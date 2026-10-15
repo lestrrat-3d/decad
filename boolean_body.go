@@ -69,43 +69,43 @@ type facetGroup struct {
 // measurements compose from. It is what Transform re-evaluates under a composed
 // motion (docs/evaluator-design.md §8).
 type facetedPayload struct {
-	// smoothRectSection is the immutable exact height curve of an original
+	// SmoothRectSection is the immutable exact height curve of an original
 	// rectangular LoftSections result. Placement and similarity drop it.
-	smoothRectSection *smoothloft.RectangularSection
-	// axialSectionJoin marks a proven XY section swept through one axial
+	SmoothRectSection *smoothloft.RectangularSection
+	// AxialSectionJoin marks a proven XY section swept through one axial
 	// interval. Its held vertical boundary chains retain a Z direction for
 	// selectors even though their curve type remains bounded FacetedCurve.
-	axialSectionJoin bool
-	// prismPatternJoin retains immutable source and shell records for a later
+	AxialSectionJoin bool
+	// PrismPatternJoin retains immutable source and shell records for a later
 	// certified local corner rewrite. Placement drops this source relation.
-	prismPatternJoin *prismPatternJoinRecord
-	// similaritySource marks a certified similar image of a prism, full
+	PrismPatternJoin *prismPatternJoinRecord
+	// SimilaritySource marks a certified similar image of a prism, full
 	// Revolve, or exact line-only stack/BRep. Rigid copies retain it;
 	// booleans and modify rewrites do not.
-	similaritySource bool
-	// booleanSimilaritySource marks the certified held mesh and source groups
+	SimilaritySource bool
+	// BooleanSimilaritySource marks the certified held mesh and source groups
 	// produced by the generic mesh Boolean after its topology and volume audit.
 	// Rigid placement and positive similarity retain this certificate.
-	booleanSimilaritySource bool
-	// obliqueBoss retains the two authenticated prism sources for one complete
+	BooleanSimilaritySource bool
+	// ObliqueBoss retains the two authenticated prism sources for one complete
 	// plate-to-cylinder junction. A later Fillet rebuilds from these records.
-	obliqueBoss       *obliqueBossRecord
-	prismUnionFillet  *prismUnionFilletRecord
-	crossCylinderBore *crossCylinderBoreRecord
-	loftCylinderJoin  *loftCylinderJoinRecord
-	loftCylinderBore  *loftCylinderBoreRecord
-	loftMirrorJoin    *loftMirrorJoinRecord
-	loftMirrorCopy    *loftMirrorPlacementRecord
-	// mirrorCapGroups names the two outer-cap groups of a loft mirror join.
+	ObliqueBoss       *obliqueBossRecord
+	PrismUnionFillet  *prismUnionFilletRecord
+	CrossCylinderBore *crossCylinderBoreRecord
+	LoftCylinderJoin  *loftCylinderJoinRecord
+	LoftCylinderBore  *loftCylinderBoreRecord
+	LoftMirrorJoin    *loftMirrorJoinRecord
+	LoftMirrorCopy    *loftMirrorPlacementRecord
+	// MirrorCapGroups names the two outer-cap groups of a loft mirror join.
 	// It is provenance only: every placement keeps it, so each copy mints the
-	// cap roles under its own identity, whether or not the loftMirrorCopy
+	// cap roles under its own identity, whether or not the LoftMirrorCopy
 	// proof survives the placement.
-	mirrorCapGroups        *[2]int
-	loftMirrorCylinderJoin *loftMirrorCylinderJoinRecord
-	loftMirrorCylinderBore *loftMirrorCylinderBoreRecord
-	// contactAudited records a whole-mesh exact contact audit at construction.
+	MirrorCapGroups        *[2]int
+	LoftMirrorCylinderJoin *loftMirrorCylinderJoinRecord
+	LoftMirrorCylinderBore *loftMirrorCylinderBoreRecord
+	// ContactAudited records a whole-mesh exact contact audit at construction.
 	// PlaceMesh preserves it by checking every rounded facet after placement.
-	contactAudited bool
+	ContactAudited bool
 	// pointSection retains the authenticated Sketch source of a point loft.
 	// Boolean results have nil here; ordinary placement keeps it only for an
 	// exactly identity delta, and exact rotation copies drop it.
@@ -129,23 +129,23 @@ type facetedPayload struct {
 	loftFacesCap  *loftFacesCapRecord
 	loftFacesToe  *loftFacesToeRecord
 	loftFacesTrim *loftFacesTrimRecord
-	// exactPlaced marks a body whose current true solid is the image of an
+	// ExactPlaced marks a body whose current true solid is the image of an
 	// exact-rotation placement (placedWith with a record), at any angle and
 	// whether the copy was direct or not. The pose model of
 	// motionbound.PoseDeviation does not describe re-placing such a solid by
 	// a float transform, so motionRun.place refuses it. Every later placement,
 	// Copy, Transform and ScaledAt builds its payload from the receiver's and
-	// MUST keep the mark, whatever happens to copyLineage or to the source's
+	// MUST keep the mark, whatever happens to CopyLineage or to the source's
 	// liveness. A future placement path that does not start from the
 	// receiver's payload must carry it over by hand. Only an exact placement
 	// sets it; a fresh payload never has it.
-	exactPlaced bool
-	// copyLineage names the live faceted source and its recorded rigid image.
+	ExactPlaced bool
+	// CopyLineage names the live faceted source and its recorded rigid image.
 	// A Boolean result has no copy lineage; Copy and placement issue it.
-	copyLineage *facetedCopyLineage
-	// spiralTools exists only on a transient disjoint-tool operand built by
+	CopyLineage *facetedCopyLineage
+	// SpiralTools exists only on a transient disjoint-tool operand built by
 	// A multi-body Union. It maps its source faces back to the live input tools.
-	spiralTools *spiralCombinedTools
+	SpiralTools *spiralCombinedTools
 	// revolveLoftJoin retains a geometry-certified section/sector source.
 	revolveLoftJoin *revolveLoftJoinRecord
 	// revolveLoftSector identifies one rigid copy of a trimmed point loft.
@@ -164,16 +164,16 @@ type facetedPayload struct {
 	// Faces() order; buildFacetedBody sets it, Tessellate reads it.
 	FaceOf []int
 
-	// exactSourceVerts and exactSourceTris name the zero-bound Boolean mesh
+	// ExactSourceVerts and ExactSourceTris name the zero-bound Boolean mesh
 	// before translation-only placement rounded its held coordinates. They
 	// certify its true occupied boundary under Xform; ordinary positive-bound
 	// Boolean results and non-translation placements carry neither record.
-	exactSourceVerts []r3.Vec
-	exactSourceTris  [][3]int
-	// lowerSupport survives one mesh Union only when an exact source box owns
+	ExactSourceVerts []r3.Vec
+	ExactSourceTris  [][3]int
+	// LowerSupport survives one mesh Union only when an exact source box owns
 	// the lower face and the other operand is certified strictly above it.
 	// Placement drops this proof until source-frame transfer is certified.
-	lowerSupport *facetproof.LowerSupport
+	LowerSupport *facetproof.LowerSupport
 
 	// MeshBound is the proven vertex-level bound (mm): no point of the true
 	// result boundary is farther than this from the held mesh's
@@ -234,7 +234,7 @@ func facetedPlacementDelta(xform, composed r3.Transform) (r3.Transform, error) {
 // the float delta as ever, charged for its distance to Q, and every record
 // that describes the float placement rather than Q is dropped (every group
 // surface tag and denoted patch, pointSection, pointPlane, pointSimilarity,
-// revolveLoftSector and loftMirrorCopy). A dropped record is never rebuilt
+// revolveLoftSector and LoftMirrorCopy). A dropped record is never rebuilt
 // from a later float placement.
 func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref producerID, composed r3.Transform,
 	exact *exactrotation.Rotation) (*Body, error) {
@@ -247,59 +247,59 @@ func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref produc
 		return nil, err
 	}
 	next := fp
-	next.smoothRectSection = nil
-	next.axialSectionJoin = false
-	next.prismPatternJoin = nil
+	next.SmoothRectSection = nil
+	next.AxialSectionJoin = false
+	next.PrismPatternJoin = nil
 	next.Xform = composed
-	next.lowerSupport = nil
+	next.LowerSupport = nil
 	next.pointCone = nil
 	next.loftFacesCap = nil
 	next.loftFacesToe = nil
 	next.loftFacesTrim = nil
-	next.copyLineage = nil
-	next.spiralTools = nil
+	next.CopyLineage = nil
+	next.SpiralTools = nil
 	// A rigid copy keeps the immutable Split source for certified face
 	// centroid ranking, but cannot become a new structural Split source.
 	next.pointPlaneSourceEligible = false
 	next.revolveLoftJoin = nil
-	next.obliqueBoss = nil
-	next.prismUnionFillet = nil
-	next.crossCylinderBore = nil
-	next.loftCylinderJoin = nil
-	next.loftCylinderBore = nil
-	next.loftMirrorJoin = nil
-	next.loftMirrorCopy = nil
-	next.loftMirrorCylinderJoin = nil
-	next.loftMirrorCylinderBore = nil
+	next.ObliqueBoss = nil
+	next.PrismUnionFillet = nil
+	next.CrossCylinderBore = nil
+	next.LoftCylinderJoin = nil
+	next.LoftCylinderBore = nil
+	next.LoftMirrorJoin = nil
+	next.LoftMirrorCopy = nil
+	next.LoftMirrorCylinderJoin = nil
+	next.LoftMirrorCylinderBore = nil
 	next.revolveLoftSector = nil
 	// The true solid follows each exact reading of delta, even when the
 	// accumulated float placement later returns to identity.
 	if delta != r3.Identity() {
 		next.pointSection = nil
 	}
-	if fp.loftMirrorJoin != nil && fp.Xform == r3.Identity() {
-		next.loftMirrorCopy = &loftMirrorPlacementRecord{source: fp.loftMirrorJoin, motion: composed}
-	} else if fp.loftMirrorCopy != nil {
-		next.loftMirrorCopy = &loftMirrorPlacementRecord{source: fp.loftMirrorCopy.source, motion: composed}
+	if fp.LoftMirrorJoin != nil && fp.Xform == r3.Identity() {
+		next.LoftMirrorCopy = &loftMirrorPlacementRecord{Source: fp.LoftMirrorJoin, Motion: composed}
+	} else if fp.LoftMirrorCopy != nil {
+		next.LoftMirrorCopy = &loftMirrorPlacementRecord{Source: fp.LoftMirrorCopy.Source, Motion: composed}
 	}
 	if fp.pointCone != nil && fp.Xform == r3.Identity() {
 		next.revolveLoftSector = &revolveLoftSectorPlacement{source: fp.pointCone, motion: composed}
 	}
 	if exact != nil {
-		next.loftMirrorCopy = nil
+		next.LoftMirrorCopy = nil
 		next.revolveLoftSector = nil
 		next.pointSection = nil
 		next.pointPlane = nil
 		next.pointSimilarity = nil
 		next.pointPlaneCapDisplacement = 0
-		next.exactPlaced = true
+		next.ExactPlaced = true
 	}
 	next.groups = append([]facetGroup(nil), fp.groups...)
-	if fp.loftMirrorJoin != nil && fp.mirrorCapGroups == nil {
+	if fp.LoftMirrorJoin != nil && fp.MirrorCapGroups == nil {
 		return nil, fmt.Errorf("%w: a loft mirror join lost its outer-cap groups", ErrUnsupported)
 	}
-	if fp.mirrorCapGroups != nil {
-		for cap, group := range fp.mirrorCapGroups {
+	if fp.MirrorCapGroups != nil {
+		for cap, group := range fp.MirrorCapGroups {
 			if group < 0 || group >= len(next.groups) {
 				return nil, fmt.Errorf("%w: placed mirror join lost an outer cap", ErrUnsupported)
 			}
@@ -352,13 +352,13 @@ func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref produc
 		}
 	}
 	if exact != nil && !exact.IsIdentity() {
-		next.exactSourceVerts, next.exactSourceTris = nil, nil
+		next.ExactSourceVerts, next.ExactSourceTris = nil, nil
 	} else if !facetproof.TranslationOnly(delta) || !facetproof.TranslationOnly(composed) {
-		next.exactSourceVerts, next.exactSourceTris = nil, nil
-	} else if len(fp.exactSourceVerts) == 0 && fp.MeshBound == 0 && fp.VolSymDiff == 0 &&
+		next.ExactSourceVerts, next.ExactSourceTris = nil, nil
+	} else if len(fp.ExactSourceVerts) == 0 && fp.MeshBound == 0 && fp.VolSymDiff == 0 &&
 		fp.Xform == r3.Identity() {
-		next.exactSourceVerts = append([]r3.Vec(nil), fp.Verts...)
-		next.exactSourceTris = append([][3]int(nil), fp.Tris...)
+		next.ExactSourceVerts = append([]r3.Vec(nil), fp.Verts...)
+		next.ExactSourceTris = append([][3]int(nil), fp.Tris...)
 	}
 	var charge massmoment.MapCharge
 	var placed facetproof.PlacedMesh
@@ -443,7 +443,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	var diameterReading float64
 	var ok bool
 	var err error
-	if pp.spiralTools != nil {
+	if pp.SpiralTools != nil {
 		// The transient multi-tool operand needs only a lower witness. Its
 		// coordinate-extreme vertices give one without a quadratic all-pairs
 		// scan over every patterned copy.
@@ -577,7 +577,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	}
 
 	if err := buildFacetedTopology(ctx, verts, tris, facetFace, facePlanar,
-		pp.VertexBound, pp.axialSectionJoin); err != nil {
+		pp.VertexBound, pp.AxialSectionJoin); err != nil {
 		return nil, err
 	}
 

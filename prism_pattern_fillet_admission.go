@@ -17,10 +17,10 @@ import (
 func prismPatternFilletContactsOf(ctx context.Context, body *Body, edges []*Edge,
 	radius float64) ([]prismPatternFilletContact, error) {
 	fp, ok := body.n.Payload.(facetedPayload)
-	if !ok || fp.prismPatternJoin == nil || radius <= 0 || proofbound.IsNonFinite(radius) {
+	if !ok || fp.PrismPatternJoin == nil || radius <= 0 || proofbound.IsNonFinite(radius) {
 		return nil, fmt.Errorf("%w: fillet has no certified joined-prism source or radius", ErrUnsupported)
 	}
-	rec := fp.prismPatternJoin
+	rec := fp.PrismPatternJoin
 	seen := make(map[[2]int]struct{}, len(edges))
 	contacts := make([]prismPatternFilletContact, 0, len(edges))
 	for _, edge := range edges {
@@ -32,10 +32,10 @@ func prismPatternFilletContactsOf(ctx context.Context, body *Body, edges []*Edge
 			return nil, fmt.Errorf("%w: joined-prism fillet selection has an unproved axial edge", ErrUnsupported)
 		}
 		matched := false
-		for i, part := range rec.parts {
-			for _, station := range []int{0, part.rootStart} {
-				bottom := fp.Verts[part.vertex[0][station]]
-				top := fp.Verts[part.vertex[1][station]]
+		for i, part := range rec.Parts {
+			for _, station := range []int{0, part.RootStart} {
+				bottom := fp.Verts[part.Vertex[0][station]]
+				top := fp.Verts[part.Vertex[1][station]]
 				if (edge.n.Start.Position != bottom || edge.n.End.Position != top) &&
 					(edge.n.Start.Position != top || edge.n.End.Position != bottom) {
 					continue
@@ -45,7 +45,7 @@ func prismPatternFilletContactsOf(ctx context.Context, body *Body, edges []*Edge
 					return nil, fmt.Errorf("%w: joined-prism fillet selects one root twice", ErrUnsupported)
 				}
 				contact, err := prismPatternFilletContactOf(part, i, station,
-					rec.source.rootArc, rec.source.rootIndex, rec.source.blankRadius, radius)
+					rec.Source.RootArc, rec.Source.RootIndex, rec.Source.BlankRadius, radius)
 				if err != nil {
 					return nil, err
 				}
@@ -76,26 +76,26 @@ func prismPatternFilletContactsOf(ctx context.Context, body *Body, edges []*Edge
 // connectors and fillet arcs must clear each contact's angular sector.
 func prismPatternFilletClearance(ctx context.Context, rec *prismPatternJoinRecord,
 	contacts []prismPatternFilletContact, radius float64) error {
-	reach := proofbound.AbsSumUpper(rec.source.blankRadius,
+	reach := proofbound.AbsSumUpper(rec.Source.BlankRadius,
 		proofbound.ProductUpper(2, radius))
 	minScale2 := big.NewRat(1, 1)
-	for _, part := range rec.parts {
-		scale2 := prismpattern.Scale2(part.prism.Xform)
+	for _, part := range rec.Parts {
+		scale2 := prismpattern.Scale2(part.Prism.Xform)
 		if scale2.Cmp(minScale2) < 0 {
 			minScale2 = scale2
 		}
 	}
 	reachSq := new(big.Rat).Quo(prismpattern.RadiusSq(reach), minScale2)
-	if err := prismpattern.OutsideRoot(ctx, rec.source.section.Profile.Outer.Segments,
-		rec.source.rootIndex, rec.source.rootArc, reachSq); err != nil {
+	if err := prismpattern.OutsideRoot(ctx, rec.Source.Section.Profile.Outer.Segments,
+		rec.Source.RootIndex, rec.Source.RootArc, reachSq); err != nil {
 		return fmt.Errorf("%w: joined-prism fillet radial envelope reaches another source wall: %w",
 			ErrUnsupported, err)
 	}
-	for _, part := range rec.parts {
-		scale2 := prismpattern.Scale2(part.prism.Xform)
-		for i, segment := range part.prism.Profile.Outer.Segments {
+	for _, part := range rec.Parts {
+		scale2 := prismpattern.Scale2(part.Prism.Xform)
+		for i, segment := range part.Prism.Profile.Outer.Segments {
 			arc, ok := segment.(arcSeg)
-			if !ok || i == rec.source.rootIndex {
+			if !ok || i == rec.Source.RootIndex {
 				continue
 			}
 			nominalSq := new(big.Rat).Mul(scale2, prismpattern.RadialSq(arc.Start))
@@ -123,31 +123,31 @@ func prismPatternFilletClearance(ctx context.Context, rec *prismPatternJoinRecor
 		}
 	}
 	for i, contact := range contacts {
-		part := rec.parts[contact.part]
+		part := rec.Parts[contact.part]
 		station := contact.station
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		rootPoint := rec.source.rootArc.Start
-		if station == part.rootStart {
-			rootPoint = rec.source.rootArc.End
+		rootPoint := rec.Source.RootArc.Start
+		if station == part.RootStart {
+			rootPoint = rec.Source.RootArc.End
 		}
 		root := prismPatternExactPlacedPoint(part, rootPoint)
-		held := part.mesh.n.Vertices[2*station]
+		held := part.Mesh.n.Vertices[2*station]
 		rootError := proofbound.AbsSumUpper(
 			proofbound.IntervalFloatError(root.X, held.X),
 			proofbound.IntervalFloatError(root.Y, held.Y))
-		if rootError > part.mesh.Bound().Base() {
+		if rootError > part.Mesh.Bound().Base() {
 			return fmt.Errorf("%w: joined-prism fillet contact %d lost its source station", ErrUnsupported, i)
 		}
-		for j, other := range rec.parts {
+		for j, other := range rec.Parts {
 			for _, connector := range []struct {
 				index, station int
-			}{{0, 0}, {rec.source.rootIndex - 1, other.rootStart}} {
+			}{{0, 0}, {rec.Source.RootIndex - 1, other.RootStart}} {
 				if contact.part == j && station == connector.station {
 					continue
 				}
-				line, ok := other.prism.Profile.Outer.Segments[connector.index].(lineSeg)
+				line, ok := other.Prism.Profile.Outer.Segments[connector.index].(lineSeg)
 				if !ok {
 					return fmt.Errorf("%w: joined-prism fillet lost a source connector", ErrUnsupported)
 				}

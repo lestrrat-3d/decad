@@ -26,7 +26,7 @@ import (
 // Only an original Union gets this record; placement drops it. The sources
 // may be retired, so every use authenticates the selected result edge and
 // works through booleanBody without committing an intermediate body.
-type prismUnionFilletRecord struct{ first, second *Body }
+type prismUnionFilletRecord struct{ First, Second *Body }
 
 func recognizePrismUnionFillet(a, b *Body) *prismUnionFilletRecord {
 	if _, ok := a.n.Payload.(prismPayload); !ok {
@@ -35,7 +35,7 @@ func recognizePrismUnionFillet(a, b *Body) *prismUnionFilletRecord {
 	if _, ok := b.n.Payload.(prismPayload); !ok {
 		return nil
 	}
-	return &prismUnionFilletRecord{first: a, second: b}
+	return &prismUnionFilletRecord{First: a, Second: b}
 }
 
 func (b *Body) filletPrismUnion(ctx context.Context, edges []*Edge,
@@ -43,7 +43,7 @@ func (b *Body) filletPrismUnion(ctx context.Context, edges []*Edge,
 	if len(edges) != 1 || radiusDelta != 0 || !(radius > 0) || proofbound.IsNonFinite(radius) {
 		return nil, false, nil
 	}
-	for _, pair := range [][2]*Body{{rec.first, rec.second}, {rec.second, rec.first}} {
+	for _, pair := range [][2]*Body{{rec.First, rec.Second}, {rec.Second, rec.First}} {
 		pp, ok := pair[0].n.Payload.(prismPayload)
 		if !ok {
 			continue

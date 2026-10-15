@@ -39,17 +39,17 @@ func spiralCombineInputs(ctx context.Context, blank *Body, tools []*Body) (*spir
 	// The blank is invariant under an exact rotation about X, so the first
 	// tooth's source facts hold for the copy. A float placement matrix is not
 	// orthogonal and would scale the blank, so every copy must carry the record.
-	for i, rec := range copies.exact[1:] {
+	for i, rec := range copies.Exact[1:] {
 		if _, ok := spiralsector.AxisCopyMap(rec); !ok {
 			return nil, fmt.Errorf("%w: copied tool %d %w; copy it with WithCopyRotation "+
 				"about the X axis through the origin", ErrUnsupported, i+2, errSpiralCopyNotExact)
 		}
 	}
-	for i, move := range copies.moves[1:] {
+	for i, move := range copies.Moves[1:] {
 		if !spiralsector.NearAxisRotation(move) {
 			return nil, fmt.Errorf("%w: tool %d cannot use the legacy axial seam proof", ErrUnsupported, i+2)
 		}
 	}
 	return &spiralCombineSource{first: first, tools: tools,
-		moves: copies.moves, copies: copies}, nil
+		moves: copies.Moves, copies: copies}, nil
 }

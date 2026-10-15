@@ -78,8 +78,8 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 		}
 	}
 	pointSlab := fp.pointPlane != nil && fp.pointPlane.base.pointSection != nil
-	booleanSource := fp.booleanSimilaritySource && b.Kind() == BodySolid && b.IsSolid()
-	if (!pointSlab && !fp.similaritySource && !booleanSource) || !fp.Xform.IsValid() ||
+	booleanSource := fp.BooleanSimilaritySource && b.Kind() == BodySolid && b.IsSolid()
+	if (!pointSlab && !fp.SimilaritySource && !booleanSource) || !fp.Xform.IsValid() ||
 		len(fp.Verts) == 0 || len(fp.VertexBound) != len(fp.Verts) {
 		return nil, fmt.Errorf("%w: this body has no certified similarity source", ErrUnsupported)
 	}
@@ -104,7 +104,7 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 		return nil, err
 	}
 	next := fp
-	next.smoothRectSection = nil
+	next.SmoothRectSection = nil
 	next.Verts, next.Tris = mesh.Verts, mesh.Tris
 	next.VertexBound, next.MeshBound = mesh.VertexBound, mesh.MeshBound
 	next.VolSymDiff, next.AreaSlack = mesh.VolSymDiff, mesh.AreaSlack
@@ -115,33 +115,33 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 		facetedSourceDiameterUpper(next.Verts, next.MeshBound))
 	next.Xform = r3.Identity()
 	next.pointPlaneSourceEligible = false
-	next.axialSectionJoin = false
-	next.prismPatternJoin = nil
-	next.obliqueBoss = nil
-	next.prismUnionFillet = nil
-	next.crossCylinderBore = nil
-	next.loftCylinderJoin = nil
-	next.loftCylinderBore = nil
-	next.loftMirrorJoin = nil
-	next.loftMirrorCopy = nil
-	next.mirrorCapGroups = nil
-	next.loftMirrorCylinderJoin = nil
-	next.loftMirrorCylinderBore = nil
+	next.AxialSectionJoin = false
+	next.PrismPatternJoin = nil
+	next.ObliqueBoss = nil
+	next.PrismUnionFillet = nil
+	next.CrossCylinderBore = nil
+	next.LoftCylinderJoin = nil
+	next.LoftCylinderBore = nil
+	next.LoftMirrorJoin = nil
+	next.LoftMirrorCopy = nil
+	next.MirrorCapGroups = nil
+	next.LoftMirrorCylinderJoin = nil
+	next.LoftMirrorCylinderBore = nil
 	next.revolveLoftJoin = nil
 	next.revolveLoftSector = nil
 	next.LoftFacesPrimitive = false
 	next.loftFacesCap = nil
 	next.loftFacesToe = nil
 	next.loftFacesTrim = nil
-	next.copyLineage = nil
-	next.spiralTools = nil
+	next.CopyLineage = nil
+	next.SpiralTools = nil
 	if pointSlab {
 		next.pointPlaneCapDisplacement = proofbound.AbsSumUpper(
 			proofbound.ProductUpper(fp.pointPlaneCapDisplacement, s), mesh.Round)
 	}
 	next.pointSection, next.pointCone = nil, nil
-	next.exactSourceVerts, next.exactSourceTris = nil, nil
-	next.lowerSupport = nil
+	next.ExactSourceVerts, next.ExactSourceTris = nil, nil
+	next.LowerSupport = nil
 	next.groups = append([]facetGroup(nil), fp.groups...)
 	for i := range next.groups {
 		group := &next.groups[i]

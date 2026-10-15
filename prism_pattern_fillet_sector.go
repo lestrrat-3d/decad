@@ -17,10 +17,10 @@ type prismPatternFilletSector struct{ lo, hi *big.Rat }
 func prismPatternFilletSectorOf(rec *prismPatternJoinRecord,
 	contact prismPatternFilletContact, radius float64) (prismPatternFilletSector, error) {
 	var empty prismPatternFilletSector
-	part := rec.parts[contact.part]
-	rootPoint := rec.source.rootArc.Start
-	if contact.station == part.rootStart {
-		rootPoint = rec.source.rootArc.End
+	part := rec.Parts[contact.part]
+	rootPoint := rec.Source.RootArc.Start
+	if contact.station == part.RootStart {
+		rootPoint = rec.Source.RootArc.End
 	}
 	root := prismPatternExactPlacedPoint(part, rootPoint)
 	center := contact.centerIV
@@ -34,7 +34,7 @@ func prismPatternFilletSectorOf(rec *prismPatternJoinRecord,
 	cross := proofbound.IntervalSub(proofbound.IntervalMul(center.X, line.Y),
 		proofbound.IntervalMul(center.Y, line.X))
 	if contact.station == 0 && cross.Lo.Sign() <= 0 ||
-		contact.station == part.rootStart && cross.Hi.Sign() >= 0 {
+		contact.station == part.RootStart && cross.Hi.Sign() >= 0 {
 		return empty, fmt.Errorf("%w: joined-prism fillet arc has no sided polar sweep", ErrUnsupported)
 	}
 	centerNorm, err := prismpattern.IVSqrt(center.Dot(center))

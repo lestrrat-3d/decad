@@ -14,13 +14,13 @@ import (
 // the shared wall and the caps still need a constructed boundary and volume
 // proof before any result can be published.
 type prismPatternSource struct {
-	blank       prismPayload
-	blankRadius float64
-	section     prismPayload
-	rootArc     arcSeg
-	rootIndex   int
-	rootGap     float64
-	sections    []*Body
+	Blank       prismPayload
+	BlankRadius float64
+	Section     prismPayload
+	RootArc     arcSeg
+	RootIndex   int
+	RootGap     float64
+	Sections    []*Body
 }
 
 // prismPatternSourceOf checks only recorded Extrude sections and Copy
@@ -107,7 +107,7 @@ func prismPatternSourceOf(ctx context.Context, operands []*Body) (*prismPatternS
 	if err := prismpattern.OutsideRoot(ctx, segments, rootIndex, root, outsideRadiusSq); err != nil {
 		return nil, true, err
 	}
-	return &prismPatternSource{blank: blank, blankRadius: circle.Radius.Base(), section: first,
-		rootArc: root, rootIndex: rootIndex,
-		rootGap: gap, sections: operands[1:]}, true, nil
+	return &prismPatternSource{Blank: blank, BlankRadius: circle.Radius.Base(), Section: first,
+		RootArc: root, RootIndex: rootIndex,
+		RootGap: gap, Sections: operands[1:]}, true, nil
 }

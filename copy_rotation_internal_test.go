@@ -56,11 +56,11 @@ func TestCopyRotationRecordsExactPlacementOnDirectCopy(t *testing.T) {
 	exact, err := Copy(t.Context(), joined, WithCopyRotation(r3.Vec{}, zAxis, angle))
 	require.NoError(t, err)
 	payload := exact.n.Payload.(facetedPayload)
-	require.NotNil(t, payload.copyLineage)
-	require.True(t, payload.copyLineage.direct)
-	require.NotNil(t, payload.copyLineage.exact)
-	require.Nil(t, payload.loftMirrorCopy, "the float-motion proof is dropped")
-	require.NotNil(t, payload.mirrorCapGroups, "the cap-role provenance is kept")
+	require.NotNil(t, payload.CopyLineage)
+	require.True(t, payload.CopyLineage.Direct)
+	require.NotNil(t, payload.CopyLineage.Exact)
+	require.Nil(t, payload.LoftMirrorCopy, "the float-motion proof is dropped")
+	require.NotNil(t, payload.MirrorCapGroups, "the cap-role provenance is kept")
 	for _, g := range payload.groups {
 		require.Nil(t, g.surface)
 		require.Nil(t, g.denoted)
@@ -74,8 +74,8 @@ func TestCopyRotationRecordsExactPlacementOnDirectCopy(t *testing.T) {
 	control, err := Copy(t.Context(), joined, WithCopyPlacement(turn))
 	require.NoError(t, err)
 	cp := control.n.Payload.(facetedPayload)
-	require.Nil(t, cp.copyLineage.exact)
-	require.NotNil(t, cp.loftMirrorCopy)
+	require.Nil(t, cp.CopyLineage.Exact)
+	require.NotNil(t, cp.LoftMirrorCopy)
 	tagged := 0
 	for _, g := range cp.groups {
 		if g.surface != nil {
@@ -94,14 +94,14 @@ func TestCopyRotationLineageExactIsDirectOnly(t *testing.T) {
 	turn := WithCopyRotation(r3.Vec{}, r3.Vec{Z: 1}, units.Degrees(30))
 	first, err := Copy(t.Context(), joined, turn)
 	require.NoError(t, err)
-	require.NotNil(t, first.n.Payload.(facetedPayload).copyLineage.exact)
+	require.NotNil(t, first.n.Payload.(facetedPayload).CopyLineage.Exact)
 
 	second, err := Copy(t.Context(), first, turn)
 	require.NoError(t, err)
 	sp := second.n.Payload.(facetedPayload)
-	require.NotNil(t, sp.copyLineage)
-	require.False(t, sp.copyLineage.direct)
-	require.Nil(t, sp.copyLineage.exact, "a copy of a copy records no exact rotation")
+	require.NotNil(t, sp.CopyLineage)
+	require.False(t, sp.CopyLineage.Direct)
+	require.Nil(t, sp.CopyLineage.Exact, "a copy of a copy records no exact rotation")
 	for _, g := range sp.groups {
 		require.Nil(t, g.surface, "the second exact placement still drops every tag")
 	}
@@ -111,8 +111,8 @@ func TestCopyRotationLineageExactIsDirectOnly(t *testing.T) {
 	moved, err := Transform(t.Context(), first, shift)
 	require.NoError(t, err)
 	mp := moved.n.Payload.(facetedPayload)
-	if mp.copyLineage != nil {
-		require.Nil(t, mp.copyLineage.exact, "Transform re-binds without the exact rotation")
+	if mp.CopyLineage != nil {
+		require.Nil(t, mp.CopyLineage.Exact, "Transform re-binds without the exact rotation")
 	}
 }
 
@@ -125,8 +125,8 @@ func TestCopyRotationOrdinaryCopyOfExactCopyKeepsNoTags(t *testing.T) {
 	second, err := Copy(t.Context(), first, WithCopyPlacement(shift))
 	require.NoError(t, err)
 	sp := second.n.Payload.(facetedPayload)
-	require.Nil(t, sp.loftMirrorCopy)
-	require.NotNil(t, sp.mirrorCapGroups)
+	require.Nil(t, sp.LoftMirrorCopy)
+	require.NotNil(t, sp.MirrorCapGroups)
 	for _, g := range sp.groups {
 		require.Nil(t, g.surface)
 	}
@@ -168,21 +168,21 @@ func TestExactGroupPlacedMapsCentroidAndDropsTags(t *testing.T) {
 func TestCopyRotationExactSourceVertsDropForRotation(t *testing.T) {
 	_, _, placed := boundedFacetedFloorFixture(t)
 	source := placed.n.Payload.(facetedPayload)
-	require.NotEmpty(t, source.exactSourceVerts)
+	require.NotEmpty(t, source.ExactSourceVerts)
 
 	shift, err := r3.Translation(r3.NewVec(1, 0, 0))
 	require.NoError(t, err)
 	control, err := Copy(t.Context(), placed, WithCopyPlacement(shift))
 	require.NoError(t, err)
-	require.NotEmpty(t, control.n.Payload.(facetedPayload).exactSourceVerts)
+	require.NotEmpty(t, control.n.Payload.(facetedPayload).ExactSourceVerts)
 
 	rotated, err := Copy(t.Context(), placed, WithCopyRotation(r3.Vec{}, r3.Vec{Z: 1}, units.Degrees(30)))
 	require.NoError(t, err)
-	require.Empty(t, rotated.n.Payload.(facetedPayload).exactSourceVerts)
+	require.Empty(t, rotated.n.Payload.(facetedPayload).ExactSourceVerts)
 
 	identity, err := Copy(t.Context(), placed, WithCopyRotation(r3.Vec{}, r3.Vec{Z: 1}, units.Radians(0)))
 	require.NoError(t, err)
-	require.NotEmpty(t, identity.n.Payload.(facetedPayload).exactSourceVerts,
+	require.NotEmpty(t, identity.n.Payload.(facetedPayload).ExactSourceVerts,
 		"an exactly identity record keeps the zero-bound source")
 }
 
@@ -250,7 +250,7 @@ func TestPlacedWithDropsFloatPlacementRecords(t *testing.T) {
 	require.Nil(t, exact.pointSimilarity)
 	require.Nil(t, exact.pointCone)
 	require.Nil(t, exact.revolveLoftSector)
-	require.Nil(t, exact.loftMirrorCopy)
+	require.Nil(t, exact.LoftMirrorCopy)
 	require.Zero(t, exact.pointPlaneCapDisplacement)
 
 	// A nonidentity float delta moves the true solid, so it drops the point-loft
@@ -261,7 +261,7 @@ func TestPlacedWithDropsFloatPlacementRecords(t *testing.T) {
 	require.Nil(t, float.pointSection)
 	require.NotNil(t, float.pointSimilarity)
 	require.NotNil(t, float.revolveLoftSector)
-	require.NotNil(t, float.loftMirrorCopy)
+	require.NotNil(t, float.LoftMirrorCopy)
 
 	t.Run("identity delta", func(t *testing.T) {
 		require.Equal(t, r3.Identity(), source.Xform)
@@ -272,7 +272,7 @@ func TestPlacedWithDropsFloatPlacementRecords(t *testing.T) {
 	})
 }
 
-// exactCopyMotionMessage is the text only the exactPlaced refusal in
+// exactCopyMotionMessage is the text only the ExactPlaced refusal in
 // motionRun.place carries.
 const exactCopyMotionMessage = "descends from an exact-rotation copy"
 
@@ -305,7 +305,7 @@ func boxUnion(t *testing.T) *Body {
 
 // TestCopyRotationMotionRefusalSurvivesDescendants checks that the refusal to
 // re-place an exact-copy descendant during motion verification follows the
-// persistent exactPlaced mark. Every case has its own live static solid
+// persistent ExactPlaced mark. Every case has its own live static solid
 // partner and a non-constant, evaluated pair, so the guard is reached; a case
 // that retires the source or earlier movers still leaves that partner.
 func TestCopyRotationMotionRefusalSurvivesDescendants(t *testing.T) {
@@ -362,7 +362,7 @@ func TestCopyRotationMotionRefusalSurvivesDescendants(t *testing.T) {
 			exact, err := Copy(t.Context(), source, turn())
 			require.NoError(t, err)
 			mover := tc.build(t, doc, source, exact)
-			require.True(t, mover.n.Payload.(facetedPayload).exactPlaced)
+			require.True(t, mover.n.Payload.(facetedPayload).ExactPlaced)
 			// A live static solid partner on the mover's path, added last so no
 			// case can retire it.
 			internalBoxBody(t, doc, 6, -2, 10, 2, 10)
@@ -378,7 +378,7 @@ func TestCopyRotationMotionRefusalSurvivesDescendants(t *testing.T) {
 		require.NoError(t, err)
 		control, err := Copy(t.Context(), source, WithCopyPlacement(rot))
 		require.NoError(t, err)
-		require.False(t, control.n.Payload.(facetedPayload).exactPlaced)
+		require.False(t, control.n.Payload.(facetedPayload).ExactPlaced)
 		internalBoxBody(t, documentHandle(source.n.Doc), 6, -2, 10, 2, 10)
 		require.NoError(t, verifyTranslated(t, documentHandle(source.n.Doc), control))
 	})
@@ -386,13 +386,13 @@ func TestCopyRotationMotionRefusalSurvivesDescendants(t *testing.T) {
 
 func TestCopyRotationExactPlacedMarkFollowsPlacementOnly(t *testing.T) {
 	source := mirrorJoinedLoft(t)
-	require.False(t, source.n.Payload.(facetedPayload).exactPlaced)
+	require.False(t, source.n.Payload.(facetedPayload).ExactPlaced)
 	zero, err := Copy(t.Context(), source, WithCopyRotation(r3.Vec{}, r3.Vec{X: 1}, units.Degrees(0)))
 	require.NoError(t, err)
-	require.True(t, zero.n.Payload.(facetedPayload).exactPlaced, "a zero angle is still an exact placement")
+	require.True(t, zero.n.Payload.(facetedPayload).ExactPlaced, "a zero angle is still an exact placement")
 	again, err := Copy(t.Context(), zero)
 	require.NoError(t, err)
-	require.True(t, again.n.Payload.(facetedPayload).exactPlaced)
+	require.True(t, again.n.Payload.(facetedPayload).ExactPlaced)
 }
 
 // pointLoftTooth is a fitted-side point loft with its apex at the origin.
@@ -478,7 +478,7 @@ func TestCopyRotationRoundTripDropsPointSource(t *testing.T) {
 	require.NoError(t, err)
 	rp := round.n.Payload.(facetedPayload)
 	require.Equal(t, r3.Identity(), rp.Xform, "the float round trip is the identity")
-	require.True(t, rp.exactPlaced)
+	require.True(t, rp.ExactPlaced)
 
 	_, matched, err = tryPointConeBoolean(t.Context(), meshbool.OpCut, doc, doc.nextProducerID(), round, cone)
 	require.NoError(t, err)

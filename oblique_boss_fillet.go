@@ -73,7 +73,7 @@ func obliqueBossHasOrigin(face *topo.Face, group facetGroup) bool {
 }
 
 func obliqueBossPlateWallRoles(rec *obliqueBossRecord) ([4]string, bool) {
-	pp, ok := rec.plate.n.Payload.(prismPayload)
+	pp, ok := rec.Plate.n.Payload.(prismPayload)
 	if !ok || len(pp.Profile.Outer.Segments) != 4 {
 		return [4]string{}, false
 	}
@@ -85,13 +85,13 @@ func obliqueBossPlateWallRoles(rec *obliqueBossRecord) ([4]string, bool) {
 		}
 		role := fmt.Sprintf("side(0,%d)", i)
 		switch {
-		case line.Start.U == rec.rect.U0 && line.End.U == rec.rect.U0:
+		case line.Start.U == rec.Rect.U0 && line.End.U == rec.Rect.U0:
 			roles[0] = role
-		case line.Start.U == rec.rect.U1 && line.End.U == rec.rect.U1:
+		case line.Start.U == rec.Rect.U1 && line.End.U == rec.Rect.U1:
 			roles[1] = role
-		case line.Start.V == rec.rect.V0 && line.End.V == rec.rect.V0:
+		case line.Start.V == rec.Rect.V0 && line.End.V == rec.Rect.V0:
 			roles[2] = role
-		case line.Start.V == rec.rect.V1 && line.End.V == rec.rect.V1:
+		case line.Start.V == rec.Rect.V1 && line.End.V == rec.Rect.V1:
 			roles[3] = role
 		default:
 			return [4]string{}, false
@@ -115,8 +115,8 @@ func (b *Body) filletObliqueBoss(ctx context.Context, edges []*Edge,
 	if _, ok := edges[0].n.Curve.(surfacegeom.FacetedCurve); !ok {
 		return nil, fmt.Errorf("%w: the selected oblique junction has no faceted edge witness", ErrUnsupported)
 	}
-	plateTop, topOK := obliqueBossFaceGroup(rec.plate, provenance.RoleCapEnd)
-	bossSide, sideOK := obliqueBossFaceGroup(rec.boss, prismrecord.OuterFirstSideRole)
+	plateTop, topOK := obliqueBossFaceGroup(rec.Plate, provenance.RoleCapEnd)
+	bossSide, sideOK := obliqueBossFaceGroup(rec.Boss, prismrecord.OuterFirstSideRole)
 	if !topOK || !sideOK || len(edges[0].n.Faces) != 2 {
 		return nil, fmt.Errorf("%w: the selected edge is not the complete plate-to-cylinder junction", ErrUnsupported)
 	}
@@ -128,17 +128,17 @@ func (b *Body) filletObliqueBoss(ctx context.Context, edges []*Edge,
 		return nil, fmt.Errorf("%w: the selected edge is not the complete plate-to-cylinder junction", ErrUnsupported)
 	}
 	if radiusDelta != 0 || !(radius > 0) ||
-		proofbound.IsNonFinite(radius) || radius >= rec.radius/4 {
+		proofbound.IsNonFinite(radius) || radius >= rec.Radius/4 {
 		return nil, fmt.Errorf("%w: the oblique junction fillet radius exceeds its proven clearance", ErrUnsupported)
 	}
-	margin := proofbound.DivUpper(proofbound.AbsSumUpper(rec.radius, radius), 0.93)
-	center := rec.base.Add(rec.axis.Scale((rec.top + radius - rec.base.Z) / rec.axis.Z))
-	if !(center.X-margin-rec.sourceBound > rec.rect.U0 &&
-		center.X+margin+rec.sourceBound < rec.rect.U1 &&
-		center.Y-margin-rec.sourceBound > rec.rect.V0 &&
-		center.Y+margin+rec.sourceBound < rec.rect.V1 &&
-		rec.base.Z+rec.length*rec.axis.Z-rec.radius*math.Hypot(rec.axis.X, rec.axis.Y)-rec.sourceBound >
-			rec.top+radius*(1+math.Hypot(rec.axis.X, rec.axis.Y))) {
+	margin := proofbound.DivUpper(proofbound.AbsSumUpper(rec.Radius, radius), 0.93)
+	center := rec.Base.Add(rec.Axis.Scale((rec.Top + radius - rec.Base.Z) / rec.Axis.Z))
+	if !(center.X-margin-rec.SourceBound > rec.Rect.U0 &&
+		center.X+margin+rec.SourceBound < rec.Rect.U1 &&
+		center.Y-margin-rec.SourceBound > rec.Rect.V0 &&
+		center.Y+margin+rec.SourceBound < rec.Rect.V1 &&
+		rec.Base.Z+rec.Length*rec.Axis.Z-rec.Radius*math.Hypot(rec.Axis.X, rec.Axis.Y)-rec.SourceBound >
+			rec.Top+radius*(1+math.Hypot(rec.Axis.X, rec.Axis.Y))) {
 		return nil, fmt.Errorf("%w: the oblique junction fillet reaches a plate side or the boss far cap", ErrUnsupported)
 	}
 	mesh, err := buildObliqueBossFilletMesh(ctx, rec, radius)
@@ -177,7 +177,7 @@ func (b *Body) filletObliqueBoss(ctx context.Context, edges []*Edge,
 	result, err := buildFacetedBodyWithProof(ctx, documentHandle(b.n.Doc), ref, facetedPayload{
 		Verts: mesh.verts, Tris: mesh.tris, Src: mesh.src, groups: mesh.groups,
 		VertexBound: vertexBound, MeshBound: bound, VolSymDiff: volumeGap,
-		AreaSlack: areaSlack, DPair: dPair, contactAudited: true, Xform: r3.Identity(),
+		AreaSlack: areaSlack, DPair: dPair, ContactAudited: true, Xform: r3.Identity(),
 	}, audit, volume, heldVolume)
 	if err != nil {
 		return nil, err
@@ -190,18 +190,18 @@ func obliqueBossSamples(rec *obliqueBossRecord, radius float64) []obliqueBossSam
 	for i := range obliqueBossAngularCells {
 		samples = append(samples, obliqueBossSample{u: 2 * math.Pi * float64(i) / obliqueBossAngularCells, corner: -1})
 	}
-	center := rec.base.Add(rec.axis.Scale((rec.top + radius - rec.base.Z) / rec.axis.Z))
+	center := rec.Base.Add(rec.Axis.Scale((rec.Top + radius - rec.Base.Z) / rec.Axis.Z))
 	corners := [4]r3.Vec{
-		{X: rec.rect.U1, Y: rec.rect.V0},
-		{X: rec.rect.U1, Y: rec.rect.V1},
-		{X: rec.rect.U0, Y: rec.rect.V1},
-		{X: rec.rect.U0, Y: rec.rect.V0},
+		{X: rec.Rect.U1, Y: rec.Rect.V0},
+		{X: rec.Rect.U1, Y: rec.Rect.V1},
+		{X: rec.Rect.U0, Y: rec.Rect.V1},
+		{X: rec.Rect.U0, Y: rec.Rect.V0},
 	}
-	sinTilt := math.Hypot(rec.axis.X, rec.axis.Y)
-	hx, hy := rec.axis.X/sinTilt, rec.axis.Y/sinTilt
+	sinTilt := math.Hypot(rec.Axis.X, rec.Axis.Y)
+	hx, hy := rec.Axis.X/sinTilt, rec.Axis.Y/sinTilt
 	for i, corner := range corners {
 		dx, dy := corner.X-center.X, corner.Y-center.Y
-		u := math.Atan2(-hy*dx+hx*dy, rec.axis.Z*(hx*dx+hy*dy))
+		u := math.Atan2(-hy*dx+hx*dy, rec.Axis.Z*(hx*dx+hy*dy))
 		if u < 0 {
 			u += 2 * math.Pi
 		}
@@ -235,27 +235,27 @@ func obliqueBossSamples(rec *obliqueBossRecord, radius float64) []obliqueBossSam
 // perpendicular section. The same ray sets the rim vertex and corner angle.
 func obliqueBossPlaneRay(rec *obliqueBossRecord, u float64) (float64, float64) {
 	sn, cs := math.Sincos(u)
-	d := rec.ex.Scale(cs).Add(rec.ey.Scale(sn))
-	return d.X - rec.axis.X*d.Z/rec.axis.Z,
-		d.Y - rec.axis.Y*d.Z/rec.axis.Z
+	d := rec.Ex.Scale(cs).Add(rec.Ey.Scale(sn))
+	return d.X - rec.Axis.X*d.Z/rec.Axis.Z,
+		d.Y - rec.Axis.Y*d.Z/rec.Axis.Z
 }
 
 func obliqueBossOuterPoint(rec *obliqueBossRecord, center r3.Vec,
 	u float64, corner int) r3.Vec {
 	switch corner {
 	case 0:
-		return r3.Vec{X: rec.rect.U1, Y: rec.rect.V0, Z: rec.top}
+		return r3.Vec{X: rec.Rect.U1, Y: rec.Rect.V0, Z: rec.Top}
 	case 1:
-		return r3.Vec{X: rec.rect.U1, Y: rec.rect.V1, Z: rec.top}
+		return r3.Vec{X: rec.Rect.U1, Y: rec.Rect.V1, Z: rec.Top}
 	case 2:
-		return r3.Vec{X: rec.rect.U0, Y: rec.rect.V1, Z: rec.top}
+		return r3.Vec{X: rec.Rect.U0, Y: rec.Rect.V1, Z: rec.Top}
 	case 3:
-		return r3.Vec{X: rec.rect.U0, Y: rec.rect.V0, Z: rec.top}
+		return r3.Vec{X: rec.Rect.U0, Y: rec.Rect.V0, Z: rec.Top}
 	}
 	dx, dy := obliqueBossPlaneRay(rec, u)
 	best := math.Inf(1)
 	side := -1
-	for i, x := range []float64{rec.rect.U0, rec.rect.U1} {
+	for i, x := range []float64{rec.Rect.U0, rec.Rect.U1} {
 		if dx == 0 {
 			continue
 		}
@@ -264,7 +264,7 @@ func obliqueBossOuterPoint(rec *obliqueBossRecord, center r3.Vec,
 			best, side = t, i
 		}
 	}
-	for i, y := range []float64{rec.rect.V0, rec.rect.V1} {
+	for i, y := range []float64{rec.Rect.V0, rec.Rect.V1} {
 		if dy == 0 {
 			continue
 		}
@@ -273,16 +273,16 @@ func obliqueBossOuterPoint(rec *obliqueBossRecord, center r3.Vec,
 			best, side = t, i+2
 		}
 	}
-	p := r3.Vec{X: center.X + best*dx, Y: center.Y + best*dy, Z: rec.top}
+	p := r3.Vec{X: center.X + best*dx, Y: center.Y + best*dy, Z: rec.Top}
 	switch side {
 	case 0:
-		p.X = rec.rect.U0
+		p.X = rec.Rect.U0
 	case 1:
-		p.X = rec.rect.U1
+		p.X = rec.Rect.U1
 	case 2:
-		p.Y = rec.rect.V0
+		p.Y = rec.Rect.V0
 	case 3:
-		p.Y = rec.rect.V1
+		p.Y = rec.Rect.V1
 	}
 	return p
 }
@@ -298,11 +298,11 @@ func buildObliqueBossFilletMesh(ctx context.Context,
 		body *Body
 		role string
 	}{
-		{rec.plate, provenance.RoleCapStart},
-		{rec.plate, wallRoles[0]}, {rec.plate, wallRoles[1]},
-		{rec.plate, wallRoles[2]}, {rec.plate, wallRoles[3]},
-		{rec.plate, provenance.RoleCapEnd},
-		{rec.boss, prismrecord.OuterFirstSideRole}, {rec.boss, provenance.RoleCapEnd},
+		{rec.Plate, provenance.RoleCapStart},
+		{rec.Plate, wallRoles[0]}, {rec.Plate, wallRoles[1]},
+		{rec.Plate, wallRoles[2]}, {rec.Plate, wallRoles[3]},
+		{rec.Plate, provenance.RoleCapEnd},
+		{rec.Boss, prismrecord.OuterFirstSideRole}, {rec.Boss, provenance.RoleCapEnd},
 	}
 	for _, role := range roles {
 		group, ok := obliqueBossFaceGroup(role.body, role.role)
@@ -320,7 +320,7 @@ func buildObliqueBossFilletMesh(ctx context.Context,
 	for j := range band {
 		band[j] = make([]int, n)
 	}
-	center := rec.base.Add(rec.axis.Scale((rec.top + radius - rec.base.Z) / rec.axis.Z))
+	center := rec.Base.Add(rec.Axis.Scale((rec.Top + radius - rec.Base.Z) / rec.Axis.Z))
 	for i, sample := range samples {
 		if i%32 == 0 {
 			if err := ctx.Err(); err != nil {
@@ -328,20 +328,20 @@ func buildObliqueBossFilletMesh(ctx context.Context,
 			}
 		}
 		sn, cs := math.Sincos(sample.u)
-		d := rec.ex.Scale(cs).Add(rec.ey.Scale(sn))
-		t := (rec.top + radius - rec.base.Z - (rec.radius+radius)*d.Z) / rec.axis.Z
-		c := rec.base.Add(d.Scale(rec.radius + radius)).Add(rec.axis.Scale(t))
+		d := rec.Ex.Scale(cs).Add(rec.Ey.Scale(sn))
+		t := (rec.Top + radius - rec.Base.Z - (rec.Radius+radius)*d.Z) / rec.Axis.Z
+		c := rec.Base.Add(d.Scale(rec.Radius + radius)).Add(rec.Axis.Scale(t))
 		p := c.Sub(r3.Vec{Z: radius})
-		p.Z = rec.top
+		p.Z = rec.Top
 		s := c.Sub(d.Scale(radius))
-		u := rec.base.Add(d.Scale(rec.radius)).Add(rec.axis.Scale(rec.length))
+		u := rec.Base.Add(d.Scale(rec.Radius)).Add(rec.Axis.Scale(rec.Length))
 		o := obliqueBossOuterPoint(rec, center, sample.u, sample.corner)
-		if !proofbound.FiniteVec(o) || o.X < rec.rect.U0 || o.X > rec.rect.U1 ||
-			o.Y < rec.rect.V0 || o.Y > rec.rect.V1 {
+		if !proofbound.FiniteVec(o) || o.X < rec.Rect.U0 || o.X > rec.Rect.U1 ||
+			o.Y < rec.Rect.V0 || o.Y > rec.Rect.V1 {
 			return nil, fmt.Errorf("%w: an oblique plate rim leaves its source rectangle", ErrUnsupported)
 		}
 		outer[i], lower[i], plane[i], side[i], far[i] =
-			m.point(o), m.point(r3.Vec{X: o.X, Y: o.Y, Z: rec.bottom}),
+			m.point(o), m.point(r3.Vec{X: o.X, Y: o.Y, Z: rec.Bottom}),
 			m.point(p), m.point(s), m.point(u)
 		band[0][i], band[obliqueBossBlendCells][i] = plane[i], side[i]
 		for j := 1; j < obliqueBossBlendCells; j++ {
@@ -350,21 +350,21 @@ func buildObliqueBossFilletMesh(ctx context.Context,
 			band[j][i] = m.point(c.Sub(q.Scale(radius / q.Len())))
 		}
 	}
-	bottomCenter := m.point(r3.Vec{X: (rec.rect.U0 + rec.rect.U1) / 2,
-		Y: (rec.rect.V0 + rec.rect.V1) / 2, Z: rec.bottom})
-	farCenter := m.point(rec.base.Add(rec.axis.Scale(rec.length)))
+	bottomCenter := m.point(r3.Vec{X: (rec.Rect.U0 + rec.Rect.U1) / 2,
+		Y: (rec.Rect.V0 + rec.Rect.V1) / 2, Z: rec.Bottom})
+	farCenter := m.point(rec.Base.Add(rec.Axis.Scale(rec.Length)))
 	for i := range samples {
 		j := (i + 1) % n
 		a, b := m.verts[outer[i]], m.verts[outer[j]]
 		wall := -1
 		switch {
-		case a.X == rec.rect.U0 && b.X == rec.rect.U0:
+		case a.X == rec.Rect.U0 && b.X == rec.Rect.U0:
 			wall = 1
-		case a.X == rec.rect.U1 && b.X == rec.rect.U1:
+		case a.X == rec.Rect.U1 && b.X == rec.Rect.U1:
 			wall = 2
-		case a.Y == rec.rect.V0 && b.Y == rec.rect.V0:
+		case a.Y == rec.Rect.V0 && b.Y == rec.Rect.V0:
 			wall = 3
-		case a.Y == rec.rect.V1 && b.Y == rec.rect.V1:
+		case a.Y == rec.Rect.V1 && b.Y == rec.Rect.V1:
 			wall = 4
 		}
 		if wall < 0 {

@@ -12,14 +12,14 @@ import (
 // obliqueBossRecord is a one-use witness for a whole plate-to-cylinder
 // junction. The generic Union still proves its own mesh and contact.
 type obliqueBossRecord struct {
-	plate, boss  *Body
-	rect         momentinput.AxisRect
-	bottom, top  float64
-	base         r3.Vec
-	axis, ex, ey r3.Vec
-	radius       float64
-	length       float64
-	sourceBound  float64
+	Plate, Boss  *Body
+	Rect         momentinput.AxisRect
+	Bottom, Top  float64
+	Base         r3.Vec
+	Axis, Ex, Ey r3.Vec
+	Radius       float64
+	Length       float64
+	SourceBound  float64
 }
 
 // recognizeObliqueBoss is reject-only. It never changes the mesh Union or
@@ -125,8 +125,8 @@ func recognizeObliqueBoss(a, b *Body) *obliqueBossRecord {
 		}
 	}
 	return &obliqueBossRecord{
-		plate: plate, boss: boss, rect: rect, bottom: pp.Z0, top: pp.Z1,
-		base: base, axis: axis, ex: ex, ey: ey, radius: radius,
-		length: length, sourceBound: sourceBound,
+		Plate: plate, Boss: boss, Rect: rect, Bottom: pp.Z0, Top: pp.Z1,
+		Base: base, Axis: axis, Ex: ex, Ey: ey, Radius: radius,
+		Length: length, SourceBound: sourceBound,
 	}
 }

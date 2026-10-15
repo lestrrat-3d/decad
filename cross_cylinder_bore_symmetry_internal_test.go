@@ -86,8 +86,8 @@ func TestCrossBoreMirroredCellsEncloseSamples(t *testing.T) {
 		rec     crossCylinderBoreRecord
 		setback float64
 	}{
-		{"five by one", crossCylinderBoreRecord{radius: 5, bore: 1, height: 10, centerZ: 5}, 0.5},
-		{"eight by one and half", crossCylinderBoreRecord{radius: 8, bore: 1.5, height: 16, centerZ: 8}, 0.1875},
+		{"five by one", crossCylinderBoreRecord{Radius: 5, Bore: 1, Height: 10, CenterZ: 5}, 0.5},
+		{"eight by one and half", crossCylinderBoreRecord{Radius: 8, Bore: 1.5, Height: 16, CenterZ: 8}, 0.1875},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			bases := map[int]crossBoreCellExact{}
@@ -109,10 +109,10 @@ func TestCrossBoreMirroredCellsEncloseSamples(t *testing.T) {
 					outer, inner := crossBoreFeet(&tc.rec, tc.setback, theta)
 					co, sn := math.Cos(theta), math.Sin(theta)
 					points := [9]float64{
-						outer.X, outer.Y, outer.Z - tc.rec.centerZ,
-						inner.X, inner.Y, inner.Z - tc.rec.centerZ,
-						-math.Sqrt(tc.rec.radius*tc.rec.radius - tc.rec.bore*tc.rec.bore*co*co),
-						tc.rec.bore * co, tc.rec.bore * sn,
+						outer.X, outer.Y, outer.Z - tc.rec.CenterZ,
+						inner.X, inner.Y, inner.Z - tc.rec.CenterZ,
+						-math.Sqrt(tc.rec.Radius*tc.rec.Radius - tc.rec.Bore*tc.rec.Bore*co*co),
+						tc.rec.Bore * co, tc.rec.Bore * sn,
 					}
 					for c, p := range points {
 						lo, _ := coords[c].Lo.Rat().Float64()
@@ -322,22 +322,22 @@ func TestCrossBoreCellsRefuseNearSymmetricPose(t *testing.T) {
 	}{
 		{"tool centre one ulp off the Y mirror", func() crossCylinderBoreRecord {
 			rec := *exact
-			rec.tool = offsetTool
+			rec.Tool = offsetTool
 			return rec
 		}()},
 		{"target centre one ulp off the Y mirror", func() crossCylinderBoreRecord {
 			rec := *exact
-			rec.target = offsetTarget
+			rec.Target = offsetTarget
 			return rec
 		}()},
 		{"tool turned by a rounded full turn", func() crossCylinderBoreRecord {
 			rec := *exact
-			rec.tool = turnedTool
+			rec.Tool = turnedTool
 			return rec
 		}()},
 		{"bore radius one ulp off its source", func() crossCylinderBoreRecord {
 			rec := *exact
-			rec.bore = math.Nextafter(rec.bore, 2)
+			rec.Bore = math.Nextafter(rec.Bore, 2)
 			return rec
 		}()},
 	} {
@@ -376,8 +376,8 @@ func TestCrossBoreMirroredRouteMatchesDirect(t *testing.T) {
 	for j := range n {
 		k, flipY, flipZ := crossBoreCellMirror(j)
 		held := crossBoreMeshHeld(mesh, j)
-		mapped := crossBoreCellSampleError(&held, rec.centerZ, &direct[k].coords, flipY, flipZ)
-		own := crossBoreCellSampleError(&held, rec.centerZ, &direct[j].coords, false, false)
+		mapped := crossBoreCellSampleError(&held, rec.CenterZ, &direct[k].coords, flipY, flipZ)
+		own := crossBoreCellSampleError(&held, rec.CenterZ, &direct[j].coords, false, false)
 		require.False(t, proofbound.IsNonFinite(mapped), "cell %d", j)
 		want.sampleError = max(want.sampleError, mapped)
 		directMax.sampleError = max(directMax.sampleError, own)
@@ -409,7 +409,7 @@ func TestCrossBoreMirroredRouteMatchesDirect(t *testing.T) {
 		func(j int, base *crossBoreCellExact, flipY, flipZ bool) float64 {
 			cell := mesh.cellHeld[j]
 			held := [3]r3.Vec{moved[cell[0]], moved[cell[1]], moved[cell[2]]}
-			return crossBoreCellSampleError(&held, rec.centerZ, &base.coords, flipY, flipZ)
+			return crossBoreCellSampleError(&held, rec.CenterZ, &base.coords, flipY, flipZ)
 		})
 	require.NoError(t, err)
 	require.Greater(t, charged.sampleError, proofbound.Radius3D(0.04))
@@ -422,8 +422,8 @@ func TestCrossBoreMirroredRouteRefusesLikeDirect(t *testing.T) {
 		name string
 		rec  crossCylinderBoreRecord
 	}{
-		{"loses clearance or folds", crossCylinderBoreRecord{radius: 5, bore: 4.9, height: 10, centerZ: 5}},
-		{"no real X", crossCylinderBoreRecord{radius: 5, bore: 5, height: 10, centerZ: 5}},
+		{"loses clearance or folds", crossCylinderBoreRecord{Radius: 5, Bore: 4.9, Height: 10, CenterZ: 5}},
+		{"no real X", crossCylinderBoreRecord{Radius: 5, Bore: 5, Height: 10, CenterZ: 5}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var firstDirect error

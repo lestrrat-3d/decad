@@ -147,16 +147,16 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 func smoothRectangularSectionRecord(fp facetedPayload, plane r3.Frame) (profileRecord, bool) {
 	// Placement drops the certificate. The xform and normal checks are
 	// reject-only backstops for future producers and placement paths.
-	if fp.smoothRectSection == nil || fp.Xform != r3.Identity() ||
+	if fp.SmoothRectSection == nil || fp.Xform != r3.Identity() ||
 		plane.U() != r3.NewVec(1, 0, 0) || plane.V() != r3.NewVec(0, 1, 0) ||
 		plane.N() != r3.NewVec(0, 0, 1) {
 		return profileRecord{}, false
 	}
-	origin := fp.smoothRectSection.Origin()
+	origin := fp.SmoothRectSection.Origin()
 	if plane.Origin().X != origin.X || plane.Origin().Y != origin.Y {
 		return profileRecord{}, false
 	}
-	w, h, ok := fp.smoothRectSection.At(plane.Origin().Z)
+	w, h, ok := fp.SmoothRectSection.At(plane.Origin().Z)
 	if !ok {
 		return profileRecord{}, false
 	}

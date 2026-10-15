@@ -21,17 +21,17 @@ import (
 // Lofts. The lower source occupies ring 0..1, its reflected copy ring 1..2.
 // Wall groups stay distinct even when both sources use the same role string.
 type loftMirrorJoinRecord struct {
-	lower, upper *Body
-	stationCount int
-	wallGroups   [2][]int
-	capGroups    [2]int
+	Lower, Upper *Body
+	StationCount int
+	WallGroups   [2][]int
+	CapGroups    [2]int
 }
 
 // A rigid copy keeps the source relation separate from its moved held mesh.
 // The source record is never reauthenticated from a faceted surface.
 type loftMirrorPlacementRecord struct {
-	source *loftMirrorJoinRecord
-	motion r3.Transform
+	Source *loftMirrorJoinRecord
+	Motion r3.Transform
 }
 
 func tryLoftMirrorUnion(ctx context.Context, op meshbool.OperationKind,
@@ -141,7 +141,7 @@ func buildLoftMirrorUnion(ctx context.Context, d *Document, ref producerID,
 		return nil, fmt.Errorf("%w: reflected loft proof is not finite", ErrUnsupported)
 	}
 
-	record := &loftMirrorJoinRecord{lower: lowerBody, upper: upperBody, stationCount: n}
+	record := &loftMirrorJoinRecord{Lower: lowerBody, Upper: upperBody, StationCount: n}
 	verts := append(append([]r3.Vec(nil), lower.Verts...), upper.Verts[:n]...)
 	vertexBound := make([]float64, len(verts))
 	for i := range vertexBound {
@@ -175,11 +175,11 @@ func buildLoftMirrorUnion(ctx context.Context, d *Document, ref producerID,
 		tris = append(tris, triangle)
 		src = append(src, group)
 		if wallIndex >= 0 {
-			record.wallGroups[half][wallIndex] = group
+			record.WallGroups[half][wallIndex] = group
 		} else if capRole == provenance.RoleCapStart {
-			record.capGroups[0] = group
+			record.CapGroups[0] = group
 		} else if capRole == provenance.RoleCapEnd {
-			record.capGroups[1] = group
+			record.CapGroups[1] = group
 		}
 	}
 	for half, item := range []struct {
@@ -188,7 +188,7 @@ func buildLoftMirrorUnion(ctx context.Context, d *Document, ref producerID,
 	}{
 		{lower, lowerMesh}, {upper, upperMesh},
 	} {
-		record.wallGroups[half] = make([]int, item.payload.Walls)
+		record.WallGroups[half] = make([]int, item.payload.Walls)
 		for i := range item.payload.Walls + item.payload.CapStartCount {
 			if err := ctx.Err(); err != nil {
 				return nil, err
@@ -218,11 +218,11 @@ func buildLoftMirrorUnion(ctx context.Context, d *Document, ref producerID,
 	if err := loftmesh.LoftCrossingAudit(proofbound.NewWorkBudget(ctx), verts, tris); err != nil {
 		return nil, err
 	}
-	capGroups := record.capGroups
+	capGroups := record.CapGroups
 	fp := facetedPayload{Verts: verts, Tris: tris, Src: src, groups: groups,
 		VertexBound: vertexBound, MeshBound: bound, VolSymDiff: volumeGap,
-		AreaSlack: areaSlack, DPair: pairDiameter, contactAudited: true,
-		loftMirrorJoin: record, mirrorCapGroups: &capGroups, Xform: r3.Identity()}
+		AreaSlack: areaSlack, DPair: pairDiameter, ContactAudited: true,
+		LoftMirrorJoin: record, MirrorCapGroups: &capGroups, Xform: r3.Identity()}
 	return buildFacetedBody(ctx, d, ref, fp)
 }
 

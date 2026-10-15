@@ -40,7 +40,7 @@ then proves topology, mass and bounded area and volume readings from this
 record. `Tessellate(VerifyAll)` checks the final result at a caller's target
 tolerance.
 
-The `loftMirrorJoin` record preserves both original Loft operands, separate
+The `LoftMirrorJoin` record preserves both original Loft operands, separate
 lower and upper wall groups, outer cap groups, and the number of vertices in
 each station. Both retained outer caps keep their source origins and planar
 surface, with new Union cap roles appended. A later rigid `Copy` keeps a

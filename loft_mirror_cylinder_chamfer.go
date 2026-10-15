@@ -21,19 +21,19 @@ import (
 // audited half. Both exterior bands then have the same held construction.
 func tryLoftMirrorCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPayload,
 	edges []*Edge, setback, delta float64, asym *asymmetricChamfer) (*Body, bool, error) {
-	record := fp.loftMirrorCylinderBore
-	if record == nil || !fp.contactAudited || fp.Xform != r3.Identity() {
+	record := fp.LoftMirrorCylinderBore
+	if record == nil || !fp.ContactAudited || fp.Xform != r3.Identity() {
 		return nil, false, nil
 	}
 	if asym != nil || delta != 0 || setback <= 0 || proofbound.IsNonFinite(setback) {
 		return nil, true, fmt.Errorf("%w: mirrored cap chamfer needs one exact equal setback", ErrUnsupported)
 	}
-	if record.join == nil || record.join.blank == nil || record.lowerBore == nil ||
-		record.lowerBore.n.Doc != b.n.Doc || record.join.blank.n.Doc != b.n.Doc {
+	if record.Join == nil || record.Join.Blank == nil || record.LowerBore == nil ||
+		record.LowerBore.n.Doc != b.n.Doc || record.Join.Blank.n.Doc != b.n.Doc {
 		return nil, true, fmt.Errorf("%w: mirrored cap chamfer lost its authenticated source", ErrUnsupported)
 	}
-	lower, ok := record.lowerBore.n.Payload.(facetedPayload)
-	if !ok || lower.loftCylinderBore == nil || !lower.contactAudited || lower.Xform != r3.Identity() {
+	lower, ok := record.LowerBore.n.Payload.(facetedPayload)
+	if !ok || lower.LoftCylinderBore == nil || !lower.ContactAudited || lower.Xform != r3.Identity() {
 		return nil, true, fmt.Errorf("%w: mirrored cap chamfer lost its lower bore", ErrUnsupported)
 	}
 	source, ok := loftCylinderChamferSourceOf(lower)
@@ -62,7 +62,7 @@ func tryLoftMirrorCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPay
 		return nil, true, err
 	}
 	bridgeReserve, err := loftmesh.MirrorBridgeReserve(lower.Verts, lower.MeshBound,
-		record.join.bridgeBound, setback)
+		record.Join.BridgeBound, setback)
 	if err != nil {
 		return nil, true, err
 	}
@@ -89,11 +89,11 @@ func tryLoftMirrorCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPay
 // assembled upper half must also pass the measured bound check below.
 func loftMirrorCylinderChamferReflectionReserve(lower facetedPayload,
 	record *loftMirrorCylinderBoreRecord, setback float64) (float64, error) {
-	if record == nil || record.join == nil || record.join.source == nil ||
-		record.join.source.lower == nil {
+	if record == nil || record.Join == nil || record.Join.Source == nil ||
+		record.Join.Source.Lower == nil {
 		return 0, fmt.Errorf("%w: mirrored cap chamfer lost its Loft frame", ErrUnsupported)
 	}
-	loft, ok := record.join.source.lower.n.Payload.(loftPayload)
+	loft, ok := record.Join.Source.Lower.n.Payload.(loftPayload)
 	if !ok || !loft.AuthenticatedReconstruction {
 		return 0, fmt.Errorf("%w: mirrored cap chamfer lost its Loft frame", ErrUnsupported)
 	}
@@ -145,7 +145,7 @@ func loftMirrorCylinderChamferSelect(ctx context.Context, b *Body, fp facetedPay
 	if len(selected) != len(edges) {
 		return fmt.Errorf("%w: mirrored cap chamfer repeats an edge", ErrUnsupported)
 	}
-	blank, ok := record.join.blank.n.Payload.(prismPayload)
+	blank, ok := record.Join.Blank.n.Payload.(prismPayload)
 	if !ok || !loftMirrorCylinderBlank(blank) || caps[0] == nil || caps[1] == nil {
 		return fmt.Errorf("%w: mirrored bore lost its two exterior annuli", ErrUnsupported)
 	}
@@ -154,10 +154,10 @@ func loftMirrorCylinderChamferSelect(ctx context.Context, b *Body, fp facetedPay
 		if cap == 1 {
 			z = blank.Z1
 		}
-		if record.capGroups[cap] < 0 || record.wallGroups[cap] < 0 ||
-			!loftCylinderAuditAnnulus(ctx, mesh, record.outer[cap], record.inner[cap],
-				record.capGroups[cap], z, cap == 0) || len(face.n.Loops) != 2 ||
-			!loftCylinderChamferCapWalk(face.n.Loops[0], fp.Verts, record.outer[cap], cap == 0) {
+		if record.CapGroups[cap] < 0 || record.WallGroups[cap] < 0 ||
+			!loftCylinderAuditAnnulus(ctx, mesh, record.Outer[cap], record.Inner[cap],
+				record.CapGroups[cap], z, cap == 0) || len(face.n.Loops) != 2 ||
+			!loftCylinderChamferCapWalk(face.n.Loops[0], fp.Verts, record.Outer[cap], cap == 0) {
 			return fmt.Errorf("%w: mirrored bore cap %d has no audited outer loop", ErrUnsupported, cap)
 		}
 		for _, ce := range face.n.Loops[0].CoEdges {
@@ -178,11 +178,11 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 	old facetedPayload, record *loftMirrorCylinderBoreRecord, lowerBody *Body,
 	half loftCylinderOneCapData, reflectionReserve, bridgeReserve, setback float64) (*Body, error) {
 	lower, ok := lowerBody.n.Payload.(facetedPayload)
-	if !ok || !lower.contactAudited || lower.Xform != r3.Identity() ||
-		record.join.source == nil || record.join.source.lower == nil {
+	if !ok || !lower.ContactAudited || lower.Xform != r3.Identity() ||
+		record.Join.Source == nil || record.Join.Source.Lower == nil {
 		return nil, fmt.Errorf("%w: mirrored cap chamfer lost its audited lower half", ErrUnsupported)
 	}
-	loft, ok := record.join.source.lower.n.Payload.(loftPayload)
+	loft, ok := record.Join.Source.Lower.n.Payload.(loftPayload)
 	if !ok || !loft.AuthenticatedReconstruction {
 		return nil, fmt.Errorf("%w: mirrored cap chamfer lost its Loft source", ErrUnsupported)
 	}
@@ -195,7 +195,7 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 		return nil, err
 	}
 	upper, ok := upperBody.n.Payload.(facetedPayload)
-	if !ok || !upper.contactAudited || len(lower.Verts) != len(upper.Verts) ||
+	if !ok || !upper.ContactAudited || len(lower.Verts) != len(upper.Verts) ||
 		len(lower.Tris) != len(upper.Tris) || len(lower.Src) != len(upper.Src) ||
 		half.capGroups[0] < 0 || half.capGroups[1] < 0 || half.boreGroup < 0 {
 		return nil, fmt.Errorf("%w: mirrored cap chamfer halves have no matching held shell", ErrUnsupported)
@@ -296,7 +296,7 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 	if err := tessellation.RequireVertexLinks(ctx, len(verts), tris); err != nil {
 		return nil, fmt.Errorf("%w: mirrored cap chamfer has an invalid vertex link: %s", ErrUnsupported, err)
 	}
-	blank, ok := record.join.blank.n.Payload.(prismPayload)
+	blank, ok := record.Join.Blank.n.Payload.(prismPayload)
 	if !ok || !loftMirrorCylinderBlank(blank) {
 		return nil, fmt.Errorf("%w: mirrored cap chamfer lost its exact blank", ErrUnsupported)
 	}
@@ -320,12 +320,12 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 			return nil, fmt.Errorf("%w: mirrored cap chamfer does not tile exterior annulus %d", ErrUnsupported, cap)
 		}
 	}
-	if err := loftMirrorCylinderChamferBoreUnchanged(old, mesh, record.wallGroups, wallGroups); err != nil {
+	if err := loftMirrorCylinderChamferBoreUnchanged(old, mesh, record.WallGroups, wallGroups); err != nil {
 		return nil, err
 	}
 	bound := max(lower.MeshBound, proofbound.AbsSumUpper(upper.MeshBound, bridgeReach))
 	volumeGap := proofbound.AbsSumUpper(lower.VolSymDiff, upper.VolSymDiff,
-		record.join.bridgeVolume)
+		record.Join.BridgeVolume)
 	areaSlack := proofbound.AbsSumUpper(lower.AreaSlack, upper.AreaSlack,
 		proofbound.ProductUpper(2, max(lower.AreaSlack, upper.AreaSlack)))
 	diameter := facetedSourceDiameterUpper(verts, bound)
@@ -337,11 +337,11 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 	}
 	result := facetedPayload{Verts: verts, Tris: tris, Src: src, groups: groups,
 		VertexBound: vertexBound, MeshBound: bound, VolSymDiff: volumeGap,
-		AreaSlack: areaSlack, DPair: diameter, contactAudited: true, Xform: r3.Identity()}
+		AreaSlack: areaSlack, DPair: diameter, ContactAudited: true, Xform: r3.Identity()}
 	for cap, group := range capGroups {
-		result.groups[group].origins = append([]provenance.Ref(nil), old.groups[record.capGroups[cap]].origins...)
+		result.groups[group].origins = append([]provenance.Ref(nil), old.groups[record.CapGroups[cap]].origins...)
 	}
-	if err := loftCylinderTagCaps(&result, record.join.blank, capGroups,
+	if err := loftCylinderTagCaps(&result, record.Join.Blank, capGroups,
 		[2]float64{blank.Z0, blank.Z1}, ref); err != nil {
 		return nil, err
 	}

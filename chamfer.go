@@ -282,8 +282,8 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 		}
 	}
 	if fp, ok := b.n.Payload.(facetedPayload); ok {
-		if fp.prismUnionFillet != nil && asym == nil {
-			if body, recognized, err := b.tryChamferPrismUnion(ctx, edges, fp.prismUnionFillet, dmm, dDelta); recognized || err != nil {
+		if fp.PrismUnionFillet != nil && asym == nil {
+			if body, recognized, err := b.tryChamferPrismUnion(ctx, edges, fp.PrismUnionFillet, dmm, dDelta); recognized || err != nil {
 				return body, err
 			}
 		}

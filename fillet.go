@@ -256,17 +256,17 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 	if lp, ok := b.n.Payload.(loftPayload); ok {
 		return b.filletStraightLoft(ctx, sel, edges, lp, rmm)
 	}
-	if fp, ok := b.n.Payload.(facetedPayload); ok && fp.obliqueBoss != nil {
-		return b.filletObliqueBoss(ctx, edges, fp.obliqueBoss, rmm, rDelta)
+	if fp, ok := b.n.Payload.(facetedPayload); ok && fp.ObliqueBoss != nil {
+		return b.filletObliqueBoss(ctx, edges, fp.ObliqueBoss, rmm, rDelta)
 	}
-	if fp, ok := b.n.Payload.(facetedPayload); ok && fp.prismUnionFillet != nil {
+	if fp, ok := b.n.Payload.(facetedPayload); ok && fp.PrismUnionFillet != nil {
 		// A retained source pair alone does not authenticate this selection.
 		// Keep the ordinary S3 refusal and its complete edge context on a miss.
-		if out, matched, err := b.filletPrismUnion(ctx, edges, fp.prismUnionFillet, rmm, rDelta); matched || err != nil {
+		if out, matched, err := b.filletPrismUnion(ctx, edges, fp.PrismUnionFillet, rmm, rDelta); matched || err != nil {
 			return out, err
 		}
 	}
-	if fp, ok := b.n.Payload.(facetedPayload); ok && fp.prismPatternJoin != nil {
+	if fp, ok := b.n.Payload.(facetedPayload); ok && fp.PrismPatternJoin != nil {
 		out, err := prismPatternFilletBody(ctx, b, edges, rmm, rDelta)
 		if err != nil {
 			return nil, err

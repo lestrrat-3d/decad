@@ -23,7 +23,7 @@ func (b *Body) tryChamferPrismUnion(ctx context.Context, edges []*Edge,
 	if len(edges) != 1 || setbackDelta != 0 || !(setback > 0) || proofbound.IsNonFinite(setback) {
 		return nil, false, nil
 	}
-	for _, pair := range [][2]*Body{{rec.first, rec.second}, {rec.second, rec.first}} {
+	for _, pair := range [][2]*Body{{rec.First, rec.Second}, {rec.Second, rec.First}} {
 		pp, ok := pair[0].n.Payload.(prismPayload)
 		if !ok {
 			continue

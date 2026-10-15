@@ -17,9 +17,9 @@ import (
 // sources instead of retaining its mesh. Only this exact common pose maps the
 // local result to those operands; an ordinary later placement drops the record.
 type loftCylinderPlacement struct {
-	pose  r3.Transform
-	blank *Body
-	teeth []*Body
+	Pose  r3.Transform
+	Blank *Body
+	Teeth []*Body
 }
 
 // loftCylinderAffine compares the exact rational maps represented by stored
@@ -256,20 +256,20 @@ func tryPlacedLoftCylinderUnion(ctx context.Context, d *Document, ref producerID
 		blank, teeth = a, []*Body{b}
 	} else if _, ok := b.n.Payload.(prismPayload); ok {
 		blank, teeth = b, []*Body{a}
-	} else if fp, ok := a.n.Payload.(facetedPayload); ok && fp.loftCylinderJoin != nil &&
-		fp.loftCylinderJoin.placement != nil && fp.Xform == fp.loftCylinderJoin.placement.pose {
-		placement := fp.loftCylinderJoin.placement
-		blank, teeth, pose = fp.loftCylinderJoin.blank,
-			append(append([]*Body(nil), fp.loftCylinderJoin.teeth...), b), placement.pose
-		localBlank = placement.blank
-		localTeeth = append([]*Body(nil), placement.teeth...)
-	} else if fp, ok := b.n.Payload.(facetedPayload); ok && fp.loftCylinderJoin != nil &&
-		fp.loftCylinderJoin.placement != nil && fp.Xform == fp.loftCylinderJoin.placement.pose {
-		placement := fp.loftCylinderJoin.placement
-		blank, teeth, pose = fp.loftCylinderJoin.blank,
-			append(append([]*Body(nil), fp.loftCylinderJoin.teeth...), a), placement.pose
-		localBlank = placement.blank
-		localTeeth = append([]*Body(nil), placement.teeth...)
+	} else if fp, ok := a.n.Payload.(facetedPayload); ok && fp.LoftCylinderJoin != nil &&
+		fp.LoftCylinderJoin.Placement != nil && fp.Xform == fp.LoftCylinderJoin.Placement.Pose {
+		placement := fp.LoftCylinderJoin.Placement
+		blank, teeth, pose = fp.LoftCylinderJoin.Blank,
+			append(append([]*Body(nil), fp.LoftCylinderJoin.Teeth...), b), placement.Pose
+		localBlank = placement.Blank
+		localTeeth = append([]*Body(nil), placement.Teeth...)
+	} else if fp, ok := b.n.Payload.(facetedPayload); ok && fp.LoftCylinderJoin != nil &&
+		fp.LoftCylinderJoin.Placement != nil && fp.Xform == fp.LoftCylinderJoin.Placement.Pose {
+		placement := fp.LoftCylinderJoin.Placement
+		blank, teeth, pose = fp.LoftCylinderJoin.Blank,
+			append(append([]*Body(nil), fp.LoftCylinderJoin.Teeth...), a), placement.Pose
+		localBlank = placement.Blank
+		localTeeth = append([]*Body(nil), placement.Teeth...)
 	} else {
 		return nil, false, nil
 	}
@@ -301,7 +301,7 @@ func tryPlacedLoftCylinderUnion(ctx context.Context, d *Document, ref producerID
 		return nil, admitted, err
 	}
 	localPayload, ok := localJoin.n.Payload.(facetedPayload)
-	if !ok || localPayload.loftCylinderJoin == nil {
+	if !ok || localPayload.LoftCylinderJoin == nil {
 		return nil, false, nil
 	}
 	world, err := localPayload.placedWith(ctx, d, ref, pose, nil)
@@ -312,11 +312,11 @@ func tryPlacedLoftCylinderUnion(ctx context.Context, d *Document, ref producerID
 	if !ok || placed.MeshBound > 0.1 || proofbound.IsNonFinite(placed.MeshBound) {
 		return nil, false, nil
 	}
-	record := *localPayload.loftCylinderJoin
-	record.blank = blank
-	record.teeth = teeth
-	record.placement = &loftCylinderPlacement{pose: pose, blank: localBlank, teeth: localTeeth}
-	placed.loftCylinderJoin = &record
+	record := *localPayload.LoftCylinderJoin
+	record.Blank = blank
+	record.Teeth = teeth
+	record.Placement = &loftCylinderPlacement{Pose: pose, Blank: localBlank, Teeth: localTeeth}
+	placed.LoftCylinderJoin = &record
 	world.n.Payload = placed
 	return world, true, nil
 }
@@ -324,16 +324,16 @@ func tryPlacedLoftCylinderUnion(ctx context.Context, d *Document, ref producerID
 func tryPlacedLoftCylinderBoreCut(ctx context.Context, d *Document, ref producerID,
 	target, tool *Body) (*Body, bool, error) {
 	joined, ok := target.n.Payload.(facetedPayload)
-	if !ok || joined.loftCylinderJoin == nil || joined.loftCylinderJoin.placement == nil {
+	if !ok || joined.LoftCylinderJoin == nil || joined.LoftCylinderJoin.Placement == nil {
 		return nil, false, nil
 	}
-	placement := joined.loftCylinderJoin.placement
-	if joined.Xform != placement.pose || !joined.contactAudited ||
-		placement.blank == nil || len(placement.teeth) == 0 ||
-		!loftCylinderPlacedSourcesMatch(placement.teeth) {
+	placement := joined.LoftCylinderJoin.Placement
+	if joined.Xform != placement.Pose || !joined.ContactAudited ||
+		placement.Blank == nil || len(placement.Teeth) == 0 ||
+		!loftCylinderPlacedSourcesMatch(placement.Teeth) {
 		return nil, false, nil
 	}
-	record := joined.loftCylinderJoin
+	record := joined.LoftCylinderJoin
 	// Mirror the local bore's source-level gates before rebuilding the tool.
 	// A mismatch belongs to generic Cut; a rebuild error remains observable.
 	pp, ok := tool.n.Payload.(prismPayload)
@@ -352,7 +352,7 @@ func tryPlacedLoftCylinderBoreCut(ctx context.Context, d *Document, ref producer
 	if err != nil {
 		return nil, false, err
 	}
-	if radius <= 0 || radius >= record.radius || proofbound.IsNonFinite(radius) ||
+	if radius <= 0 || radius >= record.Radius || proofbound.IsNonFinite(radius) ||
 		proofbound.IsNonFinite(pp.Z0) || proofbound.IsNonFinite(pp.Z1) {
 		return nil, false, nil
 	}
@@ -364,7 +364,7 @@ func tryPlacedLoftCylinderBoreCut(ctx context.Context, d *Document, ref producer
 	if err != nil {
 		return nil, false, nil //nolint:nilerr // an invalid tool map keeps the generic fallback
 	}
-	inverse, err := placement.pose.Inverse()
+	inverse, err := placement.Pose.Inverse()
 	if err != nil {
 		return nil, false, nil //nolint:nilerr // an invalid pose inverse cannot certify this bore
 	}
@@ -382,7 +382,7 @@ func tryPlacedLoftCylinderBoreCut(ctx context.Context, d *Document, ref producer
 		return nil, false, err
 	}
 	if !loftCylinderAffineOf(frame).then(loftCylinderAffineOf(pp.Xform)).equals(
-		loftCylinderAffineOf(localMap).then(loftCylinderAffineOf(placement.pose))) {
+		loftCylinderAffineOf(localMap).then(loftCylinderAffineOf(placement.Pose))) {
 		return nil, false, nil
 	}
 	origin := localFrame.Origin()
@@ -391,14 +391,14 @@ func tryPlacedLoftCylinderBoreCut(ctx context.Context, d *Document, ref producer
 	}
 	start := new(big.Rat).Add(proofarith.FloatRat(origin.Z), proofarith.FloatRat(pp.Z0))
 	end := new(big.Rat).Add(proofarith.FloatRat(origin.Z), proofarith.FloatRat(pp.Z1))
-	if start.Cmp(proofarith.FloatRat(record.z0)) >= 0 ||
-		end.Cmp(proofarith.FloatRat(record.z1)) <= 0 {
+	if start.Cmp(proofarith.FloatRat(record.Z0)) >= 0 ||
+		end.Cmp(proofarith.FloatRat(record.Z1)) <= 0 {
 		return nil, false, nil
 	}
 	// The source and tool gates above precede both private rebuilds. The join
 	// is only needed for an eligible bore; later tooth joins use the sources.
 	localJoin, admitted, err := tryLoftCylinderUnionTeeth(ctx, d,
-		target.originProducer(), placement.blank, placement.teeth)
+		target.originProducer(), placement.Blank, placement.Teeth)
 	if err != nil || !admitted {
 		return nil, admitted, err
 	}
@@ -417,7 +417,7 @@ func tryPlacedLoftCylinderBoreCut(ctx context.Context, d *Document, ref producer
 	if !ok {
 		return nil, false, nil
 	}
-	world, err := localPayload.placedWith(ctx, d, ref, placement.pose, nil)
+	world, err := localPayload.placedWith(ctx, d, ref, placement.Pose, nil)
 	if err != nil {
 		return nil, true, err
 	}

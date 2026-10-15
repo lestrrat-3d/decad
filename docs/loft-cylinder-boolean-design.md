@@ -123,7 +123,7 @@ The two planar caps use the ordered tooth exterior paths and ring paths.
 The exact cap audit checks that each outline is simple, counterclockwise,
 contains the origin, and is tiled by only its cap-group triangles with
 matching directed edges and exact area. `LoftCrossingAudit` checks the entire
-constructed shell before the payload records `contactAudited=true`. The
+constructed shell before the payload records `ContactAudited=true`. The
 faceted-body audit then checks manifold closure and orientation.
 The structural join uses a 16-million candidate-pair scan ceiling in this
 audit; other callers keep the generic eight-million ceiling. The triangle
@@ -410,7 +410,7 @@ charges the final rigid placement, and the result must still meet the 0.1 mm
 boundary limit. The placed bore's face origins name the actual blank, teeth,
 and tool. The placed bore does not gain an unplaced chamfer source record.
 
-The bore record also retains the upward `boreBound` used in Cut's wall proof.
+The bore record also retains the upward `BoreBound` used in Cut's wall proof.
 That value bounds the two-way, same-height correspondence between the exact
 bore cylinder and its held wall. A later outer-cap edit must recheck Cut's
 strict bore-to-blank clearance before using this local bound.

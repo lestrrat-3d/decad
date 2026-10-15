@@ -53,48 +53,48 @@ func prismPatternShell(ctx context.Context, blank *Body, source *prismPatternSou
 	var outlines [2][]int
 	for i := range parts {
 		part := &parts[i]
-		part.vertex = make([][]int, 2)
+		part.Vertex = make([][]int, 2)
 		for capIndex := range 2 {
-			part.vertex[capIndex] = make([]int, part.rootStart+1)
-			for j := range part.vertex[capIndex] {
-				part.vertex[capIndex][j] = len(mesh.verts)
-				mesh.verts = append(mesh.verts, part.mesh.n.Vertices[2*j+capIndex])
+			part.Vertex[capIndex] = make([]int, part.RootStart+1)
+			for j := range part.Vertex[capIndex] {
+				part.Vertex[capIndex][j] = len(mesh.verts)
+				mesh.verts = append(mesh.verts, part.Mesh.n.Vertices[2*j+capIndex])
 			}
 		}
 		groups := make(map[*topo.Face]int)
-		for j := range part.rootStart {
+		for j := range part.RootStart {
 			for side := range 2 {
 				k := 2*j + side
-				face := part.mesh.n.Source[k]
+				face := part.Mesh.n.Source[k]
 				group, ok := groups[face]
 				if !ok {
 					group = len(mesh.groups)
 					groups[face] = group
 					mesh.groups = append(mesh.groups, facetGroup{origins: append([]provenance.Ref(nil), face.Origins...)})
 				}
-				old := part.mesh.n.Triangles[k]
+				old := part.Mesh.n.Triangles[k]
 				var mapped [3]int
 				for corner, index := range old {
 					station, capIndex := index/2, index%2
-					if station > part.rootStart {
+					if station > part.RootStart {
 						return nil, [2][]int{}, blankGroup, 0, 0,
 							fmt.Errorf("%w: retained prism wall enters its root arc", ErrUnsupported)
 					}
-					mapped[corner] = part.vertex[capIndex][station]
+					mapped[corner] = part.Vertex[capIndex][station]
 				}
 				mesh.add(mapped, group)
 			}
 		}
 	}
-	radius := source.blankRadius
+	radius := source.BlankRadius
 	maxStep, ringRound := 0.0, 0.0
 	for i := range parts {
 		part, next := &parts[i], &parts[(i+1)%len(parts)]
 		for cap := range 2 {
-			outlines[cap] = append(outlines[cap], part.vertex[cap]...)
+			outlines[cap] = append(outlines[cap], part.Vertex[cap]...)
 		}
-		start, end := part.end, next.start
-		startIV, endIV := part.endIV, next.startIV
+		start, end := part.End, next.Start
+		startIV, endIV := part.EndIV, next.StartIV
 		for end <= start {
 			end += 2 * math.Pi
 			endIV = proofbound.IntervalAdd(endIV, proofbound.TwoPiInterval())
@@ -109,8 +109,8 @@ func prismPatternShell(ctx context.Context, blank *Body, source *prismPatternSou
 		var rings [2][]int
 		for cap := range 2 {
 			rings[cap] = make([]int, steps+1)
-			rings[cap][0] = part.vertex[cap][part.rootStart]
-			rings[cap][steps] = next.vertex[cap][0]
+			rings[cap][0] = part.Vertex[cap][part.RootStart]
+			rings[cap][steps] = next.Vertex[cap][0]
 			for step := 1; step < steps; step++ {
 				fraction := big.NewRat(int64(step), int64(steps))
 				angleIV := proofbound.IntervalAdd(
@@ -118,9 +118,9 @@ func prismPatternShell(ctx context.Context, blank *Body, source *prismPatternSou
 						new(big.Rat).Sub(big.NewRat(1, 1), fraction)),
 					proofbound.IntervalScale(endIV, fraction))
 				angle := start + float64(step)*width/float64(steps)
-				z := source.blank.Z0
+				z := source.Blank.Z0
 				if cap == 1 {
-					z = source.blank.Z1
+					z = source.Blank.Z1
 				}
 				point, round, err := prismpattern.RingPoint(radius, z, angle, angleIV)
 				if err != nil {
@@ -172,9 +172,9 @@ func prismPatternShell(ctx context.Context, blank *Body, source *prismPatternSou
 		return nil, [2][]int{}, blankGroup, 0, 0, err
 	}
 	for cap, outline := range outlines {
-		z := source.blank.Z0
+		z := source.Blank.Z0
 		if cap == 1 {
-			z = source.blank.Z1
+			z = source.Blank.Z1
 		}
 		if !loftCylinderAuditCap(ctx, mesh, outline, blankGroup[cap+1], z, cap == 0) ||
 			!prismPatternRootChordsInsideCap(ctx, mesh, outline, parts, cap) {

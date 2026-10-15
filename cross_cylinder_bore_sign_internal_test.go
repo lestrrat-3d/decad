@@ -34,7 +34,7 @@ func crossBoreCellProofFullEnds(rec *crossCylinderBoreRecord, setback float64,
 	gapLazy := proofarith.LazyOf(angularGap)
 	s := proofarith.LazyIntervalWiden(proofarith.LazyIntervalOf(proofbound.ToProofInterval(s0)), gapLazy)
 	c := proofarith.LazyIntervalWiden(proofarith.LazyIntervalOf(proofbound.ToProofInterval(c0)), gapLazy)
-	R, r, d := crossPoint(rec.radius), crossPoint(rec.bore), crossPoint(setback)
+	R, r, d := crossPoint(rec.Radius), crossPoint(rec.Bore), crossPoint(setback)
 	cd, sd := crossDual{v: c, d: crossSub(crossPoint(0), s)}, crossDual{v: s, d: c}
 	Rd, rd, dd := crossConst(R), crossConst(r), crossConst(d)
 	xd, ok := crossDSqrt(crossDSub(crossDMul(Rd, Rd),
@@ -106,15 +106,15 @@ func crossBoreCellProofFullEnds(rec *crossCylinderBoreRecord, setback float64,
 	theta := 2 * math.Pi * float64(i) / n
 	outer, inner := crossBoreFeet(rec, setback, theta)
 	co, sn := math.Cos(theta), math.Sin(theta)
-	negative := r3.Vec{X: -math.Sqrt(rec.radius*rec.radius - rec.bore*rec.bore*co*co),
-		Y: rec.bore * co, Z: rec.bore * sn}
+	negative := r3.Vec{X: -math.Sqrt(rec.Radius*rec.Radius - rec.Bore*rec.Bore*co*co),
+		Y: rec.Bore * co, Z: rec.Bore * sn}
 	sampleError := 0.0
 	for _, pair := range []struct {
 		exact crossIV
 		held  float64
 	}{
-		{outX.v, outer.X}, {outY.v, outer.Y}, {outZ.v, outer.Z - rec.centerZ},
-		{inX.v, inner.X}, {inY.v, inner.Y}, {inZ.v, inner.Z - rec.centerZ},
+		{outX.v, outer.X}, {outY.v, outer.Y}, {outZ.v, outer.Z - rec.CenterZ},
+		{inX.v, inner.X}, {inY.v, inner.Y}, {inZ.v, inner.Z - rec.CenterZ},
 		{negativeX, negative.X}, {negativeY, negative.Y}, {negativeZ, negative.Z},
 	} {
 		sampleError = max(sampleError, proofbound.LazyIntervalFloatError(pair.exact, pair.held))
@@ -143,12 +143,12 @@ func TestCrossBoreSignTestsMatchReference(t *testing.T) {
 		setback float64
 		failing bool
 	}{
-		{"five by one", crossCylinderBoreRecord{radius: 5, bore: 1, height: 10, centerZ: 5, sourceBound: 1e-9}, 0.5, false},
+		{"five by one", crossCylinderBoreRecord{Radius: 5, Bore: 1, Height: 10, CenterZ: 5, SourceBound: 1e-9}, 0.5, false},
 		{"eight by one and half",
-			crossCylinderBoreRecord{radius: 8, bore: 1.5, height: 16, centerZ: 8, sourceBound: 1e-9}, 0.1875, false},
+			crossCylinderBoreRecord{Radius: 8, Bore: 1.5, Height: 16, CenterZ: 8, SourceBound: 1e-9}, 0.1875, false},
 		{"loses clearance or folds",
-			crossCylinderBoreRecord{radius: 5, bore: 4.9, height: 10, centerZ: 5, sourceBound: 1e-9}, 0.5, true},
-		{"no real X", crossCylinderBoreRecord{radius: 5, bore: 5, height: 10, centerZ: 5, sourceBound: 1e-9}, 0.5, true},
+			crossCylinderBoreRecord{Radius: 5, Bore: 4.9, Height: 10, CenterZ: 5, SourceBound: 1e-9}, 0.5, true},
+		{"no real X", crossCylinderBoreRecord{Radius: 5, Bore: 5, Height: 10, CenterZ: 5, SourceBound: 1e-9}, 0.5, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			const n = 2 * crossBoreHalfStations

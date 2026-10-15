@@ -412,7 +412,7 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 		vertexBound[i] = bound
 	}
 	payload := facetedPayload{Verts: mesh.verts, Tris: mesh.tris, Src: mesh.src,
-		groups: mesh.groups, VertexBound: vertexBound, contactAudited: true,
+		groups: mesh.groups, VertexBound: vertexBound, ContactAudited: true,
 		MeshBound: bound, VolSymDiff: volumeGap, AreaSlack: areaSlack,
 		DPair: base.DPair, Xform: r3.Identity()}
 	body, err := buildFacetedBody(ctx, d, ref, payload)

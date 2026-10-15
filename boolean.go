@@ -443,11 +443,11 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 		return nil, asBooleanError(op, err)
 	}
 	if op == meshbool.OpUnion {
-		eval.payload.obliqueBoss = recognizeObliqueBoss(a, b)
-		eval.payload.prismUnionFillet = recognizePrismUnionFillet(a, b)
+		eval.payload.ObliqueBoss = recognizeObliqueBoss(a, b)
+		eval.payload.PrismUnionFillet = recognizePrismUnionFillet(a, b)
 	}
 	if op == meshbool.OpCut {
-		eval.payload.crossCylinderBore = recognizeCrossCylinderBore(a, b)
+		eval.payload.CrossCylinderBore = recognizeCrossCylinderBore(a, b)
 	}
 
 	body, err := buildFacetedBodyWithProof(ctx, d, ref, eval.payload, eval.audit, eval.volume, eval.volumeRat)
@@ -925,7 +925,7 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 	}
 	// The mesh audit and occupied-volume reading certify this Boolean result
 	// as a source for a later positive similarity. No unbuilt result is marked.
-	payload.booleanSimilaritySource = true
+	payload.BooleanSimilaritySource = true
 	if err := ctx.Err(); err != nil {
 		return booleanEvaluation{}, err
 	}

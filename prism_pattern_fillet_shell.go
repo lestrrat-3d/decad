@@ -23,8 +23,8 @@ func prismPatternFilletShell(ctx context.Context, rec *prismPatternJoinRecord,
 	var outlines [2][]int
 	// A contact may consume several original circular-wall stations. Keep
 	// the final bracket facet and move its near endpoint to the circle foot.
-	positionByVertex := make(map[int]int, 2*len(rec.outlines[0]))
-	for _, outline := range rec.outlines {
+	positionByVertex := make(map[int]int, 2*len(rec.Outlines[0]))
+	for _, outline := range rec.Outlines {
 		for position, vertex := range outline {
 			positionByVertex[vertex] = position
 		}
@@ -58,14 +58,14 @@ func prismPatternFilletShell(ctx context.Context, rec *prismPatternJoinRecord,
 		}
 	}
 	dropCounts := make(map[[2]int]int, len(dropPairs))
-	mesh := &joinedMesh{verts: append([]r3.Vec(nil), rec.mesh.verts...),
-		groups: append([]facetGroup(nil), rec.mesh.groups...)}
-	for i, tri := range rec.mesh.tris {
-		group := rec.mesh.src[i]
-		if group == rec.groups[1] || group == rec.groups[2] {
+	mesh := &joinedMesh{verts: append([]r3.Vec(nil), rec.Mesh.verts...),
+		groups: append([]facetGroup(nil), rec.Mesh.groups...)}
+	for i, tri := range rec.Mesh.tris {
+		group := rec.Mesh.src[i]
+		if group == rec.Groups[1] || group == rec.Groups[2] {
 			continue
 		}
-		if group == rec.groups[0] {
+		if group == rec.Groups[0] {
 			pair := [2]int{-1, -1}
 			for _, vertex := range tri {
 				position, ok := positionByVertex[vertex]
@@ -86,8 +86,8 @@ func prismPatternFilletShell(ctx context.Context, rec *prismPatternJoinRecord,
 			if pair[1] < 0 {
 				return nil, outlines, 0, fmt.Errorf("%w: joined-prism fillet ring facet has no paired stations", ErrUnsupported)
 			}
-			gap := (pair[1] - pair[0] + len(rec.outlines[0])) % len(rec.outlines[0])
-			if gap != 1 && gap != len(rec.outlines[0])-1 {
+			gap := (pair[1] - pair[0] + len(rec.Outlines[0])) % len(rec.Outlines[0])
+			if gap != 1 && gap != len(rec.Outlines[0])-1 {
 				return nil, outlines, 0, fmt.Errorf("%w: joined-prism fillet ring facet skips a station", ErrUnsupported)
 			}
 			if pair[0] > pair[1] {
@@ -118,9 +118,9 @@ func prismPatternFilletShell(ctx context.Context, rec *prismPatternJoinRecord,
 		if err := ctx.Err(); err != nil {
 			return nil, outlines, 0, err
 		}
-		part := rec.parts[contact.part]
+		part := rec.Parts[contact.part]
 		station := contact.station
-		if station != 0 && station != part.rootStart {
+		if station != 0 && station != part.RootStart {
 			return nil, outlines, 0, fmt.Errorf("%w: joined-prism fillet lost a root station", ErrUnsupported)
 		}
 		path, bound, err := prismPatternFilletBand(mesh, part, contact, radius)
@@ -132,13 +132,13 @@ func prismPatternFilletShell(ctx context.Context, rec *prismPatternJoinRecord,
 		mesh.groups = append(mesh.groups, facetGroup{origins: []provenance.Ref{{Producer: ref,
 			Role: fmt.Sprintf("fillet(%d,%d)", contact.part, station)}}})
 		for capIndex := range 2 {
-			old := part.vertex[capIndex][station]
+			old := part.Vertex[capIndex][station]
 			last := path[capIndex][len(path[capIndex])-1]
 			cut := contact.ringCut
-			lastConsumed := rec.outlines[capIndex][cut.positions[len(cut.positions)-1]]
+			lastConsumed := rec.Outlines[capIndex][cut.positions[len(cut.positions)-1]]
 			ringReplacement[lastConsumed] = last
 			for _, position := range cut.positions[1:] {
-				skip[capIndex][rec.outlines[capIndex][position]] = true
+				skip[capIndex][rec.Outlines[capIndex][position]] = true
 			}
 			walk := path[capIndex]
 			if station == 0 {
@@ -160,7 +160,7 @@ func prismPatternFilletShell(ctx context.Context, rec *prismPatternJoinRecord,
 	// Rebind those endpoints to the circle foot; the connector wall still
 	// ends at the line foot stored under the original vertex index.
 	for i := range retainedWalls {
-		if mesh.src[i] != rec.groups[0] {
+		if mesh.src[i] != rec.Groups[0] {
 			continue
 		}
 		for j, index := range mesh.tris[i] {
@@ -169,7 +169,7 @@ func prismPatternFilletShell(ctx context.Context, rec *prismPatternJoinRecord,
 			}
 		}
 	}
-	for capIndex, original := range rec.outlines {
+	for capIndex, original := range rec.Outlines {
 		for _, index := range original {
 			if skip[capIndex][index] {
 				continue
@@ -196,7 +196,7 @@ func prismPatternFilletShell(ctx context.Context, rec *prismPatternJoinRecord,
 			if capIndex == 0 {
 				mapped[1], mapped[2] = mapped[2], mapped[1]
 			}
-			mesh.add(mapped, rec.groups[capIndex+1])
+			mesh.add(mapped, rec.Groups[capIndex+1])
 		}
 	}
 	if err := orientJoinedMesh(mesh); err != nil {
@@ -207,12 +207,12 @@ func prismPatternFilletShell(ctx context.Context, rec *prismPatternJoinRecord,
 		return nil, outlines, 0, err
 	}
 	for capIndex, outline := range outlines {
-		z := rec.source.blank.Z0
+		z := rec.Source.Blank.Z0
 		if capIndex == 1 {
-			z = rec.source.blank.Z1
+			z = rec.Source.Blank.Z1
 		}
-		if !loftCylinderAuditCap(ctx, mesh, outline, rec.groups[capIndex+1], z, capIndex == 0) ||
-			!prismPatternRootChordsInsideCap(ctx, mesh, outline, rec.parts, capIndex) {
+		if !loftCylinderAuditCap(ctx, mesh, outline, rec.Groups[capIndex+1], z, capIndex == 0) ||
+			!prismPatternRootChordsInsideCap(ctx, mesh, outline, rec.Parts, capIndex) {
 			return nil, outlines, 0, fmt.Errorf("%w: joined-prism fillet cap has no exact tiling or source-root proof",
 				ErrUnsupported)
 		}
@@ -228,7 +228,7 @@ func prismPatternFilletBand(mesh *joinedMesh, part prismPatternPart,
 	end := math.Atan2(q.Y-center.Y, q.X-center.X)
 	sweep := math.Remainder(end-start, 2*math.Pi)
 	if proofbound.IsNonFinite(sweep) || math.Abs(sweep) <= 0.01 || math.Abs(sweep) >= math.Pi ||
-		contact.station == 0 && sweep <= 0 || contact.station == part.rootStart && sweep >= 0 {
+		contact.station == 0 && sweep <= 0 || contact.station == part.RootStart && sweep >= 0 {
 		return path, 0, fmt.Errorf("%w: joined-prism fillet has no bounded corner sweep", ErrUnsupported)
 	}
 	steps := int(math.Ceil(math.Abs(sweep) / 0.1))
@@ -260,7 +260,7 @@ func prismPatternFilletBand(mesh *joinedMesh, part prismPatternPart,
 	}
 	maxRound, maxAngleError := 0.0, 0.0
 	for capIndex := range 2 {
-		old := part.vertex[capIndex][contact.station]
+		old := part.Vertex[capIndex][contact.station]
 		z := mesh.verts[old].Z
 		mesh.verts[old] = r3.Vec{X: p.X, Y: p.Y, Z: z}
 		path[capIndex] = append(path[capIndex], old)

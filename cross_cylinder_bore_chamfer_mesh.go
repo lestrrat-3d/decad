@@ -130,7 +130,7 @@ const (
 // cylinders. The source intersection is x=sqrt(R²-r²cos²t), y=r cos t,
 // z=c+r sin t; Q=sqrt(R²-r²cos⁴t) makes both normal offsets explicit.
 func crossBoreFeet(rec *crossCylinderBoreRecord, setback, theta float64) (r3.Vec, r3.Vec) {
-	R, r, c := rec.radius, rec.bore, rec.centerZ
+	R, r, c := rec.Radius, rec.Bore, rec.CenterZ
 	s, co := math.Sincos(theta)
 	x := math.Sqrt(R*R - r*r*co*co)
 	Q := math.Sqrt(R*R - r*r*co*co*co*co)
@@ -168,10 +168,10 @@ func crossBoreMeshGroups(rec *crossCylinderBoreRecord) ([]facetGroup, error) {
 		body *Body
 		role string
 	}{
-		{rec.target, provenance.RoleCapStart},
-		{rec.target, provenance.RoleCapEnd},
-		{rec.target, prismrecord.OuterFirstSideRole},
-		{rec.tool, prismrecord.OuterFirstSideRole},
+		{rec.Target, provenance.RoleCapStart},
+		{rec.Target, provenance.RoleCapEnd},
+		{rec.Target, prismrecord.OuterFirstSideRole},
+		{rec.Tool, prismrecord.OuterFirstSideRole},
 	} {
 		group, ok := crossBoreFaceGroup(source.body, source.role)
 		if !ok {
@@ -196,11 +196,11 @@ func crossBoreStationPlan(rec *crossCylinderBoreRecord, setback float64) ([]cros
 			kind: crossBorePositive, j: j,
 		}
 		co, s := math.Cos(theta), math.Sin(theta)
-		x, y := -math.Sqrt(rec.radius*rec.radius-rec.bore*rec.bore*co*co), rec.bore*co
+		x, y := -math.Sqrt(rec.Radius*rec.Radius-rec.Bore*rec.Bore*co*co), rec.Bore*co
 		negative[j] = crossBoreStation{
 			phi:   math.Atan2(y, x),
-			lower: r3.Vec{X: x, Y: y, Z: rec.centerZ - rec.bore*s},
-			upper: r3.Vec{X: x, Y: y, Z: rec.centerZ + rec.bore*s},
+			lower: r3.Vec{X: x, Y: y, Z: rec.CenterZ - rec.Bore*s},
+			upper: r3.Vec{X: x, Y: y, Z: rec.CenterZ + rec.Bore*s},
 			kind:  crossBoreNegative, j: j,
 		}
 		if negative[j].phi < 0 {
@@ -217,8 +217,8 @@ func crossBoreStationPlan(rec *crossCylinderBoreRecord, setback float64) ([]cros
 	addRest := func(stations []crossBoreStation, first, last float64) []crossBoreStation {
 		for k := 1; k < rest; k++ {
 			phi := first + (last-first)*float64(k)/rest
-			p := r3.Vec{X: rec.radius * math.Cos(phi),
-				Y: rec.radius * math.Sin(phi), Z: rec.centerZ}
+			p := r3.Vec{X: rec.Radius * math.Cos(phi),
+				Y: rec.Radius * math.Sin(phi), Z: rec.CenterZ}
 			stations = append(stations, crossBoreStation{
 				phi: phi, lower: p, upper: p, kind: crossBoreRest,
 			})
@@ -299,7 +299,7 @@ func buildCrossBoreChamferMeshWorkers(ctx context.Context,
 	}
 	m := &crossBoreMesh{groups: groups}
 	m.outerAngularGap = outerGap
-	radiusRat := proofarith.FloatRat(rec.radius)
+	radiusRat := proofarith.FloatRat(rec.Radius)
 	bottom := make([]int, len(stations))
 	lower := make([]int, len(stations))
 	upper := make([]int, len(stations))
@@ -313,14 +313,14 @@ func buildCrossBoreChamferMeshWorkers(ctx context.Context,
 				return nil, err
 			}
 		}
-		x, y := rec.radius*math.Cos(station.phi), rec.radius*math.Sin(station.phi)
+		x, y := rec.Radius*math.Cos(station.phi), rec.Radius*math.Sin(station.phi)
 		bottom[i] = m.point(r3.Vec{X: x, Y: y})
 		lower[i] = m.point(station.lower)
 		upper[i] = lower[i]
 		if station.lower.Sub(station.upper).Len() >= 1e-13 {
 			upper[i] = m.point(station.upper)
 		}
-		top[i] = m.point(r3.Vec{X: x, Y: y, Z: rec.height})
+		top[i] = m.point(r3.Vec{X: x, Y: y, Z: rec.Height})
 		vertexIndex[i] = [4]int{bottom[i], lower[i], upper[i], top[i]}
 		if station.kind == crossBorePositive {
 			positiveOuter[station.j] = upper[i]
@@ -343,7 +343,7 @@ func buildCrossBoreChamferMeshWorkers(ctx context.Context,
 			m.outerStationError = max(m.outerStationError, e)
 		}
 	}
-	bottomCenter, topCenter := m.point(r3.Vec{}), m.point(r3.Vec{Z: rec.height})
+	bottomCenter, topCenter := m.point(r3.Vec{}), m.point(r3.Vec{Z: rec.Height})
 	for i := range stations {
 		j := (i + 1) % len(stations)
 		m.quad(bottom[i], bottom[j], lower[j], lower[i], 2)

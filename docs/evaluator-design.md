@@ -896,12 +896,12 @@ group centroids are re-derived as `Q*c + t` in rational arithmetic with no
 stretch charge. Every record that describes the float placement instead of `Q`
 is dropped: every group surface tag and denoted patch, `pointSection`,
 `pointPlane`, `pointSimilarity`, the point-plane cap displacement,
-`revolveLoftSector` and `loftMirrorCopy`. The cap-role provenance of a loft
+`revolveLoftSector` and `LoftMirrorCopy`. The cap-role provenance of a loft
 mirror join is a separate record, so each exact copy still mints both outer-cap
 roles under its own identity. The zero-bound exact source mesh survives only an
 exactly identity record. The copy lineage keeps the rotation only for a copy
 made directly from the source's own payload; `Transform` and a copy of a copy
-record none. Every exact placement sets the payload's `exactPlaced` mark, and
+record none. Every exact placement sets the payload's `ExactPlaced` mark, and
 every later placement, `Copy`, `Transform` and `ScaledAt` keeps it. The motion
 checks (`VerifyMotion`, `VerifyLinkage`) refuse to re-place a marked mover with
 `ErrUnsupported`, because their pose deviation model does not describe a

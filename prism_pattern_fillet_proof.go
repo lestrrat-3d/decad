@@ -21,7 +21,7 @@ func prismPatternFilletBody(ctx context.Context, body *Body, edges []*Edge,
 		return nil, fmt.Errorf("%w: joined-prism fillet radius carries a displacement", ErrUnsupported)
 	}
 	old, ok := body.n.Payload.(facetedPayload)
-	if !ok || old.prismPatternJoin == nil {
+	if !ok || old.PrismPatternJoin == nil {
 		return nil, fmt.Errorf("%w: fillet has no certified joined-prism source", ErrUnsupported)
 	}
 	contacts, err := prismPatternFilletContactsOf(ctx, body, edges, radius)
@@ -31,7 +31,7 @@ func prismPatternFilletBody(ctx context.Context, body *Body, edges []*Edge,
 	if len(contacts) == 0 {
 		return nil, fmt.Errorf("%w: joined-prism fillet has no selected roots", ErrUnsupported)
 	}
-	rec := old.prismPatternJoin
+	rec := old.PrismPatternJoin
 	ref := body.n.Doc.NextProducer
 	mesh, _, arcBound, err := prismPatternFilletShell(ctx, rec, contacts, radius, ref)
 	if err != nil {
@@ -49,7 +49,7 @@ func prismPatternFilletBody(ctx context.Context, body *Body, edges []*Edge,
 	piUpper := proofbound.RatFloatUp(proofbound.PiUpper)
 	trueDisk := proofbound.ProductUpper(3, radius)
 	heldDisk := proofbound.AbsSumUpper(trueDisk, old.MeshBound, arcBound)
-	height := rec.source.blank.Z1 - rec.source.blank.Z0
+	height := rec.Source.Blank.Z1 - rec.Source.Blank.Z0
 	if height <= 0 || proofbound.IsNonFinite(heldDisk) {
 		return nil, fmt.Errorf("%w: joined-prism fillet has no finite local disk", ErrUnsupported)
 	}
@@ -73,16 +73,16 @@ func prismPatternFilletBody(ctx context.Context, body *Body, edges []*Edge,
 		vertexBound[i] = bound
 	}
 	result := facetedPayload{Verts: mesh.verts, Tris: mesh.tris, Src: mesh.src,
-		groups: mesh.groups, VertexBound: vertexBound, axialSectionJoin: true,
-		contactAudited: true, MeshBound: bound, VolSymDiff: volumeGap,
+		groups: mesh.groups, VertexBound: vertexBound, AxialSectionJoin: true,
+		ContactAudited: true, MeshBound: bound, VolSymDiff: volumeGap,
 		AreaSlack: areaSlack, DPair: facetedSourceDiameterUpper(mesh.verts, bound),
 		Xform: r3.Identity()}
 	if proofbound.IsNonFinite(result.DPair) {
 		return nil, fmt.Errorf("%w: joined-prism fillet has no finite diameter proof", ErrUnsupported)
 	}
-	if err := loftCylinderTagCaps(&result, rec.blank,
-		[2]int{rec.groups[1], rec.groups[2]},
-		[2]float64{rec.source.blank.Z0, rec.source.blank.Z1}, ref); err != nil {
+	if err := loftCylinderTagCaps(&result, rec.Blank,
+		[2]int{rec.Groups[1], rec.Groups[2]},
+		[2]float64{rec.Source.Blank.Z0, rec.Source.Blank.Z1}, ref); err != nil {
 		return nil, err
 	}
 	out, err := buildFacetedBody(ctx, documentHandle(body.n.Doc), ref, result)

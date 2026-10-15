@@ -24,21 +24,21 @@ import (
 // A cylinder joined to a matching axial Loft keeps the original operands.
 // Subsequent placements of that same Loft rebuild the common cylinder ring.
 type loftCylinderJoinRecord struct {
-	blank     *Body
-	placement *loftCylinderPlacement
-	// teeth are the exact Union operands. proofTeeth are private, axially
-	// normalized witnesses whose mesh proofs include axialBridge.
-	teeth, proofTeeth []*Body
-	axialBridge       []float64
-	capOutlines       [2][]int
-	capGroups         [2]int
-	minSideRadius     float64
-	radius            float64
-	// These upward bounds enclose the replaced root seam around radius.
+	Blank     *Body
+	Placement *loftCylinderPlacement
+	// Teeth are the exact Union operands. ProofTeeth are private, axially
+	// normalized witnesses whose mesh proofs include AxialBridge.
+	Teeth, ProofTeeth []*Body
+	AxialBridge       []float64
+	CapOutlines       [2][]int
+	CapGroups         [2]int
+	MinSideRadius     float64
+	Radius            float64
+	// These upward bounds enclose the replaced root seam around Radius.
 	// Retained tooth exterior walls still read their Loft source bounds.
 	// The symmetric collar covers source-root exceptions near either cap.
-	innerInset, outerExcess, rootCollar float64
-	z0, z1                              float64
+	InnerInset, OuterExcess, RootCollar float64
+	Z0, Z1                              float64
 }
 
 // The structural join has at most 32 separately certified Loft teeth. Its
@@ -82,12 +82,12 @@ func tryLoftCylinderUnion(ctx context.Context, op meshbool.OperationKind,
 		blank, teeth = a, []*Body{b}
 	} else if _, ok := b.n.Payload.(prismPayload); ok {
 		blank, teeth = b, []*Body{a}
-	} else if fp, ok := a.n.Payload.(facetedPayload); ok && fp.loftCylinderJoin != nil && fp.Xform == r3.Identity() {
-		blank = fp.loftCylinderJoin.blank
-		teeth = append(append([]*Body(nil), fp.loftCylinderJoin.teeth...), b)
-	} else if fp, ok := b.n.Payload.(facetedPayload); ok && fp.loftCylinderJoin != nil && fp.Xform == r3.Identity() {
-		blank = fp.loftCylinderJoin.blank
-		teeth = append(append([]*Body(nil), fp.loftCylinderJoin.teeth...), a)
+	} else if fp, ok := a.n.Payload.(facetedPayload); ok && fp.LoftCylinderJoin != nil && fp.Xform == r3.Identity() {
+		blank = fp.LoftCylinderJoin.Blank
+		teeth = append(append([]*Body(nil), fp.LoftCylinderJoin.Teeth...), b)
+	} else if fp, ok := b.n.Payload.(facetedPayload); ok && fp.LoftCylinderJoin != nil && fp.Xform == r3.Identity() {
+		blank = fp.LoftCylinderJoin.Blank
+		teeth = append(append([]*Body(nil), fp.LoftCylinderJoin.Teeth...), a)
 	} else {
 		return tryPlacedLoftCylinderUnion(ctx, d, ref, a, b)
 	}
@@ -798,24 +798,24 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 		axialBridge[i] = parts[i].bridge
 	}
 	fp := facetedPayload{Verts: mesh.verts, Tris: mesh.tris, Src: mesh.src,
-		groups: mesh.groups, VertexBound: vertexBound, contactAudited: true,
+		groups: mesh.groups, VertexBound: vertexBound, ContactAudited: true,
 		MeshBound: bound, VolSymDiff: volumeGap, AreaSlack: areaSlack,
 		DPair: facetedSourceDiameterUpper(mesh.verts, bound),
-		Xform: r3.Identity(), loftCylinderJoin: &loftCylinderJoinRecord{
-			blank: blank, teeth: toothBodies, proofTeeth: proofBodies,
-			axialBridge: axialBridge, capOutlines: outlines,
-			capGroups:     [2]int{blankGroups[1], blankGroups[2]},
-			minSideRadius: minSideRadius, radius: radius, z0: pp.Z0, z1: pp.Z1,
-			innerInset: innerInset, outerExcess: outerExcess, rootCollar: rootCollar,
+		Xform: r3.Identity(), LoftCylinderJoin: &loftCylinderJoinRecord{
+			Blank: blank, Teeth: toothBodies, ProofTeeth: proofBodies,
+			AxialBridge: axialBridge, CapOutlines: outlines,
+			CapGroups:     [2]int{blankGroups[1], blankGroups[2]},
+			MinSideRadius: minSideRadius, Radius: radius, Z0: pp.Z0, Z1: pp.Z1,
+			InnerInset: innerInset, OuterExcess: outerExcess, RootCollar: rootCollar,
 		}}
 	if proofbound.IsNonFinite(fp.DPair) {
 		return nil, fmt.Errorf("%w: circular join has no finite diameter proof", ErrUnsupported)
 	}
-	if err := loftCylinderTagCaps(&fp, blank, fp.loftCylinderJoin.capGroups,
+	if err := loftCylinderTagCaps(&fp, blank, fp.LoftCylinderJoin.CapGroups,
 		[2]float64{pp.Z0, pp.Z1}, ref); err != nil {
 		return nil, err
 	}
-	loftCylinderTagBridgedTop(&fp, fp.loftCylinderJoin.capGroups[1], axialBridge)
+	loftCylinderTagBridgedTop(&fp, fp.LoftCylinderJoin.CapGroups[1], axialBridge)
 	return buildFacetedBody(ctx, d, ref, fp)
 }
 

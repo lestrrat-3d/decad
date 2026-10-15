@@ -29,7 +29,7 @@ func crossBoreEdgeHasOrigins(edge *Edge, outer, bore facetGroup) bool {
 func tryCrossCylinderBoreMouthChamfer(ctx context.Context, body *Body,
 	fp facetedPayload, edges []*Edge, setback, setbackDelta float64,
 	asym *asymmetricChamfer) (*Body, bool, error) {
-	rec := fp.crossCylinderBore
+	rec := fp.CrossCylinderBore
 	if rec == nil {
 		return nil, false, nil
 	}
@@ -40,16 +40,16 @@ func tryCrossCylinderBoreMouthChamfer(ctx context.Context, body *Body,
 	if _, ok := edges[0].n.Curve.(surfacegeom.FacetedCurve); !ok {
 		return nil, true, fmt.Errorf("%w: the selected cross-bore mouth has no faceted edge witness", ErrUnsupported)
 	}
-	outer, outerOK := crossBoreFaceGroup(rec.target, prismrecord.OuterFirstSideRole)
-	bore, boreOK := crossBoreFaceGroup(rec.tool, prismrecord.OuterFirstSideRole)
+	outer, outerOK := crossBoreFaceGroup(rec.Target, prismrecord.OuterFirstSideRole)
+	bore, boreOK := crossBoreFaceGroup(rec.Tool, prismrecord.OuterFirstSideRole)
 	if !outerOK || !boreOK || !crossBoreEdgeHasOrigins(edges[0], outer, bore) ||
-		!(edges[0].n.Start.Position.X > rec.radius/2) {
+		!(edges[0].n.Start.Position.X > rec.Radius/2) {
 		return nil, true, fmt.Errorf("%w: the selected edge is not the positive cross-bore mouth", ErrUnsupported)
 	}
 	if asym != nil || setbackDelta != 0 || !(setback > 0) ||
-		proofbound.IsNonFinite(setback) || setback > rec.bore/2 ||
-		rec.centerZ-rec.bore-setback <= 0 ||
-		rec.centerZ+rec.bore+setback >= rec.height {
+		proofbound.IsNonFinite(setback) || setback > rec.Bore/2 ||
+		rec.CenterZ-rec.Bore-setback <= 0 ||
+		rec.CenterZ+rec.Bore+setback >= rec.Height {
 		return nil, true, fmt.Errorf("%w: the cross-bore setback exceeds its proven clearance", ErrUnsupported)
 	}
 	mesh, err := buildCrossBoreChamferMesh(ctx, rec, setback)
@@ -92,7 +92,7 @@ func tryCrossCylinderBoreMouthChamfer(ctx context.Context, body *Body,
 	result, err := buildFacetedBodyWithProof(ctx, documentHandle(body.n.Doc), ref, facetedPayload{
 		Verts: mesh.verts, Tris: mesh.tris, Src: mesh.src, groups: mesh.groups,
 		VertexBound: vertexBound, MeshBound: bound, VolSymDiff: volumeGap,
-		AreaSlack: areaSlack, DPair: dPair, contactAudited: true, Xform: r3.Identity(),
+		AreaSlack: areaSlack, DPair: dPair, ContactAudited: true, Xform: r3.Identity(),
 	}, audit, volume, heldVolume)
 	return result, true, err
 }

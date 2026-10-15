@@ -621,7 +621,7 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 	result.Verts, result.Tris, result.Src, result.groups = mesh.verts, mesh.tris, mesh.src, mesh.groups
 	result.VertexBound, result.MeshBound = bounds, bound
 	result.VolSymDiff, result.AreaSlack = volumeGap, proofbound.AbsSumUpper(fp.AreaSlack, area)
-	result.loftCylinderJoin, result.loftCylinderBore = nil, nil
+	result.LoftCylinderJoin, result.LoftCylinderBore = nil, nil
 	body, err := buildFacetedBody(ctx, d, ref, result)
 	if err != nil {
 		return nil, err

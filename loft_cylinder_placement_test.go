@@ -80,13 +80,13 @@ func loftCylinderCheckPlacedResult(t *testing.T, joined, blank, tooth *Body, pla
 	require.Less(t, box.Min.Z, box.Max.Z)
 	fp, ok := joined.n.Payload.(facetedPayload)
 	require.True(t, ok)
-	require.NotNil(t, fp.loftCylinderJoin)
+	require.NotNil(t, fp.LoftCylinderJoin)
 	require.LessOrEqual(t, fp.MeshBound, 0.1)
-	require.True(t, fp.contactAudited)
-	require.Equal(t, blank.originProducer(), fp.loftCylinderJoin.blank.originProducer())
-	require.Equal(t, 1, len(fp.loftCylinderJoin.teeth))
-	require.Equal(t, tooth.originProducer(), fp.loftCylinderJoin.teeth[0].originProducer())
-	require.Equal(t, placed, fp.loftCylinderJoin.placement != nil)
+	require.True(t, fp.ContactAudited)
+	require.Equal(t, blank.originProducer(), fp.LoftCylinderJoin.Blank.originProducer())
+	require.Equal(t, 1, len(fp.LoftCylinderJoin.Teeth))
+	require.Equal(t, tooth.originProducer(), fp.LoftCylinderJoin.Teeth[0].originProducer())
+	require.Equal(t, placed, fp.LoftCylinderJoin.Placement != nil)
 	seenBlank, seenTooth := false, false
 	for _, face := range joined.Faces() {
 		for _, origin := range face.Origins() {
@@ -224,18 +224,18 @@ func TestLoftCylinderUnionCommonPlacement(t *testing.T) {
 			loftCylinderCheckPlacedResult(t, joined, blank, tooth, tc.placed)
 			if tc.placed {
 				fp := joined.n.Payload.(facetedPayload)
-				placement := fp.loftCylinderJoin.placement
+				placement := fp.LoftCylinderJoin.Placement
 				localJoin, admitted, err := tryLoftCylinderUnionTeeth(t.Context(), doc,
-					joined.originProducer(), placement.blank, placement.teeth)
+					joined.originProducer(), placement.Blank, placement.Teeth)
 				require.NoError(t, err)
 				require.True(t, admitted, "canonical source bodies must rebuild the join")
 				loftCylinderCheckCanonicalReadings(t, joined,
-					localJoin, placement.pose)
+					localJoin, placement.Pose)
 				if tc.name == "translation_1e-12" {
 					moved, err := Transform(t.Context(), joined, loftCylinderTestTranslation(t, 1))
 					require.NoError(t, err)
 					movedPayload := moved.n.Payload.(facetedPayload)
-					require.Nil(t, movedPayload.loftCylinderJoin,
+					require.Nil(t, movedPayload.LoftCylinderJoin,
 						"public Transform must clear the structural record")
 				}
 			}
@@ -266,17 +266,17 @@ func TestLoftCylinderCommonPlacementConsumers(t *testing.T) {
 	require.NoError(t, err)
 	fp, ok := joined.n.Payload.(facetedPayload)
 	require.True(t, ok)
-	require.NotNil(t, fp.loftCylinderJoin)
-	require.NotNil(t, fp.loftCylinderJoin.placement)
-	require.Equal(t, 2, len(fp.loftCylinderJoin.teeth))
-	require.Equal(t, second.originProducer(), fp.loftCylinderJoin.teeth[1].originProducer())
+	require.NotNil(t, fp.LoftCylinderJoin)
+	require.NotNil(t, fp.LoftCylinderJoin.Placement)
+	require.Equal(t, 2, len(fp.LoftCylinderJoin.Teeth))
+	require.Equal(t, second.originProducer(), fp.LoftCylinderJoin.Teeth[1].originProducer())
 	require.LessOrEqual(t, fp.MeshBound, 0.1)
-	placement := fp.loftCylinderJoin.placement
+	placement := fp.LoftCylinderJoin.Placement
 	localJoin, admitted, err := tryLoftCylinderUnionTeeth(ctx, doc,
-		joined.originProducer(), placement.blank, placement.teeth)
+		joined.originProducer(), placement.Blank, placement.Teeth)
 	require.NoError(t, err)
 	require.True(t, admitted, "canonical source bodies must rebuild the later join")
-	loftCylinderCheckCanonicalReadings(t, joined, localJoin, placement.pose)
+	loftCylinderCheckCanonicalReadings(t, joined, localJoin, placement.Pose)
 	seenJoin := map[producerID]bool{}
 	for _, face := range joined.Faces() {
 		for _, origin := range face.Origins() {
@@ -289,7 +289,7 @@ func TestLoftCylinderCommonPlacementConsumers(t *testing.T) {
 	copyOfJoin, err := Copy(ctx, joined)
 	require.NoError(t, err)
 	copyPayload := copyOfJoin.n.Payload.(facetedPayload)
-	require.Nil(t, copyPayload.loftCylinderJoin, "public Copy must clear the structural record")
+	require.Nil(t, copyPayload.LoftCylinderJoin, "public Copy must clear the structural record")
 
 	w := sketch.NewWorld()
 	base, err := w.CreateOffsetPlane(w.XY(), -1)
@@ -316,14 +316,14 @@ func TestLoftCylinderCommonPlacementConsumers(t *testing.T) {
 	cut, ok := bored.n.Payload.(facetedPayload)
 	require.True(t, ok)
 	require.LessOrEqual(t, cut.MeshBound, 0.1)
-	require.True(t, cut.contactAudited)
+	require.True(t, cut.ContactAudited)
 	volume, err := bored.Volume()
 	require.NoError(t, err)
 	require.Positive(t, volume.Value.Base())
 	box, err := bored.Bounds()
 	require.NoError(t, err)
 	require.True(t, proofFiniteBox(box), "bore result bounds must be finite")
-	loftCylinderCheckCanonicalReadings(t, bored, localBore, placement.pose)
+	loftCylinderCheckCanonicalReadings(t, bored, localBore, placement.Pose)
 	seenBore := map[producerID]bool{}
 	for _, face := range bored.Faces() {
 		for _, origin := range face.Origins() {
@@ -372,7 +372,7 @@ func TestLoftCylinderCommonPlacementDifferentLoftSourceFallsBack(t *testing.T) {
 	_, admitted, err := tryPlacedLoftCylinderUnion(ctx, doc, other.originProducer(), joined, other)
 	require.NoError(t, err)
 	require.False(t, admitted, "different Loft sources must use the generic Union")
-	require.NotNil(t, joinedPayload.loftCylinderJoin.placement,
+	require.NotNil(t, joinedPayload.LoftCylinderJoin.Placement,
 		"fallback must leave the existing placed certificate intact")
 
 	result, err := Union(ctx, joined, other)
@@ -382,7 +382,7 @@ func TestLoftCylinderCommonPlacementDifferentLoftSourceFallsBack(t *testing.T) {
 		return
 	}
 	if fp, ok := result.n.Payload.(facetedPayload); ok {
-		require.Nil(t, fp.loftCylinderJoin, "different Loft sources used the placed certificate")
+		require.Nil(t, fp.LoftCylinderJoin, "different Loft sources used the placed certificate")
 	}
 }
 
@@ -464,15 +464,15 @@ func TestLoftCylinderCommonPlacementNativeYZConsumers(t *testing.T) {
 	require.NoError(t, err)
 	fp, ok := joined.n.Payload.(facetedPayload)
 	require.True(t, ok)
-	require.NotNil(t, fp.loftCylinderJoin)
-	require.NotNil(t, fp.loftCylinderJoin.placement)
-	require.Equal(t, 2, len(fp.loftCylinderJoin.teeth))
-	placement := fp.loftCylinderJoin.placement
+	require.NotNil(t, fp.LoftCylinderJoin)
+	require.NotNil(t, fp.LoftCylinderJoin.Placement)
+	require.Equal(t, 2, len(fp.LoftCylinderJoin.Teeth))
+	placement := fp.LoftCylinderJoin.Placement
 	localJoin, admitted, err := tryLoftCylinderUnionTeeth(ctx, doc,
-		joined.originProducer(), placement.blank, placement.teeth)
+		joined.originProducer(), placement.Blank, placement.Teeth)
 	require.NoError(t, err)
 	require.True(t, admitted, "canonical source bodies must rebuild the native YZ join")
-	loftCylinderCheckCanonicalReadings(t, joined, localJoin, placement.pose)
+	loftCylinderCheckCanonicalReadings(t, joined, localJoin, placement.Pose)
 
 	w := sketch.NewWorld()
 	toolFrame := loftCylinderTestFrame(t, r3.Vec{X: -1}, y, z)
@@ -545,7 +545,7 @@ func TestLoftCylinderCommonPlacementLeavesArbitraryAngleGeneric(t *testing.T) {
 	}
 	fp, ok := joined.n.Payload.(facetedPayload)
 	require.True(t, ok)
-	require.Nil(t, fp.loftCylinderJoin, "arbitrary-angle result used the structural certificate")
+	require.Nil(t, fp.LoftCylinderJoin, "arbitrary-angle result used the structural certificate")
 }
 
 func TestLoftCylinderCommonPlacementRejectsOrdinaryQuarterTurn(t *testing.T) {
@@ -582,7 +582,7 @@ func TestLoftCylinderCommonPlacementRejectsRoundedComposition(t *testing.T) {
 		return
 	}
 	if fp, ok := joined.n.Payload.(facetedPayload); ok {
-		require.Nil(t, fp.loftCylinderJoin, "rounded composition used the structural certificate")
+		require.Nil(t, fp.LoftCylinderJoin, "rounded composition used the structural certificate")
 	}
 }
 
@@ -603,7 +603,7 @@ func TestLoftCylinderCommonPlacementLeavesOtherPrismsGeneric(t *testing.T) {
 		return
 	}
 	if fp, ok := joined.n.Payload.(facetedPayload); ok {
-		require.Nil(t, fp.loftCylinderJoin, "a prism pair used the cylinder/Loft certificate")
+		require.Nil(t, fp.LoftCylinderJoin, "a prism pair used the cylinder/Loft certificate")
 	}
 }
 
