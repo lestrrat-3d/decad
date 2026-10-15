@@ -3,6 +3,8 @@ package compositesweep
 import (
 	"fmt"
 	"strings"
+
+	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
 // RewriteSideRole returns role renumbered as a side wall of span. A role that
@@ -43,4 +45,17 @@ func SwapCapRole(role, capStart, capEnd string) string {
 		return capStart
 	}
 	return role
+}
+
+// RewriteFaceSideRoles renumbers each "side(" role of face as a side wall of
+// span (RewriteSideRole); every other role stays.
+func RewriteFaceSideRoles(face *topo.Face, span int) {
+	for i, origin := range face.Origins {
+		role, ok := RewriteSideRole(origin.Role, span)
+		if !ok {
+			continue
+		}
+		origin.Role = role
+		face.Origins[i] = origin
+	}
 }

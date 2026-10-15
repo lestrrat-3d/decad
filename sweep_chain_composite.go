@@ -130,19 +130,19 @@ func replayCompositeChainSweepWork(ctx context.Context, d *Document, ref produce
 	// Both edges denote the same two endpoints of the one recorded source
 	// line. The coordinate comparison above only rejects a failed restatement;
 	// it does not establish their source identity.
-	rewriteCompositeVertex(parts[0], vertexHandle(previous.end.n.Start), vertexHandle(following.start.n.Start))
-	rewriteCompositeVertex(parts[0], vertexHandle(previous.end.n.End), vertexHandle(following.start.n.End))
-	rewriteCompositeEdge(parts[0], previous.end, following.start)
+	compositesweep.RewriteVertex(bodyNode(parts[0]), previous.end.n.Start, following.start.n.Start)
+	compositesweep.RewriteVertex(bodyNode(parts[0]), previous.end.n.End, following.start.n.End)
+	compositesweep.RewriteEdge(bodyNode(parts[0]), edgeNode(previous.end), edgeNode(following.start))
 	following.start.n.Faces = append(following.start.n.Faces, previous.end.n.Faces...)
 
 	body := bornBody(&Body{n: topo.Body{Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodySheet, Doc: documentNode(d)}})
 	faces := []*Face{parts[0].Faces()[0], parts[1].Faces()[0]}
 	for i, face := range faces {
-		rewriteCompositeSideRoles(face, i)
+		compositesweep.RewriteFaceSideRoles(faceNode(face), i)
 		face.n.Body = bodyNode(body)
 	}
 	body.n.Lumps = topobuild.SheetLumps(handleAlloc{}, faceNodes(faces))
-	if err := auditCompositeBoundary(ctx, body, map[*Edge]struct{}{following.start: {}}); err != nil {
+	if err := compositesweep.AuditBoundary(ctx, bodyNode(body), map[*topo.Edge]struct{}{edgeNode(following.start): {}}); err != nil {
 		return nil, err
 	}
 	area := proofbound.BoundedAdd(

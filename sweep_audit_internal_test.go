@@ -22,7 +22,7 @@ func TestSweepAuditAcceptsSeparatedStraightSpans(t *testing.T) {
 	require.NoError(t, err)
 	profile := unitSquareProfile()
 	doc := bornDocument(&Document{})
-	spans := make([]sweepAuditSpan, 3)
+	spans := make([]compositesweep.SpanPart, 3)
 	for i := range spans {
 		body, buildErr := bodyResult(prismrecord.Build(t.Context(), envOf(documentNode(doc), producerID(i+1)), prismrecord.Payload{
 			Profile: profile,
@@ -32,10 +32,10 @@ func TestSweepAuditAcceptsSeparatedStraightSpans(t *testing.T) {
 			Xform:   r3.Identity(),
 		}, freeform.NewFreeformWork()))
 		require.NoError(t, buildErr)
-		spans[i] = sweepAuditSpan{
-			body:     body,
-			startCap: sweepAuditFaceWithRole(t, body, provenance.RoleCapStart),
-			endCap:   sweepAuditFaceWithRole(t, body, provenance.RoleCapEnd),
+		spans[i] = compositesweep.SpanPart{
+			Body:     bodyNode(body),
+			StartCap: faceNode(sweepAuditFaceWithRole(t, body, provenance.RoleCapStart)),
+			EndCap:   faceNode(sweepAuditFaceWithRole(t, body, provenance.RoleCapEnd)),
 		}
 	}
 
@@ -47,7 +47,7 @@ func TestSweepAuditRejectsUncertifiedAdjacentAndRemotePairs(t *testing.T) {
 	require.NoError(t, err)
 	profile := unitSquareProfile()
 	doc := bornDocument(&Document{})
-	build := func(z0, z1 float64) sweepAuditSpan {
+	build := func(z0, z1 float64) compositesweep.SpanPart {
 		body, buildErr := bodyResult(prismrecord.Build(t.Context(), envOf(documentNode(doc), 1), prismrecord.Payload{
 			Profile: profile,
 			Frame:   frame,
@@ -56,18 +56,18 @@ func TestSweepAuditRejectsUncertifiedAdjacentAndRemotePairs(t *testing.T) {
 			Xform:   r3.Identity(),
 		}, freeform.NewFreeformWork()))
 		require.NoError(t, buildErr)
-		return sweepAuditSpan{
-			body:     body,
-			startCap: sweepAuditFaceWithRole(t, body, provenance.RoleCapStart),
-			endCap:   sweepAuditFaceWithRole(t, body, provenance.RoleCapEnd),
+		return compositesweep.SpanPart{
+			Body:     bodyNode(body),
+			StartCap: faceNode(sweepAuditFaceWithRole(t, body, provenance.RoleCapStart)),
+			EndCap:   faceNode(sweepAuditFaceWithRole(t, body, provenance.RoleCapEnd)),
 		}
 	}
 
-	adjacentOverlap := []sweepAuditSpan{build(0, 2), build(1, 3)}
+	adjacentOverlap := []compositesweep.SpanPart{build(0, 2), build(1, 3)}
 	require.ErrorIs(t, auditCompositeSweep(t.Context(), adjacentOverlap), ErrUnsupported)
 
-	remoteTouch := []sweepAuditSpan{build(0, 1), build(1, 2), build(2, 3)}
-	remoteTouch[2].body.n.Bounds = remoteTouch[0].body.n.Bounds
+	remoteTouch := []compositesweep.SpanPart{build(0, 1), build(1, 2), build(2, 3)}
+	remoteTouch[2].Body.Bounds = remoteTouch[0].Body.Bounds
 	require.ErrorIs(t, auditCompositeSweep(t.Context(), remoteTouch), ErrUnsupported)
 }
 
@@ -92,18 +92,18 @@ func TestSweepAuditEndpointSupportStopsAtHalfTurn(t *testing.T) {
 			Phi1: revolveangle.Angle{Rad: new(big.Rat), Turn: big.NewRat(1, 2)},
 		}},
 	}})
-	require.True(t, sweepAuditEndpointSupports(body))
+	require.True(t, sweepAuditEndpointSupports(bodyNode(body)))
 
 	payload := body.n.Payload.(revolvePayload)
 	payload.Den.Phi1.Turn = big.NewRat(3, 4)
 	body.n.Payload = payload
-	require.False(t, sweepAuditEndpointSupports(body))
+	require.False(t, sweepAuditEndpointSupports(bodyNode(body)))
 }
 
 func TestSweepAuditHonorsCanceledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	require.ErrorIs(t, auditCompositeSweep(ctx, []sweepAuditSpan{{}, {}}), context.Canceled)
+	require.ErrorIs(t, auditCompositeSweep(ctx, []compositesweep.SpanPart{{}, {}}), context.Canceled)
 }
 
 func sweepAuditFaceWithRole(t *testing.T, body *Body, role string) *Face {

@@ -1283,11 +1283,11 @@ revolve axis at more than one isolated point can pinch a revolved boundary
 at those points, non-manifold there even though the parity leg and Rule S
 both pass; two otherwise-unconnected stitched bodies that share exactly one
 welded vertex-table entry, with no edge joining them, pinch the identical
-way through the all-planar path). `sweep_composite.go`'s own
-`auditVertexLinks` — hoisted out of `auditCompositeVertexLinks`, its `*Body`
-parameter dropped along with a leg that turned out to prove nothing about
-its own two inputs — is the existing reject-only mechanism for exactly
-this, and `Stitch` runs it unconditionally, immediately after
+way through the all-planar path). The composite sweep's own
+`compositesweep.AuditVertexLinks` (`internal/compositesweep/boundary.go`),
+which takes no body because a vertex-count leg against one would prove
+nothing about its own two inputs, is the existing reject-only mechanism for
+exactly this, and `Stitch` runs it unconditionally, immediately after
 `checkStitchClosure` proves the directed-edge parity leg and before Table
 C's own closure/curvature branches decide anything at all — on every build
 arm, all-planar or curved, open or closed alike, never the curved-closed

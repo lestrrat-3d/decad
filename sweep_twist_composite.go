@@ -241,7 +241,7 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 	if err != nil {
 		return nil, err
 	}
-	parts := make([]compositeSpanPart, len(stations)-1)
+	parts := make([]compositesweep.SpanPart, len(stations)-1)
 	held := make([]loftPayload, len(parts))
 	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
 	budget := proofbound.NewWorkBudget(ctx)
@@ -263,13 +263,13 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 		if _, err := mergeTwistWalls(ctx, part, ref, held[i], len(poly.Points)); err != nil {
 			return nil, fmt.Errorf("twisted sweep cell %d: %w", i, err)
 		}
-		parts[i], err = compositeSpanPartOf(part)
+		parts[i], err = compositesweep.SpanPartOf(bodyNode(part))
 		if err != nil {
 			return nil, fmt.Errorf("twisted sweep cell %d: %w", i, err)
 		}
 	}
-	body, err := assembleCompositeSweepBodyWithJoin(ctx, d, ref, parts, false,
-		func(ctx context.Context, spans []sweepAuditSpan) error {
+	body, err := bodyResult(compositesweep.Assemble(ctx, envOf(documentNode(d), ref), parts, false,
+		func(ctx context.Context, spans []compositesweep.SpanPart) error {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
@@ -277,13 +277,13 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 				return fmt.Errorf(`%w: twisted sweep span audit count changed`, ErrDegenerate)
 			}
 			for i, span := range spans {
-				if span.body == nil || span.body.n.Payload == nil ||
-					span.startCap == nil || span.endCap == nil || len(held[i].Verts) != 2*len(poly.Points) {
+				if span.Body == nil || span.Body.Payload == nil ||
+					span.StartCap == nil || span.EndCap == nil || len(held[i].Verts) != 2*len(poly.Points) {
 					return fmt.Errorf(`%w: twisted sweep cell %d has incomplete Loft geometry`, ErrUnsupported, i)
 				}
 			}
 			return nil
-		}, sewTwistLoftJoin)
+		}, compositesweep.SewTwistLoftJoin, false))
 	if err != nil {
 		return nil, err
 	}
@@ -417,47 +417,6 @@ func publishCompositeTwistCentroid(body *Body, xform r3.Transform,
 	return nil
 }
 
-// A Loft's start and end cap loops walk in opposite directions. Match the
-// recorded station coordinates at a join instead of pairing coedge positions.
-// Both adjoining Lofts use the same held frame, so equality is exact here.
-func sewTwistLoftJoin(ctx context.Context, from, to *Face, previous *Body, sewn map[*Edge]struct{}) error {
-	if len(from.n.Loops) != 1 || len(to.n.Loops) != 1 {
-		return fmt.Errorf(`%w: a twisted Loft join needs one section loop`, ErrUnsupported)
-	}
-	for _, old := range from.n.Loops[0].CoEdges {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		var shared topo.CoEdge
-		matches := 0
-		for _, candidate := range to.n.Loops[0].CoEdges {
-			if coedgeStart(old).Position == coedgeStart(candidate).Position &&
-				coedgeEnd(old).Position == coedgeEnd(candidate).Position ||
-				coedgeStart(old).Position == coedgeEnd(candidate).Position &&
-					coedgeEnd(old).Position == coedgeStart(candidate).Position {
-				shared = candidate
-				matches++
-			}
-		}
-		if matches != 1 {
-			return fmt.Errorf(`%w: a twisted Loft join has %d matching rim edges`, ErrUnsupported, matches)
-		}
-		var start, end *Vertex
-		if coedgeStart(old).Position == coedgeStart(shared).Position {
-			start, end = vertexHandle(coedgeStart(shared)), vertexHandle(coedgeEnd(shared))
-		} else {
-			start, end = vertexHandle(coedgeEnd(shared)), vertexHandle(coedgeStart(shared))
-		}
-		rewriteCompositeVertex(previous, vertexHandle(coedgeStart(old)), start)
-		rewriteCompositeVertex(previous, vertexHandle(coedgeEnd(old)), end)
-		discarded := old.Edge
-		rewriteCompositeEdge(previous, edgeHandle(discarded), edgeHandle(shared.Edge))
-		shared.Edge.Faces = append(shared.Edge.Faces, discarded.Faces...)
-		sewn[edgeHandle(shared.Edge)] = struct{}{}
-	}
-	return nil
-}
-
 type twistCellGroup struct{ from, through, pathSpan int }
 
 // Each Loft cell contributes one quad for each profile edge. Internal section
@@ -552,7 +511,7 @@ func mergeTwistCellFaces(ctx context.Context, body *Body, ref producerID,
 	if err := topobuild.AttachFaceLoops(ctx, faceNodes(merged)); err != nil {
 		return err
 	}
-	if err := auditCompositeBoundary(ctx, body, nil); err != nil {
+	if err := compositesweep.AuditBoundary(ctx, bodyNode(body), nil); err != nil {
 		return err
 	}
 	return nil
