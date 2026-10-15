@@ -295,7 +295,7 @@ func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.Freefor
 // RecordChain admits no whole closed segment
 // (docs/sketch-seam-design.md §2.2). It is the one per-kind construction a
 // closed loop's own wall (BuildLoopSidesAs) and an open chain's own wall
-// (buildChainSides, root extrude.go) share; the two differ only in the TOPOLOGY
+// (chainrecord's buildSides) share; the two differ only in the TOPOLOGY
 // around it — wraparound junctions and cap coedges for a loop, neither for a
 // chain (docs/surface-design.md §13.4).
 func BuildWallGeometry(alloc topo.Alloc, pp Payload, w survey2d.SideWalk, convex, closed bool, bStart, bEnd, tStart, tEnd *topo.Vertex) (*topo.Edge, *topo.Edge, surfacegeom.Surface, bool, error) {

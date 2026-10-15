@@ -98,7 +98,7 @@ func TestExtrudeChainRibbonReadsValid(t *testing.T) {
 // diagonal (irrational-length) one-line chain, so the wall area's bound is
 // genuinely nonzero (docs/surface-design.md §13.4's boundedAdd/boundedMul
 // composition, never a raw float product). Shown-to-fail: replacing
-// evalChainExtrudeContext's boundedMul(measuredScalar(w.length,
+// chainrecord.Build's boundedMul(measuredScalar(w.length,
 // w.lengthBound), height) with an uncharged exactScalar(w.length*height.value)
 // turns the enclosure assertion below red — see this PR's report for the
 // exact failure text.

@@ -437,7 +437,7 @@ func evalChainLoftContext(ctx context.Context, d *Document, ref producerID, lp c
 	body.n.Bounds = boxToInternal(bounds)
 	// volume and centroid stay at their zero value: finite, so the validation
 	// below passes, and neither is reachable through Body.Volume/Body.Centroid
-	// while solid is false, exactly as evalChainExtrudeContext leaves them.
+	// while solid is false, exactly as chainrecord.Build leaves them.
 	if err := topobuild.ValidateAnalyticMeasurements(bodyNode(body)); err != nil {
 		return nil, err
 	}
@@ -457,7 +457,7 @@ func evalChainLoftContext(ctx context.Context, d *Document, ref producerID, lp c
 //
 // A free end rung takes the concave default rather than a measured sense: only
 // an interior rung has two incident triangles to cross, so a free end carries
-// no turn of its own — the identical rule buildChainSides applies to a chain
+// no turn of its own — the identical rule chainrecord's buildSides applies to a chain
 // prism's own free-end sweep edges. Each walk's rims take the outer-loop
 // convexity convention, since a chain walk is loop 0 throughout
 // (docs/surface-design.md §13.4).

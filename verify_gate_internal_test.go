@@ -573,7 +573,7 @@ func TestGateDiameterReadsArcWallStations(t *testing.T) {
 			d, ok, err := bodyGateDiameter(t.Context(), body)
 			require.NoError(t, err)
 			require.True(t, ok)
-			requireStationDiameter(t, d, h, arcChordDiameterSquare(t, pp.prism()))
+			requireStationDiameter(t, d, h, arcChordDiameterSquare(t, pp.Prism()))
 		})
 		t.Run(fmt.Sprintf("brep h %v", h), func(t *testing.T) {
 			t.Parallel()

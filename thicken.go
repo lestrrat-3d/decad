@@ -270,10 +270,10 @@ func thickenRibbonSteps(side ThickenSide) (int, int) {
 // thickened section swept through the ribbon's unchanged interval
 // (docs/surface-design.md §16.6).
 func thickenChainExtrude(ctx context.Context, d *Document, cp chainPayload, side ThickenSide, tmm, tDelta float64) (*Body, error) {
-	if len(cp.chains) != 1 || cp.sectionDelta != 0 {
+	if len(cp.Chains) != 1 || cp.SectionDelta != 0 {
 		return nil, fmt.Errorf(`%w: this ribbon has no admitted Thicken walk`, ErrUnsupported)
 	}
-	if proofbound.AdmitAbove(proofbound.BoundedSub(cp.z1Scalar(), cp.z0Scalar()), 0) != proofbound.SurvAdmit {
+	if proofbound.AdmitAbove(proofbound.BoundedSub(cp.Z1Scalar(), cp.Z0Scalar()), 0) != proofbound.SurvAdmit {
 		return nil, fmt.Errorf(`%w: the ribbon has no proven positive sweep height`, ErrUnsupported)
 	}
 	amount, err := thickenAmount(tmm, tDelta, side)
@@ -288,16 +288,16 @@ func thickenChainExtrude(ctx context.Context, d *Document, cp chainPayload, side
 	// the build that consumes its section both spend from it.
 	work := freeform.NewFreeformWork()
 	rightSteps, leftSteps := thickenRibbonSteps(side)
-	section, err := thickenaxis.RibbonProfile(ctx, cp.chains[0], rightSteps, leftSteps, amount, budget, work, nil)
+	section, err := thickenaxis.RibbonProfile(ctx, cp.Chains[0], rightSteps, leftSteps, amount, budget, work, nil)
 	if err != nil {
 		return nil, err
 	}
 	return bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), d.nextProducerID()), prismrecord.Payload{
 		Profile: section,
-		Frame:   cp.frame,
-		Z0:      cp.z0, Z1: cp.z1,
-		Z0Delta: cp.z0Delta, Z1Delta: cp.z1Delta,
-		Xform: cp.xform,
+		Frame:   cp.Frame,
+		Z0:      cp.Z0, Z1: cp.Z1,
+		Z0Delta: cp.Z0Delta, Z1Delta: cp.Z1Delta,
+		Xform: cp.Xform,
 	}, work))
 }
 

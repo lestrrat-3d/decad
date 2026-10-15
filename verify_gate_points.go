@@ -115,16 +115,16 @@ func vertexGatePoints(budget *proofbound.WorkBudget, body *Body, extraAllow floa
 // stations cannot read (a free-form segment) keeps its vertices alone. ok is
 // false, with no error, when the walk ends or vertices cannot be bounded.
 func chainGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body *Body, pp chainPayload) (gatePoints, bool, error) {
-	endpointAllow, ok, err := diameter.ChainWalkEndpointAllow(ctx, pp.chains)
+	endpointAllow, ok, err := diameter.ChainWalkEndpointAllow(ctx, pp.Chains)
 	if err != nil || !ok {
 		return gatePoints{}, false, err
 	}
-	g, ok, err := vertexGatePoints(budget, body, proofbound.AbsSumUpper(pp.sectionDelta, endpointAllow))
+	g, ok, err := vertexGatePoints(budget, body, proofbound.AbsSumUpper(pp.SectionDelta, endpointAllow))
 	if err != nil || !ok {
 		return gatePoints{}, false, err
 	}
-	view := pp.prism()
-	stations, read, err := prismGatePoints(budget, []prismPayload{view}, proofbound.AbsSumUpper(pp.sectionDelta, view.AxialDelta()))
+	view := pp.Prism()
+	stations, read, err := prismGatePoints(budget, []prismPayload{view}, proofbound.AbsSumUpper(pp.SectionDelta, view.AxialDelta()))
 	if err != nil {
 		return gatePoints{}, false, err
 	}

@@ -29,7 +29,7 @@ The rules for rows live in `docs/layout.md`.
 | `stitch.go` | `Stitch` evaluator and topology adapter. See surface §6.4. |
 | `stitch_flux.go` | Stitch face flux, mass and tag adapters. See surface §6.4. |
 | `unstitch.go` | `Unstitch` sheet split and placement. See surface §6.5. |
-| `extrude.go` | Generic `Extrude` over a profile or chain, `WithTaper`, linear-extent resolution, the chain ribbon build. See evaluator §5 and surface §13.2. |
+| `extrude.go` | Generic `Extrude` over a profile or chain, `WithTaper`, linear-extent resolution, the chain ribbon entry point. See evaluator §5 and surface §13.2. |
 | `draft.go` | `Draft`, `NeutralPlane`, `Walls` gates. See draft §10. |
 | `draft_payload.go` | `draftPayload`, its band view and offset span. See draft §6, §8.1. |
 | `draft_build.go` | Tapered extrude gates and assembly. See draft §5, §7. |

@@ -163,20 +163,20 @@ func chainSweepMeshClass(b *Body, sp chainSweepPayload) (float64, float64, float
 	}
 	if b.Kind() != BodySheet || len(sp.spans) != 2 || sp.spans[0].arc || !sp.spans[1].arc ||
 		sp.spans[1].reverseArcRims || sp.path == nil || len(sp.path.Segments) != 2 ||
-		sp.spans[0].chain.xform != r3.Identity() ||
-		sp.spans[1].revolve.xform != r3.Identity() || len(sp.spans[0].chain.chains) != 1 ||
+		sp.spans[0].chain.Xform != r3.Identity() ||
+		sp.spans[1].revolve.xform != r3.Identity() || len(sp.spans[0].chain.Chains) != 1 ||
 		len(sp.spans[1].revolve.chains) != 1 {
 		return refuse()
 	}
-	chain := sp.spans[0].chain.chains[0]
+	chain := sp.spans[0].chain.Chains[0]
 	if len(chain.Segments) != 1 || len(sp.spans[1].revolve.chains[0].Segments) != 1 {
 		return refuse()
 	}
 	seg, ok := chain.Segments[0].(lineSeg)
 	if !ok || seg.Start.U != 0 || seg.Start.V != 0 || seg.End.V != 0 || seg.End.U <= 0 ||
-		sp.spans[0].chain.frame.Origin() != (r3.Vec{}) ||
-		sp.spans[0].chain.frame.U() != (r3.Vec{X: 1}) ||
-		sp.spans[0].chain.frame.V() != (r3.Vec{Y: 1}) {
+		sp.spans[0].chain.Frame.Origin() != (r3.Vec{}) ||
+		sp.spans[0].chain.Frame.U() != (r3.Vec{X: 1}) ||
+		sp.spans[0].chain.Frame.V() != (r3.Vec{Y: 1}) {
 		return refuse()
 	}
 	w := seg.End.U
@@ -196,8 +196,8 @@ func chainSweepMeshClass(b *Body, sp chainSweepPayload) (float64, float64, float
 		proofarith.FloatRat(radius-w).Cmp(new(big.Rat).Sub(proofarith.FloatRat(radius), proofarith.FloatRat(w))) != 0 {
 		return refuse()
 	}
-	if sp.spans[0].chain.z0 != 0 || sp.spans[0].chain.z1 != height ||
-		sp.spans[0].chain.sectionDelta != 0 || sp.spans[1].revolve.sectionDelta != 0 ||
+	if sp.spans[0].chain.Z0 != 0 || sp.spans[0].chain.Z1 != height ||
+		sp.spans[0].chain.SectionDelta != 0 || sp.spans[1].revolve.sectionDelta != 0 ||
 		sp.spans[1].revolve.frame.Origin() != (r3.Vec{Z: height}) ||
 		sp.spans[1].revolve.frame.U() != (r3.Vec{X: 1}) ||
 		sp.spans[1].revolve.frame.V() != (r3.Vec{Y: 1}) ||

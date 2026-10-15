@@ -56,15 +56,15 @@ func thickenArcChainSweep(ctx context.Context, d *Document, sp chainSweepPayload
 func thickenCompositeChainSweep(ctx context.Context, d *Document, sp chainSweepPayload,
 	side ThickenSide, tmm, tDelta float64) (*Body, error) {
 	if len(sp.spans) != 2 || sp.spans[0].arc || !sp.spans[1].arc || sp.path == nil ||
-		len(sp.spans[0].chain.chains) != 1 || len(sp.spans[1].revolve.chains) != 1 ||
-		sp.spans[0].chain.sectionDelta != 0 || sp.spans[1].revolve.sectionDelta != 0 ||
-		sp.spans[0].chain.xform != r3.Identity() || sp.spans[1].revolve.xform != r3.Identity() {
+		len(sp.spans[0].chain.Chains) != 1 || len(sp.spans[1].revolve.chains) != 1 ||
+		sp.spans[0].chain.SectionDelta != 0 || sp.spans[1].revolve.sectionDelta != 0 ||
+		sp.spans[0].chain.Xform != r3.Identity() || sp.spans[1].revolve.xform != r3.Identity() {
 		return nil, fmt.Errorf(`%w: this chain sweep has no admitted Thicken section`, ErrUnsupported)
 	}
 	straight := sp.spans[0].chain
-	frame := straight.frame
+	frame := straight.Frame
 	plane := planeRecord{Origin: frame.Origin(), U: frame.U(), V: frame.V()}
-	if err := sweepinput.CardinalChainSweepClass(straight.chains[0], plane, sp.path); err != nil {
+	if err := sweepinput.CardinalChainSweepClass(straight.Chains[0], plane, sp.path); err != nil {
 		return nil, err
 	}
 	amount, err := thickenAmount(tmm, tDelta, side)
@@ -83,7 +83,7 @@ func thickenCompositeChainSweep(ctx context.Context, d *Document, sp chainSweepP
 	}
 	radial := thickenaxis.NewRadial(proofarith.FloatRat(arc.Through.X), big.NewRat(0, 1),
 		big.NewRat(0, 1), big.NewRat(1, 1))
-	section, err := thickenaxis.RibbonProfile(ctx, straight.chains[0], right, left, amount, budget, work, &radial)
+	section, err := thickenaxis.RibbonProfile(ctx, straight.Chains[0], right, left, amount, budget, work, &radial)
 	if err != nil {
 		return nil, err
 	}

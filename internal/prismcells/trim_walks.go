@@ -22,7 +22,7 @@ import (
 // end-cut fixture). The decision reads only the two recorded floats — never a
 // coordinate comparison, never whether a value "looks like" it moved.
 //
-// This is never called for a plain chain Extrude ribbon: evalChainExtrudeContext
+// This is never called for a plain chain Extrude ribbon: chainrecord.Build
 // gates it on pp.sectionDelta != 0, which no construction but this design's
 // Trim ever sets, so an ordinary ribbon keeps resolving through walkOf with
 // no augmentation.

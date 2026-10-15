@@ -723,7 +723,7 @@ segments carries `n` rim posts, each shared by the two walls that meet there;
 an open walk of `n` segments carries `n+1`, of which post `0` and post `n` are
 touched by one wall each. So a chain join sews `n` rim edges and `n+1` rim
 vertices where a profile join sews `n` and `n`, by the same index in both
-lists. `buildChainSides` (`extrude.go`) already mints that post set for one
+lists. `buildSides` (`internal/chainrecord/build.go`) already mints that post set for one
 span, and `docs/surface-design.md` §13.3 states the same drop for a chain
 revolve's own two free ends.
 
@@ -741,7 +741,7 @@ requires each span's material to be certified on its own side of the shared
 section plane. It reads the span's analytic extent along that plane's normal
 and the span's own endpoint-supporting-plane property, and neither reading asks
 whether the section closes: a chain prism span supplies both through
-`chainPayload.prism`'s `prismPayload` view, and a chain arc span through
+`chainrecord.Payload.Prism`'s `prismPayload` view, and a chain arc span through
 `chainRevolvePayload.revolve`'s `revolvePayload` view. The non-neighbour rule
 is a bounded-box separation and reads no section at all. The topology audit
 that follows the sew already admits a free rim edge — it requires one or two

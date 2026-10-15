@@ -466,7 +466,7 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 			return tessellateChainArcSweep(ctx, b, sp, chord, verify)
 		}
 		// the chain Sweep's one-span straight reduction builds through the
-		// identical evalChainExtrudeContext a plain chain Extrude does, over
+		// identical chainrecord.Build a plain chain Extrude does, over
 		// the chainPayload it wraps unchanged (sweep.go's
 		// finishChainSweepBody), so it reuses that same restatement rather
 		// than a second one keyed on the wrapper type.

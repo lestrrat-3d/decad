@@ -128,7 +128,7 @@ func TestTessellateChainReflectedPlacementFlipsWinding(t *testing.T) {
 	require.NoError(t, err)
 	pp, ok := placed.n.Payload.(chainPayload)
 	require.True(t, ok)
-	require.True(t, pp.xform.IsReflection(), "premise: the placement negates the determinant")
+	require.True(t, pp.Xform.IsReflection(), "premise: the placement negates the determinant")
 
 	mesh, err := tessellateChain(t.Context(), placed, pp)
 	require.NoError(t, err)
