@@ -67,3 +67,7 @@ func (mp Payload) Placed(ctx context.Context, env topo.Env, composed r3.Transfor
 		LocalMoments: mp.LocalMoments,
 	})
 }
+
+// SurveyClass names the payload class a staged survey diagnostic reports
+// (internal/reportvocab): the root type name this payload had before it moved.
+func (Payload) SurveyClass() string { return "mitredSweepPayload" }
