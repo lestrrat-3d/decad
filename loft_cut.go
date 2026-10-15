@@ -19,13 +19,13 @@ import (
 // Every other pair keeps the general boolean path.
 func tryLoftThroughBoreCut(ctx context.Context, d *Document, ref producerID, a, b *Body) (*Body, bool, error) {
 	pl, ok := a.n.Payload.(loftPayload)
-	if !ok || pl.surfaceResult || len(pl.profile0.Holes) != 0 ||
-		!sectionrecord.IdenticalRecord(pl.profile0, pl.profile1) ||
-		pl.frame0.U() != pl.frame1.U() || pl.frame0.V() != pl.frame1.V() ||
-		pl.xform != r3.Identity() {
+	if !ok || pl.SurfaceResult || len(pl.Profile0.Holes) != 0 ||
+		!sectionrecord.IdenticalRecord(pl.Profile0, pl.Profile1) ||
+		pl.Frame0.U() != pl.Frame1.U() || pl.Frame0.V() != pl.Frame1.V() ||
+		pl.Xform != r3.Identity() {
 		return nil, false, nil
 	}
-	for _, off := range pl.alignment {
+	for _, off := range pl.Alignment {
 		if off != 0 {
 			return nil, false, nil
 		}
@@ -33,7 +33,7 @@ func tryLoftThroughBoreCut(ctx context.Context, d *Document, ref producerID, a, 
 	tool, ok := b.n.Payload.(prismPayload)
 	if !ok || tool.SurfaceResult || tool.Xform != r3.Identity() ||
 		tool.SectionDelta != 0 || tool.Z0Delta != 0 || tool.Z1Delta != 0 ||
-		tool.Frame.U() != pl.frame0.U() || tool.Frame.V() != pl.frame0.V() ||
+		tool.Frame.U() != pl.Frame0.U() || tool.Frame.V() != pl.Frame0.V() ||
 		len(tool.Profile.Holes) != 0 || len(tool.Profile.Outer.Segments) != 1 {
 		return nil, false, nil
 	}
@@ -43,26 +43,26 @@ func tryLoftThroughBoreCut(ctx context.Context, d *Document, ref producerID, a, 
 		return nil, false, nil
 	}
 	centerWorld := tool.Point(circle.Center.U, circle.Center.V, 0)
-	center := pl.frame0.ToLocal(centerWorld)
-	if !loftToolCenterExact(tool, pl.frame0, circle.Center.U, circle.Center.V, center) {
+	center := pl.Frame0.ToLocal(centerWorld)
+	if !loftToolCenterExact(tool, pl.Frame0, circle.Center.U, circle.Center.V, center) {
 		return nil, false, nil
 	}
-	end := pl.frame0.ToLocal(pl.frame1.Origin())
-	if end.Z <= 0 || !loftToolSpansExactCaps(tool, pl.frame0, pl.frame1) {
+	end := pl.Frame0.ToLocal(pl.Frame1.Origin())
+	if end.Z <= 0 || !loftToolSpansExactCaps(tool, pl.Frame0, pl.Frame1) {
 		return nil, false, nil
 	}
-	profile := pl.profile0
+	profile := pl.Profile0
 	hole := circle
 	hole.Center = sectionrecord.Point2{U: center.X, V: center.Y}
 	hole.CCW, hole.TStart, hole.TEnd = false, 1, 0
 	profile.Holes = []loopRecord{{Segments: []curveSegment{hole}}}
 	budget := proofbound.NewWorkBudget(ctx)
 	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
-	pl.raiseReconstructionLimit(work0, work1)
-	limit := pl.rewriteWorkLimit(uint64(len(profile.Outer.Segments) + 1))
+	pl.RaiseReconstructionLimit(work0, work1)
+	limit := pl.RewriteWorkLimit(uint64(len(profile.Outer.Segments) + 1))
 	work0.RaiseLimit(limit)
 	work1.RaiseLimit(limit)
-	contained, err := loftfillet.CircleHoleInside(budget, pl.profile0.Outer, hole, pl.constructionDelta, work0)
+	contained, err := loftfillet.CircleHoleInside(budget, pl.Profile0.Outer, hole, pl.ConstructionDelta, work0)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, false, ctx.Err()
@@ -80,13 +80,13 @@ func tryLoftThroughBoreCut(ctx context.Context, d *Document, ref producerID, a, 
 		return nil, false, err
 	}
 	next := pl
-	next.profile0, next.profile1 = profile, profile
-	next.throughBoreCut = true
-	next.recordArea = [2]float64{ig.Area, ig.Area}
+	next.Profile0, next.Profile1 = profile, profile
+	next.ThroughBoreCut = true
+	next.RecordArea = [2]float64{ig.Area, ig.Area}
 	// The analytic wall has no normal-departure allowance. A rounded center
 	// or a non-isometric frame map keeps the Loft's tessellated bore topology.
-	next.analyticBore = loftBoreHasExactAxis(pl.frame0, pl.frame1, hole.Center.U, hole.Center.V, end.Z) &&
-		loftBoreCylinderExactGeometry(pl.frame0, pl.xform, hole.Center.U, hole.Center.V)
+	next.AnalyticBore = loftBoreHasExactAxis(pl.Frame0, pl.Frame1, hole.Center.U, hole.Center.V, end.Z) &&
+		loftBoreCylinderExactGeometry(pl.Frame0, pl.Xform, hole.Center.U, hole.Center.V)
 	out, err := evalLoft(ctx, d, ref, next, budget, work0, work1)
 	if err != nil {
 		return nil, false, err

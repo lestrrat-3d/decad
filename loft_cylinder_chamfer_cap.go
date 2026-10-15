@@ -26,12 +26,12 @@ func loftCylinderChamferCapRadialReach(source loftCylinderChamferSource,
 			return 0, fmt.Errorf("%w: cap radial band lacks a source tooth", ErrUnsupported)
 		}
 		lp, ok := tooth.n.Payload.(loftPayload)
-		if !ok || !lp.authenticatedReconstruction {
+		if !ok || !lp.AuthenticatedReconstruction {
 			return 0, fmt.Errorf("%w: cap slit lacks an authenticated tooth", ErrUnsupported)
 		}
-		profile := lp.profile0
+		profile := lp.Profile0
 		if capIndex == 1 {
-			profile = lp.profile1
+			profile = lp.Profile1
 		}
 		if len(profile.Outer.Segments) <= 5 {
 			return 0, fmt.Errorf("%w: cap slit lacks the source root arc", ErrUnsupported)
@@ -40,7 +40,7 @@ func loftCylinderChamferCapRadialReach(source loftCylinderChamferSource,
 		if !ok {
 			return 0, fmt.Errorf("%w: cap slit lacks the source root arc", ErrUnsupported)
 		}
-		p := loftcylinder.SourcePoint(lp.xform.Basis().EX, arc.Start)
+		p := loftcylinder.SourcePoint(lp.Xform.Basis().EX, arc.Start)
 		if q := loftcylinder.SourceDot(p, p); q.Cmp(outer2) > 0 {
 			return 0, fmt.Errorf("%w: cap radial band misses a source root", ErrUnsupported)
 		}

@@ -22,12 +22,12 @@ func loftCylinderProofTooth(ctx context.Context, d *Document, tooth *Body,
 	if !ok {
 		return nil, 0, false, nil
 	}
-	if loftCylinderAxialPlacement(lp.xform) {
+	if loftCylinderAxialPlacement(lp.Xform) {
 		return tooth, 0, true, nil
 	}
-	basis := lp.xform.Basis()
+	basis := lp.Xform.Basis()
 	if z0 != 0 || z1 <= 0 || proofbound.IsNonFinite(z1) ||
-		lp.xform.Translation() != (r3.Vec{}) ||
+		lp.Xform.Translation() != (r3.Vec{}) ||
 		basis.EZ != (r3.Vec{Z: math.Nextafter(1, 0)}) ||
 		basis.EX.Z != 0 || basis.EY.Z != 0 ||
 		basis.EX.X != basis.EY.Y || basis.EX.Y != -basis.EY.X {
@@ -48,20 +48,20 @@ func loftCylinderProofTooth(ctx context.Context, d *Document, tooth *Body,
 		return nil, 0, true, err
 	}
 	proof, ok := proxy.n.Payload.(loftPayload)
-	if !ok || proof.sourceIdentity != lp.sourceIdentity || len(proof.verts) != len(lp.verts) ||
-		!slices.Equal(proof.tris, lp.tris) || proof.walls != lp.walls ||
-		len(proof.segment) != len(lp.segment) {
+	if !ok || proof.SourceIdentity != lp.SourceIdentity || len(proof.Verts) != len(lp.Verts) ||
+		!slices.Equal(proof.Tris, lp.Tris) || proof.Walls != lp.Walls ||
+		len(proof.Segment) != len(lp.Segment) {
 		return nil, 0, false, nil
 	}
-	for i := range lp.segment {
-		if !slices.Equal(proof.segment[i], lp.segment[i]) {
+	for i := range lp.Segment {
+		if !slices.Equal(proof.Segment[i], lp.Segment[i]) {
 			return nil, 0, false, nil
 		}
 	}
 	gap := new(big.Rat).Sub(big.NewRat(1, 1), proofarith.FloatRat(basis.EZ.Z))
 	shift := proofbound.RatFloatUp(new(big.Rat).Mul(gap, proofarith.FloatRat(z1)))
-	for i, old := range lp.verts {
-		current := proof.verts[i]
+	for i, old := range lp.Verts {
+		current := proof.Verts[i]
 		if old.X != current.X || old.Y != current.Y {
 			return nil, 0, false, nil
 		}
@@ -79,12 +79,12 @@ func loftCylinderProofTooth(ctx context.Context, d *Document, tooth *Body,
 	areaUpper := proofbound.AbsSumUpper(area.Value.Base(), area.Bound.Base())
 	areaBridge := proofbound.ProductUpper(proofbound.RatFloatUp(gap), areaUpper)
 	volumeBridge := proofbound.SweptVolumeAllow(shift, areaUpper)
-	proof.proof.FacetDeparture = proofbound.AbsSumUpper(proof.proof.FacetDeparture, shift)
-	proof.proof.AreaSlack = proofbound.AbsSumUpper(proof.proof.AreaSlack, areaBridge)
-	proof.proof.VolSymDiff = proofbound.AbsSumUpper(proof.proof.VolSymDiff, volumeBridge)
-	if proofbound.IsNonFinite(proof.proof.FacetDeparture) ||
-		proofbound.IsNonFinite(proof.proof.AreaSlack) ||
-		proofbound.IsNonFinite(proof.proof.VolSymDiff) {
+	proof.Proof.FacetDeparture = proofbound.AbsSumUpper(proof.Proof.FacetDeparture, shift)
+	proof.Proof.AreaSlack = proofbound.AbsSumUpper(proof.Proof.AreaSlack, areaBridge)
+	proof.Proof.VolSymDiff = proofbound.AbsSumUpper(proof.Proof.VolSymDiff, volumeBridge)
+	if proofbound.IsNonFinite(proof.Proof.FacetDeparture) ||
+		proofbound.IsNonFinite(proof.Proof.AreaSlack) ||
+		proofbound.IsNonFinite(proof.Proof.VolSymDiff) {
 		return nil, 0, false, nil
 	}
 	proxy.n.Payload = proof

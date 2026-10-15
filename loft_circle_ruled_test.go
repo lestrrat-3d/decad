@@ -20,13 +20,13 @@ func TestDirectLoftCircleGateRejectsEqualBaseDifferentRecord(t *testing.T) {
 	other.Radius = units.Centimeters(1)
 	require.Equal(t, circle.Radius.Base(), other.Radius.Base())
 	pl := loftPayload{
-		profile0: profileRecord{Holes: []loopRecord{{Segments: []curveSegment{circle}}}},
-		profile1: profileRecord{Holes: []loopRecord{{Segments: []curveSegment{circle}}}},
-		frame0:   bottom, frame1: top,
-		xform: r3.Identity(), authenticatedReconstruction: true,
+		Profile0: profileRecord{Holes: []loopRecord{{Segments: []curveSegment{circle}}}},
+		Profile1: profileRecord{Holes: []loopRecord{{Segments: []curveSegment{circle}}}},
+		Frame0:   bottom, Frame1: top,
+		Xform: r3.Identity(), AuthenticatedReconstruction: true,
 	}
 	require.Equal(t, loftCircleWallCylinder, directLoftCircularHole(pl))
-	pl.profile1.Holes[0].Segments[0] = other
+	pl.Profile1.Holes[0].Segments[0] = other
 	require.Equal(t, loftCircleWallNone, directLoftCircularHole(pl))
 }
 

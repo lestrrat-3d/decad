@@ -97,8 +97,8 @@ func twistSymDiff(height float64, perimeter, delta float64) float64 {
 // Faceted face with role side(0,0,j).
 func mergeTwistWalls(ctx context.Context, body *Body, ref producerID, held loftPayload, count int) (map[string]*Face, error) {
 	oldFaces := body.Faces()
-	if len(oldFaces) != 2+held.walls || len(held.cell) != held.walls ||
-		len(held.segment) != 1 {
+	if len(oldFaces) != 2+held.Walls || len(held.Cell) != held.Walls ||
+		len(held.Segment) != 1 {
 		return nil, fmt.Errorf(`%w: the twist's held wall count changed`, ErrUnsupported)
 	}
 	sources := map[string]*Face{
@@ -112,12 +112,12 @@ func mergeTwistWalls(ctx context.Context, body *Body, ref producerID, held loftP
 		}
 		uses := map[*Edge][]topo.CoEdge{}
 		area, areaBound, firstFacet := 0.0, 0.0, -1
-		for k := range held.walls {
-			cell := held.cell[k]
-			if cell[0] != 0 || cell[1] < 0 || cell[1] >= len(held.segment[0]) {
+		for k := range held.Walls {
+			cell := held.Cell[k]
+			if cell[0] != 0 || cell[1] < 0 || cell[1] >= len(held.Segment[0]) {
 				return nil, fmt.Errorf(`%w: a twisted wall lost its source segment`, ErrUnsupported)
 			}
-			if held.segment[0][cell[1]] != j {
+			if held.Segment[0][cell[1]] != j {
 				continue
 			}
 			face := oldFaces[2+k]
@@ -191,9 +191,9 @@ func mergeTwistWalls(ctx context.Context, body *Body, ref producerID, held loftP
 				Loops:     []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: outline}}))},
 			},
 		})
-		for k := range held.walls {
-			cell := held.cell[k]
-			if held.segment[0][cell[1]] == j {
+		for k := range held.Walls {
+			cell := held.Cell[k]
+			if held.Segment[0][cell[1]] == j {
 				sources[oldFaces[2+k].n.Origins[0].Role] = face
 			}
 		}
@@ -271,9 +271,9 @@ func evalTwistedSweep(ctx context.Context, d *Document, ref producerID, profile 
 	)
 	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
 	heldBody, err := evalLoft(ctx, d, ref, loftPayload{
-		profile0: profile, profile1: profile, plane0: plane, plane1: end,
-		frame0: f0, frame1: f1, xform: xform,
-		recordArea: [2]float64{recordArea, recordArea},
+		Profile0: profile, Profile1: profile, Plane0: plane, Plane1: end,
+		Frame0: f0, Frame1: f1, Xform: xform,
+		RecordArea: [2]float64{recordArea, recordArea},
 	}, proofbound.NewWorkBudget(ctx), work0, work1)
 	if err != nil {
 		return nil, err
@@ -287,7 +287,7 @@ func evalTwistedSweep(ctx context.Context, d *Document, ref producerID, profile 
 		return nil, err
 	}
 	idealDelta := twistDeparture(poly, upper, coordError, 0)
-	delta := proofbound.AbsSumUpper(idealDelta, held.delta)
+	delta := proofbound.AbsSumUpper(idealDelta, held.Delta)
 	if proofbound.IsNonFinite(delta) || delta <= 0 {
 		return nil, fmt.Errorf(`%w: the twisted boundary has no finite displacement proof`, ErrUnsupported)
 	}
@@ -302,13 +302,13 @@ func evalTwistedSweep(ctx context.Context, d *Document, ref producerID, profile 
 		new(big.Rat).Add(twistsweep.TwistRat(heldArea.Value.Base()), twistsweep.TwistRat(heldArea.Bound.Base())),
 	)
 	areaGap := proofbound.RatFloatUp(proofbound.IntervalAbsUpper(proofbound.IntervalSub(areaIv, heldAreaIv)))
-	areaSlack := proofbound.AbsSumUpper(areaGap, held.proof.AreaSlack)
+	areaSlack := proofbound.AbsSumUpper(areaGap, held.Proof.AreaSlack)
 	// The horizontal-section tube compares the true twist with the exact
 	// unrounded Loft facets. Loft's own occupied-volume proof then covers
 	// every held-vertex displacement, including axial placement rounding.
 	volSymDiff := proofbound.AbsSumUpper(
 		twistSymDiff(path.End.Z, poly.PerimeterUpper, idealDelta),
-		held.proof.VolSymDiff,
+		held.Proof.VolSymDiff,
 	)
 	if proofbound.IsNonFinite(trueArea) || proofbound.IsNonFinite(trueAreaBound) ||
 		proofbound.IsNonFinite(areaSlack) || proofbound.IsNonFinite(volSymDiff) {

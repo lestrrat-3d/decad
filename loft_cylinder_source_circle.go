@@ -21,28 +21,28 @@ func loftCylinderSourceCircleOf(lp loftPayload, radius float64) (loftcylinder.So
 	refuse := func(reason string) (loftcylinder.SourceCircle, error) {
 		return loftcylinder.SourceCircle{}, fmt.Errorf("%w: %s", ErrUnsupported, reason)
 	}
-	if radius <= 0 || proofbound.IsNonFinite(radius) || !lp.authenticatedReconstruction ||
-		lp.sourceIdentity == nil || lp.surfaceResult || !loftCylinderAxialPlacement(lp.xform) ||
-		lp.proof.FacetDeparture < 0 || proofbound.IsNonFinite(lp.proof.FacetDeparture) ||
-		len(lp.profile0.Outer.Segments) != 6 || len(lp.profile1.Outer.Segments) != 6 ||
-		!loftCylinderSectionKinds(lp) || len(lp.verts)%2 != 0 || len(lp.verts) < 16 ||
-		len(lp.segment) != 1 {
+	if radius <= 0 || proofbound.IsNonFinite(radius) || !lp.AuthenticatedReconstruction ||
+		lp.SourceIdentity == nil || lp.SurfaceResult || !loftCylinderAxialPlacement(lp.Xform) ||
+		lp.Proof.FacetDeparture < 0 || proofbound.IsNonFinite(lp.Proof.FacetDeparture) ||
+		len(lp.Profile0.Outer.Segments) != 6 || len(lp.Profile1.Outer.Segments) != 6 ||
+		!loftCylinderSectionKinds(lp) || len(lp.Verts)%2 != 0 || len(lp.Verts) < 16 ||
+		len(lp.Segment) != 1 {
 		return refuse("source circle lacks an authenticated axial Loft")
 	}
-	n := len(lp.verts) / 2
-	if len(lp.segment[0]) != n || len(lp.tris) != 4*n-4 ||
-		lp.frame0.U() != (r3.Vec{X: 1}) || lp.frame0.V() != (r3.Vec{Y: 1}) ||
-		lp.frame1.U() != (r3.Vec{X: 1}) || lp.frame1.V() != (r3.Vec{Y: 1}) {
+	n := len(lp.Verts) / 2
+	if len(lp.Segment[0]) != n || len(lp.Tris) != 4*n-4 ||
+		lp.Frame0.U() != (r3.Vec{X: 1}) || lp.Frame0.V() != (r3.Vec{Y: 1}) ||
+		lp.Frame1.U() != (r3.Vec{X: 1}) || lp.Frame1.V() != (r3.Vec{Y: 1}) {
 		return refuse("source circle has no paired planar sections")
 	}
-	z0, z1 := lp.frame0.Origin().Z, lp.frame1.Origin().Z
+	z0, z1 := lp.Frame0.Origin().Z, lp.Frame1.Origin().Z
 	if z1 <= z0 || !proofbound.FiniteVec(r3.Vec{Z: z0}) || !proofbound.FiniteVec(r3.Vec{Z: z1}) ||
-		lp.frame0.Origin() != (r3.Vec{Z: z0}) || lp.frame1.Origin() != (r3.Vec{Z: z1}) ||
-		lp.verts[0].Z != z0 || lp.verts[n].Z != z1 {
+		lp.Frame0.Origin() != (r3.Vec{Z: z0}) || lp.Frame1.Origin() != (r3.Vec{Z: z1}) ||
+		lp.Verts[0].Z != z0 || lp.Verts[n].Z != z1 {
 		return refuse("source circle has no exact axial interval")
 	}
 	root := -1
-	for j, segment := range lp.segment[0] {
+	for j, segment := range lp.Segment[0] {
 		if segment == 5 && root < 0 {
 			root = j
 		}
@@ -53,11 +53,11 @@ func loftCylinderSourceCircleOf(lp loftPayload, radius float64) (loftcylinder.So
 	if root < 3 || root >= n-1 {
 		return refuse("source circle has no paired root connectors")
 	}
-	gap, ok := loftcylinder.RootRadiusGap(lp.xform, [2]momentinput.Profile{lp.profile0, lp.profile1}, radius)
+	gap, ok := loftcylinder.RootRadiusGap(lp.Xform, [2]momentinput.Profile{lp.Profile0, lp.Profile1}, radius)
 	if !ok {
 		return refuse("source root has no radial gap bound")
 	}
-	if _, ok := loftcylinder.RadialGate(lp.verts, lp.tris, lp.segment, root, radius, lp.proof.FacetDeparture, gap); !ok {
+	if _, ok := loftcylinder.RadialGate(lp.Verts, lp.Tris, lp.Segment, root, radius, lp.Proof.FacetDeparture, gap); !ok {
 		return refuse("source fitted walls may meet the circle")
 	}
 	height := proofbound.RatFloatUp(new(big.Rat).Sub(proofarith.FloatRat(z1), proofarith.FloatRat(z0)))
@@ -74,14 +74,14 @@ func loftCylinderSourceCircleOf(lp loftPayload, radius float64) (loftcylinder.So
 		return refuse("source root collar covers the axial interval")
 	}
 	for i, cell := range [2]int{0, root - 1} {
-		connector, valid := loftcylinder.SourceConnectorOf(lp.verts, lp.tris, lp.segment,
-			[2]profileRecord{lp.profile0, lp.profile1}, lp.xform.Basis().EX, cell, root)
+		connector, valid := loftcylinder.SourceConnectorOf(lp.Verts, lp.Tris, lp.Segment,
+			[2]profileRecord{lp.Profile0, lp.Profile1}, lp.Xform.Basis().EX, cell, root)
 		if !valid || !connector.RadialMonotone() || !connector.FarOutside(record.Radius) {
 			return refuse("true source connector lacks one transverse circle crossing")
 		}
 		record.Connector[i] = connector
 	}
-	axis, ok := loftcylinder.SourceGapAxis(lp.verts, root, lp.proof.FacetDeparture)
+	axis, ok := loftcylinder.SourceGapAxis(lp.Verts, root, lp.Proof.FacetDeparture)
 	if !ok {
 		return refuse("source tooth has no exterior gap witness")
 	}
@@ -98,13 +98,13 @@ func loftCylinderSourceStrictRootCollar(lp loftPayload, radius, height float64) 
 	if !ok || collar > 0 {
 		return collar, ok
 	}
-	basis := lp.xform.Basis()
+	basis := lp.Xform.Basis()
 	c, s := proofarith.FloatRat(basis.EX.X), proofarith.FloatRat(basis.EX.Y)
 	scale2 := new(big.Rat).Add(new(big.Rat).Mul(c, c), new(big.Rat).Mul(s, s))
 	r2 := new(big.Rat).Mul(proofarith.FloatRat(radius), proofarith.FloatRat(radius))
 	var q [2]*big.Rat
 	var angles [2][2]proofbound.RatInterval
-	for cap, profile := range []profileRecord{lp.profile0, lp.profile1} {
+	for cap, profile := range []profileRecord{lp.Profile0, lp.Profile1} {
 		arc, valid := profile.Outer.Segments[5].(arcSeg)
 		if !valid {
 			return 0, false

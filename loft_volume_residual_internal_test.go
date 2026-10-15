@@ -45,14 +45,14 @@ func (b loftMassBuild) stationsPerLoop() int { return len(b.pairs[0].V) }
 func loftMassAtTarget(t *testing.T, pl loftPayload, target float64) loftMassBuild {
 	t.Helper()
 	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
-	offsets, walks0, walks1, production, err := loftmesh.ValidateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, pl.recordArea, work0, work1)
+	offsets, walks0, walks1, production, err := loftmesh.ValidateLoftRecords(pl.Profile0, pl.Profile1, pl.Plane0, pl.Plane1, pl.Alignment, pl.RecordArea, work0, work1)
 	require.NoError(t, err)
 	if target <= 0 {
 		target = production
 	}
-	pairs, sectionDelta, sectionMatchedDelta, stationRound, err := loftmesh.PairRecords(pl.profile0, pl.profile1, offsets, walks0, walks1, target, work0, work1)
+	pairs, sectionDelta, sectionMatchedDelta, stationRound, err := loftmesh.PairRecords(pl.Profile0, pl.Profile1, offsets, walks0, walks1, target, work0, work1)
 	require.NoError(t, err)
-	a, err := loftmesh.AssembleTriangulated(t.Context(), pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform, stationRound)
+	a, err := loftmesh.AssembleTriangulated(t.Context(), pairs, pl.Frame0, pl.Frame1, pl.Plane0, pl.Xform, stationRound)
 	require.NoError(t, err)
 	return loftMassBuild{
 		mass: buildLoftMass(pl, a, pairs, sectionDelta, sectionMatchedDelta), a: a, pairs: pairs,
@@ -88,10 +88,10 @@ func quarterRingProfile(c, s float64) profileRecord {
 func loftPayloadOnPlanes(t *testing.T, p0, p1 profileRecord, pl0, pl1 planeRecord) loftPayload {
 	t.Helper()
 	return loftPayload{
-		profile0: p0, profile1: p1, plane0: pl0, plane1: pl1,
-		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
-		xform:      r3.Identity(),
-		recordArea: loftRecordAreasOrZero(p0, p1),
+		Profile0: p0, Profile1: p1, Plane0: pl0, Plane1: pl1,
+		Frame0: mustFrame(t, pl0), Frame1: mustFrame(t, pl1),
+		Xform:      r3.Identity(),
+		RecordArea: loftRecordAreasOrZero(p0, p1),
 	}
 }
 
@@ -157,7 +157,7 @@ func TestLoftVolumeResidualIsPerCellWallLegPlusSkirt(t *testing.T) {
 	oval := twoRadiusOvalProfile()
 	unplaced := loftPayloadOnPlanes(t, oval, oval, planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 10)))
 	placed := unplaced
-	placed.xform = testPlacement(t)
+	placed.Xform = testPlacement(t)
 
 	for _, tc := range []struct {
 		name      string
@@ -362,7 +362,7 @@ func TestLoftPlacedVolumeNeedsTheVertexSweep(t *testing.T) {
 		lineSeg{Start: pt(0, 10), End: pt(0, 0), TStart: 0, TEnd: 1},
 	}}}
 	pl := loftPayloadOnPlanes(t, slab, slab, planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, h)))
-	pl.xform = testPlacement(t)
+	pl.Xform = testPlacement(t)
 
 	b := loftMassAtTarget(t, pl, 0)
 	m := b.mass

@@ -32,7 +32,7 @@ func requireBitIdentical(t *testing.T, want, got r3.Vec) {
 }
 
 // TestR3IdentityApplyIsBitIdentical pins the identity fast path's own
-// premise (docs/loft-design.md §5, §12 PR 2a): loftPayload.delta is 0 only
+// premise (docs/loft-design.md §5, §12 PR 2a): loftPayload.Delta is 0 only
 // because r3.Identity().Apply is bit-exact on every finite coordinate,
 // including the corners a naive implementation might round differently — a
 // subnormal, a near-overflow magnitude, negative zero, and a non-terminating

@@ -234,9 +234,9 @@ func loftGearDenseLoop(t *testing.T, loop loopRecord, perSeg int) ([]planePoint,
 // patch, whose integrands are cubic in each parameter.
 func loftGearReference(t *testing.T, lp loftPayload) ruledReferenceReadings {
 	t.Helper()
-	dense, faceted := loftGearDenseLoop(t, lp.profile0.Outer, 512)
-	x0 := liftSamples(dense, lp.frame0)
-	x1 := liftSamples(dense, lp.frame1)
+	dense, faceted := loftGearDenseLoop(t, lp.Profile0.Outer, 512)
+	x0 := liftSamples(dense, lp.Frame0)
+	x1 := liftSamples(dense, lp.Frame1)
 	n := len(dense)
 
 	var vol, wall float64
@@ -316,8 +316,8 @@ func requireLoftGearSound(t *testing.T, c loftGearCase) {
 	require.Less(t, ratio, toleranceRel, "every reading must sit inside the default tolerance")
 
 	lp := body.n.Payload.(loftPayload)
-	p := uint64(len(lp.profile0.Outer.Segments))
-	stations := lp.walls / 2
+	p := uint64(len(lp.Profile0.Outer.Segments))
+	stations := lp.Walls / 2
 	require.Less(t, stations, loftmesh.StationCap(p), "the build must settle inside stationCap(P)")
 
 	ref := loftGearReference(t, lp)

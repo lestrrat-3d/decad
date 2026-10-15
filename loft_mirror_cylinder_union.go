@@ -86,21 +86,21 @@ func loftMirrorCylinderPairs(ctx context.Context, d *Document, ref producerID,
 	}
 	lower, lowOK := record.lower.n.Payload.(loftPayload)
 	upper, upOK := record.upper.n.Payload.(loftPayload)
-	if !lowOK || !upOK || !lower.authenticatedReconstruction ||
-		!upper.authenticatedReconstruction || lower.sourceIdentity == nil ||
-		lower.sourceIdentity != upper.sourceIdentity ||
-		lower.xform != r3.Identity() || !loftMirrorAxialSource(lower) {
+	if !lowOK || !upOK || !lower.AuthenticatedReconstruction ||
+		!upper.AuthenticatedReconstruction || lower.SourceIdentity == nil ||
+		lower.SourceIdentity != upper.SourceIdentity ||
+		lower.Xform != r3.Identity() || !loftMirrorAxialSource(lower) {
 		return nil, false, nil
 	}
-	reflection, err := r3.Reflection(lower.frame1)
+	reflection, err := r3.Reflection(lower.Frame1)
 	if err != nil {
 		return nil, true, fmt.Errorf("%w: mirrored cylinder source has no reflection: %s", ErrUnsupported, err)
 	}
-	if upper.xform != reflection {
+	if upper.Xform != reflection {
 		return nil, false, nil
 	}
-	z0, middle, z2 := pp.Z0, lower.frame1.Origin().Z, pp.Z1
-	if lower.frame0.Origin().Z != z0 || !(z0 < middle && middle < z2) ||
+	z0, middle, z2 := pp.Z0, lower.Frame1.Origin().Z, pp.Z1
+	if lower.Frame0.Origin().Z != z0 || !(z0 < middle && middle < z2) ||
 		!loftMirrorCylinderLevels(z0, middle, z2) {
 		return nil, false, nil
 	}

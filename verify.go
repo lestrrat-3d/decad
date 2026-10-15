@@ -821,7 +821,7 @@ func payloadProvesSimple(ctx context.Context, p topo.Payload) bool {
 	case prismPayload:
 		return pp.SurfaceResult && pp.SectionDelta == 0
 	case loftPayload:
-		return pp.surfaceResult && pp.sectionDelta == 0 && !pp.chorded
+		return pp.SurfaceResult && pp.SectionDelta == 0 && !pp.Chorded
 	case chainLoftPayload:
 		return true
 	case coilPayload:

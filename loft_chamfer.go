@@ -28,26 +28,26 @@ type loftCapBandSource struct {
 // route. Its cap contour follows the loft's certified held station polygon.
 func tryLoftCapChamfer(ctx context.Context, b *Body, pl loftPayload, edges []*Edge,
 	d, dDelta float64, asym *asymmetricChamfer) (*Body, bool, error) {
-	if asym != nil || pl.surfaceResult || pl.xform != r3.Identity() ||
-		!sectionrecord.IdenticalRecord(pl.profile0, pl.profile1) ||
-		len(pl.profile0.Holes) > 1 ||
-		pl.frame0.U() != pl.frame1.U() || pl.frame0.V() != pl.frame1.V() {
+	if asym != nil || pl.SurfaceResult || pl.Xform != r3.Identity() ||
+		!sectionrecord.IdenticalRecord(pl.Profile0, pl.Profile1) ||
+		len(pl.Profile0.Holes) > 1 ||
+		pl.Frame0.U() != pl.Frame1.U() || pl.Frame0.V() != pl.Frame1.V() {
 		return nil, false, nil
 	}
-	if len(pl.profile0.Holes) == 1 {
-		if len(pl.profile0.Holes[0].Segments) != 1 {
+	if len(pl.Profile0.Holes) == 1 {
+		if len(pl.Profile0.Holes[0].Segments) != 1 {
 			return nil, false, nil
 		}
-		if _, ok := pl.profile0.Holes[0].Segments[0].(circleSeg); !ok {
+		if _, ok := pl.Profile0.Holes[0].Segments[0].(circleSeg); !ok {
 			return nil, false, nil
 		}
 	}
-	for _, offset := range pl.alignment {
+	for _, offset := range pl.Alignment {
 		if offset != 0 {
 			return nil, false, nil
 		}
 	}
-	end := pl.frame0.ToLocal(pl.frame1.Origin())
+	end := pl.Frame0.ToLocal(pl.Frame1.Origin())
 	if end.X != 0 || end.Y != 0 || end.Z <= 2*d {
 		return nil, false, nil
 	}
@@ -65,7 +65,7 @@ func tryLoftCapChamfer(ctx context.Context, b *Body, pl loftPayload, edges []*Ed
 	if caps[0] == nil || caps[1] == nil {
 		return nil, false, nil
 	}
-	if !matchingLoftHeldCapOuters(pl.frame0, caps[0], caps[1]) {
+	if !matchingLoftHeldCapOuters(pl.Frame0, caps[0], caps[1]) {
 		return nil, false, nil
 	}
 	selected := make(map[*topo.Edge]struct{}, len(edges))
@@ -89,8 +89,8 @@ func tryLoftCapChamfer(ctx context.Context, b *Body, pl loftPayload, edges []*Ed
 	}
 	outer := make([]curveSegment, 0, len(caps[1].n.Loops[0].CoEdges))
 	for _, ce := range caps[1].n.Loops[0].CoEdges {
-		start := pl.frame0.ToLocal(coedgeStart(ce).Position)
-		stop := pl.frame0.ToLocal(coedgeEnd(ce).Position)
+		start := pl.Frame0.ToLocal(coedgeStart(ce).Position)
+		stop := pl.Frame0.ToLocal(coedgeEnd(ce).Position)
 		outer = append(outer, lineSeg{
 			Start:  sectionrecord.Point2{U: start.X, V: start.Y},
 			End:    sectionrecord.Point2{U: stop.X, V: stop.Y},
@@ -99,11 +99,11 @@ func tryLoftCapChamfer(ctx context.Context, b *Body, pl loftPayload, edges []*Ed
 	}
 	profile := profileRecord{
 		Outer: loopRecord{Segments: outer},
-		Holes: pl.profile0.Holes,
+		Holes: pl.Profile0.Holes,
 	}
-	pp := prismrecord.Payload{Profile: profile, Frame: pl.frame0, Z0: 0, Z1: end.Z, Xform: r3.Identity()}
+	pp := prismrecord.Payload{Profile: profile, Frame: pl.Frame0, Z0: 0, Z1: end.Z, Xform: r3.Identity()}
 	setback := capSetback{Dc: d, DcDelta: dDelta, Ds: d, DsDelta: dDelta}
-	source := &loftCapBandSource{Profile: pl.profile0, Proof: pl.proof}
+	source := &loftCapBandSource{Profile: pl.Profile0, Proof: pl.Proof}
 	result, err := buildCapBlendWithLoftSource(ctx, documentHandle(b.n.Doc), b.n.Doc.NextProducer, pp, setback, setback,
 		map[int]bool{0: true}, map[int]bool{0: true}, source)
 	if err != nil {

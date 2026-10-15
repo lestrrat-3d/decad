@@ -40,32 +40,32 @@ func tryLoftMirrorUnion(ctx context.Context, op meshbool.OperationKind,
 		return nil, false, nil
 	}
 	lower, ok := a.n.Payload.(loftPayload)
-	if !ok || lower.xform != r3.Identity() {
+	if !ok || lower.Xform != r3.Identity() {
 		a, b = b, a
 		lower, ok = a.n.Payload.(loftPayload)
 	}
 	upper, upperOK := b.n.Payload.(loftPayload)
-	if !ok || !upperOK || lower.xform != r3.Identity() ||
-		!lower.authenticatedReconstruction || !upper.authenticatedReconstruction ||
-		lower.surfaceResult || upper.surfaceResult || lower.sourceIdentity == nil ||
-		lower.sourceIdentity != upper.sourceIdentity {
+	if !ok || !upperOK || lower.Xform != r3.Identity() ||
+		!lower.AuthenticatedReconstruction || !upper.AuthenticatedReconstruction ||
+		lower.SurfaceResult || upper.SurfaceResult || lower.SourceIdentity == nil ||
+		lower.SourceIdentity != upper.SourceIdentity {
 		return nil, false, nil
 	}
-	if !loftMirrorAxialSource(lower) || lower.frame0 != upper.frame0 ||
-		lower.frame1 != upper.frame1 || lower.plane0 != upper.plane0 ||
-		lower.plane1 != upper.plane1 || !slices.Equal(lower.alignment, upper.alignment) {
+	if !loftMirrorAxialSource(lower) || lower.Frame0 != upper.Frame0 ||
+		lower.Frame1 != upper.Frame1 || lower.Plane0 != upper.Plane0 ||
+		lower.Plane1 != upper.Plane1 || !slices.Equal(lower.Alignment, upper.Alignment) {
 		return nil, false, nil
 	}
-	reflection, err := r3.Reflection(lower.frame1)
+	reflection, err := r3.Reflection(lower.Frame1)
 	if err != nil {
 		return nil, true, fmt.Errorf("%w: loft end section has no reflection: %s", ErrUnsupported, err)
 	}
-	if upper.xform != reflection {
+	if upper.Xform != reflection {
 		return nil, false, nil
 	}
 	budget := proofbound.NewWorkBudget(ctx)
-	for _, pair := range [][2]profileRecord{{lower.profile0, upper.profile0},
-		{lower.profile1, upper.profile1}} {
+	for _, pair := range [][2]profileRecord{{lower.Profile0, upper.Profile0},
+		{lower.Profile1, upper.Profile1}} {
 		same, err := momentinput.ExactProfileEqual(budget, pair[0], pair[1])
 		if err != nil {
 			return nil, true, err
@@ -83,27 +83,27 @@ func tryLoftMirrorUnion(ctx context.Context, op meshbool.OperationKind,
 }
 
 func loftMirrorAxialSource(lp loftPayload) bool {
-	for _, f := range []r3.Frame{lp.frame0, lp.frame1} {
+	for _, f := range []r3.Frame{lp.Frame0, lp.Frame1} {
 		if f.U() != (r3.Vec{X: 1}) || f.V() != (r3.Vec{Y: 1}) ||
 			f.Origin().X != 0 || f.Origin().Y != 0 {
 			return false
 		}
 	}
-	return lp.frame0.Origin().Z < lp.frame1.Origin().Z
+	return lp.Frame0.Origin().Z < lp.Frame1.Origin().Z
 }
 
 func buildLoftMirrorUnion(ctx context.Context, d *Document, ref producerID,
 	lowerBody, upperBody *Body, lower, upper loftPayload) (*Body, error) {
-	n := len(lower.verts) / 2
-	if len(lower.verts)%2 != 0 || n < 3 || len(upper.verts) != len(lower.verts) ||
-		lower.walls != 2*n || upper.walls != lower.walls ||
-		lower.capStartCount <= 0 || upper.capStartCount != lower.capStartCount ||
-		len(lower.tris) != len(upper.tris) ||
-		lower.walls+lower.capStartCount >= len(lower.tris) {
+	n := len(lower.Verts) / 2
+	if len(lower.Verts)%2 != 0 || n < 3 || len(upper.Verts) != len(lower.Verts) ||
+		lower.Walls != 2*n || upper.Walls != lower.Walls ||
+		lower.CapStartCount <= 0 || upper.CapStartCount != lower.CapStartCount ||
+		len(lower.Tris) != len(upper.Tris) ||
+		lower.Walls+lower.CapStartCount >= len(lower.Tris) {
 		return nil, fmt.Errorf("%w: reflected lofts lack matching cap and wall stations", ErrUnsupported)
 	}
 	for i := range n {
-		if lower.verts[n+i] != upper.verts[n+i] {
+		if lower.Verts[n+i] != upper.Verts[n+i] {
 			return nil, fmt.Errorf("%w: reflected loft cap stations differ", ErrUnsupported)
 		}
 	}
@@ -142,7 +142,7 @@ func buildLoftMirrorUnion(ctx context.Context, d *Document, ref producerID,
 	}
 
 	record := &loftMirrorJoinRecord{lower: lowerBody, upper: upperBody, stationCount: n}
-	verts := append(append([]r3.Vec(nil), lower.verts...), upper.verts[:n]...)
+	verts := append(append([]r3.Vec(nil), lower.Verts...), upper.Verts[:n]...)
 	vertexBound := make([]float64, len(verts))
 	for i := range vertexBound {
 		vertexBound[i] = lowerBound
@@ -188,12 +188,12 @@ func buildLoftMirrorUnion(ctx context.Context, d *Document, ref producerID,
 	}{
 		{lower, lowerMesh}, {upper, upperMesh},
 	} {
-		record.wallGroups[half] = make([]int, item.payload.walls)
-		for i := range item.payload.walls + item.payload.capStartCount {
+		record.wallGroups[half] = make([]int, item.payload.Walls)
+		for i := range item.payload.Walls + item.payload.CapStartCount {
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			triangle := item.payload.tris[i]
+			triangle := item.payload.Tris[i]
 			if half == 1 {
 				for corner, old := range triangle {
 					if old < n {
@@ -202,7 +202,7 @@ func buildLoftMirrorUnion(ctx context.Context, d *Document, ref producerID,
 				}
 			}
 			role, wallIndex := "", i
-			if i >= item.payload.walls {
+			if i >= item.payload.Walls {
 				wallIndex = -1
 				role = provenance.RoleCapStart
 				if half == 1 {
@@ -227,21 +227,21 @@ func buildLoftMirrorUnion(ctx context.Context, d *Document, ref producerID,
 }
 
 func loftMirrorMeshMatchesPayload(mesh *Mesh, lp loftPayload) bool {
-	return slices.Equal(mesh.n.Vertices, lp.verts) && slices.Equal(mesh.n.Triangles, lp.tris) &&
-		len(mesh.n.Source) == len(lp.tris)
+	return slices.Equal(mesh.n.Vertices, lp.Verts) && slices.Equal(mesh.n.Triangles, lp.Tris) &&
+		len(mesh.n.Source) == len(lp.Tris)
 }
 
 func loftMirrorCapTrianglesMatch(lower, upper loftPayload) bool {
-	start := lower.walls + lower.capStartCount
-	indices := make(map[[3]int]int, len(lower.tris)-start)
-	for _, triangle := range lower.tris[start:] {
+	start := lower.Walls + lower.CapStartCount
+	indices := make(map[[3]int]int, len(lower.Tris)-start)
+	for _, triangle := range lower.Tris[start:] {
 		key, sign := facetedtopology.SortedTriangle(triangle)
 		if indices[key] != 0 {
 			return false
 		}
 		indices[key] = sign
 	}
-	for _, triangle := range upper.tris[start:] {
+	for _, triangle := range upper.Tris[start:] {
 		key, sign := facetedtopology.SortedTriangle(triangle)
 		if indices[key] != -sign {
 			return false

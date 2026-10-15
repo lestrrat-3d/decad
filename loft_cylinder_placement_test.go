@@ -351,8 +351,8 @@ func TestLoftCylinderCommonPlacementDifferentLoftSourceFallsBack(t *testing.T) {
 	s1, p1 := loftCylinderTabProfile(t, ctx, world, topPlane, 10*math.Pi/180)
 	other, err := doc.Loft(ctx, s0, p0, s1, p1)
 	require.NoError(t, err)
-	firstSource := tooth.n.Payload.(loftPayload).sourceIdentity
-	otherSource := other.n.Payload.(loftPayload).sourceIdentity
+	firstSource := tooth.n.Payload.(loftPayload).SourceIdentity
+	otherSource := other.n.Payload.(loftPayload).SourceIdentity
 	require.True(t, firstSource != otherSource, "independent Lofts must have distinct source identities")
 
 	move := loftCylinderTestTranslation(t, 7)

@@ -20,10 +20,10 @@ func loftMirrorCylinderChamferUpperShifts(record *loftMirrorCylinderBoreRecord,
 		return nil, fmt.Errorf("%w: mirrored cap chamfer lost its upper tooth source", ErrUnsupported)
 	}
 	loft, ok := record.join.source.lower.n.Payload.(loftPayload)
-	if !ok || !loft.authenticatedReconstruction {
+	if !ok || !loft.AuthenticatedReconstruction {
 		return nil, fmt.Errorf("%w: mirrored cap chamfer lost its source Loft", ErrUnsupported)
 	}
-	middle := loft.frame1.Origin().Z
+	middle := loft.Frame1.Origin().Z
 	byMotion := make(map[r3.Transform]*big.Rat, len(record.join.pairs))
 	var sweptTotal, greatest float64
 	for i, pair := range record.join.pairs {
@@ -70,16 +70,16 @@ func loftMirrorCylinderChamferUpperShifts(record *loftMirrorCylinderBoreRecord,
 	shifts := make([]*big.Rat, len(source.originalTeeth))
 	for i, tooth := range source.originalTeeth {
 		lp, ok := tooth.n.Payload.(loftPayload)
-		if !ok || !lp.authenticatedReconstruction ||
-			lp.sourceIdentity != loft.sourceIdentity {
+		if !ok || !lp.AuthenticatedReconstruction ||
+			lp.SourceIdentity != loft.SourceIdentity {
 			return nil, fmt.Errorf("%w: mirrored cap tooth %d lost its source identity", ErrUnsupported, i)
 		}
-		shift, matched := byMotion[lp.xform]
+		shift, matched := byMotion[lp.Xform]
 		if !matched || shift == nil {
 			return nil, fmt.Errorf("%w: mirrored cap tooth %d has no matching placement", ErrUnsupported, i)
 		}
 		shifts[i] = shift
-		delete(byMotion, lp.xform)
+		delete(byMotion, lp.Xform)
 	}
 	if len(byMotion) != 0 {
 		return nil, fmt.Errorf("%w: mirrored cap has unmatched pair placements", ErrUnsupported)
@@ -103,11 +103,11 @@ func loftMirrorCylinderChamferUpperCapBridge(ctx context.Context, old, upper fac
 		return 0, fmt.Errorf("%w: mirrored cap bridge lost its upper band", ErrUnsupported)
 	}
 	loft, ok := record.join.source.lower.n.Payload.(loftPayload)
-	if !ok || !loft.authenticatedReconstruction {
+	if !ok || !loft.AuthenticatedReconstruction {
 		return 0, fmt.Errorf("%w: mirrored cap bridge lost its source frame", ErrUnsupported)
 	}
 	twiceMiddle := new(big.Rat).Mul(big.NewRat(2, 1),
-		proofarith.FloatRat(loft.frame1.Origin().Z))
+		proofarith.FloatRat(loft.Frame1.Origin().Z))
 	ideal := make([]proofarith.Xpt, len(half.ideal))
 	for i, p := range half.ideal {
 		if p.W == nil || p.W.Sign() <= 0 {

@@ -93,21 +93,21 @@ func loftCylinderChamferToothFaces(source loftCylinderChamferSource) (map[proven
 		}
 		lp, ok := tooth.n.Payload.(loftPayload)
 		original, originalOK := source.originalTeeth[toothIndex].n.Payload.(loftPayload)
-		if !ok || !lp.authenticatedReconstruction || lp.sourceIdentity == nil ||
-			!originalOK || original.sourceIdentity != lp.sourceIdentity ||
-			lp.proof.FacetDeparture < 0 || proofbound.IsNonFinite(lp.proof.FacetDeparture) ||
-			len(lp.segment) != 1 {
+		if !ok || !lp.AuthenticatedReconstruction || lp.SourceIdentity == nil ||
+			!originalOK || original.SourceIdentity != lp.SourceIdentity ||
+			lp.Proof.FacetDeparture < 0 || proofbound.IsNonFinite(lp.Proof.FacetDeparture) ||
+			len(lp.Segment) != 1 {
 			return nil, fmt.Errorf("%w: loft/cylinder tooth lost its certified surface", ErrUnsupported)
 		}
 		root := -1
-		for i, segment := range lp.segment[0] {
+		for i, segment := range lp.Segment[0] {
 			if segment == 5 {
 				root = i
 				break
 			}
 		}
 		toothFaces := tooth.Faces()
-		if root < 3 || len(toothFaces) != lp.walls+2 || lp.walls < 2*root {
+		if root < 3 || len(toothFaces) != lp.Walls+2 || lp.Walls < 2*root {
 			return nil, fmt.Errorf("%w: loft/cylinder tooth has no paired exterior faces", ErrUnsupported)
 		}
 		for j := range root {
@@ -118,8 +118,8 @@ func loftCylinderChamferToothFaces(source loftCylinderChamferSource) (map[proven
 				}
 				origin := f.n.Origins[0]
 				faces[origin] = append(faces[origin], loftCylinderChamferToothFace{
-					body: tooth, loft: lp, root: root, cell: j, bound: lp.proof.FacetDeparture,
-					scale: proofarith.FloatRat(original.xform.Basis().EZ.Z),
+					body: tooth, loft: lp, root: root, cell: j, bound: lp.Proof.FacetDeparture,
+					scale: proofarith.FloatRat(original.Xform.Basis().EZ.Z),
 				})
 			}
 		}

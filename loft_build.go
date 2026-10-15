@@ -50,42 +50,42 @@ import (
 // accumulator integrated — tris[:walls] the wall triangles (side(i,j,k)), the
 // rest the two caps' own triangulations — kept on the payload so a later
 // Tessellate (PR 2) restates it rather than rebuilding it.
-type loftSourceIdentity struct{ origin producerID }
+type loftSourceIdentity struct{ Origin producerID }
 
 type loftPayload struct {
 	// sourceIdentity is shared only by the original Loft and its own placed
 	// copies. It lets a structural consumer require one authenticated source.
-	sourceIdentity     *loftSourceIdentity
-	profile0, profile1 profileRecord
-	plane0, plane1     planeRecord
-	frame0, frame1     r3.Frame
-	alignment          []int
-	xform              r3.Transform
+	SourceIdentity     *loftSourceIdentity
+	Profile0, Profile1 profileRecord
+	Plane0, Plane1     planeRecord
+	Frame0, Frame1     r3.Frame
+	Alignment          []int
+	Xform              r3.Transform
 	// authenticatedReconstruction is set only after the public Loft seam has
 	// admitted both Sketch profiles. Certified fillet and bore rewrites retain
 	// that provenance when they re-evaluate their private loft records.
-	authenticatedReconstruction bool
+	AuthenticatedReconstruction bool
 	// blendSegs names connector segments inserted by Fillet. Every
 	// triangle of a connector's loft cell also carries fillet(loop,segment).
-	blendSegs []map[int]struct{}
+	BlendSegs []map[int]struct{}
 	// A fitted-spline fillet records float trim parameters and a float arc.
 	// These fields enclose the ideal radius-r tangent rewrite certified at
 	// construction. The first is the maximum matched plane displacement over
 	// all rewritten carriers and connector arcs. The second bounds each ideal
 	// connector's complete arc length, keyed by the outer-loop segment index.
-	constructionDelta    float64
-	constructionArcUpper map[int]float64
+	ConstructionDelta    float64
+	ConstructionArcUpper map[int]float64
 	// A trimmed carrier can gain length when its ideal tangent parameter
 	// replaces the recorded float trim. Each value bounds that increase for
 	// every cell of the named outer-loop segment.
-	constructionLengthExtra map[int]float64
+	ConstructionLengthExtra map[int]float64
 	// throughBoreCut marks a profile pair rewritten by Cut. The added hole
 	// did not come from the two authenticated source Sketch profiles.
-	throughBoreCut bool
+	ThroughBoreCut bool
 	// analyticBore is set only by the certified whole-circle through Cut.
 	// Its loft mesh still supplies mass and tessellation proofs, while the
 	// public topology uses one cylindrical wall for the new hole.
-	analyticBore bool
+	AnalyticBore bool
 
 	// surfaceResult is WithSurfaceResult's own flag (docs/surface-design.md
 	// §4): true when the build must omit both section caps and publish a
@@ -94,7 +94,7 @@ type loftPayload struct {
 	// (internal/prismrecord, internal/revolveplan/build.go), so Transform and Copy
 	// reproduce the sheet with no further code — a plain solid
 	// loft leaves it false.
-	surfaceResult bool
+	SurfaceResult bool
 
 	// recordArea holds each record's own exact region integral, the value
 	// falsifyRecordedArea computed and compared against sketch's area in
@@ -102,7 +102,7 @@ type loftPayload struct {
 	// docs/loft-gear-bounds-design.md §5), so no evaluation integrates a
 	// record a second time to size its chords. A rigid placement moves
 	// neither record, so placed carries it over unchanged.
-	recordArea [2]float64
+	RecordArea [2]float64
 
 	// delta is the proven displacement of every held vertex from the exact
 	// point the record denotes for it (docs/loft-design.md §5, §12 PR 2a,
@@ -111,7 +111,7 @@ type loftPayload struct {
 	// rounding each station's lift through its own section frame commits
 	// (loftmesh.FrameLiftRoundAllow), zero only on an XY-aligned frame whose
 	// origin lies on the Z axis. placeAllow is zero for an unplaced body —
-	// pl.xform == r3.Identity(), an exact struct comparison, never a
+	// pl.Xform == r3.Identity(), an exact struct comparison, never a
 	// tolerance — and otherwise
 	// internal/proofbound/bounds.go's proofbound.RigidRoundAllow, read at the pre-transform lifted point's
 	// own magnitude and the composed translation's magnitude. stationRound is
@@ -129,7 +129,7 @@ type loftPayload struct {
 	// recorded radius. So delta is zero exactly when
 	// all three terms are, never merely when the body is unplaced. Every
 	// measurement this payload publishes composes it.
-	delta float64
+	Delta float64
 
 	// sectionDelta is the proven upper bound on how far any BUILT CHORD point
 	// of a wall cell sits from the recorded curve it chords, AS A SET — the
@@ -183,45 +183,45 @@ type loftPayload struct {
 	// The cap-area tube is NOT one of them: §5.2's capAreaAllow row names the
 	// matched term there, because a held cap polygon's own vertices are
 	// displaced as well as chorded.
-	sectionDelta float64
+	SectionDelta float64
 
 	// chorded reports that the build holds a cell whose held triangle pair is
 	// NOT the boundary it denotes: a circular or free-form cell, which stands
 	// for a ruled patch (loftmesh.LoopPair.Faceted). It is true on a degree-1
 	// free-form build whose sectionDelta is zero, so a consumer asking whether
 	// the held mesh IS the surface reads this field beside sectionDelta.
-	chorded bool
+	Chorded bool
 
-	verts []r3.Vec
-	tris  [][3]int
-	walls int
+	Verts []r3.Vec
+	Tris  [][3]int
+	Walls int
 	// capStartCount is how many of tris[walls:] belong to capStart; the rest
 	// belong to capEnd. cell/side parallel tris[:walls] — cell[k] is that wall
 	// triangle's {loop index i, cell index j} and side[k] its 0/1 half — so a
 	// consumer can name the side(i,j,k) role of every wall triangle without
 	// re-deriving the assembly's own split. All three are copied verbatim from
 	// loftmesh.Assembly, whose own doc comment owns the convention.
-	capStartCount int
-	cell          [][2]int
-	side          []uint8
+	CapStartCount int
+	Cell          [][2]int
+	Side          []uint8
 	// segment names the authenticated source segment of each wall cell.
 	// It stays parallel to the section stations and is retained for structural
 	// consumers that must omit a source wall without inferring its identity
 	// from its sampled coordinates.
-	segment [][]int
+	Segment [][]int
 	// twistAreaCells retains only the certified per-cell readings needed by a
 	// private twisted Sweep comparison Loft. Ordinary Loft payloads omit them.
-	twistAreaCells       [][]twistsweep.TwistAreaCellClaims
-	retainTwistAreaCells bool
+	TwistAreaCells       [][]twistsweep.TwistAreaCellClaims
+	RetainTwistAreaCells bool
 
 	// proof is the mesh proof record docs/tessellation-design.md §2 states for
 	// this payload, composed by evalLoft from the same build the triangle set
 	// above came out of (docs/tessellation-reach-design.md §4).
-	proof loftmesh.MeshProof
+	Proof loftmesh.MeshProof
 }
 
-func (pl loftPayload) raiseReconstructionLimit(work ...*freeform.FreeformWork) {
-	if !pl.authenticatedReconstruction {
+func (pl loftPayload) RaiseReconstructionLimit(work ...*freeform.FreeformWork) {
+	if !pl.AuthenticatedReconstruction {
 		return
 	}
 	for _, counter := range work {
@@ -232,21 +232,21 @@ func (pl loftPayload) raiseReconstructionLimit(work ...*freeform.FreeformWork) {
 // rewriteWorkLimit is private to the certified fillet and centered-bore
 // rewrites. Their extra section proof precedes the ordinary area and station
 // work on the same counter. An untrusted payload keeps the ordinary ceiling.
-func (pl loftPayload) rewriteWorkLimit(p uint64) uint64 {
+func (pl loftPayload) RewriteWorkLimit(p uint64) uint64 {
 	limit := loftmesh.StationWorkLimit(0, p)
-	if pl.authenticatedReconstruction {
+	if pl.AuthenticatedReconstruction {
 		limit *= 2
 	}
 	return limit
 }
 
 // Transform is the accumulated rigid placement.
-func (pl loftPayload) Transform() r3.Transform { return pl.xform }
+func (pl loftPayload) Transform() r3.Transform { return pl.Xform }
 
 // AxialDelta reports the displacement of every held loft vertex. Its planar
 // caps are built from those vertices, so a ToFace stop against either cap
 // inherits this bound.
-func (pl loftPayload) AxialDelta() float64 { return pl.delta }
+func (pl loftPayload) AxialDelta() float64 { return pl.Delta }
 
 // Placed re-evaluates the same two records under the composed motion
 // (docs/loft-design.md §7, §12 PR 2a): it re-lifts every vertex from the
@@ -266,15 +266,15 @@ func (pl loftPayload) AxialDelta() float64 { return pl.delta }
 func (pl loftPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
 	d, ref := documentHandle(env.Doc), env.Ref
 	next := pl
-	next.xform = composed
-	next.verts, next.tris, next.walls = nil, nil, 0
+	next.Xform = composed
+	next.Verts, next.Tris, next.Walls = nil, nil, 0
 	// The assembly-derived fields and the proof composed from them are cleared
 	// beside the triangle set they speak for: evalLoft rewrites all of them
 	// from the re-lifted records, and a stale copy surviving the re-evaluation
 	// is exactly the disagreement the payload's own doc comment forbids.
-	next.capStartCount, next.cell, next.side, next.segment = 0, nil, nil, nil
-	next.twistAreaCells = nil
-	next.proof = loftmesh.MeshProof{}
+	next.CapStartCount, next.Cell, next.Side, next.Segment = 0, nil, nil, nil
+	next.TwistAreaCells = nil
+	next.Proof = loftmesh.MeshProof{}
 	return placedNode(evalLoft(ctx, d, ref, next, proofbound.NewWorkBudget(ctx), freeform.NewFreeformWork(), freeform.NewFreeformWork()))
 }
 
@@ -297,43 +297,43 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	pl.raiseReconstructionLimit(work0, work1)
+	pl.RaiseReconstructionLimit(work0, work1)
 
-	offsets, walks0, walks1, target, err := loftmesh.ValidateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, pl.recordArea, work0, work1)
+	offsets, walks0, walks1, target, err := loftmesh.ValidateLoftRecords(pl.Profile0, pl.Profile1, pl.Plane0, pl.Plane1, pl.Alignment, pl.RecordArea, work0, work1)
 	if err != nil {
 		return nil, err
 	}
 
-	pairs, sectionDelta, sectionMatchedDelta, stationRound, err := loftmesh.PairRecords(pl.profile0, pl.profile1, offsets, walks0, walks1, target, work0, work1)
+	pairs, sectionDelta, sectionMatchedDelta, stationRound, err := loftmesh.PairRecords(pl.Profile0, pl.Profile1, offsets, walks0, walks1, target, work0, work1)
 	if err != nil {
 		return nil, err
 	}
-	if pl.constructionDelta > 0 {
-		if proofbound.IsNonFinite(pl.constructionDelta) {
+	if pl.ConstructionDelta > 0 {
+		if proofbound.IsNonFinite(pl.ConstructionDelta) {
 			return nil, fmt.Errorf(`%w: the loft fillet construction displacement is not finite`, ErrUnsupported)
 		}
-		stationRound = proofbound.AbsSumUpper(stationRound, pl.constructionDelta)
+		stationRound = proofbound.AbsSumUpper(stationRound, pl.ConstructionDelta)
 		if proofbound.IsNonFinite(stationRound) {
 			return nil, fmt.Errorf(`%w: the loft fillet station displacement is not finite`, ErrUnsupported)
 		}
 	}
-	if len(pl.constructionArcUpper) != 0 {
+	if len(pl.ConstructionArcUpper) != 0 {
 		if len(pairs) == 0 {
 			return nil, fmt.Errorf(`%w: the loft fillet has no outer loop`, ErrUnsupported)
 		}
-		counts := make(map[int]int, len(pl.constructionArcUpper))
+		counts := make(map[int]int, len(pl.ConstructionArcUpper))
 		for _, segment := range pairs[0].Segment {
-			if _, exists := pl.constructionArcUpper[segment]; exists {
+			if _, exists := pl.ConstructionArcUpper[segment]; exists {
 				counts[segment]++
 			}
 		}
-		for segment := range pl.constructionArcUpper {
+		for segment := range pl.ConstructionArcUpper {
 			if counts[segment] == 0 {
 				return nil, fmt.Errorf(`%w: the loft fillet arc-length key has no cell`, ErrUnsupported)
 			}
 		}
 		for cell, segment := range pairs[0].Segment {
-			idealLength, exists := pl.constructionArcUpper[segment]
+			idealLength, exists := pl.ConstructionArcUpper[segment]
 			if !exists {
 				continue
 			}
@@ -348,13 +348,13 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 			pairs[0].TangentEnergyW[cell] = max(pairs[0].TangentEnergyW[cell], energy)
 		}
 	}
-	if len(pl.constructionLengthExtra) != 0 {
+	if len(pl.ConstructionLengthExtra) != 0 {
 		if len(pairs) == 0 {
 			return nil, fmt.Errorf(`%w: the loft fillet has no outer loop`, ErrUnsupported)
 		}
-		seen := make(map[int]bool, len(pl.constructionLengthExtra))
+		seen := make(map[int]bool, len(pl.ConstructionLengthExtra))
 		for cell, segment := range pairs[0].Segment {
-			extra, exists := pl.constructionLengthExtra[segment]
+			extra, exists := pl.ConstructionLengthExtra[segment]
 			if !exists {
 				continue
 			}
@@ -370,14 +370,14 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 			pairs[0].TangentEnergyV[cell] = math.Inf(1)
 			pairs[0].TangentEnergyW[cell] = math.Inf(1)
 		}
-		for segment := range pl.constructionLengthExtra {
+		for segment := range pl.ConstructionLengthExtra {
 			if !seen[segment] {
 				return nil, fmt.Errorf(`%w: the loft fillet carrier-length key has no cell`, ErrUnsupported)
 			}
 		}
 	}
 
-	a, err := loftmesh.AssembleTriangulated(ctx, pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform, stationRound)
+	a, err := loftmesh.AssembleTriangulated(ctx, pairs, pl.Frame0, pl.Frame1, pl.Plane0, pl.Xform, stationRound)
 	if err != nil {
 		return nil, err
 	}
@@ -399,10 +399,10 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	// revolvePayload's own builds already follow (internal/prismrecord/build.go,
 	// internal/revolveplan/build.go).
 	kind := BodySolid
-	if pl.surfaceResult {
+	if pl.SurfaceResult {
 		kind = BodySheet
 	}
-	body := bornBody(&Body{n: topo.Body{Solid: !pl.surfaceResult, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodyKind(kind), Doc: documentNode(d)}})
+	body := bornBody(&Body{n: topo.Body{Solid: !pl.SurfaceResult, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodyKind(kind), Doc: documentNode(d)}})
 
 	capStart, capEnd, walls, wallAreas, err := buildLoftTopology(ctx, body, ref, a, cap0Rat, cap1Rat)
 	if err != nil {
@@ -410,24 +410,24 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	}
 	// Section 0 lifts through frame0 and section 1 through frame1
 	// (loftmesh.Assemble), so each cap denotes its own section plane.
-	capStart.n.CapRecord = &topo.CapRecord{Frame: pl.frame0, Xform: pl.xform}
-	capEnd.n.CapRecord = &topo.CapRecord{Frame: pl.frame1, Xform: pl.xform}
+	capStart.n.CapRecord = &topo.CapRecord{Frame: pl.Frame0, Xform: pl.Xform}
+	capEnd.n.CapRecord = &topo.CapRecord{Frame: pl.Frame1, Xform: pl.Xform}
 	for k, wall := range walls {
 		li, cell := a.Cell[k][0], a.Cell[k][1]
-		if li >= len(pl.blendSegs) {
+		if li >= len(pl.BlendSegs) {
 			continue // A through-bore adds an unblended hole wall.
 		}
 		if cell >= len(pairs[li].Segment) {
 			return nil, fmt.Errorf(`%w: a loft fillet lost its segment correspondence`, ErrUnsupported)
 		}
 		seg := pairs[li].Segment[cell]
-		if _, blend := pl.blendSegs[li][seg]; blend {
+		if _, blend := pl.BlendSegs[li][seg]; blend {
 			wall.n.Origins = append(wall.n.Origins, provenance.Ref{Producer: ref, Role: fmt.Sprintf("fillet(%d,%d)", li, seg)})
 		}
 	}
 	directCircle := directLoftCircularHole(pl)
 	var circularWall *Face
-	if pl.analyticBore || directCircle == loftCircleWallCylinder {
+	if pl.AnalyticBore || directCircle == loftCircleWallCylinder {
 		walls, err = buildLoftAnalyticBoreTopology(ctx, body, ref, pl, a, capStart, capEnd, walls)
 		if err != nil {
 			return nil, err
@@ -453,7 +453,7 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	// topobuild.AttachFaceLoops has registered every wall face on its own edges
 	// (topobuild.ShellIsOpen's and topobuild.SheetLumps's doc comments); a solid loft keeps
 	// the single-shell, single-lump body PR 1 already published, unchanged.
-	if pl.surfaceResult {
+	if pl.SurfaceResult {
 		if err := topobuild.AttachFaceLoops(ctx, faceNodes(walls)); err != nil {
 			return nil, err
 		}
@@ -482,8 +482,8 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	if circularWall != nil {
 		var wallArea proofbound.BoundedScalar
 		if directCircle != loftCircleWallCylinder {
-			bottom, bottomOK := pl.profile0.Holes[0].Segments[0].(circleSeg)
-			top, topOK := pl.profile1.Holes[0].Segments[0].(circleSeg)
+			bottom, bottomOK := pl.Profile0.Holes[0].Segments[0].(circleSeg)
+			top, topOK := pl.Profile1.Holes[0].Segments[0].(circleSeg)
 			if !bottomOK || !topOK {
 				return nil, fmt.Errorf(`%w: a circular loft wall lost its circle pair`, ErrUnsupported)
 			}
@@ -521,7 +521,7 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 		}
 		circularWall.n.Area, circularWall.n.AreaBound = wallArea.Value, wallArea.Bound
 	}
-	if pl.surfaceResult {
+	if pl.SurfaceResult {
 		// §4.3: a surface result's area is the solid's area minus the two
 		// omitted caps'. Each cap's area and bound are read back from the
 		// Face fields buildLoftTopology stamped, which already compose the
@@ -557,21 +557,21 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 		return nil, err
 	}
 
-	pl.verts, pl.tris, pl.walls = a.Verts, a.Tris, a.Walls
-	if pl.sourceIdentity == nil {
-		pl.sourceIdentity = &loftSourceIdentity{origin: ref}
+	pl.Verts, pl.Tris, pl.Walls = a.Verts, a.Tris, a.Walls
+	if pl.SourceIdentity == nil {
+		pl.SourceIdentity = &loftSourceIdentity{Origin: ref}
 	}
-	pl.capStartCount, pl.cell, pl.side = a.CapStartCount, a.Cell, a.Side
-	pl.segment = make([][]int, len(pairs))
+	pl.CapStartCount, pl.Cell, pl.Side = a.CapStartCount, a.Cell, a.Side
+	pl.Segment = make([][]int, len(pairs))
 	for i := range pairs {
-		pl.segment[i] = append([]int(nil), pairs[i].Segment...)
+		pl.Segment[i] = append([]int(nil), pairs[i].Segment...)
 	}
-	if pl.retainTwistAreaCells {
-		pl.twistAreaCells = make([][]twistsweep.TwistAreaCellClaims, len(pairs))
+	if pl.RetainTwistAreaCells {
+		pl.TwistAreaCells = make([][]twistsweep.TwistAreaCellClaims, len(pairs))
 		for i, pair := range pairs {
-			pl.twistAreaCells[i] = make([]twistsweep.TwistAreaCellClaims, len(pair.Segment))
+			pl.TwistAreaCells[i] = make([]twistsweep.TwistAreaCellClaims, len(pair.Segment))
 			for j := range pair.Segment {
-				pl.twistAreaCells[i][j] = twistsweep.TwistAreaCellClaims{
+				pl.TwistAreaCells[i][j] = twistsweep.TwistAreaCellClaims{
 					ArcLength: max(pair.ArcUpperV[j], pair.ArcUpperW[j]),
 					Energy:    max(pair.TangentEnergyV[j], pair.TangentEnergyW[j]),
 					Matched:   pair.MatchedDelta[j],
@@ -579,14 +579,14 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 			}
 		}
 	}
-	pl.proof = loftmesh.MeshProofOf(a, mass.MassAccumulator, sectionMatchedDelta)
-	pl.delta = a.Delta
+	pl.Proof = loftmesh.MeshProofOf(a, mass.MassAccumulator, sectionMatchedDelta)
+	pl.Delta = a.Delta
 	// sectionDelta is loftmesh.PairRecords' own accumulated MAX over cells
 	// (loftPayload's own doc comment): zero for a LineSeg-only pairing,
 	// positive for a same-kind circular one, to the sagitta its station
 	// chording commits.
-	pl.sectionDelta = sectionDelta
-	pl.chorded = loftmesh.IsChorded(pairs, sectionDelta, sectionMatchedDelta)
+	pl.SectionDelta = sectionDelta
+	pl.Chorded = loftmesh.IsChorded(pairs, sectionDelta, sectionMatchedDelta)
 	body.n.Payload = pl
 	return body, nil
 }
@@ -619,7 +619,7 @@ func buildLoftMass(pl loftPayload, a loftmesh.Assembly, pairs []loftmesh.LoopPai
 }
 
 func buildLoftMassWithWallAreas(pl loftPayload, a loftmesh.Assembly, pairs []loftmesh.LoopPair, sectionDelta, sectionMatchedDelta float64, wallAreas []loftmesh.WallArea) *loftMassAccumulator {
-	anchor := pl.xform.Apply(pl.plane0.Origin)
+	anchor := pl.Xform.Apply(pl.Plane0.Origin)
 	chorded := loftmesh.IsChorded(pairs, sectionDelta, sectionMatchedDelta)
 	matchedDelta := 0.0
 	if chorded {
@@ -682,14 +682,14 @@ func tessellateLoft(ctx context.Context, b *Body, lp loftPayload, privateRoles .
 	}
 	sheet := b.Kind() == BodySheet
 	in := loftmesh.LoftInput{
-		Vertices: lp.verts, Triangles: lp.tris,
-		WallCount: lp.walls, StartCapCount: lp.capStartCount,
-		WallCell: lp.cell, WallSide: lp.side,
+		Vertices: lp.Verts, Triangles: lp.Tris,
+		WallCount: lp.Walls, StartCapCount: lp.CapStartCount,
+		WallCell: lp.Cell, WallSide: lp.Side,
 		Sheet:      sheet,
 		FaceOfRole: faceOfRole, StartCapRole: provenance.RoleCapStart, EndCapRole: provenance.RoleCapEnd,
-		FacetDepartureMM: lp.proof.FacetDeparture,
-		AreaSlackMM2:     lp.proof.AreaSlack,
-		VolumeSymDiffMM3: lp.proof.VolSymDiff,
+		FacetDepartureMM: lp.Proof.FacetDeparture,
+		AreaSlackMM2:     lp.Proof.AreaSlack,
+		VolumeSymDiffMM3: lp.Proof.VolSymDiff,
 	}
 	if sheet {
 		counts := freeChainCountsByFace(b)
@@ -700,7 +700,7 @@ func tessellateLoft(ctx context.Context, b *Body, lp loftPayload, privateRoles .
 	} else {
 		// The same anchor evalLoft used (docs/loft-design.md §5's whole-shell
 		// orientation rule).
-		in.Anchor = lp.xform.Apply(lp.plane0.Origin)
+		in.Anchor = lp.Xform.Apply(lp.Plane0.Origin)
 	}
 	out, err := loftmesh.RestateLoft(ctx, in)
 	if err != nil {

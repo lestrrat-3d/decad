@@ -44,7 +44,7 @@ func TestLoftCircleBoreTopologyShapeRefusals(t *testing.T) {
 	}
 	valid := func() fixture {
 		return fixture{
-			pl: loftPayload{profile0: profileRecord{Holes: []loopRecord{{
+			pl: loftPayload{Profile0: profileRecord{Holes: []loopRecord{{
 				Segments: []curveSegment{circleSeg{TStart: 1, TEnd: 0}},
 			}}}},
 			a:     loftmesh.Assembly{VIdx: [][]int{{}, {}}, Walls: 1},
@@ -60,22 +60,22 @@ func TestLoftCircleBoreTopologyShapeRefusals(t *testing.T) {
 		name   string
 		change func(*fixture)
 	}{
-		{"no hole", func(f *fixture) { f.pl.profile0.Holes = nil }},
-		{"extra hole", func(f *fixture) { f.pl.profile0.Holes = append(f.pl.profile0.Holes, loopRecord{}) }},
-		{"no segment", func(f *fixture) { f.pl.profile0.Holes[0].Segments = nil }},
+		{"no hole", func(f *fixture) { f.pl.Profile0.Holes = nil }},
+		{"extra hole", func(f *fixture) { f.pl.Profile0.Holes = append(f.pl.Profile0.Holes, loopRecord{}) }},
+		{"no segment", func(f *fixture) { f.pl.Profile0.Holes[0].Segments = nil }},
 		{"extra segment", func(f *fixture) {
-			f.pl.profile0.Holes[0].Segments = append(f.pl.profile0.Holes[0].Segments, lineSeg{})
+			f.pl.Profile0.Holes[0].Segments = append(f.pl.Profile0.Holes[0].Segments, lineSeg{})
 		}},
 		{"wrong station count", func(f *fixture) { f.a.VIdx = f.a.VIdx[:1] }},
 		{"wrong start loops", func(f *fixture) { f.start.n.Loops = f.start.n.Loops[:1] }},
 		{"wrong end loops", func(f *fixture) { f.end.n.Loops = f.end.n.Loops[:1] }},
 		{"wrong wall count", func(f *fixture) { f.walls = nil }},
-		{"noncircle segment", func(f *fixture) { f.pl.profile0.Holes[0].Segments[0] = lineSeg{} }},
+		{"noncircle segment", func(f *fixture) { f.pl.Profile0.Holes[0].Segments[0] = lineSeg{} }},
 		{"counterclockwise circle", func(f *fixture) {
-			f.pl.profile0.Holes[0].Segments[0] = circleSeg{CCW: true, TStart: 1}
+			f.pl.Profile0.Holes[0].Segments[0] = circleSeg{CCW: true, TStart: 1}
 		}},
-		{"wrong circle start", func(f *fixture) { f.pl.profile0.Holes[0].Segments[0] = circleSeg{TStart: 0} }},
-		{"wrong circle end", func(f *fixture) { f.pl.profile0.Holes[0].Segments[0] = circleSeg{TStart: 1, TEnd: 1} }},
+		{"wrong circle start", func(f *fixture) { f.pl.Profile0.Holes[0].Segments[0] = circleSeg{TStart: 0} }},
+		{"wrong circle end", func(f *fixture) { f.pl.Profile0.Holes[0].Segments[0] = circleSeg{TStart: 1, TEnd: 1} }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := valid()

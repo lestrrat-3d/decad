@@ -94,10 +94,10 @@ func loftMirrorCylinderChamferReflectionReserve(lower facetedPayload,
 		return 0, fmt.Errorf("%w: mirrored cap chamfer lost its Loft frame", ErrUnsupported)
 	}
 	loft, ok := record.join.source.lower.n.Payload.(loftPayload)
-	if !ok || !loft.authenticatedReconstruction {
+	if !ok || !loft.AuthenticatedReconstruction {
 		return 0, fmt.Errorf("%w: mirrored cap chamfer lost its Loft frame", ErrUnsupported)
 	}
-	reflection, err := r3.Reflection(loft.frame1)
+	reflection, err := r3.Reflection(loft.Frame1)
 	if err != nil {
 		return 0, fmt.Errorf("%w: mirrored cap chamfer has no source reflection: %s", ErrUnsupported, err)
 	}
@@ -183,10 +183,10 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 		return nil, fmt.Errorf("%w: mirrored cap chamfer lost its audited lower half", ErrUnsupported)
 	}
 	loft, ok := record.join.source.lower.n.Payload.(loftPayload)
-	if !ok || !loft.authenticatedReconstruction {
+	if !ok || !loft.AuthenticatedReconstruction {
 		return nil, fmt.Errorf("%w: mirrored cap chamfer lost its Loft source", ErrUnsupported)
 	}
-	reflection, err := r3.Reflection(loft.frame1)
+	reflection, err := r3.Reflection(loft.Frame1)
 	if err != nil {
 		return nil, fmt.Errorf("%w: mirrored cap chamfer has no source reflection: %s", ErrUnsupported, err)
 	}
@@ -212,7 +212,7 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 		return nil, fmt.Errorf("%w: reflected cap bridge %g exceeds its %g mm reserve",
 			ErrUnsupported, bridgeReach, bridgeReserve)
 	}
-	middle := loft.frame1.Origin().Z
+	middle := loft.Frame1.Origin().Z
 	midVertices := make(map[r3.Vec]int)
 	for i, vertex := range lower.verts {
 		if vertex.Z != middle {

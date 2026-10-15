@@ -202,7 +202,7 @@ func TestLoftConeFrustumWallAreaEnclosed(t *testing.T) {
 
 	loaded, ok := body.n.Payload.(loftPayload)
 	require.True(t, ok)
-	require.Greater(t, loaded.sectionDelta, 0.0, "a genuinely curved, un-congruent pairing must carry a positive sectionDelta")
+	require.Greater(t, loaded.SectionDelta, 0.0, "a genuinely curved, un-congruent pairing must carry a positive sectionDelta")
 
 	area, err := body.Area()
 	require.NoError(t, err)
@@ -474,11 +474,11 @@ func TestLoftArcWedgeBoxSoundness(t *testing.T) {
 	p := profileRecord{Outer: arcWedgeLoopStraddling(radius, halfSweep)}
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 10))
 	pl := loftPayload{
-		profile0: p, profile1: p,
-		recordArea: loftRecordAreasOrZero(p, p),
-		plane0:     pl0, plane1: pl1,
-		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
-		xform: r3.Identity(),
+		Profile0: p, Profile1: p,
+		RecordArea: loftRecordAreasOrZero(p, p),
+		Plane0:     pl0, Plane1: pl1,
+		Frame0: mustFrame(t, pl0), Frame1: mustFrame(t, pl1),
+		Xform: r3.Identity(),
 	}
 	budget := proofbound.NewWorkBudget(t.Context())
 	body, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, freeform.NewFreeformWork(), freeform.NewFreeformWork())
@@ -686,11 +686,11 @@ func TestLoftArcPairM1PublishesZeroDeltaWithPositiveSectionDelta(t *testing.T) {
 	p := profileRecord{Outer: loop}
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 10))
 	pl := loftPayload{
-		profile0: p, profile1: p,
-		recordArea: loftRecordAreasOrZero(p, p),
-		plane0:     pl0, plane1: pl1,
-		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
-		xform: r3.Identity(),
+		Profile0: p, Profile1: p,
+		RecordArea: loftRecordAreasOrZero(p, p),
+		Plane0:     pl0, Plane1: pl1,
+		Frame0: mustFrame(t, pl0), Frame1: mustFrame(t, pl1),
+		Xform: r3.Identity(),
 	}
 	budget := proofbound.NewWorkBudget(t.Context())
 	body, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, freeform.NewFreeformWork(), freeform.NewFreeformWork())
@@ -698,13 +698,13 @@ func TestLoftArcPairM1PublishesZeroDeltaWithPositiveSectionDelta(t *testing.T) {
 
 	loaded, ok := body.n.Payload.(loftPayload)
 	require.True(t, ok)
-	require.Equal(t, 0.0, loaded.delta, "m=1: no interior computed station, so delta must be exactly 0")
-	require.Greater(t, loaded.sectionDelta, 0.0, "m=1: the single chord still departs from the arc it denotes")
+	require.Equal(t, 0.0, loaded.Delta, "m=1: no interior computed station, so delta must be exactly 0")
+	require.Greater(t, loaded.SectionDelta, 0.0, "m=1: the single chord still departs from the arc it denotes")
 
 	d, ok, err := bodyGateDiameter(t.Context(), body)
 	require.NoError(t, err)
 	require.True(t, ok)
-	held, ok, err := diameter.PointsContext(t.Context(), loaded.verts)
+	held, ok, err := diameter.PointsContext(t.Context(), loaded.Verts)
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, held, d, "delta == 0 takes the unshrunk fast path: the shared reader's own answer, unchanged")
@@ -760,11 +760,11 @@ func TestLoftArcPairDriftedEndChargesRadialResidual(t *testing.T) {
 	p := profileRecord{Outer: loop}
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 10))
 	pl := loftPayload{
-		profile0: p, profile1: p,
-		recordArea: loftRecordAreasOrZero(p, p),
-		plane0:     pl0, plane1: pl1,
-		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
-		xform: r3.Identity(),
+		Profile0: p, Profile1: p,
+		RecordArea: loftRecordAreasOrZero(p, p),
+		Plane0:     pl0, Plane1: pl1,
+		Frame0: mustFrame(t, pl0), Frame1: mustFrame(t, pl1),
+		Xform: r3.Identity(),
 	}
 	budget := proofbound.NewWorkBudget(t.Context())
 	body, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, freeform.NewFreeformWork(), freeform.NewFreeformWork())
@@ -772,7 +772,7 @@ func TestLoftArcPairDriftedEndChargesRadialResidual(t *testing.T) {
 
 	loaded, ok := body.n.Payload.(loftPayload)
 	require.True(t, ok)
-	require.GreaterOrEqual(t, proofarith.FloatRat(loaded.delta).Cmp(want), 0,
+	require.GreaterOrEqual(t, proofarith.FloatRat(loaded.Delta).Cmp(want), 0,
 		"delta must dominate the drifted arc end's own proven radial displacement; a zero here is the defect this test guards")
 
 	// delta > 0 now, so bodyGateDiameter must SHRINK rather than take the
@@ -781,7 +781,7 @@ func TestLoftArcPairDriftedEndChargesRadialResidual(t *testing.T) {
 	d, ok, err := bodyGateDiameter(t.Context(), body)
 	require.NoError(t, err)
 	require.True(t, ok)
-	held, ok, err := diameter.PointsContext(t.Context(), loaded.verts)
+	held, ok, err := diameter.PointsContext(t.Context(), loaded.Verts)
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Less(t, d, held, "a positive delta must take the 2*delta-shrunk reference, never the unshrunk fast path")
@@ -830,8 +830,8 @@ func TestLoftPlacedArcWedgeCarriesBothDisplacements(t *testing.T) {
 
 	loaded, ok := placed.n.Payload.(loftPayload)
 	require.True(t, ok)
-	require.Greater(t, loaded.delta, 0.0, "a placed body's delta must be positive")
-	require.Greater(t, loaded.sectionDelta, 0.0, "a curved pair's sectionDelta must be positive whether or not the body is placed")
+	require.Greater(t, loaded.Delta, 0.0, "a placed body's delta must be positive")
+	require.Greater(t, loaded.SectionDelta, 0.0, "a curved pair's sectionDelta must be positive whether or not the body is placed")
 }
 
 // TestLoftCopyPlacementTenTimesSectionDeltaUnchanged is the ask's own line: ten
@@ -848,7 +848,7 @@ func TestLoftCopyPlacementTenTimesSectionDeltaUnchanged(t *testing.T) {
 
 	loaded0, ok := body.n.Payload.(loftPayload)
 	require.True(t, ok)
-	want := loaded0.sectionDelta
+	want := loaded0.SectionDelta
 	require.Greater(t, want, 0.0)
 
 	for i := range 10 {
@@ -858,6 +858,6 @@ func TestLoftCopyPlacementTenTimesSectionDeltaUnchanged(t *testing.T) {
 		require.NoError(t, err)
 		loaded, ok := body.n.Payload.(loftPayload)
 		require.True(t, ok)
-		require.Equal(t, want, loaded.sectionDelta, "sectionDelta must not drift across repeated placements (iteration %d)", i)
+		require.Equal(t, want, loaded.SectionDelta, "sectionDelta must not drift across repeated placements (iteration %d)", i)
 	}
 }

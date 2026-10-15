@@ -81,11 +81,11 @@ func boxLoftPayloadOn(t *testing.T, z0, z1 float64) loftPayload {
 	pl0 := planeAt(r3.NewVec(0, 0, z0))
 	pl1 := planeAt(r3.NewVec(0, 0, z1))
 	return loftPayload{
-		profile0: p, profile1: p,
-		recordArea: loftRecordAreasOrZero(p, p),
-		plane0:     pl0, plane1: pl1,
-		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
-		xform: r3.Identity(),
+		Profile0: p, Profile1: p,
+		RecordArea: loftRecordAreasOrZero(p, p),
+		Plane0:     pl0, Plane1: pl1,
+		Frame0: mustFrame(t, pl0), Frame1: mustFrame(t, pl1),
+		Xform: r3.Identity(),
 	}
 }
 
@@ -338,11 +338,11 @@ func TestEvalLoftHoleRimIsConcave(t *testing.T) {
 	pl0 := planeAt(r3.NewVec(0, 0, 0))
 	pl1 := planeAt(r3.NewVec(0, 0, 1))
 	pl := loftPayload{
-		profile0: p, profile1: p,
-		recordArea: loftRecordAreasOrZero(p, p),
-		plane0:     pl0, plane1: pl1,
-		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
-		xform: r3.Identity(),
+		Profile0: p, Profile1: p,
+		RecordArea: loftRecordAreasOrZero(p, p),
+		Plane0:     pl0, Plane1: pl1,
+		Frame0: mustFrame(t, pl0), Frame1: mustFrame(t, pl1),
+		Xform: r3.Identity(),
 	}
 	body := evalLoftFixture(t, pl)
 
@@ -619,11 +619,11 @@ func TestEvalLoftCollinearSplitKeepsTwoFacesPerCell(t *testing.T) {
 	pl0 := planeAt(r3.NewVec(0, 0, 0))
 	pl1 := planeAt(r3.NewVec(0, 0, 1))
 	pl := loftPayload{
-		profile0: p, profile1: p,
-		recordArea: loftRecordAreasOrZero(p, p),
-		plane0:     pl0, plane1: pl1,
-		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
-		xform: r3.Identity(),
+		Profile0: p, Profile1: p,
+		RecordArea: loftRecordAreasOrZero(p, p),
+		Plane0:     pl0, Plane1: pl1,
+		Frame0: mustFrame(t, pl0), Frame1: mustFrame(t, pl1),
+		Xform: r3.Identity(),
 	}
 	body := evalLoftFixture(t, pl)
 
@@ -693,9 +693,9 @@ func TestLoftGateDiameterIsTheVertexDiameter(t *testing.T) {
 	require.InDelta(t, 1.7320508075688772, d, 1e-12) // sqrt(3)
 
 	pl := body.n.Payload.(loftPayload)
-	require.Zero(t, pl.delta, "this fixture is unplaced AND every station of its untrimmed square is PINNED (docs/loft-design.md §5.2)")
-	require.Zero(t, pl.sectionDelta, "S3 admits only LineSeg pairs, so every wall cell's chord IS the recorded segment")
-	held, ok, err := diameter.PointsContext(t.Context(), pl.verts)
+	require.Zero(t, pl.Delta, "this fixture is unplaced AND every station of its untrimmed square is PINNED (docs/loft-design.md §5.2)")
+	require.Zero(t, pl.SectionDelta, "S3 admits only LineSeg pairs, so every wall cell's chord IS the recorded segment")
+	held, ok, err := diameter.PointsContext(t.Context(), pl.Verts)
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, held, d, "an unplaced loft's reference must be the held diameter bit-for-bit")
@@ -720,12 +720,12 @@ func TestLoftPlacedGateDiameterShrinksByTwiceDelta(t *testing.T) {
 	placedBody, err := placePayload(t.Context(), pl, New(), producerID(1), rot)
 	require.NoError(t, err)
 	placedPl := placedBody.n.Payload.(loftPayload)
-	require.Greater(t, placedPl.delta, 0.0)
+	require.Greater(t, placedPl.Delta, 0.0)
 
 	placedD, ok, err := bodyGateDiameter(t.Context(), placedBody)
 	require.NoError(t, err)
 	require.True(t, ok)
-	require.InDelta(t, unplacedD-2*placedPl.delta, placedD, 1e-12)
+	require.InDelta(t, unplacedD-2*placedPl.Delta, placedD, 1e-12)
 }
 
 // TestLoftPlacedGateDiameterRoundsTheShrinkOutward proves the shrink's own
@@ -749,15 +749,15 @@ func TestLoftPlacedGateDiameterRoundsTheShrinkOutward(t *testing.T) {
 			placedBody, err := placePayload(t.Context(), boxLoftPayloadOn(t, 0, 3), New(), producerID(1), move)
 			require.NoError(t, err)
 			placedPl := placedBody.n.Payload.(loftPayload)
-			require.Greater(t, placedPl.delta, 0.0)
+			require.Greater(t, placedPl.Delta, 0.0)
 
-			held, ok, err := diameter.PointsContext(t.Context(), placedPl.verts)
+			held, ok, err := diameter.PointsContext(t.Context(), placedPl.Verts)
 			require.NoError(t, err)
 			require.True(t, ok)
 
 			exact := new(big.Rat).Sub(
 				new(big.Rat).SetFloat64(held),
-				new(big.Rat).Mul(big.NewRat(2, 1), new(big.Rat).SetFloat64(placedPl.delta)),
+				new(big.Rat).Mul(big.NewRat(2, 1), new(big.Rat).SetFloat64(placedPl.Delta)),
 			)
 
 			got, ok, err := bodyGateDiameter(t.Context(), placedBody)
@@ -792,20 +792,20 @@ func TestLoftCollapsedGateDiameterIsRefusedFirst(t *testing.T) {
 			p := profileRecord{Outer: squareLoop(0, 0, tc.half, true)}
 			pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, tc.height))
 			pl := loftPayload{
-				profile0: p, profile1: p,
-				recordArea: loftRecordAreasOrZero(p, p),
-				plane0:     pl0, plane1: pl1,
-				frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
-				xform: r3.Identity(),
+				Profile0: p, Profile1: p,
+				RecordArea: loftRecordAreasOrZero(p, p),
+				Plane0:     pl0, Plane1: pl1,
+				Frame0: mustFrame(t, pl0), Frame1: mustFrame(t, pl1),
+				Xform: r3.Identity(),
 			}
 
 			held := evalLoftFixture(t, pl).n.Payload.(loftPayload)
-			d, ok, err := diameter.PointsContext(t.Context(), held.verts)
+			d, ok, err := diameter.PointsContext(t.Context(), held.Verts)
 			require.NoError(t, err)
 			require.True(t, ok)
 
 			maxInputAbs := 0.0
-			for _, v := range held.verts {
+			for _, v := range held.Verts {
 				maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(v))
 			}
 			move, err := r3.Translation(r3.NewVec(tc.dx, 0, 0))
@@ -846,7 +846,7 @@ func validateLoftRecordsErr(p0, p1 profileRecord, pl0, pl1 planeRecord, alignmen
 }
 
 // loftRecordAreas is the pair of exact region integrals Loft reads off
-// falsifyRecordedArea and stores on the payload (loftPayload.recordArea), for
+// falsifyRecordedArea and stores on the payload (loftPayload.RecordArea), for
 // a test that builds a payload or calls loftmesh.ValidateLoftRecords directly.
 func loftRecordAreas(t testing.TB, p0, p1 profileRecord) [2]float64 {
 	t.Helper()
@@ -984,11 +984,11 @@ func TestEvalLoftCollapsedTriangleIsDegenerate(t *testing.T) {
 	pl0 := planeRecord{Origin: r3.NewVec(0, 0, 0), U: r3.NewVec(1, 0, 0), V: r3.NewVec(0, 1, 0)}
 	pl1 := planeRecord{Origin: r3.NewVec(0, 0, 0), U: r3.NewVec(0, 1, 0), V: r3.NewVec(0, 0, 1)}
 	pl := loftPayload{
-		profile0: p, profile1: p,
-		recordArea: loftRecordAreasOrZero(p, p),
-		plane0:     pl0, plane1: pl1,
-		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
-		xform: r3.Identity(),
+		Profile0: p, Profile1: p,
+		RecordArea: loftRecordAreasOrZero(p, p),
+		Plane0:     pl0, Plane1: pl1,
+		Frame0: mustFrame(t, pl0), Frame1: mustFrame(t, pl1),
+		Xform: r3.Identity(),
 	}
 	budget := proofbound.NewWorkBudget(t.Context())
 	_, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, freeform.NewFreeformWork(), freeform.NewFreeformWork())
@@ -1006,11 +1006,11 @@ func TestEvalLoftOverTwistedCorrespondenceCrosses(t *testing.T) {
 	pl0 := planeAt(r3.NewVec(0, 0, 0))
 	pl1 := planeRecord{Origin: r3.NewVec(1, 0, 1), U: r3.NewVec(-1, 0, 0), V: r3.NewVec(0, 1, 0)}
 	pl := loftPayload{
-		profile0: p, profile1: p,
-		recordArea: loftRecordAreasOrZero(p, p),
-		plane0:     pl0, plane1: pl1,
-		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
-		xform: r3.Identity(),
+		Profile0: p, Profile1: p,
+		RecordArea: loftRecordAreasOrZero(p, p),
+		Plane0:     pl0, Plane1: pl1,
+		Frame0: mustFrame(t, pl0), Frame1: mustFrame(t, pl1),
+		Xform: r3.Identity(),
 	}
 	budget := proofbound.NewWorkBudget(t.Context())
 	_, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, freeform.NewFreeformWork(), freeform.NewFreeformWork())
@@ -1049,11 +1049,11 @@ func TestEvalLoftAuditCountsCandidatesNotPairs(t *testing.T) {
 	pl0 := planeAt(r3.NewVec(0, 0, 0))
 	pl1 := planeAt(r3.NewVec(0, 0, 1))
 	pl := loftPayload{
-		profile0: p, profile1: p,
-		recordArea: loftRecordAreasOrZero(p, p),
-		plane0:     pl0, plane1: pl1,
-		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
-		xform: r3.Identity(),
+		Profile0: p, Profile1: p,
+		RecordArea: loftRecordAreasOrZero(p, p),
+		Plane0:     pl0, Plane1: pl1,
+		Frame0: mustFrame(t, pl0), Frame1: mustFrame(t, pl1),
+		Xform: r3.Identity(),
 	}
 	allPairs, ok := proofbound.WallChoose2(uint64(4*n - 4))
 	require.True(t, ok)
@@ -1116,22 +1116,22 @@ func TestLoftFrameLiftRoundingChargedInDelta(t *testing.T) {
 
 			exact := exactLoftVertexLifts(t, pl)
 			sawGap := false
-			delta := proofarith.FloatRat(pl.delta)
+			delta := proofarith.FloatRat(pl.Delta)
 			delta2 := new(big.Rat).Mul(delta, delta)
-			for k, v := range pl.verts {
+			for k, v := range pl.Verts {
 				gap2 := new(big.Rat)
 				for axis, held := range [3]float64{v.X, v.Y, v.Z} {
 					d := new(big.Rat).Sub(proofarith.FloatRat(held), exact[k][axis])
 					gap2.Add(gap2, d.Mul(d, d))
 				}
 				sawGap = sawGap || gap2.Sign() > 0
-				require.LessOrEqual(t, gap2.Cmp(delta2), 0, "vertex %d sits past delta %g from its exact lift", k, pl.delta)
+				require.LessOrEqual(t, gap2.Cmp(delta2), 0, "vertex %d sits past delta %g from its exact lift", k, pl.Delta)
 			}
 			require.True(t, sawGap, "the fixture must hold a vertex the lift rounds")
 
 			vol, err := body.Volume()
 			require.NoError(t, err)
-			requireRatCovered(t, vol, exactRatMeshVolume(exact, pl.tris))
+			requireRatCovered(t, vol, exactRatMeshVolume(exact, pl.Tris))
 		})
 	}
 }
@@ -1141,14 +1141,14 @@ func TestLoftFrameLiftRoundingChargedInDelta(t *testing.T) {
 // own frame, over exact rationals.
 func exactLoftVertexLifts(t *testing.T, pl loftPayload) [][3]*big.Rat {
 	t.Helper()
-	require.Equal(t, r3.Identity(), pl.xform)
-	offsets, walks0, walks1, target, err := loftmesh.ValidateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, pl.recordArea, freeform.NewFreeformWork(), freeform.NewFreeformWork())
+	require.Equal(t, r3.Identity(), pl.Xform)
+	offsets, walks0, walks1, target, err := loftmesh.ValidateLoftRecords(pl.Profile0, pl.Profile1, pl.Plane0, pl.Plane1, pl.Alignment, pl.RecordArea, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.NoError(t, err)
-	pairs, _, _, stationRound, err := loftmesh.PairRecords(pl.profile0, pl.profile1, offsets, walks0, walks1, target, freeform.NewFreeformWork(), freeform.NewFreeformWork())
+	pairs, _, _, stationRound, err := loftmesh.PairRecords(pl.Profile0, pl.Profile1, offsets, walks0, walks1, target, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.NoError(t, err)
-	a, err := loftmesh.AssembleTriangulated(t.Context(), pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform, stationRound)
+	a, err := loftmesh.AssembleTriangulated(t.Context(), pairs, pl.Frame0, pl.Frame1, pl.Plane0, pl.Xform, stationRound)
 	require.NoError(t, err)
-	require.Equal(t, pl.verts, a.Verts)
+	require.Equal(t, pl.Verts, a.Verts)
 	lift := func(f r3.Frame, p planePoint) [3]*big.Rat {
 		o, u, v := f.Origin(), f.U(), f.V()
 		pu, pv := proofarith.FloatRat(p.U), proofarith.FloatRat(p.V)
@@ -1162,10 +1162,10 @@ func exactLoftVertexLifts(t *testing.T, pl loftPayload) [][3]*big.Rat {
 	out := make([][3]*big.Rat, len(a.Verts))
 	for i, p := range pairs {
 		for j, q := range p.V {
-			out[a.VIdx[i][j]] = lift(pl.frame0, q)
+			out[a.VIdx[i][j]] = lift(pl.Frame0, q)
 		}
 		for j, q := range p.W {
-			out[a.WIdx[i][j]] = lift(pl.frame1, q)
+			out[a.WIdx[i][j]] = lift(pl.Frame1, q)
 		}
 	}
 	return out
@@ -1194,11 +1194,11 @@ func exactRatMeshVolume(verts [][3]*big.Rat, tris [][3]int) *big.Rat {
 // directly rather than only the published body.
 func assembleLoftFixture(t *testing.T, pl loftPayload) loftmesh.Assembly {
 	t.Helper()
-	offsets, walks0, walks1, target, err := loftmesh.ValidateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, loftRecordAreas(t, pl.profile0, pl.profile1), freeform.NewFreeformWork(), freeform.NewFreeformWork())
+	offsets, walks0, walks1, target, err := loftmesh.ValidateLoftRecords(pl.Profile0, pl.Profile1, pl.Plane0, pl.Plane1, pl.Alignment, loftRecordAreas(t, pl.Profile0, pl.Profile1), freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.NoError(t, err)
-	pairs, _, _, stationRound, err := loftmesh.PairRecords(pl.profile0, pl.profile1, offsets, walks0, walks1, target, freeform.NewFreeformWork(), freeform.NewFreeformWork())
+	pairs, _, _, stationRound, err := loftmesh.PairRecords(pl.Profile0, pl.Profile1, offsets, walks0, walks1, target, freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	require.NoError(t, err)
-	a, err := loftmesh.AssembleTriangulated(t.Context(), pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform, stationRound)
+	a, err := loftmesh.AssembleTriangulated(t.Context(), pairs, pl.Frame0, pl.Frame1, pl.Plane0, pl.Xform, stationRound)
 	require.NoError(t, err)
 	return a
 }
@@ -1232,7 +1232,7 @@ func TestCapPolygonAreaRatMatchesMomentsOnUntrimmedLineSeg(t *testing.T) {
 	pl := boxLoftPayload(t)
 	a := assembleLoftFixture(t, pl)
 
-	ig, err := pl.profile0.IntegralsTo(freeform.MomentAreaOrder)
+	ig, err := pl.Profile0.IntegralsTo(freeform.MomentAreaOrder)
 	require.NoError(t, err)
 	require.False(t, ig.ExactDead)
 	require.True(t, ig.Exact.Complete())
@@ -1289,11 +1289,11 @@ func TestCapPolygonAreaRatMatchesTrianglesOnTrimmedLineSeg(t *testing.T) {
 	pl0 := planeAt(r3.NewVec(0, 0, 0))
 	pl1 := planeAt(r3.NewVec(0, 0, 1))
 	pl := loftPayload{
-		profile0: p, profile1: p,
-		recordArea: loftRecordAreasOrZero(p, p),
-		plane0:     pl0, plane1: pl1,
-		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
-		xform: r3.Identity(),
+		Profile0: p, Profile1: p,
+		RecordArea: loftRecordAreasOrZero(p, p),
+		Plane0:     pl0, Plane1: pl1,
+		Frame0: mustFrame(t, pl0), Frame1: mustFrame(t, pl1),
+		Xform: r3.Identity(),
 	}
 
 	a := assembleLoftFixture(t, pl)
@@ -1383,11 +1383,11 @@ func loftPayloadFor(t *testing.T, p0, p1 profileRecord, o0, o1 r3.Vec) loftPaylo
 	t.Helper()
 	pl0, pl1 := planeAt(o0), planeAt(o1)
 	return loftPayload{
-		profile0: p0, profile1: p1,
-		recordArea: loftRecordAreasOrZero(p0, p1),
-		plane0:     pl0, plane1: pl1,
-		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
-		xform: r3.Identity(),
+		Profile0: p0, Profile1: p1,
+		RecordArea: loftRecordAreasOrZero(p0, p1),
+		Plane0:     pl0, Plane1: pl1,
+		Frame0: mustFrame(t, pl0), Frame1: mustFrame(t, pl1),
+		Xform: r3.Identity(),
 	}
 }
 
@@ -1406,7 +1406,7 @@ func placedHoleLoftPayload(t *testing.T) loftPayload {
 	require.NoError(t, err)
 	xform, err := rot.Then(shift)
 	require.NoError(t, err)
-	pl.xform = xform
+	pl.Xform = xform
 	return pl
 }
 
@@ -1504,11 +1504,11 @@ func TestCapPolygonAreaRatNetsEveryLoop(t *testing.T) {
 			got0 := loftmesh.CapPolygonAreaRat(a.Pts0, a.LoopIdx0)
 			got1 := loftmesh.CapPolygonAreaRat(a.Pts1, a.LoopIdx1)
 
-			ig0, err := pl.profile0.IntegralsTo(freeform.MomentAreaOrder)
+			ig0, err := pl.Profile0.IntegralsTo(freeform.MomentAreaOrder)
 			require.NoError(t, err)
 			require.False(t, ig0.ExactDead)
 			require.True(t, ig0.Exact.Complete())
-			ig1, err := pl.profile1.IntegralsTo(freeform.MomentAreaOrder)
+			ig1, err := pl.Profile1.IntegralsTo(freeform.MomentAreaOrder)
 			require.NoError(t, err)
 			require.False(t, ig1.ExactDead)
 			require.True(t, ig1.Exact.Complete())
@@ -1520,7 +1520,7 @@ func TestCapPolygonAreaRatNetsEveryLoop(t *testing.T) {
 				"capEnd: the assembled polygon's shoelace %s must equal moments.go's own hole-netted region rational %s exactly",
 				got1.RatString(), ig1.Exact.Area.RatString())
 
-			mass := newLoftMassAccumulator(pl.xform.Apply(pl.plane0.Origin), a.Delta, 0, 0)
+			mass := newLoftMassAccumulator(pl.Xform.Apply(pl.Plane0.Origin), a.Delta, 0, 0)
 			for k, tri := range a.Tris {
 				mass.add(a.Verts[tri[0]], a.Verts[tri[1]], a.Verts[tri[2]], k < a.Walls)
 			}

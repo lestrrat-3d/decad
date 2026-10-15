@@ -68,30 +68,30 @@ func twistMixedWallAreaL1(cells []loftPayload, stations []straightTwistStation,
 	perHeight := proofbound.DivUpper(height, float64(len(cells)))
 	sum := 0.0
 	for i, held := range cells {
-		if len(held.segment) != 1 || len(held.twistAreaCells) != 1 ||
-			len(held.segment[0]) != len(held.twistAreaCells[0]) {
+		if len(held.Segment) != 1 || len(held.TwistAreaCells) != 1 ||
+			len(held.Segment[0]) != len(held.TwistAreaCells[0]) {
 			return 0, fmt.Errorf(`%w: twisted wall lost authenticated cell claims`, ErrUnsupported)
 		}
-		n := len(held.segment[0])
-		if n == 0 || len(held.verts) != 2*n || held.walls != 2*n ||
-			len(held.tris) < held.walls || len(held.cell) != held.walls || len(held.side) != held.walls {
+		n := len(held.Segment[0])
+		if n == 0 || len(held.Verts) != 2*n || held.Walls != 2*n ||
+			len(held.Tris) < held.Walls || len(held.Cell) != held.Walls || len(held.Side) != held.Walls {
 			return 0, fmt.Errorf(`%w: twisted wall lost its held cell table`, ErrUnsupported)
 		}
-		vertexDelta := proofbound.AbsSumUpper(held.delta,
+		vertexDelta := proofbound.AbsSumUpper(held.Delta,
 			math.Max(stations[i].PointError, stations[i+1].PointError))
 		for j := range n {
-			if held.segment[0][j] < 0 || held.segment[0][j] >= len(poly.Points) ||
-				held.cell[2*j] != [2]int{0, j} || held.cell[2*j+1] != [2]int{0, j} ||
-				held.side[2*j] != 0 || held.side[2*j+1] != 1 {
+			if held.Segment[0][j] < 0 || held.Segment[0][j] >= len(poly.Points) ||
+				held.Cell[2*j] != [2]int{0, j} || held.Cell[2*j+1] != [2]int{0, j} ||
+				held.Side[2*j] != 0 || held.Side[2*j+1] != 1 {
 				return 0, fmt.Errorf(`%w: twisted wall cell has no source/facet correspondence`, ErrUnsupported)
 			}
 			jn := (j + 1) % n
-			if !sameTwistFacetCorners(held.tris[2*j], [3]int{j, jn, n + jn}) ||
-				!sameTwistFacetCorners(held.tris[2*j+1], [3]int{j, n + jn, n + j}) {
+			if !sameTwistFacetCorners(held.Tris[2*j], [3]int{j, jn, n + jn}) ||
+				!sameTwistFacetCorners(held.Tris[2*j+1], [3]int{j, n + jn, n + j}) {
 				return 0, fmt.Errorf(`%w: twisted wall facet changed its cell corners`, ErrUnsupported)
 			}
-			allow := twistsweep.TwistWallCellAreaL1(held.verts[j], held.verts[jn],
-				held.verts[n+j], held.verts[n+jn], held.twistAreaCells[0][j],
+			allow := twistsweep.TwistWallCellAreaL1(held.Verts[j], held.Verts[jn],
+				held.Verts[n+j], held.Verts[n+jn], held.TwistAreaCells[0][j],
 				vertexDelta, poly.MaxRadiusL1, perAngle, perHeight)
 			if proofbound.IsNonFinite(allow) {
 				return 0, fmt.Errorf(`%w: twisted wall cell has no finite area proof`, ErrUnsupported)

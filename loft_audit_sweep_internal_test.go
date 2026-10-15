@@ -94,8 +94,8 @@ func unitSquareAuditFixture(t *testing.T) loftAuditFixture {
 	t.Helper()
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
 	return loftAuditFixtureOf(assembleLoftFixture(t, loftPayload{
-		profile0: unitSquareProfile(), profile1: unitSquareProfile(),
-		plane0: pl0, plane1: pl1, frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1), xform: r3.Identity(),
+		Profile0: unitSquareProfile(), Profile1: unitSquareProfile(),
+		Plane0: pl0, Plane1: pl1, Frame0: mustFrame(t, pl0), Frame1: mustFrame(t, pl1), Xform: r3.Identity(),
 	}))
 }
 
@@ -104,8 +104,8 @@ func holedSquareAuditFixture(t *testing.T) loftAuditFixture {
 	p := profileRecord{Outer: squareLoop(0.5, 0.5, 0.5, true), Holes: []loopRecord{squareLoop(0.5, 0.5, 0.2, false)}}
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
 	return loftAuditFixtureOf(assembleLoftFixture(t, loftPayload{
-		profile0: p, profile1: p,
-		plane0: pl0, plane1: pl1, frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1), xform: r3.Identity(),
+		Profile0: p, Profile1: p,
+		Plane0: pl0, Plane1: pl1, Frame0: mustFrame(t, pl0), Frame1: mustFrame(t, pl1), Xform: r3.Identity(),
 	}))
 }
 
@@ -157,14 +157,14 @@ func loftAuditFixtures(t *testing.T) []struct {
 		p := unitSquareProfile()
 		pl0 := planeAt(r3.NewVec(0, 0, 0))
 		pl1 := planeRecord{Origin: r3.NewVec(1, 0, 1), U: r3.NewVec(-1, 0, 0), V: r3.NewVec(0, 1, 0)}
-		return loftPayload{profile0: p, profile1: p, plane0: pl0, plane1: pl1,
-			frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1), xform: r3.Identity()}
+		return loftPayload{Profile0: p, Profile1: p, Plane0: pl0, Plane1: pl1,
+			Frame0: mustFrame(t, pl0), Frame1: mustFrame(t, pl1), Xform: r3.Identity()}
 	}
 
 	gon := profileRecord{Outer: manyGonLoop(0, 0, 10, 64)}
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
-	gonFixture := loftAuditFixtureOf(assembleLoftFixture(t, loftPayload{profile0: gon, profile1: gon,
-		plane0: pl0, plane1: pl1, frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1), xform: r3.Identity()}))
+	gonFixture := loftAuditFixtureOf(assembleLoftFixture(t, loftPayload{Profile0: gon, Profile1: gon,
+		Plane0: pl0, Plane1: pl1, Frame0: mustFrame(t, pl0), Frame1: mustFrame(t, pl1), Xform: r3.Identity()}))
 
 	return []struct {
 		name      string
@@ -436,8 +436,8 @@ func TestLoftAuditEnumerationTracksCandidates(t *testing.T) {
 	t.Run("3000-gon loft 100 tall", func(t *testing.T) {
 		p := profileRecord{Outer: manyGonLoop(0, 0, 1, 3000)}
 		pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 100))
-		pl := loftPayload{profile0: p, profile1: p, plane0: pl0, plane1: pl1,
-			frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1), xform: r3.Identity()}
+		pl := loftPayload{Profile0: p, Profile1: p, Plane0: pl0, Plane1: pl1,
+			Frame0: mustFrame(t, pl0), Frame1: mustFrame(t, pl1), Xform: r3.Identity()}
 		_, err := evalLoft(t.Context(), New(), producerID(0), pl, proofbound.NewWorkBudget(t.Context()),
 			freeform.NewFreeformWork(), freeform.NewFreeformWork())
 		require.NoError(t, err)

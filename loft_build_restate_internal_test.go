@@ -23,14 +23,14 @@ import (
 func TestLoftSheetAuditRejectsCapInPlaceOfWall(t *testing.T) {
 	t.Parallel()
 	pl := boxLoftPayload(t)
-	pl.surfaceResult = true
+	pl.SurfaceResult = true
 	body := evalLoftFixture(t, pl)
 	lp, _ := loftProofOf(t, body)
 	mesh, err := tessellateLoft(t.Context(), body, lp)
 	require.NoError(t, err)
-	require.Greater(t, lp.capStartCount, 0)
+	require.Greater(t, lp.CapStartCount, 0)
 
-	mesh.n.Triangles[0] = lp.tris[lp.walls]
+	mesh.n.Triangles[0] = lp.Tris[lp.Walls]
 	err = requireSheetMesh(t.Context(), body, mesh)
 	require.True(t, errors.Is(err, ErrDegenerate), "a cap replacing a wall must fail free-edge attribution: %v", err)
 	t.Logf("wrong-drop audit: %v", err)
@@ -41,7 +41,7 @@ func loftProofOf(t *testing.T, body *Body) (loftPayload, loftmesh.MeshProof) {
 	t.Helper()
 	lp, ok := body.n.Payload.(loftPayload)
 	require.True(t, ok, "a lofted body carries a loftPayload")
-	return lp, lp.proof
+	return lp, lp.Proof
 }
 
 // twistedArcWedgePayload is a same-kind ArcSeg pairing whose two wedges share
@@ -75,8 +75,8 @@ func TestLoftMeshProofComposition(t *testing.T) {
 	t.Run("unplaced pinned LineSeg-only publishes zero", func(t *testing.T) {
 		body := evalLoftFixture(t, boxLoftPayload(t))
 		lp, proof := loftProofOf(t, body)
-		require.Zero(t, lp.delta, "the fixture must actually be the pinned, unplaced case")
-		require.Zero(t, lp.sectionDelta)
+		require.Zero(t, lp.Delta, "the fixture must actually be the pinned, unplaced case")
+		require.Zero(t, lp.SectionDelta)
 		require.Zero(t, proof.FacetDeparture, "every held facet IS the boundary this build denotes")
 		require.Zero(t, proof.AreaSlack)
 		require.Zero(t, proof.VolSymDiff)
@@ -90,17 +90,17 @@ func TestLoftMeshProofComposition(t *testing.T) {
 		require.NoError(t, err)
 		xform, err := rot.Then(shift)
 		require.NoError(t, err)
-		pl.xform = xform
+		pl.Xform = xform
 
 		lp, proof := loftProofOf(t, evalLoftFixture(t, pl))
-		require.Positive(t, lp.delta, "a placed build's every held vertex carries the motion's own rounding")
-		require.Zero(t, lp.sectionDelta, "a LineSeg pairing chords no curve")
+		require.Positive(t, lp.Delta, "a placed build's every held vertex carries the motion's own rounding")
+		require.Zero(t, lp.SectionDelta, "a LineSeg pairing chords no curve")
 		// The composition is proofbound.AbsSumUpper(loftmesh.ChordCellDeltaUpper(0, delta), 0),
 		// which is delta widened only by its own outward rounding. It must
 		// never read as the ZERO the build's chorded gate is left at.
 		require.Positive(t, proof.FacetDeparture)
-		require.GreaterOrEqual(t, proof.FacetDeparture, lp.delta)
-		require.InEpsilon(t, lp.delta, proof.FacetDeparture, 1e-12,
+		require.GreaterOrEqual(t, proof.FacetDeparture, lp.Delta)
+		require.InEpsilon(t, lp.Delta, proof.FacetDeparture, 1e-12,
 			"a LineSeg-only build's facet departure is its own delta, up to the composition's outward rounding")
 		require.Positive(t, proof.AreaSlack, "a displaced vertex moves the area of every facet it touches")
 		require.Positive(t, proof.VolSymDiff, "and sweeps volume at the rate of the surface it moved")
@@ -108,11 +108,11 @@ func TestLoftMeshProofComposition(t *testing.T) {
 
 	t.Run("chorded twisted pair exceeds the sagitta", func(t *testing.T) {
 		lp, proof := loftProofOf(t, evalLoftFixture(t, twistedArcWedgePayload(t)))
-		require.Positive(t, lp.sectionDelta, "a circular pairing chords its own curve")
-		require.Greater(t, proof.FacetDeparture, lp.sectionDelta,
+		require.Positive(t, lp.SectionDelta, "a circular pairing chords its own curve")
+		require.Greater(t, proof.FacetDeparture, lp.SectionDelta,
 			"the facet departure adds the wall's own twist to the parameter-matched chord departure, "+
 				"and a SET-distance sagitta can never stand in for either")
-		require.Greater(t, proof.FacetDeparture, lp.delta)
+		require.Greater(t, proof.FacetDeparture, lp.Delta)
 		require.Positive(t, proof.AreaSlack)
 		require.Positive(t, proof.VolSymDiff)
 	})
@@ -124,13 +124,13 @@ func TestLoftMeshProofComposition(t *testing.T) {
 		placedPayload := unplaced
 		motion, err := r3.Translation(r3.NewVec(1e6, 0, 0))
 		require.NoError(t, err)
-		placedPayload.xform = motion
+		placedPayload.Xform = motion
 		lp, proof := loftProofOf(t, evalLoftFixture(t, placedPayload))
 
 		// The translation is large enough that its own proofbound.RigidRoundAllow is far
 		// above the ulp scale, so the placement leg cannot hide inside the
 		// chorded one.
-		require.Positive(t, lp.delta)
+		require.Positive(t, lp.Delta)
 		require.Greater(t, proof.FacetDeparture, flat.FacetDeparture,
 			"a placed build charges its held vertices' own displacement beside the chord departure")
 		require.Greater(t, proof.VolSymDiff, flat.VolSymDiff,
@@ -145,11 +145,11 @@ func TestLoftMeshProofComposition(t *testing.T) {
 		p := trimmedLineTriangleProfile()
 		lp, proof := loftProofOf(t, evalLoftFixture(t,
 			loftPayloadFor(t, p, p, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1))))
-		require.Equal(t, r3.Identity(), lp.xform, "the fixture must reach its positive delta unplaced")
-		require.Positive(t, lp.delta, "a trimmed LineSeg start is a GENERATED station, never a pinned one")
-		require.Zero(t, lp.sectionDelta, "a LineSeg pairing still chords no curve")
-		require.GreaterOrEqual(t, proof.FacetDeparture, lp.delta)
-		require.InEpsilon(t, lp.delta, proof.FacetDeparture, 1e-12)
+		require.Equal(t, r3.Identity(), lp.Xform, "the fixture must reach its positive delta unplaced")
+		require.Positive(t, lp.Delta, "a trimmed LineSeg start is a GENERATED station, never a pinned one")
+		require.Zero(t, lp.SectionDelta, "a LineSeg pairing still chords no curve")
+		require.GreaterOrEqual(t, proof.FacetDeparture, lp.Delta)
+		require.InEpsilon(t, lp.Delta, proof.FacetDeparture, 1e-12)
 	})
 }
 
@@ -164,10 +164,10 @@ func TestTessellateLoftRestatesTheHeldTriangleSet(t *testing.T) {
 
 	mesh, err := tessellateLoft(t.Context(), body, lp)
 	require.NoError(t, err)
-	require.Equal(t, lp.tris, mesh.n.Triangles, "the restatement retriangulates nothing")
-	require.Equal(t, lp.verts, mesh.n.Vertices, "and moves, rounds and welds no coordinate")
-	require.NotSame(t, &lp.verts[0], &mesh.n.Vertices[0], "the held mesh must not alias the payload's own arrays")
-	require.NotSame(t, &lp.tris[0], &mesh.n.Triangles[0])
+	require.Equal(t, lp.Tris, mesh.n.Triangles, "the restatement retriangulates nothing")
+	require.Equal(t, lp.Verts, mesh.n.Vertices, "and moves, rounds and welds no coordinate")
+	require.NotSame(t, &lp.Verts[0], &mesh.n.Vertices[0], "the held mesh must not alias the payload's own arrays")
+	require.NotSame(t, &lp.Tris[0], &mesh.n.Triangles[0])
 
 	require.Equal(t, proof.FacetDeparture, mesh.n.Bound)
 	require.Equal(t, proof.AreaSlack, mesh.n.AreaSlack)
@@ -191,16 +191,16 @@ func TestTessellateLoftRestatesTheHeldTriangleSet(t *testing.T) {
 	// The two caps' triangles sit after the walls, in the payload's own split
 	// order, and the wall triangles carry one distinct face each — a loft
 	// coalesces no wall (docs/tessellation-design.md §4).
-	capStart := mesh.n.Source[lp.walls]
+	capStart := mesh.n.Source[lp.Walls]
 	capEnd := mesh.n.Source[len(mesh.n.Triangles)-1]
 	require.NotSame(t, capStart, capEnd)
 	require.Equal(t, provenance.RoleCapStart, featureRefsOf(capStart.Origins)[0].Role)
 	require.Equal(t, provenance.RoleCapEnd, featureRefsOf(capEnd.Origins)[0].Role)
 	walls := map[*Face]struct{}{}
-	for k := range lp.walls {
+	for k := range lp.Walls {
 		walls[faceHandle(mesh.n.Source[k])] = struct{}{}
 	}
-	require.Len(t, walls, lp.walls, "each wall triangle names its own side(i,j,k) face")
+	require.Len(t, walls, lp.Walls, "each wall triangle names its own side(i,j,k) face")
 }
 
 // TestTessellateLoftRefusesAnUnrestatablePayload covers the two refusal
@@ -215,9 +215,9 @@ func TestTessellateLoftRefusesAnUnrestatablePayload(t *testing.T) {
 
 	t.Run("a triangle set its own counts do not partition", func(t *testing.T) {
 		cases := map[string]func(lp *loftPayload){
-			"no triangles":       func(lp *loftPayload) { lp.tris = nil },
-			"walls past the set": func(lp *loftPayload) { lp.walls = len(lp.tris) + 1 },
-			"unnamed cells":      func(lp *loftPayload) { lp.cell = nil },
+			"no triangles":       func(lp *loftPayload) { lp.Tris = nil },
+			"walls past the set": func(lp *loftPayload) { lp.Walls = len(lp.Tris) + 1 },
+			"unnamed cells":      func(lp *loftPayload) { lp.Cell = nil },
 		}
 		for name, mutate := range cases {
 			t.Run(name, func(t *testing.T) {
@@ -238,7 +238,7 @@ func TestTessellateLoftRefusesAnUnrestatablePayload(t *testing.T) {
 		} {
 			t.Run(name, func(t *testing.T) {
 				lp := base
-				mutate(&lp.proof)
+				mutate(&lp.Proof)
 				mesh, err := tessellateLoft(t.Context(), body, lp)
 				require.Nil(t, mesh, "an absent proof must never reach a consumer as a bound")
 				require.ErrorIs(t, err, ErrUnsupported)
