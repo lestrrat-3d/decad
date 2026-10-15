@@ -285,7 +285,7 @@ func proveLoftFaceBounds(ctx context.Context, sections []loftFaceSection,
 	mesh.VolSymDiff = volumeGap
 	mesh.AreaSlack = areaSlack
 	mesh.DPair = facetedSourceDiameterUpper(mesh.Verts, meshBound)
-	mesh.contactAudited = true
+	mesh.ContactAudited = true
 	return mesh, nil
 }
 

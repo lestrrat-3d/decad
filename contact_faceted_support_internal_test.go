@@ -99,16 +99,16 @@ func TestFacetedAxisSupportProvesRealUnionFloorFace(t *testing.T) {
 func TestFacetedAxisSupportRejectsMalformedPlacementProvenance(t *testing.T) {
 	_, _, placed := boundedFacetedFloorFixture(t)
 	valid := placed.n.Payload.(facetedPayload)
-	require.NotEmpty(t, valid.exactSourceVerts)
-	require.NotEmpty(t, valid.exactSourceTris)
+	require.NotEmpty(t, valid.ExactSourceVerts)
+	require.NotEmpty(t, valid.ExactSourceTris)
 	missing := valid
-	missing.exactSourceVerts = nil
+	missing.ExactSourceVerts = nil
 	wrongTris := valid
-	wrongTris.exactSourceTris = append([][3]int(nil), valid.exactSourceTris...)
-	wrongTris.exactSourceTris[0][0] = -1
+	wrongTris.ExactSourceTris = append([][3]int(nil), valid.ExactSourceTris...)
+	wrongTris.ExactSourceTris[0][0] = -1
 	wrongVerts := valid
-	wrongVerts.exactSourceVerts = append([]r3.Vec(nil), valid.exactSourceVerts...)
-	wrongVerts.exactSourceVerts[0].X += 1
+	wrongVerts.ExactSourceVerts = append([]r3.Vec(nil), valid.ExactSourceVerts...)
+	wrongVerts.ExactSourceVerts[0].X += 1
 	for _, corrupt := range []facetedPayload{missing, wrongTris, wrongVerts} {
 		body := bornBody(&Body{n: topo.Body{Solid: placed.n.Solid, Kind: placed.n.Kind, Lumps: placed.n.Lumps, Payload: corrupt}})
 		_, ok, err := sourceFacetedAxisSupport(t.Context(), body, r3.Identity(), 2, 0)
@@ -124,7 +124,7 @@ func TestFacetedAxisSupportRejectsMalformedPlacementProvenance(t *testing.T) {
 	reflected, err := Transform(t.Context(), source, reflection)
 	require.NoError(t, err)
 	require.Same(t, doc, reflected.Document())
-	require.Empty(t, reflected.n.Payload.(facetedPayload).exactSourceVerts)
+	require.Empty(t, reflected.n.Payload.(facetedPayload).ExactSourceVerts)
 	_, ok, err := sourceFacetedAxisSupport(t.Context(), reflected, r3.Identity(), 2, 0)
 	require.NoError(t, err)
 	require.False(t, ok)

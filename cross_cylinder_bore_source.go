@@ -14,10 +14,10 @@ import (
 // proof; this record permits a later mouth chamfer to rebuild from the exact
 // source circles instead of interpreting a sampled intersection as a curve.
 type crossCylinderBoreRecord struct {
-	target, tool    *Body
-	radius, bore    float64
-	height, centerZ float64
-	sourceBound     float64
+	Target, Tool    *Body
+	Radius, Bore    float64
+	Height, CenterZ float64
+	SourceBound     float64
 }
 
 func crossCylinderCircleSource(body *Body, u, v r3.Vec) (prismPayload, circleSeg, bool) {
@@ -88,7 +88,7 @@ func recognizeCrossCylinderBore(target, tool *Body) *crossCylinderBoreRecord {
 		return nil
 	}
 	return &crossCylinderBoreRecord{
-		target: target, tool: tool, radius: R, bore: r,
-		height: H, centerZ: c, sourceBound: bound,
+		Target: target, Tool: tool, Radius: R, Bore: r,
+		Height: H, CenterZ: c, SourceBound: bound,
 	}
 }

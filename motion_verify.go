@@ -943,7 +943,7 @@ func (r *motionRun) replayConstant(mp *motionPose, i, k int, once *constantOutco
 // largest linear factor among them and the group's stretch base.
 //
 // place refuses to RE-PLACE a faceted mover that descends from an exact-rotation
-// copy (facetedPayload.exactPlaced): PoseDeviation models a mover as P*p for
+// copy (facetedPayload.ExactPlaced): PoseDeviation models a mover as P*p for
 // record points, which does not describe a re-placement of Q*S. The refusal
 // applies where a mover is placed; a fixed group, a settled constant pair
 // and a mover with no evaluated pair never reach it.
@@ -961,7 +961,7 @@ func (r *motionRun) place(mp *motionPose, i int, placed []*motionPlaced) (*motio
 		placed[i] = r.constPlaced[i]
 		return placed[i], nil
 	}
-	if fp, ok := mv.body.n.Payload.(facetedPayload); ok && fp.exactPlaced {
+	if fp, ok := mv.body.n.Payload.(facetedPayload); ok && fp.ExactPlaced {
 		return nil, fmt.Errorf("%w: motion verification cannot re-place a body that descends from an "+
 			"exact-rotation copy (WithCopyRotation), because its pose has no deviation proof", ErrUnsupported)
 	}

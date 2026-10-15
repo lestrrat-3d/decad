@@ -49,8 +49,8 @@ func TestPrismPatternSourceProvesCircularJoinOfRotatedFittedSections(t *testing.
 	source, matched, err := prismPatternSourceOf(t.Context(), operands)
 	require.NoError(t, err)
 	require.True(t, matched)
-	require.Len(t, source.sections, 2)
-	require.Less(t, source.rootGap, 1e-12)
+	require.Len(t, source.Sections, 2)
+	require.Less(t, source.RootGap, 1e-12)
 
 	// Rebuilding a similar section is not a Copy certificate.
 	separate := copySection

@@ -27,7 +27,7 @@ type prismPatternFilletContact struct {
 }
 
 func prismPatternExactPlacedPoint(part prismPatternPart, point planePoint) prismpattern.IVPoint {
-	b := part.prism.Xform.Basis()
+	b := part.Prism.Xform.Basis()
 	c, s := proofarith.FloatRat(b.EX.X), proofarith.FloatRat(b.EX.Y)
 	u, v := proofarith.FloatRat(point.U), proofarith.FloatRat(point.V)
 	x := new(big.Rat).Sub(new(big.Rat).Mul(c, u), new(big.Rat).Mul(s, v))
@@ -39,17 +39,17 @@ func prismPatternFilletContactOf(part prismPatternPart, partIndex, station int,
 	root arcSeg, rootIndex int, blankRadius, radius float64) (prismPatternFilletContact, error) {
 	var result prismPatternFilletContact
 	if radius <= 0 || proofbound.IsNonFinite(radius) ||
-		station != 0 && station != part.rootStart {
+		station != 0 && station != part.RootStart {
 		return result, fmt.Errorf("%w: joined-prism fillet has no root corner or positive radius", ErrUnsupported)
 	}
 	lineIndex, side := 0, -1.0
-	if station == part.rootStart {
+	if station == part.RootStart {
 		lineIndex, side = rootIndex-1, 1
 	}
-	if lineIndex < 0 || lineIndex >= len(part.prism.Profile.Outer.Segments) {
+	if lineIndex < 0 || lineIndex >= len(part.Prism.Profile.Outer.Segments) {
 		return result, fmt.Errorf("%w: joined-prism fillet lost its connector", ErrUnsupported)
 	}
-	connector, ok := part.prism.Profile.Outer.Segments[lineIndex].(lineSeg)
+	connector, ok := part.Prism.Profile.Outer.Segments[lineIndex].(lineSeg)
 	if !ok {
 		return result, fmt.Errorf("%w: joined-prism fillet connector is not straight", ErrUnsupported)
 	}
@@ -62,10 +62,10 @@ func prismPatternFilletContactOf(part prismPatternPart, partIndex, station int,
 	}
 	q := prismPatternExactPlacedPoint(part, near)
 	f := prismPatternExactPlacedPoint(part, far)
-	heldRoot := part.mesh.n.Vertices[2*station]
+	heldRoot := part.Mesh.n.Vertices[2*station]
 	rootError := proofbound.AbsSumUpper(proofbound.IntervalFloatError(q.X, heldRoot.X),
 		proofbound.IntervalFloatError(q.Y, heldRoot.Y))
-	if rootError > part.mesh.Bound().Base() {
+	if rootError > part.Mesh.Bound().Base() {
 		return result, fmt.Errorf("%w: joined-prism fillet root is not tied to its source", ErrUnsupported)
 	}
 	d := f.Sub(q)

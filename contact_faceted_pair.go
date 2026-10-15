@@ -313,7 +313,7 @@ func planarPrismSolid(ctx context.Context, budget *proofbound.WorkBudget,
 func planarFacetedSolid(budget *proofbound.WorkBudget, pp facetedPayload) (planar.PlanarSolid, proofarith.Dyadic, bool, error) {
 	return planarsnapshot.FacetedSolid(budget, planarsnapshot.FacetedInput{
 		Verts: pp.Verts, Tris: pp.Tris, FaceOf: pp.FaceOf,
-		ExactSourceVerts: pp.exactSourceVerts, ExactSourceTris: pp.exactSourceTris,
+		ExactSourceVerts: pp.ExactSourceVerts, ExactSourceTris: pp.ExactSourceTris,
 		MeshBound: pp.MeshBound, VolSymDiff: pp.VolSymDiff, Transform: pp.Xform,
 	})
 }

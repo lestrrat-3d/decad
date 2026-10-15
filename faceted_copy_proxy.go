@@ -18,13 +18,13 @@ import (
 // carrying unrelated faces cannot borrow the copy lineage.
 func (set *facetedCopySet) placedProxyShells(ctx context.Context,
 	proxy *Mesh) ([]facetproof.PlacedMesh, error) {
-	if ctx == nil || set == nil || set.source == nil || proxy == nil ||
-		len(set.tools) < 2 || len(set.moves) != len(set.tools) ||
-		documentHandle(set.source.n.Doc).requireLive(set.source) != nil ||
+	if ctx == nil || set == nil || set.Source == nil || proxy == nil ||
+		len(set.Tools) < 2 || len(set.Moves) != len(set.Tools) ||
+		documentHandle(set.Source.n.Doc).requireLive(set.Source) != nil ||
 		!proxy.n.BoundaryOK || !proxy.n.SymDiffOK {
 		return nil, fmt.Errorf("%w: copied proxy lacks a live source proof", ErrUnsupported)
 	}
-	first, ok := set.source.n.Payload.(facetedPayload)
+	first, ok := set.Source.n.Payload.(facetedPayload)
 	if !ok || len(proxy.n.Vertices) != len(first.Verts) ||
 		len(proxy.n.VertexBound) != len(proxy.n.Vertices) ||
 		len(proxy.n.Triangles) != len(first.Tris) ||
@@ -32,7 +32,7 @@ func (set *facetedCopySet) placedProxyShells(ctx context.Context,
 		len(first.FaceOf) != len(first.Tris) {
 		return nil, fmt.Errorf("%w: copied proxy lost its source facets", ErrUnsupported)
 	}
-	faces := set.source.Faces()
+	faces := set.Source.Faces()
 	for i, tri := range proxy.n.Triangles {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
@@ -46,34 +46,34 @@ func (set *facetedCopySet) placedProxyShells(ctx context.Context,
 		}
 	}
 	budget := proofbound.NewWorkBudget(ctx)
-	placed := make([]facetproof.PlacedMesh, len(set.tools))
+	placed := make([]facetproof.PlacedMesh, len(set.Tools))
 	placed[0] = facetproof.PlacedMesh{
 		Verts: proxy.n.Vertices, Tris: proxy.n.Triangles,
 		VertexBound: proxy.n.VertexBound,
 		MeshBound:   facetproof.FacetBoundMax(proxy.n.Triangles, proxy.n.VertexBound),
 		VolSymDiff:  proxy.n.VolSymDiff, AreaSlack: proxy.n.AreaSlack,
 	}
-	copies := make([]shellseparation.HeldCopy, len(set.tools))
+	copies := make([]shellseparation.HeldCopy, len(set.Tools))
 	copies[0] = shellseparation.HeldCopy{Verts: proxy.n.Vertices, Tris: proxy.n.Triangles, Linked: true}
-	for i := 1; i < len(set.tools); i++ {
-		tool := set.tools[i]
-		if tool == nil || tool.n.Doc != set.source.n.Doc ||
-			documentHandle(set.source.n.Doc).requireLive(tool) != nil {
+	for i := 1; i < len(set.Tools); i++ {
+		tool := set.Tools[i]
+		if tool == nil || tool.n.Doc != set.Source.n.Doc ||
+			documentHandle(set.Source.n.Doc).requireLive(tool) != nil {
 			return nil, fmt.Errorf("%w: copied proxy tool %d lost its live placement", ErrUnsupported, i+1)
 		}
 		part, ok := tool.n.Payload.(facetedPayload)
-		if !ok || part.copyLineage == nil ||
-			part.copyLineage.source != set.source ||
-			part.copyLineage.sourceProducer != set.source.n.Origin.Producer ||
-			part.copyLineage.sourcePlacement != first.Xform ||
-			part.copyLineage.targetPlacement != part.Xform ||
-			part.copyLineage.motion != set.moves[i] ||
+		if !ok || part.CopyLineage == nil ||
+			part.CopyLineage.Source != set.Source ||
+			part.CopyLineage.SourceProducer != set.Source.n.Origin.Producer ||
+			part.CopyLineage.SourcePlacement != first.Xform ||
+			part.CopyLineage.TargetPlacement != part.Xform ||
+			part.CopyLineage.Motion != set.Moves[i] ||
 			len(part.Tris) != len(proxy.n.Triangles) {
 			return nil, fmt.Errorf("%w: copied proxy tool %d changed its source", ErrUnsupported, i+1)
 		}
 		for j, triangle := range part.Tris {
 			want := proxy.n.Triangles[j]
-			if set.moves[i].IsReflection() {
+			if set.Moves[i].IsReflection() {
 				want[1], want[2] = want[2], want[1]
 			}
 			if triangle != want {
@@ -81,7 +81,7 @@ func (set *facetedCopySet) placedProxyShells(ctx context.Context,
 			}
 		}
 		var err error
-		placed[i], err = set.placeProxy(ctx, budget, proxy, i, part.copyLineage.exact)
+		placed[i], err = set.placeProxy(ctx, budget, proxy, i, part.CopyLineage.Exact)
 		if err != nil {
 			return nil, err
 		}
@@ -89,14 +89,14 @@ func (set *facetedCopySet) placedProxyShells(ctx context.Context,
 			Verts: placed[i].Verts, Tris: placed[i].Tris, Linked: true,
 		}
 	}
-	held, err := shellseparation.PlacedHeldShells(ctx, copies, set.moves)
+	held, err := shellseparation.PlacedHeldShells(ctx, copies, set.Moves)
 	if err != nil {
 		return nil, err
 	}
 	for _, axis := range []shellseparation.Axis{
-		set.axis, shellseparation.AxisX, shellseparation.AxisY, shellseparation.AxisZ,
+		set.Axis, shellseparation.AxisX, shellseparation.AxisY, shellseparation.AxisZ,
 	} {
-		if shellseparation.Separate(ctx, held, set.moves, nil,
+		if shellseparation.Separate(ctx, held, set.Moves, nil,
 			shellseparation.ProxyShell, axis, true) {
 			return placed, nil
 		}
@@ -112,21 +112,21 @@ func (set *facetedCopySet) placedProxyShells(ctx context.Context,
 // rotation and the float move instead of the float matrix's stretch.
 func (set *facetedCopySet) placeProxy(ctx context.Context, budget *proofbound.WorkBudget, proxy *Mesh,
 	i int, record *exactrotation.Rotation) (facetproof.PlacedMesh, error) {
-	if record != set.exact[i] {
+	if record != set.Exact[i] {
 		return facetproof.PlacedMesh{}, fmt.Errorf("%w: copied proxy tool %d changed its exact rotation",
 			ErrUnsupported, i+1)
 	}
 	if record != nil {
-		linearGap, translationGap, ok := record.Gap(set.moves[i])
+		linearGap, translationGap, ok := record.Gap(set.Moves[i])
 		if !ok {
 			return facetproof.PlacedMesh{}, fmt.Errorf("%w: copied proxy tool %d has no finite rotation gap",
 				ErrUnsupported, i+1)
 		}
 		return facetproof.PlaceMeshDenoting(ctx, budget, proxy.n.Vertices, proxy.n.Triangles,
-			proxy.n.VertexBound, proxy.n.VolSymDiff, proxy.n.AreaSlack, set.moves[i],
+			proxy.n.VertexBound, proxy.n.VolSymDiff, proxy.n.AreaSlack, set.Moves[i],
 			linearGap, translationGap)
 	}
-	linear, err := massmoment.PlacementRotation(set.moves[i])
+	linear, err := massmoment.PlacementRotation(set.Moves[i])
 	if err != nil {
 		return facetproof.PlacedMesh{}, err
 	}
@@ -136,5 +136,5 @@ func (set *facetedCopySet) placeProxy(ctx context.Context, budget *proofbound.Wo
 	}
 	return facetproof.PlaceMesh(ctx, budget, proxy.n.Vertices, proxy.n.Triangles,
 		proxy.n.VertexBound, proxy.n.VolSymDiff, proxy.n.AreaSlack,
-		charge.Stretch, charge.Volume, set.moves[i])
+		charge.Stretch, charge.Volume, set.Moves[i])
 }

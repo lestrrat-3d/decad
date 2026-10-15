@@ -324,7 +324,7 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 	result.VertexBound, result.MeshBound = vertexBound, bound
 	result.VolSymDiff, result.AreaSlack = volumeGap, areaSlack
 	result.revolveLoftJoin = nil
-	result.contactAudited = true
+	result.ContactAudited = true
 	body, err := buildFacetedBody(ctx, d, ref, result)
 	return body, true, err
 }

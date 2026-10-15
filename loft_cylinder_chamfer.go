@@ -43,28 +43,28 @@ type loftCylinderChamferSource struct {
 }
 
 func loftCylinderChamferSourceOf(fp facetedPayload) (loftCylinderChamferSource, bool) {
-	if !fp.contactAudited || fp.Xform != r3.Identity() {
+	if !fp.ContactAudited || fp.Xform != r3.Identity() {
 		return loftCylinderChamferSource{}, false
 	}
-	if r := fp.loftCylinderBore; r != nil {
+	if r := fp.LoftCylinderBore; r != nil {
 		return loftCylinderChamferSource{
-			blank: r.blank, teeth: r.proofTeeth,
-			originalTeeth: r.teeth, axialBridge: r.axialBridge,
-			outer: r.outer, inner: r.inner, capGroups: r.capGroups,
-			boreGroup: r.wallGroup, blankRadius: r.blankRadius,
-			boreRadius: r.boreRadius, boreBound: r.boreBound, innerInset: r.innerInset,
-			outerExcess: r.outerExcess, rootCollar: r.rootCollar,
-			z0: r.z0, z1: r.z1,
+			blank: r.Blank, teeth: r.ProofTeeth,
+			originalTeeth: r.Teeth, axialBridge: r.AxialBridge,
+			outer: r.Outer, inner: r.Inner, capGroups: r.CapGroups,
+			boreGroup: r.WallGroup, blankRadius: r.BlankRadius,
+			boreRadius: r.BoreRadius, boreBound: r.BoreBound, innerInset: r.InnerInset,
+			outerExcess: r.OuterExcess, rootCollar: r.RootCollar,
+			z0: r.Z0, z1: r.Z1,
 		}, true
 	}
-	if r := fp.loftCylinderJoin; r != nil {
+	if r := fp.LoftCylinderJoin; r != nil {
 		return loftCylinderChamferSource{
-			blank: r.blank, teeth: r.proofTeeth,
-			originalTeeth: r.teeth, axialBridge: r.axialBridge,
-			outer: r.capOutlines, capGroups: r.capGroups,
-			boreGroup: -1, blankRadius: r.radius,
-			innerInset: r.innerInset, outerExcess: r.outerExcess,
-			rootCollar: r.rootCollar, z0: r.z0, z1: r.z1,
+			blank: r.Blank, teeth: r.ProofTeeth,
+			originalTeeth: r.Teeth, axialBridge: r.AxialBridge,
+			outer: r.CapOutlines, capGroups: r.CapGroups,
+			boreGroup: -1, blankRadius: r.Radius,
+			innerInset: r.InnerInset, outerExcess: r.OuterExcess,
+			rootCollar: r.RootCollar, z0: r.Z0, z1: r.Z1,
 		}, true
 	}
 	return loftCylinderChamferSource{}, false

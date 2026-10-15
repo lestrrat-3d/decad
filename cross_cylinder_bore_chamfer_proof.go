@@ -94,7 +94,7 @@ func crossBoreCellExactProof(rec *crossCylinderBoreRecord, setback float64,
 	gapLazy := proofarith.LazyOf(angularGap)
 	s := proofarith.LazyIntervalWiden(proofarith.LazyIntervalOf(proofbound.ToProofInterval(s0)), gapLazy)
 	c := proofarith.LazyIntervalWiden(proofarith.LazyIntervalOf(proofbound.ToProofInterval(c0)), gapLazy)
-	R, r, d := crossPoint(rec.radius), crossPoint(rec.bore), crossPoint(setback)
+	R, r, d := crossPoint(rec.Radius), crossPoint(rec.Bore), crossPoint(setback)
 	cd, sd := crossDual{v: c, d: crossSub(crossPoint(0), s)}, crossDual{v: s, d: c}
 	Rd, rd, dd := crossConst(R), crossConst(r), crossConst(d)
 	xd, ok := crossDSqrt(crossDSub(crossDMul(Rd, Rd),
@@ -335,7 +335,7 @@ func crossBoreMirroredCellMaxima(ctx context.Context, workers int,
 // crossBoreMirroredCellMaxima's mirror map needs. A pose that is symmetric
 // only to rounding fails one of admission's exact comparisons.
 func crossBoreMirrorPose(rec *crossCylinderBoreRecord) bool {
-	again := recognizeCrossCylinderBore(rec.target, rec.tool)
+	again := recognizeCrossCylinderBore(rec.Target, rec.Tool)
 	return again != nil && *again == *rec
 }
 
@@ -358,7 +358,7 @@ func proveCrossBoreCells(ctx context.Context, rec *crossCylinderBoreRecord,
 		func(j int, base *crossBoreCellExact, flipY, flipZ bool) float64 {
 			cell := mesh.cellHeld[j]
 			held := [3]r3.Vec{mesh.verts[cell[0]], mesh.verts[cell[1]], mesh.verts[cell[2]]}
-			return crossBoreCellSampleError(&held, rec.centerZ, &base.coords, flipY, flipZ)
+			return crossBoreCellSampleError(&held, rec.CenterZ, &base.coords, flipY, flipZ)
 		})
 }
 
@@ -382,15 +382,15 @@ func proveCrossBoreChamfer(ctx context.Context, rec *crossCylinderBoreRecord,
 	// fraction. Two endpoint curves in one cell have coordinate spread at
 	// most width; the triangle diagonal adds one further spread. Three box
 	// diagonals enclose all such pairings and their rounded sample vertices.
-	R, r, H, d := rec.radius, rec.bore, rec.height, setback
+	R, r, H, d := rec.Radius, rec.Bore, rec.Height, setback
 	xMinSquared := new(big.Rat).Sub(
 		new(big.Rat).Mul(proofarith.FloatRat(R), proofarith.FloatRat(R)),
 		new(big.Rat).Mul(proofarith.FloatRat(r), proofarith.FloatRat(r)))
 	xMin := proofbound.RatSqrtDown(xMinSquared)
 	width := proofbound.RatFloatUp(new(big.Rat).Sub(proofarith.FloatRat(R), proofarith.FloatRat(xMin)))
-	width = proofbound.AbsSumUpper(width, proofbound.ProductUpper(2, d), rec.sourceBound)
+	width = proofbound.AbsSumUpper(width, proofbound.ProductUpper(2, d), rec.SourceBound)
 	span := proofbound.AbsSumUpper(proofbound.ProductUpper(2, r), proofbound.ProductUpper(2, d),
-		proofbound.ProductUpper(2, rec.sourceBound))
+		proofbound.ProductUpper(2, rec.SourceBound))
 	collar := proofbound.ProductUpper(width, proofbound.ProductUpper(span, span))
 	piUpper := proofbound.RatFloatUp(proofbound.PiUpper)
 	// The mesh builder certifies the maximum exact angular gap of every
@@ -411,17 +411,17 @@ func proveCrossBoreChamfer(ctx context.Context, rec *crossCylinderBoreRecord,
 		proofbound.DivUpper(proofbound.ProductUpper(boreStep, boreStep), 8))
 	bound := proofbound.AbsSumUpper(
 		proofbound.ProductUpper(3, proofbound.Radius3D(maximum.width)),
-		maximum.sampleError, proofbound.ProductUpper(4, rec.sourceBound),
+		maximum.sampleError, proofbound.ProductUpper(4, rec.SourceBound),
 		mesh.outerStationError, outerChord, boreChord)
 	if !(bound < 0.1) || proofbound.IsNonFinite(bound) {
 		return 0, 0, 0, fmt.Errorf("%w: the cross-bore chamfer exceeds its 0.1 mm proof plan", ErrUnsupported)
 	}
 	outerShell := proofbound.ProductUpper(4*piUpper,
 		proofbound.ProductUpper(R, proofbound.ProductUpper(H,
-			proofbound.AbsSumUpper(outerChord, mesh.outerStationError, rec.sourceBound))))
+			proofbound.AbsSumUpper(outerChord, mesh.outerStationError, rec.SourceBound))))
 	boreShell := proofbound.ProductUpper(8*piUpper,
 		proofbound.ProductUpper(R, proofbound.ProductUpper(r,
-			proofbound.AbsSumUpper(boreChord, rec.sourceBound))))
+			proofbound.AbsSumUpper(boreChord, rec.SourceBound))))
 	volumeGap := proofbound.AbsSumUpper(collar, outerShell, boreShell)
 	// Surface area is bounded by the complete outer cylinder and caps, the
 	// complete bore wall, and the band's derivative times its width. Adding

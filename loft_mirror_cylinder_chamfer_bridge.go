@@ -14,24 +14,24 @@ import (
 // source placements. The Join's accumulated bounds must still contain them.
 func loftMirrorCylinderChamferUpperShifts(record *loftMirrorCylinderBoreRecord,
 	source loftCylinderChamferSource) ([]*big.Rat, error) {
-	if record == nil || record.join == nil || record.join.source == nil ||
-		record.join.source.lower == nil || len(record.join.pairs) == 0 ||
-		len(record.join.pairs) != len(source.originalTeeth) {
+	if record == nil || record.Join == nil || record.Join.Source == nil ||
+		record.Join.Source.Lower == nil || len(record.Join.Pairs) == 0 ||
+		len(record.Join.Pairs) != len(source.originalTeeth) {
 		return nil, fmt.Errorf("%w: mirrored cap chamfer lost its upper tooth source", ErrUnsupported)
 	}
-	loft, ok := record.join.source.lower.n.Payload.(loftPayload)
+	loft, ok := record.Join.Source.Lower.n.Payload.(loftPayload)
 	if !ok || !loft.AuthenticatedReconstruction {
 		return nil, fmt.Errorf("%w: mirrored cap chamfer lost its source Loft", ErrUnsupported)
 	}
 	middle := loft.Frame1.Origin().Z
-	byMotion := make(map[r3.Transform]*big.Rat, len(record.join.pairs))
+	byMotion := make(map[r3.Transform]*big.Rat, len(record.Join.Pairs))
 	var sweptTotal, greatest float64
-	for i, pair := range record.join.pairs {
+	for i, pair := range record.Join.Pairs {
 		fp, ok := pair.n.Payload.(facetedPayload)
-		if !ok || !fp.contactAudited {
+		if !ok || !fp.ContactAudited {
 			return nil, fmt.Errorf("%w: mirrored cap tooth %d lost its source", ErrUnsupported, i)
 		}
-		motion, ok := loftMirrorCylinderPairMotion(fp, record.join.source)
+		motion, ok := loftMirrorCylinderPairMotion(fp, record.Join.Source)
 		if !ok {
 			return nil, fmt.Errorf("%w: mirrored cap tooth %d lost its placement", ErrUnsupported, i)
 		}
@@ -59,7 +59,7 @@ func loftMirrorCylinderChamferUpperShifts(record *loftMirrorCylinderBoreRecord,
 		greatest = max(greatest, shift)
 		sweptTotal = proofbound.AbsSumUpper(sweptTotal, swept)
 	}
-	if greatest > record.join.bridgeBound || sweptTotal > record.join.bridgeVolume {
+	if greatest > record.Join.BridgeBound || sweptTotal > record.Join.BridgeVolume {
 		return nil, fmt.Errorf("%w: mirrored cap source exceeds the inherited bridge", ErrUnsupported)
 	}
 	if greatest == 0 {
@@ -93,16 +93,16 @@ func loftMirrorCylinderChamferUpperShifts(record *loftMirrorCylinderBoreRecord,
 // an exact transverse section of the actual upper cap band.
 func loftMirrorCylinderChamferUpperCapBridge(ctx context.Context, old, upper facetedPayload,
 	record *loftMirrorCylinderBoreRecord, half loftCylinderOneCapData, setback float64) (float64, error) {
-	shift := record.join.bridgeBound
+	shift := record.Join.BridgeBound
 	if shift == 0 {
 		return 0, nil
 	}
-	blank, ok := record.join.blank.n.Payload.(prismPayload)
+	blank, ok := record.Join.Blank.n.Payload.(prismPayload)
 	if !ok || !loftMirrorCylinderBlank(blank) || len(half.ideal) != len(upper.Verts) ||
-		half.band[0] >= half.band[1] || len(record.outer[1]) < 3 {
+		half.band[0] >= half.band[1] || len(record.Outer[1]) < 3 {
 		return 0, fmt.Errorf("%w: mirrored cap bridge lost its upper band", ErrUnsupported)
 	}
-	loft, ok := record.join.source.lower.n.Payload.(loftPayload)
+	loft, ok := record.Join.Source.Lower.n.Payload.(loftPayload)
 	if !ok || !loft.AuthenticatedReconstruction {
 		return 0, fmt.Errorf("%w: mirrored cap bridge lost its source frame", ErrUnsupported)
 	}
@@ -122,8 +122,8 @@ func loftMirrorCylinderChamferUpperCapBridge(ctx context.Context, old, upper fac
 		}
 	}
 	mesh := &joinedMesh{verts: append([]r3.Vec(nil), upper.Verts...), tris: upper.Tris}
-	outer := make([]int, len(record.outer[1]))
-	for i, index := range record.outer[1] {
+	outer := make([]int, len(record.Outer[1]))
+	for i, index := range record.Outer[1] {
 		if index < 0 || index >= len(old.Verts) {
 			return 0, fmt.Errorf("%w: mirrored cap bridge lost its old outer rim", ErrUnsupported)
 		}

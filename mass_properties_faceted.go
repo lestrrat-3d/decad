@@ -29,7 +29,7 @@ func facetedMassProperties(ctx context.Context, b *Body, pp facetedPayload, dens
 		mesh.n.VolSymDiff != pp.VolSymDiff || mesh.n.Bound != pp.MeshBound {
 		return MassProperties{}, fmt.Errorf("%w: faceted mass has no matching verified mesh certificate", ErrUnsupported)
 	}
-	if err := massmoment.AuditMesh(ctx, pp.Verts, pp.Tris, pp.contactAudited); err != nil {
+	if err := massmoment.AuditMesh(ctx, pp.Verts, pp.Tris, pp.ContactAudited); err != nil {
 		return MassProperties{}, err
 	}
 	// Anchor at a held corner before summing tetrahedra.

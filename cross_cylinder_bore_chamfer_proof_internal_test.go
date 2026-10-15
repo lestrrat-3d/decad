@@ -29,9 +29,9 @@ func crossBoreCellProof(rec *crossCylinderBoreRecord, setback float64,
 	outer, inner := crossBoreFeet(rec, setback, theta)
 	co, sn := math.Cos(theta), math.Sin(theta)
 	held := [9]float64{
-		outer.X, outer.Y, outer.Z - rec.centerZ,
-		inner.X, inner.Y, inner.Z - rec.centerZ,
-		-math.Sqrt(rec.radius*rec.radius - rec.bore*rec.bore*co*co), rec.bore * co, rec.bore * sn,
+		outer.X, outer.Y, outer.Z - rec.CenterZ,
+		inner.X, inner.Y, inner.Z - rec.CenterZ,
+		-math.Sqrt(rec.Radius*rec.Radius - rec.Bore*rec.Bore*co*co), rec.Bore * co, rec.Bore * sn,
 	}
 	sampleError := 0.0
 	for c := range held {
@@ -175,8 +175,8 @@ func TestCrossBoreCellProofsParallelMatchSerial(t *testing.T) {
 		rec     crossCylinderBoreRecord
 		setback float64
 	}{
-		{crossCylinderBoreRecord{radius: 5, bore: 1, height: 10, centerZ: 5, sourceBound: 1e-9}, 0.5},
-		{crossCylinderBoreRecord{radius: 8, bore: 1.5, height: 16, centerZ: 8, sourceBound: 1e-9}, 0.1875},
+		{crossCylinderBoreRecord{Radius: 5, Bore: 1, Height: 10, CenterZ: 5, SourceBound: 1e-9}, 0.5},
+		{crossCylinderBoreRecord{Radius: 8, Bore: 1.5, Height: 16, CenterZ: 8, SourceBound: 1e-9}, 0.1875},
 	} {
 		cell := func(i int) (crossBoreCellResult, error) {
 			return crossBoreCellProof(&tc.rec, tc.setback, 64*i, gap)

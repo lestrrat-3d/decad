@@ -24,7 +24,7 @@ func TestLoftCylinderUnionCentroidDiameter(t *testing.T) {
 	_, joined := loftCylinderTabJoin(t)
 	payload, ok := joined.n.Payload.(facetedPayload)
 	require.True(t, ok)
-	require.NotNil(t, payload.loftCylinderJoin)
+	require.NotNil(t, payload.LoftCylinderJoin)
 	require.Positive(t, payload.VolSymDiff)
 	// The source tab reaches radius 4 and the blank reaches radius 3 on the
 	// opposite side; the certified pair diameter must exceed 7 mm.
@@ -101,7 +101,7 @@ func TestLoftCylinderBoreCentroidDiameter(t *testing.T) {
 	require.NoError(t, err)
 	fp, ok := bored.n.Payload.(facetedPayload)
 	require.True(t, ok)
-	require.NotNil(t, fp.loftCylinderBore)
+	require.NotNil(t, fp.LoftCylinderBore)
 	require.GreaterOrEqual(t, fp.DPair, facetedSourceDiameterUpper(fp.Verts, fp.MeshBound))
 	centroid, err := bored.Centroid()
 	require.NoError(t, err)

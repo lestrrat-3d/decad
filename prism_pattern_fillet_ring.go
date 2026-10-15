@@ -19,20 +19,20 @@ type prismPatternFilletRingCut struct {
 func prismPatternFilletRingCutOf(rec *prismPatternJoinRecord,
 	contact prismPatternFilletContact) (prismPatternFilletRingCut, error) {
 	var empty prismPatternFilletRingCut
-	outline := rec.outlines[0]
-	if len(outline) < 4 || len(rec.outlines[1]) != len(outline) {
+	outline := rec.Outlines[0]
+	if len(outline) < 4 || len(rec.Outlines[1]) != len(outline) {
 		return empty, fmt.Errorf("%w: joined-prism fillet lost its paired ring outlines", ErrUnsupported)
 	}
-	part := rec.parts[contact.part]
-	root, limit, direction := part.vertex[0][part.rootStart], 0, 1
+	part := rec.Parts[contact.part]
+	root, limit, direction := part.Vertex[0][part.RootStart], 0, 1
 	if contact.station == 0 {
-		root = part.vertex[0][0]
-		previous := rec.parts[(contact.part+len(rec.parts)-1)%len(rec.parts)]
-		limit = previous.vertex[0][previous.rootStart]
+		root = part.Vertex[0][0]
+		previous := rec.Parts[(contact.part+len(rec.Parts)-1)%len(rec.Parts)]
+		limit = previous.Vertex[0][previous.RootStart]
 		direction = -1
 	} else {
-		next := rec.parts[(contact.part+1)%len(rec.parts)]
-		limit = next.vertex[0][0]
+		next := rec.Parts[(contact.part+1)%len(rec.Parts)]
+		limit = next.Vertex[0][0]
 	}
 	find := func(index int) int {
 		for i, found := range outline {
@@ -47,28 +47,28 @@ func prismPatternFilletRingCutOf(rec *prismPatternJoinRecord,
 		return empty, fmt.Errorf("%w: joined-prism fillet has no bounded source ring gap", ErrUnsupported)
 	}
 	point := func(position int) (prismpattern.IVPoint, bool) {
-		bottom := rec.mesh.verts[rec.outlines[0][position]]
-		top := rec.mesh.verts[rec.outlines[1][position]]
+		bottom := rec.Mesh.verts[rec.Outlines[0][position]]
+		top := rec.Mesh.verts[rec.Outlines[1][position]]
 		if bottom.X != top.X || bottom.Y != top.Y ||
-			bottom.Z != rec.source.blank.Z0 || top.Z != rec.source.blank.Z1 {
+			bottom.Z != rec.Source.Blank.Z0 || top.Z != rec.Source.Blank.Z1 {
 			return prismpattern.IVPoint{}, false
 		}
 		return prismpattern.IVPointOf(proofarith.FloatRat(bottom.X), proofarith.FloatRat(bottom.Y)), true
 	}
 	// A held station can sit on the other side of a contact from its true
 	// circle station. Check both orders before shortening the source chord.
-	trueRoots := make(map[int]prismpattern.IVPoint, 2*len(rec.parts))
-	for _, sourcePart := range rec.parts {
-		trueRoots[sourcePart.vertex[0][0]] = prismPatternExactPlacedPoint(sourcePart,
-			rec.source.rootArc.Start)
-		trueRoots[sourcePart.vertex[0][sourcePart.rootStart]] = prismPatternExactPlacedPoint(sourcePart,
-			rec.source.rootArc.End)
+	trueRoots := make(map[int]prismpattern.IVPoint, 2*len(rec.Parts))
+	for _, sourcePart := range rec.Parts {
+		trueRoots[sourcePart.Vertex[0][0]] = prismPatternExactPlacedPoint(sourcePart,
+			rec.Source.RootArc.Start)
+		trueRoots[sourcePart.Vertex[0][sourcePart.RootStart]] = prismPatternExactPlacedPoint(sourcePart,
+			rec.Source.RootArc.End)
 	}
 	sourcePoint := func(position int, held prismpattern.IVPoint) prismpattern.IVPoint {
 		if root, ok := trueRoots[outline[position]]; ok {
 			return root
 		}
-		widen := proofarith.FloatRat(rec.ringRound)
+		widen := proofarith.FloatRat(rec.RingRound)
 		return prismpattern.IVPoint{
 			X: proofbound.IntervalWiden(held.X, widen),
 			Y: proofbound.IntervalWiden(held.Y, widen),

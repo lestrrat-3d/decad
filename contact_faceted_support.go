@@ -16,7 +16,7 @@ import (
 
 func certifyFacetedUnionLowerSupport(ctx context.Context, result, a, b *Body) error {
 	pp, ok := result.n.Payload.(facetedPayload)
-	if !ok || pp.MeshBound <= 0 || len(pp.exactSourceVerts) != 0 {
+	if !ok || pp.MeshBound <= 0 || len(pp.ExactSourceVerts) != 0 {
 		return nil
 	}
 	for candidate, operands := range [][2]*Body{{a, b}, {b, a}} {
@@ -38,7 +38,7 @@ func certifyFacetedUnionLowerSupport(ctx context.Context, result, a, b *Body) er
 				continue
 			}
 			sourceGroup := i + candidate*len(a.Faces())
-			pp.lowerSupport = &facetproof.LowerSupport{Plane: box.lo[2], SourceGroup: sourceGroup,
+			pp.LowerSupport = &facetproof.LowerSupport{Plane: box.lo[2], SourceGroup: sourceGroup,
 				FootLo: [2]proofarith.Dyadic{box.lo[0], box.lo[1]},
 				FootHi: [2]proofarith.Dyadic{box.hi[0], box.hi[1]}}
 			result.n.Payload = pp
@@ -49,7 +49,7 @@ func certifyFacetedUnionLowerSupport(ctx context.Context, result, a, b *Body) er
 			if proven {
 				return nil
 			}
-			pp.lowerSupport = nil
+			pp.LowerSupport = nil
 			result.n.Payload = pp
 			break
 		}
@@ -164,12 +164,12 @@ func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
 		valid[i] = face.n.HeldPlanar && face.n.Surface.Kind() == surfacegeom.KindFaceted
 	}
 	result, proven, err := facetproof.ProveAxisSupport(ctx, facetproof.AxisSupportInput{
-		Verts: pp.Verts, ExactSourceVerts: pp.exactSourceVerts,
-		Tris: pp.Tris, ExactSourceTris: pp.exactSourceTris,
+		Verts: pp.Verts, ExactSourceVerts: pp.ExactSourceVerts,
+		Tris: pp.Tris, ExactSourceTris: pp.ExactSourceTris,
 		FaceOf: pp.FaceOf, SourceGroup: pp.Src, FaceValid: valid,
 		GroupCount: len(pp.groups), MeshBound: pp.MeshBound,
 		VolSymDiff: pp.VolSymDiff, Xform: pp.Xform, Pose: pose,
-		Lower: pp.lowerSupport, Axis: axis, Side: side,
+		Lower: pp.LowerSupport, Axis: axis, Side: side,
 	})
 	if err != nil || !proven {
 		return facetedAxisSupport{}, false, err

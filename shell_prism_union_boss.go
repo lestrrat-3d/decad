@@ -35,11 +35,11 @@ type prismUnionBossShellSource struct {
 func (b *Body) shellPrismUnionBoss(ctx context.Context, fp facetedPayload,
 	removed []*Face, sense ShellSense, t, tDelta float64) (*Body, bool, error) {
 	if len(removed) != 1 || sense != Inward || tDelta != 0 || !(t > 0) ||
-		proofbound.IsNonFinite(t) || fp.prismUnionFillet == nil || fp.Xform != r3.Identity() {
+		proofbound.IsNonFinite(t) || fp.PrismUnionFillet == nil || fp.Xform != r3.Identity() {
 		return nil, false, nil
 	}
-	for _, pair := range [][2]*Body{{fp.prismUnionFillet.first, fp.prismUnionFillet.second},
-		{fp.prismUnionFillet.second, fp.prismUnionFillet.first}} {
+	for _, pair := range [][2]*Body{{fp.PrismUnionFillet.First, fp.PrismUnionFillet.Second},
+		{fp.PrismUnionFillet.Second, fp.PrismUnionFillet.First}} {
 		source, ok := prismUnionBossShellAuthenticate(b, fp, pair[0], pair[1], removed[0], t)
 		if !ok {
 			continue
@@ -352,7 +352,7 @@ func buildPrismUnionBossShell(ctx context.Context, source *Body, fp facetedPaylo
 		VertexBound: mesh.beta, MeshBound: bound, VolSymDiff: volumeBound,
 		AreaSlack: proofbound.AbsSumUpper(fp.AreaSlack, rootAreaSlack),
 		DPair:     facetedSourceDiameterUpper(mesh.verts, bound),
-		Xform:     r3.Identity(), contactAudited: true,
+		Xform:     r3.Identity(), ContactAudited: true,
 	}
 	return buildFacetedBodyWithProof(ctx, documentHandle(source.n.Doc), ref, payload, audit, Measurement{}, nil)
 }

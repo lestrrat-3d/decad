@@ -87,7 +87,7 @@ func crossBoreCellProofReference(rec *crossCylinderBoreRecord, setback float64,
 	turn := big.NewRat(int64(i), n)
 	s, c := proofbound.TurnSinCosInterval(turn)
 	s, c = proofbound.IntervalWiden(s, angularGap), proofbound.IntervalWiden(c, angularGap)
-	R, r, d := crossRefPoint(rec.radius), crossRefPoint(rec.bore), crossRefPoint(setback)
+	R, r, d := crossRefPoint(rec.Radius), crossRefPoint(rec.Bore), crossRefPoint(setback)
 	cd, sd := crossRefDual{v: c, d: crossRefSub(crossRefPoint(0), s)}, crossRefDual{v: s, d: c}
 	Rd, rd, dd := crossRefConst(R), crossRefConst(r), crossRefConst(d)
 	xd, ok := crossRefDSqrt(crossRefDSub(crossRefDMul(Rd, Rd),
@@ -159,15 +159,15 @@ func crossBoreCellProofReference(rec *crossCylinderBoreRecord, setback float64,
 	theta := 2 * math.Pi * float64(i) / n
 	outer, inner := crossBoreFeet(rec, setback, theta)
 	co, sn := math.Cos(theta), math.Sin(theta)
-	negative := r3.Vec{X: -math.Sqrt(rec.radius*rec.radius - rec.bore*rec.bore*co*co),
-		Y: rec.bore * co, Z: rec.bore * sn}
+	negative := r3.Vec{X: -math.Sqrt(rec.Radius*rec.Radius - rec.Bore*rec.Bore*co*co),
+		Y: rec.Bore * co, Z: rec.Bore * sn}
 	sampleError := 0.0
 	for _, pair := range []struct {
 		exact crossRefIV
 		held  float64
 	}{
-		{outX.v, outer.X}, {outY.v, outer.Y}, {outZ.v, outer.Z - rec.centerZ},
-		{inX.v, inner.X}, {inY.v, inner.Y}, {inZ.v, inner.Z - rec.centerZ},
+		{outX.v, outer.X}, {outY.v, outer.Y}, {outZ.v, outer.Z - rec.CenterZ},
+		{inX.v, inner.X}, {inY.v, inner.Y}, {inZ.v, inner.Z - rec.CenterZ},
 		{negativeX, negative.X}, {negativeY, negative.Y}, {negativeZ, negative.Z},
 	} {
 		sampleError = max(sampleError, proofbound.IntervalFloatError(pair.exact, pair.held))
@@ -218,12 +218,12 @@ func TestCrossBoreLazyCellsMatchReference(t *testing.T) {
 		setback float64
 		stride  int
 	}{
-		{"five by one", crossCylinderBoreRecord{radius: 5, bore: 1, height: 10, centerZ: 5, sourceBound: 1e-9}, 0.5, 8},
+		{"five by one", crossCylinderBoreRecord{Radius: 5, Bore: 1, Height: 10, CenterZ: 5, SourceBound: 1e-9}, 0.5, 8},
 		{"eight by one and half",
-			crossCylinderBoreRecord{radius: 8, bore: 1.5, height: 16, centerZ: 8, sourceBound: 1e-9}, 0.1875, 8},
+			crossCylinderBoreRecord{Radius: 8, Bore: 1.5, Height: 16, CenterZ: 8, SourceBound: 1e-9}, 0.1875, 8},
 		{"loses clearance or folds",
-			crossCylinderBoreRecord{radius: 5, bore: 4.9, height: 10, centerZ: 5, sourceBound: 1e-9}, 0.5, 16},
-		{"no real X", crossCylinderBoreRecord{radius: 5, bore: 5, height: 10, centerZ: 5, sourceBound: 1e-9}, 0.5, 16},
+			crossCylinderBoreRecord{Radius: 5, Bore: 4.9, Height: 10, CenterZ: 5, SourceBound: 1e-9}, 0.5, 16},
+		{"no real X", crossCylinderBoreRecord{Radius: 5, Bore: 5, Height: 10, CenterZ: 5, SourceBound: 1e-9}, 0.5, 16},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			failed := 0
@@ -296,15 +296,15 @@ func TestCrossBoreStationErrorsMatchSerial(t *testing.T) {
 
 			stations, err := crossBoreStationPlan(rec, tc.setback)
 			require.NoError(t, err)
-			radius := new(big.Rat).SetFloat64(rec.radius)
+			radius := new(big.Rat).SetFloat64(rec.Radius)
 			want := 0.0
 			for _, station := range stations {
-				x, y := rec.radius*math.Cos(station.phi), rec.radius*math.Sin(station.phi)
+				x, y := rec.Radius*math.Cos(station.phi), rec.Radius*math.Sin(station.phi)
 				upper := station.lower
 				if station.lower.Sub(station.upper).Len() >= 1e-13 {
 					upper = station.upper
 				}
-				for _, p := range []r3.Vec{{X: x, Y: y}, station.lower, upper, {X: x, Y: y, Z: rec.height}} {
+				for _, p := range []r3.Vec{{X: x, Y: y}, station.lower, upper, {X: x, Y: y, Z: rec.Height}} {
 					e, ok := crossBoreStationError(p, radius, station.phi)
 					require.True(t, ok)
 					want = max(want, e)

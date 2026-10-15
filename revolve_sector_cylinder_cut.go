@@ -43,7 +43,7 @@ func revolveSectorBoreCapRecord(joined facetedPayload) (revolveSectorBoreCaps, b
 		record.capRing == nil || record.certificate.section.blank != record.blank ||
 		record.boundaryBound != joined.MeshBound ||
 		record.volumeBound != joined.VolSymDiff || record.areaBound != joined.AreaSlack ||
-		joined.Xform != r3.Identity() || !joined.contactAudited {
+		joined.Xform != r3.Identity() || !joined.ContactAudited {
 		return caps, false
 	}
 	section, ring := record.certificate.section, record.capRing
@@ -343,7 +343,7 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 	result.VertexBound, result.MeshBound = vertexBound, bound
 	result.VolSymDiff, result.AreaSlack = volumeGap, areaSlack
 	result.revolveLoftJoin = nil
-	result.contactAudited = true
+	result.ContactAudited = true
 	body, err := buildFacetedBody(ctx, d, ref, result)
 	return body, true, err
 }

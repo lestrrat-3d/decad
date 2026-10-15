@@ -16,32 +16,32 @@ import (
 )
 
 // prismPatternPart is one authenticated source extrusion and its verified
-// boundary mesh. The root wall starts at rootStart and ends at sample zero;
+// boundary mesh. The root wall starts at RootStart and ends at sample zero;
 // the preceding samples form the exterior section path.
 type prismPatternPart struct {
-	body      *Body
-	prism     prismPayload
-	mesh      *Mesh
-	rootStart int
-	start     float64
-	end       float64
-	startIV   proofbound.RatInterval
-	endIV     proofbound.RatInterval
-	vertex    [][]int
+	Body      *Body
+	Prism     prismPayload
+	Mesh      *Mesh
+	RootStart int
+	Start     float64
+	End       float64
+	StartIV   proofbound.RatInterval
+	EndIV     proofbound.RatInterval
+	Vertex    [][]int
 }
 
 // The Union keeps its authenticated sources and complete held shell so a
 // later operation can prove a local rewrite without inferring source curves
 // from faceted edges. These slices are immutable after the Union commits.
 type prismPatternJoinRecord struct {
-	blank     *Body
-	source    *prismPatternSource
-	parts     []prismPatternPart
-	outlines  [2][]int
-	groups    [3]int
-	maxStep   float64
-	ringRound float64
-	mesh      *joinedMesh
+	Blank     *Body
+	Source    *prismPatternSource
+	Parts     []prismPatternPart
+	Outlines  [2][]int
+	Groups    [3]int
+	MaxStep   float64
+	RingRound float64
+	Mesh      *joinedMesh
 }
 
 // tryPrismPatternUnionMany admits only an authenticated circular prism and
@@ -53,17 +53,17 @@ func tryPrismPatternUnionMany(ctx context.Context, d *Document, ref producerID,
 	if !matched || err != nil {
 		return nil, matched, err
 	}
-	blank := source.blank
+	blank := source.Blank
 	if blank.SurfaceResult || blank.SectionDelta != 0 || blank.Z0Delta != 0 || blank.Z1Delta != 0 ||
 		blank.Frame.Origin() != (r3.Vec{}) || blank.Frame.U() != (r3.Vec{X: 1}) ||
 		blank.Frame.V() != (r3.Vec{Y: 1}) || blank.Z0 != 0 || blank.Z1 <= 0 ||
-		source.rootIndex != len(source.section.Profile.Outer.Segments)-1 ||
-		source.rootArc.TStart != 1 || source.rootArc.TEnd != 0 {
+		source.RootIndex != len(source.Section.Profile.Outer.Segments)-1 ||
+		source.RootArc.TStart != 1 || source.RootArc.TEnd != 0 {
 		return nil, true, fmt.Errorf("%w: copied-prism circular join needs a positive axial blank and trailing inward root arc",
 			ErrUnsupported)
 	}
-	parts := make([]prismPatternPart, len(source.sections))
-	for i, body := range source.sections {
+	parts := make([]prismPatternPart, len(source.Sections))
+	for i, body := range source.Sections {
 		if err := ctx.Err(); err != nil {
 			return nil, true, err
 		}
@@ -81,7 +81,7 @@ func tryPrismPatternUnionMany(ctx context.Context, d *Document, ref producerID,
 		if !m.BoundaryVerified() || !m.VolumeVerified() {
 			return nil, true, fmt.Errorf("%w: copied-prism section %d lacks a complete mesh proof", ErrUnsupported, i+1)
 		}
-		rootStart, err := prismPatternMeshRoot(m, body, source.rootIndex, blank.Z0, blank.Z1)
+		rootStart, err := prismPatternMeshRoot(m, body, source.RootIndex, blank.Z0, blank.Z1)
 		if err != nil {
 			return nil, true, err
 		}
@@ -98,10 +98,10 @@ func tryPrismPatternUnionMany(ctx context.Context, d *Document, ref producerID,
 			startIV.Hi.Cmp(endIV.Lo) >= 0 {
 			return nil, true, fmt.Errorf("%w: copied-prism section %d has no ordered root sector", ErrUnsupported, i+1)
 		}
-		parts[i] = prismPatternPart{body: body, prism: p, mesh: m, rootStart: rootStart,
-			start: start, end: end, startIV: startIV, endIV: endIV}
+		parts[i] = prismPatternPart{Body: body, Prism: p, Mesh: m, RootStart: rootStart,
+			Start: start, End: end, StartIV: startIV, EndIV: endIV}
 	}
-	sort.Slice(parts, func(i, j int) bool { return parts[i].start < parts[j].start })
+	sort.Slice(parts, func(i, j int) bool { return parts[i].Start < parts[j].Start })
 	for i := range parts {
 		for j := i + 1; j < len(parts); j++ {
 			if !prismPatternMeshSeparated(parts[i], parts[j]) {
@@ -112,13 +112,13 @@ func tryPrismPatternUnionMany(ctx context.Context, d *Document, ref producerID,
 	}
 	for i := range parts {
 		a, b := &parts[i], &parts[(i+1)%len(parts)]
-		nextStart := b.start
-		nextIV := b.startIV
-		for nextStart <= a.end {
+		nextStart := b.Start
+		nextIV := b.StartIV
+		for nextStart <= a.End {
 			nextStart += 2 * math.Pi
 			nextIV = proofbound.IntervalAdd(nextIV, proofbound.TwoPiInterval())
 		}
-		if nextStart-a.end >= 2*math.Pi || a.endIV.Hi.Cmp(nextIV.Lo) >= 0 {
+		if nextStart-a.End >= 2*math.Pi || a.EndIV.Hi.Cmp(nextIV.Lo) >= 0 {
 			return nil, true, fmt.Errorf("%w: copied-prism root sectors have no ordered circular gap", ErrUnsupported)
 		}
 	}
@@ -148,8 +148,8 @@ func prismPatternMeshRoot(m *Mesh, body *Body, rootIndex int, z0, z1 float64) (i
 // source-to-mesh bounds. A bounded region lies in the convex hull of its
 // boundary, so this one plane separates the complete source solids.
 func prismPatternMeshSeparated(a, b prismPatternPart) bool {
-	pa := a.mesh.n.Vertices[0].Add(a.mesh.n.Vertices[2*a.rootStart])
-	pb := b.mesh.n.Vertices[0].Add(b.mesh.n.Vertices[2*b.rootStart])
+	pa := a.Mesh.n.Vertices[0].Add(a.Mesh.n.Vertices[2*a.RootStart])
+	pb := b.Mesh.n.Vertices[0].Add(b.Mesh.n.Vertices[2*b.RootStart])
 	nx := new(big.Rat).Sub(proofarith.FloatRat(pa.X), proofarith.FloatRat(pb.X))
 	ny := new(big.Rat).Sub(proofarith.FloatRat(pa.Y), proofarith.FloatRat(pb.Y))
 	normSq := new(big.Rat).Add(new(big.Rat).Mul(nx, nx), new(big.Rat).Mul(ny, ny))
@@ -157,14 +157,14 @@ func prismPatternMeshSeparated(a, b prismPatternPart) bool {
 		return false
 	}
 	var minA, maxB *big.Rat
-	for _, v := range a.mesh.n.Vertices {
+	for _, v := range a.Mesh.n.Vertices {
 		dot := new(big.Rat).Add(new(big.Rat).Mul(nx, proofarith.FloatRat(v.X)),
 			new(big.Rat).Mul(ny, proofarith.FloatRat(v.Y)))
 		if minA == nil || dot.Cmp(minA) < 0 {
 			minA = dot
 		}
 	}
-	for _, v := range b.mesh.n.Vertices {
+	for _, v := range b.Mesh.n.Vertices {
 		dot := new(big.Rat).Add(new(big.Rat).Mul(nx, proofarith.FloatRat(v.X)),
 			new(big.Rat).Mul(ny, proofarith.FloatRat(v.Y)))
 		if maxB == nil || dot.Cmp(maxB) > 0 {
@@ -172,7 +172,7 @@ func prismPatternMeshSeparated(a, b prismPatternPart) bool {
 		}
 	}
 	margin := proofbound.ProductUpper(proofbound.RatSqrtUp(normSq),
-		proofbound.AbsSumUpper(a.mesh.Bound().Base(), b.mesh.Bound().Base()))
+		proofbound.AbsSumUpper(a.Mesh.Bound().Base(), b.Mesh.Bound().Base()))
 	return minA != nil && maxB != nil &&
 		new(big.Rat).Sub(minA, maxB).Cmp(proofarith.FloatRat(margin)) > 0
 }

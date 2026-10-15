@@ -102,8 +102,8 @@ func certifiedScaleSource(ctx context.Context, b *Body, chord float64) (facetedP
 		return facetedPayload{}, fmt.Errorf("%w: the source has no finite diameter bound", ErrUnsupported)
 	}
 	return facetedPayload{
-		similaritySource: true,
-		contactAudited:   true,
+		SimilaritySource: true,
+		ContactAudited:   true,
 		Verts:            mesh.n.Vertices,
 		VertexBound:      vertexBound,
 		Tris:             mesh.n.Triangles,

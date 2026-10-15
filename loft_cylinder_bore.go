@@ -23,17 +23,17 @@ import (
 // loftCylinderBoreRecord names the two certified annular caps of an unplaced
 // through-bore result. Each outer and inner loop is CCW when viewed from +Z.
 type loftCylinderBoreRecord struct {
-	blank *Body
-	// teeth are exact Cut sources; proofTeeth and axialBridge retain the
+	Blank *Body
+	// Teeth are exact Cut sources; ProofTeeth and AxialBridge retain the
 	// private Union witnesses for later source-level admission checks.
-	teeth, proofTeeth                   []*Body
-	axialBridge                         []float64
-	outer, inner                        [2][]int
-	capGroups                           [2]int
-	wallGroup                           int
-	blankRadius, boreRadius, boreBound  float64
-	innerInset, outerExcess, rootCollar float64
-	z0, z1                              float64
+	Teeth, ProofTeeth                   []*Body
+	AxialBridge                         []float64
+	Outer, Inner                        [2][]int
+	CapGroups                           [2]int
+	WallGroup                           int
+	BlankRadius, BoreRadius, BoreBound  float64
+	InnerInset, OuterExcess, RootCollar float64
+	Z0, Z1                              float64
 }
 
 // tryLoftCylinderBoreCut replaces the two planar cap disks of an authenticated
@@ -46,15 +46,15 @@ func tryLoftCylinderBoreCut(ctx context.Context, op meshbool.OperationKind,
 		return nil, false, nil
 	}
 	if joined, ok := target.n.Payload.(facetedPayload); ok &&
-		joined.loftCylinderJoin != nil && joined.loftCylinderJoin.placement != nil {
+		joined.LoftCylinderJoin != nil && joined.LoftCylinderJoin.Placement != nil {
 		return tryPlacedLoftCylinderBoreCut(ctx, d, ref, target, tool)
 	}
 	joined, ok := target.n.Payload.(facetedPayload)
-	if !ok || joined.loftCylinderJoin == nil || !joined.contactAudited ||
+	if !ok || joined.LoftCylinderJoin == nil || !joined.ContactAudited ||
 		joined.Xform != r3.Identity() {
 		return nil, false, nil
 	}
-	record := joined.loftCylinderJoin
+	record := joined.LoftCylinderJoin
 	prism, ok := tool.n.Payload.(prismPayload)
 	if !ok || prism.SurfaceResult || prism.Xform != r3.Identity() ||
 		prism.SectionDelta != 0 || prism.Z0Delta != 0 || prism.Z1Delta != 0 ||
@@ -77,13 +77,13 @@ func tryLoftCylinderBoreCut(ctx context.Context, op meshbool.OperationKind,
 	origin := prism.Frame.Origin()
 	if !proofbound.FiniteVec(origin) ||
 		!proofbound.FiniteVec(r3.Vec{X: prism.Z0, Y: prism.Z1, Z: radius}) ||
-		radius <= 0 || radius >= record.radius {
+		radius <= 0 || radius >= record.Radius {
 		return nil, false, nil
 	}
 	start := new(big.Rat).Add(proofarith.FloatRat(origin.Z), proofarith.FloatRat(prism.Z0))
 	end := new(big.Rat).Add(proofarith.FloatRat(origin.Z), proofarith.FloatRat(prism.Z1))
-	if start.Cmp(proofarith.FloatRat(record.z0)) >= 0 ||
-		end.Cmp(proofarith.FloatRat(record.z1)) <= 0 {
+	if start.Cmp(proofarith.FloatRat(record.Z0)) >= 0 ||
+		end.Cmp(proofarith.FloatRat(record.Z1)) <= 0 {
 		return nil, false, nil
 	}
 	var wall *Face
@@ -110,18 +110,18 @@ func tryLoftCylinderBoreCut(ctx context.Context, op meshbool.OperationKind,
 
 func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 	joined facetedPayload, radius float64, wall *Face) (*Body, error) {
-	record := joined.loftCylinderJoin
+	record := joined.LoftCylinderJoin
 	if len(joined.Tris) != len(joined.Src) || len(joined.Verts) != len(joined.VertexBound) {
 		return nil, fmt.Errorf("%w: circular join has an incomplete mesh record", ErrUnsupported)
 	}
 	source := &joinedMesh{verts: joined.Verts, tris: joined.Tris, src: joined.Src}
 	for cap := range 2 {
-		z := record.z0
+		z := record.Z0
 		if cap == 1 {
-			z = record.z1
+			z = record.Z1
 		}
-		if !loftCylinderAuditCap(ctx, source, record.capOutlines[cap],
-			record.capGroups[cap], z, cap == 0) {
+		if !loftCylinderAuditCap(ctx, source, record.CapOutlines[cap],
+			record.CapGroups[cap], z, cap == 0) {
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
@@ -129,8 +129,8 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 		}
 	}
 	if len(joined.Tris) < 4 || len(joined.Verts) == 0 ||
-		record.capGroups[0] == record.capGroups[1] ||
-		record.minSideRadius <= 0 || proofbound.IsNonFinite(record.minSideRadius) {
+		record.CapGroups[0] == record.CapGroups[1] ||
+		record.MinSideRadius <= 0 || proofbound.IsNonFinite(record.MinSideRadius) {
 		return nil, fmt.Errorf("%w: circular join has no separated cap disks", ErrUnsupported)
 	}
 	const stations = 256
@@ -143,11 +143,11 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 		return nil, err
 	}
 	if proofbound.IsNonFinite(boreBound) || boreBound >= radius ||
-		proofbound.AbsSumUpper(radius, boreBound) >= record.radius ||
-		proofbound.AbsSumUpper(radius, boreBound, joined.MeshBound) >= record.minSideRadius {
+		proofbound.AbsSumUpper(radius, boreBound) >= record.Radius ||
+		proofbound.AbsSumUpper(radius, boreBound, joined.MeshBound) >= record.MinSideRadius {
 		return nil, fmt.Errorf("%w: circular bore reaches a joined side facet", ErrUnsupported)
 	}
-	if proofbound.AbsSumUpper(radius, boreBound, record.innerInset) >= record.radius {
+	if proofbound.AbsSumUpper(radius, boreBound, record.InnerInset) >= record.Radius {
 		return nil, fmt.Errorf("%w: circular bore reaches the joined source seam annulus", ErrUnsupported)
 	}
 	mesh := &joinedMesh{
@@ -155,7 +155,7 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 		groups: append([]facetGroup(nil), joined.groups...),
 	}
 	for i, tri := range joined.Tris {
-		if joined.Src[i] != record.capGroups[0] && joined.Src[i] != record.capGroups[1] {
+		if joined.Src[i] != record.CapGroups[0] && joined.Src[i] != record.CapGroups[1] {
 			mesh.add(tri, joined.Src[i])
 		}
 	}
@@ -167,9 +167,9 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 	var inner [2][]int
 	for cap := range 2 {
 		inner[cap] = make([]int, stations)
-		z := record.z0
+		z := record.Z0
 		if cap == 1 {
-			z = record.z1
+			z = record.Z1
 		}
 		for i, point := range innerStations {
 			inner[cap][i] = len(mesh.verts)
@@ -182,7 +182,7 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 			}
 			return nil, fmt.Errorf("%w: circular bore ring does not enclose its axis", ErrUnsupported)
 		}
-		outline := record.capOutlines[cap]
+		outline := record.CapOutlines[cap]
 		points := make([]triangulation.Point2, len(outline)+stations)
 		outerLoop := make([]int, len(outline))
 		for i, index := range outline {
@@ -212,7 +212,7 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 			if cap == 0 {
 				mapped[1], mapped[2] = mapped[2], mapped[1]
 			}
-			mesh.add(mapped, record.capGroups[cap])
+			mesh.add(mapped, record.CapGroups[cap])
 		}
 	}
 	for i := range stations {
@@ -232,7 +232,7 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 		return nil, err
 	}
 	height := proofbound.RatFloatUp(new(big.Rat).Sub(
-		proofarith.FloatRat(record.z1), proofarith.FloatRat(record.z0)))
+		proofarith.FloatRat(record.Z1), proofarith.FloatRat(record.Z0)))
 	if height <= 0 || proofbound.IsNonFinite(height) {
 		return nil, fmt.Errorf("%w: circular bore has no positive axial span", ErrUnsupported)
 	}
@@ -249,7 +249,7 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 	if err != nil {
 		return nil, err
 	}
-	blankArea, err := record.blank.Area()
+	blankArea, err := record.Blank.Area()
 	if err != nil {
 		return nil, err
 	}
@@ -268,39 +268,39 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 	if proofbound.IsNonFinite(result.DPair) {
 		return nil, fmt.Errorf("%w: circular bore has no finite diameter proof", ErrUnsupported)
 	}
-	result.loftCylinderJoin = nil
-	result.loftCylinderBore = &loftCylinderBoreRecord{
-		blank:       record.blank,
-		teeth:       append([]*Body(nil), record.teeth...),
-		proofTeeth:  append([]*Body(nil), record.proofTeeth...),
-		axialBridge: append([]float64(nil), record.axialBridge...),
-		capGroups:   record.capGroups, wallGroup: wallGroup,
-		blankRadius: record.radius, boreRadius: radius, boreBound: boreBound,
-		z0: record.z0, z1: record.z1,
-		innerInset: record.innerInset, outerExcess: record.outerExcess, rootCollar: record.rootCollar,
+	result.LoftCylinderJoin = nil
+	result.LoftCylinderBore = &loftCylinderBoreRecord{
+		Blank:       record.Blank,
+		Teeth:       append([]*Body(nil), record.Teeth...),
+		ProofTeeth:  append([]*Body(nil), record.ProofTeeth...),
+		AxialBridge: append([]float64(nil), record.AxialBridge...),
+		CapGroups:   record.CapGroups, WallGroup: wallGroup,
+		BlankRadius: record.Radius, BoreRadius: radius, BoreBound: boreBound,
+		Z0: record.Z0, Z1: record.Z1,
+		InnerInset: record.InnerInset, OuterExcess: record.OuterExcess, RootCollar: record.RootCollar,
 	}
 	for cap := range 2 {
-		result.loftCylinderBore.outer[cap] = append([]int(nil), record.capOutlines[cap]...)
-		result.loftCylinderBore.inner[cap] = append([]int(nil), inner[cap]...)
+		result.LoftCylinderBore.Outer[cap] = append([]int(nil), record.CapOutlines[cap]...)
+		result.LoftCylinderBore.Inner[cap] = append([]int(nil), inner[cap]...)
 	}
-	result.contactAudited = true
+	result.ContactAudited = true
 	for cap := range 2 {
-		z := record.z0
+		z := record.Z0
 		if cap == 1 {
-			z = record.z1
+			z = record.Z1
 		}
-		if !loftCylinderAuditAnnulus(ctx, mesh, result.loftCylinderBore.outer[cap],
-			result.loftCylinderBore.inner[cap], record.capGroups[cap], z, cap == 0) {
+		if !loftCylinderAuditAnnulus(ctx, mesh, result.LoftCylinderBore.Outer[cap],
+			result.LoftCylinderBore.Inner[cap], record.CapGroups[cap], z, cap == 0) {
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
 			return nil, fmt.Errorf("%w: circular bore cap does not tile its annulus", ErrUnsupported)
 		}
 	}
-	if err := loftCylinderTagCaps(&result, record.blank, record.capGroups,
-		[2]float64{record.z0, record.z1}, ref); err != nil {
+	if err := loftCylinderTagCaps(&result, record.Blank, record.CapGroups,
+		[2]float64{record.Z0, record.Z1}, ref); err != nil {
 		return nil, err
 	}
-	loftCylinderTagBridgedTop(&result, record.capGroups[1], record.axialBridge)
+	loftCylinderTagBridgedTop(&result, record.CapGroups[1], record.AxialBridge)
 	return buildFacetedBody(ctx, d, ref, result)
 }

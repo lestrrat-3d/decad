@@ -21,31 +21,31 @@ import (
 func prismPatternJoinedBody(ctx context.Context, d *Document, ref producerID,
 	blank *Body, source *prismPatternSource, parts []prismPatternPart,
 	mesh *joinedMesh, outlines [2][]int, groups [3]int, maxStep, ringRound float64) (*Body, error) {
-	radius := source.blankRadius
+	radius := source.BlankRadius
 	toothBound, toothVolume, toothArea := 0.0, 0.0, 0.0
 	connectorReach, rootHeldExcess := 0.0, 0.0
 	for i := range parts {
 		part := &parts[i]
-		toothBound = max(toothBound, part.mesh.Bound().Base())
-		toothVolume = proofbound.AbsSumUpper(toothVolume, part.mesh.n.VolSymDiff)
-		area, err := part.body.Area()
+		toothBound = max(toothBound, part.Mesh.Bound().Base())
+		toothVolume = proofbound.AbsSumUpper(toothVolume, part.Mesh.n.VolSymDiff)
+		area, err := part.Body.Area()
 		if err != nil {
 			return nil, err
 		}
 		toothArea = proofbound.AbsSumUpper(toothArea, area.Value.Base(), area.Bound.Base())
-		reach, err := prismpattern.ConnectorReach(part.prism, source.rootArc, radius,
-			source.rootIndex)
+		reach, err := prismpattern.ConnectorReach(part.Prism, source.RootArc, radius,
+			source.RootIndex)
 
 		if err != nil {
 			return nil, err
 		}
 		connectorReach = max(connectorReach, reach)
-		n := len(part.mesh.n.Vertices) / 2
+		n := len(part.Mesh.n.Vertices) / 2
 		for j := range n {
-			if j < part.rootStart {
+			if j < part.RootStart {
 				continue
 			}
-			v := part.mesh.n.Vertices[2*j]
+			v := part.Mesh.n.Vertices[2*j]
 			r2 := prismpattern.RadialSq(planePoint{U: v.X, V: v.Y})
 			excess := new(big.Rat).Sub(proofarith.FloatRat(proofbound.RatSqrtUp(r2)),
 				proofarith.FloatRat(radius))
@@ -56,11 +56,11 @@ func prismPatternJoinedBody(ctx context.Context, d *Document, ref producerID,
 		// The retained fitted and tip facets stay strictly outside the blank
 		// even after their source-to-held departure. The first and last
 		// connector walls are the only retained pieces that enter the band.
-		for j := 1; j < part.rootStart-1; j++ {
+		for j := 1; j < part.RootStart-1; j++ {
 			for side := range 2 {
-				tri := part.mesh.n.Triangles[2*j+side]
-				minimum := loftcylinder.TriangleMinRadius(part.mesh.n.Vertices, tri)
-				if minimum <= proofbound.AbsSumUpper(radius, part.mesh.Bound().Base()) {
+				tri := part.Mesh.n.Triangles[2*j+side]
+				minimum := loftcylinder.TriangleMinRadius(part.Mesh.n.Vertices, tri)
+				if minimum <= proofbound.AbsSumUpper(radius, part.Mesh.Bound().Base()) {
 					return nil, fmt.Errorf("%w: copied-prism exterior wall %d lacks circular clearance",
 						ErrUnsupported, j)
 				}
@@ -69,12 +69,12 @@ func prismPatternJoinedBody(ctx context.Context, d *Document, ref producerID,
 	}
 	ringSag := proofbound.ProductUpper(radius,
 		proofbound.ProductUpper(maxStep, maxStep)/8)
-	seamBand := proofbound.AbsSumUpper(source.rootGap, connectorReach,
+	seamBand := proofbound.AbsSumUpper(source.RootGap, connectorReach,
 		rootHeldExcess, ringSag, ringRound)
 	bound := proofbound.AbsSumUpper(toothBound, seamBand)
 	if proofbound.IsNonFinite(bound) || bound > 0.1 {
 		return nil, fmt.Errorf("%w: copied-prism join exceeds the 0.1 mm boundary proof: bound %g tooth %g root %g reach %g ring %g",
-			ErrUnsupported, bound, toothBound, source.rootGap, connectorReach, ringSag)
+			ErrUnsupported, bound, toothBound, source.RootGap, connectorReach, ringSag)
 	}
 	if seamBand >= radius {
 		return nil, fmt.Errorf("%w: copied-prism join band reaches the axis", ErrUnsupported)
@@ -87,7 +87,7 @@ func prismPatternJoinedBody(ctx context.Context, d *Document, ref producerID,
 		proofbound.RatFloatUp(proofbound.PiUpper),
 		proofbound.ProductUpper(proofbound.ProductUpper(4, radius), seamBand))
 	height := proofbound.RatFloatUp(new(big.Rat).Sub(
-		proofarith.FloatRat(source.blank.Z1), proofarith.FloatRat(source.blank.Z0)))
+		proofarith.FloatRat(source.Blank.Z1), proofarith.FloatRat(source.Blank.Z0)))
 	volumeGap := proofbound.AbsSumUpper(toothVolume, proofbound.ProductUpper(annulusArea, height))
 	areaUpper, err := proofbound.PerturbedAreaUpperContext(ctx, mesh.verts, mesh.tris, bound)
 	if err != nil {
@@ -107,18 +107,18 @@ func prismPatternJoinedBody(ctx context.Context, d *Document, ref producerID,
 		vertexBound[i] = bound
 	}
 	fp := facetedPayload{Verts: mesh.verts, Tris: mesh.tris, Src: mesh.src, groups: mesh.groups,
-		axialSectionJoin: true,
-		prismPatternJoin: &prismPatternJoinRecord{blank: blank, source: source, parts: parts,
-			outlines: outlines, groups: groups, maxStep: maxStep, ringRound: ringRound,
-			mesh: mesh},
-		VertexBound: vertexBound, contactAudited: true,
+		AxialSectionJoin: true,
+		PrismPatternJoin: &prismPatternJoinRecord{Blank: blank, Source: source, Parts: parts,
+			Outlines: outlines, Groups: groups, MaxStep: maxStep, RingRound: ringRound,
+			Mesh: mesh},
+		VertexBound: vertexBound, ContactAudited: true,
 		MeshBound: bound, VolSymDiff: volumeGap, AreaSlack: areaSlack,
 		DPair: facetedSourceDiameterUpper(mesh.verts, bound), Xform: r3.Identity()}
 	if proofbound.IsNonFinite(fp.DPair) {
 		return nil, fmt.Errorf("%w: copied-prism join has no finite diameter proof", ErrUnsupported)
 	}
 	if err := loftCylinderTagCaps(&fp, blank, [2]int{groups[1], groups[2]},
-		[2]float64{source.blank.Z0, source.blank.Z1}, ref); err != nil {
+		[2]float64{source.Blank.Z0, source.Blank.Z1}, ref); err != nil {
 		return nil, err
 	}
 	return buildFacetedBody(ctx, d, ref, fp)

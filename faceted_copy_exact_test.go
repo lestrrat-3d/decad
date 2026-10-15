@@ -16,7 +16,7 @@ func exactCopyOf(t *testing.T, body *Body, degrees float64) *Body {
 	t.Helper()
 	image, err := Copy(t.Context(), body, WithCopyRotation(r3.Vec{}, r3.Vec{X: 1}, units.Degrees(degrees)))
 	require.NoError(t, err)
-	require.NotNil(t, image.n.Payload.(facetedPayload).copyLineage.exact)
+	require.NotNil(t, image.n.Payload.(facetedPayload).CopyLineage.Exact)
 	return image
 }
 
@@ -40,15 +40,15 @@ func TestCertifyFacetedCopiesPassesExactMaps(t *testing.T) {
 
 	set, err := certifyFacetedCopies(t.Context(), []*Body{source, a, b})
 	require.NoError(t, err)
-	require.Len(t, set.exact, 3)
-	require.Len(t, set.maps, 3)
-	require.Nil(t, set.exact[0])
-	for i, tool := range set.tools[1:] {
-		record := tool.n.Payload.(facetedPayload).copyLineage.exact
-		require.Same(t, record, set.exact[i+1])
-		require.Equal(t, record.Linear(), set.maps[i+1])
+	require.Len(t, set.Exact, 3)
+	require.Len(t, set.Maps, 3)
+	require.Nil(t, set.Exact[0])
+	for i, tool := range set.Tools[1:] {
+		record := tool.n.Payload.(facetedPayload).CopyLineage.Exact
+		require.Same(t, record, set.Exact[i+1])
+		require.Equal(t, record.Linear(), set.Maps[i+1])
 	}
-	require.Nil(t, set.maps[0][0][0])
+	require.Nil(t, set.Maps[0][0][0])
 
 	t.Run("ordinary placement passes no maps", func(t *testing.T) {
 		c := ordinaryCopyOf(t, source, 20)
@@ -56,8 +56,8 @@ func TestCertifyFacetedCopiesPassesExactMaps(t *testing.T) {
 		looseBounds(d)
 		set, err := certifyFacetedCopies(t.Context(), []*Body{source, c, d})
 		require.NoError(t, err)
-		require.Nil(t, set.maps)
-		require.Equal(t, []*exactrotation.Rotation{nil, nil, nil}, set.exact)
+		require.Nil(t, set.Maps)
+		require.Equal(t, []*exactrotation.Rotation{nil, nil, nil}, set.Exact)
 	})
 	t.Run("mixed set maps only the exact copy", func(t *testing.T) {
 		c := ordinaryCopyOf(t, source, 20)
@@ -65,8 +65,8 @@ func TestCertifyFacetedCopiesPassesExactMaps(t *testing.T) {
 		looseBounds(d)
 		set, err := certifyFacetedCopies(t.Context(), []*Body{source, c, d})
 		require.NoError(t, err)
-		require.Nil(t, set.maps[1][0][0])
-		require.NotNil(t, set.maps[2][0][0])
+		require.Nil(t, set.Maps[1][0][0])
+		require.NotNil(t, set.Maps[2][0][0])
 	})
 	t.Run("nonzero exact translation turns transfer off", func(t *testing.T) {
 		// Same linear map as the origin rotation, with the translation of a
@@ -83,9 +83,9 @@ func TestCertifyFacetedCopiesPassesExactMaps(t *testing.T) {
 		d := exactCopyOf(t, source, 40)
 		looseBounds(d)
 		part := d.n.Payload.(facetedPayload)
-		lineage := *part.copyLineage
-		lineage.exact = shifted
-		part.copyLineage = &lineage
+		lineage := *part.CopyLineage
+		lineage.Exact = shifted
+		part.CopyLineage = &lineage
 		d.n.Payload = part
 		_, err = certifyFacetedCopies(t.Context(), []*Body{source, c, d})
 		require.ErrorIs(t, err, ErrUnsupported)
@@ -102,9 +102,9 @@ func TestCertifyFacetedCopiesPassesExactMaps(t *testing.T) {
 		other, _, err := exactrotation.New(r3.Vec{}, r3.Vec{X: 1}, units.Degrees(70))
 		require.NoError(t, err)
 		part := d.n.Payload.(facetedPayload)
-		lineage := *part.copyLineage
-		lineage.exact = other
-		part.copyLineage = &lineage
+		lineage := *part.CopyLineage
+		lineage.Exact = other
+		part.CopyLineage = &lineage
 		d.n.Payload = part
 		_, err = certifyFacetedCopies(t.Context(), []*Body{source, c, d})
 		require.ErrorIs(t, err, ErrUnsupported)
@@ -113,9 +113,9 @@ func TestCertifyFacetedCopiesPassesExactMaps(t *testing.T) {
 	t.Run("exact record needs a direct placement", func(t *testing.T) {
 		c := exactCopyOf(t, source, 20)
 		part := c.n.Payload.(facetedPayload)
-		lineage := *part.copyLineage
-		lineage.direct = false
-		part.copyLineage = &lineage
+		lineage := *part.CopyLineage
+		lineage.Direct = false
+		part.CopyLineage = &lineage
 		c.n.Payload = part
 		_, err := certifyFacetedCopies(t.Context(), []*Body{source, c})
 		require.ErrorIs(t, err, ErrUnsupported)
@@ -155,12 +155,12 @@ func TestPlacedProxyShellsChargeExactCopies(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, legacy[1].Verts, placed[1].Verts, "the held placement is the same float transform")
 
-	record := set.exact[1]
-	linearGap, translationGap, ok := record.Gap(set.moves[1])
+	record := set.Exact[1]
+	linearGap, translationGap, ok := record.Gap(set.Moves[1])
 	require.True(t, ok)
 	want, err := facetproof.PlaceMeshDenoting(t.Context(), proofbound.NewWorkBudget(t.Context()),
 		proxy.n.Vertices, proxy.n.Triangles, proxy.n.VertexBound, proxy.n.VolSymDiff,
-		proxy.n.AreaSlack, set.moves[1], linearGap, translationGap)
+		proxy.n.AreaSlack, set.Moves[1], linearGap, translationGap)
 	require.NoError(t, err)
 	require.Equal(t, want, placed[1], "an exact copy's proxy pays the exact-rotation charge")
 	require.NotEqual(t, legacy[1].VertexBound, placed[1].VertexBound,
@@ -185,9 +185,9 @@ func TestPlacedProxyShellsChargeExactCopies(t *testing.T) {
 
 	t.Run("a swapped record is refused", func(t *testing.T) {
 		part := image.n.Payload.(facetedPayload)
-		lineage := *part.copyLineage
-		lineage.exact = nil
-		part.copyLineage = &lineage
+		lineage := *part.CopyLineage
+		lineage.Exact = nil
+		part.CopyLineage = &lineage
 		image.n.Payload = part
 		_, err := set.placedProxyShells(t.Context(), proxy)
 		require.ErrorIs(t, err, ErrUnsupported)

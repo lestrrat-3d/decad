@@ -289,7 +289,7 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value, opts .
 	if tp, ok := b.n.Payload.(twistedSweepPayload); ok {
 		return b.shellTwistedSweep(ctx, tp, removed, sense, tmm, tDelta)
 	}
-	if fp, ok := b.n.Payload.(facetedPayload); ok && fp.prismUnionFillet != nil {
+	if fp, ok := b.n.Payload.(facetedPayload); ok && fp.PrismUnionFillet != nil {
 		if out, matched, err := b.shellPrismUnionBoss(ctx, fp, removed, sense, tmm, tDelta); matched || err != nil {
 			return out, err
 		}

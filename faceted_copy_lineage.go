@@ -15,18 +15,18 @@ import (
 // Copy issues it after rebuilding the held mesh. A Boolean result does not
 // inherit it. The source must still be live when a copied-tool proof uses it.
 type facetedCopyLineage struct {
-	source          *Body
-	sourceProducer  producerID
-	sourcePlacement r3.Transform
-	targetPlacement r3.Transform
-	motion          r3.Transform
-	// direct is true only when placed applied motion to the source payload
+	Source          *Body
+	SourceProducer  producerID
+	SourcePlacement r3.Transform
+	TargetPlacement r3.Transform
+	Motion          r3.Transform
+	// Direct is true only when placed applied motion to the source payload
 	// itself, so the image's true solid is exactly motion of the source's.
-	direct bool
-	// exact is the rational rotation the image denotes, set only for a direct
+	Direct bool
+	// Exact is the rational rotation the image denotes, set only for a direct
 	// copy made with WithCopyRotation. A Transform, a copy of a copy and every
 	// ordinary placement leave it nil.
-	exact *exactrotation.Rotation
+	Exact *exactrotation.Rotation
 }
 
 // bindFacetedCopyLineage records a rigid image only while its source remains
@@ -52,13 +52,13 @@ func bindFacetedCopyLineage(image, source *Body, targetPlacement r3.Transform, d
 	if err != nil || !motion.IsValid() {
 		return
 	}
-	placed.copyLineage = &facetedCopyLineage{
-		source: source, sourceProducer: source.n.Origin.Producer,
-		sourcePlacement: base.Xform, targetPlacement: targetPlacement,
-		motion: motion, direct: direct,
+	placed.CopyLineage = &facetedCopyLineage{
+		Source: source, SourceProducer: source.n.Origin.Producer,
+		SourcePlacement: base.Xform, TargetPlacement: targetPlacement,
+		Motion: motion, Direct: direct,
 	}
 	if direct {
-		placed.copyLineage.exact = exact
+		placed.CopyLineage.Exact = exact
 	}
 	image.n.Payload = placed
 }
@@ -68,17 +68,17 @@ func bindFacetedCopyLineage(image, source *Body, targetPlacement r3.Transform, d
 // source solids and held shells are pairwise separate; it says nothing about
 // their contact with a separate Union blank.
 type facetedCopySet struct {
-	source *Body
-	tools  []*Body
-	moves  []r3.Transform
-	// exact holds each copy's exact rotation record (index 0 and every ordinary
-	// copy nil). maps holds the matching true linear maps for shellseparation:
+	Source *Body
+	Tools  []*Body
+	Moves  []r3.Transform
+	// Exact holds each copy's exact rotation record (index 0 and every ordinary
+	// copy nil). Maps holds the matching true linear maps for shellseparation:
 	// the record's rotation where one exists, else nil for the float move.
-	exact     []*exactrotation.Rotation
-	maps      [][3][3]*big.Rat
-	axis      shellseparation.Axis
-	held      []shellseparation.Shell
-	faceOwner []map[*Face]*Face // source face to the corresponding live copy face
+	Exact     []*exactrotation.Rotation
+	Maps      [][3][3]*big.Rat
+	Axis      shellseparation.Axis
+	Held      []shellseparation.Shell
+	FaceOwner []map[*Face]*Face // source face to the corresponding live copy face
 }
 
 func facetedShell(p facetedPayload) shellseparation.Shell {
@@ -97,7 +97,7 @@ func facetedCopyFaceOwners(source, image *Body, first, placed facetedPayload) (m
 	reverse := make(map[*Face]*Face, len(imageFaces))
 	for i, triangle := range first.Tris {
 		want := triangle
-		if placed.copyLineage.motion.IsReflection() {
+		if placed.CopyLineage.Motion.IsReflection() {
 			want[1], want[2] = want[2], want[1]
 		}
 		if placed.Tris[i] != want || first.Src[i] != placed.Src[i] ||
@@ -140,14 +140,14 @@ func certifyFacetedCopies(ctx context.Context, tools []*Body) (*facetedCopySet, 
 	if !ok || d.requireLive(source) != nil {
 		return nil, fmt.Errorf("%w: copied tools lack a live faceted source", ErrUnsupported)
 	}
-	set := &facetedCopySet{source: source, tools: append([]*Body(nil), tools...),
-		moves:     make([]r3.Transform, len(tools)),
-		exact:     make([]*exactrotation.Rotation, len(tools)),
-		faceOwner: make([]map[*Face]*Face, len(tools))}
-	set.moves[0] = r3.Identity()
-	set.faceOwner[0] = make(map[*Face]*Face, len(source.Faces()))
+	set := &facetedCopySet{Source: source, Tools: append([]*Body(nil), tools...),
+		Moves:     make([]r3.Transform, len(tools)),
+		Exact:     make([]*exactrotation.Rotation, len(tools)),
+		FaceOwner: make([]map[*Face]*Face, len(tools))}
+	set.Moves[0] = r3.Identity()
+	set.FaceOwner[0] = make(map[*Face]*Face, len(source.Faces()))
 	for _, face := range source.Faces() {
-		set.faceOwner[0][face] = face
+		set.FaceOwner[0][face] = face
 	}
 	shells := make([]shellseparation.Shell, len(tools))
 	maps := make([][3][3]*big.Rat, len(tools))
@@ -170,11 +170,11 @@ func certifyFacetedCopies(ctx context.Context, tools []*Body) (*facetedCopySet, 
 		if i == 0 {
 			continue
 		}
-		record := part.copyLineage
-		if record == nil || record.source != source ||
-			record.sourceProducer != source.n.Origin.Producer ||
-			record.sourcePlacement != first.Xform ||
-			record.targetPlacement != part.Xform || !record.motion.IsValid() {
+		record := part.CopyLineage
+		if record == nil || record.Source != source ||
+			record.SourceProducer != source.n.Origin.Producer ||
+			record.SourcePlacement != first.Xform ||
+			record.TargetPlacement != part.Xform || !record.Motion.IsValid() {
 			return nil, fmt.Errorf("%w: copied tool %d lost its source placement", ErrUnsupported, i+1)
 		}
 		inverse, err := first.Xform.Inverse()
@@ -182,44 +182,44 @@ func certifyFacetedCopies(ctx context.Context, tools []*Body) (*facetedCopySet, 
 			return nil, fmt.Errorf("%w: copied tool %d has no source inverse", ErrUnsupported, i+1)
 		}
 		motion, err := inverse.Then(part.Xform)
-		if err != nil || motion != record.motion {
+		if err != nil || motion != record.Motion {
 			return nil, fmt.Errorf("%w: copied tool %d changed its recorded motion", ErrUnsupported, i+1)
 		}
 		owners, mapped := facetedCopyFaceOwners(source, tool, first, part)
 		if !mapped {
 			return nil, fmt.Errorf("%w: copied tool %d lost source face ownership", ErrUnsupported, i+1)
 		}
-		if record.exact != nil && !record.direct {
+		if record.Exact != nil && !record.Direct {
 			return nil, fmt.Errorf("%w: copied tool %d carries an exact rotation without a direct placement",
 				ErrUnsupported, i+1)
 		}
-		set.faceOwner[i] = owners
-		set.moves[i] = record.motion
-		sourceLinked = sourceLinked && record.direct
-		if record.exact != nil {
-			set.exact[i] = record.exact
-			maps[i] = record.exact.Linear()
+		set.FaceOwner[i] = owners
+		set.Moves[i] = record.Motion
+		sourceLinked = sourceLinked && record.Direct
+		if record.Exact != nil {
+			set.Exact[i] = record.Exact
+			maps[i] = record.Exact.Linear()
 			anyExact = true
 			// Transfer composes no translation, so an exact copy with a
 			// translation, even one the float move rounds to zero, turns it off.
-			for _, t := range record.exact.Translation() {
+			for _, t := range record.Exact.Translation() {
 				sourceLinked = sourceLinked && t.Sign() == 0
 			}
 		}
 	}
 	if anyExact {
-		set.maps = maps
+		set.Maps = maps
 	}
 	for _, axis := range []shellseparation.Axis{
 		shellseparation.AxisX, shellseparation.AxisY, shellseparation.AxisZ,
 	} {
 		// Source-solid transfer needs each copy's true solid to be exactly its
 		// recorded motion of the source's, which holds only for direct copies.
-		if !shellseparation.Separate(ctx, shells, set.moves, set.maps,
+		if !shellseparation.Separate(ctx, shells, set.Moves, set.Maps,
 			shellseparation.SourceShell, axis, sourceLinked) {
 			continue
 		}
-		held, err := shellseparation.PlacedHeldShells(ctx, heldCopies, set.moves)
+		held, err := shellseparation.PlacedHeldShells(ctx, heldCopies, set.Moves)
 		if err != nil {
 			return nil, err
 		}
@@ -234,11 +234,11 @@ func certifyFacetedCopies(ctx context.Context, tools []*Body) (*facetedCopySet, 
 				}
 			}
 		}
-		if !shellseparation.Separate(ctx, held, set.moves, nil,
+		if !shellseparation.Separate(ctx, held, set.Moves, nil,
 			shellseparation.HeldCopyShell, axis, true) {
 			continue
 		}
-		set.axis, set.held = axis, held
+		set.Axis, set.Held = axis, held
 		return set, nil
 	}
 	if err := ctx.Err(); err != nil {
