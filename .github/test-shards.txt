@@ -233,7 +233,6 @@
 1	4.69	TestMitredSweepMomentsMatchRationalSum
 1	0.00	TestMotionParamSinCosEnclosesTheAngle
 1	0.01	TestNewBodyGeomRefusesSurfaceResultRevolve
-1	0.00	TestOrientPatchChainRejectsDisagreeingAdjacentFaces
 1	3.75	TestPairStationsAcceptsTheStatedChordCap
 1	0.00	TestPairStationsSagittaUpperReflectsTheLargerSide
 1	0.03	TestParityFacetBoxStatesTheProjection
@@ -306,7 +305,6 @@
 2	0.19	TestBrepLoopFilletSphereAtEqualRadius
 2	0.01	TestBrepMeasurementsChargeFaceDisplacements
 2	0.07	TestBrepShellThroughCutP6
-2	0.00	TestBuildPatchFaceCarriesTheLevelBoundOntoTheNewFacesAxialDelta
 2	0.00	TestCICPUClassShard6
 2	0.04	TestCapBlendMeshMotionCarriesTheMiterDisplacement
 2	0.18	TestCapBlendPayloadStoresEachBandsContourDisplacement
@@ -449,7 +447,6 @@
 3	0.16	TestBrepShellThroughCutBothCaps
 3	0.14	TestBrepShellThroughCutP1
 3	0.10	TestBrepShellThroughCutP7
-3	0.00	TestBuildPatchFaceReadsTheLevelTokensNormalNotAFittedOneOnARotatedFrame
 3	0.00	TestCICPUClassShard7
 3	0.02	TestCapBlendAdmissionRefusesAReflexCorner
 3	0.12	TestCapBlendCornerChordReachesArcNaturalEnd
@@ -581,7 +578,6 @@
 4	0.27	TestBrepLoopFilletCrossDrilled
 4	0.10	TestBrepShellThroughCutRimFalsifier
 4	0.12	TestBrepShellThroughCutWallOpeningDisplaced
-4	0.00	TestBuildPatchFaceRemapsACrossingChainToErrDegenerate
 4	0.00	TestCICPUClassShard8
 4	0.42	TestCapBandConePatchChargesItsCornerSlivers
 4	0.02	TestCapBandMassBoundsChargeInheritedCapLevel

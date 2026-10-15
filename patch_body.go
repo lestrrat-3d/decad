@@ -6,22 +6,9 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/lestrrat-3d/decad/internal/measurement"
-	"github.com/lestrrat-3d/decad/internal/provenance"
-	"github.com/lestrrat-3d/decad/internal/sectionaudit"
-	"github.com/lestrrat-3d/decad/internal/surfacegeom"
-	"github.com/lestrrat-3d/decad/internal/topo"
-	"github.com/lestrrat-3d/decad/internal/topobuild"
-
-	"github.com/lestrrat-3d/decad/internal/freeform"
-	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/patchchain"
-
-	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/surfaceplace"
-
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
-	"github.com/lestrrat-3d/units"
 )
 
 // This file is PatchEdges of docs/surface-design.md §5.2: a planar fill of
@@ -36,7 +23,7 @@ import (
 // rather than welding one, stitch_weld.go's newStitchVertexTable is NOT
 // needed here — a patch never merges two DIFFERENT edges into one, it only
 // gives an already-free edge a SECOND face, so the same-pointer cache alone
-// (copyPatchFacesUnder's edgeFor) is what stitch.go's weld groups exist to
+// (patchchain.copyFacesUnder's edgeFor) is what stitch.go's weld groups exist to
 // generalize beyond.
 //
 // Four gates decide the selection, in order, each reject-only
@@ -52,13 +39,13 @@ import (
 //  3. each chain is planar, proven exactly over dyadic.go's rational lift
 //     (provePatchChainPlane) — never a residual against a fitted plane;
 //  4. each chain is simple in its plane, via fillet_audit.go's existing
-//     crossing audit (buildPatchFace) — that audit's own ErrUnsupported is
-//     remapped to ErrDegenerate at this boundary (patchRemapCrossingError),
+//     crossing audit (patchchain.buildFace) — that audit's own ErrUnsupported is
+//     remapped to ErrDegenerate at this boundary (patchchain.remapCrossingError),
 //     because a self-crossing chain is bad input rather than evaluator
 //     reach, on docs/surface-design.md §5.2's own instruction.
 //
 // Orientation — which sense each new face takes on its chain's edges — is a
-// fifth, purely combinatorial decision with no geometry in it (orientPatchChain):
+// fifth, purely combinatorial decision with no geometry in it (patchchain.orientChain):
 // each edge is traversed by the one face already adjacent to it in some
 // sense, and the patch takes the opposite sense. Where a chain's own
 // adjacent faces do not agree among themselves — unreachable through this
@@ -67,7 +54,7 @@ import (
 // seam — that disagreement is ErrDegenerate, Table R row R18 (new: §5.2
 // named the case without giving it a row).
 //
-// evalBodyPatchContext is the whole evaluator, shared by the initial build
+// patchchain.BuildBody is the whole evaluator, shared by the initial build
 // and every later Transform/Copy re-evaluation: gate 3's exact
 // plane proof runs ONCE, in buildPatchChains, and is never re-proven (a
 // rigid motion preserves planarity exactly, so re-proving would only make
@@ -75,19 +62,16 @@ import (
 // discarded once the proof passes — the payload carries only the chain's own
 // edges, never a plane value — because the new face's actual plane is
 // derived fresh, every evaluation, from that chain's own (placed) oriented
-// geometry (patchChainOrientedNormal). Gate 4's crossing audit and the
+// geometry (patchchain.OrientedNormal). Gate 4's crossing audit and the
 // orientation derivation are NOT replayed from a stored answer either: they
 // run again on every placement, exactly as Stitch re-runs its own crossing
 // audit after a placement, because rounding can bring two placed points into
 // contact — or apart — that the unplaced ones were not.
 
-// PatchEdges's own two Table R rows this PR adds, beside the existing R4
-// (gate 1), R5 (gate 2, and gate 4 remapped), R6 (gate 3) and R16 (selector)
-// rows §5.2 already names.
+// PatchEdges's own Table R row R19, beside the existing R4 (gate 1), R5 (gate 2,
+// and gate 4 remapped), R6 (gate 3), R16 (selector) and R18 (patchchain's
+// RowFacesDisagree) rows §5.2 already names.
 const (
-	// patchRowFacesDisagree is Table R row R18: a chain's adjacent faces
-	// cannot be brought into agreement on its patch's orientation.
-	patchRowFacesDisagree = `docs/surface-design.md Table R row R18`
 	// patchRowNoPayload is Table R row R19: the receiver carries no
 	// evaluator payload for this evaluator to rebuild from.
 	patchRowNoPayload = `docs/surface-design.md Table R row R19`
@@ -144,7 +128,7 @@ func PatchEdges(ctx context.Context, b *Body, sel EdgeSelector) (*Body, error) {
 		return nil, err
 	}
 	ref := d.nextProducerID()
-	body, err := evalBodyPatchContext(ctx, d, ref, b.Faces(), boxFromInternal(b.n.Bounds), chains, r3.Identity())
+	body, err := bodyResult(patchchain.BuildBody(ctx, envOf(&d.n, ref), faceNodes(b.Faces()), b.n.Bounds, chains, r3.Identity()))
 	if err != nil {
 		return nil, err
 	}
@@ -155,75 +139,10 @@ func PatchEdges(ctx context.Context, b *Body, sel EdgeSelector) (*Body, error) {
 	return body, nil
 }
 
-// bodyPatchChain is one proven chain, carried in the payload from the
-// initial build to every later placement: the chain's own (receiver-owned,
-// read-only) edges. Gate 3's proof (provePatchChainPlane) is a pure yes/no
-// decision over these same edges' own held data, never re-run once passed —
-// a rigid motion preserves planarity exactly, so nothing about the proof
-// changes across a placement. A chain the EXACT arm admitted publishes no
-// value gate 3 computed: the new face's plane is derived fresh, every
-// evaluation, from the chain's own (placed) oriented geometry
-// (patchChainOrientedNormal). A chain the LEVEL arm admitted instead
-// publishes ITS OWN token, below, which buildPatchFace reads for the
-// plane's origin and normal directly — never a value fitted to held vertex
-// coordinates, which are only approximately coplanar for a chain admitted
-// this way (denotation.go's own doc comment states why).
-type bodyPatchChain struct {
-	edges []*Edge
-	// axialBound and hasAxialBound are the proven axial displacement gate 3's
-	// LEVEL arm (provePatchChainPlaneLevel) admitted this chain under —
-	// stamped onto the new face's own AxialDelta exactly as internal/prismrecord/build.go
-	// stamps a prism cap's (buildPatchFace, docs/surface-design.md §5.2).
-	// hasAxialBound stays false, and axialBound zero, whenever gate 3 instead
-	// admitted the chain through its existing exact (zero-bound) arm.
-	axialBound    float64
-	hasAxialBound bool
-	// level is the token the LEVEL arm admitted this chain under — the zero
-	// value whenever hasAxialBound is false. buildPatchFace reads its own
-	// origin/normal, transformed by this evaluation's own placement, as the
-	// published plane: never patchChainOrientedNormal's fitted vector, which
-	// this token's own doc comment (denotation.go) states is unsound for a
-	// chain admitted by identity rather than by proven-exact coplanarity.
-	level levelToken
-}
-
-// bodyPatchPayload is PatchEdges's own record: the retiring receiver's own
-// faces, its already-proven Bounds, and each chain's proven plane — never a
-// built topology (unstitch.go's "held-B-rep-under-a-rigid-motion" idea,
-// widened here from one face to a whole face set plus the faces the patch
-// mints on top of it). Placed() replays evalBodyPatchContext from these same
-// values under the composed transform, exactly as unstitchPayload.Placed
-// replays evalUnstitchFaceContext.
-type bodyPatchPayload struct {
-	xform r3.Transform
-	// delta is the proven displacement proofbound.RigidRoundAllow charges against this
-	// body's placed geometry — zero exactly when xform is the identity
-	// transform, an exact struct comparison (unstitchPayload's own delta).
-	delta float64
-	// faces is the ORIGINAL (now retired) receiver's own face set: read-only,
-	// and never mutated or aliased into a live body's topology
-	// (copyPatchFacesUnder always mints a fresh copy from it).
-	faces []*Face
-	// bounds is the retiring receiver's own proven, UNPLACED Bounds — reused
-	// rather than re-derived, on the same reasoning unstitchBounds already
-	// states: every new face's boundary is already receiver geometry, and a
-	// bounded planar region lies inside its own boundary's box, so the
-	// receiver's own box already bounds the patched result too.
-	bounds Box
-	chains []bodyPatchChain
-}
-
-func (pp bodyPatchPayload) Transform() r3.Transform { return pp.xform }
-
-func (pp bodyPatchPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
-	d, ref := documentHandle(env.Doc), env.Ref
-	return placedNode(evalBodyPatchContext(ctx, d, ref, pp.faces, pp.bounds, pp.chains, composed))
-}
-
 // buildPatchChains runs gates 1-3 against the selector's resolved edges: gate
 // 1 (every edge free), gate 2 (partition into closed chains), and gate 3
 // (each chain's exact plane proof). Gate 4 (simplicity) and the orientation
-// derivation are NOT run here — they run inside evalBodyPatchContext, every
+// derivation are NOT run here — they run inside patchchain.BuildBody, every
 // time, including the very first build, since building the actual face
 // needs the SAME per-placement machinery a later Transform call replays
 // (docs/surface-design.md's "re-run the combinatorial and in-plane gates on
@@ -244,7 +163,7 @@ func buildPatchChains(edges []*Edge) ([]bodyPatchChain, error) {
 		if err != nil {
 			return nil, err
 		}
-		chains[i] = bodyPatchChain{edges: g, axialBound: axialBound, hasAxialBound: hasAxialBound, level: lvl}
+		chains[i] = bodyPatchChain{Edges: edgeNodes(g), AxialBound: axialBound, HasAxialBound: hasAxialBound, Level: lvl}
 	}
 	return chains, nil
 }
@@ -280,7 +199,7 @@ func renderCoord3(p r3.Vec) string {
 // nonzero bound, and never reads a coordinate, a residual or a bound
 // magnitude (docs/surface-design.md §5.2's own two-arm amendment). Its
 // return states what the level arm admitted: the levelToken and axialBound
-// are what buildPatchFace reads for the new face's own plane and AxialDelta,
+// are what patchchain.buildFace reads for the new face's own plane and AxialDelta,
 // mirroring what a prism cap already carries; a chain the exact arm admits
 // instead publishes the zero token and a zero axialBound, unchanged.
 func provePatchChainPlane(edges []*Edge) (levelToken, float64, bool, error) {
@@ -438,509 +357,6 @@ func patchCurveCarrier(e *Edge) (center, axis r3.Vec, curved bool) {
 	}
 }
 
-// patchOrientedEdge is one chain edge under the orientation decision: the
-// receiver's own (read-only) edge, and the sense — forward from Edge.Start
-// to Edge.End, or backward — the new patch face traverses it in.
-type patchOrientedEdge struct {
-	old     *Edge
-	forward bool
-}
-
-// orientPatchChain reads each edge's adjacent face and delegates the cycle
-// walk to internal/patchchain. See docs/surface-design.md §5.2.
-func orientPatchChain(chain bodyPatchChain) ([]patchOrientedEdge, error) {
-	oriented := make([]patchchain.OrientedEdge[*Edge, *Vertex], len(chain.edges))
-	for i, e := range chain.edges {
-		if len(e.n.Faces) != 1 {
-			return nil, fmt.Errorf(`%w: a PatchEdges chain edge is not free (%s)`, ErrDegenerate, patchRowFacesDisagree)
-		}
-		dir, ok := coedgeDirectionFor(faceHandle(e.n.Faces[0]), e)
-		if !ok {
-			return nil, fmt.Errorf(`%w: a PatchEdges chain edge's adjacent face does not use it (%s)`, ErrDegenerate, patchRowFacesDisagree)
-		}
-		oriented[i] = patchchain.OrientedEdge[*Edge, *Vertex]{Edge: e, Start: vertexHandle(e.n.Start), End: vertexHandle(e.n.End), Forward: !dir}
-	}
-	walk, err := patchchain.Orient(oriented, patchRowFacesDisagree)
-	if err != nil {
-		return nil, err
-	}
-	order := make([]patchOrientedEdge, len(walk))
-	for i, oe := range walk {
-		order[i] = patchOrientedEdge{old: oe.Edge, forward: oe.Forward}
-	}
-	return order, nil
-}
-
-// evalBodyPatchContext is PatchEdges's whole evaluator, shared by the
-// initial build and every later placement: it rebuilds the receiver's own
-// face set under xform (copyPatchFacesUnder), builds one new face per chain
-// on top of that same rebuild (buildPatchFace, which re-derives orientation
-// and re-runs gate 4 fresh every time), assembles the result, and publishes
-// its measurements.
-func evalBodyPatchContext(ctx context.Context, d *Document, ref producerID, srcFaces []*Face, srcBounds Box, chains []bodyPatchChain, xform r3.Transform) (*Body, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-
-	maxInputAbs := 0.0
-	for _, f := range srcFaces {
-		for _, l := range f.n.Loops {
-			for _, ce := range l.CoEdges {
-				maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(ce.Edge.Start.Position), proofbound.VecMaxAbs(ce.Edge.End.Position))
-			}
-		}
-	}
-	delta := 0.0
-	if xform != r3.Identity() {
-		delta = proofbound.RigidRoundAllow(maxInputAbs, proofbound.VecMaxAbs(xform.Translation()))
-	}
-
-	newFaces, edgeCopy, err := copyPatchFacesUnder(ctx, srcFaces, xform, delta)
-	if err != nil {
-		return nil, err
-	}
-
-	patchFaces := make([]*Face, len(chains))
-	for i, chain := range chains {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		pf, err := buildPatchFace(ctx, ref, chain, edgeCopy, xform, delta)
-		if err != nil {
-			return nil, err
-		}
-		patchFaces[i] = pf
-	}
-
-	allFaces := make([]*Face, 0, len(newFaces)+len(patchFaces))
-	allFaces = append(allFaces, newFaces...)
-	allFaces = append(allFaces, patchFaces...)
-	if err := topobuild.AttachFaceLoops(ctx, faceNodes(allFaces)); err != nil {
-		return nil, err
-	}
-
-	// Kind and lumps/shells come from the existing topobuild.SheetLumps, run only AFTER
-	// every face is attached (its own contract). PatchEdges never publishes a
-	// solid: closing a sheet's last free edge leaves a CLOSED sheet reporting
-	// BodySheet with IsSolid() false, since Stitch alone makes the material
-	// claim (docs/surface-design.md §2.1).
-	body := bornBody(&Body{n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodySheet, Doc: documentNode(d)}})
-	for _, f := range allFaces {
-		f.n.Body = bodyNode(body)
-	}
-	body.n.Lumps = topobuild.SheetLumps(handleAlloc{}, faceNodes(allFaces))
-
-	// Area is the receiver's own faces' area plus each new face's, composed
-	// through proofbound.BoundedAdd — never a re-derived reading — exactly the sum
-	// evalStitchContext already runs over its own constituent faces
-	// (docs/surface-design.md §6.4/§8), reused here for one operand's own
-	// face set plus the faces this call adds to it.
-	areaAcc := proofbound.BoundedScalar{}
-	for _, f := range allFaces {
-		areaAcc = proofbound.BoundedAdd(areaAcc, proofbound.MeasuredScalar(f.n.Area, f.n.AreaBound))
-	}
-	body.n.Area = measurement.Measurement{
-		Value:     units.SquareMillimeters(areaAcc.Value),
-		Exactness: measurement.ExactnessOf(areaAcc.Bound),
-		Bound:     units.SquareMillimeters(areaAcc.Bound),
-	}
-
-	// Bounds is the receiver's own already-proven box: every new face's
-	// boundary is already receiver geometry, and a bounded planar region
-	// lies inside its own boundary's box, so unstitchBounds's own reasoning
-	// — reuse the operand's own extent rather than re-deriving a tighter one
-	// — carries unchanged from one face to a whole rebuilt face set.
-	bounds, err := unstitchBounds(srcBounds, xform, delta)
-	if err != nil {
-		return nil, err
-	}
-	body.n.Bounds = boxToInternal(bounds)
-
-	if err := topobuild.ValidateAnalyticMeasurements(bodyNode(body)); err != nil {
-		return nil, err
-	}
-
-	body.n.Payload = bodyPatchPayload{xform: xform, delta: delta, faces: srcFaces, bounds: srcBounds, chains: chains}
-	return body, nil
-}
-
-// copyPatchFacesUnder deep-copies every one of srcFaces under xform, minting
-// fresh Vertex, Edge and Face values that share no pointer with the retiring
-// receiver (docs/surface-design.md's "rebuild the receiver from its
-// payload" decision): a retired body stays readable, and a caller may still
-// hold it, so mutating its topology through a shared pointer would corrupt
-// what they read.
-//
-// It is unstitch.go's copyFaceUnderContext widened from one face to a whole
-// face SET: an edge or vertex used by two of the receiver's own faces — an
-// ordinary interior edge, exactly as common on a sheet as on a solid — still
-// resolves to the SAME new object via the returned edgeCopy cache, the same
-// per-old-edge sharing stitch.go's rebuildStitchTopology relies on for its
-// own operand faces. Unlike that function, no weld plan is consulted: a
-// patch never merges two DIFFERENT edges into one, it only gives an
-// already-free edge a second face once buildPatchFace's own coedge is
-// attached, so the plain per-pointer cache is the whole of what sharing
-// needs here.
-//
-// Each copy carries its source face's own AxialDelta, hasAxialDelta and
-// normalBound, on unstitch.go's copyFaceUnderContext's terms: the copy holds
-// the identical surface and tag, so both figures are as true of it as of
-// the source. AxialDelta widens by delta under a non-identity placement, and
-// a placed copy of a face whose normalBound is nonzero refuses with
-// [ErrUnsupported], since no dimensionless term bounds the placement's own
-// rotation of the tag frame. A revolve face's denoted surface (topo.Face.Denoted)
-// carries over as its exact image under xform.
-func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transform, delta float64) ([]*Face, map[*Edge]*Edge, error) {
-	if xform != r3.Identity() {
-		for _, f := range srcFaces {
-			if f.n.NormalBound != 0 {
-				return nil, nil, fmt.Errorf(`%w: a placed copy of a face whose normalBound is nonzero has no dimensionless term to bound the placement's own rotation of the tag frame off the true rotation, so this evaluator refuses rather than guess one`, ErrUnsupported)
-			}
-		}
-	}
-	// The copies denote the source faces carried through the placement's held
-	// basis read exactly, which is orthonormal only to rounding, so every
-	// copied area and length widens by its defect (massmoment.MapCharge).
-	basis, err := massmoment.PlacementRotation(xform)
-	if err != nil {
-		return nil, nil, err
-	}
-	place, err := massmoment.MapChargeOf(basis)
-	if err != nil {
-		return nil, nil, err
-	}
-	newVertByOld := map[*Vertex]*Vertex{}
-	vertexFor := func(old *Vertex) (*Vertex, error) {
-		if nv, ok := newVertByOld[old]; ok {
-			return nv, nil
-		}
-		p := xform.Apply(old.n.Position)
-		if !proofbound.FiniteVec(p) {
-			return nil, fmt.Errorf(`%w: a placed patch vertex is not representable`, ErrUnsupported)
-		}
-		bound := old.n.Bound.Base()
-		if delta > 0 {
-			bound = proofbound.AbsSumUpper(bound, delta)
-		}
-		// The CURVE half of the shared-denotation certificate (denotation.go)
-		// restates under xform, composing rather than overwriting, exactly
-		// as unstitch.go's copyFaceUnderContext does.
-		nv := bornVertex(&Vertex{n: topo.Vertex{Position: p, Bound: units.Millimeters(bound), Denot: old.n.Denot.Compose(xform)}})
-		newVertByOld[old] = nv
-		return nv, nil
-	}
-
-	newEdgeByOld := map[*Edge]*Edge{}
-	edgeFor := func(old *Edge) (*Edge, error) {
-		if ne, ok := newEdgeByOld[old]; ok {
-			return ne, nil
-		}
-		curve, err := surfaceplace.TransformCurve(old.n.Curve, xform)
-		if err != nil {
-			return nil, err
-		}
-		start, err := vertexFor(vertexHandle(old.n.Start))
-		if err != nil {
-			return nil, err
-		}
-		end, err := vertexFor(vertexHandle(old.n.End))
-		if err != nil {
-			return nil, err
-		}
-		lengthBound := old.n.LengthBound
-		if delta > 0 {
-			lengthBound = proofbound.AbsSumUpper(lengthBound, delta)
-		}
-		lengthBound = place.LengthBound(old.n.Length, lengthBound)
-		ne := bornEdge(&Edge{
-			n: topo.Edge{
-				Convex:          old.n.Convex,
-				Length:          old.n.Length,
-				LengthBound:     lengthBound,
-				LengthUnbounded: old.n.LengthUnbounded,
-				Denot:           old.n.Denot.Compose(xform),
-				Curve:           curve,
-				Start:           vertexNode(start),
-				End:             vertexNode(end),
-			},
-		})
-		ne.n.CurveBound, ne.n.CurveBounded = surfaceplace.PlacedCurveBound(
-			old.n.Curve, old.n.CurveBound, old.n.CurveBounded, curve, xform)
-		newEdgeByOld[old] = ne
-		return ne, nil
-	}
-
-	newFaces := make([]*Face, len(srcFaces))
-	for i, f := range srcFaces {
-		if err := ctx.Err(); err != nil {
-			return nil, nil, err
-		}
-		transformed, err := surfaceplace.TransformSurface(f.n.Surface, xform)
-		if err != nil {
-			return nil, nil, err
-		}
-		axialDelta := f.n.AxialDelta
-		if delta > 0 {
-			axialDelta = proofbound.AbsSumUpper(axialDelta, delta)
-		}
-		nf := bornFace(&Face{
-			n: topo.Face{
-				Area:          f.n.Area,
-				AreaBound:     place.AreaOf(proofbound.MeasuredScalar(f.n.Area, f.n.AreaBound)).Bound,
-				Reversed:      f.n.Reversed,
-				HeldPlanar:    f.n.HeldPlanar,
-				AxialDelta:    axialDelta,
-				HasAxialDelta: f.n.HasAxialDelta,
-				NormalBound:   f.n.NormalBound,
-				Denoted:       f.denotedUnder(xform),
-				Surface:       transformed,
-				CapRecord:     f.n.CapRecord.Under(xform),
-				Origins:       append([]provenance.Ref(nil), f.n.Origins...),
-			},
-		})
-		for _, l := range f.n.Loops {
-			coedges := make([]topo.CoEdge, len(l.CoEdges))
-			for j, ce := range l.CoEdges {
-				ne, err := edgeFor(edgeHandle(ce.Edge))
-				if err != nil {
-					return nil, nil, err
-				}
-				coedges[j] = topo.CoEdge{Edge: edgeNode(ne), Forward: ce.Forward}
-			}
-			nf.n.Loops = append(nf.n.Loops, loopNode(bornLoop(&Loop{n: topo.Loop{Outer: l.Outer, CoEdges: coedges}})))
-		}
-		newFaces[i] = nf
-	}
-	return newFaces, newEdgeByOld, nil
-}
-
-// buildPatchFace builds one chain's new face: it derives the chain's
-// orientation (orientPatchChain) and its plane.
-//
-// A chain the EXACT arm admitted derives the plane frame's normal and origin
-// DETERMINISTICALLY from that same oriented, placed geometry
-// (patchChainOrientedNormal, patchChainWalkOrigin) — never by trying a
-// candidate and correcting its sign from a computed area, which would
-// silently absorb a wrong orientation instead of surfacing it. This is
-// sound because gate 3's exact arm already proved these SAME held vertex
-// coordinates bit-for-bit coplanar (dyadic.go's exact rational lift), so
-// fitting a normal to them fits one to data that genuinely, exactly, is
-// coplanar.
-//
-// A chain the LEVEL arm admitted instead reads the plane's normal and
-// origin from the chain's own levelToken, transformed by this evaluation's
-// own placement (xform) — never fitted to held vertex coordinates, which
-// gate 3's level arm never proved exactly coplanar (denotation.go's own doc
-// comment states why a fit would be unsound here). patchChainOrientedNormal
-// still runs for such a chain, but only to settle which of the token's two
-// normal directions (±) matches the chain's own walk sense
-// (patchChainLevelNormal) — its MAGNITUDE, and any tilt a fit to
-// approximately-coplanar data would carry, are discarded.
-//
-// Either way this re-runs gate 4's crossing audit, and reads the face's area
-// from the same moments engine PatchProfile's own single planar face uses.
-func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, edgeCopy map[*Edge]*Edge, xform r3.Transform, delta float64) (*Face, error) {
-	ordered, err := orientPatchChain(chain)
-	if err != nil {
-		return nil, err
-	}
-
-	fitted, err := patchChainOrientedNormal(ordered, edgeCopy)
-	if err != nil {
-		return nil, err
-	}
-
-	normal := fitted
-	origin := patchChainWalkOrigin(ordered, edgeCopy)
-	axialDelta := chain.axialBound
-	if chain.hasAxialBound {
-		normal, err = patchChainLevelNormal(fitted, xform.ApplyDir(chain.level.Normal))
-		if err != nil {
-			return nil, err
-		}
-		origin = xform.Apply(chain.level.Origin)
-		// A placement's own rounding (proofbound.RigidRoundAllow) displaces the token's
-		// origin exactly as it displaces every other placed coordinate this
-		// evaluator publishes (copyPatchFacesUnder's own vertex/edge
-		// widening), so it folds into the SAME AxialDelta the token's own
-		// bound already states.
-		if delta > 0 {
-			axialDelta = proofbound.AbsSumUpper(axialDelta, delta)
-		}
-	}
-	frame, segs, err := patchChainFrameAndSegments(ordered, edgeCopy, origin, normal)
-	if err != nil {
-		return nil, err
-	}
-
-	ig, err := patchChainIntegrals(ctx, segs)
-	if err != nil {
-		return nil, err
-	}
-	if ig.Area <= 0 {
-		return nil, fmt.Errorf(`%w: a PatchEdges chain encloses no area`, ErrDegenerate)
-	}
-	// The integrals are taken in the fitted frame's plane coordinates, which
-	// that frame's held axes carry to world orthonormal only to rounding.
-	frameMap, err := massmoment.PrismRotation(frame, r3.Identity())
-	if err != nil {
-		return nil, err
-	}
-	frameCharge, err := massmoment.MapChargeOf(frameMap)
-	if err != nil {
-		return nil, err
-	}
-	ig.AreaBound = frameCharge.AreaOf(proofbound.MeasuredScalar(ig.Area, ig.AreaBound)).Bound
-	// A straight-edged rim is a polygon whose corners are the chain's own
-	// vertices, so its area is bounded directly in world coordinates, which
-	// also charges the float re-expression of the rim into the fitted frame
-	// that the plane-coordinate integrals above cannot see.
-	areaEdges := make([]patchchain.AreaEdge, len(ordered))
-	for i, oe := range ordered {
-		ne := edgeCopy[oe.old]
-		areaEdges[i] = patchchain.AreaEdge{
-			Curve: ne.n.Curve, Forward: oe.forward,
-			Start:  patchchain.AreaVertex{Position: ne.n.Start.Position, Bound: ne.n.Start.Bound.Base()},
-			End:    patchchain.AreaVertex{Position: ne.n.End.Position, Bound: ne.n.End.Bound.Base()},
-			Length: ne.n.Length, LengthBound: ne.n.LengthBound, LengthUnbounded: ne.n.LengthUnbounded,
-			CurveBound: ne.n.CurveBound, CurveBounded: ne.n.CurveBounded,
-		}
-	}
-	if bound, ok := patchchain.PolygonAreaBound(ig.Area, areaEdges); ok {
-		ig.AreaBound = bound
-	} else {
-		// A rim with a circular edge is bounded against the loop the
-		// integrals read, lifted through the fitted frame, edge by edge
-		// (patchchain.CurvedAreaCharge); a rim it cannot bound refuses rather than
-		// publish an area its own truth may sit outside of.
-		charge, ok := patchchain.CurvedAreaCharge(frame, frameMap, frameCharge.Stretch, segs, areaEdges)
-		if !ok {
-			return nil, fmt.Errorf(`%w: a PatchEdges rim edge carries no proven bound on the curve it denotes, so its face area has none`, ErrUnsupported)
-		}
-		ig.AreaBound = proofbound.AbsSumUpper(ig.AreaBound, charge)
-	}
-
-	budget := proofbound.NewWorkBudget(ctx)
-	segEntries, err := sectionaudit.EntriesOf(budget, []loopRecord{{Segments: segs}})
-	if err != nil {
-		return nil, patchRemapCrossingError(err)
-	}
-	if err := sectionaudit.Crossing(budget, segEntries); err != nil {
-		return nil, patchRemapCrossingError(err)
-	}
-
-	coedges := make([]topo.CoEdge, len(ordered))
-	for i, oe := range ordered {
-		coedges[i] = topo.CoEdge{Edge: edgeNode(edgeCopy[oe.old]), Forward: oe.forward}
-	}
-
-	return bornFace(&Face{
-		n: topo.Face{
-			Area:      ig.Area,
-			AreaBound: ig.AreaBound,
-			// A chain gate 3's level arm admitted has a proven-bounded plane
-			// origin, never a zero one: the same fields internal/prismrecord/build.go already
-			// sets on a prism's own caps (docs/surface-design.md §5.2). A chain
-			// the exact arm admitted instead carries a zero, unset bound here.
-			AxialDelta:    axialDelta,
-			HasAxialDelta: chain.hasAxialBound,
-			Surface:       surfacegeom.Plane{Frame: frame},
-			Origins:       []provenance.Ref{{Producer: ref, Role: rolePatch}},
-			Loops:         []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: coedges}}))},
-		},
-	}), nil
-}
-
-// patchChainIntegrals runs the same closed-form region integral
-// PatchProfile's own single planar face uses (moments.go), over a
-// single-loop, no-hole record — reused rather than a bespoke shoelace sum,
-// so a patch face's Area answers on the identical Exactness/Bound terms
-// docs/surface-design.md §5.1 already states for a sketch-recorded patch.
-func patchChainIntegrals(ctx context.Context, segs []curveSegment) (regionIntegrals, error) {
-	work := freeform.NewFreeformWork()
-	return profileRecord{Outer: loopRecord{Segments: segs}}.EvaluatorIntegralsContext(ctx, freeform.MomentAreaOrder, work)
-}
-
-// patchRemapCrossingError maps fillet_audit.go's own [ErrUnsupported] boundary
-// -- crossing audit refusal to [ErrDegenerate] at gate 4's own boundary
-// (docs/surface-design.md §5.2, Table R row R5): a self-crossing chain is
-// bad input this evaluator will never admit under a finer tolerance, unlike
-// the evaluator-reach refusals ErrUnsupported names elsewhere, so it takes
-// the sentinel a caller should branch on as unfixable rather than staged.
-func patchRemapCrossingError(err error) error {
-	if err == nil {
-		return nil
-	}
-	if errors.Is(err, ErrUnsupported) {
-		return fmt.Errorf(`%w: a PatchEdges chain's plane-local walk crosses or touches itself (docs/surface-design.md Table R row R5)`, ErrDegenerate)
-	}
-	return err
-}
-
-// patchChainOrientedNormal adapts placed geometry for internal/patchchain's
-// normal derivation. See docs/surface-design.md §5.2.
-func patchChainOrientedNormal(ordered []patchOrientedEdge, edgeCopy map[*Edge]*Edge) (r3.Vec, error) {
-	return patchchain.OrientedNormal(patchGeometryEdges(ordered, edgeCopy))
-}
-
-// patchChainWalkOrigin is the exact arm's own plane origin: the chain's
-// first (already placed) vertex in walk order. A chain the exact arm
-// admitted has this vertex bit-for-bit coplanar with every other chain
-// vertex (gate 3's own dyadic proof), so using it as the plane's origin
-// introduces no coordinate this evaluator has not already verified.
-func patchChainWalkOrigin(ordered []patchOrientedEdge, edgeCopy map[*Edge]*Edge) r3.Vec {
-	first := edgeCopy[ordered[0].old]
-	if !ordered[0].forward {
-		return first.n.End.Position
-	}
-	return first.n.Start.Position
-}
-
-// patchChainLevelNormal adapts the recorded level normal's sign decision.
-func patchChainLevelNormal(fitted, tokenNormal r3.Vec) (r3.Vec, error) {
-	return patchchain.LevelNormal(fitted, tokenNormal)
-}
-
-// patchChainFrameAndSegments adapts placed edges to plane-local records.
-// internal/patchchain owns the curved edge sense rule.
-func patchChainFrameAndSegments(ordered []patchOrientedEdge, edgeCopy map[*Edge]*Edge, origin, normal r3.Vec) (r3.Frame, []curveSegment, error) {
-	frame, err := planeFrameFromNormal(origin, normal)
-	if err != nil {
-		return r3.Frame{}, nil, err
-	}
-	segs, err := patchchain.SegmentsInFrame(frame, patchGeometryEdges(ordered, edgeCopy))
-	if err != nil {
-		return r3.Frame{}, nil, err
-	}
-	return frame, segs, nil
-}
-
-// patchGeometryEdges adapts the rebuilt topology to the ordered geometry read.
-func patchGeometryEdges(ordered []patchOrientedEdge, edgeCopy map[*Edge]*Edge) []patchchain.GeometryEdge {
-	out := make([]patchchain.GeometryEdge, len(ordered))
-	for i, oe := range ordered {
-		ne := edgeCopy[oe.old]
-		g := patchchain.GeometryEdge{Start: ne.n.Start.Position, End: ne.n.End.Position, Forward: oe.forward}
-		switch c := ne.n.Curve.(type) {
-		case surfacegeom.Line3:
-			g.Kind = patchchain.Line
-		case surfacegeom.Circle3:
-			g.Kind, g.Center, g.Axis, g.Radius = patchchain.Circle, c.Center, c.Axis, c.Radius
-		case surfacegeom.Arc3:
-			g.Kind, g.Center, g.Axis = patchchain.Arc, c.Center, c.Axis
-		default:
-			g.Kind, g.CurveName = patchchain.Unsupported, fmt.Sprintf("%T", publicCurve(c))
-		}
-		out[i] = g
-	}
-	return out
-}
-
-// planeFrameFromNormal adapts the patch chain's plane-frame construction.
-func planeFrameFromNormal(origin, normal r3.Vec) (r3.Frame, error) {
-	return patchchain.PlaneFrameFromNormal(origin, normal)
-}
-
 // Rule P (docs/surface-design.md §6.4) is the construction-proof gate a
 // bodyPatchPayload earns from its own receiver, letting Rule S
 // (stitch_flux.go) admit the "walls, then cap, then stitch" flow §6.1
@@ -978,7 +394,7 @@ func planeFrameFromNormal(origin, normal r3.Vec) (r3.Frame, error) {
 // planarity. A chain with no shared id — the exact-arm case, a chain from
 // any receiver whose build mints no level token at all, or a chain a
 // SECOND PatchEdges call selects from an already-patched body
-// (copyPatchFacesUnder does not propagate a level token onto the copies it
+// (patchchain.copyFacesUnder does not propagate a level token onto the copies it
 // mints) — is undecided here, never guessed: Rule P names no distance
 // threshold that could stand in for the identity check CLAUDE.md's
 // reject-only rule requires.
@@ -998,7 +414,7 @@ func planeFrameFromNormal(origin, normal r3.Vec) (r3.Frame, error) {
 // stitchOperandBodies reused verbatim: pp.faces is exactly the shape that
 // function already reads an operand's source body from.
 func bodyPatchPayloadProvesSimple(ctx context.Context, pp bodyPatchPayload) bool {
-	bodies := stitchOperandBodies(pp.faces)
+	bodies := stitchOperandBodies(faceHandles(pp.Faces))
 	if len(bodies) != 1 || bodies[0] == nil || bodies[0].n.Payload == nil {
 		return false
 	}
@@ -1020,12 +436,13 @@ func bodyPatchPayloadProvesSimple(ctx context.Context, pp bodyPatchPayload) bool
 		receiverFreeByLevel[e.n.Level.ID] = append(receiverFreeByLevel[e.n.Level.ID], e)
 	}
 
-	for _, chain := range pp.chains {
-		id, ok := patchChainSharedLevel(chain.edges)
+	for _, chain := range pp.Chains {
+		chainEdges := edgeHandles(chain.Edges)
+		id, ok := patchChainSharedLevel(chainEdges)
 		if !ok {
 			return false
 		}
-		if !edgeSetsEqual(receiverFreeByLevel[id], chain.edges) {
+		if !edgeSetsEqual(receiverFreeByLevel[id], chainEdges) {
 			return false
 		}
 	}

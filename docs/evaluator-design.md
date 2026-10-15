@@ -851,7 +851,9 @@ builder calls through `envOf` too. `stackedPrismPayload` is an alias of
 under the payload's own plan. `cupPayload` is an alias of `cupwall.Payload`:
 its `Placed` runs `cupwall.Build`, which builds through `stackedrecord.Build`
 under the cup's own `stackedrecord.Plan`. `chainPayload` is an alias of `chainrecord.Payload`
-likewise: its `Placed` runs `chainrecord.Build`. A payload that still lives in the root
+likewise: its `Placed` runs `chainrecord.Build`. `patchPayload` and `bodyPatchPayload`
+are aliases of `patchchain.Payload` and `patchchain.BodyPayload`: their `Placed` runs
+`patchchain.Build` and `patchchain.BuildBody`. A payload that still lives in the root
 package recovers its document handle from the node's `Owner` in `Placed` and
 runs its root builder.
 

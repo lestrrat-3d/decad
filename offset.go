@@ -164,7 +164,7 @@ func offsetPatch(ctx context.Context, d *Document, pp patchPayload, side OffsetS
 	if side == OffsetNegative {
 		signed = -dmm
 	}
-	motion, err := r3.Translation(pp.prism().Dir(0, 0, 1).Scale(signed))
+	motion, err := r3.Translation(pp.Prism().Dir(0, 0, 1).Scale(signed))
 	if err != nil {
 		return nil, fmt.Errorf(`%w: the offset translation is not a placement: %s`, ErrUnsupported, err)
 	}

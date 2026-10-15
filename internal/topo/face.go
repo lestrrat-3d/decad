@@ -117,3 +117,27 @@ type Face struct {
 	// through it; nothing else writes it.
 	Owner any
 }
+
+// DenotedUnder carries a face's denoted surface onto a copy placed by xform:
+// the exact image of the source face's own, never a re-reading of the copy's
+// rounded tag.
+func (f *Face) DenotedUnder(xform r3.Transform) *surfacenormal.Revolved {
+	if f.Denoted == nil || xform == r3.Identity() {
+		return f.Denoted
+	}
+	out := f.Denoted.Transformed(xform)
+	return &out
+}
+
+// CoEdgeDirection returns f's own forward flag for its use of e, and whether f
+// actually uses e at all.
+func (f *Face) CoEdgeDirection(e *Edge) (bool, bool) {
+	for _, l := range f.Loops {
+		for _, ce := range l.CoEdges {
+			if ce.Edge == e {
+				return ce.Forward, true
+			}
+		}
+	}
+	return false, false
+}

@@ -456,7 +456,7 @@ func TestRevolveWallNormalCoversTiltedAxis(t *testing.T) {
 // own departure from the Cylinder tag.
 //
 // Shown to fail: copying the face without its denoted surface (a nil
-// Face.denotedUnder) turns both subtests red, the copy publishing the tag's
+// topo.Face.DenotedUnder) turns both subtests red, the copy publishing the tag's
 // 1.1e-16 bound 5e-10 off the denoted normal.
 func TestRevolveWallNormalSurvivesUnstitch(t *testing.T) {
 	t.Parallel()

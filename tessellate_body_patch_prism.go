@@ -22,25 +22,25 @@ import (
 // extrusion. Its one source face supplies both rim station grids, and each
 // selected rim is exactly one of the source body's own full-circle edges.
 func bodyPatchCircularPrismSource(pp bodyPatchPayload) (prismPayload, bool) {
-	if len(pp.faces) != 1 || len(pp.chains) == 0 || len(pp.chains) > 2 || pp.faces[0].n.Body == nil {
+	if len(pp.Faces) != 1 || len(pp.Chains) == 0 || len(pp.Chains) > 2 || pp.Faces[0].Body == nil {
 		return prismPayload{}, false
 	}
-	prism, ok := pp.faces[0].n.Body.Payload.(prismPayload)
+	prism, ok := pp.Faces[0].Body.Payload.(prismPayload)
 	if !ok || !prism.SurfaceResult || prism.SectionDelta != 0 || len(prism.Profile.Holes) != 0 ||
 		len(prism.Profile.Outer.Segments) != 1 {
 		return prismPayload{}, false
 	}
-	if _, ok := pp.faces[0].n.Surface.(surfacegeom.Cylinder); !ok {
+	if _, ok := pp.Faces[0].Surface.(surfacegeom.Cylinder); !ok {
 		return prismPayload{}, false
 	}
-	for _, chain := range pp.chains {
-		if len(chain.edges) != 1 {
+	for _, chain := range pp.Chains {
+		if len(chain.Edges) != 1 {
 			return prismPayload{}, false
 		}
-		if _, ok := chain.edges[0].n.Curve.(surfacegeom.Circle3); !ok {
+		if _, ok := chain.Edges[0].Curve.(surfacegeom.Circle3); !ok {
 			return prismPayload{}, false
 		}
-		if len(chain.edges[0].n.Faces) != 1 || chain.edges[0].n.Faces[0] != faceNode(pp.faces[0]) {
+		if len(chain.Edges[0].Faces) != 1 || chain.Edges[0].Faces[0] != pp.Faces[0] {
 			return prismPayload{}, false
 		}
 	}
@@ -53,12 +53,12 @@ func bodyPatchCircularPrismSource(pp bodyPatchPayload) (prismPayload, bool) {
 // two-sided sheet proof without making an occupied-volume claim.
 func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatchPayload,
 	prism prismPayload, chord float64, verify Verification) (*Mesh, error) {
-	source, err := tessellatePrism(ctx, bodyHandle(pp.faces[0].n.Body), prism, prismWallRole, chord, VerifyBoundary)
+	source, err := tessellatePrism(ctx, bodyHandle(pp.Faces[0].Body), prism, prismWallRole, chord, VerifyBoundary)
 	if err != nil {
 		return nil, err
 	}
 	faces := b.Faces()
-	if len(faces) != 1+len(pp.chains) || len(source.n.Source) == 0 {
+	if len(faces) != 1+len(pp.Chains) || len(source.n.Source) == 0 {
 		return nil, fmt.Errorf(`%w: a circular PatchEdges source has an incomplete face map`, ErrUnsupported)
 	}
 	work := freeform.NewFreeformWork()
@@ -71,7 +71,7 @@ func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatch
 		walks = nil
 	}
 	cl, err := tessellation.ChordLoop(ctx, prism.Profile.Outer, chord, prism.Z1-prism.Z0,
-		work, walks, 0, func(_ survey2d.SideWalk) (*Face, error) { return pp.faces[0], nil },
+		work, walks, 0, func(_ survey2d.SideWalk) (*Face, error) { return faceHandle(pp.Faces[0]), nil },
 		stationbound.ChordStationBound)
 	if err != nil {
 		return nil, err
@@ -106,7 +106,7 @@ func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatch
 		},
 	})
 	for i := range mesh.n.Source {
-		if source.n.Source[i] != faceNode(pp.faces[0]) {
+		if source.n.Source[i] != pp.Faces[0] {
 			return nil, fmt.Errorf(`%w: a circular PatchEdges source has multiple wall faces`, ErrUnsupported)
 		}
 		mesh.n.Source[i] = faceNode(faces[0])
@@ -115,8 +115,8 @@ func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatch
 	// Charge its exact linear stretch and its held point-rounding separately.
 	placementRound := 0.0
 	stretch := 0.0
-	if pp.xform != r3.Identity() {
-		rotation, err := massmoment.PlacementRotation(pp.xform)
+	if pp.Xform != r3.Identity() {
+		rotation, err := massmoment.PlacementRotation(pp.Xform)
 		if err != nil {
 			return nil, err
 		}
@@ -128,10 +128,10 @@ func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatch
 		for i, v := range mesh.n.Vertices {
 			placementRound = math.Max(placementRound,
 				proofbound.RigidRoundAllow(proofbound.VecMaxAbs(v),
-					proofbound.VecMaxAbs(pp.xform.Translation())))
-			mesh.n.Vertices[i] = pp.xform.Apply(v)
+					proofbound.VecMaxAbs(pp.Xform.Translation())))
+			mesh.n.Vertices[i] = pp.Xform.Apply(v)
 		}
-		if pp.xform.IsReflection() {
+		if pp.Xform.IsReflection() {
 			for i := range mesh.n.Triangles {
 				mesh.n.Triangles[i][1], mesh.n.Triangles[i][2] = mesh.n.Triangles[i][2], mesh.n.Triangles[i][1]
 			}
@@ -139,7 +139,7 @@ func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatch
 	}
 	lengthScale := proofbound.AbsSumUpper(1, stretch)
 	mesh.n.CoordBound = proofbound.AbsSumUpper(proofbound.ProductUpper(source.n.CoordBound, lengthScale), placementRound)
-	wallBound, ok := source.sourceBound(faceNode(pp.faces[0]))
+	wallBound, ok := source.sourceBound(pp.Faces[0])
 	if !ok {
 		return nil, fmt.Errorf(`%w: a circular PatchEdges source states no wall bound`, ErrUnsupported)
 	}
@@ -150,11 +150,11 @@ func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatch
 		byFace[faces[0]] = append(byFace[faces[0]], i)
 	}
 	used := [2]bool{}
-	for i, chain := range pp.chains {
+	for i, chain := range pp.Chains {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		at := chain.edges[0].n.Start.Position
+		at := chain.Edges[0].Start.Position
 		ring := -1
 		for k := range 2 {
 			if at == source.n.Vertices[k] {

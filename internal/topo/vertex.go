@@ -26,7 +26,7 @@ type Vertex struct {
 	// propagated unchanged,
 	// composing xform, by every copier that reproduces the same point
 	// (stitch.go's rebuildStitchTopology, unstitch.go's
-	// copyFaceUnderContext, patch_body.go's copyPatchFacesUnder). Zero ("no
+	// copyFaceUnderContext, patchchain's copyFacesUnder). Zero ("no
 	// certificate") for every vertex no builder or copier stamps.
 	Denot denotation.CurveToken
 	// Owner is the root Vertex handle that holds this node by value. Root

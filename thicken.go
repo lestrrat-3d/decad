@@ -164,7 +164,7 @@ func thickenPatch(ctx context.Context, d *Document, pp patchPayload, side Thicke
 	if proofbound.AdmitAbove(proofbound.BoundedSub(z1, z0), 0) != proofbound.SurvAdmit {
 		return nil, fmt.Errorf(`%w: the thicken interval has no proven positive height`, ErrUnsupported)
 	}
-	prism := pp.prism()
+	prism := pp.Prism()
 	prism.Z0, prism.Z0Delta = z0.Value, z0.Bound
 	prism.Z1, prism.Z1Delta = z1.Value, z1.Bound
 	ref := d.nextProducerID()

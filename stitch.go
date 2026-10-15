@@ -610,7 +610,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 				AxialDelta:    axialDelta,
 				HasAxialDelta: f.n.HasAxialDelta,
 				NormalBound:   f.n.NormalBound,
-				Denoted:       f.denotedUnder(xform),
+				Denoted:       f.n.DenotedUnder(xform),
 				Surface:       transformed,
 				CapRecord:     f.n.CapRecord.Under(xform),
 				Origins:       append([]provenance.Ref(nil), f.n.Origins...),
@@ -641,19 +641,6 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 		newFaces[i] = nf
 	}
 	return newFaces, classOf, welded, nil
-}
-
-// coedgeDirectionFor returns f's own forward flag for its use of e, and
-// whether f actually uses e at all.
-func coedgeDirectionFor(f *Face, e *Edge) (bool, bool) {
-	for _, l := range f.n.Loops {
-		for _, ce := range l.CoEdges {
-			if ce.Edge == edgeNode(e) {
-				return ce.Forward, true
-			}
-		}
-	}
-	return false, false
 }
 
 // reverseFaceOrientation reverses f's whole boundary walk in place: every
@@ -898,7 +885,7 @@ func fixWeldedEdgeConvexity(welded map[*Edge]struct{}) {
 		}
 		var fwd, bwd *Face
 		for _, f := range e.n.Faces {
-			dir, ok := coedgeDirectionFor(faceHandle(f), e)
+			dir, ok := f.CoEdgeDirection(edgeNode(e))
 			if !ok {
 				continue
 			}

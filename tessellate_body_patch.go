@@ -70,7 +70,7 @@ func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chor
 	if err := orientBodyPatchFilledFaces(mesh, b, classOf, budget); err != nil {
 		return nil, err
 	}
-	if pp.xform.IsReflection() {
+	if pp.Xform.IsReflection() {
 		for i := range mesh.n.Triangles {
 			mesh.n.Triangles[i][1], mesh.n.Triangles[i][2] = mesh.n.Triangles[i][2], mesh.n.Triangles[i][1]
 		}
