@@ -10,6 +10,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/cupwall"
+	"github.com/lestrrat-3d/decad/internal/draftrecord"
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/modifyoption"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
@@ -275,7 +276,7 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value, opts .
 	if out, taken, err := tryDraftCircleShell(ctx, b, removed, sense, tmm, tDelta); taken {
 		return out, err
 	}
-	if err := requireNotDraftReceiver(b.n.Payload, "shells"); err != nil {
+	if err := draftrecord.RequireNotReceiver(b.n.Payload, "shells"); err != nil {
 		return nil, err
 	}
 	// Reach RX2 (docs/modify-reach-design.md §9.3): a revolve receiver shells

@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/chainrecord"
 	"github.com/lestrrat-3d/decad/internal/coilshell"
 	"github.com/lestrrat-3d/decad/internal/cupwall"
+	"github.com/lestrrat-3d/decad/internal/draftrecord"
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/patchchain"
@@ -135,18 +136,27 @@ type (
 	compositeTwistedSweepPayload = twistsweep.CompositePayload
 )
 
+// draftPayload and twoSidedDraftPayload are the evaluator's records of a
+// tapered Extrude or face Draft and of a two-sided taper: the
+// internal/draftrecord payloads, which draftrecord.Build and
+// draftrecord.BuildTwoSided evaluate over topology nodes and which implement
+// topo.Payload (docs/draft-design.md, docs/evaluator-design.md §8).
+type (
+	draftPayload         = draftrecord.Payload
+	twoSidedDraftPayload = draftrecord.TwoSidedPayload
+)
+
 // capBlendPayload is the evaluator's record of a complete-cap-loop chamfer
 // and of the band view a draft or brep loop band builds through: the
 // internal/capblend payload, which capblend.Build evaluates over topology
 // nodes and which implements topo.Payload (docs/modify-reach-design.md §8.3,
 // docs/evaluator-design.md §8). The other names are its setbacks, band keys,
-// patches, built bands and loft source.
+// patches and loft source.
 type (
 	capBlendPayload   = capblend.Payload
 	capSetback        = capblend.Setback
 	capBandKey        = capblend.BandKey
 	capPatch          = capblend.Patch
-	capBandResult     = capblend.BandResult
 	loftCapBandSource = capblend.LoftSource
 	capPatchGeom      = capband.Patch
 )

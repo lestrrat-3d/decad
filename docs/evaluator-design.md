@@ -865,7 +865,9 @@ their `Placed` runs `loftrecord.Build` and `loftrecord.BuildChain`. `capBlendPay
 `breprecord.AllEdgeChamferPayload`: its `Placed` runs `breprecord.BuildAllEdgeChamfer`. `brepPayload` is an
 alias of `breprecord.Payload`: its `Placed` runs `breprecord.Build`. `twistedSweepPayload` and
 `compositeTwistedSweepPayload` are aliases of `twistsweep.Payload` and `twistsweep.CompositePayload`:
-their `Placed` runs `twistsweep.Eval`. A payload that still lives in the root
+their `Placed` runs `twistsweep.Eval`. `draftPayload` and `twoSidedDraftPayload` are aliases of
+`draftrecord.Payload` and `draftrecord.TwoSidedPayload`: their `Placed` runs `draftrecord.Build` and
+`draftrecord.BuildTwoSided`. A payload that still lives in the root
 package recovers its document handle from the node's `Owner` in `Placed` and
 runs its root builder.
 

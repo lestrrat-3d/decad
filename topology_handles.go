@@ -258,18 +258,6 @@ func loopHandles(ns []*topo.Loop) []*Loop {
 	return out
 }
 
-// loopNodes returns the nodes of ls in order, or nil for an empty ls.
-func loopNodes(ls []*Loop) []*topo.Loop {
-	if len(ls) == 0 {
-		return nil
-	}
-	out := make([]*topo.Loop, len(ls))
-	for i, l := range ls {
-		out[i] = loopNode(l)
-	}
-	return out
-}
-
 // loopEdges returns the handles of the edges n's uses traverse, in walk order:
 // Loop.Edges's answer for a loop node.
 func loopEdges(n *topo.Loop) []*Edge {

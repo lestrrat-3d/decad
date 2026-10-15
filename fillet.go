@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/breprecord"
+	"github.com/lestrrat-3d/decad/internal/draftrecord"
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -204,7 +205,7 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 	if out, matched, err := tryDraftCircleRimFillet(ctx, b, edges, rmm, rDelta); matched || err != nil {
 		return out, err
 	}
-	if err := requireNotDraftReceiver(b.n.Payload, "fillets"); err != nil {
+	if err := draftrecord.RequireNotReceiver(b.n.Payload, "fillets"); err != nil {
 		return nil, err
 	}
 	if bp, ok := b.n.Payload.(brepPayload); ok {

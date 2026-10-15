@@ -31,10 +31,7 @@ The rules for rows live in `docs/layout.md`.
 | `unstitch.go` | `Unstitch` sheet split and placement. See surface §6.5. |
 | `extrude.go` | Generic `Extrude` over a profile or chain, `WithTaper`, linear-extent resolution, the chain ribbon entry point. See evaluator §5 and surface §13.2. |
 | `draft.go` | `Draft`, `NeutralPlane`, `Walls` gates. See draft §10. |
-| `draft_payload.go` | `draftPayload`, its band view and offset span. See draft §6, §8.1. |
-| `draft_build.go` | Tapered extrude gates and assembly. See draft §5, §7. |
-| `draft_two_sided.go` | Two-slab draft assembly and placement. See draft §7. |
-| `draft_moments.go` | Draft body measurements. See draft §8. |
+| `draft_build.go` | Tapered extrude angle and surface-result gates, extent resolution and slab dispatch. See draft §5, §7. |
 | `draft_survey.go` | Draft body undercut survey. See draft DD7. |
 | `section_input.go` | `Section`: the profile-or-chain constraint a section-fed operation is generic over. See surface §13.2. |
 | `sweep.go` | Generic `Sweep` over a profile or chain, path admission adapters and span payloads. See sweep design. |

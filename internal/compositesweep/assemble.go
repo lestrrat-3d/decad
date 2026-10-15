@@ -106,13 +106,13 @@ func Assemble(
 			parts[join].Body,
 			sewnEdges,
 		); err != nil {
-			return nil, wrapStageError(fmt.Sprintf(`sweep path join %d`, join+1), err)
+			return nil, WrapStageError(fmt.Sprintf(`sweep path join %d`, join+1), err)
 		}
 	}
 	if closed {
 		last := parts[len(parts)-1]
 		if err := joinSpans(ctx, last.EndCap, parts[0].StartCap, last.Body, sewnEdges); err != nil {
-			return nil, wrapStageError(`sweep path closure`, err)
+			return nil, WrapStageError(`sweep path closure`, err)
 		}
 	}
 
@@ -220,10 +220,11 @@ func ValidateRims(ctx context.Context, parts []SpanPart) error {
 	return budget.Err()
 }
 
-// wrapStageError names the stage of a build that failed. A canceled or
+// WrapStageError names the stage of a build that failed. A canceled or
 // expired context passes through unwrapped, so a caller reads ctx.Err() itself.
-// It is root wrapStageError's text, for the join stages Assemble names.
-func wrapStageError(stage string, err error) error {
+// Assemble names its join stages through it, and internal/draftrecord its
+// wall and half-taper stages.
+func WrapStageError(stage string, err error) error {
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return err
 	}

@@ -332,7 +332,6 @@
 2	0.00	TestDegreeOneNURBSCornerIsNotFitInterpolatedAndStillFolds
 2	0.01	TestDraftMeshSharesTheNearRing
 2	0.24	TestDraftMoverRecordRadiusEnclosesTheBody
-2	0.00	TestDraftOffsetEnclosesTheExactProduct
 2	0.00	TestEvalLoftCancellation
 2	0.00	TestEvalPrismRejectsOverflowedMeasurements
 2	0.00	TestFacetAdjacencyCancellationIsBounded

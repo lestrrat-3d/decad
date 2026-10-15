@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/breprecord"
+	"github.com/lestrrat-3d/decad/internal/draftrecord"
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -228,7 +229,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 			return out, err
 		}
 	}
-	if err := requireNotDraftReceiver(b.n.Payload, "chamfers"); err != nil {
+	if err := draftrecord.RequireNotReceiver(b.n.Payload, "chamfers"); err != nil {
 		return nil, err
 	}
 	blend := revolveBlendOp{

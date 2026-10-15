@@ -36,18 +36,6 @@ func requireNotCapBlendReceiver(payload topo.Payload, op string) error {
 	return nil
 }
 
-// requireNotDraftReceiver is modify S3 for a draft body
-// (docs/draft-design.md Table DD row DD14) outside its bounded rim routes.
-// It runs beside requireNotCapBlendReceiver, so the refusal names the draft
-// body rather than the generic class.
-func requireNotDraftReceiver(payload topo.Payload, op string) error {
-	switch payload.(type) {
-	case draftPayload, twoSidedDraftPayload:
-		return fmt.Errorf(`%w: this evaluator %s a straight prism, a revolve or their modify results; this draft body (a tapered extrude) is outside its bounded rim routes (modify S3)`, ErrUnsupported, op)
-	}
-	return nil
-}
-
 // classifyChamferSelection is RX1's second class plus SX4 (Table SX):
 // distinguishes a lateral-edge selection (the base modify-design §7 case,
 // left to the existing code path unchanged) from a complete-cap-loop

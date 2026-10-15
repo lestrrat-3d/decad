@@ -2,14 +2,9 @@ package decad
 
 import (
 	"math"
-	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/capblend"
-	"github.com/lestrrat-3d/decad/internal/freeform"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
-	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -31,35 +26,6 @@ func draftSlot(t *testing.T) *Body {
 	b, err := Extrude(t.Context(), New(), s, s.Profiles()[0], Distance{D: units.Millimeters(8), Dir: Along}, WithTaper(units.Degrees(3)))
 	require.NoError(t, err)
 	return b
-}
-
-// TestDraftOffsetEnclosesTheExactProduct pins §8.1's span: every corner of the
-// exact product of the height span and the tangent enclosure lies within
-// dDelta of the held d, and dDelta is positive even for a millimetre sweep and
-// a degree angle, since the tangent enclosure has width. A taper whose cosine
-// enclosure reaches zero is SD2.
-func TestDraftOffsetEnclosesTheExactProduct(t *testing.T) {
-	t.Parallel()
-	for _, tc := range []struct{ h, hDelta, deg float64 }{
-		{10, 0, 5}, {8, 0, -3}, {25.4, 3.6e-15, 7.5}, {1, 0, 89},
-	} {
-		alpha := tc.deg * units.Degree.Factor()
-		d, dDelta, err := draftOffset(tc.h, tc.hDelta, alpha, 0)
-		require.NoError(t, err)
-		require.Greater(t, dDelta, 0.0)
-		require.Equal(t, math.Signbit(d), tc.deg < 0)
-		tan, ok := proofbound.RadTanSpan(proofbound.PointInterval(proofarith.FloatRat(alpha)))
-		require.True(t, ok)
-		for _, h := range []float64{tc.h - tc.hDelta, tc.h + tc.hDelta} {
-			for _, tv := range []*big.Rat{tan.Lo, tan.Hi} {
-				exact := new(big.Rat).Mul(proofarith.FloatRat(h), tv)
-				gap := new(big.Rat).Abs(new(big.Rat).Sub(exact, proofarith.FloatRat(d)))
-				require.LessOrEqual(t, gap.Cmp(proofarith.FloatRat(dDelta)), 0)
-			}
-		}
-	}
-	_, _, err := draftOffset(10, 0, math.Pi/2, 1e-3)
-	require.ErrorIs(t, err, ErrDegenerate)
 }
 
 // TestDraftPayloadRecordsTheFarSection pins Table BD row BD1: the body's
@@ -85,27 +51,19 @@ func TestDraftPayloadRecordsTheFarSection(t *testing.T) {
 // TestDraftConeWallsReadNoChordLocusTerm pins §8's chord-versus-locus term at
 // zero: both corners of each of the slot's Cone walls are G1 feet on the
 // wall's own radials, so the band's proven corner skews are zero, and with
-// them capband's chord-versus-locus allowance.
+// them capband's chord-versus-locus allowance. It reads the patch geometry
+// the build recorded from capblend.BuildBand.
 func TestDraftConeWallsReadNoChordLocusTerm(t *testing.T) {
 	t.Parallel()
 	b := draftSlot(t)
 	dp := b.n.Payload.(draftPayload)
-	cbp := dp.Band()
-	nearZ, nearDelta, farZ, matSign := dp.Levels()
-	work := freeform.NewFreeformWork()
-	loop := cbp.Loops()[0]
-	near, err := draftNearRim(t.Context(), cbp.PrismLike(0, 0), 0, loop, nearZ, nearDelta, work)
-	require.NoError(t, err)
-	band, err := capblend.BuildBand(t.Context(), envOf(b.n.Doc, b.n.Origin.Producer),
-		bodyNode(bornBody(&Body{n: topo.Body{Doc: b.n.Doc}})), cbp, 0, loop, farZ, matSign, near, nil, work)
-	require.NoError(t, err)
 	cones := 0
-	for _, g := range band.Geom {
-		if !g.Circular {
+	for _, p := range dp.Patches {
+		if !p.Geom.Circular {
 			continue
 		}
 		cones++
-		require.Zero(t, capblend.PatchWindowSkew(g))
+		require.Zero(t, capblend.PatchWindowSkew(p.Geom))
 	}
 	require.Equal(t, 2, cones)
 }

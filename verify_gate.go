@@ -5,7 +5,6 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/diameter"
-	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
@@ -406,23 +405,12 @@ func fallbackGateDiameter(budget *proofbound.WorkBudget, body *Body) (float64, b
 // the sweep and taper denote. Where the stations cannot be read, the arm
 // reads the body's vertices with their published bounds instead.
 func draftGateDiameter(ctx context.Context, body *Body, dp draftPayload) (float64, bool, error) {
-	prisms, displacement := draftCapPrisms(dp)
+	prisms, displacement := dp.CapPrisms()
 	d, ok, err := stationGateDiameter(proofbound.NewWorkBudget(ctx), prisms, displacement)
 	if err != nil || ok {
 		return d, ok, err
 	}
 	return chainVertexGateDiameter(ctx, body, 0)
-}
-
-// draftCapPrisms is the near section at the near level and the recorded far
-// section at the far level, each as a prism of zero height, beside the
-// displacement their stations carry: the levels' and farDelta.
-func draftCapPrisms(dp draftPayload) ([]prismPayload, float64) {
-	nearZ, _, farZ, _ := dp.Levels()
-	level := func(profile profileRecord, z float64) prismPayload {
-		return prismrecord.Payload{Profile: profile, Frame: dp.Frame, Z0: z, Z1: z, Xform: dp.Xform}
-	}
-	return []prismPayload{level(dp.Profile, nearZ), level(dp.Far, farZ)}, proofbound.AbsSumUpper(dp.AxialDelta(), dp.FarDelta)
 }
 
 // gateWitnessPrism builds the straight prism fallbackGateDiameter reads its
