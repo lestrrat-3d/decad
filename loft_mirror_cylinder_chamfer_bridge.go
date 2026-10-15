@@ -19,7 +19,7 @@ func loftMirrorCylinderChamferUpperShifts(record *loftMirrorCylinderBoreRecord,
 		len(record.Join.Pairs) != len(source.originalTeeth) {
 		return nil, fmt.Errorf("%w: mirrored cap chamfer lost its upper tooth source", ErrUnsupported)
 	}
-	loft, ok := record.Join.Source.Lower.n.Payload.(loftPayload)
+	loft, ok := record.Join.Source.Lower.Payload.(loftPayload)
 	if !ok || !loft.AuthenticatedReconstruction {
 		return nil, fmt.Errorf("%w: mirrored cap chamfer lost its source Loft", ErrUnsupported)
 	}
@@ -27,7 +27,7 @@ func loftMirrorCylinderChamferUpperShifts(record *loftMirrorCylinderBoreRecord,
 	byMotion := make(map[r3.Transform]*big.Rat, len(record.Join.Pairs))
 	var sweptTotal, greatest float64
 	for i, pair := range record.Join.Pairs {
-		fp, ok := pair.n.Payload.(facetedPayload)
+		fp, ok := pair.Payload.(facetedPayload)
 		if !ok || !fp.ContactAudited {
 			return nil, fmt.Errorf("%w: mirrored cap tooth %d lost its source", ErrUnsupported, i)
 		}
@@ -42,7 +42,7 @@ func loftMirrorCylinderChamferUpperShifts(record *loftMirrorCylinderBoreRecord,
 			byMotion[motion] = new(big.Rat)
 			continue
 		}
-		shift, swept, proved, err := loftMirrorCylinderUpperBridge(pair, motion, middle)
+		shift, swept, proved, err := loftMirrorCylinderUpperBridge(bodyHandle(pair), motion, middle)
 		if err != nil {
 			return nil, err
 		}
@@ -97,12 +97,12 @@ func loftMirrorCylinderChamferUpperCapBridge(ctx context.Context, old, upper fac
 	if shift == 0 {
 		return 0, nil
 	}
-	blank, ok := record.Join.Blank.n.Payload.(prismPayload)
+	blank, ok := record.Join.Blank.Payload.(prismPayload)
 	if !ok || !loftMirrorCylinderBlank(blank) || len(half.ideal) != len(upper.Verts) ||
 		half.band[0] >= half.band[1] || len(record.Outer[1]) < 3 {
 		return 0, fmt.Errorf("%w: mirrored cap bridge lost its upper band", ErrUnsupported)
 	}
-	loft, ok := record.Join.Source.Lower.n.Payload.(loftPayload)
+	loft, ok := record.Join.Source.Lower.Payload.(loftPayload)
 	if !ok || !loft.AuthenticatedReconstruction {
 		return 0, fmt.Errorf("%w: mirrored cap bridge lost its source frame", ErrUnsupported)
 	}

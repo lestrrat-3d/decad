@@ -116,7 +116,7 @@ func spiralNearFaceTable(blank, tooth *Body, proof *spiralFirstJoinSource) (
 ) {
 	if blank == nil || tooth == nil || proof == nil || proof.Blank == nil ||
 		proof.Tooth == nil || proof.Blank.RootFace == nil ||
-		proof.Blank.RootFace.n.Body != bodyNode(blank) {
+		proof.Blank.RootFace.Body != bodyNode(blank) {
 		return nil, false
 	}
 	p, ok := tooth.n.Payload.(facetedPayload)
@@ -128,7 +128,7 @@ func spiralNearFaceTable(blank, tooth *Body, proof *spiralFirstJoinSource) (
 			Role: fmt.Sprintf("side(0,%d)", proof.Blank.EdgeIndex[edge])})
 	}
 	heel, root, toe := blankFace(2), blankFace(3), blankFace(4)
-	if heel == nil || root == nil || toe == nil || root != proof.Blank.RootFace ||
+	if heel == nil || root == nil || toe == nil || faceNode(root) != proof.Blank.RootFace ||
 		heel == root || heel == toe || root == toe {
 		return nil, false
 	}

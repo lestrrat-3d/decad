@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -30,7 +31,7 @@ type pointPlaneLimit struct {
 	Surface                 surfacegeom.Plane
 	Origins                 []provenance.Ref
 	NormalBound, MapStretch float64
-	Centroid                VecMeasurement
+	Centroid                measurement.VecMeasurement
 	HasCentroid             bool
 	// Whether the sheet's reported normal faces away from the apex.
 	FrameTowardFar bool
@@ -285,7 +286,7 @@ func (d *Document) splitPointPlane(ctx context.Context, budget *proofbound.WorkB
 	if center, proved, err := pointPlaneCapCentroid(ctx, record.Base, plane); err != nil {
 		return nil, true, err
 	} else {
-		plane.Centroid, plane.HasCentroid = center, proved
+		plane.Centroid, plane.HasCentroid = vecMeasurementToInternal(center), proved
 	}
 	if record.Lower != nil {
 		switch pointPlaneOrder(record.Base, record.Lower, plane) {

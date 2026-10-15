@@ -125,7 +125,7 @@ func revolveLoftFacesContactGraphOf(ctx context.Context,
 		for cellIndex := range side.cells {
 			cell := side.cells[cellIndex]
 			if side.sectionIndex < 0 || side.sectionIndex >= len(proof.section.Spans) ||
-				side.face != proof.section.Spans[side.sectionIndex].Face || cell.face == nil {
+				faceNode(side.face) != proof.section.Spans[side.sectionIndex].Face || cell.face == nil {
 				return nil, false, nil
 			}
 			g.cells = append(g.cells, revolveLoftFacesGraphCell{
@@ -140,7 +140,7 @@ func revolveLoftFacesContactGraphOf(ctx context.Context,
 		for cellIndex := range side.side.cells {
 			cell := side.side.cells[cellIndex]
 			if side.sectionIndex < 0 || side.sectionIndex >= len(proof.section.Spans) ||
-				side.side.face != proof.section.Spans[side.sectionIndex].Face ||
+				faceNode(side.side.face) != proof.section.Spans[side.sectionIndex].Face ||
 				(cell.face == nil) != (len(cell.retained) == 0) {
 				return nil, false, nil
 			}
@@ -155,7 +155,7 @@ func revolveLoftFacesContactGraphOf(ctx context.Context,
 		key := [2]*Face{pair.blankFace, pair.trimmedFace}
 		if seenPairs[key] || pair.sectionIndex < 0 ||
 			pair.sectionIndex >= len(proof.section.Spans) ||
-			proof.section.Spans[pair.sectionIndex].Face != pair.blankFace ||
+			proof.section.Spans[pair.sectionIndex].Face != faceNode(pair.blankFace) ||
 			!slices.Contains(blankFaces, pair.blankFace) ||
 			!slices.Contains(trimmedFaces, pair.trimmedFace) {
 			return nil, false, nil

@@ -219,8 +219,8 @@ func (o pairsOutcome) requireSame(t *testing.T, want pairsOutcome) {
 	require.Equal(t, wantRecord.CapOutlines, gotRecord.CapOutlines)
 	require.Equal(t, wantRecord.BridgeBound, gotRecord.BridgeBound)
 	require.Equal(t, wantRecord.BridgeVolume, gotRecord.BridgeVolume)
-	wantHalf := wantRecord.LowerHalf.n.Payload.(facetedPayload)
-	gotHalf := gotRecord.LowerHalf.n.Payload.(facetedPayload)
+	wantHalf := wantRecord.LowerHalf.Payload.(facetedPayload)
+	gotHalf := gotRecord.LowerHalf.Payload.(facetedPayload)
 	wantJoin, gotJoin := wantHalf.LoftCylinderJoin, gotHalf.LoftCylinderJoin
 	require.NotNil(t, wantJoin)
 	require.NotNil(t, gotJoin)
@@ -229,9 +229,9 @@ func (o pairsOutcome) requireSame(t *testing.T, want pairsOutcome) {
 	// The lower half's Join record holds the placed teeth, the part this
 	// change computes on goroutines: every tooth body and its proof witness.
 	// The half blank is evaluated afresh by each call.
-	require.Equal(t, wantJoin.Blank.n.Payload, gotJoin.Blank.n.Payload)
-	require.Equal(t, measurementFromInternal(wantJoin.Blank.n.Volume), measurementFromInternal(gotJoin.Blank.n.Volume))
-	require.Equal(t, boxFromInternal(wantJoin.Blank.n.Bounds), boxFromInternal(gotJoin.Blank.n.Bounds))
+	require.Equal(t, wantJoin.Blank.Payload, gotJoin.Blank.Payload)
+	require.Equal(t, measurementFromInternal(wantJoin.Blank.Volume), measurementFromInternal(gotJoin.Blank.Volume))
+	require.Equal(t, boxFromInternal(wantJoin.Blank.Bounds), boxFromInternal(gotJoin.Blank.Bounds))
 	require.Equal(t, wantJoin.AxialBridge, gotJoin.AxialBridge)
 	require.Equal(t, wantJoin.CapOutlines, gotJoin.CapOutlines)
 	require.Equal(t, wantJoin.CapGroups, gotJoin.CapGroups)
@@ -239,7 +239,7 @@ func (o pairsOutcome) requireSame(t *testing.T, want pairsOutcome) {
 		wantJoin.RootCollar, wantJoin.Z0, wantJoin.Z1},
 		[]float64{gotJoin.MinSideRadius, gotJoin.Radius, gotJoin.InnerInset, gotJoin.OuterExcess,
 			gotJoin.RootCollar, gotJoin.Z0, gotJoin.Z1})
-	for _, pair := range [][2][]*Body{{wantJoin.Teeth, gotJoin.Teeth}, {wantJoin.ProofTeeth, gotJoin.ProofTeeth}} {
+	for _, pair := range [][2][]*Body{{bodyHandles(wantJoin.Teeth), bodyHandles(gotJoin.Teeth)}, {bodyHandles(wantJoin.ProofTeeth), bodyHandles(gotJoin.ProofTeeth)}} {
 		require.Len(t, pair[1], len(pair[0]))
 		for i := range pair[0] {
 			require.Equal(t, pair[0][i].n.Payload, pair[1][i].n.Payload, "tooth %d payload", i)
@@ -247,8 +247,8 @@ func (o pairsOutcome) requireSame(t *testing.T, want pairsOutcome) {
 			require.Equal(t, boxFromInternal(pair[0][i].n.Bounds), boxFromInternal(pair[1][i].n.Bounds), "tooth %d bounds", i)
 		}
 	}
-	require.Equal(t, measurementFromInternal(wantRecord.LowerHalf.n.Volume), measurementFromInternal(gotRecord.LowerHalf.n.Volume))
-	require.Equal(t, boxFromInternal(wantRecord.LowerHalf.n.Bounds), boxFromInternal(gotRecord.LowerHalf.n.Bounds))
+	require.Equal(t, measurementFromInternal(wantRecord.LowerHalf.Volume), measurementFromInternal(gotRecord.LowerHalf.Volume))
+	require.Equal(t, boxFromInternal(wantRecord.LowerHalf.Bounds), boxFromInternal(gotRecord.LowerHalf.Bounds))
 	// The topology: every face's origins, area and surface kind, in order.
 	wantFaces, gotFaces := want.body.Faces(), o.body.Faces()
 	require.Len(t, gotFaces, len(wantFaces))
@@ -354,13 +354,13 @@ func TestLoftMirrorCylinderPlaceTeethCancelled(t *testing.T) {
 	f := newTeethFixture(t)
 	ref := f.d.nextProducerID()
 	record := f.pairs[0].n.Payload.(facetedPayload).LoftMirrorJoin
-	lower := record.Lower.n.Payload.(loftPayload)
+	lower := record.Lower.Payload.(loftPayload)
 	checked := loftMirrorCylinderCheckPairs(f.d, f.pairs, record, lower.Frame1.Origin().Z)
 	run := func(cancelAt int64, workers int) (int64, []*Body, error) {
 		ctx := &pollCancelContext{Context: t.Context(), cancelAt: cancelAt}
 		teeth, err := loftMirrorCylinderPlaceTeeth(checked.stop, workers, func(i int) (*Body, error) {
 			if checked.motions[i] == r3.Identity() {
-				return record.Lower, nil
+				return bodyHandle(record.Lower), nil
 			}
 			return placePayload(ctx, lower, f.d, ref, checked.motions[i])
 		})
@@ -432,7 +432,7 @@ func TestLoftMirrorCylinderPlaceTeethMatchesSerialPlacement(t *testing.T) {
 	f := newTeethFixture(t)
 	ref := f.d.nextProducerID()
 	record := f.pairs[0].n.Payload.(facetedPayload).LoftMirrorJoin
-	lower := record.Lower.n.Payload.(loftPayload)
+	lower := record.Lower.Payload.(loftPayload)
 	checked := loftMirrorCylinderCheckPairs(f.d, f.pairs, record, lower.Frame1.Origin().Z)
 	require.Equal(t, len(f.pairs), checked.stop)
 	live, stopLive := context.WithCancel(t.Context())
@@ -446,7 +446,7 @@ func TestLoftMirrorCylinderPlaceTeethMatchesSerialPlacement(t *testing.T) {
 				ctx = cancelled
 			}
 			if checked.motions[i] == r3.Identity() {
-				return record.Lower, nil
+				return bodyHandle(record.Lower), nil
 			}
 			return placePayload(ctx, lower, f.d, ref, checked.motions[i])
 		}
@@ -534,11 +534,11 @@ func oracleLoftMirrorCylinderPairs(ctx context.Context, d *Document, ref produce
 	}
 	record := first.LoftMirrorJoin
 	if record.Lower == nil || record.Upper == nil || record.StationCount < 3 ||
-		record.Lower.n.Doc != documentNode(d) || record.Upper.n.Doc != documentNode(d) {
+		record.Lower.Doc != documentNode(d) || record.Upper.Doc != documentNode(d) {
 		return nil, false, nil
 	}
-	lower, lowOK := record.Lower.n.Payload.(loftPayload)
-	upper, upOK := record.Upper.n.Payload.(loftPayload)
+	lower, lowOK := record.Lower.Payload.(loftPayload)
+	upper, upOK := record.Upper.Payload.(loftPayload)
 	if !lowOK || !upOK || !lower.AuthenticatedReconstruction ||
 		!upper.AuthenticatedReconstruction || lower.SourceIdentity == nil ||
 		lower.SourceIdentity != upper.SourceIdentity ||
@@ -589,7 +589,7 @@ func oracleLoftMirrorCylinderPairs(ctx context.Context, d *Document, ref produce
 			bridgeVolume = proofbound.AbsSumUpper(bridgeVolume, swept)
 			upperBridges[i] = shift
 		}
-		tooth := record.Lower
+		tooth := bodyHandle(record.Lower)
 		if motion != r3.Identity() {
 			tooth, err = placePayload(ctx, lower, d, ref, motion)
 			if err != nil {

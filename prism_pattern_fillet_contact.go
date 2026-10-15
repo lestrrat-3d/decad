@@ -9,6 +9,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
 )
 
 // A joined-prism fillet contacts the original connector line and circular
@@ -62,10 +63,10 @@ func prismPatternFilletContactOf(part prismPatternPart, partIndex, station int,
 	}
 	q := prismPatternExactPlacedPoint(part, near)
 	f := prismPatternExactPlacedPoint(part, far)
-	heldRoot := part.Mesh.n.Vertices[2*station]
+	heldRoot := part.Mesh.Vertices[2*station]
 	rootError := proofbound.AbsSumUpper(proofbound.IntervalFloatError(q.X, heldRoot.X),
 		proofbound.IntervalFloatError(q.Y, heldRoot.Y))
-	if rootError > part.Mesh.Bound().Base() {
+	if rootError > units.Millimeters(part.Mesh.Bound).Base() {
 		return result, fmt.Errorf("%w: joined-prism fillet root is not tied to its source", ErrUnsupported)
 	}
 	d := f.Sub(q)

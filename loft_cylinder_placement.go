@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -18,8 +19,8 @@ import (
 // local result to those operands; an ordinary later placement drops the record.
 type loftCylinderPlacement struct {
 	Pose  r3.Transform
-	Blank *Body
-	Teeth []*Body
+	Blank *topo.Body
+	Teeth []*topo.Body
 }
 
 // loftCylinderAffine compares the exact rational maps represented by stored
@@ -259,17 +260,17 @@ func tryPlacedLoftCylinderUnion(ctx context.Context, d *Document, ref producerID
 	} else if fp, ok := a.n.Payload.(facetedPayload); ok && fp.LoftCylinderJoin != nil &&
 		fp.LoftCylinderJoin.Placement != nil && fp.Xform == fp.LoftCylinderJoin.Placement.Pose {
 		placement := fp.LoftCylinderJoin.Placement
-		blank, teeth, pose = fp.LoftCylinderJoin.Blank,
-			append(append([]*Body(nil), fp.LoftCylinderJoin.Teeth...), b), placement.Pose
-		localBlank = placement.Blank
-		localTeeth = append([]*Body(nil), placement.Teeth...)
+		blank, teeth, pose = bodyHandle(fp.LoftCylinderJoin.Blank),
+			append(append([]*Body(nil), bodyHandles(fp.LoftCylinderJoin.Teeth)...), b), placement.Pose
+		localBlank = bodyHandle(placement.Blank)
+		localTeeth = append([]*Body(nil), bodyHandles(placement.Teeth)...)
 	} else if fp, ok := b.n.Payload.(facetedPayload); ok && fp.LoftCylinderJoin != nil &&
 		fp.LoftCylinderJoin.Placement != nil && fp.Xform == fp.LoftCylinderJoin.Placement.Pose {
 		placement := fp.LoftCylinderJoin.Placement
-		blank, teeth, pose = fp.LoftCylinderJoin.Blank,
-			append(append([]*Body(nil), fp.LoftCylinderJoin.Teeth...), a), placement.Pose
-		localBlank = placement.Blank
-		localTeeth = append([]*Body(nil), placement.Teeth...)
+		blank, teeth, pose = bodyHandle(fp.LoftCylinderJoin.Blank),
+			append(append([]*Body(nil), bodyHandles(fp.LoftCylinderJoin.Teeth)...), a), placement.Pose
+		localBlank = bodyHandle(placement.Blank)
+		localTeeth = append([]*Body(nil), bodyHandles(placement.Teeth)...)
 	} else {
 		return nil, false, nil
 	}
@@ -313,9 +314,9 @@ func tryPlacedLoftCylinderUnion(ctx context.Context, d *Document, ref producerID
 		return nil, false, nil
 	}
 	record := *localPayload.LoftCylinderJoin
-	record.Blank = blank
-	record.Teeth = teeth
-	record.Placement = &loftCylinderPlacement{Pose: pose, Blank: localBlank, Teeth: localTeeth}
+	record.Blank = bodyNode(blank)
+	record.Teeth = bodyNodes(teeth)
+	record.Placement = &loftCylinderPlacement{Pose: pose, Blank: bodyNode(localBlank), Teeth: bodyNodes(localTeeth)}
 	placed.LoftCylinderJoin = &record
 	world.n.Payload = placed
 	return world, true, nil
@@ -330,7 +331,7 @@ func tryPlacedLoftCylinderBoreCut(ctx context.Context, d *Document, ref producer
 	placement := joined.LoftCylinderJoin.Placement
 	if joined.Xform != placement.Pose || !joined.ContactAudited ||
 		placement.Blank == nil || len(placement.Teeth) == 0 ||
-		!loftCylinderPlacedSourcesMatch(placement.Teeth) {
+		!loftCylinderPlacedSourcesMatch(bodyHandles(placement.Teeth)) {
 		return nil, false, nil
 	}
 	record := joined.LoftCylinderJoin
@@ -398,7 +399,7 @@ func tryPlacedLoftCylinderBoreCut(ctx context.Context, d *Document, ref producer
 	// The source and tool gates above precede both private rebuilds. The join
 	// is only needed for an eligible bore; later tooth joins use the sources.
 	localJoin, admitted, err := tryLoftCylinderUnionTeeth(ctx, d,
-		target.originProducer(), placement.Blank, placement.Teeth)
+		target.originProducer(), bodyHandle(placement.Blank), bodyHandles(placement.Teeth))
 	if err != nil || !admitted {
 		return nil, admitted, err
 	}

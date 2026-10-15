@@ -158,8 +158,8 @@ func TestCurvedLoftFacesSourceCertifiesLiveProducer(t *testing.T) {
 			if index == proof.section.RootSpan || span.Face == nil {
 				continue
 			}
-			if _, ok := span.Face.n.Surface.(surfacegeom.Cone); ok {
-				face = span.Face
+			if _, ok := span.Face.Surface.(surfacegeom.Cone); ok {
+				face = faceHandle(span.Face)
 				break
 			}
 		}

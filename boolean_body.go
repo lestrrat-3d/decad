@@ -43,7 +43,7 @@ type facetGroup struct {
 	Origins []provenance.Ref
 	// Centroid is available only when this entire source group has a separate
 	// certificate. A disconnected group cannot give that reading to a patch.
-	Centroid    VecMeasurement
+	Centroid    measurement.VecMeasurement
 	HasCentroid bool
 	// Surface is set by a source whose authenticated surface is retained,
 	// including structural trims and the smooth three-section loft. Ordinary
@@ -319,11 +319,11 @@ func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref produc
 			continue
 		}
 		if next.Groups[i].HasCentroid {
-			reading, err := placedCapCentroid(next.Groups[i].Centroid, delta)
+			reading, err := placedCapCentroid(vecMeasurementFromInternal(next.Groups[i].Centroid), delta)
 			if err != nil {
 				return nil, err
 			}
-			next.Groups[i].Centroid = reading
+			next.Groups[i].Centroid = vecMeasurementToInternal(reading)
 		}
 		// A later structural trim requires the unplaced source. Its retained
 		// public surface identity still moves with this faceted restatement.
@@ -548,7 +548,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 			})
 			group := pp.Groups[pp.Src[i]]
 			if group.HasCentroid && groupPatch[pp.Src[i]] == patch[i] {
-				f.n.Centroid, f.n.HasCentroid = vecMeasurementToInternal(group.Centroid), true
+				f.n.Centroid, f.n.HasCentroid = group.Centroid, true
 			}
 			faceIdx[patch[i]] = f
 			facePlanar[f] = pp.Groups[pp.Src[i]].Planar
@@ -909,11 +909,11 @@ func buildFacetedTopology(
 // stay.
 func exactGroupPlaced(g *facetGroup, q *exactrotation.Rotation) error {
 	if g.HasCentroid {
-		reading, err := placedCapCentroidBy(g.Centroid, q.Linear(), q.Translation())
+		reading, err := placedCapCentroidBy(vecMeasurementFromInternal(g.Centroid), q.Linear(), q.Translation())
 		if err != nil {
 			return err
 		}
-		g.Centroid = reading
+		g.Centroid = vecMeasurementToInternal(reading)
 	}
 	g.Surface, g.Denoted, g.NormalBound = nil, nil, 0
 	return nil

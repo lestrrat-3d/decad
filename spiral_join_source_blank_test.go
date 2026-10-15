@@ -38,7 +38,7 @@ func TestSpiralBlankUsesAuthenticatedRevolveSection(t *testing.T) {
 	require.NotEmpty(t, candidates)
 	source, ok := exactSpiralBlank(blank)
 	require.True(t, ok)
-	require.Same(t, blank, source.Section.Blank)
+	require.Same(t, blank, bodyHandle(source.Section.Blank))
 	rootCandidates := 0
 	for _, candidate := range candidates {
 		if candidate.RootStart != section[4] || candidate.RootEnd != section[3] {

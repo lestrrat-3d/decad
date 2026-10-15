@@ -58,21 +58,21 @@ func prismPatternShell(ctx context.Context, blank *Body, source *prismPatternSou
 			part.Vertex[capIndex] = make([]int, part.RootStart+1)
 			for j := range part.Vertex[capIndex] {
 				part.Vertex[capIndex][j] = len(mesh.Verts)
-				mesh.Verts = append(mesh.Verts, part.Mesh.n.Vertices[2*j+capIndex])
+				mesh.Verts = append(mesh.Verts, part.Mesh.Vertices[2*j+capIndex])
 			}
 		}
 		groups := make(map[*topo.Face]int)
 		for j := range part.RootStart {
 			for side := range 2 {
 				k := 2*j + side
-				face := part.Mesh.n.Source[k]
+				face := part.Mesh.Source[k]
 				group, ok := groups[face]
 				if !ok {
 					group = len(mesh.Groups)
 					groups[face] = group
 					mesh.Groups = append(mesh.Groups, facetGroup{Origins: append([]provenance.Ref(nil), face.Origins...)})
 				}
-				old := part.Mesh.n.Triangles[k]
+				old := part.Mesh.Triangles[k]
 				var mapped [3]int
 				for corner, index := range old {
 					station, capIndex := index/2, index%2

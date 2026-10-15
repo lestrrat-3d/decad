@@ -10,6 +10,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
 )
 
 // prismPatternJoinedBody charges the only changed source boundary to the
@@ -26,9 +27,9 @@ func prismPatternJoinedBody(ctx context.Context, d *Document, ref producerID,
 	connectorReach, rootHeldExcess := 0.0, 0.0
 	for i := range parts {
 		part := &parts[i]
-		toothBound = max(toothBound, part.Mesh.Bound().Base())
-		toothVolume = proofbound.AbsSumUpper(toothVolume, part.Mesh.n.VolSymDiff)
-		area, err := part.Body.Area()
+		toothBound = max(toothBound, units.Millimeters(part.Mesh.Bound).Base())
+		toothVolume = proofbound.AbsSumUpper(toothVolume, part.Mesh.VolSymDiff)
+		area, err := bodyHandle(part.Body).Area()
 		if err != nil {
 			return nil, err
 		}
@@ -40,12 +41,12 @@ func prismPatternJoinedBody(ctx context.Context, d *Document, ref producerID,
 			return nil, err
 		}
 		connectorReach = max(connectorReach, reach)
-		n := len(part.Mesh.n.Vertices) / 2
+		n := len(part.Mesh.Vertices) / 2
 		for j := range n {
 			if j < part.RootStart {
 				continue
 			}
-			v := part.Mesh.n.Vertices[2*j]
+			v := part.Mesh.Vertices[2*j]
 			r2 := prismpattern.RadialSq(planePoint{U: v.X, V: v.Y})
 			excess := new(big.Rat).Sub(proofarith.FloatRat(proofbound.RatSqrtUp(r2)),
 				proofarith.FloatRat(radius))
@@ -58,9 +59,9 @@ func prismPatternJoinedBody(ctx context.Context, d *Document, ref producerID,
 		// connector walls are the only retained pieces that enter the band.
 		for j := 1; j < part.RootStart-1; j++ {
 			for side := range 2 {
-				tri := part.Mesh.n.Triangles[2*j+side]
-				minimum := loftcylinder.TriangleMinRadius(part.Mesh.n.Vertices, tri)
-				if minimum <= proofbound.AbsSumUpper(radius, part.Mesh.Bound().Base()) {
+				tri := part.Mesh.Triangles[2*j+side]
+				minimum := loftcylinder.TriangleMinRadius(part.Mesh.Vertices, tri)
+				if minimum <= proofbound.AbsSumUpper(radius, units.Millimeters(part.Mesh.Bound).Base()) {
 					return nil, fmt.Errorf("%w: copied-prism exterior wall %d lacks circular clearance",
 						ErrUnsupported, j)
 				}
@@ -108,7 +109,7 @@ func prismPatternJoinedBody(ctx context.Context, d *Document, ref producerID,
 	}
 	fp := facetedPayload{Verts: mesh.Verts, Tris: mesh.Tris, Src: mesh.Src, Groups: mesh.Groups,
 		AxialSectionJoin: true,
-		PrismPatternJoin: &prismPatternJoinRecord{Blank: blank, Source: source, Parts: parts,
+		PrismPatternJoin: &prismPatternJoinRecord{Blank: bodyNode(blank), Source: source, Parts: parts,
 			Outlines: outlines, Groups: groups, MaxStep: maxStep, RingRound: ringRound,
 			Mesh: mesh},
 		VertexBound: vertexBound, ContactAudited: true,

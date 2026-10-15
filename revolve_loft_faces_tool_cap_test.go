@@ -36,14 +36,14 @@ func TestRevolveLoftFacesToolCirclesConsumeLiveNeutralSource(t *testing.T) {
 			if index == proof.section.RootSpan || span.Face == nil {
 				continue
 			}
-			cone, ok := span.Face.n.Surface.(surfacegeom.Cone)
+			cone, ok := span.Face.Surface.(surfacegeom.Cone)
 			if !ok {
 				continue
 			}
-			original := span.Face.n.Surface
-			defer func() { span.Face.n.Surface = original }()
+			original := span.Face.Surface
+			defer func() { span.Face.Surface = original }()
 			cone.Origin.X += 0.125
-			span.Face.n.Surface = cone
+			span.Face.Surface = cone
 			_, accepted := revolveLoftFacesToolCapSidesOf(proof)
 			require.False(t, accepted)
 			return

@@ -83,9 +83,9 @@ func loftCylinderCheckPlacedResult(t *testing.T, joined, blank, tooth *Body, pla
 	require.NotNil(t, fp.LoftCylinderJoin)
 	require.LessOrEqual(t, fp.MeshBound, 0.1)
 	require.True(t, fp.ContactAudited)
-	require.Equal(t, blank.originProducer(), fp.LoftCylinderJoin.Blank.originProducer())
+	require.Equal(t, blank.originProducer(), bodyHandle(fp.LoftCylinderJoin.Blank).originProducer())
 	require.Equal(t, 1, len(fp.LoftCylinderJoin.Teeth))
-	require.Equal(t, tooth.originProducer(), fp.LoftCylinderJoin.Teeth[0].originProducer())
+	require.Equal(t, tooth.originProducer(), bodyHandle(fp.LoftCylinderJoin.Teeth[0]).originProducer())
 	require.Equal(t, placed, fp.LoftCylinderJoin.Placement != nil)
 	seenBlank, seenTooth := false, false
 	for _, face := range joined.Faces() {
@@ -226,7 +226,7 @@ func TestLoftCylinderUnionCommonPlacement(t *testing.T) {
 				fp := joined.n.Payload.(facetedPayload)
 				placement := fp.LoftCylinderJoin.Placement
 				localJoin, admitted, err := tryLoftCylinderUnionTeeth(t.Context(), doc,
-					joined.originProducer(), placement.Blank, placement.Teeth)
+					joined.originProducer(), bodyHandle(placement.Blank), bodyHandles(placement.Teeth))
 				require.NoError(t, err)
 				require.True(t, admitted, "canonical source bodies must rebuild the join")
 				loftCylinderCheckCanonicalReadings(t, joined,
@@ -269,11 +269,11 @@ func TestLoftCylinderCommonPlacementConsumers(t *testing.T) {
 	require.NotNil(t, fp.LoftCylinderJoin)
 	require.NotNil(t, fp.LoftCylinderJoin.Placement)
 	require.Equal(t, 2, len(fp.LoftCylinderJoin.Teeth))
-	require.Equal(t, second.originProducer(), fp.LoftCylinderJoin.Teeth[1].originProducer())
+	require.Equal(t, second.originProducer(), bodyHandle(fp.LoftCylinderJoin.Teeth[1]).originProducer())
 	require.LessOrEqual(t, fp.MeshBound, 0.1)
 	placement := fp.LoftCylinderJoin.Placement
 	localJoin, admitted, err := tryLoftCylinderUnionTeeth(ctx, doc,
-		joined.originProducer(), placement.Blank, placement.Teeth)
+		joined.originProducer(), bodyHandle(placement.Blank), bodyHandles(placement.Teeth))
 	require.NoError(t, err)
 	require.True(t, admitted, "canonical source bodies must rebuild the later join")
 	loftCylinderCheckCanonicalReadings(t, joined, localJoin, placement.Pose)
@@ -469,7 +469,7 @@ func TestLoftCylinderCommonPlacementNativeYZConsumers(t *testing.T) {
 	require.Equal(t, 2, len(fp.LoftCylinderJoin.Teeth))
 	placement := fp.LoftCylinderJoin.Placement
 	localJoin, admitted, err := tryLoftCylinderUnionTeeth(ctx, doc,
-		joined.originProducer(), placement.Blank, placement.Teeth)
+		joined.originProducer(), bodyHandle(placement.Blank), bodyHandles(placement.Teeth))
 	require.NoError(t, err)
 	require.True(t, admitted, "canonical source bodies must rebuild the native YZ join")
 	loftCylinderCheckCanonicalReadings(t, joined, localJoin, placement.Pose)

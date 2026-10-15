@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/loftface"
+	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
 // A pair verdict is a source answer for one live blank and trimmed face.
@@ -98,7 +99,7 @@ func revolveLoftFacesCensus(ctx context.Context,
 		}
 		seenTrimmed[face] = struct{}{}
 	}
-	sectionOf := make(map[*Face]int)
+	sectionOf := make(map[*topo.Face]int)
 	for index, span := range proof.section.Spans {
 		if span.Face == nil {
 			continue
@@ -118,7 +119,7 @@ func revolveLoftFacesCensus(ctx context.Context,
 			return nil, false, nil
 		}
 		seenBlank[face] = struct{}{}
-		if _, found := sectionOf[face]; !found {
+		if _, found := sectionOf[faceNode(face)]; !found {
 			return nil, false, nil
 		}
 	}
@@ -144,7 +145,7 @@ func revolveLoftFacesCensus(ctx context.Context,
 		if err := ctx.Err(); err != nil {
 			return nil, false, err
 		}
-		sectionIndex, found := sectionOf[blankFace]
+		sectionIndex, found := sectionOf[faceNode(blankFace)]
 		if !found || sectionIndex >= len(manifest.sideOutcome) {
 			return nil, false, nil
 		}

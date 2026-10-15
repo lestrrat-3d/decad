@@ -70,7 +70,7 @@ func revolveLoftFacesVerticalSideClassify(ctx context.Context,
 		return nil, revolveLoftFacesVerticalRefusal, nil
 	}
 	face, ok := revolveSpanFace(proof.blank, section)
-	if !ok || face != section.Face || !verticalOriginsMatch(face.originRefs(), section.Origins) {
+	if !ok || faceNode(face) != section.Face || !verticalOriginsMatch(face.originRefs(), section.Origins) {
 		return nil, revolveLoftFacesVerticalRefusal, nil
 	}
 	payload, ok := proof.tooth.n.Payload.(facetedPayload)

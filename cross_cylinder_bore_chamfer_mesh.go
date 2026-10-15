@@ -168,10 +168,10 @@ func crossBoreMeshGroups(rec *crossCylinderBoreRecord) ([]facetGroup, error) {
 		body *Body
 		role string
 	}{
-		{rec.Target, provenance.RoleCapStart},
-		{rec.Target, provenance.RoleCapEnd},
-		{rec.Target, prismrecord.OuterFirstSideRole},
-		{rec.Tool, prismrecord.OuterFirstSideRole},
+		{bodyHandle(rec.Target), provenance.RoleCapStart},
+		{bodyHandle(rec.Target), provenance.RoleCapEnd},
+		{bodyHandle(rec.Target), prismrecord.OuterFirstSideRole},
+		{bodyHandle(rec.Tool), prismrecord.OuterFirstSideRole},
 	} {
 		group, ok := crossBoreFaceGroup(source.body, source.role)
 		if !ok {

@@ -15,6 +15,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -22,10 +23,10 @@ import (
 // of the original blank. The upper source is its authenticated reflection.
 // The original Boolean operands remain recorded for each later pattern step.
 type loftMirrorCylinderJoinRecord struct {
-	Blank        *Body
+	Blank        *topo.Body
 	Source       *loftMirrorJoinRecord
-	Pairs        []*Body
-	LowerHalf    *Body
+	Pairs        []*topo.Body
+	LowerHalf    *topo.Body
 	CapGroups    [2]int
 	CapOutlines  [2][]int
 	BridgeBound  float64
@@ -46,14 +47,14 @@ func tryLoftMirrorCylinderUnion(ctx context.Context, op meshbool.OperationKind,
 		blank, pairs = b, []*Body{a}
 	} else if fp, ok := a.n.Payload.(facetedPayload); ok &&
 		fp.LoftMirrorCylinderJoin != nil && fp.Xform == r3.Identity() {
-		blank = fp.LoftMirrorCylinderJoin.Blank
+		blank = bodyHandle(fp.LoftMirrorCylinderJoin.Blank)
 		source = fp.LoftMirrorCylinderJoin.Source
-		pairs = append(append([]*Body(nil), fp.LoftMirrorCylinderJoin.Pairs...), b)
+		pairs = append(append([]*Body(nil), bodyHandles(fp.LoftMirrorCylinderJoin.Pairs)...), b)
 	} else if fp, ok := b.n.Payload.(facetedPayload); ok &&
 		fp.LoftMirrorCylinderJoin != nil && fp.Xform == r3.Identity() {
-		blank = fp.LoftMirrorCylinderJoin.Blank
+		blank = bodyHandle(fp.LoftMirrorCylinderJoin.Blank)
 		source = fp.LoftMirrorCylinderJoin.Source
-		pairs = append(append([]*Body(nil), fp.LoftMirrorCylinderJoin.Pairs...), a)
+		pairs = append(append([]*Body(nil), bodyHandles(fp.LoftMirrorCylinderJoin.Pairs)...), a)
 	} else {
 		return nil, false, nil
 	}
@@ -81,11 +82,11 @@ func loftMirrorCylinderPairs(ctx context.Context, d *Document, ref producerID,
 	}
 	record := first.LoftMirrorJoin
 	if record.Lower == nil || record.Upper == nil || record.StationCount < 3 ||
-		record.Lower.n.Doc != documentNode(d) || record.Upper.n.Doc != documentNode(d) {
+		record.Lower.Doc != documentNode(d) || record.Upper.Doc != documentNode(d) {
 		return nil, false, nil
 	}
-	lower, lowOK := record.Lower.n.Payload.(loftPayload)
-	upper, upOK := record.Upper.n.Payload.(loftPayload)
+	lower, lowOK := record.Lower.Payload.(loftPayload)
+	upper, upOK := record.Upper.Payload.(loftPayload)
 	if !lowOK || !upOK || !lower.AuthenticatedReconstruction ||
 		!upper.AuthenticatedReconstruction || lower.SourceIdentity == nil ||
 		lower.SourceIdentity != upper.SourceIdentity ||
@@ -116,7 +117,7 @@ func loftMirrorCylinderPairs(ctx context.Context, d *Document, ref producerID,
 	workers := min(placeWorkers, orderedwork.EachWorkers(checked.stop, 2))
 	lowerTeeth, err := loftMirrorCylinderPlaceTeeth(checked.stop, workers, func(i int) (*Body, error) {
 		if checked.motions[i] == r3.Identity() {
-			return record.Lower, nil
+			return bodyHandle(record.Lower), nil
 		}
 		return placePayload(ctx, lower, d, ref, checked.motions[i])
 	})
@@ -422,8 +423,8 @@ func buildLoftMirrorCylinderUnion(ctx context.Context, d *Document, ref producer
 		VertexBound: vertexBound, MeshBound: bound, VolSymDiff: volumeGap,
 		AreaSlack: areaSlack, DPair: diameter, ContactAudited: true, Xform: r3.Identity(),
 		LoftMirrorCylinderJoin: &loftMirrorCylinderJoinRecord{
-			Blank: blank, Source: source, Pairs: append([]*Body(nil), pairs...),
-			LowerHalf: lowerHalf, CapGroups: capGroups, CapOutlines: capOutlines,
+			Blank: bodyNode(blank), Source: source, Pairs: bodyNodes(pairs),
+			LowerHalf: bodyNode(lowerHalf), CapGroups: capGroups, CapOutlines: capOutlines,
 			BridgeBound: bridgeBound, BridgeVolume: bridgeVolume,
 		},
 	}

@@ -201,7 +201,7 @@ func Transform(ctx context.Context, body *Body, t r3.Transform) (*Body, error) {
 		return nil, err
 	}
 	if source, ok := body.n.Payload.(facetedPayload); ok && source.CopyLineage != nil {
-		bindFacetedCopyLineage(placed, source.CopyLineage.Source, composed, false, nil)
+		bindFacetedCopyLineage(placed, bodyHandle(source.CopyLineage.Source), composed, false, nil)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -341,7 +341,7 @@ func (b *Body) copyUnder(ctx context.Context, motion r3.Transform, exact *exactr
 	if isFaceted {
 		source := b
 		if record := faceted.CopyLineage; record != nil {
-			source = record.Source
+			source = bodyHandle(record.Source)
 		}
 		bindFacetedCopyLineage(copied, source, composed, faceted.CopyLineage == nil, exact)
 	}

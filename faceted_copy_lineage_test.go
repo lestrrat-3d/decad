@@ -18,7 +18,7 @@ func TestRealCurvedCopiedToolLineage(t *testing.T) {
 
 	set, err := certifyFacetedCopies(t.Context(), []*Body{source, image})
 	require.NoError(t, err)
-	require.Same(t, source, set.Source)
+	require.Same(t, source, bodyHandle(set.Source))
 	require.Equal(t, turn, set.Moves[1])
 	require.Len(t, set.Held, 2)
 	require.Len(t, set.FaceOwner[1], len(source.Faces()))
@@ -28,9 +28,9 @@ func TestRealCurvedCopiedToolLineage(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, placed, 2)
 	for _, face := range source.Faces() {
-		owner := set.FaceOwner[1][face]
+		owner := set.FaceOwner[1][faceNode(face)]
 		require.NotNil(t, owner)
-		require.Same(t, image, bodyHandle(owner.n.Body))
+		require.Same(t, image, bodyHandle(owner.Body))
 	}
 	require.NotNil(t, blank, "the source is a real Revolve and LoftFaces pair")
 
@@ -48,7 +48,7 @@ func TestRealCurvedCopiedToolLineage(t *testing.T) {
 	require.NoError(t, err)
 	thirdPayload := third.n.Payload.(facetedPayload)
 	require.Nil(t, thirdPayload.LoftFacesTrim)
-	require.Same(t, source, thirdPayload.CopyLineage.Source)
+	require.Same(t, source, bodyHandle(thirdPayload.CopyLineage.Source))
 	set, err = certifyFacetedCopies(t.Context(), []*Body{source, image, third})
 	require.NoError(t, err)
 	require.Len(t, set.FaceOwner[2], len(source.Faces()))
@@ -93,7 +93,7 @@ func TestFacetedCopyLineageDirectTransfer(t *testing.T) {
 	c, err := Copy(t.Context(), a, WithCopyPlacement(rotate(90)))
 	require.NoError(t, err)
 	cLineage := c.n.Payload.(facetedPayload).CopyLineage
-	require.Same(t, source, cLineage.Source)
+	require.Same(t, source, bodyHandle(cLineage.Source))
 	require.False(t, cLineage.Direct)
 
 	set, err := certifyFacetedCopies(t.Context(), []*Body{source, a, b})

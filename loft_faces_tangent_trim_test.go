@@ -245,7 +245,7 @@ func TestTangentCapExtensionOnRealChain(t *testing.T) {
 	proxy, slab, err := extendTangentCap(t.Context(), oversized, toe, plane)
 	require.NoError(t, err)
 	require.NotNil(t, slab.Eps)
-	changed := map[*Face]bool{toe.CapFace: true}
+	changed := map[*Face]bool{faceHandle(toe.CapFace): true}
 	for _, f := range proxy.n.Source[len(proxy.n.Source)-2*len(toe.Cap.Source.SourceStation):] {
 		changed[faceHandle(f)] = true
 	}
@@ -270,7 +270,7 @@ func TestTangentCapExtensionOnRealChain(t *testing.T) {
 
 	capFacets := 0
 	for i, f := range proxy.n.Source {
-		if f != faceNode(toe.CapFace) {
+		if f != toe.CapFace {
 			continue
 		}
 		capFacets++

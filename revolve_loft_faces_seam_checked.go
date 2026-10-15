@@ -32,7 +32,7 @@ func revolveLoftFacesCertifiedArcPatches(ctx context.Context, blank, tooth *Body
 	for i := range graph.runs {
 		run := &graph.runs[i]
 		cell := graph.cells[run.cellID]
-		if cell.sectionIndex != sectionIndex || cell.blankFace != section.Face ||
+		if cell.sectionIndex != sectionIndex || faceNode(cell.blankFace) != section.Face ||
 			cell.pairID < 0 || cell.source == nil ||
 			graph.pairs[cell.pairID].verdict != revolveLoftFacesPairSourceCandidate {
 			continue

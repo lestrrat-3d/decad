@@ -6,13 +6,14 @@ import (
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
 // obliqueBossRecord is a one-use witness for a whole plate-to-cylinder
 // junction. The generic Union still proves its own mesh and contact.
 type obliqueBossRecord struct {
-	Plate, Boss  *Body
+	Plate, Boss  *topo.Body
 	Rect         momentinput.AxisRect
 	Bottom, Top  float64
 	Base         r3.Vec
@@ -125,7 +126,7 @@ func recognizeObliqueBoss(a, b *Body) *obliqueBossRecord {
 		}
 	}
 	return &obliqueBossRecord{
-		Plate: plate, Boss: boss, Rect: rect, Bottom: pp.Z0, Top: pp.Z1,
+		Plate: bodyNode(plate), Boss: bodyNode(boss), Rect: rect, Bottom: pp.Z0, Top: pp.Z1,
 		Base: base, Axis: axis, Ex: ex, Ey: ey, Radius: radius,
 		Length: length, SourceBound: sourceBound,
 	}

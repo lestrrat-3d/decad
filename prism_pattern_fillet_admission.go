@@ -10,6 +10,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
 )
 
 // Selected chains must be authenticated source-root generators. A faceted
@@ -133,11 +134,11 @@ func prismPatternFilletClearance(ctx context.Context, rec *prismPatternJoinRecor
 			rootPoint = rec.Source.RootArc.End
 		}
 		root := prismPatternExactPlacedPoint(part, rootPoint)
-		held := part.Mesh.n.Vertices[2*station]
+		held := part.Mesh.Vertices[2*station]
 		rootError := proofbound.AbsSumUpper(
 			proofbound.IntervalFloatError(root.X, held.X),
 			proofbound.IntervalFloatError(root.Y, held.Y))
-		if rootError > part.Mesh.Bound().Base() {
+		if rootError > units.Millimeters(part.Mesh.Bound).Base() {
 			return fmt.Errorf("%w: joined-prism fillet contact %d lost its source station", ErrUnsupported, i)
 		}
 		for j, other := range rec.Parts {

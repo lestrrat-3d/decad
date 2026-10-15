@@ -19,6 +19,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -26,7 +27,7 @@ import (
 // Only an original Union gets this record; placement drops it. The sources
 // may be retired, so every use authenticates the selected result edge and
 // works through booleanBody without committing an intermediate body.
-type prismUnionFilletRecord struct{ First, Second *Body }
+type prismUnionFilletRecord struct{ First, Second *topo.Body }
 
 func recognizePrismUnionFillet(a, b *Body) *prismUnionFilletRecord {
 	if _, ok := a.n.Payload.(prismPayload); !ok {
@@ -35,7 +36,7 @@ func recognizePrismUnionFillet(a, b *Body) *prismUnionFilletRecord {
 	if _, ok := b.n.Payload.(prismPayload); !ok {
 		return nil
 	}
-	return &prismUnionFilletRecord{First: a, Second: b}
+	return &prismUnionFilletRecord{First: bodyNode(a), Second: bodyNode(b)}
 }
 
 func (b *Body) filletPrismUnion(ctx context.Context, edges []*Edge,
@@ -43,7 +44,7 @@ func (b *Body) filletPrismUnion(ctx context.Context, edges []*Edge,
 	if len(edges) != 1 || radiusDelta != 0 || !(radius > 0) || proofbound.IsNonFinite(radius) {
 		return nil, false, nil
 	}
-	for _, pair := range [][2]*Body{{rec.First, rec.Second}, {rec.Second, rec.First}} {
+	for _, pair := range [][2]*Body{{bodyHandle(rec.First), bodyHandle(rec.Second)}, {bodyHandle(rec.Second), bodyHandle(rec.First)}} {
 		pp, ok := pair[0].n.Payload.(prismPayload)
 		if !ok {
 			continue

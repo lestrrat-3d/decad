@@ -48,8 +48,8 @@ func loftCylinderChamferSourceOf(fp facetedPayload) (loftCylinderChamferSource, 
 	}
 	if r := fp.LoftCylinderBore; r != nil {
 		return loftCylinderChamferSource{
-			blank: r.Blank, teeth: r.ProofTeeth,
-			originalTeeth: r.Teeth, axialBridge: r.AxialBridge,
+			blank: bodyHandle(r.Blank), teeth: bodyHandles(r.ProofTeeth),
+			originalTeeth: bodyHandles(r.Teeth), axialBridge: r.AxialBridge,
 			outer: r.Outer, inner: r.Inner, capGroups: r.CapGroups,
 			boreGroup: r.WallGroup, blankRadius: r.BlankRadius,
 			boreRadius: r.BoreRadius, boreBound: r.BoreBound, innerInset: r.InnerInset,
@@ -59,8 +59,8 @@ func loftCylinderChamferSourceOf(fp facetedPayload) (loftCylinderChamferSource, 
 	}
 	if r := fp.LoftCylinderJoin; r != nil {
 		return loftCylinderChamferSource{
-			blank: r.Blank, teeth: r.ProofTeeth,
-			originalTeeth: r.Teeth, axialBridge: r.AxialBridge,
+			blank: bodyHandle(r.Blank), teeth: bodyHandles(r.ProofTeeth),
+			originalTeeth: bodyHandles(r.Teeth), axialBridge: r.AxialBridge,
 			outer: r.CapOutlines, capGroups: r.CapGroups,
 			boreGroup: -1, blankRadius: r.Radius,
 			innerInset: r.InnerInset, outerExcess: r.OuterExcess,

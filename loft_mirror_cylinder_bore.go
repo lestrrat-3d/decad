@@ -10,6 +10,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -17,7 +18,7 @@ import (
 // exterior and bore loops for a later outer-cap rewrite. Placement clears it.
 type loftMirrorCylinderBoreRecord struct {
 	Join       *loftMirrorCylinderJoinRecord
-	LowerBore  *Body
+	LowerBore  *topo.Body
 	CapGroups  [2]int
 	Outer      [2][]int
 	Inner      [2][]int
@@ -40,17 +41,17 @@ func tryLoftMirrorCylinderBoreCut(ctx context.Context, op meshbool.OperationKind
 	}
 	record := joined.LoftMirrorCylinderJoin
 	if record.Blank == nil || record.Source == nil || record.LowerHalf == nil ||
-		len(record.Pairs) == 0 || record.LowerHalf.n.Doc != documentNode(d) || record.Blank.n.Doc != documentNode(d) ||
+		len(record.Pairs) == 0 || record.LowerHalf.Doc != documentNode(d) || record.Blank.Doc != documentNode(d) ||
 		record.BridgeBound < 0 || record.BridgeVolume < 0 ||
 		proofbound.IsNonFinite(record.BridgeBound) || proofbound.IsNonFinite(record.BridgeVolume) {
 		return nil, true, fmt.Errorf("%w: mirrored circular Join lost its bore sources", ErrUnsupported)
 	}
-	lower, ok := record.LowerHalf.n.Payload.(facetedPayload)
+	lower, ok := record.LowerHalf.Payload.(facetedPayload)
 	if !ok || lower.LoftCylinderJoin == nil || !lower.ContactAudited ||
 		lower.Xform != r3.Identity() {
 		return nil, true, fmt.Errorf("%w: mirrored circular Join lost its lower-half proof", ErrUnsupported)
 	}
-	blank, ok := record.Blank.n.Payload.(prismPayload)
+	blank, ok := record.Blank.Payload.(prismPayload)
 	if !ok || !loftMirrorCylinderBlank(blank) ||
 		lower.LoftCylinderJoin.Z0 != blank.Z0 ||
 		!loftMirrorCylinderLevels(blank.Z0, lower.LoftCylinderJoin.Z1, blank.Z1) {
@@ -67,7 +68,7 @@ func tryLoftMirrorCylinderBoreCut(ctx context.Context, op meshbool.OperationKind
 			return nil, true, fmt.Errorf("%w: mirrored circular Join lost an outer cap disk", ErrUnsupported)
 		}
 	}
-	lowerBore, matched, err := tryLoftCylinderBoreCut(ctx, op, d, ref, record.LowerHalf, tool)
+	lowerBore, matched, err := tryLoftCylinderBoreCut(ctx, op, d, ref, bodyHandle(record.LowerHalf), tool)
 	if err != nil || !matched {
 		return lowerBore, matched, err
 	}
@@ -90,7 +91,7 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 		lower.Xform != r3.Identity() || record.Source.Lower == nil {
 		return nil, fmt.Errorf("%w: mirrored circular bore lost its lower annulus", ErrUnsupported)
 	}
-	loft, ok := record.Source.Lower.n.Payload.(loftPayload)
+	loft, ok := record.Source.Lower.Payload.(loftPayload)
 	if !ok || !loft.AuthenticatedReconstruction {
 		return nil, fmt.Errorf("%w: mirrored circular bore lost its Loft source", ErrUnsupported)
 	}
@@ -232,7 +233,7 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 			return nil, err
 		}
 	}
-	fullBlank, ok := record.Blank.n.Payload.(prismPayload)
+	fullBlank, ok := record.Blank.Payload.(prismPayload)
 	if !ok || !loftMirrorCylinderBlank(fullBlank) {
 		return nil, fmt.Errorf("%w: reflected circular bore lost its exact blank", ErrUnsupported)
 	}
@@ -250,13 +251,13 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 		VertexBound: vertexBound, MeshBound: bound, VolSymDiff: volumeGap,
 		AreaSlack: areaSlack, DPair: diameter, ContactAudited: true, Xform: r3.Identity(),
 		LoftMirrorCylinderBore: &loftMirrorCylinderBoreRecord{
-			Join: record, LowerBore: lowerBody, CapGroups: capGroups,
+			Join: record, LowerBore: bodyNode(lowerBody), CapGroups: capGroups,
 			Outer: outer, Inner: inner, WallGroups: wallGroups,
 		}}
-	if err := loftMirrorCylinderCapOrigins(&fp, record.Blank, record.Pairs, capGroups); err != nil {
+	if err := loftMirrorCylinderCapOrigins(&fp, bodyHandle(record.Blank), bodyHandles(record.Pairs), capGroups); err != nil {
 		return nil, err
 	}
-	if err := loftCylinderTagCaps(&fp, record.Blank, capGroups,
+	if err := loftCylinderTagCaps(&fp, bodyHandle(record.Blank), capGroups,
 		[2]float64{fullBlank.Z0, fullBlank.Z1}, ref); err != nil {
 		return nil, err
 	}

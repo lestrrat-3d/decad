@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -21,14 +22,14 @@ import (
 type revolveSectionSpan struct {
 	Start, End  planePoint
 	SourceEdges []int
-	Face        *Face
+	Face        *topo.Face
 	Origins     []provenance.Ref
 }
 
 // revolveSectionCertificate describes the authenticated finite section and
 // one candidate conical contact face. Its spans stay in source walk order.
 type revolveSectionCertificate struct {
-	Blank              *Body
+	Blank              *topo.Body
 	Spans              []revolveSectionSpan
 	Frame              r3.Frame
 	AxisSpan, RootSpan int
@@ -122,7 +123,7 @@ func recordedRevolveSection(blank *Body) ([]revolveSectionSpan, int, r3.Frame, b
 			return nil, -1, empty, false
 		}
 		usedFaces[face] = struct{}{}
-		span.Face, span.Origins = face, face.originRefs()
+		span.Face, span.Origins = faceNode(face), face.originRefs()
 	}
 	if axisSpan < 0 {
 		return nil, -1, empty, false
@@ -202,7 +203,7 @@ func revolveRootCandidates(blank *Body) []revolveSectionCertificate {
 		if span.Face == nil || span.Start.V == 0 || span.End.V == 0 {
 			continue
 		}
-		cone, ok := span.Face.n.Surface.(surfacegeom.Cone)
+		cone, ok := span.Face.Surface.(surfacegeom.Cone)
 		if !ok || cone.Axis != (r3.Vec{X: 1}) ||
 			cone.Origin.Y != 0 || cone.Origin.Z != 0 ||
 			!proofbound.FiniteVec(cone.Origin) {
@@ -231,7 +232,7 @@ func revolveRootCandidates(blank *Body) []revolveSectionCertificate {
 			continue
 		}
 		candidates = append(candidates, revolveSectionCertificate{
-			Blank: blank, Spans: spans, Frame: frame,
+			Blank: bodyNode(blank), Spans: spans, Frame: frame,
 			AxisSpan: axisSpan, RootSpan: i, RootStart: start, RootEnd: end,
 			RootCone: cone, ConeGap: gap})
 	}

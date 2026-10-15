@@ -6,6 +6,7 @@ import (
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 )
@@ -28,7 +29,7 @@ type revolveSectorBoundary struct {
 // Sketch answers that identify one connected exposed sector of a point loft.
 // Mesh stations and their displacement remain a separate construction proof.
 type revolveLoftSectorCertificate struct {
-	Blank         *Body
+	Blank         *topo.Body
 	Section       revolveSectionCertificate
 	Trimmed       facetedPayload
 	Trim          *pointConeTrimRecord
@@ -80,7 +81,7 @@ func certifyRevolveLoftSector(blank, sector *Body) (*revolveLoftSectorCertificat
 		if selected != nil {
 			return nil, false
 		}
-		selected = &revolveLoftSectorCertificate{Blank: blank, Section: section,
+		selected = &revolveLoftSectorCertificate{Blank: bodyNode(blank), Section: section,
 			Trimmed: fp, Trim: trim, Base: trim.Base, Boundary: boundary}
 	}
 	return selected, selected != nil

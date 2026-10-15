@@ -44,7 +44,7 @@ func TestCertifyFacetedCopiesPassesExactMaps(t *testing.T) {
 	require.Len(t, set.Maps, 3)
 	require.Nil(t, set.Exact[0])
 	for i, tool := range set.Tools[1:] {
-		record := tool.n.Payload.(facetedPayload).CopyLineage.Exact
+		record := tool.Payload.(facetedPayload).CopyLineage.Exact
 		require.Same(t, record, set.Exact[i+1])
 		require.Equal(t, record.Linear(), set.Maps[i+1])
 	}

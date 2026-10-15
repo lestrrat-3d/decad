@@ -35,7 +35,7 @@ func revolveLoftFacesToolCapSidesOf(proof *revolveLoftFacesSourceCertificate) (
 ) {
 	var out revolveLoftFacesToolCapSides
 	if proof == nil || proof.blank == nil || proof.tooth == nil ||
-		proof.section.Blank != proof.blank || proof.trim == nil ||
+		proof.section.Blank != bodyNode(proof.blank) || proof.trim == nil ||
 		!revolveLoftFacesSectionCurrent(proof) ||
 		!revolveLoftFacesSectionFacesComplete(proof) ||
 		proof.toeFace == nil || proof.heelFace == nil ||
@@ -77,7 +77,7 @@ func revolveLoftFacesToolCapSidesOf(proof *revolveLoftFacesSourceCertificate) (
 			if span.Face == nil {
 				continue // The axis span has no boundary face.
 			}
-			if span.Face.n.Body != bodyNode(proof.blank) || span.Start.V < 0 || span.End.V < 0 ||
+			if span.Face.Body != bodyNode(proof.blank) || span.Start.V < 0 || span.End.V < 0 ||
 				span.Start == span.End {
 				return revolveLoftFacesToolCapSides{}, false
 			}
@@ -86,11 +86,11 @@ func revolveLoftFacesToolCapSidesOf(proof *revolveLoftFacesSourceCertificate) (
 				return revolveLoftFacesToolCapSides{}, false
 			}
 			if !crosses {
-				out.separated[[2]*Face{span.Face, tool.face}] = struct{}{}
+				out.separated[[2]*Face{faceHandle(span.Face), tool.face}] = struct{}{}
 				continue
 			}
 			out.circles = append(out.circles, revolveLoftFacesToolCapCircle{
-				blankFace: span.Face, capFace: tool.face, capOrigin: origin,
+				blankFace: faceHandle(span.Face), capFace: tool.face, capOrigin: origin,
 				span: spanIndex, tool: toolIndex, x: x, radius: radius,
 				sourceMiss: revolveLoftFacesToolCircleOutsideSource(proof.trim, x, radius)})
 		}
