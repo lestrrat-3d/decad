@@ -31,12 +31,12 @@ func TestMappedArcRadialTimeBandTwoExactTimeCrossings(t *testing.T) {
 		QV: loftFaceRatVec{zero, big.NewRat(-1, 1), zero},
 		G0: one, GU: zero, GV: zero}
 	trim := &loftFacesTrimRecord{
-		source: &pointSectionRecord{
+		Source: &pointSectionRecord{
 			profile:   profileRecord{Outer: loopRecord{Segments: []curveSegment{segment}}},
 			source:    &pointSectionSource{entities: []sketch.Entity{arc}},
 			sourceBox: [4]float64{-3, 3, -3, 3},
 		},
-		maps: []loftFaceMap{first, second},
+		Maps: []loftFaceMap{first, second},
 	}
 	meridian := revolveSectionSpan{start: planePoint{V: 1.5}, end: planePoint{U: 1, V: 1.5}}
 	_, certified := mappedArcFiniteSide(context.Background(), &loftFacesTrimRecord{}, 0, meridian)
@@ -52,22 +52,22 @@ func TestMappedArcRadialTimeBandTwoExactTimeCrossings(t *testing.T) {
 	require.Zero(t, got.x[0].Sign())
 	require.Equal(t, 0, got.x[1].Cmp(lfOne()))
 	segment.TStart, segment.TEnd = 1, 0
-	trim.source.profile.Outer.Segments[0] = segment
+	trim.Source.profile.Outer.Segments[0] = segment
 	_, certified = mappedArcRadialTimeBand(context.Background(), trim, 0, 0, meridian)
 	require.True(t, certified)
 	segment.Start.U = 2.1
-	trim.source.profile.Outer.Segments[0] = segment
+	trim.Source.profile.Outer.Segments[0] = segment
 	_, certified = mappedArcRadialTimeBand(context.Background(), trim, 0, 0, meridian)
 	require.False(t, certified)
 	segment.Start.U = 2
-	trim.source.profile.Outer.Segments[0] = segment
+	trim.Source.profile.Outer.Segments[0] = segment
 
 	// A shear breaks the all-time radial identity even though the cap still
 	// maps every sampled endpoint to a finite point.
-	trim.maps[1].QV[2] = big.NewRat(1, 100)
+	trim.Maps[1].QV[2] = big.NewRat(1, 100)
 	_, certified = mappedArcRadialTimeBand(context.Background(), trim, 0, 0, meridian)
 	require.False(t, certified)
-	trim.maps[1].QV[2] = zero
+	trim.Maps[1].QV[2] = zero
 	require.True(t, s.RemoveEntity(arc))
 	_, certified = mappedArcRadialTimeBand(context.Background(), trim, 0, 0, meridian)
 	require.False(t, certified)

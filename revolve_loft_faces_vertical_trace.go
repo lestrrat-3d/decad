@@ -136,12 +136,12 @@ func revolveLoftFacesVerticalTraceChain(graph *revolveLoftFacesContactGraph,
 		return nil, false
 	}
 	payload, ok := graph.tooth.n.Payload.(facetedPayload)
-	if !ok || payload.loftFacesTrim == nil ||
-		payload.loftFacesTrim.source == nil ||
-		payload.loftFacesTrim.source.source == nil {
+	if !ok || payload.LoftFacesTrim == nil ||
+		payload.LoftFacesTrim.Source == nil ||
+		payload.LoftFacesTrim.Source.source == nil {
 		return nil, false
 	}
-	trim := payload.loftFacesTrim
+	trim := payload.LoftFacesTrim
 	pieces := make([]revolveLoftFacesVerticalTracePiece, 0)
 	for id := range graph.cells {
 		entry := &graph.cells[id]
@@ -157,12 +157,12 @@ func revolveLoftFacesVerticalTraceChain(graph *revolveLoftFacesContactGraph,
 		var radius2 *big.Rat
 		var arcBox [2]loftFaceInterval
 		if len(cell.source) == 0 {
-			if cell.segment < 0 || cell.segment >= len(trim.source.profile.Outer.Segments) ||
-				cell.segment >= len(trim.source.source.entities) {
+			if cell.segment < 0 || cell.segment >= len(trim.Source.profile.Outer.Segments) ||
+				cell.segment >= len(trim.Source.source.entities) {
 				return nil, false
 			}
-			record, recorded := trim.source.profile.Outer.Segments[cell.segment].(arcSeg)
-			live, liveArc := trim.source.source.entities[cell.segment].(*sketch.Arc)
+			record, recorded := trim.Source.profile.Outer.Segments[cell.segment].(arcSeg)
+			live, liveArc := trim.Source.source.entities[cell.segment].(*sketch.Arc)
 			if !recorded || !liveArc || !mappedArcRecordMatches(record, live) ||
 				cell.span != 0 || cell.band != side.band {
 				return nil, false

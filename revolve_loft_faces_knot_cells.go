@@ -49,14 +49,14 @@ func revolveLoftFacesEndpointPartitionCells(ctx context.Context,
 	jointCells []revolveLoftFacesJointCell, atEnd bool) (
 	[]revolveLoftFacesMappedCell, bool, error,
 ) {
-	if ctx == nil || trim == nil || band < 0 || band+1 >= len(trim.maps) ||
+	if ctx == nil || trim == nil || band < 0 || band+1 >= len(trim.Maps) ||
 		len(roots) == 0 || len(pieces) != 2*len(roots)+1 ||
 		len(jointCells) != len(roots) {
 		return nil, false, nil
 	}
 	m, b := revolveLoftFacesMeridian(section)
-	q := revolveLoftFacesMeridianMemoOf(ctx).QRows(trim.maps[band], trim.maps[band+1], span, m, b)
-	j := loftface.MeridianJRows(trim.maps[band], trim.maps[band+1], span, q)
+	q := revolveLoftFacesMeridianMemoOf(ctx).QRows(trim.Maps[band], trim.Maps[band+1], span, m, b)
+	j := loftface.MeridianJRows(trim.Maps[band], trim.Maps[band+1], span, q)
 	remaining := revolveLoftFacesMaxBandCells
 	var cells []revolveLoftFacesMappedCell
 	for _, piece := range pieces {
@@ -95,7 +95,7 @@ func revolveLoftFacesEndpointPartitionCells(ctx context.Context,
 			return nil, false, nil
 		}
 		openCells, ok, err := revolveLoftFacesOpenTimeSlab(ctx, q, j,
-			trim.maps[band], trim.maps[band+1], span, section,
+			trim.Maps[band], trim.Maps[band+1], span, section,
 			segment, spanIndex, band, piece.Lo, piece.Hi,
 			piece.LoOpen, piece.HiOpen, &remaining)
 		if err != nil {

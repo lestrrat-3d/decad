@@ -130,9 +130,9 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 	next.revolveLoftJoin = nil
 	next.revolveLoftSector = nil
 	next.LoftFacesPrimitive = false
-	next.loftFacesCap = nil
-	next.loftFacesToe = nil
-	next.loftFacesTrim = nil
+	next.LoftFacesCap = nil
+	next.LoftFacesToe = nil
+	next.LoftFacesTrim = nil
 	next.CopyLineage = nil
 	next.SpiralTools = nil
 	if pointSlab {

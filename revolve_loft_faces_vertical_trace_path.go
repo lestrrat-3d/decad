@@ -179,7 +179,7 @@ func revolveLoftFacesVerticalTraceSegmentBound(proof *revolveLoftFacesSourceCert
 		return bound, !proofbound.IsNonFinite(bound) && bound >= 0
 	}
 	if proof == nil || proof.trim == nil || piece.cell.band < 0 ||
-		piece.cell.band+1 >= len(proof.trim.maps) || from.lo == nil || from.hi == nil ||
+		piece.cell.band+1 >= len(proof.trim.Maps) || from.lo == nil || from.hi == nil ||
 		to.lo == nil || to.hi == nil {
 		return 0, false
 	}
@@ -191,8 +191,8 @@ func revolveLoftFacesVerticalTraceSegmentBound(proof *revolveLoftFacesSourceCert
 						{Lo: point[0], Hi: point[0]}, {Lo: point[1], Hi: point[1]}},
 					point[0] != nil && point[1] != nil
 			}
-			return loftface.JunctionBox(proof.trim.maps[piece.cell.band],
-				proof.trim.maps[piece.cell.band+1], piece.cell.source,
+			return loftface.JunctionBox(proof.trim.Maps[piece.cell.band],
+				proof.trim.Maps[piece.cell.band+1], piece.cell.source,
 				hit.lo, hit.hi, piece.time, piece.time)
 		}
 		start, ok := endpointBox(from)
@@ -220,8 +220,8 @@ func revolveLoftFacesVerticalTraceSegmentBound(proof *revolveLoftFacesSourceCert
 	if lo.Cmp(hi) >= 0 {
 		return 0, false
 	}
-	box, ok := loftface.JunctionBox(proof.trim.maps[piece.cell.band],
-		proof.trim.maps[piece.cell.band+1], piece.cell.source,
+	box, ok := loftface.JunctionBox(proof.trim.Maps[piece.cell.band],
+		proof.trim.Maps[piece.cell.band+1], piece.cell.source,
 		lo, hi, piece.time, piece.time)
 	if !ok {
 		return 0, false

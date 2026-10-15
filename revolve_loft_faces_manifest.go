@@ -29,13 +29,13 @@ func revolveLoftFacesNonverticalManifest(ctx context.Context,
 	proof *revolveLoftFacesSourceCertificate) ([]revolveLoftFacesNonverticalSide, bool, error) {
 	if ctx == nil || proof == nil || proof.blank == nil || proof.tooth == nil || proof.trim == nil ||
 		proof.section.blank != proof.blank || len(proof.section.spans) == 0 ||
-		len(proof.sourceRefs) != len(proof.trim.maps)-1 {
+		len(proof.sourceRefs) != len(proof.trim.Maps)-1 {
 		return nil, false, nil
 	}
 	p, ok := proof.tooth.n.Payload.(facetedPayload)
-	if !ok || p.loftFacesTrim != proof.trim ||
+	if !ok || p.LoftFacesTrim != proof.trim ||
 		!revolveLoftFacesTrimCurrent(proof.tooth, proof.trim) ||
-		!pointSourceCurrent(proof.trim.source) {
+		!pointSourceCurrent(proof.trim.Source) {
 		return nil, false, nil
 	}
 	liveRefs, ok := revolveLoftFacesSourceRefs(proof.trim, proof.tooth)

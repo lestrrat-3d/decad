@@ -15,10 +15,10 @@ import (
 // the blank's finite heel outer cone. Endpoints follow ArcSeg Start, End order.
 // The intervals include the source arc's recorded-radius uncertainty.
 type spiralHeelRootSeam struct {
-	x, slope loftFaceInterval
-	ends     [2][3]loftFaceInterval
-	coneC    *big.Rat
-	negative bool
+	X, Slope loftFaceInterval
+	Ends     [2][3]loftFaceInterval
+	ConeC    *big.Rat
+	Negative bool
 }
 
 // A rational half-angle interval encloses the short source arc. These limits
@@ -254,26 +254,26 @@ func (p spiralHeelPolys) at(t *big.Rat) []*big.Rat {
 
 func spiralHeelRootCells(ctx context.Context, trim *loftFacesTrimRecord, coneC *big.Rat) (bool, error) {
 	count := 0
-	for j, group := range trim.stationGroup {
+	for j, group := range trim.StationGroup {
 		if group != 4 {
 			continue
 		}
 		if err := ctx.Err(); err != nil {
 			return false, err
 		}
-		if j >= len(trim.bounds[7].sourceDeparture) || j >= len(trim.bounds[8].sourceDeparture) ||
-			j >= len(trim.bounds[7].projectiveDeparture) || j >= len(trim.bounds[8].projectiveDeparture) {
+		if j >= len(trim.Bounds[7].SourceDeparture) || j >= len(trim.Bounds[8].SourceDeparture) ||
+			j >= len(trim.Bounds[7].ProjectiveDeparture) || j >= len(trim.Bounds[8].ProjectiveDeparture) {
 			return false, nil
 		}
-		lo, hi := trim.bounds[7], trim.bounds[8]
-		departure := math.Max(proofbound.AbsSumUpper(lo.sourceDeparture[j], lo.projectiveDeparture[j]),
-			proofbound.AbsSumUpper(hi.sourceDeparture[j], hi.projectiveDeparture[j]))
+		lo, hi := trim.Bounds[7], trim.Bounds[8]
+		departure := math.Max(proofbound.AbsSumUpper(lo.SourceDeparture[j], lo.ProjectiveDeparture[j]),
+			proofbound.AbsSumUpper(hi.SourceDeparture[j], hi.ProjectiveDeparture[j]))
 		if proofbound.IsNonFinite(departure) {
 			return false, nil
 		}
-		a := trim.source.sourceStation[j]
-		z := trim.source.sourceStation[(j+1)%len(trim.stationGroup)]
-		if !spiralCellSide(trim.maps[7], trim.maps[8], a, z, lfF(departure),
+		a := trim.Source.sourceStation[j]
+		z := trim.Source.sourceStation[(j+1)%len(trim.StationGroup)]
+		if !spiralCellSide(trim.Maps[7], trim.Maps[8], a, z, lfF(departure),
 			big.NewRat(-1, 1), coneC, false, lfZero(), big.NewRat(19, 20), 8) {
 			return false, nil
 		}
@@ -351,44 +351,44 @@ func spiralHeelRatio(box [3]loftFaceInterval) (loftFaceInterval, bool) {
 // x + r = coneC, so the cap lies strictly outside the blank cone over the
 // whole source box (loftface.CapOutsideNestedCone).
 func spiralTangentCapEightOutsideBlank(trim *loftFacesTrimRecord, coneC *big.Rat) bool {
-	if trim == nil || trim.tangent == nil || !spiralTangentRecordCurrent(trim) || len(trim.maps) != 9 {
+	if trim == nil || trim.Tangent == nil || !spiralTangentRecordCurrent(trim) || len(trim.Maps) != 9 {
 		return false
 	}
-	box, err := lfSourceBox(trim.source)
+	box, err := lfSourceBox(trim.Source)
 	if err != nil {
 		return false
 	}
-	return loftface.CapOutsideNestedCone(trim.maps[8], box, trim.heel.apex, trim.heel.slope,
-		trim.heel.far, coneC, lfOne())
+	return loftface.CapOutsideNestedCone(trim.Maps[8], box, trim.Heel.apex, trim.Heel.slope,
+		trim.Heel.far, coneC, lfOne())
 }
 
 func certifySpiralHeelRootSeam(ctx context.Context, proof *spiralFirstJoinSource) (*spiralHeelRootSeam, bool, error) {
-	if ctx == nil || proof == nil || proof.tooth == nil || proof.blank == nil {
+	if ctx == nil || proof == nil || proof.Tooth == nil || proof.Blank == nil {
 		return nil, false, nil
 	}
-	trim := proof.tooth
-	arc, ok := trim.source.profile.Outer.Segments[4].(arcSeg)
-	if !ok || len(trim.maps) != 9 || len(trim.bounds) != 9 {
+	trim := proof.Tooth
+	arc, ok := trim.Source.profile.Outer.Segments[4].(arcSeg)
+	if !ok || len(trim.Maps) != 9 || len(trim.Bounds) != 9 {
 		return nil, false, nil
 	}
 	radius, radiusBound, box, ok := spiralHeelSourceBox(arc)
 	if !ok {
 		return nil, false, nil
 	}
-	coneC := lfAdd(lfF(proof.blank.ded.U), lfF(proof.blank.ded.V))
-	if lfAdd(lfF(proof.blank.heelOuter.U), lfF(proof.blank.heelOuter.V)).Cmp(coneC) != 0 ||
-		coneC.Sign() <= 0 || lfF(proof.blank.ded.U).Cmp(lfF(proof.blank.heelOuter.U)) >= 0 {
+	coneC := lfAdd(lfF(proof.Blank.ded.U), lfF(proof.Blank.ded.V))
+	if lfAdd(lfF(proof.Blank.heelOuter.U), lfF(proof.Blank.heelOuter.V)).Cmp(coneC) != 0 ||
+		coneC.Sign() <= 0 || lfF(proof.Blank.ded.U).Cmp(lfF(proof.Blank.heelOuter.U)) >= 0 {
 		return nil, false, nil
 	}
-	mapOK, negative := spiralHeelMapCharge(trim.maps[7], trim.maps[8], box, radiusBound, coneC)
-	if !mapOK || (!spiralHeelCapEightOutside(trim.maps[8], coneC) &&
+	mapOK, negative := spiralHeelMapCharge(trim.Maps[7], trim.Maps[8], box, radiusBound, coneC)
+	if !mapOK || (!spiralHeelCapEightOutside(trim.Maps[8], coneC) &&
 		!spiralTangentCapEightOutsideBlank(trim, coneC)) {
 		return nil, false, nil
 	}
 	if ok, err := spiralHeelRootCells(ctx, trim, coneC); err != nil || !ok {
 		return nil, false, err
 	}
-	p := spiralHeelBuildPolys(trim.maps[7], trim.maps[8], radius, coneC)
+	p := spiralHeelBuildPolys(trim.Maps[7], trim.Maps[8], radius, coneC)
 	if ok, err := polynomial.BernsteinSignByHalving(ctx, p.deltaX, 1, 0); err != nil || !ok {
 		return nil, false, err
 	}
@@ -438,27 +438,27 @@ func certifySpiralHeelRootSeam(ctx context.Context, proof *spiralFirstJoinSource
 	// actual Sketch arc and both its endpoint crossings.
 	coordCharge, slopeCharge := big.NewRat(1, 10_000_000_000), big.NewRat(1, 1_000_000_000)
 	seam := &spiralHeelRootSeam{
-		x:        loftFaceInterval{Lo: lfSub(idealXLo, coordCharge), Hi: lfAdd(idealXHi, coordCharge)},
-		slope:    loftFaceInterval{Lo: lfSub(idealSLo, slopeCharge), Hi: lfAdd(idealSHi, slopeCharge)},
-		coneC:    coneC,
-		negative: negative,
+		X:        loftFaceInterval{Lo: lfSub(idealXLo, coordCharge), Hi: lfAdd(idealXHi, coordCharge)},
+		Slope:    loftFaceInterval{Lo: lfSub(idealSLo, slopeCharge), Hi: lfAdd(idealSHi, slopeCharge)},
+		ConeC:    coneC,
+		Negative: negative,
 	}
-	if seam.x.Lo.Cmp(lfF(proof.blank.ded.U)) <= 0 ||
-		seam.x.Hi.Cmp(lfF(proof.blank.heelOuter.U)) >= 0 {
+	if seam.X.Lo.Cmp(lfF(proof.Blank.ded.U)) <= 0 ||
+		seam.X.Hi.Cmp(lfF(proof.Blank.heelOuter.U)) >= 0 {
 		return nil, false, nil
 	}
 	for end, point := range [...]planePoint{arc.Start, arc.End} {
-		endpoint, ok, err := spiralHeelEndpointBox(ctx, trim.maps[7], trim.maps[8], point,
+		endpoint, ok, err := spiralHeelEndpointBox(ctx, trim.Maps[7], trim.Maps[8], point,
 			coneC, coordCharge)
 		if err != nil || !ok {
 			return nil, false, err
 		}
 		ratio, ok := spiralHeelRatio(endpoint)
-		if !ok || endpoint[0].Lo.Cmp(seam.x.Lo) <= 0 || endpoint[0].Hi.Cmp(seam.x.Hi) >= 0 ||
-			ratio.Lo.Cmp(seam.slope.Lo) <= 0 || ratio.Hi.Cmp(seam.slope.Hi) >= 0 {
+		if !ok || endpoint[0].Lo.Cmp(seam.X.Lo) <= 0 || endpoint[0].Hi.Cmp(seam.X.Hi) >= 0 ||
+			ratio.Lo.Cmp(seam.Slope.Lo) <= 0 || ratio.Hi.Cmp(seam.Slope.Hi) >= 0 {
 			return nil, false, nil
 		}
-		seam.ends[end] = endpoint
+		seam.Ends[end] = endpoint
 	}
 	return seam, true, nil
 }
@@ -471,14 +471,14 @@ func spiralHeelTailBox(seam *spiralHeelRootSeam, minAbsSlope *big.Rat) ([3]loftF
 	if seam == nil || minAbsSlope == nil || minAbsSlope.Sign() <= 0 {
 		return empty, false
 	}
-	maxAbsSlope := seam.slope.Hi
-	if seam.negative {
-		maxAbsSlope = lfSub(lfZero(), seam.slope.Lo)
+	maxAbsSlope := seam.Slope.Hi
+	if seam.Negative {
+		maxAbsSlope = lfSub(lfZero(), seam.Slope.Lo)
 	}
 	if minAbsSlope.Cmp(maxAbsSlope) >= 0 {
 		return empty, false
 	}
-	rLo, rHi := lfSub(seam.coneC, seam.x.Hi), lfSub(seam.coneC, seam.x.Lo)
+	rLo, rHi := lfSub(seam.ConeC, seam.X.Hi), lfSub(seam.ConeC, seam.X.Lo)
 	if rLo.Sign() <= 0 {
 		return empty, false
 	}
@@ -503,8 +503,8 @@ func spiralHeelTailBox(seam *spiralHeelRootSeam, minAbsSlope *big.Rat) ([3]loftF
 	zLo := new(big.Rat).Quo(lfMul(rLo, minAbsSlope), sqrtMinHi)
 	zHi := new(big.Rat).Quo(lfMul(rHi, maxAbsSlope), sqrtMaxLo)
 	z := loftFaceInterval{Lo: zLo, Hi: zHi}
-	if seam.negative {
+	if seam.Negative {
 		z = loftFaceInterval{Lo: lfSub(lfZero(), zHi), Hi: lfSub(lfZero(), zLo)}
 	}
-	return [3]loftFaceInterval{seam.x, {Lo: yLo, Hi: yHi}, z}, true
+	return [3]loftFaceInterval{seam.X, {Lo: yLo, Hi: yHi}, z}, true
 }

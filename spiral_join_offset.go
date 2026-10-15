@@ -26,7 +26,7 @@ const spiralFirstJoinCapOffset = 0.032 // millimetres; every actual move is char
 func spiralOffsetToothMesh(ctx context.Context, blank, tooth *Body, original *Mesh,
 	src []int, proof *spiralFirstJoinSource) (*Mesh, bool, error) {
 	if ctx == nil || blank == nil || tooth == nil || original == nil || proof == nil ||
-		proof.tooth == nil || !original.n.BoundaryOK || !original.n.SymDiffOK ||
+		proof.Tooth == nil || !original.n.BoundaryOK || !original.n.SymDiffOK ||
 		len(src) != len(original.n.Triangles) || len(original.n.Vertices) == 0 ||
 		len(original.n.Vertices) > 1<<16 || len(original.n.Triangles) > 1<<17 ||
 		len(original.n.VertexBound) != len(original.n.Vertices) ||
@@ -34,11 +34,11 @@ func spiralOffsetToothMesh(ctx context.Context, blank, tooth *Body, original *Me
 		return nil, false, nil
 	}
 	p, ok := tooth.n.Payload.(facetedPayload)
-	if !ok || p.loftFacesTrim != proof.tooth {
+	if !ok || p.LoftFacesTrim != proof.Tooth {
 		return nil, false, nil
 	}
-	toeFace := spiralTrimFaceGroup(tooth, proof.tooth.toeCapGroup)
-	heelFace := spiralTrimFaceGroup(tooth, proof.tooth.heelCapGroup)
+	toeFace := spiralTrimFaceGroup(tooth, proof.Tooth.ToeCapGroup)
+	heelFace := spiralTrimFaceGroup(tooth, proof.Tooth.HeelCapGroup)
 	if toeFace < 0 || heelFace < 0 || toeFace == heelFace {
 		return nil, false, nil
 	}

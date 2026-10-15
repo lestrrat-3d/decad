@@ -14,7 +14,7 @@ func revolveLoftFacesHeelSlopedOccupiedArc(ctx context.Context,
 	*revolveLoftFacesToolCapOccupiedArc, bool, error,
 ) {
 	if ctx == nil || proof == nil || proof.blank == nil || proof.tooth == nil ||
-		proof.trim == nil || proof.trim.toe == nil || proof.trim.heel == nil ||
+		proof.trim == nil || proof.trim.Toe == nil || proof.trim.Heel == nil ||
 		circle.tool != 1 || circle.sourceMiss || circle.x == nil ||
 		circle.radius == nil || circle.radius.Sign() <= 0 ||
 		circle.span < 0 || circle.span >= len(proof.section.spans) ||
@@ -29,13 +29,13 @@ func revolveLoftFacesHeelSlopedOccupiedArc(ctx context.Context,
 	}
 	trim := proof.trim
 	payload, ok := proof.tooth.n.Payload.(facetedPayload)
-	if !ok || payload.loftFacesTrim != trim ||
+	if !ok || payload.LoftFacesTrim != trim ||
 		!revolveLoftFacesTrimCurrent(proof.tooth, trim) ||
-		trim.heelCapGroup < 0 || trim.heelCapGroup >= len(payload.Groups) ||
-		len(payload.Groups[trim.heelCapGroup].Origins) != 1 ||
-		payload.Groups[trim.heelCapGroup].Origins[0] != circle.capOrigin ||
+		trim.HeelCapGroup < 0 || trim.HeelCapGroup >= len(payload.Groups) ||
+		len(payload.Groups[trim.HeelCapGroup].Origins) != 1 ||
+		payload.Groups[trim.HeelCapGroup].Origins[0] != circle.capOrigin ||
 		!revolveLoftFacesToolCapFaceOriginCurrent(circle) ||
-		uniqueResultSourceFace(proof.tooth, trim.heelCapGroup) != circle.capFace {
+		uniqueResultSourceFace(proof.tooth, trim.HeelCapGroup) != circle.capFace {
 		return nil, false, nil
 	}
 	span := proof.section.spans[circle.span]
@@ -48,7 +48,7 @@ func revolveLoftFacesHeelSlopedOccupiedArc(ctx context.Context,
 		!verticalOriginsMatch(face.originRefs(), span.origins) {
 		return nil, false, nil
 	}
-	x, radius, crosses, decided := revolveLoftFacesToolCircleOnSpan(trim.heel, span)
+	x, radius, crosses, decided := revolveLoftFacesToolCircleOnSpan(trim.Heel, span)
 	if !decided || !crosses || x.Cmp(circle.x) != 0 ||
 		radius.Cmp(circle.radius) != 0 {
 		return nil, false, nil
@@ -56,14 +56,14 @@ func revolveLoftFacesHeelSlopedOccupiedArc(ctx context.Context,
 	if !revolveLoftFacesSlopedRadialInside(proof.section, circle.span, x, radius) {
 		return nil, false, nil
 	}
-	if trim.toe.apex == nil || trim.toe.far == nil || trim.toe.slope == nil ||
-		trim.toe.slope.Sign() <= 0 || x.Cmp(trim.toe.far) <= 0 ||
-		x.Cmp(trim.heel.far) <= 0 || x.Cmp(trim.heel.apex) >= 0 {
+	if trim.Toe.apex == nil || trim.Toe.far == nil || trim.Toe.slope == nil ||
+		trim.Toe.slope.Sign() <= 0 || x.Cmp(trim.Toe.far) <= 0 ||
+		x.Cmp(trim.Heel.far) <= 0 || x.Cmp(trim.Heel.apex) >= 0 {
 		return nil, false, nil
 	}
 	lower := lfZero()
-	if x.Cmp(trim.toe.apex) < 0 {
-		lower = lfDiv(lfSub(trim.toe.apex, x), trim.toe.slope)
+	if x.Cmp(trim.Toe.apex) < 0 {
+		lower = lfDiv(lfSub(trim.Toe.apex, x), trim.Toe.slope)
 	}
 	if lower.Sign() < 0 || lower.Cmp(radius) >= 0 {
 		return nil, false, nil

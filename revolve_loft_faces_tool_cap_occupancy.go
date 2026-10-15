@@ -44,29 +44,29 @@ func revolveLoftFacesHeelVerticalOccupiedArc(ctx context.Context,
 	circle revolveLoftFacesToolCapCircle) (
 	*revolveLoftFacesToolCapOccupiedArc, bool, error,
 ) {
-	if ctx == nil || proof == nil || proof.tooth == nil || proof.trim == nil || proof.trim.source == nil ||
-		proof.trim.source.source == nil || proof.trim.source.source.profile == nil ||
+	if ctx == nil || proof == nil || proof.tooth == nil || proof.trim == nil || proof.trim.Source == nil ||
+		proof.trim.Source.source == nil || proof.trim.Source.source.profile == nil ||
 		circle.tool != 1 || circle.sourceMiss || circle.x == nil || circle.radius == nil ||
 		circle.span < 0 || circle.span >= len(proof.section.spans) ||
 		circle.blankFace == nil || circle.capFace != proof.heelFace ||
 		!revolveLoftFacesSectionFacesComplete(proof) ||
-		!proof.trim.source.source.profile.Valid ||
-		len(proof.trim.source.source.profile.Holes) != 0 {
+		!proof.trim.Source.source.profile.Valid ||
+		len(proof.trim.Source.source.profile.Holes) != 0 {
 		return nil, false, nil
 	}
 	x, radius, crosses, decided := revolveLoftFacesToolCircleOnSpan(
-		proof.trim.heel, proof.section.spans[circle.span])
+		proof.trim.Heel, proof.section.spans[circle.span])
 	if !decided || !crosses || x.Cmp(circle.x) != 0 ||
 		radius.Cmp(circle.radius) != 0 {
 		return nil, false, nil
 	}
 	payload, ok := proof.tooth.n.Payload.(facetedPayload)
-	if !ok || payload.loftFacesTrim != proof.trim ||
-		proof.trim.heelCapGroup < 0 || proof.trim.heelCapGroup >= len(payload.Groups) ||
-		len(payload.Groups[proof.trim.heelCapGroup].Origins) != 1 ||
-		payload.Groups[proof.trim.heelCapGroup].Origins[0] != circle.capOrigin ||
+	if !ok || payload.LoftFacesTrim != proof.trim ||
+		proof.trim.HeelCapGroup < 0 || proof.trim.HeelCapGroup >= len(payload.Groups) ||
+		len(payload.Groups[proof.trim.HeelCapGroup].Origins) != 1 ||
+		payload.Groups[proof.trim.HeelCapGroup].Origins[0] != circle.capOrigin ||
 		!revolveLoftFacesToolCapFaceOriginCurrent(circle) ||
-		uniqueResultSourceFace(proof.tooth, proof.trim.heelCapGroup) != circle.capFace {
+		uniqueResultSourceFace(proof.tooth, proof.trim.HeelCapGroup) != circle.capFace {
 		return nil, false, nil
 	}
 	vertical, outcome, err := revolveLoftFacesVerticalSideClassify(ctx, proof, circle.span)
@@ -109,7 +109,7 @@ func revolveLoftFacesHeelOccupiedFromSource(ctx context.Context,
 	if err != nil || !simple || loop == nil || !loop.ccw {
 		return nil, false, err
 	}
-	outer := proof.trim.source.source.profile.Outer
+	outer := proof.trim.Source.source.profile.Outer
 	var negative, positive *revolveLoftFacesToolCapBoundary
 	for _, cell := range section.cells {
 		if cell.segment < 0 || cell.segment >= len(outer) {
@@ -202,14 +202,14 @@ func revolveLoftFacesToolCapSourceCurrent(ctx context.Context,
 		fresh = vertical.revolveLoftFacesConstantXSource
 	} else {
 		if !revolveLoftFacesSlopedRadialInside(proof.section, circle.span,
-			circle.x, circle.radius) || proof.trim.toe == nil ||
-			proof.trim.toe.apex == nil || proof.trim.toe.slope == nil ||
-			proof.trim.toe.slope.Sign() <= 0 {
+			circle.x, circle.radius) || proof.trim.Toe == nil ||
+			proof.trim.Toe.apex == nil || proof.trim.Toe.slope == nil ||
+			proof.trim.Toe.slope.Sign() <= 0 {
 			return false, nil
 		}
 		lower := lfZero()
-		if circle.x.Cmp(proof.trim.toe.apex) < 0 {
-			lower = lfDiv(lfSub(proof.trim.toe.apex, circle.x), proof.trim.toe.slope)
+		if circle.x.Cmp(proof.trim.Toe.apex) < 0 {
+			lower = lfDiv(lfSub(proof.trim.Toe.apex, circle.x), proof.trim.Toe.slope)
 		}
 		var err error
 		fresh, ok, err = revolveLoftFacesConstantXSourceCells(ctx, proof,

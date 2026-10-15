@@ -57,11 +57,11 @@ func certifyRevolveLoftFacesSource(ctx context.Context, blank, tooth *Body) (
 		return nil, false, nil
 	}
 	p, ok := tooth.n.Payload.(facetedPayload)
-	if !ok || p.Xform != r3.Identity() || p.loftFacesTrim == nil ||
-		!revolveLoftFacesTrimCurrent(tooth, p.loftFacesTrim) {
+	if !ok || p.Xform != r3.Identity() || p.LoftFacesTrim == nil ||
+		!revolveLoftFacesTrimCurrent(tooth, p.LoftFacesTrim) {
 		return nil, false, nil
 	}
-	trim := p.loftFacesTrim
+	trim := p.LoftFacesTrim
 	var selected *revolveLoftFacesSourceCertificate
 	for _, section := range revolveRootCandidates(blank) {
 		if err := ctx.Err(); err != nil {
@@ -128,58 +128,58 @@ func revolveLoftFacesTrimCurrent(tooth *Body, trim *loftFacesTrimRecord) bool {
 		return false
 	}
 	p, ok := tooth.n.Payload.(facetedPayload)
-	if !ok || p.loftFacesTrim != trim {
+	if !ok || p.LoftFacesTrim != trim {
 		return false
 	}
 	// A cone-tangent tooth is decided by the first-join certificate only;
 	// this generic route defers it explicitly.
-	if trim != nil && (trim.tangent != nil ||
-		(trim.base.loftFacesCap != nil && trim.base.loftFacesCap.tangent != nil)) {
+	if trim != nil && (trim.Tangent != nil ||
+		(trim.Base.LoftFacesCap != nil && trim.Base.LoftFacesCap.Tangent != nil)) {
 		return false
 	}
-	if p.Xform != r3.Identity() || trim == nil || trim.source == nil ||
-		!pointSourceCurrent(trim.source) ||
-		!revolveLoftFacesConeCurrent(trim.toeTool, trim.toe) ||
-		!revolveLoftFacesConeCurrent(trim.heelTool, trim.heel) ||
-		len(trim.maps) < 3 || len(trim.maps) > 64 ||
-		len(trim.bounds) != len(trim.maps) ||
-		!orderedLoftFacesConeLimits(trim.toe, trim.heel, trim.base) ||
-		!trim.base.LoftFacesPrimitive || trim.base.loftFacesCap == nil ||
-		trim.base.loftFacesCap.source != trim.source ||
-		trim.source.sourceBoxIssued != trim.source.sourceBox ||
-		len(trim.base.loftFacesCap.maps) != len(trim.maps) ||
-		len(trim.base.loftFacesCap.bounds) != len(trim.bounds) ||
-		len(trim.stationGroup) != len(trim.source.sourceStation) ||
-		len(trim.base.loftFacesCap.stationGroup) != len(trim.stationGroup) ||
-		len(trim.source.profile.Holes) != 0 ||
-		len(trim.source.profile.Outer.Segments) < 4 ||
-		len(trim.source.profile.Outer.Segments) > 128 ||
-		len(trim.source.profile.Outer.Segments) != len(trim.source.source.entities) ||
-		!facetedtopology.CapGroupsPresent(p.Src, p.FaceOf, len(p.Groups), trim.toeCapGroup, trim.heelCapGroup) ||
+	if p.Xform != r3.Identity() || trim == nil || trim.Source == nil ||
+		!pointSourceCurrent(trim.Source) ||
+		!revolveLoftFacesConeCurrent(trim.ToeTool, trim.Toe) ||
+		!revolveLoftFacesConeCurrent(trim.HeelTool, trim.Heel) ||
+		len(trim.Maps) < 3 || len(trim.Maps) > 64 ||
+		len(trim.Bounds) != len(trim.Maps) ||
+		!orderedLoftFacesConeLimits(trim.Toe, trim.Heel, trim.Base) ||
+		!trim.Base.LoftFacesPrimitive || trim.Base.LoftFacesCap == nil ||
+		trim.Base.LoftFacesCap.Source != trim.Source ||
+		trim.Source.sourceBoxIssued != trim.Source.sourceBox ||
+		len(trim.Base.LoftFacesCap.Maps) != len(trim.Maps) ||
+		len(trim.Base.LoftFacesCap.Bounds) != len(trim.Bounds) ||
+		len(trim.StationGroup) != len(trim.Source.sourceStation) ||
+		len(trim.Base.LoftFacesCap.StationGroup) != len(trim.StationGroup) ||
+		len(trim.Source.profile.Holes) != 0 ||
+		len(trim.Source.profile.Outer.Segments) < 4 ||
+		len(trim.Source.profile.Outer.Segments) > 128 ||
+		len(trim.Source.profile.Outer.Segments) != len(trim.Source.source.entities) ||
+		!facetedtopology.CapGroupsPresent(p.Src, p.FaceOf, len(p.Groups), trim.ToeCapGroup, trim.HeelCapGroup) ||
 		!facetedtopology.CapGroupsPure(p.Src, p.FaceOf, len(p.Tris), len(tooth.Faces()),
-			trim.toeCapGroup, trim.heelCapGroup) {
+			trim.ToeCapGroup, trim.HeelCapGroup) {
 		return false
 	}
-	if !slices.Equal(trim.stationGroup, trim.base.loftFacesCap.stationGroup) {
+	if !slices.Equal(trim.StationGroup, trim.Base.LoftFacesCap.StationGroup) {
 		return false
 	}
-	for i, bound := range trim.bounds {
-		if !revolveLoftFacesSameCapBound(bound, trim.base.loftFacesCap.bounds[i]) {
+	for i, bound := range trim.Bounds {
+		if !revolveLoftFacesSameCapBound(bound, trim.Base.LoftFacesCap.Bounds[i]) {
 			return false
 		}
 	}
-	for _, edge := range trim.source.source.profile.Outer {
+	for _, edge := range trim.Source.source.profile.Outer {
 		if edge.Partial {
 			return false
 		}
 	}
-	box, err := lfSourceBox(trim.source)
+	box, err := lfSourceBox(trim.Source)
 	if err != nil {
 		return false
 	}
-	for i, mapped := range trim.maps {
+	for i, mapped := range trim.Maps {
 		if loftface.PositiveDenominator(mapped, box) != nil ||
-			mapped != trim.base.loftFacesCap.maps[i] {
+			mapped != trim.Base.LoftFacesCap.Maps[i] {
 			return false
 		}
 	}
@@ -199,11 +199,11 @@ func revolveLoftFacesConeCurrent(tool *Body, recorded *pointConeLimit) bool {
 }
 
 func revolveLoftFacesSameCapBound(a, b loftFaceCapBounds) bool {
-	return a.stationRound == b.stationRound &&
-		slices.Equal(a.projectiveDeparture, b.projectiveDeparture) &&
-		slices.Equal(a.polygonSpeed, b.polygonSpeed) &&
-		slices.Equal(a.sourceSpeed, b.sourceSpeed) &&
-		slices.Equal(a.sourceDeparture, b.sourceDeparture)
+	return a.StationRound == b.StationRound &&
+		slices.Equal(a.ProjectiveDeparture, b.ProjectiveDeparture) &&
+		slices.Equal(a.PolygonSpeed, b.PolygonSpeed) &&
+		slices.Equal(a.SourceSpeed, b.SourceSpeed) &&
+		slices.Equal(a.SourceDeparture, b.SourceDeparture)
 }
 
 func certifyRevolveLoftFacesAgainstRoot(ctx context.Context, blank, tooth *Body,
@@ -214,20 +214,20 @@ func certifyRevolveLoftFacesAgainstRoot(ctx context.Context, blank, tooth *Body,
 	if !spiralSourcePhysicalSector(trim, m, b) {
 		return nil, false, nil
 	}
-	toeX, ok := spiralRootToolX(m, b, trim.toe)
+	toeX, ok := spiralRootToolX(m, b, trim.Toe)
 	if !ok {
 		return nil, false, nil
 	}
-	heelX, ok := spiralRootToolX(m, b, trim.heel)
+	heelX, ok := spiralRootToolX(m, b, trim.Heel)
 	if !ok || toeX.Cmp(heelX) >= 0 ||
 		lfF(section.rootStart.U).Cmp(toeX) <= 0 ||
 		lfF(section.rootEnd.U).Cmp(heelX) >= 0 ||
-		!spiralFiniteConeSide(trim.toe, section.rootStart, section.rootEnd, 1) ||
-		!spiralFiniteConeSide(trim.heel, section.rootStart, section.rootEnd, -1) ||
+		!spiralFiniteConeSide(trim.Toe, section.rootStart, section.rootEnd, 1) ||
+		!spiralFiniteConeSide(trim.Heel, section.rootStart, section.rootEnd, -1) ||
 		!revolveLoftFacesCapsAvoidToolRootCircles(trim, m, b, toeX, heelX) {
 		return nil, false, nil
 	}
-	segments := trim.source.profile.Outer.Segments
+	segments := trim.Source.profile.Outer.Segments
 	proof := &revolveLoftFacesSourceCertificate{blank: blank, tooth: tooth,
 		section: section, trim: trim, rootM: m, rootB: b, toeX: toeX, heelX: heelX,
 		sides: make([]int, len(segments))}
@@ -312,8 +312,8 @@ func certifyRevolveLoftFacesAgainstRoot(ctx context.Context, blank, tooth *Body,
 			return nil, false, nil
 		}
 	}
-	proof.toeFace = uniqueResultSourceFace(tooth, p.loftFacesTrim.toeCapGroup)
-	proof.heelFace = uniqueResultSourceFace(tooth, p.loftFacesTrim.heelCapGroup)
+	proof.toeFace = uniqueResultSourceFace(tooth, p.LoftFacesTrim.ToeCapGroup)
+	proof.heelFace = uniqueResultSourceFace(tooth, p.LoftFacesTrim.HeelCapGroup)
 	if proof.toeFace == nil || proof.heelFace == nil || proof.toeFace == proof.heelFace {
 		return nil, false, nil
 	}
@@ -324,11 +324,11 @@ func certifyRevolveLoftFacesAgainstRoot(ctx context.Context, blank, tooth *Body,
 // supporting plane misses the full heel circle, including its interior.
 func revolveLoftFacesCapsAvoidToolRootCircles(trim *loftFacesTrimRecord,
 	m, b, toeX, heelX *big.Rat) bool {
-	box, err := lfSourceBox(trim.source)
-	if err != nil || len(trim.maps) < 2 {
+	box, err := lfSourceBox(trim.Source)
+	if err != nil || len(trim.Maps) < 2 {
 		return false
 	}
-	first, last := trim.maps[0], trim.maps[len(trim.maps)-1]
+	first, last := trim.Maps[0], trim.Maps[len(trim.Maps)-1]
 	if loftface.PositiveDenominator(first, box) != nil || loftface.PositiveDenominator(last, box) != nil {
 		return false
 	}
@@ -339,8 +339,8 @@ func revolveLoftFacesCapsAvoidToolRootCircles(trim *loftFacesTrimRecord,
 }
 
 func revolveLoftFacesSegmentKind(trim *loftFacesTrimRecord, index int) bool {
-	segment := trim.source.profile.Outer.Segments[index]
-	entity := trim.source.source.entities[index]
+	segment := trim.Source.profile.Outer.Segments[index]
+	entity := trim.Source.source.entities[index]
 	switch entity.(type) {
 	case *sketch.Line:
 		_, ok := segment.(lineSeg)
@@ -357,20 +357,20 @@ func revolveLoftFacesSegmentKind(trim *loftFacesTrimRecord, index int) bool {
 // crossing or an undecidable cell refuses; no sampled sign grants admission.
 func revolveLoftFacesStationSide(ctx context.Context, trim *loftFacesTrimRecord,
 	m, b *big.Rat, segment int) int {
-	source := trim.source
+	source := trim.Source
 	n := len(source.sourceStation)
-	if n == 0 || len(trim.stationGroup) != n {
+	if n == 0 || len(trim.StationGroup) != n {
 		return 0
 	}
 	inside, outside, seen := true, true, false
-	for band := 0; band+1 < len(trim.maps); band++ {
-		lo, hi := trim.bounds[band], trim.bounds[band+1]
-		if len(lo.sourceDeparture) != n || len(hi.sourceDeparture) != n ||
-			len(lo.projectiveDeparture) != n || len(hi.projectiveDeparture) != n {
+	for band := 0; band+1 < len(trim.Maps); band++ {
+		lo, hi := trim.Bounds[band], trim.Bounds[band+1]
+		if len(lo.SourceDeparture) != n || len(hi.SourceDeparture) != n ||
+			len(lo.ProjectiveDeparture) != n || len(hi.ProjectiveDeparture) != n {
 			return 0
 		}
 		for j, station := range source.sourceStation {
-			if trim.stationGroup[j] != segment {
+			if trim.StationGroup[j] != segment {
 				continue
 			}
 			if j%64 == 0 && ctx.Err() != nil {
@@ -378,17 +378,17 @@ func revolveLoftFacesStationSide(ctx context.Context, trim *loftFacesTrimRecord,
 			}
 			seen = true
 			departure := max(
-				proofbound.AbsSumUpper(lo.sourceDeparture[j], lo.projectiveDeparture[j]),
-				proofbound.AbsSumUpper(hi.sourceDeparture[j], hi.projectiveDeparture[j]))
+				proofbound.AbsSumUpper(lo.SourceDeparture[j], lo.ProjectiveDeparture[j]),
+				proofbound.AbsSumUpper(hi.SourceDeparture[j], hi.ProjectiveDeparture[j]))
 			if proofbound.IsNonFinite(departure) || departure < 0 {
 				return 0
 			}
 			next := source.sourceStation[(j+1)%n]
-			if inside && !spiralCellSide(trim.maps[band], trim.maps[band+1], station,
+			if inside && !spiralCellSide(trim.Maps[band], trim.Maps[band+1], station,
 				next, lfF(departure), m, b, false, lfZero(), lfOne(), 8) {
 				inside = false
 			}
-			if outside && !spiralCellSide(trim.maps[band], trim.maps[band+1], station,
+			if outside && !spiralCellSide(trim.Maps[band], trim.Maps[band+1], station,
 				next, lfF(departure), m, b, true, lfZero(), lfOne(), 8) {
 				outside = false
 			}
@@ -407,16 +407,16 @@ func revolveLoftFacesStationSide(ctx context.Context, trim *loftFacesTrimRecord,
 }
 
 func revolveLoftFacesSourceRefs(trim *loftFacesTrimRecord, tooth *Body) ([][]provenance.Ref, bool) {
-	n := len(trim.source.profile.Outer.Segments)
-	if len(trim.base.Groups) != (len(trim.maps)-1)*n+2 {
+	n := len(trim.Source.profile.Outer.Segments)
+	if len(trim.Base.Groups) != (len(trim.Maps)-1)*n+2 {
 		return nil, false
 	}
-	refs := make([][]provenance.Ref, len(trim.maps)-1)
+	refs := make([][]provenance.Ref, len(trim.Maps)-1)
 	var producer producerID
 	for band := range refs {
 		refs[band] = make([]provenance.Ref, n)
 		for segment := range n {
-			group := trim.base.Groups[band*n+segment]
+			group := trim.Base.Groups[band*n+segment]
 			if len(group.Origins) != 1 ||
 				group.Origins[0].Role != fmt.Sprintf("side(%d,%d)", band, segment) {
 				return nil, false

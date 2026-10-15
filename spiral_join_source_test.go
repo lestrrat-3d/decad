@@ -19,18 +19,18 @@ func TestSpiralFirstJoinDeclinesTangentHeelOutsideFiniteBlankOnly(t *testing.T) 
 	blank, tooth, _ := spiralTangentBlankAndTooth(t, doc)
 	section, ok := exactSpiralBlank(blank)
 	require.True(t, ok)
-	trim := tooth.n.Payload.(facetedPayload).loftFacesTrim
+	trim := tooth.n.Payload.(facetedPayload).LoftFacesTrim
 	require.NotNil(t, trim)
 	require.True(t, spiralTangentRecordCurrent(trim))
 	m, b := section.section.meridianEquation()
-	toeX, ok := spiralRootToolX(m, b, trim.toe)
+	toeX, ok := spiralRootToolX(m, b, trim.Toe)
 	require.True(t, ok)
-	heelX, ok := spiralRootToolX(m, b, trim.heel)
+	heelX, ok := spiralRootToolX(m, b, trim.Heel)
 	require.True(t, ok)
-	_, ok = spiralToolOuterGap(trim.heel, section.ded, section.heelOuter, -1)
+	_, ok = spiralToolOuterGap(trim.Heel, section.ded, section.heelOuter, -1)
 	require.True(t, ok, "the finite heel gap admits this producer-built tool")
 	require.True(t, spiralTangentCapTouchesHeelCircle(trim, m, b, toeX, heelX))
-	require.False(t, spiralHeelCapEightOutside(trim.maps[8],
+	require.False(t, spiralHeelCapEightOutside(trim.Maps[8],
 		lfAdd(lfF(section.ded.U), lfF(section.ded.V))))
 
 	proof, accepted, err := certifySpiralFirstJoin(t.Context(), blank, tooth)
@@ -45,21 +45,21 @@ func TestSpiralFirstJoinDeclinesTangentToeCapPastToeCircle(t *testing.T) {
 	blank, tooth, _ := spiralTangentBlankAndToothWithTools(t, New(), -3.02, false)
 	section, ok := exactSpiralBlank(blank)
 	require.True(t, ok)
-	trim := tooth.n.Payload.(facetedPayload).loftFacesTrim
+	trim := tooth.n.Payload.(facetedPayload).LoftFacesTrim
 	require.NotNil(t, trim)
 	require.True(t, spiralTangentRecordCurrent(trim))
 	m, b := section.section.meridianEquation()
-	toeX, ok := spiralRootToolX(m, b, trim.toe)
+	toeX, ok := spiralRootToolX(m, b, trim.Toe)
 	require.True(t, ok)
-	heelX, ok := spiralRootToolX(m, b, trim.heel)
+	heelX, ok := spiralRootToolX(m, b, trim.Heel)
 	require.True(t, ok)
-	box, err := lfSourceBox(trim.source)
+	box, err := lfSourceBox(trim.Source)
 	require.NoError(t, err)
-	capX := loftface.ScalarRange(trim.maps[0], loftFaceRatVec{lfOne(), lfZero(), lfZero()},
+	capX := loftface.ScalarRange(trim.Maps[0], loftFaceRatVec{lfOne(), lfZero(), lfZero()},
 		loftface.BoxCorners(box))
 	require.GreaterOrEqual(t, capX.Hi.Cmp(toeX), 0, "cap 0 reaches the toe tool/root circle")
-	require.True(t, loftface.CapPlaneTouchesRootCircle(trim.maps[8], loftface.BoxCorners(box),
-		m, b, heelX, trim.maps[7]), "the heel-circle leg still passes")
+	require.True(t, loftface.CapPlaneTouchesRootCircle(trim.Maps[8], loftface.BoxCorners(box),
+		m, b, heelX, trim.Maps[7]), "the heel-circle leg still passes")
 	require.False(t, spiralOriginalCapsAvoidToolRootCircles(trim, m, b, toeX, heelX))
 
 	proof, accepted, err := certifySpiralFirstJoin(t.Context(), blank, tooth)
@@ -275,26 +275,26 @@ func spiralRootTube(ctx context.Context, proof *spiralFirstJoinSource, side int,
 	if err := ctx.Err(); err != nil {
 		return empty, false, err
 	}
-	if proof == nil || side < 0 || side >= len(proof.flank) ||
+	if proof == nil || side < 0 || side >= len(proof.Flank) ||
 		xLo == nil || xHi == nil || xLo.Cmp(xHi) >= 0 {
 		return empty, false, nil
 	}
-	span := proof.flank[side]
-	low, ok := spiralIsolateJunction(ctx, proof.tooth.maps, span,
-		proof.rootM, proof.rootB, proof.crossings[side], xLo)
+	span := proof.Flank[side]
+	low, ok := spiralIsolateJunction(ctx, proof.Tooth.Maps, span,
+		proof.RootM, proof.RootB, proof.Crossings[side], xLo)
 	if !ok {
 		return empty, false, ctx.Err()
 	}
-	high, ok := spiralIsolateJunction(ctx, proof.tooth.maps, span,
-		proof.rootM, proof.rootB, proof.crossings[side], xHi)
-	if !ok || low.band != high.band || low.tHi.Cmp(high.tLo) >= 0 {
+	high, ok := spiralIsolateJunction(ctx, proof.Tooth.Maps, span,
+		proof.RootM, proof.RootB, proof.Crossings[side], xHi)
+	if !ok || low.Band != high.Band || low.THi.Cmp(high.TLo) >= 0 {
 		return empty, false, ctx.Err()
 	}
-	band := low.band
-	q := loftface.MeridianQRows(proof.tooth.maps[band], proof.tooth.maps[band+1],
-		span, proof.rootM, proof.rootB)
+	band := low.Band
+	q := loftface.MeridianQRows(proof.Tooth.Maps[band], proof.Tooth.Maps[band+1],
+		span, proof.RootM, proof.RootB)
 	sLo, sHi := lfZero(), lfOne()
-	if !spiralJunctionRootBracket(q, sLo, sHi, low.tLo, high.tHi) {
+	if !spiralJunctionRootBracket(q, sLo, sHi, low.TLo, high.THi) {
 		return empty, false, ctx.Err()
 	}
 	for step := range 64 {
@@ -302,18 +302,18 @@ func spiralRootTube(ctx context.Context, proof *spiralFirstJoinSource, side int,
 			return empty, false, ctx.Err()
 		}
 		mid := lfMul(lfAdd(sLo, sHi), big.NewRat(1, 2))
-		if polynomial.BernsteinRowsSignAt(q, mid, low.tLo, high.tHi, -1) {
+		if polynomial.BernsteinRowsSignAt(q, mid, low.TLo, high.THi, -1) {
 			sLo = mid
 			continue
 		}
-		if polynomial.BernsteinRowsSignAt(q, mid, low.tLo, high.tHi, 1) {
+		if polynomial.BernsteinRowsSignAt(q, mid, low.TLo, high.THi, 1) {
 			sHi = mid
 			continue
 		}
 		break
 	}
-	box, ok := loftface.JunctionBox(proof.tooth.maps[band], proof.tooth.maps[band+1],
-		span, sLo, sHi, low.tLo, high.tHi)
+	box, ok := loftface.JunctionBox(proof.Tooth.Maps[band], proof.Tooth.Maps[band+1],
+		span, sLo, sHi, low.TLo, high.THi)
 	if err := ctx.Err(); err != nil {
 		return empty, false, err
 	}

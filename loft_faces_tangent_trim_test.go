@@ -62,10 +62,10 @@ func buildTangentTrimChain(t *testing.T) tangentTrimChain {
 	c.loft, err = LoftFacesToConeTangent(t.Context(), ConeTangentEnd{Cone: c.heelTool, Radial: r3.NewVec(0, tangentCos, tangentSin)},
 		f.toe, f.heel)
 	require.NoError(t, err)
-	c.loftRecord = c.loft.n.Payload.(facetedPayload).loftFacesCap
+	c.loftRecord = c.loft.n.Payload.(facetedPayload).LoftFacesCap
 	c.cut, err = Cut(t.Context(), c.loft, c.toeTool)
 	require.NoError(t, err)
-	require.NotNil(t, c.cut.n.Payload.(facetedPayload).loftFacesToe)
+	require.NotNil(t, c.cut.n.Payload.(facetedPayload).LoftFacesToe)
 	return c
 }
 
@@ -73,13 +73,13 @@ func buildTangentTrimChain(t *testing.T) tangentTrimChain {
 // recorded final and preceding cap maps, the source box and the heel cone.
 func tangentGateInputs(t *testing.T, c tangentTrimChain) (final, previous loftFaceMap, box [4]*big.Rat, heel *pointConeLimit) {
 	t.Helper()
-	record := c.cut.n.Payload.(facetedPayload).loftFacesToe.cap
+	record := c.cut.n.Payload.(facetedPayload).LoftFacesToe.Cap
 	var err error
-	box, err = lfSourceBox(record.source)
+	box, err = lfSourceBox(record.Source)
 	require.NoError(t, err)
 	heel, ok := exactPointCone(c.heelTool)
 	require.True(t, ok)
-	return record.final, record.maps[len(record.maps)-2], box, heel
+	return record.Final, record.Maps[len(record.Maps)-2], box, heel
 }
 
 func TestLoftFacesTangentHeelIntersectKeepsTrimRecord(t *testing.T) {
@@ -103,7 +103,7 @@ func TestLoftFacesTangentHeelIntersectKeepsTrimRecord(t *testing.T) {
 	// gate accepts. The unextended held tooth, with no pair exempted, is
 	// refused at the first chord scale whose tessellation the held cut accepts:
 	// the end cap touches the cone, which the proximity gate cannot decide.
-	require.True(t, loftface.CapsOnSide(final, c.loftRecord.maps[:len(c.loftRecord.maps)-1], box, side),
+	require.True(t, loftface.CapsOnSide(final, c.loftRecord.Maps[:len(c.loftRecord.Maps)-1], box, side),
 		"G2 admits the real chain")
 	decided := false
 	for scale := 4.0; scale <= 32 && !decided; scale *= 2 {
@@ -125,7 +125,7 @@ func TestLoftFacesTangentHeelIntersectKeepsTrimRecord(t *testing.T) {
 	// vertex lies beyond the slab.
 	plane, ok := loftface.NewTangentPlane(final, side)
 	require.True(t, ok)
-	toe := c.cut.n.Payload.(facetedPayload).loftFacesToe
+	toe := c.cut.n.Payload.(facetedPayload).LoftFacesToe
 	var meshes *tangentHeelMeshes
 	var eval booleanEvaluation
 	for scale := 4.0; scale <= 32; scale *= 2 {
@@ -184,17 +184,17 @@ func TestLoftFacesTangentHeelIntersectKeepsTrimRecord(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, eval.payload.VolSymDiff, trim.n.Payload.(facetedPayload).VolSymDiff,
 		"the published allowance is the composed one")
-	trimRecord := trim.n.Payload.(facetedPayload).loftFacesTrim
+	trimRecord := trim.n.Payload.(facetedPayload).LoftFacesTrim
 	require.NotNil(t, trimRecord, "the tangent heel Intersect keeps the trim record")
-	require.NotNil(t, trimRecord.tangent)
-	require.Same(t, c.loftRecord.tangent, trimRecord.tangent, "the trim record copies the cap record's tangent end")
-	require.True(t, trimRecord.tangent.MatchesCone(heel.apex, heel.slope))
-	require.Same(t, c.loftRecord.source, trimRecord.source)
-	require.Len(t, trimRecord.maps, 3)
+	require.NotNil(t, trimRecord.Tangent)
+	require.Same(t, c.loftRecord.Tangent, trimRecord.Tangent, "the trim record copies the cap record's tangent end")
+	require.True(t, trimRecord.Tangent.MatchesCone(heel.apex, heel.slope))
+	require.Same(t, c.loftRecord.Source, trimRecord.Source)
+	require.Len(t, trimRecord.Maps, 3)
 
 	// The end cap does not survive; the heel cone is one face.
-	require.NotNil(t, uniqueResultSourceFace(trim, trimRecord.heelCapGroup))
-	require.NotNil(t, uniqueResultSourceFace(trim, trimRecord.toeCapGroup))
+	require.NotNil(t, uniqueResultSourceFace(trim, trimRecord.HeelCapGroup))
+	require.NotNil(t, uniqueResultSourceFace(trim, trimRecord.ToeCapGroup))
 	_, err = Faces(FaceCreatedBy(CapEnd(c.loft))).SelectFaces(trim)
 	require.ErrorIs(t, err, ErrNoMatch, "no result face descends from the planar end cap")
 
@@ -224,7 +224,7 @@ func TestTangentCapExtensionOnRealChain(t *testing.T) {
 	require.True(t, ok)
 	plane, ok := loftface.NewTangentPlane(final, side)
 	require.True(t, ok)
-	toe := c.cut.n.Payload.(facetedPayload).loftFacesToe
+	toe := c.cut.n.Payload.(facetedPayload).LoftFacesToe
 	var held *Mesh
 	for scale := 4.0; scale <= 32 && held == nil; scale *= 2 {
 		tolMM, _, err := pairChordTolerance(t.Context(), c.cut, c.heelTool)
@@ -245,8 +245,8 @@ func TestTangentCapExtensionOnRealChain(t *testing.T) {
 	proxy, slab, err := extendTangentCap(t.Context(), oversized, toe, plane)
 	require.NoError(t, err)
 	require.NotNil(t, slab.Eps)
-	changed := map[*Face]bool{toe.capFace: true}
-	for _, f := range proxy.n.Source[len(proxy.n.Source)-2*len(toe.cap.source.sourceStation):] {
+	changed := map[*Face]bool{toe.CapFace: true}
+	for _, f := range proxy.n.Source[len(proxy.n.Source)-2*len(toe.Cap.Source.sourceStation):] {
 		changed[faceHandle(f)] = true
 	}
 	for f := range changed {
@@ -270,7 +270,7 @@ func TestTangentCapExtensionOnRealChain(t *testing.T) {
 
 	capFacets := 0
 	for i, f := range proxy.n.Source {
-		if f != faceNode(toe.capFace) {
+		if f != faceNode(toe.CapFace) {
 			continue
 		}
 		capFacets++
@@ -292,10 +292,10 @@ func TestTangentCapExtensionOnRealChain(t *testing.T) {
 	// is at least the chord bound that the final cap's proof certifies.
 	link, err := toeStationLink(held.n.Vertices, toe)
 	require.NoError(t, err)
-	record := toe.cap
-	last := len(record.maps) - 1
-	n := len(record.source.sourceStation)
-	capBounds := record.bounds[last]
+	record := toe.Cap
+	last := len(record.Maps) - 1
+	n := len(record.Source.sourceStation)
+	capBounds := record.Bounds[last]
 	walls := proxy.n.Triangles[len(proxy.n.Triangles)-2*n:]
 	seen := make([]bool, n)
 	for i := 0; i < len(walls); i += 2 {
@@ -304,14 +304,14 @@ func TestTangentCapExtensionOnRealChain(t *testing.T) {
 		require.Less(t, b, len(held.n.Vertices))
 		sa, sb := link.Station[a], link.Station[b]
 		require.GreaterOrEqual(t, min(sa, sb), 0, "a ring vertex is a station vertex")
-		require.Equal(t, held.n.Vertices[a], toe.base.Verts[last*n+sa], "ring vertex equals its station vertex")
+		require.Equal(t, held.n.Vertices[a], toe.Base.Verts[last*n+sa], "ring vertex equals its station vertex")
 		j := min(sa, sb)
 		if max(sa, sb)-min(sa, sb) != 1 {
 			j = max(sa, sb)
 		}
 		seen[j] = true
-		chord := proofbound.AbsSumUpper(capBounds.sourceDeparture[j], capBounds.projectiveDeparture[j],
-			capBounds.stationRound)
+		chord := proofbound.AbsSumUpper(capBounds.SourceDeparture[j], capBounds.ProjectiveDeparture[j],
+			capBounds.StationRound)
 		for k := range 2 {
 			corner := 0.0
 			for _, v := range walls[i+k] {
@@ -327,8 +327,8 @@ func TestTangentCapExtensionOnRealChain(t *testing.T) {
 	// A ring with two neighbouring stations swapped has an edge that is no chord.
 	require.GreaterOrEqual(t, n, 4)
 	swapped := *toe
-	swapped.base.Verts = append([]r3.Vec(nil), toe.base.Verts...)
-	ring := swapped.base.Verts[last*n : (last+1)*n]
+	swapped.Base.Verts = append([]r3.Vec(nil), toe.Base.Verts...)
+	ring := swapped.Base.Verts[last*n : (last+1)*n]
 	ring[0], ring[1] = ring[1], ring[0]
 	_, _, err = extendTangentCap(t.Context(), held, &swapped, plane)
 	require.ErrorIs(t, err, ErrUnsupported)
@@ -340,16 +340,16 @@ func TestTangentCapExtensionOnRealChain(t *testing.T) {
 func movePreviousCap(t *testing.T, cut *Body, factor int64) {
 	t.Helper()
 	p := cut.n.Payload.(facetedPayload)
-	toe := *p.loftFacesToe
-	record := *toe.cap
-	record.maps = append([]loftFaceMap(nil), record.maps...)
-	previous := len(record.maps) - 2
-	normal := loftface.VCross(record.final.QU, record.final.QV)
-	moved := record.final
+	toe := *p.LoftFacesToe
+	record := *toe.Cap
+	record.Maps = append([]loftFaceMap(nil), record.Maps...)
+	previous := len(record.Maps) - 2
+	normal := loftface.VCross(record.Final.QU, record.Final.QV)
+	moved := record.Final
 	moved.Constant = loftface.VAdd(moved.Constant, loftface.VScale(normal, big.NewRat(factor, 8)))
-	record.maps[previous] = moved
-	toe.cap = &record
-	p.loftFacesToe = &toe
+	record.Maps[previous] = moved
+	toe.Cap = &record
+	p.LoftFacesToe = &toe
 	cut.n.Payload = p
 }
 
@@ -366,7 +366,7 @@ func TestLoftFacesTangentHeelRefusesWrongSide(t *testing.T) {
 			trim, err := Intersect(t.Context(), c.cut, c.heelTool)
 			if !test.refused {
 				require.NoError(t, err)
-				require.NotNil(t, trim.n.Payload.(facetedPayload).loftFacesTrim)
+				require.NotNil(t, trim.n.Payload.(facetedPayload).LoftFacesTrim)
 				return
 			}
 			require.ErrorIs(t, err, ErrUnsupported)
@@ -384,9 +384,9 @@ func TestLoftFacesTangentHeelRefusesWrongSide(t *testing.T) {
 func TestLoftFacesTangentHeelRefusesMissingToolFace(t *testing.T) {
 	c := buildTangentTrimChain(t)
 	p := c.cut.n.Payload.(facetedPayload)
-	toe := *p.loftFacesToe
-	toe.toeCapFace = toe.capFace
-	p.loftFacesToe = &toe
+	toe := *p.LoftFacesToe
+	toe.ToeCapFace = toe.CapFace
+	p.LoftFacesToe = &toe
 	c.cut.n.Payload = p
 
 	trim, err := Intersect(t.Context(), c.cut, c.heelTool)
@@ -402,17 +402,17 @@ func TestLoftFacesTangentHeelRefusesOtherCone(t *testing.T) {
 	other := c.f.coneAt(t, -4, 16, math.Nextafter(8, 9))
 	limit, ok := exactPointCone(other)
 	require.True(t, ok)
-	require.False(t, c.loftRecord.tangent.MatchesCone(limit.apex, limit.slope))
-	box, err := lfSourceBox(c.loftRecord.source)
+	require.False(t, c.loftRecord.Tangent.MatchesCone(limit.apex, limit.slope))
+	box, err := lfSourceBox(c.loftRecord.Source)
 	require.NoError(t, err)
-	require.False(t, loftCapOutsideHeelCone(c.loftRecord.final, box, limit))
+	require.False(t, loftCapOutsideHeelCone(c.loftRecord.Final, box, limit))
 	plane, err := loftCapTangentToHeelCone(c.loftRecord, box, limit)
 	require.NoError(t, err)
 	require.Nil(t, plane, "the record gate fails")
 
 	trim, err := Intersect(t.Context(), c.cut, other)
 	if err == nil {
-		require.Nil(t, trim.n.Payload.(facetedPayload).loftFacesTrim, "no trim record is issued")
+		require.Nil(t, trim.n.Payload.(facetedPayload).LoftFacesTrim, "no trim record is issued")
 		return
 	}
 	require.ErrorIs(t, err, ErrUnsupported)

@@ -41,21 +41,21 @@ func spiralFiniteConeSide(cone *pointConeLimit, first, last planePoint, sign int
 // separate the matching tool-cap faces, the toe cap from the heel tool, and
 // the entire finite blank root from both tool caps.
 func spiralNearTrimSides(proof *spiralFirstJoinSource) bool {
-	if proof == nil || proof.blank == nil || proof.tooth == nil ||
-		proof.tooth.toe == nil || proof.tooth.heel == nil ||
-		proof.toeCapGap == nil || proof.heelCapGap == nil ||
-		proof.toeCapGap.Sign() <= 0 || proof.heelCapGap.Sign() <= 0 ||
-		proof.toeOffset == nil || proof.heelOffset == nil ||
-		proof.toeOffset.Sign() >= 0 || proof.heelOffset.Sign() <= 0 {
+	if proof == nil || proof.Blank == nil || proof.Tooth == nil ||
+		proof.Tooth.Toe == nil || proof.Tooth.Heel == nil ||
+		proof.ToeCapGap == nil || proof.HeelCapGap == nil ||
+		proof.ToeCapGap.Sign() <= 0 || proof.HeelCapGap.Sign() <= 0 ||
+		proof.ToeOffset == nil || proof.HeelOffset == nil ||
+		proof.ToeOffset.Sign() >= 0 || proof.HeelOffset.Sign() <= 0 {
 		return false
 	}
-	blank := proof.blank
-	return spiralFiniteConeSide(proof.tooth.toe, blank.toeRoot, blank.toeOuter, 1) &&
-		spiralFiniteConeSide(proof.tooth.heel, blank.toeRoot, blank.toeOuter, -1) &&
-		spiralFiniteConeSide(proof.tooth.toe, blank.ded, blank.heelOuter, 1) &&
-		spiralFiniteConeSide(proof.tooth.heel, blank.ded, blank.heelOuter, -1) &&
-		spiralFiniteConeSide(proof.tooth.toe, blank.toeRoot, blank.ded, 1) &&
-		spiralFiniteConeSide(proof.tooth.heel, blank.toeRoot, blank.ded, -1)
+	blank := proof.Blank
+	return spiralFiniteConeSide(proof.Tooth.Toe, blank.toeRoot, blank.toeOuter, 1) &&
+		spiralFiniteConeSide(proof.Tooth.Heel, blank.toeRoot, blank.toeOuter, -1) &&
+		spiralFiniteConeSide(proof.Tooth.Toe, blank.ded, blank.heelOuter, 1) &&
+		spiralFiniteConeSide(proof.Tooth.Heel, blank.ded, blank.heelOuter, -1) &&
+		spiralFiniteConeSide(proof.Tooth.Toe, blank.toeRoot, blank.ded, 1) &&
+		spiralFiniteConeSide(proof.Tooth.Heel, blank.toeRoot, blank.ded, -1)
 }
 
 func spiralUniqueFaceWithOrigin(body *Body, want provenance.Ref) *Face {
@@ -87,7 +87,7 @@ func spiralOriginalSideRef(trim *loftFacesTrimRecord, band, segment int) (proven
 	role := fmt.Sprintf("side(%d,%d)", band, segment)
 	var result provenance.Ref
 	found := false
-	for _, group := range trim.base.Groups {
+	for _, group := range trim.Base.Groups {
 		for _, origin := range group.Origins {
 			if origin.Role != role {
 				continue
@@ -114,26 +114,26 @@ func spiralCapGroupRef(groups []facetGroup, group int) (provenance.Ref, bool) {
 func spiralNearFaceTable(blank, tooth *Body, proof *spiralFirstJoinSource) (
 	map[[2]*Face]spiralNearPairKind, bool,
 ) {
-	if blank == nil || tooth == nil || proof == nil || proof.blank == nil ||
-		proof.tooth == nil || proof.blank.rootFace == nil ||
-		proof.blank.rootFace.n.Body != bodyNode(blank) {
+	if blank == nil || tooth == nil || proof == nil || proof.Blank == nil ||
+		proof.Tooth == nil || proof.Blank.rootFace == nil ||
+		proof.Blank.rootFace.n.Body != bodyNode(blank) {
 		return nil, false
 	}
 	p, ok := tooth.n.Payload.(facetedPayload)
-	if !ok || p.loftFacesTrim != proof.tooth {
+	if !ok || p.LoftFacesTrim != proof.Tooth {
 		return nil, false
 	}
 	blankFace := func(edge int) *Face {
 		return spiralUniqueFaceWithOrigin(blank, provenance.Ref{Producer: blank.n.Origin.Producer,
-			Role: fmt.Sprintf("side(0,%d)", proof.blank.edgeIndex[edge])})
+			Role: fmt.Sprintf("side(0,%d)", proof.Blank.edgeIndex[edge])})
 	}
 	heel, root, toe := blankFace(2), blankFace(3), blankFace(4)
-	if heel == nil || root == nil || toe == nil || root != proof.blank.rootFace ||
+	if heel == nil || root == nil || toe == nil || root != proof.Blank.rootFace ||
 		heel == root || heel == toe || root == toe {
 		return nil, false
 	}
-	toeRef, okToe := spiralCapGroupRef(p.Groups, proof.tooth.toeCapGroup)
-	heelRef, okHeel := spiralCapGroupRef(p.Groups, proof.tooth.heelCapGroup)
+	toeRef, okToe := spiralCapGroupRef(p.Groups, proof.Tooth.ToeCapGroup)
+	heelRef, okHeel := spiralCapGroupRef(p.Groups, proof.Tooth.HeelCapGroup)
 	if !okToe || !okHeel || toeRef == heelRef {
 		return nil, false
 	}
@@ -160,7 +160,7 @@ func spiralNearFaceTable(blank, tooth *Body, proof *spiralFirstJoinSource) (
 			blank *Face
 			band  int
 		}{{heel, 7}, {toe, 1}, {root, 1}} {
-			origin, found := spiralOriginalSideRef(proof.tooth, placement.band, side)
+			origin, found := spiralOriginalSideRef(proof.Tooth, placement.band, side)
 			if !found || !add(placement.blank,
 				spiralUniqueFaceWithOrigin(tooth, origin), spiralNearPairCrossing) {
 				return nil, false
@@ -168,7 +168,7 @@ func spiralNearFaceTable(blank, tooth *Body, proof *spiralFirstJoinSource) (
 		}
 	}
 	for _, side := range [...]int{3, 4, 5} {
-		origin, found := spiralOriginalSideRef(proof.tooth, 1, side)
+		origin, found := spiralOriginalSideRef(proof.Tooth, 1, side)
 		if !found || !add(toe, spiralUniqueFaceWithOrigin(tooth, origin), spiralNearPairCrossing) {
 			return nil, false
 		}
@@ -193,8 +193,8 @@ func certifySpiralNearFaceRoles(ctx context.Context, blank, tooth *Body,
 ) {
 	var empty [2][4]spiralShortCapFamily
 	if ctx == nil || blank == nil || tooth == nil || proof == nil ||
-		proof.blank == nil || proof.tooth == nil || proof.heelSeam == nil ||
-		!spiralNearTrimSides(proof) || !spiralTrimSourceCurrent(proof.tooth) {
+		proof.Blank == nil || proof.Tooth == nil || proof.HeelSeam == nil ||
+		!spiralNearTrimSides(proof) || !spiralTrimSourceCurrent(proof.Tooth) {
 		return nil, empty, false, nil
 	}
 	if err := ctx.Err(); err != nil {

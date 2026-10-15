@@ -42,21 +42,21 @@ func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
 		t.Fatalf("real source did not exercise both vertical answers: contacts=%d misses=%d", contacts, misses)
 	}
 	t.Run("changed toe cone slope", func(t *testing.T) {
-		original := proof.trim.toe.slope
-		defer func() { proof.trim.toe.slope = original }()
-		proof.trim.toe.slope = lfAdd(original, lfF(0.001))
+		original := proof.trim.Toe.slope
+		defer func() { proof.trim.Toe.slope = original }()
+		proof.trim.Toe.slope = lfAdd(original, lfF(0.001))
 		assertChangedCurvedTrimRefuses(t, tooth, proof)
 	})
 	t.Run("changed heel cone apex", func(t *testing.T) {
-		original := proof.trim.heel.apex
-		defer func() { proof.trim.heel.apex = original }()
-		proof.trim.heel.apex = lfAdd(original, lfF(0.001))
+		original := proof.trim.Heel.apex
+		defer func() { proof.trim.Heel.apex = original }()
+		proof.trim.Heel.apex = lfAdd(original, lfF(0.001))
 		assertChangedCurvedTrimRefuses(t, tooth, proof)
 	})
 	t.Run("changed toe tool", func(t *testing.T) {
-		original := proof.trim.toeTool
-		defer func() { proof.trim.toeTool = original }()
-		proof.trim.toeTool = proof.trim.heelTool
+		original := proof.trim.ToeTool
+		defer func() { proof.trim.ToeTool = original }()
+		proof.trim.ToeTool = proof.trim.HeelTool
 		assertChangedCurvedTrimRefuses(t, tooth, proof)
 	})
 	t.Run("cap triangle on source face", func(t *testing.T) {
@@ -72,7 +72,7 @@ func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
 		payload.FaceOf = slices.Clone(payload.FaceOf)
 		changed := false
 		for i, group := range payload.Src {
-			if group == proof.trim.toeCapGroup {
+			if group == proof.trim.ToeCapGroup {
 				payload.FaceOf[i] = len(tooth.Faces()) + 1
 				changed = true
 			}
@@ -203,13 +203,13 @@ func mutateCurvedCapFaceOwner(t *testing.T, tooth *Body,
 	defer func() { tooth.n.Payload = original }()
 	payload := original.(facetedPayload)
 	payload.FaceOf = slices.Clone(payload.FaceOf)
-	capGroup := proof.trim.toeCapGroup
+	capGroup := proof.trim.ToeCapGroup
 	capTriangle, sourceTriangle := -1, -1
 	for i, group := range payload.Src {
 		if group == capGroup && capTriangle < 0 {
 			capTriangle = i
 		}
-		if group != proof.trim.toeCapGroup && group != proof.trim.heelCapGroup && sourceTriangle < 0 {
+		if group != proof.trim.ToeCapGroup && group != proof.trim.HeelCapGroup && sourceTriangle < 0 {
 			sourceTriangle = i
 		}
 	}

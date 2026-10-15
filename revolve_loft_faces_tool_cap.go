@@ -44,18 +44,18 @@ func revolveLoftFacesToolCapSidesOf(proof *revolveLoftFacesSourceCertificate) (
 		return out, false
 	}
 	p, ok := proof.tooth.n.Payload.(facetedPayload)
-	if !ok || p.loftFacesTrim != proof.trim ||
+	if !ok || p.LoftFacesTrim != proof.trim ||
 		!revolveLoftFacesTrimCurrent(proof.tooth, proof.trim) ||
-		uniqueResultSourceFace(proof.tooth, proof.trim.toeCapGroup) != proof.toeFace ||
-		uniqueResultSourceFace(proof.tooth, proof.trim.heelCapGroup) != proof.heelFace {
+		uniqueResultSourceFace(proof.tooth, proof.trim.ToeCapGroup) != proof.toeFace ||
+		uniqueResultSourceFace(proof.tooth, proof.trim.HeelCapGroup) != proof.heelFace {
 		return out, false
 	}
 	tools := [...]struct {
 		limit *pointConeLimit
 		face  *Face
 		group int
-	}{{proof.trim.toe, proof.toeFace, proof.trim.toeCapGroup},
-		{proof.trim.heel, proof.heelFace, proof.trim.heelCapGroup}}
+	}{{proof.trim.Toe, proof.toeFace, proof.trim.ToeCapGroup},
+		{proof.trim.Heel, proof.heelFace, proof.trim.HeelCapGroup}}
 	out.separated = make(map[[2]*Face]struct{})
 	for toolIndex, tool := range tools {
 		if tool.limit == nil || tool.limit.apex == nil || tool.limit.far == nil ||
@@ -138,13 +138,13 @@ func revolveLoftFacesToolResidual(tool *pointConeLimit, point planePoint) *big.R
 // more than the actual Sketch region and therefore only prove misses.
 func revolveLoftFacesToolCircleOutsideSource(trim *loftFacesTrimRecord,
 	x, radius *big.Rat) bool {
-	if trim == nil || trim.source == nil || x == nil || radius == nil ||
+	if trim == nil || trim.Source == nil || x == nil || radius == nil ||
 		radius.Sign() <= 0 {
 		return false
 	}
-	box, err := lfSourceBox(trim.source)
+	box, err := lfSourceBox(trim.Source)
 	if err != nil {
 		return false
 	}
-	return loftface.CircleOutsideMaps(trim.maps, box, x, radius)
+	return loftface.CircleOutsideMaps(trim.Maps, box, x, radius)
 }

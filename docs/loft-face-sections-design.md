@@ -161,7 +161,7 @@ they continue, and the cap facets move to the extension vertices with their
 face id and orientation. An extension wall over chord `j` stands for the
 translate of the true cap-boundary piece of chord `j`. The certified distance
 between that piece and the held chord is
-`chord_j = AbsSumUpper(sourceDeparture[j], projectiveDeparture[j], stationRound)`
+`chord_j = AbsSumUpper(SourceDeparture[j], ProjectiveDeparture[j], StationRound)`
 of the final cap's bounds, and it includes the curved profile's departure. The
 bounds of the wall's two extension vertices are raised to at least
 `AbsSumUpper(max(beta(a), beta(b), chord_j), max(gap(a_e), gap(b_e)))`. A face
@@ -363,7 +363,7 @@ term of the cap bound charges that rounding.
 
 The end face carries the cap-end role of the new loft only, with a `Plane` tag
 rounded from the map, and no origin of a selected cap. `loftFacesCapRecord`
-holds the `TangentEnd` beside `final`, and the cone-trim record copies it, so
+holds the `TangentEnd` beside `Final`, and the cone-trim record copies it, so
 a later check can require that its cone and map match the construction
 exactly. Placement drops both records. A source whose plane is not the tangent
 plane still passes through the ordinary embedding gates, which refuse an

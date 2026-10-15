@@ -123,11 +123,11 @@ type loftFaceEmbedding struct {
 }
 
 type loftFaceCapBounds struct {
-	stationRound        float64
-	projectiveDeparture []float64
-	polygonSpeed        []float64
-	sourceSpeed         []float64
-	sourceDeparture     []float64
+	StationRound        float64
+	ProjectiveDeparture []float64
+	PolygonSpeed        []float64
+	SourceSpeed         []float64
+	SourceDeparture     []float64
 }
 
 func lfStationUV(point planePoint) (*big.Rat, *big.Rat) { return lfF(point.U), lfF(point.V) }
@@ -139,10 +139,10 @@ func lfCapBounds(ctx context.Context, capMap loftFaceMap, section loftFaceSectio
 	if len(section.ring) != n || len(source.sourceArcUpper) != n || len(source.sourceMatched) != n {
 		return out, fmt.Errorf("%w: loft source station proof is incomplete", ErrUnsupported)
 	}
-	out.projectiveDeparture = make([]float64, n)
-	out.polygonSpeed = make([]float64, n)
-	out.sourceSpeed = make([]float64, n)
-	out.sourceDeparture = make([]float64, n)
+	out.ProjectiveDeparture = make([]float64, n)
+	out.PolygonSpeed = make([]float64, n)
+	out.SourceSpeed = make([]float64, n)
+	out.SourceDeparture = make([]float64, n)
 	exact := make([]loftFaceRatVec, n)
 	den := make([]*big.Rat, n)
 	for j, station := range source.sourceStation {
@@ -163,7 +163,7 @@ func lfCapBounds(ctx context.Context, capMap loftFaceMap, section loftFaceSectio
 		for axis := range held {
 			perCoord = max(perCoord, proofbound.RatAbsDiff(exact[j][axis], held[axis]))
 		}
-		out.stationRound = max(out.stationRound, proofbound.Radius3D(perCoord))
+		out.StationRound = max(out.StationRound, proofbound.Radius3D(perCoord))
 	}
 	for j := range n {
 		jn := (j + 1) % n
@@ -176,19 +176,19 @@ func lfCapBounds(ctx context.Context, capMap loftFaceMap, section loftFaceSectio
 		shift := lfDiv(lfMul(lfAbs(lfSub(den[jn], den[j])), lengthL1),
 			lfMul(big.NewRat(4, 1), minDen))
 		speed := lfDiv(lfMul(maxDen, lengthL1), minDen)
-		out.projectiveDeparture[j] = loftface.RatUp(shift)
-		out.polygonSpeed[j] = loftface.RatUp(speed)
-		out.sourceSpeed[j] = proofbound.ProductUpper(source.sourceArcUpper[j], capMap.Stretch)
-		out.sourceDeparture[j] = proofbound.ProductUpper(
+		out.ProjectiveDeparture[j] = loftface.RatUp(shift)
+		out.PolygonSpeed[j] = loftface.RatUp(speed)
+		out.SourceSpeed[j] = proofbound.ProductUpper(source.sourceArcUpper[j], capMap.Stretch)
+		out.SourceDeparture[j] = proofbound.ProductUpper(
 			max(source.sourceMatched[j], section.slice.base.MeshBound), capMap.Stretch)
-		if proofbound.IsNonFinite(out.projectiveDeparture[j]) ||
-			proofbound.IsNonFinite(out.polygonSpeed[j]) ||
-			proofbound.IsNonFinite(out.sourceSpeed[j]) ||
-			proofbound.IsNonFinite(out.sourceDeparture[j]) {
+		if proofbound.IsNonFinite(out.ProjectiveDeparture[j]) ||
+			proofbound.IsNonFinite(out.PolygonSpeed[j]) ||
+			proofbound.IsNonFinite(out.SourceSpeed[j]) ||
+			proofbound.IsNonFinite(out.SourceDeparture[j]) {
 			return out, fmt.Errorf("%w: loft cap cell has no finite source bound", ErrUnsupported)
 		}
 	}
-	if proofbound.IsNonFinite(out.stationRound) {
+	if proofbound.IsNonFinite(out.StationRound) {
 		return out, fmt.Errorf("%w: loft cap station rounding is not finite", ErrUnsupported)
 	}
 	return out, nil
@@ -208,7 +208,7 @@ func proveLoftFaceBounds(ctx context.Context, sections []loftFaceSection,
 		if err != nil {
 			return facetedPayload{}, fmt.Errorf("loft cap %d: %w", i, err)
 		}
-		maxRound = max(maxRound, proofs[i].stationRound)
+		maxRound = max(maxRound, proofs[i].StationRound)
 	}
 	meshBound, wallLeg, twistVolume, trueWallArea := 0.0, 0.0, 0.0, 0.0
 	n := len(source.sourceStation)
@@ -223,28 +223,28 @@ func proveLoftFaceBounds(ctx context.Context, sections []loftFaceSection,
 			jn := (j + 1) % n
 			vLo, vHi := sections[band].ring[j], sections[band].ring[jn]
 			wLo, wHi := sections[band+1].ring[j], sections[band+1].ring[jn]
-			polygonMatch := max(proofbound.AbsSumUpper(lo.projectiveDeparture[j], lo.stationRound),
-				proofbound.AbsSumUpper(hi.projectiveDeparture[j], hi.stationRound))
+			polygonMatch := max(proofbound.AbsSumUpper(lo.ProjectiveDeparture[j], lo.StationRound),
+				proofbound.AbsSumUpper(hi.ProjectiveDeparture[j], hi.StationRound))
 			wallArea := proofbound.CellChordCurveAreaUpper(vLo, vHi, wLo, wHi,
-				lo.polygonSpeed[j], hi.polygonSpeed[j], polygonMatch)
+				lo.PolygonSpeed[j], hi.PolygonSpeed[j], polygonMatch)
 			wallLeg = proofbound.AbsSumUpper(wallLeg, proofbound.ProductUpper(polygonMatch, wallArea))
 			twistVolume = proofbound.AbsSumUpper(twistVolume,
 				proofbound.CellTwistVolumeAllow(vLo, vHi, wLo, wHi))
-			smoothMatch := max(proofbound.AbsSumUpper(lo.sourceDeparture[j],
-				lo.projectiveDeparture[j], lo.stationRound),
-				proofbound.AbsSumUpper(hi.sourceDeparture[j],
-					hi.projectiveDeparture[j], hi.stationRound))
+			smoothMatch := max(proofbound.AbsSumUpper(lo.SourceDeparture[j],
+				lo.ProjectiveDeparture[j], lo.StationRound),
+				proofbound.AbsSumUpper(hi.SourceDeparture[j],
+					hi.ProjectiveDeparture[j], hi.StationRound))
 			meshBound = max(meshBound, proofbound.AbsSumUpper(smoothMatch,
 				proofbound.CellTwistOffsetUpper(vLo, vHi, wLo, wHi)))
 			trueWallArea = proofbound.AbsSumUpper(trueWallArea,
 				proofbound.CellChordCurveAreaUpper(vLo, vHi, wLo, wHi,
-					lo.sourceSpeed[j], hi.sourceSpeed[j], smoothMatch))
+					lo.SourceSpeed[j], hi.SourceSpeed[j], smoothMatch))
 		}
 	}
 	for _, proof := range []loftFaceCapBounds{proofs[0], proofs[len(proofs)-1]} {
-		for j := range proof.sourceDeparture {
-			meshBound = max(meshBound, proofbound.AbsSumUpper(proof.sourceDeparture[j],
-				proof.projectiveDeparture[j], proof.stationRound))
+		for j := range proof.SourceDeparture {
+			meshBound = max(meshBound, proofbound.AbsSumUpper(proof.SourceDeparture[j],
+				proof.ProjectiveDeparture[j], proof.StationRound))
 		}
 	}
 	// This whole-mesh sweep charges the exact source-map station coordinates

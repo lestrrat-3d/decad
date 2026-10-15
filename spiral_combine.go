@@ -17,16 +17,16 @@ import (
 )
 
 type spiralCombineSource struct {
-	first  *spiralFirstJoinSource
-	tools  []*Body
-	moves  []r3.Transform
-	copies *facetedCopySet
+	First  *spiralFirstJoinSource
+	Tools  []*Body
+	Moves  []r3.Transform
+	Copies *facetedCopySet
 }
 
 type spiralCombinedTools struct {
-	source *spiralCombineSource
-	// owner maps each transient composite face to the live face it copies.
-	owner map[*Face]*Face
+	Source *spiralCombineSource
+	// Owner maps each transient composite face to the live face it copies.
+	Owner map[*Face]*Face
 }
 
 type spiralCombinedAdmission struct {
@@ -42,8 +42,8 @@ type spiralCombinedAdmission struct {
 // that changes the source group's patch partition or joins two copy faces.
 func spiralCombineFaceRoles(ctx context.Context, blank, combined *Body,
 	source *spiralCombineSource, faceID map[*Face]int) (*spiralCombinedAdmission, error) {
-	first := source.tools[0]
-	roles, short, ok, err := certifySpiralNearFaceRoles(ctx, blank, first, source.first)
+	first := source.Tools[0]
+	roles, short, ok, err := certifySpiralNearFaceRoles(ctx, blank, first, source.First)
 	if err != nil || !ok {
 		return nil, err
 	}
@@ -54,7 +54,7 @@ func spiralCombineFaceRoles(ctx context.Context, blank, combined *Body,
 	for i, face := range first.Faces() {
 		firstID[face] = len(blank.Faces()) + i
 	}
-	firstAdmission := &spiralFirstUnionAdmission{source: source.first, short: short, roles: roles}
+	firstAdmission := &spiralFirstUnionAdmission{source: source.First, short: short, roles: roles}
 	firstAllowed, ok := spiralFirstUnionPairs(blank, first, firstAdmission, firstID)
 	if !ok {
 		return nil, fmt.Errorf("%w: combined source has no first-tooth role table", ErrUnsupported)
@@ -70,9 +70,9 @@ func spiralCombineFaceRoles(ctx context.Context, blank, combined *Body,
 	}
 	result := &spiralCombinedAdmission{source: source,
 		roles: make(map[[2]*Face]spiralNearPairKind), allowed: make(map[[2]int]bool),
-		short: short, groups: make([]map[int]int, len(source.tools))}
+		short: short, groups: make([]map[int]int, len(source.Tools))}
 	start := 0
-	for copyIndex, tool := range source.tools {
+	for copyIndex, tool := range source.Tools {
 		part, ok := tool.n.Payload.(facetedPayload)
 		if !ok {
 			return nil, fmt.Errorf("%w: spiral copy lost its faceted source", ErrUnsupported)
@@ -99,7 +99,7 @@ func spiralCombineFaceRoles(ctx context.Context, blank, combined *Body,
 			original := first.Faces()[firstPart.FaceOf[j]]
 			copyFace := copyFaces[part.FaceOf[j]]
 			compositeFace := allFaces[combinedPart.FaceOf[start+j]]
-			if owner := combinedPart.SpiralTools.owner[compositeFace]; owner != copyFace {
+			if owner := combinedPart.SpiralTools.Owner[compositeFace]; owner != copyFace {
 				return nil, fmt.Errorf("%w: combined face owner changed", ErrUnsupported)
 			}
 			if prior := mapped[original]; prior != nil && prior != compositeFace {
@@ -135,8 +135,8 @@ func spiralCombineFaceRoles(ctx context.Context, blank, combined *Body,
 		start += len(part.Tris)
 		result.groups[copyIndex] = groupMap
 	}
-	if start != len(combinedPart.Tris) || len(result.roles) != 14*len(source.tools) ||
-		len(result.allowed) != 24*len(source.tools) {
+	if start != len(combinedPart.Tris) || len(result.roles) != 14*len(source.Tools) ||
+		len(result.allowed) != 24*len(source.Tools) {
 		return nil, fmt.Errorf("%w: combined spiral face role count changed", ErrUnsupported)
 	}
 	return result, nil
@@ -145,11 +145,11 @@ func spiralCombineFaceRoles(ctx context.Context, blank, combined *Body,
 func spiralValidateCombinedUnion(ctx context.Context, blank *Body, blankHeld *meshbool.BoolMesh,
 	result *meshbool.StitchedMesh, admission *spiralCombinedAdmission) (bool, error) {
 	if ctx == nil || blank == nil || blankHeld == nil || result == nil || admission == nil ||
-		admission.source == nil || len(admission.groups) != len(admission.source.tools) {
+		admission.source == nil || len(admission.groups) != len(admission.source.Tools) {
 		return false, nil
 	}
 	firstAdmission := &spiralFirstUnionAdmission{
-		source: admission.source.first, short: admission.short,
+		source: admission.source.First, short: admission.short,
 		rootBoxes: new([2]*spiralRootFlankSourceBoxes),
 	}
 	for side := range firstAdmission.rootBoxes {
@@ -163,7 +163,7 @@ func spiralValidateCombinedUnion(ctx context.Context, blank *Body, blankHeld *me
 		accepted bool
 		err      error
 	}
-	results := make([]verdict, len(admission.source.moves))
+	results := make([]verdict, len(admission.source.Moves))
 	jobs := make(chan int, len(results))
 	for i := range results {
 		jobs <- i
@@ -198,7 +198,7 @@ func spiralValidateCombinedCopy(ctx context.Context, blank *Body, blankHeld *mes
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
-	first := admission.source.tools[0]
+	first := admission.source.Tools[0]
 	blankFaces := len(blank.Faces())
 	local := *result
 	local.Src = make([]int, len(result.Src))
@@ -216,8 +216,8 @@ func spiralValidateCombinedCopy(ctx context.Context, blank *Body, blankHeld *mes
 	if copyIndex != 0 {
 		var ok bool
 		local.Verts, local.VertexBound, local.Round, radialExtra, ok =
-			spiralInverseHeldResult(ctx, blankHeld, first, result, admission.source.moves[copyIndex],
-				admission.source.copies.Exact[copyIndex])
+			spiralInverseHeldResult(ctx, blankHeld, first, result, admission.source.Moves[copyIndex],
+				admission.source.Copies.Exact[copyIndex])
 		if !ok {
 			if err := ctx.Err(); err != nil {
 				return false, err
@@ -252,12 +252,12 @@ func spiralPrepareCombinedUnion(ctx context.Context, op meshbool.OperationKind,
 	if !ok || p.SpiralTools == nil || op != meshbool.OpUnion {
 		return original, nil, nil
 	}
-	meta := p.SpiralTools.source
-	if meta == nil || len(meta.tools) < 2 || len(meta.tools) != len(meta.moves) ||
-		meta.first == nil || meta.first.tooth == nil {
+	meta := p.SpiralTools.Source
+	if meta == nil || len(meta.Tools) < 2 || len(meta.Tools) != len(meta.Moves) ||
+		meta.First == nil || meta.First.Tooth == nil {
 		return nil, nil, fmt.Errorf("%w: combined spiral source is incomplete", ErrUnsupported)
 	}
-	first := meta.tools[0]
+	first := meta.Tools[0]
 	firstMesh, _, err := tessellateBooleanOperand(ctx, first, pairTol)
 	if err != nil {
 		return nil, nil, err
@@ -270,11 +270,11 @@ func spiralPrepareCombinedUnion(ctx context.Context, op meshbool.OperationKind,
 	if err != nil {
 		return nil, nil, err
 	}
-	proxy, certified, err := spiralOffsetToothMesh(ctx, blank, first, firstMesh, src, meta.first)
+	proxy, certified, err := spiralOffsetToothMesh(ctx, blank, first, firstMesh, src, meta.First)
 	if err != nil || !certified {
 		return nil, nil, err
 	}
-	placedParts, err := meta.copies.placedProxyShells(ctx, proxy)
+	placedParts, err := meta.Copies.placedProxyShells(ctx, proxy)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -334,14 +334,14 @@ func spiralCombineBody(ctx context.Context, d *Document, ref producerID,
 // the pairwise separation certificate above proves its shells are separate.
 func spiralCombinedToolBody(ctx context.Context, d *Document, ref producerID,
 	source *spiralCombineSource) (*Body, error) {
-	meta := &spiralCombinedTools{source: source, owner: make(map[*Face]*Face)}
+	meta := &spiralCombinedTools{Source: source, Owner: make(map[*Face]*Face)}
 	p := facetedPayload{Xform: r3.Identity(), SpiralTools: meta, ContactAudited: true}
-	firstPart, ok := source.tools[0].n.Payload.(facetedPayload)
+	firstPart, ok := source.Tools[0].n.Payload.(facetedPayload)
 	if !ok {
 		return nil, fmt.Errorf("%w: first spiral tooth lost its faceted source", ErrUnsupported)
 	}
 	maxAbs := 0.0
-	for copyIndex, tooth := range source.tools {
+	for copyIndex, tooth := range source.Tools {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
@@ -351,10 +351,10 @@ func spiralCombinedToolBody(ctx context.Context, d *Document, ref producerID,
 			return nil, fmt.Errorf("%w: spiral tool has no complete held-mesh proof", ErrUnsupported)
 		}
 		if copyIndex != 0 {
-			if source.copies == nil || source.copies.Tools[copyIndex] != tooth ||
-				part.CopyLineage == nil || part.CopyLineage.Source != source.tools[0] ||
-				part.CopyLineage.Motion != source.moves[copyIndex] ||
-				part.CopyLineage.Exact == nil || part.CopyLineage.Exact != source.copies.Exact[copyIndex] ||
+			if source.Copies == nil || source.Copies.Tools[copyIndex] != tooth ||
+				part.CopyLineage == nil || part.CopyLineage.Source != source.Tools[0] ||
+				part.CopyLineage.Motion != source.Moves[copyIndex] ||
+				part.CopyLineage.Exact == nil || part.CopyLineage.Exact != source.Copies.Exact[copyIndex] ||
 				len(part.Verts) != len(firstPart.Verts) || len(part.Tris) != len(firstPart.Tris) {
 				return nil, fmt.Errorf("%w: spiral copy lost its audited source", ErrUnsupported)
 			}
@@ -408,7 +408,7 @@ func spiralCombinedToolBody(ctx context.Context, d *Document, ref producerID,
 	}
 	faces := body.Faces()
 	triangle := 0
-	for _, tooth := range source.tools {
+	for _, tooth := range source.Tools {
 		part, ok := tooth.n.Payload.(facetedPayload)
 		if !ok {
 			return nil, fmt.Errorf("%w: spiral copy lost its faceted source", ErrBooleanFailed)
@@ -420,10 +420,10 @@ func spiralCombinedToolBody(ctx context.Context, d *Document, ref producerID,
 				return nil, fmt.Errorf("%w: combined tool lost a source face", ErrBooleanFailed)
 			}
 			copyFace, liveFace := faces[composite.FaceOf[triangle]], original[part.FaceOf[i]]
-			if prior, found := meta.owner[copyFace]; found && prior != liveFace {
+			if prior, found := meta.Owner[copyFace]; found && prior != liveFace {
 				return nil, fmt.Errorf("%w: combined tool merged distinct source faces", ErrBooleanFailed)
 			}
-			meta.owner[copyFace] = liveFace
+			meta.Owner[copyFace] = liveFace
 			triangle++
 		}
 	}

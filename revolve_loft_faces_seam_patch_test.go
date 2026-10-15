@@ -72,13 +72,13 @@ func neutralArcSeamContact(t *testing.T, blank, trimmed *Body, trim *loftFacesTr
 	require.NotNil(t, contact.tLo)
 	require.NotNil(t, contact.tHi)
 	var stations []int
-	for index, group := range trim.stationGroup {
+	for index, group := range trim.StationGroup {
 		if group == contact.segment {
 			stations = append(stations, index)
 		}
 	}
 	require.NotEmpty(t, stations)
-	stations = append(stations, (stations[len(stations)-1]+1)%len(trim.stationGroup))
+	stations = append(stations, (stations[len(stations)-1]+1)%len(trim.StationGroup))
 	return sectionIndex, contact, stations
 }
 
@@ -86,8 +86,8 @@ func TestCurvedArcSeamRefusesChangedStationAndIncompleteRun(t *testing.T) {
 	t.Run("changed station", func(t *testing.T) {
 		blank, trimmed, trim := neutralArcSeamSource(t)
 		sectionIndex, contact, stations := neutralArcSeamContact(t, blank, trimmed, trim)
-		trim.source.sourceStation[stations[1]].U += 0.001
-		require.False(t, pointSourceCurrent(trim.source))
+		trim.Source.sourceStation[stations[1]].U += 0.001
+		require.False(t, pointSourceCurrent(trim.Source))
 		_, _, _, ok, err := revolveLoftFacesCertifiedArcPatches(t.Context(), blank, trimmed,
 			sectionIndex, contact.segment, contact.band,
 			loftFaceInterval{Lo: contact.tLo, Hi: contact.tHi}, stations)
@@ -97,9 +97,9 @@ func TestCurvedArcSeamRefusesChangedStationAndIncompleteRun(t *testing.T) {
 	t.Run("changed station bound", func(t *testing.T) {
 		blank, trimmed, trim := neutralArcSeamSource(t)
 		sectionIndex, contact, stations := neutralArcSeamContact(t, blank, trimmed, trim)
-		require.Positive(t, trim.source.sourceStationRound)
-		trim.source.sourceStationRound = 0
-		require.False(t, pointSourceCurrent(trim.source))
+		require.Positive(t, trim.Source.sourceStationRound)
+		trim.Source.sourceStationRound = 0
+		require.False(t, pointSourceCurrent(trim.Source))
 		_, _, _, ok, err := revolveLoftFacesCertifiedArcPatches(t.Context(), blank, trimmed,
 			sectionIndex, contact.segment, contact.band,
 			loftFaceInterval{Lo: contact.tLo, Hi: contact.tHi}, stations)

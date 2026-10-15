@@ -18,7 +18,7 @@ func TestMappedFitKnotRootCellRequiresFiniteSourceSliver(t *testing.T) {
 			G0:       one, GU: zero, GV: zero,
 		}
 	}
-	trim := &loftFacesTrimRecord{maps: []loftFaceMap{mapAt(4, 0), mapAt(6, 1)}}
+	trim := &loftFacesTrimRecord{Maps: []loftFaceMap{mapAt(4, 0), mapAt(6, 1)}}
 	span := freeform.BezierSpan{
 		{U: big.NewRat(0, 1), V: lfZero()},
 		{U: big.NewRat(1, 3), V: lfZero()},

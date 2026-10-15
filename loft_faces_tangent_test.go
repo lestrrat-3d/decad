@@ -115,15 +115,15 @@ func TestLoftFacesToConeTangentBuildsExactEnd(t *testing.T) {
 		f.toe, f.heel)
 	require.NoError(t, err)
 
-	record := body.n.Payload.(facetedPayload).loftFacesCap
+	record := body.n.Payload.(facetedPayload).LoftFacesCap
 	require.NotNil(t, record)
-	require.Len(t, record.maps, 3)
-	require.Len(t, record.bounds, 3)
-	require.NotNil(t, record.tangent)
-	require.True(t, record.tangent.MatchesCone(limit.apex, limit.slope))
-	require.True(t, loftface.MapEqual(record.final, record.tangent.Map()),
+	require.Len(t, record.Maps, 3)
+	require.Len(t, record.Bounds, 3)
+	require.NotNil(t, record.Tangent)
+	require.True(t, record.Tangent.MatchesCone(limit.apex, limit.slope))
+	require.True(t, loftface.MapEqual(record.Final, record.Tangent.Map()),
 		"the recorded final map is the constructed map")
-	q := loftface.ConePullback(record.final, limit.apex, limit.slope)
+	q := loftface.ConePullback(record.Final, limit.apex, limit.slope)
 	for i := range 5 {
 		require.Zero(t, q[i].Sign(), "pullback coefficient %d", i)
 	}
@@ -131,10 +131,10 @@ func TestLoftFacesToConeTangentBuildsExactEnd(t *testing.T) {
 
 	// The held end ring is the rounded constructed map at each station.
 	end := body.n.Payload.(facetedPayload)
-	n := len(record.source.sourceStation)
-	for j, station := range record.source.sourceStation {
+	n := len(record.Source.sourceStation)
+	for j, station := range record.Source.sourceStation {
 		u, v := lfStationUV(station)
-		want := loftface.RoundPoint(record.final.At(u, v))
+		want := loftface.RoundPoint(record.Final.At(u, v))
 		require.Equal(t, want, end.Verts[2*n+j])
 	}
 

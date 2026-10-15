@@ -783,7 +783,7 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 	}
 	if combinedAdmission != nil {
 		ok, err := spiralsector.ScopeWidenedContacts(ctx, bmA, bmB, memo,
-			combinedAdmission.allowed, tolMM, 24*len(combinedAdmission.source.tools))
+			combinedAdmission.allowed, tolMM, 24*len(combinedAdmission.source.Tools))
 		if err != nil {
 			return booleanEvaluation{}, err
 		}
@@ -902,7 +902,7 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 	}
 	if combinedAdmission != nil {
 		ok, err := spiralsector.ScopeOutputSwitches(ctx, stitched,
-			len(a.Faces()), combinedAdmission.allowed, 24*len(combinedAdmission.source.tools))
+			len(a.Faces()), combinedAdmission.allowed, 24*len(combinedAdmission.source.Tools))
 		if err != nil {
 			return booleanEvaluation{}, err
 		}

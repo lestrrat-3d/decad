@@ -169,7 +169,7 @@ func revolveLoftFacesVerticalTraceHeldPoint(proof *revolveLoftFacesSourceCertifi
 	ray revolveLoftFacesRay, radius *big.Rat) (r3.Vec, float64, float64, bool) {
 	var empty r3.Vec
 	if radius == nil || radius.Sign() <= 0 ||
-		piece.cell.band < 0 || piece.cell.band+1 >= len(proof.trim.maps) {
+		piece.cell.band < 0 || piece.cell.band+1 >= len(proof.trim.Maps) {
 		return empty, 0, 0, false
 	}
 	if piece.arc != nil {
@@ -199,8 +199,8 @@ func revolveLoftFacesVerticalTraceHeldPoint(proof *revolveLoftFacesSourceCertifi
 	if hit.lo == nil || hit.hi == nil || hit.lo.Cmp(hit.hi) > 0 {
 		return empty, 0, 0, false
 	}
-	box, ok := loftface.JunctionBox(proof.trim.maps[piece.cell.band],
-		proof.trim.maps[piece.cell.band+1], piece.cell.source,
+	box, ok := loftface.JunctionBox(proof.trim.Maps[piece.cell.band],
+		proof.trim.Maps[piece.cell.band+1], piece.cell.source,
 		hit.lo, hit.hi, piece.time, piece.time)
 	if !ok || box[0].Lo.Cmp(piece.x) != 0 || box[0].Hi.Cmp(piece.x) != 0 {
 		return empty, 0, 0, false

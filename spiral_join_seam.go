@@ -379,7 +379,7 @@ func spiralHeldShortCapProof(ctx context.Context, held *meshbool.StitchedMesh,
 	blank, tooth *Body, proof *spiralFirstJoinSource,
 	short [2][4]spiralShortCapFamily) (float64, bool, error) {
 	if ctx == nil || held == nil || blank == nil || tooth == nil || proof == nil ||
-		proof.tooth == nil {
+		proof.Tooth == nil {
 		return 0, false, nil
 	}
 	groups, ok := spiralJoinGroups(blank, tooth, proof)
@@ -402,12 +402,12 @@ func spiralHeldShortCapProof(ctx context.Context, held *meshbool.StitchedMesh,
 		for index, role := range roles {
 			family := short[end][index]
 			if family.group != role || len(family.pieces) != 1 ||
-				family.band < 0 || family.band >= len(proof.tooth.maps)-1 ||
-				family.band != proof.junctions[0][end].band ||
-				family.band != proof.junctions[1][end].band {
+				family.band < 0 || family.band >= len(proof.Tooth.Maps)-1 ||
+				family.band != proof.Junctions[0][end].Band ||
+				family.band != proof.Junctions[1][end].Band {
 				return 0, false, nil
 			}
-			origin, found := spiralOriginalSideRef(proof.tooth, family.band, role)
+			origin, found := spiralOriginalSideRef(proof.Tooth, family.band, role)
 			if !found {
 				return 0, false, nil
 			}
@@ -475,13 +475,13 @@ func spiralSeamEndpointSlope(box [3]loftFaceInterval) (loftFaceInterval, bool) {
 func spiralConeSlopeBox(seam *spiralHeelRootSeam,
 	slope loftFaceInterval) ([3]loftFaceInterval, bool) {
 	var result [3]loftFaceInterval
-	if seam == nil || seam.coneC == nil || seam.x.Lo == nil || seam.x.Hi == nil ||
-		seam.slope.Lo == nil || seam.slope.Hi == nil ||
+	if seam == nil || seam.ConeC == nil || seam.X.Lo == nil || seam.X.Hi == nil ||
+		seam.Slope.Lo == nil || seam.Slope.Hi == nil ||
 		slope.Lo == nil || slope.Hi == nil || slope.Lo.Cmp(slope.Hi) > 0 ||
-		slope.Lo.Cmp(seam.slope.Lo) < 0 || slope.Hi.Cmp(seam.slope.Hi) > 0 {
+		slope.Lo.Cmp(seam.Slope.Lo) < 0 || slope.Hi.Cmp(seam.Slope.Hi) > 0 {
 		return result, false
 	}
-	rLo, rHi := lfSub(seam.coneC, seam.x.Hi), lfSub(seam.coneC, seam.x.Lo)
+	rLo, rHi := lfSub(seam.ConeC, seam.X.Hi), lfSub(seam.ConeC, seam.X.Lo)
 	if rLo.Sign() <= 0 || rLo.Cmp(rHi) > 0 {
 		return result, false
 	}
@@ -515,7 +515,7 @@ func spiralConeSlopeBox(seam *spiralHeelRootSeam,
 			}
 		}
 	}
-	return [3]loftFaceInterval{seam.x, y, z}, true
+	return [3]loftFaceInterval{seam.X, y, z}, true
 }
 
 // The source seam is a continuous unique crossing of the authenticated
@@ -526,8 +526,8 @@ func spiralConeSlopeBox(seam *spiralHeelRootSeam,
 func spiralHeldHeelSeamProof(ctx context.Context, held *meshbool.StitchedMesh,
 	blankHeel, toothRoot int, seam *spiralHeelRootSeam,
 	radialError float64) (float64, bool, error) {
-	if seam == nil || seam.x.Lo == nil || seam.x.Hi == nil ||
-		seam.slope.Lo == nil || seam.slope.Hi == nil || held == nil ||
+	if seam == nil || seam.X.Lo == nil || seam.X.Hi == nil ||
+		seam.Slope.Lo == nil || seam.Slope.Hi == nil || held == nil ||
 		proofbound.IsNonFinite(radialError) || radialError < 0 {
 		return 0, false, nil
 	}
@@ -550,23 +550,23 @@ func spiralHeldHeelSeamProof(ctx context.Context, held *meshbool.StitchedMesh,
 	if heldLow.Cmp(heldHigh) >= 0 {
 		return 0, false, nil
 	}
-	end0, ok0 := spiralSeamEndpointSlope(seam.ends[0])
-	end1, ok1 := spiralSeamEndpointSlope(seam.ends[1])
+	end0, ok0 := spiralSeamEndpointSlope(seam.Ends[0])
+	end1, ok1 := spiralSeamEndpointSlope(seam.Ends[1])
 	if !ok0 || !ok1 {
 		return 0, false, nil
 	}
 	sourceLow, sourceHigh := end0, end1
-	lowBox, highBox := seam.ends[0], seam.ends[1]
+	lowBox, highBox := seam.Ends[0], seam.Ends[1]
 	if end1.Hi.Cmp(end0.Lo) < 0 {
 		sourceLow, sourceHigh = end1, end0
-		lowBox, highBox = seam.ends[1], seam.ends[0]
+		lowBox, highBox = seam.Ends[1], seam.Ends[0]
 	}
 	if sourceLow.Hi.Cmp(sourceHigh.Lo) >= 0 ||
-		seam.slope.Lo.Cmp(sourceLow.Lo) > 0 ||
-		seam.slope.Hi.Cmp(sourceHigh.Hi) < 0 {
+		seam.Slope.Lo.Cmp(sourceLow.Lo) > 0 ||
+		seam.Slope.Hi.Cmp(sourceHigh.Hi) < 0 {
 		return 0, false, nil
 	}
-	inner, ok := spiralHeelSameRayBound(chain, seam.x, big.NewRat(-1, 1),
+	inner, ok := spiralHeelSameRayBound(chain, seam.X, big.NewRat(-1, 1),
 		radialError, held.Round)
 	if !ok {
 		return inner, false, nil
@@ -575,9 +575,9 @@ func spiralHeldHeelSeamProof(ctx context.Context, held *meshbool.StitchedMesh,
 	var highAbsIndex int
 	var minAbsSlope *big.Rat
 	var tailAtLow bool
-	if seam.negative {
+	if seam.Negative {
 		// The pinion has a true low-slope tail and a held high-slope tail.
-		if sourceLow.Hi.Cmp(heldLow) >= 0 || seam.slope.Hi.Cmp(heldHigh) >= 0 {
+		if sourceLow.Hi.Cmp(heldLow) >= 0 || seam.Slope.Hi.Cmp(heldHigh) >= 0 {
 			return 0, false, nil
 		}
 		endpoint = highBox
@@ -586,7 +586,7 @@ func spiralHeldHeelSeamProof(ctx context.Context, held *meshbool.StitchedMesh,
 	} else {
 		// The driving member has a held low-slope tail and a true high-slope tail.
 		if heldLow.Cmp(sourceLow.Lo) >= 0 || heldHigh.Cmp(sourceHigh.Lo) >= 0 ||
-			seam.slope.Lo.Cmp(heldLow) <= 0 {
+			seam.Slope.Lo.Cmp(heldLow) <= 0 {
 			return 0, false, nil
 		}
 		endpoint = lowBox
@@ -617,8 +617,8 @@ func spiralHeldHeelSeamProof(ctx context.Context, held *meshbool.StitchedMesh,
 func spiralHeldToeSeamProof(ctx context.Context, held *meshbool.StitchedMesh,
 	blankToe, toothRoot int, seam *spiralToeRootSeam,
 	radialError float64) (float64, bool, error) {
-	if seam == nil || seam.x.Lo == nil || seam.x.Hi == nil ||
-		seam.slope.Lo == nil || seam.slope.Hi == nil || held == nil ||
+	if seam == nil || seam.X.Lo == nil || seam.X.Hi == nil ||
+		seam.Slope.Lo == nil || seam.Slope.Hi == nil || held == nil ||
 		proofbound.IsNonFinite(radialError) || radialError < 0 {
 		return 0, false, nil
 	}
@@ -641,23 +641,23 @@ func spiralHeldToeSeamProof(ctx context.Context, held *meshbool.StitchedMesh,
 	if heldLow.Cmp(heldHigh) >= 0 {
 		return 0, false, nil
 	}
-	end0, ok0 := spiralSeamEndpointSlope(seam.ends[0])
-	end1, ok1 := spiralSeamEndpointSlope(seam.ends[1])
+	end0, ok0 := spiralSeamEndpointSlope(seam.Ends[0])
+	end1, ok1 := spiralSeamEndpointSlope(seam.Ends[1])
 	if !ok0 || !ok1 {
 		return 0, false, nil
 	}
 	sourceLow, sourceHigh := end0, end1
-	lowBox, highBox := seam.ends[0], seam.ends[1]
+	lowBox, highBox := seam.Ends[0], seam.Ends[1]
 	if end1.Hi.Cmp(end0.Lo) < 0 {
 		sourceLow, sourceHigh = end1, end0
-		lowBox, highBox = seam.ends[1], seam.ends[0]
+		lowBox, highBox = seam.Ends[1], seam.Ends[0]
 	}
 	if sourceLow.Hi.Cmp(sourceHigh.Lo) >= 0 ||
-		seam.slope.Lo.Cmp(sourceLow.Lo) > 0 ||
-		seam.slope.Hi.Cmp(sourceHigh.Hi) < 0 {
+		seam.Slope.Lo.Cmp(sourceLow.Lo) > 0 ||
+		seam.Slope.Hi.Cmp(sourceHigh.Hi) < 0 {
 		return 0, false, nil
 	}
-	inner, ok := spiralHeelSameRayBound(chain, seam.x, big.NewRat(-1, 1),
+	inner, ok := spiralHeelSameRayBound(chain, seam.X, big.NewRat(-1, 1),
 		radialError, held.Round)
 	if !ok {
 		return inner, false, nil
@@ -668,17 +668,17 @@ func spiralHeldToeSeamProof(ctx context.Context, held *meshbool.StitchedMesh,
 	var opposite int
 	switch {
 	case heldLow.Cmp(sourceLow.Lo) < 0 && sourceLow.Hi.Cmp(heldHigh) < 0 &&
-		heldHigh.Cmp(sourceHigh.Lo) < 0 && seam.slope.Lo.Cmp(heldLow) > 0:
+		heldHigh.Cmp(sourceHigh.Lo) < 0 && seam.Slope.Lo.Cmp(heldLow) > 0:
 		// The held chain extends below the source and the source extends above it.
 		endpoint = lowBox
 		tailAtLow = true
-		sourceTail = loftFaceInterval{Lo: heldHigh, Hi: seam.slope.Hi}
+		sourceTail = loftFaceInterval{Lo: heldHigh, Hi: seam.Slope.Hi}
 		opposite = high
-	case seam.slope.Hi.Cmp(heldHigh) < 0 && sourceLow.Hi.Cmp(heldLow) < 0 &&
+	case seam.Slope.Hi.Cmp(heldHigh) < 0 && sourceLow.Hi.Cmp(heldLow) < 0 &&
 		heldLow.Cmp(sourceHigh.Lo) < 0 && sourceHigh.Hi.Cmp(heldHigh) < 0:
 		// The source extends below the held chain and the held chain extends above it.
 		endpoint = highBox
-		sourceTail = loftFaceInterval{Lo: seam.slope.Lo, Hi: heldLow}
+		sourceTail = loftFaceInterval{Lo: seam.Slope.Lo, Hi: heldLow}
 		opposite = low
 	default:
 		return 0, false, nil

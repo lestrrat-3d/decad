@@ -24,9 +24,9 @@ func TestRevolveLoftFacesToolCirclesConsumeLiveNeutralSource(t *testing.T) {
 		require.Same(t, blank, bodyHandle(circle.blankFace.n.Body))
 		require.Same(t, tooth, bodyHandle(circle.capFace.n.Body))
 		require.Positive(t, circle.radius.Sign())
-		tool := proof.trim.toe
+		tool := proof.trim.Toe
 		if circle.tool == 1 {
-			tool = proof.trim.heel
+			tool = proof.trim.Heel
 		}
 		require.Zero(t, lfSub(lfAdd(circle.x,
 			lfMul(tool.slope, circle.radius)), tool.apex).Sign())
@@ -60,11 +60,11 @@ func TestRevolveLoftFacesToolCirclesConsumeLiveNeutralSource(t *testing.T) {
 	changed.toeFace = proof.heelFace
 	_, accepted = revolveLoftFacesToolCapSidesOf(&changed)
 	require.False(t, accepted)
-	toeSlope := proof.trim.toe.slope
-	proof.trim.toe.slope = lfAdd(toeSlope, big.NewRat(1, 32))
+	toeSlope := proof.trim.Toe.slope
+	proof.trim.Toe.slope = lfAdd(toeSlope, big.NewRat(1, 32))
 	_, accepted = revolveLoftFacesToolCapSidesOf(proof)
 	require.False(t, accepted)
-	proof.trim.toe.slope = toeSlope
+	proof.trim.Toe.slope = toeSlope
 	originalPayload := tooth.n.Payload
 	t.Cleanup(func() { tooth.n.Payload = originalPayload })
 	payload := originalPayload.(facetedPayload)
@@ -73,8 +73,8 @@ func TestRevolveLoftFacesToolCirclesConsumeLiveNeutralSource(t *testing.T) {
 	require.GreaterOrEqual(t, toeFaceIndex, 0)
 	changedTriangle := -1
 	for index, group := range payload.Src {
-		if group != proof.trim.toeCapGroup &&
-			group != proof.trim.heelCapGroup && payload.FaceOf[index] != toeFaceIndex {
+		if group != proof.trim.ToeCapGroup &&
+			group != proof.trim.HeelCapGroup && payload.FaceOf[index] != toeFaceIndex {
 			changedTriangle = index
 			break
 		}
@@ -84,7 +84,7 @@ func TestRevolveLoftFacesToolCirclesConsumeLiveNeutralSource(t *testing.T) {
 	tooth.n.Payload = payload
 	require.False(t, revolveLoftFacesTrimCurrent(tooth, proof.trim))
 	require.Same(t, proof.toeFace,
-		uniqueResultSourceFace(tooth, proof.trim.toeCapGroup))
+		uniqueResultSourceFace(tooth, proof.trim.ToeCapGroup))
 	_, accepted = revolveLoftFacesToolCapSidesOf(proof)
 	require.False(t, accepted)
 	tooth.n.Payload = originalPayload
@@ -92,7 +92,7 @@ func TestRevolveLoftFacesToolCirclesConsumeLiveNeutralSource(t *testing.T) {
 	payload.FaceOf = slices.Clone(payload.FaceOf)
 	capTriangle := -1
 	for index, group := range payload.Src {
-		if group == proof.trim.toeCapGroup {
+		if group == proof.trim.ToeCapGroup {
 			capTriangle = index
 			break
 		}
@@ -197,16 +197,16 @@ func TestRevolveLoftFacesCircleMissConsumesLiveNeutralSource(t *testing.T) {
 	}
 	require.Len(t, sides.circles, 4)
 	require.Equal(t, 2, misses)
-	map0 := proof.trim.maps[0]
-	proof.trim.maps[0] = proof.trim.maps[1]
+	map0 := proof.trim.Maps[0]
+	proof.trim.Maps[0] = proof.trim.Maps[1]
 	_, accepted := revolveLoftFacesToolCapSidesOf(proof)
 	require.False(t, accepted, "the source-miss flag needs the current live maps")
-	proof.trim.maps[0] = map0
-	sourceBox := proof.trim.source.sourceBox
-	require.True(t, pointSourceCurrent(proof.trim.source))
-	proof.trim.source.sourceBox[1] = (sourceBox[0] + sourceBox[1]) / 2
-	require.False(t, pointSourceCurrent(proof.trim.source))
+	proof.trim.Maps[0] = map0
+	sourceBox := proof.trim.Source.sourceBox
+	require.True(t, pointSourceCurrent(proof.trim.Source))
+	proof.trim.Source.sourceBox[1] = (sourceBox[0] + sourceBox[1]) / 2
+	require.False(t, pointSourceCurrent(proof.trim.Source))
 	_, accepted = revolveLoftFacesToolCapSidesOf(proof)
 	require.False(t, accepted, "a narrowed stored source box cannot prove a whole-circle miss")
-	proof.trim.source.sourceBox = sourceBox
+	proof.trim.Source.sourceBox = sourceBox
 }

@@ -81,9 +81,9 @@ func TestCurvedClearPatchRefusesUnprovedClaims(t *testing.T) {
 		require.False(t, built)
 	}
 	t.Run("stale producer", func(t *testing.T) {
-		original := trim.stationGroup[0]
-		trim.stationGroup[0] = original + 1
-		defer func() { trim.stationGroup[0] = original }()
+		original := trim.StationGroup[0]
+		trim.StationGroup[0] = original + 1
+		defer func() { trim.StationGroup[0] = original }()
 		refusesEntry(t)
 	})
 	t.Run("changed body facet", func(t *testing.T) {

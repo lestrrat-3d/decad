@@ -18,28 +18,28 @@ import (
 func spiralBandOneRootBox(ctx context.Context, proof *spiralFirstJoinSource,
 	side int) ([3]loftFaceInterval, bool, error) {
 	var empty [3]loftFaceInterval
-	if ctx == nil || proof == nil || side < 0 || side >= len(proof.flank) ||
-		proof.blank == nil || proof.tooth == nil || len(proof.tooth.maps) != 9 {
+	if ctx == nil || proof == nil || side < 0 || side >= len(proof.Flank) ||
+		proof.Blank == nil || proof.Tooth == nil || len(proof.Tooth.Maps) != 9 {
 		return empty, false, nil
 	}
 	if err := ctx.Err(); err != nil {
 		return empty, false, err
 	}
-	toeRoot := lfF(proof.blank.toeRoot.U)
-	cap2 := loftface.CapXRange(proof.tooth.maps[2], proof.flank[side], proof.crossings[side][2])
+	toeRoot := lfF(proof.Blank.toeRoot.U)
+	cap2 := loftface.CapXRange(proof.Tooth.Maps[2], proof.Flank[side], proof.Crossings[side][2])
 	if cap2.Lo == nil || cap2.Hi == nil || toeRoot.Cmp(cap2.Lo) >= 0 ||
-		cap2.Hi.Cmp(lfF(proof.blank.ded.U)) >= 0 {
+		cap2.Hi.Cmp(lfF(proof.Blank.ded.U)) >= 0 {
 		return empty, false, nil
 	}
-	low, ok := spiralIsolateJunction(ctx, proof.tooth.maps, proof.flank[side],
-		proof.rootM, proof.rootB, proof.crossings[side], toeRoot)
-	if !ok || low.band != 1 || low.tHi.Cmp(lfOne()) >= 0 {
+	low, ok := spiralIsolateJunction(ctx, proof.Tooth.Maps, proof.Flank[side],
+		proof.RootM, proof.RootB, proof.Crossings[side], toeRoot)
+	if !ok || low.Band != 1 || low.THi.Cmp(lfOne()) >= 0 {
 		return empty, false, ctx.Err()
 	}
-	q := loftface.MeridianQRows(proof.tooth.maps[1], proof.tooth.maps[2],
-		proof.flank[side], proof.rootM, proof.rootB)
+	q := loftface.MeridianQRows(proof.Tooth.Maps[1], proof.Tooth.Maps[2],
+		proof.Flank[side], proof.RootM, proof.RootB)
 	sLo, sHi := lfZero(), lfOne()
-	if !spiralJunctionRootBracket(q, sLo, sHi, low.tLo, lfOne()) {
+	if !spiralJunctionRootBracket(q, sLo, sHi, low.TLo, lfOne()) {
 		return empty, false, ctx.Err()
 	}
 	for step := range 64 {
@@ -49,18 +49,18 @@ func spiralBandOneRootBox(ctx context.Context, proof *spiralFirstJoinSource,
 			}
 		}
 		mid := lfMul(lfAdd(sLo, sHi), big.NewRat(1, 2))
-		if polynomial.BernsteinRowsSignAt(q, mid, low.tLo, lfOne(), -1) {
+		if polynomial.BernsteinRowsSignAt(q, mid, low.TLo, lfOne(), -1) {
 			sLo = mid
 			continue
 		}
-		if polynomial.BernsteinRowsSignAt(q, mid, low.tLo, lfOne(), 1) {
+		if polynomial.BernsteinRowsSignAt(q, mid, low.TLo, lfOne(), 1) {
 			sHi = mid
 			continue
 		}
 		break
 	}
-	box, ok := loftface.JunctionBox(proof.tooth.maps[1], proof.tooth.maps[2],
-		proof.flank[side], sLo, sHi, low.tLo, lfOne())
+	box, ok := loftface.JunctionBox(proof.Tooth.Maps[1], proof.Tooth.Maps[2],
+		proof.Flank[side], sLo, sHi, low.TLo, lfOne())
 	if err := ctx.Err(); err != nil {
 		return empty, false, err
 	}
@@ -82,7 +82,7 @@ func spiralBandOneRootBox(ctx context.Context, proof *spiralFirstJoinSource,
 func spiralRootFlankWholeBound(ctx context.Context, proof *spiralFirstJoinSource,
 	side int, held []r3.Vec, minBound float64,
 	prepared ...*spiralRootFlankSourceBoxes) (float64, bool, error) {
-	if ctx == nil || proof == nil || side < 0 || side >= len(proof.flank) ||
+	if ctx == nil || proof == nil || side < 0 || side >= len(proof.Flank) ||
 		len(held) < 2 || len(held) > 4097 || proofbound.IsNonFinite(minBound) || minBound <= 0 {
 		return 0, false, nil
 	}
@@ -114,27 +114,27 @@ func spiralRootFlankWholeBound(ctx context.Context, proof *spiralFirstJoinSource
 			return 0, false, nil
 		}
 	}
-	toeRoot := lfF(proof.blank.toeRoot.U)
-	cap2 := loftface.CapXRange(proof.tooth.maps[2], proof.flank[side], proof.crossings[side][2])
+	toeRoot := lfF(proof.Blank.toeRoot.U)
+	cap2 := loftface.CapXRange(proof.Tooth.Maps[2], proof.Flank[side], proof.Crossings[side][2])
 	if lfF(held[0].X).Cmp(toeRoot) != 0 || lfF(held[len(held)-1].X).Cmp(cap2.Hi) < 0 {
 		return 0, false, nil
 	}
-	start := proof.junctions[side][0]
-	if start.band != 1 || start.tLo.Sign() < 0 || start.tLo.Cmp(lfOne()) >= 0 {
+	start := proof.Junctions[side][0]
+	if start.Band != 1 || start.TLo.Sign() < 0 || start.TLo.Cmp(lfOne()) >= 0 {
 		return 0, false, nil
 	}
-	first, second := proof.tooth.maps[1], proof.tooth.maps[2]
-	span := proof.flank[side]
-	q := loftface.MeridianQRows(first, second, span, proof.rootM, proof.rootB)
-	width := lfSub(lfOne(), start.tLo)
+	first, second := proof.Tooth.Maps[1], proof.Tooth.Maps[2]
+	span := proof.Flank[side]
+	q := loftface.MeridianQRows(first, second, span, proof.RootM, proof.RootB)
+	width := lfSub(lfOne(), start.TLo)
 	const slabs = 16
 	var largest float64
 	for slab := range slabs {
 		if err := ctx.Err(); err != nil {
 			return 0, false, err
 		}
-		a := lfAdd(start.tLo, lfMul(width, big.NewRat(int64(slab), slabs)))
-		z := lfAdd(start.tLo, lfMul(width, big.NewRat(int64(slab+1), slabs)))
+		a := lfAdd(start.TLo, lfMul(width, big.NewRat(int64(slab), slabs)))
+		z := lfAdd(start.TLo, lfMul(width, big.NewRat(int64(slab+1), slabs)))
 		if !spiralJunctionRootBracket(q, lfZero(), lfOne(), a, z) {
 			return 0, false, nil
 		}
@@ -189,7 +189,7 @@ func spiralRootFlankWholeBound(ctx context.Context, proof *spiralFirstJoinSource
 		largest = max(largest, bound)
 	}
 	endpoint, ok := loftface.JunctionBox(second, second, span,
-		proof.crossings[side][2].Lo, proof.crossings[side][2].Hi, lfZero(), lfZero())
+		proof.Crossings[side][2].Lo, proof.Crossings[side][2].Hi, lfZero(), lfZero())
 	if !ok || endpoint[0].Lo.Cmp(cap2.Lo) > 0 || endpoint[0].Hi.Cmp(cap2.Hi) < 0 {
 		return 0, false, nil
 	}
@@ -221,8 +221,8 @@ type spiralRootFlankSourceBoxes struct {
 
 func spiralPrepareRootFlankSource(ctx context.Context, proof *spiralFirstJoinSource,
 	side int) (*spiralRootFlankSourceBoxes, bool, error) {
-	if ctx == nil || proof == nil || side < 0 || side >= len(proof.flank) ||
-		proof.blank == nil || proof.tooth == nil || len(proof.tooth.maps) != 9 {
+	if ctx == nil || proof == nil || side < 0 || side >= len(proof.Flank) ||
+		proof.Blank == nil || proof.Tooth == nil || len(proof.Tooth.Maps) != 9 {
 		return nil, false, nil
 	}
 	if err := ctx.Err(); err != nil {
@@ -232,20 +232,20 @@ func spiralPrepareRootFlankSource(ctx context.Context, proof *spiralFirstJoinSou
 	if err != nil || !ok {
 		return nil, false, err
 	}
-	toeRoot := lfF(proof.blank.toeRoot.U)
-	cap2 := loftface.CapXRange(proof.tooth.maps[2], proof.flank[side], proof.crossings[side][2])
+	toeRoot := lfF(proof.Blank.toeRoot.U)
+	cap2 := loftface.CapXRange(proof.Tooth.Maps[2], proof.Flank[side], proof.Crossings[side][2])
 	if rootBox[0].Lo.Cmp(toeRoot) != 0 || rootBox[0].Hi.Cmp(cap2.Hi) != 0 {
 		return nil, false, nil
 	}
-	start := proof.junctions[side][0]
+	start := proof.Junctions[side][0]
 	if cap2.Lo == nil || cap2.Hi == nil ||
-		start.band != 1 || start.tLo.Sign() < 0 || start.tLo.Cmp(lfOne()) >= 0 {
+		start.Band != 1 || start.TLo.Sign() < 0 || start.TLo.Cmp(lfOne()) >= 0 {
 		return nil, false, nil
 	}
-	first, second := proof.tooth.maps[1], proof.tooth.maps[2]
-	span := proof.flank[side]
-	q := loftface.MeridianQRows(first, second, span, proof.rootM, proof.rootB)
-	width := lfSub(lfOne(), start.tLo)
+	first, second := proof.Tooth.Maps[1], proof.Tooth.Maps[2]
+	span := proof.Flank[side]
+	q := loftface.MeridianQRows(first, second, span, proof.RootM, proof.RootB)
+	width := lfSub(lfOne(), start.TLo)
 	plan := &spiralRootFlankSourceBoxes{
 		proof: proof, side: side, toeRoot: toeRoot, cap2: cap2,
 	}
@@ -253,8 +253,8 @@ func spiralPrepareRootFlankSource(ctx context.Context, proof *spiralFirstJoinSou
 		if err := ctx.Err(); err != nil {
 			return nil, false, err
 		}
-		a := lfAdd(start.tLo, lfMul(width, big.NewRat(int64(slab), 16)))
-		z := lfAdd(start.tLo, lfMul(width, big.NewRat(int64(slab+1), 16)))
+		a := lfAdd(start.TLo, lfMul(width, big.NewRat(int64(slab), 16)))
+		z := lfAdd(start.TLo, lfMul(width, big.NewRat(int64(slab+1), 16)))
 		if !spiralJunctionRootBracket(q, lfZero(), lfOne(), a, z) {
 			return nil, false, nil
 		}
@@ -301,7 +301,7 @@ func spiralPrepareRootFlankSource(ctx context.Context, proof *spiralFirstJoinSou
 		plan.slabs[slab] = trueBox
 	}
 	endpoint, ok := loftface.JunctionBox(second, second, span,
-		proof.crossings[side][2].Lo, proof.crossings[side][2].Hi, lfZero(), lfZero())
+		proof.Crossings[side][2].Lo, proof.Crossings[side][2].Hi, lfZero(), lfZero())
 	if !ok || endpoint[0].Lo.Cmp(cap2.Lo) > 0 || endpoint[0].Hi.Cmp(cap2.Hi) < 0 {
 		return nil, false, nil
 	}

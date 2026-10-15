@@ -23,17 +23,17 @@ type revolveLoftFacesFitKnot struct {
 func revolveLoftFacesFitKnotVertex(trim *loftFacesTrimRecord,
 	segmentIndex, leftIndex int) (revolveLoftFacesFitKnot, bool) {
 	var empty revolveLoftFacesFitKnot
-	if trim == nil || trim.source == nil || trim.source.source == nil ||
-		segmentIndex < 0 || segmentIndex >= len(trim.source.profile.Outer.Segments) ||
-		segmentIndex >= len(trim.source.source.entities) {
+	if trim == nil || trim.Source == nil || trim.Source.source == nil ||
+		segmentIndex < 0 || segmentIndex >= len(trim.Source.profile.Outer.Segments) ||
+		segmentIndex >= len(trim.Source.source.entities) {
 		return empty, false
 	}
-	record, ok := trim.source.profile.Outer.Segments[segmentIndex].(fitSplineSeg)
+	record, ok := trim.Source.profile.Outer.Segments[segmentIndex].(fitSplineSeg)
 	if !ok || !((record.TStart == 0 && record.TEnd == 1) ||
 		(record.TStart == 1 && record.TEnd == 0)) {
 		return empty, false
 	}
-	fit, ok := trim.source.source.entities[segmentIndex].(*sketch.FitSpline)
+	fit, ok := trim.Source.source.entities[segmentIndex].(*sketch.FitSpline)
 	if !ok || len(record.Fit) < 3 || len(record.Fit) != len(fit.Fit) {
 		return empty, false
 	}
@@ -74,7 +74,7 @@ func certifyRevolveLoftFacesFitKnotJoint(ctx context.Context, trim *loftFacesTri
 	revolveLoftFacesFitKnotJoint, bool,
 ) {
 	var empty revolveLoftFacesFitKnotJoint
-	if ctx == nil || ctx.Err() != nil || trim == nil || band < 0 || band+1 >= len(trim.maps) ||
+	if ctx == nil || ctx.Err() != nil || trim == nil || band < 0 || band+1 >= len(trim.Maps) ||
 		section.start.U == section.end.U || section.start.V <= 0 || section.end.V <= 0 {
 		return empty, false
 	}
@@ -84,8 +84,8 @@ func certifyRevolveLoftFacesFitKnotJoint(ctx context.Context, trim *loftFacesTri
 	}
 	m, b := revolveLoftFacesMeridian(section)
 	memo := revolveLoftFacesMeridianMemoOf(ctx)
-	leftQ := memo.QRows(trim.maps[band], trim.maps[band+1], vertex.left, m, b)
-	rightQ := memo.QRows(trim.maps[band], trim.maps[band+1], vertex.right, m, b)
+	leftQ := memo.QRows(trim.Maps[band], trim.Maps[band+1], vertex.left, m, b)
+	rightQ := memo.QRows(trim.Maps[band], trim.Maps[band+1], vertex.right, m, b)
 	leftEnd := len(leftQ[0]) - 1
 	for row := range leftQ {
 		if leftQ[row][leftEnd].Cmp(rightQ[row][0]) != 0 {

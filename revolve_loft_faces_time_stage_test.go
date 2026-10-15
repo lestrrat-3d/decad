@@ -101,12 +101,12 @@ func legacyRevolveLoftFacesKnotRootCell(trim *loftFacesTrimRecord,
 	section revolveSectionSpan, span freeform.BezierSpan, band int,
 	atEnd bool, root loftface.EndpointRoot) (revolveLoftFacesJointCell, bool) {
 	var empty revolveLoftFacesJointCell
-	if trim == nil || band < 0 || band+1 >= len(trim.maps) ||
+	if trim == nil || band < 0 || band+1 >= len(trim.Maps) ||
 		root.Time.Lo == nil || root.Time.Hi == nil {
 		return empty, false
 	}
 	m, b := revolveLoftFacesMeridian(section)
-	q := loftface.MeridianQRows(trim.maps[band], trim.maps[band+1], span, m, b)
+	q := loftface.MeridianQRows(trim.Maps[band], trim.Maps[band+1], span, m, b)
 	endpoint := lfZero()
 	if atEnd {
 		endpoint = lfOne()
@@ -173,7 +173,7 @@ func legacyRevolveLoftFacesKnotRootCell(trim *loftFacesTrimRecord,
 				continue
 			}
 		}
-		x, ok := loftface.SpanXRange(trim.maps[band], trim.maps[band+1],
+		x, ok := loftface.SpanXRange(trim.Maps[band], trim.Maps[band+1],
 			span, sLo, sHi, root.Time.Lo, root.Time.Hi)
 		if !ok || root.Finite && (x.Lo.Cmp(startX) <= 0 || x.Hi.Cmp(endX) >= 0) ||
 			!root.Finite && x.Hi.Cmp(startX) >= 0 && x.Lo.Cmp(endX) <= 0 {
@@ -291,7 +291,7 @@ func requireTimeStageKnotRootCellsMatch(t *testing.T) {
 		if rng.IntN(2) == 0 {
 			qv = loftFaceRatVec{big.NewRat(rng.Int64N(41)-20, 10), big.NewRat(rng.Int64N(41)-20, 10), lfZero()}
 		}
-		trim := &loftFacesTrimRecord{maps: []loftFaceMap{
+		trim := &loftFacesTrimRecord{Maps: []loftFaceMap{
 			mapAt(rng.Int64N(9)+1, rng.Int64N(7)-3, qv),
 			mapAt(rng.Int64N(9)+1, rng.Int64N(7)-3, qv),
 			mapAt(rng.Int64N(9)+1, rng.Int64N(7)-3, qv),

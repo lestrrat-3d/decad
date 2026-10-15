@@ -17,20 +17,20 @@ func spiralTrimFaceGroup(tooth *Body, sourceGroup int) int {
 }
 
 func spiralJoinGroups(blank, tooth *Body, proof *spiralFirstJoinSource) (spiralStarGroups, bool) {
-	if blank == nil || tooth == nil || proof == nil || proof.blank == nil || proof.tooth == nil {
+	if blank == nil || tooth == nil || proof == nil || proof.Blank == nil || proof.Tooth == nil {
 		return spiralStarGroups{}, false
 	}
 	offset := len(blank.Faces())
-	toeBand := proof.junctions[0][0].band
-	heelBand := proof.junctions[0][1].band
+	toeBand := proof.Junctions[0][0].Band
+	heelBand := proof.Junctions[0][1].Band
 	if toeBand < 0 || heelBand < 0 ||
-		proof.junctions[1][0].band != toeBand || proof.junctions[1][1].band != heelBand {
+		proof.Junctions[1][0].Band != toeBand || proof.Junctions[1][1].Band != heelBand {
 		return spiralStarGroups{}, false
 	}
-	toeCap := spiralTrimFaceGroup(tooth, proof.tooth.toeCapGroup)
-	heelCap := spiralTrimFaceGroup(tooth, proof.tooth.heelCapGroup)
-	toeRootRef, toeRefOK := spiralOriginalSideRef(proof.tooth, toeBand, 4)
-	heelRootRef, heelRefOK := spiralOriginalSideRef(proof.tooth, heelBand, 4)
+	toeCap := spiralTrimFaceGroup(tooth, proof.Tooth.ToeCapGroup)
+	heelCap := spiralTrimFaceGroup(tooth, proof.Tooth.HeelCapGroup)
+	toeRootRef, toeRefOK := spiralOriginalSideRef(proof.Tooth, toeBand, 4)
+	heelRootRef, heelRefOK := spiralOriginalSideRef(proof.Tooth, heelBand, 4)
 	if !toeRefOK || !heelRefOK || toeRootRef == heelRootRef {
 		return spiralStarGroups{}, false
 	}
@@ -53,9 +53,9 @@ func spiralJoinGroups(blank, tooth *Body, proof *spiralFirstJoinSource) (spiralS
 		return spiralStarGroups{}, false
 	}
 	g := spiralStarGroups{
-		blankRoot:     spiralBlankFaceGroup(blank, proof.blank, 3),
-		blankToe:      spiralBlankFaceGroup(blank, proof.blank, 4),
-		blankHeel:     spiralBlankFaceGroup(blank, proof.blank, 2),
+		blankRoot:     spiralBlankFaceGroup(blank, proof.Blank, 3),
+		blankToe:      spiralBlankFaceGroup(blank, proof.Blank, 4),
+		blankHeel:     spiralBlankFaceGroup(blank, proof.Blank, 2),
 		toothToe:      offset + toeCap,
 		toothHeel:     offset + heelCap,
 		toothRootToe:  offset + toeRoot,

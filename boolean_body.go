@@ -124,11 +124,11 @@ type facetedPayload struct {
 	// LoftFacesPrimitive identifies one certified LoftFaces held mesh. Rigid
 	// placement preserves this source; a Boolean result starts a new chain.
 	LoftFacesPrimitive bool
-	// loftFacesCap records the authenticated final cap map of an original
+	// LoftFacesCap records the authenticated final cap map of an original
 	// LoftFaces body. A Cut result receives only the one-use cone trim record.
-	loftFacesCap  *loftFacesCapRecord
-	loftFacesToe  *loftFacesToeRecord
-	loftFacesTrim *loftFacesTrimRecord
+	LoftFacesCap  *loftFacesCapRecord
+	LoftFacesToe  *loftFacesToeRecord
+	LoftFacesTrim *loftFacesTrimRecord
 	// ExactPlaced marks a body whose current true solid is the image of an
 	// exact-rotation placement (placedWith with a record), at any angle and
 	// whether the copy was direct or not. The pose model of
@@ -253,9 +253,9 @@ func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref produc
 	next.Xform = composed
 	next.LowerSupport = nil
 	next.pointCone = nil
-	next.loftFacesCap = nil
-	next.loftFacesToe = nil
-	next.loftFacesTrim = nil
+	next.LoftFacesCap = nil
+	next.LoftFacesToe = nil
+	next.LoftFacesTrim = nil
 	next.CopyLineage = nil
 	next.SpiralTools = nil
 	// A rigid copy keeps the immutable Split source for certified face

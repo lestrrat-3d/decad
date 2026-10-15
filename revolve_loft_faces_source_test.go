@@ -111,7 +111,7 @@ func neutralArcSeamSource(t *testing.T) (*Body, *Body, *loftFacesTrimRecord) {
 	require.NoError(t, err)
 	trimmedPayload, ok := trimmed.n.Payload.(facetedPayload)
 	require.True(t, ok)
-	require.NotNil(t, trimmedPayload.loftFacesTrim)
+	require.NotNil(t, trimmedPayload.LoftFacesTrim)
 	blankWorld := sketch.NewWorld()
 	blankSketch, err := blankWorld.CreateSketch(blankWorld.XY())
 	require.NoError(t, err)
@@ -131,7 +131,7 @@ func neutralArcSeamSource(t *testing.T) (*Body, *Body, *loftFacesTrimRecord) {
 	blank, err := Revolve(t.Context(), doc, blankSketch, blankSketch.Profiles()[0],
 		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{})
 	require.NoError(t, err)
-	return blank, trimmed, trimmedPayload.loftFacesTrim
+	return blank, trimmed, trimmedPayload.LoftFacesTrim
 }
 
 func TestCurvedLoftFacesSourceCertifiesLiveProducer(t *testing.T) {
@@ -143,7 +143,7 @@ func TestCurvedLoftFacesSourceCertifiesLiveProducer(t *testing.T) {
 	require.Same(t, blank, proof.blank)
 	require.Same(t, tooth, proof.tooth)
 	require.Same(t, trim, proof.trim)
-	require.Len(t, proof.sourceRefs, len(trim.maps)-1)
+	require.Len(t, proof.sourceRefs, len(trim.Maps)-1)
 	require.NotNil(t, proof.toeFace)
 	require.NotNil(t, proof.heelFace)
 	require.NotNil(t, proof.crossings[0].span)
@@ -179,21 +179,21 @@ func TestCurvedLoftFacesSourceCertifiesLiveProducer(t *testing.T) {
 	})
 
 	t.Run("changed cap departure", func(t *testing.T) {
-		original := trim.bounds[0]
-		defer func() { trim.bounds[0] = original }()
+		original := trim.Bounds[0]
+		defer func() { trim.Bounds[0] = original }()
 		changed := original
-		changed.sourceDeparture = slices.Clone(original.sourceDeparture)
-		require.NotEmpty(t, changed.sourceDeparture)
-		changed.sourceDeparture[0]++
-		trim.bounds[0] = changed
+		changed.SourceDeparture = slices.Clone(original.SourceDeparture)
+		require.NotEmpty(t, changed.SourceDeparture)
+		changed.SourceDeparture[0]++
+		trim.Bounds[0] = changed
 		_, certified, err := certifyRevolveLoftFacesSource(t.Context(), blank, tooth)
 		require.NoError(t, err)
 		require.False(t, certified)
 	})
 	t.Run("changed station group", func(t *testing.T) {
-		original := trim.stationGroup[0]
-		defer func() { trim.stationGroup[0] = original }()
-		trim.stationGroup[0] = original + 1
+		original := trim.StationGroup[0]
+		defer func() { trim.StationGroup[0] = original }()
+		trim.StationGroup[0] = original + 1
 		_, certified, err := certifyRevolveLoftFacesSource(t.Context(), blank, tooth)
 		require.NoError(t, err)
 		require.False(t, certified)

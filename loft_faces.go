@@ -84,12 +84,12 @@ func buildLoftFaces(ctx context.Context, d *Document, selected []loftFaceSection
 		return nil, fmt.Errorf("%w: loft source cell roles are incomplete", ErrUnsupported)
 	}
 	mesh.LoftFacesPrimitive = true
-	mesh.loftFacesCap = &loftFacesCapRecord{source: source,
-		maps:         append([]loftFaceMap(nil), embedding.maps...),
-		bounds:       capBounds,
-		stationGroup: append([]int(nil), selected[0].slice.base.Src[:len(source.sourceStation)]...),
-		final:        embedding.maps[len(embedding.maps)-1], group: len(mesh.Groups) - 1,
-		tangent: tangent}
+	mesh.LoftFacesCap = &loftFacesCapRecord{Source: source,
+		Maps:         append([]loftFaceMap(nil), embedding.maps...),
+		Bounds:       capBounds,
+		StationGroup: append([]int(nil), selected[0].slice.base.Src[:len(source.sourceStation)]...),
+		Final:        embedding.maps[len(embedding.maps)-1], Group: len(mesh.Groups) - 1,
+		Tangent: tangent}
 	body, err := buildFacetedBodyWithProof(ctx, d, ref, mesh, audit, Measurement{}, nil)
 	if err != nil {
 		return nil, err
