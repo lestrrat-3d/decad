@@ -57,7 +57,7 @@ func TestLoftFacesThreeCapConeContinuationKeepsSource(t *testing.T) {
 	baseRecord := loft.n.Payload.(facetedPayload).LoftFacesCap
 	require.Len(t, baseRecord.Maps, 3)
 	require.Len(t, baseRecord.Bounds, 3)
-	require.Len(t, baseRecord.StationGroup, len(baseRecord.Source.sourceStation))
+	require.Len(t, baseRecord.StationGroup, len(baseRecord.Source.SourceStation))
 	cone := func(apex float64) *Body {
 		cs, e := world.CreateSketch(world.XY())
 		require.NoError(t, e)

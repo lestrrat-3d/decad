@@ -86,7 +86,7 @@ func TestCurvedArcSeamRefusesChangedStationAndIncompleteRun(t *testing.T) {
 	t.Run("changed station", func(t *testing.T) {
 		blank, trimmed, trim := neutralArcSeamSource(t)
 		sectionIndex, contact, stations := neutralArcSeamContact(t, blank, trimmed, trim)
-		trim.Source.sourceStation[stations[1]].U += 0.001
+		trim.Source.SourceStation[stations[1]].U += 0.001
 		require.False(t, pointSourceCurrent(trim.Source))
 		_, _, _, ok, err := revolveLoftFacesCertifiedArcPatches(t.Context(), blank, trimmed,
 			sectionIndex, contact.segment, contact.band,
@@ -97,8 +97,8 @@ func TestCurvedArcSeamRefusesChangedStationAndIncompleteRun(t *testing.T) {
 	t.Run("changed station bound", func(t *testing.T) {
 		blank, trimmed, trim := neutralArcSeamSource(t)
 		sectionIndex, contact, stations := neutralArcSeamContact(t, blank, trimmed, trim)
-		require.Positive(t, trim.Source.sourceStationRound)
-		trim.Source.sourceStationRound = 0
+		require.Positive(t, trim.Source.SourceStationRound)
+		trim.Source.SourceStationRound = 0
 		require.False(t, pointSourceCurrent(trim.Source))
 		_, _, _, ok, err := revolveLoftFacesCertifiedArcPatches(t.Context(), blank, trimmed,
 			sectionIndex, contact.segment, contact.band,

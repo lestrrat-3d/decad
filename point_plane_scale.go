@@ -16,16 +16,16 @@ import (
 // of their later rigid and positive uniform images. The source slice is never
 // reconstructed from the rounded cap chords.
 type pointPlaneSimilarityRecord struct {
-	slice *pointPlaneSliceRecord
-	steps []pointPlaneSimilarityStep
+	Slice *pointPlaneSliceRecord
+	Steps []pointPlaneSimilarityStep
 }
 
 type pointPlaneSimilarityStep struct {
-	motion          r3.Transform
-	anchor          r3.Vec
-	factor          float64 // zero means a rigid step
-	meshBound       float64
-	capDisplacement float64
+	Motion          r3.Transform
+	Anchor          r3.Vec
+	Factor          float64 // zero means a rigid step
+	MeshBound       float64
+	CapDisplacement float64
 }
 
 // ScaledAt returns the positive uniform image of an authenticated point-loft
@@ -77,7 +77,7 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 			return nil, err
 		}
 	}
-	pointSlab := fp.pointPlane != nil && fp.pointPlane.base.pointSection != nil
+	pointSlab := fp.PointPlane != nil && fp.PointPlane.Base.PointSection != nil
 	booleanSource := fp.BooleanSimilaritySource && b.Kind() == BodySolid && b.IsSolid()
 	if (!pointSlab && !fp.SimilaritySource && !booleanSource) || !fp.Xform.IsValid() ||
 		len(fp.Verts) == 0 || len(fp.VertexBound) != len(fp.Verts) {
@@ -86,7 +86,7 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 	if booleanSource && !certifiedBooleanSimilaritySource(fp, len(b.Faces())) {
 		return nil, fmt.Errorf("%w: the Boolean similarity source has no complete proof", ErrUnsupported)
 	}
-	if fp.pointSimilarity != nil && fp.pointSimilarity.slice != fp.pointPlane {
+	if fp.PointSimilarity != nil && fp.PointSimilarity.Slice != fp.PointPlane {
 		return nil, fmt.Errorf("%w: the slab similarity source does not match its Split source", ErrUnsupported)
 	}
 	for _, group := range fp.Groups {
@@ -114,7 +114,7 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 	next.DPair = max(proofbound.ProductUpper(fp.DPair, s),
 		facetedSourceDiameterUpper(next.Verts, next.MeshBound))
 	next.Xform = r3.Identity()
-	next.pointPlaneSourceEligible = false
+	next.PointPlaneSourceEligible = false
 	next.AxialSectionJoin = false
 	next.PrismPatternJoin = nil
 	next.ObliqueBoss = nil
@@ -136,10 +136,10 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 	next.CopyLineage = nil
 	next.SpiralTools = nil
 	if pointSlab {
-		next.pointPlaneCapDisplacement = proofbound.AbsSumUpper(
-			proofbound.ProductUpper(fp.pointPlaneCapDisplacement, s), mesh.Round)
+		next.PointPlaneCapDisplacement = proofbound.AbsSumUpper(
+			proofbound.ProductUpper(fp.PointPlaneCapDisplacement, s), mesh.Round)
 	}
-	next.pointSection, next.pointCone = nil, nil
+	next.PointSection, next.PointCone = nil, nil
 	next.ExactSourceVerts, next.ExactSourceTris = nil, nil
 	next.LowerSupport = nil
 	next.Groups = append([]facetGroup(nil), fp.Groups...)
@@ -166,22 +166,22 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 			group.NormalBound = 2
 		}
 	}
-	if proofbound.IsNonFinite(next.DPair) || proofbound.IsNonFinite(next.pointPlaneCapDisplacement) {
+	if proofbound.IsNonFinite(next.DPair) || proofbound.IsNonFinite(next.PointPlaneCapDisplacement) {
 		return nil, fmt.Errorf("%w: the scaled source proof is not finite", ErrUnsupported)
 	}
 	if pointSlab {
-		record := pointPlaneSimilarityRecord{slice: fp.pointPlane}
-		if fp.pointSimilarity == nil {
+		record := pointPlaneSimilarityRecord{Slice: fp.PointPlane}
+		if fp.PointSimilarity == nil {
 			if fp.Xform != r3.Identity() {
-				record.steps = append(record.steps, pointPlaneSimilarityStep{motion: fp.Xform,
-					meshBound: fp.MeshBound, capDisplacement: fp.pointPlaneCapDisplacement})
+				record.Steps = append(record.Steps, pointPlaneSimilarityStep{Motion: fp.Xform,
+					MeshBound: fp.MeshBound, CapDisplacement: fp.PointPlaneCapDisplacement})
 			}
 		} else {
-			record.steps = append(record.steps, fp.pointSimilarity.steps...)
+			record.Steps = append(record.Steps, fp.PointSimilarity.Steps...)
 		}
-		record.steps = append(record.steps, pointPlaneSimilarityStep{anchor: anchor, factor: s,
-			meshBound: next.MeshBound, capDisplacement: next.pointPlaneCapDisplacement})
-		next.pointSimilarity = &record
+		record.Steps = append(record.Steps, pointPlaneSimilarityStep{Anchor: anchor, Factor: s,
+			MeshBound: next.MeshBound, CapDisplacement: next.PointPlaneCapDisplacement})
+		next.PointSimilarity = &record
 	}
 	ref := d.nextProducerID()
 	scaled, err := buildFacetedBody(ctx, d, ref, next)

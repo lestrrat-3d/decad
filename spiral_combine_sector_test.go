@@ -23,16 +23,16 @@ func recordedToeCone(t *testing.T) *pointConeLimit {
 	t.Helper()
 	slope, ok := new(big.Rat).SetString("17157737065234201/17157737065234200")
 	require.True(t, ok)
-	return &pointConeLimit{apex: new(big.Rat).SetFloat64(20.666666666666668), slope: slope}
+	return &pointConeLimit{Apex: new(big.Rat).SetFloat64(20.666666666666668), Slope: slope}
 }
 
 // toeResidual is x/a + k*r/q - A for a copy whose X scale is a and whose radial
 // scale is q. With a = q = 1 it is the original toe residual.
 func toeResidual(cone *pointConeLimit, p planePoint, a, q *big.Rat) *big.Rat {
 	x := new(big.Rat).Quo(new(big.Rat).SetFloat64(p.U), a)
-	kr := new(big.Rat).Mul(cone.slope, new(big.Rat).SetFloat64(p.V))
+	kr := new(big.Rat).Mul(cone.Slope, new(big.Rat).SetFloat64(p.V))
 	kr.Quo(kr, q)
-	return x.Add(x, kr).Sub(x, cone.apex)
+	return x.Add(x, kr).Sub(x, cone.Apex)
 }
 
 func TestSpiralCopyKeepsToeCertificateOnlyUnderExactRotation(t *testing.T) {
@@ -50,9 +50,9 @@ func TestSpiralCopyKeepsToeCertificateOnlyUnderExactRotation(t *testing.T) {
 	// sign: sign((a*k*r)^2 - (c*c+s*s)*(a*A-x)^2).
 	a := big.NewRat(1, 1)
 	c, s := new(big.Rat).SetFloat64(-0.050649168838713551), new(big.Rat).SetFloat64(-0.99871650717105287)
-	ak := new(big.Rat).Mul(a, cone.slope)
+	ak := new(big.Rat).Mul(a, cone.Slope)
 	akr := ak.Mul(ak, new(big.Rat).SetFloat64(recordedToeRoot.V))
-	aAx := new(big.Rat).Sub(new(big.Rat).Mul(a, cone.apex), new(big.Rat).SetFloat64(recordedToeRoot.U))
+	aAx := new(big.Rat).Sub(new(big.Rat).Mul(a, cone.Apex), new(big.Rat).SetFloat64(recordedToeRoot.U))
 	require.Equal(t, 1, akr.Sign(), "precondition: a*k*r > 0")
 	require.Equal(t, 1, aAx.Sign(), "precondition: a*A - x > 0")
 	cs := new(big.Rat).Add(new(big.Rat).Mul(c, c), new(big.Rat).Mul(s, s))

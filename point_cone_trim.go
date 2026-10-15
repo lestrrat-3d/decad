@@ -22,30 +22,30 @@ import (
 // Chained trims always start from that same authenticated fan rather than a
 // previously rounded Boolean mesh.
 type pointConeTrimRecord struct {
-	base  facetedPayload
-	lower *pointConeLimit
-	upper *pointConeLimit
+	Base  facetedPayload
+	Lower *pointConeLimit
+	Upper *pointConeLimit
 }
 
 type pointConeLimit struct {
-	apex, far, slope *big.Rat
-	surface          surfacegeom.Cone
-	origins          []provenance.Ref
-	denoted          *surfacenormal.Revolved
-	reversed         bool
+	Apex, Far, Slope *big.Rat
+	Surface          surfacegeom.Cone
+	Origins          []provenance.Ref
+	Denoted          *surfacenormal.Revolved
+	Reversed         bool
 
-	consts *pointcone.Consts // built on first use by constants
+	Consts *pointcone.Consts // built on first use by Constants
 }
 
-func (cone *pointConeLimit) constants() *pointcone.Consts {
-	if cone.consts == nil {
-		cone.consts = pointcone.ConstantsOf(cone.apex, cone.slope)
+func (cone *pointConeLimit) Constants() *pointcone.Consts {
+	if cone.Consts == nil {
+		cone.Consts = pointcone.ConstantsOf(cone.Apex, cone.Slope)
 	}
-	return cone.consts
+	return cone.Consts
 }
 
 func pointConeFacetGroup(cone *pointConeLimit, flip bool) facetGroup {
-	denoted := cone.denoted
+	denoted := cone.Denoted
 	if flip {
 		// A straight revolve wall's denotation stores its oriented meridian
 		// runs. Its Allow method reads that orientation directly.
@@ -57,8 +57,8 @@ func pointConeFacetGroup(cone *pointConeLimit, flip bool) facetGroup {
 		}
 		denoted = &denotedCopy
 	}
-	return facetGroup{Origins: cone.origins, Surface: cone.surface,
-		Denoted: denoted, Reversed: cone.reversed != flip}
+	return facetGroup{Origins: cone.Origins, Surface: cone.Surface,
+		Denoted: denoted, Reversed: cone.Reversed != flip}
 }
 
 // exactPointCone recognizes the unplaced, full, straight-meridian cone whose
@@ -128,8 +128,8 @@ func exactPointCone(b *Body) (*pointConeLimit, bool) {
 	}
 	a := proofarith.FloatRat(apex)
 	k := new(big.Rat).Quo(new(big.Rat).Sub(a, proofarith.FloatRat(far)), proofarith.FloatRat(radius))
-	return &pointConeLimit{apex: a, far: proofarith.FloatRat(far), slope: k,
-		surface: surface, origins: origins, denoted: denoted, reversed: reversed}, true
+	return &pointConeLimit{Apex: a, Far: proofarith.FloatRat(far), Slope: k,
+		Surface: surface, Origins: origins, Denoted: denoted, Reversed: reversed}, true
 }
 
 // tryPointConeBoolean is an accept-only structural arm. It does not change
@@ -147,28 +147,28 @@ func tryPointConeBoolean(ctx context.Context, op meshbool.OperationKind, d *Docu
 	if !ok || fp.Xform != r3.Identity() {
 		return nil, false, nil
 	}
-	record := pointConeTrimRecord{base: fp}
-	if fp.pointCone != nil {
-		record = *fp.pointCone
-	} else if fp.pointSection == nil || fp.pointSection.apex != (r3.Vec{}) {
+	record := pointConeTrimRecord{Base: fp}
+	if fp.PointCone != nil {
+		record = *fp.PointCone
+	} else if fp.PointSection == nil || fp.PointSection.Apex != (r3.Vec{}) {
 		return nil, false, nil
 	}
-	if !pointcone.AboveFarCap(record.base.Verts, record.base.MeshBound, cone.far) {
+	if !pointcone.AboveFarCap(record.Base.Verts, record.Base.MeshBound, cone.Far) {
 		return nil, false, nil
 	}
 	if op == meshbool.OpCut {
-		if record.lower != nil && !pointConeLimitLater(record.lower, cone, record.base) {
+		if record.Lower != nil && !pointConeLimitLater(record.Lower, cone, record.Base) {
 			return nil, false, nil
 		}
-		record.lower = cone
+		record.Lower = cone
 	} else {
-		if record.upper != nil && !pointConeLimitEarlier(record.upper, cone, record.base) {
+		if record.Upper != nil && !pointConeLimitEarlier(record.Upper, cone, record.Base) {
 			return nil, false, nil
 		}
-		record.upper = cone
+		record.Upper = cone
 	}
-	if record.lower != nil && record.upper != nil &&
-		!pointConeLimitOrdered(record.lower, record.upper, record.base) {
+	if record.Lower != nil && record.Upper != nil &&
+		!pointConeLimitOrdered(record.Lower, record.Upper, record.Base) {
 		return nil, false, nil
 	}
 	body, err := buildPointConeTrim(ctx, d, ref, record)
@@ -187,16 +187,16 @@ func pointConeLimitEarlier(old, next *pointConeLimit, base facetedPayload) bool 
 }
 
 func pointConeLimitOrdered(earlier, later *pointConeLimit, base facetedPayload) bool {
-	return pointcone.Ordered(earlier.apex, earlier.slope, later.apex, later.slope,
+	return pointcone.Ordered(earlier.Apex, earlier.Slope, later.Apex, later.Slope,
 		base.Verts, base.MeshBound)
 }
 
 func buildPointConeTrim(ctx context.Context, d *Document, ref producerID,
 	record pointConeTrimRecord) (*Body, error) {
-	if record.upper != nil {
+	if record.Upper != nil {
 		return buildPointConeInsideBand(ctx, d, ref, record)
 	}
-	if record.lower == nil {
+	if record.Lower == nil {
 		return nil, fmt.Errorf("%w: a point-cone trim has no radial limit", ErrUnsupported)
 	}
 	return buildPointConeOuterBand(ctx, d, ref, record)
@@ -207,7 +207,7 @@ func buildPointConeTrim(ctx context.Context, d *Document, ref producerID,
 // boundary. The upper cap is split where the cone reaches the far profile.
 func buildPointConeInsideBand(ctx context.Context, d *Document, ref producerID,
 	record pointConeTrimRecord) (*Body, error) {
-	base, upper, lower := record.base, record.upper, record.lower
+	base, upper, lower := record.Base, record.Upper, record.Lower
 	far, caps, sides, farRound, err := pointConeSubdivide(ctx, base, 4)
 	if err != nil {
 		return nil, err
@@ -224,7 +224,7 @@ func buildPointConeInsideBand(ctx context.Context, d *Document, ref producerID,
 		upperQError = max(upperQError, upperSamples[i].QError)
 	}
 	capGeom := pointcone.CapGeometry(far, caps)
-	upperCapBound, upperLip, err := pointcone.CapBound(capGeom, upper.constants())
+	upperCapBound, upperLip, err := pointcone.CapBound(capGeom, upper.Constants())
 	if err != nil {
 		return nil, err
 	}
@@ -233,7 +233,7 @@ func buildPointConeInsideBand(ctx context.Context, d *Document, ref producerID,
 			proofbound.ProductUpper(upperLip, upperLip))))
 	lowerCapBound, lowerLip, lowerNodeRound := 0.0, 0.0, 0.0
 	if lower != nil {
-		lowerCapBound, lowerLip, err = pointcone.CapBound(capGeom, lower.constants())
+		lowerCapBound, lowerLip, err = pointcone.CapBound(capGeom, lower.Constants())
 		if err != nil {
 			return nil, err
 		}
@@ -365,7 +365,7 @@ func buildPointConeInsideBand(ctx context.Context, d *Document, ref producerID,
 	pp := facetedPayload{
 		Verts: verts, Tris: tris, Src: src, Groups: groups, VertexBound: vertexBound,
 		MeshBound: bound, VolSymDiff: volumeGap, AreaSlack: areaSlack,
-		DPair: base.DPair, Xform: r3.Identity(), pointCone: &record,
+		DPair: base.DPair, Xform: r3.Identity(), PointCone: &record,
 	}
 	return buildFacetedBody(ctx, d, ref, pp)
 }
@@ -375,7 +375,7 @@ func buildPointConeInsideBand(ctx context.Context, d *Document, ref producerID,
 // strictly before the far cap; contact curves use a separate clipping arm.
 func buildPointConeOuterBand(ctx context.Context, d *Document, ref producerID,
 	record pointConeTrimRecord) (*Body, error) {
-	base, cone := record.base, record.lower
+	base, cone := record.Base, record.Lower
 	if !pointConeHasOutsideWitness(base, cone) {
 		return nil, fmt.Errorf("%w: the point loft has no certified material outside the cone", ErrUnsupported)
 	}
@@ -399,7 +399,7 @@ func buildPointConeOuterBand(ctx context.Context, d *Document, ref producerID,
 		maxNodeRound = max(maxNodeRound, sample.PointError)
 		maxQError = max(maxQError, sample.QError)
 	}
-	capBound, lip, err := pointcone.CapBound(pointcone.CapGeometry(far, caps), cone.constants())
+	capBound, lip, err := pointcone.CapBound(pointcone.CapGeometry(far, caps), cone.Constants())
 	if err != nil {
 		return nil, err
 	}
@@ -495,15 +495,15 @@ func buildPointConeOuterBand(ctx context.Context, d *Document, ref producerID,
 	pp := facetedPayload{
 		Verts: verts, Tris: tris, Src: src, Groups: groups, VertexBound: vertexBound,
 		MeshBound: bound, VolSymDiff: volumeGap, AreaSlack: areaSlack,
-		DPair: base.DPair, Xform: r3.Identity(), pointCone: &record,
+		DPair: base.DPair, Xform: r3.Identity(), PointCone: &record,
 	}
 	return buildFacetedBody(ctx, d, ref, pp)
 }
 
 func pointConeHasOutsideWitness(base facetedPayload, cone *pointConeLimit) bool {
 	move := new(big.Rat).Quo(new(big.Rat).Mul(
-		new(big.Rat).Add(big.NewRat(1, 1), cone.slope),
-		proofarith.FloatRat(base.MeshBound)), cone.apex)
+		new(big.Rat).Add(big.NewRat(1, 1), cone.Slope),
+		proofarith.FloatRat(base.MeshBound)), cone.Apex)
 	for _, p := range base.Verts[1:] {
 		sample, err := pointConeFactor(p, cone)
 		if err != nil {
@@ -520,7 +520,7 @@ func pointConeHasOutsideWitness(base facetedPayload, cone *pointConeLimit) bool 
 
 func pointConeSubdivide(ctx context.Context, base facetedPayload, rounds int) (
 	[]r3.Vec, [][3]int, []pointcone.Side, float64, error) {
-	if base.pointSection == nil {
+	if base.PointSection == nil {
 		return nil, nil, nil, 0, fmt.Errorf("%w: the point-cone source has no fan", ErrUnsupported)
 	}
 	return pointcone.Subdivide(ctx, base.Verts, base.Tris, base.Src, rounds)
@@ -529,10 +529,10 @@ func pointConeSubdivide(ctx context.Context, base facetedPayload, rounds int) (
 // pointConeFactor dispatches a held far-cap point to the Dyadic crossing for a
 // positive apex and slope, and to the big.Rat form otherwise.
 func pointConeFactor(p r3.Vec, cone *pointConeLimit) (pointcone.Sample, error) {
-	if cone.apex.Sign() <= 0 || cone.slope.Sign() <= 0 {
-		return pointcone.FactorRat(p, cone.apex, cone.slope)
+	if cone.Apex.Sign() <= 0 || cone.Slope.Sign() <= 0 {
+		return pointcone.FactorRat(p, cone.Apex, cone.Slope)
 	}
-	return pointcone.FactorDyadic(p, cone.constants())
+	return pointcone.FactorDyadic(p, cone.Constants())
 }
 
 // pointConeFactorParallelMin is the point count from which pointConeFactors
@@ -549,7 +549,7 @@ const pointConeFactorParallelMin = 1024
 func pointConeFactors(points []r3.Vec, cone *pointConeLimit, workers int) ([]pointcone.Sample, []error) {
 	samples := make([]pointcone.Sample, len(points))
 	errs := make([]error, len(points))
-	if cone.apex.Sign() <= 0 || cone.slope.Sign() <= 0 {
+	if cone.Apex.Sign() <= 0 || cone.Slope.Sign() <= 0 {
 		workers = 1
 	}
 	if workers < 2 {
@@ -561,7 +561,7 @@ func pointConeFactors(points []r3.Vec, cone *pointConeLimit, workers int) ([]poi
 		}
 		return samples, errs
 	}
-	consts := cone.constants()
+	consts := cone.Constants()
 	// The per-index error lives in errs, so Each's own result is unused.
 	_, _ = orderedwork.Each(len(points), workers, 256, nil, func(i int) error {
 		samples[i], errs[i] = pointcone.FactorDyadic(points[i], consts)

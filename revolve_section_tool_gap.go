@@ -12,7 +12,7 @@ import (
 // The endpoints come from the recorded section walk, not profile positions.
 func revolveSectionToolGap(section revolveSectionCertificate,
 	record *pointConeTrimRecord) (float64, bool) {
-	if record == nil || record.lower == nil || record.upper == nil ||
+	if record == nil || record.Lower == nil || record.Upper == nil ||
 		len(section.Spans) < 4 || section.RootSpan < 0 ||
 		section.RootSpan >= len(section.Spans) {
 		return 0, false
@@ -38,7 +38,7 @@ func revolveSectionToolGap(section revolveSectionCertificate,
 	for i, item := range []struct {
 		limit *pointConeLimit
 		root  planePoint
-	}{{record.lower, section.RootStart}, {record.upper, section.RootEnd}} {
+	}{{record.Lower, section.RootStart}, {record.Upper, section.RootEnd}} {
 		outer := neighbors[i]
 		if outer.V <= 0 || outer == item.root {
 			return 0, false
@@ -46,19 +46,19 @@ func revolveSectionToolGap(section revolveSectionCertificate,
 		residual := func(p planePoint) *big.Rat {
 			value := new(big.Rat).Sub(new(big.Rat).Add(
 				proofarith.FloatRat(p.U),
-				new(big.Rat).Mul(item.limit.slope, proofarith.FloatRat(p.V))),
-				item.limit.apex)
+				new(big.Rat).Mul(item.limit.Slope, proofarith.FloatRat(p.V))),
+				item.limit.Apex)
 			return value.Abs(value)
 		}
 		maxGap = max(maxGap, proofbound.RatFloatUp(residual(item.root)),
 			proofbound.RatFloatUp(residual(outer)))
 		den := new(big.Rat).Add(big.NewRat(1, 1),
-			new(big.Rat).Mul(item.limit.slope, m))
+			new(big.Rat).Mul(item.limit.Slope, m))
 		if den.Sign() <= 0 {
 			return 0, false
 		}
-		crossX := new(big.Rat).Quo(new(big.Rat).Sub(item.limit.apex,
-			new(big.Rat).Mul(item.limit.slope, b)), den)
+		crossX := new(big.Rat).Quo(new(big.Rat).Sub(item.limit.Apex,
+			new(big.Rat).Mul(item.limit.Slope, b)), den)
 		xGap := new(big.Rat).Sub(crossX, proofarith.FloatRat(item.root.U))
 		rGap := new(big.Rat).Mul(m, xGap)
 		distance2 := new(big.Rat).Add(new(big.Rat).Mul(xGap, xGap),

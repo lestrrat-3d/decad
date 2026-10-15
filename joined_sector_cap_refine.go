@@ -17,11 +17,11 @@ func sectorConeCapBounds(nodes []pointcone.SectorNode, caps [][3]int,
 		far[i] = node.P
 	}
 	capGeom := pointcone.CapGeometry(far, caps)
-	upper, _, err := pointcone.CapBound(capGeom, record.upper.constants())
+	upper, _, err := pointcone.CapBound(capGeom, record.Upper.Constants())
 	if err != nil {
 		return 0, 0, err
 	}
-	lower, _, err := pointcone.CapBound(capGeom, record.lower.constants())
+	lower, _, err := pointcone.CapBound(capGeom, record.Lower.Constants())
 	return upper, lower, err
 }
 
@@ -41,11 +41,11 @@ func sectorRefineCap(ctx context.Context, nodes []pointcone.SectorNode,
 		}
 		far := [3]r3.Vec{nodes[tri[0]].P, nodes[tri[1]].P, nodes[tri[2]].P}
 		geom := pointcone.CellGeometry(far)
-		upper, _, _, err := pointcone.TriangleBound(geom, record.upper.constants())
+		upper, _, _, err := pointcone.TriangleBound(geom, record.Upper.Constants())
 		if err != nil {
 			return nil, nil, nil, 0, err
 		}
-		lower, _, _, err := pointcone.TriangleBound(geom, record.lower.constants())
+		lower, _, _, err := pointcone.TriangleBound(geom, record.Lower.Constants())
 		if err != nil {
 			return nil, nil, nil, 0, err
 		}

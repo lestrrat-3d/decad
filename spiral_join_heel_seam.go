@@ -271,8 +271,8 @@ func spiralHeelRootCells(ctx context.Context, trim *loftFacesTrimRecord, coneC *
 		if proofbound.IsNonFinite(departure) {
 			return false, nil
 		}
-		a := trim.Source.sourceStation[j]
-		z := trim.Source.sourceStation[(j+1)%len(trim.StationGroup)]
+		a := trim.Source.SourceStation[j]
+		z := trim.Source.SourceStation[(j+1)%len(trim.StationGroup)]
 		if !spiralCellSide(trim.Maps[7], trim.Maps[8], a, z, lfF(departure),
 			big.NewRat(-1, 1), coneC, false, lfZero(), big.NewRat(19, 20), 8) {
 			return false, nil
@@ -358,8 +358,8 @@ func spiralTangentCapEightOutsideBlank(trim *loftFacesTrimRecord, coneC *big.Rat
 	if err != nil {
 		return false
 	}
-	return loftface.CapOutsideNestedCone(trim.Maps[8], box, trim.Heel.apex, trim.Heel.slope,
-		trim.Heel.far, coneC, lfOne())
+	return loftface.CapOutsideNestedCone(trim.Maps[8], box, trim.Heel.Apex, trim.Heel.Slope,
+		trim.Heel.Far, coneC, lfOne())
 }
 
 func certifySpiralHeelRootSeam(ctx context.Context, proof *spiralFirstJoinSource) (*spiralHeelRootSeam, bool, error) {
@@ -367,7 +367,7 @@ func certifySpiralHeelRootSeam(ctx context.Context, proof *spiralFirstJoinSource
 		return nil, false, nil
 	}
 	trim := proof.Tooth
-	arc, ok := trim.Source.profile.Outer.Segments[4].(arcSeg)
+	arc, ok := trim.Source.Profile.Outer.Segments[4].(arcSeg)
 	if !ok || len(trim.Maps) != 9 || len(trim.Bounds) != 9 {
 		return nil, false, nil
 	}

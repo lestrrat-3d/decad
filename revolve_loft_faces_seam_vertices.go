@@ -33,8 +33,8 @@ func revolveLoftFacesArcSeamVerticesUnchecked(ctx context.Context, trim *loftFac
 		root.Lo == nil || root.Hi == nil || section.Start.U == section.End.U ||
 		section.Start.V <= 0 || section.End.V <= 0 ||
 		root.Lo.Sign() < 0 || root.Hi.Cmp(lfOne()) > 0 || root.Lo.Cmp(root.Hi) > 0 ||
-		proofbound.IsNonFinite(trim.Source.sourceStationRound) ||
-		trim.Source.sourceStationRound < 0 {
+		proofbound.IsNonFinite(trim.Source.SourceStationRound) ||
+		trim.Source.SourceStationRound < 0 {
 		return nil, false, nil
 	}
 	first, last := trim.Maps[band], trim.Maps[band+1]
@@ -50,7 +50,7 @@ func revolveLoftFacesArcSeamVerticesUnchecked(ctx context.Context, trim *loftFac
 	if proofbound.IsNonFinite(stretch) || stretch < 0 {
 		return nil, false, nil
 	}
-	stationBound := proofbound.ProductUpper(trim.Source.sourceStationRound, stretch)
+	stationBound := proofbound.ProductUpper(trim.Source.SourceStationRound, stretch)
 	if proofbound.IsNonFinite(stationBound) {
 		return nil, false, nil
 	}
@@ -62,14 +62,14 @@ func revolveLoftFacesArcSeamVerticesUnchecked(ctx context.Context, trim *loftFac
 		if err := ctx.Err(); err != nil {
 			return nil, false, err
 		}
-		if stationIndex < 0 || stationIndex >= len(trim.Source.sourceStation) {
+		if stationIndex < 0 || stationIndex >= len(trim.Source.SourceStation) {
 			return nil, false, nil
 		}
 		if _, exists := seen[stationIndex]; exists {
 			return nil, false, nil
 		}
 		seen[stationIndex] = struct{}{}
-		station := trim.Source.sourceStation[stationIndex]
+		station := trim.Source.SourceStation[stationIndex]
 		u, v := lfF(station.U), lfF(station.V)
 		a, z := first.At(u, v), last.At(u, v)
 		for _, time := range []*big.Rat{root.Lo, root.Hi} {

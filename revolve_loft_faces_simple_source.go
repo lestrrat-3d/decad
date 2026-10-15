@@ -24,26 +24,26 @@ func revolveLoftFacesSimpleSourceLoop(ctx context.Context,
 	trim *loftFacesTrimRecord) (*revolveLoftFacesSimpleLoop, bool, error) {
 	if ctx == nil || trim == nil || trim.Source == nil ||
 		!pointSourceCurrent(trim.Source) ||
-		trim.Source.source.profile == nil ||
-		!trim.Source.source.profile.Valid ||
-		len(trim.Source.source.profile.Holes) != 0 {
+		trim.Source.Source.Profile == nil ||
+		!trim.Source.Source.Profile.Valid ||
+		len(trim.Source.Source.Profile.Holes) != 0 {
 		return nil, false, nil
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, false, err
 	}
-	fresh, plane, _, err := sectioncert.RecordProfile(trim.Source.source.sketch,
-		trim.Source.source.profile)
+	fresh, plane, _, err := sectioncert.RecordProfile(trim.Source.Source.Sketch,
+		trim.Source.Source.Profile)
 	if err != nil {
 		return nil, false, err
 	}
-	if !sectionrecord.IdenticalRecord(fresh, trim.Source.profile) ||
-		!sectionrecord.IdenticalRecord(plane, trim.Source.plane) {
+	if !sectionrecord.IdenticalRecord(fresh, trim.Source.Profile) ||
+		!sectionrecord.IdenticalRecord(plane, trim.Source.Plane) {
 		return nil, false, nil
 	}
-	recorded := trim.Source.profile.Outer.Segments
-	outer := trim.Source.source.profile.Outer
-	entities := trim.Source.source.sketch.Entities()
+	recorded := trim.Source.Profile.Outer.Segments
+	outer := trim.Source.Source.Profile.Outer
+	entities := trim.Source.Source.Sketch.Entities()
 	if len(recorded) < 3 || len(recorded) != len(outer) ||
 		len(entities) != len(recorded) {
 		return nil, false, nil
@@ -51,7 +51,7 @@ func revolveLoftFacesSimpleSourceLoop(ctx context.Context,
 	// Every current Sketch entity must occur exactly once on this whole
 	// boundary. Otherwise a hidden interior contour could change occupancy
 	// even if the selected outer walk is exactly simple.
-	for i, entity := range trim.Source.source.entities {
+	for i, entity := range trim.Source.Source.Entities {
 		found := 0
 		for _, current := range entities {
 			if current == entity {
@@ -62,7 +62,7 @@ func revolveLoftFacesSimpleSourceLoop(ctx context.Context,
 			return nil, false, nil
 		}
 		for j := range i {
-			if trim.Source.source.entities[j] == entity {
+			if trim.Source.Source.Entities[j] == entity {
 				return nil, false, nil
 			}
 		}
@@ -73,7 +73,7 @@ func revolveLoftFacesSimpleSourceLoop(ctx context.Context,
 			return nil, false, err
 		}
 		if outer[segment].Partial || outer[segment].Entity !=
-			trim.Source.source.entities[segment] {
+			trim.Source.Source.Entities[segment] {
 			return nil, false, nil
 		}
 		switch source := source.(type) {

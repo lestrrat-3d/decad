@@ -46,7 +46,7 @@ func revolveLoftFacesFiniteSpanCells(ctx context.Context, trim *loftFacesTrimRec
 		return nil, false, err
 	}
 	var cells []revolveLoftFacesMappedCell
-	for segment, source := range trim.Source.profile.Outer.Segments {
+	for segment, source := range trim.Source.Profile.Outer.Segments {
 		if err := ctx.Err(); err != nil {
 			return nil, false, err
 		}
@@ -179,12 +179,12 @@ func revolveLoftFacesMeridian(section revolveSectionSpan) (*big.Rat, *big.Rat) {
 
 func revolveLoftFacesStraightOrFitSpans(trim *loftFacesTrimRecord,
 	segment int, source curveSegment) ([]freeform.BezierSpan, bool) {
-	if segment >= len(trim.Source.source.entities) {
+	if segment >= len(trim.Source.Source.Entities) {
 		return nil, false
 	}
 	switch typed := source.(type) {
 	case lineSeg:
-		if _, ok := trim.Source.source.entities[segment].(*sketch.Line); !ok ||
+		if _, ok := trim.Source.Source.Entities[segment].(*sketch.Line); !ok ||
 			!((typed.TStart == 0 && typed.TEnd == 1) ||
 				(typed.TStart == 1 && typed.TEnd == 0)) {
 			return nil, false
@@ -194,7 +194,7 @@ func revolveLoftFacesStraightOrFitSpans(trim *loftFacesTrimRecord,
 			{U: lfF(typed.End.U), V: lfF(typed.End.V)},
 		}}, true
 	case fitSplineSeg:
-		if _, ok := trim.Source.source.entities[segment].(*sketch.FitSpline); !ok ||
+		if _, ok := trim.Source.Source.Entities[segment].(*sketch.FitSpline); !ok ||
 			!((typed.TStart == 0 && typed.TEnd == 1) ||
 				(typed.TStart == 1 && typed.TEnd == 0)) {
 			return nil, false

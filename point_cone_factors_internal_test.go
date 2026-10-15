@@ -33,7 +33,7 @@ func TestPointConeFactorsMatchSerial(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			// A fresh cone per run keeps the lazily built constants out of
 			// the comparison.
-			newCone := func() *pointConeLimit { return &pointConeLimit{apex: c.apex, slope: c.slope} }
+			newCone := func() *pointConeLimit { return &pointConeLimit{Apex: c.apex, Slope: c.slope} }
 			ref := newCone()
 			first, firstErr := -1, error(nil)
 			for i, p := range points {

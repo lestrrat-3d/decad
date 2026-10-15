@@ -42,15 +42,15 @@ func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
 		t.Fatalf("real source did not exercise both vertical answers: contacts=%d misses=%d", contacts, misses)
 	}
 	t.Run("changed toe cone slope", func(t *testing.T) {
-		original := proof.trim.Toe.slope
-		defer func() { proof.trim.Toe.slope = original }()
-		proof.trim.Toe.slope = lfAdd(original, lfF(0.001))
+		original := proof.trim.Toe.Slope
+		defer func() { proof.trim.Toe.Slope = original }()
+		proof.trim.Toe.Slope = lfAdd(original, lfF(0.001))
 		assertChangedCurvedTrimRefuses(t, tooth, proof)
 	})
 	t.Run("changed heel cone apex", func(t *testing.T) {
-		original := proof.trim.Heel.apex
-		defer func() { proof.trim.Heel.apex = original }()
-		proof.trim.Heel.apex = lfAdd(original, lfF(0.001))
+		original := proof.trim.Heel.Apex
+		defer func() { proof.trim.Heel.Apex = original }()
+		proof.trim.Heel.Apex = lfAdd(original, lfF(0.001))
 		assertChangedCurvedTrimRefuses(t, tooth, proof)
 	})
 	t.Run("changed toe tool", func(t *testing.T) {

@@ -56,14 +56,14 @@ func revolveLoftFacesHeelSlopedOccupiedArc(ctx context.Context,
 	if !revolveLoftFacesSlopedRadialInside(proof.section, circle.span, x, radius) {
 		return nil, false, nil
 	}
-	if trim.Toe.apex == nil || trim.Toe.far == nil || trim.Toe.slope == nil ||
-		trim.Toe.slope.Sign() <= 0 || x.Cmp(trim.Toe.far) <= 0 ||
-		x.Cmp(trim.Heel.far) <= 0 || x.Cmp(trim.Heel.apex) >= 0 {
+	if trim.Toe.Apex == nil || trim.Toe.Far == nil || trim.Toe.Slope == nil ||
+		trim.Toe.Slope.Sign() <= 0 || x.Cmp(trim.Toe.Far) <= 0 ||
+		x.Cmp(trim.Heel.Far) <= 0 || x.Cmp(trim.Heel.Apex) >= 0 {
 		return nil, false, nil
 	}
 	lower := lfZero()
-	if x.Cmp(trim.Toe.apex) < 0 {
-		lower = lfDiv(lfSub(trim.Toe.apex, x), trim.Toe.slope)
+	if x.Cmp(trim.Toe.Apex) < 0 {
+		lower = lfDiv(lfSub(trim.Toe.Apex, x), trim.Toe.Slope)
 	}
 	if lower.Sign() < 0 || lower.Cmp(radius) >= 0 {
 		return nil, false, nil

@@ -89,11 +89,11 @@ func revolveLoftFacesHeelBoundarySideTie(proof *revolveLoftFacesSourceCertificat
 	boundary revolveLoftFacesToolCapBoundary) (revolveLoftFacesCapSideTie, bool) {
 	var result revolveLoftFacesCapSideTie
 	if proof == nil || proof.trim == nil || proof.trim.Source == nil ||
-		proof.trim.Source.source == nil ||
+		proof.trim.Source.Source == nil ||
 		census == nil || census.manifest == nil || arc == nil || arc.time == nil ||
 		arc.circle.span < 0 || arc.circle.span >= len(proof.section.Spans) ||
 		boundary.face == nil || boundary.segment < 0 ||
-		boundary.segment >= len(proof.trim.Source.profile.Outer.Segments) {
+		boundary.segment >= len(proof.trim.Source.Profile.Outer.Segments) {
 		return result, false
 	}
 	section := proof.section.Spans[arc.circle.span]
@@ -161,7 +161,7 @@ func revolveLoftFacesCapMeridianIdentity(proof *revolveLoftFacesSourceCertificat
 	arc *revolveLoftFacesToolCapOccupiedArc,
 	boundary revolveLoftFacesToolCapBoundary) bool {
 	if proof == nil || proof.trim == nil || proof.trim.Source == nil ||
-		proof.trim.Source.source == nil || arc == nil ||
+		proof.trim.Source.Source == nil || arc == nil ||
 		arc.time == nil || arc.circle.x == nil || arc.circle.radius == nil ||
 		arc.circle.span < 0 || arc.circle.span >= len(proof.section.Spans) ||
 		arc.band < 0 || arc.band+1 >= len(proof.trim.Maps) {
@@ -170,7 +170,7 @@ func revolveLoftFacesCapMeridianIdentity(proof *revolveLoftFacesSourceCertificat
 	section := proof.section.Spans[arc.circle.span]
 	if section.Start.U == section.End.U ||
 		boundary.segment < 0 ||
-		boundary.segment >= len(proof.trim.Source.profile.Outer.Segments) {
+		boundary.segment >= len(proof.trim.Source.Profile.Outer.Segments) {
 		return false
 	}
 	box, err := lfSourceBox(proof.trim.Source)
@@ -185,7 +185,7 @@ func revolveLoftFacesCapMeridianIdentity(proof *revolveLoftFacesSourceCertificat
 	if lfAdd(lfMul(m, arc.circle.x), b).Cmp(arc.circle.radius) != 0 {
 		return false
 	}
-	segment := proof.trim.Source.profile.Outer.Segments[boundary.segment]
+	segment := proof.trim.Source.Profile.Outer.Segments[boundary.segment]
 	spans, ok := revolveLoftFacesStraightOrFitSpans(proof.trim, boundary.segment, segment)
 	if !ok || boundary.span < 0 || boundary.span >= len(spans) {
 		return false

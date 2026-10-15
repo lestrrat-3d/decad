@@ -25,7 +25,7 @@ func buildRevolveSectorMesh(mesh *joinedMesh, ring revolvedSectionRing,
 	section revolveSectionCertificate, nodes, original []pointcone.SectorNode, caps [][3]int,
 	edges []pointcone.SectorEdge, rootNode []int, record *pointConeTrimRecord,
 	motion r3.Transform, placedGroups []facetGroup, samples *revolveSectorSamples) (float64, float64, error) {
-	if mesh == nil || record == nil || record.base.pointSection == nil ||
+	if mesh == nil || record == nil || record.Base.PointSection == nil ||
 		len(nodes) != len(rootNode) || len(nodes) != len(original) || len(nodes) < 3 ||
 		section.RootSpan < 0 || section.RootSpan >= len(ring.Rings) {
 		return 0, 0, fmt.Errorf("%w: sector cap has invalid source records", ErrUnsupported)
@@ -36,11 +36,11 @@ func buildRevolveSectorMesh(mesh *joinedMesh, ring revolvedSectionRing,
 		lowSpan, highSpan = highSpan, lowSpan
 	}
 	baseGroup := len(mesh.Groups)
-	if placedGroups != nil && len(placedGroups) != len(record.base.Groups)+2 {
+	if placedGroups != nil && len(placedGroups) != len(record.Base.Groups)+2 {
 		return 0, 0, fmt.Errorf("%w: placed sector lost its source faces", ErrUnsupported)
 	}
-	for i, group := range record.base.Groups {
-		if i == len(record.base.Groups)-1 {
+	for i, group := range record.Base.Groups {
+		if i == len(record.Base.Groups)-1 {
 			break
 		}
 		group.Surface = surfacegeom.NURBSSurface{}
@@ -50,15 +50,15 @@ func buildRevolveSectorMesh(mesh *joinedMesh, ring revolvedSectionRing,
 		mesh.Groups = append(mesh.Groups, group)
 	}
 	upperGroup := len(mesh.Groups)
-	upperFace := pointConeFacetGroup(record.upper, false)
+	upperFace := pointConeFacetGroup(record.Upper, false)
 	if placedGroups != nil {
-		upperFace = placedGroups[len(record.base.Groups)]
+		upperFace = placedGroups[len(record.Base.Groups)]
 	}
 	mesh.Groups = append(mesh.Groups, upperFace)
 	lowerGroup := len(mesh.Groups)
-	lowerFace := pointConeFacetGroup(record.lower, true)
+	lowerFace := pointConeFacetGroup(record.Lower, true)
 	if placedGroups != nil {
-		lowerFace = placedGroups[len(record.base.Groups)+1]
+		lowerFace = placedGroups[len(record.Base.Groups)+1]
 	}
 	mesh.Groups = append(mesh.Groups, lowerFace)
 	upper, lower := make([]int, len(nodes)), make([]int, len(nodes))
@@ -76,8 +76,8 @@ func buildRevolveSectorMesh(mesh *joinedMesh, ring revolvedSectionRing,
 			points[i] = original[i].P
 		}
 		w := orderedwork.EachWorkers(len(points), pointConeFactorParallelMin)
-		samples.up, upErrs = pointConeFactors(points, record.upper, w)
-		samples.down, downErrs = pointConeFactors(points, record.lower, w)
+		samples.up, upErrs = pointConeFactors(points, record.Upper, w)
+		samples.down, downErrs = pointConeFactors(points, record.Lower, w)
 	}
 	for i := range nodes {
 		far := original[i].P
@@ -138,7 +138,7 @@ func buildRevolveSectorMesh(mesh *joinedMesh, ring revolvedSectionRing,
 		if edge.Group < 0 {
 			continue
 		}
-		if edge.Group >= len(record.base.Groups)-1 {
+		if edge.Group >= len(record.Base.Groups)-1 {
 			return 0, 0, fmt.Errorf("%w: sector face role is missing", ErrUnsupported)
 		}
 		u, v := edge.U, edge.V

@@ -22,11 +22,11 @@ type revolveLoftFacesFitLineVertex struct {
 func revolveLoftFacesFitLineVertexAt(trim *loftFacesTrimRecord,
 	fitIndex, lineIndex int, fitAtWalkEnd bool) (revolveLoftFacesFitLineVertex, bool) {
 	var empty revolveLoftFacesFitLineVertex
-	if trim == nil || trim.Source == nil || trim.Source.source == nil {
+	if trim == nil || trim.Source == nil || trim.Source.Source == nil {
 		return empty, false
 	}
-	segments := trim.Source.profile.Outer.Segments
-	entities := trim.Source.source.entities
+	segments := trim.Source.Profile.Outer.Segments
+	entities := trim.Source.Source.Entities
 	n := len(segments)
 	if n < 2 || len(entities) != n || fitIndex < 0 || fitIndex >= n ||
 		lineIndex < 0 || lineIndex >= n || fitIndex == lineIndex ||

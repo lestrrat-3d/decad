@@ -46,7 +46,7 @@ func TestRevolveLoftFacesVerticalRefusesChangedBlankSection(t *testing.T) {
 func TestRevolveLoftFacesConstantXRejectsSubstitutedSourceRef(t *testing.T) {
 	const segmentCount = 2
 	trim := &loftFacesTrimRecord{
-		Source: &pointSectionRecord{profile: profileRecord{Outer: loopRecord{
+		Source: &pointSectionRecord{Profile: profileRecord{Outer: loopRecord{
 			Segments: []curveSegment{lineSeg{}, lineSeg{}},
 		}}},
 		Maps: make([]loftFaceMap, 3),
@@ -85,8 +85,8 @@ func TestRevolveLoftFacesVerticalConstantXAndTrimLimits(t *testing.T) {
 	require.False(t, ok)
 
 	trim := &loftFacesTrimRecord{
-		Toe:  &pointConeLimit{apex: big.NewRat(13, 2), far: big.NewRat(-2, 1), slope: one},
-		Heel: &pointConeLimit{apex: big.NewRat(8, 1), far: big.NewRat(-2, 1), slope: one},
+		Toe:  &pointConeLimit{Apex: big.NewRat(13, 2), Far: big.NewRat(-2, 1), Slope: one},
+		Heel: &pointConeLimit{Apex: big.NewRat(8, 1), Far: big.NewRat(-2, 1), Slope: one},
 	}
 	section := revolveSectionSpan{Start: planePoint{U: 6}, End: planePoint{U: 6, V: 3.5}}
 	lower, upper, outcome := revolveLoftFacesVerticalLimits(trim, section, big.NewRat(6, 1))

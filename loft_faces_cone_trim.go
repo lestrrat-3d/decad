@@ -68,7 +68,7 @@ func loftFacesCapRecordReady(record *loftFacesCapRecord) bool {
 	}
 	n := len(record.Maps)
 	return n >= 2 && n <= maxLoftFacesSections && len(record.Bounds) == n &&
-		len(record.StationGroup) == len(record.Source.sourceStation) && len(record.StationGroup) >= 3
+		len(record.StationGroup) == len(record.Source.SourceStation) && len(record.StationGroup) >= 3
 }
 
 func uniqueConeFace(body *Body) (*Face, bool) {
@@ -147,7 +147,7 @@ func recordLoftFacesConeToe(ctx context.Context, source, tool, result *Body) err
 		return nil
 	}
 	cone, ok := exactPointCone(tool)
-	if !ok || !pointcone.AboveFarCap(base.Verts, base.MeshBound, cone.far) {
+	if !ok || !pointcone.AboveFarCap(base.Verts, base.MeshBound, cone.Far) {
 		return nil
 	}
 	box, err := lfSourceBox(base.LoftFacesCap.Source)
@@ -192,12 +192,12 @@ func loftCapOutsideToeCone(m loftFaceMap, box [4]*big.Rat, cone *pointConeLimit)
 	x := loftface.ScalarRange(m, loftFaceRatVec{lfOne(), lfZero(), lfZero()}, corners)
 	y := loftface.ScalarRange(m, loftFaceRatVec{lfZero(), lfOne(), lfZero()}, corners)
 	z := loftface.ScalarRange(m, loftFaceRatVec{lfZero(), lfZero(), lfOne()}, corners)
-	if x.Lo.Cmp(cone.far) <= 0 {
+	if x.Lo.Cmp(cone.Far) <= 0 {
 		return false
 	}
-	d := loftface.IntervalSub(loftFaceInterval{Lo: cone.apex, Hi: cone.apex}, x)
+	d := loftface.IntervalSub(loftFaceInterval{Lo: cone.Apex, Hi: cone.Apex}, x)
 	radial := lfAdd(loftface.IntervalSquareMin(y), loftface.IntervalSquareMin(z))
-	margin := lfSub(lfMul(lfMul(cone.slope, cone.slope), radial), loftface.IntervalSquareMax(d))
+	margin := lfSub(lfMul(lfMul(cone.Slope, cone.Slope), radial), loftface.IntervalSquareMax(d))
 	return margin.Sign() > 0
 }
 
@@ -230,8 +230,8 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 		return nil, false, nil
 	}
 	cone, ok := exactPointCone(tool)
-	if !ok || cone.far.Cmp(p.LoftFacesToe.Toe.far) != 0 ||
-		!pointcone.AboveFarCap(p.LoftFacesToe.Base.Verts, p.LoftFacesToe.Base.MeshBound, cone.far) ||
+	if !ok || cone.Far.Cmp(p.LoftFacesToe.Toe.Far) != 0 ||
+		!pointcone.AboveFarCap(p.LoftFacesToe.Base.Verts, p.LoftFacesToe.Base.MeshBound, cone.Far) ||
 		!orderedLoftFacesConeLimits(p.LoftFacesToe.Toe, cone, p.LoftFacesToe.Base) {
 		return nil, false, nil
 	}
@@ -347,7 +347,7 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 }
 
 func orderedLoftFacesConeLimits(toe, heel *pointConeLimit, base facetedPayload) bool {
-	return pointcone.ToeHeelOrdered(toe.apex, toe.slope, heel.apex, heel.slope,
+	return pointcone.ToeHeelOrdered(toe.Apex, toe.Slope, heel.Apex, heel.Slope,
 		base.Verts, base.MeshBound)
 }
 
@@ -358,7 +358,7 @@ func loftCapOutsideHeelCone(m loftFaceMap, box [4]*big.Rat, cone *pointConeLimit
 	if box[1].Sign() >= 0 && box[0].Sign() <= 0 {
 		return false
 	}
-	return loftface.ConeStrictOutsideForm(loftface.ConePullback(m, cone.apex, cone.slope))
+	return loftface.ConeStrictOutsideForm(loftface.ConePullback(m, cone.Apex, cone.Slope))
 }
 
 // loftCapTangentToHeelCone admits the cap of a cone-tangent LoftFaces end
@@ -382,16 +382,16 @@ func loftCapOutsideHeelCone(m loftFaceMap, box [4]*big.Rat, cone *pointConeLimit
 func loftCapTangentToHeelCone(record *loftFacesCapRecord, box [4]*big.Rat,
 	cone *pointConeLimit) (*loftface.TangentPlane, error) {
 	rec := record.Tangent
-	if rec == nil || !rec.MatchesCone(cone.apex, cone.slope) ||
+	if rec == nil || !rec.MatchesCone(cone.Apex, cone.Slope) ||
 		!loftface.MapEqual(rec.Map(), record.Final) ||
-		!loftface.ConeTangentAlongRuling(record.Final, box, cone.apex, cone.slope) {
+		!loftface.ConeTangentAlongRuling(record.Final, box, cone.Apex, cone.Slope) {
 		return nil, nil //nolint:nilnil // nil plane with nil error means the record is not a tangent end for this cone.
 	}
 	if len(record.Maps) < 2 {
 		return nil, nil //nolint:nilnil // same: not a tangent end for this cone.
 	}
 	side, ok := loftface.ConeOnLoftSide(record.Final, record.Maps[len(record.Maps)-2], box,
-		cone.apex, cone.slope, cone.far)
+		cone.Apex, cone.Slope, cone.Far)
 	if !ok {
 		return nil, fmt.Errorf("%w: the heel cone is not provably on the loft side of the tangent cap plane",
 			ErrUnsupported)
@@ -558,7 +558,7 @@ func toeStationLink(vertices []r3.Vec, toe *loftFacesToeRecord) (loftface.Statio
 	}
 	record := toe.Cap
 	last := len(record.Maps) - 1
-	n := len(record.Source.sourceStation)
+	n := len(record.Source.SourceStation)
 	baseVerts := toe.Base.Verts
 	if last < 1 || len(record.Bounds) != len(record.Maps) || len(baseVerts) < (last+1)*n || n < 3 {
 		return refuse("has no station ring")

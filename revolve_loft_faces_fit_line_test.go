@@ -13,7 +13,7 @@ func TestFiniteRevolveFitLineJointKeepsBothLiveSourceSides(t *testing.T) {
 	_, _, trim := neutralArcSeamSource(t)
 	vertex, ok := revolveLoftFacesFitLineVertexAt(trim, 0, 5, false)
 	require.True(t, ok)
-	require.Same(t, trim.Source.source.entities[0].(*sketch.FitSpline).Fit[0], vertex.point)
+	require.Same(t, trim.Source.Source.Entities[0].(*sketch.FitSpline).Fit[0], vertex.point)
 	other, ok := revolveLoftFacesFitLineVertexAt(trim, 2, 3, true)
 	require.True(t, ok)
 	require.False(t, other.lineAtEnd)
@@ -84,11 +84,11 @@ func TestFiniteRevolveFitLineJointKeepsBothLiveSourceSides(t *testing.T) {
 		require.True(t, matched)
 	}
 	t.Run("changed recorded line endpoint refuses", func(t *testing.T) {
-		original := trim.Source.profile.Outer.Segments[5]
-		defer func() { trim.Source.profile.Outer.Segments[5] = original }()
+		original := trim.Source.Profile.Outer.Segments[5]
+		defer func() { trim.Source.Profile.Outer.Segments[5] = original }()
 		changed := original.(lineSeg)
 		changed.End.U += 0.001
-		trim.Source.profile.Outer.Segments[5] = changed
+		trim.Source.Profile.Outer.Segments[5] = changed
 		_, valid := revolveLoftFacesFitLineVertexAt(trim, 0, 5, false)
 		require.False(t, valid)
 	})

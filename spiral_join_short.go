@@ -176,7 +176,7 @@ func spiralShortCubicBox(ctx context.Context, first, second loftFaceMap,
 
 func spiralShortCapSpan(source *pointSectionRecord, groups []int,
 	group int) (freeform.BezierSpan, bool) {
-	if source == nil || len(source.sourceStation) != len(groups) {
+	if source == nil || len(source.SourceStation) != len(groups) {
 		return nil, false
 	}
 	index := -1
@@ -191,9 +191,9 @@ func spiralShortCapSpan(source *pointSectionRecord, groups []int,
 	if index < 0 {
 		return nil, false
 	}
-	a := source.sourceStation[index]
-	z := source.sourceStation[(index+1)%len(groups)]
-	line, ok := source.profile.Outer.Segments[group].(lineSeg)
+	a := source.SourceStation[index]
+	z := source.SourceStation[(index+1)%len(groups)]
+	line, ok := source.Profile.Outer.Segments[group].(lineSeg)
 	if !ok || a != line.Start && z != line.Start || a != line.End && z != line.End {
 		return nil, false
 	}
@@ -341,7 +341,7 @@ func spiralShortCapFamilies(ctx context.Context, proof *spiralFirstJoinSource) (
 				}
 				spans = []freeform.BezierSpan{span}
 			} else {
-				fit, ok := proof.Tooth.Source.profile.Outer.Segments[group].(fitSplineSeg)
+				fit, ok := proof.Tooth.Source.Profile.Outer.Segments[group].(fitSplineSeg)
 				if !ok {
 					return out, false, nil
 				}

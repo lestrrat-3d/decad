@@ -106,21 +106,21 @@ type facetedPayload struct {
 	// ContactAudited records a whole-mesh exact contact audit at construction.
 	// PlaceMesh preserves it by checking every rounded facet after placement.
 	ContactAudited bool
-	// pointSection retains the authenticated Sketch source of a point loft.
+	// PointSection retains the authenticated Sketch source of a point loft.
 	// Boolean results have nil here; ordinary placement keeps it only for an
 	// exactly identity delta, and exact rotation copies drop it.
-	pointSection *pointSectionRecord
-	pointCone    *pointConeTrimRecord
-	pointPlane   *pointPlaneSliceRecord
-	// pointSimilarity records ordered images of the immutable Split source.
-	pointSimilarity *pointPlaneSimilarityRecord
-	// pointPlaneCapDisplacement bounds the true source cap contour against
+	PointSection *pointSectionRecord
+	PointCone    *pointConeTrimRecord
+	PointPlane   *pointPlaneSliceRecord
+	// PointSimilarity records ordered images of the immutable Split source.
+	PointSimilarity *pointPlaneSimilarityRecord
+	// PointPlaneCapDisplacement bounds the true source cap contour against
 	// each held cap ring, including every placed-basis stretch and rounding.
-	pointPlaneCapDisplacement float64
-	// pointPlaneSourceEligible belongs only to an original point loft or
-	// freshly built Split slab. Rigid copies retain pointPlane for queries,
+	PointPlaneCapDisplacement float64
+	// PointPlaneSourceEligible belongs only to an original point loft or
+	// freshly built Split slab. Rigid copies retain PointPlane for queries,
 	// but even a round-trip copy cannot become a new structural Split source.
-	pointPlaneSourceEligible bool
+	PointPlaneSourceEligible bool
 	// LoftFacesPrimitive identifies one certified LoftFaces held mesh. Rigid
 	// placement preserves this source; a Boolean result starts a new chain.
 	LoftFacesPrimitive bool
@@ -233,7 +233,7 @@ func facetedPlacementDelta(xform, composed r3.Transform) (r3.Transform, error) {
 // denotes Q*S + t_Q, where S is fp's true solid: the held mesh is placed by
 // the float delta as ever, charged for its distance to Q, and every record
 // that describes the float placement rather than Q is dropped (every group
-// surface tag and denoted patch, pointSection, pointPlane, pointSimilarity,
+// surface tag and denoted patch, PointSection, PointPlane, PointSimilarity,
 // RevolveLoftSector and LoftMirrorCopy). A dropped record is never rebuilt
 // from a later float placement.
 func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref producerID, composed r3.Transform,
@@ -252,7 +252,7 @@ func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref produc
 	next.PrismPatternJoin = nil
 	next.Xform = composed
 	next.LowerSupport = nil
-	next.pointCone = nil
+	next.PointCone = nil
 	next.LoftFacesCap = nil
 	next.LoftFacesToe = nil
 	next.LoftFacesTrim = nil
@@ -260,7 +260,7 @@ func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref produc
 	next.SpiralTools = nil
 	// A rigid copy keeps the immutable Split source for certified face
 	// centroid ranking, but cannot become a new structural Split source.
-	next.pointPlaneSourceEligible = false
+	next.PointPlaneSourceEligible = false
 	next.RevolveLoftJoin = nil
 	next.ObliqueBoss = nil
 	next.PrismUnionFillet = nil
@@ -275,23 +275,23 @@ func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref produc
 	// The true solid follows each exact reading of delta, even when the
 	// accumulated float placement later returns to identity.
 	if delta != r3.Identity() {
-		next.pointSection = nil
+		next.PointSection = nil
 	}
 	if fp.LoftMirrorJoin != nil && fp.Xform == r3.Identity() {
 		next.LoftMirrorCopy = &loftMirrorPlacementRecord{Source: fp.LoftMirrorJoin, Motion: composed}
 	} else if fp.LoftMirrorCopy != nil {
 		next.LoftMirrorCopy = &loftMirrorPlacementRecord{Source: fp.LoftMirrorCopy.Source, Motion: composed}
 	}
-	if fp.pointCone != nil && fp.Xform == r3.Identity() {
-		next.RevolveLoftSector = &revolveLoftSectorPlacement{Source: fp.pointCone, Motion: composed}
+	if fp.PointCone != nil && fp.Xform == r3.Identity() {
+		next.RevolveLoftSector = &revolveLoftSectorPlacement{Source: fp.PointCone, Motion: composed}
 	}
 	if exact != nil {
 		next.LoftMirrorCopy = nil
 		next.RevolveLoftSector = nil
-		next.pointSection = nil
-		next.pointPlane = nil
-		next.pointSimilarity = nil
-		next.pointPlaneCapDisplacement = 0
+		next.PointSection = nil
+		next.PointPlane = nil
+		next.PointSimilarity = nil
+		next.PointPlaneCapDisplacement = 0
 		next.ExactPlaced = true
 	}
 	next.Groups = append([]facetGroup(nil), fp.Groups...)
@@ -392,22 +392,22 @@ func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref produc
 	if proofbound.IsNonFinite(next.DPair) {
 		return nil, fmt.Errorf("%w: the placed pair diameter has no finite proof", ErrUnsupported)
 	}
-	if fp.pointPlane != nil && exact == nil {
+	if fp.PointPlane != nil && exact == nil {
 		// PlaceMesh's MeshBound includes the held-coordinate rounding and any
 		// embedding correction, but does not stretch the previous source gap.
 		// Add both terms; the possible double charge is conservative.
-		next.pointPlaneCapDisplacement = proofbound.AbsSumUpper(
-			proofbound.ProductUpper(fp.pointPlaneCapDisplacement,
+		next.PointPlaneCapDisplacement = proofbound.AbsSumUpper(
+			proofbound.ProductUpper(fp.PointPlaneCapDisplacement,
 				proofbound.AbsSumUpper(1, charge.Stretch)), placed.MeshBound)
 	}
-	if fp.pointPlane != nil && exact == nil {
-		record := pointPlaneSimilarityRecord{slice: fp.pointPlane}
-		if fp.pointSimilarity != nil {
-			record.steps = append(record.steps, fp.pointSimilarity.steps...)
+	if fp.PointPlane != nil && exact == nil {
+		record := pointPlaneSimilarityRecord{Slice: fp.PointPlane}
+		if fp.PointSimilarity != nil {
+			record.Steps = append(record.Steps, fp.PointSimilarity.Steps...)
 		}
-		record.steps = append(record.steps, pointPlaneSimilarityStep{motion: delta,
-			meshBound: next.MeshBound, capDisplacement: next.pointPlaneCapDisplacement})
-		next.pointSimilarity = &record
+		record.Steps = append(record.Steps, pointPlaneSimilarityStep{Motion: delta,
+			MeshBound: next.MeshBound, CapDisplacement: next.PointPlaneCapDisplacement})
+		next.PointSimilarity = &record
 	}
 	return buildFacetedBody(ctx, d, ref, next)
 }

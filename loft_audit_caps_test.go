@@ -100,14 +100,14 @@ func TestPointLoftAuditsDecideCapsAsFamilies(t *testing.T) {
 	addSlab := func(name string, slab *Body, proofs int) {
 		payload, ok := slab.n.Payload.(facetedPayload)
 		require.True(t, ok)
-		require.NotNil(t, payload.pointPlane)
-		require.Equal(t, sides, payload.pointPlane.base.Tris[:n])
-		hasApex := payload.pointPlane.lower == nil
+		require.NotNil(t, payload.PointPlane)
+		require.Equal(t, sides, payload.PointPlane.Base.Tris[:n])
+		hasApex := payload.PointPlane.Lower == nil
 		upperOffset := n
 		if hasApex {
 			upperOffset = 1
 		}
-		layout, ok := pointPlaneSlabCapLayout(payload.pointPlane.base.Tris[:n], len(payload.Tris), upperOffset, hasApex)
+		layout, ok := pointPlaneSlabCapLayout(payload.PointPlane.Base.Tris[:n], len(payload.Tris), upperOffset, hasApex)
 		require.True(t, ok, name)
 		cases = append(cases, audited{name, layout, payload.Verts, payload.Tris, proofs})
 	}

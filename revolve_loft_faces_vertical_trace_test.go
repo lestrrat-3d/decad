@@ -179,10 +179,10 @@ func TestVerticalTraceRefusesChangedSourceAndRayOwners(t *testing.T) {
 	payload := tooth.n.Payload.(facetedPayload)
 	trim := *payload.LoftFacesTrim
 	source := *trim.Source
-	live := *source.source
-	live.entities = slices.Clone(live.entities)
-	live.entities[pieces[1].cell.segment] = nil
-	source.source = &live
+	live := *source.Source
+	live.Entities = slices.Clone(live.Entities)
+	live.Entities[pieces[1].cell.segment] = nil
+	source.Source = &live
 	trim.Source = &source
 	payload.LoftFacesTrim = &trim
 	partialTooth := bornBody(&Body{n: topo.Body{Payload: payload}})

@@ -58,9 +58,9 @@ func revolveLoftFacesToolCapSidesOf(proof *revolveLoftFacesSourceCertificate) (
 		{proof.trim.Heel, proof.heelFace, proof.trim.HeelCapGroup}}
 	out.separated = make(map[[2]*Face]struct{})
 	for toolIndex, tool := range tools {
-		if tool.limit == nil || tool.limit.apex == nil || tool.limit.far == nil ||
-			tool.limit.slope == nil || tool.limit.slope.Sign() <= 0 ||
-			tool.limit.far.Cmp(tool.limit.apex) >= 0 ||
+		if tool.limit == nil || tool.limit.Apex == nil || tool.limit.Far == nil ||
+			tool.limit.Slope == nil || tool.limit.Slope.Sign() <= 0 ||
+			tool.limit.Far.Cmp(tool.limit.Apex) >= 0 ||
 			tool.group < 0 || tool.group >= len(p.Groups) ||
 			len(p.Groups[tool.group].Origins) != 1 {
 			return revolveLoftFacesToolCapSides{}, false
@@ -101,8 +101,8 @@ func revolveLoftFacesToolCapSidesOf(proof *revolveLoftFacesSourceCertificate) (
 func revolveLoftFacesToolCircleOnSpan(tool *pointConeLimit, span revolveSectionSpan) (
 	*big.Rat, *big.Rat, bool, bool,
 ) {
-	if tool == nil || tool.apex == nil || tool.far == nil || tool.slope == nil ||
-		tool.slope.Sign() <= 0 || tool.far.Cmp(tool.apex) >= 0 ||
+	if tool == nil || tool.Apex == nil || tool.Far == nil || tool.Slope == nil ||
+		tool.Slope.Sign() <= 0 || tool.Far.Cmp(tool.Apex) >= 0 ||
 		span.Start == span.End || span.Start.V < 0 || span.End.V < 0 {
 		return nil, nil, false, false
 	}
@@ -122,14 +122,14 @@ func revolveLoftFacesToolCircleOnSpan(tool *pointConeLimit, span revolveSectionS
 		lfSub(lfF(span.End.U), lfF(span.Start.U))))
 	radius := lfAdd(lfF(span.Start.V), lfMul(fraction,
 		lfSub(lfF(span.End.V), lfF(span.Start.V))))
-	if radius.Sign() <= 0 || x.Cmp(tool.far) <= 0 || x.Cmp(tool.apex) >= 0 {
+	if radius.Sign() <= 0 || x.Cmp(tool.Far) <= 0 || x.Cmp(tool.Apex) >= 0 {
 		return nil, nil, false, false
 	}
 	return x, radius, true, true
 }
 
 func revolveLoftFacesToolResidual(tool *pointConeLimit, point planePoint) *big.Rat {
-	return lfSub(lfAdd(lfF(point.U), lfMul(tool.slope, lfF(point.V))), tool.apex)
+	return lfSub(lfAdd(lfF(point.U), lfMul(tool.Slope, lfF(point.V))), tool.Apex)
 }
 
 // Every true LoftFaces band is inside the image of the authenticated source

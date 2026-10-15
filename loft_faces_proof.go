@@ -37,19 +37,19 @@ func lfAbs(a *big.Rat) *big.Rat    { return new(big.Rat).Abs(a) }
 
 func lfSimilarity(section loftFaceSection) (loftFaceAffine, error) {
 	out := loftface.Identity()
-	if section.mesh.pointSimilarity != nil {
-		for _, step := range section.mesh.pointSimilarity.steps {
-			if step.factor == 0 {
-				if !step.motion.IsValid() {
+	if section.mesh.PointSimilarity != nil {
+		for _, step := range section.mesh.PointSimilarity.Steps {
+			if step.Factor == 0 {
+				if !step.Motion.IsValid() {
 					return loftFaceAffine{}, fmt.Errorf("%w: loft cap has an invalid rigid step", ErrUnsupported)
 				}
-				out = loftface.Compose(out, loftface.Motion(step.motion))
+				out = loftface.Compose(out, loftface.Motion(step.Motion))
 			} else {
-				if !proofbound.FiniteVec(step.anchor) || !proofbound.FiniteVec(r3.Vec{X: step.factor}) ||
-					step.factor <= 0 {
+				if !proofbound.FiniteVec(step.Anchor) || !proofbound.FiniteVec(r3.Vec{X: step.Factor}) ||
+					step.Factor <= 0 {
 					return loftFaceAffine{}, fmt.Errorf("%w: loft cap has an invalid scale step", ErrUnsupported)
 				}
-				out = loftface.Compose(out, loftface.Scale(step.anchor, step.factor))
+				out = loftface.Compose(out, loftface.Scale(step.Anchor, step.Factor))
 			}
 		}
 	} else if section.mesh.Xform != r3.Identity() {
@@ -69,18 +69,18 @@ func lfCapMap(section loftFaceSection, source *pointSectionRecord) (loftFaceMap,
 	if err != nil {
 		return loftFaceMap{}, err
 	}
-	apex := loftface.Vec(source.apex)
-	origin := loftface.Vec(source.plane.Origin)
-	uAxis := loftface.Vec(source.plane.U)
-	vAxis := loftface.Vec(source.plane.V)
+	apex := loftface.Vec(source.Apex)
+	origin := loftface.Vec(source.Plane.Origin)
+	uAxis := loftface.Vec(source.Plane.U)
+	vAxis := loftface.Vec(source.Plane.V)
 	var n loftFaceRatVec
 	var d *big.Rat
 	if section.limit == nil {
 		n = loftFaceRatVec{lfZero(), lfZero(), lfZero()}
 		d = lfOne()
 	} else {
-		n = loftFaceRatVec{section.limit.nx, section.limit.ny, lfZero()}
-		d = section.limit.d
+		n = loftFaceRatVec{section.limit.Nx, section.limit.Ny, lfZero()}
+		d = section.limit.D
 	}
 	g0, gu, gv := loftface.VDot(n, loftface.VSub(origin, apex)), loftface.VDot(n, uAxis), loftface.VDot(n, vAxis)
 	if section.limit == nil {
@@ -91,7 +91,7 @@ func lfCapMap(section loftFaceSection, source *pointSectionRecord) (loftFaceMap,
 	qv := loftface.VScale(loftface.MatVec(affine.A, vAxis), d)
 	stretch := loftface.AffineStretch(affine.A)
 	if section.limit != nil {
-		stretch = proofbound.ProductUpper(stretch, section.limit.mapStretch)
+		stretch = proofbound.ProductUpper(stretch, section.limit.MapStretch)
 	}
 	if proofbound.IsNonFinite(stretch) {
 		return loftFaceMap{}, fmt.Errorf("%w: loft cap source stretch is not finite", ErrUnsupported)
@@ -102,7 +102,7 @@ func lfCapMap(section loftFaceSection, source *pointSectionRecord) (loftFaceMap,
 
 func lfSourceBox(source *pointSectionRecord) ([4]*big.Rat, error) {
 	var box [4]*big.Rat
-	for i, v := range source.sourceBox {
+	for i, v := range source.SourceBox {
 		if proofbound.IsNonFinite(v) {
 			return box,
 				fmt.Errorf("%w: loft source rectangle is not finite", ErrUnsupported)
@@ -134,9 +134,9 @@ func lfStationUV(point planePoint) (*big.Rat, *big.Rat) { return lfF(point.U), l
 
 func lfCapBounds(ctx context.Context, capMap loftFaceMap, section loftFaceSection,
 	source *pointSectionRecord) (loftFaceCapBounds, error) {
-	n := len(source.sourceStation)
+	n := len(source.SourceStation)
 	var out loftFaceCapBounds
-	if len(section.ring) != n || len(source.sourceArcUpper) != n || len(source.sourceMatched) != n {
+	if len(section.ring) != n || len(source.SourceArcUpper) != n || len(source.SourceMatched) != n {
 		return out, fmt.Errorf("%w: loft source station proof is incomplete", ErrUnsupported)
 	}
 	out.ProjectiveDeparture = make([]float64, n)
@@ -145,7 +145,7 @@ func lfCapBounds(ctx context.Context, capMap loftFaceMap, section loftFaceSectio
 	out.SourceDeparture = make([]float64, n)
 	exact := make([]loftFaceRatVec, n)
 	den := make([]*big.Rat, n)
-	for j, station := range source.sourceStation {
+	for j, station := range source.SourceStation {
 		if j%256 == 0 {
 			if err := ctx.Err(); err != nil {
 				return out, err
@@ -178,9 +178,9 @@ func lfCapBounds(ctx context.Context, capMap loftFaceMap, section loftFaceSectio
 		speed := lfDiv(lfMul(maxDen, lengthL1), minDen)
 		out.ProjectiveDeparture[j] = loftface.RatUp(shift)
 		out.PolygonSpeed[j] = loftface.RatUp(speed)
-		out.SourceSpeed[j] = proofbound.ProductUpper(source.sourceArcUpper[j], capMap.Stretch)
+		out.SourceSpeed[j] = proofbound.ProductUpper(source.SourceArcUpper[j], capMap.Stretch)
 		out.SourceDeparture[j] = proofbound.ProductUpper(
-			max(source.sourceMatched[j], section.slice.base.MeshBound), capMap.Stretch)
+			max(source.SourceMatched[j], section.slice.Base.MeshBound), capMap.Stretch)
 		if proofbound.IsNonFinite(out.ProjectiveDeparture[j]) ||
 			proofbound.IsNonFinite(out.PolygonSpeed[j]) ||
 			proofbound.IsNonFinite(out.SourceSpeed[j]) ||
@@ -211,7 +211,7 @@ func proveLoftFaceBounds(ctx context.Context, sections []loftFaceSection,
 		maxRound = max(maxRound, proofs[i].StationRound)
 	}
 	meshBound, wallLeg, twistVolume, trueWallArea := 0.0, 0.0, 0.0, 0.0
-	n := len(source.sourceStation)
+	n := len(source.SourceStation)
 	for band := 0; band+1 < len(sections); band++ {
 		lo, hi := proofs[band], proofs[band+1]
 		for j := range n {
@@ -255,9 +255,9 @@ func proveLoftFaceBounds(ctx context.Context, sections []loftFaceSection,
 		return facetedPayload{}, err
 	}
 	roundSweep := proofbound.SweptVolumeAllow(maxRound, roundArea)
-	sourceRegion := proofbound.ProductUpper(source.sourceAreaDelta, embedding.jacobianSum)
+	sourceRegion := proofbound.ProductUpper(source.SourceAreaDelta, embedding.jacobianSum)
 	volumeGap := proofbound.AbsSumUpper(sourceRegion, wallLeg, twistVolume, roundSweep)
-	base := sections[0].slice.base
+	base := sections[0].slice.Base
 	baseArea, err := proofbound.PerturbedAreaUpperContext(ctx, base.Verts, base.Tris, base.MeshBound)
 	if err != nil {
 		return facetedPayload{}, err
@@ -332,7 +332,7 @@ func proveLoftFaceEmbedding(ctx context.Context, sections []loftFaceSection,
 
 func orientLoftFaces(mesh *facetedPayload, base facetedPayload,
 	source *pointSectionRecord, jacobianSign int) error {
-	n := len(source.sourceStation)
+	n := len(source.SourceStation)
 	if n < 3 || len(base.Tris) <= n || jacobianSign == 0 {
 		return fmt.Errorf("%w: loft source cap has no orientation", ErrUnsupported)
 	}
@@ -342,8 +342,8 @@ func orientLoftFaces(mesh *facetedPayload, base facetedPayload,
 			tri[0] > n || tri[1] > n || tri[2] > n {
 			return fmt.Errorf("%w: loft source cap has invalid station indices", ErrUnsupported)
 		}
-		a, b, c := source.sourceStation[tri[0]-1], source.sourceStation[tri[1]-1],
-			source.sourceStation[tri[2]-1]
+		a, b, c := source.SourceStation[tri[0]-1], source.SourceStation[tri[1]-1],
+			source.SourceStation[tri[2]-1]
 		cross := lfSub(lfMul(lfSub(lfF(b.U), lfF(a.U)), lfSub(lfF(c.V), lfF(a.V))),
 			lfMul(lfSub(lfF(b.V), lfF(a.V)), lfSub(lfF(c.U), lfF(a.U))))
 		sign := cross.Sign()

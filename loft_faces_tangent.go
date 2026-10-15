@@ -65,13 +65,13 @@ func LoftFacesToConeTangent(ctx context.Context, end ConeTangentEnd, sections ..
 	if err != nil {
 		return nil, err
 	}
-	tangent, err := loftface.NewTangentEnd(cone.apex, cone.slope, end.Radial.Y, end.Radial.Z)
+	tangent, err := loftface.NewTangentEnd(cone.Apex, cone.Slope, end.Radial.Y, end.Radial.Z)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s", ErrUnsupported, err)
 	}
 	endMap := tangent.Map()
-	ring := make([]r3.Vec, len(source.sourceStation))
-	for j, station := range source.sourceStation {
+	ring := make([]r3.Vec, len(source.SourceStation))
+	for j, station := range source.SourceStation {
 		u, v := lfStationUV(station)
 		ring[j] = loftface.RoundPoint(endMap.At(u, v))
 	}

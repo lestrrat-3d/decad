@@ -120,8 +120,8 @@ func spiralToeRootCells(ctx context.Context, trim *loftFacesTrimRecord,
 		if proofbound.IsNonFinite(departure) {
 			return false, nil
 		}
-		a := trim.Source.sourceStation[j]
-		z := trim.Source.sourceStation[(j+1)%len(trim.StationGroup)]
+		a := trim.Source.SourceStation[j]
+		z := trim.Source.SourceStation[(j+1)%len(trim.StationGroup)]
 		if !spiralCellSide(trim.Maps[1], trim.Maps[2], a, z, lfF(departure),
 			big.NewRat(-1, 1), capC, false, lfZero(), lfZero(), 0) ||
 			!spiralCellSide(trim.Maps[1], trim.Maps[2], a, z, lfF(departure),
@@ -214,7 +214,7 @@ func certifySpiralToeRootSeam(ctx context.Context,
 		return nil, false, nil
 	}
 	trim := proof.Tooth
-	arc, ok := trim.Source.profile.Outer.Segments[4].(arcSeg)
+	arc, ok := trim.Source.Profile.Outer.Segments[4].(arcSeg)
 	if !ok || len(trim.Maps) != 9 || len(trim.Bounds) != 9 {
 		return nil, false, nil
 	}

@@ -36,7 +36,7 @@ func tryRevolveLoftSectorUnionMany(ctx context.Context, d *Document, ref produce
 				continue
 			}
 			path, bound, err := revolveExteriorPath(cert.Base, cert.Boundary,
-				cert.Trim.base.pointSection.source, cert.Section)
+				cert.Trim.Base.PointSection.Source, cert.Section)
 			if err != nil {
 				return nil, true, err
 			}
@@ -104,7 +104,7 @@ func tryRevolveLoftSectorUnion(ctx context.Context, op meshbool.OperationKind,
 		}
 	}
 	path, bound, err := revolveExteriorPath(cert.Base, cert.Boundary,
-		cert.Trim.base.pointSection.source, cert.Section)
+		cert.Trim.Base.PointSection.Source, cert.Section)
 	if err != nil {
 		return nil, true, err
 	}

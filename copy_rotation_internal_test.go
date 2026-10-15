@@ -232,11 +232,11 @@ func TestPlacedWithChargesTheGapToExactRotation(t *testing.T) {
 func TestPlacedWithDropsFloatPlacementRecords(t *testing.T) {
 	joined := mirrorJoinedLoft(t)
 	source := joined.n.Payload.(facetedPayload)
-	source.pointSection = &pointSectionRecord{}
-	source.pointPlane = &pointPlaneSliceRecord{}
-	source.pointSimilarity = &pointPlaneSimilarityRecord{}
-	source.pointCone = &pointConeTrimRecord{}
-	source.pointPlaneCapDisplacement = 1
+	source.PointSection = &pointSectionRecord{}
+	source.PointPlane = &pointPlaneSliceRecord{}
+	source.PointSimilarity = &pointPlaneSimilarityRecord{}
+	source.PointCone = &pointConeTrimRecord{}
+	source.PointPlaneCapDisplacement = 1
 	q, d, err := exactrotation.New(r3.Vec{}, r3.Vec{Z: 1}, units.Degrees(30))
 	require.NoError(t, err)
 	composed, err := source.Xform.Then(d)
@@ -245,21 +245,21 @@ func TestPlacedWithDropsFloatPlacementRecords(t *testing.T) {
 	body, err := source.placedWith(t.Context(), documentHandle(joined.n.Doc), joined.n.Doc.NextProducer, composed, q)
 	require.NoError(t, err)
 	exact := body.n.Payload.(facetedPayload)
-	require.Nil(t, exact.pointSection)
-	require.Nil(t, exact.pointPlane)
-	require.Nil(t, exact.pointSimilarity)
-	require.Nil(t, exact.pointCone)
+	require.Nil(t, exact.PointSection)
+	require.Nil(t, exact.PointPlane)
+	require.Nil(t, exact.PointSimilarity)
+	require.Nil(t, exact.PointCone)
 	require.Nil(t, exact.RevolveLoftSector)
 	require.Nil(t, exact.LoftMirrorCopy)
-	require.Zero(t, exact.pointPlaneCapDisplacement)
+	require.Zero(t, exact.PointPlaneCapDisplacement)
 
 	// A nonidentity float delta moves the true solid, so it drops the point-loft
 	// source while retaining the float similarity, sector, and mirror-copy records.
 	body, err = placePayload(t.Context(), source, documentHandle(joined.n.Doc), joined.n.Doc.NextProducer, composed)
 	require.NoError(t, err)
 	float := body.n.Payload.(facetedPayload)
-	require.Nil(t, float.pointSection)
-	require.NotNil(t, float.pointSimilarity)
+	require.Nil(t, float.PointSection)
+	require.NotNil(t, float.PointSimilarity)
 	require.NotNil(t, float.RevolveLoftSector)
 	require.NotNil(t, float.LoftMirrorCopy)
 
@@ -268,7 +268,7 @@ func TestPlacedWithDropsFloatPlacementRecords(t *testing.T) {
 		body, err := placePayload(t.Context(), source, documentHandle(joined.n.Doc), joined.n.Doc.NextProducer, r3.Identity())
 		require.NoError(t, err)
 		// An exact identity delta leaves the point-loft source valid.
-		require.NotNil(t, body.n.Payload.(facetedPayload).pointSection)
+		require.NotNil(t, body.n.Payload.(facetedPayload).PointSection)
 	})
 }
 
@@ -447,16 +447,16 @@ func pointLoftConeTool(t *testing.T, doc *Document, apex float64) *Body {
 // cannot restore the point-loft source of an exact copy. An exact rotation
 // about X through (0,1,1) at 2^-60 has a nonzero exact translation, yet the
 // inverse float rotation brings the accumulated placement back to the float
-// identity; the dropped pointSection must keep the cone trim from matching.
+// identity; the dropped PointSection must keep the cone trim from matching.
 func TestCopyRotationRoundTripDropsPointSource(t *testing.T) {
 	doc := New()
 	tooth := pointLoftTooth(t, doc)
 	cone := pointLoftConeTool(t, doc, 5)
-	require.NotNil(t, tooth.n.Payload.(facetedPayload).pointSection)
+	require.NotNil(t, tooth.n.Payload.(facetedPayload).PointSection)
 	control, matched, err := tryPointConeBoolean(t.Context(), meshbool.OpCut, doc, doc.nextProducerID(), tooth, cone)
 	require.NoError(t, err)
 	require.True(t, matched, "the unplaced point loft takes the cone trim")
-	require.NotNil(t, control.n.Payload.(facetedPayload).pointCone)
+	require.NotNil(t, control.n.Payload.(facetedPayload).PointCone)
 
 	center, axis, angle := r3.NewVec(0, 1, 1), r3.Vec{X: 1}, units.Radians(math.Ldexp(1, -60))
 	record, _, err := exactrotation.New(center, axis, angle)
@@ -486,9 +486,9 @@ func TestCopyRotationRoundTripDropsPointSource(t *testing.T) {
 
 	cut, err := Cut(t.Context(), round, cone)
 	require.NoError(t, err)
-	require.True(t, cut.n.Payload.(facetedPayload).pointCone == nil, "the Cut result carries no pointCone")
+	require.True(t, cut.n.Payload.(facetedPayload).PointCone == nil, "the Cut result carries no PointCone")
 
 	// The record itself is gone from the exact copy and from the round trip.
-	require.True(t, exact.n.Payload.(facetedPayload).pointSection == nil)
-	require.True(t, rp.pointSection == nil)
+	require.True(t, exact.n.Payload.(facetedPayload).PointSection == nil)
+	require.True(t, rp.PointSection == nil)
 }

@@ -43,8 +43,8 @@ func TestRevolveLoftFacesToolCapArcBindsLiveSourceCells(t *testing.T) {
 		require.True(t, current)
 		if span.Start.U != span.End.U {
 			lower := lfZero()
-			if circle.x.Cmp(proof.trim.Toe.apex) < 0 {
-				lower = lfDiv(lfSub(proof.trim.Toe.apex, circle.x), proof.trim.Toe.slope)
+			if circle.x.Cmp(proof.trim.Toe.Apex) < 0 {
+				lower = lfDiv(lfSub(proof.trim.Toe.Apex, circle.x), proof.trim.Toe.Slope)
 			}
 			section, sourceOK, sourceErr := revolveLoftFacesConstantXSourceCells(t.Context(), proof,
 				circle.x, lower, circle.radius)

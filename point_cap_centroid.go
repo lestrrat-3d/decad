@@ -54,7 +54,7 @@ func pointFarCapCentroid(profile profileRecord, plane planeRecord) (VecMeasureme
 // centroid, the true centroid differs by at most ΔD/(A-Δ).
 func pointPlaneCapCentroid(ctx context.Context, base facetedPayload,
 	plane *pointPlaneLimit) (VecMeasurement, bool, error) {
-	if len(base.Verts) < 4 || base.pointSection == nil {
+	if len(base.Verts) < 4 || base.PointSection == nil {
 		return VecMeasurement{}, false, nil
 	}
 	polygon := make([][3]*big.Rat, len(base.Verts)-1)
@@ -64,7 +64,7 @@ func pointPlaneCapCentroid(ctx context.Context, base facetedPayload,
 				return VecMeasurement{}, false, err
 			}
 		}
-		q, err := pointPlaneMapExact(base.pointSection.apex, far, plane)
+		q, err := pointPlaneMapExact(base.PointSection.Apex, far, plane)
 		if err != nil {
 			return VecMeasurement{}, false, nil //nolint:nilerr // failed map withholds the optional centroid reading
 		}
@@ -73,7 +73,7 @@ func pointPlaneCapCentroid(ctx context.Context, base facetedPayload,
 	// A vertical cut plane has nx*x+ny*y=constant. Drop the coordinate
 	// with the larger normal component to keep the projected area useful.
 	u, v := 0, 2
-	if pointPlaneAbs(plane.nx).Cmp(pointPlaneAbs(plane.ny)) > 0 {
+	if pointPlaneAbs(plane.Nx).Cmp(pointPlaneAbs(plane.Ny)) > 0 {
 		u = 1
 	}
 	twiceArea := new(big.Rat)
@@ -117,7 +117,7 @@ func pointPlaneCapCentroid(ctx context.Context, base facetedPayload,
 	// The projected area is a conservative lower bound on physical area:
 	// dropping the dominant normal component cannot enlarge a planar patch.
 	areaLower := proofbound.RatFloatDown(new(big.Rat).Quo(pointPlaneAbs(twiceArea), big.NewRat(2, 1)))
-	delta := proofbound.ProductUpper(plane.mapStretch, base.MeshBound)
+	delta := proofbound.ProductUpper(plane.MapStretch, base.MeshBound)
 	tube := proofbound.SectionDisplacementArea(delta, len(polygon), perimeter)
 	if areaLower <= tube || proofbound.IsNonFinite(delta) || proofbound.IsNonFinite(tube) {
 		return VecMeasurement{}, false, nil
@@ -153,7 +153,7 @@ func pointPlaneCapCentroid(ctx context.Context, base facetedPayload,
 func pointPlaneCapDroppedCoordinate(center, anchor [3]*big.Rat,
 	plane *pointPlaneLimit, keep int) *big.Rat {
 	drop := 1 - keep
-	normal := [2]*big.Rat{plane.nx, plane.ny}
+	normal := [2]*big.Rat{plane.Nx, plane.Ny}
 	// QuoRat needs lowest-terms operands; plane.nx and plane.ny come from
 	// FloatRat or NewRat (see pointPlaneAdd), so the slope is in lowest terms.
 	slope := proofarith.QuoRat(new(big.Rat), normal[keep], normal[drop])

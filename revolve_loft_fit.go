@@ -17,7 +17,7 @@ func certifyRevolveFitBoundary(record *pointSectionRecord,
 	section revolveSectionCertificate, base facetedPayload) (revolveSectorBoundary, bool) {
 	var empty revolveSectorBoundary
 	if !pointSourceCurrent(record) ||
-		len(record.profile.Outer.Segments) < 4 || len(record.profile.Outer.Segments) > 128 {
+		len(record.Profile.Outer.Segments) < 4 || len(record.Profile.Outer.Segments) > 128 {
 		return empty, false
 	}
 	implicitCost, ok := revolveImplicitDisplacement(section, base)
@@ -25,31 +25,31 @@ func certifyRevolveFitBoundary(record *pointSectionRecord,
 		return empty, false
 	}
 	cone := section.ConeSection()
-	src := record.source
+	src := record.Source
 	result := revolveSectorBoundary{InsideSegment: -1, OutsideWitness: -1,
-		FitRoute: true, Sides: make([]sketch.ConeCurveSide, len(src.entities)),
-		SourceRevision: src.revision}
-	sides := make([]sketch.ConeSide, len(src.entities))
+		FitRoute: true, Sides: make([]sketch.ConeCurveSide, len(src.Entities)),
+		SourceRevision: src.Revision}
+	sides := make([]sketch.ConeSide, len(src.Entities))
 	fitCount := 0
-	for i, entity := range src.entities {
-		if src.profile.Outer[i].Partial {
+	for i, entity := range src.Entities {
+		if src.Profile.Outer[i].Partial {
 			return empty, false
 		}
 		switch typed := entity.(type) {
 		case *sketch.Line:
-			if _, ok := record.profile.Outer.Segments[i].(lineSeg); !ok {
+			if _, ok := record.Profile.Outer.Segments[i].(lineSeg); !ok {
 				return empty, false
 			}
 		case *sketch.FitSpline:
-			segment, ok := record.profile.Outer.Segments[i].(fitSplineSeg)
+			segment, ok := record.Profile.Outer.Segments[i].(fitSplineSeg)
 			if !ok || !((segment.TStart == 0 && segment.TEnd == 1) ||
 				(segment.TStart == 1 && segment.TEnd == 0)) {
 				return empty, false
 			}
-			cert, err := src.sketch.CertifyConeFitCrossing(typed, cone)
+			cert, err := src.Sketch.CertifyConeFitCrossing(typed, cone)
 			if err == nil {
 				if fitCount >= len(result.Contacts) || cert.Spline() != typed ||
-					cert.Cone() != cone || cert.SketchRevision() != src.revision ||
+					cert.Cone() != cone || cert.SketchRevision() != src.Revision ||
 					cert.IsStale() || cert.BeforeSide() == cert.AfterSide() ||
 					cert.BeforeSide() == 0 || cert.AfterSide() == 0 {
 					return empty, false
@@ -67,13 +67,13 @@ func certifyRevolveFitBoundary(record *pointSectionRecord,
 				continue
 			}
 		case *sketch.Arc:
-			if _, ok := record.profile.Outer.Segments[i].(arcSeg); !ok {
+			if _, ok := record.Profile.Outer.Segments[i].(arcSeg); !ok {
 				return empty, false
 			}
 		default:
 			return empty, false
 		}
-		cert, err := src.sketch.CertifyConeCurveSide(entity, cone)
+		cert, err := src.Sketch.CertifyConeCurveSide(entity, cone)
 		if err != nil || cert.Entity() != entity || cert.Cone() != cone ||
 			cert.IsStale() || cert.ImplicitMargin() == nil ||
 			cert.ImplicitMargin().Cmp(proofarith.FloatRat(implicitCost)) <= 0 {
@@ -116,7 +116,7 @@ func certifyRevolveFitBoundary(record *pointSectionRecord,
 		if previous == 0 || next == 0 || previous == next {
 			return empty, false
 		}
-		segment, ok := record.profile.Outer.Segments[i].(fitSplineSeg)
+		segment, ok := record.Profile.Outer.Segments[i].(fitSplineSeg)
 		if !ok {
 			return empty, false
 		}
@@ -189,7 +189,7 @@ func revolveFitMeridianDifference(section revolveSectionCertificate, cone sketch
 func revolveFitSeatPoint(src *pointSectionSource, cert sketch.ConeFitCrossing,
 	section revolveSectionCertificate) (r3.Vec, float64, [2]float64, bool) {
 	if src == nil || cert.Spline() == nil || cert.IsStale() ||
-		cert.SketchRevision() != src.revision || cert.Cone() != section.ConeSection() {
+		cert.SketchRevision() != src.Revision || cert.Cone() != section.ConeSection() {
 		return r3.Vec{}, 0, [2]float64{}, false
 	}
 	rootLo, rootHi := cert.TBounds()
@@ -205,7 +205,7 @@ func revolveFitSeatPoint(src *pointSectionSource, cert sketch.ConeFitCrossing,
 	if !ok {
 		return r3.Vec{}, 0, [2]float64{}, false
 	}
-	maxDifference, _, _, ok := revolveFitMeridianDifference(section, cert.Cone(), src.frame,
+	maxDifference, _, _, ok := revolveFitMeridianDifference(section, cert.Cone(), src.Frame,
 		globalLo, globalHi, globalTangentLo, globalTangentHi)
 	if !ok {
 		return r3.Vec{}, 0, [2]float64{}, false
@@ -232,7 +232,7 @@ func revolveFitSeatPoint(src *pointSectionSource, cert sketch.ConeFitCrossing,
 			return r3.Vec{}, 0, [2]float64{}, false
 		}
 		_, derivativeDifference, box, boxOK := revolveFitMeridianDifference(
-			section, cert.Cone(), src.frame, pointLo, pointHi, tangentLo, tangentHi)
+			section, cert.Cone(), src.Frame, pointLo, pointHi, tangentLo, tangentHi)
 		if !boxOK {
 			return r3.Vec{}, 0, [2]float64{}, false
 		}
@@ -264,15 +264,15 @@ func revolveFitSeatPoint(src *pointSectionSource, cert sketch.ConeFitCrossing,
 // station or a second qualifying cell is refused.
 func revolveFitStationEdge(base facetedPayload, groups []int, source *pointSectionSource,
 	entity int, cert sketch.ConeFitCrossing, root [2]float64) (int, bool) {
-	record := base.pointSection
-	if record == nil || record.source != source || source == nil ||
-		len(record.sourceStation) != len(groups) || entity < 0 ||
-		entity >= len(record.profile.Outer.Segments) || entity >= len(source.entities) ||
-		source.entities[entity] != cert.Spline() || cert.IsStale() ||
-		proofbound.IsNonFinite(record.sourceStationRound) || record.sourceStationRound < 0 {
+	record := base.PointSection
+	if record == nil || record.Source != source || source == nil ||
+		len(record.SourceStation) != len(groups) || entity < 0 ||
+		entity >= len(record.Profile.Outer.Segments) || entity >= len(source.Entities) ||
+		source.Entities[entity] != cert.Spline() || cert.IsStale() ||
+		proofbound.IsNonFinite(record.SourceStationRound) || record.SourceStationRound < 0 {
 		return -1, false
 	}
-	segment, ok := record.profile.Outer.Segments[entity].(fitSplineSeg)
+	segment, ok := record.Profile.Outer.Segments[entity].(fitSplineSeg)
 	if !ok || !((segment.TStart == 0 && segment.TEnd == 1) ||
 		(segment.TStart == 1 && segment.TEnd == 0)) ||
 		!(0 < root[0] && root[0] < root[1] && root[1] < 1) {
@@ -291,13 +291,13 @@ func revolveFitStationEdge(base facetedPayload, groups []int, source *pointSecti
 		increasing = !increasing
 	}
 	rootLo, rootHi := proofarith.FloatRat(lower[0]), proofarith.FloatRat(upper[0])
-	round := proofarith.FloatRat(record.sourceStationRound)
+	round := proofarith.FloatRat(record.SourceStationRound)
 	selected := -1
 	for i, group := range groups {
 		if group != entity {
 			continue
 		}
-		a, b := record.sourceStation[i].U, record.sourceStation[(i+1)%len(groups)].U
+		a, b := record.SourceStation[i].U, record.SourceStation[(i+1)%len(groups)].U
 		if math.IsNaN(a) || math.IsInf(a, 0) || math.IsNaN(b) || math.IsInf(b, 0) {
 			return -1, false
 		}

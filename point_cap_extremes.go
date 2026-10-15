@@ -24,16 +24,16 @@ func (b *Body) ExtremeFacesByCentroid(ctx context.Context, axis r3.Vec) (*Face, 
 		return nil, nil, err
 	}
 	fp, ok := b.n.Payload.(facetedPayload)
-	if !ok || fp.pointPlane == nil || fp.pointPlane.lower == nil ||
-		fp.pointPlane.base.pointSection == nil ||
-		proofbound.IsNonFinite(fp.pointPlaneCapDisplacement) || fp.pointPlaneCapDisplacement < 0 {
+	if !ok || fp.PointPlane == nil || fp.PointPlane.Lower == nil ||
+		fp.PointPlane.Base.PointSection == nil ||
+		proofbound.IsNonFinite(fp.PointPlaneCapDisplacement) || fp.PointPlaneCapDisplacement < 0 {
 		return nil, nil, fmt.Errorf("%w: this body has no complete point-loft Split source", ErrUnsupported)
 	}
-	n := len(fp.pointPlane.base.Verts) - 1
+	n := len(fp.PointPlane.Base.Verts) - 1
 	if n < 3 || len(fp.Verts) != 2*n || len(fp.Src) != len(fp.FaceOf) {
 		return nil, nil, fmt.Errorf("%w: the point-loft Split rings are incomplete", ErrUnsupported)
 	}
-	capStartGroup := len(fp.pointPlane.base.Groups) - 1
+	capStartGroup := len(fp.PointPlane.Base.Groups) - 1
 	capEndGroup := capStartGroup + 1
 	start, ok := pointCapGroupFace(b, fp, capStartGroup)
 	if !ok {
@@ -61,7 +61,7 @@ func (b *Body) ExtremeFacesByCentroid(ctx context.Context, axis r3.Vec) (*Face, 
 		return nil, nil, fmt.Errorf("%w: the end cap has no bounded centroid", ErrUnsupported)
 	}
 	lowerLo, lowerHi, ok, err := pointCapRingInterval(ctx, fp.Verts[:n], axis, axisLen,
-		fp.pointPlaneCapDisplacement)
+		fp.PointPlaneCapDisplacement)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -69,7 +69,7 @@ func (b *Body) ExtremeFacesByCentroid(ctx context.Context, axis r3.Vec) (*Face, 
 		return nil, nil, fmt.Errorf("%w: the lower cap boundary has no finite projection", ErrUnsupported)
 	}
 	upperLo, upperHi, ok, err := pointCapRingInterval(ctx, fp.Verts[n:], axis, axisLen,
-		fp.pointPlaneCapDisplacement)
+		fp.PointPlaneCapDisplacement)
 	if err != nil {
 		return nil, nil, err
 	}

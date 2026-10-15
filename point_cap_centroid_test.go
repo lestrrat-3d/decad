@@ -96,7 +96,7 @@ func TestPlacedCapCentroidReadsPlacementAsExactMap(t *testing.T) {
 // of the production moment loop and dropped-coordinate recovery.
 func pointPlaneCapCentroidThreeMomentReference(ctx context.Context, base facetedPayload,
 	plane *pointPlaneLimit) (VecMeasurement, [3]*big.Rat, bool, error) {
-	if len(base.Verts) < 4 || base.pointSection == nil {
+	if len(base.Verts) < 4 || base.PointSection == nil {
 		return VecMeasurement{}, [3]*big.Rat{}, false, nil
 	}
 	polygon := make([][3]*big.Rat, len(base.Verts)-1)
@@ -106,14 +106,14 @@ func pointPlaneCapCentroidThreeMomentReference(ctx context.Context, base faceted
 				return VecMeasurement{}, [3]*big.Rat{}, false, err
 			}
 		}
-		q, err := pointPlaneMapExact(base.pointSection.apex, far, plane)
+		q, err := pointPlaneMapExact(base.PointSection.Apex, far, plane)
 		if err != nil {
 			return VecMeasurement{}, [3]*big.Rat{}, false, nil //nolint:nilerr // the frozen reference withholds an optional reading
 		}
 		polygon[i] = q
 	}
 	u, v := 0, 2
-	if pointPlaneAbs(plane.nx).Cmp(pointPlaneAbs(plane.ny)) > 0 {
+	if pointPlaneAbs(plane.Nx).Cmp(pointPlaneAbs(plane.Ny)) > 0 {
 		u = 1
 	}
 	twiceArea := new(big.Rat)
@@ -152,7 +152,7 @@ func pointPlaneCapCentroidThreeMomentReference(ctx context.Context, base faceted
 		center[k] = new(big.Rat).Quo(moments[k], den)
 	}
 	areaLower := proofbound.RatFloatDown(new(big.Rat).Quo(pointPlaneAbs(twiceArea), big.NewRat(2, 1)))
-	delta := proofbound.ProductUpper(plane.mapStretch, base.MeshBound)
+	delta := proofbound.ProductUpper(plane.MapStretch, base.MeshBound)
 	tube := proofbound.SectionDisplacementArea(delta, len(polygon), perimeter)
 	if areaLower <= tube || proofbound.IsNonFinite(delta) || proofbound.IsNonFinite(tube) {
 		return VecMeasurement{}, center, false, nil
@@ -185,7 +185,7 @@ func pointPlaneCapCentroidThreeMomentReference(ctx context.Context, base faceted
 
 func testPointCapBase(apex r3.Vec, far []r3.Vec, meshBound float64) facetedPayload {
 	return facetedPayload{
-		Verts: append([]r3.Vec{apex}, far...), pointSection: &pointSectionRecord{apex: apex},
+		Verts: append([]r3.Vec{apex}, far...), PointSection: &pointSectionRecord{Apex: apex},
 		MeshBound: meshBound,
 	}
 }
@@ -205,10 +205,10 @@ func requirePointCapThreeMomentMatch(t *testing.T, base facetedPayload, plane *p
 	require.Equal(t, math.Float64bits(want.Value.Y), math.Float64bits(got.Value.Y))
 	require.Equal(t, math.Float64bits(want.Value.Z), math.Float64bits(got.Value.Z))
 	require.Equal(t, math.Float64bits(want.Bound.Base()), math.Float64bits(got.Bound.Base()))
-	anchor, err := pointPlaneMapExact(base.pointSection.apex, base.Verts[1], plane)
+	anchor, err := pointPlaneMapExact(base.PointSection.Apex, base.Verts[1], plane)
 	require.NoError(t, err)
 	keep := 0
-	if pointPlaneAbs(plane.nx).Cmp(pointPlaneAbs(plane.ny)) > 0 {
+	if pointPlaneAbs(plane.Nx).Cmp(pointPlaneAbs(plane.Ny)) > 0 {
 		keep = 1
 	}
 	recovered := pointPlaneCapDroppedCoordinate(exact, anchor, plane, keep)
@@ -257,8 +257,8 @@ func TestPointPlaneCapCentroidMatchesThreeMoments(t *testing.T) {
 				}
 			}
 			t.Run(name, func(t *testing.T) {
-				plane := &pointPlaneLimit{nx: ratOfPointPlane(tc.nx), ny: ratOfPointPlane(tc.ny),
-					d: ratOfPointPlane(tc.d), mapStretch: 1}
+				plane := &pointPlaneLimit{Nx: ratOfPointPlane(tc.nx), Ny: ratOfPointPlane(tc.ny),
+					D: ratOfPointPlane(tc.d), MapStretch: 1}
 				base := testPointCapBase(tc.apex, far, 0)
 				requirePointCapThreeMomentMatch(t, base, plane, t.Context())
 				if tc.name == "halfway_rounding" {
@@ -279,8 +279,8 @@ func TestPointPlaneCapCentroidMatchesThreeMoments(t *testing.T) {
 			angle := 2 * math.Pi * float64(i) / float64(len(far))
 			far[i] = r3.NewVec(9+math.Sin(3*angle)/8, 3+math.Cos(angle), math.Sin(angle))
 		}
-		plane := &pointPlaneLimit{nx: ratOfPointPlane(near(0.7, 1)), ny: ratOfPointPlane(0.6),
-			d: ratOfPointPlane(2.5), mapStretch: 1}
+		plane := &pointPlaneLimit{Nx: ratOfPointPlane(near(0.7, 1)), Ny: ratOfPointPlane(0.6),
+			D: ratOfPointPlane(2.5), MapStretch: 1}
 		base := testPointCapBase(apex, far, 0)
 		requirePointCapThreeMomentMatch(t, base, plane, t.Context())
 		_, exact, proved, err := pointPlaneCapCentroidThreeMomentReference(t.Context(), base, plane)
@@ -311,14 +311,14 @@ func (c *pointCapCancelAfterContext) Err() error {
 func TestPointPlaneCapCentroidRefusalsMatchThreeMoments(t *testing.T) {
 	good := []r3.Vec{r3.NewVec(10, -2, -2), r3.NewVec(10, 2, -2),
 		r3.NewVec(10, 2, 2), r3.NewVec(10, -2, 2)}
-	plane := &pointPlaneLimit{nx: big.NewRat(1, 1), ny: new(big.Rat),
-		d: big.NewRat(5, 1), mapStretch: 1}
+	plane := &pointPlaneLimit{Nx: big.NewRat(1, 1), Ny: new(big.Rat),
+		D: big.NewRat(5, 1), MapStretch: 1}
 	t.Run("too_few_vertices", func(t *testing.T) {
 		requirePointCapThreeMomentMatch(t, testPointCapBase(r3.Vec{}, good[:2], 0), plane, t.Context())
 	})
 	t.Run("missing_source", func(t *testing.T) {
 		base := testPointCapBase(r3.Vec{}, good, 0)
-		base.pointSection = nil
+		base.PointSection = nil
 		requirePointCapThreeMomentMatch(t, base, plane, t.Context())
 	})
 	t.Run("ray_misses_plane", func(t *testing.T) {

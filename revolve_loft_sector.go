@@ -55,24 +55,24 @@ func certifyRevolveLoftSector(blank, sector *Body) (*revolveLoftSectorCertificat
 		return nil, false
 	}
 	fp, ok := sector.n.Payload.(facetedPayload)
-	if !ok || fp.Xform != r3.Identity() || fp.pointCone == nil ||
-		fp.pointCone.lower == nil || fp.pointCone.upper == nil ||
-		fp.pointCone.base.pointSection == nil ||
-		fp.pointCone.base.pointSection.apex != (r3.Vec{}) ||
-		fp.pointCone.base.Xform != r3.Identity() {
+	if !ok || fp.Xform != r3.Identity() || fp.PointCone == nil ||
+		fp.PointCone.Lower == nil || fp.PointCone.Upper == nil ||
+		fp.PointCone.Base.PointSection == nil ||
+		fp.PointCone.Base.PointSection.Apex != (r3.Vec{}) ||
+		fp.PointCone.Base.Xform != r3.Identity() {
 		return nil, false
 	}
-	trim := fp.pointCone
-	if !pointSourceCurrent(trim.base.pointSection) {
+	trim := fp.PointCone
+	if !pointSourceCurrent(trim.Base.PointSection) {
 		return nil, false
 	}
 	var selected *revolveLoftSectorCertificate
 	for _, section := range revolveRootCandidates(blank) {
-		boundary, ok := certifyRevolveConnectorBoundary(trim.base.pointSection,
-			section, trim.base)
+		boundary, ok := certifyRevolveConnectorBoundary(trim.Base.PointSection,
+			section, trim.Base)
 		if !ok {
-			boundary, ok = certifyRevolveFitBoundary(trim.base.pointSection,
-				section, trim.base)
+			boundary, ok = certifyRevolveFitBoundary(trim.Base.PointSection,
+				section, trim.Base)
 			if !ok {
 				continue
 			}
@@ -81,7 +81,7 @@ func certifyRevolveLoftSector(blank, sector *Body) (*revolveLoftSectorCertificat
 			return nil, false
 		}
 		selected = &revolveLoftSectorCertificate{Blank: blank, Section: section,
-			Trimmed: fp, Trim: trim, Base: trim.base, Boundary: boundary}
+			Trimmed: fp, Trim: trim, Base: trim.Base, Boundary: boundary}
 	}
 	return selected, selected != nil
 }
@@ -90,7 +90,7 @@ func certifyRevolveConnectorBoundary(record *pointSectionRecord,
 	section revolveSectionCertificate, base facetedPayload) (revolveSectorBoundary, bool) {
 	var empty revolveSectorBoundary
 	if !pointSourceCurrent(record) ||
-		len(record.profile.Outer.Segments) < 5 || len(record.profile.Outer.Segments) > 128 {
+		len(record.Profile.Outer.Segments) < 5 || len(record.Profile.Outer.Segments) > 128 {
 		return empty, false
 	}
 	implicitCost, ok := revolveImplicitDisplacement(section, base)
@@ -98,25 +98,25 @@ func certifyRevolveConnectorBoundary(record *pointSectionRecord,
 		return empty, false
 	}
 	cone := section.ConeSection()
-	src := record.source
+	src := record.Source
 	result := revolveSectorBoundary{InsideSegment: -1, OutsideWitness: -1,
-		Sides: make([]sketch.ConeCurveSide, len(src.entities)), SourceRevision: src.revision}
+		Sides: make([]sketch.ConeCurveSide, len(src.Entities)), SourceRevision: src.Revision}
 	count := 0
-	for i, entity := range src.entities {
+	for i, entity := range src.Entities {
 		// Sketch's approximate Partial has no admissible exact endpoint. A
 		// certified partial needs a separate restricted-entity side proof.
-		if src.profile.Outer[i].Partial {
+		if src.Profile.Outer[i].Partial {
 			return empty, false
 		}
 		switch typed := entity.(type) {
 		case *sketch.Line:
-			if _, ok := record.profile.Outer.Segments[i].(lineSeg); !ok {
+			if _, ok := record.Profile.Outer.Segments[i].(lineSeg); !ok {
 				return empty, false
 			}
-			cert, err := src.sketch.CertifyConeLineCrossing(typed, cone)
+			cert, err := src.Sketch.CertifyConeLineCrossing(typed, cone)
 			if err == nil {
 				if count >= len(result.Contacts) || cert.Line() != typed ||
-					cert.Cone() != cone || cert.SketchRevision() != src.revision ||
+					cert.Cone() != cone || cert.SketchRevision() != src.Revision ||
 					cert.IsStale() || !cert.TExact() {
 					return empty, false
 				}
@@ -131,17 +131,17 @@ func certifyRevolveConnectorBoundary(record *pointSectionRecord,
 				continue
 			}
 		case *sketch.FitSpline:
-			if _, ok := record.profile.Outer.Segments[i].(fitSplineSeg); !ok {
+			if _, ok := record.Profile.Outer.Segments[i].(fitSplineSeg); !ok {
 				return empty, false
 			}
 		case *sketch.Arc:
-			if _, ok := record.profile.Outer.Segments[i].(arcSeg); !ok {
+			if _, ok := record.Profile.Outer.Segments[i].(arcSeg); !ok {
 				return empty, false
 			}
 		default:
 			return empty, false
 		}
-		cert, err := src.sketch.CertifyConeCurveSide(entity, cone)
+		cert, err := src.Sketch.CertifyConeCurveSide(entity, cone)
 		if err != nil || cert.Entity() != entity || cert.Cone() != cone || cert.IsStale() ||
 			cert.ImplicitMargin() == nil ||
 			cert.ImplicitMargin().Cmp(proofarith.FloatRat(implicitCost)) <= 0 {
@@ -163,8 +163,8 @@ func certifyRevolveConnectorBoundary(record *pointSectionRecord,
 	if count != 2 || result.InsideSegment < 0 || result.OutsideWitness < 0 {
 		return empty, false
 	}
-	left := (result.InsideSegment + len(src.entities) - 1) % len(src.entities)
-	right := (result.InsideSegment + 1) % len(src.entities)
+	left := (result.InsideSegment + len(src.Entities) - 1) % len(src.Entities)
+	right := (result.InsideSegment + 1) % len(src.Entities)
 	if (result.Contacts[0].Segment != left || result.Contacts[1].Segment != right) &&
 		(result.Contacts[0].Segment != right || result.Contacts[1].Segment != left) {
 		return empty, false

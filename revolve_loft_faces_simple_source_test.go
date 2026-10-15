@@ -50,10 +50,10 @@ func neutralSimpleSourceRecord(t *testing.T, s *sketch.Sketch,
 	frame, err := s.Plane().Frame()
 	require.NoError(t, err)
 	return &loftFacesTrimRecord{Source: &pointSectionRecord{
-		profile: recorded, plane: plane,
-		source: &pointSectionSource{sketch: s, profile: profile,
-			revision: s.Revision(), frame: frame,
-			entities: append([]sketch.Entity(nil), profile.Entities...)},
+		Profile: recorded, Plane: plane,
+		Source: &pointSectionSource{Sketch: s, Profile: profile,
+			Revision: s.Revision(), Frame: frame,
+			Entities: append([]sketch.Entity(nil), profile.Entities...)},
 	}}
 }
 
@@ -82,9 +82,9 @@ func TestRevolveLoftFacesSimpleSourceRefusesExtraSketchEntity(t *testing.T) {
 func TestRevolveLoftFacesSimpleSourceRefusesChangedRecordedArc(t *testing.T) {
 	s, profile := neutralSimpleSourceSketch(t, false)
 	trim := neutralSimpleSourceRecord(t, s, profile)
-	arc := trim.Source.profile.Outer.Segments[1].(arcSeg)
+	arc := trim.Source.Profile.Outer.Segments[1].(arcSeg)
 	arc.Center.U = 2
-	trim.Source.profile.Outer.Segments[1] = arc
+	trim.Source.Profile.Outer.Segments[1] = arc
 	require.True(t, pointSourceCurrent(trim.Source),
 		"the existing revision gate does not compare stored curve geometry")
 	_, certified, err := revolveLoftFacesSimpleSourceLoop(t.Context(), trim)

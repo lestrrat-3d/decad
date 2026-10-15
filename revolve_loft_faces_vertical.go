@@ -154,14 +154,14 @@ func revolveLoftFacesConstantXSourceCells(ctx context.Context,
 		return nil, false, err
 	}
 	band, time, ok := loftface.ConstantXBand(trim.Maps, box, x)
-	if !ok || len(proof.sourceRefs[band]) != len(trim.Source.profile.Outer.Segments) {
+	if !ok || len(proof.sourceRefs[band]) != len(trim.Source.Profile.Outer.Segments) {
 		return nil, false, nil
 	}
 	result := &revolveLoftFacesConstantXSource{band: band,
 		time: time, x: x, lower: lower, upper: upper}
 	result.yzAffine, _ = loftface.VerticalAffineMap(trim.Maps[band],
 		trim.Maps[band+1], time)
-	for segment, source := range trim.Source.profile.Outer.Segments {
+	for segment, source := range trim.Source.Profile.Outer.Segments {
 		if err := ctx.Err(); err != nil {
 			return nil, false, err
 		}
@@ -263,25 +263,25 @@ func verticalOriginsMatch(actual, recorded []provenance.Ref) bool {
 func revolveLoftFacesVerticalLimits(trim *loftFacesTrimRecord,
 	section revolveSectionSpan, x *big.Rat) (*big.Rat, *big.Rat, revolveLoftFacesVerticalOutcome) {
 	if trim == nil || trim.Toe == nil || trim.Heel == nil || x == nil ||
-		trim.Toe.apex == nil || trim.Heel.apex == nil ||
-		trim.Toe.far == nil || trim.Heel.far == nil ||
-		trim.Toe.slope == nil || trim.Heel.slope == nil ||
-		trim.Toe.slope.Sign() <= 0 || trim.Heel.slope.Sign() <= 0 ||
-		x.Cmp(trim.Toe.far) <= 0 || x.Cmp(trim.Heel.far) <= 0 ||
-		x.Cmp(trim.Heel.apex) >= 0 {
+		trim.Toe.Apex == nil || trim.Heel.Apex == nil ||
+		trim.Toe.Far == nil || trim.Heel.Far == nil ||
+		trim.Toe.Slope == nil || trim.Heel.Slope == nil ||
+		trim.Toe.Slope.Sign() <= 0 || trim.Heel.Slope.Sign() <= 0 ||
+		x.Cmp(trim.Toe.Far) <= 0 || x.Cmp(trim.Heel.Far) <= 0 ||
+		x.Cmp(trim.Heel.Apex) >= 0 {
 		return nil, nil, revolveLoftFacesVerticalRefusal
 	}
 	lower, upper := lfF(section.Start.V), lfF(section.End.V)
 	if lower.Cmp(upper) > 0 {
 		lower, upper = upper, lower
 	}
-	if x.Cmp(trim.Toe.apex) < 0 {
-		toe := lfDiv(lfSub(trim.Toe.apex, x), trim.Toe.slope)
+	if x.Cmp(trim.Toe.Apex) < 0 {
+		toe := lfDiv(lfSub(trim.Toe.Apex, x), trim.Toe.Slope)
 		if lower.Cmp(toe) < 0 {
 			lower = toe
 		}
 	}
-	heel := lfDiv(lfSub(trim.Heel.apex, x), trim.Heel.slope)
+	heel := lfDiv(lfSub(trim.Heel.Apex, x), trim.Heel.Slope)
 	if upper.Cmp(heel) > 0 {
 		upper = heel
 	}

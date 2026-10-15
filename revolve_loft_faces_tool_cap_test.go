@@ -29,7 +29,7 @@ func TestRevolveLoftFacesToolCirclesConsumeLiveNeutralSource(t *testing.T) {
 			tool = proof.trim.Heel
 		}
 		require.Zero(t, lfSub(lfAdd(circle.x,
-			lfMul(tool.slope, circle.radius)), tool.apex).Sign())
+			lfMul(tool.Slope, circle.radius)), tool.Apex).Sign())
 	}
 	t.Run("changed non-root Revolve surface", func(t *testing.T) {
 		for index, span := range proof.section.Spans {
@@ -60,11 +60,11 @@ func TestRevolveLoftFacesToolCirclesConsumeLiveNeutralSource(t *testing.T) {
 	changed.toeFace = proof.heelFace
 	_, accepted = revolveLoftFacesToolCapSidesOf(&changed)
 	require.False(t, accepted)
-	toeSlope := proof.trim.Toe.slope
-	proof.trim.Toe.slope = lfAdd(toeSlope, big.NewRat(1, 32))
+	toeSlope := proof.trim.Toe.Slope
+	proof.trim.Toe.Slope = lfAdd(toeSlope, big.NewRat(1, 32))
 	_, accepted = revolveLoftFacesToolCapSidesOf(proof)
 	require.False(t, accepted)
-	proof.trim.Toe.slope = toeSlope
+	proof.trim.Toe.Slope = toeSlope
 	originalPayload := tooth.n.Payload
 	t.Cleanup(func() { tooth.n.Payload = originalPayload })
 	payload := originalPayload.(facetedPayload)
@@ -112,8 +112,8 @@ func TestRevolveLoftFacesToolCirclesConsumeLiveNeutralSource(t *testing.T) {
 }
 
 func TestRevolveLoftFacesToolCircleOnFiniteSection(t *testing.T) {
-	tool := &pointConeLimit{apex: big.NewRat(8, 1), far: big.NewRat(-2, 1),
-		slope: big.NewRat(1, 1)}
+	tool := &pointConeLimit{Apex: big.NewRat(8, 1), Far: big.NewRat(-2, 1),
+		Slope: big.NewRat(1, 1)}
 	section := revolveSectionSpan{Start: planePoint{U: 5, V: 2}, End: planePoint{U: 6, V: 4}}
 	x, radius, crosses, decided := revolveLoftFacesToolCircleOnSpan(tool, section)
 	require.True(t, decided)
@@ -127,7 +127,7 @@ func TestRevolveLoftFacesToolCircleOnFiniteSection(t *testing.T) {
 	requireReducedRat(x)
 	require.Zero(t, radius.Cmp(big.NewRat(8, 3)))
 	requireReducedRat(radius)
-	require.Zero(t, lfSub(lfAdd(x, radius), tool.apex).Sign())
+	require.Zero(t, lfSub(lfAdd(x, radius), tool.Apex).Sign())
 
 	// A vertical Revolve side can also meet the cone at an interior circle.
 	section = revolveSectionSpan{Start: planePoint{U: 6, V: 1}, End: planePoint{U: 6, V: 3}}
@@ -202,11 +202,11 @@ func TestRevolveLoftFacesCircleMissConsumesLiveNeutralSource(t *testing.T) {
 	_, accepted := revolveLoftFacesToolCapSidesOf(proof)
 	require.False(t, accepted, "the source-miss flag needs the current live maps")
 	proof.trim.Maps[0] = map0
-	sourceBox := proof.trim.Source.sourceBox
+	sourceBox := proof.trim.Source.SourceBox
 	require.True(t, pointSourceCurrent(proof.trim.Source))
-	proof.trim.Source.sourceBox[1] = (sourceBox[0] + sourceBox[1]) / 2
+	proof.trim.Source.SourceBox[1] = (sourceBox[0] + sourceBox[1]) / 2
 	require.False(t, pointSourceCurrent(proof.trim.Source))
 	_, accepted = revolveLoftFacesToolCapSidesOf(proof)
 	require.False(t, accepted, "a narrowed stored source box cannot prove a whole-circle miss")
-	proof.trim.Source.sourceBox = sourceBox
+	proof.trim.Source.SourceBox = sourceBox
 }
