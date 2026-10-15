@@ -17,7 +17,7 @@ import (
 func revolveCrossingPoint(src *pointSectionSource, cert sketch.ConeLineCrossing) (
 	r3.Vec, float64, bool) {
 	if src == nil || cert.IsStale() || !cert.TExact() ||
-		cert.SketchRevision() != src.revision {
+		cert.SketchRevision() != src.Revision {
 		return r3.Vec{}, 0, false
 	}
 	line := cert.Line()
@@ -32,7 +32,7 @@ func revolveCrossingPoint(src *pointSectionSource, cert sketch.ConeLineCrossing)
 		!proofbound.FiniteVec(r3.Vec{X: point[0], Y: point[1], Z: t}) {
 		return r3.Vec{}, 0, false
 	}
-	q := src.frame.ToWorldUV(point[0], point[1])
+	q := src.Frame.ToWorldUV(point[0], point[1])
 	if !proofbound.FiniteVec(q) {
 		return r3.Vec{}, 0, false
 	}
@@ -56,14 +56,14 @@ func revolveCrossingPoint(src *pointSectionSource, cert sketch.ConeLineCrossing)
 	}
 	uError := coordError(start.X, end.X, point[0])
 	vError := coordError(start.Y, end.Y, point[1])
-	uLength := proofbound.DvLenUpper(proofbound.HeldDelta(src.frame.U(), r3.Vec{}))
-	vLength := proofbound.DvLenUpper(proofbound.HeldDelta(src.frame.V(), r3.Vec{}))
+	uLength := proofbound.DvLenUpper(proofbound.HeldDelta(src.Frame.U(), r3.Vec{}))
+	vLength := proofbound.DvLenUpper(proofbound.HeldDelta(src.Frame.V(), r3.Vec{}))
 	bound := proofbound.AbsSumUpper(
 		proofbound.ProductUpper(paramGap, proofbound.ProductUpper(lineLength,
 			proofbound.AbsSumUpper(uLength, vLength))),
 		proofbound.ProductUpper(uError, uLength),
 		proofbound.ProductUpper(vError, vLength),
-		loftmesh.FrameLiftRoundAllow(src.frame, max(math.Abs(point[0]), math.Abs(point[1]))))
+		loftmesh.FrameLiftRoundAllow(src.Frame, max(math.Abs(point[0]), math.Abs(point[1]))))
 	return q, bound, !proofbound.IsNonFinite(bound)
 }
 
@@ -79,7 +79,7 @@ func revolveSeatPoint(src *pointSectionSource, cert sketch.ConeLineCrossing,
 	}
 	line := cert.Line()
 	start, end := line.Start.Geometry(), line.End.Geometry()
-	frame := src.frame
+	frame := src.Frame
 	fr := [3][3]*big.Rat{}
 	for axis, values := range [3][3]float64{
 		{frame.Origin().X, frame.U().X, frame.V().X},

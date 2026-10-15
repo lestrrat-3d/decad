@@ -15,7 +15,7 @@ import (
 // strict positive Bernstein bound. These are exact rational predicates.
 func revolveLoftFacesFitSide(trim *loftFacesTrimRecord, m, b *big.Rat,
 	segmentIndex int, segment fitSplineSeg) (*revolveLoftFacesCrossing, int, bool) {
-	if _, ok := trim.Source.source.entities[segmentIndex].(*sketch.FitSpline); !ok ||
+	if _, ok := trim.Source.Source.Entities[segmentIndex].(*sketch.FitSpline); !ok ||
 		!((segment.TStart == 0 && segment.TEnd == 1) ||
 			(segment.TStart == 1 && segment.TEnd == 0)) {
 		return nil, 0, false

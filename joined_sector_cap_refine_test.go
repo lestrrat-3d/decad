@@ -10,8 +10,8 @@ import (
 )
 
 func TestSectorCapRefinementKeepsSharedEdges(t *testing.T) {
-	cone := &pointConeLimit{apex: big.NewRat(20, 1), slope: big.NewRat(1, 1)}
-	record := &pointConeTrimRecord{lower: cone, upper: cone}
+	cone := &pointConeLimit{Apex: big.NewRat(20, 1), Slope: big.NewRat(1, 1)}
+	record := &pointConeTrimRecord{Lower: cone, Upper: cone}
 	nodes := []pointcone.SectorNode{
 		{P: r3.NewVec(10, 5, 0), RootBoundary: true, Angle: 0},
 		{P: r3.NewVec(10, 6, 0), RootBoundary: true, Angle: 0.1},

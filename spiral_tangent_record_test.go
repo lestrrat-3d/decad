@@ -60,12 +60,12 @@ func TestSpiralTangentRecordCurrent(t *testing.T) {
 	})
 
 	t.Run("heel slope one float step off", func(t *testing.T) {
-		slope, _ := trim.Heel.slope.Float64()
+		slope, _ := trim.Heel.Slope.Float64()
 		stepped := new(big.Rat)
 		stepped.SetFloat64(math.Nextafter(slope, math.Inf(1)))
-		require.NotZero(t, stepped.Cmp(trim.Heel.slope))
+		require.NotZero(t, stepped.Cmp(trim.Heel.Slope))
 		heel := *trim.Heel
-		heel.slope = stepped
+		heel.Slope = stepped
 		mutated := *trim
 		mutated.Heel = &heel
 		require.False(t, spiralTangentRecordCurrent(&mutated))

@@ -38,13 +38,13 @@ func TestPointConeTrimRejectsRoundTrippedPointLoft(t *testing.T) {
 			fp, ok := back.n.Payload.(facetedPayload)
 			require.True(t, ok)
 			require.Equal(t, r3.Identity(), fp.Xform)
-			require.True(t, fp.pointSection == nil, "a nonidentity delta must drop the source record")
+			require.True(t, fp.PointSection == nil, "a nonidentity delta must drop the source record")
 
 			got, err := Cut(t.Context(), back, pointLoftConeTool(t, doc, 5))
 			require.NoError(t, err)
 			gfp, ok := got.n.Payload.(facetedPayload)
 			require.True(t, ok)
-			require.Nil(t, gfp.pointCone)
+			require.Nil(t, gfp.PointCone)
 		})
 	}
 
@@ -54,18 +54,18 @@ func TestPointConeTrimRejectsRoundTrippedPointLoft(t *testing.T) {
 		require.NoError(t, err)
 		fp, ok := cloned.n.Payload.(facetedPayload)
 		require.True(t, ok)
-		require.NotNil(t, fp.pointSection)
+		require.NotNil(t, fp.PointSection)
 		got, err := Cut(t.Context(), cloned, pointLoftConeTool(t, doc, 5))
 		require.NoError(t, err)
 		gfp, ok := got.n.Payload.(facetedPayload)
 		require.True(t, ok)
-		require.NotNil(t, gfp.pointCone)
+		require.NotNil(t, gfp.PointCone)
 	})
 }
 
 func TestPointConeUpperFarPlaneNodeRequiresCapCharge(t *testing.T) {
 	t.Parallel()
-	cone := &pointConeLimit{apex: big.NewRat(10, 1), slope: big.NewRat(1, 1)}
+	cone := &pointConeLimit{Apex: big.NewRat(10, 1), Slope: big.NewRat(1, 1)}
 	far := r3.Vec{X: 5, Y: 4.9}
 	sample, err := pointConeFactor(far, cone)
 	require.NoError(t, err)
@@ -80,7 +80,7 @@ func TestPointConeUpperFarPlaneNodeRequiresCapCharge(t *testing.T) {
 
 func TestPointConeOutsideWitnessRejectsUncertainContact(t *testing.T) {
 	t.Parallel()
-	cone := &pointConeLimit{apex: big.NewRat(13, 1), slope: big.NewRat(1, 1)}
+	cone := &pointConeLimit{Apex: big.NewRat(13, 1), Slope: big.NewRat(1, 1)}
 	base := facetedPayload{Verts: []r3.Vec{{}, {X: 8, Y: 5.00001}}}
 	require.True(t, pointConeHasOutsideWitness(base, cone))
 	base.MeshBound = 0.001

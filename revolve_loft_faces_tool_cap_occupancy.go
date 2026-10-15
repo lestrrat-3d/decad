@@ -45,13 +45,13 @@ func revolveLoftFacesHeelVerticalOccupiedArc(ctx context.Context,
 	*revolveLoftFacesToolCapOccupiedArc, bool, error,
 ) {
 	if ctx == nil || proof == nil || proof.tooth == nil || proof.trim == nil || proof.trim.Source == nil ||
-		proof.trim.Source.source == nil || proof.trim.Source.source.profile == nil ||
+		proof.trim.Source.Source == nil || proof.trim.Source.Source.Profile == nil ||
 		circle.tool != 1 || circle.sourceMiss || circle.x == nil || circle.radius == nil ||
 		circle.span < 0 || circle.span >= len(proof.section.Spans) ||
 		circle.blankFace == nil || circle.capFace != proof.heelFace ||
 		!revolveLoftFacesSectionFacesComplete(proof) ||
-		!proof.trim.Source.source.profile.Valid ||
-		len(proof.trim.Source.source.profile.Holes) != 0 {
+		!proof.trim.Source.Source.Profile.Valid ||
+		len(proof.trim.Source.Source.Profile.Holes) != 0 {
 		return nil, false, nil
 	}
 	x, radius, crosses, decided := revolveLoftFacesToolCircleOnSpan(
@@ -109,7 +109,7 @@ func revolveLoftFacesHeelOccupiedFromSource(ctx context.Context,
 	if err != nil || !simple || loop == nil || !loop.ccw {
 		return nil, false, err
 	}
-	outer := proof.trim.Source.source.profile.Outer
+	outer := proof.trim.Source.Source.Profile.Outer
 	var negative, positive *revolveLoftFacesToolCapBoundary
 	for _, cell := range section.cells {
 		if cell.segment < 0 || cell.segment >= len(outer) {
@@ -203,13 +203,13 @@ func revolveLoftFacesToolCapSourceCurrent(ctx context.Context,
 	} else {
 		if !revolveLoftFacesSlopedRadialInside(proof.section, circle.span,
 			circle.x, circle.radius) || proof.trim.Toe == nil ||
-			proof.trim.Toe.apex == nil || proof.trim.Toe.slope == nil ||
-			proof.trim.Toe.slope.Sign() <= 0 {
+			proof.trim.Toe.Apex == nil || proof.trim.Toe.Slope == nil ||
+			proof.trim.Toe.Slope.Sign() <= 0 {
 			return false, nil
 		}
 		lower := lfZero()
-		if circle.x.Cmp(proof.trim.Toe.apex) < 0 {
-			lower = lfDiv(lfSub(proof.trim.Toe.apex, circle.x), proof.trim.Toe.slope)
+		if circle.x.Cmp(proof.trim.Toe.Apex) < 0 {
+			lower = lfDiv(lfSub(proof.trim.Toe.Apex, circle.x), proof.trim.Toe.Slope)
 		}
 		var err error
 		fresh, ok, err = revolveLoftFacesConstantXSourceCells(ctx, proof,

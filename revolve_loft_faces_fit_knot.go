@@ -23,17 +23,17 @@ type revolveLoftFacesFitKnot struct {
 func revolveLoftFacesFitKnotVertex(trim *loftFacesTrimRecord,
 	segmentIndex, leftIndex int) (revolveLoftFacesFitKnot, bool) {
 	var empty revolveLoftFacesFitKnot
-	if trim == nil || trim.Source == nil || trim.Source.source == nil ||
-		segmentIndex < 0 || segmentIndex >= len(trim.Source.profile.Outer.Segments) ||
-		segmentIndex >= len(trim.Source.source.entities) {
+	if trim == nil || trim.Source == nil || trim.Source.Source == nil ||
+		segmentIndex < 0 || segmentIndex >= len(trim.Source.Profile.Outer.Segments) ||
+		segmentIndex >= len(trim.Source.Source.Entities) {
 		return empty, false
 	}
-	record, ok := trim.Source.profile.Outer.Segments[segmentIndex].(fitSplineSeg)
+	record, ok := trim.Source.Profile.Outer.Segments[segmentIndex].(fitSplineSeg)
 	if !ok || !((record.TStart == 0 && record.TEnd == 1) ||
 		(record.TStart == 1 && record.TEnd == 0)) {
 		return empty, false
 	}
-	fit, ok := trim.Source.source.entities[segmentIndex].(*sketch.FitSpline)
+	fit, ok := trim.Source.Source.Entities[segmentIndex].(*sketch.FitSpline)
 	if !ok || len(record.Fit) < 3 || len(record.Fit) != len(fit.Fit) {
 		return empty, false
 	}

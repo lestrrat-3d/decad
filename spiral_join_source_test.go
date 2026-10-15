@@ -104,38 +104,38 @@ func TestSpiralCapPlaneMustMissTheWholeRootCircle(t *testing.T) {
 func TestSpiralToolCapMustStayOnCertifiedSideOfBlankMeridian(t *testing.T) {
 	toe := planePoint{U: 2, V: 8}
 	outer := planePoint{U: 3, V: 7}
-	cone := &pointConeLimit{apex: big.NewRat(9999999999999999, 1000000000000000),
-		slope: big.NewRat(1, 1)}
+	cone := &pointConeLimit{Apex: big.NewRat(9999999999999999, 1000000000000000),
+		Slope: big.NewRat(1, 1)}
 	gap, ok := spiralToolOuterGap(cone, toe, outer, 1)
 	require.True(t, ok)
 	require.Equal(t, big.NewRat(1, 1000000000000000), gap)
 
 	// A tiny side reversal must refuse the source-specific join.
-	cone.apex = big.NewRat(10000000000000001, 1000000000000000)
+	cone.Apex = big.NewRat(10000000000000001, 1000000000000000)
 	_, ok = spiralToolOuterGap(cone, toe, outer, 1)
 	require.False(t, ok)
 
 	// A different slope may keep the side, but its full finite-meridian
 	// separation must be returned for the later cap-strip allowance gate.
-	cone.apex, cone.slope = big.NewRat(10, 1), big.NewRat(2, 1)
+	cone.Apex, cone.Slope = big.NewRat(10, 1), big.NewRat(2, 1)
 	gap, ok = spiralToolOuterGap(cone, toe, outer, 1)
 	require.True(t, ok)
 	require.Equal(t, big.NewRat(8, 1), gap)
 }
 
 func TestSpiralFiniteConeSideRequiresWholeGeneratorAndFiniteTool(t *testing.T) {
-	cone := &pointConeLimit{apex: big.NewRat(10, 1), far: big.NewRat(-1, 1),
-		slope: big.NewRat(1, 1)}
+	cone := &pointConeLimit{Apex: big.NewRat(10, 1), Far: big.NewRat(-1, 1),
+		Slope: big.NewRat(1, 1)}
 	first, last := planePoint{U: 2, V: 9}, planePoint{U: 3, V: 8}
 	require.True(t, spiralFiniteConeSide(cone, first, last, 1))
 	last.V = 6
 	require.False(t, spiralFiniteConeSide(cone, first, last, 1),
 		"opposite endpoint signs cannot certify a complete face")
 	last.V = 8
-	cone.far = big.NewRat(0, 1)
+	cone.Far = big.NewRat(0, 1)
 	require.False(t, spiralFiniteConeSide(cone, first, last, 1),
 		"the admitted tool must have a finite far plane before the source face")
-	cone.far = big.NewRat(-1, 1)
+	cone.Far = big.NewRat(-1, 1)
 	last.U = 10
 	require.False(t, spiralFiniteConeSide(cone, first, last, 1),
 		"the admitted generator must end before the cone apex")

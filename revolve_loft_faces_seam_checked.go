@@ -71,8 +71,8 @@ func revolveLoftFacesCertifiedArcPatches(ctx context.Context, blank, tooth *Body
 // contains every chord of this Sketch arc and its next shared endpoint.
 func revolveLoftFacesCompleteArcRun(trim *loftFacesTrimRecord, segment int) ([]int, bool) {
 	if trim == nil || trim.Source == nil || segment < 0 ||
-		segment >= len(trim.Source.profile.Outer.Segments) ||
-		len(trim.StationGroup) != len(trim.Source.sourceStation) ||
+		segment >= len(trim.Source.Profile.Outer.Segments) ||
+		len(trim.StationGroup) != len(trim.Source.SourceStation) ||
 		len(trim.StationGroup) < 3 {
 		return nil, false
 	}

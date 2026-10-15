@@ -24,20 +24,20 @@ func mappedArcRadialTimeBand(ctx context.Context, trim *loftFacesTrimRecord,
 	segmentIndex, band int, meridian revolveSectionSpan) (mappedArcRadialBand, bool) {
 	var empty mappedArcRadialBand
 	if ctx == nil || ctx.Err() != nil || trim == nil || trim.Source == nil ||
-		trim.Source.source == nil ||
-		segmentIndex < 0 || segmentIndex >= len(trim.Source.profile.Outer.Segments) ||
-		segmentIndex >= len(trim.Source.source.entities) ||
+		trim.Source.Source == nil ||
+		segmentIndex < 0 || segmentIndex >= len(trim.Source.Profile.Outer.Segments) ||
+		segmentIndex >= len(trim.Source.Source.Entities) ||
 		band < 0 || band+1 >= len(trim.Maps) ||
 		meridian.Start.U == meridian.End.U ||
 		meridian.Start.V <= 0 || meridian.End.V <= 0 {
 		return empty, false
 	}
-	segment, ok := trim.Source.profile.Outer.Segments[segmentIndex].(arcSeg)
+	segment, ok := trim.Source.Profile.Outer.Segments[segmentIndex].(arcSeg)
 	if !ok || !((segment.TStart == 0 && segment.TEnd == 1) ||
 		(segment.TStart == 1 && segment.TEnd == 0)) {
 		return empty, false
 	}
-	arc, ok := trim.Source.source.entities[segmentIndex].(*sketch.Arc)
+	arc, ok := trim.Source.Source.Entities[segmentIndex].(*sketch.Arc)
 	if !ok || !mappedArcRecordMatches(segment, arc) {
 		return empty, false
 	}

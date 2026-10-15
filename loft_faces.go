@@ -46,7 +46,7 @@ func buildLoftFaces(ctx context.Context, d *Document, selected []loftFaceSection
 	if err != nil {
 		return nil, err
 	}
-	if layout, ok := loftFacesCapLayout(selected[0].slice.base.Tris[:len(selected[0].ring)],
+	if layout, ok := loftFacesCapLayout(selected[0].slice.Base.Tris[:len(selected[0].ring)],
 		len(selected)-1, len(mesh.Tris)); ok {
 		err = loftmesh.LoftCrossingAuditWithCaps(ctx, mesh.Verts, mesh.Tris, layout)
 	} else {
@@ -55,7 +55,7 @@ func buildLoftFaces(ctx context.Context, d *Document, selected []loftFaceSection
 	if err != nil {
 		return nil, err
 	}
-	if err := orientLoftFaces(&mesh, selected[0].slice.base, source, embedding.sign); err != nil {
+	if err := orientLoftFaces(&mesh, selected[0].slice.Base, source, embedding.sign); err != nil {
 		return nil, err
 	}
 	audit, err := facetproof.AuditFacetedMesh(ctx, mesh.Verts, mesh.Tris)
@@ -80,14 +80,14 @@ func buildLoftFaces(ctx context.Context, d *Document, selected []loftFaceSection
 	if volFloor(heldRat, mesh.VolSymDiff) <= 0 {
 		return nil, fmt.Errorf("%w: face-fed loft occupied-volume proof exceeds the held volume", ErrUnsupported)
 	}
-	if len(selected[0].slice.base.Src) < len(source.sourceStation) {
+	if len(selected[0].slice.Base.Src) < len(source.SourceStation) {
 		return nil, fmt.Errorf("%w: loft source cell roles are incomplete", ErrUnsupported)
 	}
 	mesh.LoftFacesPrimitive = true
 	mesh.LoftFacesCap = &loftFacesCapRecord{Source: source,
 		Maps:         append([]loftFaceMap(nil), embedding.maps...),
 		Bounds:       capBounds,
-		StationGroup: append([]int(nil), selected[0].slice.base.Src[:len(source.sourceStation)]...),
+		StationGroup: append([]int(nil), selected[0].slice.Base.Src[:len(source.SourceStation)]...),
 		Final:        embedding.maps[len(embedding.maps)-1], Group: len(mesh.Groups) - 1,
 		Tangent: tangent}
 	body, err := buildFacetedBodyWithProof(ctx, d, ref, mesh, audit, Measurement{}, nil)
@@ -129,11 +129,11 @@ func collectLoftFaces(d *Document, faces []*Face) ([]loftFaceSection, *pointSect
 			return nil, nil, err
 		}
 		fp, ok := body.n.Payload.(facetedPayload)
-		if !ok || fp.pointPlane == nil || fp.pointPlane.base.pointSection == nil ||
+		if !ok || fp.PointPlane == nil || fp.PointPlane.Base.PointSection == nil ||
 			len(fp.Verts) == 0 || len(fp.FaceOf) != len(fp.Tris) {
 			return nil, nil, fmt.Errorf("%w: LoftFaces section %d has no authenticated Split cap", ErrUnsupported, i)
 		}
-		record := fp.pointPlane.base.pointSection
+		record := fp.PointPlane.Base.PointSection
 		if !pointSourceCurrent(record) {
 			return nil, nil, fmt.Errorf("%w: LoftFaces section %d has a stale source profile", ErrStaleProfile, i)
 		}
@@ -142,7 +142,7 @@ func collectLoftFaces(d *Document, faces []*Face) ([]loftFaceSection, *pointSect
 		} else if source != record {
 			return nil, nil, fmt.Errorf("%w: LoftFaces sections have different point-loft sources", ErrUnsupported)
 		}
-		if fp.pointSimilarity != nil && fp.pointSimilarity.slice != fp.pointPlane {
+		if fp.PointSimilarity != nil && fp.PointSimilarity.Slice != fp.PointPlane {
 			return nil, nil, fmt.Errorf("%w: LoftFaces section %d has broken similarity provenance", ErrUnsupported, i)
 		}
 		faceIndex := -1
@@ -166,7 +166,7 @@ func collectLoftFaces(d *Document, faces []*Face) ([]loftFaceSection, *pointSect
 		if i == 0 {
 			want--
 		}
-		if group != want || (i == 0 && fp.pointPlane.lower == nil) {
+		if group != want || (i == 0 && fp.PointPlane.Lower == nil) {
 			return nil, nil, fmt.Errorf("%w: LoftFaces section %d is not the required Split cap", ErrUnsupported, i)
 		}
 		if complete, ok := pointCapGroupFace(body, fp, want); !ok || complete != face {
@@ -181,18 +181,18 @@ func collectLoftFaces(d *Document, faces []*Face) ([]loftFaceSection, *pointSect
 			}
 			seen[body] = true
 		}
-		n := len(fp.pointPlane.base.Verts) - 1
-		if n < 3 || len(fp.Verts) != 2*n || len(fp.pointPlane.base.Tris) <= n {
+		n := len(fp.PointPlane.Base.Verts) - 1
+		if n < 3 || len(fp.Verts) != 2*n || len(fp.PointPlane.Base.Tris) <= n {
 			return nil, nil, fmt.Errorf("%w: LoftFaces section %d has no complete station ring", ErrUnsupported, i)
 		}
 		ring := fp.Verts[n:]
-		limit := fp.pointPlane.upper
+		limit := fp.PointPlane.Upper
 		if i == 0 {
 			ring = fp.Verts[:n]
-			limit = fp.pointPlane.lower
+			limit = fp.PointPlane.Lower
 		}
 		sections[i] = loftFaceSection{face: face, body: body, mesh: fp,
-			slice: fp.pointPlane, limit: limit, group: group, ring: ring}
+			slice: fp.PointPlane, limit: limit, group: group, ring: ring}
 	}
 	return sections, source, nil
 }
@@ -233,8 +233,8 @@ func loftFacesCapLayout(sides [][3]int, bands, triCount int) (loftmesh.LoftCapLa
 func assembleLoftFaces(ctx context.Context, ref producerID,
 	sections []loftFaceSection, source *pointSectionRecord) (facetedPayload, error) {
 	n := len(sections[0].ring)
-	base := sections[0].slice.base
-	segmentCount := len(source.profile.Outer.Segments)
+	base := sections[0].slice.Base
+	segmentCount := len(source.Profile.Outer.Segments)
 	if len(base.Src) < n || len(base.Tris) < n || len(base.Groups) != segmentCount+1 {
 		return facetedPayload{}, fmt.Errorf("%w: LoftFaces source fan has no complete side correspondence", ErrUnsupported)
 	}

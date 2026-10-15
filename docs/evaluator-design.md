@@ -894,8 +894,8 @@ Its held vertices are placed by the same float basis, and each vertex pays
 stretch and determinant charge, because `Q` keeps length, area and volume. The
 group centroids are re-derived as `Q*c + t` in rational arithmetic with no
 stretch charge. Every record that describes the float placement instead of `Q`
-is dropped: every group surface tag and denoted patch, `pointSection`,
-`pointPlane`, `pointSimilarity`, the point-plane cap displacement,
+is dropped: every group surface tag and denoted patch, `PointSection`,
+`PointPlane`, `PointSimilarity`, the point-plane cap displacement,
 `RevolveLoftSector` and `LoftMirrorCopy`. The cap-role provenance of a loft
 mirror join is a separate record, so each exact copy still mints both outer-cap
 roles under its own identity. The zero-bound exact source mesh survives only an

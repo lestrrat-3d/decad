@@ -25,12 +25,12 @@ func revolveLoftFacesEnumerateNonverticalJoints(ctx context.Context,
 	revolveLoftFacesNonverticalJoints, bool, error,
 ) {
 	var out revolveLoftFacesNonverticalJoints
-	if ctx == nil || trim == nil || trim.Source == nil || trim.Source.source == nil ||
+	if ctx == nil || trim == nil || trim.Source == nil || trim.Source.Source == nil ||
 		section.Start.U == section.End.U || section.Start.V <= 0 || section.End.V <= 0 {
 		return out, false, nil
 	}
-	segments := trim.Source.profile.Outer.Segments
-	entities := trim.Source.source.entities
+	segments := trim.Source.Profile.Outer.Segments
+	entities := trim.Source.Source.Entities
 	if len(segments) == 0 || len(segments) != len(entities) {
 		return out, false, nil
 	}
@@ -143,7 +143,7 @@ func revolveLoftFacesRadialPartitionCells(ctx context.Context,
 		return nil, false, nil
 	}
 	spans, ok := revolveLoftFacesStraightOrFitSpans(trim, segment,
-		trim.Source.profile.Outer.Segments[segment])
+		trim.Source.Profile.Outer.Segments[segment])
 	if !ok || spanIndex < 0 || spanIndex >= len(spans) ||
 		joint.vertex.fitAtEnd && spanIndex != len(spans)-1 ||
 		!joint.vertex.fitAtEnd && spanIndex != 0 ||

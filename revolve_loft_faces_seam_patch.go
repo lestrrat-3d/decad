@@ -33,14 +33,14 @@ func revolveLoftFacesArcPatchesUnchecked(ctx context.Context, trim *loftFacesTri
 	var blank, loft revolveLoftFacesSeamPatch
 	if ctx == nil || trim == nil || trim.Source == nil ||
 		band < 0 || band+1 >= len(trim.Maps) || segment < 0 ||
-		len(seam) < 2 || len(trim.StationGroup) != len(trim.Source.sourceStation) ||
+		len(seam) < 2 || len(trim.StationGroup) != len(trim.Source.SourceStation) ||
 		section.Face == nil || len(section.Origins) == 0 ||
 		section.Start.U == section.End.U ||
 		section.Start.V <= 0 || section.End.V <= 0 ||
-		len(trim.Source.profile.Outer.Segments) == 0 {
+		len(trim.Source.Profile.Outer.Segments) == 0 {
 		return blank, loft, false, nil
 	}
-	count := len(trim.Source.sourceStation)
+	count := len(trim.Source.SourceStation)
 	for i := range seam {
 		if seam[i].station < 0 || seam[i].station >= count ||
 			proofbound.IsNonFinite(seam[i].blankBound) ||
@@ -54,7 +54,7 @@ func revolveLoftFacesArcPatchesUnchecked(ctx context.Context, trim *loftFacesTri
 			return blank, loft, false, nil
 		}
 	}
-	group := band*len(trim.Source.profile.Outer.Segments) + segment
+	group := band*len(trim.Source.Profile.Outer.Segments) + segment
 	if group < 0 || group >= len(trim.Base.Groups) ||
 		len(trim.Base.Groups[group].Origins) == 0 {
 		return blank, loft, false, nil
@@ -69,7 +69,7 @@ func revolveLoftFacesArcPatchesUnchecked(ctx context.Context, trim *loftFacesTri
 		if err := ctx.Err(); err != nil {
 			return blank, loft, false, err
 		}
-		station := trim.Source.sourceStation[entry.station]
+		station := trim.Source.SourceStation[entry.station]
 		u, v := lfF(station.U), lfF(station.V)
 		for row, mapped := range [...]loftFaceMap{trim.Maps[band], trim.Maps[band+1]} {
 			position := row * 2 * len(seam)
@@ -82,7 +82,7 @@ func revolveLoftFacesArcPatchesUnchecked(ctx context.Context, trim *loftFacesTri
 			}
 			loft.vertices[position+j] = point
 			loft.vertexBounds[position+j] = proofbound.AbsSumUpper(round,
-				proofbound.ProductUpper(trim.Source.sourceStationRound, mapped.Stretch))
+				proofbound.ProductUpper(trim.Source.SourceStationRound, mapped.Stretch))
 		}
 		for row, end := range [...]planePoint{section.Start, section.End} {
 			position := row * 2 * len(seam)

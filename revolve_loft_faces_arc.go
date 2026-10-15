@@ -38,21 +38,21 @@ func mappedArcFiniteSide(ctx context.Context, trim *loftFacesTrimRecord,
 func mappedArcFiniteSideCell(ctx context.Context, trim *loftFacesTrimRecord,
 	segmentIndex int, meridian revolveSectionSpan, band int,
 	sLo, sHi float64, tLo, tHi *big.Rat) (int, bool) {
-	if ctx == nil || trim == nil || trim.Source == nil || trim.Source.source == nil ||
-		segmentIndex < 0 || segmentIndex >= len(trim.Source.profile.Outer.Segments) ||
-		segmentIndex >= len(trim.Source.source.entities) ||
+	if ctx == nil || trim == nil || trim.Source == nil || trim.Source.Source == nil ||
+		segmentIndex < 0 || segmentIndex >= len(trim.Source.Profile.Outer.Segments) ||
+		segmentIndex >= len(trim.Source.Source.Entities) ||
 		band < 0 || band+1 >= len(trim.Maps) ||
 		sLo < 0 || sHi > 1 || sLo > sHi ||
 		tLo == nil || tHi == nil || tLo.Sign() < 0 ||
 		tLo.Cmp(tHi) > 0 || tHi.Cmp(lfOne()) > 0 {
 		return 0, false
 	}
-	segment, ok := trim.Source.profile.Outer.Segments[segmentIndex].(arcSeg)
+	segment, ok := trim.Source.Profile.Outer.Segments[segmentIndex].(arcSeg)
 	if !ok || !((segment.TStart == 0 && segment.TEnd == 1) ||
 		(segment.TStart == 1 && segment.TEnd == 0)) {
 		return 0, false
 	}
-	arc, ok := trim.Source.source.entities[segmentIndex].(*sketch.Arc)
+	arc, ok := trim.Source.Source.Entities[segmentIndex].(*sketch.Arc)
 	if !ok || !mappedArcRecordMatches(segment, arc) {
 		return 0, false
 	}

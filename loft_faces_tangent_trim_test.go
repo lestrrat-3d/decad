@@ -88,7 +88,7 @@ func TestLoftFacesTangentHeelIntersectKeepsTrimRecord(t *testing.T) {
 	// G1 holds on the real maps. Its side is checked against the plane
 	// functional N.(P - end point), which is phi without a stored constant.
 	final, previous, box, heel := tangentGateInputs(t, c)
-	side, ok := loftface.ConeOnLoftSide(final, previous, box, heel.apex, heel.slope, heel.far)
+	side, ok := loftface.ConeOnLoftSide(final, previous, box, heel.Apex, heel.Slope, heel.Far)
 	require.True(t, ok, "G1 admits the real chain")
 	normal := loftface.VCross(final.QU, final.QV)
 	origin := final.At(box[0], box[2])
@@ -96,7 +96,7 @@ func TestLoftFacesTangentHeelIntersectKeepsTrimRecord(t *testing.T) {
 	for _, corner := range loftface.BoxCorners(box) {
 		require.Equal(t, side, phi(previous.At(corner[0], corner[1])), "the preceding cap is on the loft side")
 	}
-	mid := new(big.Rat).Quo(new(big.Rat).Add(heel.apex, heel.far), big.NewRat(2, 1))
+	mid := new(big.Rat).Quo(new(big.Rat).Add(heel.Apex, heel.Far), big.NewRat(2, 1))
 	require.Equal(t, side, phi(loftface.RatVec{mid, new(big.Rat), new(big.Rat)}), "the cone is on the loft side")
 
 	// G2 holds on the real maps, and the extended proxy is what the ordinary
@@ -188,7 +188,7 @@ func TestLoftFacesTangentHeelIntersectKeepsTrimRecord(t *testing.T) {
 	require.NotNil(t, trimRecord, "the tangent heel Intersect keeps the trim record")
 	require.NotNil(t, trimRecord.Tangent)
 	require.Same(t, c.loftRecord.Tangent, trimRecord.Tangent, "the trim record copies the cap record's tangent end")
-	require.True(t, trimRecord.Tangent.MatchesCone(heel.apex, heel.slope))
+	require.True(t, trimRecord.Tangent.MatchesCone(heel.Apex, heel.Slope))
 	require.Same(t, c.loftRecord.Source, trimRecord.Source)
 	require.Len(t, trimRecord.Maps, 3)
 
@@ -220,7 +220,7 @@ func TestLoftFacesTangentHeelIntersectKeepsTrimRecord(t *testing.T) {
 func TestTangentCapExtensionOnRealChain(t *testing.T) {
 	c := buildTangentTrimChain(t)
 	final, previous, box, heel := tangentGateInputs(t, c)
-	side, ok := loftface.ConeOnLoftSide(final, previous, box, heel.apex, heel.slope, heel.far)
+	side, ok := loftface.ConeOnLoftSide(final, previous, box, heel.Apex, heel.Slope, heel.Far)
 	require.True(t, ok)
 	plane, ok := loftface.NewTangentPlane(final, side)
 	require.True(t, ok)
@@ -246,7 +246,7 @@ func TestTangentCapExtensionOnRealChain(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, slab.Eps)
 	changed := map[*Face]bool{toe.CapFace: true}
-	for _, f := range proxy.n.Source[len(proxy.n.Source)-2*len(toe.Cap.Source.sourceStation):] {
+	for _, f := range proxy.n.Source[len(proxy.n.Source)-2*len(toe.Cap.Source.SourceStation):] {
 		changed[faceHandle(f)] = true
 	}
 	for f := range changed {
@@ -294,7 +294,7 @@ func TestTangentCapExtensionOnRealChain(t *testing.T) {
 	require.NoError(t, err)
 	record := toe.Cap
 	last := len(record.Maps) - 1
-	n := len(record.Source.sourceStation)
+	n := len(record.Source.SourceStation)
 	capBounds := record.Bounds[last]
 	walls := proxy.n.Triangles[len(proxy.n.Triangles)-2*n:]
 	seen := make([]bool, n)
@@ -402,7 +402,7 @@ func TestLoftFacesTangentHeelRefusesOtherCone(t *testing.T) {
 	other := c.f.coneAt(t, -4, 16, math.Nextafter(8, 9))
 	limit, ok := exactPointCone(other)
 	require.True(t, ok)
-	require.False(t, c.loftRecord.Tangent.MatchesCone(limit.apex, limit.slope))
+	require.False(t, c.loftRecord.Tangent.MatchesCone(limit.Apex, limit.Slope))
 	box, err := lfSourceBox(c.loftRecord.Source)
 	require.NoError(t, err)
 	require.False(t, loftCapOutsideHeelCone(c.loftRecord.Final, box, limit))

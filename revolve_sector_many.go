@@ -55,7 +55,7 @@ func buildRevolveLoftSectorsJoin(ctx context.Context, d *Document, ref producerI
 	cert *revolveLoftSectorCertificate, sources []facetedPayload) (*Body, *revolvedSectionRing, error) {
 	if cert == nil || cert.Trim == nil || cert.Blank == nil ||
 		len(sources) == 0 || len(sources) > 128 ||
-		!pointSourceCurrent(cert.Trim.base.pointSection) {
+		!pointSourceCurrent(cert.Trim.Base.PointSection) {
 		return nil, nil, fmt.Errorf("%w: sector source is incomplete or stale", ErrUnsupported)
 	}
 	sag := 0.01
@@ -107,11 +107,11 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 			Crossing: node.Crossing, RootBoundary: node.RootBoundary, Angle: node.Angle}
 	}
 	original, err := revolveSectorCapBoundary(path, section,
-		base.pointSection.source.frame, regularSource, sourceSector)
+		base.PointSection.Source.Frame, regularSource, sourceSector)
 	if err != nil {
 		return nil, nil, err
 	}
-	caps, err := pointcone.SectorTriangulate(ctx, original, base.pointSection.source.frame)
+	caps, err := pointcone.SectorTriangulate(ctx, original, base.PointSection.Source.Frame)
 	if err != nil {
 		return nil, nil, triangulation.WrapLoftError(err)
 	}
@@ -144,7 +144,7 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 	motions := make([]r3.Transform, len(sources))
 	charges := make([]massmoment.MapCharge, len(sources))
 	motions[0] = r3.Identity()
-	if sources[0].pointCone != record || sources[0].Xform != r3.Identity() {
+	if sources[0].PointCone != record || sources[0].Xform != r3.Identity() {
 		return nil, nil, fmt.Errorf("%w: first sector lost its source", ErrUnsupported)
 	}
 	for i := 1; i < len(sources); i++ {
@@ -263,11 +263,11 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 		far[i] = node.P
 	}
 	capGeom := pointcone.CapGeometry(far, caps)
-	upperBound, upperLip, err := pointcone.CapBound(capGeom, record.upper.constants())
+	upperBound, upperLip, err := pointcone.CapBound(capGeom, record.Upper.Constants())
 	if err != nil {
 		return nil, nil, err
 	}
-	lowerBound, lowerLip, err := pointcone.CapBound(capGeom, record.lower.constants())
+	lowerBound, lowerLip, err := pointcone.CapBound(capGeom, record.Lower.Constants())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -290,8 +290,8 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 			placedGroups = sources[i].Groups
 		}
 		baseGroup := len(mesh.Groups)
-		plan.capGroups = [2]int{baseGroup + len(record.base.Groups) - 1,
-			baseGroup + len(record.base.Groups)}
+		plan.capGroups = [2]int{baseGroup + len(record.Base.Groups) - 1,
+			baseGroup + len(record.Base.Groups)}
 		plan.nodeRound, plan.snap, err = buildRevolveSectorMesh(mesh, ring, section,
 			plan.nodes, original, caps, edges, plan.rootNode, record, plan.motion, placedGroups, &samples)
 		if err != nil {

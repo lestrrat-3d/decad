@@ -151,7 +151,7 @@ func TestPointPlaneCapDroppedCoordinateMatchesRawRat(t *testing.T) {
 	for _, nx := range normals {
 		for _, ny := range normals {
 			for keep := range 2 {
-				plane := &pointPlaneLimit{nx: nx, ny: ny}
+				plane := &pointPlaneLimit{Nx: nx, Ny: ny}
 				coords := func() [3]*big.Rat {
 					return [3]*big.Rat{randomReducedRat(rng), randomReducedRat(rng), randomReducedRat(rng)}
 				}
@@ -201,12 +201,12 @@ func TestLoftFaceRatHelpersAcceptNonReducedOperandsByValue(t *testing.T) {
 }
 
 func TestPointPlaneCapDroppedCoordinateAcceptsNonReducedByValue(t *testing.T) {
-	plane := &pointPlaneLimit{nx: nonReducedRat(3, 9), ny: nonReducedRat(-6, 9)}
+	plane := &pointPlaneLimit{Nx: nonReducedRat(3, 9), Ny: nonReducedRat(-6, 9)}
 	center := [3]*big.Rat{big.NewRat(2, 3), big.NewRat(5, 7), big.NewRat(-1, 4)}
 	anchor := [3]*big.Rat{big.NewRat(1, 5), big.NewRat(-2, 3), big.NewRat(3, 8)}
 	for keep := range 2 {
 		drop := 1 - keep
-		normal := [2]*big.Rat{plane.nx, plane.ny}
+		normal := [2]*big.Rat{plane.Nx, plane.Ny}
 		slope := new(big.Rat).Quo(normal[keep], normal[drop])
 		want := new(big.Rat).Sub(anchor[drop], new(big.Rat).Mul(slope, new(big.Rat).Sub(center[keep], anchor[keep])))
 		got := pointPlaneCapDroppedCoordinate(center, anchor, plane, keep)

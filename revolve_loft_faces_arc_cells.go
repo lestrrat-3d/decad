@@ -16,13 +16,13 @@ import (
 func revolveLoftFacesArcSpanCells(ctx context.Context,
 	trim *loftFacesTrimRecord, section revolveSectionSpan,
 	segment int) ([]revolveLoftFacesMappedCell, bool, error) {
-	if ctx == nil || trim == nil || trim.Source == nil || trim.Source.source == nil ||
-		segment < 0 || segment >= len(trim.Source.profile.Outer.Segments) ||
-		segment >= len(trim.Source.source.entities) {
+	if ctx == nil || trim == nil || trim.Source == nil || trim.Source.Source == nil ||
+		segment < 0 || segment >= len(trim.Source.Profile.Outer.Segments) ||
+		segment >= len(trim.Source.Source.Entities) {
 		return nil, false, nil
 	}
-	record, ok := trim.Source.profile.Outer.Segments[segment].(arcSeg)
-	arc, live := trim.Source.source.entities[segment].(*sketch.Arc)
+	record, ok := trim.Source.Profile.Outer.Segments[segment].(arcSeg)
+	arc, live := trim.Source.Source.Entities[segment].(*sketch.Arc)
 	if !ok || !live || !mappedArcRecordMatches(record, arc) {
 		return nil, false, nil
 	}

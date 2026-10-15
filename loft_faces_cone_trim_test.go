@@ -20,7 +20,7 @@ func TestLoftCapConeProofRequiresStrictWholeCapSeparation(t *testing.T) {
 		G0:       one, GU: zero, GV: zero,
 	}
 	box := [4]*big.Rat{big.NewRat(-3, 1), big.NewRat(-1, 1), big.NewRat(-1, 1), one}
-	cone := &pointConeLimit{apex: big.NewRat(10, 1), far: zero, slope: one}
+	cone := &pointConeLimit{Apex: big.NewRat(10, 1), Far: zero, Slope: one}
 	if !loftCapOutsideHeelCone(m, box, cone) {
 		t.Fatal("the exact positive quadratic with a small radial margin was refused")
 	}
@@ -50,7 +50,7 @@ func TestLoftCapToeConeProofUsesWholeSourceBox(t *testing.T) {
 		G0:       one, GU: zero, GV: zero,
 	}
 	box := [4]*big.Rat{big.NewRat(-3, 1), big.NewRat(-1, 1), big.NewRat(-1, 1), one}
-	cone := &pointConeLimit{apex: big.NewRat(8, 1), far: zero, slope: one}
+	cone := &pointConeLimit{Apex: big.NewRat(8, 1), Far: zero, Slope: one}
 	if !loftCapOutsideToeCone(m, box, cone) {
 		t.Fatal("the cap strictly outside the toe cone was refused")
 	}
@@ -61,7 +61,7 @@ func TestLoftCapToeConeProofUsesWholeSourceBox(t *testing.T) {
 }
 
 func TestLoftFacesCapRecordChecksVariableSourceShape(t *testing.T) {
-	source := &pointSectionRecord{sourceStation: make([]planePoint, 4)}
+	source := &pointSectionRecord{SourceStation: make([]planePoint, 4)}
 	record := &loftFacesCapRecord{Source: source, StationGroup: make([]int, 4)}
 	for _, count := range []int{2, 3, 9, maxLoftFacesSections} {
 		record.Maps = make([]loftFaceMap, count)
@@ -117,7 +117,7 @@ func TestLoftCapTangentToHeelCone(t *testing.T) {
 	previous := final
 	previous.Constant = loftface.VAdd(final.Constant, loftface.VScale(normal, big.NewRat(1, 8)))
 	box := [4]*big.Rat{big.NewRat(-4, 1), big.NewRat(-3, 1), big.NewRat(-1, 1), big.NewRat(1, 1)}
-	cone := &pointConeLimit{apex: apex, far: big.NewRat(-4, 1), slope: slope}
+	cone := &pointConeLimit{Apex: apex, Far: big.NewRat(-4, 1), Slope: slope}
 	record := func() *loftFacesCapRecord {
 		return &loftFacesCapRecord{Tangent: &end, Final: final, Maps: []loftFaceMap{previous, previous, final}}
 	}
@@ -134,7 +134,7 @@ func TestLoftCapTangentToHeelCone(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, plane, "a plain LoftFaces cap has no tangent scope")
 
-	other := &pointConeLimit{apex: apex, far: cone.far, slope: big.NewRat(1, 1)}
+	other := &pointConeLimit{Apex: apex, Far: cone.Far, Slope: big.NewRat(1, 1)}
 	plane, err = loftCapTangentToHeelCone(record(), box, other)
 	require.NoError(t, err)
 	require.Nil(t, plane, "the end was built for another cone")

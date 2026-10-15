@@ -84,7 +84,7 @@ func TestConeFromFaceIsStrictlyOffBlankFaces(t *testing.T) {
 			require.Positive(t, gap.Sign())
 			require.True(t, spiralFiniteConeSide(limit, tc.first, tc.last, tc.sign),
 				"the whole finite generator must lie on the certified side")
-			require.Zero(t, limit.far.Cmp(lfF(-5)), "far plane is the requested one")
+			require.Zero(t, limit.Far.Cmp(lfF(-5)), "far plane is the requested one")
 		})
 	}
 }
@@ -304,8 +304,8 @@ func TestConeFromFaceNonConvexSectionIsAccepted(t *testing.T) {
 	// just below (5/2+5)/(1/2) = 15.
 	wantApex := math.Nextafter(2.5, math.Inf(-1))
 	wantRadius := math.Nextafter(15, math.Inf(-1))
-	require.Zero(t, limit.apex.Cmp(new(big.Rat).SetFloat64(wantApex)))
-	radius := new(big.Rat).Quo(new(big.Rat).Sub(limit.apex, limit.far), limit.slope)
+	require.Zero(t, limit.Apex.Cmp(new(big.Rat).SetFloat64(wantApex)))
+	radius := new(big.Rat).Quo(new(big.Rat).Sub(limit.Apex, limit.Far), limit.Slope)
 	require.Zero(t, radius.Cmp(new(big.Rat).SetFloat64(wantRadius)))
 }
 

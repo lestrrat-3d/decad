@@ -358,7 +358,7 @@ vertex depends on that vertex's inputs alone (`internal/proofbound/bounds.go`,
 `RigidRoundAllow`). `MeshBound` is recomputed as the maximum `δ(t)` after the
 addition. The exact-source record for a translation-only placement is kept or
 dropped under the same conditions as today, with §4.1's zero condition.
-Ordinary placement keeps a point loft's `pointSection` source record only for
+Ordinary placement keeps a point loft's `PointSection` source record only for
 an exactly identity delta; a later float composition to identity cannot
 restore it. An exact rotation copy drops the record regardless of angle.
 

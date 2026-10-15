@@ -45,8 +45,8 @@ func revolveLoftFacesShellSeamCutOf(ctx context.Context,
 	if mapped.side != revolveLoftFacesJointContact ||
 		mapped.jointKind != revolveLoftFacesWholeArcContact || mapped.jointArc == nil ||
 		mapped.tLo == nil || mapped.tHi == nil || mapped.tLoOpen || mapped.tHiOpen ||
-		mapped.segment < 0 || mapped.segment >= len(proof.trim.Source.source.entities) ||
-		proof.trim.Source.source.entities[mapped.segment] != mapped.jointArc ||
+		mapped.segment < 0 || mapped.segment >= len(proof.trim.Source.Source.Entities) ||
+		proof.trim.Source.Source.Entities[mapped.segment] != mapped.jointArc ||
 		mapped.band < 0 || mapped.band+1 >= len(proof.trim.Maps) {
 		return empty, nil, false, nil
 	}

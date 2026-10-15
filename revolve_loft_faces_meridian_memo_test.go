@@ -31,7 +31,7 @@ func TestCurvedCensusMeridianMemoMatchesDirect(t *testing.T) {
 		if section.Face == nil || section.Start.U == section.End.U {
 			continue
 		}
-		for segment, source := range trim.Source.profile.Outer.Segments {
+		for segment, source := range trim.Source.Profile.Outer.Segments {
 			spans, ok := revolveLoftFacesStraightOrFitSpans(trim, segment, source)
 			if !ok {
 				continue

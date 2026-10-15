@@ -32,9 +32,9 @@ func TestMappedArcRadialTimeBandTwoExactTimeCrossings(t *testing.T) {
 		G0: one, GU: zero, GV: zero}
 	trim := &loftFacesTrimRecord{
 		Source: &pointSectionRecord{
-			profile:   profileRecord{Outer: loopRecord{Segments: []curveSegment{segment}}},
-			source:    &pointSectionSource{entities: []sketch.Entity{arc}},
-			sourceBox: [4]float64{-3, 3, -3, 3},
+			Profile:   profileRecord{Outer: loopRecord{Segments: []curveSegment{segment}}},
+			Source:    &pointSectionSource{Entities: []sketch.Entity{arc}},
+			SourceBox: [4]float64{-3, 3, -3, 3},
 		},
 		Maps: []loftFaceMap{first, second},
 	}
@@ -52,15 +52,15 @@ func TestMappedArcRadialTimeBandTwoExactTimeCrossings(t *testing.T) {
 	require.Zero(t, got.x[0].Sign())
 	require.Equal(t, 0, got.x[1].Cmp(lfOne()))
 	segment.TStart, segment.TEnd = 1, 0
-	trim.Source.profile.Outer.Segments[0] = segment
+	trim.Source.Profile.Outer.Segments[0] = segment
 	_, certified = mappedArcRadialTimeBand(context.Background(), trim, 0, 0, meridian)
 	require.True(t, certified)
 	segment.Start.U = 2.1
-	trim.Source.profile.Outer.Segments[0] = segment
+	trim.Source.Profile.Outer.Segments[0] = segment
 	_, certified = mappedArcRadialTimeBand(context.Background(), trim, 0, 0, meridian)
 	require.False(t, certified)
 	segment.Start.U = 2
-	trim.Source.profile.Outer.Segments[0] = segment
+	trim.Source.Profile.Outer.Segments[0] = segment
 
 	// A shear breaks the all-time radial identity even though the cap still
 	// maps every sampled endpoint to a finite point.

@@ -16,24 +16,24 @@ import (
 // pointPlaneSliceRecord always names the original point loft. Repeated cuts
 // never use a previously rounded cut ring as their geometric source.
 type pointPlaneSliceRecord struct {
-	base         facetedPayload
-	lower, upper *pointPlaneLimit
+	Base         facetedPayload
+	Lower, Upper *pointPlaneLimit
 }
 
 // pointPlaneLimit is the exact plane through the source line of an unplaced
 // world-XY chain Extrude. Its normal is deliberately unnormalised: all tests
 // and ray intersections below are rational statements about stored floats.
 type pointPlaneLimit struct {
-	nx, ny, d               *big.Rat
-	a, b                    planePoint
-	z0, z1                  float64
-	surface                 surfacegeom.Plane
-	origins                 []provenance.Ref
-	normalBound, mapStretch float64
-	centroid                VecMeasurement
-	hasCentroid             bool
+	Nx, Ny, D               *big.Rat
+	A, B                    planePoint
+	Z0, Z1                  float64
+	Surface                 surfacegeom.Plane
+	Origins                 []provenance.Ref
+	NormalBound, MapStretch float64
+	Centroid                VecMeasurement
+	HasCentroid             bool
 	// Whether the sheet's reported normal faces away from the apex.
-	frameTowardFar bool
+	FrameTowardFar bool
 }
 
 func ratOfPointPlane(v float64) *big.Rat { return proofarith.FloatRat(v) }
@@ -54,14 +54,14 @@ func pointPlaneSub(a, b *big.Rat) *big.Rat { return proofarith.SubRat(new(big.Ra
 
 func pointPlaneMul(a, b *big.Rat) *big.Rat { return proofarith.MulRat(new(big.Rat), a, b) }
 
-func (p *pointPlaneLimit) normalL1() *big.Rat {
-	return pointPlaneAdd(pointPlaneAbs(p.nx), pointPlaneAbs(p.ny))
+func (p *pointPlaneLimit) NormalL1() *big.Rat {
+	return pointPlaneAdd(pointPlaneAbs(p.Nx), pointPlaneAbs(p.Ny))
 }
 
-func (p *pointPlaneLimit) denominator(apex, far r3.Vec) *big.Rat {
+func (p *pointPlaneLimit) Denominator(apex, far r3.Vec) *big.Rat {
 	x := pointPlaneSub(ratOfPointPlane(far.X), ratOfPointPlane(apex.X))
 	y := pointPlaneSub(ratOfPointPlane(far.Y), ratOfPointPlane(apex.Y))
-	return pointPlaneAdd(pointPlaneMul(p.nx, x), pointPlaneMul(p.ny, y))
+	return pointPlaneAdd(pointPlaneMul(p.Nx, x), pointPlaneMul(p.Ny, y))
 }
 
 // exactPointPlaneSheet recognizes the actual step-E sheet class. A rectangle
@@ -126,40 +126,40 @@ func exactPointPlaneSheet(tool *Body, apex r3.Vec) (*pointPlaneLimit, bool) {
 	if pointPlaneAbs(dot).Cmp(allow) <= 0 {
 		return nil, false
 	}
-	return &pointPlaneLimit{nx: nx, ny: ny, d: d,
-		a: line.Start, b: line.End, z0: cp.Z0, z1: cp.Z1,
-		surface: surface, origins: face.originRefs(), normalBound: face.n.NormalBound,
-		frameTowardFar: dot.Sign() > 0}, true
+	return &pointPlaneLimit{Nx: nx, Ny: ny, D: d,
+		A: line.Start, B: line.End, Z0: cp.Z0, Z1: cp.Z1,
+		Surface: surface, Origins: face.originRefs(), NormalBound: face.n.NormalBound,
+		FrameTowardFar: dot.Sign() > 0}, true
 }
 
 func pointPlaneSource(target *Body) (pointPlaneSliceRecord, bool) {
 	fp, ok := target.n.Payload.(facetedPayload)
 	if !ok || target.Kind() != BodySolid || !target.IsSolid() ||
-		!fp.pointPlaneSourceEligible || fp.Xform != r3.Identity() {
+		!fp.PointPlaneSourceEligible || fp.Xform != r3.Identity() {
 		return pointPlaneSliceRecord{}, false
 	}
-	if fp.pointPlane != nil {
-		return *fp.pointPlane, true
+	if fp.PointPlane != nil {
+		return *fp.PointPlane, true
 	}
-	if fp.pointSection == nil {
+	if fp.PointSection == nil {
 		return pointPlaneSliceRecord{}, false
 	}
-	return pointPlaneSliceRecord{base: fp}, true
+	return pointPlaneSliceRecord{Base: fp}, true
 }
 
 // pointPlaneOrder returns -1 when a lies strictly nearer the apex than b,
 // +1 for the reverse, and zero if the source boundary bound cannot decide.
 func pointPlaneOrder(base facetedPayload, a, b *pointPlaneLimit) int {
-	// b.d*a.g - a.d*b.g is affine on the source cap. Every cap
+	// b.D*a.g - a.D*b.g is affine on the source cap. Every cap
 	// triangle is convex, so its vertex minima decide the whole held cap.
-	cx := pointPlaneSub(pointPlaneMul(b.d, a.nx), pointPlaneMul(a.d, b.nx))
-	cy := pointPlaneSub(pointPlaneMul(b.d, a.ny), pointPlaneMul(a.d, b.ny))
+	cx := pointPlaneSub(pointPlaneMul(b.D, a.Nx), pointPlaneMul(a.D, b.Nx))
+	cy := pointPlaneSub(pointPlaneMul(b.D, a.Ny), pointPlaneMul(a.D, b.Ny))
 	margin := pointPlaneMul(pointPlaneAdd(pointPlaneAbs(cx), pointPlaneAbs(cy)),
 		ratOfPointPlane(base.MeshBound))
 	allPositive, allNegative := true, true
 	for _, far := range base.Verts[1:] {
-		x := pointPlaneSub(ratOfPointPlane(far.X), ratOfPointPlane(base.pointSection.apex.X))
-		y := pointPlaneSub(ratOfPointPlane(far.Y), ratOfPointPlane(base.pointSection.apex.Y))
+		x := pointPlaneSub(ratOfPointPlane(far.X), ratOfPointPlane(base.PointSection.Apex.X))
+		y := pointPlaneSub(ratOfPointPlane(far.Y), ratOfPointPlane(base.PointSection.Apex.Y))
 		v := pointPlaneAdd(pointPlaneMul(cx, x), pointPlaneMul(cy, y))
 		allPositive = allPositive && v.Cmp(margin) > 0
 		allNegative = allNegative && v.Cmp(new(big.Rat).Neg(margin)) < 0
@@ -177,19 +177,19 @@ func pointPlaneOrder(base facetedPayload, a, b *pointPlaneLimit) int {
 // ribbon strictly inside both its length and its sweep span. The source
 // point-loft boundary allowance covers every curved point between stations.
 func validatePointPlane(base facetedPayload, plane *pointPlaneLimit) error {
-	if base.pointSection == nil || len(base.Verts) < 4 || base.MeshBound < 0 ||
+	if base.PointSection == nil || len(base.Verts) < 4 || base.MeshBound < 0 ||
 		proofbound.IsNonFinite(base.MeshBound) || proofbound.IsNonFinite(base.VolSymDiff) ||
 		proofbound.IsNonFinite(base.AreaSlack) {
 		return fmt.Errorf("%w: a planar point-loft split needs a proved source fan", ErrUnsupported)
 	}
-	apex := base.pointSection.apex
-	normalAllow := pointPlaneMul(plane.normalL1(), ratOfPointPlane(base.MeshBound))
+	apex := base.PointSection.Apex
+	normalAllow := pointPlaneMul(plane.NormalL1(), ratOfPointPlane(base.MeshBound))
 	var denMin *big.Rat
 	reach := 0.0
 	for _, far := range base.Verts[1:] {
-		den := plane.denominator(apex, far)
+		den := plane.Denominator(apex, far)
 		lo := pointPlaneSub(den, normalAllow)
-		if lo.Sign() <= 0 || lo.Cmp(plane.d) <= 0 {
+		if lo.Sign() <= 0 || lo.Cmp(plane.D) <= 0 {
 			return fmt.Errorf("%w: the cut plane does not cross every source ray strictly", ErrUnsupported)
 		}
 		if denMin == nil || lo.Cmp(denMin) < 0 {
@@ -197,8 +197,8 @@ func validatePointPlane(base facetedPayload, plane *pointPlaneLimit) error {
 		}
 		reach = max(reach, proofbound.DvLenUpper(proofbound.HeldDelta(far, apex)))
 	}
-	normUp := proofbound.RatFloatUp(plane.normalL1())
-	dUp := proofbound.RatFloatUp(plane.d)
+	normUp := proofbound.RatFloatUp(plane.NormalL1())
+	dUp := proofbound.RatFloatUp(plane.D)
 	denLo := proofbound.RatFloatDown(denMin)
 	reach = proofbound.AbsSumUpper(reach, base.MeshBound)
 	alphaUp := proofbound.DivUpper(dUp, denLo)
@@ -207,27 +207,27 @@ func validatePointPlane(base facetedPayload, plane *pointPlaneLimit) error {
 	if proofbound.IsNonFinite(stretch) {
 		return fmt.Errorf("%w: the cut plane has no finite source map", ErrUnsupported)
 	}
-	plane.mapStretch = stretch
+	plane.MapStretch = stretch
 	// A projective map sends each source cap triangle to a triangle. A
 	// convex finite sheet contains that image when it contains every
 	// mapped vertex with room for the true source displacement.
-	ex := pointPlaneSub(ratOfPointPlane(plane.b.U), ratOfPointPlane(plane.a.U))
-	ey := pointPlaneSub(ratOfPointPlane(plane.b.V), ratOfPointPlane(plane.a.V))
+	ex := pointPlaneSub(ratOfPointPlane(plane.B.U), ratOfPointPlane(plane.A.U))
+	ey := pointPlaneSub(ratOfPointPlane(plane.B.V), ratOfPointPlane(plane.A.V))
 	e2 := pointPlaneAdd(pointPlaneMul(ex, ex), pointPlaneMul(ey, ey))
 	cutAllow := proofbound.ProductUpper(stretch, base.MeshBound)
 	spanMargin := pointPlaneMul(pointPlaneAdd(pointPlaneAbs(ex), pointPlaneAbs(ey)),
 		ratOfPointPlane(cutAllow))
 	zMargin := ratOfPointPlane(cutAllow)
-	z0 := pointPlaneAdd(ratOfPointPlane(plane.z0), zMargin)
-	z1 := pointPlaneSub(ratOfPointPlane(plane.z1), zMargin)
+	z0 := pointPlaneAdd(ratOfPointPlane(plane.Z0), zMargin)
+	z1 := pointPlaneSub(ratOfPointPlane(plane.Z1), zMargin)
 	for _, far := range base.Verts[1:] {
 		q, err := pointPlaneMapExact(apex, far, plane)
 		if err != nil {
 			return err
 		}
 		along := pointPlaneAdd(
-			pointPlaneMul(pointPlaneSub(q[0], ratOfPointPlane(plane.a.U)), ex),
-			pointPlaneMul(pointPlaneSub(q[1], ratOfPointPlane(plane.a.V)), ey))
+			pointPlaneMul(pointPlaneSub(q[0], ratOfPointPlane(plane.A.U)), ex),
+			pointPlaneMul(pointPlaneSub(q[1], ratOfPointPlane(plane.A.V)), ey))
 		if along.Cmp(spanMargin) <= 0 ||
 			along.Cmp(pointPlaneSub(e2, spanMargin)) >= 0 ||
 			q[2].Cmp(z0) <= 0 || q[2].Cmp(z1) >= 0 {
@@ -238,11 +238,11 @@ func validatePointPlane(base facetedPayload, plane *pointPlaneLimit) error {
 }
 
 func pointPlaneMapExact(apex, far r3.Vec, plane *pointPlaneLimit) ([3]*big.Rat, error) {
-	den := plane.denominator(apex, far)
+	den := plane.Denominator(apex, far)
 	if den.Sign() <= 0 {
 		return [3]*big.Rat{}, fmt.Errorf("%w: a source ray does not meet the split plane", ErrUnsupported)
 	}
-	alpha := new(big.Rat).Quo(plane.d, den)
+	alpha := new(big.Rat).Quo(plane.D, den)
 	a := [3]float64{apex.X, apex.Y, apex.Z}
 	p := [3]float64{far.X, far.Y, far.Z}
 	var q [3]*big.Rat
@@ -275,20 +275,20 @@ func (d *Document) splitPointPlane(ctx context.Context, budget *proofbound.WorkB
 	if !ok {
 		return nil, false, nil
 	}
-	plane, ok := exactPointPlaneSheet(tool, record.base.pointSection.apex)
+	plane, ok := exactPointPlaneSheet(tool, record.Base.PointSection.Apex)
 	if !ok {
 		return nil, false, nil
 	}
-	if err := validatePointPlane(record.base, plane); err != nil {
+	if err := validatePointPlane(record.Base, plane); err != nil {
 		return nil, true, err
 	}
-	if center, proved, err := pointPlaneCapCentroid(ctx, record.base, plane); err != nil {
+	if center, proved, err := pointPlaneCapCentroid(ctx, record.Base, plane); err != nil {
 		return nil, true, err
 	} else {
-		plane.centroid, plane.hasCentroid = center, proved
+		plane.Centroid, plane.HasCentroid = center, proved
 	}
-	if record.lower != nil {
-		switch pointPlaneOrder(record.base, record.lower, plane) {
+	if record.Lower != nil {
+		switch pointPlaneOrder(record.Base, record.Lower, plane) {
 		case -1:
 			// The new plane is strictly beyond the existing lower cap.
 		case 1:
@@ -297,8 +297,8 @@ func (d *Document) splitPointPlane(ctx context.Context, budget *proofbound.WorkB
 			return nil, true, fmt.Errorf("%w: the split plane meets or crosses the slab's lower plane", ErrUnsupported)
 		}
 	}
-	if record.upper != nil {
-		switch pointPlaneOrder(record.base, plane, record.upper) {
+	if record.Upper != nil {
+		switch pointPlaneOrder(record.Base, plane, record.Upper) {
 		case -1:
 			// The new plane is strictly before the existing upper cap.
 		case 1:
@@ -312,9 +312,9 @@ func (d *Document) splitPointPlane(ctx context.Context, budget *proofbound.WorkB
 	}
 	ref := d.nextProducerID()
 	inner := record
-	inner.upper = plane
+	inner.Upper = plane
 	outer := record
-	outer.lower = plane
+	outer.Lower = plane
 	first, err := buildPointPlaneSlab(ctx, d, ref, inner)
 	if err != nil {
 		return nil, true, fmt.Errorf("point-loft inner slab: %w", err)
@@ -334,10 +334,10 @@ func (d *Document) splitPointPlane(ctx context.Context, budget *proofbound.WorkB
 func pointPlaneCapGroup(ref producerID, role string, plane *pointPlaneLimit,
 	base facetedPayload, far, reverse bool) facetGroup {
 	if far {
-		frame := base.pointSection.source.frame
-		profilePlane := base.pointSection.plane
+		frame := base.PointSection.Source.Frame
+		profilePlane := base.PointSection.Plane
 		apexSide := proofarith.XdotRat(
-			proofarith.Xsub(proofarith.XptOf(base.pointSection.apex),
+			proofarith.Xsub(proofarith.XptOf(base.PointSection.Apex),
 				proofarith.XptOf(profilePlane.Origin)),
 			proofarith.Xcross(proofarith.XptOf(profilePlane.U),
 				proofarith.XptOf(profilePlane.V)),
@@ -349,11 +349,11 @@ func pointPlaneCapGroup(ref producerID, role string, plane *pointPlaneLimit,
 			Reversed: apexSide.Sign() > 0,
 			Centroid: sourceCap.Centroid, HasCentroid: sourceCap.HasCentroid}
 	}
-	origins := append([]provenance.Ref(nil), plane.origins...)
+	origins := append([]provenance.Ref(nil), plane.Origins...)
 	origins = append(origins, provenance.Ref{Producer: ref, Role: role})
-	return facetGroup{Origins: origins, Surface: plane.surface, Planar: true,
-		NormalBound: plane.normalBound, Reversed: reverse,
-		Centroid: plane.centroid, HasCentroid: plane.hasCentroid}
+	return facetGroup{Origins: origins, Surface: plane.Surface, Planar: true,
+		NormalBound: plane.NormalBound, Reversed: reverse,
+		Centroid: plane.Centroid, HasCentroid: plane.HasCentroid}
 }
 
 func pointPlaneRing(ctx context.Context, base facetedPayload, plane *pointPlaneLimit) (
@@ -370,7 +370,7 @@ func pointPlaneRing(ctx context.Context, base facetedPayload, plane *pointPlaneL
 				return nil, 0, err
 			}
 		}
-		q, err := pointPlaneMapExact(base.pointSection.apex, far, plane)
+		q, err := pointPlaneMapExact(base.PointSection.Apex, far, plane)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -427,31 +427,31 @@ func pointPlaneSlabCapLayout(sides [][3]int, triCount, upperOffset int, hasApex 
 
 func buildPointPlaneSlab(ctx context.Context, d *Document, ref producerID,
 	record pointPlaneSliceRecord) (*Body, error) {
-	base := record.base
-	if record.lower != nil && record.upper != nil &&
-		pointPlaneOrder(base, record.lower, record.upper) != -1 {
+	base := record.Base
+	if record.Lower != nil && record.Upper != nil &&
+		pointPlaneOrder(base, record.Lower, record.Upper) != -1 {
 		return nil, fmt.Errorf("%w: point-loft slab planes are not ordered", ErrUnsupported)
 	}
 	n := len(base.Verts) - 1
 	if n < 3 || len(base.Tris) <= n || len(base.Src) != len(base.Tris) {
 		return nil, fmt.Errorf("%w: point-loft source has no complete fan", ErrUnsupported)
 	}
-	lower, lowerRound, err := pointPlaneRing(ctx, base, record.lower)
+	lower, lowerRound, err := pointPlaneRing(ctx, base, record.Lower)
 	if err != nil {
 		return nil, err
 	}
-	upper, upperRound, err := pointPlaneRing(ctx, base, record.upper)
+	upper, upperRound, err := pointPlaneRing(ctx, base, record.Upper)
 	if err != nil {
 		return nil, err
 	}
-	if record.upper == nil {
+	if record.Upper == nil {
 		copy(upper, base.Verts[1:])
 	}
 	round := max(lowerRound, upperRound)
-	hasApex := record.lower == nil
+	hasApex := record.Lower == nil
 	vertices := make([]r3.Vec, 0, 2*n+1)
 	if hasApex {
-		vertices = append(vertices, base.pointSection.apex)
+		vertices = append(vertices, base.PointSection.Apex)
 	} else {
 		vertices = append(vertices, lower...)
 	}
@@ -462,15 +462,15 @@ func buildPointPlaneSlab(ctx context.Context, d *Document, ref producerID,
 	lowerGroup := len(groups)
 	if !hasApex {
 		groups = append(groups, pointPlaneCapGroup(ref, provenance.RoleCapStart,
-			record.lower, base, false, record.lower.frameTowardFar))
+			record.Lower, base, false, record.Lower.FrameTowardFar))
 	}
 	upperGroup := len(groups)
 	upperReversed := false
-	if record.upper != nil {
-		upperReversed = !record.upper.frameTowardFar
+	if record.Upper != nil {
+		upperReversed = !record.Upper.FrameTowardFar
 	}
 	groups = append(groups, pointPlaneCapGroup(ref, provenance.RoleCapEnd,
-		record.upper, base, record.upper == nil, upperReversed))
+		record.Upper, base, record.Upper == nil, upperReversed))
 	triangles := make([][3]int, 0, 2*n+2*(len(base.Tris)-n))
 	sources := make([]int, 0, cap(triangles))
 	for i := range n {
@@ -522,11 +522,11 @@ func buildPointPlaneSlab(ctx context.Context, d *Document, ref producerID,
 		return nil, err
 	}
 	stretch := 1.0
-	if record.lower != nil {
-		stretch = max(stretch, record.lower.mapStretch)
+	if record.Lower != nil {
+		stretch = max(stretch, record.Lower.MapStretch)
 	}
-	if record.upper != nil {
-		stretch = max(stretch, record.upper.mapStretch)
+	if record.Upper != nil {
+		stretch = max(stretch, record.Upper.MapStretch)
 	}
 	meshBound := proofbound.AbsSumUpper(proofbound.ProductUpper(stretch, base.MeshBound), round)
 	if proofbound.IsNonFinite(meshBound) {
@@ -561,8 +561,8 @@ func buildPointPlaneSlab(ctx context.Context, d *Document, ref producerID,
 		Verts: vertices, Tris: triangles, Src: sources, Groups: groups,
 		VertexBound: vertexBounds, MeshBound: meshBound,
 		VolSymDiff: volumeGap, AreaSlack: areaSlack,
-		DPair: base.DPair, Xform: r3.Identity(), pointPlane: &recordCopy,
-		pointPlaneCapDisplacement: meshBound,
-		pointPlaneSourceEligible:  true,
+		DPair: base.DPair, Xform: r3.Identity(), PointPlane: &recordCopy,
+		PointPlaneCapDisplacement: meshBound,
+		PointPlaneSourceEligible:  true,
 	})
 }

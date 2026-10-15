@@ -52,7 +52,7 @@ func TestCurvedMappedSourceConsumesLiveProducer(t *testing.T) {
 	})
 	t.Logf("root section %d mapped %d source cells", proof.section.RootSpan, len(cells))
 	radial := 0
-	for segment, entity := range trim.Source.source.entities {
+	for segment, entity := range trim.Source.Source.Entities {
 		if _, isArc := entity.(*sketch.Arc); !isArc {
 			continue
 		}
