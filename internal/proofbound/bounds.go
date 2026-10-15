@@ -1406,9 +1406,19 @@ type CellAllows struct {
 // reading alone: the twist readings do not take those operands, while a
 // non-finite CORNER refuses all four.
 func CellAllowsOf(vLo, vHi, wLo, wHi r3.Vec, arcLenUpperA, arcLenUpperB, matchedDeltaUpper float64) CellAllows {
+	allows, _, _ := CellAllowsWithSideSpansOf(vLo, vHi, wLo, wHi, arcLenUpperA, arcLenUpperB, matchedDeltaUpper)
+	return allows
+}
+
+// CellAllowsWithSideSpansOf also returns the two certified side spans already
+// computed for CellAllowsOf. A non-finite corner returns +Inf for both spans,
+// matching the refusal of all four cell bounds.
+func CellAllowsWithSideSpansOf(
+	vLo, vHi, wLo, wHi r3.Vec, arcLenUpperA, arcLenUpperB, matchedDeltaUpper float64,
+) (CellAllows, float64, float64) {
 	if !FiniteVec(vLo) || !FiniteVec(vHi) || !FiniteVec(wLo) || !FiniteVec(wHi) {
 		inf := math.Inf(1)
-		return CellAllows{ChordCurveAreaUpper: inf, TwistVolumeAllow: inf, TwistOffsetUpper: inf, TwistAreaAllow: inf}
+		return CellAllows{ChordCurveAreaUpper: inf, TwistVolumeAllow: inf, TwistOffsetUpper: inf, TwistAreaAllow: inf}, inf, inf
 	}
 	corners := CellCornersOf(vLo, vHi, wLo, wHi)
 	spans := corners.Spans()
@@ -1423,7 +1433,7 @@ func CellAllowsOf(vLo, vHi, wLo, wHi r3.Vec, arcLenUpperA, arcLenUpperB, matched
 		TwistVolumeAllow:    CellTwistVolumeAllow(vLo, vHi, wLo, wHi),
 		TwistOffsetUpper:    twistUpper,
 		TwistAreaAllow:      cellTwistAreaFromSpans(spans, twistUpper, vLo, vHi, wLo, wHi),
-	}
+	}, spans.SideA, spans.SideB
 }
 
 // CellTwistAreaAllow bounds the area gap between one loft wall cell's held
