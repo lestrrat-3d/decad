@@ -4,10 +4,12 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
-	"github.com/stretchr/testify/require"
 )
 
 func TestDirectLoftCircleGateRejectsEqualBaseDifferentRecord(t *testing.T) {
@@ -25,9 +27,9 @@ func TestDirectLoftCircleGateRejectsEqualBaseDifferentRecord(t *testing.T) {
 		Frame0:   bottom, Frame1: top,
 		Xform: r3.Identity(), AuthenticatedReconstruction: true,
 	}
-	require.Equal(t, loftCircleWallCylinder, directLoftCircularHole(pl))
+	require.Equal(t, loftrecord.WallCylinder, loftrecord.DirectCircularHole(pl))
 	pl.Profile1.Holes[0].Segments[0] = other
-	require.Equal(t, loftCircleWallNone, directLoftCircularHole(pl))
+	require.Equal(t, loftrecord.WallNone, loftrecord.DirectCircularHole(pl))
 }
 
 func TestDirectLoftRuledCircleWallHasBodyNode(t *testing.T) {
@@ -66,7 +68,7 @@ func TestDirectLoftRuledCircleWallHasBodyNode(t *testing.T) {
 	require.Same(t, body, bodyHandle(ruled.n.Body))
 }
 
-// The three homogeneous Bernstein controls in loftCircularWallSurface's
+// The three homogeneous Bernstein controls in loftrecord.circularWallSurface's
 // source-net construction give X=1-t², Y=2t and W=1+t². The polynomial
 // identity proves every parameter lies on the circle, not just a sample.
 func TestRuledCircleQuarterControlNet(t *testing.T) {

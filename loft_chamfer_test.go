@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/r3"
@@ -41,8 +42,7 @@ func notchedLoft(t *testing.T, withBore bool) *Body {
 		Frame0: mustFrame(t, p0), Frame1: mustFrame(t, p1),
 		Xform: r3.Identity(),
 	}
-	body, err := evalLoft(t.Context(), New(), producerID(1), pl,
-		proofbound.NewWorkBudget(t.Context()), freeform.NewFreeformWork(), freeform.NewFreeformWork())
+	body, err := bodyResult(loftrecord.Build(t.Context(), envOf(documentNode(New()), producerID(1)), pl, proofbound.NewWorkBudget(t.Context()), freeform.NewFreeformWork(), freeform.NewFreeformWork()))
 	require.NoError(t, err)
 	return body
 }

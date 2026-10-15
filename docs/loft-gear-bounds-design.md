@@ -305,7 +305,7 @@ across segments lowers it for a given station count by more than a constant.
 `Placed` carries them over unchanged. `loftStationCapGate` computes the target once
 per evaluation from them and the walks `validateLoftRecords` resolves, decides S15
 against it, and returns it to the station generators. The target itself is not
-stored: its perimeter half reads the walks, which only `evalLoft` resolves, and
+stored: its perimeter half reads the walks, which only `loftrecord.Build` resolves, and
 recomputing it from the stored areas is one pass over the segments. Recomputing the
 area integral costs 1.1 s per record at z40, which the prototype paid and the
 implementation does not.
@@ -546,7 +546,7 @@ and `testing.Short`) and records the ratios it reached in its description.
   build-wide `matchedDelta` for the per-cell value in `wallLeg` or the cap tube.
 - Do not bisect on the sagitta alone and rely on the measured 1.5× ratio; the ratio
   is unbounded on a general span.
-- Do not recompute the area integral inside `evalLoft` for the target: carry the
+- Do not recompute the area integral inside `loftrecord.Build` for the target: carry the
   integrals `falsifyRecordedArea` computed on the payload.
 - Do not derive the target from the sketch's claimed area; the record's own exact
   integral is the deterministic input.

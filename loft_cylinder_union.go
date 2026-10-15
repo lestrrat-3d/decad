@@ -9,6 +9,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
@@ -126,7 +127,7 @@ func tryLoftCylinderUnionTeethWithUpperBridge(ctx context.Context, d *Document, 
 		return nil, false, nil
 	}
 	parts := make([]loftCylinderTooth, len(teeth))
-	var source *loftSourceIdentity
+	var source *loftrecord.SourceIdentity
 	for i, tooth := range teeth {
 		lp, ok := tooth.n.Payload.(loftPayload)
 		if !ok || !lp.AuthenticatedReconstruction || lp.SurfaceResult ||

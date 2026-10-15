@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -270,11 +271,11 @@ func evalTwistedSweep(ctx context.Context, d *Document, ref producerID, profile 
 		proofbound.IntervalFloatError(cosIv, f1.V().Y),
 	)
 	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
-	heldBody, err := evalLoft(ctx, d, ref, loftPayload{
+	heldBody, err := bodyResult(loftrecord.Build(ctx, envOf(documentNode(d), ref), loftPayload{
 		Profile0: profile, Profile1: profile, Plane0: plane, Plane1: end,
 		Frame0: f0, Frame1: f1, Xform: xform,
 		RecordArea: [2]float64{recordArea, recordArea},
-	}, proofbound.NewWorkBudget(ctx), work0, work1)
+	}, proofbound.NewWorkBudget(ctx), work0, work1))
 	if err != nil {
 		return nil, err
 	}

@@ -718,10 +718,10 @@ func TestLoftCircularCellStationsMatchedDeltaIsItsSagitta(t *testing.T) {
 // R8).
 //
 // This necessarily precedes S8's own audit-budget ceiling, each row decided at
-// the phase docs/loft-design.md §4's gate-order paragraph assigns it: evalLoft
+// the phase docs/loft-design.md §4's gate-order paragraph assigns it: loftrecord.Build
 // calls loftmesh.PairRecords (which reaches this refusal through loftmesh.RecordCellStations)
 // before loftmesh.AssembleTriangulated ever builds a triangle and before
-// loftmesh.LoftCrossingAudit ever runs (loft_build.go's own evalLoft body). Had the
+// loftmesh.LoftCrossingAudit ever runs (loft_build.go's own loftrecord.Build body). Had the
 // cap not fired, the station count alone — already past 2^14 per side — would
 // publish orders of magnitude more wall faces than S8's own
 // proofbound.MaxFacetPairTestsPerCall ceiling binds at, an F (§7) far past it

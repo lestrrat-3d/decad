@@ -1,4 +1,4 @@
-package decad
+package loftrecord
 
 import (
 	"context"
@@ -7,6 +7,8 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
+	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/denotation"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
@@ -23,44 +25,46 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-type loftCircleWallKind uint8
+// WallKind names the analytic wall a certified circular loft hole publishes.
+type WallKind uint8
 
+// The hole wall kinds. WallNone is the faceted hole.
 const (
-	loftCircleWallNone loftCircleWallKind = iota
-	loftCircleWallCylinder
-	loftCircleWallCone
-	loftCircleWallRuled
-	loftCircleWallQuarterTurn
+	WallNone WallKind = iota
+	WallCylinder
+	WallCone
+	WallRuled
+	WallQuarterTurn
 )
 
-// directLoftCircularHole reads only authenticated section records. Matching
+// DirectCircularHole reads only authenticated section records. Matching
 // frame axes and zero alignment make a circle pair interpolate with center
 // C(z) and radius r(z). A fixed center gives a right cylinder or cone; a
 // moving center gives a rational ruled surface. Exact cardinal quarter-turn
 // frames also give a rational ruled surface under the common angle parameter.
-func directLoftCircularHole(pl loftPayload) loftCircleWallKind {
+func DirectCircularHole(pl Payload) WallKind {
 	if !pl.AuthenticatedReconstruction || pl.SurfaceResult ||
 		len(pl.Profile0.Holes) != 1 || len(pl.Profile1.Holes) != 1 ||
 		len(pl.Profile0.Holes[0].Segments) != 1 || len(pl.Profile1.Holes[0].Segments) != 1 ||
 		!sectionrecord.IdenticalRecord(pl.Profile0.Outer, pl.Profile1.Outer) {
-		return loftCircleWallNone
+		return WallNone
 	}
 	for _, offset := range pl.Alignment {
 		if offset != 0 {
-			return loftCircleWallNone
+			return WallNone
 		}
 	}
-	bottom, ok0 := pl.Profile0.Holes[0].Segments[0].(circleSeg)
-	top, ok1 := pl.Profile1.Holes[0].Segments[0].(circleSeg)
+	bottom, ok0 := pl.Profile0.Holes[0].Segments[0].(sectionrecord.CircleSeg)
+	top, ok1 := pl.Profile1.Holes[0].Segments[0].(sectionrecord.CircleSeg)
 	if !ok0 || !ok1 || bottom.CCW || top.CCW ||
 		bottom.TStart != 1 || bottom.TEnd != 0 || top.TStart != 1 || top.TEnd != 0 {
-		return loftCircleWallNone
+		return WallNone
 	}
 	level := pl.Frame0.ToLocal(pl.Frame1.Origin())
 	sameAxes := pl.Frame0.U() == pl.Frame1.U() && pl.Frame0.V() == pl.Frame1.V()
 	if sameAxes {
-		if !loftBoreHasExactAxis(pl.Frame0, pl.Frame1, 0, 0, level.Z) {
-			return loftCircleWallNone
+		if !BoreHasExactAxis(pl.Frame0, pl.Frame1, 0, 0, level.Z) {
+			return WallNone
 		}
 	} else {
 		// A cardinal quarter-turn gives an exact ruled circle pair and an
@@ -73,21 +77,21 @@ func directLoftCircularHole(pl loftPayload) loftCircleWallKind {
 			pl.Frame1.U() == (r3.Vec{Y: -1}) && pl.Frame1.V() == (r3.Vec{X: 1})
 		if !quarterTurn || bottom.Center.U != 0 || bottom.Center.V != 0 ||
 			top.Center.U != 0 || top.Center.V != 0 {
-			return loftCircleWallNone
+			return WallNone
 		}
 	}
 	// The cylindrical builder uses the first section's entire circle record
 	// for both rims, so equal world radii alone do not authorize that reuse.
 	if sameAxes && sectionrecord.IdenticalRecord(bottom, top) {
-		if loftBoreHasExactAxis(pl.Frame0, pl.Frame1,
+		if BoreHasExactAxis(pl.Frame0, pl.Frame1,
 			bottom.Center.U, bottom.Center.V, level.Z) &&
-			loftBoreCylinderExactGeometry(pl.Frame0, pl.Xform, bottom.Center.U, bottom.Center.V) {
-			return loftCircleWallCylinder
+			BoreCylinderExactGeometry(pl.Frame0, pl.Xform, bottom.Center.U, bottom.Center.V) {
+			return WallCylinder
 		}
-		return loftCircleWallNone
+		return WallNone
 	}
 	if sameAxes && bottom.Center == top.Center && bottom.Radius.Base() == top.Radius.Base() {
-		return loftCircleWallNone
+		return WallNone
 	}
 	// The varying case uses exact world-XY coordinates. This makes its
 	// section-to-world control net exact and lets Cone's half-angle bound
@@ -96,25 +100,26 @@ func directLoftCircularHole(pl loftPayload) loftCircleWallKind {
 		pl.Frame0.V() != (r3.Vec{Y: 1}) ||
 		pl.Frame0.Origin().X != 0 || pl.Frame0.Origin().Y != 0 ||
 		pl.Frame1.Origin().X != 0 || pl.Frame1.Origin().Y != 0 {
-		return loftCircleWallNone
+		return WallNone
 	}
 	height := new(big.Rat).Sub(proofarith.FloatRat(pl.Plane1.Origin.Z),
 		proofarith.FloatRat(pl.Plane0.Origin.Z))
 	if height.Cmp(proofarith.FloatRat(level.Z)) != 0 {
-		return loftCircleWallNone
+		return WallNone
 	}
 	if !sameAxes {
-		return loftCircleWallQuarterTurn
+		return WallQuarterTurn
 	}
 	if bottom.Center == top.Center {
-		return loftCircleWallCone
+		return WallCone
 	}
-	return loftCircleWallRuled
+	return WallRuled
 }
 
-// The shared cylinder builder publishes no normal departure. Use it only
-// when its held center and the exact frame map denote a true round cylinder.
-func loftBoreCylinderExactGeometry(frame r3.Frame, xform r3.Transform, u, v float64) bool {
+// BoreCylinderExactGeometry reports whether the shared cylinder builder, which
+// publishes no normal departure, may be used: its held center and the exact
+// frame map must denote a true round cylinder.
+func BoreCylinderExactGeometry(frame r3.Frame, xform r3.Transform, u, v float64) bool {
 	pp := prismrecord.Payload{Frame: frame, Xform: xform}
 	center := pp.Point(u, v, 0)
 	if pp.PointRound(u, v, 0, center) != 0 {
@@ -128,10 +133,10 @@ func loftBoreCylinderExactGeometry(frame r3.Frame, xform r3.Transform, u, v floa
 	return err == nil && charge.Stretch == 0
 }
 
-// loftConeWallArea bounds the lateral area of the exact circular frustum
+// coneWallArea bounds the lateral area of the exact circular frustum
 // denoted by two coaxial circle records. The surface is independent of the
 // outer Loft wall, so a curved outer loop does not enter this proof.
-func loftConeWallArea(pl loftPayload, bottom, top circleSeg) (proofbound.BoundedScalar, bool) {
+func coneWallArea(pl Payload, bottom, top sectionrecord.CircleSeg) (proofbound.BoundedScalar, bool) {
 	r0, r1 := bottom.Radius.Base(), top.Radius.Base()
 	h := new(big.Rat).Sub(proofarith.FloatRat(pl.Plane1.Origin.Z),
 		proofarith.FloatRat(pl.Plane0.Origin.Z))
@@ -153,12 +158,12 @@ func loftConeWallArea(pl loftPayload, bottom, top circleSeg) (proofbound.Bounded
 	return proofbound.MeasuredScalar(held, bound), true
 }
 
-// loftMovingCircleWallArea bounds the wall ruled between corresponding circle
+// movingCircleWallArea bounds the wall ruled between corresponding circle
 // points. Its speed is r(t)*sqrt(h²+(dr+dx*cosθ+dy*sinθ)²); integrating the
 // linear radius over t leaves the mean radius times one angular integral.
 // The angular speed is |(dx,dy)|-Lipschitz, so midpoint quadrature has an
 // absolute error at most |(dx,dy)|*π²/cells.
-func loftMovingCircleWallArea(pl loftPayload, bottom, top circleSeg) (proofbound.BoundedScalar, bool) {
+func movingCircleWallArea(pl Payload, bottom, top sectionrecord.CircleSeg) (proofbound.BoundedScalar, bool) {
 	r0, r1 := proofarith.FloatRat(bottom.Radius.Base()), proofarith.FloatRat(top.Radius.Base())
 	dr := new(big.Rat).Sub(r1, r0)
 	dx := new(big.Rat).Sub(proofarith.FloatRat(top.Center.U), proofarith.FloatRat(bottom.Center.U))
@@ -206,13 +211,13 @@ func loftMovingCircleWallArea(pl loftPayload, bottom, top circleSeg) (proofbound
 	return proofbound.MeasuredScalar(held, bound), true
 }
 
-// loftQuarterTurnWallArea encloses the lateral area of a pair of concentric
+// quarterTurnWallArea encloses the lateral area of a pair of concentric
 // circles whose section frames differ by exactly a quarter-turn. Writing the
 // planar ruled point as q(t) exp(iθ), q(t)=(1-t)r0+i t r1, removes θ from the
 // area integrand. Its square is a positive quadratic in t. Each interval's
 // endpoint maximum and endpoint-or-vertex minimum bound the integrand there;
 // outward square roots and π then bound the full integral.
-func loftQuarterTurnWallArea(pl loftPayload, bottom, top circleSeg) (proofbound.BoundedScalar, bool) {
+func quarterTurnWallArea(pl Payload, bottom, top sectionrecord.CircleSeg) (proofbound.BoundedScalar, bool) {
 	r0, r1 := proofarith.FloatRat(bottom.Radius.Base()), proofarith.FloatRat(top.Radius.Base())
 	h := new(big.Rat).Sub(proofarith.FloatRat(pl.Plane1.Origin.Z),
 		proofarith.FloatRat(pl.Plane0.Origin.Z))
@@ -259,11 +264,11 @@ func loftQuarterTurnWallArea(pl loftPayload, bottom, top circleSeg) (proofbound.
 	return proofbound.MeasuredScalar(held, bound), true
 }
 
-// loftCircularRim uses a section's own whole-circle record and the Loft
+// circularRim uses a section's own whole-circle record and the Loft
 // assembly's first circle station. The station carries a.Delta to the exact
 // seam; CircleCurveBound separately reaches the entire recorded circle from
 // the published Circle3 under the frame and placement.
-func loftCircularRim(pl loftPayload, a loftmesh.Assembly, side int) (*Edge, bool, error) {
+func circularRim(env topo.Env, pl Payload, a loftmesh.Assembly, side int) (*topo.Edge, bool, error) {
 	profile, frame, indices := pl.Profile0, pl.Frame0, a.VIdx[1]
 	if side == 1 {
 		profile, frame, indices = pl.Profile1, pl.Frame1, a.WIdx[1]
@@ -271,7 +276,7 @@ func loftCircularRim(pl loftPayload, a loftmesh.Assembly, side int) (*Edge, bool
 	if len(indices) == 0 {
 		return nil, false, nil
 	}
-	circle, ok := profile.Holes[0].Segments[0].(circleSeg)
+	circle, ok := profile.Holes[0].Segments[0].(sectionrecord.CircleSeg)
 	if !ok {
 		return nil, false, nil
 	}
@@ -296,13 +301,13 @@ func loftCircularRim(pl loftPayload, a loftmesh.Assembly, side int) (*Edge, bool
 	if pp.Reflected() {
 		edgeAxis = axis
 	}
-	vertex := topobuild.LoftVertex(handleAlloc{}, a.Verts[indices[0]], a.Delta)
-	return bornEdge(&Edge{n: topo.Edge{
+	vertex := topobuild.LoftVertex(env.Alloc, a.Verts[indices[0]], a.Delta)
+	return topobuild.NewEdge(env.Alloc, topo.Edge{
 		Convex: false, Length: walk.Length, LengthBound: walk.LengthBound,
 		Curve:      surfacegeom.Circle3{Center: center, Axis: edgeAxis, Radius: circle.Radius},
 		CurveBound: curveBound, CurveBounded: true,
 		Start: vertex, End: vertex,
-	}}), true, nil
+	}), true, nil
 }
 
 // A whole circle has the rational quadratic quarter-arc parametrization
@@ -314,15 +319,15 @@ func loftCircularRim(pl loftPayload, a loftmesh.Assembly, side int) (*Edge, bool
 // exact cardinal quarter-turn of the second section. The source records
 // therefore determine an exact private degree-(2,1) control net; its tag is
 // NURBSSurface when that wall is neither a right cylinder nor a right cone.
-func loftCircularWallSurface(pl loftPayload, bottom, top circleSeg,
-	kind loftCircleWallKind) (surfacegeom.Surface, float64) {
-	if kind == loftCircleWallRuled || kind == loftCircleWallQuarterTurn {
+func circularWallSurface(pl Payload, bottom, top sectionrecord.CircleSeg,
+	kind WallKind) (surfacegeom.Surface, float64) {
+	if kind == WallRuled || kind == WallQuarterTurn {
 		return surfacegeom.NURBSSurface{}, 0
 	}
 	r0, r1 := bottom.Radius.Base(), top.Radius.Base()
 	pp0 := prismrecord.Payload{Frame: pl.Frame0, Xform: pl.Xform}
 	pp1 := prismrecord.Payload{Frame: pl.Frame1, Xform: pl.Xform}
-	if kind == loftCircleWallCylinder {
+	if kind == WallCylinder {
 		return surfacegeom.Cylinder{Origin: pp0.Point(bottom.Center.U, bottom.Center.V, 0),
 			Axis: pp0.Dir(0, 0, 1), Radius: bottom.Radius}, 0
 	}
@@ -347,36 +352,36 @@ func loftCircularWallSurface(pl loftPayload, bottom, top circleSeg,
 		Axis: pp1.Dir(0, 0, -1), Radius: top.Radius, HalfAngle: angle}, angleBound
 }
 
-// buildLoftVaryingCircularHoleTopology uses the source circle pair to replace
+// buildVaryingCircularHoleTopology uses the source circle pair to replace
 // only the hole wall and its two rims. A circle whose placement cannot bound
 // its analytic curve keeps the original faceted topology instead.
-func buildLoftVaryingCircularHoleTopology(ctx context.Context, body *Body, pl loftPayload,
-	kind loftCircleWallKind, a loftmesh.Assembly, start, end *Face,
-	walls []*Face) ([]*Face, *Face, error) {
-	if len(a.VIdx) != 2 || len(start.n.Loops) != 2 || len(end.n.Loops) != 2 || len(walls) != a.Walls {
+func buildVaryingCircularHoleTopology(ctx context.Context, env topo.Env, body *topo.Body, pl Payload,
+	kind WallKind, a loftmesh.Assembly, start, end *topo.Face,
+	walls []*topo.Face) ([]*topo.Face, *topo.Face, error) {
+	if len(a.VIdx) != 2 || len(start.Loops) != 2 || len(end.Loops) != 2 || len(walls) != a.Walls {
 		return walls, nil, nil
 	}
-	bottomSeg, ok0 := pl.Profile0.Holes[0].Segments[0].(circleSeg)
-	topSeg, ok1 := pl.Profile1.Holes[0].Segments[0].(circleSeg)
+	bottomSeg, ok0 := pl.Profile0.Holes[0].Segments[0].(sectionrecord.CircleSeg)
+	topSeg, ok1 := pl.Profile1.Holes[0].Segments[0].(sectionrecord.CircleSeg)
 	if !ok0 || !ok1 {
 		return walls, nil, nil
 	}
-	bottom, ok, err := loftCircularRim(pl, a, 0)
+	bottom, ok, err := circularRim(env, pl, a, 0)
 	if err != nil || !ok {
 		return walls, nil, err
 	}
-	top, ok, err := loftCircularRim(pl, a, 1)
+	top, ok, err := circularRim(env, pl, a, 1)
 	if err != nil || !ok {
 		return walls, nil, err
 	}
-	kept := make([]*Face, 0, len(walls))
+	kept := make([]*topo.Face, 0, len(walls))
 	var origins []provenance.Ref
 	for k, face := range walls {
 		if err := ctx.Err(); err != nil {
 			return nil, nil, err
 		}
 		if a.Cell[k][0] == 1 {
-			origins = append(origins, face.n.Origins...)
+			origins = append(origins, face.Origins...)
 			continue
 		}
 		kept = append(kept, face)
@@ -384,27 +389,27 @@ func buildLoftVaryingCircularHoleTopology(ctx context.Context, body *Body, pl lo
 	if len(origins) < 2 {
 		return walls, nil, nil
 	}
-	surface, normalBound := loftCircularWallSurface(pl, bottomSeg, topSeg, kind)
-	wall := bornFace(&Face{n: topo.Face{
-		Surface: surface, Reversed: kind != loftCircleWallRuled && kind != loftCircleWallQuarterTurn,
-		NormalBound: normalBound, Origins: origins, Body: bodyNode(body),
-	}})
-	wall.n.Loops = []*topo.Loop{
-		loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{{Edge: edgeNode(bottom), Forward: true}}, a.Reversed)}})),
-		loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{{Edge: edgeNode(top), Forward: false}}, a.Reversed)}})),
+	surface, normalBound := circularWallSurface(pl, bottomSeg, topSeg, kind)
+	wall := topobuild.NewFace(env.Alloc, topo.Face{
+		Surface: surface, Reversed: kind != WallRuled && kind != WallQuarterTurn,
+		NormalBound: normalBound, Origins: origins, Body: body,
+	})
+	wall.Loops = []*topo.Loop{
+		topobuild.NewLoop(env.Alloc, topo.Loop{Outer: true, CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{{Edge: bottom, Forward: true}}, a.Reversed)}),
+		topobuild.NewLoop(env.Alloc, topo.Loop{Outer: true, CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{{Edge: top, Forward: false}}, a.Reversed)}),
 	}
-	start.n.Loops[1] = loopNode(bornLoop(&Loop{n: topo.Loop{Outer: start.n.Loops[1].Outer, CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{{Edge: edgeNode(bottom), Forward: false}}, a.Reversed)}}))
-	end.n.Loops[1] = loopNode(bornLoop(&Loop{n: topo.Loop{Outer: end.n.Loops[1].Outer, CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{{Edge: edgeNode(top), Forward: true}}, a.Reversed)}}))
-	if err := loftCircleCapAreas(ctx, pl, a, start, end); err != nil {
+	start.Loops[1] = topobuild.NewLoop(env.Alloc, topo.Loop{Outer: start.Loops[1].Outer, CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{{Edge: bottom, Forward: false}}, a.Reversed)})
+	end.Loops[1] = topobuild.NewLoop(env.Alloc, topo.Loop{Outer: end.Loops[1].Outer, CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{{Edge: top, Forward: true}}, a.Reversed)})
+	if err := circleCapAreas(ctx, pl, a, start, end); err != nil {
 		return nil, nil, err
 	}
 	return append(kept, wall), wall, nil
 }
 
-// loftBoreHasExactAxis compares the recorded frames' denoted lifts over
+// BoreHasExactAxis compares the recorded frames' denoted lifts over
 // rationals. The proposed axial sweep uses frame0's axis and the rounded
 // level, so both section origins and the selected centers must agree exactly.
-func loftBoreHasExactAxis(frame0, frame1 r3.Frame, u, v, level float64) bool {
+func BoreHasExactAxis(frame0, frame1 r3.Frame, u, v, level float64) bool {
 	z := proofarith.FloatRat(level)
 	if z == nil || z.Sign() <= 0 {
 		return false
@@ -441,41 +446,41 @@ func loftBoreHasExactAxis(frame0, frame1 r3.Frame, u, v, level float64) bool {
 	return true
 }
 
-func loftBoreTopologyCircle(pl loftPayload, a loftmesh.Assembly, start, end *Face, walls []*Face) (circleSeg, bool) {
+func boreTopologyCircle(pl Payload, a loftmesh.Assembly, start, end *topo.Face, walls []*topo.Face) (sectionrecord.CircleSeg, bool) {
 	if len(pl.Profile0.Holes) != 1 || len(pl.Profile0.Holes[0].Segments) != 1 ||
-		len(a.VIdx) != 2 || len(start.n.Loops) != 2 || len(end.n.Loops) != 2 || len(walls) != a.Walls {
-		return circleSeg{}, false
+		len(a.VIdx) != 2 || len(start.Loops) != 2 || len(end.Loops) != 2 || len(walls) != a.Walls {
+		return sectionrecord.CircleSeg{}, false
 	}
-	circle, ok := pl.Profile0.Holes[0].Segments[0].(circleSeg)
+	circle, ok := pl.Profile0.Holes[0].Segments[0].(sectionrecord.CircleSeg)
 	if !ok || circle.CCW || circle.TStart != 1 || circle.TEnd != 0 {
-		return circleSeg{}, false
+		return sectionrecord.CircleSeg{}, false
 	}
 	return circle, true
 }
 
-// buildLoftAnalyticBoreTopology replaces only the certified hole's triangle
+// buildAnalyticBoreTopology replaces only the certified hole's triangle
 // faces. The loft assembly and its mass and tessellation proofs stay intact:
 // each former hole triangle role maps to the one cylindrical source face.
-func buildLoftAnalyticBoreTopology(ctx context.Context, body *Body, ref producerID, pl loftPayload,
-	a loftmesh.Assembly, start, end *Face, walls []*Face) ([]*Face, error) {
-	circle, ok := loftBoreTopologyCircle(pl, a, start, end, walls)
+func buildAnalyticBoreTopology(ctx context.Context, env topo.Env, body *topo.Body, pl Payload,
+	a loftmesh.Assembly, start, end *topo.Face, walls []*topo.Face) ([]*topo.Face, error) {
+	circle, ok := boreTopologyCircle(pl, a, start, end, walls)
 	if !ok {
-		return nil, fmt.Errorf("%w: a through-bore loft lost its certified hole", ErrUnsupported)
+		return nil, fmt.Errorf("%w: a through-bore loft lost its certified hole", decaderr.ErrUnsupported)
 	}
 	level := pl.Frame0.ToLocal(pl.Frame1.Origin())
-	if !loftBoreHasExactAxis(pl.Frame0, pl.Frame1, circle.Center.U, circle.Center.V, level.Z) {
-		return nil, fmt.Errorf("%w: a through-bore loft has no common circle axis", ErrUnsupported)
+	if !BoreHasExactAxis(pl.Frame0, pl.Frame1, circle.Center.U, circle.Center.V, level.Z) {
+		return nil, fmt.Errorf("%w: a through-bore loft has no common circle axis", decaderr.ErrUnsupported)
 	}
 	pp := prismrecord.Payload{
 		Frame: pl.Frame0, Z0: 0, Z1: level.Z, Xform: pl.Xform,
 		Z0Delta: a.Delta, Z1Delta: a.Delta,
 	}
-	faces, bottom, top, _, err := prismrecord.BuildLoopSidesAs(ctx, envOf(body.n.Doc, ref), bodyNode(body), pp, 1, true, pl.Profile0.Holes[0], freeform.NewFreeformWork(), nil, levelToken{}, levelToken{}, false)
+	faces, bottom, top, _, err := prismrecord.BuildLoopSidesAs(ctx, env, body, pp, 1, true, pl.Profile0.Holes[0], freeform.NewFreeformWork(), nil, denotation.LevelToken{}, denotation.LevelToken{}, false)
 	if err != nil {
 		return nil, err
 	}
 	if len(faces) != 1 || len(bottom) != 1 || len(top) != 1 {
-		return nil, fmt.Errorf("%w: a through-bore circle did not build one wall", ErrUnsupported)
+		return nil, fmt.Errorf("%w: a through-bore circle did not build one wall", decaderr.ErrUnsupported)
 	}
 	wall := faces[0]
 	wall.Origins = nil
@@ -485,38 +490,38 @@ func buildLoftAnalyticBoreTopology(ctx context.Context, body *Body, ref producer
 	for _, loop := range wall.Loops {
 		loop.CoEdges = topobuild.LoftLoopCoedges(loop.CoEdges, a.Reversed)
 	}
-	// prismrecord.BuildLoopSidesAs links its side face immediately, while evalLoft links
+	// prismrecord.BuildLoopSidesAs links its side face immediately, while Build links
 	// every live face after this rewrite. Clear those two private links once.
 	bottom[0].Edge.Faces = nil
 	top[0].Edge.Faces = nil
-	filtered := make([]*Face, 0, len(walls))
+	filtered := make([]*topo.Face, 0, len(walls))
 	for k, face := range walls {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 		if a.Cell[k][0] == 1 {
-			wall.Origins = append(wall.Origins, face.n.Origins...)
+			wall.Origins = append(wall.Origins, face.Origins...)
 			continue
 		}
 		filtered = append(filtered, face)
 	}
 	if len(wall.Origins) < 2 {
-		return nil, fmt.Errorf("%w: a through-bore has no source wall cells", ErrUnsupported)
+		return nil, fmt.Errorf("%w: a through-bore has no source wall cells", decaderr.ErrUnsupported)
 	}
-	filtered = append(filtered, faceHandle(wall))
-	start.n.Loops[1] = loopNode(bornLoop(&Loop{n: topo.Loop{Outer: start.n.Loops[1].Outer, CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{{Edge: bottom[0].Edge, Forward: false}}, a.Reversed)}}))
-	end.n.Loops[1] = loopNode(bornLoop(&Loop{n: topo.Loop{Outer: end.n.Loops[1].Outer, CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{{Edge: top[0].Edge, Forward: true}}, a.Reversed)}}))
-	if err := loftCircleCapAreas(ctx, pl, a, start, end); err != nil {
+	filtered = append(filtered, wall)
+	start.Loops[1] = topobuild.NewLoop(env.Alloc, topo.Loop{Outer: start.Loops[1].Outer, CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{{Edge: bottom[0].Edge, Forward: false}}, a.Reversed)})
+	end.Loops[1] = topobuild.NewLoop(env.Alloc, topo.Loop{Outer: end.Loops[1].Outer, CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{{Edge: top[0].Edge, Forward: true}}, a.Reversed)})
+	if err := circleCapAreas(ctx, pl, a, start, end); err != nil {
 		return nil, err
 	}
 	return filtered, nil
 }
 
-// loftCircleCapAreas replaces each held hole polygon's area with its own
+// circleCapAreas replaces each held hole polygon's area with its own
 // recorded whole-circle integral. Each cap keeps its existing triangle and
 // placement bounds; the subtraction composes the circle integral's bound.
-func loftCircleCapAreas(ctx context.Context, pl loftPayload, a loftmesh.Assembly, start, end *Face) error {
-	for cap, face := range []*Face{start, end} {
+func circleCapAreas(ctx context.Context, pl Payload, a loftmesh.Assembly, start, end *topo.Face) error {
+	for cap, face := range []*topo.Face{start, end} {
 		hole := pl.Profile0.Holes[0]
 		pts, loops := a.Pts0, a.LoopIdx0
 		if cap == 1 {
@@ -530,12 +535,12 @@ func loftCircleCapAreas(ctx context.Context, pl loftPayload, a loftmesh.Assembly
 		outer := loftmesh.CapPolygonAreaRat(pts, [][]int{loops[0]})
 		value, _ := outer.Float64()
 		if proofbound.IsNonFinite(value) {
-			return fmt.Errorf("%w: a circular-hole cap area is not finite", ErrUnsupported)
+			return fmt.Errorf("%w: a circular-hole cap area is not finite", decaderr.ErrUnsupported)
 		}
 		area := proofbound.BoundedSub(
 			proofbound.MeasuredScalar(value, proofarith.RationalFloatError(outer, value)), holeArea)
-		face.n.Area = area.Value
-		face.n.AreaBound = proofbound.AbsSumUpper(area.Bound, face.n.AreaBound)
+		face.Area = area.Value
+		face.AreaBound = proofbound.AbsSumUpper(area.Bound, face.AreaBound)
 	}
 	return nil
 }

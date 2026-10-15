@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -481,7 +482,7 @@ func TestLoftArcWedgeBoxSoundness(t *testing.T) {
 		Xform: r3.Identity(),
 	}
 	budget := proofbound.NewWorkBudget(t.Context())
-	body, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, freeform.NewFreeformWork(), freeform.NewFreeformWork())
+	body, err := bodyResult(loftrecord.Build(t.Context(), envOf(documentNode(New()), producerID(0)), pl, budget, freeform.NewFreeformWork(), freeform.NewFreeformWork()))
 	require.NoError(t, err)
 
 	bnd, err := body.Bounds()
@@ -693,7 +694,7 @@ func TestLoftArcPairM1PublishesZeroDeltaWithPositiveSectionDelta(t *testing.T) {
 		Xform: r3.Identity(),
 	}
 	budget := proofbound.NewWorkBudget(t.Context())
-	body, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, freeform.NewFreeformWork(), freeform.NewFreeformWork())
+	body, err := bodyResult(loftrecord.Build(t.Context(), envOf(documentNode(New()), producerID(0)), pl, budget, freeform.NewFreeformWork(), freeform.NewFreeformWork()))
 	require.NoError(t, err)
 
 	loaded, ok := body.n.Payload.(loftPayload)
@@ -767,7 +768,7 @@ func TestLoftArcPairDriftedEndChargesRadialResidual(t *testing.T) {
 		Xform: r3.Identity(),
 	}
 	budget := proofbound.NewWorkBudget(t.Context())
-	body, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, freeform.NewFreeformWork(), freeform.NewFreeformWork())
+	body, err := bodyResult(loftrecord.Build(t.Context(), envOf(documentNode(New()), producerID(0)), pl, budget, freeform.NewFreeformWork(), freeform.NewFreeformWork()))
 	require.NoError(t, err)
 
 	loaded, ok := body.n.Payload.(loftPayload)

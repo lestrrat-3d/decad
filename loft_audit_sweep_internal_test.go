@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
@@ -438,8 +439,7 @@ func TestLoftAuditEnumerationTracksCandidates(t *testing.T) {
 		pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 100))
 		pl := loftPayload{Profile0: p, Profile1: p, Plane0: pl0, Plane1: pl1,
 			Frame0: mustFrame(t, pl0), Frame1: mustFrame(t, pl1), Xform: r3.Identity()}
-		_, err := evalLoft(t.Context(), New(), producerID(0), pl, proofbound.NewWorkBudget(t.Context()),
-			freeform.NewFreeformWork(), freeform.NewFreeformWork())
+		_, err := bodyResult(loftrecord.Build(t.Context(), envOf(documentNode(New()), producerID(0)), pl, proofbound.NewWorkBudget(t.Context()), freeform.NewFreeformWork(), freeform.NewFreeformWork()))
 		require.NoError(t, err)
 	})
 	t.Run("overlapping stack", func(t *testing.T) {

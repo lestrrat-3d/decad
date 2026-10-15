@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -100,7 +101,7 @@ func boxLoftPayload(t *testing.T) loftPayload {
 func evalLoftFixture(t *testing.T, pl loftPayload) *Body {
 	t.Helper()
 	budget := proofbound.NewWorkBudget(t.Context())
-	body, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, freeform.NewFreeformWork(), freeform.NewFreeformWork())
+	body, err := bodyResult(loftrecord.Build(t.Context(), envOf(documentNode(New()), producerID(0)), pl, budget, freeform.NewFreeformWork(), freeform.NewFreeformWork()))
 	require.NoError(t, err)
 	return body
 }
@@ -149,12 +150,12 @@ func TestEvalLoftUnitBoxTopology(t *testing.T) {
 
 // TestEvalLoftRolesUseTheGivenProducerID proves every role FeatureRef the build
 // mints — the body's own origin and every face's role — carries the producerID
-// evalLoft was actually called with, not a hardcoded one.
+// loftrecord.Build was actually called with, not a hardcoded one.
 func TestEvalLoftRolesUseTheGivenProducerID(t *testing.T) {
 	t.Parallel()
 	const ref = producerID(7)
 	budget := proofbound.NewWorkBudget(t.Context())
-	body, err := evalLoft(t.Context(), New(), ref, boxLoftPayload(t), budget, freeform.NewFreeformWork(), freeform.NewFreeformWork())
+	body, err := bodyResult(loftrecord.Build(t.Context(), envOf(documentNode(New()), ref), boxLoftPayload(t), budget, freeform.NewFreeformWork(), freeform.NewFreeformWork()))
 	require.NoError(t, err)
 
 	require.Equal(t, ref, body.n.Origin.Producer)
@@ -827,7 +828,7 @@ func TestEvalLoftCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	budget := proofbound.NewWorkBudget(ctx)
-	_, err := evalLoft(ctx, New(), producerID(0), boxLoftPayload(t), budget, freeform.NewFreeformWork(), freeform.NewFreeformWork())
+	_, err := bodyResult(loftrecord.Build(ctx, envOf(documentNode(New()), producerID(0)), boxLoftPayload(t), budget, freeform.NewFreeformWork(), freeform.NewFreeformWork()))
 	require.ErrorIs(t, err, context.Canceled)
 }
 
@@ -974,7 +975,7 @@ func TestValidateLoftRecordsDistinctPlanesPass(t *testing.T) {
 }
 
 // TestEvalLoftCollapsedTriangleIsDegenerate is S6, reached through the full
-// evalLoft pipeline: plane0 and plane1 share the same origin but different
+// loftrecord.Build pipeline: plane0 and plane1 share the same origin but different
 // (non-coincident, so S5 passes) bases, which puts corner 0 of BOTH profiles
 // at the exact same world point — collapsing that corner's two incident wall
 // triangles to zero area.
@@ -991,7 +992,7 @@ func TestEvalLoftCollapsedTriangleIsDegenerate(t *testing.T) {
 		Xform: r3.Identity(),
 	}
 	budget := proofbound.NewWorkBudget(t.Context())
-	_, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, freeform.NewFreeformWork(), freeform.NewFreeformWork())
+	_, err := bodyResult(loftrecord.Build(t.Context(), envOf(documentNode(New()), producerID(0)), pl, budget, freeform.NewFreeformWork(), freeform.NewFreeformWork()))
 	require.ErrorIs(t, err, ErrDegenerate, "S6: a corner shared by both profiles collapses its incident wall triangles")
 }
 
@@ -1013,7 +1014,7 @@ func TestEvalLoftOverTwistedCorrespondenceCrosses(t *testing.T) {
 		Xform: r3.Identity(),
 	}
 	budget := proofbound.NewWorkBudget(t.Context())
-	_, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, freeform.NewFreeformWork(), freeform.NewFreeformWork())
+	_, err := bodyResult(loftrecord.Build(t.Context(), envOf(documentNode(New()), producerID(0)), pl, budget, freeform.NewFreeformWork(), freeform.NewFreeformWork()))
 	require.ErrorIs(t, err, ErrDegenerate, "S7: a mirrored correspondence self-crosses")
 }
 
@@ -1033,7 +1034,7 @@ func manyGonLoop(cx, cy, radius float64, n int) loopRecord {
 }
 
 // TestEvalLoftAuditCountsCandidatesNotPairs is S8's measure, wired end to
-// end through evalLoft: a 1200-gon prism assembles F = 4*1200 - 4 triangles,
+// end through loftrecord.Build: a 1200-gon prism assembles F = 4*1200 - 4 triangles,
 // whose F*(F-1)/2 is past proofbound.MaxFacetPairTestsPerCall, yet the audit
 // tests only the wall-wall pairs whose boxes overlap (both caps are decided
 // by their proofs), so the build passes and publishes the n-gon's exact
@@ -1061,7 +1062,7 @@ func TestEvalLoftAuditCountsCandidatesNotPairs(t *testing.T) {
 		"the fixture must be one the all-pairs count would refuse")
 
 	budget := proofbound.NewWorkBudget(t.Context())
-	body, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, freeform.NewFreeformWork(), freeform.NewFreeformWork())
+	body, err := bodyResult(loftrecord.Build(t.Context(), envOf(documentNode(New()), producerID(0)), pl, budget, freeform.NewFreeformWork(), freeform.NewFreeformWork()))
 	require.NoError(t, err)
 	vol, err := body.Volume()
 	require.NoError(t, err)
@@ -1188,7 +1189,7 @@ func exactRatMeshVolume(verts [][3]*big.Rat, tris [][3]int) *big.Rat {
 
 // --- loftmesh.CapPolygonAreaRat: docs/loft-design.md §8's cap-polygon shoelace ---
 
-// assembleLoftFixture runs evalLoft's own pairing/assembly prefix
+// assembleLoftFixture runs loftrecord.Build's own pairing/assembly prefix
 // (loftmesh.ValidateLoftRecords, loftmesh.PairRecords, loftmesh.AssembleTriangulated) and stops there, so a
 // test can inspect the assembled cap polygon (pts0/loopIdx0, pts1/loopIdx1)
 // directly rather than only the published body.

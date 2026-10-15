@@ -1512,8 +1512,6 @@
 10	0.00	TestTwinEnumsMatch
 10	0.00	TestTopologyHandlesAreBorn
 10	0.00	TestFaceBodyIsTheBodyHandle
-10	0.00	TestLoftCircleBoreExactAxisProof
-10	0.00	TestLoftCircleBoreTopologyShapeRefusals
 10	0.00	TestLoftWallAreaCacheMatchesHeldTriangles
 10	0.00	TestTopoDocumentWriteGuard
 10	0.00	TestCertifyFacetedCopiesRejectsBodiesOutsideTheDocument

@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftfillet"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -317,7 +318,7 @@ func (b *Body) filletStraightLoft(ctx context.Context, sel EdgeSelector, edges [
 	next.Cell, next.Side, next.CapStartCount = nil, nil, 0
 	next.Proof = loftmesh.MeshProof{}
 	ref := b.n.Doc.NextProducer
-	body, err := evalLoft(ctx, documentHandle(b.n.Doc), ref, next, budget, work0, work1)
+	body, err := bodyResult(loftrecord.Build(ctx, envOf(b.n.Doc, ref), next, budget, work0, work1))
 	if err != nil {
 		return nil, err
 	}

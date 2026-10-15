@@ -20,7 +20,7 @@ type BodyReadings struct {
 	BoundsBound          float64
 }
 
-// ValidateBodyReadings is evalLoft's own finiteness gate (design O2).
+// ValidateBodyReadings is loftrecord.Build's own finiteness gate (design O2).
 // Volume, Centroid and Bounds must be fully finite, exactly as every other
 // analytic payload requires — but Area's Bound is deliberately NOT checked:
 // §8 requires a saturated Area bound to publish +Inf as a proof term (a wall

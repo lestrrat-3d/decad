@@ -98,7 +98,7 @@ func HasUnfacetedCell(pairs []LoopPair) bool {
 // MAX of every cell's own PARAMETER-MATCHED chord-to-curve departure (F1's
 // rule) — a DIFFERENT quantity, never interchangeable with sectionDelta. It
 // is the CHORD-TO-CURVE HALF of docs/loft-design.md §5.2's matchedDelta row
-// and never that whole row: evalLoft composes it with the build's own delta
+// and never that whole row: loftrecord.Build composes it with the build's own delta
 // (ChordCellDeltaUpper) before any chorded leg — each of which names a
 // parameter-matched matchedDelta obligation, never "the sagitta alone" —
 // reads it. The two accumulators here coincide bit-for-bit

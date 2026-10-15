@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftfillet"
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -85,9 +86,9 @@ func tryLoftThroughBoreCut(ctx context.Context, d *Document, ref producerID, a, 
 	next.RecordArea = [2]float64{ig.Area, ig.Area}
 	// The analytic wall has no normal-departure allowance. A rounded center
 	// or a non-isometric frame map keeps the Loft's tessellated bore topology.
-	next.AnalyticBore = loftBoreHasExactAxis(pl.Frame0, pl.Frame1, hole.Center.U, hole.Center.V, end.Z) &&
-		loftBoreCylinderExactGeometry(pl.Frame0, pl.Xform, hole.Center.U, hole.Center.V)
-	out, err := evalLoft(ctx, d, ref, next, budget, work0, work1)
+	next.AnalyticBore = loftrecord.BoreHasExactAxis(pl.Frame0, pl.Frame1, hole.Center.U, hole.Center.V, end.Z) &&
+		loftrecord.BoreCylinderExactGeometry(pl.Frame0, pl.Xform, hole.Center.U, hole.Center.V)
+	out, err := bodyResult(loftrecord.Build(ctx, envOf(documentNode(d), ref), next, budget, work0, work1))
 	if err != nil {
 		return nil, false, err
 	}

@@ -401,7 +401,7 @@ func TestLoftCrossingAuditPollsAfterFinalPair(t *testing.T) {
 // wrapper. loftAuditPairwise runs the pair loop's two per-pair shortcuts
 // over every pair, loftAuditProduction is exactly what
 // loftmesh.LoftCrossingAudit itself passes (the same two plus the sweep
-// enumeration), and loftAuditStructured is what evalLoft's
+// enumeration), and loftAuditStructured is what loftrecord.Build's
 // loftmesh.LoftCrossingAuditStructured passes. An equivalence proven against
 // the last two is a statement about the shipped paths.
 //
@@ -705,7 +705,7 @@ func TestLoftCrossingAuditBroadPhaseStillCatchesACrossing(t *testing.T) {
 
 // chordedWedgeTriangles assembles the F~230 hand-chorded spline wedge's own
 // wall-and-cap triangle set — the very verts/tris loftmesh.LoftCrossingAudit is handed
-// inside a Document.Loft of that shape — by running the same pipeline evalLoft
+// inside a Document.Loft of that shape — by running the same pipeline loftrecord.Build
 // runs ahead of the audit (sectioncert.RecordProfile, loftmesh.ValidateLoftRecords, loftmesh.PairRecords,
 // loftmesh.AssembleTriangulated) and stopping at its output. It reuses
 // loft_chord_calibration_internal_test.go's wedgePlanes/chordedWedgeProfile

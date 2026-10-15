@@ -117,7 +117,7 @@ func TestLoftFitSplineWedgeMatchesExtrude(t *testing.T) {
 // independently of freeform's exact path: a finite-difference integral of
 // |C'(s) − Δ|² over the dense samples between the cell's two stations, which
 // sit at uniform native parameter. Each published energy must agree with it.
-// The test then recomputes the Area reading through evalLoft's own steps
+// The test then recomputes the Area reading through loftrecord.Build's own steps
 // twice — once as built, once with every free-form energy at +Inf — checks
 // the first against the published Area, and asserts the Area bound shrinks by
 // the sum of the per-cell differences the measured energies predict. The
@@ -215,7 +215,7 @@ func untwistedRuledLeg(c, h, md, arcA, arcB, energyA, energyB float64) float64 {
 	return math.Min(free, sharp)
 }
 
-// loftWedgeAreaRebuild replays evalLoft's own steps from the records to the
+// loftWedgeAreaRebuild replays loftrecord.Build's own steps from the records to the
 // Area reading. With dropEnergy set, every cell's tangent energy is +Inf, the
 // reading a build with no energy proof publishes.
 func loftWedgeAreaRebuild(t *testing.T, pl loftPayload, dropEnergy bool) (Measurement, []loftmesh.LoopPair, loftmesh.Assembly) {
@@ -563,7 +563,7 @@ func TestLoftFreeformPairPastItsShareRefusesS15(t *testing.T) {
 // instead (§5), whose volume 40 publishes Exact.
 //
 // Shown to fail first: on the build that skipped zero-departure cells in
-// ComputeLoftChordedAllow, and on the build whose evalLoft gate read the two
+// ComputeLoftChordedAllow, and on the build whose loftrecord.Build gate read the two
 // section terms alone, the NURBS pair published Volume 40 ± 0 Exact (the
 // twist correction never applied). With Area's bilinear correction keyed on
 // the section terms alone, Area missed the ruled walls by 5.28 against a

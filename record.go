@@ -4,6 +4,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/chainrecord"
 	"github.com/lestrrat-3d/decad/internal/coilshell"
 	"github.com/lestrrat-3d/decad/internal/cupwall"
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/patchchain"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
@@ -109,6 +110,15 @@ type mitredSweepPayload = sweepmitre.Payload
 // payload, which coilshell.BuildBody evaluates over topology nodes and which
 // implements topo.Payload (docs/helix-design.md, docs/evaluator-design.md §8).
 type coilPayload = coilshell.Payload
+
+// loftPayload and chainLoftPayload are the evaluator's records of a Loft and of
+// a LoftChain ribbon: the internal/loftrecord payloads, which loftrecord.Build
+// and loftrecord.BuildChain evaluate over topology nodes and which implement
+// topo.Payload (docs/loft-design.md, docs/evaluator-design.md §8).
+type (
+	loftPayload      = loftrecord.Payload
+	chainLoftPayload = loftrecord.ChainPayload
+)
 
 type loopRecord = sectionrecord.LoopRecord
 
