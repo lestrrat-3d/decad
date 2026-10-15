@@ -340,9 +340,9 @@ faces `G0`, `G1`:
    walk end whichever edge made it.
 7. **Assemble.** The result record is the receiver's faces in order, restated
    and rewritten in place, with every blend face appended, `stack` nil,
-   `assignRoles`. `falsifyBrepPayload` and `brepTopologyContext` run: an edge
+   `assignRoles`. `breprecord.Falsify` and `breprecord.TopologyContext` run: an edge
    that does not pair is `ErrUnsupported` (general-boolean §4.2's closure by
-   counting — the proof that the rewrite closed). `evalBrepContext` builds and
+   counting — the proof that the rewrite closed). `breprecord.Build` builds and
    measures the body; a non-positive volume is its own `ErrDegenerate`.
    `Document.commit` retires the receiver, as every modify op does.
 
@@ -410,7 +410,7 @@ record gate; a mismatch falls through to the table unchanged:
 | 3. edge topology | EB2/SB6; the restatement passes (§5.2): EB3/SB7, then EB4/SB8; EB5/SB8; EB6 |
 | 4. construction | per edge: S4, S5 in `G0`; the recomputation in `G1`, SB9; EB8/SB8 before rewriting |
 | 5. audit | per planar face: S8, S6, S7, S9; per trimmed wall: S6 |
-| 6. closure | `falsifyBrepPayload`, `brepTopologyContext`, `evalBrepContext` |
+| 6. closure | `breprecord.Falsify`, `breprecord.TopologyContext`, `breprecord.Build` |
 
 The existence question is asked first wherever two gates meet one input: S4
 and S5 (stage 4) decide whether the blend exists before any trim is measured

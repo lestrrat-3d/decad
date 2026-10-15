@@ -33,19 +33,17 @@ The rules for rows live in `docs/layout.md`.
 | `shell_revolve.go` | `Shell` of a revolve. See modify-reach §9.3. |
 | `shell_opening.go` | Prism and straight Sweep side openings: classify removed faces and dispatch the audited region build. See shell-opening §3–§5. |
 | `shell_opening_brep.go` | Records a prism side opening from the section or stack engine. See shell-opening §4. |
-| `shell_stacked_boss.go` | Builds and measures the exact two-slab rectangular-boss shell. See modify-general §3.1a. |
+| `shell_stacked_boss.go` | Admits and records the exact two-slab rectangular-boss shell; `breprecord` builds and measures it. See modify-general §3.1a. |
 | `shell_prism_union_boss.go` | Authenticates a nested rectangular boss in a faceted Union and builds its bounded inward cup. See shell-faceted-boss design. |
-| `shell_round_boss.go` | Builds and measures the exact two-slab circular-boss shell. See modify-general §3.1c. |
-| `shell_blind_pocket.go` | Builds and measures the exact two-slab rectangular blind-pocket shell. See modify-general §3.1b. |
-| `shell_counterbore.go` | Builds and measures the exact two-level coaxial counterbore shell. See modify-general §3.1e. |
+| `shell_round_boss.go` | Admits and records the exact two-slab circular-boss shell; `breprecord` builds and measures it. See modify-general §3.1c. |
+| `shell_blind_pocket.go` | Admits and records the exact two-slab rectangular blind-pocket shell; `breprecord` builds and measures it. See modify-general §3.1b. |
+| `shell_counterbore.go` | Admits and records the exact two-level coaxial counterbore shell; `breprecord` builds and measures it. See modify-general §3.1e. |
 | `brep_modify.go` / `brep_modify_prism.go` | Brep and stacked modify receivers: dispatch, SB1/SB2, route P. See brep-modify. |
 | `brep_shell.go` / `brep_shell_curved.go` | Route S: through-cut shell and one circular tool-wall opening. See modify-general §3. |
 | `brep_shell_rim.go` | Route S rims. See modify-general §3.3. |
 | `brep_modify_edge.go` | Route E: Table EB, restatement, blends, trims and closure. See brep-modify §5. |
-| `brep_modify_loop.go` / `brep_loop_band.go` | Route L: record rewrite, bands and mass. See modify-general §4. |
+| `brep_modify_loop.go` / `brep_loop_band.go` | Route L: record rewrite and the bands' mesh-boolean admission; `breprecord` builds the bands and their mass. See modify-general §4. |
 | `brep_modify_chain.go` | Route L: selected cap-edge chains and partial-loop record adapters over `internal/offset2d/` and `internal/capband/`. |
 | `brep_modify_partial_chamfer.go` | Rewrites one or two straight edges on part of a brep cap loop, including terminal lines. See modify-general §4.3a. |
-| `brep_loop_fillet.go` | Route L's fillet topology and mass adapters over `internal/filletband/`. See loop-fillet. |
-| `brep_loop_partial_fillet.go` | Closes partial-loop fillet bands with corner patches and terminal arcs. |
-| `brep_loop_partial_chamfer.go` | Closes one or two selected chamfer strips and integrates their exact planar mass. See modify-general §4.3a. |
+| `brep_loop_fillet.go` | Route L's fillet-band pull survey (DF7). See loop-fillet. |
 | `brep_all_edge_chamfer.go` | Admits an exact cross-drilled box and its twelve selected outer edges, then builds the all-edge chamfer through `breprecord`. See modify-general §4.3b. |

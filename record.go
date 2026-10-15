@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/capblend"
@@ -139,14 +140,13 @@ type (
 // internal/capblend payload, which capblend.Build evaluates over topology
 // nodes and which implements topo.Payload (docs/modify-reach-design.md §8.3,
 // docs/evaluator-design.md §8). The other names are its setbacks, band keys,
-// patches, built bands, supplied cap boundaries and loft source.
+// patches, built bands and loft source.
 type (
 	capBlendPayload   = capblend.Payload
 	capSetback        = capblend.Setback
 	capBandKey        = capblend.BandKey
 	capPatch          = capblend.Patch
 	capBandResult     = capblend.BandResult
-	suppliedCapEdges  = capblend.SuppliedCapEdges
 	loftCapBandSource = capblend.LoftSource
 	capPatchGeom      = capband.Patch
 )
@@ -175,3 +175,37 @@ func normalizeSegment(segment curveSegment) (curveSegment, error) {
 // breprecord.BuildAllEdgeChamfer evaluates over topology nodes and which
 // implements topo.Payload (docs/evaluator-design.md §8).
 type allEdgeChamferPayload = breprecord.AllEdgeChamferPayload
+
+// brepPayload is the evaluator's record of an analytically trimmed body
+// (docs/general-boolean-design.md §4): the internal/breprecord payload, which
+// breprecord.Build evaluates over topology nodes and which implements
+// topo.Payload (docs/evaluator-design.md §8). The other names are its faces,
+// an A1 result's slabs, a route L band and its terminals and kind, and the
+// shared topology reading.
+type (
+	brepPayload      = breprecord.Payload
+	brepFace         = breprecord.Face
+	brepStack        = breprecord.Stack
+	brepLoopBand     = breprecord.LoopBand
+	brepBandTerminal = breprecord.BandTerminal
+	brepBandKind     = breprecord.BandKind
+	brepTopology     = breprecord.Topology
+)
+
+// brepSplit is one side-line split: a level and its displacement. brepEmbed
+// maps one face frame's local axes onto the reference frame's by a signed
+// permutation, and brepUse is one face's use of one edge in the shared
+// topology builder.
+type (
+	brepSplit = brepgeom.Split
+	brepEmbed = brepgeom.Embed
+	brepUse   = brepgeom.Use
+)
+
+const (
+	brepLoopSeg = brepgeom.LoopSeg // a planar face's loop segment
+	brepRim0    = brepgeom.Rim0    // a swept face's wall at z0
+	brepRim1    = brepgeom.Rim1    // a swept face's wall at z1
+	brepSide0   = brepgeom.Side0   // a swept face's line at the wall's start
+	brepSide1   = brepgeom.Side1   // a swept face's line at the wall's end
+)

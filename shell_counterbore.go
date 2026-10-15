@@ -3,17 +3,13 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
-	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
-	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
-	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -183,93 +179,6 @@ func shellCounterbore(ctx context.Context, source *Body, sp stackedPrismPayload,
 		Round: &prismshell.CounterboreShellRound{Small: small, Large: large, Plate: plate, Inset: inset,
 			FarZ: farZ, StepZ: stepZ, NearZ: nearZ, Sign: sign, T: t, Center: c, Frame: sp.Frame}}
 	result.AssignRoles()
-	body, err := evalBrepContext(ctx, documentHandle(source.n.Doc), source.n.Doc.NextProducer, result)
+	body, err := bodyResult(breprecord.Build(ctx, envOf(source.n.Doc, source.n.Doc.NextProducer), result))
 	return body, true, err
-}
-
-// measureCounterboreShell subtracts the inset rectangular cavity and adds
-// the dilation of the source's stepped through bore. The quarter-torus
-// transition is integrated as a circular radius over its axial interval.
-func measureCounterboreShell(ctx context.Context, bp brepPayload, body *Body) error {
-	b := bp.PocketShell.Round
-	point := func(x float64) proofbound.RatInterval { return proofbound.PointInterval(proofarith.FloatRat(x)) }
-	add, sub, mul := proofbound.IntervalAdd, proofbound.IntervalSub, proofbound.IntervalMul
-	scale := func(a proofbound.RatInterval, n, d int64) proofbound.RatInterval {
-		return proofbound.IntervalScale(a, big.NewRat(n, d))
-	}
-	pi := proofbound.Interval(proofbound.PiLower, proofbound.PiUpper)
-	area := func(r prismshell.BossRect) proofbound.RatInterval {
-		return mul(sub(point(r.U1), point(r.U0)), sub(point(r.V1), point(r.V0)))
-	}
-	centerU := func(r prismshell.BossRect) proofbound.RatInterval { return scale(add(point(r.U0), point(r.U1)), 1, 2) }
-	centerV := func(r prismshell.BossRect) proofbound.RatInterval { return scale(add(point(r.V0), point(r.V1)), 1, 2) }
-	square := func(r proofbound.RatInterval) proofbound.RatInterval { return mul(r, r) }
-	t, rs, rl := point(b.T), point(b.Small.Radius), point(b.Large.Radius)
-	rsExpanded, rlExpanded := add(rs, t), add(rl, t)
-	farH := point(math.Abs(b.StepZ - b.FarZ))
-	nearH := point(math.Abs(b.NearZ - b.StepZ))
-	h := add(farH, nearH)
-	outerV := mul(area(b.Plate), h)
-	smallHoleV := mul(pi, mul(square(rs), farH))
-	largeHoleV := mul(pi, mul(square(rl), nearH))
-	sourceV := sub(sub(outerV, smallHoleV), largeHoleV)
-	innerV := mul(area(b.Inset), sub(h, t))
-	lowerH := sub(farH, scale(t, 2, 1))
-	lowerV := mul(pi, mul(square(rsExpanded), lowerH))
-	upperV := mul(pi, mul(square(rlExpanded), nearH))
-	t2, t3, t4 := square(t), mul(square(t), t), square(square(t))
-	// At distance v below the shoulder, the expanded hole radius is
-	// rl + sqrt(t²-v²), 0 <= v <= t.
-	transitionArea := add(add(mul(square(rl), t), scale(mul(mul(rl, pi), t2), 1, 2)), scale(t3, 2, 3))
-	transitionV := mul(pi, transitionArea)
-	obstacleV := add(add(lowerV, transitionV), upperV)
-	volume := add(sub(sourceV, innerV), obstacleV)
-	if volume.Lo.Sign() <= 0 {
-		return fmt.Errorf("%w: counterbore shell has no proven positive volume", ErrUnsupported)
-	}
-	v, ve := heldOf(volume)
-	body.n.Volume = measurement.Measurement{Value: units.CubicMillimeters(v), Bound: units.CubicMillimeters(ve),
-		Exactness: measurement.ExactnessOf(ve)}
-	outerW := mul(outerV, scale(h, 1, 2))
-	smallHoleW := mul(smallHoleV, scale(farH, 1, 2))
-	largeHoleW := mul(largeHoleV, add(farH, scale(nearH, 1, 2)))
-	sourceW := sub(sub(outerW, smallHoleW), largeHoleW)
-	innerW := mul(innerV, scale(add(h, t), 1, 2))
-	lowerW := mul(lowerV, scale(farH, 1, 2))
-	transitionVFirst := add(add(scale(mul(square(rl), t2), 1, 2),
-		scale(mul(rl, t3), 2, 3)), scale(t4, 1, 4))
-	transitionW := sub(mul(transitionV, farH), mul(pi, transitionVFirst))
-	upperW := mul(upperV, add(farH, scale(nearH, 1, 2)))
-	mw := add(sub(sourceW, innerW), add(add(lowerW, transitionW), upperW))
-	mu := sub(mul(outerV, centerU(b.Plate)), mul(innerV, centerU(b.Inset)))
-	mv := sub(mul(outerV, centerV(b.Plate)), mul(innerV, centerV(b.Inset)))
-	holesV := add(smallHoleV, largeHoleV)
-	mu = add(sub(mu, mul(holesV, point(b.Center.U))), mul(obstacleV, point(b.Center.U)))
-	mv = add(sub(mv, mul(holesV, point(b.Center.V))), mul(obstacleV, point(b.Center.V)))
-	mz := add(mul(point(b.FarZ), volume), mul(point(b.Sign), mw))
-	var c [3]proofbound.BoundedScalar
-	for i, iv := range []proofbound.RatInterval{mu, mv, mz} {
-		q, ok := proofbound.IntervalQuo(iv, volume)
-		if !ok {
-			return fmt.Errorf("%w: counterbore shell centroid has no finite enclosure", ErrUnsupported)
-		}
-		value, bound := heldOf(q)
-		c[i] = proofbound.MeasuredScalar(value, bound)
-	}
-	ref := bp.RefView()
-	cb := ref.PointBound(c[0], c[1], c[2])
-	body.n.Centroid = measurement.VecMeasurement{Value: ref.Point(c[0].Value, c[1].Value, c[2].Value),
-		Bound: units.Millimeters(cb), Exactness: measurement.ExactnessOf(cb)}
-	var surfaceArea proofbound.BoundedScalar
-	for _, face := range body.Faces() {
-		surfaceArea = proofbound.BoundedAdd(surfaceArea, proofbound.MeasuredScalar(face.n.Area, face.n.AreaBound))
-	}
-	body.n.Area = measurement.Measurement{Value: units.SquareMillimeters(surfaceArea.Value),
-		Bound: units.SquareMillimeters(surfaceArea.Bound), Exactness: measurement.ExactnessOf(surfaceArea.Bound)}
-	box, err := brepBoundsContext(ctx, bp)
-	if err != nil {
-		return err
-	}
-	body.n.Bounds = boxToInternal(box)
-	return topobuild.ValidateAnalyticMeasurements(bodyNode(body))
 }

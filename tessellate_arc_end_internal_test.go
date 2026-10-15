@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
@@ -183,7 +184,7 @@ func TestBrepChordWallReachesArcNaturalEnd(t *testing.T) {
 	got := arcEndTombstone(t)
 	bp, ok := got.n.Payload.(brepPayload)
 	require.True(t, ok, `got %T`, got.n.Payload)
-	btopo, err := brepTopologyContext(t.Context(), bp)
+	btopo, err := breprecord.TopologyContext(t.Context(), bp)
 	require.NoError(t, err)
 	checked := 0
 	for fi, f := range bp.Faces {

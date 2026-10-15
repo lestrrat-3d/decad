@@ -403,3 +403,24 @@ func TestBrepChamferAllStraightOuterEdgesStagedSurvey(t *testing.T) {
 	require.Equal(t, "allEdgeChamferPayload wall survey support is not implemented; use an analytic body or wait for wider "+
 		"allEdgeChamferPayload survey support", staged.Message)
 }
+
+// TestBrepPartialChamferStagedSurvey pins the class name the partial chamfer
+// body's wall survey prints: the staged-survey message names the brep payload
+// class, not the Go type that holds it.
+func TestBrepPartialChamferStagedSurvey(t *testing.T) {
+	t.Parallel()
+	doc, bar := crossDrilledBar(t)
+	corner := r3.NewVec(40, 0, 20)
+	selected := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)), decad.EndpointAt(corner)).
+		Or(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(corner)).Exactly(2)
+	got, err := decad.Chamfer(t.Context(), bar, selected, units.Millimeters(1))
+	require.NoError(t, err)
+	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
+	require.NoError(t, err)
+	reading, err := report.ForBody(got)
+	require.NoError(t, err)
+	staged, found := findDiagnostic(reading.Diagnostics, decad.DiagUnsupportedSurveyPayload)
+	require.True(t, found)
+	require.Equal(t, "brepPayload wall survey support is not implemented; use an analytic body or wait for wider "+
+		"brepPayload survey support", staged.Message)
+}

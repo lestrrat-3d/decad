@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
@@ -33,7 +34,7 @@ func internalBrepBody(t *testing.T, src *Body) *Body {
 
 func internalCommitBrep(t *testing.T, doc *Document, bp brepPayload) *Body {
 	t.Helper()
-	body, err := evalBrepContext(t.Context(), doc, doc.nextProducerID(), bp)
+	body, err := bodyResult(breprecord.Build(t.Context(), envOf(documentNode(doc), doc.nextProducerID()), bp))
 	require.NoError(t, err)
 	doc.commit(body)
 	return body
@@ -423,7 +424,7 @@ func TestBrepVerifyIsSoundWithAGateDiameter(t *testing.T) {
 func TestBrepPayloadAuditRefusesBrokenRecords(t *testing.T) {
 	t.Parallel()
 	base := internalCrossDrilledBrep(t)
-	require.NoError(t, falsifyBrepPayload(t.Context(), base))
+	require.NoError(t, breprecord.Falsify(t.Context(), base))
 	tilted, err := r3.NewFrame(r3.Vec{}, r3.NewVec(0.6, 0.8, 0), r3.NewVec(-0.8, 0.6, 0))
 	require.NoError(t, err)
 	shifted, err := r3.NewFrame(r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
@@ -451,7 +452,7 @@ func TestBrepPayloadAuditRefusesBrokenRecords(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			bp := brepPayload{Xform: base.Xform, Faces: append([]brepFace(nil), base.Faces...)}
 			tc.change(&bp)
-			_, err := brepTopologyContext(t.Context(), bp)
+			_, err := breprecord.TopologyContext(t.Context(), bp)
 			require.ErrorIs(t, err, tc.want)
 		})
 	}
@@ -681,7 +682,7 @@ func TestBrepCoordinateEnvelopeReadsArcsTightly(t *testing.T) {
 	require.NoError(t, err)
 	bp, err := brepOfPrism(prism.n.Payload.(prismPayload))
 	require.NoError(t, err)
-	btopo, err := brepTopologyContext(t.Context(), bp)
+	btopo, err := breprecord.TopologyContext(t.Context(), bp)
 	require.NoError(t, err)
 	worst := 0.0
 	for i := range 4096 {

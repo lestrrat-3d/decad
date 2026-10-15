@@ -191,7 +191,7 @@ The closed result keeps the boss's complete top, ends the boss inset at
 `z2 − t`, and caps that inset with one cavity ceiling. The source's exterior
 faces form one connected shell. The derived cavity floor, inset walls,
 ledge, four cylinder patches and ceiling form one other closed face group.
-`evalBrepContext` marks that group void after confirming that all source
+`breprecord.Build` marks that group void after confirming that all source
 faces occupy the exterior group. For the same dimensions and thickness,
 the closed volume adds the boss inset's area times `t` to the top-open
 volume; its first axial moment adds that volume at height `z2 − t/2`.
@@ -467,10 +467,10 @@ With `s = +1`, `t` the thickness in millimetres with its conversion bound
    splits, so nothing is solved or admitted. Where nothing cancels, the rim
    is the record above, bit for bit.
 6. **Audit.** Every rim region and band runs modify §5's audit: S8, S7, S9.
-7. **Closure.** `assignRoles`, `falsifyBrepPayload`, `brepTopologyContext`:
+7. **Closure.** `assignRoles`, `breprecord.Falsify`, `breprecord.TopologyContext`:
    an unpaired edge is `ErrUnsupported` (general-boolean §4.2's count), the
    proof that the receiver's kept faces, the cavity and the rims close.
-   `evalBrepContext` builds and measures; a non-positive volume is
+   `breprecord.Build` builds and measures; a non-positive volume is
    `ErrDegenerate`. `commitModifyResult` retires the receiver.
 
 Why the pieces pair by identity: a removed cap's region is `S` (TC1), the
@@ -509,7 +509,7 @@ reach SX10:
 | 4. offset audit | S8, S11b, S9 on `S ⊖ t` (caps alone) and on each `Tᵢ ⊕ t`; TC7 (SG6) |
 | 5. cavity | the private cuts (SG6) |
 | 6. assembly | SG7; the rim audit S8, S7, S9 |
-| 7. closure | `falsifyBrepPayload`, `brepTopologyContext`, `evalBrepContext` |
+| 7. closure | `breprecord.Falsify`, `breprecord.TopologyContext`, `breprecord.Build` |
 
 SB10 narrows to a record route S also refuses, and its text names SG3's
 reason. SB3 narrows likewise: a record that reads as a prism along some axis
@@ -584,7 +584,7 @@ cap-blend view. Then:
    S7 — the contour against `F`'s other loops, SX7's text — and S9).
 5. **The band.** The record stores `loopBands`: `(face, loop, dc, ds, σ)`
    per touched loop, beside the rewritten faces; no face record holds a cone.
-   At body build, after `evalBrepContext` has built every face and edge of
+   At body build, after `breprecord.Build` has built every face and edge of
    the record, each band is attached by reach §8.3's `capblend.BuildBand` run in
    `F`'s own frame (`prismLike` over `F.frame`, cap level `L_F`, side level
    `sideZ`, `matSign` from `σ` and `F.outward`), with both of its directrices
@@ -597,7 +597,7 @@ cap-blend view. Then:
    `(ds·n̂_wall, σ·dc·n̂_F)`, which has a positive dot product with the true
    outward normal in both senses), their skews, locus spans and corner flux
    are reach §8.3's and §8.4's unchanged.
-6. **Closure.** The record's faces pair by `brepTopologyContext` as before;
+6. **Closure.** The record's faces pair by `breprecord.TopologyContext` as before;
    the band's patches each bound two faces by construction (the contour edge
    on `F`, the side edge on the adjacent face, the corner rulings between
    neighbouring patches), and `topobuild.AttachFaceLoops` proves every edge
@@ -614,11 +614,11 @@ second loop on the same body chamfers in a later call.
 
 ### 4.3 Measurements
 
-`measureBrepContext` sums general-boolean §4.3's face terms over the
+`breprecord`'s `measureBody` sums general-boolean §4.3's face terms over the
 rewritten record, then adds each band's terms through reach §8.4's readers
 (`capblend.ReadBandMass`): its volume flux and first moments about the plane-local
 origin, which is the reference origin every face frame shares bit for bit
-(`brepEmbeds`), each `Cone` patch's chord-versus-locus terms, the closure
+(`breprecord.Embeds`), each `Cone` patch's chord-versus-locus terms, the closure
 slivers (`capband.Closure`), and `capband.LevelVolume` for the side level's
 displacement. Those readers integrate the closed band region `B` — the
 patches closed by the cap contour's disk at `L_F` and `ℓ`'s disk at `sideZ`

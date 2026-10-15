@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -88,7 +89,7 @@ func filletSelection(t *testing.T, body *Body, sel *EdgeQuery, r float64, bands 
 	require.Nil(t, bp.Stack)
 	require.Len(t, bp.LoopBands, before+bands)
 	for _, b := range bp.LoopBands[before:] {
-		require.Equal(t, brepBandFillet, b.Kind)
+		require.Equal(t, breprecord.BandFillet, b.Kind)
 	}
 	requireClosedTopology(t, out)
 	require.Len(t, bp.LoopPatches, len(bp.LoopBands))
@@ -1364,7 +1365,7 @@ func TestVertexBlendPocketMouthOpenChain(t *testing.T) {
 // holds every patch, read against the oblique extents; the through-all
 // extent along (1, 0, 1) reaches the x = 40 patch's stationary point
 // 56 + 2√2 past the record's own faces; and the mesh closes with its proof.
-// Shown to fail with brepBoundsContext's band
+// Shown to fail with breprecord.Bounds's band
 // extents deleted (the rotated box then missed the patches' bulge) and with
 // ExtentAlong's band arm deleted (the stop then read the record's faces
 // alone, 58/√2).

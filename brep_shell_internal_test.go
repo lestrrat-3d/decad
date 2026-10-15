@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
+	"github.com/lestrrat-3d/decad/internal/breprecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -184,7 +185,7 @@ func shellFacePred(t *testing.T, body *Body, dir r3.Vec, level float64) FacePred
 // reference axis k at reference level.
 func shellRecordRole(t *testing.T, bp brepPayload, k int, level float64) string {
 	t.Helper()
-	embeds, err := brepEmbeds(bp.Faces)
+	embeds, err := breprecord.Embeds(bp.Faces)
 	require.NoError(t, err)
 	role := ""
 	for fi, f := range bp.Faces {
@@ -272,7 +273,7 @@ func TestBrepShellThroughCutReadsP1(t *testing.T) {
 	t.Parallel()
 	_, s1 := internalCrossDrilled(t)
 	bp := s1.n.Payload.(brepPayload)
-	embeds, err := brepEmbeds(bp.Faces)
+	embeds, err := breprecord.Embeds(bp.Faces)
 	require.NoError(t, err)
 	for k := range 2 {
 		_, _, ok, err := readThroughCut(t.Context(), bp, embeds, k)
@@ -734,7 +735,7 @@ func TestBrepShellThroughCutRimFalsifier(t *testing.T) {
 	t.Parallel()
 	_, body := internalBandedBox(t)
 	bp := body.n.Payload.(brepPayload)
-	embeds, err := brepEmbeds(bp.Faces)
+	embeds, err := breprecord.Embeds(bp.Faces)
 	require.NoError(t, err)
 	tc, reason, ok, err := readThroughCut(t.Context(), bp, embeds, 2)
 	require.NoError(t, err)
@@ -781,7 +782,7 @@ func TestBrepShellThroughCutRimFalsifier(t *testing.T) {
 // every line of one loop of record face fi.
 func shellLoopCorners(t *testing.T, bp brepPayload, fi int, loop loopRecord) [][3]float64 {
 	t.Helper()
-	embeds, err := brepEmbeds(bp.Faces)
+	embeds, err := breprecord.Embeds(bp.Faces)
 	require.NoError(t, err)
 	out := make([][3]float64, 0, len(loop.Segments))
 	for _, seg := range loop.Segments {
@@ -999,7 +1000,7 @@ func TestBrepShellThroughCutWallRimCharge(t *testing.T) {
 	t.Parallel()
 	_, s1 := internalCrossDrilled(t)
 	bp := s1.n.Payload.(brepPayload)
-	embeds, err := brepEmbeds(bp.Faces)
+	embeds, err := breprecord.Embeds(bp.Faces)
 	require.NoError(t, err)
 	tc, reason, ok, err := readThroughCut(t.Context(), bp, embeds, 2)
 	require.NoError(t, err)

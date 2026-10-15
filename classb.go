@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/classbgeom"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
@@ -181,7 +182,7 @@ func admitClassBPair(ctx context.Context, xPayload, yPayload topo.Payload, place
 	if x.Xform != placement || y.Xform != placement {
 		return classBPair{}, false, nil
 	}
-	embeds, err := brepEmbeds(x.Faces)
+	embeds, err := breprecord.Embeds(x.Faces)
 	if err != nil {
 		return classBPair{}, false, nil //nolint:nilerr // frames with no exact map onto the reference are a silent miss, not a refusal
 	}

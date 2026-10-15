@@ -10,4 +10,5 @@ import (
 // The staged-survey diagnostic text publishes this class name verbatim.
 func TestSurveyClass(t *testing.T) {
 	require.Equal(t, "allEdgeChamferPayload", breprecord.AllEdgeChamferPayload{}.SurveyClass())
+	require.Equal(t, "brepPayload", breprecord.Payload{}.SurveyClass())
 }

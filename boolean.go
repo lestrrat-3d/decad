@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
@@ -1366,7 +1367,7 @@ func analyticBooleanBody(ctx context.Context, d *Document, ref producerID, paylo
 	case stackedPrismPayload:
 		return bodyResult(stackedrecord.Build(ctx, envOf(documentNode(d), ref), p, stackedrecord.OwnPlan{}))
 	case brepPayload:
-		return evalBrepContext(ctx, d, ref, p)
+		return bodyResult(breprecord.Build(ctx, envOf(documentNode(d), ref), p))
 	default:
 		return nil, fmt.Errorf(`%w: an analytic boolean produced a %T payload`, ErrUnsupported, payload)
 	}

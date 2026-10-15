@@ -3,23 +3,15 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
-	"github.com/lestrrat-3d/decad/internal/freeform"
-	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
-	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
-	"github.com/lestrrat-3d/decad/internal/topo"
-	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
-	"github.com/lestrrat-3d/units"
 )
 
 // reverseClosedBossStack makes a narrow lower slab the upper boss of the
@@ -175,7 +167,7 @@ func shellStackedBoss(ctx context.Context, source *Body, sp stackedPrismPayload,
 		LowerZ: lowerZ, T: t, LedgeFace: ledgeFace, Frame: sp.Frame,
 		OuterFaceCount: outerFaceCount, Closed: closed}
 	result.AssignRoles()
-	body, err := evalBrepContext(ctx, documentHandle(source.n.Doc), source.n.Doc.NextProducer, result)
+	body, err := bodyResult(breprecord.Build(ctx, envOf(source.n.Doc, source.n.Doc.NextProducer), result))
 	return body, true, err
 }
 
@@ -195,216 +187,4 @@ func bossRectArithmeticExact(r prismshell.BossRect, t float64) bool {
 		return false
 	}
 	return true
-}
-
-// closedBossShellLumps assigns the inner face component to the one void shell.
-// shellStackedBoss has already proved that the nested cavity stays clear of
-// every exterior wall, the floor and the kept roof. Every source face must
-// therefore lie in the one outer component, and all derived cavity faces in
-// exactly one other closed component.
-func closedBossShellLumps(faces []*Face, outerFaceCount int) ([]*Lump, error) {
-	if outerFaceCount <= 0 || outerFaceCount >= len(faces) {
-		return nil, fmt.Errorf("%w: a closed boss shell has no distinct exterior and cavity", ErrUnsupported)
-	}
-	outerFaces := make(map[*Face]struct{}, outerFaceCount)
-	for _, face := range faces[:outerFaceCount] {
-		outerFaces[face] = struct{}{}
-	}
-	groups := faceGroupHandles(topobuild.SplitConnectedFaces(faceNodes(faces)))
-	if len(groups) != 2 {
-		return nil, fmt.Errorf("%w: a closed boss shell has %d face components, expected an exterior and one cavity",
-			ErrUnsupported, len(groups))
-	}
-	var outer, cavity []*Face
-	for _, group := range groups {
-		anchors := 0
-		for _, face := range group {
-			if _, ok := outerFaces[face]; ok {
-				anchors++
-			}
-		}
-		switch {
-		case anchors == outerFaceCount && len(group) == outerFaceCount:
-			outer = group
-		case anchors == 0:
-			cavity = group
-		default:
-			return nil, fmt.Errorf("%w: a closed boss shell mixes exterior and cavity faces", ErrUnsupported)
-		}
-	}
-	if len(outer) != outerFaceCount || len(cavity) != len(faces)-outerFaceCount ||
-		topobuild.ShellIsOpen(faceNodes(outer)) || topobuild.ShellIsOpen(faceNodes(cavity)) ||
-		!closedBossShellEdgePairs(outer) || !closedBossShellEdgePairs(cavity) {
-		return nil, fmt.Errorf("%w: a closed boss shell needs two closed face components", ErrUnsupported)
-	}
-	return []*Lump{bornLump(&Lump{n: topo.Lump{Shells: []*topo.FaceShell{faceShellNode(bornFaceShell(&FaceShell{n: topo.FaceShell{Faces: faceNodes(outer)}})), faceShellNode(bornFaceShell(&FaceShell{n: topo.FaceShell{Void: true, Faces: faceNodes(cavity)}}))}}})}, nil
-}
-
-// Each component must use every edge exactly twice. A free edge or a repeated
-// edge cannot pass merely because the face graph has two components. The
-// coedge's forward bit records curve direction, not outward face winding.
-func closedBossShellEdgePairs(faces []*Face) bool {
-	edges := map[*Edge]int{}
-	for _, face := range faces {
-		for _, loop := range face.n.Loops {
-			for _, use := range loop.CoEdges {
-				edges[edgeHandle(use.Edge)]++
-			}
-		}
-	}
-	if len(edges) == 0 {
-		return false
-	}
-	for edge, uses := range edges {
-		if uses != 2 || len(edge.n.Faces) != 2 || edge.n.Faces[0] == edge.n.Faces[1] {
-			return false
-		}
-	}
-	return true
-}
-
-// bossShellOpenEdges supplies the two four-edge rings in the common
-// counter-clockwise walk. Each ordinary face uses its edge in its own sense.
-func bossShellOpenEdges(ctx context.Context, bp brepPayload, btopo *brepTopology,
-	openAt map[brepgeom.EdgeKey]int,
-	placeVertex func([3]float64, float64, float64, float64) *Vertex,
-	out *brepOpenSet, bi int) error {
-	band := bp.BossShell
-	e := btopo.Embeds[band.LedgeFace]
-	for ring, spec := range []struct {
-		profile profileRecord
-		z       float64
-	}{{band.SideProfile(), band.LowerZ}, {band.CapProfile(), band.InterfaceZ}} {
-		view := prismrecord.Payload{Frame: band.Frame, Xform: bp.Xform, Z0: spec.z, Z1: spec.z}
-		for _, seg := range spec.profile.Outer.Segments {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			w, err := boundarywalk.WalkOf(seg, nil)
-			if err != nil {
-				return err
-			}
-			key, _ := brepgeom.CurveKey(e, w, spec.z)
-			ui, ok := openAt[key]
-			if !ok {
-				return fmt.Errorf("%w: a boss shell ring has no open record edge", ErrUnsupported)
-			}
-			u := btopo.Uses[ui]
-			from, to := e.Canon(w.StartU, w.StartV, spec.z), e.Canon(w.EndU, w.EndV, spec.z)
-			start, end := placeVertex(from, 0, 0, 0), placeVertex(to, 0, 0, 0)
-			edge, err := brepBandEdge(view, w, true, start, end)
-			if err != nil {
-				return err
-			}
-			out.coedge[ui] = topo.CoEdge{Edge: edgeNode(edge), Forward: u.DirFrom == from && u.DirTo == to}
-			if ring == 0 {
-				out.side[bi] = append(out.side[bi], topo.CoEdge{Edge: edgeNode(edge), Forward: true})
-			}
-			if ring == 1 {
-				out.cap[bi] = append(out.cap[bi], topo.CoEdge{Edge: edgeNode(edge), Forward: true})
-			}
-		}
-	}
-	return nil
-}
-
-// attachBossShellBand uses the established analytic fillet patch constructor
-// with a virtual cap at the upper ring. The cap is only a geometry datum:
-// its ring is actually bounded by the upper cavity walls.
-func attachBossShellBand(ctx context.Context, body *Body, ref producerID, bp brepPayload, open brepOpenSet) ([]*Face, error) {
-	band := bp.BossShell
-	bi := len(bp.LoopBands)
-	b := brepLoopBand{Face: band.LedgeFace, Loop: 0, Orig: band.SideProfile().Outer,
-		Setback: capSetback{Dc: band.T, Ds: band.T}, Sigma: 1, Kind: brepBandFillet}
-	upper := band.CapProfile()
-	fake := brepFace{Frame: band.Frame, Region: &upper,
-		Z0: band.InterfaceZ, Z1: band.InterfaceZ, Outward: false, Role: "bossShellBand"}
-	copyBP := bp
-	copyBP.Faces = append([]brepFace(nil), bp.Faces...)
-	copyBP.Faces[band.LedgeFace] = fake
-	copyBP.LoopBands = append(append([]brepLoopBand(nil), bp.LoopBands...), b)
-	embeds, err := brepEmbeds(bp.Faces)
-	if err != nil {
-		return nil, err
-	}
-	patches, _, err := attachFilletBand(ctx, body, ref, copyBP, bi, open, embeds[band.LedgeFace], freeform.NewFreeformWork())
-	return patches, err
-}
-
-// measureBossShell integrates its three cavity intervals exactly, with pi
-// enclosed by proofbound's rational interval. Face areas already carry each
-// planar or cylindrical patch's own independent bound.
-func measureBossShell(ctx context.Context, bp brepPayload, body *Body) error {
-	if bp.BossShell.Round != nil {
-		return measureRoundBossShell(ctx, bp, body)
-	}
-	b := bp.BossShell
-	point := func(x float64) proofbound.RatInterval { return proofbound.PointInterval(proofarith.FloatRat(x)) }
-	add, sub, mul := proofbound.IntervalAdd, proofbound.IntervalSub, proofbound.IntervalMul
-	scale := func(a proofbound.RatInterval, n, d int64) proofbound.RatInterval {
-		return proofbound.IntervalScale(a, big.NewRat(n, d))
-	}
-	pi := proofbound.Interval(proofbound.PiLower, proofbound.PiUpper)
-	area := func(r prismshell.BossRect) proofbound.RatInterval {
-		return mul(sub(point(r.U1), point(r.U0)), sub(point(r.V1), point(r.V0)))
-	}
-	centerU := func(r prismshell.BossRect) proofbound.RatInterval { return scale(add(point(r.U0), point(r.U1)), 1, 2) }
-	centerV := func(r prismshell.BossRect) proofbound.RatInterval { return scale(add(point(r.V0), point(r.V1)), 1, 2) }
-	t := point(b.T)
-	h := sub(point(b.InterfaceZ), point(b.Z0))
-	hb := sub(point(b.TopZ), point(b.InterfaceZ))
-	bw, bh := point(b.Boss.Width()), point(b.Boss.Height())
-	plateV, bossV := mul(area(b.Plate), h), mul(area(b.Boss), hb)
-	lowerV := mul(area(b.Lower), sub(h, scale(t, 2, 1)))
-	upperHeight := sub(point(b.CavityTopZ), point(b.InterfaceZ))
-	upperV := mul(area(b.Upper), upperHeight)
-	t2, t3, t4 := mul(t, t), mul(mul(t, t), t), mul(mul(t, t), mul(t, t))
-	widths := add(bw, bh)
-	bandV := add(
-		add(sub(mul(area(b.Boss), t), scale(mul(widths, t2), 2, 1)),
-			scale(mul(mul(widths, pi), t2), 1, 2)),
-		sub(scale(t3, 20, 3), scale(mul(pi, t3), 2, 1)),
-	)
-	volume := sub(sub(add(plateV, bossV), add(lowerV, upperV)), bandV)
-	if volume.Lo.Sign() <= 0 {
-		return fmt.Errorf("%w: boss shell has no proven positive volume", ErrUnsupported)
-	}
-	v, ve := heldOf(volume)
-	body.n.Volume = measurement.Measurement{Value: units.CubicMillimeters(v), Bound: units.CubicMillimeters(ve), Exactness: measurement.ExactnessOf(ve)}
-	// z is measured from the recorded frame origin, not from the plate base.
-	plateCZ := scale(add(point(b.Z0), point(b.InterfaceZ)), 1, 2)
-	bossCZ := scale(add(point(b.InterfaceZ), point(b.TopZ)), 1, 2)
-	upperCZ := scale(add(point(b.InterfaceZ), point(b.CavityTopZ)), 1, 2)
-	bandZ := add(mul(point(b.LowerZ), bandV),
-		add(sub(scale(mul(area(b.Boss), t2), 1, 2), scale(mul(widths, t3), 1, 3)), scale(t4, 1, 3)))
-	mu := sub(sub(add(mul(plateV, centerU(b.Plate)), mul(bossV, centerU(b.Boss))),
-		add(mul(lowerV, centerU(b.Lower)), mul(upperV, centerU(b.Upper)))), mul(bandV, centerU(b.Boss)))
-	mv := sub(sub(add(mul(plateV, centerV(b.Plate)), mul(bossV, centerV(b.Boss))),
-		add(mul(lowerV, centerV(b.Lower)), mul(upperV, centerV(b.Upper)))), mul(bandV, centerV(b.Boss)))
-	mz := sub(sub(add(mul(plateV, plateCZ), mul(bossV, bossCZ)),
-		add(mul(lowerV, plateCZ), mul(upperV, upperCZ))), bandZ)
-	ivs := []proofbound.RatInterval{mu, mv, mz}
-	var c [3]proofbound.BoundedScalar
-	for i, iv := range ivs {
-		q, ok := proofbound.IntervalQuo(iv, volume)
-		if !ok {
-			return fmt.Errorf("%w: boss shell centroid has no finite enclosure", ErrUnsupported)
-		}
-		value, bound := heldOf(q)
-		c[i] = proofbound.MeasuredScalar(value, bound)
-	}
-	ref := bp.RefView()
-	cb := ref.PointBound(c[0], c[1], c[2])
-	body.n.Centroid = measurement.VecMeasurement{Value: ref.Point(c[0].Value, c[1].Value, c[2].Value), Bound: units.Millimeters(cb), Exactness: measurement.ExactnessOf(cb)}
-	var a proofbound.BoundedScalar
-	for _, f := range body.Faces() {
-		a = proofbound.BoundedAdd(a, proofbound.MeasuredScalar(f.n.Area, f.n.AreaBound))
-	}
-	body.n.Area = measurement.Measurement{Value: units.SquareMillimeters(a.Value), Bound: units.SquareMillimeters(a.Bound), Exactness: measurement.ExactnessOf(a.Bound)}
-	box, err := brepBoundsContext(ctx, bp)
-	if err != nil {
-		return err
-	}
-	body.n.Bounds = boxToInternal(box)
-	return topobuild.ValidateAnalyticMeasurements(bodyNode(body))
 }

@@ -21,7 +21,7 @@ import (
 // (4.4e-13 mm on the radius-5 section) from the denoted point.
 //
 // Shown-to-fail: with brepgeom.Use's StartBound and EndBound replaced by the
-// walk's own bounds (Walk.StartBound and Walk.EndBound) in evalBrepContext,
+// walk's own bounds (Walk.StartBound and Walk.EndBound) in breprecord.Build,
 // the stacked union, the class-B cut and the route-E fillet publish both
 // vertices at End Exact, 1.8e-12 mm from the denoted point. The shell side
 // opening is coverage only: its canonical-vertex allowance already reached

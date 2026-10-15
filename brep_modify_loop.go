@@ -8,6 +8,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
+	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -32,7 +33,7 @@ import (
 // rewritten (rewriteLoopFaces): each loop's face takes the loop's cap contour,
 // each face beside the loop is trimmed to the band's side level, and the band
 // is recorded on the result (brepLoopBand) and attached at body build
-// (brep_loop_band.go, and brep_loop_fillet.go for a fillet band).
+// (internal/breprecord/band.go, and fillet.go for a fillet band).
 
 // brepLoopRead holds one route L call's readings of the receiver: its record,
 // topology, each planar loop segment's use, and the record edge each selected
@@ -86,12 +87,12 @@ func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepMo
 	if r.singleStraightEdges() {
 		body, err := brepBlendEdges(ctx, d, bp, call)
 		var mismatch *brepMaterialWedgeMismatchError
-		if len(call.edges) == 1 && call.loopKind == brepBandFillet && errors.As(err, &mismatch) {
+		if len(call.edges) == 1 && call.loopKind == breprecord.BandFillet && errors.As(err, &mismatch) {
 			if sel, selected, ok := r.partialSelectedLoop(); ok {
 				return brepFilletPartialLoop(ctx, d, bp, call, sel, selected)
 			}
 		}
-		if len(call.edges) == 1 && call.loopKind == brepBandChamfer && call.asym == nil &&
+		if len(call.edges) == 1 && call.loopKind == breprecord.BandChamfer && call.asym == nil &&
 			errors.As(err, &mismatch) {
 			if sel, selected, ok := r.partialSelectedLoop(); ok {
 				return brepChamferPartialLoop(ctx, d, bp, call, sel, selected)
@@ -106,7 +107,7 @@ func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepMo
 		}
 		return r.buildSelectedLoops(ctx, d, loops)
 	}
-	if call.loopKind == brepBandFillet {
+	if call.loopKind == breprecord.BandFillet {
 		if body, recognized, err := r.cornerTriad(ctx, d); recognized {
 			return body, err
 		}
@@ -164,7 +165,7 @@ func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepMo
 			}
 		}
 	}
-	if call.loopKind == brepBandChamfer && len(call.edges) == 2 {
+	if call.loopKind == breprecord.BandChamfer && len(call.edges) == 2 {
 		if sel, selected, ok := r.partialSelectedLoop(); ok {
 			return brepChamferPartialLoop(ctx, d, bp, call, sel, selected)
 		}
@@ -430,7 +431,7 @@ func (r *brepLoopRead) buildSelectedLoops(ctx context.Context, d *Document, loop
 	if err != nil {
 		return nil, err
 	}
-	body, err := evalBrepContext(ctx, d, d.nextProducerID(), out)
+	body, err := bodyResult(breprecord.Build(ctx, envOf(documentNode(d), d.nextProducerID()), out))
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, ctxErr
@@ -449,7 +450,7 @@ func (r *brepLoopRead) buildSelectedLoops(ctx context.Context, d *Document, loop
 // topology and each planar loop segment's use. Matching the selected edges is
 // matchEdges's.
 func newBrepLoopRead(ctx context.Context, bp brepPayload, call brepModifyRequest) (*brepLoopRead, error) {
-	btopo, err := brepTopologyContext(ctx, bp)
+	btopo, err := breprecord.TopologyContext(ctx, bp)
 	if err != nil {
 		return nil, err
 	}
@@ -720,7 +721,7 @@ func (r *brepLoopRead) classifyLoop(sel *brepLoopSel) error {
 		eA := r.btopo.Embeds[pu.Face]
 		b := brepLoopBeside{use: r.partner(r.loopUse[[3]int{sel.face, sel.loop, s}])}
 		switch {
-		case !a.Planar() && eA.Axis[2] == n && brepIsRim(pu.Part):
+		case !a.Planar() && eA.Axis[2] == n && brepgeom.IsRim(pu.Part):
 			if len(a.Side0) > 0 || len(a.Side1) > 0 {
 				return refuse(fmt.Sprintf(`brep face %s beside the loop has a split side line`, a.Role))
 			}
@@ -902,7 +903,7 @@ func (r *brepLoopRead) loopFaceView(fi int, sels []brepLoopSel) capBlendPayload 
 		Z0: f.Z0, Z1: f.Z0, Z0Delta: f.Z0Delta, Z1Delta: f.Z0Delta,
 		Start: *r.call.loop, End: *r.call.loop,
 		StartLoops: map[int]bool{}, EndLoops: map[int]bool{},
-		Fillet: r.call.loopKind == brepBandFillet,
+		Fillet: r.call.loopKind == breprecord.BandFillet,
 	}
 	for _, sel := range sels {
 		if sel.face != fi {
@@ -987,9 +988,9 @@ func (r *brepLoopRead) rewriteLoopFaces(ctx context.Context, sels []brepLoopSel)
 		}
 		// SF1 (loop-fillet §6): every corner of a fillet's loop takes a class of
 		// Table LF.
-		if r.call.loopKind == brepBandFillet {
+		if r.call.loopKind == breprecord.BandFillet {
 			f := r.bp.Faces[sel.face]
-			if _, err := filletLoopOf(r.budget, f.RegionLoop(sel.loop), setback.Dc, f.Role, work); err != nil {
+			if _, err := breprecord.FilletLoopOf(r.budget, f.RegionLoop(sel.loop), setback.Dc, f.Role, work); err != nil {
 				return brepPayload{}, r.wrapFace(sel.face, err)
 			}
 		}

@@ -37,7 +37,7 @@ import (
 //     chain extrude went red in every variant;
 //   - in stackedrecord.Build: the union, the blind cut and the cup went
 //     red in every variant;
-//   - in evalBrepContext: the rotated drilled block went red;
+//   - in breprecord.Build: the rotated drilled block went red;
 //   - chargePlacement in evalUnstitchFaceContext and the copy charge in
 //     patchchain.copyFacesUnder: the rotated unstitch and body patch went red;
 //   - massmoment.AffineInertia in massmoment.RevolveProperties, replaced by the

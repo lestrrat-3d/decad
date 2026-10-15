@@ -862,7 +862,8 @@ are aliases of `patchchain.Payload` and `patchchain.BodyPayload`: their `Placed`
 `chainLoftPayload` are aliases of `loftrecord.Payload` and `loftrecord.ChainPayload`:
 their `Placed` runs `loftrecord.Build` and `loftrecord.BuildChain`. `capBlendPayload` is an alias of
 `capblend.Payload`: its `Placed` runs `capblend.Build`. `allEdgeChamferPayload` is an alias of
-`breprecord.AllEdgeChamferPayload`: its `Placed` runs `breprecord.BuildAllEdgeChamfer`. `twistedSweepPayload` and
+`breprecord.AllEdgeChamferPayload`: its `Placed` runs `breprecord.BuildAllEdgeChamfer`. `brepPayload` is an
+alias of `breprecord.Payload`: its `Placed` runs `breprecord.Build`. `twistedSweepPayload` and
 `compositeTwistedSweepPayload` are aliases of `twistsweep.Payload` and `twistsweep.CompositePayload`:
 their `Placed` runs `twistsweep.Eval`. A payload that still lives in the root
 package recovers its document handle from the node's `Owner` in `Placed` and

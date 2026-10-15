@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -231,7 +232,7 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 		admits: func(pp prismPayload, _ prismCaps) error { return requireLateralEdges(ctx, pp, edges) },
 		sel:    sel, edges: edges, blend: &blend,
 		loop:     &capSetback{Dc: rmm, DcDelta: rDelta, Ds: rmm, DsDelta: rDelta},
-		loopKind: brepBandFillet,
+		loopKind: breprecord.BandFillet,
 	}
 	route, err := modifyBrepReceiver(ctx, b, loopCall)
 	if err != nil {

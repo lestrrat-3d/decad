@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
+	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
@@ -98,7 +99,7 @@ func readThroughCut(ctx context.Context, bp brepPayload, embeds []brepEmbed, k i
 		zloDelta: record.ZloDelta, zhiDelta: record.ZhiDelta}
 
 	// TC4 and TC5: the tools, read through the record's own pairing.
-	btopo, err := brepTopologyContext(ctx, bp)
+	btopo, err := breprecord.TopologyContext(ctx, bp)
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return throughCut{}, "", false, ctxErr
@@ -246,11 +247,11 @@ func shellThroughCut(ctx context.Context, b *Body, bp brepPayload, call brepShel
 		return nil, err
 	}
 
-	// Stage 7: closure. evalBrepContext runs falsifyBrepPayload and
-	// brepTopologyContext (an unpaired edge is ErrUnsupported) and measures
+	// Stage 7: closure. breprecord.Build runs breprecord.Falsify and
+	// breprecord.TopologyContext (an unpaired edge is ErrUnsupported) and measures
 	// the body (a non-positive volume is ErrDegenerate).
 	out.AssignRoles()
-	return evalBrepContext(ctx, documentHandle(b.n.Doc), b.n.Doc.NextProducer, out)
+	return bodyResult(breprecord.Build(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), out))
 }
 
 // throughSection is A ⊖ t's section: eroded, and for a removed wall run the
@@ -323,7 +324,7 @@ func (tc throughCut) openingThroughSection(budget *proofbound.WorkBudget, rm thr
 // than two planar faces across it, else along axis 0.
 func readThroughCutAnyAxis(ctx context.Context, bp brepPayload, refusal error) (throughCut, error) {
 	reason := "its face frames have no exact map onto one reference frame"
-	if embeds, err := brepEmbeds(bp.Faces); err == nil {
+	if embeds, err := breprecord.Embeds(bp.Faces); err == nil {
 		reasons := make([]string, 3)
 		rank := make([]int, 3)
 		for k := range 3 {

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
+	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
@@ -212,7 +213,7 @@ func TestBrepModifyRecognisesThePrism(t *testing.T) {
 	t.Parallel()
 	read := func(t *testing.T, bp brepPayload, k int) (brepPrismRead, bool) {
 		t.Helper()
-		embeds, err := brepEmbeds(bp.Faces)
+		embeds, err := breprecord.Embeds(bp.Faces)
 		require.NoError(t, err)
 		r, ok, err := recognisePrism(t.Context(), bp, embeds, k)
 		require.NoError(t, err)
@@ -351,7 +352,7 @@ func TestBrepModifyRoutePMapsTheStartCapsHoles(t *testing.T) {
 func TestBrepModifySplitsThePrismReading(t *testing.T) {
 	t.Parallel()
 	bp := internalCrossDrilledBrep(t)
-	embeds, err := brepEmbeds(bp.Faces)
+	embeds, err := breprecord.Embeds(bp.Faces)
 	require.NoError(t, err)
 
 	caps, ok := brepgeom.ReadPrismCaps(prismFaceRecords(bp), embeds, 1)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -130,7 +131,7 @@ func (b *Body) shellSideOpening(ctx context.Context, pp prismPayload, removedSta
 		var bp brepPayload
 		bp, err = sideOpeningBrep(ctx, budget, pp, sec, removedStart, removedEnd, s, tmm, tDelta)
 		if err == nil {
-			body, err = evalBrepContext(ctx, d, ref, bp)
+			body, err = bodyResult(breprecord.Build(ctx, envOf(documentNode(d), ref), bp))
 		}
 	}
 	if err != nil {

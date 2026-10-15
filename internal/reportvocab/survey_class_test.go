@@ -28,6 +28,7 @@ func TestStagedSurveyNamesRootPayloadClass(t *testing.T) {
 	}{
 		{"prismPayload", prismrecord.Payload{}},
 		{"allEdgeChamferPayload", breprecord.AllEdgeChamferPayload{}},
+		{"brepPayload", breprecord.Payload{}},
 		{"stackedPrismPayload", stackedrecord.Payload{}},
 		{"chainPayload", chainrecord.Payload{}},
 		{"cupPayload", cupwall.Payload{}},

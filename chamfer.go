@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -251,7 +252,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 			return err
 		},
 		sel: sel, edges: edges, blend: &blend, asym: asym,
-		loop: &capSetback{Dc: dmm, DcDelta: dDelta, Ds: dmm, DsDelta: dDelta}, loopKind: brepBandChamfer}
+		loop: &capSetback{Dc: dmm, DcDelta: dDelta, Ds: dmm, DsDelta: dDelta}, loopKind: breprecord.BandChamfer}
 	if bp, ok := b.n.Payload.(brepPayload); ok {
 		body, matched, err := tryAllEdgeChamfer(ctx, b, bp, edges, dmm, dDelta, asym)
 		if matched || err != nil {

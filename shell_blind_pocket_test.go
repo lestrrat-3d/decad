@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
@@ -21,7 +22,7 @@ func TestBlindPocketFloorBandHasFourSphereOctants(t *testing.T) {
 	delta, err := offsetSectionDelta(budget, pocket, -1, 1, 0)
 	require.NoError(t, err)
 	require.Zero(t, delta)
-	read, err := filletLoopOf(budget, rounded.Outer, 1, "pocket floor", freeform.NewFreeformWork())
+	read, err := breprecord.FilletLoopOf(budget, rounded.Outer, 1, "pocket floor", freeform.NewFreeformWork())
 	require.NoError(t, err)
 	joins, err := filletband.OffsetJoins(budget, read.Walks, 1, 0, shellTol)
 	require.NoError(t, err)

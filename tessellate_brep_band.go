@@ -8,12 +8,12 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
+	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/partialband"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
-	"github.com/lestrrat-3d/r3"
 )
 
 // This file is the brep tessellator's reading of a route L body's bands
@@ -25,16 +25,6 @@ import (
 // imposed on that wall as its sample points, so the wall's rim at the side
 // level and the band's side ring are the same mesh vertices, and
 // emitCapBand writes the band's strip and its departure terms.
-
-// tessView is the band read as a one-loop cap blend in F's own frame
-// (brepLoopBand.view) beside its contour displacement, which the record
-// charges into F's displacement (modify-general §4.2): the larger charge only
-// widens what the tessellator's readers add.
-func (b brepLoopBand) TessView(f brepFace, xform r3.Transform) capBlendPayload {
-	cbp := b.view(f, xform)
-	cbp.BandDelta = map[capBandKey]float64{{Loop: 0, Start: b.MatSign(f) > 0}: f.Delta}
-	return cbp
-}
 
 // brepBandChord is one band's chording: the cap-blend loop record chordCapBlendLoop
 // resolves over the receiver's loop in F's frame, the topology use of each
@@ -89,7 +79,7 @@ func brepChordBands(ctx context.Context, bp brepPayload, btopo *brepTopology, ch
 		if b.Selected != nil {
 			var bc brepBandChord
 			var err error
-			if b.Kind == brepBandFillet {
+			if b.Kind == breprecord.BandFillet {
 				bc, err = chordPartialFilletBand(ctx, b, f, cbp, chord)
 			} else {
 				bc, err = chordPartialChamferBand(ctx, b, f, cbp, chord)
@@ -115,7 +105,7 @@ func brepChordBands(ctx context.Context, bp brepPayload, btopo *brepTopology, ch
 			}
 			bc.sideUse = append(bc.sideUse, ui)
 			u := btopo.Uses[ui]
-			if !brepIsRim(u.Part) {
+			if !brepgeom.IsRim(u.Part) {
 				continue
 			}
 			wallFace := bp.Faces[u.Face]
@@ -137,9 +127,9 @@ func brepChordBands(ctx context.Context, bp brepPayload, btopo *brepTopology, ch
 			}
 			imposed[u.Face] = samples
 		}
-		if b.Kind == brepBandFillet {
+		if b.Kind == breprecord.BandFillet {
 			rings := tessellation.FilletRingCount(b.Setback.AxialUpper(), chord)
-			fr, err := filletLoopOf(budget, b.Orig, b.Setback.Dc, f.Role, work)
+			fr, err := breprecord.FilletLoopOf(budget, b.Orig, b.Setback.Dc, f.Role, work)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -167,7 +157,7 @@ func brepChordBands(ctx context.Context, bp brepPayload, btopo *brepTopology, ch
 	if bp.BossShell != nil {
 		shell := bp.BossShell
 		b := brepLoopBand{Face: shell.LedgeFace, Loop: 0, Orig: shell.SideProfile().Outer,
-			Setback: capSetback{Dc: shell.T, Ds: shell.T}, Sigma: 1, Kind: brepBandFillet}
+			Setback: capSetback{Dc: shell.T, Ds: shell.T}, Sigma: 1, Kind: breprecord.BandFillet}
 		region := shell.CapProfile()
 		f := brepFace{Frame: shell.Frame, Region: &region, Z0: shell.InterfaceZ, Z1: shell.InterfaceZ,
 			Outward: false, Role: "bossShellBand"}
@@ -192,7 +182,7 @@ func brepChordBands(ctx context.Context, bp brepPayload, btopo *brepTopology, ch
 			}
 			key, _ := brepgeom.CurveKey(e, w, shell.InterfaceZ)
 			ui, ok := openAt[key]
-			if !ok || !brepIsRim(btopo.Uses[ui].Part) {
+			if !ok || !brepgeom.IsRim(btopo.Uses[ui].Part) {
 				return nil, nil, fmt.Errorf(`%w: round boss shell cap ring has no cavity wall`, ErrUnsupported)
 			}
 			face := btopo.Uses[ui].Face
@@ -222,7 +212,7 @@ func brepChordBands(ctx context.Context, bp brepPayload, btopo *brepTopology, ch
 			bandChord = chord / 4
 		}
 		b := brepLoopBand{Face: shell.FloorFace, Loop: 0, Orig: shell.Rounded.Outer,
-			Setback: capSetback{Dc: shell.T, Ds: shell.T}, Sigma: 1, Kind: brepBandFillet}
+			Setback: capSetback{Dc: shell.T, Ds: shell.T}, Sigma: 1, Kind: breprecord.BandFillet}
 		region := shell.CapProfile()
 		f := brepFace{Frame: shell.Frame, Region: &region, Z0: shell.LowerZ, Z1: shell.LowerZ,
 			Outward: shell.CapOutward(), Role: "pocketShellBand"}
@@ -244,7 +234,7 @@ func brepChordBands(ctx context.Context, bp brepPayload, btopo *brepTopology, ch
 			}
 			bc.sideUse = append(bc.sideUse, ui)
 			u := btopo.Uses[ui]
-			if !brepIsRim(u.Part) {
+			if !brepgeom.IsRim(u.Part) {
 				continue
 			}
 			wallFace := bp.Faces[u.Face]
@@ -283,13 +273,13 @@ func (bc *brepBandChord) place(e brepEmbed, addVertex func([3]float64, proofboun
 
 // emit writes the band's patch cells. A band whose walls rise off its face
 // (sigma +1) fills a concave corner rather than removing a wedge, and its
-// patches face the other way (attachBrepLoopBands), so its windings turn over.
+// patches face the other way (breprecord's attachLoopBands), so its windings turn over.
 func (bc *brepBandChord) emit(budget *proofbound.WorkBudget, m *Mesh, geom map[string]capPatchGeom,
 	faceOfRole func(string) (*Face, error), bump func(*Face, float64)) error {
 	if bc.partial != nil {
 		first := len(m.n.Triangles)
 		var err error
-		if bc.band.Kind == brepBandFillet {
+		if bc.band.Kind == breprecord.BandFillet {
 			err = bc.emitPartialFillet(m, faceOfRole, bump)
 		} else {
 			err = bc.emitPartialChamfer(m, faceOfRole, bump)

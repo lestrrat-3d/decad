@@ -368,7 +368,7 @@ is nil: the result is not an A1 operand (brep-modify DB11).
 ### 4.5 Topology and roles
 
 The record is general-boolean §4.2's: every edge bounds exactly two faces by
-`brepTopologyContext`'s count, and a record that fails it is `ErrUnsupported`
+`breprecord.TopologyContext`'s count, and a record that fails it is `ErrUnsupported`
 (SO5) — the proof that the three regions closed against each other. One lump,
 one shell, `FaceShell.IsVoid()` false: the cavity reaches the outside through the
 opening. Roles are the brep's, `face(k)` and `wall(k)` by result index,
@@ -414,8 +414,8 @@ In order, each refusing and none admitting:
    pairs the pieces; whether a cut lies on `carrier(r)` is the enclosure's
    question (§2.4), not this one's.
 4. The engine's own misses (SO5), modify §5's audit on every planar face the
-   engine writes (as `stacked_union_brep.go` runs it), `falsifyBrepPayload`,
-   `brepTopologyContext`'s closure count, and `evalBrepContext`'s positive
+   engine writes (as `stacked_union_brep.go` runs it), `breprecord.Falsify`,
+   `breprecord.TopologyContext`'s closure count, and `breprecord.Build`'s positive
    volume (`ErrDegenerate`).
 
 ## 5. Table SO — refusals and gate order
