@@ -20,7 +20,7 @@ func TestCurvedMultiRunShellConsumesLiveGraph(t *testing.T) {
 	require.Len(t, graph.arcs, 2)
 	require.Len(t, shell.seams, len(graph.runs))
 	require.Len(t, shell.capRings, len(graph.arcs))
-	require.Len(t, shell.triangleCells, len(shell.mesh.tris))
+	require.Len(t, shell.triangleCells, len(shell.mesh.Tris))
 	require.Less(t, shell.faceBound, 0.1)
 	require.True(t, revolveLoftFacesBlankShellEulerTwo(&shell.mesh))
 	seenIDs := make(map[int]struct{})
@@ -44,7 +44,7 @@ func TestCurvedMultiRunShellConsumesLiveGraph(t *testing.T) {
 		require.True(t, patched)
 		for station, index := range shell.seams[i] {
 			require.GreaterOrEqual(t, index, 0)
-			require.Less(t, index, len(shell.mesh.verts))
+			require.Less(t, index, len(shell.mesh.Verts))
 			_, duplicate := seenVertices[index]
 			require.False(t, duplicate)
 			seenVertices[index] = struct{}{}
@@ -52,7 +52,7 @@ func TestCurvedMultiRunShellConsumesLiveGraph(t *testing.T) {
 			_, duplicate = seenIDs[id]
 			require.False(t, duplicate)
 			seenIDs[id] = struct{}{}
-			require.Equal(t, seam[station].point, shell.mesh.verts[index])
+			require.Equal(t, seam[station].point, shell.mesh.Verts[index])
 			require.Equal(t, seam[station].point,
 				blankPatch.vertices[blankPatch.seam[station]])
 			require.Equal(t, seam[station].point,
@@ -80,7 +80,7 @@ func TestCurvedMultiRunShellConsumesLiveGraph(t *testing.T) {
 		require.Equal(t, arc.endpointCellIDs, ring.endpointCellIDs)
 		for endpoint, cellID := range arc.endpointCellIDs {
 			index := ring.endpoints[endpoint]
-			require.Equal(t, ring.endpointProof[endpoint].point, shell.mesh.verts[index])
+			require.Equal(t, ring.endpointProof[endpoint].point, shell.mesh.Verts[index])
 			require.GreaterOrEqual(t, shell.vertexBounds[index], ring.endpointProof[endpoint].blankBound)
 			require.True(t, graph.endpointCellMatches(arc, &ring, endpoint, cellID))
 		}
@@ -102,7 +102,7 @@ func TestCurvedMultiRunShellConsumesLiveGraph(t *testing.T) {
 		require.Less(t, cell.band+1, len(shell.sectionRings[cell.section]))
 		require.GreaterOrEqual(t, cell.ray, 0)
 		require.Less(t, cell.ray, shell.rayCount)
-		require.Equal(t, sectionGroup[cell.section], shell.mesh.src[triIndex])
+		require.Equal(t, sectionGroup[cell.section], shell.mesh.Src[triIndex])
 		_, duplicate := seenCells[cell]
 		require.False(t, duplicate)
 		seenCells[cell] = struct{}{}
@@ -120,7 +120,7 @@ func TestCurvedMultiRunShellConsumesLiveGraph(t *testing.T) {
 		default:
 			want = [3]int{start[cell.ray], end[next], start[next]}
 		}
-		got := shell.mesh.tris[triIndex]
+		got := shell.mesh.Tris[triIndex]
 		slices.Sort(got[:])
 		slices.Sort(want[:])
 		require.Equal(t, want, got)

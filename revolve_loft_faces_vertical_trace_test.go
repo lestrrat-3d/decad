@@ -45,7 +45,7 @@ func TestCurvedVerticalTraceConsumesLiveGraphAndShell(t *testing.T) {
 	require.Contains(t, trace.cellIDs, selected)
 	require.Len(t, shell.seams, len(boundGraph.runs))
 	require.Len(t, shell.capRings, len(boundGraph.arcs))
-	require.Len(t, shell.triangleCells, len(shell.mesh.tris))
+	require.Len(t, shell.triangleCells, len(shell.mesh.Tris))
 	require.True(t, revolveLoftFacesBlankShellEulerTwo(&shell.mesh))
 	require.Less(t, shell.faceBound, 0.1)
 	require.Less(t, trace.loftBound, 0.1)
@@ -55,7 +55,7 @@ func TestCurvedVerticalTraceConsumesLiveGraphAndShell(t *testing.T) {
 	require.Len(t, trace.vertexRays, len(trace.vertices))
 	seenCells := make(map[revolveLoftFacesShellTriangleCell]bool)
 	incident := make(map[[2]int][]revolveLoftFacesShellTriangleCell)
-	for i, tri := range shell.mesh.tris {
+	for i, tri := range shell.mesh.Tris {
 		cell := shell.triangleCells[i]
 		require.False(t, seenCells[cell])
 		seenCells[cell] = true
@@ -109,7 +109,7 @@ func TestCurvedVerticalTraceConsumesLiveGraphAndShell(t *testing.T) {
 	}
 	t.Logf("vertical trace: %d cells, %d vertices, bound %.9g mm; shell %d vertices, %d triangles",
 		len(trace.cellIDs), len(trace.vertices), trace.loftBound,
-		len(shell.mesh.verts), len(shell.mesh.tris))
+		len(shell.mesh.Verts), len(shell.mesh.Tris))
 }
 
 func TestVerticalTraceRefusesChangedSourceAndRayOwners(t *testing.T) {
@@ -216,7 +216,7 @@ func TestVerticalTraceRefusesChangedSourceAndRayOwners(t *testing.T) {
 	startRay := shell.rays[capRays[0]]
 	join, _, direction, joined := revolveLoftFacesTraceJoin(proof, pieces[0], pieces[0].to)
 	require.True(t, joined)
-	moved := shell.mesh.verts[ring.endpoints[0]]
+	moved := shell.mesh.Verts[ring.endpoints[0]]
 	moved.Y++
 	motionBound, bounded := revolveLoftFacesVerticalTraceSegmentBound(proof, pieces[0],
 		revolveLoftFacesVerticalTraceHit{piece: 0, ray: capRays[0],

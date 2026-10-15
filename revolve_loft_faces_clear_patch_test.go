@@ -19,10 +19,10 @@ func TestCurvedClearPatchCertifiesRealTrimmedTool(t *testing.T) {
 	classifier, built, err := newRevolveLoftFacesClearPatchContext(t.Context(), source, units.Millimeters(0.1))
 	require.NoError(t, err)
 	require.True(t, built)
-	require.NotEmpty(t, classifier.shell.mesh.tris)
+	require.NotEmpty(t, classifier.shell.mesh.Tris)
 	require.NotEmpty(t, classifier.tool.n.Triangles)
 	index := -1
-	for i := range classifier.shell.mesh.tris {
+	for i := range classifier.shell.mesh.Tris {
 		location, certified, checkErr := classifier.classify(t.Context(), i)
 		require.NoError(t, checkErr)
 		if certified {
@@ -34,7 +34,7 @@ func TestCurvedClearPatchCertifiesRealTrimmedTool(t *testing.T) {
 	require.GreaterOrEqual(t, index, 0)
 	seamVertex := classifier.shell.seams[0][len(classifier.shell.seams[0])/2]
 	seamTriangle := -1
-	for i, tri := range classifier.shell.mesh.tris {
+	for i, tri := range classifier.shell.mesh.Tris {
 		if slices.Contains(tri[:], seamVertex) {
 			seamTriangle = i
 			break
@@ -57,7 +57,7 @@ func TestCurvedClearPatchRefusesUnprovedClaims(t *testing.T) {
 	require.True(t, ok)
 	shell, tool := classifier.shell, classifier.tool
 	index := -1
-	for i := range shell.mesh.tris {
+	for i := range shell.mesh.Tris {
 		location, certified, checkErr := classifier.classify(t.Context(), i)
 		require.NoError(t, checkErr)
 		if certified {
@@ -134,10 +134,10 @@ func TestCurvedClearPatchRefusesUnprovedClaims(t *testing.T) {
 		refuses(t, classifier)
 	})
 	t.Run("changed owned shell vertex after context", func(t *testing.T) {
-		vertex := shell.mesh.tris[index][0]
-		original := shell.mesh.verts[vertex]
-		shell.mesh.verts[vertex].X += 1
-		defer func() { shell.mesh.verts[vertex] = original }()
+		vertex := shell.mesh.Tris[index][0]
+		original := shell.mesh.Verts[vertex]
+		shell.mesh.Verts[vertex].X += 1
+		defer func() { shell.mesh.Verts[vertex] = original }()
 		refuses(t, classifier)
 	})
 	t.Run("understated owned shell bound after context", func(t *testing.T) {
@@ -186,8 +186,8 @@ func TestCurvedClearPatchRefusesUnprovedClaims(t *testing.T) {
 	t.Run("wrong source group", func(t *testing.T) {
 		changed := *shell
 		changed.mesh = shell.mesh
-		changed.mesh.src = slices.Clone(shell.mesh.src)
-		changed.mesh.src[index] = len(shell.mesh.groups)
+		changed.mesh.Src = slices.Clone(shell.mesh.Src)
+		changed.mesh.Src[index] = len(shell.mesh.Groups)
 		modified := *classifier
 		modified.shell = &changed
 		refuses(t, &modified)
@@ -195,7 +195,7 @@ func TestCurvedClearPatchRefusesUnprovedClaims(t *testing.T) {
 	t.Run("understated corner bound", func(t *testing.T) {
 		changed := *shell
 		changed.vertexBounds = slices.Clone(shell.vertexBounds)
-		changed.vertexBounds[shell.mesh.tris[index][0]] = shell.faceBound + 1
+		changed.vertexBounds[shell.mesh.Tris[index][0]] = shell.faceBound + 1
 		modified := *classifier
 		modified.shell = &changed
 		refuses(t, &modified)

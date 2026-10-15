@@ -167,7 +167,7 @@ func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
 		Verts: pp.Verts, ExactSourceVerts: pp.ExactSourceVerts,
 		Tris: pp.Tris, ExactSourceTris: pp.ExactSourceTris,
 		FaceOf: pp.FaceOf, SourceGroup: pp.Src, FaceValid: valid,
-		GroupCount: len(pp.groups), MeshBound: pp.MeshBound,
+		GroupCount: len(pp.Groups), MeshBound: pp.MeshBound,
 		VolSymDiff: pp.VolSymDiff, Xform: pp.Xform, Pose: pose,
 		Lower: pp.LowerSupport, Axis: axis, Side: side,
 	})

@@ -16,7 +16,7 @@ import (
 // quadratic box scan among the many coplanar cap triangles.
 func loftCylinderChamferCrossingAudit(ctx context.Context, mesh *joinedMesh,
 	source loftCylinderChamferSource, outer [2][]int, maxTriangles int) error {
-	if len(mesh.tris) > maxTriangles || len(mesh.src) != len(mesh.tris) ||
+	if len(mesh.Tris) > maxTriangles || len(mesh.Src) != len(mesh.Tris) ||
 		source.z0 >= source.z1 || source.capGroups[0] == source.capGroups[1] {
 		return fmt.Errorf("%w: cap chamfer has no bounded shell partition", ErrUnsupported)
 	}
@@ -27,14 +27,14 @@ func loftCylinderChamferCrossingAudit(ctx context.Context, mesh *joinedMesh,
 		if cap == 1 {
 			z = source.z1
 		}
-		if !loftcylinder.BoreRingSimple(ctx, mesh.verts, outer[cap]) {
+		if !loftcylinder.BoreRingSimple(ctx, mesh.Verts, outer[cap]) {
 			return fmt.Errorf("%w: cap %d has no simple outer loop", ErrUnsupported, cap)
 		}
 		if len(source.inner[cap]) > 0 {
-			if !loftcylinder.BoreRingSimple(ctx, mesh.verts, source.inner[cap]) {
+			if !loftcylinder.BoreRingSimple(ctx, mesh.Verts, source.inner[cap]) {
 				return fmt.Errorf("%w: cap %d has no simple bore loop", ErrUnsupported, cap)
 			}
-			nested, err := loftcylinder.ChamferRingNested(ctx, mesh.verts, outer[cap], source.inner[cap])
+			nested, err := loftcylinder.ChamferRingNested(ctx, mesh.Verts, outer[cap], source.inner[cap])
 			if err != nil {
 				return err
 			}
@@ -55,12 +55,12 @@ func loftCylinderChamferCrossingAudit(ctx context.Context, mesh *joinedMesh,
 			}
 		}
 	}
-	wall := make([][3]int, 0, len(mesh.tris))
-	for i, tri := range mesh.tris {
+	wall := make([][3]int, 0, len(mesh.Tris))
+	for i, tri := range mesh.Tris {
 		if i%256 == 0 && ctx.Err() != nil {
 			return ctx.Err()
 		}
-		if mesh.src[i] == source.capGroups[0] || mesh.src[i] == source.capGroups[1] {
+		if mesh.Src[i] == source.capGroups[0] || mesh.Src[i] == source.capGroups[1] {
 			continue
 		}
 		wall = append(wall, tri)
@@ -71,11 +71,11 @@ func loftCylinderChamferCrossingAudit(ctx context.Context, mesh *joinedMesh,
 			}
 			var on []int
 			for _, index := range tri {
-				if index < 0 || index >= len(mesh.verts) ||
-					mesh.verts[index].Z < source.z0 || mesh.verts[index].Z > source.z1 {
+				if index < 0 || index >= len(mesh.Verts) ||
+					mesh.Verts[index].Z < source.z0 || mesh.Verts[index].Z > source.z1 {
 					return fmt.Errorf("%w: cap chamfer wall leaves its axial slab", ErrUnsupported)
 				}
-				if mesh.verts[index].Z == z {
+				if mesh.Verts[index].Z == z {
 					if _, ok := vertices[cap][index]; !ok {
 						return fmt.Errorf("%w: cap chamfer wall meets a cap away from its loop", ErrUnsupported)
 					}
@@ -93,7 +93,7 @@ func loftCylinderChamferCrossingAudit(ctx context.Context, mesh *joinedMesh,
 		}
 	}
 	maxScans := uint64(min(64_000_000, 2_048*len(wall)))
-	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewPollWorkBudget(ctx), mesh.verts, wall,
+	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewPollWorkBudget(ctx), mesh.Verts, wall,
 		maxTriangles, maxScans); err != nil {
 		return fmt.Errorf("cap chamfer wall crossing audit (%d facets, %d pair scans): %w",
 			len(wall), maxScans, err)

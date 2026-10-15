@@ -38,7 +38,7 @@ func revolveLoftFacesInsertVerticalTrace(ctx context.Context,
 ) (*revolveLoftFacesVerticalTrace, bool, error) {
 	if ctx == nil || proof == nil || shell == nil || graph == nil ||
 		selectedCellID < 0 || selectedCellID >= len(graph.cells) ||
-		len(shell.triangleCells) != len(shell.mesh.tris) ||
+		len(shell.triangleCells) != len(shell.mesh.Tris) ||
 		len(shell.rays) != shell.rayCount {
 		return nil, false, nil
 	}
@@ -101,10 +101,10 @@ func revolveLoftFacesInsertVerticalTrace(ctx context.Context,
 		return nil, false, nil
 	}
 	working := *shell
-	working.mesh.verts = slices.Clone(shell.mesh.verts)
-	working.mesh.tris = slices.Clone(shell.mesh.tris)
-	working.mesh.src = slices.Clone(shell.mesh.src)
-	working.mesh.groups = slices.Clone(shell.mesh.groups)
+	working.mesh.Verts = slices.Clone(shell.mesh.Verts)
+	working.mesh.Tris = slices.Clone(shell.mesh.Tris)
+	working.mesh.Src = slices.Clone(shell.mesh.Src)
+	working.mesh.Groups = slices.Clone(shell.mesh.Groups)
 	working.vertexBounds = slices.Clone(shell.vertexBounds)
 	working.triangleCells = slices.Clone(shell.triangleCells)
 	nodes, edges, loftBound, built, err := revolveLoftFacesVerticalTracePath(
@@ -131,7 +131,7 @@ func revolveLoftFacesInsertVerticalTrace(ctx context.Context,
 	}
 	built, err = revolveLoftFacesVerticalTraceSplitWedges(ctx, &working, *ring,
 		event.sectionIndex, nodes, edges)
-	if err != nil || !built || len(working.triangleCells) != len(working.mesh.tris) ||
+	if err != nil || !built || len(working.triangleCells) != len(working.mesh.Tris) ||
 		!revolveLoftFacesBlankShellEulerTwo(&working.mesh) {
 		return nil, false, err
 	}
@@ -150,10 +150,10 @@ func revolveLoftFacesInsertVerticalTrace(ctx context.Context,
 		return nil, false, err
 	}
 	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx),
-		working.mesh.verts, working.mesh.tris, len(working.mesh.tris), 1<<20); err != nil {
+		working.mesh.Verts, working.mesh.Tris, len(working.mesh.Tris), 1<<20); err != nil {
 		return nil, false, err
 	}
-	audit, err := facetproof.AuditFacetedMesh(ctx, working.mesh.verts, working.mesh.tris)
+	audit, err := facetproof.AuditFacetedMesh(ctx, working.mesh.Verts, working.mesh.Tris)
 	if err != nil {
 		return nil, false, err
 	}

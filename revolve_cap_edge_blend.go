@@ -135,14 +135,14 @@ func buildRevolveCapRimBlend(ctx context.Context, body *Body, source revolvemesh
 	groups := make([]facetGroup, 6)
 	for i, role := range roleOrder {
 		f := roles[role]
-		groups[i] = facetGroup{origins: f.originRefs(), planar: f.isPlanar()}
+		groups[i] = facetGroup{Origins: f.originRefs(), Planar: f.isPlanar()}
 	}
 	ref := body.n.Doc.NextProducer
 	blendRole := "fillet(0,1)"
 	if source.Kind == revolvemesh.RimChamfer {
 		blendRole = "chamfer(0,1)"
 	}
-	groups[5] = facetGroup{origins: []provenance.Ref{{Producer: ref, Role: blendRole}}}
+	groups[5] = facetGroup{Origins: []provenance.Ref{{Producer: ref, Role: blendRole}}}
 	tris := make([][3]int, 0, 8*n)
 	src := make([]int, 0, 8*n)
 	add := func(group, a, b, c int) {
@@ -196,7 +196,7 @@ func buildRevolveCapRimBlend(ctx context.Context, body *Body, source revolvemesh
 	areaSlack := math.Max(proofbound.RatFloatUp(trueArea), facetproof.MeshAreaUpper(verts, tris))
 	diameter2 := new(big.Rat).Add(new(big.Rat).Mul(length, length), new(big.Rat).Mul(big.NewRat(2, 1), r2))
 	dPair := proofbound.RatSqrtUp(diameter2)
-	fp := facetedPayload{Verts: verts, Tris: tris, Src: src, groups: groups,
+	fp := facetedPayload{Verts: verts, Tris: tris, Src: src, Groups: groups,
 		VertexBound: vertexBound, MeshBound: bound, VolSymDiff: missing,
 		AreaSlack: areaSlack, DPair: dPair, Xform: r3.Identity()}
 	out, err := buildFacetedBody(ctx, documentHandle(body.n.Doc), ref, fp)

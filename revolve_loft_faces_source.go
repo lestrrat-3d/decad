@@ -155,7 +155,7 @@ func revolveLoftFacesTrimCurrent(tooth *Body, trim *loftFacesTrimRecord) bool {
 		len(trim.source.profile.Outer.Segments) < 4 ||
 		len(trim.source.profile.Outer.Segments) > 128 ||
 		len(trim.source.profile.Outer.Segments) != len(trim.source.source.entities) ||
-		!facetedtopology.CapGroupsPresent(p.Src, p.FaceOf, len(p.groups), trim.toeCapGroup, trim.heelCapGroup) ||
+		!facetedtopology.CapGroupsPresent(p.Src, p.FaceOf, len(p.Groups), trim.toeCapGroup, trim.heelCapGroup) ||
 		!facetedtopology.CapGroupsPure(p.Src, p.FaceOf, len(p.Tris), len(tooth.Faces()),
 			trim.toeCapGroup, trim.heelCapGroup) {
 		return false
@@ -408,7 +408,7 @@ func revolveLoftFacesStationSide(ctx context.Context, trim *loftFacesTrimRecord,
 
 func revolveLoftFacesSourceRefs(trim *loftFacesTrimRecord, tooth *Body) ([][]provenance.Ref, bool) {
 	n := len(trim.source.profile.Outer.Segments)
-	if len(trim.base.groups) != (len(trim.maps)-1)*n+2 {
+	if len(trim.base.Groups) != (len(trim.maps)-1)*n+2 {
 		return nil, false
 	}
 	refs := make([][]provenance.Ref, len(trim.maps)-1)
@@ -416,12 +416,12 @@ func revolveLoftFacesSourceRefs(trim *loftFacesTrimRecord, tooth *Body) ([][]pro
 	for band := range refs {
 		refs[band] = make([]provenance.Ref, n)
 		for segment := range n {
-			group := trim.base.groups[band*n+segment]
-			if len(group.origins) != 1 ||
-				group.origins[0].Role != fmt.Sprintf("side(%d,%d)", band, segment) {
+			group := trim.base.Groups[band*n+segment]
+			if len(group.Origins) != 1 ||
+				group.Origins[0].Role != fmt.Sprintf("side(%d,%d)", band, segment) {
 				return nil, false
 			}
-			ref := group.origins[0]
+			ref := group.Origins[0]
 			if band == 0 && segment == 0 {
 				producer = ref.Producer
 			} else if ref.Producer != producer {
@@ -471,10 +471,10 @@ func revolveLoftFacesRefFaceIndex(p facetedPayload, want provenance.Ref, faceCou
 	}
 	index := -1
 	for i, group := range p.Src {
-		if group < 0 || group >= len(p.groups) {
+		if group < 0 || group >= len(p.Groups) {
 			return -1, false
 		}
-		if slices.Contains(p.groups[group].origins, want) {
+		if slices.Contains(p.Groups[group].Origins, want) {
 			if p.FaceOf[i] < 0 || p.FaceOf[i] >= faceCount ||
 				index >= 0 && index != p.FaceOf[i] {
 				return -1, false

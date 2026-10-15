@@ -58,7 +58,7 @@ var middleSidePrepHook func(*middleSidePrep)
 
 func newMiddleSidePrep(fp facetedPayload, mesh *joinedMesh, source loftCylinderChamferSource,
 	ideal []proofarith.Xpt, middle [2]int, clipBound float64) (*middleSidePrep, error) {
-	if middle[0] < 0 || middle[1] > len(mesh.tris) || middle[0] >= middle[1] ||
+	if middle[0] < 0 || middle[1] > len(mesh.Tris) || middle[0] >= middle[1] ||
 		len(fp.Src) != len(fp.Tris) || proofbound.IsNonFinite(clipBound) {
 		return nil, fmt.Errorf("%w: cap chamfer has no retained middle side", ErrUnsupported)
 	}
@@ -121,13 +121,13 @@ func (prep *middleSidePrep) serialFrom(ctx context.Context, first int) error {
 
 func (prep *middleSidePrep) middleFacet(ctx context.Context, i int, st *middleState) error {
 	mesh, source, ideal := prep.mesh, prep.source, prep.ideal
-	group := mesh.src[i]
-	if group < 0 || group >= len(mesh.groups) || len(mesh.groups[group].origins) == 0 {
+	group := mesh.Src[i]
+	if group < 0 || group >= len(mesh.Groups) || len(mesh.Groups[group].Origins) == 0 {
 		return fmt.Errorf("%w: retained middle facet lost its source group", ErrUnsupported)
 	}
-	origin := mesh.groups[group].origins[0]
+	origin := mesh.Groups[group].Origins[0]
 	var base [3]proofarith.Xpt
-	for j, index := range mesh.tris[i] {
+	for j, index := range mesh.Tris[i] {
 		if index < 0 || index >= len(ideal) {
 			return fmt.Errorf("%w: retained middle facet has an invalid vertex", ErrUnsupported)
 		}

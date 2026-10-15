@@ -68,12 +68,12 @@ func sameRevolveLoftFacesProofMesh(a, b *Mesh) bool {
 
 func cloneRevolveLoftFacesClearShell(shell *revolveLoftFacesBlankSeamShell) *revolveLoftFacesBlankSeamShell {
 	cloned := *shell
-	cloned.mesh.verts = slices.Clone(shell.mesh.verts)
-	cloned.mesh.tris = slices.Clone(shell.mesh.tris)
-	cloned.mesh.src = slices.Clone(shell.mesh.src)
-	cloned.mesh.groups = slices.Clone(shell.mesh.groups)
-	for i := range cloned.mesh.groups {
-		cloned.mesh.groups[i].origins = slices.Clone(shell.mesh.groups[i].origins)
+	cloned.mesh.Verts = slices.Clone(shell.mesh.Verts)
+	cloned.mesh.Tris = slices.Clone(shell.mesh.Tris)
+	cloned.mesh.Src = slices.Clone(shell.mesh.Src)
+	cloned.mesh.Groups = slices.Clone(shell.mesh.Groups)
+	for i := range cloned.mesh.Groups {
+		cloned.mesh.Groups[i].Origins = slices.Clone(shell.mesh.Groups[i].Origins)
 	}
 	cloned.vertexBounds = slices.Clone(shell.vertexBounds)
 	cloned.triangleCells = slices.Clone(shell.triangleCells)
@@ -96,11 +96,11 @@ func cloneRevolveLoftFacesClearShell(shell *revolveLoftFacesBlankSeamShell) *rev
 
 func sameRevolveLoftFacesClearShell(a, b *revolveLoftFacesBlankSeamShell) bool {
 	if a == nil || b == nil ||
-		!slices.Equal(a.mesh.verts, b.mesh.verts) ||
-		!slices.Equal(a.mesh.tris, b.mesh.tris) ||
-		!slices.Equal(a.mesh.src, b.mesh.src) ||
-		!slices.EqualFunc(a.mesh.groups, b.mesh.groups, func(x, y facetGroup) bool {
-			return slices.Equal(x.origins, y.origins)
+		!slices.Equal(a.mesh.Verts, b.mesh.Verts) ||
+		!slices.Equal(a.mesh.Tris, b.mesh.Tris) ||
+		!slices.Equal(a.mesh.Src, b.mesh.Src) ||
+		!slices.EqualFunc(a.mesh.Groups, b.mesh.Groups, func(x, y facetGroup) bool {
+			return slices.Equal(x.Origins, y.Origins)
 		}) ||
 		!slices.Equal(a.vertexBounds, b.vertexBounds) ||
 		!slices.Equal(a.triangleCells, b.triangleCells) ||
@@ -195,10 +195,10 @@ func (c *revolveLoftFacesClearPatchContext) classifyClearPatch(ctx context.Conte
 		!tool.n.BoundaryOK || !tool.n.SymDiffOK ||
 		proofbound.IsNonFinite(tool.n.Bound) || tool.n.Bound < 0 ||
 		proofbound.IsNonFinite(tool.n.VolSymDiff) || tool.n.VolSymDiff < 0 ||
-		index < 0 || index >= len(shell.mesh.tris) ||
-		len(shell.triangleCells) != len(shell.mesh.tris) ||
-		len(shell.mesh.src) != len(shell.mesh.tris) ||
-		len(shell.vertexBounds) != len(shell.mesh.verts) ||
+		index < 0 || index >= len(shell.mesh.Tris) ||
+		len(shell.triangleCells) != len(shell.mesh.Tris) ||
+		len(shell.mesh.Src) != len(shell.mesh.Tris) ||
+		len(shell.vertexBounds) != len(shell.mesh.Verts) ||
 		proofbound.IsNonFinite(shell.faceBound) || shell.faceBound < shell.chordBound {
 		return pointquery.Undecided, false, nil
 	}
@@ -210,15 +210,15 @@ func (c *revolveLoftFacesClearPatchContext) classifyClearPatch(ctx context.Conte
 		cell.ray < 0 || cell.ray >= shell.rayCount {
 		return pointquery.Undecided, false, nil
 	}
-	group := shell.mesh.src[index]
-	if group < 0 || group >= len(shell.mesh.groups) ||
+	group := shell.mesh.Src[index]
+	if group < 0 || group >= len(shell.mesh.Groups) ||
 		!sameRevolveLoftFacesShellGroup(source, shell, cell.section, group) {
 		return pointquery.Undecided, false, nil
 	}
-	tri := shell.mesh.tris[index]
+	tri := shell.mesh.Tris[index]
 	for _, vertex := range tri {
-		if vertex < 0 || vertex >= len(shell.mesh.verts) ||
-			!proofbound.FiniteVec(shell.mesh.verts[vertex]) ||
+		if vertex < 0 || vertex >= len(shell.mesh.Verts) ||
+			!proofbound.FiniteVec(shell.mesh.Verts[vertex]) ||
 			proofbound.IsNonFinite(shell.vertexBounds[vertex]) ||
 			shell.vertexBounds[vertex] < 0 {
 			return pointquery.Undecided, false, nil
@@ -238,9 +238,9 @@ func (c *revolveLoftFacesClearPatchContext) classifyClearPatch(ctx context.Conte
 		return pointquery.Undecided, false, nil
 	}
 	held := [3]proof.Xpt{
-		proof.XptOf(shell.mesh.verts[tri[0]]),
-		proof.XptOf(shell.mesh.verts[tri[1]]),
-		proof.XptOf(shell.mesh.verts[tri[2]]),
+		proof.XptOf(shell.mesh.Verts[tri[0]]),
+		proof.XptOf(shell.mesh.Verts[tri[1]]),
+		proof.XptOf(shell.mesh.Verts[tri[2]]),
 	}
 	for _, facet := range tool.n.Triangles {
 		if err := ctx.Err(); err != nil {
@@ -286,8 +286,8 @@ func revolveLoftFacesClearPatchToolCurrent(source *revolveLoftFacesSourceCertifi
 func sameRevolveLoftFacesShellGroup(source *revolveLoftFacesSourceCertificate,
 	shell *revolveLoftFacesBlankSeamShell, section, group int) bool {
 	span := source.section.spans[section]
-	if span.face == nil || group >= len(shell.mesh.groups) ||
-		!slices.Equal(shell.mesh.groups[group].origins, span.origins) {
+	if span.face == nil || group >= len(shell.mesh.Groups) ||
+		!slices.Equal(shell.mesh.Groups[group].Origins, span.origins) {
 		return false
 	}
 	want := 0

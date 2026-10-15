@@ -155,7 +155,7 @@ func crossBoreFaceGroup(body *Body, role string) (facetGroup, bool) {
 	for _, face := range body.Faces() {
 		for _, origin := range face.originRefs() {
 			if origin.Producer == body.n.Origin.Producer && origin.Role == role {
-				return facetGroup{origins: face.originRefs(), planar: face.isPlanar()}, true
+				return facetGroup{Origins: face.originRefs(), Planar: face.isPlanar()}, true
 			}
 		}
 	}
@@ -179,7 +179,7 @@ func crossBoreMeshGroups(rec *crossCylinderBoreRecord) ([]facetGroup, error) {
 		}
 		groups = append(groups, group)
 	}
-	groups = append(groups, facetGroup{origins: []provenance.Ref{{Role: "boreMouthChamfer"}}})
+	groups = append(groups, facetGroup{Origins: []provenance.Ref{{Role: "boreMouthChamfer"}}})
 	return groups, nil
 }
 

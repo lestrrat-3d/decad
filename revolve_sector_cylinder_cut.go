@@ -78,7 +78,7 @@ func revolveSectorBoreCapRecord(joined facetedPayload) (revolveSectorBoreCaps, b
 	caps.lowRadius, caps.highRadius = low.start.V, high.end.V
 	caps.lowGroup, caps.highGroup = ring.groups[caps.low], ring.groups[caps.high]
 	if caps.lowGroup < 0 || caps.highGroup < 0 ||
-		caps.lowGroup >= len(joined.groups) || caps.highGroup >= len(joined.groups) ||
+		caps.lowGroup >= len(joined.Groups) || caps.highGroup >= len(joined.Groups) ||
 		caps.lowGroup == caps.highGroup ||
 		len(ring.rings[axis]) != 1 || len(ring.rings[caps.high]) != 1 ||
 		len(ring.rings[caps.low]) != n ||
@@ -226,8 +226,8 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 		lowPos[caps.lowOuter[i]], highPos[caps.highOuter[i]] = i, i
 	}
 	lowSeen, highSeen := make([]bool, n), make([]bool, n)
-	mesh := &joinedMesh{verts: append([]r3.Vec(nil), joined.Verts...),
-		groups: append([]facetGroup(nil), joined.groups...)}
+	mesh := &joinedMesh{Verts: append([]r3.Vec(nil), joined.Verts...),
+		Groups: append([]facetGroup(nil), joined.Groups...)}
 	for i, tri := range joined.Tris {
 		if err := ctx.Err(); err != nil {
 			return nil, true, err
@@ -259,16 +259,16 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 		if !revolveSectorTriangleClear(tri, joined.Verts, clearance) {
 			return nil, true, fmt.Errorf("%w: untouched face may enter the bore", ErrUnsupported)
 		}
-		mesh.add(tri, joined.Src[i])
+		mesh.Add(tri, joined.Src[i])
 	}
 	for i := range n {
 		if !lowSeen[i] || !highSeen[i] {
 			return nil, true, fmt.Errorf("%w: cap fan misses an angular cell", ErrUnsupported)
 		}
 	}
-	wallGroup := len(mesh.groups)
-	mesh.groups = append(mesh.groups, facetGroup{origins: wall.originRefs(),
-		surface: wall.n.Surface, normalBound: wall.n.NormalBound, reversed: !wall.n.Reversed})
+	wallGroup := len(mesh.Groups)
+	mesh.Groups = append(mesh.Groups, facetGroup{Origins: wall.originRefs(),
+		Surface: wall.n.Surface, NormalBound: wall.n.NormalBound, Reversed: !wall.n.Reversed})
 	vertexBound := append([]float64(nil), joined.VertexBound...)
 	innerLow, innerHigh := make([]int, n), make([]int, n)
 	for i := range n {
@@ -276,39 +276,39 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 		high := r3.Vec{X: caps.highX, Y: inner[i].U, Z: inner[i].V}
 		if i == 0 {
 			innerLow[i], innerHigh[i] = caps.lowAxis, caps.highAxis
-			mesh.verts[caps.lowAxis], mesh.verts[caps.highAxis] = low, high
+			mesh.Verts[caps.lowAxis], mesh.Verts[caps.highAxis] = low, high
 			vertexBound[caps.lowAxis], vertexBound[caps.highAxis] = boreBound, boreBound
 			continue
 		}
-		innerLow[i] = len(mesh.verts)
-		mesh.verts = append(mesh.verts, low)
+		innerLow[i] = len(mesh.Verts)
+		mesh.Verts = append(mesh.Verts, low)
 		vertexBound = append(vertexBound, boreBound)
-		innerHigh[i] = len(mesh.verts)
-		mesh.verts = append(mesh.verts, high)
+		innerHigh[i] = len(mesh.Verts)
+		mesh.Verts = append(mesh.Verts, high)
 		vertexBound = append(vertexBound, boreBound)
 	}
-	oldCount := len(mesh.tris)
+	oldCount := len(mesh.Tris)
 	for i := range n {
 		j := (i + 1) % n
-		mesh.add([3]int{caps.lowOuter[i], innerLow[i], innerLow[j]}, caps.lowGroup)
-		mesh.add([3]int{caps.lowOuter[i], innerLow[j], caps.lowOuter[j]}, caps.lowGroup)
-		mesh.add([3]int{innerHigh[i], caps.highOuter[i], caps.highOuter[j]}, caps.highGroup)
-		mesh.add([3]int{innerHigh[i], caps.highOuter[j], innerHigh[j]}, caps.highGroup)
-		mesh.add([3]int{innerLow[i], innerHigh[i], innerHigh[j]}, wallGroup)
-		mesh.add([3]int{innerLow[i], innerHigh[j], innerLow[j]}, wallGroup)
+		mesh.Add([3]int{caps.lowOuter[i], innerLow[i], innerLow[j]}, caps.lowGroup)
+		mesh.Add([3]int{caps.lowOuter[i], innerLow[j], caps.lowOuter[j]}, caps.lowGroup)
+		mesh.Add([3]int{innerHigh[i], caps.highOuter[i], caps.highOuter[j]}, caps.highGroup)
+		mesh.Add([3]int{innerHigh[i], caps.highOuter[j], innerHigh[j]}, caps.highGroup)
+		mesh.Add([3]int{innerLow[i], innerHigh[i], innerHigh[j]}, wallGroup)
+		mesh.Add([3]int{innerLow[i], innerHigh[j], innerLow[j]}, wallGroup)
 	}
 	if err := orientJoinedMesh(mesh); err != nil {
 		return nil, true, err
 	}
-	if err := tessellation.RequireVertexLinks(ctx, len(mesh.verts), mesh.tris); err != nil {
+	if err := tessellation.RequireVertexLinks(ctx, len(mesh.Verts), mesh.Tris); err != nil {
 		return nil, true, err
 	}
-	if len(mesh.tris) != len(joined.Tris)+4*n {
+	if len(mesh.Tris) != len(joined.Tris)+4*n {
 		return nil, true, fmt.Errorf("%w: cap and wall triangle census changed", ErrUnsupported)
 	}
-	patches := revolvemesh.SectorBorePatches(mesh.src, oldCount, n, false, caps.lowGroup, caps.highGroup, -1, wallGroup)
+	patches := revolvemesh.SectorBorePatches(mesh.Src, oldCount, n, false, caps.lowGroup, caps.highGroup, -1, wallGroup)
 	if err := loftmesh.LoftCrossingAuditBoundedProjectedPatchesStreaming(proofbound.NewWorkBudget(ctx),
-		mesh.verts, mesh.tris, patches, revolveSectorBoreMaxAuditTriangles,
+		mesh.Verts, mesh.Tris, patches, revolveSectorBoreMaxAuditTriangles,
 		revolveSectorBoreMaxAuditScans); err != nil {
 		return nil, true, err
 	}
@@ -323,7 +323,7 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 	volumeGap := proofbound.AbsSumUpper(joined.VolSymDiff,
 		proofbound.ProductUpper(shellArea, height))
 	bound := max(joined.MeshBound, boreBound)
-	heldArea, err := proofbound.PerturbedAreaUpperContext(ctx, mesh.verts, mesh.tris, bound)
+	heldArea, err := proofbound.PerturbedAreaUpperContext(ctx, mesh.Verts, mesh.Tris, bound)
 	if err != nil {
 		return nil, true, err
 	}
@@ -339,7 +339,7 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 		return nil, true, fmt.Errorf("%w: bore has no finite measure proof", ErrUnsupported)
 	}
 	result := joined
-	result.Verts, result.Tris, result.Src, result.groups = mesh.verts, mesh.tris, mesh.src, mesh.groups
+	result.Verts, result.Tris, result.Src, result.Groups = mesh.Verts, mesh.Tris, mesh.Src, mesh.Groups
 	result.VertexBound, result.MeshBound = vertexBound, bound
 	result.VolSymDiff, result.AreaSlack = volumeGap, areaSlack
 	result.revolveLoftJoin = nil

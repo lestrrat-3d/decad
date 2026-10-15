@@ -56,7 +56,7 @@ func obliqueBossFaceGroup(body *Body, role string) (facetGroup, bool) {
 	for _, face := range body.Faces() {
 		for _, origin := range face.originRefs() {
 			if origin.Role == role && origin.Producer == body.n.Origin.Producer {
-				return facetGroup{origins: face.originRefs(), planar: face.isPlanar()}, true
+				return facetGroup{Origins: face.originRefs(), Planar: face.isPlanar()}, true
 			}
 		}
 	}
@@ -65,7 +65,7 @@ func obliqueBossFaceGroup(body *Body, role string) (facetGroup, bool) {
 
 func obliqueBossHasOrigin(face *topo.Face, group facetGroup) bool {
 	for _, origin := range face.Origins {
-		if slices.Contains(group.origins, origin) {
+		if slices.Contains(group.Origins, origin) {
 			return true
 		}
 	}
@@ -173,9 +173,9 @@ func (b *Body) filletObliqueBoss(ctx context.Context, edges []*Edge,
 		vertexBound[i] = bound
 	}
 	ref := b.n.Doc.NextProducer
-	mesh.groups[8].origins[0].Producer = ref
+	mesh.groups[8].Origins[0].Producer = ref
 	result, err := buildFacetedBodyWithProof(ctx, documentHandle(b.n.Doc), ref, facetedPayload{
-		Verts: mesh.verts, Tris: mesh.tris, Src: mesh.src, groups: mesh.groups,
+		Verts: mesh.verts, Tris: mesh.tris, Src: mesh.src, Groups: mesh.groups,
 		VertexBound: vertexBound, MeshBound: bound, VolSymDiff: volumeGap,
 		AreaSlack: areaSlack, DPair: dPair, ContactAudited: true, Xform: r3.Identity(),
 	}, audit, volume, heldVolume)
@@ -311,7 +311,7 @@ func buildObliqueBossFilletMesh(ctx context.Context,
 		}
 		m.groups = append(m.groups, group)
 	}
-	m.groups = append(m.groups, facetGroup{origins: []provenance.Ref{{Role: "junctionFillet"}}})
+	m.groups = append(m.groups, facetGroup{Origins: []provenance.Ref{{Role: "junctionFillet"}}})
 	samples := obliqueBossSamples(rec, radius)
 	n := len(samples)
 	outer, lower, plane, side, far := make([]int, n), make([]int, n),

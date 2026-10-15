@@ -31,9 +31,9 @@ func revolveLoftFacesHeelSlopedOccupiedArc(ctx context.Context,
 	payload, ok := proof.tooth.n.Payload.(facetedPayload)
 	if !ok || payload.loftFacesTrim != trim ||
 		!revolveLoftFacesTrimCurrent(proof.tooth, trim) ||
-		trim.heelCapGroup < 0 || trim.heelCapGroup >= len(payload.groups) ||
-		len(payload.groups[trim.heelCapGroup].origins) != 1 ||
-		payload.groups[trim.heelCapGroup].origins[0] != circle.capOrigin ||
+		trim.heelCapGroup < 0 || trim.heelCapGroup >= len(payload.Groups) ||
+		len(payload.Groups[trim.heelCapGroup].Origins) != 1 ||
+		payload.Groups[trim.heelCapGroup].Origins[0] != circle.capOrigin ||
 		!revolveLoftFacesToolCapFaceOriginCurrent(circle) ||
 		uniqueResultSourceFace(proof.tooth, trim.heelCapGroup) != circle.capFace {
 		return nil, false, nil

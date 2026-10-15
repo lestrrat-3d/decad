@@ -63,15 +63,15 @@ func buildRevolvedSectionRing(mesh *joinedMesh, section revolveSectionCertificat
 	if span.Cmp(proofbound.TwoPiInterval().Lo) >= 0 {
 		return empty, 0, fmt.Errorf("%w: revolved ring covers more than one turn", ErrUnsupported)
 	}
-	startVerts, startTris := len(mesh.verts), len(mesh.tris)
-	startSources, startGroups := len(mesh.src), len(mesh.groups)
+	startVerts, startTris := len(mesh.Verts), len(mesh.Tris)
+	startSources, startGroups := len(mesh.Src), len(mesh.Groups)
 	complete := false
 	defer func() {
 		if !complete {
-			mesh.verts = mesh.verts[:startVerts]
-			mesh.tris = mesh.tris[:startTris]
-			mesh.src = mesh.src[:startSources]
-			mesh.groups = mesh.groups[:startGroups]
+			mesh.Verts = mesh.Verts[:startVerts]
+			mesh.Tris = mesh.Tris[:startTris]
+			mesh.Src = mesh.Src[:startSources]
+			mesh.Groups = mesh.Groups[:startGroups]
 		}
 	}()
 
@@ -92,8 +92,8 @@ func buildRevolvedSectionRing(mesh *joinedMesh, section revolveSectionCertificat
 	for i, span := range spans {
 		p := span.start
 		if p.V == 0 {
-			ring.rings[i] = []int{len(mesh.verts)}
-			mesh.verts = append(mesh.verts, r3.Vec{X: p.U})
+			ring.rings[i] = []int{len(mesh.Verts)}
+			mesh.Verts = append(mesh.Verts, r3.Vec{X: p.U})
 			continue
 		}
 		maxRadius = max(maxRadius, p.V)
@@ -107,8 +107,8 @@ func buildRevolvedSectionRing(mesh *joinedMesh, section revolveSectionCertificat
 			yError := proofbound.IntervalFloatError(proofbound.IntervalScale(cosIv[j], radius), held.Y)
 			zError := proofbound.IntervalFloatError(proofbound.IntervalScale(sinIv[j], radius), held.Z)
 			maxRound = max(maxRound, proofbound.Radius3D(max(yError, zError)))
-			ring.rings[i][j] = len(mesh.verts)
-			mesh.verts = append(mesh.verts, held)
+			ring.rings[i][j] = len(mesh.Verts)
+			mesh.Verts = append(mesh.Verts, held)
 		}
 	}
 	if maxRadius <= 0 {
@@ -125,11 +125,11 @@ func buildRevolvedSectionRing(mesh *joinedMesh, section revolveSectionCertificat
 			return empty, 0, fmt.Errorf("%w: revolved section face is missing", ErrUnsupported)
 		}
 		_, planar := span.face.n.Surface.(surfacegeom.Plane)
-		groupForSpan[i] = len(mesh.groups)
-		mesh.groups = append(mesh.groups, facetGroup{
-			origins: append([]provenance.Ref(nil), span.origins...),
-			surface: span.face.n.Surface, denoted: span.face.n.Denoted,
-			reversed: span.face.n.Reversed, planar: planar,
+		groupForSpan[i] = len(mesh.Groups)
+		mesh.Groups = append(mesh.Groups, facetGroup{
+			Origins: append([]provenance.Ref(nil), span.origins...),
+			Surface: span.face.n.Surface, Denoted: span.face.n.Denoted,
+			Reversed: span.face.n.Reversed, Planar: planar,
 		})
 	}
 	ring.groups = groupForSpan
@@ -161,12 +161,12 @@ func buildRevolvedSectionRing(mesh *joinedMesh, section revolveSectionCertificat
 			group := groupForSpan[i]
 			switch {
 			case span.start.V == 0:
-				mesh.add([3]int{a, b, c}, group)
+				mesh.Add([3]int{a, b, c}, group)
 			case span.end.V == 0:
-				mesh.add([3]int{a, b, d}, group)
+				mesh.Add([3]int{a, b, d}, group)
 			default:
-				mesh.add([3]int{a, b, c}, group)
-				mesh.add([3]int{a, c, d}, group)
+				mesh.Add([3]int{a, b, c}, group)
+				mesh.Add([3]int{a, c, d}, group)
 			}
 		}
 	}

@@ -94,7 +94,7 @@ func TestCurvedContactGraphHeldAnchors(t *testing.T) {
 			shellIndex, blankIndex, loftIndex := shell.seam[i], blankPatch.seam[i], loftPatch.seam[i]
 			require.False(t, seenShellVertices[shellIndex])
 			seenShellVertices[shellIndex] = true
-			require.Equal(t, seam[i].point, shell.mesh.verts[shellIndex])
+			require.Equal(t, seam[i].point, shell.mesh.Verts[shellIndex])
 			require.Equal(t, seam[i].point, blankPatch.vertices[blankIndex])
 			require.Equal(t, seam[i].point, loftPatch.vertices[loftIndex])
 			require.GreaterOrEqual(t, shell.vertexBounds[shellIndex], seam[i].blankBound)
@@ -122,7 +122,7 @@ func TestCurvedContactGraphHeldAnchors(t *testing.T) {
 				require.False(t, seenEndpointIDs[id])
 				seenEndpointIDs[id] = true
 				require.Equal(t, ring.endpointProof[endpoint].point,
-					shell.mesh.verts[ring.endpoints[endpoint]])
+					shell.mesh.Verts[ring.endpoints[endpoint]])
 				require.GreaterOrEqual(t, graph.cells[cellID].pairID, 0)
 				require.True(t, graph.endpointCellMatches(arc, &ring, endpoint, cellID))
 			}

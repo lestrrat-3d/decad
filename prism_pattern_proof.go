@@ -89,7 +89,7 @@ func prismPatternJoinedBody(ctx context.Context, d *Document, ref producerID,
 	height := proofbound.RatFloatUp(new(big.Rat).Sub(
 		proofarith.FloatRat(source.Blank.Z1), proofarith.FloatRat(source.Blank.Z0)))
 	volumeGap := proofbound.AbsSumUpper(toothVolume, proofbound.ProductUpper(annulusArea, height))
-	areaUpper, err := proofbound.PerturbedAreaUpperContext(ctx, mesh.verts, mesh.tris, bound)
+	areaUpper, err := proofbound.PerturbedAreaUpperContext(ctx, mesh.Verts, mesh.Tris, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -102,18 +102,18 @@ func prismPatternJoinedBody(ctx context.Context, d *Document, ref producerID,
 	if proofbound.IsNonFinite(volumeGap) || proofbound.IsNonFinite(areaSlack) {
 		return nil, fmt.Errorf("%w: copied-prism join has no finite occupied-volume proof", ErrUnsupported)
 	}
-	vertexBound := make([]float64, len(mesh.verts))
+	vertexBound := make([]float64, len(mesh.Verts))
 	for i := range vertexBound {
 		vertexBound[i] = bound
 	}
-	fp := facetedPayload{Verts: mesh.verts, Tris: mesh.tris, Src: mesh.src, groups: mesh.groups,
+	fp := facetedPayload{Verts: mesh.Verts, Tris: mesh.Tris, Src: mesh.Src, Groups: mesh.Groups,
 		AxialSectionJoin: true,
 		PrismPatternJoin: &prismPatternJoinRecord{Blank: blank, Source: source, Parts: parts,
 			Outlines: outlines, Groups: groups, MaxStep: maxStep, RingRound: ringRound,
 			Mesh: mesh},
 		VertexBound: vertexBound, ContactAudited: true,
 		MeshBound: bound, VolSymDiff: volumeGap, AreaSlack: areaSlack,
-		DPair: facetedSourceDiameterUpper(mesh.verts, bound), Xform: r3.Identity()}
+		DPair: facetedSourceDiameterUpper(mesh.Verts, bound), Xform: r3.Identity()}
 	if proofbound.IsNonFinite(fp.DPair) {
 		return nil, fmt.Errorf("%w: copied-prism join has no finite diameter proof", ErrUnsupported)
 	}

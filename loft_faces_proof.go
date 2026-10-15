@@ -356,8 +356,8 @@ func orientLoftFaces(mesh *facetedPayload, base facetedPayload,
 		for i := range mesh.Tris {
 			mesh.Tris[i][1], mesh.Tris[i][2] = mesh.Tris[i][2], mesh.Tris[i][1]
 		}
-		mesh.groups[len(mesh.groups)-2].reversed = false
-		mesh.groups[len(mesh.groups)-1].reversed = true
+		mesh.Groups[len(mesh.Groups)-2].Reversed = false
+		mesh.Groups[len(mesh.Groups)-1].Reversed = true
 	}
 	return nil
 }

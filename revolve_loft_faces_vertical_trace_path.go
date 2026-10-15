@@ -284,8 +284,8 @@ func revolveLoftFacesVerticalTracePath(ctx context.Context,
 			if !valid || loftBound >= 0.1 {
 				return nil, nil, 0, false, nil
 			}
-			vertex := len(shell.mesh.verts)
-			shell.mesh.verts = append(shell.mesh.verts, held)
+			vertex := len(shell.mesh.Verts)
+			shell.mesh.Verts = append(shell.mesh.Verts, held)
 			shell.vertexBounds = append(shell.vertexBounds, blankBound)
 			maxBound = max(maxBound, loftBound)
 			hit.piece = index
@@ -304,8 +304,8 @@ func revolveLoftFacesVerticalTracePath(ctx context.Context,
 			if !valid || bound >= 0.1 {
 				return nil, nil, 0, false, nil
 			}
-			vertex := len(shell.mesh.verts)
-			shell.mesh.verts = append(shell.mesh.verts, held)
+			vertex := len(shell.mesh.Verts)
+			shell.mesh.Verts = append(shell.mesh.Verts, held)
 			shell.vertexBounds = append(shell.vertexBounds, bound)
 			maxBound = max(maxBound, bound)
 			targets = append(targets, revolveLoftFacesTraceNode{vertex: vertex, ray: -1,
@@ -320,7 +320,7 @@ func revolveLoftFacesVerticalTracePath(ctx context.Context,
 			}
 			bound, valid := revolveLoftFacesVerticalTraceSegmentBound(proof, piece,
 				prior.hit, target.hit, prior.dir, target.dir,
-				shell.mesh.verts[prior.vertex], shell.mesh.verts[target.vertex], shell.rays)
+				shell.mesh.Verts[prior.vertex], shell.mesh.Verts[target.vertex], shell.rays)
 			if !valid || bound >= 0.1 {
 				return nil, nil, 0, false, nil
 			}

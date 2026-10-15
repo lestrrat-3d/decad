@@ -76,11 +76,11 @@ func certifiedScaleSource(ctx context.Context, b *Body, chord float64) (facetedP
 		}
 		switch surface := face.n.Surface.(type) {
 		case surfacegeom.Plane:
-			groups[i] = facetGroup{origins: face.originRefs(), surface: surface, planar: true}
+			groups[i] = facetGroup{Origins: face.originRefs(), Surface: surface, Planar: true}
 		default:
 			// The source mesh supplies every curved-face displacement. The
 			// image keeps origins and publishes Faceted without a normal tag.
-			groups[i] = facetGroup{origins: face.originRefs()}
+			groups[i] = facetGroup{Origins: face.originRefs()}
 		}
 		faceID[faceNode(face)] = i
 	}
@@ -108,7 +108,7 @@ func certifiedScaleSource(ctx context.Context, b *Body, chord float64) (facetedP
 		VertexBound:      vertexBound,
 		Tris:             mesh.n.Triangles,
 		Src:              source,
-		groups:           groups,
+		Groups:           groups,
 		MeshBound:        facetproof.FacetBoundMax(mesh.n.Triangles, vertexBound),
 		VolSymDiff:       mesh.n.VolSymDiff,
 		AreaSlack:        mesh.n.AreaSlack,

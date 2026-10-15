@@ -485,8 +485,8 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 		if group < 0 || blankGroups[group] >= 0 {
 			return nil, fmt.Errorf("%w: a circular blank has changed face roles", ErrUnsupported)
 		}
-		blankGroups[group] = len(mesh.groups)
-		mesh.groups = append(mesh.groups, facetGroup{origins: f.originRefs(), planar: group != 0})
+		blankGroups[group] = len(mesh.Groups)
+		mesh.Groups = append(mesh.Groups, facetGroup{Origins: f.originRefs(), Planar: group != 0})
 	}
 	for _, group := range blankGroups {
 		if group < 0 {
@@ -501,8 +501,8 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 		for cap := range 2 {
 			part.vertex[cap] = make([]int, part.rootStart+1)
 			for j := range part.vertex[cap] {
-				part.vertex[cap][j] = len(mesh.verts)
-				mesh.verts = append(mesh.verts, lp.Verts[cap*n+j])
+				part.vertex[cap][j] = len(mesh.Verts)
+				mesh.Verts = append(mesh.Verts, lp.Verts[cap*n+j])
 			}
 		}
 		faces := part.body.Faces()
@@ -525,9 +525,9 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 					}
 					mapped[corner] = part.vertex[capIndex][station]
 				}
-				group := len(mesh.groups)
-				mesh.groups = append(mesh.groups, facetGroup{origins: f.originRefs(), planar: true})
-				mesh.add(mapped, group)
+				group := len(mesh.Groups)
+				mesh.Groups = append(mesh.Groups, facetGroup{Origins: f.originRefs(), Planar: true})
+				mesh.Add(mapped, group)
 			}
 		}
 		toothBound = max(toothBound, part.mesh.Bound().Base())
@@ -599,8 +599,8 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 					proofbound.IntervalFloatError(proofbound.IntervalScale(sine, r), p.Y)))
 				ringRound = max(ringRound, proofbound.AbsSumUpper(pointRound,
 					proofbound.ProductUpper(radius, angleError)))
-				rings[cap][step] = len(mesh.verts)
-				mesh.verts = append(mesh.verts, p)
+				rings[cap][step] = len(mesh.Verts)
+				mesh.Verts = append(mesh.Verts, p)
 				outlines[cap] = append(outlines[cap], rings[cap][step])
 			}
 		}
@@ -609,19 +609,19 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 		for step := range steps {
 			b0, b1 := rings[0][step], rings[0][step+1]
 			t0, t1 := rings[1][step], rings[1][step+1]
-			if !loftcylinder.RingOrder(mesh.verts[b0], mesh.verts[b1],
-				mesh.verts[t0], mesh.verts[t1]) {
+			if !loftcylinder.RingOrder(mesh.Verts[b0], mesh.Verts[b1],
+				mesh.Verts[t0], mesh.Verts[t1]) {
 				return nil, fmt.Errorf("%w: circular ring loses angular order through height", ErrUnsupported)
 			}
-			mesh.add([3]int{b0, b1, t1}, blankGroups[0])
-			mesh.add([3]int{b0, t1, t0}, blankGroups[0])
+			mesh.Add([3]int{b0, b1, t1}, blankGroups[0])
+			mesh.Add([3]int{b0, t1, t0}, blankGroups[0])
 		}
 	}
 	for cap, outline := range outlines {
 		points := make([]triangulation.Point2, len(outline))
 		loop := make([]int, len(outline))
 		for i, index := range outline {
-			p := mesh.verts[index]
+			p := mesh.Verts[index]
 			points[i] = triangulation.Point2{U: p.X, V: p.Y}
 			loop[i] = i
 		}
@@ -634,7 +634,7 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 			if cap == 0 {
 				mapped[1], mapped[2] = mapped[2], mapped[1]
 			}
-			mesh.add(mapped, blankGroups[cap+1])
+			mesh.Add(mapped, blankGroups[cap+1])
 		}
 	}
 	if maximumTwist > 0.4 || maximumStep > 0.025 {
@@ -652,16 +652,16 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 	// RatSqrtDown, RatSqrtUp and RatFloatUp are monotone, so the exact extreme
 	// over the ring is converted once instead of once per triangle.
 	var ringMin2, ringMax2 *big.Rat
-	for i, tri := range mesh.tris {
-		if mesh.src[i] != blankGroups[0] {
+	for i, tri := range mesh.Tris {
+		if mesh.Src[i] != blankGroups[0] {
 			continue
 		}
-		minimum2 := loftcylinder.TriangleMinRadius2(mesh.verts, tri)
+		minimum2 := loftcylinder.TriangleMinRadius2(mesh.Verts, tri)
 		if ringMin2 == nil || minimum2.Cmp(ringMin2) < 0 {
 			ringMin2 = minimum2
 		}
 		for _, index := range tri {
-			p := mesh.verts[index]
+			p := mesh.Verts[index]
 			x, y := proofarith.FloatRat(p.X), proofarith.FloatRat(p.Y)
 			q := new(big.Rat).Add(new(big.Rat).Mul(x, x), new(big.Rat).Mul(y, y))
 			if ringMax2 == nil || q.Cmp(ringMax2) > 0 {
@@ -719,7 +719,7 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 	if err := orientJoinedMesh(mesh); err != nil {
 		return nil, err
 	}
-	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx), mesh.verts, mesh.tris,
+	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx), mesh.Verts, mesh.Tris,
 		loftmesh.MaxLoftAuditTriangles, loftCylinderAuditMaxScans); err != nil {
 		return nil, err
 	}
@@ -742,11 +742,11 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 		}
 	}
 	var sideMin2 *big.Rat
-	for i, tri := range mesh.tris {
-		if mesh.src[i] == blankGroups[1] || mesh.src[i] == blankGroups[2] {
+	for i, tri := range mesh.Tris {
+		if mesh.Src[i] == blankGroups[1] || mesh.Src[i] == blankGroups[2] {
 			continue
 		}
-		if q := loftcylinder.TriangleMinRadius2(mesh.verts, tri); sideMin2 == nil || q.Cmp(sideMin2) < 0 {
+		if q := loftcylinder.TriangleMinRadius2(mesh.Verts, tri); sideMin2 == nil || q.Cmp(sideMin2) < 0 {
 			sideMin2 = q
 		}
 	}
@@ -757,7 +757,7 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 	if minSideRadius <= 0 || proofbound.IsNonFinite(minSideRadius) {
 		return nil, fmt.Errorf("%w: circular join has no side clearance certificate", ErrUnsupported)
 	}
-	area, err := proofbound.PerturbedAreaUpperContext(ctx, mesh.verts, mesh.tris, bound)
+	area, err := proofbound.PerturbedAreaUpperContext(ctx, mesh.Verts, mesh.Tris, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -785,7 +785,7 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 	if proofbound.IsNonFinite(volumeGap) || proofbound.IsNonFinite(areaSlack) {
 		return nil, fmt.Errorf("%w: circular join has no finite volume proof", ErrUnsupported)
 	}
-	vertexBound := make([]float64, len(mesh.verts))
+	vertexBound := make([]float64, len(mesh.Verts))
 	for i := range vertexBound {
 		vertexBound[i] = bound
 	}
@@ -797,10 +797,10 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 		proofBodies[i] = parts[i].body
 		axialBridge[i] = parts[i].bridge
 	}
-	fp := facetedPayload{Verts: mesh.verts, Tris: mesh.tris, Src: mesh.src,
-		groups: mesh.groups, VertexBound: vertexBound, ContactAudited: true,
+	fp := facetedPayload{Verts: mesh.Verts, Tris: mesh.Tris, Src: mesh.Src,
+		Groups: mesh.Groups, VertexBound: vertexBound, ContactAudited: true,
 		MeshBound: bound, VolSymDiff: volumeGap, AreaSlack: areaSlack,
-		DPair: facetedSourceDiameterUpper(mesh.verts, bound),
+		DPair: facetedSourceDiameterUpper(mesh.Verts, bound),
 		Xform: r3.Identity(), LoftCylinderJoin: &loftCylinderJoinRecord{
 			Blank: blank, Teeth: toothBodies, ProofTeeth: proofBodies,
 			AxialBridge: axialBridge, CapOutlines: outlines,
@@ -859,10 +859,10 @@ func loftCylinderRootChordsInsideCap(ctx context.Context, mesh *joinedMesh,
 	points := make([]loftcylinder.XY, len(outline))
 	poly := make([]meshbool.Xp2, len(outline))
 	for i, index := range outline {
-		if index < 0 || index >= len(mesh.verts) {
+		if index < 0 || index >= len(mesh.Verts) {
 			return false
 		}
-		points[i] = loftcylinder.ExactXY(mesh.verts[index])
+		points[i] = loftcylinder.ExactXY(mesh.Verts[index])
 		poly[i] = meshbool.NewXP2(points[i].X, points[i].Y)
 	}
 	same := func(a, b loftcylinder.XY) bool {

@@ -375,10 +375,10 @@ func spiralCombinedToolBody(ctx context.Context, d *Document, ref producerID,
 			copyIndex != 0 || part.ContactAudited); err != nil {
 			return nil, err
 		}
-		vertexOffset, groupOffset := len(p.Verts), len(p.groups)
+		vertexOffset, groupOffset := len(p.Verts), len(p.Groups)
 		p.Verts = append(p.Verts, part.Verts...)
 		p.VertexBound = append(p.VertexBound, part.VertexBound...)
-		p.groups = append(p.groups, part.groups...)
+		p.Groups = append(p.Groups, part.Groups...)
 		for i, tri := range part.Tris {
 			p.Tris = append(p.Tris, [3]int{
 				tri[0] + vertexOffset, tri[1] + vertexOffset, tri[2] + vertexOffset,

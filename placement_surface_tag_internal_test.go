@@ -248,7 +248,7 @@ func TestFacetedPlacementKeepsDenotedProof(t *testing.T) {
 				require.NoError(t, err)
 				require.LessOrEqual(t, got.Value.Sub(want).Len(), got.Bound.Base(),
 					"published normal bound does not cover the true error")
-				// The denoted proof does not read normalBound, which the
+				// The denoted proof does not read NormalBound, which the
 				// placement set to 2 for a group without a denoted patch. A
 				// rigid placement moves the denoted record to its exact image,
 				// so only rounding separates the two normals. A stale record

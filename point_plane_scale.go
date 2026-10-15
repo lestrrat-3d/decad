@@ -89,11 +89,11 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 	if fp.pointSimilarity != nil && fp.pointSimilarity.slice != fp.pointPlane {
 		return nil, fmt.Errorf("%w: the slab similarity source does not match its Split source", ErrUnsupported)
 	}
-	for _, group := range fp.groups {
-		if group.denoted != nil {
+	for _, group := range fp.Groups {
+		if group.Denoted != nil {
 			return nil, fmt.Errorf("%w: a denoted surface has no similarity proof", ErrUnsupported)
 		}
-		if _, ok := group.surface.(surfacegeom.Plane); group.surface != nil && !ok {
+		if _, ok := group.Surface.(surfacegeom.Plane); group.Surface != nil && !ok {
 			return nil, fmt.Errorf("%w: a retained curved surface has no similarity proof", ErrUnsupported)
 		}
 	}
@@ -142,28 +142,28 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 	next.pointSection, next.pointCone = nil, nil
 	next.ExactSourceVerts, next.ExactSourceTris = nil, nil
 	next.LowerSupport = nil
-	next.groups = append([]facetGroup(nil), fp.groups...)
-	for i := range next.groups {
-		group := &next.groups[i]
+	next.Groups = append([]facetGroup(nil), fp.Groups...)
+	for i := range next.Groups {
+		group := &next.Groups[i]
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
-		if group.hasCentroid {
-			group.centroid, err = similarCapCentroid(group.centroid, anchor, s)
+		if group.HasCentroid {
+			group.Centroid, err = similarCapCentroid(group.Centroid, anchor, s)
 			if err != nil {
 				return nil, err
 			}
 		}
-		if plane, ok := group.surface.(surfacegeom.Plane); ok {
+		if plane, ok := group.Surface.(surfacegeom.Plane); ok {
 			origin := anchor.Add(plane.Frame.Origin().Sub(anchor).Scale(s))
 			frame, frameErr := r3.NewFrame(origin, plane.Frame.U(), plane.Frame.V())
 			if frameErr != nil {
 				return nil, fmt.Errorf("%w: a scaled cap frame is not representable: %s", ErrUnsupported, frameErr)
 			}
-			group.surface = surfacegeom.Plane{Frame: frame}
+			group.Surface = surfacegeom.Plane{Frame: frame}
 			// NewFrame may round the held axes again. The exact similar plane
 			// keeps its old normal; two unit normals differ by at most 2.
-			group.normalBound = 2
+			group.NormalBound = 2
 		}
 	}
 	if proofbound.IsNonFinite(next.DPair) || proofbound.IsNonFinite(next.pointPlaneCapDisplacement) {
@@ -199,7 +199,7 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 // geometry, proof terms, and source-group mapping before ScaleMesh consumes it.
 func certifiedBooleanSimilaritySource(fp facetedPayload, faceCount int) bool {
 	if len(fp.Tris) == 0 || len(fp.Tris) != len(fp.Src) ||
-		len(fp.Tris) != len(fp.FaceOf) || len(fp.groups) == 0 || faceCount == 0 ||
+		len(fp.Tris) != len(fp.FaceOf) || len(fp.Groups) == 0 || faceCount == 0 ||
 		fp.MeshBound < 0 || fp.VolSymDiff < 0 || fp.AreaSlack < 0 || fp.DPair <= 0 ||
 		proofbound.IsNonFinite(fp.MeshBound) || proofbound.IsNonFinite(fp.VolSymDiff) ||
 		proofbound.IsNonFinite(fp.AreaSlack) || proofbound.IsNonFinite(fp.DPair) {
@@ -214,7 +214,7 @@ func certifiedBooleanSimilaritySource(fp facetedPayload, faceCount int) bool {
 		return false
 	}
 	for _, source := range fp.Src {
-		if source < 0 || source >= len(fp.groups) {
+		if source < 0 || source >= len(fp.Groups) {
 			return false
 		}
 	}
@@ -223,8 +223,8 @@ func certifiedBooleanSimilaritySource(fp facetedPayload, faceCount int) bool {
 			return false
 		}
 	}
-	for _, group := range fp.groups {
-		if len(group.origins) == 0 {
+	for _, group := range fp.Groups {
+		if len(group.Origins) == 0 {
 			return false
 		}
 	}

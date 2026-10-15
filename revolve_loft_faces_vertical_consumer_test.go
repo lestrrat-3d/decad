@@ -245,7 +245,7 @@ func rejectChangedCurvedSourceOwner(t *testing.T, tooth *Body, ref provenance.Re
 	}
 	changed := false
 	for i, group := range payload.Src {
-		if slices.Contains(payload.groups[group].origins, ref) {
+		if slices.Contains(payload.Groups[group].Origins, ref) {
 			payload.FaceOf[i] = other
 			changed = true
 			break

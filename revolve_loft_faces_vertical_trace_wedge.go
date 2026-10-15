@@ -14,7 +14,7 @@ type revolveLoftFacesTracePlanarEdge struct{ a, b int }
 
 func revolveLoftFacesTracePlanarPoint(shell *revolveLoftFacesBlankSeamShell,
 	vertex int) meshbool.Xp2 {
-	p := shell.mesh.verts[vertex]
+	p := shell.mesh.Verts[vertex]
 	return meshbool.NewXP2(lfF(p.Y), lfF(p.Z))
 }
 
@@ -252,15 +252,15 @@ func revolveLoftFacesVerticalTraceSplitWedges(ctx context.Context,
 		byWedge[edge.wedge] = append(byWedge[edge.wedge],
 			revolveLoftFacesTracePlanarEdge{nodes[edge.start].vertex, nodes[edge.end].vertex})
 	}
-	nextTris := make([][3]int, 0, len(shell.mesh.tris)+4*len(nodes))
+	nextTris := make([][3]int, 0, len(shell.mesh.Tris)+4*len(nodes))
 	nextSrc := make([]int, 0, cap(nextTris))
 	nextCells := make([]revolveLoftFacesShellTriangleCell, 0, cap(nextTris))
 	seenRay := make([]bool, shell.rayCount)
-	for i, tri := range shell.mesh.tris {
+	for i, tri := range shell.mesh.Tris {
 		cell := shell.triangleCells[i]
 		if cell.section != section || cell.band != band {
 			nextTris = append(nextTris, tri)
-			nextSrc = append(nextSrc, shell.mesh.src[i])
+			nextSrc = append(nextSrc, shell.mesh.Src[i])
 			nextCells = append(nextCells, cell)
 			continue
 		}
@@ -274,7 +274,7 @@ func revolveLoftFacesVerticalTraceSplitWedges(ctx context.Context,
 		if len(byRay[ray]) == 0 && len(byRay[(ray+1)%shell.rayCount]) == 0 &&
 			len(byWedge[ray]) == 0 {
 			nextTris = append(nextTris, tri)
-			nextSrc = append(nextSrc, shell.mesh.src[i])
+			nextSrc = append(nextSrc, shell.mesh.Src[i])
 			nextCells = append(nextCells, cell)
 			continue
 		}
@@ -297,7 +297,7 @@ func revolveLoftFacesVerticalTraceSplitWedges(ctx context.Context,
 		}
 		for half, triangle := range clipped {
 			nextTris = append(nextTris, triangle)
-			nextSrc = append(nextSrc, shell.mesh.src[i])
+			nextSrc = append(nextSrc, shell.mesh.Src[i])
 			nextCells = append(nextCells, revolveLoftFacesShellTriangleCell{
 				section: section, band: band, ray: ray, half: half})
 		}
@@ -307,6 +307,6 @@ func revolveLoftFacesVerticalTraceSplitWedges(ctx context.Context,
 			return false, nil
 		}
 	}
-	shell.mesh.tris, shell.mesh.src, shell.triangleCells = nextTris, nextSrc, nextCells
+	shell.mesh.Tris, shell.mesh.Src, shell.triangleCells = nextTris, nextSrc, nextCells
 	return true, nil
 }

@@ -41,8 +41,8 @@ func prismPatternShell(ctx context.Context, blank *Body, source *prismPatternSou
 			return nil, [2][]int{}, blankGroup, 0, 0,
 				fmt.Errorf("%w: circular blank changed its three source faces", ErrUnsupported)
 		}
-		blankGroup[group] = len(mesh.groups)
-		mesh.groups = append(mesh.groups, facetGroup{origins: face.originRefs(), planar: group != 0})
+		blankGroup[group] = len(mesh.Groups)
+		mesh.Groups = append(mesh.Groups, facetGroup{Origins: face.originRefs(), Planar: group != 0})
 	}
 	for _, group := range blankGroup {
 		if group < 0 {
@@ -57,8 +57,8 @@ func prismPatternShell(ctx context.Context, blank *Body, source *prismPatternSou
 		for capIndex := range 2 {
 			part.Vertex[capIndex] = make([]int, part.RootStart+1)
 			for j := range part.Vertex[capIndex] {
-				part.Vertex[capIndex][j] = len(mesh.verts)
-				mesh.verts = append(mesh.verts, part.Mesh.n.Vertices[2*j+capIndex])
+				part.Vertex[capIndex][j] = len(mesh.Verts)
+				mesh.Verts = append(mesh.Verts, part.Mesh.n.Vertices[2*j+capIndex])
 			}
 		}
 		groups := make(map[*topo.Face]int)
@@ -68,9 +68,9 @@ func prismPatternShell(ctx context.Context, blank *Body, source *prismPatternSou
 				face := part.Mesh.n.Source[k]
 				group, ok := groups[face]
 				if !ok {
-					group = len(mesh.groups)
+					group = len(mesh.Groups)
 					groups[face] = group
-					mesh.groups = append(mesh.groups, facetGroup{origins: append([]provenance.Ref(nil), face.Origins...)})
+					mesh.Groups = append(mesh.Groups, facetGroup{Origins: append([]provenance.Ref(nil), face.Origins...)})
 				}
 				old := part.Mesh.n.Triangles[k]
 				var mapped [3]int
@@ -82,7 +82,7 @@ func prismPatternShell(ctx context.Context, blank *Body, source *prismPatternSou
 					}
 					mapped[corner] = part.Vertex[capIndex][station]
 				}
-				mesh.add(mapped, group)
+				mesh.Add(mapped, group)
 			}
 		}
 	}
@@ -127,28 +127,28 @@ func prismPatternShell(ctx context.Context, blank *Body, source *prismPatternSou
 					return nil, [2][]int{}, blankGroup, 0, 0, err
 				}
 				ringRound = max(ringRound, round)
-				rings[cap][step] = len(mesh.verts)
-				mesh.verts = append(mesh.verts, point)
+				rings[cap][step] = len(mesh.Verts)
+				mesh.Verts = append(mesh.Verts, point)
 				outlines[cap] = append(outlines[cap], rings[cap][step])
 			}
 		}
 		for step := range steps {
 			b0, b1 := rings[0][step], rings[0][step+1]
 			t0, t1 := rings[1][step], rings[1][step+1]
-			if !loftcylinder.RingOrder(mesh.verts[b0], mesh.verts[b1],
-				mesh.verts[t0], mesh.verts[t1]) {
+			if !loftcylinder.RingOrder(mesh.Verts[b0], mesh.Verts[b1],
+				mesh.Verts[t0], mesh.Verts[t1]) {
 				return nil, [2][]int{}, blankGroup, 0, 0,
 					fmt.Errorf("%w: circular prism ring loses angular order", ErrUnsupported)
 			}
-			mesh.add([3]int{b0, b1, t1}, blankGroup[0])
-			mesh.add([3]int{b0, t1, t0}, blankGroup[0])
+			mesh.Add([3]int{b0, b1, t1}, blankGroup[0])
+			mesh.Add([3]int{b0, t1, t0}, blankGroup[0])
 		}
 	}
 	for cap, outline := range outlines {
 		points := make([]triangulation.Point2, len(outline))
 		loop := make([]int, len(outline))
 		for i, index := range outline {
-			point := mesh.verts[index]
+			point := mesh.Verts[index]
 			points[i] = triangulation.Point2{U: point.X, V: point.Y}
 			loop[i] = i
 		}
@@ -161,13 +161,13 @@ func prismPatternShell(ctx context.Context, blank *Body, source *prismPatternSou
 			if cap == 0 {
 				mapped[1], mapped[2] = mapped[2], mapped[1]
 			}
-			mesh.add(mapped, blankGroup[cap+1])
+			mesh.Add(mapped, blankGroup[cap+1])
 		}
 	}
 	if err := orientJoinedMesh(mesh); err != nil {
 		return nil, [2][]int{}, blankGroup, 0, 0, err
 	}
-	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx), mesh.verts, mesh.tris,
+	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx), mesh.Verts, mesh.Tris,
 		loftmesh.MaxLoftAuditTriangles, loftCylinderAuditMaxScans); err != nil {
 		return nil, [2][]int{}, blankGroup, 0, 0, err
 	}

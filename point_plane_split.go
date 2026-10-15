@@ -342,18 +342,18 @@ func pointPlaneCapGroup(ref producerID, role string, plane *pointPlaneLimit,
 			proofarith.Xcross(proofarith.XptOf(profilePlane.U),
 				proofarith.XptOf(profilePlane.V)),
 		)
-		origins := append([]provenance.Ref(nil), base.groups[len(base.groups)-1].origins...)
+		origins := append([]provenance.Ref(nil), base.Groups[len(base.Groups)-1].Origins...)
 		origins = append(origins, provenance.Ref{Producer: ref, Role: role})
-		sourceCap := base.groups[len(base.groups)-1]
-		return facetGroup{origins: origins, surface: surfacegeom.Plane{Frame: frame}, planar: true,
-			reversed: apexSide.Sign() > 0,
-			centroid: sourceCap.centroid, hasCentroid: sourceCap.hasCentroid}
+		sourceCap := base.Groups[len(base.Groups)-1]
+		return facetGroup{Origins: origins, Surface: surfacegeom.Plane{Frame: frame}, Planar: true,
+			Reversed: apexSide.Sign() > 0,
+			Centroid: sourceCap.Centroid, HasCentroid: sourceCap.HasCentroid}
 	}
 	origins := append([]provenance.Ref(nil), plane.origins...)
 	origins = append(origins, provenance.Ref{Producer: ref, Role: role})
-	return facetGroup{origins: origins, surface: plane.surface, planar: true,
-		normalBound: plane.normalBound, reversed: reverse,
-		centroid: plane.centroid, hasCentroid: plane.hasCentroid}
+	return facetGroup{Origins: origins, Surface: plane.surface, Planar: true,
+		NormalBound: plane.normalBound, Reversed: reverse,
+		Centroid: plane.centroid, HasCentroid: plane.hasCentroid}
 }
 
 func pointPlaneRing(ctx context.Context, base facetedPayload, plane *pointPlaneLimit) (
@@ -457,8 +457,8 @@ func buildPointPlaneSlab(ctx context.Context, d *Document, ref producerID,
 	}
 	upperOffset := len(vertices)
 	vertices = append(vertices, upper...)
-	groups := make([]facetGroup, 0, len(base.groups)+2)
-	groups = append(groups, base.groups[:len(base.groups)-1]...)
+	groups := make([]facetGroup, 0, len(base.Groups)+2)
+	groups = append(groups, base.Groups[:len(base.Groups)-1]...)
 	lowerGroup := len(groups)
 	if !hasApex {
 		groups = append(groups, pointPlaneCapGroup(ref, provenance.RoleCapStart,
@@ -485,7 +485,7 @@ func buildPointPlaneSlab(ctx context.Context, d *Document, ref producerID,
 		}
 		b, c := side[1]-1, side[2]-1
 		source := base.Src[i]
-		if source < 0 || source >= len(base.groups)-1 {
+		if source < 0 || source >= len(base.Groups)-1 {
 			return nil, fmt.Errorf("%w: point-loft side has no source role", ErrUnsupported)
 		}
 		if hasApex {
@@ -558,7 +558,7 @@ func buildPointPlaneSlab(ctx context.Context, d *Document, ref producerID,
 	}
 	recordCopy := record
 	return buildFacetedBody(ctx, d, ref, facetedPayload{
-		Verts: vertices, Tris: triangles, Src: sources, groups: groups,
+		Verts: vertices, Tris: triangles, Src: sources, Groups: groups,
 		VertexBound: vertexBounds, MeshBound: meshBound,
 		VolSymDiff: volumeGap, AreaSlack: areaSlack,
 		DPair: base.DPair, Xform: r3.Identity(), pointPlane: &recordCopy,

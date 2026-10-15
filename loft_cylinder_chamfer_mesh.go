@@ -107,9 +107,9 @@ func loftCylinderChamferClipSide(ctx context.Context, mesh *joinedMesh,
 					return result, err
 				}
 				result.clipBound = max(result.clipBound, round)
-				result.rings[cap][2*i+k] = len(mesh.verts)
+				result.rings[cap][2*i+k] = len(mesh.Verts)
 				result.exact[cap][2*i+k] = exact
-				mesh.verts = append(mesh.verts, p)
+				mesh.Verts = append(mesh.Verts, p)
 				*vertexBound = append(*vertexBound, proofbound.AbsSumUpper(fp.MeshBound, round))
 			}
 		}
@@ -118,11 +118,11 @@ func loftCylinderChamferClipSide(ctx context.Context, mesh *joinedMesh,
 	for i, group := range groups {
 		j := (i + 1) % n
 		// Original [b_i,b_j,t_j].
-		mesh.add([3]int{lo[2*i+1], lo[2*j], hi[2*j]}, group[0])
-		mesh.add([3]int{lo[2*i+1], hi[2*j], hi[2*i+1]}, group[0])
+		mesh.Add([3]int{lo[2*i+1], lo[2*j], hi[2*j]}, group[0])
+		mesh.Add([3]int{lo[2*i+1], hi[2*j], hi[2*i+1]}, group[0])
 		// Original [b_i,t_j,t_i].
-		mesh.add([3]int{lo[2*i], lo[2*i+1], hi[2*i+1]}, group[1])
-		mesh.add([3]int{lo[2*i], hi[2*i+1], hi[2*i]}, group[1])
+		mesh.Add([3]int{lo[2*i], lo[2*i+1], hi[2*i+1]}, group[1])
+		mesh.Add([3]int{lo[2*i], hi[2*i+1], hi[2*i]}, group[1])
 	}
 	return result, nil
 }
@@ -151,7 +151,7 @@ func loftCylinderChamferContactAudit(ctx context.Context, fp facetedPayload,
 		for _, vertex := range side.rings[cap] {
 			sideVertexKeys[xverts[vertex].Key()] = struct{}{}
 		}
-		tri := mesh.tris[band[0]]
+		tri := mesh.Tris[band[0]]
 		witness := meshbool.XCentroid(xverts[tri[0]], xverts[tri[1]], xverts[tri[2]])
 		inside, on, parityErr := meshbool.MeshParityPreparedContext(ctx, witness, oldParity, allTris)
 		if parityErr != nil {
@@ -172,13 +172,13 @@ func loftCylinderChamferContactAudit(ctx context.Context, fp facetedPayload,
 					return err
 				}
 			}
-			box := meshbool.TriBox(mesh.verts, mesh.tris[i])
+			box := meshbool.TriBox(mesh.Verts, mesh.Tris[i])
 			pad := max(2*side.clipBound, 1e-12)
 			box[0] = r3.Vec{X: math.Nextafter(box[0].X-pad, math.Inf(-1)),
 				Y: math.Nextafter(box[0].Y-pad, math.Inf(-1)), Z: math.Nextafter(box[0].Z-pad, math.Inf(-1))}
 			box[1] = r3.Vec{X: math.Nextafter(box[1].X+pad, math.Inf(1)),
 				Y: math.Nextafter(box[1].Y+pad, math.Inf(1)), Z: math.Nextafter(box[1].Z+pad, math.Inf(1))}
-			tri := mesh.tris[i]
+			tri := mesh.Tris[i]
 			var xa [3]proofarith.Xpt
 			for k, index := range tri {
 				xa[k] = xverts[index]
@@ -260,13 +260,13 @@ func loftCylinderChamferRestoreTop(mesh *joinedMesh, fp facetedPayload,
 	for i, pair := range groups {
 		j := (i + 1) % n
 		topI, topJ := source.outer[1][i], source.outer[1][j]
-		mesh.add([3]int{ring[2*i+1], ring[2*j], topJ}, pair[0])
-		mesh.add([3]int{ring[2*i], ring[2*i+1], topJ}, pair[1])
-		mesh.add([3]int{ring[2*i], topJ, topI}, pair[1])
+		mesh.Add([3]int{ring[2*i+1], ring[2*j], topJ}, pair[0])
+		mesh.Add([3]int{ring[2*i], ring[2*i+1], topJ}, pair[1])
+		mesh.Add([3]int{ring[2*i], topJ, topI}, pair[1])
 	}
 	for i, group := range fp.Src {
 		if group == source.capGroups[1] {
-			mesh.add(fp.Tris[i], group)
+			mesh.Add(fp.Tris[i], group)
 		}
 	}
 	return nil
@@ -306,7 +306,7 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 	if len(fp.VertexBound) != len(fp.Verts) || len(fp.Src) != len(fp.Tris) {
 		return nil, fmt.Errorf("%w: loft/cylinder source has incomplete mesh proof", ErrUnsupported)
 	}
-	old := &joinedMesh{verts: fp.Verts, tris: fp.Tris, src: fp.Src, groups: fp.groups}
+	old := &joinedMesh{Verts: fp.Verts, Tris: fp.Tris, Src: fp.Src, Groups: fp.Groups}
 	for cap := range 2 {
 		level := source.z0
 		if cap == 1 {
@@ -327,20 +327,20 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 	if err != nil {
 		return nil, err
 	}
-	mesh := &joinedMesh{verts: append([]r3.Vec(nil), fp.Verts...),
-		groups: append([]facetGroup(nil), fp.groups...)}
+	mesh := &joinedMesh{Verts: append([]r3.Vec(nil), fp.Verts...),
+		Groups: append([]facetGroup(nil), fp.Groups...)}
 	bounds := append([]float64(nil), fp.VertexBound...)
 	for i, tri := range fp.Tris {
 		if fp.Src[i] == source.boreGroup {
-			mesh.add(tri, fp.Src[i])
+			mesh.Add(tri, fp.Src[i])
 		}
 	}
-	middleFirst := len(mesh.tris)
+	middleFirst := len(mesh.Tris)
 	clipped, err := loftCylinderChamferClipSide(ctx, mesh, &bounds, fp, source, groups, setback)
 	if err != nil {
 		return nil, err
 	}
-	middle := [2]int{middleFirst, len(mesh.tris)}
+	middle := [2]int{middleFirst, len(mesh.Tris)}
 	if !active[1] {
 		if err := loftCylinderChamferRestoreTop(mesh, fp, source, groups, clipped.rings[1]); err != nil {
 			return nil, err
@@ -350,7 +350,7 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 		if !active[cap] {
 			continue
 		}
-		if !loftcylinder.BoreRingSimple(ctx, mesh.verts, clipped.rings[cap]) {
+		if !loftcylinder.BoreRingSimple(ctx, mesh.Verts, clipped.rings[cap]) {
 			return nil, fmt.Errorf("%w: loft/cylinder side level is not one simple outer ring", ErrUnsupported)
 		}
 	}
@@ -361,7 +361,7 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 	for cap := range 2 {
 		if !active[cap] {
 			inset[cap] = source.outer[cap]
-			bands[cap] = [2]int{len(mesh.tris), len(mesh.tris)}
+			bands[cap] = [2]int{len(mesh.Tris), len(mesh.Tris)}
 			continue
 		}
 		samples, err := loftCylinderInset(ctx, fp, source.outer[cap], setback)
@@ -379,14 +379,14 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 		inset[cap] = make([]int, len(samples.points))
 		for i, p := range samples.points {
 			p.Z = level
-			inset[cap][i] = len(mesh.verts)
-			mesh.verts = append(mesh.verts, p)
+			inset[cap][i] = len(mesh.Verts)
+			mesh.Verts = append(mesh.Verts, p)
 			bounds = append(bounds, proofbound.AbsSumUpper(fp.MeshBound, samples.bound))
 		}
-		if !loftcylinder.BoreRingSimple(ctx, mesh.verts, inset[cap]) {
+		if !loftcylinder.BoreRingSimple(ctx, mesh.Verts, inset[cap]) {
 			return nil, fmt.Errorf("%w: loft/cylinder inset is not one simple outer ring", ErrUnsupported)
 		}
-		inSource, err := loftcylinder.ChamferRingNested(ctx, mesh.verts, source.outer[cap], inset[cap])
+		inSource, err := loftcylinder.ChamferRingNested(ctx, mesh.Verts, source.outer[cap], inset[cap])
 		if err != nil {
 			return nil, err
 		}
@@ -394,7 +394,7 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 			return nil, fmt.Errorf("%w: loft/cylinder inset crosses its source cap", ErrUnsupported)
 		}
 		if active[1] {
-			inSide, err := loftcylinder.ChamferRingNested(ctx, mesh.verts, clipped.rings[cap], inset[cap])
+			inSide, err := loftcylinder.ChamferRingNested(ctx, mesh.Verts, clipped.rings[cap], inset[cap])
 			if err != nil {
 				return nil, err
 			}
@@ -402,7 +402,7 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 				return nil, fmt.Errorf("%w: loft/cylinder inset crosses its side-level ring", ErrUnsupported)
 			}
 		}
-		if err := loftcylinder.ChamferHeldOutlineGap(ctx, mesh.verts,
+		if err := loftcylinder.ChamferHeldOutlineGap(ctx, mesh.Verts,
 			source.outer[cap], inset[cap], fp.MeshBound); err != nil {
 			return nil, err
 		}
@@ -410,12 +410,12 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 			return nil, err
 		}
 		outerRadius := proofbound.AbsSumUpper(source.blankRadius, 0.01)
-		radialReach[cap], err = loftCylinderChamferCapRadialReach(source, mesh.verts,
+		radialReach[cap], err = loftCylinderChamferCapRadialReach(source, mesh.Verts,
 			inset[cap], cap, outerRadius)
 		if err != nil {
 			return nil, err
 		}
-		if err := loftCylinderChamferExteriorRimInside(ctx, source, mesh.verts,
+		if err := loftCylinderChamferExteriorRimInside(ctx, source, mesh.Verts,
 			inset[cap], cap, outerRadius); err != nil {
 			return nil, err
 		}
@@ -424,7 +424,7 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 				clipped.clipBound)
 			for i, index := range inset[cap] {
 				next := inset[cap][(i+1)%len(inset[cap])]
-				if loftcylinder.TriangleMinRadius(mesh.verts, [3]int{index, next, next}) <= boreReach {
+				if loftcylinder.TriangleMinRadius(mesh.Verts, [3]int{index, next, next}) <= boreReach {
 					return nil, fmt.Errorf("%w: loft/cylinder inset edge reaches the exact bore", ErrUnsupported)
 				}
 			}
@@ -434,33 +434,33 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 		if cap == 1 {
 			role = provenance.RoleCapEnd
 		}
-		mesh.groups[capGroup].origins = append(append([]provenance.Ref(nil), mesh.groups[capGroup].origins...),
+		mesh.Groups[capGroup].Origins = append(append([]provenance.Ref(nil), mesh.Groups[capGroup].Origins...),
 			provenance.Ref{Producer: ref, Role: role})
-		capTris, err := loftcylinder.ChamferCapTriangles(ctx, mesh.verts, inset[cap], source.inner[cap], cap == 0)
+		capTris, err := loftcylinder.ChamferCapTriangles(ctx, mesh.Verts, inset[cap], source.inner[cap], cap == 0)
 		if err != nil {
 			return nil, fmt.Errorf("loft/cylinder cap %d: %w", cap, err)
 		}
 		for _, t := range capTris {
-			mesh.add(t, capGroup)
+			mesh.Add(t, capGroup)
 		}
-		bandGroup := len(mesh.groups)
-		mesh.groups = append(mesh.groups, facetGroup{origins: []provenance.Ref{{Producer: ref,
+		bandGroup := len(mesh.Groups)
+		mesh.Groups = append(mesh.Groups, facetGroup{Origins: []provenance.Ref{{Producer: ref,
 			Role: fmt.Sprintf("chamferCap(%d,0,0)", cap)}}})
-		bandFirst := len(mesh.tris)
+		bandFirst := len(mesh.Tris)
 		bandTris, err := loftcylinder.ChamferBandTriangles(clipped.rings[cap], inset[cap],
 			samples.lineStart, samples.arcStart, len(samples.points))
 		if err != nil {
 			return nil, fmt.Errorf("loft/cylinder band %d: %w", cap, err)
 		}
 		for _, t := range bandTris {
-			mesh.add(t, bandGroup)
+			mesh.Add(t, bandGroup)
 		}
-		bands[cap] = [2]int{bandFirst, len(mesh.tris)}
+		bands[cap] = [2]int{bandFirst, len(mesh.Tris)}
 		if len(source.inner[cap]) > 0 {
 			boreReach := proofbound.AbsSumUpper(source.boreRadius, fp.MeshBound, samples.bound,
 				clipped.clipBound)
-			for _, tri := range mesh.tris[bandFirst:] {
-				if loftcylinder.TriangleMinRadius(mesh.verts, tri) <= boreReach {
+			for _, tri := range mesh.Tris[bandFirst:] {
+				if loftcylinder.TriangleMinRadius(mesh.Verts, tri) <= boreReach {
 					return nil, fmt.Errorf("%w: loft/cylinder cap band reaches the exact bore", ErrUnsupported)
 				}
 			}
@@ -469,10 +469,10 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 	if err := orientJoinedMesh(mesh); err != nil {
 		return nil, err
 	}
-	if err := tessellation.RequireVertexLinks(ctx, len(mesh.verts), mesh.tris); err != nil {
+	if err := tessellation.RequireVertexLinks(ctx, len(mesh.Verts), mesh.Tris); err != nil {
 		return nil, err
 	}
-	ideal := loftCylinderChamferIdealVertices(mesh.verts, clipped)
+	ideal := loftCylinderChamferIdealVertices(mesh.Verts, clipped)
 	var bandSideEdges [2]map[[2]int]struct{}
 	for cap := range 2 {
 		if !active[cap] {
@@ -496,11 +496,11 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 				return nil, fmt.Errorf("%w: ideal loft/cylinder inset crosses its side section", ErrUnsupported)
 			}
 		}
-		bandSideEdges[cap], err = loftcylinder.ChamferBandBoundary(mesh.tris, bands[cap], clipped.rings[cap], inset[cap])
+		bandSideEdges[cap], err = loftcylinder.ChamferBandBoundary(mesh.Tris, bands[cap], clipped.rings[cap], inset[cap])
 		if err != nil {
 			return nil, err
 		}
-		if err := loftcylinder.ChamferIdealBandLevels(mesh.tris, ideal, bands[cap], inset[cap],
+		if err := loftcylinder.ChamferIdealBandLevels(mesh.Tris, ideal, bands[cap], inset[cap],
 			capLevel, sideLevel); err != nil {
 			return nil, err
 		}
@@ -509,7 +509,7 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 		bands, bandSideEdges, ideal, setback); err != nil {
 		return nil, err
 	}
-	if err := loftcylinder.ChamferIdealBandAudit(ctx, len(mesh.verts), mesh.tris, ideal, bands, clipped.clipBound); err != nil {
+	if err := loftcylinder.ChamferIdealBandAudit(ctx, len(mesh.Verts), mesh.Tris, ideal, bands, clipped.clipBound); err != nil {
 		return nil, err
 	}
 	bridgeReach := 0.0
@@ -552,13 +552,13 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 	// The exact band-to-source witness consumes the full certified tolerance.
 	// Publish that allowance so VerifyAll does not understate the new boundary.
 	bound := allowance
-	if err := loftcylinder.ChamferIdealOrientation(ctx, mesh.tris, ideal); err != nil {
+	if err := loftcylinder.ChamferIdealOrientation(ctx, mesh.Tris, ideal); err != nil {
 		return nil, err
 	}
 	if err := loftCylinderChamferSolidWitness(ctx, fp, source, setback); err != nil {
 		return nil, err
 	}
-	if len(mesh.tris) > maxTriangles {
+	if len(mesh.Tris) > maxTriangles {
 		return nil, fmt.Errorf("%w: loft/cylinder chamfer exceeds the triangle work ceiling", ErrUnsupported)
 	}
 	if err := loftCylinderChamferCrossingAudit(ctx, mesh, source, inset, maxTriangles); err != nil {
@@ -586,16 +586,16 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 	var usedIdeal []bool
 	if oneCap != nil {
 		usedIdeal = make([]bool, len(ideal))
-		for _, tri := range mesh.tris {
+		for _, tri := range mesh.Tris {
 			for _, index := range tri {
 				usedIdeal[index] = true
 			}
 		}
 	}
 	var remap []int
-	mesh.verts, bounds, remap = loftcylinder.ChamferCompact(mesh.verts, mesh.tris, bounds)
+	mesh.Verts, bounds, remap = loftcylinder.ChamferCompact(mesh.Verts, mesh.Tris, bounds)
 	if oneCap != nil {
-		oneCap.ideal = make([]proofarith.Xpt, len(mesh.verts))
+		oneCap.ideal = make([]proofarith.Xpt, len(mesh.Verts))
 		for i, x := range ideal {
 			if usedIdeal[i] {
 				oneCap.ideal[remap[i]] = x
@@ -603,7 +603,7 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 		}
 		oneCap.band = bands[0]
 	}
-	roundArea, err := proofbound.PerturbedAreaUpperContext(ctx, mesh.verts, mesh.tris,
+	roundArea, err := proofbound.PerturbedAreaUpperContext(ctx, mesh.Verts, mesh.Tris,
 		clipped.clipBound)
 	if err != nil {
 		return nil, err
@@ -613,12 +613,12 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 	// charged separately; its two embedded closed surfaces share indices.
 	volumeGap := proofbound.AbsSumUpper(fp.VolSymDiff,
 		proofbound.SweptVolumeAllow(clipped.clipBound, roundArea))
-	area, err := proofbound.PerturbedAreaUpperContext(ctx, mesh.verts, mesh.tris, bound)
+	area, err := proofbound.PerturbedAreaUpperContext(ctx, mesh.Verts, mesh.Tris, bound)
 	if err != nil {
 		return nil, err
 	}
 	result := fp
-	result.Verts, result.Tris, result.Src, result.groups = mesh.verts, mesh.tris, mesh.src, mesh.groups
+	result.Verts, result.Tris, result.Src, result.Groups = mesh.Verts, mesh.Tris, mesh.Src, mesh.Groups
 	result.VertexBound, result.MeshBound = bounds, bound
 	result.VolSymDiff, result.AreaSlack = volumeGap, proofbound.AbsSumUpper(fp.AreaSlack, area)
 	result.LoftCylinderJoin, result.LoftCylinderBore = nil, nil

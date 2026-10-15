@@ -56,13 +56,13 @@ func tryLoftMirrorCylinderBoreCut(ctx context.Context, op meshbool.OperationKind
 		!loftMirrorCylinderLevels(blank.Z0, lower.LoftCylinderJoin.Z1, blank.Z1) {
 		return nil, true, fmt.Errorf("%w: mirrored circular Join lost its exact axial levels", ErrUnsupported)
 	}
-	source := &joinedMesh{verts: joined.Verts, tris: joined.Tris, src: joined.Src}
+	source := &joinedMesh{Verts: joined.Verts, Tris: joined.Tris, Src: joined.Src}
 	for cap, group := range record.CapGroups {
 		level := blank.Z0
 		if cap == 1 {
 			level = blank.Z1
 		}
-		if group < 0 || group >= len(joined.groups) ||
+		if group < 0 || group >= len(joined.Groups) ||
 			!loftCylinderAuditCap(ctx, source, record.CapOutlines[cap], group, level, cap == 0) {
 			return nil, true, fmt.Errorf("%w: mirrored circular Join lost an outer cap disk", ErrUnsupported)
 		}
@@ -166,12 +166,12 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 			}
 			group, exists := groupMap[oldGroup]
 			if !exists {
-				if oldGroup < 0 || oldGroup >= len(payload.groups) {
+				if oldGroup < 0 || oldGroup >= len(payload.Groups) {
 					return nil, fmt.Errorf("%w: reflected circular bore facet lost its source group", ErrUnsupported)
 				}
 				group = len(groups)
 				groupMap[oldGroup] = group
-				groups = append(groups, payload.groups[oldGroup])
+				groups = append(groups, payload.Groups[oldGroup])
 				if oldGroup == lowCaps[0] {
 					capGroups[half] = group
 				}
@@ -236,7 +236,7 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 	if !ok || !loftMirrorCylinderBlank(fullBlank) {
 		return nil, fmt.Errorf("%w: reflected circular bore lost its exact blank", ErrUnsupported)
 	}
-	mesh := &joinedMesh{verts: verts, tris: tris, src: src}
+	mesh := &joinedMesh{Verts: verts, Tris: tris, Src: src}
 	for cap, group := range capGroups {
 		z := fullBlank.Z0
 		if cap == 1 {
@@ -246,7 +246,7 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 			return nil, fmt.Errorf("%w: reflected circular bore cap does not tile its annulus", ErrUnsupported)
 		}
 	}
-	fp := facetedPayload{Verts: verts, Tris: tris, Src: src, groups: groups,
+	fp := facetedPayload{Verts: verts, Tris: tris, Src: src, Groups: groups,
 		VertexBound: vertexBound, MeshBound: bound, VolSymDiff: volumeGap,
 		AreaSlack: areaSlack, DPair: diameter, ContactAudited: true, Xform: r3.Identity(),
 		LoftMirrorCylinderBore: &loftMirrorCylinderBoreRecord{

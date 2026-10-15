@@ -216,13 +216,13 @@ func evalPointSectionLoft(ctx context.Context, d *Document, ref producerID,
 	groups := make([]facetGroup, len(record.profile.Outer.Segments)+1)
 	for j, seg := range record.profile.Outer.Segments {
 		_, planar := seg.(lineSeg)
-		groups[j] = facetGroup{origins: []provenance.Ref{{Producer: ref,
-			Role: fmt.Sprintf("side(0,%d)", j)}}, planar: planar}
+		groups[j] = facetGroup{Origins: []provenance.Ref{{Producer: ref,
+			Role: fmt.Sprintf("side(0,%d)", j)}}, Planar: planar}
 	}
 	capGroup := len(groups) - 1
-	groups[capGroup] = facetGroup{origins: []provenance.Ref{{Producer: ref, Role: provenance.RoleCapEnd}}, planar: true}
+	groups[capGroup] = facetGroup{Origins: []provenance.Ref{{Producer: ref, Role: provenance.RoleCapEnd}}, Planar: true}
 	if center, proved := pointFarCapCentroid(record.profile, record.plane); proved {
-		groups[capGroup].centroid, groups[capGroup].hasCentroid = center, true
+		groups[capGroup].Centroid, groups[capGroup].HasCentroid = center, true
 	}
 	for j := range pair.W {
 		jn := (j + 1) % len(pair.W)
@@ -329,7 +329,7 @@ func evalPointSectionLoft(ctx context.Context, d *Document, ref producerID,
 	diameter := proofbound.AbsSumUpper(maxFar, proofbound.ProductUpper(perimeter,
 		max(basisU, basisV)), meshBound)
 	pp := facetedPayload{
-		Verts: verts, Tris: tris, Src: src, groups: groups, VertexBound: vertexBound,
+		Verts: verts, Tris: tris, Src: src, Groups: groups, VertexBound: vertexBound,
 		MeshBound: meshBound, VolSymDiff: volumeGap, AreaSlack: areaGap,
 		DPair: diameter, Xform: r3.Identity(),
 		pointSection: &record, pointPlaneSourceEligible: true,

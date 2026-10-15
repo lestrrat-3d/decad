@@ -168,9 +168,9 @@ func prismUnionBossShellAuthenticate(result *Body, fp facetedPayload, plateBody,
 			topVerts[vi] = struct{}{}
 		}
 	}
-	if len(topVerts) != 4 || len(topTris) != 2 || src.topGroup < 0 || src.topGroup >= len(fp.groups) ||
-		len(fp.groups[src.topGroup].origins) != 1 || !fp.groups[src.topGroup].planar ||
-		fp.groups[src.topGroup].origins[0] != refOf(CapEnd(bossBody)) {
+	if len(topVerts) != 4 || len(topTris) != 2 || src.topGroup < 0 || src.topGroup >= len(fp.Groups) ||
+		len(fp.Groups[src.topGroup].Origins) != 1 || !fp.Groups[src.topGroup].Planar ||
+		fp.Groups[src.topGroup].Origins[0] != refOf(CapEnd(bossBody)) {
 		return src, false
 	}
 	for fi, group := range fp.Src {
@@ -178,11 +178,11 @@ func prismUnionBossShellAuthenticate(result *Body, fp facetedPayload, plateBody,
 			return src, false
 		}
 	}
-	for i, group := range fp.groups {
+	for i, group := range fp.Groups {
 		if i == src.topGroup {
 			continue
 		}
-		if slices.Contains(group.origins, refOf(CapEnd(bossBody))) {
+		if slices.Contains(group.Origins, refOf(CapEnd(bossBody))) {
 			return src, false
 		}
 	}
@@ -348,7 +348,7 @@ func buildPrismUnionBossShell(ctx context.Context, source *Body, fp facetedPaylo
 	rootAreaSlack := proofbound.ProductUpper(
 		proofbound.ProductUpper(4, perimeter), proofbound.ProductUpper(t, proofbound.RatFloatUp(proofbound.PiUpper)))
 	payload := facetedPayload{
-		Verts: mesh.verts, Tris: mesh.tris, Src: mesh.src, groups: mesh.groups,
+		Verts: mesh.verts, Tris: mesh.tris, Src: mesh.src, Groups: mesh.groups,
 		VertexBound: mesh.beta, MeshBound: bound, VolSymDiff: volumeBound,
 		AreaSlack: proofbound.AbsSumUpper(fp.AreaSlack, rootAreaSlack),
 		DPair:     facetedSourceDiameterUpper(mesh.verts, bound),
@@ -362,10 +362,10 @@ func prismUnionBossShellMeshOf(ctx context.Context, ref producerID, fp facetedPa
 	var out prismUnionBossShellMesh
 	out.verts = append(out.verts, fp.Verts...)
 	out.beta = append(out.beta, fp.VertexBound...)
-	out.groups = append(out.groups, fp.groups...)
+	out.groups = append(out.groups, fp.Groups...)
 	addGroup := func(role string, planar bool) int {
 		i := len(out.groups)
-		out.groups = append(out.groups, facetGroup{origins: []provenance.Ref{{Producer: ref, Role: role}}, planar: planar})
+		out.groups = append(out.groups, facetGroup{Origins: []provenance.Ref{{Producer: ref, Role: role}}, Planar: planar})
 		return i
 	}
 	// The source's top cap is replaced by the opening's narrow horizontal rim.
