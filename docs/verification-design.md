@@ -755,7 +755,7 @@ regardless of sense. Its outer walls run the cup's full height, so every
 station on them is a point of the body.
 
 `capBlendPayload` reads one witness prism per loop of the receiver's section
-(`capBlendWitnessPrisms`), over the interval that loop's wall runs on the
+(`capblend.WitnessPrisms`), over the interval that loop's wall runs on the
 body. A chamfer band cuts its loop's wall back from the cap level to the side
 level, the cap level moved `ds` into the material, so the receiver's walls at
 a chamfered cap level are not points of the body: a 10 mm cube chamfered 2 mm

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/breprecord"
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
@@ -961,7 +962,7 @@ func booleanProofBounds(symA, symB, roundVol, slackA, slackB, dropArea float64) 
 // It is operandSymDiff's question asked one step earlier. A cap-loop chamfer,
 // and a draft body through the same band (draftOccupiedVolumeAdmission),
 // narrows rather than refuses outright: both arms read the SAME predicate,
-// capBlendOccupiedVolumeAdmission (capblend_admit.go) — this one before the
+// capblend.OccupiedVolumeAdmission — this one before the
 // mesh is built, and tessellateCapBlend through symDiffOK after it — so a
 // payload whose every band docs/tessellation-reach-design.md §7 admits (whole
 // turns, line-line miters, exactly G1 joins) passes here and publishes its
@@ -1006,7 +1007,7 @@ func requireVolumeProvingPayload(ctx context.Context, b *Body, index int) error 
 				// a bounded reflex-corner slab in tessellateCapBlend.
 				return nil
 			}
-			refusal, aErr := capBlendOccupiedVolumeAdmission(proofbound.NewWorkBudget(ctx), pl)
+			refusal, aErr := capblend.OccupiedVolumeAdmission(proofbound.NewWorkBudget(ctx), pl)
 			if aErr != nil {
 				return aErr
 			}

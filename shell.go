@@ -7,6 +7,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/breprecord"
+	"github.com/lestrrat-3d/decad/internal/capblend"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/cupwall"
@@ -208,7 +209,7 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value, opts .
 	if o.NoOpenings {
 		// The one nil-selector shell: no face is removed, so there is no
 		// selection to resolve. SX10 still leads for a cap-blend receiver.
-		if err := requireNotCapBlendReceiver(b.n.Payload, "shells"); err != nil {
+		if err := capblend.RequireNotReceiver(b.n.Payload, "shells"); err != nil {
 			return nil, err
 		}
 		// Reach §9.3: a full turn over a hole-free meridian keeps every face
@@ -270,7 +271,7 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value, opts .
 
 	// SX10: a capBlendPayload receiver is staged before the generic "not a
 	// prism" refusal, so the more specific reason leads.
-	if err := requireNotCapBlendReceiver(b.n.Payload, "shells"); err != nil {
+	if err := capblend.RequireNotReceiver(b.n.Payload, "shells"); err != nil {
 		return nil, err
 	}
 	if out, taken, err := tryDraftCircleShell(ctx, b, removed, sense, tmm, tDelta); taken {

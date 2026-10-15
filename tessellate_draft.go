@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
@@ -48,7 +49,7 @@ func tessellateDraft(ctx context.Context, b *Body, dp draftPayload, chord float6
 // draft body: docs/tessellation-reach-design.md §7's admission over its band
 // view, the same predicate tessellateCapBlend reads before it publishes.
 func draftOccupiedVolumeAdmission(budget *proofbound.WorkBudget, dp draftPayload) (error, error) {
-	return capBlendOccupiedVolumeAdmission(budget, dp.Band())
+	return capblend.OccupiedVolumeAdmission(budget, dp.Band())
 }
 
 // draftNearLevel is the near cap's level in a draft band view beside its own

@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -362,7 +363,7 @@ func chainRevolveEdgeGateDiameter(ctx context.Context, body *Body, sectionDelta 
 // runs, a displaced section and a sweep's witness prism (the straight prism
 // itself, or the start section at one level). A cap-loop chamfer cuts the
 // receiver's walls back at the cap levels, so its witness prisms
-// (capBlendWitnessPrisms) stop each chamfered loop at its band's side level;
+// (capblend.WitnessPrisms) stop each chamfered loop at its band's side level;
 // bodyGateDiameter reads such a body through capBlendGateDiameter, which
 // adds its cap circles and vertices to those stations.
 //
@@ -428,7 +429,7 @@ func draftGateDiameter(ctx context.Context, body *Body, dp draftPayload) (float6
 //
 // The three arms read different geometry and earn a witness for different
 // reasons. A capBlendPayload reads one witness prism per loop instead
-// (capBlendWitnessPrisms, through gateWitnessPrisms).
+// (capblend.WitnessPrisms, through gateWitnessPrisms).
 //
 // cupPayload reads its view's outer, the cup's own outer region — the receiver's unmodified section
 // for an INWARD shell, but the wider OFFSET (expanded) region for an OUTWARD
@@ -496,10 +497,10 @@ func gateWitnessPrism(payload topo.Payload) (prismPayload, float64, bool) {
 // the slabs it spans, so every witness is a point of the body. The first
 // slab's outer swept over the whole stack would hold points a union-built
 // stack does not reach, and would overstate its diameter. A capBlendPayload
-// reads capBlendWitnessPrisms.
+// reads capblend.WitnessPrisms.
 func gateWitnessPrisms(payload topo.Payload) ([]prismPayload, float64, bool) {
 	if pl, ok := payload.(capBlendPayload); ok {
-		return capBlendWitnessPrisms(pl), pl.AxialDelta(), true
+		return capblend.WitnessPrisms(pl), pl.AxialDelta(), true
 	}
 	if pl, ok := payload.(stackedPrismPayload); ok {
 		runs := pl.OuterRuns()
@@ -513,35 +514,4 @@ func gateWitnessPrisms(payload topo.Payload) ([]prismPayload, float64, bool) {
 		return nil, 0, false
 	}
 	return []prismPayload{witness}, displacement, true
-}
-
-// capBlendWitnessPrisms lists one witness prism per loop of a cap-loop
-// chamfer's receiver section, each over the interval its loop's own wall runs
-// on the body. A chamfer band cuts its loop's wall back from the cap level to
-// the side level, the cap level moved ds into the material
-// (docs/modify-reach-design.md §8.3.1), and leaves the wall between the two
-// side levels untouched. A loop chamfered on the start cap therefore starts
-// at z0 + ds, one chamfered on the end cap stops at z1 - ds, and an
-// unchamfered loop runs from z0 to z1. Those are the float sums the build
-// places each band's side level at, and capBlendPayload.AxialDelta bounds how
-// far any of them sits from the level it denotes. The receiver's walls at the
-// cap levels are not points of the body wherever a band cuts them, and a
-// reading from them overstates the body's diameter: a 10 mm cube chamfered 2
-// mm around its end cap is sqrt(264) across, against the receiver's
-// sqrt(300).
-func capBlendWitnessPrisms(pl capBlendPayload) []prismPayload {
-	loops := pl.Loops()
-	out := make([]prismPayload, 0, len(loops))
-	for li, loop := range loops {
-		witness := pl.PrismLike(pl.Z0, pl.Z1)
-		witness.Profile = profileRecord{Outer: loop}
-		if pl.StartLoops[li] {
-			witness.Z0 = pl.Z0 + pl.Start.Ds
-		}
-		if pl.EndLoops[li] {
-			witness.Z1 = pl.Z1 - pl.End.Ds
-		}
-		out = append(out, witness)
-	}
-	return out
 }

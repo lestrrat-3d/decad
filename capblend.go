@@ -7,7 +7,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
-	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
@@ -23,18 +22,6 @@ import (
 // not implemented here. Each chamfered cap carries its own two setbacks
 // (capSetback): dc = ds = d for an equal chamfer, and the pair §8.3.1 assigns
 // from WithAsymmetricChamfer's reference face for a two-distance one.
-
-// requireNotCapBlendReceiver is SX10 (docs/modify-reach-design.md Table SX):
-// another modify op on a capBlendPayload receiver is staged — the body
-// exists, but composing another feature onto a cap-blend result is not built.
-// Called before the ordinary prismPayload cast in Fillet/Chamfer/Shell so the
-// more specific reason leads the generic "not a prism" refusal.
-func requireNotCapBlendReceiver(payload topo.Payload, op string) error {
-	if _, ok := payload.(capBlendPayload); ok {
-		return fmt.Errorf(`%w: this evaluator does not yet compose another modify op onto a cap-loop chamfer result; %s a receiver this evaluator built directly`, ErrUnsupported, op)
-	}
-	return nil
-}
 
 // classifyChamferSelection is RX1's second class plus SX4 (Table SX):
 // distinguishes a lateral-edge selection (the base modify-design §7 case,
