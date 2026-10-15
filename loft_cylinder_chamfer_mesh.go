@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -622,7 +623,7 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 	result.VertexBound, result.MeshBound = bounds, bound
 	result.VolSymDiff, result.AreaSlack = volumeGap, proofbound.AbsSumUpper(fp.AreaSlack, area)
 	result.LoftCylinderJoin, result.LoftCylinderBore = nil, nil
-	body, err := buildFacetedBody(ctx, d, ref, result)
+	body, err := bodyResult(facetedrecord.Build(ctx, envOf(documentNode(d), ref), result))
 	if err != nil {
 		return nil, err
 	}

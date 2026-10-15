@@ -91,7 +91,7 @@ func buildLoftFaces(ctx context.Context, d *Document, selected []loftFaceSection
 		StationGroup: append([]int(nil), selected[0].slice.Base.Src[:len(source.SourceStation)]...),
 		Final:        embedding.maps[len(embedding.maps)-1], Group: len(mesh.Groups) - 1,
 		Tangent: tangent}
-	body, err := buildFacetedBodyWithProof(ctx, d, ref, mesh, audit, Measurement{}, nil)
+	body, err := bodyResult(facetedrecord.BuildWithProof(ctx, envOf(documentNode(d), ref), mesh, audit, measurementToInternal(Measurement{}), nil))
 	if err != nil {
 		return nil, err
 	}

@@ -9,17 +9,6 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// crossCylinderBoreRecord keeps the two full circular prisms whose Cut made
-// one perpendicular through-bore. The mesh Cut owns its original contact
-// proof; this record permits a later mouth chamfer to rebuild from the exact
-// source circles instead of interpreting a sampled intersection as a curve.
-type crossCylinderBoreRecord struct {
-	Target, Tool    *topo.Body
-	Radius, Bore    float64
-	Height, CenterZ float64
-	SourceBound     float64
-}
-
 func crossCylinderCircleSource(body *Body, u, v r3.Vec) (prismPayload, circleSeg, bool) {
 	pp, ok := body.n.Payload.(prismPayload)
 	if !ok || !body.n.Solid || body.n.Kind != topo.BodySolid || pp.SurfaceResult ||

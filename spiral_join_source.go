@@ -10,22 +10,9 @@ import (
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/splinebezier"
-	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 )
-
-// spiralBlankSource is the legacy six-side view of one authenticated Revolve
-// section. The generic certificate owns the source walk, faces, and cone gap;
-// these named corners only map the older spiral join's fixed cap roles.
-type spiralBlankSource struct {
-	Section           revolveSectionCertificate
-	ToeAxis, HeelAxis planePoint
-	ToeOuter, ToeRoot planePoint
-	Ded, HeelOuter    planePoint
-	EdgeIndex         [6]int
-	RootFace          *topo.Face
-}
 
 func exactSpiralBlank(blank *Body) (*spiralBlankSource, bool) {
 	for _, section := range revolveRootCandidates(blank) {
@@ -114,36 +101,6 @@ func spiralSixSideBlank(section revolveSectionCertificate) (*spiralBlankSource, 
 		}
 	}
 	return result, seen[3]
-}
-
-// A bounded box around one true flank/root/tool triple junction. The true
-// point has X=the corresponding exact ToeX or HeelX; s and t remain enclosed
-// separately because their algebraic roots need not be rational.
-type spiralJunction struct {
-	Band     int
-	SLo, SHi *big.Rat
-	TLo, THi *big.Rat
-	Box      [3]loftFaceInterval
-}
-
-// A first curved tooth join may use this only while both input bodies remain
-// the original unplaced blank and cone-trimmed LoftFaces tooth. The matcher
-// below rechecks the live Sketch source and the exact finite blank meridian.
-type spiralFirstJoinSource struct {
-	Blank      *spiralBlankSource
-	Tooth      *loftFacesTrimRecord
-	RootM      *big.Rat
-	RootB      *big.Rat
-	ToeX       *big.Rat
-	HeelX      *big.Rat
-	ToeOffset  *big.Rat
-	HeelOffset *big.Rat
-	ToeCapGap  *big.Rat
-	HeelCapGap *big.Rat
-	Flank      [2]freeform.BezierSpan // root-containing cubic of groups 0 and 2
-	Crossings  [2][9]loftface.RootCrossing
-	Junctions  [2][2]spiralJunction // flank 0/2, then toe/heel
-	HeelSeam   *spiralHeelRootSeam
 }
 
 // certifySpiralFirstJoin proves that each of the two fitted flanks crosses

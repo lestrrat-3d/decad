@@ -1215,7 +1215,7 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
    §6's audit reuse, §5's authentication, §7's exactness (the section
    displacement bound on `prismPayload`, its one `internal/proofbound/bounds.go` helper, and
    `evalPrism`'s composition of it), and `performBoolean`'s branch before
-   `evaluateBoolean` to build via `evalPrism` instead of `buildFacetedBody`
+   `evaluateBoolean` to build via `evalPrism` instead of `facetedrecord.Build`
    on admission. A split boundary routes to the mesh path before recording
    when either source carries a section displacement, either source carries a
    nonzero walk charge (§7's `δ_walk`), or B's re-expression is nonidentity —

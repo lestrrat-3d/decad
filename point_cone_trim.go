@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	"github.com/lestrrat-3d/decad/internal/pointcone"
@@ -17,32 +18,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 )
-
-// A point cone trim uses the original point-loft fan as its radial domain.
-// Chained trims always start from that same authenticated fan rather than a
-// previously rounded Boolean mesh.
-type pointConeTrimRecord struct {
-	Base  facetedPayload
-	Lower *pointConeLimit
-	Upper *pointConeLimit
-}
-
-type pointConeLimit struct {
-	Apex, Far, Slope *big.Rat
-	Surface          surfacegeom.Cone
-	Origins          []provenance.Ref
-	Denoted          *surfacenormal.Revolved
-	Reversed         bool
-
-	Consts *pointcone.Consts // built on first use by Constants
-}
-
-func (cone *pointConeLimit) Constants() *pointcone.Consts {
-	if cone.Consts == nil {
-		cone.Consts = pointcone.ConstantsOf(cone.Apex, cone.Slope)
-	}
-	return cone.Consts
-}
 
 func pointConeFacetGroup(cone *pointConeLimit, flip bool) facetGroup {
 	denoted := cone.Denoted
@@ -367,7 +342,7 @@ func buildPointConeInsideBand(ctx context.Context, d *Document, ref producerID,
 		MeshBound: bound, VolSymDiff: volumeGap, AreaSlack: areaSlack,
 		DPair: base.DPair, Xform: r3.Identity(), PointCone: &record,
 	}
-	return buildFacetedBody(ctx, d, ref, pp)
+	return bodyResult(facetedrecord.Build(ctx, envOf(documentNode(d), ref), pp))
 }
 
 // buildPointConeOuterBand constructs a near cone cap and the original far cap
@@ -497,7 +472,7 @@ func buildPointConeOuterBand(ctx context.Context, d *Document, ref producerID,
 		MeshBound: bound, VolSymDiff: volumeGap, AreaSlack: areaSlack,
 		DPair: base.DPair, Xform: r3.Identity(), PointCone: &record,
 	}
-	return buildFacetedBody(ctx, d, ref, pp)
+	return bodyResult(facetedrecord.Build(ctx, envOf(documentNode(d), ref), pp))
 }
 
 func pointConeHasOutsideWitness(base facetedPayload, cone *pointConeLimit) bool {

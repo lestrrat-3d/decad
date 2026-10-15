@@ -6,21 +6,8 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
-	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
-
-// revolveLoftJoinRecord retains one proved section/sector source and the
-// bounds published by its joined mesh. Later placed sectors and cap-ring
-// rewrites can authenticate against the same immutable source.
-type revolveLoftJoinRecord struct {
-	Certificate                           *revolveLoftSectorCertificate
-	Blank                                 *topo.Body
-	First                                 facetedPayload
-	Placed                                []facetedPayload
-	CapRing                               *revolvedSectionRing
-	BoundaryBound, VolumeBound, AreaBound float64
-}
 
 // tryRevolveLoftSectorUnionMany admits one Revolve and one authentic point
 // Loft source, followed by copies of that same source. Operand order does
@@ -82,11 +69,6 @@ func tryRevolveLoftSectorUnionMany(ctx context.Context, d *Document, ref produce
 		}
 	}
 	return nil, false, nil
-}
-
-type revolveLoftSectorPlacement struct {
-	Source *pointConeTrimRecord
-	Motion r3.Transform
 }
 
 // tryRevolveLoftSectorUnion authenticates source geometry before construction.

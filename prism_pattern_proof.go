@@ -123,5 +123,5 @@ func prismPatternJoinedBody(ctx context.Context, d *Document, ref producerID,
 		[2]float64{source.Blank.Z0, source.Blank.Z1}, ref); err != nil {
 		return nil, err
 	}
-	return buildFacetedBody(ctx, d, ref, fp)
+	return bodyResult(facetedrecord.Build(ctx, envOf(documentNode(d), ref), fp))
 }

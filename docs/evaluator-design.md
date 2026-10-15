@@ -871,12 +871,12 @@ their `Placed` runs `twistsweep.Eval`. `draftPayload` and `twoSidedDraftPayload`
 `sweeprecord.ChainPayload`: their `Placed` rebuilds the one-span reduction and runs a `sweeprecord` finishing
 step; a profile composite replays its spans and a chain composite refuses. `stitchPayload` and
 `unstitchPayload` are aliases of `stitchrecord.Payload` and `stitchrecord.UnstitchPayload`: their `Placed`
-runs `stitchrecord.Build` and `stitchrecord.BuildUnstitchFace`. A payload that still lives in the root
-package recovers its document handle from the node's `Owner` in `Placed` and
-runs its root builder. `facetedPayload` is one: its root builder
-`buildFacetedBodyWithProof` runs `facetedrecord.AssembleBody` over the held mesh and its source groups
-(`facetGroup` is an alias of `facetedrecord.Group`), then stores the payload with the returned diameter and
-facet-to-face map on the body.
+runs `stitchrecord.Build` and `stitchrecord.BuildUnstitchFace`. `facetedPayload` is an alias of
+`facetedrecord.Payload` (`facetGroup` of `facetedrecord.Group`, and each faceted source record of its
+`facetedrecord` type): its `Placed` runs `PlacedWith`, which places the held mesh and runs
+`facetedrecord.Build`. `facetedrecord.BuildWithProof` runs `facetedrecord.AssembleBody` over the held mesh
+and its source groups, then stores the payload with the returned diameter and facet-to-face map on the
+body. Every root payload name is such an alias; no payload type is declared in the root package.
 
 `Transform` and `Copy` pass the caller's context through payload re-evaluation.
 Faceted placement polls that context while transforming vertices, auditing and
@@ -1006,7 +1006,7 @@ image for embedding, multiplies each source vertex displacement by the scale
 (including each circular face's chord departure derived from its source bound),
 and adds the image's rounding. It multiplies the source area allowance by the
 scale squared and the occupied-volume difference by the scale cubed, then
-charges the rounded boundary's area and swept volume. `buildFacetedBody`
+charges the rounded boundary's area and swept volume. `facetedrecord.Build`
 audits the image's topology and rebuilds bounded volume and area readings.
 The centroid's diameter allowance takes the larger of the scaled source
 diameter and the rounded image's held coordinate-box diagonal plus twice

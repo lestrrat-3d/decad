@@ -7,6 +7,7 @@ import (
 	"slices"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
@@ -174,11 +175,11 @@ func (b *Body) filletObliqueBoss(ctx context.Context, edges []*Edge,
 	}
 	ref := b.n.Doc.NextProducer
 	mesh.groups[8].Origins[0].Producer = ref
-	result, err := buildFacetedBodyWithProof(ctx, documentHandle(b.n.Doc), ref, facetedPayload{
+	result, err := bodyResult(facetedrecord.BuildWithProof(ctx, envOf(documentNode(documentHandle(b.n.Doc)), ref), facetedPayload{
 		Verts: mesh.verts, Tris: mesh.tris, Src: mesh.src, Groups: mesh.groups,
 		VertexBound: vertexBound, MeshBound: bound, VolSymDiff: volumeGap,
 		AreaSlack: areaSlack, DPair: dPair, ContactAudited: true, Xform: r3.Identity(),
-	}, audit, volume, heldVolume)
+	}, audit, measurementToInternal(volume), heldVolume))
 	if err != nil {
 		return nil, err
 	}

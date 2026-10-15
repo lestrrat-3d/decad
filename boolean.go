@@ -9,6 +9,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/capblend"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
@@ -450,7 +451,7 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 		eval.payload.CrossCylinderBore = recognizeCrossCylinderBore(a, b)
 	}
 
-	body, err := buildFacetedBodyWithProof(ctx, d, ref, eval.payload, eval.audit, eval.volume, eval.volumeRat)
+	body, err := bodyResult(facetedrecord.BuildWithProof(ctx, envOf(documentNode(d), ref), eval.payload, eval.audit, measurementToInternal(eval.volume), eval.volumeRat))
 	if err != nil {
 		return nil, asBooleanError(op, err)
 	}

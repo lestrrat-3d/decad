@@ -123,14 +123,6 @@ type loftFaceEmbedding struct {
 	sign        int
 }
 
-type loftFaceCapBounds struct {
-	StationRound        float64
-	ProjectiveDeparture []float64
-	PolygonSpeed        []float64
-	SourceSpeed         []float64
-	SourceDeparture     []float64
-}
-
 func lfStationUV(point planePoint) (*big.Rat, *big.Rat) { return lfF(point.U), lfF(point.V) }
 
 func lfCapBounds(ctx context.Context, capMap loftFaceMap, section loftFaceSection,

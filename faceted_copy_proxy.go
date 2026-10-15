@@ -14,9 +14,9 @@ import (
 // placedProxyShells places one source-certified proxy under every recorded
 // copy motion and proves its held shells separate. The caller owns the proof
 // that proxy's true boundary and volume represent the original source solid.
-// This method checks the live source face of every proxy triangle; a mesh
+// This function checks the live source face of every proxy triangle; a mesh
 // carrying unrelated faces cannot borrow the copy lineage.
-func (set *facetedCopySet) placedProxyShells(ctx context.Context,
+func placedProxyShells(ctx context.Context, set *facetedCopySet,
 	proxy *Mesh) ([]facetproof.PlacedMesh, error) {
 	if ctx == nil || set == nil || set.Source == nil || proxy == nil ||
 		len(set.Tools) < 2 || len(set.Moves) != len(set.Tools) ||
@@ -81,7 +81,7 @@ func (set *facetedCopySet) placedProxyShells(ctx context.Context,
 			}
 		}
 		var err error
-		placed[i], err = set.placeProxy(ctx, budget, proxy, i, part.CopyLineage.Exact)
+		placed[i], err = placeProxy(ctx, set, budget, proxy, i, part.CopyLineage.Exact)
 		if err != nil {
 			return nil, err
 		}
@@ -110,7 +110,7 @@ func (set *facetedCopySet) placedProxyShells(ctx context.Context,
 // placeProxy places the proxy for copy i. An exact copy's true solid is its
 // exact rotation of the source's, so the proxy pays the gap between that
 // rotation and the float move instead of the float matrix's stretch.
-func (set *facetedCopySet) placeProxy(ctx context.Context, budget *proofbound.WorkBudget, proxy *Mesh,
+func placeProxy(ctx context.Context, set *facetedCopySet, budget *proofbound.WorkBudget, proxy *Mesh,
 	i int, record *exactrotation.Rotation) (facetproof.PlacedMesh, error) {
 	if record != set.Exact[i] {
 		return facetproof.PlacedMesh{}, fmt.Errorf("%w: copied proxy tool %d changed its exact rotation",

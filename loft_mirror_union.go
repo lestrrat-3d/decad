@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetedtopology"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -16,23 +17,6 @@ import (
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
-
-// loftMirrorJoinRecord ties a sewn three-ring mesh back to two authenticated
-// Lofts. The lower source occupies ring 0..1, its reflected copy ring 1..2.
-// Wall groups stay distinct even when both sources use the same role string.
-type loftMirrorJoinRecord struct {
-	Lower, Upper *topo.Body
-	StationCount int
-	WallGroups   [2][]int
-	CapGroups    [2]int
-}
-
-// A rigid copy keeps the source relation separate from its moved held mesh.
-// The source record is never reauthenticated from a faceted surface.
-type loftMirrorPlacementRecord struct {
-	Source *loftMirrorJoinRecord
-	Motion r3.Transform
-}
 
 func tryLoftMirrorUnion(ctx context.Context, op meshbool.OperationKind,
 	d *Document, ref producerID, a, b *Body) (*Body, bool, error) {
@@ -223,7 +207,7 @@ func buildLoftMirrorUnion(ctx context.Context, d *Document, ref producerID,
 		VertexBound: vertexBound, MeshBound: bound, VolSymDiff: volumeGap,
 		AreaSlack: areaSlack, DPair: pairDiameter, ContactAudited: true,
 		LoftMirrorJoin: record, MirrorCapGroups: &capGroups, Xform: r3.Identity()}
-	return buildFacetedBody(ctx, d, ref, fp)
+	return bodyResult(facetedrecord.Build(ctx, envOf(documentNode(d), ref), fp))
 }
 
 func loftMirrorMeshMatchesPayload(mesh *Mesh, lp loftPayload) bool {

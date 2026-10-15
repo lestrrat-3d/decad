@@ -28,7 +28,7 @@ The rules for rows live in `docs/layout.md`.
 | `spiral_join_union.go` | Gates the first curved-tooth Union's source pairs, held contacts and output curves. See faceted-vertex-bounds §3.6. |
 | `spiral_combine.go` | Builds and validates a multi-tool spiral-bevel join. See faceted-vertex-bounds §3.7. |
 | `spiral_combine_sector.go` | Admits the first curved join: runs the generic copied-tool proof, then requires every copy to carry an exact X-axis rotation (`WithCopyRotation`). See faceted-vertex-bounds §3.7. |
-| `joined_mesh.go` | Collects source-labeled join facets and checks closed, connected orientation before geometric audits. See tessellation §4. |
+| `joined_mesh.go` | Checks a joined mesh's closed, connected orientation before geometric audits; `facetedrecord.JoinedMesh` collects its facets. See tessellation §4. |
 | `loft_cut.go` | Preserves a matching axial loft through a certified coaxial circle-bore Cut. See loft §18. |
 | `loft_mirror_union.go` | Joins one authenticated axial Loft to its end-cap reflection. See loft-mirror-boolean design. |
 | `loft_mirror_cylinder_union.go` | Joins repeated reflected Loft pairs to a centered cylinder, including one-pass Union and bounded axial placement. See loft-mirror-boolean design. |
@@ -65,8 +65,8 @@ The rules for rows live in `docs/layout.md`.
 | `brep_measure.go` | The brep surveys; `internal/breprecord` states prisms and stacked prisms as face views, then builds and measures the record. See general-boolean §4. |
 | `classb.go` | Class-B admission and result adapters. See general-boolean §3 B. |
 | `classb_crossing.go` | Class-B scene and BRep adapters. See general-boolean §5, §10. |
-| `oblique_boss.go` | Retains two prism sources after a complete oblique cylinder and plate Union. See oblique-boss-fillet design. |
-| `cross_cylinder_bore_source.go` | Retains two circular prism sources after a perpendicular cylinder Cut. See cross-cylinder-bore-chamfer design. |
+| `oblique_boss.go` | Recognizes the two prism sources a complete oblique cylinder and plate Union retains. See oblique-boss-fillet design. |
+| `cross_cylinder_bore_source.go` | Recognizes the two circular prism sources a perpendicular cylinder Cut retains. See cross-cylinder-bore-chamfer design. |
 | `surface_trim.go` / `surface_split_revolve.go` | Surface body gates and revolve `Split`. See surface-intersection §2–§3. |
 | `point_plane_split.go` | Splits a point loft by a planar chain sheet. See loft-point design. |
 | `point_plane_scale.go` | Dispatches certified similar bodies, authenticates Boolean mesh sources, and carries Split-slab maps. See loft-point design and evaluator §8. |
@@ -75,6 +75,6 @@ The rules for rows live in `docs/layout.md`.
 | `point_cap_centroid.go` | Certifies far and planar Split cap centroids; `facetedrecord.PlacedCapCentroid` maps them through rigid placement. See loft-point design. |
 | `point_cap_extremes.go` | Bounds side-face centroid projections and selects the extreme Split cap faces. See loft-point design. |
 | `boolean_mesh.go` | Prepares an operand's mesh for `internal/meshbool/`. See evaluator §9. |
-| `boolean_body.go` | The faceted payload, its placement, and the root builder that stores it on the body `facetedrecord.AssembleBody` builds. See evaluator §9. |
-| `faceted_copy_lineage.go` | Binds live faceted copies to source faces, recorded motion, and separate source and held shells. See faceted-vertex-bounds §3.7. |
+| `boolean_body.go` | Reads an audited mesh's exact volume into a measurement and keys exactness off a proven bound. See evaluator §9. |
+| `faceted_copy_lineage.go` | Binds live faceted copies to source faces, recorded motion, and separate source and held shells in a `facetedrecord` copy set. See faceted-vertex-bounds §3.7. |
 | `faceted_copy_proxy.go` | Places a source-certified proxy under generic copied-tool motions and proves proxy shell separation. See faceted-vertex-bounds §3.7. |

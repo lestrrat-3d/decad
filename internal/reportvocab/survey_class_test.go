@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/coilshell"
 	"github.com/lestrrat-3d/decad/internal/cupwall"
 	"github.com/lestrrat-3d/decad/internal/draftrecord"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/patchchain"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
@@ -49,6 +50,7 @@ func TestStagedSurveyNamesRootPayloadClass(t *testing.T) {
 		{"chainSweepPayload", sweeprecord.ChainPayload{}},
 		{"stitchPayload", stitchrecord.Payload{}},
 		{"unstitchPayload", stitchrecord.UnstitchPayload{}},
+		{"facetedPayload", facetedrecord.Payload{}},
 	} {
 		t.Run(tc.class, func(t *testing.T) {
 			t.Parallel()

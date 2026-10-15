@@ -15,35 +15,6 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// prismPatternPart is one authenticated source extrusion and its verified
-// boundary mesh. The root wall starts at RootStart and ends at sample zero;
-// the preceding samples form the exterior section path.
-type prismPatternPart struct {
-	Body      *topo.Body
-	Prism     prismPayload
-	Mesh      *topo.Mesh
-	RootStart int
-	Start     float64
-	End       float64
-	StartIV   proofbound.RatInterval
-	EndIV     proofbound.RatInterval
-	Vertex    [][]int
-}
-
-// The Union keeps its authenticated sources and complete held shell so a
-// later operation can prove a local rewrite without inferring source curves
-// from faceted edges. These slices are immutable after the Union commits.
-type prismPatternJoinRecord struct {
-	Blank     *topo.Body
-	Source    *prismPatternSource
-	Parts     []prismPatternPart
-	Outlines  [2][]int
-	Groups    [3]int
-	MaxStep   float64
-	RingRound float64
-	Mesh      *joinedMesh
-}
-
 // tryPrismPatternUnionMany admits only an authenticated circular prism and
 // rigid copies of one extruded section. Each later proof stage may refuse;
 // the public Union commits only a fully audited result.

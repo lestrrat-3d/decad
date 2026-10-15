@@ -13,22 +13,6 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// pointPlaneSimilarityRecord retains the exact source cut maps and the order
-// of their later rigid and positive uniform images. The source slice is never
-// reconstructed from the rounded cap chords.
-type pointPlaneSimilarityRecord struct {
-	Slice *pointPlaneSliceRecord
-	Steps []pointPlaneSimilarityStep
-}
-
-type pointPlaneSimilarityStep struct {
-	Motion          r3.Transform
-	Anchor          r3.Vec
-	Factor          float64 // zero means a rigid step
-	MeshBound       float64
-	CapDisplacement float64
-}
-
 // ScaledAt returns the positive uniform image of an authenticated point-loft
 // Split slab, exact line/circular solid prism, line-only stack or stack-backed
 // BRep, complete solid Revolve, or audited faceted Boolean result about anchor,
@@ -186,7 +170,7 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 		next.PointSimilarity = &record
 	}
 	ref := d.nextProducerID()
-	scaled, err := buildFacetedBody(ctx, d, ref, next)
+	scaled, err := bodyResult(facetedrecord.Build(ctx, envOf(documentNode(d), ref), next))
 	if err != nil {
 		return nil, err
 	}

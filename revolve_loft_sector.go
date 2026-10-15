@@ -6,47 +6,9 @@ import (
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 )
-
-type revolveSectorContact struct {
-	Segment int
-	Line    sketch.ConeLineCrossing
-	Fit     sketch.ConeFitCrossing
-}
-
-type revolveSectorBoundary struct {
-	InsideSegment, OutsideWitness int
-	Contacts                      [2]revolveSectorContact
-	FitRoute                      bool
-	Sides                         []sketch.ConeCurveSide
-	SourceRevision                uint64
-}
-
-// revolveLoftSectorCertificate keeps the immutable source records and the
-// Sketch answers that identify one connected exposed sector of a point loft.
-// Mesh stations and their displacement remain a separate construction proof.
-type revolveLoftSectorCertificate struct {
-	Blank         *topo.Body
-	Section       revolveSectionCertificate
-	Trimmed       facetedPayload
-	Trim          *pointConeTrimRecord
-	Base          facetedPayload
-	Boundary      revolveSectorBoundary
-	Sector        [2]float64
-	Loop          []revolveSectorNode
-	CrossingBound float64
-}
-
-type revolveSectorNode struct {
-	Point        r3.Vec
-	GroupToNext  int
-	Crossing     int
-	RootBoundary bool
-	Angle        float64
-}
 
 // certifyRevolveLoftSector tries each authenticated finite conical face of
 // the Revolve section. The source must certify exactly one face as the

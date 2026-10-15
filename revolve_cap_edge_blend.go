@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -199,7 +200,7 @@ func buildRevolveCapRimBlend(ctx context.Context, body *Body, source revolvemesh
 	fp := facetedPayload{Verts: verts, Tris: tris, Src: src, Groups: groups,
 		VertexBound: vertexBound, MeshBound: bound, VolSymDiff: missing,
 		AreaSlack: areaSlack, DPair: dPair, Xform: r3.Identity()}
-	out, err := buildFacetedBody(ctx, documentHandle(body.n.Doc), ref, fp)
+	out, err := bodyResult(facetedrecord.Build(ctx, envOf(documentNode(documentHandle(body.n.Doc)), ref), fp))
 	if err != nil {
 		return nil, err
 	}

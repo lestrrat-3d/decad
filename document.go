@@ -331,7 +331,7 @@ func (b *Body) copyUnder(ctx context.Context, motion r3.Transform, exact *exactr
 	var copied *Body
 	faceted, isFaceted := b.n.Payload.(facetedPayload)
 	if isFaceted && exact != nil {
-		copied, err = faceted.placedWith(ctx, d, ref, composed, exact)
+		copied, err = bodyResult(faceted.PlacedWith(ctx, envOf(documentNode(d), ref), composed, exact))
 	} else {
 		copied, err = placePayload(ctx, b.n.Payload, d, ref, composed)
 	}

@@ -11,16 +11,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
-// spiralHeelRootSeam encloses the true crossing of the source root arc and
-// the blank's finite heel outer cone. Endpoints follow ArcSeg Start, End order.
-// The intervals include the source arc's recorded-radius uncertainty.
-type spiralHeelRootSeam struct {
-	X, Slope loftFaceInterval
-	Ends     [2][3]loftFaceInterval
-	ConeC    *big.Rat
-	Negative bool
-}
-
 // A rational half-angle interval encloses the short source arc. These limits
 // only admit the current bounded first-tooth geometry; other shapes refuse.
 var spiralHeelHalfAngle = big.NewRat(127, 5000)

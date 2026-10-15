@@ -9,7 +9,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/exactrotation"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/measurement"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -121,11 +120,3 @@ func PointPlaneRound(q [3]*big.Rat) (r3.Vec, float64, error) {
 	}
 	return r3.NewVec(value[0], value[1], value[2]), proofbound.Radius3D(gap), nil
 }
-
-// ratOfPointPlane and pointPlaneMul are the root point-plane rational
-// helpers: pointPlaneMul returns a fresh Rat, reads its operands only, and is
-// in lowest terms for reduced operands, which FloatRat and its own results
-// are.
-func ratOfPointPlane(v float64) *big.Rat { return proofarith.FloatRat(v) }
-
-func pointPlaneMul(a, b *big.Rat) *big.Rat { return proofarith.MulRat(new(big.Rat), a, b) }

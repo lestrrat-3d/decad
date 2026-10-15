@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/breprecord"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 
 	"github.com/lestrrat-3d/decad/internal/capedge"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -57,7 +58,7 @@ func tryRoundedBrepCapEdgeFillet(ctx context.Context, body *Body, bp brepPayload
 	if err != nil {
 		return nil, true, asBooleanError(meshbool.OpCut, err)
 	}
-	out, err := buildFacetedBodyWithProof(ctx, d, ref+1, eval.payload, eval.audit, eval.volume, eval.volumeRat)
+	out, err := bodyResult(facetedrecord.BuildWithProof(ctx, envOf(documentNode(d), ref+1), eval.payload, eval.audit, measurementToInternal(eval.volume), eval.volumeRat))
 	if err != nil {
 		return nil, true, asBooleanError(meshbool.OpCut, err)
 	}

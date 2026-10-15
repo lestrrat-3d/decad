@@ -11,20 +11,8 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
-	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
-
-// This record retains the certified private lower bore and the full shell's
-// exterior and bore loops for a later outer-cap rewrite. Placement clears it.
-type loftMirrorCylinderBoreRecord struct {
-	Join       *loftMirrorCylinderJoinRecord
-	LowerBore  *topo.Body
-	CapGroups  [2]int
-	Outer      [2][]int
-	Inner      [2][]int
-	WallGroups [2]int
-}
 
 // tryLoftMirrorCylinderBoreCut cuts the exact centered cylinder from both
 // reflected source halves. The lower half keeps the authenticated circular
@@ -263,5 +251,5 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 		return nil, err
 	}
 	loftCylinderTagBridgedTop(&fp, capGroups[1], []float64{record.BridgeBound})
-	return buildFacetedBody(ctx, d, ref, fp)
+	return bodyResult(facetedrecord.Build(ctx, envOf(documentNode(d), ref), fp))
 }

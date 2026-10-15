@@ -6,23 +6,8 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/prismpattern"
-	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
-
-// prismPatternSource is a bounded source relation for a circular prism and
-// rigid copies of one adjacent prism section. It does not prove a Union:
-// the shared wall and the caps still need a constructed boundary and volume
-// proof before any result can be published.
-type prismPatternSource struct {
-	Blank       prismPayload
-	BlankRadius float64
-	Section     prismPayload
-	RootArc     arcSeg
-	RootIndex   int
-	RootGap     float64
-	Sections    []*topo.Body
-}
 
 // prismPatternSourceOf checks only recorded Extrude sections and Copy
 // placements. The first tool and its copies must share the very same source

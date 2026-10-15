@@ -165,7 +165,7 @@ func TestPlacedWithChargesTheGapToExactRotation(t *testing.T) {
 	require.NoError(t, err)
 	composed, err := source.Xform.Then(off)
 	require.NoError(t, err)
-	body, err := source.placedWith(t.Context(), documentHandle(joined.n.Doc), joined.n.Doc.NextProducer, composed, q)
+	body, err := bodyResult(source.PlacedWith(t.Context(), envOf(documentNode(documentHandle(joined.n.Doc)), joined.n.Doc.NextProducer), composed, q))
 	require.NoError(t, err)
 	placed := body.n.Payload.(facetedPayload)
 	require.Len(t, placed.Verts, len(source.Verts))
@@ -207,7 +207,7 @@ func TestPlacedWithDropsFloatPlacementRecords(t *testing.T) {
 	composed, err := source.Xform.Then(d)
 	require.NoError(t, err)
 
-	body, err := source.placedWith(t.Context(), documentHandle(joined.n.Doc), joined.n.Doc.NextProducer, composed, q)
+	body, err := bodyResult(source.PlacedWith(t.Context(), envOf(documentNode(documentHandle(joined.n.Doc)), joined.n.Doc.NextProducer), composed, q))
 	require.NoError(t, err)
 	exact := body.n.Payload.(facetedPayload)
 	require.Nil(t, exact.PointSection)

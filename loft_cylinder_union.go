@@ -23,26 +23,6 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// A cylinder joined to a matching axial Loft keeps the original operands.
-// Subsequent placements of that same Loft rebuild the common cylinder ring.
-type loftCylinderJoinRecord struct {
-	Blank     *topo.Body
-	Placement *loftCylinderPlacement
-	// Teeth are the exact Union operands. ProofTeeth are private, axially
-	// normalized witnesses whose mesh proofs include AxialBridge.
-	Teeth, ProofTeeth []*topo.Body
-	AxialBridge       []float64
-	CapOutlines       [2][]int
-	CapGroups         [2]int
-	MinSideRadius     float64
-	Radius            float64
-	// These upward bounds enclose the replaced root seam around Radius.
-	// Retained tooth exterior walls still read their Loft source bounds.
-	// The symmetric collar covers source-root exceptions near either cap.
-	InnerInset, OuterExcess, RootCollar float64
-	Z0, Z1                              float64
-}
-
 // The structural join has at most 32 separately certified Loft teeth. Its
 // final crossing audit and the matched centered bore may scan twice the
 // generic mesh ceiling; exact pair classifications remain unchanged.
@@ -818,7 +798,7 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 		return nil, err
 	}
 	loftCylinderTagBridgedTop(&fp, fp.LoftCylinderJoin.CapGroups[1], axialBridge)
-	return buildFacetedBody(ctx, d, ref, fp)
+	return bodyResult(facetedrecord.Build(ctx, envOf(documentNode(d), ref), fp))
 }
 
 // Source root and connector rulings move linearly between the cap sections.

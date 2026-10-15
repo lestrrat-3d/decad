@@ -147,11 +147,11 @@ func TestPlacedProxyShellsChargeExactCopies(t *testing.T) {
 
 	set, err := certifyFacetedCopies(t.Context(), []*Body{source, image})
 	require.NoError(t, err)
-	placed, err := set.placedProxyShells(t.Context(), proxy)
+	placed, err := placedProxyShells(t.Context(), set, proxy)
 	require.NoError(t, err)
 	twinSet, err := certifyFacetedCopies(t.Context(), []*Body{source, twin})
 	require.NoError(t, err)
-	legacy, err := twinSet.placedProxyShells(t.Context(), proxy)
+	legacy, err := placedProxyShells(t.Context(), twinSet, proxy)
 	require.NoError(t, err)
 	require.Equal(t, legacy[1].Verts, placed[1].Verts, "the held placement is the same float transform")
 
@@ -189,7 +189,7 @@ func TestPlacedProxyShellsChargeExactCopies(t *testing.T) {
 		lineage.Exact = nil
 		part.CopyLineage = &lineage
 		image.n.Payload = part
-		_, err := set.placedProxyShells(t.Context(), proxy)
+		_, err := placedProxyShells(t.Context(), set, proxy)
 		require.ErrorIs(t, err, ErrUnsupported)
 		require.ErrorContains(t, err, "changed its exact rotation")
 	})

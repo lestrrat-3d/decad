@@ -346,7 +346,7 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 		[2]float64{blank.Z0, blank.Z1}, ref); err != nil {
 		return nil, err
 	}
-	return buildFacetedBody(ctx, d, ref, result)
+	return bodyResult(facetedrecord.Build(ctx, envOf(documentNode(d), ref), result))
 }
 
 // Each half was audited before reflection. Their only possible geometric
