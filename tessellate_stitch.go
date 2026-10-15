@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stitchrecord"
@@ -57,7 +58,11 @@ func stitchLumpFaceGroups(b *Body) [][]*topo.Face {
 	groups := make([][]*topo.Face, len(lumps))
 	for i, lp := range lumps {
 		for _, s := range lp.Shells() {
-			groups[i] = append(groups[i], faceNodes(s.Faces())...)
+			faces := s.Faces()
+			groups[i] = slices.Grow(groups[i], len(faces))
+			for _, f := range faces {
+				groups[i] = append(groups[i], faceNode(f))
+			}
 		}
 	}
 	return groups
