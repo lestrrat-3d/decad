@@ -143,14 +143,14 @@ func TestLoftFacesTangentHeelIntersectKeepsTrimRecord(t *testing.T) {
 	require.NotNil(t, meshes.coneTris, "the extended Boolean succeeded within the ladder")
 	require.NoError(t, loftface.ExtensionClearsCone(meshes.slab, meshes.coneVerts, meshes.coneTris, plane,
 		proofbound.NewWorkBudget(t.Context())), "E5 passes on the recorded meshes")
-	require.NoError(t, meshes.clearsResult(t.Context(), eval.payload.verts))
+	require.NoError(t, meshes.clearsResult(t.Context(), eval.payload.Verts))
 	depth, ok := loftface.ConeDepth(meshes.coneVerts, plane)
 	require.True(t, ok)
 	floor := depth
 	if floor.Cmp(meshes.slab.Eps) < 0 {
 		floor = meshes.slab.Eps
 	}
-	require.False(t, loftface.ResultBeyondSlab(eval.payload.verts, plane, floor),
+	require.False(t, loftface.ResultBeyondSlab(eval.payload.Verts, plane, floor),
 		"no result vertex lies beyond the slab")
 
 	// The result's volume allowance is the composition of the UNEXTENDED
@@ -304,7 +304,7 @@ func TestTangentCapExtensionOnRealChain(t *testing.T) {
 		require.Less(t, b, len(held.n.Vertices))
 		sa, sb := link.Station[a], link.Station[b]
 		require.GreaterOrEqual(t, min(sa, sb), 0, "a ring vertex is a station vertex")
-		require.Equal(t, held.n.Vertices[a], toe.base.verts[last*n+sa], "ring vertex equals its station vertex")
+		require.Equal(t, held.n.Vertices[a], toe.base.Verts[last*n+sa], "ring vertex equals its station vertex")
 		j := min(sa, sb)
 		if max(sa, sb)-min(sa, sb) != 1 {
 			j = max(sa, sb)
@@ -327,8 +327,8 @@ func TestTangentCapExtensionOnRealChain(t *testing.T) {
 	// A ring with two neighbouring stations swapped has an edge that is no chord.
 	require.GreaterOrEqual(t, n, 4)
 	swapped := *toe
-	swapped.base.verts = append([]r3.Vec(nil), toe.base.verts...)
-	ring := swapped.base.verts[last*n : (last+1)*n]
+	swapped.base.Verts = append([]r3.Vec(nil), toe.base.Verts...)
+	ring := swapped.base.Verts[last*n : (last+1)*n]
 	ring[0], ring[1] = ring[1], ring[0]
 	_, _, err = extendTangentCap(t.Context(), held, &swapped, plane)
 	require.ErrorIs(t, err, ErrUnsupported)

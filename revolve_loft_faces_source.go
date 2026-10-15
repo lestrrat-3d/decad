@@ -144,7 +144,7 @@ func revolveLoftFacesTrimCurrent(tooth *Body, trim *loftFacesTrimRecord) bool {
 		len(trim.maps) < 3 || len(trim.maps) > 64 ||
 		len(trim.bounds) != len(trim.maps) ||
 		!orderedLoftFacesConeLimits(trim.toe, trim.heel, trim.base) ||
-		!trim.base.loftFacesPrimitive || trim.base.loftFacesCap == nil ||
+		!trim.base.LoftFacesPrimitive || trim.base.loftFacesCap == nil ||
 		trim.base.loftFacesCap.source != trim.source ||
 		trim.source.sourceBoxIssued != trim.source.sourceBox ||
 		len(trim.base.loftFacesCap.maps) != len(trim.maps) ||
@@ -155,8 +155,8 @@ func revolveLoftFacesTrimCurrent(tooth *Body, trim *loftFacesTrimRecord) bool {
 		len(trim.source.profile.Outer.Segments) < 4 ||
 		len(trim.source.profile.Outer.Segments) > 128 ||
 		len(trim.source.profile.Outer.Segments) != len(trim.source.source.entities) ||
-		!facetedtopology.CapGroupsPresent(p.src, p.faceOf, len(p.groups), trim.toeCapGroup, trim.heelCapGroup) ||
-		!facetedtopology.CapGroupsPure(p.src, p.faceOf, len(p.tris), len(tooth.Faces()),
+		!facetedtopology.CapGroupsPresent(p.Src, p.FaceOf, len(p.groups), trim.toeCapGroup, trim.heelCapGroup) ||
+		!facetedtopology.CapGroupsPure(p.Src, p.FaceOf, len(p.Tris), len(tooth.Faces()),
 			trim.toeCapGroup, trim.heelCapGroup) {
 		return false
 	}
@@ -466,20 +466,20 @@ func revolveLoftFacesUniqueOriginFace(body *Body, want provenance.Ref) (*Face, b
 }
 
 func revolveLoftFacesRefFaceIndex(p facetedPayload, want provenance.Ref, faceCount int) (int, bool) {
-	if len(p.src) != len(p.tris) || len(p.faceOf) != len(p.tris) {
+	if len(p.Src) != len(p.Tris) || len(p.FaceOf) != len(p.Tris) {
 		return -1, false
 	}
 	index := -1
-	for i, group := range p.src {
+	for i, group := range p.Src {
 		if group < 0 || group >= len(p.groups) {
 			return -1, false
 		}
 		if slices.Contains(p.groups[group].origins, want) {
-			if p.faceOf[i] < 0 || p.faceOf[i] >= faceCount ||
-				index >= 0 && index != p.faceOf[i] {
+			if p.FaceOf[i] < 0 || p.FaceOf[i] >= faceCount ||
+				index >= 0 && index != p.FaceOf[i] {
 				return -1, false
 			}
-			index = p.faceOf[i]
+			index = p.FaceOf[i]
 		}
 	}
 	return index, true

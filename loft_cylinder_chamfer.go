@@ -168,7 +168,7 @@ func tryLoftCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPayload,
 	}
 	for cap, face := range caps {
 		if len(face.n.Loops) == 0 || !loftCylinderChamferCapWalk(
-			face.n.Loops[0], fp.verts, source.outer[cap], cap == 0) {
+			face.n.Loops[0], fp.Verts, source.outer[cap], cap == 0) {
 			return nil, true, fmt.Errorf("%w: loft/cylinder cap %d has no outer loop", ErrUnsupported, cap)
 		}
 		for _, ce := range face.n.Loops[0].CoEdges {
@@ -201,10 +201,10 @@ func loftCylinderInset(ctx context.Context, fp facetedPayload, ring []int, d flo
 	segs := make([]curveSegment, len(ring))
 	for i, index := range ring {
 		next := ring[(i+1)%len(ring)]
-		if index < 0 || next < 0 || index >= len(fp.verts) || next >= len(fp.verts) {
+		if index < 0 || next < 0 || index >= len(fp.Verts) || next >= len(fp.Verts) {
 			return loftCylinderInsetSamples{}, fmt.Errorf("%w: cap outline has an invalid vertex", ErrUnsupported)
 		}
-		a, b := fp.verts[index], fp.verts[next]
+		a, b := fp.Verts[index], fp.Verts[next]
 		segs[i] = lineSeg{Start: sectionrecord.Point2{U: a.X, V: a.Y},
 			End: sectionrecord.Point2{U: b.X, V: b.Y}, TStart: 0, TEnd: 1}
 	}

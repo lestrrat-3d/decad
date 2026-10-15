@@ -121,9 +121,9 @@ type facetedPayload struct {
 	// freshly built Split slab. Rigid copies retain pointPlane for queries,
 	// but even a round-trip copy cannot become a new structural Split source.
 	pointPlaneSourceEligible bool
-	// loftFacesPrimitive identifies one certified LoftFaces held mesh. Rigid
+	// LoftFacesPrimitive identifies one certified LoftFaces held mesh. Rigid
 	// placement preserves this source; a Boolean result starts a new chain.
-	loftFacesPrimitive bool
+	LoftFacesPrimitive bool
 	// loftFacesCap records the authenticated final cap map of an original
 	// LoftFaces body. A Cut result receives only the one-use cone trim record.
 	loftFacesCap  *loftFacesCapRecord
@@ -150,19 +150,19 @@ type facetedPayload struct {
 	revolveLoftJoin *revolveLoftJoinRecord
 	// revolveLoftSector identifies one rigid copy of a trimmed point loft.
 	revolveLoftSector *revolveLoftSectorPlacement
-	verts             []r3.Vec
+	Verts             []r3.Vec
 	// vertexBound is β(v) per held vertex (docs/faceted-vertex-bounds-design.md
 	// §2, §4.1), composed by the boolean that built the payload (§3) and
 	// carried through every placement. The boolean always writes it; a nil
 	// record is an invariant failure, never a fallback.
 	vertexBound []float64
-	tris        [][3]int
-	src         []int // per-facet source-group id
+	Tris        [][3]int
+	Src         []int // per-facet source-group id
 	groups      []facetGroup
 
-	// faceOf maps each facet to its face's index in the built body's
+	// FaceOf maps each facet to its face's index in the built body's
 	// Faces() order; buildFacetedBody sets it, Tessellate reads it.
-	faceOf []int
+	FaceOf []int
 
 	// exactSourceVerts and exactSourceTris name the zero-bound Boolean mesh
 	// before translation-only placement rounded its held coordinates. They
@@ -357,8 +357,8 @@ func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref produc
 		next.exactSourceVerts, next.exactSourceTris = nil, nil
 	} else if len(fp.exactSourceVerts) == 0 && fp.meshBound == 0 && fp.volSymDiff == 0 &&
 		fp.xform == r3.Identity() {
-		next.exactSourceVerts = append([]r3.Vec(nil), fp.verts...)
-		next.exactSourceTris = append([][3]int(nil), fp.tris...)
+		next.exactSourceVerts = append([]r3.Vec(nil), fp.Verts...)
+		next.exactSourceTris = append([][3]int(nil), fp.Tris...)
 	}
 	var charge massmoment.MapCharge
 	var placed facetproof.PlacedMesh
@@ -367,7 +367,7 @@ func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref produc
 		if !ok {
 			return nil, fmt.Errorf("%w: the exact rotation has no finite gap to the float placement", ErrUnsupported)
 		}
-		placed, err = facetproof.PlaceMeshDenoting(ctx, budget, fp.verts, fp.tris, fp.vertexBound,
+		placed, err = facetproof.PlaceMeshDenoting(ctx, budget, fp.Verts, fp.Tris, fp.vertexBound,
 			fp.volSymDiff, fp.areaSlack, delta, linearGap, translationGap)
 	} else {
 		var linear [3][3]*big.Rat
@@ -379,16 +379,16 @@ func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref produc
 		if err != nil {
 			return nil, err
 		}
-		placed, err = facetproof.PlaceMesh(ctx, budget, fp.verts, fp.tris, fp.vertexBound,
+		placed, err = facetproof.PlaceMesh(ctx, budget, fp.Verts, fp.Tris, fp.vertexBound,
 			fp.volSymDiff, fp.areaSlack, charge.Stretch, charge.Volume, delta)
 	}
 	if err != nil {
 		return nil, err
 	}
-	next.verts, next.tris = placed.Verts, placed.Tris
+	next.Verts, next.Tris = placed.Verts, placed.Tris
 	next.vertexBound, next.meshBound, next.volSymDiff = placed.VertexBound, placed.MeshBound, placed.VolSymDiff
 	next.areaSlack = placed.AreaSlack
-	next.dPair = facetedSourceDiameterUpper(next.verts, next.meshBound)
+	next.dPair = facetedSourceDiameterUpper(next.Verts, next.meshBound)
 	if proofbound.IsNonFinite(next.dPair) {
 		return nil, fmt.Errorf("%w: the placed pair diameter has no finite proof", ErrUnsupported)
 	}
@@ -439,7 +439,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	verts, tris := pp.verts, pp.tris
+	verts, tris := pp.Verts, pp.Tris
 	var diameterReading float64
 	var ok bool
 	var err error
@@ -479,7 +479,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	// (docs/faceted-vertex-bounds-design.md §2).
 	facetDelta := facetproof.FacetDeltas(tris, pp.vertexBound)
 
-	for _, s := range pp.src {
+	for _, s := range pp.Src {
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
@@ -504,12 +504,12 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	// The partition is exactly edge-connectivity, so it adds no face boundary
 	// that was not already there: an edge whose two facets differ in patch also
 	// differs in source group, and was a boundary before the split.
-	patch, err := facetproof.SourcePatches(budget, len(tris), pp.src, adj)
+	patch, err := facetproof.SourcePatches(budget, len(tris), pp.Src, adj)
 	if err != nil {
 		return nil, err
 	}
 	groupPatch := make(map[int]int)
-	for i, group := range pp.src {
+	for i, group := range pp.Src {
 		if first, exists := groupPatch[group]; !exists {
 			groupPatch[group] = patch[i]
 		} else if first != patch[i] {
@@ -538,21 +538,21 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 			// still say so, or FaceCreatedBy and the surveys lose them.
 			f = bornFace(&Face{
 				n: topo.Face{
-					HeldPlanar:  pp.groups[pp.src[i]].planar,
-					Denoted:     pp.groups[pp.src[i]].denoted,
-					NormalBound: pp.groups[pp.src[i]].normalBound,
-					Reversed:    pp.groups[pp.src[i]].reversed,
-					Origins:     append([]provenance.Ref(nil), pp.groups[pp.src[i]].origins...),
+					HeldPlanar:  pp.groups[pp.Src[i]].planar,
+					Denoted:     pp.groups[pp.Src[i]].denoted,
+					NormalBound: pp.groups[pp.Src[i]].normalBound,
+					Reversed:    pp.groups[pp.Src[i]].reversed,
+					Origins:     append([]provenance.Ref(nil), pp.groups[pp.Src[i]].origins...),
 					Body:        bodyNode(body),
 				},
 			})
-			group := pp.groups[pp.src[i]]
-			if group.hasCentroid && groupPatch[pp.src[i]] == patch[i] {
+			group := pp.groups[pp.Src[i]]
+			if group.hasCentroid && groupPatch[pp.Src[i]] == patch[i] {
 				f.n.Centroid, f.n.HasCentroid = vecMeasurementToInternal(group.centroid), true
 			}
 			faceIdx[patch[i]] = f
-			facePlanar[f] = pp.groups[pp.src[i]].planar
-			faceGroup[f] = pp.src[i]
+			facePlanar[f] = pp.groups[pp.Src[i]].planar
+			faceGroup[f] = pp.Src[i]
 			compFaces[comp[i]] = append(compFaces[comp[i]], f)
 		}
 		a, b, c := verts[t[0]], verts[t[1]], verts[t[2]]
@@ -742,7 +742,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	if err != nil {
 		return nil, err
 	}
-	pp.faceOf = faceOf
+	pp.FaceOf = faceOf
 	body.n.Payload = pp
 	if err := ctx.Err(); err != nil {
 		return nil, err

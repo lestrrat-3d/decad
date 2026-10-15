@@ -31,18 +31,18 @@ type revolveLoftFacesToolPayloadSnapshot struct {
 func newRevolveLoftFacesToolPayloadSnapshot(tooth *Body,
 	p facetedPayload) *revolveLoftFacesToolPayloadSnapshot {
 	return &revolveLoftFacesToolPayloadSnapshot{
-		verts: slices.Clone(p.verts), tris: slices.Clone(p.tris),
-		vertexBound: slices.Clone(p.vertexBound), src: slices.Clone(p.src),
-		faceOf: slices.Clone(p.faceOf), faces: tooth.Faces(),
+		verts: slices.Clone(p.Verts), tris: slices.Clone(p.Tris),
+		vertexBound: slices.Clone(p.vertexBound), src: slices.Clone(p.Src),
+		faceOf: slices.Clone(p.FaceOf), faces: tooth.Faces(),
 		meshBound: p.meshBound, volSymDiff: p.volSymDiff, areaSlack: p.areaSlack,
 	}
 }
 
 func (s *revolveLoftFacesToolPayloadSnapshot) current(tooth *Body,
 	p facetedPayload) bool {
-	return s != nil && tooth != nil && slices.Equal(s.verts, p.verts) &&
-		slices.Equal(s.tris, p.tris) && slices.Equal(s.vertexBound, p.vertexBound) &&
-		slices.Equal(s.src, p.src) && slices.Equal(s.faceOf, p.faceOf) &&
+	return s != nil && tooth != nil && slices.Equal(s.verts, p.Verts) &&
+		slices.Equal(s.tris, p.Tris) && slices.Equal(s.vertexBound, p.vertexBound) &&
+		slices.Equal(s.src, p.Src) && slices.Equal(s.faceOf, p.FaceOf) &&
 		slices.Equal(s.faces, tooth.Faces()) && s.meshBound == p.meshBound &&
 		s.volSymDiff == p.volSymDiff && s.areaSlack == p.areaSlack
 }

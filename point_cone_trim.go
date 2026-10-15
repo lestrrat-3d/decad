@@ -153,7 +153,7 @@ func tryPointConeBoolean(ctx context.Context, op meshbool.OperationKind, d *Docu
 	} else if fp.pointSection == nil || fp.pointSection.apex != (r3.Vec{}) {
 		return nil, false, nil
 	}
-	if !pointcone.AboveFarCap(record.base.verts, record.base.meshBound, cone.far) {
+	if !pointcone.AboveFarCap(record.base.Verts, record.base.meshBound, cone.far) {
 		return nil, false, nil
 	}
 	if op == meshbool.OpCut {
@@ -188,7 +188,7 @@ func pointConeLimitEarlier(old, next *pointConeLimit, base facetedPayload) bool 
 
 func pointConeLimitOrdered(earlier, later *pointConeLimit, base facetedPayload) bool {
 	return pointcone.Ordered(earlier.apex, earlier.slope, later.apex, later.slope,
-		base.verts, base.meshBound)
+		base.Verts, base.meshBound)
 }
 
 func buildPointConeTrim(ctx context.Context, d *Document, ref producerID,
@@ -345,7 +345,7 @@ func buildPointConeInsideBand(ctx context.Context, d *Document, ref producerID,
 	volumeGap := proofbound.AbsSumUpper(base.volSymDiff,
 		proofbound.ProductUpper(proofbound.ProductUpper(capArea, capBound), capAreaFactor),
 		proofbound.SweptVolumeAllow(roundEnvelope, areaUpper))
-	baseArea, err := proofbound.PerturbedAreaUpperContext(ctx, base.verts, base.tris, base.meshBound)
+	baseArea, err := proofbound.PerturbedAreaUpperContext(ctx, base.Verts, base.Tris, base.meshBound)
 	if err != nil {
 		return nil, err
 	}
@@ -363,7 +363,7 @@ func buildPointConeInsideBand(ctx context.Context, d *Document, ref producerID,
 		vertexBound[i] = bound
 	}
 	pp := facetedPayload{
-		verts: verts, tris: tris, src: src, groups: groups, vertexBound: vertexBound,
+		Verts: verts, Tris: tris, Src: src, groups: groups, vertexBound: vertexBound,
 		meshBound: bound, volSymDiff: volumeGap, areaSlack: areaSlack,
 		dPair: base.dPair, xform: r3.Identity(), pointCone: &record,
 	}
@@ -477,7 +477,7 @@ func buildPointConeOuterBand(ctx context.Context, d *Document, ref producerID,
 	volumeGap := proofbound.AbsSumUpper(base.volSymDiff,
 		proofbound.ProductUpper(proofbound.ProductUpper(capArea, capBound), capAreaFactor),
 		proofbound.SweptVolumeAllow(roundEnvelope, areaUpper))
-	baseArea, err := proofbound.PerturbedAreaUpperContext(ctx, base.verts, base.tris, base.meshBound)
+	baseArea, err := proofbound.PerturbedAreaUpperContext(ctx, base.Verts, base.Tris, base.meshBound)
 	if err != nil {
 		return nil, err
 	}
@@ -493,7 +493,7 @@ func buildPointConeOuterBand(ctx context.Context, d *Document, ref producerID,
 		vertexBound[i] = bound
 	}
 	pp := facetedPayload{
-		verts: verts, tris: tris, src: src, groups: groups, vertexBound: vertexBound,
+		Verts: verts, Tris: tris, Src: src, groups: groups, vertexBound: vertexBound,
 		meshBound: bound, volSymDiff: volumeGap, areaSlack: areaSlack,
 		dPair: base.dPair, xform: r3.Identity(), pointCone: &record,
 	}
@@ -504,7 +504,7 @@ func pointConeHasOutsideWitness(base facetedPayload, cone *pointConeLimit) bool 
 	move := new(big.Rat).Quo(new(big.Rat).Mul(
 		new(big.Rat).Add(big.NewRat(1, 1), cone.slope),
 		proofarith.FloatRat(base.meshBound)), cone.apex)
-	for _, p := range base.verts[1:] {
+	for _, p := range base.Verts[1:] {
 		sample, err := pointConeFactor(p, cone)
 		if err != nil {
 			continue
@@ -523,7 +523,7 @@ func pointConeSubdivide(ctx context.Context, base facetedPayload, rounds int) (
 	if base.pointSection == nil {
 		return nil, nil, nil, 0, fmt.Errorf("%w: the point-cone source has no fan", ErrUnsupported)
 	}
-	return pointcone.Subdivide(ctx, base.verts, base.tris, base.src, rounds)
+	return pointcone.Subdivide(ctx, base.Verts, base.Tris, base.Src, rounds)
 }
 
 // pointConeFactor dispatches a held far-cap point to the Dyadic crossing for a

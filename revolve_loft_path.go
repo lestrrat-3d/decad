@@ -13,13 +13,13 @@ import (
 // exposed.
 func revolveExteriorPath(base facetedPayload, boundary revolveSectorBoundary,
 	source *pointSectionSource, section revolveSectionCertificate) ([]revolveSectorNode, float64, error) {
-	n := len(base.verts) - 1
-	if n < 6 || len(base.tris) < n || len(base.src) != len(base.tris) {
+	n := len(base.Verts) - 1
+	if n < 6 || len(base.Tris) < n || len(base.Src) != len(base.Tris) {
 		return nil, 0, fmt.Errorf("%w: point-loft fan is incomplete", ErrUnsupported)
 	}
 	groups := make([]int, n)
 	seen := make([]bool, n)
-	for i, tri := range base.tris {
+	for i, tri := range base.Tris {
 		if tri[0] != 0 || tri[1] <= 0 || tri[2] <= 0 {
 			continue
 		}
@@ -33,7 +33,7 @@ func revolveExteriorPath(base facetedPayload, boundary revolveSectorBoundary,
 		if v != (u+1)%n || seen[u] {
 			return nil, 0, fmt.Errorf("%w: point-loft fan has a changed boundary order", ErrUnsupported)
 		}
-		seen[u], groups[u] = true, base.src[i]
+		seen[u], groups[u] = true, base.Src[i]
 	}
 	for _, yes := range seen {
 		if !yes {
@@ -68,13 +68,13 @@ func revolveExteriorPath(base facetedPayload, boundary revolveSectorBoundary,
 			if !ok {
 				return nil, 0, fmt.Errorf("%w: cone crossing has no unique source fan cell", ErrUnsupported)
 			}
-			best = revolvePointSegmentDistance(p, base.verts[edge+1], base.verts[(edge+1)%n+1])
+			best = revolvePointSegmentDistance(p, base.Verts[edge+1], base.Verts[(edge+1)%n+1])
 		} else {
 			for i := range n {
 				if groups[i] != edgeIndex {
 					continue
 				}
-				distance := revolvePointSegmentDistance(p, base.verts[i+1], base.verts[(i+1)%n+1])
+				distance := revolvePointSegmentDistance(p, base.Verts[i+1], base.Verts[(i+1)%n+1])
 				if distance < best {
 					best, edge = distance, i
 				}
@@ -100,7 +100,7 @@ func revolveExteriorPath(base facetedPayload, boundary revolveSectorBoundary,
 	full := make([]revolveSectorNode, 0, n+2)
 	var crossPosition [2]int
 	for i := range n {
-		full = append(full, revolveSectorNode{point: base.verts[i+1], groupToNext: groups[i], crossing: -1})
+		full = append(full, revolveSectorNode{point: base.Verts[i+1], groupToNext: groups[i], crossing: -1})
 		for k := range crossing {
 			if crossing[k].edge == i {
 				crossPosition[k] = len(full)

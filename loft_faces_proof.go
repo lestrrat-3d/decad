@@ -250,7 +250,7 @@ func proveLoftFaceBounds(ctx context.Context, sections []loftFaceSection,
 	// This whole-mesh sweep charges the exact source-map station coordinates
 	// against the stored float vertices, including both end caps. The wall
 	// matched-departure leg may also charge this rounding; duplication is safe.
-	roundArea, err := proofbound.PerturbedAreaUpperContext(ctx, mesh.verts, mesh.tris, maxRound)
+	roundArea, err := proofbound.PerturbedAreaUpperContext(ctx, mesh.Verts, mesh.Tris, maxRound)
 	if err != nil {
 		return facetedPayload{}, err
 	}
@@ -258,7 +258,7 @@ func proveLoftFaceBounds(ctx context.Context, sections []loftFaceSection,
 	sourceRegion := proofbound.ProductUpper(source.sourceAreaDelta, embedding.jacobianSum)
 	volumeGap := proofbound.AbsSumUpper(sourceRegion, wallLeg, twistVolume, roundSweep)
 	base := sections[0].slice.base
-	baseArea, err := proofbound.PerturbedAreaUpperContext(ctx, base.verts, base.tris, base.meshBound)
+	baseArea, err := proofbound.PerturbedAreaUpperContext(ctx, base.Verts, base.Tris, base.meshBound)
 	if err != nil {
 		return facetedPayload{}, err
 	}
@@ -268,7 +268,7 @@ func proveLoftFaceBounds(ctx context.Context, sections []loftFaceSection,
 		stretch2 := proofbound.ProductUpper(embedding.maps[i].Stretch, embedding.maps[i].Stretch)
 		endCapArea = proofbound.AbsSumUpper(endCapArea, proofbound.ProductUpper(baseArea, stretch2))
 	}
-	heldArea, err := proofbound.PerturbedAreaUpperContext(ctx, mesh.verts, mesh.tris, 0)
+	heldArea, err := proofbound.PerturbedAreaUpperContext(ctx, mesh.Verts, mesh.Tris, 0)
 	if err != nil {
 		return facetedPayload{}, err
 	}
@@ -277,14 +277,14 @@ func proveLoftFaceBounds(ctx context.Context, sections []loftFaceSection,
 		proofbound.IsNonFinite(areaSlack) {
 		return facetedPayload{}, fmt.Errorf("%w: face-fed loft proof has no finite bounds", ErrUnsupported)
 	}
-	mesh.vertexBound = make([]float64, len(mesh.verts))
+	mesh.vertexBound = make([]float64, len(mesh.Verts))
 	for i := range mesh.vertexBound {
 		mesh.vertexBound[i] = meshBound
 	}
 	mesh.meshBound = meshBound
 	mesh.volSymDiff = volumeGap
 	mesh.areaSlack = areaSlack
-	mesh.dPair = facetedSourceDiameterUpper(mesh.verts, meshBound)
+	mesh.dPair = facetedSourceDiameterUpper(mesh.Verts, meshBound)
 	mesh.contactAudited = true
 	return mesh, nil
 }
@@ -333,11 +333,11 @@ func proveLoftFaceEmbedding(ctx context.Context, sections []loftFaceSection,
 func orientLoftFaces(mesh *facetedPayload, base facetedPayload,
 	source *pointSectionRecord, jacobianSign int) error {
 	n := len(source.sourceStation)
-	if n < 3 || len(base.tris) <= n || jacobianSign == 0 {
+	if n < 3 || len(base.Tris) <= n || jacobianSign == 0 {
 		return fmt.Errorf("%w: loft source cap has no orientation", ErrUnsupported)
 	}
 	polygonSign := 0
-	for _, tri := range base.tris[n:] {
+	for _, tri := range base.Tris[n:] {
 		if tri[0] <= 0 || tri[1] <= 0 || tri[2] <= 0 ||
 			tri[0] > n || tri[1] > n || tri[2] > n {
 			return fmt.Errorf("%w: loft source cap has invalid station indices", ErrUnsupported)
@@ -353,8 +353,8 @@ func orientLoftFaces(mesh *facetedPayload, base facetedPayload,
 		polygonSign = sign
 	}
 	if polygonSign != jacobianSign {
-		for i := range mesh.tris {
-			mesh.tris[i][1], mesh.tris[i][2] = mesh.tris[i][2], mesh.tris[i][1]
+		for i := range mesh.Tris {
+			mesh.Tris[i][1], mesh.Tris[i][2] = mesh.Tris[i][2], mesh.Tris[i][1]
 		}
 		mesh.groups[len(mesh.groups)-2].reversed = false
 		mesh.groups[len(mesh.groups)-1].reversed = true

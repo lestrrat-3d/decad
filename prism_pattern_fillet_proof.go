@@ -72,7 +72,7 @@ func prismPatternFilletBody(ctx context.Context, body *Body, edges []*Edge,
 	for i := range vertexBound {
 		vertexBound[i] = bound
 	}
-	result := facetedPayload{verts: mesh.verts, tris: mesh.tris, src: mesh.src,
+	result := facetedPayload{Verts: mesh.verts, Tris: mesh.tris, Src: mesh.src,
 		groups: mesh.groups, vertexBound: vertexBound, axialSectionJoin: true,
 		contactAudited: true, meshBound: bound, volSymDiff: volumeGap,
 		areaSlack: areaSlack, dPair: facetedSourceDiameterUpper(mesh.verts, bound),

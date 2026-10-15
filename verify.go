@@ -631,7 +631,7 @@ func auditBoundary(b *Body) bool {
 				continue
 			case surfacegeom.KindFaceted:
 				fp, ok := b.n.Payload.(facetedPayload)
-				if ok && fp.contactAudited && len(faces) == 1 && len(fp.tris) > 0 && len(b.Edges()) == 0 {
+				if ok && fp.contactAudited && len(faces) == 1 && len(fp.Tris) > 0 && len(b.Edges()) == 0 {
 					continue
 				}
 				return false

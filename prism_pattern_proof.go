@@ -106,7 +106,7 @@ func prismPatternJoinedBody(ctx context.Context, d *Document, ref producerID,
 	for i := range vertexBound {
 		vertexBound[i] = bound
 	}
-	fp := facetedPayload{verts: mesh.verts, tris: mesh.tris, src: mesh.src, groups: mesh.groups,
+	fp := facetedPayload{Verts: mesh.verts, Tris: mesh.tris, Src: mesh.src, groups: mesh.groups,
 		axialSectionJoin: true,
 		prismPatternJoin: &prismPatternJoinRecord{blank: blank, source: source, parts: parts,
 			outlines: outlines, groups: groups, maxStep: maxStep, ringRound: ringRound,

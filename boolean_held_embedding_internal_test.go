@@ -168,7 +168,7 @@ func TestUnionKeepsTheHeldMeshEmbedded(t *testing.T) {
 		require.NoError(t, err, `union %d`, k+1)
 		pp, ok := tree.n.Payload.(facetedPayload)
 		require.True(t, ok)
-		require.Empty(t, heldMeshFolds(t, pp.verts, pp.tris), `union %d's held mesh is embedded`, k+1)
+		require.Empty(t, heldMeshFolds(t, pp.Verts, pp.Tris), `union %d's held mesh is embedded`, k+1)
 		require.Len(t, tree.Lumps(), 1)
 	}
 }
@@ -192,7 +192,7 @@ func TestPlacedFacetedBodyStaysEmbedded(t *testing.T) {
 	require.NoError(t, err)
 	pp, ok := placed.n.Payload.(facetedPayload)
 	require.True(t, ok)
-	require.Empty(t, heldMeshFolds(t, pp.verts, pp.tris))
+	require.Empty(t, heldMeshFolds(t, pp.Verts, pp.Tris))
 }
 
 // TestClusteredUnionChainSurvey runs a long clustered chain on request and
@@ -217,9 +217,9 @@ func TestClusteredUnionChainSurvey(t *testing.T) {
 		pp := tree.n.Payload.(facetedPayload)
 		folds := -1
 		if check {
-			folds = len(heldMeshFolds(t, pp.verts, pp.tris))
+			folds = len(heldMeshFolds(t, pp.Verts, pp.Tris))
 		}
-		t.Logf("union %2d: %v, %d facets, %d folds", k+1, time.Since(start), len(pp.tris), folds)
+		t.Logf("union %2d: %v, %d facets, %d folds", k+1, time.Since(start), len(pp.Tris), folds)
 		require.Len(t, tree.Lumps(), 1)
 	}
 }

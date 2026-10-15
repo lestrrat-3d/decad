@@ -81,24 +81,24 @@ func spiralCombineFaceRoles(ctx context.Context, blank, combined *Body,
 		mapped := make(map[*Face]*Face)
 		reverse := make(map[*Face]*Face)
 		groupMap := make(map[int]int)
-		if len(part.tris) != len(firstPart.tris) || start+len(part.tris) > len(combinedPart.tris) {
+		if len(part.Tris) != len(firstPart.Tris) || start+len(part.Tris) > len(combinedPart.Tris) {
 			return nil, fmt.Errorf("%w: combined tooth face layout changed", ErrUnsupported)
 		}
-		for j := range part.tris {
+		for j := range part.Tris {
 			if j%256 == 0 {
 				if err := ctx.Err(); err != nil {
 					return nil, err
 				}
 			}
-			if part.src[j] != firstPart.src[j] ||
-				firstPart.faceOf[j] < 0 || firstPart.faceOf[j] >= len(first.Faces()) ||
-				part.faceOf[j] < 0 || part.faceOf[j] >= len(copyFaces) ||
-				combinedPart.faceOf[start+j] < 0 || combinedPart.faceOf[start+j] >= len(allFaces) {
+			if part.Src[j] != firstPart.Src[j] ||
+				firstPart.FaceOf[j] < 0 || firstPart.FaceOf[j] >= len(first.Faces()) ||
+				part.FaceOf[j] < 0 || part.FaceOf[j] >= len(copyFaces) ||
+				combinedPart.FaceOf[start+j] < 0 || combinedPart.FaceOf[start+j] >= len(allFaces) {
 				return nil, fmt.Errorf("%w: copied spiral face lost source provenance", ErrUnsupported)
 			}
-			original := first.Faces()[firstPart.faceOf[j]]
-			copyFace := copyFaces[part.faceOf[j]]
-			compositeFace := allFaces[combinedPart.faceOf[start+j]]
+			original := first.Faces()[firstPart.FaceOf[j]]
+			copyFace := copyFaces[part.FaceOf[j]]
+			compositeFace := allFaces[combinedPart.FaceOf[start+j]]
 			if owner := combinedPart.spiralTools.owner[compositeFace]; owner != copyFace {
 				return nil, fmt.Errorf("%w: combined face owner changed", ErrUnsupported)
 			}
@@ -132,10 +132,10 @@ func spiralCombineFaceRoles(ctx context.Context, blank, combined *Body,
 			}
 			result.allowed[[2]int{pair[0], group}] = true
 		}
-		start += len(part.tris)
+		start += len(part.Tris)
 		result.groups[copyIndex] = groupMap
 	}
-	if start != len(combinedPart.tris) || len(result.roles) != 14*len(source.tools) ||
+	if start != len(combinedPart.Tris) || len(result.roles) != 14*len(source.tools) ||
 		len(result.allowed) != 24*len(source.tools) {
 		return nil, fmt.Errorf("%w: combined spiral face role count changed", ErrUnsupported)
 	}
@@ -240,7 +240,7 @@ func spiralInverseHeldResult(ctx context.Context, blankHeld *meshbool.BoolMesh,
 	if !ok {
 		return nil, nil, 0, 0, false
 	}
-	return spiralsector.InverseHeldResult(ctx, blankHeld, firstPart.verts, firstPart.meshBound, held, move, rec)
+	return spiralsector.InverseHeldResult(ctx, blankHeld, firstPart.Verts, firstPart.meshBound, held, move, rec)
 }
 
 // spiralPrepareCombinedUnion transports the first join's certified temporary
@@ -346,8 +346,8 @@ func spiralCombinedToolBody(ctx context.Context, d *Document, ref producerID,
 			return nil, err
 		}
 		part, ok := tooth.n.Payload.(facetedPayload)
-		if !ok || len(part.vertexBound) != len(part.verts) ||
-			len(part.src) != len(part.tris) || len(part.faceOf) != len(part.tris) {
+		if !ok || len(part.vertexBound) != len(part.Verts) ||
+			len(part.Src) != len(part.Tris) || len(part.FaceOf) != len(part.Tris) {
 			return nil, fmt.Errorf("%w: spiral tool has no complete held-mesh proof", ErrUnsupported)
 		}
 		if copyIndex != 0 {
@@ -355,40 +355,40 @@ func spiralCombinedToolBody(ctx context.Context, d *Document, ref producerID,
 				part.copyLineage == nil || part.copyLineage.source != source.tools[0] ||
 				part.copyLineage.motion != source.moves[copyIndex] ||
 				part.copyLineage.exact == nil || part.copyLineage.exact != source.copies.exact[copyIndex] ||
-				len(part.verts) != len(firstPart.verts) || len(part.tris) != len(firstPart.tris) {
+				len(part.Verts) != len(firstPart.Verts) || len(part.Tris) != len(firstPart.Tris) {
 				return nil, fmt.Errorf("%w: spiral copy lost its audited source", ErrUnsupported)
 			}
-			for j, tri := range part.tris {
+			for j, tri := range part.Tris {
 				if j%256 == 0 {
 					if err := ctx.Err(); err != nil {
 						return nil, err
 					}
 				}
-				if tri != firstPart.tris[j] {
+				if tri != firstPart.Tris[j] {
 					return nil, fmt.Errorf("%w: spiral copy changed the source facets", ErrUnsupported)
 				}
 			}
 		}
 		// The first audit proves the unplaced trim embedded. Each authenticated
 		// copy was built by PlaceMesh, which keeps its held image embedded.
-		if err := massmoment.AuditMesh(ctx, part.verts, part.tris,
+		if err := massmoment.AuditMesh(ctx, part.Verts, part.Tris,
 			copyIndex != 0 || part.contactAudited); err != nil {
 			return nil, err
 		}
-		vertexOffset, groupOffset := len(p.verts), len(p.groups)
-		p.verts = append(p.verts, part.verts...)
+		vertexOffset, groupOffset := len(p.Verts), len(p.groups)
+		p.Verts = append(p.Verts, part.Verts...)
 		p.vertexBound = append(p.vertexBound, part.vertexBound...)
 		p.groups = append(p.groups, part.groups...)
-		for i, tri := range part.tris {
-			p.tris = append(p.tris, [3]int{
+		for i, tri := range part.Tris {
+			p.Tris = append(p.Tris, [3]int{
 				tri[0] + vertexOffset, tri[1] + vertexOffset, tri[2] + vertexOffset,
 			})
-			p.src = append(p.src, part.src[i]+groupOffset)
+			p.Src = append(p.Src, part.Src[i]+groupOffset)
 		}
 		p.meshBound = max(p.meshBound, part.meshBound)
 		p.volSymDiff = proofbound.AbsSumUpper(p.volSymDiff, part.volSymDiff)
 		p.areaSlack = proofbound.AbsSumUpper(p.areaSlack, part.areaSlack)
-		for _, v := range part.verts {
+		for _, v := range part.Verts {
 			maxAbs = max(maxAbs, math.Abs(v.X), math.Abs(v.Y), math.Abs(v.Z))
 		}
 	}
@@ -414,12 +414,12 @@ func spiralCombinedToolBody(ctx context.Context, d *Document, ref producerID,
 			return nil, fmt.Errorf("%w: spiral copy lost its faceted source", ErrBooleanFailed)
 		}
 		original := tooth.Faces()
-		for i := range part.tris {
-			if part.faceOf[i] < 0 || part.faceOf[i] >= len(original) ||
-				composite.faceOf[triangle] < 0 || composite.faceOf[triangle] >= len(faces) {
+		for i := range part.Tris {
+			if part.FaceOf[i] < 0 || part.FaceOf[i] >= len(original) ||
+				composite.FaceOf[triangle] < 0 || composite.FaceOf[triangle] >= len(faces) {
 				return nil, fmt.Errorf("%w: combined tool lost a source face", ErrBooleanFailed)
 			}
-			copyFace, liveFace := faces[composite.faceOf[triangle]], original[part.faceOf[i]]
+			copyFace, liveFace := faces[composite.FaceOf[triangle]], original[part.FaceOf[i]]
 			if prior, found := meta.owner[copyFace]; found && prior != liveFace {
 				return nil, fmt.Errorf("%w: combined tool merged distinct source faces", ErrBooleanFailed)
 			}

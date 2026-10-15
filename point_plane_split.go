@@ -157,7 +157,7 @@ func pointPlaneOrder(base facetedPayload, a, b *pointPlaneLimit) int {
 	margin := pointPlaneMul(pointPlaneAdd(pointPlaneAbs(cx), pointPlaneAbs(cy)),
 		ratOfPointPlane(base.meshBound))
 	allPositive, allNegative := true, true
-	for _, far := range base.verts[1:] {
+	for _, far := range base.Verts[1:] {
 		x := pointPlaneSub(ratOfPointPlane(far.X), ratOfPointPlane(base.pointSection.apex.X))
 		y := pointPlaneSub(ratOfPointPlane(far.Y), ratOfPointPlane(base.pointSection.apex.Y))
 		v := pointPlaneAdd(pointPlaneMul(cx, x), pointPlaneMul(cy, y))
@@ -177,7 +177,7 @@ func pointPlaneOrder(base facetedPayload, a, b *pointPlaneLimit) int {
 // ribbon strictly inside both its length and its sweep span. The source
 // point-loft boundary allowance covers every curved point between stations.
 func validatePointPlane(base facetedPayload, plane *pointPlaneLimit) error {
-	if base.pointSection == nil || len(base.verts) < 4 || base.meshBound < 0 ||
+	if base.pointSection == nil || len(base.Verts) < 4 || base.meshBound < 0 ||
 		proofbound.IsNonFinite(base.meshBound) || proofbound.IsNonFinite(base.volSymDiff) ||
 		proofbound.IsNonFinite(base.areaSlack) {
 		return fmt.Errorf("%w: a planar point-loft split needs a proved source fan", ErrUnsupported)
@@ -186,7 +186,7 @@ func validatePointPlane(base facetedPayload, plane *pointPlaneLimit) error {
 	normalAllow := pointPlaneMul(plane.normalL1(), ratOfPointPlane(base.meshBound))
 	var denMin *big.Rat
 	reach := 0.0
-	for _, far := range base.verts[1:] {
+	for _, far := range base.Verts[1:] {
 		den := plane.denominator(apex, far)
 		lo := pointPlaneSub(den, normalAllow)
 		if lo.Sign() <= 0 || lo.Cmp(plane.d) <= 0 {
@@ -220,7 +220,7 @@ func validatePointPlane(base facetedPayload, plane *pointPlaneLimit) error {
 	zMargin := ratOfPointPlane(cutAllow)
 	z0 := pointPlaneAdd(ratOfPointPlane(plane.z0), zMargin)
 	z1 := pointPlaneSub(ratOfPointPlane(plane.z1), zMargin)
-	for _, far := range base.verts[1:] {
+	for _, far := range base.Verts[1:] {
 		q, err := pointPlaneMapExact(apex, far, plane)
 		if err != nil {
 			return err
@@ -358,13 +358,13 @@ func pointPlaneCapGroup(ref producerID, role string, plane *pointPlaneLimit,
 
 func pointPlaneRing(ctx context.Context, base facetedPayload, plane *pointPlaneLimit) (
 	[]r3.Vec, float64, error) {
-	vertices := make([]r3.Vec, len(base.verts)-1)
+	vertices := make([]r3.Vec, len(base.Verts)-1)
 	if plane == nil {
-		copy(vertices, base.verts[1:])
+		copy(vertices, base.Verts[1:])
 		return vertices, 0, nil
 	}
 	round := 0.0
-	for i, far := range base.verts[1:] {
+	for i, far := range base.Verts[1:] {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
 				return nil, 0, err
@@ -432,8 +432,8 @@ func buildPointPlaneSlab(ctx context.Context, d *Document, ref producerID,
 		pointPlaneOrder(base, record.lower, record.upper) != -1 {
 		return nil, fmt.Errorf("%w: point-loft slab planes are not ordered", ErrUnsupported)
 	}
-	n := len(base.verts) - 1
-	if n < 3 || len(base.tris) <= n || len(base.src) != len(base.tris) {
+	n := len(base.Verts) - 1
+	if n < 3 || len(base.Tris) <= n || len(base.Src) != len(base.Tris) {
 		return nil, fmt.Errorf("%w: point-loft source has no complete fan", ErrUnsupported)
 	}
 	lower, lowerRound, err := pointPlaneRing(ctx, base, record.lower)
@@ -445,7 +445,7 @@ func buildPointPlaneSlab(ctx context.Context, d *Document, ref producerID,
 		return nil, err
 	}
 	if record.upper == nil {
-		copy(upper, base.verts[1:])
+		copy(upper, base.Verts[1:])
 	}
 	round := max(lowerRound, upperRound)
 	hasApex := record.lower == nil
@@ -471,7 +471,7 @@ func buildPointPlaneSlab(ctx context.Context, d *Document, ref producerID,
 	}
 	groups = append(groups, pointPlaneCapGroup(ref, provenance.RoleCapEnd,
 		record.upper, base, record.upper == nil, upperReversed))
-	triangles := make([][3]int, 0, 2*n+2*(len(base.tris)-n))
+	triangles := make([][3]int, 0, 2*n+2*(len(base.Tris)-n))
 	sources := make([]int, 0, cap(triangles))
 	for i := range n {
 		if i%256 == 0 {
@@ -479,12 +479,12 @@ func buildPointPlaneSlab(ctx context.Context, d *Document, ref producerID,
 				return nil, err
 			}
 		}
-		side := base.tris[i]
+		side := base.Tris[i]
 		if side[0] != 0 || side[1] <= 0 || side[2] <= 0 {
 			return nil, fmt.Errorf("%w: point-loft side has no apex fan", ErrUnsupported)
 		}
 		b, c := side[1]-1, side[2]-1
-		source := base.src[i]
+		source := base.Src[i]
 		if source < 0 || source >= len(base.groups)-1 {
 			return nil, fmt.Errorf("%w: point-loft side has no source role", ErrUnsupported)
 		}
@@ -498,7 +498,7 @@ func buildPointPlaneSlab(ctx context.Context, d *Document, ref producerID,
 			[3]int{b, upperOffset + c, c})
 		sources = append(sources, source, source)
 	}
-	for _, capTri := range base.tris[n:] {
+	for _, capTri := range base.Tris[n:] {
 		if capTri[0] == 0 || capTri[1] == 0 || capTri[2] == 0 {
 			return nil, fmt.Errorf("%w: point-loft far cap includes its apex", ErrUnsupported)
 		}
@@ -513,7 +513,7 @@ func buildPointPlaneSlab(ctx context.Context, d *Document, ref producerID,
 			sources = append(sources, lowerGroup)
 		}
 	}
-	if layout, ok := pointPlaneSlabCapLayout(base.tris[:n], len(triangles), upperOffset, hasApex); ok {
+	if layout, ok := pointPlaneSlabCapLayout(base.Tris[:n], len(triangles), upperOffset, hasApex); ok {
 		err = loftmesh.LoftCrossingAuditWithCaps(ctx, vertices, triangles, layout)
 	} else {
 		err = loftmesh.LoftCrossingAudit(proofbound.NewWorkBudget(ctx), vertices, triangles)
@@ -538,7 +538,7 @@ func buildPointPlaneSlab(ctx context.Context, d *Document, ref producerID,
 	}
 	volumeGap := proofbound.AbsSumUpper(base.volSymDiff,
 		proofbound.SweptVolumeAllow(round, areaRound))
-	baseArea, err := proofbound.PerturbedAreaUpperContext(ctx, base.verts, base.tris, 0)
+	baseArea, err := proofbound.PerturbedAreaUpperContext(ctx, base.Verts, base.Tris, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -558,7 +558,7 @@ func buildPointPlaneSlab(ctx context.Context, d *Document, ref producerID,
 	}
 	recordCopy := record
 	return buildFacetedBody(ctx, d, ref, facetedPayload{
-		verts: vertices, tris: triangles, src: sources, groups: groups,
+		Verts: vertices, Tris: triangles, Src: sources, groups: groups,
 		vertexBound: vertexBounds, meshBound: meshBound,
 		volSymDiff: volumeGap, areaSlack: areaSlack,
 		dPair: base.dPair, xform: r3.Identity(), pointPlane: &recordCopy,

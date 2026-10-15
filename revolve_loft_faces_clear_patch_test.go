@@ -89,8 +89,8 @@ func TestCurvedClearPatchRefusesUnprovedClaims(t *testing.T) {
 	t.Run("changed body facet", func(t *testing.T) {
 		original := trimmed.n.Payload
 		changed := original.(facetedPayload)
-		changed.verts = slices.Clone(changed.verts)
-		changed.verts[0].X += 1
+		changed.Verts = slices.Clone(changed.Verts)
+		changed.Verts[0].X += 1
 		trimmed.n.Payload = changed
 		defer func() { trimmed.n.Payload = original }()
 		refusesEntry(t)
@@ -98,8 +98,8 @@ func TestCurvedClearPatchRefusesUnprovedClaims(t *testing.T) {
 	t.Run("changed body facet after context", func(t *testing.T) {
 		original := trimmed.n.Payload
 		changed := original.(facetedPayload)
-		changed.verts = slices.Clone(changed.verts)
-		changed.verts[0].X += 1
+		changed.Verts = slices.Clone(changed.Verts)
+		changed.Verts[0].X += 1
 		trimmed.n.Payload = changed
 		defer func() { trimmed.n.Payload = original }()
 		refuses(t, classifier)

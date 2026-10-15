@@ -23,7 +23,7 @@ func TestCurvedLoftFacesRealCopySeparation(t *testing.T) {
 	require.Equal(t, turn, placed.copyLineage.motion)
 
 	shell := func(p facetedPayload) shellseparation.Shell {
-		return shellseparation.Shell{Verts: p.verts, Tris: p.tris,
+		return shellseparation.Shell{Verts: p.Verts, Tris: p.Tris,
 			VertexBound: p.vertexBound, MeshBound: p.meshBound}
 	}
 	moves := []r3.Transform{r3.Identity(), turn}
@@ -32,8 +32,8 @@ func TestCurvedLoftFacesRealCopySeparation(t *testing.T) {
 		nil, shellseparation.SourceShell,
 		shellseparation.AxisX, true))
 	held, err := shellseparation.PlacedHeldShells(t.Context(), []shellseparation.HeldCopy{
-		{Verts: original.verts, Tris: original.tris, Linked: true},
-		{Verts: placed.verts, Tris: placed.tris, Linked: true},
+		{Verts: original.Verts, Tris: original.Tris, Linked: true},
+		{Verts: placed.Verts, Tris: placed.Tris, Linked: true},
 	}, moves)
 	require.NoError(t, err)
 	require.True(t, shellseparation.Separate(t.Context(), held, moves,

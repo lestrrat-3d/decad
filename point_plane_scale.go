@@ -80,7 +80,7 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 	pointSlab := fp.pointPlane != nil && fp.pointPlane.base.pointSection != nil
 	booleanSource := fp.booleanSimilaritySource && b.Kind() == BodySolid && b.IsSolid()
 	if (!pointSlab && !fp.similaritySource && !booleanSource) || !fp.xform.IsValid() ||
-		len(fp.verts) == 0 || len(fp.vertexBound) != len(fp.verts) {
+		len(fp.Verts) == 0 || len(fp.vertexBound) != len(fp.Verts) {
 		return nil, fmt.Errorf("%w: this body has no certified similarity source", ErrUnsupported)
 	}
 	if booleanSource && !certifiedBooleanSimilaritySource(fp, len(b.Faces())) {
@@ -98,21 +98,21 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 		}
 	}
 	budget := proofbound.NewWorkBudget(ctx)
-	mesh, err := facetproof.ScaleMesh(ctx, budget, fp.verts, fp.tris, fp.vertexBound,
+	mesh, err := facetproof.ScaleMesh(ctx, budget, fp.Verts, fp.Tris, fp.vertexBound,
 		fp.volSymDiff, fp.areaSlack, anchor, s)
 	if err != nil {
 		return nil, err
 	}
 	next := fp
 	next.smoothRectSection = nil
-	next.verts, next.tris = mesh.Verts, mesh.Tris
+	next.Verts, next.Tris = mesh.Verts, mesh.Tris
 	next.vertexBound, next.meshBound = mesh.VertexBound, mesh.MeshBound
 	next.volSymDiff, next.areaSlack = mesh.VolSymDiff, mesh.AreaSlack
 	// Scaling the old diameter does not include the held vertices' new
 	// rounding or an embedding adjustment. The centroid's yardstick must
 	// cover both the true body and this rounded held body.
 	next.dPair = max(proofbound.ProductUpper(fp.dPair, s),
-		facetedSourceDiameterUpper(next.verts, next.meshBound))
+		facetedSourceDiameterUpper(next.Verts, next.meshBound))
 	next.xform = r3.Identity()
 	next.pointPlaneSourceEligible = false
 	next.axialSectionJoin = false
@@ -129,7 +129,7 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 	next.loftMirrorCylinderBore = nil
 	next.revolveLoftJoin = nil
 	next.revolveLoftSector = nil
-	next.loftFacesPrimitive = false
+	next.LoftFacesPrimitive = false
 	next.loftFacesCap = nil
 	next.loftFacesToe = nil
 	next.loftFacesTrim = nil
@@ -198,8 +198,8 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 // certifiedBooleanSimilaritySource checks the private Boolean result's
 // geometry, proof terms, and source-group mapping before ScaleMesh consumes it.
 func certifiedBooleanSimilaritySource(fp facetedPayload, faceCount int) bool {
-	if len(fp.tris) == 0 || len(fp.tris) != len(fp.src) ||
-		len(fp.tris) != len(fp.faceOf) || len(fp.groups) == 0 || faceCount == 0 ||
+	if len(fp.Tris) == 0 || len(fp.Tris) != len(fp.Src) ||
+		len(fp.Tris) != len(fp.FaceOf) || len(fp.groups) == 0 || faceCount == 0 ||
 		fp.meshBound < 0 || fp.volSymDiff < 0 || fp.areaSlack < 0 || fp.dPair <= 0 ||
 		proofbound.IsNonFinite(fp.meshBound) || proofbound.IsNonFinite(fp.volSymDiff) ||
 		proofbound.IsNonFinite(fp.areaSlack) || proofbound.IsNonFinite(fp.dPair) {
@@ -210,15 +210,15 @@ func certifiedBooleanSimilaritySource(fp facetedPayload, faceCount int) bool {
 			return false
 		}
 	}
-	if fp.meshBound < facetproof.FacetBoundMax(fp.tris, fp.vertexBound) {
+	if fp.meshBound < facetproof.FacetBoundMax(fp.Tris, fp.vertexBound) {
 		return false
 	}
-	for _, source := range fp.src {
+	for _, source := range fp.Src {
 		if source < 0 || source >= len(fp.groups) {
 			return false
 		}
 	}
-	for _, face := range fp.faceOf {
+	for _, face := range fp.FaceOf {
 		if face < 0 || face >= faceCount {
 			return false
 		}

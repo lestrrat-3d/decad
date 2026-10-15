@@ -275,8 +275,8 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 	capArea := pointcone.CapArea(far, caps)
 	capFactor := max(1, proofbound.ProductUpper(upperLip, upperLip),
 		proofbound.ProductUpper(lowerLip, lowerLip))
-	baseArea, err := proofbound.PerturbedAreaUpperContext(ctx, base.verts,
-		base.tris, base.meshBound)
+	baseArea, err := proofbound.PerturbedAreaUpperContext(ctx, base.Verts,
+		base.Tris, base.meshBound)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -411,7 +411,7 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 	for i := range vertexBound {
 		vertexBound[i] = bound
 	}
-	payload := facetedPayload{verts: mesh.verts, tris: mesh.tris, src: mesh.src,
+	payload := facetedPayload{Verts: mesh.verts, Tris: mesh.tris, Src: mesh.src,
 		groups: mesh.groups, vertexBound: vertexBound, contactAudited: true,
 		meshBound: bound, volSymDiff: volumeGap, areaSlack: areaSlack,
 		dPair: base.dPair, xform: r3.Identity()}

@@ -738,7 +738,7 @@ func TestMotionTranslationPoseChargesFacetedReplacement(t *testing.T) {
 		delta, err := facetedPlacementDelta(fp.xform, composed)
 		require.NoError(t, err)
 		eta := motionPlacementFloat(placed.eta)
-		for _, vertex := range fp.verts {
+		for _, vertex := range fp.Verts {
 			gap := motionPlacementGap(delta, vertex, shift)
 			if gap.Sign() == 0 {
 				continue

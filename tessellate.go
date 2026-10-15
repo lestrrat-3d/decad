@@ -1163,15 +1163,15 @@ func tessellateFaceted(ctx context.Context, b *Body, fp facetedPayload, chord fl
 	if chord < fp.meshBound {
 		return nil, &facetedBoundError{requested: chord, held: fp.meshBound}
 	}
-	src, err := facetproof.RestateSources(ctx, topobuild.Faces(&b.n), fp.faceOf,
-		len(fp.verts), len(fp.vertexBound), len(fp.tris))
+	src, err := facetproof.RestateSources(ctx, topobuild.Faces(&b.n), fp.FaceOf,
+		len(fp.Verts), len(fp.vertexBound), len(fp.Tris))
 	if err != nil {
 		return nil, err
 	}
 	m := bornMesh(&Mesh{
 		n: topo.Mesh{
-			Vertices:   fp.verts,
-			Triangles:  fp.tris,
+			Vertices:   fp.Verts,
+			Triangles:  fp.Tris,
 			AreaSlack:  fp.areaSlack,
 			VolSymDiff: fp.volSymDiff,
 			SymDiffOK:  true,

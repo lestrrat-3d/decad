@@ -104,10 +104,10 @@ func certifiedScaleSource(ctx context.Context, b *Body, chord float64) (facetedP
 	return facetedPayload{
 		similaritySource: true,
 		contactAudited:   true,
-		verts:            mesh.n.Vertices,
+		Verts:            mesh.n.Vertices,
 		vertexBound:      vertexBound,
-		tris:             mesh.n.Triangles,
-		src:              source,
+		Tris:             mesh.n.Triangles,
+		Src:              source,
 		groups:           groups,
 		meshBound:        facetproof.FacetBoundMax(mesh.n.Triangles, vertexBound),
 		volSymDiff:       mesh.n.VolSymDiff,

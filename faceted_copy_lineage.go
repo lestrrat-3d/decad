@@ -82,30 +82,30 @@ type facetedCopySet struct {
 }
 
 func facetedShell(p facetedPayload) shellseparation.Shell {
-	return shellseparation.Shell{Verts: p.verts, Tris: p.tris,
+	return shellseparation.Shell{Verts: p.Verts, Tris: p.Tris,
 		VertexBound: p.vertexBound, MeshBound: p.meshBound}
 }
 
 func facetedCopyFaceOwners(source, image *Body, first, placed facetedPayload) (map[*Face]*Face, bool) {
-	if len(first.tris) != len(placed.tris) || len(first.src) != len(first.tris) ||
-		len(placed.src) != len(placed.tris) || len(first.faceOf) != len(first.tris) ||
-		len(placed.faceOf) != len(placed.tris) || len(first.verts) != len(placed.verts) {
+	if len(first.Tris) != len(placed.Tris) || len(first.Src) != len(first.Tris) ||
+		len(placed.Src) != len(placed.Tris) || len(first.FaceOf) != len(first.Tris) ||
+		len(placed.FaceOf) != len(placed.Tris) || len(first.Verts) != len(placed.Verts) {
 		return nil, false
 	}
 	sourceFaces, imageFaces := source.Faces(), image.Faces()
 	owners := make(map[*Face]*Face, len(sourceFaces))
 	reverse := make(map[*Face]*Face, len(imageFaces))
-	for i, triangle := range first.tris {
+	for i, triangle := range first.Tris {
 		want := triangle
 		if placed.copyLineage.motion.IsReflection() {
 			want[1], want[2] = want[2], want[1]
 		}
-		if placed.tris[i] != want || first.src[i] != placed.src[i] ||
-			first.faceOf[i] < 0 || first.faceOf[i] >= len(sourceFaces) ||
-			placed.faceOf[i] < 0 || placed.faceOf[i] >= len(imageFaces) {
+		if placed.Tris[i] != want || first.Src[i] != placed.Src[i] ||
+			first.FaceOf[i] < 0 || first.FaceOf[i] >= len(sourceFaces) ||
+			placed.FaceOf[i] < 0 || placed.FaceOf[i] >= len(imageFaces) {
 			return nil, false
 		}
-		original, copyFace := sourceFaces[first.faceOf[i]], imageFaces[placed.faceOf[i]]
+		original, copyFace := sourceFaces[first.FaceOf[i]], imageFaces[placed.FaceOf[i]]
 		if owner := owners[original]; owner != nil && owner != copyFace {
 			return nil, false
 		}
@@ -166,7 +166,7 @@ func certifyFacetedCopies(ctx context.Context, tools []*Body) (*facetedCopySet, 
 			return nil, fmt.Errorf("%w: copied tool %d lost its faceted payload", ErrUnsupported, i+1)
 		}
 		shells[i] = facetedShell(part)
-		heldCopies[i] = shellseparation.HeldCopy{Verts: part.verts, Tris: part.tris, Linked: true}
+		heldCopies[i] = shellseparation.HeldCopy{Verts: part.Verts, Tris: part.Tris, Linked: true}
 		if i == 0 {
 			continue
 		}

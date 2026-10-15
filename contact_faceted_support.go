@@ -71,14 +71,14 @@ func sourceBoundedFacetedExtent(ctx context.Context, b *Body,
 		return boundedFacetedExtent{}, false, nil
 	}
 	pp, ok := b.n.Payload.(facetedPayload)
-	if !ok || len(pp.verts) == 0 || !measurement.FiniteValues(pp.meshBound, pp.volSymDiff) ||
+	if !ok || len(pp.Verts) == 0 || !measurement.FiniteValues(pp.meshBound, pp.volSymDiff) ||
 		pp.meshBound < 0 || pp.volSymDiff < 0 {
 		return boundedFacetedExtent{}, false, nil
 	}
 	budget := proofbound.NewWorkBudget(ctx)
 	var proof boundedFacetedExtent
 	proof.bound = proofarith.MustDyOf(pp.meshBound)
-	for i, v := range pp.verts {
+	for i, v := range pp.Verts {
 		if err := budget.Step(); err != nil {
 			return boundedFacetedExtent{}, false, err
 		}
@@ -164,9 +164,9 @@ func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
 		valid[i] = face.n.HeldPlanar && face.n.Surface.Kind() == surfacegeom.KindFaceted
 	}
 	result, proven, err := facetproof.ProveAxisSupport(ctx, facetproof.AxisSupportInput{
-		Verts: pp.verts, ExactSourceVerts: pp.exactSourceVerts,
-		Tris: pp.tris, ExactSourceTris: pp.exactSourceTris,
-		FaceOf: pp.faceOf, SourceGroup: pp.src, FaceValid: valid,
+		Verts: pp.Verts, ExactSourceVerts: pp.exactSourceVerts,
+		Tris: pp.Tris, ExactSourceTris: pp.exactSourceTris,
+		FaceOf: pp.FaceOf, SourceGroup: pp.Src, FaceValid: valid,
 		GroupCount: len(pp.groups), MeshBound: pp.meshBound,
 		VolSymDiff: pp.volSymDiff, Xform: pp.xform, Pose: pose,
 		Lower: pp.lowerSupport, Axis: axis, Side: side,

@@ -17,7 +17,7 @@ import (
 // faceted surface identity.
 func loftCylinderTagCaps(pp *facetedPayload, blank *Body, groups [2]int,
 	levels [2]float64, ref producerID) error {
-	if blank == nil || len(pp.tris) != len(pp.src) || groups[0] == groups[1] {
+	if blank == nil || len(pp.Tris) != len(pp.Src) || groups[0] == groups[1] {
 		return fmt.Errorf("%w: loft/cylinder caps have no separate source groups", ErrUnsupported)
 	}
 	roles := [2]string{provenance.RoleCapStart, provenance.RoleCapEnd}
@@ -52,13 +52,13 @@ func loftCylinderTagCaps(pp *facetedPayload, blank *Body, groups [2]int,
 			return fmt.Errorf("%w: loft/cylinder blank cap has no axial normal", ErrUnsupported)
 		}
 		count := 0
-		for i, tri := range pp.tris {
-			if pp.src[i] != group {
+		for i, tri := range pp.Tris {
+			if pp.Src[i] != group {
 				continue
 			}
 			count++
 			for _, index := range tri {
-				if index < 0 || index >= len(pp.verts) || pp.verts[index].Z != levels[cap] {
+				if index < 0 || index >= len(pp.Verts) || pp.Verts[index].Z != levels[cap] {
 					return fmt.Errorf("%w: loft/cylinder cap facet leaves its source plane", ErrUnsupported)
 				}
 			}

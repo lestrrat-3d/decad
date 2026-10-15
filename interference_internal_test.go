@@ -226,12 +226,12 @@ func TestCoplanarRelationCancellationIsBounded(t *testing.T) {
 func TestInterferencePairDiameterUsesAllFacetedPayloadVertices(t *testing.T) {
 	t.Parallel()
 	a := bornBody(&Body{n: topo.Body{
-		Payload: facetedPayload{verts: []r3.Vec{
+		Payload: facetedPayload{Verts: []r3.Vec{
 			r3.NewVec(0, 0, 0),
 			r3.NewVec(100, 0, 0),
 		}},
 	}})
-	b := bornBody(&Body{n: topo.Body{Payload: facetedPayload{verts: []r3.Vec{r3.NewVec(0, 0, 0)}}}})
+	b := bornBody(&Body{n: topo.Body{Payload: facetedPayload{Verts: []r3.Vec{r3.NewVec(0, 0, 0)}}}})
 
 	diameter, err := interferencePairDiameter(t.Context(), a, b)
 	require.NoError(t, err)

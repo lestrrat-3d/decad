@@ -58,8 +58,8 @@ func prismUnionBossShellAuthenticate(result *Body, fp facetedPayload, plateBody,
 	opening *Face, t float64) (prismUnionBossShellSource, bool) {
 	var src prismUnionBossShellSource
 	if plateBody == nil || bossBody == nil || opening == nil || opening.n.Body != bodyNode(result) ||
-		len(fp.verts) != len(fp.vertexBound) || len(fp.tris) != len(fp.src) ||
-		len(fp.tris) != len(fp.faceOf) || fp.volSymDiff < 0 ||
+		len(fp.Verts) != len(fp.vertexBound) || len(fp.Tris) != len(fp.Src) ||
+		len(fp.Tris) != len(fp.FaceOf) || fp.volSymDiff < 0 ||
 		proofbound.IsNonFinite(fp.volSymDiff) {
 		return src, false
 	}
@@ -152,19 +152,19 @@ func prismUnionBossShellAuthenticate(result *Body, fp facetedPayload, plateBody,
 	}
 	var topVerts map[int]struct{}
 	var topTris [][3]int
-	for fi, faceIdx := range fp.faceOf {
+	for fi, faceIdx := range fp.FaceOf {
 		if faceIdx != openingIdx {
 			continue
 		}
 		if topVerts == nil {
 			topVerts = map[int]struct{}{}
-			src.topGroup = fp.src[fi]
+			src.topGroup = fp.Src[fi]
 		}
-		if fp.src[fi] != src.topGroup {
+		if fp.Src[fi] != src.topGroup {
 			return src, false
 		}
-		topTris = append(topTris, fp.tris[fi])
-		for _, vi := range fp.tris[fi] {
+		topTris = append(topTris, fp.Tris[fi])
+		for _, vi := range fp.Tris[fi] {
 			topVerts[vi] = struct{}{}
 		}
 	}
@@ -173,8 +173,8 @@ func prismUnionBossShellAuthenticate(result *Body, fp facetedPayload, plateBody,
 		fp.groups[src.topGroup].origins[0] != refOf(CapEnd(bossBody)) {
 		return src, false
 	}
-	for fi, group := range fp.src {
-		if group == src.topGroup && fp.faceOf[fi] != openingIdx {
+	for fi, group := range fp.Src {
+		if group == src.topGroup && fp.FaceOf[fi] != openingIdx {
 			return src, false
 		}
 	}
@@ -189,7 +189,7 @@ func prismUnionBossShellAuthenticate(result *Body, fp facetedPayload, plateBody,
 	for i, p := range corners {
 		found := -1
 		for vi := range topVerts {
-			if fp.verts[vi] == p {
+			if fp.Verts[vi] == p {
 				found = vi
 				break
 			}
@@ -348,7 +348,7 @@ func buildPrismUnionBossShell(ctx context.Context, source *Body, fp facetedPaylo
 	rootAreaSlack := proofbound.ProductUpper(
 		proofbound.ProductUpper(4, perimeter), proofbound.ProductUpper(t, proofbound.RatFloatUp(proofbound.PiUpper)))
 	payload := facetedPayload{
-		verts: mesh.verts, tris: mesh.tris, src: mesh.src, groups: mesh.groups,
+		Verts: mesh.verts, Tris: mesh.tris, Src: mesh.src, groups: mesh.groups,
 		vertexBound: mesh.beta, meshBound: bound, volSymDiff: volumeBound,
 		areaSlack: proofbound.AbsSumUpper(fp.areaSlack, rootAreaSlack),
 		dPair:     facetedSourceDiameterUpper(mesh.verts, bound),
@@ -360,7 +360,7 @@ func buildPrismUnionBossShell(ctx context.Context, source *Body, fp facetedPaylo
 func prismUnionBossShellMeshOf(ctx context.Context, ref producerID, fp facetedPayload,
 	src prismUnionBossShellSource, t float64) (prismUnionBossShellMesh, error) {
 	var out prismUnionBossShellMesh
-	out.verts = append(out.verts, fp.verts...)
+	out.verts = append(out.verts, fp.Verts...)
 	out.beta = append(out.beta, fp.vertexBound...)
 	out.groups = append(out.groups, fp.groups...)
 	addGroup := func(role string, planar bool) int {
@@ -369,12 +369,12 @@ func prismUnionBossShellMeshOf(ctx context.Context, ref producerID, fp facetedPa
 		return i
 	}
 	// The source's top cap is replaced by the opening's narrow horizontal rim.
-	for i, tri := range fp.tris {
-		if fp.src[i] == src.topGroup {
+	for i, tri := range fp.Tris {
+		if fp.Src[i] == src.topGroup {
 			continue
 		}
 		out.tris = append(out.tris, tri)
-		out.src = append(out.src, fp.src[i])
+		out.src = append(out.src, fp.Src[i])
 	}
 	add := func(v r3.Vec, beta float64) int {
 		i := len(out.verts)

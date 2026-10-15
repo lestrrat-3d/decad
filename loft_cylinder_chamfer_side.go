@@ -59,17 +59,17 @@ var middleSidePrepHook func(*middleSidePrep)
 func newMiddleSidePrep(fp facetedPayload, mesh *joinedMesh, source loftCylinderChamferSource,
 	ideal []proofarith.Xpt, middle [2]int, clipBound float64) (*middleSidePrep, error) {
 	if middle[0] < 0 || middle[1] > len(mesh.tris) || middle[0] >= middle[1] ||
-		len(fp.src) != len(fp.tris) || proofbound.IsNonFinite(clipBound) {
+		len(fp.Src) != len(fp.Tris) || proofbound.IsNonFinite(clipBound) {
 		return nil, fmt.Errorf("%w: cap chamfer has no retained middle side", ErrUnsupported)
 	}
 	faces, err := loftCylinderChamferToothFaces(source)
 	if err != nil {
 		return nil, err
 	}
-	old := loftmesh.NewLoftAuditData(fp.verts, fp.tris)
-	oldBoxes := make([][2]r3.Vec, len(fp.tris))
-	for i, tri := range fp.tris {
-		oldBoxes[i] = meshbool.TriBox(fp.verts, tri)
+	old := loftmesh.NewLoftAuditData(fp.Verts, fp.Tris)
+	oldBoxes := make([][2]r3.Vec, len(fp.Tris))
+	for i, tri := range fp.Tris {
+		oldBoxes[i] = meshbool.TriBox(fp.Verts, tri)
 	}
 	oldGrid, err := loftmesh.ChamferBoxGridOf(oldBoxes, source.z0, source.z1)
 	if err != nil {
@@ -77,7 +77,7 @@ func newMiddleSidePrep(fp facetedPayload, mesh *joinedMesh, source loftCylinderC
 	}
 	// A whole old boundary component cannot hide inside a middle collar:
 	// every old vertex is on a cap plane, outside every strict middle prism.
-	for _, p := range fp.verts {
+	for _, p := range fp.Verts {
 		if p.Z != source.z0 && p.Z != source.z1 {
 			return nil, fmt.Errorf("%w: joined source has an interior-height vertex", ErrUnsupported)
 		}
@@ -107,7 +107,7 @@ func loftCylinderChamferMiddleSideReach(ctx context.Context, fp facetedPayload,
 
 // serialFrom runs the facets first..middle[1] in order on the real grid.
 func (prep *middleSidePrep) serialFrom(ctx context.Context, first int) error {
-	st := newMiddleState(prep.grid, meshbool.NewParityMesh(prep.fp.verts, prep.fp.tris))
+	st := newMiddleState(prep.grid, meshbool.NewParityMesh(prep.fp.Verts, prep.fp.Tris))
 	for i := first; i < prep.middle[1]; i++ {
 		if i%32 == 0 && ctx.Err() != nil {
 			return ctx.Err()
@@ -185,7 +185,7 @@ func (prep *middleSidePrep) middleFacet(ctx context.Context, i int, st *middleSt
 			}
 			baseRounded = true
 		}
-		if err := loftmesh.ChamferMiddlePrism(ctx, len(prep.fp.tris), prep.old, prep.oldBoxes, st.grid,
+		if err := loftmesh.ChamferMiddlePrism(ctx, len(prep.fp.Tris), prep.old, prep.oldBoxes, st.grid,
 			st.parity, base, q, shift, corners); err != nil {
 			if ctx.Err() != nil {
 				return ctx.Err()
@@ -383,7 +383,7 @@ func loftCylinderChamferReach(ctx context.Context, in *loftCylinderChamferReachI
 	defer cancelAll()
 	states := make(chan *middleState, workers)
 	for range workers {
-		states <- newMiddleState(prep.grid.Fork(), meshbool.NewParityMesh(in.fp.verts, in.fp.tris))
+		states <- newMiddleState(prep.grid.Fork(), meshbool.NewParityMesh(in.fp.Verts, in.fp.Tris))
 	}
 	logs := make([][]loftmesh.ChamferGridQuery, facets)
 	poll := func() error {

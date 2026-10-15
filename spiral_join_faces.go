@@ -13,7 +13,7 @@ func spiralTrimFaceGroup(tooth *Body, sourceGroup int) int {
 	if !ok {
 		return -1
 	}
-	return facetedtopology.TrimGroupFace(p.src, p.faceOf, len(tooth.Faces()), sourceGroup)
+	return facetedtopology.TrimGroupFace(p.Src, p.FaceOf, len(tooth.Faces()), sourceGroup)
 }
 
 func spiralJoinGroups(blank, tooth *Body, proof *spiralFirstJoinSource) (spiralStarGroups, bool) {
