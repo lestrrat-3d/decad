@@ -144,13 +144,13 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 	motions := make([]r3.Transform, len(sources))
 	charges := make([]massmoment.MapCharge, len(sources))
 	motions[0] = r3.Identity()
-	if sources[0].pointCone != record || sources[0].xform != r3.Identity() {
+	if sources[0].pointCone != record || sources[0].Xform != r3.Identity() {
 		return nil, nil, fmt.Errorf("%w: first sector lost its source", ErrUnsupported)
 	}
 	for i := 1; i < len(sources); i++ {
 		placed := sources[i]
 		if placed.revolveLoftSector == nil || placed.revolveLoftSector.source != record ||
-			placed.xform != placed.revolveLoftSector.motion {
+			placed.Xform != placed.revolveLoftSector.motion {
 			return nil, nil, fmt.Errorf("%w: placed sector lost its source", ErrUnsupported)
 		}
 		motions[i] = placed.revolveLoftSector.motion
@@ -200,8 +200,8 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 		for j := i + 1; j < len(plans); j++ {
 			seamCost := proofbound.AbsSumUpper(plans[i].crossingBound,
 				plans[j].crossingBound,
-				massmoment.PlacedBound(sources[i].meshBound, charges[i]),
-				massmoment.PlacedBound(sources[j].meshBound, charges[j]))
+				massmoment.PlacedBound(sources[i].MeshBound, charges[i]),
+				massmoment.PlacedBound(sources[j].MeshBound, charges[j]))
 			if !(minRadius > 0 && seamCost < minRadius/2) {
 				return nil, nil, fmt.Errorf("%w: root sectors have no angular error bound", ErrUnsupported)
 			}
@@ -276,7 +276,7 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 	capFactor := max(1, proofbound.ProductUpper(upperLip, upperLip),
 		proofbound.ProductUpper(lowerLip, lowerLip))
 	baseArea, err := proofbound.PerturbedAreaUpperContext(ctx, base.Verts,
-		base.Tris, base.meshBound)
+		base.Tris, base.MeshBound)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -297,7 +297,7 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 		if err != nil {
 			return nil, nil, err
 		}
-		seamAllowance := proofbound.AbsSumUpper(base.meshBound, sectionSag,
+		seamAllowance := proofbound.AbsSumUpper(base.MeshBound, sectionSag,
 			section.coneGap, plan.crossingBound, toolGap, plan.placedRound)
 		if plan.snap > seamAllowance {
 			return nil, nil, fmt.Errorf("%w: placed cap misses the finite root patch (sector %d snap %.9g allowance %.9g)",
@@ -306,7 +306,7 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 		stretch := proofbound.AbsSumUpper(1, plan.charge.Stretch)
 		farTerm := proofbound.ProductUpper(proofbound.ProductUpper(farRound, stretch), lip)
 		baseTerm := proofbound.ProductUpper(proofbound.AbsSumUpper(
-			massmoment.PlacedBound(base.meshBound, plan.charge),
+			massmoment.PlacedBound(base.MeshBound, plan.charge),
 			plan.crossingBound, plan.placedRound), lip)
 		capTerm := proofbound.ProductUpper(max(upperBound, lowerBound), stretch)
 		otherBound := proofbound.AbsSumUpper(plan.snap, plan.nodeRound,
@@ -323,14 +323,14 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 			proofbound.ProductUpper(proofbound.ProductUpper(farRound, stretch), lip),
 			proofbound.ProductUpper(proofbound.AbsSumUpper(
 				plan.crossingBound, plan.placedRound), lip), section.coneGap, toolGap))
-		volumePart := proofbound.AbsSumUpper(base.volSymDiff,
+		volumePart := proofbound.AbsSumUpper(base.VolSymDiff,
 			proofbound.ProductUpper(proofbound.ProductUpper(capArea,
 				proofbound.AbsSumUpper(upperBound, lowerBound)), capFactor))
-		areaPart := proofbound.AbsSumUpper(baseArea, base.areaSlack,
+		areaPart := proofbound.AbsSumUpper(baseArea, base.AreaSlack,
 			proofbound.ProductUpper(proofbound.AbsSumUpper(1,
 				proofbound.ProductUpper(upperLip, upperLip),
 				proofbound.ProductUpper(lowerLip, lowerLip)),
-				proofbound.AbsSumUpper(capArea, base.areaSlack)))
+				proofbound.AbsSumUpper(capArea, base.AreaSlack)))
 		if i != 0 {
 			volumePart = proofbound.ProductUpper(
 				proofbound.AbsSumUpper(1, plan.charge.Volume), volumePart)
@@ -412,9 +412,9 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 		vertexBound[i] = bound
 	}
 	payload := facetedPayload{Verts: mesh.verts, Tris: mesh.tris, Src: mesh.src,
-		groups: mesh.groups, vertexBound: vertexBound, contactAudited: true,
-		meshBound: bound, volSymDiff: volumeGap, areaSlack: areaSlack,
-		dPair: base.dPair, xform: r3.Identity()}
+		groups: mesh.groups, VertexBound: vertexBound, contactAudited: true,
+		MeshBound: bound, VolSymDiff: volumeGap, AreaSlack: areaSlack,
+		DPair: base.DPair, Xform: r3.Identity()}
 	body, err := buildFacetedBody(ctx, d, ref, payload)
 	if err != nil {
 		return nil, nil, err

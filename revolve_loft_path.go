@@ -80,7 +80,7 @@ func revolveExteriorPath(base facetedPayload, boundary revolveSectorBoundary,
 				}
 			}
 		}
-		allow := proofbound.AbsSumUpper(base.meshBound, bound)
+		allow := proofbound.AbsSumUpper(base.MeshBound, bound)
 		if edge < 0 || !(best <= allow) || !proofbound.FiniteVec(p) {
 			return nil, 0, fmt.Errorf("%w: certified root contact is outside its source fan edge", ErrUnsupported)
 		}

@@ -51,10 +51,10 @@ func twistShellFacetedBody(ctx context.Context, d *Document, ref producerID,
 		{origins: []provenance.Ref{{Producer: ref, Role: "rim(0)"}}, planar: true},
 	}
 	payload := facetedPayload{
-		Verts: held.Verts, vertexBound: vertexBound, Tris: held.Tris,
-		Src: held.Src, groups: groups, meshBound: bound,
-		volSymDiff: held.VolumeBound, areaSlack: held.AreaSlack,
-		dPair: facetedSourceDiameterUpper(held.Verts, bound), xform: r3.Identity(),
+		Verts: held.Verts, VertexBound: vertexBound, Tris: held.Tris,
+		Src: held.Src, groups: groups, MeshBound: bound,
+		VolSymDiff: held.VolumeBound, AreaSlack: held.AreaSlack,
+		DPair: facetedSourceDiameterUpper(held.Verts, bound), Xform: r3.Identity(),
 		contactAudited: true,
 	}
 	return buildFacetedBodyWithProof(ctx, d, ref, payload, audit, Measurement{}, nil)

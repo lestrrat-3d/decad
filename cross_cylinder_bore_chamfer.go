@@ -33,7 +33,7 @@ func tryCrossCylinderBoreMouthChamfer(ctx context.Context, body *Body,
 	if rec == nil {
 		return nil, false, nil
 	}
-	if fp.xform != r3.Identity() || len(edges) != 1 ||
+	if fp.Xform != r3.Identity() || len(edges) != 1 ||
 		edges[0].n.Start != edges[0].n.End || len(body.Edges()) != 4 {
 		return nil, true, fmt.Errorf("%w: the cross-bore chamfer needs one complete unplaced mouth loop", ErrUnsupported)
 	}
@@ -91,8 +91,8 @@ func tryCrossCylinderBoreMouthChamfer(ctx context.Context, body *Body,
 	mesh.groups[4].origins[0].Producer = ref
 	result, err := buildFacetedBodyWithProof(ctx, documentHandle(body.n.Doc), ref, facetedPayload{
 		Verts: mesh.verts, Tris: mesh.tris, Src: mesh.src, groups: mesh.groups,
-		vertexBound: vertexBound, meshBound: bound, volSymDiff: volumeGap,
-		areaSlack: areaSlack, dPair: dPair, contactAudited: true, xform: r3.Identity(),
+		VertexBound: vertexBound, MeshBound: bound, VolSymDiff: volumeGap,
+		AreaSlack: areaSlack, DPair: dPair, contactAudited: true, Xform: r3.Identity(),
 	}, audit, volume, heldVolume)
 	return result, true, err
 }

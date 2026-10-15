@@ -57,7 +57,7 @@ func certifyRevolveLoftFacesSource(ctx context.Context, blank, tooth *Body) (
 		return nil, false, nil
 	}
 	p, ok := tooth.n.Payload.(facetedPayload)
-	if !ok || p.xform != r3.Identity() || p.loftFacesTrim == nil ||
+	if !ok || p.Xform != r3.Identity() || p.loftFacesTrim == nil ||
 		!revolveLoftFacesTrimCurrent(tooth, p.loftFacesTrim) {
 		return nil, false, nil
 	}
@@ -137,7 +137,7 @@ func revolveLoftFacesTrimCurrent(tooth *Body, trim *loftFacesTrimRecord) bool {
 		(trim.base.loftFacesCap != nil && trim.base.loftFacesCap.tangent != nil)) {
 		return false
 	}
-	if p.xform != r3.Identity() || trim == nil || trim.source == nil ||
+	if p.Xform != r3.Identity() || trim == nil || trim.source == nil ||
 		!pointSourceCurrent(trim.source) ||
 		!revolveLoftFacesConeCurrent(trim.toeTool, trim.toe) ||
 		!revolveLoftFacesConeCurrent(trim.heelTool, trim.heel) ||

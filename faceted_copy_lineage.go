@@ -41,10 +41,10 @@ func bindFacetedCopyLineage(image, source *Body, targetPlacement r3.Transform, d
 	}
 	base, baseOK := source.n.Payload.(facetedPayload)
 	placed, placedOK := image.n.Payload.(facetedPayload)
-	if !baseOK || !placedOK || placed.xform != targetPlacement {
+	if !baseOK || !placedOK || placed.Xform != targetPlacement {
 		return
 	}
-	inverse, err := base.xform.Inverse()
+	inverse, err := base.Xform.Inverse()
 	if err != nil {
 		return
 	}
@@ -54,7 +54,7 @@ func bindFacetedCopyLineage(image, source *Body, targetPlacement r3.Transform, d
 	}
 	placed.copyLineage = &facetedCopyLineage{
 		source: source, sourceProducer: source.n.Origin.Producer,
-		sourcePlacement: base.xform, targetPlacement: targetPlacement,
+		sourcePlacement: base.Xform, targetPlacement: targetPlacement,
 		motion: motion, direct: direct,
 	}
 	if direct {
@@ -83,7 +83,7 @@ type facetedCopySet struct {
 
 func facetedShell(p facetedPayload) shellseparation.Shell {
 	return shellseparation.Shell{Verts: p.Verts, Tris: p.Tris,
-		VertexBound: p.vertexBound, MeshBound: p.meshBound}
+		VertexBound: p.VertexBound, MeshBound: p.MeshBound}
 }
 
 func facetedCopyFaceOwners(source, image *Body, first, placed facetedPayload) (map[*Face]*Face, bool) {
@@ -173,15 +173,15 @@ func certifyFacetedCopies(ctx context.Context, tools []*Body) (*facetedCopySet, 
 		record := part.copyLineage
 		if record == nil || record.source != source ||
 			record.sourceProducer != source.n.Origin.Producer ||
-			record.sourcePlacement != first.xform ||
-			record.targetPlacement != part.xform || !record.motion.IsValid() {
+			record.sourcePlacement != first.Xform ||
+			record.targetPlacement != part.Xform || !record.motion.IsValid() {
 			return nil, fmt.Errorf("%w: copied tool %d lost its source placement", ErrUnsupported, i+1)
 		}
-		inverse, err := first.xform.Inverse()
+		inverse, err := first.Xform.Inverse()
 		if err != nil {
 			return nil, fmt.Errorf("%w: copied tool %d has no source inverse", ErrUnsupported, i+1)
 		}
-		motion, err := inverse.Then(part.xform)
+		motion, err := inverse.Then(part.Xform)
 		if err != nil || motion != record.motion {
 			return nil, fmt.Errorf("%w: copied tool %d changed its recorded motion", ErrUnsupported, i+1)
 		}
@@ -229,7 +229,7 @@ func certifyFacetedCopies(ctx context.Context, tools []*Body) (*facetedCopySet, 
 				return nil, fmt.Errorf("%w: copied tool %d lost its faceted payload", ErrUnsupported, i+1)
 			}
 			for j, placementBound := range held[i].VertexBound {
-				if placementBound > part.vertexBound[j] {
+				if placementBound > part.VertexBound[j] {
 					return nil, fmt.Errorf("%w: copied tool %d lost its held placement bound", ErrUnsupported, i+1)
 				}
 			}

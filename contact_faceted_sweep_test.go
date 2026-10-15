@@ -199,7 +199,7 @@ func TestSweepPairFacetedFloorRefusesUnprovedPath(t *testing.T) {
 	require.NoError(t, err)
 	reflected, err := Transform(t.Context(), union, reflection)
 	require.NoError(t, err)
-	require.Positive(t, reflected.n.Payload.(facetedPayload).meshBound)
+	require.Positive(t, reflected.n.Payload.(facetedPayload).MeshBound)
 	require.Empty(t, reflected.n.Payload.(facetedPayload).exactSourceVerts)
 	unproved, err := doc.SweepPair(t.Context(), floor, reflected, still,
 		facetedSweepPath(start, facetedSweepPose(t, r3.Vec{Z: -10})),

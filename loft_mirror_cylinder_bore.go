@@ -35,7 +35,7 @@ func tryLoftMirrorCylinderBoreCut(ctx context.Context, op meshbool.OperationKind
 	}
 	joined, ok := target.n.Payload.(facetedPayload)
 	if !ok || joined.loftMirrorCylinderJoin == nil || !joined.contactAudited ||
-		joined.xform != r3.Identity() {
+		joined.Xform != r3.Identity() {
 		return nil, false, nil
 	}
 	record := joined.loftMirrorCylinderJoin
@@ -47,7 +47,7 @@ func tryLoftMirrorCylinderBoreCut(ctx context.Context, op meshbool.OperationKind
 	}
 	lower, ok := record.lowerHalf.n.Payload.(facetedPayload)
 	if !ok || lower.loftCylinderJoin == nil || !lower.contactAudited ||
-		lower.xform != r3.Identity() {
+		lower.Xform != r3.Identity() {
 		return nil, true, fmt.Errorf("%w: mirrored circular Join lost its lower-half proof", ErrUnsupported)
 	}
 	blank, ok := record.blank.n.Payload.(prismPayload)
@@ -87,7 +87,7 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 	record *loftMirrorCylinderJoinRecord, lowerBody *Body) (*Body, error) {
 	lower, ok := lowerBody.n.Payload.(facetedPayload)
 	if !ok || lower.loftCylinderBore == nil || !lower.contactAudited ||
-		lower.xform != r3.Identity() || record.source.lower == nil {
+		lower.Xform != r3.Identity() || record.source.lower == nil {
 		return nil, fmt.Errorf("%w: mirrored circular bore lost its lower annulus", ErrUnsupported)
 	}
 	loft, ok := record.source.lower.n.Payload.(loftPayload)
@@ -124,7 +124,7 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 	}
 	vertexMap := make([]int, len(upper.Verts))
 	verts := append([]r3.Vec(nil), lower.Verts...)
-	vertexBound := append([]float64(nil), lower.vertexBound...)
+	vertexBound := append([]float64(nil), lower.VertexBound...)
 	for i, vertex := range upper.Verts {
 		if vertex.Z == middle {
 			index, exists := midVertices[vertex]
@@ -133,7 +133,7 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 			}
 			vertexMap[i] = index
 			vertexBound[index] = max(vertexBound[index],
-				proofbound.AbsSumUpper(upper.vertexBound[i], record.bridgeBound))
+				proofbound.AbsSumUpper(upper.VertexBound[i], record.bridgeBound))
 			continue
 		}
 		if vertex.Z <= middle {
@@ -142,7 +142,7 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 		vertexMap[i] = len(verts)
 		verts = append(verts, vertex)
 		vertexBound = append(vertexBound,
-			proofbound.AbsSumUpper(upper.vertexBound[i], record.bridgeBound))
+			proofbound.AbsSumUpper(upper.VertexBound[i], record.bridgeBound))
 	}
 	if !loftMirrorCylinderCapsOppose(lower, upper, vertexMap, lowCaps[1], lowCaps[1]) {
 		return nil, fmt.Errorf("%w: reflected circular bore middle annuli do not tile equally", ErrUnsupported)
@@ -198,11 +198,11 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 		loftmesh.MaxLoftAuditTriangles, loftCylinderAuditMaxScans); err != nil {
 		return nil, err
 	}
-	bound := max(lower.meshBound,
-		proofbound.AbsSumUpper(upper.meshBound, record.bridgeBound))
-	volumeGap := proofbound.AbsSumUpper(lower.volSymDiff, upper.volSymDiff, record.bridgeVolume)
-	areaSlack := proofbound.AbsSumUpper(lower.areaSlack, upper.areaSlack,
-		proofbound.ProductUpper(2, max(lower.areaSlack, upper.areaSlack)))
+	bound := max(lower.MeshBound,
+		proofbound.AbsSumUpper(upper.MeshBound, record.bridgeBound))
+	volumeGap := proofbound.AbsSumUpper(lower.VolSymDiff, upper.VolSymDiff, record.bridgeVolume)
+	areaSlack := proofbound.AbsSumUpper(lower.AreaSlack, upper.AreaSlack,
+		proofbound.ProductUpper(2, max(lower.AreaSlack, upper.AreaSlack)))
 	diameter := facetedSourceDiameterUpper(verts, bound)
 	if bound > 0.1 || proofbound.IsNonFinite(bound) || proofbound.IsNonFinite(volumeGap) ||
 		proofbound.IsNonFinite(areaSlack) || proofbound.IsNonFinite(diameter) {
@@ -247,8 +247,8 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 		}
 	}
 	fp := facetedPayload{Verts: verts, Tris: tris, Src: src, groups: groups,
-		vertexBound: vertexBound, meshBound: bound, volSymDiff: volumeGap,
-		areaSlack: areaSlack, dPair: diameter, contactAudited: true, xform: r3.Identity(),
+		VertexBound: vertexBound, MeshBound: bound, VolSymDiff: volumeGap,
+		AreaSlack: areaSlack, DPair: diameter, contactAudited: true, Xform: r3.Identity(),
 		loftMirrorCylinderBore: &loftMirrorCylinderBoreRecord{
 			join: record, lowerBore: lowerBody, capGroups: capGroups,
 			outer: outer, inner: inner, wallGroups: wallGroups,

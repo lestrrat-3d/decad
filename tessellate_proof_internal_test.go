@@ -267,25 +267,25 @@ func TestFacetedRestatementPublishesItsPayloadsOwnProofRecord(t *testing.T) {
 	require.NoError(t, err)
 	fp, ok := drilled.n.Payload.(facetedPayload)
 	require.True(t, ok)
-	require.Positive(t, fp.meshBound)
-	require.Positive(t, fp.volSymDiff)
+	require.Positive(t, fp.MeshBound)
+	require.Positive(t, fp.VolSymDiff)
 
 	mesh, err := tessellateContext(t.Context(), drilled, units.Millimeters(1), VerifyAll)
 	require.NoError(t, err)
-	require.Equal(t, fp.meshBound, mesh.n.Bound)
-	require.Equal(t, fp.volSymDiff, mesh.n.VolSymDiff)
-	require.Equal(t, fp.areaSlack, mesh.n.AreaSlack)
+	require.Equal(t, fp.MeshBound, mesh.n.Bound)
+	require.Equal(t, fp.VolSymDiff, mesh.n.VolSymDiff)
+	require.Equal(t, fp.AreaSlack, mesh.n.AreaSlack)
 	require.True(t, mesh.n.SymDiffOK)
 
 	// The restatement publishes the payload's own per-vertex record, and each
 	// face states the largest facet bound over its own facets
 	// (docs/faceted-vertex-bounds-design.md §4.4): the drilled faces carry the
 	// rim's bound and the untouched ones keep their own.
-	require.Equal(t, fp.vertexBound, mesh.n.VertexBound)
+	require.Equal(t, fp.VertexBound, mesh.n.VertexBound)
 	want := map[*Face]float64{}
 	for i, tri := range mesh.n.Triangles {
 		f := mesh.n.Source[i]
-		want[faceHandle(f)] = max(want[faceHandle(f)], fp.vertexBound[tri[0]], fp.vertexBound[tri[1]], fp.vertexBound[tri[2]])
+		want[faceHandle(f)] = max(want[faceHandle(f)], fp.VertexBound[tri[0]], fp.VertexBound[tri[1]], fp.VertexBound[tri[2]])
 	}
 	require.Len(t, mesh.n.FaceBound, len(want))
 	finer := 0
@@ -293,7 +293,7 @@ func TestFacetedRestatementPublishesItsPayloadsOwnProofRecord(t *testing.T) {
 		d, ok := mesh.sourceBound(faceNode(f))
 		require.True(t, ok)
 		require.Equal(t, w, d)
-		if d < fp.meshBound {
+		if d < fp.MeshBound {
 			finer++
 		}
 	}

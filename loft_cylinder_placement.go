@@ -257,14 +257,14 @@ func tryPlacedLoftCylinderUnion(ctx context.Context, d *Document, ref producerID
 	} else if _, ok := b.n.Payload.(prismPayload); ok {
 		blank, teeth = b, []*Body{a}
 	} else if fp, ok := a.n.Payload.(facetedPayload); ok && fp.loftCylinderJoin != nil &&
-		fp.loftCylinderJoin.placement != nil && fp.xform == fp.loftCylinderJoin.placement.pose {
+		fp.loftCylinderJoin.placement != nil && fp.Xform == fp.loftCylinderJoin.placement.pose {
 		placement := fp.loftCylinderJoin.placement
 		blank, teeth, pose = fp.loftCylinderJoin.blank,
 			append(append([]*Body(nil), fp.loftCylinderJoin.teeth...), b), placement.pose
 		localBlank = placement.blank
 		localTeeth = append([]*Body(nil), placement.teeth...)
 	} else if fp, ok := b.n.Payload.(facetedPayload); ok && fp.loftCylinderJoin != nil &&
-		fp.loftCylinderJoin.placement != nil && fp.xform == fp.loftCylinderJoin.placement.pose {
+		fp.loftCylinderJoin.placement != nil && fp.Xform == fp.loftCylinderJoin.placement.pose {
 		placement := fp.loftCylinderJoin.placement
 		blank, teeth, pose = fp.loftCylinderJoin.blank,
 			append(append([]*Body(nil), fp.loftCylinderJoin.teeth...), a), placement.pose
@@ -309,7 +309,7 @@ func tryPlacedLoftCylinderUnion(ctx context.Context, d *Document, ref producerID
 		return nil, true, err
 	}
 	placed, ok := world.n.Payload.(facetedPayload)
-	if !ok || placed.meshBound > 0.1 || proofbound.IsNonFinite(placed.meshBound) {
+	if !ok || placed.MeshBound > 0.1 || proofbound.IsNonFinite(placed.MeshBound) {
 		return nil, false, nil
 	}
 	record := *localPayload.loftCylinderJoin
@@ -328,7 +328,7 @@ func tryPlacedLoftCylinderBoreCut(ctx context.Context, d *Document, ref producer
 		return nil, false, nil
 	}
 	placement := joined.loftCylinderJoin.placement
-	if joined.xform != placement.pose || !joined.contactAudited ||
+	if joined.Xform != placement.pose || !joined.contactAudited ||
 		placement.blank == nil || len(placement.teeth) == 0 ||
 		!loftCylinderPlacedSourcesMatch(placement.teeth) {
 		return nil, false, nil
@@ -422,7 +422,7 @@ func tryPlacedLoftCylinderBoreCut(ctx context.Context, d *Document, ref producer
 		return nil, true, err
 	}
 	placed, ok := world.n.Payload.(facetedPayload)
-	if !ok || placed.meshBound > 0.1 || proofbound.IsNonFinite(placed.meshBound) {
+	if !ok || placed.MeshBound > 0.1 || proofbound.IsNonFinite(placed.MeshBound) {
 		return nil, false, nil
 	}
 	return world, true, nil

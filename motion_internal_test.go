@@ -733,9 +733,9 @@ func TestMotionTranslationPoseChargesFacetedReplacement(t *testing.T) {
 		require.NoError(t, err)
 		placed, err := run.place(pose, 0, make([]*motionPlaced, len(run.movers)))
 		require.NoError(t, err)
-		composed, err := fp.xform.Then(pose.result.Pose)
+		composed, err := fp.Xform.Then(pose.result.Pose)
 		require.NoError(t, err)
-		delta, err := facetedPlacementDelta(fp.xform, composed)
+		delta, err := facetedPlacementDelta(fp.Xform, composed)
 		require.NoError(t, err)
 		eta := motionPlacementFloat(placed.eta)
 		for _, vertex := range fp.Verts {

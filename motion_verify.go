@@ -411,7 +411,7 @@ func (r *motionRun) readBodies(groups [][]*Body) {
 		mv.r0 = moverRecordRadius(r.ctx, mv.body)
 		mv.heldRadius = math.Inf(1)
 		if fp, ok := mv.body.n.Payload.(facetedPayload); ok {
-			mv.heldRadius = motionbound.HeldRadiusUpper(fp.Verts, fp.meshBound)
+			mv.heldRadius = motionbound.HeldRadiusUpper(fp.Verts, fp.MeshBound)
 		}
 		mv.area = proofbound.AbsSumUpper(mv.body.n.Area.Value.Base(), mv.body.n.Area.Bound.Base())
 		mv.sigma = motionbound.BasisSigmaLower(mv.body.n.Payload.Transform())

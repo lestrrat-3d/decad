@@ -55,11 +55,11 @@ func certifyRevolveLoftSector(blank, sector *Body) (*revolveLoftSectorCertificat
 		return nil, false
 	}
 	fp, ok := sector.n.Payload.(facetedPayload)
-	if !ok || fp.xform != r3.Identity() || fp.pointCone == nil ||
+	if !ok || fp.Xform != r3.Identity() || fp.pointCone == nil ||
 		fp.pointCone.lower == nil || fp.pointCone.upper == nil ||
 		fp.pointCone.base.pointSection == nil ||
 		fp.pointCone.base.pointSection.apex != (r3.Vec{}) ||
-		fp.pointCone.base.xform != r3.Identity() {
+		fp.pointCone.base.Xform != r3.Identity() {
 		return nil, false
 	}
 	trim := fp.pointCone
@@ -176,7 +176,7 @@ func certifyRevolveConnectorBoundary(record *pointSectionRecord,
 // departure against the reported cone, including the finite meridian gap.
 func revolveImplicitDisplacement(section revolveSectionCertificate,
 	base facetedPayload) (float64, bool) {
-	if !proofbound.FiniteVec(r3.Vec{X: base.meshBound}) || base.meshBound < 0 ||
+	if !proofbound.FiniteVec(r3.Vec{X: base.MeshBound}) || base.MeshBound < 0 ||
 		section.rootStart.U <= 0 || len(base.Verts) < 4 {
 		return 0, false
 	}
@@ -188,13 +188,13 @@ func revolveImplicitDisplacement(section revolveSectionCertificate,
 		minX, maxX = min(minX, world.X), max(maxX, world.X)
 		reach = max(reach, proofbound.DvLenUpper(proofbound.HeldDelta(world, r3.Vec{})))
 	}
-	minX = math.Nextafter(minX-base.meshBound, math.Inf(-1))
-	maxX = proofbound.AbsSumUpper(maxX, base.meshBound)
+	minX = math.Nextafter(minX-base.MeshBound, math.Inf(-1))
+	maxX = proofbound.AbsSumUpper(maxX, base.MeshBound)
 	if !(minX > section.rootCone.Origin.X) {
 		return 0, false
 	}
 	slope := section.coneSection().Slope
-	d := proofbound.AbsSumUpper(base.meshBound,
+	d := proofbound.AbsSumUpper(base.MeshBound,
 		revolveMeridianExtensionGap(section, minX, maxX))
 	r := proofbound.AbsSumUpper(reach, d)
 	cost := proofbound.ProductUpper(proofbound.AbsSumUpper(1,

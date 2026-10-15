@@ -37,7 +37,7 @@ func TestPointConeTrimRejectsRoundTrippedPointLoft(t *testing.T) {
 			require.NoError(t, err)
 			fp, ok := back.n.Payload.(facetedPayload)
 			require.True(t, ok)
-			require.Equal(t, r3.Identity(), fp.xform)
+			require.Equal(t, r3.Identity(), fp.Xform)
 			require.True(t, fp.pointSection == nil, "a nonidentity delta must drop the source record")
 
 			got, err := Cut(t.Context(), back, pointLoftConeTool(t, doc, 5))
@@ -83,6 +83,6 @@ func TestPointConeOutsideWitnessRejectsUncertainContact(t *testing.T) {
 	cone := &pointConeLimit{apex: big.NewRat(13, 1), slope: big.NewRat(1, 1)}
 	base := facetedPayload{Verts: []r3.Vec{{}, {X: 8, Y: 5.00001}}}
 	require.True(t, pointConeHasOutsideWitness(base, cone))
-	base.meshBound = 0.001
+	base.MeshBound = 0.001
 	require.False(t, pointConeHasOutsideWitness(base, cone))
 }

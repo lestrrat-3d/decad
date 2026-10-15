@@ -16,7 +16,7 @@ import (
 func loftCylinderChamferExteriorLineage(fp facetedPayload,
 	source loftCylinderChamferSource, capIndex int) error {
 	if capIndex < 0 || capIndex > 1 || len(source.outer[capIndex]) < 3 ||
-		fp.meshBound < 0 || proofbound.IsNonFinite(fp.meshBound) {
+		fp.MeshBound < 0 || proofbound.IsNonFinite(fp.MeshBound) {
 		return fmt.Errorf("%w: cap has no exterior contour correspondence", ErrUnsupported)
 	}
 	outer := source.outer[capIndex]
@@ -34,7 +34,7 @@ func loftCylinderChamferExteriorLineage(fp facetedPayload,
 		}
 		lp, ok := body.n.Payload.(loftPayload)
 		if !ok || !lp.AuthenticatedReconstruction || lp.Proof.FacetDeparture < 0 ||
-			lp.Proof.FacetDeparture > fp.meshBound || len(lp.Verts)%2 != 0 ||
+			lp.Proof.FacetDeparture > fp.MeshBound || len(lp.Verts)%2 != 0 ||
 			len(lp.Segment) != 1 {
 			return fmt.Errorf("%w: cap tooth has no bounded source contour", ErrUnsupported)
 		}

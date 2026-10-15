@@ -420,7 +420,7 @@ func TestPrismUnionCancellationLeavesDocumentUnchanged(t *testing.T) {
 // chaining" consequence and §15's own required test: a second Union
 // consuming the first's analytic result is itself admitted (a prismPayload
 // operand, same plane), so its own Exactness/Bound are governed purely by
-// §7's rule — never by an accumulated tessellation meshBound, which does not
+// §7's rule — never by an accumulated tessellation MeshBound, which does not
 // exist on this lineage at all.
 //
 // The first union CUTS NOTHING (b sits strictly inside a), so first carries no
@@ -430,7 +430,7 @@ func TestPrismUnionCancellationLeavesDocumentUnchanged(t *testing.T) {
 // (non-Pythagorean-exact) float and whose cut parameters §7 charges. The volume
 // is still exactly correct (1880 mm^3, the closed-form area 188 mm^2 times the
 // 10 mm height); what §7/§8 promise is that its Bound stays at this ordinary
-// per-mechanism scale, never the large, accumulating meshBound a chained mesh
+// per-mechanism scale, never the large, accumulating MeshBound a chained mesh
 // boolean would compose.
 //
 // A chain whose FIRST result already cut carries that cut's displacement into
@@ -455,7 +455,7 @@ func TestPrismUnionChainedBooleanCarriesNoAccumulatedBound(t *testing.T) {
 	require.NoError(t, err)
 	decadtest.Measures(t, "chained union volume", secondVol, units.CubicMillimeters(1880.0))
 	// An ordinary moments-engine bound is many orders of magnitude below the
-	// coarsest meshBound a chained mesh boolean could ever report (the
+	// coarsest MeshBound a chained mesh boolean could ever report (the
 	// boolean chord tolerance floor alone is diameter * 2e-5).
 	require.Less(t, boundMM3(t, secondVol), 1e-9)
 

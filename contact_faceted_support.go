@@ -16,7 +16,7 @@ import (
 
 func certifyFacetedUnionLowerSupport(ctx context.Context, result, a, b *Body) error {
 	pp, ok := result.n.Payload.(facetedPayload)
-	if !ok || pp.meshBound <= 0 || len(pp.exactSourceVerts) != 0 {
+	if !ok || pp.MeshBound <= 0 || len(pp.exactSourceVerts) != 0 {
 		return nil
 	}
 	for candidate, operands := range [][2]*Body{{a, b}, {b, a}} {
@@ -71,13 +71,13 @@ func sourceBoundedFacetedExtent(ctx context.Context, b *Body,
 		return boundedFacetedExtent{}, false, nil
 	}
 	pp, ok := b.n.Payload.(facetedPayload)
-	if !ok || len(pp.Verts) == 0 || !measurement.FiniteValues(pp.meshBound, pp.volSymDiff) ||
-		pp.meshBound < 0 || pp.volSymDiff < 0 {
+	if !ok || len(pp.Verts) == 0 || !measurement.FiniteValues(pp.MeshBound, pp.VolSymDiff) ||
+		pp.MeshBound < 0 || pp.VolSymDiff < 0 {
 		return boundedFacetedExtent{}, false, nil
 	}
 	budget := proofbound.NewWorkBudget(ctx)
 	var proof boundedFacetedExtent
-	proof.bound = proofarith.MustDyOf(pp.meshBound)
+	proof.bound = proofarith.MustDyOf(pp.MeshBound)
 	for i, v := range pp.Verts {
 		if err := budget.Step(); err != nil {
 			return boundedFacetedExtent{}, false, err
@@ -167,8 +167,8 @@ func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
 		Verts: pp.Verts, ExactSourceVerts: pp.exactSourceVerts,
 		Tris: pp.Tris, ExactSourceTris: pp.exactSourceTris,
 		FaceOf: pp.FaceOf, SourceGroup: pp.Src, FaceValid: valid,
-		GroupCount: len(pp.groups), MeshBound: pp.meshBound,
-		VolSymDiff: pp.volSymDiff, Xform: pp.xform, Pose: pose,
+		GroupCount: len(pp.groups), MeshBound: pp.MeshBound,
+		VolSymDiff: pp.VolSymDiff, Xform: pp.Xform, Pose: pose,
 		Lower: pp.lowerSupport, Axis: axis, Side: side,
 	})
 	if err != nil || !proven {

@@ -464,7 +464,7 @@ one, so its occupied-volume difference is at most
 rounded upward once. The faceted builder integrates held volume and first
 moments exactly and uses this difference with the box diagonal to bound
 centroid displacement. Each true face area is below the sum
-`2R²+4R(xhi−xlo)+2aR`; `areaSlack` is the larger of that and the audited
+`2R²+4R(xhi−xlo)+2aR`; `AreaSlack` is the larger of that and the audited
 held mesh area upper bound. This bounds each source face's area difference.
 
 ## 8. Complete prism cap-loop blends
@@ -1653,7 +1653,7 @@ Proof rules:
 A build-time question has no `Suspect`. Any proof the builder cannot finish is
 `ErrUnsupported`.
 
-`facetedPayload` stays excluded even when `meshBound == 0`, except for RX6's
+`facetedPayload` stays excluded even when `MeshBound == 0`, except for RX6's
 authenticated routes. Its groups retain provenance and a planar flag, not
 general analytic carrier or trim intent. The loft/cylinder cap route reads
 the immutable Union or Bore Cut source record and requires both complete

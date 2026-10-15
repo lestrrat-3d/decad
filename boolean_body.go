@@ -151,11 +151,11 @@ type facetedPayload struct {
 	// revolveLoftSector identifies one rigid copy of a trimmed point loft.
 	revolveLoftSector *revolveLoftSectorPlacement
 	Verts             []r3.Vec
-	// vertexBound is β(v) per held vertex (docs/faceted-vertex-bounds-design.md
+	// VertexBound is β(v) per held vertex (docs/faceted-vertex-bounds-design.md
 	// §2, §4.1), composed by the boolean that built the payload (§3) and
 	// carried through every placement. The boolean always writes it; a nil
 	// record is an invariant failure, never a fallback.
-	vertexBound []float64
+	VertexBound []float64
 	Tris        [][3]int
 	Src         []int // per-facet source-group id
 	groups      []facetGroup
@@ -166,7 +166,7 @@ type facetedPayload struct {
 
 	// exactSourceVerts and exactSourceTris name the zero-bound Boolean mesh
 	// before translation-only placement rounded its held coordinates. They
-	// certify its true occupied boundary under xform; ordinary positive-bound
+	// certify its true occupied boundary under Xform; ordinary positive-bound
 	// Boolean results and non-translation placements carry neither record.
 	exactSourceVerts []r3.Vec
 	exactSourceTris  [][3]int
@@ -175,34 +175,34 @@ type facetedPayload struct {
 	// Placement drops this proof until source-frame transfer is certified.
 	lowerSupport *facetproof.LowerSupport
 
-	// meshBound is the proven vertex-level bound (mm): no point of the true
+	// MeshBound is the proven vertex-level bound (mm): no point of the true
 	// result boundary is farther than this from the held mesh's
 	// corresponding piece. It is the largest facet bound δ(t) over the held
-	// facets, each the largest of its corners' vertexBound. volSymDiff bounds the volume of the symmetric
-	// difference between the held solid and the true result. areaSlack
+	// facets, each the largest of its corners' VertexBound. VolSymDiff bounds the volume of the symmetric
+	// difference between the held solid and the true result. AreaSlack
 	// bounds the area the held mesh cannot report: the chord-length deficit
 	// the operand tessellations carry, plus the area of any facet the final
 	// weld collapsed out of the mesh.
-	// dPair bounds the held and true result diameter for the centroid
+	// DPair bounds the held and true result diameter for the centroid
 	// allowance. Some sources supply the broader operand-pair diameter.
-	meshBound  float64
-	volSymDiff float64
-	areaSlack  float64
-	dPair      float64
+	MeshBound  float64
+	VolSymDiff float64
+	AreaSlack  float64
+	DPair      float64
 
-	// diameter is the held Faceted body's own diameter for Verify's
+	// Diameter is the held Faceted body's own diameter for Verify's
 	// tolerance gate. It is computed from every payload vertex, including
 	// interior tessellation vertices that have no B-rep Vertex, and rebuilt
 	// after every placement. It is read through the one witness-maximum reader
 	// every gate diameter is published through (diameter.PointsWithBudget,
 	// verify.go), so it sits at or below the held boundary's own diameter.
-	diameter float64
+	Diameter float64
 
-	xform r3.Transform
+	Xform r3.Transform
 }
 
 // Transform is the accumulated rigid placement.
-func (fp facetedPayload) Transform() r3.Transform { return fp.xform }
+func (fp facetedPayload) Transform() r3.Transform { return fp.Xform }
 
 // Placed re-evaluates the held mesh under the composed motion: the vertices
 // move through the delta motion (float rounding is folded into the proven
@@ -242,7 +242,7 @@ func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref produc
 	if err := budget.Err(); err != nil {
 		return nil, err
 	}
-	delta, err := facetedPlacementDelta(fp.xform, composed)
+	delta, err := facetedPlacementDelta(fp.Xform, composed)
 	if err != nil {
 		return nil, err
 	}
@@ -250,7 +250,7 @@ func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref produc
 	next.smoothRectSection = nil
 	next.axialSectionJoin = false
 	next.prismPatternJoin = nil
-	next.xform = composed
+	next.Xform = composed
 	next.lowerSupport = nil
 	next.pointCone = nil
 	next.loftFacesCap = nil
@@ -277,12 +277,12 @@ func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref produc
 	if delta != r3.Identity() {
 		next.pointSection = nil
 	}
-	if fp.loftMirrorJoin != nil && fp.xform == r3.Identity() {
+	if fp.loftMirrorJoin != nil && fp.Xform == r3.Identity() {
 		next.loftMirrorCopy = &loftMirrorPlacementRecord{source: fp.loftMirrorJoin, motion: composed}
 	} else if fp.loftMirrorCopy != nil {
 		next.loftMirrorCopy = &loftMirrorPlacementRecord{source: fp.loftMirrorCopy.source, motion: composed}
 	}
-	if fp.pointCone != nil && fp.xform == r3.Identity() {
+	if fp.pointCone != nil && fp.Xform == r3.Identity() {
 		next.revolveLoftSector = &revolveLoftSectorPlacement{source: fp.pointCone, motion: composed}
 	}
 	if exact != nil {
@@ -355,8 +355,8 @@ func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref produc
 		next.exactSourceVerts, next.exactSourceTris = nil, nil
 	} else if !facetproof.TranslationOnly(delta) || !facetproof.TranslationOnly(composed) {
 		next.exactSourceVerts, next.exactSourceTris = nil, nil
-	} else if len(fp.exactSourceVerts) == 0 && fp.meshBound == 0 && fp.volSymDiff == 0 &&
-		fp.xform == r3.Identity() {
+	} else if len(fp.exactSourceVerts) == 0 && fp.MeshBound == 0 && fp.VolSymDiff == 0 &&
+		fp.Xform == r3.Identity() {
 		next.exactSourceVerts = append([]r3.Vec(nil), fp.Verts...)
 		next.exactSourceTris = append([][3]int(nil), fp.Tris...)
 	}
@@ -367,8 +367,8 @@ func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref produc
 		if !ok {
 			return nil, fmt.Errorf("%w: the exact rotation has no finite gap to the float placement", ErrUnsupported)
 		}
-		placed, err = facetproof.PlaceMeshDenoting(ctx, budget, fp.Verts, fp.Tris, fp.vertexBound,
-			fp.volSymDiff, fp.areaSlack, delta, linearGap, translationGap)
+		placed, err = facetproof.PlaceMeshDenoting(ctx, budget, fp.Verts, fp.Tris, fp.VertexBound,
+			fp.VolSymDiff, fp.AreaSlack, delta, linearGap, translationGap)
 	} else {
 		var linear [3][3]*big.Rat
 		linear, err = massmoment.PlacementRotation(delta)
@@ -379,17 +379,17 @@ func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref produc
 		if err != nil {
 			return nil, err
 		}
-		placed, err = facetproof.PlaceMesh(ctx, budget, fp.Verts, fp.Tris, fp.vertexBound,
-			fp.volSymDiff, fp.areaSlack, charge.Stretch, charge.Volume, delta)
+		placed, err = facetproof.PlaceMesh(ctx, budget, fp.Verts, fp.Tris, fp.VertexBound,
+			fp.VolSymDiff, fp.AreaSlack, charge.Stretch, charge.Volume, delta)
 	}
 	if err != nil {
 		return nil, err
 	}
 	next.Verts, next.Tris = placed.Verts, placed.Tris
-	next.vertexBound, next.meshBound, next.volSymDiff = placed.VertexBound, placed.MeshBound, placed.VolSymDiff
-	next.areaSlack = placed.AreaSlack
-	next.dPair = facetedSourceDiameterUpper(next.Verts, next.meshBound)
-	if proofbound.IsNonFinite(next.dPair) {
+	next.VertexBound, next.MeshBound, next.VolSymDiff = placed.VertexBound, placed.MeshBound, placed.VolSymDiff
+	next.AreaSlack = placed.AreaSlack
+	next.DPair = facetedSourceDiameterUpper(next.Verts, next.MeshBound)
+	if proofbound.IsNonFinite(next.DPair) {
 		return nil, fmt.Errorf("%w: the placed pair diameter has no finite proof", ErrUnsupported)
 	}
 	if fp.pointPlane != nil && exact == nil {
@@ -406,7 +406,7 @@ func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref produc
 			record.steps = append(record.steps, fp.pointSimilarity.steps...)
 		}
 		record.steps = append(record.steps, pointPlaneSimilarityStep{motion: delta,
-			meshBound: next.meshBound, capDisplacement: next.pointPlaneCapDisplacement})
+			meshBound: next.MeshBound, capDisplacement: next.pointPlaneCapDisplacement})
 		next.pointSimilarity = &record
 	}
 	return buildFacetedBody(ctx, d, ref, next)
@@ -457,7 +457,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	if !ok {
 		return nil, fmt.Errorf(`%w: the held boundary has no usable diameter`, ErrBooleanFailed)
 	}
-	pp.diameter = diameterReading
+	pp.Diameter = diameterReading
 	if audit == nil {
 		audit, err = facetproof.AuditFacetedMesh(ctx, verts, tris)
 		if err != nil {
@@ -472,12 +472,12 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	members, compVol, contains := audit.Members, audit.CompVol, audit.Contains
 
 	body := bornBody(&Body{n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Doc: documentNode(d)}})
-	if len(pp.vertexBound) != len(verts) {
-		return nil, fmt.Errorf(`%w: a faceted payload carries %d vertex bounds for %d vertices`, ErrBooleanFailed, len(pp.vertexBound), len(verts))
+	if len(pp.VertexBound) != len(verts) {
+		return nil, fmt.Errorf(`%w: a faceted payload carries %d vertex bounds for %d vertices`, ErrBooleanFailed, len(pp.VertexBound), len(verts))
 	}
 	// facetDelta is each held facet's δ(t), the largest of its corners' β
 	// (docs/faceted-vertex-bounds-design.md §2).
-	facetDelta := facetproof.FacetDeltas(tris, pp.vertexBound)
+	facetDelta := facetproof.FacetDeltas(tris, pp.VertexBound)
 
 	for _, s := range pp.Src {
 		if err := budget.Step(); err != nil {
@@ -577,7 +577,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	}
 
 	if err := buildFacetedTopology(ctx, verts, tris, facetFace, facePlanar,
-		pp.vertexBound, pp.axialSectionJoin); err != nil {
+		pp.VertexBound, pp.axialSectionJoin); err != nil {
 		return nil, err
 	}
 
@@ -611,7 +611,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 			}
 			geom := facetproof.FacetedAreaGeom(faceDelta[f], loopLen, faceFacetArea[f])
 			bodyGeom = proofbound.AbsSumUpper(bodyGeom, geom)
-			f.n.AreaBound = proofbound.AbsSumUpper(geom, pp.areaSlack, proofbound.SumSlop(facetsOf[f], f.n.Area), faceTermSlop[f])
+			f.n.AreaBound = proofbound.AbsSumUpper(geom, pp.AreaSlack, proofbound.SumSlop(facetsOf[f], f.n.Area), faceTermSlop[f])
 		}
 	}
 
@@ -650,7 +650,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	// of volume truth.
 	if volRat == nil {
 		var volF, volBound float64
-		volF, volBound, volRat, err = facetproof.VolumeFromAudit(audit, pp.volSymDiff)
+		volF, volBound, volRat, err = facetproof.VolumeFromAudit(audit, pp.VolSymDiff)
 		volume = Measurement{Value: units.CubicMillimeters(volF),
 			Exactness: exactnessOf(volBound), Bound: units.CubicMillimeters(volBound)}
 		if err != nil {
@@ -680,7 +680,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	// Both are ulp-scale in the total, so a genuinely tiny-bound planar boolean
 	// stays tiny — and never zero, which would claim an exactness a float sum of
 	// square roots does not have.
-	areaBound := proofbound.AbsSumUpper(bodyGeom, pp.areaSlack, proofbound.SumSlop(len(tris), areaF), termSlop)
+	areaBound := proofbound.AbsSumUpper(bodyGeom, pp.AreaSlack, proofbound.SumSlop(len(tris), areaF), termSlop)
 	body.n.Area = measurement.Measurement{
 		Value:     units.SquareMillimeters(areaF),
 		Exactness: measurement.ExactnessOf(areaBound),
@@ -694,7 +694,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	cx := centroidCoord(moments[0], tf, volRat)
 	cy := centroidCoord(moments[1], tf, volRat)
 	cz := centroidCoord(moments[2], tf, volRat)
-	cenBound := facetproof.FacetedCentroidAllowance(pp.volSymDiff, pp.dPair, volFloor(volRat, pp.volSymDiff))
+	cenBound := facetproof.FacetedCentroidAllowance(pp.VolSymDiff, pp.DPair, volFloor(volRat, pp.VolSymDiff))
 	cxF, _ := cx.Float64()
 	cyF, _ := cy.Float64()
 	czF, _ := cz.Float64()
@@ -723,7 +723,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	// once, so the radius is √3 of the largest (internal/proofbound/bounds.go,
 	// proofbound.Radius3D).
 	vertexFacetDelta := facetproof.VertexFacetDeltas(len(verts), tris, facetDelta)
-	extremeErr, err := facetproof.FacetedExtremeError(budget, verts, pp.vertexBound, vertexFacetDelta, lo, hi)
+	extremeErr, err := facetproof.FacetedExtremeError(budget, verts, pp.VertexBound, vertexFacetDelta, lo, hi)
 	if err != nil {
 		return nil, err
 	}
@@ -828,7 +828,7 @@ func facetedSourceDiameterUpper(verts []r3.Vec, departure float64) float64 {
 // buildFacetedTopology chains the face-boundary mesh edges into topological
 // Edges (split where the adjacent face pair or the exact hinge convexity
 // changes) and builds each face's loops by walking the facet fans. Each
-// Vertex reports its own held bound vertexBound[v], and each Edge the largest
+// Vertex reports its own held bound VertexBound[v], and each Edge the largest
 // of its chain's vertices' bounds (docs/faceted-vertex-bounds-design.md
 // §4.2).
 func buildFacetedTopology(

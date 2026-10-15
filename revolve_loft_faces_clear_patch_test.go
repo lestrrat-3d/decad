@@ -107,7 +107,7 @@ func TestCurvedClearPatchRefusesUnprovedClaims(t *testing.T) {
 	t.Run("changed body bound after context", func(t *testing.T) {
 		original := trimmed.n.Payload
 		changed := original.(facetedPayload)
-		changed.meshBound = math.Nextafter(changed.meshBound, 0)
+		changed.MeshBound = math.Nextafter(changed.MeshBound, 0)
 		trimmed.n.Payload = changed
 		defer func() { trimmed.n.Payload = original }()
 		refuses(t, classifier)
@@ -115,7 +115,7 @@ func TestCurvedClearPatchRefusesUnprovedClaims(t *testing.T) {
 	t.Run("changed body volume proof after context", func(t *testing.T) {
 		original := trimmed.n.Payload
 		changed := original.(facetedPayload)
-		changed.volSymDiff = math.Nextafter(changed.volSymDiff, math.Inf(1))
+		changed.VolSymDiff = math.Nextafter(changed.VolSymDiff, math.Inf(1))
 		trimmed.n.Payload = changed
 		defer func() { trimmed.n.Payload = original }()
 		refuses(t, classifier)

@@ -140,7 +140,7 @@ func Intersect(ctx context.Context, a, b *Body) (*Body, error) {
 }
 
 // heldFloorOf is the bound below which a RESTATING operand cannot give a mesh
-// (docs/faceted-vertex-bounds-design.md §5): a boolean result's meshBound, or
+// (docs/faceted-vertex-bounds-design.md §5): a boolean result's MeshBound, or
 // a mitred sweep's or a coil's delta (docs/helix-design.md Table CD row CD3). Its restatement returns the same vertices at any
 // tolerance at or above the floor. restating is false for every other
 // payload, whose request stays the pair tolerance and whose facets the local
@@ -148,7 +148,7 @@ func Intersect(ctx context.Context, a, b *Body) (*Body, error) {
 func heldFloorOf(b *Body) (floor float64, restating bool) {
 	switch p := b.n.Payload.(type) {
 	case facetedPayload:
-		return p.meshBound, true
+		return p.MeshBound, true
 	case mitredSweepPayload:
 		return p.Delta, true
 	case coilPayload:
@@ -864,15 +864,15 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 	}
 	payload := facetedPayload{
 		Verts:       stitched.Verts,
-		vertexBound: stitched.VertexBound,
+		VertexBound: stitched.VertexBound,
 		Tris:        stitched.Tris,
 		Src:         stitched.Src,
 		groups:      groups,
-		meshBound:   facetproof.FacetBoundMax(stitched.Tris, stitched.VertexBound),
-		volSymDiff:  volSymDiff,
-		areaSlack:   areaSlack,
-		dPair:       dPair,
-		xform:       r3.Identity(),
+		MeshBound:   facetproof.FacetBoundMax(stitched.Tris, stitched.VertexBound),
+		VolSymDiff:  volSymDiff,
+		AreaSlack:   areaSlack,
+		DPair:       dPair,
+		Xform:       r3.Identity(),
 	}
 	if err := ctx.Err(); err != nil {
 		return booleanEvaluation{}, err
@@ -919,7 +919,7 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 				fmt.Errorf("%w: combined spiral join boundary proof", ErrUnsupported))
 		}
 	}
-	volume, volumeRat, err := meshVolumeMeasurement(ctx, audit, payload.volSymDiff)
+	volume, volumeRat, err := meshVolumeMeasurement(ctx, audit, payload.VolSymDiff)
 	if err != nil {
 		return booleanEvaluation{}, err
 	}
@@ -1305,19 +1305,19 @@ func chordOperandOf(ctx context.Context, b *Body) (meshbool.ChordOperand, error)
 }
 
 // heldPrimitiveFloorOf is the proven held bound of an operand built as a
-// fixed held mesh in one construction — a LoftFaces meshBound, or a coil's,
+// fixed held mesh in one construction — a LoftFaces MeshBound, or a coil's,
 // mitred sweep's, or twisted sweep's delta
 // (docs/faceted-vertex-bounds-design.md §5). Its restatement cannot be
 // meshed closer than that, and every facet it touches the partner with holds
 // at most that bound, so raising the pair tolerance to it is what lets the
-// chain-depth gate admit the pair. A boolean result's meshBound is not one:
+// chain-depth gate admit the pair. A boolean result's MeshBound is not one:
 // it grows with the chain, which is what the gate exists to refuse. Every
 // other payload answers zero.
 func heldPrimitiveFloorOf(b *Body) float64 {
 	switch p := b.n.Payload.(type) {
 	case facetedPayload:
 		if p.LoftFacesPrimitive {
-			return p.meshBound
+			return p.MeshBound
 		}
 		return 0
 	case coilPayload:

@@ -284,9 +284,9 @@ corner of every facet of that face is held exactly. A proof is rounded up at
 every sum/product that could understate it. A non-finite proof is a refusal,
 never an infinite bound.
 
-A `facetedPayload` boundary certificate MUST retain the global `meshBound`,
+A `facetedPayload` boundary certificate MUST retain the global `MeshBound`,
 the largest facet bound over the held mesh, beside its per-vertex record. Every
-per-face value is at most `meshBound` and covers every true patch mapped to
+per-face value is at most `MeshBound` and covers every true patch mapped to
 that face. A payload whose per-vertex record is missing or does not match its
 mesh is an invariant failure; it NEVER falls back to zero.
 
@@ -773,7 +773,7 @@ that identity in its face groups and attach a boundary certificate.
   face, then set `facetedBound = max(sourceBound(face))`.
 - Requested `tol < facetedBound` → `ErrUnsupported`. The boolean never
   reaches this refusal: it asks a restating operand for its mesh at the
-  pair's chord tolerance raised to the payload's held floor (`meshBound`, or
+  pair's chord tolerance raised to the payload's held floor (`MeshBound`, or
   a mitred sweep's, coil's, or twisted sweep's `delta`), and compares the
   bounds of the facets the pair touches after classification instead (§11 step 5,
   `docs/faceted-vertex-bounds-design.md` §5).
@@ -1236,11 +1236,11 @@ Boolean composition then stays evaluator §9's:
    at `VerifyAll`, passed explicitly rather than taken from the default; `tol`
    already sits at or above a coil's, mitred sweep's, or twisted sweep's held
    `delta`, or a
-   certified `LoftFaces` result's held `meshBound`
+   certified `LoftFaces` result's held `MeshBound`
    (`docs/faceted-vertex-bounds-design.md` §5). An
    operand that restates a held mesh (a boolean result, coil, mitred sweep,
    or twisted sweep) is
-   asked at `max(tol, heldFloor)`, `heldFloor` its payload's `meshBound` or
+   asked at `max(tol, heldFloor)`, `heldFloor` its payload's `MeshBound` or
    `delta`, which its restatement always meets (§7); a chorded analytic
    operand is asked at `tol`.
 2. Require a complete `volSymDiff` proof from each mesh.
@@ -1282,7 +1282,7 @@ Boolean composition then stays evaluator §9's:
    vertex's own pre-weld bound (§3.4 there).
 9. Compose `areaSlackA + areaSlackB` plus area dropped by the final weld.
 
-A faceted operand contributes its payload's already composed `volSymDiff`.
+A faceted operand contributes its payload's already composed `VolSymDiff`.
 Prism, cup, loft, and revolve operands contribute their mesh proofs. No
 analytic operand is admitted through a generic `delta * area` shortcut.
 
@@ -1299,8 +1299,8 @@ vertex keeps its operand's per-vertex bound (§2.1 there, derived from
 step 7's bound, and a vertex the cutter or the conforming pass places on an
 operand facet takes that facet's bound. Add each vertex's own weld (step 8);
 zero is allowed only when its coordinates are exact. The payload records the
-result per vertex, and its global `meshBound` is the largest facet bound, the
-largest of each facet's corners. `meshBound` may exceed the next pair's
+result per vertex, and its global `MeshBound` is the largest facet bound, the
+largest of each facet's corners. `MeshBound` may exceed the next pair's
 chord tolerance: the result is still an operand, and only step 5's gate on
 the facets that pair touches can refuse it. Thus every faceted operand's
 per-vertex bound or `sourceBound`, and every final weld displacement, flows

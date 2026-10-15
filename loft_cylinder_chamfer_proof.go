@@ -47,7 +47,7 @@ func loftCylinderChamferSolidWitness(ctx context.Context, fp facetedPayload,
 			big.NewRat(2, 1)))
 	}
 	if proofbound.AbsSumUpper(r, source.innerInset) >= source.blankRadius ||
-		source.boreRadius > 0 && r <= proofbound.AbsSumUpper(source.boreRadius, fp.meshBound) {
+		source.boreRadius > 0 && r <= proofbound.AbsSumUpper(source.boreRadius, fp.MeshBound) {
 		return fmt.Errorf("%w: cap chamfer lacks an interior blank witness", ErrUnsupported)
 	}
 	witness := proofarith.Xlerp(

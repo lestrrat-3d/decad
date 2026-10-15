@@ -35,7 +35,7 @@ type prismUnionBossShellSource struct {
 func (b *Body) shellPrismUnionBoss(ctx context.Context, fp facetedPayload,
 	removed []*Face, sense ShellSense, t, tDelta float64) (*Body, bool, error) {
 	if len(removed) != 1 || sense != Inward || tDelta != 0 || !(t > 0) ||
-		proofbound.IsNonFinite(t) || fp.prismUnionFillet == nil || fp.xform != r3.Identity() {
+		proofbound.IsNonFinite(t) || fp.prismUnionFillet == nil || fp.Xform != r3.Identity() {
 		return nil, false, nil
 	}
 	for _, pair := range [][2]*Body{{fp.prismUnionFillet.first, fp.prismUnionFillet.second},
@@ -58,9 +58,9 @@ func prismUnionBossShellAuthenticate(result *Body, fp facetedPayload, plateBody,
 	opening *Face, t float64) (prismUnionBossShellSource, bool) {
 	var src prismUnionBossShellSource
 	if plateBody == nil || bossBody == nil || opening == nil || opening.n.Body != bodyNode(result) ||
-		len(fp.Verts) != len(fp.vertexBound) || len(fp.Tris) != len(fp.Src) ||
-		len(fp.Tris) != len(fp.FaceOf) || fp.volSymDiff < 0 ||
-		proofbound.IsNonFinite(fp.volSymDiff) {
+		len(fp.Verts) != len(fp.VertexBound) || len(fp.Tris) != len(fp.Src) ||
+		len(fp.Tris) != len(fp.FaceOf) || fp.VolSymDiff < 0 ||
+		proofbound.IsNonFinite(fp.VolSymDiff) {
 		return src, false
 	}
 	var ok bool
@@ -331,7 +331,7 @@ func buildPrismUnionBossShell(ctx context.Context, source *Body, fp facetedPaylo
 		proofbound.ProductUpper(width, height),
 		proofbound.ProductUpper(src.plateRect.Inset(t).Width(), src.plateRect.Inset(t).Height()))
 	levelVol := proofbound.ProductUpper(proofbound.ProductUpper(4, capArea), station)
-	volumeBound := proofbound.AbsSumUpper(fp.volSymDiff, rootVol, upperVol, levelVol)
+	volumeBound := proofbound.AbsSumUpper(fp.VolSymDiff, rootVol, upperVol, levelVol)
 	heldVolume := audit.CompVol[0]
 	if proofbound.IntervalAbsUpper(proofbound.IntervalSub(trueVolume,
 		proofbound.PointInterval(heldVolume))).Cmp(proofarith.FloatRat(volumeBound)) > 0 {
@@ -349,10 +349,10 @@ func buildPrismUnionBossShell(ctx context.Context, source *Body, fp facetedPaylo
 		proofbound.ProductUpper(4, perimeter), proofbound.ProductUpper(t, proofbound.RatFloatUp(proofbound.PiUpper)))
 	payload := facetedPayload{
 		Verts: mesh.verts, Tris: mesh.tris, Src: mesh.src, groups: mesh.groups,
-		vertexBound: mesh.beta, meshBound: bound, volSymDiff: volumeBound,
-		areaSlack: proofbound.AbsSumUpper(fp.areaSlack, rootAreaSlack),
-		dPair:     facetedSourceDiameterUpper(mesh.verts, bound),
-		xform:     r3.Identity(), contactAudited: true,
+		VertexBound: mesh.beta, MeshBound: bound, VolSymDiff: volumeBound,
+		AreaSlack: proofbound.AbsSumUpper(fp.AreaSlack, rootAreaSlack),
+		DPair:     facetedSourceDiameterUpper(mesh.verts, bound),
+		Xform:     r3.Identity(), contactAudited: true,
 	}
 	return buildFacetedBodyWithProof(ctx, documentHandle(source.n.Doc), ref, payload, audit, Measurement{}, nil)
 }
@@ -361,7 +361,7 @@ func prismUnionBossShellMeshOf(ctx context.Context, ref producerID, fp facetedPa
 	src prismUnionBossShellSource, t float64) (prismUnionBossShellMesh, error) {
 	var out prismUnionBossShellMesh
 	out.verts = append(out.verts, fp.Verts...)
-	out.beta = append(out.beta, fp.vertexBound...)
+	out.beta = append(out.beta, fp.VertexBound...)
 	out.groups = append(out.groups, fp.groups...)
 	addGroup := func(role string, planar bool) int {
 		i := len(out.groups)

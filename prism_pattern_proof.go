@@ -111,10 +111,10 @@ func prismPatternJoinedBody(ctx context.Context, d *Document, ref producerID,
 		prismPatternJoin: &prismPatternJoinRecord{blank: blank, source: source, parts: parts,
 			outlines: outlines, groups: groups, maxStep: maxStep, ringRound: ringRound,
 			mesh: mesh},
-		vertexBound: vertexBound, contactAudited: true,
-		meshBound: bound, volSymDiff: volumeGap, areaSlack: areaSlack,
-		dPair: facetedSourceDiameterUpper(mesh.verts, bound), xform: r3.Identity()}
-	if proofbound.IsNonFinite(fp.dPair) {
+		VertexBound: vertexBound, contactAudited: true,
+		MeshBound: bound, VolSymDiff: volumeGap, AreaSlack: areaSlack,
+		DPair: facetedSourceDiameterUpper(mesh.verts, bound), Xform: r3.Identity()}
+	if proofbound.IsNonFinite(fp.DPair) {
 		return nil, fmt.Errorf("%w: copied-prism join has no finite diameter proof", ErrUnsupported)
 	}
 	if err := loftCylinderTagCaps(&fp, blank, [2]int{groups[1], groups[2]},

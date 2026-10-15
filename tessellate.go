@@ -1160,11 +1160,11 @@ func tessellateFaceted(ctx context.Context, b *Body, fp facetedPayload, chord fl
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if chord < fp.meshBound {
-		return nil, &facetedBoundError{requested: chord, held: fp.meshBound}
+	if chord < fp.MeshBound {
+		return nil, &facetedBoundError{requested: chord, held: fp.MeshBound}
 	}
 	src, err := facetproof.RestateSources(ctx, topobuild.Faces(&b.n), fp.FaceOf,
-		len(fp.Verts), len(fp.vertexBound), len(fp.Tris))
+		len(fp.Verts), len(fp.VertexBound), len(fp.Tris))
 	if err != nil {
 		return nil, err
 	}
@@ -1172,8 +1172,8 @@ func tessellateFaceted(ctx context.Context, b *Body, fp facetedPayload, chord fl
 		n: topo.Mesh{
 			Vertices:   fp.Verts,
 			Triangles:  fp.Tris,
-			AreaSlack:  fp.areaSlack,
-			VolSymDiff: fp.volSymDiff,
+			AreaSlack:  fp.AreaSlack,
+			VolSymDiff: fp.VolSymDiff,
 			SymDiffOK:  true,
 			Source:     src,
 		},
@@ -1182,9 +1182,9 @@ func tessellateFaceted(ctx context.Context, b *Body, fp facetedPayload, chord fl
 	// face's bound is the largest δ(t) over its own facets
 	// (docs/faceted-vertex-bounds-design.md §4.4), so the next boolean's
 	// pre-pass and rim composition read each face's and each facet's own
-	// figure. Their maximum is the payload's meshBound by construction.
-	m.setVertexBounds(fp.vertexBound)
-	if m.n.Bound != fp.meshBound {
+	// figure. Their maximum is the payload's MeshBound by construction.
+	m.setVertexBounds(fp.VertexBound)
+	if m.n.Bound != fp.MeshBound {
 		return nil, fmt.Errorf(`%w: a faceted payload's mesh bound is not the largest of its facet bounds`, ErrBooleanFailed)
 	}
 	return m, nil

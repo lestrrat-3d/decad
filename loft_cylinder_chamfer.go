@@ -43,7 +43,7 @@ type loftCylinderChamferSource struct {
 }
 
 func loftCylinderChamferSourceOf(fp facetedPayload) (loftCylinderChamferSource, bool) {
-	if !fp.contactAudited || fp.xform != r3.Identity() {
+	if !fp.contactAudited || fp.Xform != r3.Identity() {
 		return loftCylinderChamferSource{}, false
 	}
 	if r := fp.loftCylinderBore; r != nil {

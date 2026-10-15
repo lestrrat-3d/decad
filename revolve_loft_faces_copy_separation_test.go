@@ -24,7 +24,7 @@ func TestCurvedLoftFacesRealCopySeparation(t *testing.T) {
 
 	shell := func(p facetedPayload) shellseparation.Shell {
 		return shellseparation.Shell{Verts: p.Verts, Tris: p.Tris,
-			VertexBound: p.vertexBound, MeshBound: p.meshBound}
+			VertexBound: p.VertexBound, MeshBound: p.MeshBound}
 	}
 	moves := []r3.Transform{r3.Identity(), turn}
 	require.True(t, shellseparation.Separate(t.Context(),

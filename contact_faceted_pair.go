@@ -314,7 +314,7 @@ func planarFacetedSolid(budget *proofbound.WorkBudget, pp facetedPayload) (plana
 	return planarsnapshot.FacetedSolid(budget, planarsnapshot.FacetedInput{
 		Verts: pp.Verts, Tris: pp.Tris, FaceOf: pp.FaceOf,
 		ExactSourceVerts: pp.exactSourceVerts, ExactSourceTris: pp.exactSourceTris,
-		MeshBound: pp.meshBound, VolSymDiff: pp.volSymDiff, Transform: pp.xform,
+		MeshBound: pp.MeshBound, VolSymDiff: pp.VolSymDiff, Transform: pp.Xform,
 	})
 }
 

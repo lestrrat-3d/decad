@@ -105,7 +105,7 @@ type loftCylinderRingTeeth map[loftCylinderRingToothKey]loftCylinderRingTooth
 func loftCylinderSourceRingInside(ctx context.Context, fp facetedPayload,
 	edges [][2]proofarith.Xpt, teeth loftCylinderRingTeeth,
 	records *loftcylinder.RingEdgeRecords) (loftcylinder.RingOccupancy, error) {
-	if !fp.contactAudited || fp.xform != r3.Identity() {
+	if !fp.contactAudited || fp.Xform != r3.Identity() {
 		return loftcylinder.RingOccupancy{},
 			fmt.Errorf("%w: split ring has no audited source body", ErrUnsupported)
 	}

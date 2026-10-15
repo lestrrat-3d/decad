@@ -65,8 +65,8 @@ func (set *facetedCopySet) placedProxyShells(ctx context.Context,
 		if !ok || part.copyLineage == nil ||
 			part.copyLineage.source != set.source ||
 			part.copyLineage.sourceProducer != set.source.n.Origin.Producer ||
-			part.copyLineage.sourcePlacement != first.xform ||
-			part.copyLineage.targetPlacement != part.xform ||
+			part.copyLineage.sourcePlacement != first.Xform ||
+			part.copyLineage.targetPlacement != part.Xform ||
 			part.copyLineage.motion != set.moves[i] ||
 			len(part.Tris) != len(proxy.n.Triangles) {
 			return nil, fmt.Errorf("%w: copied proxy tool %d changed its source", ErrUnsupported, i+1)

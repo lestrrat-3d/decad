@@ -58,13 +58,13 @@ func (b *Body) shellTwistedSweep(ctx context.Context, p twistedSweepPayload,
 		if !ok {
 			return nil, fmt.Errorf(`%w: twisted shell lost its held cup`, ErrUnsupported)
 		}
-		facets.vertexBound = append([]float64(nil), facets.vertexBound...)
-		for i := range facets.vertexBound {
-			facets.vertexBound[i] = proofbound.AbsSumUpper(facets.vertexBound[i], gap.Boundary)
+		facets.VertexBound = append([]float64(nil), facets.VertexBound...)
+		for i := range facets.VertexBound {
+			facets.VertexBound[i] = proofbound.AbsSumUpper(facets.VertexBound[i], gap.Boundary)
 		}
-		facets.meshBound = proofbound.AbsSumUpper(facets.meshBound, gap.Boundary)
-		facets.volSymDiff = proofbound.AbsSumUpper(facets.volSymDiff, gap.Volume)
-		facets.areaSlack = proofbound.AbsSumUpper(facets.areaSlack, gap.Area)
+		facets.MeshBound = proofbound.AbsSumUpper(facets.MeshBound, gap.Boundary)
+		facets.VolSymDiff = proofbound.AbsSumUpper(facets.VolSymDiff, gap.Volume)
+		facets.AreaSlack = proofbound.AbsSumUpper(facets.AreaSlack, gap.Area)
 		out, err = placePayload(ctx, facets, documentHandle(b.n.Doc), ref, p.Xform)
 		if err != nil {
 			return nil, err

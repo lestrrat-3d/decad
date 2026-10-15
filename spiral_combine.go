@@ -240,7 +240,7 @@ func spiralInverseHeldResult(ctx context.Context, blankHeld *meshbool.BoolMesh,
 	if !ok {
 		return nil, nil, 0, 0, false
 	}
-	return spiralsector.InverseHeldResult(ctx, blankHeld, firstPart.Verts, firstPart.meshBound, held, move, rec)
+	return spiralsector.InverseHeldResult(ctx, blankHeld, firstPart.Verts, firstPart.MeshBound, held, move, rec)
 }
 
 // spiralPrepareCombinedUnion transports the first join's certified temporary
@@ -335,7 +335,7 @@ func spiralCombineBody(ctx context.Context, d *Document, ref producerID,
 func spiralCombinedToolBody(ctx context.Context, d *Document, ref producerID,
 	source *spiralCombineSource) (*Body, error) {
 	meta := &spiralCombinedTools{source: source, owner: make(map[*Face]*Face)}
-	p := facetedPayload{xform: r3.Identity(), spiralTools: meta, contactAudited: true}
+	p := facetedPayload{Xform: r3.Identity(), spiralTools: meta, contactAudited: true}
 	firstPart, ok := source.tools[0].n.Payload.(facetedPayload)
 	if !ok {
 		return nil, fmt.Errorf("%w: first spiral tooth lost its faceted source", ErrUnsupported)
@@ -346,7 +346,7 @@ func spiralCombinedToolBody(ctx context.Context, d *Document, ref producerID,
 			return nil, err
 		}
 		part, ok := tooth.n.Payload.(facetedPayload)
-		if !ok || len(part.vertexBound) != len(part.Verts) ||
+		if !ok || len(part.VertexBound) != len(part.Verts) ||
 			len(part.Src) != len(part.Tris) || len(part.FaceOf) != len(part.Tris) {
 			return nil, fmt.Errorf("%w: spiral tool has no complete held-mesh proof", ErrUnsupported)
 		}
@@ -377,7 +377,7 @@ func spiralCombinedToolBody(ctx context.Context, d *Document, ref producerID,
 		}
 		vertexOffset, groupOffset := len(p.Verts), len(p.groups)
 		p.Verts = append(p.Verts, part.Verts...)
-		p.vertexBound = append(p.vertexBound, part.vertexBound...)
+		p.VertexBound = append(p.VertexBound, part.VertexBound...)
 		p.groups = append(p.groups, part.groups...)
 		for i, tri := range part.Tris {
 			p.Tris = append(p.Tris, [3]int{
@@ -385,17 +385,17 @@ func spiralCombinedToolBody(ctx context.Context, d *Document, ref producerID,
 			})
 			p.Src = append(p.Src, part.Src[i]+groupOffset)
 		}
-		p.meshBound = max(p.meshBound, part.meshBound)
-		p.volSymDiff = proofbound.AbsSumUpper(p.volSymDiff, part.volSymDiff)
-		p.areaSlack = proofbound.AbsSumUpper(p.areaSlack, part.areaSlack)
+		p.MeshBound = max(p.MeshBound, part.MeshBound)
+		p.VolSymDiff = proofbound.AbsSumUpper(p.VolSymDiff, part.VolSymDiff)
+		p.AreaSlack = proofbound.AbsSumUpper(p.AreaSlack, part.AreaSlack)
 		for _, v := range part.Verts {
 			maxAbs = max(maxAbs, math.Abs(v.X), math.Abs(v.Y), math.Abs(v.Z))
 		}
 	}
-	p.dPair = proofbound.ProductUpper(2, proofbound.AbsSumUpper(
-		proofbound.Radius3D(maxAbs), p.meshBound))
-	if proofbound.IsNonFinite(p.dPair) || proofbound.IsNonFinite(p.volSymDiff) ||
-		proofbound.IsNonFinite(p.areaSlack) {
+	p.DPair = proofbound.ProductUpper(2, proofbound.AbsSumUpper(
+		proofbound.Radius3D(maxAbs), p.MeshBound))
+	if proofbound.IsNonFinite(p.DPair) || proofbound.IsNonFinite(p.VolSymDiff) ||
+		proofbound.IsNonFinite(p.AreaSlack) {
 		return nil, fmt.Errorf("%w: combined tool has no finite measurement bounds", ErrUnsupported)
 	}
 	body, err := buildFacetedBody(ctx, d, ref, p)
