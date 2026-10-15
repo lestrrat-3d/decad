@@ -83,26 +83,26 @@ func (dp draftPayload) Placed(ctx context.Context, env topo.Env, composed r3.Tra
 // draftKept the walls a subset draft leaves in place (docs/draft-design.md §1,
 // §7, §10.2).
 func (dp draftPayload) band() capBlendPayload {
-	setback := capSetback{dc: dp.d, dcDelta: dp.dDelta, ds: dp.z1 - dp.z0}
+	setback := capSetback{Dc: dp.d, DcDelta: dp.dDelta, Ds: dp.z1 - dp.z0}
 	every := map[int]bool{}
 	for li := range len(dp.profile.Holes) + 1 {
 		every[li] = true
 	}
 	cbp := capBlendPayload{
-		profile: dp.profile,
-		frame:   dp.frame,
-		z0:      dp.z0, z1: dp.z1,
-		z0Delta: dp.z0Delta, z1Delta: dp.z1Delta,
-		xform:     dp.xform,
-		draft:     true,
-		patches:   dp.patches,
-		bandDelta: dp.bandDelta,
-		draftKept: dp.kept,
+		Profile: dp.profile,
+		Frame:   dp.frame,
+		Z0:      dp.z0, Z1: dp.z1,
+		Z0Delta: dp.z0Delta, Z1Delta: dp.z1Delta,
+		Xform:     dp.xform,
+		Draft:     true,
+		Patches:   dp.patches,
+		BandDelta: dp.bandDelta,
+		DraftKept: dp.kept,
 	}
 	if dp.nearStart {
-		cbp.end, cbp.endLoops = setback, every
+		cbp.End, cbp.EndLoops = setback, every
 	} else {
-		cbp.start, cbp.startLoops = setback, every
+		cbp.Start, cbp.StartLoops = setback, every
 	}
 	return cbp
 }
@@ -122,7 +122,7 @@ func (dp draftPayload) levels() (nearZ, nearDelta, farZ, matSign float64) {
 // sketch plane and the far section at the far level, each beside its own
 // displacement.
 func (dp draftPayload) ExtentAlong(g r3.Vec) (float64, float64, float64, error) {
-	return dp.band().extentBoundedAlong(context.Background(), g, freeform.NewFreeformWork())
+	return dp.band().ExtentBoundedAlong(context.Background(), g, freeform.NewFreeformWork())
 }
 
 // AxialDelta is the larger sweep-level displacement a body-relative stop

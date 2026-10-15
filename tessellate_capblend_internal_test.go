@@ -64,19 +64,19 @@ func chamferedSectionBody(t *testing.T, section func(*sketch.Sketch), d float64)
 func TestCapBlendPayloadStoresEachBandsContourDisplacement(t *testing.T) {
 	t.Parallel()
 	chamfered, cbp := chamferedSectionBody(t, quarterDiskSection(10), 2)
-	require.Len(t, cbp.bandDelta, 1)
-	stored, ok := cbp.bandDelta[capBandKey{loop: 0, start: false}]
+	require.Len(t, cbp.BandDelta, 1)
+	stored, ok := cbp.BandDelta[capBandKey{Loop: 0, Start: false}]
 	require.True(t, ok, `the end cap's band must be keyed by its own loop and cap`)
 
 	// The same value, re-derived through the build's own capBandResult.
 	budget := proofbound.NewWorkBudget(t.Context())
 	work := freeform.NewFreeformWork()
-	cl, err := oneLoopCornerLoop(budget, cbp.loops()[0], work)
+	cl, err := oneLoopCornerLoop(budget, cbp.Loops()[0], work)
 	require.NoError(t, err)
-	joins, err := capband.OffsetJoins(budget, cl.Walks, cbp.loopOffset(0), shellTol)
+	joins, err := capband.OffsetJoins(budget, cl.Walks, cbp.LoopOffset(0), shellTol)
 	require.NoError(t, err)
 	want, err := capband.ContourDisplacement(cl.Walks, capband.ContourJoins(joins),
-		cbp.loopOffset(0), cbp.loopSetback(0).dcDelta, shellTol)
+		cbp.LoopOffset(0), cbp.LoopSetback(0).DcDelta, shellTol)
 	require.NoError(t, err)
 	require.Equal(t, want, stored)
 	require.NotNil(t, chamfered)
@@ -123,7 +123,7 @@ func holedPlateSection(s *sketch.Sketch) {
 // the loop's own circular wall so the caller can say which one decided.
 func requireCapBlendSharedCount(t *testing.T, cbp capBlendPayload, li int, tol float64) (int, int) {
 	t.Helper()
-	lm, err := chordCapBlendLoop(t.Context(), proofbound.NewWorkBudget(t.Context()), cbp, li, cbp.loops()[li], tol, freeform.NewFreeformWork())
+	lm, err := chordCapBlendLoop(t.Context(), proofbound.NewWorkBudget(t.Context()), cbp, li, cbp.Loops()[li], tol, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	n := len(lm.walks)
 
@@ -175,7 +175,7 @@ func TestCapBlendMeshChargesTheWindowSkew(t *testing.T) {
 	mesh, err := tessellateCapBlend(t.Context(), chamfered, cbp, tol, VerifyAll)
 	require.NoError(t, err)
 
-	lm, err := chordCapBlendLoop(t.Context(), proofbound.NewWorkBudget(t.Context()), cbp, 0, cbp.loops()[0], tol, freeform.NewFreeformWork())
+	lm, err := chordCapBlendLoop(t.Context(), proofbound.NewWorkBudget(t.Context()), cbp, 0, cbp.Loops()[0], tol, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	sag := 0.0
 	for i, w := range lm.walks {
@@ -187,16 +187,16 @@ func TestCapBlendMeshChargesTheWindowSkew(t *testing.T) {
 
 	roles := facesByRole(chamfered)
 	found := 0
-	for _, patch := range cbp.patches {
-		if !patch.geom.Circular {
+	for _, patch := range cbp.Patches {
+		if !patch.Geom.Circular {
 			continue
 		}
 		found++
-		skew := capPatchWindowSkew(patch.geom)
+		skew := capPatchWindowSkew(patch.Geom)
 		require.Positive(t, skew, `a mitered arc's two windows differ`)
-		skewTerm := proofbound.ProductUpper(patch.geom.CapRadius, skew)
+		skewTerm := proofbound.ProductUpper(patch.Geom.CapRadius, skew)
 		require.Positive(t, skewTerm)
-		face := roles[patch.role]
+		face := roles[patch.Role]
 		require.NotNil(t, face)
 		bound, ok := mesh.sourceBound(faceNode(face))
 		require.True(t, ok, `every source face states its own bound`)
@@ -217,18 +217,18 @@ func TestCapBlendBandPatchBoundCoversItsOwnChording(t *testing.T) {
 	chamfered, cbp := chamferedSectionBody(t, diskSection(0, 0, 10), 2)
 	mesh, err := tessellateCapBlend(t.Context(), chamfered, cbp, tol, VerifyAll)
 	require.NoError(t, err)
-	lm, err := chordCapBlendLoop(t.Context(), proofbound.NewWorkBudget(t.Context()), cbp, 0, cbp.loops()[0], tol, freeform.NewFreeformWork())
+	lm, err := chordCapBlendLoop(t.Context(), proofbound.NewWorkBudget(t.Context()), cbp, 0, cbp.Loops()[0], tol, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.True(t, lm.whole, `a cornerless circle is the one whole-turn band`)
 	sag := math.Max(lm.sideSag[0], lm.capSag[0])
 	require.Positive(t, sag)
 
 	roles := facesByRole(chamfered)
-	require.Len(t, cbp.patches, 1)
-	for _, patch := range cbp.patches {
-		require.Equal(t, 0.0, capPatchWindowSkew(patch.geom),
+	require.Len(t, cbp.Patches, 1)
+	for _, patch := range cbp.Patches {
+		require.Equal(t, 0.0, capPatchWindowSkew(patch.Geom),
 			`a whole-turn band's two windows coincide`)
-		bound, ok := mesh.sourceBound(faceNode(roles[patch.role]))
+		bound, ok := mesh.sourceBound(faceNode(roles[patch.Role]))
 		require.True(t, ok)
 		require.GreaterOrEqual(t, bound, sag,
 			`a band patch's own bound covers the chording of both its directrices`)
@@ -243,7 +243,7 @@ func TestCapBlendHoleApexPatchBoundCoversConnectorSagitta(t *testing.T) {
 		s.CreateRectangle(15, 10, 45, 30)
 	}, 1.5)
 	const tol = 0.05
-	lm, err := chordCapBlendLoop(t.Context(), proofbound.NewWorkBudget(t.Context()), cbp, 1, cbp.loops()[1],
+	lm, err := chordCapBlendLoop(t.Context(), proofbound.NewWorkBudget(t.Context()), cbp, 1, cbp.Loops()[1],
 		tol, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Equal(t, len(lm.capPts), lm.capArcStart[0]+lm.arcCount[0],
@@ -254,12 +254,12 @@ func TestCapBlendHoleApexPatchBoundCoversConnectorSagitta(t *testing.T) {
 
 	roles := facesByRole(chamfered)
 	apexCount := 0
-	for _, patch := range cbp.patches {
-		if !patch.geom.Circular || patch.geom.SideRadius != 0 {
+	for _, patch := range cbp.Patches {
+		if !patch.Geom.Circular || patch.Geom.SideRadius != 0 {
 			continue
 		}
 		apexCount++
-		bound, ok := mesh.sourceBound(faceNode(roles[patch.role]))
+		bound, ok := mesh.sourceBound(faceNode(roles[patch.Role]))
 		require.True(t, ok)
 		require.GreaterOrEqual(t, bound, lm.arcSag[0],
 			"each apex face's own bound covers its connector chord")
@@ -310,9 +310,9 @@ func TestCapBlendCornerLocusGapIsZeroOnlyWhereBothLociAreAffine(t *testing.T) {
 func capBlendCornerSetup(t *testing.T, cbp capBlendPayload) ([]survey2d.SideWalk, []cornerJoin) {
 	t.Helper()
 	budget := proofbound.NewWorkBudget(t.Context())
-	cl, err := oneLoopCornerLoop(budget, cbp.loops()[0], freeform.NewFreeformWork())
+	cl, err := oneLoopCornerLoop(budget, cbp.Loops()[0], freeform.NewFreeformWork())
 	require.NoError(t, err)
-	joins, err := capband.OffsetJoins(budget, cl.Walks, cbp.loopOffset(0), shellTol)
+	joins, err := capband.OffsetJoins(budget, cl.Walks, cbp.LoopOffset(0), shellTol)
 	require.NoError(t, err)
 	return cl.Walks, joins
 }
@@ -321,9 +321,9 @@ func capBlendLocusInput(cbp capBlendPayload, walks []survey2d.SideWalk, i int,
 	j cornerJoin,
 ) tessellation.CapBlendLocusInput {
 	return tessellation.CapBlendLocusInput{
-		Setback: capBlendProofSetback(cbp.loopSetback(0)), Segments: cbp.loops()[0].Segments,
+		Setback: capBlendProofSetback(cbp.LoopSetback(0)), Segments: cbp.Loops()[0].Segments,
 		Walks: walks, Corner: i, Join: capBlendSampleJoins([]cornerJoin{j})[0],
-		FootDelta: cbp.loopBandDelta(0),
+		FootDelta: cbp.LoopBandDelta(0),
 	}
 }
 
@@ -383,7 +383,7 @@ func TestCapBlendMeshPublishesNoVolumeProofForAMiteredBand(t *testing.T) {
 func capBlendMotionUnderTest(t *testing.T, cbp capBlendPayload, chord float64) ([]capBlendLoopMesh, []float64) {
 	t.Helper()
 	budget := proofbound.NewWorkBudget(t.Context())
-	loops := cbp.loops()
+	loops := cbp.Loops()
 	lms := make([]capBlendLoopMesh, len(loops))
 	for li, loop := range loops {
 		lm, err := chordCapBlendLoop(t.Context(), budget, cbp, li, loop, chord, freeform.NewFreeformWork())
@@ -392,7 +392,7 @@ func capBlendMotionUnderTest(t *testing.T, cbp capBlendPayload, chord float64) (
 		lms[li] = lm
 	}
 	mesh := bornMesh(new(Mesh))
-	store, motion, err := capBlendVertices(budget, cbp, cbp.prismLike(0, 0), lms, mesh, true)
+	store, motion, err := capBlendVertices(budget, cbp, cbp.PrismLike(0, 0), lms, mesh, true)
 	require.NoError(t, err)
 	require.Len(t, motion, len(store), `motion is a parallel array, one entry per vertex`)
 	return lms, motion
@@ -435,7 +435,7 @@ func TestCapBlendMeshPublishesVolumeProofForAnAdmittedBand(t *testing.T) {
 	seg := bore.loop.Segments[bore.walks[0].Segs[0]]
 	held := bore.capPts[0]
 	gap := proofbound.WalkEndBoundAllow(stationbound.CapOffsetStationBound(seg, 0, bore.count[0],
-		capcontour.CapWallRadiusOffset(bore.walks[0], cbp.loopOffset(bore.li)), held.U, held.V))
+		capcontour.CapWallRadiusOffset(bore.walks[0], cbp.LoopOffset(bore.li)), held.U, held.V))
 	require.Positive(t, gap, `the float full turn leaves the seam station off (19, 0)`)
 	seam := motion[bore.capHiV[0]]
 	require.Positive(t, seam)
@@ -480,7 +480,7 @@ func TestCapBlendMeshMotionCarriesEachLevelBound(t *testing.T) {
 	require.NoError(t, err)
 	cbp, ok := chamfered.n.Payload.(capBlendPayload)
 	require.True(t, ok)
-	capLevel := cbp.capBandLevel(cbp.z1, -1)
+	capLevel := cbp.CapBandLevel(cbp.Z1, -1)
 	require.Positive(t, capLevel.Bound, `a ToFace stop's end level is computed, and says so`)
 
 	const tol = 1.0
@@ -556,7 +556,7 @@ func TestCapBlendMeshMotionCarriesTheMiterDisplacement(t *testing.T) {
 		}
 		s.Fix(points[0])
 	}, 2)
-	delta := cbp.bandDelta[capBandKey{loop: 0, start: false}]
+	delta := cbp.BandDelta[capBandKey{Loop: 0, Start: false}]
 	require.Positive(t, delta, `an irrational miter point is held only within the band's contour displacement`)
 	mesh, err := tessellateCapBlend(t.Context(), chamfered, cbp, 1, VerifyAll)
 	require.NoError(t, err)
@@ -638,7 +638,7 @@ func asymChamferedSectionBody(t *testing.T, section func(*sketch.Sketch), dc, ds
 	require.NoError(t, err)
 	cbp, ok := chamfered.n.Payload.(capBlendPayload)
 	require.True(t, ok)
-	require.Equal(t, capSetback{dc: dc, ds: ds}, cbp.end)
+	require.Equal(t, capSetback{Dc: dc, Ds: ds}, cbp.End)
 	return chamfered, cbp
 }
 
@@ -741,7 +741,7 @@ func TestCapBlendMeshCapMotionCarriesSetbackRounding(t *testing.T) {
 	require.NoError(t, err)
 	cbp, ok := chamfered.n.Payload.(capBlendPayload)
 	require.True(t, ok)
-	require.Positive(t, cbp.end.dcDelta, `the premise: the conversion to millimetres rounds`)
+	require.Positive(t, cbp.End.DcDelta, `the premise: the conversion to millimetres rounds`)
 
 	exactDC := extent.ExactConversion(inch, units.Millimeter)
 	denoted := new(big.Rat).Sub(new(big.Rat).SetFloat64(r), exactDC)

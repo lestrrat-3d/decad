@@ -251,7 +251,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 			return err
 		},
 		sel: sel, edges: edges, blend: &blend, asym: asym,
-		loop: &capSetback{dc: dmm, dcDelta: dDelta, ds: dmm, dsDelta: dDelta}, loopKind: brepBandChamfer}
+		loop: &capSetback{Dc: dmm, DcDelta: dDelta, Ds: dmm, DsDelta: dDelta}, loopKind: brepBandChamfer}
 	if bp, ok := b.n.Payload.(brepPayload); ok {
 		body, matched, err := tryAllEdgeChamfer(ctx, b, bp, edges, dmm, dDelta, asym)
 		if matched || err != nil {
@@ -367,7 +367,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 		// An equal chamfer sets both caps back d across the cap and d down the
 		// side; a two-distance one takes each cap's pair from its reference
 		// face (docs/modify-reach-design.md §8.3.1).
-		start := capSetback{dc: dmm, dcDelta: dDelta, ds: dmm, dsDelta: dDelta}
+		start := capSetback{Dc: dmm, DcDelta: dDelta, Ds: dmm, DsDelta: dDelta}
 		end := start
 		if asym != nil {
 			if start, end, err = asym.capSetbacks(caps, edges, startLoops, endLoops); err != nil {

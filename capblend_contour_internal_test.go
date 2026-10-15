@@ -383,8 +383,8 @@ func TestCapPatchIntegralsCoverTheirHeldNumbers(t *testing.T) {
 			t.Parallel()
 			cbp := capHeldBody(t, tc.section, tc.h, tc.d)
 			checked := 0
-			for _, p := range cbp.patches {
-				g := p.geom
+			for _, p := range cbp.Patches {
+				g := p.Geom
 				if !g.Circular || g.WholeTurn {
 					continue
 				}

@@ -32,7 +32,7 @@ import (
 // widens what the tessellator's readers add.
 func (b brepLoopBand) tessView(f brepFace, xform r3.Transform) capBlendPayload {
 	cbp := b.view(f, xform)
-	cbp.bandDelta = map[capBandKey]float64{{loop: 0, start: b.matSign(f) > 0}: f.delta}
+	cbp.BandDelta = map[capBandKey]float64{{Loop: 0, Start: b.matSign(f) > 0}: f.delta}
 	return cbp
 }
 
@@ -138,8 +138,8 @@ func brepChordBands(ctx context.Context, bp brepPayload, btopo *brepTopology, ch
 			imposed[u.Face] = samples
 		}
 		if b.kind == brepBandFillet {
-			rings := tessellation.FilletRingCount(b.setback.axialUpper(), chord)
-			fr, err := filletLoopOf(budget, b.orig, b.setback.dc, f.role, work)
+			rings := tessellation.FilletRingCount(b.setback.AxialUpper(), chord)
+			fr, err := filletLoopOf(budget, b.orig, b.setback.Dc, f.role, work)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -150,7 +150,7 @@ func brepChordBands(ctx context.Context, bp brepPayload, btopo *brepTopology, ch
 				}
 				bc.curved[k] = true
 				prev := fr.walks[(k+len(fr.walks)-1)%len(fr.walks)]
-				length, ok := filletband.CurvedMiterLength(prev, fr.walks[k], b.setback.axialUpper())
+				length, ok := filletband.CurvedMiterLength(prev, fr.walks[k], b.setback.AxialUpper())
 				if !ok {
 					return nil, nil, fmt.Errorf(`%w: fillet band %d's curved miter has no length enclosure`, ErrUnsupported, bi)
 				}
@@ -167,7 +167,7 @@ func brepChordBands(ctx context.Context, bp brepPayload, btopo *brepTopology, ch
 	if bp.bossShell != nil {
 		shell := bp.bossShell
 		b := brepLoopBand{face: shell.LedgeFace, loop: 0, orig: shell.SideProfile().Outer,
-			setback: capSetback{dc: shell.T, ds: shell.T}, sigma: 1, kind: brepBandFillet}
+			setback: capSetback{Dc: shell.T, Ds: shell.T}, sigma: 1, kind: brepBandFillet}
 		region := shell.CapProfile()
 		f := brepFace{frame: shell.Frame, region: &region, z0: shell.InterfaceZ, z1: shell.InterfaceZ,
 			outward: false, role: "bossShellBand"}
@@ -179,7 +179,7 @@ func brepChordBands(ctx context.Context, bp brepPayload, btopo *brepTopology, ch
 		sideZ, sideDelta := b.sideLevel(f)
 		bc := brepBandChord{band: b, face: f, cbp: cbp, lm: lm, start: false,
 			sideZ: sideZ, sideDelta: sideDelta, bossShell: true,
-			fillet: &filletRings{n: tessellation.FilletRingCount(b.setback.axialUpper(), chord)}}
+			fillet: &filletRings{n: tessellation.FilletRingCount(b.setback.AxialUpper(), chord)}}
 		if shell.Round != nil {
 			// The upper cavity wall starts on the band's smaller circle.
 			// Impose the band's count and stations on that wall so the
@@ -222,7 +222,7 @@ func brepChordBands(ctx context.Context, bp brepPayload, btopo *brepTopology, ch
 			bandChord = chord / 4
 		}
 		b := brepLoopBand{face: shell.FloorFace, loop: 0, orig: shell.Rounded.Outer,
-			setback: capSetback{dc: shell.T, ds: shell.T}, sigma: 1, kind: brepBandFillet}
+			setback: capSetback{Dc: shell.T, Ds: shell.T}, sigma: 1, kind: brepBandFillet}
 		region := shell.CapProfile()
 		f := brepFace{frame: shell.Frame, region: &region, z0: shell.LowerZ, z1: shell.LowerZ,
 			outward: shell.CapOutward(), role: "pocketShellBand"}
@@ -234,7 +234,7 @@ func brepChordBands(ctx context.Context, bp brepPayload, btopo *brepTopology, ch
 		sideZ, sideDelta := b.sideLevel(f)
 		bc := brepBandChord{band: b, face: f, cbp: cbp, lm: lm, start: b.matSign(f) > 0,
 			sideZ: sideZ, sideDelta: sideDelta, pocketShell: true,
-			fillet: &filletRings{n: tessellation.FilletRingCount(b.setback.axialUpper(), bandChord)}}
+			fillet: &filletRings{n: tessellation.FilletRingCount(b.setback.AxialUpper(), bandChord)}}
 		e := btopo.embeds[b.face]
 		for i, w := range lm.walks {
 			key, _ := brepgeom.CurveKey(e, w.SegmentWalk, sideZ)
@@ -358,7 +358,7 @@ func brepBandMotion(ctx context.Context, bands []brepBandChord, store, round []f
 			return nil, err
 		}
 		if bc.fillet != nil {
-			bc.fillet.arcMotion(&bc.lm, bc.face.delta, bc.band.setback.dcDelta)
+			bc.fillet.arcMotion(&bc.lm, bc.face.delta, bc.band.setback.DcDelta)
 		}
 		for j, vi := range bc.capV {
 			motion[vi] = proofbound.AbsSumUpper(bc.lm.capMotion[j], round[vi], bc.face.z0Delta)
@@ -394,9 +394,9 @@ func brepBandChordVolume(bands []brepBandChord) float64 {
 		loop.ZLo, loop.ZHi = proofbound.MeasuredScalar(0, 0), proofbound.MeasuredScalar(0, 0)
 		height := [2]float64{}
 		if bc.start {
-			height[0] = bc.band.setback.axialUpper()
+			height[0] = bc.band.setback.AxialUpper()
 		} else {
-			height[1] = bc.band.setback.axialUpper()
+			height[1] = bc.band.setback.AxialUpper()
 		}
 		total = proofbound.AbsSumUpper(total, tessellation.CapBlendChordVolume(height, []tessellation.CapBlendLoopProof{loop}))
 	}

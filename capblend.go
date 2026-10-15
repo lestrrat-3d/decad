@@ -62,15 +62,15 @@ import (
 // it labels, so a result's roles are minted from the result's own record,
 // never inherited).
 type capBlendPayload struct {
-	profile    profileRecord
-	frame      r3.Frame
-	z0, z1     float64
-	z0Delta    float64
-	z1Delta    float64
-	xform      r3.Transform
-	start, end capSetback   // the z0 and z1 caps' own setbacks
-	startLoops map[int]bool // loop index -> chamfered on the z0 cap
-	endLoops   map[int]bool // loop index -> chamfered on the z1 cap
+	Profile    profileRecord
+	Frame      r3.Frame
+	Z0, Z1     float64
+	Z0Delta    float64
+	Z1Delta    float64
+	Xform      r3.Transform
+	Start, End capSetback   // the z0 and z1 caps' own setbacks
+	StartLoops map[int]bool // loop index -> chamfered on the z0 cap
+	EndLoops   map[int]bool // loop index -> chamfered on the z1 cap
 	// patches carries every chamferCap(...) role beside its plane-local
 	// geometry (capPatchGeom), populated once at build time
 	// (evalCapBlendContext) and reused by the DX7/DX8 surveys —
@@ -81,7 +81,7 @@ type capBlendPayload struct {
 	// public output a caller may diff: a map hands Go's randomized start order
 	// to every reader, and sorting the role strings is not this order either —
 	// it puts patch 10 ahead of patch 2.
-	patches []capPatch
+	Patches []capPatch
 	// bandDelta is each built band's own cap-contour displacement
 	// (capBandResult.delta, capband.ContourDisplacement), keyed by the
 	// (loop, cap) that band sits on. buildCapBand already computes it once for
@@ -90,25 +90,25 @@ type capBlendPayload struct {
 	// §7 — charge the SAME number those readings did rather than re-derive a
 	// second one from the same offset. It is plane-local and
 	// placement-invariant, exactly as patches is.
-	bandDelta map[capBandKey]float64
+	BandDelta map[capBandKey]float64
 	// draft marks the view a draft body builds its wall band through
 	// (draftPayload.band, draft_build.go): its corners take the sharp offset
 	// rule (offset2d.SharpJoinsBudget) rather than the reflex-corner arc, its
 	// wall patches carry the prism's side(i, j) roles, and its rim and ruling
 	// edges take the prism's convexity (docs/draft-design.md §2, §6). A
 	// cap-loop chamfer never sets it.
-	draft bool
+	Draft bool
 	// fillet marks a route L view whose inward circular walk may collapse to
 	// one pole. A chamfer or draft never uses that contour rule.
-	fillet bool
+	Fillet bool
 	// draftKept is a draft view's draftPayload.kept: the recorded segments of
 	// the walls a subset draft leaves in place, which every per-walk reading
 	// of the band offsets by zero (walkAmounts). Empty moves every wall.
-	draftKept map[offset2d.DraftWall]struct{}
+	DraftKept map[offset2d.DraftWall]struct{}
 	// loftSource marks the cap band built over an axial loft's held outer
 	// station polygon. Its fit-spline allowances remain attached to the
 	// resulting body and mesh; the bore remains an exact circular hole.
-	loftSource *loftCapBandSource
+	LoftSource *loftCapBandSource
 }
 
 // capSetback is one chamfered cap's two setbacks (docs/modify-reach-design.md
@@ -120,44 +120,44 @@ type capBlendPayload struct {
 // over every offset amount within dcDelta of dc, and by every cap-level
 // length that reads dc as a radius. An equal chamfer holds dc == ds == d.
 type capSetback struct {
-	dc, dcDelta, ds, dsDelta float64
+	Dc, DcDelta, Ds, DsDelta float64
 }
 
 // axialUpper is a proven upper bound on the axial rise the band denotes: the
 // side setback the caller stated, which lies within dsDelta of ds. A setback
 // stated in millimetres converts exactly, and the bound is |ds| itself.
-func (s capSetback) axialUpper() float64 {
-	if s.dsDelta > 0 {
-		return proofbound.AbsSumUpper(s.ds, s.dsDelta)
+func (s capSetback) AxialUpper() float64 {
+	if s.DsDelta > 0 {
+		return proofbound.AbsSumUpper(s.Ds, s.DsDelta)
 	}
-	return math.Abs(s.ds)
+	return math.Abs(s.Ds)
 }
 
 // setbackAt returns the setbacks of the cap a band with material sense
 // matSign sits on: positive is the start cap, negative the end cap.
-func (cbp capBlendPayload) setbackAt(matSign float64) capSetback {
+func (cbp capBlendPayload) SetbackAt(matSign float64) capSetback {
 	if matSign > 0 {
-		return cbp.start
+		return cbp.Start
 	}
-	return cbp.end
+	return cbp.End
 }
 
 // loopSetback is the setbacks of whichever cap loop li is chamfered on. A loop
 // chamfered on both caps takes one pair on both: resolveCapSetbacks refuses a
 // loop whose two caps pick its setbacks differently.
-func (cbp capBlendPayload) loopSetback(li int) capSetback {
-	if cbp.startLoops[li] {
-		return cbp.start
+func (cbp capBlendPayload) LoopSetback(li int) capSetback {
+	if cbp.StartLoops[li] {
+		return cbp.Start
 	}
-	return cbp.end
+	return cbp.End
 }
 
 // loopBandDelta is the larger contour displacement of loop li's chamfer bands
 // (evalCapBlendContext's bandDelta), zero where it is chamfered on neither cap.
-func (cbp capBlendPayload) loopBandDelta(li int) float64 {
+func (cbp capBlendPayload) LoopBandDelta(li int) float64 {
 	delta := 0.0
 	for _, start := range [...]bool{true, false} {
-		if d, ok := cbp.bandDelta[capBandKey{loop: li, start: start}]; ok {
+		if d, ok := cbp.BandDelta[capBandKey{Loop: li, Start: start}]; ok {
 			delta = math.Max(delta, d)
 		}
 	}
@@ -167,17 +167,17 @@ func (cbp capBlendPayload) loopBandDelta(li int) float64 {
 // walkAmounts is the in-plane offset of each coalesced walk of loop li when
 // the band's setback is d: d for every walk of a chamfer or a draft of every
 // wall, and zero for a walk a subset draft keeps (draftKept).
-func (cbp capBlendPayload) walkAmounts(li int, walks []survey2d.SideWalk, d float64) []float64 {
-	return offset2d.DraftWalkAmounts(cbp.draftKept, li, walks, d)
+func (cbp capBlendPayload) WalkAmounts(li int, walks []survey2d.SideWalk, d float64) []float64 {
+	return offset2d.DraftWalkAmounts(cbp.DraftKept, li, walks, d)
 }
 
 // loopOffset is loop li's own in-plane offset, its loopSetback's dc.
-func (cbp capBlendPayload) loopOffset(li int) float64 { return cbp.loopSetback(li).dc }
+func (cbp capBlendPayload) LoopOffset(li int) float64 { return cbp.LoopSetback(li).Dc }
 
 // noun names the body a refusal over this payload speaks of: the draft view's
 // tapered extrude, or the cap-loop chamfer.
-func (cbp capBlendPayload) noun() string {
-	if cbp.draft {
+func (cbp capBlendPayload) Noun() string {
+	if cbp.Draft {
 		return "tapered extrude"
 	}
 	return "cap-loop chamfer"
@@ -186,47 +186,47 @@ func (cbp capBlendPayload) noun() string {
 // capBandKey names one chamfer band: the loop it belongs to (an index into
 // loops(), the same index space Table BX's roles use) and which cap it sits on.
 type capBandKey struct {
-	loop  int
-	start bool
+	Loop  int
+	Start bool
 }
 
 // capPatch is one built chamfer patch's role paired with the geometry that
 // role labels.
 type capPatch struct {
-	role string
-	geom capPatchGeom
+	Role string
+	Geom capPatchGeom
 }
 
 // Transform is the accumulated rigid placement.
-func (cbp capBlendPayload) Transform() r3.Transform { return cbp.xform }
+func (cbp capBlendPayload) Transform() r3.Transform { return cbp.Xform }
 
 // Placed re-evaluates the same record under the composed motion (evaluator
 // §8): every gate this PR enforces is a closed-form fact of the RECORD, so a
 // placed body re-derives the identical chamfer.
 func (cbp capBlendPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
 	d, ref := documentHandle(env.Doc), env.Ref
-	cbp.xform = composed
+	cbp.Xform = composed
 	return placedNode(evalCapBlendContext(ctx, d, ref, cbp))
 }
 
 // prismLike returns a prismPayload sharing the receiver's frame and
 // placement over [z0, z1], so the point/dir machinery already built for
 // prisms serves the cap-blend build too.
-func (cbp capBlendPayload) prismLike(z0, z1 float64) prismPayload {
+func (cbp capBlendPayload) PrismLike(z0, z1 float64) prismPayload {
 	return prismrecord.Payload{
-		Frame: cbp.frame, Z0: z0, Z1: z1,
-		Z0Delta: cbp.z0Delta, Z1Delta: cbp.z1Delta,
-		Xform: cbp.xform,
+		Frame: cbp.Frame, Z0: z0, Z1: z1,
+		Z0Delta: cbp.Z0Delta, Z1Delta: cbp.Z1Delta,
+		Xform: cbp.Xform,
 	}
 }
 
 // capBandLevel preserves the selected end's axial displacement while a
 // chamfer band derives its cap and side levels. The start band has positive
 // material sense; the end band has negative material sense.
-func (cbp capBlendPayload) capBandLevel(capZ, matSign float64) proofbound.BoundedScalar {
-	capDelta := cbp.z1Delta
+func (cbp capBlendPayload) CapBandLevel(capZ, matSign float64) proofbound.BoundedScalar {
+	capDelta := cbp.Z1Delta
 	if matSign > 0 {
-		capDelta = cbp.z0Delta
+		capDelta = cbp.Z0Delta
 	}
 	return proofbound.MeasuredScalar(capZ, capDelta)
 }
@@ -235,14 +235,14 @@ func (cbp capBlendPayload) capBandLevel(capZ, matSign float64) proofbound.Bounde
 // preserve when it resolves against this cap blend. A chamfered end also
 // carries the setback conversion and float-sum rounding of its level.
 func (cbp capBlendPayload) AxialDelta() float64 {
-	z0Delta, z1Delta := cbp.z0Delta, cbp.z1Delta
-	if len(cbp.startLoops) != 0 {
-		s := cbp.start
-		z0Delta = proofbound.AbsSumUpper(z0Delta, s.dsDelta, proofarith.AddRoundError(cbp.z0, s.ds, cbp.z0+s.ds))
+	z0Delta, z1Delta := cbp.Z0Delta, cbp.Z1Delta
+	if len(cbp.StartLoops) != 0 {
+		s := cbp.Start
+		z0Delta = proofbound.AbsSumUpper(z0Delta, s.DsDelta, proofarith.AddRoundError(cbp.Z0, s.Ds, cbp.Z0+s.Ds))
 	}
-	if len(cbp.endLoops) != 0 {
-		s := cbp.end
-		z1Delta = proofbound.AbsSumUpper(z1Delta, s.dsDelta, proofarith.AddRoundError(cbp.z1, -s.ds, cbp.z1-s.ds))
+	if len(cbp.EndLoops) != 0 {
+		s := cbp.End
+		z1Delta = proofbound.AbsSumUpper(z1Delta, s.DsDelta, proofarith.AddRoundError(cbp.Z1, -s.Ds, cbp.Z1-s.Ds))
 	}
 	return math.Max(z0Delta, z1Delta)
 }
@@ -283,7 +283,7 @@ func (cbp capBlendPayload) AxialDelta() float64 {
 // A direction along the sweep ignores contour displacement but
 // still reads the cap level's own inherited axial displacement.
 func (cbp capBlendPayload) ExtentAlong(g r3.Vec) (float64, float64, float64, error) {
-	return cbp.extentBoundedAlong(context.Background(), g, freeform.NewFreeformWork())
+	return cbp.ExtentBoundedAlong(context.Background(), g, freeform.NewFreeformWork())
 }
 
 // extentBoundedAlong is the reading itself: the interval AND the proven
@@ -302,9 +302,9 @@ func (cbp capBlendPayload) ExtentAlong(g r3.Vec) (float64, float64, float64, err
 // extremized candidate, charged exactly by proofbound.ExactSumRound (internal/proofbound/bounds.go), since a
 // placement can leave every coefficient exactly right and still round when the
 // terms are added.
-func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freeform.FreeformWork) (float64, float64, float64, error) {
-	pl := cbp.prismLike(0, 0)
-	base := cbp.xform.Apply(cbp.frame.Origin()).Dot(g)
+func (cbp capBlendPayload) ExtentBoundedAlong(ctx context.Context, g r3.Vec, work *freeform.FreeformWork) (float64, float64, float64, error) {
+	pl := cbp.PrismLike(0, 0)
+	base := cbp.Xform.Apply(cbp.Frame.Origin()).Dot(g)
 	gu := pl.Dir(1, 0, 0).Dot(g)
 	gv := pl.Dir(0, 1, 0).Dot(g)
 	gz := pl.Dir(0, 0, 1).Dot(g)
@@ -335,23 +335,23 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 		hiLower = math.Max(hiLower, outward(hv, allow, false))
 		hiUpper = math.Max(hiUpper, outward(hv, allow, true))
 	}
-	for li, loop := range cbp.loops() {
+	for li, loop := range cbp.Loops() {
 		if err := ctx.Err(); err != nil {
 			return 0, 0, 0, err
 		}
-		onStart, onEnd := cbp.startLoops[li], cbp.endLoops[li]
-		zLo, zHi := cbp.z0, cbp.z1
-		loAllow := proofbound.ProductUpper(axial, cbp.z0Delta)
-		hiAllow := proofbound.ProductUpper(axial, cbp.z1Delta)
+		onStart, onEnd := cbp.StartLoops[li], cbp.EndLoops[li]
+		zLo, zHi := cbp.Z0, cbp.Z1
+		loAllow := proofbound.ProductUpper(axial, cbp.Z0Delta)
+		hiAllow := proofbound.ProductUpper(axial, cbp.Z1Delta)
 		if onStart {
-			s := cbp.start
-			zLo = cbp.z0 + s.ds
-			loAllow = proofbound.AbsSumUpper(loAllow, proofbound.ProductUpper(axial, proofbound.AbsSumUpper(s.dsDelta, proofarith.AddRoundError(cbp.z0, s.ds, zLo))))
+			s := cbp.Start
+			zLo = cbp.Z0 + s.Ds
+			loAllow = proofbound.AbsSumUpper(loAllow, proofbound.ProductUpper(axial, proofbound.AbsSumUpper(s.DsDelta, proofarith.AddRoundError(cbp.Z0, s.Ds, zLo))))
 		}
 		if onEnd {
-			s := cbp.end
-			zHi = cbp.z1 - s.ds
-			hiAllow = proofbound.AbsSumUpper(hiAllow, proofbound.ProductUpper(axial, proofbound.AbsSumUpper(s.dsDelta, proofarith.AddRoundError(cbp.z1, -s.ds, zHi))))
+			s := cbp.End
+			zHi = cbp.Z1 - s.Ds
+			hiAllow = proofbound.AbsSumUpper(hiAllow, proofbound.ProductUpper(axial, proofbound.AbsSumUpper(s.DsDelta, proofarith.AddRoundError(cbp.Z1, -s.Ds, zHi))))
 		}
 		// The boundary scan states its own displacement per candidate — nonzero
 		// wherever a circular candidate's apex is not exactly representable
@@ -373,12 +373,12 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 		// The cap contour is the band's cap-level directrix and the chamfered
 		// cap face's own boundary — the same offset loop the build emits, and
 		// the same displacement the band's own vertices and edges carry.
-		contour, err := cbp.contourOf(ctx, li, loop, cbp.loopOffset(li))
+		contour, err := cbp.ContourOf(ctx, li, loop, cbp.LoopOffset(li))
 		if err != nil {
 			return 0, 0, 0, err
 		}
-		setback := cbp.loopSetback(li)
-		delta, err := cbp.loopContourDelta(ctx, li, loop, setback.dc, setback.dcDelta)
+		setback := cbp.LoopSetback(li)
+		delta, err := cbp.LoopContourDelta(ctx, li, loop, setback.Dc, setback.DcDelta)
 		if err != nil {
 			return 0, 0, 0, err
 		}
@@ -391,10 +391,10 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 		// scan's own candidate displacement is a third in-plane term.
 		contourAllow := proofbound.AbsSumUpper(proofbound.ProductUpper(inPlane, delta), contourPlaneAllow)
 		if onStart {
-			take(cl, ch, cbp.z0, proofbound.AbsSumUpper(contourAllow, proofbound.ProductUpper(axial, cbp.z0Delta)))
+			take(cl, ch, cbp.Z0, proofbound.AbsSumUpper(contourAllow, proofbound.ProductUpper(axial, cbp.Z0Delta)))
 		}
 		if onEnd {
-			take(cl, ch, cbp.z1, proofbound.AbsSumUpper(contourAllow, proofbound.ProductUpper(axial, cbp.z1Delta)))
+			take(cl, ch, cbp.Z1, proofbound.AbsSumUpper(contourAllow, proofbound.ProductUpper(axial, cbp.Z1Delta)))
 		}
 	}
 	if math.IsInf(lo, 1) {
@@ -404,11 +404,11 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 		math.Max(loUpper-lo, lo-loLower),
 		math.Max(hiUpper-hi, hi-hiLower),
 	))
-	coordUpper, err := momentinput.CoordinateEnvelope(cbp.profile, work, nil)
+	coordUpper, err := momentinput.CoordinateEnvelope(cbp.Profile, work, nil)
 	if err != nil {
 		return 0, 0, 0, err
 	}
-	zUpper := math.Max(math.Abs(cbp.z0), math.Abs(cbp.z1))
+	zUpper := math.Max(math.Abs(cbp.Z0), math.Abs(cbp.Z1))
 	placeAllow := prismrecord.PlacementCoeffAllow(pl, g, base, gu, gv, gz, coordUpper, zUpper)
 	// A FIFTH mechanism displaces both ends and composes outward with the rest:
 	// the reading's own recombination base + lo (and base + hi), charged exactly
@@ -452,8 +452,8 @@ func requireNotDraftReceiver(payload topo.Payload, op string) error {
 
 // capLoops returns the receiver's loops as append(Outer, Holes...), the same
 // index space Table BX's roles and the prism's own side(i,j) roles use.
-func (cbp capBlendPayload) loops() []loopRecord {
-	return append([]loopRecord{cbp.profile.Outer}, cbp.profile.Holes...)
+func (cbp capBlendPayload) Loops() []loopRecord {
+	return append([]loopRecord{cbp.Profile.Outer}, cbp.Profile.Holes...)
 }
 
 // classifyChamferSelection is RX1's second class plus SX4 (Table SX):
@@ -562,18 +562,18 @@ func buildCapBlendWithLoftSource(ctx context.Context, doc *Document, ref produce
 	height := pp.Z1 - pp.Z0
 	loops := append([]loopRecord{pp.Profile.Outer}, pp.Profile.Holes...)
 	cbp := capBlendPayload{
-		profile:    pp.Profile,
-		frame:      pp.Frame,
-		z0:         pp.Z0,
-		z1:         pp.Z1,
-		z0Delta:    pp.Z0Delta,
-		z1Delta:    pp.Z1Delta,
-		xform:      pp.Xform,
-		start:      start,
-		end:        end,
-		startLoops: startLoops,
-		endLoops:   endLoops,
-		loftSource: source,
+		Profile:    pp.Profile,
+		Frame:      pp.Frame,
+		Z0:         pp.Z0,
+		Z1:         pp.Z1,
+		Z0Delta:    pp.Z0Delta,
+		Z1Delta:    pp.Z1Delta,
+		Xform:      pp.Xform,
+		Start:      start,
+		End:        end,
+		StartLoops: startLoops,
+		EndLoops:   endLoops,
+		LoftSource: source,
 	}
 
 	// SX6 + SX7/SX12: build the "mixed" profile — every selected loop offset
@@ -617,10 +617,10 @@ func buildCapBlendWithLoftSource(ctx context.Context, doc *Document, ref produce
 	for li := range loops {
 		reach := 0.0
 		if startLoops[li] {
-			reach += start.ds
+			reach += start.Ds
 		}
 		if endLoops[li] {
-			reach += end.ds
+			reach += end.Ds
 		}
 		if reach >= height {
 			return nil, fmt.Errorf(`%w: the chamfer band(s) on loop %d reach or pass the opposite end of the sweep; a merging kernel is not available`, ErrUnsupported, li)
@@ -666,19 +666,19 @@ func buildCapBlendWithLoftSource(ctx context.Context, doc *Document, ref produce
 // corner rather than surfacing as an unbounded measurement. A G1 join and a
 // reflex corner's connector arc read no locus and are not checked.
 func requireCapBlendCornerLoci(budget *proofbound.WorkBudget, cbp capBlendPayload) error {
-	for li, loop := range cbp.loops() {
-		if !cbp.startLoops[li] && !cbp.endLoops[li] {
+	for li, loop := range cbp.Loops() {
+		if !cbp.StartLoops[li] && !cbp.EndLoops[li] {
 			continue
 		}
-		setback := cbp.loopSetback(li)
-		if setback.dc <= 0 {
+		setback := cbp.LoopSetback(li)
+		if setback.Dc <= 0 {
 			continue
 		}
 		cl, err := oneLoopCornerLoop(budget, loop, freeform.NewFreeformWork())
 		if err != nil {
 			return err
 		}
-		joins, err := cbp.offsetJoins(budget, li, cl, setback.dc)
+		joins, err := cbp.OffsetJoins(budget, li, cl, setback.Dc)
 		if err != nil {
 			return err
 		}
@@ -689,7 +689,7 @@ func requireCapBlendCornerLoci(budget *proofbound.WorkBudget, cbp capBlendPayloa
 			if j.Arc || j.G1 || (!prev.IsCircular() && !cur.IsCircular()) {
 				continue
 			}
-			_, ok, err := capband.MiterLocusUpper(budget, prev, cur, j.VertU, j.VertV, setback.axialUpper(), setback.dc, setback.dcDelta)
+			_, ok, err := capband.MiterLocusUpper(budget, prev, cur, j.VertU, j.VertV, setback.AxialUpper(), setback.Dc, setback.DcDelta)
 			if err != nil {
 				return err
 			}
@@ -732,11 +732,11 @@ func requireCapBlendLevelsSeparate(cbp capBlendPayload) error {
 	refuse := func(which string, ds, level float64) error {
 		return fmt.Errorf(`%w: the chamfer's side setback %v mm is below the float64 spacing of the %s cap's own sweep level %v mm, so the band's side level rounds back onto the cap level and every patch is emitted flat in the cap plane; a wider setback or a shorter sweep states a chamfer this evaluator can build`, ErrUnsupported, ds, which, level)
 	}
-	if ds := cbp.start.ds; anyLoopSelected(cbp.startLoops) && cbp.z0+ds == cbp.z0 {
-		return refuse(`start`, ds, cbp.z0)
+	if ds := cbp.Start.Ds; anyLoopSelected(cbp.StartLoops) && cbp.Z0+ds == cbp.Z0 {
+		return refuse(`start`, ds, cbp.Z0)
 	}
-	if ds := cbp.end.ds; anyLoopSelected(cbp.endLoops) && cbp.z1-ds == cbp.z1 {
-		return refuse(`end`, ds, cbp.z1)
+	if ds := cbp.End.Ds; anyLoopSelected(cbp.EndLoops) && cbp.Z1-ds == cbp.Z1 {
+		return refuse(`end`, ds, cbp.Z1)
 	}
 	return nil
 }
@@ -785,21 +785,21 @@ func auditCapBlendSetbackSpan(budget *proofbound.WorkBudget, profile profileReco
 // the held point and nothing differs.
 func (cbp capBlendPayload) setbackSpanTop() (capBlendPayload, bool) {
 	top := func(s capSetback) (capSetback, bool) {
-		if !(s.dcDelta > 0) {
+		if !(s.DcDelta > 0) {
 			return s, false
 		}
-		rd, rw := proofarith.FloatRat(s.dc), proofarith.FloatRat(s.dcDelta)
+		rd, rw := proofarith.FloatRat(s.Dc), proofarith.FloatRat(s.DcDelta)
 		if rd == nil || rw == nil {
-			s.dc = math.Inf(1)
+			s.Dc = math.Inf(1)
 			return s, true
 		}
-		s.dc = proofbound.RatFloatUp(new(big.Rat).Add(rd, rw))
+		s.Dc = proofbound.RatFloatUp(new(big.Rat).Add(rd, rw))
 		return s, true
 	}
 	out := cbp
 	var okStart, okEnd bool
-	out.start, okStart = top(cbp.start)
-	out.end, okEnd = top(cbp.end)
+	out.Start, okStart = top(cbp.Start)
+	out.End, okEnd = top(cbp.End)
 	return out, okStart || okEnd
 }
 
@@ -818,7 +818,7 @@ func anyLoopSelected(loops map[int]bool) bool {
 // in-plane offset, loopOffset's dc) into the material, leaving every other
 // loop unchanged. It reuses offset2d.BuildLoop's per-feature offset unmodified.
 func mixedOffsetProfile(budget *proofbound.WorkBudget, cbp capBlendPayload) (profileRecord, error) {
-	profile := cbp.profile
+	profile := cbp.Profile
 	loops, err := offset2d.ProfileCornerLoopsBudget(budget, profile)
 	if err != nil {
 		return profileRecord{}, err
@@ -829,19 +829,19 @@ func mixedOffsetProfile(budget *proofbound.WorkBudget, cbp capBlendPayload) (pro
 		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return profileRecord{}, err
 		}
-		if !cbp.startLoops[li] && !cbp.endLoops[li] {
+		if !cbp.StartLoops[li] && !cbp.EndLoops[li] {
 			out[li] = cloneLoopRecord(orig[li])
 			continue
 		}
 		var segs []curveSegment
-		if cbp.fillet && (len(loops[li].Walks) != 1 || !loops[li].Walks[0].Closed) {
-			joins, joinErr := filletband.OffsetJoins(budget, loops[li].Walks, cbp.loopOffset(li), cbp.loopSetback(li).dcDelta, shellTol)
+		if cbp.Fillet && (len(loops[li].Walks) != 1 || !loops[li].Walks[0].Closed) {
+			joins, joinErr := filletband.OffsetJoins(budget, loops[li].Walks, cbp.LoopOffset(li), cbp.LoopSetback(li).DcDelta, shellTol)
 			if joinErr != nil {
 				return profileRecord{}, offset2d.InLoop(joinErr, li)
 			}
-			segs, err = filletband.OffsetLoop(budget, loops[li].Walks, joins, cbp.loopOffset(li), shellTol)
+			segs, err = filletband.OffsetLoop(budget, loops[li].Walks, joins, cbp.LoopOffset(li), shellTol)
 		} else {
-			segs, err = offset2d.BuildLoop(budget, loops[li].Walks, 1, cbp.loopOffset(li), shellTol)
+			segs, err = offset2d.BuildLoop(budget, loops[li].Walks, 1, cbp.LoopOffset(li), shellTol)
 		}
 		if err != nil {
 			return profileRecord{}, offset2d.InLoop(err, li)

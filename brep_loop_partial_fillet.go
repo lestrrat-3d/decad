@@ -22,8 +22,8 @@ func attachPartialFilletBand(ctx context.Context, body *Body, ref producerID, bp
 	b := bp.loopBands[bi]
 	f := bp.faces[b.face]
 	pl := f.view(bp.xform)
-	r := b.setback.dc
-	rIv, err := filletband.RadiusInterval(b.setback.dc, b.setback.dcDelta)
+	r := b.setback.Dc
+	rIv, err := filletband.RadiusInterval(b.setback.Dc, b.setback.DcDelta)
 	if err != nil {
 		return nil, brepBandMass{}, err
 	}

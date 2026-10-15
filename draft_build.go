@@ -196,10 +196,10 @@ func auditDraftSpan(budget *proofbound.WorkBudget, profile profileRecord, walks 
 // walls. draft_moments.go then measures the body.
 func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draftPayload, work *freeform.FreeformWork) (*Body, error) {
 	cbp := dp.band()
-	loops := cbp.loops()
+	loops := cbp.Loops()
 	nearZ, nearDelta, farZ, matSign := dp.levels()
 	body := bornBody(&Body{n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Doc: documentNode(doc)}})
-	pl := cbp.prismLike(0, 0)
+	pl := cbp.PrismLike(0, 0)
 
 	var faces []*Face
 	nearLoops := make([]*Loop, len(loops))
@@ -219,17 +219,17 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 		if err != nil {
 			return nil, wrapStageError(`the tapered extrude's walls`, err)
 		}
-		faces = append(faces, band.patches...)
+		faces = append(faces, band.Patches...)
 		nearLoops[li] = bornLoop(&Loop{n: topo.Loop{Outer: li == 0, CoEdges: nearCo}})
-		farLoops[li] = bornLoop(&Loop{n: topo.Loop{Outer: li == 0, CoEdges: band.capCo}})
+		farLoops[li] = bornLoop(&Loop{n: topo.Loop{Outer: li == 0, CoEdges: band.CapCo}})
 		bands[li] = band
-		dp.farDelta = math.Max(dp.farDelta, band.delta)
-		dp.bandDelta[capBandKey{loop: li, start: !dp.nearStart}] = band.delta
-		if len(band.patches) != len(band.geom) {
-			return nil, fmt.Errorf(`%w: the tapered extrude's wall band on loop %d built %d walls over %d patch geometries`, ErrDegenerate, li, len(band.patches), len(band.geom))
+		dp.farDelta = math.Max(dp.farDelta, band.Delta)
+		dp.bandDelta[capBandKey{Loop: li, Start: !dp.nearStart}] = band.Delta
+		if len(band.Patches) != len(band.Geom) {
+			return nil, fmt.Errorf(`%w: the tapered extrude's wall band on loop %d built %d walls over %d patch geometries`, ErrDegenerate, li, len(band.Patches), len(band.Geom))
 		}
-		for p, f := range band.patches {
-			dp.patches = append(dp.patches, capPatch{role: f.n.Origins[0].Role, geom: band.geom[p]})
+		for p, f := range band.Patches {
+			dp.patches = append(dp.patches, capPatch{Role: f.n.Origins[0].Role, Geom: band.Geom[p]})
 		}
 	}
 

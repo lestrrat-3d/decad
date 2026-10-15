@@ -78,7 +78,7 @@ func (b brepLoopBand) matSign(f brepFace) float64 {
 // setback's conversion and the float sum's rounding (capband.BandLevelDelta).
 func (b brepLoopBand) sideLevel(f brepFace) (float64, float64) {
 	m := b.matSign(f)
-	return f.z0 + m*b.setback.ds, proofbound.AbsSumUpper(f.z0Delta, capband.BandLevelDelta(f.z0, m, b.setback.ds, b.setback.dsDelta))
+	return f.z0 + m*b.setback.Ds, proofbound.AbsSumUpper(f.z0Delta, capband.BandLevelDelta(f.z0, m, b.setback.Ds, b.setback.DsDelta))
 }
 
 // view is the band read as a one-loop cap blend in F's own frame: its
@@ -87,16 +87,16 @@ func (b brepLoopBand) sideLevel(f brepFace) (float64, float64) {
 // it exactly as they read a prism's cap band.
 func (b brepLoopBand) view(f brepFace, xform r3.Transform) capBlendPayload {
 	cbp := capBlendPayload{
-		profile: profileRecord{Outer: b.orig}, frame: f.frame, xform: xform,
-		z0: f.z0, z1: f.z0, z0Delta: f.z0Delta, z1Delta: f.z0Delta,
-		start: b.setback, end: b.setback,
-		startLoops: map[int]bool{}, endLoops: map[int]bool{},
-		fillet: b.kind == brepBandFillet,
+		Profile: profileRecord{Outer: b.orig}, Frame: f.frame, Xform: xform,
+		Z0: f.z0, Z1: f.z0, Z0Delta: f.z0Delta, Z1Delta: f.z0Delta,
+		Start: b.setback, End: b.setback,
+		StartLoops: map[int]bool{}, EndLoops: map[int]bool{},
+		Fillet: b.kind == brepBandFillet,
 	}
 	if b.matSign(f) > 0 {
-		cbp.startLoops[0] = true
+		cbp.StartLoops[0] = true
 	} else {
-		cbp.endLoops[0] = true
+		cbp.EndLoops[0] = true
 	}
 	return cbp
 }
@@ -124,9 +124,9 @@ func (b brepLoopBand) validate(bp brepPayload, bi int) error {
 		return refuse(`is neither a chamfer nor a fillet band, the two kinds route L builds`)
 	case b.sigma != 1 && b.sigma != -1:
 		return refuse(`states no side of its face`)
-	case !(b.setback.dc > 0) || !(b.setback.ds > 0) ||
-		math.IsInf(b.setback.dc, 1) || math.IsInf(b.setback.ds, 1) ||
-		(b.kind == brepBandFillet && b.setback.dc != b.setback.ds):
+	case !(b.setback.Dc > 0) || !(b.setback.Ds > 0) ||
+		math.IsInf(b.setback.Dc, 1) || math.IsInf(b.setback.Ds, 1) ||
+		(b.kind == brepBandFillet && b.setback.Dc != b.setback.Ds):
 		return refuse(`states no positive finite setbacks for its band kind`)
 	case len(b.orig.Segments) == 0:
 		return refuse(`holds no loop`)
@@ -541,16 +541,16 @@ func attachBrepLoopBands(ctx context.Context, body *Body, ref producerID, bp bre
 		if err != nil {
 			return brepBandsBuilt{}, err
 		}
-		geom := make([]capPatch, len(band.patches))
-		for p, patch := range band.patches {
+		geom := make([]capPatch, len(band.Patches))
+		for p, patch := range band.Patches {
 			role := b.patchRole(p)
 			patch.n.Origins = []provenance.Ref{{Producer: ref, Role: role}}
 			if b.sigma > 0 {
 				patch.n.Reversed = !patch.n.Reversed
 			}
-			geom[p] = capPatch{role: role, geom: band.geom[p]}
+			geom[p] = capPatch{Role: role, Geom: band.Geom[p]}
 		}
-		out.patches = append(out.patches, band.patches...)
+		out.patches = append(out.patches, band.Patches...)
 		out.geom = append(out.geom, geom)
 		mass, err := brepBandMassOf(ctx, b, f, embeds[b.face], cbp, band, work)
 		if err != nil {
@@ -578,7 +578,7 @@ func attachBrepLoopBands(ctx context.Context, body *Body, ref producerID, bp bre
 // signed permutation.
 func brepBandMassOf(ctx context.Context, b brepLoopBand, f brepFace, e brepEmbed, cbp capBlendPayload, band capBandResult, work *freeform.FreeformWork) (brepBandMass, error) {
 	m := b.matSign(f)
-	in, err := readBandMass(ctx, 0, b.orig, cbp, band.geom, f.z0, m, band.delta, band.closure)
+	in, err := readBandMass(ctx, 0, b.orig, cbp, band.Geom, f.z0, m, band.Delta, band.Closure)
 	if err != nil {
 		return brepBandMass{}, err
 	}
@@ -639,7 +639,7 @@ func brepBandMassOf(ctx context.Context, b brepLoopBand, f brepFace, e brepEmbed
 		scale := proofbound.RatMul(eps, big.NewRat(int64(e.Sign[i]), 1))
 		out.moments[e.Axis[i]] = proofbound.IntervalScale(local[i], scale)
 	}
-	for _, g := range band.geom {
+	for _, g := range band.Geom {
 		pa, pb := capband.AreaOf(g)
 		out.area = proofbound.BoundedAdd(out.area, proofbound.MeasuredScalar(pa, pb))
 	}

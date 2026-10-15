@@ -32,7 +32,7 @@ func measureDraftBody(ctx context.Context, body *Body, dp draftPayload, cbp capB
 	_, _, farZ, matSign := dp.levels()
 	var nearArea, farArea, patchArea, volume proofbound.BoundedScalar
 	var mu, mv, mz proofbound.BoundedScalar
-	for li, loop := range cbp.loops() {
+	for li, loop := range cbp.Loops() {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
@@ -45,7 +45,7 @@ func measureDraftBody(ctx context.Context, body *Body, dp draftPayload, cbp capB
 		}
 		band := bands[li]
 
-		mass, err := readBandMass(ctx, li, loop, cbp, band.geom, farZ, matSign, band.delta, band.closure)
+		mass, err := readBandMass(ctx, li, loop, cbp, band.Geom, farZ, matSign, band.Delta, band.Closure)
 		if err != nil {
 			return err
 		}
@@ -64,7 +64,7 @@ func measureDraftBody(ctx context.Context, body *Body, dp draftPayload, cbp capB
 		mu = proofbound.BoundedAdd(mu, signed(bmu))
 		mv = proofbound.BoundedAdd(mv, signed(bmv))
 		mz = proofbound.BoundedAdd(mz, signed(bmz))
-		for _, g := range band.geom {
+		for _, g := range band.Geom {
 			pa, pb := capband.AreaOf(g)
 			patchArea = proofbound.BoundedAdd(patchArea, proofbound.MeasuredScalar(pa, pb))
 		}
@@ -74,7 +74,7 @@ func measureDraftBody(ctx context.Context, body *Body, dp draftPayload, cbp capB
 			return err
 		}
 		nearArea = proofbound.BoundedAdd(nearArea, signed(near))
-		boundary, err := cbp.contourOf(ctx, li, loop, dp.d)
+		boundary, err := cbp.ContourOf(ctx, li, loop, dp.d)
 		if err != nil {
 			return err
 		}
@@ -88,7 +88,7 @@ func measureDraftBody(ctx context.Context, body *Body, dp draftPayload, cbp capB
 		// joint terms proofbound.SectionDisplacementArea states over the far
 		// rim's own held perimeter.
 		far.Bound = proofbound.AbsSumUpper(far.Bound,
-			proofbound.SectionDisplacementArea(band.delta, len(loop.Segments), capContourPerimeterUpper(band.capCo)))
+			proofbound.SectionDisplacementArea(band.Delta, len(loop.Segments), capContourPerimeterUpper(band.CapCo)))
 		farArea = proofbound.BoundedAdd(farArea, signed(far))
 	}
 	nearCap.n.Area, nearCap.n.AreaBound = nearArea.Value, nearArea.Bound

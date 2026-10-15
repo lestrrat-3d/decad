@@ -37,9 +37,9 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 	}
 	outerPair := b.loop == 0 && b.sigma == -1 && selectedCount == 2
 	rootRun := b.loop > 0 && b.sigma == 1 && (selectedCount == 1 || selectedCount == 2)
-	if (!outerPair && !rootRun) || f.delta != 0 || b.setback.dc != b.setback.ds ||
-		b.setback.dcDelta != 0 ||
-		b.setback.dsDelta != 0 {
+	if (!outerPair && !rootRun) || f.delta != 0 || b.setback.Dc != b.setback.Ds ||
+		b.setback.DcDelta != 0 ||
+		b.setback.DsDelta != 0 {
 		return nil, brepBandMass{}, fmt.Errorf(`%w: a partial chamfer requires an exact outer pair or one or two inner roots`, ErrUnsupported)
 	}
 	sideZ, sideDelta := b.sideLevel(f)
@@ -78,7 +78,7 @@ func attachPartialChamferBand(ctx context.Context, body *Body, ref producerID,
 				e.Canon(cw.EndU, cw.EndV, f.z0), e.Canon(cw.StartU, cw.StartV, f.z0),
 			}, cap: capEdge, side: edgeHandle(sideEdge),
 		}
-		if err := partialband.ChamferQuadExact(quads[i].points, b.setback.dc, b.setback.ds, e); err != nil {
+		if err := partialband.ChamferQuadExact(quads[i].points, b.setback.Dc, b.setback.Ds, e); err != nil {
 			return nil, brepBandMass{}, err
 		}
 		sideOrdinal++

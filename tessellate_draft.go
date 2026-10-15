@@ -54,10 +54,10 @@ func draftOccupiedVolumeAdmission(budget *proofbound.WorkBudget, dp draftPayload
 // draftNearLevel is the near cap's level in a draft band view beside its own
 // axial displacement: the cap no loop is chamfered on.
 func draftNearLevel(cbp capBlendPayload) proofbound.BoundedScalar {
-	if len(cbp.endLoops) > 0 {
-		return proofbound.MeasuredScalar(cbp.z0, cbp.z0Delta)
+	if len(cbp.EndLoops) > 0 {
+		return proofbound.MeasuredScalar(cbp.Z0, cbp.Z0Delta)
 	}
-	return proofbound.MeasuredScalar(cbp.z1, cbp.z1Delta)
+	return proofbound.MeasuredScalar(cbp.Z1, cbp.Z1Delta)
 }
 
 // draftBandHeightUpper is a proven upper bound on the axial extent of a draft
@@ -67,7 +67,7 @@ func draftNearLevel(cbp capBlendPayload) proofbound.BoundedScalar {
 // band term), in place of the side setback, which carries neither end's
 // displacement.
 func draftBandHeightUpper(cbp capBlendPayload) float64 {
-	h := proofbound.BoundedSub(proofbound.MeasuredScalar(cbp.z1, cbp.z1Delta), proofbound.MeasuredScalar(cbp.z0, cbp.z0Delta))
+	h := proofbound.BoundedSub(proofbound.MeasuredScalar(cbp.Z1, cbp.Z1Delta), proofbound.MeasuredScalar(cbp.Z0, cbp.Z0Delta))
 	return proofbound.AbsSumUpper(math.Abs(h.Value), h.Bound)
 }
 

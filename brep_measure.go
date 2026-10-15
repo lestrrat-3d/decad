@@ -283,8 +283,8 @@ func brepMinRadius(b *Body, bp brepPayload) (radiusOutcome, bool) {
 	roles := facesByRole(b)
 	for _, patches := range bp.loopPatches {
 		for _, patch := range patches {
-			f := roles[patch.role]
-			if f == nil || capPatchWindowSkew(patch.geom) > 0 || f.n.NormalBound != 0 {
+			f := roles[patch.Role]
+			if f == nil || capPatchWindowSkew(patch.Geom) > 0 || f.n.NormalBound != 0 {
 				return radiusOutcome{}, false
 			}
 		}
@@ -301,7 +301,7 @@ func brepMinRadius(b *Body, bp brepPayload) (radiusOutcome, bool) {
 			// The tag's Minor or Radius, which a placement leaves unchanged,
 			// within the radius's unit conversion.
 			fillets = append(fillets, radiussurvey.BrepFilletRadius{
-				Radius: band.setback.dc, Bound: band.setback.dcDelta,
+				Radius: band.setback.Dc, Bound: band.setback.DcDelta,
 			})
 		}
 	}

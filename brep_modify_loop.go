@@ -838,11 +838,11 @@ func (r *brepLoopRead) assignLoopSetbacks(sels []brepLoopSel) error {
 				r.bp.faces[sel.face].role))
 		}
 		if assignment == 0 {
-			sel.setback = capSetback{dc: r.call.asym.d, dcDelta: r.call.asym.dDelta,
-				ds: r.call.asym.other, dsDelta: r.call.asym.otherDelta}
+			sel.setback = capSetback{Dc: r.call.asym.d, DcDelta: r.call.asym.dDelta,
+				Ds: r.call.asym.other, DsDelta: r.call.asym.otherDelta}
 		} else {
-			sel.setback = capSetback{dc: r.call.asym.other, dcDelta: r.call.asym.otherDelta,
-				ds: r.call.asym.d, dsDelta: r.call.asym.dDelta}
+			sel.setback = capSetback{Dc: r.call.asym.other, DcDelta: r.call.asym.otherDelta,
+				Ds: r.call.asym.d, DsDelta: r.call.asym.dDelta}
 		}
 		f := r.bp.faces[sel.face]
 		band := brepLoopBand{sigma: sel.sigma}
@@ -879,7 +879,7 @@ func (r *brepLoopRead) requireBandReach(sels []brepLoopSel) error {
 				if b.planar {
 					key.use = b.nb[k]
 				}
-				reach[key] += sel.setback.ds
+				reach[key] += sel.setback.Ds
 				if reach[key] >= height {
 					return fmt.Errorf(`%w: the %s band on brep face %s's loop reaches or passes the far end of brep face %s beside it (%g mm of %g mm); a merging kernel is not available (modify-reach SX7); selector %s matched [%s]`,
 						ErrUnsupported, r.call.loopKind, f.role, a.role, reach[key], height, r.call.sel, selectedEdgesContext(r.call.edges))
@@ -897,11 +897,11 @@ func (r *brepLoopRead) requireBandReach(sels []brepLoopSel) error {
 func (r *brepLoopRead) loopFaceView(fi int, sels []brepLoopSel) capBlendPayload {
 	f := r.bp.faces[fi]
 	cbp := capBlendPayload{
-		profile: *f.region, frame: f.frame, xform: r.bp.xform,
-		z0: f.z0, z1: f.z0, z0Delta: f.z0Delta, z1Delta: f.z0Delta,
-		start: *r.call.loop, end: *r.call.loop,
-		startLoops: map[int]bool{}, endLoops: map[int]bool{},
-		fillet: r.call.loopKind == brepBandFillet,
+		Profile: *f.region, Frame: f.frame, Xform: r.bp.xform,
+		Z0: f.z0, Z1: f.z0, Z0Delta: f.z0Delta, Z1Delta: f.z0Delta,
+		Start: *r.call.loop, End: *r.call.loop,
+		StartLoops: map[int]bool{}, EndLoops: map[int]bool{},
+		Fillet: r.call.loopKind == brepBandFillet,
 	}
 	for _, sel := range sels {
 		if sel.face != fi {
@@ -909,11 +909,11 @@ func (r *brepLoopRead) loopFaceView(fi int, sels []brepLoopSel) capBlendPayload 
 		}
 		band := brepLoopBand{sigma: sel.sigma, setback: sel.setback}
 		if band.matSign(f) > 0 {
-			cbp.startLoops[sel.loop] = true
-			cbp.start = sel.setback
+			cbp.StartLoops[sel.loop] = true
+			cbp.Start = sel.setback
 		} else {
-			cbp.endLoops[sel.loop] = true
-			cbp.end = sel.setback
+			cbp.EndLoops[sel.loop] = true
+			cbp.End = sel.setback
 		}
 	}
 	return cbp
@@ -977,9 +977,9 @@ func (r *brepLoopRead) rewriteLoopFaces(ctx context.Context, sels []brepLoopSel)
 			return brepPayload{}, err
 		}
 		if len(cl.Walks) == 1 && cl.Walks[0].Closed {
-			_, err = capband.BandRadius(cl.Walks[0], setback.dc, shellTol)
+			_, err = capband.BandRadius(cl.Walks[0], setback.Dc, shellTol)
 		} else {
-			_, err = views[sel.face].offsetJoins(r.budget, sel.loop, cl, setback.dc)
+			_, err = views[sel.face].OffsetJoins(r.budget, sel.loop, cl, setback.Dc)
 		}
 		if err != nil {
 			return brepPayload{}, r.wrapFace(sel.face, err)
@@ -988,7 +988,7 @@ func (r *brepLoopRead) rewriteLoopFaces(ctx context.Context, sels []brepLoopSel)
 		// Table LF.
 		if r.call.loopKind == brepBandFillet {
 			f := r.bp.faces[sel.face]
-			if _, err := filletLoopOf(r.budget, f.regionLoop(sel.loop), setback.dc, f.role, work); err != nil {
+			if _, err := filletLoopOf(r.budget, f.regionLoop(sel.loop), setback.Dc, f.role, work); err != nil {
 				return brepPayload{}, r.wrapFace(sel.face, err)
 			}
 		}
@@ -1022,7 +1022,7 @@ func (r *brepLoopRead) rewriteLoopFaces(ctx context.Context, sels []brepLoopSel)
 		eF := r.btopo.embeds[sel.face]
 		n := eF.Axis[2]
 		band := brepLoopBand{face: sel.face, loop: sel.loop, orig: cloneLoopRecord(f.regionLoop(sel.loop)), setback: setback, sigma: sel.sigma, kind: r.call.loopKind}
-		delta, err := views[sel.face].loopContourDelta(ctx, sel.loop, band.orig, setback.dc, setback.dcDelta)
+		delta, err := views[sel.face].LoopContourDelta(ctx, sel.loop, band.orig, setback.Dc, setback.DcDelta)
 		if err != nil {
 			return brepPayload{}, r.wrapFace(sel.face, err)
 		}
@@ -1042,7 +1042,7 @@ func (r *brepLoopRead) rewriteLoopFaces(ctx context.Context, sels []brepLoopSel)
 				}
 				continue
 			}
-			if err := r.trimPlanar(trims, pu, n, sideRef, setback.ds); err != nil {
+			if err := r.trimPlanar(trims, pu, n, sideRef, setback.Ds); err != nil {
 				return brepPayload{}, err
 			}
 			a.delta = math.Max(a.delta, sideDelta)

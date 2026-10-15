@@ -219,8 +219,8 @@ func TestCapBlendGateDiameterReadsCapContours(t *testing.T) {
 	require.NoError(t, err)
 	cbp, isCapBlend := chamfered.n.Payload.(capBlendPayload)
 	require.True(t, isCapBlend)
-	require.Len(t, cbp.startLoops, 1)
-	require.Len(t, cbp.endLoops, 1)
+	require.Len(t, cbp.StartLoops, 1)
+	require.Len(t, cbp.EndLoops, 1)
 
 	d, ok, err := bodyGateDiameter(t.Context(), chamfered)
 	require.NoError(t, err)
@@ -265,8 +265,8 @@ func TestCapBlendGateDiameterReadsTrimmedCapArcs(t *testing.T) {
 	cbp, isCapBlend := chamfered.n.Payload.(capBlendPayload)
 	require.True(t, isCapBlend)
 	trimmed := 0
-	for _, p := range cbp.patches {
-		if p.geom.Circular && !p.geom.WholeTurn {
+	for _, p := range cbp.Patches {
+		if p.Geom.Circular && !p.Geom.WholeTurn {
 			trimmed++
 		}
 	}

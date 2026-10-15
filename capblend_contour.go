@@ -18,11 +18,11 @@ import (
 // (cbp.offsetJoins), each walk at its own amount (walkAmounts), so its
 // displacement is enclosed over the sharp joins, never over the reflex-corner
 // arcs a chamfer's contour holds.
-func (cbp capBlendPayload) loopContourDelta(ctx context.Context, li int, loop loopRecord, d, dDelta float64) (float64, error) {
-	if cbp.fillet {
+func (cbp capBlendPayload) LoopContourDelta(ctx context.Context, li int, loop loopRecord, d, dDelta float64) (float64, error) {
+	if cbp.Fillet {
 		return filletband.LoopContourDelta(ctx, loop, d, dDelta, shellTol)
 	}
-	if !cbp.draft {
+	if !cbp.Draft {
 		return capband.LoopContourDelta(ctx, loop, d, dDelta, shellTol)
 	}
 	budget := proofbound.NewWorkBudget(ctx)
@@ -31,7 +31,7 @@ func (cbp capBlendPayload) loopContourDelta(ctx context.Context, li int, loop lo
 	if err != nil {
 		return 0, err
 	}
-	amounts := cbp.walkAmounts(li, cl.Walks, d)
+	amounts := cbp.WalkAmounts(li, cl.Walks, d)
 	if len(cl.Walks) == 1 && cl.Walks[0].Closed {
 		a, aDelta := amounts[0], dDelta
 		if a == 0 {
@@ -39,7 +39,7 @@ func (cbp capBlendPayload) loopContourDelta(ctx context.Context, li int, loop lo
 		}
 		return capband.WallCircleDisplacement(cl.Walks[0], a, aDelta, shellTol)
 	}
-	joins, err := cbp.offsetJoins(budget, li, cl, d)
+	joins, err := cbp.OffsetJoins(budget, li, cl, d)
 	if err != nil {
 		return 0, err
 	}
