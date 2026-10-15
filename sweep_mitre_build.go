@@ -152,7 +152,7 @@ func evalMitredSweep(ctx context.Context, d *Document, ref producerID, mp mitred
 		Exactness: measurement.ExactnessOf(bound),
 		Bound:     units.SquareMillimeters(bound),
 	}
-	if err := validateLoftBodyMeasurements(body); err != nil {
+	if err := topobuild.ValidateLoftBodyMeasurements(&body.n); err != nil {
 		return nil, err
 	}
 	if !measurement.FiniteValues(bound) {

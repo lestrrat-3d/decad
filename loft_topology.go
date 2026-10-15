@@ -7,14 +7,13 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/provenance"
-	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
-	"github.com/lestrrat-3d/units"
 )
 
 // This file adapts the flat-triangle assembly in internal/loftmesh and builds
@@ -28,43 +27,6 @@ import (
 // displacement, never by publishing a ruled patch nothing constructed. See
 // docs/loft-design.md §5.1 and §7.
 
-// loftVertex builds a vertex at a recorded (or lifted-from-recorded)
-// coordinate: every loft vertex position comes from Plane.Origin + p.U*Plane.U
-// + p.V*Plane.V, the identical single float64 evaluation Extrude already
-// performs for a cap vertex (§5), so a vertex of a build whose delta is zero
-// carries the same zero-bound standing; any other vertex carries the payload's
-// own delta (§12 PR 2a). Zero delta is NOT the same claim as unplaced: an
-// unplaced build still carries a positive delta wherever a station was
-// COMPUTED rather than pinned (loftPayload's own delta doc comment).
-func loftVertex(p r3.Vec, delta float64) *Vertex {
-	return bornVertex(&Vertex{n: topo.Vertex{Position: p, Bound: units.Millimeters(delta)}})
-}
-
-// loftEdge builds one straight loft edge between two vertex-table indices,
-// with the given walked-boundary convexity.
-func loftEdge(vertexObjs []*Vertex, positions []r3.Vec, a, b int, convex bool, delta float64) *Edge {
-	held, bound := loftmesh.EdgeLength(positions[a], positions[b], delta)
-	return bornEdge(&Edge{n: topo.Edge{Convex: convex, Length: held, LengthBound: bound, Curve: surfacegeom.Line3{}, Start: vertexNode(vertexObjs[a]), End: vertexNode(vertexObjs[b])}})
-}
-
-// planeFromTriangle builds a face's Plane surface directly from one of its
-// own (already outward-oriented) triangles: origin at its first vertex, U and
-// V its two edge vectors. r3.NewFrame orthonormalizes them (Gram-Schmidt in
-// effect), and the resulting normal U×V is (B-A)x(C-A) up to positive
-// scaling — the outward normal of an outward-wound triangle, so the face's
-// `reversed` flag stays false (§5's wall-face row: every wall face is a Plane
-// wound outward). The Frame is the exact answer for the three vertices handed
-// to it whatever their own standing — §5's surface-parameter carve-out — while
-// the face's own area and its vertices' positions carry the payload's delta.
-func planeFromTriangle(verts []r3.Vec, tri [3]int) (surfacegeom.Plane, error) {
-	a, b, c := verts[tri[0]], verts[tri[1]], verts[tri[2]]
-	f, err := r3.NewFrame(a, b.Sub(a), c.Sub(a))
-	if err != nil {
-		return surfacegeom.Plane{}, fmt.Errorf(`%w: a loft triangle has no plane: %s`, ErrDegenerate, err)
-	}
-	return surfacegeom.Plane{Frame: f}, nil
-}
-
 // buildLoftWallFace builds one wall triangle's Face (§7's lower/upper wall
 // triangle row): its own Plane, its own proven area bracket
 // (loft_moments.go's loftmesh.WallTriangleArea, the identical bracket the mass
@@ -73,7 +35,7 @@ func planeFromTriangle(verts []r3.Vec, tri [3]int) (surfacegeom.Plane, error) {
 // the same per-triangle correction the mass accumulator sums into Area's own
 // bound.
 func buildLoftWallFace(body *Body, ref producerID, verts []r3.Vec, tri [3]int, i, j, side int, delta float64, area *loftmesh.WallArea) (*Face, error) {
-	surf, err := planeFromTriangle(verts, tri)
+	surf, err := topobuild.PlaneFromTriangle(verts, tri)
 	if err != nil {
 		return nil, err
 	}
@@ -99,31 +61,6 @@ func buildLoftWallFace(body *Body, ref producerID, verts []r3.Vec, tri [3]int, i
 	}), nil
 }
 
-// loftLoopCoedges carries §5's whole-shell reversal into one face's directed
-// boundary. Every walk buildLoftTopology emits is written from the LOCAL
-// vertex order of §5's construction table, which is the order the triangles
-// had BEFORE the whole-shell step; a face's Plane, by contrast, is rebuilt
-// from its own
-// already-flipped triple (planeFromTriangle), so on a reversed shell the two
-// disagree and the published boundary — Loop.CoEdges, CoEdge.Start/End/
-// IsForward — walks the material on the RIGHT of the face's own outward
-// normal, the opposite of decad's material-on-the-left convention.
-//
-// Reversing a walk is reversing its coedge order and negating each use's
-// sense; nothing but the direction changes. The edge identities and their
-// count are untouched, so every edge still bounds exactly the same two faces
-// and Loop.Edges' undirected view is merely re-ordered.
-func loftLoopCoedges(co []topo.CoEdge, reversed bool) []topo.CoEdge {
-	if !reversed {
-		return co
-	}
-	out := make([]topo.CoEdge, len(co))
-	for i, ce := range co {
-		out[len(co)-1-i] = topo.CoEdge{Edge: ce.Edge, Forward: !ce.Forward}
-	}
-	return out
-}
-
 // buildLoftTopology builds the B-rep topology from the assembled, globally
 // oriented triangle set (docs/loft-design.md §5/§7): real Vertex/Edge/Loop/
 // Face objects sharing indices with the assembly's own vertex table. Every
@@ -132,14 +69,14 @@ func loftLoopCoedges(co []topo.CoEdge, reversed bool) []topo.CoEdge {
 // its incident wall edge, the standard two-manifold convention.
 //
 // Every loop this builds is stated in §5's LOCAL vertex order and then passed
-// through loftLoopCoedges, which is what carries the assembly's own
+// through topobuild.LoftLoopCoedges, which is what carries the assembly's own
 // whole-shell reversal into the directed boundary each face publishes. A walk
 // emitted without it agrees with its face's Plane on one axial spelling of a
 // section pair and opposes it on the mirror.
 func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftmesh.Assembly, cap0Rat, cap1Rat *big.Rat) (*Face, *Face, []*Face, []loftmesh.WallArea, error) {
-	vertexObjs := make([]*Vertex, len(a.Verts))
+	vertexObjs := make([]*topo.Vertex, len(a.Verts))
 	for i, p := range a.Verts {
-		vertexObjs[i] = loftVertex(p, a.Delta)
+		vertexObjs[i] = topobuild.LoftVertex(handleAlloc{}, p, a.Delta)
 	}
 
 	loopCount := len(a.VIdx)
@@ -172,22 +109,22 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 		isOuter := i == 0
 		vIdx, wIdx := a.VIdx[i], a.WIdx[i]
 
-		rimBottom := make([]*Edge, n)
-		rimTop := make([]*Edge, n)
-		diagE := make([]*Edge, n)
-		rungE := make([]*Edge, n)
+		rimBottom := make([]*topo.Edge, n)
+		rimTop := make([]*topo.Edge, n)
+		diagE := make([]*topo.Edge, n)
+		rungE := make([]*topo.Edge, n)
 		for j := range n {
 			jn := (j + 1) % n
-			rimBottom[j] = loftEdge(vertexObjs, a.Verts, vIdx[j], vIdx[jn], isOuter, a.Delta)
-			rimTop[j] = loftEdge(vertexObjs, a.Verts, wIdx[j], wIdx[jn], isOuter, a.Delta)
+			rimBottom[j] = topobuild.LoftEdge(handleAlloc{}, vertexObjs, a.Verts, vIdx[j], vIdx[jn], isOuter, a.Delta)
+			rimTop[j] = topobuild.LoftEdge(handleAlloc{}, vertexObjs, a.Verts, wIdx[j], wIdx[jn], isOuter, a.Delta)
 		}
 		for j := range n {
 			jn := (j + 1) % n
 			jp := (j - 1 + n) % n
 			rungConvex := loftmesh.JunctionConvex(a.Verts, lowerTri[i][jp], upperTri[i][j], vIdx[j], wIdx[j])
-			rungE[j] = loftEdge(vertexObjs, a.Verts, vIdx[j], wIdx[j], rungConvex, a.Delta)
+			rungE[j] = topobuild.LoftEdge(handleAlloc{}, vertexObjs, a.Verts, vIdx[j], wIdx[j], rungConvex, a.Delta)
 			diagConvex := loftmesh.JunctionConvex(a.Verts, lowerTri[i][j], upperTri[i][j], vIdx[j], wIdx[jn])
-			diagE[j] = loftEdge(vertexObjs, a.Verts, vIdx[j], wIdx[jn], diagConvex, a.Delta)
+			diagE[j] = topobuild.LoftEdge(handleAlloc{}, vertexObjs, a.Verts, vIdx[j], wIdx[jn], diagConvex, a.Delta)
 		}
 
 		capStartCo := make([]topo.CoEdge, n)
@@ -200,10 +137,10 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 			if err != nil {
 				return nil, nil, nil, nil, err
 			}
-			lowerFace.n.Loops = []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: loftLoopCoedges([]topo.CoEdge{
-				{Edge: edgeNode(rimBottom[j]), Forward: true},
-				{Edge: edgeNode(rungE[jn]), Forward: true},
-				{Edge: edgeNode(diagE[j]), Forward: false},
+			lowerFace.n.Loops = []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{
+				{Edge: rimBottom[j], Forward: true},
+				{Edge: rungE[jn], Forward: true},
+				{Edge: diagE[j], Forward: false},
 			}, a.Reversed),
 			}}))}
 			walls = append(walls, lowerFace)
@@ -214,27 +151,27 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftme
 			if err != nil {
 				return nil, nil, nil, nil, err
 			}
-			upperFace.n.Loops = []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: loftLoopCoedges([]topo.CoEdge{
-				{Edge: edgeNode(diagE[j]), Forward: true},
-				{Edge: edgeNode(rimTop[j]), Forward: false},
-				{Edge: edgeNode(rungE[j]), Forward: false},
+			upperFace.n.Loops = []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{
+				{Edge: diagE[j], Forward: true},
+				{Edge: rimTop[j], Forward: false},
+				{Edge: rungE[j], Forward: false},
 			}, a.Reversed),
 			}}))}
 			walls = append(walls, upperFace)
 			wallAreas = append(wallAreas, upperArea)
 
-			capStartCo[n-1-j] = topo.CoEdge{Edge: edgeNode(rimBottom[j]), Forward: false}
-			capEndCo[j] = topo.CoEdge{Edge: edgeNode(rimTop[j]), Forward: true}
+			capStartCo[n-1-j] = topo.CoEdge{Edge: rimBottom[j], Forward: false}
+			capEndCo[j] = topo.CoEdge{Edge: rimTop[j], Forward: true}
 		}
-		capStartLoops = append(capStartLoops, bornLoop(&Loop{n: topo.Loop{Outer: isOuter, CoEdges: loftLoopCoedges(capStartCo, a.Reversed)}}))
-		capEndLoops = append(capEndLoops, bornLoop(&Loop{n: topo.Loop{Outer: isOuter, CoEdges: loftLoopCoedges(capEndCo, a.Reversed)}}))
+		capStartLoops = append(capStartLoops, bornLoop(&Loop{n: topo.Loop{Outer: isOuter, CoEdges: topobuild.LoftLoopCoedges(capStartCo, a.Reversed)}}))
+		capEndLoops = append(capEndLoops, bornLoop(&Loop{n: topo.Loop{Outer: isOuter, CoEdges: topobuild.LoftLoopCoedges(capEndCo, a.Reversed)}}))
 	}
 
-	capStartSurf, err := planeFromTriangle(a.Verts, a.Tris[a.Walls])
+	capStartSurf, err := topobuild.PlaneFromTriangle(a.Verts, a.Tris[a.Walls])
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
-	capEndSurf, err := planeFromTriangle(a.Verts, a.Tris[a.Walls+a.CapStartCount])
+	capEndSurf, err := topobuild.PlaneFromTriangle(a.Verts, a.Tris[a.Walls+a.CapStartCount])
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}

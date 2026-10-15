@@ -18,6 +18,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -295,12 +296,12 @@ func loftCircularRim(pl loftPayload, a loftmesh.Assembly, side int) (*Edge, bool
 	if pp.Reflected() {
 		edgeAxis = axis
 	}
-	vertex := loftVertex(a.Verts[indices[0]], a.Delta)
+	vertex := topobuild.LoftVertex(handleAlloc{}, a.Verts[indices[0]], a.Delta)
 	return bornEdge(&Edge{n: topo.Edge{
 		Convex: false, Length: walk.Length, LengthBound: walk.LengthBound,
 		Curve:      surfacegeom.Circle3{Center: center, Axis: edgeAxis, Radius: circle.Radius},
 		CurveBound: curveBound, CurveBounded: true,
-		Start: vertexNode(vertex), End: vertexNode(vertex),
+		Start: vertex, End: vertex,
 	}}), true, nil
 }
 
@@ -389,11 +390,11 @@ func buildLoftVaryingCircularHoleTopology(ctx context.Context, body *Body, pl lo
 		NormalBound: normalBound, Origins: origins, Body: bodyNode(body),
 	}})
 	wall.n.Loops = []*topo.Loop{
-		loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: loftLoopCoedges([]topo.CoEdge{{Edge: edgeNode(bottom), Forward: true}}, a.Reversed)}})),
-		loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: loftLoopCoedges([]topo.CoEdge{{Edge: edgeNode(top), Forward: false}}, a.Reversed)}})),
+		loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{{Edge: edgeNode(bottom), Forward: true}}, a.Reversed)}})),
+		loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{{Edge: edgeNode(top), Forward: false}}, a.Reversed)}})),
 	}
-	start.n.Loops[1] = loopNode(bornLoop(&Loop{n: topo.Loop{Outer: start.n.Loops[1].Outer, CoEdges: loftLoopCoedges([]topo.CoEdge{{Edge: edgeNode(bottom), Forward: false}}, a.Reversed)}}))
-	end.n.Loops[1] = loopNode(bornLoop(&Loop{n: topo.Loop{Outer: end.n.Loops[1].Outer, CoEdges: loftLoopCoedges([]topo.CoEdge{{Edge: edgeNode(top), Forward: true}}, a.Reversed)}}))
+	start.n.Loops[1] = loopNode(bornLoop(&Loop{n: topo.Loop{Outer: start.n.Loops[1].Outer, CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{{Edge: edgeNode(bottom), Forward: false}}, a.Reversed)}}))
+	end.n.Loops[1] = loopNode(bornLoop(&Loop{n: topo.Loop{Outer: end.n.Loops[1].Outer, CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{{Edge: edgeNode(top), Forward: true}}, a.Reversed)}}))
 	if err := loftCircleCapAreas(ctx, pl, a, start, end); err != nil {
 		return nil, nil, err
 	}
@@ -482,7 +483,7 @@ func buildLoftAnalyticBoreTopology(ctx context.Context, body *Body, ref producer
 	// Carry the Loft assembly's whole-shell reversal onto the cylinder too;
 	// the cap loops below already receive the same reversal.
 	for _, loop := range wall.Loops {
-		loop.CoEdges = loftLoopCoedges(loop.CoEdges, a.Reversed)
+		loop.CoEdges = topobuild.LoftLoopCoedges(loop.CoEdges, a.Reversed)
 	}
 	// prismrecord.BuildLoopSidesAs links its side face immediately, while evalLoft links
 	// every live face after this rewrite. Clear those two private links once.
@@ -503,8 +504,8 @@ func buildLoftAnalyticBoreTopology(ctx context.Context, body *Body, ref producer
 		return nil, fmt.Errorf("%w: a through-bore has no source wall cells", ErrUnsupported)
 	}
 	filtered = append(filtered, faceHandle(wall))
-	start.n.Loops[1] = loopNode(bornLoop(&Loop{n: topo.Loop{Outer: start.n.Loops[1].Outer, CoEdges: loftLoopCoedges([]topo.CoEdge{{Edge: bottom[0].Edge, Forward: false}}, a.Reversed)}}))
-	end.n.Loops[1] = loopNode(bornLoop(&Loop{n: topo.Loop{Outer: end.n.Loops[1].Outer, CoEdges: loftLoopCoedges([]topo.CoEdge{{Edge: top[0].Edge, Forward: true}}, a.Reversed)}}))
+	start.n.Loops[1] = loopNode(bornLoop(&Loop{n: topo.Loop{Outer: start.n.Loops[1].Outer, CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{{Edge: bottom[0].Edge, Forward: false}}, a.Reversed)}}))
+	end.n.Loops[1] = loopNode(bornLoop(&Loop{n: topo.Loop{Outer: end.n.Loops[1].Outer, CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{{Edge: top[0].Edge, Forward: true}}, a.Reversed)}}))
 	if err := loftCircleCapAreas(ctx, pl, a, start, end); err != nil {
 		return nil, err
 	}

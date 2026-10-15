@@ -463,9 +463,9 @@ func evalChainLoftContext(ctx context.Context, d *Document, ref producerID, lp c
 // (docs/surface-design.md §13.4).
 func buildChainLoftTopology(ctx context.Context, body *Body, ref producerID, verts []r3.Vec, tris [][3]int, vIdx, wIdx []int, delta float64) ([]*Face, error) {
 	n := len(vIdx) - 1
-	vertexObjs := make([]*Vertex, len(verts))
+	vertexObjs := make([]*topo.Vertex, len(verts))
 	for i, p := range verts {
-		vertexObjs[i] = loftVertex(p, delta)
+		vertexObjs[i] = topobuild.LoftVertex(handleAlloc{}, p, delta)
 	}
 
 	lowerTri := make([][3]int, n)
@@ -475,14 +475,14 @@ func buildChainLoftTopology(ctx context.Context, body *Body, ref producerID, ver
 		upperTri[j] = tris[2*j+1]
 	}
 
-	rimBottom := make([]*Edge, n)
-	rimTop := make([]*Edge, n)
-	diagE := make([]*Edge, n)
-	rungE := make([]*Edge, n+1)
+	rimBottom := make([]*topo.Edge, n)
+	rimTop := make([]*topo.Edge, n)
+	diagE := make([]*topo.Edge, n)
+	rungE := make([]*topo.Edge, n+1)
 	for j := range n {
-		rimBottom[j] = loftEdge(vertexObjs, verts, vIdx[j], vIdx[j+1], true, delta)
-		rimTop[j] = loftEdge(vertexObjs, verts, wIdx[j], wIdx[j+1], true, delta)
-		diagE[j] = loftEdge(vertexObjs, verts, vIdx[j], wIdx[j+1],
+		rimBottom[j] = topobuild.LoftEdge(handleAlloc{}, vertexObjs, verts, vIdx[j], vIdx[j+1], true, delta)
+		rimTop[j] = topobuild.LoftEdge(handleAlloc{}, vertexObjs, verts, wIdx[j], wIdx[j+1], true, delta)
+		diagE[j] = topobuild.LoftEdge(handleAlloc{}, vertexObjs, verts, vIdx[j], wIdx[j+1],
 			loftmesh.JunctionConvex(verts, lowerTri[j], upperTri[j], vIdx[j], wIdx[j+1]), delta)
 	}
 	for j := 0; j <= n; j++ {
@@ -490,7 +490,7 @@ func buildChainLoftTopology(ctx context.Context, body *Body, ref producerID, ver
 		if j > 0 && j < n {
 			convex = loftmesh.JunctionConvex(verts, lowerTri[j-1], upperTri[j], vIdx[j], wIdx[j])
 		}
-		rungE[j] = loftEdge(vertexObjs, verts, vIdx[j], wIdx[j], convex, delta)
+		rungE[j] = topobuild.LoftEdge(handleAlloc{}, vertexObjs, verts, vIdx[j], wIdx[j], convex, delta)
 	}
 
 	walls := make([]*Face, 0, 2*n)
@@ -503,9 +503,9 @@ func buildChainLoftTopology(ctx context.Context, body *Body, ref producerID, ver
 			return nil, err
 		}
 		lowerFace.n.Loops = []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
-			{Edge: edgeNode(rimBottom[j]), Forward: true},
-			{Edge: edgeNode(rungE[j+1]), Forward: true},
-			{Edge: edgeNode(diagE[j]), Forward: false},
+			{Edge: rimBottom[j], Forward: true},
+			{Edge: rungE[j+1], Forward: true},
+			{Edge: diagE[j], Forward: false},
 		},
 		}}))}
 		walls = append(walls, lowerFace)
@@ -515,9 +515,9 @@ func buildChainLoftTopology(ctx context.Context, body *Body, ref producerID, ver
 			return nil, err
 		}
 		upperFace.n.Loops = []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
-			{Edge: edgeNode(diagE[j]), Forward: true},
-			{Edge: edgeNode(rimTop[j]), Forward: false},
-			{Edge: edgeNode(rungE[j]), Forward: false},
+			{Edge: diagE[j], Forward: true},
+			{Edge: rimTop[j], Forward: false},
+			{Edge: rungE[j], Forward: false},
 		},
 		}}))}
 		walls = append(walls, upperFace)

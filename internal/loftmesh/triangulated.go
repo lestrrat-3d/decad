@@ -47,7 +47,7 @@ func AssembleTriangulated(ctx context.Context, pairs []LoopPair, f0, f1 r3.Frame
 // spline_fit.go's R16 draw the identical line for a finite input whose
 // derived magnitude runs off float64; errors.go scopes ErrNotFinite to a
 // non-finite PARAMETER or a derived non-finite MEASUREMENT, and
-// validateLoftBodyMeasurements already owns that second case.
+// topobuild.ValidateLoftBodyMeasurements already owns that second case.
 //
 // The gate runs BEFORE the first exact-dyadic lift, never after it:
 // tessellation.OrientationSign lifts the anchor and every vertex through dyVec, whose
