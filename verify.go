@@ -799,7 +799,7 @@ func auditSheetBoundary(ctx context.Context, b *Body) reportvocab.SheetAuditOutc
 // payload, or a nil one, is undecided.
 //
 // A sweepPayload admits leg 4 for the ONE-SPAN STRAIGHT reduction alone
-// (len(spans) == 0, arc false), on exactly the prismPayload argument above,
+// (len(Spans) == 0, Arc false), on exactly the prismPayload argument above,
 // which transfers verbatim: the line reduction IS a prismPayload build. The
 // arc-reduced and composite sheets read undecided instead, and deliberately —
 // this is not an oversight to lift later without a new proof:
@@ -836,7 +836,7 @@ func payloadProvesSimple(ctx context.Context, p topo.Payload) bool {
 	case bodyPatchPayload:
 		return bodyPatchPayloadProvesSimple(ctx, pp)
 	case sweepPayload:
-		return len(pp.spans) == 0 && !pp.arc && pp.prism.SurfaceResult && pp.prism.SectionDelta == 0
+		return len(pp.Spans) == 0 && !pp.Arc && pp.Prism.SurfaceResult && pp.Prism.SectionDelta == 0
 	case revolvePayload:
 		return revolvePayloadProvesSimple(ctx, pp)
 	case chainPayload:
@@ -851,7 +851,7 @@ func payloadProvesSimple(ctx context.Context, p topo.Payload) bool {
 		// the argument, on the identical prismPayload reading above.
 		return pp.SectionDelta == 0
 	case chainSweepPayload:
-		if len(pp.spans) != 0 || pp.arc {
+		if len(pp.Spans) != 0 || pp.Arc {
 			return false
 		}
 		// The remaining one-span reduction is the straight case
@@ -862,7 +862,7 @@ func payloadProvesSimple(ctx context.Context, p topo.Payload) bool {
 		// chainPayload's own arm makes, re-read off the wrapped payload —
 		// never a weaker version of it. The arc and composite cases returned
 		// false above because their partial turns have no simplicity proof.
-		return pp.chain.SectionDelta == 0
+		return pp.Chain.SectionDelta == 0
 	case chainRevolvePayload:
 		// A chain-fed revolve earns leg 4 on the identical full-turn argument,
 		// re-read over the chain's own open walk through the SAME generic

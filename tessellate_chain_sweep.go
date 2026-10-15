@@ -162,31 +162,31 @@ func chainSweepMeshClass(b *Body, sp chainSweepPayload) (float64, float64, float
 		return 0, 0, 0, nil, nil,
 			fmt.Errorf(`%w: this chain sweep mesh requires one cardinal line and one positive half-circle`, ErrUnsupported)
 	}
-	if b.Kind() != BodySheet || len(sp.spans) != 2 || sp.spans[0].arc || !sp.spans[1].arc ||
-		sp.spans[1].reverseArcRims || sp.path == nil || len(sp.path.Segments) != 2 ||
-		sp.spans[0].chain.Xform != r3.Identity() ||
-		sp.spans[1].revolve.Xform != r3.Identity() || len(sp.spans[0].chain.Chains) != 1 ||
-		len(sp.spans[1].revolve.Chains) != 1 {
+	if b.Kind() != BodySheet || len(sp.Spans) != 2 || sp.Spans[0].Arc || !sp.Spans[1].Arc ||
+		sp.Spans[1].ReverseArcRims || sp.Path == nil || len(sp.Path.Segments) != 2 ||
+		sp.Spans[0].Chain.Xform != r3.Identity() ||
+		sp.Spans[1].Revolve.Xform != r3.Identity() || len(sp.Spans[0].Chain.Chains) != 1 ||
+		len(sp.Spans[1].Revolve.Chains) != 1 {
 		return refuse()
 	}
-	chain := sp.spans[0].chain.Chains[0]
-	if len(chain.Segments) != 1 || len(sp.spans[1].revolve.Chains[0].Segments) != 1 {
+	chain := sp.Spans[0].Chain.Chains[0]
+	if len(chain.Segments) != 1 || len(sp.Spans[1].Revolve.Chains[0].Segments) != 1 {
 		return refuse()
 	}
 	seg, ok := chain.Segments[0].(lineSeg)
 	if !ok || seg.Start.U != 0 || seg.Start.V != 0 || seg.End.V != 0 || seg.End.U <= 0 ||
-		sp.spans[0].chain.Frame.Origin() != (r3.Vec{}) ||
-		sp.spans[0].chain.Frame.U() != (r3.Vec{X: 1}) ||
-		sp.spans[0].chain.Frame.V() != (r3.Vec{Y: 1}) {
+		sp.Spans[0].Chain.Frame.Origin() != (r3.Vec{}) ||
+		sp.Spans[0].Chain.Frame.U() != (r3.Vec{X: 1}) ||
+		sp.Spans[0].Chain.Frame.V() != (r3.Vec{Y: 1}) {
 		return refuse()
 	}
 	w := seg.End.U
-	line, ok := sp.path.Segments[0], !sp.path.Segments[0].Arc
-	if !ok || sp.path.Start != (r3.Vec{}) || line.End.X != 0 || line.End.Y != 0 || line.End.Z <= 0 {
+	line, ok := sp.Path.Segments[0], !sp.Path.Segments[0].Arc
+	if !ok || sp.Path.Start != (r3.Vec{}) || line.End.X != 0 || line.End.Y != 0 || line.End.Z <= 0 {
 		return refuse()
 	}
 	height := line.End.Z
-	arc, ok := sp.path.Segments[1], sp.path.Segments[1].Arc
+	arc, ok := sp.Path.Segments[1], sp.Path.Segments[1].Arc
 	if !ok || arc.Through.Y != 0 || arc.End.Y != 0 || arc.End.Z != height {
 		return refuse()
 	}
@@ -197,15 +197,15 @@ func chainSweepMeshClass(b *Body, sp chainSweepPayload) (float64, float64, float
 		proofarith.FloatRat(radius-w).Cmp(new(big.Rat).Sub(proofarith.FloatRat(radius), proofarith.FloatRat(w))) != 0 {
 		return refuse()
 	}
-	if sp.spans[0].chain.Z0 != 0 || sp.spans[0].chain.Z1 != height ||
-		sp.spans[0].chain.SectionDelta != 0 || sp.spans[1].revolve.SectionDelta != 0 ||
-		sp.spans[1].revolve.Frame.Origin() != (r3.Vec{Z: height}) ||
-		sp.spans[1].revolve.Frame.U() != (r3.Vec{X: 1}) ||
-		sp.spans[1].revolve.Frame.V() != (r3.Vec{Y: 1}) ||
-		sp.spans[1].revolve.Ax.AU != radius || sp.spans[1].revolve.Ax.AV != 0 ||
-		sp.spans[1].revolve.Ax.DU != 0 || sp.spans[1].revolve.Ax.DV != 1 ||
-		sp.spans[1].revolve.Ax.AUBound != 0 || sp.spans[1].revolve.Ax.AVBound != 0 ||
-		sp.spans[1].revolve.Ax.DUBound != 0 || sp.spans[1].revolve.Ax.DVBound != 0 {
+	if sp.Spans[0].Chain.Z0 != 0 || sp.Spans[0].Chain.Z1 != height ||
+		sp.Spans[0].Chain.SectionDelta != 0 || sp.Spans[1].Revolve.SectionDelta != 0 ||
+		sp.Spans[1].Revolve.Frame.Origin() != (r3.Vec{Z: height}) ||
+		sp.Spans[1].Revolve.Frame.U() != (r3.Vec{X: 1}) ||
+		sp.Spans[1].Revolve.Frame.V() != (r3.Vec{Y: 1}) ||
+		sp.Spans[1].Revolve.Ax.AU != radius || sp.Spans[1].Revolve.Ax.AV != 0 ||
+		sp.Spans[1].Revolve.Ax.DU != 0 || sp.Spans[1].Revolve.Ax.DV != 1 ||
+		sp.Spans[1].Revolve.Ax.AUBound != 0 || sp.Spans[1].Revolve.Ax.AVBound != 0 ||
+		sp.Spans[1].Revolve.Ax.DUBound != 0 || sp.Spans[1].Revolve.Ax.DVBound != 0 {
 		return refuse()
 	}
 	var straight, curved *Face

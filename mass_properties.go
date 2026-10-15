@@ -169,22 +169,22 @@ func massRevolveRecord(rp revolvePayload) massmoment.RevolveRecord {
 
 // massSweepRecord presents the sweep's certified span reductions to the mass integrator.
 func massSweepRecord(sp sweepPayload) massmoment.SweepRecord {
-	record := massmoment.SweepRecord{Arc: sp.arc}
-	if len(sp.spans) == 0 {
-		if sp.arc {
-			record.Revolve = massRevolveRecord(sp.revolve)
+	record := massmoment.SweepRecord{Arc: sp.Arc}
+	if len(sp.Spans) == 0 {
+		if sp.Arc {
+			record.Revolve = massRevolveRecord(sp.Revolve)
 		} else {
-			record.Prism = sp.prism.MassRecord()
+			record.Prism = sp.Prism.MassRecord()
 		}
 		return record
 	}
-	record.Spans = make([]massmoment.SweepSpanRecord, len(sp.spans))
-	for i, span := range sp.spans {
-		record.Spans[i] = massmoment.SweepSpanRecord{Arc: span.arc}
-		if span.arc {
-			record.Spans[i].Revolve = massRevolveRecord(span.revolve)
+	record.Spans = make([]massmoment.SweepSpanRecord, len(sp.Spans))
+	for i, span := range sp.Spans {
+		record.Spans[i] = massmoment.SweepSpanRecord{Arc: span.Arc}
+		if span.Arc {
+			record.Spans[i].Revolve = massRevolveRecord(span.Revolve)
 		} else {
-			record.Spans[i].Prism = span.prism.MassRecord()
+			record.Spans[i].Prism = span.Prism.MassRecord()
 		}
 	}
 	return record
