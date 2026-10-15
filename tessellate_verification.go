@@ -155,7 +155,7 @@ func payloadAuditsFacetContact(p topo.Payload) bool {
 		return true
 	}
 	sp, ok := p.(stitchPayload)
-	return ok && sp.tris == nil
+	return ok && sp.Tris == nil
 }
 
 // foldVerification reads the level a call's options name, starting from the

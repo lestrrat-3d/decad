@@ -203,7 +203,7 @@ func TestContactPairExactPlanarNonConvex(t *testing.T) {
 //     requires ContactBand;
 //   - the face map (TestPlanarManifoldStitchedVertexTouch).
 //
-// The vertBound widening has no identity-placed fixture: only a
+// The VertBound widening has no identity-placed fixture: only a
 // certificate-welded stitch (docs/surface-design.md §6.2) carries a positive
 // class bound at the identity. The term is the per-vertex bound Stitch
 // stamps on each live Vertex, the one tessellate_stitch.go publishes per

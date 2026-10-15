@@ -307,7 +307,7 @@ func bodyGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body *Bo
 		// (docs/helix-design.md §5.3), so the largest rounding is the gap.
 		return gatePoints{Points: pl.Verts, Allow: pl.MaxRound}, true, nil
 	case stitchPayload:
-		return gatePoints{Points: pl.verts, Allow: pl.delta}, true, nil
+		return gatePoints{Points: pl.Verts, Allow: pl.Delta}, true, nil
 	case chainPayload:
 		return chainGatePoints(ctx, budget, body, pl)
 	case brepPayload:

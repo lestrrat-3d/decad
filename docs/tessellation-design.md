@@ -217,7 +217,7 @@ single swept prism or cup section's own construction does.
 **The free-boundary row's attribution needs no role at all for an OPEN
 stitched sheet's mesh** (`stitchPayload`, T8), unlike every other sheet row
 above, which attributes by the role this evaluator's own build stamped on a
-face it created. `stitchPayload.triFaces` names the live rebuilt `*Face` of
+face it created. `stitchPayload.TriFaces` names the live rebuilt `*Face` of
 an all-planar triangle directly. T10's source-to-live pairing names that
 face for a revolve-backed triangle. `Body.Edges()`'s own `Faces()` reads that
 identical pointer back off the same rebuilt topology
@@ -554,7 +554,7 @@ Assign sources by patch:
 | start/end cap | `capStart` / `capEnd` face |
 | cup kept cap, pocket floor, rim band | the corresponding `capStart`, `shellCap`, or `rim(i)` face |
 | faceted restatement | faceted body face recorded by the payload's facet group |
-| stitched-solid triangle | the payload's own recorded per-triangle live face (`stitchPayload.triFaces`), or T10's source-to-live pairing; never a role lookup |
+| stitched-solid triangle | the payload's own recorded per-triangle live face (`stitchPayload.TriFaces`), or T10's source-to-live pairing; never a role lookup |
 
 Every row above but the last names a ROLE this evaluator's own build stamped
 on the face it created, unique per body by construction. A stitched body's

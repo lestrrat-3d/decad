@@ -1611,12 +1611,12 @@ takes `ExtrudeOption`, `SweepOption` or `RevolveOption`, so
 
 R32's own naming is not uniform across its causes, and the row's wording
 states the weaker claim true of all of them. `tessellateStitchCurved`'s
-surface-kind switch (`tessellate_stitch.go`) walks `sp.faces` in order and
+surface-kind switch (`tessellate_stitch.go`) walks `sp.Faces` in order and
 returns at the first one its switch does not recognize, so that cause names
 the actual offending face's surface kind. Every other cause the row
 covers — an incomplete or duplicated face pairing, a non-identity stitch
 placement, a broken sibling ancestry check — returns through one shared
-`refuse` closure that always names `sp.faces[0]`'s surface kind instead, no
+`refuse` closure that always names `sp.Faces[0]`'s surface kind instead, no
 matter which face the cause itself points to, because most of those causes
 (a mismatched weld group, an omitted original face) name no single face at
 all. "Naming a source surface kind" is true of every cause for that reason;
@@ -2021,7 +2021,7 @@ own recorded free `Edge`s, and `internal/tessellation.RequireSheetVertexLinks` i
 vertex-link safety net for an open boundary vertex's path-shaped link.
 Attribution holds with no role lookup at all —
 `docs/tessellation-design.md` §4's own point about a stitched body's
-non-unique roles — because `stitchPayload.triFaces` and `Body.Edges()`'s own
+non-unique roles — because `stitchPayload.TriFaces` and `Body.Edges()`'s own
 `Faces()` both name the identical LIVE face pointer `rebuildStitchTopology`
 built, so the mesh side and the body side of the audit agree by construction,
 never by coincidence or by a second geometric test.
@@ -2103,7 +2103,7 @@ recorded curved `Edge`; that would reject every sufficiently chorded rim.
 An OPEN stitched body also reuses the source revolve mesh when its inputs
 are the complete set of single-face sheets made by `Unstitch` on one
 revolve sheet, with no placement on the pieces or on the stitch. Every
-`unstitchPayload.face` must belong to that same original sheet, and each
+`unstitchPayload.Face` must belong to that same original sheet, and each
 original face must appear once. The original may be retired: its payload
 and faces remain readable, and `tessellateRevolve` works from that immutable
 record. This route admits a new weld only when each welded pair of copied

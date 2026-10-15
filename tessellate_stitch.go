@@ -25,7 +25,7 @@ import (
 // for this payload).
 //
 // A curved or mixed stitched body carries no recorded triangle set
-// (stitchPayload.tris is nil). T10 reuses one complete revolve sheet's
+// (stitchPayload.Tris is nil). T10 reuses one complete revolve sheet's
 // chording under surface §10.1; T11 also accepts that sheet's identity
 // Unstitch siblings re-welded along their original edges (§10.2). Other
 // curved sources refuse with ErrUnsupported. An OPEN
@@ -71,30 +71,30 @@ func stitchSiblingRevolveSource(b *Body, sp stitchPayload) (*Body, map[*Face]*Fa
 		return nil, nil, "a newly welded curved stitch has no open-sheet proof"
 	}
 	var originalBody *Body
-	paired := make(map[*Face]*Face, len(sp.faces))
+	paired := make(map[*Face]*Face, len(sp.Faces))
 	originalEdgeOf := map[*topo.Edge]*topo.Edge{}
 	originalVertexOf := map[*topo.Vertex]*topo.Vertex{}
 	copiesByOriginalEdge := map[*topo.Edge]map[*topo.Edge]struct{}{}
-	for i, copied := range sp.faces {
+	for i, copied := range sp.Faces {
 		piece := bodyHandle(copied.n.Body)
 		if piece == nil || len(piece.Faces()) != 1 || piece.Faces()[0] != copied {
 			return nil, nil, "a source is not a single-face unstitched sheet"
 		}
 		up, ok := piece.n.Payload.(unstitchPayload)
-		if !ok || up.xform != r3.Identity() || up.delta != 0 || up.face == nil {
+		if !ok || up.Xform != r3.Identity() || up.Delta != 0 || up.Face == nil {
 			return nil, nil, "an unstitched source has no identity copy proof"
 		}
-		original := up.face
+		original := up.Face
 		if originalBody == nil {
 			originalBody = bodyHandle(original.n.Body)
 		}
-		if originalBody == nil || original.n.Body != bodyNode(originalBody) || sp.liveFaces[i] == nil {
+		if originalBody == nil || original.n.Body != bodyNode(originalBody) || sp.LiveFaces[i] == nil {
 			return nil, nil, "the unstitched faces have no common original"
 		}
 		if _, exists := paired[original]; exists {
 			return nil, nil, "an original face occurs more than once"
 		}
-		paired[original] = sp.liveFaces[i]
+		paired[original] = sp.LiveFaces[i]
 		if len(copied.n.Loops) != len(original.n.Loops) {
 			return nil, nil, "an unstitched face changed its loop layout"
 		}
@@ -141,7 +141,7 @@ func stitchSiblingRevolveSource(b *Body, sp stitchPayload) (*Body, map[*Face]*Fa
 		}
 	}
 	classOriginal := map[int]*topo.Vertex{}
-	for v, class := range sp.plan.table.Classes {
+	for v, class := range sp.Plan.Table.Classes {
 		original, ok := originalVertexOf[vertexNode(v)]
 		if !ok {
 			return nil, nil, "a welded vertex has no original identity"
@@ -151,12 +151,12 @@ func stitchSiblingRevolveSource(b *Body, sp stitchPayload) (*Body, map[*Face]*Fa
 		}
 		classOriginal[class] = original
 	}
-	if len(originalVertexOf) != len(sp.plan.table.Classes) {
+	if len(originalVertexOf) != len(sp.Plan.Table.Classes) {
 		return nil, nil, "an unstitched vertex is absent from the weld plan"
 	}
 	groupOriginal := map[int]*topo.Edge{}
 	groupCount := map[int]int{}
-	for copied, gid := range sp.plan.group {
+	for copied, gid := range sp.Plan.Group {
 		original, ok := originalEdgeOf[edgeNode(copied)]
 		if !ok {
 			return nil, nil, "a welded edge has no original identity"
@@ -179,7 +179,7 @@ func stitchSiblingRevolveSource(b *Body, sp stitchPayload) (*Body, map[*Face]*Fa
 			}
 			gid := -1
 			for copied := range copies {
-				got, ok := sp.plan.group[edgeHandle(copied)]
+				got, ok := sp.Plan.Group[edgeHandle(copied)]
 				if !ok || (gid >= 0 && got != gid) {
 					return nil, nil, "an original two-face edge was not re-welded"
 				}
@@ -191,7 +191,7 @@ func stitchSiblingRevolveSource(b *Body, sp stitchPayload) (*Body, map[*Face]*Fa
 			return nil, nil, "an original free edge has multiple copies"
 		}
 		for copied := range copies {
-			if _, welded := sp.plan.group[edgeHandle(copied)]; welded {
+			if _, welded := sp.Plan.Group[edgeHandle(copied)]; welded {
 				return nil, nil, "an original free edge was newly welded"
 			}
 		}
@@ -207,15 +207,15 @@ func tessellateStitchCurved(ctx context.Context, b *Body, sp stitchPayload, chor
 		return nil, err
 	}
 	refuse := func(reason string) (*Mesh, error) {
-		if len(sp.faces) == 0 || sp.faces[0] == nil {
+		if len(sp.Faces) == 0 || sp.Faces[0] == nil {
 			return nil, fmt.Errorf(`%w: %s for a stitched body with no source face`, ErrUnsupported, reason)
 		}
-		return nil, fmt.Errorf(`%w: %s for a stitched body's %T face`, ErrUnsupported, reason, sp.faces[0].Surface())
+		return nil, fmt.Errorf(`%w: %s for a stitched body's %T face`, ErrUnsupported, reason, sp.Faces[0].Surface())
 	}
-	if len(sp.faces) == 0 || len(sp.liveFaces) != len(sp.faces) || sp.plan == nil || sp.plan.table == nil {
+	if len(sp.Faces) == 0 || len(sp.LiveFaces) != len(sp.Faces) || sp.Plan == nil || sp.Plan.Table == nil {
 		return refuse("this evaluator has no complete source-to-live face pairing")
 	}
-	for _, f := range sp.faces {
+	for _, f := range sp.Faces {
 		if f == nil {
 			return refuse("this evaluator has no complete source-to-live face pairing")
 		}
@@ -225,28 +225,28 @@ func tessellateStitchCurved(ctx context.Context, b *Body, sp stitchPayload, chor
 			return nil, fmt.Errorf(`%w: this evaluator has no chording arm for a stitched body's %T face`, ErrUnsupported, f.Surface())
 		}
 	}
-	if sp.xform != r3.Identity() {
+	if sp.Xform != r3.Identity() {
 		return refuse("this evaluator cannot reuse source chording after stitch placement")
 	}
 	var sourceBody *Body
 	var paired map[*Face]*Face
-	if direct := bodyHandle(sp.faces[0].n.Body); direct != nil {
+	if direct := bodyHandle(sp.Faces[0].n.Body); direct != nil {
 		switch direct.n.Payload.(type) {
 		case revolvePayload:
-			if direct.Kind() != BodySheet || sp.plan.groups != 0 ||
-				len(sp.plan.table.Classes) != len(sp.plan.table.Vertices) {
+			if direct.Kind() != BodySheet || sp.Plan.Groups != 0 ||
+				len(sp.Plan.Table.Classes) != len(sp.Plan.Table.Vertices) {
 				return refuse("this evaluator cannot reuse source chording after a stitch weld")
 			}
 			sourceBody = direct
-			paired = make(map[*Face]*Face, len(sp.faces))
-			for i, f := range sp.faces {
-				if f.n.Body != bodyNode(direct) || sp.liveFaces[i] == nil {
+			paired = make(map[*Face]*Face, len(sp.Faces))
+			for i, f := range sp.Faces {
+				if f.n.Body != bodyNode(direct) || sp.LiveFaces[i] == nil {
 					return refuse("this evaluator has no complete revolve-sheet face set")
 				}
 				if _, exists := paired[f]; exists {
 					return refuse("this evaluator has a repeated revolve-sheet source face")
 				}
-				paired[f] = sp.liveFaces[i]
+				paired[f] = sp.LiveFaces[i]
 			}
 		case unstitchPayload:
 			var reason string
@@ -331,7 +331,7 @@ func tessellateStitch(ctx context.Context, b *Body, sp stitchPayload) (*Mesh, er
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if sp.tris == nil {
+	if sp.Tris == nil {
 		for _, f := range b.Faces() {
 			if !faceIsTetrahedronEligible(f) {
 				return nil, fmt.Errorf(`%w: this evaluator has no chording arm for a stitched body's %T face`, ErrUnsupported, f.Surface())
@@ -345,9 +345,9 @@ func tessellateStitch(ctx context.Context, b *Body, sp stitchPayload) (*Mesh, er
 	// through one would rewrite the body's boundary.
 	mesh := bornMesh(&Mesh{
 		n: topo.Mesh{
-			Vertices:  append([]r3.Vec(nil), sp.verts...),
-			Triangles: append([][3]int(nil), sp.tris...),
-			Source:    faceNodes(sp.triFaces),
+			Vertices:  append([]r3.Vec(nil), sp.Verts...),
+			Triangles: append([][3]int(nil), sp.Tris...),
+			Source:    faceNodes(sp.TriFaces),
 		},
 	})
 
@@ -359,7 +359,7 @@ func tessellateStitch(ctx context.Context, b *Body, sp stitchPayload) (*Mesh, er
 		}
 		delta := 0.0
 		for _, v := range tri {
-			delta = max(delta, sp.vertBound[v])
+			delta = max(delta, sp.VertBound[v])
 		}
 		topobuild.SetFaceBound(&mesh.n, mesh.n.Source[i], delta)
 		if delta > 0 {
@@ -395,7 +395,7 @@ func tessellateStitch(ctx context.Context, b *Body, sp stitchPayload) (*Mesh, er
 	//     a stitched vertex's bound above zero.
 	//  2. The polygon triangulateStitchFaces (stitch.go) built for every face
 	//     IS that face's exact boundary, never an approximation of a curved
-	//     one. stitchAllTetrahedronEligible — already required for sp.tris to
+	//     one. stitchAllTetrahedronEligible — already required for sp.Tris to
 	//     be non-nil, which is why this function reached this point at all —
 	//     requires every face to be a Plane bounded entirely by Line3 edges.
 	//     A Line3's whole geometry is its two endpoints, so the coedge-start-

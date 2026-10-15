@@ -325,29 +325,29 @@ func planarHeldSolid(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]in
 }
 
 // planarStitchSolid reads a closed all-planar stitched solid off its own
-// audited triangle set (§9). Stitch records tris, triFaces and vertBound only
-// for an all-planar weld, and auditClean only when the crossing audit ran and
-// passed, so a curved or mixed stitch (nil tris) and a failed audit are not
+// audited triangle set (§9). Stitch records Tris, TriFaces and VertBound only
+// for an all-planar weld, and AuditClean only when the crossing audit ran and
+// passed, so a curved or mixed stitch (nil Tris) and a failed audit are not
 // admitted; planarSolidAtPose has already refused an open sheet, which is
 // not a solid. The vertices are the welded table's floats at the stitch's
-// placement, triFaces names each triangle's live face, and a face missing
+// placement, TriFaces names each triangle's live face, and a face missing
 // from b.Faces() leaves the snapshot's face map unset.
 //
 // The displacement is the largest per-vertex weld bound, and at least the
-// placement rounding delta. Each vertBound entry is the bound vertexForClass
-// stamps on its live Vertex, the weld class bound with delta already added,
+// placement rounding Delta. Each VertBound entry is the bound vertexForClass
+// stamps on its live Vertex, the weld class bound with Delta already added,
 // and every held triangle point is a convex combination of its corners, so
 // no true boundary point lies farther than that bound from the held mesh. It
 // is zero for a weld built at the identity whose every class is zero-bound,
 // which is then an exact §9 body.
 func planarStitchSolid(budget *proofbound.WorkBudget, b *Body, sp stitchPayload) (planar.PlanarSolid, proofarith.Dyadic, bool, error) {
 	none := proofarith.DyZero()
-	if !sp.auditClean || len(sp.tris) == 0 || len(sp.triFaces) != len(sp.tris) ||
-		len(sp.vertBound) != len(sp.verts) || !measurement.FiniteValues(sp.delta) || sp.delta < 0 {
+	if !sp.AuditClean || len(sp.Tris) == 0 || len(sp.TriFaces) != len(sp.Tris) ||
+		len(sp.VertBound) != len(sp.Verts) || !measurement.FiniteValues(sp.Delta) || sp.Delta < 0 {
 		return planar.PlanarSolid{}, none, false, nil
 	}
-	displacement := sp.delta
-	for _, bound := range sp.vertBound {
+	displacement := sp.Delta
+	for _, bound := range sp.VertBound {
 		if !measurement.FiniteValues(bound) || bound < 0 {
 			return planar.PlanarSolid{}, none, false, nil
 		}
@@ -358,8 +358,8 @@ func planarStitchSolid(budget *proofbound.WorkBudget, b *Body, sp stitchPayload)
 	for i, face := range faces {
 		faceAt[face] = i
 	}
-	faceOf := make([]int, len(sp.tris))
-	for t, face := range sp.triFaces {
+	faceOf := make([]int, len(sp.Tris))
+	for t, face := range sp.TriFaces {
 		at, ok := faceAt[face]
 		if !ok {
 			faceOf = nil
@@ -367,7 +367,7 @@ func planarStitchSolid(budget *proofbound.WorkBudget, b *Body, sp stitchPayload)
 		}
 		faceOf[t] = at
 	}
-	solid, ok, err := planarHeldSolid(budget, sp.verts, sp.tris, faceOf)
+	solid, ok, err := planarHeldSolid(budget, sp.Verts, sp.Tris, faceOf)
 	if err != nil || !ok {
 		return planar.PlanarSolid{}, none, false, err
 	}

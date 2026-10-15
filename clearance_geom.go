@@ -122,7 +122,7 @@ func newBodyGeomBudget(budget *proofbound.WorkBudget, b *Body) (*bodyGeom, bool,
 		// identical charge a placed prism's frame/placement rounding takes
 		// (bodyGeom's own doc comment), so this arm needs no standing narrower than addPrismFaces'
 		// own anymore.
-		if pl.tris == nil {
+		if pl.Tris == nil {
 			return nil, false, nil
 		}
 		maxVertexBound, mErr := stitchweld.MaxBound(budget, stitchVertexBounds(b))
@@ -534,14 +534,14 @@ func (g *bodyGeom) addStitchFaces(budget *proofbound.WorkBudget, b *Body, sp sti
 		// the plane's frame (CapBox), and the topology's own vertices.
 		cf.Box = clearance.BoxUnion(clearance.BoxOf(pts...), clearance.CapBox(cf))
 
-		for i, tri := range sp.tris {
-			if sp.triFaces[i] != f {
+		for i, tri := range sp.Tris {
+			if sp.TriFaces[i] != f {
 				continue
 			}
 			if err := budget.Step(); err != nil {
 				return false, err
 			}
-			a, b2, c := sp.verts[tri[0]], sp.verts[tri[1]], sp.verts[tri[2]]
+			a, b2, c := sp.Verts[tri[0]], sp.Verts[tri[1]], sp.Verts[tri[2]]
 			cen := a.Add(b2).Add(c).Scale(1.0 / 3.0)
 			lx, ly := cf.PlaneCoords(cen)
 			if cf.Region.Classify(lx, ly, cf.Region.Tol()) > 0 {

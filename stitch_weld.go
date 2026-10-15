@@ -28,9 +28,9 @@ func (t *stitchVertexTable) classOf(v *Vertex) int {
 // stitchWeldPlan records the admitted free-edge pairs over one Stitch call.
 // A placement replays these groups without running Table J again.
 type stitchWeldPlan struct {
-	table  *stitchVertexTable
-	group  map[*Edge]int // welded edges only; absent means the edge stays free
-	groups int
+	Table  *stitchVertexTable
+	Group  map[*Edge]int // welded edges only; absent means the edge stays free
+	Groups int
 }
 
 // buildStitchWeldPlan registers operand vertices, then groups eligible free
@@ -73,7 +73,7 @@ func buildStitchWeldPlan(faces []*Face) *stitchWeldPlan {
 		}
 	}
 	group, groups := stitchweld.WeldPairs(candidates, stitchEdgesJoin)
-	return &stitchWeldPlan{table: table, group: group, groups: groups}
+	return &stitchWeldPlan{Table: table, Group: group, Groups: groups}
 }
 
 // stitchEdgesJoin decides Table J's J2/J3 for two free edges that already
