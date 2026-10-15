@@ -90,7 +90,7 @@ placement a float composition the caller never asked for, orthonormalised by
 
 | Consumer | Reading of a reflected body |
 |---|---|
-| Face outward normals, `Facing`, `NormalTo` | `internal/prismrecord/build.go` / `revolve_build.go` swap the sense; measured M1 |
+| Face outward normals, `Facing`, `NormalTo` | `internal/prismrecord/build.go` / `internal/revolveplan/build.go` swap the sense; measured M1 |
 | Loop winding, `Edge.IsConvex` | the walked-boundary convexity is a property of the record, which the reflection does not change; the built loops are re-wound (`internal/prismrecord/build.go`); measured M1 (17 of 18 convex on both) |
 | Mass properties | magnitudes unchanged, centroid mapped through `xform`; measured M1, M7, M9–M12 |
 | `Bounds` | extremes mapped and rounded as for any placement (evaluator §5) |

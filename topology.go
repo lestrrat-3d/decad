@@ -622,7 +622,7 @@ func (s *FaceShell) IsVoid() bool { return s.n.Void }
 // and neither implies the other. A solid's shell is never open; a
 // surface-result feature's sheet shell reports true wherever its build
 // omitted a closing face and left a rim with no second face to pair it with
-// (extrude.go, revolve_build.go), and false for a closed sheet that mints no
+// (extrude.go, internal/revolveplan/build.go), and false for a closed sheet that mints no
 // such rim — a full revolution (docs/surface-design.md Table W).
 func (s *FaceShell) IsOpen() bool { return s.n.Open }
 

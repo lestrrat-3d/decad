@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/sweeparc"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
 	"github.com/lestrrat-3d/decad/internal/sweeptransport"
@@ -280,7 +281,7 @@ func (span *sweepSpanPayload) build(
 		return nil, err
 	}
 	if span.arc {
-		body, err := evalRevolveContextWork(ctx, d, ref, span.revolve, work)
+		body, err := bodyResult(revolveplan.Build(ctx, envOf(documentNode(d), ref), span.revolve, work))
 		if err != nil {
 			return nil, err
 		}
@@ -326,7 +327,7 @@ func restoreSweepArcCapRoles(body *Body, reverse bool) {
 // (cap-inclusive) sum minus the two omitted caps, each already-computed
 // quantity contributing its own bound. So the two omitted caps are summed
 // into the running total and then subtracted back out, exactly as
-// internal/prismrecord/build.go and revolve_build.go compose theirs, rather than being left out
+// internal/prismrecord/build.go and internal/revolveplan/build.go compose theirs, rather than being left out
 // of the sum from the start.
 func aggregateCompositeSweepMeasurements(ctx context.Context, body *Body, parts []compositeSpanPart, surfaceResult bool) error {
 	if body == nil || len(parts) == 0 {

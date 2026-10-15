@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -53,7 +54,7 @@ func TestRevolveBoundsSharedProfileMatchesIndependentExtents(t *testing.T) {
 				Den:     test.den,
 				Xform:   r3.Identity(),
 			}
-			got, err := revolveBoundsContext(t.Context(), rp, freeform.NewFreeformWork())
+			got, err := revolveplan.Bounds(t.Context(), rp, freeform.NewFreeformWork())
 			require.NoError(t, err)
 			cached, err := revolveaxis.ResolveAnalyticExtentProfile(t.Context(), test.profile, freeform.NewFreeformWork())
 			require.NoError(t, err)
@@ -76,7 +77,7 @@ func TestRevolveBoundsSharedProfileMatchesIndependentExtents(t *testing.T) {
 				Exactness: exactnessOf(bound),
 				Bound:     units.Millimeters(bound),
 			}
-			require.Equal(t, want, got)
+			require.Equal(t, want, boxFromInternal(got))
 		})
 	}
 }

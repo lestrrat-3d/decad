@@ -866,8 +866,8 @@ func payloadProvesSimple(ctx context.Context, p topo.Payload) bool {
 	case chainRevolvePayload:
 		// A chain-fed revolve earns leg 4 on the identical full-turn argument,
 		// re-read over the chain's own open walk through the SAME generic
-		// reading revolvePayloadProvesSimple already takes off rp.profile and
-		// rp.ax — neither of which assumes the walk closes
+		// reading revolvePayloadProvesSimple already takes off rp.Profile and
+		// rp.Ax — neither of which assumes the walk closes
 		// (docs/surface-design.md §13.4).
 		return revolvePayloadProvesSimple(ctx, pp.Revolve())
 	default:

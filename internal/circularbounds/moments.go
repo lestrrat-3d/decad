@@ -28,7 +28,7 @@ func ratScale(value *big.Rat, num, den int64) *big.Rat {
 }
 
 // The interval readers integrate recorded circular segments for root region
-// moments and the per-wall axial moment in revolve_build.go.
+// moments and the per-wall axial moment in internal/revolveplan/build.go.
 //
 // Each reader returns an enclosure and a flag, and the flag is false whenever
 // the segment's own record does not determine the answer exactly. A false
@@ -38,9 +38,9 @@ func ratScale(value *big.Rat, num, den int64) *big.Rat {
 
 // axisComponentInterval encloses one axis-frame scalar — the anchor's aU/aV
 // or the outward normal's nU/nV (nU = −dV, nV = dU, revolvemass.AxisMoments' own pairing,
-// revolve_build.go) — as an interval centred on its held float and widened by
+// internal/revolveplan/build.go) — as an interval centred on its held float and widened by
 // its own proven bound: junctionRadiusInterval's construction
-// (revolve_build.go), generalized from a junction's radial coordinate to the
+// (internal/revolveplan/build.go), generalized from a junction's radial coordinate to the
 // axis's own anchor and direction. A component this evaluator cannot state as
 // a finite rational — a +Inf bound, the sqrt bracket a tilted axis's
 // direction does not yet carry — answers ok == false, and

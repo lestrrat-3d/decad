@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
 	"github.com/lestrrat-3d/r3"
 )
@@ -26,7 +27,7 @@ func (d *Document) sweepArcChain(ctx context.Context, chain chainRecord,
 		Phi0: arc.Phi0, Phi1: arc.Phi1, Den: arc.Den, Xform: r3.Identity(),
 	}
 	ref := d.nextProducerID()
-	body, err := evalChainRevolveContext(ctx, d, ref, reduction, work)
+	body, err := bodyResult(revolveplan.BuildChain(ctx, envOf(documentNode(d), ref), reduction, work))
 	if err != nil {
 		return nil, err
 	}

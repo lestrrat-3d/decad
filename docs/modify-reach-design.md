@@ -382,7 +382,7 @@ result record's index space.
 try §7.2's source-specific radial rim first.
 
 **Matching.** The build stamps every junction edge from
-`revolvePayload.junctionCircle`: centre on the axis at the junction's `z`,
+`revolvePayload.JunctionCircle`: centre on the axis at the junction's `z`,
 the placed sweep axis, radius `ρ`. A selected edge is a junction exactly when
 its curve kind is the sweep's (`Circle3` full, `Arc3` partial) and its centre,
 axis and radius equal one junction circle's bit for bit, recomputed from the
@@ -1532,7 +1532,7 @@ and the void shell outward. Only S10's section limit bounds the thickness, as
 for a partial turn, since a full turn keeps no angular floor.
 
 Stage 4's revolve gates run in this order: the receiver's section-displacement
-guard (`requireExactRevolveSection`), a holed meridian (SX8), a kept angular
+guard (`revolveplan.RequireExactSection`), a holed meridian (SX8), a kept angular
 cap (SX8), more than one on-axis walk (SX8), then a removed side run that is
 not one proper connected run of whole walks or that leaves two kept chains
 (SX8, §9.3.2). `WithNoOpenings` on a partial turn or on a holed meridian is SX8 before the shell is routed here.

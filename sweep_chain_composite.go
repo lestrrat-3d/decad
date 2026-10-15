@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
 	"github.com/lestrrat-3d/decad/internal/sweeptransport"
@@ -38,7 +39,7 @@ func (sp chainSweepSpanPayload) transform() r3.Transform {
 func (sp *chainSweepSpanPayload) build(ctx context.Context, d *Document, ref producerID,
 	work *freeform.FreeformWork) (*Body, error) {
 	if sp.arc {
-		return evalChainRevolveContext(ctx, d, ref, sp.revolve, work)
+		return bodyResult(revolveplan.BuildChain(ctx, envOf(documentNode(d), ref), sp.revolve, work))
 	}
 	return bodyResult(chainrecord.Build(ctx, envOf(documentNode(d), ref), sp.chain, work))
 }

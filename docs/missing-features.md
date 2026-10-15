@@ -75,7 +75,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Closed shell (`WithNoOpenings`) outside a full revolve, a hole-free straight prism or a two-slab nested rectangular boss | `ErrUnsupported` (SX8/SX9; modify-general SG2) (`shell.go`) | `docs/modify-reach-design.md` §9, §14; `docs/modify-general-design.md` §3.1a |
 | Reverse-order nested rectangular boss whose frame cannot flip exactly | `ErrUnsupported` (`shell_stacked_boss.go`) | `docs/modify-general-design.md` §3.1a |
 | Modify of a prism whose section carries a displacement bound | `ErrUnsupported` via `prismrecord.Payload.RequireExactSection` | `docs/modify-design.md` |
-| Shell or junction fillet/chamfer of a revolve whose meridian carries a displacement bound — a revolve shell with a slanted cut, such as a cone's | `ErrUnsupported` via `requireExactRevolveSection` | `docs/surface-intersection-design.md` §7.2 |
+| Shell or junction fillet/chamfer of a revolve whose meridian carries a displacement bound — a revolve shell with a slanted cut, such as a cone's | `ErrUnsupported` via `revolveplan.RequireExactSection` | `docs/surface-intersection-design.md` §7.2 |
 | Variable-radius fillet, face-to-face fillet | No entry point exists | none |
 
 ## Booleans

@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/decad/internal/shellsurvey"
 	"github.com/lestrrat-3d/units"
@@ -28,7 +29,7 @@ import (
 // wall region over the receiver's own interval. A full turn under
 // WithNoOpenings sweeps it a whole turn into a closed hollow body: the cavity
 // wall is the offset's own swept surface, a void shell beside the outer one
-// (revolve_build.go's fullRevolveShellsContext). A side opening — a connected
+// (internal/revolveplan/build.go's fullRevolveShellsContext). A side opening — a connected
 // run of generated side faces removed, on a full turn or beside both removed
 // angular caps — sweeps the open-chain wall region closed at each opening by
 // docs/shell-opening-design.md's Table RO rim instead (revolveshell.SideWall).
@@ -48,7 +49,7 @@ func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*F
 	// The section-displacement guard, read as a modify refusal: the offset
 	// is of the recorded meridian, and a meridian displaced from the one it
 	// denotes has no proven offset (prismrecord.Payload.RequireExactSection's prism reading).
-	if err := requireExactRevolveSection(rp, "this evaluator's revolve shell"); err != nil {
+	if err := revolveplan.RequireExactSection(rp, "this evaluator's revolve shell"); err != nil {
 		return nil, err
 	}
 
@@ -162,7 +163,7 @@ func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*F
 	}
 
 	ref := d.nextProducerID()
-	body, err := evalRevolveContextWork(ctx, d, ref, revolvePayload{
+	body, err := bodyResult(revolveplan.Build(ctx, envOf(documentNode(d), ref), revolvePayload{
 		Profile:      wall,
 		Frame:        rp.Frame,
 		Ax:           ax,
@@ -174,7 +175,7 @@ func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*F
 		RadialProof:  ax.RadialProof,
 		SectionDelta: delta,
 		SectionWhole: delta > 0,
-	}, work)
+	}, work))
 	if err != nil {
 		return nil, err
 	}

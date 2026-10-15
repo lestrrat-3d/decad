@@ -36,18 +36,6 @@ func TestSideOriginsContextPollsEachSegment(t *testing.T) {
 	require.Equal(t, 3, ctx.calls)
 }
 
-func TestFullRevolveShellsContextPollsEachLoop(t *testing.T) {
-	t.Parallel()
-	ctx := &cancelAfterContext{Context: t.Context(), cancelAt: 2}
-	perLoop := []revLoopParts{{}, {faces: []*Face{bornFace(&Face{})}, runs: []int{0}}}
-
-	shells, err := fullRevolveShellsContext(ctx, perLoop, false)
-
-	require.ErrorIs(t, err, context.Canceled)
-	require.Nil(t, shells)
-	require.Equal(t, 2, ctx.calls)
-}
-
 func TestAddBlendRolesContextPollsNestedMetadata(t *testing.T) {
 	t.Parallel()
 	ref := producerID(1)

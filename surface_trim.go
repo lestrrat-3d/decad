@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
 )
 
 // This file implements Trim, Extend and Split. Their §2.1
@@ -498,7 +499,7 @@ func admitSplitPair(budget *proofbound.WorkBudget, target, tool *Body) (prismPay
 // generator test and S6's span relation differ from the prism arm; §3's whole
 // resolution — prismcells.BuildScene, prismcells.Classify, the survivor chaining and
 // the cut-displacement reading — is consumed VERBATIM over the two operands'
-// MERIDIAN views, which is what §3.1 claims and what revolvePayload.meridian
+// MERIDIAN views, which is what §3.1 claims and what revolvePayload.Meridian
 // supplies.
 
 // trimRevolve is Trim over a pair S1 has already routed to the revolve family.
@@ -532,7 +533,7 @@ func (b *Body) trimRevolve(ctx context.Context, budget *proofbound.WorkBudget, t
 		// derives.
 		SectionDelta: sectionDelta,
 	}
-	body, err := evalChainRevolveContext(ctx, d, d.nextProducerID(), pp, freeform.NewFreeformWork())
+	body, err := bodyResult(revolveplan.BuildChain(ctx, envOf(documentNode(d), d.nextProducerID()), pp, freeform.NewFreeformWork()))
 	if err != nil {
 		return nil, err
 	}
@@ -747,7 +748,7 @@ func (b *Body) extendRevolve(ctx context.Context, budget *proofbound.WorkBudget,
 	// §7.1's fold reads this field as its gate, and ResolveSurfaceExtend's δ_cut is
 	// the whole of it: S4 and S7 zero every other term prism §7 derives.
 	rcv.SectionDelta = cutDelta
-	result, err := evalChainRevolveContext(ctx, d, d.nextProducerID(), rcv, freeform.NewFreeformWork())
+	result, err := bodyResult(revolveplan.BuildChain(ctx, envOf(documentNode(d), d.nextProducerID()), rcv, freeform.NewFreeformWork()))
 	if err != nil {
 		return nil, err
 	}
@@ -786,7 +787,7 @@ func admitExtendRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, 
 	}
 	// The FULL-revolution restriction, and it is a reading rather than a bound:
 	// extendRevolveEndSegment below names a free end by the single-coedge
-	// latitude loop fullRevLoops (revolve_build.go) puts on the first and last
+	// latitude loop fullRevLoops (internal/revolveplan/build.go) puts on the first and last
 	// wall. A PARTIAL revolution carries no such loop — each wall holds one loop
 	// gathering its two cap edges beside the swept arcs, and which member of it
 	// is the meridian's own free end is not a recorded fact — so the pair is
@@ -882,7 +883,7 @@ func admitExtendRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, 
 //
 // Under a full revolution buildChainRevolveWalls gives every wall face its
 // junctions' latitude circles as SEPARATE single-coedge loops through
-// fullRevLoops (revolve_build.go), which sets forward true for the wall's own
+// fullRevLoops (internal/revolveplan/build.go), which sets forward true for the wall's own
 // START junction and false for its END. That flag is the map: the receiver's
 // two free ends are junction 0 of the FIRST wall and junction n of the LAST,
 // and reading the flag rather than the loop position is what makes the reading
@@ -892,7 +893,7 @@ func admitExtendRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, 
 // — so faces[0] and faces[len-1] are walk 0 and walk n-1.
 //
 // The loop indexes b.lumps and reads pp.chains at the SAME index, on
-// extendEndSegment's own terms: evalChainRevolveContext appends each chain's
+// extendEndSegment's own terms: revolveplan.BuildChain appends each chain's
 // faces in chain order and topobuild.SheetLumps preserves first-appearance order, so the
 // body's i-th lump is the payload's i-th chain. A producer that emits a lump
 // per connected PIECE rather than per chain owes this function a recorded map

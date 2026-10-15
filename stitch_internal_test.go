@@ -842,7 +842,7 @@ func TestStitchSphereFluxDerivesRadiusFromAreaNotBareField(t *testing.T) {
 // machinery a partial sphere (a zone or cap bounded by one or two rim
 // circles) would need (top-of-file doc comment), so a Sphere face carrying
 // any boundary loop at all is refused rather than guessed at. No reachable
-// fixture builds one today — revolve_build.go's own wallSphere
+// fixture builds one today — the revolve build's own revolveaxis.WallSphere
 // classification requires the generating arc's centre to sit on the
 // axis, and every reachable profile whose generating arc reaches the axis
 // at both of its own endpoints (the only way this evaluator's Rule S can

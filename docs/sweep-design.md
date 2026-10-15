@@ -742,7 +742,7 @@ section plane. It reads the span's analytic extent along that plane's normal
 and the span's own endpoint-supporting-plane property, and neither reading asks
 whether the section closes: a chain prism span supplies both through
 `chainrecord.Payload.Prism`'s `prismPayload` view, and a chain arc span through
-`chainRevolvePayload.revolve`'s `revolvePayload` view. The non-neighbour rule
+`chainRevolvePayload.Revolve`'s `revolvePayload` view. The non-neighbour rule
 is a bounded-box separation and reads no section at all. The topology audit
 that follows the sew already admits a free rim edge — it requires one or two
 incident faces per edge and a vertex link that is one cycle or one path — so a
@@ -861,7 +861,7 @@ option refusals of §15.3 included, from masking a seam refusal.
 | faces | one wall per recorded segment per path span, after the rim coalescing `Extrude` already runs — `docs/surface-design.md` Table G's own per-kind construction, never a cap and never a closing face |
 | `Edges(Free())` | both rims of the walk over every span, plus the one sweep edge at each of the walk's two free ends; a one-span straight sweep of an `n`-segment walk resolves `2n + 2` |
 | `Area` | the sum of each wall's own area through `boundedAdd`. A straight span's wall is `boundedMul(segment length, span height)`, the height carrying §15.2's composed path bound; an arc span's is `boundedMul(walkAxisMoment, sweep)` on `docs/surface-design.md` §13.4's own terms. A circular wall carries its proven integral enclosure and a free-form wall `internal/freeform/spline_length.go`'s proven bracket |
-| `Bounds` | the recorded walk's per-segment analytic extremes swept over the span's signed interval, from `internal/prismrecord/extent.go` and `revolve_extent.go` verbatim, charging the frame and placement rounding those readings already charge |
+| `Bounds` | the recorded walk's per-segment analytic extremes swept over the span's signed interval, from `internal/prismrecord/extent.go` and `internal/revolveplan/extent.go` verbatim, charging the frame and placement rounding those readings already charge |
 | `Verify`'s validity | exactly what a chain `Extrude` ribbon or a chain `Revolve` shell over the same recorded walk and interval reads (`docs/surface-design.md` §13.4, §9.1). A composite chain sweep reads `ValidityUndecided`, for D1's own reason: the assembled topology audit proves how the spans sew together, never that the swept walls do not fold back through one another |
 
 No bound in that table is new, because no geometry is: every wall is built by

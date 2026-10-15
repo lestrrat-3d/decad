@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -124,7 +125,7 @@ func tryCommonAxisRevolveBoolean(ctx context.Context, op meshbool.OperationKind,
 	result.SourceSideOrigins = [][][]provenance.Ref{sources}
 	result.BlendSegs = nil
 	result.BlendKind = ""
-	body, err := evalRevolveContext(ctx, d, ref, result)
+	body, err := bodyResult(revolveplan.Build(ctx, envOf(documentNode(d), ref), result, freeform.NewFreeformWork()))
 	if err != nil {
 		return nil, false, err
 	}

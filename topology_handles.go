@@ -319,18 +319,6 @@ func faceShellHandles(ns []*topo.FaceShell) []*FaceShell {
 	return out
 }
 
-// faceShellNodes returns the nodes of ss in order, or nil for an empty ss.
-func faceShellNodes(ss []*FaceShell) []*topo.FaceShell {
-	if len(ss) == 0 {
-		return nil
-	}
-	out := make([]*topo.FaceShell, len(ss))
-	for i, s := range ss {
-		out[i] = faceShellNode(s)
-	}
-	return out
-}
-
 // bornLump sets l's node Owner to l and returns l. Every root Lump is born
 // through it, so lumpHandle maps any lump node a body links back to the one
 // handle that holds it.

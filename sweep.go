@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/featureoption"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -28,7 +29,7 @@ import (
 // increment 3) reaches every one of Sweep's three build paths, but not through
 // one shared mechanism: a one-span straight or arc path sets the flag on its
 // reduced prismPayload/revolvePayload and gets the whole sheet behaviour for
-// free from internal/prismrecord/build.go and revolve_build.go, while a composite path's spans
+// free from internal/prismrecord/build.go and internal/revolveplan/build.go, while a composite path's spans
 // stay solid (sweepSpanPayload never carries the flag) and
 // assembleCompositeSweepBody (sweep_composite.go) consumes sweepPayload's own
 // flag to omit the two outer caps after every span has built solid.
@@ -250,7 +251,7 @@ func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 // read only off prism/revolve: every finishing step below overwrites the
 // built body's payload with this struct, so a flag that rode only the reduced
 // prism/revolve payload would still reach Kind()/solid correctly on first
-// build (prismrecord.Build/evalRevolveContextWork read it there) but would give
+// build (prismrecord.Build/revolveplan.Build read it there) but would give
 // a later consumer — auditSheetBoundary's own sweepPayload case
 // (verify.go) — no uniform field to read across all three build paths. For
 // the composite path it is the ONLY place the flag lives at all: every span
@@ -308,7 +309,7 @@ func (sp sweepPayload) Placed(ctx context.Context, env topo.Env, composed r3.Tra
 	if sp.arc {
 		sp.revolve.Xform = composed
 		sp.prism.Xform = composed
-		body, err := evalRevolveContext(ctx, d, ref, sp.revolve)
+		body, err := bodyResult(revolveplan.Build(ctx, envOf(documentNode(d), ref), sp.revolve, freeform.NewFreeformWork()))
 		if err != nil {
 			return nil, err
 		}
@@ -369,7 +370,7 @@ func (sp chainSweepPayload) Placed(ctx context.Context, env topo.Env, composed r
 	}
 	if sp.arc {
 		sp.revolve.Xform = composed
-		body, err := evalChainRevolveContext(ctx, d, ref, sp.revolve, freeform.NewFreeformWork())
+		body, err := bodyResult(revolveplan.BuildChain(ctx, envOf(documentNode(d), ref), sp.revolve, freeform.NewFreeformWork()))
 		if err != nil {
 			return nil, err
 		}

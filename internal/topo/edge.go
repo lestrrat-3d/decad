@@ -50,7 +50,7 @@ type Edge struct {
 	// Denot is the CURVE half of the shared-denotation certificate
 	// (root denotation.go): non-zero only for an edge a builder minted one for —
 	// today a straight prism's rim edge (internal/prismrecord/build.go) and a revolve's
-	// junction edge (root revolve_build.go) — and propagated unchanged, composing
+	// junction edge (internal/revolveplan/build.go) — and propagated unchanged, composing
 	// xform, by every copier that reproduces the same curve (root stitch.go's
 	// rebuildStitchTopology, root unstitch.go's copyFaceUnderContext,
 	// patchchain's copyFacesUnder). It is what root stitch_weld.go's

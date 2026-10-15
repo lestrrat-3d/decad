@@ -650,7 +650,7 @@ meridian holes, no section displacement, a matching full-turn angle record,
 and one resulting closed loop. Every input segment must have a distinct scene
 entity so its source-face role is unambiguous. The existing prism-cell work
 cap and cancellation apply. A result cut through a source line carries the
-cut parameter's displacement through `revolvePayload.sectionDelta`. A kept
+cut parameter's displacement through `revolvePayload.SectionDelta`. A kept
 wall retains its source face's origins; a coincident wall retains both source
 faces' origins. Every shared span must lie on exactly the same recorded line
 carrier, with both ends inside both finite segments. Sketch's identity band

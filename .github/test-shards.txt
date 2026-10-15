@@ -67,7 +67,6 @@
 0	0.00	TestFilletSphereWalkRequiresExactRecordedRadius
 0	0.00	TestFitSplineVanishingSpeedStillRefusesRegularity
 0	0.03	TestFixPatchOrientation
-0	0.00	TestFullRevolveShellsContextPollsEachLoop
 0	0.01	TestGatePointsNeverStoreOrReturnUnderCancel
 0	0.00	TestJointBoxDependentDelta
 0	0.74	TestJointBoxLoopSplitAxis

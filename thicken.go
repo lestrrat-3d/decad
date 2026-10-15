@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
@@ -250,7 +251,7 @@ func thickenRevolve(ctx context.Context, d *Document, rp revolvePayload, side Th
 	rp.RadialProof = false
 	rp.SurfaceResult = false
 	rp.BlendSegs, rp.BlendKind = nil, ""
-	return evalRevolveContextWork(ctx, d, d.nextProducerID(), rp, work)
+	return bodyResult(revolveplan.Build(ctx, envOf(documentNode(d), d.nextProducerID()), rp, work))
 }
 
 // thickenRibbonSteps maps the requested side to the right and left copies of
@@ -307,7 +308,7 @@ func thickenChainExtrude(ctx context.Context, d *Document, cp chainPayload, side
 func thickenChainRevolve(ctx context.Context, d *Document, cp chainRevolvePayload, side ThickenSide, tmm, tDelta float64) (*Body, error) {
 	// The prism ribbon's own admission, re-read over the meridian walk set
 	// (thickenChainExtrude above): §16.6 offsets ONE walk, and the assembled
-	// section it hands the solid build has to be exact — requireExactRevolveSection
+	// section it hands the solid build has to be exact — revolveplan.RequireExactSection
 	// refuses a displaced one at that build anyway, and refusing here names the
 	// ribbon rather than the revolve it was about to become.
 	if len(cp.Chains) != 1 || cp.SectionDelta != 0 {
@@ -350,5 +351,5 @@ func thickenChainRevolve(ctx context.Context, d *Document, cp chainRevolvePayloa
 	rp.Profile = section
 	rp.Ax = ax
 	rp.RadialProof = false
-	return evalRevolveContextWork(ctx, d, d.nextProducerID(), rp, work)
+	return bodyResult(revolveplan.Build(ctx, envOf(documentNode(d), d.nextProducerID()), rp, work))
 }

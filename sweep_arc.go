@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/sweeparc"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
 
@@ -55,8 +56,8 @@ func evalArcSweepContext(
 		reverseCaps = true
 	}
 	// The flag rides the REDUCED revolvePayload, not just the finishing
-	// sweepPayload literal below: revolve_build.go's evalRevolveContextWork
-	// reads rp.surfaceResult to decide Kind()/solid, cap omission, topobuild.SheetLumps
+	// sweepPayload literal below: revolveplan.Build
+	// reads rp.SurfaceResult to decide Kind()/solid, cap omission, topobuild.SheetLumps
 	// and the area subtraction — including Table W's profile-meets-axis row —
 	// which is what gives the arc reduction the whole sheet behaviour for free
 	// (docs/surface-design.md §4).
@@ -70,7 +71,7 @@ func evalArcSweepContext(
 		Xform:         r3.Identity(),
 		SurfaceResult: surfaceResult,
 	}
-	body, err := evalRevolveContextWork(ctx, d, ref, revolve, work)
+	body, err := bodyResult(revolveplan.Build(ctx, envOf(documentNode(d), ref), revolve, work))
 	if err != nil {
 		return nil, err
 	}

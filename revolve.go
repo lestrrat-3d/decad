@@ -8,10 +8,10 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
-	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 
@@ -32,7 +32,7 @@ import (
 //
 // That evaluator is spread over three sibling files, each with its own doc
 // comment: revolve_axis.go resolves the axis and classifies what the profile
-// sweeps around it, revolve_build.go builds the body, and revolve_extent.go
+// sweeps around it, internal/revolveplan/build.go builds the body, and internal/revolveplan/extent.go
 // answers the extent questions asked of the result.
 
 // Axis is what a revolve may spin about (docs/api-design.md §6.2). Sealed:
@@ -288,7 +288,7 @@ func revolveProfileBuild(ctx context.Context, d *Document, s *sketch.Sketch, p *
 	}
 
 	ref := d.nextProducerID()
-	body, err := evalRevolveContextWork(ctx, d, ref, revolvePayload{
+	body, err := bodyResult(revolveplan.Build(ctx, envOf(documentNode(d), ref), revolvePayload{
 		Profile:       profile,
 		Frame:         frame,
 		Ax:            ax,
@@ -299,7 +299,7 @@ func revolveProfileBuild(ctx context.Context, d *Document, s *sketch.Sketch, p *
 		Xform:         r3.Identity(),
 		SurfaceResult: surfaceResult,
 		RadialProof:   ax.RadialProof,
-	}, work)
+	}, work))
 	if err != nil {
 		return nil, err
 	}
@@ -518,87 +518,10 @@ func (d *Document) resolveAngleSide(s SideAngular, st angularStops, travel float
 
 // This section is the chain-fed Revolve of docs/surface-design.md §13: the open
 // sketch chain's own spin into a shell with no cap. It reuses
-// revolve_axis.go's axis resolution and revolve_build.go/revolve_extent.go's
-// per-kind wall construction and extent readings unchanged — the same
+// revolve_axis.go's axis resolution and internal/revolveplan's per-kind wall
+// construction and extent readings unchanged — the same
 // evaluator Revolve runs, over an open rather than a closed walk — and reads
 // its recorded walk through recordChain (seam.go) rather than sectioncert.RecordProfile.
-
-// chainRevolvePayload is chain Revolve's own record of a shell body: the
-// recorded open walk SET, the plane frame, the oriented plane-local axis, the
-// sweep interval, and the accumulated rigid placement — chainRevolvePayload
-// is to chain Revolve what chainPayload is to chain Extrude, and what
-// revolvePayload is to Revolve (docs/surface-design.md §13.4). A plain
-// chain Revolve builds the one-walk case; docs/surface-intersection-design.md
-// §3.4 is what first builds more than one, one lump per surviving walk, and
-// sets sectionDelta beside them.
-type chainRevolvePayload struct {
-	Chains     []chainRecord
-	Frame      r3.Frame
-	Ax         axisFrame
-	Phi0, Phi1 float64
-	Full       bool
-	Den        revolveangle.Sweep
-	Xform      r3.Transform
-	// sectionDelta is prismPayload's own §7 term (docs/prism-boolean-design.md),
-	// carried here on the identical terms: the proven upper bound on how far
-	// any recorded meridian coordinate sits from the meridian its construction
-	// denotes. It is zero for every walk a caller draws through chain Revolve,
-	// and docs/surface-intersection-design.md §7.1 derives how a nonzero one
-	// reaches this body's published Area and Bounds.
-	SectionDelta float64
-}
-
-// revolve is a *view* of rp as a revolvePayload wrapping the chain's own
-// segment list as an unclosed "outer loop" with no holes — never a body this
-// evaluator builds from directly — used only to feed the axis, sweep and
-// extent readings revolvePayload already proves generically over rp.profile:
-// none of them assumes the loop closes (docs/surface-design.md §13.4).
-// surfaceResult stays false and is read nowhere below: chain Revolve never
-// runs revolvePayload's own solid/cap topology, only its own open-walk build
-// (buildChainRevolveWalls).
-// The first chain stands in for a profile's outer loop and the rest for its
-// holes, exactly as chainrecord.Payload.Prism folds its own walk set: every reading
-// this view feeds walks the segments and cares about neither winding nor
-// closure.
-func (rp chainRevolvePayload) Revolve() revolvePayload {
-	profile := profileRecord{Outer: loopRecord(rp.Chains[0])}
-	for _, c := range rp.Chains[1:] {
-		profile.Holes = append(profile.Holes, loopRecord(c))
-	}
-	return revolvePayload{
-		Profile: profile,
-		Frame:   rp.Frame,
-		Ax:      rp.Ax,
-		Phi0:    rp.Phi0, Phi1: rp.Phi1,
-		Full:         rp.Full,
-		Den:          rp.Den,
-		Xform:        rp.Xform,
-		SectionDelta: rp.SectionDelta,
-	}
-}
-
-// walkView is the single-walk view the wall build takes: chain ci alone as the
-// outer loop, so prismrecord.SideOrigins's segment indices and revolvemass.WallAxisMoment's own
-// rp.profile.Outer read reach exactly that walk's segments. loopIdx feeds the
-// face role, so two walks' faces never collide on one role string.
-func (rp chainRevolvePayload) WalkView(ci int) revolvePayload {
-	view := rp.Revolve()
-	view.Profile = profileRecord{Outer: loopRecord(rp.Chains[ci])}
-	return view
-}
-
-// Transform is the accumulated rigid placement.
-func (rp chainRevolvePayload) Transform() r3.Transform { return rp.Xform }
-
-// Placed re-evaluates the same record under the composed motion (core §8). A
-// re-evaluation path: no preflight has run on this record within the call, so
-// the build opens the record's one free-form work counter itself
-// (docs/spline-design.md §5.2), exactly as revolvePayload.Placed does.
-func (rp chainRevolvePayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
-	d, ref := documentHandle(env.Doc), env.Ref
-	rp.Xform = composed
-	return placedNode(evalChainRevolveContext(ctx, d, ref, rp, freeform.NewFreeformWork()))
-}
 
 // revolveChain is the chain-fed Revolve body (docs/surface-design.md §13).
 // Its refusals run in this order: the nil-option check, the seam gates, the
@@ -686,7 +609,7 @@ func revolveChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch
 	}
 
 	ref := d.nextProducerID()
-	body, err := evalChainRevolveContext(ctx, d, ref, chainRevolvePayload{
+	body, err := bodyResult(revolveplan.BuildChain(ctx, envOf(documentNode(d), ref), chainRevolvePayload{
 		Chains: []chainRecord{chain},
 		Frame:  frame,
 		Ax:     ax,
@@ -694,7 +617,7 @@ func revolveChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch
 		Full:  full,
 		Den:   den,
 		Xform: r3.Identity(),
-	}, work)
+	}, work))
 	if err != nil {
 		return nil, err
 	}

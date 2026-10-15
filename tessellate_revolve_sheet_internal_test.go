@@ -119,8 +119,8 @@ func TestRevolveSheetAreaSlackBelowSolidOnCircularMeridian(t *testing.T) {
 
 // TestRevolveSheetOrientationSignIsAnchorDependent is the falsifier for the
 // signed-volume orientation guard (tessellate_revolve.go's `!sheet ||
-// rp.full` arm around tessellation.OrientationSign). No Table W fixture's own
-// default anchor (rp.xform.Apply(p.basis.a3)) happens to flip sign when
+// rp.Full` arm around tessellation.OrientationSign). No Table W fixture's own
+// default anchor (rp.Xform.Apply(p.basis.a3)) happens to flip sign when
 // that guard is dropped, so a test built from that call alone would never
 // catch its removal — the guard cannot be justified by any fixture's
 // default anchor. What justifies it is that the sum is ANCHOR-DEPENDENT at

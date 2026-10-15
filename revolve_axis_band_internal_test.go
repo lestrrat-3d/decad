@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolvemass"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
 	"github.com/lestrrat-3d/r3"
@@ -19,7 +20,7 @@ import (
 )
 
 // This file is docs/surface-design.md §15's T90-T95: the revolve axis-band
-// repair (revolve_axis.go's resolveAxisSide, revolve_build.go's
+// repair (revolve_axis.go's resolveAxisSide, internal/revolveplan/build.go's
 // revolvemass.AdmitBandCharge/revolvemass.AdmitVolumeCharge). Every fixture is
 // a straight-edged rectangle in plane-local (u, v), U the axial coordinate
 // and V the radial one, with every vertex an exact recorded coordinate —
@@ -67,7 +68,7 @@ func axisAlignedFrame(t *testing.T) r3.Frame {
 // directly (revolve.go), so a hand-built revolvePayload's sweep bound is the
 // SAME tight, held-value-exact reading a real Revolve call produces — a
 // zero-value den falls back to sweep()'s own conservative magnitude envelope
-// (revolve_denotation.go), which would swamp every other bound in this file
+// (internal/revolveplan/payload.go), which would swamp every other bound in this file
 // and defeat the isolation buildDipShaftBodyCharged exists for.
 func fullTurnDenotation() revolveangle.Sweep {
 	return revolveangle.Sweep{Phi0: revolveangle.Zero(), Phi1: revolveangle.Angle{Rad: new(big.Rat), Turn: big.NewRat(1, 1)}}
@@ -102,7 +103,7 @@ func buildDipShaftBodyCharged(t *testing.T, profile profileRecord, full bool, ph
 		Den:   den,
 		Xform: r3.Identity(),
 	}
-	body, err := evalRevolveContext(t.Context(), New(), producerID(0), rp)
+	body, err := bodyResult(revolveplan.Build(t.Context(), envOf(documentNode(New()), producerID(0)), rp, freeform.NewFreeformWork()))
 	require.NoError(t, err)
 	return body
 }
@@ -330,7 +331,7 @@ func TestRevolveAxisBandRealGeometryChargedPathVolumeContainment(t *testing.T) {
 	// concrete rather than assumed.
 	rpNoCharge := rp
 	rpNoCharge.Ax.RadialAdmitAllow = 0
-	bodyNoCharge, err := evalRevolveContext(t.Context(), New(), producerID(0), rpNoCharge)
+	bodyNoCharge, err := bodyResult(revolveplan.Build(t.Context(), envOf(documentNode(New()), producerID(0)), rpNoCharge, freeform.NewFreeformWork()))
 	require.NoError(t, err)
 	volNoCharge, err := bodyNoCharge.Volume()
 	require.NoError(t, err)

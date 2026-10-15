@@ -82,7 +82,7 @@ type SideResult struct {
 //     interval's own worst case is bounded (by the coarse ±tol classification
 //     above, which already proved the chosen side's near extreme sits no
 //     lower than −tol), and radialAdmitAllow carries exactly that worst case
-//     forward to revolve_build.go, which charges it into every published
+//     forward to internal/revolveplan/build.go, which charges it into every published
 //     measurement the snap/unsnap mismatch can touch.
 func ResolveSide(line Line2, readings SideExtremes) (SideResult, error) {
 	nU, nV := -line.DV, line.DU

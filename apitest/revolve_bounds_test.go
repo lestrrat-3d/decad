@@ -118,7 +118,7 @@ func TestRevolveBoundsEnclosesDenotedExtreme(t *testing.T) {
 	})
 }
 
-// The tests below prove rp.sweep()'s own tightening (revolve_denotation.go):
+// The tests below prove rp.Sweep()'s own tightening (internal/revolveplan/payload.go):
 // it replaces the old |h|+2π magnitude-envelope fallback with the denoted
 // sweep width's own certified bracket wherever the denotation admits one,
 // and the partial-sweep centroid's endpoint sin/cos (revolveangle.EndSinCos) takes the

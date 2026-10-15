@@ -45,6 +45,9 @@ func axisInPlane(a Axis, frame r3.Frame) (revolveaxis.Line2, error) {
 type axisFrame = revolveaxis.Frame
 type regionSnapAllow = revolveaxis.SnapAllow
 
+// revolveWalks is the shared plane and axis-coordinate resolution.
+type revolveWalks = revolveaxis.ResolvedWalks
+
 // wallKind classifies what one boundary walk sweeps.
 type wallKind = revolveaxis.WallKind
 
@@ -59,11 +62,6 @@ const (
 	wallPlane = revolveaxis.WallPlane
 	// wallCone is an inclined line; an endpoint on the axis is its apex.
 	wallCone = revolveaxis.WallCone
-	// wallSphere is a circular walk whose center lies on the axis.
-	wallSphere = revolveaxis.WallSphere
-	// wallTorus is a circular walk whose center lies off the axis.
-	wallTorus    = revolveaxis.WallTorus
-	wallFreeform = revolveaxis.WallFreeform
 )
 
 // resolveAxisSide scans the record, asks revolveaxis to decide its side, then
