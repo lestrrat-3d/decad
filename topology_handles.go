@@ -402,6 +402,14 @@ func documentNode(d *Document) *topo.Document {
 // topo.Payload.Placed: it builds the environment from d and maps the node
 // back. It never commits.
 func placePayload(ctx context.Context, p topo.Payload, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
+	switch pl := p.(type) {
+	case stitchPayload:
+		documentHandle(&d.n)
+		assertPlacedStitchOwners(pl.Faces, composed)
+	case unstitchPayload:
+		documentHandle(&d.n)
+		assertUnstitchFaceOwners(pl.Face, composed)
+	}
 	return bodyResult(p.Placed(ctx, envOf(&d.n, ref), composed))
 }
 

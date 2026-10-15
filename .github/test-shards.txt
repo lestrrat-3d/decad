@@ -1539,3 +1539,4 @@
 10	0.00	TestSimpleProverImplementers
 10	0.00	TestBuiltBodiesStorePayloadsByValue
 10	0.00	TestReportvocabNamesMatchPublicTypes
+10	0.00	TestStitchKeepsOwnerAssertions

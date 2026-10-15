@@ -72,8 +72,13 @@ func Stitch(ctx context.Context, bodies ...*Body) (*Body, error) {
 
 	var srcFaces []*topo.Face
 	for _, b := range bodies {
-		srcFaces = append(srcFaces, topobuild.Faces(&b.n)...)
+		faces := topobuild.Faces(&b.n)
+		for _, f := range faces {
+			faceHandle(f)
+		}
+		srcFaces = append(srcFaces, faces...)
 	}
+	assertStitchSourceOwners(srcFaces)
 	plan := stitchrecord.BuildPlan(srcFaces)
 
 	ref := d.nextProducerID()
@@ -86,6 +91,75 @@ func Stitch(ctx context.Context, bodies ...*Body) (*Body, error) {
 	}
 	d.commit(body, bodies...)
 	return body, nil
+}
+
+// assertStitchSourceOwners maps every operand vertex node, then every operand
+// edge node, that Stitch's weld plan and topology rebuild read back to its
+// root handle, so a node whose Owner is not its handle fails the mapping's
+// assertion as it always has. It stops where the weld plan would dereference
+// a nil edge or vertex, leaving that panic to stitchrecord.BuildPlan. The edge
+// checks run here, ahead of the build's own context poll and placement and
+// surface refusals.
+func assertStitchSourceOwners(faces []*topo.Face) {
+	for _, f := range faces {
+		for _, l := range f.Loops {
+			for _, ce := range l.CoEdges {
+				start := coedgeStart(ce)
+				if start == nil {
+					return
+				}
+				vertexHandle(start)
+				end := coedgeEnd(ce)
+				if end == nil {
+					return
+				}
+				vertexHandle(end)
+			}
+		}
+	}
+	for _, f := range faces {
+		for _, l := range f.Loops {
+			for _, ce := range l.CoEdges {
+				edgeHandle(ce.Edge)
+			}
+		}
+	}
+}
+
+// assertPlacedStitchOwners maps every operand edge and vertex node a stitch
+// payload's placement rebuild reads back to its root handle, in that rebuild's
+// order. It checks nothing when the rebuild refuses first (a placed operand
+// with a nonzero normalBound) and stops where the rebuild would dereference a
+// nil face, edge or vertex.
+func assertPlacedStitchOwners(faces []*topo.Face, xform r3.Transform) {
+	if xform != r3.Identity() {
+		for _, f := range faces {
+			if f == nil {
+				return
+			}
+			if f.NormalBound != 0 {
+				return
+			}
+		}
+	}
+	for _, f := range faces {
+		if f == nil {
+			return
+		}
+		for _, l := range f.Loops {
+			for _, ce := range l.CoEdges {
+				edgeHandle(ce.Edge)
+				if ce.Edge == nil || ce.Edge.Start == nil {
+					return
+				}
+				vertexHandle(ce.Edge.Start)
+				if ce.Edge.End == nil {
+					return
+				}
+				vertexHandle(ce.Edge.End)
+			}
+		}
+	}
 }
 
 // stitchVertexBounds yields the proven bound magnitude of each of b's own

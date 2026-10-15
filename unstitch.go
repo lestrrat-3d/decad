@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/stitchrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -59,6 +60,7 @@ func Unstitch(ctx context.Context, b *Body) ([]*Body, error) {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
+		assertUnstitchFaceOwners(faceNode(f), r3.Identity())
 		body, err := bodyResult(stitchrecord.BuildUnstitchFace(ctx, envOf(documentNode(d), base+producerID(i)), faceNode(f), b.n.Bounds, r3.Identity()))
 		if err != nil {
 			return nil, err
@@ -70,4 +72,37 @@ func Unstitch(ctx context.Context, b *Body) ([]*Body, error) {
 	}
 	d.commitMany(results, b)
 	return results, nil
+}
+
+// assertUnstitchFaceOwners maps every edge and vertex node of srcFace that
+// Unstitch's face copy reads back to its root handle, in the copy's order, so
+// a node whose Owner is not its handle fails the mapping's assertion as it
+// always has. It checks nothing when the copy refuses first (a placed face
+// with a nonzero normalBound) and stops where the build would dereference a
+// nil face, loop, edge or vertex, leaving that panic to
+// stitchrecord.BuildUnstitchFace.
+func assertUnstitchFaceOwners(srcFace *topo.Face, xform r3.Transform) {
+	if srcFace == nil {
+		return
+	}
+	for _, l := range srcFace.Loops {
+		if l == nil {
+			return
+		}
+		for _, ce := range l.CoEdges {
+			if ce.Edge == nil || ce.Edge.Start == nil || ce.Edge.End == nil {
+				return
+			}
+		}
+	}
+	if xform != r3.Identity() && srcFace.NormalBound != 0 {
+		return
+	}
+	for _, l := range srcFace.Loops {
+		for _, ce := range l.CoEdges {
+			edgeHandle(ce.Edge)
+			vertexHandle(ce.Edge.Start)
+			vertexHandle(ce.Edge.End)
+		}
+	}
 }

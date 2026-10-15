@@ -53,11 +53,11 @@ import (
 // (docs/surface-design.md §2.2), so this is a direct read of b's own
 // recorded connectivity, never a second split.
 func stitchLumpFaceGroups(b *Body) [][]*topo.Face {
-	lumps := b.n.Lumps
+	lumps := b.Lumps()
 	groups := make([][]*topo.Face, len(lumps))
 	for i, lp := range lumps {
-		for _, s := range lp.Shells {
-			groups[i] = append(groups[i], s.Faces...)
+		for _, s := range lp.Shells() {
+			groups[i] = append(groups[i], faceNodes(s.Faces())...)
 		}
 	}
 	return groups
@@ -78,7 +78,7 @@ func stitchSiblingRevolveSource(b *Body, sp stitchPayload) (*Body, map[*topo.Fac
 	copiesByOriginalEdge := map[*topo.Edge]map[*topo.Edge]struct{}{}
 	for i, copied := range sp.Faces {
 		piece := bodyHandle(copied.Body)
-		if piece == nil || len(topobuild.Faces(&piece.n)) != 1 || topobuild.Faces(&piece.n)[0] != copied {
+		if piece == nil || len(piece.Faces()) != 1 || faceNode(piece.Faces()[0]) != copied {
 			return nil, nil, "a source is not a single-face unstitched sheet"
 		}
 		up, ok := piece.n.Payload.(unstitchPayload)
@@ -132,12 +132,12 @@ func stitchSiblingRevolveSource(b *Body, sp stitchPayload) (*Body, map[*topo.Fac
 	if _, ok := originalBody.n.Payload.(revolvePayload); !ok {
 		return nil, nil, "the original has no revolve chording"
 	}
-	originalFaces := topobuild.Faces(&originalBody.n)
+	originalFaces := originalBody.Faces()
 	if len(originalFaces) != len(paired) {
 		return nil, nil, "the unstitched set omits an original face"
 	}
 	for _, f := range originalFaces {
-		if _, ok := paired[f]; !ok {
+		if _, ok := paired[faceNode(f)]; !ok {
 			return nil, nil, "the unstitched set omits an original face"
 		}
 	}
@@ -180,7 +180,7 @@ func stitchSiblingRevolveSource(b *Body, sp stitchPayload) (*Body, map[*topo.Fac
 			}
 			gid := -1
 			for copied := range copies {
-				got, ok := sp.Plan.Group[copied]
+				got, ok := sp.Plan.Group[edgeNode(edgeHandle(copied))]
 				if !ok || (gid >= 0 && got != gid) {
 					return nil, nil, "an original two-face edge was not re-welded"
 				}
@@ -192,7 +192,7 @@ func stitchSiblingRevolveSource(b *Body, sp stitchPayload) (*Body, map[*topo.Fac
 			return nil, nil, "an original free edge has multiple copies"
 		}
 		for copied := range copies {
-			if _, welded := sp.Plan.Group[copied]; welded {
+			if _, welded := sp.Plan.Group[edgeNode(edgeHandle(copied))]; welded {
 				return nil, nil, "an original free edge was newly welded"
 			}
 		}
@@ -259,11 +259,11 @@ func tessellateStitchCurved(ctx context.Context, b *Body, sp stitchPayload, chor
 			return refuse("this evaluator has no chording arm for the source construction")
 		}
 	}
-	if sourceBody == nil || len(topobuild.Faces(&sourceBody.n)) != len(paired) {
+	if sourceBody == nil || len(sourceBody.Faces()) != len(paired) {
 		return refuse("this evaluator has no complete revolve-sheet source")
 	}
-	for _, f := range topobuild.Faces(&sourceBody.n) {
-		if _, ok := paired[f]; !ok {
+	for _, f := range sourceBody.Faces() {
+		if _, ok := paired[faceNode(f)]; !ok {
 			return refuse("this evaluator has no complete revolve-sheet face set")
 		}
 	}
