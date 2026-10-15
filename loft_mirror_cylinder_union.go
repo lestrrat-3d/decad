@@ -49,12 +49,12 @@ func tryLoftMirrorCylinderUnion(ctx context.Context, op meshbool.OperationKind,
 		fp.LoftMirrorCylinderJoin != nil && fp.Xform == r3.Identity() {
 		blank = bodyHandle(fp.LoftMirrorCylinderJoin.Blank)
 		source = fp.LoftMirrorCylinderJoin.Source
-		pairs = append(append([]*Body(nil), bodyHandles(fp.LoftMirrorCylinderJoin.Pairs)...), b)
+		pairs = append(bodyHandlesCopy(fp.LoftMirrorCylinderJoin.Pairs), b)
 	} else if fp, ok := b.n.Payload.(facetedPayload); ok &&
 		fp.LoftMirrorCylinderJoin != nil && fp.Xform == r3.Identity() {
 		blank = bodyHandle(fp.LoftMirrorCylinderJoin.Blank)
 		source = fp.LoftMirrorCylinderJoin.Source
-		pairs = append(append([]*Body(nil), bodyHandles(fp.LoftMirrorCylinderJoin.Pairs)...), a)
+		pairs = append(bodyHandlesCopy(fp.LoftMirrorCylinderJoin.Pairs), a)
 	} else {
 		return nil, false, nil
 	}
@@ -428,7 +428,7 @@ func buildLoftMirrorCylinderUnion(ctx context.Context, d *Document, ref producer
 			BridgeBound: bridgeBound, BridgeVolume: bridgeVolume,
 		},
 	}
-	if err := loftMirrorCylinderCapOrigins(&fp, blank, pairs, capGroups); err != nil {
+	if err := loftMirrorCylinderCapOrigins(&fp, blank, fp.LoftMirrorCylinderJoin.Pairs, capGroups); err != nil {
 		return nil, err
 	}
 	if err := loftCylinderTagCaps(&fp, blank, capGroups,
@@ -445,7 +445,7 @@ func loftMirrorCylinderCapsOppose(lower, upper facetedPayload, upperMap []int,
 		upperMap, lowerGroup, upperGroup)
 }
 
-func loftMirrorCylinderCapOrigins(fp *facetedPayload, blank *Body, pairs []*Body,
+func loftMirrorCylinderCapOrigins(fp *facetedPayload, blank *Body, pairs []*topo.Body,
 	groups [2]int) error {
 	for cap, group := range groups {
 		role := provenance.RoleCapStart
@@ -470,7 +470,7 @@ func loftMirrorCylinderCapOrigins(fp *facetedPayload, blank *Body, pairs []*Body
 			}
 		}
 		for _, pair := range pairs {
-			payload, ok := pair.n.Payload.(facetedPayload)
+			payload, ok := pair.Payload.(facetedPayload)
 			if !ok {
 				return fmt.Errorf("%w: mirrored tooth lacks a source cap", ErrUnsupported)
 			}

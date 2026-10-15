@@ -254,7 +254,7 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 			Join: record, LowerBore: bodyNode(lowerBody), CapGroups: capGroups,
 			Outer: outer, Inner: inner, WallGroups: wallGroups,
 		}}
-	if err := loftMirrorCylinderCapOrigins(&fp, bodyHandle(record.Blank), bodyHandles(record.Pairs), capGroups); err != nil {
+	if err := loftMirrorCylinderCapOrigins(&fp, bodyHandle(record.Blank), record.Pairs, capGroups); err != nil {
 		return nil, err
 	}
 	if err := loftCylinderTagCaps(&fp, bodyHandle(record.Blank), capGroups,

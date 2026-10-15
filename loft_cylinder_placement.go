@@ -143,12 +143,25 @@ func loftCylinderPlacedToothShape(body *Body) bool {
 // authenticated Loft source. Check this before rebuilding the next tooth so
 // an unrelated Loft keeps the ordinary Boolean's error and admission policy.
 func loftCylinderPlacedSourcesMatch(teeth []*Body) bool {
-	first, ok := teeth[0].n.Payload.(loftPayload)
+	return loftCylinderSourceIdentitiesMatch(len(teeth), func(i int) topo.Payload { return teeth[i].n.Payload })
+}
+
+// loftCylinderPlacedNodeSourcesMatch is loftCylinderPlacedSourcesMatch over
+// the body nodes a join record stores.
+func loftCylinderPlacedNodeSourcesMatch(teeth []*topo.Body) bool {
+	return loftCylinderSourceIdentitiesMatch(len(teeth), func(i int) topo.Payload { return teeth[i].Payload })
+}
+
+// loftCylinderSourceIdentitiesMatch reports whether the payloads of teeth
+// 0..n-1, read through payload in index order, are authenticated Lofts
+// sharing the first tooth's source identity. n must be at least 1.
+func loftCylinderSourceIdentitiesMatch(n int, payload func(i int) topo.Payload) bool {
+	first, ok := payload(0).(loftPayload)
 	if !ok || first.SourceIdentity == nil {
 		return false
 	}
-	for _, tooth := range teeth[1:] {
-		next, ok := tooth.n.Payload.(loftPayload)
+	for i := 1; i < n; i++ {
+		next, ok := payload(i).(loftPayload)
 		if !ok || next.SourceIdentity != first.SourceIdentity {
 			return false
 		}
@@ -261,16 +274,16 @@ func tryPlacedLoftCylinderUnion(ctx context.Context, d *Document, ref producerID
 		fp.LoftCylinderJoin.Placement != nil && fp.Xform == fp.LoftCylinderJoin.Placement.Pose {
 		placement := fp.LoftCylinderJoin.Placement
 		blank, teeth, pose = bodyHandle(fp.LoftCylinderJoin.Blank),
-			append(append([]*Body(nil), bodyHandles(fp.LoftCylinderJoin.Teeth)...), b), placement.Pose
+			append(bodyHandlesCopy(fp.LoftCylinderJoin.Teeth), b), placement.Pose
 		localBlank = bodyHandle(placement.Blank)
-		localTeeth = append([]*Body(nil), bodyHandles(placement.Teeth)...)
+		localTeeth = bodyHandlesCopy(placement.Teeth)
 	} else if fp, ok := b.n.Payload.(facetedPayload); ok && fp.LoftCylinderJoin != nil &&
 		fp.LoftCylinderJoin.Placement != nil && fp.Xform == fp.LoftCylinderJoin.Placement.Pose {
 		placement := fp.LoftCylinderJoin.Placement
 		blank, teeth, pose = bodyHandle(fp.LoftCylinderJoin.Blank),
-			append(append([]*Body(nil), bodyHandles(fp.LoftCylinderJoin.Teeth)...), a), placement.Pose
+			append(bodyHandlesCopy(fp.LoftCylinderJoin.Teeth), a), placement.Pose
 		localBlank = bodyHandle(placement.Blank)
-		localTeeth = append([]*Body(nil), bodyHandles(placement.Teeth)...)
+		localTeeth = bodyHandlesCopy(placement.Teeth)
 	} else {
 		return nil, false, nil
 	}
@@ -331,7 +344,7 @@ func tryPlacedLoftCylinderBoreCut(ctx context.Context, d *Document, ref producer
 	placement := joined.LoftCylinderJoin.Placement
 	if joined.Xform != placement.Pose || !joined.ContactAudited ||
 		placement.Blank == nil || len(placement.Teeth) == 0 ||
-		!loftCylinderPlacedSourcesMatch(bodyHandles(placement.Teeth)) {
+		!loftCylinderPlacedNodeSourcesMatch(placement.Teeth) {
 		return nil, false, nil
 	}
 	record := joined.LoftCylinderJoin

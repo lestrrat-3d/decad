@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -355,6 +356,19 @@ func bodyHandles(ns []*topo.Body) []*Body {
 	out := make([]*Body, len(ns))
 	for i, n := range ns {
 		out[i] = bodyHandle(n)
+	}
+	return out
+}
+
+// bodyHandlesCopy returns the handles of ns in order exactly as
+// append([]*Body(nil), hs...) of the same handles hs would: one allocation,
+// with the capacity that append chooses, or nil for an empty ns. A caller
+// that appends to the result therefore grows it exactly when the old copy
+// grew. It makes no intermediate handle slice.
+func bodyHandlesCopy(ns []*topo.Body) []*Body {
+	out := slices.Grow([]*Body(nil), len(ns))
+	for _, n := range ns {
+		out = append(out, bodyHandle(n))
 	}
 	return out
 }
