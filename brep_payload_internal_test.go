@@ -482,7 +482,7 @@ func TestBrepFaceViewChargesSectionDisplacement(t *testing.T) {
 	require.NoError(t, err)
 	pocket, err := Cut(t.Context(), plate, tool)
 	require.NoError(t, err)
-	delta := pocket.n.Payload.(stackedPrismPayload).sectionDelta
+	delta := pocket.n.Payload.(stackedPrismPayload).SectionDelta
 	require.Positive(t, delta, `the placed tool's re-expression is charged`)
 	brep := internalBrepBody(t, pocket)
 	// The denoted pocket is exact: 1000 − 64. Every wall's band 2·δ·L over its
@@ -570,7 +570,7 @@ func TestBrepFaceViewOfStackedUnionCoversItsMeasurements(t *testing.T) {
 			require.NoError(t, err)
 			sp, ok := union.n.Payload.(stackedPrismPayload)
 			require.True(t, ok)
-			require.Len(t, sp.slabs, tc.slabs)
+			require.Len(t, sp.Slabs, tc.slabs)
 			brep := internalBrepBody(t, union)
 			requireClosedTopology(t, brep)
 			require.Len(t, brep.Faces(), len(union.Faces()))

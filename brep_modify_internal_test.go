@@ -87,7 +87,7 @@ func TestBrepModifyOutsideRoutePRefuses(t *testing.T) {
 		_, pocket := internalPocket(t)
 		sp, ok := pocket.n.Payload.(stackedPrismPayload)
 		require.True(t, ok, "the pocket is a stacked prism, got %T", pocket.n.Payload)
-		require.Zero(t, sp.sectionDelta)
+		require.Zero(t, sp.SectionDelta)
 		refuses(t, pocket, "brep-modify SB10", "modify-general SG3")
 	})
 }
@@ -147,7 +147,7 @@ func TestBrepModifySB1RefusesADisplacedReceiver(t *testing.T) {
 		require.NoError(t, err)
 		sp, ok := union.n.Payload.(stackedPrismPayload)
 		require.True(t, ok, "the union is a stacked prism, got %T", union.n.Payload)
-		require.Positive(t, sp.sectionDelta)
+		require.Positive(t, sp.SectionDelta)
 		requireSB1Names(t, union)
 	})
 }
@@ -161,7 +161,7 @@ func TestBrepModifySB2RefusesAPrismGroup(t *testing.T) {
 	t.Parallel()
 	doc := New()
 	group, sp := internalBoxGroup(t, doc)
-	require.Len(t, sp.slabs[0].Regions, 2)
+	require.Len(t, sp.Slabs[0].Regions, 2)
 	requireBrepModifyRefuses(t, group, "brep-modify SB2")
 	_, err := brepOfStacked(t.Context(), sp)
 	require.ErrorIs(t, err, ErrUnsupported)

@@ -187,11 +187,11 @@ func patternFrameOf(payload topo.Payload) (r3.Frame, r3.Transform, []profileReco
 	case prismPayload:
 		return p.Frame, p.Xform, []profileRecord{p.Profile}, true
 	case stackedPrismPayload:
-		regions := make([]profileRecord, 0, len(p.slabs))
-		for _, slab := range p.slabs {
+		regions := make([]profileRecord, 0, len(p.Slabs))
+		for _, slab := range p.Slabs {
 			regions = append(regions, slab.Regions...)
 		}
-		return p.frame, p.xform, regions, true
+		return p.Frame, p.Xform, regions, true
 	default:
 		return r3.Frame{}, r3.Transform{}, nil, false
 	}
@@ -266,9 +266,9 @@ func (rp resolvedPattern) frameKeepingInstance(ctx context.Context, d *Document,
 		p.Walks = nil
 		return bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), ref), p, freeform.NewFreeformWork()))
 	case stackedPrismPayload:
-		slabs := make([]stackedrecord.Slab, len(p.slabs))
+		slabs := make([]stackedrecord.Slab, len(p.Slabs))
 		delta := 0.0
-		for k, slab := range p.slabs {
+		for k, slab := range p.Slabs {
 			slabs[k] = slab
 			slabs[k].Regions = make([]profileRecord, len(slab.Regions))
 			for r, region := range slab.Regions {
@@ -281,7 +281,7 @@ func (rp resolvedPattern) frameKeepingInstance(ctx context.Context, d *Document,
 			}
 		}
 		if delta != 0 {
-			runs := p.outerRuns()
+			runs := p.OuterRuns()
 			if len(runs) != 1 {
 				// A union-built stack's narrower outer sits inside the wider
 				// one by construction, which no audit re-proves. A motion that
@@ -290,13 +290,13 @@ func (rp resolvedPattern) frameKeepingInstance(ctx context.Context, d *Document,
 				return rp.placedInstance(ctx, d, ref, payload, i)
 			}
 		}
-		interfaces, err := stackedrecord.Derive(ctx, slabs, p.interfaces)
+		interfaces, err := stackedrecord.Derive(ctx, slabs, p.Interfaces)
 		if err != nil {
 			return nil, err
 		}
-		p.slabs, p.interfaces = slabs, interfaces
-		p.sectionDelta = patternrecord.WithDelta(p.sectionDelta, delta)
-		return evalStackedContext(ctx, d, ref, p)
+		p.Slabs, p.Interfaces = slabs, interfaces
+		p.SectionDelta = patternrecord.WithDelta(p.SectionDelta, delta)
+		return bodyResult(stackedrecord.Build(ctx, envOf(documentNode(d), ref), p, stackedrecord.OwnPlan{}))
 	default:
 		return nil, fmt.Errorf(`%w: a %T receiver has no frame-keeping pattern instance`, ErrUnsupported, payload)
 	}
@@ -332,7 +332,7 @@ func Patterned(ctx context.Context, b *Body, spec PatternSpec) (*Body, error) {
 			return nil, err
 		}
 		if ok {
-			body, err := evalStackedContext(ctx, d, base, sp)
+			body, err := bodyResult(stackedrecord.Build(ctx, envOf(documentNode(d), base), sp, stackedrecord.OwnPlan{}))
 			if err != nil {
 				return nil, err
 			}
@@ -391,17 +391,17 @@ func (rp resolvedPattern) patternGroup(ctx context.Context, payload topo.Payload
 		slab = stackedrecord.Slab{Z0: p.Z0, Z1: p.Z1, Z0Delta: p.Z0Delta, Z1Delta: p.Z1Delta}
 		sectionDelta = p.SectionDelta
 	case stackedPrismPayload:
-		if p.isGroup() {
-			regions = p.slabs[0].Regions
-			slab = p.slabs[0]
-			sectionDelta = p.sectionDelta
+		if p.IsGroup() {
+			regions = p.Slabs[0].Regions
+			slab = p.Slabs[0]
+			sectionDelta = p.SectionDelta
 			break
 		}
-		runs := p.outerRuns()
+		runs := p.OuterRuns()
 		if len(runs) != 1 {
 			return stackedPrismPayload{}, false, nil
 		}
-		regions = []profileRecord{{Outer: p.slabs[0].Regions[0].Outer}}
+		regions = []profileRecord{{Outer: p.Slabs[0].Regions[0].Outer}}
 		multiSlab = true
 	default:
 		return stackedPrismPayload{}, false, nil
@@ -431,8 +431,8 @@ func (rp resolvedPattern) patternGroup(ctx context.Context, payload topo.Payload
 	}
 	slab.Regions = all
 	return stackedPrismPayload{
-		slabs: []stackedrecord.Slab{slab},
-		frame: frame, xform: xform,
-		sectionDelta: math.Max(patternrecord.WithDelta(sectionDelta, delta), walk),
+		Slabs: []stackedrecord.Slab{slab},
+		Frame: frame, Xform: xform,
+		SectionDelta: math.Max(patternrecord.WithDelta(sectionDelta, delta), walk),
 	}, true, nil
 }

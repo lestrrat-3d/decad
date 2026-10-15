@@ -47,13 +47,13 @@ func prismGroupOperandOf(b *Body) (prismGroupOperand, bool) {
 	case prismPayload:
 		return prismGroupOperand{proxy: p, regions: []profileRecord{p.Profile}}, true
 	case stackedPrismPayload:
-		if !p.isGroup() {
+		if !p.IsGroup() {
 			return prismGroupOperand{}, false
 		}
-		slab := p.slabs[0]
-		proxy := prismrecord.Payload{Profile: slab.Regions[0], Frame: p.frame, Xform: p.xform,
+		slab := p.Slabs[0]
+		proxy := prismrecord.Payload{Profile: slab.Regions[0], Frame: p.Frame, Xform: p.Xform,
 			Z0: slab.Z0, Z1: slab.Z1, Z0Delta: slab.Z0Delta, Z1Delta: slab.Z1Delta,
-			SectionDelta: p.sectionDelta}
+			SectionDelta: p.SectionDelta}
 		return prismGroupOperand{proxy: proxy, regions: slab.Regions, group: true}, true
 	default:
 		return prismGroupOperand{}, false
@@ -213,12 +213,12 @@ func prismGroupUnionTail(ctx context.Context, budget *proofbound.WorkBudget, sce
 		return nil, false, err
 	}
 	sp := stackedPrismPayload{
-		slabs: []stackedrecord.Slab{{Regions: regions, Z0: oa.proxy.Z0, Z1: oa.proxy.Z1,
+		Slabs: []stackedrecord.Slab{{Regions: regions, Z0: oa.proxy.Z0, Z1: oa.proxy.Z1,
 			Z0Delta: z0Delta, Z1Delta: z1Delta}},
-		frame: oa.proxy.Frame, xform: oa.proxy.Xform,
-		sectionDelta: proofbound.AbsSumUpper(max(inputDelta, disjointWalk), cutDelta),
+		Frame: oa.proxy.Frame, Xform: oa.proxy.Xform,
+		SectionDelta: proofbound.AbsSumUpper(max(inputDelta, disjointWalk), cutDelta),
 	}
-	if err := stackedrecord.Falsify(ctx, stackedrecord.Record{Slabs: sp.slabs, Interfaces: sp.interfaces}); err != nil {
+	if err := stackedrecord.Falsify(ctx, stackedrecord.Record{Slabs: sp.Slabs, Interfaces: sp.Interfaces}); err != nil {
 		return nil, false, err
 	}
 	return sp, true, nil

@@ -57,7 +57,7 @@ func stackedUnionOperandOf(b *Body) (stackedUnionOperand, bool) {
 			Z0:      p.Z0, Z1: p.Z1, Z0Delta: p.Z0Delta, Z1Delta: p.Z1Delta,
 		}}}, true
 	case stackedPrismPayload:
-		return stackedUnionOperand{proxy: p.outerPrism(), slabs: p.slabs}, true
+		return stackedUnionOperand{proxy: p.OuterPrism(), slabs: p.Slabs}, true
 	case brepPayload:
 		// An A1 result keeps the slabs it was built from; a class-B result
 		// keeps none and is no operand here.
@@ -153,7 +153,7 @@ func tryStackedUnion(ctx context.Context, a, b *Body) (topo.Payload, bool, error
 
 	st := &stackedUnionState{budget: budget, va: va, vb: vb, reexpress: reexpress,
 		bRecorded: map[int]profileRecord{}, scenes: map[[2]stackedUnionRegionRef]*stackedNesting{}}
-	sp := stackedPrismPayload{frame: va.proxy.Frame, xform: va.proxy.Xform}
+	sp := stackedPrismPayload{Frame: va.proxy.Frame, Xform: va.proxy.Xform}
 	zero := new(big.Rat)
 	var reach [][2]int
 	for k := 0; k+1 < len(levels); k++ {
@@ -174,11 +174,11 @@ func tryStackedUnion(ctx context.Context, a, b *Body) (topo.Payload, bool, error
 		if err != nil || !ok {
 			return nil, false, err
 		}
-		sp.slabs = append(sp.slabs, stackedrecord.Slab{Regions: []profileRecord{region},
+		sp.Slabs = append(sp.Slabs, stackedrecord.Slab{Regions: []profileRecord{region},
 			Z0: lo.Held, Z1: hi.Held, Z0Delta: lo.Delta, Z1Delta: hi.Delta})
 	}
-	for k := 0; k+1 < len(sp.slabs); k++ {
-		boundary, ok, err := st.interfaceOf(ctx, sp.slabs[k].Regions[0], sp.slabs[k+1].Regions[0])
+	for k := 0; k+1 < len(sp.Slabs); k++ {
+		boundary, ok, err := st.interfaceOf(ctx, sp.Slabs[k].Regions[0], sp.Slabs[k+1].Regions[0])
 		if err != nil {
 			return nil, false, err
 		}
@@ -188,10 +188,10 @@ func tryStackedUnion(ctx context.Context, a, b *Body) (topo.Payload, bool, error
 			// classifies every interface's cells instead.
 			return st.brep(ctx, levels, reach)
 		}
-		sp.interfaces = append(sp.interfaces, boundary)
+		sp.Interfaces = append(sp.Interfaces, boundary)
 	}
-	sp.sectionDelta = st.sectionDelta()
-	if err := stackedrecord.Falsify(ctx, stackedrecord.Record{Slabs: sp.slabs, Interfaces: sp.interfaces}); err != nil {
+	sp.SectionDelta = st.sectionDelta()
+	if err := stackedrecord.Falsify(ctx, stackedrecord.Record{Slabs: sp.Slabs, Interfaces: sp.Interfaces}); err != nil {
 		return nil, false, err
 	}
 	return sp, true, nil

@@ -846,7 +846,10 @@ so each node's `Owner` is set before the builder stores a pointer to it, and
 internal unit tests allocate bare nodes (`topotest.Alloc`). `prismPayload` is
 an alias of `prismrecord.Payload`: its `Placed` sets `Xform` on its own value
 copy and runs `prismrecord.Build`, which every other root caller of the prism
-builder calls through `envOf` too. A payload that still lives in the root
+builder calls through `envOf` too. `stackedPrismPayload` is an alias of
+`stackedrecord.Payload` in the same way: its `Placed` runs `stackedrecord.Build`
+under the payload's own plan, and a cup builds through the same function under
+its own `stackedrecord.Plan`. A payload that still lives in the root
 package recovers its document handle from the node's `Owner` in `Placed` and
 runs its root builder.
 

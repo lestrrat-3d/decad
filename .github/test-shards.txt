@@ -942,7 +942,6 @@
 6	0.00	TestSortAlongEdgeCancellationIsBounded
 6	0.03	TestSpanMatchedDeltaUpperEnclosesDenseSampleOnOrdinarySpans
 6	0.00	TestSpanSagittaUpperRoundsOutward
-6	0.00	TestStackedLumpsNeedsOneOuterShellForACavity
 6	0.01	TestStackedPayloadAuditRejectsBrokenRecords
 6	0.02	TestStackedUnionBrepFlushEdgeBoss
 6	0.06	TestStackedUnionBrepOperandThirdBoss

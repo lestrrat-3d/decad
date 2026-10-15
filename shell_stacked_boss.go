@@ -27,23 +27,23 @@ import (
 // V coordinates, and the recorded levels preserves the same world geometry
 // and a right-handed face frame.
 func reverseClosedBossStack(ctx context.Context, sp stackedPrismPayload) (stackedPrismPayload, bool, error) {
-	if len(sp.slabs) != 2 || len(sp.interfaces) != 1 ||
-		len(sp.slabs[0].Regions) != 1 || len(sp.slabs[1].Regions) != 1 {
+	if len(sp.Slabs) != 2 || len(sp.Interfaces) != 1 ||
+		len(sp.Slabs[0].Regions) != 1 || len(sp.Slabs[1].Regions) != 1 {
 		return stackedPrismPayload{}, false, nil
 	}
-	inner, innerOK := prismshell.RecordedBossRect(sp.slabs[0].Regions[0])
-	outer, outerOK := prismshell.RecordedBossRect(sp.slabs[1].Regions[0])
+	inner, innerOK := prismshell.RecordedBossRect(sp.Slabs[0].Regions[0])
+	outer, outerOK := prismshell.RecordedBossRect(sp.Slabs[1].Regions[0])
 	if !innerOK || !outerOK || !(inner.U0 > outer.U0 && inner.V0 > outer.V0 &&
 		inner.U1 < outer.U1 && inner.V1 < outer.V1) {
 		return stackedPrismPayload{}, false, nil
 	}
-	frame, err := r3.NewFrame(sp.frame.Origin(), sp.frame.U(), sp.frame.V().Scale(-1))
+	frame, err := r3.NewFrame(sp.Frame.Origin(), sp.Frame.U(), sp.Frame.V().Scale(-1))
 	if err != nil {
 		return stackedPrismPayload{}, true, fmt.Errorf("%w: the closed boss shell cannot reverse its section frame: %v",
 			ErrUnsupported, err)
 	}
-	if frame.Origin() != sp.frame.Origin() || frame.U() != sp.frame.U() ||
-		frame.V() != sp.frame.V().Scale(-1) || frame.N() != sp.frame.N().Scale(-1) {
+	if frame.Origin() != sp.Frame.Origin() || frame.U() != sp.Frame.U() ||
+		frame.V() != sp.Frame.V().Scale(-1) || frame.N() != sp.Frame.N().Scale(-1) {
 		return stackedPrismPayload{}, true, fmt.Errorf("%w: the closed boss shell needs an exact reversed section frame",
 			ErrUnsupported)
 	}
@@ -55,16 +55,16 @@ func reverseClosedBossStack(ctx context.Context, sp stackedPrismPayload) (stacke
 		return stackedPrismPayload{}, true, fmt.Errorf("%w: the closed boss shell cannot reverse its interface: %v",
 			ErrUnsupported, err)
 	}
-	a, b := sp.slabs[0], sp.slabs[1]
+	a, b := sp.Slabs[0], sp.Slabs[1]
 	return stackedPrismPayload{
-		slabs: []stackedrecord.Slab{
+		Slabs: []stackedrecord.Slab{
 			{Regions: []profileRecord{reflectRect(outer)}, Z0: -b.Z1, Z1: -b.Z0, Z0Delta: b.Z1Delta, Z1Delta: b.Z0Delta},
 			{Regions: []profileRecord{reflectRect(inner)}, Z0: -a.Z1, Z1: -a.Z0, Z0Delta: a.Z1Delta, Z1Delta: a.Z0Delta},
 		},
-		interfaces: []stackedrecord.Interface{{
+		Interfaces: []stackedrecord.Interface{{
 			LowerExposed: exposed,
 		}},
-		frame: frame, xform: sp.xform, sectionDelta: sp.sectionDelta,
+		Frame: frame, Xform: sp.Xform, SectionDelta: sp.SectionDelta,
 	}, true, nil
 }
 
@@ -72,11 +72,11 @@ func reverseClosedBossStack(ctx context.Context, sp stackedPrismPayload) (stacke
 // An unrelated stack falls through to the ordinary Shell route.
 func shellStackedBoss(ctx context.Context, source *Body, sp stackedPrismPayload, view brepPayload,
 	call brepShellCall) (*Body, bool, error) {
-	if len(sp.slabs) != 2 || len(sp.interfaces) != 1 || len(sp.slabs[0].Regions) != 1 || len(sp.slabs[1].Regions) != 1 {
+	if len(sp.Slabs) != 2 || len(sp.Interfaces) != 1 || len(sp.Slabs[0].Regions) != 1 || len(sp.Slabs[1].Regions) != 1 {
 		return nil, false, nil
 	}
-	plate, pOK := prismshell.RecordedBossRect(sp.slabs[0].Regions[0])
-	boss, bOK := prismshell.RecordedBossRect(sp.slabs[1].Regions[0])
+	plate, pOK := prismshell.RecordedBossRect(sp.Slabs[0].Regions[0])
+	boss, bOK := prismshell.RecordedBossRect(sp.Slabs[1].Regions[0])
 	if !pOK || !bOK || !(boss.U0 > plate.U0 && boss.V0 > plate.V0 && boss.U1 < plate.U1 && boss.V1 < plate.V1) {
 		return nil, false, nil
 	}
@@ -88,8 +88,8 @@ func shellStackedBoss(ctx context.Context, source *Body, sp stackedPrismPayload,
 	refuse := func(why string) (*Body, bool, error) {
 		return nil, true, fmt.Errorf("%w: stacked boss shell %s", ErrUnsupported, why)
 	}
-	a, b := sp.slabs[0], sp.slabs[1]
-	if sp.sectionDelta != 0 || a.Z0Delta != 0 || a.Z1Delta != 0 || b.Z0Delta != 0 || b.Z1Delta != 0 ||
+	a, b := sp.Slabs[0], sp.Slabs[1]
+	if sp.SectionDelta != 0 || a.Z0Delta != 0 || a.Z1Delta != 0 || b.Z0Delta != 0 || b.Z1Delta != 0 ||
 		a.Z1 != b.Z0 || !(a.Z0 < a.Z1 && b.Z0 < b.Z1) || call.tDelta != 0 {
 		return refuse("requires exact slab sections, levels, and thickness")
 	}
@@ -141,12 +141,12 @@ func shellStackedBoss(ctx context.Context, source *Body, sp stackedPrismPayload,
 	}
 	outerFaceCount := len(result.faces)
 	addPlane := func(p profileRecord, z float64, outward bool) int {
-		result.faces = append(result.faces, brepFace{frame: sp.frame, region: &p, z0: z, z1: z, outward: outward})
+		result.faces = append(result.faces, brepFace{frame: sp.Frame, region: &p, z0: z, z1: z, outward: outward})
 		return len(result.faces) - 1
 	}
 	addWalls := func(r prismshell.BossRect, z0, z1 float64) {
 		for _, seg := range r.Profile().Outer.Segments {
-			result.faces = append(result.faces, brepFace{frame: sp.frame, wall: brepgeom.ReverseSegment(seg), z0: z0, z1: z1})
+			result.faces = append(result.faces, brepFace{frame: sp.Frame, wall: brepgeom.ReverseSegment(seg), z0: z0, z1: z1})
 		}
 	}
 	addPlane(lower.Profile(), a.Z0+t, true)
@@ -172,7 +172,7 @@ func shellStackedBoss(ctx context.Context, source *Body, sp stackedPrismPayload,
 	}
 	result.bossShell = &prismshell.BossShellBand{Plate: plate, Boss: boss, Lower: lower, Upper: upper,
 		Z0: a.Z0, InterfaceZ: a.Z1, TopZ: b.Z1, CavityTopZ: cavityTopZ,
-		LowerZ: lowerZ, T: t, LedgeFace: ledgeFace, Frame: sp.frame,
+		LowerZ: lowerZ, T: t, LedgeFace: ledgeFace, Frame: sp.Frame,
 		OuterFaceCount: outerFaceCount, Closed: closed}
 	result.assignRoles()
 	body, err := evalBrepContext(ctx, documentHandle(source.n.Doc), source.n.Doc.NextProducer, result)

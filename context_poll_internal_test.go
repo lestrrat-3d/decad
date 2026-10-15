@@ -68,7 +68,7 @@ func TestRenameCavityRolesContextPollsNestedMetadata(t *testing.T) {
 	face := bornFace(&Face{n: topo.Face{Origins: []provenance.Ref{{Producer: ref, Role: "side(0,0)"}}}})
 	ctx := &cancelAfterContext{Context: t.Context(), cancelAt: 3}
 
-	err := renameCavityRoles(ctx, []*Face{face}, ref)
+	err := renameCavityRoles(ctx, []*topo.Face{faceNode(face)}, ref)
 
 	require.ErrorIs(t, err, context.Canceled)
 	require.Equal(t, 3, ctx.calls)

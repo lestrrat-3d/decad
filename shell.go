@@ -477,10 +477,10 @@ func evalShellBandsContext(ctx context.Context, d *Document, ref producerID, pp 
 	if err != nil {
 		return nil, err
 	}
-	return evalStackedContext(ctx, d, ref, stackedPrismPayload{
-		slabs: []stackedrecord.Slab{{Regions: bands, Z0: pp.Z0, Z1: pp.Z1, Z0Delta: pp.Z0Delta, Z1Delta: pp.Z1Delta}},
-		frame: pp.Frame, xform: pp.Xform, sectionDelta: offsetDelta,
-	})
+	return bodyResult(stackedrecord.Build(ctx, envOf(documentNode(d), ref), stackedPrismPayload{
+		Slabs: []stackedrecord.Slab{{Regions: bands, Z0: pp.Z0, Z1: pp.Z1, Z0Delta: pp.Z0Delta, Z1Delta: pp.Z1Delta}},
+		Frame: pp.Frame, Xform: pp.Xform, SectionDelta: offsetDelta,
+	}, stackedrecord.OwnPlan{}))
 }
 
 // refuseClosedShell is Shell's answer to WithNoOpenings on every receiver but
@@ -595,13 +595,13 @@ func (b *Body) shellClosedPrism(ctx context.Context, pp prismPayload, s float64,
 	}
 	exposed := []profileRecord{cavity}
 	ref := d.nextProducerID()
-	body, err := evalStackedContext(ctx, d, ref, stackedPrismPayload{
-		slabs:        []stackedrecord.Slab{first, middle, last},
-		interfaces:   []stackedrecord.Interface{{LowerExposed: exposed}, {UpperExposed: exposed}},
-		frame:        pp.Frame,
-		xform:        pp.Xform,
-		sectionDelta: offsetDelta,
-	})
+	body, err := bodyResult(stackedrecord.Build(ctx, envOf(documentNode(d), ref), stackedPrismPayload{
+		Slabs:        []stackedrecord.Slab{first, middle, last},
+		Interfaces:   []stackedrecord.Interface{{LowerExposed: exposed}, {UpperExposed: exposed}},
+		Frame:        pp.Frame,
+		Xform:        pp.Xform,
+		SectionDelta: offsetDelta,
+	}, stackedrecord.OwnPlan{}))
 	if err != nil {
 		return nil, err
 	}

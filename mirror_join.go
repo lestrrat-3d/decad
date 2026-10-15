@@ -69,7 +69,7 @@ func (b *Body) mirroredJoin(ctx context.Context, plane MirrorPlane) (*Body, erro
 	if b.Kind() == BodySheet {
 		return nil, fmt.Errorf(`%w: a mirror join builds a solid and does not accept a sheet body`, ErrUnsupported)
 	}
-	if sp, ok := b.n.Payload.(stackedPrismPayload); ok && sp.isGroup() {
+	if sp, ok := b.n.Payload.(stackedPrismPayload); ok && sp.IsGroup() {
 		// A prism group's lumps are separate regions, which this join does
 		// not splice one by one.
 		return nil, fmt.Errorf(`%w: a mirror join does not rewrite a prism group (J1)`, ErrUnsupported)
@@ -99,7 +99,7 @@ func (b *Body) mirroredJoin(ctx context.Context, plane MirrorPlane) (*Body, erro
 		if err != nil {
 			return nil, err
 		}
-		body, err = evalStackedContext(ctx, d, ref, joined)
+		body, err = bodyResult(stackedrecord.Build(ctx, envOf(documentNode(d), ref), joined, stackedrecord.OwnPlan{}))
 		if err != nil {
 			return nil, err
 		}
@@ -257,15 +257,15 @@ func joinPrismPayload(budget *proofbound.WorkBudget, pp prismPayload, walls []jo
 // receiver, rewrites each region by the same splice, and re-derives every
 // interface's exposed records from the rewritten regions. Equal loops rewrite
 // to equal loops, so the outer wall stays one column and each interface stays
-// monotone; evalStackedContext's stackedrecord.Falsify call re-checks both.
+// monotone; stackedrecord.Build's Falsify call re-checks both.
 func joinStackedPayload(ctx context.Context, budget *proofbound.WorkBudget, sp stackedPrismPayload, walls []joinWall) (stackedPrismPayload, error) {
 	// J1: the join re-derives each interface from exclusive holes, which a
 	// union-built stack's changing outer loop does not record.
-	if len(sp.outerRuns()) != 1 {
+	if len(sp.OuterRuns()) != 1 {
 		return stackedPrismPayload{}, fmt.Errorf(`%w: a union-built stack changes its outer loop between slabs, which the join does not rewrite; join the operands before the union (J1)`, ErrUnsupported)
 	}
-	regions := make([]joinRegion, len(sp.slabs))
-	for k, slab := range sp.slabs {
+	regions := make([]joinRegion, len(sp.Slabs))
+	for k, slab := range sp.Slabs {
 		if len(slab.Regions) != 1 {
 			return stackedPrismPayload{}, fmt.Errorf(`%w: slab %d has no single region`, ErrUnsupported, k)
 		}
@@ -303,25 +303,25 @@ func joinStackedPayload(ctx context.Context, budget *proofbound.WorkBudget, sp s
 	if err := line.admitRegions(budget, regions); err != nil {
 		return stackedPrismPayload{}, err
 	}
-	if sp.sectionDelta != 0 {
+	if sp.SectionDelta != 0 {
 		return stackedPrismPayload{}, errJoinDisplaced
 	}
 	out := sp
-	out.slabs = make([]stackedrecord.Slab, len(sp.slabs))
+	out.Slabs = make([]stackedrecord.Slab, len(sp.Slabs))
 	for k, region := range regions {
 		joined, delta, err := line.assemble(budget, region)
 		if err != nil {
 			return stackedPrismPayload{}, err
 		}
-		out.slabs[k] = sp.slabs[k]
-		out.slabs[k].Regions = []profileRecord{joined}
-		out.sectionDelta = math.Max(out.sectionDelta, delta)
+		out.Slabs[k] = sp.Slabs[k]
+		out.Slabs[k].Regions = []profileRecord{joined}
+		out.SectionDelta = math.Max(out.SectionDelta, delta)
 	}
-	interfaces, err := stackedrecord.Derive(ctx, out.slabs, sp.interfaces)
+	interfaces, err := stackedrecord.Derive(ctx, out.Slabs, sp.Interfaces)
 	if err != nil {
 		return stackedPrismPayload{}, err
 	}
-	out.interfaces = interfaces
+	out.Interfaces = interfaces
 	return out, nil
 }
 

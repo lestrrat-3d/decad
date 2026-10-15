@@ -99,16 +99,16 @@ func requireCupPrismLevelBounds(t *testing.T, prism prismPayload, a, b proofboun
 //
 // Legs shown to fail (each deleted, the fixture watched go red, then
 // restored):
-//   - stackedRegionPart's column-displacement area term: the Volume and the
+//   - stackedrecord.regionPart's column-displacement area term: the Volume and the
 //     rim area miss, inward and outward.
-//   - stackedRegionPart's column-displacement moment term: the wide
+//   - stackedrecord.regionPart's column-displacement moment term: the wide
 //     cavity's Centroid misses (TestDisplacedCupCentroidMoment).
-//   - stackedPatchArea's per-loop column term: the inward shellCap area
+//   - stackedrecord.patchArea's per-loop column term: the inward shellCap area
 //     misses.
 //   - The column's own section displacement in the stacked wall build
-//     (cupPlan.columnDelta into prismrecord.BuildLoopSidesAs): each offset wall face's
+//     (cupPlan.ColumnDelta into prismrecord.BuildLoopSidesAs): each offset wall face's
 //     area misses, inward and outward.
-//   - stackedBoundsContext's outer-run displacement: the outward Bounds
+//   - stackedrecord.boundsContext's outer-run displacement: the outward Bounds
 //     miss.
 //   - cupView.ExtentAlong's offset term: the outward extent misses.
 //   - The cup gate witness's offset term (verify_gate.go): the outward gate

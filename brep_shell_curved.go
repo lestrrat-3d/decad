@@ -98,14 +98,14 @@ func shellThroughRoundPort(ctx context.Context, source *Body, bp brepPayload, tc
 	if err != nil {
 		return nil, true, err
 	}
-	sp := stackedPrismPayload{frame: tool.prism.Frame, xform: bp.xform,
-		slabs: []stackedrecord.Slab{
+	sp := stackedPrismPayload{Frame: tool.prism.Frame, Xform: bp.xform,
+		Slabs: []stackedrecord.Slab{
 			{Regions: []profileRecord{end}, Z0: tool.lo, Z1: loInner},
 			{Regions: []profileRecord{middle}, Z0: loInner, Z1: hiInner},
 			{Regions: []profileRecord{end}, Z0: hiInner, Z1: tool.hi},
 		},
-		interfaces: []stackedrecord.Interface{{LowerExposed: ring}, {UpperExposed: ring}},
+		Interfaces: []stackedrecord.Interface{{LowerExposed: ring}, {UpperExposed: ring}},
 	}
-	result, err := evalStackedContext(ctx, documentHandle(source.n.Doc), source.n.Doc.NextProducer, sp)
+	result, err := bodyResult(stackedrecord.Build(ctx, envOf(source.n.Doc, source.n.Doc.NextProducer), sp, stackedrecord.OwnPlan{}))
 	return result, true, err
 }

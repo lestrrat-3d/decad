@@ -20,12 +20,12 @@ import (
 // rectangular plate. Every offset and level must be exactly represented.
 func shellRoundBoss(ctx context.Context, source *Body, sp stackedPrismPayload, view brepPayload,
 	call brepShellCall) (*Body, bool, error) {
-	if len(sp.slabs) != 2 || len(sp.interfaces) != 1 ||
-		len(sp.slabs[0].Regions) != 1 || len(sp.slabs[1].Regions) != 1 {
+	if len(sp.Slabs) != 2 || len(sp.Interfaces) != 1 ||
+		len(sp.Slabs[0].Regions) != 1 || len(sp.Slabs[1].Regions) != 1 {
 		return nil, false, nil
 	}
-	plate, pOK := prismshell.RecordedBossRect(sp.slabs[0].Regions[0])
-	circle, cOK := prismshell.RecordedBossCircle(sp.slabs[1].Regions[0])
+	plate, pOK := prismshell.RecordedBossRect(sp.Slabs[0].Regions[0])
+	circle, cOK := prismshell.RecordedBossCircle(sp.Slabs[1].Regions[0])
 	if !pOK || !cOK {
 		return nil, false, nil
 	}
@@ -36,8 +36,8 @@ func shellRoundBoss(ctx context.Context, source *Body, sp stackedPrismPayload, v
 	refuse := func(why string) (*Body, bool, error) {
 		return nil, true, fmt.Errorf("%w: round stacked-boss shell %s", ErrUnsupported, why)
 	}
-	a, b := sp.slabs[0], sp.slabs[1]
-	if sp.sectionDelta != 0 || a.Z0Delta != 0 || a.Z1Delta != 0 || b.Z0Delta != 0 || b.Z1Delta != 0 ||
+	a, b := sp.Slabs[0], sp.Slabs[1]
+	if sp.SectionDelta != 0 || a.Z0Delta != 0 || a.Z1Delta != 0 || b.Z0Delta != 0 || b.Z1Delta != 0 ||
 		a.Z1 != b.Z0 || !(a.Z0 < a.Z1 && b.Z0 < b.Z1) || call.tDelta != 0 {
 		return refuse("requires exact slab sections, levels, and thickness")
 	}
@@ -85,12 +85,12 @@ func shellRoundBoss(ctx context.Context, source *Body, sp stackedPrismPayload, v
 	result.faces = append(result.faces, view.faces[:topCapIdx]...)
 	result.faces = append(result.faces, view.faces[topCapIdx+1:]...)
 	addPlane := func(p profileRecord, z float64, outward bool) int {
-		result.faces = append(result.faces, brepFace{frame: sp.frame, region: &p, z0: z, z1: z, outward: outward})
+		result.faces = append(result.faces, brepFace{frame: sp.Frame, region: &p, z0: z, z1: z, outward: outward})
 		return len(result.faces) - 1
 	}
 	addWalls := func(p profileRecord, z0, z1 float64) {
 		for _, seg := range p.Outer.Segments {
-			result.faces = append(result.faces, brepFace{frame: sp.frame, wall: brepgeom.ReverseSegment(seg), z0: z0, z1: z1})
+			result.faces = append(result.faces, brepFace{frame: sp.Frame, wall: brepgeom.ReverseSegment(seg), z0: z0, z1: z1})
 		}
 	}
 	lower := plate.Inset(t)
@@ -113,7 +113,7 @@ func shellRoundBoss(ctx context.Context, source *Body, sp stackedPrismPayload, v
 	addPlane(rim, b.Z1, true)
 	result.bossShell = &prismshell.BossShellBand{Plate: plate, Lower: lower, Round: &circle,
 		Z0: a.Z0, InterfaceZ: a.Z1, TopZ: b.Z1, LowerZ: lowerZ,
-		T: t, LedgeFace: ledgeFace, Frame: sp.frame}
+		T: t, LedgeFace: ledgeFace, Frame: sp.Frame}
 	result.assignRoles()
 	body, err := evalBrepContext(ctx, documentHandle(source.n.Doc), source.n.Doc.NextProducer, result)
 	return body, true, err

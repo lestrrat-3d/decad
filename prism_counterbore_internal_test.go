@@ -66,11 +66,11 @@ func TestCounterboreReverseArrangementProvesEmptyCut(t *testing.T) {
 	require.True(t, ok)
 	tool := internalCircleBody(t, doc, 0, 2, 0, Distance{D: units.Millimeters(10), Dir: Along})
 	budget := proofbound.NewWorkBudget(t.Context())
-	proxy := bornBody(&Body{n: topo.Body{Payload: sp.outerPrism()}})
+	proxy := bornBody(&Body{n: topo.Body{Payload: sp.OuterPrism()}})
 	target, cutter, admitted, err := admitPrismPairBudget(budget, meshbool.OpCut, proxy, tool)
 	require.NoError(t, err)
 	require.True(t, admitted)
-	target.Profile = sp.slabs[1].Regions[0]
+	target.Profile = sp.Slabs[1].Regions[0]
 	reexpress, err := prismcells.NewReexpression(target.PlacementOperand(), cutter.PlacementOperand())
 	require.NoError(t, err)
 	scene, tags, _, err := prismcells.BuildScene(budget, target.Profile, cutter.Profile, reexpress)

@@ -61,14 +61,14 @@ func TestStackedUnionRecordsSlabsAndFloor(t *testing.T) {
 	t.Run("boss on plate", func(t *testing.T) {
 		plate, boss := internalBossOnPlate(t, 0, 10, 15)
 		sp := internalStackedUnion(t, plate, boss)
-		require.Len(t, sp.slabs, 2)
+		require.Len(t, sp.Slabs, 2)
 		require.Equal(t, [4]float64{0, 10, 10, 25},
-			[4]float64{sp.slabs[0].Z0, sp.slabs[0].Z1, sp.slabs[1].Z0, sp.slabs[1].Z1})
-		require.Zero(t, sp.sectionDelta)
-		require.Len(t, sp.interfaces, 1)
-		require.Empty(t, sp.interfaces[0].UpperExposed)
-		require.Len(t, sp.interfaces[0].LowerExposed, 1)
-		floor := sp.interfaces[0].LowerExposed[0]
+			[4]float64{sp.Slabs[0].Z0, sp.Slabs[0].Z1, sp.Slabs[1].Z0, sp.Slabs[1].Z1})
+		require.Zero(t, sp.SectionDelta)
+		require.Len(t, sp.Interfaces, 1)
+		require.Empty(t, sp.Interfaces[0].UpperExposed)
+		require.Len(t, sp.Interfaces[0].LowerExposed, 1)
+		floor := sp.Interfaces[0].LowerExposed[0]
 		plateOuter := plate.n.Payload.(prismPayload).Profile.Outer
 		same, err := momentinput.ExactLoopEqual(nil, floor.Outer, plateOuter)
 		require.NoError(t, err)
@@ -80,14 +80,14 @@ func TestStackedUnionRecordsSlabsAndFloor(t *testing.T) {
 	t.Run("rooted boss", func(t *testing.T) {
 		plate, boss := internalBossOnPlate(t, 0, 5, 20)
 		sp := internalStackedUnion(t, plate, boss)
-		require.Len(t, sp.slabs, 3)
+		require.Len(t, sp.Slabs, 3)
 		plateProfile := plate.n.Payload.(prismPayload).Profile
-		require.Equal(t, plateProfile, sp.slabs[1].Regions[0],
+		require.Equal(t, plateProfile, sp.Slabs[1].Regions[0],
 			"the slab both operands reach takes the containing plate's record verbatim")
-		require.Empty(t, sp.interfaces[0].LowerExposed)
-		require.Empty(t, sp.interfaces[0].UpperExposed)
-		require.Len(t, sp.interfaces[1].LowerExposed, 1)
-		require.Zero(t, sp.sectionDelta)
+		require.Empty(t, sp.Interfaces[0].LowerExposed)
+		require.Empty(t, sp.Interfaces[0].UpperExposed)
+		require.Len(t, sp.Interfaces[1].LowerExposed, 1)
+		require.Zero(t, sp.SectionDelta)
 	})
 }
 
@@ -174,16 +174,16 @@ func TestStackedUnionLevelChargesExactOffsetSum(t *testing.T) {
 	charge := proofarith.RationalFloatError(top, held)
 	require.Positive(t, charge, "the fixture's top level must not be a float")
 	found := false
-	for k := 0; k+1 < len(sp.slabs); k++ {
-		if sp.slabs[k].Z1 != held {
+	for k := 0; k+1 < len(sp.Slabs); k++ {
+		if sp.Slabs[k].Z1 != held {
 			continue
 		}
 		found = true
-		require.Equal(t, charge, sp.slabs[k].Z1Delta)
-		require.Equal(t, charge, sp.slabs[k+1].Z0Delta)
+		require.Equal(t, charge, sp.Slabs[k].Z1Delta)
+		require.Equal(t, charge, sp.Slabs[k+1].Z0Delta)
 	}
 	require.True(t, found, "the boss's top level splits the plate")
-	require.NoError(t, stackedrecord.Falsify(t.Context(), stackedrecord.Record{Slabs: sp.slabs, Interfaces: sp.interfaces}))
+	require.NoError(t, stackedrecord.Falsify(t.Context(), stackedrecord.Record{Slabs: sp.Slabs, Interfaces: sp.Interfaces}))
 }
 
 // A boss moved in its plane re-expresses into the plate's frame, so the
@@ -197,7 +197,7 @@ func TestStackedUnionPlacedBossChargesSectionDisplacement(t *testing.T) {
 	boss, err = Transform(t.Context(), boss, move)
 	require.NoError(t, err)
 	sp := internalStackedUnion(t, plate, boss)
-	require.Positive(t, sp.sectionDelta)
+	require.Positive(t, sp.SectionDelta)
 	got, err := Union(t.Context(), plate, boss)
 	require.NoError(t, err)
 	volume, err := got.Volume()
@@ -210,7 +210,7 @@ func TestStackedUnionPlacedBossChargesSectionDisplacement(t *testing.T) {
 func TestStackedUnionPayloadAuditRejectsBrokenInterfaces(t *testing.T) {
 	plate, boss := internalBossOnPlate(t, 0, 10, 15)
 	base := internalStackedUnion(t, plate, boss)
-	require.NoError(t, stackedrecord.Falsify(t.Context(), stackedrecord.Record{Slabs: base.slabs, Interfaces: base.interfaces}))
+	require.NoError(t, stackedrecord.Falsify(t.Context(), stackedrecord.Record{Slabs: base.Slabs, Interfaces: base.Interfaces}))
 	bossOuter := boss.n.Payload.(prismPayload).Profile.Outer
 	cases := []struct {
 		name   string
@@ -218,26 +218,26 @@ func TestStackedUnionPayloadAuditRejectsBrokenInterfaces(t *testing.T) {
 		want   error
 	}{
 		{"exposure on the wrong side", func(sp *stackedPrismPayload) {
-			sp.interfaces[0].UpperExposed, sp.interfaces[0].LowerExposed = sp.interfaces[0].LowerExposed, nil
+			sp.Interfaces[0].UpperExposed, sp.Interfaces[0].LowerExposed = sp.Interfaces[0].LowerExposed, nil
 		}, ErrDegenerate},
 		{"exposure on both sides", func(sp *stackedPrismPayload) {
-			sp.interfaces[0].UpperExposed = sp.interfaces[0].LowerExposed
+			sp.Interfaces[0].UpperExposed = sp.Interfaces[0].LowerExposed
 		}, ErrDegenerate},
 		{"no exposure", func(sp *stackedPrismPayload) {
-			sp.interfaces[0].LowerExposed = nil
+			sp.Interfaces[0].LowerExposed = nil
 		}, ErrDegenerate},
 		{"exposure without its hole", func(sp *stackedPrismPayload) {
-			sp.interfaces[0].LowerExposed = []profileRecord{{Outer: sp.slabs[0].Regions[0].Outer}}
+			sp.Interfaces[0].LowerExposed = []profileRecord{{Outer: sp.Slabs[0].Regions[0].Outer}}
 		}, ErrDegenerate},
 		{"holed region under a changed outer", func(sp *stackedPrismPayload) {
-			sp.slabs[1].Regions[0].Holes = []loopRecord{bossOuter}
+			sp.Slabs[1].Regions[0].Holes = []loopRecord{bossOuter}
 		}, ErrUnsupported},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			sp := cloneStackedForAudit(base)
 			tc.change(&sp)
-			require.ErrorIs(t, stackedrecord.Falsify(t.Context(), stackedrecord.Record{Slabs: sp.slabs, Interfaces: sp.interfaces}), tc.want)
+			require.ErrorIs(t, stackedrecord.Falsify(t.Context(), stackedrecord.Record{Slabs: sp.Slabs, Interfaces: sp.Interfaces}), tc.want)
 		})
 	}
 }

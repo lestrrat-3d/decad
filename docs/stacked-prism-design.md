@@ -166,7 +166,7 @@ boss's wall is one column over the slabs the boss alone reaches, and a plate's
 wall is one column over the slabs the plate spans. A through hole is one
 column over every slab. A pocket's wall is a column over the slabs the pocket
 reaches, and a hole that vanishes and reappears is two columns.
-`stackedColumns` derives the column list from the slabs alone, and the body
+`stackedrecord.Payload.Columns` derives the column list from the slabs alone, and the body
 build and the tessellator both read it, so a wall is one face however many
 slabs it crosses — evaluator §3's canonicalization rule — and both consumers
 name the same face by the same role.
@@ -197,10 +197,10 @@ by column (§4).
 
 ## 3. Topology and roles
 
-`evalStackedContext` builds the body under the boolean's own private producer
+`stackedrecord.Build` builds the body under the boolean's own private producer
 identity, after `stackedrecord.Falsify`. It builds through the payload's own
 naming plan; a cup builds the same record through its own plan
-(`stackedPlan`), which mints the cup's roles (modify Table B) and states each
+(`stackedrecord.Plan`), which mints the cup's roles (modify Table B) and states each
 column's displacement:
 
 | Face | Built from | Surface | Role |
@@ -214,7 +214,7 @@ column's displacement:
 A union-built interface's one patch has two loops: its outer is the wider
 side's outer column, read at that column's end on the interface, and its hole
 is the narrower side's outer column, read at that column's start or end there.
-`stackedInterfacePatches` lists every patch with its column rings, and the
+`stackedrecord.Payload.InterfacePatches` lists every patch with its column rings, and the
 body build and the tessellator both read that list.
 
 Every planar face's loops are the coedges the column walls already placed at
@@ -222,7 +222,7 @@ that level, so every edge bounds exactly two faces: a column that starts in
 slab 0 gives its bottom coedges to `capStart`, one that starts at an interface
 gives them to that interface's floor; a column that ends in the last slab gives
 its top coedges to `capEnd`, one that ends at an interface gives them to that
-interface's ceiling. `stackedLumps` derives the lump set from face adjacency:
+interface's ceiling. `stackedrecord.Build` derives the lump set from face adjacency:
 each connected face set holding a region outer's wall or an end cap is one
 lump's outer shell, and a connected set holding neither — hole walls closed
 by a floor below and a ceiling above, a closed shell's cavity (§2.4) — is a
@@ -348,7 +348,7 @@ reads its `sectionDelta` through `sectionDisplacementOf`, as it reads a prism's.
 
 Each admitted arm ships its implementation and tests together.
 
-1. **Blind cut and through cuts on the result.** The payload, `evalStacked`,
+1. **Blind cut and through cuts on the result.** The payload, `stackedrecord.Build`,
    `tessellateStacked` with its occupied-volume proof, prism-boolean §3.2's two
    new `Cut` rows (a blind tool on a prism target, a spanning tool on a stacked
    target), the `Verify` gate arm, `sectionDisplacementOf`'s arm, the explicit

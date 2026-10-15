@@ -503,7 +503,7 @@ func gateWitnessPrism(payload topo.Payload) (prismPayload, float64, bool) {
 }
 
 // gateWitnessPrisms is gateWitnessPrism's reading for every payload. A stacked
-// prism reads one witness prism per outer run (stackedPrismPayload.outerRuns)
+// prism reads one witness prism per outer run (stackedPrismPayload.OuterRuns)
 // over that run's own interval. Every run's outer loop is the outer wall of
 // the slabs it spans, so every witness is a point of the body. The first
 // slab's outer swept over the whole stack would hold points a union-built
@@ -514,11 +514,11 @@ func gateWitnessPrisms(payload topo.Payload) ([]prismPayload, float64, bool) {
 		return capBlendWitnessPrisms(pl), pl.AxialDelta(), true
 	}
 	if pl, ok := payload.(stackedPrismPayload); ok {
-		runs := pl.outerRuns()
+		runs := pl.OuterRuns()
 		for i := range runs {
 			runs[i].SectionDelta = 0
 		}
-		return runs, proofbound.AbsSumUpper(pl.sectionDelta, pl.AxialDelta()), true
+		return runs, proofbound.AbsSumUpper(pl.SectionDelta, pl.AxialDelta()), true
 	}
 	witness, displacement, ok := gateWitnessPrism(payload)
 	if !ok {
