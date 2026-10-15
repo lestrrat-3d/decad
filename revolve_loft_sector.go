@@ -177,11 +177,11 @@ func certifyRevolveConnectorBoundary(record *pointSectionRecord,
 func revolveImplicitDisplacement(section revolveSectionCertificate,
 	base facetedPayload) (float64, bool) {
 	if !proofbound.FiniteVec(r3.Vec{X: base.meshBound}) || base.meshBound < 0 ||
-		section.rootStart.U <= 0 || len(base.verts) < 4 {
+		section.rootStart.U <= 0 || len(base.Verts) < 4 {
 		return 0, false
 	}
 	minX, maxX, reach := math.Inf(1), math.Inf(-1), 0.0
-	for _, world := range base.verts[1:] {
+	for _, world := range base.Verts[1:] {
 		if !proofbound.FiniteVec(world) || world.X <= 0 {
 			return 0, false
 		}

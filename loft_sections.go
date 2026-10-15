@@ -179,7 +179,7 @@ func (d *Document) buildSmoothSectionBody(ctx context.Context, built smoothloft.
 	}
 	body, err := buildFacetedBody(ctx, d, ref, facetedPayload{
 		smoothRectSection: built.RectangularSection,
-		verts:             built.Vertices, tris: built.Triangles, src: built.Sources,
+		Verts:             built.Vertices, Tris: built.Triangles, Src: built.Sources,
 		groups: groups, vertexBound: vertexBound, meshBound: built.MeshBound,
 		volSymDiff: built.VolSymDiff, areaSlack: built.AreaSlack,
 		dPair: built.Diameter, xform: r3.Identity(),

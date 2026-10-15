@@ -135,7 +135,7 @@ func TestLoftFacesToConeTangentBuildsExactEnd(t *testing.T) {
 	for j, station := range record.source.sourceStation {
 		u, v := lfStationUV(station)
 		want := loftface.RoundPoint(record.final.At(u, v))
-		require.Equal(t, want, end.verts[2*n+j])
+		require.Equal(t, want, end.Verts[2*n+j])
 	}
 
 	// The end group is one cap-end face of the new producer with a plane tag

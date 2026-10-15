@@ -74,7 +74,7 @@ func revolveCrossingPoint(src *pointSectionSource, cert sketch.ConeLineCrossing)
 func revolveSeatPoint(src *pointSectionSource, cert sketch.ConeLineCrossing,
 	section revolveSectionCertificate, base facetedPayload) (r3.Vec, float64, bool) {
 	point, pointBound, ok := revolveCrossingPoint(src, cert)
-	if !ok || len(base.verts) < 4 || base.meshBound < 0 {
+	if !ok || len(base.Verts) < 4 || base.meshBound < 0 {
 		return r3.Vec{}, 0, false
 	}
 	line := cert.Line()
@@ -144,7 +144,7 @@ func revolveSeatPoint(src *pointSectionSource, cert sketch.ConeLineCrossing,
 		minD.Abs(d1)
 	}
 	reach := 0.0
-	for _, p := range base.verts[1:] {
+	for _, p := range base.Verts[1:] {
 		reach = max(reach, proofbound.DvLenUpper(proofbound.HeldDelta(p, r3.Vec{})))
 	}
 	reach = proofbound.AbsSumUpper(reach, base.meshBound)

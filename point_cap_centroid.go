@@ -54,11 +54,11 @@ func pointFarCapCentroid(profile profileRecord, plane planeRecord) (VecMeasureme
 // centroid, the true centroid differs by at most ΔD/(A-Δ).
 func pointPlaneCapCentroid(ctx context.Context, base facetedPayload,
 	plane *pointPlaneLimit) (VecMeasurement, bool, error) {
-	if len(base.verts) < 4 || base.pointSection == nil {
+	if len(base.Verts) < 4 || base.pointSection == nil {
 		return VecMeasurement{}, false, nil
 	}
-	polygon := make([][3]*big.Rat, len(base.verts)-1)
-	for i, far := range base.verts[1:] {
+	polygon := make([][3]*big.Rat, len(base.Verts)-1)
+	for i, far := range base.Verts[1:] {
 		if i%32 == 0 {
 			if err := ctx.Err(); err != nil {
 				return VecMeasurement{}, false, err

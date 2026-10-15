@@ -30,17 +30,17 @@ func TestLoftMirrorCylinderLevelsRequireExactMidpoint(t *testing.T) {
 func TestLoftMirrorCylinderCapsMustTileWithOppositeWinding(t *testing.T) {
 	t.Parallel()
 	lower := facetedPayload{
-		tris: [][3]int{{0, 1, 2}, {0, 2, 3}}, src: []int{4, 4},
+		Tris: [][3]int{{0, 1, 2}, {0, 2, 3}}, Src: []int{4, 4},
 	}
 	upper := facetedPayload{
-		tris: [][3]int{{2, 1, 0}, {3, 2, 0}}, src: []int{4, 4},
+		Tris: [][3]int{{2, 1, 0}, {3, 2, 0}}, Src: []int{4, 4},
 	}
 	require.True(t, loftMirrorCylinderCapsOppose(lower, upper, []int{0, 1, 2, 3}, 4, 4))
-	upper.tris[1] = [3]int{0, 2, 3}
+	upper.Tris[1] = [3]int{0, 2, 3}
 	require.False(t, loftMirrorCylinderCapsOppose(lower, upper, []int{0, 1, 2, 3}, 4, 4))
-	upper.tris[1] = [3]int{3, 2, 0}
+	upper.Tris[1] = [3]int{3, 2, 0}
 	require.False(t, loftMirrorCylinderCapsOppose(lower, upper, []int{0, 1, 2, 4}, 4, 4))
-	upper.src[1] = 3
+	upper.Src[1] = 3
 	require.False(t, loftMirrorCylinderCapsOppose(lower, upper, []int{0, 1, 2, 3}, 4, 4))
 }
 
@@ -194,8 +194,8 @@ func (o pairsOutcome) requireSame(t *testing.T, want pairsOutcome) {
 	require.True(t, ok)
 	gotPayload, ok := o.body.n.Payload.(facetedPayload)
 	require.True(t, ok)
-	require.Equal(t, wantPayload.verts, gotPayload.verts)
-	require.Equal(t, wantPayload.tris, gotPayload.tris)
+	require.Equal(t, wantPayload.Verts, gotPayload.Verts)
+	require.Equal(t, wantPayload.Tris, gotPayload.Tris)
 	require.Equal(t, measurementFromInternal(want.body.n.Volume), measurementFromInternal(o.body.n.Volume))
 	require.Equal(t, measurementFromInternal(want.body.n.Area), measurementFromInternal(o.body.n.Area))
 	require.Equal(t, vecMeasurementFromInternal(want.body.n.Centroid), vecMeasurementFromInternal(o.body.n.Centroid))

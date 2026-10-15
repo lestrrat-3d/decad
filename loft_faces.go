@@ -46,11 +46,11 @@ func buildLoftFaces(ctx context.Context, d *Document, selected []loftFaceSection
 	if err != nil {
 		return nil, err
 	}
-	if layout, ok := loftFacesCapLayout(selected[0].slice.base.tris[:len(selected[0].ring)],
-		len(selected)-1, len(mesh.tris)); ok {
-		err = loftmesh.LoftCrossingAuditWithCaps(ctx, mesh.verts, mesh.tris, layout)
+	if layout, ok := loftFacesCapLayout(selected[0].slice.base.Tris[:len(selected[0].ring)],
+		len(selected)-1, len(mesh.Tris)); ok {
+		err = loftmesh.LoftCrossingAuditWithCaps(ctx, mesh.Verts, mesh.Tris, layout)
 	} else {
-		err = loftmesh.LoftCrossingAudit(proofbound.NewWorkBudget(ctx), mesh.verts, mesh.tris)
+		err = loftmesh.LoftCrossingAudit(proofbound.NewWorkBudget(ctx), mesh.Verts, mesh.Tris)
 	}
 	if err != nil {
 		return nil, err
@@ -58,7 +58,7 @@ func buildLoftFaces(ctx context.Context, d *Document, selected []loftFaceSection
 	if err := orientLoftFaces(&mesh, selected[0].slice.base, source, embedding.sign); err != nil {
 		return nil, err
 	}
-	audit, err := facetproof.AuditFacetedMesh(ctx, mesh.verts, mesh.tris)
+	audit, err := facetproof.AuditFacetedMesh(ctx, mesh.Verts, mesh.Tris)
 	if err != nil {
 		return nil, err
 	}
@@ -80,14 +80,14 @@ func buildLoftFaces(ctx context.Context, d *Document, selected []loftFaceSection
 	if volFloor(heldRat, mesh.volSymDiff) <= 0 {
 		return nil, fmt.Errorf("%w: face-fed loft occupied-volume proof exceeds the held volume", ErrUnsupported)
 	}
-	if len(selected[0].slice.base.src) < len(source.sourceStation) {
+	if len(selected[0].slice.base.Src) < len(source.sourceStation) {
 		return nil, fmt.Errorf("%w: loft source cell roles are incomplete", ErrUnsupported)
 	}
-	mesh.loftFacesPrimitive = true
+	mesh.LoftFacesPrimitive = true
 	mesh.loftFacesCap = &loftFacesCapRecord{source: source,
 		maps:         append([]loftFaceMap(nil), embedding.maps...),
 		bounds:       capBounds,
-		stationGroup: append([]int(nil), selected[0].slice.base.src[:len(source.sourceStation)]...),
+		stationGroup: append([]int(nil), selected[0].slice.base.Src[:len(source.sourceStation)]...),
 		final:        embedding.maps[len(embedding.maps)-1], group: len(mesh.groups) - 1,
 		tangent: tangent}
 	body, err := buildFacetedBodyWithProof(ctx, d, ref, mesh, audit, Measurement{}, nil)
@@ -130,7 +130,7 @@ func collectLoftFaces(d *Document, faces []*Face) ([]loftFaceSection, *pointSect
 		}
 		fp, ok := body.n.Payload.(facetedPayload)
 		if !ok || fp.pointPlane == nil || fp.pointPlane.base.pointSection == nil ||
-			len(fp.verts) == 0 || len(fp.faceOf) != len(fp.tris) {
+			len(fp.Verts) == 0 || len(fp.FaceOf) != len(fp.Tris) {
 			return nil, nil, fmt.Errorf("%w: LoftFaces section %d has no authenticated Split cap", ErrUnsupported, i)
 		}
 		record := fp.pointPlane.base.pointSection
@@ -156,9 +156,9 @@ func collectLoftFaces(d *Document, faces []*Face) ([]loftFaceSection, *pointSect
 			return nil, nil, fmt.Errorf("%w: LoftFaces section %d is not in its body", ErrUnsupported, i)
 		}
 		group := -1
-		for j, owner := range fp.faceOf {
+		for j, owner := range fp.FaceOf {
 			if owner == faceIndex {
-				group = fp.src[j]
+				group = fp.Src[j]
 				break
 			}
 		}
@@ -181,14 +181,14 @@ func collectLoftFaces(d *Document, faces []*Face) ([]loftFaceSection, *pointSect
 			}
 			seen[body] = true
 		}
-		n := len(fp.pointPlane.base.verts) - 1
-		if n < 3 || len(fp.verts) != 2*n || len(fp.pointPlane.base.tris) <= n {
+		n := len(fp.pointPlane.base.Verts) - 1
+		if n < 3 || len(fp.Verts) != 2*n || len(fp.pointPlane.base.Tris) <= n {
 			return nil, nil, fmt.Errorf("%w: LoftFaces section %d has no complete station ring", ErrUnsupported, i)
 		}
-		ring := fp.verts[n:]
+		ring := fp.Verts[n:]
 		limit := fp.pointPlane.upper
 		if i == 0 {
-			ring = fp.verts[:n]
+			ring = fp.Verts[:n]
 			limit = fp.pointPlane.lower
 		}
 		sections[i] = loftFaceSection{face: face, body: body, mesh: fp,
@@ -235,7 +235,7 @@ func assembleLoftFaces(ctx context.Context, ref producerID,
 	n := len(sections[0].ring)
 	base := sections[0].slice.base
 	segmentCount := len(source.profile.Outer.Segments)
-	if len(base.src) < n || len(base.tris) < n || len(base.groups) != segmentCount+1 {
+	if len(base.Src) < n || len(base.Tris) < n || len(base.groups) != segmentCount+1 {
 		return facetedPayload{}, fmt.Errorf("%w: LoftFaces source fan has no complete side correspondence", ErrUnsupported)
 	}
 	verts := make([]r3.Vec, 0, len(sections)*n)
@@ -248,7 +248,7 @@ func assembleLoftFaces(ctx context.Context, ref producerID,
 		}
 		verts = append(verts, section.ring...)
 	}
-	tris := make([][3]int, 0, 2*n*(len(sections)-1)+2*len(base.tris[n:]))
+	tris := make([][3]int, 0, 2*n*(len(sections)-1)+2*len(base.Tris[n:]))
 	src := make([]int, 0, cap(tris))
 	groups := make([]facetGroup, (len(sections)-1)*segmentCount+2)
 	for band := range len(sections) - 1 {
@@ -262,12 +262,12 @@ func assembleLoftFaces(ctx context.Context, ref producerID,
 					return facetedPayload{}, err
 				}
 			}
-			side := base.tris[j]
+			side := base.Tris[j]
 			if side[0] != 0 || side[1] <= 0 || side[2] <= 0 {
 				return facetedPayload{}, fmt.Errorf("%w: LoftFaces source fan has no ordered side", ErrUnsupported)
 			}
 			b, c := side[1]-1, side[2]-1
-			group := base.src[j]
+			group := base.Src[j]
 			if group < 0 || group >= segmentCount {
 				return facetedPayload{}, fmt.Errorf("%w: LoftFaces source side has no segment", ErrUnsupported)
 			}
@@ -293,7 +293,7 @@ func assembleLoftFaces(ctx context.Context, ref producerID,
 		groups[endGroup] = facetGroup{origins: append(endOrigins, provenance.Ref{Producer: ref, Role: provenance.RoleCapEnd}),
 			surface: last.face.n.Surface, planar: true, normalBound: 2}
 	}
-	for _, capTri := range base.tris[n:] {
+	for _, capTri := range base.Tris[n:] {
 		if capTri[0] == 0 || capTri[1] == 0 || capTri[2] == 0 {
 			return facetedPayload{}, fmt.Errorf("%w: LoftFaces source cap includes the apex", ErrUnsupported)
 		}
@@ -303,7 +303,7 @@ func assembleLoftFaces(ctx context.Context, ref producerID,
 				(len(sections)-1)*n + capTri[2] - 1})
 		src = append(src, startGroup, endGroup)
 	}
-	return facetedPayload{verts: verts, tris: tris, src: src, groups: groups, xform: r3.Identity()}, nil
+	return facetedPayload{Verts: verts, Tris: tris, Src: src, groups: groups, xform: r3.Identity()}, nil
 }
 
 // loftFacesConstructedPlane returns the rounded Plane tag of a constructed

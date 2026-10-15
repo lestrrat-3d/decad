@@ -159,15 +159,15 @@ func TestFacetedReadingsReportEachVertexsOwnBound(t *testing.T) {
 	require.Positive(t, finer, `some untouched trunk vertex sits under the body-wide bound`)
 
 	faceVerts := map[int][]int{}
-	for i, fi := range fp.faceOf {
-		faceVerts[fi] = append(faceVerts[fi], fp.tris[i][:]...)
+	for i, fi := range fp.FaceOf {
+		faceVerts[fi] = append(faceVerts[fi], fp.Tris[i][:]...)
 	}
 	faces := body.Faces()
 	untouched, finerFaces := 0, 0
 	for fi, vs := range faceVerts {
 		want, all := 0.0, true
 		for _, v := range vs {
-			beta, ok := own[fp.verts[v]]
+			beta, ok := own[fp.Verts[v]]
 			if !ok {
 				all = false
 				break
@@ -319,11 +319,11 @@ func TestFacetedPlacementChargesEachVertexAtItsOwnMagnitude(t *testing.T) {
 	const maxTrans = 3.0
 	magOf := func(v r3.Vec) float64 { return math.Max(math.Abs(v.X), math.Max(math.Abs(v.Y), math.Abs(v.Z))) }
 	maxIn := 0.0
-	for _, v := range src.verts {
+	for _, v := range src.Verts {
 		maxIn = math.Max(maxIn, magOf(v))
 	}
 	origin := -1
-	for i, v := range src.verts {
+	for i, v := range src.Verts {
 		own := proofbound.AbsSumUpper(src.vertexBound[i], proofbound.RigidRoundAllow(magOf(v), maxTrans))
 		require.GreaterOrEqual(t, next.vertexBound[i], own, `vertex %v is charged at least its own rounding`, v)
 		if v == (r3.Vec{}) {
@@ -331,7 +331,7 @@ func TestFacetedPlacementChargesEachVertexAtItsOwnMagnitude(t *testing.T) {
 		}
 	}
 	require.GreaterOrEqual(t, origin, 0)
-	require.Equal(t, r3.NewVec(1, 2, 3), next.verts[origin])
+	require.Equal(t, r3.NewVec(1, 2, 3), next.Verts[origin])
 	require.Zero(t, src.vertexBound[origin], `the plate corner is held exactly`)
 	require.Equal(t, proofbound.AbsSumUpper(0, proofbound.RigidRoundAllow(0, maxTrans)), next.vertexBound[origin])
 	require.Less(t, next.vertexBound[origin], proofbound.AbsSumUpper(0, proofbound.RigidRoundAllow(maxIn, maxTrans)))

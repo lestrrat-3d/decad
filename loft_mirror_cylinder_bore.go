@@ -56,7 +56,7 @@ func tryLoftMirrorCylinderBoreCut(ctx context.Context, op meshbool.OperationKind
 		!loftMirrorCylinderLevels(blank.Z0, lower.loftCylinderJoin.z1, blank.Z1) {
 		return nil, true, fmt.Errorf("%w: mirrored circular Join lost its exact axial levels", ErrUnsupported)
 	}
-	source := &joinedMesh{verts: joined.verts, tris: joined.tris, src: joined.src}
+	source := &joinedMesh{verts: joined.Verts, tris: joined.Tris, src: joined.Src}
 	for cap, group := range record.capGroups {
 		level := blank.Z0
 		if cap == 1 {
@@ -103,8 +103,8 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 		return nil, err
 	}
 	upper, ok := upperBody.n.Payload.(facetedPayload)
-	if !ok || !upper.contactAudited || len(lower.verts) != len(upper.verts) ||
-		len(lower.tris) != len(upper.tris) || len(lower.src) != len(upper.src) {
+	if !ok || !upper.contactAudited || len(lower.Verts) != len(upper.Verts) ||
+		len(lower.Tris) != len(upper.Tris) || len(lower.Src) != len(upper.Src) {
 		return nil, fmt.Errorf("%w: reflected circular bore lacks a matching held shell", ErrUnsupported)
 	}
 	lowCaps := lower.loftCylinderBore.capGroups
@@ -113,7 +113,7 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 		return nil, fmt.Errorf("%w: reflected circular bore has no separate annular caps", ErrUnsupported)
 	}
 	midVertices := make(map[r3.Vec]int)
-	for i, vertex := range lower.verts {
+	for i, vertex := range lower.Verts {
 		if vertex.Z != middle {
 			continue
 		}
@@ -122,10 +122,10 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 		}
 		midVertices[vertex] = i
 	}
-	vertexMap := make([]int, len(upper.verts))
-	verts := append([]r3.Vec(nil), lower.verts...)
+	vertexMap := make([]int, len(upper.Verts))
+	verts := append([]r3.Vec(nil), lower.Verts...)
 	vertexBound := append([]float64(nil), lower.vertexBound...)
-	for i, vertex := range upper.verts {
+	for i, vertex := range upper.Verts {
 		if vertex.Z == middle {
 			index, exists := midVertices[vertex]
 			if !exists {
@@ -154,13 +154,13 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 	wallGroups := [2]int{-1, -1}
 	for half, payload := range []facetedPayload{lower, upper} {
 		groupMap := make(map[int]int)
-		for i, tri := range payload.tris {
+		for i, tri := range payload.Tris {
 			if i%256 == 0 {
 				if err := ctx.Err(); err != nil {
 					return nil, err
 				}
 			}
-			oldGroup := payload.src[i]
+			oldGroup := payload.Src[i]
 			if oldGroup == lowCaps[1] {
 				continue
 			}
@@ -246,7 +246,7 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 			return nil, fmt.Errorf("%w: reflected circular bore cap does not tile its annulus", ErrUnsupported)
 		}
 	}
-	fp := facetedPayload{verts: verts, tris: tris, src: src, groups: groups,
+	fp := facetedPayload{Verts: verts, Tris: tris, Src: src, groups: groups,
 		vertexBound: vertexBound, meshBound: bound, volSymDiff: volumeGap,
 		areaSlack: areaSlack, dPair: diameter, contactAudited: true, xform: r3.Identity(),
 		loftMirrorCylinderBore: &loftMirrorCylinderBoreRecord{

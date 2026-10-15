@@ -85,8 +85,8 @@ func TestCopyRotationRecordsExactPlacementOnDirectCopy(t *testing.T) {
 	require.Positive(t, tagged)
 
 	// The held mesh is the float placement D applied as ever.
-	require.Equal(t, cp.verts, payload.verts)
-	require.Equal(t, cp.tris, payload.tris)
+	require.Equal(t, cp.Verts, payload.Verts)
+	require.Equal(t, cp.Tris, payload.Tris)
 }
 
 func TestCopyRotationLineageExactIsDirectOnly(t *testing.T) {
@@ -203,14 +203,14 @@ func TestPlacedWithChargesTheGapToExactRotation(t *testing.T) {
 	body, err := source.placedWith(t.Context(), documentHandle(joined.n.Doc), joined.n.Doc.NextProducer, composed, q)
 	require.NoError(t, err)
 	placed := body.n.Payload.(facetedPayload)
-	require.Len(t, placed.verts, len(source.verts))
+	require.Len(t, placed.Verts, len(source.Verts))
 
 	lin, tr := q.Linear(), q.Translation()
 	ratOf := func(f float64) *big.Rat { return new(big.Rat).SetFloat64(f) }
 	farthest := 0.0
-	for i, v := range source.verts {
+	for i, v := range source.Verts {
 		in := [3]*big.Rat{ratOf(v.X), ratOf(v.Y), ratOf(v.Z)}
-		held := [3]*big.Rat{ratOf(placed.verts[i].X), ratOf(placed.verts[i].Y), ratOf(placed.verts[i].Z)}
+		held := [3]*big.Rat{ratOf(placed.Verts[i].X), ratOf(placed.Verts[i].Y), ratOf(placed.Verts[i].Z)}
 		dist2 := new(big.Rat)
 		for r := range in {
 			image := new(big.Rat).Set(tr[r])

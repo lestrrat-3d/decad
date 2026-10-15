@@ -46,7 +46,7 @@ func TestLoftCylinderUnionCentroidDiameter(t *testing.T) {
 	// Placement rounds the held vertices and adds their displacement to the
 	// boundary bound; the centroid's diameter must cover that moved source.
 	require.GreaterOrEqual(t, placedPayload.dPair,
-		facetedSourceDiameterUpper(placedPayload.verts, placedPayload.meshBound))
+		facetedSourceDiameterUpper(placedPayload.Verts, placedPayload.meshBound))
 	placedCentroid, err := placed.Centroid()
 	require.NoError(t, err)
 	require.Greater(t, placedCentroid.Bound.Base(), 0.1)
@@ -102,7 +102,7 @@ func TestLoftCylinderBoreCentroidDiameter(t *testing.T) {
 	fp, ok := bored.n.Payload.(facetedPayload)
 	require.True(t, ok)
 	require.NotNil(t, fp.loftCylinderBore)
-	require.GreaterOrEqual(t, fp.dPair, facetedSourceDiameterUpper(fp.verts, fp.meshBound))
+	require.GreaterOrEqual(t, fp.dPair, facetedSourceDiameterUpper(fp.Verts, fp.meshBound))
 	centroid, err := bored.Centroid()
 	require.NoError(t, err)
 	require.Positive(t, centroid.Bound.Base())

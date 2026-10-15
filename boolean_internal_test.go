@@ -696,7 +696,7 @@ func TestBooleanRoundingUnderflowKeepsProofPositive(t *testing.T) {
 	require.NoError(t, err)
 	proof, ok := union.n.Payload.(facetedPayload)
 	require.True(t, ok)
-	require.Contains(t, proof.verts, r3.Vec{Y: 0.5 * scale})
+	require.Contains(t, proof.Verts, r3.Vec{Y: 0.5 * scale})
 	require.Positive(t, proof.meshBound)
 	require.Positive(t, proof.volSymDiff)
 	volume, err := union.Volume()
@@ -767,7 +767,7 @@ func TestFacetedMeasurementSumsEncloseSmallAllowances(t *testing.T) {
 		verts := []r3.Vec{{X: 1}, {X: 1 + width}, {X: 1, Y: 1}, {X: 1, Z: 1}}
 		tris := [][3]int{{0, 2, 1}, {0, 1, 3}, {0, 3, 2}, {1, 2, 3}}
 		payload := facetedPayload{
-			verts: verts, vertexBound: make([]float64, len(verts)), tris: tris, src: []int{0, 1, 2, 3},
+			Verts: verts, vertexBound: make([]float64, len(verts)), Tris: tris, Src: []int{0, 1, 2, 3},
 			groups:     []facetGroup{{planar: true}, {planar: true}, {planar: true}, {planar: true}},
 			volSymDiff: tiny, dPair: 2, xform: r3.Identity(),
 		}
@@ -838,7 +838,7 @@ func TestBooleanVolumesAreUnchangedByTheKernelRewrite(t *testing.T) {
 			require.NotNil(t, eval.audit)
 			require.NotNil(t, eval.volumeRat)
 			wantValue, wantBound, wantRat, err := facetproof.Volume(t.Context(),
-				eval.audit.XVerts, eval.payload.tris, eval.payload.volSymDiff)
+				eval.audit.XVerts, eval.payload.Tris, eval.payload.volSymDiff)
 			require.NoError(t, err)
 			require.Zero(t, wantRat.Cmp(eval.volumeRat))
 			require.Equal(t, math.Float64bits(wantValue), math.Float64bits(eval.volume.Value.Base()))
@@ -1150,15 +1150,15 @@ func TestFacetedPlacementRebuildsCachedDiameter(t *testing.T) {
 	t.Parallel()
 	doc := New()
 	body, err := buildFacetedBody(t.Context(), doc, producerID(0), facetedPayload{
-		verts: []r3.Vec{
+		Verts: []r3.Vec{
 			r3.NewVec(0, 0, 0),
 			r3.NewVec(3, 0, 0),
 			r3.NewVec(0, 4, 0),
 			r3.NewVec(0, 0, 5),
 		},
 		vertexBound: make([]float64, 4),
-		tris:        [][3]int{{0, 2, 1}, {0, 1, 3}, {0, 3, 2}, {1, 2, 3}},
-		src:         []int{0, 1, 2, 3},
+		Tris:        [][3]int{{0, 2, 1}, {0, 1, 3}, {0, 3, 2}, {1, 2, 3}},
+		Src:         []int{0, 1, 2, 3},
 		groups: []facetGroup{
 			{planar: true}, {planar: true}, {planar: true}, {planar: true},
 		},
@@ -1178,7 +1178,7 @@ func TestFacetedPlacementRebuildsCachedDiameter(t *testing.T) {
 	placed, err := placePayload(t.Context(), before, doc, producerID(1), placement)
 	require.NoError(t, err)
 	after := placed.n.Payload.(facetedPayload)
-	want, ok := diameter.Points(after.verts)
+	want, ok := diameter.Points(after.Verts)
 	require.True(t, ok)
 	require.NotEqual(t, before.diameter, want, "the placement must make a stale cached diameter observable")
 	require.Equal(t, want, after.diameter)
@@ -1228,11 +1228,11 @@ func TestFacetedPlacementEnclosesExactPriorAndMotionBounds(t *testing.T) {
 	require.NoError(t, err)
 	after := placed.n.Payload.(facetedPayload)
 	maxInput := 0.0
-	for _, v := range before.verts {
+	for _, v := range before.Verts {
 		maxInput = math.Max(maxInput, math.Max(math.Abs(v.X), math.Max(math.Abs(v.Y), math.Abs(v.Z))))
 	}
 	allow := proofbound.RigidRoundAllow(maxInput, 1)
-	areaUpper, err := proofbound.PerturbedAreaUpperContext(t.Context(), after.verts, after.tris, allow)
+	areaUpper, err := proofbound.PerturbedAreaUpperContext(t.Context(), after.Verts, after.Tris, allow)
 	require.NoError(t, err)
 	roundVol := proofbound.SweptVolumeAllow(allow, areaUpper)
 	for _, tc := range []struct{ got, increment float64 }{

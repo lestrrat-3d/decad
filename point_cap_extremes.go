@@ -29,8 +29,8 @@ func (b *Body) ExtremeFacesByCentroid(ctx context.Context, axis r3.Vec) (*Face, 
 		proofbound.IsNonFinite(fp.pointPlaneCapDisplacement) || fp.pointPlaneCapDisplacement < 0 {
 		return nil, nil, fmt.Errorf("%w: this body has no complete point-loft Split source", ErrUnsupported)
 	}
-	n := len(fp.pointPlane.base.verts) - 1
-	if n < 3 || len(fp.verts) != 2*n || len(fp.src) != len(fp.faceOf) {
+	n := len(fp.pointPlane.base.Verts) - 1
+	if n < 3 || len(fp.Verts) != 2*n || len(fp.Src) != len(fp.FaceOf) {
 		return nil, nil, fmt.Errorf("%w: the point-loft Split rings are incomplete", ErrUnsupported)
 	}
 	capStartGroup := len(fp.pointPlane.base.groups) - 1
@@ -43,7 +43,7 @@ func (b *Body) ExtremeFacesByCentroid(ctx context.Context, axis r3.Vec) (*Face, 
 	if !ok || start == end {
 		return nil, nil, fmt.Errorf("%w: the Split has no unique end cap", ErrUnsupported)
 	}
-	for _, group := range fp.src {
+	for _, group := range fp.Src {
 		if group < 0 || group > capEndGroup {
 			return nil, nil, fmt.Errorf("%w: the Split has an unrelated face group", ErrUnsupported)
 		}
@@ -60,7 +60,7 @@ func (b *Body) ExtremeFacesByCentroid(ctx context.Context, axis r3.Vec) (*Face, 
 	if !ok {
 		return nil, nil, fmt.Errorf("%w: the end cap has no bounded centroid", ErrUnsupported)
 	}
-	lowerLo, lowerHi, ok, err := pointCapRingInterval(ctx, fp.verts[:n], axis, axisLen,
+	lowerLo, lowerHi, ok, err := pointCapRingInterval(ctx, fp.Verts[:n], axis, axisLen,
 		fp.pointPlaneCapDisplacement)
 	if err != nil {
 		return nil, nil, err
@@ -68,7 +68,7 @@ func (b *Body) ExtremeFacesByCentroid(ctx context.Context, axis r3.Vec) (*Face, 
 	if !ok {
 		return nil, nil, fmt.Errorf("%w: the lower cap boundary has no finite projection", ErrUnsupported)
 	}
-	upperLo, upperHi, ok, err := pointCapRingInterval(ctx, fp.verts[n:], axis, axisLen,
+	upperLo, upperHi, ok, err := pointCapRingInterval(ctx, fp.Verts[n:], axis, axisLen,
 		fp.pointPlaneCapDisplacement)
 	if err != nil {
 		return nil, nil, err
@@ -96,7 +96,7 @@ func (b *Body) ExtremeFacesByCentroid(ctx context.Context, axis r3.Vec) (*Face, 
 
 func pointCapGroupFace(b *Body, fp facetedPayload, group int) (*Face, bool) {
 	faces := b.Faces()
-	index, ok := facetedtopology.GroupFace(fp.src, fp.faceOf, len(faces), group)
+	index, ok := facetedtopology.GroupFace(fp.Src, fp.FaceOf, len(faces), group)
 	if !ok {
 		return nil, false
 	}

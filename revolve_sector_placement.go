@@ -26,7 +26,7 @@ func revolveSectorSourcesSeparate(sectors []facetedPayload) bool {
 				return false
 			}
 		}
-		sources[i] = facetproof.SectorSource{Verts: sector.verts, MeshBound: sector.meshBound,
+		sources[i] = facetproof.SectorSource{Verts: sector.Verts, MeshBound: sector.meshBound,
 			Bound: massmoment.PlacedBound(sector.meshBound, charge)}
 	}
 	return facetproof.SectorSourcesSeparate(sources)

@@ -329,7 +329,7 @@ func evalPointSectionLoft(ctx context.Context, d *Document, ref producerID,
 	diameter := proofbound.AbsSumUpper(maxFar, proofbound.ProductUpper(perimeter,
 		max(basisU, basisV)), meshBound)
 	pp := facetedPayload{
-		verts: verts, tris: tris, src: src, groups: groups, vertexBound: vertexBound,
+		Verts: verts, Tris: tris, Src: src, groups: groups, vertexBound: vertexBound,
 		meshBound: meshBound, volSymDiff: volumeGap, areaSlack: areaGap,
 		dPair: diameter, xform: r3.Identity(),
 		pointSection: &record, pointPlaneSourceEligible: true,

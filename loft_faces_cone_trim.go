@@ -102,7 +102,7 @@ func uniqueResultSourceFace(body *Body, source int) *Face {
 		return nil
 	}
 	faces := body.Faces()
-	index, ok := facetedtopology.UniqueGroupFace(p.src, p.faceOf, len(faces), source)
+	index, ok := facetedtopology.UniqueGroupFace(p.Src, p.FaceOf, len(faces), source)
 	if !ok {
 		return nil
 	}
@@ -115,16 +115,16 @@ func uniqueResultSourceFace(body *Body, source int) *Face {
 // (see uniqueResultSourceFace). It reads the audit's adjacency, so it needs no
 // built body.
 func uniquePayloadSourcePatches(ctx context.Context, p facetedPayload, adj [][]int, groups ...int) (bool, error) {
-	if len(adj) != len(p.tris) || len(p.src) != len(p.tris) {
+	if len(adj) != len(p.Tris) || len(p.Src) != len(p.Tris) {
 		return false, nil
 	}
-	patch, err := facetproof.SourcePatches(proofbound.NewWorkBudget(ctx), len(p.tris), p.src, adj)
+	patch, err := facetproof.SourcePatches(proofbound.NewWorkBudget(ctx), len(p.Tris), p.Src, adj)
 	if err != nil {
 		return false, err
 	}
 	for _, group := range groups {
 		found := -1
-		for i, source := range p.src {
+		for i, source := range p.Src {
 			if source != group {
 				continue
 			}
@@ -142,12 +142,12 @@ func uniquePayloadSourcePatches(ctx context.Context, p facetedPayload, adj [][]i
 
 func recordLoftFacesConeToe(ctx context.Context, source, tool, result *Body) error {
 	base, ok := source.n.Payload.(facetedPayload)
-	if !ok || !base.loftFacesPrimitive || !loftFacesCapRecordReady(base.loftFacesCap) ||
+	if !ok || !base.LoftFacesPrimitive || !loftFacesCapRecordReady(base.loftFacesCap) ||
 		base.xform != r3.Identity() {
 		return nil
 	}
 	cone, ok := exactPointCone(tool)
-	if !ok || !pointcone.AboveFarCap(base.verts, base.meshBound, cone.far) {
+	if !ok || !pointcone.AboveFarCap(base.Verts, base.meshBound, cone.far) {
 		return nil
 	}
 	box, err := lfSourceBox(base.loftFacesCap.source)
@@ -207,10 +207,10 @@ func unchangedLoftCap(ctx context.Context, source, result *Body, base facetedPay
 	resultFaces := result.Faces()
 	var held *facetedtopology.GroupedMesh
 	if p, ok := result.n.Payload.(facetedPayload); ok {
-		held = &facetedtopology.GroupedMesh{Verts: p.verts, Tris: p.tris, Src: p.src, FaceOf: p.faceOf}
+		held = &facetedtopology.GroupedMesh{Verts: p.Verts, Tris: p.Tris, Src: p.Src, FaceOf: p.FaceOf}
 	}
 	index, ok, err := facetedtopology.UnchangedGroupPatch(ctx,
-		facetedtopology.GroupedMesh{Verts: base.verts, Tris: base.tris, Src: base.src, FaceOf: base.faceOf},
+		facetedtopology.GroupedMesh{Verts: base.Verts, Tris: base.Tris, Src: base.Src, FaceOf: base.FaceOf},
 		len(base.groups), group, len(source.Faces()), held, len(resultFaces))
 	if err != nil || !ok {
 		return nil, false, err
@@ -231,7 +231,7 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 	}
 	cone, ok := exactPointCone(tool)
 	if !ok || cone.far.Cmp(p.loftFacesToe.toe.far) != 0 ||
-		!pointcone.AboveFarCap(p.loftFacesToe.base.verts, p.loftFacesToe.base.meshBound, cone.far) ||
+		!pointcone.AboveFarCap(p.loftFacesToe.base.Verts, p.loftFacesToe.base.meshBound, cone.far) ||
 		!orderedLoftFacesConeLimits(p.loftFacesToe.toe, cone, p.loftFacesToe.base) {
 		return nil, false, nil
 	}
@@ -298,13 +298,13 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 		}
 	}
 	if meshes != nil {
-		if err := meshes.clearsResult(ctx, eval.payload.verts); err != nil {
+		if err := meshes.clearsResult(ctx, eval.payload.Verts); err != nil {
 			return nil, true, asBooleanError(op, err)
 		}
 	}
 	// The cap and wall have no held contact. The mesh result must exclude
 	// the whole cap, agreeing with the exact proof that it is outside.
-	if slices.Contains(eval.payload.src, capSource) {
+	if slices.Contains(eval.payload.Src, capSource) {
 		return nil, true, asBooleanError(op, meshbool.ExpectedBoolean(meshbool.BooleanExpectedContact,
 			fmt.Errorf("%w: the held cone retains a cap certified outside its true surface", ErrUnsupported)))
 	}
@@ -348,7 +348,7 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 
 func orderedLoftFacesConeLimits(toe, heel *pointConeLimit, base facetedPayload) bool {
 	return pointcone.ToeHeelOrdered(toe.apex, toe.slope, heel.apex, heel.slope,
-		base.verts, base.meshBound)
+		base.Verts, base.meshBound)
 }
 
 // Q is the exact cone pullback after multiplying through the positive map
@@ -559,7 +559,7 @@ func toeStationLink(vertices []r3.Vec, toe *loftFacesToeRecord) (loftface.Statio
 	record := toe.cap
 	last := len(record.maps) - 1
 	n := len(record.source.sourceStation)
-	baseVerts := toe.base.verts
+	baseVerts := toe.base.Verts
 	if last < 1 || len(record.bounds) != len(record.maps) || len(baseVerts) < (last+1)*n || n < 3 {
 		return refuse("has no station ring")
 	}

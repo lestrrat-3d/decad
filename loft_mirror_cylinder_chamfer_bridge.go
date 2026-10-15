@@ -98,7 +98,7 @@ func loftMirrorCylinderChamferUpperCapBridge(ctx context.Context, old, upper fac
 		return 0, nil
 	}
 	blank, ok := record.join.blank.n.Payload.(prismPayload)
-	if !ok || !loftMirrorCylinderBlank(blank) || len(half.ideal) != len(upper.verts) ||
+	if !ok || !loftMirrorCylinderBlank(blank) || len(half.ideal) != len(upper.Verts) ||
 		half.band[0] >= half.band[1] || len(record.outer[1]) < 3 {
 		return 0, fmt.Errorf("%w: mirrored cap bridge lost its upper band", ErrUnsupported)
 	}
@@ -121,15 +121,15 @@ func loftMirrorCylinderChamferUpperCapBridge(ctx context.Context, old, upper fac
 			W: new(big.Int).Mul(p.W, z.Denom()),
 		}
 	}
-	mesh := &joinedMesh{verts: append([]r3.Vec(nil), upper.verts...), tris: upper.tris}
+	mesh := &joinedMesh{verts: append([]r3.Vec(nil), upper.Verts...), tris: upper.Tris}
 	outer := make([]int, len(record.outer[1]))
 	for i, index := range record.outer[1] {
-		if index < 0 || index >= len(old.verts) {
+		if index < 0 || index >= len(old.Verts) {
 			return 0, fmt.Errorf("%w: mirrored cap bridge lost its old outer rim", ErrUnsupported)
 		}
 		outer[i] = len(mesh.verts)
-		mesh.verts = append(mesh.verts, old.verts[index])
-		ideal = append(ideal, proofarith.XptOf(old.verts[index]))
+		mesh.verts = append(mesh.verts, old.Verts[index])
+		ideal = append(ideal, proofarith.XptOf(old.Verts[index]))
 	}
 	source := loftCylinderChamferSource{
 		z1: blank.Z1, bridgeBound: shift,

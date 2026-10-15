@@ -285,8 +285,8 @@ func buildLoftMirrorCylinderUnion(ctx context.Context, d *Document, ref producer
 		return nil, err
 	}
 	upper, ok := upperHalf.n.Payload.(facetedPayload)
-	if !ok || !upper.contactAudited || len(lower.verts) != len(upper.verts) ||
-		len(lower.tris) != len(upper.tris) || len(lower.src) != len(upper.src) {
+	if !ok || !upper.contactAudited || len(lower.Verts) != len(upper.Verts) ||
+		len(lower.Tris) != len(upper.Tris) || len(lower.Src) != len(upper.Src) {
 		return nil, fmt.Errorf("%w: reflected cylinder slab has no matching held mesh", ErrUnsupported)
 	}
 	lowCaps := lower.loftCylinderJoin.capGroups
@@ -297,7 +297,7 @@ func buildLoftMirrorCylinderUnion(ctx context.Context, d *Document, ref producer
 	// vertex of the reflected cap must match the original held vertex exactly.
 	middle := lower.loftCylinderJoin.z1
 	midVertices := make(map[r3.Vec]int)
-	for i, v := range lower.verts {
+	for i, v := range lower.Verts {
 		if v.Z == middle {
 			if _, exists := midVertices[v]; exists {
 				return nil, fmt.Errorf("%w: lower circular Join duplicates a middle vertex", ErrUnsupported)
@@ -308,10 +308,10 @@ func buildLoftMirrorCylinderUnion(ctx context.Context, d *Document, ref producer
 	if len(midVertices) < 3 {
 		return nil, fmt.Errorf("%w: circular Join has no complete middle outline", ErrUnsupported)
 	}
-	vertexMap := make([]int, len(upper.verts))
-	verts := append([]r3.Vec(nil), lower.verts...)
+	vertexMap := make([]int, len(upper.Verts))
+	verts := append([]r3.Vec(nil), lower.Verts...)
 	vertexBound := append([]float64(nil), lower.vertexBound...)
-	for i, v := range upper.verts {
+	for i, v := range upper.Verts {
 		if v.Z == middle {
 			index, exists := midVertices[v]
 			if !exists {
@@ -342,13 +342,13 @@ func buildLoftMirrorCylinderUnion(ctx context.Context, d *Document, ref producer
 		// group ID. Both copies omit the original top cap group.
 		omit, keep := lowCaps[1], lowCaps[0]
 		groupMap := make(map[int]int)
-		for i, tri := range payload.tris {
+		for i, tri := range payload.Tris {
 			if i%256 == 0 {
 				if err := ctx.Err(); err != nil {
 					return nil, err
 				}
 			}
-			oldGroup := payload.src[i]
+			oldGroup := payload.Src[i]
 			if oldGroup == omit {
 				continue
 			}
@@ -418,7 +418,7 @@ func buildLoftMirrorCylinderUnion(ctx context.Context, d *Document, ref producer
 			return nil, fmt.Errorf("%w: mirrored cylinder cap does not tile its recorded outline", ErrUnsupported)
 		}
 	}
-	fp := facetedPayload{verts: verts, tris: tris, src: src, groups: groups,
+	fp := facetedPayload{Verts: verts, Tris: tris, Src: src, groups: groups,
 		vertexBound: vertexBound, meshBound: bound, volSymDiff: volumeGap,
 		areaSlack: areaSlack, dPair: diameter, contactAudited: true, xform: r3.Identity(),
 		loftMirrorCylinderJoin: &loftMirrorCylinderJoinRecord{
@@ -440,7 +440,7 @@ func buildLoftMirrorCylinderUnion(ctx context.Context, d *Document, ref producer
 
 func loftMirrorCylinderCapsOppose(lower, upper facetedPayload, upperMap []int,
 	lowerGroup, upperGroup int) bool {
-	return facetedtopology.CapsOppose(lower.tris, lower.src, upper.tris, upper.src,
+	return facetedtopology.CapsOppose(lower.Tris, lower.Src, upper.Tris, upper.Src,
 		upperMap, lowerGroup, upperGroup)
 }
 

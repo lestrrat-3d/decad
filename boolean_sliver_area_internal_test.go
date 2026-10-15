@@ -83,8 +83,8 @@ func TestFacetedAreaBoundsCoverSliverFacet(t *testing.T) {
 	require.True(t, ok, `the union takes the mesh path`)
 
 	faceTris := map[int][][3]int{}
-	for i, fi := range fp.faceOf {
-		faceTris[fi] = append(faceTris[fi], fp.tris[i])
+	for i, fi := range fp.FaceOf {
+		faceTris[fi] = append(faceTris[fi], fp.Tris[i])
 	}
 	faces := union.Faces()
 	var sliverTri [3]int
@@ -92,10 +92,10 @@ func TestFacetedAreaBoundsCoverSliverFacet(t *testing.T) {
 	for fi, tris := range faceTris {
 		m, err := faces[fi].Area()
 		require.NoError(t, err)
-		gap := facetAreaGap(m.Value.Base(), fp.verts, tris)
+		gap := facetAreaGap(m.Value.Base(), fp.Verts, tris)
 		require.LessOrEqual(t, gap.Cmp(new(big.Float).SetFloat64(m.Bound.Base())), 0,
 			`face %d (%d facets): area %v, bound %v, gap %s`, fi, len(tris), m.Value.Base(), m.Bound.Base(), gap.Text('g', 6))
-		if len(tris) == 1 && fp.verts[tris[0][0]].Z == 0 && fp.verts[tris[0][1]].Z == 0 && fp.verts[tris[0][2]].Z == 0 {
+		if len(tris) == 1 && fp.Verts[tris[0][0]].Z == 0 && fp.Verts[tris[0][1]].Z == 0 && fp.Verts[tris[0][2]].Z == 0 {
 			sliverTri = tris[0]
 			sliverFaces++
 			// The fixture is a sliver only while its rounding beats the
@@ -108,14 +108,14 @@ func TestFacetedAreaBoundsCoverSliverFacet(t *testing.T) {
 
 	body, err := union.Area()
 	require.NoError(t, err)
-	gap := facetAreaGap(body.Value.Base(), fp.verts, fp.tris)
+	gap := facetAreaGap(body.Value.Base(), fp.Verts, fp.Tris)
 	require.LessOrEqual(t, gap.Cmp(new(big.Float).SetFloat64(body.Bound.Base())), 0)
 
 	only := [][3]int{sliverTri}
-	exact := exactFacetAreaSum(fp.verts, only)
-	require.GreaterOrEqual(t, new(big.Float).SetFloat64(facetproof.MeshAreaUpper(fp.verts, only)).Cmp(exact), 0,
+	exact := exactFacetAreaSum(fp.Verts, only)
+	require.GreaterOrEqual(t, new(big.Float).SetFloat64(facetproof.MeshAreaUpper(fp.Verts, only)).Cmp(exact), 0,
 		`facetproof.MeshAreaUpper bounds the sliver's exact area from above`)
-	upper := tessellation.FaceAreaUpper(fp.verts, only, []int{0}, make([]float64, len(fp.verts)))
+	upper := tessellation.FaceAreaUpper(fp.Verts, only, []int{0}, make([]float64, len(fp.Verts)))
 	require.GreaterOrEqual(t, new(big.Float).SetFloat64(upper[0]).Cmp(exact), 0,
 		`tessellation.FaceAreaUpper bounds the sliver's exact area from above`)
 }

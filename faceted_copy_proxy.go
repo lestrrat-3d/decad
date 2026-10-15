@@ -25,11 +25,11 @@ func (set *facetedCopySet) placedProxyShells(ctx context.Context,
 		return nil, fmt.Errorf("%w: copied proxy lacks a live source proof", ErrUnsupported)
 	}
 	first, ok := set.source.n.Payload.(facetedPayload)
-	if !ok || len(proxy.n.Vertices) != len(first.verts) ||
+	if !ok || len(proxy.n.Vertices) != len(first.Verts) ||
 		len(proxy.n.VertexBound) != len(proxy.n.Vertices) ||
-		len(proxy.n.Triangles) != len(first.tris) ||
+		len(proxy.n.Triangles) != len(first.Tris) ||
 		len(proxy.n.Source) != len(proxy.n.Triangles) ||
-		len(first.faceOf) != len(first.tris) {
+		len(first.FaceOf) != len(first.Tris) {
 		return nil, fmt.Errorf("%w: copied proxy lost its source facets", ErrUnsupported)
 	}
 	faces := set.source.Faces()
@@ -39,8 +39,8 @@ func (set *facetedCopySet) placedProxyShells(ctx context.Context,
 				return nil, err
 			}
 		}
-		faceIndex := first.faceOf[i]
-		if tri != first.tris[i] || faceIndex < 0 || faceIndex >= len(faces) ||
+		faceIndex := first.FaceOf[i]
+		if tri != first.Tris[i] || faceIndex < 0 || faceIndex >= len(faces) ||
 			proxy.n.Source[i] != faceNode(faces[faceIndex]) {
 			return nil, fmt.Errorf("%w: copied proxy changed source face ownership", ErrUnsupported)
 		}
@@ -68,10 +68,10 @@ func (set *facetedCopySet) placedProxyShells(ctx context.Context,
 			part.copyLineage.sourcePlacement != first.xform ||
 			part.copyLineage.targetPlacement != part.xform ||
 			part.copyLineage.motion != set.moves[i] ||
-			len(part.tris) != len(proxy.n.Triangles) {
+			len(part.Tris) != len(proxy.n.Triangles) {
 			return nil, fmt.Errorf("%w: copied proxy tool %d changed its source", ErrUnsupported, i+1)
 		}
-		for j, triangle := range part.tris {
+		for j, triangle := range part.Tris {
 			want := proxy.n.Triangles[j]
 			if set.moves[i].IsReflection() {
 				want[1], want[2] = want[2], want[1]

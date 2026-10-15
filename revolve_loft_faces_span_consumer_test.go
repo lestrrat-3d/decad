@@ -100,7 +100,7 @@ func TestCurvedMappedSourceConsumesLiveProducer(t *testing.T) {
 		original := tooth.n.Payload
 		defer func() { tooth.n.Payload = original }()
 		payload := original.(facetedPayload)
-		payload.faceOf = slices.Clone(payload.faceOf)
+		payload.FaceOf = slices.Clone(payload.FaceOf)
 		other := -1
 		for i, face := range tooth.Faces() {
 			if face != owner {
@@ -112,9 +112,9 @@ func TestCurvedMappedSourceConsumesLiveProducer(t *testing.T) {
 			t.Fatal("the real source has no second face")
 		}
 		changed := false
-		for i, group := range payload.src {
+		for i, group := range payload.Src {
 			if slices.Contains(payload.groups[group].origins, ref) {
-				payload.faceOf[i] = other
+				payload.FaceOf[i] = other
 				changed = true
 				break
 			}

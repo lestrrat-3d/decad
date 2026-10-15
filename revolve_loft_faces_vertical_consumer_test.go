@@ -69,11 +69,11 @@ func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
 		original := tooth.n.Payload
 		defer func() { tooth.n.Payload = original }()
 		payload := original.(facetedPayload)
-		payload.faceOf = slices.Clone(payload.faceOf)
+		payload.FaceOf = slices.Clone(payload.FaceOf)
 		changed := false
-		for i, group := range payload.src {
+		for i, group := range payload.Src {
 			if group == proof.trim.toeCapGroup {
-				payload.faceOf[i] = len(tooth.Faces()) + 1
+				payload.FaceOf[i] = len(tooth.Faces()) + 1
 				changed = true
 			}
 		}
@@ -202,10 +202,10 @@ func mutateCurvedCapFaceOwner(t *testing.T, tooth *Body,
 	original := tooth.n.Payload
 	defer func() { tooth.n.Payload = original }()
 	payload := original.(facetedPayload)
-	payload.faceOf = slices.Clone(payload.faceOf)
+	payload.FaceOf = slices.Clone(payload.FaceOf)
 	capGroup := proof.trim.toeCapGroup
 	capTriangle, sourceTriangle := -1, -1
-	for i, group := range payload.src {
+	for i, group := range payload.Src {
 		if group == capGroup && capTriangle < 0 {
 			capTriangle = i
 		}
@@ -214,13 +214,13 @@ func mutateCurvedCapFaceOwner(t *testing.T, tooth *Body,
 		}
 	}
 	if capTriangle < 0 || sourceTriangle < 0 ||
-		payload.faceOf[capTriangle] == payload.faceOf[sourceTriangle] {
+		payload.FaceOf[capTriangle] == payload.FaceOf[sourceTriangle] {
 		t.Fatal("the real producer lacks separate cap and source faces")
 	}
 	if capToSource {
-		payload.faceOf[capTriangle] = payload.faceOf[sourceTriangle]
+		payload.FaceOf[capTriangle] = payload.FaceOf[sourceTriangle]
 	} else {
-		payload.faceOf[sourceTriangle] = payload.faceOf[capTriangle]
+		payload.FaceOf[sourceTriangle] = payload.FaceOf[capTriangle]
 	}
 	tooth.n.Payload = payload
 	assertChangedCurvedTrimRefuses(t, tooth, proof)
@@ -232,7 +232,7 @@ func rejectChangedCurvedSourceOwner(t *testing.T, tooth *Body, ref provenance.Re
 	original := tooth.n.Payload
 	defer func() { tooth.n.Payload = original }()
 	payload := original.(facetedPayload)
-	payload.faceOf = slices.Clone(payload.faceOf)
+	payload.FaceOf = slices.Clone(payload.FaceOf)
 	other := -1
 	for i, face := range tooth.Faces() {
 		if face != owner {
@@ -244,9 +244,9 @@ func rejectChangedCurvedSourceOwner(t *testing.T, tooth *Body, ref provenance.Re
 		t.Fatal("the live source has no other face")
 	}
 	changed := false
-	for i, group := range payload.src {
+	for i, group := range payload.Src {
 		if slices.Contains(payload.groups[group].origins, ref) {
-			payload.faceOf[i] = other
+			payload.FaceOf[i] = other
 			changed = true
 			break
 		}

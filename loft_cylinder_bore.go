@@ -111,10 +111,10 @@ func tryLoftCylinderBoreCut(ctx context.Context, op meshbool.OperationKind,
 func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 	joined facetedPayload, radius float64, wall *Face) (*Body, error) {
 	record := joined.loftCylinderJoin
-	if len(joined.tris) != len(joined.src) || len(joined.verts) != len(joined.vertexBound) {
+	if len(joined.Tris) != len(joined.Src) || len(joined.Verts) != len(joined.vertexBound) {
 		return nil, fmt.Errorf("%w: circular join has an incomplete mesh record", ErrUnsupported)
 	}
-	source := &joinedMesh{verts: joined.verts, tris: joined.tris, src: joined.src}
+	source := &joinedMesh{verts: joined.Verts, tris: joined.Tris, src: joined.Src}
 	for cap := range 2 {
 		z := record.z0
 		if cap == 1 {
@@ -128,7 +128,7 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 			return nil, fmt.Errorf("%w: circular join cap no longer matches its source ring", ErrUnsupported)
 		}
 	}
-	if len(joined.tris) < 4 || len(joined.verts) == 0 ||
+	if len(joined.Tris) < 4 || len(joined.Verts) == 0 ||
 		record.capGroups[0] == record.capGroups[1] ||
 		record.minSideRadius <= 0 || proofbound.IsNonFinite(record.minSideRadius) {
 		return nil, fmt.Errorf("%w: circular join has no separated cap disks", ErrUnsupported)
@@ -151,12 +151,12 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 		return nil, fmt.Errorf("%w: circular bore reaches the joined source seam annulus", ErrUnsupported)
 	}
 	mesh := &joinedMesh{
-		verts:  append([]r3.Vec(nil), joined.verts...),
+		verts:  append([]r3.Vec(nil), joined.Verts...),
 		groups: append([]facetGroup(nil), joined.groups...),
 	}
-	for i, tri := range joined.tris {
-		if joined.src[i] != record.capGroups[0] && joined.src[i] != record.capGroups[1] {
-			mesh.add(tri, joined.src[i])
+	for i, tri := range joined.Tris {
+		if joined.Src[i] != record.capGroups[0] && joined.Src[i] != record.capGroups[1] {
+			mesh.add(tri, joined.Src[i])
 		}
 	}
 	wallGroup := len(mesh.groups)
@@ -261,10 +261,10 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 		return nil, fmt.Errorf("%w: circular bore has no finite measure proof", ErrUnsupported)
 	}
 	result := joined
-	result.verts, result.tris, result.src, result.groups = mesh.verts, mesh.tris, mesh.src, mesh.groups
+	result.Verts, result.Tris, result.Src, result.groups = mesh.verts, mesh.tris, mesh.src, mesh.groups
 	result.vertexBound, result.meshBound = vertexBound, bound
 	result.volSymDiff, result.areaSlack = volumeGap, areaSlack
-	result.dPair = facetedSourceDiameterUpper(result.verts, result.meshBound)
+	result.dPair = facetedSourceDiameterUpper(result.Verts, result.meshBound)
 	if proofbound.IsNonFinite(result.dPair) {
 		return nil, fmt.Errorf("%w: circular bore has no finite diameter proof", ErrUnsupported)
 	}

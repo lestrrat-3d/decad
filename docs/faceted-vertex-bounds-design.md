@@ -381,7 +381,7 @@ rotation and `D` the float one. It drops every analytic surface tag and
 ### 4.4 Faceted restatement
 
 `tessellateFaceted` publishes the payload's `vertexBound` on the `Mesh`,
-`faceBound[f] = max δ(t)` over the facets `faceOf` maps to `f`, and
+`faceBound[f] = max δ(t)` over the facets `FaceOf` maps to `f`, and
 `bound = meshBound`. Tessellation §7's refusal of a public `Tessellate` call
 whose tolerance is below the held `meshBound` stays: a caller who asked for a
 finer mesh than the body holds still gets `facetedBoundError`. Only the

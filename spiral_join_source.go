@@ -164,7 +164,7 @@ func certifySpiralFirstJoin(ctx context.Context, blank, tooth *Body) (*spiralFir
 		return nil, false, nil
 	}
 	trim := p.loftFacesTrim
-	if !spiralTrimSourceCurrent(trim) || !facetedtopology.CapGroupsPresent(p.src, p.faceOf, len(p.groups),
+	if !spiralTrimSourceCurrent(trim) || !facetedtopology.CapGroupsPresent(p.Src, p.FaceOf, len(p.groups),
 		trim.toeCapGroup, trim.heelCapGroup) {
 		return nil, false, nil
 	}
@@ -365,7 +365,7 @@ func spiralTrimSourceCurrent(trim *loftFacesTrimRecord) bool {
 	if trim == nil || trim.source == nil || !pointSourceCurrent(trim.source) ||
 		trim.toe == nil || trim.heel == nil || len(trim.maps) != 9 || len(trim.bounds) != 9 ||
 		!orderedLoftFacesConeLimits(trim.toe, trim.heel, trim.base) ||
-		!trim.base.loftFacesPrimitive || trim.base.loftFacesCap == nil ||
+		!trim.base.LoftFacesPrimitive || trim.base.loftFacesCap == nil ||
 		trim.base.loftFacesCap.source != trim.source ||
 		len(trim.base.loftFacesCap.maps) != 9 || len(trim.base.loftFacesCap.bounds) != 9 ||
 		len(trim.stationGroup) != len(trim.source.sourceStation) ||

@@ -71,8 +71,8 @@ func revolveSectorProjectionTestSources(t *testing.T, degrees float64) (facetedP
 	for i, vertex := range vertices {
 		placed[i] = turn.Apply(vertex)
 	}
-	first := facetedPayload{verts: vertices, meshBound: 0.01, xform: r3.Identity()}
-	second := facetedPayload{verts: placed, meshBound: 0.01, xform: turn,
+	first := facetedPayload{Verts: vertices, meshBound: 0.01, xform: r3.Identity()}
+	second := facetedPayload{Verts: placed, meshBound: 0.01, xform: turn,
 		revolveLoftSector: &revolveLoftSectorPlacement{motion: turn}}
 	return first, second
 }

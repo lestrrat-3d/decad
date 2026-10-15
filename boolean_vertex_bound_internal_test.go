@@ -153,9 +153,9 @@ func unionVertexBoundFixture(t *testing.T, a, b *Body) vertexBoundFixture {
 	require.NoError(t, err)
 	result, ok := u.n.Payload.(facetedPayload)
 	require.True(t, ok)
-	require.Len(t, result.vertexBound, len(result.verts))
+	require.Len(t, result.vertexBound, len(result.Verts))
 	held := map[r3.Vec]int{}
-	for i, v := range result.verts {
+	for i, v := range result.Verts {
 		held[v] = i
 	}
 	return vertexBoundFixture{ma: ma, mb: mb, rims: rims, sinMin: sinMin, result: result, heldIdx: held, operand: operand}
@@ -169,7 +169,7 @@ func (f vertexBoundFixture) held(t *testing.T, p proof.Xpt) int {
 		return i
 	}
 	best, bestGap := -1, (*big.Rat)(nil)
-	for i, v := range f.result.verts {
+	for i, v := range f.result.Verts {
 		if gap := meshbool.CoordDistance(p, v); bestGap == nil || gap.Cmp(bestGap) < 0 {
 			best, bestGap = i, gap
 		}
@@ -232,7 +232,7 @@ func TestBooleanVertexBoundsComposePerPair(t *testing.T) {
 		if beta, ok := f.operand[p.Vec()]; ok && meshbool.CoordDistance(p, p.Vec()).Sign() == 0 {
 			pre = max(pre, beta)
 		}
-		weld := weldOf(p, f.result.verts[i])
+		weld := weldOf(p, f.result.Verts[i])
 		maxWeld = max(maxWeld, weld)
 		if weld > 0 {
 			pre = proofbound.AbsSumUpper(pre, weld)
@@ -243,7 +243,7 @@ func TestBooleanVertexBoundsComposePerPair(t *testing.T) {
 		}
 	}
 	for i, w := range want {
-		require.Equal(t, w, f.result.vertexBound[i], `rim vertex %v carries its own pair's bound plus its own weld`, f.result.verts[i])
+		require.Equal(t, w, f.result.vertexBound[i], `rim vertex %v carries its own pair's bound plus its own weld`, f.result.Verts[i])
 	}
 	require.Positive(t, steeper, `some rim crosses more steeply than the pair's shallowest contact`)
 
@@ -263,7 +263,7 @@ func TestBooleanVertexBoundsComposePerPair(t *testing.T) {
 
 	today := proofbound.AbsSumUpper(proofbound.UpRound((f.ma.n.Bound+f.mb.n.Bound)/f.sinMin), maxWeld)
 	require.LessOrEqual(t, f.result.meshBound, today)
-	require.Equal(t, facetproof.FacetBoundMax(f.result.tris, f.result.vertexBound), f.result.meshBound)
+	require.Equal(t, facetproof.FacetBoundMax(f.result.Tris, f.result.vertexBound), f.result.meshBound)
 	t.Logf("meshBound %.3g, global composition %.3g, operand deltas %.3g / %.3g", f.result.meshBound, today, f.ma.n.Bound, f.mb.n.Bound)
 }
 
@@ -298,7 +298,7 @@ func TestBooleanVertexBoundsChargeEachRimItsWeld(t *testing.T) {
 		p := r.p
 		require.Zero(t, r.own)
 		i := f.held(t, p)
-		v := f.result.verts[i]
+		v := f.result.Verts[i]
 		px, py, pz := proof.XhpRat(proof.Xhp(p))
 		d2 := new(big.Rat)
 		for _, pair := range [][2]*big.Rat{{px, new(big.Rat).SetFloat64(v.X)}, {py, new(big.Rat).SetFloat64(v.Y)}, {pz, new(big.Rat).SetFloat64(v.Z)}} {

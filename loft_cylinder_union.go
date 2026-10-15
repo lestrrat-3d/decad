@@ -797,7 +797,7 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 		proofBodies[i] = parts[i].body
 		axialBridge[i] = parts[i].bridge
 	}
-	fp := facetedPayload{verts: mesh.verts, tris: mesh.tris, src: mesh.src,
+	fp := facetedPayload{Verts: mesh.verts, Tris: mesh.tris, Src: mesh.src,
 		groups: mesh.groups, vertexBound: vertexBound, contactAudited: true,
 		meshBound: bound, volSymDiff: volumeGap, areaSlack: areaSlack,
 		dPair: facetedSourceDiameterUpper(mesh.verts, bound),

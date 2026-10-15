@@ -26,7 +26,7 @@ func loftCylinderChamferBoreInheritance(fp facetedPayload, mesh *joinedMesh,
 		proofbound.AbsSumUpper(source.boreRadius, source.boreBound, source.innerInset) >= source.blankRadius {
 		return fmt.Errorf("%w: chamfer bore lost its source radial bound", ErrUnsupported)
 	}
-	if len(mesh.verts) < len(fp.verts) || len(fp.tris) != len(fp.src) ||
+	if len(mesh.verts) < len(fp.Verts) || len(fp.Tris) != len(fp.Src) ||
 		len(mesh.tris) != len(mesh.src) {
 		return fmt.Errorf("%w: chamfer bore has incomplete held triangles", ErrUnsupported)
 	}
@@ -35,16 +35,16 @@ func loftCylinderChamferBoreInheritance(fp facetedPayload, mesh *joinedMesh,
 			return fmt.Errorf("%w: chamfer bore lost its inner cap loop", ErrUnsupported)
 		}
 		for i, index := range ring {
-			if index != record.inner[cap][i] || index < 0 || index >= len(fp.verts) ||
-				mesh.verts[index] != fp.verts[index] {
+			if index != record.inner[cap][i] || index < 0 || index >= len(fp.Verts) ||
+				mesh.verts[index] != fp.Verts[index] {
 				return fmt.Errorf("%w: chamfer bore changed an inner cap station", ErrUnsupported)
 			}
 		}
 	}
 	old := make([][3]int, 0)
-	for i, group := range fp.src {
+	for i, group := range fp.Src {
 		if group == source.boreGroup {
-			old = append(old, fp.tris[i])
+			old = append(old, fp.Tris[i])
 		}
 	}
 	if len(old) == 0 {
@@ -59,7 +59,7 @@ func loftCylinderChamferBoreInheritance(fp facetedPayload, mesh *joinedMesh,
 			return fmt.Errorf("%w: chamfer changed a held bore-wall facet", ErrUnsupported)
 		}
 		for _, index := range mesh.tris[i] {
-			if index < 0 || index >= len(fp.verts) || mesh.verts[index] != fp.verts[index] {
+			if index < 0 || index >= len(fp.Verts) || mesh.verts[index] != fp.Verts[index] {
 				return fmt.Errorf("%w: chamfer changed a held bore-wall vertex", ErrUnsupported)
 			}
 		}

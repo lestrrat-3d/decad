@@ -96,11 +96,11 @@ func TestPlacedCapCentroidReadsPlacementAsExactMap(t *testing.T) {
 // of the production moment loop and dropped-coordinate recovery.
 func pointPlaneCapCentroidThreeMomentReference(ctx context.Context, base facetedPayload,
 	plane *pointPlaneLimit) (VecMeasurement, [3]*big.Rat, bool, error) {
-	if len(base.verts) < 4 || base.pointSection == nil {
+	if len(base.Verts) < 4 || base.pointSection == nil {
 		return VecMeasurement{}, [3]*big.Rat{}, false, nil
 	}
-	polygon := make([][3]*big.Rat, len(base.verts)-1)
-	for i, far := range base.verts[1:] {
+	polygon := make([][3]*big.Rat, len(base.Verts)-1)
+	for i, far := range base.Verts[1:] {
 		if i%32 == 0 {
 			if err := ctx.Err(); err != nil {
 				return VecMeasurement{}, [3]*big.Rat{}, false, err
@@ -185,7 +185,7 @@ func pointPlaneCapCentroidThreeMomentReference(ctx context.Context, base faceted
 
 func testPointCapBase(apex r3.Vec, far []r3.Vec, meshBound float64) facetedPayload {
 	return facetedPayload{
-		verts: append([]r3.Vec{apex}, far...), pointSection: &pointSectionRecord{apex: apex},
+		Verts: append([]r3.Vec{apex}, far...), pointSection: &pointSectionRecord{apex: apex},
 		meshBound: meshBound,
 	}
 }
@@ -205,7 +205,7 @@ func requirePointCapThreeMomentMatch(t *testing.T, base facetedPayload, plane *p
 	require.Equal(t, math.Float64bits(want.Value.Y), math.Float64bits(got.Value.Y))
 	require.Equal(t, math.Float64bits(want.Value.Z), math.Float64bits(got.Value.Z))
 	require.Equal(t, math.Float64bits(want.Bound.Base()), math.Float64bits(got.Bound.Base()))
-	anchor, err := pointPlaneMapExact(base.pointSection.apex, base.verts[1], plane)
+	anchor, err := pointPlaneMapExact(base.pointSection.apex, base.Verts[1], plane)
 	require.NoError(t, err)
 	keep := 0
 	if pointPlaneAbs(plane.nx).Cmp(pointPlaneAbs(plane.ny)) > 0 {

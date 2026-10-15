@@ -54,12 +54,12 @@ func loftCylinderChamferSolidWitness(ctx context.Context, fp facetedPayload,
 		proofarith.XptOf(r3.Vec{X: r, Z: source.z0}),
 		proofarith.XptOf(r3.Vec{X: r, Z: source.z1}),
 		big.NewInt(1), big.NewInt(2))
-	indices := make([]int, len(fp.tris))
+	indices := make([]int, len(fp.Tris))
 	for i := range indices {
 		indices[i] = i
 	}
 	inside, on, err := meshbool.MeshParityPreparedContext(ctx, witness,
-		meshbool.NewParityMesh(fp.verts, fp.tris), indices)
+		meshbool.NewParityMesh(fp.Verts, fp.Tris), indices)
 	if err != nil {
 		return err
 	}

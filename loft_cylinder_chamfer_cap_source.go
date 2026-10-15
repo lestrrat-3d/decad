@@ -23,10 +23,10 @@ func loftCylinderChamferExteriorLineage(fp facetedPayload,
 	edges := make(map[[2]r3.Vec]struct{}, len(outer))
 	for i, index := range outer {
 		next := outer[(i+1)%len(outer)]
-		if index < 0 || index >= len(fp.verts) || next < 0 || next >= len(fp.verts) {
+		if index < 0 || index >= len(fp.Verts) || next < 0 || next >= len(fp.Verts) {
 			return fmt.Errorf("%w: cap outer loop has invalid indices", ErrUnsupported)
 		}
-		edges[[2]r3.Vec{fp.verts[index], fp.verts[next]}] = struct{}{}
+		edges[[2]r3.Vec{fp.Verts[index], fp.Verts[next]}] = struct{}{}
 	}
 	for _, body := range source.teeth {
 		if body == nil {

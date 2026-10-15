@@ -863,10 +863,10 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 		areaSlack = proofbound.AbsSumUpper(areaSlack, allowance)
 	}
 	payload := facetedPayload{
-		verts:       stitched.Verts,
+		Verts:       stitched.Verts,
 		vertexBound: stitched.VertexBound,
-		tris:        stitched.Tris,
-		src:         stitched.Src,
+		Tris:        stitched.Tris,
+		Src:         stitched.Src,
 		groups:      groups,
 		meshBound:   facetproof.FacetBoundMax(stitched.Tris, stitched.VertexBound),
 		volSymDiff:  volSymDiff,
@@ -877,7 +877,7 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 	if err := ctx.Err(); err != nil {
 		return booleanEvaluation{}, err
 	}
-	audit, err := facetproof.AuditFacetedMesh(ctx, payload.verts, payload.tris)
+	audit, err := facetproof.AuditFacetedMesh(ctx, payload.Verts, payload.Tris)
 	if err != nil {
 		return booleanEvaluation{}, err
 	}
@@ -1316,7 +1316,7 @@ func chordOperandOf(ctx context.Context, b *Body) (meshbool.ChordOperand, error)
 func heldPrimitiveFloorOf(b *Body) float64 {
 	switch p := b.n.Payload.(type) {
 	case facetedPayload:
-		if p.loftFacesPrimitive {
+		if p.LoftFacesPrimitive {
 			return p.meshBound
 		}
 		return 0

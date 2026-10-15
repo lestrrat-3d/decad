@@ -81,7 +81,7 @@ func TestPointConeUpperFarPlaneNodeRequiresCapCharge(t *testing.T) {
 func TestPointConeOutsideWitnessRejectsUncertainContact(t *testing.T) {
 	t.Parallel()
 	cone := &pointConeLimit{apex: big.NewRat(13, 1), slope: big.NewRat(1, 1)}
-	base := facetedPayload{verts: []r3.Vec{{}, {X: 8, Y: 5.00001}}}
+	base := facetedPayload{Verts: []r3.Vec{{}, {X: 8, Y: 5.00001}}}
 	require.True(t, pointConeHasOutsideWitness(base, cone))
 	base.meshBound = 0.001
 	require.False(t, pointConeHasOutsideWitness(base, cone))

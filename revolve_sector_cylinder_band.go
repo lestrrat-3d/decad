@@ -80,7 +80,7 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 		band.face == nil || len(band.origins) == 0 ||
 		len(ring.rings[bandIndex]) != n ||
 		ring.groups[bandIndex] < 0 || ring.groups[bandIndex] >= len(joined.groups) ||
-		len(joined.tris) > revolveSectorBoreMaxAuditTriangles-2*n {
+		len(joined.Tris) > revolveSectorBoreMaxAuditTriangles-2*n {
 		return nil, true, fmt.Errorf("%w: bore has no complete cap-adjacent straight band", ErrUnsupported)
 	}
 	cross, ok := revolveSectorStraightBandCross(band.start, band.end, radius)
@@ -103,7 +103,7 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 	rootRing := ring.rings[bandIndex]
 	for i := range n {
 		for _, v := range [...]int{caps.lowOuter[i], caps.highOuter[i], rootRing[i]} {
-			if v < 0 || v >= len(joined.verts) || used[v] {
+			if v < 0 || v >= len(joined.Verts) || used[v] {
 				return nil, true, fmt.Errorf("%w: section band repeats a ring vertex", ErrUnsupported)
 			}
 			used[v] = true
@@ -139,8 +139,8 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 			point r3.Vec
 		}{
 			{radius, r3.Vec{Y: inner[i].U, Z: inner[i].V}},
-			{band.start.V, joined.verts[rootRing[i]]},
-			{band.end.V, joined.verts[caps.lowOuter[i]]},
+			{band.start.V, joined.Verts[rootRing[i]]},
+			{band.end.V, joined.Verts[caps.lowOuter[i]]},
 		} {
 			exactRadius := proofarith.FloatRat(sample.rad)
 			yErr := proofbound.IntervalFloatError(proofbound.IntervalScale(cosIv, exactRadius), sample.point.Y)
@@ -152,8 +152,8 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 				oldRound = max(oldRound, round)
 			}
 		}
-		if joined.verts[rootRing[i]].X != band.start.U ||
-			joined.verts[caps.lowOuter[i]].X != band.end.U {
+		if joined.Verts[rootRing[i]].X != band.start.U ||
+			joined.Verts[caps.lowOuter[i]].X != band.end.U {
 			return nil, true, fmt.Errorf("%w: section band changed its source stations", ErrUnsupported)
 		}
 	}
@@ -183,13 +183,13 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 		}
 	}
 	lowSeen, highSeen := make([]bool, n), make([]bool, n)
-	mesh := &joinedMesh{verts: append([]r3.Vec(nil), joined.verts...),
+	mesh := &joinedMesh{verts: append([]r3.Vec(nil), joined.Verts...),
 		groups: append([]facetGroup(nil), joined.groups...)}
-	for i, tri := range joined.tris {
+	for i, tri := range joined.Tris {
 		if err := ctx.Err(); err != nil {
 			return nil, true, err
 		}
-		cell, fan, err := revolvemesh.SectorCapFan(tri, joined.src[i], caps.lowAxis,
+		cell, fan, err := revolvemesh.SectorCapFan(tri, joined.Src[i], caps.lowAxis,
 			caps.lowGroup, lowPos, n)
 		if err != nil {
 			return nil, true, err
@@ -201,7 +201,7 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 			lowSeen[cell] = true
 			continue
 		}
-		cell, fan, err = revolvemesh.SectorCapFan(tri, joined.src[i], caps.highAxis,
+		cell, fan, err = revolvemesh.SectorCapFan(tri, joined.Src[i], caps.highAxis,
 			caps.highGroup, highPos, n)
 		if err != nil {
 			return nil, true, err
@@ -213,7 +213,7 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 			highSeen[cell] = true
 			continue
 		}
-		if joined.src[i] == bandGroup {
+		if joined.Src[i] == bandGroup {
 			key := revolveSectorSortedTriangle(tri)
 			seen, expected := bandCells[key]
 			if !expected || seen {
@@ -222,10 +222,10 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 			bandCells[key] = true
 			continue
 		}
-		if !revolveSectorTriangleClear(tri, joined.verts, clearance) {
+		if !revolveSectorTriangleClear(tri, joined.Verts, clearance) {
 			return nil, true, fmt.Errorf("%w: untouched face may enter the bore", ErrUnsupported)
 		}
-		mesh.add(tri, joined.src[i])
+		mesh.add(tri, joined.Src[i])
 	}
 	for i := range n {
 		if !lowSeen[i] || !highSeen[i] {
@@ -276,7 +276,7 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 	if err := tessellation.RequireVertexLinks(ctx, len(mesh.verts), mesh.tris); err != nil {
 		return nil, true, err
 	}
-	if len(mesh.tris) != len(joined.tris)+2*n {
+	if len(mesh.tris) != len(joined.Tris)+2*n {
 		return nil, true, fmt.Errorf("%w: band and wall triangle census changed", ErrUnsupported)
 	}
 	patches := revolvemesh.SectorBorePatches(mesh.src, oldCount, n, true, caps.lowGroup, caps.highGroup, bandGroup, wallGroup)
@@ -305,7 +305,7 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 		proofbound.ProductUpper(boreBound, height))
 	volumeGap := proofbound.AbsSumUpper(joined.volSymDiff, sideShell, seamSlab, circleShell)
 	oldHeldArea, err := proofbound.PerturbedAreaUpperContext(ctx,
-		joined.verts, joined.tris, joined.meshBound)
+		joined.Verts, joined.Tris, joined.meshBound)
 	if err != nil {
 		return nil, true, err
 	}
@@ -320,7 +320,7 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 		return nil, true, fmt.Errorf("%w: bore has no finite measure proof", ErrUnsupported)
 	}
 	result := joined
-	result.verts, result.tris, result.src, result.groups = mesh.verts, mesh.tris, mesh.src, mesh.groups
+	result.Verts, result.Tris, result.Src, result.groups = mesh.verts, mesh.tris, mesh.src, mesh.groups
 	result.vertexBound, result.meshBound = vertexBound, bound
 	result.volSymDiff, result.areaSlack = volumeGap, areaSlack
 	result.revolveLoftJoin = nil

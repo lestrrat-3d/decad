@@ -196,7 +196,7 @@ func buildRevolveCapRimBlend(ctx context.Context, body *Body, source revolvemesh
 	areaSlack := math.Max(proofbound.RatFloatUp(trueArea), facetproof.MeshAreaUpper(verts, tris))
 	diameter2 := new(big.Rat).Add(new(big.Rat).Mul(length, length), new(big.Rat).Mul(big.NewRat(2, 1), r2))
 	dPair := proofbound.RatSqrtUp(diameter2)
-	fp := facetedPayload{verts: verts, tris: tris, src: src, groups: groups,
+	fp := facetedPayload{Verts: verts, Tris: tris, Src: src, groups: groups,
 		vertexBound: vertexBound, meshBound: bound, volSymDiff: missing,
 		areaSlack: areaSlack, dPair: dPair, xform: r3.Identity()}
 	out, err := buildFacetedBody(ctx, documentHandle(body.n.Doc), ref, fp)

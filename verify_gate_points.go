@@ -292,7 +292,7 @@ func bodyGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body *Bo
 	stations *diameter.StationMemo) (gatePoints, bool, error) {
 	switch pl := body.n.Payload.(type) {
 	case facetedPayload:
-		return gatePoints{Points: pl.verts}, true, nil
+		return gatePoints{Points: pl.Verts}, true, nil
 	case loftPayload:
 		return gatePoints{Points: pl.Verts, Allow: pl.Delta}, true, nil
 	case twistedSweepPayload:

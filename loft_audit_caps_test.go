@@ -82,8 +82,8 @@ func TestPointLoftAuditsDecideCapsAsFamilies(t *testing.T) {
 	pointLoft := capsAuditFixtureLoft(t, doc)
 	loftPayload, ok := pointLoft.n.Payload.(facetedPayload)
 	require.True(t, ok)
-	n := len(loftPayload.verts) - 1
-	sides := loftPayload.tris[:n]
+	n := len(loftPayload.Verts) - 1
+	sides := loftPayload.Tris[:n]
 
 	type audited struct {
 		name   string
@@ -93,23 +93,23 @@ func TestPointLoftAuditsDecideCapsAsFamilies(t *testing.T) {
 		proofs int
 	}
 	var cases []audited
-	layout, ok := pointLoftCapLayout(loftPayload.tris, n)
+	layout, ok := pointLoftCapLayout(loftPayload.Tris, n)
 	require.True(t, ok)
-	cases = append(cases, audited{"point loft", layout, loftPayload.verts, loftPayload.tris, 1})
+	cases = append(cases, audited{"point loft", layout, loftPayload.Verts, loftPayload.Tris, 1})
 
 	addSlab := func(name string, slab *Body, proofs int) {
 		payload, ok := slab.n.Payload.(facetedPayload)
 		require.True(t, ok)
 		require.NotNil(t, payload.pointPlane)
-		require.Equal(t, sides, payload.pointPlane.base.tris[:n])
+		require.Equal(t, sides, payload.pointPlane.base.Tris[:n])
 		hasApex := payload.pointPlane.lower == nil
 		upperOffset := n
 		if hasApex {
 			upperOffset = 1
 		}
-		layout, ok := pointPlaneSlabCapLayout(payload.pointPlane.base.tris[:n], len(payload.tris), upperOffset, hasApex)
+		layout, ok := pointPlaneSlabCapLayout(payload.pointPlane.base.Tris[:n], len(payload.Tris), upperOffset, hasApex)
 		require.True(t, ok, name)
-		cases = append(cases, audited{name, layout, payload.verts, payload.tris, proofs})
+		cases = append(cases, audited{name, layout, payload.Verts, payload.Tris, proofs})
 	}
 	inner1, slab0 := capsAuditSplit(t, doc, pointLoft, 7.3)
 	addSlab("apex slab 1", inner1, 1)
@@ -125,9 +125,9 @@ func TestPointLoftAuditsDecideCapsAsFamilies(t *testing.T) {
 	require.NoError(t, err)
 	facesPayload, ok := loft.n.Payload.(facetedPayload)
 	require.True(t, ok)
-	facesLayout, ok := loftFacesCapLayout(sides, 2, len(facesPayload.tris))
+	facesLayout, ok := loftFacesCapLayout(sides, 2, len(facesPayload.Tris))
 	require.True(t, ok)
-	cases = append(cases, audited{"LoftFaces", facesLayout, facesPayload.verts, facesPayload.tris, 2})
+	cases = append(cases, audited{"LoftFaces", facesLayout, facesPayload.Verts, facesPayload.Tris, 2})
 
 	for _, c := range cases {
 		work, structured, err := loftmesh.LoftCrossingAuditWithCapsWork(t.Context(), c.verts, c.tris, c.layout)

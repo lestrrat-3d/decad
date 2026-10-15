@@ -52,8 +52,8 @@ func revolveSectorBoreCapRecord(joined facetedPayload) (revolveSectorBoreCaps, b
 	if count < 4 || len(ring.rings) != count || len(ring.groups) != count ||
 		section.axisSpan < 0 || section.axisSpan >= count ||
 		n < 16 || n > revolvemesh.SectorBoreMaxStations ||
-		len(joined.tris) != len(joined.src) ||
-		len(joined.verts) != len(joined.vertexBound) {
+		len(joined.Tris) != len(joined.Src) ||
+		len(joined.Verts) != len(joined.vertexBound) {
 		return caps, false
 	}
 	axis := section.axisSpan
@@ -90,9 +90,9 @@ func revolveSectorBoreCapRecord(joined facetedPayload) (revolveSectorBoreCaps, b
 	caps.highOuter = ring.rings[(caps.high+1)%count]
 	if caps.lowAxis == caps.highAxis ||
 		caps.lowAxis < 0 || caps.highAxis < 0 ||
-		caps.lowAxis >= len(joined.verts) || caps.highAxis >= len(joined.verts) ||
-		joined.verts[caps.lowAxis] != (r3.Vec{X: caps.lowX}) ||
-		joined.verts[caps.highAxis] != (r3.Vec{X: caps.highX}) {
+		caps.lowAxis >= len(joined.Verts) || caps.highAxis >= len(joined.Verts) ||
+		joined.Verts[caps.lowAxis] != (r3.Vec{X: caps.lowX}) ||
+		joined.Verts[caps.highAxis] != (r3.Vec{X: caps.highX}) {
 		return caps, false
 	}
 	return caps, true
@@ -186,7 +186,7 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 	joined facetedPayload, caps revolveSectorBoreCaps, radius float64, wall *Face) (*Body, bool, error) {
 	ring := joined.revolveLoftJoin.capRing
 	n := len(ring.angles)
-	if len(joined.tris) > revolveSectorBoreMaxAuditTriangles-4*n ||
+	if len(joined.Tris) > revolveSectorBoreMaxAuditTriangles-4*n ||
 		radius >= min(caps.lowRadius, caps.highRadius) {
 		return nil, true, fmt.Errorf("%w: bore does not fit inside both radial caps", ErrUnsupported)
 	}
@@ -218,7 +218,7 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 	used := map[int]bool{caps.lowAxis: true, caps.highAxis: true}
 	for i := range n {
 		for _, v := range [...]int{caps.lowOuter[i], caps.highOuter[i]} {
-			if v < 0 || v >= len(joined.verts) || used[v] {
+			if v < 0 || v >= len(joined.Verts) || used[v] {
 				return nil, true, fmt.Errorf("%w: cap ring repeats a vertex", ErrUnsupported)
 			}
 			used[v] = true
@@ -226,13 +226,13 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 		lowPos[caps.lowOuter[i]], highPos[caps.highOuter[i]] = i, i
 	}
 	lowSeen, highSeen := make([]bool, n), make([]bool, n)
-	mesh := &joinedMesh{verts: append([]r3.Vec(nil), joined.verts...),
+	mesh := &joinedMesh{verts: append([]r3.Vec(nil), joined.Verts...),
 		groups: append([]facetGroup(nil), joined.groups...)}
-	for i, tri := range joined.tris {
+	for i, tri := range joined.Tris {
 		if err := ctx.Err(); err != nil {
 			return nil, true, err
 		}
-		cell, fan, err := revolvemesh.SectorCapFan(tri, joined.src[i], caps.lowAxis,
+		cell, fan, err := revolvemesh.SectorCapFan(tri, joined.Src[i], caps.lowAxis,
 			caps.lowGroup, lowPos, n)
 		if err != nil {
 			return nil, true, err
@@ -244,7 +244,7 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 			lowSeen[cell] = true
 			continue
 		}
-		cell, fan, err = revolvemesh.SectorCapFan(tri, joined.src[i], caps.highAxis,
+		cell, fan, err = revolvemesh.SectorCapFan(tri, joined.Src[i], caps.highAxis,
 			caps.highGroup, highPos, n)
 		if err != nil {
 			return nil, true, err
@@ -256,10 +256,10 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 			highSeen[cell] = true
 			continue
 		}
-		if !revolveSectorTriangleClear(tri, joined.verts, clearance) {
+		if !revolveSectorTriangleClear(tri, joined.Verts, clearance) {
 			return nil, true, fmt.Errorf("%w: untouched face may enter the bore", ErrUnsupported)
 		}
-		mesh.add(tri, joined.src[i])
+		mesh.add(tri, joined.Src[i])
 	}
 	for i := range n {
 		if !lowSeen[i] || !highSeen[i] {
@@ -303,7 +303,7 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 	if err := tessellation.RequireVertexLinks(ctx, len(mesh.verts), mesh.tris); err != nil {
 		return nil, true, err
 	}
-	if len(mesh.tris) != len(joined.tris)+4*n {
+	if len(mesh.tris) != len(joined.Tris)+4*n {
 		return nil, true, fmt.Errorf("%w: cap and wall triangle census changed", ErrUnsupported)
 	}
 	patches := revolvemesh.SectorBorePatches(mesh.src, oldCount, n, false, caps.lowGroup, caps.highGroup, -1, wallGroup)
@@ -339,7 +339,7 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 		return nil, true, fmt.Errorf("%w: bore has no finite measure proof", ErrUnsupported)
 	}
 	result := joined
-	result.verts, result.tris, result.src, result.groups = mesh.verts, mesh.tris, mesh.src, mesh.groups
+	result.Verts, result.Tris, result.Src, result.groups = mesh.verts, mesh.tris, mesh.src, mesh.groups
 	result.vertexBound, result.meshBound = vertexBound, bound
 	result.volSymDiff, result.areaSlack = volumeGap, areaSlack
 	result.revolveLoftJoin = nil

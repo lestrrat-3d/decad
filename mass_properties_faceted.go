@@ -17,7 +17,7 @@ import (
 // certificate, and admits them only when the VerifyAll mesh restating them
 // publishes the same certificate.
 func facetedMassProperties(ctx context.Context, b *Body, pp facetedPayload, density units.Value) (MassProperties, error) {
-	if len(pp.verts) == 0 || len(pp.tris) == 0 || proofbound.IsNonFinite(pp.meshBound) || pp.meshBound < 0 ||
+	if len(pp.Verts) == 0 || len(pp.Tris) == 0 || proofbound.IsNonFinite(pp.meshBound) || pp.meshBound < 0 ||
 		proofbound.IsNonFinite(pp.volSymDiff) || pp.volSymDiff < 0 {
 		return MassProperties{}, fmt.Errorf("%w: faceted mass has no finite occupied-volume certificate", ErrUnsupported)
 	}
@@ -29,10 +29,10 @@ func facetedMassProperties(ctx context.Context, b *Body, pp facetedPayload, dens
 		mesh.n.VolSymDiff != pp.volSymDiff || mesh.n.Bound != pp.meshBound {
 		return MassProperties{}, fmt.Errorf("%w: faceted mass has no matching verified mesh certificate", ErrUnsupported)
 	}
-	if err := massmoment.AuditMesh(ctx, pp.verts, pp.tris, pp.contactAudited); err != nil {
+	if err := massmoment.AuditMesh(ctx, pp.Verts, pp.Tris, pp.contactAudited); err != nil {
 		return MassProperties{}, err
 	}
 	// Anchor at a held corner before summing tetrahedra.
 	return massPropertiesFromReadings(
-		massmoment.HeldMeshMassProperties(ctx, b.n.Bounds, pp.verts[0], pp.verts, pp.tris, pp.volSymDiff, density))
+		massmoment.HeldMeshMassProperties(ctx, b.n.Bounds, pp.Verts[0], pp.Verts, pp.Tris, pp.volSymDiff, density))
 }
