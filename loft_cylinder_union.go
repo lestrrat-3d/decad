@@ -23,7 +23,8 @@ import (
 // A cylinder joined to a matching axial Loft keeps the original operands.
 // Subsequent placements of that same Loft rebuild the common cylinder ring.
 type loftCylinderJoinRecord struct {
-	blank *Body
+	blank     *Body
+	placement *loftCylinderPlacement
 	// teeth are the exact Union operands. proofTeeth are private, axially
 	// normalized witnesses whose mesh proofs include axialBridge.
 	teeth, proofTeeth []*Body
@@ -87,9 +88,13 @@ func tryLoftCylinderUnion(ctx context.Context, op meshbool.OperationKind,
 		blank = fp.loftCylinderJoin.blank
 		teeth = append(append([]*Body(nil), fp.loftCylinderJoin.teeth...), a)
 	} else {
-		return nil, false, nil
+		return tryPlacedLoftCylinderUnion(ctx, d, ref, a, b)
 	}
-	return tryLoftCylinderUnionTeeth(ctx, d, ref, blank, teeth)
+	body, ok, err := tryLoftCylinderUnionTeeth(ctx, d, ref, blank, teeth)
+	if err != nil || ok {
+		return body, ok, err
+	}
+	return tryPlacedLoftCylinderUnion(ctx, d, ref, a, b)
 }
 
 // tryLoftCylinderUnionTeeth certifies one complete circular Join from its
