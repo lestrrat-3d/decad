@@ -18,8 +18,8 @@ type allEdgeAxisMap struct {
 // exact signed-axis isometry. Each published coordinate is compared with its
 // rational image, so the rebuilt corners still denote the rigid image of the
 // original body. Other rigid motions retain the bounded refusal in §4.3b.
-func (p allEdgeChamferPayload) placedGeometry() (allEdgeChamferPayload, allEdgeAxisMap, error) {
-	basis := p.xform.Basis()
+func (p allEdgeChamferPayload) PlacedGeometry() (allEdgeChamferPayload, allEdgeAxisMap, error) {
+	basis := p.Xform.Basis()
 	images := [3]r3.Vec{basis.EX, basis.EY, basis.EZ}
 	axisMap := allEdgeAxisMap{source: [3]int{-1, -1, -1}}
 	for sourceAxis, image := range images {
@@ -46,40 +46,40 @@ func (p allEdgeChamferPayload) placedGeometry() (allEdgeChamferPayload, allEdgeA
 		return allEdgeChamferPayload{}, allEdgeAxisMap{},
 			fmt.Errorf(`%w: the placed all-edge chamfer bore must stay along y`, ErrUnsupported)
 	}
-	translation := p.xform.Translation()
+	translation := p.Xform.Translation()
 	shift := [3]float64{translation.X, translation.Y, translation.Z}
 	placed := p
-	placed.xform = r3.Identity()
+	placed.Xform = r3.Identity()
 	for axis := range 3 {
 		sourceAxis := axisMap.source[axis]
 		sign := axisMap.sign[axis]
-		for sourceSide, original := range p.box[sourceAxis] {
+		for sourceSide, original := range p.Box[sourceAxis] {
 			var point [3]float64
 			point[sourceAxis] = original
-			image := p.xform.Apply(vec(point))
+			image := p.Xform.Apply(vec(point))
 			coordinate := [3]float64{image.X, image.Y, image.Z}[axis]
 			if !finiteExactImage(coordinate, float64(sign)*original, shift[axis]) {
 				return allEdgeChamferPayload{}, allEdgeAxisMap{},
 					fmt.Errorf(`%w: a placed all-edge chamfer box endpoint rounded`, ErrUnsupported)
 			}
-			placed.box[axis][axisMap.sourceSide(axis, sourceSide)] = coordinate
+			placed.Box[axis][axisMap.sourceSide(axis, sourceSide)] = coordinate
 		}
 	}
-	center := p.xform.Apply(r3.NewVec(p.center[0], 0, p.center[1]))
+	center := p.Xform.Apply(r3.NewVec(p.Center[0], 0, p.Center[1]))
 	centerImage := [3]float64{center.X, center.Y, center.Z}
 	for _, axis := range []int{0, 2} {
 		sourceAxis := axisMap.source[axis]
-		original := p.center[0]
+		original := p.Center[0]
 		if sourceAxis == 2 {
-			original = p.center[1]
+			original = p.Center[1]
 		}
 		if !finiteExactImage(centerImage[axis], float64(axisMap.sign[axis])*original, shift[axis]) {
 			return allEdgeChamferPayload{}, allEdgeAxisMap{},
 				fmt.Errorf(`%w: the placed all-edge chamfer bore center rounded`, ErrUnsupported)
 		}
-		placed.center[axis/2] = centerImage[axis]
+		placed.Center[axis/2] = centerImage[axis]
 	}
-	if !placed.admitBox() || !placed.exactCoordinates() {
+	if !placed.AdmitBox() || !placed.ExactCoordinates() {
 		return allEdgeChamferPayload{}, allEdgeAxisMap{},
 			fmt.Errorf(`%w: a placed all-edge chamfer corner is not exactly representable`, ErrUnsupported)
 	}
