@@ -1038,7 +1038,7 @@ func requireVolumeProvingPayload(ctx context.Context, b *Body, index int) error 
 			}
 			err = refusal
 		case twoSidedDraftPayload:
-			for _, half := range []draftPayload{pl.negative, pl.positive} {
+			for _, half := range []draftPayload{pl.Negative, pl.Positive} {
 				refusal, aErr := draftOccupiedVolumeAdmission(proofbound.NewWorkBudget(ctx), half)
 				if aErr != nil {
 					return aErr

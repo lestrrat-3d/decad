@@ -11,7 +11,7 @@ import (
 // This file is docs/draft-design.md Table DD row DD1: a draft body's
 // tessellation and its occupied-volume proof. A draft body is built as the
 // cap-loop band of docs/modify-reach-design.md §8.3 with no straight slab
-// (draftPayload.band), so it is meshed by the cap-loop chamfer tessellator
+// (draftPayload.Band), so it is meshed by the cap-loop chamfer tessellator
 // over that same view (tessellate_capblend.go, docs/tessellation-reach-design.md
 // §7) with four differences, each stated where it applies:
 //
@@ -38,17 +38,17 @@ import (
 
 // tessellateDraft meshes a draft body through its band view.
 func tessellateDraft(ctx context.Context, b *Body, dp draftPayload, chord float64, verify Verification) (*Mesh, error) {
-	if len(dp.patches) == 0 || len(dp.bandDelta) == 0 {
+	if len(dp.Patches) == 0 || len(dp.BandDelta) == 0 {
 		return nil, fmt.Errorf(`%w: the tapered extrude's payload states no wall band geometry`, ErrDegenerate)
 	}
-	return tessellateCapBlend(ctx, b, dp.band(), chord, verify)
+	return tessellateCapBlend(ctx, b, dp.Band(), chord, verify)
 }
 
 // draftOccupiedVolumeAdmission is requireVolumeProvingPayload's question for a
 // draft body: docs/tessellation-reach-design.md §7's admission over its band
 // view, the same predicate tessellateCapBlend reads before it publishes.
 func draftOccupiedVolumeAdmission(budget *proofbound.WorkBudget, dp draftPayload) (error, error) {
-	return capBlendOccupiedVolumeAdmission(budget, dp.band())
+	return capBlendOccupiedVolumeAdmission(budget, dp.Band())
 }
 
 // draftNearLevel is the near cap's level in a draft band view beside its own

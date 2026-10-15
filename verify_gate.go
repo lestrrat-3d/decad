@@ -217,11 +217,11 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		return draftGateDiameter(ctx, body, payload)
 	}
 	if payload, ok := body.n.Payload.(twoSidedDraftPayload); ok {
-		negative, okNeg, err := draftGateDiameter(ctx, body, payload.negative)
+		negative, okNeg, err := draftGateDiameter(ctx, body, payload.Negative)
 		if err != nil {
 			return 0, false, err
 		}
-		positive, okPos, err := draftGateDiameter(ctx, body, payload.positive)
+		positive, okPos, err := draftGateDiameter(ctx, body, payload.Positive)
 		if err != nil {
 			return 0, false, err
 		}
@@ -418,11 +418,11 @@ func draftGateDiameter(ctx context.Context, body *Body, dp draftPayload) (float6
 // section at the far level, each as a prism of zero height, beside the
 // displacement their stations carry: the levels' and farDelta.
 func draftCapPrisms(dp draftPayload) ([]prismPayload, float64) {
-	nearZ, _, farZ, _ := dp.levels()
+	nearZ, _, farZ, _ := dp.Levels()
 	level := func(profile profileRecord, z float64) prismPayload {
-		return prismrecord.Payload{Profile: profile, Frame: dp.frame, Z0: z, Z1: z, Xform: dp.xform}
+		return prismrecord.Payload{Profile: profile, Frame: dp.Frame, Z0: z, Z1: z, Xform: dp.Xform}
 	}
-	return []prismPayload{level(dp.profile, nearZ), level(dp.far, farZ)}, proofbound.AbsSumUpper(dp.AxialDelta(), dp.farDelta)
+	return []prismPayload{level(dp.Profile, nearZ), level(dp.Far, farZ)}, proofbound.AbsSumUpper(dp.AxialDelta(), dp.FarDelta)
 }
 
 // gateWitnessPrism builds the straight prism fallbackGateDiameter reads its

@@ -70,14 +70,14 @@ func TestDraftPayloadRecordsTheFarSection(t *testing.T) {
 	b := draftSlot(t)
 	dp, ok := b.n.Payload.(draftPayload)
 	require.True(t, ok)
-	require.True(t, dp.nearStart)
-	require.Greater(t, dp.d, 0.0)
-	require.Greater(t, dp.farDelta, 0.0)
-	require.Len(t, dp.far.Outer.Segments, 4)
-	require.Empty(t, dp.far.Holes)
-	for _, seg := range dp.far.Outer.Segments {
+	require.True(t, dp.NearStart)
+	require.Greater(t, dp.D, 0.0)
+	require.Greater(t, dp.FarDelta, 0.0)
+	require.Len(t, dp.Far.Outer.Segments, 4)
+	require.Empty(t, dp.Far.Holes)
+	for _, seg := range dp.Far.Outer.Segments {
 		if arc, ok := seg.(arcSeg); ok {
-			require.InDelta(t, 5-dp.d, math.Hypot(arc.Start.U-arc.Center.U, arc.Start.V-arc.Center.V), 1e-12)
+			require.InDelta(t, 5-dp.D, math.Hypot(arc.Start.U-arc.Center.U, arc.Start.V-arc.Center.V), 1e-12)
 		}
 	}
 }
@@ -90,8 +90,8 @@ func TestDraftConeWallsReadNoChordLocusTerm(t *testing.T) {
 	t.Parallel()
 	b := draftSlot(t)
 	dp := b.n.Payload.(draftPayload)
-	cbp := dp.band()
-	nearZ, nearDelta, farZ, matSign := dp.levels()
+	cbp := dp.Band()
+	nearZ, nearDelta, farZ, matSign := dp.Levels()
 	work := freeform.NewFreeformWork()
 	loop := cbp.Loops()[0]
 	near, err := draftNearRim(t.Context(), cbp.PrismLike(0, 0), 0, loop, nearZ, nearDelta, work)

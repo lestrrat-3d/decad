@@ -85,7 +85,7 @@ type Payload struct {
 	// placement-invariant, exactly as patches is.
 	BandDelta map[BandKey]float64
 	// draft marks the view a draft body builds its wall band through
-	// (draftPayload.band, draft_build.go): its corners take the sharp offset
+	// (draftPayload.Band, draft_build.go): its corners take the sharp offset
 	// rule (offset2d.SharpJoinsBudget) rather than the reflex-corner arc, its
 	// wall patches carry the prism's side(i, j) roles, and its rim and ruling
 	// edges take the prism's convexity (docs/draft-design.md §2, §6). A
@@ -94,7 +94,7 @@ type Payload struct {
 	// fillet marks a route L view whose inward circular walk may collapse to
 	// one pole. A chamfer or draft never uses that contour rule.
 	Fillet bool
-	// draftKept is a draft view's draftPayload.kept: the recorded segments of
+	// draftKept is a draft view's draftPayload.Kept: the recorded segments of
 	// the walls a subset draft leaves in place, which every per-walk reading
 	// of the band offsets by zero (walkAmounts). Empty moves every wall.
 	DraftKept map[offset2d.DraftWall]struct{}

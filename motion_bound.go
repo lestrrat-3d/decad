@@ -41,7 +41,7 @@ func moverRecordRadius(ctx context.Context, b *Body) float64 {
 	case draftPayload:
 		return draftMoverRecordRadius(pl)
 	case twoSidedDraftPayload:
-		return math.Max(draftMoverRecordRadius(pl.negative), draftMoverRecordRadius(pl.positive))
+		return math.Max(draftMoverRecordRadius(pl.Negative), draftMoverRecordRadius(pl.Positive))
 	case revolvePayload:
 		coordUpper, err := momentinput.CoordinateUpper(pl.Profile, freeform.NewFreeformWork(), nil)
 		if err != nil {
@@ -57,15 +57,15 @@ func moverRecordRadius(ctx context.Context, b *Body) float64 {
 // Every draft point lies on an end section or a ruling between them. Bound
 // both section coordinate envelopes, then include the far contour's gap.
 func draftMoverRecordRadius(pl draftPayload) float64 {
-	nearUpper, err := motionbound.DraftSectionCoordinateUpper(pl.profile)
+	nearUpper, err := motionbound.DraftSectionCoordinateUpper(pl.Profile)
 	if err != nil {
 		return math.Inf(1)
 	}
-	farUpper, err := motionbound.DraftSectionCoordinateUpper(pl.far)
+	farUpper, err := motionbound.DraftSectionCoordinateUpper(pl.Far)
 	if err != nil {
 		return math.Inf(1)
 	}
-	coordUpper := math.Max(nearUpper, proofbound.AbsSumUpper(farUpper, pl.farDelta))
-	zUpper := proofbound.AbsSumUpper(math.Max(math.Abs(pl.z0), math.Abs(pl.z1)), pl.AxialDelta())
-	return motionbound.LinearRecordRadius(pl.frame, coordUpper, zUpper)
+	coordUpper := math.Max(nearUpper, proofbound.AbsSumUpper(farUpper, pl.FarDelta))
+	zUpper := proofbound.AbsSumUpper(math.Max(math.Abs(pl.Z0), math.Abs(pl.Z1)), pl.AxialDelta())
+	return motionbound.LinearRecordRadius(pl.Frame, coordUpper, zUpper)
 }

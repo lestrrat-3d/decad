@@ -23,15 +23,15 @@ import (
 // torus, mass readings and occupied-volume proof from that meridian.
 func tryDraftCircleRimFillet(ctx context.Context, b *Body, edges []*Edge, radius, radiusDelta float64) (*Body, bool, error) {
 	dp, ok := b.n.Payload.(draftPayload)
-	if !ok || !dp.nearStart || dp.taper <= 0 || len(dp.kept) != 0 ||
-		len(dp.profile.Holes) != 0 || len(dp.profile.Outer.Segments) != 1 || len(edges) != 1 {
+	if !ok || !dp.NearStart || dp.Taper <= 0 || len(dp.Kept) != 0 ||
+		len(dp.Profile.Holes) != 0 || len(dp.Profile.Outer.Segments) != 1 || len(edges) != 1 {
 		return nil, false, nil
 	}
-	circle, ok := dp.profile.Outer.Segments[0].(circleSeg)
-	if !ok || !circle.CCW || len(dp.far.Outer.Segments) != 1 || !exactSignedAxisFrame(dp.frame) {
+	circle, ok := dp.Profile.Outer.Segments[0].(circleSeg)
+	if !ok || !circle.CCW || len(dp.Far.Outer.Segments) != 1 || !exactSignedAxisFrame(dp.Frame) {
 		return nil, false, nil
 	}
-	if _, ok := dp.far.Outer.Segments[0].(circleSeg); !ok {
+	if _, ok := dp.Far.Outer.Segments[0].(circleSeg); !ok {
 		return nil, false, nil
 	}
 	caps := prismCapsOf(b)
@@ -46,9 +46,9 @@ func tryDraftCircleRimFillet(ctx context.Context, b *Body, edges []*Edge, radius
 	}
 	near := proofbound.MeasuredScalar(nearRadius, nearDelta)
 	height := proofbound.BoundedSub(
-		proofbound.MeasuredScalar(dp.z1, dp.z1Delta),
-		proofbound.MeasuredScalar(dp.z0, dp.z0Delta))
-	amount := proofbound.MeasuredScalar(dp.d, dp.dDelta)
+		proofbound.MeasuredScalar(dp.Z1, dp.Z1Delta),
+		proofbound.MeasuredScalar(dp.Z0, dp.Z0Delta))
+	amount := proofbound.MeasuredScalar(dp.D, dp.DDelta)
 	fillet := proofbound.MeasuredScalar(radius, radiusDelta)
 	slope := proofbound.BoundedDiv(amount, height)
 	unit := proofbound.ExactScalar(1)
@@ -74,12 +74,12 @@ func tryDraftCircleRimFillet(ctx context.Context, b *Body, edges []*Edge, radius
 	// sweep of at most a quarter turn, and adding centre and radius motion,
 	// moves every arc point by less than 16*epsilon. The 64-fold charge also
 	// covers every constructed line and the frame-origin lift.
-	point := prismrecord.Payload{Profile: dp.profile, Frame: dp.frame, Z0: dp.z0,
-		Z0Delta: dp.z0Delta, Xform: r3.Identity()}
+	point := prismrecord.Payload{Profile: dp.Profile, Frame: dp.Frame, Z0: dp.Z0,
+		Z0Delta: dp.Z0Delta, Xform: r3.Identity()}
 	originDelta := point.PointBound(proofbound.ExactScalar(circle.Center.U),
-		proofbound.ExactScalar(circle.Center.V), proofbound.MeasuredScalar(dp.z0, dp.z0Delta))
+		proofbound.ExactScalar(circle.Center.V), proofbound.MeasuredScalar(dp.Z0, dp.Z0Delta))
 
-	epsilon := math.Max(originDelta, dp.farDelta)
+	epsilon := math.Max(originDelta, dp.FarDelta)
 	for _, q := range []proofbound.BoundedScalar{near, far, height, fillet,
 		centerR, centerZ, sideR, sideZ} {
 		epsilon = math.Max(epsilon, q.Bound)
@@ -103,8 +103,8 @@ func tryDraftCircleRimFillet(ctx context.Context, b *Body, edges []*Edge, radius
 		line(sideEnd, baseEnd),
 		line(baseEnd, zero),
 	}}}
-	origin := dp.frame.ToWorldUV(circle.Center.U, circle.Center.V).Add(dp.frame.N().Scale(dp.z0))
-	frame, err := r3.NewFrame(origin, dp.frame.N(), dp.frame.U())
+	origin := dp.Frame.ToWorldUV(circle.Center.U, circle.Center.V).Add(dp.Frame.N().Scale(dp.Z0))
+	frame, err := r3.NewFrame(origin, dp.Frame.N(), dp.Frame.U())
 	if err != nil {
 		return nil, true, fmt.Errorf(`%w: the tapered circle's meridian frame: %v`, ErrUnsupported, err)
 	}
@@ -122,7 +122,7 @@ func tryDraftCircleRimFillet(ctx context.Context, b *Body, edges []*Edge, radius
 	}
 	result, err := bodyResult(revolveplan.Build(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), revolvePayload{
 		Profile: profile, Frame: frame, Ax: ax, Phi0: phi0, Phi1: phi1, Full: full,
-		Den: den, Xform: dp.xform, RadialProof: ax.RadialProof,
+		Den: den, Xform: dp.Xform, RadialProof: ax.RadialProof,
 		SectionDelta: sectionDelta, SectionWhole: true,
 		BlendSegs: []map[int]struct{}{{2: {}}}, BlendKind: "fillet",
 		DraftCircleCaps: true,

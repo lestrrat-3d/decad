@@ -8,7 +8,7 @@ import (
 
 // This file is a draft body's undercut survey (docs/draft-design.md Table DD
 // row DD7). Every wall of a draft body is a patch of its band view
-// (draftPayload.band), so the survey reads each wall the way DX7 reads a
+// (draftPayload.Band), so the survey reads each wall the way DX7 reads a
 // chamfer patch (capPatchUndercuts, capblend_survey.go): the wall's own
 // Face.NormalAt, enclosed over its window by capPatchNormalRange, then decided
 // by survey2d.DecidePull at the allowance that reading carries. The allowance
@@ -31,7 +31,7 @@ func draftUndercuts(b *Body, dp draftPayload, pull r3.Vec) undercutOutcome {
 	if !ok {
 		return undercutOutcome{}
 	}
-	pl := dp.band().PrismLike(0, 0)
+	pl := dp.Band().PrismLike(0, 0)
 	m, okM := survey2d.NewPlacedFrameMap(pl.Frame, pl.Xform)
 	if !okM {
 		return undercutOutcome{}
@@ -39,7 +39,7 @@ func draftUndercuts(b *Body, dp draftPayload, pull r3.Vec) undercutOutcome {
 	roles := facesByRole(b)
 	faces := []*Face{}
 	undecided := false
-	if !capPatchUndercuts(roles, pl, dp.patches, p, &faces, &undecided) {
+	if !capPatchUndercuts(roles, pl, dp.Patches, p, &faces, &undecided) {
 		return undercutOutcome{}
 	}
 	for _, cap := range []struct {
