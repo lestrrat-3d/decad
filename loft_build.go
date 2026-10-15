@@ -91,7 +91,7 @@ type loftPayload struct {
 	// §4): true when the build must omit both section caps and publish a
 	// sheet instead of a solid. It is part of the re-evaluable record for the
 	// same reason prismPayload's and revolvePayload's own copies are
-	// (internal/prismrecord, revolve_build.go), so Transform and Copy
+	// (internal/prismrecord, internal/revolveplan/build.go), so Transform and Copy
 	// reproduce the sheet with no further code — a plain solid
 	// loft leaves it false.
 	surfaceResult bool
@@ -397,7 +397,7 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	// guards, and kind BodySheet is what Kind() reports
 	// (docs/surface-design.md §4.3), the same rule prismPayload's and
 	// revolvePayload's own builds already follow (internal/prismrecord/build.go,
-	// revolve_build.go).
+	// internal/revolveplan/build.go).
 	kind := BodySolid
 	if pl.surfaceResult {
 		kind = BodySheet

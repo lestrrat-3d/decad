@@ -6,6 +6,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/patchchain"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 )
@@ -84,6 +85,16 @@ type (
 	patchPayload     = patchchain.Payload
 	bodyPatchPayload = patchchain.BodyPayload
 	bodyPatchChain   = patchchain.Chain
+)
+
+// revolvePayload is the evaluator's own record of a revolved body, and
+// chainRevolvePayload chain Revolve's record of a shell: the
+// internal/revolveplan payloads, which revolveplan.Build and
+// revolveplan.BuildChain evaluate over topology nodes and which implement
+// topo.Payload (docs/evaluator-design.md §6, §8; docs/surface-design.md §13.4).
+type (
+	revolvePayload      = revolveplan.Payload
+	chainRevolvePayload = revolveplan.ChainPayload
 )
 
 type loopRecord = sectionrecord.LoopRecord

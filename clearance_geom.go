@@ -406,9 +406,9 @@ func brepCarrierWalk(seg curveSegment) (survey2d.SegmentWalk, bool) {
 }
 
 // addRevolveFaces builds the revolved body's faces from its own payload. Its
-// cap planes, clearance.AngWindow and witnesses all read rp.phi0/rp.phi1 as the held
+// cap planes, clearance.AngWindow and witnesses all read rp.Phi0/rp.Phi1 as the held
 // sweep angle rather than the angle the record denotes, and folds
-// rp.angularDelta() — scaled by the radial envelope every witness can carry
+// rp.AngularDelta() — scaled by the radial envelope every witness can carry
 // it at, verify_gate.go's own reading of the same displacement — into
 // bodyGeom.delta below, beside the payload's own frame/placement point
 // rounding, the per-face tilt term every plane carrier here can commit

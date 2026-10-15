@@ -37,7 +37,7 @@ func PiScalar() proofbound.BoundedScalar {
 // (aUBound/aVBound/dUBound/dVBound) — exactly zero only when the axis is
 // coordinate-aligned and passes through the origin (every product is by 0 or
 // 1 and nothing rounds), and genuinely positive for any other axis. A
-// revolve wall's or junction circle's radius (j.rho in revolve_build.go) is
+// revolve wall's or junction circle's radius (j.rho in internal/revolveplan/build.go) is
 // exactly this re-expressed value, so a face this arm admits can carry a
 // radius this evaluator has already proven imperfect — the zero-normalBound
 // gate says the face's geometry IS its tag (Plane/Cylinder, not some
@@ -82,7 +82,7 @@ func Dot(a, b r3.Vec) proofbound.BoundedScalar {
 // but this function NEVER evaluates that division: it admits Radius == 0
 // only, where the formula collapses to apex = Origin, Exact, independent of
 // tan(HalfAngle)'s own value. Every construction site in this evaluator
-// (revolve_build.go's wallCone, capblend_geom.go's coneSurface) sets Radius
+// (internal/revolveplan/build.go's wallCone, capblend_geom.go's coneSurface) sets Radius
 // literally to 0 — Origin already IS the apex — so this restriction costs
 // no reachable admitted face; the refusal it adds for a nonzero Radius is
 // exercised at a hand-built internal fixture
@@ -164,7 +164,7 @@ func ConeApex(halfAngle, radius units.Value, origin r3.Vec) (proofbound.BoundedS
 		// exactly that failure. So a nonzero Radius refuses rather than
 		// publish an apex whose own bound this evaluator cannot prove:
 		// Radius is EXACTLY zero at every construction site in this
-		// evaluator (revolve_build.go's wallCone, capblend_geom.go's
+		// evaluator (internal/revolveplan/build.go's wallCone, capblend_geom.go's
 		// coneSurface — Origin is already the apex), so refusing what
 		// nothing builds costs no reachable fixture
 		// (TestStitchConeApexRefusesNonzeroRadius, stitch_internal_test.go).
@@ -206,11 +206,11 @@ func AxisDistanceFromApex(apexX, apexY, apexZ proofbound.BoundedScalar, axis, po
 // a Sphere face only when it carries NO boundary loop at all (this file's
 // only reachable Sphere fixture — docs/surface-design.md's own T50 — mints
 // no latitude circle for either of its two on-axis pole junctions,
-// revolve_build.go's fullRevLoops), so there is no edge here to read a
+// internal/revolveplan/build.go's fullRevLoops), so there is no edge here to read a
 // circumference from at all, not merely one this file declines to trust.
 // The face's own area, by contrast, is ALREADY a proven reading regardless
 // of loop count: it is set at construction time from the profile's own
-// closed-form Pappus integral (revolve_build.go's faceArea, revolvemass.WallAxisMoment),
+// closed-form Pappus integral (internal/revolveplan/build.go's faceArea, revolvemass.WallAxisMoment),
 // the identical value docs/surface-design.md §6.4's Area-sum block already
 // trusts unconditionally for every face kind. Inverting Area = 4πR² through
 // proofbound.BoundedQuotient and proofbound.BoundedSqrt is therefore a reuse of an

@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -865,7 +866,7 @@ func TestRevolvePayloadProvesSimple(t *testing.T) {
 		motion, err := r3.Translation(r3.NewVec(1, 2, 3))
 		require.NoError(t, err)
 		doc := New()
-		body, err := evalRevolveContext(t.Context(), doc, doc.nextProducerID(), rp)
+		body, err := bodyResult(revolveplan.Build(t.Context(), envOf(documentNode(doc), doc.nextProducerID()), rp, freeform.NewFreeformWork()))
 		require.NoError(t, err)
 		doc.commit(body)
 		placed, err := Transform(t.Context(), body, motion)

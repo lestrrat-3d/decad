@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"
@@ -27,7 +28,7 @@ import (
 // the receiver's frame, axis, angular interval and placement.
 //
 // A selected edge maps to its corner by matching the stored analytic edge
-// against the junction circle the build stamps (revolvePayload.junctionCircle),
+// against the junction circle the build stamps (revolvePayload.JunctionCircle),
 // never by a topology index. An edge that matches no junction — a cap edge of a
 // partial turn, or the shared on-axis edge of a wedge — is SX5
 // (ErrUnsupported).
@@ -64,7 +65,7 @@ func (b *Body) blendRevolveJunctions(ctx context.Context, sel EdgeSelector, edge
 	// The section-displacement guard, read as a modify refusal: the rewrite
 	// is of the recorded meridian, and a meridian displaced from the one it
 	// denotes has no proven rewrite (prismrecord.Payload.RequireExactSection's prism reading).
-	if err := requireExactRevolveSection(rp, "this evaluator's junction "+op.kind); err != nil {
+	if err := revolveplan.RequireExactSection(rp, "this evaluator's junction "+op.kind); err != nil {
 		return nil, err
 	}
 
@@ -141,7 +142,7 @@ func (b *Body) blendRevolveJunctions(ctx context.Context, sel EdgeSelector, edge
 	}
 
 	ref := d.nextProducerID()
-	body, err := evalRevolveContextWork(ctx, d, ref, revolvePayload{
+	body, err := bodyResult(revolveplan.Build(ctx, envOf(documentNode(d), ref), revolvePayload{
 		Profile:     profile,
 		Frame:       rp.Frame,
 		Ax:          ax,
@@ -153,7 +154,7 @@ func (b *Body) blendRevolveJunctions(ctx context.Context, sel EdgeSelector, edge
 		RadialProof: ax.RadialProof,
 		BlendSegs:   blendSegs,
 		BlendKind:   op.kind,
-	}, work)
+	}, work))
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +228,7 @@ func newRevolveJunction(rp revolvePayload, basis revolvemesh.RevolveBasis, z, rh
 // curve kind the receiver's sweep stamps — a Circle3 on a full turn, an Arc3
 // on a partial one — with the centre, axis and radius of one junction circle
 // exactly (both radii are millimetre values, so their magnitudes compare
-// directly): the build stamps both from revolvePayload.junctionCircle over the
+// directly): the build stamps both from revolvePayload.JunctionCircle over the
 // same payload, so an equal edge is that junction's own and a cap edge (whose
 // circle lies in a cap plane) or any other curve matches none. found is false
 // for every such edge. A junction whose leaving walk starts at a recorded

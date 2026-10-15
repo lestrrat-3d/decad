@@ -9,10 +9,9 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
-	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -138,53 +137,14 @@ func tryDraftCircleShell(ctx context.Context, b *Body, removed []*Face, sense Sh
 	if err != nil {
 		return nil, true, err
 	}
-	result, err := evalRevolveContextWork(ctx, documentHandle(b.n.Doc), b.n.Doc.NextProducer, revolvePayload{
+	result, err := bodyResult(revolveplan.Build(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), revolvePayload{
 		Profile: profile, Frame: frame, Ax: ax, Phi0: phi0, Phi1: phi1, Full: full,
 		Den: den, Xform: dp.xform, RadialProof: ax.RadialProof,
 		SectionDelta: sectionDelta, SectionWhole: true, DraftCircleShellRoles: true,
-	}, work)
+	}, work))
 	if err != nil {
 		return nil, true, err
 	}
 	out, err := commitModifyResult(ctx, b, result)
 	return out, true, err
-}
-
-// addDraftCircleShellRoles gives the revolved meridian the public shell roles
-// of a cup. The original side roles stay for the revolve's own readers.
-func addDraftCircleShellRoles(ctx context.Context, body *Body, ref producerID) error {
-	roles := map[string]struct {
-		name string
-		kind surfacegeom.SurfaceKind
-	}{
-		"side(0,1)": {roleShellCap, surfacegeom.KindPlane},
-		"side(0,2)": {"shellSide(0,0)", surfacegeom.KindCone},
-		"side(0,3)": {"rim(0)", surfacegeom.KindPlane},
-		"side(0,5)": {provenance.RoleCapStart, surfacegeom.KindPlane},
-	}
-	seen := map[string]struct{}{}
-	for _, face := range body.Faces() {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		for _, source := range face.n.Origins {
-			role, ok := roles[source.Role]
-			if !ok || source.Producer != ref {
-				continue
-			}
-			if face.n.Surface.Kind() != role.kind {
-				return fmt.Errorf(`%w: the tapered circular shell's %s has the wrong surface`,
-					ErrUnsupported, role.name)
-			}
-			if _, exists := seen[role.name]; exists {
-				return fmt.Errorf(`%w: the tapered circular shell repeats %s`, ErrUnsupported, role.name)
-			}
-			face.n.Origins = append(face.n.Origins, provenance.Ref{Producer: ref, Role: role.name})
-			seen[role.name] = struct{}{}
-		}
-	}
-	if len(seen) != len(roles) {
-		return fmt.Errorf(`%w: the tapered circular shell lost a cap, rim or cavity wall`, ErrUnsupported)
-	}
-	return nil
 }

@@ -431,7 +431,7 @@ wall, and no role: a wall face of the sheet is the same face, with the same
 That is the whole of the evaluator work, and it is deliberately small. Every
 builder this option reaches already constructs its walls and its closing faces
 separately — `internal/prismrecord/build.go`'s `prismrecord.BuildLoopSidesAs` walk beside its two caps,
-`revolve_build.go`'s swept walls beside its caps and seams — so the option
+`internal/revolveplan/build.go`'s swept walls beside its caps and seams — so the option
 selects among faces the evaluator already has rather than asking it for new
 geometry. No new surface is derived, so no new bound is derived either.
 
@@ -476,7 +476,7 @@ box face. Every cap is a compact region whose boundary lies in the wall set,
 and a box extreme over a compact region is attained on its boundary, so no
 cap interior point reaches past the walls in any axis direction. The
 evaluator reuses the existing per-payload extent readings (`internal/prismrecord/extent.go`,
-`revolve_extent.go`) verbatim, including their bounds.
+`internal/revolveplan/extent.go`) verbatim, including their bounds.
 
 **`Area` is the solid's area minus the omitted caps' areas.** Each cap area is
 already computed and already carries its own bound
@@ -589,7 +589,7 @@ Four gates, in this order, and each is reject-only:
    two separate calls and are never equal, and nothing about admission ever
    compares the coordinates or the bounds themselves. A revolve's own seam
    is excluded on purpose: its half-plane's normal is itself bounded, not
-   merely its offset, so `revolve_build.go` mints no level token, and a
+   merely its offset, so `internal/revolveplan/build.go` mints no level token, and a
    revolve seam chain stays on the first (exact) arm alone — still
    `ErrUnsupported` (R6). A chain admitted by neither arm is `ErrUnsupported`
    (R6): decad's reject-only rule treats "not proven planar by either arm"
@@ -818,7 +818,7 @@ the evaluator that first builds it — today a straight prism's own rim edge
 and rim vertex (`internal/prismrecord/build.go`, minted fresh per edge and per vertex, with
 no `sectionDelta == 0` precondition: unlike coplanarity, an identity claims
 nothing about the section itself) and a revolve's own internal junction edge
-and its shared vertex (`revolve_build.go`; a revolve's SEAM — its boundary
+and its shared vertex (`internal/revolveplan/build.go`; a revolve's SEAM — its boundary
 copy at `phi0`/`phi1` — mints none, since it never has a partner to weld
 against) — and propagated unchanged, composing the rigid motion it is applied
 under, by every copier that reproduces the same geometry:
@@ -855,7 +855,7 @@ the permanent proof that bit-identity alone never admits, and it stays green
 unchanged by this certificate).
 
 A rebuild from a record — `Transform`/`Copy` re-evaluating a
-straight prism or a revolve from `prismrecord.Build`/`evalRevolveContextWork`
+straight prism or a revolve from `prismrecord.Build`/`revolveplan.Build`
 — mints fresh ids every time, which is safe because a fresh id only ever
 declines: two builds of the identical profile at the identical extent, one
 placed and one not, never share a token regardless. A copy path — Unstitch
@@ -1006,7 +1006,7 @@ point runs along a ruling and is therefore normal-orthogonal by the same
 argument `NormalAt`'s own `Cone` case already encodes (`n = cosβ·radial −
 sinβ·Axis`, orthogonal to any ruling direction). The apex itself is Origin
 when `Radius` is exactly `0` — the ONLY case this evaluator admits, and
-every reachable construction site (`revolve_build.go`, `capblend_geom.go`)
+every reachable construction site (`internal/revolveplan/build.go`, `capblend_geom.go`)
 sets `Radius` to that literal constant (`Origin` already IS the apex), so
 this costs no reachable face. The general formula, `Origin −
 Axis·(Radius/tan(HalfAngle))`, is never evaluated: charging that division
@@ -1414,7 +1414,7 @@ original build already proved coincident (§6.2's amendment, §15's T42).
 
 **A revolve's own internal junction weld now round-trips too, closing back
 to what the never-unstitched sheet itself already published — its own
-free-edge shape, not the whole boundary.** `revolve_build.go` mints a curve
+free-edge shape, not the whole boundary.** `internal/revolveplan/build.go` mints a curve
 token for a junction edge and its shared vertex (the boundary an internal
 `Circle3`/`Arc3` shares between two adjacent side faces before Unstitch ever
 splits them), so `Unstitch` then `Stitch` re-admits that pair on the
@@ -2479,7 +2479,7 @@ is therefore three columns rather than Table W's four.
 | Feature | Sheet faces | Positive side | Free edges |
 |---|---|---|---|
 | `Extrude` over a chain | one wall per recorded segment, by `docs/evaluator-design.md` §5's own per-kind table: a `LineSeg` a `Plane`, a `CircleSeg`/`ArcSeg` fragment a `Cylinder` patch, a free-form segment a `NURBSSurface` | `T × N` at each wall point, `T` the walk tangent and `N` the plane normal — the walk's right-hand side, the identical construction a profile-fed wall's outward normal already takes | both rims of the walk, plus the one sweep edge at each of its two free ends |
-| `Revolve` over a chain, partial sweep | one swept wall per off-axis recorded segment | the same sense, transported through the sweep by `revolve_build.go` unchanged | the walk's own copy at each of `phi0` and `phi1`, plus the arc each off-axis free end sweeps; a free pole mints no arc |
+| `Revolve` over a chain, partial sweep | one swept wall per off-axis recorded segment | the same sense, transported through the sweep by `internal/revolveplan/build.go` unchanged | the walk's own copy at each of `phi0` and `phi1`, plus the arc each off-axis free end sweeps; a free pole mints no arc |
 | `Revolve` over a chain, full revolution | one swept wall per off-axis recorded segment, the walls closing angularly | the same | the circle each off-axis free end sweeps; a free pole mints no circle |
 
 Three readings of Table G are worth stating outright.
@@ -2519,11 +2519,11 @@ path does not have and give one built surface two admissible orientations.
 | faces | one per recorded segment, Table G |
 | `Edges(Free())` | Table G's own count: a full-turn chain with one pole has one free rim; a partial turn with one pole and one segment has two free meridian edges plus one off-axis sweep arc |
 | `Area` | the sum of each wall's own area through `boundedAdd`: `segment length · h` for an extrude, `boundedMul(walkAxisMoment, sweep)` for a revolve. A pole adds zero area. `walkAxisMoment` charges the snapped radial endpoint's bound and the segment-length bound, and that length bound itself carries what the snap discarded: moving an endpoint onto the axis moves the wall's two ends APART as well as inward, by at most the sum of the two discarded radial magnitudes, and the recorded length is the unsnapped one (`axisFrame.walk`). Charging only the radial endpoint would leave a nearly RADIAL wall short — a disk spends the whole discarded radius on its length where a steep cone spends a fraction of it. The sweep carries its angle-denotation bound; `boundedMul` charges the product and `boundedAdd` charges the wall sum. A circular wall also carries its proven integral enclosure, and a free-form wall carries `internal/freeform/spline_length.go`'s proven bracket |
-| `Bounds` | the recorded walk's per-segment analytic extremes swept over the signed interval, from `internal/prismrecord/extent.go` and `revolve_extent.go` verbatim, charging the frame and placement rounding those readings already charge |
+| `Bounds` | the recorded walk's per-segment analytic extremes swept over the signed interval, from `internal/prismrecord/extent.go` and `internal/revolveplan/extent.go` verbatim, charging the frame and placement rounding those readings already charge |
 
 No bound in that table is new, because no geometry is: every wall is built by
 the identical per-segment construction — `prismrecord.BuildLoopSidesAs` for a prism,
-`revolve_build.go`'s wall walk for a revolve — so its surface, its area and its
+`internal/revolveplan/build.go`'s wall walk for a revolve — so its surface, its area and its
 bound are the ones that construction already proves. The tolerance gate's
 reference diameter comes from the same extent readings a profile-fed payload
 supplies it from, so §8's "no sheet payload withholds the gate" holds here
@@ -2826,15 +2826,15 @@ The row-9 curved-mesh obligations are:
 | T80 | a chamfered rectangular plate's own flat band patch (`normalBound` nonzero under a far placement), unstitched at identity | the unstitched face's `NormalAt` published bound at the patch's own held corner still covers the SOURCE face's own `normalBound` — asserted against that face's own value, never a literal, since the bound is architecture-dependent. Shown-to-fail: reverting `copyFaceUnderContext`'s carried `normalBound` to its old zero value turns this red, the published bound falling under the source's own `normalBound` |
 | T81 | a pin extruded `ToFace` against a plate's own cap, where the plate's own extrude depth is stated in inches (a genuine unit-conversion rounding, so the cap's own `AxialDelta` is nonzero) — once against the un-unstitched plate, once against that SAME plate unstitched into its six free sheets first | the two pins' own `Bounds` agree exactly, `Exactness` and `Bound` alike — the equality is the assertion, stronger than either number alone. Shown-to-fail: reverting `copyFaceUnderContext`'s carried `AxialDelta`/`hasAxialDelta` to their old zero value turns the unstitched-cap pin's own `Bounds` `Exact` at a zero bound while the un-unstitched pin's stays `Approximate`, breaking the equality |
 | T82 | the same far-placed chamfered plate's own flat band patch (T80's fixture), unstitched at identity then placed again under a second, non-identity motion | `ErrUnsupported`: `normalBound` is dimensionless and carries no term to absorb a placement's own length-scale rounding, so this evaluator refuses the placed copy rather than invent one. Shown-to-fail: removing `copyFaceUnderContext`'s placed-nonzero-`normalBound` refusal turns this `NoError`, publishing a placed copy whose `normalBound` no longer covers the tag's true departure |
-| T90 | a hand-built revolve payload for a dipped shaft profile (axis exact, an admitted nonzero radial-minimum interval charged by hand), driven directly at `evalRevolveContext` (internal — `TestRevolveAxisBandVolumeContainsEnclosedVolume`) | `Volume` is `Approximate` with a strictly positive `Bound`, and its interval contains the volume the body's own (snapped-topology) cylindrical faces enclose. Shown-to-fail: dropping `revolveAxisAdmitVolumeCharge`'s own charge turns the containment assertion red |
-| T91 | the same shape as T90, a quarter sweep instead of a full turn, driven directly at `evalRevolveContext` (internal — `TestRevolveAxisBandPartialSweepAreaContainsEnclosedArea`) | each of the two cap faces' `Area` is `Approximate` with a strictly positive `Bound`, and its interval contains the area the cap's own snapped loop encloses — the sharper of the two measured consequences, since a cap's loop and its published area come from two different profiles (snapped, unsnapped) whenever the charge is nonzero. Shown-to-fail: dropping the cap `areaBound`'s own charge turns the containment assertion red |
+| T90 | a hand-built revolve payload for a dipped shaft profile (axis exact, an admitted nonzero radial-minimum interval charged by hand), driven directly at `revolveplan.Build` (internal — `TestRevolveAxisBandVolumeContainsEnclosedVolume`) | `Volume` is `Approximate` with a strictly positive `Bound`, and its interval contains the volume the body's own (snapped-topology) cylindrical faces enclose. Shown-to-fail: dropping `revolveAxisAdmitVolumeCharge`'s own charge turns the containment assertion red |
+| T91 | the same shape as T90, a quarter sweep instead of a full turn, driven directly at `revolveplan.Build` (internal — `TestRevolveAxisBandPartialSweepAreaContainsEnclosedArea`) | each of the two cap faces' `Area` is `Approximate` with a strictly positive `Bound`, and its interval contains the area the cap's own snapped loop encloses — the sharper of the two measured consequences, since a cap's loop and its published area come from two different profiles (snapped, unsnapped) whenever the charge is nonzero. Shown-to-fail: dropping the cap `areaBound`'s own charge turns the containment assertion red |
 | T92 | `resolveAxisSide` against an axis-aligned, origin-anchored axis and a profile whose recorded near edge sits exactly on the axis (internal — `TestRevolveAxisBandAllowanceZeroForExactAxis`) | the returned `axisFrame.radialAdmitAllow` is exactly zero, and so are `revolveAxisAdmitBandCharge`/`revolveAxisAdmitVolumeCharge` off it — the charge never widens the common, exact-arithmetic case. Shown-to-fail: charging a spurious nonzero allowance regardless of admission turns this assertion red |
 | T93 | `resolveAxisSide` against the SAME exact axis with the near edge dipped 1e-7 mm below it (internal — `TestRevolveAxisBandRefusesProvenNegativeRadialMinimumUnderExactAxis`; the fixture the investigation measured admitted under the pre-repair tolerance) | `ErrDegenerate`, never an admission with a widened bound — the strict half of the repair: an admission gate may not rest on a tolerance once the radial bound is proven zero. Shown-to-fail: removing the strict refusal turns this assertion red |
 | T94 | `resolveAxisSide` against an axis anchored far from the origin (`aV = 1e10`) on a direction whose components are not exactly representable, mirroring `TestRevolvePayloadProvesSimpleChargesTheAxisOffsetShift`'s own fixture one level up (internal — `TestRevolveAxisBandChargesTheOffsetSubtraction`) | the axis-offset subtraction's own rounding is charged into the bound the "ambiguous side" refusal states, which is never zero. Shown-to-fail: reverting to a bare `rlo -= roff` drops the charge and the fixture wrongly reaches an unrefused, uncharged admission |
 | T95 | a real sketch-solver-resolved shaft profile whose near edge sits AT (not below) `tiltedAxis` (`apitest/revolve_bounds_test.go`'s own anchor/direction), built end to end through `Revolve` (internal — `TestRevolveAxisBandRealGeometryChargedPathVolumeContainment`) | `axisFrame.radialAdmitAllow` is confirmed positive (the charged path, not the strict one, fires on real geometry — `resolveAxisSide`'s own `planeDotDecompositionRoundAllow` charge on its scan arithmetic is what makes this reading agree across architectures instead of one proving the same true-zero radial minimum negative); `Volume`'s published interval contains the plain cylinder its snapped topology encloses; rebuilding the SAME payload with `radialAdmitAllow` zeroed publishes a bound smaller by less than one part in a million, establishing rather than assuming that this real fixture's own charge is swamped by the build's other analytic-rounding terms — T90/T91 are what make the charge itself load-bearing, at a magnitude no real sketch-resolved fixture in this tree reaches. Shown-to-fail: moving the near edge off the axis turns the `radialAdmitAllow` positivity assertion red; comparing the no-charge bound against an arbitrary literal instead of the real one turns the relative-magnitude assertion red |
 | T96 | a 100×60×40 mm axis-aligned box transformed under a rotation about the normalized (1, 2, 3) composed with a 500 mm translation (`apitest/vertex_placement_test.go`'s `TestVertexPlacedPrismBoundEnclosesDisplacement`) | for each of the eight rim vertices, the L∞ residual between the held value and the corner the record, frame and placement denote — computed entirely over `math/big.Rat` and rounded UP into a float64, never a second float answer — sits inside the published `Vertex.Position()` `Bound`. At least one vertex is genuinely displaced, so it reads `Approximate` over a strictly positive bound; a corner whose lift happens to be exact reads `Exact` with a zero bound and a zero residual. No bound is compared against a literal. Shown-to-fail: deleting the lift term `internal/prismrecord/build.go`'s `rimVertex` charges in `prismrecord.BuildLoopSidesAs` turns every vertex `Exact` at a zero bound and the enclosure assertions go red |
 | T97 | the same 100×60 rectangle extruded 40 mm with NO placement, drawn on a tilted, non-origin sketch plane — origin (7, −3, 11), normal the normalized (1, 2, 3) (`TestVertexTiltedPlaneUnplacedBoundEnclosesDisplacement`) | the same reading under the identity transform: lifting a plane-local coordinate through a non-axis-aligned frame rounds with no placement in play, so each rim vertex's bound encloses its exact-rational truth and at least one is `Approximate` over a strictly positive bound. Shown-to-fail: charging the lift only under a non-identity `xform` — the loft/stitch/patch/unstitch pattern, which never has to consider its own frame lift — turns this row red while T100 stays green, so this is the row that isolates the frame lift from the placement |
-| T98 | `annularSketch` revolved a quarter turn `Along` about `uAxis`, then transformed under a rotation about the normalized (1, 2, 3) (`TestVertexPlacedRevolveBoundEnclosesDisplacement`) | the four cap vertices at φ = 0 sit inside their own published bounds, and at least one reads `Approximate` over a strictly positive bound. The sweep starts where sine and cosine evaluate to exactly (1, 0), so the row charges the frame lift and the placement alone and not the angular denotation `apitest/revolve_bounds_test.go` already covers. Shown-to-fail: replacing `revolve_build.go`'s `sweptVertex` comparison with a zero bound turns the assertions red |
+| T98 | `annularSketch` revolved a quarter turn `Along` about `uAxis`, then transformed under a rotation about the normalized (1, 2, 3) (`TestVertexPlacedRevolveBoundEnclosesDisplacement`) | the four cap vertices at φ = 0 sit inside their own published bounds, and at least one reads `Approximate` over a strictly positive bound. The sweep starts where sine and cosine evaluate to exactly (1, 0), so the row charges the frame lift and the placement alone and not the angular denotation `apitest/revolve_bounds_test.go` already covers. Shown-to-fail: replacing `internal/revolveplan/build.go`'s `sweptVertex` comparison with a zero bound turns the assertions red |
 | T99 | a 100×60×20 mm box `Chamfer`ed 5 mm on its complete end-cap loop, then transformed under T96's own motion (`TestVertexPlacedCapBlendBoundEnclosesDisplacement`) | the four cap-level corners sit inside their own published bounds, and at least one reads `Approximate` over a strictly positive bound. A 5 mm chamfer sets each corner back exactly 5 mm along both adjacent edges, so the cap-level corners are the plane-local (5, 5), (95, 5), (95, 55) and (5, 55) at z = 20 by construction and the truth needs no offset-solve reproduction. Shown-to-fail: deleting the lift term `capblend_geom.go`'s `capVertexAt` charges in `buildCapBand` turns the assertions red |
 | T100 | the same prism, revolve and cap-blend shapes built axis-aligned and unplaced (`TestVertexAxisAlignedUnplacedBoundStaysZero`) | every vertex of all three bodies reads `Exact` with a `Bound` of exactly zero: the charge the four rows above pin must not widen the common, exact-arithmetic case. Shown-to-fail: replacing the exact per-vertex lift measurement with a magnitude charge, nonzero whenever a coordinate is, in `prismPayload.LiftedVertex` turns the prism and cap-blend assertions red, and in `revolvePayload.sweptVertex` the revolve one |
 | T110 | `semicircleSketch`'s half-disc (radius 5, centred at u=5) revolved a full turn about its own diameter, `Body.Centroid` (`TestRevolveSemicircleFullTurnCentroidBoundTightens`) | the published bound is a tiny fraction of the body's own 10 mm diameter (never a literal, since `circularSecondMomentInterval`'s bound is architecture-dependent) and still encloses the true (5, 0, 0) centroid — `moments_circular.go`'s new `circularSecondMomentInterval` replaces the old bound of exactly 460.625 mm, wide enough to admit any centroid inside the body. Shown-to-fail: forcing `circularSecondMomentInterval` to answer `ok == false` reproduces the old 460.625 mm envelope and turns the tightness assertion red |
@@ -2859,7 +2859,7 @@ The row-9 curved-mesh obligations are:
 | T140 | two chain `Extrude` ribbons whose free end edges are a proven-coincident, zero-bound pair, `Stitch`ed | the pair welds under Table J's `Line3` row and the result is a `BodySheet` whose `Edges(Free())` resolves to the remaining 6 edges, not 8 — a ribbon is an ordinary stitch operand, admitted by the existing gates and not by a new one |
 | T141 | a chain holding a free-form fragment, chain `Extrude` 10 mm `Along` | `Area` is `Approximate` with a strictly positive `Bound`, and its interval encloses the analytic wall area; `ch.Length · h` sits at or below that interval's lower end, never inside it — the underestimate §13.3 refuses to publish. Shown-to-fail: replacing the per-segment sum with `ch.Length · h` published as `Exact` turns the enclosure assertion red |
 | T142 | a single line from (z = 0, r = 0) to (z = 4, r = 3), spun a full turn about r = 0 | `BodySheet`, one cone face, one free circle, `Bounds` exactly (0, -3, -3)–(4, 3, 3) mm, and `Area` enclosing 15π mm²; the pole adds no edge or area. Shown-to-fail: an otherwise identical start radius within the axis snap band must still enclose the snapped cone's 15π mm² area, and a snapped RADIAL wall — a meridian at constant z, which sweeps a disk — must enclose its own; dropping either of `walkAxisMoment`'s two snap terms, the start radius or the wall length, turns one of those enclosures red |
-| T143 | T142's line spun a quarter turn | one cone face, one pole `Vertex` shared by the two meridian edges, three free edges, and `Area` enclosing 15π/4 mm². Shown-to-fail: zeroing `revolvePayload.sweep`'s width bound turns the area enclosure red |
+| T143 | T142's line spun a quarter turn | one cone face, one pole `Vertex` shared by the two meridian edges, three free edges, and `Area` enclosing 15π/4 mm². Shown-to-fail: zeroing `revolvePayload.Sweep`'s width bound turns the area enclosure red |
 | T144 | a valid half-circle chain from (z = -5, r = 0) to (z = 5, r = 0), spun a full turn | R22 `ErrUnsupported` names BOTH on-axis free ends; no body is committed |
 | T145 | a one-pole cone from (z = 0, r = 0) to (z = 10⁶, r = 3), placed under a 30° rotation | its `Area` value and bound equal the unplaced cone's; one free rim remains; its `Bounds` interval encloses the exact dot products at the rotated rim's x and y extremes. Shown-to-fail: zeroing `extentBoundedAlong`'s final composed bound makes the x enclosure red |
 | T146 | two off-axis lines meeting at one interior point on the revolve axis | R33 `ErrDegenerate` names the interior axis junction; no pinched shell is committed |
@@ -2871,7 +2871,7 @@ The row-9 curved-mesh obligations are:
 | T155 | 100×60 mm `PatchProfile` with a radius-10 mm hole, positive 2 mm | 7 faces; volume and area intervals enclose `12000-200π` mm³ and `12640-160π` mm²; box (0,0,0)–(100,60,2) mm |
 | T156 | internal exact-generation check: U = 2^53 mm axis-parallel edge displaced by 1 mm | R27 `ErrUnsupported`; the held coordinate cannot equal the true derived coordinate |
 | T157 | a composite `Sweep` sheet and a `Loft` sheet | R24 `ErrUnsupported` for both, the composite message naming its missing join proof; both stay live and `Document.Bodies()` is unchanged |
-| T158 | a 10 × 10 mm meridian rectangle at `r ∈ [10, 20]`, `z ∈ [0, 10]` spun a FULL turn as a surface, thickened inward 2 mm | `BodySolid`, 8 faces, one lump whose second shell is the toroidal void the eroded meridian sweeps; `Volume` and `Area` intervals each enclose `1920π` (mm³ and mm²); `Bounds` exactly (−20, 0, −20)–(20, 10, 20) mm; the source sheet is retired and still readable. Shown-to-fail: zeroing `revolvePayload.sweep`'s width bound publishes `Volume` `Exact` at a zero bound, and its interval then excludes `1920π` |
+| T158 | a 10 × 10 mm meridian rectangle at `r ∈ [10, 20]`, `z ∈ [0, 10]` spun a FULL turn as a surface, thickened inward 2 mm | `BodySolid`, 8 faces, one lump whose second shell is the toroidal void the eroded meridian sweeps; `Volume` and `Area` intervals each enclose `1920π` (mm³ and mm²); `Bounds` exactly (−20, 0, −20)–(20, 10, 20) mm; the source sheet is retired and still readable. Shown-to-fail: zeroing `revolvePayload.Sweep`'s width bound publishes `Volume` `Exact` at a zero bound, and its interval then excludes `1920π` |
 | T159 | a radius-5 mm circle centred at `r = 20` spun a full turn as a surface — a one-face torus sheet — thickened outward 2 mm, and separately centered 4 mm | 2 faces each; `Volume` intervals enclose `960π²` and `1600π²` mm³; the outward result's `Bounds` reaches ±27 mm radially and ±7 mm axially. Shown-to-fail: deleting the region integral's own first-moment bound publishes `Volume` `Exact` and its interval then excludes `960π²` |
 | T160 | T158's meridian swept a QUARTER turn as a surface, thickened inward 2 mm | 10 faces — 8 walls and two annular caps of 64 mm² each; `Volume` encloses `480π mm³` and `Area` encloses `480π + 128 mm²`; the source sheet's own `Volume` was `ErrNotSolid` and the result's is a measurement |
 | T161 | a radius-5 mm circle centred at `r = 6` thickened outward 2 mm, and separately T158's sheet about an axis tilted 30° in its own plane | R43 `ErrUnsupported` both ways: the first message names the least radius `−1 mm`, the second the axis that is not along a recorded plane axis. No body is committed and `Document.Bodies()` is unchanged |
@@ -3266,7 +3266,7 @@ names it as the radial-axis half of this arm's missing proof.
 `Q- = P ⊖ t` negative, both at `t/2` centered, and the result's section is
 `Q+ ∖ P`, `P ∖ Q-` or `Q+ ∖ Q-` with the inner loop reversed into the hole walk
 by `reverseLoopRecordContext` — the identical annulus `evalTubeContext`
-assembles for a prism. That section then goes to `evalRevolveContextWork` under
+assembles for a prism. That section then goes to `revolveplan.Build` under
 a `revolvePayload` whose `phi0`, `phi1`, `full`, `den`, `frame` and `xform` are
 the sheet's own, unchanged, and whose `surfaceResult` is false. No level, no
 angle and no placement moves, so a `Thicken` of a quarter-turn sheet spins
@@ -3323,10 +3323,10 @@ undecided axis side for the annulus are R43.
 | `Volume` | `boundedMul(q, sweep)`, Pappus's second theorem over the annulus's own `∫ρ dA`, plus `revolveAxisAdmitVolumeCharge`. Its bound composes the region integral's own bound, `regionSnapAllow.first`, the sweep's own `sweepDenotation` width, and `boundedMul`'s product charge. The snap term is zero wherever the annulus's least radius clears the re-resolved frame's own `snapTol`, and positive where it does not — the radial gate proves that radius STRICTLY positive, which is a weaker statement than clearing the snap band, so the charge is carried rather than argued away |
 | `Area` | `boundedAdd` over each wall's `boundedMul(walkAxisMoment, sweep)`, plus both cap faces' own area and bound for a partial sweep. A circular wall's moment carries `circularAxisMomentTotal`'s rational enclosure and a straight wall's its mean-radius composition |
 | `Centroid` | `boundedDiv(mzr, q)` along the axis, plus the in-plane radial term for a partial sweep, `math.Min`-ed against `revolveCentroidGeometryBound` and then charged `revolveAxisAdmitBandCharge` |
-| `Bounds` | `revolveBoundsContext` verbatim, charging the frame lift and the accumulated placement the sheet's own extent reading already charged |
+| `Bounds` | `revolveplan.Bounds` verbatim, charging the frame lift and the accumulated placement the sheet's own extent reading already charged |
 
 No bound in that table is new, because no geometry is: the annulus is an
-ordinary recorded section and `evalRevolveContext` builds it by the path it
+ordinary recorded section and `revolveplan.Build` builds it by the path it
 already proves. The readings that change are `Volume` and `Centroid`, which
 answered `ErrNotSolid` on the sheet and answer a measurement here. A 10 mm ×
 10 mm meridian rectangle at `r ∈ [10, 20]` spun a full turn as a surface and
@@ -3431,7 +3431,7 @@ its own beyond the two. The receiver is a live `BodySheet` holding a
 §16.5's axis class. The construction assembles §16.6's closed ring as the
 meridian section, runs §16.5's radial gate over the same moving pieces and the
 same boxes, re-resolves the axis against the assembled section, and builds
-through `evalRevolveContextWork` over a `revolvePayload` carrying that section
+through `revolveplan.Build` over a `revolvePayload` carrying that section
 beside the shell's own `phi0`, `phi1`, `full`, `den`, `frame` and `xform`, with
 `surfaceResult` false.
 
@@ -3449,7 +3449,7 @@ section, which is its own increment.
 **What the result publishes** is §16.5's table over ONE loop rather than two:
 one wall per assembled section segment, two planar cap faces when the sweep is
 partial and none when it is full, one lump with one shell, and the same
-Pappus volume, swept-moment area, axial centroid and `revolveBoundsContext`
+Pappus volume, swept-moment area, axial centroid and `revolveplan.Bounds`
 box, each under the same bound origins. A 40 mm meridian at `r = 10` spun a
 full turn and thickened outward 2 mm has `Volume` enclosing `1760π mm³`
 (T165).

@@ -258,13 +258,13 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	rp := p.rp
 	// sheet is docs/surface-design.md §4.1's own flag, read once: a surface
 	// result omits both caps from a partial sweep's wall build
-	// (revolve_build.go), and every arm below that would otherwise emit a
+	// (internal/revolveplan/build.go), and every arm below that would otherwise emit a
 	// cap, charge a cap-only facet or a cap-only slack term, publish an
 	// occupied-volume proof, or run the orientation check that decides
 	// nothing on an open mesh reads it to skip that half of the work rather
 	// than fault a role this evaluator's own reach never minted. A full
 	// revolution mints no cap in either kind for a solid either, so most
-	// arms below key on rp.full alone; sheet is its own separate condition
+	// arms below key on rp.Full alone; sheet is its own separate condition
 	// wherever a solid's full-turn behavior and a sheet's differ.
 	sheet := rp.SurfaceResult
 	mesh := bornMesh(&Mesh{})

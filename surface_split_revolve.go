@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
 )
 
 // This file is Split over the revolve family
@@ -42,7 +43,7 @@ func (d *Document) splitRevolve(ctx context.Context, budget *proofbound.WorkBudg
 		if err != nil {
 			return nil, err
 		}
-		bodies[i], err = evalRevolveContextWork(ctx, d, ref+producerID(i), revolvePayload{
+		bodies[i], err = bodyResult(revolveplan.Build(ctx, envOf(documentNode(d), ref+producerID(i)), revolvePayload{
 			Profile:     cell.Profile,
 			Frame:       rcv.Frame,
 			Ax:          ax,
@@ -56,7 +57,7 @@ func (d *Document) splitRevolve(ctx context.Context, budget *proofbound.WorkBudg
 			// and S7 zero every other term prism §7 derives, and a cell's
 			// uncut edges record their entity's own data verbatim.
 			SectionDelta: cell.SectionDelta,
-		}, work)
+		}, work))
 		if err != nil {
 			return nil, err
 		}

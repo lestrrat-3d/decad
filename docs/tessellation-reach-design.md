@@ -348,7 +348,7 @@ tess §§8–11 are the theory; this section maps each paragraph to code. No new
 
 ### Shared with the builder
 
-`buildRevolveLoop` (`revolve_build.go`) resolves each loop's walks (`walkOf` → `requireAnalyticWalk` →
+`buildRevolveLoop` (`internal/revolveplan/build.go`) resolves each loop's walks (`walkOf` → `requireAnalyticWalk` →
 `rp.ax.walk` → `coalesceWalksContext` → `ax.classify`). Extract that prefix into
 `revolveLoopWalks(ctx, rp, loop, work, what) (revolveWalks, error)`, whose result carries the coalesced axis
 walks, their `wallKind`s, `singleClosed`, and the same walks still in PLANE-local coordinates indexed by
@@ -802,7 +802,7 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
 
 ### R3 — revolve line generators
 
-14. **Files:** `revolve_build.go`. **What:** extract `revolveLoopWalks` from `buildRevolveLoop`, returning the axis
+14. **Files:** `internal/revolveplan/build.go`. **What:** extract `revolveLoopWalks` from `buildRevolveLoop`, returning the axis
     walks, their kinds, `singleClosed` and the plane-local walks the proof reads. **Tests:** existing revolve
     tests unchanged.
 15. **Files:** `tessellate_revolve.go`, `internal/revolvesampling/meridian.go`. **What:**

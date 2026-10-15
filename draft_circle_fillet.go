@@ -9,10 +9,9 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
-	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -121,47 +120,18 @@ func tryDraftCircleRimFillet(ctx context.Context, b *Body, edges []*Edge, radius
 	if err != nil {
 		return nil, true, err
 	}
-	result, err := evalRevolveContextWork(ctx, documentHandle(b.n.Doc), b.n.Doc.NextProducer, revolvePayload{
+	result, err := bodyResult(revolveplan.Build(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), revolvePayload{
 		Profile: profile, Frame: frame, Ax: ax, Phi0: phi0, Phi1: phi1, Full: full,
 		Den: den, Xform: dp.xform, RadialProof: ax.RadialProof,
 		SectionDelta: sectionDelta, SectionWhole: true,
 		BlendSegs: []map[int]struct{}{{2: {}}}, BlendKind: "fillet",
 		DraftCircleCaps: true,
-	}, work)
+	}, work))
 	if err != nil {
 		return nil, true, err
 	}
 	out, err := commitModifyResult(ctx, b, result)
 	return out, true, err
-}
-
-// A full revolution normally has no cap role: its meridian walls are all
-// side faces. Both tapered-circle rim rewrites have two planar disks.
-// Preserve their axial cap names so face and rim selectors still work after
-// the draft's rebuild and after placement.
-func addDraftCircleCapRoles(ctx context.Context, body *Body, ref producerID) error {
-	roles := map[string]string{"side(0,1)": provenance.RoleCapEnd, "side(0,4)": provenance.RoleCapStart}
-	seen := map[string]bool{}
-	for _, face := range body.Faces() {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		for _, origin := range face.n.Origins {
-			capRole, ok := roles[origin.Role]
-			if !ok || origin.Producer != ref {
-				continue
-			}
-			if seen[capRole] || face.n.Surface.Kind() != surfacegeom.KindPlane {
-				return fmt.Errorf(`%w: the tapered circular rim has no unique planar %s`, ErrUnsupported, capRole)
-			}
-			face.n.Origins = append(face.n.Origins, provenance.Ref{Producer: ref, Role: capRole})
-			seen[capRole] = true
-		}
-	}
-	if !seen[provenance.RoleCapStart] || !seen[provenance.RoleCapEnd] {
-		return fmt.Errorf(`%w: the tapered circular rim lost a planar cap`, ErrUnsupported)
-	}
-	return nil
 }
 
 func draftCircleFilletFits(near, far, height, slope, fillet, centerR, centerZ, sideR, sideZ proofbound.BoundedScalar) bool {

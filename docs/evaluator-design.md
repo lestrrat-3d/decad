@@ -606,9 +606,9 @@ caller's own record states, whether or not that coincides with the held
 no better claim than itself, since the record names a target face rather
 than an angle, so its displacement is unbounded and every reading it feeds
 keeps the magnitude envelope it always has. The pair is spelled
-`revolvePayload.phi0`/`phi1` beside `den`, their `revolveangle.Angle` twin
+`revolvePayload.Phi0`/`Phi1` beside `Den`, their `revolveangle.Angle` twin
 (`internal/revolveangle/denotation.go`), and the per-end displacement is
-`phi0Delta`/`phi1Delta` (`angularDelta` for whichever a reading cannot
+`phi0Delta`/`phi1Delta` (`AngularDelta` for whichever a reading cannot
 attribute to one end). Every reading that folds a held sweep angle into a
 published measurement takes it: `Bounds`, the partial-sweep cap vertices and
 cap-copy seam vertices, the cap faces' own `Plane` normal, the mesh's angular
@@ -853,7 +853,10 @@ its `Placed` runs `cupwall.Build`, which builds through `stackedrecord.Build`
 under the cup's own `stackedrecord.Plan`. `chainPayload` is an alias of `chainrecord.Payload`
 likewise: its `Placed` runs `chainrecord.Build`. `patchPayload` and `bodyPatchPayload`
 are aliases of `patchchain.Payload` and `patchchain.BodyPayload`: their `Placed` runs
-`patchchain.Build` and `patchchain.BuildBody`. A payload that still lives in the root
+`patchchain.Build` and `patchchain.BuildBody`. `revolvePayload` and
+`chainRevolvePayload` are aliases of `revolveplan.Payload` and
+`revolveplan.ChainPayload`: their `Placed` runs `revolveplan.Build` and
+`revolveplan.BuildChain`. A payload that still lives in the root
 package recovers its document handle from the node's `Owner` in `Placed` and
 runs its root builder.
 

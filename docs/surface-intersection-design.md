@@ -561,7 +561,7 @@ Every product rounds outward through `ProductUpper` and every sum through
 
 **The per-walk readings** need to know WHICH coordinates moved. A trim moves
 only its cut ends, which §7.1's fold charges endpoint by endpoint. An offset
-construction moves every coordinate, which `revolvePayload.sectionWhole`
+construction moves every coordinate, which `revolvePayload.SectionWhole`
 states. Its premise has two halves, and both are needed. Every recorded
 boundary point sits within `δ` of the denoted boundary and every denoted point
 within `δ` of the recorded one, which the band, the mesh's `+δ` and
@@ -730,7 +730,7 @@ predicate, exactly as it must after a mesh boolean produces several lumps.
    T180, T182 and T183. A trimmed revolve sheet's own mesh waits on surface
    increment 4, exactly as a profile-fed revolve sheet's does.
 5. **PR5 — `Split` over the revolve family** (landed).
-   `revolvePayload.sectionDelta` reaches the Pappus volume, the centroid and
+   `revolvePayload.SectionDelta` reaches the Pappus volume, the centroid and
    every other solid reading (§7.2). `surface_split_revolve.go` runs PR2's
    `prismcells.SplitPieces` over the two meridian views, reruns the axis gates per piece
    (§2.2) and builds one `revolvePayload` per cell; the deterministic order is

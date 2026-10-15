@@ -16,7 +16,7 @@ import (
 // four features to take the option. Sweep has three distinct build paths, and
 // none of them are alike: a one-span straight path reduces to the prism
 // builder and a one-span arc reduces to the revolve builder, so each gets the
-// whole sheet behaviour for free from internal/prismrecord/build.go and revolve_build.go; a
+// whole sheet behaviour for free from internal/prismrecord/build.go and internal/revolveplan/build.go; a
 // composite path has its own join topology (sweep_composite.go) and is the
 // only path with real new evaluator work. Every fixture reuses plateSketch
 // (extrude_test.go), the arc fixture sweep_arc_test.go's own
@@ -127,7 +127,7 @@ func TestSurfaceSweepLineSheetVerifiesSound(t *testing.T) {
 
 // TestSurfaceSweepArcIsASheet is Table W's arc row over the one-span arc
 // reduction: the flag rides the reduced revolvePayload, so the cap omission,
-// Kind() and area subtraction are revolve_build.go's own.
+// Kind() and area subtraction are internal/revolveplan/build.go's own.
 func TestSurfaceSweepArcIsASheet(t *testing.T) {
 	t.Parallel()
 	s0, p0 := plateSketch(t)

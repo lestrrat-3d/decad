@@ -39,7 +39,7 @@ const revolvePropertySeed int64 = 0x5eed_1eaf_c0ffee
 // axisPlacement is a revolve axis inside the XY sketch plane: an origin (ou, ov)
 // and an in-plane direction angle beta. The XY plane maps sketch (u, v) to world
 // (u, v, 0), so the world sweep basis follows in closed form — and it is the
-// SAME basis revolvePayload.basis() derives, with the region on the +rho side.
+// SAME basis revolvePayload.Basis() derives, with the region on the +rho side.
 type axisPlacement struct {
 	ou, ov float64
 	beta   float64

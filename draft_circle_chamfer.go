@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -117,13 +118,13 @@ func tryDraftCircleRimChamfer(ctx context.Context, b *Body, edges []*Edge, setba
 	if err != nil {
 		return nil, true, err
 	}
-	result, err := evalRevolveContextWork(ctx, documentHandle(b.n.Doc), b.n.Doc.NextProducer, revolvePayload{
+	result, err := bodyResult(revolveplan.Build(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), revolvePayload{
 		Profile: profile, Frame: frame, Ax: ax, Phi0: phi0, Phi1: phi1, Full: full,
 		Den: den, Xform: dp.xform, RadialProof: ax.RadialProof,
 		SectionDelta: sectionDelta, SectionWhole: true,
 		BlendSegs: []map[int]struct{}{{2: {}}}, BlendKind: "chamfer",
 		DraftCircleCaps: true,
-	}, work)
+	}, work))
 	if err != nil {
 		return nil, true, err
 	}

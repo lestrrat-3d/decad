@@ -13,7 +13,7 @@ import (
 )
 
 // This file is docs/surface-design.md §15's T96-T100: the vertex-bound
-// repair for internal/prismrecord/build.go, revolve_build.go and capblend_geom.go, the
+// repair for internal/prismrecord/build.go, internal/revolveplan/build.go and capblend_geom.go, the
 // three analytic builders that published Vertex.Position() Exact with a
 // zero bound for a placed body or a body on a tilted sketch plane, although
 // pp.point/rp.point's own frame lift and accumulated placement rounds under
@@ -225,7 +225,7 @@ func TestVertexTiltedPlaneUnplacedBoundEnclosesDisplacement(t *testing.T) {
 // sin/cos evaluate exactly (1, 0) with no libm rounding of their own, which
 // isolates the frame-lift/placement charge this row tests from the
 // angular-denotation charge revolve_bounds_test.go already covers.
-// Shown-to-fail: replacing revolve_build.go's sweptVertex comparison with a
+// Shown-to-fail: replacing internal/revolveplan/build.go's sweptVertex comparison with a
 // zero bound turns the enclosure assertions red.
 func TestVertexPlacedRevolveBoundEnclosesDisplacement(t *testing.T) {
 	t.Parallel()

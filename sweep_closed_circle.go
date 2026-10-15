@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/sweeparc"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
 	"github.com/lestrrat-3d/r3"
@@ -51,7 +52,7 @@ func evalClosedCircleSweep(ctx context.Context, d *Document, ref producerID,
 		Xform:       r3.Identity(),
 		RadialProof: ax.RadialProof,
 	}
-	body, err := evalRevolveContextWork(ctx, d, ref, revolve, work)
+	body, err := bodyResult(revolveplan.Build(ctx, envOf(documentNode(d), ref), revolve, work))
 	if err != nil {
 		return nil, err
 	}
