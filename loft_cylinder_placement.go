@@ -169,7 +169,7 @@ func loftCylinderLocalBlank(ctx context.Context, d *Document, blank *Body) (*Bod
 	pose, err := frame.Then(pp.Xform)
 	if err != nil || pose == r3.Identity() || !loftCylinderSignedPose(pose) ||
 		!loftCylinderAffineOf(frame).then(loftCylinderAffineOf(pp.Xform)).equals(loftCylinderAffineOf(pose)) {
-		return nil, r3.Transform{}, false, nil
+		return nil, r3.Transform{}, false, nil //nolint:nilerr // an invalid pose cannot use this certificate
 	}
 	localFrame, err := loftCylinderCanonicalFrame(0)
 	if err != nil {
@@ -177,8 +177,8 @@ func loftCylinderLocalBlank(ctx context.Context, d *Document, blank *Body) (*Bod
 	}
 	local := pp
 	local.Frame, local.Xform = localFrame, r3.Identity()
-	copy, err := placePayload(ctx, local, d, blank.n.Origin.Producer, r3.Identity())
-	return copy, pose, err == nil, err
+	localBody, err := placePayload(ctx, local, d, blank.n.Origin.Producer, r3.Identity())
+	return localBody, pose, err == nil, err
 }
 
 // loftCylinderLocalTooth accepts only a source whose two recorded section
@@ -202,15 +202,15 @@ func loftCylinderLocalTooth(ctx context.Context, d *Document, tooth *Body,
 	}
 	inverse, err := pose.Inverse()
 	if err != nil {
-		return nil, false, nil
+		return nil, false, nil //nolint:nilerr // an inverse without a valid map cannot certify this tooth
 	}
 	firstWorld, err := first.Then(lp.xform)
 	if err != nil {
-		return nil, false, nil
+		return nil, false, nil //nolint:nilerr // an invalid source map keeps the generic fallback
 	}
 	localXform, err := firstWorld.Then(inverse)
 	if err != nil || !loftCylinderAxialPlacement(localXform) {
-		return nil, false, nil
+		return nil, false, nil //nolint:nilerr // an invalid local map cannot certify axial placement
 	}
 	local0, err := loftCylinderCanonicalFrame(0)
 	if err != nil {
@@ -241,8 +241,8 @@ func loftCylinderLocalTooth(ctx context.Context, d *Document, tooth *Body,
 	local.plane0 = planeRecord{Origin: local0.Origin(), U: local0.U(), V: local0.V()}
 	local.plane1 = planeRecord{Origin: local1.Origin(), U: local1.U(), V: local1.V()}
 	local.frame0, local.frame1, local.xform = local0, local1, localXform
-	copy, err := placePayload(ctx, local, d, tooth.n.Origin.Producer, localXform)
-	return copy, err == nil, err
+	localBody, err := placePayload(ctx, local, d, tooth.n.Origin.Producer, localXform)
+	return localBody, err == nil, err
 }
 
 func tryPlacedLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
@@ -362,16 +362,16 @@ func tryPlacedLoftCylinderBoreCut(ctx context.Context, d *Document, ref producer
 	}
 	worldFrame, err := frame.Then(pp.Xform)
 	if err != nil {
-		return nil, false, nil
+		return nil, false, nil //nolint:nilerr // an invalid tool map keeps the generic fallback
 	}
 	inverse, err := placement.pose.Inverse()
 	if err != nil {
-		return nil, false, nil
+		return nil, false, nil //nolint:nilerr // an invalid pose inverse cannot certify this bore
 	}
 	localFrameMap, err := worldFrame.Then(inverse)
 	if err != nil || localFrameMap.Basis() != r3.Identity().Basis() ||
 		localFrameMap.Translation().X != 0 || localFrameMap.Translation().Y != 0 {
-		return nil, false, nil
+		return nil, false, nil //nolint:nilerr // an invalid local tool map keeps the generic fallback
 	}
 	localFrame, err := loftCylinderCanonicalFrame(localFrameMap.Translation().Z)
 	if err != nil {

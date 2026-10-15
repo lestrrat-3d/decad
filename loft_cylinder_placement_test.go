@@ -35,7 +35,7 @@ func loftCylinderPlacedTabPair(t *testing.T, lower, upper r3.Frame) (*Document, 
 	s.CreateCircle(center, 3)
 	_, err = s.Solve(ctx)
 	require.NoError(t, err)
-	require.Len(t, s.Profiles(), 1)
+	require.Equal(t, 1, len(s.Profiles()))
 	blank, err := Extrude(ctx, doc, s, s.Profiles()[0], Distance{D: units.Millimeters(2), Dir: Along})
 	require.NoError(t, err)
 	return doc, blank, tooth
@@ -66,7 +66,7 @@ func loftCylinderErrorText(err error) string {
 	return message
 }
 
-func loftCylinderCheckPlacedResult(t *testing.T, joined, blank, tooth *Body, placed bool) Measurement {
+func loftCylinderCheckPlacedResult(t *testing.T, joined, blank, tooth *Body, placed bool) {
 	t.Helper()
 	require.True(t, joined.IsSolid())
 	volume, err := joined.Volume()
@@ -84,7 +84,7 @@ func loftCylinderCheckPlacedResult(t *testing.T, joined, blank, tooth *Body, pla
 	require.LessOrEqual(t, fp.meshBound, 0.1)
 	require.True(t, fp.contactAudited)
 	require.Equal(t, blank.originProducer(), fp.loftCylinderJoin.blank.originProducer())
-	require.Len(t, fp.loftCylinderJoin.teeth, 1)
+	require.Equal(t, 1, len(fp.loftCylinderJoin.teeth))
 	require.Equal(t, tooth.originProducer(), fp.loftCylinderJoin.teeth[0].originProducer())
 	require.Equal(t, placed, fp.loftCylinderJoin.placement != nil)
 	seenBlank, seenTooth := false, false
@@ -96,7 +96,6 @@ func loftCylinderCheckPlacedResult(t *testing.T, joined, blank, tooth *Body, pla
 	}
 	require.True(t, seenBlank, "result lost blank face provenance")
 	require.True(t, seenTooth, "result lost tooth face provenance")
-	return volume
 }
 
 func proofFiniteBox(box Box) bool {
@@ -269,7 +268,7 @@ func TestLoftCylinderCommonPlacementConsumers(t *testing.T) {
 	require.True(t, ok)
 	require.NotNil(t, fp.loftCylinderJoin)
 	require.NotNil(t, fp.loftCylinderJoin.placement)
-	require.Len(t, fp.loftCylinderJoin.teeth, 2)
+	require.Equal(t, 2, len(fp.loftCylinderJoin.teeth))
 	require.Equal(t, second.originProducer(), fp.loftCylinderJoin.teeth[1].originProducer())
 	require.LessOrEqual(t, fp.meshBound, 0.1)
 	placement := fp.loftCylinderJoin.placement
@@ -302,7 +301,7 @@ func TestLoftCylinderCommonPlacementConsumers(t *testing.T) {
 	s.CreateCircle(c, 0.5)
 	_, err = s.Solve(ctx)
 	require.NoError(t, err)
-	require.Len(t, s.Profiles(), 1)
+	require.Equal(t, 1, len(s.Profiles()))
 	tool, err := Extrude(ctx, doc, s, s.Profiles()[0], Distance{D: units.Millimeters(4), Dir: Along})
 	require.NoError(t, err)
 	localBore, admitted, err := tryLoftCylinderBoreCut(ctx, meshbool.OpCut, doc,
@@ -414,7 +413,7 @@ func TestLoftCylinderCommonPlacementBoreEligibilityPrecedesRebuild(t *testing.T)
 		s.CreateCircle(center, radius)
 		_, err = s.Solve(ctx)
 		require.NoError(t, err)
-		require.Len(t, s.Profiles(), 1)
+		require.Equal(t, 1, len(s.Profiles()))
 		tool, err := Extrude(ctx, doc, s, s.Profiles()[0],
 			Distance{D: units.Millimeters(height), Dir: Along})
 		require.NoError(t, err)
@@ -467,7 +466,7 @@ func TestLoftCylinderCommonPlacementNativeYZConsumers(t *testing.T) {
 	require.True(t, ok)
 	require.NotNil(t, fp.loftCylinderJoin)
 	require.NotNil(t, fp.loftCylinderJoin.placement)
-	require.Len(t, fp.loftCylinderJoin.teeth, 2)
+	require.Equal(t, 2, len(fp.loftCylinderJoin.teeth))
 	placement := fp.loftCylinderJoin.placement
 	localJoin, admitted, err := tryLoftCylinderUnionTeeth(ctx, doc,
 		joined.originProducer(), placement.blank, placement.teeth)
@@ -486,7 +485,7 @@ func TestLoftCylinderCommonPlacementNativeYZConsumers(t *testing.T) {
 	s.CreateCircle(center, 0.5)
 	_, err = s.Solve(ctx)
 	require.NoError(t, err)
-	require.Len(t, s.Profiles(), 1)
+	require.Equal(t, 1, len(s.Profiles()))
 	tool, err := Extrude(ctx, doc, s, s.Profiles()[0], Distance{D: units.Millimeters(4), Dir: Along})
 	require.NoError(t, err)
 	bored, err := Cut(ctx, joined, tool)
