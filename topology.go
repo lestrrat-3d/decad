@@ -2,12 +2,10 @@ package decad
 
 import (
 	"fmt"
-	"math"
 
 	"github.com/lestrrat-3d/decad/internal/patchchain"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
-	"github.com/lestrrat-3d/decad/internal/surfacenormal"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
@@ -454,106 +452,8 @@ type Face struct {
 // waits on the faceted certificate stage
 // (docs/payload-verification-design.md §5.4, §13).
 func (f *Face) NormalAt(p r3.Vec) (VecMeasurement, error) {
-	switch s := f.n.Surface.(type) {
-	case surfacegeom.Plane:
-		n := s.Frame.N()
-		return f.normalMeasurement(p, n, func() (float64, surfacenormal.Status) {
-			return surfacenormal.PlaneAllow(s.Frame, n)
-		}, "the frame of this plane names no direction")
-	case surfacegeom.Cylinder:
-		rel := p.Sub(s.Origin)
-		radial := rel.Sub(s.Axis.Scale(rel.Dot(s.Axis)))
-		dir, ok := radial.Normalize()
-		if !ok {
-			return VecMeasurement{}, fmt.Errorf(`%w: a point on the cylinder axis has no normal`, ErrDegenerate)
-		}
-		return f.normalMeasurement(p, dir, func() (float64, surfacenormal.Status) {
-			return surfacenormal.AxialAllow(p, s.Origin, s.Axis, dir)
-		}, "a point on the cylinder axis has no normal")
-	case surfacegeom.Cone:
-		rel := p.Sub(s.Origin)
-		radial := rel.Sub(s.Axis.Scale(rel.Dot(s.Axis)))
-		dir, ok := radial.Normalize()
-		if !ok {
-			return VecMeasurement{}, fmt.Errorf(`%w: the cone apex has no normal`, ErrDegenerate)
-		}
-		half, err := s.HalfAngle.In(units.Radian)
-		if err != nil {
-			return VecMeasurement{}, fmt.Errorf(`decad: a cone's half angle is not an angle: %w`, err)
-		}
-		// The wall leans outward by the half angle along the growth axis, so
-		// the geometric normal tilts against it by the same angle.
-		n := dir.Scale(math.Cos(half)).Sub(s.Axis.Scale(math.Sin(half)))
-		return f.normalMeasurement(p, n, func() (float64, surfacenormal.Status) {
-			return surfacenormal.ConeAllow(p, s.Origin, s.Axis, half, n)
-		}, "the cone apex has no normal")
-	case surfacegeom.Sphere:
-		dir, ok := p.Sub(s.Center).Normalize()
-		if !ok {
-			return VecMeasurement{}, fmt.Errorf(`%w: the sphere center has no normal`, ErrDegenerate)
-		}
-		return f.normalMeasurement(p, dir, func() (float64, surfacenormal.Status) {
-			return surfacenormal.RadialAllow(p, s.Center, dir)
-		}, "the sphere center has no normal")
-	case surfacegeom.Torus:
-		major, err := s.Major.In(units.Millimeter)
-		if err != nil {
-			return VecMeasurement{}, fmt.Errorf(`decad: a torus's major radius is not a length: %w`, err)
-		}
-		rel := p.Sub(s.Center)
-		radial := rel.Sub(s.Axis.Scale(rel.Dot(s.Axis)))
-		rdir, ok := radial.Normalize()
-		if !ok {
-			return VecMeasurement{}, fmt.Errorf(`%w: a point on the torus axis has no normal`, ErrDegenerate)
-		}
-		tube := s.Center.Add(rdir.Scale(major))
-		dir, ok := p.Sub(tube).Normalize()
-		if !ok {
-			return VecMeasurement{}, fmt.Errorf(`%w: the tube center has no normal`, ErrDegenerate)
-		}
-		return f.normalMeasurement(p, dir, func() (float64, surfacenormal.Status) {
-			return surfacenormal.TorusAllow(p, s.Center, s.Axis, major, dir)
-		}, "the tube center has no normal")
-	default:
-		return VecMeasurement{}, fmt.Errorf(`%w: this evaluator computes normals for its own analytic faces only`, ErrUnsupported)
-	}
-}
-
-// normalMeasurement publishes one arm's computed geometric direction under
-// the face's own outward sign. tagAllow is the arm's proof against its tagged
-// surface, and the face's own departure from its tag (normalBound) composes
-// with it by triangle inequality. A face carrying its denoted surface is
-// proven against that instead: the comparison is with the surface the face
-// carries, so it covers the departure normalBound states, and neither
-// tagAllow nor normalBound enters. The sign is exact, so it never changes the
-// bound.
-func (f *Face) normalMeasurement(p, dir r3.Vec, tagAllow func() (float64, surfacenormal.Status), degenerate string) (VecMeasurement, error) {
-	if f.n.Reversed {
-		dir = dir.Scale(-1)
-	}
-	var allow float64
-	var st surfacenormal.Status
-	departure := 0.0
-	if f.n.Denoted != nil {
-		allow, st = f.n.Denoted.Allow(p, dir, f.n.Reversed)
-	} else {
-		allow, st = tagAllow()
-		departure = f.n.NormalBound
-	}
-	switch st {
-	case surfacenormal.Zero:
-		return VecMeasurement{}, fmt.Errorf(`%w: %s`, ErrDegenerate, degenerate)
-	case surfacenormal.Unproven:
-		return VecMeasurement{}, fmt.Errorf(`%w: this normal's own direction is not proven away from zero, so no bound covers it`, ErrUnsupported)
-	}
-	if allow != 0 || departure != 0 {
-		allow = math.Nextafter(allow+departure, math.Inf(1))
-	}
-	return VecMeasurement{
-		Value:     dir,
-		Exactness: exactnessOf(allow),
-		Bound:     units.Scalar(allow),
-	}, nil
+	m, err := topobuild.NormalAt(&f.n, p)
+	return vecMeasurementFromInternal(m), err
 }
 
 // Surface returns the face's tagged geometry.
