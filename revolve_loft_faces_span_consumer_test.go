@@ -20,7 +20,7 @@ func TestCurvedMappedSourceConsumesLiveProducer(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("live source was not admitted: %v, %t", err, ok)
 	}
-	section := proof.section.spans[proof.section.rootSpan]
+	section := proof.section.Spans[proof.section.RootSpan]
 	cells, ok, err := revolveLoftFacesFiniteSpanCells(t.Context(), trim, section)
 	if err != nil || !ok {
 		t.Fatalf("live source did not reach mapped finite-span consumer: %v, %t", err, ok)
@@ -50,7 +50,7 @@ func TestCurvedMappedSourceConsumesLiveProducer(t *testing.T) {
 			}
 		}
 	})
-	t.Logf("root section %d mapped %d source cells", proof.section.rootSpan, len(cells))
+	t.Logf("root section %d mapped %d source cells", proof.section.RootSpan, len(cells))
 	radial := 0
 	for segment, entity := range trim.Source.source.entities {
 		if _, isArc := entity.(*sketch.Arc); !isArc {

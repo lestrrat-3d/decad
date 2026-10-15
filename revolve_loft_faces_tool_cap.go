@@ -35,7 +35,7 @@ func revolveLoftFacesToolCapSidesOf(proof *revolveLoftFacesSourceCertificate) (
 ) {
 	var out revolveLoftFacesToolCapSides
 	if proof == nil || proof.blank == nil || proof.tooth == nil ||
-		proof.section.blank != proof.blank || proof.trim == nil ||
+		proof.section.Blank != proof.blank || proof.trim == nil ||
 		!revolveLoftFacesSectionCurrent(proof) ||
 		!revolveLoftFacesSectionFacesComplete(proof) ||
 		proof.toeFace == nil || proof.heelFace == nil ||
@@ -73,12 +73,12 @@ func revolveLoftFacesToolCapSidesOf(proof *revolveLoftFacesSourceCertificate) (
 		if !found {
 			return revolveLoftFacesToolCapSides{}, false
 		}
-		for spanIndex, span := range proof.section.spans {
-			if span.face == nil {
+		for spanIndex, span := range proof.section.Spans {
+			if span.Face == nil {
 				continue // The axis span has no boundary face.
 			}
-			if span.face.n.Body != bodyNode(proof.blank) || span.start.V < 0 || span.end.V < 0 ||
-				span.start == span.end {
+			if span.Face.n.Body != bodyNode(proof.blank) || span.Start.V < 0 || span.End.V < 0 ||
+				span.Start == span.End {
 				return revolveLoftFacesToolCapSides{}, false
 			}
 			x, radius, crosses, decided := revolveLoftFacesToolCircleOnSpan(tool.limit, span)
@@ -86,11 +86,11 @@ func revolveLoftFacesToolCapSidesOf(proof *revolveLoftFacesSourceCertificate) (
 				return revolveLoftFacesToolCapSides{}, false
 			}
 			if !crosses {
-				out.separated[[2]*Face{span.face, tool.face}] = struct{}{}
+				out.separated[[2]*Face{span.Face, tool.face}] = struct{}{}
 				continue
 			}
 			out.circles = append(out.circles, revolveLoftFacesToolCapCircle{
-				blankFace: span.face, capFace: tool.face, capOrigin: origin,
+				blankFace: span.Face, capFace: tool.face, capOrigin: origin,
 				span: spanIndex, tool: toolIndex, x: x, radius: radius,
 				sourceMiss: revolveLoftFacesToolCircleOutsideSource(proof.trim, x, radius)})
 		}
@@ -103,11 +103,11 @@ func revolveLoftFacesToolCircleOnSpan(tool *pointConeLimit, span revolveSectionS
 ) {
 	if tool == nil || tool.apex == nil || tool.far == nil || tool.slope == nil ||
 		tool.slope.Sign() <= 0 || tool.far.Cmp(tool.apex) >= 0 ||
-		span.start == span.end || span.start.V < 0 || span.end.V < 0 {
+		span.Start == span.End || span.Start.V < 0 || span.End.V < 0 {
 		return nil, nil, false, false
 	}
-	a := revolveLoftFacesToolResidual(tool, span.start)
-	b := revolveLoftFacesToolResidual(tool, span.end)
+	a := revolveLoftFacesToolResidual(tool, span.Start)
+	b := revolveLoftFacesToolResidual(tool, span.End)
 	if a.Sign() != 0 && a.Sign() == b.Sign() {
 		return nil, nil, false, true
 	}
@@ -118,10 +118,10 @@ func revolveLoftFacesToolCircleOnSpan(tool *pointConeLimit, span revolveSectionS
 	if fraction.Sign() <= 0 || fraction.Cmp(lfOne()) >= 0 {
 		return nil, nil, false, false
 	}
-	x := lfAdd(lfF(span.start.U), lfMul(fraction,
-		lfSub(lfF(span.end.U), lfF(span.start.U))))
-	radius := lfAdd(lfF(span.start.V), lfMul(fraction,
-		lfSub(lfF(span.end.V), lfF(span.start.V))))
+	x := lfAdd(lfF(span.Start.U), lfMul(fraction,
+		lfSub(lfF(span.End.U), lfF(span.Start.U))))
+	radius := lfAdd(lfF(span.Start.V), lfMul(fraction,
+		lfSub(lfF(span.End.V), lfF(span.Start.V))))
 	if radius.Sign() <= 0 || x.Cmp(tool.far) <= 0 || x.Cmp(tool.apex) >= 0 {
 		return nil, nil, false, false
 	}

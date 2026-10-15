@@ -24,11 +24,11 @@ func certifyRevolveFitBoundary(record *pointSectionRecord,
 	if !ok {
 		return empty, false
 	}
-	cone := section.coneSection()
+	cone := section.ConeSection()
 	src := record.source
-	result := revolveSectorBoundary{insideSegment: -1, outsideWitness: -1,
-		fitRoute: true, sides: make([]sketch.ConeCurveSide, len(src.entities)),
-		sourceRevision: src.revision}
+	result := revolveSectorBoundary{InsideSegment: -1, OutsideWitness: -1,
+		FitRoute: true, Sides: make([]sketch.ConeCurveSide, len(src.entities)),
+		SourceRevision: src.revision}
 	sides := make([]sketch.ConeSide, len(src.entities))
 	fitCount := 0
 	for i, entity := range src.entities {
@@ -48,7 +48,7 @@ func certifyRevolveFitBoundary(record *pointSectionRecord,
 			}
 			cert, err := src.sketch.CertifyConeFitCrossing(typed, cone)
 			if err == nil {
-				if fitCount >= len(result.contacts) || cert.Spline() != typed ||
+				if fitCount >= len(result.Contacts) || cert.Spline() != typed ||
 					cert.Cone() != cone || cert.SketchRevision() != src.revision ||
 					cert.IsStale() || cert.BeforeSide() == cert.AfterSide() ||
 					cert.BeforeSide() == 0 || cert.AfterSide() == 0 {
@@ -62,7 +62,7 @@ func certifyRevolveFitBoundary(record *pointSectionRecord,
 				if !ok || !(derivativeLo[0] > 0 || derivativeHi[0] < 0) {
 					return empty, false
 				}
-				result.contacts[fitCount] = revolveSectorContact{segment: i, fit: cert}
+				result.Contacts[fitCount] = revolveSectorContact{Segment: i, Fit: cert}
 				fitCount++
 				continue
 			}
@@ -83,19 +83,19 @@ func certifyRevolveFitBoundary(record *pointSectionRecord,
 		switch sides[i] {
 		case sketch.ConeInside:
 			if _, isArc := entity.(*sketch.Arc); isArc {
-				if result.insideSegment >= 0 {
+				if result.InsideSegment >= 0 {
 					return empty, false
 				}
-				result.insideSegment = i
+				result.InsideSegment = i
 			}
 		case sketch.ConeOutside:
-			result.outsideWitness = i
+			result.OutsideWitness = i
 		default:
 			return empty, false
 		}
-		result.sides[i] = cert
+		result.Sides[i] = cert
 	}
-	if fitCount != 2 || result.insideSegment < 0 || result.outsideWitness < 0 {
+	if fitCount != 2 || result.InsideSegment < 0 || result.OutsideWitness < 0 {
 		return empty, false
 	}
 	for i, side := range sides {
@@ -107,9 +107,9 @@ func certifyRevolveFitBoundary(record *pointSectionRecord,
 			continue
 		}
 		k := 0
-		if result.contacts[1].segment == i {
+		if result.Contacts[1].Segment == i {
 			k = 1
-		} else if result.contacts[0].segment != i {
+		} else if result.Contacts[0].Segment != i {
 			return empty, false
 		}
 		previous := sides[(i+len(sides)-1)%len(sides)]
@@ -120,7 +120,7 @@ func certifyRevolveFitBoundary(record *pointSectionRecord,
 		if !ok {
 			return empty, false
 		}
-		startSide, endSide := result.contacts[k].fit.BeforeSide(), result.contacts[k].fit.AfterSide()
+		startSide, endSide := result.Contacts[k].Fit.BeforeSide(), result.Contacts[k].Fit.AfterSide()
 		if segment.TStart == 1 {
 			startSide, endSide = endSide, startSide
 		}
@@ -154,7 +154,7 @@ func revolveFitMeridianDifference(section revolveSectionCertificate, cone sketch
 	if !ok {
 		return nil, nil, empty, false
 	}
-	m, b := section.meridianEquation()
+	m, b := section.MeridianEquation()
 	x := point[0]
 	rootRadius := proofbound.IntervalAdd(proofbound.IntervalScale(x, m),
 		proofbound.PointInterval(b))
@@ -189,7 +189,7 @@ func revolveFitMeridianDifference(section revolveSectionCertificate, cone sketch
 func revolveFitSeatPoint(src *pointSectionSource, cert sketch.ConeFitCrossing,
 	section revolveSectionCertificate) (r3.Vec, float64, [2]float64, bool) {
 	if src == nil || cert.Spline() == nil || cert.IsStale() ||
-		cert.SketchRevision() != src.revision || cert.Cone() != section.coneSection() {
+		cert.SketchRevision() != src.revision || cert.Cone() != section.ConeSection() {
 		return r3.Vec{}, 0, [2]float64{}, false
 	}
 	rootLo, rootHi := cert.TBounds()

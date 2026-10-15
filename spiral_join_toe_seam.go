@@ -222,9 +222,9 @@ func certifySpiralToeRootSeam(ctx context.Context,
 	if !ok {
 		return nil, false, nil
 	}
-	capC := lfAdd(lfF(proof.Blank.toeRoot.U), lfF(proof.Blank.toeRoot.V))
-	if lfAdd(lfF(proof.Blank.toeOuter.U), lfF(proof.Blank.toeOuter.V)).Cmp(capC) != 0 ||
-		capC.Sign() <= 0 || lfF(proof.Blank.toeRoot.U).Cmp(lfF(proof.Blank.toeOuter.U)) >= 0 {
+	capC := lfAdd(lfF(proof.Blank.ToeRoot.U), lfF(proof.Blank.ToeRoot.V))
+	if lfAdd(lfF(proof.Blank.ToeOuter.U), lfF(proof.Blank.ToeOuter.V)).Cmp(capC) != 0 ||
+		capC.Sign() <= 0 || lfF(proof.Blank.ToeRoot.U).Cmp(lfF(proof.Blank.ToeOuter.U)) >= 0 {
 		return nil, false, nil
 	}
 	mapOK, negative := spiralToeMapCharge(trim.Maps[1], trim.Maps[2], box, radiusBound, capC)
@@ -277,8 +277,8 @@ func certifySpiralToeRootSeam(ctx context.Context,
 		ConeC:    capC,
 		Negative: negative,
 	}
-	if seam.X.Lo.Cmp(lfF(proof.Blank.toeRoot.U)) <= 0 ||
-		seam.X.Hi.Cmp(lfF(proof.Blank.toeOuter.U)) >= 0 {
+	if seam.X.Lo.Cmp(lfF(proof.Blank.ToeRoot.U)) <= 0 ||
+		seam.X.Hi.Cmp(lfF(proof.Blank.ToeOuter.U)) >= 0 {
 		return nil, false, nil
 	}
 	for end, point := range [...]planePoint{arc.Start, arc.End} {

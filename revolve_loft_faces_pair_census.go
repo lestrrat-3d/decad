@@ -99,14 +99,14 @@ func revolveLoftFacesCensus(ctx context.Context,
 		seenTrimmed[face] = struct{}{}
 	}
 	sectionOf := make(map[*Face]int)
-	for index, span := range proof.section.spans {
-		if span.face == nil {
+	for index, span := range proof.section.Spans {
+		if span.Face == nil {
 			continue
 		}
-		if _, duplicate := sectionOf[span.face]; duplicate {
+		if _, duplicate := sectionOf[span.Face]; duplicate {
 			return nil, false, nil
 		}
-		sectionOf[span.face] = index
+		sectionOf[span.Face] = index
 	}
 	if len(sectionOf) != len(blankFaces) {
 		return nil, false, nil
@@ -167,8 +167,8 @@ func revolveLoftFacesCensus(ctx context.Context,
 					var arc *revolveLoftFacesToolCapOccupiedArc
 					var certified bool
 					var arcErr error
-					span := proof.section.spans[circle.span]
-					if span.start.U == span.end.U {
+					span := proof.section.Spans[circle.span]
+					if span.Start.U == span.End.U {
 						arc, certified, arcErr = revolveLoftFacesHeelVerticalOccupiedArc(ctx, proof, circle)
 					} else {
 						arc, certified, arcErr = revolveLoftFacesHeelSlopedOccupiedArc(ctx, proof, circle)

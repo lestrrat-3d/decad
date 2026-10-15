@@ -29,16 +29,16 @@ func TestRevolveLoftFacesVerticalRefusesChangedBlankSection(t *testing.T) {
 	proof := &revolveLoftFacesSourceCertificate{blank: blank, section: candidates[0]}
 	require.True(t, revolveLoftFacesSectionCurrent(proof))
 	index := -1
-	for i, span := range proof.section.spans {
-		if span.start.U == 5 && span.end.U == 5 {
+	for i, span := range proof.section.Spans {
+		if span.Start.U == 5 && span.End.U == 5 {
 			index = i
 			break
 		}
 	}
 	require.NotEqual(t, -1, index)
-	proof.section.spans[index].start.U = 2
-	proof.section.spans[index].end.U = 2
-	proof.section.spans[index].end.V = 2
+	proof.section.Spans[index].Start.U = 2
+	proof.section.Spans[index].End.U = 2
+	proof.section.Spans[index].End.V = 2
 	require.False(t, revolveLoftFacesSectionCurrent(proof),
 		"the retained face cannot authenticate changed section endpoints")
 }
@@ -88,25 +88,25 @@ func TestRevolveLoftFacesVerticalConstantXAndTrimLimits(t *testing.T) {
 		Toe:  &pointConeLimit{apex: big.NewRat(13, 2), far: big.NewRat(-2, 1), slope: one},
 		Heel: &pointConeLimit{apex: big.NewRat(8, 1), far: big.NewRat(-2, 1), slope: one},
 	}
-	section := revolveSectionSpan{start: planePoint{U: 6}, end: planePoint{U: 6, V: 3.5}}
+	section := revolveSectionSpan{Start: planePoint{U: 6}, End: planePoint{U: 6, V: 3.5}}
 	lower, upper, outcome := revolveLoftFacesVerticalLimits(trim, section, big.NewRat(6, 1))
 	require.Equal(t, revolveLoftFacesVerticalContact, outcome)
 	require.Equal(t, "1/2", lower.RatString())
 	require.Equal(t, "2", upper.RatString())
-	section.start.U, section.end.U = 3.2, 3.2
+	section.Start.U, section.End.U = 3.2, 3.2
 	lower, upper, outcome = revolveLoftFacesVerticalLimits(trim, section, big.NewRat(16, 5))
 	require.Equal(t, revolveLoftFacesVerticalContact, outcome)
 	require.Equal(t, 0, lower.Cmp(big.NewRat(33, 10)))
 	require.Equal(t, "7/2", upper.RatString())
-	section.end.V = 3.2
+	section.End.V = 3.2
 	lower, upper, outcome = revolveLoftFacesVerticalLimits(trim, section, lfF(3.2))
 	require.Equal(t, revolveLoftFacesVerticalMiss, outcome)
 	require.Greater(t, lower.Cmp(upper), 0, "the toe tool leaves a strict whole-side gap")
-	section.start.U, section.end.U, section.end.V = 3.25, 3.25, 3.25
+	section.Start.U, section.End.U, section.End.V = 3.25, 3.25, 3.25
 	_, _, outcome = revolveLoftFacesVerticalLimits(trim, section, big.NewRat(13, 4))
 	require.Equal(t, revolveLoftFacesVerticalRefusal, outcome,
 		"a touching radial boundary does not prove a miss")
-	section.start.U, section.end.U = 8, 8
+	section.Start.U, section.End.U = 8, 8
 	_, _, outcome = revolveLoftFacesVerticalLimits(trim, section, big.NewRat(8, 1))
 	require.Equal(t, revolveLoftFacesVerticalRefusal, outcome)
 }

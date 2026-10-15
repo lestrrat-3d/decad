@@ -40,7 +40,7 @@ func revolveLoftFacesHeelArcSideTiesIn(ctx context.Context,
 	proof *revolveLoftFacesSourceCertificate, census *revolveLoftFacesPairCensus,
 	arc *revolveLoftFacesToolCapOccupiedArc) (*revolveLoftFacesHeelArcSideTies, bool, error) {
 	if ctx == nil || proof == nil || arc == nil || arc.time == nil ||
-		arc.circle.span < 0 || arc.circle.span >= len(proof.section.spans) {
+		arc.circle.span < 0 || arc.circle.span >= len(proof.section.Spans) {
 		return nil, false, nil
 	}
 	current, err := revolveLoftFacesToolCapOccupiedArcCurrentIn(ctx, proof, census, arc)
@@ -91,13 +91,13 @@ func revolveLoftFacesHeelBoundarySideTie(proof *revolveLoftFacesSourceCertificat
 	if proof == nil || proof.trim == nil || proof.trim.Source == nil ||
 		proof.trim.Source.source == nil ||
 		census == nil || census.manifest == nil || arc == nil || arc.time == nil ||
-		arc.circle.span < 0 || arc.circle.span >= len(proof.section.spans) ||
+		arc.circle.span < 0 || arc.circle.span >= len(proof.section.Spans) ||
 		boundary.face == nil || boundary.segment < 0 ||
 		boundary.segment >= len(proof.trim.Source.profile.Outer.Segments) {
 		return result, false
 	}
-	section := proof.section.spans[arc.circle.span]
-	vertical := section.start.U == section.end.U
+	section := proof.section.Spans[arc.circle.span]
+	vertical := section.Start.U == section.End.U
 	if vertical {
 		matchedSide := false
 		for _, entry := range census.manifest.vertical {
@@ -163,12 +163,12 @@ func revolveLoftFacesCapMeridianIdentity(proof *revolveLoftFacesSourceCertificat
 	if proof == nil || proof.trim == nil || proof.trim.Source == nil ||
 		proof.trim.Source.source == nil || arc == nil ||
 		arc.time == nil || arc.circle.x == nil || arc.circle.radius == nil ||
-		arc.circle.span < 0 || arc.circle.span >= len(proof.section.spans) ||
+		arc.circle.span < 0 || arc.circle.span >= len(proof.section.Spans) ||
 		arc.band < 0 || arc.band+1 >= len(proof.trim.Maps) {
 		return false
 	}
-	section := proof.section.spans[arc.circle.span]
-	if section.start.U == section.end.U ||
+	section := proof.section.Spans[arc.circle.span]
+	if section.Start.U == section.End.U ||
 		boundary.segment < 0 ||
 		boundary.segment >= len(proof.trim.Source.profile.Outer.Segments) {
 		return false

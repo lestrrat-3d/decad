@@ -22,16 +22,16 @@ func TestSpiralFirstJoinDeclinesTangentHeelOutsideFiniteBlankOnly(t *testing.T) 
 	trim := tooth.n.Payload.(facetedPayload).LoftFacesTrim
 	require.NotNil(t, trim)
 	require.True(t, spiralTangentRecordCurrent(trim))
-	m, b := section.section.meridianEquation()
+	m, b := section.Section.MeridianEquation()
 	toeX, ok := spiralRootToolX(m, b, trim.Toe)
 	require.True(t, ok)
 	heelX, ok := spiralRootToolX(m, b, trim.Heel)
 	require.True(t, ok)
-	_, ok = spiralToolOuterGap(trim.Heel, section.ded, section.heelOuter, -1)
+	_, ok = spiralToolOuterGap(trim.Heel, section.Ded, section.HeelOuter, -1)
 	require.True(t, ok, "the finite heel gap admits this producer-built tool")
 	require.True(t, spiralTangentCapTouchesHeelCircle(trim, m, b, toeX, heelX))
 	require.False(t, spiralHeelCapEightOutside(trim.Maps[8],
-		lfAdd(lfF(section.ded.U), lfF(section.ded.V))))
+		lfAdd(lfF(section.Ded.U), lfF(section.Ded.V))))
 
 	proof, accepted, err := certifySpiralFirstJoin(t.Context(), blank, tooth)
 	require.NoError(t, err)
@@ -48,7 +48,7 @@ func TestSpiralFirstJoinDeclinesTangentToeCapPastToeCircle(t *testing.T) {
 	trim := tooth.n.Payload.(facetedPayload).LoftFacesTrim
 	require.NotNil(t, trim)
 	require.True(t, spiralTangentRecordCurrent(trim))
-	m, b := section.section.meridianEquation()
+	m, b := section.Section.MeridianEquation()
 	toeX, ok := spiralRootToolX(m, b, trim.Toe)
 	require.True(t, ok)
 	heelX, ok := spiralRootToolX(m, b, trim.Heel)

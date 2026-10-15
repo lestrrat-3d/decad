@@ -38,7 +38,7 @@ func TestMappedArcRadialTimeBandTwoExactTimeCrossings(t *testing.T) {
 		},
 		Maps: []loftFaceMap{first, second},
 	}
-	meridian := revolveSectionSpan{start: planePoint{V: 1.5}, end: planePoint{U: 1, V: 1.5}}
+	meridian := revolveSectionSpan{Start: planePoint{V: 1.5}, End: planePoint{U: 1, V: 1.5}}
 	_, certified := mappedArcFiniteSide(context.Background(), &loftFacesTrimRecord{}, 0, meridian)
 	require.False(t, certified)
 	got, certified := mappedArcRadialTimeBand(context.Background(), trim, 0, 0, meridian)

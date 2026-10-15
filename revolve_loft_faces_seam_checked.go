@@ -21,18 +21,18 @@ func revolveLoftFacesCertifiedArcPatches(ctx context.Context, blank, tooth *Body
 		return nil, empty, empty, false, nil
 	}
 	proof, graph, ok, err := revolveLoftFacesLiveGraph(ctx, blank, tooth)
-	if err != nil || !ok || sectionIndex >= len(proof.section.spans) {
+	if err != nil || !ok || sectionIndex >= len(proof.section.Spans) {
 		return nil, empty, empty, false, err
 	}
-	section := proof.section.spans[sectionIndex]
-	if section.face == nil || section.start.U == section.end.U {
+	section := proof.section.Spans[sectionIndex]
+	if section.Face == nil || section.Start.U == section.End.U {
 		return nil, empty, empty, false, nil
 	}
 	var selected *revolveLoftFacesGraphRun
 	for i := range graph.runs {
 		run := &graph.runs[i]
 		cell := graph.cells[run.cellID]
-		if cell.sectionIndex != sectionIndex || cell.blankFace != section.face ||
+		if cell.sectionIndex != sectionIndex || cell.blankFace != section.Face ||
 			cell.pairID < 0 || cell.source == nil ||
 			graph.pairs[cell.pairID].verdict != revolveLoftFacesPairSourceCandidate {
 			continue

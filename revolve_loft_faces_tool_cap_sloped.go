@@ -17,7 +17,7 @@ func revolveLoftFacesHeelSlopedOccupiedArc(ctx context.Context,
 		proof.trim == nil || proof.trim.Toe == nil || proof.trim.Heel == nil ||
 		circle.tool != 1 || circle.sourceMiss || circle.x == nil ||
 		circle.radius == nil || circle.radius.Sign() <= 0 ||
-		circle.span < 0 || circle.span >= len(proof.section.spans) ||
+		circle.span < 0 || circle.span >= len(proof.section.Spans) ||
 		circle.blankFace == nil || circle.capFace == nil ||
 		circle.capFace != proof.heelFace ||
 		!revolveLoftFacesSectionCurrent(proof) ||
@@ -38,14 +38,14 @@ func revolveLoftFacesHeelSlopedOccupiedArc(ctx context.Context,
 		uniqueResultSourceFace(proof.tooth, trim.HeelCapGroup) != circle.capFace {
 		return nil, false, nil
 	}
-	span := proof.section.spans[circle.span]
-	if span.start.U == span.end.U || span.face != circle.blankFace ||
-		span.face.n.Body != bodyNode(proof.blank) || len(span.origins) == 0 {
+	span := proof.section.Spans[circle.span]
+	if span.Start.U == span.End.U || span.Face != circle.blankFace ||
+		span.Face.n.Body != bodyNode(proof.blank) || len(span.Origins) == 0 {
 		return nil, false, nil
 	}
 	face, live := revolveSpanFace(proof.blank, span)
 	if !live || face != circle.blankFace ||
-		!verticalOriginsMatch(face.originRefs(), span.origins) {
+		!verticalOriginsMatch(face.originRefs(), span.Origins) {
 		return nil, false, nil
 	}
 	x, radius, crosses, decided := revolveLoftFacesToolCircleOnSpan(trim.Heel, span)
@@ -84,35 +84,35 @@ func revolveLoftFacesHeelSlopedOccupiedArc(ctx context.Context,
 func revolveLoftFacesSlopedRadialInside(section revolveSectionCertificate,
 	spanIndex int, x, radius *big.Rat) bool {
 	if x == nil || radius == nil || radius.Sign() <= 0 ||
-		spanIndex < 0 || spanIndex >= len(section.spans) ||
-		section.axisSpan < 0 || section.axisSpan >= len(section.spans) ||
-		spanIndex == section.axisSpan {
+		spanIndex < 0 || spanIndex >= len(section.Spans) ||
+		section.AxisSpan < 0 || section.AxisSpan >= len(section.Spans) ||
+		spanIndex == section.AxisSpan {
 		return false
 	}
-	axis := section.spans[section.axisSpan]
-	if axis.start.V != 0 || axis.end.V != 0 ||
-		lfF(axis.start.U).Cmp(x) >= 0 || lfF(axis.end.U).Cmp(x) <= 0 {
+	axis := section.Spans[section.AxisSpan]
+	if axis.Start.V != 0 || axis.End.V != 0 ||
+		lfF(axis.Start.U).Cmp(x) >= 0 || lfF(axis.End.U).Cmp(x) <= 0 {
 		return false
 	}
 	found := false
-	for i, span := range section.spans {
-		startX, endX := lfF(span.start.U), lfF(span.end.U)
+	for i, span := range section.Spans {
+		startX, endX := lfF(span.Start.U), lfF(span.End.U)
 		if startX.Cmp(x) == 0 || endX.Cmp(x) == 0 {
 			return false
 		}
-		if i == section.axisSpan {
+		if i == section.AxisSpan {
 			continue
 		}
 		if startX.Cmp(x) == endX.Cmp(x) {
 			continue
 		}
 		if i != spanIndex || startX.Cmp(x) <= 0 || endX.Cmp(x) >= 0 ||
-			span.start.V < 0 || span.end.V < 0 {
+			span.Start.V < 0 || span.End.V < 0 {
 			return false
 		}
 		fraction := lfDiv(lfSub(x, startX), lfSub(endX, startX))
-		atX := lfAdd(lfF(span.start.V), lfMul(fraction,
-			lfSub(lfF(span.end.V), lfF(span.start.V))))
+		atX := lfAdd(lfF(span.Start.V), lfMul(fraction,
+			lfSub(lfF(span.End.V), lfF(span.Start.V))))
 		if atX.Cmp(radius) != 0 {
 			return false
 		}

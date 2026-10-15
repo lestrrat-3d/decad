@@ -19,12 +19,12 @@ func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
 	if err != nil || !complete || manifest == nil {
 		t.Fatalf("live source did not reach all-side consumer: %v, %t", err, complete)
 	}
-	if len(manifest.sideOutcome) != len(proof.section.spans) {
+	if len(manifest.sideOutcome) != len(proof.section.Spans) {
 		t.Fatal("all-side record does not cover the live Revolve section")
 	}
 	contacts, misses := 0, 0
 	for _, entry := range manifest.vertical {
-		if entry.sectionIndex < 0 || entry.sectionIndex >= len(proof.section.spans) ||
+		if entry.sectionIndex < 0 || entry.sectionIndex >= len(proof.section.Spans) ||
 			entry.outcome == revolveLoftFacesVerticalContact && entry.side == nil ||
 			entry.outcome == revolveLoftFacesVerticalMiss && entry.side != nil {
 			t.Fatal("vertical answer lacks its live side record")
@@ -94,18 +94,18 @@ func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
 		}
 	})
 	t.Run("changed root section", func(t *testing.T) {
-		original := proof.section.rootStart
-		defer func() { proof.section.rootStart = original }()
-		proof.section.rootStart.U += 0.125
+		original := proof.section.RootStart
+		defer func() { proof.section.RootStart = original }()
+		proof.section.RootStart.U += 0.125
 		_, complete, err := revolveLoftFacesAllSideManifest(t.Context(), proof)
 		if err != nil || complete {
 			t.Fatalf("changed live root section was admitted: %v, %t", err, complete)
 		}
 	})
 	t.Run("changed root cone", func(t *testing.T) {
-		original := proof.section.rootCone
-		defer func() { proof.section.rootCone = original }()
-		proof.section.rootCone.Origin.X += 0.125
+		original := proof.section.RootCone
+		defer func() { proof.section.RootCone = original }()
+		proof.section.RootCone.Origin.X += 0.125
 		_, complete, err := revolveLoftFacesAllSideManifest(t.Context(), proof)
 		if err != nil || complete {
 			t.Fatalf("changed live root cone was admitted: %v, %t", err, complete)

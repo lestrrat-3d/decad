@@ -38,24 +38,24 @@ func TestSpiralBlankUsesAuthenticatedRevolveSection(t *testing.T) {
 	require.NotEmpty(t, candidates)
 	source, ok := exactSpiralBlank(blank)
 	require.True(t, ok)
-	require.Same(t, blank, source.section.blank)
+	require.Same(t, blank, source.Section.Blank)
 	rootCandidates := 0
 	for _, candidate := range candidates {
-		if candidate.rootStart != section[4] || candidate.rootEnd != section[3] {
+		if candidate.RootStart != section[4] || candidate.RootEnd != section[3] {
 			continue
 		}
 		rootCandidates++
-		require.Equal(t, candidate.rootSpan, source.section.rootSpan)
-		require.Same(t, candidate.spans[candidate.rootSpan].face, source.rootFace)
-		require.Equal(t, candidate.coneGap, source.section.coneGap)
+		require.Equal(t, candidate.RootSpan, source.Section.RootSpan)
+		require.Same(t, candidate.Spans[candidate.RootSpan].Face, source.RootFace)
+		require.Equal(t, candidate.ConeGap, source.Section.ConeGap)
 	}
 	require.Equal(t, 1, rootCandidates)
-	require.Equal(t, section[4], source.toeRoot)
-	require.Equal(t, section[3], source.ded)
-	for edge, index := range source.edgeIndex {
+	require.Equal(t, section[4], source.ToeRoot)
+	require.Equal(t, section[3], source.Ded)
+	for edge, index := range source.EdgeIndex {
 		found := false
-		for _, span := range source.section.spans {
-			if len(span.sourceEdges) == 1 && span.sourceEdges[0] == index {
+		for _, span := range source.Section.Spans {
+			if len(span.SourceEdges) == 1 && span.SourceEdges[0] == index {
 				found = true
 				break
 			}
@@ -72,7 +72,7 @@ func TestSpiralBlankRefusesSevenSideRevolveSection(t *testing.T) {
 	candidates := revolveRootCandidates(blank)
 	require.NotEmpty(t, candidates)
 	for _, candidate := range candidates {
-		require.Len(t, candidate.spans, 7)
+		require.Len(t, candidate.Spans, 7)
 	}
 	_, admitted := exactSpiralBlank(blank)
 	require.False(t, admitted)

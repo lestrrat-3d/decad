@@ -65,10 +65,10 @@ func spiralSortedGraphTri(a, b, c int) spiralGraphTri {
 }
 
 func spiralBlankFaceGroup(blank *Body, source *spiralBlankSource, edge int) int {
-	if blank == nil || source == nil || edge < 0 || edge >= len(source.edgeIndex) {
+	if blank == nil || source == nil || edge < 0 || edge >= len(source.EdgeIndex) {
 		return -1
 	}
-	role := fmt.Sprintf("side(0,%d)", source.edgeIndex[edge])
+	role := fmt.Sprintf("side(0,%d)", source.EdgeIndex[edge])
 	group := -1
 	for i, face := range blank.Faces() {
 		for _, origin := range face.Origins() {
@@ -90,7 +90,7 @@ func spiralBlankFaceGroup(blank *Body, source *spiralBlankSource, edge int) int 
 func spiralHeldBlankCellGraph(ctx context.Context, blank *Body, held *meshbool.BoolMesh,
 	source *spiralBlankSource, edge int) (bool, error) {
 	if ctx == nil || blank == nil || held == nil || source == nil ||
-		edge < 0 || edge >= len(source.edgeIndex) {
+		edge < 0 || edge >= len(source.EdgeIndex) {
 		return false, nil
 	}
 	group := spiralBlankFaceGroup(blank, source, edge)

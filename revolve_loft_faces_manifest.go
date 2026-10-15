@@ -28,7 +28,7 @@ type revolveLoftFacesNonverticalSide struct {
 func revolveLoftFacesNonverticalManifest(ctx context.Context,
 	proof *revolveLoftFacesSourceCertificate) ([]revolveLoftFacesNonverticalSide, bool, error) {
 	if ctx == nil || proof == nil || proof.blank == nil || proof.tooth == nil || proof.trim == nil ||
-		proof.section.blank != proof.blank || len(proof.section.spans) == 0 ||
+		proof.section.Blank != proof.blank || len(proof.section.Spans) == 0 ||
 		len(proof.sourceRefs) != len(proof.trim.Maps)-1 {
 		return nil, false, nil
 	}
@@ -49,17 +49,17 @@ func revolveLoftFacesNonverticalManifest(ctx context.Context,
 	}
 	current := false
 	for _, candidate := range revolveRootCandidates(proof.blank) {
-		if candidate.rootSpan != proof.section.rootSpan ||
-			len(candidate.spans) != len(proof.section.spans) {
+		if candidate.RootSpan != proof.section.RootSpan ||
+			len(candidate.Spans) != len(proof.section.Spans) {
 			continue
 		}
 		matches := true
-		for i, span := range candidate.spans {
-			old := proof.section.spans[i]
-			matches = matches && span.face == old.face &&
-				span.start == old.start && span.end == old.end &&
-				slices.Equal(span.sourceEdges, old.sourceEdges) &&
-				slices.Equal(span.origins, old.origins)
+		for i, span := range candidate.Spans {
+			old := proof.section.Spans[i]
+			matches = matches && span.Face == old.Face &&
+				span.Start == old.Start && span.End == old.End &&
+				slices.Equal(span.SourceEdges, old.SourceEdges) &&
+				slices.Equal(span.Origins, old.Origins)
 		}
 		if matches {
 			current = true
@@ -71,12 +71,12 @@ func revolveLoftFacesNonverticalManifest(ctx context.Context,
 	}
 	faces := proof.tooth.Faces()
 	var manifest []revolveLoftFacesNonverticalSide
-	for sectionIndex, section := range proof.section.spans {
+	for sectionIndex, section := range proof.section.Spans {
 		if err := ctx.Err(); err != nil {
 			return nil, false, err
 		}
-		if section.face == nil || section.start.U == section.end.U ||
-			section.start.V <= 0 || section.end.V <= 0 {
+		if section.Face == nil || section.Start.U == section.End.U ||
+			section.Start.V <= 0 || section.End.V <= 0 {
 			continue
 		}
 		mapped, ok, err := revolveLoftFacesFiniteSpanCells(ctx, proof.trim, section)
@@ -88,7 +88,7 @@ func revolveLoftFacesNonverticalManifest(ctx context.Context,
 				ErrUnsupported, sectionIndex)
 		}
 		entry := revolveLoftFacesNonverticalSide{sectionIndex: sectionIndex,
-			face: section.face, origins: append([]provenance.Ref(nil), section.origins...)}
+			face: section.Face, origins: append([]provenance.Ref(nil), section.Origins...)}
 		for _, cell := range mapped {
 			if cell.band < 0 || cell.band >= len(proof.sourceRefs) ||
 				cell.segment < 0 || cell.segment >= len(proof.sourceRefs[cell.band]) ||

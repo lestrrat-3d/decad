@@ -13,7 +13,7 @@ func revolveLoftFacesBlankShellWithCapRings(ctx context.Context,
 	if err != nil || !ok || graph == nil || graph.manifest == nil {
 		return nil, false, err
 	}
-	if sectionIndex < 0 || sectionIndex >= len(proof.section.spans) {
+	if sectionIndex < 0 || sectionIndex >= len(proof.section.Spans) {
 		return nil, false, nil
 	}
 	var selected *revolveLoftFacesGraphRun
@@ -21,7 +21,7 @@ func revolveLoftFacesBlankShellWithCapRings(ctx context.Context,
 		run := &graph.runs[i]
 		cell := graph.cells[run.cellID]
 		if cell.sectionIndex == sectionIndex && cell.cellIndex == cellIndex &&
-			cell.source != nil && cell.blankFace == proof.section.spans[sectionIndex].face {
+			cell.source != nil && cell.blankFace == proof.section.Spans[sectionIndex].Face {
 			if selected != nil {
 				return nil, false, nil
 			}

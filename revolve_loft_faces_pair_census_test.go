@@ -27,7 +27,7 @@ func TestCurvedSourcePairCensusCoversLiveFaces(t *testing.T) {
 		_, duplicate := seen[key]
 		require.False(t, duplicate, "a live face pair must occur once")
 		seen[key] = struct{}{}
-		require.Equal(t, proof.section.spans[pair.sectionIndex].face, pair.blankFace)
+		require.Equal(t, proof.section.Spans[pair.sectionIndex].Face, pair.blankFace)
 		counts[pair.verdict]++
 		switch pair.verdict {
 		case revolveLoftFacesPairMiss:

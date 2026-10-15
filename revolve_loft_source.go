@@ -19,22 +19,22 @@ import (
 // Several whole source lines may form the same side when they continue
 // exactly forward on one line and Revolve retained one source face for them.
 type revolveSectionSpan struct {
-	start, end  planePoint
-	sourceEdges []int
-	face        *Face
-	origins     []provenance.Ref
+	Start, End  planePoint
+	SourceEdges []int
+	Face        *Face
+	Origins     []provenance.Ref
 }
 
 // revolveSectionCertificate describes the authenticated finite section and
 // one candidate conical contact face. Its spans stay in source walk order.
 type revolveSectionCertificate struct {
-	blank              *Body
-	spans              []revolveSectionSpan
-	frame              r3.Frame
-	axisSpan, rootSpan int
-	rootStart, rootEnd planePoint
-	rootCone           surfacegeom.Cone
-	coneGap            float64
+	Blank              *Body
+	Spans              []revolveSectionSpan
+	Frame              r3.Frame
+	AxisSpan, RootSpan int
+	RootStart, RootEnd planePoint
+	RootCone           surfacegeom.Cone
+	ConeGap            float64
 }
 
 // recordedRevolveSection does not classify a gear profile. It only checks a
@@ -99,15 +99,15 @@ func recordedRevolveSection(blank *Body) ([]revolveSectionSpan, int, r3.Frame, b
 	for j, start := range corners {
 		end := corners[(j+1)%len(corners)]
 		span := &spans[j]
-		span.start, span.end = points[start], points[end]
+		span.Start, span.End = points[start], points[end]
 		for i := start; i != end; i = (i + 1) % len(points) {
-			span.sourceEdges = append(span.sourceEdges, i)
+			span.SourceEdges = append(span.SourceEdges, i)
 		}
-		if span.start.U <= 0 || span.end.U <= 0 ||
-			span.start.V < 0 || span.end.V < 0 {
+		if span.Start.U <= 0 || span.End.U <= 0 ||
+			span.Start.V < 0 || span.End.V < 0 {
 			return nil, -1, empty, false
 		}
-		if span.start.V == 0 && span.end.V == 0 {
+		if span.Start.V == 0 && span.End.V == 0 {
 			if axisSpan >= 0 {
 				return nil, -1, empty, false
 			}
@@ -122,7 +122,7 @@ func recordedRevolveSection(blank *Body) ([]revolveSectionSpan, int, r3.Frame, b
 			return nil, -1, empty, false
 		}
 		usedFaces[face] = struct{}{}
-		span.face, span.origins = face, face.originRefs()
+		span.Face, span.Origins = face, face.originRefs()
 	}
 	if axisSpan < 0 {
 		return nil, -1, empty, false
@@ -145,9 +145,9 @@ func revolveSpanFace(blank *Body, span revolveSectionSpan) (*Face, bool) {
 	if !ok {
 		return nil, false
 	}
-	dz, dr := span.end.U-span.start.U, span.end.V-span.start.V
-	w := survey2d.SegmentWalk{StartU: span.start.U, StartV: span.start.V,
-		EndU: span.end.U, EndV: span.end.V, TanInU: dz, TanInV: dr}
+	dz, dr := span.End.U-span.Start.U, span.End.V-span.Start.V
+	w := survey2d.SegmentWalk{StartU: span.Start.U, StartV: span.Start.V,
+		EndU: span.End.U, EndV: span.End.V, TanInU: dz, TanInV: dr}
 	kind := wallCone
 	if dz == 0 {
 		kind = wallPlane
@@ -158,8 +158,8 @@ func revolveSpanFace(blank *Body, span revolveSectionSpan) (*Face, bool) {
 	if err != nil {
 		return nil, false
 	}
-	roles := make(map[string]struct{}, len(span.sourceEdges))
-	for _, index := range span.sourceEdges {
+	roles := make(map[string]struct{}, len(span.SourceEdges))
+	for _, index := range span.SourceEdges {
 		roles[fmt.Sprintf("side(0,%d)", index)] = struct{}{}
 	}
 	var matched *Face
@@ -199,10 +199,10 @@ func revolveRootCandidates(blank *Body) []revolveSectionCertificate {
 	}
 	var candidates []revolveSectionCertificate
 	for i, span := range spans {
-		if span.face == nil || span.start.V == 0 || span.end.V == 0 {
+		if span.Face == nil || span.Start.V == 0 || span.End.V == 0 {
 			continue
 		}
-		cone, ok := span.face.n.Surface.(surfacegeom.Cone)
+		cone, ok := span.Face.n.Surface.(surfacegeom.Cone)
 		if !ok || cone.Axis != (r3.Vec{X: 1}) ||
 			cone.Origin.Y != 0 || cone.Origin.Z != 0 ||
 			!proofbound.FiniteVec(cone.Origin) {
@@ -218,7 +218,7 @@ func revolveRootCandidates(blank *Body) []revolveSectionCertificate {
 		if !proofbound.FiniteVec(r3.Vec{X: slope}) || slope <= 0 {
 			continue
 		}
-		start, end := span.start, span.end
+		start, end := span.Start, span.End
 		if start.U > end.U {
 			start, end = end, start
 		}
@@ -231,9 +231,9 @@ func revolveRootCandidates(blank *Body) []revolveSectionCertificate {
 			continue
 		}
 		candidates = append(candidates, revolveSectionCertificate{
-			blank: blank, spans: spans, frame: frame,
-			axisSpan: axisSpan, rootSpan: i, rootStart: start, rootEnd: end,
-			rootCone: cone, coneGap: gap})
+			Blank: blank, Spans: spans, Frame: frame,
+			AxisSpan: axisSpan, RootSpan: i, RootStart: start, RootEnd: end,
+			RootCone: cone, ConeGap: gap})
 	}
 	return candidates
 }
@@ -248,15 +248,15 @@ func revolveMeridianResidual(point planePoint, slope, originX float64) float64 {
 	return proofbound.RatFloatUp(r)
 }
 
-func (section revolveSectionCertificate) coneSection() sketch.ConeSection {
-	angle, _ := section.rootCone.HalfAngle.In(units.Radian)
-	return sketch.ConeSection{Apex: section.rootCone.Origin,
-		Axis: section.rootCone.Axis, Slope: math.Tan(angle)}
+func (section revolveSectionCertificate) ConeSection() sketch.ConeSection {
+	angle, _ := section.RootCone.HalfAngle.In(units.Radian)
+	return sketch.ConeSection{Apex: section.RootCone.Origin,
+		Axis: section.RootCone.Axis, Slope: math.Tan(angle)}
 }
 
-func (section revolveSectionCertificate) meridianEquation() (*big.Rat, *big.Rat) {
-	x0, x1 := proofarith.FloatRat(section.rootStart.U), proofarith.FloatRat(section.rootEnd.U)
-	r0, r1 := proofarith.FloatRat(section.rootStart.V), proofarith.FloatRat(section.rootEnd.V)
+func (section revolveSectionCertificate) MeridianEquation() (*big.Rat, *big.Rat) {
+	x0, x1 := proofarith.FloatRat(section.RootStart.U), proofarith.FloatRat(section.RootEnd.U)
+	r0, r1 := proofarith.FloatRat(section.RootStart.V), proofarith.FloatRat(section.RootEnd.V)
 	m := new(big.Rat).Quo(new(big.Rat).Sub(r1, r0), new(big.Rat).Sub(x1, x0))
 	b := new(big.Rat).Sub(r0, new(big.Rat).Mul(m, x0))
 	return m, b

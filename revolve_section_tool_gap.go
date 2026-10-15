@@ -13,21 +13,21 @@ import (
 func revolveSectionToolGap(section revolveSectionCertificate,
 	record *pointConeTrimRecord) (float64, bool) {
 	if record == nil || record.lower == nil || record.upper == nil ||
-		len(section.spans) < 4 || section.rootSpan < 0 ||
-		section.rootSpan >= len(section.spans) {
+		len(section.Spans) < 4 || section.RootSpan < 0 ||
+		section.RootSpan >= len(section.Spans) {
 		return 0, false
 	}
-	root := section.spans[section.rootSpan]
+	root := section.Spans[section.RootSpan]
 	var neighbors [2]planePoint
-	if root.start.U < root.end.U {
-		neighbors[0] = section.spans[(section.rootSpan+len(section.spans)-1)%len(section.spans)].start
-		neighbors[1] = section.spans[(section.rootSpan+1)%len(section.spans)].end
+	if root.Start.U < root.End.U {
+		neighbors[0] = section.Spans[(section.RootSpan+len(section.Spans)-1)%len(section.Spans)].Start
+		neighbors[1] = section.Spans[(section.RootSpan+1)%len(section.Spans)].End
 	} else {
-		neighbors[0] = section.spans[(section.rootSpan+1)%len(section.spans)].end
-		neighbors[1] = section.spans[(section.rootSpan+len(section.spans)-1)%len(section.spans)].start
+		neighbors[0] = section.Spans[(section.RootSpan+1)%len(section.Spans)].End
+		neighbors[1] = section.Spans[(section.RootSpan+len(section.Spans)-1)%len(section.Spans)].Start
 	}
-	x0, x1 := proofarith.FloatRat(section.rootStart.U), proofarith.FloatRat(section.rootEnd.U)
-	r0, r1 := proofarith.FloatRat(section.rootStart.V), proofarith.FloatRat(section.rootEnd.V)
+	x0, x1 := proofarith.FloatRat(section.RootStart.U), proofarith.FloatRat(section.RootEnd.U)
+	r0, r1 := proofarith.FloatRat(section.RootStart.V), proofarith.FloatRat(section.RootEnd.V)
 	dx := new(big.Rat).Sub(x1, x0)
 	if dx.Sign() <= 0 {
 		return 0, false
@@ -38,7 +38,7 @@ func revolveSectionToolGap(section revolveSectionCertificate,
 	for i, item := range []struct {
 		limit *pointConeLimit
 		root  planePoint
-	}{{record.lower, section.rootStart}, {record.upper, section.rootEnd}} {
+	}{{record.lower, section.RootStart}, {record.upper, section.RootEnd}} {
 		outer := neighbors[i]
 		if outer.V <= 0 || outer == item.root {
 			return 0, false

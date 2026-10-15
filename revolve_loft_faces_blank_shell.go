@@ -137,10 +137,10 @@ func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
 		stationCount += len(vertices)
 	}
 	maxRadius := 0.0
-	for _, span := range proof.section.spans {
-		maxRadius = max(maxRadius, span.start.V, span.end.V)
+	for _, span := range proof.section.Spans {
+		maxRadius = max(maxRadius, span.Start.V, span.End.V)
 	}
-	if proof.section.axisSpan < 0 || !proofbound.FiniteVec(r3.Vec{X: maxRadius}) ||
+	if proof.section.AxisSpan < 0 || !proofbound.FiniteVec(r3.Vec{X: maxRadius}) ||
 		maxRadius <= 0 || maxRadius > 0.04*1024*1024 {
 		return nil, false, nil
 	}
@@ -166,7 +166,7 @@ func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
 	}
 	rays := revolveLoftFacesShellRaysForRuns(n, seams, capVertices)
 	if len(rays) < 4 || len(rays) > 4*n+stationCount+len(capVertices) ||
-		len(rays)*len(proof.section.spans) > 1<<16 {
+		len(rays)*len(proof.section.Spans) > 1<<16 {
 		return nil, false, nil
 	}
 	if len(seams) == 1 {
@@ -202,11 +202,11 @@ func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
 		}
 	}
 	out.seam = out.seams[0]
-	group := make([]int, len(proof.section.spans))
-	for i, span := range proof.section.spans {
+	group := make([]int, len(proof.section.Spans))
+	for i, span := range proof.section.Spans {
 		group[i] = -1
-		if span.face == nil {
-			if i != proof.section.axisSpan {
+		if span.Face == nil {
+			if i != proof.section.AxisSpan {
 				return nil, false, nil
 			}
 			continue
@@ -220,7 +220,7 @@ func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
 		}
 		group[i] = len(out.mesh.Groups)
 		out.mesh.Groups = append(out.mesh.Groups,
-			facetGroup{Origins: append([]provenance.Ref(nil), span.origins...), Planar: span.face.isPlanar()})
+			facetGroup{Origins: append([]provenance.Ref(nil), span.Origins...), Planar: span.Face.isPlanar()})
 	}
 	appendPoint := func(point r3.Vec, bound float64) int {
 		index := len(out.mesh.Verts)
@@ -279,24 +279,24 @@ func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
 		}
 		return ring, true
 	}
-	rings := make([][]int, len(proof.section.spans))
-	for i, span := range proof.section.spans {
+	rings := make([][]int, len(proof.section.Spans))
+	for i, span := range proof.section.Spans {
 		if err := ctx.Err(); err != nil {
 			return nil, false, err
 		}
 		var valid bool
-		rings[i], valid = makeRing(lfF(span.start.U), lfF(span.start.V), nil)
+		rings[i], valid = makeRing(lfF(span.Start.U), lfF(span.Start.V), nil)
 		if !valid {
 			return nil, false, nil
 		}
 	}
-	cuts := make([][]revolveLoftFacesShellCut, len(proof.section.spans))
+	cuts := make([][]revolveLoftFacesShellCut, len(proof.section.Spans))
 	for _, cut := range seamCuts {
 		cuts[cut.sectionIndex] = append(cuts[cut.sectionIndex], cut)
 	}
 	for _, cut := range capCuts {
 		if cut.arc == nil || cut.sectionIndex < 0 ||
-			cut.sectionIndex >= len(proof.section.spans) ||
+			cut.sectionIndex >= len(proof.section.Spans) ||
 			cut.x == nil || cut.radius == nil || cut.seam ||
 			cut.arc.circle.x == nil || cut.arc.circle.radius == nil ||
 			cut.arc.circle.span != cut.sectionIndex ||
@@ -310,14 +310,14 @@ func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
 		}
 		cuts[cut.sectionIndex] = append(cuts[cut.sectionIndex], cut)
 	}
-	if (len(proof.section.spans)+len(capCuts)+len(seamCuts))*len(rays) > 1<<16 {
+	if (len(proof.section.Spans)+len(capCuts)+len(seamCuts))*len(rays) > 1<<16 {
 		return nil, false, nil
 	}
 	for i := range cuts {
-		span := proof.section.spans[i]
+		span := proof.section.Spans[i]
 		parameter := func(cut revolveLoftFacesShellCut) (*big.Rat, bool) {
-			startX, endX := lfF(span.start.U), lfF(span.end.U)
-			startR, endR := lfF(span.start.V), lfF(span.end.V)
+			startX, endX := lfF(span.Start.U), lfF(span.End.U)
+			startR, endR := lfF(span.Start.V), lfF(span.End.V)
 			if startX.Cmp(endX) != 0 {
 				fraction := lfDiv(lfSub(cut.x, startX), lfSub(endX, startX))
 				return fraction, lfAdd(startR, lfMul(fraction, lfSub(endR, startR))).Cmp(cut.radius) == 0
@@ -420,7 +420,7 @@ func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
 		}
 		return true
 	}
-	for i := range proof.section.spans {
+	for i := range proof.section.Spans {
 		if group[i] < 0 {
 			continue
 		}
@@ -520,29 +520,29 @@ func revolveLoftFacesShellSideCurrent(ctx context.Context,
 	index int, span revolveSectionSpan) (bool, error) {
 	switch manifest.sideOutcome[index] {
 	case revolveLoftFacesSideSourceCandidate:
-		if span.start.U != span.end.U {
+		if span.Start.U != span.End.U {
 			for _, side := range manifest.nonvertical {
 				if side.sectionIndex == index {
-					return side.face == span.face && len(side.cells) > 0 &&
-						slices.Equal(side.origins, span.origins), nil
+					return side.face == span.Face && len(side.cells) > 0 &&
+						slices.Equal(side.origins, span.Origins), nil
 				}
 			}
 			return false, nil
 		}
 		side, outcome, err := revolveLoftFacesVerticalSideClassify(ctx, proof, index)
 		if err != nil || outcome != revolveLoftFacesVerticalContact ||
-			side == nil || side.face != span.face || len(side.cells) == 0 {
+			side == nil || side.face != span.Face || len(side.cells) == 0 {
 			return false, err
 		}
 		for _, entry := range manifest.vertical {
 			if entry.sectionIndex == index {
 				return entry.outcome == revolveLoftFacesVerticalContact &&
-					entry.side != nil && entry.side.face == span.face &&
+					entry.side != nil && entry.side.face == span.Face &&
 					len(entry.side.cells) > 0, nil
 			}
 		}
 	case revolveLoftFacesSideMiss:
-		if span.start.U != span.end.U {
+		if span.Start.U != span.End.U {
 			return false, nil
 		}
 		side, outcome, err := revolveLoftFacesVerticalSideClassify(ctx, proof, index)

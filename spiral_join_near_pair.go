@@ -50,12 +50,12 @@ func spiralNearTrimSides(proof *spiralFirstJoinSource) bool {
 		return false
 	}
 	blank := proof.Blank
-	return spiralFiniteConeSide(proof.Tooth.Toe, blank.toeRoot, blank.toeOuter, 1) &&
-		spiralFiniteConeSide(proof.Tooth.Heel, blank.toeRoot, blank.toeOuter, -1) &&
-		spiralFiniteConeSide(proof.Tooth.Toe, blank.ded, blank.heelOuter, 1) &&
-		spiralFiniteConeSide(proof.Tooth.Heel, blank.ded, blank.heelOuter, -1) &&
-		spiralFiniteConeSide(proof.Tooth.Toe, blank.toeRoot, blank.ded, 1) &&
-		spiralFiniteConeSide(proof.Tooth.Heel, blank.toeRoot, blank.ded, -1)
+	return spiralFiniteConeSide(proof.Tooth.Toe, blank.ToeRoot, blank.ToeOuter, 1) &&
+		spiralFiniteConeSide(proof.Tooth.Heel, blank.ToeRoot, blank.ToeOuter, -1) &&
+		spiralFiniteConeSide(proof.Tooth.Toe, blank.Ded, blank.HeelOuter, 1) &&
+		spiralFiniteConeSide(proof.Tooth.Heel, blank.Ded, blank.HeelOuter, -1) &&
+		spiralFiniteConeSide(proof.Tooth.Toe, blank.ToeRoot, blank.Ded, 1) &&
+		spiralFiniteConeSide(proof.Tooth.Heel, blank.ToeRoot, blank.Ded, -1)
 }
 
 func spiralUniqueFaceWithOrigin(body *Body, want provenance.Ref) *Face {
@@ -115,8 +115,8 @@ func spiralNearFaceTable(blank, tooth *Body, proof *spiralFirstJoinSource) (
 	map[[2]*Face]spiralNearPairKind, bool,
 ) {
 	if blank == nil || tooth == nil || proof == nil || proof.Blank == nil ||
-		proof.Tooth == nil || proof.Blank.rootFace == nil ||
-		proof.Blank.rootFace.n.Body != bodyNode(blank) {
+		proof.Tooth == nil || proof.Blank.RootFace == nil ||
+		proof.Blank.RootFace.n.Body != bodyNode(blank) {
 		return nil, false
 	}
 	p, ok := tooth.n.Payload.(facetedPayload)
@@ -125,10 +125,10 @@ func spiralNearFaceTable(blank, tooth *Body, proof *spiralFirstJoinSource) (
 	}
 	blankFace := func(edge int) *Face {
 		return spiralUniqueFaceWithOrigin(blank, provenance.Ref{Producer: blank.n.Origin.Producer,
-			Role: fmt.Sprintf("side(0,%d)", proof.Blank.edgeIndex[edge])})
+			Role: fmt.Sprintf("side(0,%d)", proof.Blank.EdgeIndex[edge])})
 	}
 	heel, root, toe := blankFace(2), blankFace(3), blankFace(4)
-	if heel == nil || root == nil || toe == nil || root != proof.Blank.rootFace ||
+	if heel == nil || root == nil || toe == nil || root != proof.Blank.RootFace ||
 		heel == root || heel == toe || root == toe {
 		return nil, false
 	}

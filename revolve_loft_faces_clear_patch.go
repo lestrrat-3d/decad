@@ -203,9 +203,9 @@ func (c *revolveLoftFacesClearPatchContext) classifyClearPatch(ctx context.Conte
 		return pointquery.Undecided, false, nil
 	}
 	cell := shell.triangleCells[index]
-	if cell.section < 0 || cell.section >= len(source.section.spans) ||
+	if cell.section < 0 || cell.section >= len(source.section.Spans) ||
 		cell.section >= len(shell.sectionRings) ||
-		source.section.spans[cell.section].face == nil ||
+		source.section.Spans[cell.section].Face == nil ||
 		cell.band < 0 || cell.band+1 >= len(shell.sectionRings[cell.section]) ||
 		cell.ray < 0 || cell.ray >= shell.rayCount {
 		return pointquery.Undecided, false, nil
@@ -285,17 +285,17 @@ func revolveLoftFacesClearPatchToolCurrent(source *revolveLoftFacesSourceCertifi
 
 func sameRevolveLoftFacesShellGroup(source *revolveLoftFacesSourceCertificate,
 	shell *revolveLoftFacesBlankSeamShell, section, group int) bool {
-	span := source.section.spans[section]
-	if span.face == nil || group >= len(shell.mesh.Groups) ||
-		!slices.Equal(shell.mesh.Groups[group].Origins, span.origins) {
+	span := source.section.Spans[section]
+	if span.Face == nil || group >= len(shell.mesh.Groups) ||
+		!slices.Equal(shell.mesh.Groups[group].Origins, span.Origins) {
 		return false
 	}
 	want := 0
-	for i := range source.section.spans {
+	for i := range source.section.Spans {
 		if i == section {
 			return group == want
 		}
-		if source.section.spans[i].face != nil {
+		if source.section.Spans[i].Face != nil {
 			want++
 		}
 	}

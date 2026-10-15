@@ -146,10 +146,10 @@ type facetedPayload struct {
 	// SpiralTools exists only on a transient disjoint-tool operand built by
 	// A multi-body Union. It maps its source faces back to the live input tools.
 	SpiralTools *spiralCombinedTools
-	// revolveLoftJoin retains a geometry-certified section/sector source.
-	revolveLoftJoin *revolveLoftJoinRecord
-	// revolveLoftSector identifies one rigid copy of a trimmed point loft.
-	revolveLoftSector *revolveLoftSectorPlacement
+	// RevolveLoftJoin retains a geometry-certified section/sector source.
+	RevolveLoftJoin *revolveLoftJoinRecord
+	// RevolveLoftSector identifies one rigid copy of a trimmed point loft.
+	RevolveLoftSector *revolveLoftSectorPlacement
 	Verts             []r3.Vec
 	// VertexBound is β(v) per held vertex (docs/faceted-vertex-bounds-design.md
 	// §2, §4.1), composed by the boolean that built the payload (§3) and
@@ -234,7 +234,7 @@ func facetedPlacementDelta(xform, composed r3.Transform) (r3.Transform, error) {
 // the float delta as ever, charged for its distance to Q, and every record
 // that describes the float placement rather than Q is dropped (every group
 // surface tag and denoted patch, pointSection, pointPlane, pointSimilarity,
-// revolveLoftSector and LoftMirrorCopy). A dropped record is never rebuilt
+// RevolveLoftSector and LoftMirrorCopy). A dropped record is never rebuilt
 // from a later float placement.
 func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref producerID, composed r3.Transform,
 	exact *exactrotation.Rotation) (*Body, error) {
@@ -261,7 +261,7 @@ func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref produc
 	// A rigid copy keeps the immutable Split source for certified face
 	// centroid ranking, but cannot become a new structural Split source.
 	next.pointPlaneSourceEligible = false
-	next.revolveLoftJoin = nil
+	next.RevolveLoftJoin = nil
 	next.ObliqueBoss = nil
 	next.PrismUnionFillet = nil
 	next.CrossCylinderBore = nil
@@ -271,7 +271,7 @@ func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref produc
 	next.LoftMirrorCopy = nil
 	next.LoftMirrorCylinderJoin = nil
 	next.LoftMirrorCylinderBore = nil
-	next.revolveLoftSector = nil
+	next.RevolveLoftSector = nil
 	// The true solid follows each exact reading of delta, even when the
 	// accumulated float placement later returns to identity.
 	if delta != r3.Identity() {
@@ -283,11 +283,11 @@ func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref produc
 		next.LoftMirrorCopy = &loftMirrorPlacementRecord{Source: fp.LoftMirrorCopy.Source, Motion: composed}
 	}
 	if fp.pointCone != nil && fp.Xform == r3.Identity() {
-		next.revolveLoftSector = &revolveLoftSectorPlacement{source: fp.pointCone, motion: composed}
+		next.RevolveLoftSector = &revolveLoftSectorPlacement{Source: fp.pointCone, Motion: composed}
 	}
 	if exact != nil {
 		next.LoftMirrorCopy = nil
-		next.revolveLoftSector = nil
+		next.RevolveLoftSector = nil
 		next.pointSection = nil
 		next.pointPlane = nil
 		next.pointSimilarity = nil

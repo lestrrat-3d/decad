@@ -127,8 +127,8 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 	next.MirrorCapGroups = nil
 	next.LoftMirrorCylinderJoin = nil
 	next.LoftMirrorCylinderBore = nil
-	next.revolveLoftJoin = nil
-	next.revolveLoftSector = nil
+	next.RevolveLoftJoin = nil
+	next.RevolveLoftSector = nil
 	next.LoftFacesPrimitive = false
 	next.LoftFacesCap = nil
 	next.LoftFacesToe = nil

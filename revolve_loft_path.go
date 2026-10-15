@@ -46,25 +46,25 @@ func revolveExteriorPath(base facetedPayload, boundary revolveSectorBoundary,
 		edge  int
 	}
 	maxCrossBound := 0.0
-	for k := range boundary.contacts {
+	for k := range boundary.Contacts {
 		var p r3.Vec
 		var bound float64
 		var root [2]float64
 		var ok bool
-		edgeIndex := boundary.contacts[k].segment
-		if boundary.fitRoute {
-			edgeIndex = boundary.contacts[k].segment
-			p, bound, root, ok = revolveFitSeatPoint(source, boundary.contacts[k].fit, section)
+		edgeIndex := boundary.Contacts[k].Segment
+		if boundary.FitRoute {
+			edgeIndex = boundary.Contacts[k].Segment
+			p, bound, root, ok = revolveFitSeatPoint(source, boundary.Contacts[k].Fit, section)
 		} else {
-			p, bound, ok = revolveSeatPoint(source, boundary.contacts[k].line, section, base)
+			p, bound, ok = revolveSeatPoint(source, boundary.Contacts[k].Line, section, base)
 		}
 		if !ok {
 			return nil, 0, fmt.Errorf("%w: cone crossing has no finite spatial enclosure", ErrUnsupported)
 		}
 		best, edge := math.Inf(1), -1
-		if boundary.fitRoute {
+		if boundary.FitRoute {
 			edge, ok = revolveFitStationEdge(base, groups, source, edgeIndex,
-				boundary.contacts[k].fit, root)
+				boundary.Contacts[k].Fit, root)
 			if !ok {
 				return nil, 0, fmt.Errorf("%w: cone crossing has no unique source fan cell", ErrUnsupported)
 			}
@@ -100,17 +100,17 @@ func revolveExteriorPath(base facetedPayload, boundary revolveSectorBoundary,
 	full := make([]revolveSectorNode, 0, n+2)
 	var crossPosition [2]int
 	for i := range n {
-		full = append(full, revolveSectorNode{point: base.Verts[i+1], groupToNext: groups[i], crossing: -1})
+		full = append(full, revolveSectorNode{Point: base.Verts[i+1], GroupToNext: groups[i], Crossing: -1})
 		for k := range crossing {
 			if crossing[k].edge == i {
 				crossPosition[k] = len(full)
-				full = append(full, revolveSectorNode{point: crossing[k].p,
-					groupToNext: groups[i], crossing: k})
+				full = append(full, revolveSectorNode{Point: crossing[k].p,
+					GroupToNext: groups[i], Crossing: k})
 			}
 		}
 	}
-	witness := boundary.outsideWitness
-	if witness < 0 || witness >= len(source.entities) || witness == boundary.insideSegment {
+	witness := boundary.OutsideWitness
+	if witness < 0 || witness >= len(source.entities) || witness == boundary.InsideSegment {
 		return nil, 0, fmt.Errorf("%w: trimmed Loft has no certified outside segment", ErrUnsupported)
 	}
 	forward := make([]revolveSectorNode, 0, len(full))
@@ -122,8 +122,8 @@ func revolveExteriorPath(base facetedPayload, boundary revolveSectorBoundary,
 	}
 	hasTip, hasRoot := false, false
 	for i := 0; i+1 < len(forward); i++ {
-		hasTip = hasTip || forward[i].groupToNext == witness
-		hasRoot = hasRoot || forward[i].groupToNext == boundary.insideSegment
+		hasTip = hasTip || forward[i].GroupToNext == witness
+		hasRoot = hasRoot || forward[i].GroupToNext == boundary.InsideSegment
 	}
 	if !hasTip || hasRoot {
 		other := make([]revolveSectorNode, 0, len(full))
@@ -136,19 +136,19 @@ func revolveExteriorPath(base facetedPayload, boundary revolveSectorBoundary,
 		forward = other
 		hasTip, hasRoot = false, false
 		for i := 0; i+1 < len(forward); i++ {
-			hasTip = hasTip || forward[i].groupToNext == witness
-			hasRoot = hasRoot || forward[i].groupToNext == boundary.insideSegment
+			hasTip = hasTip || forward[i].GroupToNext == witness
+			hasRoot = hasRoot || forward[i].GroupToNext == boundary.InsideSegment
 		}
 		if !hasTip || hasRoot {
 			return nil, 0, fmt.Errorf("%w: source fan has no unique outside path", ErrUnsupported)
 		}
 	}
-	if forward[0].crossing < 0 || forward[len(forward)-1].crossing < 0 {
+	if forward[0].Crossing < 0 || forward[len(forward)-1].Crossing < 0 {
 		return nil, 0, fmt.Errorf("%w: source path lost its cone crossings", ErrUnsupported)
 	}
 	for _, i := range []int{0, len(forward) - 1} {
-		forward[i].rootBoundary = true
-		forward[i].angle = math.Atan2(forward[i].point.Z, forward[i].point.Y)
+		forward[i].RootBoundary = true
+		forward[i].Angle = math.Atan2(forward[i].Point.Z, forward[i].Point.Y)
 	}
 	return forward, maxCrossBound, nil
 }
@@ -164,10 +164,10 @@ func revolvePointSegmentDistance(p, a, b r3.Vec) float64 {
 }
 
 func revolveRootAngles(path []revolveSectorNode) (float64, float64, bool) {
-	if len(path) < 2 || !path[0].rootBoundary || !path[len(path)-1].rootBoundary {
+	if len(path) < 2 || !path[0].RootBoundary || !path[len(path)-1].RootBoundary {
 		return 0, 0, false
 	}
-	a, b := path[0].angle, path[len(path)-1].angle
+	a, b := path[0].Angle, path[len(path)-1].Angle
 	if !proofbound.FiniteVec(r3.Vec{X: a, Y: b}) || a == b || math.Abs(a-b) >= math.Pi {
 		return 0, 0, false
 	}

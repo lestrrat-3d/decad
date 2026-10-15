@@ -69,29 +69,29 @@ func revolveSectorSortedTriangle(t [3]int) [3]int {
 // The full band and both cap fans are counted before any facets are removed.
 func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 	joined facetedPayload, caps revolveSectorBoreCaps, radius float64, wall *Face) (*Body, bool, error) {
-	record := joined.revolveLoftJoin
-	section, ring := record.certificate.section, record.capRing
-	n, count := len(ring.angles), len(section.spans)
+	record := joined.RevolveLoftJoin
+	section, ring := record.Certificate.Section, record.CapRing
+	n, count := len(ring.Angles), len(section.Spans)
 	bandIndex := (caps.low + count - 1) % count
-	band := section.spans[bandIndex]
-	if bandIndex == section.axisSpan || bandIndex == section.rootSpan ||
-		band.end != section.spans[caps.low].start ||
-		band.start.V <= radius || band.end.V >= radius ||
-		band.face == nil || len(band.origins) == 0 ||
-		len(ring.rings[bandIndex]) != n ||
-		ring.groups[bandIndex] < 0 || ring.groups[bandIndex] >= len(joined.Groups) ||
+	band := section.Spans[bandIndex]
+	if bandIndex == section.AxisSpan || bandIndex == section.RootSpan ||
+		band.End != section.Spans[caps.low].Start ||
+		band.Start.V <= radius || band.End.V >= radius ||
+		band.Face == nil || len(band.Origins) == 0 ||
+		len(ring.Rings[bandIndex]) != n ||
+		ring.Groups[bandIndex] < 0 || ring.Groups[bandIndex] >= len(joined.Groups) ||
 		len(joined.Tris) > revolveSectorBoreMaxAuditTriangles-2*n {
 		return nil, true, fmt.Errorf("%w: bore has no complete cap-adjacent straight band", ErrUnsupported)
 	}
-	cross, ok := revolveSectorStraightBandCross(band.start, band.end, radius)
+	cross, ok := revolveSectorStraightBandCross(band.Start, band.End, radius)
 	if !ok || cross.x >= caps.highX {
 		return nil, true, fmt.Errorf("%w: bore does not cross one straight section band", ErrUnsupported)
 	}
-	maxStep, ok := revolvemesh.SectorRingMaxStep(ring.angles)
+	maxStep, ok := revolvemesh.SectorRingMaxStep(ring.Angles)
 	if !ok {
 		return nil, true, fmt.Errorf("%w: section ring has no bounded angular plan", ErrUnsupported)
 	}
-	inner, boreBound, err := circularbounds.BoreRingAtStep(ctx, radius, ring.angles, maxStep)
+	inner, boreBound, err := circularbounds.BoreRingAtStep(ctx, radius, ring.Angles, maxStep)
 	if err != nil {
 		return nil, true, err
 	}
@@ -100,7 +100,7 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 	}
 	lowPos, highPos := make(map[int]int, n), make(map[int]int, n)
 	used := map[int]bool{caps.lowAxis: true, caps.highAxis: true}
-	rootRing := ring.rings[bandIndex]
+	rootRing := ring.Rings[bandIndex]
 	for i := range n {
 		for _, v := range [...]int{caps.lowOuter[i], caps.highOuter[i], rootRing[i]} {
 			if v < 0 || v >= len(joined.Verts) || used[v] {
@@ -110,7 +110,7 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 		}
 		lowPos[caps.lowOuter[i]], highPos[caps.highOuter[i]] = i, i
 	}
-	bandGroup := ring.groups[bandIndex]
+	bandGroup := ring.Groups[bandIndex]
 	bandCells := make(map[[3]int]bool, 2*n)
 	for i := range n {
 		j := (i + 1) % n
@@ -126,7 +126,7 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 		}
 	}
 	maxRound, oldRound := 0.0, 0.0
-	for i, angle := range ring.angles {
+	for i, angle := range ring.Angles {
 		if err := ctx.Err(); err != nil {
 			return nil, true, err
 		}
@@ -139,8 +139,8 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 			point r3.Vec
 		}{
 			{radius, r3.Vec{Y: inner[i].U, Z: inner[i].V}},
-			{band.start.V, joined.Verts[rootRing[i]]},
-			{band.end.V, joined.Verts[caps.lowOuter[i]]},
+			{band.Start.V, joined.Verts[rootRing[i]]},
+			{band.End.V, joined.Verts[caps.lowOuter[i]]},
 		} {
 			exactRadius := proofarith.FloatRat(sample.rad)
 			yErr := proofbound.IntervalFloatError(proofbound.IntervalScale(cosIv, exactRadius), sample.point.Y)
@@ -152,33 +152,33 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 				oldRound = max(oldRound, round)
 			}
 		}
-		if joined.Verts[rootRing[i]].X != band.start.U ||
-			joined.Verts[caps.lowOuter[i]].X != band.end.U {
+		if joined.Verts[rootRing[i]].X != band.Start.U ||
+			joined.Verts[caps.lowOuter[i]].X != band.End.U {
 			return nil, true, fmt.Errorf("%w: section band changed its source stations", ErrUnsupported)
 		}
 	}
 	sagFactor := proofbound.ProductUpper(maxStep, maxStep) / 8
 	cutRound := proofbound.AbsSumUpper(maxRound, cross.round)
 	boreBound = proofbound.AbsSumUpper(proofbound.ProductUpper(radius, sagFactor), cutRound)
-	oldSideErr := proofbound.AbsSumUpper(proofbound.ProductUpper(band.start.V, sagFactor), oldRound)
+	oldSideErr := proofbound.AbsSumUpper(proofbound.ProductUpper(band.Start.V, sagFactor), oldRound)
 	newSideErr := proofbound.AbsSumUpper(
-		proofbound.ProductUpper(max(band.start.V, radius), sagFactor), oldRound, cutRound,
+		proofbound.ProductUpper(max(band.Start.V, radius), sagFactor), oldRound, cutRound,
 		proofbound.ProductUpper(cross.slopeHi, cross.round))
 	sideErr := max(oldSideErr, newSideErr)
 	bound := max(joined.MeshBound, boreBound, sideErr)
 	if proofbound.IsNonFinite(bound) || bound > 0.1 || boreBound >= radius ||
 		proofbound.AbsSumUpper(caps.lowRadius, joined.MeshBound, boreBound) >= radius ||
-		proofbound.AbsSumUpper(radius, joined.MeshBound, boreBound) >= band.start.V {
+		proofbound.AbsSumUpper(radius, joined.MeshBound, boreBound) >= band.Start.V {
 		return nil, true, fmt.Errorf("%w: bore has no separate source bands", ErrUnsupported)
 	}
 	// Keep every other section span strictly outside the cylinder. This also
 	// checks shoulders and additional meridian faces without assigning roles.
 	clearance := proofbound.AbsSumUpper(radius, joined.MeshBound, boreBound)
-	for i, span := range section.spans {
-		if i == section.axisSpan || i == caps.low || i == caps.high || i == bandIndex {
+	for i, span := range section.Spans {
+		if i == section.AxisSpan || i == caps.low || i == caps.high || i == bandIndex {
 			continue
 		}
-		if min(span.start.V, span.end.V) <= clearance {
+		if min(span.Start.V, span.End.V) <= clearance {
 			return nil, true, fmt.Errorf("%w: another section span may enter the bore", ErrUnsupported)
 		}
 	}
@@ -285,8 +285,8 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 		revolveSectorBoreMaxAuditScans); err != nil {
 		return nil, true, err
 	}
-	rootX := proofarith.FloatRat(band.start.U)
-	span := proofbound.RatFloatUp(new(big.Rat).Sub(proofarith.FloatRat(band.end.U), rootX))
+	rootX := proofarith.FloatRat(band.Start.U)
+	span := proofbound.RatFloatUp(new(big.Rat).Sub(proofarith.FloatRat(band.End.U), rootX))
 	height := proofbound.RatFloatUp(new(big.Rat).Sub(proofarith.FloatRat(caps.highX), rootX))
 	seamHalf := proofbound.DivUpper(sideErr, cross.slopeLo)
 	if proofbound.IsNonFinite(span) || proofbound.IsNonFinite(height) ||
@@ -294,7 +294,7 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 		return nil, true, fmt.Errorf("%w: bore has no finite section span", ErrUnsupported)
 	}
 	sideShell := proofbound.ProductUpper(proofbound.ProductUpper(4, proofbound.TwoPiUpper()/2),
-		proofbound.ProductUpper(proofbound.AbsSumUpper(band.start.V, sideErr),
+		proofbound.ProductUpper(proofbound.AbsSumUpper(band.Start.V, sideErr),
 			proofbound.ProductUpper(sideErr, span)))
 	seamRadius := proofbound.AbsSumUpper(radius, sideErr)
 	seamSlab := proofbound.ProductUpper(proofbound.ProductUpper(2, seamHalf),
@@ -323,7 +323,7 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 	result.Verts, result.Tris, result.Src, result.Groups = mesh.Verts, mesh.Tris, mesh.Src, mesh.Groups
 	result.VertexBound, result.MeshBound = vertexBound, bound
 	result.VolSymDiff, result.AreaSlack = volumeGap, areaSlack
-	result.revolveLoftJoin = nil
+	result.RevolveLoftJoin = nil
 	result.ContactAudited = true
 	body, err := buildFacetedBody(ctx, d, ref, result)
 	return body, true, err

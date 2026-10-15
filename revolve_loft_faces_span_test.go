@@ -45,8 +45,8 @@ func TestMappedEndpointTimeRoots(t *testing.T) {
 }
 
 func TestMappedEndpointFiniteSection(t *testing.T) {
-	section := revolveSectionSpan{start: planePoint{U: 5.7, V: 2.28},
-		end: planePoint{U: 5.8, V: 3.3}}
+	section := revolveSectionSpan{Start: planePoint{U: 5.7, V: 2.28},
+		End: planePoint{U: 5.8, V: 3.3}}
 	x0, x1 := big.NewRat(5, 1), big.NewRat(6, 1)
 	outside := loftface.EndpointRoot{Time: loftFaceInterval{
 		Lo: big.NewRat(1, 8), Hi: big.NewRat(1, 8)}}
@@ -60,7 +60,7 @@ func TestMappedEndpointFiniteSection(t *testing.T) {
 	if !ok || !inside.Finite || inside.X.Lo.Cmp(big.NewRat(23, 4)) != 0 {
 		t.Fatalf("expected a certified finite crossing, got %+v, %t", inside, ok)
 	}
-	boundaryTime := lfSub(lfF(section.start.U), x0)
+	boundaryTime := lfSub(lfF(section.Start.U), x0)
 	boundary := loftface.EndpointRoot{Time: loftFaceInterval{
 		Lo: boundaryTime, Hi: boundaryTime}}
 	if _, ok := revolveLoftFacesEndpointAxialClass(boundary, x0, x1, section); ok {
@@ -91,13 +91,13 @@ func TestMappedSpanAxialHull(t *testing.T) {
 	if !ok || x.Lo.Cmp(big.NewRat(45, 8)) != 0 || x.Hi.Cmp(big.NewRat(25, 4)) != 0 {
 		t.Fatalf("expected exact affine mapped X hull, got %+v, %t", x, ok)
 	}
-	section := revolveSectionSpan{start: planePoint{U: 6.5, V: 1},
-		end: planePoint{U: 7, V: 2}}
+	section := revolveSectionSpan{Start: planePoint{U: 6.5, V: 1},
+		End: planePoint{U: 7, V: 2}}
 	if !revolveLoftFacesSpanAxialMiss(first, last, span, section,
 		big.NewRat(1, 2), big.NewRat(1, 1), big.NewRat(1, 8), big.NewRat(1, 4)) {
 		t.Fatal("mapped span should miss the finite section")
 	}
-	section.start.U = 6
+	section.Start.U = 6
 	if revolveLoftFacesSpanAxialMiss(first, last, span, section,
 		big.NewRat(1, 2), big.NewRat(1, 1), big.NewRat(1, 8), big.NewRat(1, 4)) {
 		t.Fatal("overlapping mapped span cannot be clipped")

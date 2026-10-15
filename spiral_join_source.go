@@ -18,12 +18,12 @@ import (
 // section. The generic certificate owns the source walk, faces, and cone gap;
 // these named corners only map the older spiral join's fixed cap roles.
 type spiralBlankSource struct {
-	section           revolveSectionCertificate
-	toeAxis, heelAxis planePoint
-	toeOuter, toeRoot planePoint
-	ded, heelOuter    planePoint
-	edgeIndex         [6]int
-	rootFace          *Face
+	Section           revolveSectionCertificate
+	ToeAxis, HeelAxis planePoint
+	ToeOuter, ToeRoot planePoint
+	Ded, HeelOuter    planePoint
+	EdgeIndex         [6]int
+	RootFace          *Face
 }
 
 func exactSpiralBlank(blank *Body) (*spiralBlankSource, bool) {
@@ -37,74 +37,74 @@ func exactSpiralBlank(blank *Body) (*spiralBlankSource, bool) {
 }
 
 func spiralSixSideBlank(section revolveSectionCertificate) (*spiralBlankSource, bool) {
-	if len(section.spans) != 6 || section.axisSpan < 0 ||
-		section.axisSpan >= len(section.spans) ||
-		section.rootSpan < 0 || section.rootSpan >= len(section.spans) {
+	if len(section.Spans) != 6 || section.AxisSpan < 0 ||
+		section.AxisSpan >= len(section.Spans) ||
+		section.RootSpan < 0 || section.RootSpan >= len(section.Spans) {
 		return nil, false
 	}
-	result := &spiralBlankSource{section: section,
-		rootFace: section.spans[section.rootSpan].face}
-	if result.rootFace == nil {
+	result := &spiralBlankSource{Section: section,
+		RootFace: section.Spans[section.RootSpan].Face}
+	if result.RootFace == nil {
 		return nil, false
 	}
-	axis := section.spans[section.axisSpan]
-	result.toeAxis, result.heelAxis = axis.start, axis.end
-	if result.toeAxis.U > result.heelAxis.U {
-		result.toeAxis, result.heelAxis = result.heelAxis, result.toeAxis
+	axis := section.Spans[section.AxisSpan]
+	result.ToeAxis, result.HeelAxis = axis.Start, axis.End
+	if result.ToeAxis.U > result.HeelAxis.U {
+		result.ToeAxis, result.HeelAxis = result.HeelAxis, result.ToeAxis
 	}
 	var interior []planePoint
-	for _, span := range section.spans {
-		if len(span.sourceEdges) != 1 {
+	for _, span := range section.Spans {
+		if len(span.SourceEdges) != 1 {
 			return nil, false
 		}
-		point := span.start
+		point := span.Start
 		if point.V == 0 {
 			continue
 		}
 		switch point.U {
-		case result.toeAxis.U:
-			if result.toeOuter != (planePoint{}) {
+		case result.ToeAxis.U:
+			if result.ToeOuter != (planePoint{}) {
 				return nil, false
 			}
-			result.toeOuter = point
-		case result.heelAxis.U:
-			if result.heelOuter != (planePoint{}) {
+			result.ToeOuter = point
+		case result.HeelAxis.U:
+			if result.HeelOuter != (planePoint{}) {
 				return nil, false
 			}
-			result.heelOuter = point
+			result.HeelOuter = point
 		default:
 			interior = append(interior, point)
 		}
 	}
-	if len(interior) != 2 || result.toeOuter == (planePoint{}) ||
-		result.heelOuter == (planePoint{}) {
+	if len(interior) != 2 || result.ToeOuter == (planePoint{}) ||
+		result.HeelOuter == (planePoint{}) {
 		return nil, false
 	}
 	if interior[0].U > interior[1].U {
 		interior[0], interior[1] = interior[1], interior[0]
 	}
-	result.toeRoot, result.ded = interior[0], interior[1]
-	if !(result.toeRoot.U < result.toeAxis.U &&
-		result.toeAxis.U < result.ded.U && result.ded.U < result.heelAxis.U) {
+	result.ToeRoot, result.Ded = interior[0], interior[1]
+	if !(result.ToeRoot.U < result.ToeAxis.U &&
+		result.ToeAxis.U < result.Ded.U && result.Ded.U < result.HeelAxis.U) {
 		return nil, false
 	}
-	cycle := [6]planePoint{result.toeAxis, result.heelAxis, result.heelOuter,
-		result.ded, result.toeRoot, result.toeOuter}
+	cycle := [6]planePoint{result.ToeAxis, result.HeelAxis, result.HeelOuter,
+		result.Ded, result.ToeRoot, result.ToeOuter}
 	var seen [6]bool
-	for _, span := range section.spans {
+	for _, span := range section.Spans {
 		matched := false
 		for edge := range cycle {
 			start, end := cycle[edge], cycle[(edge+1)%len(cycle)]
-			forward := span.start == start && span.end == end
-			reverse := span.start == end && span.end == start
+			forward := span.Start == start && span.End == end
+			reverse := span.Start == end && span.End == start
 			if !forward && !reverse {
 				continue
 			}
-			if seen[edge] || edge == 3 && span.face != result.rootFace {
+			if seen[edge] || edge == 3 && span.Face != result.RootFace {
 				return nil, false
 			}
 			seen[edge] = true
-			result.edgeIndex[edge] = span.sourceEdges[0]
+			result.EdgeIndex[edge] = span.SourceEdges[0]
 			matched = true
 			break
 		}
@@ -168,7 +168,7 @@ func certifySpiralFirstJoin(ctx context.Context, blank, tooth *Body) (*spiralFir
 		trim.ToeCapGroup, trim.HeelCapGroup) {
 		return nil, false, nil
 	}
-	m, b := section.section.meridianEquation()
+	m, b := section.Section.MeridianEquation()
 	if !spiralSourcePhysicalSector(trim, m, b) {
 		return nil, false, nil
 	}
@@ -188,18 +188,18 @@ func certifySpiralFirstJoin(ctx context.Context, blank, tooth *Body) (*spiralFir
 		lfAdd(lfMul(m, heelX), b).Sign() <= 0 {
 		return nil, false, nil
 	}
-	toeGap, ok := spiralToolOuterGap(trim.Toe, section.toeRoot, section.toeOuter, 1)
+	toeGap, ok := spiralToolOuterGap(trim.Toe, section.ToeRoot, section.ToeOuter, 1)
 	if !ok {
 		return nil, false, nil
 	}
-	heelGap, ok := spiralToolOuterGap(trim.Heel, section.ded, section.heelOuter, -1)
+	heelGap, ok := spiralToolOuterGap(trim.Heel, section.Ded, section.HeelOuter, -1)
 	if !ok {
 		return nil, false, nil
 	}
 	proof := &spiralFirstJoinSource{Blank: section, Tooth: trim, RootM: m, RootB: b,
 		ToeX: toeX, HeelX: heelX,
-		ToeOffset:  lfSub(toeX, lfF(section.toeRoot.U)),
-		HeelOffset: lfSub(heelX, lfF(section.ded.U)),
+		ToeOffset:  lfSub(toeX, lfF(section.ToeRoot.U)),
+		HeelOffset: lfSub(heelX, lfF(section.Ded.U)),
 		ToeCapGap:  toeGap, HeelCapGap: heelGap}
 	// The real finite root lies between the tool-clipped ends, with a small
 	// overhang at each cap. The later cap proof charges both exact offsets.

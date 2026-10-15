@@ -124,8 +124,8 @@ func TestVerticalTraceRefusesChangedSourceAndRayOwners(t *testing.T) {
 	var ring *revolveLoftFacesShellCapRing
 	for i := range graph.arcs {
 		candidate := &graph.arcs[i]
-		if proof.section.spans[candidate.sectionIndex].start.U ==
-			proof.section.spans[candidate.sectionIndex].end.U {
+		if proof.section.Spans[candidate.sectionIndex].Start.U ==
+			proof.section.Spans[candidate.sectionIndex].End.U {
 			arc = candidate
 			break
 		}

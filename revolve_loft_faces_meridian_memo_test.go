@@ -27,8 +27,8 @@ func TestCurvedCensusMeridianMemoMatchesDirect(t *testing.T) {
 	trim := proof.trim
 	memo := loftface.NewMeridianMemo()
 	compared := 0
-	for _, section := range proof.section.spans {
-		if section.face == nil || section.start.U == section.end.U {
+	for _, section := range proof.section.Spans {
+		if section.Face == nil || section.Start.U == section.End.U {
 			continue
 		}
 		for segment, source := range trim.Source.profile.Outer.Segments {
