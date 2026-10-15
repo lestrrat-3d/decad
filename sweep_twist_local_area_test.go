@@ -227,8 +227,8 @@ func TestTwistLocalAreaRealArcCell(t *testing.T) {
 		proofbound.RatFloatUp(proofbound.IntervalAbsUpper(angleIv)), source.path.End.Z)
 	require.ErrorIs(t, err, ErrUnsupported)
 	corrupt[0] = heldCells[0]
-	corrupt[0].TwistAreaCells = [][]twistsweep.TwistAreaCellClaims{
-		append([]twistsweep.TwistAreaCellClaims(nil), heldCells[0].TwistAreaCells[0]...),
+	corrupt[0].TwistAreaCells = [][]loftrecord.TwistAreaCellClaims{
+		append([]loftrecord.TwistAreaCellClaims(nil), heldCells[0].TwistAreaCells[0]...),
 	}
 	corrupt[0].TwistAreaCells[0][j].Matched = -1
 	_, err = twistMixedWallAreaL1(corrupt, stations, poly,

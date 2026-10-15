@@ -15,7 +15,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
-	"github.com/lestrrat-3d/decad/internal/twistsweep"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -339,11 +338,11 @@ func Build(ctx context.Context, env topo.Env, pl Payload, budget *proofbound.Wor
 		pl.Segment[i] = append([]int(nil), pairs[i].Segment...)
 	}
 	if pl.RetainTwistAreaCells {
-		pl.TwistAreaCells = make([][]twistsweep.TwistAreaCellClaims, len(pairs))
+		pl.TwistAreaCells = make([][]TwistAreaCellClaims, len(pairs))
 		for i, pair := range pairs {
-			pl.TwistAreaCells[i] = make([]twistsweep.TwistAreaCellClaims, len(pair.Segment))
+			pl.TwistAreaCells[i] = make([]TwistAreaCellClaims, len(pair.Segment))
 			for j := range pair.Segment {
-				pl.TwistAreaCells[i][j] = twistsweep.TwistAreaCellClaims{
+				pl.TwistAreaCells[i][j] = TwistAreaCellClaims{
 					ArcLength: max(pair.ArcUpperV[j], pair.ArcUpperW[j]),
 					Energy:    max(pair.TangentEnergyV[j], pair.TangentEnergyW[j]),
 					Matched:   pair.MatchedDelta[j],
