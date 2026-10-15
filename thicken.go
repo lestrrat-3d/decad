@@ -122,11 +122,11 @@ func Thicken(ctx context.Context, b *Body, thickness units.Value, opts ...Thicke
 // publishes the result as a Sweep. The reduced builder proves the offset and
 // solid; the finishing step restores the path's wall and cap roles.
 func thickenSweep(ctx context.Context, d *Document, sp sweepPayload, side ThickenSide, tmm, tDelta float64) (*Body, error) {
-	if !sp.surfaceResult || len(sp.spans) != 0 {
+	if !sp.SurfaceResult || len(sp.Spans) != 0 {
 		return nil, fmt.Errorf(`%w: this sweep sheet has no admitted Thicken join proof`, ErrUnsupported)
 	}
-	if sp.arc {
-		body, err := thickenRevolve(ctx, d, sp.revolve, side, tmm, tDelta)
+	if sp.Arc {
+		body, err := thickenRevolve(ctx, d, sp.Revolve, side, tmm, tDelta)
 		if err != nil {
 			return nil, err
 		}
@@ -134,18 +134,18 @@ func thickenSweep(ctx context.Context, d *Document, sp sweepPayload, side Thicke
 		if !ok {
 			return nil, fmt.Errorf(`%w: a thickened arc sweep has no revolve reduction`, ErrDegenerate)
 		}
-		sp.revolve = built
-		sp.prism.Profile = built.Profile
-		sp.prism.Xform = built.Xform
-		sp.surfaceResult = false
+		sp.Revolve = built
+		sp.Prism.Profile = built.Profile
+		sp.Prism.Xform = built.Xform
+		sp.SurfaceResult = false
 		finishArcSweepBody(body, sp)
 		return body, nil
 	}
-	body, err := thickenPrism(ctx, d, sp.prism, side, tmm, tDelta)
+	body, err := thickenPrism(ctx, d, sp.Prism, side, tmm, tDelta)
 	if err != nil {
 		return nil, err
 	}
-	sp.surfaceResult = false
+	sp.SurfaceResult = false
 	finishStraightSweepBody(body, sp)
 	return body, nil
 }

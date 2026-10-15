@@ -442,10 +442,10 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		return tessellateChain(ctx, b, cp)
 	}
 	if sp, ok := b.n.Payload.(chainSweepPayload); ok {
-		if len(sp.spans) != 0 {
+		if len(sp.Spans) != 0 {
 			return tessellateChainSweep(ctx, b, sp, chord, verify)
 		}
-		if sp.arc {
+		if sp.Arc {
 			return tessellateChainArcSweep(ctx, b, sp, chord, verify)
 		}
 		// the chain Sweep's one-span straight reduction builds through the
@@ -453,7 +453,7 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		// the chainPayload it wraps unchanged (sweep.go's
 		// finishChainSweepBody), so it reuses that same restatement rather
 		// than a second one keyed on the wrapper type.
-		return tessellateChain(ctx, b, sp.chain)
+		return tessellateChain(ctx, b, sp.Chain)
 	}
 	if mp, ok := b.n.Payload.(mitredSweepPayload); ok {
 		// docs/sweep-design.md Table DM row DM2: an exact restatement of the
@@ -468,13 +468,13 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 	if sp, ok := b.n.Payload.(sweepPayload); ok {
 		// One-span sweeps reuse the prism or revolve mesh of their exact
 		// analytic reduction. A sheet carries no occupied-volume proof.
-		if len(sp.spans) != 0 {
+		if len(sp.Spans) != 0 {
 			return tessellateCompositeSweep(ctx, b, sp, chord, verify)
 		}
-		if sp.arc {
-			return tessellateRevolveWithRoles(ctx, b, sp.revolve, chord, verify, sweepArcRole(sp.reverseArcCaps))
+		if sp.Arc {
+			return tessellateRevolveWithRoles(ctx, b, sp.Revolve, chord, verify, sweepArcRole(sp.ReverseArcCaps))
 		}
-		return tessellatePrism(ctx, b, sp.prism, sweepWallRole, chord, verify)
+		return tessellatePrism(ctx, b, sp.Prism, sweepWallRole, chord, verify)
 	}
 	pp, ok := b.n.Payload.(prismPayload)
 	if !ok {

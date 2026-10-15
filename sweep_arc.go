@@ -86,12 +86,12 @@ func evalArcSweepContext(
 		Xform:   r3.Identity(),
 	}
 	payload := sweepPayload{
-		prism:          witness,
-		revolve:        revolve,
-		arc:            true,
-		reverseArcCaps: reverseCaps,
-		path:           path,
-		surfaceResult:  surfaceResult,
+		Prism:          witness,
+		Revolve:        revolve,
+		Arc:            true,
+		ReverseArcCaps: reverseCaps,
+		Path:           path,
+		SurfaceResult:  surfaceResult,
 	}
 	finishArcSweepBody(body, payload)
 	return body, nil
@@ -113,14 +113,14 @@ func sweepRatIsZero(v sweepRatVec) bool { return sweeparc.IsZero(v) }
 // of the section's loop and segment indices, exactly as
 // prefixSweepSpanZeroRole does for a straight reduction. A closed full-circle
 // reduction adds the second span's role to each seam-free full-turn wall. A
-// span whose Revolve axis was reoriented (reverseArcCaps) has its cap roles swapped back
+// span whose Revolve axis was reoriented (ReverseArcCaps) has its cap roles swapped back
 // into PATH order, so capStart always names the section the path leaves and
 // capEnd the one it arrives at — the orientation compositesweep.Assemble's own
 // join pairing reads when it takes one span's end cap against the next span's
 // start cap. A closed full-circle reduction has no cap.
 func finishArcSweepBody(body *Body, payload sweepPayload) {
 	if built, ok := body.n.Payload.(revolvePayload); ok {
-		payload.revolve = built
+		payload.Revolve = built
 	}
 	for _, face := range body.Faces() {
 		origins := make([]provenance.Ref, 0, len(face.n.Origins)*2)
@@ -129,15 +129,15 @@ func finishArcSweepBody(body *Body, payload sweepPayload) {
 			case strings.HasPrefix(origin.Role, "side("):
 				suffix := strings.TrimPrefix(origin.Role, "side(")
 				origin.Role = "side(0," + suffix
-				if payload.closedCircle {
+				if payload.ClosedCircle {
 					second := origin
 					second.Role = "side(1," + suffix
 					origins = append(origins, origin, second)
 					continue
 				}
-			case payload.reverseArcCaps && origin.Role == provenance.RoleCapStart:
+			case payload.ReverseArcCaps && origin.Role == provenance.RoleCapStart:
 				origin.Role = provenance.RoleCapEnd
-			case payload.reverseArcCaps && origin.Role == provenance.RoleCapEnd:
+			case payload.ReverseArcCaps && origin.Role == provenance.RoleCapEnd:
 				origin.Role = provenance.RoleCapStart
 			}
 			origins = append(origins, origin)

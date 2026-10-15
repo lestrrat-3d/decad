@@ -21,7 +21,7 @@ func (d *Document) sweepArcChain(ctx context.Context, chain chainRecord,
 	if err != nil {
 		return nil, err
 	}
-	arc := span.revolve
+	arc := span.Revolve
 	reduction := chainRevolvePayload{
 		Chains: []chainRecord{chain}, Frame: arc.Frame, Ax: arc.Ax,
 		Phi0: arc.Phi0, Phi1: arc.Phi1, Den: arc.Den, Xform: r3.Identity(),
@@ -34,7 +34,7 @@ func (d *Document) sweepArcChain(ctx context.Context, chain chainRecord,
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	finishChainSweepBody(body, chainSweepPayload{revolve: reduction, arc: true, path: path})
+	finishChainSweepBody(body, chainSweepPayload{Revolve: reduction, Arc: true, Path: path})
 	d.commit(body)
 	return body, nil
 }

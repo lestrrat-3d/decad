@@ -37,13 +37,13 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 		}
 	}
 	mesh := bornMesh(&Mesh{})
-	spanWork := newCompositeSweepWork(sp.prism.Profile)
+	spanWork := newCompositeSweepWork(sp.Prism.Profile)
 	budget := proofbound.NewWorkBudget(ctx)
 	coordinateBound := 0.0
 	triangleSpan := []int{}
-	stations := len(sp.spans) + 1
-	if sp.closedComposite {
-		stations = len(sp.spans)
+	stations := len(sp.Spans) + 1
+	if sp.ClosedComposite {
+		stations = len(sp.Spans)
 	}
 	join := make([][]int, stations)
 	joinBound := make([][]float64, stations)
@@ -54,29 +54,29 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 			join[i][j] = -1
 		}
 	}
-	for i := range sp.spans {
+	for i := range sp.Spans {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		span := sp.spans[i]
-		part, err := span.build(ctx, documentHandle(b.n.Doc), b.n.Origin.Producer, spanWork)
+		span := sp.Spans[i]
+		part, err := span.Build(ctx, documentHandle(b.n.Doc), b.n.Origin.Producer, spanWork)
 		if err != nil {
 			return nil, fmt.Errorf(`sweep path span %d: %w`, i, err)
 		}
-		// span.build restores path cap names for topology pairing. The reduced
+		// span.Build restores path cap names for topology pairing. The reduced
 		// revolve tessellator needs its own cap names while it makes its proof.
-		if span.arc && span.reverseArcCaps {
+		if span.Arc && span.ReverseArcCaps {
 			restoreSweepArcCapRoles(part, true)
 		}
 		var piece *Mesh
-		if span.arc {
-			floor, floorErr := compositeRevolveFloor(ctx, span.revolve, counts, freeformTarget)
+		if span.Arc {
+			floor, floorErr := compositeRevolveFloor(ctx, span.Revolve, counts, freeformTarget)
 			if floorErr != nil {
 				return nil, fmt.Errorf(`sweep path span %d: %w`, i, floorErr)
 			}
-			piece, err = tessellateRevolveWithCountFloor(ctx, part, span.revolve, chord, verify, nil, floor, freeformTarget)
+			piece, err = tessellateRevolveWithCountFloor(ctx, part, span.Revolve, chord, verify, nil, floor, freeformTarget)
 		} else {
-			piece, err = tessellatePrismWithCountFloor(ctx, part, span.prism, prismWallRole, chord, verify,
+			piece, err = tessellatePrismWithCountFloor(ctx, part, span.Prism, prismWallRole, chord, verify,
 				func(loop, seg int) int { return counts[compositeStationKey{loop, seg}] }, freeformTarget)
 		}
 		if err != nil {
@@ -96,7 +96,7 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 		}
 		maxMove := 0.0
 		endSection := i + 1
-		if sp.closedComposite && endSection == len(sp.spans) {
+		if sp.ClosedComposite && endSection == len(sp.Spans) {
 			endSection = 0
 		}
 		for station := range profileSamples {
@@ -144,13 +144,13 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 			if err := budget.Step(); err != nil {
 				return nil, err
 			}
-			role, err := compositeSpanFaceRole(piece.n.Source[t], i, span.reverseArcCaps)
+			role, err := compositeSpanFaceRole(piece.n.Source[t], i, span.ReverseArcCaps)
 			if err != nil {
 				return nil, err
 			}
-			if sp.closedComposite && (role == provenance.RoleCapStart || role == provenance.RoleCapEnd) ||
-				role == provenance.RoleCapStart && (sp.surfaceResult || i != 0) ||
-				role == provenance.RoleCapEnd && (sp.surfaceResult || i != len(sp.spans)-1) {
+			if sp.ClosedComposite && (role == provenance.RoleCapStart || role == provenance.RoleCapEnd) ||
+				role == provenance.RoleCapStart && (sp.SurfaceResult || i != 0) ||
+				role == provenance.RoleCapEnd && (sp.SurfaceResult || i != len(sp.Spans)-1) {
 				continue
 			}
 			face, ok := byRole[role]
@@ -184,10 +184,10 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 		return nil, fmt.Errorf(`%w: the composite sweep mesh has no finite proof bound`, ErrUnsupported)
 	}
 	mesh.n.CoordBound = coordinateBound
-	if err := requireMeshAudit(ctx, sp.surfaceResult, b, mesh); err != nil {
+	if err := requireMeshAudit(ctx, sp.SurfaceResult, b, mesh); err != nil {
 		return nil, err
 	}
-	if !sp.surfaceResult {
+	if !sp.SurfaceResult {
 		if err := topobuild.LiftAuditError(tessellation.RequireVertexLinks(ctx, len(mesh.n.Vertices), mesh.n.Triangles)); err != nil {
 			return nil, err
 		}
@@ -202,10 +202,10 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 			return nil, err
 		}
 	}
-	if !sp.surfaceResult && tessellation.OrientationSign(mesh.n.Vertices, mesh.n.Triangles, r3.Vec{}) <= 0 {
+	if !sp.SurfaceResult && tessellation.OrientationSign(mesh.n.Vertices, mesh.n.Triangles, r3.Vec{}) <= 0 {
 		return nil, fmt.Errorf(`%w: the composite sweep mesh does not enclose a positive volume`, ErrUnsupported)
 	}
-	mesh.n.SymDiffOK = verify >= VerifyAll && !sp.surfaceResult
+	mesh.n.SymDiffOK = verify >= VerifyAll && !sp.SurfaceResult
 	return mesh, nil
 }
 
@@ -213,7 +213,7 @@ func compositeSpanRings(ctx context.Context, span sweepSpanPayload, mesh *Mesh,
 	samples int, freeformTarget float64) ([]int, []int, float64, error) {
 	start := make([]int, samples)
 	end := make([]int, samples)
-	if !span.arc {
+	if !span.Arc {
 		if len(mesh.n.Vertices) != 2*samples {
 			return nil, nil, 0, fmt.Errorf(`%w: a straight sweep span has a different profile station chain`, ErrUnsupported)
 		}
@@ -222,7 +222,7 @@ func compositeSpanRings(ctx context.Context, span sweepSpanPayload, mesh *Mesh,
 		}
 		return start, end, mesh.n.CoordBound, nil
 	}
-	res, err := resolveRevolveWithLimit(ctx, span.revolve, compositeWorkLimit(freeformTarget))
+	res, err := resolveRevolveWithLimit(ctx, span.Revolve, compositeWorkLimit(freeformTarget))
 	if err != nil {
 		return nil, nil, 0, err
 	}
@@ -242,7 +242,7 @@ func compositeSpanRings(ctx context.Context, span sweepSpanPayload, mesh *Mesh,
 	}
 	for j := range samples {
 		start[j], end[j] = j*angular, j*angular+angular-1
-		if span.reverseArcCaps {
+		if span.ReverseArcCaps {
 			start[j], end[j] = end[j], start[j]
 		}
 	}
@@ -271,9 +271,9 @@ func compositeWorkLimit(freeformTarget float64) uint64 {
 // is a lower bound. Fitted splines instead share the smallest certified
 // chording target across their prism and Revolve spans.
 func compositeProfileCountPlan(ctx context.Context, sp sweepPayload, chord float64) (map[compositeStationKey]int, int, float64, error) {
-	loops := append([]loopRecord{sp.prism.Profile.Outer}, sp.prism.Profile.Holes...)
+	loops := append([]loopRecord{sp.Prism.Profile.Outer}, sp.Prism.Profile.Holes...)
 	counts := map[compositeStationKey]int{}
-	work := newCompositeSweepWork(sp.prism.Profile)
+	work := newCompositeSweepWork(sp.Prism.Profile)
 	freeformTarget := chord
 	hasFreeform := false
 	for li, loop := range loops {
@@ -302,21 +302,21 @@ func compositeProfileCountPlan(ctx context.Context, sp sweepPayload, chord float
 			}
 		}
 	}
-	for _, span := range sp.spans {
-		if !span.arc {
+	for _, span := range sp.Spans {
+		if !span.Arc {
 			continue
 		}
 		workLimit := uint64(0)
 		if hasFreeform {
 			workLimit = compositeFitSweepWorkLimit
 		}
-		res, err := resolveRevolveWithLimit(ctx, span.revolve, workLimit)
+		res, err := resolveRevolveWithLimit(ctx, span.Revolve, workLimit)
 		if err != nil {
 			return nil, 0, 0, err
 		}
 		planned, err := revolveplan.PlanCounts(revolveplan.CountInput{
-			Resolution: res, Chord: chord, SectionDelta: span.revolve.SectionDelta,
-			Phi0: span.revolve.Phi0, Phi1: span.revolve.Phi1, Full: span.revolve.Full,
+			Resolution: res, Chord: chord, SectionDelta: span.Revolve.SectionDelta,
+			Phi0: span.Revolve.Phi0, Phi1: span.Revolve.Phi1, Full: span.Revolve.Full,
 			WorkLimit: workLimit,
 		})
 		if err != nil {

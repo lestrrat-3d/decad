@@ -482,7 +482,7 @@ func gateWitnessPrism(payload topo.Payload) (prismPayload, float64, bool) {
 		witness.SectionDelta = 0
 		return witness, displacement, true
 	case sweepPayload:
-		witness := pl.prism
+		witness := pl.Prism
 		displacement := proofbound.AbsSumUpper(witness.SectionDelta, witness.AxialDelta())
 		witness.SectionDelta = 0
 		return witness, displacement, true

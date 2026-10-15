@@ -23,25 +23,25 @@ import (
 // chainSweepSpanPayload keeps the two real chain reductions separate. A
 // composite chain has no caps: each span's wall supplies its path-end rims.
 type chainSweepSpanPayload struct {
-	chain          chainPayload
-	revolve        chainRevolvePayload
-	arc            bool
-	reverseArcRims bool
+	Chain          chainPayload
+	Revolve        chainRevolvePayload
+	Arc            bool
+	ReverseArcRims bool
 }
 
 func (sp chainSweepSpanPayload) transform() r3.Transform {
-	if sp.arc {
-		return sp.revolve.Xform
+	if sp.Arc {
+		return sp.Revolve.Xform
 	}
-	return sp.chain.Xform
+	return sp.Chain.Xform
 }
 
 func (sp *chainSweepSpanPayload) build(ctx context.Context, d *Document, ref producerID,
 	work *freeform.FreeformWork) (*Body, error) {
-	if sp.arc {
-		return bodyResult(revolveplan.BuildChain(ctx, envOf(documentNode(d), ref), sp.revolve, work))
+	if sp.Arc {
+		return bodyResult(revolveplan.BuildChain(ctx, envOf(documentNode(d), ref), sp.Revolve, work))
 	}
-	return bodyResult(chainrecord.Build(ctx, envOf(documentNode(d), ref), sp.chain, work))
+	return bodyResult(chainrecord.Build(ctx, envOf(documentNode(d), ref), sp.Chain, work))
 }
 
 func (d *Document) sweepCompositeChain(ctx context.Context, chain chainRecord, plane planeRecord,
@@ -72,18 +72,18 @@ func (d *Document) sweepCompositeChain(ctx context.Context, chain chainRecord, p
 	if err != nil {
 		return nil, err
 	}
-	payload := chainSweepPayload{path: path, spans: []chainSweepSpanPayload{
-		{chain: chainPayload{
-			Chains: []chainRecord{chain}, Frame: straight.prism.Frame,
-			Z0: straight.prism.Z0, Z1: straight.prism.Z1,
-			Z0Delta: straight.prism.Z0Delta, Z1Delta: straight.prism.Z1Delta,
+	payload := chainSweepPayload{Path: path, Spans: []chainSweepSpanPayload{
+		{Chain: chainPayload{
+			Chains: []chainRecord{chain}, Frame: straight.Prism.Frame,
+			Z0: straight.Prism.Z0, Z1: straight.Prism.Z1,
+			Z0Delta: straight.Prism.Z0Delta, Z1Delta: straight.Prism.Z1Delta,
 			Xform: r3.Identity(),
 		}},
-		{revolve: chainRevolvePayload{
-			Chains: []chainRecord{chain}, Frame: arc.revolve.Frame, Ax: arc.revolve.Ax,
-			Phi0: arc.revolve.Phi0, Phi1: arc.revolve.Phi1,
-			Den: arc.revolve.Den, Xform: r3.Identity(),
-		}, arc: true, reverseArcRims: arc.reverseArcCaps},
+		{Revolve: chainRevolvePayload{
+			Chains: []chainRecord{chain}, Frame: arc.Revolve.Frame, Ax: arc.Revolve.Ax,
+			Phi0: arc.Revolve.Phi0, Phi1: arc.Revolve.Phi1,
+			Den: arc.Revolve.Den, Xform: r3.Identity(),
+		}, Arc: true, ReverseArcRims: arc.ReverseArcCaps},
 	}}
 	ref := d.nextProducerID()
 	body, err := replayCompositeChainSweepWork(ctx, d, ref, payload, work)
@@ -99,12 +99,12 @@ func (d *Document) sweepCompositeChain(ctx context.Context, chain chainRecord, p
 
 func replayCompositeChainSweepWork(ctx context.Context, d *Document, ref producerID,
 	payload chainSweepPayload, work *freeform.FreeformWork) (*Body, error) {
-	if len(payload.spans) != 2 || payload.spans[0].arc || !payload.spans[1].arc {
+	if len(payload.Spans) != 2 || payload.Spans[0].Arc || !payload.Spans[1].Arc {
 		return nil, fmt.Errorf(`%w: composite chain Sweep has no admitted span sequence`, ErrUnsupported)
 	}
 	parts := make([]*Body, 2)
-	for i := range payload.spans {
-		part, err := payload.spans[i].build(ctx, d, ref, work)
+	for i := range payload.Spans {
+		part, err := payload.Spans[i].build(ctx, d, ref, work)
 		if err != nil {
 			return nil, fmt.Errorf("sweep path span %d: %w", i, err)
 		}
@@ -120,7 +120,7 @@ func replayCompositeChainSweepWork(ctx context.Context, d *Document, ref produce
 	if err != nil {
 		return nil, err
 	}
-	following, err := chainSpanRims(parts[1], true, payload.spans[1].reverseArcRims)
+	following, err := chainSpanRims(parts[1], true, payload.Spans[1].ReverseArcRims)
 	if err != nil {
 		return nil, err
 	}
@@ -198,16 +198,16 @@ type chainSweepExtent struct{ span chainSweepSpanPayload }
 
 func (e chainSweepExtent) AuditExtent(ctx context.Context, direction r3.Vec,
 	work *freeform.FreeformWork) (float64, float64, float64, error) {
-	if e.span.arc {
-		return e.span.revolve.Revolve().ExtentBoundedAlong(ctx, direction, work)
+	if e.span.Arc {
+		return e.span.Revolve.Revolve().ExtentBoundedAlong(ctx, direction, work)
 	}
-	return e.span.chain.Prism().ExtentBoundedAlong(ctx, direction, work, nil)
+	return e.span.Chain.Prism().ExtentBoundedAlong(ctx, direction, work, nil)
 }
 
 func auditCompositeChainSeparation(ctx context.Context, payload chainSweepPayload, parts []*Body) error {
-	frames, err := sweeptransport.TransportSweepFramesContext(ctx, payload.path, planeRecord{
-		Origin: payload.spans[0].chain.Frame.Origin(),
-		U:      payload.spans[0].chain.Frame.U(), V: payload.spans[0].chain.Frame.V(),
+	frames, err := sweeptransport.TransportSweepFramesContext(ctx, payload.Path, planeRecord{
+		Origin: payload.Spans[0].Chain.Frame.Origin(),
+		U:      payload.Spans[0].Chain.Frame.U(), V: payload.Spans[0].Chain.Frame.V(),
 	})
 	if err != nil {
 		return err
@@ -226,7 +226,7 @@ func auditCompositeChainSeparation(ctx context.Context, payload chainSweepPayloa
 			StartPlane:  surfacegeom.Plane{Frame: incoming},
 			StartPlanar: true, EndPlanar: true, EndpointSupports: true,
 			Box:    compositesweep.AuditBox{Min: box.Min, Max: box.Max, Bound: box.Bound.Base()},
-			Extent: chainSweepExtent{span: payload.spans[i]},
+			Extent: chainSweepExtent{span: payload.Spans[i]},
 		}
 	}
 	return compositesweep.Audit(ctx, audit)

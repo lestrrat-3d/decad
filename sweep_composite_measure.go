@@ -28,10 +28,10 @@ import (
 // start. The common xform on every span is the composite body's accumulated
 // rigid placement.
 type sweepSpanPayload struct {
-	prism          prismPayload
-	revolve        revolvePayload
-	arc            bool
-	reverseArcCaps bool
+	Prism          prismPayload
+	Revolve        revolvePayload
+	Arc            bool
+	ReverseArcCaps bool
 }
 
 // newCompositeSweepWork gives one composite fitted-spline profile a bounded
@@ -50,7 +50,7 @@ func replayCompositeSweep(
 	ref producerID,
 	payload sweepPayload,
 ) (*Body, error) {
-	return replayCompositeSweepWork(ctx, d, ref, payload, newCompositeSweepWork(payload.prism.Profile))
+	return replayCompositeSweepWork(ctx, d, ref, payload, newCompositeSweepWork(payload.Prism.Profile))
 }
 
 func replayCompositeSweepWork(
@@ -60,16 +60,16 @@ func replayCompositeSweepWork(
 	payload sweepPayload,
 	work *freeform.FreeformWork,
 ) (*Body, error) {
-	if err := compositesweep.Preflight(payload.prism.Profile, len(payload.spans)); err != nil {
+	if err := compositesweep.Preflight(payload.Prism.Profile, len(payload.Spans)); err != nil {
 		return nil, err
 	}
-	parts := make([]compositesweep.SpanPart, len(payload.spans))
-	for i := range payload.spans {
+	parts := make([]compositesweep.SpanPart, len(payload.Spans))
+	for i := range payload.Spans {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		span := &payload.spans[i]
-		body, err := span.build(ctx, d, ref, work)
+		span := &payload.Spans[i]
+		body, err := span.Build(ctx, d, ref, work)
 		if err != nil {
 			return nil, fmt.Errorf(`sweep path span %d: %w`, i, err)
 		}
@@ -80,17 +80,17 @@ func replayCompositeSweepWork(
 	}
 	var body *Body
 	var err error
-	if payload.closedComposite {
+	if payload.ClosedComposite {
 		body, err = bodyResult(compositesweep.Assemble(ctx, envOf(documentNode(d), ref), parts, false,
 			compositesweep.AuditClosedBodies, compositesweep.SewJoin, true))
 	} else {
-		body, err = bodyResult(compositesweep.Assemble(ctx, envOf(documentNode(d), ref), parts, payload.surfaceResult,
+		body, err = bodyResult(compositesweep.Assemble(ctx, envOf(documentNode(d), ref), parts, payload.SurfaceResult,
 			compositesweep.AuditBodies, compositesweep.SewJoin, false))
 	}
 	if err != nil {
 		return nil, err
 	}
-	if err := compositesweep.AggregateBody(ctx, bodyNode(body), parts, payload.surfaceResult); err != nil {
+	if err := compositesweep.AggregateBody(ctx, bodyNode(body), parts, payload.SurfaceResult); err != nil {
 		return nil, err
 	}
 	body.n.Payload = payload
@@ -148,15 +148,15 @@ func evalCompositeSweepContextWithClosure(
 	// from the published face set after every span has built solid
 	// (docs/surface-design.md §4).
 	payload := sweepPayload{
-		prism: prismrecord.Payload{
+		Prism: prismrecord.Payload{
 			Profile: profile,
 			Frame:   frame,
 			Xform:   r3.Identity(),
 		},
-		spans:           make([]sweepSpanPayload, len(path.Records)),
-		path:            path,
-		surfaceResult:   surfaceResult,
-		closedComposite: closedComposite,
+		Spans:           make([]sweepSpanPayload, len(path.Records)),
+		Path:            path,
+		SurfaceResult:   surfaceResult,
+		ClosedComposite: closedComposite,
 	}
 	for i, record := range path.Records {
 		if err := ctx.Err(); err != nil {
@@ -165,10 +165,10 @@ func evalCompositeSweepContextWithClosure(
 		current := frames[i].Frame
 		var err error
 		if record.Arc == nil {
-			payload.spans[i], err = compositeLineSweepSpan(profile, current, record)
+			payload.Spans[i], err = compositeLineSweepSpan(profile, current, record)
 		} else {
 			spanPlane := planeRecord{Origin: current.Origin(), U: current.U(), V: current.V()}
-			payload.spans[i], err = compositeArcSweepSpan(ctx, profile, spanPlane, current, record, work)
+			payload.Spans[i], err = compositeArcSweepSpan(ctx, profile, spanPlane, current, record, work)
 		}
 		if err != nil {
 			return nil, fmt.Errorf(`sweep path span %d: %w`, i, err)
@@ -211,7 +211,7 @@ func compositeLineSweepSpan(
 	if math.IsInf(heightBound, 0) || math.IsNaN(heightBound) {
 		return sweepSpanPayload{}, fmt.Errorf(`%w: the sweep line's length has no finite error bound`, ErrUnsupported)
 	}
-	return sweepSpanPayload{prism: prismrecord.Payload{
+	return sweepSpanPayload{Prism: prismrecord.Payload{
 		Profile: profile,
 		Frame:   frame,
 		Z1:      height,
@@ -246,7 +246,7 @@ func compositeArcSweepSpan(
 		reverseCaps = true
 	}
 	return sweepSpanPayload{
-		revolve: revolvePayload{
+		Revolve: revolvePayload{
 			Profile: profile,
 			Frame:   frame,
 			Ax:      ax,
@@ -255,22 +255,22 @@ func compositeArcSweepSpan(
 			Den:     den,
 			Xform:   r3.Identity(),
 		},
-		arc:            true,
-		reverseArcCaps: reverseCaps,
+		Arc:            true,
+		ReverseArcCaps: reverseCaps,
 	}, nil
 }
 
 func (span sweepSpanPayload) transform() r3.Transform {
-	if span.arc {
-		return span.revolve.Xform
+	if span.Arc {
+		return span.Revolve.Xform
 	}
-	return span.prism.Xform
+	return span.Prism.Xform
 }
 
-// build evaluates one temporary closed span. compositesweep.Assemble
+// Build evaluates one temporary closed span. compositesweep.Assemble
 // removes the internal caps and sews adjacent section boundaries after every
 // span has succeeded. No temporary body is committed to the document.
-func (span *sweepSpanPayload) build(
+func (span *sweepSpanPayload) Build(
 	ctx context.Context,
 	d *Document,
 	ref producerID,
@@ -279,23 +279,23 @@ func (span *sweepSpanPayload) build(
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if span.arc {
-		body, err := bodyResult(revolveplan.Build(ctx, envOf(documentNode(d), ref), span.revolve, work))
+	if span.Arc {
+		body, err := bodyResult(revolveplan.Build(ctx, envOf(documentNode(d), ref), span.Revolve, work))
 		if err != nil {
 			return nil, err
 		}
-		restoreSweepArcCapRoles(body, span.reverseArcCaps)
+		restoreSweepArcCapRoles(body, span.ReverseArcCaps)
 		if built, ok := body.n.Payload.(revolvePayload); ok {
-			span.revolve = built
+			span.Revolve = built
 		}
 		return body, nil
 	}
-	body, err := bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), ref), span.prism, work))
+	body, err := bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), ref), span.Prism, work))
 	if err != nil {
 		return nil, err
 	}
 	if built, ok := body.n.Payload.(prismPayload); ok {
-		span.prism = built
+		span.Prism = built
 	}
 	return body, nil
 }

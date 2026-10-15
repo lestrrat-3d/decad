@@ -146,10 +146,10 @@ func payloadAuditsFacetContact(p topo.Payload) bool {
 		return true
 	}
 	if sp, ok := p.(sweepPayload); ok {
-		return len(sp.spans) != 0 || sp.arc
+		return len(sp.Spans) != 0 || sp.Arc
 	}
 	if sp, ok := p.(chainSweepPayload); ok {
-		return len(sp.spans) != 0 || sp.arc
+		return len(sp.Spans) != 0 || sp.Arc
 	}
 	if _, ok := p.(bodyPatchPayload); ok {
 		return true

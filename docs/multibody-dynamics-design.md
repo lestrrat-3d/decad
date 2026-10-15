@@ -2848,7 +2848,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 ### PR 20a (Phase 3) — one-span straight sweep tessellation
 
 - Delivers `Body.Tessellate` of a one-span straight sweep (a `sweepPayload` with no spans, no arc and no
-  surface result) as the prism it reduced to (`sweepPayload.prism`), its wall roles read through the span
+  surface result) as the prism it reduced to (`sweepPayload.Prism`), its wall roles read through the span
   prefix `prefixSweepSpanZeroRole` minted (`side(0,i,j)`); `docs/sweep-design.md` D2 gains that exception.
   The reduction builds through `prismrecord.Build`, so the prism's mesh and proofs are the sweep's.
 - Files: `tessellate.go`, `docs/sweep-design.md`.

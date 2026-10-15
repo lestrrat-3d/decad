@@ -27,16 +27,16 @@ func tessellateChainArcSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if !sp.arc || len(sp.spans) != 0 || len(sp.revolve.Chains) != 1 ||
-		len(sp.revolve.Chains[0].Segments) != 1 || sp.revolve.Full ||
-		sp.revolve.SectionDelta != 0 || b.Kind() != BodySheet || len(b.Faces()) != 1 {
+	if !sp.Arc || len(sp.Spans) != 0 || len(sp.Revolve.Chains) != 1 ||
+		len(sp.Revolve.Chains[0].Segments) != 1 || sp.Revolve.Full ||
+		sp.Revolve.SectionDelta != 0 || b.Kind() != BodySheet || len(b.Faces()) != 1 {
 		return refuse("a chain arc Sweep mesh needs one straight source and one partial arc wall")
 	}
-	if _, ok := sp.revolve.Chains[0].Segments[0].(lineSeg); !ok {
+	if _, ok := sp.Revolve.Chains[0].Segments[0].(lineSeg); !ok {
 		return refuse("the chain arc Sweep meridian is not a line")
 	}
-	rp := sp.revolve.Revolve()
-	resolved, err := revolveaxis.ResolveChain(ctx, sp.revolve.Chains[0],
+	rp := sp.Revolve.Revolve()
+	resolved, err := revolveaxis.ResolveChain(ctx, sp.Revolve.Chains[0],
 		freeform.NewFreeformWork(), "chain arc Sweep tessellation", rp.ChargedWalk, rp.Ax.SnapTol)
 	if err != nil {
 		return nil, err
