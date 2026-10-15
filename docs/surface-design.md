@@ -2444,9 +2444,8 @@ the use `Profile.Area` already gets at the same seam — and nothing else reads
 it. Every length decad publishes about a ribbon is computed from the recorded
 segments, by the engines that already prove their own bounds.
 
-A chain `Revolve` runs `revolve_axis.go`'s existing axis resolution over the
-recorded walk: the axis must be non-degenerate and coplanar with the sketch
-plane, and the walk must lie in one closed half-plane of it. `axisFrame.walk`
+A chain `Revolve` passes the recorded walk through
+`revolveplan.ResolveAxisSide`. `axisFrame.walk`
 snaps an endpoint within `snapTol` to exactly zero and charges the discarded
 radial distance to `startVBound` or `endVBound`. The pole test reads that snapped
 zero exactly; it does not admit a near-zero radius through a new tolerance.

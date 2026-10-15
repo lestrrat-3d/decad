@@ -8,17 +8,9 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// This file resolves a revolve's axis into the sketch plane and decides what
-// the profile may do around it: revolveaxis.Line2, the 2D line the axis projects to;
-// axisFrame, the axis-local frame every later reading is taken in; and the
-// two gates that refuse a profile crossing or touching the axis where the
-// sweep would be degenerate.
-//
-// wallKind is decided here because it follows from the axis alone: a segment
-// parallel to the axis sweeps a cylinder, one meeting it at an angle a cone,
-// one perpendicular an annulus. A segment whose kind the axis cannot decide
-// exactly refuses rather than being assigned the nearest one. See
-// docs/evaluator-design.md §6.
+// This file holds axisInPlane and the aliases axisFrame and wallKind. The
+// profile gates live in revolveplan.ResolveAxisSide
+// (internal/revolveplan/axis_side.go). See docs/evaluator-design.md §6.
 
 // axisInPlane reads the public axis variant and resolves its coordinates.
 func axisInPlane(a Axis, frame r3.Frame) (revolveaxis.Line2, error) {
