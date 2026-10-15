@@ -150,7 +150,7 @@ func pointPlaneSource(target *Body) (pointPlaneSliceRecord, bool) {
 // pointPlaneOrder returns -1 when a lies strictly nearer the apex than b,
 // +1 for the reverse, and zero if the source boundary bound cannot decide.
 func pointPlaneOrder(base facetedPayload, a, b *pointPlaneLimit) int {
-	// b.d*a.g - a.d*b.g is affine on the source cap. Every cap
+	// b.D*a.g - a.D*b.g is affine on the source cap. Every cap
 	// triangle is convex, so its vertex minima decide the whole held cap.
 	cx := pointPlaneSub(pointPlaneMul(b.D, a.Nx), pointPlaneMul(a.D, b.Nx))
 	cy := pointPlaneSub(pointPlaneMul(b.D, a.Ny), pointPlaneMul(a.D, b.Ny))

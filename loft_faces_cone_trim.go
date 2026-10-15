@@ -19,7 +19,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// The original LoftFaces proof authenticates this map over Source.sourceBox.
+// The original LoftFaces proof authenticates this map over Source.SourceBox.
 // A later Boolean may use it only after proving that its far cap survived.
 type loftFacesCapRecord struct {
 	Source       *pointSectionRecord

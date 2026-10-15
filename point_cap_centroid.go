@@ -154,7 +154,7 @@ func pointPlaneCapDroppedCoordinate(center, anchor [3]*big.Rat,
 	plane *pointPlaneLimit, keep int) *big.Rat {
 	drop := 1 - keep
 	normal := [2]*big.Rat{plane.Nx, plane.Ny}
-	// QuoRat needs lowest-terms operands; plane.nx and plane.ny come from
+	// QuoRat needs lowest-terms operands; plane.Nx and plane.Ny come from
 	// FloatRat or NewRat (see pointPlaneAdd), so the slope is in lowest terms.
 	slope := proofarith.QuoRat(new(big.Rat), normal[keep], normal[drop])
 	return pointPlaneSub(anchor[drop],
