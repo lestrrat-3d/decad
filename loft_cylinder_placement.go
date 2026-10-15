@@ -13,13 +13,13 @@ import (
 
 // loftCylinderPlacement keeps the local source bodies used by the structural
 // certificate. The public operands and their producer identities stay in the
-// surrounding join record. Only this exact common pose maps the local result
-// to those operands; an ordinary later placement drops the record.
+// surrounding join record. A later bore rebuilds the local join from these
+// sources instead of retaining its mesh. Only this exact common pose maps the
+// local result to those operands; an ordinary later placement drops the record.
 type loftCylinderPlacement struct {
-	pose   r3.Transform
-	blank  *Body
-	teeth  []*Body
-	joined *Body
+	pose  r3.Transform
+	blank *Body
+	teeth []*Body
 }
 
 // loftCylinderAffine compares the exact rational maps represented by stored
@@ -315,8 +315,7 @@ func tryPlacedLoftCylinderUnion(ctx context.Context, d *Document, ref producerID
 	record := *localPayload.loftCylinderJoin
 	record.blank = blank
 	record.teeth = teeth
-	record.placement = &loftCylinderPlacement{pose: pose, blank: localBlank,
-		teeth: localTeeth, joined: localJoin}
+	record.placement = &loftCylinderPlacement{pose: pose, blank: localBlank, teeth: localTeeth}
 	placed.loftCylinderJoin = &record
 	world.n.Payload = placed
 	return world, true, nil
@@ -329,15 +328,12 @@ func tryPlacedLoftCylinderBoreCut(ctx context.Context, d *Document, ref producer
 		return nil, false, nil
 	}
 	placement := joined.loftCylinderJoin.placement
-	if joined.xform != placement.pose || placement.joined == nil {
+	if joined.xform != placement.pose || !joined.contactAudited ||
+		placement.blank == nil || len(placement.teeth) == 0 ||
+		!loftCylinderPlacedSourcesMatch(placement.teeth) {
 		return nil, false, nil
 	}
-	localJoined, ok := placement.joined.n.Payload.(facetedPayload)
-	if !ok || localJoined.loftCylinderJoin == nil || !localJoined.contactAudited ||
-		localJoined.xform != r3.Identity() {
-		return nil, false, nil
-	}
-	record := localJoined.loftCylinderJoin
+	record := joined.loftCylinderJoin
 	// Mirror the local bore's source-level gates before rebuilding the tool.
 	// A mismatch belongs to generic Cut; a rebuild error remains observable.
 	pp, ok := tool.n.Payload.(prismPayload)
@@ -399,6 +395,13 @@ func tryPlacedLoftCylinderBoreCut(ctx context.Context, d *Document, ref producer
 		end.Cmp(proofarith.FloatRat(record.z1)) <= 0 {
 		return nil, false, nil
 	}
+	// The source and tool gates above precede both private rebuilds. The join
+	// is only needed for an eligible bore; later tooth joins use the sources.
+	localJoin, admitted, err := tryLoftCylinderUnionTeeth(ctx, d,
+		target.originProducer(), placement.blank, placement.teeth)
+	if err != nil || !admitted {
+		return nil, admitted, err
+	}
 	local := pp
 	local.Frame, local.Xform = localFrame, r3.Identity()
 	localTool, err := placePayload(ctx, local, d, tool.n.Origin.Producer, r3.Identity())
@@ -406,7 +409,7 @@ func tryPlacedLoftCylinderBoreCut(ctx context.Context, d *Document, ref producer
 		return nil, false, err
 	}
 	localBore, admitted, err := tryLoftCylinderBoreCut(ctx, meshbool.OpCut,
-		d, ref, placement.joined, localTool)
+		d, ref, localJoin, localTool)
 	if err != nil || !admitted {
 		return nil, admitted, err
 	}

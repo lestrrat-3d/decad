@@ -37,8 +37,9 @@ actual blank and teeth plus the private local proof bodies and pose. A later
 tooth join rebuilds the local certificate from those proof bodies and an
 exactly matched new tooth. Ordinary `Transform` or `Copy` of the joined result
 clears the record as before.
-The source record keeps a private local joined mesh while the placed result
-is live so a later centered bore can use the same audited local shell.
+The source record keeps private local source bodies, not a second joined mesh.
+A later centered bore rebuilds the canonical join from those sources only
+after its cheap source and pose checks pass.
 Nonmatching source shapes and exact-map mismatches leave the generic Boolean
 available before private reconstruction. A reconstruction or fixed work-limit
 error after those checks is returned, as in the original certified path;
@@ -338,9 +339,9 @@ exact blank, below the side clearance after the joined boundary bound, and
 inside the seam annulus's inner radius. The cap audit proves each recorded
 outline is one disk containing the axis. Placement clears the record, so a
 later Boolean cannot rebuild from unplaced operands.
-The common-placement arm stores the local audited join alongside the actual
-source identities. This record exists only on the result built by that arm;
-public placement still clears it.
+The common-placement arm stores its local source bodies alongside the actual
+source identities. It does not retain the local joined mesh. This record
+exists only on the result built by that arm; public placement still clears it.
 It also stores the private proxy teeth and each axial bridge distance. A
 later Union rebuilds proofs from the original teeth. A centered through-bore
 copies both tooth lists and the bridge distances into its own source record.
@@ -399,13 +400,15 @@ bound, while the new bore wall and inner annular rims use `boreBound`.
 Placement clears this post-bore record.
 
 For a common-placement join, `Cut` first checks that the tool's recorded
-plane and placement equal a local centered bore plane under the same exact
-pose. It cuts the private local audited join with a private tool carrying the
-actual tool's producer identity. The existing bore audits and bounds run in
-local coordinates; `PlaceMesh` charges the final rigid placement, and the
-result must still meet the 0.1 mm boundary limit. The placed bore's face
-origins name the actual blank, teeth, and tool. The placed bore does not gain
-an unplaced chamfer source record.
+circle, radius, axial span, plane and placement match a local centered bore
+under the same exact pose. An ineligible tool reaches generic Cut before
+either private body is rebuilt. For an eligible tool, `Cut` rebuilds the
+canonical join from the retained local sources and then builds a private tool
+with the actual tool's producer identity. Reconstruction errors propagate.
+The existing bore audits and bounds run in local coordinates; `PlaceMesh`
+charges the final rigid placement, and the result must still meet the 0.1 mm
+boundary limit. The placed bore's face origins name the actual blank, teeth,
+and tool. The placed bore does not gain an unplaced chamfer source record.
 
 The bore record also retains the upward `boreBound` used in Cut's wall proof.
 That value bounds the two-way, same-height correspondence between the exact

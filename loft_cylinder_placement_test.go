@@ -211,7 +211,7 @@ func TestLoftCylinderUnionCommonPlacement(t *testing.T) {
 			loftCylinderTestFrame(t, r3.Vec{X: 2}, r3.Vec{Y: 1}, r3.Vec{Z: 1}), 0, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, blank, tooth := loftCylinderPlacedTabPair(t, tc.lower, tc.upper)
+			doc, blank, tooth := loftCylinderPlacedTabPair(t, tc.lower, tc.upper)
 			if tc.translate != 0 {
 				motion := loftCylinderTestTranslation(t, tc.translate)
 				var err error
@@ -225,8 +225,13 @@ func TestLoftCylinderUnionCommonPlacement(t *testing.T) {
 			loftCylinderCheckPlacedResult(t, joined, blank, tooth, tc.placed)
 			if tc.placed {
 				fp := joined.n.Payload.(facetedPayload)
+				placement := fp.loftCylinderJoin.placement
+				localJoin, admitted, err := tryLoftCylinderUnionTeeth(t.Context(), doc,
+					joined.originProducer(), placement.blank, placement.teeth)
+				require.NoError(t, err)
+				require.True(t, admitted, "canonical source bodies must rebuild the join")
 				loftCylinderCheckCanonicalReadings(t, joined,
-					fp.loftCylinderJoin.placement.joined, fp.loftCylinderJoin.placement.pose)
+					localJoin, placement.pose)
 				if tc.name == "translation_1e-12" {
 					moved, err := Transform(t.Context(), joined, loftCylinderTestTranslation(t, 1))
 					require.NoError(t, err)
@@ -267,8 +272,12 @@ func TestLoftCylinderCommonPlacementConsumers(t *testing.T) {
 	require.Len(t, fp.loftCylinderJoin.teeth, 2)
 	require.Equal(t, second.originProducer(), fp.loftCylinderJoin.teeth[1].originProducer())
 	require.LessOrEqual(t, fp.meshBound, 0.1)
-	loftCylinderCheckCanonicalReadings(t, joined, fp.loftCylinderJoin.placement.joined,
-		fp.loftCylinderJoin.placement.pose)
+	placement := fp.loftCylinderJoin.placement
+	localJoin, admitted, err := tryLoftCylinderUnionTeeth(ctx, doc,
+		joined.originProducer(), placement.blank, placement.teeth)
+	require.NoError(t, err)
+	require.True(t, admitted, "canonical source bodies must rebuild the later join")
+	loftCylinderCheckCanonicalReadings(t, joined, localJoin, placement.pose)
 	seenJoin := map[producerID]bool{}
 	for _, face := range joined.Faces() {
 		for _, origin := range face.Origins() {
@@ -297,7 +306,7 @@ func TestLoftCylinderCommonPlacementConsumers(t *testing.T) {
 	tool, err := Extrude(ctx, doc, s, s.Profiles()[0], Distance{D: units.Millimeters(4), Dir: Along})
 	require.NoError(t, err)
 	localBore, admitted, err := tryLoftCylinderBoreCut(ctx, meshbool.OpCut, doc,
-		tool.originProducer(), fp.loftCylinderJoin.placement.joined, tool)
+		tool.originProducer(), localJoin, tool)
 	require.NoError(t, err)
 	require.True(t, admitted)
 	tool, err = Transform(ctx, tool, move)
@@ -315,7 +324,7 @@ func TestLoftCylinderCommonPlacementConsumers(t *testing.T) {
 	box, err := bored.Bounds()
 	require.NoError(t, err)
 	require.True(t, proofFiniteBox(box), "bore result bounds must be finite")
-	loftCylinderCheckCanonicalReadings(t, bored, localBore, fp.loftCylinderJoin.placement.pose)
+	loftCylinderCheckCanonicalReadings(t, bored, localBore, placement.pose)
 	seenBore := map[producerID]bool{}
 	for _, face := range bored.Faces() {
 		for _, origin := range face.Origins() {
@@ -459,8 +468,12 @@ func TestLoftCylinderCommonPlacementNativeYZConsumers(t *testing.T) {
 	require.NotNil(t, fp.loftCylinderJoin)
 	require.NotNil(t, fp.loftCylinderJoin.placement)
 	require.Len(t, fp.loftCylinderJoin.teeth, 2)
-	loftCylinderCheckCanonicalReadings(t, joined, fp.loftCylinderJoin.placement.joined,
-		fp.loftCylinderJoin.placement.pose)
+	placement := fp.loftCylinderJoin.placement
+	localJoin, admitted, err := tryLoftCylinderUnionTeeth(ctx, doc,
+		joined.originProducer(), placement.blank, placement.teeth)
+	require.NoError(t, err)
+	require.True(t, admitted, "canonical source bodies must rebuild the native YZ join")
+	loftCylinderCheckCanonicalReadings(t, joined, localJoin, placement.pose)
 
 	w := sketch.NewWorld()
 	toolFrame := loftCylinderTestFrame(t, r3.Vec{X: -1}, y, z)
