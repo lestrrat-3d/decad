@@ -400,6 +400,74 @@ func TestCellAllowsOfMatchesThePerBoundHelpers(t *testing.T) {
 	})
 }
 
+func TestCellAllowsWithSideSpansKeepsExactCellReadings(t *testing.T) {
+	t.Parallel()
+	negativeZero := math.Copysign(0, -1)
+	for _, tc := range []struct {
+		name                         string
+		vLo, vHi, wLo, wHi           r3.Vec
+		arcLenA, arcLenB, matchedDel float64
+	}{
+		{
+			name: "distinct sides",
+			vLo:  r3.NewVec(0, 0, 0), vHi: r3.NewVec(1, 2, 0),
+			wLo: r3.NewVec(0, 0, 3), wHi: r3.NewVec(2, 1, 3),
+			arcLenA: 3, arcLenB: 3, matchedDel: 0.1,
+		},
+		{
+			name: "signed zero and degenerate sides",
+			vLo:  r3.Vec{X: negativeZero}, vHi: r3.Vec{},
+			wLo: r3.Vec{Y: negativeZero}, wHi: r3.Vec{},
+			arcLenA: 0, arcLenB: 0, matchedDel: 0,
+		},
+		{
+			name: "long dyadic denominator",
+			vLo:  r3.Vec{}, vHi: r3.NewVec(math.Nextafter(1, 2), math.Ldexp(1, -400), 0),
+			wLo: r3.NewVec(0, 0, 3), wHi: r3.NewVec(1, math.Ldexp(1, -400), 3),
+			arcLenA: 3, arcLenB: 3, matchedDel: 0,
+		},
+		{
+			name: "broken scalar claim",
+			vLo:  r3.Vec{}, vHi: r3.NewVec(1, 0, 0),
+			wLo: r3.NewVec(0, 0, 1), wHi: r3.NewVec(0, 1, 1),
+			arcLenA: -1, arcLenB: 2, matchedDel: math.NaN(),
+		},
+		{
+			name: "nonfinite corner",
+			vLo:  r3.Vec{}, vHi: r3.NewVec(math.Inf(1), 0, 0),
+			wLo: r3.NewVec(0, 0, 1), wHi: r3.NewVec(0, 1, 1),
+			arcLenA: 2, arcLenB: 2, matchedDel: 0,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, sideA, sideB := proofbound.CellAllowsWithSideSpansOf(
+				tc.vLo, tc.vHi, tc.wLo, tc.wHi, tc.arcLenA, tc.arcLenB, tc.matchedDel,
+			)
+			for _, field := range []struct {
+				name      string
+				want, got float64
+			}{
+				{"chord area", proofbound.CellChordCurveAreaUpper(
+					tc.vLo, tc.vHi, tc.wLo, tc.wHi, tc.arcLenA, tc.arcLenB, tc.matchedDel,
+				), got.ChordCurveAreaUpper},
+				{"twist volume", proofbound.CellTwistVolumeAllow(tc.vLo, tc.vHi, tc.wLo, tc.wHi), got.TwistVolumeAllow},
+				{"twist offset", proofbound.CellTwistOffsetUpper(tc.vLo, tc.vHi, tc.wLo, tc.wHi), got.TwistOffsetUpper},
+				{"twist area", proofbound.CellTwistAreaAllow(tc.vLo, tc.vHi, tc.wLo, tc.wHi), got.TwistAreaAllow},
+			} {
+				require.Equal(t, math.Float64bits(field.want), math.Float64bits(field.got), field.name)
+			}
+			if !proofbound.FiniteVec(tc.vLo) || !proofbound.FiniteVec(tc.vHi) ||
+				!proofbound.FiniteVec(tc.wLo) || !proofbound.FiniteVec(tc.wHi) {
+				require.True(t, math.IsInf(sideA, 1), "side A must refuse a nonfinite corner")
+				require.True(t, math.IsInf(sideB, 1), "side B must refuse a nonfinite corner")
+				return
+			}
+			require.Equal(t, math.Float64bits(proofbound.CellSpanUpper(tc.vLo, tc.vHi)), math.Float64bits(sideA), "side A")
+			require.Equal(t, math.Float64bits(proofbound.CellSpanUpper(tc.wLo, tc.wHi)), math.Float64bits(sideB), "side B")
+		})
+	}
+}
+
 // rawNormIsBelowExact reports whether naiveNorm (bounds_internal_test.go) of
 // a−b lands STRICTLY below the exact |a−b|, decided by exact rational
 // comparison of the raw reading's own square against the exactly-rational

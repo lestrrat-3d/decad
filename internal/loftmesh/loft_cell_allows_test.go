@@ -92,8 +92,15 @@ func TestComputeLoftChordedAllowMatchesSeparateBounds(t *testing.T) {
 				v[i] = r3.NewVec(1, 2, 3)
 			}
 		}},
+		{name: "signed zero corners", edit: func(_ []LoopPair, v []r3.Vec) {
+			v[0].X = math.Copysign(0, -1)
+			v[4].Y = math.Copysign(0, -1)
+		}},
 		{name: "broken arc claim", edit: func(p []LoopPair, _ []r3.Vec) {
 			p[0].ArcUpperV[0] = 0.01
+		}},
+		{name: "unstateable matched claim on faceted cell", edit: func(p []LoopPair, _ []r3.Vec) {
+			p[0].Faceted[0], p[0].MatchedDelta[0] = true, math.Inf(1)
 		}},
 		{name: "nonfinite scalar claim", edit: func(p []LoopPair, _ []r3.Vec) {
 			p[0].TangentEnergyV[0] = math.Inf(1)
@@ -142,6 +149,56 @@ func TestComputeLoftChordedAllowMatchesSeparateBounds(t *testing.T) {
 			requireChordedAllowExact(t, want, cached)
 			require.Equal(t, originalPairs, pairs)
 			require.Equal(t, originalVerts, verts)
+		})
+	}
+}
+
+func TestComputeLoftChordedAllowNaNArcMatchesSeparateBounds(t *testing.T) {
+	pairs, vIdx, wIdx, verts := chordedAllowCase()
+	pairs[0].ArcUpperV[0] = math.NaN()
+	anchor := r3.NewVec(0.25, -0.5, 0.75)
+	want := referenceComputeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, 0.25, 0.01, false)
+	got := ComputeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, 0.25, 0.01, false)
+	requireChordedAllowExact(t, want, got)
+}
+
+func TestComputeLoftChordedAllowNonfiniteCornerKeepsSeamPanic(t *testing.T) {
+	const finiteLiftPanic = "decad: exact Dyadic lift requires a finite float"
+	readPanic := func(run func()) (caught any) {
+		defer func() { caught = recover() }()
+		run()
+		return nil
+	}
+	for _, faceted := range []bool{false, true} {
+		name := "charged"
+		if faceted {
+			name = "faceted uncharged"
+		}
+		t.Run(name, func(t *testing.T) {
+			pairs, vIdx, wIdx, verts := chordedAllowCase()
+			verts[0].X = math.Inf(1)
+			if faceted {
+				pairs[0].Faceted[0], pairs[0].MatchedDelta[0] = true, 0
+			}
+			anchor := r3.NewVec(0.25, -0.5, 0.75)
+			for _, path := range []struct {
+				name string
+				run  func()
+			}{
+				{"separate bounds", func() {
+					referenceComputeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, 0.25, 0.01, false)
+				}},
+				{"shared bounds", func() {
+					ComputeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, 0.25, 0.01, false)
+				}},
+			} {
+				caught := readPanic(path.run)
+				message, ok := caught.(string)
+				if !ok {
+					t.Fatalf("%s: expected a string panic, got %T", path.name, caught)
+				}
+				require.Equal(t, finiteLiftPanic, message, path.name)
+			}
 		})
 	}
 }

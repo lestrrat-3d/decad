@@ -134,16 +134,32 @@ func computeLoftChordedAllow(
 			jn := (j + 1) % n
 			vLo, vHi := verts[vIdx[i][j]], verts[vIdx[i][jn]]
 			wLo, wHi := verts[wIdx[i][j]], verts[wIdx[i][jn]]
+			charged := !(p.Faceted[j] && p.MatchedDelta[j] <= 0)
+			reuseSpans := charged && proofbound.FiniteVec(vLo) && proofbound.FiniteVec(vHi) &&
+				proofbound.FiniteVec(wLo) && proofbound.FiniteVec(wHi)
+			var allows proofbound.CellAllows
+			var cellMatched, sideA, sideB float64
+			if reuseSpans {
+				// The cell bounds have already certified these exact side spans.
+				cellMatched = ChordCellDeltaUpper(p.MatchedDelta[j], delta)
+				allows, sideA, sideB = proofbound.CellAllowsWithSideSpansOf(
+					vLo, vHi, wLo, wHi, p.ArcUpperV[j], p.ArcUpperW[j], cellMatched,
+				)
+			} else {
+				// Uncharged and non-finite cells keep the original seam reading.
+				sideA = proofbound.CellSpanUpper(vLo, vHi)
+				sideB = proofbound.CellSpanUpper(wLo, wHi)
+			}
 			// The skirt runs along every HELD seam cell (this function's
 			// doc comment), so this sum precedes the charged-cell gate.
 			// ArcUpper bounds the true segment, and a held chord joining two
 			// displaced stations can be up to 2·delta longer, so each side
 			// takes the larger of that and the held chord's own exact length.
 			seamPerimeterUpper = proofbound.AbsSumUpper(seamPerimeterUpper,
-				math.Max(p.ArcUpperV[j], proofbound.CellSpanUpper(vLo, vHi)),
-				math.Max(p.ArcUpperW[j], proofbound.CellSpanUpper(wLo, wHi)),
+				math.Max(p.ArcUpperV[j], sideA),
+				math.Max(p.ArcUpperW[j], sideB),
 			)
-			if p.Faceted[j] && p.MatchedDelta[j] <= 0 {
+			if !charged {
 				// A faceted cell's held triangle pair IS its boundary; its
 				// vertex displacement is the accumulator's delta-keyed legs
 				// (this function's doc comment).
@@ -158,9 +174,10 @@ func computeLoftChordedAllow(
 			// per-cell composition is at most the build-wide matchedDelta
 			// (that term takes the same sum at the MAX cell), so it is
 			// the tighter of the two readings of the same row.
-			cellMatched := ChordCellDeltaUpper(p.MatchedDelta[j], delta)
-
-			allows := proofbound.CellAllowsOf(vLo, vHi, wLo, wHi, p.ArcUpperV[j], p.ArcUpperW[j], cellMatched)
+			if !reuseSpans {
+				cellMatched = ChordCellDeltaUpper(p.MatchedDelta[j], delta)
+				allows = proofbound.CellAllowsOf(vLo, vHi, wLo, wHi, p.ArcUpperV[j], p.ArcUpperW[j], cellMatched)
+			}
 			cellWallUpper := allows.ChordCurveAreaUpper
 			wallAreaUpper = proofbound.AbsSumUpper(wallAreaUpper, cellWallUpper)
 			wallLeg = proofbound.AbsSumUpper(wallLeg, proofbound.ProductUpper(cellMatched, cellWallUpper))
