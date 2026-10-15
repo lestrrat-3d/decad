@@ -95,8 +95,8 @@ type PointPlaneSliceRecord struct {
 }
 
 // PointPlaneLimit is the exact plane through the source line of an unplaced
-// world-XY chain Extrude. Its normal is deliberately unnormalised: all tests
-// and ray intersections below are rational statements about stored floats.
+// world-XY chain Extrude. Its normal is deliberately unnormalised: every test
+// and ray intersection against it is a rational statement about stored floats.
 type PointPlaneLimit struct {
 	Nx, Ny, D               *big.Rat
 	A, B                    sectionrecord.Point2
@@ -117,11 +117,12 @@ func pointPlaneAbs(q *big.Rat) *big.Rat { return new(big.Rat).Abs(q) }
 // pointPlaneAdd, pointPlaneSub and pointPlaneMul return a fresh Rat and read
 // their operands only. Operands must be in lowest terms: the result always
 // equals the exact value, but is in lowest terms only for reduced operands (a
-// 3/9 operand gives 3/9 where big.Rat gives 1/3). Every producer in this
-// package reduces: FloatRat through ratOfPointPlane and lfF, big.NewRat
-// literals, lfOne, lfZero, and results of these helpers and of raw Quo, Abs and
-// Neg. The guard TestNoRatWritesThroughNumDenom (internal/proof) bars in-place
-// Num and Denom writes outside internal/proof.
+// 3/9 operand gives 3/9 where big.Rat gives 1/3). Every operand in this
+// package is reduced: FloatRat through ratOfPointPlane and
+// massmoment.PlacementRotation, the PointPlaneLimit coefficients the root
+// package builds from reduced producers, exact rotation matrices, and results
+// of these helpers and of raw Abs. The guard TestNoRatWritesThroughNumDenom
+// (internal/proof) bars in-place Num and Denom writes outside internal/proof.
 func pointPlaneAdd(a, b *big.Rat) *big.Rat { return proofarith.AddRat(new(big.Rat), a, b) }
 
 func pointPlaneSub(a, b *big.Rat) *big.Rat { return proofarith.SubRat(new(big.Rat), a, b) }

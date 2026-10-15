@@ -56,8 +56,8 @@ type SpiralJunction struct {
 }
 
 // A first curved tooth join may use this only while both input bodies remain
-// the original unplaced blank and cone-trimmed LoftFaces tooth. The matcher
-// below rechecks the live Sketch source and the exact finite blank meridian.
+// the original unplaced blank and cone-trimmed LoftFaces tooth. The root
+// matcher rechecks the live Sketch source and the exact finite blank meridian.
 type SpiralFirstJoinSource struct {
 	Blank      *SpiralBlankSource
 	Tooth      *LoftFacesTrimRecord
