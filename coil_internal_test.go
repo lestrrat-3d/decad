@@ -26,7 +26,7 @@ import (
 //     TestCoilSquareSpring's "enclosures hold the exact values" went red;
 //   - the asinh term (SegmentArea's second term dropped): the annular wall
 //     assertions in TestCoilSquareSpring went red;
-//   - the δ widening (coilBounds without ±δ): TestCoilBoundsEncloseTheSolid
+//   - the δ widening (coilshell's coilBounds without ±δ): TestCoilBoundsEncloseTheSolid
 //     went red at 1.3 turns, where the quarter-turn extreme falls between
 //     stations.
 
@@ -197,7 +197,7 @@ func TestCoilSquareSpring(t *testing.T) {
 	})
 	t.Run("enclosures hold the exact values", func(t *testing.T) {
 		cp := b.n.Payload.(coilPayload)
-		rec, err := coilRecordOfPayload(cp)
+		rec, err := cp.Record()
 		require.NoError(t, err)
 		m := coil.RegionMoments(rec.Rho, rec.Zeta, rec.LoopIdx, big.NewRat(1, 1), rec.Axis.Side)
 		requireIntervalHolds(t, coil.Volume(m, rec.Turns), mulPi(10), "volume enclosure")
@@ -236,13 +236,13 @@ func TestCoilSquareSpring(t *testing.T) {
 	})
 	t.Run("held table bounds", func(t *testing.T) {
 		cp := b.n.Payload.(coilPayload)
-		require.Len(t, cp.verts, 4*(512+1))
+		require.Len(t, cp.Verts, 4*(512+1))
 		maxBeta := 0.0
-		for _, beta := range cp.vertexBound {
+		for _, beta := range cp.VertexBound {
 			maxBeta = math.Max(maxBeta, beta)
 		}
-		require.Equal(t, cp.delta, maxBeta)
-		require.Positive(t, cp.delta)
+		require.Equal(t, cp.Delta, maxBeta)
+		require.Positive(t, cp.Delta)
 		box, err := b.Bounds()
 		require.NoError(t, err)
 		require.Equal(t, Approximate, box.Exactness)
@@ -253,9 +253,9 @@ func TestCoilSquareSpring(t *testing.T) {
 		require.Equal(t, Sound, rep.Status)
 		require.Equal(t, ValidityValid, rep.Bodies[0].Validity.Outcome)
 		cp := b.n.Payload.(coilPayload)
-		held, ok := diameter.Points(cp.verts)
+		held, ok := diameter.Points(cp.Verts)
 		require.True(t, ok)
-		want, ok := diameter.LowerForDisplacement(held, cp.delta)
+		want, ok := diameter.LowerForDisplacement(held, cp.Delta)
 		require.True(t, ok)
 		got, ok, err := bodyGateDiameter(t.Context(), b)
 		require.NoError(t, err)
@@ -339,7 +339,7 @@ func TestCoilFractionalTurnCentroid(t *testing.T) {
 	requireEnclosesBig(t, c.Value.Z, c.Bound.Base(), wantZ, "centroid z")
 
 	cp := b.n.Payload.(coilPayload)
-	rec, err := coilRecordOfPayload(cp)
+	rec, err := cp.Record()
 	require.NoError(t, err)
 	m := coil.RegionMoments(rec.Rho, rec.Zeta, rec.LoopIdx, big.NewRat(1, 1), rec.Axis.Side)
 	r, tr, n, ok := coil.CentroidCoefficients(m, rec.Pitch, rec.Turns, rec.Sigma)
@@ -359,7 +359,7 @@ func TestCoilLeftHandMirrors(t *testing.T) {
 	left, err := Coil(t.Context(), doc, s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2.5), WithLeftHand())
 	require.NoError(t, err)
 
-	rv, lv := right.n.Payload.(coilPayload).verts, left.n.Payload.(coilPayload).verts
+	rv, lv := right.n.Payload.(coilPayload).Verts, left.n.Payload.(coilPayload).Verts
 	require.Len(t, lv, len(rv))
 	for i := range rv {
 		require.Equal(t, r3.NewVec(rv[i].X, rv[i].Y, -rv[i].Z), lv[i], "vertex %d", i)
@@ -606,9 +606,9 @@ func TestCoilRepeatAndPlacement(t *testing.T) {
 	second, err := Coil(t.Context(), doc, s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2.5))
 	require.NoError(t, err)
 	fp, sp := first.n.Payload.(coilPayload), second.n.Payload.(coilPayload)
-	require.Equal(t, fp.verts, sp.verts)
-	require.Equal(t, fp.vertexBound, sp.vertexBound)
-	require.Equal(t, fp.tris, sp.tris)
+	require.Equal(t, fp.Verts, sp.Verts)
+	require.Equal(t, fp.VertexBound, sp.VertexBound)
+	require.Equal(t, fp.Tris, sp.Tris)
 	for i, f := range first.Faces() {
 		require.Equal(t, f.Origins()[0].Role, second.Faces()[i].Origins()[0].Role)
 	}
@@ -625,7 +625,7 @@ func TestCoilRepeatAndPlacement(t *testing.T) {
 	require.NoError(t, err)
 	placedB, err := Transform(t.Context(), second, rot)
 	require.NoError(t, err)
-	require.Equal(t, placedA.n.Payload.(coilPayload).verts, placedB.n.Payload.(coilPayload).verts)
+	require.Equal(t, placedA.n.Payload.(coilPayload).Verts, placedB.n.Payload.(coilPayload).Verts)
 
 	// L = rot·[U V N] is orthonormal only to rounding, so the placed coil
 	// denotes the affine image of the unplaced one: its volume is det(L)
@@ -653,7 +653,7 @@ func TestCoilRepeatAndPlacement(t *testing.T) {
 	det := dot(ex, cross(ey, ez))
 	require.NotZero(t, det.Cmp(big.NewRat(1, 1)), "the fixture's rotation must not be exactly orthonormal")
 	pcp := placedA.n.Payload.(coilPayload)
-	prec, err := coilRecordOfPayload(pcp)
+	prec, err := pcp.Record()
 	require.NoError(t, err)
 	pm := coil.RegionMoments(prec.Rho, prec.Zeta, prec.LoopIdx, big.NewRat(1, 1), prec.Axis.Side)
 	wantVol := new(big.Float).SetPrec(512).Mul(bigPi(), big.NewFloat(12.5))
@@ -757,7 +757,7 @@ func TestCoilFacetBoundHoldsTheSurface(t *testing.T) {
 			b, err := Coil(t.Context(), doc, s, p, coilAxisV, units.Millimeters(pitch), units.Scalar(c.turns))
 			require.NoError(t, err)
 			cp := b.n.Payload.(coilPayload)
-			rec, err := coilRecordOfPayload(cp)
+			rec, err := cp.Record()
 			require.NoError(t, err)
 			stride, n := len(rec.Pts), rec.N
 			k := pitch / (2 * math.Pi)
@@ -771,10 +771,10 @@ func TestCoilFacetBoundHoldsTheSurface(t *testing.T) {
 					corners := []int{int(j)*stride + v, int(j)*stride + w, int(j+1)*stride + v, int(j+1)*stride + w}
 					facet := 0.0
 					for _, q := range corners {
-						facet = math.Max(facet, cp.vertexBound[q])
+						facet = math.Max(facet, cp.VertexBound[q])
 					}
 					cell := 2 * (int(j)*stride + kk)
-					tris := [][3]int{cp.tris[cell], cp.tris[cell+1]}
+					tris := [][3]int{cp.Tris[cell], cp.Tris[cell+1]}
 					for _, l := range []float64{0, 0.25, 0.5, 0.75, 1} {
 						for _, sf := range []float64{0, 0.2, 0.4, 0.5, 0.6, 0.8, 1} {
 							rho := pv.U + l*(pw.U-pv.U)
@@ -783,7 +783,7 @@ func TestCoilFacetBoundHoldsTheSurface(t *testing.T) {
 							q := r3.NewVec(rho*math.Cos(th), zeta+k*th, -rho*math.Sin(th))
 							d := math.Inf(1)
 							for _, tri := range tris {
-								d = math.Min(d, closestOnTriangle(q, cp.verts[tri[0]], cp.verts[tri[1]], cp.verts[tri[2]]))
+								d = math.Min(d, closestOnTriangle(q, cp.Verts[tri[0]], cp.Verts[tri[1]], cp.Verts[tri[2]]))
 							}
 							// The sample's own float evaluation is off by a few ulps.
 							require.LessOrEqual(t, d, facet+1e-12, "cell %d of segment %d at (%v, %v)", j, v, l, sf)

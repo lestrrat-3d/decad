@@ -40,7 +40,7 @@ func TestPlanarPairVerdictCoilAgainstPrism(t *testing.T) {
 	_, spring, core := coilCoreFixture(t)
 	payload, ok := spring.n.Payload.(coilPayload)
 	require.True(t, ok)
-	require.Positive(t, payload.delta)
+	require.Positive(t, payload.Delta)
 
 	want := 2 - math.Sqrt2
 	for name, pair := range map[string][2]*Body{"coil first": {spring, core}, "prism first": {core, spring}} {
@@ -52,7 +52,7 @@ func TestPlanarPairVerdictCoilAgainstPrism(t *testing.T) {
 		require.GreaterOrEqual(t, res.hi, want, name)
 		// The held gap is within δ of the true one and the interval adds δ
 		// on each side, so its width is at most about 4δ.
-		require.LessOrEqual(t, res.hi-res.lo, 4*payload.delta+1e-9, name)
+		require.LessOrEqual(t, res.hi-res.lo, 4*payload.Delta+1e-9, name)
 		require.Positive(t, res.lo, name)
 		require.False(t, res.exact, name)
 	}
@@ -73,8 +73,8 @@ func TestVerifyCoilClearanceAgainstPrism(t *testing.T) {
 	require.NoError(t, err)
 	bound := c.Gap.Bound.Base()
 	require.InDelta(t, want, gap, bound)
-	require.LessOrEqual(t, bound, 2*payload.delta+1e-9)
-	require.InDelta(t, want, gap, 2*payload.delta, "the gap is within δ of the hand value")
+	require.LessOrEqual(t, bound, 2*payload.Delta+1e-9)
+	require.InDelta(t, want, gap, 2*payload.Delta, "the gap is within δ of the hand value")
 }
 
 func TestVerifyCoilClearanceAgainstRevolveStaysSuspect(t *testing.T) {

@@ -51,8 +51,7 @@ The rules for rows live in `docs/layout.md`.
 | `sweep_composite_measure.go` | Composite Sweep span replay and body measurement adapters. See `docs/sweep-design.md` PR 4. |
 | `sweep_audit.go` | Adapts built span caps, bounds and extents to `internal/compositesweep/`'s separation audit. See sweep §7. |
 | `sweep_mitre.go` | Mitred options, entry adapters and restatement; builds through `sweepmitre.Build`. See sweep §16. |
-| `coil.go` | `Coil`, `CoilOption`, Table CS gates, payload and placement. See helix §2, §4, §5.6. |
-| `coil_body.go` | The coil's Table CB topology and Table CM readings. See helix §6–§7. |
+| `coil.go` | `Coil`, `CoilOption`, Table CS gates. Root `coilPayload` aliases `coilshell.Payload`. See helix §2, §4, §5.6. |
 | `revolve.go` | Generic `Revolve` over a profile or chain: `Axis` variants, options, angular extents. See evaluator §6 and surface §13.2. |
 | `revolve_blend.go` | Fillet/Chamfer of revolve meridian junctions. See modify-reach §7. |
 | `revolve_cap_edge_blend.go` | Bounded quarter-turn radial cap-rim fillet and chamfer with faceted proofs. See modify-reach §7.2. |

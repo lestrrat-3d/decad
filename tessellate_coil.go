@@ -26,10 +26,10 @@ import (
 // occupied-volume proof run at VerifyAll alone; tessellateContext withholds
 // both below it.
 func tessellateCoil(ctx context.Context, b *Body, cp coilPayload, chord float64, verify Verification) (*Mesh, error) {
-	if chord < cp.delta {
-		return nil, fmt.Errorf(`%w: a coil restates its held vertices, which sit up to %g mm from the body; a tolerance of %g mm is finer than that`, ErrUnsupported, cp.delta, chord)
+	if chord < cp.Delta {
+		return nil, fmt.Errorf(`%w: a coil restates its held vertices, which sit up to %g mm from the body; a tolerance of %g mm is finer than that`, ErrUnsupported, cp.Delta, chord)
 	}
-	rec, err := coilRecordOfPayload(cp)
+	rec, err := cp.Record()
 	if err != nil {
 		return nil, err
 	}
@@ -64,12 +64,12 @@ func tessellateCoil(ctx context.Context, b *Body, cp coilPayload, chord float64,
 		return nil, err
 	}
 	walls := 2 * int(rec.N) * stride
-	capCount := (len(cp.tris) - walls) / 2
-	if walls+2*capCount != len(cp.tris) {
+	capCount := (len(cp.Tris) - walls) / 2
+	if walls+2*capCount != len(cp.Tris) {
 		return nil, fmt.Errorf(`%w: the coil's held triangle set does not split into walls and two caps`, ErrDegenerate)
 	}
-	src := make([]*topo.Face, len(cp.tris))
-	for t := range cp.tris {
+	src := make([]*topo.Face, len(cp.Tris))
+	for t := range cp.Tris {
 		switch {
 		case t < walls:
 			src[t] = faceNode(segment[rec.Profile.Chord[(t/2)%stride].Segment])
@@ -79,23 +79,23 @@ func tessellateCoil(ctx context.Context, b *Body, cp coilPayload, chord float64,
 			src[t] = faceNode(capEnd)
 		}
 	}
-	if err := tessellation.RequireClosedMesh(cp.tris); err != nil {
+	if err := tessellation.RequireClosedMesh(cp.Tris); err != nil {
 		return nil, fmt.Errorf(`%w: the coil's held triangle set is not a closed mesh`, ErrUnsupported)
 	}
 	mesh := bornMesh(&Mesh{
 		n: topo.Mesh{
-			Vertices:  append([]r3.Vec(nil), cp.verts...),
-			Triangles: append([][3]int(nil), cp.tris...),
+			Vertices:  append([]r3.Vec(nil), cp.Verts...),
+			Triangles: append([][3]int(nil), cp.Tris...),
 			Source:    src,
 		},
 	})
-	mesh.setVertexBounds(cp.vertexBound)
-	mesh.n.Bound = cp.delta
+	mesh.setVertexBounds(cp.VertexBound)
+	mesh.n.Bound = cp.Delta
 	if verify < VerifyAll {
 		return mesh, nil
 	}
 	slack, volSymDiff, err := coilshell.MeshProofs(ctx, rec, coilshell.MeshInput{
-		Verts: cp.verts, Tris: cp.tris, Delta: cp.delta, MaxRound: cp.maxRound,
+		Verts: cp.Verts, Tris: cp.Tris, Delta: cp.Delta, MaxRound: cp.MaxRound,
 	}, walls)
 	if err != nil {
 		return nil, err

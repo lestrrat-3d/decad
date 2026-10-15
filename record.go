@@ -2,6 +2,7 @@ package decad
 
 import (
 	"github.com/lestrrat-3d/decad/internal/chainrecord"
+	"github.com/lestrrat-3d/decad/internal/coilshell"
 	"github.com/lestrrat-3d/decad/internal/cupwall"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/patchchain"
@@ -103,6 +104,11 @@ type (
 // nodes and which implements topo.Payload (docs/sweep-design.md §16,
 // docs/evaluator-design.md §8).
 type mitredSweepPayload = sweepmitre.Payload
+
+// coilPayload is the evaluator's record of a coil: the internal/coilshell
+// payload, which coilshell.BuildBody evaluates over topology nodes and which
+// implements topo.Payload (docs/helix-design.md, docs/evaluator-design.md §8).
+type coilPayload = coilshell.Payload
 
 type loopRecord = sectionrecord.LoopRecord
 

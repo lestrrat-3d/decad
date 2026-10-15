@@ -386,10 +386,10 @@ func planarStitchSolid(budget *proofbound.WorkBudget, b *Body, sp stitchPayload)
 func planarCoilSolid(ctx context.Context, budget *proofbound.WorkBudget, b *Body,
 	cp coilPayload) (planar.PlanarSolid, proofarith.Dyadic, bool, error) {
 	none := proofarith.DyZero()
-	if !measurement.FiniteValues(cp.delta) || cp.delta < 0 {
+	if !measurement.FiniteValues(cp.Delta) || cp.Delta < 0 {
 		return planar.PlanarSolid{}, none, false, nil
 	}
-	mesh, err := tessellateCoil(ctx, b, cp, cp.delta, VerifyNone)
+	mesh, err := tessellateCoil(ctx, b, cp, cp.Delta, VerifyNone)
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return planar.PlanarSolid{}, none, false, ctxErr
@@ -413,7 +413,7 @@ func planarCoilSolid(ctx context.Context, budget *proofbound.WorkBudget, b *Body
 	if err != nil || !ok {
 		return planar.PlanarSolid{}, none, false, err
 	}
-	return solid, proofarith.MustDyOf(cp.delta), true, nil
+	return solid, proofarith.MustDyOf(cp.Delta), true, nil
 }
 
 // planarHeldMeshSolid reads a solid payload without an exact contact family

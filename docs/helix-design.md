@@ -814,9 +814,8 @@ count.
 
 | File | Owns |
 |---|---|
-| `coil.go` | `Coil`, `CoilOption`, `WithLeftHand`, option validation, Table CS's gates in §4's order, `coilPayload` and its placement |
-| `internal/coilshell/` | §5 and §8: stations, `β`, triangles, crossing audit and mesh proofs |
-| `coil_body.go` | Table CB's topology and Table CM's four readings |
+| `coil.go` | `Coil`, `CoilOption`, `WithLeftHand`, option validation, Table CS's gates in §4's order |
+| `internal/coilshell/` | §5 and §8: stations, `β`, triangles, crossing audit and mesh proofs; the coil payload and its placement (`Payload`, `BuildBody`); Table CB's topology and Table CM's four readings (`body.go`) |
 | `tessellate_coil.go` | CD2 (PR 2) |
 | `internal/coil/` | station fractions and trig, the profile station chain (§5.3), the lift to axis coordinates, the segment area closed form, §11.1's arc bracket, the cell departure terms, §8.1 and §8.2's sums — every function pure over `big.Rat`/`RatInterval` inputs and unit-tested against hand values |
 | `internal/proofbound/log.go` | `LnInterval`, `AsinhInterval` (§7.1) |
