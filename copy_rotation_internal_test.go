@@ -139,7 +139,7 @@ func TestExactGroupPlacedMapsCentroidAndDropsTags(t *testing.T) {
 	origin := provenance.Ref{Producer: 1, Role: provenance.RoleCapStart}
 	g := facetGroup{
 		Origins: []provenance.Ref{origin}, HasCentroid: true, Planar: true, Reversed: true,
-		Centroid:    VecMeasurement{Value: r3.NewVec(2, 0, 5), Exactness: Exact},
+		Centroid:    vecMeasurementToInternal(VecMeasurement{Value: r3.NewVec(2, 0, 5), Exactness: Exact}),
 		Surface:     surfacegeom.Plane{},
 		NormalBound: 3,
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -23,10 +24,10 @@ import (
 // loftCylinderBoreRecord names the two certified annular caps of an unplaced
 // through-bore result. Each outer and inner loop is CCW when viewed from +Z.
 type loftCylinderBoreRecord struct {
-	Blank *Body
+	Blank *topo.Body
 	// Teeth are exact Cut sources; ProofTeeth and AxialBridge retain the
 	// private Union witnesses for later source-level admission checks.
-	Teeth, ProofTeeth                   []*Body
+	Teeth, ProofTeeth                   []*topo.Body
 	AxialBridge                         []float64
 	Outer, Inner                        [2][]int
 	CapGroups                           [2]int
@@ -249,7 +250,7 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 	if err != nil {
 		return nil, err
 	}
-	blankArea, err := record.Blank.Area()
+	blankArea, err := bodyHandle(record.Blank).Area()
 	if err != nil {
 		return nil, err
 	}
@@ -271,8 +272,8 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 	result.LoftCylinderJoin = nil
 	result.LoftCylinderBore = &loftCylinderBoreRecord{
 		Blank:       record.Blank,
-		Teeth:       append([]*Body(nil), record.Teeth...),
-		ProofTeeth:  append([]*Body(nil), record.ProofTeeth...),
+		Teeth:       append([]*topo.Body(nil), record.Teeth...),
+		ProofTeeth:  append([]*topo.Body(nil), record.ProofTeeth...),
 		AxialBridge: append([]float64(nil), record.AxialBridge...),
 		CapGroups:   record.CapGroups, WallGroup: wallGroup,
 		BlankRadius: record.Radius, BoreRadius: radius, BoreBound: boreBound,
@@ -297,7 +298,7 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 			return nil, fmt.Errorf("%w: circular bore cap does not tile its annulus", ErrUnsupported)
 		}
 	}
-	if err := loftCylinderTagCaps(&result, record.Blank, record.CapGroups,
+	if err := loftCylinderTagCaps(&result, bodyHandle(record.Blank), record.CapGroups,
 		[2]float64{record.Z0, record.Z1}, ref); err != nil {
 		return nil, err
 	}

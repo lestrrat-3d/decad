@@ -16,6 +16,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -24,11 +25,11 @@ import (
 // A cylinder joined to a matching axial Loft keeps the original operands.
 // Subsequent placements of that same Loft rebuild the common cylinder ring.
 type loftCylinderJoinRecord struct {
-	Blank     *Body
+	Blank     *topo.Body
 	Placement *loftCylinderPlacement
 	// Teeth are the exact Union operands. ProofTeeth are private, axially
 	// normalized witnesses whose mesh proofs include AxialBridge.
-	Teeth, ProofTeeth []*Body
+	Teeth, ProofTeeth []*topo.Body
 	AxialBridge       []float64
 	CapOutlines       [2][]int
 	CapGroups         [2]int
@@ -83,11 +84,11 @@ func tryLoftCylinderUnion(ctx context.Context, op meshbool.OperationKind,
 	} else if _, ok := b.n.Payload.(prismPayload); ok {
 		blank, teeth = b, []*Body{a}
 	} else if fp, ok := a.n.Payload.(facetedPayload); ok && fp.LoftCylinderJoin != nil && fp.Xform == r3.Identity() {
-		blank = fp.LoftCylinderJoin.Blank
-		teeth = append(append([]*Body(nil), fp.LoftCylinderJoin.Teeth...), b)
+		blank = bodyHandle(fp.LoftCylinderJoin.Blank)
+		teeth = append(bodyHandlesCopy(fp.LoftCylinderJoin.Teeth), b)
 	} else if fp, ok := b.n.Payload.(facetedPayload); ok && fp.LoftCylinderJoin != nil && fp.Xform == r3.Identity() {
-		blank = fp.LoftCylinderJoin.Blank
-		teeth = append(append([]*Body(nil), fp.LoftCylinderJoin.Teeth...), a)
+		blank = bodyHandle(fp.LoftCylinderJoin.Blank)
+		teeth = append(bodyHandlesCopy(fp.LoftCylinderJoin.Teeth), a)
 	} else {
 		return tryPlacedLoftCylinderUnion(ctx, d, ref, a, b)
 	}
@@ -789,12 +790,12 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 	for i := range vertexBound {
 		vertexBound[i] = bound
 	}
-	toothBodies := make([]*Body, len(parts))
-	proofBodies := make([]*Body, len(parts))
+	toothBodies := make([]*topo.Body, len(parts))
+	proofBodies := make([]*topo.Body, len(parts))
 	axialBridge := make([]float64, len(parts))
 	for i := range parts {
-		toothBodies[i] = parts[i].original
-		proofBodies[i] = parts[i].body
+		toothBodies[i] = bodyNode(parts[i].original)
+		proofBodies[i] = bodyNode(parts[i].body)
 		axialBridge[i] = parts[i].bridge
 	}
 	fp := facetedPayload{Verts: mesh.Verts, Tris: mesh.Tris, Src: mesh.Src,
@@ -802,7 +803,7 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 		MeshBound: bound, VolSymDiff: volumeGap, AreaSlack: areaSlack,
 		DPair: facetedSourceDiameterUpper(mesh.Verts, bound),
 		Xform: r3.Identity(), LoftCylinderJoin: &loftCylinderJoinRecord{
-			Blank: blank, Teeth: toothBodies, ProofTeeth: proofBodies,
+			Blank: bodyNode(blank), Teeth: toothBodies, ProofTeeth: proofBodies,
 			AxialBridge: axialBridge, CapOutlines: outlines,
 			CapGroups:     [2]int{blankGroups[1], blankGroups[2]},
 			MinSideRadius: minSideRadius, Radius: radius, Z0: pp.Z0, Z1: pp.Z1,

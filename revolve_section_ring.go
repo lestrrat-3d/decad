@@ -124,12 +124,12 @@ func buildRevolvedSectionRing(mesh *joinedMesh, section revolveSectionCertificat
 		if span.Face == nil || len(span.Origins) == 0 {
 			return empty, 0, fmt.Errorf("%w: revolved section face is missing", ErrUnsupported)
 		}
-		_, planar := span.Face.n.Surface.(surfacegeom.Plane)
+		_, planar := span.Face.Surface.(surfacegeom.Plane)
 		groupForSpan[i] = len(mesh.Groups)
 		mesh.Groups = append(mesh.Groups, facetGroup{
 			Origins: append([]provenance.Ref(nil), span.Origins...),
-			Surface: span.Face.n.Surface, Denoted: span.Face.n.Denoted,
-			Reversed: span.Face.n.Reversed, Planar: planar,
+			Surface: span.Face.Surface, Denoted: span.Face.Denoted,
+			Reversed: span.Face.Reversed, Planar: planar,
 		})
 	}
 	ring.Groups = groupForSpan

@@ -398,7 +398,7 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 	}
 	volumeGap := proofbound.AbsSumUpper(sourceVolume,
 		proofbound.SweptVolumeAllow(roundEnvelope, area))
-	blankArea, err := cert.Blank.Area()
+	blankArea, err := bodyHandle(cert.Blank).Area()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -419,7 +419,7 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 	if err != nil {
 		return nil, nil, err
 	}
-	blankVolume, err := cert.Blank.Volume()
+	blankVolume, err := bodyHandle(cert.Blank).Volume()
 	if err != nil {
 		return nil, nil, err
 	}

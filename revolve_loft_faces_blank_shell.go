@@ -220,7 +220,7 @@ func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
 		}
 		group[i] = len(out.mesh.Groups)
 		out.mesh.Groups = append(out.mesh.Groups,
-			facetGroup{Origins: append([]provenance.Ref(nil), span.Origins...), Planar: span.Face.isPlanar()})
+			facetGroup{Origins: append([]provenance.Ref(nil), span.Origins...), Planar: faceHandle(span.Face).isPlanar()})
 	}
 	appendPoint := func(point r3.Vec, bound float64) int {
 		index := len(out.mesh.Verts)
@@ -523,7 +523,7 @@ func revolveLoftFacesShellSideCurrent(ctx context.Context,
 		if span.Start.U != span.End.U {
 			for _, side := range manifest.nonvertical {
 				if side.sectionIndex == index {
-					return side.face == span.Face && len(side.cells) > 0 &&
+					return faceNode(side.face) == span.Face && len(side.cells) > 0 &&
 						slices.Equal(side.origins, span.Origins), nil
 				}
 			}
@@ -531,13 +531,13 @@ func revolveLoftFacesShellSideCurrent(ctx context.Context,
 		}
 		side, outcome, err := revolveLoftFacesVerticalSideClassify(ctx, proof, index)
 		if err != nil || outcome != revolveLoftFacesVerticalContact ||
-			side == nil || side.face != span.Face || len(side.cells) == 0 {
+			side == nil || faceNode(side.face) != span.Face || len(side.cells) == 0 {
 			return false, err
 		}
 		for _, entry := range manifest.vertical {
 			if entry.sectionIndex == index {
 				return entry.outcome == revolveLoftFacesVerticalContact &&
-					entry.side != nil && entry.side.face == span.Face &&
+					entry.side != nil && faceNode(entry.side.face) == span.Face &&
 					len(entry.side.cells) > 0, nil
 			}
 		}

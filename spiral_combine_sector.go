@@ -50,6 +50,6 @@ func spiralCombineInputs(ctx context.Context, blank *Body, tools []*Body) (*spir
 			return nil, fmt.Errorf("%w: tool %d cannot use the legacy axial seam proof", ErrUnsupported, i+2)
 		}
 	}
-	return &spiralCombineSource{First: first, Tools: tools,
+	return &spiralCombineSource{First: first, Tools: bodyNodes(tools),
 		Moves: copies.Moves, Copies: copies}, nil
 }

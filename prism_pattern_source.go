@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/prismpattern"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -20,7 +21,7 @@ type prismPatternSource struct {
 	RootArc     arcSeg
 	RootIndex   int
 	RootGap     float64
-	Sections    []*Body
+	Sections    []*topo.Body
 }
 
 // prismPatternSourceOf checks only recorded Extrude sections and Copy
@@ -109,5 +110,5 @@ func prismPatternSourceOf(ctx context.Context, operands []*Body) (*prismPatternS
 	}
 	return &prismPatternSource{Blank: blank, BlankRadius: circle.Radius.Base(), Section: first,
 		RootArc: root, RootIndex: rootIndex,
-		RootGap: gap, Sections: operands[1:]}, true, nil
+		RootGap: gap, Sections: bodyNodes(operands[1:])}, true, nil
 }

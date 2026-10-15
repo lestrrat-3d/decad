@@ -139,8 +139,8 @@ func revolveLoftFacesTrimCurrent(tooth *Body, trim *loftFacesTrimRecord) bool {
 	}
 	if p.Xform != r3.Identity() || trim == nil || trim.Source == nil ||
 		!pointSourceCurrent(trim.Source) ||
-		!revolveLoftFacesConeCurrent(trim.ToeTool, trim.Toe) ||
-		!revolveLoftFacesConeCurrent(trim.HeelTool, trim.Heel) ||
+		!revolveLoftFacesConeCurrent(bodyHandle(trim.ToeTool), trim.Toe) ||
+		!revolveLoftFacesConeCurrent(bodyHandle(trim.HeelTool), trim.Heel) ||
 		len(trim.Maps) < 3 || len(trim.Maps) > 64 ||
 		len(trim.Bounds) != len(trim.Maps) ||
 		!orderedLoftFacesConeLimits(trim.Toe, trim.Heel, trim.Base) ||

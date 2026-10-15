@@ -29,10 +29,10 @@ func tryLoftMirrorCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPay
 		return nil, true, fmt.Errorf("%w: mirrored cap chamfer needs one exact equal setback", ErrUnsupported)
 	}
 	if record.Join == nil || record.Join.Blank == nil || record.LowerBore == nil ||
-		record.LowerBore.n.Doc != b.n.Doc || record.Join.Blank.n.Doc != b.n.Doc {
+		record.LowerBore.Doc != b.n.Doc || record.Join.Blank.Doc != b.n.Doc {
 		return nil, true, fmt.Errorf("%w: mirrored cap chamfer lost its authenticated source", ErrUnsupported)
 	}
-	lower, ok := record.LowerBore.n.Payload.(facetedPayload)
+	lower, ok := record.LowerBore.Payload.(facetedPayload)
 	if !ok || lower.LoftCylinderBore == nil || !lower.ContactAudited || lower.Xform != r3.Identity() {
 		return nil, true, fmt.Errorf("%w: mirrored cap chamfer lost its lower bore", ErrUnsupported)
 	}
@@ -93,7 +93,7 @@ func loftMirrorCylinderChamferReflectionReserve(lower facetedPayload,
 		record.Join.Source.Lower == nil {
 		return 0, fmt.Errorf("%w: mirrored cap chamfer lost its Loft frame", ErrUnsupported)
 	}
-	loft, ok := record.Join.Source.Lower.n.Payload.(loftPayload)
+	loft, ok := record.Join.Source.Lower.Payload.(loftPayload)
 	if !ok || !loft.AuthenticatedReconstruction {
 		return 0, fmt.Errorf("%w: mirrored cap chamfer lost its Loft frame", ErrUnsupported)
 	}
@@ -145,7 +145,7 @@ func loftMirrorCylinderChamferSelect(ctx context.Context, b *Body, fp facetedPay
 	if len(selected) != len(edges) {
 		return fmt.Errorf("%w: mirrored cap chamfer repeats an edge", ErrUnsupported)
 	}
-	blank, ok := record.Join.Blank.n.Payload.(prismPayload)
+	blank, ok := record.Join.Blank.Payload.(prismPayload)
 	if !ok || !loftMirrorCylinderBlank(blank) || caps[0] == nil || caps[1] == nil {
 		return fmt.Errorf("%w: mirrored bore lost its two exterior annuli", ErrUnsupported)
 	}
@@ -182,7 +182,7 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 		record.Join.Source == nil || record.Join.Source.Lower == nil {
 		return nil, fmt.Errorf("%w: mirrored cap chamfer lost its audited lower half", ErrUnsupported)
 	}
-	loft, ok := record.Join.Source.Lower.n.Payload.(loftPayload)
+	loft, ok := record.Join.Source.Lower.Payload.(loftPayload)
 	if !ok || !loft.AuthenticatedReconstruction {
 		return nil, fmt.Errorf("%w: mirrored cap chamfer lost its Loft source", ErrUnsupported)
 	}
@@ -296,7 +296,7 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 	if err := tessellation.RequireVertexLinks(ctx, len(verts), tris); err != nil {
 		return nil, fmt.Errorf("%w: mirrored cap chamfer has an invalid vertex link: %s", ErrUnsupported, err)
 	}
-	blank, ok := record.Join.Blank.n.Payload.(prismPayload)
+	blank, ok := record.Join.Blank.Payload.(prismPayload)
 	if !ok || !loftMirrorCylinderBlank(blank) {
 		return nil, fmt.Errorf("%w: mirrored cap chamfer lost its exact blank", ErrUnsupported)
 	}
@@ -341,7 +341,7 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 	for cap, group := range capGroups {
 		result.Groups[group].Origins = append([]provenance.Ref(nil), old.Groups[record.CapGroups[cap]].Origins...)
 	}
-	if err := loftCylinderTagCaps(&result, record.Join.Blank, capGroups,
+	if err := loftCylinderTagCaps(&result, bodyHandle(record.Join.Blank), capGroups,
 		[2]float64{blank.Z0, blank.Z1}, ref); err != nil {
 		return nil, err
 	}

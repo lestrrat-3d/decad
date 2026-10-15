@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/splinebezier"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 )
@@ -23,7 +24,7 @@ type spiralBlankSource struct {
 	ToeOuter, ToeRoot planePoint
 	Ded, HeelOuter    planePoint
 	EdgeIndex         [6]int
-	RootFace          *Face
+	RootFace          *topo.Face
 }
 
 func exactSpiralBlank(blank *Body) (*spiralBlankSource, bool) {

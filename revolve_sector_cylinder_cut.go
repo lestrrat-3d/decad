@@ -68,10 +68,10 @@ func revolveSectorBoreCapRecord(joined facetedPayload) (revolveSectorBoreCaps, b
 		len(low.Origins) == 0 || len(high.Origins) == 0 {
 		return caps, false
 	}
-	if _, ok := low.Face.n.Surface.(surfacegeom.Plane); !ok {
+	if _, ok := low.Face.Surface.(surfacegeom.Plane); !ok {
 		return caps, false
 	}
-	if _, ok := high.Face.n.Surface.(surfacegeom.Plane); !ok {
+	if _, ok := high.Face.Surface.(surfacegeom.Plane); !ok {
 		return caps, false
 	}
 	caps.lowX, caps.highX = low.Start.U, high.Start.U
@@ -327,7 +327,7 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 	if err != nil {
 		return nil, true, err
 	}
-	oldArea, err := joined.RevolveLoftJoin.Blank.Area()
+	oldArea, err := bodyHandle(joined.RevolveLoftJoin.Blank).Area()
 	if err != nil {
 		return nil, true, err
 	}

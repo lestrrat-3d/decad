@@ -322,17 +322,17 @@ func TestCrossBoreCellsRefuseNearSymmetricPose(t *testing.T) {
 	}{
 		{"tool centre one ulp off the Y mirror", func() crossCylinderBoreRecord {
 			rec := *exact
-			rec.Tool = offsetTool
+			rec.Tool = bodyNode(offsetTool)
 			return rec
 		}()},
 		{"target centre one ulp off the Y mirror", func() crossCylinderBoreRecord {
 			rec := *exact
-			rec.Target = offsetTarget
+			rec.Target = bodyNode(offsetTarget)
 			return rec
 		}()},
 		{"tool turned by a rounded full turn", func() crossCylinderBoreRecord {
 			rec := *exact
-			rec.Tool = turnedTool
+			rec.Tool = bodyNode(turnedTool)
 			return rec
 		}()},
 		{"bore radius one ulp off its source", func() crossCylinderBoreRecord {

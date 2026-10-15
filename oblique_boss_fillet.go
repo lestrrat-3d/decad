@@ -73,7 +73,7 @@ func obliqueBossHasOrigin(face *topo.Face, group facetGroup) bool {
 }
 
 func obliqueBossPlateWallRoles(rec *obliqueBossRecord) ([4]string, bool) {
-	pp, ok := rec.Plate.n.Payload.(prismPayload)
+	pp, ok := rec.Plate.Payload.(prismPayload)
 	if !ok || len(pp.Profile.Outer.Segments) != 4 {
 		return [4]string{}, false
 	}
@@ -115,8 +115,8 @@ func (b *Body) filletObliqueBoss(ctx context.Context, edges []*Edge,
 	if _, ok := edges[0].n.Curve.(surfacegeom.FacetedCurve); !ok {
 		return nil, fmt.Errorf("%w: the selected oblique junction has no faceted edge witness", ErrUnsupported)
 	}
-	plateTop, topOK := obliqueBossFaceGroup(rec.Plate, provenance.RoleCapEnd)
-	bossSide, sideOK := obliqueBossFaceGroup(rec.Boss, prismrecord.OuterFirstSideRole)
+	plateTop, topOK := obliqueBossFaceGroup(bodyHandle(rec.Plate), provenance.RoleCapEnd)
+	bossSide, sideOK := obliqueBossFaceGroup(bodyHandle(rec.Boss), prismrecord.OuterFirstSideRole)
 	if !topOK || !sideOK || len(edges[0].n.Faces) != 2 {
 		return nil, fmt.Errorf("%w: the selected edge is not the complete plate-to-cylinder junction", ErrUnsupported)
 	}
@@ -298,11 +298,11 @@ func buildObliqueBossFilletMesh(ctx context.Context,
 		body *Body
 		role string
 	}{
-		{rec.Plate, provenance.RoleCapStart},
-		{rec.Plate, wallRoles[0]}, {rec.Plate, wallRoles[1]},
-		{rec.Plate, wallRoles[2]}, {rec.Plate, wallRoles[3]},
-		{rec.Plate, provenance.RoleCapEnd},
-		{rec.Boss, prismrecord.OuterFirstSideRole}, {rec.Boss, provenance.RoleCapEnd},
+		{bodyHandle(rec.Plate), provenance.RoleCapStart},
+		{bodyHandle(rec.Plate), wallRoles[0]}, {bodyHandle(rec.Plate), wallRoles[1]},
+		{bodyHandle(rec.Plate), wallRoles[2]}, {bodyHandle(rec.Plate), wallRoles[3]},
+		{bodyHandle(rec.Plate), provenance.RoleCapEnd},
+		{bodyHandle(rec.Boss), prismrecord.OuterFirstSideRole}, {bodyHandle(rec.Boss), provenance.RoleCapEnd},
 	}
 	for _, role := range roles {
 		group, ok := obliqueBossFaceGroup(role.body, role.role)

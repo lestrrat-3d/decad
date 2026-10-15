@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/exactrotation"
 	"github.com/lestrrat-3d/decad/internal/shellseparation"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -15,7 +16,7 @@ import (
 // Copy issues it after rebuilding the held mesh. A Boolean result does not
 // inherit it. The source must still be live when a copied-tool proof uses it.
 type facetedCopyLineage struct {
-	Source          *Body
+	Source          *topo.Body
 	SourceProducer  producerID
 	SourcePlacement r3.Transform
 	TargetPlacement r3.Transform
@@ -53,7 +54,7 @@ func bindFacetedCopyLineage(image, source *Body, targetPlacement r3.Transform, d
 		return
 	}
 	placed.CopyLineage = &facetedCopyLineage{
-		Source: source, SourceProducer: source.n.Origin.Producer,
+		Source: bodyNode(source), SourceProducer: source.n.Origin.Producer,
 		SourcePlacement: base.Xform, TargetPlacement: targetPlacement,
 		Motion: motion, Direct: direct,
 	}
@@ -68,8 +69,8 @@ func bindFacetedCopyLineage(image, source *Body, targetPlacement r3.Transform, d
 // source solids and held shells are pairwise separate; it says nothing about
 // their contact with a separate Union blank.
 type facetedCopySet struct {
-	Source *Body
-	Tools  []*Body
+	Source *topo.Body
+	Tools  []*topo.Body
 	Moves  []r3.Transform
 	// Exact holds each copy's exact rotation record (index 0 and every ordinary
 	// copy nil). Maps holds the matching true linear maps for shellseparation:
@@ -78,7 +79,7 @@ type facetedCopySet struct {
 	Maps      [][3][3]*big.Rat
 	Axis      shellseparation.Axis
 	Held      []shellseparation.Shell
-	FaceOwner []map[*Face]*Face // source face to the corresponding live copy face
+	FaceOwner []map[*topo.Face]*topo.Face // source face to the corresponding live copy face
 }
 
 func facetedShell(p facetedPayload) shellseparation.Shell {
@@ -86,15 +87,15 @@ func facetedShell(p facetedPayload) shellseparation.Shell {
 		VertexBound: p.VertexBound, MeshBound: p.MeshBound}
 }
 
-func facetedCopyFaceOwners(source, image *Body, first, placed facetedPayload) (map[*Face]*Face, bool) {
+func facetedCopyFaceOwners(source, image *Body, first, placed facetedPayload) (map[*topo.Face]*topo.Face, bool) {
 	if len(first.Tris) != len(placed.Tris) || len(first.Src) != len(first.Tris) ||
 		len(placed.Src) != len(placed.Tris) || len(first.FaceOf) != len(first.Tris) ||
 		len(placed.FaceOf) != len(placed.Tris) || len(first.Verts) != len(placed.Verts) {
 		return nil, false
 	}
 	sourceFaces, imageFaces := source.Faces(), image.Faces()
-	owners := make(map[*Face]*Face, len(sourceFaces))
-	reverse := make(map[*Face]*Face, len(imageFaces))
+	owners := make(map[*topo.Face]*topo.Face, len(sourceFaces))
+	reverse := make(map[*topo.Face]*topo.Face, len(imageFaces))
 	for i, triangle := range first.Tris {
 		want := triangle
 		if placed.CopyLineage.Motion.IsReflection() {
@@ -105,7 +106,7 @@ func facetedCopyFaceOwners(source, image *Body, first, placed facetedPayload) (m
 			placed.FaceOf[i] < 0 || placed.FaceOf[i] >= len(imageFaces) {
 			return nil, false
 		}
-		original, copyFace := sourceFaces[first.FaceOf[i]], imageFaces[placed.FaceOf[i]]
+		original, copyFace := faceNode(sourceFaces[first.FaceOf[i]]), faceNode(imageFaces[placed.FaceOf[i]])
 		if owner := owners[original]; owner != nil && owner != copyFace {
 			return nil, false
 		}
@@ -118,8 +119,8 @@ func facetedCopyFaceOwners(source, image *Body, first, placed facetedPayload) (m
 		return nil, false
 	}
 	for original, copyFace := range owners {
-		copyOrigins := copyFace.originRefs()
-		for _, sourceOrigin := range original.originRefs() {
+		copyOrigins := faceHandle(copyFace).originRefs()
+		for _, sourceOrigin := range faceHandle(original).originRefs() {
 			if !slices.Contains(copyOrigins, sourceOrigin) {
 				return nil, false
 			}
@@ -140,14 +141,14 @@ func certifyFacetedCopies(ctx context.Context, tools []*Body) (*facetedCopySet, 
 	if !ok || d.requireLive(source) != nil {
 		return nil, fmt.Errorf("%w: copied tools lack a live faceted source", ErrUnsupported)
 	}
-	set := &facetedCopySet{Source: source, Tools: append([]*Body(nil), tools...),
+	set := &facetedCopySet{Source: bodyNode(source), Tools: bodyNodes(tools),
 		Moves:     make([]r3.Transform, len(tools)),
 		Exact:     make([]*exactrotation.Rotation, len(tools)),
-		FaceOwner: make([]map[*Face]*Face, len(tools))}
+		FaceOwner: make([]map[*topo.Face]*topo.Face, len(tools))}
 	set.Moves[0] = r3.Identity()
-	set.FaceOwner[0] = make(map[*Face]*Face, len(source.Faces()))
+	set.FaceOwner[0] = make(map[*topo.Face]*topo.Face, len(source.Faces()))
 	for _, face := range source.Faces() {
-		set.FaceOwner[0][face] = face
+		set.FaceOwner[0][faceNode(face)] = faceNode(face)
 	}
 	shells := make([]shellseparation.Shell, len(tools))
 	maps := make([][3][3]*big.Rat, len(tools))
@@ -171,7 +172,7 @@ func certifyFacetedCopies(ctx context.Context, tools []*Body) (*facetedCopySet, 
 			continue
 		}
 		record := part.CopyLineage
-		if record == nil || record.Source != source ||
+		if record == nil || record.Source != bodyNode(source) ||
 			record.SourceProducer != source.n.Origin.Producer ||
 			record.SourcePlacement != first.Xform ||
 			record.TargetPlacement != part.Xform || !record.Motion.IsValid() {

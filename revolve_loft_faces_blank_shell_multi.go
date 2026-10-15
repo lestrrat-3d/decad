@@ -35,7 +35,7 @@ func revolveLoftFacesShellSeamCutOf(ctx context.Context,
 			side = &manifest.nonvertical[i]
 		}
 	}
-	if side == nil || side.face != section.Face ||
+	if side == nil || faceNode(side.face) != section.Face ||
 		!slices.Equal(side.origins, section.Origins) ||
 		cellIndex < 0 || cellIndex >= len(side.cells) {
 		return empty, nil, false, nil

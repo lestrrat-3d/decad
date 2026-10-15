@@ -21,7 +21,7 @@ import (
 // Lofts. The lower source occupies ring 0..1, its reflected copy ring 1..2.
 // Wall groups stay distinct even when both sources use the same role string.
 type loftMirrorJoinRecord struct {
-	Lower, Upper *Body
+	Lower, Upper *topo.Body
 	StationCount int
 	WallGroups   [2][]int
 	CapGroups    [2]int
@@ -141,7 +141,7 @@ func buildLoftMirrorUnion(ctx context.Context, d *Document, ref producerID,
 		return nil, fmt.Errorf("%w: reflected loft proof is not finite", ErrUnsupported)
 	}
 
-	record := &loftMirrorJoinRecord{Lower: lowerBody, Upper: upperBody, StationCount: n}
+	record := &loftMirrorJoinRecord{Lower: bodyNode(lowerBody), Upper: bodyNode(upperBody), StationCount: n}
 	verts := append(append([]r3.Vec(nil), lower.Verts...), upper.Verts[:n]...)
 	vertexBound := make([]float64, len(verts))
 	for i := range vertexBound {

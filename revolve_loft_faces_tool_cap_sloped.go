@@ -39,8 +39,8 @@ func revolveLoftFacesHeelSlopedOccupiedArc(ctx context.Context,
 		return nil, false, nil
 	}
 	span := proof.section.Spans[circle.span]
-	if span.Start.U == span.End.U || span.Face != circle.blankFace ||
-		span.Face.n.Body != bodyNode(proof.blank) || len(span.Origins) == 0 {
+	if span.Start.U == span.End.U || span.Face != faceNode(circle.blankFace) ||
+		span.Face.Body != bodyNode(proof.blank) || len(span.Origins) == 0 {
 		return nil, false, nil
 	}
 	face, live := revolveSpanFace(proof.blank, span)

@@ -149,7 +149,8 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 			return nil, err
 		}
 		if group.HasCentroid {
-			group.Centroid, err = similarCapCentroid(group.Centroid, anchor, s)
+			centroid, centroidErr := similarCapCentroid(vecMeasurementFromInternal(group.Centroid), anchor, s)
+			group.Centroid, err = vecMeasurementToInternal(centroid), centroidErr
 			if err != nil {
 				return nil, err
 			}

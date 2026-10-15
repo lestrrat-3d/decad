@@ -38,8 +38,8 @@ func (b *Body) shellPrismUnionBoss(ctx context.Context, fp facetedPayload,
 		proofbound.IsNonFinite(t) || fp.PrismUnionFillet == nil || fp.Xform != r3.Identity() {
 		return nil, false, nil
 	}
-	for _, pair := range [][2]*Body{{fp.PrismUnionFillet.First, fp.PrismUnionFillet.Second},
-		{fp.PrismUnionFillet.Second, fp.PrismUnionFillet.First}} {
+	for _, pair := range [][2]*Body{{bodyHandle(fp.PrismUnionFillet.First), bodyHandle(fp.PrismUnionFillet.Second)},
+		{bodyHandle(fp.PrismUnionFillet.Second), bodyHandle(fp.PrismUnionFillet.First)}} {
 		source, ok := prismUnionBossShellAuthenticate(b, fp, pair[0], pair[1], removed[0], t)
 		if !ok {
 			continue

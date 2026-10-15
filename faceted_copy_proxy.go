@@ -20,11 +20,11 @@ func (set *facetedCopySet) placedProxyShells(ctx context.Context,
 	proxy *Mesh) ([]facetproof.PlacedMesh, error) {
 	if ctx == nil || set == nil || set.Source == nil || proxy == nil ||
 		len(set.Tools) < 2 || len(set.Moves) != len(set.Tools) ||
-		documentHandle(set.Source.n.Doc).requireLive(set.Source) != nil ||
+		documentHandle(set.Source.Doc).requireLive(bodyHandle(set.Source)) != nil ||
 		!proxy.n.BoundaryOK || !proxy.n.SymDiffOK {
 		return nil, fmt.Errorf("%w: copied proxy lacks a live source proof", ErrUnsupported)
 	}
-	first, ok := set.Source.n.Payload.(facetedPayload)
+	first, ok := set.Source.Payload.(facetedPayload)
 	if !ok || len(proxy.n.Vertices) != len(first.Verts) ||
 		len(proxy.n.VertexBound) != len(proxy.n.Vertices) ||
 		len(proxy.n.Triangles) != len(first.Tris) ||
@@ -32,7 +32,7 @@ func (set *facetedCopySet) placedProxyShells(ctx context.Context,
 		len(first.FaceOf) != len(first.Tris) {
 		return nil, fmt.Errorf("%w: copied proxy lost its source facets", ErrUnsupported)
 	}
-	faces := set.Source.Faces()
+	faces := bodyHandle(set.Source).Faces()
 	for i, tri := range proxy.n.Triangles {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
@@ -57,14 +57,14 @@ func (set *facetedCopySet) placedProxyShells(ctx context.Context,
 	copies[0] = shellseparation.HeldCopy{Verts: proxy.n.Vertices, Tris: proxy.n.Triangles, Linked: true}
 	for i := 1; i < len(set.Tools); i++ {
 		tool := set.Tools[i]
-		if tool == nil || tool.n.Doc != set.Source.n.Doc ||
-			documentHandle(set.Source.n.Doc).requireLive(tool) != nil {
+		if tool == nil || tool.Doc != set.Source.Doc ||
+			documentHandle(set.Source.Doc).requireLive(bodyHandle(tool)) != nil {
 			return nil, fmt.Errorf("%w: copied proxy tool %d lost its live placement", ErrUnsupported, i+1)
 		}
-		part, ok := tool.n.Payload.(facetedPayload)
+		part, ok := tool.Payload.(facetedPayload)
 		if !ok || part.CopyLineage == nil ||
 			part.CopyLineage.Source != set.Source ||
-			part.CopyLineage.SourceProducer != set.Source.n.Origin.Producer ||
+			part.CopyLineage.SourceProducer != set.Source.Origin.Producer ||
 			part.CopyLineage.SourcePlacement != first.Xform ||
 			part.CopyLineage.TargetPlacement != part.Xform ||
 			part.CopyLineage.Motion != set.Moves[i] ||

@@ -222,7 +222,7 @@ func evalPointSectionLoft(ctx context.Context, d *Document, ref producerID,
 	capGroup := len(groups) - 1
 	groups[capGroup] = facetGroup{Origins: []provenance.Ref{{Producer: ref, Role: provenance.RoleCapEnd}}, Planar: true}
 	if center, proved := pointFarCapCentroid(record.Profile, record.Plane); proved {
-		groups[capGroup].Centroid, groups[capGroup].HasCentroid = center, true
+		groups[capGroup].Centroid, groups[capGroup].HasCentroid = vecMeasurementToInternal(center), true
 	}
 	for j := range pair.W {
 		jn := (j + 1) % len(pair.W)

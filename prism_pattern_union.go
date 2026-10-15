@@ -19,9 +19,9 @@ import (
 // boundary mesh. The root wall starts at RootStart and ends at sample zero;
 // the preceding samples form the exterior section path.
 type prismPatternPart struct {
-	Body      *Body
+	Body      *topo.Body
 	Prism     prismPayload
-	Mesh      *Mesh
+	Mesh      *topo.Mesh
 	RootStart int
 	Start     float64
 	End       float64
@@ -34,7 +34,7 @@ type prismPatternPart struct {
 // later operation can prove a local rewrite without inferring source curves
 // from faceted edges. These slices are immutable after the Union commits.
 type prismPatternJoinRecord struct {
-	Blank     *Body
+	Blank     *topo.Body
 	Source    *prismPatternSource
 	Parts     []prismPatternPart
 	Outlines  [2][]int
@@ -67,21 +67,21 @@ func tryPrismPatternUnionMany(ctx context.Context, d *Document, ref producerID,
 		if err := ctx.Err(); err != nil {
 			return nil, true, err
 		}
-		p, ok := body.n.Payload.(prismPayload)
+		p, ok := body.Payload.(prismPayload)
 		if !ok {
 			return nil, true, fmt.Errorf("%w: copied-prism section %d lost its prism payload", ErrUnsupported, i+1)
 		}
 		if p.SurfaceResult || p.SectionDelta != 0 || p.Z0Delta != 0 || p.Z1Delta != 0 {
 			return nil, true, fmt.Errorf("%w: copied-prism section %d has a displaced or open source", ErrUnsupported, i+1)
 		}
-		m, err := body.Tessellate(ctx, units.Millimeters(0.02), WithVerification(VerifyAll))
+		m, err := bodyHandle(body).Tessellate(ctx, units.Millimeters(0.02), WithVerification(VerifyAll))
 		if err != nil {
 			return nil, true, err
 		}
 		if !m.BoundaryVerified() || !m.VolumeVerified() {
 			return nil, true, fmt.Errorf("%w: copied-prism section %d lacks a complete mesh proof", ErrUnsupported, i+1)
 		}
-		rootStart, err := prismPatternMeshRoot(m, body, source.RootIndex, blank.Z0, blank.Z1)
+		rootStart, err := prismPatternMeshRoot(m, bodyHandle(body), source.RootIndex, blank.Z0, blank.Z1)
 		if err != nil {
 			return nil, true, err
 		}
@@ -98,7 +98,7 @@ func tryPrismPatternUnionMany(ctx context.Context, d *Document, ref producerID,
 			startIV.Hi.Cmp(endIV.Lo) >= 0 {
 			return nil, true, fmt.Errorf("%w: copied-prism section %d has no ordered root sector", ErrUnsupported, i+1)
 		}
-		parts[i] = prismPatternPart{Body: body, Prism: p, Mesh: m, RootStart: rootStart,
+		parts[i] = prismPatternPart{Body: body, Prism: p, Mesh: meshNode(m), RootStart: rootStart,
 			Start: start, End: end, StartIV: startIV, EndIV: endIV}
 	}
 	sort.Slice(parts, func(i, j int) bool { return parts[i].Start < parts[j].Start })
@@ -148,8 +148,8 @@ func prismPatternMeshRoot(m *Mesh, body *Body, rootIndex int, z0, z1 float64) (i
 // source-to-mesh bounds. A bounded region lies in the convex hull of its
 // boundary, so this one plane separates the complete source solids.
 func prismPatternMeshSeparated(a, b prismPatternPart) bool {
-	pa := a.Mesh.n.Vertices[0].Add(a.Mesh.n.Vertices[2*a.RootStart])
-	pb := b.Mesh.n.Vertices[0].Add(b.Mesh.n.Vertices[2*b.RootStart])
+	pa := a.Mesh.Vertices[0].Add(a.Mesh.Vertices[2*a.RootStart])
+	pb := b.Mesh.Vertices[0].Add(b.Mesh.Vertices[2*b.RootStart])
 	nx := new(big.Rat).Sub(proofarith.FloatRat(pa.X), proofarith.FloatRat(pb.X))
 	ny := new(big.Rat).Sub(proofarith.FloatRat(pa.Y), proofarith.FloatRat(pb.Y))
 	normSq := new(big.Rat).Add(new(big.Rat).Mul(nx, nx), new(big.Rat).Mul(ny, ny))
@@ -157,14 +157,14 @@ func prismPatternMeshSeparated(a, b prismPatternPart) bool {
 		return false
 	}
 	var minA, maxB *big.Rat
-	for _, v := range a.Mesh.n.Vertices {
+	for _, v := range a.Mesh.Vertices {
 		dot := new(big.Rat).Add(new(big.Rat).Mul(nx, proofarith.FloatRat(v.X)),
 			new(big.Rat).Mul(ny, proofarith.FloatRat(v.Y)))
 		if minA == nil || dot.Cmp(minA) < 0 {
 			minA = dot
 		}
 	}
-	for _, v := range b.Mesh.n.Vertices {
+	for _, v := range b.Mesh.Vertices {
 		dot := new(big.Rat).Add(new(big.Rat).Mul(nx, proofarith.FloatRat(v.X)),
 			new(big.Rat).Mul(ny, proofarith.FloatRat(v.Y)))
 		if maxB == nil || dot.Cmp(maxB) > 0 {
@@ -172,7 +172,7 @@ func prismPatternMeshSeparated(a, b prismPatternPart) bool {
 		}
 	}
 	margin := proofbound.ProductUpper(proofbound.RatSqrtUp(normSq),
-		proofbound.AbsSumUpper(a.Mesh.Bound().Base(), b.Mesh.Bound().Base()))
+		proofbound.AbsSumUpper(units.Millimeters(a.Mesh.Bound).Base(), units.Millimeters(b.Mesh.Bound).Base()))
 	return minA != nil && maxB != nil &&
 		new(big.Rat).Sub(minA, maxB).Cmp(proofarith.FloatRat(margin)) > 0
 }

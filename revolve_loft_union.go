@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -14,7 +15,7 @@ import (
 // rewrites can authenticate against the same immutable source.
 type revolveLoftJoinRecord struct {
 	Certificate                           *revolveLoftSectorCertificate
-	Blank                                 *Body
+	Blank                                 *topo.Body
 	First                                 facetedPayload
 	Placed                                []facetedPayload
 	CapRing                               *revolvedSectionRing
@@ -72,7 +73,7 @@ func tryRevolveLoftSectorUnionMany(ctx context.Context, d *Document, ref produce
 				return nil, true, ErrUnsupported
 			}
 			payload.RevolveLoftJoin = &revolveLoftJoinRecord{Certificate: cert,
-				Blank: blank, First: sources[0],
+				Blank: bodyNode(blank), First: sources[0],
 				Placed: append([]facetedPayload(nil), sources[1:]...), CapRing: ring,
 				BoundaryBound: payload.MeshBound, VolumeBound: payload.VolSymDiff,
 				AreaBound: payload.AreaSlack}
@@ -123,7 +124,7 @@ func tryRevolveLoftSectorUnion(ctx context.Context, op meshbool.OperationKind,
 	if !ok {
 		return nil, true, ErrUnsupported
 	}
-	payload.RevolveLoftJoin = &revolveLoftJoinRecord{Certificate: cert, Blank: blank,
+	payload.RevolveLoftJoin = &revolveLoftJoinRecord{Certificate: cert, Blank: bodyNode(blank),
 		First: cert.Trimmed, CapRing: ring, BoundaryBound: payload.MeshBound,
 		VolumeBound: payload.VolSymDiff, AreaBound: payload.AreaSlack}
 	body.n.Payload = payload

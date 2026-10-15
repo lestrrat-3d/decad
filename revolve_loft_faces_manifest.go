@@ -28,7 +28,7 @@ type revolveLoftFacesNonverticalSide struct {
 func revolveLoftFacesNonverticalManifest(ctx context.Context,
 	proof *revolveLoftFacesSourceCertificate) ([]revolveLoftFacesNonverticalSide, bool, error) {
 	if ctx == nil || proof == nil || proof.blank == nil || proof.tooth == nil || proof.trim == nil ||
-		proof.section.Blank != proof.blank || len(proof.section.Spans) == 0 ||
+		proof.section.Blank != bodyNode(proof.blank) || len(proof.section.Spans) == 0 ||
 		len(proof.sourceRefs) != len(proof.trim.Maps)-1 {
 		return nil, false, nil
 	}
@@ -88,7 +88,7 @@ func revolveLoftFacesNonverticalManifest(ctx context.Context,
 				ErrUnsupported, sectionIndex)
 		}
 		entry := revolveLoftFacesNonverticalSide{sectionIndex: sectionIndex,
-			face: section.Face, origins: append([]provenance.Ref(nil), section.Origins...)}
+			face: faceHandle(section.Face), origins: append([]provenance.Ref(nil), section.Origins...)}
 		for _, cell := range mapped {
 			if cell.band < 0 || cell.band >= len(proof.sourceRefs) ||
 				cell.segment < 0 || cell.segment >= len(proof.sourceRefs[cell.band]) ||

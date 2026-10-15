@@ -38,10 +38,10 @@ type loftFacesCapRecord struct {
 type loftFacesToeRecord struct {
 	Base       facetedPayload
 	Cap        *loftFacesCapRecord
-	CapFace    *Face
-	ToeCapFace *Face
+	CapFace    *topo.Face
+	ToeCapFace *topo.Face
 	Toe        *pointConeLimit
-	ToeTool    *Body
+	ToeTool    *topo.Body
 }
 
 // loftFacesTrimRecord retains the authenticated source of one unplaced
@@ -55,7 +55,7 @@ type loftFacesTrimRecord struct {
 	Bounds                    []loftFaceCapBounds
 	StationGroup              []int
 	Toe, Heel                 *pointConeLimit
-	ToeTool, HeelTool         *Body
+	ToeTool, HeelTool         *topo.Body
 	ToeCapGroup, HeelCapGroup int
 	// Tangent is the cone-tangent end of the lofted tooth, copied from its
 	// cap record. It is nil unless the loft ended in a constructed section.
@@ -180,7 +180,7 @@ func recordLoftFacesConeToe(ctx context.Context, source, tool, result *Body) err
 		return nil
 	}
 	p.LoftFacesToe = &loftFacesToeRecord{Base: base, Cap: base.LoftFacesCap,
-		CapFace: capFace, ToeCapFace: toeCapFace, Toe: cone, ToeTool: tool}
+		CapFace: faceNode(capFace), ToeCapFace: faceNode(toeCapFace), Toe: cone, ToeTool: bodyNode(tool)}
 	result.n.Payload = p
 	return nil
 }
@@ -226,7 +226,7 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 	p, ok := target.n.Payload.(facetedPayload)
 	if !ok || p.LoftFacesToe == nil || !loftFacesCapRecordReady(p.LoftFacesToe.Cap) ||
 		p.Xform != r3.Identity() ||
-		p.LoftFacesToe.CapFace == nil || p.LoftFacesToe.CapFace.n.Body != bodyNode(target) {
+		p.LoftFacesToe.CapFace == nil || p.LoftFacesToe.CapFace.Body != bodyNode(target) {
 		return nil, false, nil
 	}
 	cone, ok := exactPointCone(tool)
@@ -259,7 +259,7 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 	}
 	capSource := -1
 	for i, face := range target.Faces() {
-		if face == p.LoftFacesToe.CapFace {
+		if faceNode(face) == p.LoftFacesToe.CapFace {
 			capSource = i
 			break
 		}
@@ -267,7 +267,7 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 	if capSource < 0 {
 		return nil, false, nil
 	}
-	toeCapSource := indexOfFace(target.Faces(), p.LoftFacesToe.ToeCapFace)
+	toeCapSource := indexOfFace(target.Faces(), faceHandle(p.LoftFacesToe.ToeCapFace))
 	if toeCapSource < 0 {
 		return nil, false, nil
 	}
@@ -280,7 +280,7 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 	for scale := 4.0; scale <= 32; scale *= 2 {
 		if plane == nil {
 			eval, err = evaluateBooleanMeshesWithConeCap(ctx, op, target, tool, pairMeshes{}, scale,
-				p.LoftFacesToe.CapFace, coneFace)
+				faceHandle(p.LoftFacesToe.CapFace), coneFace)
 		} else {
 			// The tangent cap touches the cone, so no pair is exempted. The
 			// tooth enters the ordinary gate with an exact prism glued to its
@@ -338,7 +338,7 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 		Bounds:       append([]loftFaceCapBounds(nil), p.LoftFacesToe.Cap.Bounds...),
 		StationGroup: append([]int(nil), p.LoftFacesToe.Cap.StationGroup...),
 		Toe:          p.LoftFacesToe.Toe, Heel: cone,
-		ToeTool: p.LoftFacesToe.ToeTool, HeelTool: tool,
+		ToeTool: p.LoftFacesToe.ToeTool, HeelTool: bodyNode(tool),
 		ToeCapGroup: toeCapSource, HeelCapGroup: heelCapSource,
 		Tangent: p.LoftFacesToe.Cap.Tangent,
 	}
@@ -516,7 +516,7 @@ func extendTangentCap(ctx context.Context, held *Mesh, toe *loftFacesToeRecord,
 		}
 		face[i] = id
 	}
-	capID, ok := ids[faceNode(capFace)]
+	capID, ok := ids[capFace]
 	if !ok {
 		return refuse("mesh has no end cap facet")
 	}

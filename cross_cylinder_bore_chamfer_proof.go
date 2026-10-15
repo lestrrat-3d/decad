@@ -335,7 +335,7 @@ func crossBoreMirroredCellMaxima(ctx context.Context, workers int,
 // crossBoreMirroredCellMaxima's mirror map needs. A pose that is symmetric
 // only to rounding fails one of admission's exact comparisons.
 func crossBoreMirrorPose(rec *crossCylinderBoreRecord) bool {
-	again := recognizeCrossCylinderBore(rec.Target, rec.Tool)
+	again := recognizeCrossCylinderBore(bodyHandle(rec.Target), bodyHandle(rec.Tool))
 	return again != nil && *again == *rec
 }
 

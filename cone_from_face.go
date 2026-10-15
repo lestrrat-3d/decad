@@ -137,7 +137,7 @@ func commitExactPointCone(ctx context.Context, d *Document, cone *Body) error {
 // face.
 func revolveSpanOfFace(spans []revolveSectionSpan, face *Face) (revolveSectionSpan, bool) {
 	for _, span := range spans {
-		if span.Face == face {
+		if span.Face == faceNode(face) {
 			return span, true
 		}
 	}

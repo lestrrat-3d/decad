@@ -3,6 +3,8 @@ package decad
 import (
 	"context"
 	"fmt"
+
+	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
 // A contact manifest keeps the two finite Revolve-side proofs separate.
@@ -102,12 +104,12 @@ func revolveLoftFacesSectionFacesComplete(proof *revolveLoftFacesSourceCertifica
 	if len(faces) == 0 {
 		return false
 	}
-	seen := make(map[*Face]bool, len(faces))
+	seen := make(map[*topo.Face]bool, len(faces))
 	for _, span := range proof.section.Spans {
 		if span.Face == nil {
 			continue // the Revolve axis has no boundary face
 		}
-		if span.Face.n.Body != bodyNode(proof.blank) || seen[span.Face] {
+		if span.Face.Body != bodyNode(proof.blank) || seen[span.Face] {
 			return false
 		}
 		seen[span.Face] = true
@@ -116,7 +118,7 @@ func revolveLoftFacesSectionFacesComplete(proof *revolveLoftFacesSourceCertifica
 		return false
 	}
 	for _, face := range faces {
-		if face == nil || face.n.Body != bodyNode(proof.blank) || !seen[face] {
+		if face == nil || face.n.Body != bodyNode(proof.blank) || !seen[faceNode(face)] {
 			return false
 		}
 	}
