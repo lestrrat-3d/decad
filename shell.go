@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/breprecord"
+
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/cupwall"
 	"github.com/lestrrat-3d/decad/internal/extent"
@@ -222,7 +224,7 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value, opts .
 			return b.shellClosedPrism(ctx, pp, s, t, tmm, tDelta)
 		}
 		if sp, ok := b.n.Payload.(stackedPrismPayload); ok && sense == Inward {
-			view, _, err := brepOfStackedWithRoles(ctx, sp)
+			view, _, err := breprecord.OfStackedWithRoles(ctx, sp)
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return nil, ctxErr
 			}
@@ -235,7 +237,7 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value, opts .
 						return nil, reverseErr
 					}
 					if eligible {
-						reversedView, _, viewErr := brepOfStackedWithRoles(ctx, reversed)
+						reversedView, _, viewErr := breprecord.OfStackedWithRoles(ctx, reversed)
 						if viewErr != nil {
 							return nil, viewErr
 						}

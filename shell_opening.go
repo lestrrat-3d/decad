@@ -102,7 +102,7 @@ func classifyRemovedSweepFaces(b *Body, caps prismCaps, pp prismPayload, removed
 // segments, and removedStart/removedEnd the removed caps. The regions are
 // built and audited first (prismshell.SideOpeningRegions); both caps removed records W
 // as a prism over the receiver's sweep (BO1), and otherwise the slabs are
-// stated as a brepPayload (BO2, shell_opening_brep.go).
+// stated as a brepPayload (BO2, breprecord.SideOpening).
 func (b *Body) shellSideOpening(ctx context.Context, pp prismPayload, removedStart, removedEnd bool, sides map[int]struct{}, s float64, t units.Value, tmm, tDelta float64) (*Body, error) {
 	d := documentHandle(b.n.Doc)
 	budget := proofbound.NewWorkBudget(ctx)
@@ -129,7 +129,7 @@ func (b *Body) shellSideOpening(ctx context.Context, pp prismPayload, removedSta
 		body, err = evalSideOpeningPrism(ctx, d, ref, pp, sec)
 	} else {
 		var bp brepPayload
-		bp, err = sideOpeningBrep(ctx, budget, pp, sec, removedStart, removedEnd, s, tmm, tDelta)
+		bp, err = breprecord.SideOpening(ctx, budget, pp, sec, removedStart, removedEnd, s, tmm, tDelta)
 		if err == nil {
 			body, err = bodyResult(breprecord.Build(ctx, envOf(documentNode(d), ref), bp))
 		}

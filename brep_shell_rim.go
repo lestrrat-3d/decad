@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/breprecord"
+
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 
@@ -48,7 +50,7 @@ func throughCutRims(ctx context.Context, budget *proofbound.WorkBudget, bp brepP
 	}
 	cavEmbeds := embeds[1:]
 	cavFaces := prismFaceRecords(cavity)
-	joined, _, err := brepJoinProfile(eroded)
+	joined, _, err := breprecord.JoinProfile(eroded)
 	if err != nil {
 		return brepPayload{}, err
 	}

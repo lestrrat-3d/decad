@@ -322,11 +322,11 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 				// The one-line Sweep was built from pp. Route E matches this
 				// published edge to that exact prism's face view, then checks the
 				// material wedge before rewriting either end face.
-				bp, err := brepOfPrism(pp)
+				bp, err := breprecord.OfPrism(pp)
 				if err != nil {
 					return nil, err
 				}
-				if err := requireExactBrepSection(bp, loopCall.op); err != nil {
+				if err := breprecord.RequireExactSection(bp, loopCall.op); err != nil {
 					return nil, err
 				}
 				body, err := brepBlendEdges(ctx, d, bp, loopCall)

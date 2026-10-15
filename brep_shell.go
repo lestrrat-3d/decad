@@ -338,7 +338,7 @@ func readThroughCutAnyAxis(ctx context.Context, bp brepPayload, refusal error) (
 			reasons[k] = fmt.Sprintf("along reference axis %d, %s", k, why)
 			if _, capsRead := brepgeom.ReadPrismCaps(prismFaceRecords(bp), embeds, k); capsRead {
 				rank[k] = 2
-			} else if throughCapsCount(bp, embeds, k) > 2 {
+			} else if breprecord.ThroughCapsCount(bp, embeds, k) > 2 {
 				rank[k] = 1
 			}
 		}
@@ -354,17 +354,6 @@ func readThroughCutAnyAxis(ctx context.Context, bp brepPayload, refusal error) (
 		return throughCut{}, fmt.Errorf(`%w; this body reads as a prism along a reference axis, and no such prism takes the removed faces as its caps (brep-modify SB3); nor does it read as a prism cut by through tools: %s (modify-general SG3)`, refusal, reason)
 	}
 	return throughCut{}, fmt.Errorf(`%w: this evaluator shells a brep or stacked receiver only where it reads as a prism along a reference axis (brep-modify SB10) or as one cut by through tools, and this one reads as neither: %s (modify-general SG3)`, ErrUnsupported, reason)
-}
-
-// throughCapsCount is the number of planar faces across reference axis k.
-func throughCapsCount(bp brepPayload, embeds []brepEmbed, k int) int {
-	n := 0
-	for fi, f := range bp.Faces {
-		if f.Planar() && embeds[fi].Axis[2] == k {
-			n++
-		}
-	}
-	return n
 }
 
 // requireStripsClear is TC7 (modify-general §3.3 step 3) for tool i: beyond
@@ -447,7 +436,7 @@ func (tc throughCut) cavity(ctx context.Context, bp brepPayload, eroded profileR
 			return brepPayload{}, fmt.Errorf(`%w: the shell's cavity is a %T, not a face record`, ErrUnsupported, cut)
 		}
 		var err error
-		cavity, err = brepOfPrism(pp)
+		cavity, err = breprecord.OfPrism(pp)
 		if err != nil {
 			return brepPayload{}, err
 		}

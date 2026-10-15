@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -96,7 +97,7 @@ func TestBrepModifyOutsideRoutePRefuses(t *testing.T) {
 // brep or stacked receiver whose record carries a section displacement
 // refuses every modify op, naming the displacement. The stacked receiver
 // reaches SB1 through its face view rather than the generic non-prism
-// refusal. Shown to fail with requireExactBrepSection's call deleted from
+// refusal. Shown to fail with breprecord.RequireExactSection's call deleted from
 // modifyBrepReceiver (every receiver then read SX16), and, for the stacked
 // receiver, with modifyBrepReceiver returning nil for a stackedPrismPayload
 // (it then read the generic "straight prism" refusal).
@@ -154,8 +155,8 @@ func TestBrepModifySB1RefusesADisplacedReceiver(t *testing.T) {
 
 // TestBrepModifySB2RefusesAPrismGroup pins SB2: a stacked receiver with no
 // face view — a prism group, two disjoint boxes over one interval — refuses
-// every modify op with brepOfStacked's ErrUnsupported. Shown to fail with
-// brepOfStacked's prism-group refusal deleted (the group's face view then
+// every modify op with breprecord.OfStacked's ErrUnsupported. Shown to fail with
+// breprecord.OfStacked's prism-group refusal deleted (the group's face view then
 // built from its first region's caps, and every op read SX16).
 func TestBrepModifySB2RefusesAPrismGroup(t *testing.T) {
 	t.Parallel()
@@ -163,7 +164,7 @@ func TestBrepModifySB2RefusesAPrismGroup(t *testing.T) {
 	group, sp := internalBoxGroup(t, doc)
 	require.Len(t, sp.Slabs[0].Regions, 2)
 	requireBrepModifyRefuses(t, group, "brep-modify SB2")
-	_, err := brepOfStacked(t.Context(), sp)
+	_, err := breprecord.OfStacked(t.Context(), sp)
 	require.ErrorIs(t, err, ErrUnsupported)
 	_, err = Fillet(t.Context(), group, Edges(Convex()).AtLeast(1), units.Millimeters(1))
 	require.ErrorContains(t, err, "a prism group of 2 disjoint regions has no face view")

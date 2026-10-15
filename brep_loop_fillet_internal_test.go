@@ -888,7 +888,7 @@ func TestPartialFilletContourCollapsesSelectedArc(t *testing.T) {
 	step, err := Fillet(t.Context(), body, Edges(ParallelTo(routeEZ), EndpointAt(corner)).Exactly(1), units.Millimeters(2))
 	require.NoError(t, err)
 	top := planarBodyFace(t, step, routeEZ, corner).Loops()[0].Edges()
-	bp, err := brepOfPrism(step.n.Payload.(prismPayload))
+	bp, err := breprecord.OfPrism(step.n.Payload.(prismPayload))
 	require.NoError(t, err)
 	r, err := newBrepLoopRead(t.Context(), bp, brepModifyRequest{edges: []*Edge{top[0], top[3], top[4]}})
 	require.NoError(t, err)
