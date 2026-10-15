@@ -148,7 +148,7 @@ func heldFloorOf(b *Body) (floor float64, restating bool) {
 	case facetedPayload:
 		return p.meshBound, true
 	case mitredSweepPayload:
-		return p.delta, true
+		return p.Delta, true
 	case coilPayload:
 		return p.delta, true
 	case twistedSweepPayload:
@@ -1321,7 +1321,7 @@ func heldPrimitiveFloorOf(b *Body) float64 {
 	case coilPayload:
 		return p.delta
 	case mitredSweepPayload:
-		return p.delta
+		return p.Delta
 	case twistedSweepPayload:
 		return p.delta
 	default:

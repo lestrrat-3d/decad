@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
+	"github.com/lestrrat-3d/decad/internal/sweepmitre"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/decad/internal/twistsweep"
 	"github.com/lestrrat-3d/r3"
@@ -299,8 +300,8 @@ func evalStationedTwistedSweepCells(ctx context.Context, d *Document, ref produc
 	if proofbound.IsNonFinite(mesh.n.AreaSlack) {
 		return nil, fmt.Errorf(`%w: stationed twist has no finite area proof`, ErrUnsupported)
 	}
-	volume, volumeBound := mitredEnclosure(volumeIv.Lo, volumeIv.Hi)
-	area, areaBound := mitredEnclosure(trueAreaIv.Lo, trueAreaIv.Hi)
+	volume, volumeBound := sweepmitre.Enclosure(volumeIv.Lo, volumeIv.Hi)
+	area, areaBound := sweepmitre.Enclosure(trueAreaIv.Lo, trueAreaIv.Hi)
 	body.n.Volume = measurement.Measurement{Value: units.CubicMillimeters(volume), Bound: units.CubicMillimeters(volumeBound),
 		Exactness: measurement.ExactnessOf(volumeBound)}
 	body.n.Area = measurement.Measurement{Value: units.SquareMillimeters(area), Bound: units.SquareMillimeters(areaBound),
