@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
+	"github.com/lestrrat-3d/decad/internal/prismextent"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -144,6 +145,15 @@ func (rp Payload) Meridian() prismrecord.Payload {
 
 // Transform is the accumulated rigid placement.
 func (rp Payload) Transform() r3.Transform { return rp.Xform }
+
+// ProvesSimple implements topo.SimpleProver through revolveaxis.ProvesSimple
+// (its comment holds the argument). A revolve's build runs no crossing audit
+// over a triangle set at all, so the proof is a different shape than the
+// prism's or loft's, not merely a weaker version of it.
+func (rp Payload) ProvesSimple(ctx context.Context) bool {
+	return revolveaxis.ProvesSimple(ctx, rp.Profile, rp.Ax, rp.Full, rp.RadialProof,
+		rp.SectionDelta, prismextent.ProfileBoundaryExtremes)
+}
 
 // Placed re-evaluates the same record under the composed motion.
 func (rp Payload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
@@ -494,6 +504,15 @@ func (rp ChainPayload) WalkView(ci int) Payload {
 
 // Transform is the accumulated rigid placement.
 func (rp ChainPayload) Transform() r3.Transform { return rp.Xform }
+
+// ProvesSimple implements topo.SimpleProver. A chain-fed revolve earns leg 4
+// on the identical full-turn argument, re-read over the chain's own open walk
+// through the SAME generic reading Payload.ProvesSimple already takes off
+// Profile and Ax — neither of which assumes the walk closes
+// (docs/surface-design.md §13.4).
+func (rp ChainPayload) ProvesSimple(ctx context.Context) bool {
+	return rp.Revolve().ProvesSimple(ctx)
+}
 
 // Placed re-evaluates the same record under the composed motion (core §8). A
 // re-evaluation path: no preflight has run on this record within the call, so

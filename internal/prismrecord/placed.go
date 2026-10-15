@@ -20,6 +20,18 @@ func (pp Payload) AxialDelta() float64 { return math.Max(pp.Z0Delta, pp.Z1Delta)
 // Transform is the accumulated rigid placement.
 func (pp Payload) Transform() r3.Transform { return pp.Xform }
 
+// ProvesSimple implements topo.SimpleProver. A payload with SurfaceResult true
+// and SectionDelta zero is proven by construction: `sketch` already decided
+// the recorded segments form the stated simple closed planar region; Build
+// already refuses a non-positive height; a simple planar curve crossed with a
+// positive interval does not self-intersect; and Xform is rigid, so it
+// preserves that. A nonzero SectionDelta denotes a set the record is only
+// WITHIN that displacement of, so simplicity does not transfer and the answer
+// is undecided.
+func (pp Payload) ProvesSimple(context.Context) bool {
+	return pp.SurfaceResult && pp.SectionDelta == 0
+}
+
 // Placed re-evaluates the same record under the composed motion. It is a
 // re-evaluation path: no moments preflight has run on this record within the
 // call, so the build opens the record's one counter itself.

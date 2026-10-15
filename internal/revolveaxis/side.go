@@ -53,7 +53,7 @@ type SideResult struct {
 // what shifts that reading onto the axis. A bare `rlo -= roff` would leave
 // the two products, their sum, and the subtraction's OWN round-to-nearest
 // error unaccounted for, on top of whatever aU/aV/dU/dV's own proven bounds
-// already are — the identical gap verify.go's revolvePayloadProvesSimple
+// already are — the identical gap revolveplan.Payload.ProvesSimple
 // exists to close one level up, only here it feeds the gate that decides
 // which side the region is admitted on, not a review AFTER the fact. Reading
 // the offset through proofbound.BoundedMul/proofbound.BoundedAdd/proofbound.BoundedSub (the same vocabulary
@@ -157,7 +157,7 @@ func ResolveSide(line Line2, readings SideExtremes) (SideResult, error) {
 		radialAdmitAllow = math.Max(0, near.Bound-near.Value)
 	case proofbound.SurvReject:
 		// The positive-side reading is the same extreme and offset that
-		// revolvePayloadProvesSimple would scan again. The build adds an
+		// revolveplan.Payload.ProvesSimple would scan again. The build adds an
 		// extra dot-product charge, so this proof is at least as strict.
 		// A flipped axis keeps the old scan because its coefficient signs
 		// and rounding path differ.

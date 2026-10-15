@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -122,6 +123,132 @@ func (pp BodyPayload) Placed(ctx context.Context, env topo.Env, composed r3.Tran
 // SurveyClass names the payload class a staged survey diagnostic reports
 // (internal/reportvocab): the root type name this payload had before it moved.
 func (Payload) SurveyClass() string { return "patchPayload" }
+
+// ProvesSimple implements topo.SimpleProver. Rule P (docs/surface-design.md
+// §6.4) is the construction-proof gate a BodyPayload earns from its own
+// receiver, letting Rule S admit the "walls, then cap, then stitch" flow §6.1
+// motivates. PatchEdges itself proves only its own chains simple in their own
+// plane (gate 4, §5.2), never the whole assembled boundary's
+// non-self-intersection, but a BodyPayload proves its own boundary does not
+// self-intersect when all three hold:
+//
+//  1. its receiver — the body PatchEdges was called on — itself admits
+//     under Rule S, decided by the identical topo.ProvesSimple predicate,
+//     never a reimplementation of it;
+//  2. every new face's chain is a COMPLETE free-edge chain of that
+//     receiver's own end, not a proper subset of one;
+//  3. every new face's plane is exactly one of the receiver feature's own
+//     end planes.
+//
+// Under those three the patched assembly IS the receiver feature's own
+// solid boundary — every chain vertex and edge PatchEdges selected is the
+// SAME object the receiver's own build stamped, never a copy or a fit — so
+// the receiver's own construction proof carries onto the patched body
+// unchanged. Any chain this cannot decide keeps the payload undecided,
+// reject-only exactly as every other Rule S arm.
+//
+// Conditions 2 and 3 are both decided through the LEVEL half of the
+// shared-denotation certificate, never by a coordinate or a residual:
+// prismrecord.Build stamps every rim vertex and edge at one end with the SAME
+// level token, minted once per build per end whenever the build's own section
+// is drawn straight from its record (SectionDelta == 0) — regardless of
+// whether that end's own coordinate ends up zero-bound or not.
+// chainSharedLevel reads that identity off the chain's own edges AND vertices
+// directly: a shared non-zero id proves the chain's plane IS that recorded
+// level's plane, on the same terms §5.2's own gate 3 level arm already reads
+// the identical token for, regardless of which of gate 3's two arms actually
+// admitted the chain's planarity. A chain with no shared id — the exact-arm
+// case, a chain from any receiver whose build mints no level token at all, or
+// a chain a SECOND PatchEdges call selects from an already-patched body
+// (copyFacesUnder does not propagate a level token onto the copies it mints) —
+// is undecided here, never guessed: Rule P names no distance threshold that
+// could stand in for the identity check CLAUDE.md's reject-only rule requires.
+//
+// Completeness (condition 2) then asks whether that SAME id's full set of
+// the receiver's own free edges is exactly the chain's own edge set: a
+// receiver whose end holds more than one disjoint free-edge loop — an
+// annular profile's inner and outer rims at one level — proves nothing
+// about the WHOLE end's non-self-intersection from patching only one of
+// them, so admitting on a proper subset would be unsound.
+//
+// Only prismrecord.Payload mints level tokens today, so Rule P admits a
+// PatchEdges-capped surface-extruded tube's rims and nothing wider yet.
+func (pp BodyPayload) ProvesSimple(ctx context.Context) bool {
+	bodies := topobuild.OperandBodies(pp.Faces)
+	if len(bodies) != 1 || bodies[0] == nil || bodies[0].Payload == nil {
+		return false
+	}
+	receiver := bodies[0]
+	if !topo.ProvesSimple(ctx, receiver.Payload) {
+		return false
+	}
+
+	// Every receiver free edge, grouped by its own level id — the candidate
+	// set condition 2 checks each chain against. An edge with no
+	// certificate (id == 0) joins no group: it cannot be one of the
+	// receiver's own end planes, and grouping by "no certificate" would
+	// prove nothing about which plane it belongs to.
+	receiverFreeByLevel := map[denotation.LevelID][]*topo.Edge{}
+	for _, e := range topobuild.Edges(receiver) {
+		if len(e.Faces) != 1 || e.Level.ID == 0 {
+			continue
+		}
+		receiverFreeByLevel[e.Level.ID] = append(receiverFreeByLevel[e.Level.ID], e)
+	}
+
+	for _, chain := range pp.Chains {
+		id, ok := chainSharedLevel(chain.Edges)
+		if !ok {
+			return false
+		}
+		if !edgeSetsEqual(receiverFreeByLevel[id], chain.Edges) {
+			return false
+		}
+	}
+	return true
+}
+
+// chainSharedLevel is Rule P condition 3's own decision: the single non-zero
+// level id every edge AND vertex of edges carries, or false when any of them
+// carries a different id, the zero id ("no certificate"), or edges is empty.
+// Reading id alone, never origin or normal, is what keeps this an identity
+// comparison rather than a fitted or residual one. Checking every VERTEX as
+// well as every edge is load-bearing: an edge's own id says its CURVE was
+// stamped at one level, never that both its endpoints were too.
+func chainSharedLevel(edges []*topo.Edge) (denotation.LevelID, bool) {
+	if len(edges) == 0 {
+		return 0, false
+	}
+	id := edges[0].Level.ID
+	if id == 0 {
+		return 0, false
+	}
+	for _, e := range edges {
+		if e.Level.ID != id || e.Start.Level.ID != id || e.End.Level.ID != id {
+			return 0, false
+		}
+	}
+	return id, true
+}
+
+// edgeSetsEqual reports whether a and b hold the same edge pointers, order
+// and duplicates aside — Rule P condition 2's own set-equality decision,
+// never a count alone or a residual.
+func edgeSetsEqual(a, b []*topo.Edge) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	set := make(map[*topo.Edge]struct{}, len(a))
+	for _, e := range a {
+		set[e] = struct{}{}
+	}
+	for _, e := range b {
+		if _, ok := set[e]; !ok {
+			return false
+		}
+	}
+	return true
+}
 
 // SurveyClass names the payload class a staged survey diagnostic reports
 // (internal/reportvocab): the root type name this payload had before it moved.

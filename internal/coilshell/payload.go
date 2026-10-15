@@ -57,6 +57,13 @@ type Payload struct {
 // Transform is the accumulated rigid placement.
 func (cp Payload) Transform() r3.Transform { return cp.Xform }
 
+// ProvesSimple implements topo.SimpleProver. CP5 proves the true coil simple
+// from CS5 and CS6, and the build's crossing audit proves its held shell
+// embedded (docs/helix-design.md Table CD row CD1). A coil is always a solid,
+// so the sheet audit never reaches this method; it states the answer for any
+// caller that asks.
+func (cp Payload) ProvesSimple(context.Context) bool { return true }
+
 // Record supplies the resolved axis and recorded sweep to the shell builder.
 func (cp Payload) Record() (Record, error) {
 	return Read(Input{

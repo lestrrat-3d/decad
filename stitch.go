@@ -163,6 +163,14 @@ type stitchPayload struct {
 
 func (sp stitchPayload) Transform() r3.Transform { return sp.xform }
 
+// ProvesSimple implements topo.SimpleProver. A stitchPayload is proven by an
+// explicit build-time audit: Stitch runs docs/loft-design.md §6's crossing
+// audit on the OPEN case too (docs/surface-design.md §6.3's open-case
+// decision), so a payload whose audit ran and passed (auditClean) admits leg 4
+// the same as a proven-simple prism or loft does, letting a clean stitched
+// sheet read ValidityValid instead of being permanently Suspect.
+func (sp stitchPayload) ProvesSimple(context.Context) bool { return sp.auditClean }
+
 func (sp stitchPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
 	d, ref := documentHandle(env.Doc), env.Ref
 	return placedNode(evalStitchContext(ctx, d, ref, sp.faces, sp.plan, composed))
@@ -916,24 +924,6 @@ func fixWeldedEdgeConvexity(welded map[*Edge]struct{}) {
 	}
 }
 
-// stitchOperandBodies returns the distinct original operand bodies srcFaces
-// were read from, in first-seen order.
-func stitchOperandBodies(srcFaces []*Face) []*Body {
-	seen := map[*Body]struct{}{}
-	var bodies []*Body
-	for _, f := range srcFaces {
-		if f.n.Body == nil {
-			continue
-		}
-		if _, ok := seen[bodyHandle(f.n.Body)]; ok {
-			continue
-		}
-		seen[bodyHandle(f.n.Body)] = struct{}{}
-		bodies = append(bodies, bodyHandle(f.n.Body))
-	}
-	return bodies
-}
-
 // stitchBounds publishes the assembled body's box as the union of every
 // operand's own already-proven Bounds, each inflated by its own Bound before
 // the union so no per-operand slack has to be tracked separately, then
@@ -946,14 +936,14 @@ func stitchOperandBodies(srcFaces []*Face) []*Body {
 // exactly delta: every corner is exact once inflated and transformed, so the
 // only remaining uncertainty is the placement's own rounding.
 func stitchBounds(srcFaces []*Face, xform r3.Transform, delta float64) (Box, error) {
-	bodies := stitchOperandBodies(srcFaces)
+	bodies := topobuild.OperandBodies(faceNodes(srcFaces))
 	if len(bodies) == 0 {
 		return Box{}, fmt.Errorf(`%w: Stitch has no operand geometry to bound`, ErrDegenerate)
 	}
 	have := false
 	var lo, hi r3.Vec
 	for _, b := range bodies {
-		box := b.n.Bounds
+		box := b.Bounds
 		inflate := box.Bound.Base()
 		for _, c := range stitchweld.BoxCorners(box.Min, box.Max, inflate) {
 			p := xform.Apply(c)

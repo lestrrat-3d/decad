@@ -23,7 +23,7 @@ The rules for rows live in `docs/layout.md`.
 | `thicken_axis.go` | Assembles thicken sections. See surface §16. |
 | `thicken_chain_sweep.go` | Thickens admitted one-arc and cardinal composite chain sheets. See surface §16.8. |
 | `offset.go` | `Offset`: a second sheet at a normal distance. See surface §17. |
-| `patch_body.go` | `PatchEdges` selection, chain gates 1-3 and Rule P. See surface §5.2. |
+| `patch_body.go` | `PatchEdges` selection and chain gates 1-3; Rule P lives in `internal/patchchain/`. See surface §5.2. |
 | `denotation.go` | Level and curve token names and comparisons; the document node mints them. |
 | `stitch_weld.go` | Adapts Stitch topology to Table J. See surface §6.2. |
 | `stitch.go` | `Stitch` evaluator and topology adapter. See surface §6.4. |

@@ -8,8 +8,8 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
-// ProvesSimple decides the root payloadProvesSimple's revolvePayload
-// arm: a revolve's own build runs no crossing audit over a triangle set the
+// ProvesSimple decides revolveplan.Payload's leg-4 admission:
+// a revolve's own build runs no crossing audit over a triangle set the
 // way a loft's does, so its non-self-intersection proof has to be a
 // construction argument over the profile and the resolved axis instead.
 //

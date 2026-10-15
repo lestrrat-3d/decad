@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -629,8 +630,8 @@ func TestLoftDegreeOneTwistedPairPublishesTheRuledBody(t *testing.T) {
 	// IS the surface. The NURBS sheet's walls are bilinear patches the audit
 	// never cleared, so the proof does not transfer.
 	t.Run("only the LineSeg sheet proves itself simple", func(t *testing.T) {
-		require.False(t, payloadProvesSimple(t.Context(), build(t, true, WithSurfaceResult()).n.Payload))
-		require.True(t, payloadProvesSimple(t.Context(), build(t, false, WithSurfaceResult()).n.Payload))
+		require.False(t, topo.ProvesSimple(t.Context(), build(t, true, WithSurfaceResult()).n.Payload))
+		require.True(t, topo.ProvesSimple(t.Context(), build(t, false, WithSurfaceResult()).n.Payload))
 	})
 }
 

@@ -77,6 +77,17 @@ func (pp Payload) Prism() prismrecord.Payload {
 // Transform is the accumulated rigid placement.
 func (pp Payload) Transform() r3.Transform { return pp.Xform }
 
+// ProvesSimple implements topo.SimpleProver. A chain-fed prism earns leg 4 on
+// the profile argument with one word changed (docs/surface-design.md §13.4):
+// `sketch` already proved the recorded walk a simple planar curve —
+// RecordChain's own ch.Valid gate (§13.3) — Build already refuses a
+// non-positive sweep height, and a simple planar curve crossed with a positive
+// interval cannot self-intersect. A chain-fed body is always a sheet by
+// construction (Table G), so SurfaceResult carries no separate condition here;
+// SectionDelta is the one term that can still break the argument, on the
+// identical prism reading.
+func (pp Payload) ProvesSimple(context.Context) bool { return pp.SectionDelta == 0 }
+
 // Placed re-evaluates the same record under the composed motion (core §8). A
 // re-evaluation path: no moments preflight has run on this record within the
 // call, so the build opens the record's one free-form work counter itself

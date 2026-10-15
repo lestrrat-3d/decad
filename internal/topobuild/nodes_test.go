@@ -89,3 +89,18 @@ func TestVerticesWalksEdgesOnce(t *testing.T) {
 	require.Equal(t, []*topo.Vertex{a, b, c}, topobuild.Vertices(body))
 	require.Nil(t, topobuild.Vertices(&topo.Body{}))
 }
+
+// TestOperandBodiesIsFirstSeenAndSkipsFacesWithoutABody reads the distinct
+// bodies off a face list: first-seen order, one entry per body, no entry for a
+// face that holds none.
+func TestOperandBodiesIsFirstSeenAndSkipsFacesWithoutABody(t *testing.T) {
+	t.Parallel()
+	a, b := &topo.Body{}, &topo.Body{}
+	faces := []*topo.Face{{Body: b}, {}, {Body: a}, {Body: b}, {Body: a}}
+	got := topobuild.OperandBodies(faces)
+	require.Len(t, got, 2)
+	require.Same(t, b, got[0])
+	require.Same(t, a, got[1])
+	require.Nil(t, topobuild.OperandBodies(nil))
+	require.Nil(t, topobuild.OperandBodies([]*topo.Face{{}}))
+}
