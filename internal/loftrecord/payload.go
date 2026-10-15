@@ -223,7 +223,7 @@ func (pl Payload) RewriteWorkLimit(p uint64) uint64 {
 
 // SurveyClass names the payload class a staged survey diagnostic reports
 // (internal/reportvocab), the name the evaluator has always published for it.
-func (Payload) SurveyClass() string { return "Payload" }
+func (Payload) SurveyClass() string { return "loftPayload" }
 
 // Transform is the accumulated rigid placement.
 func (pl Payload) Transform() r3.Transform { return pl.Xform }
