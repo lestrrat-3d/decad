@@ -120,7 +120,7 @@ func loftMirrorCylinderChamferReflectionReserve(lower facetedPayload,
 
 func loftMirrorCylinderChamferSelect(ctx context.Context, b *Body, fp facetedPayload,
 	record *loftMirrorCylinderBoreRecord, edges []*Edge) error {
-	mesh := &joinedMesh{verts: fp.Verts, tris: fp.Tris, src: fp.Src, groups: fp.groups}
+	mesh := &joinedMesh{Verts: fp.Verts, Tris: fp.Tris, Src: fp.Src, Groups: fp.Groups}
 	var caps [2]*Face
 	for _, face := range b.Faces() {
 		for _, origin := range face.n.Origins {
@@ -268,12 +268,12 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 			}
 			group, exists := groupMap[oldGroup]
 			if !exists {
-				if oldGroup < 0 || oldGroup >= len(payload.groups) {
+				if oldGroup < 0 || oldGroup >= len(payload.Groups) {
 					return nil, fmt.Errorf("%w: mirrored cap chamfer facet lost its source group", ErrUnsupported)
 				}
 				group = len(groups)
 				groupMap[oldGroup] = group
-				groups = append(groups, payload.groups[oldGroup])
+				groups = append(groups, payload.Groups[oldGroup])
 				if oldGroup == half.capGroups[0] {
 					capGroups[halfIndex] = group
 				}
@@ -310,7 +310,7 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 	for i, index := range half.inner[0] {
 		inner[1][i] = mapUpper[index]
 	}
-	mesh := &joinedMesh{verts: verts, tris: tris, src: src, groups: groups}
+	mesh := &joinedMesh{Verts: verts, Tris: tris, Src: src, Groups: groups}
 	for cap, group := range capGroups {
 		z := blank.Z0
 		if cap == 1 {
@@ -335,11 +335,11 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 			"(lower %g, upper %g, volume %g, area %g, diameter %g)",
 			ErrUnsupported, lower.MeshBound, upper.MeshBound, volumeGap, areaSlack, diameter)
 	}
-	result := facetedPayload{Verts: verts, Tris: tris, Src: src, groups: groups,
+	result := facetedPayload{Verts: verts, Tris: tris, Src: src, Groups: groups,
 		VertexBound: vertexBound, MeshBound: bound, VolSymDiff: volumeGap,
 		AreaSlack: areaSlack, DPair: diameter, ContactAudited: true, Xform: r3.Identity()}
 	for cap, group := range capGroups {
-		result.groups[group].origins = append([]provenance.Ref(nil), old.groups[record.CapGroups[cap]].origins...)
+		result.Groups[group].Origins = append([]provenance.Ref(nil), old.Groups[record.CapGroups[cap]].Origins...)
 	}
 	if err := loftCylinderTagCaps(&result, record.Join.Blank, capGroups,
 		[2]float64{blank.Z0, blank.Z1}, ref); err != nil {
@@ -375,8 +375,8 @@ func loftMirrorCylinderChamferSeam(ctx context.Context, lower, upper facetedPayl
 		}
 	}
 	for side, payload := range []facetedPayload{lower, upper} {
-		mesh := &joinedMesh{verts: payload.Verts, tris: payload.Tris,
-			src: payload.Src, groups: payload.groups}
+		mesh := &joinedMesh{Verts: payload.Verts, Tris: payload.Tris,
+			Src: payload.Src, Groups: payload.Groups}
 		if !loftCylinderAuditAnnulus(ctx, mesh, half.outer[1], half.inner[1],
 			half.capGroups[1], middle, side == 1) {
 			return fmt.Errorf("%w: mirrored cap chamfer half %d has no tiled middle annulus",
@@ -433,7 +433,7 @@ func loftMirrorCylinderChamferBoreUnchanged(old facetedPayload, mesh *joinedMesh
 		return kept
 	}
 	a := collect(old.Verts, old.Tris, old.Src, oldGroups)
-	b := collect(mesh.verts, mesh.tris, mesh.src, newGroups)
+	b := collect(mesh.Verts, mesh.Tris, mesh.Src, newGroups)
 	if len(a) != len(b) {
 		return fmt.Errorf("%w: mirrored cap chamfer changed its bore wall", ErrUnsupported)
 	}

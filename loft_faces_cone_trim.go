@@ -211,7 +211,7 @@ func unchangedLoftCap(ctx context.Context, source, result *Body, base facetedPay
 	}
 	index, ok, err := facetedtopology.UnchangedGroupPatch(ctx,
 		facetedtopology.GroupedMesh{Verts: base.Verts, Tris: base.Tris, Src: base.Src, FaceOf: base.FaceOf},
-		len(base.groups), group, len(source.Faces()), held, len(resultFaces))
+		len(base.Groups), group, len(source.Faces()), held, len(resultFaces))
 	if err != nil || !ok {
 		return nil, false, err
 	}

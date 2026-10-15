@@ -35,17 +35,17 @@ func TestCurvedSourceCapCirclesSplitClosedBlankShell(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Len(t, shell.capRings, 2)
-	require.Len(t, shell.vertexBounds, len(shell.mesh.verts))
+	require.Len(t, shell.vertexBounds, len(shell.mesh.Verts))
 	require.Less(t, shell.faceBound, 0.1)
 	require.True(t, revolveLoftFacesBlankShellEulerTwo(&shell.mesh))
 	edges := make(map[[2]int]struct{})
-	for _, triangle := range shell.mesh.tris {
+	for _, triangle := range shell.mesh.Tris {
 		for corner := range 3 {
 			a, b := triangle[corner], triangle[(corner+1)%3]
 			edges[[2]int{min(a, b), max(a, b)}] = struct{}{}
 		}
 	}
-	require.Equal(t, 2, len(shell.mesh.verts)-len(edges)+len(shell.mesh.tris))
+	require.Equal(t, 2, len(shell.mesh.Verts)-len(edges)+len(shell.mesh.Tris))
 	vertical, sloped := 0, 0
 	for _, ring := range shell.capRings {
 		require.Len(t, ring.vertices, len(shell.capRings[0].vertices))
@@ -57,14 +57,14 @@ func TestCurvedSourceCapCirclesSplitClosedBlankShell(t *testing.T) {
 		require.Equal(t, ring.endpoints[1], ring.occupied[len(ring.occupied)-1])
 		throughAxis := false
 		for _, vertex := range ring.occupied {
-			point := shell.mesh.verts[vertex]
+			point := shell.mesh.Verts[vertex]
 			throughAxis = throughAxis || point.Y > 0 && point.Z == 0
 		}
 		require.Equal(t, ring.arc.throughPositiveY, throughAxis)
 		for side, endpoint := range ring.endpoints {
 			require.True(t, slices.Contains(ring.vertices, endpoint))
 			require.Less(t, shell.vertexBounds[endpoint], 0.1)
-			require.Equal(t, ring.endpointProof[side].point, shell.mesh.verts[endpoint])
+			require.Equal(t, ring.endpointProof[side].point, shell.mesh.Verts[endpoint])
 			require.Equal(t, ring.endpointProof[side].blankBound,
 				shell.vertexBounds[endpoint])
 			require.Less(t, ring.endpointProof[side].loftBound, 0.1)
@@ -84,14 +84,14 @@ func TestCurvedSourceCapCirclesSplitClosedBlankShell(t *testing.T) {
 		}
 		for _, index := range ring.vertices {
 			require.GreaterOrEqual(t, index, 0)
-			require.Less(t, index, len(shell.mesh.verts))
-			point := shell.mesh.verts[index]
+			require.Less(t, index, len(shell.mesh.Verts))
+			point := shell.mesh.Verts[index]
 			bound := shell.vertexBounds[index]
 			require.InDelta(t, xf, point.X, bound+1e-12)
 			require.InDelta(t, rf*rf, point.Y*point.Y+point.Z*point.Z,
 				2*rf*bound+bound*bound+1e-12)
 			incident := 0
-			for _, triangle := range shell.mesh.tris {
+			for _, triangle := range shell.mesh.Tris {
 				if slices.Contains(triangle[:], index) {
 					incident++
 				}
@@ -103,7 +103,7 @@ func TestCurvedSourceCapCirclesSplitClosedBlankShell(t *testing.T) {
 	require.Equal(t, 1, vertical)
 	require.Equal(t, 1, sloped)
 	t.Logf("source-aligned blank shell with %d heel circles: %d vertices, %d triangles",
-		len(shell.capRings), len(shell.mesh.verts), len(shell.mesh.tris))
+		len(shell.capRings), len(shell.mesh.Verts), len(shell.mesh.Tris))
 	stale := *shell.capRings[0].arc
 	stale.time = new(big.Rat).Add(stale.time, big.NewRat(1, 1000))
 	_, accepted, err := revolveLoftFacesBlankShellAtArcWithCuts(t.Context(), proof, manifest,

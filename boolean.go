@@ -677,8 +677,8 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 		faceID[f] = len(groups)
 		sourceID[&f.n] = len(groups)
 		groups = append(groups, facetGroup{
-			origins: f.originRefs(),
-			planar:  f.isPlanar(),
+			Origins: f.originRefs(),
+			Planar:  f.isPlanar(),
 		})
 	}
 	srcA, err := meshbool.SourceIDs(ctx, ma.n.Source, sourceID)
@@ -867,7 +867,7 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 		VertexBound: stitched.VertexBound,
 		Tris:        stitched.Tris,
 		Src:         stitched.Src,
-		groups:      groups,
+		Groups:      groups,
 		MeshBound:   facetproof.FacetBoundMax(stitched.Tris, stitched.VertexBound),
 		VolSymDiff:  volSymDiff,
 		AreaSlack:   areaSlack,

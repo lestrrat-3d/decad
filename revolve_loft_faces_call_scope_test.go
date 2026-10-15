@@ -73,7 +73,7 @@ func unscopedAllRunsShell(ctx context.Context, proof *revolveLoftFacesSourceCert
 		graph.manifest, selectors, capCuts)
 	if err != nil || !built || shell == nil || shell.faceBound >= 0.1 ||
 		len(shell.seams) != len(graph.runs) ||
-		len(shell.triangleCells) != len(shell.mesh.tris) {
+		len(shell.triangleCells) != len(shell.mesh.Tris) {
 		return nil, nil, false, err
 	}
 	shell.seamRunIDs = make([][]int, len(graph.runs))
@@ -102,8 +102,8 @@ func TestCurvedCallScopeShellMatchesUnscoped(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 
-	require.Equal(t, ref.mesh.verts, shell.mesh.verts)
-	require.Equal(t, ref.mesh.tris, shell.mesh.tris)
+	require.Equal(t, ref.mesh.Verts, shell.mesh.Verts)
+	require.Equal(t, ref.mesh.Tris, shell.mesh.Tris)
 	require.Equal(t, ref.vertexBounds, shell.vertexBounds)
 	require.Equal(t, ref.seams, shell.seams)
 	require.Equal(t, ref.seamRunIDs, shell.seamRunIDs)

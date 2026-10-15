@@ -218,13 +218,13 @@ func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
 		if err != nil || !current {
 			return nil, false, err
 		}
-		group[i] = len(out.mesh.groups)
-		out.mesh.groups = append(out.mesh.groups,
-			facetGroup{origins: append([]provenance.Ref(nil), span.origins...), planar: span.face.isPlanar()})
+		group[i] = len(out.mesh.Groups)
+		out.mesh.Groups = append(out.mesh.Groups,
+			facetGroup{Origins: append([]provenance.Ref(nil), span.origins...), Planar: span.face.isPlanar()})
 	}
 	appendPoint := func(point r3.Vec, bound float64) int {
-		index := len(out.mesh.verts)
-		out.mesh.verts = append(out.mesh.verts, point)
+		index := len(out.mesh.Verts)
+		out.mesh.Verts = append(out.mesh.Verts, point)
 		out.vertexBounds = append(out.vertexBounds, bound)
 		return index
 	}
@@ -403,16 +403,16 @@ func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
 			case len(start) == 1 && len(end) == 1:
 				return false
 			case len(start) == 1:
-				out.mesh.add([3]int{start[0], end[j], end[next]}, source)
+				out.mesh.Add([3]int{start[0], end[j], end[next]}, source)
 				out.triangleCells = append(out.triangleCells,
 					revolveLoftFacesShellTriangleCell{section: section, band: band, ray: j})
 			case len(end) == 1:
-				out.mesh.add([3]int{start[j], end[0], start[next]}, source)
+				out.mesh.Add([3]int{start[j], end[0], start[next]}, source)
 				out.triangleCells = append(out.triangleCells,
 					revolveLoftFacesShellTriangleCell{section: section, band: band, ray: j})
 			default:
-				out.mesh.add([3]int{start[j], end[j], end[next]}, source)
-				out.mesh.add([3]int{start[j], end[next], start[next]}, source)
+				out.mesh.Add([3]int{start[j], end[j], end[next]}, source)
+				out.mesh.Add([3]int{start[j], end[next], start[next]}, source)
 				out.triangleCells = append(out.triangleCells,
 					revolveLoftFacesShellTriangleCell{section: section, band: band, ray: j},
 					revolveLoftFacesShellTriangleCell{section: section, band: band, ray: j, half: 1})
@@ -460,13 +460,13 @@ func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
 		return nil, false, err
 	}
 	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx),
-		out.mesh.verts, out.mesh.tris, len(out.mesh.tris), 1<<20); err != nil {
+		out.mesh.Verts, out.mesh.Tris, len(out.mesh.Tris), 1<<20); err != nil {
 		return nil, false, err
 	}
 	if !revolveLoftFacesBlankShellEulerTwo(&out.mesh) {
 		return nil, false, nil
 	}
-	audit, err := facetproof.AuditFacetedMesh(ctx, out.mesh.verts, out.mesh.tris)
+	audit, err := facetproof.AuditFacetedMesh(ctx, out.mesh.Verts, out.mesh.Tris)
 	if err != nil {
 		return nil, false, err
 	}
@@ -477,15 +477,15 @@ func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
 }
 
 func revolveLoftFacesBlankShellEulerTwo(mesh *joinedMesh) bool {
-	if mesh == nil || len(mesh.verts) == 0 || len(mesh.tris) == 0 {
+	if mesh == nil || len(mesh.Verts) == 0 || len(mesh.Tris) == 0 {
 		return false
 	}
-	edges := make(map[[2]int]struct{}, 3*len(mesh.tris)/2)
-	used := make([]bool, len(mesh.verts))
-	for _, tri := range mesh.tris {
+	edges := make(map[[2]int]struct{}, 3*len(mesh.Tris)/2)
+	used := make([]bool, len(mesh.Verts))
+	for _, tri := range mesh.Tris {
 		for side := range 3 {
 			a, b := tri[side], tri[(side+1)%3]
-			if a < 0 || b < 0 || a >= len(mesh.verts) || b >= len(mesh.verts) || a == b {
+			if a < 0 || b < 0 || a >= len(mesh.Verts) || b >= len(mesh.Verts) || a == b {
 				return false
 			}
 			used[a], used[b] = true, true
@@ -497,7 +497,7 @@ func revolveLoftFacesBlankShellEulerTwo(mesh *joinedMesh) bool {
 			return false
 		}
 	}
-	return len(mesh.verts)-len(edges)+len(mesh.tris) == 2
+	return len(mesh.Verts)-len(edges)+len(mesh.Tris) == 2
 }
 
 func revolveLoftFacesSameArcContact(a, b revolveLoftFacesMappedCell) bool {

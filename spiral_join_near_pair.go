@@ -87,8 +87,8 @@ func spiralOriginalSideRef(trim *loftFacesTrimRecord, band, segment int) (proven
 	role := fmt.Sprintf("side(%d,%d)", band, segment)
 	var result provenance.Ref
 	found := false
-	for _, group := range trim.base.groups {
-		for _, origin := range group.origins {
+	for _, group := range trim.base.Groups {
+		for _, origin := range group.Origins {
 			if origin.Role != role {
 				continue
 			}
@@ -102,10 +102,10 @@ func spiralOriginalSideRef(trim *loftFacesTrimRecord, band, segment int) (proven
 }
 
 func spiralCapGroupRef(groups []facetGroup, group int) (provenance.Ref, bool) {
-	if group < 0 || group >= len(groups) || len(groups[group].origins) != 1 {
+	if group < 0 || group >= len(groups) || len(groups[group].Origins) != 1 {
 		return provenance.Ref{}, false
 	}
-	return groups[group].origins[0], true
+	return groups[group].Origins[0], true
 }
 
 // spiralNearFaceTable binds the fixed set of source roles for the first
@@ -132,8 +132,8 @@ func spiralNearFaceTable(blank, tooth *Body, proof *spiralFirstJoinSource) (
 		heel == root || heel == toe || root == toe {
 		return nil, false
 	}
-	toeRef, okToe := spiralCapGroupRef(p.groups, proof.tooth.toeCapGroup)
-	heelRef, okHeel := spiralCapGroupRef(p.groups, proof.tooth.heelCapGroup)
+	toeRef, okToe := spiralCapGroupRef(p.Groups, proof.tooth.toeCapGroup)
+	heelRef, okHeel := spiralCapGroupRef(p.Groups, proof.tooth.heelCapGroup)
 	if !okToe || !okHeel || toeRef == heelRef {
 		return nil, false
 	}

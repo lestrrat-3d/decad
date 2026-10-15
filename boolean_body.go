@@ -40,28 +40,28 @@ import (
 // facetGroup is one source face's provenance, carried into the payload so a
 // rebuild (Transform) reproduces the same origins.
 type facetGroup struct {
-	origins []provenance.Ref
-	// centroid is available only when this entire source group has a separate
+	Origins []provenance.Ref
+	// Centroid is available only when this entire source group has a separate
 	// certificate. A disconnected group cannot give that reading to a patch.
-	centroid    VecMeasurement
-	hasCentroid bool
-	// surface is set by a source whose authenticated surface is retained,
+	Centroid    VecMeasurement
+	HasCentroid bool
+	// Surface is set by a source whose authenticated surface is retained,
 	// including structural trims and the smooth three-section loft. Ordinary
 	// mesh booleans leave it nil.
-	surface surfacegeom.Surface
-	denoted *surfacenormal.Revolved
-	// normalBound covers the tag's normal departure from its denoted patch.
+	Surface surfacegeom.Surface
+	Denoted *surfacenormal.Revolved
+	// NormalBound covers the tag's normal departure from its denoted patch.
 	// A placed planar tag conservatively uses the maximum distance of two
 	// unit normals when its rounded frame has no tighter certificate.
-	normalBound float64
-	// reversed records a retained analytic surface whose natural normal
+	NormalBound float64
+	// Reversed records a retained analytic surface whose natural normal
 	// points into the result, as on the cone exposed by a Cut.
-	reversed bool
-	// planar records whether the source analytic face is a plane: the rim
+	Reversed bool
+	// Planar records whether the source analytic face is a plane: the rim
 	// between two planar sources is a straight line, whose chord length is
 	// exact; any curved source makes the rim's true length unboundable
 	// without curvature knowledge, and Edge.Length must refuse.
-	planar bool
+	Planar bool
 }
 
 // facetedPayload is the evaluator's own record of a mesh-built body: the
@@ -158,7 +158,7 @@ type facetedPayload struct {
 	VertexBound []float64
 	Tris        [][3]int
 	Src         []int // per-facet source-group id
-	groups      []facetGroup
+	Groups      []facetGroup
 
 	// FaceOf maps each facet to its face's index in the built body's
 	// Faces() order; buildFacetedBody sets it, Tessellate reads it.
@@ -294,61 +294,61 @@ func (fp facetedPayload) placedWith(ctx context.Context, d *Document, ref produc
 		next.pointPlaneCapDisplacement = 0
 		next.ExactPlaced = true
 	}
-	next.groups = append([]facetGroup(nil), fp.groups...)
+	next.Groups = append([]facetGroup(nil), fp.Groups...)
 	if fp.LoftMirrorJoin != nil && fp.MirrorCapGroups == nil {
 		return nil, fmt.Errorf("%w: a loft mirror join lost its outer-cap groups", ErrUnsupported)
 	}
 	if fp.MirrorCapGroups != nil {
 		for cap, group := range fp.MirrorCapGroups {
-			if group < 0 || group >= len(next.groups) {
+			if group < 0 || group >= len(next.Groups) {
 				return nil, fmt.Errorf("%w: placed mirror join lost an outer cap", ErrUnsupported)
 			}
 			role := provenance.RoleCapStart
 			if cap == 1 {
 				role = provenance.RoleCapEnd
 			}
-			origins := append([]provenance.Ref(nil), next.groups[group].origins...)
-			next.groups[group].origins = append(origins, provenance.Ref{Producer: ref, Role: role})
+			origins := append([]provenance.Ref(nil), next.Groups[group].Origins...)
+			next.Groups[group].Origins = append(origins, provenance.Ref{Producer: ref, Role: role})
 		}
 	}
-	for i := range next.groups {
+	for i := range next.Groups {
 		if exact != nil {
-			if err := exactGroupPlaced(&next.groups[i], exact); err != nil {
+			if err := exactGroupPlaced(&next.Groups[i], exact); err != nil {
 				return nil, err
 			}
 			continue
 		}
-		if next.groups[i].hasCentroid {
-			reading, err := placedCapCentroid(next.groups[i].centroid, delta)
+		if next.Groups[i].HasCentroid {
+			reading, err := placedCapCentroid(next.Groups[i].Centroid, delta)
 			if err != nil {
 				return nil, err
 			}
-			next.groups[i].centroid = reading
+			next.Groups[i].Centroid = reading
 		}
 		// A later structural trim requires the unplaced source. Its retained
 		// public surface identity still moves with this faceted restatement.
 		// The moved tag is the float image of the source tag, a bounded
 		// stand-in. NormalAt proves a denoted group against the denoted
-		// patch's exact image and never reads normalBound. Any other group is
+		// patch's exact image and never reads NormalBound. Any other group is
 		// charged the largest distance of two unit normals.
-		if tag := next.groups[i].surface; tag != nil && delta != r3.Identity() {
+		if tag := next.Groups[i].Surface; tag != nil && delta != r3.Identity() {
 			switch tag.(type) {
 			case surfacegeom.Plane, surfacegeom.Cylinder, surfacegeom.Cone, surfacegeom.Sphere, surfacegeom.Torus:
 				moved, err := surfaceplace.TransformSurface(tag, delta)
 				if err != nil {
 					return nil, err
 				}
-				next.groups[i].surface = moved
-				next.groups[i].normalBound = 2
+				next.Groups[i].Surface = moved
+				next.Groups[i].NormalBound = 2
 				// Only a Plane normal is U x V, which a reflection negates.
 				if _, planar := tag.(surfacegeom.Plane); planar && delta.IsReflection() {
-					next.groups[i].reversed = !next.groups[i].reversed
+					next.Groups[i].Reversed = !next.Groups[i].Reversed
 				}
 			}
 		}
-		if next.groups[i].denoted != nil {
-			denoted := next.groups[i].denoted.Transformed(delta)
-			next.groups[i].denoted = &denoted
+		if next.Groups[i].Denoted != nil {
+			denoted := next.Groups[i].Denoted.Transformed(delta)
+			next.Groups[i].Denoted = &denoted
 		}
 	}
 	if exact != nil && !exact.IsIdentity() {
@@ -483,7 +483,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
-		if s < 0 || s >= len(pp.groups) {
+		if s < 0 || s >= len(pp.Groups) {
 			return nil, fmt.Errorf(`%w: a facet names no source group`, ErrBooleanFailed)
 		}
 	}
@@ -538,20 +538,20 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 			// still say so, or FaceCreatedBy and the surveys lose them.
 			f = bornFace(&Face{
 				n: topo.Face{
-					HeldPlanar:  pp.groups[pp.Src[i]].planar,
-					Denoted:     pp.groups[pp.Src[i]].denoted,
-					NormalBound: pp.groups[pp.Src[i]].normalBound,
-					Reversed:    pp.groups[pp.Src[i]].reversed,
-					Origins:     append([]provenance.Ref(nil), pp.groups[pp.Src[i]].origins...),
+					HeldPlanar:  pp.Groups[pp.Src[i]].Planar,
+					Denoted:     pp.Groups[pp.Src[i]].Denoted,
+					NormalBound: pp.Groups[pp.Src[i]].NormalBound,
+					Reversed:    pp.Groups[pp.Src[i]].Reversed,
+					Origins:     append([]provenance.Ref(nil), pp.Groups[pp.Src[i]].Origins...),
 					Body:        bodyNode(body),
 				},
 			})
-			group := pp.groups[pp.Src[i]]
-			if group.hasCentroid && groupPatch[pp.Src[i]] == patch[i] {
-				f.n.Centroid, f.n.HasCentroid = vecMeasurementToInternal(group.centroid), true
+			group := pp.Groups[pp.Src[i]]
+			if group.HasCentroid && groupPatch[pp.Src[i]] == patch[i] {
+				f.n.Centroid, f.n.HasCentroid = vecMeasurementToInternal(group.Centroid), true
 			}
 			faceIdx[patch[i]] = f
-			facePlanar[f] = pp.groups[pp.Src[i]].planar
+			facePlanar[f] = pp.Groups[pp.Src[i]].Planar
 			faceGroup[f] = pp.Src[i]
 			compFaces[comp[i]] = append(compFaces[comp[i]], f)
 		}
@@ -568,9 +568,9 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 		return nil, err
 	}
 	for f, delta := range faceDelta {
-		group := pp.groups[faceGroup[f]]
-		if group.surface != nil {
-			f.n.Surface = group.surface
+		group := pp.Groups[faceGroup[f]]
+		if group.Surface != nil {
+			f.n.Surface = group.Surface
 		} else {
 			f.n.Surface = surfacegeom.Faceted{Bound: units.Millimeters(delta)}
 		}
@@ -904,17 +904,17 @@ func buildFacetedTopology(
 // rotation q. The cap centroid moves by q itself, which is exactly orthogonal,
 // so the placed reading adds no stretch charge. The analytic surface tag and
 // its denoted patch describe the float placement, not q, so both are dropped;
-// the group's faces then read as Faceted with their held bound. planar,
-// reversed and origins describe the source face, which q maps rigidly, and
+// the group's faces then read as Faceted with their held bound. Planar,
+// Reversed and Origins describe the source face, which q maps rigidly, and
 // stay.
 func exactGroupPlaced(g *facetGroup, q *exactrotation.Rotation) error {
-	if g.hasCentroid {
-		reading, err := placedCapCentroidBy(g.centroid, q.Linear(), q.Translation())
+	if g.HasCentroid {
+		reading, err := placedCapCentroidBy(g.Centroid, q.Linear(), q.Translation())
 		if err != nil {
 			return err
 		}
-		g.centroid = reading
+		g.Centroid = reading
 	}
-	g.surface, g.denoted, g.normalBound = nil, nil, 0
+	g.Surface, g.Denoted, g.NormalBound = nil, nil, 0
 	return nil
 }

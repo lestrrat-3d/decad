@@ -42,13 +42,13 @@ func loftCylinderChamferNearBandReach(ctx context.Context, mesh *joinedMesh,
 		for _, fraction := range fractions {
 			var sourceEdges [][2]proofarith.Xpt
 			for i := band[0]; i < band[1]; i++ {
-				parts, edge, err := loftmesh.ChamferNearPieces(mesh.tris[i], ideal, capLevel, fraction)
+				parts, edge, err := loftmesh.ChamferNearPieces(mesh.Tris[i], ideal, capLevel, fraction)
 				if err != nil {
 					return err
 				}
 				if !multipleRings {
 					near = append(near, parts...)
-					far, err := loftmesh.ChamferFarTriangles(mesh.tris[i], ideal, capLevel, fraction)
+					far, err := loftmesh.ChamferFarTriangles(mesh.Tris[i], ideal, capLevel, fraction)
 					if err != nil {
 						return err
 					}
@@ -72,7 +72,7 @@ func loftCylinderChamferNearBandReach(ctx context.Context, mesh *joinedMesh,
 		}
 		if multipleRings {
 			for i := band[0]; i < band[1]; i++ {
-				tri := mesh.tris[i]
+				tri := mesh.Tris[i]
 				near = append(near, [3]proofarith.Xpt{ideal[tri[0]], ideal[tri[1]], ideal[tri[2]]})
 			}
 		}

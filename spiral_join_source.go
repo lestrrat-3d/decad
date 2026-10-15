@@ -164,7 +164,7 @@ func certifySpiralFirstJoin(ctx context.Context, blank, tooth *Body) (*spiralFir
 		return nil, false, nil
 	}
 	trim := p.loftFacesTrim
-	if !spiralTrimSourceCurrent(trim) || !facetedtopology.CapGroupsPresent(p.Src, p.FaceOf, len(p.groups),
+	if !spiralTrimSourceCurrent(trim) || !facetedtopology.CapGroupsPresent(p.Src, p.FaceOf, len(p.Groups),
 		trim.toeCapGroup, trim.heelCapGroup) {
 		return nil, false, nil
 	}

@@ -35,32 +35,32 @@ func buildRevolveSectorMesh(mesh *joinedMesh, ring revolvedSectionRing,
 	if root.start.U > root.end.U {
 		lowSpan, highSpan = highSpan, lowSpan
 	}
-	baseGroup := len(mesh.groups)
-	if placedGroups != nil && len(placedGroups) != len(record.base.groups)+2 {
+	baseGroup := len(mesh.Groups)
+	if placedGroups != nil && len(placedGroups) != len(record.base.Groups)+2 {
 		return 0, 0, fmt.Errorf("%w: placed sector lost its source faces", ErrUnsupported)
 	}
-	for i, group := range record.base.groups {
-		if i == len(record.base.groups)-1 {
+	for i, group := range record.base.Groups {
+		if i == len(record.base.Groups)-1 {
 			break
 		}
-		group.surface = surfacegeom.NURBSSurface{}
+		group.Surface = surfacegeom.NURBSSurface{}
 		if placedGroups != nil {
 			group = placedGroups[i]
 		}
-		mesh.groups = append(mesh.groups, group)
+		mesh.Groups = append(mesh.Groups, group)
 	}
-	upperGroup := len(mesh.groups)
+	upperGroup := len(mesh.Groups)
 	upperFace := pointConeFacetGroup(record.upper, false)
 	if placedGroups != nil {
-		upperFace = placedGroups[len(record.base.groups)]
+		upperFace = placedGroups[len(record.base.Groups)]
 	}
-	mesh.groups = append(mesh.groups, upperFace)
-	lowerGroup := len(mesh.groups)
+	mesh.Groups = append(mesh.Groups, upperFace)
+	lowerGroup := len(mesh.Groups)
 	lowerFace := pointConeFacetGroup(record.lower, true)
 	if placedGroups != nil {
-		lowerFace = placedGroups[len(record.base.groups)+1]
+		lowerFace = placedGroups[len(record.base.Groups)+1]
 	}
-	mesh.groups = append(mesh.groups, lowerFace)
+	mesh.Groups = append(mesh.Groups, lowerFace)
 	upper, lower := make([]int, len(nodes)), make([]int, len(nodes))
 	maxRound, maxSnap := 0.0, 0.0
 	// The cone samples depend only on the unplaced cap station and
@@ -120,30 +120,30 @@ func buildRevolveSectorMesh(mesh *joinedMesh, ring revolvedSectionRing,
 			}
 			upper[i], lower[i] = ring.vertex(highSpan, j), ring.vertex(lowSpan, j)
 			maxSnap = max(maxSnap,
-				proofbound.DvLenUpper(proofbound.HeldDelta(upperPoint, mesh.verts[upper[i]])),
-				proofbound.DvLenUpper(proofbound.HeldDelta(lowerPoint, mesh.verts[lower[i]])))
+				proofbound.DvLenUpper(proofbound.HeldDelta(upperPoint, mesh.Verts[upper[i]])),
+				proofbound.DvLenUpper(proofbound.HeldDelta(lowerPoint, mesh.Verts[lower[i]])))
 			continue
 		}
-		upper[i] = len(mesh.verts)
-		mesh.verts = append(mesh.verts, upperPoint)
-		lower[i] = len(mesh.verts)
-		mesh.verts = append(mesh.verts, lowerPoint)
+		upper[i] = len(mesh.Verts)
+		mesh.Verts = append(mesh.Verts, upperPoint)
+		lower[i] = len(mesh.Verts)
+		mesh.Verts = append(mesh.Verts, lowerPoint)
 	}
 	samples.filled = true
 	for _, tri := range caps {
-		mesh.add([3]int{upper[tri[0]], upper[tri[1]], upper[tri[2]]}, upperGroup)
-		mesh.add([3]int{lower[tri[2]], lower[tri[1]], lower[tri[0]]}, lowerGroup)
+		mesh.Add([3]int{upper[tri[0]], upper[tri[1]], upper[tri[2]]}, upperGroup)
+		mesh.Add([3]int{lower[tri[2]], lower[tri[1]], lower[tri[0]]}, lowerGroup)
 	}
 	for _, edge := range edges {
 		if edge.Group < 0 {
 			continue
 		}
-		if edge.Group >= len(record.base.groups)-1 {
+		if edge.Group >= len(record.base.Groups)-1 {
 			return 0, 0, fmt.Errorf("%w: sector face role is missing", ErrUnsupported)
 		}
 		u, v := edge.U, edge.V
-		mesh.add([3]int{upper[u], lower[u], lower[v]}, baseGroup+edge.Group)
-		mesh.add([3]int{upper[u], lower[v], upper[v]}, baseGroup+edge.Group)
+		mesh.Add([3]int{upper[u], lower[u], lower[v]}, baseGroup+edge.Group)
+		mesh.Add([3]int{upper[u], lower[v], upper[v]}, baseGroup+edge.Group)
 	}
 	return maxRound, maxSnap, nil
 }

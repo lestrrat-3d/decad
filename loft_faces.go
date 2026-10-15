@@ -88,7 +88,7 @@ func buildLoftFaces(ctx context.Context, d *Document, selected []loftFaceSection
 		maps:         append([]loftFaceMap(nil), embedding.maps...),
 		bounds:       capBounds,
 		stationGroup: append([]int(nil), selected[0].slice.base.Src[:len(source.sourceStation)]...),
-		final:        embedding.maps[len(embedding.maps)-1], group: len(mesh.groups) - 1,
+		final:        embedding.maps[len(embedding.maps)-1], group: len(mesh.Groups) - 1,
 		tangent: tangent}
 	body, err := buildFacetedBodyWithProof(ctx, d, ref, mesh, audit, Measurement{}, nil)
 	if err != nil {
@@ -162,7 +162,7 @@ func collectLoftFaces(d *Document, faces []*Face) ([]loftFaceSection, *pointSect
 				break
 			}
 		}
-		want := len(fp.groups) - 1
+		want := len(fp.Groups) - 1
 		if i == 0 {
 			want--
 		}
@@ -235,7 +235,7 @@ func assembleLoftFaces(ctx context.Context, ref producerID,
 	n := len(sections[0].ring)
 	base := sections[0].slice.base
 	segmentCount := len(source.profile.Outer.Segments)
-	if len(base.Src) < n || len(base.Tris) < n || len(base.groups) != segmentCount+1 {
+	if len(base.Src) < n || len(base.Tris) < n || len(base.Groups) != segmentCount+1 {
 		return facetedPayload{}, fmt.Errorf("%w: LoftFaces source fan has no complete side correspondence", ErrUnsupported)
 	}
 	verts := make([]r3.Vec, 0, len(sections)*n)
@@ -253,7 +253,7 @@ func assembleLoftFaces(ctx context.Context, ref producerID,
 	groups := make([]facetGroup, (len(sections)-1)*segmentCount+2)
 	for band := range len(sections) - 1 {
 		for segment := range segmentCount {
-			groups[band*segmentCount+segment] = facetGroup{origins: []provenance.Ref{{Producer: ref,
+			groups[band*segmentCount+segment] = facetGroup{Origins: []provenance.Ref{{Producer: ref,
 				Role: fmt.Sprintf("side(%d,%d)", band, segment)}}}
 		}
 		for j := range n {
@@ -277,21 +277,21 @@ func assembleLoftFaces(ctx context.Context, ref producerID,
 		}
 	}
 	startGroup, endGroup := len(groups)-2, len(groups)-1
-	startOrigins := append([]provenance.Ref(nil), sections[0].mesh.groups[sections[0].group].origins...)
+	startOrigins := append([]provenance.Ref(nil), sections[0].mesh.Groups[sections[0].group].Origins...)
 	last := sections[len(sections)-1]
-	groups[startGroup] = facetGroup{origins: append(startOrigins, provenance.Ref{Producer: ref, Role: provenance.RoleCapStart}),
-		surface: sections[0].face.n.Surface, planar: true, reversed: true, normalBound: 2}
+	groups[startGroup] = facetGroup{Origins: append(startOrigins, provenance.Ref{Producer: ref, Role: provenance.RoleCapStart}),
+		Surface: sections[0].face.n.Surface, Planar: true, Reversed: true, NormalBound: 2}
 	if last.constructed != nil {
 		plane, err := loftFacesConstructedPlane(*last.constructed)
 		if err != nil {
 			return facetedPayload{}, err
 		}
-		groups[endGroup] = facetGroup{origins: []provenance.Ref{{Producer: ref, Role: provenance.RoleCapEnd}},
-			surface: plane, planar: true, normalBound: 2}
+		groups[endGroup] = facetGroup{Origins: []provenance.Ref{{Producer: ref, Role: provenance.RoleCapEnd}},
+			Surface: plane, Planar: true, NormalBound: 2}
 	} else {
-		endOrigins := append([]provenance.Ref(nil), last.mesh.groups[last.group].origins...)
-		groups[endGroup] = facetGroup{origins: append(endOrigins, provenance.Ref{Producer: ref, Role: provenance.RoleCapEnd}),
-			surface: last.face.n.Surface, planar: true, normalBound: 2}
+		endOrigins := append([]provenance.Ref(nil), last.mesh.Groups[last.group].Origins...)
+		groups[endGroup] = facetGroup{Origins: append(endOrigins, provenance.Ref{Producer: ref, Role: provenance.RoleCapEnd}),
+			Surface: last.face.n.Surface, Planar: true, NormalBound: 2}
 	}
 	for _, capTri := range base.Tris[n:] {
 		if capTri[0] == 0 || capTri[1] == 0 || capTri[2] == 0 {
@@ -303,7 +303,7 @@ func assembleLoftFaces(ctx context.Context, ref producerID,
 				(len(sections)-1)*n + capTri[2] - 1})
 		src = append(src, startGroup, endGroup)
 	}
-	return facetedPayload{Verts: verts, Tris: tris, Src: src, groups: groups, Xform: r3.Identity()}, nil
+	return facetedPayload{Verts: verts, Tris: tris, Src: src, Groups: groups, Xform: r3.Identity()}, nil
 }
 
 // loftFacesConstructedPlane returns the rounded Plane tag of a constructed

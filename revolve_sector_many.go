@@ -287,11 +287,11 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 		plan := &plans[i]
 		var placedGroups []facetGroup
 		if i != 0 {
-			placedGroups = sources[i].groups
+			placedGroups = sources[i].Groups
 		}
-		baseGroup := len(mesh.groups)
-		plan.capGroups = [2]int{baseGroup + len(record.base.groups) - 1,
-			baseGroup + len(record.base.groups)}
+		baseGroup := len(mesh.Groups)
+		plan.capGroups = [2]int{baseGroup + len(record.base.Groups) - 1,
+			baseGroup + len(record.base.Groups)}
 		plan.nodeRound, plan.snap, err = buildRevolveSectorMesh(mesh, ring, section,
 			plan.nodes, original, caps, edges, plan.rootNode, record, plan.motion, placedGroups, &samples)
 		if err != nil {
@@ -350,10 +350,10 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 	if err := orientJoinedMesh(mesh); err != nil {
 		return nil, nil, err
 	}
-	if err := tessellation.RequireVertexLinks(ctx, len(mesh.verts), mesh.tris); err != nil {
+	if err := tessellation.RequireVertexLinks(ctx, len(mesh.Verts), mesh.Tris); err != nil {
 		return nil, nil, err
 	}
-	count := len(mesh.tris)
+	count := len(mesh.Tris)
 	ringLimit := uint64(2) * uint64(len(section.spans)-1) * uint64(len(angles))
 	capTriangleLimit := uint64(len(sources)) * uint64(2*len(caps)+2*len(edges))
 	maxTriangles, sumOK := proofbound.WallCheckedAdd(ringLimit, capTriangleLimit)
@@ -375,7 +375,7 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 			patchByGroup[group] = patch
 		}
 	}
-	for i, group := range mesh.src {
+	for i, group := range mesh.Src {
 		if patch, ok := patchByGroup[group]; ok {
 			patches[patch].Triangles = append(patches[patch].Triangles, i)
 		}
@@ -384,15 +384,15 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 	if count > revolveSectorStreamTriangles {
 		audit = loftmesh.LoftCrossingAuditBoundedProjectedPatchesStreaming
 	}
-	if err := audit(proofbound.NewWorkBudget(ctx), mesh.verts, mesh.tris, patches, count, scans); err != nil {
+	if err := audit(proofbound.NewWorkBudget(ctx), mesh.Verts, mesh.Tris, patches, count, scans); err != nil {
 		if revolveRootCapContact(mesh, ring, section, plans, err) {
 			return nil, nil, &revolveSectorContactRefineError{cause: err}
 		}
 		return nil, nil, err
 	}
 	roundEnvelope := proofbound.AbsSumUpper(sectionSag, localRound)
-	area, areaForArea, err := proofbound.PerturbedAreaUpperPairContext(ctx, mesh.verts,
-		mesh.tris, roundEnvelope, bound)
+	area, areaForArea, err := proofbound.PerturbedAreaUpperPairContext(ctx, mesh.Verts,
+		mesh.Tris, roundEnvelope, bound)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -407,12 +407,12 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 	if proofbound.IsNonFinite(volumeGap) || proofbound.IsNonFinite(areaSlack) {
 		return nil, nil, fmt.Errorf("%w: joined sectors have no finite measure proof", ErrUnsupported)
 	}
-	vertexBound := make([]float64, len(mesh.verts))
+	vertexBound := make([]float64, len(mesh.Verts))
 	for i := range vertexBound {
 		vertexBound[i] = bound
 	}
-	payload := facetedPayload{Verts: mesh.verts, Tris: mesh.tris, Src: mesh.src,
-		groups: mesh.groups, VertexBound: vertexBound, ContactAudited: true,
+	payload := facetedPayload{Verts: mesh.Verts, Tris: mesh.Tris, Src: mesh.Src,
+		Groups: mesh.Groups, VertexBound: vertexBound, ContactAudited: true,
 		MeshBound: bound, VolSymDiff: volumeGap, AreaSlack: areaSlack,
 		DPair: base.DPair, Xform: r3.Identity()}
 	body, err := buildFacetedBody(ctx, d, ref, payload)
@@ -443,7 +443,7 @@ func revolveRootCapContact(mesh *joinedMesh, ring revolvedSectionRing,
 	if !errors.As(err, &contact) ||
 		contact.Reason != "share no recorded vertex, but make contact" ||
 		contact.I < 0 || contact.J < 0 ||
-		contact.I >= len(mesh.src) || contact.J >= len(mesh.src) ||
+		contact.I >= len(mesh.Src) || contact.J >= len(mesh.Src) ||
 		len(plans) == 0 || section.rootSpan < 0 ||
 		section.rootSpan >= len(ring.groups) {
 		return false
@@ -461,6 +461,6 @@ func revolveRootCapContact(mesh *joinedMesh, ring revolvedSectionRing,
 		}
 		return false
 	}
-	a, b := mesh.src[contact.I], mesh.src[contact.J]
+	a, b := mesh.Src[contact.I], mesh.Src[contact.J]
 	return isCap(a) && isNeighbor(b) || isCap(b) && isNeighbor(a)
 }

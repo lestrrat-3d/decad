@@ -106,8 +106,8 @@ func reachTestInput(t *testing.T) loftCylinderChamferReachInput {
 		// Later build steps rewrite the mesh in place, so keep a snapshot.
 		copied := *in
 		copied.mesh = &joinedMesh{
-			verts: slices.Clone(in.mesh.verts), tris: slices.Clone(in.mesh.tris),
-			src: slices.Clone(in.mesh.src), groups: slices.Clone(in.mesh.groups),
+			Verts: slices.Clone(in.mesh.Verts), Tris: slices.Clone(in.mesh.Tris),
+			Src: slices.Clone(in.mesh.Src), Groups: slices.Clone(in.mesh.Groups),
 		}
 		copied.ideal = slices.Clone(in.ideal)
 		captured = &copied

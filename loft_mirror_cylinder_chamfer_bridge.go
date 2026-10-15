@@ -121,14 +121,14 @@ func loftMirrorCylinderChamferUpperCapBridge(ctx context.Context, old, upper fac
 			W: new(big.Int).Mul(p.W, z.Denom()),
 		}
 	}
-	mesh := &joinedMesh{verts: append([]r3.Vec(nil), upper.Verts...), tris: upper.Tris}
+	mesh := &joinedMesh{Verts: append([]r3.Vec(nil), upper.Verts...), Tris: upper.Tris}
 	outer := make([]int, len(record.Outer[1]))
 	for i, index := range record.Outer[1] {
 		if index < 0 || index >= len(old.Verts) {
 			return 0, fmt.Errorf("%w: mirrored cap bridge lost its old outer rim", ErrUnsupported)
 		}
-		outer[i] = len(mesh.verts)
-		mesh.verts = append(mesh.verts, old.Verts[index])
+		outer[i] = len(mesh.Verts)
+		mesh.Verts = append(mesh.Verts, old.Verts[index])
 		ideal = append(ideal, proofarith.XptOf(old.Verts[index]))
 	}
 	source := loftCylinderChamferSource{

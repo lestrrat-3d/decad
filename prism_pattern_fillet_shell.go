@@ -58,10 +58,10 @@ func prismPatternFilletShell(ctx context.Context, rec *prismPatternJoinRecord,
 		}
 	}
 	dropCounts := make(map[[2]int]int, len(dropPairs))
-	mesh := &joinedMesh{verts: append([]r3.Vec(nil), rec.Mesh.verts...),
-		groups: append([]facetGroup(nil), rec.Mesh.groups...)}
-	for i, tri := range rec.Mesh.tris {
-		group := rec.Mesh.src[i]
+	mesh := &joinedMesh{Verts: append([]r3.Vec(nil), rec.Mesh.Verts...),
+		Groups: append([]facetGroup(nil), rec.Mesh.Groups...)}
+	for i, tri := range rec.Mesh.Tris {
+		group := rec.Mesh.Src[i]
 		if group == rec.Groups[1] || group == rec.Groups[2] {
 			continue
 		}
@@ -98,14 +98,14 @@ func prismPatternFilletShell(ctx context.Context, rec *prismPatternJoinRecord,
 				continue
 			}
 		}
-		mesh.add(tri, group)
+		mesh.Add(tri, group)
 	}
 	for pair := range dropPairs {
 		if dropCounts[pair] != 2 {
 			return nil, outlines, 0, fmt.Errorf("%w: joined-prism fillet ring cut loses a facet pair", ErrUnsupported)
 		}
 	}
-	retainedWalls := len(mesh.tris)
+	retainedWalls := len(mesh.Tris)
 	var replacement [2]map[int][]int
 	var skip [2]map[int]bool
 	for capIndex := range replacement {
@@ -128,8 +128,8 @@ func prismPatternFilletShell(ctx context.Context, rec *prismPatternJoinRecord,
 			return nil, outlines, 0, err
 		}
 		arcBound = max(arcBound, bound)
-		group := len(mesh.groups)
-		mesh.groups = append(mesh.groups, facetGroup{origins: []provenance.Ref{{Producer: ref,
+		group := len(mesh.Groups)
+		mesh.Groups = append(mesh.Groups, facetGroup{Origins: []provenance.Ref{{Producer: ref,
 			Role: fmt.Sprintf("fillet(%d,%d)", contact.part, station)}}})
 		for capIndex := range 2 {
 			old := part.Vertex[capIndex][station]
@@ -152,20 +152,20 @@ func prismPatternFilletShell(ctx context.Context, rec *prismPatternJoinRecord,
 		for i := range len(path[0]) - 1 {
 			b0, b1 := path[0][i], path[0][i+1]
 			t0, t1 := path[1][i], path[1][i+1]
-			mesh.add([3]int{b0, b1, t1}, group)
-			mesh.add([3]int{b0, t1, t0}, group)
+			mesh.Add([3]int{b0, b1, t1}, group)
+			mesh.Add([3]int{b0, t1, t0}, group)
 		}
 	}
 	// Only the original circular-wall facets use a root point as their end.
 	// Rebind those endpoints to the circle foot; the connector wall still
 	// ends at the line foot stored under the original vertex index.
 	for i := range retainedWalls {
-		if mesh.src[i] != rec.Groups[0] {
+		if mesh.Src[i] != rec.Groups[0] {
 			continue
 		}
-		for j, index := range mesh.tris[i] {
+		for j, index := range mesh.Tris[i] {
 			if replacement, ok := ringReplacement[index]; ok {
-				mesh.tris[i][j] = replacement
+				mesh.Tris[i][j] = replacement
 			}
 		}
 	}
@@ -183,7 +183,7 @@ func prismPatternFilletShell(ctx context.Context, rec *prismPatternJoinRecord,
 		points := make([]triangulation.Point2, len(outlines[capIndex]))
 		loop := make([]int, len(points))
 		for i, index := range outlines[capIndex] {
-			v := mesh.verts[index]
+			v := mesh.Verts[index]
 			points[i], loop[i] = triangulation.Point2{U: v.X, V: v.Y}, i
 		}
 		tris, err := triangulation.Triangulate(ctx, points, [][]int{loop})
@@ -196,14 +196,14 @@ func prismPatternFilletShell(ctx context.Context, rec *prismPatternJoinRecord,
 			if capIndex == 0 {
 				mapped[1], mapped[2] = mapped[2], mapped[1]
 			}
-			mesh.add(mapped, rec.Groups[capIndex+1])
+			mesh.Add(mapped, rec.Groups[capIndex+1])
 		}
 	}
 	if err := orientJoinedMesh(mesh); err != nil {
 		return nil, outlines, 0, err
 	}
-	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx), mesh.verts,
-		mesh.tris, loftmesh.MaxLoftAuditTriangles, loftCylinderAuditMaxScans); err != nil {
+	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx), mesh.Verts,
+		mesh.Tris, loftmesh.MaxLoftAuditTriangles, loftCylinderAuditMaxScans); err != nil {
 		return nil, outlines, 0, err
 	}
 	for capIndex, outline := range outlines {
@@ -261,8 +261,8 @@ func prismPatternFilletBand(mesh *joinedMesh, part prismPatternPart,
 	maxRound, maxAngleError := 0.0, 0.0
 	for capIndex := range 2 {
 		old := part.Vertex[capIndex][contact.station]
-		z := mesh.verts[old].Z
-		mesh.verts[old] = r3.Vec{X: p.X, Y: p.Y, Z: z}
+		z := mesh.Verts[old].Z
+		mesh.Verts[old] = r3.Vec{X: p.X, Y: p.Y, Z: z}
 		path[capIndex] = append(path[capIndex], old)
 		for step := 1; step < steps; step++ {
 			angle := start + float64(step)*sweep/float64(steps)
@@ -288,11 +288,11 @@ func prismPatternFilletBand(mesh *joinedMesh, part prismPatternPart,
 				proofbound.IntervalScale(sine, proofarith.FloatRat(radius)))
 			maxRound = max(maxRound, proofbound.AbsSumUpper(
 				proofbound.IntervalFloatError(xIV, x), proofbound.IntervalFloatError(yIV, y)))
-			path[capIndex] = append(path[capIndex], len(mesh.verts))
-			mesh.verts = append(mesh.verts, v)
+			path[capIndex] = append(path[capIndex], len(mesh.Verts))
+			mesh.Verts = append(mesh.Verts, v)
 		}
-		path[capIndex] = append(path[capIndex], len(mesh.verts))
-		mesh.verts = append(mesh.verts, r3.Vec{X: q.X, Y: q.Y, Z: z})
+		path[capIndex] = append(path[capIndex], len(mesh.Verts))
+		mesh.Verts = append(mesh.Verts, r3.Vec{X: q.X, Y: q.Y, Z: z})
 	}
 	maxAngleError = max(maxAngleError, proofbound.IntervalFloatError(startIV, start),
 		proofbound.IntervalFloatError(endIV, start+sweep))

@@ -51,13 +51,13 @@ func TestRevolveLoftFacesConstantXRejectsSubstitutedSourceRef(t *testing.T) {
 		}}},
 		maps: make([]loftFaceMap, 3),
 	}
-	trim.base.groups = make([]facetGroup, 2*segmentCount+2)
+	trim.base.Groups = make([]facetGroup, 2*segmentCount+2)
 	bound := make([][]provenance.Ref, 2)
 	for band := range bound {
 		bound[band] = make([]provenance.Ref, segmentCount)
 		for segment := range bound[band] {
 			ref := provenance.Ref{Producer: 7, Role: fmt.Sprintf("side(%d,%d)", band, segment)}
-			trim.base.groups[band*segmentCount+segment].origins = []provenance.Ref{ref}
+			trim.base.Groups[band*segmentCount+segment].Origins = []provenance.Ref{ref}
 			bound[band][segment] = ref
 		}
 	}

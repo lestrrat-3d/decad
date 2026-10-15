@@ -354,12 +354,12 @@ func buildLoftMirrorCylinderUnion(ctx context.Context, d *Document, ref producer
 			}
 			group, exists := groupMap[oldGroup]
 			if !exists {
-				if oldGroup < 0 || oldGroup >= len(payload.groups) {
+				if oldGroup < 0 || oldGroup >= len(payload.Groups) {
 					return nil, fmt.Errorf("%w: circular Join facet names no source group", ErrUnsupported)
 				}
 				group = len(groups)
 				groupMap[oldGroup] = group
-				groups = append(groups, payload.groups[oldGroup])
+				groups = append(groups, payload.Groups[oldGroup])
 				if oldGroup == keep {
 					capGroups[half] = group
 				}
@@ -408,7 +408,7 @@ func buildLoftMirrorCylinderUnion(ctx context.Context, d *Document, ref producer
 	if !ok {
 		return nil, fmt.Errorf("%w: mirrored cylinder lost its circular blank", ErrUnsupported)
 	}
-	shell := &joinedMesh{verts: verts, tris: tris, src: src, groups: groups}
+	shell := &joinedMesh{Verts: verts, Tris: tris, Src: src, Groups: groups}
 	for cap, outline := range capOutlines {
 		z := fullBlank.Z0
 		if cap == 1 {
@@ -418,7 +418,7 @@ func buildLoftMirrorCylinderUnion(ctx context.Context, d *Document, ref producer
 			return nil, fmt.Errorf("%w: mirrored cylinder cap does not tile its recorded outline", ErrUnsupported)
 		}
 	}
-	fp := facetedPayload{Verts: verts, Tris: tris, Src: src, groups: groups,
+	fp := facetedPayload{Verts: verts, Tris: tris, Src: src, Groups: groups,
 		VertexBound: vertexBound, MeshBound: bound, VolSymDiff: volumeGap,
 		AreaSlack: areaSlack, DPair: diameter, ContactAudited: true, Xform: r3.Identity(),
 		LoftMirrorCylinderJoin: &loftMirrorCylinderJoinRecord{
@@ -478,17 +478,17 @@ func loftMirrorCylinderCapOrigins(fp *facetedPayload, blank *Body, pairs []*Body
 				record = payload.LoftMirrorCopy.Source
 			}
 			if record == nil || record.CapGroups[cap] < 0 ||
-				record.CapGroups[cap] >= len(payload.groups) {
+				record.CapGroups[cap] >= len(payload.Groups) {
 				return fmt.Errorf("%w: mirrored tooth lost a source cap role", ErrUnsupported)
 			}
-			for _, origin := range payload.groups[record.CapGroups[cap]].origins {
+			for _, origin := range payload.Groups[record.CapGroups[cap]].Origins {
 				add(origin)
 			}
 		}
 		if len(origins) == 0 {
 			return fmt.Errorf("%w: mirrored cylinder cap has no source role", ErrUnsupported)
 		}
-		fp.groups[group].origins = origins
+		fp.Groups[group].Origins = origins
 	}
 	return nil
 }

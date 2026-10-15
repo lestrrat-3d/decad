@@ -33,7 +33,7 @@ func (b *Body) ExtremeFacesByCentroid(ctx context.Context, axis r3.Vec) (*Face, 
 	if n < 3 || len(fp.Verts) != 2*n || len(fp.Src) != len(fp.FaceOf) {
 		return nil, nil, fmt.Errorf("%w: the point-loft Split rings are incomplete", ErrUnsupported)
 	}
-	capStartGroup := len(fp.pointPlane.base.groups) - 1
+	capStartGroup := len(fp.pointPlane.base.Groups) - 1
 	capEndGroup := capStartGroup + 1
 	start, ok := pointCapGroupFace(b, fp, capStartGroup)
 	if !ok {

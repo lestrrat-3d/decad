@@ -61,10 +61,10 @@ func TestCopyRotationRecordsExactPlacementOnDirectCopy(t *testing.T) {
 	require.NotNil(t, payload.CopyLineage.Exact)
 	require.Nil(t, payload.LoftMirrorCopy, "the float-motion proof is dropped")
 	require.NotNil(t, payload.MirrorCapGroups, "the cap-role provenance is kept")
-	for _, g := range payload.groups {
-		require.Nil(t, g.surface)
-		require.Nil(t, g.denoted)
-		require.Zero(t, g.normalBound)
+	for _, g := range payload.Groups {
+		require.Nil(t, g.Surface)
+		require.Nil(t, g.Denoted)
+		require.Zero(t, g.NormalBound)
 	}
 
 	// Control: the same motion through WithCopyPlacement keeps the tags and
@@ -77,8 +77,8 @@ func TestCopyRotationRecordsExactPlacementOnDirectCopy(t *testing.T) {
 	require.Nil(t, cp.CopyLineage.Exact)
 	require.NotNil(t, cp.LoftMirrorCopy)
 	tagged := 0
-	for _, g := range cp.groups {
-		if g.surface != nil {
+	for _, g := range cp.Groups {
+		if g.Surface != nil {
 			tagged++
 		}
 	}
@@ -102,8 +102,8 @@ func TestCopyRotationLineageExactIsDirectOnly(t *testing.T) {
 	require.NotNil(t, sp.CopyLineage)
 	require.False(t, sp.CopyLineage.Direct)
 	require.Nil(t, sp.CopyLineage.Exact, "a copy of a copy records no exact rotation")
-	for _, g := range sp.groups {
-		require.Nil(t, g.surface, "the second exact placement still drops every tag")
+	for _, g := range sp.Groups {
+		require.Nil(t, g.Surface, "the second exact placement still drops every tag")
 	}
 
 	shift, err := r3.Translation(r3.NewVec(5, 0, 0))
@@ -127,8 +127,8 @@ func TestCopyRotationOrdinaryCopyOfExactCopyKeepsNoTags(t *testing.T) {
 	sp := second.n.Payload.(facetedPayload)
 	require.Nil(t, sp.LoftMirrorCopy)
 	require.NotNil(t, sp.MirrorCapGroups)
-	for _, g := range sp.groups {
-		require.Nil(t, g.surface)
+	for _, g := range sp.Groups {
+		require.Nil(t, g.Surface)
 	}
 }
 
@@ -138,30 +138,30 @@ func TestExactGroupPlacedMapsCentroidAndDropsTags(t *testing.T) {
 	_ = d
 	origin := provenance.Ref{Producer: 1, Role: provenance.RoleCapStart}
 	g := facetGroup{
-		origins: []provenance.Ref{origin}, hasCentroid: true, planar: true, reversed: true,
-		centroid:    VecMeasurement{Value: r3.NewVec(2, 0, 5), Exactness: Exact},
-		surface:     surfacegeom.Plane{},
-		normalBound: 3,
+		Origins: []provenance.Ref{origin}, HasCentroid: true, Planar: true, Reversed: true,
+		Centroid:    VecMeasurement{Value: r3.NewVec(2, 0, 5), Exactness: Exact},
+		Surface:     surfacegeom.Plane{},
+		NormalBound: 3,
 	}
 	require.NoError(t, exactGroupPlaced(&g, q))
-	require.Nil(t, g.surface)
-	require.Nil(t, g.denoted)
-	require.Zero(t, g.normalBound)
-	require.True(t, g.planar)
-	require.True(t, g.reversed)
-	require.Equal(t, []provenance.Ref{origin}, g.origins)
-	require.InDelta(t, 0, g.centroid.Value.X, 1e-12)
-	require.InDelta(t, 2, g.centroid.Value.Y, 1e-12)
-	require.InDelta(t, 5, g.centroid.Value.Z, 1e-12)
+	require.Nil(t, g.Surface)
+	require.Nil(t, g.Denoted)
+	require.Zero(t, g.NormalBound)
+	require.True(t, g.Planar)
+	require.True(t, g.Reversed)
+	require.Equal(t, []provenance.Ref{origin}, g.Origins)
+	require.InDelta(t, 0, g.Centroid.Value.X, 1e-12)
+	require.InDelta(t, 2, g.Centroid.Value.Y, 1e-12)
+	require.InDelta(t, 5, g.Centroid.Value.Z, 1e-12)
 	// The reading is exactly Q*c: Q is orthogonal, so the stretch charge is 0.
 	lin := q.Linear()
 	exactY := new(big.Rat).Mul(lin[1][0], big.NewRat(2, 1))
 	got := new(big.Rat)
-	got.SetFloat64(g.centroid.Value.Y)
+	got.SetFloat64(g.Centroid.Value.Y)
 	delta := new(big.Rat).Sub(got, exactY)
 	delta.Abs(delta)
 	bound := new(big.Rat)
-	require.NotNil(t, bound.SetFloat64(g.centroid.Bound.Base()))
+	require.NotNil(t, bound.SetFloat64(g.Centroid.Bound.Base()))
 	require.LessOrEqual(t, delta.Cmp(bound), 0, "reading strays from exact Q*c beyond its bound")
 }
 

@@ -768,7 +768,7 @@ func TestFacetedMeasurementSumsEncloseSmallAllowances(t *testing.T) {
 		tris := [][3]int{{0, 2, 1}, {0, 1, 3}, {0, 3, 2}, {1, 2, 3}}
 		payload := facetedPayload{
 			Verts: verts, VertexBound: make([]float64, len(verts)), Tris: tris, Src: []int{0, 1, 2, 3},
-			groups:     []facetGroup{{planar: true}, {planar: true}, {planar: true}, {planar: true}},
+			Groups:     []facetGroup{{Planar: true}, {Planar: true}, {Planar: true}, {Planar: true}},
 			VolSymDiff: tiny, DPair: 2, Xform: r3.Identity(),
 		}
 		body, err := buildFacetedBody(t.Context(), New(), producerID(0), payload)
@@ -1159,8 +1159,8 @@ func TestFacetedPlacementRebuildsCachedDiameter(t *testing.T) {
 		VertexBound: make([]float64, 4),
 		Tris:        [][3]int{{0, 2, 1}, {0, 1, 3}, {0, 3, 2}, {1, 2, 3}},
 		Src:         []int{0, 1, 2, 3},
-		groups: []facetGroup{
-			{planar: true}, {planar: true}, {planar: true}, {planar: true},
+		Groups: []facetGroup{
+			{Planar: true}, {Planar: true}, {Planar: true}, {Planar: true},
 		},
 		DPair: 10,
 		Xform: r3.Identity(),

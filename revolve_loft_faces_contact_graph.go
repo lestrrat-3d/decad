@@ -310,12 +310,12 @@ func (g *revolveLoftFacesContactGraph) bindBlankShell(ctx context.Context,
 	seenStations, seenVertices := make(map[int]bool), make(map[int]bool)
 	for i, stationID := range run.stationIDs {
 		index := shell.seam[i]
-		if index < 0 || index >= len(shell.mesh.verts) ||
+		if index < 0 || index >= len(shell.mesh.Verts) ||
 			index >= len(shell.vertexBounds) || seenStations[stationID] ||
 			seenVertices[index] ||
-			shell.mesh.verts[index] != seam[i].point ||
-			blankPatch.vertices[blankPatch.seam[i]] != shell.mesh.verts[index] ||
-			loftPatch.vertices[loftPatch.seam[i]] != shell.mesh.verts[index] ||
+			shell.mesh.Verts[index] != seam[i].point ||
+			blankPatch.vertices[blankPatch.seam[i]] != shell.mesh.Verts[index] ||
+			loftPatch.vertices[loftPatch.seam[i]] != shell.mesh.Verts[index] ||
 			shell.vertexBounds[index] < seam[i].blankBound {
 			return false, nil
 		}
@@ -346,10 +346,10 @@ func (g *revolveLoftFacesContactGraph) bindBlankShell(ctx context.Context,
 		for endpoint, cellID := range event.endpointCellIDs {
 			index := ring.endpoints[endpoint]
 			if cellID < 0 || cellID >= len(g.cells) ||
-				index < 0 || index >= len(shell.mesh.verts) ||
+				index < 0 || index >= len(shell.mesh.Verts) ||
 				index >= len(shell.vertexBounds) ||
 				seenEndpoints[index] ||
-				shell.mesh.verts[index] != ring.endpointProof[endpoint].point ||
+				shell.mesh.Verts[index] != ring.endpointProof[endpoint].point ||
 				shell.vertexBounds[index] < ring.endpointProof[endpoint].blankBound ||
 				!g.endpointCellMatches(event, ring, endpoint, cellID) {
 				return false, nil

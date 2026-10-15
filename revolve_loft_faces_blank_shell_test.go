@@ -36,9 +36,9 @@ func TestCurvedSourceArcSplitsClosedRevolveShell(t *testing.T) {
 		sectionIndex, cellIndex)
 	require.NoError(t, err)
 	require.True(t, ok)
-	require.NotEmpty(t, shell.mesh.tris)
-	require.Len(t, shell.mesh.src, len(shell.mesh.tris))
-	require.Len(t, shell.vertexBounds, len(shell.mesh.verts))
+	require.NotEmpty(t, shell.mesh.Tris)
+	require.Len(t, shell.mesh.Src, len(shell.mesh.Tris))
+	require.Len(t, shell.vertexBounds, len(shell.mesh.Verts))
 	require.Len(t, shell.seam, 18)
 	require.Less(t, shell.chordBound, 0.1)
 	require.GreaterOrEqual(t, shell.faceBound, shell.chordBound)
@@ -53,13 +53,13 @@ func TestCurvedSourceArcSplitsClosedRevolveShell(t *testing.T) {
 		require.False(t, duplicate, "each source station needs its own mesh vertex")
 		seenSeam[index] = struct{}{}
 		lower, upper := false, false
-		for _, tri := range shell.mesh.tris {
+		for _, tri := range shell.mesh.Tris {
 			if !slices.Contains(tri[:], index) {
 				continue
 			}
 			for _, vertex := range tri {
-				lower = lower || shell.mesh.verts[vertex].X < shell.mesh.verts[index].X
-				upper = upper || shell.mesh.verts[vertex].X > shell.mesh.verts[index].X
+				lower = lower || shell.mesh.Verts[vertex].X < shell.mesh.Verts[index].X
+				upper = upper || shell.mesh.Verts[vertex].X > shell.mesh.Verts[index].X
 			}
 		}
 		require.True(t, lower && upper, "both meridian halves must use shared seam vertex %d", index)
@@ -180,5 +180,5 @@ func TestCurvedSourceArcSplitsClosedRevolveShell(t *testing.T) {
 	require.False(t, admitted)
 	liveShell.n.Faces = originalFaces
 	t.Logf("source-aligned Revolve shell: %d vertices, %d triangles, chord bound %.6g mm",
-		len(shell.mesh.verts), len(shell.mesh.tris), shell.chordBound)
+		len(shell.mesh.Verts), len(shell.mesh.Tris), shell.chordBound)
 }

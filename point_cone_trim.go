@@ -57,8 +57,8 @@ func pointConeFacetGroup(cone *pointConeLimit, flip bool) facetGroup {
 		}
 		denoted = &denotedCopy
 	}
-	return facetGroup{origins: cone.origins, surface: cone.surface,
-		denoted: denoted, reversed: cone.reversed != flip}
+	return facetGroup{Origins: cone.origins, Surface: cone.surface,
+		Denoted: denoted, Reversed: cone.reversed != flip}
 }
 
 // exactPointCone recognizes the unplaced, full, straight-meridian cone whose
@@ -283,7 +283,7 @@ func buildPointConeInsideBand(ctx context.Context, d *Document, ref producerID,
 	} else {
 		verts = append(verts, r3.Vec{})
 	}
-	groups := append([]facetGroup(nil), base.groups...)
+	groups := append([]facetGroup(nil), base.Groups...)
 	farGroup := len(groups) - 1
 	upperGroup := len(groups)
 	groups = append(groups, pointConeFacetGroup(upper, false))
@@ -293,7 +293,7 @@ func buildPointConeInsideBand(ctx context.Context, d *Document, ref producerID,
 		groups = append(groups, pointConeFacetGroup(lower, true))
 	}
 	for i := range farGroup {
-		groups[i].surface = surfacegeom.NURBSSurface{}
+		groups[i].Surface = surfacegeom.NURBSSurface{}
 	}
 	tris := make([][3]int, 0, 2*len(allCaps)+2*len(allSides))
 	src := make([]int, 0, cap(tris))
@@ -363,7 +363,7 @@ func buildPointConeInsideBand(ctx context.Context, d *Document, ref producerID,
 		vertexBound[i] = bound
 	}
 	pp := facetedPayload{
-		Verts: verts, Tris: tris, Src: src, groups: groups, VertexBound: vertexBound,
+		Verts: verts, Tris: tris, Src: src, Groups: groups, VertexBound: vertexBound,
 		MeshBound: bound, VolSymDiff: volumeGap, AreaSlack: areaSlack,
 		DPair: base.DPair, Xform: r3.Identity(), pointCone: &record,
 	}
@@ -421,12 +421,12 @@ func buildPointConeOuterBand(ctx context.Context, d *Document, ref producerID,
 			verts = append(verts, p.Scale(samples[i].Alpha))
 		}
 	}
-	groups := append([]facetGroup(nil), base.groups...)
+	groups := append([]facetGroup(nil), base.Groups...)
 	capGroup := len(groups) - 1
 	coneGroup := len(groups)
 	groups = append(groups, pointConeFacetGroup(cone, true))
 	for i := range capGroup {
-		groups[i].surface = surfacegeom.NURBSSurface{}
+		groups[i].Surface = surfacegeom.NURBSSurface{}
 	}
 	tris := make([][3]int, 0, len(caps)*2+len(sides)*2)
 	src := make([]int, 0, cap(tris))
@@ -493,7 +493,7 @@ func buildPointConeOuterBand(ctx context.Context, d *Document, ref producerID,
 		vertexBound[i] = bound
 	}
 	pp := facetedPayload{
-		Verts: verts, Tris: tris, Src: src, groups: groups, VertexBound: vertexBound,
+		Verts: verts, Tris: tris, Src: src, Groups: groups, VertexBound: vertexBound,
 		MeshBound: bound, VolSymDiff: volumeGap, AreaSlack: areaSlack,
 		DPair: base.DPair, Xform: r3.Identity(), pointCone: &record,
 	}

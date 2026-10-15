@@ -21,10 +21,10 @@ func prismPatternRootChordsInsideCap(ctx context.Context, mesh *joinedMesh,
 	points := make([]loftcylinder.XY, len(outline))
 	poly := make([]meshbool.Xp2, len(outline))
 	for i, index := range outline {
-		if index < 0 || index >= len(mesh.verts) {
+		if index < 0 || index >= len(mesh.Verts) {
 			return false
 		}
-		points[i] = loftcylinder.ExactXY(mesh.verts[index])
+		points[i] = loftcylinder.ExactXY(mesh.Verts[index])
 		poly[i] = meshbool.NewXP2(points[i].X, points[i].Y)
 	}
 	same := func(a, b loftcylinder.XY) bool {

@@ -243,7 +243,7 @@ func revolveLoftFacesBlankShellWithAllRuns(ctx context.Context,
 		graph.manifest, selectors, capCuts)
 	if err != nil || !built || shell == nil || shell.faceBound >= 0.1 ||
 		len(shell.seams) != len(graph.runs) ||
-		len(shell.triangleCells) != len(shell.mesh.tris) {
+		len(shell.triangleCells) != len(shell.mesh.Tris) {
 		return nil, nil, false, err
 	}
 	shell.seamRunIDs = make([][]int, len(graph.runs))

@@ -22,7 +22,7 @@ func loftCylinderTagCaps(pp *facetedPayload, blank *Body, groups [2]int,
 	}
 	roles := [2]string{provenance.RoleCapStart, provenance.RoleCapEnd}
 	for cap, group := range groups {
-		if group < 0 || group >= len(pp.groups) {
+		if group < 0 || group >= len(pp.Groups) {
 			return fmt.Errorf("%w: loft/cylinder cap names no source group", ErrUnsupported)
 		}
 		var source *Face
@@ -66,13 +66,13 @@ func loftCylinderTagCaps(pp *facetedPayload, blank *Body, groups [2]int,
 		if count == 0 {
 			return fmt.Errorf("%w: loft/cylinder cap group has no facets", ErrUnsupported)
 		}
-		g := &pp.groups[group]
-		g.origins = append(append([]provenance.Ref(nil), g.origins...),
+		g := &pp.Groups[group]
+		g.Origins = append(append([]provenance.Ref(nil), g.Origins...),
 			provenance.Ref{Producer: ref, Role: roles[cap]})
-		g.surface = plane
-		g.planar = true
-		g.normalBound = source.n.NormalBound
-		g.reversed = source.n.Reversed
+		g.Surface = plane
+		g.Planar = true
+		g.NormalBound = source.n.NormalBound
+		g.Reversed = source.n.Reversed
 	}
 	return nil
 }
@@ -83,9 +83,9 @@ func loftCylinderTagCaps(pp *facetedPayload, blank *Body, groups [2]int,
 func loftCylinderTagBridgedTop(pp *facetedPayload, topGroup int, axialBridge []float64) {
 	for _, shift := range axialBridge {
 		if shift > 0 {
-			top := &pp.groups[topGroup]
-			top.surface = nil
-			top.planar = false
+			top := &pp.Groups[topGroup]
+			top.Surface = nil
+			top.Planar = false
 			return
 		}
 	}
@@ -97,12 +97,12 @@ func loftCylinderTagBridgedTop(pp *facetedPayload, topGroup int, axialBridge []f
 // shell crossing audit excludes overlapping or folded cap facets.
 func loftCylinderAuditAnnulus(ctx context.Context, mesh *joinedMesh,
 	outer, inner []int, group int, z float64, bottom bool) bool {
-	return loftcylinder.AuditAnnulus(ctx, mesh.verts, mesh.tris, mesh.src, outer, inner, group, z, bottom)
+	return loftcylinder.AuditAnnulus(ctx, mesh.Verts, mesh.Tris, mesh.Src, outer, inner, group, z, bottom)
 }
 
 // The cap group must tile exactly one simple CCW outline, with the origin
 // strictly inside. A later centered bore may use that outline as its source.
 func loftCylinderAuditCap(ctx context.Context, mesh *joinedMesh,
 	outline []int, group int, z float64, bottom bool) bool {
-	return loftcylinder.AuditCap(ctx, mesh.verts, mesh.tris, mesh.src, outline, group, z, bottom)
+	return loftcylinder.AuditCap(ctx, mesh.Verts, mesh.Tris, mesh.Src, outline, group, z, bottom)
 }

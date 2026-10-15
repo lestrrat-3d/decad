@@ -47,8 +47,8 @@ func prismPatternFilletRingCutOf(rec *prismPatternJoinRecord,
 		return empty, fmt.Errorf("%w: joined-prism fillet has no bounded source ring gap", ErrUnsupported)
 	}
 	point := func(position int) (prismpattern.IVPoint, bool) {
-		bottom := rec.Mesh.verts[rec.Outlines[0][position]]
-		top := rec.Mesh.verts[rec.Outlines[1][position]]
+		bottom := rec.Mesh.Verts[rec.Outlines[0][position]]
+		top := rec.Mesh.Verts[rec.Outlines[1][position]]
 		if bottom.X != top.X || bottom.Y != top.Y ||
 			bottom.Z != rec.Source.Blank.Z0 || top.Z != rec.Source.Blank.Z1 {
 			return prismpattern.IVPoint{}, false

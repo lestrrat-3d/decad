@@ -44,15 +44,15 @@ func twistShellFacetedBody(ctx context.Context, d *Document, ref producerID,
 		vertexBound[i] = bound
 	}
 	groups := []facetGroup{
-		{origins: []provenance.Ref{{Producer: ref, Role: prismrecord.OuterFirstSideRole}}},
-		{origins: []provenance.Ref{{Producer: ref, Role: "shellSide(0,0)"}}},
-		{origins: []provenance.Ref{{Producer: ref, Role: provenance.RoleCapStart}}, planar: true},
-		{origins: []provenance.Ref{{Producer: ref, Role: roleShellCap}}, planar: true},
-		{origins: []provenance.Ref{{Producer: ref, Role: "rim(0)"}}, planar: true},
+		{Origins: []provenance.Ref{{Producer: ref, Role: prismrecord.OuterFirstSideRole}}},
+		{Origins: []provenance.Ref{{Producer: ref, Role: "shellSide(0,0)"}}},
+		{Origins: []provenance.Ref{{Producer: ref, Role: provenance.RoleCapStart}}, Planar: true},
+		{Origins: []provenance.Ref{{Producer: ref, Role: roleShellCap}}, Planar: true},
+		{Origins: []provenance.Ref{{Producer: ref, Role: "rim(0)"}}, Planar: true},
 	}
 	payload := facetedPayload{
 		Verts: held.Verts, VertexBound: vertexBound, Tris: held.Tris,
-		Src: held.Src, groups: groups, MeshBound: bound,
+		Src: held.Src, Groups: groups, MeshBound: bound,
 		VolSymDiff: held.VolumeBound, AreaSlack: held.AreaSlack,
 		DPair: facetedSourceDiameterUpper(held.Verts, bound), Xform: r3.Identity(),
 		ContactAudited: true,

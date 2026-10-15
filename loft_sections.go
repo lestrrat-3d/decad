@@ -162,17 +162,17 @@ func (d *Document) buildSmoothSectionBody(ctx context.Context, built smoothloft.
 	ref := d.nextProducerID()
 	groups := make([]facetGroup, built.EdgeCount+2)
 	for i := range built.EdgeCount {
-		groups[i] = facetGroup{origins: []provenance.Ref{{Producer: ref,
-			Role: fmt.Sprintf("side(0,%d)", i)}}, surface: surfacegeom.NURBSSurface{}}
+		groups[i] = facetGroup{Origins: []provenance.Ref{{Producer: ref,
+			Role: fmt.Sprintf("side(0,%d)", i)}}, Surface: surfacegeom.NURBSSurface{}}
 		if i < len(built.ArcRadii) && built.ArcRadii[i] > 0 {
-			groups[i].surface = surfacegeom.Cylinder{Origin: start.Origin, Axis: r3.Vec{Z: 1},
+			groups[i].Surface = surfacegeom.Cylinder{Origin: start.Origin, Axis: r3.Vec{Z: 1},
 				Radius: units.Millimeters(built.ArcRadii[i])}
 		}
 	}
-	groups[built.EdgeCount] = facetGroup{origins: []provenance.Ref{{Producer: ref, Role: provenance.RoleCapStart}},
-		surface: surfacegeom.Plane{Frame: frameStart}, planar: true, reversed: true}
-	groups[built.EdgeCount+1] = facetGroup{origins: []provenance.Ref{{Producer: ref, Role: provenance.RoleCapEnd}},
-		surface: surfacegeom.Plane{Frame: frameEnd}, planar: true}
+	groups[built.EdgeCount] = facetGroup{Origins: []provenance.Ref{{Producer: ref, Role: provenance.RoleCapStart}},
+		Surface: surfacegeom.Plane{Frame: frameStart}, Planar: true, Reversed: true}
+	groups[built.EdgeCount+1] = facetGroup{Origins: []provenance.Ref{{Producer: ref, Role: provenance.RoleCapEnd}},
+		Surface: surfacegeom.Plane{Frame: frameEnd}, Planar: true}
 	vertexBound := make([]float64, len(built.Vertices))
 	for i := range vertexBound {
 		vertexBound[i] = built.MeshBound
@@ -180,7 +180,7 @@ func (d *Document) buildSmoothSectionBody(ctx context.Context, built smoothloft.
 	body, err := buildFacetedBody(ctx, d, ref, facetedPayload{
 		SmoothRectSection: built.RectangularSection,
 		Verts:             built.Vertices, Tris: built.Triangles, Src: built.Sources,
-		groups: groups, VertexBound: vertexBound, MeshBound: built.MeshBound,
+		Groups: groups, VertexBound: vertexBound, MeshBound: built.MeshBound,
 		VolSymDiff: built.VolSymDiff, AreaSlack: built.AreaSlack,
 		DPair: built.Diameter, Xform: r3.Identity(),
 	})

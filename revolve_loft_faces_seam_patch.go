@@ -55,12 +55,12 @@ func revolveLoftFacesArcPatchesUnchecked(ctx context.Context, trim *loftFacesTri
 		}
 	}
 	group := band*len(trim.source.profile.Outer.Segments) + segment
-	if group < 0 || group >= len(trim.base.groups) ||
-		len(trim.base.groups[group].origins) == 0 {
+	if group < 0 || group >= len(trim.base.Groups) ||
+		len(trim.base.Groups[group].Origins) == 0 {
 		return blank, loft, false, nil
 	}
 	blank.origins = append([]provenance.Ref(nil), section.origins...)
-	loft.origins = append([]provenance.Ref(nil), trim.base.groups[group].origins...)
+	loft.origins = append([]provenance.Ref(nil), trim.base.Groups[group].Origins...)
 	blank.vertices, loft.vertices = make([]r3.Vec, 3*len(seam)), make([]r3.Vec, 3*len(seam))
 	blank.vertexBounds = make([]float64, 3*len(seam))
 	loft.vertexBounds = make([]float64, 3*len(seam))

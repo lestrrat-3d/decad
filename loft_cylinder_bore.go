@@ -114,7 +114,7 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 	if len(joined.Tris) != len(joined.Src) || len(joined.Verts) != len(joined.VertexBound) {
 		return nil, fmt.Errorf("%w: circular join has an incomplete mesh record", ErrUnsupported)
 	}
-	source := &joinedMesh{verts: joined.Verts, tris: joined.Tris, src: joined.Src}
+	source := &joinedMesh{Verts: joined.Verts, Tris: joined.Tris, Src: joined.Src}
 	for cap := range 2 {
 		z := record.Z0
 		if cap == 1 {
@@ -151,18 +151,18 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 		return nil, fmt.Errorf("%w: circular bore reaches the joined source seam annulus", ErrUnsupported)
 	}
 	mesh := &joinedMesh{
-		verts:  append([]r3.Vec(nil), joined.Verts...),
-		groups: append([]facetGroup(nil), joined.groups...),
+		Verts:  append([]r3.Vec(nil), joined.Verts...),
+		Groups: append([]facetGroup(nil), joined.Groups...),
 	}
 	for i, tri := range joined.Tris {
 		if joined.Src[i] != record.CapGroups[0] && joined.Src[i] != record.CapGroups[1] {
-			mesh.add(tri, joined.Src[i])
+			mesh.Add(tri, joined.Src[i])
 		}
 	}
-	wallGroup := len(mesh.groups)
-	mesh.groups = append(mesh.groups, facetGroup{origins: wall.originRefs(),
-		surface: wall.n.Surface, normalBound: wall.n.NormalBound,
-		reversed: !wall.n.Reversed})
+	wallGroup := len(mesh.Groups)
+	mesh.Groups = append(mesh.Groups, facetGroup{Origins: wall.originRefs(),
+		Surface: wall.n.Surface, NormalBound: wall.n.NormalBound,
+		Reversed: !wall.n.Reversed})
 	vertexBound := append([]float64(nil), joined.VertexBound...)
 	var inner [2][]int
 	for cap := range 2 {
@@ -172,11 +172,11 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 			z = record.Z1
 		}
 		for i, point := range innerStations {
-			inner[cap][i] = len(mesh.verts)
-			mesh.verts = append(mesh.verts, r3.Vec{X: point.U, Y: point.V, Z: z})
+			inner[cap][i] = len(mesh.Verts)
+			mesh.Verts = append(mesh.Verts, r3.Vec{X: point.U, Y: point.V, Z: z})
 			vertexBound = append(vertexBound, boreBound)
 		}
-		if cap == 0 && !loftcylinder.BoreRingSimple(ctx, mesh.verts, inner[cap]) {
+		if cap == 0 && !loftcylinder.BoreRingSimple(ctx, mesh.Verts, inner[cap]) {
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
@@ -186,13 +186,13 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 		points := make([]triangulation.Point2, len(outline)+stations)
 		outerLoop := make([]int, len(outline))
 		for i, index := range outline {
-			p := mesh.verts[index]
+			p := mesh.Verts[index]
 			points[i] = triangulation.Point2{U: p.X, V: p.Y}
 			outerLoop[i] = i
 		}
 		holeLoop := make([]int, stations)
 		for i := range stations {
-			p := mesh.verts[inner[cap][i]]
+			p := mesh.Verts[inner[cap][i]]
 			points[len(outline)+i] = triangulation.Point2{U: p.X, V: p.Y}
 			holeLoop[i] = len(outline) + stations - 1 - i
 		}
@@ -212,22 +212,22 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 			if cap == 0 {
 				mapped[1], mapped[2] = mapped[2], mapped[1]
 			}
-			mesh.add(mapped, record.CapGroups[cap])
+			mesh.Add(mapped, record.CapGroups[cap])
 		}
 	}
 	for i := range stations {
 		j := (i + 1) % stations
-		mesh.add([3]int{inner[0][i], inner[1][i], inner[1][j]}, wallGroup)
-		mesh.add([3]int{inner[0][i], inner[1][j], inner[0][j]}, wallGroup)
+		mesh.Add([3]int{inner[0][i], inner[1][i], inner[1][j]}, wallGroup)
+		mesh.Add([3]int{inner[0][i], inner[1][j], inner[0][j]}, wallGroup)
 	}
 	if err := orientJoinedMesh(mesh); err != nil {
 		return nil, err
 	}
-	if err := tessellation.RequireVertexLinks(ctx, len(mesh.verts), mesh.tris); err != nil {
+	if err := tessellation.RequireVertexLinks(ctx, len(mesh.Verts), mesh.Tris); err != nil {
 		return nil, err
 	}
 	if err := loftmesh.LoftCrossingAuditBounded(
-		proofbound.NewWorkBudget(ctx), mesh.verts, mesh.tris,
+		proofbound.NewWorkBudget(ctx), mesh.Verts, mesh.Tris,
 		loftmesh.MaxLoftAuditTriangles, loftCylinderAuditMaxScans); err != nil {
 		return nil, err
 	}
@@ -245,7 +245,7 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 	volumeGap := proofbound.AbsSumUpper(joined.VolSymDiff,
 		proofbound.ProductUpper(shellArea, height))
 	bound := max(joined.MeshBound, boreBound)
-	heldArea, err := proofbound.PerturbedAreaUpperContext(ctx, mesh.verts, mesh.tris, bound)
+	heldArea, err := proofbound.PerturbedAreaUpperContext(ctx, mesh.Verts, mesh.Tris, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -261,7 +261,7 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 		return nil, fmt.Errorf("%w: circular bore has no finite measure proof", ErrUnsupported)
 	}
 	result := joined
-	result.Verts, result.Tris, result.Src, result.groups = mesh.verts, mesh.tris, mesh.src, mesh.groups
+	result.Verts, result.Tris, result.Src, result.Groups = mesh.Verts, mesh.Tris, mesh.Src, mesh.Groups
 	result.VertexBound, result.MeshBound = vertexBound, bound
 	result.VolSymDiff, result.AreaSlack = volumeGap, areaSlack
 	result.DPair = facetedSourceDiameterUpper(result.Verts, result.MeshBound)

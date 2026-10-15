@@ -162,13 +162,13 @@ func buildLoftMirrorUnion(ctx context.Context, d *Document, ref producerID,
 		if !exists {
 			group = len(groups)
 			groupOf[face] = group
-			g := facetGroup{origins: append([]provenance.Ref(nil), face.Origins...)}
+			g := facetGroup{Origins: append([]provenance.Ref(nil), face.Origins...)}
 			if capRole != "" {
-				g.origins = append(g.origins, provenance.Ref{Producer: ref, Role: capRole})
-				g.surface = face.Surface
-				g.planar = true
-				g.normalBound = face.NormalBound
-				g.reversed = face.Reversed
+				g.Origins = append(g.Origins, provenance.Ref{Producer: ref, Role: capRole})
+				g.Surface = face.Surface
+				g.Planar = true
+				g.NormalBound = face.NormalBound
+				g.Reversed = face.Reversed
 			}
 			groups = append(groups, g)
 		}
@@ -219,7 +219,7 @@ func buildLoftMirrorUnion(ctx context.Context, d *Document, ref producerID,
 		return nil, err
 	}
 	capGroups := record.CapGroups
-	fp := facetedPayload{Verts: verts, Tris: tris, Src: src, groups: groups,
+	fp := facetedPayload{Verts: verts, Tris: tris, Src: src, Groups: groups,
 		VertexBound: vertexBound, MeshBound: bound, VolSymDiff: volumeGap,
 		AreaSlack: areaSlack, DPair: pairDiameter, ContactAudited: true,
 		LoftMirrorJoin: record, MirrorCapGroups: &capGroups, Xform: r3.Identity()}

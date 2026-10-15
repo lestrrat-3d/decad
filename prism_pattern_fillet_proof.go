@@ -68,14 +68,14 @@ func prismPatternFilletBody(ctx context.Context, body *Body, edges []*Edge,
 	if proofbound.IsNonFinite(volumeGap) || proofbound.IsNonFinite(areaSlack) {
 		return nil, fmt.Errorf("%w: joined-prism fillet has no finite volume or area proof", ErrUnsupported)
 	}
-	vertexBound := make([]float64, len(mesh.verts))
+	vertexBound := make([]float64, len(mesh.Verts))
 	for i := range vertexBound {
 		vertexBound[i] = bound
 	}
-	result := facetedPayload{Verts: mesh.verts, Tris: mesh.tris, Src: mesh.src,
-		groups: mesh.groups, VertexBound: vertexBound, AxialSectionJoin: true,
+	result := facetedPayload{Verts: mesh.Verts, Tris: mesh.Tris, Src: mesh.Src,
+		Groups: mesh.Groups, VertexBound: vertexBound, AxialSectionJoin: true,
 		ContactAudited: true, MeshBound: bound, VolSymDiff: volumeGap,
-		AreaSlack: areaSlack, DPair: facetedSourceDiameterUpper(mesh.verts, bound),
+		AreaSlack: areaSlack, DPair: facetedSourceDiameterUpper(mesh.Verts, bound),
 		Xform: r3.Identity()}
 	if proofbound.IsNonFinite(result.DPair) {
 		return nil, fmt.Errorf("%w: joined-prism fillet has no finite diameter proof", ErrUnsupported)

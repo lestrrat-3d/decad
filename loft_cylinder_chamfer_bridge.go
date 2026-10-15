@@ -111,8 +111,8 @@ func loftCylinderChamferBridgeCap(ctx context.Context, fp facetedPayload,
 	if source.bridgeBound == 0 {
 		return 0, nil
 	}
-	if source.topSourceLevel == nil || band[0] < 0 || band[1] > len(mesh.tris) ||
-		band[0] >= band[1] || len(ideal) != len(mesh.verts) || len(inset) < 3 {
+	if source.topSourceLevel == nil || band[0] < 0 || band[1] > len(mesh.Tris) ||
+		band[0] >= band[1] || len(ideal) != len(mesh.Verts) || len(inset) < 3 {
 		return 0, fmt.Errorf("%w: cap chamfer bridge has no ideal top band", ErrUnsupported)
 	}
 	capLevel := proofarith.FloatRat(source.z1)
@@ -141,7 +141,7 @@ func loftCylinderChamferBridgeCap(ctx context.Context, fp facetedPayload,
 				return 0, err
 			}
 		}
-		tri := mesh.tris[i]
+		tri := mesh.Tris[i]
 		var crossing []int
 		for k := range 3 {
 			a, b := ideal[tri[k]], ideal[tri[(k+1)%3]]
@@ -224,7 +224,7 @@ func loftCylinderChamferBridgeCap(ctx context.Context, fp facetedPayload,
 	lateral := proofbound.ProductUpper(proofbound.RatFloatUp(new(big.Rat).Quo(
 		new(big.Rat).Sub(capLevel, level), proofarith.FloatRat(setback))), span)
 	gap := proofbound.AbsSumUpper(fp.MeshBound, lateral)
-	if err := loftcylinder.ChamferHeldOutlineGap(ctx, mesh.verts, source.outer[1], inset, gap); err != nil {
+	if err := loftcylinder.ChamferHeldOutlineGap(ctx, mesh.Verts, source.outer[1], inset, gap); err != nil {
 		return 0, err
 	}
 	reach := proofbound.AbsSumUpper(epsilon, lateral, lateral)

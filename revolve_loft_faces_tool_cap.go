@@ -61,11 +61,11 @@ func revolveLoftFacesToolCapSidesOf(proof *revolveLoftFacesSourceCertificate) (
 		if tool.limit == nil || tool.limit.apex == nil || tool.limit.far == nil ||
 			tool.limit.slope == nil || tool.limit.slope.Sign() <= 0 ||
 			tool.limit.far.Cmp(tool.limit.apex) >= 0 ||
-			tool.group < 0 || tool.group >= len(p.groups) ||
-			len(p.groups[tool.group].origins) != 1 {
+			tool.group < 0 || tool.group >= len(p.Groups) ||
+			len(p.Groups[tool.group].Origins) != 1 {
 			return revolveLoftFacesToolCapSides{}, false
 		}
-		origin := p.groups[tool.group].origins[0]
+		origin := p.Groups[tool.group].Origins[0]
 		found := false
 		for _, faceOrigin := range tool.face.originRefs() {
 			found = found || faceOrigin == origin
