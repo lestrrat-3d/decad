@@ -26,21 +26,21 @@ func TestStationedTwistOccupiedVolumeProof(t *testing.T) {
 	require.NoError(t, err)
 	payload, ok := body.n.Payload.(twistedSweepPayload)
 	require.True(t, ok)
-	require.NotNil(t, payload.mesh)
+	require.NotNil(t, payload.Mesh)
 	volume, err := body.Volume()
 	require.NoError(t, err)
 	area, err := body.Area()
 	require.NoError(t, err)
 	t.Logf("cells=%d boundary=%g occupied_volume=%g volume=%g volume_bound=%g volume_exactness=%v area=%g area_bound=%g",
-		len(payload.mesh.n.Vertices)/4-1, payload.delta, payload.volSymDiff, volume.Value.Base(),
+		len(payload.Mesh.Vertices)/4-1, payload.Delta, payload.VolSymDiff, volume.Value.Base(),
 		volume.Bound.Base(), volume.Exactness, area.Value.Base(), area.Bound.Base())
-	require.LessOrEqual(t, payload.delta, 0.1)
-	require.Less(t, payload.volSymDiff, 20.0)
-	heldVolume := exactMeshVolume(payload.mesh)
+	require.LessOrEqual(t, payload.Delta, 0.1)
+	require.Less(t, payload.VolSymDiff, 20.0)
+	heldVolume := exactMeshVolume(bornMesh(&Mesh{n: *payload.Mesh}))
 	heldFloat, _ := heldVolume.Float64()
 	t.Logf("held_volume=%g", heldFloat)
 	gap := new(big.Rat).Abs(new(big.Rat).Sub(heldVolume, big.NewRat(20, 1)))
-	require.LessOrEqual(t, gap.Cmp(new(big.Rat).SetFloat64(payload.volSymDiff)), 0)
+	require.LessOrEqual(t, gap.Cmp(new(big.Rat).SetFloat64(payload.VolSymDiff)), 0)
 }
 
 // A short twisted extrusion translated far along Z makes the held caps move

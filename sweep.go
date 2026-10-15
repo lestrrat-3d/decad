@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/twistsweep"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -23,7 +24,7 @@ import (
 // analytic prism and revolve evaluators. Composite paths are admitted when
 // their transported frames and separation certificates close. The distinct
 // sweepPayload preserves the operation's downstream staging and replays every
-// reduction for placement. sweep_twist.go owns the bounded nonzero-twist case.
+// reduction for placement. internal/twistsweep owns the bounded nonzero-twist case.
 //
 // WithSurfaceResult() (docs/surface-design.md §4, docs/sweep-design.md §14
 // increment 3) reaches every one of Sweep's three build paths, but not through
@@ -146,8 +147,8 @@ func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 		if err := sweepinput.ValidateSweepPathGeometry(path, plane); err != nil {
 			return nil, err
 		}
-		body, err := evalTwistedSweep(ctx, d, d.nextProducerID(), profile, plane,
-			path, cfg.Twist, recordArea, r3.Identity())
+		body, err := bodyResult(twistsweep.Eval(ctx, envOf(documentNode(d), d.nextProducerID()), profile, plane,
+			path, cfg.Twist, recordArea, r3.Identity()))
 		if err != nil {
 			return nil, err
 		}

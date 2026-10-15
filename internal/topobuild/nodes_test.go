@@ -75,3 +75,17 @@ func TestSheetLumpsSplitsConnectedPieces(t *testing.T) {
 	require.Nil(t, topobuild.Faces(&topo.Body{}))
 	require.Nil(t, topobuild.Edges(&topo.Body{}))
 }
+
+// TestVerticesWalksEdgesOnce pins the vertex order: each edge in Edges order,
+// start before end, each vertex once, a nil endpoint skipped.
+func TestVerticesWalksEdgesOnce(t *testing.T) {
+	t.Parallel()
+	a, b, c := &topo.Vertex{}, &topo.Vertex{}, &topo.Vertex{}
+	e1 := &topo.Edge{Start: a, End: b}
+	e2 := &topo.Edge{Start: b, End: c}
+	e3 := &topo.Edge{Start: c, End: nil}
+	loop := &topo.Loop{CoEdges: []topo.CoEdge{{Edge: e1, Forward: true}, {Edge: e2, Forward: true}, {Edge: e3, Forward: true}}}
+	body := &topo.Body{Lumps: []*topo.Lump{{Shells: []*topo.FaceShell{{Faces: []*topo.Face{{Loops: []*topo.Loop{loop}}}}}}}}
+	require.Equal(t, []*topo.Vertex{a, b, c}, topobuild.Vertices(body))
+	require.Nil(t, topobuild.Vertices(&topo.Body{}))
+}

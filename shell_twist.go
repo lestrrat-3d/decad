@@ -16,30 +16,30 @@ import (
 func (b *Body) shellTwistedSweep(ctx context.Context, p twistedSweepPayload,
 	removed []*Face, sense ShellSense, thickness, thicknessDelta float64) (*Body, error) {
 	if sense != Inward || len(removed) != 1 || removed[0] != prismCapsOf(b).end ||
-		p.path == nil || len(p.path.Records) != 1 || p.path.Records[0].Arc != nil ||
-		p.path.Start != (r3.Vec{}) || p.path.End.X != 0 || p.path.End.Y != 0 ||
-		p.path.End.Z <= 0 || p.plane.Origin != (r3.Vec{}) ||
-		p.plane.U != r3.NewVec(1, 0, 0) || p.plane.V != r3.NewVec(0, 1, 0) ||
+		p.Path == nil || len(p.Path.Records) != 1 || p.Path.Records[0].Arc != nil ||
+		p.Path.Start != (r3.Vec{}) || p.Path.End.X != 0 || p.Path.End.Y != 0 ||
+		p.Path.End.Z <= 0 || p.Plane.Origin != (r3.Vec{}) ||
+		p.Plane.U != r3.NewVec(1, 0, 0) || p.Plane.V != r3.NewVec(0, 1, 0) ||
 		thicknessDelta != 0 {
 		return nil, fmt.Errorf(`%w: twisted shell needs one straight axial sweep, a top opening, and exact inward thickness`, ErrUnsupported)
 	}
-	height := p.path.End.Z
-	source, err := twistsweep.TwistOffsetSource(p.profile, height, p.angle, thickness, thicknessDelta)
+	height := p.Path.End.Z
+	source, err := twistsweep.TwistOffsetSource(p.Profile, height, p.Angle, thickness, thicknessDelta)
 	if err != nil {
 		return nil, err
 	}
-	stations, err := twistsweep.TwistOffsetSampleStations(p.profile, height, p.angle,
+	stations, err := twistsweep.TwistOffsetSampleStations(p.Profile, height, p.Angle,
 		thickness, thicknessDelta, 8, 16)
 	if err != nil {
 		return nil, err
 	}
-	poly, err := twistsweep.TwistPolygonOf(p.profile)
+	poly, err := twistsweep.TwistPolygonOf(p.Profile)
 	if err != nil {
 		return nil, err
 	}
 	ref := b.n.Doc.NextProducer
 	held, err := twistsweep.TwistShellSampledMesh(ctx, stations, height, thickness,
-		p.angle, poly.AreaInterval)
+		p.Angle, poly.AreaInterval)
 	if err != nil {
 		return nil, err
 	}
@@ -48,9 +48,9 @@ func (b *Body) shellTwistedSweep(ctx context.Context, p twistedSweepPayload,
 	if err != nil {
 		return nil, err
 	}
-	if p.xform != r3.Identity() {
-		gap, proofErr := twistsweep.TwistShellPlacedProof(p.profile, height, thickness,
-			p.angle, source, p.xform)
+	if p.Xform != r3.Identity() {
+		gap, proofErr := twistsweep.TwistShellPlacedProof(p.Profile, height, thickness,
+			p.Angle, source, p.Xform)
 		if proofErr != nil {
 			return nil, proofErr
 		}
@@ -65,7 +65,7 @@ func (b *Body) shellTwistedSweep(ctx context.Context, p twistedSweepPayload,
 		facets.meshBound = proofbound.AbsSumUpper(facets.meshBound, gap.Boundary)
 		facets.volSymDiff = proofbound.AbsSumUpper(facets.volSymDiff, gap.Volume)
 		facets.areaSlack = proofbound.AbsSumUpper(facets.areaSlack, gap.Area)
-		out, err = placePayload(ctx, facets, documentHandle(b.n.Doc), ref, p.xform)
+		out, err = placePayload(ctx, facets, documentHandle(b.n.Doc), ref, p.Xform)
 		if err != nil {
 			return nil, err
 		}

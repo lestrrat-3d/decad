@@ -33,7 +33,7 @@ import (
 // vertex-link audits instead, because the signed sum is anchor-dependent
 // without caps. A missing source role is ErrDegenerate because the live
 // topology contradicts its payload.
-func tessellateLoft(ctx context.Context, b *Body, lp loftPayload, privateRoles ...map[string]*Face) (*Mesh, error) {
+func tessellateLoft(ctx context.Context, b *Body, lp loftPayload, privateRoles ...map[string]*topo.Face) (*Mesh, error) {
 	faces := b.Faces()
 	number := make(map[*Face]int, len(faces))
 	faceOfRole := map[string]int{}
@@ -46,7 +46,7 @@ func tessellateLoft(ctx context.Context, b *Body, lp loftPayload, privateRoles .
 	if len(privateRoles) != 0 {
 		faceOfRole = make(map[string]int, len(privateRoles[0]))
 		for role, face := range privateRoles[0] {
-			i, ok := number[face]
+			i, ok := number[faceHandle(face)]
 			if !ok {
 				return nil, fmt.Errorf(`%w: a held loft source has no live face`, ErrDegenerate)
 			}

@@ -15,6 +15,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/decad/internal/sweepmitre"
+	"github.com/lestrrat-3d/decad/internal/twistsweep"
 )
 
 // Structural curve records stay in internal packages. Their aliases keep the
@@ -121,6 +122,16 @@ type coilPayload = coilshell.Payload
 type (
 	loftPayload      = loftrecord.Payload
 	chainLoftPayload = loftrecord.ChainPayload
+)
+
+// twistedSweepPayload and compositeTwistedSweepPayload are the evaluator's
+// records of a twisted Sweep along one line and along a line and a cardinal
+// quarter arc: the internal/twistsweep payloads, which twistsweep.Eval
+// evaluates over topology nodes and which implement topo.Payload
+// (docs/sweep-design.md §17, docs/evaluator-design.md §8).
+type (
+	twistedSweepPayload          = twistsweep.Payload
+	compositeTwistedSweepPayload = twistsweep.CompositePayload
 )
 
 // capBlendPayload is the evaluator's record of a complete-cap-loop chamfer

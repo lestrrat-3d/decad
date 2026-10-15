@@ -379,32 +379,32 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		return tessellateLoft(ctx, b, lp)
 	}
 	if tp, ok := b.n.Payload.(twistedSweepPayload); ok {
-		if chord < tp.delta {
-			return nil, fmt.Errorf(`%w: the twisted sweep's held boundary is %g mm from its true wall; %g mm is finer`, ErrUnsupported, tp.delta, chord)
+		if chord < tp.Delta {
+			return nil, fmt.Errorf(`%w: the twisted sweep's held boundary is %g mm from its true wall; %g mm is finer`, ErrUnsupported, tp.Delta, chord)
 		}
-		if tp.mesh != nil {
-			mesh := bornMesh(&Mesh{n: tp.mesh.n})
+		if tp.Mesh != nil {
+			mesh := bornMesh(&Mesh{n: *tp.Mesh})
 			return mesh, nil
 		}
-		mesh, err := tessellateLoft(ctx, b, tp.held, tp.sourceRoles)
+		mesh, err := tessellateLoft(ctx, b, tp.Held, tp.SourceRoles)
 		if err != nil {
 			return nil, err
 		}
 		for _, face := range mesh.n.Source {
-			topobuild.SetFaceBound(&mesh.n, face, tp.delta)
+			topobuild.SetFaceBound(&mesh.n, face, tp.Delta)
 		}
-		mesh.n.Bound = tp.delta
-		mesh.n.AreaSlack = tp.areaSlack
-		mesh.n.VolSymDiff = tp.volSymDiff
+		mesh.n.Bound = tp.Delta
+		mesh.n.AreaSlack = tp.AreaSlack
+		mesh.n.VolSymDiff = tp.VolSymDiff
 		mesh.n.SymDiffOK = true
 		return mesh, nil
 	}
 	if tp, ok := b.n.Payload.(compositeTwistedSweepPayload); ok {
-		if chord < tp.delta {
+		if chord < tp.Delta {
 			return nil, fmt.Errorf(`%w: the composite twist's held boundary is %g mm from its true wall; %g mm is finer`,
-				ErrUnsupported, tp.delta, chord)
+				ErrUnsupported, tp.Delta, chord)
 		}
-		mesh := bornMesh(&Mesh{n: tp.mesh.n})
+		mesh := bornMesh(&Mesh{n: *tp.Mesh})
 		return mesh, nil
 	}
 	if pp, ok := b.n.Payload.(patchPayload); ok {

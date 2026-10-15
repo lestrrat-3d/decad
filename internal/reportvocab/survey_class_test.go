@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/decad/internal/sweepmitre"
+	"github.com/lestrrat-3d/decad/internal/twistsweep"
 	"github.com/stretchr/testify/require"
 )
 
@@ -36,6 +37,8 @@ func TestStagedSurveyNamesRootPayloadClass(t *testing.T) {
 		{"chainRevolvePayload", revolveplan.ChainPayload{}},
 		{"mitredSweepPayload", sweepmitre.Payload{}},
 		{"coilPayload", coilshell.Payload{}},
+		{"twistedSweepPayload", twistsweep.Payload{}},
+		{"compositeTwistedSweepPayload", twistsweep.CompositePayload{}},
 	} {
 		t.Run(tc.class, func(t *testing.T) {
 			t.Parallel()

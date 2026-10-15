@@ -63,35 +63,35 @@ func roundedTwistLocalAreaSource(t *testing.T) (*Document, *Body, twistedSweepPa
 // both whole positive wall areas for a later Boolean subset.
 func TestTwistLocalAreaRealArcCell(t *testing.T) {
 	doc, body, source := roundedTwistLocalAreaSource(t)
-	poly, err := twistsweep.TwistPolygonOf(source.profile)
+	poly, err := twistsweep.TwistPolygonOf(source.Profile)
 	require.NoError(t, err)
-	angleIv, ok := revolveangle.FromValue(source.angle).Enclosure()
+	angleIv, ok := revolveangle.FromValue(source.Angle).Enclosure()
 	require.True(t, ok)
-	angle, err := source.angle.In(units.Radian)
+	angle, err := source.Angle.In(units.Radian)
 	require.NoError(t, err)
-	baseCells, refinedCells, err := stationedTwistCellCounts(poly,
+	baseCells, refinedCells, err := twistsweep.StationedTwistCellCounts(poly,
 		proofbound.RatFloatUp(proofbound.IntervalAbsUpper(angleIv)))
 	require.NoError(t, err)
 	var cells int
-	var stations []straightTwistStation
+	var stations []twistsweep.StraightTwistStation
 	var held loftPayload
 	for _, candidate := range []int{refinedCells, baseCells} {
-		candidateStations, stationErr := straightTwistStations(source.path.End.Z, angle,
+		candidateStations, stationErr := twistsweep.StraightTwistStations(source.Path.End.Z, angle,
 			angleIv, poly, candidate)
 		require.NoError(t, stationErr)
 		part, buildErr := bodyResult(loftrecord.Build(t.Context(), envOf(documentNode(doc), body.n.Origin.Producer), loftPayload{
-			Profile0: source.profile, Profile1: source.profile,
+			Profile0: source.Profile, Profile1: source.Profile,
 			Plane0: candidateStations[0].Plane, Plane1: candidateStations[1].Plane,
 			Frame0: candidateStations[0].Frame, Frame1: candidateStations[1].Frame,
-			Xform: source.xform, RecordArea: [2]float64{source.recordArea, source.recordArea},
+			Xform: source.Xform, RecordArea: [2]float64{source.RecordArea, source.RecordArea},
 			RetainTwistAreaCells: true,
 		}, proofbound.NewWorkBudget(t.Context()), freeform.NewFreeformWork(), freeform.NewFreeformWork()))
 		require.NoError(t, buildErr)
 		candidateHeld, ok := part.n.Payload.(loftPayload)
 		require.True(t, ok)
 		n := len(candidateHeld.Segment[0])
-		if len(source.mesh.n.Vertices) == (candidate+1)*n &&
-			slices.Equal(source.mesh.n.Vertices[:2*n], candidateHeld.Verts) {
+		if len(source.Mesh.Vertices) == (candidate+1)*n &&
+			slices.Equal(source.Mesh.Vertices[:2*n], candidateHeld.Verts) {
 			cells, stations, held = candidate, candidateStations, candidateHeld
 			break
 		}
@@ -114,7 +114,7 @@ func TestTwistLocalAreaRealArcCell(t *testing.T) {
 		math.Max(stations[0].PointError, stations[1].PointError))
 	bound := twistsweep.TwistWallCellAreaL1(vLo, vHi, wLo, wHi, claim, e,
 		poly.MaxRadiusL1, proofbound.DivUpper(proofbound.RatFloatUp(proofbound.IntervalAbsUpper(angleIv)), float64(cells)),
-		proofbound.DivUpper(source.path.End.Z, float64(cells)))
+		proofbound.DivUpper(source.Path.End.Z, float64(cells)))
 	require.True(t, !proofbound.IsNonFinite(bound))
 	t.Logf("cells=%d source_segment=%d cell=%d bound=%g arc=%g energy=%g matched=%g endpoint=%g",
 		cells, held.Segment[0][j], j, bound, claim.ArcLength, claim.Energy, claim.Matched, e)
@@ -145,7 +145,7 @@ func TestTwistLocalAreaRealArcCell(t *testing.T) {
 			sin, cos := math.Sincos(u * turn)
 			ts := r3.NewVec(cos*dp.X-sin*dp.Y, sin*dp.X+cos*dp.Y, 0)
 			tu := r3.NewVec(-turn*(sin*p.X+cos*p.Y), turn*(cos*p.X-sin*p.Y),
-				source.path.End.Z/float64(cells))
+				source.Path.End.Z/float64(cells))
 			heldArea := heldArea0
 			if u > s {
 				heldArea = heldArea1
@@ -165,10 +165,10 @@ func TestTwistLocalAreaRealArcCell(t *testing.T) {
 	heldCells[0] = held
 	for i := 1; i < cells; i++ {
 		part, err := bodyResult(loftrecord.Build(t.Context(), envOf(documentNode(doc), body.n.Origin.Producer), loftPayload{
-			Profile0: source.profile, Profile1: source.profile,
+			Profile0: source.Profile, Profile1: source.Profile,
 			Plane0: stations[i].Plane, Plane1: stations[i+1].Plane,
 			Frame0: stations[i].Frame, Frame1: stations[i+1].Frame,
-			Xform: source.xform, RecordArea: [2]float64{source.recordArea, source.recordArea},
+			Xform: source.Xform, RecordArea: [2]float64{source.RecordArea, source.RecordArea},
 			RetainTwistAreaCells: true,
 		}, proofbound.NewWorkBudget(t.Context()), freeform.NewFreeformWork(), freeform.NewFreeformWork()))
 		require.NoError(t, err)
@@ -177,7 +177,7 @@ func TestTwistLocalAreaRealArcCell(t *testing.T) {
 	}
 	for i, cell := range heldCells {
 		for k := range cell.Verts {
-			require.Equal(t, source.mesh.n.Vertices[i*n+k], cell.Verts[k])
+			require.Equal(t, source.Mesh.Vertices[i*n+k], cell.Verts[k])
 		}
 	}
 	global := 0
@@ -187,51 +187,51 @@ func TestTwistLocalAreaRealArcCell(t *testing.T) {
 				k >= cell.Walls+cell.CapStartCount && i != cells-1 {
 				continue
 			}
-			require.Less(t, global, len(source.mesh.n.Triangles))
+			require.Less(t, global, len(source.Mesh.Triangles))
 			require.Equal(t, [3]int{i*n + tri[0], i*n + tri[1], i*n + tri[2]},
-				source.mesh.n.Triangles[global])
+				source.Mesh.Triangles[global])
 			global++
 		}
 	}
-	require.Equal(t, len(source.mesh.n.Triangles), global)
-	wallBound, err := twistMixedWallAreaL1(heldCells, stations, poly,
-		proofbound.RatFloatUp(proofbound.IntervalAbsUpper(angleIv)), source.path.End.Z)
+	require.Equal(t, len(source.Mesh.Triangles), global)
+	wallBound, err := twistsweep.TwistMixedWallAreaL1(heldCells, stations, poly,
+		proofbound.RatFloatUp(proofbound.IntervalAbsUpper(angleIv)), source.Path.End.Z)
 	require.NoError(t, err)
 	t.Logf("all wall-cell absolute area allowance=%g", wallBound)
 	require.Less(t, wallBound, 20.0)
-	comparison, _, heldByFace, err := compositeTwistMesh(t.Context(), body, heldCells,
-		len(poly.Points), make([]int, cells), source.delta, source.volSymDiff)
+	comparison, _, heldByFace, err := twistsweep.CompositeTwistMesh(t.Context(), bodyNode(body), heldCells,
+		len(poly.Points), make([]int, cells), source.Delta, source.VolSymDiff)
 	require.NoError(t, err)
-	require.Equal(t, source.mesh.n.Vertices, comparison.n.Vertices)
-	require.Equal(t, source.mesh.n.Triangles, comparison.n.Triangles)
-	localSlack, err := twistMixedAreaSlackLocal(source.profile, poly, body, heldByFace, wallBound)
+	require.Equal(t, source.Mesh.Vertices, comparison.Vertices)
+	require.Equal(t, source.Mesh.Triangles, comparison.Triangles)
+	localSlack, err := twistsweep.TwistMixedAreaSlackLocal(source.Profile, poly, bodyNode(body), heldByFace, wallBound)
 	require.NoError(t, err)
 	t.Logf("local mixed area allowance=%g", localSlack)
-	require.Equal(t, localSlack, source.mesh.n.AreaSlack)
+	require.Equal(t, localSlack, source.Mesh.AreaSlack)
 	require.Less(t, localSlack, 50.0)
 	corrupt := append([]loftPayload(nil), heldCells...)
 	corrupt[0].Side = append([]uint8(nil), corrupt[0].Side...)
 	corrupt[0].Side[2*j+1] = 0
-	_, err = twistMixedWallAreaL1(corrupt, stations, poly,
-		proofbound.RatFloatUp(proofbound.IntervalAbsUpper(angleIv)), source.path.End.Z)
+	_, err = twistsweep.TwistMixedWallAreaL1(corrupt, stations, poly,
+		proofbound.RatFloatUp(proofbound.IntervalAbsUpper(angleIv)), source.Path.End.Z)
 	require.ErrorIs(t, err, ErrUnsupported)
 	corrupt[0] = heldCells[0]
 	corrupt[0].Tris = append([][3]int(nil), corrupt[0].Tris...)
 	corrupt[0].Tris[2*j+1][2] = corrupt[0].Tris[2*j+1][1]
-	_, err = twistMixedWallAreaL1(corrupt, stations, poly,
-		proofbound.RatFloatUp(proofbound.IntervalAbsUpper(angleIv)), source.path.End.Z)
+	_, err = twistsweep.TwistMixedWallAreaL1(corrupt, stations, poly,
+		proofbound.RatFloatUp(proofbound.IntervalAbsUpper(angleIv)), source.Path.End.Z)
 	require.ErrorIs(t, err, ErrUnsupported)
 	corrupt[0] = heldCells[0]
 	corrupt[0].TwistAreaCells = nil
-	_, err = twistMixedWallAreaL1(corrupt, stations, poly,
-		proofbound.RatFloatUp(proofbound.IntervalAbsUpper(angleIv)), source.path.End.Z)
+	_, err = twistsweep.TwistMixedWallAreaL1(corrupt, stations, poly,
+		proofbound.RatFloatUp(proofbound.IntervalAbsUpper(angleIv)), source.Path.End.Z)
 	require.ErrorIs(t, err, ErrUnsupported)
 	corrupt[0] = heldCells[0]
 	corrupt[0].TwistAreaCells = [][]loftrecord.TwistAreaCellClaims{
 		append([]loftrecord.TwistAreaCellClaims(nil), heldCells[0].TwistAreaCells[0]...),
 	}
 	corrupt[0].TwistAreaCells[0][j].Matched = -1
-	_, err = twistMixedWallAreaL1(corrupt, stations, poly,
-		proofbound.RatFloatUp(proofbound.IntervalAbsUpper(angleIv)), source.path.End.Z)
+	_, err = twistsweep.TwistMixedWallAreaL1(corrupt, stations, poly,
+		proofbound.RatFloatUp(proofbound.IntervalAbsUpper(angleIv)), source.Path.End.Z)
 	require.ErrorIs(t, err, ErrUnsupported)
 }

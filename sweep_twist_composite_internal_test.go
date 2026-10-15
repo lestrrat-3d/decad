@@ -46,9 +46,9 @@ func TestCompositeTwistOccupiedVolumeProof(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if payload.mesh.n.VolSymDiff >= volume.Value.Base()-volume.Bound.Base() {
+	if payload.Mesh.VolSymDiff >= volume.Value.Base()-volume.Bound.Base() {
 		t.Fatalf("occupied-volume allowance %g covers the whole body %g",
-			payload.mesh.n.VolSymDiff, volume.Value.Base())
+			payload.Mesh.VolSymDiff, volume.Value.Base())
 	}
 	heldVolume, heldArea := 0.0, 0.0
 	for _, triangle := range mesh.n.Triangles {
@@ -56,8 +56,8 @@ func TestCompositeTwistOccupiedVolumeProof(t *testing.T) {
 		heldVolume += a.Dot(b.Cross(c)) / 6
 		heldArea += b.Sub(a).Cross(c.Sub(a)).Len() / 2
 	}
-	if gap := math.Abs(heldVolume - volume.Value.Base()); gap > payload.mesh.n.VolSymDiff+volume.Bound.Base() {
-		t.Fatalf("held volume gap %g exceeds occupied-volume allowance %g", gap, payload.mesh.n.VolSymDiff)
+	if gap := math.Abs(heldVolume - volume.Value.Base()); gap > payload.Mesh.VolSymDiff+volume.Bound.Base() {
+		t.Fatalf("held volume gap %g exceeds occupied-volume allowance %g", gap, payload.Mesh.VolSymDiff)
 	}
 	area, err := body.Area()
 	if err != nil {

@@ -1,4 +1,4 @@
-package decad
+package twistsweep
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/compositesweep"
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/measurement"
@@ -20,43 +21,24 @@ import (
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
-	"github.com/lestrrat-3d/decad/internal/twistsweep"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
-
-type compositeTwistedSweepPayload struct {
-	profile    profileRecord
-	plane      planeRecord
-	path       *sweepinput.Path
-	angle      units.Value
-	recordArea float64
-	xform      r3.Transform
-	mesh       *Mesh
-	delta      float64
-}
-
-func (p compositeTwistedSweepPayload) Transform() r3.Transform { return p.xform }
-
-func (p compositeTwistedSweepPayload) Placed(ctx context.Context, env topo.Env, xform r3.Transform) (*topo.Body, error) {
-	d, ref := documentHandle(env.Doc), env.Ref
-	return placedNode(evalCompositeTwistedSweep(ctx, d, ref, p.profile, p.plane, p.path, p.angle, p.recordArea, xform))
-}
 
 // The true boundary and the ideal Loft boundary share a triangle-domain
 // parameterization on each profile edge. Linear interpolation between them
 // sweeps at most displacement times the product of upper bounds on its two
 // surface derivatives. Both end-cap homotopies are charged as well. Loft's
 // own proof later covers the ideal-to-stored vertex displacement separately.
-func compositeTwistCellProof(poly twistsweep.TwistPolygon, geometry twistsweep.TwistCardinalPath,
-	fullAngle proofbound.RatInterval, start, end twistsweep.TwistStation, held loftPayload) (float64, float64, error) {
-	dPhi := proofbound.RatFloatUp(new(big.Rat).Quo(proofbound.HalfPiIv.Hi, big.NewRat(twistsweep.TwistArcCells, 1)))
-	pathLengthLo := new(big.Rat).Add(twistsweep.TwistRat(geometry.Height),
-		new(big.Rat).Mul(twistsweep.TwistRat(geometry.Radius), proofbound.HalfPiIv.Lo))
+func compositeTwistCellProof(poly TwistPolygon, geometry TwistCardinalPath,
+	fullAngle proofbound.RatInterval, start, end TwistStation, held loftrecord.Payload) (float64, float64, error) {
+	dPhi := proofbound.RatFloatUp(new(big.Rat).Quo(proofbound.HalfPiIv.Hi, big.NewRat(TwistArcCells, 1)))
+	pathLengthLo := new(big.Rat).Add(TwistRat(geometry.Height),
+		new(big.Rat).Mul(TwistRat(geometry.Radius), proofbound.HalfPiIv.Lo))
 	dBetaRat := new(big.Rat).Quo(new(big.Rat).Mul(
 		proofbound.IntervalAbsUpper(fullAngle),
-		new(big.Rat).Mul(twistsweep.TwistRat(geometry.Radius),
-			new(big.Rat).Quo(proofbound.HalfPiIv.Hi, big.NewRat(twistsweep.TwistArcCells, 1)))), pathLengthLo)
+		new(big.Rat).Mul(TwistRat(geometry.Radius),
+			new(big.Rat).Quo(proofbound.HalfPiIv.Hi, big.NewRat(TwistArcCells, 1)))), pathLengthLo)
 	dBeta := proofbound.RatFloatUp(dBetaRat)
 	eps := max(start.PointError, end.PointError)
 	turn := proofbound.AbsSumUpper(dPhi, dBeta)
@@ -72,7 +54,7 @@ func compositeTwistCellProof(poly twistsweep.TwistPolygon, geometry twistsweep.T
 		proofbound.ProductUpper(poly.MaxRadiusL1, dBeta), proofbound.ProductUpper(2, eps))
 	wallAreaUpper := proofbound.ProductUpper(wallEdgeUpper, speedUpper)
 	if held.Walls != 2*len(poly.Points) || len(held.Tris) < held.Walls+held.CapStartCount {
-		return 0, 0, fmt.Errorf(`%w: twisted Loft cap cell counts changed`, ErrUnsupported)
+		return 0, 0, fmt.Errorf(`%w: twisted Loft cap cell counts changed`, decaderr.ErrUnsupported)
 	}
 	capStart := proofbound.PerturbedAreaUpper(held.Verts,
 		held.Tris[held.Walls:held.Walls+held.CapStartCount],
@@ -85,30 +67,33 @@ func compositeTwistCellProof(poly twistsweep.TwistPolygon, geometry twistsweep.T
 	swept := proofbound.ProductUpper(idealDelta,
 		proofbound.AbsSumUpper(wallAreaUpper, capStart, capEnd))
 	if proofbound.IsNonFinite(swept) || proofbound.IsNonFinite(idealDelta) {
-		return 0, 0, fmt.Errorf(`%w: twisted arc cell has no finite boundary-tube proof`, ErrUnsupported)
+		return 0, 0, fmt.Errorf(`%w: twisted arc cell has no finite boundary-tube proof`, decaderr.ErrUnsupported)
 	}
 	return idealDelta, swept, nil
 }
 
-func compositeTwistMesh(ctx context.Context, body *Body, cells []loftPayload,
-	profileEdges int, pathSpanOfCell []int, delta, volSymDiff float64) (*Mesh, proofbound.RatInterval,
+// CompositeTwistMesh sews the held cells of body into one authenticated mesh,
+// audits it, and returns it with its facet area interval and the area
+// interval of each live face. A later Boolean reads those per-face intervals.
+func CompositeTwistMesh(ctx context.Context, body *topo.Body, cells []loftrecord.Payload,
+	profileEdges int, pathSpanOfCell []int, delta, volSymDiff float64) (*topo.Mesh, proofbound.RatInterval,
 	map[*topo.Face]proofbound.RatInterval, error) {
 	if len(cells) < 2 {
-		return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: composite twist has too few held cells`, ErrDegenerate)
+		return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: composite twist has too few held cells`, decaderr.ErrDegenerate)
 	}
 	if len(pathSpanOfCell) != len(cells) {
-		return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft cells have no path-span map`, ErrDegenerate)
+		return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft cells have no path-span map`, decaderr.ErrDegenerate)
 	}
-	byRole := map[string]*Face{}
-	for _, face := range body.Faces() {
-		for _, origin := range face.n.Origins {
+	byRole := map[string]*topo.Face{}
+	for _, face := range topobuild.Faces(body) {
+		for _, origin := range face.Origins {
 			byRole[origin.Role] = face
 		}
 	}
-	mesh := bornMesh(&Mesh{n: topo.Mesh{Bound: delta, VolSymDiff: volSymDiff, SymDiffOK: true}})
+	mesh := &topo.Mesh{Bound: delta, VolSymDiff: volSymDiff, SymDiffOK: true}
 	stationPoints := len(cells[0].Verts) / 2
 	if stationPoints < profileEdges || len(cells[0].Verts) != 2*stationPoints {
-		return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft has no complete station table`, ErrUnsupported)
+		return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft has no complete station table`, decaderr.ErrUnsupported)
 	}
 	spanOf := make([]int, 0, len(cells)*(2*stationPoints+4))
 	for cell, held := range cells {
@@ -118,23 +103,23 @@ func compositeTwistMesh(ctx context.Context, body *Body, cells []loftPayload,
 		if len(held.Verts) != 2*stationPoints || held.Walls != 2*stationPoints ||
 			len(held.Segment) != 1 || len(held.Segment[0]) != stationPoints ||
 			len(held.Tris) <= held.Walls+held.CapStartCount {
-			return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft has an unexpected station table`, ErrUnsupported)
+			return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft has an unexpected station table`, decaderr.ErrUnsupported)
 		}
 		if cell == 0 {
-			mesh.n.Vertices = append(mesh.n.Vertices, held.Verts[:stationPoints]...)
+			mesh.Vertices = append(mesh.Vertices, held.Verts[:stationPoints]...)
 		} else {
 			for j := range stationPoints {
-				if mesh.n.Vertices[cell*stationPoints+j] != held.Verts[j] {
-					return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft cells disagree at a shared station`, ErrUnsupported)
+				if mesh.Vertices[cell*stationPoints+j] != held.Verts[j] {
+					return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft cells disagree at a shared station`, decaderr.ErrUnsupported)
 				}
 			}
 		}
-		mesh.n.Vertices = append(mesh.n.Vertices, held.Verts[stationPoints:]...)
-		mesh.n.CoordBound = max(mesh.n.CoordBound, held.Delta)
+		mesh.Vertices = append(mesh.Vertices, held.Verts[stationPoints:]...)
+		mesh.CoordBound = max(mesh.CoordBound, held.Delta)
 		for t, triangle := range held.Tris {
 			if t < held.Walls && (t >= len(held.Cell) ||
 				held.Cell[t][0] != 0 || held.Cell[t][1] != t/2) {
-				return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft wall order lost its profile provenance`, ErrUnsupported)
+				return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft wall order lost its profile provenance`, decaderr.ErrUnsupported)
 			}
 			if t >= held.Walls && t < held.Walls+held.CapStartCount && cell != 0 ||
 				t >= held.Walls+held.CapStartCount && cell != len(cells)-1 {
@@ -144,7 +129,7 @@ func compositeTwistMesh(ctx context.Context, body *Body, cells []loftPayload,
 			if t < held.Walls {
 				segment := held.Segment[0][t/2]
 				if segment < 0 || segment >= profileEdges {
-					return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft lost its source segment`, ErrUnsupported)
+					return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft lost its source segment`, decaderr.ErrUnsupported)
 				}
 				role = fmt.Sprintf("side(%d,0,%d)", pathSpanOfCell[cell], segment)
 			} else if t >= held.Walls+held.CapStartCount {
@@ -152,56 +137,56 @@ func compositeTwistMesh(ctx context.Context, body *Body, cells []loftPayload,
 			}
 			face := byRole[role]
 			if face == nil {
-				return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft mesh has no live face for %s`, ErrDegenerate, role)
+				return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft mesh has no live face for %s`, decaderr.ErrDegenerate, role)
 			}
 			mapped := [3]int{}
 			for i, local := range triangle {
 				if local < 0 || local >= 2*stationPoints {
-					return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft triangle has an invalid station`, ErrDegenerate)
+					return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft triangle has an invalid station`, decaderr.ErrDegenerate)
 				}
 				mapped[i] = cell*stationPoints + local
 			}
-			topobuild.AddTriangle(&mesh.n, mapped, faceNode(face))
-			topobuild.SetFaceBound(&mesh.n, faceNode(face), delta)
+			topobuild.AddTriangle(mesh, mapped, face)
+			topobuild.SetFaceBound(mesh, face, delta)
 			spanOf = append(spanOf, cell)
 		}
 	}
-	if err := topobuild.RequireClosedMesh(&mesh.n); err != nil {
+	if err := topobuild.RequireClosedMesh(mesh); err != nil {
 		return nil, proofbound.RatInterval{}, nil, err
 	}
-	if err := topobuild.LiftAuditError(tessellation.RequireVertexLinks(ctx, len(mesh.n.Vertices), mesh.n.Triangles)); err != nil {
+	if err := topobuild.LiftAuditError(tessellation.RequireVertexLinks(ctx, len(mesh.Vertices), mesh.Triangles)); err != nil {
 		return nil, proofbound.RatInterval{}, nil, err
 	}
 	budget := proofbound.NewWorkBudget(ctx)
-	auditTris, err := revolvemesh.RequireRevolveFacetAreas(budget, mesh.n.Vertices, mesh.n.Triangles, mesh.n.CoordBound)
+	auditTris, err := revolvemesh.RequireRevolveFacetAreas(budget, mesh.Vertices, mesh.Triangles, mesh.CoordBound)
 	if err != nil {
 		return nil, proofbound.RatInterval{}, nil, err
 	}
-	if err := compositesweep.CrossSpanContactAudit(budget, auditTris, mesh.n.Triangles, spanOf, mesh.n.CoordBound); err != nil {
+	if err := compositesweep.CrossSpanContactAudit(budget, auditTris, mesh.Triangles, spanOf, mesh.CoordBound); err != nil {
 		return nil, proofbound.RatInterval{}, nil, err
 	}
-	if tessellation.OrientationSign(mesh.n.Vertices, mesh.n.Triangles, r3.Vec{}) <= 0 {
-		return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft mesh has nonpositive orientation`, ErrUnsupported)
+	if tessellation.OrientationSign(mesh.Vertices, mesh.Triangles, r3.Vec{}) <= 0 {
+		return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft mesh has nonpositive orientation`, decaderr.ErrUnsupported)
 	}
 	area := proofbound.PointInterval(new(big.Rat))
-	byFace := make(map[*topo.Face]proofbound.RatInterval, len(body.Faces()))
-	for index, triangle := range mesh.n.Triangles {
+	byFace := make(map[*topo.Face]proofbound.RatInterval, len(topobuild.Faces(body)))
+	for index, triangle := range mesh.Triangles {
 		var points [3]proofbound.IvVec3
 		for i, index := range triangle {
-			v := mesh.n.Vertices[index]
+			v := mesh.Vertices[index]
 			points[i] = proofbound.IvVec3{
-				proofbound.PointInterval(twistsweep.TwistRat(v.X)),
-				proofbound.PointInterval(twistsweep.TwistRat(v.Y)),
-				proofbound.PointInterval(twistsweep.TwistRat(v.Z)),
+				proofbound.PointInterval(TwistRat(v.X)),
+				proofbound.PointInterval(TwistRat(v.Y)),
+				proofbound.PointInterval(TwistRat(v.Z)),
 			}
 		}
 		twice, ok := revolvemesh.IvTwoTriangleArea(points[0], points[1], points[2])
 		if !ok {
-			return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft facet has no area enclosure`, ErrUnsupported)
+			return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft facet has no area enclosure`, decaderr.ErrUnsupported)
 		}
 		facet := proofbound.IntervalScale(twice, big.NewRat(1, 2))
 		area = proofbound.IntervalAdd(area, facet)
-		face := mesh.n.Source[index]
+		face := mesh.Source[index]
 		if previous, exists := byFace[face]; exists {
 			byFace[face] = proofbound.IntervalAdd(previous, facet)
 		} else {
@@ -211,20 +196,20 @@ func compositeTwistMesh(ctx context.Context, body *Body, cells []loftPayload,
 	return mesh, area, byFace, nil
 }
 
-func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
+func evalComposite(ctx context.Context, env topo.Env,
 	profile profileRecord, plane planeRecord, path *sweepinput.Path, angle units.Value,
-	recordArea float64, xform r3.Transform) (*Body, error) {
+	recordArea float64, xform r3.Transform) (*topo.Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	poly, err := twistsweep.TwistPolygonOf(profile)
+	poly, err := TwistPolygonOf(profile)
 	if err != nil {
 		return nil, err
 	}
 	if poly.HasArc {
-		return nil, fmt.Errorf(`%w: a composite twisted sweep needs straight profile edges`, ErrUnsupported)
+		return nil, fmt.Errorf(`%w: a composite twisted sweep needs straight profile edges`, decaderr.ErrUnsupported)
 	}
-	geometry, err := twistsweep.TwistCardinalPathOf(path, plane, poly)
+	geometry, err := TwistCardinalPathOf(path, plane, poly)
 	if err != nil {
 		return nil, err
 	}
@@ -235,59 +220,59 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 	thetaIv, ok := revolveangle.FromValue(angle).Enclosure()
 	if !ok || thetaIv.Lo.Sign() <= 0 && thetaIv.Hi.Sign() >= 0 ||
 		proofbound.RatFloatUp(proofbound.IntervalAbsUpper(thetaIv)) > 1 {
-		return nil, fmt.Errorf(`%w: composite twist needs a nonzero certified angle up to one radian`, ErrUnsupported)
+		return nil, fmt.Errorf(`%w: composite twist needs a nonzero certified angle up to one radian`, decaderr.ErrUnsupported)
 	}
-	stations, joinAngle, err := twistsweep.CompositeTwistStations(thetaIv, theta, geometry, poly)
+	stations, joinAngle, err := CompositeTwistStations(thetaIv, theta, geometry, poly)
 	if err != nil {
 		return nil, err
 	}
 	parts := make([]compositesweep.SpanPart, len(stations)-1)
-	held := make([]loftPayload, len(parts))
+	held := make([]loftrecord.Payload, len(parts))
 	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
 	budget := proofbound.NewWorkBudget(ctx)
 	for i := range parts {
-		part, buildErr := bodyResult(loftrecord.Build(ctx, envOf(documentNode(d), ref), loftPayload{
+		part, buildErr := loftrecord.Build(ctx, env, loftrecord.Payload{
 			Profile0: profile, Profile1: profile,
 			Plane0: stations[i].Plane, Plane1: stations[i+1].Plane,
 			Frame0: stations[i].Frame, Frame1: stations[i+1].Frame,
 			Xform: xform, RecordArea: [2]float64{recordArea, recordArea},
-		}, budget, work0, work1))
+		}, budget, work0, work1)
 		if buildErr != nil {
 			return nil, fmt.Errorf("twisted sweep cell %d: %w", i, buildErr)
 		}
 		var heldOK bool
-		held[i], heldOK = part.n.Payload.(loftPayload)
+		held[i], heldOK = part.Payload.(loftrecord.Payload)
 		if !heldOK {
-			return nil, fmt.Errorf(`%w: a twisted sweep cell lost its Loft payload`, ErrUnsupported)
+			return nil, fmt.Errorf(`%w: a twisted sweep cell lost its Loft payload`, decaderr.ErrUnsupported)
 		}
-		if _, err := mergeTwistWalls(ctx, part, ref, held[i], len(poly.Points)); err != nil {
+		if _, err := mergeTwistWalls(ctx, env, part, held[i], len(poly.Points)); err != nil {
 			return nil, fmt.Errorf("twisted sweep cell %d: %w", i, err)
 		}
-		parts[i], err = compositesweep.SpanPartOf(bodyNode(part))
+		parts[i], err = compositesweep.SpanPartOf(part)
 		if err != nil {
 			return nil, fmt.Errorf("twisted sweep cell %d: %w", i, err)
 		}
 	}
-	body, err := bodyResult(compositesweep.Assemble(ctx, envOf(documentNode(d), ref), parts, false,
+	body, err := compositesweep.Assemble(ctx, env, parts, false,
 		func(ctx context.Context, spans []compositesweep.SpanPart) error {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
 			if len(spans) != len(held) {
-				return fmt.Errorf(`%w: twisted sweep span audit count changed`, ErrDegenerate)
+				return fmt.Errorf(`%w: twisted sweep span audit count changed`, decaderr.ErrDegenerate)
 			}
 			for i, span := range spans {
 				if span.Body == nil || span.Body.Payload == nil ||
 					span.StartCap == nil || span.EndCap == nil || len(held[i].Verts) != 2*len(poly.Points) {
-					return fmt.Errorf(`%w: twisted sweep cell %d has incomplete Loft geometry`, ErrUnsupported, i)
+					return fmt.Errorf(`%w: twisted sweep cell %d has incomplete Loft geometry`, decaderr.ErrUnsupported, i)
 				}
 			}
 			return nil
-		}, compositesweep.SewTwistLoftJoin, false))
+		}, compositesweep.SewTwistLoftJoin, false)
 	if err != nil {
 		return nil, err
 	}
-	if err := mergeTwistCellFaces(ctx, body, ref, len(poly.Points),
+	if err := mergeTwistCellFaces(ctx, env, body, len(poly.Points),
 		[]twistCellGroup{{from: 0, through: 1, pathSpan: 0},
 			{from: 1, through: len(held), pathSpan: 1}}); err != nil {
 		return nil, err
@@ -313,79 +298,79 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 		volSymDiff = proofbound.AbsSumUpper(volSymDiff, swept, held[i].Proof.VolSymDiff)
 	}
 	if proofbound.IsNonFinite(delta) || proofbound.IsNonFinite(volSymDiff) {
-		return nil, fmt.Errorf(`%w: twisted sweep has no finite boundary proof`, ErrUnsupported)
+		return nil, fmt.Errorf(`%w: twisted sweep has no finite boundary proof`, decaderr.ErrUnsupported)
 	}
-	length := proofbound.IntervalAdd(proofbound.PointInterval(twistsweep.TwistRat(geometry.Height)),
-		proofbound.IntervalScale(proofbound.HalfPiIv, twistsweep.TwistRat(geometry.Radius)))
+	length := proofbound.IntervalAdd(proofbound.PointInterval(TwistRat(geometry.Height)),
+		proofbound.IntervalScale(proofbound.HalfPiIv, TwistRat(geometry.Radius)))
 	volumeIv := proofbound.IntervalScale(length, poly.Area)
 	// This gate rejects a certificate that merely permits the whole true
 	// body to be missing. The admitted mesh must have a local, useful bound.
-	if twistsweep.TwistRat(volSymDiff).Cmp(volumeIv.Lo) >= 0 {
-		return nil, fmt.Errorf(`%w: twisted sweep boundary tube exceeds the true occupied volume`, ErrUnsupported)
+	if TwistRat(volSymDiff).Cmp(volumeIv.Lo) >= 0 {
+		return nil, fmt.Errorf(`%w: twisted sweep boundary tube exceeds the true occupied volume`, decaderr.ErrUnsupported)
 	}
 	pathSpanOfCell := make([]int, len(held))
 	for i := 1; i < len(pathSpanOfCell); i++ {
 		pathSpanOfCell[i] = 1
 	}
-	mesh, heldAreaIv, _, err := compositeTwistMesh(ctx, body, held, len(poly.Points),
+	mesh, heldAreaIv, _, err := CompositeTwistMesh(ctx, body, held, len(poly.Points),
 		pathSpanOfCell, delta, volSymDiff)
 	if err != nil {
 		return nil, err
 	}
-	trueAreaIv, err := twistsweep.CompositeTwistArea(poly, geometry, joinAngle, thetaIv)
+	trueAreaIv, err := CompositeTwistArea(poly, geometry, joinAngle, thetaIv)
 	if err != nil {
 		return nil, err
 	}
-	mesh.n.AreaSlack = proofbound.RatFloatUp(proofbound.IntervalAbsUpper(
+	mesh.AreaSlack = proofbound.RatFloatUp(proofbound.IntervalAbsUpper(
 		proofbound.IntervalSub(trueAreaIv, heldAreaIv)))
-	if proofbound.IsNonFinite(mesh.n.AreaSlack) {
-		return nil, fmt.Errorf(`%w: twisted sweep area proof is not finite`, ErrUnsupported)
+	if proofbound.IsNonFinite(mesh.AreaSlack) {
+		return nil, fmt.Errorf(`%w: twisted sweep area proof is not finite`, decaderr.ErrUnsupported)
 	}
 	volume, volumeBound := sweepmitre.Enclosure(volumeIv.Lo, volumeIv.Hi)
 	area, areaBound := sweepmitre.Enclosure(trueAreaIv.Lo, trueAreaIv.Hi)
-	body.n.Volume = measurement.Measurement{Value: units.CubicMillimeters(volume), Bound: units.CubicMillimeters(volumeBound),
+	body.Volume = measurement.Measurement{Value: units.CubicMillimeters(volume), Bound: units.CubicMillimeters(volumeBound),
 		Exactness: measurement.ExactnessOf(volumeBound)}
-	body.n.Area = measurement.Measurement{Value: units.SquareMillimeters(area), Bound: units.SquareMillimeters(areaBound),
+	body.Area = measurement.Measurement{Value: units.SquareMillimeters(area), Bound: units.SquareMillimeters(areaBound),
 		Exactness: measurement.ExactnessOf(areaBound)}
 	if err := publishCompositeTwistCentroid(body, xform, geometry, poly, length); err != nil {
 		return nil, err
 	}
-	minV, maxV := mesh.n.Vertices[0], mesh.n.Vertices[0]
-	for _, vertex := range mesh.n.Vertices[1:] {
+	minV, maxV := mesh.Vertices[0], mesh.Vertices[0]
+	for _, vertex := range mesh.Vertices[1:] {
 		minV.X, minV.Y, minV.Z = min(minV.X, vertex.X), min(minV.Y, vertex.Y), min(minV.Z, vertex.Z)
 		maxV.X, maxV.Y, maxV.Z = max(maxV.X, vertex.X), max(maxV.Y, vertex.Y), max(maxV.Z, vertex.Z)
 	}
-	body.n.Bounds = measurement.Box{Min: minV, Max: maxV, Bound: units.Millimeters(delta), Exactness: measurement.Approximate}
-	for _, vertex := range body.Vertices() {
-		vertex.n.Bound = units.Millimeters(proofbound.AbsSumUpper(vertex.n.Bound.Base(), delta))
+	body.Bounds = measurement.Box{Min: minV, Max: maxV, Bound: units.Millimeters(delta), Exactness: measurement.Approximate}
+	for _, vertex := range topobuild.Vertices(body) {
+		vertex.Bound = units.Millimeters(proofbound.AbsSumUpper(vertex.Bound.Base(), delta))
 	}
 	longitudinalExtra := proofbound.ProductUpper(poly.MaxRadiusL1,
 		proofbound.AbsSumUpper(proofbound.RatFloatUp(proofbound.HalfPiIv.Hi), upperTheta))
-	for _, edge := range body.Edges() {
-		edge.n.Curve = surfacegeom.FacetedCurve{Bound: units.Millimeters(delta)}
-		edge.n.LengthBound = proofbound.AbsSumUpper(edge.n.LengthBound, edge.n.Length,
+	for _, edge := range topobuild.Edges(body) {
+		edge.Curve = surfacegeom.FacetedCurve{Bound: units.Millimeters(delta)}
+		edge.LengthBound = proofbound.AbsSumUpper(edge.LengthBound, edge.Length,
 			proofbound.RatFloatUp(length.Hi), longitudinalExtra, poly.PerimeterUpper)
 	}
-	for _, face := range body.Faces() {
-		if face.n.Origins[0].Role != provenance.RoleCapStart && face.n.Origins[0].Role != provenance.RoleCapEnd {
-			face.n.Surface = surfacegeom.Faceted{Bound: units.Millimeters(delta)}
+	for _, face := range topobuild.Faces(body) {
+		if face.Origins[0].Role != provenance.RoleCapStart && face.Origins[0].Role != provenance.RoleCapEnd {
+			face.Surface = surfacegeom.Faceted{Bound: units.Millimeters(delta)}
 		}
-		face.n.AreaBound = proofbound.AbsSumUpper(face.n.AreaBound, face.n.Area, area, areaBound)
-		face.n.AxialDelta, face.n.HasAxialDelta = delta, true
+		face.AreaBound = proofbound.AbsSumUpper(face.AreaBound, face.Area, area, areaBound)
+		face.AxialDelta, face.HasAxialDelta = delta, true
 	}
-	if err := topobuild.ValidateAnalyticMeasurements(bodyNode(body)); err != nil {
+	if err := topobuild.ValidateAnalyticMeasurements(body); err != nil {
 		return nil, err
 	}
-	body.n.Payload = compositeTwistedSweepPayload{
-		profile: profile, plane: plane, path: path, angle: angle,
-		recordArea: recordArea, xform: xform, mesh: mesh, delta: delta,
+	body.Payload = CompositePayload{
+		Profile: profile, Plane: plane, Path: path, Angle: angle,
+		RecordArea: recordArea, Xform: xform, Mesh: mesh, Delta: delta,
 	}
 	return body, nil
 }
 
-func publishCompositeTwistCentroid(body *Body, xform r3.Transform,
-	geometry twistsweep.TwistCardinalPath, poly twistsweep.TwistPolygon, length proofbound.RatInterval) error {
-	h, radius := twistsweep.TwistRat(geometry.Height), twistsweep.TwistRat(geometry.Radius)
+func publishCompositeTwistCentroid(body *topo.Body, xform r3.Transform,
+	geometry TwistCardinalPath, poly TwistPolygon, length proofbound.RatInterval) error {
+	h, radius := TwistRat(geometry.Height), TwistRat(geometry.Radius)
 	xNum := proofbound.IntervalScale(proofbound.IntervalSub(proofbound.HalfPiIv,
 		proofbound.PointInterval(big.NewRat(1, 1))), new(big.Rat).Mul(radius, radius))
 	zNum := proofbound.IntervalAdd(proofbound.PointInterval(new(big.Rat).Add(
@@ -395,15 +380,15 @@ func publishCompositeTwistCentroid(body *Body, xform r3.Transform,
 	xIv, xOK := proofbound.IntervalQuo(xNum, length)
 	zIv, zOK := proofbound.IntervalQuo(zNum, length)
 	if !xOK || !zOK {
-		return fmt.Errorf(`%w: twisted sweep centroid has no path moment`, ErrUnsupported)
+		return fmt.Errorf(`%w: twisted sweep centroid has no path moment`, decaderr.ErrUnsupported)
 	}
 	x, xb := sweepmitre.Enclosure(xIv.Lo, xIv.Hi)
 	z, zb := sweepmitre.Enclosure(zIv.Lo, zIv.Hi)
 	// Curvature weights each section by 1-a/R. The exact profile centroid
 	// is at the path axis, so only its bounded second moment can shift this.
 	correction := proofbound.RatFloatUp(new(big.Rat).Quo(
-		new(big.Rat).Mul(twistsweep.TwistRat(poly.MaxRadiusL1), twistsweep.TwistRat(poly.MaxRadiusL1)),
-		twistsweep.TwistRat(geometry.Radius)))
+		new(big.Rat).Mul(TwistRat(poly.MaxRadiusL1), TwistRat(poly.MaxRadiusL1)),
+		TwistRat(geometry.Radius)))
 	local := r3.NewVec(x, 0, z)
 	world := xform.Apply(local)
 	translation := xform.Translation()
@@ -411,9 +396,9 @@ func publishCompositeTwistCentroid(body *Body, xform r3.Transform,
 		max(math.Abs(translation.X), math.Abs(translation.Y), math.Abs(translation.Z)))
 	bound := proofbound.AbsSumUpper(xb, zb, correction, round)
 	if proofbound.IsNonFinite(bound) || !proofbound.FiniteVec(world) {
-		return fmt.Errorf(`%w: twisted sweep centroid has no finite bound`, ErrUnsupported)
+		return fmt.Errorf(`%w: twisted sweep centroid has no finite bound`, decaderr.ErrUnsupported)
 	}
-	body.n.Centroid = measurement.VecMeasurement{Value: world, Bound: units.Millimeters(bound), Exactness: measurement.ExactnessOf(bound)}
+	body.Centroid = measurement.VecMeasurement{Value: world, Bound: units.Millimeters(bound), Exactness: measurement.ExactnessOf(bound)}
 	return nil
 }
 
@@ -422,96 +407,105 @@ type twistCellGroup struct{ from, through, pathSpan int }
 // Each Loft cell contributes one quad for each profile edge. Internal section
 // edges cancel in pairs, leaving one public wall patch per input path span
 // and profile edge, as Sweep's source-role contract requires.
-func mergeTwistCellFaces(ctx context.Context, body *Body, ref producerID,
+func mergeTwistCellFaces(ctx context.Context, env topo.Env, body *topo.Body,
 	profileEdges int, groups []twistCellGroup) error {
-	old := body.Faces()
+	old := topobuild.Faces(body)
 	cells := 0
 	for _, group := range groups {
 		if group.from != cells || group.through <= group.from {
-			return fmt.Errorf(`%w: twisted Loft cell groups are not consecutive`, ErrDegenerate)
+			return fmt.Errorf(`%w: twisted Loft cell groups are not consecutive`, decaderr.ErrDegenerate)
 		}
 		cells = group.through
 	}
 	if len(old) != 2+cells*profileEdges {
-		return fmt.Errorf(`%w: twisted Loft cells have unexpected wall topology`, ErrUnsupported)
+		return fmt.Errorf(`%w: twisted Loft cells have unexpected wall topology`, decaderr.ErrUnsupported)
 	}
-	merged := []*Face{old[0]}
+	merged := []*topo.Face{old[0]}
 	for _, group := range groups {
 		for j := range profileEdges {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			uses := map[*Edge][]topo.CoEdge{}
+			uses := map[*topo.Edge][]topo.CoEdge{}
 			area, areaBound := 0.0, 0.0
 			for cell := group.from; cell < group.through; cell++ {
 				face := old[1+cell*profileEdges+j]
-				if len(face.n.Loops) != 1 {
-					return fmt.Errorf(`%w: a twisted Loft wall has multiple loops`, ErrUnsupported)
+				if len(face.Loops) != 1 {
+					return fmt.Errorf(`%w: a twisted Loft wall has multiple loops`, decaderr.ErrUnsupported)
 				}
-				for _, use := range face.n.Loops[0].CoEdges {
-					uses[edgeHandle(use.Edge)] = append(uses[edgeHandle(use.Edge)], use)
+				for _, use := range face.Loops[0].CoEdges {
+					uses[use.Edge] = append(uses[use.Edge], use)
 				}
-				area = proofbound.AbsSumUpper(area, face.n.Area)
-				areaBound = proofbound.AbsSumUpper(areaBound, face.n.AreaBound)
+				area = proofbound.AbsSumUpper(area, face.Area)
+				areaBound = proofbound.AbsSumUpper(areaBound, face.AreaBound)
 			}
-			boundary := make(map[*Vertex]topo.CoEdge)
+			boundary := make(map[*topo.Vertex]topo.CoEdge)
 			for _, edgeUses := range uses {
 				switch len(edgeUses) {
 				case 1:
 					use := edgeUses[0]
-					if _, exists := boundary[vertexHandle(coedgeStart(use))]; exists {
-						return fmt.Errorf(`%w: a twisted wall boundary branches`, ErrUnsupported)
+					if _, exists := boundary[topobuild.CoEdgeStart(use)]; exists {
+						return fmt.Errorf(`%w: a twisted wall boundary branches`, decaderr.ErrUnsupported)
 					}
-					boundary[vertexHandle(coedgeStart(use))] = use
+					boundary[topobuild.CoEdgeStart(use)] = use
 				case 2:
 					if edgeUses[0].Forward == edgeUses[1].Forward {
-						return fmt.Errorf(`%w: twisted wall cells use a seam in the same direction`, ErrUnsupported)
+						return fmt.Errorf(`%w: twisted wall cells use a seam in the same direction`, decaderr.ErrUnsupported)
 					}
 				default:
-					return fmt.Errorf(`%w: a twisted wall edge has an unsupported use count`, ErrUnsupported)
+					return fmt.Errorf(`%w: a twisted wall edge has an unsupported use count`, decaderr.ErrUnsupported)
 				}
 			}
 			if len(boundary) < 4 {
-				return fmt.Errorf(`%w: a twisted wall has no closed boundary`, ErrUnsupported)
+				return fmt.Errorf(`%w: a twisted wall has no closed boundary`, decaderr.ErrUnsupported)
 			}
-			var first *Vertex
+			var first *topo.Vertex
 			firstCell := old[1+group.from*profileEdges+j]
-			for _, use := range firstCell.n.Loops[0].CoEdges {
-				if kept, ok := boundary[vertexHandle(coedgeStart(use))]; ok && kept.Edge == use.Edge {
-					first = vertexHandle(coedgeStart(use))
+			for _, use := range firstCell.Loops[0].CoEdges {
+				if kept, ok := boundary[topobuild.CoEdgeStart(use)]; ok && kept.Edge == use.Edge {
+					first = topobuild.CoEdgeStart(use)
 					break
 				}
 			}
 			if first == nil {
-				return fmt.Errorf(`%w: a twisted wall has no deterministic outline start`, ErrUnsupported)
+				return fmt.Errorf(`%w: a twisted wall has no deterministic outline start`, decaderr.ErrUnsupported)
 			}
 			outline := make([]topo.CoEdge, 0, len(boundary))
 			current := first
 			for range len(boundary) {
 				use, ok := boundary[current]
 				if !ok {
-					return fmt.Errorf(`%w: a twisted wall outline is disconnected`, ErrUnsupported)
+					return fmt.Errorf(`%w: a twisted wall outline is disconnected`, decaderr.ErrUnsupported)
 				}
 				outline = append(outline, use)
-				current = vertexHandle(coedgeEnd(use))
-				delete(boundary, vertexHandle(coedgeStart(use)))
+				current = topobuild.CoEdgeEnd(use)
+				delete(boundary, topobuild.CoEdgeStart(use))
 			}
 			if current != first || len(boundary) != 0 {
-				return fmt.Errorf(`%w: a twisted wall outline is not one cycle`, ErrUnsupported)
+				return fmt.Errorf(`%w: a twisted wall outline is not one cycle`, decaderr.ErrUnsupported)
 			}
-			face := bornFace(&Face{n: topo.Face{Area: area, AreaBound: areaBound, Surface: surfacegeom.Faceted{}, Origins: []provenance.Ref{{Producer: ref, Role: fmt.Sprintf("side(%d,0,%d)", group.pathSpan, j)}}, Body: bodyNode(body), Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: outline}}))}}})
+			face := topobuild.NewFace(env.Alloc, topo.Face{
+				Area:      area,
+				AreaBound: areaBound,
+				Surface:   surfacegeom.Faceted{},
+				Origins: []provenance.Ref{{Producer: env.Ref,
+					Role: fmt.Sprintf("side(%d,0,%d)", group.pathSpan, j)}},
+				Body: body,
+				Loops: []*topo.Loop{topobuild.NewLoop(env.Alloc,
+					topo.Loop{Outer: true, CoEdges: outline})},
+			})
 			merged = append(merged, face)
 		}
 	}
 	merged = append(merged, old[len(old)-1])
-	for _, edge := range body.Edges() {
-		edge.n.Faces = nil
+	for _, edge := range topobuild.Edges(body) {
+		edge.Faces = nil
 	}
-	body.n.Lumps[0].Shells[0].Faces = faceNodes(merged)
-	if err := topobuild.AttachFaceLoops(ctx, faceNodes(merged)); err != nil {
+	body.Lumps[0].Shells[0].Faces = merged
+	if err := topobuild.AttachFaceLoops(ctx, merged); err != nil {
 		return err
 	}
-	if err := compositesweep.AuditBoundary(ctx, bodyNode(body), nil); err != nil {
+	if err := compositesweep.AuditBoundary(ctx, body, nil); err != nil {
 		return err
 	}
 	return nil

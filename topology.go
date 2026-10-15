@@ -602,19 +602,13 @@ func (b *Body) Edges() []*Edge {
 
 // Vertices returns the body's vertices, deduplicated.
 func (b *Body) Vertices() []*Vertex {
-	seen := map[*topo.Vertex]struct{}{}
-	var out []*Vertex
-	for _, e := range topobuild.Edges(&b.n) {
-		for _, v := range [2]*topo.Vertex{e.Start, e.End} {
-			if v == nil {
-				continue
-			}
-			if _, ok := seen[v]; ok {
-				continue
-			}
-			seen[v] = struct{}{}
-			out = append(out, vertexHandle(v))
-		}
+	nodes := topobuild.Vertices(&b.n)
+	if len(nodes) == 0 {
+		return nil
+	}
+	out := make([]*Vertex, len(nodes))
+	for i, n := range nodes {
+		out[i] = vertexHandle(n)
 	}
 	return out
 }

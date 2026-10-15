@@ -48,17 +48,17 @@ func TestTwistShellOffsetSourceFromRoundedSketch(t *testing.T) {
 	require.NoError(t, err)
 	payload, ok := body.n.Payload.(twistedSweepPayload)
 	require.True(t, ok)
-	proof, err := twistsweep.TwistOffsetSource(payload.profile, 5, payload.angle, 1, 0)
+	proof, err := twistsweep.TwistOffsetSource(payload.Profile, 5, payload.Angle, 1, 0)
 	require.NoError(t, err)
-	identityGap, err := twistsweep.TwistShellPlacedProof(payload.profile, 5, 1,
-		payload.angle, proof, r3.Identity())
+	identityGap, err := twistsweep.TwistShellPlacedProof(payload.Profile, 5, 1,
+		payload.Angle, proof, r3.Identity())
 	require.NoError(t, err)
 	require.Zero(t, identityGap.Boundary)
 	require.Zero(t, identityGap.Volume)
 	require.Zero(t, identityGap.Area)
 	turn, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(23))
 	require.NoError(t, err)
-	placed, err := twistsweep.TwistShellPlacedProof(payload.profile, 5, 1, payload.angle, proof, turn)
+	placed, err := twistsweep.TwistShellPlacedProof(payload.Profile, 5, 1, payload.Angle, proof, turn)
 	require.NoError(t, err)
 	require.Positive(t, placed.Defect)
 	require.Less(t, placed.Boundary, 1e-10)
@@ -74,7 +74,7 @@ func TestTwistShellOffsetSourceFromRoundedSketch(t *testing.T) {
 	require.Positive(t, proof.RadialLo.Sign())
 	require.Zero(t, proof.FirstMomentX.Sign())
 	require.Zero(t, proof.FirstMomentY.Sign())
-	stations, err := twistsweep.TwistOffsetSampleStations(payload.profile, 5, payload.angle, 1, 0, 8, 16)
+	stations, err := twistsweep.TwistOffsetSampleStations(payload.Profile, 5, payload.Angle, 1, 0, 8, 16)
 	require.NoError(t, err)
 	require.Len(t, stations.Outer, 96)
 	require.Len(t, stations.Inner, 96)
@@ -88,10 +88,10 @@ func TestTwistShellOffsetSourceFromRoundedSketch(t *testing.T) {
 	t.Logf("stations=%d outerChord=%g innerChord=%g outerVertex=%g innerVertex=%g",
 		len(stations.Outer), stations.OuterChord, stations.InnerChord,
 		outerVertex, innerVertex)
-	poly, err := twistsweep.TwistPolygonOf(payload.profile)
+	poly, err := twistsweep.TwistPolygonOf(payload.Profile)
 	require.NoError(t, err)
 	held, err := twistsweep.TwistShellSampledMesh(t.Context(), stations, 5, 1,
-		payload.angle, poly.AreaInterval)
+		payload.Angle, poly.AreaInterval)
 	require.NoError(t, err)
 	t.Logf("held shell: vertices=%d triangles=%d vertexError=%g outerBound=%g innerBound=%g volumeBound=%g areaSlack=%g",
 		len(held.Verts), len(held.Tris), held.VertexError, held.OuterBound,
