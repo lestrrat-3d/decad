@@ -436,7 +436,7 @@ func newCone(rng *rand.Rand) setup {
 // produces whose sketch-solver-resolved geometry puts a boundary vertex on
 // the wrong side of the random axis by less than a ulp — a genuine (if
 // vanishingly small) defect in THAT draw's own geometry, which
-// revolveplan.ResolveAxisSide's strict admission gate (revolve_axis.go, CLAUDE.md's
+// revolveplan.ResolveAxisSide's strict admission gate (internal/revolveplan/axis_side.go, CLAUDE.md's
 // reject-only rule) would correctly refuse rather than silently admit under
 // the old tolerance.
 //
