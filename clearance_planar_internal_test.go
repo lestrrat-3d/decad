@@ -23,7 +23,7 @@ import (
 //     touching case reads reportvocab.PairTouching.
 //
 // The branch stands a million millimetres from the origin, so its held
-// vertices round by about 1e-10 mm (mitredSweepPayload.delta) while the
+// vertices round by about 1e-10 mm (mitredSweepPayload.Delta) while the
 // part's arm, placed by exact dyadic entries, has a held gap set to the ulp
 // of a 40 mm height, about 7e-15 mm: the two scales are far enough apart to
 // place a held gap, or a held overlap, well inside the band.
@@ -87,7 +87,7 @@ func planarPartAndBranch(t *testing.T, doc *Document, shift r3.Vec, top float64)
 	require.NoError(t, err)
 	payload, ok := branch.n.Payload.(mitredSweepPayload)
 	require.True(t, ok)
-	return part, branch, payload.delta
+	return part, branch, payload.Delta
 }
 
 func TestPlanarPairVerdictDisplacementBand(t *testing.T) {
@@ -181,7 +181,7 @@ func TestPlanarPairVerdictTouchNeedsZeroDisplacement(t *testing.T) {
 		require.NoError(t, err)
 		payload, ok := column.n.Payload.(mitredSweepPayload)
 		require.True(t, ok)
-		require.Zero(t, payload.delta, "every held vertex is its own rational")
+		require.Zero(t, payload.Delta, "every held vertex is its own rational")
 		lid := planarBox(t, doc, -1, -1, 10, 1, 1, 12)
 		res, ok, err := planarPairVerdict(t.Context(), column, lid)
 		require.NoError(t, err)

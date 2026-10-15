@@ -3,7 +3,6 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/featureoption"
@@ -42,12 +41,6 @@ func WithSectionScale(factors ...units.Value) SweepOption {
 	return sweepOptionValue{featureoption.WithSectionScale(factors...)}
 }
 
-// mitredSweepLoops adapts SM2's whole-line profile gate to its record.
-func mitredSweepLoops(profile profileRecord) ([]planePoint, [][]int, error) {
-	points, loops, err := sweepmitre.Loops(profile.Outer, profile.Holes)
-	return point2FromRecordSlice(points), loops, err
-}
-
 // mitredSweepPreflight applies SM10's span and facet-pair ceilings.
 func mitredSweepPreflight(loopIdx [][]int, spans int) error {
 	return sweepmitre.Preflight(loopIdx, spans, compositesweep.MaxSpansPerCall)
@@ -72,7 +65,7 @@ func sweepMitred(ctx context.Context, d *Document, profile profileRecord, plane 
 	if sweepinput.SamePathPoint(path.Start, path.End) {
 		return nil, fmt.Errorf(`%w: closed sweep paths are not implemented`, ErrUnsupported)
 	}
-	_, loopIdx, err := mitredSweepLoops(profile)
+	_, loopIdx, err := sweepmitre.Loops(profile.Outer, profile.Holes)
 	if err != nil {
 		return nil, err
 	}
@@ -86,68 +79,13 @@ func sweepMitred(ctx context.Context, d *Document, profile profileRecord, plane 
 			factors[k] = 1
 		}
 	}
-	return evalMitredSweep(ctx, d, d.nextProducerID(), mitredSweepPayload{
-		profile: profile,
-		plane:   plane,
-		path:    path,
-		factors: factors,
-		xform:   r3.Identity(),
-	})
-}
-
-// mitredSweepPayload is the evaluator's record of a mitred polyline sweep
-// (docs/sweep-design.md §16): the authenticated profile and its plane, the
-// path, one scale factor per span and the accumulated placement — what a
-// placement re-runs §16.3 from — plus the build that record produced.
-//
-// exact holds every vertex as the rational the construction denotes, placed
-// exactly under xform; verts is each rounded once to the nearest float,
-// vertexBound is each vertex's own 3D gap between the two, rounded up, and
-// delta is the largest of them. tris is the globally oriented
-// held triangle set, walls first in (span, loop, segment) order, then capStart
-// and capEnd; triFace names each triangle's face as an index into faceRoles.
-type mitredSweepPayload struct {
-	profile profileRecord
-	plane   planeRecord
-	path    *sweepinput.Path
-	factors []float64
-	xform   r3.Transform
-
-	exact       []sweepRatVec
-	verts       []r3.Vec
-	vertexBound []float64
-	tris        [][3]int
-	triFace     []int
-	faceRoles   []string
-	delta       float64
-	// These sums use the unplaced sections and canonical triangle winding.
-	// Placements reuse them before deciding the new shell orientation.
-	localVol6    *big.Rat
-	localMoments [3]*big.Rat
-}
-
-func (mp mitredSweepPayload) Transform() r3.Transform { return mp.xform }
-
-// AxialDelta is every held vertex's displacement; a ToFace stop against
-// either cap inherits it.
-func (mp mitredSweepPayload) AxialDelta() float64 { return mp.delta }
-
-// Placed re-runs §16.3 from the record under the composed motion (Table DM
-// row DM7): the construction rebuilds the unplaced rationals, applies the
-// motion to them exactly, rounds once, re-decides the shell orientation and
-// re-runs the crossing audit, so delta never accumulates across placements.
-func (mp mitredSweepPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
-	d, ref := documentHandle(env.Doc), env.Ref
-	next := mitredSweepPayload{
-		profile:      mp.profile,
-		plane:        mp.plane,
-		path:         mp.path,
-		factors:      mp.factors,
-		xform:        composed,
-		localVol6:    mp.localVol6,
-		localMoments: mp.localMoments,
-	}
-	return placedNode(evalMitredSweep(ctx, d, ref, next))
+	return bodyResult(sweepmitre.Build(ctx, envOf(documentNode(d), d.nextProducerID()), mitredSweepPayload{
+		Profile: profile,
+		Plane:   plane,
+		Path:    path,
+		Factors: factors,
+		Xform:   r3.Identity(),
+	}))
 }
 
 // tessellateMitredSweep is Table DM row DM2's exact restatement: the held
@@ -164,8 +102,8 @@ func (mp mitredSweepPayload) Placed(ctx context.Context, env topo.Env, composed 
 // moved by at most delta; the boundary proof is the build's own crossing
 // audit, so the mesh needs no facet-contact audit of its own.
 func tessellateMitredSweep(ctx context.Context, b *Body, mp mitredSweepPayload, chord float64) (*Mesh, error) {
-	if chord < mp.delta {
-		return nil, fmt.Errorf(`%w: a mitred sweep restates its held vertices, which sit up to %g mm from the body; a tolerance of %g mm is finer than that`, ErrUnsupported, mp.delta, chord)
+	if chord < mp.Delta {
+		return nil, fmt.Errorf(`%w: a mitred sweep restates its held vertices, which sit up to %g mm from the body; a tolerance of %g mm is finer than that`, ErrUnsupported, mp.Delta, chord)
 	}
 	faceOfRole := map[string]*Face{}
 	for _, f := range b.Faces() {
@@ -173,38 +111,38 @@ func tessellateMitredSweep(ctx context.Context, b *Body, mp mitredSweepPayload, 
 			faceOfRole[o.Role] = f
 		}
 	}
-	src := make([]*topo.Face, len(mp.tris))
-	for k, slot := range mp.triFace {
+	src := make([]*topo.Face, len(mp.Tris))
+	for k, slot := range mp.TriFace {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		f, ok := faceOfRole[mp.faceRoles[slot]]
+		f, ok := faceOfRole[mp.FaceRoles[slot]]
 		if !ok {
-			return nil, fmt.Errorf(`%w: the body carries no face for role %q`, ErrDegenerate, mp.faceRoles[slot])
+			return nil, fmt.Errorf(`%w: the body carries no face for role %q`, ErrDegenerate, mp.FaceRoles[slot])
 		}
 		src[k] = faceNode(f)
 	}
-	if err := tessellation.RequireClosedMesh(mp.tris); err != nil {
+	if err := tessellation.RequireClosedMesh(mp.Tris); err != nil {
 		return nil, fmt.Errorf(`%w: the mitred sweep's held triangle set is not a closed mesh`, ErrUnsupported)
 	}
 	mesh := bornMesh(&Mesh{
 		n: topo.Mesh{
-			Vertices:  append([]r3.Vec(nil), mp.verts...),
-			Triangles: append([][3]int(nil), mp.tris...),
+			Vertices:  append([]r3.Vec(nil), mp.Verts...),
+			Triangles: append([][3]int(nil), mp.Tris...),
 			Source:    src,
 		},
 	})
-	mesh.setVertexBounds(mp.vertexBound)
-	mesh.n.Bound = mp.delta
+	mesh.setVertexBounds(mp.VertexBound)
+	mesh.n.Bound = mp.Delta
 	slack := 0.0
-	for _, t := range mp.tris {
-		slack = proofbound.AbsSumUpper(slack, proofbound.PerturbedTriangleAreaAllow(mp.verts[t[0]], mp.verts[t[1]], mp.verts[t[2]], mp.delta))
+	for _, t := range mp.Tris {
+		slack = proofbound.AbsSumUpper(slack, proofbound.PerturbedTriangleAreaAllow(mp.Verts[t[0]], mp.Verts[t[1]], mp.Verts[t[2]], mp.Delta))
 	}
-	areaUpper, err := proofbound.PerturbedAreaUpperContext(ctx, mp.verts, mp.tris, mp.delta)
+	areaUpper, err := proofbound.PerturbedAreaUpperContext(ctx, mp.Verts, mp.Tris, mp.Delta)
 	if err != nil {
 		return nil, err
 	}
-	volSymDiff := proofbound.SweptVolumeAllow(mp.delta, areaUpper)
+	volSymDiff := proofbound.SweptVolumeAllow(mp.Delta, areaUpper)
 	if !measurement.FiniteValues(slack, volSymDiff) {
 		return nil, fmt.Errorf(`%w: the mitred sweep states no finite proof for a required mesh bound`, ErrUnsupported)
 	}

@@ -299,7 +299,7 @@ func bodyGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body *Bo
 	case compositeTwistedSweepPayload:
 		return gatePoints{Points: pl.mesh.n.Vertices, Allow: pl.delta}, true, nil
 	case mitredSweepPayload:
-		return gatePoints{Points: pl.verts, Allow: pl.delta}, true, nil
+		return gatePoints{Points: pl.Verts, Allow: pl.Delta}, true, nil
 	case coilPayload:
 		// Every held station vertex lies within its own station rounding of
 		// the point X(v, j) it denotes, a point of the coil's true helix edge

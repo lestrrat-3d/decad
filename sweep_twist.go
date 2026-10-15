@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
+	"github.com/lestrrat-3d/decad/internal/sweepmitre"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/decad/internal/twistsweep"
@@ -294,7 +295,7 @@ func evalTwistedSweep(ctx context.Context, d *Document, ref producerID, profile 
 	if err != nil {
 		return nil, err
 	}
-	trueArea, trueAreaBound := mitredEnclosure(areaIv.Lo, areaIv.Hi)
+	trueArea, trueAreaBound := sweepmitre.Enclosure(areaIv.Lo, areaIv.Hi)
 	heldArea := heldBody.n.Area
 	heldAreaIv := proofbound.Interval(
 		new(big.Rat).Sub(twistsweep.TwistRat(heldArea.Value.Base()), twistsweep.TwistRat(heldArea.Bound.Base())),
@@ -314,7 +315,7 @@ func evalTwistedSweep(ctx context.Context, d *Document, ref producerID, profile 
 		return nil, fmt.Errorf(`%w: the twisted sweep's proof is not finite`, ErrUnsupported)
 	}
 	volume := new(big.Rat).Mul(poly.Area, twistsweep.TwistRat(path.End.Z))
-	vol, volBound := mitredEnclosure(volume, volume)
+	vol, volBound := sweepmitre.Enclosure(volume, volume)
 	heldBody.n.Volume = measurement.Measurement{Value: units.CubicMillimeters(vol), Exactness: measurement.ExactnessOf(volBound), Bound: units.CubicMillimeters(volBound)}
 	heldBody.n.Area = measurement.Measurement{Value: units.SquareMillimeters(trueArea), Exactness: measurement.Approximate, Bound: units.SquareMillimeters(trueAreaBound)}
 	center := r3.NewVec(0, 0, path.End.Z/2)

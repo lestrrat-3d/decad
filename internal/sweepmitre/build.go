@@ -1,4 +1,4 @@
-package decad
+package sweepmitre
 
 import (
 	"context"
@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
-	"github.com/lestrrat-3d/decad/internal/sweepmitre"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
@@ -34,61 +34,61 @@ import (
 // a triangulation of the other, which is why capEnd reuses capStart's
 // triangulation index for index rather than triangulating a second time.
 
-// constructMitredSweep triangulates the recorded profile once, then adapts
-// its spans to §16.3's exact section construction.
-func constructMitredSweep(ctx context.Context, mp mitredSweepPayload) (sweepmitre.Construction, error) {
-	pts2, loopIdx, err := mitredSweepLoops(mp.profile)
+// ConstructPayload triangulates the recorded profile once, then adapts its
+// spans to §16.3's exact section construction.
+func ConstructPayload(ctx context.Context, mp Payload) (Construction, error) {
+	pts2, loopIdx, err := Loops(mp.Profile.Outer, mp.Profile.Holes)
 	if err != nil {
-		return sweepmitre.Construction{}, err
+		return Construction{}, err
 	}
-	capTris, err := triangulation.Triangulate(ctx, point2ToRecordSlice(pts2), loopIdx)
+	capTris, err := triangulation.Triangulate(ctx, pts2, loopIdx)
 	if err != nil {
-		return sweepmitre.Construction{}, triangulation.WrapLoftError(err)
+		return Construction{}, triangulation.WrapLoftError(err)
 	}
-	spans := make([]sweepmitre.Span, len(mp.path.Records))
-	for k, record := range mp.path.Records {
-		spans[k] = sweepmitre.Span{Start: record.Start, End: record.End}
+	spans := make([]Span, len(mp.Path.Records))
+	for k, record := range mp.Path.Records {
+		spans[k] = Span{Start: record.Start, End: record.End}
 	}
-	built, err := sweepmitre.Construct(ctx, mp.plane, point2ToRecordSlice(pts2), loopIdx, spans, mp.factors)
+	built, err := Construct(ctx, mp.Plane, pts2, loopIdx, spans, mp.Factors)
 	if err != nil {
-		return sweepmitre.Construction{}, err
+		return Construction{}, err
 	}
 	built.LoopIdx, built.CapTris = loopIdx, capTris
 	return built, nil
 }
 
-// evalMitredSweep builds the body for one payload record: §16.3's exact
-// construction and placement, the single rounding, the triangle set and
-// orientation, SM8's crossing audit, Table BM's topology and §16.6's
-// readings. The first build and every placement run it.
-func evalMitredSweep(ctx context.Context, d *Document, ref producerID, mp mitredSweepPayload) (*Body, error) {
+// Build builds the body for one payload record: §16.3's exact construction
+// and placement, the single rounding, the triangle set and orientation, SM8's
+// crossing audit, Table BM's topology and §16.6's readings. The first build
+// and every placement run it.
+func Build(ctx context.Context, env topo.Env, mp Payload) (*topo.Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	c, err := constructMitredSweep(ctx, mp)
+	c, err := ConstructPayload(ctx, mp)
 	if err != nil {
 		return nil, err
 	}
 
-	placed, err := sweepmitre.PlaceAndRound(c, mp.xform, mp.localVol6 == nil && mp.xform != r3.Identity())
+	placed, err := PlaceAndRound(c, mp.Xform, mp.LocalVol6 == nil && mp.Xform != r3.Identity())
 	if err != nil {
 		return nil, err
 	}
 	exact, localExact, anchor := placed.Exact, placed.LocalExact, placed.Anchor
 	verts, vertexBound, delta := placed.Rounded, placed.VertexBound, placed.Delta
 
-	a := sweepmitre.Assemble(c, provenance.RoleCapStart, provenance.RoleCapEnd)
-	localVol6, localMoments := mp.localVol6, mp.localMoments
+	a := Assemble(c, provenance.RoleCapStart, provenance.RoleCapEnd)
+	localVol6, localMoments := mp.LocalVol6, mp.LocalMoments
 	if localVol6 == nil {
 		if localExact == nil {
 			localExact = exact
 		}
-		localVol6, localMoments = mitredVolumeMoments(localExact, a.Tris, c.Anchor)
+		localVol6, localMoments = VolumeMoments(localExact, a.Tris, c.Anchor)
 	}
-	vol6, moments := sweepmitre.PlacedVolumeMoments(localVol6, localMoments, mp.xform)
+	vol6, moments := PlacedVolumeMoments(localVol6, localMoments, mp.Xform)
 	switch vol6.Sign() {
 	case 0:
-		return nil, fmt.Errorf(`%w: the mitred sweep encloses no volume`, ErrDegenerate)
+		return nil, fmt.Errorf(`%w: the mitred sweep encloses no volume`, decaderr.ErrDegenerate)
 	case -1:
 		// §16.3's orientation rule: one exact sign for the whole shell.
 		a.Reversed = true
@@ -102,7 +102,7 @@ func evalMitredSweep(ctx context.Context, d *Document, ref producerID, mp mitred
 	}
 	for t, tri := range a.Tris {
 		if loftmesh.TriangleCollapsed(verts, tri) {
-			return nil, fmt.Errorf(`%w: rounding the mitred sweep's vertices collapsed its triangle %d (%s)`, ErrUnsupported, t, a.Roles[a.TriFace[t]])
+			return nil, fmt.Errorf(`%w: rounding the mitred sweep's vertices collapsed its triangle %d (%s)`, decaderr.ErrUnsupported, t, a.Roles[a.TriFace[t]])
 		}
 	}
 	if err := ctx.Err(); err != nil {
@@ -111,7 +111,7 @@ func evalMitredSweep(ctx context.Context, d *Document, ref producerID, mp mitred
 	if err := loftmesh.LoftCrossingAudit(proofbound.NewWorkBudget(ctx), verts, a.Tris); err != nil {
 		var contact *loftmesh.LoftContactError
 		if errors.As(err, &contact) {
-			return nil, fmt.Errorf(`%w: mitred sweep faces %s and %s %s`, ErrDegenerate,
+			return nil, fmt.Errorf(`%w: mitred sweep faces %s and %s %s`, decaderr.ErrDegenerate,
 				a.Roles[a.TriFace[contact.I]], a.Roles[a.TriFace[contact.J]], contact.Reason)
 		}
 		return nil, err
@@ -120,48 +120,56 @@ func evalMitredSweep(ctx context.Context, d *Document, ref producerID, mp mitred
 		return nil, err
 	}
 
-	areas, err := mitredTriangleAreas(ctx, exact, a.Tris)
+	areas, err := TriangleAreas(ctx, exact, a.Tris)
 	if err != nil {
 		return nil, err
 	}
-	body := bornBody(&Body{n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodySolid, Doc: documentNode(d)}})
-	faces, err := buildMitredTopology(ctx, body, ref, a, exact, verts, areas, delta)
+	body := env.Alloc.NewBody()
+	body.Solid = true
+	body.Origin = provenance.Ref{Producer: env.Ref, Role: provenance.RoleBody}
+	body.Kind = topo.BodySolid
+	body.Doc = env.Doc
+	faces, err := buildTopology(ctx, env, body, a, exact, verts, areas, delta)
 	if err != nil {
 		return nil, err
 	}
-	if err := topobuild.AttachFaceLoops(ctx, faceNodes(faces)); err != nil {
+	if err := topobuild.AttachFaceLoops(ctx, faces); err != nil {
 		return nil, err
 	}
-	body.n.Lumps = []*topo.Lump{lumpNode(bornLump(&Lump{n: topo.Lump{Shells: []*topo.FaceShell{faceShellNode(bornFaceShell(&FaceShell{n: topo.FaceShell{Faces: faceNodes(faces)}}))}}}))}
+	shell := env.Alloc.NewFaceShell()
+	shell.Faces = faces
+	lump := env.Alloc.NewLump()
+	lump.Shells = []*topo.FaceShell{shell}
+	body.Lumps = []*topo.Lump{lump}
 
-	body.n.Volume = measurementToInternal(mitredVolume(vol6))
-	centroid, err := mitredCentroid(anchor, vol6, moments)
+	body.Volume = volumeReading(vol6)
+	centroid, err := centroidReading(anchor, vol6, moments)
 	if err != nil {
 		return nil, err
 	}
-	body.n.Centroid = vecMeasurementToInternal(centroid)
-	body.n.Bounds = boxToInternal(mitredBounds(exact))
+	body.Centroid = centroid
+	body.Bounds = boundsReading(exact)
 	areaLo, areaHi := new(big.Rat), new(big.Rat)
 	for _, enclosure := range areas {
 		areaLo.Add(areaLo, enclosure[0])
 		areaHi.Add(areaHi, enclosure[1])
 	}
-	value, bound := mitredEnclosure(areaLo, areaHi)
-	body.n.Area = measurement.Measurement{
+	value, bound := Enclosure(areaLo, areaHi)
+	body.Area = measurement.Measurement{
 		Value:     units.SquareMillimeters(value),
 		Exactness: measurement.ExactnessOf(bound),
 		Bound:     units.SquareMillimeters(bound),
 	}
-	if err := topobuild.ValidateLoftBodyMeasurements(&body.n); err != nil {
+	if err := topobuild.ValidateLoftBodyMeasurements(body); err != nil {
 		return nil, err
 	}
 	if !measurement.FiniteValues(bound) {
-		return nil, fmt.Errorf(`%w: the mitred sweep's area has no finite bound`, ErrUnsupported)
+		return nil, fmt.Errorf(`%w: the mitred sweep's area has no finite bound`, decaderr.ErrUnsupported)
 	}
 
-	mp.exact, mp.verts, mp.tris, mp.triFace, mp.faceRoles, mp.delta = exact, verts, a.Tris, a.TriFace, a.Roles, delta
-	mp.vertexBound = vertexBound
-	mp.localVol6, mp.localMoments = localVol6, localMoments
-	body.n.Payload = mp
+	mp.Exact, mp.Verts, mp.Tris, mp.TriFace, mp.FaceRoles, mp.Delta = exact, verts, a.Tris, a.TriFace, a.Roles, delta
+	mp.VertexBound = vertexBound
+	mp.LocalVol6, mp.LocalMoments = localVol6, localMoments
+	body.Payload = mp
 	return body, nil
 }

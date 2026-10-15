@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
+	"github.com/lestrrat-3d/decad/internal/sweepmitre"
 )
 
 // Structural curve records stay in internal packages. Their aliases keep the
@@ -96,6 +97,12 @@ type (
 	revolvePayload      = revolveplan.Payload
 	chainRevolvePayload = revolveplan.ChainPayload
 )
+
+// mitredSweepPayload is the evaluator's record of a mitred polyline sweep: the
+// internal/sweepmitre payload, which sweepmitre.Build evaluates over topology
+// nodes and which implements topo.Payload (docs/sweep-design.md §16,
+// docs/evaluator-design.md §8).
+type mitredSweepPayload = sweepmitre.Payload
 
 type loopRecord = sectionrecord.LoopRecord
 

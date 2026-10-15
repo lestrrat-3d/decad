@@ -15,6 +15,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
+	"github.com/lestrrat-3d/decad/internal/sweepmitre"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
@@ -339,8 +340,8 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 	if proofbound.IsNonFinite(mesh.n.AreaSlack) {
 		return nil, fmt.Errorf(`%w: twisted sweep area proof is not finite`, ErrUnsupported)
 	}
-	volume, volumeBound := mitredEnclosure(volumeIv.Lo, volumeIv.Hi)
-	area, areaBound := mitredEnclosure(trueAreaIv.Lo, trueAreaIv.Hi)
+	volume, volumeBound := sweepmitre.Enclosure(volumeIv.Lo, volumeIv.Hi)
+	area, areaBound := sweepmitre.Enclosure(trueAreaIv.Lo, trueAreaIv.Hi)
 	body.n.Volume = measurement.Measurement{Value: units.CubicMillimeters(volume), Bound: units.CubicMillimeters(volumeBound),
 		Exactness: measurement.ExactnessOf(volumeBound)}
 	body.n.Area = measurement.Measurement{Value: units.SquareMillimeters(area), Bound: units.SquareMillimeters(areaBound),
@@ -395,8 +396,8 @@ func publishCompositeTwistCentroid(body *Body, xform r3.Transform,
 	if !xOK || !zOK {
 		return fmt.Errorf(`%w: twisted sweep centroid has no path moment`, ErrUnsupported)
 	}
-	x, xb := mitredEnclosure(xIv.Lo, xIv.Hi)
-	z, zb := mitredEnclosure(zIv.Lo, zIv.Hi)
+	x, xb := sweepmitre.Enclosure(xIv.Lo, xIv.Hi)
+	z, zb := sweepmitre.Enclosure(zIv.Lo, zIv.Hi)
 	// Curvature weights each section by 1-a/R. The exact profile centroid
 	// is at the path axis, so only its bounded second moment can shift this.
 	correction := proofbound.RatFloatUp(new(big.Rat).Quo(

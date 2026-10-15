@@ -94,12 +94,12 @@ func testLengthLower(q *big.Rat) *big.Rat {
 func TestMitredSweepJoinPlanesAndWallsAreExact(t *testing.T) {
 	t.Parallel()
 	_, mp := mitredTreeBranch(t)
-	points := []r3.Vec{mp.path.Start}
-	for _, r := range mp.path.Records {
+	points := []r3.Vec{mp.Path.Start}
+	for _, r := range mp.Path.Records {
 		points = append(points, r.End)
 	}
 	n := len(points) - 1
-	stride := len(mp.exact) / (n + 1)
+	stride := len(mp.Exact) / (n + 1)
 	require.Equal(t, 16, stride)
 	dirs := make([][3]*big.Rat, n)
 	lambdas := make([]*big.Rat, n)
@@ -122,7 +122,7 @@ func TestMitredSweepJoinPlanesAndWallsAreExact(t *testing.T) {
 			}
 		}
 		for v := range stride {
-			p := testRatOf(mp.exact[k*stride+v])
+			p := testRatOf(mp.Exact[k*stride+v])
 			require.Zero(t, testRatDot(normal, testRatSub(p, testRatVec(points[k]))).Sign(),
 				`section %d vertex %d lies exactly on its section plane`, k, v)
 		}
@@ -130,8 +130,8 @@ func TestMitredSweepJoinPlanesAndWallsAreExact(t *testing.T) {
 	for k := range n {
 		for v := range stride {
 			next := (v + 1) % stride
-			p, q := testRatOf(mp.exact[k*stride+v]), testRatOf(mp.exact[k*stride+next])
-			pn, qn := testRatOf(mp.exact[(k+1)*stride+v]), testRatOf(mp.exact[(k+1)*stride+next])
+			p, q := testRatOf(mp.Exact[k*stride+v]), testRatOf(mp.Exact[k*stride+next])
+			pn, qn := testRatOf(mp.Exact[(k+1)*stride+v]), testRatOf(mp.Exact[(k+1)*stride+next])
 			orient := testRatDot(testRatCross(testRatSub(q, p), testRatSub(qn, p)), testRatSub(pn, p))
 			require.Zero(t, orient.Sign(), `wall (%d, 0, %d) is exactly planar`, k, v)
 		}
@@ -142,9 +142,9 @@ func TestMitredSweepJoinPlanesAndWallsAreExact(t *testing.T) {
 // moments about the origin over the rational vertices, splitting every wall
 // along its OTHER diagonal: a planar quad's volume does not depend on it.
 func testExactVolumeMoments(mp mitredSweepPayload) (*big.Rat, [3]*big.Rat) {
-	stride := len(mp.exact) / (len(mp.path.Records) + 1)
+	stride := len(mp.Exact) / (len(mp.Path.Records) + 1)
 	var tris [][3]int
-	for k := range len(mp.path.Records) {
+	for k := range len(mp.Path.Records) {
 		for v := range stride {
 			next := (v + 1) % stride
 			b0, b1 := k*stride+v, k*stride+next
@@ -152,12 +152,12 @@ func testExactVolumeMoments(mp mitredSweepPayload) (*big.Rat, [3]*big.Rat) {
 			tris = append(tris, [3]int{b0, b1, t0}, [3]int{b1, t1, t0})
 		}
 	}
-	walls := 2 * len(mp.path.Records) * stride
-	tris = append(tris, mp.tris[walls:]...)
+	walls := 2 * len(mp.Path.Records) * stride
+	tris = append(tris, mp.Tris[walls:]...)
 	vol6 := new(big.Rat)
 	moments := [3]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat)}
 	for _, t := range tris {
-		a, b, c := testRatOf(mp.exact[t[0]]), testRatOf(mp.exact[t[1]]), testRatOf(mp.exact[t[2]])
+		a, b, c := testRatOf(mp.Exact[t[0]]), testRatOf(mp.Exact[t[1]]), testRatOf(mp.Exact[t[2]])
 		term := testRatDot(a, testRatCross(b, c))
 		vol6.Add(vol6, term)
 		for i := range 3 {
@@ -202,8 +202,8 @@ func TestMitredSweepReadingsEncloseExactValues(t *testing.T) {
 
 	const prec = 256
 	total := new(big.Float).SetPrec(prec)
-	for _, tri := range mp.tris {
-		a, b, c := testRatOf(mp.exact[tri[0]]), testRatOf(mp.exact[tri[1]]), testRatOf(mp.exact[tri[2]])
+	for _, tri := range mp.Tris {
+		a, b, c := testRatOf(mp.Exact[tri[0]]), testRatOf(mp.Exact[tri[1]]), testRatOf(mp.Exact[tri[2]])
 		n := testRatCross(testRatSub(b, a), testRatSub(c, a))
 		q := new(big.Float).SetPrec(prec).SetRat(testRatDot(n, n))
 		total.Add(total, new(big.Float).SetPrec(prec).Quo(new(big.Float).SetPrec(prec).Sqrt(q), big.NewFloat(2)))
@@ -216,7 +216,7 @@ func TestMitredSweepReadingsEncloseExactValues(t *testing.T) {
 	lo := []float64{body.n.Bounds.Min.X, body.n.Bounds.Min.Y, body.n.Bounds.Min.Z}
 	hi := []float64{body.n.Bounds.Max.X, body.n.Bounds.Max.Y, body.n.Bounds.Max.Z}
 	var exactLo, exactHi [3]*big.Rat
-	for _, p := range mp.exact {
+	for _, p := range mp.Exact {
 		for i := range 3 {
 			require.LessOrEqual(t, new(big.Rat).SetFloat64(lo[i]).Cmp(p[i]), 0, `the box holds every exact vertex`)
 			require.GreaterOrEqual(t, new(big.Rat).SetFloat64(hi[i]).Cmp(p[i]), 0, `the box holds every exact vertex`)
@@ -242,12 +242,12 @@ func TestMitredSweepReadingsEncloseExactValues(t *testing.T) {
 func TestMitredSweepGateDiameterShrinks(t *testing.T) {
 	t.Parallel()
 	body, mp := mitredTreeBranch(t)
-	held, ok := diameter.Points(mp.verts)
+	held, ok := diameter.Points(mp.Verts)
 	require.True(t, ok)
 	got, ok, err := bodyGateDiameter(t.Context(), body)
 	require.NoError(t, err)
 	require.True(t, ok)
-	want, ok := diameter.LowerForDisplacement(held, mp.delta)
+	want, ok := diameter.LowerForDisplacement(held, mp.Delta)
 	require.True(t, ok)
 	require.Equal(t, want, got)
 	require.Less(t, got, held)
@@ -261,21 +261,21 @@ func TestMitredSweepDeltaAndMeshProofs(t *testing.T) {
 	t.Parallel()
 	body, mp := mitredTreeBranch(t)
 	worst := new(big.Rat)
-	for v, p := range mp.exact {
-		gap := testRatSub(testRatOf(p), testRatVec(mp.verts[v]))
+	for v, p := range mp.Exact {
+		gap := testRatSub(testRatOf(p), testRatVec(mp.Verts[v]))
 		d2 := testRatDot(gap, gap)
-		require.LessOrEqual(t, d2.Cmp(new(big.Rat).Mul(new(big.Rat).SetFloat64(mp.delta), new(big.Rat).SetFloat64(mp.delta))), 0)
+		require.LessOrEqual(t, d2.Cmp(new(big.Rat).Mul(new(big.Rat).SetFloat64(mp.Delta), new(big.Rat).SetFloat64(mp.Delta))), 0)
 		if d2.Cmp(worst) > 0 {
 			worst = d2
 		}
 	}
 	require.Positive(t, worst.Sign())
 	worstF, _ := worst.Float64()
-	require.LessOrEqual(t, mp.delta, 2*math.Sqrt(worstF))
+	require.LessOrEqual(t, mp.Delta, 2*math.Sqrt(worstF))
 
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.01))
 	require.NoError(t, err)
-	require.Equal(t, mp.delta, mesh.Bound().Base())
+	require.Equal(t, mp.Delta, mesh.Bound().Base())
 	require.True(t, mesh.n.SymDiffOK)
 
 	vol6, _ := testExactVolumeMoments(mp)
@@ -315,8 +315,8 @@ func TestMitredSweepPublishesPerVertexBounds(t *testing.T) {
 	require.NoError(t, err)
 	beta, err := mesh.vertexBounds()
 	require.NoError(t, err)
-	require.Len(t, beta, len(mp.exact))
-	require.Positive(t, mp.delta)
+	require.Len(t, beta, len(mp.Exact))
+	require.Positive(t, mp.Delta)
 
 	faceOfRole := map[string]*Face{}
 	for _, f := range body.Faces() {
@@ -325,8 +325,8 @@ func TestMitredSweepPublishesPerVertexBounds(t *testing.T) {
 		}
 	}
 	capCorners := 0
-	for k, tri := range mp.tris {
-		if mp.faceRoles[mp.triFace[k]] != provenance.RoleCapStart {
+	for k, tri := range mp.Tris {
+		if mp.FaceRoles[mp.TriFace[k]] != provenance.RoleCapStart {
 			continue
 		}
 		for _, v := range tri {
@@ -340,20 +340,20 @@ func TestMitredSweepPublishesPerVertexBounds(t *testing.T) {
 	require.Zero(t, capBound)
 
 	atDelta := 0
-	for v, p := range mp.exact {
-		gap := testRatSub(testRatOf(p), testRatVec(mp.verts[v]))
+	for v, p := range mp.Exact {
+		gap := testRatSub(testRatOf(p), testRatVec(mp.Verts[v]))
 		b := new(big.Rat).SetFloat64(beta[v])
 		require.LessOrEqual(t, testRatDot(gap, gap).Cmp(new(big.Rat).Mul(b, b)), 0, `vertex %d's β covers its exact gap`, v)
-		require.LessOrEqual(t, beta[v], mp.delta)
-		if beta[v] == mp.delta {
+		require.LessOrEqual(t, beta[v], mp.Delta)
+		if beta[v] == mp.Delta {
 			atDelta++
 		}
 	}
 	require.Positive(t, atDelta, `delta is some vertex's own β`)
 
 	want := map[*Face]float64{}
-	for k, tri := range mp.tris {
-		f := faceOfRole[mp.faceRoles[mp.triFace[k]]]
+	for k, tri := range mp.Tris {
+		f := faceOfRole[mp.FaceRoles[mp.TriFace[k]]]
 		want[f] = max(want[f], beta[tri[0]], beta[tri[1]], beta[tri[2]])
 	}
 	for f, w := range want {
@@ -361,7 +361,7 @@ func TestMitredSweepPublishesPerVertexBounds(t *testing.T) {
 		require.True(t, ok)
 		require.Equal(t, w, got)
 	}
-	require.Equal(t, mp.delta, mesh.Bound().Base())
+	require.Equal(t, mp.Delta, mesh.Bound().Base())
 }
 
 // TestMitredSweepRequireWallsRefuses is Table SM row SM7 over hand-built
@@ -402,7 +402,7 @@ func TestMitredSweepSpanLengthLower(t *testing.T) {
 	require.Equal(t, big.NewRat(5, 1), lambda)
 }
 
-// mitredVolumeMomentsRat is mitredVolumeMoments as a term-by-term rational
+// mitredVolumeMomentsRat is sweepmitre.VolumeMoments as a term-by-term rational
 // sum, every partial sum reduced: the reference the common-denominator sum
 // must reproduce exactly.
 func mitredVolumeMomentsRat(exact []sweepRatVec, tris [][3]int, anchor sweepRatVec) (*big.Rat, [3]*big.Rat) {
@@ -429,7 +429,7 @@ func mitredVolumeMomentsRat(exact []sweepRatVec, tris [][3]int, anchor sweepRatV
 func requireMitredSumsMatch(t *testing.T, exact []sweepRatVec, tris [][3]int, anchor sweepRatVec, label string) {
 	t.Helper()
 	wantVol, wantMom := mitredVolumeMomentsRat(exact, tris, anchor)
-	gotVol, gotMom := mitredVolumeMoments(exact, tris, anchor)
+	gotVol, gotMom := sweepmitre.VolumeMoments(exact, tris, anchor)
 	require.Zero(t, wantVol.Cmp(gotVol), `%s: vol6`, label)
 	require.Equal(t, wantVol.RatString(), gotVol.RatString(), `%s: vol6`, label)
 	for axis := range 3 {
@@ -438,7 +438,7 @@ func requireMitredSumsMatch(t *testing.T, exact []sweepRatVec, tris [][3]int, an
 	}
 }
 
-// TestMitredSweepMomentsMatchRationalSum pins mitredVolumeMoments to the
+// TestMitredSweepMomentsMatchRationalSum pins sweepmitre.VolumeMoments to the
 // term-by-term rational sum over the built mitred fixtures (the tree branch,
 // the clustered trunk and three placed branches, each with the anchor its
 // own build uses) and over random triangle sets whose coordinates carry
@@ -460,10 +460,10 @@ func TestMitredSweepMomentsMatchRationalSum(t *testing.T) {
 			payloads[name] = mp
 		}
 		for name, mp := range payloads {
-			c, err := constructMitredSweep(t.Context(), mp)
+			c, err := sweepmitre.ConstructPayload(t.Context(), mp)
 			require.NoError(t, err, name)
-			anchor := sweepmitre.Place(mp.xform, c.Anchor)
-			requireMitredSumsMatch(t, mp.exact, mp.tris, anchor, name)
+			anchor := sweepmitre.Place(mp.Xform, c.Anchor)
+			requireMitredSumsMatch(t, mp.Exact, mp.Tris, anchor, name)
 		}
 	})
 	t.Run("random", func(t *testing.T) {
@@ -503,7 +503,7 @@ func TestMitredSweepMomentsMatchRationalSum(t *testing.T) {
 	local := []sweepRatVec{point(0, 0, 0), point(2, 0, 0), point(0, 3, 0), point(0, 0, 5)}
 	anchor := sweepRatVec{big.NewRat(1, 3), big.NewRat(2, 7), big.NewRat(3, 11)}
 	tris := [][3]int{{0, 2, 1}, {0, 1, 3}, {0, 3, 2}, {1, 2, 3}}
-	vol6, moments := mitredVolumeMoments(local, tris, anchor)
+	vol6, moments := sweepmitre.VolumeMoments(local, tris, anchor)
 	frame, err := r3.NewFrame(r3.NewVec(7, 11, 13), r3.NewVec(0, 1, 0), r3.NewVec(-1, 0, 0))
 	require.NoError(t, err)
 	turn, err := r3.FromFrame(frame)
@@ -515,7 +515,7 @@ func TestMitredSweepMomentsMatchRationalSum(t *testing.T) {
 		for i, p := range local {
 			placed[i] = sweepmitre.Place(xform, p)
 		}
-		wantVol, wantMoments := mitredVolumeMoments(placed, tris, sweepmitre.Place(xform, anchor))
+		wantVol, wantMoments := sweepmitre.VolumeMoments(placed, tris, sweepmitre.Place(xform, anchor))
 		gotVol, gotMoments := sweepmitre.PlacedVolumeMoments(vol6, moments, xform)
 		require.Zero(t, wantVol.Cmp(gotVol))
 		for axis := range 3 {

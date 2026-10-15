@@ -43,7 +43,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/revolveangle/` | Exact angle denotations and certified sweep extremes. See evaluator §6 and sweep §3. |
 | `internal/sweeparc/` | Exact circle carriers, rational vectors, axis lines, plane gates and angle bounds. See sweep §3. |
 | `internal/sweepinput/` | Recorded Sweep `Path`, exact path records, tangent gates, path validation, recorded section gates and closed-path class gates. See sweep §3, §5, §15.4. |
-| `internal/sweepmitre/` | Mitred profile gates, exact sections, placement, rounding, triangle assembly and measurements. See sweep §16. |
+| `internal/sweepmitre/` | The mitred sweep payload and its builder over nodes: profile gates, exact sections, placement, rounding, triangle assembly, Table BM topology and measurements. Root `mitredSweepPayload` aliases it. See sweep §16, evaluator §8. |
 | `internal/coil/` | Coil magnitude, profile side and pitch gates, preflight gates, stations, axis coordinates, moments and closed forms. See helix §4, §5, §7. |
 | `internal/coilshell/` | Builds the held coil shell, mesh proofs and wall-area enclosures. See helix §5, §7, §8. |
 | `internal/sweeptransport/` | Bounded rotation-minimizing endpoint frames over recorded line and arc spans, and frames along a recorded path. See sweep §3.2. |
