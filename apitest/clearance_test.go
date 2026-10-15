@@ -290,7 +290,7 @@ func TestClearanceInchExtrudeAxialGapContainsTruth(t *testing.T) {
 	// The leg that makes bodyGeom.delta's AXIAL term load-bearing on its own.
 	// Both sketch planes here are axis-aligned and unplaced, so the point and
 	// tilt terms are exactly zero under the frame's own exemption and only
-	// prismPayload.axialDelta can widen anything.
+	// prismPayload.AxialDelta can widen anything.
 	//
 	// The lower box is swept 1.7 in. That is exactly 43.18 mm, which has no
 	// float64 representation, so the held top cap sits a few ulp off the level

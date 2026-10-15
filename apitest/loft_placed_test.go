@@ -344,7 +344,7 @@ func TestLoftPlacedReflectionHerringbone(t *testing.T) {
 // small constant factor of the FIRST placement's own, since each
 // evaluation re-lifts from the two ORIGINAL recorded profiles rather than
 // moving an already-placed mesh — never accumulating rounding across the
-// chain the way facetedPayload.placed's move-the-held-mesh path would.
+// chain the way facetedPayload.Placed's move-the-held-mesh path would.
 func TestLoftCopyPlacementChainDoesNotAccumulate(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)

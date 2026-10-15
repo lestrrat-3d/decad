@@ -15,7 +15,7 @@ import (
 
 // twistShellPlacedGap compares the affine image of a local shell with the
 // denoted world-normal shell on an almost rigidly placed source. Every amount
-// is expressed in local coordinates, before facetedPayload.placed applies L.
+// is expressed in local coordinates, before facetedPayload.Placed applies L.
 type twistShellPlacedGap struct {
 	Boundary float64
 	Volume   float64
