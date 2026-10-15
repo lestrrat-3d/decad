@@ -24,8 +24,8 @@ func positiveBoundFacetedFixture(t *testing.T, reverse bool) (*Document, *Body, 
 	require.NoError(t, err)
 	pp, ok := union.n.Payload.(facetedPayload)
 	require.True(t, ok)
-	require.Positive(t, pp.meshBound)
-	require.Positive(t, pp.volSymDiff)
+	require.Positive(t, pp.MeshBound)
+	require.Positive(t, pp.VolSymDiff)
 	require.Empty(t, pp.exactSourceVerts)
 	floor := internalOffsetBox(t, doc, -20, -20, 20, 20, -10,
 		Distance{D: units.Millimeters(10), Dir: Along})
@@ -70,7 +70,7 @@ func positiveBoundFacetedUnionRetainsExactLowerFace(t *testing.T, reverse bool) 
 	// Without the exact support certificate the held mesh decides the pair,
 	// and its mesh bound turns the held touch into the §10.4 band.
 	require.Equal(t, ContactBand, uncertain.Relation)
-	require.Equal(t, 2*placed.n.Payload.(facetedPayload).meshBound, uncertain.Gap.Bound.Base())
+	require.Equal(t, 2*placed.n.Payload.(facetedPayload).MeshBound, uncertain.Gap.Bound.Base())
 }
 
 func TestPositiveBoundFacetedUnionRefusesToolBelowLowerFace(t *testing.T) {
@@ -84,7 +84,7 @@ func TestPositiveBoundFacetedUnionRefusesToolBelowLowerFace(t *testing.T) {
 	union, err := Union(t.Context(), base, upper)
 	require.NoError(t, err)
 	pp := union.n.Payload.(facetedPayload)
-	require.Positive(t, pp.meshBound)
+	require.Positive(t, pp.MeshBound)
 	require.Nil(t, pp.lowerSupport)
 	_, proven, err := sourceFacetedAxisSupport(t.Context(), union, r3.Identity(), 2, 0)
 	require.NoError(t, err)

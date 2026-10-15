@@ -144,7 +144,7 @@ func tryPointConeBoolean(ctx context.Context, op meshbool.OperationKind, d *Docu
 		return nil, false, nil
 	}
 	fp, ok := target.n.Payload.(facetedPayload)
-	if !ok || fp.xform != r3.Identity() {
+	if !ok || fp.Xform != r3.Identity() {
 		return nil, false, nil
 	}
 	record := pointConeTrimRecord{base: fp}
@@ -153,7 +153,7 @@ func tryPointConeBoolean(ctx context.Context, op meshbool.OperationKind, d *Docu
 	} else if fp.pointSection == nil || fp.pointSection.apex != (r3.Vec{}) {
 		return nil, false, nil
 	}
-	if !pointcone.AboveFarCap(record.base.Verts, record.base.meshBound, cone.far) {
+	if !pointcone.AboveFarCap(record.base.Verts, record.base.MeshBound, cone.far) {
 		return nil, false, nil
 	}
 	if op == meshbool.OpCut {
@@ -188,7 +188,7 @@ func pointConeLimitEarlier(old, next *pointConeLimit, base facetedPayload) bool 
 
 func pointConeLimitOrdered(earlier, later *pointConeLimit, base facetedPayload) bool {
 	return pointcone.Ordered(earlier.apex, earlier.slope, later.apex, later.slope,
-		base.Verts, base.meshBound)
+		base.Verts, base.MeshBound)
 }
 
 func buildPointConeTrim(ctx context.Context, d *Document, ref producerID,
@@ -332,7 +332,7 @@ func buildPointConeInsideBand(ctx context.Context, d *Document, ref producerID,
 	capBound := proofbound.AbsSumUpper(upperCapBound, lowerCapBound)
 	roundEnvelope := proofbound.AbsSumUpper(proofbound.ProductUpper(farRound, lip),
 		upperNodeRound, lowerNodeRound)
-	bound := proofbound.AbsSumUpper(proofbound.ProductUpper(base.meshBound, lip),
+	bound := proofbound.AbsSumUpper(proofbound.ProductUpper(base.MeshBound, lip),
 		capBound, roundEnvelope)
 	areaUpper, err := proofbound.PerturbedAreaUpperContext(ctx, verts, tris, roundEnvelope)
 	if err != nil {
@@ -342,18 +342,18 @@ func buildPointConeInsideBand(ctx context.Context, d *Document, ref producerID,
 	// swept area by the square of the crossing map's Lipschitz bound.
 	capAreaFactor := max(1, proofbound.ProductUpper(upperLip, upperLip),
 		proofbound.ProductUpper(lowerLip, lowerLip))
-	volumeGap := proofbound.AbsSumUpper(base.volSymDiff,
+	volumeGap := proofbound.AbsSumUpper(base.VolSymDiff,
 		proofbound.ProductUpper(proofbound.ProductUpper(capArea, capBound), capAreaFactor),
 		proofbound.SweptVolumeAllow(roundEnvelope, areaUpper))
-	baseArea, err := proofbound.PerturbedAreaUpperContext(ctx, base.Verts, base.Tris, base.meshBound)
+	baseArea, err := proofbound.PerturbedAreaUpperContext(ctx, base.Verts, base.Tris, base.MeshBound)
 	if err != nil {
 		return nil, err
 	}
-	areaSlack := proofbound.AbsSumUpper(base.areaSlack, baseArea, areaUpper,
+	areaSlack := proofbound.AbsSumUpper(base.AreaSlack, baseArea, areaUpper,
 		proofbound.ProductUpper(proofbound.AbsSumUpper(1,
 			proofbound.ProductUpper(upperLip, upperLip),
 			proofbound.ProductUpper(lowerLip, lowerLip)),
-			proofbound.AbsSumUpper(capArea, base.areaSlack)))
+			proofbound.AbsSumUpper(capArea, base.AreaSlack)))
 	if proofbound.IsNonFinite(bound) || proofbound.IsNonFinite(volumeGap) ||
 		proofbound.IsNonFinite(areaSlack) {
 		return nil, fmt.Errorf("%w: the point-cone intersection has no finite mesh proof", ErrUnsupported)
@@ -363,9 +363,9 @@ func buildPointConeInsideBand(ctx context.Context, d *Document, ref producerID,
 		vertexBound[i] = bound
 	}
 	pp := facetedPayload{
-		Verts: verts, Tris: tris, Src: src, groups: groups, vertexBound: vertexBound,
-		meshBound: bound, volSymDiff: volumeGap, areaSlack: areaSlack,
-		dPair: base.dPair, xform: r3.Identity(), pointCone: &record,
+		Verts: verts, Tris: tris, Src: src, groups: groups, VertexBound: vertexBound,
+		MeshBound: bound, VolSymDiff: volumeGap, AreaSlack: areaSlack,
+		DPair: base.DPair, Xform: r3.Identity(), pointCone: &record,
 	}
 	return buildFacetedBody(ctx, d, ref, pp)
 }
@@ -466,7 +466,7 @@ func buildPointConeOuterBand(ctx context.Context, d *Document, ref producerID,
 	roundEnvelope := proofbound.AbsSumUpper(
 		proofbound.ProductUpper(farRound, proofbound.AbsSumUpper(1, lip)), maxNodeRound)
 	bound := proofbound.AbsSumUpper(
-		proofbound.ProductUpper(base.meshBound, proofbound.AbsSumUpper(1, lip)),
+		proofbound.ProductUpper(base.MeshBound, proofbound.AbsSumUpper(1, lip)),
 		capBound, roundEnvelope)
 	capArea := fullCapArea
 	areaUpper, err := proofbound.PerturbedAreaUpperContext(ctx, verts, tris, roundEnvelope)
@@ -474,16 +474,16 @@ func buildPointConeOuterBand(ctx context.Context, d *Document, ref producerID,
 		return nil, err
 	}
 	capAreaFactor := max(1, proofbound.ProductUpper(lip, lip))
-	volumeGap := proofbound.AbsSumUpper(base.volSymDiff,
+	volumeGap := proofbound.AbsSumUpper(base.VolSymDiff,
 		proofbound.ProductUpper(proofbound.ProductUpper(capArea, capBound), capAreaFactor),
 		proofbound.SweptVolumeAllow(roundEnvelope, areaUpper))
-	baseArea, err := proofbound.PerturbedAreaUpperContext(ctx, base.Verts, base.Tris, base.meshBound)
+	baseArea, err := proofbound.PerturbedAreaUpperContext(ctx, base.Verts, base.Tris, base.MeshBound)
 	if err != nil {
 		return nil, err
 	}
-	areaSlack := proofbound.AbsSumUpper(base.areaSlack, baseArea,
+	areaSlack := proofbound.AbsSumUpper(base.AreaSlack, baseArea,
 		proofbound.ProductUpper(proofbound.ProductUpper(lip, lip),
-			proofbound.AbsSumUpper(capArea, base.areaSlack)), areaUpper)
+			proofbound.AbsSumUpper(capArea, base.AreaSlack)), areaUpper)
 	if proofbound.IsNonFinite(bound) || proofbound.IsNonFinite(volumeGap) ||
 		proofbound.IsNonFinite(areaSlack) {
 		return nil, fmt.Errorf("%w: the point-cone trim has no finite mesh proof", ErrUnsupported)
@@ -493,9 +493,9 @@ func buildPointConeOuterBand(ctx context.Context, d *Document, ref producerID,
 		vertexBound[i] = bound
 	}
 	pp := facetedPayload{
-		Verts: verts, Tris: tris, Src: src, groups: groups, vertexBound: vertexBound,
-		meshBound: bound, volSymDiff: volumeGap, areaSlack: areaSlack,
-		dPair: base.dPair, xform: r3.Identity(), pointCone: &record,
+		Verts: verts, Tris: tris, Src: src, groups: groups, VertexBound: vertexBound,
+		MeshBound: bound, VolSymDiff: volumeGap, AreaSlack: areaSlack,
+		DPair: base.DPair, Xform: r3.Identity(), pointCone: &record,
 	}
 	return buildFacetedBody(ctx, d, ref, pp)
 }
@@ -503,7 +503,7 @@ func buildPointConeOuterBand(ctx context.Context, d *Document, ref producerID,
 func pointConeHasOutsideWitness(base facetedPayload, cone *pointConeLimit) bool {
 	move := new(big.Rat).Quo(new(big.Rat).Mul(
 		new(big.Rat).Add(big.NewRat(1, 1), cone.slope),
-		proofarith.FloatRat(base.meshBound)), cone.apex)
+		proofarith.FloatRat(base.MeshBound)), cone.apex)
 	for _, p := range base.Verts[1:] {
 		sample, err := pointConeFactor(p, cone)
 		if err != nil {

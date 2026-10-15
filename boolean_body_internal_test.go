@@ -151,7 +151,7 @@ func TestFacetedReadingsReportEachVertexsOwnBound(t *testing.T) {
 		}
 		require.Equal(t, units.Millimeters(beta), v.Position().Bound, `trunk vertex %v reports its own bound`, v.n.Position)
 		kept++
-		if beta < fp.meshBound {
+		if beta < fp.MeshBound {
 			finer++
 		}
 	}
@@ -181,7 +181,7 @@ func TestFacetedReadingsReportEachVertexsOwnBound(t *testing.T) {
 		require.True(t, ok)
 		require.Equal(t, units.Millimeters(want), s.Bound, `an untouched trunk face reports its own facets' bound`)
 		untouched++
-		if want < fp.meshBound {
+		if want < fp.MeshBound {
 			finerFaces++
 		}
 	}
@@ -191,7 +191,7 @@ func TestFacetedReadingsReportEachVertexsOwnBound(t *testing.T) {
 	// The box: the true extreme on each side is at most the farthest any
 	// vertex's facet bound reaches past the held one, and at least the
 	// farthest any vertex's own bound proves a true point stands.
-	mesh, err := tessellateContext(t.Context(), body, units.Millimeters(fp.meshBound), VerifyAll)
+	mesh, err := tessellateContext(t.Context(), body, units.Millimeters(fp.MeshBound), VerifyAll)
 	require.NoError(t, err)
 	reachOf := make([]float64, len(mesh.n.Vertices))
 	for _, tri := range mesh.n.Triangles {
@@ -241,7 +241,7 @@ func TestFacetedReadingsReportEachVertexsOwnBound(t *testing.T) {
 		e = proofbound.ProvenUpRound(w)
 	}
 	require.Equal(t, units.Millimeters(proofbound.Radius3D(e)), box.Bound)
-	require.Less(t, box.Bound.Mag(), proofbound.Radius3D(fp.meshBound), `the box reads each extreme's own bounds, not the body-wide one`)
+	require.Less(t, box.Bound.Mag(), proofbound.Radius3D(fp.MeshBound), `the box reads each extreme's own bounds, not the body-wide one`)
 }
 
 // TestFacetedExtremeErrorCoversAnInnerVertexsReach is docs/faceted-vertex-
@@ -314,7 +314,7 @@ func TestFacetedPlacementChargesEachVertexAtItsOwnMagnitude(t *testing.T) {
 	require.NoError(t, err)
 	next, ok := placed.n.Payload.(facetedPayload)
 	require.True(t, ok)
-	require.Len(t, next.vertexBound, len(src.vertexBound))
+	require.Len(t, next.VertexBound, len(src.VertexBound))
 
 	const maxTrans = 3.0
 	magOf := func(v r3.Vec) float64 { return math.Max(math.Abs(v.X), math.Max(math.Abs(v.Y), math.Abs(v.Z))) }
@@ -324,15 +324,15 @@ func TestFacetedPlacementChargesEachVertexAtItsOwnMagnitude(t *testing.T) {
 	}
 	origin := -1
 	for i, v := range src.Verts {
-		own := proofbound.AbsSumUpper(src.vertexBound[i], proofbound.RigidRoundAllow(magOf(v), maxTrans))
-		require.GreaterOrEqual(t, next.vertexBound[i], own, `vertex %v is charged at least its own rounding`, v)
+		own := proofbound.AbsSumUpper(src.VertexBound[i], proofbound.RigidRoundAllow(magOf(v), maxTrans))
+		require.GreaterOrEqual(t, next.VertexBound[i], own, `vertex %v is charged at least its own rounding`, v)
 		if v == (r3.Vec{}) {
 			origin = i
 		}
 	}
 	require.GreaterOrEqual(t, origin, 0)
 	require.Equal(t, r3.NewVec(1, 2, 3), next.Verts[origin])
-	require.Zero(t, src.vertexBound[origin], `the plate corner is held exactly`)
-	require.Equal(t, proofbound.AbsSumUpper(0, proofbound.RigidRoundAllow(0, maxTrans)), next.vertexBound[origin])
-	require.Less(t, next.vertexBound[origin], proofbound.AbsSumUpper(0, proofbound.RigidRoundAllow(maxIn, maxTrans)))
+	require.Zero(t, src.VertexBound[origin], `the plate corner is held exactly`)
+	require.Equal(t, proofbound.AbsSumUpper(0, proofbound.RigidRoundAllow(0, maxTrans)), next.VertexBound[origin])
+	require.Less(t, next.VertexBound[origin], proofbound.AbsSumUpper(0, proofbound.RigidRoundAllow(maxIn, maxTrans)))
 }

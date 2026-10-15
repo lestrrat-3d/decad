@@ -45,12 +45,12 @@ func tryLoftMirrorCylinderUnion(ctx context.Context, op meshbool.OperationKind,
 	} else if pp, ok := b.n.Payload.(prismPayload); ok && loftMirrorCylinderBlank(pp) {
 		blank, pairs = b, []*Body{a}
 	} else if fp, ok := a.n.Payload.(facetedPayload); ok &&
-		fp.loftMirrorCylinderJoin != nil && fp.xform == r3.Identity() {
+		fp.loftMirrorCylinderJoin != nil && fp.Xform == r3.Identity() {
 		blank = fp.loftMirrorCylinderJoin.blank
 		source = fp.loftMirrorCylinderJoin.source
 		pairs = append(append([]*Body(nil), fp.loftMirrorCylinderJoin.pairs...), b)
 	} else if fp, ok := b.n.Payload.(facetedPayload); ok &&
-		fp.loftMirrorCylinderJoin != nil && fp.xform == r3.Identity() {
+		fp.loftMirrorCylinderJoin != nil && fp.Xform == r3.Identity() {
 		blank = fp.loftMirrorCylinderJoin.blank
 		source = fp.loftMirrorCylinderJoin.source
 		pairs = append(append([]*Body(nil), fp.loftMirrorCylinderJoin.pairs...), a)
@@ -75,7 +75,7 @@ func loftMirrorCylinderPairs(ctx context.Context, d *Document, ref producerID,
 		return nil, false, nil
 	}
 	first, firstOK := pairs[0].n.Payload.(facetedPayload)
-	if !firstOK || first.loftMirrorJoin == nil || first.xform != r3.Identity() ||
+	if !firstOK || first.loftMirrorJoin == nil || first.Xform != r3.Identity() ||
 		!first.contactAudited || source != nil && source != first.loftMirrorJoin {
 		return nil, false, nil
 	}
@@ -215,11 +215,11 @@ func loftMirrorCylinderPlaceTeeth(n, workers int, place func(i int) (*Body, erro
 }
 
 func loftMirrorCylinderPairMotion(fp facetedPayload, source *loftMirrorJoinRecord) (r3.Transform, bool) {
-	if fp.loftMirrorJoin == source && fp.xform == r3.Identity() {
+	if fp.loftMirrorJoin == source && fp.Xform == r3.Identity() {
 		return r3.Identity(), true
 	}
 	if fp.loftMirrorCopy == nil || fp.loftMirrorCopy.source != source ||
-		fp.xform != fp.loftMirrorCopy.motion ||
+		fp.Xform != fp.loftMirrorCopy.motion ||
 		!loftCylinderAxialPlacement(fp.loftMirrorCopy.motion) &&
 			!loftmesh.NearAxialPlacement(fp.loftMirrorCopy.motion) {
 		return r3.Transform{}, false
@@ -277,7 +277,7 @@ func buildLoftMirrorCylinderUnion(ctx context.Context, d *Document, ref producer
 	blank *Body, pairs []*Body, source *loftMirrorJoinRecord,
 	lowerHalf *Body, reflection r3.Transform, bridgeBound, bridgeVolume float64) (*Body, error) {
 	lower, ok := lowerHalf.n.Payload.(facetedPayload)
-	if !ok || lower.loftCylinderJoin == nil || !lower.contactAudited || lower.xform != r3.Identity() {
+	if !ok || lower.loftCylinderJoin == nil || !lower.contactAudited || lower.Xform != r3.Identity() {
 		return nil, fmt.Errorf("%w: mirrored cylinder's lower slab has no audited source", ErrUnsupported)
 	}
 	upperHalf, err := placePayload(ctx, lower, d, ref, reflection)
@@ -310,7 +310,7 @@ func buildLoftMirrorCylinderUnion(ctx context.Context, d *Document, ref producer
 	}
 	vertexMap := make([]int, len(upper.Verts))
 	verts := append([]r3.Vec(nil), lower.Verts...)
-	vertexBound := append([]float64(nil), lower.vertexBound...)
+	vertexBound := append([]float64(nil), lower.VertexBound...)
 	for i, v := range upper.Verts {
 		if v.Z == middle {
 			index, exists := midVertices[v]
@@ -319,7 +319,7 @@ func buildLoftMirrorCylinderUnion(ctx context.Context, d *Document, ref producer
 			}
 			vertexMap[i] = index
 			vertexBound[index] = max(vertexBound[index],
-				proofbound.AbsSumUpper(upper.vertexBound[i], bridgeBound))
+				proofbound.AbsSumUpper(upper.VertexBound[i], bridgeBound))
 			continue
 		}
 		if v.Z <= middle {
@@ -328,7 +328,7 @@ func buildLoftMirrorCylinderUnion(ctx context.Context, d *Document, ref producer
 		vertexMap[i] = len(verts)
 		verts = append(verts, v)
 		vertexBound = append(vertexBound,
-			proofbound.AbsSumUpper(upper.vertexBound[i], bridgeBound))
+			proofbound.AbsSumUpper(upper.VertexBound[i], bridgeBound))
 	}
 	if !loftMirrorCylinderCapsOppose(lower, upper, vertexMap, lowCaps[1], lowCaps[1]) {
 		return nil, fmt.Errorf("%w: reflected cylinder middle caps do not tile equally", ErrUnsupported)
@@ -383,11 +383,11 @@ func buildLoftMirrorCylinderUnion(ctx context.Context, d *Document, ref producer
 		loftmesh.MaxLoftAuditTriangles, loftCylinderAuditMaxScans); err != nil {
 		return nil, err
 	}
-	bound := max(lower.meshBound,
-		proofbound.AbsSumUpper(upper.meshBound, bridgeBound))
-	volumeGap := proofbound.AbsSumUpper(lower.volSymDiff, upper.volSymDiff, bridgeVolume)
-	areaSlack := proofbound.AbsSumUpper(lower.areaSlack, upper.areaSlack,
-		proofbound.ProductUpper(2, max(lower.areaSlack, upper.areaSlack)))
+	bound := max(lower.MeshBound,
+		proofbound.AbsSumUpper(upper.MeshBound, bridgeBound))
+	volumeGap := proofbound.AbsSumUpper(lower.VolSymDiff, upper.VolSymDiff, bridgeVolume)
+	areaSlack := proofbound.AbsSumUpper(lower.AreaSlack, upper.AreaSlack,
+		proofbound.ProductUpper(2, max(lower.AreaSlack, upper.AreaSlack)))
 	diameter := facetedSourceDiameterUpper(verts, bound)
 	if bound > 0.1 || proofbound.IsNonFinite(bound) || proofbound.IsNonFinite(volumeGap) ||
 		proofbound.IsNonFinite(areaSlack) || proofbound.IsNonFinite(diameter) {
@@ -419,8 +419,8 @@ func buildLoftMirrorCylinderUnion(ctx context.Context, d *Document, ref producer
 		}
 	}
 	fp := facetedPayload{Verts: verts, Tris: tris, Src: src, groups: groups,
-		vertexBound: vertexBound, meshBound: bound, volSymDiff: volumeGap,
-		areaSlack: areaSlack, dPair: diameter, contactAudited: true, xform: r3.Identity(),
+		VertexBound: vertexBound, MeshBound: bound, VolSymDiff: volumeGap,
+		AreaSlack: areaSlack, DPair: diameter, contactAudited: true, Xform: r3.Identity(),
 		loftMirrorCylinderJoin: &loftMirrorCylinderJoinRecord{
 			blank: blank, source: source, pairs: append([]*Body(nil), pairs...),
 			lowerHalf: lowerHalf, capGroups: capGroups, capOutlines: capOutlines,

@@ -131,7 +131,7 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		return 0, false, nil
 	}
 	if payload, ok := body.n.Payload.(facetedPayload); ok {
-		return payload.diameter, tolerance.UsableMagnitude(payload.diameter), nil
+		return payload.Diameter, tolerance.UsableMagnitude(payload.Diameter), nil
 	}
 	if payload, ok := body.n.Payload.(loftPayload); ok {
 		d, ok, err := diameter.PointsContext(ctx, payload.Verts)

@@ -41,9 +41,9 @@ func revolveSectorBoreCapRecord(joined facetedPayload) (revolveSectorBoreCaps, b
 	record := joined.revolveLoftJoin
 	if record == nil || record.certificate == nil || record.blank == nil ||
 		record.capRing == nil || record.certificate.section.blank != record.blank ||
-		record.boundaryBound != joined.meshBound ||
-		record.volumeBound != joined.volSymDiff || record.areaBound != joined.areaSlack ||
-		joined.xform != r3.Identity() || !joined.contactAudited {
+		record.boundaryBound != joined.MeshBound ||
+		record.volumeBound != joined.VolSymDiff || record.areaBound != joined.AreaSlack ||
+		joined.Xform != r3.Identity() || !joined.contactAudited {
 		return caps, false
 	}
 	section, ring := record.certificate.section, record.capRing
@@ -53,7 +53,7 @@ func revolveSectorBoreCapRecord(joined facetedPayload) (revolveSectorBoreCaps, b
 		section.axisSpan < 0 || section.axisSpan >= count ||
 		n < 16 || n > revolvemesh.SectorBoreMaxStations ||
 		len(joined.Tris) != len(joined.Src) ||
-		len(joined.Verts) != len(joined.vertexBound) {
+		len(joined.Verts) != len(joined.VertexBound) {
 		return caps, false
 	}
 	axis := section.axisSpan
@@ -199,12 +199,12 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 		return nil, true, err
 	}
 	if proofbound.IsNonFinite(boreBound) || boreBound >= radius ||
-		max(joined.meshBound, boreBound) > 0.1 ||
-		proofbound.AbsSumUpper(radius, joined.meshBound, boreBound) >=
+		max(joined.MeshBound, boreBound) > 0.1 ||
+		proofbound.AbsSumUpper(radius, joined.MeshBound, boreBound) >=
 			min(caps.lowRadius, caps.highRadius) {
 		return nil, true, fmt.Errorf("%w: bore has no separate cap ring", ErrUnsupported)
 	}
-	clearance := proofbound.AbsSumUpper(radius, joined.meshBound, boreBound)
+	clearance := proofbound.AbsSumUpper(radius, joined.MeshBound, boreBound)
 	section := joined.revolveLoftJoin.certificate.section
 	for i, span := range section.spans {
 		if i == section.axisSpan || i == caps.low || i == caps.high {
@@ -269,7 +269,7 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 	wallGroup := len(mesh.groups)
 	mesh.groups = append(mesh.groups, facetGroup{origins: wall.originRefs(),
 		surface: wall.n.Surface, normalBound: wall.n.NormalBound, reversed: !wall.n.Reversed})
-	vertexBound := append([]float64(nil), joined.vertexBound...)
+	vertexBound := append([]float64(nil), joined.VertexBound...)
 	innerLow, innerHigh := make([]int, n), make([]int, n)
 	for i := range n {
 		low := r3.Vec{X: caps.lowX, Y: inner[i].U, Z: inner[i].V}
@@ -320,9 +320,9 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 	shellArea := proofbound.ProductUpper(
 		proofbound.ProductUpper(2, proofbound.TwoPiUpper()),
 		proofbound.ProductUpper(radius, boreBound))
-	volumeGap := proofbound.AbsSumUpper(joined.volSymDiff,
+	volumeGap := proofbound.AbsSumUpper(joined.VolSymDiff,
 		proofbound.ProductUpper(shellArea, height))
-	bound := max(joined.meshBound, boreBound)
+	bound := max(joined.MeshBound, boreBound)
 	heldArea, err := proofbound.PerturbedAreaUpperContext(ctx, mesh.verts, mesh.tris, bound)
 	if err != nil {
 		return nil, true, err
@@ -333,15 +333,15 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 	}
 	wallArea := proofbound.ProductUpper(
 		proofbound.ProductUpper(proofbound.TwoPiUpper(), radius), height)
-	areaSlack := proofbound.AbsSumUpper(joined.areaSlack, heldArea,
+	areaSlack := proofbound.AbsSumUpper(joined.AreaSlack, heldArea,
 		oldArea.Value.Base(), oldArea.Bound.Base(), wallArea)
 	if proofbound.IsNonFinite(volumeGap) || proofbound.IsNonFinite(areaSlack) {
 		return nil, true, fmt.Errorf("%w: bore has no finite measure proof", ErrUnsupported)
 	}
 	result := joined
 	result.Verts, result.Tris, result.Src, result.groups = mesh.verts, mesh.tris, mesh.src, mesh.groups
-	result.vertexBound, result.meshBound = vertexBound, bound
-	result.volSymDiff, result.areaSlack = volumeGap, areaSlack
+	result.VertexBound, result.MeshBound = vertexBound, bound
+	result.VolSymDiff, result.AreaSlack = volumeGap, areaSlack
 	result.revolveLoftJoin = nil
 	result.contactAudited = true
 	body, err := buildFacetedBody(ctx, d, ref, result)

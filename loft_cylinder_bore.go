@@ -51,7 +51,7 @@ func tryLoftCylinderBoreCut(ctx context.Context, op meshbool.OperationKind,
 	}
 	joined, ok := target.n.Payload.(facetedPayload)
 	if !ok || joined.loftCylinderJoin == nil || !joined.contactAudited ||
-		joined.xform != r3.Identity() {
+		joined.Xform != r3.Identity() {
 		return nil, false, nil
 	}
 	record := joined.loftCylinderJoin
@@ -111,7 +111,7 @@ func tryLoftCylinderBoreCut(ctx context.Context, op meshbool.OperationKind,
 func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 	joined facetedPayload, radius float64, wall *Face) (*Body, error) {
 	record := joined.loftCylinderJoin
-	if len(joined.Tris) != len(joined.Src) || len(joined.Verts) != len(joined.vertexBound) {
+	if len(joined.Tris) != len(joined.Src) || len(joined.Verts) != len(joined.VertexBound) {
 		return nil, fmt.Errorf("%w: circular join has an incomplete mesh record", ErrUnsupported)
 	}
 	source := &joinedMesh{verts: joined.Verts, tris: joined.Tris, src: joined.Src}
@@ -144,7 +144,7 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 	}
 	if proofbound.IsNonFinite(boreBound) || boreBound >= radius ||
 		proofbound.AbsSumUpper(radius, boreBound) >= record.radius ||
-		proofbound.AbsSumUpper(radius, boreBound, joined.meshBound) >= record.minSideRadius {
+		proofbound.AbsSumUpper(radius, boreBound, joined.MeshBound) >= record.minSideRadius {
 		return nil, fmt.Errorf("%w: circular bore reaches a joined side facet", ErrUnsupported)
 	}
 	if proofbound.AbsSumUpper(radius, boreBound, record.innerInset) >= record.radius {
@@ -163,7 +163,7 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 	mesh.groups = append(mesh.groups, facetGroup{origins: wall.originRefs(),
 		surface: wall.n.Surface, normalBound: wall.n.NormalBound,
 		reversed: !wall.n.Reversed})
-	vertexBound := append([]float64(nil), joined.vertexBound...)
+	vertexBound := append([]float64(nil), joined.VertexBound...)
 	var inner [2][]int
 	for cap := range 2 {
 		inner[cap] = make([]int, stations)
@@ -242,9 +242,9 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 	shellArea := proofbound.ProductUpper(
 		proofbound.ProductUpper(2, proofbound.TwoPiUpper()),
 		proofbound.ProductUpper(radius, boreBound))
-	volumeGap := proofbound.AbsSumUpper(joined.volSymDiff,
+	volumeGap := proofbound.AbsSumUpper(joined.VolSymDiff,
 		proofbound.ProductUpper(shellArea, height))
-	bound := max(joined.meshBound, boreBound)
+	bound := max(joined.MeshBound, boreBound)
 	heldArea, err := proofbound.PerturbedAreaUpperContext(ctx, mesh.verts, mesh.tris, bound)
 	if err != nil {
 		return nil, err
@@ -255,17 +255,17 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 	}
 	wallArea := proofbound.ProductUpper(
 		proofbound.ProductUpper(proofbound.TwoPiUpper(), radius), height)
-	areaSlack := proofbound.AbsSumUpper(joined.areaSlack, heldArea,
+	areaSlack := proofbound.AbsSumUpper(joined.AreaSlack, heldArea,
 		blankArea.Value.Base(), blankArea.Bound.Base(), wallArea)
 	if proofbound.IsNonFinite(volumeGap) || proofbound.IsNonFinite(areaSlack) {
 		return nil, fmt.Errorf("%w: circular bore has no finite measure proof", ErrUnsupported)
 	}
 	result := joined
 	result.Verts, result.Tris, result.Src, result.groups = mesh.verts, mesh.tris, mesh.src, mesh.groups
-	result.vertexBound, result.meshBound = vertexBound, bound
-	result.volSymDiff, result.areaSlack = volumeGap, areaSlack
-	result.dPair = facetedSourceDiameterUpper(result.Verts, result.meshBound)
-	if proofbound.IsNonFinite(result.dPair) {
+	result.VertexBound, result.MeshBound = vertexBound, bound
+	result.VolSymDiff, result.AreaSlack = volumeGap, areaSlack
+	result.DPair = facetedSourceDiameterUpper(result.Verts, result.MeshBound)
+	if proofbound.IsNonFinite(result.DPair) {
 		return nil, fmt.Errorf("%w: circular bore has no finite diameter proof", ErrUnsupported)
 	}
 	result.loftCylinderJoin = nil

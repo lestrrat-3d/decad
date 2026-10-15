@@ -347,7 +347,7 @@ For a faceted mover, the transient placement applies the float delta
 `Δ = P0⁻¹ then C_k` to its current true solid. Its `η_k` is the larger of the
 record term above and `‖B(Δ) − B(T*)‖_F·ρ_h + |t(Δ) − (c − B(T*)·c + t*)|`,
 where `ρ_h` is the held vertices' largest L1 distance from the origin plus
-`meshBound`. The linear factor used for the swept-volume transfer is enlarged
+`MeshBound`. The linear factor used for the swept-volume transfer is enlarged
 by the same maximum. A non-translation pose on a faceted mover still has an
 unbounded record term and cannot transfer a collision through `η_k`.
 

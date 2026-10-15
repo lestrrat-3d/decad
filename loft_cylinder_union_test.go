@@ -25,10 +25,10 @@ func TestLoftCylinderUnionCentroidDiameter(t *testing.T) {
 	payload, ok := joined.n.Payload.(facetedPayload)
 	require.True(t, ok)
 	require.NotNil(t, payload.loftCylinderJoin)
-	require.Positive(t, payload.volSymDiff)
+	require.Positive(t, payload.VolSymDiff)
 	// The source tab reaches radius 4 and the blank reaches radius 3 on the
 	// opposite side; the certified pair diameter must exceed 7 mm.
-	require.Greater(t, payload.dPair, 7.0)
+	require.Greater(t, payload.DPair, 7.0)
 	centroid, err := joined.Centroid()
 	require.NoError(t, err)
 	require.Greater(t, centroid.Bound.Base(), 0.1)
@@ -45,8 +45,8 @@ func TestLoftCylinderUnionCentroidDiameter(t *testing.T) {
 	require.True(t, ok)
 	// Placement rounds the held vertices and adds their displacement to the
 	// boundary bound; the centroid's diameter must cover that moved source.
-	require.GreaterOrEqual(t, placedPayload.dPair,
-		facetedSourceDiameterUpper(placedPayload.Verts, placedPayload.meshBound))
+	require.GreaterOrEqual(t, placedPayload.DPair,
+		facetedSourceDiameterUpper(placedPayload.Verts, placedPayload.MeshBound))
 	placedCentroid, err := placed.Centroid()
 	require.NoError(t, err)
 	require.Greater(t, placedCentroid.Bound.Base(), 0.1)
@@ -102,7 +102,7 @@ func TestLoftCylinderBoreCentroidDiameter(t *testing.T) {
 	fp, ok := bored.n.Payload.(facetedPayload)
 	require.True(t, ok)
 	require.NotNil(t, fp.loftCylinderBore)
-	require.GreaterOrEqual(t, fp.dPair, facetedSourceDiameterUpper(fp.Verts, fp.meshBound))
+	require.GreaterOrEqual(t, fp.DPair, facetedSourceDiameterUpper(fp.Verts, fp.MeshBound))
 	centroid, err := bored.Centroid()
 	require.NoError(t, err)
 	require.Positive(t, centroid.Bound.Base())

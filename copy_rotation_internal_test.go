@@ -198,7 +198,7 @@ func TestPlacedWithChargesTheGapToExactRotation(t *testing.T) {
 	require.NoError(t, err)
 	off, err := r3.RotationAround(r3.Vec{}, r3.Vec{Z: 1}, units.Radians(0.5+1e-6))
 	require.NoError(t, err)
-	composed, err := source.xform.Then(off)
+	composed, err := source.Xform.Then(off)
 	require.NoError(t, err)
 	body, err := source.placedWith(t.Context(), documentHandle(joined.n.Doc), joined.n.Doc.NextProducer, composed, q)
 	require.NoError(t, err)
@@ -220,7 +220,7 @@ func TestPlacedWithChargesTheGapToExactRotation(t *testing.T) {
 			d := image.Sub(image, held[r])
 			dist2.Add(dist2, d.Mul(d, d))
 		}
-		bound := ratOf(placed.vertexBound[i])
+		bound := ratOf(placed.VertexBound[i])
 		require.LessOrEqual(t, dist2.Cmp(bound.Mul(bound, bound)), 0,
 			"vertex %d lies farther from Q*v than its recorded bound", i)
 		d, _ := dist2.Float64()
@@ -239,7 +239,7 @@ func TestPlacedWithDropsFloatPlacementRecords(t *testing.T) {
 	source.pointPlaneCapDisplacement = 1
 	q, d, err := exactrotation.New(r3.Vec{}, r3.Vec{Z: 1}, units.Degrees(30))
 	require.NoError(t, err)
-	composed, err := source.xform.Then(d)
+	composed, err := source.Xform.Then(d)
 	require.NoError(t, err)
 
 	body, err := source.placedWith(t.Context(), documentHandle(joined.n.Doc), joined.n.Doc.NextProducer, composed, q)
@@ -264,7 +264,7 @@ func TestPlacedWithDropsFloatPlacementRecords(t *testing.T) {
 	require.NotNil(t, float.loftMirrorCopy)
 
 	t.Run("identity delta", func(t *testing.T) {
-		require.Equal(t, r3.Identity(), source.xform)
+		require.Equal(t, r3.Identity(), source.Xform)
 		body, err := placePayload(t.Context(), source, documentHandle(joined.n.Doc), joined.n.Doc.NextProducer, r3.Identity())
 		require.NoError(t, err)
 		// An exact identity delta leaves the point-loft source valid.
@@ -477,7 +477,7 @@ func TestCopyRotationRoundTripDropsPointSource(t *testing.T) {
 	round, err := Transform(t.Context(), exact, back)
 	require.NoError(t, err)
 	rp := round.n.Payload.(facetedPayload)
-	require.Equal(t, r3.Identity(), rp.xform, "the float round trip is the identity")
+	require.Equal(t, r3.Identity(), rp.Xform, "the float round trip is the identity")
 	require.True(t, rp.exactPlaced)
 
 	_, matched, err = tryPointConeBoolean(t.Context(), meshbool.OpCut, doc, doc.nextProducerID(), round, cone)

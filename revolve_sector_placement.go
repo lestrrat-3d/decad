@@ -17,7 +17,7 @@ func revolveSectorSourcesSeparate(sectors []facetedPayload) bool {
 		charge := massmoment.MapCharge{}
 		if i != 0 {
 			if sector.revolveLoftSector == nil ||
-				sector.xform != sector.revolveLoftSector.motion {
+				sector.Xform != sector.revolveLoftSector.motion {
 				return false
 			}
 			var err error
@@ -26,8 +26,8 @@ func revolveSectorSourcesSeparate(sectors []facetedPayload) bool {
 				return false
 			}
 		}
-		sources[i] = facetproof.SectorSource{Verts: sector.Verts, MeshBound: sector.meshBound,
-			Bound: massmoment.PlacedBound(sector.meshBound, charge)}
+		sources[i] = facetproof.SectorSource{Verts: sector.Verts, MeshBound: sector.MeshBound,
+			Bound: massmoment.PlacedBound(sector.MeshBound, charge)}
 	}
 	return facetproof.SectorSourcesSeparate(sources)
 }

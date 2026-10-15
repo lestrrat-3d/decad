@@ -32,19 +32,19 @@ func newRevolveLoftFacesToolPayloadSnapshot(tooth *Body,
 	p facetedPayload) *revolveLoftFacesToolPayloadSnapshot {
 	return &revolveLoftFacesToolPayloadSnapshot{
 		verts: slices.Clone(p.Verts), tris: slices.Clone(p.Tris),
-		vertexBound: slices.Clone(p.vertexBound), src: slices.Clone(p.Src),
+		vertexBound: slices.Clone(p.VertexBound), src: slices.Clone(p.Src),
 		faceOf: slices.Clone(p.FaceOf), faces: tooth.Faces(),
-		meshBound: p.meshBound, volSymDiff: p.volSymDiff, areaSlack: p.areaSlack,
+		meshBound: p.MeshBound, volSymDiff: p.VolSymDiff, areaSlack: p.AreaSlack,
 	}
 }
 
 func (s *revolveLoftFacesToolPayloadSnapshot) current(tooth *Body,
 	p facetedPayload) bool {
 	return s != nil && tooth != nil && slices.Equal(s.verts, p.Verts) &&
-		slices.Equal(s.tris, p.Tris) && slices.Equal(s.vertexBound, p.vertexBound) &&
+		slices.Equal(s.tris, p.Tris) && slices.Equal(s.vertexBound, p.VertexBound) &&
 		slices.Equal(s.src, p.Src) && slices.Equal(s.faceOf, p.FaceOf) &&
-		slices.Equal(s.faces, tooth.Faces()) && s.meshBound == p.meshBound &&
-		s.volSymDiff == p.volSymDiff && s.areaSlack == p.areaSlack
+		slices.Equal(s.faces, tooth.Faces()) && s.meshBound == p.MeshBound &&
+		s.volSymDiff == p.VolSymDiff && s.areaSlack == p.AreaSlack
 }
 
 func cloneRevolveLoftFacesProofMesh(m *Mesh) *Mesh {
@@ -147,7 +147,7 @@ func newRevolveLoftFacesClearPatchContext(ctx context.Context,
 		proofbound.IsNonFinite(tool.n.VolSymDiff) || tool.n.VolSymDiff < 0 {
 		return nil, false, err
 	}
-	fresh, err := tessellateFaceted(ctx, source.tooth, payload, payload.meshBound)
+	fresh, err := tessellateFaceted(ctx, source.tooth, payload, payload.MeshBound)
 	if fresh != nil {
 		// tessellateContext sets this flag after the payload restatement.
 		fresh.n.BoundaryOK = true

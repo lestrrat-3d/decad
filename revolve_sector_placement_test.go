@@ -47,7 +47,7 @@ func TestRevolveSectorNearUnitAxisPlacement(t *testing.T) {
 func TestRevolveSectorProjectionSeparatesRotatedSources(t *testing.T) {
 	first, second := revolveSectorProjectionTestSources(t, 90)
 	require.True(t, revolveSectorSourcesSeparate([]facetedPayload{first, second}))
-	second.meshBound = 2
+	second.MeshBound = 2
 	require.False(t, revolveSectorSourcesSeparate([]facetedPayload{first, second}))
 }
 
@@ -71,8 +71,8 @@ func revolveSectorProjectionTestSources(t *testing.T, degrees float64) (facetedP
 	for i, vertex := range vertices {
 		placed[i] = turn.Apply(vertex)
 	}
-	first := facetedPayload{Verts: vertices, meshBound: 0.01, xform: r3.Identity()}
-	second := facetedPayload{Verts: placed, meshBound: 0.01, xform: turn,
+	first := facetedPayload{Verts: vertices, MeshBound: 0.01, Xform: r3.Identity()}
+	second := facetedPayload{Verts: placed, MeshBound: 0.01, Xform: turn,
 		revolveLoftSector: &revolveLoftSectorPlacement{motion: turn}}
 	return first, second
 }

@@ -82,10 +82,10 @@ func tryLoftCylinderUnion(ctx context.Context, op meshbool.OperationKind,
 		blank, teeth = a, []*Body{b}
 	} else if _, ok := b.n.Payload.(prismPayload); ok {
 		blank, teeth = b, []*Body{a}
-	} else if fp, ok := a.n.Payload.(facetedPayload); ok && fp.loftCylinderJoin != nil && fp.xform == r3.Identity() {
+	} else if fp, ok := a.n.Payload.(facetedPayload); ok && fp.loftCylinderJoin != nil && fp.Xform == r3.Identity() {
 		blank = fp.loftCylinderJoin.blank
 		teeth = append(append([]*Body(nil), fp.loftCylinderJoin.teeth...), b)
-	} else if fp, ok := b.n.Payload.(facetedPayload); ok && fp.loftCylinderJoin != nil && fp.xform == r3.Identity() {
+	} else if fp, ok := b.n.Payload.(facetedPayload); ok && fp.loftCylinderJoin != nil && fp.Xform == r3.Identity() {
 		blank = fp.loftCylinderJoin.blank
 		teeth = append(append([]*Body(nil), fp.loftCylinderJoin.teeth...), a)
 	} else {
@@ -798,17 +798,17 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 		axialBridge[i] = parts[i].bridge
 	}
 	fp := facetedPayload{Verts: mesh.verts, Tris: mesh.tris, Src: mesh.src,
-		groups: mesh.groups, vertexBound: vertexBound, contactAudited: true,
-		meshBound: bound, volSymDiff: volumeGap, areaSlack: areaSlack,
-		dPair: facetedSourceDiameterUpper(mesh.verts, bound),
-		xform: r3.Identity(), loftCylinderJoin: &loftCylinderJoinRecord{
+		groups: mesh.groups, VertexBound: vertexBound, contactAudited: true,
+		MeshBound: bound, VolSymDiff: volumeGap, AreaSlack: areaSlack,
+		DPair: facetedSourceDiameterUpper(mesh.verts, bound),
+		Xform: r3.Identity(), loftCylinderJoin: &loftCylinderJoinRecord{
 			blank: blank, teeth: toothBodies, proofTeeth: proofBodies,
 			axialBridge: axialBridge, capOutlines: outlines,
 			capGroups:     [2]int{blankGroups[1], blankGroups[2]},
 			minSideRadius: minSideRadius, radius: radius, z0: pp.Z0, z1: pp.Z1,
 			innerInset: innerInset, outerExcess: outerExcess, rootCollar: rootCollar,
 		}}
-	if proofbound.IsNonFinite(fp.dPair) {
+	if proofbound.IsNonFinite(fp.DPair) {
 		return nil, fmt.Errorf("%w: circular join has no finite diameter proof", ErrUnsupported)
 	}
 	if err := loftCylinderTagCaps(&fp, blank, fp.loftCylinderJoin.capGroups,

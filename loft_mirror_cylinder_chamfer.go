@@ -22,7 +22,7 @@ import (
 func tryLoftMirrorCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPayload,
 	edges []*Edge, setback, delta float64, asym *asymmetricChamfer) (*Body, bool, error) {
 	record := fp.loftMirrorCylinderBore
-	if record == nil || !fp.contactAudited || fp.xform != r3.Identity() {
+	if record == nil || !fp.contactAudited || fp.Xform != r3.Identity() {
 		return nil, false, nil
 	}
 	if asym != nil || delta != 0 || setback <= 0 || proofbound.IsNonFinite(setback) {
@@ -33,7 +33,7 @@ func tryLoftMirrorCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPay
 		return nil, true, fmt.Errorf("%w: mirrored cap chamfer lost its authenticated source", ErrUnsupported)
 	}
 	lower, ok := record.lowerBore.n.Payload.(facetedPayload)
-	if !ok || lower.loftCylinderBore == nil || !lower.contactAudited || lower.xform != r3.Identity() {
+	if !ok || lower.loftCylinderBore == nil || !lower.contactAudited || lower.Xform != r3.Identity() {
 		return nil, true, fmt.Errorf("%w: mirrored cap chamfer lost its lower bore", ErrUnsupported)
 	}
 	source, ok := loftCylinderChamferSourceOf(lower)
@@ -61,7 +61,7 @@ func tryLoftMirrorCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPay
 	if err != nil {
 		return nil, true, err
 	}
-	bridgeReserve, err := loftmesh.MirrorBridgeReserve(lower.Verts, lower.meshBound,
+	bridgeReserve, err := loftmesh.MirrorBridgeReserve(lower.Verts, lower.MeshBound,
 		record.join.bridgeBound, setback)
 	if err != nil {
 		return nil, true, err
@@ -178,7 +178,7 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 	old facetedPayload, record *loftMirrorCylinderBoreRecord, lowerBody *Body,
 	half loftCylinderOneCapData, reflectionReserve, bridgeReserve, setback float64) (*Body, error) {
 	lower, ok := lowerBody.n.Payload.(facetedPayload)
-	if !ok || !lower.contactAudited || lower.xform != r3.Identity() ||
+	if !ok || !lower.contactAudited || lower.Xform != r3.Identity() ||
 		record.join.source == nil || record.join.source.lower == nil {
 		return nil, fmt.Errorf("%w: mirrored cap chamfer lost its audited lower half", ErrUnsupported)
 	}
@@ -200,9 +200,9 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 		half.capGroups[0] < 0 || half.capGroups[1] < 0 || half.boreGroup < 0 {
 		return nil, fmt.Errorf("%w: mirrored cap chamfer halves have no matching held shell", ErrUnsupported)
 	}
-	if upper.meshBound > proofbound.AbsSumUpper(lower.meshBound, reflectionReserve) {
+	if upper.MeshBound > proofbound.AbsSumUpper(lower.MeshBound, reflectionReserve) {
 		return nil, fmt.Errorf("%w: reflected cap chamfer exceeds its %g mm placement reserve "+
-			"(lower %g, upper %g)", ErrUnsupported, reflectionReserve, lower.meshBound, upper.meshBound)
+			"(lower %g, upper %g)", ErrUnsupported, reflectionReserve, lower.MeshBound, upper.MeshBound)
 	}
 	bridgeReach, err := loftMirrorCylinderChamferUpperCapBridge(ctx, old, upper, record, half, setback)
 	if err != nil {
@@ -225,7 +225,7 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 	}
 	mapUpper := make([]int, len(upper.Verts))
 	verts := append([]r3.Vec(nil), lower.Verts...)
-	vertexBound := append([]float64(nil), lower.vertexBound...)
+	vertexBound := append([]float64(nil), lower.VertexBound...)
 	for i, vertex := range upper.Verts {
 		if vertex.Z == middle {
 			index, exists := midVertices[vertex]
@@ -234,7 +234,7 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 			}
 			mapUpper[i] = index
 			vertexBound[index] = max(vertexBound[index],
-				proofbound.AbsSumUpper(upper.vertexBound[i], bridgeReach))
+				proofbound.AbsSumUpper(upper.VertexBound[i], bridgeReach))
 			continue
 		}
 		if vertex.Z <= middle {
@@ -242,7 +242,7 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 		}
 		mapUpper[i] = len(verts)
 		verts = append(verts, vertex)
-		vertexBound = append(vertexBound, proofbound.AbsSumUpper(upper.vertexBound[i], bridgeReach))
+		vertexBound = append(vertexBound, proofbound.AbsSumUpper(upper.VertexBound[i], bridgeReach))
 	}
 	if !loftMirrorCylinderCapsOppose(lower, upper, mapUpper,
 		half.capGroups[1], half.capGroups[1]) {
@@ -323,21 +323,21 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 	if err := loftMirrorCylinderChamferBoreUnchanged(old, mesh, record.wallGroups, wallGroups); err != nil {
 		return nil, err
 	}
-	bound := max(lower.meshBound, proofbound.AbsSumUpper(upper.meshBound, bridgeReach))
-	volumeGap := proofbound.AbsSumUpper(lower.volSymDiff, upper.volSymDiff,
+	bound := max(lower.MeshBound, proofbound.AbsSumUpper(upper.MeshBound, bridgeReach))
+	volumeGap := proofbound.AbsSumUpper(lower.VolSymDiff, upper.VolSymDiff,
 		record.join.bridgeVolume)
-	areaSlack := proofbound.AbsSumUpper(lower.areaSlack, upper.areaSlack,
-		proofbound.ProductUpper(2, max(lower.areaSlack, upper.areaSlack)))
+	areaSlack := proofbound.AbsSumUpper(lower.AreaSlack, upper.AreaSlack,
+		proofbound.ProductUpper(2, max(lower.AreaSlack, upper.AreaSlack)))
 	diameter := facetedSourceDiameterUpper(verts, bound)
 	if bound > 0.1 || proofbound.IsNonFinite(bound) || proofbound.IsNonFinite(volumeGap) ||
 		proofbound.IsNonFinite(areaSlack) || proofbound.IsNonFinite(diameter) {
 		return nil, fmt.Errorf("%w: mirrored cap chamfer has no finite 0.1 mm proof "+
 			"(lower %g, upper %g, volume %g, area %g, diameter %g)",
-			ErrUnsupported, lower.meshBound, upper.meshBound, volumeGap, areaSlack, diameter)
+			ErrUnsupported, lower.MeshBound, upper.MeshBound, volumeGap, areaSlack, diameter)
 	}
 	result := facetedPayload{Verts: verts, Tris: tris, Src: src, groups: groups,
-		vertexBound: vertexBound, meshBound: bound, volSymDiff: volumeGap,
-		areaSlack: areaSlack, dPair: diameter, contactAudited: true, xform: r3.Identity()}
+		VertexBound: vertexBound, MeshBound: bound, VolSymDiff: volumeGap,
+		AreaSlack: areaSlack, DPair: diameter, contactAudited: true, Xform: r3.Identity()}
 	for cap, group := range capGroups {
 		result.groups[group].origins = append([]provenance.Ref(nil), old.groups[record.capGroups[cap]].origins...)
 	}

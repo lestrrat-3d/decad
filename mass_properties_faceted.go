@@ -17,16 +17,16 @@ import (
 // certificate, and admits them only when the VerifyAll mesh restating them
 // publishes the same certificate.
 func facetedMassProperties(ctx context.Context, b *Body, pp facetedPayload, density units.Value) (MassProperties, error) {
-	if len(pp.Verts) == 0 || len(pp.Tris) == 0 || proofbound.IsNonFinite(pp.meshBound) || pp.meshBound < 0 ||
-		proofbound.IsNonFinite(pp.volSymDiff) || pp.volSymDiff < 0 {
+	if len(pp.Verts) == 0 || len(pp.Tris) == 0 || proofbound.IsNonFinite(pp.MeshBound) || pp.MeshBound < 0 ||
+		proofbound.IsNonFinite(pp.VolSymDiff) || pp.VolSymDiff < 0 {
 		return MassProperties{}, fmt.Errorf("%w: faceted mass has no finite occupied-volume certificate", ErrUnsupported)
 	}
-	mesh, err := b.Tessellate(ctx, units.Millimeters(math.Max(1, pp.meshBound)), WithVerification(VerifyAll))
+	mesh, err := b.Tessellate(ctx, units.Millimeters(math.Max(1, pp.MeshBound)), WithVerification(VerifyAll))
 	if err != nil {
 		return MassProperties{}, err
 	}
 	if !mesh.BoundaryVerified() || !mesh.VolumeVerified() ||
-		mesh.n.VolSymDiff != pp.volSymDiff || mesh.n.Bound != pp.meshBound {
+		mesh.n.VolSymDiff != pp.VolSymDiff || mesh.n.Bound != pp.MeshBound {
 		return MassProperties{}, fmt.Errorf("%w: faceted mass has no matching verified mesh certificate", ErrUnsupported)
 	}
 	if err := massmoment.AuditMesh(ctx, pp.Verts, pp.Tris, pp.contactAudited); err != nil {
@@ -34,5 +34,5 @@ func facetedMassProperties(ctx context.Context, b *Body, pp facetedPayload, dens
 	}
 	// Anchor at a held corner before summing tetrahedra.
 	return massPropertiesFromReadings(
-		massmoment.HeldMeshMassProperties(ctx, b.n.Bounds, pp.Verts[0], pp.Verts, pp.Tris, pp.volSymDiff, density))
+		massmoment.HeldMeshMassProperties(ctx, b.n.Bounds, pp.Verts[0], pp.Verts, pp.Tris, pp.VolSymDiff, density))
 }

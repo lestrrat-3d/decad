@@ -118,7 +118,7 @@ scales are positive and the base region is star-shaped about their common
 origin, the true and held cross-sections are nested with that
 same sign throughout. The exact absolute difference of the two formulas is
 therefore the occupied-volume symmetric difference, not merely a signed
-volume residual. Round this rational difference upward into `volSymDiff`.
+volume residual. Round this rational difference upward into `VolSymDiff`.
 The faceted payload integrates the held mesh in exact rational arithmetic;
 `Volume` includes this difference and final value rounding in its bound.
 `Centroid` uses the same symmetric-difference term and a diameter upper bound
@@ -135,7 +135,7 @@ and the reverse triangle inequality give this non-cancelling error per edge:
 d (|E|_1 H + |K| M) + q_max |K| d'.
 ```
 
-Sum those rational terms over every edge and round upward into `areaSlack`.
+Sum those rational terms over every edge and round upward into `AreaSlack`.
 The same nonnegative allowance covers any face subset a later boolean keeps.
 The faceted area and face readings add their own held arithmetic charges.
 
@@ -238,7 +238,7 @@ their occupied-volume symmetric difference equals
 (pi*r_0² - A_P) * H * (1+q+q²)/3.
 ```
 
-The proven upper rational endpoint for pi gives `volSymDiff` directly.
+The proven upper rational endpoint for pi gives `VolSymDiff` directly.
 The faceted integrator then adds its held arithmetic charge to `Volume`,
 `Centroid`, and other readings. The diameter allowance is
 `2*max(r_0,r_2)+H`.
@@ -253,7 +253,7 @@ has a slant between the inner and outer circle's slants. With
 pi*(1+q)*δ*(H+Δr+(r_0-δ)*|q-1|).
 ```
 
-Both terms are rounded upward into `areaSlack`, beside the faceted body's
+Both terms are rounded upward into `AreaSlack`, beside the faceted body's
 own held arithmetic and vertex-bound charges. For the 8/10/12 mm public
 case, the 0.1 mm `VerifyAll` boundary and volume proofs pass; default
 `Document.Verify` currently reports `Suspect` because its conservative
@@ -339,7 +339,7 @@ four ring corners differs from either diagonal triangle by at most one
 quarter of the corner twist's L1 norm. Compose those terms and the station
 rounding allowance outward to get a parameter-matched wall bound. The fixed
 arcs use their measured circle-to-chord and station-rounding bounds. Publish
-the maximum as `meshBound` and per-vertex bounds; refuse when it exceeds
+the maximum as `MeshBound` and per-vertex bounds; refuse when it exceeds
 0.05 mm. Run `internal/loftmesh`'s exact crossing audit on the complete
 closed triangle set before constructing the faceted body. Each wall triangle
 spans only adjacent Z levels, so every interior horizontal slice of the
@@ -357,7 +357,7 @@ Its homotopy sweeps at most `d*L*Δu` area at a fixed height. Multiply by the
 cell's exact Z-band height and sum all cells and bands with outward rounding.
 This non-cancelling sum bounds the occupied-volume symmetric difference;
 the signed difference of total volumes does not replace it. Pass the sum to
-`facetedPayload.volSymDiff` for `VerifyAll` and downstream booleans.
+`facetedPayload.VolSymDiff` for `VerifyAll` and downstream booleans.
 
 For wall area, the fitted source patch has
 `|S_u × S_t| <= |C_u|_1 (H+|C_t|_1)`. Its rational Bézier control
@@ -366,7 +366,7 @@ certified arc-length upper bound times `H`. Every source cap lies inside a
 disk whose radius is bounded by the fitted control nets and fixed arcs, so
 the two cap areas together are at most `2*pi*R²`. Sum these source-area
 uppers with the exact held triangle-area uppers into a conservative
-`areaSlack`: the absolute difference cannot exceed their sum. The occupied
+`AreaSlack`: the absolute difference cannot exceed their sum. The occupied
 volume proof above remains local and much tighter. A finite XY/Z extent
 bounds the diameter used by faceted centroid and bounds readings. A
 non-finite proof term or a resource ceiling returns `ErrUnsupported`; no
@@ -438,11 +438,11 @@ symmetric difference between the denoted body and the held mesh is at most
 H * (4h M/(8N^2) + r^2 (pi_upper-A_P)).
 ```
 
-This non-cancelling bound goes to `facetedPayload.volSymDiff` for
+This non-cancelling bound goes to `facetedPayload.VolSymDiff` for
 `VerifyAll`, placement, and booleans. A source-area upper bound uses the
 maximum rounded-rectangle perimeter times `H+max|w'|`, plus both cap
 areas. The exact held-triangle area uppers join it as conservative
-`areaSlack`. A finite box enclosing the source and held mesh supplies the
+`AreaSlack`. A finite box enclosing the source and held mesh supplies the
 diameter bound. General four-section free-form profiles, changing corner
 radius or half-height, and non-monotone width controls remain
 `ErrUnsupported`.
@@ -497,7 +497,7 @@ at most `4(K|w-l_w|+W|h-l_h|)`. For either quadratic,
 
 This is non-cancelling even when width and height curve in opposite
 directions. A signed volume difference cannot replace it. The allowance
-feeds `facetedPayload.volSymDiff` and bounds the true volume reading against
+feeds `facetedPayload.VolSymDiff` and bounds the true volume reading against
 the held tetrahedron sum.
 
 For area, each pair of horizontal walls has density

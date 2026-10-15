@@ -1097,7 +1097,7 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   operand's own section displacement, which no mesh of that operand can go
   below (`docs/prism-boolean-design.md` §7, tessellation §5), and past a coil's,
   mitred sweep's, or twisted sweep's held `delta`, or a certified
-  `LoftFaces` result's held `meshBound`, which coarsens the partner's mesh but
+  `LoftFaces` result's held `MeshBound`, which coarsens the partner's mesh but
   leaves its published bounds proven (`docs/faceted-vertex-bounds-design.md`
   §5). An operand that
   restates a held mesh (a boolean result, coil, mitred sweep, or twisted sweep)

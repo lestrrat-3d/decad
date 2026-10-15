@@ -223,7 +223,7 @@ func loftCylinderChamferBridgeCap(ctx context.Context, fp facetedPayload,
 	span := proofbound.RatSqrtUp(maxSpan2)
 	lateral := proofbound.ProductUpper(proofbound.RatFloatUp(new(big.Rat).Quo(
 		new(big.Rat).Sub(capLevel, level), proofarith.FloatRat(setback))), span)
-	gap := proofbound.AbsSumUpper(fp.meshBound, lateral)
+	gap := proofbound.AbsSumUpper(fp.MeshBound, lateral)
 	if err := loftcylinder.ChamferHeldOutlineGap(ctx, mesh.verts, source.outer[1], inset, gap); err != nil {
 		return 0, err
 	}

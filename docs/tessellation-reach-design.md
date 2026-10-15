@@ -99,7 +99,7 @@ Rules:
   `deltaStore + sectionDelta + deltaAxial(face)`, which is at least `sectionDisplacementOf`).
 - `operandSymDiff` returns `m.n.VolSymDiff` when `m.n.SymDiffOK`, else `ErrUnsupported` (a staging refusal,
   routed through `expectedBooleanForOperand(booleanExpectedStaging, …)` like a tessellation refusal).
-  `tessellateFaceted` sets `volSymDiff = fp.volSymDiff, symDiffOK = true`.
+  `tessellateFaceted` sets `volSymDiff = fp.VolSymDiff, symDiffOK = true`.
 
 ### Prism and cup population
 

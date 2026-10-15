@@ -37,7 +37,7 @@ func prismPatternFilletBody(ctx context.Context, body *Body, edges []*Edge,
 	if err != nil {
 		return nil, err
 	}
-	bound := proofbound.AbsSumUpper(old.meshBound, arcBound)
+	bound := proofbound.AbsSumUpper(old.MeshBound, arcBound)
 	if proofbound.IsNonFinite(bound) || bound > 0.1 {
 		return nil, fmt.Errorf("%w: joined-prism fillet exceeds its 0.1 mm boundary proof", ErrUnsupported)
 	}
@@ -48,7 +48,7 @@ func prismPatternFilletBody(ctx context.Context, body *Body, edges []*Edge,
 	// Union's occupied-volume certificate gives the following sum.
 	piUpper := proofbound.RatFloatUp(proofbound.PiUpper)
 	trueDisk := proofbound.ProductUpper(3, radius)
-	heldDisk := proofbound.AbsSumUpper(trueDisk, old.meshBound, arcBound)
+	heldDisk := proofbound.AbsSumUpper(trueDisk, old.MeshBound, arcBound)
 	height := rec.source.blank.Z1 - rec.source.blank.Z0
 	if height <= 0 || proofbound.IsNonFinite(heldDisk) {
 		return nil, fmt.Errorf("%w: joined-prism fillet has no finite local disk", ErrUnsupported)
@@ -58,13 +58,13 @@ func prismPatternFilletBody(ctx context.Context, body *Body, edges []*Edge,
 	heldDiskArea := proofbound.ProductUpper(piUpper, proofbound.ProductUpper(heldDisk, heldDisk))
 	volumeBand := proofbound.ProductUpper(n, proofbound.ProductUpper(height,
 		proofbound.AbsSumUpper(trueDiskArea, heldDiskArea)))
-	volumeGap := proofbound.AbsSumUpper(old.volSymDiff, volumeBand)
+	volumeGap := proofbound.AbsSumUpper(old.VolSymDiff, volumeBand)
 	// Old and new walls inside each disk have total area below four full
 	// cylinder walls; both changed caps fit in four complete disk faces.
 	areaBand := proofbound.ProductUpper(n, proofbound.ProductUpper(4*piUpper,
 		proofbound.AbsSumUpper(proofbound.ProductUpper(heldDisk, height),
 			proofbound.ProductUpper(heldDisk, heldDisk))))
-	areaSlack := proofbound.AbsSumUpper(old.areaSlack, areaBand)
+	areaSlack := proofbound.AbsSumUpper(old.AreaSlack, areaBand)
 	if proofbound.IsNonFinite(volumeGap) || proofbound.IsNonFinite(areaSlack) {
 		return nil, fmt.Errorf("%w: joined-prism fillet has no finite volume or area proof", ErrUnsupported)
 	}
@@ -73,11 +73,11 @@ func prismPatternFilletBody(ctx context.Context, body *Body, edges []*Edge,
 		vertexBound[i] = bound
 	}
 	result := facetedPayload{Verts: mesh.verts, Tris: mesh.tris, Src: mesh.src,
-		groups: mesh.groups, vertexBound: vertexBound, axialSectionJoin: true,
-		contactAudited: true, meshBound: bound, volSymDiff: volumeGap,
-		areaSlack: areaSlack, dPair: facetedSourceDiameterUpper(mesh.verts, bound),
-		xform: r3.Identity()}
-	if proofbound.IsNonFinite(result.dPair) {
+		groups: mesh.groups, VertexBound: vertexBound, axialSectionJoin: true,
+		contactAudited: true, MeshBound: bound, VolSymDiff: volumeGap,
+		AreaSlack: areaSlack, DPair: facetedSourceDiameterUpper(mesh.verts, bound),
+		Xform: r3.Identity()}
+	if proofbound.IsNonFinite(result.DPair) {
 		return nil, fmt.Errorf("%w: joined-prism fillet has no finite diameter proof", ErrUnsupported)
 	}
 	if err := loftCylinderTagCaps(&result, rec.blank,

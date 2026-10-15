@@ -153,7 +153,7 @@ func unionVertexBoundFixture(t *testing.T, a, b *Body) vertexBoundFixture {
 	require.NoError(t, err)
 	result, ok := u.n.Payload.(facetedPayload)
 	require.True(t, ok)
-	require.Len(t, result.vertexBound, len(result.Verts))
+	require.Len(t, result.VertexBound, len(result.Verts))
 	held := map[r3.Vec]int{}
 	for i, v := range result.Verts {
 		held[v] = i
@@ -196,7 +196,7 @@ func weldOf(p proof.Xpt, v r3.Vec) float64 {
 // operands carries its own rounding gap. A surviving operand vertex keeps that
 // gap to the bit; every rim vertex's bound is its own facet pair's
 // (δ(t_A) + δ(t_B)) / sin θ plus its own weld, recomputed here from the
-// operands' facets; and the result's meshBound is at most the global
+// operands' facets; and the result's MeshBound is at most the global
 // composition, (Δ_A + Δ_B) / sin θ_min plus the largest weld. Some rim's own
 // crossing is steeper than the pair's shallowest, so its bound sits strictly
 // under the pair-wide figure.
@@ -243,7 +243,7 @@ func TestBooleanVertexBoundsComposePerPair(t *testing.T) {
 		}
 	}
 	for i, w := range want {
-		require.Equal(t, w, f.result.vertexBound[i], `rim vertex %v carries its own pair's bound plus its own weld`, f.result.Verts[i])
+		require.Equal(t, w, f.result.VertexBound[i], `rim vertex %v carries its own pair's bound plus its own weld`, f.result.Verts[i])
 	}
 	require.Positive(t, steeper, `some rim crosses more steeply than the pair's shallowest contact`)
 
@@ -256,15 +256,15 @@ func TestBooleanVertexBoundsComposePerPair(t *testing.T) {
 		if _, rim := f.rims[proof.XptOf(v).Key()]; rim {
 			continue
 		}
-		require.Equal(t, beta, f.result.vertexBound[i], `operand vertex %v keeps its own bound`, v)
+		require.Equal(t, beta, f.result.VertexBound[i], `operand vertex %v keeps its own bound`, v)
 		kept++
 	}
 	require.Positive(t, kept)
 
 	today := proofbound.AbsSumUpper(proofbound.UpRound((f.ma.n.Bound+f.mb.n.Bound)/f.sinMin), maxWeld)
-	require.LessOrEqual(t, f.result.meshBound, today)
-	require.Equal(t, facetproof.FacetBoundMax(f.result.Tris, f.result.vertexBound), f.result.meshBound)
-	t.Logf("meshBound %.3g, global composition %.3g, operand deltas %.3g / %.3g", f.result.meshBound, today, f.ma.n.Bound, f.mb.n.Bound)
+	require.LessOrEqual(t, f.result.MeshBound, today)
+	require.Equal(t, facetproof.FacetBoundMax(f.result.Tris, f.result.VertexBound), f.result.MeshBound)
+	t.Logf("meshBound %.3g, global composition %.3g, operand deltas %.3g / %.3g", f.result.MeshBound, today, f.ma.n.Bound, f.mb.n.Bound)
 }
 
 // TestBooleanVertexBoundsChargeEachRimItsWeld is docs/tessellation-design.md
@@ -309,11 +309,11 @@ func TestBooleanVertexBoundsChargeEachRimItsWeld(t *testing.T) {
 			continue
 		}
 		inexact++
-		beta := new(big.Rat).SetFloat64(f.result.vertexBound[i])
+		beta := new(big.Rat).SetFloat64(f.result.VertexBound[i])
 		require.GreaterOrEqual(t, new(big.Rat).Mul(beta, beta).Cmp(d2), 0, `rim vertex %v's bound covers its rounding`, v)
 	}
 	require.Positive(t, inexact, `some rim vertex rounds inexactly`)
-	require.Positive(t, f.result.meshBound)
+	require.Positive(t, f.result.MeshBound)
 }
 
 // TestHeldGateReadsFacetsWithinThePrePassSlack is docs/faceted-vertex-bounds-

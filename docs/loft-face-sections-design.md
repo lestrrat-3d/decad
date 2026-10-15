@@ -79,7 +79,7 @@ remaining occupied-volume proof. The final
 allowance must be finite and below the positive held-volume floor.
 
 The successful result is one certified held primitive for mesh booleans.
-Its proven `meshBound` raises the pair's internal chord tolerance when
+Its proven `MeshBound` raises the pair's internal chord tolerance when
 necessary; the analytic partner then chords at that raised tolerance and
 publishes its own bounds. Rigid placement keeps this classification and
 charges its new mesh bound. A Boolean result does not keep it: later pairs

@@ -117,7 +117,7 @@ func pointPlaneCapCentroid(ctx context.Context, base facetedPayload,
 	// The projected area is a conservative lower bound on physical area:
 	// dropping the dominant normal component cannot enlarge a planar patch.
 	areaLower := proofbound.RatFloatDown(new(big.Rat).Quo(pointPlaneAbs(twiceArea), big.NewRat(2, 1)))
-	delta := proofbound.ProductUpper(plane.mapStretch, base.meshBound)
+	delta := proofbound.ProductUpper(plane.mapStretch, base.MeshBound)
 	tube := proofbound.SectionDisplacementArea(delta, len(polygon), perimeter)
 	if areaLower <= tube || proofbound.IsNonFinite(delta) || proofbound.IsNonFinite(tube) {
 		return VecMeasurement{}, false, nil

@@ -52,11 +52,11 @@ func lfSimilarity(section loftFaceSection) (loftFaceAffine, error) {
 				out = loftface.Compose(out, loftface.Scale(step.anchor, step.factor))
 			}
 		}
-	} else if section.mesh.xform != r3.Identity() {
-		if !section.mesh.xform.IsValid() {
+	} else if section.mesh.Xform != r3.Identity() {
+		if !section.mesh.Xform.IsValid() {
 			return loftFaceAffine{}, fmt.Errorf("%w: loft cap has an invalid placement", ErrUnsupported)
 		}
-		out = loftface.Compose(out, loftface.Motion(section.mesh.xform))
+		out = loftface.Compose(out, loftface.Motion(section.mesh.Xform))
 	}
 	return out, nil
 }
@@ -180,7 +180,7 @@ func lfCapBounds(ctx context.Context, capMap loftFaceMap, section loftFaceSectio
 		out.polygonSpeed[j] = loftface.RatUp(speed)
 		out.sourceSpeed[j] = proofbound.ProductUpper(source.sourceArcUpper[j], capMap.Stretch)
 		out.sourceDeparture[j] = proofbound.ProductUpper(
-			max(source.sourceMatched[j], section.slice.base.meshBound), capMap.Stretch)
+			max(source.sourceMatched[j], section.slice.base.MeshBound), capMap.Stretch)
 		if proofbound.IsNonFinite(out.projectiveDeparture[j]) ||
 			proofbound.IsNonFinite(out.polygonSpeed[j]) ||
 			proofbound.IsNonFinite(out.sourceSpeed[j]) ||
@@ -258,11 +258,11 @@ func proveLoftFaceBounds(ctx context.Context, sections []loftFaceSection,
 	sourceRegion := proofbound.ProductUpper(source.sourceAreaDelta, embedding.jacobianSum)
 	volumeGap := proofbound.AbsSumUpper(sourceRegion, wallLeg, twistVolume, roundSweep)
 	base := sections[0].slice.base
-	baseArea, err := proofbound.PerturbedAreaUpperContext(ctx, base.Verts, base.Tris, base.meshBound)
+	baseArea, err := proofbound.PerturbedAreaUpperContext(ctx, base.Verts, base.Tris, base.MeshBound)
 	if err != nil {
 		return facetedPayload{}, err
 	}
-	baseArea = proofbound.AbsSumUpper(baseArea, base.areaSlack)
+	baseArea = proofbound.AbsSumUpper(baseArea, base.AreaSlack)
 	endCapArea := 0.0
 	for _, i := range []int{0, len(sections) - 1} {
 		stretch2 := proofbound.ProductUpper(embedding.maps[i].Stretch, embedding.maps[i].Stretch)
@@ -277,14 +277,14 @@ func proveLoftFaceBounds(ctx context.Context, sections []loftFaceSection,
 		proofbound.IsNonFinite(areaSlack) {
 		return facetedPayload{}, fmt.Errorf("%w: face-fed loft proof has no finite bounds", ErrUnsupported)
 	}
-	mesh.vertexBound = make([]float64, len(mesh.Verts))
-	for i := range mesh.vertexBound {
-		mesh.vertexBound[i] = meshBound
+	mesh.VertexBound = make([]float64, len(mesh.Verts))
+	for i := range mesh.VertexBound {
+		mesh.VertexBound[i] = meshBound
 	}
-	mesh.meshBound = meshBound
-	mesh.volSymDiff = volumeGap
-	mesh.areaSlack = areaSlack
-	mesh.dPair = facetedSourceDiameterUpper(mesh.Verts, meshBound)
+	mesh.MeshBound = meshBound
+	mesh.VolSymDiff = volumeGap
+	mesh.AreaSlack = areaSlack
+	mesh.DPair = facetedSourceDiameterUpper(mesh.Verts, meshBound)
 	mesh.contactAudited = true
 	return mesh, nil
 }

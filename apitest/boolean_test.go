@@ -689,7 +689,7 @@ func TestBooleanChainsWithinHeldBound(t *testing.T) {
 // the target, quotes a touched bound above the pair's chord tolerance and no
 // larger than the target's held bound, says a boolean takes no tolerance, and
 // never tells this caller to retry with one. Shown to fail: with the gate
-// comparing the operand's meshBound instead of the touched facets' bounds,
+// comparing the operand's MeshBound instead of the touched facets' bounds,
 // the clear third hole refused with "coarser than this pair's chord
 // tolerance".
 func TestBooleanChainDepthGateReadsOnlyTheTouchedRims(t *testing.T) {
@@ -778,7 +778,7 @@ func coneSegment(t *testing.T, doc *decad.Document, a, b r3.Vec, ra, rb float64)
 // at 0.01 mm, its volume lies between the largest segment's and the sum of all
 // three, and its box is the hull of the three segments' boxes, each within the
 // published bounds. Shown to fail: with the gate comparing the operand's
-// meshBound, the second union refused with "coarser than this pair's chord
+// MeshBound, the second union refused with "coarser than this pair's chord
 // tolerance".
 func TestBooleanChainOfConesContinuesPastEachJoint(t *testing.T) {
 	t.Parallel()

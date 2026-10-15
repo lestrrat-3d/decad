@@ -81,7 +81,7 @@ func loftCylinderCheckPlacedResult(t *testing.T, joined, blank, tooth *Body, pla
 	fp, ok := joined.n.Payload.(facetedPayload)
 	require.True(t, ok)
 	require.NotNil(t, fp.loftCylinderJoin)
-	require.LessOrEqual(t, fp.meshBound, 0.1)
+	require.LessOrEqual(t, fp.MeshBound, 0.1)
 	require.True(t, fp.contactAudited)
 	require.Equal(t, blank.originProducer(), fp.loftCylinderJoin.blank.originProducer())
 	require.Equal(t, 1, len(fp.loftCylinderJoin.teeth))
@@ -270,7 +270,7 @@ func TestLoftCylinderCommonPlacementConsumers(t *testing.T) {
 	require.NotNil(t, fp.loftCylinderJoin.placement)
 	require.Equal(t, 2, len(fp.loftCylinderJoin.teeth))
 	require.Equal(t, second.originProducer(), fp.loftCylinderJoin.teeth[1].originProducer())
-	require.LessOrEqual(t, fp.meshBound, 0.1)
+	require.LessOrEqual(t, fp.MeshBound, 0.1)
 	placement := fp.loftCylinderJoin.placement
 	localJoin, admitted, err := tryLoftCylinderUnionTeeth(ctx, doc,
 		joined.originProducer(), placement.blank, placement.teeth)
@@ -315,7 +315,7 @@ func TestLoftCylinderCommonPlacementConsumers(t *testing.T) {
 	require.True(t, bored.IsSolid())
 	cut, ok := bored.n.Payload.(facetedPayload)
 	require.True(t, ok)
-	require.LessOrEqual(t, cut.meshBound, 0.1)
+	require.LessOrEqual(t, cut.MeshBound, 0.1)
 	require.True(t, cut.contactAudited)
 	volume, err := bored.Volume()
 	require.NoError(t, err)

@@ -135,7 +135,7 @@ func exactPointPlaneSheet(tool *Body, apex r3.Vec) (*pointPlaneLimit, bool) {
 func pointPlaneSource(target *Body) (pointPlaneSliceRecord, bool) {
 	fp, ok := target.n.Payload.(facetedPayload)
 	if !ok || target.Kind() != BodySolid || !target.IsSolid() ||
-		!fp.pointPlaneSourceEligible || fp.xform != r3.Identity() {
+		!fp.pointPlaneSourceEligible || fp.Xform != r3.Identity() {
 		return pointPlaneSliceRecord{}, false
 	}
 	if fp.pointPlane != nil {
@@ -155,7 +155,7 @@ func pointPlaneOrder(base facetedPayload, a, b *pointPlaneLimit) int {
 	cx := pointPlaneSub(pointPlaneMul(b.d, a.nx), pointPlaneMul(a.d, b.nx))
 	cy := pointPlaneSub(pointPlaneMul(b.d, a.ny), pointPlaneMul(a.d, b.ny))
 	margin := pointPlaneMul(pointPlaneAdd(pointPlaneAbs(cx), pointPlaneAbs(cy)),
-		ratOfPointPlane(base.meshBound))
+		ratOfPointPlane(base.MeshBound))
 	allPositive, allNegative := true, true
 	for _, far := range base.Verts[1:] {
 		x := pointPlaneSub(ratOfPointPlane(far.X), ratOfPointPlane(base.pointSection.apex.X))
@@ -177,13 +177,13 @@ func pointPlaneOrder(base facetedPayload, a, b *pointPlaneLimit) int {
 // ribbon strictly inside both its length and its sweep span. The source
 // point-loft boundary allowance covers every curved point between stations.
 func validatePointPlane(base facetedPayload, plane *pointPlaneLimit) error {
-	if base.pointSection == nil || len(base.Verts) < 4 || base.meshBound < 0 ||
-		proofbound.IsNonFinite(base.meshBound) || proofbound.IsNonFinite(base.volSymDiff) ||
-		proofbound.IsNonFinite(base.areaSlack) {
+	if base.pointSection == nil || len(base.Verts) < 4 || base.MeshBound < 0 ||
+		proofbound.IsNonFinite(base.MeshBound) || proofbound.IsNonFinite(base.VolSymDiff) ||
+		proofbound.IsNonFinite(base.AreaSlack) {
 		return fmt.Errorf("%w: a planar point-loft split needs a proved source fan", ErrUnsupported)
 	}
 	apex := base.pointSection.apex
-	normalAllow := pointPlaneMul(plane.normalL1(), ratOfPointPlane(base.meshBound))
+	normalAllow := pointPlaneMul(plane.normalL1(), ratOfPointPlane(base.MeshBound))
 	var denMin *big.Rat
 	reach := 0.0
 	for _, far := range base.Verts[1:] {
@@ -200,7 +200,7 @@ func validatePointPlane(base facetedPayload, plane *pointPlaneLimit) error {
 	normUp := proofbound.RatFloatUp(plane.normalL1())
 	dUp := proofbound.RatFloatUp(plane.d)
 	denLo := proofbound.RatFloatDown(denMin)
-	reach = proofbound.AbsSumUpper(reach, base.meshBound)
+	reach = proofbound.AbsSumUpper(reach, base.MeshBound)
 	alphaUp := proofbound.DivUpper(dUp, denLo)
 	stretch := proofbound.ProductUpper(alphaUp, proofbound.AbsSumUpper(1,
 		proofbound.DivUpper(proofbound.ProductUpper(reach, normUp), denLo)))
@@ -214,7 +214,7 @@ func validatePointPlane(base facetedPayload, plane *pointPlaneLimit) error {
 	ex := pointPlaneSub(ratOfPointPlane(plane.b.U), ratOfPointPlane(plane.a.U))
 	ey := pointPlaneSub(ratOfPointPlane(plane.b.V), ratOfPointPlane(plane.a.V))
 	e2 := pointPlaneAdd(pointPlaneMul(ex, ex), pointPlaneMul(ey, ey))
-	cutAllow := proofbound.ProductUpper(stretch, base.meshBound)
+	cutAllow := proofbound.ProductUpper(stretch, base.MeshBound)
 	spanMargin := pointPlaneMul(pointPlaneAdd(pointPlaneAbs(ex), pointPlaneAbs(ey)),
 		ratOfPointPlane(cutAllow))
 	zMargin := ratOfPointPlane(cutAllow)
@@ -528,7 +528,7 @@ func buildPointPlaneSlab(ctx context.Context, d *Document, ref producerID,
 	if record.upper != nil {
 		stretch = max(stretch, record.upper.mapStretch)
 	}
-	meshBound := proofbound.AbsSumUpper(proofbound.ProductUpper(stretch, base.meshBound), round)
+	meshBound := proofbound.AbsSumUpper(proofbound.ProductUpper(stretch, base.MeshBound), round)
 	if proofbound.IsNonFinite(meshBound) {
 		return nil, fmt.Errorf("%w: planar split has no finite boundary bound", ErrUnsupported)
 	}
@@ -536,13 +536,13 @@ func buildPointPlaneSlab(ctx context.Context, d *Document, ref producerID,
 	if err != nil {
 		return nil, err
 	}
-	volumeGap := proofbound.AbsSumUpper(base.volSymDiff,
+	volumeGap := proofbound.AbsSumUpper(base.VolSymDiff,
 		proofbound.SweptVolumeAllow(round, areaRound))
 	baseArea, err := proofbound.PerturbedAreaUpperContext(ctx, base.Verts, base.Tris, 0)
 	if err != nil {
 		return nil, err
 	}
-	trueArea := proofbound.AbsSumUpper(baseArea, base.areaSlack)
+	trueArea := proofbound.AbsSumUpper(baseArea, base.AreaSlack)
 	// Each side patch is a subset of its original fan. The new caps are
 	// projective images of the far cap; their area grows by at most L².
 	capStretch := proofbound.ProductUpper(stretch, stretch)
@@ -559,9 +559,9 @@ func buildPointPlaneSlab(ctx context.Context, d *Document, ref producerID,
 	recordCopy := record
 	return buildFacetedBody(ctx, d, ref, facetedPayload{
 		Verts: vertices, Tris: triangles, Src: sources, groups: groups,
-		vertexBound: vertexBounds, meshBound: meshBound,
-		volSymDiff: volumeGap, areaSlack: areaSlack,
-		dPair: base.dPair, xform: r3.Identity(), pointPlane: &recordCopy,
+		VertexBound: vertexBounds, MeshBound: meshBound,
+		VolSymDiff: volumeGap, AreaSlack: areaSlack,
+		DPair: base.DPair, Xform: r3.Identity(), pointPlane: &recordCopy,
 		pointPlaneCapDisplacement: meshBound,
 		pointPlaneSourceEligible:  true,
 	})

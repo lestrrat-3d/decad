@@ -220,9 +220,9 @@ func buildLoftMirrorUnion(ctx context.Context, d *Document, ref producerID,
 	}
 	capGroups := record.capGroups
 	fp := facetedPayload{Verts: verts, Tris: tris, Src: src, groups: groups,
-		vertexBound: vertexBound, meshBound: bound, volSymDiff: volumeGap,
-		areaSlack: areaSlack, dPair: pairDiameter, contactAudited: true,
-		loftMirrorJoin: record, mirrorCapGroups: &capGroups, xform: r3.Identity()}
+		VertexBound: vertexBound, MeshBound: bound, VolSymDiff: volumeGap,
+		AreaSlack: areaSlack, DPair: pairDiameter, contactAudited: true,
+		loftMirrorJoin: record, mirrorCapGroups: &capGroups, Xform: r3.Identity()}
 	return buildFacetedBody(ctx, d, ref, fp)
 }
 

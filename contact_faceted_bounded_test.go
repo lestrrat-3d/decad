@@ -17,7 +17,7 @@ func boundedFacetedFloorFixture(t *testing.T) (*Document, *Body, *Body) {
 	require.NoError(t, err)
 	pp, ok := placed.n.Payload.(facetedPayload)
 	require.True(t, ok)
-	require.Positive(t, pp.meshBound)
+	require.Positive(t, pp.MeshBound)
 	floor := internalOffsetBox(t, doc, -20, -20, 20, 20, -100,
 		Distance{D: units.Millimeters(10), Dir: Along})
 	return doc, floor, placed
@@ -25,7 +25,7 @@ func boundedFacetedFloorFixture(t *testing.T) (*Document, *Body, *Body) {
 
 func TestContactPairBoundedFacetedFloorStrictClear(t *testing.T) {
 	doc, floor, placed := boundedFacetedFloorFixture(t)
-	boundaryBound := placed.n.Payload.(facetedPayload).meshBound
+	boundaryBound := placed.n.Payload.(facetedPayload).MeshBound
 	req := facetedSweepRequest(StopAtInitialContact).ContactRequest
 	for _, bodies := range [][2]*Body{{floor, placed}, {placed, floor}} {
 		contact, err := doc.ContactPair(t.Context(), bodies[0], bodies[1],
@@ -63,8 +63,8 @@ func TestContactPairBoundedFacetedFloorStrictClear(t *testing.T) {
 func TestContactPairPlacedFacetedFloorExactTouch(t *testing.T) {
 	doc, _, placed := boundedFacetedFloorFixture(t)
 	pp := placed.n.Payload.(facetedPayload)
-	require.Positive(t, pp.meshBound)
-	require.Positive(t, pp.volSymDiff)
+	require.Positive(t, pp.MeshBound)
+	require.Positive(t, pp.VolSymDiff)
 	floor := internalOffsetBox(t, doc, -20, -20, 20, 20, -10,
 		Distance{D: units.Millimeters(10), Dir: Along})
 	req := facetedSweepRequest(StopAtInitialContact).ContactRequest

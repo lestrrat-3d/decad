@@ -165,15 +165,15 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 		proofbound.ProductUpper(max(band.start.V, radius), sagFactor), oldRound, cutRound,
 		proofbound.ProductUpper(cross.slopeHi, cross.round))
 	sideErr := max(oldSideErr, newSideErr)
-	bound := max(joined.meshBound, boreBound, sideErr)
+	bound := max(joined.MeshBound, boreBound, sideErr)
 	if proofbound.IsNonFinite(bound) || bound > 0.1 || boreBound >= radius ||
-		proofbound.AbsSumUpper(caps.lowRadius, joined.meshBound, boreBound) >= radius ||
-		proofbound.AbsSumUpper(radius, joined.meshBound, boreBound) >= band.start.V {
+		proofbound.AbsSumUpper(caps.lowRadius, joined.MeshBound, boreBound) >= radius ||
+		proofbound.AbsSumUpper(radius, joined.MeshBound, boreBound) >= band.start.V {
 		return nil, true, fmt.Errorf("%w: bore has no separate source bands", ErrUnsupported)
 	}
 	// Keep every other section span strictly outside the cylinder. This also
 	// checks shoulders and additional meridian faces without assigning roles.
-	clearance := proofbound.AbsSumUpper(radius, joined.meshBound, boreBound)
+	clearance := proofbound.AbsSumUpper(radius, joined.MeshBound, boreBound)
 	for i, span := range section.spans {
 		if i == section.axisSpan || i == caps.low || i == caps.high || i == bandIndex {
 			continue
@@ -240,7 +240,7 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 	wallGroup := len(mesh.groups)
 	mesh.groups = append(mesh.groups, facetGroup{origins: wall.originRefs(),
 		surface: wall.n.Surface, normalBound: wall.n.NormalBound, reversed: !wall.n.Reversed})
-	vertexBound := append([]float64(nil), joined.vertexBound...)
+	vertexBound := append([]float64(nil), joined.VertexBound...)
 	innerHigh := make([]int, n)
 	for i := range n {
 		cut := r3.Vec{X: cross.x, Y: inner[i].U, Z: inner[i].V}
@@ -303,9 +303,9 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 	circleShell := proofbound.ProductUpper(
 		proofbound.ProductUpper(proofbound.ProductUpper(2, proofbound.TwoPiUpper()), radius),
 		proofbound.ProductUpper(boreBound, height))
-	volumeGap := proofbound.AbsSumUpper(joined.volSymDiff, sideShell, seamSlab, circleShell)
+	volumeGap := proofbound.AbsSumUpper(joined.VolSymDiff, sideShell, seamSlab, circleShell)
 	oldHeldArea, err := proofbound.PerturbedAreaUpperContext(ctx,
-		joined.Verts, joined.Tris, joined.meshBound)
+		joined.Verts, joined.Tris, joined.MeshBound)
 	if err != nil {
 		return nil, true, err
 	}
@@ -315,14 +315,14 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 	}
 	wallArea := proofbound.ProductUpper(
 		proofbound.ProductUpper(proofbound.TwoPiUpper(), radius), height)
-	areaSlack := proofbound.AbsSumUpper(joined.areaSlack, oldHeldArea, newHeldArea, wallArea)
+	areaSlack := proofbound.AbsSumUpper(joined.AreaSlack, oldHeldArea, newHeldArea, wallArea)
 	if proofbound.IsNonFinite(volumeGap) || proofbound.IsNonFinite(areaSlack) {
 		return nil, true, fmt.Errorf("%w: bore has no finite measure proof", ErrUnsupported)
 	}
 	result := joined
 	result.Verts, result.Tris, result.Src, result.groups = mesh.verts, mesh.tris, mesh.src, mesh.groups
-	result.vertexBound, result.meshBound = vertexBound, bound
-	result.volSymDiff, result.areaSlack = volumeGap, areaSlack
+	result.VertexBound, result.MeshBound = vertexBound, bound
+	result.VolSymDiff, result.AreaSlack = volumeGap, areaSlack
 	result.revolveLoftJoin = nil
 	result.contactAudited = true
 	body, err := buildFacetedBody(ctx, d, ref, result)

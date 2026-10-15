@@ -513,7 +513,7 @@ bound — never fires on a shipped path today: an analytic reading carries a
 zero `Bound` and short-circuits the gate before
 any reference is consulted (`verify_tolerance.go`'s `scalarToleranceRef` and
 `boundedToleranceRef`), and a faceted body
-always forms a usable reference — its `payload.diameter` is guaranteed at build
+always forms a usable reference — its `payload.Diameter` is guaranteed at build
 (`boolean_body.go:300-304`) and an edge length is a finite chord sum
 (`boolean_body.go:757-778`). For the other shipped payloads `bodyGateDiameter`
 (`verify_gate.go`) forms a body diameter too. A `revolvePayload`, or an
@@ -628,7 +628,7 @@ reading. Every reading returned equals a fresh one bit for bit.
 rounds toward zero.** `pointSetDiameterWithBudget` (`verify_gate.go`, backed by
 `internal/diameter/points.go`) is the single
 site each arm below — the exact carrier model, the `loftPayload` arm, the
-free-form arm, `fallbackGateDiameter`, and the cached `payload.diameter` a
+free-form arm, `fallbackGateDiameter`, and the cached `payload.Diameter` a
 faceted build stores — hands its witness set to, and what it publishes is the
 winning pair's distance computed over exact rationals and rounded toward zero,
 never the float scan's own norm. The scan selects the pair; it does not state

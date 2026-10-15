@@ -125,11 +125,11 @@ func TestFacetedCopyLineageDirectTransfer(t *testing.T) {
 func looseBounds(body *Body) {
 	const delta = 0.5
 	part := body.n.Payload.(facetedPayload)
-	part.vertexBound = append([]float64(nil), part.vertexBound...)
-	for i := range part.vertexBound {
-		part.vertexBound[i] += delta
+	part.VertexBound = append([]float64(nil), part.VertexBound...)
+	for i := range part.VertexBound {
+		part.VertexBound[i] += delta
 	}
-	part.meshBound += delta
+	part.MeshBound += delta
 	body.n.Payload = part
 }
 

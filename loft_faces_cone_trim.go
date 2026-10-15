@@ -143,11 +143,11 @@ func uniquePayloadSourcePatches(ctx context.Context, p facetedPayload, adj [][]i
 func recordLoftFacesConeToe(ctx context.Context, source, tool, result *Body) error {
 	base, ok := source.n.Payload.(facetedPayload)
 	if !ok || !base.LoftFacesPrimitive || !loftFacesCapRecordReady(base.loftFacesCap) ||
-		base.xform != r3.Identity() {
+		base.Xform != r3.Identity() {
 		return nil
 	}
 	cone, ok := exactPointCone(tool)
-	if !ok || !pointcone.AboveFarCap(base.Verts, base.meshBound, cone.far) {
+	if !ok || !pointcone.AboveFarCap(base.Verts, base.MeshBound, cone.far) {
 		return nil
 	}
 	box, err := lfSourceBox(base.loftFacesCap.source)
@@ -225,13 +225,13 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 	}
 	p, ok := target.n.Payload.(facetedPayload)
 	if !ok || p.loftFacesToe == nil || !loftFacesCapRecordReady(p.loftFacesToe.cap) ||
-		p.xform != r3.Identity() ||
+		p.Xform != r3.Identity() ||
 		p.loftFacesToe.capFace == nil || p.loftFacesToe.capFace.n.Body != bodyNode(target) {
 		return nil, false, nil
 	}
 	cone, ok := exactPointCone(tool)
 	if !ok || cone.far.Cmp(p.loftFacesToe.toe.far) != 0 ||
-		!pointcone.AboveFarCap(p.loftFacesToe.base.Verts, p.loftFacesToe.base.meshBound, cone.far) ||
+		!pointcone.AboveFarCap(p.loftFacesToe.base.Verts, p.loftFacesToe.base.MeshBound, cone.far) ||
 		!orderedLoftFacesConeLimits(p.loftFacesToe.toe, cone, p.loftFacesToe.base) {
 		return nil, false, nil
 	}
@@ -348,7 +348,7 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 
 func orderedLoftFacesConeLimits(toe, heel *pointConeLimit, base facetedPayload) bool {
 	return pointcone.ToeHeelOrdered(toe.apex, toe.slope, heel.apex, heel.slope,
-		base.Verts, base.meshBound)
+		base.Verts, base.MeshBound)
 }
 
 // Q is the exact cone pullback after multiplying through the positive map
@@ -483,7 +483,7 @@ func (m *tangentHeelMeshes) clearsResult(ctx context.Context, result []r3.Vec) e
 // held is not a verified mesh, a ring vertex is not a station vertex of the
 // toe record's last cap, or the extension fails its audit.
 //
-// The proxy carries the unextended operand's volSymDiff and areaSlack. That is
+// The proxy carries the unextended operand's VolSymDiff and AreaSlack. That is
 // valid only for the heel Boolean under Gate E5, which proves the prism
 // changes no held contact and no retained piece, so every result facet is a
 // piece of a non-extension facet of the operands. The proxy is never published.

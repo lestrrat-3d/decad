@@ -77,7 +77,7 @@ func buildLoftFaces(ctx context.Context, d *Document, selected []loftFaceSection
 			return nil, err
 		}
 	}
-	if volFloor(heldRat, mesh.volSymDiff) <= 0 {
+	if volFloor(heldRat, mesh.VolSymDiff) <= 0 {
 		return nil, fmt.Errorf("%w: face-fed loft occupied-volume proof exceeds the held volume", ErrUnsupported)
 	}
 	if len(selected[0].slice.base.Src) < len(source.sourceStation) {
@@ -303,7 +303,7 @@ func assembleLoftFaces(ctx context.Context, ref producerID,
 				(len(sections)-1)*n + capTri[2] - 1})
 		src = append(src, startGroup, endGroup)
 	}
-	return facetedPayload{Verts: verts, Tris: tris, Src: src, groups: groups, xform: r3.Identity()}, nil
+	return facetedPayload{Verts: verts, Tris: tris, Src: src, groups: groups, Xform: r3.Identity()}, nil
 }
 
 // loftFacesConstructedPlane returns the rounded Plane tag of a constructed

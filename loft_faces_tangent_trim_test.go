@@ -178,11 +178,11 @@ func TestLoftFacesTangentHeelIntersectKeepsTrimRecord(t *testing.T) {
 	require.Positive(t, meshes.cone.n.VolSymDiff)
 	roundVol := proofbound.SweptVolumeAllow(stitched.Round, stitched.PreArea)
 	require.Equal(t, proofbound.AbsSumUpper(held.n.VolSymDiff, meshes.cone.n.VolSymDiff, roundVol),
-		eval.payload.volSymDiff, "the result volume allowance composes the unextended operand's")
+		eval.payload.VolSymDiff, "the result volume allowance composes the unextended operand's")
 
 	trim, err := Intersect(t.Context(), c.cut, c.heelTool)
 	require.NoError(t, err)
-	require.Equal(t, eval.payload.volSymDiff, trim.n.Payload.(facetedPayload).volSymDiff,
+	require.Equal(t, eval.payload.VolSymDiff, trim.n.Payload.(facetedPayload).VolSymDiff,
 		"the published allowance is the composed one")
 	trimRecord := trim.n.Payload.(facetedPayload).loftFacesTrim
 	require.NotNil(t, trimRecord, "the tangent heel Intersect keeps the trim record")

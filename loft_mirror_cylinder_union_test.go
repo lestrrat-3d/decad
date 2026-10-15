@@ -50,12 +50,12 @@ func TestLoftMirrorCylinderPairKeepsAuthenticatedSource(t *testing.T) {
 	other := &loftMirrorJoinRecord{}
 	identity := r3.Identity()
 	motion, ok := loftMirrorCylinderPairMotion(facetedPayload{
-		loftMirrorJoin: source, xform: identity,
+		loftMirrorJoin: source, Xform: identity,
 	}, source)
 	require.True(t, ok)
 	require.Equal(t, identity, motion)
 	_, ok = loftMirrorCylinderPairMotion(facetedPayload{
-		loftMirrorJoin: other, xform: identity,
+		loftMirrorJoin: other, Xform: identity,
 	}, source)
 	require.False(t, ok)
 
@@ -63,24 +63,24 @@ func TestLoftMirrorCylinderPairKeepsAuthenticatedSource(t *testing.T) {
 	require.NoError(t, err)
 	_, ok = loftMirrorCylinderPairMotion(facetedPayload{
 		loftMirrorCopy: &loftMirrorPlacementRecord{source: source, motion: rotated},
-		xform:          rotated,
+		Xform:          rotated,
 	}, source)
 	require.True(t, ok)
 	_, ok = loftMirrorCylinderPairMotion(facetedPayload{
 		loftMirrorCopy: &loftMirrorPlacementRecord{source: other, motion: rotated},
-		xform:          rotated,
+		Xform:          rotated,
 	}, source)
 	require.False(t, ok)
 	_, ok = loftMirrorCylinderPairMotion(facetedPayload{
 		loftMirrorCopy: &loftMirrorPlacementRecord{source: source, motion: rotated},
-		xform:          identity,
+		Xform:          identity,
 	}, source)
 	require.False(t, ok)
 	shifted, err := r3.Translation(r3.Vec{Z: 1})
 	require.NoError(t, err)
 	_, ok = loftMirrorCylinderPairMotion(facetedPayload{
 		loftMirrorCopy: &loftMirrorPlacementRecord{source: source, motion: shifted},
-		xform:          shifted,
+		Xform:          shifted,
 	}, source)
 	require.False(t, ok)
 }
@@ -200,8 +200,8 @@ func (o pairsOutcome) requireSame(t *testing.T, want pairsOutcome) {
 	require.Equal(t, measurementFromInternal(want.body.n.Area), measurementFromInternal(o.body.n.Area))
 	require.Equal(t, vecMeasurementFromInternal(want.body.n.Centroid), vecMeasurementFromInternal(o.body.n.Centroid))
 	require.Equal(t, boxFromInternal(want.body.n.Bounds), boxFromInternal(o.body.n.Bounds))
-	require.Equal(t, wantPayload.vertexBound, gotPayload.vertexBound)
-	require.Equal(t, wantPayload.meshBound, gotPayload.meshBound)
+	require.Equal(t, wantPayload.VertexBound, gotPayload.VertexBound)
+	require.Equal(t, wantPayload.MeshBound, gotPayload.MeshBound)
 	// Every other payload field the old loop's result carries (provenance
 	// groups src and mirrorCapGroups, source mapping, the proof fields, the
 	// Join records) by deep comparison. The cylinder Join record holds the lower
@@ -309,7 +309,7 @@ func TestLoftMirrorCylinderPairsParallelMatchesSerial(t *testing.T) {
 		require.NotNil(t, serial.body)
 		moved := 0
 		for _, p := range f.pairs {
-			if p.n.Payload.(facetedPayload).xform != r3.Identity() {
+			if p.n.Payload.(facetedPayload).Xform != r3.Identity() {
 				moved++
 			}
 		}
@@ -528,7 +528,7 @@ func oracleLoftMirrorCylinderPairs(ctx context.Context, d *Document, ref produce
 		return nil, false, nil
 	}
 	first, firstOK := pairs[0].n.Payload.(facetedPayload)
-	if !firstOK || first.loftMirrorJoin == nil || first.xform != r3.Identity() ||
+	if !firstOK || first.loftMirrorJoin == nil || first.Xform != r3.Identity() ||
 		!first.contactAudited || source != nil && source != first.loftMirrorJoin {
 		return nil, false, nil
 	}

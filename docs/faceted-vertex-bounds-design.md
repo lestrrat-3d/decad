@@ -19,10 +19,10 @@ core §8 "The chain depth" states.
 ## 1. Problem
 
 A boolean's result is a `facetedPayload` carrying ONE displacement bound,
-`meshBound`, for every held vertex of the body (`boolean_body.go`). Every
+`MeshBound`, for every held vertex of the body (`boolean_body.go`). Every
 reading composes from it: every `Vertex.Bound`, every face's
 `Faceted.Bound`, every rim edge's `FacetedCurve.Bound` and length bound, the
-area bound (`meshBound × perimeter`), and the box bound (`Radius3D(meshBound)`).
+area bound (`MeshBound × perimeter`), and the box bound (`Radius3D(MeshBound)`).
 Tessellating the result restates it with that one number as every face's
 `sourceBound` (`tessellateFaceted`), and the next boolean composes its rim
 bound from it: `rimDelta(ma.bound, mb.bound, sinMin, dPair)` divides the SUM
@@ -35,7 +35,7 @@ old rim. The factor per union is `1/sin θ_min` plus the weld, which the
 prototype in §6 measured at ×1.5–1.9 per union on a 40°-tilted branch tree
 and the mtilt hand-off measured at ×4 on placed 16-gon prisms crossing more
 shallowly. Core §8's chain-depth gate refuses the result as an operand once
-`meshBound` exceeds the next pair's chord tolerance (`2e-5 ×` the pair
+`MeshBound` exceeds the next pair's chord tolerance (`2e-5 ×` the pair
 diameter, `boolChordFactor`), which the measured tree reached at its 46th
 union. Long before that, the published volume, box and vertex bounds have
 grown from `1e-14 mm` to `1e-3 mm` for a body whose held vertices never moved.
@@ -306,15 +306,15 @@ apply before publication.
 
 ### 4.1 The faceted payload record
 
-`facetedPayload` gains `vertexBound []float64`, one entry per held vertex.
-`meshBound` stays, redefined as the maximum `δ(t)` over the held facets, so
+`facetedPayload` gains `VertexBound []float64`, one entry per held vertex.
+`MeshBound` stays, redefined as the maximum `δ(t)` over the held facets, so
 every reader that wants one body-wide figure keeps one that is never looser
 than today's: `Verify`'s planar faceted contact kernel
 (`contact_faceted_pair.go`'s `planarFacetedSolid`, `contact_faceted_support.go`,
 `contact_faceted_sweep.go`), the mass-property reader
-(`mass_properties_faceted.go`, which checks `mesh.bound == pp.meshBound`), and
+(`mass_properties_faceted.go`, which checks `mesh.bound == pp.MeshBound`), and
 the translation-only zero-bound fast path (`facetedTranslationOnly`), whose
-condition becomes "every `vertexBound` entry is zero". A nil `vertexBound`
+condition becomes "every `VertexBound` entry is zero". A nil `VertexBound`
 on a payload is an invariant failure, never a fallback: the composing boolean
 always writes it.
 
@@ -322,18 +322,18 @@ always writes it.
 
 | Reading | Global reading of §1 | Per-vertex reading |
 |---|---|---|
-| `Vertex.Bound` | `meshBound` | `β(v)` |
-| `Faceted.Bound` (a face) | `meshBound` | `max δ(t)` over the face's facets |
-| `FacetedCurve.Bound`, `Edge.Length` bound | `meshBound`; `ChainLengthBound(n, meshBound, len)` | `max β` over the chain's vertices; `ChainLengthBound(n, that max, len)` |
-| face area bound | `meshBound × perimeterUpper + areaSlack + SumSlop + Σ_t FacetAreaTermSlop(t)` | `min(δ_f × perimeterUpper, Σ_t PerturbedTriangleAreaAllow(t, δ(t))) + areaSlack + SumSlop + Σ_t FacetAreaTermSlop(t)`, with `δ_f` the face's own `Faceted.Bound` and the sum the `stitchPayload` row's term over the face's facets, through `AbsSumUpper` |
-| body area bound | the same with the summed face perimeters | the sum of every face's geometric term, plus `areaSlack + SumSlop + Σ_t FacetAreaTermSlop(t)` over every facet |
+| `Vertex.Bound` | `MeshBound` | `β(v)` |
+| `Faceted.Bound` (a face) | `MeshBound` | `max δ(t)` over the face's facets |
+| `FacetedCurve.Bound`, `Edge.Length` bound | `MeshBound`; `ChainLengthBound(n, MeshBound, len)` | `max β` over the chain's vertices; `ChainLengthBound(n, that max, len)` |
+| face area bound | `MeshBound × perimeterUpper + AreaSlack + SumSlop + Σ_t FacetAreaTermSlop(t)` | `min(δ_f × perimeterUpper, Σ_t PerturbedTriangleAreaAllow(t, δ(t))) + AreaSlack + SumSlop + Σ_t FacetAreaTermSlop(t)`, with `δ_f` the face's own `Faceted.Bound` and the sum the `stitchPayload` row's term over the face's facets, through `AbsSumUpper` |
+| body area bound | the same with the summed face perimeters | the sum of every face's geometric term, plus `AreaSlack + SumSlop + Σ_t FacetAreaTermSlop(t)` over every facet |
 | `Volume` | `symA + symB + SweptVolumeAllow(round, preArea)` | unchanged; `round` stays the global weld maximum here |
-| `Centroid` | from `volSymDiff` and `dPair` | unchanged |
-| `Box.Bound` | `Radius3D(meshBound)` | `Radius3D(e)`, with `e` the largest, over the six extremes, of `max(max_v (v.x + B(v)) − m, m − max_v (v.x − β(v)))` for a held maximum `m` (the minimum mirrored), where `B(v)` is the largest `δ(t)` over the facets touching `v`, formed exactly and rounded up |
+| `Centroid` | from `VolSymDiff` and `DPair` | unchanged |
+| `Box.Bound` | `Radius3D(MeshBound)` | `Radius3D(e)`, with `e` the largest, over the six extremes, of `max(max_v (v.x + B(v)) − m, m − max_v (v.x − β(v)))` for a held maximum `m` (the minimum mirrored), where `B(v)` is the largest `δ(t)` over the facets touching `v`, formed exactly and rounded up |
 
 Both area terms are proven upper bounds on the same displacement, so the
 smaller is one too: the perimeter term is at most the global one because
-`δ_f ≤ meshBound` (§4.1), and the facet sum is the tighter of the two on a
+`δ_f ≤ MeshBound` (§4.1), and the facet sum is the tighter of the two on a
 face of few facets whose rims carry a large bound.
 
 `SumSlop` bounds the float loop that sums the facet areas, and
@@ -355,7 +355,7 @@ extreme widens `e`, which the extreme vertex's own bound alone would miss.
 each vertex's own `β(v)`, at that vertex's own largest coordinate magnitude
 rather than the body's, since the rounding a rigid motion commits on one
 vertex depends on that vertex's inputs alone (`internal/proofbound/bounds.go`,
-`RigidRoundAllow`). `meshBound` is recomputed as the maximum `δ(t)` after the
+`RigidRoundAllow`). `MeshBound` is recomputed as the maximum `δ(t)` after the
 addition. The exact-source record for a translation-only placement is kept or
 dropped under the same conditions as today, with §4.1's zero condition.
 Ordinary placement keeps a point loft's `pointSection` source record only for
@@ -380,10 +380,10 @@ rotation and `D` the float one. It drops every analytic surface tag and
 
 ### 4.4 Faceted restatement
 
-`tessellateFaceted` publishes the payload's `vertexBound` on the `Mesh`,
+`tessellateFaceted` publishes the payload's `VertexBound` on the `Mesh`,
 `faceBound[f] = max δ(t)` over the facets `FaceOf` maps to `f`, and
-`bound = meshBound`. Tessellation §7's refusal of a public `Tessellate` call
-whose tolerance is below the held `meshBound` stays: a caller who asked for a
+`bound = MeshBound`. Tessellation §7's refusal of a public `Tessellate` call
+whose tolerance is below the held `MeshBound` stays: a caller who asked for a
 finer mesh than the body holds still gets `facetedBoundError`. Only the
 boolean's own request changes (§5).
 
@@ -397,7 +397,7 @@ reads.
 ## 5. The chain-depth comparison
 
 A global comparison, which asks every operand for a mesh at the pair's chord
-tolerance `tol` and refuses a faceted operand holding `meshBound > tol`
+tolerance `tol` and refuses a faceted operand holding `MeshBound > tol`
 inside `tessellateFaceted` before any contact is examined, compares the wrong
 number once bounds are per vertex: one coarse rim far from the new contact
 would refuse a pair whose every new rim is composed from fine geometry.
@@ -416,7 +416,7 @@ bound it already published, which the caller could read before planning the
 chain (core §8), and is never the reason for a refusal.
 
 **The rule.** The boolean asks a RESTATING operand for its mesh at
-`max(tol, heldFloor)`, where `heldFloor` is the payload's own `meshBound`
+`max(tol, heldFloor)`, where `heldFloor` is the payload's own `MeshBound`
 (`facetedPayload`) or `delta` (`mitredSweepPayload`, `coilPayload`,
 `twistedSweepPayload`), read by a
 `heldFloorOf(body)` reader beside `sectionDisplacementOf`; a restatement
@@ -425,12 +425,12 @@ is the one the boolean needs and the request never refuses.
 
 **A held primitive raises the pair's tolerance.** An operand built as one
 fixed held mesh — a coil, mitred sweep, or twisted sweep with proven `delta`,
-or one certified `LoftFaces` result with proven `meshBound` — raises the
+or one certified `LoftFaces` result with proven `MeshBound` — raises the
 pair's chord tolerance itself to that bound, as a displaced prism section
 already raises it past twice its displacement (`pairChordFrom`, through
 `heldPrimitiveFloorOf` beside `sectionDisplacementOf`). Every facet such an
 operand touches the partner with then holds `δ(t) ≤ heldBound ≤ tol`, so the gate
-below admits it. A boolean result's `meshBound` does not raise the pair
+below admits it. A boolean result's `MeshBound` does not raise the pair
 tolerance: it is the figure a chain grows, and the gate exists to refuse it.
 Rigid placement of `LoftFaces` keeps the primitive classification while
 charging its new bound; a Boolean result clears it.
@@ -480,7 +480,7 @@ tapering 1.5 → 1 mm along a three-span path, each tilted 40° from the trunk
 axis, its root 2.6 mm from the axis, 1.1 mm higher than the previous root and
 turned by the golden angle. Each union is `Union(tree, branch)`.
 
-| Union | today's `meshBound` | pair `tol` | §3 max `β` | max `β` among that union's rims | trunk `δ(t)` at the contact |
+| Union | today's `MeshBound` | pair `tol` | §3 max `β` | max `β` among that union's rims | trunk `δ(t)` at the contact |
 |---|---|---|---|---|---|
 | 1 | 1.4e-14 | 1.26e-3 | 1.4e-14 | 1.4e-14 | 6.2e-15 |
 | 10 | 3.0e-12 | 1.31e-3 | 3.3e-14 | 3.3e-14 | 1.7e-14 |
@@ -541,9 +541,9 @@ root's `boolean_mesh.go`, which prepares each operand for it.
 | PR | Lands | Files | Tests and the red leg each must show |
 |---|---|---|---|
 | **1** | `Mesh.vertexBound` and its setter in the mesh proof record (`tessellate.go`); the mitred sweep build keeps each vertex's own rounding gap and publishes it, with `faceBound[f]` the corner maximum over `f`'s triangles and `delta`/`bound` the overall maximum (`internal/sweepmitre/build.go`, `sweep_mitre.go`); §2.1's derived reading for a mesh with no record, as one reader the pipeline will call | mesh record, mitred build, mitred restatement | A mitred sweep with its path start at the origin and an axis-aligned first span publishes `β = 0` at every start-cap vertex and `β ≤ delta` everywhere, with equality at one vertex; red leg: publish `delta` at every vertex and the zero assertion fails. The derived reading on a revolve mesh equals the largest incident `faceBound` at a cap-wall corner; red leg: read the vertex's own face alone and the corner assertion fails |
-| **2** | the composition of §3: facet bounds on the prepared operand, `Sin2`/`δ` recorded on each contact segment, corner provenance on kept facets, per-vertex weld in the stitch, `facetedPayload.vertexBound`, `meshBound` as the facet maximum; measurements still read `meshBound` | mesh-boolean pipeline, `boolean.go`'s composition, `boolean_body.go`'s payload | Union of two crossing mitred branches (the existing `apitest` fixture): every surviving operand vertex keeps its operand `β` to the bit; every rim vertex's `β` equals `upRound((δ(t_A)+δ(t_B))/SinLowerBound(Sin2)) + weld` recomputed from the fixture's own facet pair; `meshBound` is at most today's. Red legs: divide by the pair-wide `sinMin` and the rim equality fails at a rim whose own crossing is not the shallowest; drop the per-vertex weld and tessellation §14's "rational intersection vertices round inexactly" fixture reports a rim `β` below the measured rounding gap |
-| **3** | §4's readings: `Vertex.Bound`, edge bounds, `Faceted.Bound`, area, box; `Transform` per vertex; `tessellateFaceted` publishes the record and per-face `faceBound`; the pre-pass reads per-face slack | `boolean_body.go`, `tessellate.go` | A three-union chain: an untouched trunk vertex reports the trunk's own `delta` as its `Vertex.Bound`, an untouched trunk face reports it as `Faceted.Bound`, and the box bound equals `Radius3D(e)` recomputed from the published vertices; red leg: publish `meshBound` to every vertex and the untouched-vertex equality fails. A fixture whose largest-`β` vertex sits inside the held box but within `β` of one face of it: the box bound covers `m − (v.x − B(v))`; red leg: drop that term and the fixture's exact source box (the exact rationals) escapes the published bound. `Transform` of a boolean result: each vertex's bound grows by `RigidRoundAllow` at its own magnitude; red leg: charge the body-wide magnitude and the near-origin vertex's bound is strictly looser than the assertion allows |
-| **4** | §5: `heldFloorOf`, the per-operand request tolerance, the post-classification gate and its message; companion edits to core §8 "The chain depth", evaluator §9's rim bullet, tessellation §7 (the boolean's request) and §11 steps 7–8 and the result-payload paragraph; `meshbool.StagingError` rewritten | `boolean.go`, the mesh-boolean pipeline's contact gather, the three design docs | Twenty unions of §6's fixture succeed with every union's rim `β` at most `2·tol/sin θ` of its own pair. A fixture whose operand carries one rim with `β > tol` away from the new contact succeeds, and the same operand with the new contact placed ON that rim refuses with the new message; red leg: compare the operand's `meshBound` and the first fixture refuses. A cone-to-cone-to-cone chain (the hand-off's request 1 shape) builds three segments; red leg: the global comparison refuses the third |
+| **2** | the composition of §3: facet bounds on the prepared operand, `Sin2`/`δ` recorded on each contact segment, corner provenance on kept facets, per-vertex weld in the stitch, `facetedPayload.VertexBound`, `MeshBound` as the facet maximum; measurements still read `MeshBound` | mesh-boolean pipeline, `boolean.go`'s composition, `boolean_body.go`'s payload | Union of two crossing mitred branches (the existing `apitest` fixture): every surviving operand vertex keeps its operand `β` to the bit; every rim vertex's `β` equals `upRound((δ(t_A)+δ(t_B))/SinLowerBound(Sin2)) + weld` recomputed from the fixture's own facet pair; `MeshBound` is at most today's. Red legs: divide by the pair-wide `sinMin` and the rim equality fails at a rim whose own crossing is not the shallowest; drop the per-vertex weld and tessellation §14's "rational intersection vertices round inexactly" fixture reports a rim `β` below the measured rounding gap |
+| **3** | §4's readings: `Vertex.Bound`, edge bounds, `Faceted.Bound`, area, box; `Transform` per vertex; `tessellateFaceted` publishes the record and per-face `faceBound`; the pre-pass reads per-face slack | `boolean_body.go`, `tessellate.go` | A three-union chain: an untouched trunk vertex reports the trunk's own `delta` as its `Vertex.Bound`, an untouched trunk face reports it as `Faceted.Bound`, and the box bound equals `Radius3D(e)` recomputed from the published vertices; red leg: publish `MeshBound` to every vertex and the untouched-vertex equality fails. A fixture whose largest-`β` vertex sits inside the held box but within `β` of one face of it: the box bound covers `m − (v.x − B(v))`; red leg: drop that term and the fixture's exact source box (the exact rationals) escapes the published bound. `Transform` of a boolean result: each vertex's bound grows by `RigidRoundAllow` at its own magnitude; red leg: charge the body-wide magnitude and the near-origin vertex's bound is strictly looser than the assertion allows |
+| **4** | §5: `heldFloorOf`, the per-operand request tolerance, the post-classification gate and its message; companion edits to core §8 "The chain depth", evaluator §9's rim bullet, tessellation §7 (the boolean's request) and §11 steps 7–8 and the result-payload paragraph; `meshbool.StagingError` rewritten | `boolean.go`, the mesh-boolean pipeline's contact gather, the three design docs | Twenty unions of §6's fixture succeed with every union's rim `β` at most `2·tol/sin θ` of its own pair. A fixture whose operand carries one rim with `β > tol` away from the new contact succeeds, and the same operand with the new contact placed ON that rim refuses with the new message; red leg: compare the operand's `MeshBound` and the first fixture refuses. A cone-to-cone-to-cone chain (the hand-off's request 1 shape) builds three segments; red leg: the global comparison refuses the third |
 | **5** (optional, not scheduled) | the interpolated rim rule of §6 | mesh-boolean pipeline | only if a measured chain needs it |
 
 Each PR ships its own doc edits (this document's affected sections and the
@@ -560,4 +560,4 @@ and `golangci-lint run`.
 | Whether the gate exists | §7's option B | option C |
 | Weld and placement rounding | per vertex (§3.4, §4.3) | the global maximum at every vertex, which is what today does |
 | Per-facet departure term | none; a curved per-vertex record folds it into `β` (§2.1) | a `facetBound []float64` beside `vertexBound`, needed only when a curved payload wants per-vertex bounds below its sagitta |
-| Box bound | the six-extreme rule of §4.2 | `Radius3D(meshBound)`, which stays sound and is what §4.1's maximum makes available |
+| Box bound | the six-extreme rule of §4.2 | `Radius3D(MeshBound)`, which stays sound and is what §4.1's maximum makes available |

@@ -697,8 +697,8 @@ func TestBooleanRoundingUnderflowKeepsProofPositive(t *testing.T) {
 	proof, ok := union.n.Payload.(facetedPayload)
 	require.True(t, ok)
 	require.Contains(t, proof.Verts, r3.Vec{Y: 0.5 * scale})
-	require.Positive(t, proof.meshBound)
-	require.Positive(t, proof.volSymDiff)
+	require.Positive(t, proof.MeshBound)
+	require.Positive(t, proof.VolSymDiff)
 	volume, err := union.Volume()
 	require.NoError(t, err)
 	require.Positive(t, volume.Bound.Base())
@@ -767,9 +767,9 @@ func TestFacetedMeasurementSumsEncloseSmallAllowances(t *testing.T) {
 		verts := []r3.Vec{{X: 1}, {X: 1 + width}, {X: 1, Y: 1}, {X: 1, Z: 1}}
 		tris := [][3]int{{0, 2, 1}, {0, 1, 3}, {0, 3, 2}, {1, 2, 3}}
 		payload := facetedPayload{
-			Verts: verts, vertexBound: make([]float64, len(verts)), Tris: tris, Src: []int{0, 1, 2, 3},
+			Verts: verts, VertexBound: make([]float64, len(verts)), Tris: tris, Src: []int{0, 1, 2, 3},
 			groups:     []facetGroup{{planar: true}, {planar: true}, {planar: true}, {planar: true}},
-			volSymDiff: tiny, dPair: 2, xform: r3.Identity(),
+			VolSymDiff: tiny, DPair: 2, Xform: r3.Identity(),
 		}
 		body, err := buildFacetedBody(t.Context(), New(), producerID(0), payload)
 		require.NoError(t, err)
@@ -778,7 +778,7 @@ func TestFacetedMeasurementSumsEncloseSmallAllowances(t *testing.T) {
 			new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 54)))
 		round := proofbound.Radius3D(proofbound.RatAbsDiff(trueCenterX, body.n.Centroid.Value.X))
 		volume := new(big.Rat).Quo(new(big.Rat).SetFloat64(width), big.NewRat(6, 1))
-		allowance := facetproof.FacetedCentroidAllowance(tiny, payload.dPair, volFloor(volume, tiny))
+		allowance := facetproof.FacetedCentroidAllowance(tiny, payload.DPair, volFloor(volume, tiny))
 		wantBound := new(big.Rat).Add(new(big.Rat).SetFloat64(round), new(big.Rat).SetFloat64(allowance))
 		require.GreaterOrEqual(t, new(big.Rat).SetFloat64(body.n.Centroid.Bound.Base()).Cmp(wantBound), 0)
 	})
@@ -838,7 +838,7 @@ func TestBooleanVolumesAreUnchangedByTheKernelRewrite(t *testing.T) {
 			require.NotNil(t, eval.audit)
 			require.NotNil(t, eval.volumeRat)
 			wantValue, wantBound, wantRat, err := facetproof.Volume(t.Context(),
-				eval.audit.XVerts, eval.payload.Tris, eval.payload.volSymDiff)
+				eval.audit.XVerts, eval.payload.Tris, eval.payload.VolSymDiff)
 			require.NoError(t, err)
 			require.Zero(t, wantRat.Cmp(eval.volumeRat))
 			require.Equal(t, math.Float64bits(wantValue), math.Float64bits(eval.volume.Value.Base()))
@@ -1156,14 +1156,14 @@ func TestFacetedPlacementRebuildsCachedDiameter(t *testing.T) {
 			r3.NewVec(0, 4, 0),
 			r3.NewVec(0, 0, 5),
 		},
-		vertexBound: make([]float64, 4),
+		VertexBound: make([]float64, 4),
 		Tris:        [][3]int{{0, 2, 1}, {0, 1, 3}, {0, 3, 2}, {1, 2, 3}},
 		Src:         []int{0, 1, 2, 3},
 		groups: []facetGroup{
 			{planar: true}, {planar: true}, {planar: true}, {planar: true},
 		},
-		dPair: 10,
-		xform: r3.Identity(),
+		DPair: 10,
+		Xform: r3.Identity(),
 	})
 	require.NoError(t, err)
 
@@ -1180,8 +1180,8 @@ func TestFacetedPlacementRebuildsCachedDiameter(t *testing.T) {
 	after := placed.n.Payload.(facetedPayload)
 	want, ok := diameter.Points(after.Verts)
 	require.True(t, ok)
-	require.NotEqual(t, before.diameter, want, "the placement must make a stale cached diameter observable")
-	require.Equal(t, want, after.diameter)
+	require.NotEqual(t, before.Diameter, want, "the placement must make a stale cached diameter observable")
+	require.Equal(t, want, after.Diameter)
 }
 
 func TestBooleanProofBoundsEncloseExactTermSums(t *testing.T) {
@@ -1217,10 +1217,10 @@ func TestFacetedPlacementEnclosesExactPriorAndMotionBounds(t *testing.T) {
 	require.NoError(t, err)
 	before, ok := union.n.Payload.(facetedPayload)
 	require.True(t, ok)
-	require.Zero(t, before.meshBound)
-	require.Zero(t, before.volSymDiff)
+	require.Zero(t, before.MeshBound)
+	require.Zero(t, before.VolSymDiff)
 	const tiny = math.SmallestNonzeroFloat64
-	before.meshBound, before.volSymDiff = tiny, tiny
+	before.MeshBound, before.VolSymDiff = tiny, tiny
 
 	move, err := r3.Translation(r3.NewVec(1, 0, 0))
 	require.NoError(t, err)
@@ -1236,8 +1236,8 @@ func TestFacetedPlacementEnclosesExactPriorAndMotionBounds(t *testing.T) {
 	require.NoError(t, err)
 	roundVol := proofbound.SweptVolumeAllow(allow, areaUpper)
 	for _, tc := range []struct{ got, increment float64 }{
-		{after.meshBound, allow},
-		{after.volSymDiff, roundVol},
+		{after.MeshBound, allow},
+		{after.VolSymDiff, roundVol},
 	} {
 		require.Positive(t, tc.increment)
 		want := new(big.Rat).Add(new(big.Rat).SetFloat64(tiny), new(big.Rat).SetFloat64(tc.increment))
@@ -1285,12 +1285,12 @@ func TestBooleanComposesTheOperandsOwnSymmetricDifferenceProofs(t *testing.T) {
 	require.NoError(t, err)
 	// Step 6 of docs/tessellation-design.md §11: the operands' own bounds plus
 	// the final weld's swept volume, which is non-negative and nothing else.
-	require.GreaterOrEqual(t, eval.payload.volSymDiff, symA+symB)
-	require.Less(t, eval.payload.volSymDiff, symA+substituted,
+	require.GreaterOrEqual(t, eval.payload.VolSymDiff, symA+symB)
+	require.Less(t, eval.payload.VolSymDiff, symA+substituted,
 		`the result carries the operand's proof, not the product that would have stood in for it`)
 	volMM, err := eval.volume.Bound.In(units.CubicMillimeter)
 	require.NoError(t, err)
-	require.GreaterOrEqual(t, volMM, eval.payload.volSymDiff)
+	require.GreaterOrEqual(t, volMM, eval.payload.VolSymDiff)
 }
 
 func TestOperandSymDiffRefusesAMeshWithNoOccupiedVolumeProof(t *testing.T) {

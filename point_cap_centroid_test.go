@@ -152,7 +152,7 @@ func pointPlaneCapCentroidThreeMomentReference(ctx context.Context, base faceted
 		center[k] = new(big.Rat).Quo(moments[k], den)
 	}
 	areaLower := proofbound.RatFloatDown(new(big.Rat).Quo(pointPlaneAbs(twiceArea), big.NewRat(2, 1)))
-	delta := proofbound.ProductUpper(plane.mapStretch, base.meshBound)
+	delta := proofbound.ProductUpper(plane.mapStretch, base.MeshBound)
 	tube := proofbound.SectionDisplacementArea(delta, len(polygon), perimeter)
 	if areaLower <= tube || proofbound.IsNonFinite(delta) || proofbound.IsNonFinite(tube) {
 		return VecMeasurement{}, center, false, nil
@@ -186,7 +186,7 @@ func pointPlaneCapCentroidThreeMomentReference(ctx context.Context, base faceted
 func testPointCapBase(apex r3.Vec, far []r3.Vec, meshBound float64) facetedPayload {
 	return facetedPayload{
 		Verts: append([]r3.Vec{apex}, far...), pointSection: &pointSectionRecord{apex: apex},
-		meshBound: meshBound,
+		MeshBound: meshBound,
 	}
 }
 

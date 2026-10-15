@@ -79,8 +79,8 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 	}
 	pointSlab := fp.pointPlane != nil && fp.pointPlane.base.pointSection != nil
 	booleanSource := fp.booleanSimilaritySource && b.Kind() == BodySolid && b.IsSolid()
-	if (!pointSlab && !fp.similaritySource && !booleanSource) || !fp.xform.IsValid() ||
-		len(fp.Verts) == 0 || len(fp.vertexBound) != len(fp.Verts) {
+	if (!pointSlab && !fp.similaritySource && !booleanSource) || !fp.Xform.IsValid() ||
+		len(fp.Verts) == 0 || len(fp.VertexBound) != len(fp.Verts) {
 		return nil, fmt.Errorf("%w: this body has no certified similarity source", ErrUnsupported)
 	}
 	if booleanSource && !certifiedBooleanSimilaritySource(fp, len(b.Faces())) {
@@ -98,22 +98,22 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 		}
 	}
 	budget := proofbound.NewWorkBudget(ctx)
-	mesh, err := facetproof.ScaleMesh(ctx, budget, fp.Verts, fp.Tris, fp.vertexBound,
-		fp.volSymDiff, fp.areaSlack, anchor, s)
+	mesh, err := facetproof.ScaleMesh(ctx, budget, fp.Verts, fp.Tris, fp.VertexBound,
+		fp.VolSymDiff, fp.AreaSlack, anchor, s)
 	if err != nil {
 		return nil, err
 	}
 	next := fp
 	next.smoothRectSection = nil
 	next.Verts, next.Tris = mesh.Verts, mesh.Tris
-	next.vertexBound, next.meshBound = mesh.VertexBound, mesh.MeshBound
-	next.volSymDiff, next.areaSlack = mesh.VolSymDiff, mesh.AreaSlack
+	next.VertexBound, next.MeshBound = mesh.VertexBound, mesh.MeshBound
+	next.VolSymDiff, next.AreaSlack = mesh.VolSymDiff, mesh.AreaSlack
 	// Scaling the old diameter does not include the held vertices' new
 	// rounding or an embedding adjustment. The centroid's yardstick must
 	// cover both the true body and this rounded held body.
-	next.dPair = max(proofbound.ProductUpper(fp.dPair, s),
-		facetedSourceDiameterUpper(next.Verts, next.meshBound))
-	next.xform = r3.Identity()
+	next.DPair = max(proofbound.ProductUpper(fp.DPair, s),
+		facetedSourceDiameterUpper(next.Verts, next.MeshBound))
+	next.Xform = r3.Identity()
 	next.pointPlaneSourceEligible = false
 	next.axialSectionJoin = false
 	next.prismPatternJoin = nil
@@ -166,21 +166,21 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 			group.normalBound = 2
 		}
 	}
-	if proofbound.IsNonFinite(next.dPair) || proofbound.IsNonFinite(next.pointPlaneCapDisplacement) {
+	if proofbound.IsNonFinite(next.DPair) || proofbound.IsNonFinite(next.pointPlaneCapDisplacement) {
 		return nil, fmt.Errorf("%w: the scaled source proof is not finite", ErrUnsupported)
 	}
 	if pointSlab {
 		record := pointPlaneSimilarityRecord{slice: fp.pointPlane}
 		if fp.pointSimilarity == nil {
-			if fp.xform != r3.Identity() {
-				record.steps = append(record.steps, pointPlaneSimilarityStep{motion: fp.xform,
-					meshBound: fp.meshBound, capDisplacement: fp.pointPlaneCapDisplacement})
+			if fp.Xform != r3.Identity() {
+				record.steps = append(record.steps, pointPlaneSimilarityStep{motion: fp.Xform,
+					meshBound: fp.MeshBound, capDisplacement: fp.pointPlaneCapDisplacement})
 			}
 		} else {
 			record.steps = append(record.steps, fp.pointSimilarity.steps...)
 		}
 		record.steps = append(record.steps, pointPlaneSimilarityStep{anchor: anchor, factor: s,
-			meshBound: next.meshBound, capDisplacement: next.pointPlaneCapDisplacement})
+			meshBound: next.MeshBound, capDisplacement: next.pointPlaneCapDisplacement})
 		next.pointSimilarity = &record
 	}
 	ref := d.nextProducerID()
@@ -200,17 +200,17 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 func certifiedBooleanSimilaritySource(fp facetedPayload, faceCount int) bool {
 	if len(fp.Tris) == 0 || len(fp.Tris) != len(fp.Src) ||
 		len(fp.Tris) != len(fp.FaceOf) || len(fp.groups) == 0 || faceCount == 0 ||
-		fp.meshBound < 0 || fp.volSymDiff < 0 || fp.areaSlack < 0 || fp.dPair <= 0 ||
-		proofbound.IsNonFinite(fp.meshBound) || proofbound.IsNonFinite(fp.volSymDiff) ||
-		proofbound.IsNonFinite(fp.areaSlack) || proofbound.IsNonFinite(fp.dPair) {
+		fp.MeshBound < 0 || fp.VolSymDiff < 0 || fp.AreaSlack < 0 || fp.DPair <= 0 ||
+		proofbound.IsNonFinite(fp.MeshBound) || proofbound.IsNonFinite(fp.VolSymDiff) ||
+		proofbound.IsNonFinite(fp.AreaSlack) || proofbound.IsNonFinite(fp.DPair) {
 		return false
 	}
-	for _, beta := range fp.vertexBound {
+	for _, beta := range fp.VertexBound {
 		if beta < 0 || proofbound.IsNonFinite(beta) {
 			return false
 		}
 	}
-	if fp.meshBound < facetproof.FacetBoundMax(fp.Tris, fp.vertexBound) {
+	if fp.MeshBound < facetproof.FacetBoundMax(fp.Tris, fp.VertexBound) {
 		return false
 	}
 	for _, source := range fp.Src {

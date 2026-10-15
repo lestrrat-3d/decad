@@ -22,7 +22,7 @@ func loftCylinderChamferBoreInheritance(fp facetedPayload, mesh *joinedMesh,
 	if record == nil || source.boreGroup != record.wallGroup ||
 		source.boreRadius != record.boreRadius || source.boreBound != record.boreBound ||
 		source.boreBound < 0 || proofbound.IsNonFinite(source.boreBound) ||
-		source.boreBound > fp.meshBound ||
+		source.boreBound > fp.MeshBound ||
 		proofbound.AbsSumUpper(source.boreRadius, source.boreBound, source.innerInset) >= source.blankRadius {
 		return fmt.Errorf("%w: chamfer bore lost its source radial bound", ErrUnsupported)
 	}
