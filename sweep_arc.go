@@ -115,7 +115,7 @@ func sweepRatIsZero(v sweepRatVec) bool { return sweeparc.IsZero(v) }
 // reduction adds the second span's role to each seam-free full-turn wall. A
 // span whose Revolve axis was reoriented (reverseArcCaps) has its cap roles swapped back
 // into PATH order, so capStart always names the section the path leaves and
-// capEnd the one it arrives at — the orientation sweep_composite.go's own
+// capEnd the one it arrives at — the orientation compositesweep.Assemble's own
 // join pairing reads when it takes one span's end cap against the next span's
 // start cap. A closed full-circle reduction has no cap.
 func finishArcSweepBody(body *Body, payload sweepPayload) {

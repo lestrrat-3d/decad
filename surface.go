@@ -12,7 +12,7 @@ import (
 // WithSurfaceResult, and the refusal helper that keeps a sheet body out of an
 // operation Table X does not admit it to. Extrude, Revolve, Sweep and Loft
 // each wire the option into their own build (extrude.go, internal/revolveplan/build.go,
-// sweep.go/sweep_arc.go/sweep_composite.go, loft_build.go) — Sweep is the
+// sweep.go/sweep_arc.go/internal/compositesweep/assemble.go, loft_build.go) — Sweep is the
 // last of the four to take it, so Table R row R1 now names no feature this
 // evaluator still refuses outright; the row stays in the design as the stated
 // rule for one added later. boolean.go, fillet.go, chamfer.go, shell.go and

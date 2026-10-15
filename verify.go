@@ -807,8 +807,8 @@ func auditSheetBoundary(ctx context.Context, b *Body) reportvocab.SheetAuditOutc
 //   - the arc reduction is a revolvePayload build whose own sweep is a
 //     PARTIAL turn (full == false) — revolvePayloadProvesSimple's own
 //     admission needs a full turn, so an arc-reduced sweep never qualifies;
-//   - the composite build's own auditCompositeBoundary/auditCompositeVertexLinks
-//     (sweep_composite.go) prove a closed two-manifold-with-boundary TOPOLOGY —
+//   - the composite build's own compositesweep.AuditBoundary/AuditVertexLinks
+//     (internal/compositesweep/boundary.go) prove a closed two-manifold-with-boundary TOPOLOGY —
 //     every edge's face count matches its use count, every vertex link is one
 //     cycle or path — which is a combinatorial fact about how the spans sew
 //     together, never a geometric claim that the swept walls do not fold back

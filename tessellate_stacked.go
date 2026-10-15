@@ -95,8 +95,8 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 		}
 		for j, face := range cl.FaceOf {
 			next := (j + 1) % len(cl.Samples)
-			mesh.addTriangle([3]int{r.Bottom[j], r.Bottom[next], r.Top[next]}, face)
-			mesh.addTriangle([3]int{r.Bottom[j], r.Top[next], r.Top[j]}, face)
+			topobuild.AddTriangle(&mesh.n, [3]int{r.Bottom[j], r.Bottom[next], r.Top[next]}, face)
+			topobuild.AddTriangle(&mesh.n, [3]int{r.Bottom[j], r.Top[next], r.Top[j]}, face)
 			faceTrim[face] = math.Max(faceTrim[face], cl.SagOf[j])
 			faceAxial[face] = math.Max(first.Z0Delta, last.Z1Delta)
 		}
@@ -132,7 +132,7 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 			return err
 		}
 		for _, tri := range patch.Triangles {
-			mesh.addTriangle(tri, face)
+			topobuild.AddTriangle(&mesh.n, tri, face)
 		}
 		faceTrim[face] = math.Max(faceTrim[face], patch.Sag)
 		faceAxial[face] = axial
@@ -186,7 +186,7 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 			mesh.n.Triangles[i][1], mesh.n.Triangles[i][2] = mesh.n.Triangles[i][2], mesh.n.Triangles[i][1]
 		}
 	}
-	if err := liftTessellationError(tessellation.RequireClosedMesh(mesh.n.Triangles)); err != nil {
+	if err := topobuild.LiftAuditError(tessellation.RequireClosedMesh(mesh.n.Triangles)); err != nil {
 		return nil, err
 	}
 	if err := composeFaceBounds(mesh, faceTrim, faceAxial, vertexStore, sp.SectionDelta); err != nil {

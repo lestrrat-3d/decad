@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/revolveproof"
 	"github.com/lestrrat-3d/decad/internal/revolvesampling"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -374,7 +375,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 				return nil, err
 			}
 			revolvemesh.EmitCellTriangles(lo, hi, p.Angular, func(tri [3]int) {
-				mesh.addTriangle(tri, faceNode(face))
+				topobuild.AddTriangle(&mesh.n, tri, faceNode(face))
 			})
 			cur := faceCells[face]
 			cur.rho = math.Max(cur.rho, math.Max(lo.Rho, hi.Rho))
@@ -434,8 +435,8 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 		}
 		if err := revolvemesh.EmitCapTriangles(ctx, meridianSamples, sectionPts, sectionLoops,
 			angular.Samples-1, func(end, start [3]int) {
-				mesh.addTriangle(end, faceNode(capEnd))
-				mesh.addTriangle(start, faceNode(capStart))
+				topobuild.AddTriangle(&mesh.n, end, faceNode(capEnd))
+				topobuild.AddTriangle(&mesh.n, start, faceNode(capStart))
 			}); err != nil {
 			return nil, err
 		}
@@ -632,12 +633,12 @@ func publishRevolveProof(m *Mesh, faceCells map[*Face]revFaceExtent, p *revolveP
 		if proofbound.IsNonFinite(bound) {
 			return fmt.Errorf(`%w: a revolve wall face's composed displacement is not finite`, ErrUnsupported)
 		}
-		m.setFaceBound(faceNode(f), bound)
+		topobuild.SetFaceBound(&m.n, faceNode(f), bound)
 	}
 	capBound := proofbound.UpRound(moved(proofbound.AbsSumUpper(p.MeridianDelta, coord)))
 	for _, f := range m.n.Source {
 		if _, ok := m.n.FaceBound[f]; !ok {
-			m.setFaceBound(f, capBound)
+			topobuild.SetFaceBound(&m.n, f, capBound)
 		}
 	}
 	if proofbound.IsNonFinite(m.n.Bound) {

@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 )
 
 // This file restates a lofted body's held triangle set as a Mesh. The loft
@@ -76,7 +77,7 @@ func tessellateLoft(ctx context.Context, b *Body, lp loftPayload, privateRoles .
 	}
 	out, err := loftmesh.RestateLoft(ctx, in)
 	if err != nil {
-		return nil, liftTessellationError(err)
+		return nil, topobuild.LiftAuditError(err)
 	}
 	src := make([]*topo.Face, len(out.SourceFaces))
 	for k, i := range out.SourceFaces {
@@ -84,7 +85,7 @@ func tessellateLoft(ctx context.Context, b *Body, lp loftPayload, privateRoles .
 	}
 	mesh := bornMesh(&Mesh{n: topo.Mesh{Vertices: out.Vertices, Triangles: out.Triangles, Source: src}})
 	for _, f := range src {
-		mesh.setFaceBound(f, out.BoundMM)
+		topobuild.SetFaceBound(&mesh.n, f, out.BoundMM)
 	}
 	mesh.n.Bound = out.BoundMM
 	mesh.n.AreaSlack = out.AreaSlackMM2

@@ -66,7 +66,7 @@ func replayCompositeSweepWork(
 	if err := compositesweep.Preflight(payload.prism.Profile, len(payload.spans)); err != nil {
 		return nil, err
 	}
-	parts := make([]compositeSpanPart, len(payload.spans))
+	parts := make([]compositesweep.SpanPart, len(payload.spans))
 	for i := range payload.spans {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -76,7 +76,7 @@ func replayCompositeSweepWork(
 		if err != nil {
 			return nil, fmt.Errorf(`sweep path span %d: %w`, i, err)
 		}
-		parts[i], err = compositeSpanPartOf(body)
+		parts[i], err = compositesweep.SpanPartOf(bodyNode(body))
 		if err != nil {
 			return nil, fmt.Errorf(`sweep path span %d: %w`, i, err)
 		}
@@ -84,9 +84,11 @@ func replayCompositeSweepWork(
 	var body *Body
 	var err error
 	if payload.closedComposite {
-		body, err = assembleClosedCompositeSweepBody(ctx, d, ref, parts)
+		body, err = bodyResult(compositesweep.Assemble(ctx, envOf(documentNode(d), ref), parts, false,
+			auditClosedCompositeSweep, compositesweep.SewJoin, true))
 	} else {
-		body, err = assembleCompositeSweepBody(ctx, d, ref, parts, payload.surfaceResult)
+		body, err = bodyResult(compositesweep.Assemble(ctx, envOf(documentNode(d), ref), parts, payload.surfaceResult,
+			auditCompositeSweep, compositesweep.SewJoin, false))
 	}
 	if err != nil {
 		return nil, err
@@ -145,7 +147,7 @@ func evalCompositeSweepContextWithClosure(
 	// Every span below stays solid regardless of surfaceResult (compositeLine/
 	// ArcSweepSpan take no such flag): the span pairing below needs both cap
 	// roles, and sewing pairs cap loops face to face. The flag is consumed by
-	// assembleCompositeSweepBody alone, which omits only the outer two caps
+	// compositesweep.Assemble alone, which omits only the outer two caps
 	// from the published face set after every span has built solid
 	// (docs/surface-design.md §4).
 	payload := sweepPayload{
@@ -268,7 +270,7 @@ func (span sweepSpanPayload) transform() r3.Transform {
 	return span.prism.Xform
 }
 
-// build evaluates one temporary closed span. assembleCompositeSweepBody
+// build evaluates one temporary closed span. compositesweep.Assemble
 // removes the internal caps and sews adjacent section boundaries after every
 // span has succeeded. No temporary body is committed to the document.
 func (span *sweepSpanPayload) build(
@@ -316,7 +318,7 @@ func restoreSweepArcCapRoles(body *Body, reverse bool) {
 // aggregateCompositeSweepMeasurements publishes the union readings after the
 // caller has proved that span interiors are disjoint and has assembled their
 // shared sections into body. Volume and first moments add over the spans,
-// each of which stays a solid regardless of surfaceResult (sweep_composite.go
+// each of which stays a solid regardless of surfaceResult (compositesweep.Assemble
 // keeps every span's own two cap roles for the pairing and sewing that
 // already ran); bounds are the componentwise union of the span boxes.
 //
@@ -329,21 +331,21 @@ func restoreSweepArcCapRoles(body *Body, reverse bool) {
 // into the running total and then subtracted back out, exactly as
 // internal/prismrecord/build.go and internal/revolveplan/build.go compose theirs, rather than being left out
 // of the sum from the start.
-func aggregateCompositeSweepMeasurements(ctx context.Context, body *Body, parts []compositeSpanPart, surfaceResult bool) error {
+func aggregateCompositeSweepMeasurements(ctx context.Context, body *Body, parts []compositesweep.SpanPart, surfaceResult bool) error {
 	if body == nil || len(parts) == 0 {
 		return fmt.Errorf(`%w: a composite sweep requires at least one built span`, ErrDegenerate)
 	}
 	budget := proofbound.NewWorkBudget(ctx)
 	spans := make([]compositesweep.Span, len(parts))
 	for i, part := range parts {
-		span := part.body
+		span := part.Body
 		if span == nil {
 			continue
 		}
 		spans[i] = compositesweep.Span{
-			Solid: span.n.Solid, Volume: measurementScalar(measurementFromInternal(span.n.Volume)),
-			Centroid: span.n.Centroid.Value, CentroidBound: span.n.Centroid.Bound.Base(),
-			Min: span.n.Bounds.Min, Max: span.n.Bounds.Max, BoxBound: span.n.Bounds.Bound.Base(),
+			Solid: span.Solid, Volume: measurementScalar(measurementFromInternal(span.Volume)),
+			Centroid: span.Centroid.Value, CentroidBound: span.Centroid.Bound.Base(),
+			Min: span.Bounds.Min, Max: span.Bounds.Max, BoxBound: span.Bounds.Bound.Base(),
 		}
 	}
 	faces := body.Faces()
@@ -353,8 +355,8 @@ func aggregateCompositeSweepMeasurements(ctx context.Context, body *Body, parts 
 	}
 	var startCap, endCap proofbound.BoundedScalar
 	if surfaceResult {
-		startCap = proofbound.MeasuredScalar(parts[0].startCap.n.Area, parts[0].startCap.n.AreaBound)
-		endCap = proofbound.MeasuredScalar(parts[len(parts)-1].endCap.n.Area, parts[len(parts)-1].endCap.n.AreaBound)
+		startCap = proofbound.MeasuredScalar(parts[0].StartCap.Area, parts[0].StartCap.AreaBound)
+		endCap = proofbound.MeasuredScalar(parts[len(parts)-1].EndCap.Area, parts[len(parts)-1].EndCap.AreaBound)
 	}
 	readings, err := compositesweep.Aggregate(budget, spans, areas, surfaceResult, startCap, endCap)
 	if err != nil {

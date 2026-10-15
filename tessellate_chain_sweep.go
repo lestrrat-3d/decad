@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/stationbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -56,8 +57,8 @@ func tessellateChainSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 		mesh.n.Vertices = append(mesh.n.Vertices, v.n.Position)
 		store = append(store, chainSweepVertexGap(v, nominal))
 	}
-	mesh.addTriangle([3]int{0, 1, 2}, faceNode(straight))
-	mesh.addTriangle([3]int{0, 2, 3}, faceNode(straight))
+	topobuild.AddTriangle(&mesh.n, [3]int{0, 1, 2}, faceNode(straight))
+	topobuild.AddTriangle(&mesh.n, [3]int{0, 2, 3}, faceNode(straight))
 	outer, inner := 3, 2
 	budget := proofbound.NewWorkBudget(ctx)
 	for j := 1; j <= n; j++ {
@@ -85,8 +86,8 @@ func tessellateChainSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 			mesh.n.Vertices = append(mesh.n.Vertices, p)
 			store = append(store, gap)
 		}
-		mesh.addTriangle([3]int{outer, inner, nextInner}, faceNode(curved))
-		mesh.addTriangle([3]int{outer, nextInner, nextOuter}, faceNode(curved))
+		topobuild.AddTriangle(&mesh.n, [3]int{outer, inner, nextInner}, faceNode(curved))
+		topobuild.AddTriangle(&mesh.n, [3]int{outer, nextInner, nextOuter}, faceNode(curved))
 		outer, inner = nextOuter, nextInner
 	}
 	if err := budget.Err(); err != nil {
@@ -98,13 +99,13 @@ func tessellateChainSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 	}
 	mesh.n.CoordBound = coord
 	straightBound := max(store[0], store[1], store[2], store[3])
-	mesh.setFaceBound(faceNode(straight), proofbound.UpRound(straightBound))
+	topobuild.SetFaceBound(&mesh.n, faceNode(straight), proofbound.UpRound(straightBound))
 	arcBound := proofbound.AbsSumUpper(tessellation.ChordSagitta(radius, upperPi, n), coord)
 	if proofbound.IsNonFinite(arcBound) || arcBound > chord {
 		return nil, fmt.Errorf(`%w: the chain sweep arc's chord and coordinate bound exceeds the requested tolerance`,
 			ErrUnsupported)
 	}
-	mesh.setFaceBound(faceNode(curved), arcBound)
+	topobuild.SetFaceBound(&mesh.n, faceNode(curved), arcBound)
 
 	// A per-triangle exact area bracket checks positive area at every level.
 	// At VerifyAll, the two live faces' certified area intervals bound the
@@ -129,10 +130,10 @@ func tessellateChainSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 	if verify >= VerifyBoundary {
 		data, auditErr := revolvemesh.RequireRevolveFacetAreas(budget, mesh.n.Vertices, mesh.n.Triangles, coord)
 		if auditErr != nil {
-			return nil, liftTessellationError(auditErr)
+			return nil, topobuild.LiftAuditError(auditErr)
 		}
 		if auditErr = revolvemesh.RevolveContactAudit(budget, data, mesh.n.Triangles, coord); auditErr != nil {
-			return nil, liftTessellationError(auditErr)
+			return nil, topobuild.LiftAuditError(auditErr)
 		}
 	}
 	if verify >= VerifyAll {

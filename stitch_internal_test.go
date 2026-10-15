@@ -183,7 +183,7 @@ func TestStitchRuleSRefusesMultipleSourceBodies(t *testing.T) {
 // vertex v: triangles (v, outer[0], outer[1]), (v, outer[1], outer[2]),
 // (v, outer[2], outer[0]), each pair sharing the radial edge (v, outer[i])
 // between them, and each triangle's own opposite (outer[i], outer[i+1])
-// edge free. At v this is the shape auditVertexLinks admits by construction
+// edge free. At v this is the shape compositesweep.AuditVertexLinks admits by construction
 // — degree 2 at every face, zero ends, one connected component — the
 // interior-vertex CYCLE its own doc comment names. Every non-v vertex reads
 // as a two-face PATH, also admitted.

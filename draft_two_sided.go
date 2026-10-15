@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
+	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
@@ -59,14 +60,14 @@ func evalTwoSidedDraftContext(ctx context.Context, d *Document, ref producerID, 
 	if !ok {
 		return nil, fmt.Errorf(`%w: the along-side taper lost its draft record`, ErrDegenerate)
 	}
-	parts := make([]compositeSpanPart, 2)
+	parts := make([]compositesweep.SpanPart, 2)
 	for i, part := range []*Body{negative, positive} {
-		parts[i], err = compositeSpanPartOf(part)
+		parts[i], err = compositesweep.SpanPartOf(bodyNode(part))
 		if err != nil {
 			return nil, err
 		}
 	}
-	if err := auditDraftMiddleRim(ctx, parts[0].endCap, parts[1].startCap); err != nil {
+	if err := auditDraftMiddleRim(ctx, parts[0].EndCap, parts[1].StartCap); err != nil {
 		return nil, err
 	}
 	// The single-slab band records its wall loops from the sketch rim toward
@@ -76,11 +77,12 @@ func evalTwoSidedDraftContext(ctx context.Context, d *Document, ref producerID, 
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		if face != parts[0].endCap {
+		if faceNode(face) != parts[0].EndCap {
 			reverseDraftFaceLoops(face)
 		}
 	}
-	body, err := assembleCompositeSweepBody(ctx, d, ref, parts, false)
+	body, err := bodyResult(compositesweep.Assemble(ctx, envOf(documentNode(d), ref), parts, false,
+		auditCompositeSweep, compositesweep.SewJoin, false))
 	if err != nil {
 		return nil, err
 	}
@@ -106,13 +108,13 @@ func reverseDraftFaceLoops(face *Face) {
 
 // The two builders read the same sketch section in the same frame at zero.
 // Check their held rims before replacing either set of vertices or edges.
-func auditDraftMiddleRim(ctx context.Context, from, to *Face) error {
+func auditDraftMiddleRim(ctx context.Context, from, to *topo.Face) error {
 	return brepgeom.AuditMiddleRim(ctx, draftRimEnds(from), draftRimEnds(to))
 }
 
-func draftRimEnds(face *Face) [][]brepgeom.RimEdgeEnds {
-	loops := make([][]brepgeom.RimEdgeEnds, len(face.n.Loops))
-	for li, loop := range face.n.Loops {
+func draftRimEnds(face *topo.Face) [][]brepgeom.RimEdgeEnds {
+	loops := make([][]brepgeom.RimEdgeEnds, len(face.Loops))
+	for li, loop := range face.Loops {
 		ends := make([]brepgeom.RimEdgeEnds, len(loop.CoEdges))
 		for ci, ce := range loop.CoEdges {
 			ends[ci] = brepgeom.RimEdgeEnds{Start: coedgeStart(ce).Position, End: coedgeEnd(ce).Position}

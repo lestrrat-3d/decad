@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 	"github.com/lestrrat-3d/r3"
 )
@@ -143,7 +144,7 @@ func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatch
 	if !ok {
 		return nil, fmt.Errorf(`%w: a circular PatchEdges source states no wall bound`, ErrUnsupported)
 	}
-	mesh.setFaceBound(faceNode(faces[0]), proofbound.AbsSumUpper(
+	topobuild.SetFaceBound(&mesh.n, faceNode(faces[0]), proofbound.AbsSumUpper(
 		proofbound.ProductUpper(wallBound, lengthScale), placementRound))
 	byFace := map[*Face][]int{faces[0]: {}}
 	for i := range source.n.Triangles {
@@ -185,7 +186,7 @@ func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatch
 				mesh.n.Triangles[ti][1], mesh.n.Triangles[ti][2] = mesh.n.Triangles[ti][2], mesh.n.Triangles[ti][1]
 			}
 		}
-		mesh.setFaceBound(faceNode(face), proofbound.AbsSumUpper(
+		topobuild.SetFaceBound(&mesh.n, faceNode(face), proofbound.AbsSumUpper(
 			proofbound.ProductUpper(proofbound.AbsSumUpper(capSag, source.n.CoordBound,
 				prism.AxialDelta()), lengthScale), placementRound, face.n.AxialDelta))
 	}

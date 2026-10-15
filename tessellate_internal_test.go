@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
@@ -466,12 +467,12 @@ func TestTessellatePrismReusesPublishedWalks(t *testing.T) {
 // and anything else, a cancelled context above all, is returned as itself.
 func TestLiftTessellationError(t *testing.T) {
 	t.Parallel()
-	require.NoError(t, liftTessellationError(nil))
-	require.Equal(t, context.Canceled, liftTessellationError(context.Canceled))
-	degenerate := liftTessellationError(&tessellation.AuditError{Sentinel: tessellation.Degenerate, Detail: "the detail"})
+	require.NoError(t, topobuild.LiftAuditError(nil))
+	require.Equal(t, context.Canceled, topobuild.LiftAuditError(context.Canceled))
+	degenerate := topobuild.LiftAuditError(&tessellation.AuditError{Sentinel: tessellation.Degenerate, Detail: "the detail"})
 	require.ErrorIs(t, degenerate, ErrDegenerate)
 	require.Equal(t, "decad: degenerate input: the detail", degenerate.Error())
-	unsupported := liftTessellationError(&tessellation.AuditError{Sentinel: tessellation.Unsupported, Detail: "the detail"})
+	unsupported := topobuild.LiftAuditError(&tessellation.AuditError{Sentinel: tessellation.Unsupported, Detail: "the detail"})
 	require.ErrorIs(t, unsupported, ErrUnsupported)
 	require.Equal(t, "decad: not supported by the current evaluator: the detail", unsupported.Error())
 }

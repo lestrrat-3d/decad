@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stitchflux"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -286,9 +288,9 @@ func faceIsTetrahedronEligible(f *Face) bool {
 	return true
 }
 
-// auditVertexLinksForStitchFaces builds sweep_composite.go's own
+// auditVertexLinksForStitchFaces builds internal/compositesweep's own
 // uses-by-edge map over a stitched face set and runs its hoisted
-// auditVertexLinks: the manifold-with-boundary proof at every vertex, that
+// compositesweep.AuditVertexLinks: the manifold-with-boundary proof at every vertex, that
 // the faces touching it form one connected fan (an interior vertex, a
 // cycle) or one connected path (a rim vertex, on an open sheet). Stitch's
 // own checkStitchClosure already proves every edge has one or two adjacent
@@ -304,29 +306,29 @@ func faceIsTetrahedronEligible(f *Face) bool {
 // admits, never bless anything checkStitchClosure did not already allow
 // through.
 //
-// auditVertexLinks itself is worded for its OTHER caller, the composite
-// sweep (sweep_composite.go), and reports [ErrUnsupported] there. Translated
+// compositesweep.AuditVertexLinks itself is worded for its OTHER caller, the composite
+// sweep (compositesweep.AuditBoundary), and reports [ErrUnsupported] there. Translated
 // here rather than reworded in place, so the composite sweep's own wording
 // and sentinel stay exactly as that caller states them: a pinch this
 // evaluator proves is disproven input for Stitch, never unsupported reach
 // (docs/surface-design.md Table R row R7), so this wrapper re-reports it as
 // [ErrDegenerate] with Stitch's own wording. A bare context cancellation —
-// auditVertexLinks' own budget-polling return, never wrapped in
+// compositesweep.AuditVertexLinks' own budget-polling return, never wrapped in
 // [ErrUnsupported] — passes through unchanged.
 func auditVertexLinksForStitchFaces(ctx context.Context, faces []*Face) error {
 	budget := proofbound.NewWorkBudget(ctx)
-	uses := map[*Edge][]compositeCoedgeUse{}
+	uses := map[*topo.Edge][]compositesweep.CoedgeUse{}
 	for _, face := range faces {
 		for _, loop := range face.n.Loops {
 			for _, ce := range loop.CoEdges {
 				if err := budget.Step(); err != nil {
 					return err
 				}
-				uses[edgeHandle(ce.Edge)] = append(uses[edgeHandle(ce.Edge)], compositeCoedgeUse{face: face, forward: ce.Forward})
+				uses[ce.Edge] = append(uses[ce.Edge], compositesweep.CoedgeUse{Face: faceNode(face), Forward: ce.Forward})
 			}
 		}
 	}
-	if err := auditVertexLinks(budget, uses); err != nil {
+	if err := compositesweep.AuditVertexLinks(budget, uses); err != nil {
 		if errors.Is(err, ErrUnsupported) {
 			return fmt.Errorf(`%w: Stitch's welded set has a vertex whose meeting faces are not one connected fan or path (docs/surface-design.md Table R row R7): %s`, ErrDegenerate, err)
 		}

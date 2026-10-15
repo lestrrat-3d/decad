@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/measurement"
@@ -190,7 +191,7 @@ func evalStationedTwistedSweepCells(ctx context.Context, d *Document, ref produc
 	if err != nil {
 		return nil, err
 	}
-	parts := make([]compositeSpanPart, cells)
+	parts := make([]compositesweep.SpanPart, cells)
 	held := make([]loftPayload, cells)
 	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
 	budget := proofbound.NewWorkBudget(ctx)
@@ -219,13 +220,13 @@ func evalStationedTwistedSweepCells(ctx context.Context, d *Document, ref produc
 		if _, err := mergeTwistWalls(ctx, part, ref, held[i], len(poly.Points)); err != nil {
 			return nil, fmt.Errorf("twisted sweep cell %d: %w", i, err)
 		}
-		parts[i], err = compositeSpanPartOf(part)
+		parts[i], err = compositesweep.SpanPartOf(bodyNode(part))
 		if err != nil {
 			return nil, fmt.Errorf("twisted sweep cell %d: %w", i, err)
 		}
 	}
-	body, err := assembleCompositeSweepBodyWithJoin(ctx, d, ref, parts, false,
-		func(ctx context.Context, spans []sweepAuditSpan) error {
+	body, err := bodyResult(compositesweep.Assemble(ctx, envOf(documentNode(d), ref), parts, false,
+		func(ctx context.Context, spans []compositesweep.SpanPart) error {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
@@ -233,7 +234,7 @@ func evalStationedTwistedSweepCells(ctx context.Context, d *Document, ref produc
 				return fmt.Errorf(`%w: twisted sweep cell count changed during sewing`, ErrDegenerate)
 			}
 			return nil
-		}, sewTwistLoftJoin)
+		}, compositesweep.SewTwistLoftJoin, false))
 	if err != nil {
 		return nil, err
 	}

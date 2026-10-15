@@ -16,7 +16,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/sectioncert/` | Private bounded-section Sketch provenance, guarded Extrude recording, and `RecordProfile`, the Sketch-profile recording seam. See section design, sketch-seam §1–§2. |
 | `internal/exactrotation/` | Exactly orthogonal rational rotation recorded at Copy time: scale-safe quaternion construction, exact translation, structural X-axis test, and the reject-only gap against r3's float rotation. See file comments. |
 | `internal/proofbound/` | Certified bounds, intervals, work budgets and trig. See file comments. |
-| `internal/compositesweep/` | Composite Sweep limits, bounded measurements, separation and cross-span facet audits, rim-join certificate, and span side-role renumbering and cap-role swaps. See sweep §7, §9. |
+| `internal/compositesweep/` | Composite Sweep limits, span assembly (cap pairing, rim sewing, cap removal), boundary and vertex-link audits, bounded measurements, separation and cross-span facet audits, rim-join certificate, side-role and cap-role rewrites. See sweep §7, §9. |
 | `internal/diameter/` | Lower-bound diameter of held witness points, including vertex, axis-extreme and prism station witnesses and the free-form prism section arm. See verification §3. |
 | `internal/tolerance/` | Relative tolerance comparisons, body reference formulas, and reading diagnostics. See verification §2-§3. |
 | `internal/verifyoption/` | Verify options. See verification §2. |

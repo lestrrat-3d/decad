@@ -31,7 +31,7 @@ import (
 // reduced prismPayload/revolvePayload and gets the whole sheet behaviour for
 // free from internal/prismrecord/build.go and internal/revolveplan/build.go, while a composite path's spans
 // stay solid (sweepSpanPayload never carries the flag) and
-// assembleCompositeSweepBody (sweep_composite.go) consumes sweepPayload's own
+// compositesweep.Assemble (internal/compositesweep/assemble.go) consumes sweepPayload's own
 // flag to omit the two outer caps after every span has built solid.
 //
 // An open Sweep mints two section caps. The exact two-arc closed circle of
@@ -256,7 +256,7 @@ func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 // (verify.go) — no uniform field to read across all three build paths. For
 // the composite path it is the ONLY place the flag lives at all: every span
 // stays solid (sweepSpanPayload carries no such field), and
-// assembleCompositeSweepBody reads this field alone to decide which two caps
+// compositesweep.Assemble reads this field alone to decide which two caps
 // to omit from the published face set.
 type sweepPayload struct {
 	prism           prismPayload

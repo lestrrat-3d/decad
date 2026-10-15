@@ -17,7 +17,7 @@ import (
 // none of them are alike: a one-span straight path reduces to the prism
 // builder and a one-span arc reduces to the revolve builder, so each gets the
 // whole sheet behaviour for free from internal/prismrecord/build.go and internal/revolveplan/build.go; a
-// composite path has its own join topology (sweep_composite.go) and is the
+// composite path has its own join topology (internal/compositesweep/assemble.go) and is the
 // only path with real new evaluator work. Every fixture reuses plateSketch
 // (extrude_test.go), the arc fixture sweep_arc_test.go's own
 // TestSweepArcMatchesQuarterRevolveAndReplaysPlacement proves equivalent to a
@@ -221,7 +221,7 @@ func requireSweepSheetUndecided(t *testing.T, doc *decad.Document, sheet *decad.
 }
 
 // TestSurfaceSweepCompositeIsASheet is the composite path's own new work: the
-// two outer caps are omitted by the assembler (sweep_composite.go), every
+// two outer caps are omitted by the assembler (internal/compositesweep/assemble.go), every
 // sewn internal join keeps its two adjacent faces, and the published area is
 // the composed (sum-in, subtract-out) figure docs/surface-design.md §4.3
 // requires rather than a plain walk over the surviving walls alone.
@@ -309,7 +309,7 @@ func TestSurfaceSweepCompositeHoledProfileReportsDisconnectedLumps(t *testing.T)
 }
 
 // TestSurfaceSweepCompositeRolesResolveThroughFaceCreatedBy checks the
-// composite assembler's own rewriteCompositeSideRoles keeps each span's index
+// composite assembler's own compositesweep.RewriteFaceSideRoles keeps each span's index
 // resolvable after cap omission: every wall's side(k,i,j) role still names
 // exactly the face it came from, for every span index the three-span path
 // visits, while CapStart/CapEnd mint refs that match nothing.

@@ -74,3 +74,27 @@ func Edges(n *topo.Body) []*topo.Edge {
 	}
 	return out
 }
+
+// CoEdgeStart returns the node of the vertex where the use n starts, or nil
+// for a use with no edge: root CoEdge.Start's answer, as a node.
+func CoEdgeStart(n topo.CoEdge) *topo.Vertex {
+	if n.Edge == nil {
+		return nil
+	}
+	if n.Forward {
+		return n.Edge.Start
+	}
+	return n.Edge.End
+}
+
+// CoEdgeEnd returns the node of the vertex where the use n ends, or nil for a
+// use with no edge: root CoEdge.End's answer, as a node.
+func CoEdgeEnd(n topo.CoEdge) *topo.Vertex {
+	if n.Edge == nil {
+		return nil
+	}
+	if n.Forward {
+		return n.Edge.End
+	}
+	return n.Edge.Start
+}

@@ -8,26 +8,25 @@ import (
 	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
-// sweepAuditSpan is one closed analytic span before composite Sweep removes
-// its internal caps. The cap pointers follow path direction.
+// sweepAuditSpan reads the analytic extent of one closed span's body node
+// for compositesweep.Audit.
 type sweepAuditSpan struct {
-	body     *Body
-	startCap *Face
-	endCap   *Face
+	body *topo.Body
 }
 
-func auditCompositeSweep(ctx context.Context, spans []sweepAuditSpan) error {
+func auditCompositeSweep(ctx context.Context, spans []compositesweep.SpanPart) error {
 	return auditCompositeSweepWithClosure(ctx, spans, false)
 }
 
-func auditClosedCompositeSweep(ctx context.Context, spans []sweepAuditSpan) error {
+func auditClosedCompositeSweep(ctx context.Context, spans []compositesweep.SpanPart) error {
 	return auditCompositeSweepWithClosure(ctx, spans, true)
 }
 
-func auditCompositeSweepWithClosure(ctx context.Context, spans []sweepAuditSpan, closed bool) error {
+func auditCompositeSweepWithClosure(ctx context.Context, spans []compositesweep.SpanPart, closed bool) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -36,24 +35,24 @@ func auditCompositeSweepWithClosure(ctx context.Context, spans []sweepAuditSpan,
 	}
 	audit := make([]compositesweep.AuditSpan, len(spans))
 	for i, span := range spans {
-		if span.body == nil || span.startCap == nil || span.endCap == nil {
+		if span.Body == nil || span.StartCap == nil || span.EndCap == nil {
 			return fmt.Errorf(`%w: composite sweep span %d has incomplete audit geometry`, ErrUnsupported, i)
 		}
-		if span.startCap.n.Body != bodyNode(span.body) || span.endCap.n.Body != bodyNode(span.body) {
+		if span.StartCap.Body != span.Body || span.EndCap.Body != span.Body {
 			return fmt.Errorf(`%w: composite sweep span %d has a cap from another body`, ErrUnsupported, i)
 		}
-		startPlane, startPlanar := span.startCap.n.Surface.(surfacegeom.Plane)
-		_, endPlanar := span.endCap.n.Surface.(surfacegeom.Plane)
-		bounds := span.body.n.Bounds
+		startPlane, startPlanar := span.StartCap.Surface.(surfacegeom.Plane)
+		_, endPlanar := span.EndCap.Surface.(surfacegeom.Plane)
+		bounds := span.Body.Bounds
 		audit[i] = compositesweep.AuditSpan{
 			StartPlane:       startPlane,
 			StartPlanar:      startPlanar,
 			EndPlanar:        endPlanar,
-			EndpointSupports: sweepAuditEndpointSupports(span.body),
+			EndpointSupports: sweepAuditEndpointSupports(span.Body),
 			Box: compositesweep.AuditBox{
 				Min: bounds.Min, Max: bounds.Max, Bound: bounds.Bound.Base(),
 			},
-			Extent: span,
+			Extent: sweepAuditSpan{body: span.Body},
 		}
 	}
 	if closed {
@@ -66,7 +65,7 @@ func auditCompositeSweepWithClosure(ctx context.Context, spans []sweepAuditSpan,
 func (span sweepAuditSpan) AuditExtent(
 	ctx context.Context, direction r3.Vec, work *freeform.FreeformWork,
 ) (float64, float64, float64, error) {
-	switch payload := span.body.n.Payload.(type) {
+	switch payload := span.body.Payload.(type) {
 	case prismPayload:
 		return payload.ExtentBoundedAlong(ctx, direction, work, payload.Walks)
 	case revolvePayload:
@@ -83,8 +82,8 @@ func (span sweepAuditSpan) AuditExtent(
 // for both ends. For an exact-turn arc no wider than a half turn, Revolve's
 // half-plane gate then keeps the whole swept section between its two endpoint
 // tangent planes.
-func sweepAuditEndpointSupports(body *Body) bool {
-	switch payload := body.n.Payload.(type) {
+func sweepAuditEndpointSupports(body *topo.Body) bool {
+	switch payload := body.Payload.(type) {
 	case prismPayload:
 		return true
 	case draftPayload:

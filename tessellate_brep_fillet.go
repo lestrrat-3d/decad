@@ -7,6 +7,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -156,7 +157,7 @@ func (bc *brepBandChord) emitFillet(m *Mesh, faceOfRole func(string) (*Face, err
 		if first[p] < 0 {
 			first[p] = len(m.n.Triangles)
 		}
-		m.addTriangle([3]int{a, b, c}, faceNode(faces[p]))
+		topobuild.AddTriangle(&m.n, [3]int{a, b, c}, faceNode(faces[p]))
 		last[p] = len(m.n.Triangles)
 	}
 	verts := func(k, c int) r3.Vec { return m.n.Vertices[fr.ringV[k][c]] }
