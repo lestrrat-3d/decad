@@ -72,7 +72,7 @@ func filletLoopOf(budget *proofbound.WorkBudget, loop loopRecord, r float64, rol
 // the pole vertex at the arc's recorded centre.
 func suppliedFilletCapWalls(co []topo.CoEdge, walks []survey2d.SideWalk, joins []cornerJoin, r float64) (suppliedCapEdges, error) {
 	n := len(walks)
-	out := suppliedCapEdges{wall: make([]*Edge, n), arc: make([]*Edge, n)}
+	out := suppliedCapEdges{Wall: make([]*Edge, n), Arc: make([]*Edge, n)}
 	next := 0
 	take := func() (*Edge, error) {
 		if next >= len(co) || !co[next].Forward {
@@ -88,7 +88,7 @@ func suppliedFilletCapWalls(co []topo.CoEdge, walks []survey2d.SideWalk, joins [
 			if err != nil {
 				return suppliedCapEdges{}, err
 			}
-			out.wall[i] = e
+			out.Wall[i] = e
 		}
 		j := (i + 1) % n
 		if !joins[j].Arc {
@@ -98,7 +98,7 @@ func suppliedFilletCapWalls(co []topo.CoEdge, walks []survey2d.SideWalk, joins [
 		if err != nil {
 			return suppliedCapEdges{}, err
 		}
-		out.arc[j] = e
+		out.Arc[j] = e
 	}
 	if next != len(co) {
 		return suppliedCapEdges{}, fmt.Errorf(`%w: a fillet band's cap contour has extra edges`, ErrUnsupported)
@@ -142,8 +142,8 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 	pl := f.view(bp.xform)
 	m := b.matSign(f)
 	sideZ, _ := b.sideLevel(f)
-	r := b.setback.dc
-	rIv, err := filletband.RadiusInterval(b.setback.dc, b.setback.dcDelta)
+	r := b.setback.Dc
+	rIv, err := filletband.RadiusInterval(b.setback.Dc, b.setback.DcDelta)
 	if err != nil {
 		return nil, brepBandMass{}, err
 	}
@@ -252,10 +252,10 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 			return nil, brepBandMass{}, err
 		}
 		capAt := func(k int) *Vertex {
-			if supplied.wall[k] != nil {
-				return vertexHandle(supplied.wall[k].n.Start)
+			if supplied.Wall[k] != nil {
+				return vertexHandle(supplied.Wall[k].n.Start)
 			}
-			return vertexHandle(supplied.wall[(k+1)%n].n.Start)
+			return vertexHandle(supplied.Wall[(k+1)%n].n.Start)
 		}
 		meridianLen, meridianBound := heldOf(filletband.MeridianLength(rIv))
 		// meridian is the quarter circle of radius r about the ball centre
@@ -290,7 +290,7 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 			sideV := vertexHandle(sideCo[k].Edge.Start)
 			switch fr.loop.Corners[k] {
 			case filletband.Reflex:
-				arc := supplied.arc[k]
+				arc := supplied.Arc[k]
 				if arc == nil {
 					return nil, brepBandMass{}, fmt.Errorf(`%w: fillet band %d's LF6 corner %d has no connector arc`, ErrUnsupported, bi, k)
 				}
@@ -337,7 +337,7 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 		}
 		for i := range n {
 			next := (i + 1) % n
-			wall := supplied.wall[i]
+			wall := supplied.Wall[i]
 			if wall == nil {
 				pole := capAt(i)
 				if pole != capAt(next) || vertexHandle(lead[i].n.Start) != pole || vertexHandle(trail[next].n.Start) != pole ||
@@ -374,11 +374,11 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 			}
 			v := fr.walks[next]
 			if err := newPatch(torus(v.StartU, v.StartV, r), []*Loop{bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
-				{Edge: edgeNode(supplied.arc[next]), Forward: true},
+				{Edge: edgeNode(supplied.Arc[next]), Forward: true},
 				{Edge: edgeNode(lead[next]), Forward: true},
 				{Edge: edgeNode(trail[next]), Forward: false},
 			},
-			}})}, vertexHandle(supplied.arc[next].n.Start)); err != nil {
+			}})}, vertexHandle(supplied.Arc[next].n.Start)); err != nil {
 				return nil, brepBandMass{}, err
 			}
 		}
@@ -490,11 +490,11 @@ func (bp brepPayload) filletRestored(btopo *brepTopology) ([]brepFace, error) {
 // endpoint sum's rounding.
 func filletBandExtent(ctx context.Context, b brepLoopBand, f brepFace, xform r3.Transform, g r3.Vec, work *freeform.FreeformWork) (float64, float64, float64, error) {
 	pl := f.view(xform)
-	rIv, err := filletband.RadiusInterval(b.setback.dc, b.setback.dcDelta)
+	rIv, err := filletband.RadiusInterval(b.setback.Dc, b.setback.DcDelta)
 	if err != nil {
 		return 0, 0, 0, err
 	}
-	fr, err := filletLoopOf(proofbound.NewWorkBudget(ctx), b.orig, b.setback.dc, f.role, work)
+	fr, err := filletLoopOf(proofbound.NewWorkBudget(ctx), b.orig, b.setback.Dc, f.role, work)
 	if err != nil {
 		return 0, 0, 0, err
 	}
@@ -508,11 +508,11 @@ func filletBandExtent(ctx context.Context, b brepLoopBand, f brepFace, xform r3.
 	base := pl.Xform.Apply(pl.Frame.Origin()).Dot(g)
 	coeff := [3]float64{pl.Dir(1, 0, 0).Dot(g), pl.Dir(0, 1, 0).Dot(g), pl.Dir(0, 0, 1).Dot(g)}
 	loIv, hiIv, err := filletband.ExtentsOf(fr.pieces, fr.walks, fr.loop.Corners,
-		m, b.setback.dc, rIv, sideIv, coeff)
+		m, b.setback.Dc, rIv, sideIv, coeff)
 	if err != nil {
 		return 0, 0, 0, err
 	}
-	coordUpper := filletband.WalkCoordUpper(fr.walks, b.setback.axialUpper())
+	coordUpper := filletband.WalkCoordUpper(fr.walks, b.setback.AxialUpper())
 	zUpper := proofbound.AbsSumUpper(math.Max(math.Abs(f.z0), math.Abs(sideZ)), sideDelta)
 	placeAllow := prismrecord.PlacementCoeffAllow(pl, g, base, coeff[0], coeff[1], coeff[2], coordUpper, zUpper)
 	lo, loErr := heldOf(loIv)
@@ -551,7 +551,7 @@ func brepFilletUndercuts(budget *proofbound.WorkBudget, roles map[string]*Face, 
 	if !ok {
 		return false
 	}
-	fr, err := filletLoopOf(budget, band.orig, band.setback.dc, f.role, work)
+	fr, err := filletLoopOf(budget, band.orig, band.setback.Dc, f.role, work)
 	if err != nil {
 		return false
 	}

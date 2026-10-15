@@ -1000,7 +1000,7 @@ func requireVolumeProvingPayload(ctx context.Context, b *Body, index int) error 
 	default:
 		switch pl := b.n.Payload.(type) {
 		case capBlendPayload:
-			if pl.loftSource != nil {
+			if pl.LoftSource != nil {
 				// The loft-only cap band proves its occupied volume with
 				// a bounded reflex-corner slab in tessellateCapBlend.
 				return nil

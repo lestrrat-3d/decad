@@ -21,14 +21,14 @@ func chordPartialFilletBand(ctx context.Context, b brepLoopBand, f brepFace,
 	}
 	contour := f.regionLoop(b.loop)
 	partial, err := partialband.PartialFilletLayout(side.Walks, b.orig.Segments,
-		contour.Segments, b.selected, b.capWalk, b.capArc, b.setback.dc, chord, work)
+		contour.Segments, b.selected, b.capWalk, b.capArc, b.setback.Dc, chord, work)
 	if err != nil {
 		return brepBandChord{}, err
 	}
 	sideZ, sideDelta := b.sideLevel(f)
 	return brepBandChord{band: b, face: f, cbp: cbp, start: b.matSign(f) > 0,
 		sideZ: sideZ, sideDelta: sideDelta,
-		fillet: &filletRings{n: tessellation.FilletRingCount(b.setback.axialUpper(), chord)}, partial: partial}, nil
+		fillet: &filletRings{n: tessellation.FilletRingCount(b.setback.AxialUpper(), chord)}, partial: partial}, nil
 }
 
 func (bc *brepBandChord) placePartial(e brepEmbed, addVertex func([3]float64, proofbound.WalkEndBound) int) {
@@ -51,8 +51,8 @@ func (bc *brepBandChord) placePartialRings(e brepEmbed,
 		side[c], capPoints[c] = col.Side, col.Cap
 	}
 	points, err := tessellation.FilletRingGeometry(tessellation.FilletRingInput{
-		Side: point2ToRecordSlice(side), Cap: point2ToRecordSlice(capPoints), Radius: bc.band.setback.dc,
-		RadiusDelta: bc.band.setback.dcDelta, CapLevel: bc.face.z0,
+		Side: point2ToRecordSlice(side), Cap: point2ToRecordSlice(capPoints), Radius: bc.band.setback.Dc,
+		RadiusDelta: bc.band.setback.DcDelta, CapLevel: bc.face.z0,
 		CapLevelDelta: bc.face.z0Delta, SideLevel: bc.sideZ,
 		MaterialSign: bc.band.matSign(bc.face), Count: n,
 		Noun: "a partial fillet band", RingNoun: "a partial fillet",
@@ -94,12 +94,12 @@ func (bc *brepBandChord) emitPartialFillet(m *Mesh, faceOfRole func(string) (*Fa
 	bump func(*Face, float64)) error {
 	fr := bc.fillet
 	fr.patchEps = map[*Face]float64{}
-	r := bc.band.setback.axialUpper()
+	r := bc.band.setback.AxialUpper()
 	dphi := proofbound.UpRound(proofbound.UpRound(math.Pi/2*(1+1e-12)) / float64(fr.n))
 	sPhi := proofbound.ProductUpper(r, proofbound.UpRound(proofbound.ProductUpper(dphi, dphi)/8))
 	delta := bc.face.delta
-	levelDelta := proofbound.AbsSumUpper(bc.band.setback.dsDelta, bc.sideDelta)
-	axial := bc.cbp.capBandLevel(bc.face.z0, bc.band.matSign(bc.face)).Bound
+	levelDelta := proofbound.AbsSumUpper(bc.band.setback.DsDelta, bc.sideDelta)
+	axial := bc.cbp.CapBandLevel(bc.face.z0, bc.band.matSign(bc.face)).Bound
 	for p := range bc.partial.PatchSag {
 		face, err := faceOfRole(bc.band.patchRole(p))
 		if err != nil {

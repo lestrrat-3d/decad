@@ -67,16 +67,16 @@ func TestCapPatchWindowSkewCoversTheExactCornerAngle(t *testing.T) {
 			t.Parallel()
 			_, cbp := chamferedSectionBody(t, sectorSection(tc.cx, tc.cy, tc.r, tc.phi), tc.d)
 			budget := proofbound.NewWorkBudget(t.Context())
-			cl, err := oneLoopCornerLoop(budget, cbp.loops()[0], freeform.NewFreeformWork())
+			cl, err := oneLoopCornerLoop(budget, cbp.Loops()[0], freeform.NewFreeformWork())
 			require.NoError(t, err)
-			joins, err := capband.OffsetJoins(budget, cl.Walks, cbp.loopOffset(0), shellTol)
+			joins, err := capband.OffsetJoins(budget, cl.Walks, cbp.LoopOffset(0), shellTol)
 			require.NoError(t, err)
 
 			var skew float64
 			found := 0
-			for _, p := range cbp.patches {
-				if p.geom.Circular && p.geom.SideRadius != 0 {
-					skew = capPatchWindowSkew(p.geom)
+			for _, p := range cbp.Patches {
+				if p.Geom.Circular && p.Geom.SideRadius != 0 {
+					skew = capPatchWindowSkew(p.Geom)
 					found++
 				}
 			}
@@ -123,10 +123,10 @@ func TestCapWallArcBoundChargesTheRoundedOffsetRadius(t *testing.T) {
 	t.Parallel()
 	const dc = 0.1
 	chamfered, cbp := chamferedSectionBody(t, quarterDiskSection(10), dc)
-	setback := cbp.loopSetback(0)
-	require.Zero(t, setback.dcDelta, `a setback stated in millimetres converts exactly`)
+	setback := cbp.LoopSetback(0)
+	require.Zero(t, setback.DcDelta, `a setback stated in millimetres converts exactly`)
 	budget := proofbound.NewWorkBudget(t.Context())
-	cl, err := oneLoopCornerLoop(budget, cbp.loops()[0], freeform.NewFreeformWork())
+	cl, err := oneLoopCornerLoop(budget, cbp.Loops()[0], freeform.NewFreeformWork())
 	require.NoError(t, err)
 	joins, err := capband.OffsetJoins(budget, cl.Walks, dc, shellTol)
 	require.NoError(t, err)
@@ -208,7 +208,7 @@ func TestCapMiterLocusUpperReadsTheStatedAxialRise(t *testing.T) {
 	const dc = 2
 	_, cbp := chamferedSectionBody(t, quarterDiskSection(10), dc)
 	budget := proofbound.NewWorkBudget(t.Context())
-	cl, err := oneLoopCornerLoop(budget, cbp.loops()[0], freeform.NewFreeformWork())
+	cl, err := oneLoopCornerLoop(budget, cbp.Loops()[0], freeform.NewFreeformWork())
 	require.NoError(t, err)
 	joins, err := capband.OffsetJoins(budget, cl.Walks, dc, shellTol)
 	require.NoError(t, err)
@@ -258,10 +258,10 @@ func TestBuildCapBandTakesSuppliedCapCoedges(t *testing.T) {
 		}
 		s.Fix(pts[0])
 	}, 3)
-	loop := cbp.loops()[0]
-	setback := cbp.setbackAt(-1)
-	pp := cbp.prismLike(cbp.z0, cbp.z1-setback.ds)
-	pp.Z1Delta = proofbound.AbsSumUpper(cbp.z1Delta, setback.dsDelta)
+	loop := cbp.Loops()[0]
+	setback := cbp.SetbackAt(-1)
+	pp := cbp.PrismLike(cbp.Z0, cbp.Z1-setback.Ds)
+	pp.Z1Delta = proofbound.AbsSumUpper(cbp.Z1Delta, setback.DsDelta)
 	ref := body.n.Origin.Producer
 	work := freeform.NewFreeformWork()
 	// The supplied boundary hangs off the vertices the slant edges start
@@ -269,37 +269,37 @@ func TestBuildCapBandTakesSuppliedCapCoedges(t *testing.T) {
 	scratch := bornBody(&Body{n: topo.Body{Doc: body.n.Doc}})
 	_, _, topCo, _, err := prismrecord.BuildLoopSidesAs(t.Context(), envOf(scratch.n.Doc, ref), bodyNode(scratch), pp, 0, false, loop, work, nil, levelToken{}, levelToken{}, false) //nolint:dogsled // only the top coedges are read
 	require.NoError(t, err)
-	again, err := buildCapBand(t.Context(), bornBody(&Body{n: topo.Body{Doc: body.n.Doc}}), ref, cbp, 0, loop, cbp.z1, -1, topCo, nil, work)
+	again, err := buildCapBand(t.Context(), bornBody(&Body{n: topo.Body{Doc: body.n.Doc}}), ref, cbp, 0, loop, cbp.Z1, -1, topCo, nil, work)
 	require.NoError(t, err)
-	require.Len(t, again.capCo, 7, "six walls and the reflex corner's arc")
-	supplied, err := buildCapBand(t.Context(), bornBody(&Body{n: topo.Body{Doc: body.n.Doc}}), ref, cbp, 0, loop, cbp.z1, -1, topCo, again.capCo, work)
+	require.Len(t, again.CapCo, 7, "six walls and the reflex corner's arc")
+	supplied, err := buildCapBand(t.Context(), bornBody(&Body{n: topo.Body{Doc: body.n.Doc}}), ref, cbp, 0, loop, cbp.Z1, -1, topCo, again.CapCo, work)
 	require.NoError(t, err)
 
-	require.Len(t, supplied.capCo, len(again.capCo))
-	for i, co := range supplied.capCo {
-		require.Same(t, again.capCo[i].Edge, co.Edge, "coedge %d is the supplied edge", i)
+	require.Len(t, supplied.CapCo, len(again.CapCo))
+	for i, co := range supplied.CapCo {
+		require.Same(t, again.CapCo[i].Edge, co.Edge, "coedge %d is the supplied edge", i)
 		require.True(t, co.Forward)
 	}
-	require.Equal(t, again.geom, supplied.geom)
-	require.Equal(t, again.delta, supplied.delta)
-	require.Len(t, supplied.patches, len(again.patches))
-	for i, f := range supplied.patches {
-		require.Equal(t, again.patches[i].n.Area, f.n.Area, "patch %d", i)
-		require.Equal(t, again.patches[i].n.AreaBound, f.n.AreaBound, "patch %d", i)
-		require.Equal(t, again.patches[i].n.NormalBound, f.n.NormalBound, "patch %d", i)
+	require.Equal(t, again.Geom, supplied.Geom)
+	require.Equal(t, again.Delta, supplied.Delta)
+	require.Len(t, supplied.Patches, len(again.Patches))
+	for i, f := range supplied.Patches {
+		require.Equal(t, again.Patches[i].n.Area, f.n.Area, "patch %d", i)
+		require.Equal(t, again.Patches[i].n.AreaBound, f.n.AreaBound, "patch %d", i)
+		require.Equal(t, again.Patches[i].n.NormalBound, f.n.NormalBound, "patch %d", i)
 	}
 
-	short := again.capCo[:len(again.capCo)-1]
-	_, err = buildCapBand(t.Context(), bornBody(&Body{n: topo.Body{Doc: body.n.Doc}}), ref, cbp, 0, loop, cbp.z1, -1, topCo, short, work)
+	short := again.CapCo[:len(again.CapCo)-1]
+	_, err = buildCapBand(t.Context(), bornBody(&Body{n: topo.Body{Doc: body.n.Doc}}), ref, cbp, 0, loop, cbp.Z1, -1, topCo, short, work)
 	require.ErrorContains(t, err, "supplied cap boundary")
 
-	backward := append([]topo.CoEdge(nil), again.capCo...)
+	backward := append([]topo.CoEdge(nil), again.CapCo...)
 	backward[0].Forward = false
-	_, err = buildCapBand(t.Context(), bornBody(&Body{n: topo.Body{Doc: body.n.Doc}}), ref, cbp, 0, loop, cbp.z1, -1, topCo, backward, work)
+	_, err = buildCapBand(t.Context(), bornBody(&Body{n: topo.Body{Doc: body.n.Doc}}), ref, cbp, 0, loop, cbp.Z1, -1, topCo, backward, work)
 	require.ErrorContains(t, err, "supplied cap boundary")
 
-	swapped := append([]topo.CoEdge(nil), again.capCo...)
+	swapped := append([]topo.CoEdge(nil), again.CapCo...)
 	swapped[0], swapped[2] = swapped[2], swapped[0]
-	_, err = buildCapBand(t.Context(), bornBody(&Body{n: topo.Body{Doc: body.n.Doc}}), ref, cbp, 0, loop, cbp.z1, -1, topCo, swapped, work)
+	_, err = buildCapBand(t.Context(), bornBody(&Body{n: topo.Body{Doc: body.n.Doc}}), ref, cbp, 0, loop, cbp.Z1, -1, topCo, swapped, work)
 	require.Error(t, err)
 }

@@ -36,7 +36,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		return nil, err
 	}
 	work := freeform.NewFreeformWork()
-	loops := cbp.loops()
+	loops := cbp.Loops()
 	body := bornBody(&Body{n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Doc: documentNode(d)}})
 
 	var faces []*Face
@@ -59,11 +59,11 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 	// edges and areas already did.
 	bandDeltas := map[capBandKey]float64{}
 	collectPatchGeoms := func(band capBandResult) {
-		for i, f := range band.patches {
+		for i, f := range band.Patches {
 			if len(f.n.Origins) == 0 {
 				continue
 			}
-			patchGeoms = append(patchGeoms, capPatch{role: f.n.Origins[0].Role, geom: band.geom[i]})
+			patchGeoms = append(patchGeoms, capPatch{Role: f.n.Origins[0].Role, Geom: band.Geom[i]})
 		}
 	}
 
@@ -71,7 +71,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		onStart, onEnd := cbp.startLoops[li], cbp.endLoops[li]
+		onStart, onEnd := cbp.StartLoops[li], cbp.EndLoops[li]
 		sign := 1.0
 		if li != 0 {
 			sign = -1
@@ -84,24 +84,24 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		// reaches the volume at the scale of the band itself and is charged here
 		// — the same term capband.BandVolume charges for the identical level it reads
 		// as sideZ.
-		zLo, zHi := proofbound.MeasuredScalar(cbp.z0, cbp.z0Delta), proofbound.MeasuredScalar(cbp.z1, cbp.z1Delta)
+		zLo, zHi := proofbound.MeasuredScalar(cbp.Z0, cbp.Z0Delta), proofbound.MeasuredScalar(cbp.Z1, cbp.Z1Delta)
 		if onStart {
-			zLo = proofbound.BoundedAdd(zLo, proofbound.MeasuredScalar(cbp.start.ds, cbp.start.dsDelta))
+			zLo = proofbound.BoundedAdd(zLo, proofbound.MeasuredScalar(cbp.Start.Ds, cbp.Start.DsDelta))
 		}
 		if onEnd {
-			zHi = proofbound.BoundedSub(zHi, proofbound.MeasuredScalar(cbp.end.ds, cbp.end.dsDelta))
+			zHi = proofbound.BoundedSub(zHi, proofbound.MeasuredScalar(cbp.End.Ds, cbp.End.DsDelta))
 		}
 		// The side walls are built over those same two bounded levels, so each
 		// end's displacement goes in with it: the wall vertices, the vertical
 		// edge lengths and the side face areas all read a level the setback
 		// computed, never one they can claim was recorded.
 		ppFor := prismrecord.Payload{
-			Frame:   cbp.frame,
+			Frame:   cbp.Frame,
 			Z0:      zLo.Value,
 			Z1:      zHi.Value,
 			Z0Delta: zLo.Bound,
 			Z1Delta: zHi.Bound,
-			Xform:   cbp.xform,
+			Xform:   cbp.Xform,
 		}
 		sideFaces, bottomCo, topCo, loopLen, err := prismrecord.BuildLoopSidesAs(ctx, envOf(body.n.Doc, ref), bodyNode(body), ppFor, li, li != 0, loop, work, nil, levelToken{}, levelToken{}, false)
 		if err != nil {
@@ -143,17 +143,17 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		// separate onStart/onEnd branch.
 		var startBand, endBand capBandResult
 		if onStart {
-			band, err := buildCapBand(ctx, body, ref, cbp, li, loop, cbp.z0, +1, bottomCo, nil, work)
+			band, err := buildCapBand(ctx, body, ref, cbp, li, loop, cbp.Z0, +1, bottomCo, nil, work)
 			if err != nil {
 				return nil, err
 			}
-			faces = append(faces, band.patches...)
+			faces = append(faces, band.Patches...)
 			collectPatchGeoms(band)
-			bandDeltas[capBandKey{loop: li, start: true}] = band.delta
-			startCo = band.capCo
+			bandDeltas[capBandKey{Loop: li, Start: true}] = band.Delta
+			startCo = band.CapCo
 			startBand = band
-			mass, err := readBandMassWithSideArea(ctx, li, loop, cbp, band.geom, cbp.z0, +1,
-				band.delta, band.closure, &loopArea)
+			mass, err := readBandMassWithSideArea(ctx, li, loop, cbp, band.Geom, cbp.Z0, +1,
+				band.Delta, band.Closure, &loopArea)
 			if err != nil {
 				return nil, err
 			}
@@ -162,7 +162,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 				return nil, err
 			}
 			bandVolume = proofbound.BoundedAdd(bandVolume, proofbound.MeasuredScalar(sign*v.Value, v.Bound))
-			for _, g := range band.geom {
+			for _, g := range band.Geom {
 				pa, pb := capband.AreaOf(g)
 				patchArea = proofbound.BoundedAdd(patchArea, proofbound.MeasuredScalar(pa, pb))
 			}
@@ -178,17 +178,17 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			mzTotal = proofbound.BoundedAdd(mzTotal, proofbound.MeasuredScalar(sign*bmz.Value, bmz.Bound))
 		}
 		if onEnd {
-			band, err := buildCapBand(ctx, body, ref, cbp, li, loop, cbp.z1, -1, topCo, nil, work)
+			band, err := buildCapBand(ctx, body, ref, cbp, li, loop, cbp.Z1, -1, topCo, nil, work)
 			if err != nil {
 				return nil, err
 			}
-			faces = append(faces, band.patches...)
+			faces = append(faces, band.Patches...)
 			collectPatchGeoms(band)
-			bandDeltas[capBandKey{loop: li, start: false}] = band.delta
-			endCo = band.capCo
+			bandDeltas[capBandKey{Loop: li, Start: false}] = band.Delta
+			endCo = band.CapCo
 			endBand = band
-			mass, err := readBandMassWithSideArea(ctx, li, loop, cbp, band.geom, cbp.z1, -1,
-				band.delta, band.closure, &loopArea)
+			mass, err := readBandMassWithSideArea(ctx, li, loop, cbp, band.Geom, cbp.Z1, -1,
+				band.Delta, band.Closure, &loopArea)
 			if err != nil {
 				return nil, err
 			}
@@ -197,7 +197,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 				return nil, err
 			}
 			bandVolume = proofbound.BoundedAdd(bandVolume, proofbound.MeasuredScalar(sign*v.Value, v.Bound))
-			for _, g := range band.geom {
+			for _, g := range band.Geom {
 				pa, pb := capband.AreaOf(g)
 				patchArea = proofbound.BoundedAdd(patchArea, proofbound.MeasuredScalar(pa, pb))
 			}
@@ -218,7 +218,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 
 		startBoundary := loop
 		if onStart {
-			startBoundary, err = capband.LoopBoundary(ctx, loop, cbp.start.dc, shellTol)
+			startBoundary, err = capband.LoopBoundary(ctx, loop, cbp.Start.Dc, shellTol)
 			if err != nil {
 				return nil, err
 			}
@@ -237,12 +237,12 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		// against this loop's own held boundary via capContourPerimeterUpper
 		// so it stands whatever the corner geometry did.
 		sBound := proofbound.AbsSumUpper(sArea.Bound,
-			proofbound.SectionDisplacementArea(startBand.delta, len(loop.Segments), capContourPerimeterUpper(startBand.capCo)))
+			proofbound.SectionDisplacementArea(startBand.Delta, len(loop.Segments), capContourPerimeterUpper(startBand.CapCo)))
 		startArea = proofbound.BoundedAdd(startArea, proofbound.MeasuredScalar(sign*sArea.Value, sBound))
 
 		endBoundary := loop
 		if onEnd {
-			endBoundary, err = capband.LoopBoundary(ctx, loop, cbp.end.dc, shellTol)
+			endBoundary, err = capband.LoopBoundary(ctx, loop, cbp.End.Dc, shellTol)
 			if err != nil {
 				return nil, err
 			}
@@ -252,16 +252,16 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			return nil, err
 		}
 		eBound := proofbound.AbsSumUpper(eArea.Bound,
-			proofbound.SectionDisplacementArea(endBand.delta, len(loop.Segments), capContourPerimeterUpper(endBand.capCo)))
+			proofbound.SectionDisplacementArea(endBand.Delta, len(loop.Segments), capContourPerimeterUpper(endBand.CapCo)))
 		endArea = proofbound.BoundedAdd(endArea, proofbound.MeasuredScalar(sign*eArea.Value, eBound))
 	}
 
-	pl := prismrecord.Payload{Frame: cbp.frame, Xform: cbp.xform}
-	startFrame, err := pl.CapFrame(cbp.z0, true)
+	pl := prismrecord.Payload{Frame: cbp.Frame, Xform: cbp.Xform}
+	startFrame, err := pl.CapFrame(cbp.Z0, true)
 	if err != nil {
 		return nil, err
 	}
-	endFrame, err := pl.CapFrame(cbp.z1, false)
+	endFrame, err := pl.CapFrame(cbp.Z1, false)
 	if err != nil {
 		return nil, err
 	}
@@ -269,10 +269,10 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		n: topo.Face{
 			Area:          startArea.Value,
 			AreaBound:     startArea.Bound,
-			AxialDelta:    cbp.z0Delta,
+			AxialDelta:    cbp.Z0Delta,
 			HasAxialDelta: true,
 			Surface:       surfacegeom.Plane{Frame: startFrame},
-			CapRecord:     &topo.CapRecord{Frame: cbp.frame, Xform: cbp.xform, Z: cbp.z0},
+			CapRecord:     &topo.CapRecord{Frame: cbp.Frame, Xform: cbp.Xform, Z: cbp.Z0},
 			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapStart}},
 			Body:          bodyNode(body),
 			Loops:         loopNodes(startLoopObjs),
@@ -282,10 +282,10 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		n: topo.Face{
 			Area:          endArea.Value,
 			AreaBound:     endArea.Bound,
-			AxialDelta:    cbp.z1Delta,
+			AxialDelta:    cbp.Z1Delta,
 			HasAxialDelta: true,
 			Surface:       surfacegeom.Plane{Frame: endFrame},
-			CapRecord:     &topo.CapRecord{Frame: cbp.frame, Xform: cbp.xform, Z: cbp.z1},
+			CapRecord:     &topo.CapRecord{Frame: cbp.Frame, Xform: cbp.Xform, Z: cbp.Z1},
 			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapEnd}},
 			Body:          bodyNode(body),
 			Loops:         loopNodes(endLoopObjs),
@@ -332,19 +332,19 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 		Bound:     units.Millimeters(centroidBound),
 	}
 	body.n.Bounds = boxToInternal(bounds)
-	if err := prismrecord.ChargeMap(bodyNode(body), cbp.frame, cbp.xform); err != nil {
+	if err := prismrecord.ChargeMap(bodyNode(body), cbp.Frame, cbp.Xform); err != nil {
 		return nil, err
 	}
-	if cbp.loftSource != nil {
-		if err := widenLoftCapBandMeasurements(body, cbp.loftSource.proof); err != nil {
+	if cbp.LoftSource != nil {
+		if err := widenLoftCapBandMeasurements(body, cbp.LoftSource.Proof); err != nil {
 			return nil, err
 		}
 	}
 	if err := topobuild.ValidateAnalyticMeasurements(bodyNode(body)); err != nil {
 		return nil, err
 	}
-	cbp.patches = patchGeoms
-	cbp.bandDelta = bandDeltas
+	cbp.Patches = patchGeoms
+	cbp.BandDelta = bandDeltas
 	body.n.Payload = cbp
 	return body, nil
 }
@@ -372,8 +372,8 @@ func capContourPerimeterUpper(capCo []topo.CoEdge) float64 {
 // (offset2d.BuildSharpLoop), every corner mitered and each walk moved its own
 // amount (walkAmounts), where a chamfer's cap contour closes a reflex corner
 // with an arc.
-func (cbp capBlendPayload) contourOf(ctx context.Context, li int, loop loopRecord, d float64) (loopRecord, error) {
-	if !cbp.draft {
+func (cbp capBlendPayload) ContourOf(ctx context.Context, li int, loop loopRecord, d float64) (loopRecord, error) {
+	if !cbp.Draft {
 		return capband.LoopBoundary(ctx, loop, d, shellTol)
 	}
 	budget := proofbound.NewWorkBudget(ctx)
@@ -381,7 +381,7 @@ func (cbp capBlendPayload) contourOf(ctx context.Context, li int, loop loopRecor
 	if err != nil {
 		return loopRecord{}, err
 	}
-	segs, _, err := offset2d.BuildSharpLoop(budget, cl.Walks, cbp.walkAmounts(li, cl.Walks, d), shellTol)
+	segs, _, err := offset2d.BuildSharpLoop(budget, cl.Walks, cbp.WalkAmounts(li, cl.Walks, d), shellTol)
 	if err != nil {
 		return loopRecord{}, offset2d.DraftOffsetError(err)
 	}
@@ -401,10 +401,10 @@ func readBandMass(ctx context.Context, li int, loop loopRecord, cbp capBlendPayl
 func readBandMassWithSideArea(ctx context.Context, li int, loop loopRecord, cbp capBlendPayload,
 	geom []capPatchGeom, capZ, matSign, delta float64, closure capBandClosure,
 	knownSideArea *proofbound.BoundedScalar) (capband.BandMassInput, error) {
-	setback := cbp.setbackAt(matSign)
-	capZB := cbp.capBandLevel(capZ, matSign)
+	setback := cbp.SetbackAt(matSign)
+	capZB := cbp.CapBandLevel(capZ, matSign)
 	sideZB := proofbound.BoundedAdd(capZB,
-		proofbound.MeasuredScalar(matSign*setback.ds, setback.dsDelta))
+		proofbound.MeasuredScalar(matSign*setback.Ds, setback.DsDelta))
 	signedArea, err := sectionaudit.LoopSignedArea(proofbound.NewWorkBudget(ctx), loop)
 	if err != nil {
 		return capband.BandMassInput{}, err
@@ -425,7 +425,7 @@ func readBandMassWithSideArea(ctx context.Context, li int, loop loopRecord, cbp 
 			return capband.BandMassInput{}, err
 		}
 	}
-	capBoundary, err := cbp.contourOf(ctx, li, loop, setback.dc)
+	capBoundary, err := cbp.ContourOf(ctx, li, loop, setback.Dc)
 	if err != nil {
 		return capband.BandMassInput{}, err
 	}
@@ -437,7 +437,7 @@ func readBandMassWithSideArea(ctx context.Context, li int, loop loopRecord, cbp 
 		Loop: loop, CapBoundary: capBoundary, Patches: geom,
 		CapLevel: capZB, SideLevel: sideZB, SideArea: sideArea, CapArea: capArea,
 		MaterialSign: matSign, Orientation: orient, Delta: delta,
-		LevelDelta: capband.BandLevelDelta(capZ, matSign, setback.ds, setback.dsDelta), Closure: closure,
+		LevelDelta: capband.BandLevelDelta(capZ, matSign, setback.Ds, setback.DsDelta), Closure: closure,
 	}, nil
 }
 
@@ -467,7 +467,7 @@ func capBlendBoundsContext(ctx context.Context, cbp capBlendPayload, work *freef
 		if err := ctx.Err(); err != nil {
 			return Box{}, err
 		}
-		lo, hi, axisBound, err := cbp.extentBoundedAlong(ctx, axis, work)
+		lo, hi, axisBound, err := cbp.ExtentBoundedAlong(ctx, axis, work)
 		if err != nil {
 			return Box{}, err
 		}

@@ -72,7 +72,7 @@ func (span sweepAuditSpan) AuditExtent(
 	case revolvePayload:
 		return payload.ExtentBoundedAlong(ctx, direction, work)
 	case draftPayload:
-		return payload.band().extentBoundedAlong(ctx, direction, work)
+		return payload.band().ExtentBoundedAlong(ctx, direction, work)
 	default:
 		return 0, 0, 0, fmt.Errorf(`%w: a composite sweep span has no analytic extent certificate`, ErrUnsupported)
 	}

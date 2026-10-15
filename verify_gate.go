@@ -542,16 +542,16 @@ func gateWitnessPrisms(payload topo.Payload) ([]prismPayload, float64, bool) {
 // mm around its end cap is sqrt(264) across, against the receiver's
 // sqrt(300).
 func capBlendWitnessPrisms(pl capBlendPayload) []prismPayload {
-	loops := pl.loops()
+	loops := pl.Loops()
 	out := make([]prismPayload, 0, len(loops))
 	for li, loop := range loops {
-		witness := pl.prismLike(pl.z0, pl.z1)
+		witness := pl.PrismLike(pl.Z0, pl.Z1)
 		witness.Profile = profileRecord{Outer: loop}
-		if pl.startLoops[li] {
-			witness.Z0 = pl.z0 + pl.start.ds
+		if pl.StartLoops[li] {
+			witness.Z0 = pl.Z0 + pl.Start.Ds
 		}
-		if pl.endLoops[li] {
-			witness.Z1 = pl.z1 - pl.end.ds
+		if pl.EndLoops[li] {
+			witness.Z1 = pl.Z1 - pl.End.Ds
 		}
 		out = append(out, witness)
 	}

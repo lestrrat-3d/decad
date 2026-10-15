@@ -62,8 +62,8 @@ func (bc *brepBandChord) placeRings(e brepEmbed, addVertex func([3]float64, proo
 		side[c] = lm.sidePts[index]
 	}
 	points, err := tessellation.FilletRingGeometry(tessellation.FilletRingInput{
-		Side: point2ToRecordSlice(side), Cap: point2ToRecordSlice(lm.capPts), Radius: bc.band.setback.dc,
-		RadiusDelta: bc.band.setback.dcDelta, CapLevel: bc.face.z0,
+		Side: point2ToRecordSlice(side), Cap: point2ToRecordSlice(lm.capPts), Radius: bc.band.setback.Dc,
+		RadiusDelta: bc.band.setback.DcDelta, CapLevel: bc.face.z0,
 		CapLevelDelta: bc.face.z0Delta, SideLevel: bc.sideZ,
 		MaterialSign: bc.band.matSign(bc.face), Count: n,
 		Noun: "a fillet band", RingNoun: "a fillet",
@@ -72,13 +72,13 @@ func (bc *brepBandChord) placeRings(e brepEmbed, addVertex func([3]float64, proo
 		return err
 	}
 	if len(bc.curved) > 0 {
-		rIv, err := filletband.RadiusInterval(bc.band.setback.dc, bc.band.setback.dcDelta)
+		rIv, err := filletband.RadiusInterval(bc.band.setback.Dc, bc.band.setback.DcDelta)
 		if err != nil {
 			return err
 		}
 		bc.fillet.seamGap, err = tessellation.CurvedMiterRings(points, tessellation.CurvedMiterInput{
 			Walks: lm.walks, Curved: bc.curved, CapWallStart: lm.capWallStart,
-			Radius: rIv, HeldRadius: bc.band.setback.dc,
+			Radius: rIv, HeldRadius: bc.band.setback.Dc,
 			CapLevel: bc.face.z0, CapLevelDelta: bc.face.z0Delta,
 			MaterialSign: bc.band.matSign(bc.face),
 		})
@@ -124,16 +124,16 @@ func (bc *brepBandChord) emitFillet(m *Mesh, faceOfRole func(string) (*Face, err
 	fr := bc.fillet
 	cells, patches := fr.cells, fr.patches
 	cbp := bc.cbp
-	matSign, capZ := 1.0, cbp.z0
+	matSign, capZ := 1.0, cbp.Z0
 	if !bc.start {
-		matSign, capZ = -1, cbp.z1
+		matSign, capZ = -1, cbp.Z1
 	}
-	setback := cbp.setbackAt(matSign)
-	delta := cbp.bandDelta[capBandKey{loop: 0, start: bc.start}]
-	levelDelta := proofbound.AbsSumUpper(setback.dsDelta, proofarith.AddRoundError(capZ, matSign*setback.ds, bc.sideZ))
-	axial := cbp.capBandLevel(capZ, matSign).Bound
+	setback := cbp.SetbackAt(matSign)
+	delta := cbp.BandDelta[capBandKey{Loop: 0, Start: bc.start}]
+	levelDelta := proofbound.AbsSumUpper(setback.DsDelta, proofarith.AddRoundError(capZ, matSign*setback.Ds, bc.sideZ))
+	axial := cbp.CapBandLevel(capZ, matSign).Bound
 
-	r := setback.axialUpper()
+	r := setback.AxialUpper()
 	dphi := proofbound.UpRound(proofbound.UpRound(math.Pi/2*(1+1e-12)) / float64(fr.n))
 	sPhi := proofbound.ProductUpper(r, proofbound.UpRound(proofbound.ProductUpper(dphi, dphi)/8))
 

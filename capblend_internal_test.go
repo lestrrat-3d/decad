@@ -27,7 +27,7 @@ import (
 // equalCapSetback is an equal chamfer's setbacks for one cap: d across the cap
 // and d down the side, each carrying dDelta.
 func equalCapSetback(d, dDelta float64) capSetback {
-	return capSetback{dc: d, dcDelta: dDelta, ds: d, dsDelta: dDelta}
+	return capSetback{Dc: d, DcDelta: dDelta, Ds: d, DsDelta: dDelta}
 }
 
 // These test adapters keep the mass fixtures' payload construction unchanged
@@ -96,7 +96,7 @@ func TestCapBandMomentCoordUpperCoversOffsetBoundary(t *testing.T) {
 	require.InDelta(t, rho+d, widenedRadius, 1e-9,
 		"the premise: chamfering a hole widens it by the setback")
 
-	cbp := capBlendPayload{start: equalCapSetback(d, 0), end: equalCapSetback(d, 0)}
+	cbp := capBlendPayload{Start: equalCapSetback(d, 0), End: equalCapSetback(d, 0)}
 	capZ := half
 	sideZ := capZ - d
 	g := capPatchGeom{
@@ -214,11 +214,11 @@ func capBandCircle(t *testing.T, r, d, capZ float64) proofbound.BoundedScalar {
 		circleSeg{Center: planePoint{}, Radius: units.Millimeters(r), CCW: true, TStart: 0, TEnd: 1},
 	}}
 	cbp := capBlendPayload{
-		profile:  profileRecord{Outer: loop},
-		z0:       0,
-		z1:       capZ,
-		end:      equalCapSetback(d, 0),
-		endLoops: map[int]bool{0: true},
+		Profile:  profileRecord{Outer: loop},
+		Z0:       0,
+		Z1:       capZ,
+		End:      equalCapSetback(d, 0),
+		EndLoops: map[int]bool{0: true},
 	}
 	g := capPatchGeom{
 		Circular: true, SideRadius: r, CapRadius: r - d,
@@ -245,8 +245,8 @@ func TestCapBandMassBoundsChargeInheritedCapLevel(t *testing.T) {
 		matSign float64
 		payload capBlendPayload
 	}{
-		{name: `start cap`, matSign: +1, payload: capBlendPayload{start: equalCapSetback(d, 0), z0Delta: capDelta}},
-		{name: `end cap`, matSign: -1, payload: capBlendPayload{end: equalCapSetback(d, 0), z1Delta: capDelta}},
+		{name: `start cap`, matSign: +1, payload: capBlendPayload{Start: equalCapSetback(d, 0), Z0Delta: capDelta}},
+		{name: `end cap`, matSign: -1, payload: capBlendPayload{End: equalCapSetback(d, 0), Z1Delta: capDelta}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			sideZ := capZ + tc.matSign*d
@@ -257,8 +257,8 @@ func TestCapBandMassBoundsChargeInheritedCapLevel(t *testing.T) {
 				{SideA: planePoint{U: 0, V: 1}, SideB: planePoint{U: 0, V: 0}, CapA: planePoint{U: d, V: 1 - d}, CapB: planePoint{U: d, V: d}, SideZ: sideZ, CapZ: capZ},
 			}
 			withoutDelta := tc.payload
-			withoutDelta.z0Delta = 0
-			withoutDelta.z1Delta = 0
+			withoutDelta.Z0Delta = 0
+			withoutDelta.Z1Delta = 0
 
 			volumeWith, err := capBandVolume(t.Context(), loop, tc.payload, geom, capZ, tc.matSign, freeform.NewFreeformWork())
 			require.NoError(t, err)
@@ -305,9 +305,9 @@ func TestCapBandMassBoundsChargeTheSideLevelMove(t *testing.T) {
 		{SideA: planePoint{U: u0 + 1, V: u0 + 1}, SideB: planePoint{U: u0, V: u0 + 1}, CapA: planePoint{U: u0 + 1 - d, V: u0 + 1 - d}, CapB: planePoint{U: u0 + d, V: u0 + 1 - d}, SideZ: sideZ, CapZ: capZ},
 		{SideA: planePoint{U: u0, V: u0 + 1}, SideB: planePoint{U: u0, V: u0}, CapA: planePoint{U: u0 + d, V: u0 + 1 - d}, CapB: planePoint{U: u0 + d, V: u0 + d}, SideZ: sideZ, CapZ: capZ},
 	}
-	exact := capBlendPayload{end: capSetback{dc: d, ds: d}}
-	loose := capBlendPayload{end: capSetback{dc: d, ds: d, dsDelta: dsDelta}}
-	levelDelta := capband.BandLevelDelta(capZ, -1, loose.end.ds, loose.end.dsDelta)
+	exact := capBlendPayload{End: capSetback{Dc: d, Ds: d}}
+	loose := capBlendPayload{End: capSetback{Dc: d, Ds: d, DsDelta: dsDelta}}
+	levelDelta := capband.BandLevelDelta(capZ, -1, loose.End.Ds, loose.End.DsDelta)
 	require.GreaterOrEqual(t, levelDelta, dsDelta)
 	// The side loop's area, 1, is the larger section.
 	charge := levelDelta * 1
@@ -352,15 +352,15 @@ func TestCapBlendSetbackConversionCarriesAllDerivedSideLevels(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cbp := capBlendPayload{
-				profile:    profileRecord{Outer: synthRectLoop(0, 0, 10, 10)},
-				frame:      canonicalPrismFrame(t),
-				z0:         0,
-				z1:         10,
-				xform:      r3.Identity(),
-				start:      equalCapSetback(d, dDelta),
-				end:        equalCapSetback(d, dDelta),
-				startLoops: tc.start,
-				endLoops:   tc.end,
+				Profile:    profileRecord{Outer: synthRectLoop(0, 0, 10, 10)},
+				Frame:      canonicalPrismFrame(t),
+				Z0:         0,
+				Z1:         10,
+				Xform:      r3.Identity(),
+				Start:      equalCapSetback(d, dDelta),
+				End:        equalCapSetback(d, dDelta),
+				StartLoops: tc.start,
+				EndLoops:   tc.end,
 			}
 			body, err := evalCapBlendContext(t.Context(), New(), 0, cbp)
 			require.NoError(t, err)
@@ -664,18 +664,18 @@ func chamferedCircularBand(t *testing.T, section func(*sketch.Sketch), h, d floa
 	roles := facesByRole(chamfered)
 	var out bandUnderTest
 	found := 0
-	for _, patch := range cbp.patches {
-		if !patch.geom.Circular {
+	for _, patch := range cbp.Patches {
+		if !patch.Geom.Circular {
 			continue
 		}
 		found++
-		face := roles[patch.role]
+		face := roles[patch.Role]
 		require.NotNil(t, face)
 		require.Equal(t, surfacegeom.KindCone, face.n.Surface.Kind())
 		// The sweep levels the payload itself carries: the reading under test
 		// takes its own levels from the patch geometry, so these only pin that
 		// the survey's plane-local map is the payload's own.
-		out = bandUnderTest{face: face, pl: cbp.prismLike(cbp.z0, cbp.z1), geom: patch.geom}
+		out = bandUnderTest{face: face, pl: cbp.PrismLike(cbp.Z0, cbp.Z1), geom: patch.Geom}
 	}
 	require.Equal(t, 1, found, "these sections each carry one circular wall")
 	return out
@@ -740,16 +740,16 @@ func chamferedRectFlatPatches(t *testing.T, motion r3.Transform) []bandUnderTest
 	cbp, ok := placed.n.Payload.(capBlendPayload)
 	require.True(t, ok)
 	roles := facesByRole(placed)
-	pl := cbp.prismLike(cbp.z0, cbp.z1)
+	pl := cbp.PrismLike(cbp.Z0, cbp.Z1)
 	var out []bandUnderTest
-	for _, patch := range cbp.patches {
-		if patch.geom.Circular {
+	for _, patch := range cbp.Patches {
+		if patch.Geom.Circular {
 			continue
 		}
-		face := roles[patch.role]
+		face := roles[patch.Role]
 		require.NotNil(t, face)
 		require.Equal(t, surfacegeom.KindPlane, face.n.Surface.Kind())
-		out = append(out, bandUnderTest{face: face, pl: pl, geom: patch.geom})
+		out = append(out, bandUnderTest{face: face, pl: pl, geom: patch.Geom})
 	}
 	require.Len(t, out, 4, "a rectangle's four corners each chamfer to one flat patch")
 	return out
@@ -1138,8 +1138,8 @@ func TestAsymmetricCapSetbacksRefuseMixedPicks(t *testing.T) {
 		// and a second loop on the end cap.
 		start, end, err := a.capSetbacks(caps, edges, both, map[int]bool{1: true})
 		require.NoError(t, err)
-		require.Equal(t, capSetback{dc: d, ds: other, dsDelta: otherDelta}, start)
-		require.Equal(t, capSetback{dc: other, dcDelta: otherDelta, ds: d}, end)
+		require.Equal(t, capSetback{Dc: d, Ds: other, DsDelta: otherDelta}, start)
+		require.Equal(t, capSetback{Dc: other, DcDelta: otherDelta, Ds: d}, end)
 	})
 }
 
@@ -1284,8 +1284,8 @@ func TestCapBandConeAreaBoundEnclosesBuiltRuledPatch(t *testing.T) {
 			require.True(t, ok)
 
 			mitered := 0
-			for _, p := range cbp.patches {
-				g := p.geom
+			for _, p := range cbp.Patches {
+				g := p.Geom
 				if !g.Circular || g.SideRadius == 0 || g.WholeTurn || capPatchWindowSkew(g) == 0 {
 					continue
 				}
@@ -1294,7 +1294,7 @@ func TestCapBandConeAreaBoundEnclosesBuiltRuledPatch(t *testing.T) {
 				require.InDelta(t, ruled, builtRuledPatchArea(g, 96), 1e-12*ruled, `the quadrature has converged`)
 				area, bound := capband.AreaOf(g)
 				require.GreaterOrEqual(t, bound, math.Abs(ruled-area),
-					`patch %s publishes %v ± %v, and the ruled patch holds %v`, p.role, area, bound, ruled)
+					`patch %s publishes %v ± %v, and the ruled patch holds %v`, p.Role, area, bound, ruled)
 			}
 			require.Positive(t, mitered, `the section has a mitered circular wall`)
 		})
@@ -1363,16 +1363,16 @@ func TestCapBandConePatchChargesItsCornerSlivers(t *testing.T) {
 			want := 2 * tc.ds / tc.dc * 10 * math.Abs(sum*tc.dc/n/3)
 
 			arcs := 0
-			for _, p := range cbp.patches {
-				g := p.geom
+			for _, p := range cbp.Patches {
+				g := p.Geom
 				if !g.Circular || g.SideRadius == 0 {
 					continue
 				}
 				arcs++
 				require.GreaterOrEqual(t, g.CornerFlux, want*(1-1e-9),
-					`patch %s charges %v for its corner slivers, and they owe %v`, p.role, g.CornerFlux, want)
+					`patch %s charges %v for its corner slivers, and they owe %v`, p.Role, g.CornerFlux, want)
 				require.LessOrEqual(t, g.CornerFlux, want*(1+1e-6),
-					`patch %s charges %v for its corner slivers, and the closed form gives %v`, p.role, g.CornerFlux, want)
+					`patch %s charges %v for its corner slivers, and the closed form gives %v`, p.Role, g.CornerFlux, want)
 			}
 			require.Equal(t, 1, arcs, `the section has one arc wall`)
 		})
@@ -1426,7 +1426,7 @@ func TestCapBlendAuditReadsTheSetbackSpan(t *testing.T) {
 			pp, ok := body.n.Payload.(prismPayload)
 			require.True(t, ok)
 
-			end := capSetback{dc: dc, dcDelta: tc.dcDelta, ds: dc}
+			end := capSetback{Dc: dc, DcDelta: tc.dcDelta, Ds: dc}
 			loops := map[int]bool{0: true, 1: true, 2: true}
 			doc := body.Document()
 			out, err := buildCapBlend(t.Context(), doc, doc.nextProducerID(), pp, capSetback{}, end, map[int]bool{}, loops)

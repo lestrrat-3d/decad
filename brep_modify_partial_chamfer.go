@@ -141,7 +141,7 @@ func (r *brepLoopRead) rewritePartialChamfer(sel brepLoopSel, selected []bool,
 	amounts := make([]float64, len(selected))
 	for i, on := range selected {
 		if on {
-			amounts[i] = r.call.loop.dc
+			amounts[i] = r.call.loop.Dc
 		}
 	}
 	segs, joins, capWalk, capArc, err := offset2d.PartialChamferContour(
@@ -173,7 +173,7 @@ func (r *brepLoopRead) rewritePartialChamfer(sel brepLoopSel, selected []bool,
 			PA: planePoint{U: j.PA.U, V: j.PA.V}, PB: planePoint{U: j.PB.U, V: j.PB.V}}
 	}
 	delta, err := capband.AmountsContourDisplacement(cl.Walks, readings, amounts,
-		r.call.loop.dcDelta, shellTol)
+		r.call.loop.DcDelta, shellTol)
 	if err != nil {
 		return brepPayload{}, r.wrapFace(sel.face, err)
 	}
@@ -200,7 +200,7 @@ func (r *brepLoopRead) rewritePartialChamfer(sel brepLoopSel, selected []bool,
 		}
 		a := &faces[pu.Face]
 		if b.planar {
-			if err := r.trimPlanar(trims, pu, n, sideRef, r.call.loop.ds); err != nil {
+			if err := r.trimPlanar(trims, pu, n, sideRef, r.call.loop.Ds); err != nil {
 				return brepPayload{}, err
 			}
 			a.delta = math.Max(a.delta, sideDelta)

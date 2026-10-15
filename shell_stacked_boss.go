@@ -315,7 +315,7 @@ func attachBossShellBand(ctx context.Context, body *Body, ref producerID, bp bre
 	band := bp.bossShell
 	bi := len(bp.loopBands)
 	b := brepLoopBand{face: band.LedgeFace, loop: 0, orig: band.SideProfile().Outer,
-		setback: capSetback{dc: band.T, ds: band.T}, sigma: 1, kind: brepBandFillet}
+		setback: capSetback{Dc: band.T, Ds: band.T}, sigma: 1, kind: brepBandFillet}
 	upper := band.CapProfile()
 	fake := brepFace{frame: band.Frame, region: &upper,
 		z0: band.InterfaceZ, z1: band.InterfaceZ, outward: false, role: "bossShellBand"}

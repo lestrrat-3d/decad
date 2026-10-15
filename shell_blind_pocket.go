@@ -211,7 +211,7 @@ func attachPocketShellBand(ctx context.Context, body *Body, ref producerID,
 	band := bp.pocketShell
 	bi := len(bp.loopBands)
 	b := brepLoopBand{face: band.FloorFace, loop: 0, orig: band.Rounded.Outer,
-		setback: capSetback{dc: band.T, ds: band.T}, sigma: 1, kind: brepBandFillet}
+		setback: capSetback{Dc: band.T, Ds: band.T}, sigma: 1, kind: brepBandFillet}
 	capRegion := band.CapProfile()
 	fake := brepFace{frame: band.Frame, region: &capRegion,
 		z0: band.LowerZ, z1: band.LowerZ, outward: band.CapOutward(), role: "pocketShellBand"}

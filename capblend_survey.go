@@ -85,12 +85,12 @@ func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcom
 	// prismUndercuts runs, over the RECEIVER's own recorded profile — a
 	// chamfered loop's unchanged (non-band) portion has the same wall role
 	// and the same normal as an untouched one.
-	pl := cbp.prismLike(0, 0)
+	pl := cbp.PrismLike(0, 0)
 	m, okM := survey2d.NewPlacedFrameMap(pl.Frame, pl.Xform)
 	if !okM {
 		return undercutOutcome{}
 	}
-	loops, err := boundarywalk.SurveyLoops(nil, boundarywalk.Profile(cbp.profile))
+	loops, err := boundarywalk.SurveyLoops(nil, boundarywalk.Profile(cbp.Profile))
 	if err != nil {
 		return undercutOutcome{}
 	}
@@ -126,7 +126,7 @@ func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcom
 		}
 	}
 
-	if !capPatchUndercuts(roles, pl, cbp.patches, p, &faces, &undecided) {
+	if !capPatchUndercuts(roles, pl, cbp.Patches, p, &faces, &undecided) {
 		return undercutOutcome{}
 	}
 	if undecided && len(faces) == 0 {
@@ -148,11 +148,11 @@ func capPatchUndercuts(roles map[string]*Face, pl prismPayload, patches []capPat
 	// reports — public output through Report.Bodies[i].Undercut.Faces — come
 	// back in the same sequence on every call.
 	for _, patch := range patches {
-		f := roles[patch.role]
+		f := roles[patch.Role]
 		if f == nil {
 			return false
 		}
-		mn, mx, reading, ok := capPatchNormalRange(f, pl, patch.geom, p)
+		mn, mx, reading, ok := capPatchNormalRange(f, pl, patch.Geom, p)
 		if !ok {
 			return false
 		}
@@ -292,15 +292,15 @@ func capPatchNormalRange(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (fl
 // the receiver's own untouched profile.
 func capBlendMinRadius(b *Body, cbp capBlendPayload) (radiusOutcome, bool) {
 	roles := facesByRole(b)
-	for _, patch := range cbp.patches {
-		f := roles[patch.role]
+	for _, patch := range cbp.Patches {
+		f := roles[patch.Role]
 		if f == nil {
 			return radiusOutcome{}, false
 		}
-		if capPatchWindowSkew(patch.geom) > 0 || f.n.NormalBound != 0 {
+		if capPatchWindowSkew(patch.Geom) > 0 || f.n.NormalBound != 0 {
 			return radiusOutcome{}, false
 		}
 	}
-	reading := radiussurvey.Prism(cbp.profile, 0)
+	reading := radiussurvey.Prism(cbp.Profile, 0)
 	return radiusOutcome{reading: reading.Reading, bound: reading.Bound, ok: reading.OK}, reading.OK
 }

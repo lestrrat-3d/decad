@@ -16,14 +16,14 @@ import (
 // The delayed join builder runs only after the wall checks, preserving the
 // proof budget charges and the first refusal reported.
 func capBlendOccupiedVolumeAdmission(budget *proofbound.WorkBudget, cbp capBlendPayload) (error, error) {
-	return capband.OccupiedVolumeAdmission(budget, cbp.noun(), cbp.loops(), cbp.startLoops, cbp.endLoops,
+	return capband.OccupiedVolumeAdmission(budget, cbp.Noun(), cbp.Loops(), cbp.StartLoops, cbp.EndLoops,
 		func(li int, loop sectionrecord.LoopRecord) ([]survey2d.SideWalk, func() ([]bool, error), error) {
 			cl, err := oneLoopCornerLoop(budget, loop, freeform.NewFreeformWork())
 			if err != nil {
 				return nil, nil, err
 			}
 			return cl.Walks, func() ([]bool, error) {
-				joins, err := cbp.offsetJoins(budget, li, cl, cbp.loopOffset(li))
+				joins, err := cbp.OffsetJoins(budget, li, cl, cbp.LoopOffset(li))
 				if err != nil {
 					return nil, err
 				}

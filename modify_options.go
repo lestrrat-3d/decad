@@ -261,9 +261,9 @@ func (a *asymmetricChamfer) capSetbacks(caps prismCaps, edges []*Edge, startLoop
 	}
 	pick := func(capReferenced bool) capSetback {
 		if capReferenced {
-			return capSetback{dc: a.d, dcDelta: a.dDelta, ds: a.other, dsDelta: a.otherDelta}
+			return capSetback{Dc: a.d, DcDelta: a.dDelta, Ds: a.other, DsDelta: a.otherDelta}
 		}
-		return capSetback{dc: a.other, dcDelta: a.otherDelta, ds: a.d, dsDelta: a.dDelta}
+		return capSetback{Dc: a.other, DcDelta: a.otherDelta, Ds: a.d, DsDelta: a.dDelta}
 	}
 	return pick(capRef[0]), pick(capRef[1]), nil
 }

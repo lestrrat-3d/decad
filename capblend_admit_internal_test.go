@@ -67,7 +67,7 @@ func TestCapBlendAdmissionAdmitsTheFlange(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, refusal, `every band of the flange is a whole turn or joins only exactly tangent corners`)
 
-	loops := cbp.loops()
+	loops := cbp.Loops()
 	require.Len(t, loops, 2)
 	budget := proofbound.NewWorkBudget(t.Context())
 	outer, err := oneLoopCornerLoop(budget, loops[0], freeform.NewFreeformWork())

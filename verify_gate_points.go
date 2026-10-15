@@ -174,17 +174,17 @@ func capBlendGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body
 		return gatePoints{}, false, err
 	}
 	contour := 0.0
-	for _, d := range cbp.bandDelta {
+	for _, d := range cbp.BandDelta {
 		contour = math.Max(contour, d)
 	}
 	var rims []prismPayload
-	for _, p := range cbp.patches {
-		if !p.geom.Circular || !p.geom.WholeTurn {
+	for _, p := range cbp.Patches {
+		if !p.Geom.Circular || !p.Geom.WholeTurn {
 			continue
 		}
-		rim := cbp.prismLike(p.geom.CapZ, p.geom.CapZ)
+		rim := cbp.PrismLike(p.Geom.CapZ, p.Geom.CapZ)
 		rim.Profile = profileRecord{Outer: loopRecord{Segments: []curveSegment{circleSeg{
-			Center: planePoint{U: p.geom.CU, V: p.geom.CV}, Radius: units.Millimeters(p.geom.CapRadius),
+			Center: planePoint{U: p.Geom.CU, V: p.Geom.CV}, Radius: units.Millimeters(p.Geom.CapRadius),
 			CCW: true, TStart: 0, TEnd: 1,
 		}}}}
 		rims = append(rims, rim)
@@ -198,8 +198,8 @@ func capBlendGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body
 			g.Join(caps)
 		}
 	}
-	for _, p := range cbp.patches {
-		rim, arcAllow, ok := capArcRim(cbp, p.geom, contour)
+	for _, p := range cbp.Patches {
+		rim, arcAllow, ok := capArcRim(cbp, p.Geom, contour)
 		if !ok {
 			continue
 		}
@@ -226,7 +226,7 @@ func capArcRim(cbp capBlendPayload, g capPatchGeom, contour float64) (prismPaylo
 	if !ok {
 		return prismPayload{}, 0, false
 	}
-	rim := cbp.prismLike(arc.Level, arc.Level)
+	rim := cbp.PrismLike(arc.Level, arc.Level)
 	rim.Profile = profileRecord{Outer: loopRecord{Segments: []curveSegment{arcSeg{
 		Center: arc.Center, Start: arc.Start, End: arc.End, TStart: 0, TEnd: 1,
 	}}}}

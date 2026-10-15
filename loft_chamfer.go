@@ -20,8 +20,8 @@ import (
 // band is polygonal while the original spline remains available as the flank
 // source and its displacement and mass allowances remain attached.
 type loftCapBandSource struct {
-	profile profileRecord
-	proof   loftmesh.MeshProof
+	Profile profileRecord
+	Proof   loftmesh.MeshProof
 }
 
 // tryLoftCapChamfer is the matching axial loft's complete outer-cap loop
@@ -102,8 +102,8 @@ func tryLoftCapChamfer(ctx context.Context, b *Body, pl loftPayload, edges []*Ed
 		Holes: pl.profile0.Holes,
 	}
 	pp := prismrecord.Payload{Profile: profile, Frame: pl.frame0, Z0: 0, Z1: end.Z, Xform: r3.Identity()}
-	setback := capSetback{dc: d, dcDelta: dDelta, ds: d, dsDelta: dDelta}
-	source := &loftCapBandSource{profile: pl.profile0, proof: pl.proof}
+	setback := capSetback{Dc: d, DcDelta: dDelta, Ds: d, DsDelta: dDelta}
+	source := &loftCapBandSource{Profile: pl.profile0, Proof: pl.proof}
 	result, err := buildCapBlendWithLoftSource(ctx, documentHandle(b.n.Doc), b.n.Doc.NextProducer, pp, setback, setback,
 		map[int]bool{0: true}, map[int]bool{0: true}, source)
 	if err != nil {

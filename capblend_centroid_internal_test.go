@@ -445,18 +445,18 @@ func TestCapBandCoordUpperCoversTheCornerLoci(t *testing.T) {
 	require.NoError(t, err)
 	cbp, ok := chamfered.n.Payload.(capBlendPayload)
 	require.True(t, ok)
-	require.Len(t, cbp.profile.Holes, 1)
+	require.Len(t, cbp.Profile.Holes, 1)
 
-	loop := cbp.profile.Holes[0]
+	loop := cbp.Profile.Holes[0]
 	const matSign = -1.0
-	setback := cbp.setbackAt(matSign)
-	require.Equal(t, d, setback.dc)
-	capBoundary, err := cbp.contourOf(t.Context(), 0, loop, setback.dc)
+	setback := cbp.SetbackAt(matSign)
+	require.Equal(t, d, setback.Dc)
+	capBoundary, err := cbp.ContourOf(t.Context(), 0, loop, setback.Dc)
 	require.NoError(t, err)
-	delta, ok := cbp.bandDelta[capBandKey{loop: 1, start: false}]
+	delta, ok := cbp.BandDelta[capBandKey{Loop: 1, Start: false}]
 	require.True(t, ok, `the hole's end-cap band records its contour displacement`)
-	capZB := cbp.capBandLevel(cbp.z1, matSign)
-	sideZB := proofbound.BoundedAdd(capZB, proofbound.MeasuredScalar(matSign*setback.ds, setback.dsDelta))
+	capZB := cbp.CapBandLevel(cbp.Z1, matSign)
+	sideZB := proofbound.BoundedAdd(capZB, proofbound.MeasuredScalar(matSign*setback.Ds, setback.DsDelta))
 	coordUpper, err := capband.CoordUpper(loop, capBoundary, delta, sideZB, capZB, freeform.NewFreeformWork())
 	require.NoError(t, err)
 

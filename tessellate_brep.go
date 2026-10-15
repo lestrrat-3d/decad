@@ -285,7 +285,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 			proof := bc.lm.proof()
 			sag := tessellation.CapBlendRingSagitta(proof, true)
 			capPts, capV := bc.lm.capPts, bc.capV
-			if bc.cbp.fillet {
+			if bc.cbp.Fillet {
 				capPts, capV = compactCapBlendRing(capPts, capV)
 			}
 			for j, p := range capPts {
@@ -295,7 +295,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 			}
 			trim = math.Max(trim, sag)
 			loopSag[bc.band.loop] = math.Max(loopSag[bc.band.loop], sag)
-			capSlack = proofbound.AbsSumUpper(capSlack, tessellation.CapBlendRingSegmentArea(proof, true, bc.band.setback.dc))
+			capSlack = proofbound.AbsSumUpper(capSlack, tessellation.CapBlendRingSegmentArea(proof, true, bc.band.setback.Dc))
 		}
 		if err := requireLoopClearance(ctx, pts, loops, loopSag); err != nil {
 			return nil, err
@@ -321,7 +321,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 			out := map[string]capPatchGeom{}
 			if bi < len(bp.loopPatches) {
 				for _, p := range bp.loopPatches[bi] {
-					out[p.role] = p.geom
+					out[p.Role] = p.Geom
 				}
 			}
 			return out

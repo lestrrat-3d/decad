@@ -20,8 +20,8 @@ import (
 // sample without charging the slab that contains it.
 func proveLoftCapBandVolume(ctx context.Context, mesh *Mesh, body *Body,
 	cbp capBlendPayload, lms []capBlendLoopMesh, motion []float64) error {
-	if len(lms) < 1 || len(lms) > 2 || !cbp.startLoops[0] || !cbp.endLoops[0] ||
-		len(cbp.startLoops) != 1 || len(cbp.endLoops) != 1 {
+	if len(lms) < 1 || len(lms) > 2 || !cbp.StartLoops[0] || !cbp.EndLoops[0] ||
+		len(cbp.StartLoops) != 1 || len(cbp.EndLoops) != 1 {
 		return fmt.Errorf("%w: loft cap-band volume proof requires both complete outer bands and at most one bore", ErrUnsupported)
 	}
 	if len(lms) == 2 && (!lms[1].whole || len(lms[1].walks) != 1 || !lms[1].walks[0].IsCircular()) {
@@ -50,7 +50,7 @@ func proveLoftCapBandVolume(ctx context.Context, mesh *Mesh, body *Body,
 		proofbound.SweptVolumeAllow(motionMax,
 			proofbound.PerturbedAreaUpper(mesh.n.Vertices, mesh.n.Triangles, motionMax)),
 		slab,
-		cbp.loftSource.proof.VolSymDiff,
+		cbp.LoftSource.Proof.VolSymDiff,
 	})
 }
 
@@ -104,7 +104,7 @@ func loftCapBandFiniteMotion(outer capBlendLoopMesh, vertices []r3.Vec, motion [
 // axial error and the mesh's full displacement, so the slab includes all
 // floating-point level motion as well as every reflex apex fan.
 func loftCapBandSlabVolume(ctx context.Context, body *Body, mesh *Mesh, cbp capBlendPayload) (float64, error) {
-	center := cbp.prismLike(0, 0).Point(0, 0, cbp.z0)
+	center := cbp.PrismLike(0, 0).Point(0, 0, cbp.Z0)
 	boxError := body.n.Bounds.Bound.Base()
 	axisMax := 0.0
 	include := func(p [3]float64, errorBound float64) {
@@ -130,8 +130,8 @@ func loftCapBandSlabVolume(ctx context.Context, body *Body, mesh *Mesh, cbp capB
 	// level. Two copies of the inherited axial and tessellation allowances
 	// cover those opposite motions before the two cap slabs are summed.
 	levelError := proofbound.AbsSumUpper(cbp.AxialDelta(), mesh.n.Bound)
-	startHeight := proofbound.AbsSumUpper(cbp.start.axialUpper(), proofbound.ProductUpper(2, levelError))
-	endHeight := proofbound.AbsSumUpper(cbp.end.axialUpper(), proofbound.ProductUpper(2, levelError))
+	startHeight := proofbound.AbsSumUpper(cbp.Start.AxialUpper(), proofbound.ProductUpper(2, levelError))
+	endHeight := proofbound.AbsSumUpper(cbp.End.AxialUpper(), proofbound.ProductUpper(2, levelError))
 	area := proofbound.ProductUpper(4, proofbound.ProductUpper(radius, radius))
 	volume := proofbound.ProductUpper(area, proofbound.AbsSumUpper(startHeight, endHeight))
 	if proofbound.IsNonFinite(volume) {

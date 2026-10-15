@@ -228,10 +228,10 @@ func (r *brepLoopRead) rewritePartialFillet(sel brepLoopSel, selected []bool, bl
 	amounts := make([]float64, len(selected))
 	for i, on := range selected {
 		if on {
-			amounts[i] = r.call.loop.dc
+			amounts[i] = r.call.loop.Dc
 		}
 	}
-	fr, err := filletLoopOf(r.budget, orig, r.call.loop.dc, f.role, freeform.NewFreeformWork())
+	fr, err := filletLoopOf(r.budget, orig, r.call.loop.Dc, f.role, freeform.NewFreeformWork())
 	if err != nil {
 		return brepPayload{}, err
 	}
@@ -276,7 +276,7 @@ func (r *brepLoopRead) rewritePartialFillet(sel brepLoopSel, selected []bool, bl
 			PA: planePoint{U: j.PA.U, V: j.PA.V}, PB: planePoint{U: j.PB.U, V: j.PB.V}}
 	}
 	delta, err := capband.PartialFilletContourDelta(
-		cl.Walks, readings, amounts, sphere, r.call.loop.dcDelta, shellTol)
+		cl.Walks, readings, amounts, sphere, r.call.loop.DcDelta, shellTol)
 	if err != nil {
 		return brepPayload{}, r.wrapFace(sel.face, err)
 	}
@@ -304,7 +304,7 @@ func (r *brepLoopRead) rewritePartialFillet(sel brepLoopSel, selected []bool, bl
 		}
 		a := &faces[pu.Face]
 		if b.planar {
-			if err := r.trimPlanar(trims, pu, n, sideRef, r.call.loop.ds); err != nil {
+			if err := r.trimPlanar(trims, pu, n, sideRef, r.call.loop.Ds); err != nil {
 				return brepPayload{}, err
 			}
 			a.delta = math.Max(a.delta, sideDelta)
@@ -438,7 +438,7 @@ func (r *brepLoopRead) partialTerminalBlend(sel brepLoopSel, orig, contour loopR
 	capPoint := planePoint{U: capLocal[0], V: capLocal[1]}
 	sidePoint := planePoint{U: sideLocal[0], V: sideLocal[1]}
 	centre := planePoint{U: centreLocal[0], V: centreLocal[1]}
-	if math.Abs(math.Hypot(sidePoint.U-centre.U, sidePoint.V-centre.V)-r.call.loop.dc) > filletTol {
+	if math.Abs(math.Hypot(sidePoint.U-centre.U, sidePoint.V-centre.V)-r.call.loop.Dc) > filletTol {
 		return r.refuse("SL2", `a terminal wall meets the selected pipe along a noncircular curve`)
 	}
 	blend := eb.blend[k]

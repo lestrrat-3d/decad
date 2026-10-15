@@ -230,7 +230,7 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 		op:     "fillets",
 		admits: func(pp prismPayload, _ prismCaps) error { return requireLateralEdges(ctx, pp, edges) },
 		sel:    sel, edges: edges, blend: &blend,
-		loop:     &capSetback{dc: rmm, dcDelta: rDelta, ds: rmm, dsDelta: rDelta},
+		loop:     &capSetback{Dc: rmm, DcDelta: rDelta, Ds: rmm, DsDelta: rDelta},
 		loopKind: brepBandFillet,
 	}
 	route, err := modifyBrepReceiver(ctx, b, loopCall)

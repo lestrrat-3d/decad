@@ -78,8 +78,8 @@ func TestLoftCapBandReflexVolumeProofAndSharpBore(t *testing.T) {
 	require.True(t, recognized)
 	require.True(t, out.IsSolid())
 	band := out.n.Payload.(capBlendPayload)
-	require.IsType(t, fitSplineSeg{}, band.loftSource.profile.Outer.Segments[0])
-	for _, segment := range band.profile.Outer.Segments {
+	require.IsType(t, fitSplineSeg{}, band.LoftSource.Profile.Outer.Segments[0])
+	for _, segment := range band.Profile.Outer.Segments {
 		require.IsType(t, lineSeg{}, segment, "the band offsets the certified held polygon")
 	}
 	volume, err := out.Volume()
@@ -119,10 +119,10 @@ func TestLoftCapBandNoBoreChamfersBothOuterLoops(t *testing.T) {
 	require.True(t, out.IsSolid())
 	require.Len(t, out.Shells(), 1)
 	band := out.n.Payload.(capBlendPayload)
-	require.True(t, band.startLoops[0])
-	require.True(t, band.endLoops[0])
-	require.Empty(t, band.profile.Holes)
-	require.IsType(t, fitSplineSeg{}, band.loftSource.profile.Outer.Segments[0])
+	require.True(t, band.StartLoops[0])
+	require.True(t, band.EndLoops[0])
+	require.Empty(t, band.Profile.Holes)
+	require.IsType(t, fitSplineSeg{}, band.LoftSource.Profile.Outer.Segments[0])
 	for _, cap := range [][2]provenance.Ref{{refOf(CapStart(body)), refOf(CapStart(out))}, {refOf(CapEnd(body)), refOf(CapEnd(out))}} {
 		original, err := Faces(FaceCreatedBy(featureRefOf(cap[0]))).Exactly(1).SelectFaces(body)
 		require.NoError(t, err)

@@ -224,7 +224,7 @@ func TestCapBlendSideRingReachesArcNaturalEnd(t *testing.T) {
 	require.NoError(t, err)
 	cbp, ok := chamfered.n.Payload.(capBlendPayload)
 	require.True(t, ok, `got %T`, chamfered.n.Payload)
-	loops := cbp.loops()
+	loops := cbp.Loops()
 	require.Len(t, loops, 1)
 	arc := onlyArc(t, loops[0].Segments)
 	lm, err := chordCapBlendLoop(t.Context(), proofbound.NewWorkBudget(t.Context()), cbp, 0, loops[0], 0.2, freeform.NewFreeformWork())
@@ -307,17 +307,17 @@ func TestCapBlendCornerChordReachesArcNaturalEnd(t *testing.T) {
 	require.NoError(t, err)
 	cbp, ok := chamfered.n.Payload.(capBlendPayload)
 	require.True(t, ok, `got %T`, chamfered.n.Payload)
-	segs := cbp.loops()[0].Segments
+	segs := cbp.Loops()[0].Segments
 	arc := onlyArc(t, segs)
 	walks, joins := capBlendCornerSetup(t, cbp)
-	setback, footDelta := cbp.loopSetback(0), cbp.loopBandDelta(0)
+	setback, footDelta := cbp.LoopSetback(0), cbp.LoopBandDelta(0)
 
 	const prec = 256
 	f := func(x float64) *big.Float { return new(big.Float).SetPrec(prec).SetFloat64(x) }
 	dist := func(u, v *big.Float, j cornerJoin) *big.Float {
 		du := new(big.Float).SetPrec(prec).Sub(f(j.M.U), u)
 		dv := new(big.Float).SetPrec(prec).Sub(f(j.M.V), v)
-		dz := f(setback.ds)
+		dz := f(setback.Ds)
 		du.Mul(du, du)
 		dv.Mul(dv, dv)
 		dz.Mul(dz, dz)
@@ -336,7 +336,7 @@ func TestCapBlendCornerChordReachesArcNaturalEnd(t *testing.T) {
 		held := dist(f(j.VertU), f(j.VertV), j)
 		require.Positive(t, new(big.Float).Sub(held, toDenoted).Sign(), `the denoted corner sits nearer the foot than End`)
 		worst := new(big.Float).SetPrec(prec).Sub(toDenoted, f(footDelta))
-		worst.Sub(worst, f(setback.dsDelta))
+		worst.Sub(worst, f(setback.DsDelta))
 		if worst.Sign() < 0 {
 			worst.SetFloat64(0)
 		}
