@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/cupwall"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
@@ -498,7 +499,7 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 	if !ok {
 		// Chording is per payload kind. Name both the staged kind and the
 		// implemented set so the refusal cannot misstate evaluator reach.
-		return nil, fmt.Errorf(`%w: tessellation does not support payload %T; supported payload classes are prism, patch, stacked prism, brep, chain-fed prism, sweep, mitred sweep, coil, revolve, cup, loft, cap-loop chamfer, draft (tapered extrude), stitch, and faceted`, ErrUnsupported, b.n.Payload)
+		return nil, fmt.Errorf(`%w: tessellation does not support payload %s; supported payload classes are prism, patch, stacked prism, brep, chain-fed prism, sweep, mitred sweep, coil, revolve, cup, loft, cap-loop chamfer, draft (tapered extrude), stitch, and faceted`, ErrUnsupported, reportvocab.PayloadTypeName(b.n.Payload))
 	}
 	return tessellatePrism(ctx, b, pp, prismWallRole, chord, verify)
 }

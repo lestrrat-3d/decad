@@ -114,3 +114,14 @@ func payloadClassName(payload any) string {
 	}
 	return name
 }
+
+// PayloadTypeName names a payload's type in a public error message. A payload
+// that states a SurveyClass prints as the root type it replaced, "decad."
+// followed by that class, so moving a payload between packages leaves the
+// message unchanged. Any other payload prints its Go type name.
+func PayloadTypeName(payload any) string {
+	if named, ok := payload.(interface{ SurveyClass() string }); ok {
+		return "decad." + named.SurveyClass()
+	}
+	return fmt.Sprintf("%T", payload)
+}
