@@ -869,7 +869,7 @@ func payloadProvesSimple(ctx context.Context, p topo.Payload) bool {
 		// reading revolvePayloadProvesSimple already takes off rp.profile and
 		// rp.ax — neither of which assumes the walk closes
 		// (docs/surface-design.md §13.4).
-		return revolvePayloadProvesSimple(ctx, pp.revolve())
+		return revolvePayloadProvesSimple(ctx, pp.Revolve())
 	default:
 		return false
 	}
@@ -878,8 +878,8 @@ func payloadProvesSimple(ctx context.Context, p topo.Payload) bool {
 // revolvePayloadProvesSimple decides payloadProvesSimple's revolvePayload
 // arm through revolveaxis.ProvesSimple (its comment holds the argument).
 func revolvePayloadProvesSimple(ctx context.Context, rp revolvePayload) bool {
-	return revolveaxis.ProvesSimple(ctx, rp.profile, rp.ax, rp.full, rp.radialProof,
-		rp.sectionDelta, prismextent.ProfileBoundaryExtremes)
+	return revolveaxis.ProvesSimple(ctx, rp.Profile, rp.Ax, rp.Full, rp.RadialProof,
+		rp.SectionDelta, prismextent.ProfileBoundaryExtremes)
 }
 
 // boxesDisjoint reports whether the two bounds-inflated boxes have disjoint

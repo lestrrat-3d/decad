@@ -43,12 +43,12 @@ func moverRecordRadius(ctx context.Context, b *Body) float64 {
 	case twoSidedDraftPayload:
 		return math.Max(draftMoverRecordRadius(pl.negative), draftMoverRecordRadius(pl.positive))
 	case revolvePayload:
-		coordUpper, err := momentinput.CoordinateUpper(pl.profile, freeform.NewFreeformWork(), nil)
+		coordUpper, err := momentinput.CoordinateUpper(pl.Profile, freeform.NewFreeformWork(), nil)
 		if err != nil {
 			return math.Inf(1)
 		}
-		coordUpper = proofbound.AbsSumUpper(coordUpper, pl.sectionDelta)
-		return motionbound.RevolveRecordRadius(pl.frame, coordUpper, pl.ax.AU, pl.ax.AUBound, pl.ax.AV, pl.ax.AVBound)
+		coordUpper = proofbound.AbsSumUpper(coordUpper, pl.SectionDelta)
+		return motionbound.RevolveRecordRadius(pl.Frame, coordUpper, pl.Ax.AU, pl.Ax.AUBound, pl.Ax.AV, pl.Ax.AVBound)
 	default:
 		return math.Inf(1)
 	}

@@ -289,16 +289,16 @@ func revolveProfileBuild(ctx context.Context, d *Document, s *sketch.Sketch, p *
 
 	ref := d.nextProducerID()
 	body, err := evalRevolveContextWork(ctx, d, ref, revolvePayload{
-		profile:       profile,
-		frame:         frame,
-		ax:            ax,
-		phi0:          phi0,
-		phi1:          phi1,
-		full:          full,
-		den:           den,
-		xform:         r3.Identity(),
-		surfaceResult: surfaceResult,
-		radialProof:   ax.RadialProof,
+		Profile:       profile,
+		Frame:         frame,
+		Ax:            ax,
+		Phi0:          phi0,
+		Phi1:          phi1,
+		Full:          full,
+		Den:           den,
+		Xform:         r3.Identity(),
+		SurfaceResult: surfaceResult,
+		RadialProof:   ax.RadialProof,
 	}, work)
 	if err != nil {
 		return nil, err
@@ -532,20 +532,20 @@ func (d *Document) resolveAngleSide(s SideAngular, st angularStops, travel float
 // §3.4 is what first builds more than one, one lump per surviving walk, and
 // sets sectionDelta beside them.
 type chainRevolvePayload struct {
-	chains     []chainRecord
-	frame      r3.Frame
-	ax         axisFrame
-	phi0, phi1 float64
-	full       bool
-	den        revolveangle.Sweep
-	xform      r3.Transform
+	Chains     []chainRecord
+	Frame      r3.Frame
+	Ax         axisFrame
+	Phi0, Phi1 float64
+	Full       bool
+	Den        revolveangle.Sweep
+	Xform      r3.Transform
 	// sectionDelta is prismPayload's own §7 term (docs/prism-boolean-design.md),
 	// carried here on the identical terms: the proven upper bound on how far
 	// any recorded meridian coordinate sits from the meridian its construction
 	// denotes. It is zero for every walk a caller draws through chain Revolve,
 	// and docs/surface-intersection-design.md §7.1 derives how a nonzero one
 	// reaches this body's published Area and Bounds.
-	sectionDelta float64
+	SectionDelta float64
 }
 
 // revolve is a *view* of rp as a revolvePayload wrapping the chain's own
@@ -560,20 +560,20 @@ type chainRevolvePayload struct {
 // holes, exactly as chainrecord.Payload.Prism folds its own walk set: every reading
 // this view feeds walks the segments and cares about neither winding nor
 // closure.
-func (rp chainRevolvePayload) revolve() revolvePayload {
-	profile := profileRecord{Outer: loopRecord(rp.chains[0])}
-	for _, c := range rp.chains[1:] {
+func (rp chainRevolvePayload) Revolve() revolvePayload {
+	profile := profileRecord{Outer: loopRecord(rp.Chains[0])}
+	for _, c := range rp.Chains[1:] {
 		profile.Holes = append(profile.Holes, loopRecord(c))
 	}
 	return revolvePayload{
-		profile: profile,
-		frame:   rp.frame,
-		ax:      rp.ax,
-		phi0:    rp.phi0, phi1: rp.phi1,
-		full:         rp.full,
-		den:          rp.den,
-		xform:        rp.xform,
-		sectionDelta: rp.sectionDelta,
+		Profile: profile,
+		Frame:   rp.Frame,
+		Ax:      rp.Ax,
+		Phi0:    rp.Phi0, Phi1: rp.Phi1,
+		Full:         rp.Full,
+		Den:          rp.Den,
+		Xform:        rp.Xform,
+		SectionDelta: rp.SectionDelta,
 	}
 }
 
@@ -581,14 +581,14 @@ func (rp chainRevolvePayload) revolve() revolvePayload {
 // outer loop, so prismrecord.SideOrigins's segment indices and revolvemass.WallAxisMoment's own
 // rp.profile.Outer read reach exactly that walk's segments. loopIdx feeds the
 // face role, so two walks' faces never collide on one role string.
-func (rp chainRevolvePayload) walkView(ci int) revolvePayload {
-	view := rp.revolve()
-	view.profile = profileRecord{Outer: loopRecord(rp.chains[ci])}
+func (rp chainRevolvePayload) WalkView(ci int) revolvePayload {
+	view := rp.Revolve()
+	view.Profile = profileRecord{Outer: loopRecord(rp.Chains[ci])}
 	return view
 }
 
 // Transform is the accumulated rigid placement.
-func (rp chainRevolvePayload) Transform() r3.Transform { return rp.xform }
+func (rp chainRevolvePayload) Transform() r3.Transform { return rp.Xform }
 
 // Placed re-evaluates the same record under the composed motion (core §8). A
 // re-evaluation path: no preflight has run on this record within the call, so
@@ -596,7 +596,7 @@ func (rp chainRevolvePayload) Transform() r3.Transform { return rp.xform }
 // (docs/spline-design.md §5.2), exactly as revolvePayload.Placed does.
 func (rp chainRevolvePayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
 	d, ref := documentHandle(env.Doc), env.Ref
-	rp.xform = composed
+	rp.Xform = composed
 	return placedNode(evalChainRevolveContext(ctx, d, ref, rp, freeform.NewFreeformWork()))
 }
 
@@ -687,13 +687,13 @@ func revolveChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch
 
 	ref := d.nextProducerID()
 	body, err := evalChainRevolveContext(ctx, d, ref, chainRevolvePayload{
-		chains: []chainRecord{chain},
-		frame:  frame,
-		ax:     ax,
-		phi0:   phi0, phi1: phi1,
-		full:  full,
-		den:   den,
-		xform: r3.Identity(),
+		Chains: []chainRecord{chain},
+		Frame:  frame,
+		Ax:     ax,
+		Phi0:   phi0, Phi1: phi1,
+		Full:  full,
+		Den:   den,
+		Xform: r3.Identity(),
 	}, work)
 	if err != nil {
 		return nil, err

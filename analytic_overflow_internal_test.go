@@ -63,14 +63,14 @@ func TestEvalRevolveRejectsOverflowedMeasurements(t *testing.T) {
 		lineSeg{Start: planePoint{U: 1e154, V: 1}, End: planePoint{U: 1e154}, TStart: 0, TEnd: 1},
 	}}}
 	body, err := evalRevolve(New(), producerID(0), revolvePayload{
-		profile: profile,
-		frame:   overflowFrame(t),
-		ax: axisFrame{
+		Profile: profile,
+		Frame:   overflowFrame(t),
+		Ax: axisFrame{
 			DV: -1,
 		},
-		phi1:  2 * math.Pi,
-		full:  true,
-		xform: r3.Identity(),
+		Phi1:  2 * math.Pi,
+		Full:  true,
+		Xform: r3.Identity(),
 	})
 	require.ErrorIs(t, err, ErrNotFinite)
 	require.Nil(t, body)
@@ -151,13 +151,13 @@ func TestAnalyticCircularEdgesCarryLengthBounds(t *testing.T) {
 		lineSeg{Start: planePoint{U: 0, V: 15}, End: planePoint{U: 0, V: 5}, TStart: 0, TEnd: 1},
 	}}}
 	rp := revolvePayload{
-		profile: revolveProfile,
-		frame:   overflowFrame(t),
-		ax:      axisFrame{DU: 1},
-		phi0:    0,
-		phi1:    2 * math.Pi,
-		full:    true,
-		xform:   r3.Identity(),
+		Profile: revolveProfile,
+		Frame:   overflowFrame(t),
+		Ax:      axisFrame{DU: 1},
+		Phi0:    0,
+		Phi1:    2 * math.Pi,
+		Full:    true,
+		Xform:   r3.Identity(),
 	}
 	full, err := evalRevolve(New(), producerID(0), rp)
 	require.NoError(t, err)
@@ -170,8 +170,8 @@ func TestAnalyticCircularEdgesCarryLengthBounds(t *testing.T) {
 		require.Positive(t, length.Bound.Mag())
 	}
 
-	rp.phi1 = math.Pi / 2
-	rp.full = false
+	rp.Phi1 = math.Pi / 2
+	rp.Full = false
 	partial, err := evalRevolve(New(), producerID(0), rp)
 	require.NoError(t, err)
 	for _, edge := range partial.Edges() {

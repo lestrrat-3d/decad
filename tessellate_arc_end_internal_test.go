@@ -261,11 +261,11 @@ func TestRevolveJunctionReachesArcNaturalEnd(t *testing.T) {
 	require.NoError(t, err)
 	rp, ok := body.n.Payload.(revolvePayload)
 	require.True(t, ok, `got %T`, body.n.Payload)
-	arc := onlyArc(t, rp.profile.Outer.Segments)
-	r, err := revolveaxis.ResolveLoop(t.Context(), rp.profile.Outer, freeform.NewFreeformWork(), "test",
-		rp.chargedWalk, rp.ax.SnapTol)
+	arc := onlyArc(t, rp.Profile.Outer.Segments)
+	r, err := revolveaxis.ResolveLoop(t.Context(), rp.Profile.Outer, freeform.NewFreeformWork(), "test",
+		rp.ChargedWalk, rp.Ax.SnapTol)
 	require.NoError(t, err)
-	js, _, err := revolvesampling.MeridianJunctions(rp.lift(), r)
+	js, _, err := revolvesampling.MeridianJunctions(rp.Lift(), r)
 	require.NoError(t, err)
 	du, dv := arcDenotedEnd(arc)
 	require.Zero(t, du.Sign(), `the denoted end lies on the axis`)

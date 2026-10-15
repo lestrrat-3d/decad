@@ -30,7 +30,7 @@ type chainSweepSpanPayload struct {
 
 func (sp chainSweepSpanPayload) transform() r3.Transform {
 	if sp.arc {
-		return sp.revolve.xform
+		return sp.revolve.Xform
 	}
 	return sp.chain.Xform
 }
@@ -79,9 +79,9 @@ func (d *Document) sweepCompositeChain(ctx context.Context, chain chainRecord, p
 			Xform: r3.Identity(),
 		}},
 		{revolve: chainRevolvePayload{
-			chains: []chainRecord{chain}, frame: arc.revolve.frame, ax: arc.revolve.ax,
-			phi0: arc.revolve.phi0, phi1: arc.revolve.phi1,
-			den: arc.revolve.den, xform: r3.Identity(),
+			Chains: []chainRecord{chain}, Frame: arc.revolve.Frame, Ax: arc.revolve.Ax,
+			Phi0: arc.revolve.Phi0, Phi1: arc.revolve.Phi1,
+			Den: arc.revolve.Den, Xform: r3.Identity(),
 		}, arc: true, reverseArcRims: arc.reverseArcCaps},
 	}}
 	ref := d.nextProducerID()
@@ -198,7 +198,7 @@ type chainSweepExtent struct{ span chainSweepSpanPayload }
 func (e chainSweepExtent) AuditExtent(ctx context.Context, direction r3.Vec,
 	work *freeform.FreeformWork) (float64, float64, float64, error) {
 	if e.span.arc {
-		return e.span.revolve.revolve().extentBoundedAlong(ctx, direction, work)
+		return e.span.revolve.Revolve().ExtentBoundedAlong(ctx, direction, work)
 	}
 	return e.span.chain.Prism().ExtentBoundedAlong(ctx, direction, work, nil)
 }

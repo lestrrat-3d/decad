@@ -69,7 +69,7 @@ func (b *Body) blendRevolveJunctions(ctx context.Context, sel EdgeSelector, edge
 	}
 
 	budget := proofbound.NewWorkBudget(ctx)
-	loops, err := offset2d.ProfileCornerLoopsBudget(budget, rp.profile)
+	loops, err := offset2d.ProfileCornerLoopsBudget(budget, rp.Profile)
 	if err != nil {
 		return nil, err
 	}
@@ -114,13 +114,13 @@ func (b *Body) blendRevolveJunctions(ctx context.Context, sel EdgeSelector, edge
 		blendAt[corner.loop][corner.corner] = cb
 	}
 
-	profile, blendSegs, err := rewriteProfileBudget(budget, rp.profile, loops, blendAt)
+	profile, blendSegs, err := rewriteProfileBudget(budget, rp.Profile, loops, blendAt)
 	if err != nil {
 		return nil, err
 	}
 
 	// Stage 6: the base §5 audit of the rewritten meridian (S8, S6, S7, S9).
-	if err := offset2d.AuditRewriteBudget(budget, rp.profile, profile, loops, blendAt); err != nil {
+	if err := offset2d.AuditRewriteBudget(budget, rp.Profile, profile, loops, blendAt); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return nil, context.Canceled
 		}
@@ -142,17 +142,17 @@ func (b *Body) blendRevolveJunctions(ctx context.Context, sel EdgeSelector, edge
 
 	ref := d.nextProducerID()
 	body, err := evalRevolveContextWork(ctx, d, ref, revolvePayload{
-		profile:     profile,
-		frame:       rp.frame,
-		ax:          ax,
-		phi0:        rp.phi0,
-		phi1:        rp.phi1,
-		full:        rp.full,
-		den:         rp.den,
-		xform:       rp.xform,
-		radialProof: ax.RadialProof,
-		blendSegs:   blendSegs,
-		blendKind:   op.kind,
+		Profile:     profile,
+		Frame:       rp.Frame,
+		Ax:          ax,
+		Phi0:        rp.Phi0,
+		Phi1:        rp.Phi1,
+		Full:        rp.Full,
+		Den:         rp.Den,
+		Xform:       rp.Xform,
+		RadialProof: ax.RadialProof,
+		BlendSegs:   blendSegs,
+		BlendKind:   op.kind,
 	}, work)
 	if err != nil {
 		return nil, err
@@ -177,8 +177,8 @@ func (b *Body) blendRevolveJunctions(ctx context.Context, sel EdgeSelector, edge
 // has crossed the axis and is ErrDegenerate.
 func revolveBlendAxis(ctx context.Context, rp revolvePayload, profile profileRecord, work *freeform.FreeformWork) (axisFrame, error) {
 	ax, side, err := resolveAxisSide(ctx, profile, revolveaxis.Line2{
-		AU: rp.ax.AU, AV: rp.ax.AV, AUBound: rp.ax.AUBound, AVBound: rp.ax.AVBound,
-		DU: rp.ax.DU, DV: rp.ax.DV, DUBound: rp.ax.DUBound, DVBound: rp.ax.DVBound,
+		AU: rp.Ax.AU, AV: rp.Ax.AV, AUBound: rp.Ax.AUBound, AVBound: rp.Ax.AVBound,
+		DU: rp.Ax.DU, DV: rp.Ax.DV, DUBound: rp.Ax.DUBound, DVBound: rp.Ax.DVBound,
 	}, work)
 	if err != nil {
 		return axisFrame{}, err
@@ -195,12 +195,12 @@ func revolveBlendAxis(ctx context.Context, rp revolvePayload, profile profileRec
 // sweeps a point rather than an edge.
 func revolveJunctionsOf(ctx context.Context, rp revolvePayload) ([][]revolveJunction, error) {
 	work := freeform.NewFreeformWork()
-	basis := rp.basis()
-	loops := append([]loopRecord{rp.profile.Outer}, rp.profile.Holes...)
+	basis := rp.Basis()
+	loops := append([]loopRecord{rp.Profile.Outer}, rp.Profile.Holes...)
 	out := make([][]revolveJunction, len(loops))
 	for li, loop := range loops {
 		resolved, err := revolveaxis.ResolveLoop(ctx, loop, work, "the revolve junction blend",
-			rp.chargedWalk, rp.ax.SnapTol)
+			rp.ChargedWalk, rp.Ax.SnapTol)
 		if err != nil {
 			return nil, err
 		}
@@ -218,7 +218,7 @@ func revolveJunctionsOf(ctx context.Context, rp revolvePayload) ([][]revolveJunc
 }
 
 func newRevolveJunction(rp revolvePayload, basis revolvemesh.RevolveBasis, z, rho float64, seg int) revolveJunction {
-	center, axis, radius := rp.junctionCircle(basis, z, rho)
+	center, axis, radius := rp.JunctionCircle(basis, z, rho)
 	return revolveJunction{center: center, axis: axis, radius: radius, seg: seg}
 }
 
@@ -239,12 +239,12 @@ func matchRevolveJunction(rp revolvePayload, junctions [][]revolveJunction, loop
 	var radius units.Value
 	switch c := e.n.Curve.(type) {
 	case surfacegeom.Circle3:
-		if !rp.full {
+		if !rp.Full {
 			return 0, 0, false, nil
 		}
 		center, axis, radius = c.Center, c.Axis, c.Radius
 	case surfacegeom.Arc3:
-		if rp.full {
+		if rp.Full {
 			return 0, 0, false, nil
 		}
 		center, axis, radius = c.Center, c.Axis, c.Radius

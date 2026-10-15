@@ -96,7 +96,7 @@ func newBodyGeomBudget(budget *proofbound.WorkBudget, b *Body) (*bodyGeom, bool,
 	case prismPayload:
 		ok, err = g.addPrismFaces(budget, pl)
 	case revolvePayload:
-		if pl.surfaceResult {
+		if pl.SurfaceResult {
 			// A revolve sheet reaches no pair today (§9.3 stops it on box
 			// separation before clearancePair ever sees one), but
 			// addRevolveFaces still hands back a closed model for a partial
@@ -416,15 +416,15 @@ func brepCarrierWalk(seg curveSegment) (survey2d.SegmentWalk, bool) {
 // meridian swept about the recorded axis (clearance.RevolveCarrierResult's
 // AxisGap).
 func (g *bodyGeom) addRevolveFaces(budget *proofbound.WorkBudget, rp revolvePayload) (bool, error) {
-	if rp.sectionDelta != 0 {
+	if rp.SectionDelta != 0 {
 		// addPrismFaces' own refusal over the meridian: the carriers would be
 		// exact statements about a section the payload only holds within its
 		// displacement of (docs/surface-intersection-design.md §7.2). No model,
 		// so the pair stays undecided.
 		return false, nil
 	}
-	in, ok, err := wallsurvey.RevolveCarrierInput(budget, rp.profile, rp.ax, rp.lift(), rp.axisBound(),
-		rp.xform, rp.full, rp.phi0, rp.phi1)
+	in, ok, err := wallsurvey.RevolveCarrierInput(budget, rp.Profile, rp.Ax, rp.Lift(), rp.AxisBound(),
+		rp.Xform, rp.Full, rp.Phi0, rp.Phi1)
 	if err != nil || !ok {
 		return false, err
 	}
@@ -443,11 +443,11 @@ func (g *bodyGeom) addRevolveFaces(budget *proofbound.WorkBudget, rp revolvePayl
 	// axis-aligned, unplaced, full-turn revolve whose lifts are exact for its
 	// own coordinates, which keeps an ordinary revolve's Clearance rows Exact.
 	pointTerm := carrierLiftRound(built.Faces)
-	angularTerm := proofbound.ProductUpper(built.AxisRadiusUpper, rp.angularDelta())
-	tiltTerm := clearance.BodyFaceTiltDelta(g.faces, rp.frame, rp.xform)
+	angularTerm := proofbound.ProductUpper(built.AxisRadiusUpper, rp.AngularDelta())
+	tiltTerm := clearance.BodyFaceTiltDelta(g.faces, rp.Frame, rp.Xform)
 	g.delta = proofbound.AbsSumUpper(pointTerm, angularTerm, tiltTerm)
 	g.carrierDelta = g.delta
-	if rp.full {
+	if rp.Full {
 		// A full turn builds no cap faces and gives every carrier the full
 		// angular window, so the end angles the angular term charges place
 		// only seams and witnesses on the complete surface of revolution.

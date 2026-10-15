@@ -134,8 +134,8 @@ func thickenSweep(ctx context.Context, d *Document, sp sweepPayload, side Thicke
 			return nil, fmt.Errorf(`%w: a thickened arc sweep has no revolve reduction`, ErrDegenerate)
 		}
 		sp.revolve = built
-		sp.prism.Profile = built.profile
-		sp.prism.Xform = built.xform
+		sp.prism.Profile = built.Profile
+		sp.prism.Xform = built.Xform
 		sp.surfaceResult = false
 		finishArcSweepBody(body, sp)
 		return body, nil
@@ -208,10 +208,10 @@ func thickenRadialOf(ax axisFrame) (thickenRadial, error) {
 // by offsetting its recorded meridian and spinning the annulus through the
 // sheet's own interval (docs/surface-design.md §16.5).
 func thickenRevolve(ctx context.Context, d *Document, rp revolvePayload, side ThickenSide, tmm, tDelta float64) (*Body, error) {
-	if !rp.surfaceResult || rp.sectionDelta != 0 || len(rp.profile.Holes) != 0 {
+	if !rp.SurfaceResult || rp.SectionDelta != 0 || len(rp.Profile.Holes) != 0 {
 		return nil, fmt.Errorf(`%w: this revolve sheet has no admitted Thicken section`, ErrUnsupported)
 	}
-	radial, err := thickenRadialOf(rp.ax)
+	radial, err := thickenRadialOf(rp.Ax)
 	if err != nil {
 		return nil, err
 	}
@@ -223,7 +223,7 @@ func thickenRevolve(ctx context.Context, d *Document, rp revolvePayload, side Th
 	if err := budget.Err(); err != nil {
 		return nil, err
 	}
-	sec, err := thickenSectionOf(ctx, rp.profile, side, amount, budget, &radial)
+	sec, err := thickenSectionOf(ctx, rp.Profile, side, amount, budget, &radial)
 	if err != nil {
 		return nil, err
 	}
@@ -237,7 +237,7 @@ func thickenRevolve(ctx context.Context, d *Document, rp revolvePayload, side Th
 	// over the region, and the region changed.
 	work := freeform.NewFreeformWork()
 	ax, axisSide, err := resolveAxisSide(ctx, annulus, revolveaxis.Line2{
-		AU: rp.ax.AU, AV: rp.ax.AV, DU: rp.ax.DU, DV: rp.ax.DV,
+		AU: rp.Ax.AU, AV: rp.Ax.AV, DU: rp.Ax.DU, DV: rp.Ax.DV,
 	}, work)
 	if err != nil {
 		return nil, fmt.Errorf(`%w: the thicken offset's revolve axis side is unresolved: %v`, ErrUnsupported, err)
@@ -245,11 +245,11 @@ func thickenRevolve(ctx context.Context, d *Document, rp revolvePayload, side Th
 	if axisSide < 0 {
 		return nil, fmt.Errorf(`%w: the thicken offset crossed to the far side of the revolve axis`, ErrUnsupported)
 	}
-	rp.profile = annulus
-	rp.ax = ax
-	rp.radialProof = false
-	rp.surfaceResult = false
-	rp.blendSegs, rp.blendKind = nil, ""
+	rp.Profile = annulus
+	rp.Ax = ax
+	rp.RadialProof = false
+	rp.SurfaceResult = false
+	rp.BlendSegs, rp.BlendKind = nil, ""
 	return evalRevolveContextWork(ctx, d, d.nextProducerID(), rp, work)
 }
 
@@ -310,10 +310,10 @@ func thickenChainRevolve(ctx context.Context, d *Document, cp chainRevolvePayloa
 	// section it hands the solid build has to be exact — requireExactRevolveSection
 	// refuses a displaced one at that build anyway, and refusing here names the
 	// ribbon rather than the revolve it was about to become.
-	if len(cp.chains) != 1 || cp.sectionDelta != 0 {
+	if len(cp.Chains) != 1 || cp.SectionDelta != 0 {
 		return nil, fmt.Errorf(`%w: this ribbon has no admitted Thicken walk`, ErrUnsupported)
 	}
-	radial, err := thickenRadialOf(cp.ax)
+	radial, err := thickenRadialOf(cp.Ax)
 	if err != nil {
 		return nil, err
 	}
@@ -329,7 +329,7 @@ func thickenChainRevolve(ctx context.Context, d *Document, cp chainRevolvePayloa
 	// re-resolution and the build that consumes the section all spend from it.
 	work := freeform.NewFreeformWork()
 	rightSteps, leftSteps := thickenRibbonSteps(side)
-	section, err := thickenaxis.RibbonProfile(ctx, cp.chains[0], rightSteps, leftSteps, amount, budget, work, &radial)
+	section, err := thickenaxis.RibbonProfile(ctx, cp.Chains[0], rightSteps, leftSteps, amount, budget, work, &radial)
 	if err != nil {
 		return nil, err
 	}
@@ -338,7 +338,7 @@ func thickenChainRevolve(ctx context.Context, d *Document, cp chainRevolvePayloa
 	// here rather than inherited from the shell's: every one of them is an
 	// integral over the region, and the shell had no region at all.
 	ax, axisSide, err := resolveAxisSide(ctx, section, revolveaxis.Line2{
-		AU: cp.ax.AU, AV: cp.ax.AV, DU: cp.ax.DU, DV: cp.ax.DV,
+		AU: cp.Ax.AU, AV: cp.Ax.AV, DU: cp.Ax.DU, DV: cp.Ax.DV,
 	}, work)
 	if err != nil {
 		return nil, fmt.Errorf(`%w: the thicken offset's revolve axis side is unresolved: %v`, ErrUnsupported, err)
@@ -346,9 +346,9 @@ func thickenChainRevolve(ctx context.Context, d *Document, cp chainRevolvePayloa
 	if axisSide < 0 {
 		return nil, fmt.Errorf(`%w: the thicken offset crossed to the far side of the revolve axis`, ErrUnsupported)
 	}
-	rp := cp.revolve()
-	rp.profile = section
-	rp.ax = ax
-	rp.radialProof = false
+	rp := cp.Revolve()
+	rp.Profile = section
+	rp.Ax = ax
+	rp.RadialProof = false
 	return evalRevolveContextWork(ctx, d, d.nextProducerID(), rp, work)
 }

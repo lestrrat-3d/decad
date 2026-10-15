@@ -247,13 +247,13 @@ func compositeArcSweepSpan(
 	}
 	return sweepSpanPayload{
 		revolve: revolvePayload{
-			profile: profile,
-			frame:   frame,
-			ax:      ax,
-			phi0:    phi0,
-			phi1:    phi1,
-			den:     den,
-			xform:   r3.Identity(),
+			Profile: profile,
+			Frame:   frame,
+			Ax:      ax,
+			Phi0:    phi0,
+			Phi1:    phi1,
+			Den:     den,
+			Xform:   r3.Identity(),
 		},
 		arc:            true,
 		reverseArcCaps: reverseCaps,
@@ -262,7 +262,7 @@ func compositeArcSweepSpan(
 
 func (span sweepSpanPayload) transform() r3.Transform {
 	if span.arc {
-		return span.revolve.xform
+		return span.revolve.Xform
 	}
 	return span.prism.Xform
 }

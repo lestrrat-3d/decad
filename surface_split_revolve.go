@@ -43,19 +43,19 @@ func (d *Document) splitRevolve(ctx context.Context, budget *proofbound.WorkBudg
 			return nil, err
 		}
 		bodies[i], err = evalRevolveContextWork(ctx, d, ref+producerID(i), revolvePayload{
-			profile:     cell.Profile,
-			frame:       rcv.frame,
-			ax:          ax,
-			phi0:        rcv.phi0,
-			phi1:        rcv.phi1,
-			full:        rcv.full,
-			den:         rcv.den,
-			xform:       rcv.xform,
-			radialProof: ax.RadialProof,
+			Profile:     cell.Profile,
+			Frame:       rcv.Frame,
+			Ax:          ax,
+			Phi0:        rcv.Phi0,
+			Phi1:        rcv.Phi1,
+			Full:        rcv.Full,
+			Den:         rcv.Den,
+			Xform:       rcv.Xform,
+			RadialProof: ax.RadialProof,
 			// prismcells.SplitPieces's own δ_cut for this cell is the whole of it: S4
 			// and S7 zero every other term prism §7 derives, and a cell's
 			// uncut edges record their entity's own data verbatim.
-			sectionDelta: cell.SectionDelta,
+			SectionDelta: cell.SectionDelta,
 		}, work)
 		if err != nil {
 			return nil, err
@@ -98,7 +98,7 @@ func admitSplitRevolvePair(budget *proofbound.WorkBudget, target, tool *Body) (r
 	case revolvePayload:
 		tl = p
 	case chainRevolvePayload:
-		tl = p.revolve()
+		tl = p.Revolve()
 	default:
 		return fail(`%w: Split's tool has no revolve meridian`, ErrUnsupported)
 	}
@@ -106,7 +106,7 @@ func admitSplitRevolvePair(budget *proofbound.WorkBudget, target, tool *Body) (r
 		return fail(`%w: Split does not admit an operand carrying its own section displacement`, ErrUnsupported)
 	}
 
-	rcvView, tlView := rcv.meridian(), tl.meridian()
+	rcvView, tlView := rcv.Meridian(), tl.Meridian()
 
 	// S2: neither operand's accumulated placement is a reflection.
 	if rcvView.Reflected() || tlView.Reflected() {
@@ -114,11 +114,11 @@ func admitSplitRevolvePair(budget *proofbound.WorkBudget, target, tool *Body) (r
 	}
 
 	// S3: every segment of both meridians is a LineSeg, CircleSeg or ArcSeg.
-	rcvAnalytic, err := prismcells.ProfileAnalytic(budget, rcv.profile)
+	rcvAnalytic, err := prismcells.ProfileAnalytic(budget, rcv.Profile)
 	if err != nil {
 		return pass(err)
 	}
-	tlAnalytic, err := prismcells.ProfileAnalytic(budget, tl.profile)
+	tlAnalytic, err := prismcells.ProfileAnalytic(budget, tl.Profile)
 	if err != nil {
 		return pass(err)
 	}
@@ -128,18 +128,18 @@ func admitSplitRevolvePair(budget *proofbound.WorkBudget, target, tool *Body) (r
 
 	// S4's revolve arm: the plane frames and the resolved axis agree on the
 	// stored floats, the eight-field comparison Trim's own takes.
-	if rcv.frame != tl.frame {
+	if rcv.Frame != tl.Frame {
 		return fail(`%w: the target and tool do not spin about the same frame, exactly`, ErrUnsupported)
 	}
-	if !revolveAxisIdentical(rcv.ax, tl.ax) {
+	if !revolveAxisIdentical(rcv.Ax, tl.Ax) {
 		return fail(`%w: the target and tool do not spin about the same axis, exactly`, ErrUnsupported)
 	}
 
 	// S6's revolve arm, on the stored endpoint floats: S4 has proven the two
 	// axes identical, so no origin shift applies.
-	if tl.phi0 > rcv.phi0 || tl.phi1 < rcv.phi1 {
+	if tl.Phi0 > rcv.Phi0 || tl.Phi1 < rcv.Phi1 {
 		return fail(`%w: the tool's angular span [%v, %v] does not cover the target's [%v, %v]`,
-			ErrUnsupported, tl.phi0, tl.phi1, rcv.phi0, rcv.phi1)
+			ErrUnsupported, tl.Phi0, tl.Phi1, rcv.Phi0, rcv.Phi1)
 	}
 
 	// S7's remaining two clauses.
@@ -150,11 +150,11 @@ func admitSplitRevolvePair(budget *proofbound.WorkBudget, target, tool *Body) (r
 	if !reexpress.Identity {
 		return fail(`%w: the target and tool do not share one frame and placement, so their re-expression is not the identity`, ErrUnsupported)
 	}
-	rcvWhole, err := trimProfileFullyWhole(budget, rcv.profile)
+	rcvWhole, err := trimProfileFullyWhole(budget, rcv.Profile)
 	if err != nil {
 		return pass(err)
 	}
-	tlWhole, err := trimProfileFullyWhole(budget, tl.profile)
+	tlWhole, err := trimProfileFullyWhole(budget, tl.Profile)
 	if err != nil {
 		return pass(err)
 	}

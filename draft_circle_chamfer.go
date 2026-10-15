@@ -118,11 +118,11 @@ func tryDraftCircleRimChamfer(ctx context.Context, b *Body, edges []*Edge, setba
 		return nil, true, err
 	}
 	result, err := evalRevolveContextWork(ctx, documentHandle(b.n.Doc), b.n.Doc.NextProducer, revolvePayload{
-		profile: profile, frame: frame, ax: ax, phi0: phi0, phi1: phi1, full: full,
-		den: den, xform: dp.xform, radialProof: ax.RadialProof,
-		sectionDelta: sectionDelta, sectionWhole: true,
-		blendSegs: []map[int]struct{}{{2: {}}}, blendKind: "chamfer",
-		draftCircleCaps: true,
+		Profile: profile, Frame: frame, Ax: ax, Phi0: phi0, Phi1: phi1, Full: full,
+		Den: den, Xform: dp.xform, RadialProof: ax.RadialProof,
+		SectionDelta: sectionDelta, SectionWhole: true,
+		BlendSegs: []map[int]struct{}{{2: {}}}, BlendKind: "chamfer",
+		DraftCircleCaps: true,
 	}, work)
 	if err != nil {
 		return nil, true, err

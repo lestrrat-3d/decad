@@ -51,23 +51,23 @@ func tryRevolveCapRimChamfer(ctx context.Context, body *Body, rp revolvePayload,
 }
 
 func revolveRimSourceOf(rp revolvePayload, edges []*Edge, setback, setbackDelta float64) (revolvemesh.RimSource, bool) {
-	if len(edges) != 1 || setbackDelta != 0 || rp.full || rp.surfaceResult || rp.sectionDelta != 0 ||
-		rp.sectionWhole || !rp.radialProof || rp.xform != r3.Identity() ||
-		len(rp.profile.Holes) != 0 || len(rp.profile.Outer.Segments) != 4 ||
-		len(rp.blendSegs) != 0 || rp.blendKind != "" || rp.draftCircleCaps || rp.draftCircleShellRoles {
+	if len(edges) != 1 || setbackDelta != 0 || rp.Full || rp.SurfaceResult || rp.SectionDelta != 0 ||
+		rp.SectionWhole || !rp.RadialProof || rp.Xform != r3.Identity() ||
+		len(rp.Profile.Holes) != 0 || len(rp.Profile.Outer.Segments) != 4 ||
+		len(rp.BlendSegs) != 0 || rp.BlendKind != "" || rp.DraftCircleCaps || rp.DraftCircleShellRoles {
 		return revolvemesh.RimSource{}, false
 	}
-	if rp.frame.Origin() != (r3.Vec{}) || rp.frame.U() != (r3.Vec{X: 1}) ||
-		rp.frame.V() != (r3.Vec{Y: 1}) || rp.ax.AU != 0 || rp.ax.AV != 0 ||
-		rp.ax.DU != 1 || rp.ax.DV != 0 || rp.ax.AUBound != 0 || rp.ax.AVBound != 0 ||
-		rp.ax.DUBound != 0 || rp.ax.DVBound != 0 || !rp.ax.RadialProof || rp.phi0 != 0 ||
-		rp.den.Phi0.Span != nil || rp.den.Phi0.Rad == nil || rp.den.Phi0.Turn == nil ||
-		rp.den.Phi0.Rad.Sign() != 0 || rp.den.Phi0.Turn.Sign() != 0 ||
-		rp.den.Phi1.Span != nil || rp.den.Phi1.Rad == nil || rp.den.Phi1.Turn == nil ||
-		rp.den.Phi1.Rad.Sign() != 0 || rp.den.Phi1.Turn.Cmp(big.NewRat(1, 4)) != 0 {
+	if rp.Frame.Origin() != (r3.Vec{}) || rp.Frame.U() != (r3.Vec{X: 1}) ||
+		rp.Frame.V() != (r3.Vec{Y: 1}) || rp.Ax.AU != 0 || rp.Ax.AV != 0 ||
+		rp.Ax.DU != 1 || rp.Ax.DV != 0 || rp.Ax.AUBound != 0 || rp.Ax.AVBound != 0 ||
+		rp.Ax.DUBound != 0 || rp.Ax.DVBound != 0 || !rp.Ax.RadialProof || rp.Phi0 != 0 ||
+		rp.Den.Phi0.Span != nil || rp.Den.Phi0.Rad == nil || rp.Den.Phi0.Turn == nil ||
+		rp.Den.Phi0.Rad.Sign() != 0 || rp.Den.Phi0.Turn.Sign() != 0 ||
+		rp.Den.Phi1.Span != nil || rp.Den.Phi1.Rad == nil || rp.Den.Phi1.Turn == nil ||
+		rp.Den.Phi1.Rad.Sign() != 0 || rp.Den.Phi1.Turn.Cmp(big.NewRat(1, 4)) != 0 {
 		return revolvemesh.RimSource{}, false
 	}
-	segs := rp.profile.Outer.Segments
+	segs := rp.Profile.Outer.Segments
 	lines := [4]lineSeg{}
 	for i, seg := range segs {
 		line, ok := seg.(lineSeg)

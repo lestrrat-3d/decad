@@ -192,7 +192,7 @@ func prismUndercuts(b *Body, pp prismPayload, pull r3.Vec) undercutOutcome {
 // wall's normal is n_ρ·radial(φ) + n_z·ŵ over the meridian range its walk
 // sweeps and the azimuth range of the sweep — both exact.
 func revolveUndercuts(b *Body, rp revolvePayload, pull r3.Vec) undercutOutcome {
-	if rp.sectionDelta != 0 {
+	if rp.SectionDelta != 0 {
 		// The survey reads the recorded meridian's own tangents as exact, and a
 		// displaced meridian's tangents only sit within its displacement of the
 		// denoted ones: a planar wall recorded off a rounded miter tilts by an
@@ -204,18 +204,18 @@ func revolveUndercuts(b *Body, rp revolvePayload, pull r3.Vec) undercutOutcome {
 	if !ok {
 		return undercutOutcome{}
 	}
-	bas := rp.basis()
-	pw := rp.xform.ApplyDir(bas.W).Dot(p)
-	c0 := rp.xform.ApplyDir(bas.E0).Dot(p)
-	c1 := rp.xform.ApplyDir(bas.E1).Dot(p)
+	bas := rp.Basis()
+	pw := rp.Xform.ApplyDir(bas.W).Dot(p)
+	c0 := rp.Xform.ApplyDir(bas.E0).Dot(p)
+	c1 := rp.Xform.ApplyDir(bas.E1).Dot(p)
 	roles := facesByRole(b)
-	loops, err := wallsurvey.RevolveLoops(nil, rp.profile, rp.ax)
+	loops, err := wallsurvey.RevolveLoops(nil, rp.Profile, rp.Ax)
 	if err != nil {
 		return undercutOutcome{}
 	}
 	faces := []*Face{}
 	for _, decision := range revolvesurvey.UndercutRoles(
-		loops, rp.ax, pw, c0, c1, rp.phi0, rp.phi1, rp.full, [2]string{provenance.RoleCapStart, provenance.RoleCapEnd},
+		loops, rp.Ax, pw, c0, c1, rp.Phi0, rp.Phi1, rp.Full, [2]string{provenance.RoleCapStart, provenance.RoleCapEnd},
 	) {
 		f := roles[decision.Role]
 		if f == nil {
@@ -414,8 +414,8 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 				ok: reading.OK, reason: reading.Reason}, readErr
 		case revolvePayload:
 			reading, readErr := wallsurvey.RevolveWall(budget, wallsurvey.RevolveRecord{
-				Profile: pl.profile, Axis: pl.ax, SectionDelta: pl.sectionDelta,
-				Full: pl.full, Phi0: pl.phi0, Phi1: pl.phi1, AngularDelta: pl.angularDelta(),
+				Profile: pl.Profile, Axis: pl.Ax, SectionDelta: pl.SectionDelta,
+				Full: pl.Full, Phi0: pl.Phi0, Phi1: pl.Phi1, AngularDelta: pl.AngularDelta(),
 			}, cfg.AllowRad)
 			out, err = wallOutcome{reading: reading.Reading, bound: reading.Bound,
 				ok: reading.OK, reason: reading.Reason}, readErr
@@ -491,7 +491,7 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 			reading := radiussurvey.Prism(pl.Profile, pl.SectionDelta)
 			out, ok = radiusOutcome{reading: reading.Reading, bound: reading.Bound, ok: reading.OK}, reading.OK
 		case revolvePayload:
-			reading := radiussurvey.Revolve(pl.profile, pl.ax, pl.sectionDelta)
+			reading := radiussurvey.Revolve(pl.Profile, pl.Ax, pl.SectionDelta)
 			out, ok = radiusOutcome{reading: reading.Reading, bound: reading.Bound, ok: reading.OK}, reading.OK
 		case cupPayload:
 			view := pl.View()

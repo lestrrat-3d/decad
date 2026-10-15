@@ -91,28 +91,28 @@ func sourceCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProo
 // sweeps one complete disk at every level of its axial interval.
 func sourceRevolvedCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProof, bool) {
 	rp, ok := b.n.Payload.(revolvePayload)
-	if !ok || !b.n.Solid || b.n.Kind != topo.BodySolid || rp.surfaceResult || !rp.full ||
-		rp.sectionDelta != 0 || !pairbox.RectangularProfile(rp.profile) ||
-		!pairbox.CardinalBasis(rp.frame.U(), rp.frame.V(), rp.frame.N()) ||
-		!signedAxisTransform(rp.xform) || !signedAxisTransform(pose) ||
-		!proofbound.FiniteVec(rp.frame.Origin()) ||
-		rp.ax.AUBound != 0 || rp.ax.AVBound != 0 ||
-		rp.ax.DUBound != 0 || rp.ax.DVBound != 0 {
+	if !ok || !b.n.Solid || b.n.Kind != topo.BodySolid || rp.SurfaceResult || !rp.Full ||
+		rp.SectionDelta != 0 || !pairbox.RectangularProfile(rp.Profile) ||
+		!pairbox.CardinalBasis(rp.Frame.U(), rp.Frame.V(), rp.Frame.N()) ||
+		!signedAxisTransform(rp.Xform) || !signedAxisTransform(pose) ||
+		!proofbound.FiniteVec(rp.Frame.Origin()) ||
+		rp.Ax.AUBound != 0 || rp.Ax.AVBound != 0 ||
+		rp.Ax.DUBound != 0 || rp.Ax.DVBound != 0 {
 		return sourceCylinderContactProof{}, false
 	}
-	if _, _, ok := clearance.SignedAxis(r3.Vec{X: rp.ax.DU, Y: rp.ax.DV}); !ok {
+	if _, _, ok := clearance.SignedAxis(r3.Vec{X: rp.Ax.DU, Y: rp.Ax.DV}); !ok {
 		return sourceCylinderContactProof{}, false
 	}
-	if !measurement.FiniteValues(rp.ax.AU, rp.ax.AV) {
+	if !measurement.FiniteValues(rp.Ax.AU, rp.Ax.AV) {
 		return sourceCylinderContactProof{}, false
 	}
-	axis, _, ok := clearance.SignedAxis(pose.ApplyDir(rp.xform.ApplyDir(rp.basis().W)))
+	axis, _, ok := clearance.SignedAxis(pose.ApplyDir(rp.Xform.ApplyDir(rp.Basis().W)))
 	if !ok {
 		return sourceCylinderContactProof{}, false
 	}
-	numeric, ok := pairbox.SourceRevolvedCylinderBox(rp.frame, rp.xform, pose,
-		planePoint{U: rp.ax.AU, V: rp.ax.AV}, planePoint{U: rp.ax.DU, V: rp.ax.DV},
-		rp.profile.Outer.Segments, axis)
+	numeric, ok := pairbox.SourceRevolvedCylinderBox(rp.Frame, rp.Xform, pose,
+		planePoint{U: rp.Ax.AU, V: rp.Ax.AV}, planePoint{U: rp.Ax.DU, V: rp.Ax.DV},
+		rp.Profile.Outer.Segments, axis)
 	if !ok {
 		return sourceCylinderContactProof{}, false
 	}

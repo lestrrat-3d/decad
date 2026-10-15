@@ -45,13 +45,13 @@ func TestRevolveBoundsSharedProfileMatchesIndependentExtents(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			rp := revolvePayload{
-				profile: test.profile,
-				frame:   axisAlignedFrame(t),
-				ax:      axisFrame{DU: 1},
-				phi1:    test.phi1,
-				full:    test.full,
-				den:     test.den,
-				xform:   r3.Identity(),
+				Profile: test.profile,
+				Frame:   axisAlignedFrame(t),
+				Ax:      axisFrame{DU: 1},
+				Phi1:    test.phi1,
+				Full:    test.full,
+				Den:     test.den,
+				Xform:   r3.Identity(),
 			}
 			got, err := revolveBoundsContext(t.Context(), rp, freeform.NewFreeformWork())
 			require.NoError(t, err)
@@ -66,7 +66,7 @@ func TestRevolveBoundsSharedProfileMatchesIndependentExtents(t *testing.T) {
 			bound := 0.0
 			for i, axis := range axes {
 				var axisBound float64
-				low[i], high[i], axisBound, err = rp.extentBoundedAlong(t.Context(), axis, freeform.NewFreeformWork())
+				low[i], high[i], axisBound, err = rp.ExtentBoundedAlong(t.Context(), axis, freeform.NewFreeformWork())
 				require.NoError(t, err)
 				bound = math.Max(bound, axisBound)
 			}

@@ -231,7 +231,7 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		return chainVertexGateDiameter(ctx, body, 0)
 	}
 	if payload, ok := body.n.Payload.(chainRevolvePayload); ok {
-		return chainRevolveEdgeGateDiameter(ctx, body, payload.sectionDelta)
+		return chainRevolveEdgeGateDiameter(ctx, body, payload.SectionDelta)
 	}
 	if payload, ok := body.n.Payload.(brepPayload); ok {
 		return brepGateDiameter(ctx, body, payload)

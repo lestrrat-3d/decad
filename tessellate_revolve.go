@@ -178,9 +178,9 @@ func resolveRevolve(ctx context.Context, rp revolvePayload) (*revolveplan.Resolu
 
 func resolveRevolveWithLimit(ctx context.Context, rp revolvePayload, workLimit uint64) (*revolveplan.Resolution, error) {
 	return revolveplan.Resolve(ctx, revolveplan.ResolveInput{
-		Lift: rp.lift(), Loops: append([]loopRecord{rp.profile.Outer}, rp.profile.Holes...),
-		Charge: rp.chargedWalk, SnapTol: rp.ax.SnapTol, RadialLower: rp.ax.RadialLower,
-		Transform: rp.xform, WorkLimit: workLimit,
+		Lift: rp.Lift(), Loops: append([]loopRecord{rp.Profile.Outer}, rp.Profile.Holes...),
+		Charge: rp.ChargedWalk, SnapTol: rp.Ax.SnapTol, RadialLower: rp.Ax.RadialLower,
+		Transform: rp.Xform, WorkLimit: workLimit,
 	})
 }
 
@@ -226,13 +226,13 @@ func planRevolveWithRoleCountFloor(ctx context.Context, b *Body, rp revolvePaylo
 	if workLimit > 0 {
 		sectionWork.RaiseLimit(workLimit)
 	}
-	section, err := revolveaxis.ChargeOf(rp.profile, rp.ax, rp.sectionDelta, sectionWork)
+	section, err := revolveaxis.ChargeOf(rp.Profile, rp.Ax, rp.SectionDelta, sectionWork)
 	if err != nil {
 		return nil, err
 	}
 	counts, err := revolveplan.PlanCounts(revolveplan.CountInput{
-		Resolution: res, Chord: chord, SectionDelta: rp.sectionDelta,
-		Phi0: rp.phi0, Phi1: rp.phi1, Full: rp.full,
+		Resolution: res, Chord: chord, SectionDelta: rp.SectionDelta,
+		Phi0: rp.Phi0, Phi1: rp.Phi1, Full: rp.Full,
 		MeridianFloor: floor, FreeformTarget: freeformTarget, WorkLimit: workLimit,
 	})
 	if err != nil {
@@ -266,14 +266,14 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	// revolution mints no cap in either kind for a solid either, so most
 	// arms below key on rp.full alone; sheet is its own separate condition
 	// wherever a solid's full-turn behavior and a sheet's differ.
-	sheet := rp.surfaceResult
+	sheet := rp.SurfaceResult
 	mesh := bornMesh(&Mesh{})
 	loopMesh := make([]revLoopMesh, len(p.resolved))
 	meridianSamples := make([][]revolvemesh.RevMeridian, len(p.resolved))
 	sampleGap := 0.0
 	for li := range p.resolved {
 		samples, gap, err := revolvesampling.MeridianSamples(
-			rp.lift(), p.loops[li], p.resolved[li], p.junctions[li], p.Meridian[li], p.Sagittas[li],
+			rp.Lift(), p.loops[li], p.resolved[li], p.junctions[li], p.Meridian[li], p.Sagittas[li],
 			p.Freeform[li])
 		if err != nil {
 			return nil, err
@@ -305,11 +305,11 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 		return nil, revolveSectionRetry(loopMesh, err)
 	}
 
-	if err := revolvePreflightFacets(loopMesh, p.Angular, rp.full, sheet, p.verify >= VerifyBoundary, p.work); err != nil {
+	if err := revolvePreflightFacets(loopMesh, p.Angular, rp.Full, sheet, p.verify >= VerifyBoundary, p.work); err != nil {
 		return nil, err
 	}
 	angular, err := revolvemesh.AngularSequence(revolvemesh.AngularInput{
-		Phi0: rp.phi0, Phi1: rp.phi1, Full: rp.full, Den: rp.den,
+		Phi0: rp.Phi0, Phi1: rp.Phi1, Full: rp.Full, Den: rp.Den,
 	}, p.Angular)
 	if err != nil {
 		return nil, err
@@ -319,7 +319,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	// emitted vertex indices stay attached to the same samples.
 	budget := proofbound.NewWorkBudget(ctx)
 	vertices, deltaC, deltaR, err := revolvemesh.EmitRings(
-		meridianSamples, angular, p.basis, p.ideal, rp.xform, rp.full, budget)
+		meridianSamples, angular, p.basis, p.ideal, rp.Xform, rp.Full, budget)
 	if err != nil {
 		return nil, err
 	}
@@ -327,7 +327,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	if deltaC > p.deltaCPrior || deltaR > p.deltaRPrior {
 		return nil, fmt.Errorf(`%w: this revolve's stored coordinates sit farther from the samples they denote than the tolerance split reserved for them`, ErrUnsupported)
 	}
-	deltaR = math.Min(deltaR, proofbound.RigidRoundAllow(proofbound.AbsSumUpper(p.coordMax, deltaC), proofbound.VecMaxAbs(rp.xform.Translation())))
+	deltaR = math.Min(deltaR, proofbound.RigidRoundAllow(proofbound.AbsSumUpper(p.coordMax, deltaC), proofbound.VecMaxAbs(rp.Xform.Translation())))
 	coord := proofbound.AbsSumUpper(deltaC, deltaR)
 	mesh.n.CoordBound = coord
 
@@ -410,7 +410,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	// sheet's own cap slack drop (tessellate.go). A full revolution mints no
 	// cap in either kind: the walls already close.
 	switch {
-	case rp.full:
+	case rp.Full:
 		// no cap in either kind.
 	case sheet:
 		// revolvemesh.EmitCapTriangles' triangulation call is what would
@@ -454,7 +454,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 
 	// A reflected placement flips handedness, turning every counter-clockwise
 	// winding clockwise; reversing them restores outward orientation.
-	if rp.reflected() {
+	if rp.Reflected() {
 		for i := range mesh.n.Triangles {
 			mesh.n.Triangles[i][1], mesh.n.Triangles[i][2] = mesh.n.Triangles[i][2], mesh.n.Triangles[i][1]
 		}
@@ -508,8 +508,8 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	// material would have been (docs/tessellation-design.md §1.2). A
 	// partial-sweep sheet is open and skips it; a solid, or a full-turn
 	// sheet — which carries no free edge at all — is closed and keeps it.
-	if !sheet || rp.full {
-		anchor := rp.xform.Apply(p.basis.A3)
+	if !sheet || rp.Full {
+		anchor := rp.Xform.Apply(p.basis.A3)
 		if !proofbound.FiniteVec(anchor) || tessellation.OrientationSign(mesh.n.Vertices, mesh.n.Triangles, anchor) <= 0 {
 			return nil, fmt.Errorf(`%w: this revolve's assembled cells do not enclose a positive volume`, ErrUnsupported)
 		}
@@ -614,8 +614,8 @@ func publishRevolveProof(m *Mesh, faceCells map[*Face]revFaceExtent, p *revolveP
 	// moved is the section displacement every face reads beside its chording
 	// and coordinate stages (revolvePlan.section); zero folds nothing.
 	moved := func(bound float64) float64 {
-		if p.rp.sectionDelta > 0 {
-			return proofbound.AbsSumUpper(bound, p.rp.sectionDelta)
+		if p.rp.SectionDelta > 0 {
+			return proofbound.AbsSumUpper(bound, p.rp.SectionDelta)
 		}
 		return bound
 	}
@@ -651,22 +651,22 @@ func publishRevolveProof(m *Mesh, faceCells map[*Face]revFaceExtent, p *revolveP
 		return nil
 	}
 	slack := proofbound.AbsSumUpper(cellSlack, revolvemesh.CoordinateAreaAllow(m.n.Vertices, m.n.Triangles, coord))
-	if allow := revolveaxis.SectionAreaAllow(p.rp.sectionDelta, p.Sweep, p.rp.sweep().Bound,
-		p.resolved, !p.rp.full && !p.rp.surfaceResult, p.section); allow > 0 {
+	if allow := revolveaxis.SectionAreaAllow(p.rp.SectionDelta, p.Sweep, p.rp.Sweep().Bound,
+		p.resolved, !p.rp.Full && !p.rp.SurfaceResult, p.section); allow > 0 {
 		slack = proofbound.AbsSumUpper(slack, allow)
 	}
 	if proofbound.IsNonFinite(slack) {
 		return fmt.Errorf(`%w: this revolve mesh states no finite area slack`, ErrUnsupported)
 	}
 	m.n.AreaSlack = slack
-	if p.rp.surfaceResult {
+	if p.rp.SurfaceResult {
 		return nil
 	}
 	sym, err := revolveSymDiff(m, p, cellVolume, deltaC, deltaR)
 	if err != nil {
 		return err
 	}
-	if allow := revolveaxis.SectionVolumeAllow(p.rp.sectionDelta, p.Sweep, p.rp.sweep().Bound, p.section); allow > 0 {
+	if allow := revolveaxis.SectionVolumeAllow(p.rp.SectionDelta, p.Sweep, p.rp.Sweep().Bound, p.section); allow > 0 {
 		sym = proofbound.AbsSumUpper(sym, allow)
 	}
 	m.n.VolSymDiff = sym

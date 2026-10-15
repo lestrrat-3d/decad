@@ -408,6 +408,6 @@ func TestRevolveSymDiffRefusesAnAbsentAngularTerm(t *testing.T) {
 
 // revolveMeridianMoment reads the circular meridian displacement.
 func revolveMeridianMoment(p *revolvePlan) float64 {
-	return proofbound.AbsSumUpper(revolveproof.MeridianMoment(revolveWalkView(p.resolved), p.Meridian, p.Sweep, p.rp.full),
+	return proofbound.AbsSumUpper(revolveproof.MeridianMoment(revolveWalkView(p.resolved), p.Meridian, p.Sweep, p.rp.Full),
 		revolveFreeformMeridianMoment(p))
 }

@@ -935,8 +935,8 @@ func TestNewBodyGeomRefusesSurfaceResultRevolve(t *testing.T) {
 
 	rp, ok := sheet.n.Payload.(revolvePayload)
 	require.True(t, ok)
-	require.True(t, rp.surfaceResult)
-	require.False(t, rp.full)
+	require.True(t, rp.SurfaceResult)
+	require.False(t, rp.Full)
 
 	_, ok = newBodyGeom(sheet)
 	require.False(t, ok,

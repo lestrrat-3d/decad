@@ -66,18 +66,18 @@ func pointConeFacetGroup(cone *pointConeLimit, flip bool) facetGroup {
 // the rounded public Cone tag is used only for surface reporting.
 func exactPointCone(b *Body) (*pointConeLimit, bool) {
 	rp, ok := b.n.Payload.(revolvePayload)
-	if !ok || !rp.full || rp.surfaceResult || rp.sectionDelta != 0 || rp.xform != r3.Identity() ||
-		len(rp.profile.Holes) != 0 || len(rp.profile.Outer.Segments) != 3 ||
-		rp.frame.Origin() != (r3.Vec{}) || rp.frame.U() != (r3.Vec{X: 1}) ||
-		rp.frame.V() != (r3.Vec{Y: 1}) || rp.ax.AU != 0 || rp.ax.AV != 0 ||
-		rp.ax.DU != 1 || rp.ax.DV != 0 || rp.ax.AUBound != 0 || rp.ax.AVBound != 0 ||
-		rp.ax.DUBound != 0 || rp.ax.DVBound != 0 {
+	if !ok || !rp.Full || rp.SurfaceResult || rp.SectionDelta != 0 || rp.Xform != r3.Identity() ||
+		len(rp.Profile.Holes) != 0 || len(rp.Profile.Outer.Segments) != 3 ||
+		rp.Frame.Origin() != (r3.Vec{}) || rp.Frame.U() != (r3.Vec{X: 1}) ||
+		rp.Frame.V() != (r3.Vec{Y: 1}) || rp.Ax.AU != 0 || rp.Ax.AV != 0 ||
+		rp.Ax.DU != 1 || rp.Ax.DV != 0 || rp.Ax.AUBound != 0 || rp.Ax.AVBound != 0 ||
+		rp.Ax.DUBound != 0 || rp.Ax.DVBound != 0 {
 		return nil, false
 	}
 	var apex, far, radius float64
 	far = math.Inf(1)
 	axisCount, rimCount := 0, 0
-	for _, segment := range rp.profile.Outer.Segments {
+	for _, segment := range rp.Profile.Outer.Segments {
 		line, ok := segment.(lineSeg)
 		if !ok {
 			return nil, false
@@ -100,7 +100,7 @@ func exactPointCone(b *Body) (*pointConeLimit, bool) {
 		apex <= 0 || far >= 0 || radius <= 0 {
 		return nil, false
 	}
-	for _, segment := range rp.profile.Outer.Segments {
+	for _, segment := range rp.Profile.Outer.Segments {
 		line, ok := segment.(lineSeg)
 		if !ok {
 			return nil, false

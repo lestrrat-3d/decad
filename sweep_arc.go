@@ -61,14 +61,14 @@ func evalArcSweepContext(
 	// which is what gives the arc reduction the whole sheet behaviour for free
 	// (docs/surface-design.md §4).
 	revolve := revolvePayload{
-		profile:       profile,
-		frame:         frame,
-		ax:            ax,
-		phi0:          phi0,
-		phi1:          phi1,
-		den:           den,
-		xform:         r3.Identity(),
-		surfaceResult: surfaceResult,
+		Profile:       profile,
+		Frame:         frame,
+		Ax:            ax,
+		Phi0:          phi0,
+		Phi1:          phi1,
+		Den:           den,
+		Xform:         r3.Identity(),
+		SurfaceResult: surfaceResult,
 	}
 	body, err := evalRevolveContextWork(ctx, d, ref, revolve, work)
 	if err != nil {

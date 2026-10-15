@@ -289,7 +289,7 @@ func (sp sweepPayload) Transform() r3.Transform {
 		return sp.spans[0].transform()
 	}
 	if sp.arc {
-		return sp.revolve.xform
+		return sp.revolve.Xform
 	}
 	return sp.prism.Xform
 }
@@ -301,12 +301,12 @@ func (sp sweepPayload) Placed(ctx context.Context, env topo.Env, composed r3.Tra
 		sp.prism.Xform = composed
 		for i := range sp.spans {
 			sp.spans[i].prism.Xform = composed
-			sp.spans[i].revolve.xform = composed
+			sp.spans[i].revolve.Xform = composed
 		}
 		return placedNode(replayCompositeSweep(ctx, d, ref, sp))
 	}
 	if sp.arc {
-		sp.revolve.xform = composed
+		sp.revolve.Xform = composed
 		sp.prism.Xform = composed
 		body, err := evalRevolveContext(ctx, d, ref, sp.revolve)
 		if err != nil {
@@ -368,7 +368,7 @@ func (sp chainSweepPayload) Placed(ctx context.Context, env topo.Env, composed r
 		return nil, fmt.Errorf(`%w: composite chain Sweep placement has no transformed separation proof`, ErrUnsupported)
 	}
 	if sp.arc {
-		sp.revolve.xform = composed
+		sp.revolve.Xform = composed
 		body, err := evalChainRevolveContext(ctx, d, ref, sp.revolve, freeform.NewFreeformWork())
 		if err != nil {
 			return nil, err

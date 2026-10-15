@@ -573,7 +573,7 @@ func TestRevolveMassCoversFrameDefect(t *testing.T) {
 	b, err = Transform(t.Context(), b, rot)
 	require.NoError(t, err)
 	rp := b.n.Payload.(revolvePayload)
-	l, err := massmoment.PlaneMap(rp.frame, rp.xform)
+	l, err := massmoment.PlaneMap(rp.Frame, rp.Xform)
 	require.NoError(t, err)
 	det := massmoment.Determinant(l)
 	det.Abs(det)
@@ -602,8 +602,8 @@ func TestRevolveBoxChargesTheBasisRounding(t *testing.T) {
 	b, err := Revolve(t.Context(), New(), s, p, coilAxisV, FullRevolution{})
 	require.NoError(t, err)
 	rp := b.n.Payload.(revolvePayload)
-	basis := rp.basis()
-	gaps := rp.lift().BasisRound(basis)
+	basis := rp.Basis()
+	gaps := rp.Lift().BasisRound(basis)
 	require.Positive(t, gaps[3], "premise: the float E1 is not the exact cross product")
 
 	// The exact E1 gap, read independently: |b.E1 − W × E0| over rationals.
@@ -623,12 +623,12 @@ func TestRevolveBoxChargesTheBasisRounding(t *testing.T) {
 	require.Positive(t, gapF)
 
 	for _, g := range []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)} {
-		c1 := rp.xform.ApplyDir(basis.E1).Dot(g)
-		coordUpper, err := momentinput.CoordinateUpper(rp.profile, freeform.NewFreeformWork(), nil)
+		c1 := rp.Xform.ApplyDir(basis.E1).Dot(g)
+		coordUpper, err := momentinput.CoordinateUpper(rp.Profile, freeform.NewFreeformWork(), nil)
 		require.NoError(t, err)
-		allow := revolveaxis.FrameRoundAllow(rp.ax, rp.sectionDelta, rp.xform, g, basis,
-			rp.lift().BasisRound(basis), rp.xform.Apply(basis.A3).Dot(g), rp.xform.ApplyDir(basis.W).Dot(g),
-			rp.xform.ApplyDir(basis.E0).Dot(g), c1, coordUpper)
+		allow := revolveaxis.FrameRoundAllow(rp.Ax, rp.SectionDelta, rp.Xform, g, basis,
+			rp.Lift().BasisRound(basis), rp.Xform.Apply(basis.A3).Dot(g), rp.Xform.ApplyDir(basis.W).Dot(g),
+			rp.Xform.ApplyDir(basis.E0).Dot(g), c1, coordUpper)
 		// E1's coefficient multiplies ρ ≤ 3, so its gap moves the extreme by
 		// at most 3·gap; the allowance must cover at least that.
 		require.GreaterOrEqual(t, allow, 3*gapF, "axis %v", g)

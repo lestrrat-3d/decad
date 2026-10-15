@@ -17,8 +17,8 @@ func revolveAxisGap(t *testing.T, b *Body) float64 {
 	t.Helper()
 	rp, ok := b.n.Payload.(revolvePayload)
 	require.True(t, ok)
-	in, ok, err := wallsurvey.RevolveCarrierInput(proofbound.NewWorkBudget(t.Context()), rp.profile, rp.ax,
-		rp.lift(), rp.axisBound(), rp.xform, rp.full, rp.phi0, rp.phi1)
+	in, ok, err := wallsurvey.RevolveCarrierInput(proofbound.NewWorkBudget(t.Context()), rp.Profile, rp.Ax,
+		rp.Lift(), rp.AxisBound(), rp.Xform, rp.Full, rp.Phi0, rp.Phi1)
 	require.NoError(t, err)
 	require.True(t, ok)
 	return clearance.BuildRevolveCarriers(in).AxisGap

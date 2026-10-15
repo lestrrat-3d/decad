@@ -41,15 +41,15 @@ func evalClosedCircleSweep(ctx context.Context, d *Document, ref producerID,
 		den.Phi0, den.Phi1 = den.Phi1.Neg(), den.Phi0.Neg()
 	}
 	revolve := revolvePayload{
-		profile:     profile,
-		frame:       frame,
-		ax:          ax,
-		phi0:        phi0,
-		phi1:        phi1,
-		full:        full,
-		den:         den,
-		xform:       r3.Identity(),
-		radialProof: ax.RadialProof,
+		Profile:     profile,
+		Frame:       frame,
+		Ax:          ax,
+		Phi0:        phi0,
+		Phi1:        phi1,
+		Full:        full,
+		Den:         den,
+		Xform:       r3.Identity(),
+		RadialProof: ax.RadialProof,
 	}
 	body, err := evalRevolveContextWork(ctx, d, ref, revolve, work)
 	if err != nil {
