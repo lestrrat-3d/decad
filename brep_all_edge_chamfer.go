@@ -3,40 +3,11 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
-	"math/big"
-	"slices"
 
-	"github.com/lestrrat-3d/decad/internal/measurement"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
-	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/provenance"
-	"github.com/lestrrat-3d/decad/internal/stitchflux"
+	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
-	"github.com/lestrrat-3d/decad/internal/topo"
-	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
-	"github.com/lestrrat-3d/units"
 )
-
-// allEdgeChamferPayload is the bounded box-with-one-cross-bore construction
-// in modify-general §4.3b. The twelve simultaneous cuts are half spaces;
-// their three planes meet at (d/2,d/2,d/2) at each original box corner.
-type allEdgeChamferPayload struct {
-	xform  r3.Transform
-	box    [3][2]float64
-	center [2]float64 // x and z of the through-y bore
-	radius float64
-	d      float64
-}
-
-func (p allEdgeChamferPayload) Transform() r3.Transform { return p.xform }
-
-func (p allEdgeChamferPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
-	d, ref := documentHandle(env.Doc), env.Ref
-	p.xform = composed
-	return placedNode(evalAllEdgeChamfer(ctx, d, ref, p))
-}
 
 // tryAllEdgeChamfer accepts only the complete straight-edge set of an exact
 // axis-aligned box with one through-y circular bore. Other breps keep their
@@ -52,16 +23,16 @@ func tryAllEdgeChamfer(ctx context.Context, source *Body, bp brepPayload,
 		return nil, true, fmt.Errorf(`%w: the all-edge chamfer needs an exact millimetre setback`, ErrUnsupported)
 	}
 	var p allEdgeChamferPayload
-	p.xform = r3.Identity()
-	p.d = distance
-	p.box = [3][2]float64{{source.n.Bounds.Min.X, source.n.Bounds.Max.X},
+	p.Xform = r3.Identity()
+	p.D = distance
+	p.Box = [3][2]float64{{source.n.Bounds.Min.X, source.n.Bounds.Max.X},
 		{source.n.Bounds.Min.Y, source.n.Bounds.Max.Y}, {source.n.Bounds.Min.Z, source.n.Bounds.Max.Z}}
-	if source.n.Bounds.Bound.Base() != 0 || !p.admitBox() {
+	if source.n.Bounds.Bound.Base() != 0 || !p.AdmitBox() {
 		return nil, false, nil
 	}
 	selected := map[*Edge]struct{}{}
 	for _, e := range edges {
-		if _, dup := selected[e]; dup || !p.outerBoxEdge(e) {
+		if _, dup := selected[e]; dup || !p.OuterBoxEdge(edgeNode(e)) {
 			return nil, false, nil
 		}
 		selected[e] = struct{}{}
@@ -73,7 +44,7 @@ func tryAllEdgeChamfer(ctx context.Context, source *Body, bp brepPayload,
 	for _, f := range source.Faces() {
 		switch surface := f.n.Surface.(type) {
 		case surfacegeom.Plane:
-			axis, side, ok := p.boxPlane(f, surface)
+			axis, side, ok := p.BoxPlane(faceNode(f), surface)
 			if !ok || seen[axis][side] {
 				return nil, false, nil
 			}
@@ -84,13 +55,13 @@ func tryAllEdgeChamfer(ctx context.Context, source *Body, bp brepPayload,
 					return nil, false, nil
 				}
 				circle, ok := f.n.Loops[1].CoEdges[0].Edge.Curve.(surfacegeom.Circle3)
-				if !ok || circle.Center.Y != p.box[1][side] ||
+				if !ok || circle.Center.Y != p.Box[1][side] ||
 					circle.Axis != (r3.Vec{Y: 1}) && circle.Axis != (r3.Vec{Y: -1}) {
 					return nil, false, nil
 				}
-				if p.radius == 0 {
-					p.center, p.radius = [2]float64{circle.Center.X, circle.Center.Z}, circle.Radius.Base()
-				} else if p.center != [2]float64{circle.Center.X, circle.Center.Z} || p.radius != circle.Radius.Base() {
+				if p.Radius == 0 {
+					p.Center, p.Radius = [2]float64{circle.Center.X, circle.Center.Z}, circle.Radius.Base()
+				} else if p.Center != [2]float64{circle.Center.X, circle.Center.Z} || p.Radius != circle.Radius.Base() {
 					return nil, false, nil
 				}
 			} else if len(f.n.Loops) != 1 {
@@ -105,10 +76,10 @@ func tryAllEdgeChamfer(ctx context.Context, source *Body, bp brepPayload,
 			return nil, false, nil
 		}
 	}
-	if planes != 6 || boreFace == nil || p.radius <= 0 ||
+	if planes != 6 || boreFace == nil || p.Radius <= 0 ||
 		boreSurface.Axis != (r3.Vec{Y: 1}) && boreSurface.Axis != (r3.Vec{Y: -1}) ||
-		boreSurface.Origin.X != p.center[0] || boreSurface.Origin.Z != p.center[1] ||
-		boreSurface.Radius.Base() != p.radius || !boreFace.n.Reversed || len(boreFace.n.Loops) != 2 {
+		boreSurface.Origin.X != p.Center[0] || boreSurface.Origin.Z != p.Center[1] ||
+		boreSurface.Radius.Base() != p.Radius || !boreFace.n.Reversed || len(boreFace.n.Loops) != 2 {
 		return nil, false, nil
 	}
 	var rims [2]bool
@@ -119,12 +90,12 @@ func tryAllEdgeChamfer(ctx context.Context, source *Body, bp brepPayload,
 		edge := loop.CoEdges[0].Edge
 		circle, ok := edge.Curve.(surfacegeom.Circle3)
 		if !ok || !edge.CurveBounded || edge.CurveBound != 0 ||
-			circle.Radius.Base() != p.radius {
+			circle.Radius.Base() != p.Radius {
 			return nil, false, nil
 		}
 		side := -1
 		for s := range 2 {
-			if circle.Center == r3.NewVec(p.center[0], p.box[1][s], p.center[1]) {
+			if circle.Center == r3.NewVec(p.Center[0], p.Box[1][s], p.Center[1]) {
 				side = s
 			}
 		}
@@ -138,396 +109,15 @@ func tryAllEdgeChamfer(ctx context.Context, source *Body, bp brepPayload,
 			return nil, false, nil
 		}
 	}
-	if !p.exactCoordinates() {
+	if !p.ExactCoordinates() {
 		return nil, true, fmt.Errorf(`%w: an all-edge chamfer corner is not exactly representable`, ErrUnsupported)
 	}
-	if p.center[0]-p.radius <= p.box[0][0]+distance ||
-		p.center[0]+p.radius >= p.box[0][1]-distance ||
-		p.center[1]-p.radius <= p.box[2][0]+distance ||
-		p.center[1]+p.radius >= p.box[2][1]-distance {
+	if p.Center[0]-p.Radius <= p.Box[0][0]+distance ||
+		p.Center[0]+p.Radius >= p.Box[0][1]-distance ||
+		p.Center[1]-p.Radius <= p.Box[2][0]+distance ||
+		p.Center[1]+p.Radius >= p.Box[2][1]-distance {
 		return nil, true, fmt.Errorf(`%w: the bore reaches the all-edge chamfer`, ErrUnsupported)
 	}
-	body, err := evalAllEdgeChamfer(ctx, documentHandle(source.n.Doc), source.n.Doc.NextProducer, p)
+	body, err := bodyResult(breprecord.BuildAllEdgeChamfer(ctx, envOf(source.n.Doc, source.n.Doc.NextProducer), p))
 	return body, true, err
-}
-
-func (p allEdgeChamferPayload) admitBox() bool {
-	if p.d <= 0 || p.d/2 == 0 || math.IsNaN(p.d) || math.IsInf(p.d, 0) {
-		return false
-	}
-	for _, interval := range p.box {
-		if math.IsNaN(interval[0]) || math.IsNaN(interval[1]) ||
-			math.IsInf(interval[0], 0) || math.IsInf(interval[1], 0) ||
-			interval[1]-interval[0] <= 2*p.d || interval[0]+p.d == interval[0] ||
-			interval[1]-p.d == interval[1] {
-			return false
-		}
-	}
-	return true
-}
-
-// exactCoordinates requires every published polygon corner and circle seam
-// to equal its rational expression in the recorded box and setback. This
-// rules out a rounded miter that would silently move a bevel plane.
-func (p allEdgeChamferPayload) exactCoordinates() bool {
-	for _, interval := range p.box {
-		lo, hi, d := proofarith.FloatRat(interval[0]), proofarith.FloatRat(interval[1]), proofarith.FloatRat(p.d)
-		half := new(big.Rat).Quo(d, big.NewRat(2, 1))
-		if proofarith.FloatRat(p.d/2).Cmp(half) != 0 ||
-			!rationalSumEquals(interval[0], p.d, interval[0]+p.d) ||
-			!rationalSumEquals(interval[0], p.d/2, interval[0]+p.d/2) ||
-			!rationalSumEquals(interval[1], -p.d, interval[1]-p.d) ||
-			!rationalSumEquals(interval[1], -p.d/2, interval[1]-p.d/2) ||
-			new(big.Rat).Sub(hi, lo).Cmp(new(big.Rat).Mul(d, big.NewRat(2, 1))) <= 0 {
-			return false
-		}
-	}
-	for _, center := range p.center {
-		if !rationalSumEquals(center, p.radius, center+p.radius) ||
-			!rationalSumEquals(center, -p.radius, center-p.radius) {
-			return false
-		}
-	}
-	return true
-}
-
-func rationalSumEquals(a, b, held float64) bool {
-	return proofarith.FloatRat(held).Cmp(new(big.Rat).Add(proofarith.FloatRat(a), proofarith.FloatRat(b))) == 0
-}
-
-func rationalMidpointEquals(interval [2]float64, held float64) bool {
-	sum := new(big.Rat).Add(proofarith.FloatRat(interval[0]), proofarith.FloatRat(interval[1]))
-	return new(big.Rat).Mul(proofarith.FloatRat(held), big.NewRat(2, 1)).Cmp(sum) == 0
-}
-
-func (p allEdgeChamferPayload) outerBoxEdge(e *Edge) bool {
-	if _, ok := e.n.Curve.(surfacegeom.Line3); !ok || e.n.Start.Bound.Base() != 0 || e.n.End.Bound.Base() != 0 {
-		return false
-	}
-	a, b := e.n.Start.Position, e.n.End.Position
-	x, y := [3]float64{a.X, a.Y, a.Z}, [3]float64{b.X, b.Y, b.Z}
-	varying := 0
-	for axis := range 3 {
-		if x[axis] == y[axis] {
-			if x[axis] != p.box[axis][0] && x[axis] != p.box[axis][1] {
-				return false
-			}
-			continue
-		}
-		varying++
-		if (x[axis] != p.box[axis][0] || y[axis] != p.box[axis][1]) &&
-			(x[axis] != p.box[axis][1] || y[axis] != p.box[axis][0]) {
-			return false
-		}
-	}
-	return varying == 1
-}
-
-func (p allEdgeChamferPayload) boxPlane(f *Face, plane surfacegeom.Plane) (int, int, bool) {
-	if len(f.n.Loops) == 0 || len(f.n.Loops[0].CoEdges) != 4 {
-		return 0, 0, false
-	}
-	n := plane.Frame.N()
-	axis, side := -1, -1
-	for k, v := range [3]float64{n.X, n.Y, n.Z} {
-		if v == 1 || v == -1 {
-			if axis >= 0 {
-				return 0, 0, false
-			}
-			axis, side = k, 0
-			if v > 0 {
-				side = 1
-			}
-		} else if v != 0 {
-			return 0, 0, false
-		}
-	}
-	if axis < 0 {
-		return 0, 0, false
-	}
-	seen := map[[3]float64]struct{}{}
-	for _, ce := range f.n.Loops[0].CoEdges {
-		if _, ok := ce.Edge.Curve.(surfacegeom.Line3); !ok || coedgeStart(ce).Bound.Base() != 0 {
-			return 0, 0, false
-		}
-		v := coedgeStart(ce).Position
-		c := [3]float64{v.X, v.Y, v.Z}
-		if c[axis] != p.box[axis][side] {
-			return 0, 0, false
-		}
-		for j := range 3 {
-			if j != axis && c[j] != p.box[j][0] && c[j] != p.box[j][1] {
-				return 0, 0, false
-			}
-		}
-		seen[c] = struct{}{}
-	}
-	return axis, side, len(seen) == 4
-}
-
-type allEdgePolygon struct {
-	points []r3.Vec
-	normal r3.Vec
-	role   string
-	area   proofbound.BoundedScalar
-	hole   bool
-}
-
-func (p allEdgeChamferPayload) polygons() []allEdgePolygon {
-	var out []allEdgePolygon
-	for axis := range 3 {
-		b, c := (axis+1)%3, (axis+2)%3
-		for side := range 2 {
-			coords := [][3]float64{}
-			for _, pair := range [][2]int{{0, 0}, {1, 0}, {1, 1}, {0, 1}} {
-				var q [3]float64
-				q[axis] = p.box[axis][side]
-				q[b] = p.box[b][pair[0]] + inward(pair[0], p.d)
-				q[c] = p.box[c][pair[1]] + inward(pair[1], p.d)
-				coords = append(coords, q)
-			}
-			n := [3]float64{}
-			n[axis] = float64(2*side - 1)
-			widthB := proofbound.BoundedSub(
-				proofbound.BoundedSub(proofbound.ExactScalar(p.box[b][1]), proofbound.ExactScalar(p.box[b][0])),
-				proofbound.BoundedMul(proofbound.ExactScalar(2), proofbound.ExactScalar(p.d)))
-			widthC := proofbound.BoundedSub(
-				proofbound.BoundedSub(proofbound.ExactScalar(p.box[c][1]), proofbound.ExactScalar(p.box[c][0])),
-				proofbound.BoundedMul(proofbound.ExactScalar(2), proofbound.ExactScalar(p.d)))
-			area := proofbound.BoundedMul(
-				widthB, widthC)
-			out = append(out, allEdgePolygon{points: vecs(coords), normal: vec(n),
-				role: fmt.Sprintf("face(%d)", 2*axis+side), area: area, hole: axis == 1})
-		}
-	}
-	sqrt2 := proofbound.BoundedSqrt(proofbound.ExactScalar(2))
-	for axis := range 3 {
-		b, c := (axis+1)%3, (axis+2)%3
-		for sb := range 2 {
-			for sc := range 2 {
-				q := func(along, ub float64) [3]float64 {
-					var v [3]float64
-					v[axis] = along
-					v[b] = p.box[b][sb] + inward(sb, ub)
-					v[c] = p.box[c][sc] + inward(sc, p.d-ub)
-					return v
-				}
-				lo, hi := p.box[axis][0], p.box[axis][1]
-				points := vecs([][3]float64{q(lo+p.d, 0), q(lo+p.d/2, p.d/2),
-					q(lo+p.d, p.d), q(hi-p.d, p.d), q(hi-p.d/2, p.d/2), q(hi-p.d, 0)})
-				n := [3]float64{}
-				n[b], n[c] = float64(2*sb-1), float64(2*sc-1)
-				length := proofbound.BoundedSub(proofbound.ExactScalar(hi), proofbound.ExactScalar(lo))
-				d2 := proofbound.BoundedMul(proofbound.ExactScalar(p.d), proofbound.ExactScalar(p.d))
-				span := proofbound.BoundedSub(proofbound.BoundedMul(length, proofbound.ExactScalar(p.d)),
-					proofbound.BoundedMul(proofbound.ExactScalar(1.5), d2))
-				area := proofbound.BoundedMul(sqrt2, span)
-				out = append(out, allEdgePolygon{points: points, normal: vec(n),
-					role: fmt.Sprintf("chamfer(%d,%d,%d)", axis, sb, sc), area: area})
-			}
-		}
-	}
-	return out
-}
-
-func inward(side int, d float64) float64 {
-	if side == 0 {
-		return d
-	}
-	return -d
-}
-
-func vec(c [3]float64) r3.Vec { return r3.NewVec(c[0], c[1], c[2]) }
-
-func vecs(coords [][3]float64) []r3.Vec {
-	out := make([]r3.Vec, len(coords))
-	for i, c := range coords {
-		out[i] = vec(c)
-	}
-	return out
-}
-
-func evalAllEdgeChamfer(ctx context.Context, d *Document, ref producerID,
-	p allEdgeChamferPayload) (*Body, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	geometry, axisMap, err := p.placedGeometry()
-	if err != nil {
-		return nil, err
-	}
-	body := bornBody(&Body{n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodySolid, Doc: documentNode(d)}})
-	polygons := geometry.polygons()
-	vertices := map[r3.Vec]*Vertex{}
-	vertex := func(v r3.Vec) *Vertex {
-		if found := vertices[v]; found != nil {
-			return found
-		}
-		made := bornVertex(&Vertex{n: topo.Vertex{Position: v, Bound: units.Millimeters(0)}})
-		vertices[v] = made
-		return made
-	}
-	type lineKey struct{ a, b r3.Vec }
-	lines := map[lineKey]*Edge{}
-	faces := make([]*Face, 0, len(polygons)+1)
-	for polygonIndex, poly := range polygons {
-		points := slices.Clone(poly.points)
-		if points[1].Sub(points[0]).Cross(points[2].Sub(points[0])).Dot(poly.normal) < 0 {
-			slices.Reverse(points)
-		}
-		u := points[1].Sub(points[0])
-		frame, err := r3.NewFrame(points[0], u, poly.normal.Cross(u))
-		if err != nil {
-			return nil, fmt.Errorf(`%w: all-edge chamfer plane: %s`, ErrUnsupported, err)
-		}
-		face := bornFace(&Face{n: topo.Face{Area: poly.area.Value, AreaBound: poly.area.Bound, Surface: surfacegeom.Plane{Frame: frame}, Origins: []provenance.Ref{{Producer: ref, Role: axisMap.faceRole(polygonIndex)}}, Body: bodyNode(body)}})
-		loop := bornLoop(&Loop{n: topo.Loop{Outer: true}})
-		for i, a := range points {
-			b := points[(i+1)%len(points)]
-			key := lineKey{a, b}
-			if b.X < a.X || b.X == a.X && (b.Y < a.Y || b.Y == a.Y && b.Z < a.Z) {
-				key = lineKey{b, a}
-			}
-			e := lines[key]
-			if e == nil {
-				lengthSquared := proofbound.ExactScalar(0)
-				for _, pair := range [][2]float64{{a.X, b.X}, {a.Y, b.Y}, {a.Z, b.Z}} {
-					v := proofbound.BoundedSub(proofbound.ExactScalar(pair[1]), proofbound.ExactScalar(pair[0]))
-					lengthSquared = proofbound.BoundedAdd(lengthSquared,
-						proofbound.BoundedMul(v, v))
-				}
-				length := proofbound.BoundedSqrt(lengthSquared)
-				e = bornEdge(&Edge{n: topo.Edge{
-					Convex:      true,
-					Length:      length.Value,
-					LengthBound: length.Bound,
-					Curve:       surfacegeom.Line3{},
-					Start:       vertexNode(vertex(a)),
-					End:         vertexNode(vertex(b)),
-				}})
-				lines[key] = e
-			}
-			loop.n.CoEdges = append(loop.n.CoEdges, topo.CoEdge{Edge: edgeNode(e), Forward: vertexHandle(e.n.Start) == vertex(a)})
-		}
-		face.n.Loops = []*topo.Loop{loopNode(loop)}
-		faces = append(faces, face)
-	}
-	bore, err := geometry.addBoreTopology(body, ref, faces, vertex)
-	if err != nil {
-		return nil, err
-	}
-	faces = append(faces, bore)
-	if err := topobuild.AttachFaceLoops(ctx, faceNodes(faces)); err != nil {
-		return nil, err
-	}
-	for _, e := range lines {
-		if len(e.n.Faces) != 2 {
-			return nil, fmt.Errorf(`%w: all-edge chamfer has an unsewn planar edge`, ErrUnsupported)
-		}
-	}
-	body.n.Lumps = topobuild.SheetLumps(handleAlloc{}, faceNodes(faces))
-	if len(body.n.Lumps) != 1 || body.n.Lumps[0].Shells[0].Open {
-		return nil, fmt.Errorf(`%w: all-edge chamfer has an open shell`, ErrUnsupported)
-	}
-	if err := geometry.measure(body, polygons); err != nil {
-		return nil, err
-	}
-	body.n.Payload = p
-	return body, nil
-}
-
-func (p allEdgeChamferPayload) addBoreTopology(body *Body, ref producerID, faces []*Face,
-	vertex func(r3.Vec) *Vertex) (*Face, error) {
-	if len(faces) < 4 {
-		return nil, fmt.Errorf(`%w: the all-edge chamfer lacks its two bored faces`, ErrUnsupported)
-	}
-	pi := stitchflux.PiScalar()
-	r := proofbound.ExactScalar(p.radius)
-	disk := proofbound.BoundedMul(pi, proofbound.BoundedMul(r, r))
-	height := proofbound.BoundedSub(proofbound.ExactScalar(p.box[1][1]), proofbound.ExactScalar(p.box[1][0]))
-	wallArea := proofbound.BoundedMul(proofbound.BoundedMul(proofbound.ExactScalar(2), pi),
-		proofbound.BoundedMul(r, height))
-	bore := bornFace(&Face{n: topo.Face{
-		Reversed:  true,
-		Area:      wallArea.Value,
-		AreaBound: wallArea.Bound,
-		Surface: surfacegeom.Cylinder{Origin: r3.NewVec(p.center[0], p.box[1][0], p.center[1]),
-			Axis: r3.NewVec(0, 1, 0), Radius: units.Millimeters(p.radius)},
-		Origins: []provenance.Ref{{Producer: ref, Role: "wall(6)"}},
-		Body:    bodyNode(body),
-	}})
-	for side := range 2 {
-		face := faces[2+side]
-		area := proofbound.BoundedSub(proofbound.MeasuredScalar(face.n.Area, face.n.AreaBound), disk)
-		face.n.Area, face.n.AreaBound = area.Value, area.Bound
-		center := r3.NewVec(p.center[0], p.box[1][side], p.center[1])
-		seam := vertex(center.Add(r3.NewVec(p.radius, 0, 0)))
-		circumference := proofbound.BoundedMul(proofbound.BoundedMul(proofbound.ExactScalar(2), pi), r)
-		edge := bornEdge(&Edge{n: topo.Edge{
-			Convex:       false,
-			Length:       circumference.Value,
-			LengthBound:  circumference.Bound,
-			CurveBounded: true,
-			Curve: surfacegeom.Circle3{Center: center, Axis: r3.NewVec(0, -1, 0),
-				Radius: units.Millimeters(p.radius)},
-			Start: vertexNode(seam),
-			End:   vertexNode(seam),
-		}})
-		face.n.Loops = append(face.n.Loops, loopNode(bornLoop(&Loop{n: topo.Loop{CoEdges: []topo.CoEdge{{Edge: edgeNode(edge), Forward: side == 1}}}})))
-		bore.n.Loops = append(bore.n.Loops, loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(edge), Forward: side == 0}}}})))
-	}
-	return bore, nil
-}
-
-func (p allEdgeChamferPayload) measure(body *Body, polygons []allEdgePolygon) error {
-	lx := proofbound.BoundedSub(proofbound.ExactScalar(p.box[0][1]), proofbound.ExactScalar(p.box[0][0]))
-	ly := proofbound.BoundedSub(proofbound.ExactScalar(p.box[1][1]), proofbound.ExactScalar(p.box[1][0]))
-	lz := proofbound.BoundedSub(proofbound.ExactScalar(p.box[2][1]), proofbound.ExactScalar(p.box[2][0]))
-	d := proofbound.ExactScalar(p.d)
-	r := proofbound.ExactScalar(p.radius)
-	pi := stitchflux.PiScalar()
-	box := proofbound.BoundedMul(proofbound.BoundedMul(lx, ly), lz)
-	bore := proofbound.BoundedMul(proofbound.BoundedMul(pi, proofbound.BoundedMul(r, r)), ly)
-	d2 := proofbound.BoundedMul(d, d)
-	removed := proofbound.BoundedSub(
-		proofbound.BoundedMul(proofbound.ExactScalar(2),
-			proofbound.BoundedMul(d2, proofbound.BoundedAdd(proofbound.BoundedAdd(lx, ly), lz))),
-		proofbound.BoundedMul(proofbound.ExactScalar(6), proofbound.BoundedMul(d2, d)))
-	volume := proofbound.BoundedSub(proofbound.BoundedSub(box, bore), removed)
-	if volume.Value-volume.Bound <= 0 {
-		return fmt.Errorf(`%w: the all-edge chamfer has no proven positive volume`, ErrUnsupported)
-	}
-	body.n.Volume = measurement.Measurement{Value: units.CubicMillimeters(volume.Value), Bound: units.CubicMillimeters(volume.Bound),
-		Exactness: measurement.ExactnessOf(volume.Bound)}
-	area := proofbound.ExactScalar(0)
-	for _, poly := range polygons {
-		area = proofbound.BoundedAdd(area, poly.area)
-	}
-	disks := proofbound.BoundedMul(proofbound.ExactScalar(2),
-		proofbound.BoundedMul(pi, proofbound.BoundedMul(r, r)))
-	wall := proofbound.BoundedMul(proofbound.ExactScalar(2),
-		proofbound.BoundedMul(pi, proofbound.BoundedMul(r, ly)))
-	area = proofbound.BoundedAdd(proofbound.BoundedSub(area, disks), wall)
-	body.n.Area = measurement.Measurement{Value: units.SquareMillimeters(area.Value), Bound: units.SquareMillimeters(area.Bound),
-		Exactness: measurement.ExactnessOf(area.Bound)}
-	// The admitted bore is centered in x and z and traverses the full y range.
-	// The twelve edge wedges are symmetric about all three box midplanes.
-	if !rationalMidpointEquals(p.box[0], p.center[0]) ||
-		!rationalMidpointEquals(p.box[2], p.center[1]) {
-		return fmt.Errorf(`%w: the all-edge chamfer requires a centered bore`, ErrUnsupported)
-	}
-	var midpoint [3]proofbound.BoundedScalar
-	centroidBound := 0.0
-	for axis := range 3 {
-		midpoint[axis] = proofbound.BoundedMul(proofbound.ExactScalar(0.5),
-			proofbound.BoundedAdd(proofbound.ExactScalar(p.box[axis][0]), proofbound.ExactScalar(p.box[axis][1])))
-		centroidBound = math.Max(centroidBound, midpoint[axis].Bound)
-	}
-	centroid := r3.NewVec(midpoint[0].Value, midpoint[1].Value, midpoint[2].Value)
-	body.n.Centroid = measurement.VecMeasurement{Value: centroid, Bound: units.Millimeters(centroidBound),
-		Exactness: measurement.ExactnessOf(centroidBound)}
-	body.n.Bounds = measurement.Box{Min: r3.NewVec(p.box[0][0], p.box[1][0], p.box[2][0]),
-		Max:   r3.NewVec(p.box[0][1], p.box[1][1], p.box[2][1]),
-		Bound: units.Millimeters(0), Exactness: measurement.Exact}
-	return topobuild.ValidateAnalyticMeasurements(bodyNode(body))
 }

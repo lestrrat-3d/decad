@@ -382,3 +382,24 @@ func TestBrepPartialChamferMirroredCrossDrilledBar(t *testing.T) {
 	require.True(t, mesh.VolumeVerified())
 	require.InDelta(t, removedVolume, meshVolume(baseMesh)-meshVolume(mesh), 1e-8)
 }
+
+// TestBrepChamferAllStraightOuterEdgesStagedSurvey pins the class name the
+// all-edge chamfer body's wall survey prints: the staged-survey message names
+// the payload class, not the Go type that holds it.
+func TestBrepChamferAllStraightOuterEdgesStagedSurvey(t *testing.T) {
+	t.Parallel()
+	doc, bar := crossDrilledBar(t)
+	selected := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0))).
+		Or(decad.ParallelTo(r3.NewVec(0, 1, 0))).
+		Or(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(12)
+	got, err := decad.Chamfer(t.Context(), bar, selected, units.Millimeters(1))
+	require.NoError(t, err)
+	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
+	require.NoError(t, err)
+	reading, err := report.ForBody(got)
+	require.NoError(t, err)
+	staged, found := findDiagnostic(reading.Diagnostics, decad.DiagUnsupportedSurveyPayload)
+	require.True(t, found)
+	require.Equal(t, "allEdgeChamferPayload wall survey support is not implemented; use an analytic body or wait for wider "+
+		"allEdgeChamferPayload survey support", staged.Message)
+}

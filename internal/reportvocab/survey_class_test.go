@@ -3,6 +3,7 @@ package reportvocab_test
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/chainrecord"
 	"github.com/lestrrat-3d/decad/internal/coilshell"
 	"github.com/lestrrat-3d/decad/internal/cupwall"
@@ -25,6 +26,7 @@ func TestStagedSurveyNamesRootPayloadClass(t *testing.T) {
 		payload any
 	}{
 		{"prismPayload", prismrecord.Payload{}},
+		{"allEdgeChamferPayload", breprecord.AllEdgeChamferPayload{}},
 		{"stackedPrismPayload", stackedrecord.Payload{}},
 		{"chainPayload", chainrecord.Payload{}},
 		{"cupPayload", cupwall.Payload{}},

@@ -2101,3 +2101,4 @@
 10	0.00	TestMeshSourceFacesAreTheBodyFaces
 10	0.00	TestTessellateRefusalNamesChainRevolvePayload
 10	0.00	TestTessellateRefusalNamesChainLoftPayload
+10	0.05	TestBrepChamferAllStraightOuterEdgesStagedSurvey

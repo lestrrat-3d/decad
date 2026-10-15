@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/chainrecord"
@@ -157,3 +158,9 @@ func cloneLoopRecord(loop loopRecord) loopRecord { return sectionrecord.CloneLoo
 func normalizeSegment(segment curveSegment) (curveSegment, error) {
 	return sectionrecord.NormalizeSegment(segment)
 }
+
+// allEdgeChamferPayload is the evaluator's record of the box all-edge chamfer
+// of modify-general §4.3b: the internal/breprecord payload, which
+// breprecord.BuildAllEdgeChamfer evaluates over topology nodes and which
+// implements topo.Payload (docs/evaluator-design.md §8).
+type allEdgeChamferPayload = breprecord.AllEdgeChamferPayload

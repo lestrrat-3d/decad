@@ -30,7 +30,7 @@ func tessellateAllEdgeChamfer(ctx context.Context, body *Body, p allEdgeChamferP
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	geometry, _, err := p.placedGeometry()
+	geometry, _, err := p.PlacedGeometry()
 	if err != nil {
 		return nil, err
 	}
@@ -40,11 +40,11 @@ func tessellateAllEdgeChamfer(ctx context.Context, body *Body, p allEdgeChamferP
 		return nil, fmt.Errorf(`%w: the all-edge chamfer has no 18 planes and one bore`, ErrUnsupported)
 	}
 	loop := sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{sectionrecord.CircleSeg{
-		Center: sectionrecord.Point2{U: p.center[0], V: p.center[1]},
-		Radius: units.Millimeters(p.radius), CCW: true, TStart: 0, TEnd: 1,
+		Center: sectionrecord.Point2{U: p.Center[0], V: p.Center[1]},
+		Radius: units.Millimeters(p.Radius), CCW: true, TStart: 0, TEnd: 1,
 	}}}
-	heightMeasure := proofbound.BoundedSub(proofbound.ExactScalar(p.box[1][1]),
-		proofbound.ExactScalar(p.box[1][0]))
+	heightMeasure := proofbound.BoundedSub(proofbound.ExactScalar(p.Box[1][1]),
+		proofbound.ExactScalar(p.Box[1][0]))
 	height := proofbound.AbsSumUpper(heightMeasure.Value, heightMeasure.Bound)
 	samples, err := tessellation.ChordLoop(ctx, loop, chord, height, freeform.NewFreeformWork(), nil, 0,
 		func(_ survey2d.SideWalk) (*Face, error) { return faces[18], nil }, stationbound.ChordStationBound)
@@ -73,7 +73,7 @@ func tessellateAllEdgeChamfer(ctx context.Context, body *Body, p allEdgeChamferP
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			v := r3.NewVec(sample.U, p.box[1][side], sample.V)
+			v := r3.NewVec(sample.U, p.Box[1][side], sample.V)
 			circle[side][i] = add(v, proofbound.WalkEndBoundAllow(samples.BoundOf[i]))
 		}
 	}
@@ -129,7 +129,7 @@ func tessellateAllEdgeChamfer(ctx context.Context, body *Body, p allEdgeChamferP
 	if err := tessellation.RequireVertexLinks(ctx, len(mesh.n.Vertices), mesh.n.Triangles); err != nil {
 		return nil, err
 	}
-	anchor := r3.NewVec(p.box[0][0], p.box[1][0], p.box[2][0])
+	anchor := r3.NewVec(p.Box[0][0], p.Box[1][0], p.Box[2][0])
 	if tessellation.OrientationSign(mesh.n.Vertices, mesh.n.Triangles, anchor) <= 0 {
 		return nil, fmt.Errorf(`%w: the all-edge chamfer mesh has no positive enclosed volume`, ErrUnsupported)
 	}
