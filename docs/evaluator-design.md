@@ -861,8 +861,9 @@ are aliases of `patchchain.Payload` and `patchchain.BodyPayload`: their `Placed`
 `coilshell.Payload`: its `Placed` runs `coilshell.BuildBody`. `loftPayload` and
 `chainLoftPayload` are aliases of `loftrecord.Payload` and `loftrecord.ChainPayload`:
 their `Placed` runs `loftrecord.Build` and `loftrecord.BuildChain`. `capBlendPayload` is an alias of
-`capblend.Payload`: its `Placed` runs `capblend.Build`. A payload that still lives in the root
-package recovers its document handle from the node's `Owner` in `Placed` and
+`capblend.Payload`: its `Placed` runs `capblend.Build`. `allEdgeChamferPayload` is an alias of
+`breprecord.AllEdgeChamferPayload`: its `Placed` runs `breprecord.BuildAllEdgeChamfer`. A payload
+that still lives in the root package recovers its document handle from the node's `Owner` in `Placed` and
 runs its root builder.
 
 `Transform` and `Copy` pass the caller's context through payload re-evaluation.

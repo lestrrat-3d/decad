@@ -766,7 +766,7 @@ as a plane, takes the partial fillet route
 | **BG2** | route L chamfer | `brepPayload` with `loopBands`, `stack` nil | the rewritten record's faces plus the band patches | `face(k)` / `wall(k)`; each patch `chamferLoop(f,l,p)` for face `f`, loop `l`, patch `p` in its band's own order |
 | **BG3** | rectangular-boss shell (§3.1a) | `brepPayload` with `bossShell`, `stack` nil | ordinary faces plus four cylinder patches and four ellipse seams; the closed arm groups the cavity as one void shell | `face(k)` / `wall(k)`; the patches carry `filletLoop` roles |
 | **BG4** | circular-boss shell (§3.1c) | `brepPayload` with `bossShell`, `stack` nil | ordinary faces plus one whole-turn torus patch | `face(k)` / `wall(k)`; the patch carries a `filletLoop` role |
-| **BG5** | box all-edge chamfer (§4.3b) | `allEdgeChamferPayload` | six inset box planes, twelve bevel planes, one bore cylinder | `face(k)` / `chamfer(axis,side,side)` / `wall(6)` |
+| **BG5** | box all-edge chamfer (§4.3b) | `allEdgeChamferPayload` (`breprecord.AllEdgeChamferPayload`) | six inset box planes, twelve bevel planes, one bore cylinder | `face(k)` / `chamfer(axis,side,side)` / `wall(6)` |
 | **BG6** | coaxial counterbore shell (§3.1e) | `brepPayload` with `pocketShell`, `stack` nil | retained source faces, two cavity linings and floors, two opening rims, one whole-turn torus patch | `face(k)` / `wall(k)`; the patch carries a `filletLoop` role |
 
 A BG1 result is an ordinary brep: general-boolean §4.5 reads it unchanged.

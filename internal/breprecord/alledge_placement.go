@@ -1,27 +1,28 @@
-package decad
+package breprecord
 
 import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/r3"
 )
 
-// allEdgeAxisMap names the source coordinate behind each placed coordinate.
+// AxisMap names the source coordinate behind each placed coordinate.
 // Its signs also map a placed box side back to the source side for face roles.
-type allEdgeAxisMap struct {
+type AxisMap struct {
 	source [3]int
 	sign   [3]int
 }
 
-// placedGeometry re-expresses the canonical box and through-y bore under an
+// PlacedGeometry re-expresses the canonical box and through-y bore under an
 // exact signed-axis isometry. Each published coordinate is compared with its
 // rational image, so the rebuilt corners still denote the rigid image of the
 // original body. Other rigid motions retain the bounded refusal in §4.3b.
-func (p allEdgeChamferPayload) PlacedGeometry() (allEdgeChamferPayload, allEdgeAxisMap, error) {
+func (p AllEdgeChamferPayload) PlacedGeometry() (AllEdgeChamferPayload, AxisMap, error) {
 	basis := p.Xform.Basis()
 	images := [3]r3.Vec{basis.EX, basis.EY, basis.EZ}
-	axisMap := allEdgeAxisMap{source: [3]int{-1, -1, -1}}
+	axisMap := AxisMap{source: [3]int{-1, -1, -1}}
 	for sourceAxis, image := range images {
 		components := [3]float64{image.X, image.Y, image.Z}
 		placedAxis := -1
@@ -30,21 +31,21 @@ func (p allEdgeChamferPayload) PlacedGeometry() (allEdgeChamferPayload, allEdgeA
 				continue
 			}
 			if component != 1 && component != -1 || placedAxis >= 0 || axisMap.source[axis] >= 0 {
-				return allEdgeChamferPayload{}, allEdgeAxisMap{},
-					fmt.Errorf(`%w: the all-edge chamfer needs a signed-axis placement`, ErrUnsupported)
+				return AllEdgeChamferPayload{}, AxisMap{},
+					fmt.Errorf(`%w: the all-edge chamfer needs a signed-axis placement`, decaderr.ErrUnsupported)
 			}
 			placedAxis = axis
 			axisMap.source[axis] = sourceAxis
 			axisMap.sign[axis] = int(component)
 		}
 		if placedAxis < 0 {
-			return allEdgeChamferPayload{}, allEdgeAxisMap{},
-				fmt.Errorf(`%w: the all-edge chamfer needs a signed-axis placement`, ErrUnsupported)
+			return AllEdgeChamferPayload{}, AxisMap{},
+				fmt.Errorf(`%w: the all-edge chamfer needs a signed-axis placement`, decaderr.ErrUnsupported)
 		}
 	}
 	if axisMap.source[1] != 1 {
-		return allEdgeChamferPayload{}, allEdgeAxisMap{},
-			fmt.Errorf(`%w: the placed all-edge chamfer bore must stay along y`, ErrUnsupported)
+		return AllEdgeChamferPayload{}, AxisMap{},
+			fmt.Errorf(`%w: the placed all-edge chamfer bore must stay along y`, decaderr.ErrUnsupported)
 	}
 	translation := p.Xform.Translation()
 	shift := [3]float64{translation.X, translation.Y, translation.Z}
@@ -59,8 +60,8 @@ func (p allEdgeChamferPayload) PlacedGeometry() (allEdgeChamferPayload, allEdgeA
 			image := p.Xform.Apply(vec(point))
 			coordinate := [3]float64{image.X, image.Y, image.Z}[axis]
 			if !finiteExactImage(coordinate, float64(sign)*original, shift[axis]) {
-				return allEdgeChamferPayload{}, allEdgeAxisMap{},
-					fmt.Errorf(`%w: a placed all-edge chamfer box endpoint rounded`, ErrUnsupported)
+				return AllEdgeChamferPayload{}, AxisMap{},
+					fmt.Errorf(`%w: a placed all-edge chamfer box endpoint rounded`, decaderr.ErrUnsupported)
 			}
 			placed.Box[axis][axisMap.sourceSide(axis, sourceSide)] = coordinate
 		}
@@ -74,14 +75,14 @@ func (p allEdgeChamferPayload) PlacedGeometry() (allEdgeChamferPayload, allEdgeA
 			original = p.Center[1]
 		}
 		if !finiteExactImage(centerImage[axis], float64(axisMap.sign[axis])*original, shift[axis]) {
-			return allEdgeChamferPayload{}, allEdgeAxisMap{},
-				fmt.Errorf(`%w: the placed all-edge chamfer bore center rounded`, ErrUnsupported)
+			return AllEdgeChamferPayload{}, AxisMap{},
+				fmt.Errorf(`%w: the placed all-edge chamfer bore center rounded`, decaderr.ErrUnsupported)
 		}
 		placed.Center[axis/2] = centerImage[axis]
 	}
 	if !placed.AdmitBox() || !placed.ExactCoordinates() {
-		return allEdgeChamferPayload{}, allEdgeAxisMap{},
-			fmt.Errorf(`%w: a placed all-edge chamfer corner is not exactly representable`, ErrUnsupported)
+		return AllEdgeChamferPayload{}, AxisMap{},
+			fmt.Errorf(`%w: a placed all-edge chamfer corner is not exactly representable`, decaderr.ErrUnsupported)
 	}
 	return placed, axisMap, nil
 }
@@ -90,14 +91,14 @@ func finiteExactImage(held, signedSource, shift float64) bool {
 	return !math.IsNaN(held) && !math.IsInf(held, 0) && rationalSumEquals(signedSource, shift, held)
 }
 
-func (m allEdgeAxisMap) sourceSide(placedAxis, placedSide int) int {
+func (m AxisMap) sourceSide(placedAxis, placedSide int) int {
 	if m.sign[placedAxis] < 0 {
 		return 1 - placedSide
 	}
 	return placedSide
 }
 
-func (m allEdgeAxisMap) faceRole(index int) string {
+func (m AxisMap) faceRole(index int) string {
 	if index < 6 {
 		axis, side := index/2, index%2
 		return fmt.Sprintf("face(%d)", 2*m.source[axis]+m.sourceSide(axis, side))
