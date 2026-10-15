@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/prismpattern"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -114,7 +115,7 @@ func prismPatternJoinedBody(ctx context.Context, d *Document, ref producerID,
 			Mesh: mesh},
 		VertexBound: vertexBound, ContactAudited: true,
 		MeshBound: bound, VolSymDiff: volumeGap, AreaSlack: areaSlack,
-		DPair: facetedSourceDiameterUpper(mesh.Verts, bound), Xform: r3.Identity()}
+		DPair: facetedrecord.SourceDiameterUpper(mesh.Verts, bound), Xform: r3.Identity()}
 	if proofbound.IsNonFinite(fp.DPair) {
 		return nil, fmt.Errorf("%w: copied-prism join has no finite diameter proof", ErrUnsupported)
 	}

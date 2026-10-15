@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -54,7 +55,7 @@ func twistShellFacetedBody(ctx context.Context, d *Document, ref producerID,
 		Verts: held.Verts, VertexBound: vertexBound, Tris: held.Tris,
 		Src: held.Src, Groups: groups, MeshBound: bound,
 		VolSymDiff: held.VolumeBound, AreaSlack: held.AreaSlack,
-		DPair: facetedSourceDiameterUpper(held.Verts, bound), Xform: r3.Identity(),
+		DPair: facetedrecord.SourceDiameterUpper(held.Verts, bound), Xform: r3.Identity(),
 		ContactAudited: true,
 	}
 	return buildFacetedBodyWithProof(ctx, d, ref, payload, audit, Measurement{}, nil)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -75,7 +76,7 @@ func prismPatternFilletBody(ctx context.Context, body *Body, edges []*Edge,
 	result := facetedPayload{Verts: mesh.Verts, Tris: mesh.Tris, Src: mesh.Src,
 		Groups: mesh.Groups, VertexBound: vertexBound, AxialSectionJoin: true,
 		ContactAudited: true, MeshBound: bound, VolSymDiff: volumeGap,
-		AreaSlack: areaSlack, DPair: facetedSourceDiameterUpper(mesh.Verts, bound),
+		AreaSlack: areaSlack, DPair: facetedrecord.SourceDiameterUpper(mesh.Verts, bound),
 		Xform: r3.Identity()}
 	if proofbound.IsNonFinite(result.DPair) {
 		return nil, fmt.Errorf("%w: joined-prism fillet has no finite diameter proof", ErrUnsupported)

@@ -873,7 +873,10 @@ step; a profile composite replays its spans and a chain composite refuses. `stit
 `unstitchPayload` are aliases of `stitchrecord.Payload` and `stitchrecord.UnstitchPayload`: their `Placed`
 runs `stitchrecord.Build` and `stitchrecord.BuildUnstitchFace`. A payload that still lives in the root
 package recovers its document handle from the node's `Owner` in `Placed` and
-runs its root builder.
+runs its root builder. `facetedPayload` is one: its root builder
+`buildFacetedBodyWithProof` runs `facetedrecord.AssembleBody` over the held mesh and its source groups
+(`facetGroup` is an alias of `facetedrecord.Group`), then stores the payload with the returned diameter and
+facet-to-face map on the body.
 
 `Transform` and `Copy` pass the caller's context through payload re-evaluation.
 Faceted placement polls that context while transforming vertices, auditing and

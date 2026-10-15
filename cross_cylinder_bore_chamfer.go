@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
@@ -83,7 +84,7 @@ func tryCrossCylinderBoreMouthChamfer(ctx context.Context, body *Body,
 	for i := range vertexBound {
 		vertexBound[i] = bound
 	}
-	dPair := facetedSourceDiameterUpper(mesh.verts, bound)
+	dPair := facetedrecord.SourceDiameterUpper(mesh.verts, bound)
 	if proofbound.IsNonFinite(dPair) {
 		return nil, true, fmt.Errorf("%w: the cross-bore chamfer has no finite diameter", ErrUnsupported)
 	}

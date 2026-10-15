@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/circularbounds"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -265,7 +266,7 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 	result.Verts, result.Tris, result.Src, result.Groups = mesh.Verts, mesh.Tris, mesh.Src, mesh.Groups
 	result.VertexBound, result.MeshBound = vertexBound, bound
 	result.VolSymDiff, result.AreaSlack = volumeGap, areaSlack
-	result.DPair = facetedSourceDiameterUpper(result.Verts, result.MeshBound)
+	result.DPair = facetedrecord.SourceDiameterUpper(result.Verts, result.MeshBound)
 	if proofbound.IsNonFinite(result.DPair) {
 		return nil, fmt.Errorf("%w: circular bore has no finite diameter proof", ErrUnsupported)
 	}

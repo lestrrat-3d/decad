@@ -7,8 +7,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/exactrotation"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
-	"github.com/lestrrat-3d/decad/internal/provenance"
-	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -130,39 +128,6 @@ func TestCopyRotationOrdinaryCopyOfExactCopyKeepsNoTags(t *testing.T) {
 	for _, g := range sp.Groups {
 		require.Nil(t, g.Surface)
 	}
-}
-
-func TestExactGroupPlacedMapsCentroidAndDropsTags(t *testing.T) {
-	q, d, err := exactrotation.New(r3.Vec{}, r3.Vec{Z: 1}, units.Degrees(90))
-	require.NoError(t, err)
-	_ = d
-	origin := provenance.Ref{Producer: 1, Role: provenance.RoleCapStart}
-	g := facetGroup{
-		Origins: []provenance.Ref{origin}, HasCentroid: true, Planar: true, Reversed: true,
-		Centroid:    vecMeasurementToInternal(VecMeasurement{Value: r3.NewVec(2, 0, 5), Exactness: Exact}),
-		Surface:     surfacegeom.Plane{},
-		NormalBound: 3,
-	}
-	require.NoError(t, exactGroupPlaced(&g, q))
-	require.Nil(t, g.Surface)
-	require.Nil(t, g.Denoted)
-	require.Zero(t, g.NormalBound)
-	require.True(t, g.Planar)
-	require.True(t, g.Reversed)
-	require.Equal(t, []provenance.Ref{origin}, g.Origins)
-	require.InDelta(t, 0, g.Centroid.Value.X, 1e-12)
-	require.InDelta(t, 2, g.Centroid.Value.Y, 1e-12)
-	require.InDelta(t, 5, g.Centroid.Value.Z, 1e-12)
-	// The reading is exactly Q*c: Q is orthogonal, so the stretch charge is 0.
-	lin := q.Linear()
-	exactY := new(big.Rat).Mul(lin[1][0], big.NewRat(2, 1))
-	got := new(big.Rat)
-	got.SetFloat64(g.Centroid.Value.Y)
-	delta := new(big.Rat).Sub(got, exactY)
-	delta.Abs(delta)
-	bound := new(big.Rat)
-	require.NotNil(t, bound.SetFloat64(g.Centroid.Bound.Base()))
-	require.LessOrEqual(t, delta.Cmp(bound), 0, "reading strays from exact Q*c beyond its bound")
 }
 
 func TestCopyRotationExactSourceVertsDropForRotation(t *testing.T) {
