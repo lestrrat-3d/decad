@@ -69,7 +69,8 @@ func BernsteinRectOpenSide(q [3][]*big.Rat,
 		len(q[1]) != len(q[0]) || len(q[2]) != len(q[0]) {
 		return 0
 	}
-	box := BernsteinRectRestrict(q, ratZero(), ratOne(), tLo, tHi)
+	// The source interval is [0, 1], and the time restriction already owns fresh rows.
+	box := BernsteinRectTimeRestrict(q, tLo, tHi)
 	for _, side := range [...]int{1, -1} {
 		valid := true
 		for col := range box[0] {

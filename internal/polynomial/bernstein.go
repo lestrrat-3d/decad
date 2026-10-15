@@ -13,7 +13,6 @@ import (
 // bernsteinUnit is the read-only interval end 1. It is never written.
 var bernsteinUnit = big.NewRat(1, 1)
 
-func ratZero() *big.Rat             { return new(big.Rat) }
 func ratOne() *big.Rat              { return big.NewRat(1, 1) }
 func ratAdd(a, b *big.Rat) *big.Rat { return proofarith.AddRat(new(big.Rat), a, b) }
 func ratSub(a, b *big.Rat) *big.Rat { return proofarith.SubRat(new(big.Rat), a, b) }
