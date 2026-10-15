@@ -287,7 +287,7 @@ reads the record and not the surface.
    lateral edges convex by the walk's turn.
 10. **Measure** (§8), then commit.
 
-Steps 7–9 run through the cap-loop band itself. `draftPayload.band()` is a
+Steps 7–9 run through the cap-loop band itself. `draftPayload.Band()` is a
 `capBlendPayload` view with every loop chamfered on the far cap, `dc = d`
 across the cap and `ds = h` down the sweep, so the band's side level is the
 sketch plane and no straight slab remains. Its `draft` flag makes
@@ -431,7 +431,7 @@ payloads (DD8).
 
 ### 9.1 The mesh
 
-`tessellate_draft.go` hands `draftPayload.band()` to the cap-loop chamfer
+`tessellate_draft.go` hands `draftPayload.Band()` to the cap-loop chamfer
 tessellator with the payload's own wall geometry and far contour displacement
 (`patches`, `bandDelta`, filled by the build), so the mesh charges the numbers
 every reading of the body charged. Three things differ from a chamfer's mesh:
@@ -556,7 +556,7 @@ a tilted wall and a vertical one is their exact intersection line. Every
 reading of §8 is unchanged: a patch with a zero amount is a Plane or Cylinder
 patch whose far directrix is its near one translated.
 
-The payload records the unselected walls as `draftPayload.kept`, the
+The payload records the unselected walls as `draftPayload.Kept`, the
 `(loop, segment)` pairs read from their `side(i, j)` roles, nil when every
 wall is selected; a placement re-runs §7 over the same set (DD12). Decided
 details, each the reading the rule above implies:

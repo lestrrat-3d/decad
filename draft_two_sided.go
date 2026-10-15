@@ -14,18 +14,18 @@ import (
 // twoSidedDraftPayload keeps both halves of a taper measured from the sketch
 // plane. The two near sections are the same recorded profile at level zero.
 type twoSidedDraftPayload struct {
-	negative draftPayload
-	positive draftPayload
+	Negative draftPayload
+	Positive draftPayload
 }
 
-func (dp twoSidedDraftPayload) Transform() r3.Transform { return dp.positive.xform }
+func (dp twoSidedDraftPayload) Transform() r3.Transform { return dp.Positive.Xform }
 
 func (dp twoSidedDraftPayload) ExtentAlong(g r3.Vec) (float64, float64, float64, error) {
-	lo0, hi0, delta0, err := dp.negative.ExtentAlong(g)
+	lo0, hi0, delta0, err := dp.Negative.ExtentAlong(g)
 	if err != nil {
 		return 0, 0, 0, err
 	}
-	lo1, hi1, delta1, err := dp.positive.ExtentAlong(g)
+	lo1, hi1, delta1, err := dp.Positive.ExtentAlong(g)
 	if err != nil {
 		return 0, 0, 0, err
 	}
@@ -33,22 +33,22 @@ func (dp twoSidedDraftPayload) ExtentAlong(g r3.Vec) (float64, float64, float64,
 }
 
 func (dp twoSidedDraftPayload) AxialDelta() float64 {
-	return math.Max(dp.negative.AxialDelta(), dp.positive.AxialDelta())
+	return math.Max(dp.Negative.AxialDelta(), dp.Positive.AxialDelta())
 }
 
 func (dp twoSidedDraftPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
 	d, ref := documentHandle(env.Doc), env.Ref
-	dp.negative.xform = composed
-	dp.positive.xform = composed
+	dp.Negative.Xform = composed
+	dp.Positive.Xform = composed
 	return placedNode(evalTwoSidedDraftContext(ctx, d, ref, dp))
 }
 
 func evalTwoSidedDraftContext(ctx context.Context, d *Document, ref producerID, dp twoSidedDraftPayload) (*Body, error) {
-	negative, err := evalDraftContext(ctx, d, ref, dp.negative)
+	negative, err := evalDraftContext(ctx, d, ref, dp.Negative)
 	if err != nil {
 		return nil, wrapStageError("against-side taper", err)
 	}
-	positive, err := evalDraftContext(ctx, d, ref, dp.positive)
+	positive, err := evalDraftContext(ctx, d, ref, dp.Positive)
 	if err != nil {
 		return nil, wrapStageError("along-side taper", err)
 	}
@@ -89,8 +89,8 @@ func evalTwoSidedDraftContext(ctx context.Context, d *Document, ref producerID, 
 	if err := compositesweep.AggregateBody(ctx, bodyNode(body), parts, false); err != nil {
 		return nil, err
 	}
-	dp.negative = negativePayload
-	dp.positive = positivePayload
+	dp.Negative = negativePayload
+	dp.Positive = positivePayload
 	body.n.Payload = dp
 	return body, nil
 }

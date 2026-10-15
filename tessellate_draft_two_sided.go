@@ -26,7 +26,7 @@ func tessellateTwoSidedDraft(ctx context.Context, body *Body, dp twoSidedDraftPa
 			byRole[origin.Role] = face
 		}
 	}
-	parts := []draftPayload{dp.negative, dp.positive}
+	parts := []draftPayload{dp.Negative, dp.Positive}
 	out := bornMesh(new(Mesh))
 	vertexIndex := make(map[[3]float64]int)
 	var bounds []float64

@@ -21,15 +21,15 @@ import (
 // gives the full-revolve evaluator two cones and its mass and mesh proofs.
 func tryDraftCircleRimChamfer(ctx context.Context, b *Body, edges []*Edge, setback, setbackDelta float64) (*Body, bool, error) {
 	dp, ok := b.n.Payload.(draftPayload)
-	if !ok || !dp.nearStart || dp.taper <= 0 || len(dp.kept) != 0 ||
-		len(dp.profile.Holes) != 0 || len(dp.profile.Outer.Segments) != 1 || len(edges) != 1 {
+	if !ok || !dp.NearStart || dp.Taper <= 0 || len(dp.Kept) != 0 ||
+		len(dp.Profile.Holes) != 0 || len(dp.Profile.Outer.Segments) != 1 || len(edges) != 1 {
 		return nil, false, nil
 	}
-	circle, ok := dp.profile.Outer.Segments[0].(circleSeg)
-	if !ok || !circle.CCW || len(dp.far.Outer.Segments) != 1 || !exactSignedAxisFrame(dp.frame) {
+	circle, ok := dp.Profile.Outer.Segments[0].(circleSeg)
+	if !ok || !circle.CCW || len(dp.Far.Outer.Segments) != 1 || !exactSignedAxisFrame(dp.Frame) {
 		return nil, false, nil
 	}
-	if _, ok := dp.far.Outer.Segments[0].(circleSeg); !ok {
+	if _, ok := dp.Far.Outer.Segments[0].(circleSeg); !ok {
 		return nil, false, nil
 	}
 	caps := prismCapsOf(b)
@@ -44,9 +44,9 @@ func tryDraftCircleRimChamfer(ctx context.Context, b *Body, edges []*Edge, setba
 		return nil, true, err
 	}
 	near := proofbound.MeasuredScalar(nearRadius, nearDelta)
-	height := proofbound.BoundedSub(proofbound.MeasuredScalar(dp.z1, dp.z1Delta),
-		proofbound.MeasuredScalar(dp.z0, dp.z0Delta))
-	amount := proofbound.MeasuredScalar(dp.d, dp.dDelta)
+	height := proofbound.BoundedSub(proofbound.MeasuredScalar(dp.Z1, dp.Z1Delta),
+		proofbound.MeasuredScalar(dp.Z0, dp.Z0Delta))
+	amount := proofbound.MeasuredScalar(dp.D, dp.DDelta)
 	cut := proofbound.MeasuredScalar(setback, setbackDelta)
 	slope := proofbound.BoundedDiv(amount, height)
 	norm := proofbound.BoundedSqrt(proofbound.BoundedAdd(proofbound.ExactScalar(1),
@@ -70,12 +70,12 @@ func tryDraftCircleRimChamfer(ctx context.Context, b *Body, edges []*Edge, setba
 	// A line's true-to-held distance is at most its endpoints' maximum
 	// distance when both are read at the same parameter. The source circle,
 	// axial levels, taper and setback supply all five meridian endpoints.
-	point := prismrecord.Payload{Profile: dp.profile, Frame: dp.frame, Z0: dp.z0,
-		Z0Delta: dp.z0Delta, Xform: r3.Identity()}
+	point := prismrecord.Payload{Profile: dp.Profile, Frame: dp.Frame, Z0: dp.Z0,
+		Z0Delta: dp.Z0Delta, Xform: r3.Identity()}
 	originDelta := point.PointBound(proofbound.ExactScalar(circle.Center.U),
-		proofbound.ExactScalar(circle.Center.V), proofbound.MeasuredScalar(dp.z0, dp.z0Delta))
+		proofbound.ExactScalar(circle.Center.V), proofbound.MeasuredScalar(dp.Z0, dp.Z0Delta))
 
-	epsilon := math.Max(originDelta, dp.farDelta)
+	epsilon := math.Max(originDelta, dp.FarDelta)
 	for _, q := range []proofbound.BoundedScalar{near, far, height, cut, slope, norm,
 		sideStep, capR, sideZ, sideR} {
 		epsilon = math.Max(epsilon, q.Bound)
@@ -101,8 +101,8 @@ func tryDraftCircleRimChamfer(ctx context.Context, b *Body, edges []*Edge, setba
 		line(sideEnd, baseEnd),
 		line(baseEnd, zero),
 	}}}
-	origin := dp.frame.ToWorldUV(circle.Center.U, circle.Center.V).Add(dp.frame.N().Scale(dp.z0))
-	frame, err := r3.NewFrame(origin, dp.frame.N(), dp.frame.U())
+	origin := dp.Frame.ToWorldUV(circle.Center.U, circle.Center.V).Add(dp.Frame.N().Scale(dp.Z0))
+	frame, err := r3.NewFrame(origin, dp.Frame.N(), dp.Frame.U())
 	if err != nil {
 		return nil, true, fmt.Errorf(`%w: the tapered circle's meridian frame: %v`, ErrUnsupported, err)
 	}
@@ -120,7 +120,7 @@ func tryDraftCircleRimChamfer(ctx context.Context, b *Body, edges []*Edge, setba
 	}
 	result, err := bodyResult(revolveplan.Build(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), revolvePayload{
 		Profile: profile, Frame: frame, Ax: ax, Phi0: phi0, Phi1: phi1, Full: full,
-		Den: den, Xform: dp.xform, RadialProof: ax.RadialProof,
+		Den: den, Xform: dp.Xform, RadialProof: ax.RadialProof,
 		SectionDelta: sectionDelta, SectionWhole: true,
 		BlendSegs: []map[int]struct{}{{2: {}}}, BlendKind: "chamfer",
 		DraftCircleCaps: true,

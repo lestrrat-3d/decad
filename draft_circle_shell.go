@@ -25,16 +25,16 @@ import (
 func tryDraftCircleShell(ctx context.Context, b *Body, removed []*Face, sense ShellSense,
 	tmm, tDelta float64) (*Body, bool, error) {
 	dp, ok := b.n.Payload.(draftPayload)
-	if !ok || sense != Inward || !dp.nearStart || dp.taper <= 0 || len(dp.kept) != 0 ||
-		len(dp.profile.Holes) != 0 || len(dp.profile.Outer.Segments) != 1 ||
-		len(dp.far.Outer.Segments) != 1 || !exactSignedAxisFrame(dp.frame) {
+	if !ok || sense != Inward || !dp.NearStart || dp.Taper <= 0 || len(dp.Kept) != 0 ||
+		len(dp.Profile.Holes) != 0 || len(dp.Profile.Outer.Segments) != 1 ||
+		len(dp.Far.Outer.Segments) != 1 || !exactSignedAxisFrame(dp.Frame) {
 		return nil, false, nil
 	}
-	nearCircle, ok := dp.profile.Outer.Segments[0].(circleSeg)
+	nearCircle, ok := dp.Profile.Outer.Segments[0].(circleSeg)
 	if !ok || !nearCircle.CCW {
 		return nil, false, nil
 	}
-	farCircle, ok := dp.far.Outer.Segments[0].(circleSeg)
+	farCircle, ok := dp.Far.Outer.Segments[0].(circleSeg)
 	if !ok {
 		return nil, false, nil
 	}
@@ -54,9 +54,9 @@ func tryDraftCircleShell(ctx context.Context, b *Body, removed []*Face, sense Sh
 		return nil, true, err
 	}
 	near := proofbound.MeasuredScalar(radius, radiusDelta)
-	height := proofbound.BoundedSub(proofbound.MeasuredScalar(dp.z1, dp.z1Delta),
-		proofbound.MeasuredScalar(dp.z0, dp.z0Delta))
-	amount := proofbound.MeasuredScalar(dp.d, dp.dDelta)
+	height := proofbound.BoundedSub(proofbound.MeasuredScalar(dp.Z1, dp.Z1Delta),
+		proofbound.MeasuredScalar(dp.Z0, dp.Z0Delta))
+	amount := proofbound.MeasuredScalar(dp.D, dp.DDelta)
 	thickness := proofbound.MeasuredScalar(tmm, tDelta)
 	positive := func(q proofbound.BoundedScalar) bool {
 		lo, _ := proofbound.BoundedEnds(q)
@@ -84,12 +84,12 @@ func tryDraftCircleShell(ctx context.Context, b *Body, removed []*Face, sense Sh
 	// point by the same affine parameter. Each coordinate's interval reaches
 	// the true endpoint, so the endpoint maximum reaches its entire edge.
 	// Include the existing draft's far-contour displacement and frame lift.
-	point := prismrecord.Payload{Profile: dp.profile, Frame: dp.frame, Z0: dp.z0,
-		Z0Delta: dp.z0Delta, Xform: r3.Identity()}
+	point := prismrecord.Payload{Profile: dp.Profile, Frame: dp.Frame, Z0: dp.Z0,
+		Z0Delta: dp.Z0Delta, Xform: r3.Identity()}
 	originDelta := point.PointBound(proofbound.ExactScalar(nearCircle.Center.U),
-		proofbound.ExactScalar(nearCircle.Center.V), proofbound.MeasuredScalar(dp.z0, dp.z0Delta))
+		proofbound.ExactScalar(nearCircle.Center.V), proofbound.MeasuredScalar(dp.Z0, dp.Z0Delta))
 
-	epsilon := math.Max(originDelta, dp.farDelta)
+	epsilon := math.Max(originDelta, dp.FarDelta)
 	epsilon = math.Max(epsilon, math.Abs(farHeld-far.Value)+farHeldDelta)
 	epsilon = math.Max(epsilon, math.Hypot(farCircle.Center.U-nearCircle.Center.U,
 		farCircle.Center.V-nearCircle.Center.V))
@@ -120,8 +120,8 @@ func tryDraftCircleShell(ctx context.Context, b *Body, removed []*Face, sense Sh
 		line(outerRim, baseRim),
 		line(baseRim, axisNear),
 	}}}
-	origin := dp.frame.ToWorldUV(nearCircle.Center.U, nearCircle.Center.V).Add(dp.frame.N().Scale(dp.z0))
-	frame, err := r3.NewFrame(origin, dp.frame.N(), dp.frame.U())
+	origin := dp.Frame.ToWorldUV(nearCircle.Center.U, nearCircle.Center.V).Add(dp.Frame.N().Scale(dp.Z0))
+	frame, err := r3.NewFrame(origin, dp.Frame.N(), dp.Frame.U())
 	if err != nil {
 		return nil, true, fmt.Errorf(`%w: the tapered circle's meridian frame: %v`, ErrUnsupported, err)
 	}
@@ -139,7 +139,7 @@ func tryDraftCircleShell(ctx context.Context, b *Body, removed []*Face, sense Sh
 	}
 	result, err := bodyResult(revolveplan.Build(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), revolvePayload{
 		Profile: profile, Frame: frame, Ax: ax, Phi0: phi0, Phi1: phi1, Full: full,
-		Den: den, Xform: dp.xform, RadialProof: ax.RadialProof,
+		Den: den, Xform: dp.Xform, RadialProof: ax.RadialProof,
 		SectionDelta: sectionDelta, SectionWhole: true, DraftCircleShellRoles: true,
 	}, work))
 	if err != nil {

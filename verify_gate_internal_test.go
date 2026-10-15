@@ -386,9 +386,9 @@ func TestPlacedGateDiameterChargesEveryPoint(t *testing.T) {
 			placed, err := Transform(t.Context(), body, gateFarPlacement(t, i))
 			require.NoError(t, err)
 			pdp := placed.n.Payload.(draftPayload)
-			nearZ, _, farZ, _ := pdp.levels()
-			view := prismrecord.Payload{Frame: pdp.frame, Xform: pdp.xform, Z0: nearZ, Z1: farZ}
-			least := new(big.Rat).Sub(new(big.Rat).SetFloat64(dp.d), new(big.Rat).SetFloat64(dp.dDelta))
+			nearZ, _, farZ, _ := pdp.Levels()
+			view := prismrecord.Payload{Frame: pdp.Frame, Xform: pdp.Xform, Z0: nearZ, Z1: farZ}
+			least := new(big.Rat).Sub(new(big.Rat).SetFloat64(dp.D), new(big.Rat).SetFloat64(dp.DDelta))
 			upper := exactDraftSquareDiameterSquare(view, 5, least)
 			requireGateDiameterWithin(t, read(t, placed), floatSqrtOf(upper)-gateFarSlack(), upper)
 		}
@@ -433,11 +433,11 @@ func TestPlacedGateDiameterChargesEveryPoint(t *testing.T) {
 			placement := gateFarPlacement(t, i)
 			placed, err := Transform(t.Context(), body, placement)
 			require.NoError(t, err)
-			least := new(big.Rat).Sub(new(big.Rat).SetFloat64(dp.d), new(big.Rat).SetFloat64(dp.dDelta))
+			least := new(big.Rat).Sub(new(big.Rat).SetFloat64(dp.D), new(big.Rat).SetFloat64(dp.DDelta))
 			across := new(big.Rat).Sub(big.NewRat(10, 1), least)
 			local := new(big.Rat).Add(across.Mul(across, across), big.NewRat(64, 1))
 			upper := new(big.Rat).Mul(local, placedStretchSquare(placement))
-			lower := math.Hypot(10-(dp.d+dp.dDelta), 8) - gateFarSlack()
+			lower := math.Hypot(10-(dp.D+dp.DDelta), 8) - gateFarSlack()
 			requireGateDiameterWithin(t, read(t, placed), lower, upper)
 		}
 	})

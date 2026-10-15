@@ -318,8 +318,8 @@ func bodyGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body *Bo
 		}
 		return vertexGatePoints(budget, body, 0)
 	case twoSidedDraftPayload:
-		negative, negDelta := draftCapPrisms(pl.negative)
-		positive, posDelta := draftCapPrisms(pl.positive)
+		negative, negDelta := draftCapPrisms(pl.Negative)
+		positive, posDelta := draftCapPrisms(pl.Positive)
 		prisms := append(negative, positive...)
 		if g, ok, err := prismGatePoints(budget, prisms, math.Max(negDelta, posDelta)); err != nil || ok {
 			return g, ok, err

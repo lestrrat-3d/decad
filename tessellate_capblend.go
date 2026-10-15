@@ -590,7 +590,7 @@ func emitCapBand(budget *proofbound.WorkBudget, m *Mesh, cbp capBlendPayload, lm
 		role := fmt.Sprintf("chamferCap(%s,%d,%d)", capName, lm.li, p)
 		if cbp.Draft {
 			// A draft band has no apex patch, so patch p is walk p, and its
-			// face carries the prism's own wall role (draftPayload.patches).
+			// face carries the prism's own wall role (draftPayload.Patches).
 			role = prismWallRole(lm.li, lm.walks[p].Segs[0])
 		}
 		if roleOf != nil {

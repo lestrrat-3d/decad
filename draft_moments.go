@@ -30,7 +30,7 @@ import (
 // measureDraftBody stamps the body's volume, area, centroid, bounds and its
 // two cap faces' areas. bands are capblend.BuildBand's results in loop order.
 func measureDraftBody(ctx context.Context, body *Body, dp draftPayload, cbp capBlendPayload, bands []capBandResult, nearCap, farCap *Face, work *freeform.FreeformWork) error {
-	_, _, farZ, matSign := dp.levels()
+	_, _, farZ, matSign := dp.Levels()
 	var nearArea, farArea, patchArea, volume proofbound.BoundedScalar
 	var mu, mv, mz proofbound.BoundedScalar
 	for li, loop := range cbp.Loops() {
@@ -75,7 +75,7 @@ func measureDraftBody(ctx context.Context, body *Body, dp draftPayload, cbp capB
 			return err
 		}
 		nearArea = proofbound.BoundedAdd(nearArea, signed(near))
-		boundary, err := cbp.ContourOf(ctx, li, loop, dp.d)
+		boundary, err := cbp.ContourOf(ctx, li, loop, dp.D)
 		if err != nil {
 			return err
 		}
@@ -111,7 +111,7 @@ func measureDraftBody(ctx context.Context, body *Body, dp draftPayload, cbp capB
 	if err != nil {
 		return err
 	}
-	pl := prismrecord.Payload{Frame: dp.frame, Xform: dp.xform}
+	pl := prismrecord.Payload{Frame: dp.Frame, Xform: dp.Xform}
 	cu := proofbound.BoundedQuotient(mu.Value, mu.Bound, volume.Value, volume.Bound)
 	cv := proofbound.BoundedQuotient(mv.Value, mv.Bound, volume.Value, volume.Bound)
 	cz := proofbound.BoundedQuotient(mz.Value, mz.Bound, volume.Value, volume.Bound)
@@ -123,7 +123,7 @@ func measureDraftBody(ctx context.Context, body *Body, dp draftPayload, cbp capB
 		Bound:     units.Millimeters(centroidBound),
 	}
 	body.n.Bounds = bounds
-	if err := prismrecord.ChargeMap(bodyNode(body), dp.frame, dp.xform); err != nil {
+	if err := prismrecord.ChargeMap(bodyNode(body), dp.Frame, dp.Xform); err != nil {
 		return err
 	}
 	return topobuild.ValidateAnalyticMeasurements(bodyNode(body))

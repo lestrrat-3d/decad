@@ -26,32 +26,32 @@ import (
 // span, and the far section Q = P offset sharply by d with the displacement
 // its built contour carries (docs/draft-design.md §2, §8.1).
 type draftPayload struct {
-	profile profileRecord
-	frame   r3.Frame
-	z0, z1  float64
-	z0Delta float64
-	z1Delta float64
+	Profile profileRecord
+	Frame   r3.Frame
+	Z0, Z1  float64
+	Z0Delta float64
+	Z1Delta float64
 	// nearStart is true when P sits at z0 (an Along or forward stop extent)
 	// and false when it sits at z1 (Against or backward stop). The far
 	// section sits at the other end.
-	nearStart bool
+	NearStart bool
 	// taper is the signed taper in radians and taperDelta its unit
 	// conversion's rounding: the stated angle lies within taperDelta of it.
-	taper, taperDelta float64
-	xform             r3.Transform
+	Taper, TaperDelta float64
+	Xform             r3.Transform
 	// kept names the recorded segments of the walls a subset draft leaves
 	// vertical (docs/draft-design.md §10.2), keyed by loop and segment; empty
 	// for a tapered extrude or a draft of every wall, which moves them all.
-	kept map[offset2d.DraftWall]struct{}
+	Kept map[offset2d.DraftWall]struct{}
 
 	// d is the held offset amount h·tan α and dDelta the reach of every amount
 	// the stated sweep and taper denote from it (draftOffset).
-	d, dDelta float64
+	D, DDelta float64
 	// far is the far section Q as built, one loop per loop of profile in the
 	// same order, and farDelta the largest contour displacement any of its
 	// loops carries (capband.ContourDisplacement).
-	far      profileRecord
-	farDelta float64
+	Far      profileRecord
+	FarDelta float64
 	// patches is every wall patch's side(i, j) role beside the plane-local
 	// geometry capblend.BuildBand built it from, in loop order then walk order, and
 	// bandDelta each loop's own far contour displacement keyed as the band view
@@ -59,19 +59,19 @@ type draftPayload struct {
 	// (band), so the tessellator (tessellate_draft.go) charges the same patch
 	// geometry and contour displacement every reading of the body charged.
 	// Both are plane-local and placement-invariant.
-	patches   []capPatch
-	bandDelta map[capBandKey]float64
+	Patches   []capPatch
+	BandDelta map[capBandKey]float64
 }
 
 // Transform is the accumulated rigid placement.
-func (dp draftPayload) Transform() r3.Transform { return dp.xform }
+func (dp draftPayload) Transform() r3.Transform { return dp.Xform }
 
 // Placed re-evaluates the same record under the composed motion: every gate
 // the build runs is a fact of the record, so a placed body re-derives the
 // identical far section and walls (docs/draft-design.md Table DD row DD12).
 func (dp draftPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
 	d, ref := documentHandle(env.Doc), env.Ref
-	dp.xform = composed
+	dp.Xform = composed
 	return placedNode(evalDraftContext(ctx, d, ref, dp))
 }
 
@@ -82,24 +82,24 @@ func (dp draftPayload) Placed(ctx context.Context, env topo.Env, composed r3.Tra
 // selects the sharp corner rule and the prism's roles and convexity, and its
 // draftKept the walls a subset draft leaves in place (docs/draft-design.md §1,
 // §7, §10.2).
-func (dp draftPayload) band() capBlendPayload {
-	setback := capSetback{Dc: dp.d, DcDelta: dp.dDelta, Ds: dp.z1 - dp.z0}
+func (dp draftPayload) Band() capBlendPayload {
+	setback := capSetback{Dc: dp.D, DcDelta: dp.DDelta, Ds: dp.Z1 - dp.Z0}
 	every := map[int]bool{}
-	for li := range len(dp.profile.Holes) + 1 {
+	for li := range len(dp.Profile.Holes) + 1 {
 		every[li] = true
 	}
 	cbp := capBlendPayload{
-		Profile: dp.profile,
-		Frame:   dp.frame,
-		Z0:      dp.z0, Z1: dp.z1,
-		Z0Delta: dp.z0Delta, Z1Delta: dp.z1Delta,
-		Xform:     dp.xform,
+		Profile: dp.Profile,
+		Frame:   dp.Frame,
+		Z0:      dp.Z0, Z1: dp.Z1,
+		Z0Delta: dp.Z0Delta, Z1Delta: dp.Z1Delta,
+		Xform:     dp.Xform,
 		Draft:     true,
-		Patches:   dp.patches,
-		BandDelta: dp.bandDelta,
-		DraftKept: dp.kept,
+		Patches:   dp.Patches,
+		BandDelta: dp.BandDelta,
+		DraftKept: dp.Kept,
 	}
-	if dp.nearStart {
+	if dp.NearStart {
 		cbp.End, cbp.EndLoops = setback, every
 	} else {
 		cbp.Start, cbp.StartLoops = setback, every
@@ -110,11 +110,11 @@ func (dp draftPayload) band() capBlendPayload {
 // levels returns the near level, its axial displacement, the far level and
 // the far cap's material sense in the band's convention: +1 when the far
 // section is the z0 cap, −1 when it is the z1 cap.
-func (dp draftPayload) levels() (nearZ, nearDelta, farZ, matSign float64) {
-	if dp.nearStart {
-		return dp.z0, dp.z0Delta, dp.z1, -1
+func (dp draftPayload) Levels() (nearZ, nearDelta, farZ, matSign float64) {
+	if dp.NearStart {
+		return dp.Z0, dp.Z0Delta, dp.Z1, -1
 	}
-	return dp.z1, dp.z1Delta, dp.z0, +1
+	return dp.Z1, dp.Z1Delta, dp.Z0, +1
 }
 
 // ExtentAlong is the through-all stop's reading of the draft body (stops.go):
@@ -122,7 +122,7 @@ func (dp draftPayload) levels() (nearZ, nearDelta, farZ, matSign float64) {
 // sketch plane and the far section at the far level, each beside its own
 // displacement.
 func (dp draftPayload) ExtentAlong(g r3.Vec) (float64, float64, float64, error) {
-	return dp.band().ExtentBoundedAlong(context.Background(), g, freeform.NewFreeformWork())
+	return dp.Band().ExtentBoundedAlong(context.Background(), g, freeform.NewFreeformWork())
 }
 
 // AuditExtent reads the analytic extent the composite sweep audit needs
@@ -130,7 +130,7 @@ func (dp draftPayload) ExtentAlong(g r3.Vec) (float64, float64, float64, error) 
 func (dp draftPayload) AuditExtent(
 	ctx context.Context, direction r3.Vec, work *freeform.FreeformWork,
 ) (float64, float64, float64, error) {
-	return dp.band().ExtentBoundedAlong(ctx, direction, work)
+	return dp.Band().ExtentBoundedAlong(ctx, direction, work)
 }
 
 // AuditEndpointSupports reports that each draft slab stays between its two
@@ -139,7 +139,7 @@ func (dp draftPayload) AuditEndpointSupports() bool { return true }
 
 // AxialDelta is the larger sweep-level displacement a body-relative stop
 // resolving against this body must preserve.
-func (dp draftPayload) AxialDelta() float64 { return math.Max(dp.z0Delta, dp.z1Delta) }
+func (dp draftPayload) AxialDelta() float64 { return math.Max(dp.Z0Delta, dp.Z1Delta) }
 
 // draftOffset is §8.1's offset amount: d = h·tan α as a float, beside dDelta,
 // the reach from d of the exact product of three enclosures — the sweep

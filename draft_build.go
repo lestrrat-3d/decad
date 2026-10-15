@@ -28,7 +28,7 @@ import (
 // SD in §5's stage order, the near cap over the recorded section P, the far
 // cap over its sharp offset Q, and one ruled wall per walk between them. The
 // walls are the cap-loop band of docs/modify-reach-design.md §8.3 with no
-// straight slab below it: draftPayload.band hands capblend.BuildBand a view whose
+// straight slab below it: draftPayload.Band hands capblend.BuildBand a view whose
 // side level is the sketch plane and whose cap contour is Q, so every wall
 // patch, ruling and far-cap edge, and every bound they carry, comes from that
 // one construction. The measurements are draft_moments.go's.
@@ -74,24 +74,24 @@ func (d *Document) extrudeDraft(ctx context.Context, profile profileRecord, fram
 	}
 	ref := d.nextProducerID()
 	base := draftPayload{
-		profile:    profile,
-		frame:      frame,
-		z0:         sweep.z0,
-		z1:         sweep.z1,
-		z0Delta:    sweep.z0Delta,
-		z1Delta:    sweep.z1Delta,
-		nearStart:  sweep.z0 == 0,
-		taper:      alpha,
-		taperDelta: alphaDelta,
-		xform:      r3.Identity(),
+		Profile:    profile,
+		Frame:      frame,
+		Z0:         sweep.z0,
+		Z1:         sweep.z1,
+		Z0Delta:    sweep.z0Delta,
+		Z1Delta:    sweep.z1Delta,
+		NearStart:  sweep.z0 == 0,
+		Taper:      alpha,
+		TaperDelta: alphaDelta,
+		Xform:      r3.Identity(),
 	}
 	var body *Body
 	if sweep.z0 < 0 && sweep.z1 > 0 {
 		negative, positive := base, base
-		negative.z1, negative.z1Delta, negative.nearStart = 0, 0, false
-		positive.z0, positive.z0Delta, positive.nearStart = 0, 0, true
+		negative.Z1, negative.Z1Delta, negative.NearStart = 0, 0, false
+		positive.Z0, positive.Z0Delta, positive.NearStart = 0, 0, true
 		body, err = evalTwoSidedDraftContext(ctx, d, ref, twoSidedDraftPayload{
-			negative: negative, positive: positive,
+			Negative: negative, Positive: positive,
 		})
 	} else {
 		body, err = evalDraftContext(ctx, d, ref, base)
@@ -125,33 +125,33 @@ func evalDraftContext(ctx context.Context, doc *Document, ref producerID, dp dra
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	height := proofbound.BoundedSub(proofbound.MeasuredScalar(dp.z1, dp.z1Delta), proofbound.MeasuredScalar(dp.z0, dp.z0Delta))
+	height := proofbound.BoundedSub(proofbound.MeasuredScalar(dp.Z1, dp.Z1Delta), proofbound.MeasuredScalar(dp.Z0, dp.Z0Delta))
 	if !(height.Value > 0) {
 		return nil, fmt.Errorf(`%w: the sweep interval is empty`, ErrDegenerate)
 	}
-	off, offDelta, err := draftOffset(height.Value, height.Bound, dp.taper, dp.taperDelta)
+	off, offDelta, err := draftOffset(height.Value, height.Bound, dp.Taper, dp.TaperDelta)
 	if err != nil {
 		return nil, err
 	}
-	dp.d, dp.dDelta = off, offDelta
+	dp.D, dp.DDelta = off, offDelta
 
 	budget := proofbound.NewWorkBudget(ctx)
 	work := freeform.NewFreeformWork()
-	walks, err := offset2d.DraftSectionWalks(budget, dp.profile, dp.kept, work, shellTol)
+	walks, err := offset2d.DraftSectionWalks(budget, dp.Profile, dp.Kept, work, shellTol)
 	if err != nil {
 		return nil, err
 	}
-	far, err := offset2d.DraftFarSection(budget, walks, dp.kept, dp.d, shellTol)
+	far, err := offset2d.DraftFarSection(budget, walks, dp.Kept, dp.D, shellTol)
 	if err != nil {
 		return nil, err
 	}
-	if err := offset2d.AuditOffsetSectionBudget(budget, dp.profile, far); err != nil {
+	if err := offset2d.AuditOffsetSectionBudget(budget, dp.Profile, far); err != nil {
 		return nil, offset2d.DraftAuditError(err)
 	}
-	if err := auditDraftSpan(budget, dp.profile, walks, dp.kept, dp.d, dp.dDelta); err != nil {
+	if err := auditDraftSpan(budget, dp.Profile, walks, dp.Kept, dp.D, dp.DDelta); err != nil {
 		return nil, err
 	}
-	dp.far = far
+	dp.Far = far
 	return buildDraftBody(ctx, doc, ref, dp, work)
 }
 
@@ -196,9 +196,9 @@ func auditDraftSpan(budget *proofbound.WorkBudget, profile profileRecord, walks 
 // the near cap, a far rim edge its wall and the far cap, a ruling its two
 // walls. draft_moments.go then measures the body.
 func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draftPayload, work *freeform.FreeformWork) (*Body, error) {
-	cbp := dp.band()
+	cbp := dp.Band()
 	loops := cbp.Loops()
-	nearZ, nearDelta, farZ, matSign := dp.levels()
+	nearZ, nearDelta, farZ, matSign := dp.Levels()
 	body := bornBody(&Body{n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Doc: documentNode(doc)}})
 	pl := cbp.PrismLike(0, 0)
 
@@ -206,8 +206,8 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 	nearLoops := make([]*Loop, len(loops))
 	farLoops := make([]*Loop, len(loops))
 	bands := make([]capBandResult, len(loops))
-	dp.patches = nil
-	dp.bandDelta = make(map[capBandKey]float64, len(loops))
+	dp.Patches = nil
+	dp.BandDelta = make(map[capBandKey]float64, len(loops))
 	for li, loop := range loops {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -225,34 +225,34 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 		nearLoops[li] = bornLoop(&Loop{n: topo.Loop{Outer: li == 0, CoEdges: nearCo}})
 		farLoops[li] = bornLoop(&Loop{n: topo.Loop{Outer: li == 0, CoEdges: band.CapCo}})
 		bands[li] = band
-		dp.farDelta = math.Max(dp.farDelta, band.Delta)
-		dp.bandDelta[capBandKey{Loop: li, Start: !dp.nearStart}] = band.Delta
+		dp.FarDelta = math.Max(dp.FarDelta, band.Delta)
+		dp.BandDelta[capBandKey{Loop: li, Start: !dp.NearStart}] = band.Delta
 		if len(band.Patches) != len(band.Geom) {
 			return nil, fmt.Errorf(`%w: the tapered extrude's wall band on loop %d built %d walls over %d patch geometries`, ErrDegenerate, li, len(band.Patches), len(band.Geom))
 		}
 		for p, f := range band.Patches {
-			dp.patches = append(dp.patches, capPatch{Role: f.Origins[0].Role, Geom: band.Geom[p]})
+			dp.Patches = append(dp.Patches, capPatch{Role: f.Origins[0].Role, Geom: band.Geom[p]})
 		}
 	}
 
 	startLoops, endLoops := farLoops, nearLoops
-	if dp.nearStart {
+	if dp.NearStart {
 		startLoops, endLoops = nearLoops, farLoops
 	}
-	startFrame, err := pl.CapFrame(dp.z0, true)
+	startFrame, err := pl.CapFrame(dp.Z0, true)
 	if err != nil {
 		return nil, err
 	}
-	endFrame, err := pl.CapFrame(dp.z1, false)
+	endFrame, err := pl.CapFrame(dp.Z1, false)
 	if err != nil {
 		return nil, err
 	}
 	capStart := bornFace(&Face{
 		n: topo.Face{
-			AxialDelta:    dp.z0Delta,
+			AxialDelta:    dp.Z0Delta,
 			HasAxialDelta: true,
 			Surface:       surfacegeom.Plane{Frame: startFrame},
-			CapRecord:     &topo.CapRecord{Frame: pl.Frame, Xform: pl.Xform, Z: dp.z0},
+			CapRecord:     &topo.CapRecord{Frame: pl.Frame, Xform: pl.Xform, Z: dp.Z0},
 			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapStart}},
 			Body:          bodyNode(body),
 			Loops:         loopNodes(startLoops),
@@ -260,10 +260,10 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 	})
 	capEnd := bornFace(&Face{
 		n: topo.Face{
-			AxialDelta:    dp.z1Delta,
+			AxialDelta:    dp.Z1Delta,
 			HasAxialDelta: true,
 			Surface:       surfacegeom.Plane{Frame: endFrame},
-			CapRecord:     &topo.CapRecord{Frame: pl.Frame, Xform: pl.Xform, Z: dp.z1},
+			CapRecord:     &topo.CapRecord{Frame: pl.Frame, Xform: pl.Xform, Z: dp.Z1},
 			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapEnd}},
 			Body:          bodyNode(body),
 			Loops:         loopNodes(endLoops),
@@ -276,7 +276,7 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 	body.n.Lumps = []*topo.Lump{lumpNode(bornLump(&Lump{n: topo.Lump{Shells: []*topo.FaceShell{faceShellNode(bornFaceShell(&FaceShell{n: topo.FaceShell{Faces: faceNodes(faces)}}))}}}))}
 
 	nearCap, farCap := capStart, capEnd
-	if !dp.nearStart {
+	if !dp.NearStart {
 		nearCap, farCap = capEnd, capStart
 	}
 	if err := measureDraftBody(ctx, body, dp, cbp, bands, nearCap, farCap, work); err != nil {
