@@ -173,7 +173,7 @@ func publishCoilReadings(body *Body, rec coilshell.Record, sh coilshell.Shell, m
 	}
 
 	body.n.Bounds = boxToInternal(coilBounds(sh))
-	return validateLoftBodyMeasurements(body)
+	return topobuild.ValidateLoftBodyMeasurements(&body.n)
 }
 
 // coilBounds is Table CM's Bounds row. Every true point lies within its
@@ -205,7 +205,7 @@ func coilBounds(sh coilshell.Shell) Box {
 // per segment junction and one vertex per junction per cap. A whole circle
 // has no junction: its wall is a band bounded by its two rim circles, which
 // close on one seam vertex per cap. Every loop is stated in the local
-// winding and passed through loftLoopCoedges, which carries the shell's one
+// winding and passed through topobuild.LoftLoopCoedges, which carries the shell's one
 // orientation decision into the directed boundary.
 func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coilshell.Record, sh coilshell.Shell, capRegion coil.Iv, walls []coil.Iv) ([]*Face, error) {
 	n := rec.N
@@ -282,14 +282,14 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 			startCo[m-1-k] = topo.CoEdge{Edge: edgeNode(rimStart[i]), Forward: false}
 			endCo[k] = topo.CoEdge{Edge: edgeNode(rimEnd[i]), Forward: true}
 		}
-		capStartLoops = append(capStartLoops, bornLoop(&Loop{n: topo.Loop{Outer: loop == 0, CoEdges: loftLoopCoedges(startCo, sh.Reversed)}}))
-		capEndLoops = append(capEndLoops, bornLoop(&Loop{n: topo.Loop{Outer: loop == 0, CoEdges: loftLoopCoedges(endCo, sh.Reversed)}}))
+		capStartLoops = append(capStartLoops, bornLoop(&Loop{n: topo.Loop{Outer: loop == 0, CoEdges: topobuild.LoftLoopCoedges(startCo, sh.Reversed)}}))
+		capEndLoops = append(capEndLoops, bornLoop(&Loop{n: topo.Loop{Outer: loop == 0, CoEdges: topobuild.LoftLoopCoedges(endCo, sh.Reversed)}}))
 	}
-	capStartSurf, err := planeFromTriangle(sh.Verts, sh.Tris[sh.Walls])
+	capStartSurf, err := topobuild.PlaneFromTriangle(sh.Verts, sh.Tris[sh.Walls])
 	if err != nil {
 		return nil, err
 	}
-	capEndSurf, err := planeFromTriangle(sh.Verts, sh.Tris[sh.Walls+sh.CapStartCount])
+	capEndSurf, err := topobuild.PlaneFromTriangle(sh.Verts, sh.Tris[sh.Walls+sh.CapStartCount])
 	if err != nil {
 		return nil, err
 	}
@@ -350,11 +350,11 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 		})
 		if seg.Closed {
 			face.n.Loops = []*topo.Loop{
-				loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: loftLoopCoedges([]topo.CoEdge{{Edge: edgeNode(rimStart[i]), Forward: true}}, sh.Reversed)}})),
-				loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: loftLoopCoedges([]topo.CoEdge{{Edge: edgeNode(rimEnd[i]), Forward: false}}, sh.Reversed)}})),
+				loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{{Edge: edgeNode(rimStart[i]), Forward: true}}, sh.Reversed)}})),
+				loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{{Edge: edgeNode(rimEnd[i]), Forward: false}}, sh.Reversed)}})),
 			}
 		} else {
-			face.n.Loops = []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: loftLoopCoedges([]topo.CoEdge{
+			face.n.Loops = []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{
 				{Edge: edgeNode(rimStart[i]), Forward: true},
 				{Edge: edgeNode(helix[next]), Forward: true},
 				{Edge: edgeNode(rimEnd[i]), Forward: false},

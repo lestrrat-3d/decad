@@ -347,7 +347,7 @@ func evalTwistedSweep(ctx context.Context, d *Document, ref producerID, profile 
 		face.n.AreaBound = proofbound.AbsSumUpper(face.n.AreaBound, face.n.Area, trueArea, trueAreaBound)
 		face.n.AxialDelta, face.n.HasAxialDelta = delta, true
 	}
-	if err := validateLoftBodyMeasurements(heldBody); err != nil {
+	if err := topobuild.ValidateLoftBodyMeasurements(&heldBody.n); err != nil {
 		return nil, err
 	}
 	heldBody.n.Payload = twistedSweepPayload{

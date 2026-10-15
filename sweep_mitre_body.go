@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sweepmitre"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -48,12 +49,12 @@ func mitredJunctionConvex(exact []sweepRatVec, primary, other [3]int, a, b int) 
 // one Vertex per section vertex, one section edge per profile segment per
 // section, one longitudinal edge per profile vertex per span, one four-edge
 // face per wall and the two caps. Every loop is stated in the local winding
-// and passed through loftLoopCoedges, which carries the whole-shell reversal
+// and passed through topobuild.LoftLoopCoedges, which carries the whole-shell reversal
 // into the directed boundary.
 func buildMitredTopology(ctx context.Context, body *Body, ref producerID, a sweepmitre.Assembly, exact []sweepRatVec, verts []r3.Vec, areas [][2]*big.Rat, delta float64) ([]*Face, error) {
-	vertexObjs := make([]*Vertex, len(verts))
+	vertexObjs := make([]*topo.Vertex, len(verts))
 	for v, p := range verts {
-		vertexObjs[v] = loftVertex(p, delta)
+		vertexObjs[v] = topobuild.LoftVertex(handleAlloc{}, p, delta)
 	}
 	next := make([]int, a.Stride)
 	isOuter := make([]bool, a.Stride)
@@ -70,29 +71,29 @@ func buildMitredTopology(ctx context.Context, body *Body, ref producerID, a swee
 	tri0 := func(k, v int) [3]int { return a.Tris[2*a.Wall(k, v)] }
 	tri1 := func(k, v int) [3]int { return a.Tris[2*a.Wall(k, v)+1] }
 
-	sec := make([][]*Edge, a.Spans+1)
-	lon := make([][]*Edge, a.Spans)
+	sec := make([][]*topo.Edge, a.Spans+1)
+	lon := make([][]*topo.Edge, a.Spans)
 	for k := range a.Spans + 1 {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		sec[k] = make([]*Edge, a.Stride)
+		sec[k] = make([]*topo.Edge, a.Stride)
 		for v := range a.Stride {
 			from, to := a.At(k, v), a.At(k, next[v])
 			convex := isOuter[v]
 			if k > 0 && k < a.Spans {
 				convex = mitredJunctionConvex(exact, tri0(k, v), tri1(k-1, v), from, to)
 			}
-			sec[k][v] = loftEdge(vertexObjs, verts, from, to, convex, delta)
+			sec[k][v] = topobuild.LoftEdge(handleAlloc{}, vertexObjs, verts, from, to, convex, delta)
 		}
 		if k == a.Spans {
 			break
 		}
-		lon[k] = make([]*Edge, a.Stride)
+		lon[k] = make([]*topo.Edge, a.Stride)
 		for v := range a.Stride {
 			from, to := a.At(k, v), a.At(k+1, v)
 			convex := mitredJunctionConvex(exact, tri0(k, prev[v]), tri1(k, v), from, to)
-			lon[k][v] = loftEdge(vertexObjs, verts, from, to, convex, delta)
+			lon[k][v] = topobuild.LoftEdge(handleAlloc{}, vertexObjs, verts, from, to, convex, delta)
 		}
 	}
 
@@ -115,17 +116,17 @@ func buildMitredTopology(ctx context.Context, body *Body, ref producerID, a swee
 		capStartCo := make([]topo.CoEdge, m)
 		capEndCo := make([]topo.CoEdge, m)
 		for j, v := range idx {
-			capStartCo[m-1-j] = topo.CoEdge{Edge: edgeNode(sec[0][v]), Forward: false}
-			capEndCo[j] = topo.CoEdge{Edge: edgeNode(sec[a.Spans][v]), Forward: true}
+			capStartCo[m-1-j] = topo.CoEdge{Edge: sec[0][v], Forward: false}
+			capEndCo[j] = topo.CoEdge{Edge: sec[a.Spans][v], Forward: true}
 		}
-		capStartLoops = append(capStartLoops, bornLoop(&Loop{n: topo.Loop{Outer: i == 0, CoEdges: loftLoopCoedges(capStartCo, a.Reversed)}}))
-		capEndLoops = append(capEndLoops, bornLoop(&Loop{n: topo.Loop{Outer: i == 0, CoEdges: loftLoopCoedges(capEndCo, a.Reversed)}}))
+		capStartLoops = append(capStartLoops, bornLoop(&Loop{n: topo.Loop{Outer: i == 0, CoEdges: topobuild.LoftLoopCoedges(capStartCo, a.Reversed)}}))
+		capEndLoops = append(capEndLoops, bornLoop(&Loop{n: topo.Loop{Outer: i == 0, CoEdges: topobuild.LoftLoopCoedges(capEndCo, a.Reversed)}}))
 	}
-	capStartSurf, err := planeFromTriangle(verts, a.Tris[a.Walls])
+	capStartSurf, err := topobuild.PlaneFromTriangle(verts, a.Tris[a.Walls])
 	if err != nil {
 		return nil, err
 	}
-	capEndSurf, err := planeFromTriangle(verts, a.Tris[a.Walls+a.CapStartCount])
+	capEndSurf, err := topobuild.PlaneFromTriangle(verts, a.Tris[a.Walls+a.CapStartCount])
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +164,7 @@ func buildMitredTopology(ctx context.Context, body *Body, ref producerID, a swee
 		for _, idx := range a.LoopIdx {
 			for _, v := range idx {
 				w := a.Wall(k, v)
-				surf, err := planeFromTriangle(verts, a.Tris[2*w])
+				surf, err := topobuild.PlaneFromTriangle(verts, a.Tris[2*w])
 				if err != nil {
 					return nil, err
 				}
@@ -178,11 +179,11 @@ func buildMitredTopology(ctx context.Context, body *Body, ref producerID, a swee
 						Body:      bodyNode(body),
 					},
 				})
-				face.n.Loops = []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: loftLoopCoedges([]topo.CoEdge{
-					{Edge: edgeNode(sec[k][v]), Forward: true},
-					{Edge: edgeNode(lon[k][next[v]]), Forward: true},
-					{Edge: edgeNode(sec[k+1][v]), Forward: false},
-					{Edge: edgeNode(lon[k][v]), Forward: false},
+				face.n.Loops = []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{
+					{Edge: sec[k][v], Forward: true},
+					{Edge: lon[k][next[v]], Forward: true},
+					{Edge: sec[k+1][v], Forward: false},
+					{Edge: lon[k][v], Forward: false},
 				}, a.Reversed),
 				}}))}
 				faces = append(faces, face)

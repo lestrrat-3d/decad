@@ -278,18 +278,6 @@ func (pl loftPayload) Placed(ctx context.Context, env topo.Env, composed r3.Tran
 	return placedNode(evalLoft(ctx, d, ref, next, proofbound.NewWorkBudget(ctx), freeform.NewFreeformWork(), freeform.NewFreeformWork()))
 }
 
-// validateLoftBodyMeasurements is evalLoft's own finiteness gate (design O2);
-// loftmesh.ValidateBodyReadings owns the rule.
-func validateLoftBodyMeasurements(body *Body) error {
-	return loftmesh.ValidateBodyReadings(loftmesh.BodyReadings{
-		Volume: body.n.Volume.Value.Base(), VolumeBound: body.n.Volume.Bound.Base(),
-		Area:     body.n.Area.Value.Base(),
-		Centroid: body.n.Centroid.Value, CentroidBound: body.n.Centroid.Bound.Base(),
-		BoundsMin: body.n.Bounds.Min, BoundsMax: body.n.Bounds.Max,
-		BoundsBound: body.n.Bounds.Bound.Base(),
-	})
-}
-
 // evalLoft builds the lofted body from the payload's own records
 // (docs/loft-design.md §5-§8): pairing, assembly, the §6 audit, topology, and
 // the four measurements — all four published at build, never staged (§12).
@@ -565,7 +553,7 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 		}
 	}
 
-	if err := validateLoftBodyMeasurements(body); err != nil {
+	if err := topobuild.ValidateLoftBodyMeasurements(&body.n); err != nil {
 		return nil, err
 	}
 
