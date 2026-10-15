@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/chainrecord"
 	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -31,7 +32,7 @@ func (sp chainSweepSpanPayload) transform() r3.Transform {
 	if sp.arc {
 		return sp.revolve.xform
 	}
-	return sp.chain.xform
+	return sp.chain.Xform
 }
 
 func (sp *chainSweepSpanPayload) build(ctx context.Context, d *Document, ref producerID,
@@ -39,7 +40,7 @@ func (sp *chainSweepSpanPayload) build(ctx context.Context, d *Document, ref pro
 	if sp.arc {
 		return evalChainRevolveContext(ctx, d, ref, sp.revolve, work)
 	}
-	return evalChainExtrudeContext(ctx, d, ref, sp.chain, work)
+	return bodyResult(chainrecord.Build(ctx, envOf(documentNode(d), ref), sp.chain, work))
 }
 
 func (d *Document) sweepCompositeChain(ctx context.Context, chain chainRecord, plane planeRecord,
@@ -72,10 +73,10 @@ func (d *Document) sweepCompositeChain(ctx context.Context, chain chainRecord, p
 	}
 	payload := chainSweepPayload{path: path, spans: []chainSweepSpanPayload{
 		{chain: chainPayload{
-			chains: []chainRecord{chain}, frame: straight.prism.Frame,
-			z0: straight.prism.Z0, z1: straight.prism.Z1,
-			z0Delta: straight.prism.Z0Delta, z1Delta: straight.prism.Z1Delta,
-			xform: r3.Identity(),
+			Chains: []chainRecord{chain}, Frame: straight.prism.Frame,
+			Z0: straight.prism.Z0, Z1: straight.prism.Z1,
+			Z0Delta: straight.prism.Z0Delta, Z1Delta: straight.prism.Z1Delta,
+			Xform: r3.Identity(),
 		}},
 		{revolve: chainRevolvePayload{
 			chains: []chainRecord{chain}, frame: arc.revolve.frame, ax: arc.revolve.ax,
@@ -199,13 +200,13 @@ func (e chainSweepExtent) AuditExtent(ctx context.Context, direction r3.Vec,
 	if e.span.arc {
 		return e.span.revolve.revolve().extentBoundedAlong(ctx, direction, work)
 	}
-	return e.span.chain.prism().ExtentBoundedAlong(ctx, direction, work, nil)
+	return e.span.chain.Prism().ExtentBoundedAlong(ctx, direction, work, nil)
 }
 
 func auditCompositeChainSeparation(ctx context.Context, payload chainSweepPayload, parts []*Body) error {
 	frames, err := sweeptransport.TransportSweepFramesContext(ctx, payload.path, planeRecord{
-		Origin: payload.spans[0].chain.frame.Origin(),
-		U:      payload.spans[0].chain.frame.U(), V: payload.spans[0].chain.frame.V(),
+		Origin: payload.spans[0].chain.Frame.Origin(),
+		U:      payload.spans[0].chain.Frame.U(), V: payload.spans[0].chain.Frame.V(),
 	})
 	if err != nil {
 		return err

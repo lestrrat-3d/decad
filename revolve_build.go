@@ -1231,7 +1231,7 @@ func evalChainRevolveContext(ctx context.Context, d *Document, ref producerID, r
 	// volume and centroid stay at their zero value: a chain bounds no region
 	// (docs/surface-design.md §13.3), so neither is ever integrated here, and
 	// neither is reachable through Body.Volume/Body.Centroid while solid is
-	// false (§8) — exactly as evalChainExtrudeContext leaves them.
+	// false (§8) — exactly as chainrecord.Build leaves them.
 	bounds, err := revolveBoundsContext(ctx, rev, work)
 	if err != nil {
 		return nil, err

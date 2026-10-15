@@ -557,7 +557,7 @@ type chainRevolvePayload struct {
 // runs revolvePayload's own solid/cap topology, only its own open-walk build
 // (buildChainRevolveWalls).
 // The first chain stands in for a profile's outer loop and the rest for its
-// holes, exactly as chainPayload.prism folds its own walk set: every reading
+// holes, exactly as chainrecord.Payload.Prism folds its own walk set: every reading
 // this view feeds walks the segments and cares about neither winding nor
 // closure.
 func (rp chainRevolvePayload) revolve() revolvePayload {

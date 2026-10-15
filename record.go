@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"github.com/lestrrat-3d/decad/internal/chainrecord"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -53,6 +54,12 @@ type prismPayload = prismrecord.Payload
 // topology nodes and which implements topo.Payload
 // (docs/stacked-prism-design.md, docs/evaluator-design.md §8).
 type stackedPrismPayload = stackedrecord.Payload
+
+// chainPayload is chain Extrude's own record of a ribbon body: the
+// internal/chainrecord payload, which chainrecord.Build evaluates over
+// topology nodes and which implements topo.Payload
+// (docs/surface-design.md §13.4, docs/evaluator-design.md §8).
+type chainPayload = chainrecord.Payload
 
 type loopRecord = sectionrecord.LoopRecord
 

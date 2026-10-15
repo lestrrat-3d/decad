@@ -7,22 +7,11 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/featureoption"
-	"github.com/lestrrat-3d/decad/internal/measurement"
-	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
-	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
-	"github.com/lestrrat-3d/decad/internal/surfacegeom"
-	"github.com/lestrrat-3d/decad/internal/topo"
-	"github.com/lestrrat-3d/decad/internal/topobuild"
 
-	"github.com/lestrrat-3d/decad/internal/boundarywalk"
+	"github.com/lestrrat-3d/decad/internal/chainrecord"
 	"github.com/lestrrat-3d/decad/internal/freeform"
-	"github.com/lestrrat-3d/decad/internal/momentinput"
-
-	"github.com/lestrrat-3d/decad/internal/survey2d"
-
-	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -446,79 +435,9 @@ func (d *Document) resolveLinearSide(s SideExtent, frame r3.Frame, travel float6
 // the extent vocabulary and the frame it resolves against are identical to
 // Extrude's — and reads its recorded walk through recordChain (seam.go)
 // rather than sectioncert.RecordProfile. It builds a chain of any segment count and kind
-// Table G's per-kind construction admits, through buildChainSides
-// (internal/prismrecord/build.go's prismrecord.BuildWallGeometry, shared with the profile-fed prism
+// Table G's per-kind construction admits, through chainrecord.Build
+// (internal/chainrecord/build.go, which calls prismrecord.BuildWallGeometry, shared with the profile-fed prism
 // build) — the same evaluator, over an open rather than a closed walk.
-
-// chainPayload is chain Extrude's own record of a ribbon body: the recorded
-// walk SET, the plane frame it lifts through, the signed sweep interval, and
-// the accumulated rigid placement — chainPayload is to chain Extrude what
-// prismPayload is to Extrude (docs/surface-design.md §13.4). A plain
-// chain Extrude builds the one-walk case; docs/surface-intersection-design.md
-// §3.4 is what first builds more than one, one lump per surviving walk, and
-// sets sectionDelta beside them.
-type chainPayload struct {
-	chains  []chainRecord
-	frame   r3.Frame
-	z0, z1  float64
-	z0Delta float64
-	z1Delta float64
-	xform   r3.Transform
-	// sectionDelta is prismPayload's own §7 term (docs/prism-boolean-design.md),
-	// carried here on the identical terms: the proven upper bound on how far
-	// any recorded boundary coordinate sits from the section its construction
-	// denotes. Zero for every walk a caller draws through chain Extrude.
-	sectionDelta float64
-}
-
-func (pp chainPayload) z0Scalar() proofbound.BoundedScalar {
-	return proofbound.MeasuredScalar(pp.z0, pp.z0Delta)
-}
-func (pp chainPayload) z1Scalar() proofbound.BoundedScalar {
-	return proofbound.MeasuredScalar(pp.z1, pp.z1Delta)
-}
-
-// prism is a *view* of pp as a zero-section-delta prismPayload — never a body
-// this evaluator builds — used only to feed pp.point/pp.dir/reflected and
-// prismrecord.Bounds, none of which cares whether the section it reads
-// closes. sectionDelta stays zero in THIS view deliberately: prismPayload's
-// own Bounds reading (prismrecord.Bounds) charges a nonzero sectionDelta as a
-// BLANKET term, δ outward on every face regardless of which candidate wins
-// each extreme, which is sound for an ordinary prismPayload but would widen a
-// trimmed ribbon's UNTOUCHED extremes too — exactly the ones T170 requires to
-// stay bit-identical to the untrimmed sheet's own. The tight, per-extreme
-// charge this design actually needs is carried instead by the WALKS
-// evalChainExtrudeContext resolves through prismcells.TrimProfileWalks
-// (surface_trim.go) when pp.sectionDelta != 0, never by this view's own
-// field. The first chain stands in for a profile's outer loop, the rest for
-// its holes — extentBoundedAlong reads every one the same way, caring only
-// about the segments, never about winding or closure.
-func (pp chainPayload) prism() prismPayload {
-	profile := profileRecord{Outer: loopRecord(pp.chains[0])}
-	for _, c := range pp.chains[1:] {
-		profile.Holes = append(profile.Holes, loopRecord(c))
-	}
-	return prismrecord.Payload{
-		Profile: profile,
-		Frame:   pp.frame,
-		Z0:      pp.z0, Z1: pp.z1,
-		Z0Delta: pp.z0Delta, Z1Delta: pp.z1Delta,
-		Xform: pp.xform,
-	}
-}
-
-// Transform is the accumulated rigid placement.
-func (pp chainPayload) Transform() r3.Transform { return pp.xform }
-
-// Placed re-evaluates the same record under the composed motion (core §8). A
-// re-evaluation path: no moments preflight has run on this record within the
-// call, so the build opens the record's one free-form work counter itself
-// (docs/spline-design.md §5.2), exactly as prismPayload.Placed does.
-func (pp chainPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
-	d, ref := documentHandle(env.Doc), env.Ref
-	pp.xform = composed
-	return placedNode(evalChainExtrudeContext(ctx, d, ref, pp, freeform.NewFreeformWork()))
-}
 
 // extrudeChain is the chain-fed Extrude body (docs/surface-design.md §13).
 // Its refusals run in this order: the nil-option check, the seam gates, the
@@ -575,19 +494,19 @@ func extrudeChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch
 
 	// ONE free-form work counter for this whole call, exactly as the profile
 	// form opens for its own build (docs/spline-design.md §5.2):
-	// buildChainSides's own walkOf calls and the final bounds reading below
+	// buildSides' own walkOf calls and the final bounds reading below
 	// spend from the same ceiling rather than each opening a fresh one.
 	work := freeform.NewFreeformWork()
 	ref := d.nextProducerID()
-	body, err := evalChainExtrudeContext(ctx, d, ref, chainPayload{
-		chains:  []chainRecord{chain},
-		frame:   frame,
-		z0:      sweep.z0,
-		z1:      sweep.z1,
-		z0Delta: sweep.z0Delta,
-		z1Delta: sweep.z1Delta,
-		xform:   r3.Identity(),
-	}, work)
+	body, err := bodyResult(chainrecord.Build(ctx, envOf(documentNode(d), ref), chainPayload{
+		Chains:  []chainRecord{chain},
+		Frame:   frame,
+		Z0:      sweep.z0,
+		Z1:      sweep.z1,
+		Z0Delta: sweep.z0Delta,
+		Z1Delta: sweep.z1Delta,
+		Xform:   r3.Identity(),
+	}, work))
 	if err != nil {
 		return nil, err
 	}
@@ -616,273 +535,4 @@ func refuseChainExtrudeOptions(opts []ExtrudeOption) error {
 		}
 	}
 	return nil
-}
-
-// evalChainExtrudeContext builds the ribbon body: one wall face per recorded
-// segment of every walk in pp.chains, both rims of each walk and the one
-// sweep edge at each of its two free ends (docs/surface-design.md §13.4,
-// Table G row 1), and the measurements the finished body publishes. It
-// mirrors prismrecord.Build's own order (internal/prismrecord/build.go) without ever
-// building a solid or a closing cap: an open chain mints neither. Each walk
-// is its own lump — surface §2.2's one-lump-per-connected-boundary rule,
-// which docs/surface-intersection-design.md §3.4 is the first construction
-// to exercise with more than one. work is the record's ONE free-form work
-// counter (docs/spline-design.md §5.2): the caller opens it once and every
-// walk's build and the final bounds reading all spend from it.
-func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, pp chainPayload, work *freeform.FreeformWork) (*Body, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	if len(pp.chains) == 0 {
-		return nil, fmt.Errorf(`%w: a ribbon payload holds no walk`, ErrDegenerate)
-	}
-	height := proofbound.BoundedSub(pp.z1Scalar(), pp.z0Scalar())
-	if height.Value <= 0 {
-		return nil, fmt.Errorf(`%w: the sweep interval is empty`, ErrDegenerate)
-	}
-
-	body := bornBody(&Body{n: topo.Body{Solid: false, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodySheet, Doc: documentNode(d)}})
-	var allFaces []*Face
-	total := proofbound.BoundedScalar{}
-	var captures []chainWalkCapture
-	if pp.sectionDelta == 0 {
-		captures = make([]chainWalkCapture, len(pp.chains))
-	}
-	for ci, chain := range pp.chains {
-		var capture *chainWalkCapture
-		if captures != nil {
-			capture = &captures[ci]
-		}
-		faces, area, err := buildChainSides(ctx, body, ref, pp, ci, chain, work, capture)
-		if err != nil {
-			return nil, err
-		}
-		allFaces = append(allFaces, faces...)
-		total = proofbound.BoundedAdd(total, area)
-	}
-	body.n.Lumps = topobuild.SheetLumps(handleAlloc{}, faceNodes(allFaces))
-
-	body.n.Area = measurement.Measurement{
-		Value:     units.SquareMillimeters(total.Value),
-		Exactness: measurement.ExactnessOf(total.Bound),
-		Bound:     units.SquareMillimeters(total.Bound),
-	}
-	// volume and centroid stay at their zero value: finite, so
-	// topobuild.ValidateAnalyticMeasurements below passes, and neither is
-	// reachable through Body.Volume/Body.Centroid while solid is false
-	// (docs/surface-design.md §8), exactly as patch.go's evalPatchContext
-	// leaves them.
-	//
-	// A ribbon this design's Trim assembled (pp.sectionDelta != 0 — the only
-	// construction that ever sets it, docs/surface-intersection-design.md
-	// §3.4) reads its extent through walks that charge §7's δ_cut into
-	// exactly the endpoint a cut produced, never into one the record states
-	// verbatim (prismcells.TrimProfileWalks). A plain chain Extrude
-	// ribbon has zero sectionDelta and reuses the walks resolved for its sides.
-	view := pp.prism()
-	var boundsWalks *momentinput.ProfileWalks
-	if pp.sectionDelta != 0 {
-		var err error
-		boundsWalks, err = prismcells.TrimProfileWalks(view.Profile, work)
-		if err != nil {
-			return nil, err
-		}
-		if err := boundsWalks.Charge(work); err != nil {
-			return nil, err
-		}
-	} else {
-		boundsWalks = chainBoundsWalks(view.Profile, captures)
-	}
-	bounds, err := prismrecord.Bounds(ctx, view, work, boundsWalks)
-	if err != nil {
-		return nil, err
-	}
-	body.n.Bounds = bounds
-	if err := prismrecord.ChargeMap(bodyNode(body), pp.frame, pp.xform); err != nil {
-		return nil, err
-	}
-	if err := topobuild.ValidateAnalyticMeasurements(bodyNode(body)); err != nil {
-		return nil, err
-	}
-	body.n.Payload = pp
-	return body, nil
-}
-
-type chainWalkCapture struct {
-	walks   []survey2d.SegmentWalk
-	charges []momentinput.WalkReadCharge
-}
-
-// chainBoundsWalks reads the exact pre-widening walks buildChainSides already
-// resolved. The cache is local to this build; its per-segment measured charges
-// are replayed by momentinput.ResolveOrRead at each bounds read.
-func chainBoundsWalks(profile profileRecord, captures []chainWalkCapture) *momentinput.ProfileWalks {
-	reads := make([][]momentinput.WalkReadCharge, len(captures))
-	walks := &momentinput.ProfileWalks{Profile: profile, ReadCharges: reads}
-	for i, capture := range captures {
-		reads[i] = capture.charges
-		if i == 0 {
-			walks.Outer = capture.walks
-		} else {
-			walks.Holes = append(walks.Holes, capture.walks)
-		}
-	}
-	return walks
-}
-
-// buildChainSides builds ONE walk's whole wall set with shared vertices and
-// edges: one wall face per recorded segment (Table G row 1), never a cap and
-// never a wraparound junction. chainIdx names which of pp.chains this is,
-// feeding prismrecord.SideOrigins's roleLoop exactly as a prism's loop index does,
-// so two different walks' faces never collide on one role string. n segments
-// place n+1 rim posts at each sweep level, so the walk's two FREE ends (post
-// 0 and post n) each carry a sweep edge touched by exactly one wall — Free()
-// resolves them (Edge.IsFree, topology.go) — while every INTERIOR post
-// (1..n-1) shares its sweep edge between the two walls it joins, exactly as
-// prismrecord.BuildLoopSidesAs's own junction verticals do for a closed loop
-// (docs/surface-design.md §13.4). It returns the faces and the walk's own
-// total wall area, folded through proofbound.BoundedAdd rather than summed as raw
-// floats.
-func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPayload, chainIdx int, chain chainRecord, work *freeform.FreeformWork, capture *chainWalkCapture) ([]*Face, proofbound.BoundedScalar, error) {
-	prismView := pp.prism()
-	// Every coordinate this walk's segments read sits within pp's own section
-	// displacement of the section it denotes, so each segment's own length
-	// carries that displacement too — prismrecord.BuildLoopSidesAs's identical charge,
-	// prism-boolean §7's 12·π·δ per walk (internal/proofbound/bounds.go's
-	// proofbound.SectionDisplacementLength), zero for every payload chain Extrude builds
-	// directly.
-	walkLenAllow := proofbound.SectionDisplacementLength(pp.sectionDelta, 1)
-	raw := make([]survey2d.SideWalk, len(chain.Segments))
-	if capture != nil {
-		capture.walks = make([]survey2d.SegmentWalk, len(chain.Segments))
-		capture.charges = make([]momentinput.WalkReadCharge, len(chain.Segments))
-	}
-	for i, seg := range chain.Segments {
-		if err := ctx.Err(); err != nil {
-			return nil, proofbound.BoundedScalar{}, err
-		}
-		before, beforeRecon := boundarywalk.WorkSpent(work)
-		w, err := boundarywalk.WalkOf(seg, work)
-		if err != nil {
-			return nil, proofbound.BoundedScalar{}, err
-		}
-		if capture != nil {
-			after, afterRecon := boundarywalk.WorkSpent(work)
-			capture.walks[i] = w
-			capture.charges[i] = momentinput.WalkReadCharge{
-				Spent: after - before, ReconstructionSpent: afterRecon - beforeRecon,
-			}
-		}
-		w.LengthBound = proofbound.AbsSumUpper(w.LengthBound, walkLenAllow)
-		raw[i] = survey2d.SideWalk{SegmentWalk: w, Segs: []int{i}}
-	}
-	walks, err := boundarywalk.CoalesceChainWalksContext(ctx, raw)
-	if err != nil {
-		return nil, proofbound.BoundedScalar{}, err
-	}
-	n := len(walks)
-
-	height := proofbound.BoundedSub(pp.z1Scalar(), pp.z0Scalar())
-	// rimVertex places one rim post at (u, v) on level z, whose own axial
-	// displacement is zDelta, beside the post's own exact frame lift and
-	// placement rounding (prismPayload.LiftedVertex) — zero wherever that lift
-	// is exact, which is what keeps a plain chain Extrude's rim vertices Exact,
-	// mirroring prismrecord.BuildLoopSidesAs's own rimVertex.
-	rimVertex := func(u, v, z, zDelta, extra float64) *Vertex {
-		held, lift := prismView.LiftedVertex(u, v, z)
-		return bornVertex(&Vertex{n: topo.Vertex{Position: held, Bound: units.Millimeters(proofbound.AbsSumUpper(proofbound.AbsSumUpper(zDelta, lift), extra))}})
-	}
-
-	// Rim posts 0..n, no wraparound: post i sits at walk i's start for
-	// i < n, and at the LAST walk's own end for i == n — the chain's two free
-	// ends. A free end charges its one walk end's own bound against the point
-	// its segment denotes there (boundarywalk.DenotedStartBound and
-	// DenotedEndBound); an interior post charges both neighbours' ends
-	// (boundarywalk.JunctionVertexAt), exactly as prismrecord.BuildLoopSidesAs does for a closed
-	// loop's junctions.
-	bottomV := make([]*Vertex, n+1)
-	topV := make([]*Vertex, n+1)
-	for i := 0; i <= n; i++ {
-		if err := ctx.Err(); err != nil {
-			return nil, proofbound.BoundedScalar{}, err
-		}
-		var u, v, extra float64
-		switch i {
-		case n:
-			last := walks[n-1]
-			u, v = last.EndU, last.EndV
-			extra = proofbound.WalkEndBoundAllow(boundarywalk.DenotedEndBound(chain.Segments[last.Segs[len(last.Segs)-1]], last.SegmentWalk))
-		case 0:
-			u, v = walks[0].StartU, walks[0].StartV
-			extra = proofbound.WalkEndBoundAllow(boundarywalk.DenotedStartBound(chain.Segments[walks[0].Segs[0]], walks[0].SegmentWalk))
-		default:
-			u, v, extra = boundarywalk.JunctionVertexAt(chain.Segments, walks[i-1], walks[i])
-		}
-		bottomV[i] = rimVertex(u, v, pp.z0, pp.z0Delta, extra)
-		topV[i] = rimVertex(u, v, pp.z1, pp.z1Delta, extra)
-	}
-
-	// Sweep edges at every post, free-end and interior alike. Convexity from
-	// the 2D turn, exactly as prismrecord.BuildLoopSidesAs's own junction verticals: only
-	// an interior post has both a leaving and an entering tangent to cross,
-	// so a free end's carries no turn of its own and keeps its zero
-	// (concave) default — Table G assigns it no sense.
-	vertical := make([]*Edge, n+1)
-	for i := 0; i <= n; i++ {
-		if err := ctx.Err(); err != nil {
-			return nil, proofbound.BoundedScalar{}, err
-		}
-		convex := false
-		if i > 0 && i < n {
-			prev, w := walks[i-1], walks[i]
-			convex = prev.TanOutU*w.TanInV-prev.TanOutV*w.TanInU > 0
-		}
-		vertical[i] = bornEdge(&Edge{n: topo.Edge{Convex: convex, Length: pp.z1 - pp.z0, LengthBound: height.Bound, Curve: surfacegeom.Line3{}, Start: vertexNode(bottomV[i]), End: vertexNode(topV[i])}})
-	}
-
-	faces := make([]*Face, 0, n)
-	total := proofbound.BoundedScalar{}
-	for i, w := range walks {
-		if err := ctx.Err(); err != nil {
-			return nil, proofbound.BoundedScalar{}, err
-		}
-		// holeLoop is always false: a chain has no hole, and the whole walk
-		// takes the loop-0 (outer) convention (docs/surface-design.md §13.4).
-		convex, err := boundarywalk.RimConvexity(ctx, w, false, work)
-		if err != nil {
-			return nil, proofbound.BoundedScalar{}, err
-		}
-		bottomEdge, topEdge, surf, faceReversed, err := prismrecord.BuildWallGeometry(handleAlloc{}, prismView, w, convex, false, vertexNode(bottomV[i]), vertexNode(bottomV[i+1]), vertexNode(topV[i]), vertexNode(topV[i+1]))
-		if err != nil {
-			return nil, proofbound.BoundedScalar{}, err
-		}
-		origins, err := prismrecord.SideOrigins(ctx, ref, chainIdx, w.Segs)
-		if err != nil {
-			return nil, proofbound.BoundedScalar{}, err
-		}
-		faceArea := proofbound.BoundedMul(proofbound.MeasuredScalar(w.Length, w.LengthBound), height)
-		face := bornFace(&Face{
-			n: topo.Face{
-				Area:      faceArea.Value,
-				AreaBound: faceArea.Bound,
-				Reversed:  faceReversed,
-				Surface:   surf,
-				Origins:   origins,
-				Body:      bodyNode(body),
-				Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
-					{Edge: bottomEdge, Forward: true},
-					{Edge: edgeNode(vertical[i+1]), Forward: true},
-					{Edge: topEdge, Forward: false},
-					{Edge: edgeNode(vertical[i]), Forward: false},
-				},
-				}}))},
-			},
-		})
-		for _, e := range []*topo.Edge{bottomEdge, topEdge, edgeNode(vertical[i]), edgeNode(vertical[i+1])} {
-			e.Faces = append(e.Faces, faceNode(face))
-		}
-		faces = append(faces, face)
-		total = proofbound.BoundedAdd(total, faceArea)
-	}
-	return faces, total, nil
 }

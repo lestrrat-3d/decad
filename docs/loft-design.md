@@ -2659,7 +2659,7 @@ the next segment's first station or the loop's own wrap supplies it. An open
 walk has no wrap, so its chain carries the last segment's end point explicitly
 and the cell walk runs `j` to `j+1` over `n+1` stations rather than cyclically
 over `n`. Dropping the wrap is what mints the two end rungs as free edges, and
-it is the identical drop `buildChainSides` already makes for a chain prism's
+it is the identical drop chainrecord's `buildSides` already makes for a chain prism's
 rim posts (`docs/surface-design.md` §13.4).
 
 **No term in §5.2's table is new and none is removed by kind.** An untrimmed

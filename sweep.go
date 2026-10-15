@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/chainrecord"
 	"github.com/lestrrat-3d/decad/internal/featureoption"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
@@ -375,8 +376,8 @@ func (sp chainSweepPayload) Placed(ctx context.Context, env topo.Env, composed r
 		finishChainSweepBody(body, sp)
 		return bodyNode(body), nil
 	}
-	sp.chain.xform = composed
-	body, err := evalChainExtrudeContext(ctx, d, ref, sp.chain, freeform.NewFreeformWork())
+	sp.chain.Xform = composed
+	body, err := bodyResult(chainrecord.Build(ctx, envOf(documentNode(d), ref), sp.chain, freeform.NewFreeformWork()))
 	if err != nil {
 		return nil, err
 	}
@@ -459,14 +460,14 @@ func sweepChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch.C
 	// composed length bound lands — the term §15.2 names as the one thing a
 	// chain sweep carries that the same walk's chain Extrude reading may not.
 	reduction := chainPayload{
-		chains:  []chainRecord{chain},
-		frame:   frame,
-		z0:      0,
-		z1:      height,
-		z1Delta: heightBound,
-		xform:   r3.Identity(),
+		Chains:  []chainRecord{chain},
+		Frame:   frame,
+		Z0:      0,
+		Z1:      height,
+		Z1Delta: heightBound,
+		Xform:   r3.Identity(),
 	}
-	body, err := evalChainExtrudeContext(ctx, d, ref, reduction, work)
+	body, err := bodyResult(chainrecord.Build(ctx, envOf(documentNode(d), ref), reduction, work))
 	if err != nil {
 		return nil, err
 	}

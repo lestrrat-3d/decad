@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
+	"github.com/lestrrat-3d/decad/internal/chainrecord"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
@@ -35,26 +36,26 @@ func TestChainBoundsCachedWalksMatchFreshResolution(t *testing.T) {
 	check := func(t *testing.T, body *Body) {
 		t.Helper()
 		payload := body.n.Payload.(chainPayload)
-		profile := payload.prism().Profile
+		profile := payload.Prism().Profile
 		work := freeform.NewFreeformWork()
-		captures := make([]chainWalkCapture, len(payload.chains))
-		for ci, chain := range payload.chains {
+		captures := make([]chainrecord.WalkCapture, len(payload.Chains))
+		for ci, chain := range payload.Chains {
 			for _, segment := range chain.Segments {
 				before, beforeRecon := boundarywalk.WorkSpent(work)
 				walk, err := boundarywalk.WalkOf(segment, work)
 				require.NoError(t, err)
 				after, afterRecon := boundarywalk.WorkSpent(work)
-				captures[ci].walks = append(captures[ci].walks, walk)
-				captures[ci].charges = append(captures[ci].charges,
+				captures[ci].Walks = append(captures[ci].Walks, walk)
+				captures[ci].Charges = append(captures[ci].Charges,
 					momentinput.WalkReadCharge{Spent: after - before, ReconstructionSpent: afterRecon - beforeRecon})
 			}
 		}
 		cachedWork, freshWork := *work, *work
-		cachedWalks := chainBoundsWalks(profile, captures)
-		cached, err := prismrecord.Bounds(t.Context(), payload.prism(), &cachedWork,
+		cachedWalks := chainrecord.BoundsWalks(profile, captures)
+		cached, err := prismrecord.Bounds(t.Context(), payload.Prism(), &cachedWork,
 			cachedWalks)
 		require.NoError(t, err)
-		fresh, err := prismrecord.Bounds(t.Context(), payload.prism(), &freshWork, nil)
+		fresh, err := prismrecord.Bounds(t.Context(), payload.Prism(), &freshWork, nil)
 		require.NoError(t, err)
 		require.Equal(t, fresh, cached)
 		require.Equal(t, fresh, body.n.Bounds)
@@ -72,14 +73,14 @@ func TestChainBoundsCachedWalksMatchFreshResolution(t *testing.T) {
 		cancelled, cancel := context.WithCancel(t.Context())
 		cancel()
 		cachedCancelled, freshCancelled := *work, *work
-		_, cachedErr := prismrecord.Bounds(cancelled, payload.prism(), &cachedCancelled, cachedWalks)
-		_, freshErr := prismrecord.Bounds(cancelled, payload.prism(), &freshCancelled, nil)
+		_, cachedErr := prismrecord.Bounds(cancelled, payload.Prism(), &cachedCancelled, cachedWalks)
+		_, freshErr := prismrecord.Bounds(cancelled, payload.Prism(), &freshCancelled, nil)
 		require.ErrorIs(t, cachedErr, context.Canceled)
 		require.EqualError(t, cachedErr, freshErr.Error())
 		require.Equal(t, freshCancelled, cachedCancelled)
-		for ci, chain := range payload.chains {
+		for ci, chain := range payload.Chains {
 			for si, segment := range chain.Segments {
-				charge := captures[ci].charges[si]
+				charge := captures[ci].Charges[si]
 				if charge.Spent <= 1 {
 					continue
 				}

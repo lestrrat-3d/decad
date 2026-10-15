@@ -28,13 +28,13 @@ import (
 // (CircleSeg/ArcSeg fragment) or free-form segment builds a Cylinder or
 // NURBSSurface wall this file has no chording arm for yet, staged for the
 // increment that chords those walls too. Both chain Extrude and the chain Sweep's
-// one-span straight reduction build through evalChainExtrudeContext, so both
+// one-span straight reduction build through chainrecord.Build, so both
 // a chainPayload and the chainPayload a chainSweepPayload wraps reach this
 // function unchanged.
 
 // tessellateChain restates a chain-fed ribbon's own wall topology as a Mesh.
 // Every wall Face is already an exact planar quad — four corner Vertex
-// objects evalChainExtrudeContext placed directly on the recorded boundary —
+// objects chainrecord.Build placed directly on the recorded boundary —
 // so the mesh is read straight off Face -> Loop -> CoEdge -> Vertex, with no
 // chording decision of its own. A straight wall's own published
 // topo.Face.Reversed is always false (prismrecord.BuildWallGeometry's default-case return,
@@ -49,7 +49,7 @@ func tessellateChain(ctx context.Context, b *Body, pp chainPayload) (*Mesh, erro
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	reflected := pp.xform.IsReflection()
+	reflected := pp.Xform.IsReflection()
 
 	mesh := bornMesh(new(Mesh))
 	index := map[*Vertex]int{}
@@ -100,19 +100,19 @@ func tessellateChain(ctx context.Context, b *Body, pp chainPayload) (*Mesh, erro
 		}
 		mesh.addTriangle(tri1, faceNode(f))
 		mesh.addTriangle(tri2, faceNode(f))
-		mesh.setFaceBound(faceNode(f), proofbound.UpRound(cornerDelta+pp.sectionDelta))
+		mesh.setFaceBound(faceNode(f), proofbound.UpRound(cornerDelta+pp.SectionDelta))
 	}
 	if err := budget.Err(); err != nil {
 		return nil, err
 	}
 
 	mesh.n.AreaSlack = tessellation.StoreAreaAllow(mesh.n.Vertices, mesh.n.Triangles, vertexStore)
-	if pp.sectionDelta > 0 {
+	if pp.SectionDelta > 0 {
 		walks := 0
-		for _, chain := range pp.chains {
+		for _, chain := range pp.Chains {
 			walks += len(chain.Segments)
 		}
-		wallMove := proofbound.ProductUpper(proofbound.SectionDisplacementLength(pp.sectionDelta, walks), math.Abs(pp.z1-pp.z0))
+		wallMove := proofbound.ProductUpper(proofbound.SectionDisplacementLength(pp.SectionDelta, walks), math.Abs(pp.Z1-pp.Z0))
 		mesh.n.AreaSlack = proofbound.AbsSumUpper(mesh.n.AreaSlack, wallMove)
 	}
 

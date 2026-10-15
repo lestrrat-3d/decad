@@ -128,7 +128,7 @@ func ChainLoftPlaneSideGate(pl0, pl1 sectionrecord.PlaneRecord) error {
 // A loop's chain carries only each segment's OWN station because the next
 // segment's first station, or the loop's wrap, supplies the one it shares. An
 // open walk has no wrap, so its last segment's end point is carried
-// explicitly — the identical drop buildChainSides already makes for a chain
+// explicitly — the identical drop chainrecord's buildSides already makes for a chain
 // prism's n+1 rim posts (docs/surface-design.md §13.4).
 //
 // The returned stationRound is the MAX over every station of the displacement

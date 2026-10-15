@@ -68,14 +68,14 @@ func (p *pointPlaneLimit) denominator(apex, far r3.Vec) *big.Rat {
 // drawn as Patch does not pass this gate because it has a different source.
 func exactPointPlaneSheet(tool *Body, apex r3.Vec) (*pointPlaneLimit, bool) {
 	cp, ok := tool.n.Payload.(chainPayload)
-	if !ok || tool.Kind() != BodySheet || cp.xform != r3.Identity() ||
-		cp.frame.Origin() != (r3.Vec{}) || cp.frame.U() != (r3.Vec{X: 1}) ||
-		cp.frame.V() != (r3.Vec{Y: 1}) || cp.sectionDelta != 0 ||
-		cp.z0Delta != 0 || cp.z1Delta != 0 || len(cp.chains) != 1 ||
-		len(cp.chains[0].Segments) != 1 || len(tool.Faces()) != 1 {
+	if !ok || tool.Kind() != BodySheet || cp.Xform != r3.Identity() ||
+		cp.Frame.Origin() != (r3.Vec{}) || cp.Frame.U() != (r3.Vec{X: 1}) ||
+		cp.Frame.V() != (r3.Vec{Y: 1}) || cp.SectionDelta != 0 ||
+		cp.Z0Delta != 0 || cp.Z1Delta != 0 || len(cp.Chains) != 1 ||
+		len(cp.Chains[0].Segments) != 1 || len(tool.Faces()) != 1 {
 		return nil, false
 	}
-	line, ok := cp.chains[0].Segments[0].(lineSeg)
+	line, ok := cp.Chains[0].Segments[0].(lineSeg)
 	if !ok || !((line.TStart == 0 && line.TEnd == 1) ||
 		(line.TStart == 1 && line.TEnd == 0)) {
 		return nil, false
@@ -89,7 +89,7 @@ func exactPointPlaneSheet(tool *Body, apex r3.Vec) (*pointPlaneLimit, bool) {
 	surface, ok := face.n.Surface.(surfacegeom.Plane)
 	if !ok || !proofbound.FiniteVec(apex) || !proofbound.FiniteVec(r3.Vec{
 		X: line.Start.U, Y: line.Start.V, Z: line.End.U}) ||
-		!proofbound.FiniteVec(r3.Vec{X: line.End.V, Y: cp.z0, Z: cp.z1}) {
+		!proofbound.FiniteVec(r3.Vec{X: line.End.V, Y: cp.Z0, Z: cp.Z1}) {
 		return nil, false
 	}
 	ax, ay := ratOfPointPlane(line.Start.U), ratOfPointPlane(line.Start.V)
@@ -127,7 +127,7 @@ func exactPointPlaneSheet(tool *Body, apex r3.Vec) (*pointPlaneLimit, bool) {
 		return nil, false
 	}
 	return &pointPlaneLimit{nx: nx, ny: ny, d: d,
-		a: line.Start, b: line.End, z0: cp.z0, z1: cp.z1,
+		a: line.Start, b: line.End, z0: cp.Z0, z1: cp.Z1,
 		surface: surface, origins: face.originRefs(), normalBound: face.n.NormalBound,
 		frameTowardFar: dot.Sign() > 0}, true
 }

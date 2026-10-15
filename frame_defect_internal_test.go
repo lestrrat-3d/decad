@@ -33,7 +33,7 @@ import (
 //     and lengths Exact, and so did the tilted unstitch and body patch whose
 //     source sheet is a prism;
 //   - in measureDraftBody, evalCapBlendContext, evalPatchContext and
-//     evalChainExtrudeContext: the draft, the cap chamfer, the patch and the
+//     chainrecord.Build: the draft, the cap chamfer, the patch and the
 //     chain extrude went red in every variant;
 //   - in stackedrecord.Build: the union, the blind cut and the cup went
 //     red in every variant;

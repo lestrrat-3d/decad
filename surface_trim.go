@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/chainrecord"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
@@ -65,8 +66,8 @@ func Extend(ctx context.Context, b *Body, edges *EdgeQuery, tool *Body) (*Body, 
 	if err != nil {
 		return nil, err
 	}
-	chains := make([]chainRecord, len(rcv.chains))
-	for i, chain := range rcv.chains {
+	chains := make([]chainRecord, len(rcv.Chains))
+	for i, chain := range rcv.Chains {
 		chains[i] = chainRecord{Segments: append([]curveSegment(nil), chain.Segments...)}
 	}
 	cutDelta := 0.0
@@ -76,16 +77,16 @@ func Extend(ctx context.Context, b *Body, edges *EdgeQuery, tool *Body) (*Body, 
 			return nil, err
 		}
 		widened, delta, err := prismcells.ResolveSurfaceExtend(ctx, budget,
-			prismcells.SurfaceOperandOf(rcv.prism()), prismcells.SurfaceOperandOf(tl), chains[ci].Segments[si], atStart)
+			prismcells.SurfaceOperandOf(rcv.Prism()), prismcells.SurfaceOperandOf(tl), chains[ci].Segments[si], atStart)
 		if err != nil {
 			return nil, err
 		}
 		chains[ci].Segments[si] = widened
 		cutDelta = math.Max(cutDelta, delta)
 	}
-	rcv.chains = chains
-	rcv.sectionDelta = cutDelta
-	result, err := evalChainExtrudeContext(ctx, d, d.nextProducerID(), rcv, freeform.NewFreeformWork())
+	rcv.Chains = chains
+	rcv.SectionDelta = cutDelta
+	result, err := bodyResult(chainrecord.Build(ctx, envOf(documentNode(d), d.nextProducerID()), rcv, freeform.NewFreeformWork()))
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +106,7 @@ func Extend(ctx context.Context, b *Body, edges *EdgeQuery, tool *Body) (*Body, 
 // chainPayload a body carrying zero section displacement can hold comes from
 // one of two producers — chain Extrude (extrude.go) and this file's own Extend —
 // and both build exactly one lump per chain in chain order through
-// evalChainExtrudeContext; Trim's chainPayload is the only other one, and S7
+// chainrecord.Build; Trim's chainPayload is the only other one, and S7
 // already refused it for its nonzero sectionDelta. What would break it: a
 // producer that emits a lump per connected PIECE rather than per chain (one
 // self-touching walk splitting into two lumps, or two walks meeting at a vertex
@@ -117,7 +118,7 @@ func extendEndSegment(b *Body, pp chainPayload, edge *Edge) (int, int, bool, err
 		return 0, 0, false, fmt.Errorf(`%w: Extend needs a free sweep edge at an open section end`, ErrUnsupported)
 	}
 	for ci, lump := range b.n.Lumps {
-		if ci >= len(pp.chains) || len(lump.Shells) != 1 || len(lump.Shells[0].Faces) == 0 {
+		if ci >= len(pp.Chains) || len(lump.Shells) != 1 || len(lump.Shells[0].Faces) == 0 {
 			continue
 		}
 		faces := lump.Shells[0].Faces
@@ -127,7 +128,7 @@ func extendEndSegment(b *Body, pp chainPayload, edge *Edge) (int, int, bool, err
 			return ci, 0, true, nil
 		}
 		if edge == edgeHandle(last[1].Edge) {
-			return ci, len(pp.chains[ci].Segments) - 1, false, nil
+			return ci, len(pp.Chains[ci].Segments) - 1, false, nil
 		}
 	}
 	return 0, 0, false, fmt.Errorf(`%w: Extend needs a free sweep edge at an open section end`, ErrUnsupported)
@@ -153,15 +154,15 @@ func admitExtendPair(budget *proofbound.WorkBudget, receiver, tool *Body) (chain
 	case prismPayload:
 		tl = p
 	case chainPayload:
-		tl = p.prism()
+		tl = p.Prism()
 	default:
 		return chainPayload{}, prismPayload{}, fmt.Errorf(`%w: Extend's tool has no prism section`, ErrUnsupported)
 	}
-	if rcv.sectionDelta != 0 || trimOperandSectionDelta(tool) != 0 {
+	if rcv.SectionDelta != 0 || trimOperandSectionDelta(tool) != 0 {
 		return chainPayload{}, prismPayload{}, fmt.Errorf(
 			`%w: Extend does not admit an operand carrying its own section displacement`, ErrUnsupported)
 	}
-	view := rcv.prism()
+	view := rcv.Prism()
 	if err := prismcells.AdmitSurfacePair(budget, prismcells.SurfaceExtend,
 		prismcells.SurfaceOperandOf(view), prismcells.SurfaceOperandOf(tl)); err != nil {
 		return chainPayload{}, prismPayload{}, err
@@ -249,17 +250,17 @@ func Trim(ctx context.Context, b *Body, tool *Body, side TrimSide) (*Body, error
 	}
 
 	pp := chainPayload{
-		chains:       chains,
-		frame:        rcv.Frame,
-		z0:           rcv.Z0,
-		z1:           rcv.Z1,
-		z0Delta:      rcv.Z0Delta,
-		z1Delta:      rcv.Z1Delta,
-		xform:        rcv.Xform,
-		sectionDelta: sectionDelta,
+		Chains:       chains,
+		Frame:        rcv.Frame,
+		Z0:           rcv.Z0,
+		Z1:           rcv.Z1,
+		Z0Delta:      rcv.Z0Delta,
+		Z1Delta:      rcv.Z1Delta,
+		Xform:        rcv.Xform,
+		SectionDelta: sectionDelta,
 	}
 	ref := d.nextProducerID()
-	body, err := evalChainExtrudeContext(ctx, d, ref, pp, freeform.NewFreeformWork())
+	body, err := bodyResult(chainrecord.Build(ctx, envOf(documentNode(d), ref), pp, freeform.NewFreeformWork()))
 	if err != nil {
 		return nil, err
 	}
@@ -321,7 +322,7 @@ func trimOperandSectionDelta(b *Body) float64 {
 	case prismPayload:
 		return p.SectionDelta
 	case chainPayload:
-		return p.sectionDelta
+		return p.SectionDelta
 	case revolvePayload:
 		return p.sectionDelta
 	case chainRevolvePayload:
@@ -477,7 +478,7 @@ func admitSplitPair(budget *proofbound.WorkBudget, target, tool *Body) (prismPay
 	case prismPayload:
 		tl = p
 	case chainPayload:
-		tl = p.prism()
+		tl = p.Prism()
 	default:
 		return prismPayload{}, prismPayload{}, fmt.Errorf(`%w: Split's tool has no prism section`, ErrUnsupported)
 	}

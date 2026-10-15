@@ -849,7 +849,8 @@ copy and runs `prismrecord.Build`, which every other root caller of the prism
 builder calls through `envOf` too. `stackedPrismPayload` is an alias of
 `stackedrecord.Payload` in the same way: its `Placed` runs `stackedrecord.Build`
 under the payload's own plan, and a cup builds through the same function under
-its own `stackedrecord.Plan`. A payload that still lives in the root
+its own `stackedrecord.Plan`. `chainPayload` is an alias of `chainrecord.Payload`
+likewise: its `Placed` runs `chainrecord.Build`. A payload that still lives in the root
 package recovers its document handle from the node's `Owner` in `Placed` and
 runs its root builder.
 

@@ -843,26 +843,26 @@ func payloadProvesSimple(ctx context.Context, p topo.Payload) bool {
 		// A chain-fed prism earns leg 4 on the profile argument with one word
 		// changed (docs/surface-design.md §13.4): `sketch` already proved the
 		// recorded walk a simple planar curve — RecordChain's own ch.Valid gate
-		// (§13.3) — evalChainExtrudeContext already refuses a non-positive
+		// (§13.3) — chainrecord.Build already refuses a non-positive
 		// sweep height, and a simple planar curve crossed with a positive
 		// interval cannot self-intersect. A chain-fed body is always a sheet
 		// by construction (Table G), so surfaceResult carries no separate
 		// condition here; sectionDelta is the one term that can still break
 		// the argument, on the identical prismPayload reading above.
-		return pp.sectionDelta == 0
+		return pp.SectionDelta == 0
 	case chainSweepPayload:
 		if len(pp.spans) != 0 || pp.arc {
 			return false
 		}
 		// The remaining one-span reduction is the straight case
 		// (docs/sweep-design.md §15): chain Sweep builds the body
-		// through the identical evalChainExtrudeContext a plain chain Extrude
+		// through the identical chainrecord.Build a plain chain Extrude
 		// does, over a chainPayload it then wraps unchanged (sweep.go's
 		// finishChainSweepBody). So this is the SAME construction argument
 		// chainPayload's own arm makes, re-read off the wrapped payload —
 		// never a weaker version of it. The arc and composite cases returned
 		// false above because their partial turns have no simplicity proof.
-		return pp.chain.sectionDelta == 0
+		return pp.chain.SectionDelta == 0
 	case chainRevolvePayload:
 		// A chain-fed revolve earns leg 4 on the identical full-turn argument,
 		// re-read over the chain's own open walk through the SAME generic
