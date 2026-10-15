@@ -1210,15 +1210,15 @@ reused crossing audit cannot run on one.** That audit (this section's own
 opening paragraph) consumes a triangulated face set, which a curved
 boundary has none of, and chording curved faces into one just to run it
 would be an admission gate resting on an approximation — CLAUDE.md's
-reject-only rule forbids exactly this, and `verify.go`'s own
-`payloadProvesSimple` doc comment already states the two ways such a chord
+reject-only rule forbids exactly this, and `internal/topo`'s
+`SimpleProver` doc comment already states the two ways such a chord
 mesh can be wrong in both directions. So a curved closed set's only
 available proof of non-self-intersection is the one its own SOURCE
-feature's construction already carries: `verify.go`'s `payloadProvesSimple`,
+feature's construction already carries: `internal/topo`'s `ProvesSimple`,
 built for `Verify`'s own Table V leg 4 and reused here unchanged. Before the
 flux arms ever run, `stitchRuleSAdmits` requires every operand face to
-descend from exactly ONE source body (`stitchOperandBodies`), whose own
-payload `payloadProvesSimple` admits. A full-turn `revolvePayload` clear of
+descend from exactly ONE source body (`topobuild.OperandBodies`), whose own
+payload `topo.ProvesSimple` admits. A full-turn `revolvePayload` clear of
 the axis (an annular revolve sheet) admits; a `bodyPatchPayload` admits only
 under Rule P below — on its own, an unqualified `PatchEdges` chain proves
 nothing about the whole assembled boundary. A stitch of curved sheets from
@@ -1229,11 +1229,11 @@ no way to compare two features' own proofs against each other.
 from its own receiver**, closing §6.1's own motivating "walls, then cap,
 then stitch" story for the one receiver shape it was written against. A
 `bodyPatchPayload` proves its own boundary does not self-intersect, and so
-admits Rule S, when all three hold, decided by `patch_body.go`'s
-`bodyPatchPayloadProvesSimple`:
+admits Rule S, when all three hold, decided by `internal/patchchain`'s
+`patchchain.BodyPayload.ProvesSimple`:
 
 1. its receiver — the body `PatchEdges` was called on — itself admits under
-   Rule S, decided by the identical `payloadProvesSimple` predicate, never a
+   Rule S, decided by the identical `topo.ProvesSimple` predicate, never a
    reimplementation of it;
 2. every new face's chain is a COMPLETE free-edge chain of that receiver's
    own end, not a proper subset of one;
@@ -1729,7 +1729,7 @@ own build-time gate, which admits down to a `-tol` band rather than proving
 the minimum clear of zero — an admission gate resting on a tolerance is what
 CLAUDE.md's reject-only rule forbids. For a direct Revolve on the positive
 axis side, `revolveplan.ResolveAxisSide` also records a strict zero-threshold proof from
-its profile scan when one exists. `revolvePayloadProvesSimple` reuses that
+its profile scan when one exists. `revolveplan.Payload.ProvesSimple` reuses that
 proof only while the profile and axis are unchanged; otherwise it scans the
 recorded profile again at zero. A revolve profile can never
 carry a free-form segment reaching this leg either: `revolveplan.ResolveAxisSide` refuses
@@ -1738,7 +1738,7 @@ here. A partial-turn revolve sheet, or one whose radial minimum is not proven
 clear of the axis, earns no such proof: the fourth leg has nothing to stand
 on, which is undecided, not a violation. Any other construction earns no
 proof either, for the same reason, EXCEPT a `bodyPatchPayload` that admits
-under §6.4's Rule P: the identical `payloadProvesSimple` predicate serves
+under §6.4's Rule P: the identical `topo.ProvesSimple` predicate serves
 both `Stitch` and `Verify`, so a `PatchEdges`-capped sheet that closes its
 receiver's own rim by identity earns the fourth leg here too, whether or not
 it is ever stitched into a solid. A free edge, which on a closed body would
@@ -2782,13 +2782,13 @@ The row-9 curved-mesh obligations are:
 | T36 | `offAxisSemicircleSketch` revolved a full turn as a surface, stitched alone | closes to a solid from T53 onward |
 | T37 | a hand-built face carrying a `NURBSSurface`, driven directly at `stitchFaceFluxAndMoment` (internal — `PatchEdges` itself refuses any chain carrying a `NURBSCurve` edge, so a free-form-walled sheet can never be closed through the public seam at all) | `ErrUnsupported` (R8), permanently: `NURBSSurface` exports no control net to integrate |
 | T38 | a hand-built face carrying a nonzero `normalBound`, driven directly at `stitchFaceFluxAndMoment` (internal — a fillet or chamfer's `Unstitch`-then-`Stitch` round trip never re-closes, §6.5's own "no further" limit for any non-all-planar body, so no public fixture reaches this gate) | `ErrUnsupported` (R8) |
-| T39 | `annularSketch` revolved a full turn as a surface | `Verify` reads `Validity.Outcome == ValidityValid` with no `Validity.Diagnostics`, admitted by construction: `payloadProvesSimple`'s `revolvePayload` arm holds because the sweep is exactly one full turn and the radial minimum is proven clear of the axis |
+| T39 | `annularSketch` revolved a full turn as a surface | `Verify` reads `Validity.Outcome == ValidityValid` with no `Validity.Diagnostics`, admitted by construction: `revolveplan.Payload.ProvesSimple` holds because the sweep is exactly one full turn and the radial minimum is proven clear of the axis |
 | T40 | `annularSketch` revolved a quarter turn as a surface | `Verify` stays `Validity.Outcome == ValidityUndecided` with one `DiagUndecidedValidity`: a partial turn earns no construction admission |
 | T41 | two INDEPENDENT `Extrude` calls building the identical profile at the identical Symmetric extent, both `WithSurfaceResult()` | first, the premise: a rim vertex of each holds a bit-identical coordinate and an identical non-zero bound; then `Stitch(a, b)`: `Kind() == BodySheet`, and `Edges(Free())` resolves to the full 16 edges, none welded — the proof the CURVE certificate is an identity check, never a tolerance, since each independent build mints its own fresh `curveID` |
 | T42 | a Symmetric surface-extruded wall (both rims bounded) on an off-axis, non-origin sketch plane, `PatchEdges`-capped on both rims in one call, then a single-operand `Stitch` | no error; `Kind() == BodySolid`; `Volume` `Approximate` with `Bound.Base() > 0`, and the denoted volume lies inside `[value−bound, value+bound]` — the enclosure assertion a missing `massDelta` charge breaks (§6.4's amendment). Unstitching that solid then re-stitching it closes to a `BodySolid` again, `Volume` matching bit for bit — the CURVE certificate's own copy-path proof, since Table J's J5 could never admit the bounded rim pair on bit-identity alone. Placing ONE of the six unstitched sheets by a motion neither axis-aligned nor centred on the origin, then stitching all six, leaves exactly that sheet's own boundary and its former neighbours' matching copies free (8 of 24 edges), while the remaining five unplaced siblings still weld among themselves — a placement breaks the certificate |
-| T43 | a hand-built `bodyPatchPayload` whose receiver's own payload is a `prismPayload` with a nonzero `sectionDelta`, driven directly at `bodyPatchPayloadProvesSimple` (internal — Rule P condition 1: a receiver this evaluator can otherwise prove Rule S-admits, isolated from conditions 2 and 3, which the fixture's chain and receiver otherwise satisfy) | `bodyPatchPayloadProvesSimple` reports `false` |
-| T44 | a hand-built `bodyPatchPayload` whose receiver carries two disjoint free-edge loops under the SAME level id and whose one new chain caps only one of them, driven directly at `bodyPatchPayloadProvesSimple` (internal — Rule P condition 2: the receiver's own construction proof does not transfer from a proper subset of its end's own free edges, the annular-rim hazard §6.4 names) | `bodyPatchPayloadProvesSimple` reports `false` |
-| T45 | a hand-built `bodyPatchPayload` whose chain's edges all share one level id but one chain VERTEX carries a different one, driven directly at `bodyPatchPayloadProvesSimple` (internal — Rule P condition 3: every vertex, not only every edge, must be proven part of the same recorded plane) | `bodyPatchPayloadProvesSimple` reports `false` |
+| T43 | a hand-built `bodyPatchPayload` whose receiver's own payload is a `prismPayload` with a nonzero `sectionDelta`, driven directly at `patchchain.BodyPayload.ProvesSimple` (internal — Rule P condition 1: a receiver this evaluator can otherwise prove Rule S-admits, isolated from conditions 2 and 3, which the fixture's chain and receiver otherwise satisfy) | `patchchain.BodyPayload.ProvesSimple` reports `false` |
+| T44 | a hand-built `bodyPatchPayload` whose receiver carries two disjoint free-edge loops under the SAME level id and whose one new chain caps only one of them, driven directly at `patchchain.BodyPayload.ProvesSimple` (internal — Rule P condition 2: the receiver's own construction proof does not transfer from a proper subset of its end's own free edges, the annular-rim hazard §6.4 names) | `patchchain.BodyPayload.ProvesSimple` reports `false` |
+| T45 | a hand-built `bodyPatchPayload` whose chain's edges all share one level id but one chain VERTEX carries a different one, driven directly at `patchchain.BodyPayload.ProvesSimple` (internal — Rule P condition 3: every vertex, not only every edge, must be proven part of the same recorded plane) | `patchchain.BodyPayload.ProvesSimple` reports `false` |
 | T46 | a trapezoid profile clear of the axis (both non-radial sides leaning off it, so revolving sweeps two `Cone` walls of different half-angles, not two `Cylinder` walls), revolved a full turn as a surface, stitched alone | `Kind() == BodySolid`; `Volume` and `Area` match the analytic frustum-shell values, `Approximate`, enclosing the analytic value within `Bound`; `Centroid` matches the analytic value, `Approximate`; `Edges(Free())` matches nothing |
 | T47 | the same profile built as a solid `Revolve` with no option, and separately stitched from the surface-result build | the two bodies' `Volume` and `Centroid` agree within the two independently-composed bounds — the independent-producer cross-check, proving the `Cone` arm against the unrelated revolve engine rather than against its own arithmetic |
 | T48 | a hand-built `Cone` face whose `Origin` sits away from the apex (`Radius` nonzero), driven directly at the apex derivation (internal — every reachable construction site sets `Radius` literally to `0`, so a nonzero-`Radius` `Cone` never reaches `Stitch` through the public seam) | `ErrUnsupported` (R8): this evaluator has no sound bound for `tan(HalfAngle)`'s own rounding, so it refuses rather than publish an unbounded apex; a literal zero `Radius` still publishes `Origin` as an `Exact` apex |

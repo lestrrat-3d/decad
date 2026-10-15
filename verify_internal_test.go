@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"math/big"
+	"reflect"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/diameter"
@@ -815,8 +816,8 @@ func rectangleProfile(vlo, vhi float64) profileRecord {
 	}}}
 }
 
-// TestRevolvePayloadProvesSimple drives payloadProvesSimple's revolvePayload
-// arm directly against hand-built payloads, isolating each half of its
+// TestRevolvePayloadProvesSimple drives revolveplan.Payload.ProvesSimple
+// directly against hand-built payloads, isolating each half of its
 // admission condition — full == true, and a radial minimum PROVEN
 // non-negative — from revolveplan.ResolveAxisSide's own build-time gate, which admits
 // down to a −tol band rather than proving the minimum clear of zero
@@ -829,25 +830,25 @@ func TestRevolvePayloadProvesSimple(t *testing.T) {
 	t.Run("full turn clear of the axis admits", func(t *testing.T) {
 		t.Parallel()
 		rp := revolvePayload{Profile: rectangleProfile(5, 15), Ax: axis, Full: true}
-		require.True(t, revolvePayloadProvesSimple(t.Context(), rp))
+		require.True(t, rp.ProvesSimple(t.Context()))
 	})
 
 	t.Run("partial turn never admits, however clear of the axis", func(t *testing.T) {
 		t.Parallel()
 		rp := revolvePayload{Profile: rectangleProfile(5, 15), Ax: axis, Full: false}
-		require.False(t, revolvePayloadProvesSimple(t.Context(), rp))
+		require.False(t, rp.ProvesSimple(t.Context()))
 	})
 
 	t.Run("a proven-negative radial minimum never admits, full turn or not", func(t *testing.T) {
 		t.Parallel()
 		rp := revolvePayload{Profile: rectangleProfile(-1, 9), Ax: axis, Full: true}
-		require.False(t, revolvePayloadProvesSimple(t.Context(), rp))
+		require.False(t, rp.ProvesSimple(t.Context()))
 	})
 
 	t.Run("a radial minimum proven exactly zero admits", func(t *testing.T) {
 		t.Parallel()
 		rp := revolvePayload{Profile: rectangleProfile(0, 8), Ax: axis, Full: true}
-		require.True(t, revolvePayloadProvesSimple(t.Context(), rp))
+		require.True(t, rp.ProvesSimple(t.Context()))
 	})
 
 	t.Run("build proof survives placement and respects cancellation", func(t *testing.T) {
@@ -862,7 +863,7 @@ func TestRevolvePayloadProvesSimple(t *testing.T) {
 			Phi1: 2 * math.Pi, Full: true, Den: fullTurnDenotation(),
 			Xform: r3.Identity(), SurfaceResult: true, RadialProof: ax.RadialProof,
 		}
-		require.True(t, revolvePayloadProvesSimple(t.Context(), rp))
+		require.True(t, rp.ProvesSimple(t.Context()))
 		motion, err := r3.Translation(r3.NewVec(1, 2, 3))
 		require.NoError(t, err)
 		doc := New()
@@ -874,10 +875,10 @@ func TestRevolvePayloadProvesSimple(t *testing.T) {
 		placedPayload, ok := placed.n.Payload.(revolvePayload)
 		require.True(t, ok)
 		require.True(t, placedPayload.RadialProof)
-		require.True(t, revolvePayloadProvesSimple(t.Context(), placedPayload))
+		require.True(t, placedPayload.ProvesSimple(t.Context()))
 		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
-		require.False(t, revolvePayloadProvesSimple(ctx, placedPayload))
+		require.False(t, placedPayload.ProvesSimple(ctx))
 	})
 
 	t.Run("flipped axis and chain view keep the scan", func(t *testing.T) {
@@ -888,7 +889,7 @@ func TestRevolvePayloadProvesSimple(t *testing.T) {
 		require.Equal(t, -1.0, side)
 		require.False(t, ax.RadialProof)
 		rp := revolvePayload{Profile: profile, Ax: ax, Full: true}
-		require.True(t, revolvePayloadProvesSimple(t.Context(), rp))
+		require.True(t, rp.ProvesSimple(t.Context()))
 		chain := chainRevolvePayload{Chains: []chainRecord{{Segments: profile.Outer.Segments}}, Ax: ax, Full: true}
 		require.False(t, chain.Revolve().RadialProof)
 	})
@@ -925,7 +926,7 @@ func TestRevolvePayloadProvesSimpleChargesTheAxisOffsetShift(t *testing.T) {
 		lineSeg{Start: planePoint{U: 0, V: aV - eps}, End: planePoint{U: 0, V: aV - eps + 5}, TStart: 0, TEnd: 1},
 	}}}
 	rp := revolvePayload{Profile: profile, Ax: ax, Full: true}
-	require.False(t, revolvePayloadProvesSimple(t.Context(), rp),
+	require.False(t, rp.ProvesSimple(t.Context()),
 		"the true radial minimum here is negative (-8e-8); the offset shift's own rounding must not admit it")
 }
 
@@ -1075,4 +1076,221 @@ func TestFallbackGateDiameterReadsCurvedWallStations(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, d, routed, `bodyGateDiameter routes a displaced prism through fallbackGateDiameter`)
+}
+
+// TestSimpleProverImplementers pins exactly which payload types implement
+// topo.SimpleProver: the eleven families that can prove Table V's leg 4, and
+// none of the others, whose bodies stay undecided.
+func TestSimpleProverImplementers(t *testing.T) {
+	t.Parallel()
+	type entry struct {
+		name string
+		p    topo.Payload
+	}
+	proves := []entry{
+		{"prismPayload", prismPayload{}},
+		{"loftPayload", loftPayload{}},
+		{"chainLoftPayload", chainLoftPayload{}},
+		{"coilPayload", coilPayload{}},
+		{"stitchPayload", stitchPayload{}},
+		{"bodyPatchPayload", bodyPatchPayload{}},
+		{"sweepPayload", sweepPayload{}},
+		{"revolvePayload", revolvePayload{}},
+		{"chainPayload", chainPayload{}},
+		{"chainSweepPayload", chainSweepPayload{}},
+		{"chainRevolvePayload", chainRevolvePayload{}},
+	}
+	undecided := []entry{
+		{"unstitchPayload", unstitchPayload{}},
+		{"facetedPayload", facetedPayload{}},
+		{"capBlendPayload", capBlendPayload{}},
+		{"brepPayload", brepPayload{}},
+		{"allEdgeChamferPayload", allEdgeChamferPayload{}},
+		{"stackedPrismPayload", stackedPrismPayload{}},
+		{"cupPayload", cupPayload{}},
+		{"patchPayload", patchPayload{}},
+		{"draftPayload", draftPayload{}},
+		{"twoSidedDraftPayload", twoSidedDraftPayload{}},
+		{"mitredSweepPayload", mitredSweepPayload{}},
+		{"twistedSweepPayload", twistedSweepPayload{}},
+		{"compositeTwistedSweepPayload", compositeTwistedSweepPayload{}},
+	}
+	for _, e := range proves {
+		_, ok := e.p.(topo.SimpleProver)
+		require.True(t, ok, e.name)
+	}
+	for _, e := range undecided {
+		_, ok := e.p.(topo.SimpleProver)
+		require.False(t, ok, e.name)
+		require.False(t, topo.ProvesSimple(t.Context(), e.p), e.name)
+	}
+	require.False(t, topo.ProvesSimple(t.Context(), nil))
+}
+
+// TestBuiltBodiesStorePayloadsByValue builds one body through each public
+// builder whose payload implements topo.SimpleProver and requires the stored
+// payload to be a value, never a pointer: the SimpleProver, Transform and
+// Placed methods have value receivers, so a pointer payload is outside the
+// contract. A pointer would also reach a ProvesSimple the old type switch
+// refused. reflect is needed because the stored dynamic type is an interface
+// value with no static form to compare.
+func TestBuiltBodiesStorePayloadsByValue(t *testing.T) {
+	t.Parallel()
+	storedByValue := func(p topo.Payload) bool {
+		return p != nil && reflect.TypeOf(p).Kind() != reflect.Pointer
+	}
+	openWalk := func(t *testing.T, w *sketch.World, plane *sketch.Plane, pts [][2]float64) (*sketch.Sketch, *sketch.Chain) {
+		t.Helper()
+		s, err := w.CreateSketch(plane)
+		require.NoError(t, err)
+		points := make([]*sketch.Point, len(pts))
+		for i, p := range pts {
+			points[i] = s.CreatePoint(p[0], p[1])
+			s.Fix(points[i])
+		}
+		for i := range len(points) - 1 {
+			s.CreateLine(points[i], points[i+1])
+		}
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		require.Len(t, s.Chains(), 1)
+		return s, s.Chains()[0]
+	}
+	rect := func(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
+		t.Helper()
+		return coilLoopsSketch(t, [][2]float64{{0, 5}, {10, 5}, {10, 15}, {0, 15}})
+	}
+	walk := [][2]float64{{0, 5}, {10, 5}, {10, 9}}
+	uAxis := SketchLine{Start: planePoint{U: 0, V: 0}, End: planePoint{U: 1, V: 0}}
+	zPath := func(t *testing.T) *Path {
+		t.Helper()
+		p, err := NewPath(r3.NewVec(0, 0, 0), LineTo{End: r3.NewVec(0, 0, 30)})
+		require.NoError(t, err)
+		return p
+	}
+
+	builders := []struct {
+		name  string
+		build func(t *testing.T) *Body
+	}{
+		{"prismPayload", func(t *testing.T) *Body {
+			s, p := rect(t)
+			b, err := Extrude(t.Context(), New(), s, p, Distance{D: units.Millimeters(5), Dir: Along})
+			require.NoError(t, err)
+			return b
+		}},
+		{"chainPayload", func(t *testing.T) *Body {
+			w := sketch.NewWorld()
+			s, ch := openWalk(t, w, w.XY(), walk)
+			b, err := Extrude(t.Context(), New(), s, ch, Distance{D: units.Millimeters(5), Dir: Along})
+			require.NoError(t, err)
+			return b
+		}},
+		{"patchPayload", func(t *testing.T) *Body {
+			s, p := rect(t)
+			b, err := PatchProfile(t.Context(), New(), s, p)
+			require.NoError(t, err)
+			return b
+		}},
+		{"bodyPatchPayload", func(t *testing.T) *Body {
+			s, p := rect(t)
+			tube, err := Extrude(t.Context(), New(), s, p, Distance{D: units.Millimeters(5), Dir: Along}, WithSurfaceResult())
+			require.NoError(t, err)
+			b, err := PatchEdges(t.Context(), tube, Edges(Free()).Exactly(8))
+			require.NoError(t, err)
+			return b
+		}},
+		{"revolvePayload", func(t *testing.T) *Body {
+			s, p := rect(t)
+			b, err := Revolve(t.Context(), New(), s, p, uAxis, FullRevolution{}, WithSurfaceResult())
+			require.NoError(t, err)
+			return b
+		}},
+		{"chainRevolvePayload", func(t *testing.T) *Body {
+			w := sketch.NewWorld()
+			s, ch := openWalk(t, w, w.XY(), walk)
+			b, err := Revolve(t.Context(), New(), s, ch, uAxis, FullRevolution{})
+			require.NoError(t, err)
+			return b
+		}},
+		{"sweepPayload", func(t *testing.T) *Body {
+			s, p := rect(t)
+			b, err := Sweep(t.Context(), New(), s, p, zPath(t))
+			require.NoError(t, err)
+			return b
+		}},
+		{"chainSweepPayload", func(t *testing.T) *Body {
+			w := sketch.NewWorld()
+			s, ch := openWalk(t, w, w.XY(), walk)
+			b, err := Sweep(t.Context(), New(), s, ch, zPath(t))
+			require.NoError(t, err)
+			return b
+		}},
+		{"loftPayload", func(t *testing.T) *Body {
+			w := sketch.NewWorld()
+			top, err := w.CreateOffsetPlane(w.XY(), 10)
+			require.NoError(t, err)
+			s0, err := w.CreateSketch(w.XY())
+			require.NoError(t, err)
+			c0 := s0.CreatePoint(0, 0)
+			s0.Fix(c0)
+			s0.CreateCircle(c0, 10)
+			_, err = s0.Solve(t.Context())
+			require.NoError(t, err)
+			s1, err := w.CreateSketch(top)
+			require.NoError(t, err)
+			c1 := s1.CreatePoint(0, 0)
+			s1.Fix(c1)
+			s1.CreateCircle(c1, 5)
+			_, err = s1.Solve(t.Context())
+			require.NoError(t, err)
+			b, err := New().Loft(t.Context(), s0, s0.Profiles()[0], s1, s1.Profiles()[0])
+			require.NoError(t, err)
+			return b
+		}},
+		{"chainLoftPayload", func(t *testing.T) *Body {
+			w := sketch.NewWorld()
+			top, err := w.CreateOffsetPlane(w.XY(), 5)
+			require.NoError(t, err)
+			s0, ch0 := openWalk(t, w, w.XY(), walk)
+			s1, ch1 := openWalk(t, w, top, walk)
+			b, err := New().LoftChain(t.Context(), s0, ch0, s1, ch1)
+			require.NoError(t, err)
+			return b
+		}},
+		{"stitchPayload", func(t *testing.T) *Body {
+			s, p := rect(t)
+			tube, err := Extrude(t.Context(), New(), s, p, Distance{D: units.Millimeters(5), Dir: Along}, WithSurfaceResult())
+			require.NoError(t, err)
+			b, err := Stitch(t.Context(), tube)
+			require.NoError(t, err)
+			return b
+		}},
+		{"coilPayload", func(t *testing.T) *Body {
+			s, p := coilLoopsSketch(t, [][2]float64{{4, 0}, {6, 0}, {6, 1}, {4, 1}})
+			b, err := Coil(t.Context(), New(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2))
+			require.NoError(t, err)
+			return b
+		}},
+		{"cupPayload", func(t *testing.T) *Body {
+			_, s1 := internalCrossDrilled(t)
+			b, err := Shell(t.Context(), s1, Faces(Facing(r3.NewVec(0, 1, 0))).Exactly(1), units.Millimeters(2))
+			require.NoError(t, err)
+			return b
+		}},
+	}
+	for _, bc := range builders {
+		t.Run(bc.name, func(t *testing.T) {
+			t.Parallel()
+			b := bc.build(t)
+			require.True(t, storedByValue(b.n.Payload), "%s body stores a pointer or no payload", bc.name)
+		})
+	}
+
+	t.Run("the check detects a pointer", func(t *testing.T) {
+		t.Parallel()
+		require.True(t, storedByValue(prismPayload{}))
+		require.False(t, storedByValue(&prismPayload{}))
+		require.False(t, storedByValue(nil))
+	})
 }

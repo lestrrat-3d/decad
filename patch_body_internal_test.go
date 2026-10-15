@@ -209,19 +209,19 @@ func patchTestReceiverWithOneChain(payload topo.Payload, edges []*Edge) *Body {
 // TestBodyPatchPayloadProvesSimpleRefusesNonAdmittingReceiver is
 // docs/surface-design.md's T43, Rule P condition 1 isolated: the receiver's
 // own payload is a prismPayload whose sectionDelta is nonzero, so
-// payloadProvesSimple refuses it — exactly the shape a boolean-reduced
+// topo.ProvesSimple refuses it — exactly the shape a boolean-reduced
 // prism reads (denotation.go's own doc comment: such a section is COMPUTED,
 // never recorded). The chain itself is the receiver's own complete
 // single-level end rim (conditions 2 and 3 both hold), isolating the
 // refusal to condition 1 alone: deleting the receiver-admission check in
-// bodyPatchPayloadProvesSimple is what this test is shown to catch.
+// patchchain.BodyPayload.ProvesSimple is what this test is shown to catch.
 func TestBodyPatchPayloadProvesSimpleRefusesNonAdmittingReceiver(t *testing.T) {
 	t.Parallel()
 	edges, _ := boundedSquareChain(1, units.Millimeters(0))
 	receiver := patchTestReceiverWithOneChain(prismrecord.Payload{SurfaceResult: true, SectionDelta: 5}, edges)
 
 	pp := bodyPatchPayload{Faces: faceNodes(receiver.Faces()), Chains: []bodyPatchChain{{Edges: edgeNodes(edges)}}}
-	require.False(t, bodyPatchPayloadProvesSimple(context.Background(), pp))
+	require.False(t, pp.ProvesSimple(context.Background()))
 }
 
 // TestBodyPatchPayloadProvesSimpleRefusesIncompleteChain is
@@ -260,7 +260,7 @@ func TestBodyPatchPayloadProvesSimpleRefusesIncompleteChain(t *testing.T) {
 		Faces:  faceNodes(receiver.Faces()),
 		Chains: []bodyPatchChain{{Edges: edgeNodes([]*Edge{inner})}},
 	}
-	require.False(t, bodyPatchPayloadProvesSimple(context.Background(), pp))
+	require.False(t, pp.ProvesSimple(context.Background()))
 }
 
 // TestBodyPatchPayloadProvesSimpleRefusesVertexLevelMismatch is
@@ -289,5 +289,5 @@ func TestBodyPatchPayloadProvesSimpleRefusesVertexLevelMismatch(t *testing.T) {
 	receiver := patchTestReceiverWithOneChain(prismrecord.Payload{SurfaceResult: true, SectionDelta: 0}, edges)
 
 	pp := bodyPatchPayload{Faces: faceNodes(receiver.Faces()), Chains: []bodyPatchChain{{Edges: edgeNodes(edges)}}}
-	require.False(t, bodyPatchPayloadProvesSimple(context.Background(), pp))
+	require.False(t, pp.ProvesSimple(context.Background()))
 }

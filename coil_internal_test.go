@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -261,7 +262,7 @@ func TestCoilSquareSpring(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, ok)
 		require.Equal(t, want, got)
-		require.True(t, payloadProvesSimple(t.Context(), b.n.Payload))
+		require.True(t, topo.ProvesSimple(t.Context(), b.n.Payload))
 	})
 }
 

@@ -1536,3 +1536,5 @@
 10	0.00	TestSpiralOffsetToothMeshLeavesOriginalIntact
 10	0.00	TestSpiralPrepareCombinedUnionLeavesOriginalIntact
 10	0.00	TestSpiralCombinedProxyMeshKeepsOneTriangleSourceIntact
+10	0.00	TestSimpleProverImplementers
+10	0.00	TestBuiltBodiesStorePayloadsByValue

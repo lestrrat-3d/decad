@@ -6,9 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/orderedwork"
-	"github.com/lestrrat-3d/decad/internal/prismextent"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
-	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -680,9 +678,9 @@ func auditBoundary(b *Body) bool {
 // adjacent-face count is also a violation: it means some face's loop walks an
 // edge Faces() does not know about, or fails to walk one it does.
 //
-// Leg 4 — non-self-intersection, decided by payloadProvesSimple on the
-// body's own payload. See that function's doc comment for the admission rule,
-// one payload at a time.
+// Leg 4 — non-self-intersection, decided by topo.ProvesSimple on the
+// body's own payload. See topo.SimpleProver and each payload's ProvesSimple
+// method for the admission rule, one payload at a time.
 func auditSheetBoundary(ctx context.Context, b *Body) reportvocab.SheetAuditOutcome {
 	faces := b.Faces()
 	if len(faces) == 0 {
@@ -731,155 +729,10 @@ func auditSheetBoundary(ctx context.Context, b *Body) reportvocab.SheetAuditOutc
 		}
 	}
 
-	if payloadProvesSimple(ctx, b.n.Payload) {
+	if topo.ProvesSimple(ctx, b.n.Payload) {
 		return reportvocab.SheetAuditProven
 	}
 	return reportvocab.SheetAuditUndecided
-}
-
-// payloadProvesSimple decides, in the one place both callers share, whether
-// the body a payload records already proves its own boundary does not
-// self-intersect — Table V's leg 4. auditSheetBoundary asks it above; a later
-// Stitch increment asks the identical question of an operand's SOURCE
-// payload before folding its faces into a curved-solid volume/centroid
-// reading, and hoisting the switch here is what keeps the two callers from
-// ever answering it two different ways.
-//
-// A prismPayload with surfaceResult true and sectionDelta zero is proven by
-// construction: `sketch` already decided the recorded segments form the
-// stated simple closed planar region; prismrecord.Build already refuses a
-// non-positive height; a simple planar curve crossed with a positive
-// interval does not self-intersect; and pp.xform is rigid, so it preserves
-// that. A nonzero sectionDelta denotes a set the record is only WITHIN that
-// displacement of, so simplicity does not transfer and the answer is
-// undecided.
-//
-// A loftPayload with surfaceResult true and sectionDelta zero admits leg 4 on
-// an argument STRONGER than the prism's: the evaluator cannot return a loft
-// body at ALL unless docs/loft-design.md §6's crossing audit already passed
-// over the complete held triangle set — walls and both caps together — and
-// non-self-intersection of a SUBSET (the walls alone, once the caps are
-// omitted) follows from non-self-intersection of that superset with no
-// further proof needed. A positive sectionDelta means the body denotes a
-// curved surface the held chords are only WITHIN that displacement of, so
-// simplicity of the chord mesh does not transfer to the curved surface it
-// stands for, and the answer is undecided rather than violated — the
-// identical reading a nonzero sectionDelta gives a prism, restated here
-// because a loft's own displacement is section-plane rather than axial. A
-// chorded loft at zero sectionDelta (a degree-1 free-form pair) is undecided
-// for the same reason: each wall cell denotes the bilinear ruled patch
-// through its four corners, and the audit cleared the triangle pair instead.
-//
-// A chainLoftPayload records only the held flat ribbon triangles. Its build
-// runs the complete crossing audit before committing a body, and placement
-// rebuilds and audits that triangle set again. A committed chain loft thus
-// already proves leg 4 over the exact sheet Verify reads.
-//
-// A stitchPayload is proven instead by an explicit build-time audit: Stitch
-// runs docs/loft-design.md §6's crossing audit on the OPEN case too
-// (docs/surface-design.md §6.3's open-case decision), so a stitchPayload
-// whose audit ran and passed (auditClean) admits leg 4 the same as a
-// proven-simple prism or loft does, letting a clean stitched sheet read
-// ValidityValid instead of being permanently Suspect. A bodyPatchPayload
-// admits under Rule P (patch_body.go's bodyPatchPayloadProvesSimple,
-// docs/surface-design.md §6.4): PatchEdges itself proves only its own
-// chains simple in their own plane (gate 4, §5.2), never the whole
-// assembled boundary's non-self-intersection, but where its receiver itself
-// admits this same predicate, every new chain is a COMPLETE free-edge chain
-// of that receiver's own end, and every new chain's plane is proven — by
-// the LEVEL half of the shared-denotation certificate's own identity, never
-// a coordinate or a residual — to be exactly one of that receiver's own end
-// planes, the patched assembly IS the receiver's own solid boundary and its
-// proof carries. Any chain this cannot decide keeps the payload undecided.
-//
-// A revolvePayload admits leg 4 on the CONSTRUCTION argument
-// revolvePayloadProvesSimple states in full — its build runs no crossing
-// audit over a triangle set at all, so the proof is a different shape than
-// the prism's or loft's, not merely a weaker version of it. Any other
-// payload, or a nil one, is undecided.
-//
-// A sweepPayload admits leg 4 for the ONE-SPAN STRAIGHT reduction alone
-// (len(Spans) == 0, Arc false), on exactly the prismPayload argument above,
-// which transfers verbatim: the line reduction IS a prismPayload build. The
-// arc-reduced and composite sheets read undecided instead, and deliberately —
-// this is not an oversight to lift later without a new proof:
-//
-//   - the arc reduction is a revolvePayload build whose own sweep is a
-//     PARTIAL turn (full == false) — revolvePayloadProvesSimple's own
-//     admission needs a full turn, so an arc-reduced sweep never qualifies;
-//   - the composite build's own compositesweep.AuditBoundary/AuditVertexLinks
-//     (internal/compositesweep/boundary.go) prove a closed two-manifold-with-boundary TOPOLOGY —
-//     every edge's face count matches its use count, every vertex link is one
-//     cycle or path — which is a combinatorial fact about how the spans sew
-//     together, never a geometric claim that the swept walls do not fold back
-//     and cross themselves in space. That geometric claim is precisely what
-//     this leg (non-self-intersection) asks, and it is exactly the audit this
-//     increment relaxes to admit a sheet's free rims in the first place, so it
-//     cannot also be read as proving the thing it was relaxed away from.
-func payloadProvesSimple(ctx context.Context, p topo.Payload) bool {
-	switch pp := p.(type) {
-	case prismPayload:
-		return pp.SurfaceResult && pp.SectionDelta == 0
-	case loftPayload:
-		return pp.SurfaceResult && pp.SectionDelta == 0 && !pp.Chorded
-	case chainLoftPayload:
-		return true
-	case coilPayload:
-		// CP5 proves the true coil simple from CS5 and CS6, and the build's
-		// crossing audit proves its held shell embedded (docs/helix-design.md
-		// Table CD row CD1). A coil is always a solid, so the sheet audit
-		// never reaches this arm; it states the answer for any caller that
-		// asks.
-		return true
-	case stitchPayload:
-		return pp.auditClean
-	case bodyPatchPayload:
-		return bodyPatchPayloadProvesSimple(ctx, pp)
-	case sweepPayload:
-		return len(pp.Spans) == 0 && !pp.Arc && pp.Prism.SurfaceResult && pp.Prism.SectionDelta == 0
-	case revolvePayload:
-		return revolvePayloadProvesSimple(ctx, pp)
-	case chainPayload:
-		// A chain-fed prism earns leg 4 on the profile argument with one word
-		// changed (docs/surface-design.md §13.4): `sketch` already proved the
-		// recorded walk a simple planar curve — RecordChain's own ch.Valid gate
-		// (§13.3) — chainrecord.Build already refuses a non-positive
-		// sweep height, and a simple planar curve crossed with a positive
-		// interval cannot self-intersect. A chain-fed body is always a sheet
-		// by construction (Table G), so surfaceResult carries no separate
-		// condition here; sectionDelta is the one term that can still break
-		// the argument, on the identical prismPayload reading above.
-		return pp.SectionDelta == 0
-	case chainSweepPayload:
-		if len(pp.Spans) != 0 || pp.Arc {
-			return false
-		}
-		// The remaining one-span reduction is the straight case
-		// (docs/sweep-design.md §15): chain Sweep builds the body
-		// through the identical chainrecord.Build a plain chain Extrude
-		// does, over a chainPayload it then wraps unchanged (internal/sweeprecord's
-		// FinishChain). So this is the SAME construction argument
-		// chainPayload's own arm makes, re-read off the wrapped payload —
-		// never a weaker version of it. The arc and composite cases returned
-		// false above because their partial turns have no simplicity proof.
-		return pp.Chain.SectionDelta == 0
-	case chainRevolvePayload:
-		// A chain-fed revolve earns leg 4 on the identical full-turn argument,
-		// re-read over the chain's own open walk through the SAME generic
-		// reading revolvePayloadProvesSimple already takes off rp.Profile and
-		// rp.Ax — neither of which assumes the walk closes
-		// (docs/surface-design.md §13.4).
-		return revolvePayloadProvesSimple(ctx, pp.Revolve())
-	default:
-		return false
-	}
-}
-
-// revolvePayloadProvesSimple decides payloadProvesSimple's revolvePayload
-// arm through revolveaxis.ProvesSimple (its comment holds the argument).
-func revolvePayloadProvesSimple(ctx context.Context, rp revolvePayload) bool {
-	return revolveaxis.ProvesSimple(ctx, rp.Profile, rp.Ax, rp.Full, rp.RadialProof,
-		rp.SectionDelta, prismextent.ProfileBoundaryExtremes)
 }
 
 // boxesDisjoint reports whether the two bounds-inflated boxes have disjoint

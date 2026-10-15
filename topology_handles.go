@@ -140,18 +140,6 @@ func edgeNodes(es []*Edge) []*topo.Edge {
 	return out
 }
 
-// edgeHandles returns the handles of ns in order, or nil for an empty ns.
-func edgeHandles(ns []*topo.Edge) []*Edge {
-	if len(ns) == 0 {
-		return nil
-	}
-	out := make([]*Edge, len(ns))
-	for i, n := range ns {
-		out[i] = edgeHandle(n)
-	}
-	return out
-}
-
 // bornEdge sets e's node Owner to e and returns e. Every root Edge is born
 // through it, so edgeHandle maps any edge node a loop's coedge links back to
 // the one handle that holds it.

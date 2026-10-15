@@ -96,6 +96,29 @@ func (sp Payload) Placed(ctx context.Context, env topo.Env, composed r3.Transfor
 	return body, nil
 }
 
+// ProvesSimple implements topo.SimpleProver. A sweep admits leg 4 for the
+// ONE-SPAN STRAIGHT reduction alone (len(Spans) == 0, Arc false), on exactly
+// the prism argument, which transfers verbatim: the line reduction IS a prism
+// build. The arc-reduced and composite sheets read undecided instead, and
+// deliberately — this is not an oversight to lift later without a new proof:
+//
+//   - the arc reduction is a revolve build whose own sweep is a PARTIAL turn
+//     (full == false) — the revolve admission needs a full turn, so an
+//     arc-reduced sweep never qualifies;
+//   - the composite build's own compositesweep.AuditBoundary/AuditVertexLinks
+//     (internal/compositesweep/boundary.go) prove a closed
+//     two-manifold-with-boundary TOPOLOGY — every edge's face count matches
+//     its use count, every vertex link is one cycle or path — which is a
+//     combinatorial fact about how the spans sew together, never a geometric
+//     claim that the swept walls do not fold back and cross themselves in
+//     space. That geometric claim is precisely what this leg
+//     (non-self-intersection) asks, and it is exactly the audit this increment
+//     relaxes to admit a sheet's free rims in the first place, so it cannot
+//     also be read as proving the thing it was relaxed away from.
+func (sp Payload) ProvesSimple(context.Context) bool {
+	return len(sp.Spans) == 0 && !sp.Arc && sp.Prism.SurfaceResult && sp.Prism.SectionDelta == 0
+}
+
 // SurveyClass names the payload class a staged survey diagnostic reports
 // (docs/evaluator-design.md §8): the root type this payload replaced.
 func (Payload) SurveyClass() string { return "sweepPayload" }
@@ -148,6 +171,21 @@ func (sp ChainPayload) Placed(ctx context.Context, env topo.Env, composed r3.Tra
 	}
 	FinishChain(body, sp)
 	return body, nil
+}
+
+// ProvesSimple implements topo.SimpleProver. The one-span straight reduction
+// is the only admitted case (docs/sweep-design.md §15): chain Sweep builds the
+// body through the identical chainrecord.Build a plain chain Extrude does,
+// over a chainrecord.Payload it then wraps unchanged (FinishChain). So this is
+// the SAME construction argument chainrecord.Payload.ProvesSimple makes,
+// re-read off the wrapped payload — never a weaker version of it. The arc and
+// composite cases are undecided because their partial turns have no simplicity
+// proof.
+func (sp ChainPayload) ProvesSimple(context.Context) bool {
+	if len(sp.Spans) != 0 || sp.Arc {
+		return false
+	}
+	return sp.Chain.SectionDelta == 0
 }
 
 // SurveyClass names the payload class a staged survey diagnostic reports

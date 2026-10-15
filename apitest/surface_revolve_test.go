@@ -449,7 +449,7 @@ func TestSurfaceRevolveRolesResolveThroughFaceCreatedBy(t *testing.T) {
 
 // TestSurfaceRevolveSheetVerifiesUndecided is docs/surface-design.md §15's
 // T40: a quarter-turn revolve sheet stays Suspect with DiagUndecidedValidity,
-// because payloadProvesSimple's revolvePayload arm requires full == true and
+// because revolveplan.Payload.ProvesSimple requires full == true and
 // a partial turn never has it — the manifold-with-boundary audit this
 // evaluator would otherwise need lands later, so a sheet reads
 // ValidityUndecided rather than proven invalid.
@@ -476,7 +476,7 @@ func TestSurfaceRevolveSheetVerifiesUndecided(t *testing.T) {
 
 // TestSurfaceRevolveFullTurnSheetVerifiesValid is docs/surface-design.md
 // §15's T39: a full-revolution surface sheet reads ValidityValid, admitted
-// by construction — payloadProvesSimple's revolvePayload arm holds because
+// by construction — revolveplan.Payload.ProvesSimple holds because
 // the sweep is exactly one full turn and annularSketch's radial minimum
 // (5 mm) is proven clear of the axis. This is the widening PR 0 makes: the
 // same fixture read ValidityUndecided before this arm existed. The assertion
@@ -501,7 +501,7 @@ func TestSurfaceRevolveFullTurnSheetVerifiesValid(t *testing.T) {
 }
 
 // TestSurfaceRevolveAxisStraddlingProfileNeverReachesTheAudit confirms the
-// premise payloadProvesSimple's revolvePayload arm rests on: a profile whose
+// premise revolveplan.Payload.ProvesSimple rests on: a profile whose
 // boundary straddles the revolve axis is refused by revolveplan.ResolveAxisSide at
 // build, before a body exists at all, so it never reaches auditSheetBoundary
 // with a claim the arm would have to decide.

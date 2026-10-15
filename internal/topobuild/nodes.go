@@ -51,6 +51,24 @@ func Faces(b *topo.Body) []*topo.Face {
 	return out
 }
 
+// OperandBodies returns the distinct bodies faces were read from, in
+// first-seen order, skipping a face that holds no body.
+func OperandBodies(faces []*topo.Face) []*topo.Body {
+	seen := map[*topo.Body]struct{}{}
+	var bodies []*topo.Body
+	for _, f := range faces {
+		if f.Body == nil {
+			continue
+		}
+		if _, ok := seen[f.Body]; ok {
+			continue
+		}
+		seen[f.Body] = struct{}{}
+		bodies = append(bodies, f.Body)
+	}
+	return bodies
+}
+
 // Edges returns the nodes of n's edges, each once, in the order root
 // Body.Edges returns their handles: first seen walking lumps, shells, faces,
 // loops and their uses.

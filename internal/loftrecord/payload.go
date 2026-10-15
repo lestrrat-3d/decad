@@ -236,6 +236,26 @@ func (Payload) SurveyClass() string { return "loftPayload" }
 // Transform is the accumulated rigid placement.
 func (pl Payload) Transform() r3.Transform { return pl.Xform }
 
+// ProvesSimple implements topo.SimpleProver. A payload with SurfaceResult true
+// and SectionDelta zero admits leg 4 on an argument STRONGER than the prism's:
+// the evaluator cannot return a loft body at ALL unless docs/loft-design.md
+// §6's crossing audit already passed over the complete held triangle set —
+// walls and both caps together — and non-self-intersection of a SUBSET (the
+// walls alone, once the caps are omitted) follows from non-self-intersection
+// of that superset with no further proof needed. A positive SectionDelta means
+// the body denotes a curved surface the held chords are only WITHIN that
+// displacement of, so simplicity of the chord mesh does not transfer to the
+// curved surface it stands for, and the answer is undecided rather than
+// violated — the identical reading a nonzero SectionDelta gives a prism,
+// restated here because a loft's own displacement is section-plane rather than
+// axial. A chorded loft at zero SectionDelta (a degree-1 free-form pair) is
+// undecided for the same reason: each wall cell denotes the bilinear ruled
+// patch through its four corners, and the audit cleared the triangle pair
+// instead.
+func (pl Payload) ProvesSimple(context.Context) bool {
+	return pl.SurfaceResult && pl.SectionDelta == 0 && !pl.Chorded
+}
+
 // AxialDelta reports the displacement of every held loft vertex. Its planar
 // caps are built from those vertices, so a ToFace stop against either cap
 // inherits this bound.

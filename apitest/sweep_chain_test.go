@@ -88,7 +88,7 @@ func TestSweepChainOneLineRibbonMatchesExtrudeChain(t *testing.T) {
 // validity leg, restated for a chain-fed sweep: the one-span straight
 // reduction builds through the identical chainrecord.Build a plain
 // chain Extrude does, so it earns the same construction proof
-// payloadProvesSimple's chainPayload arm does, re-read off the
+// chainrecord.Payload.ProvesSimple does, re-read off the
 // chainSweepPayload it wraps that build in — never ValidityUndecided, which
 // is what a payload without this leg's own arm would read instead.
 func TestSweepChainRibbonReadsValid(t *testing.T) {

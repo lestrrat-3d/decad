@@ -36,6 +36,13 @@ func (ChainPayload) SurveyClass() string { return "chainLoftPayload" }
 // Transform is the accumulated rigid placement.
 func (lp ChainPayload) Transform() r3.Transform { return lp.Xform }
 
+// ProvesSimple implements topo.SimpleProver. A chain loft records only the
+// held flat ribbon triangles. Its build runs the complete crossing audit
+// before committing a body, and placement rebuilds and audits that triangle
+// set again. A committed chain loft thus already proves leg 4 over the exact
+// sheet Verify reads.
+func (lp ChainPayload) ProvesSimple(context.Context) bool { return true }
+
 // Placed re-evaluates the same two records under the composed motion (core
 // §8), re-running every gate decided from the records and rebuilding from
 // scratch, exactly as docs/loft-design.md §4 states a loft placement does.

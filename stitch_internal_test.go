@@ -159,7 +159,7 @@ func TestStitchAuditRefusesOverlappingAssembly(t *testing.T) {
 // T35: Rule S's single-source-body restriction, driven directly at
 // stitchRuleSAdmits on two faces whose own bodies each individually carry a
 // construction proof (prismPayload{surfaceResult: true}, the same shape
-// payloadProvesSimple's own prismPayload arm admits) — proving the refusal
+// prismrecord.Payload.ProvesSimple admits) — proving the refusal
 // is specifically about the COUNT of source bodies, not about either
 // payload's own standing. decad's public seam has no way to reach this
 // directly: docs/surface-design.md §6.2's Table J admits a free Line3 edge

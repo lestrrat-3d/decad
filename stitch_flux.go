@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/stitchflux"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -213,7 +214,7 @@ import (
 //
 // RULE S — the construction-proof gate. Before this file's dispatch ever
 // runs, evalStitchContext requires every operand face to descend from ONE
-// source body whose payload passes payloadProvesSimple (verify.go) —
+// source body whose payload passes topo.ProvesSimple —
 // stitchRuleSAdmits below. The reused crossing audit (docs/loft-design.md
 // §6) consumes triangles, and a curved face has none to chord into it
 // without admitting a self-intersection question on an approximation
@@ -228,16 +229,16 @@ import (
 
 // stitchRuleSAdmits is Rule S: every operand face must descend from exactly
 // one source body, and that body's own evaluator payload must prove its
-// boundary simple by construction (payloadProvesSimple). srcFaces is the
+// boundary simple by construction (topo.ProvesSimple). srcFaces is the
 // PRE-rebuild operand face set (stitch.go's own srcFaces, read before the
 // new body's own topology and Face body links exist) — the same set
 // stitchBounds already reads operand bodies from.
 func stitchRuleSAdmits(ctx context.Context, srcFaces []*Face) bool {
-	bodies := stitchOperandBodies(srcFaces)
-	if len(bodies) != 1 || bodies[0] == nil || bodies[0].n.Payload == nil {
+	bodies := topobuild.OperandBodies(faceNodes(srcFaces))
+	if len(bodies) != 1 || bodies[0] == nil || bodies[0].Payload == nil {
 		return false
 	}
-	return payloadProvesSimple(ctx, bodies[0].n.Payload)
+	return topo.ProvesSimple(ctx, bodies[0].Payload)
 }
 
 // stitchAllTetrahedronEligible reports whether every face qualifies for

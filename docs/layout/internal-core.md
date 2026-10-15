@@ -27,7 +27,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/surfaceplace/` | Rigid placement of face surfaces and edge curves, and the placed circle bound. See surface §6. |
 | `internal/reportvocab/` | Contact and sweep enums; Verify reports, motion verification records, survey diagnostics, and pair, interference and sheet outcomes. |
 | `internal/extent/` | Unit bounds and stop levels for extents. See API §8.1, evaluator §5/§6. |
-| `internal/patchchain/` | The `PatchProfile` and `PatchEdges` payloads and their builders over nodes; chain partition, plane proof, orientation, segment record and area bounds. See surface §5.1-§5.2. |
+| `internal/patchchain/` | The `PatchProfile` and `PatchEdges` payloads and their builders over nodes; chain partition, plane proof, orientation, segment record, area bounds and Rule P. See surface §5.1-§5.2. |
 | `internal/sectionaudit/` | Rewrite audit order, signed area, cutback, crossing, contact and nesting checks. See modify §5. |
 | `internal/sketchrecord/` | Sketch snapshot authentication, edge conversion, and join checks. See sketch-seam §2. |
 | `internal/splinebezier/` | Exact Bézier conversion of recorded splines. See `docs/spline-design.md` §5.1. |
@@ -67,5 +67,5 @@ The rules for rows live in `docs/layout.md`.
 | `internal/revolveproof/` | Meridian envelopes, facet budgets, cell area and volume bounds, and chain-arc source points and area density. See tessellation §8–§11, sweep §15.9. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping over recorded `Point2`; indexed triangles and chording refusals. |
 | `internal/loftcylinder/` | Exact cap XY audits, source circle and connector gates, ring distances and occupancy, cap chamfer clearance, triangles, band strips, compaction and audits, triangle radii, root radius gaps, and radial and wedge gates of the loft/cylinder Union. See loft-cylinder-boolean design. |
-| `internal/topo/` | Node data the root topology handles hold by value (Vertex, Edge, CoEdge, Loop, Face, FaceShell, Lump, Body, Document, Mesh), with their links and the document node's minting and liveness reads; `Payload`, `Env` and the builders' `Alloc`; `topotest` allocates bare nodes. See evaluator §3, §8. |
-| `internal/topobuild/` | Topology assembly builders share over nodes: face-loop attachment, open shells, connected lumps, node literals through `Alloc`, body and coedge walkers, blend roles, loft-family helpers, face normals, finiteness gates, mesh facet writes and the closed-mesh audit. See evaluator §3, §5, surface §2.2. |
+| `internal/topo/` | Node data the root topology handles hold by value (Vertex, Edge, CoEdge, Loop, Face, FaceShell, Lump, Body, Document, Mesh), with their links and the document's minting and liveness; `Payload`, `SimpleProver`, `Env` and the builders' `Alloc`; `topotest` allocates bare nodes. See evaluator §3, §8. |
+| `internal/topobuild/` | Topology assembly builders share over nodes: face-loop attachment, open shells, connected lumps, node literals via `Alloc`, body, operand and coedge walkers, blend roles, loft-family helpers, face normals, finiteness gates, mesh facet writes and closed-mesh audit. See evaluator §3, §5, surface §2.2. |
