@@ -31,6 +31,45 @@ func TestBernsteinRowsSignAt(t *testing.T) {
 	require.False(t, polynomial.BernsteinRowsSignAt(q, half, zero, one, -1))
 }
 
+func TestBernsteinRectOpenSidePreservesEndpointVerdictsAndInput(t *testing.T) {
+	zero, one := big.NewRat(0, 1), big.NewRat(1, 1)
+	quarter, threeQuarters := big.NewRat(1, 4), big.NewRat(3, 4)
+	cases := []struct {
+		name           string
+		controls       [3][]int64
+		lo, hi         *big.Rat
+		loOpen, hiOpen bool
+		want           int
+	}{
+		{"positive closed", [3][]int64{{2, 3}, {2, 3}, {2, 3}}, zero, one, false, false, 1},
+		{"negative closed", [3][]int64{{-2, -3}, {-2, -3}, {-2, -3}}, zero, one, false, false, -1},
+		{"open lower zero", [3][]int64{{0, 0}, {2, 3}, {2, 3}}, zero, one, true, false, 1},
+		{"closed lower zero", [3][]int64{{0, 0}, {2, 3}, {2, 3}}, zero, one, false, false, 0},
+		{"open upper zero", [3][]int64{{-2, -3}, {-2, -3}, {0, 0}}, zero, one, false, true, -1},
+		{"closed upper zero", [3][]int64{{-2, -3}, {-2, -3}, {0, 0}}, zero, one, false, false, 0},
+		{"zero source column", [3][]int64{{2, 0}, {2, 0}, {2, 0}}, zero, one, true, true, 0},
+		{"mixed source signs", [3][]int64{{2, -2}, {2, -2}, {2, -2}}, zero, one, true, true, 0},
+		{"restricted time", [3][]int64{{0, 0}, {2, 3}, {0, 0}}, quarter, threeQuarters, false, false, 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var q [3][]*big.Rat
+			for row, controls := range tc.controls {
+				for _, value := range controls {
+					q[row] = append(q[row], big.NewRat(value, 1))
+				}
+			}
+			require.Equal(t, tc.want, polynomial.BernsteinRectOpenSide(q, tc.lo, tc.hi, tc.loOpen, tc.hiOpen))
+			for row, controls := range tc.controls {
+				for column, value := range controls {
+					require.Zero(t, q[row][column].Cmp(big.NewRat(value, 1)),
+						"input coefficient at row %d, column %d", row, column)
+				}
+			}
+		})
+	}
+}
+
 func TestBernsteinSignByHalving(t *testing.T) {
 	coeff := []*big.Rat{big.NewRat(1, 1), big.NewRat(-2, 5), big.NewRat(1, 1)}
 
