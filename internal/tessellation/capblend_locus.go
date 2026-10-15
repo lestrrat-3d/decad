@@ -37,7 +37,7 @@ type CapBlendLocusInput struct {
 // The locus is a curve of proven length at most L between two endpoints c*
 // apart, so it lies inside the ellipse with those two endpoints as foci and
 // major axis L, whose semi-minor axis is sqrt(L² − c*²)/2. L is the same
-// subdivided bound capSlantEdge charges the ruling's own length against
+// subdivided bound capblend.SlantEdge charges the ruling's own length against
 // (capband.MiterLocusUpper). The semi-minor axis only grows as the focal distance
 // shrinks, so c must be a proven LOWER bound on c*, the distance between the
 // locus's own ends: the denoted corner and the denoted foot, the stated side

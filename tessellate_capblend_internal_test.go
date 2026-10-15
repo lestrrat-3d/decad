@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/capband"
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/extent"
 
 	"github.com/lestrrat-3d/decad/internal/capcontour"
@@ -71,7 +72,7 @@ func TestCapBlendPayloadStoresEachBandsContourDisplacement(t *testing.T) {
 	// The same value, re-derived through the build's own capBandResult.
 	budget := proofbound.NewWorkBudget(t.Context())
 	work := freeform.NewFreeformWork()
-	cl, err := oneLoopCornerLoop(budget, cbp.Loops()[0], work)
+	cl, err := capblend.OneLoopCornerLoop(budget, cbp.Loops()[0], work)
 	require.NoError(t, err)
 	joins, err := capband.OffsetJoins(budget, cl.Walks, cbp.LoopOffset(0), shellTol)
 	require.NoError(t, err)
@@ -192,7 +193,7 @@ func TestCapBlendMeshChargesTheWindowSkew(t *testing.T) {
 			continue
 		}
 		found++
-		skew := capPatchWindowSkew(patch.Geom)
+		skew := capblend.PatchWindowSkew(patch.Geom)
 		require.Positive(t, skew, `a mitered arc's two windows differ`)
 		skewTerm := proofbound.ProductUpper(patch.Geom.CapRadius, skew)
 		require.Positive(t, skewTerm)
@@ -226,7 +227,7 @@ func TestCapBlendBandPatchBoundCoversItsOwnChording(t *testing.T) {
 	roles := facesByRole(chamfered)
 	require.Len(t, cbp.Patches, 1)
 	for _, patch := range cbp.Patches {
-		require.Equal(t, 0.0, capPatchWindowSkew(patch.Geom),
+		require.Equal(t, 0.0, capblend.PatchWindowSkew(patch.Geom),
 			`a whole-turn band's two windows coincide`)
 		bound, ok := mesh.sourceBound(faceNode(roles[patch.Role]))
 		require.True(t, ok)
@@ -310,7 +311,7 @@ func TestCapBlendCornerLocusGapIsZeroOnlyWhereBothLociAreAffine(t *testing.T) {
 func capBlendCornerSetup(t *testing.T, cbp capBlendPayload) ([]survey2d.SideWalk, []cornerJoin) {
 	t.Helper()
 	budget := proofbound.NewWorkBudget(t.Context())
-	cl, err := oneLoopCornerLoop(budget, cbp.Loops()[0], freeform.NewFreeformWork())
+	cl, err := capblend.OneLoopCornerLoop(budget, cbp.Loops()[0], freeform.NewFreeformWork())
 	require.NoError(t, err)
 	joins, err := capband.OffsetJoins(budget, cl.Walks, cbp.LoopOffset(0), shellTol)
 	require.NoError(t, err)

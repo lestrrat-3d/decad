@@ -23,7 +23,7 @@ import (
 // at up to 15% of the body's own area (a 20x39 mm cylinder cap-chamfer band)
 // or 3.8x an apex patch's own value (a reflex-corner star), for a VALUE that
 // was already exact to the closed form. coneFrustumAreaBracket
-// (capblend_moments.go) replaces the fallback with a certified interval
+// (internal/capblend/build.go) replaces the fallback with a certified interval
 // wherever one can be built; these tests pin the result tight rather than
 // merely present.
 //
@@ -325,7 +325,7 @@ func TestCapBlendCircularRimVerifyArea(t *testing.T) {
 
 // This file is the A8 regression suite for the cap-loop chamfer's CENTROID
 // (docs/modify-reach-design.md §8.4's closed-form first moments): before this
-// fix, evalCapBlendContext never computed a first moment at all — it
+// fix, capblend.Build never computed a first moment at all — it
 // published an area-weighted average of each face's own first-loop-start
 // VERTEX, bounded only by the body's own bounding box. On the ask's own
 // cylinder r10 h8 chamfer 0.5mm fixture that reported (9.8725, 0, 2.3314)
@@ -932,7 +932,7 @@ func TestCapBlendPlacedTangentBandDepartureGrowsWithPlacement(t *testing.T) {
 // meets a neighbour at a non-tangential miter corner has a CAP-level
 // directrix (the offset arc, trimmed at the mitered corner feet) whose
 // angular window differs from its SIDE-level directrix (the wall's own
-// recorded sweep, untrimmed) — capblend_geom.go/capblend_moments.go used to
+// recorded sweep, untrimmed) — internal/capblend/band.go/internal/capblend/build.go used to
 // read the side window for both, which moved Body.Volume() by up to 0.7% at
 // a 7.24e-10 published bound. Affected exactly when a circular wall meets a
 // non-tangential neighbour; unaffected and covered here too: a whole-turn
@@ -943,7 +943,7 @@ func TestCapBlendPlacedTangentBandDepartureGrowsWithPlacement(t *testing.T) {
 // between its own Start() and End() (about the Arc3's own Center), within
 // its own Bound — reference-free, since Start/End/Center/Radius are all
 // public readings of the SAME edge, never a second construction.
-// capblend_geom.go used to hold this edge's length as
+// internal/capblend/band.go used to hold this edge's length as
 // capRadius*|w.th1-w.th0| — the WALL's own full recorded sweep — rather than
 // the trimmed cap-level sweep between the actual corner feet the edge runs
 // between, so the held length disagreed with the edge's own endpoints.
@@ -1150,7 +1150,7 @@ func circularSectorBodyAt(t *testing.T, cx, cy, r, phi float64, ext decad.Extent
 // exactly this residual). Every residual is the gap between the BUILT
 // (straight-ruled-patch) solid and the exact miter-locus solid the erosion
 // family denotes (docs/modify-reach-design.md §8.3's own scope note,
-// capblend_moments.go); the published Bound must enclose it.
+// internal/capblend/build.go); the published Bound must enclose it.
 func TestCapBlendErosionFamilyVolumeBoundEncloses(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {

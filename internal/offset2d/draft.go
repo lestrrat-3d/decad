@@ -159,7 +159,7 @@ func errDraftAmountRoundsAway(t float64) error {
 // DraftSharpJoins is the draft band's corner rule
 // (capBlendPayload.offsetJoins): every corner of one coalesced loop resolved
 // by SharpJoinsBudget, walk i moved amounts[i], in walk order, as the
-// Join records buildCapBand reads. No join is an arc.
+// Join records capblend.BuildBand reads. No join is an arc.
 func DraftSharpJoins(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, amounts []float64, tol float64) ([]Join, error) {
 	result, err := SharpJoinsBudget(budget, walks, amounts, tol)
 	if err != nil {

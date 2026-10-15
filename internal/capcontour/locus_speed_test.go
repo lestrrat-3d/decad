@@ -23,7 +23,7 @@ import (
 // A public cap-loop chamfer reaches this case at a tangent cusp, where a line
 // touches the circle and the two walls run in opposite directions:
 // TestCapLoopChamferRefusesNearTangentCorner's horn profile, which
-// requireCapBlendCornerLoci refuses as SX14 through this same answer.
+// capblend.RequireCornerLoci refuses as SX14 through this same answer.
 //
 // The construction: a straight wall along the U axis (material-side normal
 // (0, 1)) meets a circular wall centred at (0, -R), radius R, so the corner

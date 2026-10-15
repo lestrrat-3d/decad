@@ -53,7 +53,7 @@ type draftPayload struct {
 	far      profileRecord
 	farDelta float64
 	// patches is every wall patch's side(i, j) role beside the plane-local
-	// geometry buildCapBand built it from, in loop order then walk order, and
+	// geometry capblend.BuildBand built it from, in loop order then walk order, and
 	// bandDelta each loop's own far contour displacement keyed as the band view
 	// keys it. Both are filled once by the build and handed to the band view
 	// (band), so the tessellator (tessellate_draft.go) charges the same patch

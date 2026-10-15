@@ -569,7 +569,7 @@ cap-blend view. Then:
    construction (`capband.LoopBoundary`): SX6 for a dropped carrier, SX13's radial
    half per circular wall, SX14 per corner. `F`'s region is rewritten with the
    contour in `ℓ`'s place, and the second offset at the top of `dc`'s
-   conversion span runs as `auditCapBlendSetbackSpan` does.
+   conversion span runs as `capblend.AuditSetbackSpan` does.
 2. **The side level.** `sideZ = L_F + σ·ds` with `σ = −1` for a loop whose
    walls descend into the body and `+1` for one whose walls rise (LB6), its
    displacement `levelDelta` the float sum's rounding plus `dsDelta`; SX13's
@@ -585,15 +585,15 @@ cap-blend view. Then:
 5. **The band.** The record stores `loopBands`: `(face, loop, dc, ds, σ)`
    per touched loop, beside the rewritten faces; no face record holds a cone.
    At body build, after `evalBrepContext` has built every face and edge of
-   the record, each band is attached by reach §8.3's `buildCapBand` run in
+   the record, each band is attached by reach §8.3's `capblend.BuildBand` run in
    `F`'s own frame (`prismLike` over `F.frame`, cap level `L_F`, side level
    `sideZ`, `matSign` from `σ` and `F.outward`), with both of its directrices
    handed in as the brep's own coedges: the cap contour's edges are `F`'s new
    loop coedges, the side contour's edges are the (sw) faces' rims at `sideZ`
-   and the (pl) faces' moved segments. PR 0 refactors `buildCapBand` to take
+   and the (pl) faces' moved segments. PR 0 refactors `capblend.BuildBand` to take
    the cap-level coedges from its caller; the prism cap blend passes the
    ones it minted. Patches, their readings (`setPatchReadings`), their
-   orientation (`fixPatchOrientation` against reach §8.3.1's reference
+   orientation (`capblend.FixPatchOrientation` against reach §8.3.1's reference
    `(ds·n̂_wall, σ·dc·n̂_F)`, which has a positive dot product with the true
    outward normal in both senses), their skews, locus spans and corner flux
    are reach §8.3's and §8.4's unchanged.
@@ -616,10 +616,10 @@ second loop on the same body chamfers in a later call.
 
 `measureBrepContext` sums general-boolean §4.3's face terms over the
 rewritten record, then adds each band's terms through reach §8.4's readers
-(`readBandMass`): its volume flux and first moments about the plane-local
+(`capblend.ReadBandMass`): its volume flux and first moments about the plane-local
 origin, which is the reference origin every face frame shares bit for bit
 (`brepEmbeds`), each `Cone` patch's chord-versus-locus terms, the closure
-slivers (`capBandClosure`), and `capband.LevelVolume` for the side level's
+slivers (`capband.Closure`), and `capband.LevelVolume` for the side level's
 displacement. Those readers integrate the closed band region `B` — the
 patches closed by the cap contour's disk at `L_F` and `ℓ`'s disk at `sideZ`
 — so the patches' share is `B`'s flux and moments less the two disks', each
@@ -756,7 +756,7 @@ as a plane, takes the partial fillet route
 | 3. topology | LB3, LB4, LB6 (SL2); LB5 (SX7) |
 | 4. existence | SX6, SX13 per band as the contour is built |
 | 5. audit | per band SX14, SX7, SX12 on the contour; per (pl) face S8, S6, S7, S9; per `F` S8, S7, S9 |
-| 6. build | the record's closure; `buildCapBand` per band (SX15 as each patch is oriented) |
+| 6. build | the record's closure; `capblend.BuildBand` per band (SX15 as each patch is oriented) |
 
 ## 5. Tables BG and DG — results and downstream
 
@@ -1037,10 +1037,10 @@ document ships with PR 0.
 
 | PR | Model | Lands | Files and functions | Proves | After |
 |---|---|---|---|---|---|
-| **0** | Sonnet, file-by-file | the hooks: `classBOfPayloads` (class B's entry over two payloads and one placement, `tryClassB` rewritten over it); `recognisePrism` split into `readPrismCaps` (P1, P3, P4) and the wall classifier, both exported to route S; `brepgeom.ReverseSegment` over a `CircleSeg` and a `brepFace` reversal helper; `buildCapBand` taking its cap-level coedges from the caller; `modifyBrepReceiver`'s two new arms calling stubs that return SB10's and SX16's refusals | `classb.go`, `brep_modify_prism.go`, `brep_modify_edge.go`, `brep_payload.go`, `capblend_geom.go`, `capblend_moments.go`, `brep_modify.go` | every existing brep-modify, class-B and cap-blend fixture bit for bit | — |
+| **0** | Sonnet, file-by-file | the hooks: `classBOfPayloads` (class B's entry over two payloads and one placement, `tryClassB` rewritten over it); `recognisePrism` split into `readPrismCaps` (P1, P3, P4) and the wall classifier, both exported to route S; `brepgeom.ReverseSegment` over a `CircleSeg` and a `brepFace` reversal helper; `capblend.BuildBand` taking its cap-level coedges from the caller; `modifyBrepReceiver`'s two new arms calling stubs that return SB10's and SX16's refusals | `classb.go`, `brep_modify_prism.go`, `brep_modify_edge.go`, `brep_payload.go`, `internal/capblend/band.go`, `internal/capblend/build.go`, `brep_modify.go` | every existing brep-modify, class-B and cap-blend fixture bit for bit | — |
 | **S-1** | Opus, proof spec | route S with removed caps: Table TC, the gates, TC7, the private cuts, the rim assembly, SG1–SG7 | `brep_shell.go` (new: `readThroughCut`, `shellThroughCut`, `throughCutRims`), `brep_modify.go`, `shell.go` (doc comment), `brep_shell_internal_test.go`, `apitest/brep_shell_test.go` | §9's S-1 fixtures | 0 |
 | **S-2** | Opus, proof spec | route S with a removed wall run: `sideOpeningRegions`'s cavity section as `A ⊖ t`'s section, the rim at a pierced wall as bands, SG5 narrowed | `brep_shell.go`, `brep_shell_rim.go`, `internal/throughshell/`, `shell_opening.go`, tests | §9's S-2 fixtures | S-1 |
-| **L-1** | Opus, proof spec | route L: Table LB, the record rewrite and trims, `loopBands` on `brepPayload`, the band attached at build, measurements, SL1–SL4; tessellation, clearance, the surveys and STEP refuse a body with `loopBands` until L-2 (`ErrUnsupported`, naming L-2) | `brep_modify_loop.go` (new: `brepLoopRoute`, `admitLoops`, `rewriteLoopFaces`), `brep_loop_band.go` (new: the `buildCapBand` adapter and `readBandMass` sums), `brep_payload.go`, `brep_measure.go`, `chamfer.go` (doc comment), `brep_modify_loop_internal_test.go`, `apitest/brep_loop_chamfer_test.go` | §9's L-1 fixtures | 0 |
+| **L-1** | Opus, proof spec | route L: Table LB, the record rewrite and trims, `loopBands` on `brepPayload`, the band attached at build, measurements, SL1–SL4; tessellation, clearance, the surveys and STEP refuse a body with `loopBands` until L-2 (`ErrUnsupported`, naming L-2) | `brep_modify_loop.go` (new: `brepLoopRoute`, `admitLoops`, `rewriteLoopFaces`), `brep_loop_band.go` (new: the `capblend.BuildBand` adapter and `capblend.ReadBandMass` sums), `brep_payload.go`, `brep_measure.go`, `chamfer.go` (doc comment), `brep_modify_loop_internal_test.go`, `apitest/brep_loop_chamfer_test.go` | §9's L-1 fixtures | 0 |
 | **L-2** | Sonnet, file-by-file: each consumer copies its cap-blend twin | DG3 (`tessellateBrep` with imposed samples and `emitCapBand`), DG4 (`capBlendOccupiedVolumeAdmission` per band in `requireVolumeProvingPayload`), DG6 (`addBrepFaces` returns no model), DG7/DG8 (`brepUndercuts`, `brepMinRadius` reading the patch faces through `capblend_survey.go`'s readers), DG10 (the STEP writer's cone fallback, which needed no change), DG12 | `tessellate_brep.go`, `tessellate_brep_band.go` (new), `tessellate_capblend.go`, `boolean.go`, `brep_loop_band.go`, `brep_measure.go`, `brep_payload.go`, `survey.go`, tests | §9's L-2 fixtures | L-1 |
 
 S-1 and L-1 run in parallel after PR 0: they add disjoint files and touch

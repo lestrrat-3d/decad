@@ -13,7 +13,7 @@ import (
 )
 
 // This file is docs/surface-design.md §15's T96-T100: the vertex-bound
-// repair for internal/prismrecord/build.go, internal/revolveplan/build.go and capblend_geom.go, the
+// repair for internal/prismrecord/build.go, internal/revolveplan/build.go and internal/capblend/band.go, the
 // three analytic builders that published Vertex.Position() Exact with a
 // zero bound for a placed body or a body on a tilted sketch plane, although
 // pp.point/rp.point's own frame lift and accumulated placement rounds under
@@ -254,7 +254,7 @@ func TestVertexPlacedRevolveBoundEnclosesDisplacement(t *testing.T) {
 // each corner inward by exactly 5 mm along both adjacent edges, so the
 // cap-level corner at plane-local (5, 5) is exact by construction, and the
 // truth needs no offset-solve reproduction. Shown-to-fail: deleting the lift
-// term capblend_geom.go's capVertexAt charges (buildCapBand) turns the
+// term internal/capblend/band.go's capVertexAt charges (capblend.BuildBand) turns the
 // enclosure assertions red.
 func TestVertexPlacedCapBlendBoundEnclosesDisplacement(t *testing.T) {
 	t.Parallel()

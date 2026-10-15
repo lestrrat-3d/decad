@@ -1,4 +1,4 @@
-package decad
+package capblend
 
 import (
 	"context"
@@ -8,64 +8,33 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/capcontour"
-	"github.com/lestrrat-3d/decad/internal/filletband"
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
-	"github.com/lestrrat-3d/decad/internal/provenance"
-	"github.com/lestrrat-3d/decad/internal/surfacegeom"
-	"github.com/lestrrat-3d/decad/internal/topo"
-
-	"github.com/lestrrat-3d/decad/internal/survey2d"
-
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
+
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
-// This file builds the capBlendPayload topology (docs/modify-reach-design.md
+// This file builds the Payload topology (docs/modify-reach-design.md
 // §8.3, Table BX row BX3): the trimmed prism side walls, the cap faces (a
 // mix of unchanged loops and offset "cap contour" loops), and the chamfer
 // band patches between them — a Plane for a line wall, a Cone for a circular
 // wall, and a Cone whose apex is the original corner for a reflex corner's
 // extra offset arc.
 
-// offsetJoins is capband.OffsetJoins read under cbp's corner rule for loop li. A
-// draft view (docs/draft-design.md §2) checks the band radius of each circular
-// wall it moves exactly as capband.OffsetJoins does and then resolves every corner
-// by the sharp rule, each walk at its own amount (offset2d.DraftWalkAmounts, §10.2): a
-// reflex corner is mitered, a corner at a circular walk must be a G1 join
-// between two walks moved alike (SD4), and two moved lines that do not meet
-// are a cusp (SD15).
-func (cbp capBlendPayload) OffsetJoins(budget *proofbound.WorkBudget, li int, cl cornerLoop, d float64) ([]cornerJoin, error) {
-	if cbp.Fillet {
-		return filletband.OffsetJoins(budget, cl.Walks, d, cbp.LoopSetback(li).DcDelta, shellTol)
-	}
-	if !cbp.Draft {
-		return capband.OffsetJoins(budget, cl.Walks, d, shellTol)
-	}
-	if len(cl.Walks) == 0 {
-		return nil, fmt.Errorf(`%w: a draft loop holds no walks`, ErrDegenerate)
-	}
-	amounts := cbp.WalkAmounts(li, cl.Walks, d)
-	for i, w := range cl.Walks {
-		if err := survey2d.WallBudgetStep(budget); err != nil {
-			return nil, err
-		}
-		if w.IsCircular() {
-			if _, err := capband.WallRadius(w, amounts[i], shellTol); err != nil {
-				return nil, offset2d.DraftOffsetError(err)
-			}
-		}
-	}
-	return offset2d.DraftSharpJoins(budget, cl.Walks, amounts, shellTol)
-}
-
-// capWallFoot returns the offset segment's own (start, end) feet for wall i,
+// WallFoot returns the offset segment's own (start, end) feet for wall i,
 // exactly as offset2d.BuildLoop's per-wall trim does.
-func capWallFoot(joins []cornerJoin, i, n int) (planePoint, planePoint) {
+func WallFoot(joins []offset2d.Join, i, n int) (sectionrecord.Point2, sectionrecord.Point2) {
 	j0 := joins[i]
 	start := j0.M
 	if j0.Arc {
@@ -79,40 +48,38 @@ func capWallFoot(joins []cornerJoin, i, n int) (planePoint, planePoint) {
 	return start, end
 }
 
-// oneLoopCornerLoop decomposes a single recorded loop into its coalesced
+// OneLoopCornerLoop decomposes a single recorded loop into its coalesced
 // corner walk (capband.LoopWalks), the same decomposition
 // offset2d.ProfileCornerLoopsBudget applies to every loop of a section.
-func oneLoopCornerLoop(budget *proofbound.WorkBudget, loop loopRecord, work *freeform.FreeformWork) (cornerLoop, error) {
+func OneLoopCornerLoop(budget *proofbound.WorkBudget, loop sectionrecord.LoopRecord, work *freeform.FreeformWork) (survey2d.CornerLoop, error) {
 	walks, err := capband.LoopWalks(budget, loop, work)
 	if err != nil {
-		return cornerLoop{}, err
+		return survey2d.CornerLoop{}, err
 	}
-	return cornerLoop{Walks: walks}, nil
+	return survey2d.CornerLoop{Walks: walks}, nil
 }
 
-// capBandResult is what buildCapBand contributes to the enclosing build: the
+// BandResult is what BuildBand contributes to the enclosing build: the
 // new patch faces, the cap-level coedges bounding the loop's rewritten cap
 // boundary (in walk order), the exact-rational patch geometry the moments
 // pass integrates, and the band's own contour displacement (delta,
 // capband.ContourDisplacement/WholeCircleDisplacement) — computed once
-// here, since buildCapBand already needs it for every cap-level vertex and
+// here, since BuildBand already needs it for every cap-level vertex and
 // edge bound, and returned so the cap face area and band volume readings
-// (capblend_moments.go) charge the SAME value rather than each re-deriving it
+// (build.go) charge the SAME value rather than each re-deriving it
 // through loopContourDelta.
-type capBandResult struct {
-	Patches []*Face
+type BandResult struct {
+	Patches []*topo.Face
 	CapCo   []topo.CoEdge
-	Geom    []capPatchGeom
+	Geom    []capband.Patch
 	Delta   float64
-	// closure is the band's capBandClosure: the area of the slivers between its
+	// closure is the band's capband.Closure: the area of the slivers between its
 	// patches' integrated boundaries and the surface those patches meet, which
 	// capband.BandVolume and capband.BandMoment charge beside the patch integrals.
-	Closure capBandClosure
+	Closure capband.Closure
 }
 
-type capPatchGeom = capband.Patch
-
-// buildCapBand builds the chamfer band for one loop selected on one cap: the
+// BuildBand builds the chamfer band for one loop selected on one cap: the
 // patch faces between the cap contour (offset dc into material, at capZ) and
 // the side contour (the original loop, at capZ + matSign*ds), and the
 // cap-level coedges that replace the loop's boundary in the cap face. The
@@ -125,14 +92,15 @@ type capPatchGeom = capband.Patch
 // into that corner, all forward, whose vertices the band's slant edges then
 // start from. Nil mints them here, as a prism's cap blend does. A supplied
 // boundary whose shape or joined vertices are not the band's is an error.
-func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendPayload, li int, loop loopRecord, capZ float64, matSign float64, sideCo []topo.CoEdge, suppliedCap []topo.CoEdge, work *freeform.FreeformWork) (capBandResult, error) {
+func BuildBand(ctx context.Context, env topo.Env, body *topo.Body, cbp Payload, li int, loop sectionrecord.LoopRecord, capZ float64, matSign float64, sideCo []topo.CoEdge, suppliedCap []topo.CoEdge, work *freeform.FreeformWork) (BandResult, error) {
 	if err := ctx.Err(); err != nil {
-		return capBandResult{}, err
+		return BandResult{}, err
 	}
+	ref, alloc := env.Ref, env.Alloc
 	budget := proofbound.NewWorkBudget(ctx)
-	cl, err := oneLoopCornerLoop(budget, loop, work)
+	cl, err := OneLoopCornerLoop(budget, loop, work)
 	if err != nil {
-		return capBandResult{}, err
+		return BandResult{}, err
 	}
 	walks := cl.Walks
 	n := len(walks)
@@ -154,32 +122,32 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	}
 	pl := cbp.PrismLike(0, 0)
 
-	capName := capNameOf(matSign)
+	capName := CapNameOf(matSign)
 
-	liftCap := func(p planePoint) r3.Vec { return pl.Point(p.U, p.V, capZ) }
-	liftSide := func(p planePoint) r3.Vec { return pl.Point(p.U, p.V, sideZ) }
+	liftCap := func(p sectionrecord.Point2) r3.Vec { return pl.Point(p.U, p.V, capZ) }
+	liftSide := func(p sectionrecord.Point2) r3.Vec { return pl.Point(p.U, p.V, sideZ) }
 
 	// capVertexAt places one cap-level vertex at p, bounded by base beside the
 	// vertex's own exact frame lift and placement rounding
-	// (prismPayload.LiftedVertex; topology.go's Vertex.Position contract) —
+	// (prismrecord.Payload.LiftedVertex; topology.go's Vertex.Position contract) —
 	// zero wherever that lift is exact, which is what keeps an ordinary
 	// chamfer's cap-level vertices Exact. The lift term widens only the VERTEX
 	// bound, never capLevelDelta itself, which the band's slant and cap edges
 	// still read unwidened for their own, separate bound: the frame lift is a
 	// per-coordinate rounding, not a chord or locus term, so it has no business
 	// in an edge's length bound.
-	capVertexAt := func(p planePoint, base float64) *Vertex {
+	capVertexAt := func(p sectionrecord.Point2, base float64) *topo.Vertex {
 		held, lift := pl.LiftedVertex(p.U, p.V, capZ)
-		return bornVertex(&Vertex{n: topo.Vertex{Position: held, Bound: units.Millimeters(proofbound.AbsSumUpper(base, lift))}})
+		return topobuild.NewVertex(alloc, topo.Vertex{Position: held, Bound: units.Millimeters(proofbound.AbsSumUpper(base, lift))})
 	}
 
 	// levelDelta is the side level's conversion and float-sum rounding: sideZ
 	// is a float sum, so the band's side directrix sits that far from the level
 	// it denotes, and every edge with an endpoint there carries it beside the
 	// contour's own displacement. It is the same term capband.BandVolume charges for
-	// the identical level, and it rides onto every patch's own capPatchGeom,
+	// the identical level, and it rides onto every patch's own capband.Patch,
 	// where patchAreaOf charges it against the patch's area
-	// (capblend_moments.go).
+	// (build.go).
 	levelDelta := capband.BandLevelDelta(capZ, matSign, setback.Ds, setback.DsDelta)
 	// capDelta is the inherited displacement of the cap level itself. The cap
 	// contour moves only in the cap plane, so its delta does not cover this
@@ -212,17 +180,17 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	if n == 1 && walks[0].Closed {
 		w := walks[0]
 		a := amounts[0]
-		capRadius, err := capband.WallRadius(w, a, shellTol)
+		capRadius, err := capband.WallRadius(w, a, offset2d.ShellTol)
 		if err != nil {
-			return capBandResult{}, err
+			return BandResult{}, err
 		}
-		delta, err := capband.WallCircleDisplacement(w, a, amountDelta(a), shellTol)
+		delta, err := capband.WallCircleDisplacement(w, a, amountDelta(a), offset2d.ShellTol)
 		if err != nil {
-			return capBandResult{}, err
+			return BandResult{}, err
 		}
 		exactRadius, ok := capband.OffsetRadiusSpan(w, a, amountDelta(a))
 		if !ok {
-			return capBandResult{}, capband.ErrContourUnbounded
+			return BandResult{}, capband.ErrContourUnbounded
 		}
 		seam0 := sideCo[0].Edge // the side wall's own whole-circle bottom/top edge
 		capLevelDelta := proofbound.AbsSumUpper(delta, capDelta)
@@ -230,28 +198,28 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// bound — its returned Edge's own lengthBound comes from
 		// capcontour.CapCircleLengthBound instead — and the seam vertex adds its own
 		// exact lift rounding there.
-		var capEdge *Edge
+		var capEdge *topo.Edge
 		if suppliedCap != nil {
 			split, err := suppliedCapWalls(suppliedCap, nil, 1)
 			if err != nil {
-				return capBandResult{}, err
+				return BandResult{}, err
 			}
 			capEdge = split.Wall[0]
 		} else {
-			capEdge = wholeCircleEdge(pl, w.CU, w.CV, capRadius, capZ, w.Th1 > w.Th0, capLevelDelta, exactRadius)
+			capEdge = wholeCircleEdge(alloc, pl, w.CU, w.CV, capRadius, capZ, w.Th1 > w.Th0, capLevelDelta, exactRadius)
 		}
 		origins, err := wallOrigins(w.Segs, 0)
 		if err != nil {
-			return capBandResult{}, err
+			return BandResult{}, err
 		}
-		patch := buildConePatch(pl, body, origins, w.CU, w.CV, w.Radius, capRadius, sideZ, capZ, false, edgeHandle(seam0), capEdge)
+		patch := buildConePatch(alloc, pl, body, origins, w.CU, w.CV, w.Radius, capRadius, sideZ, capZ, false, seam0, capEdge)
 		sign := 1.0
 		if w.Th1 < w.Th0 {
 			sign = -1
 		}
 		samplePoint := pl.Point(w.CU+w.Radius, w.CV, sideZ)
-		if err := fixPatchOrientation(patch, pl, samplePoint, sign, 0, axialRef); err != nil {
-			return capBandResult{}, err
+		if err := FixPatchOrientation(patch, pl, samplePoint, sign, 0, axialRef); err != nil {
+			return BandResult{}, err
 		}
 		// th0, th1 record the patch's ANGULAR EXTENT, not the wall's own
 		// walked sense: the DX7 survey reads the window as an increasing
@@ -264,7 +232,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// chordUpper/slant are this whole-circle patch's own held chord (its
 		// full circumference) and slant distance (the radial change ruled
 		// against the axial one), the two factors proofbound.BandPatchAreaAllow needs.
-		chordUpper := proofbound.AbsSumUpper(capEdge.n.Length, capEdge.n.LengthBound)
+		chordUpper := proofbound.AbsSumUpper(capEdge.Length, capEdge.LengthBound)
 		slant := math.Hypot(math.Abs(capRadius-w.Radius), math.Abs(capZ-sideZ))
 		// CapThAllow: the whole-turn patch's cap-level sweep is the WALL's own
 		// recorded th0/th1 (there is no offset corner to trim it — wholeTurn is
@@ -276,7 +244,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// circumference.
 		dthHeld := gth1 - gth0
 		capThAllow := proofbound.IntervalFloatError(proofbound.TwoPiInterval(), dthHeld)
-		geom := capPatchGeom{Circular: true, CU: w.CU, CV: w.CV, SideRadius: w.Radius, CapRadius: capRadius, Th0: gth0, Th1: gth1, CapTh0: gth0, CapTh1: gth1, SweepCCW: w.Th1 > w.Th0, WholeTurn: true, SideZ: sideZ, CapZ: capZ, ContourAllow: proofbound.BandPatchAreaAllow(delta, chordUpper, slant), LevelDelta: levelDelta, CapThAllow: capThAllow}
+		geom := capband.Patch{Circular: true, CU: w.CU, CV: w.CV, SideRadius: w.Radius, CapRadius: capRadius, Th0: gth0, Th1: gth1, CapTh0: gth0, CapTh1: gth1, SweepCCW: w.Th1 > w.Th0, WholeTurn: true, SideZ: sideZ, CapZ: capZ, ContourAllow: proofbound.BandPatchAreaAllow(delta, chordUpper, slant), LevelDelta: levelDelta, CapThAllow: capThAllow}
 		// A whole turn reads its two windows structurally, as 2π, and its cap
 		// face records the circle at capRadius itself, so only the side radius
 		// owes an allowance: the circle record's own (zero for a CircleSeg).
@@ -284,33 +252,33 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// The two circles pair at their seams, the side wall's own walk start
 		// and the cap circle's (cU + capRadius, cV), and keep that pairing all
 		// the way round, so both corner skews are the seams' one angle.
-		sideSeam := planePoint{U: w.StartU, V: w.StartV}
-		capSeam := planePoint{U: w.CU + capRadius, V: w.CV}
+		sideSeam := sectionrecord.Point2{U: w.StartU, V: w.StartV}
+		capSeam := sectionrecord.Point2{U: w.CU + capRadius, V: w.CV}
 		if err := capband.SetPatchSkews(&geom, sideSeam, sideSeam, capSeam, capSeam); err != nil {
-			return capBandResult{}, err
+			return BandResult{}, err
 		}
 		// A cornerless band has no corner to pair its two directrices at, so
 		// the one ruling its azimuth spread is measured on is the pair of SEAM
 		// vertices — the one place either circle names a parameter origin.
-		setPatchReadings(patch, geom, capBuiltPatch(edgeHandle(seam0), capEdge, []*Vertex{vertexHandle(seam0.Start)}, []*Vertex{capEdge.Start()}), delta, capDelta)
-		capLoop := []topo.CoEdge{{Edge: edgeNode(capEdge), Forward: true}}
-		return capBandResult{Patches: []*Face{patch}, CapCo: capLoop, Geom: []capPatchGeom{geom}, Delta: delta}, nil
+		setPatchReadings(patch, geom, builtPatch(seam0, capEdge, []*topo.Vertex{seam0.Start}, []*topo.Vertex{capEdge.Start}), delta, capDelta)
+		capLoop := []topo.CoEdge{{Edge: capEdge, Forward: true}}
+		return BandResult{Patches: []*topo.Face{patch}, CapCo: capLoop, Geom: []capband.Patch{geom}, Delta: delta}, nil
 	}
 
 	joins, err := cbp.OffsetJoins(budget, li, cl, dc)
 	if err != nil {
-		return capBandResult{}, err
+		return BandResult{}, err
 	}
 
-	var supplied suppliedCapEdges
+	var supplied SuppliedCapEdges
 	if suppliedCap != nil {
 		supplied, err = suppliedCapWalls(suppliedCap, joins, n)
 		if err != nil {
-			return capBandResult{}, err
+			return BandResult{}, err
 		}
 	}
 
-	// delta is this band's CONTOUR DISPLACEMENT (capblend_contour.go): the one
+	// delta is this band's CONTOUR DISPLACEMENT (payload.go's LoopContourDelta): the one
 	// proven upper bound on how far a cap-level point the build emits sits from
 	// the point the offset denotes. Every cap-level vertex and every cap-level
 	// edge below is bounded through it, so no two readers of the same contour
@@ -319,12 +287,12 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	// published for a coordinate this solve computed.
 	var delta float64
 	if cbp.Draft {
-		delta, err = capband.AmountsContourDisplacement(walks, capband.ContourJoins(joins), amounts, dcDelta, shellTol)
+		delta, err = capband.AmountsContourDisplacement(walks, capband.ContourJoins(joins), amounts, dcDelta, offset2d.ShellTol)
 	} else {
-		delta, err = capband.ContourDisplacement(walks, capband.ContourJoins(joins), dc, dcDelta, shellTol)
+		delta, err = capband.ContourDisplacement(walks, capband.ContourJoins(joins), dc, dcDelta, offset2d.ShellTol)
 	}
 	if err != nil {
-		return capBandResult{}, err
+		return BandResult{}, err
 	}
 	capLevelDelta := proofbound.AbsSumUpper(delta, capDelta)
 
@@ -333,7 +301,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	// sideCo[i-1].edge.End()), reused rather than re-created, so a reflex
 	// corner's apex patch and its two neighboring wall patches close on the
 	// SAME vertex.
-	sideVertexAt := func(i int) *Vertex { return vertexHandle(sideCo[i].Edge.Start) }
+	sideVertexAt := func(i int) *topo.Vertex { return sideCo[i].Edge.Start }
 
 	// Pass 1: every corner's connector edge(s), independent of wall build
 	// order (so a reflex corner at index 0 wraps around correctly). A miter
@@ -343,10 +311,10 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	// trailing edge) and slantOut[i] (from pB, used by the FOLLOWING wall's
 	// leading edge) — different cap-level points, but both ending at the
 	// SAME side-level apex vertex, sideVertexAt(i).
-	slantIn := make([]*Edge, n)
-	slantOut := make([]*Edge, n)
+	slantIn := make([]*topo.Edge, n)
+	slantOut := make([]*topo.Edge, n)
 	// slantInHeld/slantOutHeld are slantIn[i]/slantOut[i]'s own ARITHMETIC-ONLY
-	// length bound (capSlantEdge's second return) — the same value the edge's
+	// length bound (SlantEdge's second return) — the same value the edge's
 	// own lengthBound carries everywhere except a miter ruling adjacent to a
 	// circular wall, where lengthBound also carries the chord-versus-locus
 	// excess (docs/modify-reach-design.md §8.3) that proofbound.BandPatchAreaAllow's
@@ -354,7 +322,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	// held chord alone).
 	slantInHeld := make([]float64, n)
 	slantOutHeld := make([]float64, n)
-	arcByCorner := make([]*Edge, n) // non-nil for a reflex corner's cap-level arc
+	arcByCorner := make([]*topo.Edge, n) // non-nil for a reflex corner's cap-level arc
 	arcTh0 := make([]float64, n)
 	arcTh1 := make([]float64, n)
 	// arcWraps carries each reflex corner's own unwrap count (below) into
@@ -367,41 +335,41 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		apex := sideVertexAt(i)
 		prev, cur := walks[(i+n-1)%n], walks[i]
 		if !j.Arc {
-			var capV *Vertex
+			var capV *topo.Vertex
 			if suppliedCap != nil {
-				capV = vertexHandle(supplied.Wall[i].n.Start)
+				capV = supplied.Wall[i].Start
 			} else {
 				capV = capVertexAt(j.M, capLevelDelta)
 			}
-			e, held, err := capSlantEdge(budget, j.M, capV, apex, j.VertU, j.VertV, capZ, sideZ, capLevelDelta, levelDelta, prev, cur, setback, j.G1)
+			e, held, err := SlantEdge(alloc, budget, j.M, capV, apex, j.VertU, j.VertV, capZ, sideZ, capLevelDelta, levelDelta, prev, cur, setback, j.G1)
 			if err != nil {
-				return capBandResult{}, err
+				return BandResult{}, err
 			}
 			if cbp.Draft {
 				// A draft's ruling is a prism's lateral edge tilted: its
 				// convexity is the 2D turn of the two walks it joins, the rule
 				// prismrecord.BuildLoopSidesAs applies to a vertical edge.
-				e.n.Convex = prev.TanOutU*cur.TanInV-prev.TanOutV*cur.TanInU > 0
+				e.Convex = prev.TanOutU*cur.TanInV-prev.TanOutV*cur.TanInU > 0
 			}
 			slantIn[i], slantOut[i] = e, e
 			slantInHeld[i], slantOutHeld[i] = held, held
 			continue
 		}
-		var pAV, pBV *Vertex
+		var pAV, pBV *topo.Vertex
 		if suppliedCap != nil {
-			pAV, pBV = vertexHandle(supplied.Arc[i].n.Start), vertexHandle(supplied.Arc[i].n.End)
+			pAV, pBV = supplied.Arc[i].Start, supplied.Arc[i].End
 		} else {
 			pAV = capVertexAt(j.PA, capLevelDelta)
 			pBV = capVertexAt(j.PB, capLevelDelta)
 		}
 		var errA, errB error
-		slantIn[i], slantInHeld[i], errA = capSlantEdge(budget, j.PA, pAV, apex, j.VertU, j.VertV, capZ, sideZ, capLevelDelta, levelDelta, survey2d.SideWalk{}, survey2d.SideWalk{}, capSetback{}, true)
+		slantIn[i], slantInHeld[i], errA = SlantEdge(alloc, budget, j.PA, pAV, apex, j.VertU, j.VertV, capZ, sideZ, capLevelDelta, levelDelta, survey2d.SideWalk{}, survey2d.SideWalk{}, Setback{}, true)
 		if errA != nil {
-			return capBandResult{}, errA
+			return BandResult{}, errA
 		}
-		slantOut[i], slantOutHeld[i], errB = capSlantEdge(budget, j.PB, pBV, apex, j.VertU, j.VertV, capZ, sideZ, capLevelDelta, levelDelta, survey2d.SideWalk{}, survey2d.SideWalk{}, capSetback{}, true)
+		slantOut[i], slantOutHeld[i], errB = SlantEdge(alloc, budget, j.PB, pBV, apex, j.VertU, j.VertV, capZ, sideZ, capLevelDelta, levelDelta, survey2d.SideWalk{}, survey2d.SideWalk{}, Setback{}, true)
 		if errB != nil {
-			return capBandResult{}, errB
+			return BandResult{}, errB
 		}
 		th0 := math.Atan2(j.PA.V-j.VertV, j.PA.U-j.VertU)
 		th1 := math.Atan2(j.PB.V-j.VertV, j.PB.U-j.VertU)
@@ -426,30 +394,28 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			arcByCorner[i] = supplied.Arc[i]
 			continue
 		}
-		arcByCorner[i] = bornEdge(&Edge{
-			n: topo.Edge{
-				Convex: false,
-				Length: arcLength,
-				LengthBound: capcontour.CapApexArcBound(
-					capcontour.ApexJoin{VU: j.VertU, VV: j.VertV, PA: j.PA, PB: j.PB},
-					dc, dcDelta, arcLength, wraps, delta),
-				Curve: surfacegeom.Arc3{Center: liftCap(planePoint{U: j.VertU, V: j.VertV}), Axis: pl.Dir(0, 0, 1).Scale(-1), Radius: units.Millimeters(dc)},
-				Start: vertexNode(pAV),
-				End:   vertexNode(pBV),
-			},
+		arcByCorner[i] = topobuild.NewEdge(alloc, topo.Edge{
+			Convex: false,
+			Length: arcLength,
+			LengthBound: capcontour.CapApexArcBound(
+				capcontour.ApexJoin{VU: j.VertU, VV: j.VertV, PA: j.PA, PB: j.PB},
+				dc, dcDelta, arcLength, wraps, delta),
+			Curve: surfacegeom.Arc3{Center: liftCap(sectionrecord.Point2{U: j.VertU, V: j.VertV}), Axis: pl.Dir(0, 0, 1).Scale(-1), Radius: units.Millimeters(dc)},
+			Start: pAV,
+			End:   pBV,
 		})
 		// The connector denotes the arc of every setback in dc's span about
 		// the recorded corner, which both neighbouring walks' held ends
 		// enclose within their own bounds.
 		if span, ok := capcontour.OffsetSpan(dc, dcDelta); ok {
-			center, axis, _, _ := surfacegeom.CircleOf(arcByCorner[i].n.Curve)
+			center, axis, _, _ := surfacegeom.CircleOf(arcByCorner[i].Curve)
 			cornerDelta := math.Min(capband.CornerGap(j.VertU, j.VertV, prev.EndU, prev.EndV, prev.EndBound), capband.CornerGap(j.VertU, j.VertV, cur.StartU, cur.StartV, cur.StartBound))
-			arcByCorner[i].n.CurveBound, arcByCorner[i].n.CurveBounded = pl.CircleCurveBound(j.VertU, j.VertV, capZ, capDelta, cornerDelta, dc, proofbound.IntervalFloatError(span, dc), center, axis)
+			arcByCorner[i].CurveBound, arcByCorner[i].CurveBounded = pl.CircleCurveBound(j.VertU, j.VertV, capZ, capDelta, cornerDelta, dc, proofbound.IntervalFloatError(span, dc), center, axis)
 		}
 	}
 
-	var patches []*Face
-	var geoms []capPatchGeom
+	var patches []*topo.Face
+	var geoms []capband.Patch
 	capCo := make([]topo.CoEdge, 0, 2*n)
 
 	// Pass 2: the apex patches (Cone-with-corner-apex, one per reflex
@@ -461,8 +427,8 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		j := joins[i]
 		arc := arcByCorner[i]
 		// p is Table BX row BX3's "deterministic patch order in the result's
-		// own capBlendPayload" — the patch's index in this band's own patch
-		// slice, which is the order capblend_moments.go pairs its geometry in.
+		// own Payload" — the patch's index in this band's own patch
+		// slice, which is the order build.go pairs its geometry in.
 		// It is NEVER the corner or wall index: those two index spaces collide
 		// (corner i sits at walks[i].start), and two faces sharing one role
 		// string collapse every last-wins reader — facesByRole, FaceCreatedBy,
@@ -473,14 +439,12 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// Walk order: arc (pAV -> pBV, cap level), slantOut forward
 		// (pBV -> apex), slantIn reversed (apex -> pAV) — a closed
 		// triangle-like boundary each coedge's end matching the next's start.
-		face := bornFace(&Face{
-			n: topo.Face{Surface: surf, Origins: []provenance.Ref{{Producer: ref, Role: role}}, Body: bodyNode(body), Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
-				{Edge: edgeNode(arc), Forward: true},
-				{Edge: edgeNode(slantOut[i]), Forward: true},
-				{Edge: edgeNode(slantIn[i]), Forward: false},
-			},
-			}}))},
-			},
+		face := topobuild.NewFace(alloc, topo.Face{Surface: surf, Origins: []provenance.Ref{{Producer: ref, Role: role}}, Body: body, Loops: []*topo.Loop{topobuild.NewLoop(alloc, topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
+			{Edge: arc, Forward: true},
+			{Edge: slantOut[i], Forward: true},
+			{Edge: slantIn[i], Forward: false},
+		},
+		})},
 		})
 		// Orientation: a corner's own offset carrier is an EROSION, and at a
 		// REFLEX corner the eroded boundary is the arc of radius dc about the
@@ -495,14 +459,14 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// reading is not merely the wrong sign: its dot product is dc - ds, so
 		// at dc = ds (cos, sin, -matSign) is EXACTLY perpendicular to the true
 		// normal and decides nothing at all. Verified empirically (never hand-trusted):
-		// fixPatchOrientation checks the actual built surface's own NormalAt
+		// FixPatchOrientation checks the actual built surface's own NormalAt
 		// against this reference and reverses only if they disagree.
-		if err := fixPatchOrientation(face, pl, pl.Point(j.VertU+dc*math.Cos(arcTh0[i]), j.VertV+dc*math.Sin(arcTh0[i]), capZ), -math.Cos(arcTh0[i]), -math.Sin(arcTh0[i]), -matSign); err != nil {
-			return capBandResult{}, err
+		if err := FixPatchOrientation(face, pl, pl.Point(j.VertU+dc*math.Cos(arcTh0[i]), j.VertV+dc*math.Sin(arcTh0[i]), capZ), -math.Cos(arcTh0[i]), -math.Sin(arcTh0[i]), -matSign); err != nil {
+			return BandResult{}, err
 		}
-		slantIn[i].n.Faces = append(slantIn[i].n.Faces, faceNode(face))
-		arc.n.Faces = append(arc.n.Faces, faceNode(face))
-		slantOut[i].n.Faces = append(slantOut[i].n.Faces, faceNode(face))
+		slantIn[i].Faces = append(slantIn[i].Faces, face)
+		arc.Faces = append(arc.Faces, face)
+		slantOut[i].Faces = append(slantOut[i].Faces, face)
 		patches = append(patches, face)
 		// th0, th1 record the patch's ANGULAR EXTENT, not the connector's own
 		// clockwise walk — the same normalization every other patch's geometry
@@ -520,10 +484,10 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// triangle-like edges from an offset foot down to the shared
 		// side-level apex — the two are not necessarily equal, so the larger
 		// is the sound upper bound).
-		chordUpper := proofbound.AbsSumUpper(arc.n.Length, arc.n.LengthBound)
+		chordUpper := proofbound.AbsSumUpper(arc.Length, arc.LengthBound)
 		slant := math.Max(
-			proofbound.AbsSumUpper(slantOut[i].n.Length, slantOutHeld[i]),
-			proofbound.AbsSumUpper(slantIn[i].n.Length, slantInHeld[i]),
+			proofbound.AbsSumUpper(slantOut[i].Length, slantOutHeld[i]),
+			proofbound.AbsSumUpper(slantIn[i].Length, slantInHeld[i]),
 		)
 		// CapThAllow: this apex patch's own connector runs pA -> pB (the same
 		// capcontour.CapApexArcBound bracket capcontour.CapApexArcBound already builds for the
@@ -534,7 +498,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// convention reproduces atan2(pA)-atan2(pB), matching arcWraps[i]'s own
 		// unwrap direction (Pass 1's "for th1 > th0 { th1 -= 2*math.Pi }").
 		capThAllow := capcontour.CapSweepAllow(j.VertU, j.VertV, dc, j.PB, j.PA, arcTh0[i]-arcTh1[i], arcWraps[i], delta)
-		g := capPatchGeom{
+		g := capband.Patch{
 			Circular: true, SweepCCW: false,
 			CU: j.VertU, CV: j.VertV, SideRadius: 0, CapRadius: dc,
 			Th0: gth0, Th1: gth1, CapTh0: gth0, CapTh1: gth1, SideZ: sideZ, CapZ: capZ,
@@ -544,12 +508,12 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		}
 		held, err := capband.ApexHeldAllow(j.VertU, j.VertV, dc, foot0, foot1, gth0, gth1)
 		if err != nil {
-			return capBandResult{}, err
+			return BandResult{}, err
 		}
 		g.Held = held
 		// The apex patch's rulings all leave the ORIGINAL corner vertex, which
 		// is the cone tag's own apex: a point side directrix.
-		setPatchReadings(face, g, capBuiltApexPatch(sideVertexAt(i), arc, []*Vertex{arc.Start(), arc.End()}), delta, capDelta)
+		setPatchReadings(face, g, builtApexPatch(sideVertexAt(i), arc, []*topo.Vertex{arc.Start, arc.End}), delta, capDelta)
 		geoms = append(geoms, g)
 	}
 
@@ -559,9 +523,9 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	// emits the same offset loop's segments in.
 	for i := range n {
 		w := walks[i]
-		start, end := capWallFoot(joins, i, n)
+		start, end := WallFoot(joins, i, n)
 		nextI := (i + 1) % n
-		capA, capB := vertexHandle(slantOut[i].n.Start), vertexHandle(slantIn[nextI].n.Start)
+		capA, capB := slantOut[i].Start, slantIn[nextI].Start
 		side := sideCo[i].Edge
 		leadSlant, trailSlant := slantOut[i], slantIn[nextI]
 
@@ -579,13 +543,13 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		capThAllow := 0.0
 		radialShift := 0.0
 		if w.IsCircular() {
-			r, err := capband.WallRadius(w, amounts[i], shellTol)
+			r, err := capband.WallRadius(w, amounts[i], offset2d.ShellTol)
 			if err != nil {
-				return capBandResult{}, err
+				return BandResult{}, err
 			}
 			radius, ok := capband.OffsetRadiusSpan(w, amounts[i], amountDelta(amounts[i]))
 			if !ok {
-				return capBandResult{}, capband.ErrContourUnbounded
+				return BandResult{}, capband.ErrContourUnbounded
 			}
 			capRadius = r
 			// radialShift is how far every radius the cap arc denotes sits
@@ -604,44 +568,43 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			capThAllow = capcontour.CapSweepAllow(w.CU, w.CV, capRadius, start, end, capTh1-capTh0, wraps, delta)
 		}
 
-		var capEdge *Edge
+		var capEdge *topo.Edge
 		switch {
 		case suppliedCap != nil:
 			capEdge = supplied.Wall[i]
-			if vertexHandle(capEdge.n.Start) != capA || vertexHandle(capEdge.n.End) != capB {
-				return capBandResult{}, fmt.Errorf("a cap-loop band's supplied cap edge %d does not join the vertices its slant edges start from", i)
+			if capEdge.Start != capA || capEdge.End != capB {
+				return BandResult{}, fmt.Errorf("a cap-loop band's supplied cap edge %d does not join the vertices its slant edges start from", i)
 			}
 		case !w.IsCircular():
 			held := math.Hypot(end.U-start.U, end.V-start.V)
 			// Both endpoints are contour points, so both carry the band's own
 			// displacement; the square root's own committed error is measured
 			// against the exact squared length.
-			capEdge = bornEdge(&Edge{n: topo.Edge{
+			capEdge = topobuild.NewEdge(alloc, topo.Edge{
 				Convex:      !cbp.Draft || li == 0,
 				Length:      held,
 				LengthBound: capcontour.CapEdgeLengthBound(held, end, start, delta),
 				Curve:       surfacegeom.Line3{},
-				Start:       vertexNode(capA),
-				End:         vertexNode(capB),
-			},
+				Start:       capA,
+				End:         capB,
 			})
 		default:
 			sweepSigned := capTh1 - capTh0
 			held := math.Abs(capRadius * sweepSigned)
-			capEdge = arcEdge(pl, w.CU, w.CV, capRadius, capZ, capA, capB, capTh0, capTh1, held,
+			capEdge = arcEdge(alloc, pl, w.CU, w.CV, capRadius, capZ, capA, capB, capTh0, capTh1, held,
 				capcontour.CapWallArcBound(w.CU, w.CV, start, end, capRadius, capRadius*sweepSigned, wraps, delta, radialShift))
 			// The trimmed arc lies on the offset circle about the wall's
 			// recorded centre, every radius of which sits within radialShift
 			// of the held capRadius.
-			center, axis, _, _ := surfacegeom.CircleOf(capEdge.n.Curve)
-			capEdge.n.CurveBound, capEdge.n.CurveBounded = pl.CircleCurveBound(w.CU, w.CV, capZ, capDelta, 0, capRadius, radialShift, center, axis)
+			center, axis, _, _ := surfacegeom.CircleOf(capEdge.Curve)
+			capEdge.CurveBound, capEdge.CurveBounded = pl.CircleCurveBound(w.CU, w.CV, capZ, capDelta, 0, capRadius, radialShift, center, axis)
 		}
 
 		var surf surfacegeom.Surface
 		if !w.IsCircular() {
-			f, err := planeFromThree(liftSide(planePoint{U: w.StartU, V: w.StartV}), liftSide(planePoint{U: w.EndU, V: w.EndV}), capB.n.Position)
+			f, err := PlaneFromThree(liftSide(sectionrecord.Point2{U: w.StartU, V: w.StartV}), liftSide(sectionrecord.Point2{U: w.EndU, V: w.EndV}), capB.Position)
 			if err != nil {
-				return capBandResult{}, err
+				return BandResult{}, err
 			}
 			surf = f
 		} else {
@@ -660,17 +623,15 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// never share a role — see the pass-2 comment.
 		origins, err := wallOrigins(w.Segs, len(patches))
 		if err != nil {
-			return capBandResult{}, err
+			return BandResult{}, err
 		}
-		face := bornFace(&Face{
-			n: topo.Face{Surface: surf, Origins: origins, Body: bodyNode(body), Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
-				{Edge: side, Forward: true},
-				{Edge: edgeNode(trailSlant), Forward: false},
-				{Edge: edgeNode(capEdge), Forward: false},
-				{Edge: edgeNode(leadSlant), Forward: true},
-			},
-			}}))},
-			},
+		face := topobuild.NewFace(alloc, topo.Face{Surface: surf, Origins: origins, Body: body, Loops: []*topo.Loop{topobuild.NewLoop(alloc, topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
+			{Edge: side, Forward: true},
+			{Edge: trailSlant, Forward: false},
+			{Edge: capEdge, Forward: false},
+			{Edge: leadSlant, Forward: true},
+		},
+		})},
 		})
 		// Orientation: the reference is the ORIGINAL wall's own outward
 		// convention (the same "tangent rotated a quarter turn" rule
@@ -678,12 +639,12 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		// through the wall's OWN walked sense, no separate case needed) plus
 		// the toward-the-cap Z sense every patch in this band shares. Checked
 		// empirically against the patch's own built NormalAt, never hand
-		// trusted: fixPatchOrientation reverses only if they disagree.
+		// trusted: FixPatchOrientation reverses only if they disagree.
 		var refU, refV float64
 		var samplePoint r3.Vec
 		if !w.IsCircular() {
 			refU, refV = w.TanInV, -w.TanInU
-			samplePoint = liftSide(planePoint{U: w.StartU, V: w.StartV})
+			samplePoint = liftSide(sectionrecord.Point2{U: w.StartU, V: w.StartV})
 		} else {
 			sign := 1.0
 			if w.Th1 < w.Th0 {
@@ -692,16 +653,16 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			refU, refV = sign*math.Cos(w.Th0), sign*math.Sin(w.Th0)
 			samplePoint = pl.Point(w.CU+w.Radius*math.Cos(w.Th0), w.CV+w.Radius*math.Sin(w.Th0), sideZ)
 		}
-		if err := fixPatchOrientation(face, pl, samplePoint, refU, refV, axialRef); err != nil {
-			return capBandResult{}, err
+		if err := FixPatchOrientation(face, pl, samplePoint, refU, refV, axialRef); err != nil {
+			return BandResult{}, err
 		}
-		side.Faces = append(side.Faces, faceNode(face))
-		trailSlant.n.Faces = append(trailSlant.n.Faces, faceNode(face))
-		capEdge.n.Faces = append(capEdge.n.Faces, faceNode(face))
-		leadSlant.n.Faces = append(leadSlant.n.Faces, faceNode(face))
+		side.Faces = append(side.Faces, face)
+		trailSlant.Faces = append(trailSlant.Faces, face)
+		capEdge.Faces = append(capEdge.Faces, face)
+		leadSlant.Faces = append(leadSlant.Faces, face)
 		patches = append(patches, face)
 
-		g := capPatchGeom{SideZ: sideZ, CapZ: capZ, LevelDelta: levelDelta}
+		g := capband.Patch{SideZ: sideZ, CapZ: capZ, LevelDelta: levelDelta}
 		if w.IsCircular() {
 			g.Circular = true
 			g.CU, g.CV = w.CU, w.CV
@@ -714,11 +675,11 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			g.Th0, g.Th1 = w.Th0, w.Th1
 			g.CapTh0, g.CapTh1 = capTh0, capTh1
 			g.CapThAllow = capThAllow
-			side0, side1 := planePoint{U: w.StartU, V: w.StartV}, planePoint{U: w.EndU, V: w.EndV}
+			side0, side1 := sectionrecord.Point2{U: w.StartU, V: w.StartV}, sectionrecord.Point2{U: w.EndU, V: w.EndV}
 			cap0, cap1 := start, end
 			held, err := capband.WallHeldAllow(w, capRadius, start, end, capTh0, capTh1)
 			if err != nil {
-				return capBandResult{}, err
+				return BandResult{}, err
 			}
 			g.Held = held
 			swapped := g.Th1 < g.Th0
@@ -736,102 +697,102 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			}
 			g.CapA, g.CapB = cap0, cap1
 			if err := capband.SetPatchSkews(&g, side0, side1, cap0, cap1); err != nil {
-				return capBandResult{}, err
+				return BandResult{}, err
 			}
 			cornerFlux, err := capband.PatchCornerFlux(budget, walks, joins, i, setback.AxialUpper(), setback.Dc, setback.DcDelta)
 			if err != nil {
-				return capBandResult{}, err
+				return BandResult{}, err
 			}
 			g.CornerFlux = cornerFlux
 			if err := capband.SetPatchLocusSpans(budget, &g, walks, joins, i, setback.Dc, setback.DcDelta, swapped); err != nil {
-				return capBandResult{}, err
+				return BandResult{}, err
 			}
 		} else {
-			g.SideA = planePoint{U: w.StartU, V: w.StartV}
-			g.SideB = planePoint{U: w.EndU, V: w.EndV}
+			g.SideA = sectionrecord.Point2{U: w.StartU, V: w.StartV}
+			g.SideB = sectionrecord.Point2{U: w.EndU, V: w.EndV}
 			g.CapA, g.CapB = start, end
 		}
 		// chordUpper/slant are this wall patch's own held chord (its cap-level
 		// edge) and slant distance (either of its two bounding slant edges,
 		// which can differ at a mitered corner — the larger is the sound
 		// upper bound).
-		chordUpper := proofbound.AbsSumUpper(capEdge.n.Length, capEdge.n.LengthBound)
+		chordUpper := proofbound.AbsSumUpper(capEdge.Length, capEdge.LengthBound)
 		slant := math.Max(
-			proofbound.AbsSumUpper(leadSlant.n.Length, slantOutHeld[i]),
-			proofbound.AbsSumUpper(trailSlant.n.Length, slantInHeld[nextI]),
+			proofbound.AbsSumUpper(leadSlant.Length, slantOutHeld[i]),
+			proofbound.AbsSumUpper(trailSlant.Length, slantInHeld[nextI]),
 		)
 		g.ContourAllow = proofbound.BandPatchAreaAllow(delta, chordUpper, slant)
 		// The two rulings this wall patch is bounded by, paired end for end:
 		// leadSlant joins the side wall's own start vertex to capA, trailSlant
 		// its end vertex to capB. Both patch kinds read the pair: a Plane
 		// patch's tag is fixed through three of its four built corners, so the
-		// fourth's own departure from it is what capPatchNormalAllow measures
+		// fourth's own departure from it is what patchNormalAllow measures
 		// there.
-		setPatchReadings(face, g, capBuiltPatch(edgeHandle(side), capEdge,
-			[]*Vertex{vertexHandle(side.Start), vertexHandle(side.End)}, []*Vertex{capA, capB}), delta, capDelta)
+		setPatchReadings(face, g, builtPatch(side, capEdge,
+			[]*topo.Vertex{side.Start, side.End}, []*topo.Vertex{capA, capB}), delta, capDelta)
 		geoms = append(geoms, g)
-		capCo = append(capCo, topo.CoEdge{Edge: edgeNode(capEdge), Forward: true})
+		capCo = append(capCo, topo.CoEdge{Edge: capEdge, Forward: true})
 		if arc := arcByCorner[nextI]; arc != nil {
 			// shell_offset.go's reflex-corner arc walks pA -> pB in the
 			// SAME sense as the boundary's own travel direction (inward,
 			// s=+1: a clockwise arc whose tangent continues the walk).
-			capCo = append(capCo, topo.CoEdge{Edge: edgeNode(arc), Forward: true})
+			capCo = append(capCo, topo.CoEdge{Edge: arc, Forward: true})
 		}
 	}
-	closure, err := capBandClosureOf(walks, joins, slantIn, slantOut, slantInHeld, slantOutHeld)
+	closure, err := closureOf(walks, joins, slantIn, slantOut, slantInHeld, slantOutHeld)
 	if err != nil {
-		return capBandResult{}, err
+		return BandResult{}, err
 	}
-	return capBandResult{Patches: patches, CapCo: capCo, Geom: geoms, Delta: delta, Closure: closure}, nil
+	return BandResult{Patches: patches, CapCo: capCo, Geom: geoms, Delta: delta, Closure: closure}, nil
 }
 
-// suppliedCapEdges is a caller-supplied cap-level boundary split by role:
+// SuppliedCapEdges is a caller-supplied cap-level boundary split by role:
 // wall[i] is wall i's cap edge, and arc[i] the reflex arc at corner i (the
 // start of wall i), nil at a corner with none.
-type suppliedCapEdges struct {
-	Wall, Arc []*Edge
+type SuppliedCapEdges struct {
+	Wall, Arc []*topo.Edge
 }
 
 // suppliedCapWalls splits a supplied cap boundary, in walk order, into the
 // band's n wall edges and the arcs of the reflex corners joins marks. A
 // single closed circle passes joins nil. A boundary of another length, or a
 // backward coedge, is not the band's.
-func suppliedCapWalls(co []topo.CoEdge, joins []cornerJoin, n int) (suppliedCapEdges, error) {
-	out := suppliedCapEdges{Wall: make([]*Edge, n), Arc: make([]*Edge, n)}
+func suppliedCapWalls(co []topo.CoEdge, joins []offset2d.Join, n int) (SuppliedCapEdges, error) {
+	out := SuppliedCapEdges{Wall: make([]*topo.Edge, n), Arc: make([]*topo.Edge, n)}
 	next := 0
-	take := func() (*Edge, error) {
+	take := func() (*topo.Edge, error) {
 		if next >= len(co) || !co[next].Forward {
 			return nil, fmt.Errorf("a cap-loop band's supplied cap boundary of %d coedges is not the band's %d walls and their reflex arcs", len(co), n)
 		}
 		next++
-		return edgeHandle(co[next-1].Edge), nil
+		return co[next-1].Edge, nil
 	}
 	for i := range n {
 		e, err := take()
 		if err != nil {
-			return suppliedCapEdges{}, err
+			return SuppliedCapEdges{}, err
 		}
 		out.Wall[i] = e
 		if joins == nil || !joins[(i+1)%n].Arc {
 			continue
 		}
 		if out.Arc[(i+1)%n], err = take(); err != nil {
-			return suppliedCapEdges{}, err
+			return SuppliedCapEdges{}, err
 		}
 	}
 	if next != len(co) {
-		return suppliedCapEdges{}, fmt.Errorf("a cap-loop band's supplied cap boundary of %d coedges is not the band's %d walls and their reflex arcs", len(co), n)
+		return SuppliedCapEdges{}, fmt.Errorf("a cap-loop band's supplied cap boundary of %d coedges is not the band's %d walls and their reflex arcs", len(co), n)
 	}
 	return out, nil
 }
 
 // setPatchReadings gives a constructed chamfer patch the two readings its OWN
 // geometry already states: the area and bound patchAreaOf gives
-// (capblend_moments.go) — the same numbers the body's area sum is built from,
+// (build.go) — the same numbers the body's area sum is built from,
 // so a caller reading `Face.Area()` and a caller reading `Body.Area()` are told
 // the same thing about the same surface — and the bound its `Face.NormalAt`
 // owes, which is how far the RULED surface the build assembles can depart from
-// the surface this file tags it with (capblend_departure.go), plus how far
+// the surface this file tags it with (departure.go), plus how far
 // that built surface turns from the one the records denote
 // (capband.DenotedNormalAllow). The second term exists because the cap-level
 // directrix is the offset the build solved, held only within delta of the
@@ -848,7 +809,7 @@ func suppliedCapWalls(co []topo.CoEdge, joins []cornerJoin, n int) (suppliedCapE
 // plane-local description states none of it.
 //
 // Left unset, a patch Face reports a zero area with a zero bound, which
-// `exactnessOf` publishes as an EXACT zero: not merely a missing reading but a
+// `measurement.ExactnessOf` publishes as an EXACT zero: not merely a missing reading but a
 // positively wrong one, asserted as a fact about a face that plainly has area.
 // A zero surface-departure term is the same kind of wrong answer one reading
 // over: it omits a direction difference the built surface has, and the DX7
@@ -858,18 +819,18 @@ func suppliedCapWalls(co []topo.CoEdge, joins []cornerJoin, n int) (suppliedCapE
 // Every patch this file builds passes through here, and each does so with the
 // geometry the moments pass then integrates, so those two can never disagree
 // either.
-func setPatchReadings(f *Face, g capPatchGeom, built capPatchBuilt, delta, capDelta float64) {
-	f.n.Area, f.n.AreaBound = capband.AreaOf(g)
+func setPatchReadings(f *topo.Face, g capband.Patch, built capband.PatchBuilt, delta, capDelta float64) {
+	f.Area, f.AreaBound = capband.AreaOf(g)
 	dr := 0.0
 	if g.Circular {
 		delta = proofbound.AbsSumUpper(delta, g.Held.SideRadius, g.Held.CapRadius)
 		dr = g.CapRadius - g.SideRadius
 	}
 	denoted := capband.DenotedNormalAllow(delta, capDelta, g.LevelDelta, g.CapZ-g.SideZ, dr)
-	f.n.NormalBound = math.Min(ruledNormalAllowUnbounded, proofbound.AbsSumUpper(capPatchNormalAllow(f, g, built), denoted))
+	f.NormalBound = math.Min(ruledNormalAllowUnbounded, proofbound.AbsSumUpper(patchNormalAllow(f, g, built), denoted))
 }
 
-// capSlantEdge is one cap-level contour point's slant edge down to the
+// SlantEdge is one cap-level contour point's slant edge down to the
 // side-level apex it closes on. The apex is a recorded (u, v) at the band's own
 // side level, so the edge's whole displacement is the contour's at one end and
 // the level's rounding at the other — and the held length is the float square
@@ -909,23 +870,22 @@ func setPatchReadings(f *Face, g capPatchGeom, built capPatchBuilt, delta, capDe
 // slantUpper by it would loosen the area bound for a residual it never
 // measured.
 //
-// budget is the same counter buildCapBand already threads through this
+// budget is the same counter BuildBand already threads through this
 // band's build; each sub-range's own enclosure charges one step, so a band
 // with many mitered circular corners cannot spend unbounded work here any
 // more than it can building the contour displacement itself.
-func capSlantEdge(budget *proofbound.WorkBudget, capP planePoint, capV, apex *Vertex, apexU, apexV, capZ, sideZ, delta, levelDelta float64, prev, cur survey2d.SideWalk, setback capSetback, affine bool) (*Edge, float64, error) {
+func SlantEdge(alloc topo.Alloc, budget *proofbound.WorkBudget, capP sectionrecord.Point2, capV, apex *topo.Vertex, apexU, apexV, capZ, sideZ, delta, levelDelta float64, prev, cur survey2d.SideWalk, setback Setback, affine bool) (*topo.Edge, float64, error) {
 	dc, dcDelta := setback.Dc, setback.DcDelta
 	held := math.Hypot(math.Hypot(capP.U-apexU, capP.V-apexV), capZ-sideZ)
 	squared, squaredOK := proofarith.DySquaredDistance3(capP.U, capP.V, capZ, apexU, apexV, sideZ)
 	heldBound := capcontour.StraightEdgeBound(held, squared, squaredOK, delta, levelDelta)
-	e := bornEdge(&Edge{n: topo.Edge{
+	e := topobuild.NewEdge(alloc, topo.Edge{
 		Convex:      true,
 		Length:      held,
 		LengthBound: heldBound,
 		Curve:       surfacegeom.Line3{},
-		Start:       vertexNode(capV),
-		End:         vertexNode(apex),
-	},
+		Start:       capV,
+		End:         apex,
 	})
 	if affine || dc <= 0 || (!prev.IsCircular() && !cur.IsCircular()) {
 		return e, heldBound, nil
@@ -936,12 +896,12 @@ func capSlantEdge(budget *proofbound.WorkBudget, capP planePoint, capV, apex *Ve
 		return nil, 0, err
 	}
 	if !ok {
-		e.n.LengthBound = 0
-		e.n.LengthUnbounded = true
+		e.LengthBound = 0
+		e.LengthUnbounded = true
 		return e, heldBound, nil
 	}
 	if excess := total - chordUpper; excess > 0 {
-		e.n.LengthBound = proofbound.AbsSumUpper(heldBound, proofbound.UpRound(excess))
+		e.LengthBound = proofbound.AbsSumUpper(heldBound, proofbound.UpRound(excess))
 	}
 	return e, heldBound, nil
 }
@@ -952,16 +912,14 @@ func capSlantEdge(budget *proofbound.WorkBudget, capP planePoint, capV, apex *Ve
 // encloses every radius it denotes, so the seam vertex publishes the displacement it
 // actually has (its own coordinate is a float SUM of the centre and that
 // radius, which rounds once more, and its own lift through pl's frame and
-// placement rounds by what prismPayload.LiftedVertex measures) and the
+// placement rounds by what prismrecord.Payload.LiftedVertex measures) and the
 // circumference is bounded against π's own rational bracket.
-func wholeCircleEdge(pl prismPayload, cu, cv, r, z float64, ccw bool, delta float64, exactRadius proofbound.RatInterval) *Edge {
+func wholeCircleEdge(alloc topo.Alloc, pl prismrecord.Payload, cu, cv, r, z float64, ccw bool, delta float64, exactRadius proofbound.RatInterval) *topo.Edge {
 	seamU := cu + r
 	seamPos, lift := pl.LiftedVertex(seamU, cv, z)
-	seam := bornVertex(&Vertex{
-		n: topo.Vertex{
-			Position: seamPos,
-			Bound:    units.Millimeters(proofbound.AbsSumUpper(proofbound.AbsSumUpper(delta, lift), proofarith.AddRoundError(cu, r, seamU))),
-		},
+	seam := topobuild.NewVertex(alloc, topo.Vertex{
+		Position: seamPos,
+		Bound:    units.Millimeters(proofbound.AbsSumUpper(proofbound.AbsSumUpper(delta, lift), proofarith.AddRoundError(cu, r, seamU))),
 	})
 	axis := pl.Dir(0, 0, 1)
 	if !ccw {
@@ -969,15 +927,13 @@ func wholeCircleEdge(pl prismPayload, cu, cv, r, z float64, ccw bool, delta floa
 	}
 	held := 2 * math.Pi * r
 	center := pl.Point(cu, cv, z)
-	e := bornEdge(&Edge{
-		n: topo.Edge{
-			Convex:      ccw,
-			Length:      held,
-			LengthBound: capcontour.CapCircleLengthBound(exactRadius, held),
-			Curve:       surfacegeom.Circle3{Center: center, Axis: axis, Radius: units.Millimeters(r)},
-			Start:       vertexNode(seam),
-			End:         vertexNode(seam),
-		},
+	e := topobuild.NewEdge(alloc, topo.Edge{
+		Convex:      ccw,
+		Length:      held,
+		LengthBound: capcontour.CapCircleLengthBound(exactRadius, held),
+		Curve:       surfacegeom.Circle3{Center: center, Axis: axis, Radius: units.Millimeters(r)},
+		Start:       seam,
+		End:         seam,
 	})
 	// The held radius sits within its own gap from exactRadius's ends of
 	// every radius the offset denotes, and the contour within delta of it.
@@ -987,7 +943,7 @@ func wholeCircleEdge(pl prismPayload, cu, cv, r, z float64, ccw bool, delta floa
 			proofbound.RatFloatUp(new(big.Rat).Abs(new(big.Rat).Sub(exactRadius.Hi, heldRat))))
 		radiusBound = proofbound.AbsSumUpper(gap, delta)
 	}
-	e.n.CurveBound, e.n.CurveBounded = pl.CircleCurveBound(cu, cv, z, pl.AxialDelta(), 0, r, radiusBound, center, axis)
+	e.CurveBound, e.CurveBounded = pl.CircleCurveBound(cu, cv, z, pl.AxialDelta(), 0, r, radiusBound, center, axis)
 	return e
 }
 
@@ -999,32 +955,30 @@ func wholeCircleEdge(pl prismPayload, cu, cv, r, z float64, ccw bool, delta floa
 // capcontour.CapWallArcBound's (or capcontour.CapCircleLengthBound's) proven bound on it — the
 // caller forms the two together so the bound is never computed against a
 // value spelled a second time.
-func arcEdge(pl prismPayload, cu, cv, r, z float64, start, end *Vertex, th0, th1, length, lengthBound float64) *Edge {
+func arcEdge(alloc topo.Alloc, pl prismrecord.Payload, cu, cv, r, z float64, start, end *topo.Vertex, th0, th1, length, lengthBound float64) *topo.Edge {
 	axis := pl.Dir(0, 0, 1)
 	if th1 < th0 {
 		axis = axis.Scale(-1)
 	}
-	return bornEdge(&Edge{
-		n: topo.Edge{
-			Convex:      th1 > th0,
-			Length:      length,
-			LengthBound: lengthBound,
-			Curve:       surfacegeom.Arc3{Center: pl.Point(cu, cv, z), Axis: axis, Radius: units.Millimeters(r)},
-			Start:       vertexNode(start),
-			End:         vertexNode(end),
-		},
+	return topobuild.NewEdge(alloc, topo.Edge{
+		Convex:      th1 > th0,
+		Length:      length,
+		LengthBound: lengthBound,
+		Curve:       surfacegeom.Arc3{Center: pl.Point(cu, cv, z), Axis: axis, Radius: units.Millimeters(r)},
+		Start:       start,
+		End:         end,
 	})
 }
 
-// planeFromThree builds a Plane surface through three world points, its
+// PlaneFromThree builds a Plane surface through three world points, its
 // normal fixed by the winding p0->p1->p2 (right-hand rule); the caller flips
 // the face's reversed bit if that does not turn out to be the outward sense.
-func planeFromThree(p0, p1, p2 r3.Vec) (surfacegeom.Plane, error) {
+func PlaneFromThree(p0, p1, p2 r3.Vec) (surfacegeom.Plane, error) {
 	u := p1.Sub(p0)
 	v := p2.Sub(p0)
 	f, err := r3.NewFrame(p0, u, v)
 	if err != nil {
-		return surfacegeom.Plane{}, fmt.Errorf(`%w: a chamfer patch's three corners are degenerate: %s`, ErrDegenerate, err)
+		return surfacegeom.Plane{}, fmt.Errorf(`%w: a chamfer patch's three corners are degenerate: %s`, decaderr.ErrDegenerate, err)
 	}
 	return surfacegeom.Plane{Frame: f}, nil
 }
@@ -1048,7 +1002,7 @@ func planeFromThree(p0, p1, p2 r3.Vec) (surfacegeom.Plane, error) {
 // For a cone, Origin is the apex where the ruling reaches radius 0 (which may
 // lie outside [sideZ, capZ] for a regular frustum), Axis is the growth
 // direction, and Radius/HalfAngle are read off the same two (z, r) pairs.
-func coneSurface(pl prismPayload, cu, cv, r0, r1, z0, z1 float64) surfacegeom.Surface {
+func coneSurface(pl prismrecord.Payload, cu, cv, r0, r1, z0, z1 float64) surfacegeom.Surface {
 	dz, dr := z1-z0, r1-r0
 	if dr == 0 {
 		return surfacegeom.Cylinder{Origin: pl.Point(cu, cv, z0), Axis: pl.Dir(0, 0, 1), Radius: units.Millimeters(r0)}
@@ -1066,7 +1020,7 @@ func coneSurface(pl prismPayload, cu, cv, r0, r1, z0, z1 float64) surfacegeom.Su
 	}
 }
 
-// capPatchWindowSkew is one patch's own widest corner skew: a proven upper
+// PatchWindowSkew is one patch's own widest corner skew: a proven upper
 // bound on the angle about the centre between the side directrix's end and
 // the cap directrix's end at either corner (docs/modify-reach-design.md §8.3),
 // the larger of the two skews capband.SetPatchSkews stamps from
@@ -1082,10 +1036,10 @@ func coneSurface(pl prismPayload, cu, cv, r0, r1, z0, z1 float64) surfacegeom.Su
 // its one reader. The DX7 normal reading asks a different question: how far the
 // BUILT surface points away from the tag, which the placement's own rounding
 // moves whether or not the windows coincide. That one is measured in world
-// space from the published numbers (capblend_departure.go), never from these
+// space from the published numbers (departure.go), never from these
 // two windows. The mesh reads it too, for the distance from the ruled patch to
 // the cone it is tagged as (docs/tessellation-reach-design.md §7's skewGap).
-func capPatchWindowSkew(g capPatchGeom) float64 {
+func PatchWindowSkew(g capband.Patch) float64 {
 	if !g.Circular {
 		return 0
 	}
@@ -1098,33 +1052,35 @@ func capPatchWindowSkew(g capPatchGeom) float64 {
 // original wall's own sense (a hole/clockwise wall's material lies outside
 // its cylinder, so its chamfer cone's geometric normal needs reversing too —
 // extrude.go's same rule for a clockwise circular wall).
-func buildConePatch(pl prismPayload, body *Body, origins []provenance.Ref, cu, cv, sideRadius, capRadius, sideZ, capZ float64, reversed bool, sideEdge, capEdge *Edge) *Face {
+func buildConePatch(alloc topo.Alloc, pl prismrecord.Payload, body *topo.Body, origins []provenance.Ref, cu, cv, sideRadius, capRadius, sideZ, capZ float64, reversed bool, sideEdge, capEdge *topo.Edge) *topo.Face {
 	surf := coneSurface(pl, cu, cv, sideRadius, capRadius, sideZ, capZ)
-	loops := []*Loop{
-		bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(sideEdge), Forward: true}}}}),
-		bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(capEdge), Forward: false}}}}),
+	loops := []*topo.Loop{
+		topobuild.NewLoop(alloc, topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: sideEdge, Forward: true}}}),
+		topobuild.NewLoop(alloc, topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: capEdge, Forward: false}}}),
 	}
-	face := bornFace(&Face{n: topo.Face{Reversed: reversed, Surface: surf, Origins: origins, Body: bodyNode(body), Loops: loopNodes(loops)}})
-	sideEdge.n.Faces = append(sideEdge.n.Faces, faceNode(face))
-	capEdge.n.Faces = append(capEdge.n.Faces, faceNode(face))
+	face := topobuild.NewFace(alloc, topo.Face{Reversed: reversed, Surface: surf, Origins: origins, Body: body, Loops: loops})
+	sideEdge.Faces = append(sideEdge.Faces, face)
+	capEdge.Faces = append(capEdge.Faces, face)
 	return face
 }
 
+// CapNameStart and CapNameEnd name the two caps in a chamferCap role.
 const (
-	capNameStart = "start"
-	capNameEnd   = "end"
+	CapNameStart = "start"
+	CapNameEnd   = "end"
 )
 
-func capNameOf(matSign float64) string {
+// CapNameOf names the cap a band with material sense matSign sits on.
+func CapNameOf(matSign float64) string {
 	if matSign < 0 {
-		return capNameEnd
+		return CapNameEnd
 	}
-	return capNameStart
+	return CapNameStart
 }
 
-// fixPatchOrientation empirically verifies a patch's outward normal sign
+// FixPatchOrientation empirically verifies a patch's outward normal sign
 // against a plane-local reference direction (refU, refV, refZ), reversing
-// face.n.Reversed if the two disagree. samplePoint must lie on the patch's own
+// face.Reversed if the two disagree. samplePoint must lie on the patch's own
 // built surface. It reads the surface's OWN Face.NormalAt — the exact
 // formula every downstream reader (DX7's undercut survey included) uses — so
 // no consumer can see a different answer than what was checked here, and the
@@ -1135,20 +1091,37 @@ func capNameOf(matSign float64) string {
 //
 // When NormalAt itself refuses at samplePoint, the sign is a build-time
 // question this evaluator cannot finish, so §11 gives it no undecided state:
-// fixPatchOrientation returns SX15 (docs/modify-reach-design.md §4) as
-// ErrUnsupported rather than leaving face.n.Reversed at whatever the caller
-// constructed it with. NormalAt's own refusal there is ErrDegenerate, but
-// that sentinel and ErrUnsupported are opposite existence claims a caller
-// branches on (capblend.go's capband.ChamferAuditError), so the underlying error
+// FixPatchOrientation returns SX15 (docs/modify-reach-design.md §4) as
+// decaderr.ErrUnsupported rather than leaving face.Reversed at whatever the caller
+// constructed it with. NormalAt's own refusal there is decaderr.ErrDegenerate, but
+// that sentinel and decaderr.ErrUnsupported are opposite existence claims a caller
+// branches on (root capblend.go's capband.ChamferAuditError), so the underlying error
 // is folded in with %v, never %w.
-func fixPatchOrientation(f *Face, pl prismPayload, samplePoint r3.Vec, refU, refV, refZ float64) error {
-	n, err := f.NormalAt(samplePoint)
+func FixPatchOrientation(f *topo.Face, pl prismrecord.Payload, samplePoint r3.Vec, refU, refV, refZ float64) error {
+	n, err := topobuild.NormalAt(f, samplePoint)
 	if err != nil {
-		return fmt.Errorf(`%w: a cap-loop chamfer band patch's outward orientation cannot be certified; its own normal reading refuses at the build's orientation sample point (%v)`, ErrUnsupported, err)
+		return fmt.Errorf(`%w: a cap-loop chamfer band patch's outward orientation cannot be certified; its own normal reading refuses at the build's orientation sample point (%v)`, decaderr.ErrUnsupported, err)
 	}
 	ref := pl.Dir(refU, refV, refZ)
 	if n.Value.Dot(ref) < 0 {
-		f.n.Reversed = !f.n.Reversed
+		f.Reversed = !f.Reversed
 	}
 	return nil
+}
+
+// closureOf reads the built band's edge lengths for that proof.
+func closureOf(walks []survey2d.SideWalk, joins []offset2d.Join, slantIn, slantOut []*topo.Edge, slantInHeld, slantOutHeld []float64) (capband.Closure, error) {
+	in := make([]float64, len(slantIn))
+	out := make([]float64, len(slantOut))
+	for i, edge := range slantIn {
+		in[i] = edge.Length
+	}
+	for i, edge := range slantOut {
+		out[i] = edge.Length
+	}
+	closure, ok := capband.ClosureOf(walks, capband.ContourJoins(joins), in, out, slantInHeld, slantOutHeld)
+	if !ok {
+		return capband.Closure{}, capband.ErrHeldUnbounded
+	}
+	return closure, nil
 }

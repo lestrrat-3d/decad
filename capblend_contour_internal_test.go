@@ -45,7 +45,7 @@ func ratStraightEdgeBound(held float64, squared *big.Rat, endpointDeltas ...floa
 // squared length, computed over dyadics, to the big.Rat computation they
 // replaced, bit for bit, on random 3D point pairs of mixed magnitudes with a
 // non-finite coordinate now and then. It reads every caller's spelling: the
-// general three-coordinate form (capSlantEdge, loftmesh.EdgeLength,
+// general three-coordinate form (capblend.SlantEdge, loftmesh.EdgeLength,
 // compositeLineSweepSpan), capcontour.CapEdgeLengthBound's plane form, the big.Rat that
 // proof.RatSquaredDistance3 still hands its dividing callers, and the dot product of
 // the exact tangent sweepinput.ValidateStraightSweepPath substitutes for the distance.

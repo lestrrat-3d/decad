@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
@@ -893,7 +894,7 @@ func TestPartialFilletContourCollapsesSelectedArc(t *testing.T) {
 	require.NoError(t, r.matchEdges())
 	sel, selected, ok := r.partialSelectedLoop()
 	require.True(t, ok)
-	cl, err := oneLoopCornerLoop(r.budget, bp.faces[sel.face].regionLoop(sel.loop), freeform.NewFreeformWork())
+	cl, err := capblend.OneLoopCornerLoop(r.budget, bp.faces[sel.face].regionLoop(sel.loop), freeform.NewFreeformWork())
 	require.NoError(t, err)
 	amounts := make([]float64, len(selected))
 	sphere := make([]bool, len(selected))

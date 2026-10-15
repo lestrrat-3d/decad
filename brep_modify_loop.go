@@ -9,6 +9,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/capband"
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -960,19 +961,19 @@ func (r *brepLoopRead) rewriteLoopFaces(ctx context.Context, sels []brepLoopSel)
 	for _, fi := range faceOrder {
 		cbp := r.loopFaceView(fi, sels)
 		views[fi] = cbp
-		profile, err := mixedOffsetProfile(r.budget, cbp)
+		profile, err := capblend.MixedOffsetProfile(r.budget, cbp)
 		if err != nil {
 			return brepPayload{}, r.wrapFace(fi, capband.ChamferDropError(err))
 		}
 		mixed[fi] = profile
-		if err := requireCapBlendLevelsSeparate(cbp); err != nil {
+		if err := capblend.RequireLevelsSeparate(cbp); err != nil {
 			return brepPayload{}, r.wrapFace(fi, err)
 		}
 	}
 	work := freeform.NewFreeformWork()
 	for _, sel := range sels {
 		setback := sel.setback
-		cl, err := oneLoopCornerLoop(r.budget, r.bp.faces[sel.face].regionLoop(sel.loop), work)
+		cl, err := capblend.OneLoopCornerLoop(r.budget, r.bp.faces[sel.face].regionLoop(sel.loop), work)
 		if err != nil {
 			return brepPayload{}, err
 		}
@@ -997,14 +998,14 @@ func (r *brepLoopRead) rewriteLoopFaces(ctx context.Context, sels []brepLoopSel)
 	// Stage 5: SX14 at every miter corner beside a circular wall, then each
 	// face's rewritten region.
 	for _, fi := range faceOrder {
-		if err := requireCapBlendCornerLoci(r.budget, views[fi]); err != nil {
+		if err := capblend.RequireCornerLoci(r.budget, views[fi]); err != nil {
 			return brepPayload{}, r.wrapFace(fi, err)
 		}
 		region := *r.bp.faces[fi].region
 		if err := offset2d.AuditOffsetSectionBudget(r.budget, region, mixed[fi]); err != nil {
 			return brepPayload{}, r.wrapFace(fi, capband.ChamferAuditError(err))
 		}
-		if err := auditCapBlendSetbackSpan(r.budget, region, views[fi]); err != nil {
+		if err := capblend.AuditSetbackSpan(r.budget, region, views[fi]); err != nil {
 			return brepPayload{}, r.wrapFace(fi, err)
 		}
 	}

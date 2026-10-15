@@ -694,7 +694,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	cx := centroidCoord(moments[0], tf, volRat)
 	cy := centroidCoord(moments[1], tf, volRat)
 	cz := centroidCoord(moments[2], tf, volRat)
-	cenBound := facetedCentroidAllowance(pp.volSymDiff, pp.dPair, volFloor(volRat, pp.volSymDiff))
+	cenBound := facetproof.FacetedCentroidAllowance(pp.volSymDiff, pp.dPair, volFloor(volRat, pp.volSymDiff))
 	cxF, _ := cx.Float64()
 	cyF, _ := cy.Float64()
 	czF, _ := cz.Float64()
@@ -805,15 +805,6 @@ func volFloor(vol *big.Rat, sym float64) float64 {
 		return 0
 	}
 	return rem
-}
-
-// facetedCentroidAllowance keeps a positive occupied-volume displacement
-// positive even when its product with the pair diameter underflows.
-func facetedCentroidAllowance(sym, diameter, volumeFloor float64) float64 {
-	if volumeFloor <= 0 {
-		return diameter
-	}
-	return math.Min(diameter, proofbound.DivUpper(proofbound.ProductUpper(sym, diameter), volumeFloor))
 }
 
 // facetedSourceDiameterUpper bounds any pair of held or true boundary

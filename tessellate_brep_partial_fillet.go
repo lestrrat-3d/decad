@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/partialband"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -15,7 +16,7 @@ func chordPartialFilletBand(ctx context.Context, b brepLoopBand, f brepFace,
 	cbp capBlendPayload, chord float64) (brepBandChord, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	work := freeform.NewFreeformWork()
-	side, err := oneLoopCornerLoop(budget, b.orig, work)
+	side, err := capblend.OneLoopCornerLoop(budget, b.orig, work)
 	if err != nil {
 		return brepBandChord{}, err
 	}

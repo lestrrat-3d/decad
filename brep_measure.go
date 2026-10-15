@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
@@ -284,7 +285,7 @@ func brepMinRadius(b *Body, bp brepPayload) (radiusOutcome, bool) {
 	for _, patches := range bp.loopPatches {
 		for _, patch := range patches {
 			f := roles[patch.Role]
-			if f == nil || capPatchWindowSkew(patch.Geom) > 0 || f.n.NormalBound != 0 {
+			if f == nil || capblend.PatchWindowSkew(patch.Geom) > 0 || f.n.NormalBound != 0 {
 				return radiusOutcome{}, false
 			}
 		}

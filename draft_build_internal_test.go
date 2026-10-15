@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -95,7 +96,8 @@ func TestDraftConeWallsReadNoChordLocusTerm(t *testing.T) {
 	loop := cbp.Loops()[0]
 	near, err := draftNearRim(t.Context(), cbp.PrismLike(0, 0), 0, loop, nearZ, nearDelta, work)
 	require.NoError(t, err)
-	band, err := buildCapBand(t.Context(), bornBody(&Body{n: topo.Body{Doc: b.n.Doc}}), b.n.Origin.Producer, cbp, 0, loop, farZ, matSign, near, nil, work)
+	band, err := capblend.BuildBand(t.Context(), envOf(b.n.Doc, b.n.Origin.Producer),
+		bodyNode(bornBody(&Body{n: topo.Body{Doc: b.n.Doc}})), cbp, 0, loop, farZ, matSign, near, nil, work)
 	require.NoError(t, err)
 	cones := 0
 	for _, g := range band.Geom {
@@ -103,7 +105,7 @@ func TestDraftConeWallsReadNoChordLocusTerm(t *testing.T) {
 			continue
 		}
 		cones++
-		require.Zero(t, capPatchWindowSkew(g))
+		require.Zero(t, capblend.PatchWindowSkew(g))
 	}
 	require.Equal(t, 2, cones)
 }

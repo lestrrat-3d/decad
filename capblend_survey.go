@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/capband"
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/radiussurvey"
 
@@ -21,7 +22,7 @@ import (
 //
 // Both rows turn on one fact about the band: a circular patch is RULED between
 // two directrices, so the Cone it publishes is its surface only to within a
-// proven bound (§8.3, capblend_departure.go). DX7 widens its own reading by
+// proven bound (§8.3, internal/capblend/departure.go). DX7 widens its own reading by
 // that bound. A provenly opposing point lists its patch; only a patch with no
 // such point and a straddling range is undecided.
 //
@@ -53,7 +54,7 @@ import (
 // capBlendUndercuts surveys a cap-blend body's patches against the pull
 // (DX7): each patch's published normal range is read from its OWN built Face —
 // Face.NormalAt already carries the correct outward sign (the .reversed bit
-// each patch sets at build time, capblend_geom.go) — sampled at enough
+// each patch sets at build time, internal/capblend/band.go) — sampled at enough
 // azimuths to recover the patch's normal as A*cos(theta)+B*sin(theta)+C (a
 // Cone's normal is that form in its own local azimuth; a Plane's is the
 // degenerate A=B=0 case) and then read over the window [th0, th1] through a
@@ -67,7 +68,7 @@ import (
 //
 // That range is the patch's own only where the patch's surface IS the one it
 // publishes. A circular patch's is not, so its reading is widened by the
-// departure the build already stamped on the face (capblend_departure.go);
+// departure the build already stamped on the face (internal/capblend/departure.go);
 // every patch's reading is also widened by the whole distance its own readings
 // can sit from the surface it publishes. Both widenings are composed inside
 // capPatchNormalRange, so the reading it returns is already the complete
@@ -158,7 +159,7 @@ func capPatchUndercuts(roles map[string]*Face, pl prismPayload, patches []capPat
 		}
 		// reading already arrives complete: capPatchNormalRange's circular arm
 		// composes the patch's own departure from the surface it publishes
-		// (capblend_departure.go) into it directly, and its flat arm takes
+		// (internal/capblend/departure.go) into it directly, and its flat arm takes
 		// that same departure already composed into Face.NormalAt's own
 		// published bound (topology.go), since a flat patch has only the one
 		// reading to widen. Composing f.n.NormalBound again here would charge a
@@ -176,7 +177,7 @@ func capPatchUndercuts(roles map[string]*Face, pl prismPayload, patches []capPat
 		// Every point of the patch carries an azimuth inside this window, and
 		// its own normal component sits within allow of the reading at that
 		// azimuth: a CIRCULAR patch because the surface it publishes is its own
-		// only to within its departure (capblend_departure.go,
+		// only to within its departure (internal/capblend/departure.go,
 		// docs/modify-reach-design.md §8.3), and any patch at all because the
 		// reading was assembled from bounded readings. A point proven to oppose
 		// lists this patch; only an all-clear needs every point to clear. A
@@ -236,15 +237,15 @@ func capPatchNormalRange(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (fl
 // patch's radius" is only a fact about the built surface where the built
 // surface really is that Plane or Cone. The build already proves and stamps
 // how far a patch's ruled surface can point away from the surface it
-// publishes (`f.n.NormalBound`, `capblend_geom.go`'s `setPatchReadings`, derived
-// in `capblend_departure.go`), and this survey answers only where that stamp
+// publishes (`f.n.NormalBound`, `internal/capblend`'s `setPatchReadings`, derived
+// in `internal/capblend/departure.go`), and this survey answers only where that stamp
 // is an EXACT zero — a zero there means the built normal agrees with the
 // tag's everywhere on the patch, so the two surfaces share every tangent plane
 // and a boundary point, hence are the same surface, and the Plane/Cone
 // argument below is a statement about the built patch rather than an
 // assumption about it.
 //
-// `capPatchWindowSkew` decides only the SKEW half of that departure — a
+// `capblend.PatchWindowSkew` decides only the SKEW half of that departure — a
 // question about the patch's own kind, whether the build rules it between two
 // congruent windows at all. A MITERED circular patch fails even that: the
 // build rules it between two differently-swept directrices
@@ -297,7 +298,7 @@ func capBlendMinRadius(b *Body, cbp capBlendPayload) (radiusOutcome, bool) {
 		if f == nil {
 			return radiusOutcome{}, false
 		}
-		if capPatchWindowSkew(patch.Geom) > 0 || f.n.NormalBound != 0 {
+		if capblend.PatchWindowSkew(patch.Geom) > 0 || f.n.NormalBound != 0 {
 			return radiusOutcome{}, false
 		}
 	}

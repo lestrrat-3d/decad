@@ -169,7 +169,7 @@ func TestTangentJoinedRotatedSlotChamfer(t *testing.T) {
 //
 // Shown to fail: with offset2d.SectionJoinsBudget returning the bare
 // ErrTopology again, the 0.9π refusal names no corner. Without
-// requireCapBlendCornerLoci, the other two refusing chamfers answer
+// capblend.RequireCornerLoci, the other two refusing chamfers answer
 // ErrNotFinite ("the analytic body's volume measurement is not
 // finite"), from capband.PatchCornerFlux's +Inf corner flux.
 func TestCapLoopChamferRefusesNearTangentCorner(t *testing.T) {

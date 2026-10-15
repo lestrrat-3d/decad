@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/capband"
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/sketch"
@@ -307,7 +308,7 @@ func TestChordLocusRegionPointsLieInTheShell(t *testing.T) {
 
 	const qR, qD = 60.0, 4.0
 	quarter := chamferedCircularBand(t, quarterDiskSection(qR), 20, qD, nil).geom
-	require.Positive(t, capPatchWindowSkew(quarter), `the quarter disk's wall is mitered at both ends`)
+	require.Positive(t, capblend.PatchWindowSkew(quarter), `the quarter disk's wall is mitered at both ends`)
 	// quarterLocus is the corner-foot locus at height fraction v: the foot
 	// of the line through the corner offset by t = v·d, on the circle
 	// offset by t.

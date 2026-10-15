@@ -13,7 +13,7 @@ import (
 // Mx, My, Mz, the divergence-theorem flux of F = (u²/2, 0, 0), (0, v²/2, 0),
 // (0, 0, z²/2) respectively, taken relative to the plane-local origin — with
 // its own proven bound. The per-axis sibling of patchRawFlux
-// (capblend_moments.go), dispatching on g.Circular exactly where that
+// (internal/capblend/build.go), dispatching on g.Circular exactly where that
 // function does.
 func patchFirstMomentFlux(g Patch) (mu, mv, mz proofbound.BoundedScalar) {
 	if !g.Circular {
@@ -350,7 +350,7 @@ func phaseSumInterval(terms []PhaseTerm, thS0, thS1, thC0, thC1 *big.Rat, phases
 
 // wholeTurnPhaseSum is the structural reduction for a whole-turn patch
 // (Patch.WholeTurn): θS(a) and θC(a) are IDENTICAL functions of a —
-// the same floats on both directrices, capblend_geom.go's cornerless closed
+// the same floats on both directrices, internal/capblend/band.go's cornerless closed
 // circle — so every term with k+m != 0 integrates to EXACTLY zero (a full
 // period's cos and sin both integrate to zero), read directly from that
 // STRUCTURAL fact rather than from Sincos near a multiple of pi (fl(2π) is
@@ -390,7 +390,7 @@ func wholeTurnPhaseSum(terms []PhaseTerm) *big.Rat {
 // the held floats. Neither grows with the arc centre's distance from the
 // plane-local origin beyond the enclosure's own width.
 //
-// A parameter that does not lift (non-finite geometry, which buildCapBand
+// A parameter that does not lift (non-finite geometry, which capblend.BuildBand
 // already refuses) or an allowance that is not finite answers 0 with an
 // infinite bound rather than a reading nothing proves. sweepCCW's negation
 // mirrors patchRawFlux's own: the closed form is taken over the NORMALIZED

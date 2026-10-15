@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
@@ -50,7 +51,7 @@ type filletLoopRead struct {
 // no corner. role names
 // F in the refusal.
 func filletLoopOf(budget *proofbound.WorkBudget, loop loopRecord, r float64, role string, work *freeform.FreeformWork) (filletLoopRead, error) {
-	cl, err := oneLoopCornerLoop(budget, loop, work)
+	cl, err := capblend.OneLoopCornerLoop(budget, loop, work)
 	if err != nil {
 		return filletLoopRead{}, err
 	}
@@ -72,15 +73,15 @@ func filletLoopOf(budget *proofbound.WorkBudget, loop loopRecord, r float64, rol
 // the pole vertex at the arc's recorded centre.
 func suppliedFilletCapWalls(co []topo.CoEdge, walks []survey2d.SideWalk, joins []cornerJoin, r float64) (suppliedCapEdges, error) {
 	n := len(walks)
-	out := suppliedCapEdges{Wall: make([]*Edge, n), Arc: make([]*Edge, n)}
+	out := suppliedCapEdges{Wall: make([]*topo.Edge, n), Arc: make([]*topo.Edge, n)}
 	next := 0
-	take := func() (*Edge, error) {
+	take := func() (*topo.Edge, error) {
 		if next >= len(co) || !co[next].Forward {
 			return nil, fmt.Errorf(`%w: a fillet band's cap contour does not match its walks`, ErrUnsupported)
 		}
 		e := co[next].Edge
 		next++
-		return edgeHandle(e), nil
+		return e, nil
 	}
 	for i, w := range walks {
 		if !filletband.SphereWalk(w, r) {
@@ -253,9 +254,9 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 		}
 		capAt := func(k int) *Vertex {
 			if supplied.Wall[k] != nil {
-				return vertexHandle(supplied.Wall[k].n.Start)
+				return vertexHandle(supplied.Wall[k].Start)
 			}
-			return vertexHandle(supplied.Wall[(k+1)%n].n.Start)
+			return vertexHandle(supplied.Wall[(k+1)%n].Start)
 		}
 		meridianLen, meridianBound := heldOf(filletband.MeridianLength(rIv))
 		// meridian is the quarter circle of radius r about the ball centre
@@ -294,9 +295,9 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 				if arc == nil {
 					return nil, brepBandMass{}, fmt.Errorf(`%w: fillet band %d's LF6 corner %d has no connector arc`, ErrUnsupported, bi, k)
 				}
-				arc.n.Convex = convex
-				trail[k] = meridian(j.PA, w, straightWalk(w, nil), vertexHandle(arc.n.Start), sideV)
-				lead[k] = meridian(j.PB, w, straightWalk(w, nil), vertexHandle(arc.n.End), sideV)
+				arc.Convex = convex
+				trail[k] = meridian(j.PA, w, straightWalk(w, nil), vertexHandle(arc.Start), sideV)
+				lead[k] = meridian(j.PB, w, straightWalk(w, nil), vertexHandle(arc.End), sideV)
 			case filletband.Tangent:
 				prev := fr.walks[(k+n-1)%n]
 				lead[k] = meridian(j.M, w, straightWalk(prev, &w), capAt(k), sideV)
@@ -355,18 +356,18 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 				}
 				continue
 			}
-			if wall.n.Start != lead[i].n.Start || wall.n.End != trail[next].n.Start ||
+			if wall.Start != lead[i].n.Start || wall.End != trail[next].n.Start ||
 				sideCo[i].Edge.Start != lead[i].n.End || sideCo[i].Edge.End != trail[next].n.End {
 				return nil, brepBandMass{}, fmt.Errorf(`%w: fillet band %d's walk %d does not close on its contour and side vertices`, ErrUnsupported, bi, i)
 			}
-			wall.n.Convex, sideCo[i].Edge.Convex = convex, convex
+			wall.Convex, sideCo[i].Edge.Convex = convex, convex
 			if err := newPatch(walkSurface(fr.walks[i]), []*Loop{bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
 				{Edge: sideCo[i].Edge, Forward: true},
 				{Edge: edgeNode(trail[next]), Forward: false},
-				{Edge: edgeNode(wall), Forward: false},
+				{Edge: wall, Forward: false},
 				{Edge: edgeNode(lead[i]), Forward: true},
 			},
-			}})}, vertexHandle(wall.n.Start)); err != nil {
+			}})}, vertexHandle(wall.Start)); err != nil {
 				return nil, brepBandMass{}, err
 			}
 			if fr.loop.Corners[next] != filletband.Reflex {
@@ -374,11 +375,11 @@ func attachFilletBand(ctx context.Context, body *Body, ref producerID, bp brepPa
 			}
 			v := fr.walks[next]
 			if err := newPatch(torus(v.StartU, v.StartV, r), []*Loop{bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
-				{Edge: edgeNode(supplied.Arc[next]), Forward: true},
+				{Edge: supplied.Arc[next], Forward: true},
 				{Edge: edgeNode(lead[next]), Forward: true},
 				{Edge: edgeNode(trail[next]), Forward: false},
 			},
-			}})}, vertexHandle(supplied.Arc[next].n.Start)); err != nil {
+			}})}, vertexHandle(supplied.Arc[next].Start)); err != nil {
 				return nil, brepBandMass{}, err
 			}
 		}

@@ -108,7 +108,7 @@ import (
 //
 // A the side-level pair and B the cap-level one, paired end for end by the
 // rulings themselves. The `Plane` the build tags it with is fixed from THREE of
-// those corners (capblend_geom.go's planeFromThree), so the fourth is free to
+// those corners (capblend.PlaneFromThree), so the fourth is free to
 // leave it — and on a placed body it does. A straight wall's own offset is
 // parallel to it in exact arithmetic and not in float, and that freedom is
 // exactly what this bound measures rather than asserts away.

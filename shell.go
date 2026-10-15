@@ -617,9 +617,8 @@ func (b *Body) shellClosedPrism(ctx context.Context, pp prismPayload, s float64,
 }
 
 // shellTol is the closed-form degeneracy tolerance for the shell's own gates:
-// a limit reached within it is treated as reached. The section is decad's own
-// exact geometry, so this only absorbs float noise, never an admission.
-const shellTol = 1e-9
+// offset2d.ShellTol, the value the cap-band builder reads too.
+const shellTol = offset2d.ShellTol
 
 // classifyRemovedCaps decides which caps a removed-face set names on a brep
 // receiver's route P (docs/brep-modify-design.md §4.2): every face must be one

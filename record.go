@@ -1,6 +1,8 @@
 package decad
 
 import (
+	"github.com/lestrrat-3d/decad/internal/capband"
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/chainrecord"
 	"github.com/lestrrat-3d/decad/internal/coilshell"
 	"github.com/lestrrat-3d/decad/internal/cupwall"
@@ -118,6 +120,23 @@ type coilPayload = coilshell.Payload
 type (
 	loftPayload      = loftrecord.Payload
 	chainLoftPayload = loftrecord.ChainPayload
+)
+
+// capBlendPayload is the evaluator's record of a complete-cap-loop chamfer
+// and of the band view a draft or brep loop band builds through: the
+// internal/capblend payload, which capblend.Build evaluates over topology
+// nodes and which implements topo.Payload (docs/modify-reach-design.md §8.3,
+// docs/evaluator-design.md §8). The other names are its setbacks, band keys,
+// patches, built bands, supplied cap boundaries and loft source.
+type (
+	capBlendPayload   = capblend.Payload
+	capSetback        = capblend.Setback
+	capBandKey        = capblend.BandKey
+	capPatch          = capblend.Patch
+	capBandResult     = capblend.BandResult
+	suppliedCapEdges  = capblend.SuppliedCapEdges
+	loftCapBandSource = capblend.LoftSource
+	capPatchGeom      = capband.Patch
 )
 
 type loopRecord = sectionrecord.LoopRecord

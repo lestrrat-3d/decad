@@ -8,6 +8,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
@@ -27,7 +28,7 @@ import (
 // SD in §5's stage order, the near cap over the recorded section P, the far
 // cap over its sharp offset Q, and one ruled wall per walk between them. The
 // walls are the cap-loop band of docs/modify-reach-design.md §8.3 with no
-// straight slab below it: draftPayload.band hands buildCapBand a view whose
+// straight slab below it: draftPayload.band hands capblend.BuildBand a view whose
 // side level is the sketch plane and whose cap contour is Q, so every wall
 // patch, ruling and far-cap edge, and every bound they carry, comes from that
 // one construction. The measurements are draft_moments.go's.
@@ -189,7 +190,7 @@ func auditDraftSpan(budget *proofbound.WorkBudget, profile profileRecord, walks 
 }
 
 // buildDraftBody is stage 7 and the assembly (docs/draft-design.md §7 steps
-// 7–9): per loop the near rim at the sketch plane, then buildCapBand's walls
+// 7–9): per loop the near rim at the sketch plane, then capblend.BuildBand's walls
 // and far rim over it; the two caps over the near and far rims; one shell,
 // one lump. Every edge bounds exactly two faces: a near rim edge its wall and
 // the near cap, a far rim edge its wall and the far cap, a ruling its two
@@ -215,11 +216,12 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 		if err != nil {
 			return nil, err
 		}
-		band, err := buildCapBand(ctx, body, ref, cbp, li, loop, farZ, matSign, nearCo, nil, work)
+		band, err := capblend.BuildBand(ctx, envOf(body.n.Doc, ref),
+			bodyNode(body), cbp, li, loop, farZ, matSign, nearCo, nil, work)
 		if err != nil {
 			return nil, wrapStageError(`the tapered extrude's walls`, err)
 		}
-		faces = append(faces, band.Patches...)
+		faces = append(faces, faceHandles(band.Patches)...)
 		nearLoops[li] = bornLoop(&Loop{n: topo.Loop{Outer: li == 0, CoEdges: nearCo}})
 		farLoops[li] = bornLoop(&Loop{n: topo.Loop{Outer: li == 0, CoEdges: band.CapCo}})
 		bands[li] = band
@@ -229,7 +231,7 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 			return nil, fmt.Errorf(`%w: the tapered extrude's wall band on loop %d built %d walls over %d patch geometries`, ErrDegenerate, li, len(band.Patches), len(band.Geom))
 		}
 		for p, f := range band.Patches {
-			dp.patches = append(dp.patches, capPatch{Role: f.n.Origins[0].Role, Geom: band.Geom[p]})
+			dp.patches = append(dp.patches, capPatch{Role: f.Origins[0].Role, Geom: band.Geom[p]})
 		}
 	}
 
@@ -289,7 +291,7 @@ func buildDraftBody(ctx context.Context, doc *Document, ref producerID, dp draft
 // one rim edge per walk, in walk order, exactly the bottom rim
 // prismrecord.BuildLoopSidesAs builds for a prism's wall at the same level. Each vertex
 // carries its junction bound, the level's own displacement and its frame lift
-// rounding; each edge the walk's own length and convexity. buildCapBand reads
+// rounding; each edge the walk's own length and convexity. capblend.BuildBand reads
 // these as the band's side directrix, so wall i's near edge is coedge i.
 func draftNearRim(ctx context.Context, pl prismPayload, li int, loop loopRecord, z, zDelta float64, work *freeform.FreeformWork) ([]topo.CoEdge, error) {
 	if len(loop.Segments) == 0 {

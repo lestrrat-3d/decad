@@ -468,7 +468,7 @@ func asymQuarterDiskLocusLength(r, dc, ds float64) float64 {
 // next to a circular wall encloses its denoted locus when the locus runs dc in
 // the plane and ds along the sweep.
 //
-// Shown to fail: passing dc as the locus's axial span (capSlantEdge's call to
+// Shown to fail: passing dc as the locus's axial span (capblend.SlantEdge's call to
 // capband.MiterLocusUpper) leaves the ds > dc rows' bound below the locus.
 func TestCapBlendAsymmetricMiterRulingEnclosesItsLocus(t *testing.T) {
 	t.Parallel()

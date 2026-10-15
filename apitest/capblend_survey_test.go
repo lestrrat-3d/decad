@@ -391,7 +391,7 @@ func TestCapBlendFlatPatchUndercutRespectsNormalBound(t *testing.T) {
 // requireRoundingScaleFlatBound checks a flat band patch's computed normal,
 // which carries Face.NormalAt's own arithmetic proof composed with the
 // rounding-scale departure the patch's four independently rounded corners
-// leave (capblend_departure.go) and the turn from the denoted wall that the
+// leave (internal/capblend/departure.go) and the turn from the denoted wall that the
 // cap contour's own rounding allows (capband.DenotedNormalAllow). All three
 // are rounding-scale on the unplaced builds this file reads, though the last
 // divides a contour rounding by the setback: the 100 mm quarter disk's 0.5 mm
@@ -491,7 +491,7 @@ func TestCapBlendMinRadiusUndecidedOnMiteredBand(t *testing.T) {
 }
 
 // TestCapBlendMinRadiusUndecidedOnCircularBand covers DX8: a whole-turn band
-// has one window, so capPatchWindowSkew never rules it out, but its single
+// has one window, so capblend.PatchWindowSkew never rules it out, but its single
 // Cone patch's own tag is only enclosed — the held half-angle's cosine and
 // sine are never exact — so the patch is not proven to be the surface it
 // publishes even unplaced, and the survey refuses rather than answering.

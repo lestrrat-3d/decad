@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/capband"
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
@@ -27,7 +28,7 @@ import (
 // proofbound.SectionDisplacementArea.
 
 // measureDraftBody stamps the body's volume, area, centroid, bounds and its
-// two cap faces' areas. bands are buildCapBand's results in loop order.
+// two cap faces' areas. bands are capblend.BuildBand's results in loop order.
 func measureDraftBody(ctx context.Context, body *Body, dp draftPayload, cbp capBlendPayload, bands []capBandResult, nearCap, farCap *Face, work *freeform.FreeformWork) error {
 	_, _, farZ, matSign := dp.levels()
 	var nearArea, farArea, patchArea, volume proofbound.BoundedScalar
@@ -45,7 +46,7 @@ func measureDraftBody(ctx context.Context, body *Body, dp draftPayload, cbp capB
 		}
 		band := bands[li]
 
-		mass, err := readBandMass(ctx, li, loop, cbp, band.Geom, farZ, matSign, band.Delta, band.Closure)
+		mass, err := capblend.ReadBandMass(ctx, li, loop, cbp, band.Geom, farZ, matSign, band.Delta, band.Closure)
 		if err != nil {
 			return err
 		}
@@ -88,7 +89,7 @@ func measureDraftBody(ctx context.Context, body *Body, dp draftPayload, cbp capB
 		// joint terms proofbound.SectionDisplacementArea states over the far
 		// rim's own held perimeter.
 		far.Bound = proofbound.AbsSumUpper(far.Bound,
-			proofbound.SectionDisplacementArea(band.Delta, len(loop.Segments), capContourPerimeterUpper(band.CapCo)))
+			proofbound.SectionDisplacementArea(band.Delta, len(loop.Segments), capblend.ContourPerimeterUpper(band.CapCo)))
 		farArea = proofbound.BoundedAdd(farArea, signed(far))
 	}
 	nearCap.n.Area, nearCap.n.AreaBound = nearArea.Value, nearArea.Bound
@@ -106,7 +107,7 @@ func measureDraftBody(ctx context.Context, body *Body, dp draftPayload, cbp capB
 		Bound:     units.SquareMillimeters(total.Bound),
 	}
 
-	bounds, err := capBlendBoundsContext(ctx, cbp, work)
+	bounds, err := capblend.Bounds(ctx, cbp, work)
 	if err != nil {
 		return err
 	}
@@ -115,13 +116,13 @@ func measureDraftBody(ctx context.Context, body *Body, dp draftPayload, cbp capB
 	cv := proofbound.BoundedQuotient(mv.Value, mv.Bound, volume.Value, volume.Bound)
 	cz := proofbound.BoundedQuotient(mz.Value, mz.Bound, volume.Value, volume.Bound)
 	centroid := pl.Point(cu.Value, cv.Value, cz.Value)
-	centroidBound := math.Min(pl.PointBound(cu, cv, cz), capband.CentroidGeometryBound(centroid, boxToInternal(bounds)))
+	centroidBound := math.Min(pl.PointBound(cu, cv, cz), capband.CentroidGeometryBound(centroid, bounds))
 	body.n.Centroid = measurement.VecMeasurement{
 		Value:     centroid,
 		Exactness: measurement.ExactnessOf(centroidBound),
 		Bound:     units.Millimeters(centroidBound),
 	}
-	body.n.Bounds = boxToInternal(bounds)
+	body.n.Bounds = bounds
 	if err := prismrecord.ChargeMap(bodyNode(body), dp.frame, dp.xform); err != nil {
 		return err
 	}

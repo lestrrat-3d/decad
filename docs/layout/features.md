@@ -72,11 +72,7 @@ The rules for rows live in `docs/layout.md`.
 
 | Path | Responsibility |
 |---|---|
-| `capblend.go` | Complete-cap-loop chamfer: `capBlendPayload` and build gates. See modify-reach §8.3/§4. |
-| `capblend_geom.go` | `buildCapBand`: band patches and cap edges, also a draft's walls. See modify-reach §8.3. |
-| `capblend_contour.go` | Adapts built corner and edge records to `internal/capband/` contour and closure proofs. |
-| `capblend_moments.go` | Builds the cap-blend body and adapts its mass readings to `internal/capband/`. See modify-reach §8.4. |
+| `capblend.go` | Complete-cap-loop chamfer: selection classification, build gates and the hand-off to `internal/capblend/`. See modify-reach §8.3/§4. |
 | `capblend_survey.go` | Cap-blend undercut and minimum-radius surveys. See modify-reach Table DX (DX7/DX8). |
 | `capblend_normal.go` | Reads band-patch tags for DX7's normal model. |
-| `capblend_departure.go` | Reads band-patch tags and built edges for departure bounds. |
 | `capblend_admit.go` | Adapts cap-band occupied-volume admission. See tessellation-reach §7. |
