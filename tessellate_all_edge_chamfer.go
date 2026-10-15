@@ -15,6 +15,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -112,17 +113,17 @@ func tessellateAllEdgeChamfer(ctx context.Context, body *Body, p allEdgeChamferP
 			return nil, err
 		}
 		for _, tri := range tris {
-			mesh.addTriangle([3]int{meshIndices[tri[0]], meshIndices[tri[1]], meshIndices[tri[2]]}, faceNode(face))
+			topobuild.AddTriangle(&mesh.n, [3]int{meshIndices[tri[0]], meshIndices[tri[1]], meshIndices[tri[2]]}, faceNode(face))
 		}
 	}
 	for i := range circle[0] {
 		j := (i + 1) % len(circle[0])
 		lo0, lo1 := circle[0][i], circle[0][j]
 		hi0, hi1 := circle[1][i], circle[1][j]
-		mesh.addTriangle([3]int{lo0, lo1, hi0}, faceNode(faces[18]))
-		mesh.addTriangle([3]int{lo1, hi1, hi0}, faceNode(faces[18]))
+		topobuild.AddTriangle(&mesh.n, [3]int{lo0, lo1, hi0}, faceNode(faces[18]))
+		topobuild.AddTriangle(&mesh.n, [3]int{lo1, hi1, hi0}, faceNode(faces[18]))
 	}
-	if err := liftTessellationError(tessellation.RequireClosedMesh(mesh.n.Triangles)); err != nil {
+	if err := topobuild.LiftAuditError(tessellation.RequireClosedMesh(mesh.n.Triangles)); err != nil {
 		return nil, err
 	}
 	if err := tessellation.RequireVertexLinks(ctx, len(mesh.n.Vertices), mesh.n.Triangles); err != nil {

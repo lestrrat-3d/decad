@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -210,8 +211,8 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 					if k == lm.count[i]-1 {
 						g1 = lm.sideStart[(i+1)%n]
 					}
-					mesh.addTriangle([3]int{lm.sideLo[g0], lm.sideLo[g1], lm.sideHi[g1]}, faceNode(face))
-					mesh.addTriangle([3]int{lm.sideLo[g0], lm.sideHi[g1], lm.sideHi[g0]}, faceNode(face))
+					topobuild.AddTriangle(&mesh.n, [3]int{lm.sideLo[g0], lm.sideLo[g1], lm.sideHi[g1]}, faceNode(face))
+					topobuild.AddTriangle(&mesh.n, [3]int{lm.sideLo[g0], lm.sideHi[g1], lm.sideHi[g0]}, faceNode(face))
 				}
 			}
 		}
@@ -269,13 +270,13 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 		return nil, err
 	}
 	for f, bound := range faceBounds {
-		mesh.setFaceBound(f, bound)
+		topobuild.SetFaceBound(&mesh.n, f, bound)
 	}
 	mesh.n.AreaSlack = proofbound.AbsSumUpper(mesh.n.AreaSlack,
 		tessellation.StoreAreaAllow(mesh.n.Vertices, mesh.n.Triangles, store))
 	if cbp.LoftSource != nil {
 		for face, bound := range mesh.n.FaceBound {
-			mesh.setFaceBound(face, proofbound.AbsSumUpper(bound, cbp.LoftSource.Proof.FacetDeparture))
+			topobuild.SetFaceBound(&mesh.n, face, proofbound.AbsSumUpper(bound, cbp.LoftSource.Proof.FacetDeparture))
 		}
 		mesh.n.AreaSlack = proofbound.AbsSumUpper(mesh.n.AreaSlack, cbp.LoftSource.Proof.AreaSlack)
 	}
@@ -626,10 +627,12 @@ type capBlendBandWriter struct {
 	bump func(*Face, float64)
 }
 
-func (w capBlendBandWriter) AddTriangle(tri [3]int, face *Face) { w.m.addTriangle(tri, faceNode(face)) }
-func (w capBlendBandWriter) Vertices() []r3.Vec                 { return w.m.n.Vertices }
-func (w capBlendBandWriter) Triangles() [][3]int                { return w.m.n.Triangles }
-func (w capBlendBandWriter) Bump(face *Face, delta float64)     { w.bump(face, delta) }
+func (w capBlendBandWriter) AddTriangle(tri [3]int, face *Face) {
+	topobuild.AddTriangle(&w.m.n, tri, faceNode(face))
+}
+func (w capBlendBandWriter) Vertices() []r3.Vec             { return w.m.n.Vertices }
+func (w capBlendBandWriter) Triangles() [][3]int            { return w.m.n.Triangles }
+func (w capBlendBandWriter) Bump(face *Face, delta float64) { w.bump(face, delta) }
 func (w capBlendBandWriter) AddAreaSlack(patch, facets float64) {
 	w.m.n.AreaSlack = proofbound.AbsSumUpper(w.m.n.AreaSlack, patch, facets)
 }
@@ -702,10 +705,10 @@ func emitCapBlendCap(ctx context.Context, m *Mesh, cbp capBlendPayload, lms []ca
 	}
 	for _, tri := range tris {
 		if start {
-			m.addTriangle([3]int{vtx[tri[0]], vtx[tri[2]], vtx[tri[1]]}, faceNode(face))
+			topobuild.AddTriangle(&m.n, [3]int{vtx[tri[0]], vtx[tri[2]], vtx[tri[1]]}, faceNode(face))
 			continue
 		}
-		m.addTriangle([3]int{vtx[tri[0]], vtx[tri[1]], vtx[tri[2]]}, faceNode(face))
+		topobuild.AddTriangle(&m.n, [3]int{vtx[tri[0]], vtx[tri[1]], vtx[tri[2]]}, faceNode(face))
 	}
 	axial := cbp.Z0Delta
 	if !start {

@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/partialband"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 )
 
 // chordPartialFilletBand adapts the recorded band to its internal sample layout.
@@ -110,7 +111,7 @@ func (bc *brepBandChord) emitPartialFillet(m *Mesh, faceOfRole func(string) (*Fa
 		twist := 0.0
 		tri := func(a, b, c int) {
 			if a != b && b != c && a != c {
-				m.addTriangle([3]int{a, b, c}, faceNode(face))
+				topobuild.AddTriangle(&m.n, [3]int{a, b, c}, faceNode(face))
 			}
 		}
 		for _, cell := range bc.partial.Cells {

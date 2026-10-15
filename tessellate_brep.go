@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 	"github.com/lestrrat-3d/units"
 )
@@ -152,7 +153,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 		}
 		for j := 0; j+1 < len(wm.cols); j++ {
 			brepZipColumns(wm.cols[j], wm.cols[j+1], wm.levels[j], wm.levels[j+1], func(tri [3]int) {
-				mesh.addTriangle(tri, faceNode(face))
+				topobuild.AddTriangle(&mesh.n, tri, faceNode(face))
 			})
 		}
 		faceTrim[faceNode(face)] = wm.sag
@@ -309,7 +310,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 			if !f.outward {
 				bb, c = c, bb
 			}
-			mesh.addTriangle([3]int{a, bb, c}, faceNode(face))
+			topobuild.AddTriangle(&mesh.n, [3]int{a, bb, c}, faceNode(face))
 		}
 		faceTrim[faceNode(face)] = trim
 		faceAxial[faceNode(face)] = proofbound.AbsSumUpper(f.z0Delta, f.delta)
@@ -339,7 +340,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 			mesh.n.Triangles[i][1], mesh.n.Triangles[i][2] = mesh.n.Triangles[i][2], mesh.n.Triangles[i][1]
 		}
 	}
-	if err := liftTessellationError(tessellation.RequireClosedMesh(mesh.n.Triangles)); err != nil {
+	if err := topobuild.LiftAuditError(tessellation.RequireClosedMesh(mesh.n.Triangles)); err != nil {
 		return nil, err
 	}
 	if len(bands) > 0 {

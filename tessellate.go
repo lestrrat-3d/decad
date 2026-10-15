@@ -2,7 +2,6 @@ package decad
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -58,24 +57,6 @@ func (m *Mesh) sourceBound(f *topo.Face) (float64, bool) {
 	return d, ok
 }
 
-// setFaceBound records one source face's proven displacement, keeping the
-// largest a face accumulates over the several walks that can build it (a
-// coalesced side face) and lifting bound to match.
-func (m *Mesh) setFaceBound(f *topo.Face, delta float64) {
-	if m.n.FaceBound == nil {
-		m.n.FaceBound = map[*topo.Face]float64{}
-	}
-	// A zero is a published proof, not an absent one, so the entry is always
-	// written: the record's own contract is that every source face is present,
-	// and a missing key is an invariant failure the consumers refuse on.
-	if prev, ok := m.n.FaceBound[f]; !ok || delta > prev {
-		m.n.FaceBound[f] = delta
-	}
-	if delta > m.n.Bound {
-		m.n.Bound = delta
-	}
-}
-
 // setVertexBounds publishes a per-vertex record (docs/faceted-vertex-bounds-
 // design.md §2.1) and, from it, every source face's bound as the largest
 // corner entry over that face's own triangles, lifting bound to match. The
@@ -84,7 +65,7 @@ func (m *Mesh) setFaceBound(f *topo.Face, delta float64) {
 func (m *Mesh) setVertexBounds(beta []float64) {
 	m.n.VertexBound = append([]float64(nil), beta...)
 	for t, tri := range m.n.Triangles {
-		m.setFaceBound(m.n.Source[t], max(beta[tri[0]], beta[tri[1]], beta[tri[2]]))
+		topobuild.SetFaceBound(&m.n, m.n.Source[t], max(beta[tri[0]], beta[tri[1]], beta[tri[2]]))
 	}
 }
 
@@ -410,7 +391,7 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 			return nil, err
 		}
 		for _, face := range mesh.n.Source {
-			mesh.setFaceBound(face, tp.delta)
+			topobuild.SetFaceBound(&mesh.n, face, tp.delta)
 		}
 		mesh.n.Bound = tp.delta
 		mesh.n.AreaSlack = tp.areaSlack
@@ -794,7 +775,8 @@ func tessellatePrismWithCountFloor(ctx context.Context, b *Body, pp prismPayload
 
 // requireMeshAudit dispatches docs/tessellation-design.md §1's mandatory
 // mesh audit by body kind: a BodySolid keeps §1's closed-mesh audit
-// (tessellation.RequireClosedMesh) verbatim, and a BodySheet runs §1.2's
+// (tessellation.RequireClosedMesh, through topobuild.RequireClosedMesh)
+// verbatim, and a BodySheet runs §1.2's
 // manifold-with-boundary audit (requireSheetMesh) plus its own vertex-link
 // safety net (tessellation.RequireSheetVertexLinks) in its place. Both audits
 // live in internal/tessellation. This is the one place a surface-result build
@@ -805,9 +787,9 @@ func requireMeshAudit(ctx context.Context, sheet bool, b *Body, m *Mesh) error {
 		if err := requireSheetMesh(ctx, b, m); err != nil {
 			return err
 		}
-		return liftTessellationError(tessellation.RequireSheetVertexLinks(ctx, len(m.n.Vertices), m.n.Triangles))
+		return topobuild.LiftAuditError(tessellation.RequireSheetVertexLinks(ctx, len(m.n.Vertices), m.n.Triangles))
 	}
-	return liftTessellationError(tessellation.RequireClosedMesh(m.n.Triangles))
+	return topobuild.RequireClosedMesh(&m.n)
 }
 
 // requireSheetMesh is the root side of docs/tessellation-design.md §1.2's
@@ -836,24 +818,9 @@ func requireSheetMesh(ctx context.Context, b *Body, m *Mesh) error {
 	for f, n := range counts {
 		byNumber[number[faceNode(f)]] = n
 	}
-	return liftTessellationError(tessellation.RequireSheetBoundary(ctx, tessellation.SheetBoundary{
+	return topobuild.LiftAuditError(tessellation.RequireSheetBoundary(ctx, tessellation.SheetBoundary{
 		Triangles: m.n.Triangles, SourceFaces: source, FreeChainCounts: byNumber,
 	}))
-}
-
-// liftTessellationError maps an internal/tessellation refusal onto the public
-// sentinel it names and keeps the audit's own text after it, so the published
-// message is unchanged. Every other error, a cancelled context above all,
-// passes through untouched.
-func liftTessellationError(err error) error {
-	var audit *tessellation.AuditError
-	if !errors.As(err, &audit) {
-		return err
-	}
-	if audit.Sentinel == tessellation.Unsupported {
-		return fmt.Errorf(`%w: %s`, ErrUnsupported, audit.Detail)
-	}
-	return fmt.Errorf(`%w: %s`, ErrDegenerate, audit.Detail)
 }
 
 // composeFaceBounds publishes docs/tessellation-design.md §2's sourceBound for
@@ -866,7 +833,7 @@ func composeFaceBounds(m *Mesh, trim, axial map[*topo.Face]float64, store []floa
 		return err
 	}
 	for f, bound := range bounds {
-		m.setFaceBound(f, bound)
+		topobuild.SetFaceBound(&m.n, f, bound)
 	}
 	return nil
 }
@@ -1084,7 +1051,7 @@ func tessellateCup(ctx context.Context, b *Body, cp cupView, chord float64, veri
 	// walls and floors close by construction; this proves the assembled mesh is
 	// watertight and refuses a cracked one rather than return it, a safety net
 	// against any residual chording pathology (core §11, never a wrong mesh).
-	if err := liftTessellationError(tessellation.RequireClosedMesh(mesh.n.Triangles)); err != nil {
+	if err := topobuild.LiftAuditError(tessellation.RequireClosedMesh(mesh.n.Triangles)); err != nil {
 		return nil, err
 	}
 	// The offset region — the cavity inward, the outer region outward — is
@@ -1220,12 +1187,6 @@ func tessellateFaceted(ctx context.Context, b *Body, fp facetedPayload, chord fl
 		return nil, fmt.Errorf(`%w: a faceted payload's mesh bound is not the largest of its facet bounds`, ErrBooleanFailed)
 	}
 	return m, nil
-}
-
-// addTriangle appends one facet and its source face.
-func (m *Mesh) addTriangle(tri [3]int, src *topo.Face) {
-	m.n.Triangles = append(m.n.Triangles, tri)
-	m.n.Source = append(m.n.Source, src)
 }
 
 func requireLoopClearance(ctx context.Context, pts []planePoint, loopIdx [][]int, loopSag []float64) error {

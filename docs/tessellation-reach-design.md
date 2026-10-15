@@ -192,7 +192,7 @@ chorded cells `computeLoftChordedAllow` already walks (gated on `p.matchedDelta[
 
 `tessellateLoft` (`loft_build.go`) is the adapter: it numbers `b.Faces()` in order, maps each provenance
 role to its face number, and hands `RestateLoft` the payload's triangle set, split and proof record. It
-maps the returned face numbers back to live faces and calls `setFaceBound`. `RestateLoft` does steps 1-4.
+maps the returned face numbers back to live faces and calls `topobuild.SetFaceBound`. `RestateLoft` does steps 1-4.
 
 1. Build the role-to-face map from `b.Faces()` as the prism does. For `k < walls`: face of role
    `side(cell[k][0], cell[k][1], side[k])`. For a solid, `capStartCount` triangles → `capStart`,

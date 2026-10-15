@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 )
 
 // This file is docs/surface-design.md §13.4's chain-fed tessellation
@@ -98,9 +99,9 @@ func tessellateChain(ctx context.Context, b *Body, pp chainPayload) (*Mesh, erro
 			tri1[1], tri1[2] = tri1[2], tri1[1]
 			tri2[1], tri2[2] = tri2[2], tri2[1]
 		}
-		mesh.addTriangle(tri1, faceNode(f))
-		mesh.addTriangle(tri2, faceNode(f))
-		mesh.setFaceBound(faceNode(f), proofbound.UpRound(cornerDelta+pp.SectionDelta))
+		topobuild.AddTriangle(&mesh.n, tri1, faceNode(f))
+		topobuild.AddTriangle(&mesh.n, tri2, faceNode(f))
+		topobuild.SetFaceBound(&mesh.n, faceNode(f), proofbound.UpRound(cornerDelta+pp.SectionDelta))
 	}
 	if err := budget.Err(); err != nil {
 		return nil, err

@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 )
 
 // tessellateTwoSidedDraft meshes each closed half through the ordinary draft
@@ -88,9 +89,9 @@ func tessellateTwoSidedDraft(ctx context.Context, body *Body, dp twoSidedDraftPa
 			if published == nil {
 				return nil, fmt.Errorf(`%w: the two-sided draft has no published face for role %q`, ErrDegenerate, role)
 			}
-			out.addTriangle([3]int{indices[tri[0]], indices[tri[1]], indices[tri[2]]}, faceNode(published))
+			topobuild.AddTriangle(&out.n, [3]int{indices[tri[0]], indices[tri[1]], indices[tri[2]]}, faceNode(published))
 			if bound, ok := mesh.sourceBound(face); ok {
-				out.setFaceBound(faceNode(published), bound)
+				topobuild.SetFaceBound(&out.n, faceNode(published), bound)
 			} else {
 				return nil, fmt.Errorf(`%w: a draft mesh source face has no displacement bound`, ErrDegenerate)
 			}
@@ -104,7 +105,7 @@ func tessellateTwoSidedDraft(ctx context.Context, body *Body, dp twoSidedDraftPa
 		}
 	}
 	out.setVertexBounds(bounds)
-	if err := liftTessellationError(tessellation.RequireClosedMesh(out.n.Triangles)); err != nil {
+	if err := topobuild.LiftAuditError(tessellation.RequireClosedMesh(out.n.Triangles)); err != nil {
 		return nil, fmt.Errorf("two-sided draft middle rim: %w", err)
 	}
 	return out, budget.Err()

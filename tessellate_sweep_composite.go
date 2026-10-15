@@ -15,6 +15,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -156,7 +157,7 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 			if !ok {
 				return nil, fmt.Errorf(`%w: the composite sweep carries no face for role %q`, ErrDegenerate, role)
 			}
-			mesh.addTriangle([3]int{local[triangle[0]], local[triangle[1]], local[triangle[2]]}, faceNode(face))
+			topobuild.AddTriangle(&mesh.n, [3]int{local[triangle[0]], local[triangle[1]], local[triangle[2]]}, faceNode(face))
 			if len(mesh.n.Triangles) > maxCompositeMeshFacets {
 				return nil, fmt.Errorf(`%w: the composite sweep mesh exceeds the fixed facet ceiling`, ErrUnsupported)
 			}
@@ -165,7 +166,7 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 			if !ok {
 				return nil, fmt.Errorf(`%w: sweep path span %d has no source bound for role %q`, ErrUnsupported, i, role)
 			}
-			mesh.setFaceBound(faceNode(face), proofbound.AbsSumUpper(bound, maxMove))
+			topobuild.SetFaceBound(&mesh.n, faceNode(face), proofbound.AbsSumUpper(bound, maxMove))
 		}
 		if verify >= VerifyAll {
 			if !piece.n.SymDiffOK {
@@ -187,7 +188,7 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 		return nil, err
 	}
 	if !sp.surfaceResult {
-		if err := liftTessellationError(tessellation.RequireVertexLinks(ctx, len(mesh.n.Vertices), mesh.n.Triangles)); err != nil {
+		if err := topobuild.LiftAuditError(tessellation.RequireVertexLinks(ctx, len(mesh.n.Vertices), mesh.n.Triangles)); err != nil {
 			return nil, err
 		}
 	}

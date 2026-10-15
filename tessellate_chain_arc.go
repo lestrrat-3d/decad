@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolveproof"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 )
 
 // tessellateChainArcSweep restates one straight, off-axis source chain swept
@@ -139,26 +140,26 @@ func tessellateChainArcSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 		}
 		mesh := bornMesh(&Mesh{n: topo.Mesh{Vertices: verts, CoordBound: math.Max(coord, vertexGap)}})
 		revolvemesh.EmitCellTriangles(samples[0][0], samples[0][1], n, func(tri [3]int) {
-			mesh.addTriangle(tri, faceNode(face))
+			topobuild.AddTriangle(&mesh.n, tri, faceNode(face))
 		})
 		if rp.Reflected() {
 			for i := range mesh.n.Triangles {
 				mesh.n.Triangles[i][1], mesh.n.Triangles[i][2] = mesh.n.Triangles[i][2], mesh.n.Triangles[i][1]
 			}
 		}
-		mesh.setFaceBound(faceNode(face), bound)
+		topobuild.SetFaceBound(&mesh.n, faceNode(face), bound)
 		if err := requireMeshAudit(ctx, true, b, mesh); err != nil {
 			return nil, err
 		}
 		audit, err := revolvemesh.RequireRevolveFacetAreas(budget, mesh.n.Vertices, mesh.n.Triangles,
 			mesh.n.CoordBound)
 		if err != nil {
-			return nil, liftTessellationError(err)
+			return nil, topobuild.LiftAuditError(err)
 		}
 		if verify >= VerifyBoundary {
 			if err := revolvemesh.RevolveContactAudit(budget, audit, mesh.n.Triangles,
 				mesh.n.CoordBound); err != nil {
-				return nil, liftTessellationError(err)
+				return nil, topobuild.LiftAuditError(err)
 			}
 		}
 		if verify >= VerifyAll {

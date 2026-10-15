@@ -161,15 +161,15 @@ func compositeTwistMesh(ctx context.Context, body *Body, cells []loftPayload,
 				}
 				mapped[i] = cell*stationPoints + local
 			}
-			mesh.addTriangle(mapped, faceNode(face))
-			mesh.setFaceBound(faceNode(face), delta)
+			topobuild.AddTriangle(&mesh.n, mapped, faceNode(face))
+			topobuild.SetFaceBound(&mesh.n, faceNode(face), delta)
 			spanOf = append(spanOf, cell)
 		}
 	}
-	if err := requireMeshAudit(ctx, false, body, mesh); err != nil {
+	if err := topobuild.RequireClosedMesh(&mesh.n); err != nil {
 		return nil, proofbound.RatInterval{}, nil, err
 	}
-	if err := liftTessellationError(tessellation.RequireVertexLinks(ctx, len(mesh.n.Vertices), mesh.n.Triangles)); err != nil {
+	if err := topobuild.LiftAuditError(tessellation.RequireVertexLinks(ctx, len(mesh.n.Vertices), mesh.n.Triangles)); err != nil {
 		return nil, proofbound.RatInterval{}, nil, err
 	}
 	budget := proofbound.NewWorkBudget(ctx)

@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/stitchweld"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
@@ -306,7 +307,7 @@ func tessellateStitchCurved(ctx context.Context, b *Body, sp stitchPayload, chor
 		if !ok || proofbound.IsNonFinite(bound) {
 			return refuse("the revolve mesh has no finite source-face bound")
 		}
-		mesh.setFaceBound(faceNode(liveFace), bound)
+		topobuild.SetFaceBound(&mesh.n, faceNode(liveFace), bound)
 	}
 	if b.Kind() == BodySheet {
 		if err := requireMeshAudit(ctx, true, b, mesh); err != nil {
@@ -360,7 +361,7 @@ func tessellateStitch(ctx context.Context, b *Body, sp stitchPayload) (*Mesh, er
 		for _, v := range tri {
 			delta = max(delta, sp.vertBound[v])
 		}
-		mesh.setFaceBound(mesh.n.Source[i], delta)
+		topobuild.SetFaceBound(&mesh.n, mesh.n.Source[i], delta)
 		if delta > 0 {
 			a, bb, c := mesh.n.Vertices[tri[0]], mesh.n.Vertices[tri[1]], mesh.n.Vertices[tri[2]]
 			slack = proofbound.AbsSumUpper(slack, proofbound.PerturbedTriangleAreaAllow(a, bb, c, delta))
