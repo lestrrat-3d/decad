@@ -25,7 +25,14 @@ func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chor
 	// curveBound applies only to Circle3 and Arc3. A Line3 follows its end
 	// vertices; the cap-band miter whose Line3 tag holds a curved locus has
 	// a ruled face with nonzero normalBound, so this gate rejects that case.
-	if !stitchrecord.AllTetrahedronEligible(faceNodes(faces)) {
+	allEligible := true
+	for _, f := range faces {
+		if !stitchrecord.FaceIsTetrahedronEligible(faceNode(f)) {
+			allEligible = false
+			break
+		}
+	}
+	if !allEligible {
 		for _, f := range faces {
 			if _, ok := f.n.Surface.(surfacegeom.Plane); !ok {
 				return nil, fmt.Errorf(`%w: this evaluator has no shared chording for a PatchEdges result's %T face`,
