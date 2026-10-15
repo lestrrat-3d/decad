@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -351,7 +352,7 @@ func buildPrismUnionBossShell(ctx context.Context, source *Body, fp facetedPaylo
 		Verts: mesh.verts, Tris: mesh.tris, Src: mesh.src, Groups: mesh.groups,
 		VertexBound: mesh.beta, MeshBound: bound, VolSymDiff: volumeBound,
 		AreaSlack: proofbound.AbsSumUpper(fp.AreaSlack, rootAreaSlack),
-		DPair:     facetedSourceDiameterUpper(mesh.verts, bound),
+		DPair:     facetedrecord.SourceDiameterUpper(mesh.verts, bound),
 		Xform:     r3.Identity(), ContactAudited: true,
 	}
 	return buildFacetedBodyWithProof(ctx, documentHandle(source.n.Doc), ref, payload, audit, Measurement{}, nil)

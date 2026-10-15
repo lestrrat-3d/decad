@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -112,7 +113,7 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 	// rounding or an embedding adjustment. The centroid's yardstick must
 	// cover both the true body and this rounded held body.
 	next.DPair = max(proofbound.ProductUpper(fp.DPair, s),
-		facetedSourceDiameterUpper(next.Verts, next.MeshBound))
+		facetedrecord.SourceDiameterUpper(next.Verts, next.MeshBound))
 	next.Xform = r3.Identity()
 	next.PointPlaneSourceEligible = false
 	next.AxialSectionJoin = false
@@ -240,7 +241,7 @@ func similarCapCentroid(source VecMeasurement, anchor r3.Vec, factor float64) (V
 		exact[i] = pointPlaneAdd(ratOfPointPlane(a[i]),
 			pointPlaneMul(ratOfPointPlane(factor), pointPlaneSub(ratOfPointPlane(p[i]), ratOfPointPlane(a[i]))))
 	}
-	value, round, err := pointPlaneRound(exact)
+	value, round, err := facetedrecord.PointPlaneRound(exact)
 	if err != nil {
 		return VecMeasurement{}, err
 	}

@@ -335,18 +335,6 @@ func lumpHandles(ns []*topo.Lump) []*Lump {
 	return out
 }
 
-// lumpNodes returns the nodes of ls in order, or nil for an empty ls.
-func lumpNodes(ls []*Lump) []*topo.Lump {
-	if len(ls) == 0 {
-		return nil
-	}
-	out := make([]*topo.Lump, len(ls))
-	for i, l := range ls {
-		out[i] = lumpNode(l)
-	}
-	return out
-}
-
 // bodyHandles returns the handles of ns in order, or nil for an empty ns,
 // as append([]*Body(nil), ...) of the same bodies would.
 func bodyHandles(ns []*topo.Body) []*Body {

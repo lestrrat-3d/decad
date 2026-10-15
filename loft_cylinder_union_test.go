@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -46,7 +47,7 @@ func TestLoftCylinderUnionCentroidDiameter(t *testing.T) {
 	// Placement rounds the held vertices and adds their displacement to the
 	// boundary bound; the centroid's diameter must cover that moved source.
 	require.GreaterOrEqual(t, placedPayload.DPair,
-		facetedSourceDiameterUpper(placedPayload.Verts, placedPayload.MeshBound))
+		facetedrecord.SourceDiameterUpper(placedPayload.Verts, placedPayload.MeshBound))
 	placedCentroid, err := placed.Centroid()
 	require.NoError(t, err)
 	require.Greater(t, placedCentroid.Bound.Base(), 0.1)
@@ -102,7 +103,7 @@ func TestLoftCylinderBoreCentroidDiameter(t *testing.T) {
 	fp, ok := bored.n.Payload.(facetedPayload)
 	require.True(t, ok)
 	require.NotNil(t, fp.LoftCylinderBore)
-	require.GreaterOrEqual(t, fp.DPair, facetedSourceDiameterUpper(fp.Verts, fp.MeshBound))
+	require.GreaterOrEqual(t, fp.DPair, facetedrecord.SourceDiameterUpper(fp.Verts, fp.MeshBound))
 	centroid, err := bored.Centroid()
 	require.NoError(t, err)
 	require.Positive(t, centroid.Bound.Base())

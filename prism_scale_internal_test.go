@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -31,7 +32,7 @@ func TestScaledAtBoundsFacetedCentroidDiameterAfterVertexRounding(t *testing.T) 
 	require.True(t, mesh.VolumeVerified())
 
 	payload := scaled.n.Payload.(facetedPayload)
-	require.GreaterOrEqual(t, payload.DPair, facetedSourceDiameterUpper(payload.Verts, payload.MeshBound))
+	require.GreaterOrEqual(t, payload.DPair, facetedrecord.SourceDiameterUpper(payload.Verts, payload.MeshBound))
 	centroid, err := scaled.Centroid()
 	require.NoError(t, err)
 	want := r3.NewVec(-3e5, 6e5, -9e5+1.3)
@@ -44,10 +45,10 @@ func TestScaledAtBoundsFacetedCentroidDiameterAfterVertexRounding(t *testing.T) 
 	require.NoError(t, err)
 	placedPayload := placed.n.Payload.(facetedPayload)
 	require.GreaterOrEqual(t, placedPayload.DPair,
-		facetedSourceDiameterUpper(placedPayload.Verts, placedPayload.MeshBound))
+		facetedrecord.SourceDiameterUpper(placedPayload.Verts, placedPayload.MeshBound))
 	again, err := ScaledAt(t.Context(), placed, r3.NewVec(-2e6, 1e6, 5e5), units.Scalar(0.8))
 	require.NoError(t, err)
 	againPayload := again.n.Payload.(facetedPayload)
 	require.GreaterOrEqual(t, againPayload.DPair,
-		facetedSourceDiameterUpper(againPayload.Verts, againPayload.MeshBound))
+		facetedrecord.SourceDiameterUpper(againPayload.Verts, againPayload.MeshBound))
 }

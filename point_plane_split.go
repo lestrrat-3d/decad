@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -254,19 +255,6 @@ func pointPlaneMapExact(apex, far r3.Vec, plane *pointPlaneLimit) ([3]*big.Rat, 
 	return q, nil
 }
 
-func pointPlaneRound(q [3]*big.Rat) (r3.Vec, float64, error) {
-	var value [3]float64
-	gap := 0.0
-	for i := range value {
-		value[i], _ = q[i].Float64()
-		if proofbound.IsNonFinite(value[i]) {
-			return r3.Vec{}, 0, fmt.Errorf("%w: a planar split vertex is not representable", ErrUnsupported)
-		}
-		gap = max(gap, proofbound.RatAbsDiff(q[i], value[i]))
-	}
-	return r3.NewVec(value[0], value[1], value[2]), proofbound.Radius3D(gap), nil
-}
-
 // splitPointPlane is a separate Split arm. It handles only authenticated
 // point-loft fans and one exact chain-sheet class; other pairs continue to
 // the shared-generator Split dispatcher.
@@ -384,7 +372,7 @@ func pointPlaneRing(ctx context.Context, base facetedPayload, plane *pointPlaneL
 }
 
 func pointPlaneRoundInto(q [3]*big.Rat, prior float64) (r3.Vec, float64, error) {
-	v, gap, err := pointPlaneRound(q)
+	v, gap, err := facetedrecord.PointPlaneRound(q)
 	return v, max(prior, gap), err
 }
 

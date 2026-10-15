@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -204,7 +205,7 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 	volumeGap := proofbound.AbsSumUpper(lower.VolSymDiff, upper.VolSymDiff, record.BridgeVolume)
 	areaSlack := proofbound.AbsSumUpper(lower.AreaSlack, upper.AreaSlack,
 		proofbound.ProductUpper(2, max(lower.AreaSlack, upper.AreaSlack)))
-	diameter := facetedSourceDiameterUpper(verts, bound)
+	diameter := facetedrecord.SourceDiameterUpper(verts, bound)
 	if bound > 0.1 || proofbound.IsNonFinite(bound) || proofbound.IsNonFinite(volumeGap) ||
 		proofbound.IsNonFinite(areaSlack) || proofbound.IsNonFinite(diameter) {
 		return nil, fmt.Errorf("%w: reflected circular bore has no finite 0.1 mm proof", ErrUnsupported)

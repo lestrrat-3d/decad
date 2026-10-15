@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/coilshell"
 	"github.com/lestrrat-3d/decad/internal/cupwall"
 	"github.com/lestrrat-3d/decad/internal/draftrecord"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/patchchain"
@@ -184,6 +185,11 @@ type (
 	loftCapBandSource = capblend.LoftSource
 	capPatchGeom      = capband.Patch
 )
+
+// facetGroup is one source face's provenance in a faceted payload: the
+// internal/facetedrecord group, which facetedrecord.AssembleBody turns into
+// one face per connected patch (docs/evaluator-design.md §9).
+type facetGroup = facetedrecord.Group
 
 type loopRecord = sectionrecord.LoopRecord
 

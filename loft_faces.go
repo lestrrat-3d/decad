@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
@@ -77,7 +78,7 @@ func buildLoftFaces(ctx context.Context, d *Document, selected []loftFaceSection
 			return nil, err
 		}
 	}
-	if volFloor(heldRat, mesh.VolSymDiff) <= 0 {
+	if facetedrecord.VolFloor(heldRat, mesh.VolSymDiff) <= 0 {
 		return nil, fmt.Errorf("%w: face-fed loft occupied-volume proof exceeds the held volume", ErrUnsupported)
 	}
 	if len(selected[0].slice.Base.Src) < len(source.SourceStation) {

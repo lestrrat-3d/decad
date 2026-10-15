@@ -102,7 +102,6 @@
 0	0.04	TestPairStationsStationsAdvanceMonotonicallyAlongTheChain
 0	0.02	TestPatternCopiesUnionStackArm
 0	0.33	TestPatternedGroupDisplacement
-0	0.00	TestPlacedCapCentroidByExactRotation
 0	1.54	TestPlacedFacetedBodyStaysEmbedded
 0	0.00	TestPrismBooleanGateG3RequiresCoDirectionalSharedAxisPlanes
 0	0.01	TestPrismCutTrimmedTargetChargesItsWalkedEndpoint
@@ -237,7 +236,6 @@
 1	0.03	TestParityFacetBoxStatesTheProjection
 1	0.01	TestParseCLAUDEMDAcceptsTheShapesTheFormatMakesSafe
 1	0.07	TestPatternedSixPinsGroup
-1	0.00	TestPlacedCapCentroidReadsPlacementAsExactMap
 1	0.72	TestPointDeviationMatchesRationalForm
 1	0.97	TestPointLoftAuditsDecideCapsAsFamilies
 1	0.00	TestPrismBooleanGateG4RefusesNonAnalyticSegment
@@ -612,7 +610,6 @@
 4	0.00	TestDyadicDirectedRoundingMatchesTheRationalOnes
 4	0.00	TestEvalLoftCollinearSplitKeepsTwoFacesPerCell
 4	0.01	TestEvalLoftTrimmedLineSegPublishesStationDisplacement
-4	0.00	TestExactGroupPlacedMapsCentroidAndDropsTags
 4	0.00	TestFacetFaceIndicesMapsConsistentFaces
 4	4.12	TestFacetedCopyLineageDirectTransfer
 4	0.44	TestFacetedRestatementPublishesItsPayloadsOwnProofRecord
@@ -870,7 +867,6 @@
 6	0.00	TestDyadicSplitOpsCountsEveryOperationOneBisectionRuns
 6	0.00	TestEvalLoftJunctionConvexity
 6	0.00	TestExactRotationAtTinyAngleHasHiddenTranslation
-6	0.00	TestFacetedAreaBoundCompositionRoundsOutward
 6	0.01	TestFacetedAxisSupportProvesRealUnionFloorFace
 6	0.04	TestFacetedAxisSupportRejectsMalformedPlacementProvenance
 6	5.88	TestFacetedCopyTransferSeparation

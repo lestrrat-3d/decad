@@ -5,7 +5,7 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/massmoment"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -30,7 +30,7 @@ func pointFarCapCentroid(profile profileRecord, plane planeRecord) (VecMeasureme
 			pointPlaneAdd(pointPlaneMul(ratOfPointPlane(local.Value.X), ratOfPointPlane(u[i])),
 				pointPlaneMul(ratOfPointPlane(local.Value.Y), ratOfPointPlane(v[i]))))
 	}
-	value, round, err := pointPlaneRound(exact)
+	value, round, err := facetedrecord.PointPlaneRound(exact)
 	if err != nil {
 		return VecMeasurement{}, false
 	}
@@ -135,7 +135,7 @@ func pointPlaneCapCentroid(ctx context.Context, base facetedPayload,
 	if floor <= 0 || proofbound.IsNonFinite(radius) {
 		return VecMeasurement{}, false, nil
 	}
-	value, round, err := pointPlaneRound(center)
+	value, round, err := facetedrecord.PointPlaneRound(center)
 	if err != nil {
 		return VecMeasurement{}, false, nil //nolint:nilerr // failed rounding withholds the optional centroid reading
 	}
@@ -176,44 +176,4 @@ func pointCapDistanceUpper(a, b [3]*big.Rat) float64 {
 		}
 	}
 	return proofbound.DvLenUpper(proofbound.HeldDelta(r3.NewVec(up[0], up[1], up[2]), r3.Vec{}))
-}
-
-// placedCapCentroid applies the recorded affine motion to the true cap
-// centroid. Rational evaluation rounds the reported point once; the placement
-// matrix's proved stretch maps the source radius to the new one.
-func placedCapCentroid(source VecMeasurement, motion r3.Transform) (VecMeasurement, error) {
-	linear, err := massmoment.PlacementRotation(motion)
-	if err != nil {
-		return VecMeasurement{}, err
-	}
-	tr := motion.Translation()
-	t := [3]*big.Rat{ratOfPointPlane(tr.X), ratOfPointPlane(tr.Y), ratOfPointPlane(tr.Z)}
-	return placedCapCentroidBy(source, linear, t)
-}
-
-// placedCapCentroidBy applies the exact affine map p -> linear*p + t to the
-// true cap centroid. Rational evaluation rounds the reported point once; the
-// map's proved stretch, zero for an exactly orthogonal linear part, carries the
-// source radius to the new one.
-func placedCapCentroidBy(source VecMeasurement, linear [3][3]*big.Rat, t [3]*big.Rat) (VecMeasurement, error) {
-	charge, err := massmoment.MapChargeOf(linear)
-	if err != nil {
-		return VecMeasurement{}, err
-	}
-	p := [3]float64{source.Value.X, source.Value.Y, source.Value.Z}
-	var exact [3]*big.Rat
-	for i := range exact {
-		exact[i] = new(big.Rat).Set(t[i])
-		for j := range p {
-			exact[i].Add(exact[i], pointPlaneMul(linear[i][j], ratOfPointPlane(p[j])))
-		}
-	}
-	value, round, err := pointPlaneRound(exact)
-	if err != nil {
-		return VecMeasurement{}, err
-	}
-	bound := proofbound.AbsSumUpper(proofbound.ProductUpper(source.Bound.Base(),
-		proofbound.AbsSumUpper(1, charge.Stretch)), round)
-	return VecMeasurement{Value: value, Exactness: exactnessOf(bound),
-		Bound: units.Millimeters(bound)}, nil
 }

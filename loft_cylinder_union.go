@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
@@ -801,7 +802,7 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 	fp := facetedPayload{Verts: mesh.Verts, Tris: mesh.Tris, Src: mesh.Src,
 		Groups: mesh.Groups, VertexBound: vertexBound, ContactAudited: true,
 		MeshBound: bound, VolSymDiff: volumeGap, AreaSlack: areaSlack,
-		DPair: facetedSourceDiameterUpper(mesh.Verts, bound),
+		DPair: facetedrecord.SourceDiameterUpper(mesh.Verts, bound),
 		Xform: r3.Identity(), LoftCylinderJoin: &loftCylinderJoinRecord{
 			Blank: bodyNode(blank), Teeth: toothBodies, ProofTeeth: proofBodies,
 			AxialBridge: axialBridge, CapOutlines: outlines,

@@ -6,6 +6,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 	"github.com/lestrrat-3d/decad/internal/motionoption"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
@@ -735,7 +736,7 @@ func TestMotionTranslationPoseChargesFacetedReplacement(t *testing.T) {
 		require.NoError(t, err)
 		composed, err := fp.Xform.Then(pose.result.Pose)
 		require.NoError(t, err)
-		delta, err := facetedPlacementDelta(fp.Xform, composed)
+		delta, err := facetedrecord.PlacementDelta(fp.Xform, composed)
 		require.NoError(t, err)
 		eta := motionPlacementFloat(placed.eta)
 		for _, vertex := range fp.Verts {

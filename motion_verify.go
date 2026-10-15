@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/linkagebound"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
@@ -994,7 +995,7 @@ func (r *motionRun) place(mp *motionPose, i int, placed []*motionPlaced) (*motio
 	var delta r3.Transform
 	_, faceted := mv.body.n.Payload.(facetedPayload)
 	if faceted {
-		delta, err = facetedPlacementDelta(placement, composed)
+		delta, err = facetedrecord.PlacementDelta(placement, composed)
 		if err != nil {
 			return nil, err
 		}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -284,7 +285,7 @@ func proveLoftFaceBounds(ctx context.Context, sections []loftFaceSection,
 	mesh.MeshBound = meshBound
 	mesh.VolSymDiff = volumeGap
 	mesh.AreaSlack = areaSlack
-	mesh.DPair = facetedSourceDiameterUpper(mesh.Verts, meshBound)
+	mesh.DPair = facetedrecord.SourceDiameterUpper(mesh.Verts, meshBound)
 	mesh.ContactAudited = true
 	return mesh, nil
 }
