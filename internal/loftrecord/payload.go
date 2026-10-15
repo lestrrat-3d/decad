@@ -10,13 +10,21 @@ import (
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
-	"github.com/lestrrat-3d/decad/internal/twistsweep"
 	"github.com/lestrrat-3d/r3"
 )
 
 // This file is the loft payload docs/loft-design.md PR 1a states: the record
 // Build evaluates over topology nodes and a placement re-evaluates. It
 // implements topo.Payload (docs/evaluator-design.md §8).
+
+// TwistAreaCellClaims comes from the same authenticated Loft pairing that
+// emitted a private Sweep cell's two wall triangles. The circular arm has a
+// uniform source parameter on each chord cell; the line arm is affine.
+type TwistAreaCellClaims struct {
+	ArcLength float64 // upper bound on integral |source derivative| over s in [0,1]
+	Energy    float64 // upper bound on integral |source derivative - exact chord|^2
+	Matched   float64 // upper bound on source curve - exact chord at the same s
+}
 
 // SourceIdentity names the producer of the original Loft. It is shared only
 // by that Loft and its own placed copies.
@@ -189,7 +197,7 @@ type Payload struct {
 	Segment [][]int
 	// twistAreaCells retains only the certified per-cell readings needed by a
 	// private twisted Sweep comparison Loft. Ordinary Loft payloads omit them.
-	TwistAreaCells       [][]twistsweep.TwistAreaCellClaims
+	TwistAreaCells       [][]TwistAreaCellClaims
 	RetainTwistAreaCells bool
 
 	// Proof is the mesh proof record docs/tessellation-design.md §2 states for

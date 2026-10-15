@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -208,15 +209,6 @@ func CompositeTwistStations(theta proofbound.RatInterval, heldTheta float64,
 	return stations, joinAngle, nil
 }
 
-// TwistAreaCellClaims comes from the same authenticated Loft pairing that
-// emitted a private Sweep cell's two wall triangles. The circular arm has a
-// uniform source parameter on each chord cell; the line arm is affine.
-type TwistAreaCellClaims struct {
-	ArcLength float64 // upper bound on integral |source derivative| over s in [0,1]
-	Energy    float64 // upper bound on integral |source derivative - exact chord|^2
-	Matched   float64 // upper bound on source curve - exact chord at the same s
-}
-
 // TwistWallCellAreaL1 bounds the INTEGRAL of the absolute area-density gap
 // between a true rotating Line/Arc wall cell and its two held Loft triangles.
 // Consequently it bounds the gap on every measurable subset selected by a
@@ -243,7 +235,7 @@ type TwistAreaCellClaims struct {
 // most height+a*R, while |H_s| is at most the larger held section chord.
 // All scalars below are rounded outward; invalid caller claims return +Inf.
 func TwistWallCellAreaL1(vLo, vHi, wLo, wHi r3.Vec,
-	claim TwistAreaCellClaims, vertexDelta, radius, angle, height float64) float64 {
+	claim loftrecord.TwistAreaCellClaims, vertexDelta, radius, angle, height float64) float64 {
 	for _, x := range []float64{claim.ArcLength, claim.Matched, vertexDelta, radius, angle, height} {
 		if proofbound.IsNonFinite(x) || x < 0 {
 			return math.Inf(1)
