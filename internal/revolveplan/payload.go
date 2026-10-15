@@ -503,3 +503,11 @@ func (rp ChainPayload) Placed(ctx context.Context, env topo.Env, composed r3.Tra
 	rp.Xform = composed
 	return BuildChain(ctx, env, rp, freeform.NewFreeformWork())
 }
+
+// SurveyClass names the payload class a staged survey diagnostic reports
+// (internal/reportvocab): the root type name this payload had before it moved.
+func (Payload) SurveyClass() string { return "revolvePayload" }
+
+// SurveyClass names the payload class a staged survey diagnostic reports
+// (internal/reportvocab): the root type name this payload had before it moved.
+func (ChainPayload) SurveyClass() string { return "chainRevolvePayload" }

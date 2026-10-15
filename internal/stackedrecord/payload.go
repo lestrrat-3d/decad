@@ -115,3 +115,7 @@ func (sp Payload) Record() Record {
 func VecL1(v r3.Vec) float64 {
 	return proofbound.AbsSumUpper(v.X, v.Y, v.Z)
 }
+
+// SurveyClass names the payload class a staged survey diagnostic reports
+// (internal/reportvocab): the root type name this payload had before it moved.
+func (Payload) SurveyClass() string { return "stackedPrismPayload" }

@@ -79,3 +79,7 @@ type Payload struct {
 	Walks         *momentinput.ProfileWalks
 	SurfaceResult bool
 }
+
+// SurveyClass names the payload class a staged survey diagnostic reports
+// (internal/reportvocab): the root type name this payload had before it moved.
+func (Payload) SurveyClass() string { return "prismPayload" }

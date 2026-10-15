@@ -118,3 +118,11 @@ func (pp BodyPayload) Transform() r3.Transform { return pp.Xform }
 func (pp BodyPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
 	return BuildBody(ctx, env, pp.Faces, pp.Bounds, pp.Chains, composed)
 }
+
+// SurveyClass names the payload class a staged survey diagnostic reports
+// (internal/reportvocab): the root type name this payload had before it moved.
+func (Payload) SurveyClass() string { return "patchPayload" }
+
+// SurveyClass names the payload class a staged survey diagnostic reports
+// (internal/reportvocab): the root type name this payload had before it moved.
+func (BodyPayload) SurveyClass() string { return "bodyPatchPayload" }
