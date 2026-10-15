@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/lestrrat-3d/decad/internal/cupwall"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -381,7 +382,7 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		return tessellateFaceted(ctx, b, fp, chord)
 	}
 	if cp, ok := b.n.Payload.(cupPayload); ok {
-		return tessellateCup(ctx, b, cp.view(), chord, verify)
+		return tessellateCup(ctx, b, cp.View(), chord, verify)
 	}
 	if sp, ok := b.n.Payload.(stackedPrismPayload); ok {
 		return tessellateStacked(ctx, b, sp, chord, verify)
@@ -921,18 +922,18 @@ func tessellateCup(ctx context.Context, b *Body, cp cupView, chord float64, veri
 	// One free-form counter for the whole chorded record — the cup's outer region
 	// and its cavity are the two halves of one section (see tessellation.ChordLoop).
 	work := freeform.NewFreeformWork()
-	oLoops := append([]loopRecord{cp.outer.Outer}, cp.outer.Holes...)
-	cLoops := append([]loopRecord{cp.cavity.Outer}, cp.cavity.Holes...)
+	oLoops := append([]loopRecord{cp.Outer.Outer}, cp.Outer.Holes...)
+	cLoops := append([]loopRecord{cp.Cavity.Outer}, cp.Cavity.Holes...)
 	if len(oLoops) != len(cLoops) {
 		return nil, fmt.Errorf(`%w: the cup's outer and cavity regions have different loop counts`, ErrDegenerate)
 	}
 
-	openIsMax := cp.zOpen > cp.zOuter
-	oLo, oHi := math.Min(cp.zOuter, cp.zOpen), math.Max(cp.zOuter, cp.zOpen)
-	cLo, cHi := math.Min(cp.zCav, cp.zOpen), math.Max(cp.zCav, cp.zOpen)
+	openIsMax := cp.ZOpen > cp.ZOuter
+	oLo, oHi := math.Min(cp.ZOuter, cp.ZOpen), math.Max(cp.ZOuter, cp.ZOpen)
+	cLo, cHi := math.Min(cp.ZCav, cp.ZOpen), math.Max(cp.ZCav, cp.ZOpen)
 
 	mesh := bornMesh(new(Mesh))
-	base := cp.basePrism()
+	base := cp.BasePrism()
 	var verts []r3.Vec
 	// vertexStore is docs/tessellation-reach-design.md §3's deltaStore, parallel
 	// to verts: the sample's plane-local enclosure gap carried through the frame
@@ -1002,11 +1003,11 @@ func tessellateCup(ctx context.Context, b *Body, cp cupView, chord float64, veri
 	}
 	// Each region's own lo/hi level displacement, in the order chordRing takes
 	// them: the open end carries zOpenDelta, each floor its own level's.
-	oLoDelta, oHiDelta := cp.zOuterDelta, cp.zOpenDelta
-	cLoDelta, cHiDelta := cp.zCavDelta, cp.zOpenDelta
+	oLoDelta, oHiDelta := cp.ZOuterDelta, cp.ZOpenDelta
+	cLoDelta, cHiDelta := cp.ZCavDelta, cp.ZOpenDelta
 	if !openIsMax {
-		oLoDelta, oHiDelta = cp.zOpenDelta, cp.zOuterDelta
-		cLoDelta, cHiDelta = cp.zOpenDelta, cp.zCavDelta
+		oLoDelta, oHiDelta = cp.ZOpenDelta, cp.ZOuterDelta
+		cLoDelta, cHiDelta = cp.ZOpenDelta, cp.ZCavDelta
 	}
 
 	// Outer region O: every loop in its natural sense (outer counter-clockwise,
@@ -1061,7 +1062,7 @@ func tessellateCup(ctx context.Context, b *Body, cp cupView, chord float64, veri
 	rimFace := func(i int) (*topo.Face, error) { return faceOfRole(fmt.Sprintf("rim(%d)", i)) }
 	assembled, err := tessellation.AssembleCup(ctx, oTopology, cTopology, openIsMax, capStart, shellCap,
 		rimFace, tessellation.RequireLoopClearance, triangulation.Triangulate, faceTrim, faceAxial,
-		cp.zOuterDelta, cp.zCavDelta, cp.zOpenDelta)
+		cp.ZOuterDelta, cp.ZCavDelta, cp.ZOpenDelta)
 	if err != nil {
 		return nil, err
 	}
@@ -1091,7 +1092,7 @@ func tessellateCup(ctx context.Context, b *Body, cp cupView, chord float64, veri
 	// terms: its walls, its own planar cap and every rim. The receiver's own
 	// region carries none (docs/tessellation-design.md §6).
 	displacedRings, displacedCap, displacedHeight := cRings, shellCap, cHi-cLo
-	if cp.sense == Outward {
+	if cp.Sense == cupwall.Outward {
 		displacedRings, displacedCap, displacedHeight = oRings, capStart, oHi-oLo
 	}
 	var displacedWalks int
@@ -1100,7 +1101,7 @@ func tessellateCup(ctx context.Context, b *Body, cp cupView, chord float64, veri
 		displacedWalks += r.walks
 		displacedPerim = proofbound.AbsSumUpper(displacedPerim, r.perim)
 	}
-	if cp.offsetDelta > 0 {
+	if cp.OffsetDelta > 0 {
 		displacedFaces := map[*topo.Face]struct{}{displacedCap: {}}
 		for _, r := range displacedRings {
 			for _, f := range r.faces {
@@ -1115,7 +1116,7 @@ func tessellateCup(ctx context.Context, b *Body, cp cupView, chord float64, veri
 			displacedFaces[rim] = struct{}{}
 		}
 		for f := range displacedFaces {
-			faceTrim[f] = proofbound.AbsSumUpper(faceTrim[f], cp.offsetDelta)
+			faceTrim[f] = proofbound.AbsSumUpper(faceTrim[f], cp.OffsetDelta)
 		}
 	}
 	if err := composeFaceBounds(mesh, faceTrim, faceAxial, vertexStore, 0); err != nil {
@@ -1133,9 +1134,9 @@ func tessellateCup(ctx context.Context, b *Body, cp cupView, chord float64, veri
 	// its cap and once in the rims it bounds, and its walls' length by the
 	// displacement length over their height — evalPrism's composition for a
 	// section displacement, one region at a time.
-	displacedArea := proofbound.SectionDisplacementArea(cp.offsetDelta, displacedWalks, displacedPerim)
-	if cp.offsetDelta > 0 {
-		wallMove := proofbound.ProductUpper(proofbound.SectionDisplacementLength(cp.offsetDelta, displacedWalks), displacedHeight)
+	displacedArea := proofbound.SectionDisplacementArea(cp.OffsetDelta, displacedWalks, displacedPerim)
+	if cp.OffsetDelta > 0 {
+		wallMove := proofbound.ProductUpper(proofbound.SectionDisplacementLength(cp.OffsetDelta, displacedWalks), displacedHeight)
 		mesh.n.AreaSlack = proofbound.AbsSumUpper(mesh.n.AreaSlack, displacedArea, displacedArea, wallMove)
 	}
 
@@ -1156,9 +1157,9 @@ func tessellateCup(ctx context.Context, b *Body, cp cupView, chord float64, veri
 		proofbound.ProductUpper(oHi-oLo, oSegmentArea),
 		proofbound.ProductUpper(cHi-cLo, cSegmentArea),
 		proofbound.ProductUpper(displacedHeight, displacedArea),
-		proofbound.ProductUpper(cp.zOuterDelta, areaUpper[capStart]),
-		proofbound.ProductUpper(cp.zCavDelta, areaUpper[shellCap]),
-		proofbound.ProductUpper(cp.zOpenDelta, rimArea),
+		proofbound.ProductUpper(cp.ZOuterDelta, areaUpper[capStart]),
+		proofbound.ProductUpper(cp.ZCavDelta, areaUpper[shellCap]),
+		proofbound.ProductUpper(cp.ZOpenDelta, rimArea),
 		proofbound.SweptVolumeAllow(storeMax, proofbound.PerturbedAreaUpper(mesh.n.Vertices, mesh.n.Triangles, storeMax)),
 	}
 	if err := publishSymDiff(mesh, terms); err != nil {

@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/cupwall"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -32,14 +33,14 @@ func TestCupMassChargesDisplacement(t *testing.T) {
 	require.NoError(t, err)
 	const delta = 1.0 / 1024
 	cp := cupView{
-		outer:  rectangleRecord(-8, -4, 8, 4),
-		cavity: rectangleRecord(-6, -2, 6, 2),
-		frame:  frame,
-		zOpen:  10, zOuter: 0, zCav: 2,
-		zOpenDelta: delta, zOuterDelta: delta, zCavDelta: delta,
-		thickness: 2, thicknessDelta: delta, offsetDelta: delta,
-		sense: Inward,
-		xform: r3.Identity(),
+		Outer:  rectangleRecord(-8, -4, 8, 4),
+		Cavity: rectangleRecord(-6, -2, 6, 2),
+		Frame:  frame,
+		ZOpen:  10, ZOuter: 0, ZCav: 2,
+		ZOpenDelta: delta, ZOuterDelta: delta, ZCavDelta: delta,
+		Thickness: 2, ThicknessDelta: delta, OffsetDelta: delta,
+		Sense: cupwall.Inward,
+		Xform: r3.Identity(),
 	}
 	rho := 1.0 / 1024
 	outer, cavity := massCupRecords(cp)

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/cupwall"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -66,13 +67,13 @@ func TestCupPayloadForTracksEachSourceEndDisplacement(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cp := cupPayloadFor(pp, profileRecord{}, tt.sense, thickness, thicknessDelta, 0, tt.removedEnd)
-			require.Equal(t, tt.openDelta, cp.openScalar().Bound)
-			require.Equal(t, tt.outerDelta, cp.outerScalar().Bound)
-			require.Equal(t, tt.cavDelta, cp.cavityScalar().Bound)
+			cp := cupwall.ViewFor(pp, profileRecord{}, tt.sense, thickness, thicknessDelta, 0, tt.removedEnd)
+			require.Equal(t, tt.openDelta, cp.OpenScalar().Bound)
+			require.Equal(t, tt.outerDelta, cp.OuterScalar().Bound)
+			require.Equal(t, tt.cavDelta, cp.CavityScalar().Bound)
 
-			requireCupPrismLevelBounds(t, cp.outerPrism(), cp.outerScalar(), cp.openScalar())
-			requireCupPrismLevelBounds(t, cp.cavityPrism(), cp.cavityScalar(), cp.openScalar())
+			requireCupPrismLevelBounds(t, cp.OuterPrism(), cp.OuterScalar(), cp.OpenScalar())
+			requireCupPrismLevelBounds(t, cp.CavityPrism(), cp.CavityScalar(), cp.OpenScalar())
 		})
 	}
 }
@@ -130,16 +131,16 @@ func displacedCup(t *testing.T, sense ShellSense) cupView {
 	frame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
 	cp := cupView{
-		outer:  rectangleRecord(-8, -4, 8, 4),
-		cavity: rectangleRecord(-6, -2, 6, 2),
-		frame:  frame,
-		zOpen:  10, zOuter: 0, zCav: 2,
-		thickness: 2, offsetDelta: cupOffsetDelta,
-		sense: sense,
-		xform: r3.Identity(),
+		Outer:  rectangleRecord(-8, -4, 8, 4),
+		Cavity: rectangleRecord(-6, -2, 6, 2),
+		Frame:  frame,
+		ZOpen:  10, ZOuter: 0, ZCav: 2,
+		Thickness: 2, OffsetDelta: cupOffsetDelta,
+		Sense: cupwall.Sense(sense),
+		Xform: r3.Identity(),
 	}
 	if sense == Outward {
-		cp.zOuter, cp.zCav = -2, 0
+		cp.ZOuter, cp.ZCav = -2, 0
 	}
 	return cp
 }
@@ -244,9 +245,9 @@ func TestEvalCupChargesOffsetDisplacement(t *testing.T) {
 			require.NoError(t, err)
 			// The offset region's own wall faces: cavity walls inward, outer walls
 			// outward, each over that region's height.
-			wallPrefix, wallHeight := "shellSide(", cp.zOpen-cp.zCav
+			wallPrefix, wallHeight := "shellSide(", cp.ZOpen-cp.ZCav
 			if sense == Outward {
-				wallPrefix, wallHeight = "side(", cp.zOpen-cp.zOuter
+				wallPrefix, wallHeight = "side(", cp.ZOpen-cp.ZOuter
 			}
 			type offsetWall struct {
 				area   Measurement
@@ -272,8 +273,8 @@ func TestEvalCupChargesOffsetDisplacement(t *testing.T) {
 				} else {
 					cavity = walls
 				}
-				o := rectPrismOf(outer, cp.zOuter, cp.zOpen)
-				c := rectPrismOf(cavity, cp.zCav, cp.zOpen)
+				o := rectPrismOf(outer, cp.ZOuter, cp.ZOpen)
+				c := rectPrismOf(cavity, cp.ZCav, cp.ZOpen)
 				v := new(big.Rat).Sub(o.volume, c.volume)
 				requireRatCovered(t, volume, v)
 				requireVecCovered(t, centroid, [3]*big.Rat{
@@ -298,8 +299,8 @@ func TestEvalCupChargesOffsetDisplacement(t *testing.T) {
 						new(big.Rat).Sub(w[1], w[0]), new(big.Rat).Sub(w[3], w[2])))
 				}
 				total := new(big.Rat).Mul(big.NewRat(2, 1), rectArea(outer))
-				total.Add(total, new(big.Rat).Mul(perimeter(outer), new(big.Rat).SetFloat64(cp.zOpen-cp.zOuter)))
-				total.Add(total, new(big.Rat).Mul(perimeter(cavity), new(big.Rat).SetFloat64(cp.zOpen-cp.zCav)))
+				total.Add(total, new(big.Rat).Mul(perimeter(outer), new(big.Rat).SetFloat64(cp.ZOpen-cp.ZOuter)))
+				total.Add(total, new(big.Rat).Mul(perimeter(cavity), new(big.Rat).SetFloat64(cp.ZOpen-cp.ZCav)))
 				requireRatCovered(t, area, total)
 				// The box and the extent read the outer region.
 				requireRatCovered(t, Measurement{Value: units.Millimeters(bounds.Max.X), Bound: bounds.Bound}, outer[1])
@@ -352,8 +353,8 @@ func TestDisplacedCupMinRadius(t *testing.T) {
 	cavity, err := offsetProfile(budget, rectangleRecord(-6, -2, 6, 2), -1, 1)
 	require.NoError(t, err)
 	cp := displacedCup(t, Inward)
-	cp.outer, cp.cavity = outer, cavity
-	out := radiussurvey.Cup(cp.outer, cp.cavity, cp.offsetDelta)
+	cp.Outer, cp.Cavity = outer, cavity
+	out := radiussurvey.Cup(cp.Outer, cp.Cavity, cp.OffsetDelta)
 	require.True(t, out.OK)
 	require.NotNil(t, out.Reading)
 	reading := Measurement{Value: units.Millimeters(*out.Reading), Bound: units.Millimeters(out.Bound)}
@@ -426,17 +427,17 @@ func TestDisplacedCupMesh(t *testing.T) {
 // displaced cavity gives the centroid and only the moment term covers it.
 func TestDisplacedCupCentroidMoment(t *testing.T) {
 	cp := displacedCup(t, Inward)
-	cp.outer = rectangleRecord(-500, -500, 500, 500)
-	cp.cavity = rectangleRecord(-300, -300, 300, 300)
-	cp.zOuter, cp.zCav, cp.zOpen = -6, -4, 4
+	cp.Outer = rectangleRecord(-500, -500, 500, 500)
+	cp.Cavity = rectangleRecord(-300, -300, 300, 300)
+	cp.ZOuter, cp.ZCav, cp.ZOpen = -6, -4, 4
 	body, err := evalDisplacedCup(cp)
 	require.NoError(t, err)
 	centroid, err := body.Centroid()
 	require.NoError(t, err)
 	outer := [4]*big.Rat{big.NewRat(-500, 1), big.NewRat(500, 1), big.NewRat(-500, 1), big.NewRat(500, 1)}
-	o := rectPrismOf(outer, cp.zOuter, cp.zOpen)
+	o := rectPrismOf(outer, cp.ZOuter, cp.ZOpen)
 	cupFamily([4]float64{-300, 300, -300, 300}, func(walls [4]*big.Rat) {
-		c := rectPrismOf(walls, cp.zCav, cp.zOpen)
+		c := rectPrismOf(walls, cp.ZCav, cp.ZOpen)
 		v := new(big.Rat).Sub(o.volume, c.volume)
 		requireVecCovered(t, centroid, [3]*big.Rat{
 			new(big.Rat).Quo(new(big.Rat).Sub(o.mu, c.mu), v),
@@ -454,9 +455,9 @@ func TestDisplacedCupCentroidMoment(t *testing.T) {
 // boundary is walked as a hole in the solid and each of the void's own holes
 // as a solid post — the wall slab's band records state exactly that.
 func evalCup(d *Document, ref producerID, cv cupView) (*Body, error) {
-	cp, err := cv.payload(context.Background())
+	cp, err := cv.Payload(context.Background())
 	if err != nil {
 		return nil, err
 	}
-	return evalCupContext(context.Background(), d, ref, cp)
+	return bodyResult(cupwall.Build(context.Background(), envOf(documentNode(d), ref), cp))
 }

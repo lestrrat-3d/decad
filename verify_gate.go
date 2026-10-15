@@ -478,9 +478,9 @@ func draftCapPrisms(dp draftPayload) ([]prismPayload, float64) {
 func gateWitnessPrism(payload topo.Payload) (prismPayload, float64, bool) {
 	switch pl := payload.(type) {
 	case cupPayload:
-		cup := pl.view()
-		witness := cup.outerPrism()
-		witness.Profile = cup.outer
+		cup := pl.View()
+		witness := cup.OuterPrism()
+		witness.Profile = cup.Outer
 		displacement := proofbound.AbsSumUpper(witness.SectionDelta, witness.AxialDelta())
 		witness.SectionDelta = 0
 		return witness, displacement, true

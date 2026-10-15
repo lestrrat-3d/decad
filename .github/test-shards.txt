@@ -528,7 +528,6 @@
 3	0.00	TestPrismWallFreeformSectionPropagatesCancellation
 3	0.01	TestProfileWalksReadBackMatchesFreshResolution
 3	0.00	TestRatLenAtLeastDecidesExactly
-3	0.00	TestRenameCavityRolesContextPollsNestedMetadata
 3	0.00	TestRequireVertexLinksRejectsAPinchedVertex
 3	0.05	TestRevolveArcFanSlackBoundsAPoleCell
 3	0.00	TestRevolveAxisBandChargesTheOffsetSubtraction

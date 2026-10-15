@@ -187,7 +187,7 @@ Requirements:
 - Reuse `recordLoops`, `walkElem`, `clearance.Region2`, `clearance.CFace`, `clearance.CEdge`, and `addTopology`.
 - Build no temporary prism caps. They are not cup faces.
 - Keep one rim face per paired loop. Hole/post loop polarity follows
-  `evalCupContext`'s existing topology.
+  `cupwall.Build`'s existing topology.
 - Add `cupPayload` to `payloadExtent` through `cp.ExtentAlong(g)`'s outer-prism
   reading, taken as an exact interval only where it publishes a zero
   displacement.
@@ -725,7 +725,7 @@ lands, overlapping pairs remain `Suspect` by verification's pair-partition rule.
 | `internal/proofbound/bounds.go` | interval expansion, distance slop, direction-bound composition |
 | `clearance_geom.go` | `addCupFaces`, `addFacetedFaces`, payload delta |
 | `clearance.go` | bounded extent/contact gates + true interval expansion |
-| `shell.go` / `shell_cup.go` | expose/recheck exact morphology certificate internally |
+| `shell.go` / `internal/cupwall/payload.go` | expose/recheck exact morphology certificate internally |
 | `internal/cupwall/wall.go` | cup wall theorem and morphology recheck |
 | `survey.go` | cup wall adapter; dispatch faceted surveys |
 | `tessellate.go` | create/carry per-facet source certificates + `sourceBound` internally |

@@ -2,6 +2,7 @@ package decad
 
 import (
 	"github.com/lestrrat-3d/decad/internal/chainrecord"
+	"github.com/lestrrat-3d/decad/internal/cupwall"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -60,6 +61,18 @@ type stackedPrismPayload = stackedrecord.Payload
 // topology nodes and which implements topo.Payload
 // (docs/surface-design.md §13.4, docs/evaluator-design.md §8).
 type chainPayload = chainrecord.Payload
+
+// cupPayload is the evaluator's own record of a cup: the internal/cupwall
+// payload, which cupwall.Build evaluates over topology nodes and which
+// implements topo.Payload (docs/modify-reach-design.md §9.1,
+// docs/evaluator-design.md §8). cupView is the two-prism reading it re-derives.
+type (
+	cupPayload = cupwall.Payload
+	cupView    = cupwall.View
+)
+
+// roleShellCap names a cup's pocket floor.
+const roleShellCap = cupwall.RoleShellCap
 
 type loopRecord = sectionrecord.LoopRecord
 

@@ -22,7 +22,7 @@ import (
 // exact predicate, which is what §7.2 allows to stay context-free. The remaining
 // comparisons cover the fixed-size fields that determine the represented point
 // set. They may deliberately ignore derived certificate metadata, such as
-// cupPayload.thickness and cupPayload.sense, because it does not change set
+// cupPayload.Thickness and cupPayload.Sense, because it does not change set
 // identity.
 func analyticBodiesEqual(budget *proofbound.WorkBudget, a, b *Body) (bool, error) {
 	switch pa := a.n.Payload.(type) {
@@ -45,7 +45,7 @@ func analyticBodiesEqual(budget *proofbound.WorkBudget, a, b *Body) (bool, error
 		if !ok {
 			return false, nil
 		}
-		return cupViewsEqual(budget, pa.view(), other.view())
+		return cupViewsEqual(budget, pa.View(), other.View())
 	case revolvePayload:
 		pb, ok := b.n.Payload.(revolvePayload)
 		if !ok || pa.frame != pb.frame || pa.ax != pb.ax || pa.phi0 != pb.phi0 ||
@@ -66,21 +66,21 @@ func analyticBodiesEqual(budget *proofbound.WorkBudget, a, b *Body) (bool, error
 // cupViewsEqual is analyticBodiesEqual's cup arm over two cup views: one
 // frame, one placement, the same three levels and the same two regions.
 func cupViewsEqual(budget *proofbound.WorkBudget, pa, pb cupView) (bool, error) {
-	if pa.frame != pb.frame || pa.zOpen != pb.zOpen || pa.zOuter != pb.zOuter ||
-		pa.zCav != pb.zCav || pa.xform != pb.xform {
+	if pa.Frame != pb.Frame || pa.ZOpen != pb.ZOpen || pa.ZOuter != pb.ZOuter ||
+		pa.ZCav != pb.ZCav || pa.Xform != pb.Xform {
 		return false, nil
 	}
-	if pa.offsetDelta != 0 || pb.offsetDelta != 0 {
+	if pa.OffsetDelta != 0 || pb.OffsetDelta != 0 {
 		// The prism arm's rule for a displaced section: an offset region
 		// recorded only within offsetDelta of the one it denotes makes two
 		// equal records say nothing about the two sets. Undecided.
 		return false, nil
 	}
-	same, err := momentinput.ExactProfileEqual(budget, pa.outer, pb.outer)
+	same, err := momentinput.ExactProfileEqual(budget, pa.Outer, pb.Outer)
 	if err != nil || !same {
 		return false, err
 	}
-	return momentinput.ExactProfileEqual(budget, pa.cavity, pb.cavity)
+	return momentinput.ExactProfileEqual(budget, pa.Cavity, pb.Cavity)
 }
 
 // measuredInterference returns the pair's bounded overlap volume. Strict

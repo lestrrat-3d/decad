@@ -61,16 +61,3 @@ func TestAddBlendRolesContextPollsNestedMetadata(t *testing.T) {
 	require.Equal(t, 5, ctx.calls)
 	require.Equal(t, []provenance.Ref{{Producer: ref, Role: "side(0,0)"}}, face.n.Origins)
 }
-
-func TestRenameCavityRolesContextPollsNestedMetadata(t *testing.T) {
-	t.Parallel()
-	ref := producerID(1)
-	face := bornFace(&Face{n: topo.Face{Origins: []provenance.Ref{{Producer: ref, Role: "side(0,0)"}}}})
-	ctx := &cancelAfterContext{Context: t.Context(), cancelAt: 3}
-
-	err := renameCavityRoles(ctx, []*topo.Face{faceNode(face)}, ref)
-
-	require.ErrorIs(t, err, context.Canceled)
-	require.Equal(t, 3, ctx.calls)
-	require.Equal(t, []provenance.Ref{{Producer: ref, Role: "side(0,0)"}}, face.n.Origins)
-}

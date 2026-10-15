@@ -251,10 +251,10 @@ var cupWallOperations = cupwall.Operations{
 
 func cupWallInput(cp cupView) cupwall.Input {
 	return cupwall.Input{
-		Outer: cp.outer, Cavity: cp.cavity,
-		ZOpen: cp.zOpen, ZOuter: cp.zOuter, ZCav: cp.zCav,
-		Thickness: cp.thickness, ThicknessDelta: cp.thicknessDelta,
-		Inward: cp.sense == Inward, Outward: cp.sense == Outward,
+		Outer: cp.Outer, Cavity: cp.Cavity,
+		ZOpen: cp.ZOpen, ZOuter: cp.ZOuter, ZCav: cp.ZCav,
+		Thickness: cp.Thickness, ThicknessDelta: cp.ThicknessDelta,
+		Inward: cp.Sense == cupwall.Inward, Outward: cp.Sense == cupwall.Outward,
 	}
 }
 
@@ -271,7 +271,7 @@ func cupUndercuts(b *Body, cp cupView, pull r3.Vec) undercutOutcome {
 	if _, ok := pull.Normalize(); !ok {
 		return undercutOutcome{}
 	}
-	base := cp.basePrism()
+	base := cp.BasePrism()
 	m, okM := survey2d.NewPlacedFrameMap(base.Frame, base.Xform)
 	if !okM {
 		return undercutOutcome{}
@@ -297,8 +297,8 @@ func cupUndercuts(b *Body, cp cupView, pull r3.Vec) undercutOutcome {
 		}
 		return true
 	}
-	oLoops := append([]loopRecord{cp.outer.Outer}, cp.outer.Holes...)
-	cLoops := append([]loopRecord{cp.cavity.Outer}, cp.cavity.Holes...)
+	oLoops := append([]loopRecord{cp.Outer.Outer}, cp.Outer.Holes...)
+	cLoops := append([]loopRecord{cp.Cavity.Outer}, cp.Cavity.Holes...)
 	for i, loop := range oLoops {
 		if !survey(loop, fmt.Sprintf("side(%d,%%d)", i)) {
 			return undercutOutcome{}
@@ -318,7 +318,7 @@ func cupUndercuts(b *Body, cp cupView, pull r3.Vec) undercutOutcome {
 	// floor: the kept cap then faces −N and the pocket floor and every rim
 	// face +N. All rims share the open-end plane, so each has the same normal.
 	sOpen := -1.0
-	if cp.zOpen > cp.zOuter {
+	if cp.ZOpen > cp.ZOuter {
 		sOpen = 1
 	}
 	caps := []struct {
@@ -420,7 +420,7 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 			out, err = wallOutcome{reading: reading.Reading, bound: reading.Bound,
 				ok: reading.OK, reason: reading.Reason}, readErr
 		case cupPayload:
-			wall, wallErr := cupwall.Evaluate(budget, cupWallInput(pl.view()), cfg.AllowRad, cupWallOperations)
+			wall, wallErr := cupwall.Evaluate(budget, cupWallInput(pl.View()), cfg.AllowRad, cupWallOperations)
 			out, err = wallOutcome{reading: wall.Reading, bound: wall.Bound, ok: wall.OK}, wallErr
 		case capBlendPayload:
 			// DX9 (docs/modify-reach-design.md Table DX): a cap blend is not
@@ -459,7 +459,7 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 		case revolvePayload:
 			out = revolveUndercuts(b, pl, *cfg.Pull)
 		case cupPayload:
-			out = cupUndercuts(b, pl.view(), *cfg.Pull)
+			out = cupUndercuts(b, pl.View(), *cfg.Pull)
 		case capBlendPayload:
 			out = capBlendUndercuts(b, pl, *cfg.Pull)
 		case draftPayload:
@@ -494,8 +494,8 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 			reading := radiussurvey.Revolve(pl.profile, pl.ax, pl.sectionDelta)
 			out, ok = radiusOutcome{reading: reading.Reading, bound: reading.Bound, ok: reading.OK}, reading.OK
 		case cupPayload:
-			view := pl.view()
-			reading := radiussurvey.Cup(view.outer, view.cavity, view.offsetDelta)
+			view := pl.View()
+			reading := radiussurvey.Cup(view.Outer, view.Cavity, view.OffsetDelta)
 			out, ok = radiusOutcome{reading: reading.Reading, bound: reading.Bound, ok: reading.OK}, reading.OK
 		case capBlendPayload:
 			out, ok = capBlendMinRadius(b, pl)

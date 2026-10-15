@@ -30,7 +30,6 @@ The rules for rows live in `docs/layout.md`.
 | `shell_twist.go` | Admits and commits the inward top-cap Shell of a straight twisted rounded Sweep. See shell-twisted-sweep design. |
 | `shell_twist_mesh.go` | Builds the five-face faceted cup from the proven twisted-shell mesh and audits it. See shell-twisted-sweep design. |
 | `shell_offset.go` | Binds `internal/offset2d/`'s section offset and its displacement to `shellTol`. See modify §7–§9. |
-| `shell_cup.go` | `cupPayload`, its stacked record and view. See modify-reach §9.1. |
 | `shell_revolve.go` | `Shell` of a revolve. See modify-reach §9.3. |
 | `shell_opening.go` | Prism and straight Sweep side openings: classify removed faces and dispatch the audited region build. See shell-opening §3–§5. |
 | `shell_opening_brep.go` | Records a prism side opening from the section or stack engine. See shell-opening §4. |

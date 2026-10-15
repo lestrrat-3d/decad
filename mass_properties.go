@@ -115,7 +115,7 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 		return analyticOrMeshMassProperties(ctx, b, density, result, err)
 	}
 	if cup, ok := b.n.Payload.(cupPayload); ok {
-		outer, cavity := massCupRecords(cup.view())
+		outer, cavity := massCupRecords(cup.View())
 		result, err := massPropertiesFromReadings(massmoment.CupProperties(ctx, outer, cavity, b.n.Centroid, density))
 		return analyticOrMeshMassProperties(ctx, b, density, result, err)
 	}
@@ -147,10 +147,10 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 
 // massCupRecords reads the two prism records whose difference forms a cup.
 func massCupRecords(cp cupView) (massmoment.PrismRecord, massmoment.PrismRecord) {
-	outer := cp.outerPrism()
-	outer.Profile = cp.outer
-	cavity := cp.cavityPrism()
-	cavity.Profile = cp.cavity
+	outer := cp.OuterPrism()
+	outer.Profile = cp.Outer
+	cavity := cp.CavityPrism()
+	cavity.Profile = cp.Cavity
 	return outer.MassRecord(), cavity.MassRecord()
 }
 

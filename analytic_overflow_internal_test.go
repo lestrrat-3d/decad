@@ -79,12 +79,12 @@ func TestEvalRevolveRejectsOverflowedMeasurements(t *testing.T) {
 func TestEvalCupRejectsOverflowedMeasurements(t *testing.T) {
 	t.Parallel()
 	body, err := evalCup(New(), producerID(0), cupView{
-		outer:  overflowSquare(10),
-		cavity: overflowSquare(1),
-		frame:  overflowFrame(t),
-		zOpen:  1e307,
-		zCav:   1,
-		xform:  r3.Identity(),
+		Outer:  overflowSquare(10),
+		Cavity: overflowSquare(1),
+		Frame:  overflowFrame(t),
+		ZOpen:  1e307,
+		ZCav:   1,
+		Xform:  r3.Identity(),
 	})
 	require.ErrorIs(t, err, ErrNotFinite)
 	require.Nil(t, body)
@@ -94,13 +94,13 @@ func TestEvalCupIgnoresUnusedOverflowedSecondMoments(t *testing.T) {
 	t.Parallel()
 	const outerSide = 1e100
 	body, err := evalCup(New(), producerID(0), cupView{
-		outer:  overflowSquare(outerSide),
-		cavity: overflowSquare(outerSide / 2),
-		frame:  overflowFrame(t),
-		zOpen:  2,
-		zOuter: 0,
-		zCav:   1,
-		xform:  r3.Identity(),
+		Outer:  overflowSquare(outerSide),
+		Cavity: overflowSquare(outerSide / 2),
+		Frame:  overflowFrame(t),
+		ZOpen:  2,
+		ZOuter: 0,
+		ZCav:   1,
+		Xform:  r3.Identity(),
 	})
 	require.NoError(t, err)
 	require.NotNil(t, body)

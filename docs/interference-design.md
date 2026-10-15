@@ -246,7 +246,7 @@ the same grounds: `A = B` proves `A ∩ B = A`.
 The shipped certificate is analytic and exact. It compares the payload fields
 that determine the represented point set with exact structural equality, never
 samples, bounding boxes, tolerances, or topology counts. Derived metadata that
-does not change that set — `cupPayload.thickness`/`sense` and
+does not change that set — `cupPayload.Thickness`/`Sense` and
 `prismPayload.BlendSegs`/`BlendKind` — is deliberately excluded. Equal
 represented-set fields in `prismPayload`, `cupPayload`, or `revolvePayload`
 prove identical represented sets.
