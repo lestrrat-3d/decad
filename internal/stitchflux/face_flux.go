@@ -497,10 +497,10 @@ func ConeFaceFluxAndMoment(f FaceInput, cone ConeInput, anchor r3.Vec, sign floa
 // the loop-free construction here makes it true by construction, needing no
 // such argument.) So the (Center−anchor)·S_F cross term vanishes for EVERY
 // anchor, not merely the sphere's own center, and flux_F is exactly K_F
-// regardless of which anchor stitchCurvedMass passes in — the property that
-// makes this arm safe to reach with the r3.Vec{} anchor stitch.go
-// substitutes when the shared vertex table is empty (stitch.go's own doc
-// comment at evalStitchContext, written against exactly this fixture before
+// regardless of which anchor stitchrecord.CurvedMass passes in — the property that
+// makes this arm safe to reach with the r3.Vec{} anchor internal/stitchrecord/build.go
+// substitutes when the shared vertex table is empty (internal/stitchrecord/build.go's own doc
+// comment at stitchrecord.Build, written against exactly this fixture before
 // this arm landed).
 //
 // THE FIRST MOMENT. Because the face IS a complete closed boundary all on
@@ -512,7 +512,7 @@ func ConeFaceFluxAndMoment(f FaceInput, cone ConeInput, anchor r3.Vec, sign floa
 // region Ω of volume V centered at Ĉ: ∫_Ω(x_i−a_i)dV = V·(Ĉ_i−a_i), applies
 // directly with Ω the ball, Ĉ = Center, and V this face's own signed
 // sub-volume flux_F/3 (flux_F is exactly 3·(signed volume) by construction,
-// the same normalization stitchCurvedMass's own vol := fluxSum/3 uses for
+// the same normalization stitchrecord.CurvedMass's own vol := fluxSum/3 uses for
 // the total). So M_i = (flux_F/3)·(Center_i−anchor_i), checked directly
 // against the divergence-theorem surface integral
 // ∫_S((p_i−a_i)²/2)n_i dA by hand for a sphere: expanding

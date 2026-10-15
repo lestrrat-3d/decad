@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stitchflux"
+	"github.com/lestrrat-3d/decad/internal/stitchrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 
@@ -32,7 +33,7 @@ import (
 // edges, each shared edge walked FORWARD by both its adjacent faces. That
 // is the combinatorial shape of a Möbius strip's simplicial boundary: no
 // assignment of a per-face flip can make every shared edge see one forward
-// and one backward use, so deriveStitchOrientation must refuse rather than
+// and one backward use, so stitchrecord.DeriveOrientation must refuse rather than
 // publish an inconsistent choice.
 func TestStitchOrientationRefusesMobiusAssembly(t *testing.T) {
 	t.Parallel()
@@ -62,7 +63,7 @@ func TestStitchOrientationRefusesMobiusAssembly(t *testing.T) {
 	e23.n.Faces = []*topo.Face{faceNode(f2), faceNode(f3)}
 	e31.n.Faces = []*topo.Face{faceNode(f3), faceNode(f1)}
 
-	err := deriveStitchOrientation([]*Face{f1, f2, f3})
+	err := stitchrecord.DeriveOrientation(faceNodes([]*Face{f1, f2, f3}))
 	require.ErrorIs(t, err, ErrDegenerate)
 }
 
@@ -80,7 +81,7 @@ func TestStitchClosureRefusesNonManifoldEdge(t *testing.T) {
 	f3 := bornFace(&Face{n: topo.Face{Loops: []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: edgeNode(e), Forward: true}}}}))}}})
 	e.n.Faces = []*topo.Face{faceNode(f1), faceNode(f2), faceNode(f3)}
 
-	err := checkStitchClosure([]*Face{f1, f2, f3})
+	err := stitchrecord.CheckClosure(faceNodes([]*Face{f1, f2, f3}))
 	require.ErrorIs(t, err, ErrDegenerate)
 }
 
@@ -133,12 +134,12 @@ func stitchTestSquareFace(corner r3.Vec) *Face {
 // twice over the same corner, so every one of the four vertex pairs is
 // bit-identical and zero-bound) weld along all four edges into a
 // combinatorially valid, consistently orientable closed shell — exactly the
-// shape deriveStitchOrientation and checkStitchClosure both admit — whose
+// shape stitchrecord.DeriveOrientation and stitchrecord.CheckClosure both admit — whose
 // two faces nonetheless occupy the SAME plane region. The reused crossing
 // audit is what catches this: every pairwise contact it decides for these
 // two faces' triangles is either a full vertex-set match or a coplanar
 // overlap, neither of which is the pair's own expected contact, so
-// evalStitchContext must surface the audit's ErrDegenerate unchanged rather
+// stitchrecord.Build must surface the audit's ErrDegenerate unchanged rather
 // than publish a zero-volume "solid". decad's public seam has no way to
 // author two independent operand sheets at the identical location this
 // directly, so this is a hand-built fixture fed straight to the evaluator.
@@ -148,22 +149,22 @@ func TestStitchAuditRefusesOverlappingAssembly(t *testing.T) {
 	a := stitchTestSquareFace(origin)
 	b := stitchTestSquareFace(origin)
 
-	plan := buildStitchWeldPlan([]*Face{a, b})
+	plan := stitchrecord.BuildPlan(faceNodes([]*Face{a, b}))
 	d := New()
-	_, err := evalStitchContext(context.Background(), d, d.nextProducerID(), []*Face{a, b}, plan, r3.Identity())
+	_, err := stitchrecord.Build(context.Background(), envOf(documentNode(d), d.nextProducerID()), faceNodes([]*Face{a, b}), plan, r3.Identity())
 	require.ErrorIs(t, err, ErrDegenerate)
 	require.Empty(t, d.Bodies())
 }
 
 // TestStitchRuleSRefusesMultipleSourceBodies is docs/surface-design.md's
 // T35: Rule S's single-source-body restriction, driven directly at
-// stitchRuleSAdmits on two faces whose own bodies each individually carry a
+// stitchrecord.RuleSAdmits on two faces whose own bodies each individually carry a
 // construction proof (prismPayload{surfaceResult: true}, the same shape
 // prismrecord.Payload.ProvesSimple admits) — proving the refusal
 // is specifically about the COUNT of source bodies, not about either
 // payload's own standing. decad's public seam has no way to reach this
 // directly: docs/surface-design.md §6.2's Table J admits a free Line3 edge
-// alone (J5 is undecidable for every other curve variant, stitch_weld.go's
+// alone (J5 is undecidable for every other curve variant, internal/stitchrecord/plan.go's
 // own doc comment), so two curved rims from different features never weld
 // into a closed set at all.
 func TestStitchRuleSRefusesMultipleSourceBodies(t *testing.T) {
@@ -173,10 +174,10 @@ func TestStitchRuleSRefusesMultipleSourceBodies(t *testing.T) {
 	faceA := bornFace(&Face{n: topo.Face{Body: bodyNode(bodyA)}})
 	faceB := bornFace(&Face{n: topo.Face{Body: bodyNode(bodyB)}})
 
-	require.False(t, stitchRuleSAdmits(context.Background(), []*Face{faceA, faceB}))
+	require.False(t, stitchrecord.RuleSAdmits(context.Background(), faceNodes([]*Face{faceA, faceB})))
 	// The single-body case is what Rule S DOES admit, confirming the
 	// refusal above is about the count rather than the payload shape.
-	require.True(t, stitchRuleSAdmits(context.Background(), []*Face{faceA, faceA}))
+	require.True(t, stitchrecord.RuleSAdmits(context.Background(), faceNodes([]*Face{faceA, faceA})))
 }
 
 // stitchTestFanAroundVertex builds a closed 3-face fan around a shared
@@ -230,15 +231,15 @@ func stitchTestFanAroundVertex(v *Vertex, outer [3]*Vertex) [3]*Face {
 // docs/surface-design.md §6.4 records — two lobes of a revolved boundary
 // touching at an isolated point — collapsed to its bare combinatorial
 // shape, the same way TestStitchOrientationRefusesMobiusAssembly pins
-// deriveStitchOrientation from a hand-built face set. Unlike that Möbius
+// stitchrecord.DeriveOrientation from a hand-built face set. Unlike that Möbius
 // shape, this one IS reachable through the public seam: T76
 // (TestStitchRefusesTwoBoxesPinchedAtOneVertex, apitest/stitch_test.go) drives the
 // identical combinatorial pinch — two disjoint boxes sharing one corner
 // vertex with no shared edge — through Stitch itself, on the all-planar
 // arm rather than a curved one. This fixture stays useful anyway: it
 // isolates the gate from the all-planar arm's other legs (Table J's
-// welding, the crossing audit, checkStitchClosure) by driving
-// auditVertexLinksForStitchFaces directly, so a regression in one of those
+// welding, the crossing audit, stitchrecord.CheckClosure) by driving
+// stitchrecord.AuditVertexLinks directly, so a regression in one of those
 // other legs can never be mistaken for a fix or a break here.
 func TestStitchVertexLinkAuditRefusesPinchedVertex(t *testing.T) {
 	t.Parallel()
@@ -247,26 +248,26 @@ func TestStitchVertexLinkAuditRefusesPinchedVertex(t *testing.T) {
 	fanB := stitchTestFanAroundVertex(v, [3]*Vertex{bornVertex(&Vertex{}), bornVertex(&Vertex{}), bornVertex(&Vertex{})})
 
 	faces := append(append([]*Face{}, fanA[:]...), fanB[:]...)
-	err := auditVertexLinksForStitchFaces(context.Background(), faces)
+	err := stitchrecord.AuditVertexLinks(context.Background(), faceNodes(faces))
 	require.ErrorIs(t, err, ErrDegenerate)
 }
 
 // TestStitchFluxRefusesNURBSSurface is docs/surface-design.md's T37: a
-// NURBSSurface face driven directly at stitchFaceFluxAndMoment, on the
+// NURBSSurface face driven directly at stitchrecord.FaceFluxAndMoment, on the
 // sealed switch's own default arm. decad's public seam has no way to close
 // a free-form-walled sheet at all — PatchEdges refuses any chain carrying a
 // NURBSCurve edge outright — so no fixture reaches this through Stitch.
 func TestStitchFluxRefusesNURBSSurface(t *testing.T) {
 	t.Parallel()
 	f := bornFace(&Face{n: topo.Face{Surface: surfacegeom.NURBSSurface{}}})
-	_, _, _, _, err := stitchFaceFluxAndMoment(f, r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
+	_, _, _, _, err := stitchrecord.FaceFluxAndMoment(faceNode(f), r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
 	require.ErrorIs(t, err, ErrUnsupported)
 }
 
 // TestStitchFluxRefusesNonzeroNormalBound is docs/surface-design.md's T38:
 // a face carrying a nonzero normalBound — a cap-blend band patch's own
 // tell, since its published Plane/Cone tag only approximates the ruled
-// surface actually built — driven directly at stitchFaceFluxAndMoment.
+// surface actually built — driven directly at stitchrecord.FaceFluxAndMoment.
 // decad's public seam has no way to reach this either: Unstitch-then-Stitch
 // of a filleted or chamfered solid never re-closes (§6.5's own "no further"
 // limit for any non-all-planar body — confirmed directly, a box filleted on
@@ -276,19 +277,19 @@ func TestStitchFluxRefusesNURBSSurface(t *testing.T) {
 func TestStitchFluxRefusesNonzeroNormalBound(t *testing.T) {
 	t.Parallel()
 	f := bornFace(&Face{n: topo.Face{NormalBound: 1e-9, Surface: surfacegeom.Plane{Frame: mustPlaneFrame()}}})
-	_, _, _, _, err := stitchFaceFluxAndMoment(f, r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
+	_, _, _, _, err := stitchrecord.FaceFluxAndMoment(faceNode(f), r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
 	require.ErrorIs(t, err, ErrUnsupported)
 }
 
 // TestStitchCurvedMassCorrectsInwardOrientation is the orientation sign's
-// own shown-to-fail leg, driven directly at stitchCurvedMass: neither of
+// own shown-to-fail leg, driven directly at stitchrecord.CurvedMass: neither of
 // this increment's own public fixtures ever reaches the actual global
 // sign-flip branch, because a revolve build's own outward-normal convention
 // already agrees with the flux formula's own — disabling that branch
 // entirely leaves TestStitchAnnularRevolveSheetClosesToATube and its
 // siblings green, which is exactly the "an untested leg" trap CLAUDE.md
 // warns against. This test reverses every face of a real annular tube sheet
-// BEFORE handing it to stitchCurvedMass, so the flux sum is genuinely
+// BEFORE handing it to stitchrecord.CurvedMass, so the flux sum is genuinely
 // negative on the first pass and the correction must fire for the published
 // volume to come out positive and right at all.
 func TestStitchCurvedMassCorrectsInwardOrientation(t *testing.T) {
@@ -308,10 +309,10 @@ func TestStitchCurvedMassCorrectsInwardOrientation(t *testing.T) {
 
 	faces := sheet.Faces()
 	for _, f := range faces {
-		reverseFaceOrientation(f)
+		stitchrecord.ReverseFaceOrientation(faceNode(f))
 	}
 
-	vol, cen, err := stitchCurvedMass(context.Background(), faces, vertexHandle(coedgeStart(faces[0].n.Loops[0].CoEdges[0])).Position().Value, 0)
+	vol, cen, err := stitchrecord.CurvedMass(context.Background(), faceNodes(faces), vertexHandle(coedgeStart(faces[0].n.Loops[0].CoEdges[0])).Position().Value, 0)
 	require.NoError(t, err)
 	require.Greater(t, vol.Value.Base(), 0.0, "the global sign correction must recover a positive volume from an inward-reversed face set")
 	require.InDelta(t, 2000*3.141592653589793, vol.Value.Base(), 1e-6)
@@ -320,7 +321,7 @@ func TestStitchCurvedMassCorrectsInwardOrientation(t *testing.T) {
 
 // TestStitchCurvedMassPlacementAllowanceWidensBounds is the placement
 // allowance's own shown-to-fail leg, isolated from every other source of
-// widening by varying ONLY stitchCurvedMass's own delta parameter over the
+// widening by varying ONLY stitchrecord.CurvedMass's own delta parameter over the
 // SAME faces and anchor: TestStitchCurvedVolumeBoundWidensWhenPlaced (the
 // public test) places the body through a real rigid motion, whose OWN
 // re-lifted coordinates already carry a little extra rounding of their own
@@ -344,7 +345,7 @@ func TestStitchCurvedMassPlacementAllowanceWidensBounds(t *testing.T) {
 	faces := sheet.Faces()
 	anchor := vertexHandle(coedgeStart(faces[0].n.Loops[0].CoEdges[0])).Position().Value
 
-	unplacedVol, unplacedCen, err := stitchCurvedMass(context.Background(), faces, anchor, 0)
+	unplacedVol, unplacedCen, err := stitchrecord.CurvedMass(context.Background(), faceNodes(faces), anchor, 0)
 	require.NoError(t, err)
 	// delta = 1 makes proofbound.SweptVolumeAllow/proofbound.SweptMomentAllow's own contribution
 	// (proportional to the body's ~2513 mm^2 of face area) many orders of
@@ -353,7 +354,7 @@ func TestStitchCurvedMassPlacementAllowanceWidensBounds(t *testing.T) {
 	// well above that ulp noise floor and well below the ~2513 mm^3 this
 	// leg is expected to add, so the assertion is about the LEG, not about
 	// proofbound.AbsSumUpper's own unconditional upward nudge.
-	placedVol, placedCen, err := stitchCurvedMass(context.Background(), faces, anchor, 1)
+	placedVol, placedCen, err := stitchrecord.CurvedMass(context.Background(), faceNodes(faces), anchor, 1)
 	require.NoError(t, err)
 
 	const margin = 1.0
@@ -400,7 +401,7 @@ func stitchTestCylinderFaceWithRimBound(r, height, area, areaBound, rimBound flo
 // face's own already-proven area/areaBound rather than integrating
 // anything fresh (this file's own doc comment), so the flux's own bound
 // must scale with f.n.AreaBound exactly through proofbound.BoundedMul's proofbound.ProductUpper
-// term — driven directly at stitchFaceFluxAndMoment so neither stitchflux.PiScalar's
+// term — driven directly at stitchrecord.FaceFluxAndMoment so neither stitchflux.PiScalar's
 // own tiny representation error nor any other term can mask the leg,
 // unlike the whole-pipeline reading where every term is the same tiny
 // ulp-scale magnitude and a deleted leg is easy to lose in the noise.
@@ -408,13 +409,13 @@ func TestStitchCylinderFluxReusesAreaBound(t *testing.T) {
 	t.Parallel()
 	const r, height = 10.0, 10.0
 	area := 2 * math.Pi * r * height
-	f := stitchTestCylinderFace(r, height, area, 1.0)                    // areaBound=1, far above ulp noise
-	flux, _, _, _, err := stitchFaceFluxAndMoment(f, r3.NewVec(0, 0, 0)) //nolint:dogsled // only flux and the error matter here.
+	f := stitchTestCylinderFace(r, height, area, 1.0)                                     // areaBound=1, far above ulp noise
+	flux, _, _, _, err := stitchrecord.FaceFluxAndMoment(faceNode(f), r3.NewVec(0, 0, 0)) //nolint:dogsled // only flux and the error matter here.
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, flux.Bound, r*1.0, "the flux bound must scale with f.n.AreaBound through the Radius multiply")
 
 	zero := stitchTestCylinderFace(r, height, area, 0)
-	fluxZero, _, _, _, err := stitchFaceFluxAndMoment(zero, r3.NewVec(0, 0, 0)) //nolint:dogsled // only flux and the error matter here.
+	fluxZero, _, _, _, err := stitchrecord.FaceFluxAndMoment(faceNode(zero), r3.NewVec(0, 0, 0)) //nolint:dogsled // only flux and the error matter here.
 	require.NoError(t, err)
 	require.Less(t, fluxZero.Bound, 1e-6, "with areaBound zero, the flux bound has no other source of that magnitude")
 }
@@ -423,7 +424,7 @@ func TestStitchCylinderFluxReusesAreaBound(t *testing.T) {
 // shown-to-fail leg for the Cylinder arm: Circle3/Cylinder carry Radius as a
 // bare units.Value with no bound field, and a revolve about an axis that is
 // not coordinate-aligned through the origin hands back a Radius that is
-// itself a rounded re-expression of a recorded point (stitch_flux.go's own
+// itself a rounded re-expression of a recorded point (internal/stitchrecord/flux.go's own
 // top comment, revolve_axis.go's axisFrame.walk). Driven directly with a
 // synthetic rim lengthBound far above ulp noise, so the leg is provably
 // exercised rather than left to a fixture where the true bound happens to
@@ -442,13 +443,13 @@ func TestStitchCylinderMomentChargesRadiusBound(t *testing.T) {
 	// the moment regardless of the radius bound).
 	anchor := r3.NewVec(3, 0, 0)
 	f := stitchTestCylinderFaceWithRimBound(r, height, area, 0, 1.0) // rim lengthBound=1
-	_, mx, _, mz, err := stitchFaceFluxAndMoment(f, anchor)
+	_, mx, _, mz, err := stitchrecord.FaceFluxAndMoment(faceNode(f), anchor)
 	require.NoError(t, err)
 	require.Greater(t, mx.Bound, 0.1, "the Cylinder moment must scale with the rim's own lengthBound through boundedCircleRadius")
 	require.Zero(t, mz.Bound, "the axis component's own (1 - Axis_z^2) factor is exactly zero, so it carries no radius term to widen")
 
 	zero := stitchTestCylinderFaceWithRimBound(r, height, area, 0, 0)
-	_, mxZero, _, _, err := stitchFaceFluxAndMoment(zero, anchor) //nolint:dogsled // only mx and the error matter here.
+	_, mxZero, _, _, err := stitchrecord.FaceFluxAndMoment(faceNode(zero), anchor) //nolint:dogsled // only mx and the error matter here.
 	require.NoError(t, err)
 	require.Less(t, mxZero.Bound, 1e-6, "with the rim's own lengthBound zero, the moment bound has no other source of that magnitude")
 }
@@ -489,7 +490,7 @@ func TestStitchPlaneMomentChargesRadiusBound(t *testing.T) {
 	// that exercises the leg at all for a flat disk.
 	anchor := r3.NewVec(0, 0, 5)
 	f := stitchTestPlaneDiskFace(r, 1.0) // rim lengthBound=1
-	flux, mx, my, mz, err := stitchFaceFluxAndMoment(f, anchor)
+	flux, mx, my, mz, err := stitchrecord.FaceFluxAndMoment(faceNode(f), anchor)
 	require.NoError(t, err)
 	require.Equal(t, proofbound.BoundedScalar{}, mx)
 	require.Equal(t, proofbound.BoundedScalar{}, my)
@@ -498,7 +499,7 @@ func TestStitchPlaneMomentChargesRadiusBound(t *testing.T) {
 	require.Greater(t, mz.Bound, 0.01, "the Plane area term must scale with the rim's own lengthBound")
 
 	zero := stitchTestPlaneDiskFace(r, 0)
-	_, _, _, mzZero, err := stitchFaceFluxAndMoment(zero, anchor) //nolint:dogsled // only mz and the error matter here.
+	_, _, _, mzZero, err := stitchrecord.FaceFluxAndMoment(faceNode(zero), anchor) //nolint:dogsled // only mz and the error matter here.
 	require.NoError(t, err)
 	require.Less(t, mzZero.Bound, 1e-6, "with the rim's own lengthBound zero, the moment bound has no other source of that magnitude")
 }
@@ -520,7 +521,7 @@ func TestStitchPlaneMomentUsesTiltedDiskTerms(t *testing.T) {
 	edge.n.Faces = []*topo.Face{faceNode(face)}
 
 	anchor := r3.NewVec(1, 1, 1)
-	flux, mx, my, mz, err := stitchFaceFluxAndMoment(face, anchor)
+	flux, mx, my, mz, err := stitchrecord.FaceFluxAndMoment(faceNode(face), anchor)
 	require.NoError(t, err)
 	require.Equal(t, proofbound.BoundedScalar{}, mx)
 
@@ -536,7 +537,7 @@ func TestStitchPlaneMomentUsesTiltedDiskTerms(t *testing.T) {
 	require.InDelta(t, n.Z*(area*centerDelta.Z*centerDelta.Z+fourth*(u.Z*u.Z+v.Z*v.Z))/2, mz.Value, 1e-10)
 
 	edge.n.LengthBound = 0.5
-	_, _, myWide, mzWide, err := stitchFaceFluxAndMoment(face, anchor)
+	_, _, myWide, mzWide, err := stitchrecord.FaceFluxAndMoment(faceNode(face), anchor)
 	require.NoError(t, err)
 	require.Greater(t, myWide.Bound, my.Bound)
 	require.Greater(t, mzWide.Bound, mz.Bound)
@@ -666,13 +667,13 @@ func TestStitchConeFluxAndMomentChargeRimRadiusBound(t *testing.T) {
 	t.Parallel()
 	anchor := r3.NewVec(3, 0, 5)
 	f := stitchTestConeFace(0.6, 3, 2, 8, 5, 1.0) // rims' own lengthBound=1, far above ulp noise
-	flux, mx, _, _, err := stitchFaceFluxAndMoment(f, anchor)
+	flux, mx, _, _, err := stitchrecord.FaceFluxAndMoment(faceNode(f), anchor)
 	require.NoError(t, err)
 	require.Greater(t, flux.Bound, 0.01, "the flux bound must scale with the rims' own lengthBound through S_F's radius terms")
 	require.Greater(t, mx.Bound, 0.01, "the moment bound must scale with the rims' own lengthBound through the rim-slope tan^2(beta)")
 
 	zero := stitchTestConeFace(0.6, 3, 2, 8, 5, 0)
-	fluxZero, mxZero, _, _, err := stitchFaceFluxAndMoment(zero, anchor)
+	fluxZero, mxZero, _, _, err := stitchrecord.FaceFluxAndMoment(faceNode(zero), anchor)
 	require.NoError(t, err)
 	require.Less(t, fluxZero.Bound, 1e-6, "with the rims' own lengthBound zero, the flux bound has no other source of that magnitude")
 	require.Less(t, mxZero.Bound, 1e-6, "with the rims' own lengthBound zero, the moment bound has no other source of that magnitude")
@@ -684,10 +685,10 @@ func TestStitchConeFluxAndMomentChargeRimRadiusBound(t *testing.T) {
 // fixture (apitest/stitch_flux_test.go) ever reaches the actual global sign-flip
 // branch, because a revolve build's own outward-normal convention already
 // agrees with the flux formula's own. This test reverses every face of a
-// real frustum-shell sheet BEFORE handing it to stitchCurvedMass, so the
+// real frustum-shell sheet BEFORE handing it to stitchrecord.CurvedMass, so the
 // flux sum is genuinely negative on the first pass and the correction must
 // fire for the published volume to come out positive and right. Shown to
-// fail: deleting the `fluxSum.value < 0` branch in stitchCurvedMass makes
+// fail: deleting the `fluxSum.value < 0` branch in stitchrecord.CurvedMass makes
 // this test's volume come out negative (or its centroid wrong) — watched
 // red before landing, then restored.
 func TestStitchCurvedMassCorrectsInwardOrientationForCone(t *testing.T) {
@@ -714,11 +715,11 @@ func TestStitchCurvedMassCorrectsInwardOrientationForCone(t *testing.T) {
 
 	faces := sheet.Faces()
 	for _, f := range faces {
-		reverseFaceOrientation(f)
+		stitchrecord.ReverseFaceOrientation(faceNode(f))
 	}
 
 	anchor := vertexHandle(coedgeStart(faces[0].n.Loops[0].CoEdges[0])).Position().Value
-	vol, cen, err := stitchCurvedMass(context.Background(), faces, anchor, 0)
+	vol, cen, err := stitchrecord.CurvedMass(context.Background(), faceNodes(faces), anchor, 0)
 	require.NoError(t, err)
 	require.Greater(t, vol.Value.Base(), 0.0, "the global sign correction must recover a positive volume from an inward-reversed Cone face set")
 
@@ -797,13 +798,13 @@ func TestStitchSphereFluxReusesAreaBound(t *testing.T) {
 	anchor := r3.NewVec(-2, 0, 0)
 
 	f := stitchTestSphereFace(center, radius, 1.0) // areaBound=1, far above ulp noise
-	flux, mx, _, _, err := stitchFaceFluxAndMoment(f, anchor)
+	flux, mx, _, _, err := stitchrecord.FaceFluxAndMoment(faceNode(f), anchor)
 	require.NoError(t, err)
 	require.Greater(t, flux.Bound, 0.1, "the flux bound must scale with f.n.AreaBound")
 	require.Greater(t, mx.Bound, 0.1, "the moment bound must scale with f.n.AreaBound")
 
 	zero := stitchTestSphereFace(center, radius, 0)
-	fluxZero, mxZero, _, _, err := stitchFaceFluxAndMoment(zero, anchor)
+	fluxZero, mxZero, _, _, err := stitchrecord.FaceFluxAndMoment(faceNode(zero), anchor)
 	require.NoError(t, err)
 	require.Less(t, fluxZero.Bound, 1e-6, "with areaBound zero, the flux bound has no other source of that magnitude")
 	require.Less(t, mxZero.Bound, 1e-6, "with areaBound zero, the moment bound has no other source of that magnitude")
@@ -813,7 +814,7 @@ func TestStitchSphereFluxReusesAreaBound(t *testing.T) {
 // correctness check behind stitchflux.SphereRadius's whole existence: this face
 // carries a Sphere.Radius of 999 mm, an absurd value bearing no relation to
 // its own area, which is set to the TRUE area of a radius-5 sphere. If
-// stitchFaceFluxAndMoment ever read Sphere.Radius bare — the exact defect
+// stitchrecord.FaceFluxAndMoment ever read Sphere.Radius bare — the exact defect
 // CLAUDE.md's own rule warns against, and the one stitchflux.SphereRadius's own
 // doc comment exists to close — flux would come out around
 // sign*999*area, wildly larger than the radius-5 answer. The published
@@ -830,7 +831,7 @@ func TestStitchSphereFluxDerivesRadiusFromAreaNotBareField(t *testing.T) {
 		},
 	})
 
-	flux, _, _, _, err := stitchFaceFluxAndMoment(f, r3.NewVec(0, 0, 0)) //nolint:dogsled // only flux and the error matter here.
+	flux, _, _, _, err := stitchrecord.FaceFluxAndMoment(faceNode(f), r3.NewVec(0, 0, 0)) //nolint:dogsled // only flux and the error matter here.
 	require.NoError(t, err)
 	wantFlux := trueRadius * f.n.Area
 	require.InDelta(t, wantFlux, flux.Value, 1e-6,
@@ -863,7 +864,7 @@ func TestStitchSphereFluxRefusesFaceWithABoundaryLoop(t *testing.T) {
 	})
 	e.n.Faces = []*topo.Face{faceNode(f)}
 
-	_, _, _, _, err := stitchFaceFluxAndMoment(f, r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
+	_, _, _, _, err := stitchrecord.FaceFluxAndMoment(faceNode(f), r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
 	require.ErrorIs(t, err, ErrUnsupported)
 }
 
@@ -874,11 +875,11 @@ func TestStitchSphereFluxRefusesFaceWithABoundaryLoop(t *testing.T) {
 // Sphere fixture (apitest/stitch_flux_test.go) ever reaches the actual global
 // sign-flip branch, because a revolve build's own outward-normal convention
 // already agrees with the flux formula's own. This test reverses the real
-// T50 fixture's own Sphere face BEFORE handing it to stitchCurvedMass, so
+// T50 fixture's own Sphere face BEFORE handing it to stitchrecord.CurvedMass, so
 // the flux sum is genuinely negative on the first pass and the correction
 // must fire for the published volume to come out positive and right at
-// all. The anchor is the zero vector — the same substitution stitch.go's
-// own evalStitchContext makes when the shared vertex table is empty,
+// all. The anchor is the zero vector — the same substitution
+// stitchrecord.Build makes when the shared vertex table is empty,
 // exactly this fixture's own case, since a zero-loop Sphere face mints no
 // vertex at all.
 func TestStitchCurvedMassCorrectsInwardOrientationForSphere(t *testing.T) {
@@ -888,19 +889,19 @@ func TestStitchCurvedMassCorrectsInwardOrientationForSphere(t *testing.T) {
 	require.Empty(t, faces[0].n.Loops, "the sphere face carries no boundary loop at all")
 
 	for _, f := range faces {
-		reverseFaceOrientation(f)
+		stitchrecord.ReverseFaceOrientation(faceNode(f))
 	}
 
-	vol, cen, err := stitchCurvedMass(context.Background(), faces, r3.Vec{}, 0)
+	vol, cen, err := stitchrecord.CurvedMass(context.Background(), faceNodes(faces), r3.Vec{}, 0)
 	require.NoError(t, err)
 	require.Greater(t, vol.Value.Base(), 0.0, "the global sign correction must recover a positive volume from an inward-reversed Sphere face")
 	require.InDelta(t, 4.0/3.0*math.Pi*125, vol.Value.Base(), 1e-6)
 	require.InDelta(t, 5.0, cen.Value.X, 1e-9)
 }
 
-// TestStitchCurvedMassSphereCoordUpperTracksRadius is stitchCurvedMass's own
+// TestStitchCurvedMassSphereCoordUpperTracksRadius is stitchrecord.CurvedMass's own
 // coordUpper margin for a Sphere face, isolated: a zero-loop face
-// contributes NOTHING to the loop-based vertex scan stitchCurvedMass runs
+// contributes NOTHING to the loop-based vertex scan stitchrecord.CurvedMass runs
 // before its per-surface-kind switch, so without a dedicated Sphere case
 // coordUpper would silently ignore the sphere's own extent, however far it
 // sits from anchor — exactly the "an intervening term happened to be zero"
@@ -922,9 +923,9 @@ func TestStitchCurvedMassSphereCoordUpperTracksRadius(t *testing.T) {
 	center := r3.NewVec(5, 0, 0)
 
 	const delta = 0.001
-	_, cenAtCenter, err := stitchCurvedMass(context.Background(), faces, center, delta)
+	_, cenAtCenter, err := stitchrecord.CurvedMass(context.Background(), faceNodes(faces), center, delta)
 	require.NoError(t, err)
-	_, cenUnplaced, err := stitchCurvedMass(context.Background(), faces, center, 0)
+	_, cenUnplaced, err := stitchrecord.CurvedMass(context.Background(), faceNodes(faces), center, 0)
 	require.NoError(t, err)
 
 	require.Greater(t, cenAtCenter.Bound.Base(), cenUnplaced.Bound.Base(),
@@ -1006,18 +1007,18 @@ func TestStitchTorusRefusesOffAxisAlignedAxis(t *testing.T) {
 	t.Parallel()
 	obliqueAxis := r3.NewVec(0.6, 0.8, 0) // a unit vector, but not a coordinate one
 	f := stitchTestTorusFace(r3.NewVec(5, 0, 0), obliqueAxis, 10, 5, -5, 5)
-	_, _, _, _, err := stitchFaceFluxAndMoment(f, r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
+	_, _, _, _, err := stitchrecord.FaceFluxAndMoment(faceNode(f), r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
 	require.ErrorIs(t, err, ErrUnsupported)
 
 	offCenter := r3.NewVec(5, 0.5, 0) // axis-aligned direction, but off the axis line
 	f2 := stitchTestTorusFace(offCenter, r3.NewVec(1, 0, 0), 10, 5, -5, 5)
-	_, _, _, _, err = stitchFaceFluxAndMoment(f2, r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
+	_, _, _, _, err = stitchrecord.FaceFluxAndMoment(faceNode(f2), r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
 	require.ErrorIs(t, err, ErrUnsupported)
 
 	// A positive control: the identical shape on a genuinely coordinate-
 	// aligned axis through the origin must NOT refuse on this gate.
 	good := stitchTestTorusFace(r3.NewVec(5, 0, 0), r3.NewVec(1, 0, 0), 10, 5, -5, 5)
-	_, _, _, _, err = stitchFaceFluxAndMoment(good, r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
+	_, _, _, _, err = stitchrecord.FaceFluxAndMoment(faceNode(good), r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
 	require.NoError(t, err)
 }
 
@@ -1037,24 +1038,24 @@ func TestStitchTorusRefusesPartialWindow(t *testing.T) {
 	center, axis := r3.NewVec(5, 0, 0), r3.NewVec(1, 0, 0)
 
 	narrower := stitchTestTorusFace(center, axis, 10, 5, -3, 3)
-	_, _, _, _, err := stitchFaceFluxAndMoment(narrower, r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
+	_, _, _, _, err := stitchrecord.FaceFluxAndMoment(faceNode(narrower), r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
 	require.ErrorIs(t, err, ErrUnsupported)
 
 	sameSide := stitchTestTorusFace(center, axis, 10, 5, 5, 5)
-	_, _, _, _, err = stitchFaceFluxAndMoment(sameSide, r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
+	_, _, _, _, err = stitchrecord.FaceFluxAndMoment(faceNode(sameSide), r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
 	require.ErrorIs(t, err, ErrUnsupported)
 
 	wrongMagnitude := stitchTestTorusFace(center, axis, 10, 5, -6, 5)
-	_, _, _, _, err = stitchFaceFluxAndMoment(wrongMagnitude, r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
+	_, _, _, _, err = stitchrecord.FaceFluxAndMoment(faceNode(wrongMagnitude), r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
 	require.ErrorIs(t, err, ErrUnsupported)
 
 	// A positive control: the exact +/-minor window must NOT refuse on this
 	// gate, in either rim order.
 	good := stitchTestTorusFace(center, axis, 10, 5, -5, 5)
-	_, _, _, _, err = stitchFaceFluxAndMoment(good, r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
+	_, _, _, _, err = stitchrecord.FaceFluxAndMoment(faceNode(good), r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
 	require.NoError(t, err)
 	swapped := stitchTestTorusFace(center, axis, 10, 5, 5, -5)
-	_, _, _, _, err = stitchFaceFluxAndMoment(swapped, r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
+	_, _, _, _, err = stitchrecord.FaceFluxAndMoment(faceNode(swapped), r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
 	require.NoError(t, err)
 }
 
@@ -1075,7 +1076,7 @@ func TestStitchTorusFluxAndMomentMatchClosedForm(t *testing.T) {
 	f := stitchTestTorusFace(center, r3.NewVec(1, 0, 0), major, minor, -minor, minor)
 	anchor := r3.NewVec(1, 2, -3)
 
-	flux, mx, my, mz, err := stitchFaceFluxAndMoment(f, anchor)
+	flux, mx, my, mz, err := stitchrecord.FaceFluxAndMoment(faceNode(f), anchor)
 	require.NoError(t, err)
 
 	wantFlux := 3*math.Pi*math.Pi*major*minor*minor + 4*math.Pi*minor*(major*major+minor*minor)
@@ -1112,10 +1113,10 @@ func halfTorusAnalyticsForInternalTest(major, minor float64) (volume, area float
 // fixture (apitest/stitch_flux_test.go) ever reaches the actual global sign-flip
 // branch, because a revolve build's own outward-normal convention already
 // agrees with the flux formula's own. This test reverses every face of a
-// real half-torus sheet BEFORE handing it to stitchCurvedMass, so the flux
+// real half-torus sheet BEFORE handing it to stitchrecord.CurvedMass, so the flux
 // sum is genuinely negative on the first pass and the correction must fire
 // for the published volume to come out positive and right. Shown to fail:
-// deleting the `fluxSum.value < 0` branch in stitchCurvedMass makes this
+// deleting the `fluxSum.value < 0` branch in stitchrecord.CurvedMass makes this
 // test's volume come out negative — watched red before landing, then
 // restored.
 func TestStitchCurvedMassCorrectsInwardOrientationForTorus(t *testing.T) {
@@ -1139,11 +1140,11 @@ func TestStitchCurvedMassCorrectsInwardOrientationForTorus(t *testing.T) {
 
 	faces := sheet.Faces()
 	for _, f := range faces {
-		reverseFaceOrientation(f)
+		stitchrecord.ReverseFaceOrientation(faceNode(f))
 	}
 
 	anchor := vertexHandle(coedgeStart(faces[0].n.Loops[0].CoEdges[0])).Position().Value
-	vol, cen, err := stitchCurvedMass(context.Background(), faces, anchor, 0)
+	vol, cen, err := stitchrecord.CurvedMass(context.Background(), faceNodes(faces), anchor, 0)
 	require.NoError(t, err)
 	require.Greater(t, vol.Value.Base(), 0.0, "the global sign correction must recover a positive volume from an inward-reversed Torus face set")
 
@@ -1156,8 +1157,8 @@ func TestStitchCurvedMassCorrectsInwardOrientationForTorus(t *testing.T) {
 // tessellate_stitch.go's mesh restatement gives a second caller:
 // f.isPlanar() also admits a heldPlanar Faceted face — a boolean-built face
 // standing for flat source geometry, never a Plane itself — while
-// triangulateStitchFaces demands f.surface.(Plane) and errors on anything
-// else. faceIsTetrahedronEligible checks the surface tag directly so the
+// stitchrecord.TriangulateFaces demands f.surface.(Plane) and errors on anything
+// else. stitchrecord.FaceIsTetrahedronEligible checks the surface tag directly so the
 // two never disagree. Latent through the public seam (no Faceted face is
 // ever a stitch operand today), so this drives the eligibility check
 // straight at a hand-built fixture. Shown to fail: reverting the check to
@@ -1168,8 +1169,8 @@ func TestFaceIsTetrahedronEligibleRefusesHeldPlanarFaceted(t *testing.T) {
 	f.n.Surface = surfacegeom.Faceted{}
 	f.n.HeldPlanar = true
 	require.True(t, f.isPlanar(), "the fixture's own premise: isPlanar() alone would admit this face")
-	require.False(t, faceIsTetrahedronEligible(f),
-		"a heldPlanar Faceted face is not a Plane, and triangulateStitchFaces would error on it")
+	require.False(t, stitchrecord.FaceIsTetrahedronEligible(faceNode(f)),
+		"a heldPlanar Faceted face is not a Plane, and stitchrecord.TriangulateFaces would error on it")
 }
 
 // stitchTestClosedBoxVerts returns one 10x10x10 box's own 8 corners,
@@ -1229,7 +1230,7 @@ func stitchTestLumpFace(vs []*Vertex) *Face {
 // yet the two boxes occupy the identical world region), each its own
 // single-lump component, fed straight to tessellateStitch on a hand-built
 // Body/stitchPayload. decad's public seam has no way to reach this: once
-// evalStitchContext's own lump-separation gate lands (stitch.go), Stitch
+// stitchrecord.Build's own lump-separation gate lands (internal/stitchrecord/build.go), Stitch
 // itself refuses this exact shape before a body this overlapped could ever
 // reach tessellation (TestStitchRefusesNestedBoxes, apitest/stitch_test.go). This
 // fixture is what proves tessellateStitch's own symDiffOK reading does not
@@ -1272,7 +1273,7 @@ func TestTessellateStitchClearsSymDiffForOverlappingLumps(t *testing.T) {
 		Verts:     verts,
 		VertBound: vertBound,
 		Tris:      tris,
-		TriFaces:  triFaces,
+		TriFaces:  faceNodes(triFaces),
 	}
 
 	mesh, err := tessellateStitch(context.Background(), body, sp)
@@ -1320,13 +1321,13 @@ func TestStitchConeArmChargesApexDeparture(t *testing.T) {
 		}
 	}
 	require.NotNil(t, face)
-	require.True(t, stitchflux.TagIsDenoted(stitchTaggedFace(face)))
+	require.True(t, stitchflux.TagIsDenoted(stitchrecord.TaggedFace(faceNode(face))))
 	exactBound, ok := stitchflux.ConeApexDeparture(face.n.Denoted, cone)
 	require.True(t, ok)
 	require.Zero(t, exactBound, "an apex the walk states exactly is charged nothing")
 
 	anchor := r3.NewVec(0, 1, 0)
-	flux, mx, _, _, err := coneFaceFluxAndMoment(face, cone, anchor, 1)
+	flux, mx, _, _, err := stitchrecord.ConeFaceFluxAndMoment(faceNode(face), cone, anchor, 1)
 	require.NoError(t, err)
 
 	moved := cone
@@ -1334,7 +1335,7 @@ func TestStitchConeArmChargesApexDeparture(t *testing.T) {
 	movedBound, ok := stitchflux.ConeApexDeparture(face.n.Denoted, moved)
 	require.True(t, ok)
 	require.GreaterOrEqual(t, movedBound, 1e-6)
-	mFlux, mMx, _, _, err := coneFaceFluxAndMoment(face, moved, anchor, 1)
+	mFlux, mMx, _, _, err := stitchrecord.ConeFaceFluxAndMoment(faceNode(face), moved, anchor, 1)
 	require.NoError(t, err)
 	for _, pair := range []struct {
 		name           string
@@ -1353,7 +1354,7 @@ func TestStitchConeArmChargesApexDeparture(t *testing.T) {
 func TestStitchFluxRefusalNamesThePublicSurfaceType(t *testing.T) {
 	t.Parallel()
 	face := bornFace(&Face{n: topo.Face{Surface: surfacegeom.NURBSSurface{}}})
-	flux, mx, my, _, err := stitchFaceFluxAndMoment(face, r3.Vec{})
+	flux, mx, my, _, err := stitchrecord.FaceFluxAndMoment(faceNode(face), r3.Vec{})
 	require.Zero(t, flux)
 	require.Zero(t, mx)
 	require.Zero(t, my)

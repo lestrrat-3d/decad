@@ -129,9 +129,9 @@ func MaxBound(budget *proofbound.WorkBudget, mags iter.Seq[float64]) (float64, e
 // UnstitchBounds publishes one unstitched face's box as the retiring
 // receiver's own already-proven Bounds, inflated by its own Bound and then
 // carried through xform by its 8 corners (BoxCorners) — the reasoning
-// stitchBounds states for a curved Stitch operand, applied to a single face of
+// stitchrecord's bounds states for a curved Stitch operand, applied to a single face of
 // the body being split rather than a whole operand body. The published Bound
-// is exactly delta, on the terms stitchBounds publishes for a placed stitched
+// is exactly delta, on the terms stitchrecord's bounds publishes for a placed stitched
 // body. It is also the box PatchEdges reuses for its rebuilt face set.
 func UnstitchBounds(srcBounds measurement.Box, xform r3.Transform, delta float64) (measurement.Box, error) {
 	inflate := srcBounds.Bound.Base()

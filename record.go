@@ -16,6 +16,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
+	"github.com/lestrrat-3d/decad/internal/stitchrecord"
 	"github.com/lestrrat-3d/decad/internal/sweepmitre"
 	"github.com/lestrrat-3d/decad/internal/sweeprecord"
 	"github.com/lestrrat-3d/decad/internal/twistsweep"
@@ -147,6 +148,16 @@ type (
 	chainSweepPayload     = sweeprecord.ChainPayload
 	sweepSpanPayload      = sweeprecord.SpanPayload
 	chainSweepSpanPayload = sweeprecord.ChainSpanPayload
+)
+
+// stitchPayload and unstitchPayload are the evaluator's records of a Stitch
+// and of one Unstitch piece: the internal/stitchrecord payloads, which
+// stitchrecord.Build and stitchrecord.BuildUnstitchFace evaluate over
+// topology nodes and which implement topo.Payload (docs/surface-design.md §6,
+// docs/evaluator-design.md §8).
+type (
+	stitchPayload   = stitchrecord.Payload
+	unstitchPayload = stitchrecord.UnstitchPayload
 )
 
 // draftPayload and twoSidedDraftPayload are the evaluator's records of a

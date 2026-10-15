@@ -3,6 +3,7 @@ package decad
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/denotation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -12,23 +13,23 @@ import (
 // unit coverage, isolating what an integration test cannot: a placement
 // test reaching Stitch's public seam always ALSO fails Table J's own
 // bit-identical guard the moment a rigid motion moves a vertex, so it can
-// never by itself prove sameCurve's own xform comparison is load-bearing.
-// This file drives curveToken/sameCurve/compose directly instead.
+// never by itself prove denotation.SameCurve's own xform comparison is load-bearing.
+// This file drives curveToken/denotation.SameCurve/compose directly instead.
 
 // TestSameCurveRequiresEqualXform is the direct proof that a placement
 // breaks the certificate (docs/surface-design.md §6.2's amendment):
-// sameCurve refuses two otherwise-identical tokens once one carries an
+// denotation.SameCurve refuses two otherwise-identical tokens once one carries an
 // ADDITIONAL motion the other does not, even though this exact scenario
 // can never be observed through Stitch's own public seam — there, a
 // placement also moves the held coordinate, so Table J's own bit-identical
 // guard (kept as a reject-only narrowing on top of the certificate) already
-// refuses the pair regardless of what sameCurve says about the token alone.
+// refuses the pair regardless of what denotation.SameCurve says about the token alone.
 func TestSameCurveRequiresEqualXform(t *testing.T) {
 	t.Parallel()
 	d := bornDocument(&Document{})
 	tok := d.n.MintCurve()
 	require.NotZero(t, tok.ID)
-	require.True(t, sameCurve(tok, tok), "a token always denotes the same curve as itself")
+	require.True(t, denotation.SameCurve(tok, tok), "a token always denotes the same curve as itself")
 
 	axis, ok := r3.NewVec(3, -1, 2).Normalize()
 	require.True(t, ok)
@@ -37,8 +38,8 @@ func TestSameCurveRequiresEqualXform(t *testing.T) {
 	moved := tok.Compose(xf)
 	require.Equal(t, tok.ID, moved.ID, "compose restates the SAME identity, never a fresh one")
 	require.NotEqual(t, tok.Xform, moved.Xform)
-	require.False(t, sameCurve(tok, moved), "the same curve stated under two different motions is not the same admission")
-	require.False(t, sameCurve(moved, tok))
+	require.False(t, denotation.SameCurve(tok, moved), "the same curve stated under two different motions is not the same admission")
+	require.False(t, denotation.SameCurve(moved, tok))
 }
 
 // TestSameCurveDeclinesTheZeroToken is denotation.go's own "no certificate
@@ -46,11 +47,11 @@ func TestSameCurveRequiresEqualXform(t *testing.T) {
 // another zero token, and never equals a freshly minted one.
 func TestSameCurveDeclinesTheZeroToken(t *testing.T) {
 	t.Parallel()
-	require.False(t, sameCurve(curveToken{}, curveToken{}))
+	require.False(t, denotation.SameCurve(curveToken{}, curveToken{}))
 	d := bornDocument(&Document{})
 	tok := d.n.MintCurve()
-	require.False(t, sameCurve(curveToken{}, tok))
-	require.False(t, sameCurve(tok, curveToken{}))
+	require.False(t, denotation.SameCurve(curveToken{}, tok))
+	require.False(t, denotation.SameCurve(tok, curveToken{}))
 }
 
 // TestMintCurveNeverRepeats is the document node's own soundness argument for
@@ -64,7 +65,7 @@ func TestMintCurveNeverRepeats(t *testing.T) {
 	a := d.n.MintCurve()
 	b := d.n.MintCurve()
 	require.NotEqual(t, a.ID, b.ID)
-	require.False(t, sameCurve(a, b))
+	require.False(t, denotation.SameCurve(a, b))
 }
 
 // TestCurveTokenComposeDeclinesTheZeroToken is compose's own reject-only

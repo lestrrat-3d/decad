@@ -25,10 +25,8 @@ The rules for rows live in `docs/layout.md`.
 | `offset.go` | `Offset`: a second sheet at a normal distance. See surface §17. |
 | `patch_body.go` | `PatchEdges` selection and chain gates 1-3; Rule P lives in `internal/patchchain/`. See surface §5.2. |
 | `denotation.go` | Level and curve token names and comparisons; the document node mints them. |
-| `stitch_weld.go` | Adapts Stitch topology to Table J. See surface §6.2. |
-| `stitch.go` | `Stitch` evaluator and topology adapter. See surface §6.4. |
-| `stitch_flux.go` | Stitch face flux, mass and tag adapters. See surface §6.4. |
-| `unstitch.go` | `Unstitch` sheet split and placement. See surface §6.5. |
+| `stitch.go` | `Stitch`; builds through `internal/stitchrecord/`. See surface §6.4. |
+| `unstitch.go` | `Unstitch` sheet split; builds through `internal/stitchrecord/`. See surface §6.5. |
 | `extrude.go` | Generic `Extrude` over a profile or chain, `WithTaper`, linear-extent resolution, the chain ribbon entry point. See evaluator §5 and surface §13.2. |
 | `draft.go` | `Draft`, `NeutralPlane`, `Walls` gates. See draft §10. |
 | `draft_build.go` | Tapered extrude angle and surface-result gates, extent resolution and slab dispatch. See draft §5, §7. |
@@ -54,7 +52,6 @@ The rules for rows live in `docs/layout.md`.
 | `loft_faces_proof.go` | Exact cap-map, band embedding and occupied-volume proof for face-fed lofts. See loft-face-sections design. |
 | `loft_point.go` | Point-section Loft entry, live Sketch source check, apex fan and proof. See loft-point design. |
 | `loft_build.go` | Tessellation adapter for a lofted body. Root `loftPayload` aliases `loftrecord.Payload`. See loft §5, §8, §12. |
-| `loft_moments.go` | Loft mass adapters and chord proofs. See loft §8, §12. |
 
 ### Cap-loop chamfer
 

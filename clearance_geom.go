@@ -114,7 +114,7 @@ func newBodyGeomBudget(budget *proofbound.WorkBudget, b *Body) (*bodyGeom, bool,
 	case stitchPayload:
 		// Refuse outright unless the recorded triangle set exists (an
 		// all-planar body, open or closed — tessellate_stitch.go's own gate).
-		// A bounded body — placed (stitch.go's proofbound.RigidRoundAllow widens every
+		// A bounded body — placed (internal/stitchrecord/build.go's proofbound.RigidRoundAllow widens every
 		// vertex bound) or closed by the CURVE weld certificate at a nonzero
 		// class bound — no longer refuses on that alone: bodyGeom.delta now
 		// exists for it to charge its own worst vertex bound against
@@ -476,7 +476,7 @@ func (g *bodyGeom) addRevolveFaces(budget *proofbound.WorkBudget, rp revolvePayl
 //
 // The plane frame's origin and axes come straight off the face's own Plane
 // tag, negating the normal when the face is reversed — the identical
-// construction fixWeldedEdgeConvexity (stitch.go) already uses for a welded
+// construction fixWeldedEdgeConvexity (internal/stitchrecord/build.go) already uses for a welded
 // edge's own convexity. The trim region reads each loop's own coedge start
 // vertices, outer loop and holes together, exactly as addPrismFaces builds
 // its cap region. The interior witnesses are the payload's own recorded
@@ -534,8 +534,9 @@ func (g *bodyGeom) addStitchFaces(budget *proofbound.WorkBudget, b *Body, sp sti
 		// the plane's frame (CapBox), and the topology's own vertices.
 		cf.Box = clearance.BoxUnion(clearance.BoxOf(pts...), clearance.CapBox(cf))
 
+		fn := faceNode(f)
 		for i, tri := range sp.Tris {
-			if sp.TriFaces[i] != f {
+			if sp.TriFaces[i] != fn {
 				continue
 			}
 			if err := budget.Step(); err != nil {

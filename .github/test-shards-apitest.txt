@@ -2106,3 +2106,5 @@
 10	0.05	TestDraftStagedSurveyNamesPayloadClass
 10	0.05	TestSweepStagedSurveyNamesPayloadClass
 10	0.05	TestSweepChainStagedSurveyNamesPayloadClass
+10	0.05	TestStitchStagedSurveyNamesPayloadClass
+10	0.05	TestTessellateRefusalNamesUnstitchPayload

@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/selectorquery"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 
 	"github.com/lestrrat-3d/decad/internal/pair"
@@ -353,8 +354,8 @@ func planarStitchSolid(budget *proofbound.WorkBudget, b *Body, sp stitchPayload)
 		}
 		displacement = max(displacement, bound)
 	}
-	faces := b.Faces()
-	faceAt := make(map[*Face]int, len(faces))
+	faces := topobuild.Faces(&b.n)
+	faceAt := make(map[*topo.Face]int, len(faces))
 	for i, face := range faces {
 		faceAt[face] = i
 	}

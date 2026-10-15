@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/stitchrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -15,7 +16,7 @@ import (
 // This file is docs/surface-design.md §15's T60, T70 and T87, over
 // tessellate_stitch.go's own private proof terms: T60 needs areaSlack, which
 // the public API does not expose, and T70 needs a hand-built triangle set no
-// public seam can construct (checkStitchClosure already catches it at build
+// public seam can construct (stitchrecord.CheckClosure already catches it at build
 // time).
 
 func TestStitchCurvedMeshNamesUnsupportedSurface(t *testing.T) {
@@ -23,9 +24,9 @@ func TestStitchCurvedMeshNamesUnsupportedSurface(t *testing.T) {
 	plane := bornFace(&Face{n: topo.Face{Surface: surfacegeom.Plane{}}})
 	freeform := bornFace(&Face{n: topo.Face{Surface: surfacegeom.NURBSSurface{}}})
 	sp := stitchPayload{
-		Faces:     []*Face{plane, freeform},
-		LiveFaces: []*Face{bornFace(&Face{n: topo.Face{Surface: surfacegeom.Plane{}}}), bornFace(&Face{n: topo.Face{Surface: surfacegeom.NURBSSurface{}}})},
-		Plan:      &stitchWeldPlan{Table: newStitchVertexTable()},
+		Faces:     faceNodes([]*Face{plane, freeform}),
+		LiveFaces: faceNodes([]*Face{bornFace(&Face{n: topo.Face{Surface: surfacegeom.Plane{}}}), bornFace(&Face{n: topo.Face{Surface: surfacegeom.NURBSSurface{}}})}),
+		Plan:      &stitchrecord.Plan{Table: stitchrecord.NewVertexTable()},
 	}
 	_, err := tessellateStitchCurved(t.Context(), bornBody(&Body{n: topo.Body{Kind: topo.BodySheet}}), sp, 0.1, VerifyAll)
 	require.ErrorIs(t, err, ErrUnsupported)
@@ -75,10 +76,10 @@ func TestStitchCurvedMeshInheritsEverySourceFaceBound(t *testing.T) {
 		"the fixture's own premise: the source mesh's overall bound must be positive, or a missing per-face charge would go unnoticed")
 
 	for i, sourceFace := range sp.Faces {
-		want, ok := source.sourceBound(faceNode(sourceFace))
+		want, ok := source.sourceBound(sourceFace)
 		require.True(t, ok)
 		require.Positivef(t, want, "source face %d's own bound must be positive, or the equality check below proves nothing", i)
-		got, ok := mesh.sourceBound(faceNode(sp.LiveFaces[i]))
+		got, ok := mesh.sourceBound(sp.LiveFaces[i])
 		require.Truef(t, ok, "stitched face %d has no inherited source bound", i)
 		require.Equalf(t, want, got, "stitched face %d lost its source bound", i)
 	}
@@ -99,8 +100,8 @@ func TestStitchCurvedWeldedRevolveSiblingRejectsWrongEdgeAncestry(t *testing.T) 
 	// Keep the real welded body, but claim one copied edge belongs to a
 	// different original edge's weld group. The ancestry gate must refuse.
 	plan := *sp.Plan
-	plan.Group = make(map[*Edge]int, len(sp.Plan.Group))
-	var first *Edge
+	plan.Group = make(map[*topo.Edge]int, len(sp.Plan.Group))
+	var first *topo.Edge
 	firstGroup := -1
 	for edge, group := range sp.Plan.Group {
 		plan.Group[edge] = group
@@ -147,12 +148,12 @@ func TestStitchCurvedWeldedRevolveSiblingsInheritEverySourceFaceBound(t *testing
 	require.Len(t, sp.Faces, 2)
 
 	for i, copied := range sp.Faces {
-		up, ok := copied.n.Body.Payload.(unstitchPayload)
+		up, ok := copied.Body.Payload.(unstitchPayload)
 		require.True(t, ok)
-		want, ok := source.sourceBound(faceNode(up.Face))
+		want, ok := source.sourceBound(up.Face)
 		require.True(t, ok)
 		require.Positivef(t, want, "original face %d's own bound must be positive, or the equality check below proves nothing", i)
-		got, ok := mesh.sourceBound(faceNode(sp.LiveFaces[i]))
+		got, ok := mesh.sourceBound(sp.LiveFaces[i])
 		require.Truef(t, ok, "stitched sibling face %d has no inherited source bound", i)
 		require.Equalf(t, want, got, "stitched sibling face %d lost its original source bound", i)
 	}
@@ -335,12 +336,12 @@ func TestTessellateStitchDoesNotPublishSymDiffForAnOpenSheet(t *testing.T) {
 // corner.Z, an outer 10x10 square (CCW, stitchTestSquareFace's own winding)
 // with a 2x2 hole square centred at (5, 5) — the identical hand-authoring
 // style stitchTestSquareFace (stitch_internal_test.go) uses, extended with a
-// second loop, so triangulateStitchFaces's own hole-bridging path
+// second loop, so stitchrecord.TriangulateFaces's own hole-bridging path
 // (triangulation.BridgeHole and triangulation.EarClip) can be exercised directly without the
 // full Extrude/Patch/Stitch pipeline. classOf and the returned positions
 // slice let the caller check the triangulated set's own summed area against
 // the analytic 100 - 4 = 96 mm^2 the two loops denote.
-func stitchTestSquareFaceWithHole(corner r3.Vec) (f *Face, classOf map[*Vertex]int, positions []r3.Vec) {
+func stitchTestSquareFaceWithHole(corner r3.Vec) (f *Face, classOf map[*topo.Vertex]int, positions []r3.Vec) {
 	corners := [8]r3.Vec{
 		corner,
 		corner.Add(r3.NewVec(10, 0, 0)),
@@ -352,11 +353,11 @@ func stitchTestSquareFaceWithHole(corner r3.Vec) (f *Face, classOf map[*Vertex]i
 		corner.Add(r3.NewVec(6, 4, 0)),
 	}
 	verts := make([]*Vertex, 8)
-	classOf = map[*Vertex]int{}
+	classOf = map[*topo.Vertex]int{}
 	positions = make([]r3.Vec, 8)
 	for i, p := range corners {
 		verts[i] = bornVertex(&Vertex{n: topo.Vertex{Position: p}})
-		classOf[verts[i]] = i
+		classOf[vertexNode(verts[i])] = i
 		positions[i] = p
 	}
 	outerEdges := make([]*Edge, 4)
@@ -420,13 +421,13 @@ func TestTriangulateStitchFacesTilesAHoledFaceExactly(t *testing.T) {
 	t.Parallel()
 	f, classOf, positions := stitchTestSquareFaceWithHole(r3.Vec{})
 
-	tris, triFaces, err := triangulateStitchFaces(t.Context(), []*Face{f}, classOf)
+	tris, triFaces, err := stitchrecord.TriangulateFaces(t.Context(), []*topo.Face{faceNode(f)}, classOf)
 	require.NoError(t, err)
 	require.NotEmpty(t, tris)
 
 	total := 0.0
 	for i, tri := range tris {
-		require.Same(t, f, triFaces[i])
+		require.Same(t, faceNode(f), triFaces[i])
 		a, b, c := positions[tri[0]], positions[tri[1]], positions[tri[2]]
 		area := triAreaXY(a, b, c)
 		require.Positive(t, area, "no zero-area sliver survives triangulation")
@@ -439,7 +440,7 @@ func TestTriangulateStitchFacesTilesAHoledFaceExactly(t *testing.T) {
 // T70: a hand-built triangle set whose two triangles repeat the SAME
 // directed edge (rather than tracing it in the opposite sense the way two
 // triangles sharing an edge must) drives tessellateStitch directly.
-// checkStitchClosure already catches this shape at Stitch's own build time
+// stitchrecord.CheckClosure already catches this shape at Stitch's own build time
 // (Table R row R7), so no public seam can ever construct a stitchPayload
 // this broken; the fixture is fed straight to the restatement instead.
 func TestTessellateStitchRefusesARepeatedDirectedEdge(t *testing.T) {
@@ -450,7 +451,7 @@ func TestTessellateStitchRefusesARepeatedDirectedEdge(t *testing.T) {
 		Verts:     verts,
 		VertBound: []float64{0, 0, 0},
 		Tris:      [][3]int{{0, 1, 2}, {0, 1, 2}},
-		TriFaces:  []*Face{f, f},
+		TriFaces:  faceNodes([]*Face{f, f}),
 	}
 	b := bornBody(&Body{n: topo.Body{Solid: true, Kind: topo.BodySolid}})
 

@@ -1,4 +1,4 @@
-package decad
+package stitchrecord
 
 import (
 	"context"
@@ -7,7 +7,10 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/compositesweep"
+	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/stitchflux"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -24,10 +27,10 @@ import (
 // evaluator has no closed-form flux integral for refuses R8, and a Plane,
 // Cylinder, Cone, Sphere or Torus face with a zero normalBound admits — a
 // revolve face only where its tag is exactly the surface its record denotes
-// (stitchFluxTagsDenoted, at the bottom of this file).
+// (fluxTagsDenoted, at the bottom of this file).
 //
 // THE FORMULA. Volume is V = (1/3) Σ_F ∫_F (p−A)·n dA over one global anchor
-// A (verts[0], the same anchor loft_moments.go's tetrahedron sum uses, so the
+// A (verts[0], the same anchor loftmesh.MassAccumulator's tetrahedron sum uses, so the
 // tetrahedron and flux paths are anchored alike). Per face, with A_F a
 // per-variant anchor and S_F = ∫_F n dA the face's own vector area:
 //
@@ -36,7 +39,7 @@ import (
 // Plane: A_F = Frame.Origin(), K_F = 0 — (p−A_F)·n is identically zero on the
 // plane. Cylinder: A_F = Origin (any point on the axis — the formula is
 // invariant to which one, since a shift along the axis cancels between the
-// two terms below), K_F = σ·Radius·f.n.Area, σ = −1 when f.n.Reversed else +1 —
+// two terms below), K_F = σ·Radius·f.Area, σ = −1 when f.Reversed else +1 —
 // (p−O)·n is identically σ·Radius at every point of a cylinder wall, so the
 // K_F term reuses the face's own already-proven area/areaBound rather than
 // integrating anything fresh. Radius itself is never read bare off
@@ -79,7 +82,7 @@ import (
 // normal's own trig integrates to zero over a full turn — proven in
 // stitchflux.CylinderFaceFluxAndMoment's own doc comment), and a full-circumference
 // Cone's reduces to the closed-form cone-shadow identity
-// π(R_lo²−R_hi²)·Axis (coneFaceFluxAndMoment's own doc comment) — the SAME
+// π(R_lo²−R_hi²)·Axis (ConeFaceFluxAndMoment's own doc comment) — the SAME
 // circular term the general contour sum's own per-loop formula would give a
 // full circle (½[C×(v1−v0)+R·L·k], with v1=v0 for a closed loop), just
 // summed over the cone's own two rims rather than assembled through a
@@ -113,7 +116,7 @@ import (
 // nonzero moment component. The
 // Cylinder arm's own closed form is derived and verified in
 // stitchflux.CylinderFaceFluxAndMoment's doc comment; the Cone arm's is derived and
-// verified in coneFaceFluxAndMoment's own doc comment. The Sphere arm takes
+// verified in ConeFaceFluxAndMoment's own doc comment. The Sphere arm takes
 // a shortcut the other three cannot: because a zero-loop Sphere face IS the
 // whole closed boundary of the ball it bounds, on its own, its first moment
 // is the ball's own moment, and the general shift-of-origin identity
@@ -138,10 +141,10 @@ import (
 // proofbound.ConservativeValueError's structural "assume no cancellation at all"
 // fallback, which is sized for a quantity this evaluator has no other way
 // to bound and would overstate π's own error by many orders of magnitude —
-// wide enough, on a thin annulus, to starve stitchCurvedMass's own
+// wide enough, on a thin annulus, to starve CurvedMass's own
 // proofbound.BoundedQuotient calls of clearance and refuse a perfectly sound fixture.
 // Nothing here ever claims Exact: every admitting arm's own K_F or moment
-// carries π, so exactnessOf's zero-bound test can never fire for a curved
+// carries π, so measurement.ExactnessOf's zero-bound test can never fire for a curved
 // stitched solid.
 //
 // The radius itself carries a second, independent source of bound
@@ -213,9 +216,9 @@ import (
 // hand-built refusal fixtures already get.
 //
 // RULE S — the construction-proof gate. Before this file's dispatch ever
-// runs, evalStitchContext requires every operand face to descend from ONE
+// runs, Build requires every operand face to descend from ONE
 // source body whose payload passes topo.ProvesSimple —
-// stitchRuleSAdmits below. The reused crossing audit (docs/loft-design.md
+// RuleSAdmits below. The reused crossing audit (docs/loft-design.md
 // §6) consumes triangles, and a curved face has none to chord into it
 // without admitting a self-intersection question on an approximation
 // (verify.go's own reject-only rule for exactly this). So a curved closed
@@ -227,59 +230,59 @@ import (
 // own payload carries no such proof — docs/surface-design.md §5.2), stays
 // refused on this gate alone.
 
-// stitchRuleSAdmits is Rule S: every operand face must descend from exactly
+// RuleSAdmits is Rule S: every operand face must descend from exactly
 // one source body, and that body's own evaluator payload must prove its
 // boundary simple by construction (topo.ProvesSimple). srcFaces is the
-// PRE-rebuild operand face set (stitch.go's own srcFaces, read before the
+// PRE-rebuild operand face set (build.go's own srcFaces, read before the
 // new body's own topology and Face body links exist) — the same set
-// stitchBounds already reads operand bodies from.
-func stitchRuleSAdmits(ctx context.Context, srcFaces []*Face) bool {
-	bodies := topobuild.OperandBodies(faceNodes(srcFaces))
+// bounds already reads operand bodies from.
+func RuleSAdmits(ctx context.Context, srcFaces []*topo.Face) bool {
+	bodies := topobuild.OperandBodies(srcFaces)
 	if len(bodies) != 1 || bodies[0] == nil || bodies[0].Payload == nil {
 		return false
 	}
 	return topo.ProvesSimple(ctx, bodies[0].Payload)
 }
 
-// stitchAllTetrahedronEligible reports whether every face qualifies for
-// loft_moments.go's exact-rational tetrahedron sum: a Plane face
+// AllTetrahedronEligible reports whether every face qualifies for
+// loftmesh.MassAccumulator's exact-rational tetrahedron sum: a Plane face
 // (docs/surface-design.md's "planar and straight-edged", never "planar")
 // bounded entirely by Line3 edges, with a zero normalBound. Checking only
 // the surface tag (Kind() == KindPlane) is not enough on its own:
-// triangulateStitchFaces builds its polygon from coedge START vertices
+// TriangulateFaces builds its polygon from coedge START vertices
 // only and drops an arc's own bulge, so a Plane face with a circular
 // boundary would silently mis-triangulate. No construction reaching this
 // function puts a curved boundary on a Plane face without ALSO putting a
 // genuinely curved SURFACE elsewhere in the same closed set (which routes
-// through stitch_flux.go's own flux path instead), so the edge-kind check
+// through flux.go's own flux path instead), so the edge-kind check
 // closes a shape that was latent rather than live — closed here regardless,
 // since the split this design states is "Plane bounded entirely by Line3"
 // versus everything else, never "planar versus curved".
-func stitchAllTetrahedronEligible(faces []*Face) bool {
+func AllTetrahedronEligible(faces []*topo.Face) bool {
 	for _, f := range faces {
-		if !faceIsTetrahedronEligible(f) {
+		if !FaceIsTetrahedronEligible(f) {
 			return false
 		}
 	}
 	return true
 }
 
-// faceIsTetrahedronEligible checks the surface tag itself (Plane), never
+// FaceIsTetrahedronEligible checks the surface tag itself (Plane), never
 // f.isPlanar(): isPlanar also admits a heldPlanar Faceted face — a
 // boolean-built face that stands for flat source geometry but is not itself
-// a Plane — and triangulateStitchFaces demands a Plane outright, erroring on
+// a Plane — and TriangulateFaces demands a Plane outright, erroring on
 // anything else. Latent today because no Faceted face is ever a stitch
 // operand, but the mesh restatement (tessellate_stitch.go) gives the
 // mismatch a second caller, so the tighter check closes it here rather than
 // leave two admission rules that can disagree.
-func faceIsTetrahedronEligible(f *Face) bool {
-	if _, ok := f.n.Surface.(surfacegeom.Plane); !ok {
+func FaceIsTetrahedronEligible(f *topo.Face) bool {
+	if _, ok := f.Surface.(surfacegeom.Plane); !ok {
 		return false
 	}
-	if f.n.NormalBound != 0 {
+	if f.NormalBound != 0 {
 		return false
 	}
-	for _, l := range f.n.Loops {
+	for _, l := range f.Loops {
 		for _, ce := range l.CoEdges {
 			if _, ok := ce.Edge.Curve.(surfacegeom.Line3); !ok {
 				return false
@@ -289,12 +292,12 @@ func faceIsTetrahedronEligible(f *Face) bool {
 	return true
 }
 
-// auditVertexLinksForStitchFaces builds internal/compositesweep's own
+// AuditVertexLinks builds internal/compositesweep's own
 // uses-by-edge map over a stitched face set and runs its hoisted
 // compositesweep.AuditVertexLinks: the manifold-with-boundary proof at every vertex, that
 // the faces touching it form one connected fan (an interior vertex, a
 // cycle) or one connected path (a rim vertex, on an open sheet). Stitch's
-// own checkStitchClosure already proves every edge has one or two adjacent
+// own CheckClosure already proves every edge has one or two adjacent
 // faces with correct forward/backward parity — a strictly weaker claim than
 // this: it says nothing about whether, AT ONE VERTEX, the several faces and
 // two-face edges meeting there stay in one piece, which is exactly the gap
@@ -303,42 +306,42 @@ func faceIsTetrahedronEligible(f *Face) bool {
 // sharing exactly one welded vertex-table entry with no edge joining them
 // (docs/surface-design.md's own record of both shapes). This is a
 // reject-only gate, called unconditionally on every build arm
-// (docs/surface-design.md §6.4): it can only narrow what evalStitchContext
-// admits, never bless anything checkStitchClosure did not already allow
+// (docs/surface-design.md §6.4): it can only narrow what Build
+// admits, never bless anything CheckClosure did not already allow
 // through.
 //
 // compositesweep.AuditVertexLinks itself is worded for its OTHER caller, the composite
-// sweep (compositesweep.AuditBoundary), and reports [ErrUnsupported] there. Translated
+// sweep (compositesweep.AuditBoundary), and reports [decaderr.ErrUnsupported] there. Translated
 // here rather than reworded in place, so the composite sweep's own wording
 // and sentinel stay exactly as that caller states them: a pinch this
 // evaluator proves is disproven input for Stitch, never unsupported reach
 // (docs/surface-design.md Table R row R7), so this wrapper re-reports it as
-// [ErrDegenerate] with Stitch's own wording. A bare context cancellation —
+// [decaderr.ErrDegenerate] with Stitch's own wording. A bare context cancellation —
 // compositesweep.AuditVertexLinks' own budget-polling return, never wrapped in
-// [ErrUnsupported] — passes through unchanged.
-func auditVertexLinksForStitchFaces(ctx context.Context, faces []*Face) error {
+// [decaderr.ErrUnsupported] — passes through unchanged.
+func AuditVertexLinks(ctx context.Context, faces []*topo.Face) error {
 	budget := proofbound.NewWorkBudget(ctx)
 	uses := map[*topo.Edge][]compositesweep.CoedgeUse{}
 	for _, face := range faces {
-		for _, loop := range face.n.Loops {
+		for _, loop := range face.Loops {
 			for _, ce := range loop.CoEdges {
 				if err := budget.Step(); err != nil {
 					return err
 				}
-				uses[ce.Edge] = append(uses[ce.Edge], compositesweep.CoedgeUse{Face: faceNode(face), Forward: ce.Forward})
+				uses[ce.Edge] = append(uses[ce.Edge], compositesweep.CoedgeUse{Face: face, Forward: ce.Forward})
 			}
 		}
 	}
 	if err := compositesweep.AuditVertexLinks(budget, uses); err != nil {
-		if errors.Is(err, ErrUnsupported) {
-			return fmt.Errorf(`%w: Stitch's welded set has a vertex whose meeting faces are not one connected fan or path (docs/surface-design.md Table R row R7): %s`, ErrDegenerate, err)
+		if errors.Is(err, decaderr.ErrUnsupported) {
+			return fmt.Errorf(`%w: Stitch's welded set has a vertex whose meeting faces are not one connected fan or path (docs/surface-design.md Table R row R7): %s`, decaderr.ErrDegenerate, err)
 		}
 		return err
 	}
 	return nil
 }
 
-// stitchFaceFluxAndMoment dispatches on the face's own tagged surface,
+// FaceFluxAndMoment dispatches on the face's own tagged surface,
 // returning its flux_F (this face's own contribution to 3·Volume, before
 // the sum is divided by three) and its three first-moment contributions
 // mx, my, mz. Every admitting arm requires a zero normalBound
@@ -347,60 +350,60 @@ func auditVertexLinksForStitchFaces(ctx context.Context, faces []*Face) error {
 // actually built, and integrating a closed form over the tag would be
 // unsound for such a face). The sealed switch's default is Table R row R8,
 // unchanged for every surface this increment does not land an arm for.
-func stitchFaceFluxAndMoment(f *Face, anchor r3.Vec) (flux, mx, my, mz proofbound.BoundedScalar, err error) {
-	if f.n.NormalBound != 0 {
+func FaceFluxAndMoment(f *topo.Face, anchor r3.Vec) (flux, mx, my, mz proofbound.BoundedScalar, err error) {
+	if f.NormalBound != 0 {
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
 			`%w: Stitch closes a boundary holding a face whose published surface only approximates the geometry actually built (docs/surface-design.md Table R row R8)`,
-			ErrUnsupported,
+			decaderr.ErrUnsupported,
 		)
 	}
 	sign := 1.0
-	if f.n.Reversed {
+	if f.Reversed {
 		sign = -1.0
 	}
-	switch s := f.n.Surface.(type) {
+	switch s := f.Surface.(type) {
 	case surfacegeom.Plane:
-		return stitchflux.PlaneFaceFluxAndMoment(stitchFluxFaceInput(f), s.Frame, anchor, sign)
+		return stitchflux.PlaneFaceFluxAndMoment(fluxFaceInput(f), s.Frame, anchor, sign)
 	case surfacegeom.Cylinder:
-		return stitchflux.CylinderFaceFluxAndMoment(stitchFluxFaceInput(f), s.Origin, s.Axis, anchor, sign)
+		return stitchflux.CylinderFaceFluxAndMoment(fluxFaceInput(f), s.Origin, s.Axis, anchor, sign)
 	case surfacegeom.Cone:
-		return coneFaceFluxAndMoment(f, s, anchor, sign)
+		return ConeFaceFluxAndMoment(f, s, anchor, sign)
 	case surfacegeom.Sphere:
-		return stitchflux.SphereFaceFluxAndMoment(stitchFluxFaceInput(f), s.Center, anchor, sign)
+		return stitchflux.SphereFaceFluxAndMoment(fluxFaceInput(f), s.Center, anchor, sign)
 	case surfacegeom.Torus:
 		input := stitchflux.TorusInput{Center: s.Center, Axis: s.Axis, Major: s.Major, Minor: s.Minor}
-		return stitchflux.TorusFaceFluxAndMoment(stitchFluxFaceInput(f), input, anchor, sign)
+		return stitchflux.TorusFaceFluxAndMoment(fluxFaceInput(f), input, anchor, sign)
 	default:
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
-			`%w: Stitch closes a boundary holding a %T face this evaluator has no closed-form flux integral for (docs/surface-design.md Table R row R8)`,
-			ErrUnsupported, publicSurface(s),
+			`%w: Stitch closes a boundary holding a %s face this evaluator has no closed-form flux integral for (docs/surface-design.md Table R row R8)`,
+			decaderr.ErrUnsupported, reportvocab.SurfaceTypeName(s),
 		)
 	}
 }
 
-func stitchFluxFaceInput(f *Face) stitchflux.FaceInput {
+func fluxFaceInput(f *topo.Face) stitchflux.FaceInput {
 	input := stitchflux.FaceInput{
-		Loops:     make([]stitchflux.LoopSource, len(f.n.Loops)),
-		Area:      f.n.Area,
-		AreaBound: f.n.AreaBound,
+		Loops:     make([]stitchflux.LoopSource, len(f.Loops)),
+		Area:      f.Area,
+		AreaBound: f.AreaBound,
 	}
-	for i, l := range f.n.Loops {
-		input.Loops[i] = stitchLoopSource{loop: loopHandle(l)}
+	for i, l := range f.Loops {
+		input.Loops[i] = loopSource{loop: l}
 	}
 	return input
 }
 
-type stitchLoopSource struct{ loop *Loop }
+type loopSource struct{ loop *topo.Loop }
 
-func (s stitchLoopSource) EdgeCount() int { return len(s.loop.n.CoEdges) }
+func (s loopSource) EdgeCount() int { return len(s.loop.CoEdges) }
 
-func (s stitchLoopSource) IsOuter() bool { return s.loop.n.Outer }
+func (s loopSource) IsOuter() bool { return s.loop.Outer }
 
-func (s stitchLoopSource) Circle() (stitchflux.CircleRim, bool, string) {
-	edge := s.loop.n.CoEdges[0].Edge
+func (s loopSource) Circle() (stitchflux.CircleRim, bool, string) {
+	edge := s.loop.CoEdges[0].Edge
 	circle, ok := edge.Curve.(surfacegeom.Circle3)
 	if !ok {
-		return stitchflux.CircleRim{}, false, fmt.Sprintf("%T", publicCurve(edge.Curve))
+		return stitchflux.CircleRim{}, false, reportvocab.CurveTypeName(edge.Curve)
 	}
 	return stitchflux.CircleRim{
 		Center:          circle.Center,
@@ -410,50 +413,50 @@ func (s stitchLoopSource) Circle() (stitchflux.CircleRim, bool, string) {
 	}, true, ""
 }
 
-func coneFaceFluxAndMoment(f *Face, cone surfacegeom.Cone, anchor r3.Vec, sign float64) (proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar, error) {
-	apexBound, ok := stitchflux.ConeApexDeparture(f.n.Denoted, cone)
+func ConeFaceFluxAndMoment(f *topo.Face, cone surfacegeom.Cone, anchor r3.Vec, sign float64) (proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar, error) {
+	apexBound, ok := stitchflux.ConeApexDeparture(f.Denoted, cone)
 	if !ok {
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
 			`%w: Stitch's flux path cannot state how far this cone's apex sits from the apex its record denotes (docs/surface-design.md Table R row R8)`,
-			ErrUnsupported,
+			decaderr.ErrUnsupported,
 		)
 	}
 	input := stitchflux.ConeInput{Origin: cone.Origin, Axis: cone.Axis, Radius: cone.Radius, HalfAngle: cone.HalfAngle, ApexBound: apexBound}
-	return stitchflux.ConeFaceFluxAndMoment(stitchFluxFaceInput(f), input, anchor, sign)
+	return stitchflux.ConeFaceFluxAndMoment(fluxFaceInput(f), input, anchor, sign)
 }
 
-// stitchCurvedMass sums every face's own flux and first moment
-// (stitchFaceFluxAndMoment), decides the global orientation sign from its
+// CurvedMass sums every face's own flux and first moment
+// (FaceFluxAndMoment), decides the global orientation sign from its
 // own total — reversing every face and recomputing once, the curved
-// analogue of stitch.go's acc.vol6.Sign() < 0 step — divides by three, and
+// analogue of build.go's acc.vol6.Sign() < 0 step — divides by three, and
 // charges the placement allowance (proofbound.SweptVolumeAllow/proofbound.SweptMomentAllow) on
 // the same terms capband.BandVolume does for a placed curved solid: a
 // placed curved stitched solid is Approximate on both readings, per
 // docs/surface-design.md §6.4's placed-body paragraph.
-func stitchCurvedMass(ctx context.Context, faces []*Face, anchor r3.Vec, delta float64) (Measurement, VecMeasurement, error) {
+func CurvedMass(ctx context.Context, faces []*topo.Face, anchor r3.Vec, delta float64) (measurement.Measurement, measurement.VecMeasurement, error) {
 	if err := ctx.Err(); err != nil {
-		return Measurement{}, VecMeasurement{}, err
+		return measurement.Measurement{}, measurement.VecMeasurement{}, err
 	}
-	fluxSum, momX, momY, momZ, err := sumStitchFlux(faces, anchor)
+	fluxSum, momX, momY, momZ, err := sumFlux(faces, anchor)
 	if err != nil {
-		return Measurement{}, VecMeasurement{}, err
+		return measurement.Measurement{}, measurement.VecMeasurement{}, err
 	}
 	if fluxSum.Value < 0 {
 		for _, f := range faces {
-			reverseFaceOrientation(f)
+			ReverseFaceOrientation(f)
 		}
-		fluxSum, momX, momY, momZ, err = sumStitchFlux(faces, anchor)
+		fluxSum, momX, momY, momZ, err = sumFlux(faces, anchor)
 		if err != nil {
-			return Measurement{}, VecMeasurement{}, err
+			return measurement.Measurement{}, measurement.VecMeasurement{}, err
 		}
 	}
 
 	envelopes := make([]stitchflux.MassEnvelopeFace, 0, len(faces))
 	for _, f := range faces {
-		envelope := stitchflux.MassEnvelopeFace{Surface: f.n.Surface, Area: f.n.Area, AreaBound: f.n.AreaBound}
-		for i, loop := range f.n.Loops {
+		envelope := stitchflux.MassEnvelopeFace{Surface: f.Surface, Area: f.Area, AreaBound: f.AreaBound}
+		for i, loop := range f.Loops {
 			for _, ce := range loop.CoEdges {
-				envelope.Vertices = append(envelope.Vertices, vertexHandle(coedgeStart(ce)).Position().Value)
+				envelope.Vertices = append(envelope.Vertices, topobuild.CoEdgeStart(ce).Position)
 			}
 			if len(loop.CoEdges) > 0 {
 				edge := loop.CoEdges[0].Edge
@@ -473,32 +476,32 @@ func stitchCurvedMass(ctx context.Context, faces []*Face, anchor r3.Vec, delta f
 	vol, centre, state := stitchflux.MassFromFlux(fluxSum,
 		[3]proofbound.BoundedScalar{momX, momY, momZ}, areaUpper, coordUpper, delta)
 	if state == stitchflux.MassZeroVolume {
-		return Measurement{}, VecMeasurement{}, fmt.Errorf(`%w: a stitched curved solid with zero net volume has no centroid`, ErrDegenerate)
+		return measurement.Measurement{}, measurement.VecMeasurement{}, fmt.Errorf(`%w: a stitched curved solid with zero net volume has no centroid`, decaderr.ErrDegenerate)
 	}
 	if state == stitchflux.MassUnboundedCentroid {
-		return Measurement{}, VecMeasurement{}, fmt.Errorf(`%w: the placement's proven volume allowance is not smaller than the held volume; this evaluator cannot state the placed centroid`, ErrUnsupported)
+		return measurement.Measurement{}, measurement.VecMeasurement{}, fmt.Errorf(`%w: the placement's proven volume allowance is not smaller than the held volume; this evaluator cannot state the placed centroid`, decaderr.ErrUnsupported)
 	}
-	volMeasurement := Measurement{
+	volMeasurement := measurement.Measurement{
 		Value:     units.CubicMillimeters(vol.Value),
-		Exactness: exactnessOf(vol.Bound),
+		Exactness: measurement.ExactnessOf(vol.Bound),
 		Bound:     units.CubicMillimeters(vol.Bound),
 	}
 	fx, fy, fz := anchor.X+centre[0].Value, anchor.Y+centre[1].Value, anchor.Z+centre[2].Value
 
 	bound := proofbound.Radius3D(math.Max(centre[0].Bound, math.Max(centre[1].Bound, centre[2].Bound)))
-	centroidMeasurement := VecMeasurement{
+	centroidMeasurement := measurement.VecMeasurement{
 		Value:     r3.NewVec(fx, fy, fz),
-		Exactness: exactnessOf(bound),
+		Exactness: measurement.ExactnessOf(bound),
 		Bound:     units.Millimeters(bound),
 	}
 	return volMeasurement, centroidMeasurement, nil
 }
 
-// sumStitchFlux sums every face's own flux and first moment, refusing R8 as
+// sumFlux sums every face's own flux and first moment, refusing R8 as
 // soon as any one face's own dispatch does.
-func sumStitchFlux(faces []*Face, anchor r3.Vec) (flux, momX, momY, momZ proofbound.BoundedScalar, err error) {
+func sumFlux(faces []*topo.Face, anchor r3.Vec) (flux, momX, momY, momZ proofbound.BoundedScalar, err error) {
 	for _, f := range faces {
-		fFlux, fmx, fmy, fmz, err := stitchFaceFluxAndMoment(f, anchor)
+		fFlux, fmx, fmy, fmz, err := FaceFluxAndMoment(f, anchor)
 		if err != nil {
 			return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, err
 		}
@@ -510,7 +513,7 @@ func sumStitchFlux(faces []*Face, anchor r3.Vec) (flux, momX, momY, momZ proofbo
 	return flux, momX, momY, momZ, nil
 }
 
-// stitchFluxTagsDenoted is the gate docs/surface-design.md §6.4 puts in front
+// fluxTagsDenoted is the gate docs/surface-design.md §6.4 puts in front
 // of the flux arms for a revolve face. Every arm integrates the face's TAG —
 // a Cylinder's rims and area, a Plane's origin and normal, a Cone's apex and
 // axis, a Sphere's or Torus's centre — while a revolve face's tag is only a
@@ -525,20 +528,20 @@ func sumStitchFlux(faces []*Face, anchor r3.Vec) (flux, momX, momY, momZ proofbo
 // where its tag IS that surface, decided exactly (stitchflux.TagIsDenoted); every
 // other face's tag is its own record. It reads the unplaced operand faces:
 // a stitch's own placement rounding is its delta.
-func stitchFluxTagsDenoted(faces []*Face) bool {
+func fluxTagsDenoted(faces []*topo.Face) bool {
 	for _, f := range faces {
-		if f.n.Denoted != nil && !stitchflux.TagIsDenoted(stitchTaggedFace(f)) {
+		if f.Denoted != nil && !stitchflux.TagIsDenoted(TaggedFace(f)) {
 			return false
 		}
 	}
 	return true
 }
 
-// stitchTaggedFace passes a face's surface and edge curves to the exact
+// TaggedFace passes a face's surface and edge curves to the exact
 // denotation gate without giving the internal package topology ownership.
-func stitchTaggedFace(f *Face) stitchflux.TaggedFace {
-	tagged := stitchflux.TaggedFace{Denoted: f.n.Denoted, Surface: f.n.Surface}
-	for _, loop := range f.n.Loops {
+func TaggedFace(f *topo.Face) stitchflux.TaggedFace {
+	tagged := stitchflux.TaggedFace{Denoted: f.Denoted, Surface: f.Surface}
+	for _, loop := range f.Loops {
 		for _, ce := range loop.CoEdges {
 			tagged.Curves = append(tagged.Curves, ce.Edge.Curve)
 		}

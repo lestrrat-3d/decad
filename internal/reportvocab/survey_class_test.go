@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
+	"github.com/lestrrat-3d/decad/internal/stitchrecord"
 	"github.com/lestrrat-3d/decad/internal/sweepmitre"
 	"github.com/lestrrat-3d/decad/internal/sweeprecord"
 	"github.com/lestrrat-3d/decad/internal/twistsweep"
@@ -46,6 +47,8 @@ func TestStagedSurveyNamesRootPayloadClass(t *testing.T) {
 		{"twoSidedDraftPayload", draftrecord.TwoSidedPayload{}},
 		{"sweepPayload", sweeprecord.Payload{}},
 		{"chainSweepPayload", sweeprecord.ChainPayload{}},
+		{"stitchPayload", stitchrecord.Payload{}},
+		{"unstitchPayload", stitchrecord.UnstitchPayload{}},
 	} {
 		t.Run(tc.class, func(t *testing.T) {
 			t.Parallel()

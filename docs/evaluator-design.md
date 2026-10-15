@@ -654,7 +654,7 @@ carriers read the same walk values, so the displacement it charges for the
 carriers (`clearance.RevolveCarrierResult`'s `AxisGap`,
 `docs/clearance-design.md` §2) is the one those edges share; they add only
 the float evaluation of the centre. STEP export,
-`internal/extent/angular_stop.go`'s boundary probes and `stitch_flux.go`'s
+`internal/extent/angular_stop.go`'s boundary probes and `internal/stitchrecord/flux.go`'s
 circle rims read the held curves as they stand.
 A wall's `Face.NormalAt` bound is proven against the surface its record
 DENOTES, never against its `Surface` tag. The tag is a float re-expression:
@@ -869,7 +869,9 @@ their `Placed` runs `twistsweep.Eval`. `draftPayload` and `twoSidedDraftPayload`
 `draftrecord.Payload` and `draftrecord.TwoSidedPayload`: their `Placed` runs `draftrecord.Build` and
 `draftrecord.BuildTwoSided`. `sweepPayload` and `chainSweepPayload` are aliases of `sweeprecord.Payload` and
 `sweeprecord.ChainPayload`: their `Placed` rebuilds the one-span reduction and runs a `sweeprecord` finishing
-step; a profile composite replays its spans and a chain composite refuses. A payload that still lives in the root
+step; a profile composite replays its spans and a chain composite refuses. `stitchPayload` and
+`unstitchPayload` are aliases of `stitchrecord.Payload` and `stitchrecord.UnstitchPayload`: their `Placed`
+runs `stitchrecord.Build` and `stitchrecord.BuildUnstitchFace`. A payload that still lives in the root
 package recovers its document handle from the node's `Owner` in `Placed` and
 runs its root builder.
 

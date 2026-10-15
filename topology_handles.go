@@ -457,19 +457,6 @@ func bodyResult(n *topo.Body, err error) (*Body, error) {
 	return bodyHandle(n), nil
 }
 
-// faceGroupHandles returns the handles of each group of ns in order, or nil
-// for an empty ns.
-func faceGroupHandles(ns [][]*topo.Face) [][]*Face {
-	if len(ns) == 0 {
-		return nil
-	}
-	out := make([][]*Face, len(ns))
-	for i, g := range ns {
-		out[i] = faceHandles(g)
-	}
-	return out
-}
-
 // bornMesh sets m's node Owner to m and returns m. Every root Mesh is born
 // through it, so meshHandle maps the mesh node a body's tessellation cache
 // holds back to the one handle that holds it.

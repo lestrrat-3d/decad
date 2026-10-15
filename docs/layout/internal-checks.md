@@ -65,6 +65,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/clearance/tier/` | Vertex cells and ruling proofs. See clearance §3/§6. |
 | `internal/clearance/spine/` | Point, line and circle spine cell pairs. See clearance §4. |
 | `internal/stitchflux/` | Stitch exact revolve tag admission, face flux and mass proofs. See surface §6.4. |
+| `internal/stitchrecord/` | The Stitch and Unstitch payloads and their builders over nodes: the weld plan, topology rebuild, orientation, closure, Table C, flux mass and the one-face copy. Root `stitchPayload` and `unstitchPayload` alias it. See surface §6, evaluator §8. |
 | `internal/stitchweld/` | Stitch welds, topology and bounds. See surface §6.2–6.4. |
 | `internal/denotation/` | Level and curve identity certificates. See surface §5.2, §6.2. |
 | `internal/surfacenormal/` | Exact enclosures and error bounds for analytic face normals. See `normal_bound.go`. |
