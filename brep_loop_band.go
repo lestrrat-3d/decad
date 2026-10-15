@@ -2,10 +2,11 @@ package decad
 
 import (
 	"github.com/lestrrat-3d/decad/internal/breprecord"
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
-// brepBandsOccupiedVolumeAdmission is capBlendOccupiedVolumeAdmission's
+// brepBandsOccupiedVolumeAdmission is capblend.OccupiedVolumeAdmission's
 // question for every band of a route L body (modify-general Table DG's DG3 and
 // DG4): each band is admitted as the cap-loop chamfer admits its own loop, as
 // a whole turn, or a loop whose every corner is a line-line miter or an
@@ -28,7 +29,7 @@ func brepBandsOccupiedVolumeAdmission(budget *proofbound.WorkBudget, bp brepPayl
 			// shared vertices are the record's exact contour endpoints.
 			continue
 		}
-		refusal, err := capBlendOccupiedVolumeAdmission(budget, b.TessView(bp.Faces[b.Face], bp.Xform))
+		refusal, err := capblend.OccupiedVolumeAdmission(budget, b.TessView(bp.Faces[b.Face], bp.Xform))
 		if err != nil || refusal != nil {
 			return refusal, err
 		}

@@ -366,7 +366,7 @@ func TestCapBlendMeshPublishesNoVolumeProofForAMiteredBand(t *testing.T) {
 	require.Equal(t, 0.0, mesh.n.VolSymDiff)
 	_, err = operandSymDiff(mesh)
 	require.ErrorIs(t, err, ErrUnsupported)
-	refusal, err := capBlendOccupiedVolumeAdmission(proofbound.NewWorkBudget(t.Context()), cbp)
+	refusal, err := capblend.OccupiedVolumeAdmission(proofbound.NewWorkBudget(t.Context()), cbp)
 	require.NoError(t, err)
 	require.ErrorContains(t, refusal, `loop 0`)
 	require.ErrorContains(t, refusal, `no proof of the volume`)

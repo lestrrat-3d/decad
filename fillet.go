@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/breprecord"
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/draftrecord"
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
@@ -199,7 +200,7 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 
 	// SX10: a capBlendPayload receiver is staged before the generic "not a
 	// prism" refusal, so the more specific reason leads.
-	if err := requireNotCapBlendReceiver(b.n.Payload, "fillets"); err != nil {
+	if err := capblend.RequireNotReceiver(b.n.Payload, "fillets"); err != nil {
 		return nil, err
 	}
 	if out, matched, err := tryDraftCircleRimFillet(ctx, b, edges, rmm, rDelta); matched || err != nil {

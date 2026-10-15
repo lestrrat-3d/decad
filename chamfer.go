@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/breprecord"
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/draftrecord"
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
@@ -221,7 +222,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 
 	// SX10: a capBlendPayload receiver is staged before the generic
 	// "not a prism" refusal, so the more specific reason leads.
-	if err := requireNotCapBlendReceiver(b.n.Payload, "chamfers"); err != nil {
+	if err := capblend.RequireNotReceiver(b.n.Payload, "chamfers"); err != nil {
 		return nil, err
 	}
 	if asym == nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -147,7 +148,7 @@ func capBlendGateDiameter(ctx context.Context, budget *proofbound.WorkBudget, bo
 // capBlendGatePoints lists points a cap-loop chamfer proves lie on its body.
 // It joins four sets:
 //
-//   - the stations of capBlendWitnessPrisms: every loop's wall between the
+//   - the stations of capblend.WitnessPrisms: every loop's wall between the
 //     side levels its bands leave, charged their gaps and the levels'
 //     displacement (capBlendPayload.AxialDelta);
 //   - the stations on every whole cap circle, the cap contour a cornerless
@@ -169,7 +170,7 @@ func capBlendGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body
 	if err := ctx.Err(); err != nil {
 		return gatePoints{}, false, err
 	}
-	g, ok, err := prismGatePoints(budget, capBlendWitnessPrisms(cbp), cbp.AxialDelta())
+	g, ok, err := prismGatePoints(budget, capblend.WitnessPrisms(cbp), cbp.AxialDelta())
 	if err != nil || !ok {
 		return gatePoints{}, false, err
 	}

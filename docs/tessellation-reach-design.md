@@ -583,7 +583,7 @@ payload already publishes per patch; the trimmed walls and caps charge the prism
 
 ### Occupied volume — `volSymDiff` for an admitted band
 
-**Admission** (`capBlendOccupiedVolumeAdmission`, `capblend_admit.go`) is decided from the record alone and
+**Admission** (`capblend.OccupiedVolumeAdmission`, `internal/capblend/admit.go`) is decided from the record alone and
 read by both consumers that must agree: `requireVolumeProvingPayload` (`boolean.go`) before any mesh is
 built, and `tessellateCapBlend` when it publishes. Every loop of the payload must be either
 

@@ -64,7 +64,7 @@ func chamferedFlange(t *testing.T) (*Body, capBlendPayload) {
 func TestCapBlendAdmissionAdmitsTheFlange(t *testing.T) {
 	t.Parallel()
 	_, cbp := chamferedFlange(t)
-	refusal, err := capBlendOccupiedVolumeAdmission(proofbound.NewWorkBudget(t.Context()), cbp)
+	refusal, err := capblend.OccupiedVolumeAdmission(proofbound.NewWorkBudget(t.Context()), cbp)
 	require.NoError(t, err)
 	require.NoError(t, refusal, `every band of the flange is a whole turn or joins only exactly tangent corners`)
 
@@ -94,7 +94,7 @@ func TestCapBlendAdmissionAdmitsTheFlange(t *testing.T) {
 func TestCapBlendAdmissionRefusesAMiteredArc(t *testing.T) {
 	t.Parallel()
 	_, cbp := chamferedSectionBody(t, quarterDiskSection(10), 2)
-	refusal, err := capBlendOccupiedVolumeAdmission(proofbound.NewWorkBudget(t.Context()), cbp)
+	refusal, err := capblend.OccupiedVolumeAdmission(proofbound.NewWorkBudget(t.Context()), cbp)
 	require.NoError(t, err)
 	require.ErrorIs(t, refusal, ErrUnsupported)
 	require.ErrorContains(t, refusal, `loop 0`)
@@ -115,7 +115,7 @@ func TestCapBlendAdmissionRefusesAReflexCorner(t *testing.T) {
 		}
 		s.Fix(pts[0])
 	}, 3)
-	refusal, err := capBlendOccupiedVolumeAdmission(proofbound.NewWorkBudget(t.Context()), cbp)
+	refusal, err := capblend.OccupiedVolumeAdmission(proofbound.NewWorkBudget(t.Context()), cbp)
 	require.NoError(t, err)
 	require.ErrorIs(t, refusal, ErrUnsupported)
 	require.ErrorContains(t, refusal, `reflex`)

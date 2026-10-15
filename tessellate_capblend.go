@@ -32,7 +32,7 @@ import (
 // slack for them.
 //
 // At VerifyAll it also publishes §7's slice-wise occupied-volume proof for a
-// payload whose every band capBlendOccupiedVolumeAdmission (capblend_admit.go)
+// payload whose every band capblend.OccupiedVolumeAdmission
 // admits — whole turns, line-line miters and exactly G1 joins: the chord
 // polygon's circular-segment integral over the trimmed and band ranges
 // (capBlendChordVolume) plus proofbound.SweptVolumeAllow over each vertex's displacement
@@ -294,7 +294,7 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 		}
 		return mesh, nil
 	}
-	refusal, err := capBlendOccupiedVolumeAdmission(budget, cbp)
+	refusal, err := capblend.OccupiedVolumeAdmission(budget, cbp)
 	if err != nil {
 		return nil, err
 	}
