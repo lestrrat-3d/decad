@@ -1130,11 +1130,11 @@ section is all `LineSeg` with zero deltas, at any proper pose; a stitched all-pl
 §10.4 held mesh has zero `δ`, an exact loft, cup or one-span straight sweep among them. A body with a
 positive boundary displacement takes §10.4's held mesh at that `δ`.
 
-A stitched solid is read off its own audited triangle set (`stitchPayload.tris` over `verts`, with
-`triFaces` naming each triangle's live face), which `Stitch` assembles only for a closed all-planar weld
-whose crossing audit passed (`auditClean`); a curved or mixed stitch holds no triangle set and is not
+A stitched solid is read off its own audited triangle set (`stitchPayload.Tris` over `Verts`, with
+`TriFaces` naming each triangle's live face), which `Stitch` assembles only for a closed all-planar weld
+whose crossing audit passed (`AuditClean`); a curved or mixed stitch holds no triangle set and is not
 admitted, nor is an open sheet. Its vertices are the welded table's floats, exact dyadics, and its
-displacement is the largest per-vertex weld bound (`vertBound`, each the class bound with the placement
+displacement is the largest per-vertex weld bound (`VertBound`, each the class bound with the placement
 rounding `delta` already added), and at least `delta`: zero for a weld built at the identity whose every
 class is zero-bound, which is then a §9
 body, and positive for a placed or certificate-welded stitch, which is a §10.4 held mesh with that δ. The
@@ -2584,8 +2584,8 @@ lines below do not repeat it.
 ### PR 14b (Phase 2) — stitched planar solids in the exact pair
 
 - Delivers §9's admission of a closed all-planar stitched solid: `planarSolidAtPose` reads
-  `stitchPayload.tris`, `verts` and `triFaces` (the face map through `Body.Faces()`), refuses a nil
-  triangle set, an open sheet or a failed crossing audit, and returns the largest `vertBound`, at least
+  `stitchPayload.Tris`, `Verts` and `TriFaces` (the face map through `Body.Faces()`), refuses a nil
+  triangle set, an open sheet or a failed crossing audit, and returns the largest `VertBound`, at least
   `delta`, as the displacement, zero for the scene's tetrahedron.
 - Files: `contact_faceted_pair.go`; `docs/collision-v1-support.md`.
 - Test (`apitest`): `apitest/contact_faceted_pair_test.go` gains `TestExactPlanarPairAdmitsStitchedSolid`: the §2
@@ -2597,7 +2597,7 @@ lines below do not repeat it.
   apex, and on its `XY` face the three face corners at their exact coordinates. Legs shown to fail: the
   face map deleted (`Faces` nil), the apex fixture keeps `Touching` with no manifold; the `delta` reading
   deleted, a placed copy of the tetrahedron (positive `delta`) reads an exact `Touching` where §10.4
-  requires a `ContactBand`. The `vertBound` widening has no identity-placed fixture: only a
+  requires a `ContactBand`. The `VertBound` widening has no identity-placed fixture: only a
   certificate-welded stitch (`docs/surface-design.md` §6.2) carries a positive class bound at the
   identity, and the test file records that the term is the same per-vertex bound `tessellate_stitch.go`
   publishes per face, read back rather than proved twice. `.github/test-shards-apitest.txt` lists both tests.
@@ -2910,7 +2910,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   the floor publishes one face. The ball and `Separation` charges have no red fixture: every shipped
   tessellation samples its vertices on the true surface within rounding, and the test file records that
   the charges follow `Bound`'s contract rather than any producer's behavior, as PR 14b records its
-  `vertBound` term.
+  `VertBound` term.
 - Test (`dynamics`): `dynamics/contact_band_test.go` gains the `2.1 mm` block dropped `8 mm` onto the §2 tray
   at §2's Phase 3 residuals, landing through an `Overlapping` initial contact with a charged manifold and
   resting within `32` steps on a four-point `ContactBand` whose `Gap.Bound` is at most `δ + SupportBand`,

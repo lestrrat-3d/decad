@@ -83,7 +83,7 @@ import (
 // diameter can only turn a passing reading into a false Suspect, never a
 // false Sound.
 //
-// This arm's zero-subtraction fast path reads payload.delta == 0 exactly
+// This arm's zero-subtraction fast path reads payload.Delta == 0 exactly
 // (loft_build.go's exact identity-transform-and-no-computed-station
 // comparison, never a tolerance) and then reports the shared reader's
 // answer UNCHANGED: no subtraction and no rounding of its own. What that
@@ -194,14 +194,14 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		// as a loft's is, so the same held-vertex-set diameter is a
 		// certified LOWER bound on the body's true diameter, tightened by
 		// the placement's own proven displacement.
-		d, ok, err := diameter.PointsContext(ctx, payload.verts)
+		d, ok, err := diameter.PointsContext(ctx, payload.Verts)
 		if err != nil || !ok {
 			return d, ok, err
 		}
-		if payload.delta == 0 {
+		if payload.Delta == 0 {
 			return d, true, nil
 		}
-		d, ok = diameter.LowerForDisplacement(d, payload.delta)
+		d, ok = diameter.LowerForDisplacement(d, payload.Delta)
 		return d, ok, nil
 	}
 	if payload, ok := body.n.Payload.(chainPayload); ok {

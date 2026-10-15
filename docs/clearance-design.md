@@ -189,7 +189,7 @@ exact planar carrier per live face, read straight off the body's own rebuilt
 topology** — the plane frame from the face's own `Plane` tag (negated when the
 face is reversed), the trim region from each loop's own coedge start
 vertices, and the interior witnesses from the payload's own recorded triangle
-centroids for that face (`docs/surface-design.md` §6.4's `tris`/`triFaces`),
+centroids for that face (`docs/surface-design.md` §6.4's `Tris`/`TriFaces`),
 filtered by the region's own `classify` call as a reject-only confirmation.
 It is admitted whenever the recorded triangle set exists (an all-planar body,
 open or closed); a placement's own widened vertex bound (`stitch.go`'s

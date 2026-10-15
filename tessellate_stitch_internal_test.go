@@ -23,9 +23,9 @@ func TestStitchCurvedMeshNamesUnsupportedSurface(t *testing.T) {
 	plane := bornFace(&Face{n: topo.Face{Surface: surfacegeom.Plane{}}})
 	freeform := bornFace(&Face{n: topo.Face{Surface: surfacegeom.NURBSSurface{}}})
 	sp := stitchPayload{
-		faces:     []*Face{plane, freeform},
-		liveFaces: []*Face{bornFace(&Face{n: topo.Face{Surface: surfacegeom.Plane{}}}), bornFace(&Face{n: topo.Face{Surface: surfacegeom.NURBSSurface{}}})},
-		plan:      &stitchWeldPlan{table: newStitchVertexTable()},
+		Faces:     []*Face{plane, freeform},
+		LiveFaces: []*Face{bornFace(&Face{n: topo.Face{Surface: surfacegeom.Plane{}}}), bornFace(&Face{n: topo.Face{Surface: surfacegeom.NURBSSurface{}}})},
+		Plan:      &stitchWeldPlan{Table: newStitchVertexTable()},
 	}
 	_, err := tessellateStitchCurved(t.Context(), bornBody(&Body{n: topo.Body{Kind: topo.BodySheet}}), sp, 0.1, VerifyAll)
 	require.ErrorIs(t, err, ErrUnsupported)
@@ -69,16 +69,16 @@ func TestStitchCurvedMeshInheritsEverySourceFaceBound(t *testing.T) {
 	require.NoError(t, err)
 	sp, ok := stitched.n.Payload.(stitchPayload)
 	require.True(t, ok)
-	require.Len(t, sp.faces, 4)
+	require.Len(t, sp.Faces, 4)
 	require.Equal(t, source.Bound(), mesh.Bound())
 	require.Positive(t, mesh.Bound().Base(),
 		"the fixture's own premise: the source mesh's overall bound must be positive, or a missing per-face charge would go unnoticed")
 
-	for i, sourceFace := range sp.faces {
+	for i, sourceFace := range sp.Faces {
 		want, ok := source.sourceBound(faceNode(sourceFace))
 		require.True(t, ok)
 		require.Positivef(t, want, "source face %d's own bound must be positive, or the equality check below proves nothing", i)
-		got, ok := mesh.sourceBound(faceNode(sp.liveFaces[i]))
+		got, ok := mesh.sourceBound(faceNode(sp.LiveFaces[i]))
 		require.Truef(t, ok, "stitched face %d has no inherited source bound", i)
 		require.Equalf(t, want, got, "stitched face %d lost its source bound", i)
 	}
@@ -94,27 +94,27 @@ func TestStitchCurvedWeldedRevolveSiblingRejectsWrongEdgeAncestry(t *testing.T) 
 	require.NoError(t, err)
 	sp, ok := stitched.n.Payload.(stitchPayload)
 	require.True(t, ok)
-	require.GreaterOrEqual(t, sp.plan.groups, 2)
+	require.GreaterOrEqual(t, sp.Plan.Groups, 2)
 
 	// Keep the real welded body, but claim one copied edge belongs to a
 	// different original edge's weld group. The ancestry gate must refuse.
-	plan := *sp.plan
-	plan.group = make(map[*Edge]int, len(sp.plan.group))
+	plan := *sp.Plan
+	plan.Group = make(map[*Edge]int, len(sp.Plan.Group))
 	var first *Edge
 	firstGroup := -1
-	for edge, group := range sp.plan.group {
-		plan.group[edge] = group
+	for edge, group := range sp.Plan.Group {
+		plan.Group[edge] = group
 		if first == nil {
 			first, firstGroup = edge, group
 		}
 	}
-	for _, group := range sp.plan.group {
+	for _, group := range sp.Plan.Group {
 		if group != firstGroup {
-			plan.group[first] = group
+			plan.Group[first] = group
 			break
 		}
 	}
-	sp.plan = &plan
+	sp.Plan = &plan
 	_, err = tessellateStitchCurved(t.Context(), stitched, sp, 0.1, VerifyAll)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "a weld joins different original edges")
@@ -123,10 +123,10 @@ func TestStitchCurvedWeldedRevolveSiblingRejectsWrongEdgeAncestry(t *testing.T) 
 // TestStitchCurvedWeldedRevolveSiblingsInheritEverySourceFaceBound restates
 // T88's per-face relation for the sibling-weld route (§10.2): each live
 // face's bound must trace back to the ORIGINAL revolve sheet's own source
-// mesh face, reached here through unstitchPayload.face, since sp.faces on
+// mesh face, reached here through unstitchPayload.Face, since sp.Faces on
 // this route holds the intermediate unstitched COPY, not the original.
 // TestStitchCurvedMeshInheritsEverySourceFaceBound covers the direct route
-// (§10.1) by reading sp.faces straight; a regression confined to
+// (§10.1) by reading sp.Faces straight; a regression confined to
 // stitchSiblingRevolveSource's own paired construction leaves that test
 // green, which is why the sibling route needs this assertion of its own.
 func TestStitchCurvedWeldedRevolveSiblingsInheritEverySourceFaceBound(t *testing.T) {
@@ -144,15 +144,15 @@ func TestStitchCurvedWeldedRevolveSiblingsInheritEverySourceFaceBound(t *testing
 	require.NoError(t, err)
 	sp, ok := stitched.n.Payload.(stitchPayload)
 	require.True(t, ok)
-	require.Len(t, sp.faces, 2)
+	require.Len(t, sp.Faces, 2)
 
-	for i, copied := range sp.faces {
+	for i, copied := range sp.Faces {
 		up, ok := copied.n.Body.Payload.(unstitchPayload)
 		require.True(t, ok)
-		want, ok := source.sourceBound(faceNode(up.face))
+		want, ok := source.sourceBound(faceNode(up.Face))
 		require.True(t, ok)
 		require.Positivef(t, want, "original face %d's own bound must be positive, or the equality check below proves nothing", i)
-		got, ok := mesh.sourceBound(faceNode(sp.liveFaces[i]))
+		got, ok := mesh.sourceBound(faceNode(sp.LiveFaces[i]))
 		require.Truef(t, ok, "stitched sibling face %d has no inherited source bound", i)
 		require.Equalf(t, want, got, "stitched sibling face %d lost its original source bound", i)
 	}
@@ -213,7 +213,7 @@ func TestStitchTessellateClassBoundIsIndependentOfPlacement(t *testing.T) {
 
 	sp, ok := solid.n.Payload.(stitchPayload)
 	require.True(t, ok)
-	require.Zero(t, sp.delta, "no placement is in play: the identity transform's own fast path")
+	require.Zero(t, sp.Delta, "no placement is in play: the identity transform's own fast path")
 
 	wantBound := 0.0
 	for _, v := range solid.Vertices() {
@@ -447,10 +447,10 @@ func TestTessellateStitchRefusesARepeatedDirectedEdge(t *testing.T) {
 	f := stitchTestSquareFace(r3.Vec{})
 	verts := []r3.Vec{r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)}
 	sp := stitchPayload{
-		verts:     verts,
-		vertBound: []float64{0, 0, 0},
-		tris:      [][3]int{{0, 1, 2}, {0, 1, 2}},
-		triFaces:  []*Face{f, f},
+		Verts:     verts,
+		VertBound: []float64{0, 0, 0},
+		Tris:      [][3]int{{0, 1, 2}, {0, 1, 2}},
+		TriFaces:  []*Face{f, f},
 	}
 	b := bornBody(&Body{n: topo.Body{Solid: true, Kind: topo.BodySolid}})
 

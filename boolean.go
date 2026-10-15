@@ -986,7 +986,7 @@ func booleanProofBounds(symA, symB, roundVol, slackA, slackB, dropArea float64) 
 // caller that reaches this function by some other path.
 //
 // A stitchPayload operand narrows rather than refuses outright: a CLOSED,
-// all-planar body (sp.tris != nil) whose every vertex carries a proven bound
+// all-planar body (sp.Tris != nil) whose every vertex carries a proven bound
 // of exactly zero (stitchweld.ZeroBound over stitchVertexBounds, stitch.go — the identical gate
 // tessellate_stitch.go's own occupied-volume publication and
 // clearance_geom.go's carrier-model dispatch both apply) will publish
@@ -1054,7 +1054,7 @@ func requireVolumeProvingPayload(ctx context.Context, b *Body, index int) error 
 				return nil
 			}
 		case stitchPayload:
-			if pl.tris != nil {
+			if pl.Tris != nil {
 				zeroBound, zErr := stitchweld.ZeroBound(proofbound.NewWorkBudget(ctx), stitchVertexBounds(b))
 				if zErr != nil {
 					return zErr

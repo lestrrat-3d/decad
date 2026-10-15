@@ -424,7 +424,7 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		return tessellateTwoSidedDraft(ctx, b, dp, chord, verify)
 	}
 	if sp, ok := b.n.Payload.(stitchPayload); ok {
-		if sp.tris == nil {
+		if sp.Tris == nil {
 			return tessellateStitchCurved(ctx, b, sp, chord, verify)
 		}
 		// The all-planar stitch restatement takes no chord tolerance at all

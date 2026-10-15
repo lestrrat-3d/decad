@@ -703,7 +703,7 @@ func TestHeldChordValidation(t *testing.T) {
 // shipped tessellation samples its vertices on the true surface within
 // rounding. The charges follow Bound's contract, which places the true
 // boundary within δ of the held mesh and says nothing of where a held vertex
-// lies, rather than any producer's behavior, as PR 14b records its vertBound
+// lies, rather than any producer's behavior, as PR 14b records its VertBound
 // term.
 
 // tiltedBlock is a 12 mm block over [−6, 6]×[y0, y0+12] with its top loop

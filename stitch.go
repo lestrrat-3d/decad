@@ -119,61 +119,61 @@ func Stitch(ctx context.Context, bodies ...*Body) (*Body, error) {
 // fresh from the placed triangle set every time, exactly as a rigid motion
 // can change which pairs of placed triangles meet.
 type stitchPayload struct {
-	xform r3.Transform
-	// delta is the proven displacement proofbound.RigidRoundAllow charges against the
-	// placed shared vertex table — zero exactly when xform is the identity
+	Xform r3.Transform
+	// Delta is the proven displacement proofbound.RigidRoundAllow charges against the
+	// placed shared vertex table — zero exactly when Xform is the identity
 	// transform, an exact struct comparison (docs/loft-design.md §5's
 	// identical fast path).
-	delta float64
-	faces []*Face
-	plan  *stitchWeldPlan
-	// liveFaces parallels faces after the orientation and global sign passes.
+	Delta float64
+	Faces []*Face
+	Plan  *stitchWeldPlan
+	// LiveFaces parallels Faces after the orientation and global sign passes.
 	// A curved source mesh uses this pairing without looking up copied roles.
-	liveFaces []*Face
-	// verts is the shared vertex table actually built for THIS body, in
+	LiveFaces []*Face
+	// Verts is the shared vertex table actually built for THIS body, in
 	// world coordinates — verify_gate.go's own diameter arm reads it back,
 	// modelled on loftPayload's identical field.
-	verts []r3.Vec
-	// vertBound is verts' own per-vertex proven bound (millimetres), the
+	Verts []r3.Vec
+	// VertBound is Verts' own per-vertex proven bound (millimetres), the
 	// same widened class bound rebuildStitchTopology's vertexForClass
 	// stamps onto the live Vertex it builds for that class — read back here
 	// so tessellate_stitch.go can publish a per-face bound without
-	// recomputing it. Populated only alongside tris/triFaces below.
-	vertBound []float64
-	// tris is the final wound triangle set (indices into verts) an
+	// recomputing it. Populated only alongside Tris/TriFaces below.
+	VertBound []float64
+	// Tris is the final wound triangle set (indices into Verts) an
 	// all-planar (stitchAllTetrahedronEligible) build assembled and
 	// audited, CLOSED or OPEN — the exact set tessellate_stitch.go restates
 	// with no chording. Nil for a curved or mixed stitched body: it has no
 	// triangle set to restate.
-	tris [][3]int
-	// triFaces is tris' own per-triangle LIVE rebuilt face, parallel to
-	// tris. It is never stitchPayload.faces (the retired operand faces) and
+	Tris [][3]int
+	// TriFaces is Tris' own per-triangle LIVE rebuilt face, parallel to
+	// Tris. It is never stitchPayload.Faces (the retired operand faces) and
 	// never attributed by role, since rebuildStitchTopology copies a welded
 	// operand's origins verbatim and two welded operands can share one role
 	// string.
-	triFaces []*Face
-	// auditClean records whether the crossing audit ran and passed for this
+	TriFaces []*Face
+	// AuditClean records whether the crossing audit ran and passed for this
 	// body: true for a solid (Table C requires it) and for an open sheet
 	// whose audit was also run and admitted (the open-case decision,
 	// docs/surface-design.md §9.1's sheet validity leg 4). It is false for a
 	// non-planar body (no audit runs at all) and for an open sheet whose
 	// audit declined without erroring.
-	auditClean bool
+	AuditClean bool
 }
 
-func (sp stitchPayload) Transform() r3.Transform { return sp.xform }
+func (sp stitchPayload) Transform() r3.Transform { return sp.Xform }
 
 // ProvesSimple implements topo.SimpleProver. A stitchPayload is proven by an
 // explicit build-time audit: Stitch runs docs/loft-design.md §6's crossing
 // audit on the OPEN case too (docs/surface-design.md §6.3's open-case
-// decision), so a payload whose audit ran and passed (auditClean) admits leg 4
+// decision), so a payload whose audit ran and passed (AuditClean) admits leg 4
 // the same as a proven-simple prism or loft does, letting a clean stitched
 // sheet read ValidityValid instead of being permanently Suspect.
-func (sp stitchPayload) ProvesSimple(context.Context) bool { return sp.auditClean }
+func (sp stitchPayload) ProvesSimple(context.Context) bool { return sp.AuditClean }
 
 func (sp stitchPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
 	d, ref := documentHandle(env.Doc), env.Ref
-	return placedNode(evalStitchContext(ctx, d, ref, sp.faces, sp.plan, composed))
+	return placedNode(evalStitchContext(ctx, d, ref, sp.Faces, sp.Plan, composed))
 }
 
 // evalStitchContext is Stitch's whole evaluator, shared by the initial build
@@ -189,11 +189,11 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 	// The single held vertex table, placed under the composed motion ONCE —
 	// never per operand (docs/surface-design.md's "recorded weld" decision).
 	maxInputAbs := 0.0
-	for _, p := range plan.table.Vertices {
+	for _, p := range plan.Table.Vertices {
 		maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(p))
 	}
-	verts := make([]r3.Vec, len(plan.table.Vertices))
-	for i, p := range plan.table.Vertices {
+	verts := make([]r3.Vec, len(plan.Table.Vertices))
+	for i, p := range plan.Table.Vertices {
 		v := xform.Apply(p)
 		if !proofbound.FiniteVec(v) {
 			return nil, fmt.Errorf(`%w: a placed stitch vertex is not representable`, ErrUnsupported)
@@ -217,7 +217,7 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 	// class is zero-bound, which is every case this evaluator admitted
 	// before this increment.
 	maxClassBound := 0.0
-	for _, b := range plan.table.Bounds {
+	for _, b := range plan.Table.Bounds {
 		maxClassBound = max(maxClassBound, b)
 	}
 	massDelta := delta
@@ -477,23 +477,23 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 		payloadTris, payloadTriFaces, payloadVertBound = nil, nil, nil
 	}
 	body.n.Payload = stitchPayload{
-		xform:      xform,
-		delta:      delta,
-		faces:      srcFaces,
-		plan:       plan,
-		liveFaces:  newFaces,
-		verts:      verts,
-		vertBound:  payloadVertBound,
-		tris:       payloadTris,
-		triFaces:   payloadTriFaces,
-		auditClean: auditClean,
+		Xform:      xform,
+		Delta:      delta,
+		Faces:      srcFaces,
+		Plan:       plan,
+		LiveFaces:  newFaces,
+		Verts:      verts,
+		VertBound:  payloadVertBound,
+		Tris:       payloadTris,
+		TriFaces:   payloadTriFaces,
+		AuditClean: auditClean,
 	}
 	return body, nil
 }
 
 // rebuildStitchTopology deep-copies every operand face's surface, origins,
 // area, area bound and flags into a fresh Face, over fresh vertices and
-// edges built from the weld plan: a welded pair of free edges (plan.group)
+// edges built from the weld plan: a welded pair of free edges (plan.Group)
 // shares ONE new edge across both faces, and every other edge gets its own,
 // shared across whichever coedges of the SAME operand already pointed at
 // it. Reusing an operand face outright would corrupt the retired operand
@@ -530,11 +530,11 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 		if nv, ok := newVertByClass[class]; ok {
 			return nv
 		}
-		bound := plan.table.Bounds[class]
+		bound := plan.Table.Bounds[class]
 		if delta > 0 {
 			bound = proofbound.AbsSumUpper(bound, delta)
 		}
-		nv := bornVertex(&Vertex{n: topo.Vertex{Position: verts[class], Bound: units.Millimeters(bound), Denot: plan.table.Tokens[class].Compose(xform)}})
+		nv := bornVertex(&Vertex{n: topo.Vertex{Position: verts[class], Bound: units.Millimeters(bound), Denot: plan.Table.Tokens[class].Compose(xform)}})
 		newVertByClass[class] = nv
 		classOf[nv] = class
 		return nv
@@ -552,9 +552,9 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 		if eb, ok := buildByOld[old]; ok {
 			return eb, nil
 		}
-		startClass := plan.table.classOf(vertexHandle(old.n.Start))
-		endClass := plan.table.classOf(vertexHandle(old.n.End))
-		gid, isWelded := plan.group[old]
+		startClass := plan.Table.classOf(vertexHandle(old.n.Start))
+		endClass := plan.Table.classOf(vertexHandle(old.n.End))
+		gid, isWelded := plan.Group[old]
 		if isWelded {
 			if eb, ok := buildByGroup[gid]; ok {
 				buildByOld[old] = eb
@@ -637,7 +637,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 				// their shared rim in opposite senses — so the coedge's
 				// forward flag is restated against the CANONICAL edge's own
 				// direction rather than copied verbatim.
-				oldStartClass := plan.table.classOf(vertexHandle(ce.Edge.Start))
+				oldStartClass := plan.Table.classOf(vertexHandle(ce.Edge.Start))
 				forward := ce.Forward
 				if oldStartClass != eb.startClass {
 					forward = !forward
@@ -804,7 +804,7 @@ func stitchVertexBounds(b *Body) iter.Seq[float64] {
 // It returns the LIVE face each returned triangle belongs to, parallel to
 // the triangle set, so a caller that must attribute a triangle to its face
 // (tessellate_stitch.go) reads it back directly rather than reconstructing
-// the mapping afterward — stitchPayload.faces holds only the retired
+// the mapping afterward — stitchPayload.Faces holds only the retired
 // operand faces, and a stitched body's faces carry no per-body-unique role
 // to recover it from either (docs/tessellation-design.md §4).
 func triangulateStitchFaces(ctx context.Context, faces []*Face, classOf map[*Vertex]int) ([][3]int, []*Face, error) {

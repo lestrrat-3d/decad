@@ -1269,10 +1269,10 @@ func TestTessellateStitchClearsSymDiffForOverlappingLumps(t *testing.T) {
 	}
 
 	sp := stitchPayload{
-		verts:     verts,
-		vertBound: vertBound,
-		tris:      tris,
-		triFaces:  triFaces,
+		Verts:     verts,
+		VertBound: vertBound,
+		Tris:      tris,
+		TriFaces:  triFaces,
 	}
 
 	mesh, err := tessellateStitch(context.Background(), body, sp)

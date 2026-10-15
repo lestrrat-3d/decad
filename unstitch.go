@@ -96,16 +96,16 @@ func Unstitch(ctx context.Context, b *Body) ([]*Body, error) {
 // under the composed transform, exactly as stitchPayload.Placed replays
 // evalStitchContext.
 type unstitchPayload struct {
-	xform r3.Transform
-	// delta is the proven displacement proofbound.RigidRoundAllow charges against this
-	// face's placed geometry — zero exactly when xform is the identity
+	Xform r3.Transform
+	// Delta is the proven displacement proofbound.RigidRoundAllow charges against this
+	// face's placed geometry — zero exactly when Xform is the identity
 	// transform, an exact struct comparison.
-	delta float64
-	// face is the ORIGINAL (now retired) receiver's own Face: read-only, and
+	Delta float64
+	// Face is the ORIGINAL (now retired) receiver's own Face: read-only, and
 	// never mutated or aliased into a live body's topology (evalUnstitchFaceContext
 	// always mints a fresh copy from it).
-	face *Face
-	// bounds is the retired receiver's own proven, UNPLACED Bounds, read by
+	Face *Face
+	// Bounds is the retired receiver's own proven, UNPLACED Bounds, read by
 	// unstitchBounds (faceBounds's fallback) for every face that is not
 	// straight-edged and planar — reused rather than re-derived into a
 	// tighter per-face box, which would understate a curved face's true
@@ -115,20 +115,20 @@ type unstitchPayload struct {
 	// not the tightest box this one face could in principle earn. A
 	// straight-edged planar face never reads this field: faceBounds computes
 	// its own tight box off the placed face's held vertices instead.
-	bounds Box
+	Bounds Box
 }
 
-func (up unstitchPayload) Transform() r3.Transform { return up.xform }
+func (up unstitchPayload) Transform() r3.Transform { return up.Xform }
 
 // AxialDelta reports the held face's own proven axial displacement
 // (stops.go's axialDisplacement interface), so an unstitched sheet's
 // payload-wide fallback (payloadAxialDelta) reads the figure the face holds
 // (topo.Face.HasAxialDelta) — zero, honestly, for a face that does not.
-func (up unstitchPayload) AxialDelta() float64 { return up.face.n.AxialDelta }
+func (up unstitchPayload) AxialDelta() float64 { return up.Face.n.AxialDelta }
 
 func (up unstitchPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
 	d, ref := documentHandle(env.Doc), env.Ref
-	return placedNode(evalUnstitchFaceContext(ctx, d, ref, up.face, up.bounds, composed))
+	return placedNode(evalUnstitchFaceContext(ctx, d, ref, up.Face, up.Bounds, composed))
 }
 
 // evalUnstitchFaceContext is Unstitch's whole evaluator for one face, shared
@@ -188,7 +188,7 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 		return nil, err
 	}
 
-	body.n.Payload = unstitchPayload{xform: xform, delta: delta, face: srcFace, bounds: srcBounds}
+	body.n.Payload = unstitchPayload{Xform: xform, Delta: delta, Face: srcFace, Bounds: srcBounds}
 	return body, nil
 }
 
