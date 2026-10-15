@@ -3520,7 +3520,7 @@ is no single section to offset. Offsetting one means an offset at EVERY station
 plus a proof that no two intermediate offset sections or their ruled walls
 cross — the identical statement §16.4 refuses for `WithTaper`, and certifying
 one endpoint section proves none of it. A curved pairing's own
-`loftPayload.sectionDelta` is nonzero besides, so §16.2's exact-generation gate
+`loftPayload.SectionDelta` is nonzero besides, so §16.2's exact-generation gate
 cannot hold for it at all.
 
 **A stitched sheet, a `PatchEdges` result and an `Unstitch` result are staged

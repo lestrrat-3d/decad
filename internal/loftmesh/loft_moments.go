@@ -100,7 +100,7 @@ type LoftChordedAllow struct {
 // source each is read from.
 //
 // The two are accumulated apart — the generator publishes them apart and the
-// payload carries them apart (loftPayload.sectionDelta and loftPayload.delta),
+// payload carries them apart (loftPayload.SectionDelta and loftPayload.Delta),
 // which is the rule §5.2's table states for them — and this helper is only ever
 // a consumer's own composition. Composing them is not optional for such a
 // consumer: the sagitta bounds the IDEAL chord between the two points the record

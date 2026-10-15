@@ -355,7 +355,7 @@ func TestLoftMirrorCylinderPlaceTeethCancelled(t *testing.T) {
 	ref := f.d.nextProducerID()
 	record := f.pairs[0].n.Payload.(facetedPayload).loftMirrorJoin
 	lower := record.lower.n.Payload.(loftPayload)
-	checked := loftMirrorCylinderCheckPairs(f.d, f.pairs, record, lower.frame1.Origin().Z)
+	checked := loftMirrorCylinderCheckPairs(f.d, f.pairs, record, lower.Frame1.Origin().Z)
 	run := func(cancelAt int64, workers int) (int64, []*Body, error) {
 		ctx := &pollCancelContext{Context: t.Context(), cancelAt: cancelAt}
 		teeth, err := loftMirrorCylinderPlaceTeeth(checked.stop, workers, func(i int) (*Body, error) {
@@ -433,7 +433,7 @@ func TestLoftMirrorCylinderPlaceTeethMatchesSerialPlacement(t *testing.T) {
 	ref := f.d.nextProducerID()
 	record := f.pairs[0].n.Payload.(facetedPayload).loftMirrorJoin
 	lower := record.lower.n.Payload.(loftPayload)
-	checked := loftMirrorCylinderCheckPairs(f.d, f.pairs, record, lower.frame1.Origin().Z)
+	checked := loftMirrorCylinderCheckPairs(f.d, f.pairs, record, lower.Frame1.Origin().Z)
 	require.Equal(t, len(f.pairs), checked.stop)
 	live, stopLive := context.WithCancel(t.Context())
 	defer stopLive()
@@ -462,10 +462,10 @@ func TestLoftMirrorCylinderPlaceTeethMatchesSerialPlacement(t *testing.T) {
 			require.Same(t, serial[i], parallel[i])
 			continue
 		}
-		require.NotEmpty(t, want.verts)
-		require.Equal(t, want.verts, got.verts)
-		require.Equal(t, want.tris, got.tris)
-		require.Equal(t, want.proof, got.proof)
+		require.NotEmpty(t, want.Verts)
+		require.Equal(t, want.Verts, got.Verts)
+		require.Equal(t, want.Tris, got.Tris)
+		require.Equal(t, want.Proof, got.Proof)
 		require.Equal(t, measurementFromInternal(serial[i].n.Volume), measurementFromInternal(parallel[i].n.Volume))
 		require.Equal(t, boxFromInternal(serial[i].n.Bounds), boxFromInternal(parallel[i].n.Bounds))
 	}
@@ -539,21 +539,21 @@ func oracleLoftMirrorCylinderPairs(ctx context.Context, d *Document, ref produce
 	}
 	lower, lowOK := record.lower.n.Payload.(loftPayload)
 	upper, upOK := record.upper.n.Payload.(loftPayload)
-	if !lowOK || !upOK || !lower.authenticatedReconstruction ||
-		!upper.authenticatedReconstruction || lower.sourceIdentity == nil ||
-		lower.sourceIdentity != upper.sourceIdentity ||
-		lower.xform != r3.Identity() || !loftMirrorAxialSource(lower) {
+	if !lowOK || !upOK || !lower.AuthenticatedReconstruction ||
+		!upper.AuthenticatedReconstruction || lower.SourceIdentity == nil ||
+		lower.SourceIdentity != upper.SourceIdentity ||
+		lower.Xform != r3.Identity() || !loftMirrorAxialSource(lower) {
 		return nil, false, nil
 	}
-	reflection, err := r3.Reflection(lower.frame1)
+	reflection, err := r3.Reflection(lower.Frame1)
 	if err != nil {
 		return nil, true, fmt.Errorf("%w: mirrored cylinder source has no reflection: %s", ErrUnsupported, err)
 	}
-	if upper.xform != reflection {
+	if upper.Xform != reflection {
 		return nil, false, nil
 	}
-	z0, middle, z2 := pp.Z0, lower.frame1.Origin().Z, pp.Z1
-	if lower.frame0.Origin().Z != z0 || !(z0 < middle && middle < z2) ||
+	z0, middle, z2 := pp.Z0, lower.Frame1.Origin().Z, pp.Z1
+	if lower.Frame0.Origin().Z != z0 || !(z0 < middle && middle < z2) ||
 		!loftMirrorCylinderLevels(z0, middle, z2) {
 		return nil, false, nil
 	}

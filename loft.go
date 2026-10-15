@@ -170,14 +170,14 @@ func (d *Document) Loft(ctx context.Context, s0 *sketch.Sketch, p0 *sketch.Profi
 	ref := d.nextProducerID()
 
 	body, err := evalLoft(ctx, d, ref, loftPayload{
-		profile0: profile0, profile1: profile1,
-		plane0: plane0, plane1: plane1,
-		frame0: frame0, frame1: frame1,
-		alignment:                   alignment,
-		xform:                       r3.Identity(),
-		authenticatedReconstruction: true,
-		surfaceResult:               surfaceResult,
-		recordArea:                  [2]float64{recordArea0, recordArea1},
+		Profile0: profile0, Profile1: profile1,
+		Plane0: plane0, Plane1: plane1,
+		Frame0: frame0, Frame1: frame1,
+		Alignment:                   alignment,
+		Xform:                       r3.Identity(),
+		AuthenticatedReconstruction: true,
+		SurfaceResult:               surfaceResult,
+		RecordArea:                  [2]float64{recordArea0, recordArea1},
 	}, proofbound.NewWorkBudget(ctx), work0, work1)
 	if err != nil {
 		return nil, err
@@ -229,21 +229,21 @@ type ChainLoftOption interface {
 // orientation step, so a consumer dispatching on loftPayload would read three
 // facts about it that are not true.
 type chainLoftPayload struct {
-	chain0, chain1 chainRecord
-	plane0, plane1 planeRecord
-	frame0, frame1 r3.Frame
-	xform          r3.Transform
+	Chain0, Chain1 chainRecord
+	Plane0, Plane1 planeRecord
+	Frame0, Frame1 r3.Frame
+	Xform          r3.Transform
 }
 
 // Transform is the accumulated rigid placement.
-func (lp chainLoftPayload) Transform() r3.Transform { return lp.xform }
+func (lp chainLoftPayload) Transform() r3.Transform { return lp.Xform }
 
 // Placed re-evaluates the same two records under the composed motion (core
 // §8), re-running every gate decided from the records and rebuilding from
 // scratch, exactly as docs/loft-design.md §4 states a loft placement does.
 func (lp chainLoftPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
 	d, ref := documentHandle(env.Doc), env.Ref
-	lp.xform = composed
+	lp.Xform = composed
 	return placedNode(evalChainLoftContext(ctx, d, ref, lp, proofbound.NewWorkBudget(ctx), freeform.NewFreeformWork(), freeform.NewFreeformWork()))
 }
 
@@ -313,10 +313,10 @@ func (d *Document) LoftChain(ctx context.Context, s0 *sketch.Sketch, c0 *sketch.
 
 	ref := d.nextProducerID()
 	body, err := evalChainLoftContext(ctx, d, ref, chainLoftPayload{
-		chain0: chain0, chain1: chain1,
-		plane0: plane0, plane1: plane1,
-		frame0: frame0, frame1: frame1,
-		xform: r3.Identity(),
+		Chain0: chain0, Chain1: chain1,
+		Plane0: plane0, Plane1: plane1,
+		Frame0: frame0, Frame1: frame1,
+		Xform: r3.Identity(),
 	}, proofbound.NewWorkBudget(ctx), freeform.NewFreeformWork(), freeform.NewFreeformWork())
 	if err != nil {
 		return nil, err
@@ -342,7 +342,7 @@ func evalChainLoftContext(ctx context.Context, d *Document, ref producerID, lp c
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	walks0, walks1, err := loftmesh.ValidateChainLoftRecords(lp.chain0, lp.chain1, lp.plane0, lp.plane1, work0, work1)
+	walks0, walks1, err := loftmesh.ValidateChainLoftRecords(lp.Chain0, lp.Chain1, lp.Plane0, lp.Plane1, work0, work1)
 	if err != nil {
 		return nil, err
 	}
@@ -355,7 +355,7 @@ func evalChainLoftContext(ctx context.Context, d *Document, ref producerID, lp c
 	// exactly as loftmesh.AssembleTriangulated decides it: tessellation.OrientationSign is not run here,
 	// but the mass accumulator and the audit both lift every vertex through
 	// dyVec, whose mustDyOf PANICS on a non-finite float.
-	anchor := lp.xform.Apply(lp.plane0.Origin)
+	anchor := lp.Xform.Apply(lp.Plane0.Origin)
 	if !proofbound.FiniteVec(anchor) {
 		return nil, loftmesh.ErrPointUnrepresentable("placed plane origin")
 	}
@@ -366,14 +366,14 @@ func evalChainLoftContext(ctx context.Context, d *Document, ref producerID, lp c
 		pts   []sectionrecord.Point2
 		frame r3.Frame
 		what  string
-	}{{v, lp.frame0, "first"}, {w, lp.frame1, "second"}} {
+	}{{v, lp.Frame0, "first"}, {w, lp.Frame1, "second"}} {
 		for j, pt := range side.pts {
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
 			lifted := side.frame.ToWorldUV(pt.U, pt.V)
 			maxInputAbs = math.Max(maxInputAbs, proofbound.VecMaxAbs(lifted))
-			placed := lp.xform.Apply(lifted)
+			placed := lp.Xform.Apply(lifted)
 			if !proofbound.FiniteVec(placed) {
 				return nil, loftmesh.ErrPointUnrepresentable(fmt.Sprintf("placed station %d on the %s walk", j, side.what))
 			}
@@ -385,8 +385,8 @@ func evalChainLoftContext(ctx context.Context, d *Document, ref producerID, lp c
 	// exact struct comparison, never a tolerance — and stationRound is the
 	// independent leg beside it, exactly as loftmesh.AssembleTriangulated composes the two.
 	placeAllow := 0.0
-	if lp.xform != r3.Identity() {
-		placeAllow = proofbound.RigidRoundAllow(maxInputAbs, proofbound.VecMaxAbs(lp.xform.Translation()))
+	if lp.Xform != r3.Identity() {
+		placeAllow = proofbound.RigidRoundAllow(maxInputAbs, proofbound.VecMaxAbs(lp.Xform.Translation()))
 	}
 	delta := proofbound.AbsSumUpper(stationRound, placeAllow)
 

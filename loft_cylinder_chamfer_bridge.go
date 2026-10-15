@@ -33,25 +33,25 @@ func loftCylinderChamferBridgeSources(source *loftCylinderChamferSource) error {
 		original, okOriginal := originalBody.n.Payload.(loftPayload)
 		proxy, okProxy := proofBody.n.Payload.(loftPayload)
 		shift := source.axialBridge[i]
-		if !okOriginal || !okProxy || !original.authenticatedReconstruction ||
-			!proxy.authenticatedReconstruction || original.sourceIdentity == nil ||
-			original.sourceIdentity != proxy.sourceIdentity ||
-			len(original.verts) != len(proxy.verts) || len(original.verts)%2 != 0 ||
-			len(original.verts) < 6 || !slices.Equal(original.tris, proxy.tris) ||
-			len(original.segment) != len(proxy.segment) || shift < 0 ||
+		if !okOriginal || !okProxy || !original.AuthenticatedReconstruction ||
+			!proxy.AuthenticatedReconstruction || original.SourceIdentity == nil ||
+			original.SourceIdentity != proxy.SourceIdentity ||
+			len(original.Verts) != len(proxy.Verts) || len(original.Verts)%2 != 0 ||
+			len(original.Verts) < 6 || !slices.Equal(original.Tris, proxy.Tris) ||
+			len(original.Segment) != len(proxy.Segment) || shift < 0 ||
 			proofbound.IsNonFinite(shift) ||
-			proxy.proof.FacetDeparture < original.proof.FacetDeparture ||
-			!loftCylinderAxialPlacement(proxy.xform) {
+			proxy.Proof.FacetDeparture < original.Proof.FacetDeparture ||
+			!loftCylinderAxialPlacement(proxy.Xform) {
 			return fmt.Errorf("%w: cap chamfer tooth bridge lost its source identity", ErrUnsupported)
 		}
-		for j := range original.segment {
-			if !slices.Equal(original.segment[j], proxy.segment[j]) {
+		for j := range original.Segment {
+			if !slices.Equal(original.Segment[j], proxy.Segment[j]) {
 				return fmt.Errorf("%w: cap chamfer tooth bridge changed its wall cells", ErrUnsupported)
 			}
 		}
-		n := len(original.verts) / 2
-		for j, p := range original.verts {
-			q := proxy.verts[j]
+		n := len(original.Verts) / 2
+		for j, p := range original.Verts {
+			q := proxy.Verts[j]
 			if p.X != q.X || p.Y != q.Y ||
 				j < n && (p.Z != source.z0 || q.Z != source.z0) ||
 				j >= n && q.Z != source.z1 {
@@ -67,12 +67,12 @@ func loftCylinderChamferBridgeSources(source *loftCylinderChamferSource) error {
 				}
 			}
 		}
-		basis := original.xform.Basis()
-		if basis.EX != proxy.xform.Basis().EX || basis.EY != proxy.xform.Basis().EY ||
+		basis := original.Xform.Basis()
+		if basis.EX != proxy.Xform.Basis().EX || basis.EY != proxy.Xform.Basis().EY ||
 			basis.EZ.X != 0 || basis.EZ.Y != 0 || basis.EZ.Z <= 0 || basis.EZ.Z > 1 ||
 			basis.EZ.Z != 1 && basis.EZ.Z != math.Nextafter(1, 0) ||
-			original.xform.Translation() != proxy.xform.Translation() ||
-			proxy.xform.Basis().EZ != (r3.Vec{Z: 1}) {
+			original.Xform.Translation() != proxy.Xform.Translation() ||
+			proxy.Xform.Basis().EZ != (r3.Vec{Z: 1}) {
 			return fmt.Errorf("%w: cap chamfer bridge is not one axial scale", ErrUnsupported)
 		}
 		if basis.EZ.Z != 1 && source.z0 != 0 {

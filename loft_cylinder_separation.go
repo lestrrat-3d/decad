@@ -18,10 +18,10 @@ import (
 // At fixed z the plane is linear in XY, so each filled Loft section lies on
 // the same side as its entire boundary.
 func loftCylinderMovingSeparate(a, b loftCylinderTooth, remaining *int) bool {
-	if len(a.loft.tris) > (*remaining)/6-len(b.loft.tris) {
+	if len(a.loft.Tris) > (*remaining)/6-len(b.loft.Tris) {
 		return false
 	}
-	*remaining -= 6 * (len(a.loft.tris) + len(b.loft.tris))
+	*remaining -= 6 * (len(a.loft.Tris) + len(b.loft.Tris))
 
 	center := func(part loftCylinderTooth, endIndex int) (float64, float64) {
 		angles := part.bottom
@@ -50,9 +50,9 @@ func loftCylinderMovingSeparate(a, b loftCylinderTooth, remaining *int) bool {
 		return false
 	}
 
-	z0 := a.loft.frame0.Origin().Z
-	z1 := a.loft.frame1.Origin().Z
-	if !(z1 > z0) || b.loft.frame0.Origin().Z != z0 || b.loft.frame1.Origin().Z != z1 {
+	z0 := a.loft.Frame0.Origin().Z
+	z1 := a.loft.Frame1.Origin().Z
+	if !(z1 > z0) || b.loft.Frame0.Origin().Z != z0 || b.loft.Frame1.Origin().Z != z1 {
 		return false
 	}
 	zStart := proofarith.FloatRat(z0)
@@ -64,7 +64,7 @@ func loftCylinderMovingSeparate(a, b loftCylinderTooth, remaining *int) bool {
 	one := big.NewRat(1, 1)
 	two := big.NewRat(2, 1)
 	for side, part := range []loftCylinderTooth{a, b} {
-		bound := max(part.mesh.Bound().Base(), part.loft.proof.FacetDeparture)
+		bound := max(part.mesh.Bound().Base(), part.loft.Proof.FacetDeparture)
 		if bound < 0 || proofbound.IsNonFinite(bound) {
 			return false
 		}
@@ -76,13 +76,13 @@ func loftCylinderMovingSeparate(a, b loftCylinderTooth, remaining *int) bool {
 		shift := proofbound.AbsSumUpper(part.bridge, part.upperSeparationBridge)
 		if shift > 0 {
 			radius := 0.0
-			for _, p := range part.loft.verts {
+			for _, p := range part.loft.Verts {
 				q := new(big.Rat).Add(
 					new(big.Rat).Mul(proofarith.FloatRat(p.X), proofarith.FloatRat(p.X)),
 					new(big.Rat).Mul(proofarith.FloatRat(p.Y), proofarith.FloatRat(p.Y)))
 				radius = max(radius, proofbound.RatSqrtUp(q))
 			}
-			radius = proofbound.AbsSumUpper(radius, part.loft.proof.FacetDeparture)
+			radius = proofbound.AbsSumUpper(radius, part.loft.Proof.FacetDeparture)
 			fraction := proofbound.RatFloatUp(new(big.Rat).Quo(
 				proofarith.FloatRat(shift), zSpan))
 			margin = proofbound.AbsSumUpper(margin,
@@ -95,11 +95,11 @@ func loftCylinderMovingSeparate(a, b loftCylinderTooth, remaining *int) bool {
 		if side == 0 {
 			limit.Neg(limit)
 		}
-		for _, tri := range part.loft.tris {
+		for _, tri := range part.loft.Tris {
 			var points [3][2]*big.Rat
 			var moving [3][2]*big.Rat
 			for corner, index := range tri {
-				point := part.loft.verts[index]
+				point := part.loft.Verts[index]
 				if !proofbound.FiniteVec(point) {
 					return false
 				}

@@ -131,10 +131,10 @@ func loftCylinderPlacedBlankShape(pp prismPayload) bool {
 
 func loftCylinderPlacedToothShape(body *Body) bool {
 	lp, ok := body.n.Payload.(loftPayload)
-	return ok && lp.authenticatedReconstruction && !lp.surfaceResult && lp.sourceIdentity != nil &&
-		len(lp.profile0.Holes) == 0 && len(lp.profile1.Holes) == 0 &&
-		len(lp.profile0.Outer.Segments) == 6 && len(lp.profile1.Outer.Segments) == 6 &&
-		len(lp.segment) == 1 && len(lp.verts)%2 == 0 && len(lp.verts) >= 16 &&
+	return ok && lp.AuthenticatedReconstruction && !lp.SurfaceResult && lp.SourceIdentity != nil &&
+		len(lp.Profile0.Holes) == 0 && len(lp.Profile1.Holes) == 0 &&
+		len(lp.Profile0.Outer.Segments) == 6 && len(lp.Profile1.Outer.Segments) == 6 &&
+		len(lp.Segment) == 1 && len(lp.Verts)%2 == 0 && len(lp.Verts) >= 16 &&
 		loftCylinderSectionKinds(lp)
 }
 
@@ -143,12 +143,12 @@ func loftCylinderPlacedToothShape(body *Body) bool {
 // an unrelated Loft keeps the ordinary Boolean's error and admission policy.
 func loftCylinderPlacedSourcesMatch(teeth []*Body) bool {
 	first, ok := teeth[0].n.Payload.(loftPayload)
-	if !ok || first.sourceIdentity == nil {
+	if !ok || first.SourceIdentity == nil {
 		return false
 	}
 	for _, tooth := range teeth[1:] {
 		next, ok := tooth.n.Payload.(loftPayload)
-		if !ok || next.sourceIdentity != first.sourceIdentity {
+		if !ok || next.SourceIdentity != first.SourceIdentity {
 			return false
 		}
 	}
@@ -187,16 +187,16 @@ func loftCylinderLocalBlank(ctx context.Context, d *Document, blank *Body) (*Bod
 func loftCylinderLocalTooth(ctx context.Context, d *Document, tooth *Body,
 	pose r3.Transform, z1 float64) (*Body, bool, error) {
 	lp, ok := tooth.n.Payload.(loftPayload)
-	if !ok || !lp.authenticatedReconstruction || lp.sourceIdentity == nil ||
-		!loftCylinderFrameMatchesPlane(lp.frame0, lp.plane0) ||
-		!loftCylinderFrameMatchesPlane(lp.frame1, lp.plane1) {
+	if !ok || !lp.AuthenticatedReconstruction || lp.SourceIdentity == nil ||
+		!loftCylinderFrameMatchesPlane(lp.Frame0, lp.Plane0) ||
+		!loftCylinderFrameMatchesPlane(lp.Frame1, lp.Plane1) {
 		return nil, false, nil
 	}
-	first, err := r3.FromFrame(lp.frame0)
+	first, err := r3.FromFrame(lp.Frame0)
 	if err != nil {
 		return nil, false, err
 	}
-	last, err := r3.FromFrame(lp.frame1)
+	last, err := r3.FromFrame(lp.Frame1)
 	if err != nil {
 		return nil, false, err
 	}
@@ -204,7 +204,7 @@ func loftCylinderLocalTooth(ctx context.Context, d *Document, tooth *Body,
 	if err != nil {
 		return nil, false, nil //nolint:nilerr // an inverse without a valid map cannot certify this tooth
 	}
-	firstWorld, err := first.Then(lp.xform)
+	firstWorld, err := first.Then(lp.Xform)
 	if err != nil {
 		return nil, false, nil //nolint:nilerr // an invalid source map keeps the generic fallback
 	}
@@ -228,8 +228,8 @@ func loftCylinderLocalTooth(ctx context.Context, d *Document, tooth *Body,
 	if err != nil {
 		return nil, false, err
 	}
-	actual0 := loftCylinderAffineOf(first).then(loftCylinderAffineOf(lp.xform))
-	actual1 := loftCylinderAffineOf(last).then(loftCylinderAffineOf(lp.xform))
+	actual0 := loftCylinderAffineOf(first).then(loftCylinderAffineOf(lp.Xform))
+	actual1 := loftCylinderAffineOf(last).then(loftCylinderAffineOf(lp.Xform))
 	want0 := loftCylinderAffineOf(localFirst).then(loftCylinderAffineOf(localXform)).
 		then(loftCylinderAffineOf(pose))
 	want1 := loftCylinderAffineOf(localLast).then(loftCylinderAffineOf(localXform)).
@@ -238,9 +238,9 @@ func loftCylinderLocalTooth(ctx context.Context, d *Document, tooth *Body,
 		return nil, false, nil
 	}
 	local := lp
-	local.plane0 = planeRecord{Origin: local0.Origin(), U: local0.U(), V: local0.V()}
-	local.plane1 = planeRecord{Origin: local1.Origin(), U: local1.U(), V: local1.V()}
-	local.frame0, local.frame1, local.xform = local0, local1, localXform
+	local.Plane0 = planeRecord{Origin: local0.Origin(), U: local0.U(), V: local0.V()}
+	local.Plane1 = planeRecord{Origin: local1.Origin(), U: local1.U(), V: local1.V()}
+	local.Frame0, local.Frame1, local.Xform = local0, local1, localXform
 	localBody, err := placePayload(ctx, local, d, tooth.n.Origin.Producer, localXform)
 	return localBody, err == nil, err
 }

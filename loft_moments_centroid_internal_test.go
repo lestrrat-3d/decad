@@ -166,12 +166,12 @@ func lobeTrueBoundary(bulgeOffset, twist float64, perArc int) []r3.Vec {
 func loftCentroidRebuild(t *testing.T, pl loftPayload) (*loftMassAccumulator, loftmesh.Assembly, float64) {
 	t.Helper()
 	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
-	offsets, walks0, walks1, target, err := loftmesh.ValidateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, pl.recordArea, work0, work1)
+	offsets, walks0, walks1, target, err := loftmesh.ValidateLoftRecords(pl.Profile0, pl.Profile1, pl.Plane0, pl.Plane1, pl.Alignment, pl.RecordArea, work0, work1)
 	require.NoError(t, err)
-	pairs, sectionDelta, sectionMatchedDelta, stationRound, err := loftmesh.PairRecords(pl.profile0, pl.profile1, offsets, walks0, walks1, target, work0, work1)
+	pairs, sectionDelta, sectionMatchedDelta, stationRound, err := loftmesh.PairRecords(pl.Profile0, pl.Profile1, offsets, walks0, walks1, target, work0, work1)
 	require.NoError(t, err)
 	require.True(t, sectionDelta > 0 || sectionMatchedDelta > 0, "the fixture must be chorded")
-	a, err := loftmesh.AssembleTriangulated(t.Context(), pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform, stationRound)
+	a, err := loftmesh.AssembleTriangulated(t.Context(), pairs, pl.Frame0, pl.Frame1, pl.Plane0, pl.Xform, stationRound)
 	require.NoError(t, err)
 	mass := buildLoftMass(pl, a, pairs, sectionDelta, sectionMatchedDelta)
 	matchedDelta := loftmesh.ChordCellDeltaUpper(sectionMatchedDelta, a.Delta)
@@ -271,7 +271,7 @@ func TestLoftCentroidShiftFormEnclosesTwoArcLobe(t *testing.T) {
 			require.NoError(t, err)
 			lp := body.n.Payload.(loftPayload)
 			gap := cen.Value.Sub(want).Len()
-			t.Logf("walls=%d delta=%.3g sectionDelta=%.3g bound=%.4g gap=%.4g got=%v want=%v", lp.walls, lp.delta, lp.sectionDelta, cen.Bound.Base(), gap, cen.Value, want)
+			t.Logf("walls=%d delta=%.3g sectionDelta=%.3g bound=%.4g gap=%.4g got=%v want=%v", lp.Walls, lp.Delta, lp.SectionDelta, cen.Bound.Base(), gap, cen.Value, want)
 			require.Positive(t, gap, "the chorded centroid must differ from the true one, or the row shows nothing")
 			require.LessOrEqual(t, gap, cen.Bound.Base(), "the exact centroid must lie inside the published bound")
 
@@ -288,7 +288,7 @@ func TestLoftCentroidShiftFormEnclosesTwoArcLobe(t *testing.T) {
 			t.Logf("R_c=%.10g farthest true boundary point=%.10g matchedDelta=%.3g", radius, farthest, matchedDelta)
 			require.GreaterOrEqual(t, radius, farthest, "R_c must reach every point of the true boundary")
 
-			retired := retiredAnchorCentroidBound(t, mass, a, lp.xform.Apply(lp.plane0.Origin), matchedDelta, cen.Value)
+			retired := retiredAnchorCentroidBound(t, mass, a, lp.Xform.Apply(lp.Plane0.Origin), matchedDelta, cen.Value)
 			t.Logf("shift form %.4g, retired anchor form at least %.4g", cen.Bound.Base(), retired)
 			require.Less(t, cen.Bound.Base(), retired, "the shift form must be below the retired anchor-based form")
 		})
@@ -429,11 +429,11 @@ func TestLoftCentroidToothBoundReadsToothSize(t *testing.T) {
 			lp := body.n.Payload.(loftPayload)
 			mass, a, matchedDelta := loftCentroidRebuild(t, lp)
 			radius := mass.CentroidRadius(a.Verts, a.Tris, cen.Value, 0)
-			retired := retiredAnchorCentroidBound(t, mass, a, lp.xform.Apply(lp.plane0.Origin), matchedDelta, cen.Value)
+			retired := retiredAnchorCentroidBound(t, mass, a, lp.Xform.Apply(lp.Plane0.Origin), matchedDelta, cen.Value)
 			retiredRatio, _ := loftCentroidRatio(t, body, retired)
 			anchorReach := 0.0
 			for _, v := range a.Verts {
-				anchorReach = math.Max(anchorReach, v.Sub(lp.xform.Apply(lp.plane0.Origin)).Len())
+				anchorReach = math.Max(anchorReach, v.Sub(lp.Xform.Apply(lp.Plane0.Origin)).Len())
 			}
 			t.Logf("R_c %.4g, tooth diameter %.4g, anchor reach %.4g; ratio %.4g, retired anchor form ratio %.4g",
 				radius, diameter, anchorReach, ratio, retiredRatio)

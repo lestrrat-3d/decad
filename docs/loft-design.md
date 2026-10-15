@@ -621,7 +621,7 @@ loftChordFraction = 2.5e-4
 `docs/loft-gear-bounds-design.md` §5 owns this rule and its derivation.
 `area(p)` is the record's own region integral, the value
 `falsifyRecordedArea` already computes in `Document.Loft`; the payload
-carries the two integrals (`loftPayload.recordArea`), so no evaluation
+carries the two integrals (`loftPayload.RecordArea`), so no evaluation
 integrates a record a second time and a placement re-reads the same two
 values. `perimeterUpper(p)` sums `perCellArcUpper(seg, walk, 1)` over every
 segment of every loop: the exact `circularLengthInterval` bracket for a

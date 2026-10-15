@@ -195,11 +195,11 @@ func evalStationedTwistedSweepCells(ctx context.Context, d *Document, ref produc
 	budget := proofbound.NewWorkBudget(ctx)
 	for i := range parts {
 		part, buildErr := evalLoft(ctx, d, ref, loftPayload{
-			profile0: profile, profile1: profile,
-			plane0: stations[i].Plane, plane1: stations[i+1].Plane,
-			frame0: stations[i].Frame, frame1: stations[i+1].Frame,
-			xform: xform, recordArea: [2]float64{recordArea, recordArea},
-			retainTwistAreaCells: poly.HasArc,
+			Profile0: profile, Profile1: profile,
+			Plane0: stations[i].Plane, Plane1: stations[i+1].Plane,
+			Frame0: stations[i].Frame, Frame1: stations[i+1].Frame,
+			Xform: xform, RecordArea: [2]float64{recordArea, recordArea},
+			RetainTwistAreaCells: poly.HasArc,
 		}, budget, work0, work1)
 		if buildErr != nil {
 			return nil, fmt.Errorf("twisted sweep cell %d: %w", i, buildErr)
@@ -249,17 +249,17 @@ func evalStationedTwistedSweepCells(ctx context.Context, d *Document, ref produc
 		ideal := straightTwistCellDeparture(poly, cellAngle, stationError)
 		// Loft's source-to-facet proof includes the arc chord and ruled-wall
 		// departure; its vertex-only delta does not.
-		delta = max(delta, proofbound.AbsSumUpper(ideal, loft.proof.FacetDeparture))
+		delta = max(delta, proofbound.AbsSumUpper(ideal, loft.Proof.FacetDeparture))
 		// The horizontal tube compares cells at their exact source heights.
 		// Move that comparison Loft to the rounded station heights separately:
 		// each triangle vertex moves axially by at most axialError, and the
 		// area bound covers every intermediate triangle after placement.
-		axialArea := proofbound.PerturbedAreaUpper(loft.verts, loft.tris,
-			proofbound.AbsSumUpper(axialError, loft.delta))
+		axialArea := proofbound.PerturbedAreaUpper(loft.Verts, loft.Tris,
+			proofbound.AbsSumUpper(axialError, loft.Delta))
 		axialMove := proofbound.SweptVolumeAllow(axialError, axialArea)
 		volSymDiff = proofbound.AbsSumUpper(volSymDiff,
 			twistSymDiff(cellHeight, poly.PerimeterUpper, ideal),
-			axialMove, loft.proof.VolSymDiff)
+			axialMove, loft.Proof.VolSymDiff)
 	}
 	if proofbound.IsNonFinite(delta) || proofbound.IsNonFinite(volSymDiff) {
 		return nil, fmt.Errorf(`%w: stationed twist has no finite boundary proof`, ErrUnsupported)
@@ -350,15 +350,15 @@ func evalStationedTwistedSweepCells(ctx context.Context, d *Document, ref produc
 }
 
 func stationedTwistFirstCellFits(first loftPayload, cells int) bool {
-	if cells <= 0 || first.walls <= 0 || first.walls >= len(first.tris) {
+	if cells <= 0 || first.Walls <= 0 || first.Walls >= len(first.Tris) {
 		return false
 	}
-	walls := uint64(first.walls)
+	walls := uint64(first.Walls)
 	if walls > ^uint64(0)/uint64(cells) {
 		return false
 	}
 	facets := walls * uint64(cells)
-	caps := uint64(len(first.tris) - first.walls)
+	caps := uint64(len(first.Tris) - first.Walls)
 	if caps > ^uint64(0)-facets {
 		return false
 	}

@@ -129,23 +129,23 @@ func tryLoftCylinderUnionTeethWithUpperBridge(ctx context.Context, d *Document, 
 	var source *loftSourceIdentity
 	for i, tooth := range teeth {
 		lp, ok := tooth.n.Payload.(loftPayload)
-		if !ok || !lp.authenticatedReconstruction || lp.surfaceResult ||
-			lp.sourceIdentity == nil || len(lp.profile0.Holes) != 0 ||
-			len(lp.profile1.Holes) != 0 || len(lp.profile0.Outer.Segments) != 6 ||
-			len(lp.profile1.Outer.Segments) != 6 || len(lp.segment) != 1 ||
-			len(lp.verts)%2 != 0 || len(lp.verts) < 16 {
+		if !ok || !lp.AuthenticatedReconstruction || lp.SurfaceResult ||
+			lp.SourceIdentity == nil || len(lp.Profile0.Holes) != 0 ||
+			len(lp.Profile1.Holes) != 0 || len(lp.Profile0.Outer.Segments) != 6 ||
+			len(lp.Profile1.Outer.Segments) != 6 || len(lp.Segment) != 1 ||
+			len(lp.Verts)%2 != 0 || len(lp.Verts) < 16 {
 			return nil, false, nil
 		}
 		if source == nil {
-			source = lp.sourceIdentity
-		} else if source != lp.sourceIdentity {
+			source = lp.SourceIdentity
+		} else if source != lp.SourceIdentity {
 			return nil, false, nil
 		}
-		if !loftCylinderSectionKinds(lp) || lp.frame0.U() != (r3.Vec{X: 1}) ||
-			lp.frame0.V() != (r3.Vec{Y: 1}) || lp.frame1.U() != (r3.Vec{X: 1}) ||
-			lp.frame1.V() != (r3.Vec{Y: 1}) ||
-			lp.frame0.Origin() != (r3.Vec{Z: pp.Z0}) ||
-			lp.frame1.Origin() != (r3.Vec{Z: pp.Z1}) {
+		if !loftCylinderSectionKinds(lp) || lp.Frame0.U() != (r3.Vec{X: 1}) ||
+			lp.Frame0.V() != (r3.Vec{Y: 1}) || lp.Frame1.U() != (r3.Vec{X: 1}) ||
+			lp.Frame1.V() != (r3.Vec{Y: 1}) ||
+			lp.Frame0.Origin() != (r3.Vec{Z: pp.Z0}) ||
+			lp.Frame1.Origin() != (r3.Vec{Z: pp.Z1}) {
 			return nil, false, nil
 		}
 		proofTooth, bridge, admitted, err := loftCylinderProofTooth(ctx, d, tooth, pp.Z0, pp.Z1)
@@ -157,16 +157,16 @@ func tryLoftCylinderUnionTeethWithUpperBridge(ctx context.Context, d *Document, 
 		}
 		tooth = proofTooth
 		lp, ok = tooth.n.Payload.(loftPayload)
-		if !ok || !loftCylinderAxialPlacement(lp.xform) {
+		if !ok || !loftCylinderAxialPlacement(lp.Xform) {
 			return nil, false, nil
 		}
-		n := len(lp.verts) / 2
-		if len(lp.segment[0]) != n || lp.walls != 2*n ||
-			len(lp.tris) != 4*n-4 {
+		n := len(lp.Verts) / 2
+		if len(lp.Segment[0]) != n || lp.Walls != 2*n ||
+			len(lp.Tris) != 4*n-4 {
 			return nil, false, nil
 		}
 		root := -1
-		for j, segment := range lp.segment[0] {
+		for j, segment := range lp.Segment[0] {
 			if segment == 5 && root < 0 {
 				root = j
 			}
@@ -196,7 +196,7 @@ func tryLoftCylinderUnionTeethWithUpperBridge(ctx context.Context, d *Document, 
 		}
 		for cap := range 2 {
 			offset := cap * n
-			p0, p1 := lp.verts[offset], lp.verts[offset+root]
+			p0, p1 := lp.Verts[offset], lp.Verts[offset+root]
 			start, end := math.Atan2(p0.Y, p0.X), math.Atan2(p1.Y, p1.X)
 			startIV := proofbound.Atan2Interval(proofarith.FloatRat(p0.Y), proofarith.FloatRat(p0.X), false)
 			endIV := proofbound.Atan2Interval(proofarith.FloatRat(p1.Y), proofarith.FloatRat(p1.X), false)
@@ -227,7 +227,7 @@ func tryLoftCylinderUnionTeethWithUpperBridge(ctx context.Context, d *Document, 
 				parts[i].topIV = [2]proofbound.RatInterval{startIV, endIV}
 			}
 		}
-		gap, ok := loftcylinder.RootRadiusGap(lp.xform, [2]momentinput.Profile{lp.profile0, lp.profile1}, radius)
+		gap, ok := loftcylinder.RootRadiusGap(lp.Xform, [2]momentinput.Profile{lp.Profile0, lp.Profile1}, radius)
 		if !ok {
 			return nil, false, nil
 		}
@@ -237,23 +237,23 @@ func tryLoftCylinderUnionTeethWithUpperBridge(ctx context.Context, d *Document, 
 		if !ok {
 			return nil, false, nil
 		}
-		connectorCollar, ok := loftcylinder.ConnectorGate(lp.verts, lp.tris, lp.segment, root, radius, height, m.Bound().Base())
+		connectorCollar, ok := loftcylinder.ConnectorGate(lp.Verts, lp.Tris, lp.Segment, root, radius, height, m.Bound().Base())
 		if !ok {
 			return nil, false, nil
 		}
 		collar = max(collar, connectorCollar)
-		reach, shift, angular, ok := loftcylinder.ConnectorReach(lp.verts, lp.tris, lp.segment,
-			[2]profileRecord{lp.profile0, lp.profile1}, lp.xform.Basis().EX, lp.proof.FacetDeparture, root, radius, collar)
+		reach, shift, angular, ok := loftcylinder.ConnectorReach(lp.Verts, lp.Tris, lp.Segment,
+			[2]profileRecord{lp.Profile0, lp.Profile1}, lp.Xform.Basis().EX, lp.Proof.FacetDeparture, root, radius, collar)
 		if ok {
 			circle, err := loftCylinderSourceCircleOf(lp, radius)
 			ok = err == nil && circle.OrderedOverSafeInterval()
 		}
 		reachOK := ok
-		inset, ok := loftcylinder.RadialGate(lp.verts, lp.tris, lp.segment, root, radius, m.Bound().Base(), gap)
+		inset, ok := loftcylinder.RadialGate(lp.Verts, lp.Tris, lp.Segment, root, radius, m.Bound().Base(), gap)
 		if !ok {
 			return nil, false, nil
 		}
-		wedge, ok := loftcylinder.WedgeGate(lp.verts, lp.tris, root, pp.Z0, pp.Z1)
+		wedge, ok := loftcylinder.WedgeGate(lp.Verts, lp.Tris, root, pp.Z0, pp.Z1)
 		if !ok {
 			return nil, false, nil
 		}
@@ -274,7 +274,7 @@ func tryLoftCylinderUnionTeethWithUpperBridge(ctx context.Context, d *Document, 
 }
 
 func loftCylinderSectionKinds(lp loftPayload) bool {
-	for _, profile := range []profileRecord{lp.profile0, lp.profile1} {
+	for _, profile := range []profileRecord{lp.Profile0, lp.Profile1} {
 		segments := profile.Outer.Segments
 		start, ok := segments[0].(lineSeg)
 		if !ok {
@@ -321,10 +321,10 @@ func loftCylinderAxialPlacement(xform r3.Transform) bool {
 func loftCylinderRootCollar(lp loftPayload, radius, height float64) (float64, bool) {
 	var q [2]*big.Rat
 	var angles [2][2]proofbound.RatInterval
-	basis := lp.xform.Basis()
+	basis := lp.Xform.Basis()
 	c, s := proofarith.FloatRat(basis.EX.X), proofarith.FloatRat(basis.EX.Y)
 	scale2 := new(big.Rat).Add(new(big.Rat).Mul(c, c), new(big.Rat).Mul(s, s))
-	for cap, profile := range []profileRecord{lp.profile0, lp.profile1} {
+	for cap, profile := range []profileRecord{lp.Profile0, lp.Profile1} {
 		arc, ok := profile.Outer.Segments[5].(arcSeg)
 		if !ok {
 			return 0, false
@@ -425,7 +425,7 @@ func loftCylinderSeparate(parts []loftCylinderTooth) bool {
 			for k, part := range []loftCylinderTooth{parts[i], parts[j]} {
 				margin := proofbound.ProductUpper(length, part.mesh.Bound().Base())
 				marginRat := proofarith.FloatRat(margin)
-				for _, p := range part.loft.verts {
+				for _, p := range part.loft.Verts {
 					dot := new(big.Rat).Add(new(big.Rat).Mul(rx, proofarith.FloatRat(p.X)),
 						new(big.Rat).Mul(ry, proofarith.FloatRat(p.Y)))
 					if k == 0 && dot.Cmp(new(big.Rat).Neg(marginRat)) >= 0 ||
@@ -495,17 +495,17 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 	toothBound, toothVolume, toothArea := 0.0, 0.0, 0.0
 	for i := range parts {
 		part := &parts[i]
-		lp, n := part.loft, len(part.loft.verts)/2
+		lp, n := part.loft, len(part.loft.Verts)/2
 		part.vertex = make([][]int, 2)
 		for cap := range 2 {
 			part.vertex[cap] = make([]int, part.rootStart+1)
 			for j := range part.vertex[cap] {
 				part.vertex[cap][j] = len(mesh.verts)
-				mesh.verts = append(mesh.verts, lp.verts[cap*n+j])
+				mesh.verts = append(mesh.verts, lp.Verts[cap*n+j])
 			}
 		}
 		faces := part.body.Faces()
-		if len(faces) != lp.walls+2 {
+		if len(faces) != lp.Walls+2 {
 			return nil, fmt.Errorf("%w: a loft has changed face topology", ErrUnsupported)
 		}
 		for j := range part.rootStart {
@@ -515,7 +515,7 @@ func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
 				if len(f.Origins()) == 0 || f.Origins()[0].Role != fmt.Sprintf("side(0,%d,%d)", j, side) {
 					return nil, fmt.Errorf("%w: a loft wall lost its source role", ErrUnsupported)
 				}
-				tri := lp.tris[k]
+				tri := lp.Tris[k]
 				var mapped [3]int
 				for corner, old := range tri {
 					capIndex, station := old/n, old%n
@@ -833,13 +833,13 @@ func loftCylinderCollarSweep(parts []loftCylinderTooth, z0, z1, collar float64) 
 	maximum := 0.0
 	for _, part := range parts {
 		toothMaximum := 0.0
-		for _, p := range part.loft.verts {
+		for _, p := range part.loft.Verts {
 			x, y := proofarith.FloatRat(p.X), proofarith.FloatRat(p.Y)
 			radius := proofbound.RatSqrtUp(new(big.Rat).Add(
 				new(big.Rat).Mul(x, x), new(big.Rat).Mul(y, y)))
 			toothMaximum = max(toothMaximum, radius)
 		}
-		maximum = max(maximum, proofbound.AbsSumUpper(toothMaximum, part.loft.proof.FacetDeparture))
+		maximum = max(maximum, proofbound.AbsSumUpper(toothMaximum, part.loft.Proof.FacetDeparture))
 	}
 	ratio := proofbound.RatFloatUp(new(big.Rat).Quo(proofarith.FloatRat(collar), height))
 	sweep := proofbound.ProductUpper(proofbound.ProductUpper(2, maximum), ratio)
@@ -870,18 +870,18 @@ func loftCylinderRootChordsInsideCap(ctx context.Context, mesh *joinedMesh,
 	budget := proofbound.NewWorkBudget(ctx)
 	for _, part := range parts {
 		lp := part.loft
-		n := len(lp.verts) / 2
+		n := len(lp.Verts) / 2
 		if n < 2 || part.rootStart < 0 || part.rootStart >= n-1 {
 			return false
 		}
-		rootA := loftcylinder.ExactXY(lp.verts[capIndex*n+part.rootStart])
-		rootB := loftcylinder.ExactXY(lp.verts[capIndex*n])
+		rootA := loftcylinder.ExactXY(lp.Verts[capIndex*n+part.rootStart])
+		rootB := loftcylinder.ExactXY(lp.Verts[capIndex*n])
 		for j := part.rootStart; j < n; j++ {
 			if ctx.Err() != nil {
 				return false
 			}
-			a := loftcylinder.ExactXY(lp.verts[capIndex*n+j])
-			b := loftcylinder.ExactXY(lp.verts[capIndex*n+(j+1)%n])
+			a := loftcylinder.ExactXY(lp.Verts[capIndex*n+j])
+			b := loftcylinder.ExactXY(lp.Verts[capIndex*n+(j+1)%n])
 			if same(a, b) {
 				return false
 			}

@@ -91,10 +91,10 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 		return nil, fmt.Errorf("%w: mirrored circular bore lost its lower annulus", ErrUnsupported)
 	}
 	loft, ok := record.source.lower.n.Payload.(loftPayload)
-	if !ok || !loft.authenticatedReconstruction {
+	if !ok || !loft.AuthenticatedReconstruction {
 		return nil, fmt.Errorf("%w: mirrored circular bore lost its Loft source", ErrUnsupported)
 	}
-	reflection, err := r3.Reflection(loft.frame1)
+	reflection, err := r3.Reflection(loft.Frame1)
 	if err != nil {
 		return nil, fmt.Errorf("%w: mirrored circular bore has no source reflection: %s", ErrUnsupported, err)
 	}

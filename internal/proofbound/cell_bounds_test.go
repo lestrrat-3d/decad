@@ -611,7 +611,7 @@ func TestCellChordCurveAreaUpperRefusesARawNormArcLengthClaim(t *testing.T) {
 // TestCellChordCurveAreaUpperRefusesTheSagittaZigzag pins F1's own
 // counterexample: proofbound.CellChordCurveAreaUpper's matchedDeltaUpper obligation is
 // a PARAMETER-MATCHED bound, never the loft evaluator's SET-distance sagitta
-// (loftPayload.sectionDelta). Side A is straight (vLo=(0,0,0), vHi=(1,0,0),
+// (loftPayload.SectionDelta). Side A is straight (vLo=(0,0,0), vHi=(1,0,0),
 // chord length 1). Side B's CHORD is also straight (wLo=(0,0,0.001),
 // wHi=(1,0,0.001)), but the TRUE curve it chords is a 400-tooth zigzag of
 // amplitude 0.001 packed into x in [0, 0.02] and straight for the rest —

@@ -35,11 +35,11 @@ func notchedLoft(t *testing.T, withBore bool) *Body {
 	}
 	p0, p1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 5))
 	pl := loftPayload{
-		profile0: profile, profile1: profile,
-		recordArea: loftRecordAreasOrZero(profile, profile),
-		plane0:     p0, plane1: p1,
-		frame0: mustFrame(t, p0), frame1: mustFrame(t, p1),
-		xform: r3.Identity(),
+		Profile0: profile, Profile1: profile,
+		RecordArea: loftRecordAreasOrZero(profile, profile),
+		Plane0:     p0, Plane1: p1,
+		Frame0: mustFrame(t, p0), Frame1: mustFrame(t, p1),
+		Xform: r3.Identity(),
 	}
 	body, err := evalLoft(t.Context(), New(), producerID(1), pl,
 		proofbound.NewWorkBudget(t.Context()), freeform.NewFreeformWork(), freeform.NewFreeformWork())
@@ -84,12 +84,12 @@ func TestLoftCapBandReflexVolumeProofAndSharpBore(t *testing.T) {
 	}
 	volume, err := out.Volume()
 	require.NoError(t, err)
-	require.GreaterOrEqual(t, volume.Bound.Base(), source.proof.VolSymDiff)
+	require.GreaterOrEqual(t, volume.Bound.Base(), source.Proof.VolSymDiff)
 	mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1), WithVerification(VerifyAll))
 	require.NoError(t, err)
 	require.True(t, mesh.BoundaryVerified())
 	require.True(t, mesh.VolumeVerified())
-	require.Greater(t, mesh.n.VolSymDiff, source.proof.VolSymDiff)
+	require.Greater(t, mesh.n.VolSymDiff, source.Proof.VolSymDiff)
 	require.NoError(t, requireVolumeProvingPayload(t.Context(), out, 0))
 	for _, cap := range []provenance.Ref{refOf(CapStart(out)), refOf(CapEnd(out))} {
 		faces, err := Faces(FaceCreatedBy(featureRefOf(cap))).Exactly(1).SelectFaces(out)
@@ -139,11 +139,11 @@ func TestLoftCapBandNoBoreChamfersBothOuterLoops(t *testing.T) {
 	after, err := out.Volume()
 	require.NoError(t, err)
 	require.Less(t, after.Value.Base()+after.Bound.Base(), before.Value.Base()-before.Bound.Base())
-	require.GreaterOrEqual(t, after.Bound.Base(), body.n.Payload.(loftPayload).proof.VolSymDiff)
+	require.GreaterOrEqual(t, after.Bound.Base(), body.n.Payload.(loftPayload).Proof.VolSymDiff)
 	mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1), WithVerification(VerifyAll))
 	require.NoError(t, err)
 	require.True(t, mesh.BoundaryVerified())
 	require.True(t, mesh.VolumeVerified())
-	require.Greater(t, mesh.n.VolSymDiff, body.n.Payload.(loftPayload).proof.VolSymDiff)
+	require.Greater(t, mesh.n.VolSymDiff, body.n.Payload.(loftPayload).Proof.VolSymDiff)
 	require.NoError(t, requireVolumeProvingPayload(t.Context(), out, 0))
 }

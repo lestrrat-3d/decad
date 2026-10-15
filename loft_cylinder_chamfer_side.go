@@ -164,7 +164,7 @@ func (prep *middleSidePrep) middleFacet(ctx context.Context, i int, st *middleSt
 			for _, face := range candidates {
 				parity, ok := st.toothParity[face.body]
 				if !ok {
-					parity = meshbool.NewParityMesh(face.loft.verts, face.loft.tris)
+					parity = meshbool.NewParityMesh(face.loft.Verts, face.loft.Tris)
 					st.toothParity[face.body] = parity
 				}
 				if err := loftCylinderChamferMiddleToothSource(ctx, q, qBox, qBoxed, face,
@@ -208,24 +208,24 @@ func loftCylinderChamferMiddleToothSource(ctx context.Context, q [3]proofarith.X
 	blankRadius float64, circles map[*Body]loftcylinder.SourceCircle,
 	roots map[*Body]*loftmesh.ChamferHeldRootMemo) error {
 	lp := face.loft
-	if lp.walls <= 0 || lp.walls > len(lp.tris) || face.root < 3 ||
+	if lp.Walls <= 0 || lp.Walls > len(lp.Tris) || face.root < 3 ||
 		face.scale == nil || face.scale.Sign() <= 0 ||
-		2*face.root >= lp.walls || face.bound < 0 || proofbound.IsNonFinite(face.bound) {
+		2*face.root >= lp.Walls || face.bound < 0 || proofbound.IsNonFinite(face.bound) {
 		return fmt.Errorf("%w: inward patch lacks a bounded Loft wall", ErrUnsupported)
 	}
 	fullClear := true
-	for j := range lp.walls {
+	for j := range lp.Walls {
 		if j%64 == 0 && ctx.Err() != nil {
 			return ctx.Err()
 		}
-		tri := lp.tris[j]
-		if boxed && loftmesh.ChamferBoxGapAbove(qBox, meshbool.TriBox(lp.verts, tri), face.bound) {
+		tri := lp.Tris[j]
+		if boxed && loftmesh.ChamferBoxGapAbove(qBox, meshbool.TriBox(lp.Verts, tri), face.bound) {
 			continue
 		}
 		other := [3]proofarith.Xpt{
-			proofarith.XptOf(lp.verts[tri[0]]),
-			proofarith.XptOf(lp.verts[tri[1]]),
-			proofarith.XptOf(lp.verts[tri[2]]),
+			proofarith.XptOf(lp.Verts[tri[0]]),
+			proofarith.XptOf(lp.Verts[tri[1]]),
+			proofarith.XptOf(lp.Verts[tri[2]]),
 		}
 		if loftmesh.ChamferTriangleGapSplit(q, other, face.bound, 2) ||
 			meshbool.DisjointTriDistanceAbove(q, other, face.bound) {
@@ -276,7 +276,7 @@ func loftCylinderChamferMiddleToothSource(ctx context.Context, q [3]proofarith.X
 		roots[face.body] = memo
 	}
 	if mappedLo.Cmp(circle.SafeBottom) <= 0 || mappedHi.Cmp(circle.SafeTop) >= 0 ||
-		!memo.Inside(lp.verts, lp.tris, lp.walls, face.root, mappedLo, mappedHi, blankRadius) {
+		!memo.Inside(lp.Verts, lp.Tris, lp.Walls, face.root, mappedLo, mappedHi, blankRadius) {
 		return fmt.Errorf("%w: inward patch has no hidden root-wall interval", ErrUnsupported)
 	}
 	r := proofarith.FloatRat(blankRadius)

@@ -21,24 +21,24 @@ import (
 // rewritten record preserves their one-to-one loft correspondence. Spline
 // segments remain the original records; only the analytic corner is trimmed.
 func (b *Body) filletStraightLoft(ctx context.Context, sel EdgeSelector, edges []*Edge, pl loftPayload, radius float64) (*Body, error) {
-	if pl.constructionDelta > 0 || len(pl.constructionArcUpper) != 0 || len(pl.constructionLengthExtra) != 0 {
+	if pl.ConstructionDelta > 0 || len(pl.ConstructionArcUpper) != 0 || len(pl.ConstructionLengthExtra) != 0 {
 		return nil, fmt.Errorf(`%w: a certified fitted-spline loft fillet cannot be filleted again`, ErrUnsupported)
 	}
-	if pl.surfaceResult || len(pl.profile0.Holes) != 0 || len(pl.profile1.Holes) != 0 ||
-		!sectionrecord.IdenticalRecord(pl.profile0, pl.profile1) ||
-		pl.plane0.U != pl.plane1.U || pl.plane0.V != pl.plane1.V {
+	if pl.SurfaceResult || len(pl.Profile0.Holes) != 0 || len(pl.Profile1.Holes) != 0 ||
+		!sectionrecord.IdenticalRecord(pl.Profile0, pl.Profile1) ||
+		pl.Plane0.U != pl.Plane1.U || pl.Plane0.V != pl.Plane1.V {
 		return nil, fmt.Errorf(`%w: a loft fillet needs matching, parallel, solid sections without holes`, ErrUnsupported)
 	}
-	for _, off := range pl.alignment {
+	for _, off := range pl.Alignment {
 		if off != 0 {
 			return nil, fmt.Errorf(`%w: a loft fillet needs the two sections in the same segment order`, ErrUnsupported)
 		}
 	}
-	shift := pl.plane1.Origin.Sub(pl.plane0.Origin)
-	if shift.Dot(pl.plane0.U) != 0 || shift.Dot(pl.plane0.V) != 0 {
+	shift := pl.Plane1.Origin.Sub(pl.Plane0.Origin)
+	if shift.Dot(pl.Plane0.U) != 0 || shift.Dot(pl.Plane0.V) != 0 {
 		return nil, fmt.Errorf(`%w: a loft fillet needs an axial section translation`, ErrUnsupported)
 	}
-	segments := pl.profile0.Outer.Segments
+	segments := pl.Profile0.Outer.Segments
 	n := len(segments)
 	if n < 2 {
 		return nil, fmt.Errorf(`%w: a loft fillet needs an analytic section corner`, ErrUnsupported)
@@ -84,8 +84,8 @@ func (b *Body) filletStraightLoft(ctx context.Context, sel EdgeSelector, edges [
 				continue
 			}
 			w := walks[i]
-			bottom := pl.xform.Apply(pl.frame0.ToWorldUV(w.StartU, w.StartV))
-			top := pl.xform.Apply(pl.frame1.ToWorldUV(w.StartU, w.StartV))
+			bottom := pl.Xform.Apply(pl.Frame0.ToWorldUV(w.StartU, w.StartV))
+			top := pl.Xform.Apply(pl.Frame1.ToWorldUV(w.StartU, w.StartV))
 			if (edge.n.Start.Position == bottom && edge.n.End.Position == top) ||
 				(edge.n.Start.Position == top && edge.n.End.Position == bottom) {
 				if matched >= 0 {
@@ -288,8 +288,8 @@ func (b *Body) filletStraightLoft(ctx context.Context, sel EdgeSelector, edges [
 	profile := profileRecord{Outer: loopRecord{Segments: rewritten}}
 	budget := proofbound.NewWorkBudget(ctx)
 	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
-	pl.raiseReconstructionLimit(work0, work1)
-	limit := pl.rewriteWorkLimit(uint64(len(rewritten)))
+	pl.RaiseReconstructionLimit(work0, work1)
+	limit := pl.RewriteWorkLimit(uint64(len(rewritten)))
 	work0.RaiseLimit(limit)
 	work1.RaiseLimit(limit)
 	if err := loftfillet.AuditProfile(ctx, budget, profile, changed, constructionDelta, work0); err != nil {
@@ -307,15 +307,15 @@ func (b *Body) filletStraightLoft(ctx context.Context, sel EdgeSelector, edges [
 		return nil, fmt.Errorf(`%w: the loft fillet consumes its section`, ErrDegenerate)
 	}
 	next := pl
-	next.profile0, next.profile1 = profile, profile
-	next.blendSegs = []map[int]struct{}{blendSegs}
-	next.constructionDelta = constructionDelta
-	next.constructionArcUpper = constructionArcUpper
-	next.constructionLengthExtra = constructionLengthExtra
-	next.recordArea = [2]float64{area0.Area, area1.Area}
-	next.verts, next.tris, next.walls = nil, nil, 0
-	next.cell, next.side, next.capStartCount = nil, nil, 0
-	next.proof = loftmesh.MeshProof{}
+	next.Profile0, next.Profile1 = profile, profile
+	next.BlendSegs = []map[int]struct{}{blendSegs}
+	next.ConstructionDelta = constructionDelta
+	next.ConstructionArcUpper = constructionArcUpper
+	next.ConstructionLengthExtra = constructionLengthExtra
+	next.RecordArea = [2]float64{area0.Area, area1.Area}
+	next.Verts, next.Tris, next.Walls = nil, nil, 0
+	next.Cell, next.Side, next.CapStartCount = nil, nil, 0
+	next.Proof = loftmesh.MeshProof{}
 	ref := b.n.Doc.NextProducer
 	body, err := evalLoft(ctx, documentHandle(b.n.Doc), ref, next, budget, work0, work1)
 	if err != nil {

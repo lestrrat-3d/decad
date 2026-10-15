@@ -84,12 +84,12 @@ func TestLoftFitSplineWedgeMatchesExtrude(t *testing.T) {
 
 	lp, ok := body.n.Payload.(loftPayload)
 	require.True(t, ok)
-	require.Positive(t, lp.sectionDelta, "a chorded free-form pair publishes its measured sagitta")
-	require.Greater(t, lp.walls, 2*3, "the free-form pair must chord into more than one cell")
+	require.Positive(t, lp.SectionDelta, "a chorded free-form pair publishes its measured sagitta")
+	require.Greater(t, lp.Walls, 2*3, "the free-form pair must chord into more than one cell")
 
 	lower := map[[2]float64]struct{}{}
 	upper := map[[2]float64]struct{}{}
-	for _, v := range lp.verts {
+	for _, v := range lp.Verts {
 		switch v.Z {
 		case 0:
 			lower[[2]float64{v.X, v.Y}] = struct{}{}
@@ -159,7 +159,7 @@ func TestLoftFitSplineWedgeVerifiesSound(t *testing.T) {
 	unsharp, _, _ := loftWedgeAreaRebuild(t, lp, true)
 
 	require.Len(t, pairs, 1)
-	samples := wedgeLoopSamples(t, lp.profile0, 1<<12)
+	samples := wedgeLoopSamples(t, lp.Profile0, 1<<12)
 	predicted, freeTotal, sharpTotal := 0.0, 0.0, 0.0
 	cells := 0
 	for i, p := range pairs {
@@ -192,7 +192,7 @@ func TestLoftFitSplineWedgeVerifiesSound(t *testing.T) {
 		unsharp.Bound.Base(), built.Bound.Base(), unsharp.Bound.Base()/built.Bound.Base(), freeTotal, sharpTotal, cells, shrink, predicted)
 	require.InEpsilon(t, predicted, shrink, 1e-7, "the Area bound must shrink by the derivation's own per-cell difference")
 
-	ref := wedgeDenseArea(t, lp.profile0, wedgeHeight)
+	ref := wedgeDenseArea(t, lp.Profile0, wedgeHeight)
 	t.Logf("A10b Area: value=%.10g bound=%.3e reference=%.10g residual=%.3e", area.Value.Base(), area.Bound.Base(), ref, math.Abs(area.Value.Base()-ref))
 	require.LessOrEqual(t, math.Abs(area.Value.Base()-ref), area.Bound.Base())
 }
@@ -221,9 +221,9 @@ func untwistedRuledLeg(c, h, md, arcA, arcB, energyA, energyB float64) float64 {
 func loftWedgeAreaRebuild(t *testing.T, pl loftPayload, dropEnergy bool) (Measurement, []loftmesh.LoopPair, loftmesh.Assembly) {
 	t.Helper()
 	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
-	offsets, walks0, walks1, target, err := loftmesh.ValidateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, loftRecordAreas(t, pl.profile0, pl.profile1), work0, work1)
+	offsets, walks0, walks1, target, err := loftmesh.ValidateLoftRecords(pl.Profile0, pl.Profile1, pl.Plane0, pl.Plane1, pl.Alignment, loftRecordAreas(t, pl.Profile0, pl.Profile1), work0, work1)
 	require.NoError(t, err)
-	pairs, sectionDelta, sectionMatchedDelta, stationRound, err := loftmesh.PairRecords(pl.profile0, pl.profile1, offsets, walks0, walks1, target, work0, work1)
+	pairs, sectionDelta, sectionMatchedDelta, stationRound, err := loftmesh.PairRecords(pl.Profile0, pl.Profile1, offsets, walks0, walks1, target, work0, work1)
 	require.NoError(t, err)
 	if dropEnergy {
 		for i := range pairs {
@@ -233,7 +233,7 @@ func loftWedgeAreaRebuild(t *testing.T, pl loftPayload, dropEnergy bool) (Measur
 			}
 		}
 	}
-	a, err := loftmesh.AssembleTriangulated(t.Context(), pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform, stationRound)
+	a, err := loftmesh.AssembleTriangulated(t.Context(), pairs, pl.Frame0, pl.Frame1, pl.Plane0, pl.Xform, stationRound)
 	require.NoError(t, err)
 	mass := buildLoftMass(pl, a, pairs, sectionDelta, sectionMatchedDelta)
 	return mass.area(loftmesh.CapPolygonAreaRat(a.Pts0, a.LoopIdx0),
@@ -336,9 +336,9 @@ func TestLoftFreeformReversedRangeBuildsTheSameStations(t *testing.T) {
 
 	a := sameSense.n.Payload.(loftPayload)
 	b := opposite.n.Payload.(loftPayload)
-	require.Greater(t, a.walls, 4, "the spline must chord into several cells")
-	require.Equal(t, a.verts, b.verts, "the reversed record must build the identical station coordinates")
-	require.Equal(t, a.tris, b.tris)
+	require.Greater(t, a.Walls, 4, "the spline must chord into several cells")
+	require.Equal(t, a.Verts, b.Verts, "the reversed record must build the identical station coordinates")
+	require.Equal(t, a.Tris, b.Tris)
 }
 
 // TestLoftFreeformTwistedClosedSplineBracketsDenseReference lofts a closed
@@ -373,13 +373,13 @@ func TestLoftFreeformTwistedClosedSplineBracketsDenseReference(t *testing.T) {
 	body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
 	require.NoError(t, err)
 	lp := body.n.Payload.(loftPayload)
-	require.Positive(t, lp.sectionDelta)
+	require.Positive(t, lp.SectionDelta)
 
-	c0 := denseWalkSamples(t, lp.profile0.Outer.Segments[0], 2048)
-	c1 := denseWalkSamples(t, lp.profile1.Outer.Segments[0], 2048)
+	c0 := denseWalkSamples(t, lp.Profile0.Outer.Segments[0], 2048)
+	c1 := denseWalkSamples(t, lp.Profile1.Outer.Segments[0], 2048)
 	require.Len(t, c1, len(c0))
-	x0 := liftSamples(c0, lp.frame0)
-	x1 := liftSamples(c1, lp.frame1)
+	x0 := liftSamples(c0, lp.Frame0)
+	x1 := liftSamples(c1, lp.Frame1)
 	ref := ruledReference(x0, x1, height)
 
 	vol, err := body.Volume()
@@ -445,7 +445,7 @@ func TestLoftFreeformWedgePlacedAndTessellated(t *testing.T) {
 
 	src := body.n.Payload.(loftPayload)
 	moved := placed.n.Payload.(loftPayload)
-	require.Greater(t, moved.delta, src.delta, "a placement adds its rigid rounding to every vertex")
+	require.Greater(t, moved.Delta, src.Delta, "a placement adds its rigid rounding to every vertex")
 
 	placedVol, err := placed.Volume()
 	require.NoError(t, err)
@@ -462,8 +462,8 @@ func TestLoftFreeformWedgePlacedAndTessellated(t *testing.T) {
 		lp := b.n.Payload.(loftPayload)
 		mesh, err := b.Tessellate(t.Context(), units.Millimeters(1), WithVerification(VerifyAll))
 		require.NoError(t, err)
-		require.Len(t, mesh.Triangles(), len(lp.tris))
-		require.Equal(t, lp.proof.FacetDeparture, mesh.Bound().Base())
+		require.Len(t, mesh.Triangles(), len(lp.Tris))
+		require.Equal(t, lp.Proof.FacetDeparture, mesh.Bound().Base())
 		require.Positive(t, mesh.Bound().Base())
 		require.True(t, mesh.VolumeVerified())
 		meshVol := signedMeshVolume(mesh.Vertices(), mesh.Triangles())
@@ -593,8 +593,8 @@ func TestLoftDegreeOneTwistedPairPublishesTheRuledBody(t *testing.T) {
 	t.Run("degree-1 NURBS pair encloses the ruled body", func(t *testing.T) {
 		body := build(t, true)
 		lp := body.n.Payload.(loftPayload)
-		require.Zero(t, lp.delta, "two unplaced XY planes through the origin's own axis lift exactly")
-		require.Zero(t, lp.sectionDelta, "a degree-1 NURBSSeg is its own chord")
+		require.Zero(t, lp.Delta, "two unplaced XY planes through the origin's own axis lift exactly")
+		require.Zero(t, lp.SectionDelta, "a degree-1 NURBSSeg is its own chord")
 
 		vol, err := body.Volume()
 		require.NoError(t, err)
@@ -612,7 +612,7 @@ func TestLoftDegreeOneTwistedPairPublishesTheRuledBody(t *testing.T) {
 		require.LessOrEqual(t, math.Abs(12+4*wall-area.Value.Base()), area.Bound.Base(),
 			"Area must enclose the ruled walls, not the held triangle pairs")
 
-		require.Positive(t, lp.proof.FacetDeparture,
+		require.Positive(t, lp.Proof.FacetDeparture,
 			"the held triangle pair stands for a twisted bilinear patch, so the mesh is not the boundary")
 	})
 

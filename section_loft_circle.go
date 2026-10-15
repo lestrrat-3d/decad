@@ -17,33 +17,33 @@ func loftCircleSectionRecord(pl loftPayload, plane r3.Frame) (profileRecord, boo
 	// An exact-axis Cut is refused by analyticBore. The direct-circle gate
 	// refuses non-analytic Cut and Fillet rewrites; their markers remain
 	// reject-only backstops if those gates change.
-	if pl.constructionDelta != 0 || len(pl.blendSegs) != 0 ||
-		pl.throughBoreCut || pl.analyticBore || pl.xform != r3.Identity() ||
+	if pl.ConstructionDelta != 0 || len(pl.BlendSegs) != 0 ||
+		pl.ThroughBoreCut || pl.AnalyticBore || pl.Xform != r3.Identity() ||
 		directLoftCircularHole(pl) == loftCircleWallNone {
 		return profileRecord{}, false
 	}
 	x, y, z := r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)
-	if pl.frame0.U() != x || pl.frame0.V() != y || pl.frame0.N() != z ||
-		pl.frame1.U() != x || pl.frame1.V() != y || pl.frame1.N() != z ||
+	if pl.Frame0.U() != x || pl.Frame0.V() != y || pl.Frame0.N() != z ||
+		pl.Frame1.U() != x || pl.Frame1.V() != y || pl.Frame1.N() != z ||
 		plane.U() != x || plane.V() != y || plane.N() != z {
 		return profileRecord{}, false
 	}
-	if pl.frame0.Origin().X != pl.frame1.Origin().X ||
-		pl.frame0.Origin().Y != pl.frame1.Origin().Y ||
-		pl.frame0.Origin().X != plane.Origin().X ||
-		pl.frame0.Origin().Y != plane.Origin().Y ||
-		pl.plane0.Origin.Z != pl.frame0.Origin().Z ||
-		pl.plane1.Origin.Z != pl.frame1.Origin().Z {
+	if pl.Frame0.Origin().X != pl.Frame1.Origin().X ||
+		pl.Frame0.Origin().Y != pl.Frame1.Origin().Y ||
+		pl.Frame0.Origin().X != plane.Origin().X ||
+		pl.Frame0.Origin().Y != plane.Origin().Y ||
+		pl.Plane0.Origin.Z != pl.Frame0.Origin().Z ||
+		pl.Plane1.Origin.Z != pl.Frame1.Origin().Z {
 		return profileRecord{}, false
 	}
-	z0, z1 := proofarith.FloatRat(pl.frame0.Origin().Z), proofarith.FloatRat(pl.frame1.Origin().Z)
+	z0, z1 := proofarith.FloatRat(pl.Frame0.Origin().Z), proofarith.FloatRat(pl.Frame1.Origin().Z)
 	cut := proofarith.FloatRat(plane.Origin().Z)
 	if z0 == nil || z1 == nil || cut == nil || cut.Cmp(z0) <= 0 || cut.Cmp(z1) >= 0 {
 		return profileRecord{}, false
 	}
 	fraction := new(big.Rat).Quo(new(big.Rat).Sub(cut, z0), new(big.Rat).Sub(z1, z0))
-	bottom, okBottom := pl.profile0.Holes[0].Segments[0].(circleSeg)
-	top, okTop := pl.profile1.Holes[0].Segments[0].(circleSeg)
+	bottom, okBottom := pl.Profile0.Holes[0].Segments[0].(circleSeg)
+	top, okTop := pl.Profile1.Holes[0].Segments[0].(circleSeg)
 	if !okBottom || !okTop {
 		return profileRecord{}, false
 	}
@@ -57,7 +57,7 @@ func loftCircleSectionRecord(pl loftPayload, plane r3.Frame) (profileRecord, boo
 	hole.Center.U, hole.Center.V = u, v
 	hole.Radius = units.Millimeters(radius)
 	return profileRecord{
-		Outer: pl.profile0.Outer,
+		Outer: pl.Profile0.Outer,
 		Holes: []loopRecord{{Segments: []curveSegment{hole}}},
 	}, true
 }
@@ -68,45 +68,45 @@ func loftCircleSectionRecord(pl loftPayload, plane r3.Frame) (profileRecord, boo
 func loftVaryingCircularOuterSectionRecord(pl loftPayload, plane r3.Frame) (profileRecord, bool) {
 	// Cut/Fillet markers, hole-count disagreement, invalid alignment shapes
 	// and plane/frame disagreement are reject-only for current direct Lofts.
-	if !pl.authenticatedReconstruction || pl.surfaceResult ||
-		pl.constructionDelta != 0 || len(pl.blendSegs) != 0 ||
-		pl.throughBoreCut || pl.analyticBore || pl.xform != r3.Identity() ||
-		len(pl.profile0.Holes) != len(pl.profile1.Holes) ||
-		(len(pl.alignment) != 0 && len(pl.alignment) != 1+len(pl.profile0.Holes)) {
+	if !pl.AuthenticatedReconstruction || pl.SurfaceResult ||
+		pl.ConstructionDelta != 0 || len(pl.BlendSegs) != 0 ||
+		pl.ThroughBoreCut || pl.AnalyticBore || pl.Xform != r3.Identity() ||
+		len(pl.Profile0.Holes) != len(pl.Profile1.Holes) ||
+		(len(pl.Alignment) != 0 && len(pl.Alignment) != 1+len(pl.Profile0.Holes)) {
 		return profileRecord{}, false
 	}
-	for _, offset := range pl.alignment {
+	for _, offset := range pl.Alignment {
 		if offset != 0 {
 			return profileRecord{}, false
 		}
 	}
 	x, y, z := r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)
-	if pl.frame0.U() != x || pl.frame0.V() != y || pl.frame0.N() != z ||
-		pl.frame1.U() != x || pl.frame1.V() != y || pl.frame1.N() != z ||
+	if pl.Frame0.U() != x || pl.Frame0.V() != y || pl.Frame0.N() != z ||
+		pl.Frame1.U() != x || pl.Frame1.V() != y || pl.Frame1.N() != z ||
 		plane.U() != x || plane.V() != y || plane.N() != z ||
-		pl.plane0.U != x || pl.plane0.V != y ||
-		pl.plane1.U != x || pl.plane1.V != y ||
-		pl.plane0.Origin != pl.frame0.Origin() || pl.plane1.Origin != pl.frame1.Origin() ||
-		pl.frame0.Origin().X != pl.frame1.Origin().X ||
-		pl.frame0.Origin().Y != pl.frame1.Origin().Y ||
-		pl.frame0.Origin().X != plane.Origin().X ||
-		pl.frame0.Origin().Y != plane.Origin().Y {
+		pl.Plane0.U != x || pl.Plane0.V != y ||
+		pl.Plane1.U != x || pl.Plane1.V != y ||
+		pl.Plane0.Origin != pl.Frame0.Origin() || pl.Plane1.Origin != pl.Frame1.Origin() ||
+		pl.Frame0.Origin().X != pl.Frame1.Origin().X ||
+		pl.Frame0.Origin().Y != pl.Frame1.Origin().Y ||
+		pl.Frame0.Origin().X != plane.Origin().X ||
+		pl.Frame0.Origin().Y != plane.Origin().Y {
 		return profileRecord{}, false
 	}
-	z0, z1 := proofarith.FloatRat(pl.frame0.Origin().Z), proofarith.FloatRat(pl.frame1.Origin().Z)
+	z0, z1 := proofarith.FloatRat(pl.Frame0.Origin().Z), proofarith.FloatRat(pl.Frame1.Origin().Z)
 	cut := proofarith.FloatRat(plane.Origin().Z)
 	if z0 == nil || z1 == nil || cut == nil || cut.Cmp(z0) <= 0 || cut.Cmp(z1) >= 0 {
 		return profileRecord{}, false
 	}
 	fraction := new(big.Rat).Quo(new(big.Rat).Sub(cut, z0), new(big.Rat).Sub(z1, z0))
-	outer, outerPair, ok := loftSectionCirclePair(pl.profile0.Outer, pl.profile1.Outer, true, fraction)
+	outer, outerPair, ok := loftSectionCirclePair(pl.Profile0.Outer, pl.Profile1.Outer, true, fraction)
 	if !ok {
 		return profileRecord{}, false
 	}
-	profile := profileRecord{Outer: outer, Holes: make([]loopRecord, len(pl.profile0.Holes))}
+	profile := profileRecord{Outer: outer, Holes: make([]loopRecord, len(pl.Profile0.Holes))}
 	holePairs := make([][2]circleSeg, len(profile.Holes))
 	for i := range profile.Holes {
-		hole, pair, ok := loftSectionCirclePair(pl.profile0.Holes[i], pl.profile1.Holes[i], false, fraction)
+		hole, pair, ok := loftSectionCirclePair(pl.Profile0.Holes[i], pl.Profile1.Holes[i], false, fraction)
 		if !ok || !loftSectionCircleGapAllLevels(outerPair, pair, true) {
 			return profileRecord{}, false
 		}

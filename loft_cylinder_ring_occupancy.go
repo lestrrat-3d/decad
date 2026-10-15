@@ -35,19 +35,19 @@ func loftCylinderRingToothOf(body *Body, radius float64) (loftCylinderRingTooth,
 	if err != nil {
 		return loftCylinderRingTooth{}, err
 	}
-	bound := lp.proof.FacetDeparture
+	bound := lp.Proof.FacetDeparture
 	if bound < 0 || proofbound.IsNonFinite(bound) {
 		return loftCylinderRingTooth{}, fmt.Errorf("%w: ring tooth has no finite wall bound", ErrUnsupported)
 	}
-	n := len(lp.verts) / 2
+	n := len(lp.Verts) / 2
 	root := -1
-	for j, segment := range lp.segment[0] {
+	for j, segment := range lp.Segment[0] {
 		if segment == 5 {
 			root = j
 			break
 		}
 	}
-	if root < 3 || lp.walls != 2*n {
+	if root < 3 || lp.Walls != 2*n {
 		return loftCylinderRingTooth{}, fmt.Errorf("%w: ring tooth has no wall cell map", ErrUnsupported)
 	}
 	result := loftCylinderRingTooth{
@@ -58,8 +58,8 @@ func loftCylinderRingToothOf(body *Body, radius float64) (loftCylinderRingTooth,
 	result.fitted = make([]loftcylinder.RingWall, 0, 2*(root-2))
 	for cell := range n {
 		for half := range 2 {
-			indices := lp.tris[2*cell+half]
-			tri := [3]r3.Vec{lp.verts[indices[0]], lp.verts[indices[1]], lp.verts[indices[2]]}
+			indices := lp.Tris[2*cell+half]
+			tri := [3]r3.Vec{lp.Verts[indices[0]], lp.Verts[indices[1]], lp.Verts[indices[2]]}
 			wall := loftcylinder.RingWall{Box: loftcylinder.RingTriangleBox(tri, bound)}
 			for k, p := range tri {
 				wall.Points[k] = loftcylinder.RingVertex(p)
@@ -163,7 +163,7 @@ func loftCylinderSourceRingInsideInputs(ctx context.Context, source loftCylinder
 		if !ok {
 			return refuse("ring has no authenticated original tooth")
 		}
-		scale := proofarith.FloatRat(original.xform.Basis().EZ.Z)
+		scale := proofarith.FloatRat(original.Xform.Basis().EZ.Z)
 		mappedLevel := new(big.Rat).Set(level)
 		if len(source.ringLevelShift) != 0 {
 			shift := source.ringLevelShift[i]

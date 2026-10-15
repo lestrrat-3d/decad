@@ -33,17 +33,17 @@ func loftCylinderChamferExteriorLineage(fp facetedPayload,
 			return fmt.Errorf("%w: cap lacks an original tooth", ErrUnsupported)
 		}
 		lp, ok := body.n.Payload.(loftPayload)
-		if !ok || !lp.authenticatedReconstruction || lp.proof.FacetDeparture < 0 ||
-			lp.proof.FacetDeparture > fp.meshBound || len(lp.verts)%2 != 0 ||
-			len(lp.segment) != 1 {
+		if !ok || !lp.AuthenticatedReconstruction || lp.Proof.FacetDeparture < 0 ||
+			lp.Proof.FacetDeparture > fp.meshBound || len(lp.Verts)%2 != 0 ||
+			len(lp.Segment) != 1 {
 			return fmt.Errorf("%w: cap tooth has no bounded source contour", ErrUnsupported)
 		}
-		n := len(lp.verts) / 2
-		if len(lp.segment[0]) != n {
+		n := len(lp.Verts) / 2
+		if len(lp.Segment[0]) != n {
 			return fmt.Errorf("%w: cap tooth has no station-to-curve map", ErrUnsupported)
 		}
 		root := -1
-		for j, segment := range lp.segment[0] {
+		for j, segment := range lp.Segment[0] {
 			if segment == 5 {
 				root = j
 				break
@@ -57,7 +57,7 @@ func loftCylinderChamferExteriorLineage(fp facetedPayload,
 		}
 		first := capIndex * n
 		for j := range root {
-			if _, ok := edges[[2]r3.Vec{lp.verts[first+j], lp.verts[first+j+1]}]; !ok {
+			if _, ok := edges[[2]r3.Vec{lp.Verts[first+j], lp.Verts[first+j+1]}]; !ok {
 				return fmt.Errorf("%w: a source tooth exterior chord is absent from the held cap", ErrUnsupported)
 			}
 		}
@@ -70,11 +70,11 @@ func loftCylinderChamferCapToothOf(body *Body, capIndex int, z float64) (loftcyl
 		return loftcylinder.ChamferCapTooth{}, fmt.Errorf("%w: cap lacks a source tooth", ErrUnsupported)
 	}
 	lp, ok := body.n.Payload.(loftPayload)
-	if !ok || !lp.authenticatedReconstruction || len(lp.verts)%2 != 0 ||
-		lp.proof.FacetDeparture < 0 || proofbound.IsNonFinite(lp.proof.FacetDeparture) {
+	if !ok || !lp.AuthenticatedReconstruction || len(lp.Verts)%2 != 0 ||
+		lp.Proof.FacetDeparture < 0 || proofbound.IsNonFinite(lp.Proof.FacetDeparture) {
 		return loftcylinder.ChamferCapTooth{}, fmt.Errorf("%w: cap tooth has no matched Loft contour", ErrUnsupported)
 	}
-	return loftcylinder.ChamferCapToothOf(lp.verts, lp.proof.FacetDeparture, capIndex, z)
+	return loftcylinder.ChamferCapToothOf(lp.Verts, lp.Proof.FacetDeparture, capIndex, z)
 }
 
 // Each source tooth's held cap chords and exact cap curve have the same

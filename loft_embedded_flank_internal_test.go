@@ -63,7 +63,7 @@ func requireEmbeddedFlanks(t *testing.T, body *Body, source []fitSplineSeg) {
 	t.Helper()
 	payload, ok := body.n.Payload.(loftPayload)
 	require.True(t, ok, "the body must retain its loft payload")
-	for _, section := range []profileRecord{payload.profile0, payload.profile1} {
+	for _, section := range []profileRecord{payload.Profile0, payload.Profile1} {
 		var retained []fitSplineSeg
 		for _, segment := range section.Outer.Segments {
 			if fit, ok := segment.(fitSplineSeg); ok {

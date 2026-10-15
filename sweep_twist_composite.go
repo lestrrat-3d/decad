@@ -70,15 +70,15 @@ func compositeTwistCellProof(poly twistsweep.TwistPolygon, geometry twistsweep.T
 		proofbound.ProductUpper(proofbound.AbsSumUpper(geometry.Radius, poly.MaxRadiusL1), dPhi),
 		proofbound.ProductUpper(poly.MaxRadiusL1, dBeta), proofbound.ProductUpper(2, eps))
 	wallAreaUpper := proofbound.ProductUpper(wallEdgeUpper, speedUpper)
-	if held.walls != 2*len(poly.Points) || len(held.tris) < held.walls+held.capStartCount {
+	if held.Walls != 2*len(poly.Points) || len(held.Tris) < held.Walls+held.CapStartCount {
 		return 0, 0, fmt.Errorf(`%w: twisted Loft cap cell counts changed`, ErrUnsupported)
 	}
-	capStart := proofbound.PerturbedAreaUpper(held.verts,
-		held.tris[held.walls:held.walls+held.capStartCount],
-		proofbound.AbsSumUpper(start.PointError, held.delta))
-	capEnd := proofbound.PerturbedAreaUpper(held.verts,
-		held.tris[held.walls+held.capStartCount:],
-		proofbound.AbsSumUpper(end.PointError, held.delta))
+	capStart := proofbound.PerturbedAreaUpper(held.Verts,
+		held.Tris[held.Walls:held.Walls+held.CapStartCount],
+		proofbound.AbsSumUpper(start.PointError, held.Delta))
+	capEnd := proofbound.PerturbedAreaUpper(held.Verts,
+		held.Tris[held.Walls+held.CapStartCount:],
+		proofbound.AbsSumUpper(end.PointError, held.Delta))
 	// The cap homotopy moves only by its station error; the larger wall
 	// departure is used for one simple upper bound on the whole cell.
 	swept := proofbound.ProductUpper(idealDelta,
@@ -105,8 +105,8 @@ func compositeTwistMesh(ctx context.Context, body *Body, cells []loftPayload,
 		}
 	}
 	mesh := bornMesh(&Mesh{n: topo.Mesh{Bound: delta, VolSymDiff: volSymDiff, SymDiffOK: true}})
-	stationPoints := len(cells[0].verts) / 2
-	if stationPoints < profileEdges || len(cells[0].verts) != 2*stationPoints {
+	stationPoints := len(cells[0].Verts) / 2
+	if stationPoints < profileEdges || len(cells[0].Verts) != 2*stationPoints {
 		return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft has no complete station table`, ErrUnsupported)
 	}
 	spanOf := make([]int, 0, len(cells)*(2*stationPoints+4))
@@ -114,39 +114,39 @@ func compositeTwistMesh(ctx context.Context, body *Body, cells []loftPayload,
 		if err := ctx.Err(); err != nil {
 			return nil, proofbound.RatInterval{}, nil, err
 		}
-		if len(held.verts) != 2*stationPoints || held.walls != 2*stationPoints ||
-			len(held.segment) != 1 || len(held.segment[0]) != stationPoints ||
-			len(held.tris) <= held.walls+held.capStartCount {
+		if len(held.Verts) != 2*stationPoints || held.Walls != 2*stationPoints ||
+			len(held.Segment) != 1 || len(held.Segment[0]) != stationPoints ||
+			len(held.Tris) <= held.Walls+held.CapStartCount {
 			return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft has an unexpected station table`, ErrUnsupported)
 		}
 		if cell == 0 {
-			mesh.n.Vertices = append(mesh.n.Vertices, held.verts[:stationPoints]...)
+			mesh.n.Vertices = append(mesh.n.Vertices, held.Verts[:stationPoints]...)
 		} else {
 			for j := range stationPoints {
-				if mesh.n.Vertices[cell*stationPoints+j] != held.verts[j] {
+				if mesh.n.Vertices[cell*stationPoints+j] != held.Verts[j] {
 					return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft cells disagree at a shared station`, ErrUnsupported)
 				}
 			}
 		}
-		mesh.n.Vertices = append(mesh.n.Vertices, held.verts[stationPoints:]...)
-		mesh.n.CoordBound = max(mesh.n.CoordBound, held.delta)
-		for t, triangle := range held.tris {
-			if t < held.walls && (t >= len(held.cell) ||
-				held.cell[t][0] != 0 || held.cell[t][1] != t/2) {
+		mesh.n.Vertices = append(mesh.n.Vertices, held.Verts[stationPoints:]...)
+		mesh.n.CoordBound = max(mesh.n.CoordBound, held.Delta)
+		for t, triangle := range held.Tris {
+			if t < held.Walls && (t >= len(held.Cell) ||
+				held.Cell[t][0] != 0 || held.Cell[t][1] != t/2) {
 				return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft wall order lost its profile provenance`, ErrUnsupported)
 			}
-			if t >= held.walls && t < held.walls+held.capStartCount && cell != 0 ||
-				t >= held.walls+held.capStartCount && cell != len(cells)-1 {
+			if t >= held.Walls && t < held.Walls+held.CapStartCount && cell != 0 ||
+				t >= held.Walls+held.CapStartCount && cell != len(cells)-1 {
 				continue
 			}
 			role := provenance.RoleCapStart
-			if t < held.walls {
-				segment := held.segment[0][t/2]
+			if t < held.Walls {
+				segment := held.Segment[0][t/2]
 				if segment < 0 || segment >= profileEdges {
 					return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft lost its source segment`, ErrUnsupported)
 				}
 				role = fmt.Sprintf("side(%d,0,%d)", pathSpanOfCell[cell], segment)
-			} else if t >= held.walls+held.capStartCount {
+			} else if t >= held.Walls+held.CapStartCount {
 				role = provenance.RoleCapEnd
 			}
 			face := byRole[role]
@@ -246,10 +246,10 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 	budget := proofbound.NewWorkBudget(ctx)
 	for i := range parts {
 		part, buildErr := evalLoft(ctx, d, ref, loftPayload{
-			profile0: profile, profile1: profile,
-			plane0: stations[i].Plane, plane1: stations[i+1].Plane,
-			frame0: stations[i].Frame, frame1: stations[i+1].Frame,
-			xform: xform, recordArea: [2]float64{recordArea, recordArea},
+			Profile0: profile, Profile1: profile,
+			Plane0: stations[i].Plane, Plane1: stations[i+1].Plane,
+			Frame0: stations[i].Frame, Frame1: stations[i+1].Frame,
+			Xform: xform, RecordArea: [2]float64{recordArea, recordArea},
 		}, budget, work0, work1)
 		if buildErr != nil {
 			return nil, fmt.Errorf("twisted sweep cell %d: %w", i, buildErr)
@@ -277,7 +277,7 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 			}
 			for i, span := range spans {
 				if span.body == nil || span.body.n.Payload == nil ||
-					span.startCap == nil || span.endCap == nil || len(held[i].verts) != 2*len(poly.Points) {
+					span.startCap == nil || span.endCap == nil || len(held[i].Verts) != 2*len(poly.Points) {
 					return fmt.Errorf(`%w: twisted sweep cell %d has incomplete Loft geometry`, ErrUnsupported, i)
 				}
 			}
@@ -299,17 +299,17 @@ func evalCompositeTwistedSweep(ctx context.Context, d *Document, ref producerID,
 			proofbound.ProductUpper(upperJoin, upperJoin)), 0.125),
 		proofbound.ProductUpper(proofbound.ProductUpper(poly.MaxEdgeL1, upperJoin), 0.25),
 		lineEps)
-	delta := proofbound.AbsSumUpper(lineIdeal, held[0].delta)
+	delta := proofbound.AbsSumUpper(lineIdeal, held[0].Delta)
 	volSymDiff := proofbound.AbsSumUpper(
-		twistSymDiff(geometry.Height, poly.PerimeterUpper, lineIdeal), held[0].proof.VolSymDiff)
+		twistSymDiff(geometry.Height, poly.PerimeterUpper, lineIdeal), held[0].Proof.VolSymDiff)
 	for i := 1; i < len(held); i++ {
 		ideal, swept, proofErr := compositeTwistCellProof(poly, geometry, thetaIv,
 			stations[i], stations[i+1], held[i])
 		if proofErr != nil {
 			return nil, fmt.Errorf("twisted sweep cell %d: %w", i, proofErr)
 		}
-		delta = max(delta, proofbound.AbsSumUpper(ideal, held[i].delta))
-		volSymDiff = proofbound.AbsSumUpper(volSymDiff, swept, held[i].proof.VolSymDiff)
+		delta = max(delta, proofbound.AbsSumUpper(ideal, held[i].Delta))
+		volSymDiff = proofbound.AbsSumUpper(volSymDiff, swept, held[i].Proof.VolSymDiff)
 	}
 	if proofbound.IsNonFinite(delta) || proofbound.IsNonFinite(volSymDiff) {
 		return nil, fmt.Errorf(`%w: twisted sweep has no finite boundary proof`, ErrUnsupported)
