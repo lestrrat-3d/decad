@@ -8,7 +8,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/capcontour"
 	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/freeform"
-	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -17,13 +16,11 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sweeparc"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
 	"github.com/lestrrat-3d/decad/internal/sweeptransport"
-	"github.com/lestrrat-3d/decad/internal/topobuild"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
-	"github.com/lestrrat-3d/units"
 )
 
 // sweepSpanPayload is one certified analytic reduction used by a composite
@@ -85,15 +82,15 @@ func replayCompositeSweepWork(
 	var err error
 	if payload.closedComposite {
 		body, err = bodyResult(compositesweep.Assemble(ctx, envOf(documentNode(d), ref), parts, false,
-			auditClosedCompositeSweep, compositesweep.SewJoin, true))
+			compositesweep.AuditClosedBodies, compositesweep.SewJoin, true))
 	} else {
 		body, err = bodyResult(compositesweep.Assemble(ctx, envOf(documentNode(d), ref), parts, payload.surfaceResult,
-			auditCompositeSweep, compositesweep.SewJoin, false))
+			compositesweep.AuditBodies, compositesweep.SewJoin, false))
 	}
 	if err != nil {
 		return nil, err
 	}
-	if err := aggregateCompositeSweepMeasurements(ctx, body, parts, payload.surfaceResult); err != nil {
+	if err := compositesweep.AggregateBody(ctx, bodyNode(body), parts, payload.surfaceResult); err != nil {
 		return nil, err
 	}
 	body.n.Payload = payload
@@ -312,93 +309,5 @@ func restoreSweepArcCapRoles(body *Body, reverse bool) {
 			origin.Role = compositesweep.SwapCapRole(origin.Role, provenance.RoleCapStart, provenance.RoleCapEnd)
 			face.n.Origins[i] = origin
 		}
-	}
-}
-
-// aggregateCompositeSweepMeasurements publishes the union readings after the
-// caller has proved that span interiors are disjoint and has assembled their
-// shared sections into body. Volume and first moments add over the spans,
-// each of which stays a solid regardless of surfaceResult (compositesweep.Assemble
-// keeps every span's own two cap roles for the pairing and sewing that
-// already ran); bounds are the componentwise union of the span boxes.
-//
-// Area is a plain sum over body's own published faces, which already excludes
-// every internal cap and, for a surface result, the two outer caps too. For a
-// surface result, collapsing to that sum alone would hold the right VALUE but
-// an uncomposed bound — §4.3 requires a sheet's area to be the full
-// (cap-inclusive) sum minus the two omitted caps, each already-computed
-// quantity contributing its own bound. So the two omitted caps are summed
-// into the running total and then subtracted back out, exactly as
-// internal/prismrecord/build.go and internal/revolveplan/build.go compose theirs, rather than being left out
-// of the sum from the start.
-func aggregateCompositeSweepMeasurements(ctx context.Context, body *Body, parts []compositesweep.SpanPart, surfaceResult bool) error {
-	if body == nil || len(parts) == 0 {
-		return fmt.Errorf(`%w: a composite sweep requires at least one built span`, ErrDegenerate)
-	}
-	budget := proofbound.NewWorkBudget(ctx)
-	spans := make([]compositesweep.Span, len(parts))
-	for i, part := range parts {
-		span := part.Body
-		if span == nil {
-			continue
-		}
-		spans[i] = compositesweep.Span{
-			Solid: span.Solid, Volume: measurementScalar(measurementFromInternal(span.Volume)),
-			Centroid: span.Centroid.Value, CentroidBound: span.Centroid.Bound.Base(),
-			Min: span.Bounds.Min, Max: span.Bounds.Max, BoxBound: span.Bounds.Bound.Base(),
-		}
-	}
-	faces := body.Faces()
-	areas := make([]proofbound.BoundedScalar, len(faces))
-	for i, face := range faces {
-		areas[i] = proofbound.MeasuredScalar(face.n.Area, face.n.AreaBound)
-	}
-	var startCap, endCap proofbound.BoundedScalar
-	if surfaceResult {
-		startCap = proofbound.MeasuredScalar(parts[0].StartCap.Area, parts[0].StartCap.AreaBound)
-		endCap = proofbound.MeasuredScalar(parts[len(parts)-1].EndCap.Area, parts[len(parts)-1].EndCap.AreaBound)
-	}
-	readings, err := compositesweep.Aggregate(budget, spans, areas, surfaceResult, startCap, endCap)
-	if err != nil {
-		return err
-	}
-	centroidBound := proofbound.Radius3D(max(readings.Centroid[0].Bound, readings.Centroid[1].Bound, readings.Centroid[2].Bound))
-	body.n.Volume = measurementToInternal(scalarMeasurement(readings.Volume, units.CubicMillimeter))
-	body.n.Area = measurementToInternal(scalarMeasurement(readings.Area, units.SquareMillimeter))
-	body.n.Centroid = measurement.VecMeasurement{
-		Value:     r3.NewVec(readings.Centroid[0].Value, readings.Centroid[1].Value, readings.Centroid[2].Value),
-		Exactness: measurement.ExactnessOf(centroidBound),
-		Bound:     units.Millimeters(centroidBound),
-	}
-	body.n.Bounds = boxToInternal(compositeSweepBox(readings.Min[0], readings.Min[1], readings.Min[2],
-		readings.Max[0], readings.Max[1], readings.Max[2]))
-	if err := topobuild.ValidateAnalyticMeasurements(bodyNode(body)); err != nil {
-		return fmt.Errorf(`%w: a composite sweep computed a non-finite measurement`, ErrUnsupported)
-	}
-	return budget.Err()
-}
-
-func measurementScalar(measurement Measurement) proofbound.BoundedScalar {
-	return proofbound.MeasuredScalar(measurement.Value.Base(), measurement.Bound.Base())
-}
-
-func scalarMeasurement(value proofbound.BoundedScalar, unit units.Unit) Measurement {
-	return Measurement{
-		Value:     units.New(value.Value, unit),
-		Exactness: exactnessOf(value.Bound),
-		Bound:     units.New(value.Bound, unit),
-	}
-}
-
-func compositeSweepBox(minX, minY, minZ, maxX, maxY, maxZ proofbound.BoundedScalar) Box {
-	bound := max(minX.Bound, minY.Bound, minZ.Bound, maxX.Bound, maxY.Bound, maxZ.Bound)
-	if bound != 0 {
-		bound = math.Nextafter(bound, math.Inf(1))
-	}
-	return Box{
-		Min:       r3.NewVec(minX.Value, minY.Value, minZ.Value),
-		Max:       r3.NewVec(maxX.Value, maxY.Value, maxZ.Value),
-		Exactness: exactnessOf(bound),
-		Bound:     units.Millimeters(bound),
 	}
 }

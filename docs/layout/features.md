@@ -43,8 +43,7 @@ The rules for rows live in `docs/layout.md`.
 | `sweep_arc.go` | Adapts `internal/sweeparc/` to the one-span `ArcThrough` reduction and Revolve build. See sweep §3. |
 | `sweep_closed_circle.go` | Checks the exact two-arc full-circle path and evaluates its full Revolve reduction. See sweep §3.3. |
 | `sweep_closed_racetrack.go` | Admits exact-turn planar circular-section loops and routes the cyclic span build. See sweep §§3.4–3.5. |
-| `sweep_composite_measure.go` | Composite Sweep span replay into `internal/compositesweep/`'s assembler, and body measurement adapters. See `docs/sweep-design.md` PR 4. |
-| `sweep_audit.go` | Adapts built span caps, bounds and extents to `internal/compositesweep/`'s separation audit, the assembler's default span audit. See sweep §7. |
+| `sweep_composite_measure.go` | Composite Sweep span replay into `internal/compositesweep/`'s assembler. See `docs/sweep-design.md` PR 4. |
 | `sweep_mitre.go` | Mitred options, entry adapters and restatement; builds through `sweepmitre.Build`. See sweep §16. |
 | `coil.go` | `Coil`, `CoilOption`, Table CS gates. Root `coilPayload` aliases `coilshell.Payload`. See helix §2, §4, §5.6. |
 | `revolve.go` | Generic `Revolve` over a profile or chain: `Axis` variants, options, angular extents. See evaluator §6 and surface §13.2. |

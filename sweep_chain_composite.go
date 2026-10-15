@@ -148,7 +148,7 @@ func replayCompositeChainSweepWork(ctx context.Context, d *Document, ref produce
 	area := proofbound.BoundedAdd(
 		proofbound.MeasuredScalar(faces[0].n.Area, faces[0].n.AreaBound),
 		proofbound.MeasuredScalar(faces[1].n.Area, faces[1].n.AreaBound))
-	body.n.Area = measurementToInternal(scalarMeasurement(area, units.SquareMillimeter))
+	body.n.Area = compositesweep.ScalarMeasurement(area, units.SquareMillimeter)
 	body.n.Bounds = boxToInternal(compositeChainBox(boxFromInternal(parts[0].n.Bounds), boxFromInternal(parts[1].n.Bounds)))
 	if err := topobuild.ValidateAnalyticMeasurements(bodyNode(body)); err != nil {
 		return nil, err

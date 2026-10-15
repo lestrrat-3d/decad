@@ -125,6 +125,18 @@ func (dp draftPayload) ExtentAlong(g r3.Vec) (float64, float64, float64, error) 
 	return dp.band().ExtentBoundedAlong(context.Background(), g, freeform.NewFreeformWork())
 }
 
+// AuditExtent reads the analytic extent the composite sweep audit needs
+// (compositesweep.ExtentReader).
+func (dp draftPayload) AuditExtent(
+	ctx context.Context, direction r3.Vec, work *freeform.FreeformWork,
+) (float64, float64, float64, error) {
+	return dp.band().ExtentBoundedAlong(ctx, direction, work)
+}
+
+// AuditEndpointSupports reports that each draft slab stays between its two
+// axial cap planes (compositesweep.EndpointSupporter).
+func (dp draftPayload) AuditEndpointSupports() bool { return true }
+
 // AxialDelta is the larger sweep-level displacement a body-relative stop
 // resolving against this body must preserve.
 func (dp draftPayload) AxialDelta() float64 { return math.Max(dp.z0Delta, dp.z1Delta) }
