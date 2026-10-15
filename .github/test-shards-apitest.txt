@@ -2098,3 +2098,4 @@
 10	0.00	TestExtrudeToTranslatedRevolveStartCapChargesStopLevel
 10	0.00	TestBrepAdjacentBossRootChamferAddsCornerMaterial
 10	0.00	TestBrepAdjacentUnderBossRootChamferAddsCornerMaterial
+10	0.00	TestMeshSourceFacesAreTheBodyFaces

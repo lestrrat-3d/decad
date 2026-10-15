@@ -253,8 +253,8 @@ func TestDraftMeshSharesTheNearRing(t *testing.T) {
 	require.Len(t, mesh.n.Vertices, 8)
 	require.Len(t, mesh.n.Triangles, 12)
 	faces := map[*Face]int{}
-	for _, f := range mesh.source {
-		faces[f]++
+	for _, f := range mesh.n.Source {
+		faces[faceHandle(f)]++
 	}
 	require.Len(t, faces, 6)
 	for _, f := range b.Faces() {

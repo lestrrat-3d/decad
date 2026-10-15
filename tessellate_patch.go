@@ -70,13 +70,13 @@ func tessellatePatch(ctx context.Context, b *Body, pp patchPayload, chord float6
 		return nil, err
 	}
 	view := pp.prism()
-	mesh := &Mesh{
+	mesh := bornMesh(&Mesh{
 		n: topo.Mesh{
 			Vertices:  make([]r3.Vec, len(points)),
 			Triangles: triangles,
+			Source:    make([]*topo.Face, len(triangles)),
 		},
-		source: make([]*Face, len(triangles)),
-	}
+	})
 	store := make([]float64, len(points))
 	budget := proofbound.NewWorkBudget(ctx)
 	for i, point := range points {
@@ -94,8 +94,8 @@ func tessellatePatch(ctx context.Context, b *Body, pp patchPayload, chord float6
 	if err != nil {
 		return nil, err
 	}
-	for i := range mesh.source {
-		mesh.source[i] = face
+	for i := range mesh.n.Source {
+		mesh.n.Source[i] = faceNode(face)
 	}
 	if view.Reflected() {
 		for i := range mesh.n.Triangles {
@@ -117,7 +117,7 @@ func tessellatePatch(ctx context.Context, b *Body, pp patchPayload, chord float6
 	if err := requireMeshAudit(ctx, true, b, mesh); err != nil {
 		return nil, err
 	}
-	if err := composeFaceBounds(mesh, map[*Face]float64{face: trim}, nil, store, 0); err != nil {
+	if err := composeFaceBounds(mesh, map[*topo.Face]float64{faceNode(face): trim}, nil, store, 0); err != nil {
 		return nil, err
 	}
 	if verify >= VerifyAll {

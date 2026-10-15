@@ -393,7 +393,7 @@ func TestDisplacedCupMesh(t *testing.T) {
 		heldArea += b.Sub(a).Cross(c.Sub(a)).Len() / 2
 	}
 	wall := faceWithRole(t, body, "shellSide(0,0)")
-	wallBound, ok := mesh.sourceBound(wall)
+	wallBound, ok := mesh.sourceBound(faceNode(wall))
 	require.True(t, ok)
 	d := new(big.Rat).SetFloat64(cupOffsetDelta)
 

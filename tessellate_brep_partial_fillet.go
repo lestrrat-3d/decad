@@ -109,7 +109,7 @@ func (bc *brepBandChord) emitPartialFillet(m *Mesh, faceOfRole func(string) (*Fa
 		twist := 0.0
 		tri := func(a, b, c int) {
 			if a != b && b != c && a != c {
-				m.addTriangle([3]int{a, b, c}, face)
+				m.addTriangle([3]int{a, b, c}, faceNode(face))
 			}
 		}
 		for _, cell := range bc.partial.Cells {

@@ -525,3 +525,60 @@ func TestZeroAndNilBodyOperandsAreRejected(t *testing.T) {
 	}
 	require.Len(t, doc.Bodies(), 2, "a rejected call leaves the live set unchanged")
 }
+
+// TestMeshSourceFacesAreTheBodyFaces pins identity across the mesh links: a
+// box mesh's SourceFaces runs parallel to Triangles, every element is one of
+// the body's own faces and every face sources a facet; a second read is the
+// same faces in a fresh slice; a second Tessellate at one tolerance and level
+// is the cached *Mesh itself, and another level is another mesh; a Transform
+// result's mesh sources the result's faces, never the moved source's. The
+// zero Mesh has nil SourceFaces.
+func TestMeshSourceFacesAreTheBodyFaces(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	box := boxBody(t, doc, 0, 0, 100, 60, 10)
+	tol := units.Millimeters(0.5)
+	mesh, err := box.Tessellate(t.Context(), tol)
+	require.NoError(t, err)
+
+	faces := box.Faces()
+	require.Len(t, faces, 6)
+	source := mesh.SourceFaces()
+	require.Len(t, source, len(mesh.Triangles()))
+	used := map[*decad.Face]struct{}{}
+	for _, f := range source {
+		require.True(t, slices.Contains(faces, f), "a facet's source is one of the body's own faces")
+		used[f] = struct{}{}
+	}
+	require.Len(t, used, len(faces), "every face of the box sources a facet")
+	again := mesh.SourceFaces()
+	for i := range source {
+		require.Same(t, source[i], again[i])
+	}
+	again[0] = nil
+	require.NotNil(t, mesh.SourceFaces()[0], "SourceFaces returns a fresh slice")
+
+	cached, err := box.Tessellate(t.Context(), tol)
+	require.NoError(t, err)
+	require.Same(t, mesh, cached, "a second Tessellate at one tolerance and level is the cached mesh")
+	drawn, err := box.Tessellate(t.Context(), tol, decad.WithVerification(decad.VerifyNone))
+	require.NoError(t, err)
+	require.NotSame(t, mesh, drawn, "another verification level is another mesh")
+	require.False(t, drawn.VolumeVerified())
+
+	up, err := r3.Translation(r3.Vec{X: 0, Y: 0, Z: 50})
+	require.NoError(t, err)
+	moved, err := decad.Transform(t.Context(), box, up)
+	require.NoError(t, err)
+	movedMesh, err := moved.Tessellate(t.Context(), tol)
+	require.NoError(t, err)
+	require.NotSame(t, mesh, movedMesh)
+	movedFaces := moved.Faces()
+	for _, f := range movedMesh.SourceFaces() {
+		require.True(t, slices.Contains(movedFaces, f), "a moved body's facets source the moved body's faces")
+		require.False(t, slices.Contains(faces, f), "a moved body's facets never source the moved source's faces")
+	}
+
+	var zero decad.Mesh
+	require.Nil(t, zero.SourceFaces())
+}

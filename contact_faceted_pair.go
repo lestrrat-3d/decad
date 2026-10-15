@@ -397,12 +397,12 @@ func planarCoilSolid(ctx context.Context, budget *proofbound.WorkBudget, b *Body
 		return planar.PlanarSolid{}, none, false, nil
 	}
 	faces := b.Faces()
-	faceAt := make(map[*Face]int, len(faces))
+	faceAt := make(map[*topo.Face]int, len(faces))
 	for i, face := range faces {
-		faceAt[face] = i
+		faceAt[faceNode(face)] = i
 	}
 	faceOf := make([]int, len(mesh.n.Triangles))
-	for t, face := range mesh.source {
+	for t, face := range mesh.n.Source {
 		at, ok := faceAt[face]
 		if !ok {
 			return planar.PlanarSolid{}, none, false, nil
@@ -437,13 +437,13 @@ func planarHeldMeshSolid(ctx context.Context, budget *proofbound.WorkBudget, b *
 		return planar.PlanarSolid{}, none, false, true, nil
 	}
 	faces := b.Faces()
-	faceAt := make(map[*Face]int, len(faces))
+	faceAt := make(map[*topo.Face]int, len(faces))
 	tolerance, chordFree := planarHeldChord, true
 	for i, face := range faces {
 		if !face.isPlanar() {
 			tolerance, chordFree = chord, false
 		}
-		faceAt[face] = i
+		faceAt[faceNode(face)] = i
 	}
 	if !chordFree && tolerance <= 0 {
 		return planar.PlanarSolid{}, none, false, false, nil
@@ -459,11 +459,11 @@ func planarHeldMeshSolid(ctx context.Context, budget *proofbound.WorkBudget, b *
 		return planar.PlanarSolid{}, none, false, chordFree, nil
 	}
 	if !mesh.n.BoundaryOK || !measurement.FiniteValues(mesh.n.Bound) || mesh.n.Bound < 0 ||
-		len(mesh.source) != len(mesh.n.Triangles) {
+		len(mesh.n.Source) != len(mesh.n.Triangles) {
 		return planar.PlanarSolid{}, none, false, chordFree, nil
 	}
 	faceOf := make([]int, len(mesh.n.Triangles))
-	for t, face := range mesh.source {
+	for t, face := range mesh.n.Source {
 		at, ok := faceAt[face]
 		if !ok {
 			return planar.PlanarSolid{}, none, false, chordFree, nil

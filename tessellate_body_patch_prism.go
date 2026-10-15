@@ -25,7 +25,7 @@ func bodyPatchCircularPrismSource(pp bodyPatchPayload) (prismPayload, bool) {
 	if len(pp.faces) != 1 || len(pp.chains) == 0 || len(pp.chains) > 2 || pp.faces[0].n.Body == nil {
 		return prismPayload{}, false
 	}
-	prism, ok := bodyHandle(pp.faces[0].n.Body).n.Payload.(prismPayload)
+	prism, ok := pp.faces[0].n.Body.Payload.(prismPayload)
 	if !ok || !prism.SurfaceResult || prism.SectionDelta != 0 || len(prism.Profile.Holes) != 0 ||
 		len(prism.Profile.Outer.Segments) != 1 {
 		return prismPayload{}, false
@@ -58,7 +58,7 @@ func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatch
 		return nil, err
 	}
 	faces := b.Faces()
-	if len(faces) != 1+len(pp.chains) || len(source.source) == 0 {
+	if len(faces) != 1+len(pp.chains) || len(source.n.Source) == 0 {
 		return nil, fmt.Errorf(`%w: a circular PatchEdges source has an incomplete face map`, ErrUnsupported)
 	}
 	work := freeform.NewFreeformWork()
@@ -98,18 +98,18 @@ func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatch
 	if err != nil {
 		return nil, err
 	}
-	mesh := &Mesh{
+	mesh := bornMesh(&Mesh{
 		n: topo.Mesh{
 			Vertices:  append([]r3.Vec(nil), source.n.Vertices...),
 			Triangles: append([][3]int(nil), source.n.Triangles...),
+			Source:    make([]*topo.Face, len(source.n.Source)),
 		},
-		source: make([]*Face, len(source.source)),
-	}
-	for i := range mesh.source {
-		if source.source[i] != pp.faces[0] {
+	})
+	for i := range mesh.n.Source {
+		if source.n.Source[i] != faceNode(pp.faces[0]) {
 			return nil, fmt.Errorf(`%w: a circular PatchEdges source has multiple wall faces`, ErrUnsupported)
 		}
-		mesh.source[i] = faces[0]
+		mesh.n.Source[i] = faceNode(faces[0])
 	}
 	// A PatchEdges placement is applied once to the already placed source.
 	// Charge its exact linear stretch and its held point-rounding separately.
@@ -139,11 +139,11 @@ func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatch
 	}
 	lengthScale := proofbound.AbsSumUpper(1, stretch)
 	mesh.n.CoordBound = proofbound.AbsSumUpper(proofbound.ProductUpper(source.n.CoordBound, lengthScale), placementRound)
-	wallBound, ok := source.sourceBound(pp.faces[0])
+	wallBound, ok := source.sourceBound(faceNode(pp.faces[0]))
 	if !ok {
 		return nil, fmt.Errorf(`%w: a circular PatchEdges source states no wall bound`, ErrUnsupported)
 	}
-	mesh.setFaceBound(faces[0], proofbound.AbsSumUpper(
+	mesh.setFaceBound(faceNode(faces[0]), proofbound.AbsSumUpper(
 		proofbound.ProductUpper(wallBound, lengthScale), placementRound))
 	byFace := map[*Face][]int{faces[0]: {}}
 	for i := range source.n.Triangles {
@@ -169,7 +169,7 @@ func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatch
 		first := len(mesh.n.Triangles)
 		for _, tri := range capTris {
 			mesh.n.Triangles = append(mesh.n.Triangles, [3]int{2*tri[0] + ring, 2*tri[1] + ring, 2*tri[2] + ring})
-			mesh.source = append(mesh.source, face)
+			mesh.n.Source = append(mesh.n.Source, faceNode(face))
 			byFace[face] = append(byFace[face], len(mesh.n.Triangles)-1)
 		}
 		// The circle has one B-rep edge but many mesh chords. Use the
@@ -185,7 +185,7 @@ func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatch
 				mesh.n.Triangles[ti][1], mesh.n.Triangles[ti][2] = mesh.n.Triangles[ti][2], mesh.n.Triangles[ti][1]
 			}
 		}
-		mesh.setFaceBound(face, proofbound.AbsSumUpper(
+		mesh.setFaceBound(faceNode(face), proofbound.AbsSumUpper(
 			proofbound.ProductUpper(proofbound.AbsSumUpper(capSag, source.n.CoordBound,
 				prism.AxialDelta()), lengthScale), placementRound, face.n.AxialDelta))
 	}

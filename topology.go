@@ -3,7 +3,6 @@ package decad
 import (
 	"fmt"
 	"math"
-	"sync/atomic"
 
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -656,7 +655,6 @@ type Body struct {
 	// n is the node data internal packages read and build (internal/topo).
 	n topo.Body
 
-	tessellationCache atomic.Pointer[tessellationCacheEntry]
 	// pairReports keeps the recent ContactPair reports this body is the
 	// first operand of (internal/reportvocab/contact_memo.go); it changes no outcome either.
 	pairReports pairReportMemo

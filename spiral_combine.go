@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/spiralsector"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -261,11 +262,11 @@ func spiralPrepareCombinedUnion(ctx context.Context, op meshbool.OperationKind,
 	if err != nil {
 		return nil, nil, err
 	}
-	faceID := make(map[*Face]int)
+	faceID := make(map[*topo.Face]int)
 	for i, face := range first.Faces() {
-		faceID[face] = len(blank.Faces()) + i
+		faceID[faceNode(face)] = len(blank.Faces()) + i
 	}
-	src, err := meshbool.SourceIDs(ctx, firstMesh.source, faceID)
+	src, err := meshbool.SourceIDs(ctx, firstMesh.n.Source, faceID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -290,7 +291,7 @@ func spiralPrepareCombinedUnion(ctx context.Context, op meshbool.OperationKind,
 // spiralCombinedProxyMesh copies the combined operand's mesh and gives its
 // restated face bounds a private map before writing any entries.
 func spiralCombinedProxyMesh(original *Mesh, placedParts []facetproof.PlacedMesh) (*Mesh, error) {
-	next := *original
+	next := bornMesh(&Mesh{n: original.n})
 	next.n.Vertices = make([]r3.Vec, 0, len(original.n.Vertices))
 	next.n.VertexBound = make([]float64, 0, len(original.n.Vertices))
 	next.n.VolSymDiff, next.n.AreaSlack = 0, 0
@@ -304,11 +305,11 @@ func spiralCombinedProxyMesh(original *Mesh, placedParts []facetproof.PlacedMesh
 		proofbound.IsNonFinite(next.n.VolSymDiff) || proofbound.IsNonFinite(next.n.AreaSlack) {
 		return nil, fmt.Errorf("%w: combined spiral proxy has no complete bound", ErrUnsupported)
 	}
-	next.faceBound = nil
+	next.n.FaceBound = nil
 	next.n.Bound = 0
 	next.setVertexBounds(next.n.VertexBound)
 	next.n.CoordBound = max(next.n.CoordBound, next.n.Bound)
-	return &next, nil
+	return next, nil
 }
 
 func spiralCombineBody(ctx context.Context, d *Document, ref producerID,

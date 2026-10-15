@@ -148,18 +148,18 @@ func (f *Face) DistanceToPoint(ctx context.Context, p r3.Vec, tol units.Value) (
 		return Measurement{}, fmt.Errorf(`%w: face distance needs a verified mesh boundary`, ErrUnsupported)
 	}
 	triangles := make([][3]int, 0)
-	if len(mesh.source) != len(mesh.n.Triangles) {
+	if len(mesh.n.Source) != len(mesh.n.Triangles) {
 		return Measurement{}, fmt.Errorf(`%w: mesh source faces do not match its triangles`, ErrBooleanFailed)
 	}
-	for i, source := range mesh.source {
-		if source == f {
+	for i, source := range mesh.n.Source {
+		if source == faceNode(f) {
 			triangles = append(triangles, mesh.n.Triangles[i])
 		}
 	}
 	if len(triangles) == 0 {
 		return Measurement{}, fmt.Errorf(`%w: the face has no mesh triangles`, ErrUnsupported)
 	}
-	bound, ok := mesh.sourceBound(f)
+	bound, ok := mesh.sourceBound(faceNode(f))
 	if !ok {
 		return Measurement{}, fmt.Errorf(`%w: the face has no displacement bound`, ErrBooleanFailed)
 	}

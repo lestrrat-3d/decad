@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/twistsweep"
 )
 
@@ -15,7 +16,7 @@ import (
 // Boolean keeps any subset of the held walls. Every live source role and held
 // face still has to exist; a smaller number cannot hide a dropped face.
 func twistMixedAreaSlackLocal(profile profileRecord, poly twistsweep.TwistPolygon, body *Body,
-	held map[*Face]proofbound.RatInterval, wallBound float64) (float64, error) {
+	held map[*topo.Face]proofbound.RatInterval, wallBound float64) (float64, error) {
 	if proofbound.IsNonFinite(wallBound) || wallBound < 0 {
 		return 0, fmt.Errorf(`%w: mixed twisted wall has no finite area allowance`, ErrUnsupported)
 	}
@@ -36,7 +37,7 @@ func twistMixedAreaSlackLocal(profile profileRecord, poly twistsweep.TwistPolygo
 	for i := range profile.Outer.Segments {
 		role := fmt.Sprintf("side(0,0,%d)", i)
 		face := byRole[role]
-		area, ok := held[face]
+		area, ok := held[faceNode(face)]
 		if face == nil || !ok || area.Lo.Sign() < 0 {
 			return 0, fmt.Errorf(`%w: mixed twisted wall %s has no held area`, ErrUnsupported, role)
 		}
@@ -44,7 +45,7 @@ func twistMixedAreaSlackLocal(profile profileRecord, poly twistsweep.TwistPolygo
 	capCharge := new(big.Rat)
 	for _, role := range []string{provenance.RoleCapStart, provenance.RoleCapEnd} {
 		face := byRole[role]
-		area, ok := held[face]
+		area, ok := held[faceNode(face)]
 		if face == nil || !ok || area.Lo.Sign() < 0 {
 			return 0, fmt.Errorf(`%w: mixed twisted cap %s has no held area`, ErrUnsupported, role)
 		}

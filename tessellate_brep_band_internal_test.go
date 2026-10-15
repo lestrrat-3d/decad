@@ -56,8 +56,8 @@ func requireMeshOfBody(t *testing.T, body *Body, m *Mesh) {
 	t.Helper()
 	require.NoError(t, tessellation.RequireClosedMesh(m.n.Triangles))
 	seen := map[*Face]struct{}{}
-	for _, f := range m.source {
-		seen[f] = struct{}{}
+	for _, f := range m.n.Source {
+		seen[faceHandle(f)] = struct{}{}
 	}
 	for _, f := range body.Faces() {
 		require.Contains(t, seen, f, "face %v is in the mesh", f.Origins())
@@ -203,8 +203,8 @@ func TestTessellateBrepBandsShareOneCount(t *testing.T) {
 	require.Equal(t, side, capRing, "one count on the cone's two circles")
 	cone := requirePatchKinds(t, out, 0, 1)[0]
 	cells := 0
-	for i, f := range m.source {
-		if f == cone {
+	for i, f := range m.n.Source {
+		if f == faceNode(cone) {
 			cells++
 			a := m.n.Triangles[i]
 			zs := map[float64]int{}

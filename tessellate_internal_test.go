@@ -510,14 +510,14 @@ func TestMeshDerivedVertexBoundsTakeTheLargestIncidentFace(t *testing.T) {
 			if incident[v] == nil {
 				incident[v] = map[*Face]struct{}{}
 			}
-			incident[v][mesh.source[k]] = struct{}{}
+			incident[v][faceHandle(mesh.n.Source[k])] = struct{}{}
 		}
 	}
 	mixedCorners := 0
 	for v, faces := range incident {
 		lo, hi := math.Inf(1), 0.0
 		for f := range faces {
-			d, ok := mesh.sourceBound(f)
+			d, ok := mesh.sourceBound(faceNode(f))
 			require.True(t, ok)
 			lo, hi = math.Min(lo, d), math.Max(hi, d)
 		}

@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -52,7 +53,7 @@ func tessellateAllEdgeChamfer(ctx context.Context, body *Body, p allEdgeChamferP
 	if len(samples.Samples) < 3 {
 		return nil, fmt.Errorf(`%w: the bore has too few stations`, ErrUnsupported)
 	}
-	var mesh Mesh
+	mesh := bornMesh(new(Mesh))
 	index := map[r3.Vec]int{}
 	var store []float64
 	add := func(v r3.Vec, bound float64) int {
@@ -111,15 +112,15 @@ func tessellateAllEdgeChamfer(ctx context.Context, body *Body, p allEdgeChamferP
 			return nil, err
 		}
 		for _, tri := range tris {
-			mesh.addTriangle([3]int{meshIndices[tri[0]], meshIndices[tri[1]], meshIndices[tri[2]]}, face)
+			mesh.addTriangle([3]int{meshIndices[tri[0]], meshIndices[tri[1]], meshIndices[tri[2]]}, faceNode(face))
 		}
 	}
 	for i := range circle[0] {
 		j := (i + 1) % len(circle[0])
 		lo0, lo1 := circle[0][i], circle[0][j]
 		hi0, hi1 := circle[1][i], circle[1][j]
-		mesh.addTriangle([3]int{lo0, lo1, hi0}, faces[18])
-		mesh.addTriangle([3]int{lo1, hi1, hi0}, faces[18])
+		mesh.addTriangle([3]int{lo0, lo1, hi0}, faceNode(faces[18]))
+		mesh.addTriangle([3]int{lo1, hi1, hi0}, faceNode(faces[18]))
 	}
 	if err := liftTessellationError(tessellation.RequireClosedMesh(mesh.n.Triangles)); err != nil {
 		return nil, err
@@ -136,9 +137,9 @@ func tessellateAllEdgeChamfer(ctx context.Context, body *Body, p allEdgeChamferP
 			return nil, err
 		}
 	}
-	trim := map[*Face]float64{faces[2]: samples.MaxSag, faces[3]: samples.MaxSag,
-		faces[18]: samples.MaxSag}
-	if err := composeFaceBounds(&mesh, trim, nil, store, 0); err != nil {
+	trim := map[*topo.Face]float64{faceNode(faces[2]): samples.MaxSag, faceNode(faces[3]): samples.MaxSag,
+		faceNode(faces[18]): samples.MaxSag}
+	if err := composeFaceBounds(mesh, trim, nil, store, 0); err != nil {
 		return nil, err
 	}
 	mesh.setVertexBounds(store)
@@ -153,11 +154,11 @@ func tessellateAllEdgeChamfer(ctx context.Context, body *Body, p allEdgeChamferP
 		terms := []float64{proofbound.ProductUpper(height, samples.SegmentArea),
 			proofbound.SweptVolumeAllow(storeMax,
 				proofbound.PerturbedAreaUpper(mesh.n.Vertices, mesh.n.Triangles, storeMax))}
-		if err := publishSymDiff(&mesh, terms); err != nil {
+		if err := publishSymDiff(mesh, terms); err != nil {
 			return nil, err
 		}
 	}
-	return &mesh, nil
+	return mesh, nil
 }
 
 func signedLoopArea(points []sectionrecord.Point2, loop []int) float64 {

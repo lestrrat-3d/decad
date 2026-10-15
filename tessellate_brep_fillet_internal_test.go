@@ -114,8 +114,8 @@ func TestTessellateBrepFilletPatchesWithinBound(t *testing.T) {
 			for _, f := range filletPatchesOf(out) {
 				patches[f] = struct{}{}
 			}
-			for i, f := range m.source {
-				if _, ok := patches[f]; !ok {
+			for i, f := range m.n.Source {
+				if _, ok := patches[faceHandle(f)]; !ok {
 					continue
 				}
 				bound, ok := m.sourceBound(f)
@@ -124,7 +124,7 @@ func TestTessellateBrepFilletPatchesWithinBound(t *testing.T) {
 				a, b, c := m.n.Vertices[tri[0]], m.n.Vertices[tri[1]], m.n.Vertices[tri[2]]
 				for _, p := range []r3.Vec{a, b, c, a.Add(b).Scale(0.5), b.Add(c).Scale(0.5), a.Add(c).Scale(0.5),
 					a.Add(b).Add(c).Scale(1.0 / 3)} {
-					require.LessOrEqual(t, filletSurfaceDistance(t, f, p), bound, "cell %d of %v", i, f.Origins())
+					require.LessOrEqual(t, filletSurfaceDistance(t, faceHandle(f), p), bound, "cell %d of %v", i, featureRefsOf(f.Origins))
 				}
 			}
 		})
@@ -345,19 +345,19 @@ func TestBrepFilletUndercutAgainstSamples(t *testing.T) {
 					listed[f] = struct{}{}
 				}
 				opposes := map[*Face]bool{}
-				for i, f := range m.source {
-					if _, ok := patches[f]; !ok {
+				for i, f := range m.n.Source {
+					if _, ok := patches[faceHandle(f)]; !ok {
 						continue
 					}
 					tri := m.n.Triangles[i]
 					a, b, c := m.n.Vertices[tri[0]], m.n.Vertices[tri[1]], m.n.Vertices[tri[2]]
 					for _, pt := range []r3.Vec{a, b, c} {
-						n, err := f.NormalAt(pt)
+						n, err := faceHandle(f).NormalAt(pt)
 						if err != nil {
 							continue
 						}
 						if d := n.Value.Dot(p); d < -1e-6 && d > -1+1e-6 {
-							opposes[f] = true
+							opposes[faceHandle(f)] = true
 						}
 					}
 				}

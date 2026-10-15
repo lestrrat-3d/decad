@@ -51,7 +51,7 @@ func tessellateChain(ctx context.Context, b *Body, pp chainPayload) (*Mesh, erro
 	}
 	reflected := pp.xform.IsReflection()
 
-	var mesh Mesh
+	mesh := bornMesh(new(Mesh))
 	index := map[*Vertex]int{}
 	var vertexStore []float64
 	meshIndexOf := func(v *Vertex) int {
@@ -98,9 +98,9 @@ func tessellateChain(ctx context.Context, b *Body, pp chainPayload) (*Mesh, erro
 			tri1[1], tri1[2] = tri1[2], tri1[1]
 			tri2[1], tri2[2] = tri2[2], tri2[1]
 		}
-		mesh.addTriangle(tri1, f)
-		mesh.addTriangle(tri2, f)
-		mesh.setFaceBound(f, proofbound.UpRound(cornerDelta+pp.sectionDelta))
+		mesh.addTriangle(tri1, faceNode(f))
+		mesh.addTriangle(tri2, faceNode(f))
+		mesh.setFaceBound(faceNode(f), proofbound.UpRound(cornerDelta+pp.sectionDelta))
 	}
 	if err := budget.Err(); err != nil {
 		return nil, err
@@ -119,12 +119,12 @@ func tessellateChain(ctx context.Context, b *Body, pp chainPayload) (*Mesh, erro
 	// A chain-fed body is a BodySheet by construction, always (Table G), so
 	// requireMeshAudit takes its sheet arm unconditionally rather than
 	// branching on b.Kind() the way a payload that can build either kind does.
-	if err := requireMeshAudit(ctx, true, b, &mesh); err != nil {
+	if err := requireMeshAudit(ctx, true, b, mesh); err != nil {
 		return nil, err
 	}
 	// A sheet encloses no region, so there is no occupied volume to prove:
 	// volSymDiff and symDiffOK stay at their zero value, the identical
 	// omission tessellateBodyContext's own prism-sheet branch states
 	// (docs/surface-design.md §10).
-	return &mesh, nil
+	return mesh, nil
 }

@@ -48,19 +48,19 @@ func (s *revolveLoftFacesToolPayloadSnapshot) current(tooth *Body,
 }
 
 func cloneRevolveLoftFacesProofMesh(m *Mesh) *Mesh {
-	cloned := *m
+	cloned := bornMesh(&Mesh{n: m.n})
 	cloned.n.Vertices = slices.Clone(m.n.Vertices)
 	cloned.n.Triangles = slices.Clone(m.n.Triangles)
-	cloned.source = slices.Clone(m.source)
+	cloned.n.Source = slices.Clone(m.n.Source)
 	cloned.n.VertexBound = slices.Clone(m.n.VertexBound)
-	cloned.faceBound = maps.Clone(m.faceBound)
-	return &cloned
+	cloned.n.FaceBound = maps.Clone(m.n.FaceBound)
+	return cloned
 }
 
 func sameRevolveLoftFacesProofMesh(a, b *Mesh) bool {
 	return a != nil && b != nil && slices.Equal(a.n.Vertices, b.n.Vertices) &&
-		slices.Equal(a.n.Triangles, b.n.Triangles) && slices.Equal(a.source, b.source) &&
-		slices.Equal(a.n.VertexBound, b.n.VertexBound) && maps.Equal(a.faceBound, b.faceBound) &&
+		slices.Equal(a.n.Triangles, b.n.Triangles) && slices.Equal(a.n.Source, b.n.Source) &&
+		slices.Equal(a.n.VertexBound, b.n.VertexBound) && maps.Equal(a.n.FaceBound, b.n.FaceBound) &&
 		a.n.Bound == b.n.Bound && a.n.CoordBound == b.n.CoordBound &&
 		a.n.AreaSlack == b.n.AreaSlack && a.n.VolSymDiff == b.n.VolSymDiff &&
 		a.n.SymDiffOK == b.n.SymDiffOK && a.n.BoundaryOK == b.n.BoundaryOK

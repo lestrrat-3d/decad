@@ -173,7 +173,7 @@ func tessellateMitredSweep(ctx context.Context, b *Body, mp mitredSweepPayload, 
 			faceOfRole[o.Role] = f
 		}
 	}
-	src := make([]*Face, len(mp.tris))
+	src := make([]*topo.Face, len(mp.tris))
 	for k, slot := range mp.triFace {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -182,18 +182,18 @@ func tessellateMitredSweep(ctx context.Context, b *Body, mp mitredSweepPayload, 
 		if !ok {
 			return nil, fmt.Errorf(`%w: the body carries no face for role %q`, ErrDegenerate, mp.faceRoles[slot])
 		}
-		src[k] = f
+		src[k] = faceNode(f)
 	}
 	if err := tessellation.RequireClosedMesh(mp.tris); err != nil {
 		return nil, fmt.Errorf(`%w: the mitred sweep's held triangle set is not a closed mesh`, ErrUnsupported)
 	}
-	mesh := &Mesh{
+	mesh := bornMesh(&Mesh{
 		n: topo.Mesh{
 			Vertices:  append([]r3.Vec(nil), mp.verts...),
 			Triangles: append([][3]int(nil), mp.tris...),
+			Source:    src,
 		},
-		source: src,
-	}
+	})
 	mesh.setVertexBounds(mp.vertexBound)
 	mesh.n.Bound = mp.delta
 	slack := 0.0

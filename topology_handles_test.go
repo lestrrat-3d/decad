@@ -26,6 +26,7 @@ var bornHandles = map[string]string{
 	"FaceShell": "bornFaceShell",
 	"Lump":      "bornLump",
 	"Document":  "bornDocument",
+	"Mesh":      "bornMesh",
 }
 
 // TestTopologyHandlesAreBorn parses every root .go file, tests included, and

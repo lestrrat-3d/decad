@@ -55,7 +55,7 @@ func TestCompositeChainSweepAreaSlackEnclosesTheAnalyticSheet(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, all.n.Vertices, none.n.Vertices)
 	require.Equal(t, all.n.Triangles, none.n.Triangles)
-	require.Equal(t, all.source, none.source)
+	require.Equal(t, all.n.Source, none.n.Source)
 	require.Zero(t, none.n.AreaSlack)
 	require.False(t, none.n.BoundaryOK)
 	require.False(t, none.n.SymDiffOK)

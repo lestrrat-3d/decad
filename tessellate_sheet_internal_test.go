@@ -89,12 +89,12 @@ func TestSheetMeshFaceBoundCoversWallsOnly(t *testing.T) {
 	sheetMesh, err := tessellateContext(t.Context(), sheet, units.Millimeters(0.5), VerifyAll)
 	require.NoError(t, err)
 
-	require.Equal(t, len(sheet.Faces()), len(sheetMesh.faceBound), `one faceBound entry per wall, and a sheet carries no cap face`)
+	require.Equal(t, len(sheet.Faces()), len(sheetMesh.n.FaceBound), `one faceBound entry per wall, and a sheet carries no cap face`)
 	for _, f := range sheet.Faces() {
-		_, ok := sheetMesh.faceBound[f]
+		_, ok := sheetMesh.n.FaceBound[faceNode(f)]
 		require.True(t, ok, `every wall face has a published sourceBound`)
 	}
-	require.Equal(t, len(solid.Faces()), len(solidMesh.faceBound), `the solid's own faceBound additionally covers its two caps`)
+	require.Equal(t, len(solid.Faces()), len(solidMesh.n.FaceBound), `the solid's own faceBound additionally covers its two caps`)
 }
 
 // TestSheetAreaSlackIsBelowTheSolidsOnTheHoledFixture is the decision that a
@@ -132,20 +132,20 @@ func TestRequireSheetMeshRejectsBrokenFreeEdgeAttribution(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, requireSheetMesh(t.Context(), sheet, mesh), `premise: the real mesh passes the audit as built`)
 
-	faceA := mesh.source[0]
+	faceA := mesh.n.Source[0]
 	var faceB *Face
-	for _, f := range mesh.source {
+	for _, f := range mesh.n.Source {
 		if f != faceA {
-			faceB = f
+			faceB = faceHandle(f)
 			break
 		}
 	}
 	require.NotNil(t, faceB, `premise: a box sheet's mesh names at least two distinct source faces`)
 
-	broken := *mesh
-	broken.source = append([]*Face(nil), mesh.source...)
-	broken.source[0] = faceB
-	err = requireSheetMesh(t.Context(), sheet, &broken)
+	broken := bornMesh(&Mesh{n: mesh.n})
+	broken.n.Source = append([]*topo.Face(nil), mesh.n.Source...)
+	broken.n.Source[0] = faceNode(faceB)
+	err = requireSheetMesh(t.Context(), sheet, broken)
 	require.Error(t, err, `reassigning one triangle's source face unbalances the chain count on both faces`)
 	require.ErrorIs(t, err, ErrDegenerate)
 }
@@ -161,14 +161,14 @@ func TestRequireSheetMeshCatchesADuplicatedDirectedEdge(t *testing.T) {
 	mesh, err := tessellateContext(t.Context(), sheet, units.Millimeters(1), VerifyAll)
 	require.NoError(t, err)
 
-	broken := *mesh
+	broken := bornMesh(&Mesh{n: mesh.n})
 	broken.n.Triangles = append([][3]int(nil), mesh.n.Triangles...)
 	// Force the first two triangles to share the directed edge (t0, t1) in
 	// the same direction, which no valid mesh construction ever produces.
 	broken.n.Triangles[1] = [3]int{broken.n.Triangles[0][0], broken.n.Triangles[0][1], broken.n.Triangles[0][2]}
-	broken.source = append([]*Face(nil), mesh.source...)
+	broken.n.Source = append([]*topo.Face(nil), mesh.n.Source...)
 
-	err = requireSheetMesh(t.Context(), sheet, &broken)
+	err = requireSheetMesh(t.Context(), sheet, broken)
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrDegenerate)
 }
@@ -203,7 +203,7 @@ func TestRequireSheetMeshAndVertexLinksAdmitAClosedSheet(t *testing.T) {
 	t.Parallel()
 	verts := []r3.Vec{{}, {X: 1}, {Y: 1}, {Z: 1}}
 	tris := [][3]int{{0, 1, 2}, {0, 2, 3}, {0, 3, 1}, {1, 3, 2}}
-	mesh := &Mesh{n: topo.Mesh{Vertices: verts, Triangles: tris}, source: []*Face{bornFace(&Face{}), bornFace(&Face{}), bornFace(&Face{}), bornFace(&Face{})}}
+	mesh := bornMesh(&Mesh{n: topo.Mesh{Vertices: verts, Triangles: tris, Source: []*topo.Face{faceNode(bornFace(&Face{})), faceNode(bornFace(&Face{})), faceNode(bornFace(&Face{})), faceNode(bornFace(&Face{}))}}})
 	require.NoError(t, tessellation.RequireClosedMesh(mesh.n.Triangles), `premise: a tetrahedron is a closed mesh`)
 
 	faceA, faceB := bornFace(&Face{}), bornFace(&Face{})

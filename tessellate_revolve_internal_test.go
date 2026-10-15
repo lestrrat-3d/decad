@@ -272,14 +272,14 @@ func TestRequireVertexLinksRejectsAPinchedVertex(t *testing.T) {
 		{0, 1, 2}, {0, 2, 3}, {0, 3, 1}, {1, 3, 2},
 		{0, 5, 4}, {0, 6, 5}, {0, 4, 6}, {4, 5, 6},
 	}
-	m := &Mesh{n: topo.Mesh{Vertices: verts, Triangles: tris}}
+	m := bornMesh(&Mesh{n: topo.Mesh{Vertices: verts, Triangles: tris}})
 	require.NoError(t, tessellation.RequireClosedMesh(m.n.Triangles), `the directed-edge audit passes, which is why the link audit exists`)
 	err := tessellation.RequireVertexLinks(t.Context(), len(m.n.Vertices), m.n.Triangles)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "cycles rather than one")
 
 	// One cone alone has a sound link at every vertex.
-	single := &Mesh{n: topo.Mesh{Vertices: verts[:4], Triangles: tris[:4]}}
+	single := bornMesh(&Mesh{n: topo.Mesh{Vertices: verts[:4], Triangles: tris[:4]}})
 	require.NoError(t, tessellation.RequireVertexLinks(t.Context(), len(single.n.Vertices), single.n.Triangles))
 }
 
@@ -512,7 +512,7 @@ func TestRevolveMeshCarriesItsOccupiedVolumeProof(t *testing.T) {
 	// Every source face publishes a positive displacement beside it, so the
 	// mesh is a complete operand rather than an export-only one.
 	require.Positive(t, mesh.n.Bound)
-	for _, f := range mesh.source {
+	for _, f := range mesh.n.Source {
 		d, ok := mesh.sourceBound(f)
 		require.True(t, ok)
 		require.Positive(t, d)

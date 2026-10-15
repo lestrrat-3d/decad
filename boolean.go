@@ -664,6 +664,7 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 	// records provenance without holding live pointers.
 	var groups []facetGroup
 	faceID := map[*Face]int{}
+	sourceID := map[*topo.Face]int{}
 	for i, f := range append(a.Faces(), b.Faces()...) {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
@@ -671,16 +672,17 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 			}
 		}
 		faceID[f] = len(groups)
+		sourceID[&f.n] = len(groups)
 		groups = append(groups, facetGroup{
 			origins: f.originRefs(),
 			planar:  f.isPlanar(),
 		})
 	}
-	srcA, err := meshbool.SourceIDs(ctx, ma.source, faceID)
+	srcA, err := meshbool.SourceIDs(ctx, ma.n.Source, sourceID)
 	if err != nil {
 		return booleanEvaluation{}, err
 	}
-	srcB, err := meshbool.SourceIDs(ctx, mb.source, faceID)
+	srcB, err := meshbool.SourceIDs(ctx, mb.n.Source, sourceID)
 	if err != nil {
 		return booleanEvaluation{}, err
 	}
@@ -1204,9 +1206,9 @@ type faceFacets struct {
 // staged capability: it returns ErrBooleanFailed rather than an ErrUnsupported
 // that Verify would hide as an undecided pair, and never a zero.
 func facesOfMesh(budget *proofbound.WorkBudget, m *Mesh) ([]faceFacets, error) {
-	index := map[*Face]int{}
+	index := map[*topo.Face]int{}
 	var out []faceFacets
-	for i, f := range m.source {
+	for i, f := range m.n.Source {
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
@@ -1218,7 +1220,7 @@ func facesOfMesh(budget *proofbound.WorkBudget, m *Mesh) ([]faceFacets, error) {
 			}
 			k = len(out)
 			index[f] = k
-			out = append(out, faceFacets{source: f, delta: delta})
+			out = append(out, faceFacets{source: faceHandle(f), delta: delta})
 		}
 		out[k].facets = append(out[k].facets, i)
 	}

@@ -198,7 +198,7 @@ func TestCapBlendMeshChargesTheWindowSkew(t *testing.T) {
 		require.Positive(t, skewTerm)
 		face := roles[patch.role]
 		require.NotNil(t, face)
-		bound, ok := mesh.sourceBound(face)
+		bound, ok := mesh.sourceBound(faceNode(face))
 		require.True(t, ok, `every source face states its own bound`)
 		require.GreaterOrEqual(t, bound, sag+skewTerm,
 			`a mitered patch owes capRadius times its window skew ON TOP of its own chording`)
@@ -228,7 +228,7 @@ func TestCapBlendBandPatchBoundCoversItsOwnChording(t *testing.T) {
 	for _, patch := range cbp.patches {
 		require.Equal(t, 0.0, capPatchWindowSkew(patch.geom),
 			`a whole-turn band's two windows coincide`)
-		bound, ok := mesh.sourceBound(roles[patch.role])
+		bound, ok := mesh.sourceBound(faceNode(roles[patch.role]))
 		require.True(t, ok)
 		require.GreaterOrEqual(t, bound, sag,
 			`a band patch's own bound covers the chording of both its directrices`)
@@ -259,7 +259,7 @@ func TestCapBlendHoleApexPatchBoundCoversConnectorSagitta(t *testing.T) {
 			continue
 		}
 		apexCount++
-		bound, ok := mesh.sourceBound(roles[patch.role])
+		bound, ok := mesh.sourceBound(faceNode(roles[patch.role]))
 		require.True(t, ok)
 		require.GreaterOrEqual(t, bound, lm.arcSag[0],
 			"each apex face's own bound covers its connector chord")
@@ -371,7 +371,7 @@ func TestCapBlendMeshPublishesNoVolumeProofForAMiteredBand(t *testing.T) {
 	require.ErrorContains(t, refusal, `no proof of the volume`)
 	require.False(t, proofbound.IsNonFinite(mesh.n.AreaSlack))
 	require.Positive(t, mesh.n.AreaSlack)
-	for _, f := range mesh.source {
+	for _, f := range mesh.n.Source {
 		_, ok := mesh.sourceBound(f)
 		require.True(t, ok, `every source face is present in the proof record`)
 	}
@@ -391,8 +391,8 @@ func capBlendMotionUnderTest(t *testing.T, cbp capBlendPayload, chord float64) (
 		require.NoError(t, capBlendCapMotion(budget, cbp, &lm))
 		lms[li] = lm
 	}
-	var mesh Mesh
-	store, motion, err := capBlendVertices(budget, cbp, cbp.prismLike(0, 0), lms, &mesh, true)
+	mesh := bornMesh(new(Mesh))
+	store, motion, err := capBlendVertices(budget, cbp, cbp.prismLike(0, 0), lms, mesh, true)
 	require.NoError(t, err)
 	require.Len(t, motion, len(store), `motion is a parallel array, one entry per vertex`)
 	return lms, motion

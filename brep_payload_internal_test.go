@@ -349,7 +349,7 @@ func TestBrepTessellationProvesOccupiedVolume(t *testing.T) {
 			require.True(t, mesh.n.SymDiffOK)
 			require.LessOrEqual(t, mesh.n.Bound, tol)
 			for _, f := range tc.body.Faces() {
-				_, ok := mesh.sourceBound(f)
+				_, ok := mesh.sourceBound(faceNode(f))
 				require.True(t, ok, `every face is a source of the mesh`)
 			}
 			// The mesh's own exact volume differs from the analytic one by at

@@ -71,7 +71,7 @@ func TestPrismProofRecordChargesEveryFaceItsOwnDisplacement(t *testing.T) {
 	// Every source face states a bound, and the mesh's global figure is their
 	// maximum — never a number no face accounts for.
 	worst := 0.0
-	for _, f := range mesh.source {
+	for _, f := range mesh.n.Source {
 		d, ok := mesh.sourceBound(f)
 		require.True(t, ok, `every source face is present in the proof record`)
 		worst = math.Max(worst, d)
@@ -88,15 +88,15 @@ func TestPrismProofRecordChargesEveryFaceItsOwnDisplacement(t *testing.T) {
 
 	var sawWall, sawStraight, sawCap int
 	seen := map[*Face]struct{}{}
-	for _, f := range mesh.source {
-		if _, done := seen[f]; done {
+	for _, f := range mesh.n.Source {
+		if _, done := seen[faceHandle(f)]; done {
 			continue
 		}
-		seen[f] = struct{}{}
+		seen[faceHandle(f)] = struct{}{}
 		d, _ := mesh.sourceBound(f)
-		role := roleOf(t, f)
+		role := roleOf(t, faceHandle(f))
 		switch {
-		case f.n.Surface.Kind() == surfacegeom.KindCylinder:
+		case f.Surface.Kind() == surfacegeom.KindCylinder:
 			// The hole wall stands on chords that lie inside its own arc, so
 			// its bound covers the sagitta it took.
 			require.GreaterOrEqual(t, d, sagitta, `the hole wall %q must charge its own chord sagitta`, role)
@@ -135,10 +135,10 @@ func TestPlacedPrismChargesEveryFaceItsPlacementRounding(t *testing.T) {
 	mesh, err := tessellateContext(t.Context(), turned, units.Millimeters(1), VerifyAll)
 	require.NoError(t, err)
 
-	for _, f := range mesh.source {
+	for _, f := range mesh.n.Source {
 		d, ok := mesh.sourceBound(f)
 		require.True(t, ok)
-		require.Positive(t, d, `a rounded placement leaves no face held exactly (role %q)`, roleOf(t, f))
+		require.Positive(t, d, `a rounded placement leaves no face held exactly (role %q)`, roleOf(t, faceHandle(f)))
 	}
 
 	// The placement's own contribution is the rigid-map rounding allowance at
@@ -239,10 +239,10 @@ func TestCupProofRecordCoversEveryPatchItHolds(t *testing.T) {
 	require.Positive(t, mesh.n.VolSymDiff)
 
 	worst := 0.0
-	for _, f := range mesh.source {
+	for _, f := range mesh.n.Source {
 		d, ok := mesh.sourceBound(f)
 		require.True(t, ok, `every cup source face states a bound`)
-		require.Positive(t, d, `every patch of a chorded cup is bounded by a curved trim (role %q)`, roleOf(t, f))
+		require.Positive(t, d, `every patch of a chorded cup is bounded by a curved trim (role %q)`, roleOf(t, faceHandle(f)))
 		worst = math.Max(worst, d)
 	}
 	require.Equal(t, worst, mesh.n.Bound)
@@ -284,13 +284,13 @@ func TestFacetedRestatementPublishesItsPayloadsOwnProofRecord(t *testing.T) {
 	require.Equal(t, fp.vertexBound, mesh.n.VertexBound)
 	want := map[*Face]float64{}
 	for i, tri := range mesh.n.Triangles {
-		f := mesh.source[i]
-		want[f] = max(want[f], fp.vertexBound[tri[0]], fp.vertexBound[tri[1]], fp.vertexBound[tri[2]])
+		f := mesh.n.Source[i]
+		want[faceHandle(f)] = max(want[faceHandle(f)], fp.vertexBound[tri[0]], fp.vertexBound[tri[1]], fp.vertexBound[tri[2]])
 	}
-	require.Len(t, mesh.faceBound, len(want))
+	require.Len(t, mesh.n.FaceBound, len(want))
 	finer := 0
 	for f, w := range want {
-		d, ok := mesh.sourceBound(f)
+		d, ok := mesh.sourceBound(faceNode(f))
 		require.True(t, ok)
 		require.Equal(t, w, d)
 		if d < fp.meshBound {
@@ -386,7 +386,7 @@ func TestFreeformPrismProofRecordCoversItsOwnChording(t *testing.T) {
 	require.NoError(t, err)
 
 	worst := 0.0
-	for _, f := range mesh.source {
+	for _, f := range mesh.n.Source {
 		d, ok := mesh.sourceBound(f)
 		require.True(t, ok, `every source face is present in the proof record`)
 		worst = math.Max(worst, d)
@@ -398,7 +398,7 @@ func TestFreeformPrismProofRecordCoversItsOwnChording(t *testing.T) {
 	// exactly held polygon.
 	var curved, straight float64
 	for _, f := range body.Faces() {
-		d, ok := mesh.sourceBound(f)
+		d, ok := mesh.sourceBound(faceNode(f))
 		require.True(t, ok)
 		if _, isNURBS := f.n.Surface.(surfacegeom.NURBSSurface); isNURBS {
 			curved = d
@@ -446,8 +446,8 @@ func freeformWallChordDeviation(t *testing.T, body *Body, mesh *Mesh) float64 {
 	// The chords: each wall facet of the NURBS face projects onto exactly one
 	// of them in the sketch plane.
 	var chords [][2][2]float64
-	for i, f := range mesh.source {
-		if _, isNURBS := f.n.Surface.(surfacegeom.NURBSSurface); !isNURBS {
+	for i, f := range mesh.n.Source {
+		if _, isNURBS := f.Surface.(surfacegeom.NURBSSurface); !isNURBS {
 			continue
 		}
 		tri := mesh.n.Triangles[i]

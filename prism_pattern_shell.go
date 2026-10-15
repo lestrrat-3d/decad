@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 )
 
@@ -60,16 +61,16 @@ func prismPatternShell(ctx context.Context, blank *Body, source *prismPatternSou
 				mesh.verts = append(mesh.verts, part.mesh.n.Vertices[2*j+capIndex])
 			}
 		}
-		groups := make(map[*Face]int)
+		groups := make(map[*topo.Face]int)
 		for j := range part.rootStart {
 			for side := range 2 {
 				k := 2*j + side
-				face := part.mesh.source[k]
+				face := part.mesh.n.Source[k]
 				group, ok := groups[face]
 				if !ok {
 					group = len(mesh.groups)
 					groups[face] = group
-					mesh.groups = append(mesh.groups, facetGroup{origins: face.originRefs()})
+					mesh.groups = append(mesh.groups, facetGroup{origins: append([]provenance.Ref(nil), face.Origins...)})
 				}
 				old := part.mesh.n.Triangles[k]
 				var mapped [3]int

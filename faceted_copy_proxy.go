@@ -28,7 +28,7 @@ func (set *facetedCopySet) placedProxyShells(ctx context.Context,
 	if !ok || len(proxy.n.Vertices) != len(first.verts) ||
 		len(proxy.n.VertexBound) != len(proxy.n.Vertices) ||
 		len(proxy.n.Triangles) != len(first.tris) ||
-		len(proxy.source) != len(proxy.n.Triangles) ||
+		len(proxy.n.Source) != len(proxy.n.Triangles) ||
 		len(first.faceOf) != len(first.tris) {
 		return nil, fmt.Errorf("%w: copied proxy lost its source facets", ErrUnsupported)
 	}
@@ -41,7 +41,7 @@ func (set *facetedCopySet) placedProxyShells(ctx context.Context,
 		}
 		faceIndex := first.faceOf[i]
 		if tri != first.tris[i] || faceIndex < 0 || faceIndex >= len(faces) ||
-			proxy.source[i] != faces[faceIndex] {
+			proxy.n.Source[i] != faceNode(faces[faceIndex]) {
 			return nil, fmt.Errorf("%w: copied proxy changed source face ownership", ErrUnsupported)
 		}
 	}

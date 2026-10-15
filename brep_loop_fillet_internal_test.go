@@ -1241,7 +1241,7 @@ func TestBrepLoopFilletSharpLineArcCorners(t *testing.T) {
 	incidence := make([]uint8, len(mesh.n.Vertices))
 	for ti, tri := range mesh.n.Triangles {
 		var bit uint8
-		switch mesh.source[ti].n.Surface.(type) {
+		switch mesh.n.Source[ti].Surface.(type) {
 		case surfacegeom.Cylinder:
 			bit = 1
 		case surfacegeom.Torus:

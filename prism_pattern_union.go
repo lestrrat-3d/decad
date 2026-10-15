@@ -10,6 +10,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -132,15 +133,15 @@ func tryPrismPatternUnionMany(ctx context.Context, d *Document, ref producerID,
 
 func prismPatternMeshRoot(m *Mesh, body *Body, rootIndex int, z0, z1 float64) (int, error) {
 	role := fmt.Sprintf("side(0,%d)", rootIndex)
-	var roots []*Face
+	var roots []*topo.Face
 	for _, face := range body.Faces() {
 		for _, origin := range face.Origins() {
 			if origin.Role == role {
-				roots = append(roots, face)
+				roots = append(roots, faceNode(face))
 			}
 		}
 	}
-	return tessellation.PrismPatternMeshRoot(m.n.Vertices, len(m.n.Triangles), m.source, roots, z0, z1)
+	return tessellation.PrismPatternMeshRoot(m.n.Vertices, len(m.n.Triangles), m.n.Source, roots, z0, z1)
 }
 
 // All held section vertices strictly separate after charging both verified

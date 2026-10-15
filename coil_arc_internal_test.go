@@ -428,6 +428,6 @@ func TestCoilArcMeshProofsEncloseTheBody(t *testing.T) {
 	require.LessOrEqual(t, gap, mesh.n.AreaSlack+area.Bound.Base()+1e-9)
 
 	for k := range mesh.Triangles() {
-		require.Contains(t, []string{provenance.RoleCapStart, provenance.RoleCapEnd, coilWallRole}, mesh.source[k].Origins()[0].Role)
+		require.Contains(t, []string{provenance.RoleCapStart, provenance.RoleCapEnd, coilWallRole}, featureRefsOf(mesh.n.Source[k].Origins)[0].Role)
 	}
 }
