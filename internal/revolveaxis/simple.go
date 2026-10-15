@@ -33,7 +33,7 @@ import (
 // with in the first place.
 //
 // THE RADIAL CONDITION IS STRICTER THAN THE BUILD GATE, on purpose.
-// resolveAxisSide already refused, at build, any profile whose radial extreme
+// revolveplan.ResolveAxisSide already refused, at build, any profile whose radial extreme
 // does not clear the axis to within tol = 1e-9 * max(1, scale) — it proves
 // only that the radial minimum is not below −tol, never that it is
 // non-negative. An admission gate resting on that tolerance is exactly what
@@ -44,14 +44,14 @@ import (
 //
 // NO FREE-FORM REFUSAL IS NEEDED HERE. rejectInteriorContact
 // (revolve_axis.go) calls boundarywalk.RequireAnalyticWalk on every segment before its own
-// circularity check, and resolveAxisSide runs on every revolve build
+// circularity check, and revolveplan.ResolveAxisSide runs on every revolve build
 // (revolve.go). So a revolvePayload that built at all already has an
 // all-analytic profile and can never carry a free-form face — adding a
 // redundant free-form gate here would be dead code guarding a case this
 // arm can never reach.
 //
 // A direct Revolve can carry the strict positive-side proof produced by
-// resolveAxisSide's scan of this same profile and axis. Its scan adds a
+// revolveplan.ResolveAxisSide's scan of this same profile and axis. Its scan adds a
 // dot-product charge that makes the proof at least as strict as this scan.
 // Placement keeps the profile and axis, so it keeps that proof; a changed
 // profile or axis clears it. Other payloads take the scan below.
@@ -61,7 +61,7 @@ import (
 // own doc comment (axisFrame) states ρ = cross(d, p−a) as its radial
 // coordinate with the region already oriented onto its non-negative side, so
 // evaluating that same functional's extreme over the recorded profile reads
-// the identical quantity resolveAxisSide decided from, at the strict zero
+// the identical quantity revolveplan.ResolveAxisSide decided from, at the strict zero
 // bound this leg requires instead of the build's ±tol band. A failure to
 // measure it (never observed against a payload this evaluator built, since
 // the identical scan already succeeded once at build time over the same
@@ -80,7 +80,7 @@ import (
 // already are. A bare `rlo -= roff` would leave that error unaccounted, so
 // the strict-zero comparison below could read a NEGATIVE true radial minimum
 // as non-negative by exactly the rounding it dropped — the identical fault
-// this leg exists to close in resolveAxisSide's build-time tolerance, only
+// this leg exists to close in revolveplan.ResolveAxisSide's build-time tolerance, only
 // smaller. proofbound.BoundedMul/proofbound.BoundedAdd/proofbound.BoundedSub charge both the operands' own
 // proven bounds and this arithmetic's own commissioned rounding (the same
 // vocabulary Frame.ToAxisRhoBound already uses for the identical ρ

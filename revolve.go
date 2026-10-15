@@ -30,9 +30,9 @@ import (
 // and, under WithSurfaceResult, omitted from a sheet), and Pappus
 // measurements with proven float-evaluation bounds.
 //
-// That evaluator is spread over three sibling files, each with its own doc
-// comment: revolve_axis.go resolves the axis and classifies what the profile
-// sweeps around it, internal/revolveplan/build.go builds the body, and internal/revolveplan/extent.go
+// That evaluator is spread over several files, each with its own doc
+// comment: revolveplan.ResolveAxisSide (internal/revolveplan/axis_side.go)
+// handles the profile and axis, internal/revolveplan/build.go builds the body, and internal/revolveplan/extent.go
 // answers the extent questions asked of the result.
 
 // Axis is what a revolve may spin about (docs/api-design.md §6.2). Sealed:
@@ -265,7 +265,7 @@ func revolveProfileBuild(ctx context.Context, d *Document, s *sketch.Sketch, p *
 	if err != nil {
 		return nil, err
 	}
-	ax, side, err := resolveAxisSide(ctx, profile, line, work)
+	ax, side, err := revolveplan.ResolveAxisSide(ctx, profile, line, work)
 	if err != nil {
 		return nil, err
 	}
@@ -592,7 +592,7 @@ func revolveChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch
 	// spend from the same ceiling.
 	work := freeform.NewFreeformWork()
 	chainProfile := profileRecord{Outer: loopRecord(chain)}
-	ax, side, err := resolveAxisSide(ctx, chainProfile, line, work)
+	ax, side, err := revolveplan.ResolveAxisSide(ctx, chainProfile, line, work)
 	if err != nil {
 		return nil, err
 	}

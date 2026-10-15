@@ -126,7 +126,7 @@ func tryDraftCircleShell(ctx context.Context, b *Body, removed []*Face, sense Sh
 		return nil, true, fmt.Errorf(`%w: the tapered circle's meridian frame: %v`, ErrUnsupported, err)
 	}
 	work := freeform.NewFreeformWork()
-	ax, side, err := resolveAxisSide(ctx, profile, revolveaxis.Line2{DU: 1}, work)
+	ax, side, err := revolveplan.ResolveAxisSide(ctx, profile, revolveaxis.Line2{DU: 1}, work)
 	if err != nil {
 		return nil, true, err
 	}

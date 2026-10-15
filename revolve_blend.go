@@ -177,7 +177,7 @@ func (b *Body) blendRevolveJunctions(ctx context.Context, sel EdgeSelector, edge
 // non-negative side, so a rewrite whose region the gate puts on the far side
 // has crossed the axis and is ErrDegenerate.
 func revolveBlendAxis(ctx context.Context, rp revolvePayload, profile profileRecord, work *freeform.FreeformWork) (axisFrame, error) {
-	ax, side, err := resolveAxisSide(ctx, profile, revolveaxis.Line2{
+	ax, side, err := revolveplan.ResolveAxisSide(ctx, profile, revolveaxis.Line2{
 		AU: rp.Ax.AU, AV: rp.Ax.AV, AUBound: rp.Ax.AUBound, AVBound: rp.Ax.AVBound,
 		DU: rp.Ax.DU, DV: rp.Ax.DV, DUBound: rp.Ax.DUBound, DVBound: rp.Ax.DVBound,
 	}, work)
