@@ -867,7 +867,9 @@ alias of `breprecord.Payload`: its `Placed` runs `breprecord.Build`. `twistedSwe
 `compositeTwistedSweepPayload` are aliases of `twistsweep.Payload` and `twistsweep.CompositePayload`:
 their `Placed` runs `twistsweep.Eval`. `draftPayload` and `twoSidedDraftPayload` are aliases of
 `draftrecord.Payload` and `draftrecord.TwoSidedPayload`: their `Placed` runs `draftrecord.Build` and
-`draftrecord.BuildTwoSided`. A payload that still lives in the root
+`draftrecord.BuildTwoSided`. `sweepPayload` and `chainSweepPayload` are aliases of `sweeprecord.Payload` and
+`sweeprecord.ChainPayload`: their `Placed` rebuilds the one-span reduction and runs a `sweeprecord` finishing
+step; a profile composite replays its spans and a chain composite refuses. A payload that still lives in the root
 package recovers its document handle from the node's `Owner` in `Placed` and
 runs its root builder.
 

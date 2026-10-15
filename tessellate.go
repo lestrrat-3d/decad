@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/sweeprecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
 
@@ -450,8 +451,8 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		}
 		// the chain Sweep's one-span straight reduction builds through the
 		// identical chainrecord.Build a plain chain Extrude does, over
-		// the chainPayload it wraps unchanged (sweep.go's
-		// finishChainSweepBody), so it reuses that same restatement rather
+		// the chainPayload it wraps unchanged (internal/sweeprecord's
+		// FinishChain), so it reuses that same restatement rather
 		// than a second one keyed on the wrapper type.
 		return tessellateChain(ctx, b, sp.Chain)
 	}
@@ -491,11 +492,11 @@ func prismWallRole(loop, seg int) string { return fmt.Sprintf("side(%d,%d)", loo
 
 // sweepWallRole names the same wall on a one-span straight sweep, whose
 // reduction rewrote every side(i,j) to carry the path-span index ahead of
-// them (sweep.go's prefixSweepSpanZeroRole): side(0,i,j).
+// them (internal/sweeprecord's prefixSpanZeroRole): side(0,i,j).
 func sweepWallRole(loop, seg int) string { return fmt.Sprintf("side(0,%d,%d)", loop, seg) }
 
 // sweepArcRole maps the revolve reduction's source roles to those minted by
-// finishArcSweepBody. A reversed axis exchanges only the two cap names.
+// sweeprecord.FinishArc. A reversed axis exchanges only the two cap names.
 func sweepArcRole(reverseCaps bool) func(string) string {
 	return func(role string) string {
 		if suffix, ok := strings.CutPrefix(role, "side("); ok {
@@ -599,7 +600,7 @@ func tessellatePrismWithCountFloor(ctx context.Context, b *Body, pp prismPayload
 	// One free-form counter for the whole chorded record (see tessellation.ChordLoop).
 	work := freeform.NewFreeformWork()
 	if freeformTarget > 0 {
-		work.RaiseLimit(compositeFitSweepWorkLimit)
+		work.RaiseLimit(sweeprecord.CompositeFitWorkLimit)
 	}
 	// The build that produced this body already resolved every boundary
 	// segment's walk and published the set onto the payload (internal/prismrecord/build.go,

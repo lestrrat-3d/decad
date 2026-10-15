@@ -10,6 +10,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
+	"github.com/lestrrat-3d/decad/internal/sweeprecord"
 	"github.com/lestrrat-3d/decad/internal/thickenaxis"
 	"github.com/lestrrat-3d/r3"
 )
@@ -42,7 +43,7 @@ func thickenArcChainSweep(ctx context.Context, d *Document, sp chainSweepPayload
 	if !ok {
 		return nil, fmt.Errorf(`%w: thickened chain arc has no solid Revolve reduction`, ErrDegenerate)
 	}
-	finishArcSweepBody(body, sweepPayload{
+	sweeprecord.FinishArc(bodyNode(body), sweepPayload{
 		Prism: prismrecord.Payload{
 			Profile: built.Profile, Frame: built.Frame, Xform: built.Xform,
 		},
@@ -87,6 +88,6 @@ func thickenCompositeChainSweep(ctx context.Context, d *Document, sp chainSweepP
 	if err != nil {
 		return nil, err
 	}
-	return evalCompositeSweepContext(ctx, d, d.nextProducerID(), section, plane, frame,
-		sp.Path, work, false)
+	return bodyResult(sweeprecord.BuildComposite(ctx, envOf(documentNode(d), d.nextProducerID()), section, plane,
+		frame, sp.Path, work, false))
 }

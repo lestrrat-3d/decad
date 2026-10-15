@@ -857,8 +857,8 @@ func payloadProvesSimple(ctx context.Context, p topo.Payload) bool {
 		// The remaining one-span reduction is the straight case
 		// (docs/sweep-design.md §15): chain Sweep builds the body
 		// through the identical chainrecord.Build a plain chain Extrude
-		// does, over a chainPayload it then wraps unchanged (sweep.go's
-		// finishChainSweepBody). So this is the SAME construction argument
+		// does, over a chainPayload it then wraps unchanged (internal/sweeprecord's
+		// FinishChain). So this is the SAME construction argument
 		// chainPayload's own arm makes, re-read off the wrapped payload —
 		// never a weaker version of it. The arc and composite cases returned
 		// false above because their partial turns have no simplicity proof.

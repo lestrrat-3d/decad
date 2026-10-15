@@ -2104,3 +2104,5 @@
 10	0.05	TestBrepChamferAllStraightOuterEdgesStagedSurvey
 10	0.05	TestBrepPartialChamferStagedSurvey
 10	0.05	TestDraftStagedSurveyNamesPayloadClass
+10	0.05	TestSweepStagedSurveyNamesPayloadClass
+10	0.05	TestSweepChainStagedSurveyNamesPayloadClass

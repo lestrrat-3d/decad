@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
+	"github.com/lestrrat-3d/decad/internal/sweeprecord"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
@@ -138,7 +139,7 @@ func thickenSweep(ctx context.Context, d *Document, sp sweepPayload, side Thicke
 		sp.Prism.Profile = built.Profile
 		sp.Prism.Xform = built.Xform
 		sp.SurfaceResult = false
-		finishArcSweepBody(body, sp)
+		sweeprecord.FinishArc(bodyNode(body), sp)
 		return body, nil
 	}
 	body, err := thickenPrism(ctx, d, sp.Prism, side, tmm, tDelta)
@@ -146,7 +147,7 @@ func thickenSweep(ctx context.Context, d *Document, sp sweepPayload, side Thicke
 		return nil, err
 	}
 	sp.SurfaceResult = false
-	finishStraightSweepBody(body, sp)
+	sweeprecord.FinishStraight(bodyNode(body), sp)
 	return body, nil
 }
 

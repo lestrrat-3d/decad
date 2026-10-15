@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/capblend"
+	"github.com/lestrrat-3d/decad/internal/sweeprecord"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/cupwall"
@@ -222,7 +223,7 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value, opts .
 		if pp, ok := b.n.Payload.(prismPayload); ok && len(pp.Profile.Holes) == 0 {
 			return b.shellClosedPrism(ctx, pp, s, t, tmm, tDelta)
 		}
-		if pp, ok := straightSweepPrismReduction(b.n.Payload); ok && len(pp.Profile.Holes) == 0 {
+		if pp, ok := sweeprecord.StraightPrismReduction(b.n.Payload); ok && len(pp.Profile.Holes) == 0 {
 			return b.shellClosedPrism(ctx, pp, s, t, tmm, tDelta)
 		}
 		if sp, ok := b.n.Payload.(stackedPrismPayload); ok && sense == Inward {
@@ -317,7 +318,7 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value, opts .
 	var sweepStraight bool
 	if route.prism != nil {
 		pp, ok, caps = *route.prism, true, route.caps
-	} else if sweepPrism, admitted := straightSweepPrismReduction(b.n.Payload); admitted {
+	} else if sweepPrism, admitted := sweeprecord.StraightPrismReduction(b.n.Payload); admitted {
 		pp, ok, sweepStraight = sweepPrism, true, true
 	}
 	if !ok {

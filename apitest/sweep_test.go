@@ -340,3 +340,27 @@ func TestSweepContextCancellationLeavesDocumentUnchanged(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Empty(t, doc.Bodies())
 }
+
+// TestSweepStagedSurveyNamesPayloadClass pins the class name a solid
+// sweep's staged wall survey prints: the wall survey has no sweep arm, so the
+// message names the payload class, not the Go type that holds it.
+//
+// Shown to fail first: with SurveyClass deleted from internal/sweeprecord's
+// Payload, the message named Payload.
+func TestSweepStagedSurveyNamesPayloadClass(t *testing.T) {
+	t.Parallel()
+	s, profile := plateSketch(t)
+	path, err := decad.NewPath(r3.NewVec(0, 0, 0), decad.LineTo{End: r3.NewVec(0, 0, 10)})
+	require.NoError(t, err)
+	doc := decad.New()
+	body, err := decad.Sweep(t.Context(), doc, s, profile, path)
+	require.NoError(t, err)
+	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
+	require.NoError(t, err)
+	reading, err := report.ForBody(body)
+	require.NoError(t, err)
+	diag, found := findDiagnostic(reading.Diagnostics, decad.DiagUnsupportedSurveyPayload)
+	require.True(t, found)
+	require.Equal(t, "sweepPayload wall survey support is not implemented; use an analytic body or wait for wider "+
+		"sweepPayload survey support", diag.Message)
+}

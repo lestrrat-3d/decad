@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/sweeprecord"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
@@ -37,7 +38,7 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 		}
 	}
 	mesh := bornMesh(&Mesh{})
-	spanWork := newCompositeSweepWork(sp.Prism.Profile)
+	spanWork := sweeprecord.NewCompositeWork(sp.Prism.Profile)
 	budget := proofbound.NewWorkBudget(ctx)
 	coordinateBound := 0.0
 	triangleSpan := []int{}
@@ -59,14 +60,14 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 			return nil, err
 		}
 		span := sp.Spans[i]
-		part, err := span.Build(ctx, documentHandle(b.n.Doc), b.n.Origin.Producer, spanWork)
+		part, err := bodyResult(span.Build(ctx, envOf(b.n.Doc, b.n.Origin.Producer), spanWork))
 		if err != nil {
 			return nil, fmt.Errorf(`sweep path span %d: %w`, i, err)
 		}
 		// span.Build restores path cap names for topology pairing. The reduced
 		// revolve tessellator needs its own cap names while it makes its proof.
 		if span.Arc && span.ReverseArcCaps {
-			restoreSweepArcCapRoles(part, true)
+			sweeprecord.RestoreArcCapRoles(bodyNode(part), true)
 		}
 		var piece *Mesh
 		if span.Arc {
@@ -261,7 +262,7 @@ type compositeStationKey struct{ loop, segment int }
 
 func compositeWorkLimit(freeformTarget float64) uint64 {
 	if freeformTarget > 0 {
-		return compositeFitSweepWorkLimit
+		return sweeprecord.CompositeFitWorkLimit
 	}
 	return 0
 }
@@ -273,7 +274,7 @@ func compositeWorkLimit(freeformTarget float64) uint64 {
 func compositeProfileCountPlan(ctx context.Context, sp sweepPayload, chord float64) (map[compositeStationKey]int, int, float64, error) {
 	loops := append([]loopRecord{sp.Prism.Profile.Outer}, sp.Prism.Profile.Holes...)
 	counts := map[compositeStationKey]int{}
-	work := newCompositeSweepWork(sp.Prism.Profile)
+	work := sweeprecord.NewCompositeWork(sp.Prism.Profile)
 	freeformTarget := chord
 	hasFreeform := false
 	for li, loop := range loops {
@@ -308,7 +309,7 @@ func compositeProfileCountPlan(ctx context.Context, sp sweepPayload, chord float
 		}
 		workLimit := uint64(0)
 		if hasFreeform {
-			workLimit = compositeFitSweepWorkLimit
+			workLimit = sweeprecord.CompositeFitWorkLimit
 		}
 		res, err := resolveRevolveWithLimit(ctx, span.Revolve, workLimit)
 		if err != nil {
