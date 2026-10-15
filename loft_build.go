@@ -718,11 +718,11 @@ func tessellateLoft(ctx context.Context, b *Body, lp loftPayload, privateRoles .
 	if err != nil {
 		return nil, liftTessellationError(err)
 	}
-	src := make([]*Face, len(out.SourceFaces))
+	src := make([]*topo.Face, len(out.SourceFaces))
 	for k, i := range out.SourceFaces {
-		src[k] = faces[i]
+		src[k] = faceNode(faces[i])
 	}
-	mesh := &Mesh{n: topo.Mesh{Vertices: out.Vertices, Triangles: out.Triangles}, source: src}
+	mesh := bornMesh(&Mesh{n: topo.Mesh{Vertices: out.Vertices, Triangles: out.Triangles, Source: src}})
 	for _, f := range src {
 		mesh.setFaceBound(f, out.BoundMM)
 	}

@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/stationbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 	"github.com/lestrrat-3d/units"
 )
@@ -87,7 +88,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 	}
 
 	refView := bp.refView()
-	var mesh Mesh
+	mesh := bornMesh(new(Mesh))
 	var store, round []float64
 	var canon [][3]float64
 	index := map[[3]float64]int{}
@@ -106,8 +107,8 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 		index[c] = len(canon) - 1
 		return len(canon) - 1
 	}
-	faceTrim := map[*Face]float64{}
-	faceAxial := map[*Face]float64{}
+	faceTrim := map[*topo.Face]float64{}
+	faceAxial := map[*topo.Face]float64{}
 	edgePoly := make([][]int, len(btopo.edges))
 	walls := map[int]brepWallMesh{}
 	work := freeform.NewFreeformWork()
@@ -151,11 +152,11 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 		}
 		for j := 0; j+1 < len(wm.cols); j++ {
 			brepZipColumns(wm.cols[j], wm.cols[j+1], wm.levels[j], wm.levels[j+1], func(tri [3]int) {
-				mesh.addTriangle(tri, face)
+				mesh.addTriangle(tri, faceNode(face))
 			})
 		}
-		faceTrim[face] = wm.sag
-		faceAxial[face] = proofbound.AbsSumUpper(math.Max(f.z0Delta, f.z1Delta), f.delta)
+		faceTrim[faceNode(face)] = wm.sag
+		faceAxial[faceNode(face)] = proofbound.AbsSumUpper(math.Max(f.z0Delta, f.z1Delta), f.delta)
 		mesh.n.AreaSlack = proofbound.AbsSumUpper(mesh.n.AreaSlack, wm.wallSlack)
 	}
 	if err := brepWallClearance(ctx, bp, btopo, walls, canon); err != nil {
@@ -308,10 +309,10 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 			if !f.outward {
 				bb, c = c, bb
 			}
-			mesh.addTriangle([3]int{a, bb, c}, face)
+			mesh.addTriangle([3]int{a, bb, c}, faceNode(face))
 		}
-		faceTrim[face] = trim
-		faceAxial[face] = proofbound.AbsSumUpper(f.z0Delta, f.delta)
+		faceTrim[faceNode(face)] = trim
+		faceAxial[faceNode(face)] = proofbound.AbsSumUpper(f.z0Delta, f.delta)
 		faceCapSlack[face] = capSlack
 		mesh.n.AreaSlack = proofbound.AbsSumUpper(mesh.n.AreaSlack, capSlack)
 	}
@@ -325,10 +326,10 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 			}
 			return out
 		}
-		bump := func(f *Face, v float64) { faceTrim[f] = math.Max(faceTrim[f], v) }
+		bump := func(f *Face, v float64) { faceTrim[faceNode(f)] = math.Max(faceTrim[faceNode(f)], v) }
 		wb := proofbound.NewWorkBudget(ctx)
 		for bi := range bands {
-			if err := bands[bi].emit(wb, &mesh, geomOf(bi), faceOfRole, bump); err != nil {
+			if err := bands[bi].emit(wb, mesh, geomOf(bi), faceOfRole, bump); err != nil {
 				return nil, err
 			}
 		}
@@ -355,11 +356,11 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 	if err != nil {
 		return nil, err
 	}
-	if err := composeFaceBounds(&mesh, faceTrim, faceAxial, store, 0); err != nil {
+	if err := composeFaceBounds(mesh, faceTrim, faceAxial, store, 0); err != nil {
 		return nil, err
 	}
 	if verify < VerifyAll {
-		return &mesh, nil
+		return mesh, nil
 	}
 
 	// Occupied volume (tessellation §5's prism term applied per face): each
@@ -367,7 +368,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 	// section band over its height, each planar face's level displacement over
 	// its area, and every computed coordinate's swept volume. Absolute sums
 	// throughout: an occupied-volume bound admits no cancellation.
-	areaUpper := tessellation.FaceAreaUpper(mesh.n.Vertices, mesh.n.Triangles, mesh.source, store)
+	areaUpper := tessellation.FaceAreaUpper(mesh.n.Vertices, mesh.n.Triangles, mesh.n.Source, store)
 	var terms []float64
 	for fi, f := range bp.faces {
 		face, err := faceOf(fi)
@@ -378,7 +379,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 			region := brepPlanarDisplacement(f, btopo.planar[fi])
 			mesh.n.AreaSlack = proofbound.AbsSumUpper(mesh.n.AreaSlack, region)
 			terms = append(terms, proofbound.ProductUpper(f.z0Delta,
-				proofbound.AbsSumUpper(areaUpper[face], faceCapSlack[face], region)))
+				proofbound.AbsSumUpper(areaUpper[faceNode(face)], faceCapSlack[face], region)))
 			continue
 		}
 		w := btopo.walls[fi]
@@ -402,7 +403,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 		}
 		if refusal != nil {
 			mesh.n.SymDiffOK = false
-			return &mesh, nil //nolint:nilerr // refusal is the admission result; err was checked above
+			return mesh, nil //nolint:nilerr // refusal is the admission result; err was checked above
 		}
 		motion, err := brepBandMotion(ctx, bands, store, round)
 		if err != nil {
@@ -420,16 +421,16 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 				continue
 			}
 			for face, eps := range bands[bi].fillet.patchEps {
-				terms = append(terms, proofbound.ProductUpper(areaUpper[face], eps))
+				terms = append(terms, proofbound.ProductUpper(areaUpper[faceNode(face)], eps))
 			}
 		}
 	}
 	terms = append(terms, proofbound.SweptVolumeAllow(storeMax,
 		proofbound.PerturbedAreaUpper(mesh.n.Vertices, mesh.n.Triangles, storeMax)))
-	if err := publishSymDiff(&mesh, terms); err != nil {
+	if err := publishSymDiff(mesh, terms); err != nil {
 		return nil, err
 	}
-	return &mesh, nil
+	return mesh, nil
 }
 
 // brepPlanarDisplacement is the area a planar face's section displacement

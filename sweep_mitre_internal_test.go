@@ -335,7 +335,7 @@ func TestMitredSweepPublishesPerVertexBounds(t *testing.T) {
 		}
 	}
 	require.Positive(t, capCorners)
-	capBound, ok := mesh.sourceBound(faceOfRole[provenance.RoleCapStart])
+	capBound, ok := mesh.sourceBound(faceNode(faceOfRole[provenance.RoleCapStart]))
 	require.True(t, ok)
 	require.Zero(t, capBound)
 
@@ -357,7 +357,7 @@ func TestMitredSweepPublishesPerVertexBounds(t *testing.T) {
 		want[f] = max(want[f], beta[tri[0]], beta[tri[1]], beta[tri[2]])
 	}
 	for f, w := range want {
-		got, ok := mesh.sourceBound(f)
+		got, ok := mesh.sourceBound(faceNode(f))
 		require.True(t, ok)
 		require.Equal(t, w, got)
 	}

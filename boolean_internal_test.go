@@ -139,10 +139,9 @@ func TestTriTriClassifyNamesTheInPlaneEdge(t *testing.T) {
 func singleFacetBoolMesh(t *testing.T, tri [3]r3.Vec) *meshbool.BoolMesh {
 	t.Helper()
 	face := bornFace(&Face{})
-	bm, err := prepBoolMeshContext(t.Context(), &Mesh{
-		n:      topo.Mesh{Vertices: tri[:], Triangles: [][3]int{{0, 1, 2}}},
-		source: []*Face{face}, faceBound: map[*Face]float64{face: 0},
-	}, []int{0})
+	bm, err := prepBoolMeshContext(t.Context(), bornMesh(&Mesh{
+		n: topo.Mesh{Vertices: tri[:], Triangles: [][3]int{{0, 1, 2}}, Source: []*topo.Face{faceNode(face)}, FaceBound: map[*topo.Face]float64{faceNode(face): 0}},
+	}), []int{0})
 	require.NoError(t, err)
 	return bm
 }
@@ -877,12 +876,12 @@ func TestPrepRefusesACollapsedOperandFacet(t *testing.T) {
 	// faceted body. A collapsed facet has no plane and no interior, so every
 	// contact predicate here is blind to it: a point or tangent contact made on
 	// it would be classified by nothing at all. The operand is refused.
-	m := &Mesh{
+	m := bornMesh(&Mesh{
 		n: topo.Mesh{
 			Vertices:  []r3.Vec{{X: 0, Y: 0, Z: 0}, {X: 4, Y: 0, Z: 0}, {X: 2, Y: 0, Z: 0}},
 			Triangles: [][3]int{{0, 1, 2}},
 		},
-	}
+	})
 	_, err := prepBoolMeshContext(t.Context(), m, []int{0})
 	require.ErrorIs(t, err, ErrUnsupported, `three collinear corners span no plane`)
 }
@@ -1299,11 +1298,11 @@ func TestOperandSymDiffRefusesAMeshWithNoOccupiedVolumeProof(t *testing.T) {
 	// An export-only mesh — one whose payload class has no occupied-volume proof
 	// yet — is refused as a staging limit, never composed as a zero. Its
 	// boundary audits all ran, so the refusal names the missing volume proof.
-	_, err := operandSymDiff(&Mesh{n: topo.Mesh{VolSymDiff: 17, SymDiffOK: false, BoundaryOK: true}})
+	_, err := operandSymDiff(bornMesh(&Mesh{n: topo.Mesh{VolSymDiff: 17, SymDiffOK: false, BoundaryOK: true}}))
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "no proof of the volume")
 
-	got, err := operandSymDiff(&Mesh{n: topo.Mesh{VolSymDiff: 17, SymDiffOK: true, BoundaryOK: true}})
+	got, err := operandSymDiff(bornMesh(&Mesh{n: topo.Mesh{VolSymDiff: 17, SymDiffOK: true, BoundaryOK: true}}))
 	require.NoError(t, err)
 	require.Equal(t, 17.0, got)
 
@@ -1311,7 +1310,7 @@ func TestOperandSymDiffRefusesAMeshWithNoOccupiedVolumeProof(t *testing.T) {
 	// and by its own cause: every homotopy the volume proof composes has that
 	// audit as an antecedent (docs/tessellation-design.md §11), so blaming the
 	// payload class here would misstate why this operand cannot be composed.
-	_, err = operandSymDiff(&Mesh{n: topo.Mesh{VolSymDiff: 17, SymDiffOK: true, BoundaryOK: false}})
+	_, err = operandSymDiff(bornMesh(&Mesh{n: topo.Mesh{VolSymDiff: 17, SymDiffOK: true, BoundaryOK: false}}))
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "no facet-contact audit")
 }
@@ -1343,11 +1342,11 @@ func TestOperandSymDiffRefusesARealUnverifiedMesh(t *testing.T) {
 func TestFacesOfMeshReadsTheMeshProofRecord(t *testing.T) {
 	t.Parallel()
 	stated, omitted := bornFace(&Face{}), bornFace(&Face{})
-	m := &Mesh{
-		n:         topo.Mesh{Triangles: [][3]int{{0, 1, 2}, {0, 2, 3}}},
-		source:    []*Face{stated, stated},
-		faceBound: map[*Face]float64{stated: 0.25},
-	}
+	m := bornMesh(&Mesh{
+		n: topo.Mesh{Triangles: [][3]int{{0, 1, 2}, {0, 2, 3}}, Source: []*topo.Face{faceNode(stated), faceNode(stated)},
+			FaceBound: map[*topo.Face]float64{faceNode(stated): 0.25},
+		},
+	})
 	got, err := facesOfMesh(proofbound.NewWorkBudget(t.Context()), m)
 	require.NoError(t, err)
 	require.Len(t, got, 1)
@@ -1356,7 +1355,7 @@ func TestFacesOfMeshReadsTheMeshProofRecord(t *testing.T) {
 
 	// A source face the record omits is a broken evaluator, not a staged
 	// capability, and never a zero the gate would read as "held exactly".
-	m.source[1] = omitted
+	m.n.Source[1] = faceNode(omitted)
 	_, err = facesOfMesh(proofbound.NewWorkBudget(t.Context()), m)
 	require.ErrorIs(t, err, ErrBooleanFailed)
 }

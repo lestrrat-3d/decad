@@ -156,7 +156,7 @@ func (bc *brepBandChord) emitFillet(m *Mesh, faceOfRole func(string) (*Face, err
 		if first[p] < 0 {
 			first[p] = len(m.n.Triangles)
 		}
-		m.addTriangle([3]int{a, b, c}, faces[p])
+		m.addTriangle([3]int{a, b, c}, faceNode(faces[p]))
 		last[p] = len(m.n.Triangles)
 	}
 	verts := func(k, c int) r3.Vec { return m.n.Vertices[fr.ringV[k][c]] }

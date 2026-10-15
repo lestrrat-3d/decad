@@ -267,7 +267,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	// arms below key on rp.full alone; sheet is its own separate condition
 	// wherever a solid's full-turn behavior and a sheet's differ.
 	sheet := rp.surfaceResult
-	mesh := &Mesh{}
+	mesh := bornMesh(&Mesh{})
 	loopMesh := make([]revLoopMesh, len(p.resolved))
 	meridianSamples := make([][]revolvemesh.RevMeridian, len(p.resolved))
 	sampleGap := 0.0
@@ -374,7 +374,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 				return nil, err
 			}
 			revolvemesh.EmitCellTriangles(lo, hi, p.Angular, func(tri [3]int) {
-				mesh.addTriangle(tri, face)
+				mesh.addTriangle(tri, faceNode(face))
 			})
 			cur := faceCells[face]
 			cur.rho = math.Max(cur.rho, math.Max(lo.Rho, hi.Rho))
@@ -434,8 +434,8 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 		}
 		if err := revolvemesh.EmitCapTriangles(ctx, meridianSamples, sectionPts, sectionLoops,
 			angular.Samples-1, func(end, start [3]int) {
-				mesh.addTriangle(end, capEnd)
-				mesh.addTriangle(start, capStart)
+				mesh.addTriangle(end, faceNode(capEnd))
+				mesh.addTriangle(start, faceNode(capStart))
 			}); err != nil {
 			return nil, err
 		}
@@ -632,11 +632,11 @@ func publishRevolveProof(m *Mesh, faceCells map[*Face]revFaceExtent, p *revolveP
 		if proofbound.IsNonFinite(bound) {
 			return fmt.Errorf(`%w: a revolve wall face's composed displacement is not finite`, ErrUnsupported)
 		}
-		m.setFaceBound(f, bound)
+		m.setFaceBound(faceNode(f), bound)
 	}
 	capBound := proofbound.UpRound(moved(proofbound.AbsSumUpper(p.MeridianDelta, coord)))
-	for _, f := range m.source {
-		if _, ok := m.faceBound[f]; !ok {
+	for _, f := range m.n.Source {
+		if _, ok := m.n.FaceBound[f]; !ok {
 			m.setFaceBound(f, capBound)
 		}
 	}

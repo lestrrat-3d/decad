@@ -37,7 +37,7 @@ func TestBodyPatchMeshChargesTheFilledCapsAxialBound(t *testing.T) {
 		patches++
 		require.True(t, f.n.HasAxialDelta)
 		require.Greater(t, f.n.AxialDelta, 0.0)
-		bound, ok := mesh.sourceBound(f)
+		bound, ok := mesh.sourceBound(faceNode(f))
 		require.True(t, ok)
 		require.GreaterOrEqual(t, bound, f.n.AxialDelta)
 	}

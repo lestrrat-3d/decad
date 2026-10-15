@@ -63,7 +63,7 @@ func TestCoilMeshRestatesTheHeldShell(t *testing.T) {
 	walls := 2 * 512 * 4
 	faceMax := map[*Face]float64{}
 	for k, tri := range mesh.Triangles() {
-		f := mesh.source[k]
+		f := mesh.n.Source[k]
 		want := provenance.RoleCapEnd
 		switch {
 		case k < walls:
@@ -71,11 +71,11 @@ func TestCoilMeshRestatesTheHeldShell(t *testing.T) {
 		case k < walls+2:
 			want = provenance.RoleCapStart
 		}
-		require.Equal(t, want, f.Origins()[0].Role, "triangle %d", k)
-		faceMax[f] = max(faceMax[f], cp.vertexBound[tri[0]], cp.vertexBound[tri[1]], cp.vertexBound[tri[2]])
+		require.Equal(t, want, featureRefsOf(f.Origins)[0].Role, "triangle %d", k)
+		faceMax[faceHandle(f)] = max(faceMax[faceHandle(f)], cp.vertexBound[tri[0]], cp.vertexBound[tri[1]], cp.vertexBound[tri[2]])
 	}
 	for f, want := range faceMax {
-		got, ok := mesh.sourceBound(f)
+		got, ok := mesh.sourceBound(faceNode(f))
 		require.True(t, ok)
 		require.Equal(t, want, got)
 	}

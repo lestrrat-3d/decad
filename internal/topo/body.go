@@ -10,8 +10,8 @@ import (
 )
 
 // Body is the data of the root Body handle, which holds one by
-// value. The handle keeps the payload and the other caches, which name root
-// types.
+// value. The handle keeps its contact and sweep caches, which name root types
+// or pull packages outside the floor.
 type Body struct {
 	// Solid reports whether the body is a valid solid, a decided answer
 	// (docs/api-design.md core §6).
@@ -28,6 +28,9 @@ type Body struct {
 	// (root contact_faceted_pair.go). It only speeds the next relation's
 	// distance scan, never changes its result.
 	PlanarHints sync.Map
+	// Tess caches the last tessellation (root Body.Tessellate); like the
+	// planar caches it never changes the body's logical geometry.
+	Tess atomic.Pointer[TessEntry]
 
 	// Origin is the producing feature's role. Root Body.Origin converts it to
 	// the public FeatureRef form.

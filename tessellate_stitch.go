@@ -277,32 +277,36 @@ func tessellateStitchCurved(ctx context.Context, b *Body, sp stitchPayload, chor
 	if err != nil {
 		return nil, err
 	}
-	mesh := &Mesh{
+	mesh := bornMesh(&Mesh{
 		n: topo.Mesh{
 			Vertices:  append([]r3.Vec(nil), sourceMesh.n.Vertices...),
 			Triangles: append([][3]int(nil), sourceMesh.n.Triangles...),
 			AreaSlack: sourceMesh.n.AreaSlack,
+			Source:    make([]*topo.Face, len(sourceMesh.n.Source)),
 		},
-		source: make([]*Face, len(sourceMesh.source)),
+	})
+	pairedNodes := make(map[*topo.Face]*topo.Face, len(paired))
+	for sourceFace, liveFace := range paired {
+		pairedNodes[faceNode(sourceFace)] = faceNode(liveFace)
 	}
-	for i, sourceFace := range sourceMesh.source {
-		liveFace, ok := paired[sourceFace]
+	for i, sourceFace := range sourceMesh.n.Source {
+		liveFace, ok := pairedNodes[sourceFace]
 		if !ok {
 			return refuse("the revolve mesh names a face outside the stitched source set")
 		}
-		mesh.source[i] = liveFace
+		mesh.n.Source[i] = liveFace
 		// Today's identity-copy routes preserve this bit. Keep the winding
 		// aligned if an admitted stitch ever reverses a live face.
-		if sourceFace.n.Reversed != liveFace.n.Reversed {
+		if sourceFace.Reversed != liveFace.Reversed {
 			mesh.n.Triangles[i][1], mesh.n.Triangles[i][2] = mesh.n.Triangles[i][2], mesh.n.Triangles[i][1]
 		}
 	}
 	for sourceFace, liveFace := range paired {
-		bound, ok := sourceMesh.sourceBound(sourceFace)
+		bound, ok := sourceMesh.sourceBound(faceNode(sourceFace))
 		if !ok || proofbound.IsNonFinite(bound) {
 			return refuse("the revolve mesh has no finite source-face bound")
 		}
-		mesh.setFaceBound(liveFace, bound)
+		mesh.setFaceBound(faceNode(liveFace), bound)
 	}
 	if b.Kind() == BodySheet {
 		if err := requireMeshAudit(ctx, true, b, mesh); err != nil {
@@ -338,13 +342,13 @@ func tessellateStitch(ctx context.Context, b *Body, sp stitchPayload) (*Mesh, er
 	// Fresh slices: Mesh's accessors copy on the way out, but the held mesh
 	// must not alias the payload's own arrays, or a future consumer writing
 	// through one would rewrite the body's boundary.
-	mesh := &Mesh{
+	mesh := bornMesh(&Mesh{
 		n: topo.Mesh{
 			Vertices:  append([]r3.Vec(nil), sp.verts...),
 			Triangles: append([][3]int(nil), sp.tris...),
+			Source:    faceNodes(sp.triFaces),
 		},
-		source: append([]*Face(nil), sp.triFaces...),
-	}
+	})
 
 	budget := proofbound.NewWorkBudget(ctx)
 	slack := 0.0
@@ -356,7 +360,7 @@ func tessellateStitch(ctx context.Context, b *Body, sp stitchPayload) (*Mesh, er
 		for _, v := range tri {
 			delta = max(delta, sp.vertBound[v])
 		}
-		mesh.setFaceBound(mesh.source[i], delta)
+		mesh.setFaceBound(mesh.n.Source[i], delta)
 		if delta > 0 {
 			a, bb, c := mesh.n.Vertices[tri[0]], mesh.n.Vertices[tri[1]], mesh.n.Vertices[tri[2]]
 			slack = proofbound.AbsSumUpper(slack, proofbound.PerturbedTriangleAreaAllow(a, bb, c, delta))

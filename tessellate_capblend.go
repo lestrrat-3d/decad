@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -165,8 +166,8 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 		}
 	}
 
-	var mesh Mesh
-	store, motion, err := capBlendVertices(budget, cbp, pl, lms, &mesh, proveVolume)
+	mesh := bornMesh(new(Mesh))
+	store, motion, err := capBlendVertices(budget, cbp, pl, lms, mesh, proveVolume)
 	if err != nil {
 		return nil, err
 	}
@@ -176,10 +177,10 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 
 	// faceExtra is every displacement a face carries BESIDE its own vertices'
 	// store term, which tessellation.ComposeCapBlendBounds adds per face at the end.
-	faceExtra := map[*Face]float64{}
+	faceExtra := map[*topo.Face]float64{}
 	bump := func(f *Face, v float64) {
-		if v > faceExtra[f] {
-			faceExtra[f] = v
+		if v > faceExtra[faceNode(f)] {
+			faceExtra[faceNode(f)] = v
 		}
 	}
 
@@ -208,8 +209,8 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 					if k == lm.count[i]-1 {
 						g1 = lm.sideStart[(i+1)%n]
 					}
-					mesh.addTriangle([3]int{lm.sideLo[g0], lm.sideLo[g1], lm.sideHi[g1]}, face)
-					mesh.addTriangle([3]int{lm.sideLo[g0], lm.sideHi[g1], lm.sideHi[g0]}, face)
+					mesh.addTriangle([3]int{lm.sideLo[g0], lm.sideLo[g1], lm.sideHi[g1]}, faceNode(face))
+					mesh.addTriangle([3]int{lm.sideLo[g0], lm.sideHi[g1], lm.sideHi[g0]}, faceNode(face))
 				}
 			}
 		}
@@ -220,12 +221,12 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 	for li := range lms {
 		lm := &lms[li]
 		if lm.onStart {
-			if err := emitCapBand(budget, &mesh, cbp, lm, true, faceOfRole, geomOfRole, bump, nil); err != nil {
+			if err := emitCapBand(budget, mesh, cbp, lm, true, faceOfRole, geomOfRole, bump, nil); err != nil {
 				return nil, err
 			}
 		}
 		if lm.onEnd {
-			if err := emitCapBand(budget, &mesh, cbp, lm, false, faceOfRole, geomOfRole, bump, nil); err != nil {
+			if err := emitCapBand(budget, mesh, cbp, lm, false, faceOfRole, geomOfRole, bump, nil); err != nil {
 				return nil, err
 			}
 		}
@@ -234,10 +235,10 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 	// Cap faces. Each is bounded, per loop, by that loop's contour ring where it
 	// is chamfered on this cap and by its original ring where it is not — the
 	// mixed profile evalCapBlendContext builds the same two faces from.
-	if err := emitCapBlendCap(ctx, &mesh, cbp, lms, true, capStart, bump); err != nil {
+	if err := emitCapBlendCap(ctx, mesh, cbp, lms, true, capStart, bump); err != nil {
 		return nil, err
 	}
-	if err := emitCapBlendCap(ctx, &mesh, cbp, lms, false, capEnd, bump); err != nil {
+	if err := emitCapBlendCap(ctx, mesh, cbp, lms, false, capEnd, bump); err != nil {
 		return nil, err
 	}
 
@@ -262,7 +263,7 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 		return nil, fmt.Errorf(`%w: this %s's assembled cells do not enclose a positive volume`, ErrUnsupported, cbp.noun())
 	}
 
-	faceBounds, err := tessellation.ComposeCapBlendBounds(mesh.source, mesh.n.Triangles, faceExtra, store, cbp.noun())
+	faceBounds, err := tessellation.ComposeCapBlendBounds(mesh.n.Source, mesh.n.Triangles, faceExtra, store, cbp.noun())
 	if err != nil {
 		return nil, err
 	}
@@ -272,7 +273,7 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 	mesh.n.AreaSlack = proofbound.AbsSumUpper(mesh.n.AreaSlack,
 		tessellation.StoreAreaAllow(mesh.n.Vertices, mesh.n.Triangles, store))
 	if cbp.loftSource != nil {
-		for face, bound := range mesh.faceBound {
+		for face, bound := range mesh.n.FaceBound {
 			mesh.setFaceBound(face, proofbound.AbsSumUpper(bound, cbp.loftSource.proof.FacetDeparture))
 		}
 		mesh.n.AreaSlack = proofbound.AbsSumUpper(mesh.n.AreaSlack, cbp.loftSource.proof.AreaSlack)
@@ -283,13 +284,13 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 	if !proveVolume {
 		// The level withholds every volume proof (tessellateContext's
 		// withholdProofs), so none is built.
-		return &mesh, nil
+		return mesh, nil
 	}
 	if cbp.loftSource != nil {
-		if err := proveLoftCapBandVolume(ctx, &mesh, b, cbp, lms, motion); err != nil {
+		if err := proveLoftCapBandVolume(ctx, mesh, b, cbp, lms, motion); err != nil {
 			return nil, err
 		}
-		return &mesh, nil
+		return mesh, nil
 	}
 	refusal, err := capBlendOccupiedVolumeAdmission(budget, cbp)
 	if err != nil {
@@ -301,7 +302,7 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 		// export alone and requireVolumeProvingPayload/operandSymDiff refuse it
 		// with the same reason.
 		mesh.n.SymDiffOK = false
-		return &mesh, nil //nolint:nilerr // refusal is the admission result; err was checked above
+		return mesh, nil //nolint:nilerr // refusal is the admission result; err was checked above
 	}
 	// Occupied volume (docs/tessellation-reach-design.md §7): the ideal
 	// polyhedron B1 differs from the body by its chord polygons' circular
@@ -315,10 +316,10 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 		capBlendChordVolume(cbp, lms),
 		proofbound.SweptVolumeAllow(motionMax, proofbound.PerturbedAreaUpper(mesh.n.Vertices, mesh.n.Triangles, motionMax)),
 	}
-	if err := publishSymDiff(&mesh, terms); err != nil {
+	if err := publishSymDiff(mesh, terms); err != nil {
 		return nil, err
 	}
-	return &mesh, nil
+	return mesh, nil
 }
 
 // capBlendVertices writes every loop's mesh vertices. Every sample of a loop
@@ -624,7 +625,7 @@ type capBlendBandWriter struct {
 	bump func(*Face, float64)
 }
 
-func (w capBlendBandWriter) AddTriangle(tri [3]int, face *Face) { w.m.addTriangle(tri, face) }
+func (w capBlendBandWriter) AddTriangle(tri [3]int, face *Face) { w.m.addTriangle(tri, faceNode(face)) }
 func (w capBlendBandWriter) Vertices() []r3.Vec                 { return w.m.n.Vertices }
 func (w capBlendBandWriter) Triangles() [][3]int                { return w.m.n.Triangles }
 func (w capBlendBandWriter) Bump(face *Face, delta float64)     { w.bump(face, delta) }
@@ -700,10 +701,10 @@ func emitCapBlendCap(ctx context.Context, m *Mesh, cbp capBlendPayload, lms []ca
 	}
 	for _, tri := range tris {
 		if start {
-			m.addTriangle([3]int{vtx[tri[0]], vtx[tri[2]], vtx[tri[1]]}, face)
+			m.addTriangle([3]int{vtx[tri[0]], vtx[tri[2]], vtx[tri[1]]}, faceNode(face))
 			continue
 		}
-		m.addTriangle([3]int{vtx[tri[0]], vtx[tri[1]], vtx[tri[2]]}, face)
+		m.addTriangle([3]int{vtx[tri[0]], vtx[tri[1]], vtx[tri[2]]}, faceNode(face))
 	}
 	axial := cbp.z0Delta
 	if !start {

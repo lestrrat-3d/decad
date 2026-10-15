@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/pointquery"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -147,24 +148,24 @@ func TestCurvedClearPatchRefusesUnprovedClaims(t *testing.T) {
 		refuses(t, classifier)
 	})
 	t.Run("changed cached facet", func(t *testing.T) {
-		original := trimmed.tessellationCache.Load()
-		changed := *tool
+		original := trimmed.n.Tess.Load()
+		changed := bornMesh(&Mesh{n: tool.n})
 		changed.n.Vertices = slices.Clone(tool.n.Vertices)
 		changed.n.Vertices[0].X += 1
-		trimmed.tessellationCache.Store(&tessellationCacheEntry{
-			chordBits: math.Float64bits(0.1), verify: VerifyAll, mesh: &changed})
-		defer trimmed.tessellationCache.Store(original)
+		trimmed.n.Tess.Store(&topo.TessEntry{
+			ChordBits: math.Float64bits(0.1), Verify: int(VerifyAll), Mesh: meshNode(changed)})
+		defer trimmed.n.Tess.Store(original)
 		refusesEntry(t)
 	})
 	t.Run("understated positive cached bound", func(t *testing.T) {
 		require.Positive(t, tool.n.Bound)
-		original := trimmed.tessellationCache.Load()
-		changed := *tool
+		original := trimmed.n.Tess.Load()
+		changed := bornMesh(&Mesh{n: tool.n})
 		changed.n.Bound = math.Nextafter(tool.n.Bound, 0)
 		require.Positive(t, changed.n.Bound)
-		trimmed.tessellationCache.Store(&tessellationCacheEntry{
-			chordBits: math.Float64bits(0.1), verify: VerifyAll, mesh: &changed})
-		defer trimmed.tessellationCache.Store(original)
+		trimmed.n.Tess.Store(&topo.TessEntry{
+			ChordBits: math.Float64bits(0.1), Verify: int(VerifyAll), Mesh: meshNode(changed)})
+		defer trimmed.n.Tess.Store(original)
 		refusesEntry(t)
 	})
 	t.Run("small face bound", func(t *testing.T) {
@@ -200,24 +201,24 @@ func TestCurvedClearPatchRefusesUnprovedClaims(t *testing.T) {
 		refuses(t, &modified)
 	})
 	t.Run("insufficient separation", func(t *testing.T) {
-		changed := *tool
+		changed := bornMesh(&Mesh{n: tool.n})
 		changed.n.Bound = 1000
 		modified := *classifier
-		modified.tool = &changed
+		modified.tool = changed
 		refuses(t, &modified)
 	})
 	t.Run("undecided point location", func(t *testing.T) {
-		changed := *tool
+		changed := bornMesh(&Mesh{n: tool.n})
 		changed.n.VolSymDiff = math.MaxFloat64
 		modified := *classifier
-		modified.tool = &changed
+		modified.tool = changed
 		refuses(t, &modified)
 	})
 	t.Run("unverified tool", func(t *testing.T) {
-		changed := *tool
+		changed := bornMesh(&Mesh{n: tool.n})
 		changed.n.SymDiffOK = false
 		modified := *classifier
-		modified.tool = &changed
+		modified.tool = changed
 		refuses(t, &modified)
 	})
 }

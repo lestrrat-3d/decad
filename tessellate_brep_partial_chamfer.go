@@ -50,11 +50,11 @@ func (bc *brepBandChord) emitPartialChamfer(m *Mesh, faceOfRole func(string) (*F
 			a, b := bc.sideV[cell.C0], bc.sideV[cell.C1]
 			A, B := bc.capV[cell.C0], bc.capV[cell.C1]
 			if bc.start {
-				m.addTriangle([3]int{A, B, b}, face)
-				m.addTriangle([3]int{A, b, a}, face)
+				m.addTriangle([3]int{A, B, b}, faceNode(face))
+				m.addTriangle([3]int{A, b, a}, faceNode(face))
 			} else {
-				m.addTriangle([3]int{a, b, B}, face)
-				m.addTriangle([3]int{a, B, A}, face)
+				m.addTriangle([3]int{a, b, B}, faceNode(face))
+				m.addTriangle([3]int{a, B, A}, faceNode(face))
 			}
 		}
 		// The exact rational coplanarity gate and zero contour/level

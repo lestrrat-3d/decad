@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -157,13 +158,13 @@ func TestLoftFacesTangentHeelIntersectKeepsTrimRecord(t *testing.T) {
 	// charge. The stitch is rebuilt from the meshes the Boolean read.
 	held, _, err := tessellateBooleanOperand(t.Context(), c.cut, meshes.pairTol)
 	require.NoError(t, err)
-	faceID := map[*Face]int{}
+	faceID := map[*topo.Face]int{}
 	for i, f := range append(c.cut.Faces(), c.heelTool.Faces()...) {
-		faceID[f] = i
+		faceID[faceNode(f)] = i
 	}
-	srcA, err := meshbool.SourceIDs(t.Context(), meshes.proxy.source, faceID)
+	srcA, err := meshbool.SourceIDs(t.Context(), meshes.proxy.n.Source, faceID)
 	require.NoError(t, err)
-	srcB, err := meshbool.SourceIDs(t.Context(), meshes.cone.source, faceID)
+	srcB, err := meshbool.SourceIDs(t.Context(), meshes.cone.n.Source, faceID)
 	require.NoError(t, err)
 	bmA, err := prepBoolMeshContext(t.Context(), meshes.proxy, srcA)
 	require.NoError(t, err)
@@ -236,40 +237,40 @@ func TestTangentCapExtensionOnRealChain(t *testing.T) {
 	require.NotNil(t, held, "the held cut meshes within the ladder")
 	// Hand the adapter face bounds far above any facet bound. The proxy's face
 	// bounds are recomputed from its final facets, never maxed with the old ones.
-	oversized := *held
-	oversized.faceBound = maps.Clone(held.faceBound)
-	for f := range oversized.faceBound {
-		oversized.faceBound[f] = 1e6
+	oversized := bornMesh(&Mesh{n: held.n})
+	oversized.n.FaceBound = maps.Clone(held.n.FaceBound)
+	for f := range oversized.n.FaceBound {
+		oversized.n.FaceBound[f] = 1e6
 	}
-	proxy, slab, err := extendTangentCap(t.Context(), &oversized, toe, plane)
+	proxy, slab, err := extendTangentCap(t.Context(), oversized, toe, plane)
 	require.NoError(t, err)
 	require.NotNil(t, slab.Eps)
 	changed := map[*Face]bool{toe.capFace: true}
-	for _, f := range proxy.source[len(proxy.source)-2*len(toe.cap.source.sourceStation):] {
-		changed[f] = true
+	for _, f := range proxy.n.Source[len(proxy.n.Source)-2*len(toe.cap.source.sourceStation):] {
+		changed[faceHandle(f)] = true
 	}
 	for f := range changed {
 		want := 0.0
-		for i, source := range proxy.source {
-			if source != f {
+		for i, source := range proxy.n.Source {
+			if source != faceNode(f) {
 				continue
 			}
 			for _, v := range proxy.n.Triangles[i] {
 				want = max(want, proxy.n.VertexBound[v])
 			}
 		}
-		require.Equal(t, want, proxy.faceBound[f], "a changed face bound is the recomputed facet maximum")
+		require.Equal(t, want, proxy.n.FaceBound[faceNode(f)], "a changed face bound is the recomputed facet maximum")
 		require.Less(t, want, 1e6)
 	}
-	for f := range proxy.faceBound {
-		if !changed[f] {
-			require.Equal(t, 1e6, proxy.faceBound[f], "an unchanged face keeps its bound")
+	for f := range proxy.n.FaceBound {
+		if !changed[faceHandle(f)] {
+			require.Equal(t, 1e6, proxy.n.FaceBound[f], "an unchanged face keeps its bound")
 		}
 	}
 
 	capFacets := 0
-	for i, f := range proxy.source {
-		if f != toe.capFace {
+	for i, f := range proxy.n.Source {
+		if f != faceNode(toe.capFace) {
 			continue
 		}
 		capFacets++

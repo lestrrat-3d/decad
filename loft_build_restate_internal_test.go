@@ -178,10 +178,10 @@ func TestTessellateLoftRestatesTheHeldTriangleSet(t *testing.T) {
 	// facet departure: a face's facets ARE the payload's triangles for it, so
 	// there is no tighter per-face reading to publish and no face may be
 	// missing (facesOfMesh refuses a mesh that leaves one unstated).
-	require.Len(t, mesh.source, len(mesh.n.Triangles))
+	require.Len(t, mesh.n.Source, len(mesh.n.Triangles))
 	seen := map[*Face]struct{}{}
-	for _, f := range mesh.source {
-		seen[f] = struct{}{}
+	for _, f := range mesh.n.Source {
+		seen[faceHandle(f)] = struct{}{}
 		got, ok := mesh.sourceBound(f)
 		require.True(t, ok)
 		require.Equal(t, proof.FacetDeparture, got)
@@ -191,14 +191,14 @@ func TestTessellateLoftRestatesTheHeldTriangleSet(t *testing.T) {
 	// The two caps' triangles sit after the walls, in the payload's own split
 	// order, and the wall triangles carry one distinct face each — a loft
 	// coalesces no wall (docs/tessellation-design.md §4).
-	capStart := mesh.source[lp.walls]
-	capEnd := mesh.source[len(mesh.n.Triangles)-1]
+	capStart := mesh.n.Source[lp.walls]
+	capEnd := mesh.n.Source[len(mesh.n.Triangles)-1]
 	require.NotSame(t, capStart, capEnd)
-	require.Equal(t, provenance.RoleCapStart, capStart.Origins()[0].Role)
-	require.Equal(t, provenance.RoleCapEnd, capEnd.Origins()[0].Role)
+	require.Equal(t, provenance.RoleCapStart, featureRefsOf(capStart.Origins)[0].Role)
+	require.Equal(t, provenance.RoleCapEnd, featureRefsOf(capEnd.Origins)[0].Role)
 	walls := map[*Face]struct{}{}
 	for k := range lp.walls {
-		walls[mesh.source[k]] = struct{}{}
+		walls[faceHandle(mesh.n.Source[k])] = struct{}{}
 	}
 	require.Len(t, walls, lp.walls, "each wall triangle names its own side(i,j,k) face")
 }

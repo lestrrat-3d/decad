@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -34,7 +35,7 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 			byRole[origin.Role] = f
 		}
 	}
-	mesh := &Mesh{}
+	mesh := bornMesh(&Mesh{})
 	spanWork := newCompositeSweepWork(sp.prism.Profile)
 	budget := proofbound.NewWorkBudget(ctx)
 	coordinateBound := 0.0
@@ -142,7 +143,7 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 			if err := budget.Step(); err != nil {
 				return nil, err
 			}
-			role, err := compositeSpanFaceRole(piece.source[t], i, span.reverseArcCaps)
+			role, err := compositeSpanFaceRole(piece.n.Source[t], i, span.reverseArcCaps)
 			if err != nil {
 				return nil, err
 			}
@@ -155,16 +156,16 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 			if !ok {
 				return nil, fmt.Errorf(`%w: the composite sweep carries no face for role %q`, ErrDegenerate, role)
 			}
-			mesh.addTriangle([3]int{local[triangle[0]], local[triangle[1]], local[triangle[2]]}, face)
+			mesh.addTriangle([3]int{local[triangle[0]], local[triangle[1]], local[triangle[2]]}, faceNode(face))
 			if len(mesh.n.Triangles) > maxCompositeMeshFacets {
 				return nil, fmt.Errorf(`%w: the composite sweep mesh exceeds the fixed facet ceiling`, ErrUnsupported)
 			}
 			triangleSpan = append(triangleSpan, i)
-			bound, ok := piece.sourceBound(piece.source[t])
+			bound, ok := piece.sourceBound(piece.n.Source[t])
 			if !ok {
 				return nil, fmt.Errorf(`%w: sweep path span %d has no source bound for role %q`, ErrUnsupported, i, role)
 			}
-			mesh.setFaceBound(face, proofbound.AbsSumUpper(bound, maxMove))
+			mesh.setFaceBound(faceNode(face), proofbound.AbsSumUpper(bound, maxMove))
 		}
 		if verify >= VerifyAll {
 			if !piece.n.SymDiffOK {
@@ -247,8 +248,8 @@ func compositeSpanRings(ctx context.Context, span sweepSpanPayload, mesh *Mesh,
 	return start, end, mesh.n.CoordBound, nil
 }
 
-func compositeSpanFaceRole(face *Face, span int, reverseCaps bool) (string, error) {
-	origins := face.Origins()
+func compositeSpanFaceRole(face *topo.Face, span int, reverseCaps bool) (string, error) {
+	origins := face.Origins
 	if len(origins) == 0 {
 		return "", fmt.Errorf(`%w: a sweep span face has no origin role`, ErrDegenerate)
 	}

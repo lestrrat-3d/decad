@@ -90,7 +90,7 @@ func compositeTwistCellProof(poly twistsweep.TwistPolygon, geometry twistsweep.T
 
 func compositeTwistMesh(ctx context.Context, body *Body, cells []loftPayload,
 	profileEdges int, pathSpanOfCell []int, delta, volSymDiff float64) (*Mesh, proofbound.RatInterval,
-	map[*Face]proofbound.RatInterval, error) {
+	map[*topo.Face]proofbound.RatInterval, error) {
 	if len(cells) < 2 {
 		return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: composite twist has too few held cells`, ErrDegenerate)
 	}
@@ -103,7 +103,7 @@ func compositeTwistMesh(ctx context.Context, body *Body, cells []loftPayload,
 			byRole[origin.Role] = face
 		}
 	}
-	mesh := &Mesh{n: topo.Mesh{Bound: delta, VolSymDiff: volSymDiff, SymDiffOK: true}}
+	mesh := bornMesh(&Mesh{n: topo.Mesh{Bound: delta, VolSymDiff: volSymDiff, SymDiffOK: true}})
 	stationPoints := len(cells[0].verts) / 2
 	if stationPoints < profileEdges || len(cells[0].verts) != 2*stationPoints {
 		return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft has no complete station table`, ErrUnsupported)
@@ -159,8 +159,8 @@ func compositeTwistMesh(ctx context.Context, body *Body, cells []loftPayload,
 				}
 				mapped[i] = cell*stationPoints + local
 			}
-			mesh.addTriangle(mapped, face)
-			mesh.setFaceBound(face, delta)
+			mesh.addTriangle(mapped, faceNode(face))
+			mesh.setFaceBound(faceNode(face), delta)
 			spanOf = append(spanOf, cell)
 		}
 	}
@@ -182,7 +182,7 @@ func compositeTwistMesh(ctx context.Context, body *Body, cells []loftPayload,
 		return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft mesh has nonpositive orientation`, ErrUnsupported)
 	}
 	area := proofbound.PointInterval(new(big.Rat))
-	byFace := make(map[*Face]proofbound.RatInterval, len(body.Faces()))
+	byFace := make(map[*topo.Face]proofbound.RatInterval, len(body.Faces()))
 	for index, triangle := range mesh.n.Triangles {
 		var points [3]proofbound.IvVec3
 		for i, index := range triangle {
@@ -199,7 +199,7 @@ func compositeTwistMesh(ctx context.Context, body *Body, cells []loftPayload,
 		}
 		facet := proofbound.IntervalScale(twice, big.NewRat(1, 2))
 		area = proofbound.IntervalAdd(area, facet)
-		face := mesh.source[index]
+		face := mesh.n.Source[index]
 		if previous, exists := byFace[face]; exists {
 			byFace[face] = proofbound.IntervalAdd(previous, facet)
 		} else {

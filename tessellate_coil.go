@@ -68,27 +68,27 @@ func tessellateCoil(ctx context.Context, b *Body, cp coilPayload, chord float64,
 	if walls+2*capCount != len(cp.tris) {
 		return nil, fmt.Errorf(`%w: the coil's held triangle set does not split into walls and two caps`, ErrDegenerate)
 	}
-	src := make([]*Face, len(cp.tris))
+	src := make([]*topo.Face, len(cp.tris))
 	for t := range cp.tris {
 		switch {
 		case t < walls:
-			src[t] = segment[rec.Profile.Chord[(t/2)%stride].Segment]
+			src[t] = faceNode(segment[rec.Profile.Chord[(t/2)%stride].Segment])
 		case t < walls+capCount:
-			src[t] = capStart
+			src[t] = faceNode(capStart)
 		default:
-			src[t] = capEnd
+			src[t] = faceNode(capEnd)
 		}
 	}
 	if err := tessellation.RequireClosedMesh(cp.tris); err != nil {
 		return nil, fmt.Errorf(`%w: the coil's held triangle set is not a closed mesh`, ErrUnsupported)
 	}
-	mesh := &Mesh{
+	mesh := bornMesh(&Mesh{
 		n: topo.Mesh{
 			Vertices:  append([]r3.Vec(nil), cp.verts...),
 			Triangles: append([][3]int(nil), cp.tris...),
+			Source:    src,
 		},
-		source: src,
-	}
+	})
 	mesh.setVertexBounds(cp.vertexBound)
 	mesh.n.Bound = cp.delta
 	if verify < VerifyAll {

@@ -9,6 +9,8 @@ import (
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
@@ -41,25 +43,25 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 				ErrUnsupported, units.Millimeters(chord), units.Millimeters(sp.sectionDelta))
 		}
 	}
-	byRole := map[string]*Face{}
+	byRole := map[string]*topo.Face{}
 	for _, face := range b.Faces() {
 		for _, origin := range face.Origins() {
-			byRole[origin.Role] = face
+			byRole[origin.Role] = faceNode(face)
 		}
 	}
-	faceOfRole := func(role string) (*Face, error) {
+	faceOfRole := func(role string) (*topo.Face, error) {
 		face := byRole[role]
 		if face == nil {
 			return nil, fmt.Errorf(`%w: a stacked prism has no face for role %q`, ErrDegenerate, role)
 		}
 		return face, nil
 	}
-	var mesh Mesh
+	mesh := bornMesh(new(Mesh))
 	base := sp.outerPrism()
 	work := freeform.NewFreeformWork()
 	var vertexStore []float64
-	faceTrim := map[*Face]float64{}
-	faceAxial := map[*Face]float64{}
+	faceTrim := map[*topo.Face]float64{}
+	faceAxial := map[*topo.Face]float64{}
 	addVertex := func(p planePoint, z float64, source proofbound.WalkEndBound) int {
 		v := base.Point(p.U, p.V, z)
 		mesh.n.Vertices = append(mesh.n.Vertices, v)
@@ -67,14 +69,14 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 			base.PointRound(p.U, p.V, z, v)))
 		return len(mesh.n.Vertices) - 1
 	}
-	rings := make([]tessellation.StackedRing[*Face], len(columns))
+	rings := make([]tessellation.StackedRing[*topo.Face], len(columns))
 	for ci, col := range columns {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 		first, last := sp.slabs[col.Start], sp.slabs[col.End]
 		cl, err := tessellation.ChordLoop(ctx, col.Loop, budget, last.Z1-first.Z0, work, nil, col.LoopIndex,
-			func(w survey2d.SideWalk) (*Face, error) {
+			func(w survey2d.SideWalk) (*topo.Face, error) {
 				return faceOfRole(fmt.Sprintf("slab(%d).region(%d).side(%d,%d)",
 					col.Start, col.Region, col.LoopIndex, w.Segs[0]))
 			}, stationbound.ChordStationBound)
@@ -116,7 +118,7 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 	// column runs CCW, a hole column CW. A patch triangulates its outer CCW and
 	// its holes CW, so a ring whose column winding differs from the role it
 	// plays in the patch is read reversed; a -N patch flips its triangles.
-	emitPatch := func(face *Face, loops []stackedrecord.PatchLoop, reverseFace bool, axial float64) error {
+	emitPatch := func(face *topo.Face, loops []stackedrecord.PatchLoop, reverseFace bool, axial float64) error {
 		patchLoops := make([]tessellation.StackedPatchLoop, len(loops))
 		for i, loop := range loops {
 			patchLoops[i] = tessellation.StackedPatchLoop{
@@ -187,11 +189,11 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 	if err := liftTessellationError(tessellation.RequireClosedMesh(mesh.n.Triangles)); err != nil {
 		return nil, err
 	}
-	if err := composeFaceBounds(&mesh, faceTrim, faceAxial, vertexStore, sp.sectionDelta); err != nil {
+	if err := composeFaceBounds(mesh, faceTrim, faceAxial, vertexStore, sp.sectionDelta); err != nil {
 		return nil, err
 	}
 	if verify < VerifyAll {
-		return &mesh, nil
+		return mesh, nil
 	}
 	columnHeights := make([]float64, len(columns))
 	for i, column := range columns {
@@ -206,26 +208,26 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 			slabColumns[k][i] = entry.Column
 		}
 	}
-	proof := tessellation.ProveStacked(tessellation.StackedProofInput[*Face]{
+	proof := tessellation.ProveStacked(tessellation.StackedProofInput[*topo.Face]{
 		Rings: rings, ColumnHeights: columnHeights, SlabHeights: slabHeights,
 		SlabColumns: slabColumns, SectionDelta: sp.sectionDelta,
-		Faces: b.Faces(), Source: mesh.source, FaceAxial: faceAxial,
-		IsPlanar: func(face *Face) bool { _, ok := face.n.Surface.(surfacegeom.Plane); return ok },
+		Faces: topobuild.Faces(&b.n), Source: mesh.n.Source, FaceAxial: faceAxial,
+		IsPlanar: func(face *topo.Face) bool { _, ok := face.Surface.(surfacegeom.Plane); return ok },
 		Vertices: mesh.n.Vertices, Triangles: mesh.n.Triangles,
 		Store: vertexStore, StoreMax: storeMax, AreaSlack: mesh.n.AreaSlack,
 	})
 	mesh.n.AreaSlack = proof.AreaSlack
-	if err := publishSymDiff(&mesh, proof.Terms); err != nil {
+	if err := publishSymDiff(mesh, proof.Terms); err != nil {
 		return nil, err
 	}
-	return &mesh, nil
+	return mesh, nil
 }
 
 // stackedCapFace is the cap face with the given role over one region. A
 // stack has one cap of each role. A prism group has one per region under the
 // same role, so its cap is the one sharing an edge with a wall the build
 // named for that region (slab(k).region(r).side(i,j)).
-func stackedCapFace(b *Body, sp stackedPrismPayload, faceOfRole func(string) (*Face, error), role string, slab, region int) (*Face, error) {
+func stackedCapFace(b *Body, sp stackedPrismPayload, faceOfRole func(string) (*topo.Face, error), role string, slab, region int) (*topo.Face, error) {
 	if !sp.isGroup() {
 		return faceOfRole(role)
 	}
@@ -242,7 +244,7 @@ func stackedCapFace(b *Body, sp stackedPrismPayload, faceOfRole func(string) (*F
 					}
 					for _, origin := range nb.Origins {
 						if strings.HasPrefix(origin.Role, prefix) {
-							return face, nil
+							return faceNode(face), nil
 						}
 					}
 				}

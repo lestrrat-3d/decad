@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -155,19 +156,19 @@ func buildLoftMirrorUnion(ctx context.Context, d *Document, ref producerID,
 	var tris [][3]int
 	var src []int
 	var groups []facetGroup
-	groupOf := map[*Face]int{}
-	add := func(triangle [3]int, face *Face, capRole string, half, wallIndex int) {
+	groupOf := map[*topo.Face]int{}
+	add := func(triangle [3]int, face *topo.Face, capRole string, half, wallIndex int) {
 		group, exists := groupOf[face]
 		if !exists {
 			group = len(groups)
 			groupOf[face] = group
-			g := facetGroup{origins: face.originRefs()}
+			g := facetGroup{origins: append([]provenance.Ref(nil), face.Origins...)}
 			if capRole != "" {
 				g.origins = append(g.origins, provenance.Ref{Producer: ref, Role: capRole})
-				g.surface = face.n.Surface
+				g.surface = face.Surface
 				g.planar = true
-				g.normalBound = face.n.NormalBound
-				g.reversed = face.n.Reversed
+				g.normalBound = face.NormalBound
+				g.reversed = face.Reversed
 			}
 			groups = append(groups, g)
 		}
@@ -208,7 +209,7 @@ func buildLoftMirrorUnion(ctx context.Context, d *Document, ref producerID,
 					role = provenance.RoleCapEnd
 				}
 			}
-			add(triangle, item.mesh.source[i], role, half, wallIndex)
+			add(triangle, item.mesh.n.Source[i], role, half, wallIndex)
 		}
 	}
 	if err := tessellation.RequireVertexLinks(ctx, len(verts), tris); err != nil {
@@ -227,7 +228,7 @@ func buildLoftMirrorUnion(ctx context.Context, d *Document, ref producerID,
 
 func loftMirrorMeshMatchesPayload(mesh *Mesh, lp loftPayload) bool {
 	return slices.Equal(mesh.n.Vertices, lp.verts) && slices.Equal(mesh.n.Triangles, lp.tris) &&
-		len(mesh.source) == len(lp.tris)
+		len(mesh.n.Source) == len(lp.tris)
 }
 
 func loftMirrorCapTrianglesMatch(lower, upper loftPayload) bool {

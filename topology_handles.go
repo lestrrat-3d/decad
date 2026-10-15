@@ -481,3 +481,29 @@ func faceGroupHandles(ns [][]*topo.Face) [][]*Face {
 	}
 	return out
 }
+
+// bornMesh sets m's node Owner to m and returns m. Every root Mesh is born
+// through it, so meshHandle maps the mesh node a body's tessellation cache
+// holds back to the one handle that holds it.
+func bornMesh(m *Mesh) *Mesh {
+	m.n.Owner = m
+	return m
+}
+
+// meshHandle returns the handle that holds n, or nil for a nil n. A node whose
+// handle was not born through bornMesh is an evaluator invariant failure, and
+// the assertion panics.
+func meshHandle(n *topo.Mesh) *Mesh {
+	if n == nil {
+		return nil
+	}
+	return n.Owner.(*Mesh) //nolint:forcetypeassert // every mesh node is born in its handle; a bare one must fail loudly
+}
+
+// meshNode returns m's node, or nil for a nil m.
+func meshNode(m *Mesh) *topo.Mesh {
+	if m == nil {
+		return nil
+	}
+	return &m.n
+}

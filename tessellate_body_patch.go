@@ -45,7 +45,7 @@ func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chor
 		return nil, fmt.Errorf(`%w: this evaluator cannot triangulate the PatchEdges result`, ErrUnsupported)
 	}
 	vertices := b.Vertices()
-	mesh := &Mesh{n: topo.Mesh{Vertices: make([]r3.Vec, len(vertices))}}
+	mesh := bornMesh(&Mesh{n: topo.Mesh{Vertices: make([]r3.Vec, len(vertices))}})
 	classOf := make(map[*Vertex]int, len(vertices))
 	store := make([]float64, len(vertices))
 	budget := proofbound.NewWorkBudget(ctx)
@@ -61,7 +61,9 @@ func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chor
 		return nil, err
 	}
 	var err error
-	mesh.n.Triangles, mesh.source, err = triangulateStitchFaces(ctx, faces, classOf)
+	var src []*Face
+	mesh.n.Triangles, src, err = triangulateStitchFaces(ctx, faces, classOf)
+	mesh.n.Source = faceNodes(src)
 	if err != nil {
 		return nil, err
 	}
@@ -87,9 +89,9 @@ func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chor
 			return nil, fmt.Errorf(`%w: a PatchEdges sheet's facets are not proven embedded: %s`, ErrUnsupported, err)
 		}
 	}
-	axial := make(map[*Face]float64, len(faces))
+	axial := make(map[*topo.Face]float64, len(faces))
 	for _, f := range faces {
-		axial[f] = f.n.AxialDelta
+		axial[faceNode(f)] = f.n.AxialDelta
 	}
 	if err := composeFaceBounds(mesh, nil, axial, store, 0); err != nil {
 		return nil, err
@@ -101,9 +103,9 @@ func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chor
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
-		face := mesh.source[i]
+		face := mesh.n.Source[i]
 		delta := math.Max(store[tri[0]], math.Max(store[tri[1]], store[tri[2]]))
-		delta = proofbound.AbsSumUpper(delta, face.n.AxialDelta)
+		delta = proofbound.AbsSumUpper(delta, face.AxialDelta)
 		if delta == 0 {
 			continue
 		}
@@ -124,8 +126,8 @@ func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chor
 // triangle winding is settled by the shared mesh edge, not that frame.
 func orientBodyPatchFilledFaces(m *Mesh, b *Body, classOf map[*Vertex]int, budget *proofbound.WorkBudget) error {
 	byFace := make(map[*topo.Face][]int, len(b.Faces()))
-	for i, f := range m.source {
-		byFace[faceNode(f)] = append(byFace[faceNode(f)], i)
+	for i, f := range m.n.Source {
+		byFace[f] = append(byFace[f], i)
 	}
 	for _, f := range b.Faces() {
 		if err := budget.Step(); err != nil {

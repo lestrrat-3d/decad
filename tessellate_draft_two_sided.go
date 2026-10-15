@@ -26,7 +26,7 @@ func tessellateTwoSidedDraft(ctx context.Context, body *Body, dp twoSidedDraftPa
 		}
 	}
 	parts := []draftPayload{dp.negative, dp.positive}
-	var out Mesh
+	out := bornMesh(new(Mesh))
 	vertexIndex := make(map[[3]float64]int)
 	var bounds []float64
 	for partIndex, payload := range parts {
@@ -73,11 +73,11 @@ func tessellateTwoSidedDraft(ctx context.Context, body *Body, dp twoSidedDraftPa
 			if err := budget.Step(); err != nil {
 				return nil, err
 			}
-			face := mesh.source[i]
-			if len(face.n.Origins) == 0 {
+			face := mesh.n.Source[i]
+			if len(face.Origins) == 0 {
 				return nil, fmt.Errorf(`%w: a draft mesh facet has no source role`, ErrDegenerate)
 			}
-			role := face.n.Origins[0].Role
+			role := face.Origins[0].Role
 			if role == internalCap {
 				continue
 			}
@@ -88,9 +88,9 @@ func tessellateTwoSidedDraft(ctx context.Context, body *Body, dp twoSidedDraftPa
 			if published == nil {
 				return nil, fmt.Errorf(`%w: the two-sided draft has no published face for role %q`, ErrDegenerate, role)
 			}
-			out.addTriangle([3]int{indices[tri[0]], indices[tri[1]], indices[tri[2]]}, published)
+			out.addTriangle([3]int{indices[tri[0]], indices[tri[1]], indices[tri[2]]}, faceNode(published))
 			if bound, ok := mesh.sourceBound(face); ok {
-				out.setFaceBound(published, bound)
+				out.setFaceBound(faceNode(published), bound)
 			} else {
 				return nil, fmt.Errorf(`%w: a draft mesh source face has no displacement bound`, ErrDegenerate)
 			}
@@ -107,5 +107,5 @@ func tessellateTwoSidedDraft(ctx context.Context, body *Body, dp twoSidedDraftPa
 	if err := liftTessellationError(tessellation.RequireClosedMesh(out.n.Triangles)); err != nil {
 		return nil, fmt.Errorf("two-sided draft middle rim: %w", err)
 	}
-	return &out, budget.Err()
+	return out, budget.Err()
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/stationbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -48,15 +49,15 @@ func tessellateChainSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 	// The straight wall's coedge order is source-start at its near rim,
 	// source-end at its near rim, source-end at the join, source-start at
 	// the join. The arc wall walks the same source indices at its start.
-	mesh := &Mesh{}
+	mesh := bornMesh(&Mesh{})
 	store := make([]float64, 0, 2*n+4)
 	for i, nominal := range []r3.Vec{{}, {X: w}, {X: w, Z: height}, {Z: height}} {
 		v := lineCo[i].Start()
 		mesh.n.Vertices = append(mesh.n.Vertices, v.n.Position)
 		store = append(store, chainSweepVertexGap(v, nominal))
 	}
-	mesh.addTriangle([3]int{0, 1, 2}, straight)
-	mesh.addTriangle([3]int{0, 2, 3}, straight)
+	mesh.addTriangle([3]int{0, 1, 2}, faceNode(straight))
+	mesh.addTriangle([3]int{0, 2, 3}, faceNode(straight))
 	outer, inner := 3, 2
 	budget := proofbound.NewWorkBudget(ctx)
 	for j := 1; j <= n; j++ {
@@ -84,8 +85,8 @@ func tessellateChainSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 			mesh.n.Vertices = append(mesh.n.Vertices, p)
 			store = append(store, gap)
 		}
-		mesh.addTriangle([3]int{outer, inner, nextInner}, curved)
-		mesh.addTriangle([3]int{outer, nextInner, nextOuter}, curved)
+		mesh.addTriangle([3]int{outer, inner, nextInner}, faceNode(curved))
+		mesh.addTriangle([3]int{outer, nextInner, nextOuter}, faceNode(curved))
 		outer, inner = nextOuter, nextInner
 	}
 	if err := budget.Err(); err != nil {
@@ -97,18 +98,18 @@ func tessellateChainSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 	}
 	mesh.n.CoordBound = coord
 	straightBound := max(store[0], store[1], store[2], store[3])
-	mesh.setFaceBound(straight, proofbound.UpRound(straightBound))
+	mesh.setFaceBound(faceNode(straight), proofbound.UpRound(straightBound))
 	arcBound := proofbound.AbsSumUpper(tessellation.ChordSagitta(radius, upperPi, n), coord)
 	if proofbound.IsNonFinite(arcBound) || arcBound > chord {
 		return nil, fmt.Errorf(`%w: the chain sweep arc's chord and coordinate bound exceeds the requested tolerance`,
 			ErrUnsupported)
 	}
-	mesh.setFaceBound(curved, arcBound)
+	mesh.setFaceBound(faceNode(curved), arcBound)
 
 	// A per-triangle exact area bracket checks positive area at every level.
 	// At VerifyAll, the two live faces' certified area intervals bound the
 	// difference from their attributed held triangle sums.
-	areas := map[*Face]chainSweepAreaInterval{}
+	areas := map[*topo.Face]chainSweepAreaInterval{}
 	for i, tri := range mesh.n.Triangles {
 		if err := budget.Step(); err != nil {
 			return nil, err
@@ -117,13 +118,13 @@ func tessellateChainSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 		if !ok {
 			return nil, fmt.Errorf(`%w: chain sweep facet %d has no positive area`, ErrUnsupported, i)
 		}
-		pair := areas[mesh.source[i]]
+		pair := areas[mesh.n.Source[i]]
 		if pair.lo == nil {
 			pair.lo, pair.hi = new(big.Rat), new(big.Rat)
 		}
 		pair.lo.Add(pair.lo, proofarith.FloatRat(lo))
 		pair.hi.Add(pair.hi, proofarith.FloatRat(hi))
-		areas[mesh.source[i]] = pair
+		areas[mesh.n.Source[i]] = pair
 	}
 	if verify >= VerifyBoundary {
 		data, auditErr := revolvemesh.RequireRevolveFacetAreas(budget, mesh.n.Vertices, mesh.n.Triangles, coord)
@@ -136,7 +137,7 @@ func tessellateChainSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 	}
 	if verify >= VerifyAll {
 		for _, f := range []*Face{straight, curved} {
-			slack, proofErr := chainSweepFaceAreaSlack(f, areas[f])
+			slack, proofErr := chainSweepFaceAreaSlack(f, areas[faceNode(f)])
 			if proofErr != nil {
 				return nil, proofErr
 			}

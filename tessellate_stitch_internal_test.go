@@ -75,10 +75,10 @@ func TestStitchCurvedMeshInheritsEverySourceFaceBound(t *testing.T) {
 		"the fixture's own premise: the source mesh's overall bound must be positive, or a missing per-face charge would go unnoticed")
 
 	for i, sourceFace := range sp.faces {
-		want, ok := source.sourceBound(sourceFace)
+		want, ok := source.sourceBound(faceNode(sourceFace))
 		require.True(t, ok)
 		require.Positivef(t, want, "source face %d's own bound must be positive, or the equality check below proves nothing", i)
-		got, ok := mesh.sourceBound(sp.liveFaces[i])
+		got, ok := mesh.sourceBound(faceNode(sp.liveFaces[i]))
 		require.Truef(t, ok, "stitched face %d has no inherited source bound", i)
 		require.Equalf(t, want, got, "stitched face %d lost its source bound", i)
 	}
@@ -147,12 +147,12 @@ func TestStitchCurvedWeldedRevolveSiblingsInheritEverySourceFaceBound(t *testing
 	require.Len(t, sp.faces, 2)
 
 	for i, copied := range sp.faces {
-		up, ok := bodyHandle(copied.n.Body).n.Payload.(unstitchPayload)
+		up, ok := copied.n.Body.Payload.(unstitchPayload)
 		require.True(t, ok)
-		want, ok := source.sourceBound(up.face)
+		want, ok := source.sourceBound(faceNode(up.face))
 		require.True(t, ok)
 		require.Positivef(t, want, "original face %d's own bound must be positive, or the equality check below proves nothing", i)
-		got, ok := mesh.sourceBound(sp.liveFaces[i])
+		got, ok := mesh.sourceBound(faceNode(sp.liveFaces[i]))
 		require.Truef(t, ok, "stitched sibling face %d has no inherited source bound", i)
 		require.Equalf(t, want, got, "stitched sibling face %d lost its original source bound", i)
 	}

@@ -341,7 +341,7 @@ func TestHeldGateReadsFacetsWithinThePrePassSlack(t *testing.T) {
 				tris[i] = [3]int{tr[0], tr[2], tr[1]}
 			}
 		}
-		m := &Mesh{n: topo.Mesh{Vertices: verts, Triangles: tris}, source: make([]*Face, len(tris))}
+		m := bornMesh(&Mesh{n: topo.Mesh{Vertices: verts, Triangles: tris, Source: make([]*topo.Face, len(tris))}})
 		m.setVertexBounds([]float64{bound, bound, bound, bound})
 		bm, err := prepBoolMeshContext(t.Context(), m, make([]int, len(tris)))
 		require.NoError(t, err)

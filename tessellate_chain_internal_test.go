@@ -3,6 +3,7 @@ package decad
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -82,11 +83,11 @@ func TestTessellateChainRejectsWronglyAttributedWalls(t *testing.T) {
 	const moveIdx = 0
 	moved := mesh.n.Triangles[moveIdx]
 	movedVerts := map[int]struct{}{moved[0]: {}, moved[1]: {}, moved[2]: {}}
-	homeFace := mesh.source[moveIdx]
+	homeFace := mesh.n.Source[moveIdx]
 
 	var targetFace *Face
 search:
-	for i, f := range mesh.source {
+	for i, f := range mesh.n.Source {
 		if f == homeFace {
 			continue
 		}
@@ -95,15 +96,15 @@ search:
 				continue search
 			}
 		}
-		targetFace = f
+		targetFace = faceHandle(f)
 		break
 	}
 	require.NotNil(t, targetFace, "premise: the ribbon's far wall shares no vertex with the moved triangle")
 
-	broken := *mesh
-	broken.source = append([]*Face(nil), mesh.source...)
-	broken.source[moveIdx] = targetFace
-	err = requireSheetMesh(t.Context(), body, &broken)
+	broken := bornMesh(&Mesh{n: mesh.n})
+	broken.n.Source = append([]*topo.Face(nil), mesh.n.Source...)
+	broken.n.Source[moveIdx] = faceNode(targetFace)
+	err = requireSheetMesh(t.Context(), body, broken)
 	require.Error(t, err, "moving a triangle to a vertex-disjoint wall mints a new free-boundary chain there, which the body's own recorded count does not have")
 	require.ErrorIs(t, err, ErrDegenerate)
 }
@@ -134,8 +135,8 @@ func TestTessellateChainReflectedPlacementFlipsWinding(t *testing.T) {
 	for i, tri := range mesh.n.Triangles {
 		a, b, c := mesh.n.Vertices[tri[0]], mesh.n.Vertices[tri[1]], mesh.n.Vertices[tri[2]]
 		normal := b.Sub(a).Cross(c.Sub(a))
-		face := mesh.source[i]
-		published, err := face.NormalAt(a)
+		face := mesh.n.Source[i]
+		published, err := faceHandle(face).NormalAt(a)
 		require.NoError(t, err)
 		require.Greater(t, normal.Dot(published.Value), 0.0,
 			"a reflected wall's own triangle must still wind outward, toward its published positive-side normal")

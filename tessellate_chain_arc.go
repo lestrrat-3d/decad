@@ -137,16 +137,16 @@ func tessellateChainArcSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 		if proofbound.IsNonFinite(bound) || bound > chord {
 			continue
 		}
-		mesh := &Mesh{n: topo.Mesh{Vertices: verts, CoordBound: math.Max(coord, vertexGap)}}
+		mesh := bornMesh(&Mesh{n: topo.Mesh{Vertices: verts, CoordBound: math.Max(coord, vertexGap)}})
 		revolvemesh.EmitCellTriangles(samples[0][0], samples[0][1], n, func(tri [3]int) {
-			mesh.addTriangle(tri, face)
+			mesh.addTriangle(tri, faceNode(face))
 		})
 		if rp.reflected() {
 			for i := range mesh.n.Triangles {
 				mesh.n.Triangles[i][1], mesh.n.Triangles[i][2] = mesh.n.Triangles[i][2], mesh.n.Triangles[i][1]
 			}
 		}
-		mesh.setFaceBound(face, bound)
+		mesh.setFaceBound(faceNode(face), bound)
 		if err := requireMeshAudit(ctx, true, b, mesh); err != nil {
 			return nil, err
 		}

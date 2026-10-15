@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -68,7 +69,7 @@ func certifiedScaleSource(ctx context.Context, b *Body, chord float64) (facetedP
 	}
 	faces := b.Faces()
 	groups := make([]facetGroup, len(faces))
-	faceID := make(map[*Face]int, len(faces))
+	faceID := make(map[*topo.Face]int, len(faces))
 	for i, face := range faces {
 		if err := ctx.Err(); err != nil {
 			return facetedPayload{}, err
@@ -81,9 +82,9 @@ func certifiedScaleSource(ctx context.Context, b *Body, chord float64) (facetedP
 			// image keeps origins and publishes Faceted without a normal tag.
 			groups[i] = facetGroup{origins: face.originRefs()}
 		}
-		faceID[face] = i
+		faceID[faceNode(face)] = i
 	}
-	source, err := meshbool.SourceIDs(ctx, mesh.source, faceID)
+	source, err := meshbool.SourceIDs(ctx, mesh.n.Source, faceID)
 	if err != nil {
 		return facetedPayload{}, err
 	}

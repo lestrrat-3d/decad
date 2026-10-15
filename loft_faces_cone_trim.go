@@ -15,6 +15,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/pointcone"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -491,7 +492,7 @@ func extendTangentCap(ctx context.Context, held *Mesh, toe *loftFacesToeRecord,
 	refuse := func(why string) (*Mesh, loftface.Slab, error) {
 		return nil, loftface.Slab{}, fmt.Errorf("%w: the tangent tooth %s", ErrUnsupported, why)
 	}
-	vertices, triangles, sources, capFace := held.n.Vertices, held.n.Triangles, held.source, toe.capFace
+	vertices, triangles, sources, capFace := held.n.Vertices, held.n.Triangles, held.n.Source, toe.capFace
 	if !held.n.BoundaryOK || !held.n.SymDiffOK {
 		return refuse("mesh is not verified")
 	}
@@ -503,8 +504,8 @@ func extendTangentCap(ctx context.Context, held *Mesh, toe *loftFacesToeRecord,
 	if err != nil {
 		return nil, loftface.Slab{}, err
 	}
-	var faces []*Face
-	ids := map[*Face]int{}
+	var faces []*topo.Face
+	ids := map[*topo.Face]int{}
 	face := make([]int, len(sources))
 	for i, f := range sources {
 		id, ok := ids[f]
@@ -515,7 +516,7 @@ func extendTangentCap(ctx context.Context, held *Mesh, toe *loftFacesToeRecord,
 		}
 		face[i] = id
 	}
-	capID, ok := ids[capFace]
+	capID, ok := ids[faceNode(capFace)]
 	if !ok {
 		return refuse("mesh has no end cap facet")
 	}
@@ -524,27 +525,27 @@ func extendTangentCap(ctx context.Context, held *Mesh, toe *loftFacesToeRecord,
 	if err != nil {
 		return nil, loftface.Slab{}, err
 	}
-	next := *held
+	next := bornMesh(&Mesh{n: held.n})
 	next.n.Vertices = ext.Vertices
 	next.n.Triangles = ext.Triangles
 	next.n.VertexBound = ext.VertexBound
-	next.source = make([]*Face, len(ext.Face))
+	next.n.Source = make([]*topo.Face, len(ext.Face))
 	for i, id := range ext.Face {
-		next.source[i] = faces[id]
+		next.n.Source[i] = faces[id]
 	}
-	next.faceBound = maps.Clone(held.faceBound)
+	next.n.FaceBound = maps.Clone(held.n.FaceBound)
 	for id, bound := range ext.FaceBound {
-		next.faceBound[faces[id]] = bound
+		next.n.FaceBound[faces[id]] = bound
 	}
 	next.n.Bound = 0
-	for _, bound := range next.faceBound {
+	for _, bound := range next.n.FaceBound {
 		next.n.Bound = max(next.n.Bound, bound)
 	}
 	next.n.CoordBound = proofbound.AbsSumUpper(held.n.CoordBound, ext.CoordCharge)
 	if proofbound.IsNonFinite(next.n.Bound) || proofbound.IsNonFinite(next.n.CoordBound) {
 		return refuse("cap extension has an unbounded bound")
 	}
-	return &next, ext.Slab, nil
+	return next, ext.Slab, nil
 }
 
 // toeStationLink ties the held vertices of the toe-cut tooth to the stations

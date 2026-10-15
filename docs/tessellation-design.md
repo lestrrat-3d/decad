@@ -123,8 +123,10 @@ unverified mesh as a boolean operand — and the boolean's own gates are stated
 over a mesh it believes was proven. Keying on the tolerance alone is the single
 place this split can go wrong silently.
 
-The cache pointer is mutable implementation state only. It does not change the
-body's logical geometry, topology, measurements, or payload,
+The entry lives in the body's node (`topo.Body.Tess`, a `topo.TessEntry` that
+holds the mesh's node), and a hit maps that node back to the one `*Mesh` that
+holds it. The cache pointer is mutable implementation state only. It does not
+change the body's logical geometry, topology, measurements, or payload,
 and a cached mesh remains read-only through the public API. `Transform`
 and `Copy` construct new bodies with independent cache state;
 their face pointers differ, so they never inherit the source body's entry.

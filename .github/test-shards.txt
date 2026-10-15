@@ -1545,3 +1545,6 @@
 10	0.00	TestLoftCylinderCommonPlacementRejectsRoundedComposition
 10	0.00	TestLoftCylinderCommonPlacementLeavesOtherPrismsGeneric
 10	0.00	TestLoftCylinderCommonPlacementLargeRepeatedShift
+10	0.00	TestSpiralOffsetToothMeshLeavesOriginalIntact
+10	0.00	TestSpiralPrepareCombinedUnionLeavesOriginalIntact
+10	0.00	TestSpiralCombinedProxyMeshKeepsOneTriangleSourceIntact

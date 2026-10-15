@@ -5,8 +5,7 @@ import (
 )
 
 // Mesh is the data of the root Mesh handle, which holds one by
-// value. The handle keeps the source faces and per-face bounds, which name
-// root types.
+// value.
 type Mesh struct {
 	// Vertices are the mesh vertex positions in millimetres.
 	Vertices []r3.Vec
@@ -57,4 +56,37 @@ type Mesh struct {
 	// [Mesh.BoundaryVerified] publishes it; root tessellateContext is the one
 	// writer.
 	BoundaryOK bool
+	// Source holds, parallel to Triangles, the node of the face each facet
+	// approximates. Root Mesh.SourceFaces maps them back to their handles.
+	Source []*Face
+	// FaceBound is docs/tessellation-design.md §2's sourceBound(face): the
+	// two-sided displacement between the true trimmed face patch and the facets
+	// held for it, one entry for EVERY face appearing in Source, keyed by the
+	// face node. Bound is the maximum over it, so a mesh never publishes a
+	// global figure no face accounts for, and the boolean's hidden-tangency
+	// pre-pass charges each face what its own construction cost rather than
+	// inferring a displacement from the surface kind. A source face missing
+	// from this map is an evaluator invariant failure, never a zero: zero is
+	// the CLAIM that the held polygon is the true trimmed patch and that its
+	// stored coordinates add nothing.
+	FaceBound map[*Face]float64
+	// Owner is the root Mesh handle that holds this node by value. Root sets
+	// it when the handle is born and maps a node back to its handle through
+	// it; nothing else writes it.
+	Owner any
+}
+
+// TessEntry is one cached tessellation of a body (root Body.Tessellate): the
+// mesh node built at the chord tolerance whose float64 bits are ChordBits,
+// at verification level Verify (root Verification's value). Root maps Mesh
+// back to its handle on a hit, so a second Tessellate returns the same *Mesh.
+type TessEntry struct {
+	ChordBits uint64
+	// Verify is the level the cached mesh was BUILT at, and half of the entry's
+	// key (docs/tessellation-design.md §1.1). Keying on the tolerance alone
+	// would hand a VerifyNone mesh back to a boolean whose own internal
+	// tolerance happened to match, and the boolean's gates are stated over a
+	// mesh it believes was proven.
+	Verify int
+	Mesh   *Mesh
 }

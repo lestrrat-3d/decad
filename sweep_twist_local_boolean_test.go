@@ -43,8 +43,8 @@ func TestTwistLocalAreaRealBooleanArcSubset(t *testing.T) {
 		sourceVertex[vertex] = struct{}{}
 	}
 	splitArc := false
-	for i, face := range mesh.source {
-		if len(face.n.Origins) == 0 || face.n.Origins[0].Role != "side(0,0,1)" {
+	for i, face := range mesh.n.Source {
+		if len(face.Origins) == 0 || face.Origins[0].Role != "side(0,0,1)" {
 			continue
 		}
 		for _, index := range mesh.n.Triangles[i] {

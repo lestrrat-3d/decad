@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -29,7 +30,7 @@ func spiralOffsetToothMesh(ctx context.Context, blank, tooth *Body, original *Me
 		len(src) != len(original.n.Triangles) || len(original.n.Vertices) == 0 ||
 		len(original.n.Vertices) > 1<<16 || len(original.n.Triangles) > 1<<17 ||
 		len(original.n.VertexBound) != len(original.n.Vertices) ||
-		len(original.source) != len(original.n.Triangles) {
+		len(original.n.Source) != len(original.n.Triangles) {
 		return nil, false, nil
 	}
 	p, ok := tooth.n.Payload.(facetedPayload)
@@ -72,18 +73,18 @@ func spiralOffsetToothMesh(ctx context.Context, blank, tooth *Body, original *Me
 		}
 	}
 	if capFacets[0] == 0 || capFacets[1] == 0 ||
-		len(original.faceBound) == 0 {
+		len(original.n.FaceBound) == 0 {
 		return nil, false, nil
 	}
-	next := *original
+	next := bornMesh(&Mesh{n: original.n})
 	next.n.Vertices = append([]r3.Vec(nil), original.n.Vertices...)
 	next.n.VertexBound = append([]float64(nil), original.n.VertexBound...)
-	next.faceBound = make(map[*Face]float64, len(original.faceBound))
-	for face, bound := range original.faceBound {
+	next.n.FaceBound = make(map[*topo.Face]float64, len(original.n.FaceBound))
+	for face, bound := range original.n.FaceBound {
 		if proofbound.IsNonFinite(bound) || bound < 0 {
 			return nil, false, nil
 		}
-		next.faceBound[face] = bound
+		next.n.FaceBound[face] = bound
 	}
 	maxShift := new(big.Rat)
 	moved := 0
@@ -120,7 +121,7 @@ func spiralOffsetToothMesh(ctx context.Context, blank, tooth *Body, original *Me
 	}
 	areaXZ := new(big.Rat)
 	changed := make([][3]int, 0)
-	seenFace := make(map[*Face]bool)
+	seenFace := make(map[*topo.Face]bool)
 	for i, tri := range original.n.Triangles {
 		if move[tri[0]] == 0 && move[tri[1]] == 0 && move[tri[2]] == 0 {
 			continue
@@ -149,13 +150,13 @@ func spiralOffsetToothMesh(ctx context.Context, blank, tooth *Body, original *Me
 			return nil, false, nil
 		}
 		next.n.VertexBound[largest] = max(next.n.VertexBound[largest], required)
-		face := original.source[i]
-		bound, present := original.faceBound[face]
+		face := original.n.Source[i]
+		bound, present := original.n.FaceBound[face]
 		if !present {
 			return nil, false, nil
 		}
 		if !seenFace[face] {
-			next.faceBound[face] = proofbound.AbsSumUpper(bound, maxShiftUp)
+			next.n.FaceBound[face] = proofbound.AbsSumUpper(bound, maxShiftUp)
 			seenFace[face] = true
 		}
 		a, b, c := original.n.Vertices[tri[0]], original.n.Vertices[tri[1]], original.n.Vertices[tri[2]]
@@ -173,7 +174,7 @@ func spiralOffsetToothMesh(ctx context.Context, blank, tooth *Body, original *Me
 		facetproof.MeshAreaUpper(original.n.Vertices, changed),
 		facetproof.MeshAreaUpper(next.n.Vertices, changed))
 	next.n.CoordBound = proofbound.AbsSumUpper(original.n.CoordBound, maxShiftUp)
-	for _, bound := range next.faceBound {
+	for _, bound := range next.n.FaceBound {
 		next.n.Bound = max(next.n.Bound, bound)
 	}
 	if proofbound.IsNonFinite(next.n.VolSymDiff) || proofbound.IsNonFinite(next.n.AreaSlack) ||
@@ -189,5 +190,5 @@ func spiralOffsetToothMesh(ctx context.Context, blank, tooth *Body, original *Me
 	if err := ctx.Err(); err != nil {
 		return nil, false, err
 	}
-	return &next, true, nil
+	return next, true, nil
 }
