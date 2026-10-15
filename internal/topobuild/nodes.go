@@ -75,6 +75,27 @@ func Edges(n *topo.Body) []*topo.Edge {
 	return out
 }
 
+// Vertices returns the nodes of n's vertices, each once, in the order root
+// Body.Vertices returns their handles: each edge of Edges in turn, its start
+// before its end, skipping a nil endpoint.
+func Vertices(n *topo.Body) []*topo.Vertex {
+	seen := map[*topo.Vertex]struct{}{}
+	var out []*topo.Vertex
+	for _, e := range Edges(n) {
+		for _, v := range [2]*topo.Vertex{e.Start, e.End} {
+			if v == nil {
+				continue
+			}
+			if _, ok := seen[v]; ok {
+				continue
+			}
+			seen[v] = struct{}{}
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
 // CoEdgeStart returns the node of the vertex where the use n starts, or nil
 // for a use with no edge: root CoEdge.Start's answer, as a node.
 func CoEdgeStart(n topo.CoEdge) *topo.Vertex {

@@ -40,10 +40,6 @@ The rules for rows live in `docs/layout.md`.
 | `sweep.go` | Generic `Sweep` over a profile or chain, path admission adapters and span payloads. See sweep design. |
 | `sweep_chain_composite.go` | Certified cardinal line/arc chain sheet, indexed rim join, separation and readings. See sweep §15.8. |
 | `sweep_arc_chain.go` | Reduces a one-arc chain Sweep to the authenticated chain Revolve wall. See sweep §15.9. |
-| `sweep_twist.go` | Symmetric Line/Arc twist admission, true-shape readings and source-face area proofs. See sweep §17. |
-| `sweep_twist_local_area.go` | Local absolute wall-area proof for authenticated Line/Arc twist cells and Boolean subsets. See sweep §17.4. |
-| `sweep_twist_stations.go` | Straight-path twist stations, bounded Loft cells and occupied-volume proof. See sweep §§17.3–17.4. |
-| `sweep_twist_composite.go` | Twist Loft cell sewing, source wall roles and mesh proof; cardinal composite path. See sweep §§17.2–17.4. |
 | `sweep_arc.go` | Adapts `internal/sweeparc/` to the one-span `ArcThrough` reduction and Revolve build. See sweep §3. |
 | `sweep_closed_circle.go` | Checks the exact two-arc full-circle path and evaluates its full Revolve reduction. See sweep §3.3. |
 | `sweep_closed_racetrack.go` | Admits exact-turn planar circular-section loops and routes the cyclic span build. See sweep §§3.4–3.5. |
