@@ -75,7 +75,7 @@ S14, S16) and reach SX10 for a `capBlendPayload`. Where the ops today cast to
 receiver payload           → record handed to the brep route
 prismPayload               → prism path, or route E face view for one straight cap edge
 brepPayload                → itself
-stackedPrismPayload        → brepOfStacked(sp); its refusal is SB2
+stackedPrismPayload        → breprecord.OfStacked(sp); its refusal is SB2
 cupPayload, revolve, loft… → unchanged (S3, RX2, …)
 facetedPayload             → SX9, unchanged
 ```
@@ -101,7 +101,7 @@ remains SX16.
 | RB | Receiver | `Fillet` / `Chamfer` | `Shell` |
 |---|---|---|---|
 | **RB1** | `brepPayload`, `sectionDelta() == 0` | route P, else route E (Table EB) or route L (modify-general §4); an asymmetric chamfer skips P | route P, else route S (modify-general §3) |
-| **RB2** | `stackedPrismPayload` whose `brepOfStacked` succeeds (one region per slab, not a group) | as RB1 over the face view; asymmetric references use the source-face role at each record index | as RB1 |
+| **RB2** | `stackedPrismPayload` whose `breprecord.OfStacked` succeeds (one region per slab, not a group) | as RB1 over the face view; asymmetric references use the source-face role at each record index | as RB1 |
 | **RB3** | `brepPayload` or stacked receiver with a section displacement | SB1 | SB1 |
 | **RB4** | `facetedPayload` | reach SX9 (permanent) | reach SX9 |
 
@@ -222,7 +222,7 @@ adjacent faces by its record index. A brep result names that face `face(i)` or
 `wall(i)`; restatement preserves `i`. A stacked face view carries one source
 role per record face: `slab(start).region(region).side(loop,segment)` for a
 wall column, `capStart` or `capEnd` for a cap, and `floor(k,e)` or
-`ceiling(k,e)` for an exposed interface. `brepJoinStacked` changes only
+`ceiling(k,e)` for an exposed interface. `breprecord.joinStacked` changes only
 segment endpoints, so it keeps column and segment indices. A missing or
 ambiguous source role is SX16.
 EB6 then pairs each end-face walk with one adjacent record face. The walk
@@ -380,7 +380,7 @@ Modify §1's test picks every sentinel: a body that does not exist is
 | SB | Call | Exists? | Sentinel |
 |---|---|---|---|
 | **SB1** | a brep or stacked receiver with `sectionDelta() != 0` | yes; its rewrite has no proven displacement | `ErrUnsupported`, naming the displacement as `prismrecord.Payload.RequireExactSection` does |
-| **SB2** | a stacked receiver `brepOfStacked` refuses (a prism group, several regions in one slab; a stack enclosing a cavity, a closed shell) | yes | that call's `ErrUnsupported` |
+| **SB2** | a stacked receiver `breprecord.OfStacked` refuses (a prism group, several regions in one slab; a stack enclosing a cavity, a closed shell) | yes | that call's `ErrUnsupported` |
 | **SB3** | route P reads a prism along some axis, a Shell's removed faces are not its caps, no other axis admits them, and route S reads no through-cut record along any axis (modify-general Table TC) | yes | modify S2, with SG3's reason |
 | **SB4** | route E reading an edge that is not a straight line along a reference axis; only single straight edges reach route E, and every other Fillet or Chamfer selection takes route L (modify-general §4, `docs/loop-fillet-design.md`), which builds a hole rim, a boss root or a cornered loop or refuses with Table SL or SF | — (a falsifier) | `ErrUnsupported` |
 | **SB5** | selected single straight edges share a vertex outside route V's complete-loop or selected-chain fillet (`docs/vertex-blend-design.md` §2); a mixed `Chamfer` still takes SL1 | yes | `ErrUnsupported` (SL1's text) |
@@ -597,13 +597,13 @@ with PR 0.
 
 | PR | Lands | Files and functions | Proves | After |
 |---|---|---|---|---|
-| **0** | the dispatch: `modifyBrepReceiver` in `brep_modify.go` replacing `requireNotBrepReceiver` in `fillet.go`, `chamfer.go`, `shell.go`; the stacked receiver's `brepOfStacked` entry (SB2); SB1; every other brep call still refuses with reach SX16's text | `brep_modify.go`, `brep_payload.go`, `fillet.go`, `chamfer.go`, `shell.go` | SB1, SB2 fixtures; a stacked receiver reaches SB1 rather than SX10; `TestBrepModifyOpsAreStaged` narrowed | — |
+| **0** | the dispatch: `modifyBrepReceiver` in `brep_modify.go` replacing `requireNotBrepReceiver` in `fillet.go`, `chamfer.go`, `shell.go`; the stacked receiver's `breprecord.OfStacked` entry (SB2); SB1; every other brep call still refuses with reach SX16's text | `brep_modify.go`, `internal/breprecord/convert.go`, `fillet.go`, `chamfer.go`, `shell.go` | SB1, SB2 fixtures; a stacked receiver reaches SB1 rather than SX10; `TestBrepModifyOpsAreStaged` narrowed | — |
 | **1** | route P: `recognisePrism` (P1–P5), `brepgeom.AxisFrame`, the re-expression into `F`, cap-face arguments on `classifyChamferSelection` and `classifyRemovedCaps`, SB3 | `brep_modify_prism.go`, `capblend.go`, `shell.go`, `internal/brepgeom/` | §9's five route P fixtures | 0 |
-| **2a** | route E without restatement: Table EB, `brepgeom.BrepCornerAt`, the corner blend in both end faces and SB9, (sw)/(pl) trims, claims and the per-face audit, the blend face and `brepFace.blend`, `brepgeom.MapSegment`, assembly and closure | `brep_modify_edge.go`, `brep_payload.go`, `fillet_audit.go`, `internal/brepgeom/` | S1 `z`-edge fillet, B1 `z`-edge chamfer, Pocket vertical fillets, Boss chamfer, the chaining and SB4/SB5 refusals, the consumer and placement fixtures | 0 |
+| **2a** | route E without restatement: Table EB, `brepgeom.BrepCornerAt`, the corner blend in both end faces and SB9, (sw)/(pl) trims, claims and the per-face audit, the blend face and `brepFace.blend`, `brepgeom.MapSegment`, assembly and closure | `brep_modify_edge.go`, `internal/breprecord/convert.go`, `fillet_audit.go`, `internal/brepgeom/` | S1 `z`-edge fillet, B1 `z`-edge chamfer, Pocket vertical fillets, Boss chamfer, the chaining and SB4/SB5 refusals, the consumer and placement fixtures | 0 |
 | **2b** | restatement: `brepgeom.Restate`, `brepgeom.PlanarFrame`, the whole-call restatement set, EB3/EB4 over restated faces | `brep_modify_edge.go`, `internal/brepgeom/` | Pocket floor-edge fillets, S1 `x`-edge chamfer, SB8 on a split wall | 2a |
 | **2c** | route E's asymmetric reference-face mapping; bypass route P for this option and refuse route L | `brep_modify.go`, `brep_modify_edge.go`, `brep_modify_loop.go`, `chamfer.go` | public boolean body: both reference faces on a vertical edge, restated end faces on a horizontal edge, and route L refusal | 2b |
 | **2d** | route L's asymmetric cap/side assignment and two-distance band | `brep_modify_loop.go`, `brep_loop_band.go` | public rounded, cross-drilled plate: both reference choices, analytic volume, verified mesh | 2c |
-| **2e** | preserve stacked source-face roles in its brep view for asymmetric route E/L references | `brep_payload.go`, `brep_modify.go`, `chamfer.go` | public blind-pocket plate: outer edge and both top-loop reference choices, analytic volumes, verified meshes | 2d |
+| **2e** | preserve stacked source-face roles in its brep view for asymmetric route E/L references | `internal/breprecord/convert.go`, `brep_modify.go`, `chamfer.go` | public blind-pocket plate: outer edge and both top-loop reference choices, analytic volumes, verified meshes | 2d |
 
 PR 1 and PR 2a run in parallel: they share only PR 0's dispatch and add
 disjoint files. PR 2b follows 2a.

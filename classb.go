@@ -127,7 +127,7 @@ func classBFaceView(ctx context.Context, payload topo.Payload) (brepPayload, boo
 		if p.SurfaceResult {
 			return brepPayload{}, false, nil
 		}
-		bp, err := brepOfPrism(p)
+		bp, err := breprecord.OfPrism(p)
 		return bp, err == nil, err
 	case stackedPrismPayload:
 		if p.IsGroup() {
@@ -136,7 +136,7 @@ func classBFaceView(ctx context.Context, payload topo.Payload) (brepPayload, boo
 		if len(p.OuterRuns()) != 1 {
 			return brepPayload{}, false, nil
 		}
-		bp, err := brepOfStacked(ctx, p)
+		bp, err := breprecord.OfStacked(ctx, p)
 		if err != nil {
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return brepPayload{}, false, ctxErr

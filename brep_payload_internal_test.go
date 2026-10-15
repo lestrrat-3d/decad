@@ -22,9 +22,9 @@ func internalBrepBody(t *testing.T, src *Body) *Body {
 	var err error
 	switch p := src.n.Payload.(type) {
 	case prismPayload:
-		bp, err = brepOfPrism(p)
+		bp, err = breprecord.OfPrism(p)
 	case stackedPrismPayload:
-		bp, err = brepOfStacked(t.Context(), p)
+		bp, err = breprecord.OfStacked(t.Context(), p)
 	default:
 		t.Fatalf("no face view for %T", src.n.Payload)
 	}
@@ -644,7 +644,7 @@ func TestBrepFaceViewJoinsACrossingBuiltPrism(t *testing.T) {
 	require.True(t, ok)
 	// The premise: the cut's two fragments walk to their shared corner at
 	// two different floats.
-	joined, _, err := brepJoinProfile(pp.Profile)
+	joined, _, err := breprecord.JoinProfile(pp.Profile)
 	require.NoError(t, err)
 	require.NotEqual(t, pp.Profile, joined)
 	brep := internalBrepBody(t, prism)
@@ -680,7 +680,7 @@ func TestBrepCoordinateEnvelopeReadsArcsTightly(t *testing.T) {
 	require.NoError(t, err)
 	prism, err := Extrude(t.Context(), New(), s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
 	require.NoError(t, err)
-	bp, err := brepOfPrism(prism.n.Payload.(prismPayload))
+	bp, err := breprecord.OfPrism(prism.n.Payload.(prismPayload))
 	require.NoError(t, err)
 	btopo, err := breprecord.TopologyContext(t.Context(), bp)
 	require.NoError(t, err)

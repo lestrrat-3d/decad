@@ -15,7 +15,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/stackedbrep"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
-	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -190,7 +189,7 @@ func (b *ubBuild) run(ctx context.Context) (brepPayload, error) {
 	for i, level := range b.levels {
 		faceLevels[i] = stackedbrep.Level{Held: level.Held, Delta: level.Delta}
 	}
-	out, err := stackedBrepRecord(ctx, b.st.budget, b.geom, faceLevels, b.st.va.proxy.Frame, b.st.va.proxy.Xform, delta)
+	out, err := breprecord.StackedRecord(ctx, b.st.budget, b.geom, faceLevels, b.st.va.proxy.Frame, b.st.va.proxy.Xform, delta)
 	if err != nil {
 		return brepPayload{}, err
 	}
@@ -579,49 +578,4 @@ func (b *ubBuild) interfaceFaces(ctx context.Context, k int) error {
 		}
 	}
 	return nil
-}
-
-// stackedBrepRecord states an engine's slabs and horizontal faces as a
-// brepPayload in reference frame ref under xform, every face carrying the
-// section displacement delta: the horizontal faces, every curved or oblique
-// wall piece (stackedbrep.Engine.sweptFaces) and every axis-aligned wall plane
-// (stackedbrep.Engine.wallFaces). Each planar face record then faces modify §5's audit
-// (simplicity, orientation and nesting; general-boolean §5), roles are
-// assigned, and the record must close by counting (§4.2). geom has read
-// every slab loop and horizontal face and recorded its junctions. A topology
-// the engine does not cover is brepgeom.ErrStackedWallMiss.
-func stackedBrepRecord(ctx context.Context, budget *proofbound.WorkBudget, geom *stackedbrep.Engine, levels []stackedbrep.Level, ref r3.Frame, xform r3.Transform, delta float64) (brepPayload, error) {
-	faces, err := geom.AssembleFaces(levels, ref, delta)
-	if err != nil {
-		return brepPayload{}, err
-	}
-	out := brepPayload{Xform: xform}
-	for _, f := range faces {
-		var region *profileRecord
-		if f.Region != nil {
-			p := profileRecord{Outer: f.Region.Outer, Holes: f.Region.Holes}
-			region = &p
-		}
-		out.Faces = append(out.Faces, brepFace{
-			Frame: f.Frame, Region: region, Outward: f.Outward, Sweep: f.Sweep, Wall: f.Wall,
-			Z0: f.Z0, Z1: f.Z1, Z0Delta: f.Z0Delta, Z1Delta: f.Z1Delta,
-			Side0: f.Side0, Side1: f.Side1, Delta: f.Delta,
-		})
-	}
-	// Modify §5's audit per planar face record (general-boolean §5):
-	// simplicity, orientation and nesting. It refuses; it admits nothing.
-	for _, f := range out.Faces {
-		if f.Region == nil {
-			continue
-		}
-		if err := prismcells.AuditMergeSection(budget, prismrecord.Payload{Profile: *f.Region}, *f.Region); err != nil {
-			return brepPayload{}, err
-		}
-	}
-	out.AssignRoles()
-	// The record must close by counting (§4.2).
-	if _, err := breprecord.TopologyContext(ctx, out); err != nil {
-		return brepPayload{}, err
-	}
-	return out, nil
 }

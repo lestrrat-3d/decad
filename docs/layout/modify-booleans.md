@@ -32,7 +32,7 @@ The rules for rows live in `docs/layout.md`.
 | `shell_offset.go` | Binds `internal/offset2d/`'s section offset and its displacement to `shellTol`. See modify §7–§9. |
 | `shell_revolve.go` | `Shell` of a revolve. See modify-reach §9.3. |
 | `shell_opening.go` | Prism and straight Sweep side openings: classify removed faces and dispatch the audited region build. See shell-opening §3–§5. |
-| `shell_opening_brep.go` | Records a prism side opening from the section or stack engine. See shell-opening §4. |
+| `shell_opening_brep.go` | Records a prism side opening whose caps are both removed; `breprecord` records the stacked case. See shell-opening §4. |
 | `shell_stacked_boss.go` | Admits and records the exact two-slab rectangular-boss shell; `breprecord` builds and measures it. See modify-general §3.1a. |
 | `shell_prism_union_boss.go` | Authenticates a nested rectangular boss in a faceted Union and builds its bounded inward cup. See shell-faceted-boss design. |
 | `shell_round_boss.go` | Admits and records the exact two-slab circular-boss shell; `breprecord` builds and measures it. See modify-general §3.1c. |

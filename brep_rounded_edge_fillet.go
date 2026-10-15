@@ -4,14 +4,14 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/breprecord"
+
 	"github.com/lestrrat-3d/decad/internal/capedge"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
-	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
-	"github.com/lestrrat-3d/units"
 )
 
 // tryRoundedBrepCapEdgeFillet handles the documented P8 source whose front
@@ -25,7 +25,7 @@ import (
 // occupied volume, and closure before the caller's body is retired.
 func tryRoundedBrepCapEdgeFillet(ctx context.Context, body *Body, bp brepPayload,
 	edges []*Edge, radius, radiusDelta float64) (*Body, bool, error) {
-	if !p8QuarterRadius(radius) || radiusDelta != 0 || len(edges) != 1 || !isP8RoundedBrep(bp) {
+	if !p8QuarterRadius(radius) || radiusDelta != 0 || len(edges) != 1 || !breprecord.IsP8Rounded(bp) {
 		return nil, false, nil
 	}
 	edge := edges[0]
@@ -78,62 +78,4 @@ func p8QuarterRadius(radius float64) bool {
 	default:
 		return false
 	}
-}
-
-// isP8RoundedBrep compares every stored field, including segment domains,
-// displacements, placement, and Boolean trim loops. It accepts only the
-// exact 40x20x20 radius-3 plate with one centered y-through radius-3 bore.
-// A future wider route needs its own source and clearance proof.
-func isP8RoundedBrep(bp brepPayload) bool {
-	want, ok := p8RoundedBrepRecord()
-	return ok && sectionrecord.IdenticalRecord(bp, want)
-}
-
-func p8RoundedBrepRecord() (brepPayload, bool) {
-	xy, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
-	if err != nil {
-		return brepPayload{}, false
-	}
-	xz, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 0, 1))
-	if err != nil {
-		return brepPayload{}, false
-	}
-	point := func(u, v float64) planePoint { return planePoint{U: u, V: v} }
-	line := func(x0, y0, x1, y1 float64) curveSegment {
-		return lineSeg{Start: point(x0, y0), End: point(x1, y1), TEnd: 1}
-	}
-	arc := func(cx, cy, x0, y0, x1, y1 float64) curveSegment {
-		return arcSeg{Center: point(cx, cy), Start: point(x0, y0), End: point(x1, y1), TEnd: 1}
-	}
-	outer := loopRecord{Segments: []curveSegment{
-		line(3, 0, 37, 0), arc(37, 3, 37, 0, 40, 3),
-		line(40, 3, 40, 17), arc(37, 17, 40, 17, 37, 20),
-		line(37, 20, 3, 20), arc(3, 17, 3, 20, 0, 17),
-		line(0, 17, 0, 3), arc(3, 3, 0, 3, 3, 0),
-	}}
-	hole := circleSeg{Center: point(20, 10), Radius: units.Millimeters(3), TStart: 1}
-	front := profileRecord{Outer: loopRecord{Segments: []curveSegment{
-		line(3, 0, 37, 0), line(37, 0, 37, 20),
-		line(37, 20, 3, 20), line(3, 20, 3, 0),
-	}}, Holes: []loopRecord{{Segments: []curveSegment{hole}}}}
-	back := profileRecord{Outer: loopRecord{Segments: []curveSegment{
-		line(37, 0, 37, 20), line(37, 20, 3, 20),
-		line(3, 20, 3, 0), line(3, 0, 37, 0),
-	}}, Holes: []loopRecord{{Segments: []curveSegment{hole}}}}
-	faces := []brepFace{
-		{Frame: xy, Wall: outer.Segments[1], Z1: 20},
-		{Frame: xy, Wall: outer.Segments[2], Z1: 20},
-		{Frame: xy, Wall: outer.Segments[3], Z1: 20},
-		{Frame: xy, Wall: outer.Segments[5], Z1: 20},
-		{Frame: xy, Wall: outer.Segments[6], Z1: 20},
-		{Frame: xy, Wall: outer.Segments[7], Z1: 20},
-		{Frame: xy, Region: &profileRecord{Outer: outer}},
-		{Frame: xy, Region: &profileRecord{Outer: outer}, Outward: true, Z0: 20, Z1: 20},
-		{Frame: xz, Region: &back, Sweep: r3.NewVec(0, 0, 1), Z0: -20, Z1: -20},
-		{Frame: xz, Region: &front, Outward: true, Sweep: r3.NewVec(0, 0, 1)},
-		{Frame: xz, Wall: hole, Z0: -20},
-	}
-	want := brepPayload{Faces: faces, Xform: r3.Identity()}
-	want.AssignRoles()
-	return want, true
 }

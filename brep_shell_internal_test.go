@@ -671,7 +671,7 @@ func TestBrepShellThroughCutRefusals(t *testing.T) {
 		plate, boss := internalBossOnPlate(t, 0, 10, 15)
 		p3, err := Union(t.Context(), plate, boss)
 		require.NoError(t, err)
-		bp, err := brepOfStacked(t.Context(), p3.n.Payload.(stackedPrismPayload))
+		bp, err := breprecord.OfStacked(t.Context(), p3.n.Payload.(stackedPrismPayload))
 		require.NoError(t, err)
 		third := shellRecordRole(t, bp, 2, 10)
 		refuses(t, p3, Faces(Facing(shellUp.Scale(-1))).Exactly(1), mm2, nil, "modify-general SG3", third+" is a third planar face")

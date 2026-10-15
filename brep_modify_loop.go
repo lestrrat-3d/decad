@@ -467,11 +467,11 @@ func newBrepLoopRead(ctx context.Context, bp brepPayload, call brepModifyRequest
 // of cap edges (RF3) or a Chamfer of one straight cap edge. Route E, L or V
 // builds the selection or returns its specific refusal.
 func prismFaceViewBlend(ctx context.Context, d *Document, pp prismPayload, call brepModifyRequest) (*Body, error) {
-	bp, sourceRoles, err := brepOfPrismWithRoles(pp)
+	bp, sourceRoles, err := breprecord.OfPrismWithRoles(pp)
 	if err != nil {
 		return nil, err
 	}
-	if err := requireExactBrepSection(bp, call.op); err != nil {
+	if err := breprecord.RequireExactSection(bp, call.op); err != nil {
 		return nil, err
 	}
 	if call.asym != nil {

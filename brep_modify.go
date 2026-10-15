@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/breprecord"
+
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
@@ -94,7 +96,7 @@ func modifyBrepReceiver(ctx context.Context, b *Body, req brepModifyRequest) (br
 	if err != nil || !ok {
 		return brepRoute{}, err
 	}
-	if err := requireExactBrepSection(bp, req.op); err != nil {
+	if err := breprecord.RequireExactSection(bp, req.op); err != nil {
 		return brepRoute{}, err
 	}
 	if req.asym != nil {
@@ -172,9 +174,9 @@ func commitModifyResult(ctx context.Context, b, body *Body) (*Body, error) {
 
 // brepModifyRecord is brep-modify §2's dispatch table: a brepPayload is
 // handed over as itself, and a stackedPrismPayload as its face view
-// (brepOfStacked). The second result is false for every other payload, which
+// (breprecord.OfStacked). The second result is false for every other payload, which
 // the brep route does not take. A stacked receiver with no face view (a
-// prism group, or a record its own audit refuses) is SB2: brepOfStacked's
+// prism group, or a record its own audit refuses) is SB2: breprecord.OfStacked's
 // error, naming the op.
 func brepModifyRecord(ctx context.Context, payload topo.Payload, op string) (brepPayload, []string, bool, error) {
 	switch p := payload.(type) {
@@ -184,7 +186,7 @@ func brepModifyRecord(ctx context.Context, payload topo.Payload, op string) (bre
 		}
 		return p, nil, true, nil
 	case stackedPrismPayload:
-		bp, sourceRoles, err := brepOfStackedWithRoles(ctx, p)
+		bp, sourceRoles, err := breprecord.OfStackedWithRoles(ctx, p)
 		if err == nil {
 			return bp, sourceRoles, true, nil
 		}
@@ -195,22 +197,4 @@ func brepModifyRecord(ctx context.Context, payload topo.Payload, op string) (bre
 	default:
 		return brepPayload{}, nil, false, nil
 	}
-}
-
-// requireExactBrepSection is brep-modify SB1 (Table RB's RB3): a brep or
-// stacked receiver whose record carries a section displacement on any face is
-// ErrUnsupported, naming the displacement. It is prismrecord.Payload.RequireExactSection's rule
-// over the whole record: a rewrite of a record that denotes its body only to
-// within a displacement has no proven displacement of its own. Level
-// displacements (z0Delta/z1Delta) are not read; no brep-modify construction
-// moves a level.
-func requireExactBrepSection(bp brepPayload, op string) error {
-	delta := bp.SectionDelta()
-	if delta == 0 {
-		return nil
-	}
-	return fmt.Errorf(
-		`%w: this evaluator %s a brep or stacked receiver whose recorded faces are the faces it denotes only; this body's faces carry a proven section displacement of %g mm from the ones its construction denotes (brep-modify SB1)`,
-		ErrUnsupported, op, delta,
-	)
 }

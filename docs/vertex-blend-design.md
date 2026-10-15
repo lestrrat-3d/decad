@@ -114,7 +114,7 @@ terminal arc is pinned to the cap contour's endpoint, including at a hole
 mouth where the cap contour moves away from the hole.
 
 The straight-edge set runs through route E (`brepBlendEdges`). A prism is
-read through `brepOfPrism` first; a single straight prism cap edge also
+read through `breprecord.OfPrism` first; a single straight prism cap edge also
 uses route E for a chamfer. Its two end-face corners take straight chords,
 the cap and side faces end at the chords' feet, and a planar bevel closes
 them. Route E keeps face and loop indices. A new route L reading
