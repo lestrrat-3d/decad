@@ -17,7 +17,7 @@ func TestTessellateRefusalNamesChainRevolvePayload(t *testing.T) {
 	require.NoError(t, err)
 	_, err = body.Tessellate(t.Context(), units.Millimeters(0.5))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Contains(t, err.Error(), "tessellation does not support payload decad.chainRevolvePayload;")
+	require.Equal(t, refusalText("decad.chainRevolvePayload"), err.Error())
 }
 
 // TestTessellateRefusalNamesChainLoftPayload pins the payload class the
@@ -32,5 +32,12 @@ func TestTessellateRefusalNamesChainLoftPayload(t *testing.T) {
 	require.NoError(t, err)
 	_, err = body.Tessellate(t.Context(), units.Millimeters(0.5))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Contains(t, err.Error(), "tessellation does not support payload decad.chainLoftPayload;")
+	require.Equal(t, refusalText("decad.chainLoftPayload"), err.Error())
+}
+
+// refusalText is the complete unsupported-payload message for a payload class.
+func refusalText(class string) string {
+	return "decad: not supported by the current evaluator: tessellation does not support payload " + class +
+		"; supported payload classes are prism, patch, stacked prism, brep, chain-fed prism, sweep, mitred sweep, " +
+		"coil, revolve, cup, loft, cap-loop chamfer, draft (tapered extrude), stitch, and faceted"
 }

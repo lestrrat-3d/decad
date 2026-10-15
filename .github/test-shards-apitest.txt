@@ -2099,3 +2099,5 @@
 10	0.00	TestBrepAdjacentBossRootChamferAddsCornerMaterial
 10	0.00	TestBrepAdjacentUnderBossRootChamferAddsCornerMaterial
 10	0.00	TestMeshSourceFacesAreTheBodyFaces
+10	0.00	TestTessellateRefusalNamesChainRevolvePayload
+10	0.00	TestTessellateRefusalNamesChainLoftPayload
