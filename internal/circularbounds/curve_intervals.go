@@ -544,8 +544,17 @@ func circularOffsetEndpointInterval(seg CurveSegment, rt, radiusOffset *big.Rat)
 // have sine and cosine 0 or ±1 exactly, which no series can improve on and a
 // series would only widen. Every other turn goes to proofbound.TurnSinCosInterval.
 func quarterTurnSinCos(t *big.Rat) (proofbound.RatInterval, proofbound.RatInterval) {
+	return quarterTurnSinCosWithMemo(t, nil)
+}
+
+func quarterTurnSinCosWithMemo(t *big.Rat, memo *proofbound.TurnTrigMemo) (
+	proofbound.RatInterval, proofbound.RatInterval,
+) {
 	quadrants := new(big.Rat).Mul(t, big.NewRat(4, 1))
 	if !quadrants.IsInt() {
+		if memo != nil {
+			return memo.SinCos(t)
+		}
 		return proofbound.TurnSinCosInterval(t)
 	}
 	zero, one := new(big.Rat), big.NewRat(1, 1)

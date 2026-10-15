@@ -323,6 +323,10 @@ func sharedCircleStationChains(a, b LoftCircularSide, m int) (
 		a.TStart.Cmp(b.TStart) != 0 || a.DT.Cmp(b.DT) != 0 || !ba.endpoint.CanShareCircleTurn(bb.endpoint) {
 		return nil, nil, 0, 0, false
 	}
+	var trigMemo *proofbound.TurnTrigMemo
+	if sharedCircleMemoEligible(a.TStart, a.DT, m) {
+		trigMemo = proofbound.NewTurnTrigMemo()
+	}
 	pts0, pts1 := make([]LoftStation, m), make([]LoftStation, m)
 	pts0[0] = LoftStation{U: a.Walk.StartU, V: a.Walk.StartV}
 	pts1[0] = LoftStation{U: b.Walk.StartU, V: b.Walk.StartV}
@@ -339,11 +343,21 @@ func sharedCircleStationChains(a, b LoftCircularSide, m int) (
 		sin1, cos1 := math.Sincos(theta1)
 		pts1[k] = LoftStation{U: b.Walk.CU + b.Walk.Radius*cos1, V: b.Walk.CV + b.Walk.Radius*sin1}
 		tk := new(big.Rat).Add(a.TStart, new(big.Rat).Mul(big.NewRat(int64(k), int64(m)), a.DT))
-		bound0, bound1 := ba.sharedCircleBoundsAt(bb, tk, pts0[k].U, pts0[k].V, pts1[k].U, pts1[k].V)
+		bound0, bound1 := ba.sharedCircleBoundsAt(bb, tk, pts0[k].U, pts0[k].V, pts1[k].U, pts1[k].V, trigMemo)
 		d0 = math.Max(d0, WalkEndPlaneDelta(bound0))
 		d1 = math.Max(d1, WalkEndPlaneDelta(bound1))
 	}
 	return pts0, pts1, d0, d1, true
+}
+
+// sharedCircleMemoEligible limits per-walk memo storage to exact full turns
+// with enough interior stations to reuse first-octant residuals.
+func sharedCircleMemoEligible(start, span *big.Rat, m int) bool {
+	if m < 32 {
+		return false
+	}
+	return start.Sign() == 0 && span.Cmp(big.NewRat(1, 1)) == 0 ||
+		start.Cmp(big.NewRat(1, 1)) == 0 && span.Cmp(big.NewRat(-1, 1)) == 0
 }
 
 // LoftCircularCellStations is the circular arm. It settles the pair's shared

@@ -3,6 +3,7 @@ package loftmesh
 import (
 	"fmt"
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
@@ -95,7 +96,7 @@ func TestCircularCellStationsMatchIndependentWalkReference(t *testing.T) {
 			requireSameCircleChainBits(t, got0, want0, gotRound, wantRound)
 			requireSameCircleChainBits(t, got1, want1, gotRound, wantRound)
 			require.Equal(t, math.Float64bits(wantSagitta), math.Float64bits(gotSagitta))
-			require.Len(t, gotMatched, len(wantMatched))
+			require.Equal(t, len(wantMatched), len(gotMatched))
 			for i := range wantMatched {
 				require.Equal(t, math.Float64bits(wantMatched[i]), math.Float64bits(gotMatched[i]))
 			}
@@ -105,7 +106,7 @@ func TestCircularCellStationsMatchIndependentWalkReference(t *testing.T) {
 
 func requireSameCircleChainBits(t *testing.T, got, want []LoftStation, gotDelta, wantDelta float64) {
 	t.Helper()
-	require.Len(t, got, len(want))
+	require.Equal(t, len(want), len(got))
 	for k := range want {
 		require.Equal(t, math.Float64bits(want[k].U), math.Float64bits(got[k].U), "station %d U", k)
 		require.Equal(t, math.Float64bits(want[k].V), math.Float64bits(got[k].V), "station %d V", k)
@@ -130,9 +131,13 @@ func TestSharedCircleStationChainsMatchIndependentRecordedWalks(t *testing.T) {
 			b := recordedCircleSide(t, 5, -7, math.Nextafter(1, 2), tc.start, tc.end, tc.ccw)
 			startA, spanA := a.TStart.RatString(), a.DT.RatString()
 			startB, spanB := b.TStart.RatString(), b.DT.RatString()
-			for _, m := range []int{7, 32} {
+			counts := []int{7, 32}
+			if tc.name == "full forward" || tc.name == "full reverse" {
+				counts = []int{7, 31, 32, 281, 345}
+			}
+			for _, m := range counts {
 				got0, got1, d0, d1, shared := sharedCircleStationChains(a, b, m)
-				require.True(t, shared)
+				require.True(t, shared, "m=%d", m)
 				want0, oldD0 := LoftCircularStationChain(a, m)
 				want1, oldD1 := LoftCircularStationChain(b, m)
 				requireSameCircleChainBits(t, got0, want0, d0, oldD0)
@@ -142,6 +147,30 @@ func TestSharedCircleStationChainsMatchIndependentRecordedWalks(t *testing.T) {
 			require.Equal(t, spanA, a.DT.RatString())
 			require.Equal(t, startB, b.TStart.RatString())
 			require.Equal(t, spanB, b.DT.RatString())
+		})
+	}
+}
+
+func TestSharedCircleMemoEligibility(t *testing.T) {
+	negativeZero := new(big.Rat).SetFloat64(math.Copysign(0, -1))
+	require.NotNil(t, negativeZero)
+	for _, tc := range []struct {
+		name        string
+		start, span *big.Rat
+		m           int
+		want        bool
+	}{
+		{"forward below threshold", big.NewRat(0, 1), big.NewRat(1, 1), 31, false},
+		{"forward at threshold", big.NewRat(0, 1), big.NewRat(1, 1), 32, true},
+		{"odd forward", big.NewRat(0, 1), big.NewRat(1, 1), 281, true},
+		{"odd reverse", big.NewRat(1, 1), big.NewRat(-1, 1), 345, true},
+		{"negative zero start", negativeZero, big.NewRat(1, 1), 32, true},
+		{"partial", big.NewRat(0, 1), big.NewRat(1, 2), 345, false},
+		{"shifted", big.NewRat(1, 4), big.NewRat(1, 1), 345, false},
+		{"reverse without full turn", big.NewRat(1, 1), big.NewRat(-1, 2), 345, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, sharedCircleMemoEligible(tc.start, tc.span, tc.m))
 		})
 	}
 }
@@ -160,4 +189,7 @@ func TestSharedCircleStationChainsKeepIndependentFallbacks(t *testing.T) {
 	b.RangeOK = false
 	_, _, _, _, shared = sharedCircleStationChains(a, b, 7) //nolint:dogsled // This case checks only the fallback choice.
 	require.False(t, shared, "an underivable range retains its old refusal path")
+	b.TStart, b.DT = nil, nil
+	_, _, _, _, shared = sharedCircleStationChains(a, b, 345) //nolint:dogsled // The invalid range must return before its parameters are read.
+	require.False(t, shared, "invalid scalars must not enter the memo path")
 }
