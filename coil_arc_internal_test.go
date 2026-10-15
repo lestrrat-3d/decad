@@ -168,7 +168,7 @@ func TestCoilRoundWireSpring(t *testing.T) {
 		for _, gap := range []float64{lo.X - box.Min.X, lo.Y - box.Min.Y, lo.Z - box.Min.Z, box.Max.X - hi.X, box.Max.Y - hi.Y, box.Max.Z - hi.Z} {
 			require.LessOrEqual(t, gap, bound)
 		}
-		require.LessOrEqual(t, b.n.Payload.(coilPayload).delta, box.Bound.Base())
+		require.LessOrEqual(t, b.n.Payload.(coilPayload).Delta, box.Bound.Base())
 	})
 	t.Run("verify is sound", func(t *testing.T) {
 		rep, err := doc.Verify(t.Context())
@@ -231,7 +231,7 @@ func TestCoilSlotSpring(t *testing.T) {
 		mid := c.Center.Add(c.Axis.Cross(a))
 		require.InDelta(t, 0.4, mid.Sub(c.Center).Len(), 1e-12)
 		d := math.Inf(1)
-		for _, v := range b.n.Payload.(coilPayload).verts {
+		for _, v := range b.n.Payload.(coilPayload).Verts {
 			d = math.Min(d, v.Sub(mid).Len())
 		}
 		require.Less(t, d, 1e-9, "the counter-clockwise quarter point is a held station")
@@ -328,7 +328,7 @@ func TestCoilArcFacetBoundHoldsTheSurface(t *testing.T) {
 			b, err := Coil(t.Context(), New(), s, p, coilAxisV, units.Millimeters(3), units.Scalar(c.turns))
 			require.NoError(t, err)
 			cp := b.n.Payload.(coilPayload)
-			rec, err := coilRecordOfPayload(cp)
+			rec, err := cp.Record()
 			require.NoError(t, err)
 			stride, n := len(rec.Pts), rec.N
 			idx := rec.LoopIdx[0]
@@ -380,10 +380,10 @@ func TestCoilArcFacetBoundHoldsTheSurface(t *testing.T) {
 					corners := []int{int(j)*stride + v, int(j)*stride + w, int(j+1)*stride + v, int(j+1)*stride + w}
 					facet := 0.0
 					for _, q := range corners {
-						facet = math.Max(facet, cp.vertexBound[q])
+						facet = math.Max(facet, cp.VertexBound[q])
 					}
 					cell := 2 * (int(j)*stride + kk)
-					tris := [][3]int{cp.tris[cell], cp.tris[cell+1]}
+					tris := [][3]int{cp.Tris[cell], cp.Tris[cell+1]}
 					for _, l := range []float64{0, 0.25, 0.5, 0.75, 1} {
 						rho, zeta := along(v, w, l)
 						for _, sf := range []float64{0, 0.2, 0.5, 0.8, 1} {
@@ -391,7 +391,7 @@ func TestCoilArcFacetBoundHoldsTheSurface(t *testing.T) {
 							q := r3.NewVec(rho*math.Cos(th), zeta+k*th, -rho*math.Sin(th))
 							d := math.Inf(1)
 							for _, tri := range tris {
-								d = math.Min(d, closestOnTriangle(q, cp.verts[tri[0]], cp.verts[tri[1]], cp.verts[tri[2]]))
+								d = math.Min(d, closestOnTriangle(q, cp.Verts[tri[0]], cp.Verts[tri[1]], cp.Verts[tri[2]]))
 							}
 							require.LessOrEqual(t, d, facet+1e-12, "cell %d of chord %d at (%v, %v)", j, v, l, sf)
 							worst = math.Max(worst, d/facet)

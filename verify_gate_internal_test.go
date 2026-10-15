@@ -735,6 +735,6 @@ func TestPairGateDiameterReadsCoilStations(t *testing.T) {
 
 	d, err := interferencePairDiameter(t.Context(), spring, cube)
 	require.NoError(t, err)
-	floor := math.Hypot(6, 3.25) - 2*spring.n.Payload.(coilPayload).maxRound - 1e-12
+	floor := math.Hypot(6, 3.25) - 2*spring.n.Payload.(coilPayload).MaxRound - 1e-12
 	requireGateDiameterWithin(t, d, floor, big.NewRat(52, 1))
 }

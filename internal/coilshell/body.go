@@ -1,4 +1,4 @@
-package decad
+package coilshell
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/coil"
-	"github.com/lestrrat-3d/decad/internal/coilshell"
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -25,32 +25,17 @@ import (
 // is ONE Faceted face per profile segment spanning every turn, bounded by two
 // rim edges and two helix edges.
 
-// coilRecordOfPayload supplies the resolved axis and recorded sweep to the shell builder.
-func coilRecordOfPayload(cp coilPayload) (coilshell.Record, error) {
-	return coilshell.Read(coilshell.Input{
-		Profile: cp.profile, Frame: cp.frame, Transform: cp.xform,
-		Axis: coilshell.AxisInput{
-			AU: cp.line.AU, AV: cp.line.AV, AUBound: cp.line.AUBound, AVBound: cp.line.AVBound,
-			DU: cp.line.DU, DV: cp.line.DV, DUBound: cp.line.DUBound, DVBound: cp.line.DVBound,
-			Side: cp.side,
-		},
-		Pitch: cp.pitch, Turns: cp.turns, LeftHand: cp.leftHand,
-		StationsPerTurn: coilStationsPerTurn, MaxStations: maxCoilStations,
-		ArcChordsPerTurn: coilArcChordsPerTurn,
-	})
-}
-
-// evalCoil builds the body for one payload record. The first build and
+// BuildBody builds the body for one payload record. The first build and
 // every placement run it.
-func evalCoil(ctx context.Context, d *Document, ref producerID, cp coilPayload) (*Body, error) {
+func BuildBody(ctx context.Context, env topo.Env, cp Payload) (*topo.Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	rec, err := coilRecordOfPayload(cp)
+	rec, err := cp.Record()
 	if err != nil {
 		return nil, err
 	}
-	sh, err := coilshell.Build(ctx, rec)
+	sh, err := Build(ctx, rec)
 	if err != nil {
 		return nil, err
 	}
@@ -58,27 +43,35 @@ func evalCoil(ctx context.Context, d *Document, ref producerID, cp coilPayload) 
 	if err != nil {
 		return nil, err
 	}
-	walls, err := coilshell.WallAreas(ctx, rec)
+	walls, err := WallAreas(ctx, rec)
 	if err != nil {
 		return nil, err
 	}
 
-	body := bornBody(&Body{n: topo.Body{Solid: true, Origin: provenance.Ref{Producer: ref, Role: provenance.RoleBody}, Kind: topo.BodySolid, Doc: documentNode(d)}})
-	faces, err := buildCoilTopology(ctx, body, ref, rec, sh, m.Area, walls)
+	body := env.Alloc.NewBody()
+	body.Solid = true
+	body.Origin = provenance.Ref{Producer: env.Ref, Role: provenance.RoleBody}
+	body.Kind = topo.BodySolid
+	body.Doc = env.Doc
+	faces, err := buildCoilTopology(ctx, env, body, rec, sh, m.Area, walls)
 	if err != nil {
 		return nil, err
 	}
-	if err := topobuild.AttachFaceLoops(ctx, faceNodes(faces)); err != nil {
+	if err := topobuild.AttachFaceLoops(ctx, faces); err != nil {
 		return nil, err
 	}
-	body.n.Lumps = []*topo.Lump{lumpNode(bornLump(&Lump{n: topo.Lump{Shells: []*topo.FaceShell{faceShellNode(bornFaceShell(&FaceShell{n: topo.FaceShell{Faces: faceNodes(faces)}}))}}}))}
+	shell := env.Alloc.NewFaceShell()
+	shell.Faces = faces
+	lump := env.Alloc.NewLump()
+	lump.Shells = []*topo.FaceShell{shell}
+	body.Lumps = []*topo.Lump{lump}
 
 	if err := publishCoilReadings(body, rec, sh, m, walls); err != nil {
 		return nil, err
 	}
 
-	cp.verts, cp.vertexBound, cp.tris, cp.delta, cp.maxRound = sh.Verts, sh.VertexBound, sh.Tris, sh.Delta, sh.MaxRound
-	body.n.Payload = cp
+	cp.Verts, cp.VertexBound, cp.Tris, cp.Delta, cp.MaxRound = sh.Verts, sh.VertexBound, sh.Tris, sh.Delta, sh.MaxRound
+	body.Payload = cp
 	return body, nil
 }
 
@@ -87,12 +80,12 @@ func evalCoil(ctx context.Context, d *Document, ref producerID, cp coilPayload) 
 // (coil.RegionMoments). A profile with an arc reads the recorded region's
 // plane-origin integrals, the ones Revolve reads, each enclosed by its own
 // proven bound, re-referenced into the axis frame over intervals.
-func coilMoments(ctx context.Context, cp coilPayload, rec coilshell.Record) (coil.Moments, error) {
+func coilMoments(ctx context.Context, cp Payload, rec Record) (coil.Moments, error) {
 	if !rec.Profile.HasArcs() {
 		area := coil.PolygonArea(rec.U, rec.V, rec.LoopIdx)
 		return coil.RegionMoments(rec.Rho, rec.Zeta, rec.LoopIdx, area, rec.Axis.Side), nil
 	}
-	ig, err := cp.profile.EvaluatorIntegralsContext(ctx, freeform.MomentSecondOrder, freeform.NewFreeformWork())
+	ig, err := cp.Profile.EvaluatorIntegralsContext(ctx, freeform.MomentSecondOrder, freeform.NewFreeformWork())
 	if err != nil {
 		return coil.Moments{}, err
 	}
@@ -110,7 +103,7 @@ func coilMoments(ctx context.Context, cp coilPayload, rec coilshell.Record) (coi
 	} {
 		iv, ok := coil.Measured(f.value, f.bound)
 		if !ok {
-			return coil.Moments{}, fmt.Errorf(`%w: the coil profile's region integrals are not finite`, ErrUnsupported)
+			return coil.Moments{}, fmt.Errorf(`%w: the coil profile's region integrals are not finite`, decaderr.ErrUnsupported)
 		}
 		*f.dst = iv
 	}
@@ -121,12 +114,12 @@ func coilMoments(ctx context.Context, cp coilPayload, rec coilshell.Record) (coi
 // closed form; Area = 2·A_Ω plus every wall's enclosure, widened by L's
 // defect; Bounds over the held table widened by δ. Each closed form is an
 // exact enclosure rounded once.
-func publishCoilReadings(body *Body, rec coilshell.Record, sh coilshell.Shell, m coil.Moments, walls []coil.Iv) error {
-	vol, volBound, err := coilshell.Held(coilshell.Volume(rec, m), "volume")
+func publishCoilReadings(body *topo.Body, rec Record, sh Shell, m coil.Moments, walls []coil.Iv) error {
+	vol, volBound, err := Held(Volume(rec, m), "volume")
 	if err != nil {
 		return err
 	}
-	body.n.Volume = measurement.Measurement{
+	body.Volume = measurement.Measurement{
 		Value:     units.CubicMillimeters(vol),
 		Exactness: measurement.ExactnessOf(volBound),
 		Bound:     units.CubicMillimeters(volBound),
@@ -134,7 +127,7 @@ func publishCoilReadings(body *Body, rec coilshell.Record, sh coilshell.Shell, m
 
 	cr, ct, cn, ok := coil.CentroidCoefficients(m, rec.Pitch, rec.Turns, rec.Sigma)
 	if !ok {
-		return fmt.Errorf(`%w: the coil's first moment is not proven positive`, ErrUnsupported)
+		return fmt.Errorf(`%w: the coil's first moment is not proven positive`, decaderr.ErrUnsupported)
 	}
 	erU, erV := rec.Axis.Radial()
 	x := proofbound.IntervalAdd(rec.Axis.AU, proofbound.IntervalAdd(proofbound.IntervalMul(cr, erU), proofbound.IntervalMul(cn, rec.Axis.DU)))
@@ -144,7 +137,7 @@ func publishCoilReadings(body *Body, rec coilshell.Record, sh coilshell.Shell, m
 	var cv [3]float64
 	worst := 0.0
 	for axis := range 3 {
-		held, bound, err := coilshell.Held(c[axis], "centroid")
+		held, bound, err := Held(c[axis], "centroid")
 		if err != nil {
 			return err
 		}
@@ -152,7 +145,7 @@ func publishCoilReadings(body *Body, rec coilshell.Record, sh coilshell.Shell, m
 		worst = math.Max(worst, bound)
 	}
 	centroidBound := proofbound.Radius3D(worst)
-	body.n.Centroid = measurement.VecMeasurement{
+	body.Centroid = measurement.VecMeasurement{
 		Value:     r3.NewVec(cv[0], cv[1], cv[2]),
 		Exactness: measurement.ExactnessOf(centroidBound),
 		Bound:     units.Millimeters(centroidBound),
@@ -162,18 +155,18 @@ func publishCoilReadings(body *Body, rec coilshell.Record, sh coilshell.Shell, m
 	for _, w := range walls {
 		total = proofbound.IntervalAdd(total, w)
 	}
-	area, areaBound, err := coilshell.Held(total, "area")
+	area, areaBound, err := Held(total, "area")
 	if err != nil {
 		return err
 	}
-	body.n.Area = measurement.Measurement{
+	body.Area = measurement.Measurement{
 		Value:     units.SquareMillimeters(area),
 		Exactness: measurement.ExactnessOf(areaBound),
 		Bound:     units.SquareMillimeters(areaBound),
 	}
 
-	body.n.Bounds = boxToInternal(coilBounds(sh))
-	return topobuild.ValidateLoftBodyMeasurements(&body.n)
+	body.Bounds = coilBounds(sh)
+	return topobuild.ValidateLoftBodyMeasurements(body)
 }
 
 // coilBounds is Table CM's Bounds row. Every true point lies within its
@@ -182,7 +175,7 @@ func publishCoilReadings(body *Body, rec coilshell.Record, sh coilshell.Shell, m
 // most δ plus the largest station rounding past the true extremes, since
 // every held vertex is within its own rounding of a true point, plus the
 // widening's own outward step.
-func coilBounds(sh coilshell.Shell) Box {
+func coilBounds(sh Shell) measurement.Box {
 	lo, hi := sh.Verts[0], sh.Verts[0]
 	for _, p := range sh.Verts[1:] {
 		lo = r3.NewVec(math.Min(lo.X, p.X), math.Min(lo.Y, p.Y), math.Min(lo.Z, p.Z))
@@ -197,7 +190,7 @@ func coilBounds(sh coilshell.Shell) Box {
 		step = math.Max(step, 2*proofbound.UlpOf(c))
 	}
 	bound := proofbound.AbsSumUpper(sh.Delta, sh.MaxRound, step)
-	return Box{Min: minV, Max: maxV, Exactness: exactnessOf(bound), Bound: units.Millimeters(bound)}
+	return measurement.Box{Min: minV, Max: maxV, Exactness: measurement.ExactnessOf(bound), Bound: units.Millimeters(bound)}
 }
 
 // buildCoilTopology is Table CB: two planar caps, one Faceted wall per
@@ -207,29 +200,29 @@ func coilBounds(sh coilshell.Shell) Box {
 // close on one seam vertex per cap. Every loop is stated in the local
 // winding and passed through topobuild.LoftLoopCoedges, which carries the shell's one
 // orientation decision into the directed boundary.
-func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coilshell.Record, sh coilshell.Shell, capRegion coil.Iv, walls []coil.Iv) ([]*Face, error) {
+func buildCoilTopology(ctx context.Context, env topo.Env, body *topo.Body, rec Record, sh Shell, capRegion coil.Iv, walls []coil.Iv) ([]*topo.Face, error) {
 	n := rec.N
 	segs := rec.Profile.Segments
-	vertexAt := func(j int64, v int) *Vertex {
+	vertexAt := func(j int64, v int) *topo.Vertex {
 		k := sh.At(j, v)
-		return bornVertex(&Vertex{n: topo.Vertex{Position: sh.Verts[k], Bound: units.Millimeters(sh.VertexBound[k])}})
+		return topobuild.NewVertex(env.Alloc, topo.Vertex{Position: sh.Verts[k], Bound: units.Millimeters(sh.VertexBound[k])})
 	}
-	startV := make([]*Vertex, len(segs))
-	endV := make([]*Vertex, len(segs))
+	startV := make([]*topo.Vertex, len(segs))
+	endV := make([]*topo.Vertex, len(segs))
 	for i, seg := range segs {
 		startV[i] = vertexAt(0, seg.First)
 		endV[i] = vertexAt(n, seg.First)
 	}
 
-	rimStart := make([]*Edge, len(segs))
-	rimEnd := make([]*Edge, len(segs))
-	helix := make([]*Edge, len(segs))
+	rimStart := make([]*topo.Edge, len(segs))
+	rimEnd := make([]*topo.Edge, len(segs))
+	helix := make([]*topo.Edge, len(segs))
 	for i, seg := range segs {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 		next := rec.Profile.Next(i)
-		start, end, err := coilRims(rec, i, startV[i], startV[next], endV[i], endV[next])
+		start, end, err := coilRims(env.Alloc, rec, i, startV[i], startV[next], endV[i], endV[next])
 		if err != nil {
 			return nil, err
 		}
@@ -243,14 +236,14 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 		// profile is convex, the prism's vertical-edge rule, read off the
 		// two exact walk tangents there.
 		v := seg.First
-		inU, inV := coilshell.Tangent(rec, rec.Profile.Prev(i), false)
-		outU, outV := coilshell.Tangent(rec, i, true)
+		inU, inV := Tangent(rec, rec.Profile.Prev(i), false)
+		outU, outV := Tangent(rec, i, true)
 		cross := new(big.Rat).Sub(new(big.Rat).Mul(inU, outV), new(big.Rat).Mul(inV, outU))
 		hl, ok := coil.HelixLength(rec.Rho[v], rec.Pitch, rec.Turns)
 		if !ok {
-			return nil, fmt.Errorf(`%w: the coil helix of profile vertex %d has no length`, ErrUnsupported, v)
+			return nil, fmt.Errorf(`%w: the coil helix of profile vertex %d has no length`, decaderr.ErrUnsupported, v)
 		}
-		hLength, hBound, err := coilshell.Held(rec.Stretched(hl), "helix length")
+		hLength, hBound, err := Held(rec.Stretched(hl), "helix length")
 		if err != nil {
 			return nil, err
 		}
@@ -258,16 +251,16 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 		for j := int64(0); j <= n; j++ {
 			chain = math.Max(chain, sh.VertexBound[sh.At(j, v)])
 		}
-		helix[i] = bornEdge(&Edge{
-			n: topo.Edge{Convex: cross.Sign() > 0, Length: hLength, LengthBound: hBound, Curve: surfacegeom.FacetedCurve{Bound: units.Millimeters(chain)}, Start: vertexNode(startV[i]), End: vertexNode(endV[i])},
+		helix[i] = topobuild.NewEdge(env.Alloc, topo.Edge{
+			Convex: cross.Sign() > 0, Length: hLength, LengthBound: hBound, Curve: surfacegeom.FacetedCurve{Bound: units.Millimeters(chain)}, Start: startV[i], End: endV[i],
 		})
 	}
 
-	capArea, capBound, err := coilshell.Held(rec.Stretched(capRegion), "cap area")
+	capArea, capBound, err := Held(rec.Stretched(capRegion), "cap area")
 	if err != nil {
 		return nil, err
 	}
-	var capStartLoops, capEndLoops []*Loop
+	var capStartLoops, capEndLoops []*topo.Loop
 	for loop := range rec.LoopIdx {
 		var members []int
 		for i, seg := range segs {
@@ -279,11 +272,11 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 		startCo := make([]topo.CoEdge, m)
 		endCo := make([]topo.CoEdge, m)
 		for k, i := range members {
-			startCo[m-1-k] = topo.CoEdge{Edge: edgeNode(rimStart[i]), Forward: false}
-			endCo[k] = topo.CoEdge{Edge: edgeNode(rimEnd[i]), Forward: true}
+			startCo[m-1-k] = topo.CoEdge{Edge: rimStart[i], Forward: false}
+			endCo[k] = topo.CoEdge{Edge: rimEnd[i], Forward: true}
 		}
-		capStartLoops = append(capStartLoops, bornLoop(&Loop{n: topo.Loop{Outer: loop == 0, CoEdges: topobuild.LoftLoopCoedges(startCo, sh.Reversed)}}))
-		capEndLoops = append(capEndLoops, bornLoop(&Loop{n: topo.Loop{Outer: loop == 0, CoEdges: topobuild.LoftLoopCoedges(endCo, sh.Reversed)}}))
+		capStartLoops = append(capStartLoops, topobuild.NewLoop(env.Alloc, topo.Loop{Outer: loop == 0, CoEdges: topobuild.LoftLoopCoedges(startCo, sh.Reversed)}))
+		capEndLoops = append(capEndLoops, topobuild.NewLoop(env.Alloc, topo.Loop{Outer: loop == 0, CoEdges: topobuild.LoftLoopCoedges(endCo, sh.Reversed)}))
 	}
 	capStartSurf, err := topobuild.PlaneFromTriangle(sh.Verts, sh.Tris[sh.Walls])
 	if err != nil {
@@ -293,35 +286,33 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 	if err != nil {
 		return nil, err
 	}
-	faces := []*Face{
-		bornFace(&Face{n: topo.Face{
+	faces := []*topo.Face{
+		topobuild.NewFace(env.Alloc, topo.Face{
 			Area:          capArea,
 			AreaBound:     capBound,
 			AxialDelta:    sh.Delta,
 			HasAxialDelta: true,
 			Surface:       capStartSurf,
-			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapStart}},
-			Body:          bodyNode(body),
-			Loops:         loopNodes(capStartLoops),
-		},
+			Origins:       []provenance.Ref{{Producer: env.Ref, Role: provenance.RoleCapStart}},
+			Body:          body,
+			Loops:         capStartLoops,
 		}),
-		bornFace(&Face{n: topo.Face{
+		topobuild.NewFace(env.Alloc, topo.Face{
 			Area:          capArea,
 			AreaBound:     capBound,
 			AxialDelta:    sh.Delta,
 			HasAxialDelta: true,
 			Surface:       capEndSurf,
-			Origins:       []provenance.Ref{{Producer: ref, Role: provenance.RoleCapEnd}},
-			Body:          bodyNode(body),
-			Loops:         loopNodes(capEndLoops),
-		},
+			Origins:       []provenance.Ref{{Producer: env.Ref, Role: provenance.RoleCapEnd}},
+			Body:          body,
+			Loops:         capEndLoops,
 		}),
 	}
 	for i, seg := range segs {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		area, areaBound, err := coilshell.Held(walls[i], "wall area")
+		area, areaBound, err := Held(walls[i], "wall area")
 		if err != nil {
 			return nil, err
 		}
@@ -339,28 +330,26 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 				bound = math.Max(bound, sh.VertexBound[sh.At(j, v)])
 			}
 		}
-		face := bornFace(&Face{
-			n: topo.Face{
-				Area:      area,
-				AreaBound: areaBound,
-				Surface:   surfacegeom.Faceted{Bound: units.Millimeters(bound)},
-				Origins:   []provenance.Ref{{Producer: ref, Role: fmt.Sprintf("side(%d,%d)", seg.Loop, seg.Index)}},
-				Body:      bodyNode(body),
-			},
+		face := topobuild.NewFace(env.Alloc, topo.Face{
+			Area:      area,
+			AreaBound: areaBound,
+			Surface:   surfacegeom.Faceted{Bound: units.Millimeters(bound)},
+			Origins:   []provenance.Ref{{Producer: env.Ref, Role: fmt.Sprintf("side(%d,%d)", seg.Loop, seg.Index)}},
+			Body:      body,
 		})
 		if seg.Closed {
-			face.n.Loops = []*topo.Loop{
-				loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{{Edge: edgeNode(rimStart[i]), Forward: true}}, sh.Reversed)}})),
-				loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{{Edge: edgeNode(rimEnd[i]), Forward: false}}, sh.Reversed)}})),
+			face.Loops = []*topo.Loop{
+				topobuild.NewLoop(env.Alloc, topo.Loop{Outer: true, CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{{Edge: rimStart[i], Forward: true}}, sh.Reversed)}),
+				topobuild.NewLoop(env.Alloc, topo.Loop{Outer: true, CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{{Edge: rimEnd[i], Forward: false}}, sh.Reversed)}),
 			}
 		} else {
-			face.n.Loops = []*topo.Loop{loopNode(bornLoop(&Loop{n: topo.Loop{Outer: true, CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{
-				{Edge: edgeNode(rimStart[i]), Forward: true},
-				{Edge: edgeNode(helix[next]), Forward: true},
-				{Edge: edgeNode(rimEnd[i]), Forward: false},
-				{Edge: edgeNode(helix[i]), Forward: false},
+			face.Loops = []*topo.Loop{topobuild.NewLoop(env.Alloc, topo.Loop{Outer: true, CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{
+				{Edge: rimStart[i], Forward: true},
+				{Edge: helix[next], Forward: true},
+				{Edge: rimEnd[i], Forward: false},
+				{Edge: helix[i], Forward: false},
 			}, sh.Reversed),
-			}}))}
+			})}
 		}
 		faces = append(faces, face)
 	}
@@ -374,7 +363,7 @@ func buildCoilTopology(ctx context.Context, body *Body, ref producerID, rec coil
 // θ = Θ, its axis the section plane's normal there, signed so the rim runs
 // counter-clockwise about it from start to end, and its length the arc's
 // enclosure widened by L's defect.
-func coilRims(rec coilshell.Record, i int, s0, s1, e0, e1 *Vertex) (*Edge, *Edge, error) {
+func coilRims(alloc topo.Alloc, rec Record, i int, s0, s1, e0, e1 *topo.Vertex) (*topo.Edge, *topo.Edge, error) {
 	seg := rec.Profile.Segments[i]
 	loopOuter := seg.Loop == 0
 	if !seg.IsArc() {
@@ -384,25 +373,25 @@ func coilRims(rec coilshell.Record, i int, s0, s1, e0, e1 *Vertex) (*Edge, *Edge
 		l2 := new(big.Rat).Add(new(big.Rat).Mul(du, du), new(big.Rat).Mul(dv, dv))
 		l, ok := proofbound.SqrtFixed(l2)
 		if !ok {
-			return nil, nil, fmt.Errorf(`%w: the coil rim of profile segment %d has no length`, ErrUnsupported, v)
+			return nil, nil, fmt.Errorf(`%w: the coil rim of profile segment %d has no length`, decaderr.ErrUnsupported, v)
 		}
-		length, lengthBound, err := coilshell.Held(rec.Stretched(l), "rim length")
+		length, lengthBound, err := Held(rec.Stretched(l), "rim length")
 		if err != nil {
 			return nil, nil, err
 		}
-		return bornEdge(&Edge{n: topo.Edge{Convex: loopOuter, Length: length, LengthBound: lengthBound, Curve: surfacegeom.Line3{}, Start: vertexNode(s0), End: vertexNode(s1)}}),
-			bornEdge(&Edge{n: topo.Edge{Convex: loopOuter, Length: length, LengthBound: lengthBound, Curve: surfacegeom.Line3{}, Start: vertexNode(e0), End: vertexNode(e1)}}), nil
+		return topobuild.NewEdge(alloc, topo.Edge{Convex: loopOuter, Length: length, LengthBound: lengthBound, Curve: surfacegeom.Line3{}, Start: s0, End: s1}),
+			topobuild.NewEdge(alloc, topo.Edge{Convex: loopOuter, Length: length, LengthBound: lengthBound, Curve: surfacegeom.Line3{}, Start: e0, End: e1}), nil
 	}
-	length, lengthBound, err := coilshell.Held(rec.Stretched(seg.Length), "rim length")
+	length, lengthBound, err := Held(rec.Stretched(seg.Length), "rim length")
 	if err != nil {
 		return nil, nil, err
 	}
-	radius, _, err := coilshell.Held(seg.Radius, "rim radius")
+	radius, _, err := Held(seg.Radius, "rim radius")
 	if err != nil {
 		return nil, nil, err
 	}
-	cu, cv := coilshell.Centre(seg)
-	rims, err := coilshell.RimCircles(rec, cu, cv, seg.Radius, radius)
+	cu, cv := Centre(seg)
+	rims, err := RimCircles(rec, cu, cv, seg.Radius, radius)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -426,25 +415,25 @@ func coilRims(rec coilshell.Record, i int, s0, s1, e0, e1 *Vertex) (*Edge, *Edge
 	} else {
 		c0, c1 = surfacegeom.Arc3{Center: centre0, Axis: axis0.Scale(sign), Radius: r}, surfacegeom.Arc3{Center: centre1, Axis: axis1.Scale(sign), Radius: r}
 	}
-	start := bornEdge(&Edge{n: topo.Edge{
+	start := topobuild.NewEdge(alloc, topo.Edge{
 		Convex:       convex,
 		Length:       length,
 		LengthBound:  lengthBound,
 		CurveBound:   rims[0].Bound,
 		CurveBounded: rims[0].Bounded,
 		Curve:        c0,
-		Start:        vertexNode(s0),
-		End:          vertexNode(s1),
-	}})
-	end := bornEdge(&Edge{n: topo.Edge{
+		Start:        s0,
+		End:          s1,
+	})
+	end := topobuild.NewEdge(alloc, topo.Edge{
 		Convex:       convex,
 		Length:       length,
 		LengthBound:  lengthBound,
 		CurveBound:   rims[1].Bound,
 		CurveBounded: rims[1].Bounded,
 		Curve:        c1,
-		Start:        vertexNode(e0),
-		End:          vertexNode(e1),
-	}})
+		Start:        e0,
+		End:          e1,
+	})
 	return start, end, nil
 }

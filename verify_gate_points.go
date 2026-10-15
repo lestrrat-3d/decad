@@ -304,7 +304,7 @@ func bodyGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body *Bo
 		// Every held station vertex lies within its own station rounding of
 		// the point X(v, j) it denotes, a point of the coil's true helix edge
 		// (docs/helix-design.md §5.3), so the largest rounding is the gap.
-		return gatePoints{Points: pl.verts, Allow: pl.maxRound}, true, nil
+		return gatePoints{Points: pl.Verts, Allow: pl.MaxRound}, true, nil
 	case stitchPayload:
 		return gatePoints{Points: pl.verts, Allow: pl.delta}, true, nil
 	case chainPayload:

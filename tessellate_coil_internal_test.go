@@ -48,13 +48,13 @@ func TestCoilMeshRestatesTheHeldShell(t *testing.T) {
 	b, err := Coil(t.Context(), New(), s, p, coilAxisV, units.Millimeters(1.5), units.Scalar(2))
 	require.NoError(t, err)
 	cp := b.n.Payload.(coilPayload)
-	mesh, err := b.Tessellate(t.Context(), units.Millimeters(cp.delta))
+	mesh, err := b.Tessellate(t.Context(), units.Millimeters(cp.Delta))
 	require.NoError(t, err)
 
-	require.Equal(t, cp.verts, mesh.Vertices())
-	require.Equal(t, cp.tris, mesh.Triangles())
-	require.Equal(t, cp.vertexBound, mesh.n.VertexBound)
-	require.Equal(t, cp.delta, mesh.Bound().Base())
+	require.Equal(t, cp.Verts, mesh.Vertices())
+	require.Equal(t, cp.Tris, mesh.Triangles())
+	require.Equal(t, cp.VertexBound, mesh.n.VertexBound)
+	require.Equal(t, cp.Delta, mesh.Bound().Base())
 	require.True(t, mesh.BoundaryVerified())
 	require.True(t, mesh.VolumeVerified())
 
@@ -72,7 +72,7 @@ func TestCoilMeshRestatesTheHeldShell(t *testing.T) {
 			want = provenance.RoleCapStart
 		}
 		require.Equal(t, want, featureRefsOf(f.Origins)[0].Role, "triangle %d", k)
-		faceMax[faceHandle(f)] = max(faceMax[faceHandle(f)], cp.vertexBound[tri[0]], cp.vertexBound[tri[1]], cp.vertexBound[tri[2]])
+		faceMax[faceHandle(f)] = max(faceMax[faceHandle(f)], cp.VertexBound[tri[0]], cp.VertexBound[tri[1]], cp.VertexBound[tri[2]])
 	}
 	for f, want := range faceMax {
 		got, ok := mesh.sourceBound(faceNode(f))
@@ -80,12 +80,12 @@ func TestCoilMeshRestatesTheHeldShell(t *testing.T) {
 		require.Equal(t, want, got)
 	}
 
-	_, err = b.Tessellate(t.Context(), units.Millimeters(math.Nextafter(cp.delta, 0)))
+	_, err = b.Tessellate(t.Context(), units.Millimeters(math.Nextafter(cp.Delta, 0)))
 	require.ErrorIs(t, err, ErrUnsupported)
 	drawn, err := b.Tessellate(t.Context(), units.Millimeters(1), WithVerification(VerifyNone))
 	require.NoError(t, err)
 	require.False(t, drawn.VolumeVerified())
-	require.Equal(t, cp.tris, drawn.Triangles())
+	require.Equal(t, cp.Tris, drawn.Triangles())
 }
 
 // TestCoilMeshProofsEncloseTheBody checks what each proof implies about the

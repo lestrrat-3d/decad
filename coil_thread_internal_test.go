@@ -151,7 +151,7 @@ func TestCoilThreadPartnerKeepsItsBounds(t *testing.T) {
 	cylinder, err := Revolve(t.Context(), doc, cs, cpf, coilAxisV, FullRevolution{})
 	require.NoError(t, err)
 	tool := threadTool(t, doc, 4.1, 5.3, 3, 8)
-	delta := tool.n.Payload.(coilPayload).delta
+	delta := tool.n.Payload.(coilPayload).Delta
 
 	tol, dPair, err := pairChordTolerance(t.Context(), cylinder, tool)
 	require.NoError(t, err)
