@@ -506,7 +506,7 @@ func evaluateAnalyticIntersect(ctx context.Context, a, b *Body) (*Body, bool, er
 	return body, true, nil
 }
 
-// asBooleanError maps an evaluateBoolean or buildFacetedBody error to the
+// asBooleanError maps an evaluateBoolean or facetedrecord.BuildWithProof error to the
 // public typed BooleanError (docs/api-design.md §8 / H2). The private
 // expected-outcome kinds decide the Code and the wrapped sentinel: an empty
 // result is BooleanEmpty; a valid but unclassifiable coplanar / tangent /

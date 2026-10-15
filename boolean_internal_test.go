@@ -793,7 +793,8 @@ func TestFacetedMeasurementSumsEncloseSmallAllowances(t *testing.T) {
 // them, are unchanged. Two boxes translated off every shared face plane
 // (5, 5, 5) force the mesh path rather than the analytic prism-boolean
 // reduction (TestBooleanContextCancelsFacetedBodyFinishing above cancels
-// inside buildFacetedBody on the identical fixture, which is mesh-path-only).
+// inside facetedrecord.BuildWithProof on the identical fixture, which is
+// mesh-path-only).
 // The expected numbers were captured from this same fixture on the
 // pre-rewrite math/big.Rat kernel before this change landed.
 func TestBooleanVolumesAreUnchangedByTheKernelRewrite(t *testing.T) {
