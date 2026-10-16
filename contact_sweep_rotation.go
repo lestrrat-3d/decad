@@ -296,7 +296,7 @@ func (p rotationalSweepPath) pointDeviationSquared(pose r3.Transform, ideal swee
 type rotationalPairSweep struct {
 	doc        *Document
 	a, b       rotationalSweepPath
-	req        SweepRequest
+	req        reportvocab.SweepRequest
 	resolution *big.Rat
 	report     *SweepReport
 	planar     bool                  // both paths carry exact planar vertex sets (contact_sweep_faceted.go)
@@ -304,7 +304,7 @@ type rotationalPairSweep struct {
 }
 
 func (d *Document) sweepRotatingPair(ctx context.Context, a, b *Body,
-	pa, pb affinePairPath, req SweepRequest, resolution *big.Rat,
+	pa, pb affinePairPath, req reportvocab.SweepRequest, resolution *big.Rat,
 	report *SweepReport) (*SweepReport, error) {
 	aPath, okA := prepareRotationalSweepPath(a, pa)
 	bPath, okB := prepareRotationalSweepPath(b, pb)
@@ -365,7 +365,7 @@ func (r *rotationalPairSweep) sample(ctx context.Context, f *big.Rat) (*SweepSam
 	if err != nil {
 		return nil, err
 	}
-	contact, err := r.doc.ContactPair(ctx, r.a.body, r.b.body, poseA, poseB, r.req.ContactRequest)
+	contact, err := r.doc.ContactPair(ctx, r.a.body, r.b.body, poseA, poseB, contactRequestFromInternal(r.req.ContactRequest))
 	if err != nil {
 		return nil, err
 	}
@@ -583,11 +583,11 @@ func (r *rotationalPairSweep) execute(ctx context.Context) (*SweepReport, error)
 		return r.report, nil
 	case ContactTouching:
 		r.report.InitialEvent = &first.Ideal
-		if r.req.StartPolicy == StopAtInitialContact {
+		if r.req.StartPolicy == reportvocab.StopAtInitialContact {
 			r.report.Outcome, r.report.Event = SweepInitiallyTouching, &first.Ideal
 			return r.report, nil
 		}
-		if !r.planar && r.req.StartPolicy == ContinueCertifiedTouch && r.coMovingOrientedTouch(first) {
+		if !r.planar && r.req.StartPolicy == reportvocab.ContinueCertifiedTouch && r.coMovingOrientedTouch(first) {
 			last, sampleErr := r.sample(ctx, one)
 			if errors.Is(sampleErr, errSweepPoseBudget) {
 				return r.undecided(zero, one, SweepPoseBudget), nil
@@ -601,7 +601,7 @@ func (r *rotationalPairSweep) execute(ctx context.Context) (*SweepReport, error)
 			r.report.ContactTrack = &SweepContactTrack{orientedA: &r.a.startBox,
 				orientedB: &r.b.startBox, orientedDelta: r.a.path.Delta,
 				start: zero, end: one,
-				duration: r.a.path.Duration, request: contactRequestToInternal(r.req.ContactRequest),
+				duration: r.a.path.Duration, request: r.req.ContactRequest,
 				pointCount: len(first.Ideal.Manifold.Points),
 				features: [2]reportvocab.ContactFeature{contactFeatureToInternal(first.Ideal.Manifold.Points[0].FeatureA),
 					contactFeatureToInternal(first.Ideal.Manifold.Points[0].FeatureB)},
@@ -623,7 +623,7 @@ func (r *rotationalPairSweep) execute(ctx context.Context) (*SweepReport, error)
 		if departs {
 			return r.depart(ctx, departure)
 		}
-		if r.planar && r.req.StartPolicy == ContinueCertifiedTouch {
+		if r.planar && r.req.StartPolicy == reportvocab.ContinueCertifiedTouch {
 			track, ok, bandErr := r.planarBand(ctx)
 			if bandErr != nil {
 				return nil, bandErr
@@ -644,13 +644,14 @@ func (r *rotationalPairSweep) execute(ctx context.Context) (*SweepReport, error)
 		// may stay inside the band however fast the held pair separates; a
 		// certified continuation is §10.3's band track over the held touch.
 		r.report.InitialEvent = &first.Ideal
-		if r.req.StartPolicy == StopAtInitialContact {
+		if r.req.StartPolicy == reportvocab.StopAtInitialContact {
 			r.report.Outcome, r.report.Event = SweepInitiallyTouching, &first.Ideal
 			return r.report, nil
 		}
 		// §10.5: an exact pair apart within its SupportBand has every vertex
 		// above the support plane, so it departs when §10.2's proof holds.
-		if r.planar && r.req.StartPolicy == ContinueSeparatingTouch && r.a.delta.Sign() == 0 && r.b.delta.Sign() == 0 {
+		if r.planar && r.req.StartPolicy == reportvocab.ContinueSeparatingTouch &&
+			r.a.delta.Sign() == 0 && r.b.delta.Sign() == 0 {
 			departure, departs, err := r.planarDepartureFraction(ctx)
 			if err != nil {
 				return nil, err
@@ -659,7 +660,7 @@ func (r *rotationalPairSweep) execute(ctx context.Context) (*SweepReport, error)
 				return r.depart(ctx, departure)
 			}
 		}
-		if r.planar && r.req.StartPolicy == ContinueCertifiedTouch {
+		if r.planar && r.req.StartPolicy == reportvocab.ContinueCertifiedTouch {
 			track, ok, bandErr := r.planarBand(ctx)
 			if bandErr != nil {
 				return nil, bandErr
@@ -750,7 +751,7 @@ func (r *rotationalPairSweep) departureGap(ctx context.Context, f *big.Rat, samp
 	}
 	req := r.req.ContactRequest
 	req.SupportBand = units.Value{}
-	contact, err := r.doc.ContactPair(ctx, r.a.body, r.b.body, sample.PoseA, sample.PoseB, req)
+	contact, err := r.doc.ContactPair(ctx, r.a.body, r.b.body, sample.PoseA, sample.PoseB, contactRequestFromInternal(req))
 	if err != nil {
 		return nil, false, err
 	}
@@ -771,7 +772,7 @@ func (r *rotationalPairSweep) departureGap(ctx context.Context, f *big.Rat, samp
 
 // continuationCause names the missing proof after an initial touch.
 func (r *rotationalPairSweep) continuationCause() SweepCause {
-	if r.req.StartPolicy == ContinueCertifiedTouch {
+	if r.req.StartPolicy == reportvocab.ContinueCertifiedTouch {
 		return SweepContactTrackUnproved
 	}
 	return SweepDepartureUnproved

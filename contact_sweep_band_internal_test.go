@@ -163,7 +163,7 @@ func (r *rotationalPairSweep) planarSupportsScan(poll func() error) ([]planarSup
 			}
 			tried = append(tried, planarSupport{SupportCandidate: planarsweep.SupportCandidate{Normal: n, Origin: a}})
 			read, ok, err := planarsweep.ReadSupportCandidate(planarSupportPathOf(S),
-				planarSupportPathOf(M), n, a, supportBandOf(contactRequestToInternal(r.req.ContactRequest)), poll)
+				planarSupportPathOf(M), n, a, supportBandOf(r.req.ContactRequest), poll)
 			if err != nil {
 				return nil, err
 			}
@@ -313,9 +313,9 @@ func TestPlanarSupportsMatchScan(t *testing.T) {
 					continue
 				}
 				_, ok, err := planarsweep.ReadSupportCandidate(planarSupportPathOf(S),
-					planarSupportPathOf(M), n, origin, supportBandOf(contactRequestToInternal(run.req.ContactRequest)), poll)
+					planarSupportPathOf(M), n, origin, supportBandOf(run.req.ContactRequest), poll)
 				require.NoError(t, err)
-				if !planarsweep.SupportRuledOut(boxes, n, origin, supportBandOf(contactRequestToInternal(run.req.ContactRequest))) {
+				if !planarsweep.SupportRuledOut(boxes, n, origin, supportBandOf(run.req.ContactRequest)) {
 					if ok {
 						accepted++
 					}

@@ -81,7 +81,7 @@ func (r *rotationalPairSweep) planarSupports(poll func() error) ([]planarSupport
 		rest = speed
 	}
 	inputs := [2]planarsweep.SupportPath{planarSupportPathOf(paths[0]), planarSupportPathOf(paths[1])}
-	candidates, err := planarsweep.FindSupports(inputs, supportBandOf(contactRequestToInternal(r.req.ContactRequest)), rest, poll)
+	candidates, err := planarsweep.FindSupports(inputs, supportBandOf(r.req.ContactRequest), rest, poll)
 	if err != nil {
 		return nil, err
 	}
@@ -396,7 +396,7 @@ func (r *rotationalPairSweep) planarTrack(support *planarSupport, face planarFac
 			Exactness: exactnessFromBound(bound)}
 	}
 	track := &SweepContactTrack{start: zero, end: new(big.Rat).Set(end), duration: r.a.path.Duration,
-		request: contactRequestToInternal(r.req.ContactRequest), normal: normal, planar: proof}
+		request: r.req.ContactRequest, normal: normal, planar: proof}
 	// A track whose start manifold is refused (a point ball over
 	// PointResolution) is not published; the refusal is the answer.
 	if _, refused := track.ManifoldAt(units.Scalar(0)); refused != nil {

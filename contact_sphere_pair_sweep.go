@@ -20,7 +20,7 @@ type sourceSpherePairSweepRun struct {
 	doc     *Document
 	a, b    *Body
 	pa, pb  affinePairPath
-	req     SweepRequest
+	req     reportvocab.SweepRequest
 	report  *SweepReport
 	sphereA sourceSphereContactProof
 	sphereB sourceSphereContactProof
@@ -34,10 +34,10 @@ type sourceSpherePairSweepRun struct {
 // A center-pivot drift therefore has the same exact occupied-set path as an
 // affine translation, while sampled poses still carry the requested rotation.
 func (d *Document) sweepRotatingSpherePair(ctx context.Context, a, b *Body,
-	pa, pb affinePairPath, req SweepRequest, resolution *big.Rat,
+	pa, pb affinePairPath, req reportvocab.SweepRequest, resolution *big.Rat,
 	report *SweepReport) (*SweepReport, bool, error) {
 	if pa.Drift == nil && pb.Drift == nil ||
-		(req.StartPolicy != ContinueSeparatingTouch && req.StartPolicy != StopAtInitialContact) {
+		(req.StartPolicy != reportvocab.ContinueSeparatingTouch && req.StartPolicy != reportvocab.StopAtInitialContact) {
 		return nil, false, nil
 	}
 	sphereA, okA := sourceSphereAtPose(a, pa.From)
@@ -96,7 +96,7 @@ func (r *sourceSpherePairSweepRun) idealAt(f *big.Rat, at SweepInstant) SweepEve
 	if !okA || !okB {
 		return SweepEvent{At: at, Relation: ContactUndecided, Reason: ContactPayloadUnsupported}
 	}
-	contact := &reportvocab.ContactReport{Request: contactRequestToInternal(r.req.ContactRequest)}
+	contact := &reportvocab.ContactReport{Request: r.req.ContactRequest}
 	classifySourceSpherePair(contact, a, b)
 	return sweepEventOf(at, contact)
 }
@@ -116,7 +116,7 @@ func (r *sourceSpherePairSweepRun) sample(ctx context.Context, f *big.Rat) (*Swe
 	if err != nil {
 		return nil, err
 	}
-	contact, err := r.doc.ContactPair(ctx, r.a, r.b, poseA, poseB, r.req.ContactRequest)
+	contact, err := r.doc.ContactPair(ctx, r.a, r.b, poseA, poseB, contactRequestFromInternal(r.req.ContactRequest))
 	if err != nil {
 		return nil, err
 	}
@@ -367,7 +367,7 @@ func (r *sourceSpherePairSweepRun) persistentTrack(first *SweepSample) *SweepCon
 	pair := [2]sourceSphereContactProof{r.sphereA, r.sphereB}
 	return &SweepContactTrack{
 		start: new(big.Rat), end: big.NewRat(1, 1), duration: new(big.Rat).Set(r.pa.Duration),
-		request: contactRequestToInternal(r.req.ContactRequest), spherePair: &pair,
+		request: r.req.ContactRequest, spherePair: &pair,
 		deltaA: r.pa.Delta, deltaB: r.pb.Delta,
 		features:   [2]reportvocab.ContactFeature{contactFeatureToInternal(point.FeatureA), contactFeatureToInternal(point.FeatureB)},
 		normal:     point.Normal,
@@ -385,7 +385,7 @@ func (r *sourceSpherePairSweepRun) execute(ctx context.Context, resolution *big.
 	if err != nil {
 		return nil, err
 	}
-	if r.rotating && r.req.StartPolicy == ContinueSeparatingTouch && first.Ideal.Relation != ContactTouching {
+	if r.rotating && r.req.StartPolicy == reportvocab.ContinueSeparatingTouch && first.Ideal.Relation != ContactTouching {
 		return r.undecided(zero, one, SweepContactUnsupported), nil
 	}
 	if r.rotating && first.Ideal.Relation != first.FloatContact.Relation {
@@ -401,11 +401,11 @@ func (r *sourceSpherePairSweepRun) execute(ctx context.Context, resolution *big.
 	}
 	if first.Ideal.Relation == ContactTouching {
 		r.report.InitialEvent = &first.Ideal
-		if r.req.StartPolicy == StopAtInitialContact {
+		if r.req.StartPolicy == reportvocab.StopAtInitialContact {
 			r.report.Outcome, r.report.Event = SweepInitiallyTouching, &first.Ideal
 			return r.report, nil
 		}
-		if r.req.StartPolicy == ContinueCertifiedTouch {
+		if r.req.StartPolicy == reportvocab.ContinueCertifiedTouch {
 			if track := r.persistentTrack(first); track != nil {
 				last, err := r.sample(ctx, one)
 				if errors.Is(err, errSweepPoseBudget) {

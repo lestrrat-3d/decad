@@ -22,7 +22,7 @@ type orientedSphereSweepRun struct {
 	doc          *Document
 	a, b         *Body
 	pa, pb       affinePairPath
-	req          SweepRequest
+	req          reportvocab.SweepRequest
 	report       *SweepReport
 	sphere       sourceSphereContactProof
 	box          orientedSourceBox
@@ -46,7 +46,7 @@ func (r *orientedSphereSweepRun) idealAt(f *big.Rat, at SweepInstant) SweepEvent
 	if !okSphere || !okBox {
 		return SweepEvent{At: at, Relation: ContactUndecided, Reason: ContactPayloadUnsupported}
 	}
-	contact := &reportvocab.ContactReport{Request: contactRequestToInternal(r.req.ContactRequest)}
+	contact := &reportvocab.ContactReport{Request: r.req.ContactRequest}
 	classifySourceSphereOrientedBox(contact, sphere, box, r.sphereFirst)
 	return sweepEventOf(at, contact)
 }
@@ -66,7 +66,7 @@ func (r *orientedSphereSweepRun) sample(ctx context.Context, f *big.Rat) (*Sweep
 	if err != nil {
 		return nil, err
 	}
-	contact, err := r.doc.ContactPair(ctx, r.a, r.b, poseA, poseB, r.req.ContactRequest)
+	contact, err := r.doc.ContactPair(ctx, r.a, r.b, poseA, poseB, contactRequestFromInternal(r.req.ContactRequest))
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +160,7 @@ func (r *orientedSphereSweepRun) execute(ctx context.Context, resolution *big.Ra
 	}
 	if first.Ideal.Relation == ContactTouching {
 		r.report.InitialEvent = &first.Ideal
-		if r.req.StartPolicy == StopAtInitialContact {
+		if r.req.StartPolicy == reportvocab.StopAtInitialContact {
 			r.report.Outcome, r.report.Event = SweepInitiallyTouching, &first.Ideal
 			return r.report, nil
 		}

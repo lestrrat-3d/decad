@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -16,7 +17,7 @@ import (
 // the pair relation. A sampled negative gap is left undecided because
 // ContactPair does not yet certify overlap for this payload.
 func (d *Document) sweepFacetedFloor(ctx context.Context, a, b *Body,
-	pa, pb affinePairPath, req SweepRequest, report *SweepReport,
+	pa, pb affinePairPath, req reportvocab.SweepRequest, report *SweepReport,
 	floor sourceBoxContactProof, facetedFirst bool) (*SweepReport, error) {
 	faceted, pose, facetedDelta, floorDelta := b, pb.From, pb.Delta, pa.Delta
 	if facetedFirst {
@@ -94,7 +95,7 @@ func (d *Document) sweepFacetedFloor(ctx context.Context, a, b *Body,
 // sweepBoundedFacetedFloorClear uses only the Boolean boundary displacement
 // when no exact source support-face proof survives placement.
 func (d *Document) sweepBoundedFacetedFloorClear(ctx context.Context, a, b *Body,
-	pa, pb affinePairPath, req SweepRequest, report *SweepReport,
+	pa, pb affinePairPath, req reportvocab.SweepRequest, report *SweepReport,
 	floor sourceBoxContactProof, facetedFirst bool) (*SweepReport, error) {
 	faceted, pose, facetedDelta, floorDelta := b, pb.From, pb.Delta, pa.Delta
 	if facetedFirst {
@@ -135,7 +136,7 @@ func (d *Document) sweepBoundedFacetedFloorClear(ctx context.Context, a, b *Body
 		if err != nil {
 			return nil, err
 		}
-		contact, err := d.ContactPair(ctx, a, b, poseA, poseB, req.ContactRequest)
+		contact, err := d.ContactPair(ctx, a, b, poseA, poseB, contactRequestFromInternal(req.ContactRequest))
 		if err != nil {
 			return nil, err
 		}

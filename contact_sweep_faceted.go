@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
@@ -30,10 +31,10 @@ import (
 // reports false, leaving report untouched. A path whose ideal motion or
 // travel bound cannot be formed is SweepUndecided with SweepMissingBound.
 func (d *Document) sweepPlanarPair(ctx context.Context, a, b *Body,
-	pa, pb affinePairPath, req SweepRequest, resolution *big.Rat,
+	pa, pb affinePairPath, req reportvocab.SweepRequest, resolution *big.Rat,
 	report *SweepReport) (*SweepReport, bool, error) {
 	budget := proofbound.NewWorkBudget(ctx)
-	chord := heldChordOf(contactRequestToInternal(req.ContactRequest))
+	chord := heldChordOf(req.ContactRequest)
 	solidA, deltaA, okA, err := planarSolidAtPose(ctx, budget, a, r3.Identity(), chord)
 	if err != nil {
 		return nil, true, err
@@ -78,7 +79,8 @@ func (d *Document) planarContinuation(ctx context.Context, boxes *SweepReport,
 		return nil, false, nil
 	}
 	fresh := &SweepReport{A: boxes.A, B: boxes.B, PathA: boxes.PathA, PathB: boxes.PathB, Request: boxes.Request}
-	result, admitted, err := d.sweepPlanarPair(ctx, boxes.A, boxes.B, pa, pb, boxes.Request, resolution, fresh)
+	result, admitted, err := d.sweepPlanarPair(ctx, boxes.A, boxes.B, pa, pb, sweepRequestToInternal(boxes.Request),
+		resolution, fresh)
 	if err != nil {
 		return nil, true, err
 	}

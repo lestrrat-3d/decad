@@ -6,10 +6,12 @@ import (
 	"math"
 	"math/big"
 	"math/rand/v2"
+	"reflect"
 	"slices"
 	"sync"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/sweepmemo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -237,3 +239,38 @@ func TestReplayPoseMemoEvictsOldest(t *testing.T) {
 }
 
 func poseBits(pose r3.Transform) [12]uint64 { return sweepmemo.PoseBits(pose) }
+
+// TestSweepRequestToInternalCopiesEveryField converts a request whose every
+// field holds a distinct value, once per start policy: each field arrives in
+// its reportvocab twin unchanged, each policy maps to the twin constant of the
+// same name, and the two structs name the same fields in the same order.
+func TestSweepRequestToInternalCopiesEveryField(t *testing.T) {
+	t.Parallel()
+	contact := ContactRequest{PointResolution: units.Millimeters(1e-3), NormalResolution: units.Degrees(1),
+		SupportBand: units.Millimeters(2e-3), HeldChord: units.Millimeters(5e-2)}
+	for policy, want := range map[SweepStartPolicy]reportvocab.SweepStartPolicy{
+		StopAtInitialContact:    reportvocab.StopAtInitialContact,
+		ContinueSeparatingTouch: reportvocab.ContinueSeparatingTouch,
+		ContinueCertifiedTouch:  reportvocab.ContinueCertifiedTouch,
+	} {
+		req := SweepRequest{ContactRequest: contact, TimeResolution: units.Seconds(math.Ldexp(1, -20)),
+			MaxPoseEvaluations: 513, StartPolicy: policy, RestSpeed: units.MillimetersPerSecond(10)}
+		require.Equal(t, reportvocab.SweepRequest{
+			ContactRequest: reportvocab.ContactRequest{PointResolution: units.Millimeters(1e-3),
+				NormalResolution: units.Degrees(1), SupportBand: units.Millimeters(2e-3),
+				HeldChord: units.Millimeters(5e-2)},
+			TimeResolution: units.Seconds(math.Ldexp(1, -20)), MaxPoseEvaluations: 513, StartPolicy: want,
+			RestSpeed: units.MillimetersPerSecond(10),
+		}, sweepRequestToInternal(req), "policy %d", policy)
+	}
+	fieldNames := func(typ reflect.Type) []string {
+		names := make([]string, typ.NumField())
+		for i := range names {
+			names[i] = typ.Field(i).Name
+		}
+		return names
+	}
+	require.Equal(t, fieldNames(reflect.TypeFor[SweepRequest]()), fieldNames(reflect.TypeFor[reportvocab.SweepRequest]()))
+	require.Equal(t, fieldNames(reflect.TypeFor[ContactRequest]()),
+		fieldNames(reflect.TypeFor[reportvocab.ContactRequest]()))
+}

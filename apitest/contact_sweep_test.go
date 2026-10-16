@@ -762,3 +762,89 @@ func TestSweepPairSourceBoxSlideEdgeTransition(t *testing.T) {
 	require.Equal(t, 10.0, patch.Points[1].OnA.Value.X)
 	require.Equal(t, r3.Vec{Z: 1}, patch.Points[0].Normal.Value)
 }
+
+// TestSweepPairAffineBoxPoseBudgetIsExact drives a source box into another
+// along an affine PoseSegment. A budget of exactly the evaluations the
+// unbounded run spends brackets the same impact, and one fewer stops at the
+// budget with SweepPoseBudget after spending every evaluation it allows.
+func TestSweepPairAffineBoxPoseBudgetIsExact(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	a := boxBody(t, doc, 0, 0, 10, 10, 10)
+	b := boxBody(t, doc, 20, 0, 30, 10, 10)
+	still := decad.PoseSegment{From: r3.Identity(), To: r3.Identity(), Duration: units.Seconds(1)}
+	approach := decad.PoseSegment{From: r3.Identity(), To: contactPose(t, r3.Vec{X: -20}), Duration: units.Seconds(1)}
+	req := sweepRequest()
+	req.MaxPoseEvaluations = 64
+	free, err := doc.SweepPair(t.Context(), a, b, still, approach, req)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepImpactBracket, free.Outcome)
+	spent := free.PoseEvaluations
+	require.GreaterOrEqual(t, spent, uint64(3), "premise: the bracket needs a start and two bracket samples")
+
+	req.MaxPoseEvaluations = spent
+	exact, err := doc.SweepPair(t.Context(), a, b, still, approach, req)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepImpactBracket, exact.Outcome)
+	require.Equal(t, spent, exact.PoseEvaluations)
+	require.Equal(t, free.Bracket, exact.Bracket)
+
+	req.MaxPoseEvaluations = spent - 1
+	short, err := doc.SweepPair(t.Context(), a, b, still, approach, req)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepUndecided, short.Outcome)
+	require.Equal(t, decad.SweepPoseBudget, short.Cause)
+	require.Equal(t, spent-1, short.PoseEvaluations)
+	require.NotNil(t, short.Unresolved)
+}
+
+// TestSweepPairTouchStartFollowsStartPolicy starts two affine pairs touching
+// and reads each start policy's answer. A source box pressed into a floor box
+// stops at the touch under StopAtInitialContact, and otherwise cannot depart:
+// ContinueSeparatingTouch names SweepDepartureUnproved and
+// ContinueCertifiedTouch names SweepContactTrackUnproved. A source sphere
+// resting on a turned box face stops at the touch, and departs clear when it
+// rises under ContinueSeparatingTouch.
+func TestSweepPairTouchStartFollowsStartPolicy(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	floor := boxBodyAtZ(t, doc, -20, -20, 20, 20, -10, 10)
+	top := boxBody(t, doc, 0, 0, 10, 10, 10)
+	still := decad.PoseSegment{From: r3.Identity(), To: r3.Identity(), Duration: units.Seconds(1)}
+	press := decad.PoseSegment{From: r3.Identity(), To: contactPose(t, r3.Vec{Z: -2}), Duration: units.Seconds(1)}
+	req := sweepRequest()
+	for policy, want := range map[decad.SweepStartPolicy]struct {
+		outcome decad.SweepOutcome
+		cause   decad.SweepCause
+	}{
+		decad.StopAtInitialContact:    {decad.SweepInitiallyTouching, decad.SweepNoCause},
+		decad.ContinueSeparatingTouch: {decad.SweepUndecided, decad.SweepDepartureUnproved},
+		decad.ContinueCertifiedTouch:  {decad.SweepUndecided, decad.SweepContactTrackUnproved},
+	} {
+		req.StartPolicy = policy
+		report, err := doc.SweepPair(t.Context(), floor, top, still, press, req)
+		require.NoError(t, err)
+		require.Equal(t, want.outcome, report.Outcome, "policy %d", policy)
+		require.Equal(t, want.cause, report.Cause, "policy %d", policy)
+		require.NotNil(t, report.InitialEvent, "policy %d", policy)
+		require.Equal(t, decad.ContactTouching, report.InitialEvent.Relation, "policy %d", policy)
+	}
+
+	ball := ballBody(t, doc, 5)
+	turned := rotationPose(t, r3.Vec{Z: 1}, 30, r3.Vec{})
+	box := decad.PoseSegment{From: turned, To: turned, Duration: units.Seconds(1)}
+	resting := decad.PoseSegment{From: contactPose(t, r3.Vec{Z: 5}), To: contactPose(t, r3.Vec{Z: 5}),
+		Duration: units.Seconds(1)}
+	req.StartPolicy = decad.StopAtInitialContact
+	stopped, err := doc.SweepPair(t.Context(), floor, ball, box, resting, req)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepInitiallyTouching, stopped.Outcome, "cause=%v", stopped.Cause)
+	require.Same(t, stopped.InitialEvent, stopped.Event)
+	rising := resting
+	rising.To = contactPose(t, r3.Vec{Z: 8})
+	req.StartPolicy = decad.ContinueSeparatingTouch
+	departed, err := doc.SweepPair(t.Context(), floor, ball, box, rising, req)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepDepartedClear, departed.Outcome, "cause=%v", departed.Cause)
+	require.NotNil(t, departed.Departure)
+}

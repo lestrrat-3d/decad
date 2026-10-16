@@ -26,7 +26,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/provenance/` | Producer identity, feature-role reference and the `RoleBody`/`RoleCapStart`/`RoleCapEnd` names the topology nodes hold; root `FeatureRef` is the public form. See evaluator §3. |
 | `internal/surfacegeom/` | Private face and edge geometry carriers. Public surface and curve variants live in `topology.go`; `Edge.Curve` and `Face.Surface` convert the node's curve and surface to the public variant. See API §6.1, surface §6. |
 | `internal/surfaceplace/` | Rigid placement of face surfaces and edge curves, and the placed circle bound. See surface §6. |
-| `internal/reportvocab/` | Contact and sweep enums; the contact report over topology nodes (request, reason, feature, point, manifold); Verify reports, motion verification records, survey diagnostics, and pair, interference and sheet outcomes. See contact-geometry §6. |
+| `internal/reportvocab/` | Contact and sweep enums; the contact report over topology nodes (request, reason, feature, point, manifold); the sweep request; Verify reports, motion verification records, survey diagnostics, and pair, interference and sheet outcomes. See contact-geometry §6, contact-sweep §7. |
 | `internal/extent/` | Unit bounds and stop levels for extents. See API §8.1, evaluator §5/§6. |
 | `internal/patchchain/` | The `PatchProfile` and `PatchEdges` payloads and their builders over nodes; chain partition, plane proof, orientation, segment record, area bounds and Rule P. See surface §5.1-§5.2. |
 | `internal/sectionaudit/` | Rewrite audit order, signed area, cutback, crossing, contact and nesting checks. See modify §5. |

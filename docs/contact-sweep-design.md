@@ -911,6 +911,13 @@ sentinel (`ErrDegenerate`, `ErrForeignBody`, `ErrRetiredBody`, `ErrUnitKind`,
 solid whose pair kernel lacks a proof returns `SweepUndecided`, not an input
 error. An internal invariant failure remains an error with no report.
 
+A validated request is converted once to its internal form,
+`internal/reportvocab`'s `SweepRequest`, whose contact request and start policy
+are the internal twins with the same fields and constants; every sweep path
+reads that form. The report's `Request` holds the caller's own value, and each
+sampled `ContactPair` query receives the contact request converted back to the
+public type.
+
 The dyadic grid depth is `ceil(log2(Duration / TimeResolution))`. Fully
 exploring it evaluates at most `2^depth + 1` distinct times, if that count is
 representable. `MaxPoseEvaluations` caps this work without silently relaxing

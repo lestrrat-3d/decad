@@ -363,7 +363,7 @@ func TestSweepRunMemoChangesNoReport(t *testing.T) {
 	run := func(open bool) (*SweepReport, sweepMemoStats) {
 		a, b := floorPath, box
 		a.memo, b.memo = &sweepPathMemo{Closed: !open}, &sweepPathMemo{Closed: !open}
-		sweep := &rotationalPairSweep{doc: documentHandle(floor.n.Doc), a: a, b: b, req: req, resolution: big.NewRat(1, 1<<30),
+		sweep := &rotationalPairSweep{doc: documentHandle(floor.n.Doc), a: a, b: b, req: sweepRequestToInternal(req), resolution: big.NewRat(1, 1<<30),
 			report: &SweepReport{}}
 		report, err := sweep.execute(t.Context())
 		require.NoError(t, err)

@@ -110,6 +110,26 @@ func validateRestSpeed(v units.Value) error {
 	return nil
 }
 
+// The public start policy holds the same constants, in the same order, as its
+// reportvocab twin; a constant that drifts fails to compile here.
+var (
+	_ = [1]struct{}{}[int(StopAtInitialContact)-int(reportvocab.StopAtInitialContact)]
+	_ = [1]struct{}{}[int(ContinueSeparatingTouch)-int(reportvocab.ContinueSeparatingTouch)]
+	_ = [1]struct{}{}[int(ContinueCertifiedTouch)-int(reportvocab.ContinueCertifiedTouch)]
+)
+
+// sweepRequestToInternal gives a public request its reportvocab form, field
+// for field.
+func sweepRequestToInternal(req SweepRequest) reportvocab.SweepRequest {
+	return reportvocab.SweepRequest{
+		ContactRequest:     contactRequestToInternal(req.ContactRequest),
+		TimeResolution:     req.TimeResolution,
+		MaxPoseEvaluations: req.MaxPoseEvaluations,
+		StartPolicy:        reportvocab.SweepStartPolicy(req.StartPolicy),
+		RestSpeed:          req.RestSpeed,
+	}
+}
+
 // SweepOutcome states the certified relation over the requested path.
 type SweepOutcome int
 
@@ -491,6 +511,7 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 		return nil, err
 	}
 	report := &SweepReport{A: a, B: b, PathA: pathA, PathB: pathB, Request: req}
+	request := sweepRequestToInternal(req)
 	if !pa.Supported || !pb.Supported {
 		report.Outcome, report.Cause = SweepUndecided, SweepContactUnsupported
 		report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), pa.Duration),
@@ -499,26 +520,26 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 	}
 	if pa.Drift != nil || pb.Drift != nil || pa.Screw != nil || pb.Screw != nil {
 		if pa.Screw == nil && pb.Screw == nil {
-			if result, admitted, err := d.sweepRotatingSpherePair(ctx, a, b, pa, pb, req, resolution, report); admitted {
+			if result, admitted, err := d.sweepRotatingSpherePair(ctx, a, b, pa, pb, request, resolution, report); admitted {
 				return result, err
 			}
-			if result, admitted, err := d.sweepRotatingSphereBox(ctx, a, b, pa, pb, req, resolution, report); admitted {
+			if result, admitted, err := d.sweepRotatingSphereBox(ctx, a, b, pa, pb, request, resolution, report); admitted {
 				return result, err
 			}
 		}
-		return d.sweepRotatingPair(ctx, a, b, pa, pb, req, resolution, report)
+		return d.sweepRotatingPair(ctx, a, b, pa, pb, request, resolution, report)
 	}
 	boxA, okA := sourceBoxAtPose(a, pa.From)
 	boxB, okB := sourceBoxAtPose(b, pb.From)
 	if !okA || !okB {
 		if okA {
 			if _, faceted := b.n.Payload.(facetedPayload); faceted {
-				return d.sweepFacetedFloor(ctx, a, b, pa, pb, req, report, boxA, false)
+				return d.sweepFacetedFloor(ctx, a, b, pa, pb, request, report, boxA, false)
 			}
 		}
 		if okB {
 			if _, faceted := a.n.Payload.(facetedPayload); faceted {
-				return d.sweepFacetedFloor(ctx, a, b, pa, pb, req, report, boxB, true)
+				return d.sweepFacetedFloor(ctx, a, b, pa, pb, request, report, boxB, true)
 			}
 		}
 		if !okA && !okB {
@@ -527,47 +548,47 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 			if sphereOKA && sphereOKB {
 				pair := [2]sourceSphereContactProof{sphereA, sphereB}
 				report.replay = &sweepReplayProof{pa: pa, pb: pb, spherePair: &pair,
-					request: req.ContactRequest}
+					request: request.ContactRequest}
 				return (&sourceSpherePairSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
-					req: req, report: report, sphereA: sphereA, sphereB: sphereB}).execute(ctx, resolution)
+					req: request, report: report, sphereA: sphereA, sphereB: sphereB}).execute(ctx, resolution)
 			}
 		}
 		if okA && !okB {
 			if sphere, ok := sourceSphereAtPose(b, pb.From); ok {
 				return (&sourceSphereSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
-					req: req, report: report, sphere: sphere, box: boxA}).execute(ctx, resolution)
+					req: request, report: report, sphere: sphere, box: boxA}).execute(ctx, resolution)
 			}
 			if cylinder, ok := sourceCylinderAtPose(b, pb.From); ok {
-				return d.sourceCylinderFaceSweep(ctx, a, b, pa, pb, req, report, cylinder, boxA, false)
+				return d.sourceCylinderFaceSweep(ctx, a, b, pa, pb, request, report, cylinder, boxA, false)
 			}
 		}
 		if okB && !okA {
 			if sphere, ok := sourceSphereAtPose(a, pa.From); ok {
 				return (&sourceSphereSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
-					req: req, report: report, sphere: sphere, box: boxB, sphereFirst: true}).execute(ctx, resolution)
+					req: request, report: report, sphere: sphere, box: boxB, sphereFirst: true}).execute(ctx, resolution)
 			}
 			if cylinder, ok := sourceCylinderAtPose(a, pa.From); ok {
-				return d.sourceCylinderFaceSweep(ctx, a, b, pa, pb, req, report, cylinder, boxB, true)
+				return d.sourceCylinderFaceSweep(ctx, a, b, pa, pb, request, report, cylinder, boxB, true)
 			}
 		}
 		if sphere, sphereOK := sourceSphereAtPose(a, pa.From); sphereOK {
 			if box, boxOK := sourceOrientedBoxAtPose(b, pb.From); boxOK {
 				return (&orientedSphereSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
-					req: req, report: report, sphere: sphere, box: box, sphereFirst: true}).execute(ctx, resolution)
+					req: request, report: report, sphere: sphere, box: box, sphereFirst: true}).execute(ctx, resolution)
 			}
 		}
 		if sphere, sphereOK := sourceSphereAtPose(b, pb.From); sphereOK {
 			if box, boxOK := sourceOrientedBoxAtPose(a, pa.From); boxOK {
 				return (&orientedSphereSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
-					req: req, report: report, sphere: sphere, box: box}).execute(ctx, resolution)
+					req: request, report: report, sphere: sphere, box: box}).execute(ctx, resolution)
 			}
 		}
 		if _, orientedA := sourceOrientedBoxAtPose(a, pa.From); orientedA {
 			if _, orientedB := sourceOrientedBoxAtPose(b, pb.From); orientedB {
-				return d.sweepRotatingPair(ctx, a, b, pa, pb, req, resolution, report)
+				return d.sweepRotatingPair(ctx, a, b, pa, pb, request, resolution, report)
 			}
 		}
-		if result, admitted, err := d.sweepPlanarPair(ctx, a, b, pa, pb, req, resolution, report); admitted {
+		if result, admitted, err := d.sweepPlanarPair(ctx, a, b, pa, pb, request, resolution, report); admitted {
 			return result, err
 		}
 		report.Outcome, report.Cause = SweepUndecided, SweepContactUnsupported
@@ -576,8 +597,8 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 		return report, nil
 	}
 	report.replay = &sweepReplayProof{pa: pa, pb: pb, boxA: boxA, boxB: boxB,
-		request: req.ContactRequest}
-	run := pairSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb, req: req, report: report,
+		request: request.ContactRequest}
+	run := pairSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb, req: request, report: report,
 		boxA: boxA, boxB: boxB}
 	result, err := run.execute(ctx, resolution)
 	if err != nil || result == nil {
@@ -591,7 +612,7 @@ type pairSweepRun struct {
 	doc          *Document
 	a, b         *Body
 	pa, pb       affinePairPath
-	req          SweepRequest
+	req          reportvocab.SweepRequest
 	report       *SweepReport
 	boxA, boxB   sourceBoxContactProof
 	facetedFloor bool // box for faceted body is its exact lower support patch
@@ -612,7 +633,7 @@ func (r *pairSweepRun) sample(ctx context.Context, f *big.Rat) (*SweepSample, er
 	if err != nil {
 		return nil, err
 	}
-	contact, err := r.doc.ContactPair(ctx, r.a, r.b, poseA, poseB, r.req.ContactRequest)
+	contact, err := r.doc.ContactPair(ctx, r.a, r.b, poseA, poseB, contactRequestFromInternal(r.req.ContactRequest))
 	if err != nil {
 		return nil, err
 	}
@@ -641,7 +662,7 @@ func (r *pairSweepRun) idealContact(f *big.Rat, at SweepInstant) SweepEvent {
 		b.lo[i], b.hi[i] = proofarith.DyAdd(b.lo[i], moveB), proofarith.DyAdd(b.hi[i], moveB)
 	}
 	report := &reportvocab.ContactReport{A: bodyNode(r.a), B: bodyNode(r.b),
-		Request: contactRequestToInternal(r.req.ContactRequest)}
+		Request: r.req.ContactRequest}
 	if r.facetedFloor {
 		floor, faceted := a, b
 		if _, ok := r.a.n.Payload.(facetedPayload); ok {
@@ -788,7 +809,7 @@ func (r *pairSweepRun) fullSourceBoxTrack(first *SweepSample, end *big.Rat) *Swe
 	return &SweepContactTrack{
 		a: r.boxA, b: r.boxB, deltaA: r.pa.Delta, deltaB: r.pb.Delta,
 		start: new(big.Rat), end: new(big.Rat).Set(end), duration: new(big.Rat).Set(r.pa.Duration),
-		request:  contactRequestToInternal(r.req.ContactRequest),
+		request:  r.req.ContactRequest,
 		features: [2]reportvocab.ContactFeature{contactFeatureToInternal(point.FeatureA), contactFeatureToInternal(point.FeatureB)},
 		normal:   normal,
 	}
@@ -824,12 +845,12 @@ func (r *pairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*Sweep
 		return r.report, nil
 	case ContactTouching:
 		r.report.InitialEvent = &first.Ideal
-		if r.req.StartPolicy == StopAtInitialContact {
+		if r.req.StartPolicy == reportvocab.StopAtInitialContact {
 			r.report.Outcome, r.report.Event = SweepInitiallyTouching, &first.Ideal
 			return r.report, nil
 		}
 		if !r.provesDeparture() {
-			if r.req.StartPolicy == ContinueCertifiedTouch {
+			if r.req.StartPolicy == reportvocab.ContinueCertifiedTouch {
 				if track := r.fullSourceBoxTrack(first, one); track != nil {
 					last, err := r.sample(ctx, one)
 					if errors.Is(err, errSweepPoseBudget) {
@@ -877,7 +898,7 @@ func (r *pairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*Sweep
 				}
 			}
 			cause := SweepDepartureUnproved
-			if r.req.StartPolicy == ContinueCertifiedTouch {
+			if r.req.StartPolicy == reportvocab.ContinueCertifiedTouch {
 				cause = SweepContactTrackUnproved
 			}
 			return r.undecided(zero, one, cause), nil
