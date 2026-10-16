@@ -439,7 +439,7 @@ cells (matched by `Entity` identity plus its unordered `{TStart, TEnd}` pair
 senses by each), keeping every edge that appears on exactly one (a wall
 against the unbounded exterior — the survivor is the union's own outer
 boundary). Chain the survivors into a closed directed walk (the same
-directed-edge-loop-closure shape `boolean_body.go`'s face-patch construction
+directed-edge-loop-closure shape `internal/facetedtopology/build.go`'s face-loop construction
 already performs for the mesh boolean's own loops); a chain that does not
 close into exactly one simple loop — a disjoint pair of footprints producing
 two separate lumps, which the single-outer-loop `ProfileRecord` cannot

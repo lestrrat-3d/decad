@@ -305,7 +305,7 @@ func RatPointCopy(w *FreeformWork, p RatPoint) (RatPoint, error) {
 //
 // proofbound.RatSqrtUp itself keeps its unmetered signature for the ANALYTIC readers that
 // share it — a prism's arc radius, a revolve's amplitude, a cap band's contour
-// (extrude.go, revolve.go, capblend_contour.go, moments.go, loft_moments.go,
+// (extrude.go, revolve.go, capblend_contour.go, moments.go, internal/loftmesh/loft_moments.go,
 // internal/proofbound/bounds.go) — none of which walks a free-form record and none of which holds a
 // FreeformWork counter to charge.
 //

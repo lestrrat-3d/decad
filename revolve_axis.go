@@ -8,11 +8,13 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// This file holds axisInPlane and the aliases axisFrame and wallKind. The
+// This file holds axisInPlane, the aliases axisFrame, regionSnapAllow, revolveWalks
+// and wallKind, and the wall* constants. The
 // profile gates live in revolveplan.ResolveAxisSide
 // (internal/revolveplan/axis_side.go). See docs/evaluator-design.md §6.
 
-// axisInPlane reads the public axis variant and resolves its coordinates.
+// axisInPlane reads the public axis variant and resolves its coordinates
+// through revolveaxis.AxisInPlane.
 func axisInPlane(a Axis, frame r3.Frame) (revolveaxis.Line2, error) {
 	var input revolveaxis.AxisInput
 	switch value := a.(type) {

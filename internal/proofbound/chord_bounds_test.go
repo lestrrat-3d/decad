@@ -130,7 +130,7 @@ func twistedPieSliceTrueVolume(radius, sweepRad, twistRad, h float64) float64 {
 // heldVolumeExact sums signed tetrahedra, anchored at the origin, over
 // EXACTLY the triangle set a test mesh builds — the same two-triangle-per-
 // wall-cell topology loftmesh.AssembleTriangulated emits (internal/loftmesh/triangulated.go) and
-// loftMassAccumulator measures (loft_moments.go) — as an exact rational, so
+// loftmesh.MassAccumulator measures (internal/loftmesh/mass_accumulator.go) — as an exact rational, so
 // the "measured" gap this file's enclosure tests compare against is never
 // itself subject to float summation slop.
 //

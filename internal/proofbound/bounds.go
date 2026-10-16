@@ -334,7 +334,7 @@ func DvLenAtLeast(claim float64, u proofarith.DyV3) bool {
 // scale is no scale and this helper may not invent one. That answer is a
 // PRECONDITION on the caller, not a bound: a caller whose absSum can saturate
 // independently of the value it speaks for must state its own bound for that
-// case, or the term silently vanishes (loft_moments.go's wallBound does, with
+// case, or the term silently vanishes (internal/loftmesh/mass_accumulator.go's wallBound does, with
 // +Inf). Every other caller here passes the held value itself as absSum and
 // adds this term to it, so a saturation carries +Inf into the published bound
 // on its own.
@@ -1877,7 +1877,11 @@ func CellChordPatchNormalLower(vLo, vHi, wLo, wHi r3.Vec) float64 {
 //
 // # The three-leg composition at the call site
 //
-// area() (loft_moments.go) charges one wall cell's whole gap as
+// MassAccumulator.Area (internal/loftmesh/mass_accumulator.go) corrects the
+// held triangle area to the bilinear patch area, then bounds the remaining
+// ruled and station-shift gaps. The mesh proof (internal/loftmesh/mass_proof.go)
+// separately bounds the held-to-bilinear twist gap with TwistAreaAllow. Together
+// they cover one wall cell's whole gap:
 //
 //	|A_true - T_held| <= ruled leg + twist leg + station-shift leg,
 //

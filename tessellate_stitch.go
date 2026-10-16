@@ -387,7 +387,7 @@ func tessellateStitch(ctx context.Context, b *Body, sp stitchPayload) (*Mesh, er
 	// triangle this mesh restates, or the claim does not:
 	//
 	//  1. Every held vertex IS the true boundary vertex, not merely near it.
-	//     stitchweld.ZeroBound (stitch.go) proves every one of b.Vertices()'s
+	//     stitchweld.ZeroBound (internal/stitchweld/bounds.go) proves every one of b.Vertices()'s
 	//     own proven bounds is exactly zero — the same gate
 	//     clearance_geom.go's addStitchFaces dispatch already applies, reused
 	//     verbatim rather than re-derived. That rules out both a nonzero

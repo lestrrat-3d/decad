@@ -43,7 +43,7 @@ func TestSumSlopNeverZeroForSubnormalScale(t *testing.T) {
 }
 
 // TestSumSlopEnclosesSubnormalFacetAreaError measures the error SumSlop speaks
-// for directly: facet areas summed the way boolean_body.go and
+// for directly: facet areas summed the way internal/facetedrecord/assemble.go and
 // facetproof.MeshAreaUpper sum them, b.Sub(a).Cross(c.Sub(a)).Len()/2 in a
 // naive loop, against the exact area sum. Every facet lies in the z = 0
 // plane, so its exact area is |u_x·v_y − u_y·v_x|/2, a rational computed here

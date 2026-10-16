@@ -319,7 +319,7 @@ func boxCorners() map[r3.Vec]struct{} {
 // §15's own numbered rows, but closes a gap none of them reach: T58 and T59
 // both stitch stitchBoxSheets' walls first, and that operand order happens
 // to land the arbitrary root face outward from the start, so
-// stitchrecord.Build's global sign-fix (internal/stitchrecord/build.go, "if acc.vol6.Sign() < 0")
+// stitchrecord.Build's global sign-fix (internal/stitchrecord/build.go, "if acc.Vol6.Sign() < 0")
 // never triggers for either. Stitching the SAME three sheets patch-first
 // picks bottom's own face as the root instead, which DOES trigger the fix,
 // and is what would catch M1's own payload recording the triangle set built
@@ -667,7 +667,7 @@ func TestStitchSolidUnionComposesTheCorrectVolume(t *testing.T) {
 // TestStitchPlacedSolidUnionStillRefusesOnTheVolumeProof is
 // docs/surface-design.md's T73: T58's own zero-bound box, Placed under a
 // non-identity rigid motion, still refuses a boolean — the placement's own
-// rigidRoundAllow widens every vertex bound (internal/stitchrecord/build.go), so
+// RigidRoundAllow widens every vertex bound (internal/stitchrecord/build.go), so
 // stitchweld.ZeroBound no longer holds and requireVolumeProvingPayload
 // keeps refusing this operand exactly as it did before this increment. This
 // reaches the gate by the PLACEMENT route; T74 reaches it by the

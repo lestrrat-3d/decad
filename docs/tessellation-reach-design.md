@@ -146,7 +146,7 @@ answering `+Inf` for an underivable enclosure is the same refusal.
   `faceBound >= chordSagitta(r, 2π, n)`; each cap publishes at least that; every straight outer wall publishes
   exactly 0 under identity placement.
 - The same plate under a rotated placement: every `faceBound > 0`, and `Bound` exceeds the unplaced `Bound`
-  by at most `radius3D(16·ulp(coordMax))` (`rigidRoundAllow`'s own scale).
+  by at most `radius3D(16·ulp(coordMax))` (`RigidRoundAllow`'s own scale).
 - tess §14 "Check prism/cup `volSymDiff` against exact circular-segment examples": a full cylinder of radius
   `r`, height `h`, `n` chords: `volSymDiff >= h * (π r² − n r² sin(2π/n)/2)` and at most twice it.
 - A boolean over two prisms now reads `volSymDiff`: assert the result's `Volume().Bound` equals the sum of
@@ -367,8 +367,8 @@ composes both in one expression.
 |---|---|---|
 | §8 profile → `(z, ρ)`, `rhoMax`, `zAbsMax`, `coordMax` | `revolveproof.Extents(walks)` | endpoints plus cardinal points inside a circular walk's interval; non-positive `rhoMax` is an invariant failure |
 | §8 `deltaC` | `revolvemesh.IdealBasis`, `revolveMeridianEnclosure`, `revolveIdealPoint` | Certified intervals enclose each unplaced vertex; `deltaC` bounds its stored float coordinate. |
-| §8 `deltaR` | `min(rigidRoundAllow(coordMax + deltaC, translationMax), exactRigidPointRound per vertex)` | the second term measures the same displacement exactly, so it is 0 under an exact identity and tighter elsewhere; `prismrecord.Payload.PointRound`'s own mechanism |
-| §8 budget order | `revolveConstructionPrior` + `rigidRoundAllow` before the count, the measured pair after | §8 splits the tolerance BEFORE the counts, and the count decides how many angles there are, so the split spends count-INDEPENDENT ceilings: the meridian gap (per sample, not per angle), the stored trig's own ceiling, and the evaluation's ulps at `coordMax`. The measured `deltaC`/`deltaR` are checked against them and refuse on a violation, so the a-priori figure is held to account rather than trusted |
+| §8 `deltaR` | `min(RigidRoundAllow(coordMax + deltaC, translationMax), exactRigidPointRound per vertex)` | the second term measures the same displacement exactly, so it is 0 under an exact identity and tighter elsewhere; `prismrecord.Payload.PointRound`'s own mechanism |
+| §8 budget order | `revolveConstructionPrior` + `RigidRoundAllow` before the count, the measured pair after | §8 splits the tolerance BEFORE the counts, and the count decides how many angles there are, so the split spends count-INDEPENDENT ceilings: the meridian gap (per sample, not per angle), the stored trig's own ceiling, and the evaluation's ulps at `coordMax`. The measured `deltaC`/`deltaR` are checked against them and refuse on a violation, so the a-priori figure is held to account rather than trusted |
 | §8 tolerance split | `revolveBudget(tol, deltaC, deltaR)` | `available = downRound(downRound(tol − deltaC − deltaR))`; `<= 0` refuses; meridian gets `available/2`; angular gets `available − deltaM` |
 | §3/§8 counts | `chordCount` for each circular meridian walk (R4) and for the global angular sequence with `radius = rhoMax`, `sweep = |φ1−φ0|` or `2π`, `closed = full` | the downward-then-upward correction and the cap are `chordCount`'s own; R3 sections have no circular meridian walk, so `deltaM == 0` |
 | §9 section proof | `revolvesampling.SectionPoints` + `requireLoopClearance` over the `(z, ρ)` samples, run for a full and a partial sweep alike before any cell is formed (line-only sections: the homotopy is the identity, so the endpoint checks are the proof) | R4 adds the intra-loop tube check |
@@ -772,8 +772,9 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
 
 ### R1 — loft
 
-7. **Files:** `loft_moments.go`. **What:** `loftChordedAllow.twistAreaAllow`, accumulated in
-   `computeLoftChordedAllow`'s chorded-cell loop via `cellTwistAreaAllow`. **Tests:**
+7. **Files:** `internal/loftmesh/loft_chord_allow.go`. **What:** the chorded-allowance `TwistAreaAllow`, accumulated in
+   `ComputeLoftChordedAllow`'s chorded-cell loop from the `TwistAreaAllow` that `proofbound.CellAllowsOf` or
+   `proofbound.CellAllowsWithSideSpansOf` returns. **Tests:**
    `loft_moments_internal_test.go`: zero for a `LineSeg`-only build, positive for an `ArcSeg` pair with a
    twisted cell, exactly the per-cell sum.
 8. **Files:** `loft_build.go`, `internal/loftmesh/mass_proof.go`. **What:** `loftmesh.MeshProof`; `loftPayload` gains `capStartCount`, `cell`, `side`,

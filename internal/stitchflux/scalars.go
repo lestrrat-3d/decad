@@ -31,7 +31,7 @@ func PiScalar() proofbound.BoundedScalar {
 //
 // Circle3 and Cylinder carry Radius as a bare units.Value with no bound
 // field of its own, and this evaluator's own construction does not make
-// that value exact in general: revolve_axis.go's axisFrame.walk re-expresses
+// that value exact in general: internal/revolveaxis/frame.go's Frame.Walk re-expresses
 // a recorded profile point in axis coordinates through revolveaxis.Frame.ToAxisRhoBound, which
 // folds in the resolved axis's own anchor and direction bounds
 // (aUBound/aVBound/dUBound/dVBound) — exactly zero only when the axis is
@@ -82,7 +82,7 @@ func Dot(a, b r3.Vec) proofbound.BoundedScalar {
 // but this function NEVER evaluates that division: it admits Radius == 0
 // only, where the formula collapses to apex = Origin, Exact, independent of
 // tan(HalfAngle)'s own value. Every construction site in this evaluator
-// (internal/revolveplan/build.go's wallCone, capblend_geom.go's coneSurface) sets Radius
+// (internal/revolveplan/payload.go's WallCone arm, internal/capblend/band.go's coneSurface) sets Radius
 // literally to 0 — Origin already IS the apex — so this restriction costs
 // no reachable admitted face; the refusal it adds for a nonzero Radius is
 // exercised at a hand-built internal fixture
@@ -114,9 +114,10 @@ func Dot(a, b r3.Vec) proofbound.BoundedScalar {
 // The tan(HalfAngle) call below still runs, but only to validate the angle
 // is non-degenerate, never to compute anything: a HalfAngle of 0 gives an
 // exactly-zero tangent, a degenerate needle no reachable wallCone ever
-// carries (revolve_axis.go's own analytic-walk requirement keeps HalfAngle
-// finite and strictly between 0 and π/2 — docs/surface-design.md's own
-// record of that requirement). The `proofbound.IsNonFinite(tanValue)` half of this
+// carries (internal/revolveplan/payload.go computes HalfAngle as
+// math.Atan2(|dr|, |dz|) over a wall revolveaxis.Classify named a cone, so it
+// is finite and strictly between 0 and π/2 — docs/surface-design.md's own
+// record of that fact). The `proofbound.IsNonFinite(tanValue)` half of this
 // check is a defensive backstop, not independently exercised: a NaN or Inf
 // HalfAngle is refused one layer up, by units.Value.In's own ErrNotFinite,
 // before this function's own tan(HalfAngle) call ever runs, and a
@@ -164,8 +165,8 @@ func ConeApex(halfAngle, radius units.Value, origin r3.Vec) (proofbound.BoundedS
 		// exactly that failure. So a nonzero Radius refuses rather than
 		// publish an apex whose own bound this evaluator cannot prove:
 		// Radius is EXACTLY zero at every construction site in this
-		// evaluator (internal/revolveplan/build.go's wallCone, capblend_geom.go's
-		// coneSurface — Origin is already the apex), so refusing what
+		// evaluator (internal/revolveplan/payload.go's WallCone arm,
+		// internal/capblend/band.go's coneSurface — Origin is already the apex), so refusing what
 		// nothing builds costs no reachable fixture
 		// (TestStitchConeApexRefusesNonzeroRadius, stitch_internal_test.go).
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(

@@ -27,7 +27,7 @@ import (
 
 // buildWallFace builds one wall triangle's Face (§7's lower/upper wall
 // triangle row): its own Plane, its own proven area bracket
-// (loft_moments.go's loftmesh.WallTriangleArea, the identical bracket the mass
+// (internal/loftmesh/loft_moments.go's loftmesh.WallTriangleArea, the identical bracket the mass
 // accumulator sums), and its side(i,j,k) role. A placed triangle (delta > 0,
 // §12 PR 2a) widens that bracket by internal/proofbound/bounds.go's proofbound.PerturbedTriangleAreaAllow,
 // the same per-triangle correction the mass accumulator sums into Area's own

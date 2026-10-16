@@ -431,7 +431,7 @@ func HasSplitBoundary(budget *proofbound.WorkBudget, profiles []*sketch.Profile)
 
 // ChainClosedSurvivors chains the surviving boundary edges into one
 // closed directed walk (§4.2), the same directed-edge-loop-closure shape
-// boolean_body.go's face-patch construction performs for the mesh boolean's
+// internal/facetedtopology/build.go's face-loop construction performs for the mesh boolean's
 // own loops. resolved=false means the survivors do not close into exactly
 // one simple loop using every one of them — "not resolved" (§4.4): a
 // disjoint pair of footprints (two separate lumps) or a union enclosing an

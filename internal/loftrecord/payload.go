@@ -147,7 +147,7 @@ type Payload struct {
 	// cell's own chord-to-curve departure into a MAX beside sectionDelta,
 	// and BuildMass sums that MAX with the delta above through
 	// loftmesh.ChordCellDeltaUpper before passing it — never this field — to
-	// newLoftMassAccumulator and loftmesh.ComputeLoftChordedAllow (loft_moments.go),
+	// newLoftMassAccumulator and loftmesh.ComputeLoftChordedAllow (internal/loftmesh/loft_chord_allow.go),
 	// which is where the skirt leg's, the centroid radius' and every other
 	// build-wide matched argument comes from;
 	// proofbound.CellChordCurveAreaUpper, the wall leg and the cap tube read the

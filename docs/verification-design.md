@@ -514,8 +514,8 @@ zero `Bound` and short-circuits the gate before
 any reference is consulted (`verify_tolerance.go`'s `scalarToleranceRef` and
 `boundedToleranceRef`), and a faceted body
 always forms a usable reference — its `payload.Diameter` is guaranteed at build
-(`boolean_body.go:300-304`) and an edge length is a finite chord sum
-(`boolean_body.go:757-778`). For the other shipped payloads `bodyGateDiameter`
+(`internal/facetedrecord/assemble.go`'s `AssembleBody`) and an edge length is
+a finite chord sum (`internal/facetedtopology/build.go`'s chain walk). For the other shipped payloads `bodyGateDiameter`
 (`verify_gate.go`) forms a body diameter too. A `revolvePayload`, or an
 analytic-walled `prismPayload` with no section displacement, is a payload the
 clearance kernel's exact carrier model covers

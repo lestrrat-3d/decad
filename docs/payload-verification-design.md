@@ -351,7 +351,7 @@ Rigid placement:
 
 - rotate normal certificates;
 - preserve curvature certificates;
-- add `rigidRoundAllow` to payload `Delta` and every per-facet displacement;
+- add `RigidRoundAllow` to payload `Delta` and every per-facet displacement;
 - rebuild local fan certificates after reflected winding reversal.
 
 Missing, malformed, or mismatched certificate → faceted validity + every survey

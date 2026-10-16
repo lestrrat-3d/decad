@@ -196,8 +196,10 @@ import (
 // ErrNotFinite) regardless of Radius, pinned the same way
 // (TestStitchConeHalfAngleRefusesDegenerateTangent,
 // stitch_internal_test.go) — no real wallCone ever carries one
-// (revolve_axis.go's own analytic-walk requirement keeps a real cone's
-// HalfAngle finite and strictly between 0 and π/2).
+// (internal/revolveplan/payload.go computes a real cone's HalfAngle as
+// math.Atan2(|dr|, |dz|) over a wall revolveaxis.Classify named a cone, so
+// neither dr nor dz is negligible and the angle is finite and strictly
+// between 0 and π/2).
 //
 // The Torus arm's Major and Minor carry a THIRD, still different treatment,
 // because neither of the other two routes exists for them: unlike Cylinder/
@@ -268,7 +270,7 @@ func AllTetrahedronEligible(faces []*topo.Face) bool {
 }
 
 // FaceIsTetrahedronEligible checks the surface tag itself (Plane), never
-// f.isPlanar(): isPlanar also admits a heldPlanar Faceted face — a
+// the root package's Face.isPlanar: isPlanar also admits a heldPlanar Faceted face — a
 // boolean-built face that stands for flat source geometry but is not itself
 // a Plane — and TriangulateFaces demands a Plane outright, erroring on
 // anything else. Latent today because no Faceted face is ever a stitch
@@ -428,7 +430,7 @@ func ConeFaceFluxAndMoment(f *topo.Face, cone surfacegeom.Cone, anchor r3.Vec, s
 // CurvedMass sums every face's own flux and first moment
 // (FaceFluxAndMoment), decides the global orientation sign from its
 // own total — reversing every face and recomputing once, the curved
-// analogue of build.go's acc.vol6.Sign() < 0 step — divides by three, and
+// analogue of build.go's acc.Vol6.Sign() < 0 step — divides by three, and
 // charges the placement allowance (proofbound.SweptVolumeAllow/proofbound.SweptMomentAllow) on
 // the same terms capband.BandVolume does for a placed curved solid: a
 // placed curved stitched solid is Approximate on both readings, per

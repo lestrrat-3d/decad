@@ -260,7 +260,7 @@ func TestBodyPatchReproducesThroughPlacement(t *testing.T) {
 	require.NoError(t, err)
 	decadtest.MeasuresArea(t, capped, units.SquareMillimeters(3200+2*6000), decadtest.Exactly())
 
-	// A placement's own rounding (rigidRoundAllow) is charged into the
+	// A placement's own rounding (RigidRoundAllow) is charged into the
 	// rebuilt geometry even for a clean translation, so a placed patch reads
 	// Approximate exactly as a placed Stitch does
 	// (TestStitchPlacedBoxIsApproximateSolid, stitch_test.go) — proven at or

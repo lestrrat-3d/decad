@@ -853,7 +853,7 @@ including zero, but identity placement alone may not.
 
 Let `translationMax` be the maximum absolute component of the accumulated
 placement's translation. Use the evaluator's proven
-`rigidRoundAllow(coordMax + deltaC, translationMax)` as `deltaR`; it covers the
+`RigidRoundAllow(coordMax + deltaC, translationMax)` as `deltaR`; it covers the
 final rotation/addition/write from the already stored unplaced coordinates.
 An identity placement that performs no coordinate operation has `deltaR = 0`.
 Non-finite `coordMax`, `translationMax`, `deltaC`, or `deltaR`, or failure to

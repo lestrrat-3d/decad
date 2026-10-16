@@ -601,7 +601,7 @@ func TestLoftMassAccumulatorBoundsEmpty(t *testing.T) {
 // would silently understate a genuine chord-to-curve volume displacement —
 // unsound in exactly the direction CLAUDE.md forbids.
 //
-// FALSIFICATION: reverting loft_moments.go's volume() and
+// FALSIFICATION: reverting internal/loftmesh/mass_accumulator.go's Volume and
 // loftmesh.ComputeLoftChordedAllow to read m.sectionDelta wherever they now read
 // m.sectionMatchedDelta turns this test red — verified by hand during
 // review (git stash the fix, rerun, confirm failure; restore). The fixture

@@ -425,7 +425,7 @@ func TestStitchCylinderFluxReusesAreaBound(t *testing.T) {
 // bare units.Value with no bound field, and a revolve about an axis that is
 // not coordinate-aligned through the origin hands back a Radius that is
 // itself a rounded re-expression of a recorded point (internal/stitchrecord/flux.go's own
-// top comment, revolve_axis.go's axisFrame.walk). Driven directly with a
+// top comment, internal/revolveaxis/frame.go's Frame.Walk). Driven directly with a
 // synthetic rim lengthBound far above ulp noise, so the leg is provably
 // exercised rather than left to a fixture where the true bound happens to
 // be zero (every public fixture in apitest/stitch_flux_test.go revolves about a
@@ -617,8 +617,8 @@ func TestStitchConeApexRefusesNonzeroRadius(t *testing.T) {
 // T49: a HalfAngle of 0 gives tan exactly 0, and stitchflux.ConeApex refuses rather
 // than propagate it into a division — no reachable wallCone ever carries
 // this angle, since a real one is math.Atan2(nonzero, nonzero), always
-// strictly between 0 and pi/2 (revolve_axis.go's own analytic-walk
-// requirement). A HalfAngle of NaN is refused one layer up, by
+// strictly between 0 and pi/2 (internal/revolveplan/payload.go computes it
+// over a wall revolveaxis.Classify named a cone). A HalfAngle of NaN is refused one layer up, by
 // units.Value.In itself (ErrNotFinite, wrapped rather than reaching
 // stitchflux.ConeApex's own tangent check at all) — units.Value.In never hands back a
 // non-finite float, so stitchflux.ConeApex's own `proofbound.IsNonFinite(tanValue)` guard stands
@@ -688,7 +688,7 @@ func TestStitchConeFluxAndMomentChargeRimRadiusBound(t *testing.T) {
 // real frustum-shell sheet BEFORE handing it to stitchrecord.CurvedMass, so the
 // flux sum is genuinely negative on the first pass and the correction must
 // fire for the published volume to come out positive and right. Shown to
-// fail: deleting the `fluxSum.value < 0` branch in stitchrecord.CurvedMass makes
+// fail: deleting the `fluxSum.Value < 0` branch in stitchrecord.CurvedMass makes
 // this test's volume come out negative (or its centroid wrong) — watched
 // red before landing, then restored.
 func TestStitchCurvedMassCorrectsInwardOrientationForCone(t *testing.T) {
@@ -1116,7 +1116,7 @@ func halfTorusAnalyticsForInternalTest(major, minor float64) (volume, area float
 // real half-torus sheet BEFORE handing it to stitchrecord.CurvedMass, so the flux
 // sum is genuinely negative on the first pass and the correction must fire
 // for the published volume to come out positive and right. Shown to fail:
-// deleting the `fluxSum.value < 0` branch in stitchrecord.CurvedMass makes this
+// deleting the `fluxSum.Value < 0` branch in stitchrecord.CurvedMass makes this
 // test's volume come out negative — watched red before landing, then
 // restored.
 func TestStitchCurvedMassCorrectsInwardOrientationForTorus(t *testing.T) {

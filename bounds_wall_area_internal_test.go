@@ -54,7 +54,7 @@ import (
 // ACTUAL failing assertion.
 //
 //   - L2, the ruled leg (proofbound.CellChordCurveAreaAllow), zeroed in
-//     loft_moments.go's composition (`proofbound.AbsSumUpper(areaExcess, 0, stationLeg)`):
+//     internal/loftmesh/loft_chord_allow.go's composition (`proofbound.AbsSumUpper(areaExcess, 0, stationLeg)`):
 //     TestLoftTallThinArcWedgeAreaBoundEnclosesConvergedReference fails —
 //     `"0.002446194848033656" is not less than or equal to
 //     "0.000460843512606508"`;
