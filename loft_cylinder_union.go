@@ -26,7 +26,7 @@ import (
 // The structural join has at most 32 separately certified Loft teeth. Its
 // final crossing audit and the matched centered bore may scan twice the
 // generic mesh ceiling; exact pair classifications remain unchanged.
-const loftCylinderAuditMaxScans = 16_000_000
+const loftCylinderAuditMaxScans = loftcylinder.AuditMaxScans
 
 type loftCylinderTooth struct {
 	body     *Body

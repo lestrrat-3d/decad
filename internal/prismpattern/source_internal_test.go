@@ -1,12 +1,16 @@
 package prismpattern
 
 import (
+	"math"
 	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
 
@@ -51,4 +55,22 @@ func TestIVPointArithmetic(t *testing.T) {
 	_, err := ExactAngle(point(0, 0))
 	require.ErrorIs(t, err, decaderr.ErrUnsupported)
 	require.ErrorContains(t, err, "joined-prism fillet has no exact polar point")
+}
+
+func TestPrismPatternFilletSectorRejectsAnotherConnector(t *testing.T) {
+	// Both roots lie inside R=3 and clear one another's 0.15 mm disks.
+	// The other connector ends outside R inside this selected sector.
+	require.Greater(t, math.Hypot(2.995-2.98, 0.33), 0.3)
+	part := facetedrecord.PrismPatternPart{Prism: prismrecord.Payload{Xform: r3.Identity()}}
+	connector, err := filletConnectorSector(part, sectionrecord.LineSeg{
+		Start: sectionrecord.Point2{U: 2.98, V: 0.33}, End: sectionrecord.Point2{U: 3.05, V: 0.01}})
+	require.NoError(t, err)
+	selected := filletSector{lo: big.NewRat(0, 1), hi: big.NewRat(1, 20)}
+	require.False(t, filletSectorsSeparate(selected, connector))
+	require.True(t, filletSectorsSeparate(
+		filletSector{lo: big.NewRat(-2, 25), hi: big.NewRat(-33, 1000)}, connector))
+	// The same physical angular interval can straddle the -pi/pi reading.
+	require.False(t, filletSectorsSeparate(
+		filletSector{lo: big.NewRat(31, 10), hi: big.NewRat(16, 5)},
+		filletSector{lo: big.NewRat(-159, 50), hi: big.NewRat(-77, 25)}))
 }

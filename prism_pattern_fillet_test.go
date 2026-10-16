@@ -2,10 +2,8 @@ package decad
 
 import (
 	"math"
-	"math/big"
 	"testing"
 
-	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -43,7 +41,7 @@ func TestPrismPatternFilletAcrossCircularWallStations(t *testing.T) {
 	require.NoError(t, err)
 	multiStation := false
 	for _, contact := range contacts {
-		multiStation = multiStation || len(contact.ringCut.positions) > 2
+		multiStation = multiStation || len(contact.RingCut.Positions) > 2
 	}
 	require.True(t, multiStation)
 	rounded, err := Fillet(t.Context(), joined, selection,
@@ -121,24 +119,6 @@ func prismPatternNarrowTabBodies(t *testing.T) (*Document, *Body, *Body, *Body) 
 	rotated, err := Copy(t.Context(), section, WithCopyPlacement(turn))
 	require.NoError(t, err)
 	return doc, blank, section, rotated
-}
-
-func TestPrismPatternFilletSectorRejectsAnotherConnector(t *testing.T) {
-	// Both roots lie inside R=3 and clear one another's 0.15 mm disks.
-	// The other connector ends outside R inside this selected sector.
-	require.Greater(t, math.Hypot(2.995-2.98, 0.33), 0.3)
-	part := prismPatternPart{Prism: prismrecord.Payload{Xform: r3.Identity()}}
-	connector, err := prismPatternFilletConnectorSector(part, lineSeg{
-		Start: planePoint{U: 2.98, V: 0.33}, End: planePoint{U: 3.05, V: 0.01}})
-	require.NoError(t, err)
-	selected := prismPatternFilletSector{lo: big.NewRat(0, 1), hi: big.NewRat(1, 20)}
-	require.False(t, prismPatternFilletSectorsSeparate(selected, connector))
-	require.True(t, prismPatternFilletSectorsSeparate(
-		prismPatternFilletSector{lo: big.NewRat(-2, 25), hi: big.NewRat(-33, 1000)}, connector))
-	// The same physical angular interval can straddle the -pi/pi reading.
-	require.False(t, prismPatternFilletSectorsSeparate(
-		prismPatternFilletSector{lo: big.NewRat(31, 10), hi: big.NewRat(16, 5)},
-		prismPatternFilletSector{lo: big.NewRat(-159, 50), hi: big.NewRat(-77, 25)}))
 }
 
 func TestPrismPatternFilletRefusesUnprovedCornerAndLargeRadius(t *testing.T) {
