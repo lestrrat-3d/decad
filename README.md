@@ -194,6 +194,12 @@ The same scenes render as full-size PNG frames under `_gallery/out/` with
 `-scene stack-and-drop`, drops spheres and a cylinder beside a resting box
 pyramid.
 
+Run **Refresh gallery images** from the GitHub Actions tab to regenerate
+`stills`, `features`, `hero`, `motion`, or `all`. The optional `only` input passes
+comma-separated image names to the selected renderer. Leave it blank for all
+images in that group. When images change, the workflow pushes a new branch and
+links to a page where you can open a pull request.
+
 ## Layering
 
 ```

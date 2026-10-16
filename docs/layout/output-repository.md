@@ -45,4 +45,4 @@ The rules for rows live in `docs/layout.md`.
 | `decadtest/` | The public test kit. See `decadtest/doc.go`. |
 | `_gallery/` | Nested module for README images, landing and linkage clips, dynamics scenes; excludes SolidLens. See `main.go`. |
 | `_shardgen/` | Nested module packing root and `apitest` tests into race shards. See `main.go`. |
-| `.github/workflows/` | `ci.yml`: lint, tests, tidy, vulnerability; `focused-go-test.yml`: capped named test at an exact commit; `codeql.yml`: CodeQL; `test-shards*.txt`: race shards. |
+| `.github/workflows/` | `ci.yml`: lint, tests, tidy, vulnerability; `focused-go-test.yml`: capped named test; `refresh-gallery-images.yml`: image refresh branches; `codeql.yml`: CodeQL; `test-shards*.txt`: race shards. |
