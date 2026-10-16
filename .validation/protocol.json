@@ -1,0 +1,151 @@
+{
+  "base": "3987ea5a84f662da2c307983e5c1f28988f6fbcc",
+  "candidate": "7ce5921177b20584123c12f62eb75444109d5a8c",
+  "phases": [
+    "line_correctness",
+    "integration_correctness",
+    "consumer_neck",
+    "consumer_circle"
+  ],
+  "source_hashes": {
+    "baseline": {
+      "internal/momentline/line.go": "1a984f1668df14bb1baeab3952411feaeaae858939c37a99a88291af6ce4b029",
+      "internal/momentline/line_test.go": "08a81b78f8d51a97150587be481df8a7f28812a968472c5161f29d7c64dcf956",
+      "internal/proof/dyadic.go": "6f99eded75005c0f3e56490e4de7eb87a46987ca8a6a7c8029d3c1a8c5ba18b9",
+      "internal/momentregion/segments.go": "b8ed469fe8745dd4bb0d0007927d3f74475104cf0bb341a3e3ccd2e20c7b9371",
+      "internal/momentregion/dispatch.go": "9d363d1c851fdf154181e2a2eb600b14f4c589a6e2fe288615d867f7b8815241",
+      "internal/momentregion/third.go": "581366ce098b1bcb45a14cbcb50bab9f59cfe2ee050e297b41e9398bdfdffa4c",
+      "apitest/offset_bench_test.go": "124867eae9ba8a1770039cc455c54b1c16000bf499504f910b4d9ad33a9cda23",
+      "apitest/offset_test.go": "6389f768e58a22b45c55f51d06749c248725c68e323d4fde523dd72706f6e947",
+      "apitest/thicken_prism_test.go": "c266351be718cba01db836f6a4b84186fd3b6aa8737571b67969f6ffcec9c640",
+      "apitest/moments_test.go": "d6155671530390de977082a90f2a2572b5abf8f68b88d0f8e9ca3254962159e5",
+      "moments_internal_test.go": "1cb41b366fd46be9d6dbb5668e58ea5dce14d07b08afc0ba8eeb5dd036621fd9",
+      "go.mod": "ec9f103a0e56d4fa67749bb5b77f46c194d6e47f9cd33ce479aee51569210026",
+      "go.sum": "76866a8658a108d1d626c8261f2e4c79655b7fcc27b949d4bed18d1bcb7a46f9"
+    },
+    "candidate": {
+      "internal/momentline/line.go": "ec0e07d7a14dd6efb4a3333f45d17e1dc718a2294b8ed6074b240b7c492579d8",
+      "internal/momentline/line_test.go": "08a81b78f8d51a97150587be481df8a7f28812a968472c5161f29d7c64dcf956",
+      "internal/proof/dyadic.go": "6f99eded75005c0f3e56490e4de7eb87a46987ca8a6a7c8029d3c1a8c5ba18b9",
+      "internal/momentregion/segments.go": "b8ed469fe8745dd4bb0d0007927d3f74475104cf0bb341a3e3ccd2e20c7b9371",
+      "internal/momentregion/dispatch.go": "9d363d1c851fdf154181e2a2eb600b14f4c589a6e2fe288615d867f7b8815241",
+      "internal/momentregion/third.go": "581366ce098b1bcb45a14cbcb50bab9f59cfe2ee050e297b41e9398bdfdffa4c",
+      "apitest/offset_bench_test.go": "124867eae9ba8a1770039cc455c54b1c16000bf499504f910b4d9ad33a9cda23",
+      "apitest/offset_test.go": "6389f768e58a22b45c55f51d06749c248725c68e323d4fde523dd72706f6e947",
+      "apitest/thicken_prism_test.go": "c266351be718cba01db836f6a4b84186fd3b6aa8737571b67969f6ffcec9c640",
+      "apitest/moments_test.go": "d6155671530390de977082a90f2a2572b5abf8f68b88d0f8e9ca3254962159e5",
+      "moments_internal_test.go": "1cb41b366fd46be9d6dbb5668e58ea5dce14d07b08afc0ba8eeb5dd036621fd9",
+      "go.mod": "ec9f103a0e56d4fa67749bb5b77f46c194d6e47f9cd33ce479aee51569210026",
+      "go.sum": "76866a8658a108d1d626c8261f2e4c79655b7fcc27b949d4bed18d1bcb7a46f9",
+      "internal/momentline/dyadic.go": "493964f938b0e395def749f2865e9ac7e78832a531c1b746d1f63a12bccac44d",
+      "internal/momentline/dyadic_test.go": "a8421991aecb984dbec5f2b3808d092fc42389bd92312d03d48afce8a274ff5d"
+    }
+  },
+  "temporary_parent": "7ce5921177b20584123c12f62eb75444109d5a8c",
+  "source_policy": "Archive exact commits; compile original sources without production instrumentation. Only standalone validation controls enter temporary commit. Verify source/control hashes before and after every stage. Candidate scope exactly line.go, dyadic.go, dyadic_test.go in internal/momentline.",
+  "line_tests": {
+    "both": [
+      "TestEvaluateAreaMatchesThreeMomentReference"
+    ],
+    "candidate": [
+      "TestDyadicLineMomentsMatchRationalOracle",
+      "TestDyadicLineMomentResultsOwnRationals"
+    ]
+  },
+  "integration_tests": {
+    "apitest": [
+      "TestRegionMomentsRequestedOrderControlsOverflow",
+      "TestOverflowingSecondMomentKeepsExactArea",
+      "TestLineRationalRoundingIsBounded",
+      "TestUnderflowingLineRegionAreaPublishesBoundedZero",
+      "TestOffsetPrismRectangle",
+      "TestOffsetPrismCircle",
+      "TestOffsetPrismNarrowNeckAdmitted"
+    ],
+    "root": [
+      "TestFirstOrderMomentsMatchFullAreaCentroidAndBounds",
+      "TestThirdOrderMomentsOfASector"
+    ]
+  },
+  "correctness_order": "Normal baseline and candidate, then candidate race, for each selected package; no broad suites. Separate line and integration phases.",
+  "consumer_benchmarks": {
+    "neck": "BenchmarkOffsetPrismNarrowNeck",
+    "circle": "BenchmarkOffsetPrismCircle"
+  },
+  "consumer_admission": {
+    "neck": "TestOffsetPrismNarrowNeckAdmitted",
+    "circle": "TestOffsetPrismCircle"
+  },
+  "measurement_boundary": "Existing benchmark functions remain byte-identical. Each iteration constructs fresh operands with timer stopped, starts timer for Offset only, then stops before assertions/Area/Bounds. Go benchmark allocation counters use the same timer boundaries. No added within-process warmup; baseline feasibility probe is a separate excluded process.",
+  "pairs": 5,
+  "order": [
+    "baseline",
+    "candidate",
+    "candidate",
+    "baseline",
+    "baseline",
+    "candidate",
+    "candidate",
+    "baseline",
+    "baseline",
+    "candidate"
+  ],
+  "count_rule": "Baseline-only 1x probe: <=10 seconds/op selects2x; <=20 seconds/op selects1x; otherwise abort. Five fresh-process pairs; no candidate-driven count or threshold changes.",
+  "neck_benefit_gates": {
+    "median_time_ratio_max": 0.98,
+    "median_bytes_ratio_max": 0.99,
+    "pair_time_ratio_max": 1.02,
+    "all_pair_bytes_strictly_lower": true,
+    "all_pair_allocs_no_increase": true
+  },
+  "circle_regression_gates": {
+    "median_time_ratio_max": 1.02,
+    "pair_time_ratio_max": 1.05,
+    "all_pair_bytes_no_increase": true,
+    "all_pair_allocs_no_increase": true
+  },
+  "stop_rule": "Stop subsequent phases on any correctness, resource, cleanup or frozen acceptance failure; no automatic follow-on dispatch. Both consumer phases required, circle cannot substitute for neck benefit.",
+  "resources": {
+    "memory_bytes": 4294967296,
+    "monitored_stop_bytes": 3221225472,
+    "swap_bytes": 0,
+    "cpus": 2,
+    "pids": 64,
+    "tmpfs_bytes": 67108864,
+    "aggregate_text_bytes": 1048576,
+    "metadata_bytes": 65536,
+    "controller_seconds": 1320,
+    "workflow_minutes": 24,
+    "compile_outer_seconds": 90,
+    "test_outer_seconds": 45,
+    "test_inner_seconds": 30,
+    "consumer_outer_seconds": 60,
+    "consumer_inner_seconds": 45,
+    "cleanup_seconds": 5,
+    "host_headroom_bytes": 6442450944
+  },
+  "stages": {
+    "line_correctness": {
+      "count": 6,
+      "ceilings_seconds": 405
+    },
+    "integration_correctness": {
+      "count": 12,
+      "ceilings_seconds": 810
+    },
+    "consumer_neck": {
+      "count": 15,
+      "ceilings_seconds": 960
+    },
+    "consumer_circle": {
+      "count": 15,
+      "ceilings_seconds": 960
+    }
+  },
+  "evidence": "Exact dispatch/workflow/source identity; toolchain/image/hardware; raw logs and benchmark rows; independently recomputed medians/pairs; per-stage final memory peak and zero oom/oom_kill deltas; source hashes; owned launcher reaped/no live members; exact container absent and cgroup empty/removed. Missing final evidence is inconclusive.",
+  "lifecycle_reference": {
+    "worktree": "test-20261016-held-projection-timer-reviewed",
+    "controller_sha256": "1a86fa43502261d4347e73a64d66cef8b1447a67899ca704d6de1159324bac9b"
+  },
+  "status": "Frozen proposal for independent review; no executable control draft, push, dispatch or workload yet. Synthetic algebra timings cannot establish acceptance."
+}
