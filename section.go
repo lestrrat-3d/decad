@@ -60,7 +60,16 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 		return sectionclip.ReconstructExactSection(ctx, profile, plane)
 	}
 	if rp, ok := b.n.Payload.(revolvePayload); ok {
-		profile, polygon, delta, admitted := cardinalSphereSection(b, plane)
+		sphere, authenticated := sourceSphereAtPose(b, r3.Identity())
+		var (
+			profile  profileRecord
+			polygon  []planePoint
+			delta    float64
+			admitted bool
+		)
+		if authenticated {
+			profile, polygon, delta, admitted = sectionclip.CardinalSphereSection(sphere.center, sphere.radius, plane)
+		}
 		if !admitted {
 			faces := b.Faces()
 			if len(faces) == 2 && len(b.Edges()) == 1 {
@@ -74,12 +83,12 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 					}
 				}
 				if cone == 1 && planar == 1 {
-					profile, polygon, delta, admitted = cardinalConeSection(rp, plane)
+					profile, polygon, delta, admitted = sectionclip.CardinalConeSection(rp, plane)
 				}
 			}
 		}
 		if !admitted {
-			if sphere, authenticated := sourceSphereAtPose(b, r3.Identity()); authenticated {
+			if authenticated {
 				polygon, delta, admitted = sectionclip.ObliqueSpherePolygon(sphere.center, sphere.radius, plane)
 			}
 		}
@@ -127,7 +136,7 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 				polygon, delta, clipped = sectionclip.ObliqueCircleClip(pp, plane)
 			}
 			if !clipped {
-				polygon, delta, clipped = obliqueCircleCapClip(ctx, pp, plane)
+				polygon, delta, clipped = sectionclip.ObliqueCircleCapClip(ctx, pp, plane)
 			}
 			if clipped {
 				s, result, err := sectioncert.ReconstructBoundedSection(ctx, polygon, plane, delta)

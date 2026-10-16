@@ -80,10 +80,7 @@ The rules for rows live in `docs/layout.md`.
 | `identity.go` | The root spelling of the provenance producer identity and the shared zero-vector predicate. |
 | `record.go` | Root-owned `Point2`, structural record and payload aliases (including the faceted payload and its records), and slice adapters. See sketch-seam §2. |
 | `seam.go` | Sketch chain recording adapters and `MeasureProfile`; profile recording lives in `internal/sectioncert/`. See sketch-seam §1–§2. |
-| `section.go` | Public planar section query over certified prism, stack-backed BRep, direct and rectangular smooth Loft, sphere and cone records; the exact record builders live in `internal/sectionclip/`. See section design. |
-| `section_cone_axis.go` | Full right-cone section on a cardinal plane with an exact circle or bounded polygon. See section design. |
-| `section_sphere_axis.go` | Authenticated source-sphere section on a cardinal plane with an exact circle or bounded polygon. See section design. |
-| `section_circle_cap.go` | One-cap oblique circle clip entry; the certified circle-line trim, cap polygon and world-vector helpers live in `internal/sectionclip/`. See section design. |
+| `section.go` | Public planar section query over certified prism, stack-backed BRep, direct and rectangular smooth Loft, sphere and cone records; the exact record builders and clips live in `internal/sectionclip/`. See section design. |
 | `path.go` | The immutable spatial `Path`, sealed segments and its recorded `internal/sweepinput.Path`. See sweep §2–§3. |
 | `extent.go` | Public linear and angular extent variants and normalization. See API §8.1. |
 | `selector.go` | `EdgeQuery`/`FaceQuery` and live-topology adapters for `internal/selectorquery`. See API §9. |

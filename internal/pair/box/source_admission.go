@@ -4,6 +4,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
 )
@@ -24,6 +25,16 @@ func CardinalBasis(u, v, n r3.Vec) bool {
 	}
 	a, b, c := axis(u), axis(v), axis(n)
 	return a != 0 && b != 0 && c != 0 && a != b && a != c && b != c
+}
+
+// SignedAxisTransform reports whether t is valid, has a finite translation and
+// maps the three basis axes to distinct signed axes.
+func SignedAxisTransform(t r3.Transform) bool {
+	if !t.IsValid() || !proofbound.FiniteVec(t.Translation()) {
+		return false
+	}
+	b := t.Basis()
+	return CardinalBasis(b.EX, b.EY, b.EZ)
 }
 
 // RectangularProfile admits one complete axis-aligned recorded rectangle.

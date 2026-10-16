@@ -1,4 +1,4 @@
-package decad
+package sectionclip
 
 import (
 	"math"
@@ -8,21 +8,20 @@ import (
 	"github.com/lestrrat-3d/decad/internal/pair/box"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/sectionclip"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
-// cardinalConeSection cuts one authenticated full right cone. The three
+// CardinalConeSection cuts one authenticated full right cone. The three
 // complete meridian lines must join a base-axis point, base-rim point and apex.
 // All comparisons use their exact recorded binary values. An inexact radius
 // is represented by a bounded polygon with a certified two-sided displacement.
-func cardinalConeSection(rp revolvePayload, plane r3.Frame) (profileRecord, []planePoint, float64, bool) {
+func CardinalConeSection(rp revolvePayload, plane r3.Frame) (profileRecord, []planePoint, float64, bool) {
 	if !rp.Full || rp.SurfaceResult || rp.SectionDelta != 0 ||
 		len(rp.Profile.Holes) != 0 || len(rp.Profile.Outer.Segments) != 3 ||
 		!box.CardinalBasis(rp.Frame.U(), rp.Frame.V(), rp.Frame.N()) ||
 		!box.CardinalBasis(plane.U(), plane.V(), plane.N()) ||
-		!signedAxisTransform(rp.Xform) || !proofbound.FiniteVec(rp.Frame.Origin()) ||
+		!box.SignedAxisTransform(rp.Xform) || !proofbound.FiniteVec(rp.Frame.Origin()) ||
 		rp.Ax.AUBound != 0 || rp.Ax.AVBound != 0 ||
 		rp.Ax.DUBound != 0 || rp.Ax.DVBound != 0 ||
 		!((math.Abs(rp.Ax.DU) == 1 && rp.Ax.DV == 0) ||
@@ -123,7 +122,7 @@ func cardinalConeSection(rp revolvePayload, plane r3.Frame) (profileRecord, []pl
 		}}}}, nil, 0, true
 	}
 	lower, upper := proofbound.RatFloatDown(radius), proofbound.RatFloatUp(radius)
-	if !sectionclip.ObliqueCircleFinite(lower, upper) || lower <= 0 || upper <= lower {
+	if !ObliqueCircleFinite(lower, upper) || lower <= 0 || upper <= lower {
 		return profileRecord{}, nil, 0, false
 	}
 	// The exact disk contains the lower disk and lies in the upper disk.
@@ -133,14 +132,14 @@ func cardinalConeSection(rp revolvePayload, plane r3.Frame) (profileRecord, []pl
 	gapLocal := proofbound.RatFloatUp(proofarith.DyMul(gap, proofarith.DyInt(2)).Rat())
 	gapWorld := proofbound.ProductUpper(gapLocal,
 		max(proofbound.DvLenUpper(u), proofbound.DvLenUpper(v)))
-	if !sectionclip.ObliqueCircleFinite(gapLocal, gapWorld) {
+	if !ObliqueCircleFinite(gapLocal, gapWorld) {
 		return profileRecord{}, nil, 0, false
 	}
-	center := sectionclip.SectionRatPoint{U: proofarith.FloatRat(centerU), V: proofarith.FloatRat(centerV)}
-	a := sectionclip.SectionRatPoint{U: proofarith.FloatRat(lower), V: proofarith.FloatRat(0)}
-	b := sectionclip.SectionRatPoint{U: proofarith.FloatRat(0), V: proofarith.FloatRat(lower)}
+	center := SectionRatPoint{U: proofarith.FloatRat(centerU), V: proofarith.FloatRat(centerV)}
+	a := SectionRatPoint{U: proofarith.FloatRat(lower), V: proofarith.FloatRat(0)}
+	b := SectionRatPoint{U: proofarith.FloatRat(0), V: proofarith.FloatRat(lower)}
 	for _, perQuadrant := range [...]int{8, 16, 32} {
-		polygon, delta, proved := sectionclip.ObliqueCirclePolygon(center, a, b, 1,
+		polygon, delta, proved := ObliqueCirclePolygon(center, a, b, 1,
 			plane, perQuadrant, gapLocal, gapWorld)
 		if proved {
 			return profileRecord{}, polygon, delta, true
