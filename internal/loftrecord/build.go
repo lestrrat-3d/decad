@@ -23,7 +23,7 @@ import (
 // Payload, Table S gates S1-S5, S7's STRUCTURAL arm and S13's
 // coordinate-range gate (S9-S11 are the public entry point's job,
 // docs/loft-design.md §2/§4), the wiring of the already-landed §6 audit
-// (internal/loftmesh/loft_audit.go) and §8 mass kernel (loft_moments.go), and the four
+// (internal/loftmesh/loft_audit.go) and §8 mass kernel (internal/loftmesh/mass_accumulator.go), and the four
 // measurements. Document.Loft is PR 1b.
 //
 // Sibling files carry the construction Build drives, each with its own doc
@@ -312,8 +312,8 @@ func Build(ctx context.Context, env topo.Env, pl Payload, budget *proofbound.Wor
 			proofbound.MeasuredScalar(capEnd.Area, capEnd.AreaBound),
 		)
 		// Published Approximate EXPLICITLY, never derived from the composed
-		// bound: the solid loft's own mass.area() always publishes
-		// Approximate (loft_moments.go — a triangle's area is a square root,
+		// bound: the solid loft's own MassAccumulator.Area always publishes
+		// Approximate (internal/loftmesh/mass_accumulator.go — a triangle's area is a square root,
 		// never exactly representable), and a sheet built from the SAME wall
 		// triangles must never claim more exactness than the body it came
 		// from, whatever its own composed bound happens to round to.

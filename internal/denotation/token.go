@@ -137,7 +137,7 @@ type CurveID int
 // UNDER. A placement breaks the certificate: two edges that shared a
 // denotation before one body moved no longer denote the same curve AT THE
 // SAME PLACE, so xform is part of the comparison alongside id
-// (sameCurve, below) — the identical discipline internal/stitchrecord/build.go's own
+// (SameCurve, below) — the identical discipline internal/stitchrecord/build.go's own
 // `xform != r3.Identity()` placement check already applies to a whole
 // stitched body. A copier that applies an ADDITIONAL motion on top of
 // whatever a token already carries restates it with compose, never by

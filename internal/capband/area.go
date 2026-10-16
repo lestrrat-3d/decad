@@ -15,7 +15,7 @@ import (
 // float cross product and a float norm — r3's own Len is a nested Hypot, which
 // carries no ulp contract at all — and their sum rounds once more, so the held
 // value is a float evaluation and proofbound.SumSlop is the proven, never-zero bound
-// internal/proofbound/bounds.go keeps for that shape (the same one boolean_body.go's mesh facet
+// internal/proofbound/bounds.go keeps for that shape (the same one internal/facetedrecord/assemble.go's mesh facet
 // areas take). Returning a zero bound there would publish an Exact the
 // arithmetic has not earned, on the face AND in the body's own area sum.
 //

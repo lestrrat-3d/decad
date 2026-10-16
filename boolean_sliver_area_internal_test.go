@@ -68,7 +68,7 @@ func facetAreaGap(held float64, verts []r3.Vec, tris [][3]int) *big.Float {
 // facet areas.
 //
 // Shown to fail first: dropping faceTermSlop from the per-face bound in
-// boolean_body.go turns the sliver face red; dropping termSlop from
+// internal/facetedrecord/assemble.go turns the sliver face red; dropping termSlop from
 // facetproof.MeshAreaUpper turns its assertion red; dropping
 // FacetAreaTermSlop from tessellation.FaceAreaUpper turns that assertion red.
 // The body-level assertion stays green without the body's own termSlop here:

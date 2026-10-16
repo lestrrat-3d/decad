@@ -656,7 +656,7 @@ func TestLoftCircularArcSagittaIsTheUniformParameterMatchedBound(t *testing.T) {
 // own sagittaUpper, for EVERY cell of the shared chain, never a separate or
 // smaller reading. That per-cell value is the CHORD-TO-CURVE HALF of
 // docs/loft-design.md §5.2's matchedDelta row, which every consumer
-// (internal/proofbound/bounds.go's proofbound.CellChordCurveAreaUpper through loft_moments.go's
+// (internal/proofbound/bounds.go's proofbound.CellChordCurveAreaUpper through internal/loftmesh/loft_chord_allow.go's
 // loftmesh.ComputeLoftChordedAllow) reads straight off this arm before composing it
 // with the build's own delta, and loftPayload's own doc comment states the
 // equality as fact — so it is asserted here rather than left to the

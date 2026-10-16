@@ -590,13 +590,13 @@ func TestLoftPlacedS13OverflowingCoordinate(t *testing.T) {
 // placement owes at a coordinate whose DISPLACEMENT SCALE, not its
 // coordinate, leaves the finite float64 range. Both sections sit at
 // 0.75*MaxFloat64, so 2*maxInputAbs overflows inside internal/proofbound/bounds.go's
-// rigidRoundAllow while every placed coordinate itself stays finite — S13
+// RigidRoundAllow while every placed coordinate itself stays finite — S13
 // never fires, and the placement is decided by the terms delta feeds.
 //
 // The answer must be ErrUnsupported and never ErrNotFinite: every input is
 // finite and only decad's own evaluation leaves the range, which is the line
 // Table S row S13 draws. A NaN delta is what makes the difference: NaN > 0 is
-// false, so loft_moments.go's placement terms would all be skipped, the
+// false, so internal/loftmesh/mass_accumulator.go's placement terms would all be skipped, the
 // volume bound would never be widened, S12's clearance test would never run,
 // and the placement would fail only incidentally on the one reading that
 // publishes delta unconditionally.

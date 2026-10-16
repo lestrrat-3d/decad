@@ -480,7 +480,7 @@ func (m matchedCorner) String() string {
 //
 // Closure is decided by shared vertex identity, never by coordinates: both
 // builders that mint a closed edge intern one *Vertex for its two ends
-// (boolean_body.go's vertexOf memoizes by mesh-vertex index; extrude.go
+// (internal/facetedrecord/topology.go's vertexOf memoizes by mesh-vertex index; extrude.go
 // assigns a full circle's edge the same start and end vertex), so the test is
 // the pointer comparison edge.Start() == edge.End(). A Circle3 additionally
 // reports the centre and radius no endpoint pair can carry, and falls under

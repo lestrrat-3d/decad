@@ -30,7 +30,7 @@ import (
 // This file is a10-plan.md Part 3 PR 6's own acceptance tests: the
 // same-kind circular pairing S3's arc form now admits, S14's station-
 // rounding gate, the CCW structural gate, and sectionDelta's composition
-// into all four measurements (loft_moments.go's loftmesh.ComputeLoftChordedAllow).
+// into all four measurements (internal/loftmesh/loft_chord_allow.go's loftmesh.ComputeLoftChordedAllow).
 // wedgePlanes/wedgeArcSketch/wedgeRadius/wedgeSweep/wedgeHeight/toleranceRel
 // are loft_chord_calibration_internal_test.go's own PR 1 fixtures (same
 // package, same reference wedge).

@@ -15,7 +15,7 @@ import (
 //
 // THE EMBEDDEDNESS ARGUMENT, repaired. `sketch` already proved the recorded
 // profile a simple closed planar region. Every boundary stretch lying ON the
-// resolved axis is classified wallAxis (revolve_axis.go's axisFrame.classify)
+// resolved axis is classified wallAxis (internal/revolveaxis/wall_kind.go's Classify)
 // and buildRevolveLoop skips it when assembling faces — it sweeps a
 // zero-area set and emits no face at all — so the finished face set is the
 // revolution of the boundary's OFF-axis part alone. Two distinct off-axis
@@ -42,13 +42,10 @@ import (
 // only when the radial minimum is PROVEN non-negative (rlo − rBound >= 0),
 // not merely un-disproven.
 //
-// NO FREE-FORM REFUSAL IS NEEDED HERE. rejectInteriorContact
-// (revolve_axis.go) calls boundarywalk.RequireAnalyticWalk on every segment before its own
-// circularity check, and revolveplan.ResolveAxisSide runs on every revolve build
-// (revolve.go). So a revolvePayload that built at all already has an
-// all-analytic profile and can never carry a free-form face — adding a
-// redundant free-form gate here would be dead code guarding a case this
-// arm can never reach.
+// NO FREE-FORM GATE IS ADDED HERE. revolveplan.ResolveAxisSide runs on every
+// revolve build, and its AuditProfileAxisContact (recorded_walks.go) refuses a
+// free-form generator unless the profile's radial minimum is proven clear of
+// the axis. This leg adds no free-form check of its own.
 //
 // A direct Revolve can carry the strict positive-side proof produced by
 // revolveplan.ResolveAxisSide's scan of this same profile and axis. Its scan adds a

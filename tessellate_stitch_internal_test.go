@@ -194,7 +194,7 @@ func stitchInternalOffAxisPlateSketch(t *testing.T) (*sketch.Sketch, *sketch.Pro
 // then stitched at IDENTITY — the same fixture apitest/stitch_test.go's
 // TestStitchClosesABoundedPatchedWallWithChargedVolumeBound builds). No
 // placement is in play at all, so a positive mesh Bound here can only be
-// read from the weld's own CLASS bound (stitchVertexTable.boundByClass),
+// read from the weld's own CLASS bound (internal/stitchweld/weld.go's per-class Table.Bounds),
 // never from a placement delta — the leg
 // TestStitchPlacedSolidTessellateBoundReadsVertexBound (T59,
 // apitest/tessellate_stitch_test.go) cannot distinguish on its own.

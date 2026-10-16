@@ -210,7 +210,7 @@ func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 			}
 			// The flag rides the REDUCED prismPayload, not just the finishing
 			// sweepPayload literal below: internal/prismrecord/build.go's prismrecord.Build reads
-			// pp.surfaceResult to decide Kind()/solid, cap omission, topobuild.SheetLumps and
+			// pp.SurfaceResult to decide Kind()/solid, cap omission, topobuild.SheetLumps and
 			// the area subtraction, which is what gives the line reduction the
 			// whole sheet behaviour for free (docs/surface-design.md §4).
 			prism := prismrecord.Payload{

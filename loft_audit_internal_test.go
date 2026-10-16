@@ -877,9 +877,9 @@ func BenchmarkLoftCrossingAuditBroadPhase(b *testing.B) {
 }
 
 // This file is a10-plan.md Part 3 PR 9 Task 1c: an END-TO-END fixture for
-// the wall's own three-leg AREA gap (loft_moments.go's
-// m.chorded.areaExcess, area()'s own composition line
-// `bound = proofbound.AbsSumUpper(bound, m.chorded.areaExcess, m.chorded.capAreaExcess)`)
+// the wall's own three-leg AREA gap (internal/loftmesh/mass_accumulator.go's
+// m.Chorded.AreaExcess, MassAccumulator.Area's own composition line
+// `bound = proofbound.AbsSumUpper(bound, m.Chorded.AreaExcess, m.Chorded.CapAreaExcess)`)
 // — the leg zeroing left the ENTIRE repository suite green before this file
 // existed. TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap
 // (loft_arc_pairs_internal_test.go) already proves loftmesh.ComputeLoftChordedAllow's
@@ -930,7 +930,7 @@ func BenchmarkLoftCrossingAuditBroadPhase(b *testing.B) {
 //     real Body.Area().
 //
 // FALSIFICATION LEDGER (verified by hand during review: temporarily zero
-// the named leg in loft_moments.go's `area()`, rerun the named test,
+// the named leg in internal/loftmesh/mass_accumulator.go's `MassAccumulator.Area`, rerun the named test,
 // confirm RED, restore). Each entry quotes the ACTUAL failing assertion
 // line, not merely "RED":
 //

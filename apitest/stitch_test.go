@@ -675,7 +675,7 @@ func TestStitchCurvedSolidMeshPreservesAnalyticMass(t *testing.T) {
 // stitchBoxSheetsAtZ is stitchBoxSheets with its base plane offset to z0
 // rather than z=0, so the whole assembly can float clear of another body's
 // own z=0 base face with no Placed transform in play — a Placed motion would
-// widen every vertex bound (rigidRoundAllow) and refuse the exact-carrier
+// widen every vertex bound (RigidRoundAllow) and refuse the exact-carrier
 // gate T67/T68/T69 exist to exercise.
 func stitchBoxSheetsAtZ(t *testing.T, doc *decad.Document, z0 float64) (walls, bottom, top *decad.Body) {
 	t.Helper()
@@ -857,7 +857,7 @@ func TestStitchBoundedStitchedSolidGetsClearance(t *testing.T) {
 // TestStitchPlacedStitchedSolidGetsClearance is docs/surface-design.md's
 // T69: T58's own zero-bound box, Placed under a non-identity rigid motion,
 // reaches the identical gate T68 does by the other route — the placement's
-// own rigidRoundAllow widens every vertex bound rather than a certificate
+// own RigidRoundAllow widens every vertex bound rather than a certificate
 // weld's own class bound (internal/stitchrecord/build.go's "recorded weld" comment). Neither
 // route alone would be trusted; together they prove the gate reads the
 // vertex bound itself, not one particular cause of it. It now gets a real
