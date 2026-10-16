@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/lestrrat-3d/decad/internal/freeform"
-	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/sectionclip"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -46,20 +44,20 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 		return nil, nil, fmt.Errorf(`%w: a section needs a sound solid`, ErrNotSolid)
 	}
 	if pl, ok := b.n.Payload.(loftPayload); ok {
-		profile, admitted := loftCircleSectionRecord(pl, plane)
+		profile, admitted := sectionclip.LoftCircleSectionRecord(pl, plane)
 		if !admitted {
-			profile, admitted = loftMatchingSectionRecord(pl, plane)
+			profile, admitted = sectionclip.LoftMatchingSectionRecord(pl, plane)
 		}
 		if !admitted {
-			profile, admitted = loftVaryingCircularOuterSectionRecord(pl, plane)
+			profile, admitted = sectionclip.LoftVaryingCircularOuterSectionRecord(pl, plane)
 		}
 		if !admitted {
-			profile, admitted = loftRuledLineSectionRecord(pl, plane)
+			profile, admitted = sectionclip.LoftRuledLineSectionRecord(pl, plane)
 		}
 		if !admitted {
 			return nil, nil, fmt.Errorf(`%w: section needs an exact parallel loft`, ErrUnsupported)
 		}
-		return reconstructExactSection(ctx, profile, plane)
+		return sectionclip.ReconstructExactSection(ctx, profile, plane)
 	}
 	if rp, ok := b.n.Payload.(revolvePayload); ok {
 		profile, polygon, delta, admitted := cardinalSphereSection(b, plane)
@@ -96,21 +94,21 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 			}
 			return s, []*sketch.Profile{result}, nil
 		}
-		return reconstructExactSection(ctx, profile, plane)
+		return sectionclip.ReconstructExactSection(ctx, profile, plane)
 	}
 	if _, ok := b.n.Payload.(brepPayload); ok {
 		operand, admitted := stackedUnionOperandOf(b)
 		if !admitted {
 			return nil, nil, fmt.Errorf(`%w: section needs an authenticated BRep slab`, ErrUnsupported)
 		}
-		return sectionBrepStack(ctx, operand, plane)
+		return sectionclip.SectionBrepStack(ctx, operand.proxy, operand.slabs, plane)
 	}
 	if fp, ok := b.n.Payload.(facetedPayload); ok {
-		profile, admitted := smoothRectangularSectionRecord(fp, plane)
+		profile, admitted := sectionclip.SmoothRectangularSectionRecord(fp, plane)
 		if !admitted {
 			return nil, nil, fmt.Errorf(`%w: section needs an original rectangular smooth loft`, ErrUnsupported)
 		}
-		return reconstructExactSection(ctx, profile, plane)
+		return sectionclip.ReconstructExactSection(ctx, profile, plane)
 	}
 	pp, ok := b.n.Payload.(prismPayload)
 	if !ok || pp.SectionDelta != 0 || pp.Z0Delta != 0 || pp.Z1Delta != 0 {
@@ -119,14 +117,14 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 	profile := pp.Profile
 	if !pp.SectionPlaneInside(plane) {
 		var admitted bool
-		profile, admitted = cardinalCircleSectionRecord(pp, plane)
+		profile, admitted = sectionclip.CardinalCircleSectionRecord(pp, plane)
 		if !admitted {
-			profile, admitted = cardinalRectangleSectionRecord(pp, plane)
+			profile, admitted = sectionclip.CardinalRectangleSectionRecord(pp, plane)
 		}
 		if !admitted {
-			polygon, delta, clipped := obliqueRectangleClip(pp, plane)
+			polygon, delta, clipped := sectionclip.ObliqueRectangleClip(pp, plane)
 			if !clipped {
-				polygon, delta, clipped = obliqueCircleClip(pp, plane)
+				polygon, delta, clipped = sectionclip.ObliqueCircleClip(pp, plane)
 			}
 			if !clipped {
 				polygon, delta, clipped = obliqueCircleCapClip(ctx, pp, plane)
@@ -141,72 +139,5 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 			return nil, nil, fmt.Errorf(`%w: section plane does not cross an admitted exact prism section`, ErrUnsupported)
 		}
 	}
-	return reconstructExactSection(ctx, profile, plane)
-}
-
-func smoothRectangularSectionRecord(fp facetedPayload, plane r3.Frame) (profileRecord, bool) {
-	// Placement drops the certificate. The xform and normal checks are
-	// reject-only backstops for future producers and placement paths.
-	if fp.SmoothRectSection == nil || fp.Xform != r3.Identity() ||
-		plane.U() != r3.NewVec(1, 0, 0) || plane.V() != r3.NewVec(0, 1, 0) ||
-		plane.N() != r3.NewVec(0, 0, 1) {
-		return profileRecord{}, false
-	}
-	origin := fp.SmoothRectSection.Origin()
-	if plane.Origin().X != origin.X || plane.Origin().Y != origin.Y {
-		return profileRecord{}, false
-	}
-	w, h, ok := fp.SmoothRectSection.At(plane.Origin().Z)
-	if !ok {
-		return profileRecord{}, false
-	}
-	a, b := planePoint{U: -w, V: -h}, planePoint{U: w, V: -h}
-	c, d := planePoint{U: w, V: h}, planePoint{U: -w, V: h}
-	return profileRecord{Outer: loopRecord{Segments: []curveSegment{
-		lineSeg{Start: a, End: b, TStart: 0, TEnd: 1},
-		lineSeg{Start: b, End: c, TStart: 0, TEnd: 1},
-		lineSeg{Start: c, End: d, TStart: 0, TEnd: 1},
-		lineSeg{Start: d, End: a, TStart: 0, TEnd: 1},
-	}}}, true
-}
-
-// sectionBrepStack reads only the certified slab profiles of an A1 Union.
-// The same exact frame and strict interior-level check used for a prism
-// applies to each slab separately. An interface level names two different
-// sections, so neither slab admits it.
-func sectionBrepStack(ctx context.Context, operand stackedUnionOperand, plane r3.Frame) (
-	*sketch.Sketch, []*sketch.Profile, error,
-) {
-	if operand.proxy.SectionDelta != 0 {
-		return nil, nil, fmt.Errorf(`%w: BRep section has a displaced source profile`, ErrUnsupported)
-	}
-	for _, slab := range operand.slabs {
-		if err := ctx.Err(); err != nil {
-			return nil, nil, err
-		}
-		candidate := operand.proxy
-		candidate.Z0, candidate.Z1 = slab.Z0, slab.Z1
-		if !candidate.SectionPlaneInside(plane) {
-			continue
-		}
-		if slab.Z0Delta != 0 || slab.Z1Delta != 0 || len(slab.Regions) != 1 {
-			return nil, nil, fmt.Errorf(`%w: BRep section needs one exact slab region`, ErrUnsupported)
-		}
-		return reconstructExactSection(ctx, slab.Regions[0], plane)
-	}
-	return nil, nil, fmt.Errorf(`%w: section plane lies outside BRep slab interiors`, ErrUnsupported)
-}
-
-func reconstructExactSection(ctx context.Context, profile profileRecord, plane r3.Frame) (
-	*sketch.Sketch, []*sketch.Profile, error,
-) {
-	work := freeform.NewFreeformWork()
-	if _, err := momentinput.ChargeReconstruction(profile, work); err != nil {
-		return nil, nil, err
-	}
-	s, result, err := momentinput.ReconstructProfileOnFrame(ctx, profile, plane)
-	if err != nil {
-		return nil, nil, err
-	}
-	return s, []*sketch.Profile{result}, nil
+	return sectionclip.ReconstructExactSection(ctx, profile, plane)
 }

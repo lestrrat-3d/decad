@@ -80,17 +80,10 @@ The rules for rows live in `docs/layout.md`.
 | `identity.go` | The root spelling of the provenance producer identity and the shared zero-vector predicate. |
 | `record.go` | Root-owned `Point2`, structural record and payload aliases (including the faceted payload and its records), and slice adapters. See sketch-seam §2. |
 | `seam.go` | Sketch chain recording adapters and `MeasureProfile`; profile recording lives in `internal/sectioncert/`. See sketch-seam §1–§2. |
-| `section.go` | Public planar section query over certified prism, stack-backed BRep, direct and rectangular smooth Loft, sphere and cone records. See section design. |
-| `section_loft_circle.go` | Exact parallel section of authenticated circular-boundary and circular-hole Lofts, with shared exact scalar interpolation. See section design. |
-| `section_loft_matching.go` | Exact parallel section of an authenticated Loft with matching profiles. See section design. |
-| `section_loft_ruled_lines.go` | Exact parallel section of an authenticated Loft with full line boundaries. See section design. |
-| `section_circle_axis.go` | Exact whole-circle prism section on a cardinal plane with an exact chord. See section design. |
+| `section.go` | Public planar section query over certified prism, stack-backed BRep, direct and rectangular smooth Loft, sphere and cone records; the exact record builders live in `internal/sectionclip/`. See section design. |
 | `section_cone_axis.go` | Full right-cone section on a cardinal plane with an exact circle or bounded polygon. See section design. |
 | `section_sphere_axis.go` | Authenticated source-sphere section on a cardinal plane with an exact circle or bounded polygon. See section design. |
-| `section_circle_oblique.go` | Oblique full-ellipse clip of an exact whole-circle prism; the rational polygon helpers live in `internal/sectionclip/`. See section design. |
-| `section_circle_cap.go` | One-cap oblique circle clip entry; the certified circle-line trim and cap polygon live in `internal/sectionclip/`. See section design. |
-| `section_rectangle_axis.go` | Exact rectangular-prism section on an interior cardinal vertical plane. See section design. |
-| `section_oblique_clip.go` | Exact rational clipping of a rectangular prism by an oblique plane; the rational point type and arithmetic live in `internal/sectionclip/`. See section design. |
+| `section_circle_cap.go` | One-cap oblique circle clip entry; the certified circle-line trim, cap polygon and world-vector helpers live in `internal/sectionclip/`. See section design. |
 | `path.go` | The immutable spatial `Path`, sealed segments and its recorded `internal/sweepinput.Path`. See sweep §2–§3. |
 | `extent.go` | Public linear and angular extent variants and normalization. See API §8.1. |
 | `selector.go` | `EdgeQuery`/`FaceQuery` and live-topology adapters for `internal/selectorquery`. See API §9. |

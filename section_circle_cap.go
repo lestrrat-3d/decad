@@ -75,21 +75,21 @@ func obliqueCircleCapClip(ctx context.Context, pp prismPayload, plane r3.Frame) 
 	if !sectionclip.SectionCircleCapSketch(ctx, circle, r, zCos, zSin, capLevel, highCross) {
 		return nil, 0, false
 	}
-	center := obliqueCircleWorldAdd(obliqueCircleWorld(centerWorld),
-		obliqueCircleWorldScale(obliqueCircleWorld(axis), zCenter))
-	cosVector := obliqueCircleWorldAdd(obliqueCircleWorldScale(obliqueCircleWorld(radialU), r),
-		obliqueCircleWorldScale(obliqueCircleWorld(axis), zCos))
-	sinVector := obliqueCircleWorldAdd(obliqueCircleWorldScale(obliqueCircleWorld(radialV), r),
-		obliqueCircleWorldScale(obliqueCircleWorld(axis), zSin))
-	localCenter, ok := sectionPlaneCoordinates(center, plane)
+	center := sectionclip.ObliqueCircleWorldAdd(sectionclip.ObliqueCircleWorld(centerWorld),
+		sectionclip.ObliqueCircleWorldScale(sectionclip.ObliqueCircleWorld(axis), zCenter))
+	cosVector := sectionclip.ObliqueCircleWorldAdd(sectionclip.ObliqueCircleWorldScale(sectionclip.ObliqueCircleWorld(radialU), r),
+		sectionclip.ObliqueCircleWorldScale(sectionclip.ObliqueCircleWorld(axis), zCos))
+	sinVector := sectionclip.ObliqueCircleWorldAdd(sectionclip.ObliqueCircleWorldScale(sectionclip.ObliqueCircleWorld(radialV), r),
+		sectionclip.ObliqueCircleWorldScale(sectionclip.ObliqueCircleWorld(axis), zSin))
+	localCenter, ok := sectionclip.SectionPlaneCoordinates(center, plane)
 	if !ok {
 		return nil, 0, false
 	}
-	localCos, ok := sectionPlaneCoordinates(obliqueCircleWorldAdd(center, cosVector), plane)
+	localCos, ok := sectionclip.SectionPlaneCoordinates(sectionclip.ObliqueCircleWorldAdd(center, cosVector), plane)
 	if !ok {
 		return nil, 0, false
 	}
-	localSin, ok := sectionPlaneCoordinates(obliqueCircleWorldAdd(center, sinVector), plane)
+	localSin, ok := sectionclip.SectionPlaneCoordinates(sectionclip.ObliqueCircleWorldAdd(center, sinVector), plane)
 	if !ok {
 		return nil, 0, false
 	}
