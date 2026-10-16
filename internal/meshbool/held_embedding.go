@@ -677,9 +677,22 @@ func (e *heldEmbedding) pairEmbeddedExact(i, j int, sharedI, sharedJ []int) bool
 }
 
 type heldProjectedFacet struct {
-	points [3][3][2]float64
+	points [3]r3.Vec
 	signs  [3][3]int8
 	stable [3]bool
+}
+
+// point selects a coordinate projection without recomputing or rounding it.
+func (p *heldProjectedFacet) point(axis, vertex int) [2]float64 {
+	v := p.points[vertex]
+	switch axis {
+	case 0:
+		return [2]float64{v.X, v.Y}
+	case 1:
+		return [2]float64{v.Z, v.X}
+	default:
+		return [2]float64{v.Y, v.Z}
+	}
 }
 
 // projection builds each directed edge sign once for this facet. A vertex
@@ -691,12 +704,15 @@ func (e *heldEmbedding) projection(i int) *heldProjectedFacet {
 	}
 	p := &e.projected[i]
 	tri := e.h.Tris[i]
-	for axis, axes := range [...][2]int{{0, 1}, {2, 0}, {1, 2}} {
+	for k, v := range tri {
+		p.points[k] = e.h.Verts[v]
+	}
+	for axis := range 3 {
+		var points [3][2]float64
 		p.stable[axis] = true
-		for k, v := range tri {
-			point := e.h.Verts[v]
-			p.points[axis][k] = [2]float64{AxisCoord(point, axes[0]), AxisCoord(point, axes[1])}
-			for _, coord := range p.points[axis][k] {
+		for k := range tri {
+			points[k] = p.point(axis, k)
+			for _, coord := range points[k] {
 				magnitude := proof.Abs(coord)
 				if !(magnitude == 0 || magnitude >= 1e-100 && magnitude <= 1e100) {
 					p.stable[axis] = false
@@ -709,8 +725,8 @@ func (e *heldEmbedding) projection(i int) *heldProjectedFacet {
 			continue
 		}
 		for k := range 3 {
-			p.signs[axis][k] = int8(Orient2Float(p.points[axis][k],
-				p.points[axis][(k+1)%3], p.points[axis][(k+2)%3]))
+			p.signs[axis][k] = int8(Orient2Float(points[k],
+				points[(k+1)%3], points[(k+2)%3]))
 		}
 	}
 	e.projectedOK[i] = true
@@ -740,9 +756,10 @@ func projectedEdgeSeparates(a, b *heldProjectedFacet, axis, edge int) bool {
 	if sign == 0 {
 		return false
 	}
-	start := a.points[axis][edge]
-	end := a.points[axis][(edge+1)%3]
-	for _, point := range b.points[axis] {
+	start := a.point(axis, edge)
+	end := a.point(axis, (edge+1)%3)
+	for k := range 3 {
+		point := b.point(axis, k)
 		if Orient2Float(start, end, point) != -sign {
 			return false
 		}
