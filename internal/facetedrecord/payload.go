@@ -2,6 +2,7 @@ package facetedrecord
 
 import (
 	"github.com/lestrrat-3d/decad/internal/facetproof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/smoothloft"
 	"github.com/lestrrat-3d/r3"
 )
@@ -152,3 +153,39 @@ func (fp Payload) Transform() r3.Transform { return fp.Xform }
 // SurveyClass names the payload class a staged survey diagnostic and the
 // tessellate refusal report: the root type name this payload replaced.
 func (Payload) SurveyClass() string { return "facetedPayload" }
+
+// CertifiedBooleanSimilaritySource checks the private Boolean result's
+// geometry, proof terms, and source-group mapping before ScaleMesh consumes it.
+func CertifiedBooleanSimilaritySource(fp Payload, faceCount int) bool {
+	if len(fp.Tris) == 0 || len(fp.Tris) != len(fp.Src) ||
+		len(fp.Tris) != len(fp.FaceOf) || len(fp.Groups) == 0 || faceCount == 0 ||
+		fp.MeshBound < 0 || fp.VolSymDiff < 0 || fp.AreaSlack < 0 || fp.DPair <= 0 ||
+		proofbound.IsNonFinite(fp.MeshBound) || proofbound.IsNonFinite(fp.VolSymDiff) ||
+		proofbound.IsNonFinite(fp.AreaSlack) || proofbound.IsNonFinite(fp.DPair) {
+		return false
+	}
+	for _, beta := range fp.VertexBound {
+		if beta < 0 || proofbound.IsNonFinite(beta) {
+			return false
+		}
+	}
+	if fp.MeshBound < facetproof.FacetBoundMax(fp.Tris, fp.VertexBound) {
+		return false
+	}
+	for _, source := range fp.Src {
+		if source < 0 || source >= len(fp.Groups) {
+			return false
+		}
+	}
+	for _, face := range fp.FaceOf {
+		if face < 0 || face >= faceCount {
+			return false
+		}
+	}
+	for _, group := range fp.Groups {
+		if len(group.Origins) == 0 {
+			return false
+		}
+	}
+	return true
+}

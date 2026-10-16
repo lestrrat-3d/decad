@@ -68,7 +68,7 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 		len(fp.Verts) == 0 || len(fp.VertexBound) != len(fp.Verts) {
 		return nil, fmt.Errorf("%w: this body has no certified similarity source", ErrUnsupported)
 	}
-	if booleanSource && !certifiedBooleanSimilaritySource(fp, len(b.Faces())) {
+	if booleanSource && !facetedrecord.CertifiedBooleanSimilaritySource(fp, len(b.Faces())) {
 		return nil, fmt.Errorf("%w: the Boolean similarity source has no complete proof", ErrUnsupported)
 	}
 	if fp.PointSimilarity != nil && fp.PointSimilarity.Slice != fp.PointPlane {
@@ -180,42 +180,6 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 	}
 	d.commit(scaled, b)
 	return scaled, nil
-}
-
-// certifiedBooleanSimilaritySource checks the private Boolean result's
-// geometry, proof terms, and source-group mapping before ScaleMesh consumes it.
-func certifiedBooleanSimilaritySource(fp facetedPayload, faceCount int) bool {
-	if len(fp.Tris) == 0 || len(fp.Tris) != len(fp.Src) ||
-		len(fp.Tris) != len(fp.FaceOf) || len(fp.Groups) == 0 || faceCount == 0 ||
-		fp.MeshBound < 0 || fp.VolSymDiff < 0 || fp.AreaSlack < 0 || fp.DPair <= 0 ||
-		proofbound.IsNonFinite(fp.MeshBound) || proofbound.IsNonFinite(fp.VolSymDiff) ||
-		proofbound.IsNonFinite(fp.AreaSlack) || proofbound.IsNonFinite(fp.DPair) {
-		return false
-	}
-	for _, beta := range fp.VertexBound {
-		if beta < 0 || proofbound.IsNonFinite(beta) {
-			return false
-		}
-	}
-	if fp.MeshBound < facetproof.FacetBoundMax(fp.Tris, fp.VertexBound) {
-		return false
-	}
-	for _, source := range fp.Src {
-		if source < 0 || source >= len(fp.Groups) {
-			return false
-		}
-	}
-	for _, face := range fp.FaceOf {
-		if face < 0 || face >= faceCount {
-			return false
-		}
-	}
-	for _, group := range fp.Groups {
-		if len(group.Origins) == 0 {
-			return false
-		}
-	}
-	return true
 }
 
 func similarCapCentroid(source VecMeasurement, anchor r3.Vec, factor float64) (VecMeasurement, error) {
