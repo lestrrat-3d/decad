@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/pointcone"
+	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -25,15 +26,15 @@ func TestSectorCapRefinementKeepsSharedEdges(t *testing.T) {
 		{U: 3, V: 2, Group: 3},
 		{U: 2, V: 0, Group: 3},
 	}
-	before, _, err := sectorConeCapBounds(nodes, triangles, record)
+	before, _, err := revolveshell.SectorConeCapBounds(nodes, triangles, record)
 	require.NoError(t, err)
 	limit := before * 0.01
-	refined, cells, perimeter, round, err := sectorRefineCap(t.Context(), nodes,
+	refined, cells, perimeter, round, err := revolveshell.SectorRefineCap(t.Context(), nodes,
 		triangles, edges, record, limit, 32)
 	require.NoError(t, err)
 	require.Greater(t, round, 0.0)
 	require.Greater(t, len(cells), len(triangles))
-	after, _, err := sectorConeCapBounds(refined, cells, record)
+	after, _, err := revolveshell.SectorConeCapBounds(refined, cells, record)
 	require.NoError(t, err)
 	require.Less(t, after, before)
 	require.Equal(t, -1, perimeter[0].Group)
@@ -53,7 +54,7 @@ func TestSectorCapRefinementKeepsSharedEdges(t *testing.T) {
 	for _, count := range counts {
 		require.LessOrEqual(t, count, 2)
 	}
-	refusedNodes, refusedCells, refusedEdges, refusedRound, err := sectorRefineCap(t.Context(), nodes,
+	refusedNodes, refusedCells, refusedEdges, refusedRound, err := revolveshell.SectorRefineCap(t.Context(), nodes,
 		triangles, edges, record, limit, 5)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Nil(t, refusedNodes)

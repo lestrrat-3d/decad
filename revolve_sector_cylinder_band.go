@@ -11,60 +11,10 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
+	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 )
-
-type revolveSectorBandCross struct {
-	x, round, slopeLo, slopeHi float64
-}
-
-// revolveSectorStraightBandCross solves a circle/straight-meridian crossing
-// with exact dyadic source coordinates. Its rounded axial mesh coordinate
-// carries a separate outward error and slope interval.
-func revolveSectorStraightBandCross(outer, capPoint planePoint, radius float64) (revolveSectorBandCross, bool) {
-	if !proofbound.FiniteVec(r3.Vec{X: outer.U, Y: outer.V, Z: radius}) ||
-		!proofbound.FiniteVec(r3.Vec{X: capPoint.U, Y: capPoint.V}) {
-		return revolveSectorBandCross{}, false
-	}
-	outerX, outerR := proofarith.FloatRat(outer.U), proofarith.FloatRat(outer.V)
-	capX, capR := proofarith.FloatRat(capPoint.U), proofarith.FloatRat(capPoint.V)
-	rad := proofarith.FloatRat(radius)
-	dx := new(big.Rat).Sub(capX, outerX)
-	dr := new(big.Rat).Sub(outerR, capR)
-	if dx.Sign() <= 0 || dr.Sign() <= 0 || rad.Cmp(capR) <= 0 || rad.Cmp(outerR) >= 0 {
-		return revolveSectorBandCross{}, false
-	}
-	fraction := new(big.Rat).Quo(new(big.Rat).Sub(outerR, rad), dr)
-	crossRat := new(big.Rat).Add(outerX, new(big.Rat).Mul(dx, fraction))
-	if crossRat.Cmp(outerX) <= 0 || crossRat.Cmp(capX) >= 0 {
-		return revolveSectorBandCross{}, false
-	}
-	crossX, _ := crossRat.Float64()
-	crossGap := new(big.Rat).Sub(crossRat, proofarith.FloatRat(crossX))
-	crossGap.Abs(crossGap)
-	slope := new(big.Rat).Quo(dr, dx)
-	cross := revolveSectorBandCross{x: crossX, round: proofbound.RatFloatUp(crossGap),
-		slopeLo: proofbound.RatFloatDown(slope), slopeHi: proofbound.RatFloatUp(slope)}
-	if !proofbound.FiniteVec(r3.Vec{X: cross.x, Y: cross.slopeLo, Z: cross.slopeHi}) ||
-		cross.slopeLo <= 0 || cross.round < 0 {
-		return revolveSectorBandCross{}, false
-	}
-	return cross, true
-}
-
-func revolveSectorSortedTriangle(t [3]int) [3]int {
-	if t[0] > t[1] {
-		t[0], t[1] = t[1], t[0]
-	}
-	if t[1] > t[2] {
-		t[1], t[2] = t[2], t[1]
-	}
-	if t[0] > t[1] {
-		t[0], t[1] = t[1], t[0]
-	}
-	return t
-}
 
 // buildRevolveSectorBandCut rewrites one complete cap-adjacent straight band.
 // The full band and both cap fans are counted before any facets are removed.
@@ -84,8 +34,8 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 		len(joined.Tris) > revolveSectorBoreMaxAuditTriangles-2*n {
 		return nil, true, fmt.Errorf("%w: bore has no complete cap-adjacent straight band", ErrUnsupported)
 	}
-	cross, ok := revolveSectorStraightBandCross(band.Start, band.End, radius)
-	if !ok || cross.x >= caps.highX {
+	cross, ok := revolveshell.RevolveSectorStraightBandCross(band.Start, band.End, radius)
+	if !ok || cross.X >= caps.highX {
 		return nil, true, fmt.Errorf("%w: bore does not cross one straight section band", ErrUnsupported)
 	}
 	maxStep, ok := revolvemesh.SectorRingMaxStep(ring.Angles)
@@ -119,7 +69,7 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 			{rootRing[i], caps.lowOuter[i], caps.lowOuter[j]},
 			{rootRing[i], caps.lowOuter[j], rootRing[j]},
 		} {
-			key := revolveSectorSortedTriangle(tri)
+			key := revolveshell.RevolveSectorSortedTriangle(tri)
 			if _, exists := bandCells[key]; exists {
 				return nil, true, fmt.Errorf("%w: section band repeats a mesh cell", ErrUnsupported)
 			}
@@ -159,12 +109,12 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 		}
 	}
 	sagFactor := proofbound.ProductUpper(maxStep, maxStep) / 8
-	cutRound := proofbound.AbsSumUpper(maxRound, cross.round)
+	cutRound := proofbound.AbsSumUpper(maxRound, cross.Round)
 	boreBound = proofbound.AbsSumUpper(proofbound.ProductUpper(radius, sagFactor), cutRound)
 	oldSideErr := proofbound.AbsSumUpper(proofbound.ProductUpper(band.Start.V, sagFactor), oldRound)
 	newSideErr := proofbound.AbsSumUpper(
 		proofbound.ProductUpper(max(band.Start.V, radius), sagFactor), oldRound, cutRound,
-		proofbound.ProductUpper(cross.slopeHi, cross.round))
+		proofbound.ProductUpper(cross.SlopeHi, cross.Round))
 	sideErr := max(oldSideErr, newSideErr)
 	bound := max(joined.MeshBound, boreBound, sideErr)
 	if proofbound.IsNonFinite(bound) || bound > 0.1 || boreBound >= radius ||
@@ -215,7 +165,7 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 			continue
 		}
 		if joined.Src[i] == bandGroup {
-			key := revolveSectorSortedTriangle(tri)
+			key := revolveshell.RevolveSectorSortedTriangle(tri)
 			seen, expected := bandCells[key]
 			if !expected || seen {
 				return nil, true, fmt.Errorf("%w: section band has an unexpected facet", ErrUnsupported)
@@ -223,7 +173,7 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 			bandCells[key] = true
 			continue
 		}
-		if !revolveSectorTriangleClear(tri, joined.Verts, clearance) {
+		if !revolveshell.RevolveSectorTriangleClear(tri, joined.Verts, clearance) {
 			return nil, true, fmt.Errorf("%w: untouched face may enter the bore", ErrUnsupported)
 		}
 		mesh.Add(tri, joined.Src[i])
@@ -244,7 +194,7 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 	vertexBound := append([]float64(nil), joined.VertexBound...)
 	innerHigh := make([]int, n)
 	for i := range n {
-		cut := r3.Vec{X: cross.x, Y: inner[i].U, Z: inner[i].V}
+		cut := r3.Vec{X: cross.X, Y: inner[i].U, Z: inner[i].V}
 		mesh.Verts[caps.lowOuter[i]] = cut
 		vertexBound[caps.lowOuter[i]] = max(boreBound, newSideErr)
 		high := r3.Vec{X: caps.highX, Y: inner[i].U, Z: inner[i].V}
@@ -289,7 +239,7 @@ func buildRevolveSectorBandCut(ctx context.Context, d *Document, ref producerID,
 	rootX := proofarith.FloatRat(band.Start.U)
 	span := proofbound.RatFloatUp(new(big.Rat).Sub(proofarith.FloatRat(band.End.U), rootX))
 	height := proofbound.RatFloatUp(new(big.Rat).Sub(proofarith.FloatRat(caps.highX), rootX))
-	seamHalf := proofbound.DivUpper(sideErr, cross.slopeLo)
+	seamHalf := proofbound.DivUpper(sideErr, cross.SlopeLo)
 	if proofbound.IsNonFinite(span) || proofbound.IsNonFinite(height) ||
 		proofbound.IsNonFinite(seamHalf) || height <= 0 {
 		return nil, true, fmt.Errorf("%w: bore has no finite section span", ErrUnsupported)

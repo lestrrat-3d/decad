@@ -13,13 +13,7 @@ The rules for rows live in `docs/layout.md`.
 | `revolve_loft_seat.go` | Bounds exact Sketch line crossings against the recorded finite Revolve meridian. See revolve-loft-sector design. |
 | `revolve_loft_path.go` | Selects the certified exterior point-Loft fan path and root sector. See revolve-loft-sector design. |
 | `revolve_loft_union.go` | Routes one, serial and variadic certified Revolve/point-Loft joins and retains their source records. See revolve-loft-sector design. |
-| `revolve_section_angles.go` | Chooses bounded angular stations for a finite Revolve section. See revolve-loft-sector design. |
-| `revolve_section_ring.go` | Meshes ordered meridian spans into shared section rings. See revolve-loft-sector design. |
-| `revolve_section_tool_gap.go` | Bounds cone-tool reach against the recorded meridian. See revolve-loft-sector design. |
-| `revolve_sector_cap.go` | Closes a certified exterior path on the root cone. See revolve-loft-sector design. |
 | `revolve_sector_mesh.go` | Stitches mapped point-Loft caps to shared section rings. See revolve-loft-sector design. |
 | `revolve_sector_many.go` | Builds and audits one or more certified sectors against one Revolve. See revolve-loft-sector design. |
-| `revolve_sector_placement.go` | Charges recorded sector placements for complete-source separation and picks the root seam. See revolve-loft-sector design. |
 | `revolve_sector_cylinder_cut.go` | Admits a centered cylinder and rewrites certified Revolve/sector cap fans as annuli. See revolve-loft-sector design. |
 | `revolve_sector_cylinder_band.go` | Rewrites one exact straight meridian-band crossing for a centered cylinder Cut. See revolve-loft-sector design. |
-| `joined_sector_cap_refine.go` | Refines cone-mapped sector cap cells with shared edges. See revolve-loft-sector design. |

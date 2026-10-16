@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/massmoment"
+	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -46,14 +47,14 @@ func TestRevolveSectorNearUnitAxisPlacement(t *testing.T) {
 // copies overlap in each coordinate range but have a separating YZ diagonal.
 func TestRevolveSectorProjectionSeparatesRotatedSources(t *testing.T) {
 	first, second := revolveSectorProjectionTestSources(t, 90)
-	require.True(t, revolveSectorSourcesSeparate([]facetedPayload{first, second}))
+	require.True(t, revolveshell.RevolveSectorSourcesSeparate([]facetedPayload{first, second}))
 	second.MeshBound = 2
-	require.False(t, revolveSectorSourcesSeparate([]facetedPayload{first, second}))
+	require.False(t, revolveshell.RevolveSectorSourcesSeparate([]facetedPayload{first, second}))
 }
 
 func TestRevolveSectorProjectionRefusesOverlap(t *testing.T) {
 	first, second := revolveSectorProjectionTestSources(t, 5)
-	require.False(t, revolveSectorSourcesSeparate([]facetedPayload{first, second}))
+	require.False(t, revolveshell.RevolveSectorSourcesSeparate([]facetedPayload{first, second}))
 }
 
 func revolveSectorProjectionTestSources(t *testing.T, degrees float64) (facetedPayload, facetedPayload) {

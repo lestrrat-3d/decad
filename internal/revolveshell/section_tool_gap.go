@@ -1,24 +1,26 @@
-package decad
+package revolveshell
 
 import (
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 )
 
-// revolveSectionToolGap charges the finite meridian mismatch between each
+// RevolveSectionToolGap charges the finite meridian mismatch between each
 // trimming cone and the two section spans meeting the selected root face.
 // The endpoints come from the recorded section walk, not profile positions.
-func revolveSectionToolGap(section revolveSectionCertificate,
-	record *pointConeTrimRecord) (float64, bool) {
+func RevolveSectionToolGap(section facetedrecord.RevolveSectionCertificate,
+	record *facetedrecord.PointConeTrimRecord) (float64, bool) {
 	if record == nil || record.Lower == nil || record.Upper == nil ||
 		len(section.Spans) < 4 || section.RootSpan < 0 ||
 		section.RootSpan >= len(section.Spans) {
 		return 0, false
 	}
 	root := section.Spans[section.RootSpan]
-	var neighbors [2]planePoint
+	var neighbors [2]sectionrecord.Point2
 	if root.Start.U < root.End.U {
 		neighbors[0] = section.Spans[(section.RootSpan+len(section.Spans)-1)%len(section.Spans)].Start
 		neighbors[1] = section.Spans[(section.RootSpan+1)%len(section.Spans)].End
@@ -36,14 +38,14 @@ func revolveSectionToolGap(section revolveSectionCertificate,
 	b := new(big.Rat).Sub(r0, new(big.Rat).Mul(m, x0))
 	maxGap := 0.0
 	for i, item := range []struct {
-		limit *pointConeLimit
-		root  planePoint
+		limit *facetedrecord.PointConeLimit
+		root  sectionrecord.Point2
 	}{{record.Lower, section.RootStart}, {record.Upper, section.RootEnd}} {
 		outer := neighbors[i]
 		if outer.V <= 0 || outer == item.root {
 			return 0, false
 		}
-		residual := func(p planePoint) *big.Rat {
+		residual := func(p sectionrecord.Point2) *big.Rat {
 			value := new(big.Rat).Sub(new(big.Rat).Add(
 				proofarith.FloatRat(p.U),
 				new(big.Rat).Mul(item.limit.Slope, proofarith.FloatRat(p.V))),

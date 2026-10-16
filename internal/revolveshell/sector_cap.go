@@ -1,10 +1,12 @@
-package decad
+package revolveshell
 
 import (
 	"fmt"
 	"math"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/pointcone"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -25,20 +27,20 @@ func revolveFarRootPoint(frame r3.Frame, cone surfacegeom.Cone, slope, angle flo
 	return point, proofbound.FiniteVec(point) && distance > 0
 }
 
-// revolveSectorCapBoundary closes the certified outside route with stations
+// RevolveSectorCapBoundary closes the certified outside route with stations
 // on the root face. Every root station has an exact matching angular index in
 // the revolved section mesh.
-func revolveSectorCapBoundary(path []pointcone.SectorNode, section revolveSectionCertificate,
+func RevolveSectorCapBoundary(path []pointcone.SectorNode, section facetedrecord.RevolveSectionCertificate,
 	frame r3.Frame, angles []float64, sector [2]float64) ([]pointcone.SectorNode, error) {
 	if len(path) < 3 || len(angles) < 3 {
-		return nil, fmt.Errorf("%w: sector cap has no closed source route", ErrUnsupported)
+		return nil, fmt.Errorf("%w: sector cap has no closed source route", decaderr.ErrUnsupported)
 	}
 	nodes := append([]pointcone.SectorNode(nil), path...)
 	for _, i := range []int{0, len(nodes) - 1} {
 		nodes[i].RootBoundary = true
 		nodes[i].Angle = math.Atan2(nodes[i].P.Z, nodes[i].P.Y) + 2*math.Pi
 		if nodes[i].Angle < sector[0] || nodes[i].Angle > sector[1] {
-			return nil, fmt.Errorf("%w: root contact is outside the angular sector", ErrUnsupported)
+			return nil, fmt.Errorf("%w: root contact is outside the angular sector", decaderr.ErrUnsupported)
 		}
 	}
 	nodes[len(nodes)-1].GroupToNext = -1
@@ -52,7 +54,7 @@ func revolveSectorCapBoundary(path []pointcone.SectorNode, section revolveSectio
 		point, ok := revolveFarRootPoint(frame, section.RootCone,
 			section.ConeSection().Slope, angle)
 		if !ok {
-			return fmt.Errorf("%w: root generator misses the source plane", ErrUnsupported)
+			return fmt.Errorf("%w: root generator misses the source plane", decaderr.ErrUnsupported)
 		}
 		nodes = append(nodes, pointcone.SectorNode{P: point, GroupToNext: -1,
 			Crossing: -1, RootBoundary: true, Angle: angle})
@@ -71,7 +73,7 @@ func revolveSectorCapBoundary(path []pointcone.SectorNode, section revolveSectio
 			}
 		}
 	} else {
-		return nil, fmt.Errorf("%w: root contact does not close the sector", ErrUnsupported)
+		return nil, fmt.Errorf("%w: root contact does not close the sector", decaderr.ErrUnsupported)
 	}
 	return nodes, nil
 }
