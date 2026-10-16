@@ -136,7 +136,7 @@ func TestStackedUnionFlushBossBuildsBrep(t *testing.T) {
 	reading, ok, err := prismcells.CoincidentEdges(budget, m.Tags, m.Profiles)
 	require.NoError(t, err)
 	require.True(t, ok)
-	require.Len(t, reading.Spans, 2, "the walls x = 20 and y = −20 each share one span")
+	require.Equal(t, 2, len(reading.Spans), "the walls x = 20 and y = −20 each share one span")
 	matterPlate, matterBoss, resolved, err := prismcells.Classify(budget, m.Tags, m.Profiles)
 	require.NoError(t, err)
 	require.True(t, resolved)
