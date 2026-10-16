@@ -290,10 +290,14 @@ A tooth without that record takes the strict branch alone.
   cone is positive over the tool cone's whole radius range, so the cap lies
   strictly outside the blank cone over the source rectangle.
 
-A Union of a patterned copy of a cone-tangent first tooth refuses with
-`ErrUnsupported`: no proof carries the exact tangency and the one-step gaps to
-a copy of the tooth. The generic Revolve-and-LoftFaces route
-also declines a tooth with a tangent record.
+A patterned Union accepts a cone-tangent first tooth only when every copy has
+a direct `WithCopyRotation` record about the blank's X axis through the origin.
+The exact rotation preserves the blank's cone, the cap's tangent relation and
+the first tooth's strict toe and heel source gaps. The copied-tool proof checks
+the source lineage and separation of complete tooth shells; the Union checks
+the copied contact chains and its final boundary and occupied volume. A copy
+without that exact axis rotation refuses. The generic Revolve-and-LoftFaces
+route also declines a tooth with a tangent record.
 
 The root arc also crosses each finite blank end cap. The toe and heel source
 certificates bound the crossing of the authenticated Sketch arc with the
