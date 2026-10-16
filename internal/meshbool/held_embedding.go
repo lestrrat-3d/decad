@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"runtime"
 	"slices"
+	"strconv"
 	"sync"
 	"sync/atomic"
 
@@ -473,6 +474,7 @@ func newHeldEmbedding(h HeldRounding, budget *proofbound.WorkBudget, memo bool) 
 		planes:      map[string]int{},
 		stamp:       make([]int, len(h.Tris)),
 	}
+	reserveHeldIncidence(e.inc, h.Tris)
 	for i, t := range h.Tris {
 		for _, v := range t {
 			e.inc[v] = append(e.inc[v], i)
@@ -491,6 +493,42 @@ func newHeldEmbedding(h HeldRounding, budget *proofbound.WorkBudget, memo bool) 
 		e.nextGen = 1
 	}
 	return e
+}
+
+// heldIncidenceSize bounds both the entry count and its byte size before
+// multiplication. An oversized compact array leaves the append path unchanged.
+func heldIncidenceSize(triangles int) (int, bool) {
+	const maxTriangles = int(^uint(0)>>1) / (3 * (strconv.IntSize / 8))
+	if triangles < 0 || triangles > maxTriangles {
+		return 0, false
+	}
+	return 3 * triangles, true
+}
+
+// reserveHeldIncidence gives each used vertex its own capacity-limited segment.
+// The original append traversal fills the segments, preserving corner order and
+// repeated occurrences. Unused rows stay nil. Construction adds no budget polls.
+func reserveHeldIncidence(inc [][]int, tris [][3]int) {
+	n, ok := heldIncidenceSize(len(tris))
+	if !ok || n == 0 {
+		return
+	}
+	counts := make([]int, len(inc))
+	for _, tri := range tris {
+		for _, v := range tri {
+			counts[v]++
+		}
+	}
+	storage := make([]int, n)
+	offset := 0
+	for v, count := range counts {
+		if count == 0 {
+			continue
+		}
+		end := offset + count
+		inc[v] = storage[offset:offset:end]
+		offset = end
+	}
 }
 
 // triBox is facet i's float box, TriBox over the held vertices.
