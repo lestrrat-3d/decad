@@ -15,7 +15,8 @@ import (
 
 // ConformOnce inserts, into every facet edge, the mesh vertices that lie
 // exactly in that edge's interior, re-triangulating the facet so the
-// subdivision conforms. Returns whether anything split.
+// subdivision conforms. Returns whether anything split. An unchanged nonempty
+// result may retain the input backing storage; empty outputs are normalized to nil.
 //
 // bounds runs parallel to tris and each sub-triangle inherits its parent's
 // entry. xbeta is per exact vertex: a vertex inserted into a facet's edge
@@ -58,12 +59,28 @@ func ConformOnce(ctx context.Context, verts []proof.Xpt, tris *[][3]int, src *[]
 			}
 		}
 		if inserted[0] == nil && inserted[1] == nil && inserted[2] == nil {
-			outTris = append(outTris, tri)
-			outSrc = append(outSrc, (*src)[ti])
-			outBounds = append(outBounds, (*bounds)[ti])
+			// Keep the original index checks even while the unchanged prefix
+			// is still represented by the input slices.
+			source, bound := (*src)[ti], (*bounds)[ti]
+			if splitAny {
+				outTris = append(outTris, tri)
+				outSrc = append(outSrc, source)
+				outBounds = append(outBounds, bound)
+			}
 			continue
 		}
-		splitAny = true
+		if !splitAny {
+			// Copy before xbeta changes: bounds may share its backing array.
+			outTris = make([][3]int, ti, len(*tris))
+			outSrc = make([]int, ti, len(*tris))
+			outBounds = make([]float64, ti, len(*tris))
+			if ti != 0 {
+				copy(outTris, (*tris)[:ti])
+				copy(outSrc, (*src)[:ti])
+				copy(outBounds, (*bounds)[:ti])
+			}
+			splitAny = true
+		}
 		for _, hits := range inserted {
 			for _, h := range hits {
 				xbeta[h] = max(xbeta[h], (*bounds)[ti])
@@ -84,6 +101,11 @@ func ConformOnce(ctx context.Context, verts []proof.Xpt, tris *[][3]int, src *[]
 			outSrc = append(outSrc, (*src)[ti])
 			outBounds = append(outBounds, (*bounds)[ti])
 		}
+	}
+	if !splitAny && len(*tris) != 0 {
+		outTris = *tris
+		outSrc = (*src)[:len(*tris)]
+		outBounds = (*bounds)[:len(*tris)]
 	}
 	*tris = outTris
 	*src = outSrc
