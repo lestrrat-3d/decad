@@ -30,9 +30,9 @@ func threadRender() imageRender {
 			}
 			scene := featureScene(models...)
 			scene.Camera = solidlens.Camera{
-				Position: solidlens.Vec{X: 24, Y: -5, Z: -32},
+				Position: solidlens.Vec{X: 40, Y: 7},
 				Target:   solidlens.Vec{Y: 7},
-				Up:       solidlens.Vec{Y: 1},
+				Up:       solidlens.Vec{Z: 1},
 				FOV:      27,
 			}
 			// Opposing axial light components illuminate both V-groove flanks.
