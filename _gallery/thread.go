@@ -134,6 +134,16 @@ func checkThreadGroove(ctx context.Context, body *decad.Body) error {
 		{"end intersection", r3.NewVec(0, 0, -4.55), false},
 		{"end opening", r3.NewVec(0, 0.05, -4.55), false},
 	} {
+		if sample.name == "end intersection" {
+			// Parity alone does not distinguish a cap point from a true opening.
+			distanceSquared, err := pointquery.MeshDistanceSquared(ctx, sample.point, vertices, triangles)
+			if err != nil {
+				return fmt.Errorf("thread mesh end distance: %w", err)
+			}
+			if distanceSquared.Sign() <= 0 {
+				return fmt.Errorf("thread mesh end intersection lies on a facet")
+			}
+		}
 		inside, resolved, err := pointquery.ObliqueParity(ctx, sample.point, vertices, triangles)
 		if err != nil {
 			return fmt.Errorf("check thread %s: %w", sample.name, err)

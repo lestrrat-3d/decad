@@ -258,7 +258,12 @@ func TestCoilThreadRunsOutOfTheEnd(t *testing.T) {
 	// validity assertions above independently check the body's guarantees.
 	mesh, err := res.Tessellate(t.Context(), units.Millimeters(0.01))
 	require.NoError(t, err)
-	insideMesh, resolved, err := pointquery.ObliqueParity(t.Context(), r3.NewVec(0, 0, -4.55), mesh.Vertices(), mesh.Triangles())
+	vertices, triangles := mesh.Vertices(), mesh.Triangles()
+	endPoint := r3.NewVec(0, 0, -4.55)
+	distanceSquared, err := pointquery.MeshDistanceSquared(t.Context(), endPoint, vertices, triangles)
+	require.NoError(t, err)
+	require.Positive(t, distanceSquared.Sign(), "the end opening is not a point on a cap facet")
+	insideMesh, resolved, err := pointquery.ObliqueParity(t.Context(), endPoint, vertices, triangles)
 	require.NoError(t, err)
 	require.True(t, resolved)
 	require.False(t, insideMesh)
