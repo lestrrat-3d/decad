@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -74,6 +75,34 @@ type Box = struct {
 	Min, Max  r3.Vec
 	Exactness Exactness
 	Bound     units.Value
+}
+
+// BoxesDisjoint reports whether the two bounds-inflated boxes have disjoint
+// interiors. A body's interior lies within its box's interior, so disjoint
+// box interiors prove the bodies cannot share volume — touching boxes
+// included (evaluator §10).
+func BoxesDisjoint(a, b Box) bool {
+	ia := a.Bound.Base()
+	ib := b.Bound.Base()
+	return inflatedBoxEndsDisjoint(a.Max.X, ia, b.Min.X, ib) ||
+		inflatedBoxEndsDisjoint(b.Max.X, ib, a.Min.X, ia) ||
+		inflatedBoxEndsDisjoint(a.Max.Y, ia, b.Min.Y, ib) ||
+		inflatedBoxEndsDisjoint(b.Max.Y, ib, a.Min.Y, ia) ||
+		inflatedBoxEndsDisjoint(a.Max.Z, ia, b.Min.Z, ib) ||
+		inflatedBoxEndsDisjoint(b.Max.Z, ib, a.Min.Z, ia)
+}
+
+// inflatedBoxEndsDisjoint compares the exact inflated endpoints. A strict
+// float comparison has the same ordering because rounding is monotone; when
+// both expressions round to the same float, compare their dyadic values.
+func inflatedBoxEndsDisjoint(maxCoord, maxBound, minCoord, minBound float64) bool {
+	upper, lower := maxCoord+maxBound, minCoord-minBound
+	if upper != lower {
+		return upper < lower
+	}
+	exactUpper := proofarith.DyAdd(proofarith.MustDyOf(maxCoord), proofarith.MustDyOf(maxBound))
+	exactLower := proofarith.DySubScalar(proofarith.MustDyOf(minCoord), proofarith.MustDyOf(minBound))
+	return proofarith.DyCmp(exactUpper, exactLower) <= 0
 }
 
 // ExactnessOf reports Exact for a zero bound and Approximate otherwise: a
