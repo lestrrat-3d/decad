@@ -3,10 +3,9 @@ package decad
 import (
 	"fmt"
 	"math"
-	"math/big"
 
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolveproof"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"
@@ -62,7 +61,7 @@ func recordedRevolveSection(blank *Body) ([]revolveSectionSpan, int, r3.Frame, b
 	var corners []int
 	for i := range points {
 		previous := points[(i+len(points)-1)%len(points)]
-		if !revolveForwardCollinear(previous, points[i], points[(i+1)%len(points)]) {
+		if !revolveproof.RevolveForwardCollinear(previous, points[i], points[(i+1)%len(points)]) {
 			corners = append(corners, i)
 		}
 	}
@@ -104,16 +103,6 @@ func recordedRevolveSection(blank *Body) ([]revolveSectionSpan, int, r3.Frame, b
 		return nil, -1, empty, false
 	}
 	return spans, axisSpan, rp.Frame, true
-}
-
-func revolveForwardCollinear(a, b, c planePoint) bool {
-	ax := new(big.Rat).Sub(proofarith.FloatRat(b.U), proofarith.FloatRat(a.U))
-	ay := new(big.Rat).Sub(proofarith.FloatRat(b.V), proofarith.FloatRat(a.V))
-	bx := new(big.Rat).Sub(proofarith.FloatRat(c.U), proofarith.FloatRat(b.U))
-	by := new(big.Rat).Sub(proofarith.FloatRat(c.V), proofarith.FloatRat(b.V))
-	cross := new(big.Rat).Sub(new(big.Rat).Mul(ax, by), new(big.Rat).Mul(ay, bx))
-	dot := new(big.Rat).Add(new(big.Rat).Mul(ax, bx), new(big.Rat).Mul(ay, by))
-	return cross.Sign() == 0 && dot.Sign() > 0
 }
 
 func revolveSpanFace(blank *Body, span revolveSectionSpan) (*Face, bool) {
@@ -201,8 +190,8 @@ func revolveRootCandidates(blank *Body) []revolveSectionCertificate {
 		if start.U == end.U || start.U <= cone.Origin.X {
 			continue
 		}
-		gap := max(revolveMeridianResidual(start, slope, cone.Origin.X),
-			revolveMeridianResidual(end, slope, cone.Origin.X))
+		gap := max(revolveproof.RevolveMeridianResidual(start, slope, cone.Origin.X),
+			revolveproof.RevolveMeridianResidual(end, slope, cone.Origin.X))
 		if proofbound.IsNonFinite(gap) {
 			continue
 		}
@@ -212,14 +201,4 @@ func revolveRootCandidates(blank *Body) []revolveSectionCertificate {
 			RootCone: cone, ConeGap: gap})
 	}
 	return candidates
-}
-
-func revolveMeridianResidual(point planePoint, slope, originX float64) float64 {
-	r := new(big.Rat).Sub(proofarith.FloatRat(point.V),
-		new(big.Rat).Mul(proofarith.FloatRat(slope),
-			new(big.Rat).Sub(proofarith.FloatRat(point.U), proofarith.FloatRat(originX))))
-	if r.Sign() < 0 {
-		r.Neg(r)
-	}
-	return proofbound.RatFloatUp(r)
 }

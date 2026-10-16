@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/revolveproof"
 	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/r3"
 )
@@ -24,12 +25,12 @@ func tryRevolveLoftSectorUnionMany(ctx context.Context, d *Document, ref produce
 			if !ok {
 				continue
 			}
-			path, bound, err := revolveExteriorPath(cert.Base, cert.Boundary,
+			path, bound, err := revolveproof.RevolveExteriorPath(cert.Base, cert.Boundary,
 				cert.Trim.Base.PointSection.Source, cert.Section)
 			if err != nil {
 				return nil, true, err
 			}
-			lo, hi, ok := revolveRootAngles(path)
+			lo, hi, ok := revolveproof.RevolveRootAngles(path)
 			if !ok {
 				return nil, true, ErrUnsupported
 			}
@@ -87,12 +88,12 @@ func tryRevolveLoftSectorUnion(ctx context.Context, op meshbool.OperationKind,
 			return nil, false, nil
 		}
 	}
-	path, bound, err := revolveExteriorPath(cert.Base, cert.Boundary,
+	path, bound, err := revolveproof.RevolveExteriorPath(cert.Base, cert.Boundary,
 		cert.Trim.Base.PointSection.Source, cert.Section)
 	if err != nil {
 		return nil, true, err
 	}
-	lo, hi, ok := revolveRootAngles(path)
+	lo, hi, ok := revolveproof.RevolveRootAngles(path)
 	if !ok {
 		return nil, true, ErrUnsupported
 	}
