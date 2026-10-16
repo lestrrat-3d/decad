@@ -230,6 +230,8 @@ func CutTriangle(ctx context.Context, xtri [3]proof.Xpt, normal proof.Xpt, segs 
 	}
 
 	var regions []CutRegion
+	// Each region borrows this projection buffer only until triangulation returns.
+	var regionPoints []Xp2
 	for pi, piece := range pieces {
 		if err := tc.Work.Step(); err != nil {
 			return nil, err
@@ -242,7 +244,7 @@ func CutTriangle(ctx context.Context, xtri [3]proof.Xpt, normal proof.Xpt, segs 
 			if err := tc.Work.Step(); err != nil {
 				return nil, err
 			}
-			reg, err := tc.RegionOf(poly, chainEdges)
+			reg, err := tc.regionOf(poly, chainEdges, &regionPoints)
 			if err != nil {
 				return nil, err
 			}
@@ -739,7 +741,15 @@ func (tc *TriCutter) IndexOf(poly []int, vi int) (int, error) {
 // classification anchor: the region triangle adjacent to a chain edge, whose
 // exact centroid probes the partner facet's plane side.
 func (tc *TriCutter) RegionOf(poly []int, chainEdges map[[2]int]ChainAnchor) (CutRegion, error) {
-	points, err := tc.CollectP2()
+	var points []Xp2
+	return tc.regionOf(poly, chainEdges, &points)
+}
+
+// regionOf refills the caller-owned scratch at the original collection point.
+// Every copy and budget step remains in order; no result retains the slice.
+func (tc *TriCutter) regionOf(poly []int, chainEdges map[[2]int]ChainAnchor, scratch *[]Xp2) (CutRegion, error) {
+	points, err := tc.collectP2Into(*scratch)
+	*scratch = points
 	if err != nil {
 		return CutRegion{}, err
 	}
@@ -785,7 +795,15 @@ func (tc *TriCutter) RegionOf(poly []int, chainEdges map[[2]int]ChainAnchor) (Cu
 // CollectP2 is the projected-point view of the vertex table, as EarClipX
 // wants it.
 func (tc *TriCutter) CollectP2() ([]Xp2, error) {
-	out := make([]Xp2, len(tc.Verts))
+	return tc.collectP2Into(nil)
+}
+
+func (tc *TriCutter) collectP2Into(out []Xp2) ([]Xp2, error) {
+	if out == nil || cap(out) < len(tc.Verts) {
+		out = make([]Xp2, len(tc.Verts))
+	} else {
+		out = out[:len(tc.Verts)]
+	}
 	for i, v := range tc.Verts {
 		if err := tc.Work.Step(); err != nil {
 			return nil, err
