@@ -14,6 +14,9 @@ type Payload struct {
 	// SmoothRectSection is the immutable exact height curve of an original
 	// rectangular LoftSections result. Placement and similarity drop it.
 	SmoothRectSection *smoothloft.RectangularSection
+	// SmoothHomotheticSection retains the exact base walk and height scale of
+	// an original three-section whole-line LoftSections result.
+	SmoothHomotheticSection *smoothloft.HomotheticSection
 	// AxialSectionJoin marks a proven XY section swept through one axial
 	// interval. Its held vertical boundary chains retain a Z direction for
 	// selectors even though their curve type remains bounded FacetedCurve.

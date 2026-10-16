@@ -46,6 +46,7 @@ func (fp Payload) PlacedWith(ctx context.Context, env topo.Env, composed r3.Tran
 	}
 	next := fp
 	next.SmoothRectSection = nil
+	next.SmoothHomotheticSection = nil
 	next.AxialSectionJoin = false
 	next.PrismPatternJoin = nil
 	next.Xform = composed

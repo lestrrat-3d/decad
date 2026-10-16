@@ -92,6 +92,25 @@ is the source solid's exact cross-section. Reconstruct its four whole lines
 through Sketch and require the returned valid region to match before returning
 it. A cap-level, oblique, shifted, inexact or altered-body request refuses.
 
+## Exact interior section of a three-section homothetic LoftSections result
+
+The original three-section whole-line builder retains its authenticated base
+walk, common world-XY origin, outer cap levels, and exact quadratic scale
+`q(t) = 1 + bt + at²`. Its source gate proves one positive-area, hole-free
+walk star-shaped about the scale origin, positive source scales, and a
+nonnegative middle Bernstein control. The two end controls are positive, so
+`q(t) > 0` throughout the cap interval. At a fixed interior level, the source
+solid's material region is exactly the base polygon scaled by `q(t)`.
+
+Require the canonical world-XY frame at the common in-plane origin, identity
+placement, and a level strictly between the outer caps. Evaluate the level
+fraction and scale as exact rationals. Require every scaled vertex coordinate
+to be finite and exactly representable in binary64; then rebuild the complete
+line walk in a fresh Sketch and require one matching valid profile. An inexact
+coordinate, cap-level or exterior request, shifted or rotated frame, or copied
+or scaled body returns `ErrUnsupported`. Placement and similarity drop the
+source certificate.
+
 ## Parallel section of an authenticated matching-profile Loft
 
 An authenticated two-section solid Loft with identical full profile records,
@@ -535,6 +554,11 @@ reusing its bound.
 
 ## Verification
 
+- Loft three real Sketch triangles with scales 1, 1.5 and 1 at equally spaced
+  heights. Section at one-quarter height gives 11.34375 mm²; its 2 mm Extrude
+  gives 22.6875 mm³ and passes `Tessellate(0.1 mm, VerifyAll)`. Repeat at the
+  middle source level with a translated frame and with a concave star-shaped
+  polygon. Refuse cap, exterior, shifted, rotated, inexact and copied cases.
 - Extrude a 10×10 mm square by 5 mm. Section at 2.5 mm must give one 100 mm²
   profile. Extruding that returned Sketch/profile by 2 mm gives 200 mm³ and
   passes `Tessellate(VerifyAll)`.

@@ -28,6 +28,7 @@ type Build struct {
 	Diameter           float64
 	ArcRadii           [4]float64
 	RectangularSection *RectangularSection
+	HomotheticSection  *HomotheticSection
 }
 
 func rint(n int64) *big.Rat      { return big.NewRat(n, 1) }
@@ -301,7 +302,8 @@ func BuildThree(ctx context.Context, profiles [3]momentinput.Profile,
 	diameter := add(mul(rint(2), mul(qMax, radiusOne)), h)
 	result := Build{Vertices: verts, Triangles: tris, Sources: sources, EdgeCount: len(points[0]),
 		MeshBound: proofbound.RatFloatUp(delta), VolSymDiff: proofbound.RatFloatUp(volumeGap),
-		AreaSlack: proofbound.RatFloatUp(areaGap), Diameter: proofbound.RatFloatUp(diameter)}
+		AreaSlack: proofbound.RatFloatUp(areaGap), Diameter: proofbound.RatFloatUp(diameter),
+		HomotheticSection: newHomotheticSection(planes[0].Origin, planes[2].Origin.Z, points[0], a, b)}
 	for _, v := range [...]float64{result.MeshBound, result.VolSymDiff, result.AreaSlack, result.Diameter} {
 		if math.IsNaN(v) || math.IsInf(v, 0) {
 			return Build{}, fmt.Errorf("%w: three-section loft proof exceeds float64", decaderr.ErrUnsupported)
