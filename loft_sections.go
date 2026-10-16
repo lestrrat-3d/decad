@@ -179,8 +179,9 @@ func (d *Document) buildSmoothSectionBody(ctx context.Context, built smoothloft.
 		vertexBound[i] = built.MeshBound
 	}
 	body, err := bodyResult(facetedrecord.Build(ctx, envOf(documentNode(d), ref), facetedPayload{
-		SmoothRectSection: built.RectangularSection,
-		Verts:             built.Vertices, Tris: built.Triangles, Src: built.Sources,
+		SmoothRectSection:       built.RectangularSection,
+		SmoothHomotheticSection: built.HomotheticSection,
+		Verts:                   built.Vertices, Tris: built.Triangles, Src: built.Sources,
 		Groups: groups, VertexBound: vertexBound, MeshBound: built.MeshBound,
 		VolSymDiff: built.VolSymDiff, AreaSlack: built.AreaSlack,
 		DPair: built.Diameter, Xform: r3.Identity(),

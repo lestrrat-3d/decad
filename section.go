@@ -23,7 +23,7 @@ import (
 // cut by a cardinal plane with an exact circle or bounded polygon,
 // a direct matching-profile, full line-boundary or varying circular-boundary Loft
 // cut by an exact world-XY interior plane,
-// an original rectangular LoftSections cut by an exact world-XY interior plane,
+// an original rectangular or homothetic LoftSections cut by an exact world-XY interior plane,
 // a rectangular prism cut by an interior cardinal vertical plane, and
 // a bounded oblique cut of an exact rectangular or whole-circle prism,
 // including a certified crossing of one circle-prism cap. The
@@ -106,7 +106,10 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 	if fp, ok := b.n.Payload.(facetedPayload); ok {
 		profile, admitted := sectionclip.SmoothRectangularSectionRecord(fp, plane)
 		if !admitted {
-			return nil, nil, fmt.Errorf(`%w: section needs an original rectangular smooth loft`, ErrUnsupported)
+			profile, admitted = sectionclip.SmoothHomotheticSectionRecord(fp, plane)
+		}
+		if !admitted {
+			return nil, nil, fmt.Errorf(`%w: section needs an original certified smooth loft`, ErrUnsupported)
 		}
 		return sectionclip.ReconstructExactSection(ctx, profile, plane)
 	}

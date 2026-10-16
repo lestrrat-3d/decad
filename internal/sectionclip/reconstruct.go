@@ -40,6 +40,21 @@ func SmoothRectangularSectionRecord(fp facetedPayload, plane r3.Frame) (profileR
 	}}}, true
 }
 
+// SmoothHomotheticSectionRecord reads the exact positive-scaled whole-line
+// profile of an original three-section smooth loft at the plane's world-XY level.
+func SmoothHomotheticSectionRecord(fp facetedPayload, plane r3.Frame) (profileRecord, bool) {
+	if fp.SmoothHomotheticSection == nil || fp.Xform != r3.Identity() ||
+		plane.U() != r3.NewVec(1, 0, 0) || plane.V() != r3.NewVec(0, 1, 0) ||
+		plane.N() != r3.NewVec(0, 0, 1) {
+		return profileRecord{}, false
+	}
+	origin := fp.SmoothHomotheticSection.Origin()
+	if plane.Origin().X != origin.X || plane.Origin().Y != origin.Y {
+		return profileRecord{}, false
+	}
+	return fp.SmoothHomotheticSection.At(plane.Origin().Z)
+}
+
 // SectionBrepStack reads only the certified slab profiles of an A1 Union.
 // The same exact frame and strict interior-level check used for a prism
 // applies to each slab separately. An interface level names two different

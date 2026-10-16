@@ -622,3 +622,8 @@ exact height-curve controls in the original body's payload. `Body.Section`
 uses those controls for an exact interior world-XY rectangle when its
 half-dimensions are representable. See `docs/section-design.md`. Placement,
 scaling and shape-changing operations drop this source certificate.
+
+The original three-section whole-line builder also retains its base walk and
+exact quadratic scale. `Body.Section` evaluates them for an exact interior
+world-XY polygon only when every scaled coordinate is representable. See
+`docs/section-design.md`. Placement and scaling drop this certificate.
