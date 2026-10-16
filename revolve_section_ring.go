@@ -12,21 +12,6 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// revolvedSectionRing shares every angular station across the section's
-// recorded faces. An on-axis corner has one vertex rather than a full ring.
-type revolvedSectionRing struct {
-	Angles []float64
-	Rings  [][]int
-	Groups []int
-}
-
-func (r revolvedSectionRing) Vertex(span, station int) int {
-	if len(r.Rings[span]) == 1 {
-		return r.Rings[span][0]
-	}
-	return r.Rings[span][station]
-}
-
 // buildRevolvedSectionRing meshes every authenticated meridian span except
 // the axial span and the root-face intervals replaced by admitted sectors.
 // The returned bound includes circular chording and held trig arithmetic.

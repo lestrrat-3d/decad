@@ -36,7 +36,7 @@ func (c *internalBooleanBuildCancelContext) Err() error {
 	inBuild, inTarget := false, false
 	for {
 		frame, more := frames.Next()
-		inBuild = inBuild || strings.HasSuffix(frame.Function, ".buildFacetedBodyWithProof")
+		inBuild = inBuild || strings.HasSuffix(frame.Function, ".BuildWithProof")
 		inTarget = inTarget || strings.HasSuffix(frame.Function, "."+c.target) ||
 			strings.Contains(frame.Function, "."+c.target+"[")
 		if !more {
@@ -772,7 +772,7 @@ func TestFacetedMeasurementSumsEncloseSmallAllowances(t *testing.T) {
 			Groups:     []facetGroup{{Planar: true}, {Planar: true}, {Planar: true}, {Planar: true}},
 			VolSymDiff: tiny, DPair: 2, Xform: r3.Identity(),
 		}
-		body, err := buildFacetedBody(t.Context(), New(), producerID(0), payload)
+		body, err := bodyResult(facetedrecord.Build(t.Context(), envOf(documentNode(New()), producerID(0)), payload))
 		require.NoError(t, err)
 		require.Equal(t, 1.0, body.n.Centroid.Value.X)
 		trueCenterX := new(big.Rat).Add(big.NewRat(1, 1),
@@ -793,7 +793,8 @@ func TestFacetedMeasurementSumsEncloseSmallAllowances(t *testing.T) {
 // them, are unchanged. Two boxes translated off every shared face plane
 // (5, 5, 5) force the mesh path rather than the analytic prism-boolean
 // reduction (TestBooleanContextCancelsFacetedBodyFinishing above cancels
-// inside buildFacetedBody on the identical fixture, which is mesh-path-only).
+// inside facetedrecord.BuildWithProof on the identical fixture, which is
+// mesh-path-only).
 // The expected numbers were captured from this same fixture on the
 // pre-rewrite math/big.Rat kernel before this change landed.
 func TestBooleanVolumesAreUnchangedByTheKernelRewrite(t *testing.T) {
@@ -1150,7 +1151,7 @@ func TestFacetFaceIndicesRejectsUnmappedFacet(t *testing.T) {
 func TestFacetedPlacementRebuildsCachedDiameter(t *testing.T) {
 	t.Parallel()
 	doc := New()
-	body, err := buildFacetedBody(t.Context(), doc, producerID(0), facetedPayload{
+	body, err := bodyResult(facetedrecord.Build(t.Context(), envOf(documentNode(doc), producerID(0)), facetedPayload{
 		Verts: []r3.Vec{
 			r3.NewVec(0, 0, 0),
 			r3.NewVec(3, 0, 0),
@@ -1165,7 +1166,7 @@ func TestFacetedPlacementRebuildsCachedDiameter(t *testing.T) {
 		},
 		DPair: 10,
 		Xform: r3.Identity(),
-	})
+	}))
 	require.NoError(t, err)
 
 	before := body.n.Payload.(facetedPayload)

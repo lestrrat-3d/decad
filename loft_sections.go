@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
@@ -177,13 +178,13 @@ func (d *Document) buildSmoothSectionBody(ctx context.Context, built smoothloft.
 	for i := range vertexBound {
 		vertexBound[i] = built.MeshBound
 	}
-	body, err := buildFacetedBody(ctx, d, ref, facetedPayload{
+	body, err := bodyResult(facetedrecord.Build(ctx, envOf(documentNode(d), ref), facetedPayload{
 		SmoothRectSection: built.RectangularSection,
 		Verts:             built.Vertices, Tris: built.Triangles, Src: built.Sources,
 		Groups: groups, VertexBound: vertexBound, MeshBound: built.MeshBound,
 		VolSymDiff: built.VolSymDiff, AreaSlack: built.AreaSlack,
 		DPair: built.Diameter, Xform: r3.Identity(),
-	})
+	}))
 	if err != nil {
 		return nil, err
 	}

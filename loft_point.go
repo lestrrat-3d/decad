@@ -6,6 +6,7 @@ import (
 	"math"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
@@ -19,36 +20,6 @@ import (
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 )
-
-// pointSectionRecord keeps the authenticated Sketch geometry beside the
-// faceted boundary of a point-section loft. The far section is never replaced
-// by a fitted or scaled profile.
-type pointSectionRecord struct {
-	Apex                r3.Vec
-	Profile             profileRecord
-	Plane               planeRecord
-	Source              *pointSectionSource
-	SourceBox           [4]float64   // U min/max, V min/max; contains the true region and station polygon
-	SourceBoxIssued     [4]float64   // original source rectangle at LoftFromPoint publication
-	SourceAreaDelta     float64      // area of the symmetric difference between source region and station polygon
-	SourceStation       []planePoint // original local station coordinates, in source loop order
-	SourceStationIssued []planePoint // station coordinates published with the original point loft
-	SourceStationRound  float64      // local error of every held station against its exact curve point
-	SourceRoundIssued   float64      // station error published with the original point loft
-	SourceArcUpper      []float64    // per-cell source curve speed in world millimetres
-	SourceMatched       []float64    // per-cell parameter-matched source departure in world millimetres
-}
-
-// pointSectionSource names the live Sketch entities authenticated when the
-// point loft was made. A later structural join can request a new certificate
-// only from these entities and must refuse if their revision or frame moved.
-type pointSectionSource struct {
-	Sketch   *sketch.Sketch
-	Profile  *sketch.Profile
-	Revision uint64
-	Frame    r3.Frame
-	Entities []sketch.Entity
-}
 
 // pointSourceCurrent checks the source identity held when LoftFromPoint
 // recorded the profile. Certificate getters are checked separately at use.
@@ -334,7 +305,7 @@ func evalPointSectionLoft(ctx context.Context, d *Document, ref producerID,
 		DPair: diameter, Xform: r3.Identity(),
 		PointSection: &record, PointPlaneSourceEligible: true,
 	}
-	return buildFacetedBody(ctx, d, ref, pp)
+	return bodyResult(facetedrecord.Build(ctx, envOf(documentNode(d), ref), pp))
 }
 
 // pointLoftCapLayout is a point loft's wall and cap structure as

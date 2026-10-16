@@ -90,10 +90,10 @@ func tryCrossCylinderBoreMouthChamfer(ctx context.Context, body *Body,
 	}
 	ref := body.n.Doc.NextProducer
 	mesh.groups[4].Origins[0].Producer = ref
-	result, err := buildFacetedBodyWithProof(ctx, documentHandle(body.n.Doc), ref, facetedPayload{
+	result, err := bodyResult(facetedrecord.BuildWithProof(ctx, envOf(documentNode(documentHandle(body.n.Doc)), ref), facetedPayload{
 		Verts: mesh.verts, Tris: mesh.tris, Src: mesh.src, Groups: mesh.groups,
 		VertexBound: vertexBound, MeshBound: bound, VolSymDiff: volumeGap,
 		AreaSlack: areaSlack, DPair: dPair, ContactAudited: true, Xform: r3.Identity(),
-	}, audit, volume, heldVolume)
+	}, audit, measurementToInternal(volume), heldVolume))
 	return result, true, err
 }

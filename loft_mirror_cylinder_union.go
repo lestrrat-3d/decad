@@ -20,20 +20,6 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// A mirrored cylinder Join rebuilds the lower source against one exact half
-// of the original blank. The upper source is its authenticated reflection.
-// The original Boolean operands remain recorded for each later pattern step.
-type loftMirrorCylinderJoinRecord struct {
-	Blank        *topo.Body
-	Source       *loftMirrorJoinRecord
-	Pairs        []*topo.Body
-	LowerHalf    *topo.Body
-	CapGroups    [2]int
-	CapOutlines  [2][]int
-	BridgeBound  float64
-	BridgeVolume float64
-}
-
 func tryLoftMirrorCylinderUnion(ctx context.Context, op meshbool.OperationKind,
 	d *Document, ref producerID, a, b *Body) (*Body, bool, error) {
 	if op != meshbool.OpUnion {
@@ -437,7 +423,7 @@ func buildLoftMirrorCylinderUnion(ctx context.Context, d *Document, ref producer
 		return nil, err
 	}
 	loftCylinderTagBridgedTop(&fp, capGroups[1], []float64{bridgeBound})
-	return buildFacetedBody(ctx, d, ref, fp)
+	return bodyResult(facetedrecord.Build(ctx, envOf(documentNode(d), ref), fp))
 }
 
 func loftMirrorCylinderCapsOppose(lower, upper facetedPayload, upperMap []int,

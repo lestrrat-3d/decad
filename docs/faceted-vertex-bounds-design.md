@@ -19,7 +19,7 @@ core §8 "The chain depth" states.
 ## 1. Problem
 
 A boolean's result is a `facetedPayload` carrying ONE displacement bound,
-`MeshBound`, for every held vertex of the body (`boolean_body.go`). Every
+`MeshBound`, for every held vertex of the body (`internal/facetedrecord/payload.go`). Every
 reading composes from it: every `Vertex.Bound`, every face's
 `Faceted.Bound`, every rim edge's `FacetedCurve.Bound` and length bound, the
 area bound (`MeshBound × perimeter`), and the box bound (`Radius3D(MeshBound)`).

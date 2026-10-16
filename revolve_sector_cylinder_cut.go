@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/circularbounds"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -344,6 +345,6 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 	result.VolSymDiff, result.AreaSlack = volumeGap, areaSlack
 	result.RevolveLoftJoin = nil
 	result.ContactAudited = true
-	body, err := buildFacetedBody(ctx, d, ref, result)
+	body, err := bodyResult(facetedrecord.Build(ctx, envOf(documentNode(d), ref), result))
 	return body, true, err
 }

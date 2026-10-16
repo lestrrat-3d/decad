@@ -58,5 +58,5 @@ func twistShellFacetedBody(ctx context.Context, d *Document, ref producerID,
 		DPair: facetedrecord.SourceDiameterUpper(held.Verts, bound), Xform: r3.Identity(),
 		ContactAudited: true,
 	}
-	return buildFacetedBodyWithProof(ctx, d, ref, payload, audit, Measurement{}, nil)
+	return bodyResult(facetedrecord.BuildWithProof(ctx, envOf(documentNode(d), ref), payload, audit, measurementToInternal(Measurement{}), nil))
 }

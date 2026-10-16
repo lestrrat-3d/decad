@@ -19,9 +19,10 @@ re-evaluates under it:
 `cupPayload` and the chain ribbon flip their outward normals, windings and
 arc senses through `reflected()`; `loftPayload` re-decides its whole-shell
 orientation from the placed triangles; `facetedPayload` reverses every
-triangle and re-embeds the held mesh (`boolean_body.go`). §2 measures that
-this is sound: volume, centroid, convexity, `Facing`, the mesh winding, the
-analytic STEP writer and `Verify` all read a mirrored body correctly.
+triangle and re-embeds the held mesh (`internal/facetedrecord/placed.go`).
+§2 measures that this is sound: volume, centroid, convexity, `Facing`, the
+mesh winding, the analytic STEP writer and `Verify` all read a mirrored body
+correctly.
 
 What is missing is everything a caller does WITH a mirror image:
 

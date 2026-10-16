@@ -9,6 +9,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/capblend"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
@@ -450,7 +451,7 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 		eval.payload.CrossCylinderBore = recognizeCrossCylinderBore(a, b)
 	}
 
-	body, err := buildFacetedBodyWithProof(ctx, d, ref, eval.payload, eval.audit, eval.volume, eval.volumeRat)
+	body, err := bodyResult(facetedrecord.BuildWithProof(ctx, envOf(documentNode(d), ref), eval.payload, eval.audit, measurementToInternal(eval.volume), eval.volumeRat))
 	if err != nil {
 		return nil, asBooleanError(op, err)
 	}
@@ -505,7 +506,7 @@ func evaluateAnalyticIntersect(ctx context.Context, a, b *Body) (*Body, bool, er
 	return body, true, nil
 }
 
-// asBooleanError maps an evaluateBoolean or buildFacetedBody error to the
+// asBooleanError maps an evaluateBoolean or facetedrecord.BuildWithProof error to the
 // public typed BooleanError (docs/api-design.md §8 / H2). The private
 // expected-outcome kinds decide the Code and the wrapped sentinel: an empty
 // result is BooleanEmpty; a valid but unclassifiable coplanar / tangent /

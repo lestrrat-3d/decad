@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/lestrrat-3d/decad/internal/exactrotation"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -15,19 +16,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
-
-type spiralCombineSource struct {
-	First  *spiralFirstJoinSource
-	Tools  []*topo.Body
-	Moves  []r3.Transform
-	Copies *facetedCopySet
-}
-
-type spiralCombinedTools struct {
-	Source *spiralCombineSource
-	// Owner maps each transient composite face to the live face it copies.
-	Owner map[*topo.Face]*topo.Face
-}
 
 type spiralCombinedAdmission struct {
 	source  *spiralCombineSource
@@ -274,7 +262,7 @@ func spiralPrepareCombinedUnion(ctx context.Context, op meshbool.OperationKind,
 	if err != nil || !certified {
 		return nil, nil, err
 	}
-	placedParts, err := meta.Copies.placedProxyShells(ctx, proxy)
+	placedParts, err := placedProxyShells(ctx, meta.Copies, proxy)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -326,7 +314,7 @@ func spiralCombineBody(ctx context.Context, d *Document, ref producerID,
 	if err != nil {
 		return nil, asBooleanError(meshbool.OpUnion, err)
 	}
-	return buildFacetedBodyWithProof(ctx, d, ref, eval.payload, eval.audit, eval.volume, eval.volumeRat)
+	return bodyResult(facetedrecord.BuildWithProof(ctx, envOf(documentNode(d), ref), eval.payload, eval.audit, measurementToInternal(eval.volume), eval.volumeRat))
 }
 
 // spiralCombinedToolBody creates a transient, unregistered disjoint union of
@@ -398,7 +386,7 @@ func spiralCombinedToolBody(ctx context.Context, d *Document, ref producerID,
 		proofbound.IsNonFinite(p.AreaSlack) {
 		return nil, fmt.Errorf("%w: combined tool has no finite measurement bounds", ErrUnsupported)
 	}
-	body, err := buildFacetedBody(ctx, d, ref, p)
+	body, err := bodyResult(facetedrecord.Build(ctx, envOf(documentNode(d), ref), p))
 	if err != nil {
 		return nil, err
 	}

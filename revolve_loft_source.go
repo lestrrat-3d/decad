@@ -7,36 +7,11 @@ import (
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
-	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
-	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 )
-
-// revolveSectionSpan is one straight side of a recorded Revolve section.
-// Several whole source lines may form the same side when they continue
-// exactly forward on one line and Revolve retained one source face for them.
-type revolveSectionSpan struct {
-	Start, End  planePoint
-	SourceEdges []int
-	Face        *topo.Face
-	Origins     []provenance.Ref
-}
-
-// revolveSectionCertificate describes the authenticated finite section and
-// one candidate conical contact face. Its spans stay in source walk order.
-type revolveSectionCertificate struct {
-	Blank              *topo.Body
-	Spans              []revolveSectionSpan
-	Frame              r3.Frame
-	AxisSpan, RootSpan int
-	RootStart, RootEnd planePoint
-	RootCone           surfacegeom.Cone
-	ConeGap            float64
-}
 
 // recordedRevolveSection does not classify a gear profile. It only checks a
 // full axial Revolve of a finite, closed whole-line walk and binds each
@@ -247,18 +222,4 @@ func revolveMeridianResidual(point planePoint, slope, originX float64) float64 {
 		r.Neg(r)
 	}
 	return proofbound.RatFloatUp(r)
-}
-
-func (section revolveSectionCertificate) ConeSection() sketch.ConeSection {
-	angle, _ := section.RootCone.HalfAngle.In(units.Radian)
-	return sketch.ConeSection{Apex: section.RootCone.Origin,
-		Axis: section.RootCone.Axis, Slope: math.Tan(angle)}
-}
-
-func (section revolveSectionCertificate) MeridianEquation() (*big.Rat, *big.Rat) {
-	x0, x1 := proofarith.FloatRat(section.RootStart.U), proofarith.FloatRat(section.RootEnd.U)
-	r0, r1 := proofarith.FloatRat(section.RootStart.V), proofarith.FloatRat(section.RootEnd.V)
-	m := new(big.Rat).Quo(new(big.Rat).Sub(r1, r0), new(big.Rat).Sub(x1, x0))
-	b := new(big.Rat).Sub(r0, new(big.Rat).Mul(m, x0))
-	return m, b
 }

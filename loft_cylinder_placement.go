@@ -12,17 +12,6 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// loftCylinderPlacement keeps the local source bodies used by the structural
-// certificate. The public operands and their producer identities stay in the
-// surrounding join record. A later bore rebuilds the local join from these
-// sources instead of retaining its mesh. Only this exact common pose maps the
-// local result to those operands; an ordinary later placement drops the record.
-type loftCylinderPlacement struct {
-	Pose  r3.Transform
-	Blank *topo.Body
-	Teeth []*topo.Body
-}
-
 // loftCylinderAffine compares the exact rational maps represented by stored
 // frame and transform entries. It is an admission check, not coordinate math
 // used to construct geometry. A rounded composition cannot establish that
@@ -318,7 +307,7 @@ func tryPlacedLoftCylinderUnion(ctx context.Context, d *Document, ref producerID
 	if !ok || localPayload.LoftCylinderJoin == nil {
 		return nil, false, nil
 	}
-	world, err := localPayload.placedWith(ctx, d, ref, pose, nil)
+	world, err := bodyResult(localPayload.PlacedWith(ctx, envOf(documentNode(d), ref), pose, nil))
 	if err != nil {
 		return nil, true, err
 	}
@@ -431,7 +420,7 @@ func tryPlacedLoftCylinderBoreCut(ctx context.Context, d *Document, ref producer
 	if !ok {
 		return nil, false, nil
 	}
-	world, err := localPayload.placedWith(ctx, d, ref, placement.Pose, nil)
+	world, err := bodyResult(localPayload.PlacedWith(ctx, envOf(documentNode(d), ref), placement.Pose, nil))
 	if err != nil {
 		return nil, true, err
 	}

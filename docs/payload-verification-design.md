@@ -573,7 +573,7 @@ face-wide, so it is sound only under the invariants that make the two coincide:
   planar and its certificate came from a plane source (§8.1's plane-only `constant`
   bit);
 - every patch of one public faceted `*Face` descends from a single analytic source
-  face. `buildFacetedBody` keys a face on one connected patch of one source group,
+  face. `facetedrecord.Build` keys a face on one connected patch of one source group,
   and its flood fill refuses to cross source groups.
 
 A face holding any `constant && value == -1` patch is therefore plane-sourced, and

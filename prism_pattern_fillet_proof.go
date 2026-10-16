@@ -86,7 +86,7 @@ func prismPatternFilletBody(ctx context.Context, body *Body, edges []*Edge,
 		[2]float64{rec.Source.Blank.Z0, rec.Source.Blank.Z1}, ref); err != nil {
 		return nil, err
 	}
-	out, err := buildFacetedBody(ctx, documentHandle(body.n.Doc), ref, result)
+	out, err := bodyResult(facetedrecord.Build(ctx, envOf(documentNode(documentHandle(body.n.Doc)), ref), result))
 	if err != nil {
 		return nil, err
 	}

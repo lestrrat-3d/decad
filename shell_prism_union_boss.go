@@ -355,7 +355,7 @@ func buildPrismUnionBossShell(ctx context.Context, source *Body, fp facetedPaylo
 		DPair:     facetedrecord.SourceDiameterUpper(mesh.verts, bound),
 		Xform:     r3.Identity(), ContactAudited: true,
 	}
-	return buildFacetedBodyWithProof(ctx, documentHandle(source.n.Doc), ref, payload, audit, Measurement{}, nil)
+	return bodyResult(facetedrecord.BuildWithProof(ctx, envOf(documentNode(documentHandle(source.n.Doc)), ref), payload, audit, measurementToInternal(Measurement{}), nil))
 }
 
 func prismUnionBossShellMeshOf(ctx context.Context, ref producerID, fp facetedPayload,

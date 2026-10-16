@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
@@ -415,7 +416,7 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 		Groups: mesh.Groups, VertexBound: vertexBound, ContactAudited: true,
 		MeshBound: bound, VolSymDiff: volumeGap, AreaSlack: areaSlack,
 		DPair: base.DPair, Xform: r3.Identity()}
-	body, err := buildFacetedBody(ctx, d, ref, payload)
+	body, err := bodyResult(facetedrecord.Build(ctx, envOf(documentNode(d), ref), payload))
 	if err != nil {
 		return nil, nil, err
 	}

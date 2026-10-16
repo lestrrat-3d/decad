@@ -266,7 +266,7 @@ func (pl Payload) AxialDelta() float64 { return pl.Delta }
 // record under the FULL composed transform rather than moving the held mesh
 // incrementally, so delta does not accumulate across repeated placements —
 // one rounding, not one per placement, an advantage over
-// facetedPayload.Placed's move-the-held-mesh path (boolean_body.go). It is a
+// facetedPayload.Placed's move-the-held-mesh path (internal/facetedrecord). It is a
 // re-evaluation path: no moments preflight has run on either record within
 // this call, so the build opens two fresh counters, one per record, exactly
 // as prismPayload.Placed opens its own (extrude.go). §5's whole-shell

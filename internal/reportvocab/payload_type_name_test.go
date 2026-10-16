@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/draftrecord"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
@@ -25,5 +26,6 @@ func TestPayloadTypeName(t *testing.T) {
 	require.Equal(t, "decad.chainSweepPayload", reportvocab.PayloadTypeName(sweeprecord.ChainPayload{}))
 	require.Equal(t, "decad.stitchPayload", reportvocab.PayloadTypeName(stitchrecord.Payload{}))
 	require.Equal(t, "decad.unstitchPayload", reportvocab.PayloadTypeName(stitchrecord.UnstitchPayload{}))
+	require.Equal(t, "decad.facetedPayload", reportvocab.PayloadTypeName(facetedrecord.Payload{}))
 	require.Equal(t, "int", reportvocab.PayloadTypeName(3))
 }

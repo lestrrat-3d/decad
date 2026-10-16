@@ -1,7 +1,21 @@
-// Package facetedrecord holds the faceted body's source groups and the
-// builder that assembles a Faceted body over internal/topo nodes from a held
-// mesh (docs/evaluator-design.md §9), with the placement helpers the faceted
-// payload reads. Root facetGroup aliases Group.
+// Package facetedrecord holds the faceted payload (Payload): the record of a
+// mesh-built body, its source groups, the source records and support types
+// that structural rewrites and copies read, and the builder that assembles a
+// Faceted body over internal/topo nodes from a held mesh, with its placement
+// (docs/evaluator-design.md §8, §9). Root facetedPayload, facetGroup and the
+// record names alias these types.
+//
+// BuildWithProof turns a stitched boolean mesh into a Faceted Body
+// (docs/evaluator-design.md §9, core §6.1): facets grouped into one Face per
+// CONNECTED PATCH of a source analytic face — the source's origins ride onto
+// every patch of it, so provenance survives the boolean, while a source the
+// boolean cut into disconnected pieces reports each piece as the separate face
+// it now is — real Face/Loop/Edge/Vertex topology chained along the face
+// boundaries, shells and voids decided by exact signed volume and exact
+// containment parity, and measurements integrated exactly over the held mesh,
+// reported Approximate with the proven composed bounds. An ordinary Boolean
+// face is Faceted; a structural source with its own surface proof can retain
+// that analytic tag while the polygons remain the held boundary.
 package facetedrecord
 
 import (

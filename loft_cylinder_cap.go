@@ -79,7 +79,8 @@ func loftCylinderTagCaps(pp *facetedPayload, blank *Body, groups [2]int,
 
 // loftCylinderTagBridgedTop replaces the blank's exact top Plane tag when
 // an original tooth ends below the held cap. The cap role remains intact;
-// buildFacetedBody supplies the source-to-held displacement on its surface.
+// facetedrecord.BuildWithProof supplies the source-to-held displacement on its
+// surface.
 func loftCylinderTagBridgedTop(pp *facetedPayload, topGroup int, axialBridge []float64) {
 	for _, shift := range axialBridge {
 		if shift > 0 {

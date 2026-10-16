@@ -22,22 +22,6 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// loftCylinderBoreRecord names the two certified annular caps of an unplaced
-// through-bore result. Each outer and inner loop is CCW when viewed from +Z.
-type loftCylinderBoreRecord struct {
-	Blank *topo.Body
-	// Teeth are exact Cut sources; ProofTeeth and AxialBridge retain the
-	// private Union witnesses for later source-level admission checks.
-	Teeth, ProofTeeth                   []*topo.Body
-	AxialBridge                         []float64
-	Outer, Inner                        [2][]int
-	CapGroups                           [2]int
-	WallGroup                           int
-	BlankRadius, BoreRadius, BoreBound  float64
-	InnerInset, OuterExcess, RootCollar float64
-	Z0, Z1                              float64
-}
-
 // tryLoftCylinderBoreCut replaces the two planar cap disks of an authenticated
 // loft/cylinder join with annuli and adds the bore's inward cylinder wall.
 // The source join record makes the cap disks available without asking a new
@@ -304,5 +288,5 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 		return nil, err
 	}
 	loftCylinderTagBridgedTop(&result, record.CapGroups[1], record.AxialBridge)
-	return buildFacetedBody(ctx, d, ref, result)
+	return bodyResult(facetedrecord.Build(ctx, envOf(documentNode(d), ref), result))
 }

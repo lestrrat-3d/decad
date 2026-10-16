@@ -24,7 +24,7 @@ func TestRealCurvedCopiedToolLineage(t *testing.T) {
 	require.Len(t, set.FaceOwner[1], len(source.Faces()))
 	proxy, _, err := tessellateBooleanOperand(t.Context(), source, 0.1)
 	require.NoError(t, err)
-	placed, err := set.placedProxyShells(t.Context(), proxy)
+	placed, err := placedProxyShells(t.Context(), set, proxy)
 	require.NoError(t, err)
 	require.Len(t, placed, 2)
 	for _, face := range source.Faces() {
@@ -62,7 +62,7 @@ func TestRealCurvedCopiedToolLineage(t *testing.T) {
 	set, err = certifyFacetedCopies(t.Context(), []*Body{source, mirrored})
 	require.NoError(t, err)
 	require.Equal(t, reflection, set.Moves[1])
-	placed, err = set.placedProxyShells(t.Context(), proxy)
+	placed, err = placedProxyShells(t.Context(), set, proxy)
 	require.NoError(t, err)
 	require.Len(t, placed, 2)
 

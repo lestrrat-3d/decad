@@ -411,17 +411,10 @@ func placePayload(ctx context.Context, p topo.Payload, d *Document, ref producer
 	case unstitchPayload:
 		documentHandle(&d.n)
 		assertUnstitchFaceOwners(pl.Face, composed)
+	case facetedPayload:
+		documentHandle(&d.n)
 	}
 	return bodyResult(p.Placed(ctx, envOf(&d.n, ref), composed))
-}
-
-// placedNode is the node form of a root builder's result, for a root payload's
-// Placed: the body's node, or the error unchanged.
-func placedNode(b *Body, err error) (*topo.Body, error) {
-	if err != nil {
-		return nil, err
-	}
-	return bodyNode(b), nil
 }
 
 // handleAlloc is the node allocator root hands internal builders (topo.Alloc):

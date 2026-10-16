@@ -186,10 +186,63 @@ type (
 	capPatchGeom      = capband.Patch
 )
 
-// facetGroup is one source face's provenance in a faceted payload: the
-// internal/facetedrecord group, which facetedrecord.AssembleBody turns into
-// one face per connected patch (docs/evaluator-design.md §9).
-type facetGroup = facetedrecord.Group
+// facetedPayload is the evaluator's record of a mesh-built body, and
+// facetGroup one source face's provenance in it: the internal/facetedrecord
+// payload, which facetedrecord.BuildWithProof assembles over topology nodes
+// with one face per connected patch and which implements topo.Payload
+// (docs/evaluator-design.md §8, §9).
+type (
+	facetedPayload = facetedrecord.Payload
+	facetGroup     = facetedrecord.Group
+)
+
+// The faceted payload's source records and the support types they hold are
+// internal/facetedrecord types; these aliases keep the evaluator's local names.
+type (
+	crossCylinderBoreRecord      = facetedrecord.CrossCylinderBoreRecord
+	facetedCopyLineage           = facetedrecord.FacetedCopyLineage
+	facetedCopySet               = facetedrecord.FacetedCopySet
+	joinedMesh                   = facetedrecord.JoinedMesh
+	loftCylinderBoreRecord       = facetedrecord.LoftCylinderBoreRecord
+	loftCylinderJoinRecord       = facetedrecord.LoftCylinderJoinRecord
+	loftCylinderPlacement        = facetedrecord.LoftCylinderPlacement
+	loftFaceCapBounds            = facetedrecord.LoftFaceCapBounds
+	loftFacesCapRecord           = facetedrecord.LoftFacesCapRecord
+	loftFacesToeRecord           = facetedrecord.LoftFacesToeRecord
+	loftFacesTrimRecord          = facetedrecord.LoftFacesTrimRecord
+	loftMirrorCylinderBoreRecord = facetedrecord.LoftMirrorCylinderBoreRecord
+	loftMirrorCylinderJoinRecord = facetedrecord.LoftMirrorCylinderJoinRecord
+	loftMirrorJoinRecord         = facetedrecord.LoftMirrorJoinRecord
+	loftMirrorPlacementRecord    = facetedrecord.LoftMirrorPlacementRecord
+	obliqueBossRecord            = facetedrecord.ObliqueBossRecord
+	pointConeLimit               = facetedrecord.PointConeLimit
+	pointConeTrimRecord          = facetedrecord.PointConeTrimRecord
+	pointPlaneLimit              = facetedrecord.PointPlaneLimit
+	pointPlaneSimilarityRecord   = facetedrecord.PointPlaneSimilarityRecord
+	pointPlaneSimilarityStep     = facetedrecord.PointPlaneSimilarityStep
+	pointPlaneSliceRecord        = facetedrecord.PointPlaneSliceRecord
+	pointSectionRecord           = facetedrecord.PointSectionRecord
+	pointSectionSource           = facetedrecord.PointSectionSource
+	prismPatternJoinRecord       = facetedrecord.PrismPatternJoinRecord
+	prismPatternPart             = facetedrecord.PrismPatternPart
+	prismPatternSource           = facetedrecord.PrismPatternSource
+	prismUnionFilletRecord       = facetedrecord.PrismUnionFilletRecord
+	revolveLoftJoinRecord        = facetedrecord.RevolveLoftJoinRecord
+	revolveLoftSectorCertificate = facetedrecord.RevolveLoftSectorCertificate
+	revolveLoftSectorPlacement   = facetedrecord.RevolveLoftSectorPlacement
+	revolveSectionCertificate    = facetedrecord.RevolveSectionCertificate
+	revolveSectionSpan           = facetedrecord.RevolveSectionSpan
+	revolveSectorBoundary        = facetedrecord.RevolveSectorBoundary
+	revolveSectorContact         = facetedrecord.RevolveSectorContact
+	revolveSectorNode            = facetedrecord.RevolveSectorNode
+	revolvedSectionRing          = facetedrecord.RevolvedSectionRing
+	spiralBlankSource            = facetedrecord.SpiralBlankSource
+	spiralCombineSource          = facetedrecord.SpiralCombineSource
+	spiralCombinedTools          = facetedrecord.SpiralCombinedTools
+	spiralFirstJoinSource        = facetedrecord.SpiralFirstJoinSource
+	spiralHeelRootSeam           = facetedrecord.SpiralHeelRootSeam
+	spiralJunction               = facetedrecord.SpiralJunction
+)
 
 type loopRecord = sectionrecord.LoopRecord
 

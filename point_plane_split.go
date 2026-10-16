@@ -7,36 +7,12 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
-	"github.com/lestrrat-3d/decad/internal/measurement"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 )
-
-// pointPlaneSliceRecord always names the original point loft. Repeated cuts
-// never use a previously rounded cut ring as their geometric source.
-type pointPlaneSliceRecord struct {
-	Base         facetedPayload
-	Lower, Upper *pointPlaneLimit
-}
-
-// pointPlaneLimit is the exact plane through the source line of an unplaced
-// world-XY chain Extrude. Its normal is deliberately unnormalised: all tests
-// and ray intersections below are rational statements about stored floats.
-type pointPlaneLimit struct {
-	Nx, Ny, D               *big.Rat
-	A, B                    planePoint
-	Z0, Z1                  float64
-	Surface                 surfacegeom.Plane
-	Origins                 []provenance.Ref
-	NormalBound, MapStretch float64
-	Centroid                measurement.VecMeasurement
-	HasCentroid             bool
-	// Whether the sheet's reported normal faces away from the apex.
-	FrameTowardFar bool
-}
 
 func ratOfPointPlane(v float64) *big.Rat { return proofarith.FloatRat(v) }
 
@@ -55,16 +31,6 @@ func pointPlaneAdd(a, b *big.Rat) *big.Rat { return proofarith.AddRat(new(big.Ra
 func pointPlaneSub(a, b *big.Rat) *big.Rat { return proofarith.SubRat(new(big.Rat), a, b) }
 
 func pointPlaneMul(a, b *big.Rat) *big.Rat { return proofarith.MulRat(new(big.Rat), a, b) }
-
-func (p *pointPlaneLimit) NormalL1() *big.Rat {
-	return pointPlaneAdd(pointPlaneAbs(p.Nx), pointPlaneAbs(p.Ny))
-}
-
-func (p *pointPlaneLimit) Denominator(apex, far r3.Vec) *big.Rat {
-	x := pointPlaneSub(ratOfPointPlane(far.X), ratOfPointPlane(apex.X))
-	y := pointPlaneSub(ratOfPointPlane(far.Y), ratOfPointPlane(apex.Y))
-	return pointPlaneAdd(pointPlaneMul(p.Nx, x), pointPlaneMul(p.Ny, y))
-}
 
 // exactPointPlaneSheet recognizes the actual step-E sheet class. A rectangle
 // drawn as Patch does not pass this gate because it has a different source.
@@ -546,12 +512,12 @@ func buildPointPlaneSlab(ctx context.Context, d *Document, ref producerID,
 		vertexBounds[i] = meshBound
 	}
 	recordCopy := record
-	return buildFacetedBody(ctx, d, ref, facetedPayload{
+	return bodyResult(facetedrecord.Build(ctx, envOf(documentNode(d), ref), facetedPayload{
 		Verts: vertices, Tris: triangles, Src: sources, Groups: groups,
 		VertexBound: vertexBounds, MeshBound: meshBound,
 		VolSymDiff: volumeGap, AreaSlack: areaSlack,
 		DPair: base.DPair, Xform: r3.Identity(), PointPlane: &recordCopy,
 		PointPlaneCapDisplacement: meshBound,
 		PointPlaneSourceEligible:  true,
-	})
+	}))
 }

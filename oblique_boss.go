@@ -6,22 +6,8 @@ import (
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
-	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
-
-// obliqueBossRecord is a one-use witness for a whole plate-to-cylinder
-// junction. The generic Union still proves its own mesh and contact.
-type obliqueBossRecord struct {
-	Plate, Boss  *topo.Body
-	Rect         momentinput.AxisRect
-	Bottom, Top  float64
-	Base         r3.Vec
-	Axis, Ex, Ey r3.Vec
-	Radius       float64
-	Length       float64
-	SourceBound  float64
-}
 
 // recognizeObliqueBoss is reject-only. It never changes the mesh Union or
 // asserts that a mesh intersection alone authenticates a source surface.

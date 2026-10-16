@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetedtopology"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/loftface"
@@ -18,49 +19,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
-
-// The original LoftFaces proof authenticates this map over Source.SourceBox.
-// A later Boolean may use it only after proving that its far cap survived.
-type loftFacesCapRecord struct {
-	Source       *pointSectionRecord
-	Maps         []loftFaceMap
-	Bounds       []loftFaceCapBounds
-	StationGroup []int
-	Final        loftFaceMap
-	Group        int
-	// Tangent is set only when the last section is a constructed
-	// cone-tangent end. It is nil for plain LoftFaces.
-	Tangent *loftface.TangentEnd
-}
-
-// This record is issued to one unplaced Cut of the original LoftFaces mesh.
-// Placement drops it, and the following Intersect does not copy it.
-type loftFacesToeRecord struct {
-	Base       facetedPayload
-	Cap        *loftFacesCapRecord
-	CapFace    *topo.Face
-	ToeCapFace *topo.Face
-	Toe        *pointConeLimit
-	ToeTool    *topo.Body
-}
-
-// loftFacesTrimRecord retains the authenticated source of one unplaced
-// LoftFaces body after its original toe Cut and heel Intersect.
-// The Boolean result remains faceted; this record only admits later
-// source-specific proofs after those source identities are checked again.
-type loftFacesTrimRecord struct {
-	Base                      facetedPayload
-	Source                    *pointSectionRecord
-	Maps                      []loftFaceMap
-	Bounds                    []loftFaceCapBounds
-	StationGroup              []int
-	Toe, Heel                 *pointConeLimit
-	ToeTool, HeelTool         *topo.Body
-	ToeCapGroup, HeelCapGroup int
-	// Tangent is the cone-tangent end of the lofted tooth, copied from its
-	// cap record. It is nil unless the loft ended in a constructed section.
-	Tangent *loftface.TangentEnd
-}
 
 func loftFacesCapRecordReady(record *loftFacesCapRecord) bool {
 	if record == nil || record.Source == nil {
@@ -320,7 +278,7 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 				fmt.Errorf("%w: the tangent heel result has no single toe or heel tool face", ErrUnsupported)))
 		}
 	}
-	body, err := buildFacetedBodyWithProof(ctx, d, ref, eval.payload, eval.audit, eval.volume, eval.volumeRat)
+	body, err := bodyResult(facetedrecord.BuildWithProof(ctx, envOf(documentNode(d), ref), eval.payload, eval.audit, measurementToInternal(eval.volume), eval.volumeRat))
 	if err != nil {
 		return nil, true, asBooleanError(op, err)
 	}
