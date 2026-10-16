@@ -1,4 +1,4 @@
-package decad
+package prismpattern
 
 import (
 	"context"
@@ -6,20 +6,24 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
+	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 	"github.com/lestrrat-3d/r3"
 )
 
-// prismPatternFilletShell replaces the two root-wall junctions selected on
+// FilletShell replaces the two root-wall junctions selected on
 // each section with sampled line/circle tangent bands. It retains all other
 // source wall facets and rebuilds both caps from the new common outline.
-func prismPatternFilletShell(ctx context.Context, rec *prismPatternJoinRecord,
-	contacts []prismPatternFilletContact, radius float64, ref producerID,
-) (*joinedMesh, [2][]int, float64, error) {
+func FilletShell(ctx context.Context, rec *facetedrecord.PrismPatternJoinRecord,
+	contacts []FilletContact, radius float64, ref provenance.Producer,
+) (*facetedrecord.JoinedMesh, [2][]int, float64, error) {
 	var outlines [2][]int
 	// A contact may consume several original circular-wall stations. Keep
 	// the final bracket facet and move its near endpoint to the circle foot.
@@ -33,33 +37,33 @@ func prismPatternFilletShell(ctx context.Context, rec *prismPatternJoinRecord,
 	dropPairs := make(map[[2]int]bool)
 	farStations := make([]int, 0, len(contacts))
 	for _, contact := range contacts {
-		cut := contact.ringCut
-		if len(cut.positions) == 0 {
-			return nil, outlines, 0, fmt.Errorf("%w: joined-prism fillet lost its ring bracket", ErrUnsupported)
+		cut := contact.RingCut
+		if len(cut.Positions) == 0 {
+			return nil, outlines, 0, fmt.Errorf("%w: joined-prism fillet lost its ring bracket", decaderr.ErrUnsupported)
 		}
-		for i, position := range cut.positions {
+		for i, position := range cut.Positions {
 			if consumed[position] {
-				return nil, outlines, 0, fmt.Errorf("%w: joined-prism fillet ring cuts overlap", ErrUnsupported)
+				return nil, outlines, 0, fmt.Errorf("%w: joined-prism fillet ring cuts overlap", decaderr.ErrUnsupported)
 			}
 			consumed[position] = true
 			if i > 0 {
-				pair := [2]int{cut.positions[i-1], position}
+				pair := [2]int{cut.Positions[i-1], position}
 				if pair[0] > pair[1] {
 					pair[0], pair[1] = pair[1], pair[0]
 				}
 				dropPairs[pair] = true
 			}
 		}
-		farStations = append(farStations, cut.far)
+		farStations = append(farStations, cut.Far)
 	}
 	for _, far := range farStations {
 		if consumed[far] {
-			return nil, outlines, 0, fmt.Errorf("%w: joined-prism fillet ring brackets overlap", ErrUnsupported)
+			return nil, outlines, 0, fmt.Errorf("%w: joined-prism fillet ring brackets overlap", decaderr.ErrUnsupported)
 		}
 	}
 	dropCounts := make(map[[2]int]int, len(dropPairs))
-	mesh := &joinedMesh{Verts: append([]r3.Vec(nil), rec.Mesh.Verts...),
-		Groups: append([]facetGroup(nil), rec.Mesh.Groups...)}
+	mesh := &facetedrecord.JoinedMesh{Verts: append([]r3.Vec(nil), rec.Mesh.Verts...),
+		Groups: append([]facetedrecord.Group(nil), rec.Mesh.Groups...)}
 	for i, tri := range rec.Mesh.Tris {
 		group := rec.Mesh.Src[i]
 		if group == rec.Groups[1] || group == rec.Groups[2] {
@@ -70,7 +74,7 @@ func prismPatternFilletShell(ctx context.Context, rec *prismPatternJoinRecord,
 			for _, vertex := range tri {
 				position, ok := positionByVertex[vertex]
 				if !ok {
-					return nil, outlines, 0, fmt.Errorf("%w: joined-prism fillet ring facet lost its station", ErrUnsupported)
+					return nil, outlines, 0, fmt.Errorf("%w: joined-prism fillet ring facet lost its station", decaderr.ErrUnsupported)
 				}
 				if position == pair[0] || position == pair[1] {
 					continue
@@ -80,15 +84,15 @@ func prismPatternFilletShell(ctx context.Context, rec *prismPatternJoinRecord,
 				} else if pair[1] == -1 {
 					pair[1] = position
 				} else {
-					return nil, outlines, 0, fmt.Errorf("%w: joined-prism fillet ring facet spans three stations", ErrUnsupported)
+					return nil, outlines, 0, fmt.Errorf("%w: joined-prism fillet ring facet spans three stations", decaderr.ErrUnsupported)
 				}
 			}
 			if pair[1] < 0 {
-				return nil, outlines, 0, fmt.Errorf("%w: joined-prism fillet ring facet has no paired stations", ErrUnsupported)
+				return nil, outlines, 0, fmt.Errorf("%w: joined-prism fillet ring facet has no paired stations", decaderr.ErrUnsupported)
 			}
 			gap := (pair[1] - pair[0] + len(rec.Outlines[0])) % len(rec.Outlines[0])
 			if gap != 1 && gap != len(rec.Outlines[0])-1 {
-				return nil, outlines, 0, fmt.Errorf("%w: joined-prism fillet ring facet skips a station", ErrUnsupported)
+				return nil, outlines, 0, fmt.Errorf("%w: joined-prism fillet ring facet skips a station", decaderr.ErrUnsupported)
 			}
 			if pair[0] > pair[1] {
 				pair[0], pair[1] = pair[1], pair[0]
@@ -102,7 +106,7 @@ func prismPatternFilletShell(ctx context.Context, rec *prismPatternJoinRecord,
 	}
 	for pair := range dropPairs {
 		if dropCounts[pair] != 2 {
-			return nil, outlines, 0, fmt.Errorf("%w: joined-prism fillet ring cut loses a facet pair", ErrUnsupported)
+			return nil, outlines, 0, fmt.Errorf("%w: joined-prism fillet ring cut loses a facet pair", decaderr.ErrUnsupported)
 		}
 	}
 	retainedWalls := len(mesh.Tris)
@@ -121,23 +125,23 @@ func prismPatternFilletShell(ctx context.Context, rec *prismPatternJoinRecord,
 		part := rec.Parts[contact.part]
 		station := contact.station
 		if station != 0 && station != part.RootStart {
-			return nil, outlines, 0, fmt.Errorf("%w: joined-prism fillet lost a root station", ErrUnsupported)
+			return nil, outlines, 0, fmt.Errorf("%w: joined-prism fillet lost a root station", decaderr.ErrUnsupported)
 		}
-		path, bound, err := prismPatternFilletBand(mesh, part, contact, radius)
+		path, bound, err := filletBand(mesh, part, contact, radius)
 		if err != nil {
 			return nil, outlines, 0, err
 		}
 		arcBound = max(arcBound, bound)
 		group := len(mesh.Groups)
-		mesh.Groups = append(mesh.Groups, facetGroup{Origins: []provenance.Ref{{Producer: ref,
+		mesh.Groups = append(mesh.Groups, facetedrecord.Group{Origins: []provenance.Ref{{Producer: ref,
 			Role: fmt.Sprintf("fillet(%d,%d)", contact.part, station)}}})
 		for capIndex := range 2 {
 			old := part.Vertex[capIndex][station]
 			last := path[capIndex][len(path[capIndex])-1]
-			cut := contact.ringCut
-			lastConsumed := rec.Outlines[capIndex][cut.positions[len(cut.positions)-1]]
+			cut := contact.RingCut
+			lastConsumed := rec.Outlines[capIndex][cut.Positions[len(cut.Positions)-1]]
 			ringReplacement[lastConsumed] = last
-			for _, position := range cut.positions[1:] {
+			for _, position := range cut.Positions[1:] {
 				skip[capIndex][rec.Outlines[capIndex][position]] = true
 			}
 			walk := path[capIndex]
@@ -199,11 +203,11 @@ func prismPatternFilletShell(ctx context.Context, rec *prismPatternJoinRecord,
 			mesh.Add(mapped, rec.Groups[capIndex+1])
 		}
 	}
-	if err := orientJoinedMesh(mesh); err != nil {
+	if err := tessellation.OrientJoinedMesh(mesh.Verts, mesh.Tris); err != nil {
 		return nil, outlines, 0, err
 	}
 	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx), mesh.Verts,
-		mesh.Tris, loftmesh.MaxLoftAuditTriangles, loftCylinderAuditMaxScans); err != nil {
+		mesh.Tris, loftmesh.MaxLoftAuditTriangles, loftcylinder.AuditMaxScans); err != nil {
 		return nil, outlines, 0, err
 	}
 	for capIndex, outline := range outlines {
@@ -211,17 +215,18 @@ func prismPatternFilletShell(ctx context.Context, rec *prismPatternJoinRecord,
 		if capIndex == 1 {
 			z = rec.Source.Blank.Z1
 		}
-		if !loftCylinderAuditCap(ctx, mesh, outline, rec.Groups[capIndex+1], z, capIndex == 0) ||
-			!prismPatternRootChordsInsideCap(ctx, mesh, outline, rec.Parts, capIndex) {
+		if !loftcylinder.AuditCap(ctx, mesh.Verts, mesh.Tris, mesh.Src, outline, rec.Groups[capIndex+1], z,
+			capIndex == 0) ||
+			!RootChordsInsideCap(ctx, mesh, outline, rec.Parts, capIndex) {
 			return nil, outlines, 0, fmt.Errorf("%w: joined-prism fillet cap has no exact tiling or source-root proof",
-				ErrUnsupported)
+				decaderr.ErrUnsupported)
 		}
 	}
 	return mesh, outlines, arcBound, nil
 }
 
-func prismPatternFilletBand(mesh *joinedMesh, part prismPatternPart,
-	contact prismPatternFilletContact, radius float64) ([2][]int, float64, error) {
+func filletBand(mesh *facetedrecord.JoinedMesh, part facetedrecord.PrismPatternPart,
+	contact FilletContact, radius float64) ([2][]int, float64, error) {
 	var path [2][]int
 	p, q, center := contact.line, contact.circle, contact.center
 	start := math.Atan2(p.Y-center.Y, p.X-center.X)
@@ -229,11 +234,11 @@ func prismPatternFilletBand(mesh *joinedMesh, part prismPatternPart,
 	sweep := math.Remainder(end-start, 2*math.Pi)
 	if proofbound.IsNonFinite(sweep) || math.Abs(sweep) <= 0.01 || math.Abs(sweep) >= math.Pi ||
 		contact.station == 0 && sweep <= 0 || contact.station == part.RootStart && sweep >= 0 {
-		return path, 0, fmt.Errorf("%w: joined-prism fillet has no bounded corner sweep", ErrUnsupported)
+		return path, 0, fmt.Errorf("%w: joined-prism fillet has no bounded corner sweep", decaderr.ErrUnsupported)
 	}
 	steps := int(math.Ceil(math.Abs(sweep) / 0.1))
 	if steps < 1 || steps > 64 || contact.pointError >= radius/8 {
-		return path, 0, fmt.Errorf("%w: joined-prism fillet exceeds its arc-sampling budget", ErrUnsupported)
+		return path, 0, fmt.Errorf("%w: joined-prism fillet exceeds its arc-sampling budget", decaderr.ErrUnsupported)
 	}
 	// Each endpoint radius vector differs from the true one by at most twice
 	// the contact point error. Below r/4, its angle differs by at most 4e/r.
@@ -256,7 +261,7 @@ func prismPatternFilletBand(mesh *joinedMesh, part prismPatternPart,
 		trueSweep.Hi.Cmp(proofbound.PiLower) >= 0) ||
 		sweep < 0 && (trueSweep.Hi.Sign() >= 0 ||
 			new(big.Rat).Neg(trueSweep.Lo).Cmp(proofbound.PiLower) >= 0) {
-		return path, 0, fmt.Errorf("%w: joined-prism fillet arc has no unique short sweep", ErrUnsupported)
+		return path, 0, fmt.Errorf("%w: joined-prism fillet arc has no unique short sweep", decaderr.ErrUnsupported)
 	}
 	maxRound, maxAngleError := 0.0, 0.0
 	for capIndex := range 2 {
@@ -274,13 +279,13 @@ func prismPatternFilletBand(mesh *joinedMesh, part prismPatternPart,
 			maxAngleError = max(maxAngleError, proofbound.IntervalFloatError(angleIV, angle))
 			sine, cosine, ok := proofbound.RadSinCosInterval(proofarith.FloatRat(angle))
 			if !ok {
-				return path, 0, fmt.Errorf("%w: joined-prism fillet angle has no trigonometric bound", ErrUnsupported)
+				return path, 0, fmt.Errorf("%w: joined-prism fillet angle has no trigonometric bound", decaderr.ErrUnsupported)
 			}
 			x := center.X + radius*math.Cos(angle)
 			y := center.Y + radius*math.Sin(angle)
 			v := r3.Vec{X: x, Y: y, Z: z}
 			if !proofbound.FiniteVec(v) {
-				return path, 0, fmt.Errorf("%w: joined-prism fillet has a non-finite arc station", ErrUnsupported)
+				return path, 0, fmt.Errorf("%w: joined-prism fillet has a non-finite arc station", decaderr.ErrUnsupported)
 			}
 			xIV := proofbound.IntervalAdd(proofbound.PointInterval(proofarith.FloatRat(center.X)),
 				proofbound.IntervalScale(cosine, proofarith.FloatRat(radius)))

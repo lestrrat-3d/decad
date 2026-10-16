@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/prismpattern"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
@@ -75,7 +75,7 @@ func tryPrismPatternUnionMany(ctx context.Context, d *Document, ref producerID,
 	sort.Slice(parts, func(i, j int) bool { return parts[i].Start < parts[j].Start })
 	for i := range parts {
 		for j := i + 1; j < len(parts); j++ {
-			if !prismPatternMeshSeparated(parts[i], parts[j]) {
+			if !prismpattern.MeshSeparated(parts[i], parts[j]) {
 				return nil, true, fmt.Errorf("%w: copied-prism sections %d and %d have no certified separating plane",
 					ErrUnsupported, i+1, j+1)
 			}
@@ -113,37 +113,4 @@ func prismPatternMeshRoot(m *Mesh, body *Body, rootIndex int, z0, z1 float64) (i
 		}
 	}
 	return tessellation.PrismPatternMeshRoot(m.n.Vertices, len(m.n.Triangles), m.n.Source, roots, z0, z1)
-}
-
-// All held section vertices strictly separate after charging both verified
-// source-to-mesh bounds. A bounded region lies in the convex hull of its
-// boundary, so this one plane separates the complete source solids.
-func prismPatternMeshSeparated(a, b prismPatternPart) bool {
-	pa := a.Mesh.Vertices[0].Add(a.Mesh.Vertices[2*a.RootStart])
-	pb := b.Mesh.Vertices[0].Add(b.Mesh.Vertices[2*b.RootStart])
-	nx := new(big.Rat).Sub(proofarith.FloatRat(pa.X), proofarith.FloatRat(pb.X))
-	ny := new(big.Rat).Sub(proofarith.FloatRat(pa.Y), proofarith.FloatRat(pb.Y))
-	normSq := new(big.Rat).Add(new(big.Rat).Mul(nx, nx), new(big.Rat).Mul(ny, ny))
-	if normSq.Sign() == 0 {
-		return false
-	}
-	var minA, maxB *big.Rat
-	for _, v := range a.Mesh.Vertices {
-		dot := new(big.Rat).Add(new(big.Rat).Mul(nx, proofarith.FloatRat(v.X)),
-			new(big.Rat).Mul(ny, proofarith.FloatRat(v.Y)))
-		if minA == nil || dot.Cmp(minA) < 0 {
-			minA = dot
-		}
-	}
-	for _, v := range b.Mesh.Vertices {
-		dot := new(big.Rat).Add(new(big.Rat).Mul(nx, proofarith.FloatRat(v.X)),
-			new(big.Rat).Mul(ny, proofarith.FloatRat(v.Y)))
-		if maxB == nil || dot.Cmp(maxB) > 0 {
-			maxB = dot
-		}
-	}
-	margin := proofbound.ProductUpper(proofbound.RatSqrtUp(normSq),
-		proofbound.AbsSumUpper(units.Millimeters(a.Mesh.Bound).Base(), units.Millimeters(b.Mesh.Bound).Base()))
-	return minA != nil && maxB != nil &&
-		new(big.Rat).Sub(minA, maxB).Cmp(proofarith.FloatRat(margin)) > 0
 }

@@ -1,20 +1,22 @@
-package decad
+package prismpattern
 
 import (
 	"context"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
-// Every omitted root chord must stay inside the exact cap polygon, touching
-// its outline only at the two shared root endpoints. The source root arcs
-// lie strictly inside the blank circle; the source mesh bound later charges
-// the small difference between each arc and these held chords.
-func prismPatternRootChordsInsideCap(ctx context.Context, mesh *joinedMesh,
-	outline []int, parts []prismPatternPart, capIndex int) bool {
+// RootChordsInsideCap reports whether every omitted root chord stays inside
+// the exact cap polygon, touching its outline only at the two shared root
+// endpoints. The source root arcs lie strictly inside the blank circle; the
+// source mesh bound later charges the small difference between each arc and
+// these held chords.
+func RootChordsInsideCap(ctx context.Context, mesh *facetedrecord.JoinedMesh,
+	outline []int, parts []facetedrecord.PrismPatternPart, capIndex int) bool {
 	if capIndex < 0 || capIndex > 1 || len(outline) < 3 {
 		return false
 	}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
+	"github.com/lestrrat-3d/decad/internal/prismpattern"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -34,7 +35,7 @@ func prismPatternFilletBody(ctx context.Context, body *Body, edges []*Edge,
 	}
 	rec := old.PrismPatternJoin
 	ref := body.n.Doc.NextProducer
-	mesh, _, arcBound, err := prismPatternFilletShell(ctx, rec, contacts, radius, ref)
+	mesh, _, arcBound, err := prismpattern.FilletShell(ctx, rec, contacts, radius, ref)
 	if err != nil {
 		return nil, err
 	}

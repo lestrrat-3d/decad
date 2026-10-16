@@ -177,7 +177,7 @@ func prismPatternShell(ctx context.Context, blank *Body, source *prismPatternSou
 			z = source.Blank.Z1
 		}
 		if !loftCylinderAuditCap(ctx, mesh, outline, blankGroup[cap+1], z, cap == 0) ||
-			!prismPatternRootChordsInsideCap(ctx, mesh, outline, parts, cap) {
+			!prismpattern.RootChordsInsideCap(ctx, mesh, outline, parts, cap) {
 			if err := ctx.Err(); err != nil {
 				return nil, [2][]int{}, blankGroup, 0, 0, err
 			}

@@ -106,7 +106,6 @@
 0	0.00	TestPrismBooleanGateG3RequiresCoDirectionalSharedAxisPlanes
 0	0.01	TestPrismCutTrimmedTargetChargesItsWalkedEndpoint
 0	0.32	TestPrismGroupSixHoleCutIsUndisplaced
-0	0.00	TestPrismPatternFilletSectorRejectsAnotherConnector
 0	0.01	TestPrismUnionChargesEachWalkExactlyOnce
 0	0.00	TestPrismUnionPreservesEndDisplacements
 0	0.05	TestPrismWallPropagatesNonFreeformRefusals

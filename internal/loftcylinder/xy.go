@@ -181,6 +181,12 @@ func EdgesMeet(a, b, c, d XY) bool {
 	return abc != abd && cda != cdb
 }
 
+// AuditMaxScans is the crossing-audit scan ceiling for a structural join. The
+// join has at most 32 separately certified Loft teeth. Its final crossing
+// audit and the matched centered bore may scan twice the generic mesh
+// ceiling; exact pair classifications remain unchanged.
+const AuditMaxScans = 16_000_000
+
 // The cap group must tile exactly one simple CCW outline, with the origin
 // strictly inside. A later centered bore may use that outline as its source.
 func AuditCap(ctx context.Context, verts []r3.Vec, tris [][3]int, src []int,
