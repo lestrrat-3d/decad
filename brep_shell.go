@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/breprecord"
+	"github.com/lestrrat-3d/decad/internal/classbgeom"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
@@ -31,7 +32,7 @@ import (
 // or with a removed wall run the side opening's cavity section C
 // (shell_opening.go) — swept over the cup's interval, each Tᵢ ⊕ t the tool's
 // dilated section swept t past both walls it pierces, and the difference is
-// class B's own Cut (classBOfPayloads), run privately. The result record is
+// class B's own Cut (classbgeom.OfPayloads), run privately. The result record is
 // the receiver's kept faces, the cavity's faces reversed, and the rim at each
 // removed face (§3.3, brep_shell_rim.go). The circular tool-wall route
 // builds exact stacked sections (brep_shell_curved.go). Every test below
@@ -414,7 +415,7 @@ func (tc throughCut) cavity(ctx context.Context, bp brepPayload, eroded profileR
 		hi, hiDelta := step(tool.hi, 0, call.tmm)
 		tp := prismrecord.Payload{Profile: dilated[i], Frame: tool.prism.Frame, Xform: bp.Xform,
 			Z0: lo, Z1: hi, Z0Delta: loDelta, Z1Delta: hiDelta}
-		out, ok, err := classBOfPayloads(ctx, meshbool.OpCut, cut, tp, bp.Xform, charge)
+		out, ok, err := classbgeom.OfPayloads(ctx, meshbool.OpCut, cut, tp, bp.Xform, charge)
 		if err != nil {
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return brepPayload{}, ctxErr

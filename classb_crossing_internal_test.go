@@ -150,7 +150,7 @@ func TestClassBCrossingToolCrossingAWall(t *testing.T) {
 // convex: the slot walls meet the top's two pieces at left turns, and the
 // lines on the y walls read their outer loop's role. Shown to fail with the
 // planar-planar junction arm of brepgeom.Convex reading the owner's loop role
-// and with cbBuild.brepFace recording no sweep (both floor lines then read
+// and with classbgeom's cbBuild.brepFace recording no sweep (both floor lines then read
 // convex either way).
 func TestClassBCrossingSlotFloorCornersReadConcave(t *testing.T) {
 	t.Parallel()

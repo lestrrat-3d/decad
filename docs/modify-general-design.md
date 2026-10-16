@@ -389,7 +389,7 @@ With `s = +1`, `t` the thickness in millimetres with its conversion bound
    figure). `Tᵢ' = prismPayload{profile: Dᵢ, frame: F_j, z0: L0 − t, z1: L1 + t}`
    with `offsetSectionDelta(Tᵢ, −1, t, tDelta)`. The cavity is
    `Cut(…Cut(A', T₁'), …, Tₙ')` through class B's own entry over payloads
-   (PR 0's `classBOfPayloads`, the body-free form of `tryClassB`): each cut
+   (PR 0's `classbgeom.OfPayloads`, the body-free form of `tryClassB`): each cut
    must build a `brepPayload`; a pair class B does not admit — two dilated
    holes closer than `2t` (B7), a dilated tool reaching a cap of `A'` within
    `t` of a hole (the crossing reach or the mesh path) — is SG6, naming the
@@ -400,7 +400,7 @@ With `s = +1`, `t` the thickness in millimetres with its conversion bound
    above, as its section displacement, and the largest of `δ` and the cap
    levels' displacements on both its levels: an upper bound on each face's
    own. That charge `c` is in no record the cuts read, so each cut takes it
-   as a parameter (`classBOfPayloads`'s `delta`; class B's own booleans pass
+   as a parameter (`classbgeom.OfPayloads`'s `delta`; class B's own booleans pass
    zero) under two rules. First, every face box of `A'` (and of the cavity
    so far) and every tool box that B7 and the through reach compare grows by
    `c` on every side, and each through-reach slab's level band by `c`: a
@@ -1037,7 +1037,7 @@ document ships with PR 0.
 
 | PR | Model | Lands | Files and functions | Proves | After |
 |---|---|---|---|---|---|
-| **0** | Sonnet, file-by-file | the hooks: `classBOfPayloads` (class B's entry over two payloads and one placement, `tryClassB` rewritten over it); `recognisePrism` split into `readPrismCaps` (P1, P3, P4) and the wall classifier, both exported to route S; `brepgeom.ReverseSegment` over a `CircleSeg` and a `brepFace` reversal helper; `capblend.BuildBand` taking its cap-level coedges from the caller; `modifyBrepReceiver`'s two new arms calling stubs that return SB10's and SX16's refusals | `classb.go`, `brep_modify_prism.go`, `brep_modify_edge.go`, `internal/breprecord/convert.go`, `internal/capblend/band.go`, `internal/capblend/build.go`, `brep_modify.go` | every existing brep-modify, class-B and cap-blend fixture bit for bit | — |
+| **0** | Sonnet, file-by-file | the hooks: `classbgeom.OfPayloads` (class B's entry over two payloads and one placement, `tryClassB` rewritten over it); `recognisePrism` split into `readPrismCaps` (P1, P3, P4) and the wall classifier, both exported to route S; `brepgeom.ReverseSegment` over a `CircleSeg` and a `brepFace` reversal helper; `capblend.BuildBand` taking its cap-level coedges from the caller; `modifyBrepReceiver`'s two new arms calling stubs that return SB10's and SX16's refusals | `classb.go`, `brep_modify_prism.go`, `brep_modify_edge.go`, `internal/breprecord/convert.go`, `internal/capblend/band.go`, `internal/capblend/build.go`, `brep_modify.go` | every existing brep-modify, class-B and cap-blend fixture bit for bit | — |
 | **S-1** | Opus, proof spec | route S with removed caps: Table TC, the gates, TC7, the private cuts, the rim assembly, SG1–SG7 | `brep_shell.go` (new: `readThroughCut`, `shellThroughCut`, `throughCutRims`), `brep_modify.go`, `shell.go` (doc comment), `brep_shell_internal_test.go`, `apitest/brep_shell_test.go` | §9's S-1 fixtures | 0 |
 | **S-2** | Opus, proof spec | route S with a removed wall run: `sideOpeningRegions`'s cavity section as `A ⊖ t`'s section, the rim at a pierced wall as bands, SG5 narrowed | `brep_shell.go`, `brep_shell_rim.go`, `internal/throughshell/`, `shell_opening.go`, tests | §9's S-2 fixtures | S-1 |
 | **L-1** | Opus, proof spec | route L: Table LB, the record rewrite and trims, `loopBands` on `brepPayload`, the band attached at build, measurements, SL1–SL4; tessellation, clearance, the surveys and STEP refuse a body with `loopBands` until L-2 (`ErrUnsupported`, naming L-2) | `brep_modify_loop.go` (new: `brepLoopRoute`, `admitLoops`, `rewriteLoopFaces`), `brep_loop_band.go` (new: the `capblend.BuildBand` adapter and `capblend.ReadBandMass` sums), `internal/breprecord/convert.go`, `brep_measure.go`, `chamfer.go` (doc comment), `brep_modify_loop_internal_test.go`, `apitest/brep_loop_chamfer_test.go` | §9's L-1 fixtures | 0 |

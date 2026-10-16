@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/classbgeom"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 
@@ -154,7 +155,7 @@ func TestStackedUnionFlushBossBuildsBrep(t *testing.T) {
 	for _, f := range bp.Faces {
 		if f.Planar() && f.Outward && f.Z0 == 10 && f.Frame == base.Frame {
 			floors++
-			area, err := loopSignedAreaCB(f.Region.Outer)
+			area, err := classbgeom.LoopSignedArea(f.Region.Outer)
 			require.NoError(t, err)
 			require.Equal(t, 1500.0, area)
 		}

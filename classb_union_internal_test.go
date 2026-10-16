@@ -58,7 +58,7 @@ func requireVolumeCovers(t *testing.T, body *Body, a, b int64) {
 // the 10 mm of pin inside, a prism. Each runs the one-face reach: only the
 // wall x = 40 meets the pin's tube.
 //
-// Legs shown to fail (each broken in classb.go, the fixture watched go red,
+// Legs shown to fail (each broken in internal/classbgeom/build.go, the fixture watched go red,
 // then restored): the rooted arm's inside side (Union then keeps the pin's
 // inside length), and the floor's outward flag (the blind hole's mesh then
 // fails its volume proof).

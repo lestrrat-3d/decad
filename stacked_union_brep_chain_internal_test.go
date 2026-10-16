@@ -3,6 +3,7 @@ package decad
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/classbgeom"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -90,7 +91,7 @@ func TestStackedUnionBrepOperandSecondBoss(t *testing.T) {
 			for _, f := range bp.Faces {
 				if f.Planar() && f.Outward && f.Z0 == floorLevel && f.Frame == bp.Faces[0].Frame {
 					floors++
-					area, err := loopSignedAreaCB(f.Region.Outer)
+					area, err := classbgeom.LoopSignedArea(f.Region.Outer)
 					require.NoError(t, err)
 					require.Equal(t, 1400.0, area)
 				}

@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/classbgeom"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
@@ -231,7 +232,7 @@ func TestClassBCutExactOffsetPlane(t *testing.T) {
 				s.CreateCircle(c, 3)
 			})
 			x := box.n.Payload.(prismPayload)
-			_, admitted, err := admitClassBPair(t.Context(), box.n.Payload, drill.n.Payload, box.n.Payload.Transform(), 0)
+			_, admitted, err := classbgeom.AdmitPair(t.Context(), box.n.Payload, drill.n.Payload, box.n.Payload.Transform(), 0)
 			require.NoError(t, err)
 			require.Equal(t, tc.brep, admitted)
 			if !tc.brep {
@@ -347,7 +348,7 @@ func TestClassBCutGateMissesTakeMeshPath(t *testing.T) {
 // radius 3. A placement that is not the operands' own is a silent miss, and so
 // is a payload-free body in tryClassB.
 //
-// Shown to fail: with admitClassBPair comparing the operands' transforms to
+// Shown to fail: with classbgeom.AdmitPair comparing the operands' transforms to
 // each other alone, the foreign placement admits the pair.
 func TestClassBOfPayloadsBuildsWithoutBodies(t *testing.T) {
 	t.Parallel()
@@ -356,7 +357,7 @@ func TestClassBOfPayloadsBuildsWithoutBodies(t *testing.T) {
 	drill := internalDrillAlongY(t, doc, 20, 10, 3)
 	placement := box.n.Payload.Transform()
 
-	direct, ok, err := classBOfPayloads(t.Context(), meshbool.OpCut, box.n.Payload, drill.n.Payload, placement, 0)
+	direct, ok, err := classbgeom.OfPayloads(t.Context(), meshbool.OpCut, box.n.Payload, drill.n.Payload, placement, 0)
 	require.NoError(t, err)
 	require.True(t, ok)
 	viaBodies, ok, err := tryClassB(t.Context(), meshbool.OpCut, box, drill)
@@ -379,7 +380,7 @@ func TestClassBOfPayloadsBuildsWithoutBodies(t *testing.T) {
 
 	shift, err := r3.Translation(r3.NewVec(1, 0, 0))
 	require.NoError(t, err)
-	_, ok, err = classBOfPayloads(t.Context(), meshbool.OpCut, box.n.Payload, drill.n.Payload, shift, 0)
+	_, ok, err = classbgeom.OfPayloads(t.Context(), meshbool.OpCut, box.n.Payload, drill.n.Payload, shift, 0)
 	require.NoError(t, err)
 	require.False(t, ok)
 
