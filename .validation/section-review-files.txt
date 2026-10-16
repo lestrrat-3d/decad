@@ -1,0 +1,11 @@
+M	contact_box.go
+M	docs/layout/design-docs.md
+M	docs/layout/internal-checks.md
+M	internal/pair/box/source_admission.go
+A	internal/pair/box/source_admission_test.go
+M	internal/sectionclip/circle_cap.go
+R088	section_cone_axis.go	internal/sectionclip/cone_axis.go
+M	internal/sectionclip/record_aliases.go
+R063	section_sphere_axis.go	internal/sectionclip/sphere_axis.go
+M	section.go
+D	section_circle_cap.go

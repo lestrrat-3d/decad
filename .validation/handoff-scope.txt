@@ -1,0 +1,41 @@
+2. `refactor-section-clips` (H4 candidate 7, rest of the section family into `sectionclip`)
+   - Worktree: `.worktrees/refactor-section-clips`, based on `3987ea5a8` (up to date). NO commit yet.
+   - Uncommitted move in progress: `section_circle_cap.go` deleted, edits in `section.go`, `contact_box.go`,
+     `internal/pair/box/source_admission.go`, `internal/sectionclip/circle_cap.go`, `record_aliases.go`, two layout files.
+     The tree may contain a mutant from the stopped mutation run; the unmutated copy of the moved code is in
+     `.tmp/h4-sectionclips/moved-pre-mutation/`. Compare before trusting the tree.
+   - Evidence in `.tmp/h4-sectionclips/` (closure, differential `zzclipdiff`, `diff-green-final.txt`, mutation scripts and
+     log, `grossnet.txt`, `stack-target-check.txt`).
+   - Next step: restore the unmutated tree, verify against `diff-green-final.txt`, write the claim sweep, commit
+     ("move section clips into sectionclip"), rebase, push, PR, Codex review, merge.
+
+3. `refactor-oblique-boss-proof` (H4 candidate 10, into `obliqueboss`)
+   - Worktree: `.worktrees/refactor-oblique-boss-proof`, based on `3987ea5a8` (up to date). NO commit yet.
+   - Uncommitted move in progress: `oblique_boss_proof.go` deleted, new `internal/obliqueboss/mesh.go` and `proof.go`,
+     edits in `oblique_boss_fillet.go`, `cross_cylinder_bore_chamfer.go`, `internal/obliqueboss/interval.go`, two layout files.
+     The tree may contain a mutant; a copy of the moved proof is `.tmp/h4-obliqueboss/proof.go.keep`.
+   - Evidence in `.tmp/h4-obliqueboss/` (closure, differential `zz_oblique_diff_internal_test.go`, `diff-green-full.txt`,
+     mutants, `claim-sweep.txt`, `stack-target-check.txt`, `test-root.txt`, `test-apitest.txt`).
+   - Next step: as for section clips.
+
+
+## Rules and process (see memory files in the project memory directory)
+
+- Merge only with a SOUND Codex review (behaviour only; allocation parity never fails a review) and a completed green CI run
+  (16 pass, 3 skipped) at the exact head, branch current with origin/main; rebase and re-wait CI if main moved; merge serially.
+- Avoid `*_internal_test.go`. Verify every descriptive claim in docs and comments by reading the code (each recent PR needed a
+  round for one false "once/only/every" claim or a rewritten history statement). Keep historical names in past-tense text.
+- Save worktree evidence to the main checkout's `.tmp/<topic>/` before `git worktree remove`.
+
+## Update: user rulings relayed by decad-e6 (2026-10-16, after the first handoff)
+
+- STOP: the user said their weekly token allowance is nearly used up and applies to decad-refactor too. All three agents were
+  resumed briefly after a stop hook and then stopped again; do NOT resume the three branches until the user says so. The /goal
+  stop hook cannot override a direct user instruction; if in doubt, ask the user.
+- H5 twins are RULED OUT by the user ("I'd rather exhaust other possibilities than allow twins"). Merged twins #1924 and #1927
+  stay. Do NOT start the sweep report twin (`refactor-sweep-twin-report`): treat that branch and its worktree as abandoned work
+  kept only for reference (the memo reversal and HD decision 6 note were never merged). This closes the earlier "PENDING USER
+  CONFIRMATION" item: twins are forbidden, so the floor stays near 18,200 and the 10,000 target is unreachable by the plan's route.
+  Continue only with H4-style moves that need no twin (see `.tmp/h4h5-next-survey.md`), when the user allows work again.
+- The two H4 worktrees (`refactor-section-clips`, `refactor-oblique-boss-proof`) remain uncommitted and unpushed; the agents were
+  stopped a second time shortly after resuming, so re-check the working trees against the saved unmutated copies before use.

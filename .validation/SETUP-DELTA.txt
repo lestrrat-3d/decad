@@ -1,0 +1,17 @@
+SEPARATE DRAFT: NOT THE APPROVED LIVE CANARY BUNDLE.
+Image Id and RepoDigests capture and immutable-Id container use were already present.
+Clean /out/work versus /out/differential command routing was already explicit.
+The reused official tool archive and checksum files were already included in SHA256SUMS.
+Added GOFLAGS=-p=1 -mod=readonly -buildvcs=false.
+Added bounded per-stage go env JSON (actual GOVERSION, proxy/checksum and related settings).
+Added bounded go mod download -json all output recording resolved module versions/sums.
+Setup evidence is preserved before scratch removal: at most 20 files, 512 KiB total,
+256 KiB for module identities and 64 KiB for each other file; per-command file limits apply.
+Added immediate binary SHA256 verification before lint, not only at preparation time.
+Partition Go JSON events and wrapper/df output into separate artifacts before test parsing.
+Their combined size is bounded by the original 8 MiB stream; retaining the original too
+uses at most 16 MiB for those text artifacts. Source/control/resource limits are unchanged.
+Added two mock checks for parser separation and oversized module evidence.
+17 mock tests passed; no setup command, Go test, lint, image operation or geometry ran.
+setup-integration.patch contains the exact two-file integration delta.
+Candidates and original dirty worktrees unchanged. This draft needs independent review.

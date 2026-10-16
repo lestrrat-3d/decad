@@ -1,0 +1,166 @@
+--- approved/stage.sh
++++ setup-draft/stage.sh
+@@ -1,12 +1,13 @@
+ #!/usr/bin/env bash
+ set -euo pipefail
+-export GOMAXPROCS=2 GOFLAGS=-p=1 GOMEMLIMIT=2GiB GOGC=50
++export GOMAXPROCS=2 GOMEMLIMIT=2GiB GOGC=50
++export GOFLAGS="-p=1 -mod=readonly -buildvcs=false"
+ export GOCACHE=/out/go-cache GOMODCACHE=/out/go-mod-cache GOTMPDIR=/out/go-tmp
+ export GOPATH=/out/gopath GOENV=off GOTOOLCHAIN=local
+ export TMPDIR=/out/link-tmp
+ ulimit -f 1048576
+ export GOLANGCI_LINT_CACHE=/out/golangci-lint-cache
+-mkdir -p "$GOCACHE" "$GOMODCACHE" "$GOTMPDIR" "$GOLANGCI_LINT_CACHE" "$TMPDIR"
++mkdir -p "$GOCACHE" "$GOMODCACHE" "$GOTMPDIR" "$GOLANGCI_LINT_CACHE" "$TMPDIR" /out/evidence
+ test "$(go version)" = "go version go1.26.8 linux/amd64"
+ test "$(cat /sys/fs/cgroup/memory.max)" = 4294967296
+ test "$(cat /sys/fs/cgroup/memory.swap.max)" = 0
+@@ -19,6 +20,15 @@
+ trap 'df -B1 /out "$TMPDIR" "$GOTMPDIR" /tmp; df -i /out "$TMPDIR" /tmp' EXIT
+ (cd /src && sha256sum -c /control/source.sha256) >/dev/null
+ stage_name="${1:?stage required}"
++if [[ "$stage_name" == prepare_dependencies ]]; then
++  export GOPROXY=https://proxy.golang.org,direct GOSUMDB=sum.golang.org
++else
++  export GOPROXY=off GOSUMDB=off
++fi
++(
++  ulimit -f 64
++  go env -json GOVERSION GOOS GOARCH GOFLAGS GOTOOLCHAIN GOPROXY GOSUMDB GONOSUMDB GONOPROXY GOPRIVATE > "/out/evidence/$stage_name-environment.json"
++)
+ case "$stage_name" in
+   prepare_tool)
+     test "$(uname -s)" = Linux
+@@ -29,17 +39,20 @@
+     mkdir -p /out/tools
+     tar -xzf /control/tools/golangci-lint-2.12.2-linux-amd64.tar.gz -C /out/tools golangci-lint-2.12.2-linux-amd64/golangci-lint
+     printf '%s  %s\n' 'e26335d9bd381a60e5769a13b0ccc7967db5b6fb9c39a896a1f6fd0befe0a661' /out/tools/golangci-lint-2.12.2-linux-amd64/golangci-lint | sha256sum -c -
+-    go version -m /out/tools/golangci-lint-2.12.2-linux-amd64/golangci-lint > /out/tool-build-info.txt
+-    grep -E 'mod[[:space:]]+github.com/golangci/golangci-lint/v2[[:space:]]+v2.12.2[[:space:]]*$' /out/tool-build-info.txt
+-    grep -F 'GOARCH=amd64' /out/tool-build-info.txt
+-    grep -F 'GOOS=linux' /out/tool-build-info.txt
+-    /out/tools/golangci-lint-2.12.2-linux-amd64/golangci-lint version | tee /out/tool-version.txt
+-    grep -F 'version 2.12.2 ' /out/tool-version.txt
++    go version -m /out/tools/golangci-lint-2.12.2-linux-amd64/golangci-lint > /out/evidence/tool-build-info.txt
++    grep -E 'mod[[:space:]]+github.com/golangci/golangci-lint/v2[[:space:]]+v2.12.2[[:space:]]*$' /out/evidence/tool-build-info.txt
++    grep -F 'GOARCH=amd64' /out/evidence/tool-build-info.txt
++    grep -F 'GOOS=linux' /out/evidence/tool-build-info.txt
++    /out/tools/golangci-lint-2.12.2-linux-amd64/golangci-lint version | tee /out/evidence/tool-version.txt
++    grep -F 'version 2.12.2 ' /out/evidence/tool-version.txt
+     ;;
+   prepare_dependencies)
+     cp -a /src /out/work
+     cd /out/work
+-    go mod download
++    (
++      ulimit -f 256
++      go mod download -json all > /out/evidence/resolved-modules.json
++    )
+     go mod verify
+     ;;
+   0[1-8]-*|05b-differential)
+@@ -49,6 +62,11 @@
+     case "$stage_name" in
+       07-lint|08-vet) export GOMAXPROCS=1 GOMEMLIMIT=1GiB GOGC=25 ;;
+     esac
++    case "$stage_name" in
++      07-lint)
++        printf '%s  %s\n' 'e26335d9bd381a60e5769a13b0ccc7967db5b6fb9c39a896a1f6fd0befe0a661' /out/tools/golangci-lint-2.12.2-linux-amd64/golangci-lint | sha256sum -c -
++        ;;
++    esac
+     bash "/control/commands/$stage_name.sh"
+     ;;
+   *) exit 64 ;;
+--- approved/validation_controller.py
++++ setup-draft/validation_controller.py
+@@ -142,10 +142,19 @@
+     if not phase.get('tests'):
+         return
+     passed = set()
++    json_lines, wrapper_lines = [], []
+     for line in logfile.read_text().splitlines():
+-        if not line.startswith('{'):
+-            continue  # The vetted stage also reports bounded tool/storage metadata.
++        if line.startswith('{'):
++            json_lines.append(line)
++        else:
++            wrapper_lines.append(line)
++    # Partition the already capped stream; the parser sees only Go JSON.
++    logfile.with_suffix('.go.jsonl').write_text('\n'.join(json_lines) + '\n')
++    logfile.with_suffix('.wrapper.log').write_text('\n'.join(wrapper_lines) + '\n')
++    for line in json_lines:
+         event = json.loads(line)
++        if 'Action' not in event:
++            raise RuntimeError('non-Go JSON in test event stream')
+         if event.get('Action') in ('fail', 'skip'):
+             raise RuntimeError('test failed or skipped')
+         if event.get('Action') == 'pass' and 'Test' in event:
+@@ -159,6 +168,27 @@
+         wanted, name = line.split('  ', 1)
+         if hashlib.sha256((directory / name).read_bytes()).hexdigest() != wanted:
+             raise RuntimeError('source/control hash mismatch: ' + name)
++
++
++
++def collect_setup_evidence(scratch, artifacts, report):
++    evidence = scratch / 'evidence'
++    if not evidence.exists():
++        return
++    files = sorted(evidence.iterdir())
++    if len(files) > 20:
++        raise RuntimeError('setup evidence file count exceeded')
++    total = 0
++    retained = {}
++    for path in files:
++        limit = 256 << 10 if path.name == 'resolved-modules.json' else 64 << 10
++        size = path.stat().st_size
++        total += size
++        if path.is_symlink() or not path.is_file() or size > limit or total > 512 << 10:
++            raise RuntimeError('setup evidence exceeded its file/type/storage limits')
++        shutil.copyfile(path, artifacts / path.name)
++        retained[path.name] = {'bytes': size, 'sha256': life.sha256(path)}
++    report['setup_evidence'] = retained
+ 
+ 
+ def main():
+@@ -261,19 +291,30 @@
+         raise
+     finally:
+         try:
+-            # This also handles partial loop/mount creation before prepare_disk returned.
+-            if scratch_ready or (output / 'scratch.ext4').exists() or (output / 'scratch').exists():
+-                life.remove_work_files(output, report)
++            if scratch_ready:
++                collect_setup_evidence(scratch, artifacts, report)
+         except Exception as error:
+             report['success'] = False
+-            report['scratch_cleanup_error'] = str(error)
++            report['setup_evidence_error'] = str(error)
+             raise
+         finally:
+-            if life.CANCELLED:
+-                report['success'] = False
+-                report['cancelled'] = True
+-            save_report(artifacts / 'report.json', report)
+-
++            finalize_scratch(output, artifacts, report, scratch_ready)
++
++
++def finalize_scratch(output, artifacts, report, scratch_ready):
++    try:
++        # This also handles partial loop/mount creation before prepare_disk returned.
++        if scratch_ready or (output / 'scratch.ext4').exists() or (output / 'scratch').exists():
++            life.remove_work_files(output, report)
++    except Exception as error:
++        report['success'] = False
++        report['scratch_cleanup_error'] = str(error)
++        raise
++    finally:
++        if life.CANCELLED:
++            report['success'] = False
++            report['cancelled'] = True
++        save_report(artifacts / 'report.json', report)
+ 
+ if __name__ == '__main__':
+     main()

@@ -1,0 +1,29 @@
+{
+  "source": "/home/lestrrat/dev/src/github.com/lestrrat-3d/decad/.worktrees/fix-thread-gallery/.tmp/thread-gallery-final-controls-draft/.validation/run_hosted.py",
+  "source_sha256": "055cad16361a8557a1c70482e1b9e434c4dadc7748bd9a8c0acf8c9573a16116",
+  "functions_copied_verbatim": [
+    "request_cancel",
+    "leader_status",
+    "status_code",
+    "live_group_members",
+    "stop_owned_group",
+    "checked",
+    "sha256",
+    "host_headroom",
+    "cg_value",
+    "cgroup_path",
+    "verify_cgroup",
+    "events",
+    "check_members",
+    "TextBudget",
+    "cleanup_remaining",
+    "cleanup_checked",
+    "remove_exact_container",
+    "bounded_process",
+    "capture_cgroup_bounded",
+    "disk_usage",
+    "prepare_disk",
+    "remove_work_files"
+  ],
+  "constant_change": "TEXT_LIMIT 1 MiB to 8 MiB for bounded JSON differential output"
+}
