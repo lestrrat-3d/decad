@@ -612,7 +612,13 @@ func FacetAdjacencyContext(ctx context.Context, tris [][3]int) ([][]int, error) 
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	owner := make(map[[2]int]int, 3*len(tris))
+	var owner map[[2]int]int
+	if scratch := acquireFacetOwners(&facetOwnerPool, len(tris)); scratch != nil {
+		owner = scratch.owners
+		defer releaseFacetOwners(&facetOwnerPool, scratch)
+	} else {
+		owner = make(map[[2]int]int, 3*len(tris))
+	}
 	for i, tri := range tris {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
