@@ -63,8 +63,7 @@ The rules for rows live in `docs/layout.md`.
 | `prism_face_patch_union.go` | Re-expresses exact rectangular face-patch Union operands for prism or A1 scenes. See general-boolean A1. |
 | `prism_overlap.go` | Prism-boolean §4.5's overlap-area reading for `Verify`. See its doc comment. |
 | `brep_measure.go` | The brep surveys; `internal/breprecord` states prisms and stacked prisms as face views, then builds and measures the record. See general-boolean §4. |
-| `classb.go` | Class-B admission and result adapters. See general-boolean §3 B. |
-| `classb_crossing.go` | Class-B scene and BRep adapters. See general-boolean §5, §10. |
+| `classb.go` | `tryClassB`: class B over two bodies' payloads through `internal/classbgeom`. See general-boolean §3 B. |
 | `oblique_boss.go` | Recognizes the two prism sources a complete oblique cylinder and plate Union retains. See oblique-boss-fillet design. |
 | `cross_cylinder_bore_source.go` | Recognizes the two circular prism sources a perpendicular cylinder Cut retains. See cross-cylinder-bore-chamfer design. |
 | `surface_trim.go` / `surface_split_revolve.go` | Surface body gates and revolve `Split`. See surface-intersection §2–§3. |

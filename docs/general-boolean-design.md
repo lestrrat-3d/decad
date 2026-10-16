@@ -577,7 +577,7 @@ charged per scene.
 
 `Cut`, `Union` and `Intersect` build class B for an operand X read through
 its face view (a prism, a stacked prism whose slabs keep one outer loop and
-one region, or a brep body) and a prism Y (`classb.go`). `Cut` takes X as the
+one region, or a brep body) and a prism Y (`internal/classbgeom/entry.go`). `Cut` takes X as the
 target; `Union` and `Intersect` try the operands both ways, so a brep or
 stacked operand enters in either position. Beside B1–B8, the record of §4.1
 needs one shared placement (`X.xform == Y.xform`), Y's axes carried bit for
@@ -623,7 +623,7 @@ wall, S11's chain of cross holes and a cross hole under a blind pocket are in
 the reach.
 
 A `Cut` of a prism target outside it takes the crossing reach
-(`classb_crossing.go`), whose scenes cut edges: B2's keyway, a hole breaking
+(`internal/classbgeom/crossing_cut.go`), whose scenes cut edges: B2's keyway, a hole breaking
 out of a face, a tool crossing a wall. It needs both operands hole-free, every level
 displacement zero, and a frame for faces normal to e that carries X's axes
 bit for bit. Every planar face of either operand is decided by its own

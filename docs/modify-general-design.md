@@ -389,7 +389,7 @@ With `s = +1`, `t` the thickness in millimetres with its conversion bound
    figure). `Tᵢ' = prismPayload{profile: Dᵢ, frame: F_j, z0: L0 − t, z1: L1 + t}`
    with `offsetSectionDelta(Tᵢ, −1, t, tDelta)`. The cavity is
    `Cut(…Cut(A', T₁'), …, Tₙ')` through class B's own entry over payloads
-   (PR 0's `classBOfPayloads`, the body-free form of `tryClassB`): each cut
+   (`classbgeom.OfPayloads`, PR 0's `classBOfPayloads`, the body-free form of `tryClassB`): each cut
    must build a `brepPayload`; a pair class B does not admit — two dilated
    holes closer than `2t` (B7), a dilated tool reaching a cap of `A'` within
    `t` of a hole (the crossing reach or the mesh path) — is SG6, naming the
@@ -400,7 +400,7 @@ With `s = +1`, `t` the thickness in millimetres with its conversion bound
    above, as its section displacement, and the largest of `δ` and the cap
    levels' displacements on both its levels: an upper bound on each face's
    own. That charge `c` is in no record the cuts read, so each cut takes it
-   as a parameter (`classBOfPayloads`'s `delta`; class B's own booleans pass
+   as a parameter (`classbgeom.OfPayloads`'s `delta`; class B's own booleans pass
    zero) under two rules. First, every face box of `A'` (and of the cavity
    so far) and every tool box that B7 and the through reach compare grows by
    `c` on every side, and each through-reach slab's level band by `c`: a

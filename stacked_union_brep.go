@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/breprecord"
+	"github.com/lestrrat-3d/decad/internal/classbgeom"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
@@ -378,7 +379,7 @@ func (b *ubBuild) slabRegions(ctx context.Context, k int) ([]profileRecord, erro
 	b.cutDelta = math.Max(b.cutDelta, cutDelta)
 	out := make([]profileRecord, len(loops))
 	for i, loop := range loops {
-		area, err := loopSignedAreaCB(loop)
+		area, err := classbgeom.LoopSignedArea(loop)
 		if err != nil {
 			return nil, err
 		}
@@ -438,7 +439,7 @@ func (b *ubBuild) cutSlabRegion(sc *ubScene) ([]profileRecord, error) {
 	b.cutDelta = math.Max(b.cutDelta, cutDelta)
 	var region profileRecord
 	for _, loop := range loops {
-		area, err := loopSignedAreaCB(loop)
+		area, err := classbgeom.LoopSignedArea(loop)
 		if err != nil {
 			return nil, err
 		}

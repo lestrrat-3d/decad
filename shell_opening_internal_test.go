@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/circularbounds"
+	"github.com/lestrrat-3d/decad/internal/classbgeom"
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
@@ -118,7 +119,7 @@ func TestSideOpeningRegionsLPrism(t *testing.T) {
 	sec, err := testSideOpeningRegions(budget, pp, internalSideSegments(t, pp, false, 10), 2, 1, units.Millimeters(2), 2)
 	require.NoError(t, err)
 	require.Equal(t, []planePoint{pt(10, 28), pt(2, 28), pt(2, 2), pt(28, 2), pt(28, 8), pt(10, 8)}, internalLoopPoints(t, sec.Cavity.Outer))
-	area, err := loopSignedAreaCB(sec.Cavity.Outer)
+	area, err := classbgeom.LoopSignedArea(sec.Cavity.Outer)
 	require.NoError(t, err)
 	require.Equal(t, 316.0, area)
 	require.Equal(t, []planePoint{pt(10, 10)}, point2FromRecordSlice(sec.Corners))

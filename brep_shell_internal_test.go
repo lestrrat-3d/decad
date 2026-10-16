@@ -1044,7 +1044,8 @@ func TestBrepShellThroughCutWallRimCharge(t *testing.T) {
 // vertex on y = 1 moves by the radius's error times rr/w (w the half-chord,
 // about 0.026), which the flat offset displacement does not cover.
 //
-// Shown to fail with classBOfPayloads' delta > 0 refusal deleted: the shell
+// Shown to fail with classBOfPayloads' delta > 0 refusal deleted (now
+// classbgeom.OfPayloads): the shell
 // then built, and the published bound of the rim vertex near
 // (19.981889273896304, 1, 20), 5.09e-14 mm, missed its exact position
 // x = 20 − √((3.1 + 1)² − (20 − 15.90004)²), 7.40e-14 mm away; the coverage
@@ -1096,7 +1097,8 @@ func TestBrepShellThroughCutDisplacedCrossing(t *testing.T) {
 // so the dilated hole's recorded box lies strictly apart from it while the
 // denoted tube reaches 1.8e-15 past the denoted wall.
 //
-// Shown to fail with the widening deleted (classBOfPayloads passing zero to
+// Shown to fail with the widening deleted (classBOfPayloads, now
+// classbgeom.OfPayloads, passing zero to
 // ThroughReach and CurvedApart): the shell then built 13 faces that Verify
 // read Sound, and the published area 2275.247229100661 ± 3.03e-11 mm² lay
 // wholly above the denoted area, at most 2275.247228548644 mm²: the
