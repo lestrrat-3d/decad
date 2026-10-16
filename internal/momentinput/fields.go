@@ -22,6 +22,11 @@ type FieldPreflight struct {
 // ValidateFieldsWithPoll checks a whole record while spending its shared work
 // state. Polling and charges keep their record, loop, and segment order.
 func ValidateFieldsWithPoll(poll func() error, record Profile, work *freeform.FreeformWork) (FieldPreflight, error) {
+	return validateFieldsWithCapture(poll, record, work, nil)
+}
+
+func validateFieldsWithCapture(poll func() error, record Profile, work *freeform.FreeformWork,
+	capture *analyticWalkCapture) (FieldPreflight, error) {
 	loops := append([]LoopRecord{record.Outer}, record.Holes...)
 	normalized := make([]LoopRecord, len(loops))
 	// Plan storage is minted on the first segment that converts, so a record
@@ -59,7 +64,10 @@ func ValidateFieldsWithPoll(poll func() error, record Profile, work *freeform.Fr
 					return FieldPreflight{}, err
 				}
 			}
-			checked, segEnds, plan, err := validateMomentSegment(segment, work)
+			if capture.active() {
+				capture.loopIndex, capture.segmentIndex = loopIndex, segmentIndex
+			}
+			checked, segEnds, plan, err := validateMomentSegment(segment, work, capture)
 			if err != nil {
 				return FieldPreflight{}, fmt.Errorf(
 					`decad: profile loop %d segment %d is invalid: %w`,

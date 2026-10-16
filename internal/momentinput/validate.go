@@ -156,7 +156,7 @@ func growAll(points []Point2, grow func(Point2)) {
 // would even run (validateFreeformMomentSegment), so they are read directly
 // from the same conversion the build's own survey2d.WalkKind ==
 // survey2d.WalkFreeform arm reads (extrude.go's prismrecord.BuildLoopSidesAs).
-func validateMomentSegment(segment CurveSegment, work *freeform.FreeformWork) (CurveSegment, segmentEnds, Plan, error) {
+func validateMomentSegment(segment CurveSegment, work *freeform.FreeformWork, capture *analyticWalkCapture) (CurveSegment, segmentEnds, Plan, error) {
 	segment, err := sectionrecord.NormalizeSegment(segment)
 	if err != nil {
 		return nil, segmentEnds{}, Plan{}, err
@@ -165,6 +165,7 @@ func validateMomentSegment(segment CurveSegment, work *freeform.FreeformWork) (C
 		return nil, segmentEnds{}, Plan{}, sectionrecord.ErrNilSegment
 	}
 	if splinebezier.IsFreeformSegment(segment) {
+		capture.disable()
 		checked, _, plan, err := validateFreeformMomentSegment(segment, work)
 		if err != nil {
 			return nil, segmentEnds{}, Plan{}, err
@@ -180,14 +181,14 @@ func validateMomentSegment(segment CurveSegment, work *freeform.FreeformWork) (C
 		}
 		return checked, ends, plan, nil
 	}
-	checked, ends, err := validateAnalyticMomentSegment(segment, work)
+	checked, ends, err := validateAnalyticMomentSegment(segment, work, capture)
 	return checked, ends, Plan{}, err
 }
 
 // validateAnalyticMomentSegment normalizes and checks one line, circle or arc
 // segment — the kinds integrated from their own closed forms, with no
 // conversion and so no charge against the record's work counter.
-func validateAnalyticMomentSegment(segment CurveSegment, work *freeform.FreeformWork) (CurveSegment, segmentEnds, error) {
+func validateAnalyticMomentSegment(segment CurveSegment, work *freeform.FreeformWork, capture *analyticWalkCapture) (CurveSegment, segmentEnds, error) {
 	switch segment := segment.(type) {
 	case LineSeg:
 		if !freeform.FiniteMomentValues(
@@ -218,7 +219,7 @@ func validateAnalyticMomentSegment(segment CurveSegment, work *freeform.Freeform
 			return nil, segmentEnds{}, fmt.Errorf(`%w: a circle segment's CCW flag contradicts its range order`, ErrDegenerate)
 		}
 		segment.Radius = units.Millimeters(radius)
-		return validateMomentWalk(segment, work)
+		return validateMomentWalk(segment, work, capture)
 	case ArcSeg:
 		if !freeform.FiniteMomentValues(
 			segment.Center.U,
@@ -255,7 +256,7 @@ func validateAnalyticMomentSegment(segment CurveSegment, work *freeform.Freeform
 			segment,
 		)
 	}
-	return validateMomentWalk(segment, work)
+	return validateMomentWalk(segment, work, capture)
 }
 
 // validateFreeformMomentSegment checks the fields the exact integrator reads on
@@ -375,8 +376,15 @@ func freeformDegenerate(spans []freeform.BezierSpan) bool {
 	return true
 }
 
-func validateMomentWalk(segment CurveSegment, work *freeform.FreeformWork) (CurveSegment, segmentEnds, error) {
+func validateMomentWalk(segment CurveSegment, work *freeform.FreeformWork, capture *analyticWalkCapture) (CurveSegment, segmentEnds, error) {
+	var before, beforeRecon, after, afterRecon uint64
+	if capture.active() {
+		before, beforeRecon = boundarywalk.WorkSpent(work)
+	}
 	walk, err := boundarywalk.WalkOf(segment, work)
+	if capture.active() {
+		after, afterRecon = boundarywalk.WorkSpent(work)
+	}
 	if err != nil {
 		return nil, segmentEnds{}, err
 	}
@@ -401,7 +409,11 @@ func validateMomentWalk(segment CurveSegment, work *freeform.FreeformWork) (Curv
 	if walk.Length <= 0 {
 		return nil, segmentEnds{}, fmt.Errorf(`%w: a zero-length segment contributes no boundary`, ErrDegenerate)
 	}
-	return segment, endsOfWalk(segment, walk), nil
+	ends := endsOfWalk(segment, walk)
+	if capture.active() {
+		capture.retain(walk, before, beforeRecon, after, afterRecon)
+	}
+	return segment, ends, nil
 }
 
 func validateMomentRange(start, end float64) error {

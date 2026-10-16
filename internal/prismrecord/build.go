@@ -44,7 +44,14 @@ func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.Freefor
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	ig, err := pp.Profile.EvaluatorIntegralsUncheckedContext(ctx, freeform.MomentFirstOrder, work)
+	var ig momentinput.Integrals
+	var captured *momentinput.ProfileWalks
+	var err error
+	if pp.Walks == nil {
+		ig, captured, err = pp.Profile.EvaluatorIntegralsWithAnalyticWalksContext(ctx, freeform.MomentFirstOrder, work)
+	} else {
+		ig, err = pp.Profile.EvaluatorIntegralsUncheckedContext(ctx, freeform.MomentFirstOrder, work)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -146,6 +153,12 @@ func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.Freefor
 		if err := pw.Charge(work); err != nil {
 			return nil, err
 		}
+	} else if captured.Reusable(pp.Profile) {
+		// Exact record identity preserves normalized-type and unit mismatches
+		// as fallbacks. The preflight measured zero charges, so adopting its
+		// walks adds no Step call at this formerly uncharged resolution.
+		captured.Profile = pp.Profile
+		pw = captured
 	} else {
 		resolved, err := momentinput.ResolveProfileWalks(pp.Profile, work)
 		if err != nil {
