@@ -289,8 +289,8 @@ func (st *stackedUnionState) bRegion(ctx context.Context, ib int) (profileRecord
 // A's frame. Equal outers expose nothing. Otherwise the clean-nesting match
 // must find the narrower outer whole as a hole of the wider region's cell:
 // the wider side alone holds the exposed record, the wider region with the
-// narrower outer reversed as its hole. Any other outcome, a split boundary
-// included, is unresolved and falls back to the mesh path.
+// narrower outer reversed as its hole. A split or other miss tries BRep;
+// a silent BRep miss lets the caller take the mesh path.
 func (st *stackedUnionState) interfaceOf(ctx context.Context, lower, upper profileRecord) (stackedrecord.Interface, bool, error) {
 	same, err := momentinput.ExactLoopEqual(st.budget, lower.Outer, upper.Outer)
 	if err != nil {

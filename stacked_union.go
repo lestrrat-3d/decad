@@ -20,17 +20,17 @@ import (
 // exactly, cut the union into slabs. A slab one operand reaches takes that
 // operand's region verbatim. A slab both reach takes the select-all merge of
 // prism-boolean §4.2, or the containing operand's region verbatim when the
-// clean-nesting match proves one region holds the other's whole. Each
-// interface where two adjacent regions differ is decided by the same match:
-// the narrower region's outer must come back whole as a hole of the wider
-// region's cell, and the exposed record is the wider region with that hole.
+// clean-nesting match proves one region holds the other's whole. For
+// a stackedPrismPayload, each differing interface uses that match: the
+// narrower outer must come back whole as a hole of the wider region's
+// cell, whose exposed record is that wider region with the hole.
 //
 // Admission is reject-only and silent up to the first private scene: G1-G4
 // on the two operands' outer prisms, G4 and G6 (hole-free) on every slab
 // region, prism-boolean's trimmed-circular refusal, and the interval relation
 // `z0_b' <= z1_a && z0_a <= z1_b'` over big.Rat. Past that point an
 // unresolved topology still falls back to the mesh path, as prism-boolean
-// §4.4 states: a disjoint overlap, and a cell the match cannot find. An
+// §4.4 states: a disjoint overlap, and a cell the match cannot find.
 // When a stacked record cannot state an interface, or an operand requires
 // a BRep, internal/stackedunion/brep.go rebuilds result slabs from the
 // admitted operand slabs and classifies their exposed interfaces. A pair
@@ -76,8 +76,8 @@ func stackedUnionOperandOf(b *Body) (stackedUnionOperand, bool) {
 // tryStackedUnion is general-boolean §3 A1. ok=false with a nil error is a
 // silent miss: the caller takes the mesh path. A non-nil error is a genuine
 // refusal the caller propagates (prism-boolean §3.4). The payload is a
-// stackedPrismPayload when every interface resolves through the clean-nesting
-// match, and a brepPayload (internal/stackedunion/brep.go) when one does not.
+// stackedPrismPayload when brepOnly is false and every interface matches.
+// Direct BRep routing or an interface miss can produce a brepPayload.
 func tryStackedUnion(ctx context.Context, a, b *Body) (topo.Payload, bool, error) {
 	va, aok := stackedUnionOperandOf(a)
 	vb, bok := stackedUnionOperandOf(b)
