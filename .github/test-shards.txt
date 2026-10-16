@@ -1361,6 +1361,7 @@
 10	0.01	TestCircularStationChainJunctionsMeetOnOneCoordinate
 10	0.03	TestClassBCrossingSlotFloorCornersReadConcave
 10	3.41	TestCoilArcMeshProofsEncloseTheBody
+10	0.00	TestCoilGalleryThreadVolume
 10	4.17	TestCoilHolePassage
 10	0.00	TestCommitExactPointConeRefusalKeepsDocument
 10	0.00	TestConeFromFaceCancelled
