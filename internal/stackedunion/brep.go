@@ -1,4 +1,4 @@
-package decad
+package stackedunion
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/classbgeom"
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
@@ -103,7 +104,7 @@ var errUBMiss = brepgeom.ErrStackedWallMiss
 // is a silent miss. A non-nil error is cancellation or a refusal past the
 // gate that the stacked path itself raises.
 func (st *stackedUnionState) brep(ctx context.Context, levels []stackedrecord.UnionLevel, reach [][2]int) (topo.Payload, bool, error) {
-	if !st.reexpress.Identity || st.va.proxy.SectionDelta != 0 || st.vb.proxy.SectionDelta != 0 {
+	if !st.reexpress.Identity || st.va.Proxy.SectionDelta != 0 || st.vb.Proxy.SectionDelta != 0 {
 		// B's records enter every scene verbatim only under the identity
 		// re-expression; a re-expressed B would be recorded once per scene.
 		// Every straight wall becomes a planar face at its recorded level,
@@ -119,13 +120,25 @@ func (st *stackedUnionState) brep(ctx context.Context, levels []stackedrecord.Un
 	b := &ubBuild{st: st, levels: levels, reach: reach,
 		scenes: map[string]*ubScene{}, geom: stackedbrep.NewEngine(held)}
 	bp, err := b.run(ctx)
-	if errors.Is(err, errUBMiss) || errors.Is(err, ErrUnsupported) {
+	if errors.Is(err, errUBMiss) || errors.Is(err, decaderr.ErrUnsupported) {
 		return nil, false, nil
 	}
 	if err != nil {
 		return nil, false, err
 	}
 	return bp, true, nil
+}
+
+// Cut builds the already-admitted crossing blind cut from its two prism slabs.
+// It returns the builder's original miss or refusal for the root caller to map.
+func Cut(ctx context.Context, budget *proofbound.WorkBudget, va, vb Operand,
+	reexpress *prismReexpression, levels []stackedrecord.UnionLevel, reach [][2]int) (breprecord.Payload, error) {
+	state := &stackedUnionState{budget: budget, va: va, vb: vb, reexpress: reexpress}
+	build := &ubBuild{st: state, cut: true, levels: levels, reach: reach,
+		scenes: map[string]*ubScene{}, geom: stackedbrep.NewEngine([]float64{
+			levels[0].Held, levels[1].Held, levels[2].Held,
+		})}
+	return build.run(ctx)
 }
 
 func (b *ubBuild) run(ctx context.Context) (brepPayload, error) {
@@ -190,7 +203,7 @@ func (b *ubBuild) run(ctx context.Context) (brepPayload, error) {
 	for i, level := range b.levels {
 		faceLevels[i] = stackedbrep.Level{Held: level.Held, Delta: level.Delta}
 	}
-	out, err := breprecord.StackedRecord(ctx, b.st.budget, b.geom, faceLevels, b.st.va.proxy.Frame, b.st.va.proxy.Xform, delta)
+	out, err := breprecord.StackedRecord(ctx, b.st.budget, b.geom, faceLevels, b.st.va.Proxy.Frame, b.st.va.Proxy.Xform, delta)
 	if err != nil {
 		return brepPayload{}, err
 	}
@@ -233,7 +246,7 @@ func (b *ubBuild) refs(isB bool, slab int) []ubRef {
 	if isB {
 		op = b.st.vb
 	}
-	out := make([]ubRef, len(op.slabs[slab].Regions))
+	out := make([]ubRef, len(op.Slabs[slab].Regions))
 	for r := range out {
 		out[r] = ubRef{isB: isB, slab: slab, region: r}
 	}
@@ -242,9 +255,9 @@ func (b *ubBuild) refs(isB bool, slab int) []ubRef {
 
 func (b *ubBuild) record(ref ubRef) profileRecord {
 	if ref.isB {
-		return b.st.vb.slabs[ref.slab].Regions[ref.region]
+		return b.st.vb.Slabs[ref.slab].Regions[ref.region]
 	}
-	return b.st.va.slabs[ref.slab].Regions[ref.region]
+	return b.st.va.Slabs[ref.slab].Regions[ref.region]
 }
 
 // scene arranges a set of records once and keeps the arrangement. A scene
@@ -270,7 +283,7 @@ func (b *ubBuild) scene(ctx context.Context, refsA, refsB []ubRef) (*ubScene, er
 	if !within {
 		return nil, fmt.Errorf(
 			`%w: the analytic union scene charges at least %d arranger segments against this evaluator's cap of %d (each circle or arc costs 256, each line 1)`,
-			ErrUnsupported, segments, prismcells.MaxArrangementSegments)
+			decaderr.ErrUnsupported, segments, prismcells.MaxArrangementSegments)
 	}
 	s, tags, delta, err := prismcells.BuildProfileScene(b.st.budget, regionsA, regionsB, &prismReexpression{Identity: true})
 	if err != nil {
@@ -310,7 +323,7 @@ func (b *ubBuild) scene(ctx context.Context, refsA, refsB []ubRef) (*ubScene, er
 // the shared spans' width into the build's crossing term.
 func (b *ubBuild) charge(sc *ubScene) error {
 	if !sc.charged {
-		ok, err := sc.delta.ChargeCrossings(b.st.budget, sc.tags, sc.profiles, b.st.va.proxy.SectionDelta, b.st.vb.proxy.SectionDelta, 0)
+		ok, err := sc.delta.ChargeCrossings(b.st.budget, sc.tags, sc.profiles, b.st.va.Proxy.SectionDelta, b.st.vb.Proxy.SectionDelta, 0)
 		if err != nil {
 			return err
 		}

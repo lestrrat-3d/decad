@@ -36,6 +36,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/classbgeom/` | Class B: the entry over two payloads (gates B1-B8, through reach, result record), the crossing reach, face geometry and shifted tool records. See general-boolean §3 B, §5. |
 | `internal/crossbore/` | Cross-bore mouth chamfer arithmetic: station plan and feet, outer-ring station errors, the dual-interval proof of the quarter-turn base cells and the mirror map from whole-turn cells. See cross-cylinder-bore-chamfer design. |
 | `internal/brepgeom/` / `internal/stackedbrep/` | BRep geometry, measurements, extents, face surveys, middle-rim audit and topology. See general-boolean §4–§5. |
+| `internal/stackedunion/` | Builds A1 stacked Union slabs, private scenes, and BRep faces after root admission. See general-boolean §3 A1. |
 | `internal/throughshell/` | Through-cut recognition, strips and rims. See modify-general §3. |
 | `internal/capedge/` | Convex cap-edge cutter admission, quarter-cylinder profile, chamfer wedge and the P8 top front edge test. See vertex-blend §2. |
 | `internal/prismshell/` | Prism side-opening sections, shell wall bands, boss rectangles and bands, slab levels and stack faces. See shell-opening §3–§5, modify-reach §9.2. |

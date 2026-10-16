@@ -59,7 +59,7 @@ The rules for rows live in `docs/layout.md`.
 | `prism_boolean_blind.go` | Blind and spanning Cuts via the whole-loop match. See `docs/prism-boolean-design.md` §3.2. |
 | `prism_boolean_crossing_blind.go` | Exact rectangular blind Cut across one through hole. See general-boolean A7. |
 | `prism_group.go` | Prism-group `Cut` tools and disjoint `Union` results. See general-boolean A5. |
-| `stacked_union.go` / `stacked_union_brep.go` | A1 `Union`: slabs or a brep. See general-boolean A1. |
+| `stacked_union.go` | Admits A1 `Union` operands and passes their slabs to `internal/stackedunion`. See general-boolean A1. |
 | `prism_face_patch_union.go` | Re-expresses exact rectangular face-patch Union operands for prism or A1 scenes. See general-boolean A1. |
 | `prism_overlap.go` | Prism-boolean §4.5's overlap-area reading for `Verify`. See its doc comment. |
 | `brep_measure.go` | The brep surveys; `internal/breprecord` states prisms and stacked prisms as face views, then builds and measures the record. See general-boolean §4. |

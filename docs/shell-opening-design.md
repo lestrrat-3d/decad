@@ -351,7 +351,7 @@ encloses an arc join's two feet and a miter's root, `OpeningReach` a rim cut.
 Every face carries one section displacement `delta`, the larger of the chain
 reach's figure (`3 × ChainReach`, modify §9's three-reach argument over the
 open chain and both cuts) and the engine's largest canonical-vertex
-allowance (`Engine.Allow()`), as `stacked_union_brep.go` charges its faces.
+allowance (`Engine.Allow()`), as `internal/stackedunion/brep.go` charges its faces.
 BO1's prism carries the chain's figure plus three times the **cut gap**: the
 largest distance between a rim's cut `q` and the point the rim's range names
 at `q`'s parameter (§4.2), that point enclosed over rational intervals
@@ -414,7 +414,7 @@ In order, each refusing and none admitting:
    pairs the pieces; whether a cut lies on `carrier(r)` is the enclosure's
    question (§2.4), not this one's.
 4. The engine's own misses (SO5), modify §5's audit on every planar face the
-   engine writes (as `stacked_union_brep.go` runs it), `breprecord.Falsify`,
+   engine writes (as `internal/stackedunion/brep.go` runs it), `breprecord.Falsify`,
    `breprecord.TopologyContext`'s closure count, and `breprecord.Build`'s positive
    volume (`ErrDegenerate`).
 
@@ -737,7 +737,7 @@ carrying every new name and `go test . ./apitest/ -run '^TestCI'` passing.
 - **Let a stacked column carry a wall across the cap and wall slabs.** The loop
   record changes between them; the engine's per-carrier restatement is what
   joins the pieces into one face.
-- **Fall back silently on an engine miss.** `stacked_union_brep.go` misses
+- **Fall back silently on an engine miss.** `internal/stackedunion/brep.go` misses
   into the mesh path because a boolean has one; a shell has none and refuses
   with SO5.
 - **Charge the cut only on the rim face.** The payload-wide `delta` is what

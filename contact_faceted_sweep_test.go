@@ -13,7 +13,7 @@ import (
 // z = 4..12, drawn on a plane whose origin is the box's own corner (5, 5, 4).
 // The corner offset is in the plane, so the box re-expresses into an
 // XY-sketched partner's frame as a translation that is not the identity, and
-// A1's brep build declines the pair (stacked_union_brep.go): its union with
+// A1's brep build declines the pair (internal/stackedunion/brep.go): its union with
 // the 10 mm box at the origin crosses that box's outline and takes the mesh
 // path, which is the faceted result these fixtures are about. Every
 // coordinate is exact.
