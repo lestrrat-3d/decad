@@ -1,4 +1,4 @@
-package decad
+package obliqueboss
 
 import (
 	"context"
@@ -6,18 +6,21 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
-	"github.com/lestrrat-3d/decad/internal/obliqueboss"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
 
-func obliqueBasisAdmitted(rec *obliqueBossRecord) bool {
+// basisAdmitted reports whether the record's axis tilt and held basis lie
+// inside the limits the fillet proof's constants assume.
+func basisAdmitted(rec *facetedrecord.ObliqueBossRecord) bool {
 	if rec.Axis.Z <= 0.94 {
 		return false
 	}
-	tiltSquared := obliqueboss.ObliqueRatDot(r3.Vec{X: rec.Axis.X, Y: rec.Axis.Y},
+	tiltSquared := ObliqueRatDot(r3.Vec{X: rec.Axis.X, Y: rec.Axis.Y},
 		r3.Vec{X: rec.Axis.X, Y: rec.Axis.Y})
 	tiltLimit := proofarith.FloatRat(0.349)
 	if tiltSquared.Cmp(new(big.Rat).Mul(tiltLimit, tiltLimit)) >= 0 {
@@ -27,21 +30,24 @@ func obliqueBasisAdmitted(rec *obliqueBossRecord) bool {
 	lo.Mul(lo, lo)
 	hi.Mul(hi, hi)
 	for _, basis := range []r3.Vec{rec.Axis, rec.Ex, rec.Ey} {
-		square := obliqueboss.ObliqueRatDot(basis, basis)
+		square := ObliqueRatDot(basis, basis)
 		if square.Cmp(lo) <= 0 || square.Cmp(hi) >= 0 {
 			return false
 		}
 	}
 	dotLimit := proofarith.FloatRat(0.0009)
 	for _, pair := range [][2]r3.Vec{{rec.Axis, rec.Ex}, {rec.Axis, rec.Ey}, {rec.Ex, rec.Ey}} {
-		if new(big.Rat).Abs(obliqueboss.ObliqueRatDot(pair[0], pair[1])).Cmp(dotLimit) >= 0 {
+		if new(big.Rat).Abs(ObliqueRatDot(pair[0], pair[1])).Cmp(dotLimit) >= 0 {
 			return false
 		}
 	}
 	return true
 }
 
-func obliqueBossDiameterBound(rec *obliqueBossRecord, boundaryBound float64) float64 {
+// DiameterBound bounds the diameter of the plate and boss together from the
+// rectangle's sides, the plate height, and the boss length and radius, each
+// widened by twice boundaryBound.
+func DiameterBound(rec *facetedrecord.ObliqueBossRecord, boundaryBound float64) float64 {
 	w := proofbound.RatFloatUp(new(big.Rat).Sub(
 		proofarith.FloatRat(rec.Rect.U1), proofarith.FloatRat(rec.Rect.U0)))
 	h := proofbound.RatFloatUp(new(big.Rat).Sub(
@@ -55,62 +61,62 @@ func obliqueBossDiameterBound(rec *obliqueBossRecord, boundaryBound float64) flo
 	return proofbound.Radius3D(max(w, h, z))
 }
 
-// obliqueSampleError encloses the exact value of every sampled ideal patch
+// patchPointError encloses the exact value of every sampled ideal patch
 // point. Trigonometry and normal lengths use rational outward intervals;
 // no assumed libm ulp count enters the published boundary bound.
-func obliqueSampleError(rec *obliqueBossRecord, radius float64,
+func patchPointError(rec *facetedrecord.ObliqueBossRecord, radius float64,
 	u float64, held []r3.Vec) (float64, error) {
-	if len(held) != 5+obliqueBossBlendCells-1 {
-		return 0, fmt.Errorf("%w: an oblique sample has the wrong vertex count", ErrBooleanFailed)
+	if len(held) != 5+blendCells-1 {
+		return 0, fmt.Errorf("%w: an oblique sample has the wrong vertex count", decaderr.ErrBooleanFailed)
 	}
 	sn, cs, ok := proofbound.RadSinCosInterval(proofarith.FloatRat(u))
 	if !ok {
-		return 0, fmt.Errorf("%w: an oblique sample has no trigonometric enclosure", ErrUnsupported)
+		return 0, fmt.Errorf("%w: an oblique sample has no trigonometric enclosure", decaderr.ErrUnsupported)
 	}
-	d := obliqueboss.ObliqueIVVec(rec.Ex).Mul(cs).Add(obliqueboss.ObliqueIVVec(rec.Ey).Mul(sn))
-	rPlus := proofbound.IntervalAdd(obliqueboss.ObliqueIVOf(rec.Radius), obliqueboss.ObliqueIVOf(radius))
-	topPlus := proofbound.IntervalAdd(obliqueboss.ObliqueIVOf(rec.Top), obliqueboss.ObliqueIVOf(radius))
+	d := ObliqueIVVec(rec.Ex).Mul(cs).Add(ObliqueIVVec(rec.Ey).Mul(sn))
+	rPlus := proofbound.IntervalAdd(ObliqueIVOf(rec.Radius), ObliqueIVOf(radius))
+	topPlus := proofbound.IntervalAdd(ObliqueIVOf(rec.Top), ObliqueIVOf(radius))
 	tNumerator := proofbound.IntervalSub(
-		proofbound.IntervalSub(topPlus, obliqueboss.ObliqueIVOf(rec.Base.Z)),
+		proofbound.IntervalSub(topPlus, ObliqueIVOf(rec.Base.Z)),
 		proofbound.IntervalMul(rPlus, d.Z))
-	t, ok := proofbound.IntervalQuo(tNumerator, obliqueboss.ObliqueIVOf(rec.Axis.Z))
+	t, ok := proofbound.IntervalQuo(tNumerator, ObliqueIVOf(rec.Axis.Z))
 	if !ok {
-		return 0, fmt.Errorf("%w: an oblique sample has no axial enclosure", ErrUnsupported)
+		return 0, fmt.Errorf("%w: an oblique sample has no axial enclosure", decaderr.ErrUnsupported)
 	}
-	c := obliqueboss.ObliqueIVVec(rec.Base).Add(d.Mul(rPlus)).Add(obliqueboss.ObliqueIVVec(rec.Axis).Mul(t))
-	vertical := obliqueboss.ObliqueZeroPoint()
-	vertical.Z = obliqueboss.ObliqueIVOf(radius)
+	c := ObliqueIVVec(rec.Base).Add(d.Mul(rPlus)).Add(ObliqueIVVec(rec.Axis).Mul(t))
+	vertical := ObliqueZeroPoint()
+	vertical.Z = ObliqueIVOf(radius)
 	p := c.Sub(vertical)
-	s := c.Sub(d.Mul(obliqueboss.ObliqueIVOf(radius)))
-	far := obliqueboss.ObliqueIVVec(rec.Base).Add(d.Mul(obliqueboss.ObliqueIVOf(rec.Radius))).
-		Add(obliqueboss.ObliqueIVVec(rec.Axis).Mul(obliqueboss.ObliqueIVOf(rec.Length)))
+	s := c.Sub(d.Mul(ObliqueIVOf(radius)))
+	far := ObliqueIVVec(rec.Base).Add(d.Mul(ObliqueIVOf(rec.Radius))).
+		Add(ObliqueIVVec(rec.Axis).Mul(ObliqueIVOf(rec.Length)))
 	worst := max(p.Error(held[2]), s.Error(held[3]), far.Error(held[4]))
-	for j := 1; j < obliqueBossBlendCells; j++ {
-		v := big.NewRat(int64(j), obliqueBossBlendCells)
-		q := obliqueboss.ObliqueZeroPoint()
+	for j := 1; j < blendCells; j++ {
+		v := big.NewRat(int64(j), blendCells)
+		q := ObliqueZeroPoint()
 		q.Z = proofbound.PointInterval(new(big.Rat).Sub(big.NewRat(1, 1), v))
 		q = q.Add(d.Mul(proofbound.PointInterval(v)))
 		n, ok := q.Normalized()
 		if !ok {
-			return 0, fmt.Errorf("%w: an oblique blend normal has no enclosure", ErrUnsupported)
+			return 0, fmt.Errorf("%w: an oblique blend normal has no enclosure", decaderr.ErrUnsupported)
 		}
-		point := c.Sub(n.Mul(obliqueboss.ObliqueIVOf(radius)))
+		point := c.Sub(n.Mul(ObliqueIVOf(radius)))
 		worst = max(worst, point.Error(held[4+j]))
 	}
 	return worst, nil
 }
 
-// proveObliqueBossFillet combines a cellwise boundary enclosure with a
+// ProveFillet combines a cellwise boundary enclosure with a
 // conservative occupied-volume enclosure. The volume collar is intentionally
 // larger than the actual fillet: it contains *both* source and held changes
 // above the original plate; outside it only the cylinder's radial chord
 // annulus and the two small cap slabs can differ.
-func proveObliqueBossFillet(ctx context.Context, rec *obliqueBossRecord,
-	radius float64, mesh *obliqueBossMesh) (float64, float64, float64, error) {
-	samples := obliqueBossSamples(rec, radius)
-	stride := 5 + obliqueBossBlendCells - 1
-	if len(mesh.verts) != len(samples)*stride+2 {
-		return 0, 0, 0, fmt.Errorf("%w: the oblique mesh and angular plan disagree", ErrBooleanFailed)
+func ProveFillet(ctx context.Context, rec *facetedrecord.ObliqueBossRecord,
+	radius float64, mesh *Mesh) (float64, float64, float64, error) {
+	samples := samplePlan(rec, radius)
+	stride := 5 + blendCells - 1
+	if len(mesh.Verts) != len(samples)*stride+2 {
+		return 0, 0, 0, fmt.Errorf("%w: the oblique mesh and angular plan disagree", decaderr.ErrBooleanFailed)
 	}
 	sampleError := 0.0
 	for i, sample := range samples {
@@ -119,17 +125,17 @@ func proveObliqueBossFillet(ctx context.Context, rec *obliqueBossRecord,
 				return 0, 0, 0, err
 			}
 		}
-		e, err := obliqueSampleError(rec, radius, sample.u,
-			mesh.verts[i*stride:(i+1)*stride])
+		e, err := patchPointError(rec, radius, sample.u,
+			mesh.Verts[i*stride:(i+1)*stride])
 		if err != nil {
 			return 0, 0, 0, err
 		}
 		sampleError = max(sampleError, e)
 	}
-	farCenter := obliqueboss.ObliqueIVVec(rec.Base).Add(obliqueboss.ObliqueIVVec(rec.Axis).Mul(obliqueboss.ObliqueIVOf(rec.Length)))
-	sampleError = max(sampleError, farCenter.Error(mesh.verts[len(mesh.verts)-1]))
+	farCenter := ObliqueIVVec(rec.Base).Add(ObliqueIVVec(rec.Axis).Mul(ObliqueIVOf(rec.Length)))
+	sampleError = max(sampleError, farCenter.Error(mesh.Verts[len(mesh.Verts)-1]))
 	if proofbound.IsNonFinite(sampleError) {
-		return 0, 0, 0, fmt.Errorf("%w: an oblique sample has no finite position bound", ErrUnsupported)
+		return 0, 0, 0, fmt.Errorf("%w: an oblique sample has no finite position bound", decaderr.ErrUnsupported)
 	}
 	// The regular 128-part turn limits every gap; inserted square corners can
 	// only split a gap. Check the actual ordered plan with rational differences,
@@ -147,13 +153,13 @@ func proveObliqueBossFillet(ctx context.Context, rec *obliqueBossRecord,
 		angularGap = max(angularGap, proofbound.RatFloatUp(wrap))
 	}
 	if !(angularGap > 0 && angularGap < 0.05) {
-		return 0, 0, 0, fmt.Errorf("%w: the oblique angular plan exceeds its chord proof", ErrUnsupported)
+		return 0, 0, 0, fmt.Errorf("%w: the oblique angular plan exceeds its chord proof", decaderr.ErrUnsupported)
 	}
 	// Admitted tilt and an exact Gram check keep the held canonical basis
 	// within 1.01 of orthonormal. These round constants are coarse rational
 	// inequalities, not estimates of floating evaluation error.
-	if !obliqueBasisAdmitted(rec) {
-		return 0, 0, 0, fmt.Errorf("%w: the oblique basis exceeds its proof limits", ErrUnsupported)
+	if !basisAdmitted(rec) {
+		return 0, 0, 0, fmt.Errorf("%w: the oblique basis exceeds its proof limits", decaderr.ErrUnsupported)
 	}
 	const (
 		basis         = 1.01
@@ -176,7 +182,7 @@ func proveObliqueBossFillet(ctx context.Context, rec *obliqueBossRecord,
 		proofbound.AbsSumUpper(proofbound.ProductUpper(twoBasis, invM),
 			proofbound.ProductUpper(proofbound.ProductUpper(6,
 				proofbound.ProductUpper(basis, maximumQV)), invM2)))
-	vGap := 1.0 / obliqueBossBlendCells
+	vGap := 1.0 / blendCells
 	uSquared := proofbound.ProductUpper(angularGap, angularGap)
 	vSquared := proofbound.ProductUpper(vGap, vGap)
 	blendChord := proofbound.AbsSumUpper(
@@ -199,7 +205,7 @@ func proveObliqueBossFillet(ctx context.Context, rec *obliqueBossRecord,
 	bound := proofbound.AbsSumUpper(sampleError, sourceGap, normalizationGap,
 		blendChord, circleChord)
 	if proofbound.IsNonFinite(bound) || !(bound < 0.1) {
-		return 0, 0, 0, fmt.Errorf("%w: the oblique fillet exceeds the 0.1 mm source boundary proof: %g", ErrUnsupported, bound)
+		return 0, 0, 0, fmt.Errorf("%w: the oblique fillet exceeds the 0.1 mm source boundary proof: %g", decaderr.ErrUnsupported, bound)
 	}
 	// Above the plate, the source and held fillets are both inside this full
 	// rectangular collar. Charging its entire volume requires no sign or
@@ -227,7 +233,7 @@ func proveObliqueBossFillet(ctx context.Context, rec *obliqueBossRecord,
 	// A deliberately broad area allowance bounds each retained source patch
 	// and the blend separately; the held mesh's own area is proven by exact
 	// facet arithmetic. Their sum bounds the absolute area discrepancy.
-	heldArea := facetproof.MeshAreaUpper(mesh.verts, mesh.tris)
+	heldArea := facetproof.MeshAreaUpper(mesh.Verts, mesh.Tris)
 	w := proofbound.RatFloatUp(new(big.Rat).Sub(
 		proofarith.FloatRat(rec.Rect.U1), proofarith.FloatRat(rec.Rect.U0)))
 	h := proofbound.RatFloatUp(new(big.Rat).Sub(
@@ -250,7 +256,7 @@ func proveObliqueBossFillet(ctx context.Context, rec *obliqueBossRecord,
 	areaSlack := proofbound.AbsSumUpper(heldArea,
 		proofbound.ProductUpper(2, proofbound.AbsSumUpper(plateArea, bossArea, blendArea)))
 	if proofbound.IsNonFinite(volumeGap) || proofbound.IsNonFinite(areaSlack) {
-		return 0, 0, 0, fmt.Errorf("%w: the oblique fillet has no finite volume or area proof", ErrUnsupported)
+		return 0, 0, 0, fmt.Errorf("%w: the oblique fillet has no finite volume or area proof", decaderr.ErrUnsupported)
 	}
 	return bound, volumeGap, areaSlack, nil
 }

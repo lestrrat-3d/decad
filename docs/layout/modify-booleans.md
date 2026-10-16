@@ -16,7 +16,7 @@ The rules for rows live in `docs/layout.md`.
 | `draft_circle_chamfer.go` | Rebuilds a positive-taper circular draft's far cap-rim chamfer as a bounded full meridian revolution. See draft §10.5. |
 | `draft_circle_shell.go` | Builds the inward cup of a positive-taper circular draft through a bounded meridian revolution. See draft §10.6. |
 | `loft_fillet.go` | Rewrites matching loft records at selected analytic and fitted-spline root corners. See loft §17. |
-| `oblique_boss_fillet.go` / `oblique_boss_proof.go` | Builds and proves the complete tilted cylinder boss-root fillet; the interval-vector arithmetic lives in `internal/obliqueboss/`. See oblique-boss-fillet design. |
+| `oblique_boss_fillet.go` | Admits the junction edge of a complete tilted cylinder boss-root fillet, then builds and proves the mesh through `internal/obliqueboss/` and commits the faceted result. See oblique-boss-fillet design. |
 | `cross_cylinder_bore_chamfer.go` / `cross_cylinder_bore_chamfer_mesh.go` | Builds one perpendicular cylinder bore-mouth chamfer: edge admission, source face groups and the mesh assembled from the `internal/crossbore/` station plan. See cross-cylinder-bore-chamfer design. |
 | `cross_cylinder_bore_chamfer_proof.go` | Proves that chamfer's boundary and volume: the mirror-pose check, the cell proof via `internal/crossbore/`, and the volume and area sums in root. See cross-cylinder-bore-chamfer design. |
 | `loft_chamfer.go` | Builds both outer cap bands on a matching axial loft's held polygon. See loft §18. |

@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/obliqueboss"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -19,10 +20,10 @@ func crossBoreEdgeHasOrigins(edge *Edge, outer, bore facetGroup) bool {
 	if len(edge.n.Faces) != 2 {
 		return false
 	}
-	return (obliqueBossHasOrigin(edge.n.Faces[0], outer) &&
-		obliqueBossHasOrigin(edge.n.Faces[1], bore)) ||
-		(obliqueBossHasOrigin(edge.n.Faces[1], outer) &&
-			obliqueBossHasOrigin(edge.n.Faces[0], bore))
+	return (obliqueboss.HasOrigin(edge.n.Faces[0], outer) &&
+		obliqueboss.HasOrigin(edge.n.Faces[1], bore)) ||
+		(obliqueboss.HasOrigin(edge.n.Faces[1], outer) &&
+			obliqueboss.HasOrigin(edge.n.Faces[0], bore))
 }
 
 // tryCrossCylinderBoreMouthChamfer accepts one complete positive-X mouth

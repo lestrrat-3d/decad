@@ -1,5 +1,7 @@
-// Package obliqueboss holds the rational interval-vector arithmetic that the
-// oblique cylinder boss fillet proof evaluates its sampled patch points with.
+// Package obliqueboss builds the held mesh of the oblique cylinder boss-root
+// fillet from its source record and proves that mesh's boundary, volume and
+// area bounds. Its rational interval-vector arithmetic encloses every sampled
+// patch point.
 package obliqueboss
 
 import (
