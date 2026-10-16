@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/pointquery"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -267,6 +268,59 @@ func TestCoilThreadRunsOutOfTheEnd(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, resolved)
 	require.False(t, insideMesh)
+}
+
+// TestCoilGalleryThreadVolume checks the actual R5, L14, eight-turn gallery
+// geometry. Its bound encloses the independently clipped volume even though
+// volume, area and centroid bounds all exceed the default tolerance limits.
+func TestCoilGalleryThreadVolume(t *testing.T) {
+	doc := New()
+	cs, cpf := coilLoopsSketch(t, [][2]float64{{0, 0}, {5, 0}, {5, 14}, {0, 14}})
+	cylinder, err := Revolve(t.Context(), doc, cs, cpf, coilAxisV, FullRevolution{})
+	require.NoError(t, err)
+	const start = -0.375
+	// Keep the same rounded sketch coordinates as _gallery/thread.go.
+	points := [][2]float64{{4.1, start}, {5.3, start - threadHalfWidth}, {5.3, start + threadHalfWidth}}
+	gs, gp := coilLoopsSketch(t, points)
+	tool, err := Coil(t.Context(), doc, gs, gp, coilAxisV, units.Millimeters(1.5), units.Scalar(8))
+	require.NoError(t, err)
+	res, err := Cut(t.Context(), cylinder, tool)
+	require.NoError(t, err)
+
+	// Integrate rho over the radial clip, then rho*zeta over its negative
+	// axial part. Only the lower end clips the sweep; adjacent turns do not
+	// overlap. Removed volume is pi*(16Q + (4/3)*Mminus).
+	rat := func(x float64) *big.Rat { return new(big.Rat).SetFloat64(x) }
+	groove := make([][2]*big.Rat, len(points))
+	for i, point := range points {
+		groove[i] = [2]*big.Rat{rat(point[0]), rat(point[1])}
+	}
+	inside := clipPolygon(groove, func(p [2]*big.Rat) *big.Rat { return new(big.Rat).Sub(rat(5), p[0]) })
+	q, _ := polygonMoments(inside)
+	_, below := polygonMoments(clipPolygon(inside, func(p [2]*big.Rat) *big.Rat { return new(big.Rat).Neg(p[1]) }))
+	exactOverPi := new(big.Rat).Mul(big.NewRat(16, 1), q)
+	exactOverPi.Add(exactOverPi, new(big.Rat).Mul(big.NewRat(4, 3), below))
+	exactOverPi.Sub(big.NewRat(350, 1), exactOverPi)
+	rep := requireThreadResult(t, doc, res, exactOverPi, r3.NewVec(-5, 0, -5), r3.NewVec(5, 14, 5))
+
+	vol, err := res.Volume()
+	require.NoError(t, err)
+	publishedLo := new(big.Rat).Sub(rat(vol.Value.Base()), rat(vol.Bound.Base()))
+	publishedHi := new(big.Rat).Add(rat(vol.Value.Base()), rat(vol.Bound.Base()))
+	expectedLo := new(big.Rat).Mul(exactOverPi, proofbound.PiLower)
+	expectedHi := new(big.Rat).Mul(exactOverPi, proofbound.PiUpper)
+	require.LessOrEqual(t, publishedLo.Cmp(expectedLo), 0, "volume lower bound encloses the closed form")
+	require.GreaterOrEqual(t, publishedHi.Cmp(expectedHi), 0, "volume upper bound encloses the closed form")
+	require.Equal(t, Suspect, rep.Status)
+	require.Equal(t, 3, len(rep.Diagnostics))
+	readings := map[ReadingKind]int{}
+	for _, diagnostic := range rep.Diagnostics {
+		require.Equal(t, DiagMeasurementBeyondTolerance, diagnostic.Code)
+		readings[diagnostic.Reading]++
+	}
+	for _, reading := range []ReadingKind{ReadingArea, ReadingVolume, ReadingCentroid} {
+		require.Equal(t, 1, readings[reading], "one diagnostic for reading %s", reading)
+	}
 }
 
 // TestCoilCapFlushWithAnAxialFaceRefuses cuts the groove from a half

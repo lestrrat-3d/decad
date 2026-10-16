@@ -83,7 +83,10 @@ func externalThread(ctx context.Context) (*decad.Body, error) {
 	if len(report.Bodies) != 1 || report.Bodies[0].Validity.Outcome != decad.ValidityValid || report.Status != decad.Suspect {
 		return nil, fmt.Errorf("external thread has unexpected verification result: %s", report.Status)
 	}
-	area, centroid := false, false
+	if len(report.Diagnostics) != 3 {
+		return nil, fmt.Errorf("external thread has %d diagnostics, want area, volume and centroid", len(report.Diagnostics))
+	}
+	area, volume, centroid := false, false, false
 	for _, diagnostic := range report.Diagnostics {
 		if diagnostic.Code != decad.DiagMeasurementBeyondTolerance {
 			return nil, fmt.Errorf("external thread has unexpected diagnostic: %s", diagnostic.Code)
@@ -91,14 +94,16 @@ func externalThread(ctx context.Context) (*decad.Body, error) {
 		switch diagnostic.Reading {
 		case decad.ReadingArea:
 			area = true
+		case decad.ReadingVolume:
+			volume = true
 		case decad.ReadingCentroid:
 			centroid = true
 		default:
 			return nil, fmt.Errorf("external thread has unexpected reading diagnostic: %s", diagnostic.Reading)
 		}
 	}
-	if !area || !centroid {
-		return nil, fmt.Errorf("external thread lacks area or centroid tolerance diagnostics")
+	if !area || !volume || !centroid {
+		return nil, fmt.Errorf("external thread lacks area, volume or centroid tolerance diagnostics")
 	}
 	if err := checkThreadGroove(ctx, thread); err != nil {
 		return nil, err

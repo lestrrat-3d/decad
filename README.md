@@ -119,7 +119,7 @@ leaving a sheet body.
 <img src="docs/images/features/thread.png" alt="A helical V-groove opens through one end of a cylinder, leaving a short plain collar at the other" width="320"><br>
 <strong>Coil and Cut</strong> sweep a V-groove around a cylinder and cut it through one end.
 The result has faceted faces. Its solid validity is proven, but <code>Verify</code> reports
-<code>Suspect</code> because area and centroid bounds exceed the default tolerances.
+<code>Suspect</code> because area, volume and centroid bounds exceed the default tolerances.
 This example does not specify a standard thread or a mating fit.
 </td>
 </tr>
