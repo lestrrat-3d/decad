@@ -22,7 +22,7 @@ type sourceSphereSweepRun struct {
 	doc         *Document
 	a, b        *Body
 	pa, pb      affinePairPath
-	req         SweepRequest
+	req         reportvocab.SweepRequest
 	report      *SweepReport
 	sphere      sourceSphereContactProof
 	box         sourceBoxContactProof
@@ -33,7 +33,7 @@ type sourceSphereSweepRun struct {
 // its drift pivot is the proved sphere center. Keep the real rotating path for
 // sampled poses and replay, while the support gap uses its exact center drift.
 func (d *Document) sweepRotatingSphereBox(ctx context.Context, a, b *Body,
-	pa, pb affinePairPath, req SweepRequest, resolution *big.Rat,
+	pa, pb affinePairPath, req reportvocab.SweepRequest, resolution *big.Rat,
 	report *SweepReport) (*SweepReport, bool, error) {
 	if (pa.Drift == nil) == (pb.Drift == nil) {
 		return nil, false, nil
@@ -133,7 +133,7 @@ func (r *sourceSphereSweepRun) idealAt(f *big.Rat, at SweepInstant) SweepEvent {
 	if !okSphere || !okBox {
 		return SweepEvent{At: at, Relation: ContactUndecided, Reason: ContactPayloadUnsupported}
 	}
-	contact := &reportvocab.ContactReport{Request: contactRequestToInternal(r.req.ContactRequest)}
+	contact := &reportvocab.ContactReport{Request: r.req.ContactRequest}
 	classifySourceSphereBox(contact, sphere, box, r.sphereFirst)
 	return sweepEventOf(at, contact)
 }
@@ -153,7 +153,7 @@ func (r *sourceSphereSweepRun) sample(ctx context.Context, f *big.Rat) (*SweepSa
 	if err != nil {
 		return nil, err
 	}
-	contact, err := r.doc.ContactPair(ctx, r.a, r.b, poseA, poseB, r.req.ContactRequest)
+	contact, err := r.doc.ContactPair(ctx, r.a, r.b, poseA, poseB, contactRequestFromInternal(r.req.ContactRequest))
 	if err != nil {
 		return nil, err
 	}
@@ -268,7 +268,7 @@ func (r *sourceSphereSweepRun) track(first *SweepSample) *SweepContactTrack {
 	point := first.Ideal.Manifold.Points[0]
 	track := &SweepContactTrack{
 		start: new(big.Rat), end: big.NewRat(1, 1), duration: new(big.Rat).Set(r.pa.Duration),
-		request: contactRequestToInternal(r.req.ContactRequest), sphere: &r.sphere, sphereFirst: r.sphereFirst,
+		request: r.req.ContactRequest, sphere: &r.sphere, sphereFirst: r.sphereFirst,
 		features: [2]reportvocab.ContactFeature{contactFeatureToInternal(point.FeatureA), contactFeatureToInternal(point.FeatureB)},
 		normal:   point.Normal,
 		deltaA:   r.pa.Delta, deltaB: r.pb.Delta,
@@ -300,7 +300,7 @@ func (r *sourceSphereSweepRun) execute(ctx context.Context, resolution *big.Rat)
 	}
 	if first.Ideal.Relation == ContactTouching {
 		r.report.InitialEvent = &first.Ideal
-		if r.req.StartPolicy == StopAtInitialContact {
+		if r.req.StartPolicy == reportvocab.StopAtInitialContact {
 			r.report.Outcome, r.report.Event = SweepInitiallyTouching, &first.Ideal
 			return r.report, nil
 		}
@@ -337,7 +337,7 @@ func (r *sourceSphereSweepRun) execute(ctx context.Context, resolution *big.Rat)
 			r.report.replay.snapshot(r.report)
 			return r.report, nil
 		}
-		if slope.IsZero() && r.req.StartPolicy == ContinueCertifiedTouch {
+		if slope.IsZero() && r.req.StartPolicy == reportvocab.ContinueCertifiedTouch {
 			track := r.track(first)
 			if track != nil {
 				last, err := r.sample(ctx, one)

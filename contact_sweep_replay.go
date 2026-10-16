@@ -42,7 +42,7 @@ type sweepReplayProof struct {
 	rotation                   *[2]rotationalSweepPath
 	planar                     *planarReplay // a general planar sweep (contact_sweep_faceted.go)
 	track                      *SweepContactTrack
-	request                    ContactRequest
+	request                    reportvocab.ContactRequest
 	outcome                    SweepOutcome
 	bracketLo                  *big.Rat
 	bracketHi                  *big.Rat
@@ -207,7 +207,7 @@ func (r *SweepReport) replayPosesAtFraction(f *big.Rat) (r3.Transform, r3.Transf
 	if !ok || deviation.Cmp(resolution) > 0 {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded replay pose exceeds point resolution", ErrUnsupported)
 	}
-	contact := &reportvocab.ContactReport{Request: contactRequestToInternal(r.replay.request)}
+	contact := &reportvocab.ContactReport{Request: r.replay.request}
 	classifySourceBoxes(contact, actualA, actualB)
 	if !sweepmemo.RelationCovered(reportvocab.SweepOutcome(r.replay.outcome), f, r.replay.bracketLo,
 		resolution, contact.Relation, actualA.axisBox(), actualB.axisBox()) {
@@ -337,7 +337,7 @@ func (r *SweepReport) certifiedSpherePairPosesAtFraction(f *big.Rat, poseA, pose
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: %s", ErrUnsupported, detail)
 	}
 	if p.outcome == SweepPersistentTouch {
-		contact := &reportvocab.ContactReport{Request: contactRequestToInternal(p.request)}
+		contact := &reportvocab.ContactReport{Request: p.request}
 		classifySourceSpherePair(contact, actualA, actualB)
 		if contact.Manifold == nil || len(contact.Manifold.Points) != 1 ||
 			contact.Manifold.Points[0].FeatureA != p.track.features[0] ||
@@ -468,7 +468,7 @@ func (r *SweepReport) certifiedOrientedTouchAtFraction(f *big.Rat, a, b oriented
 		r.replay.rotation[0].path.Drift != nil || r.replay.rotation[1].path.Drift != nil {
 		return false
 	}
-	report := &reportvocab.ContactReport{Request: contactRequestToInternal(r.replay.request)}
+	report := &reportvocab.ContactReport{Request: r.replay.request}
 	report.Relation, _, _ = orientedBoxRelation(a, b)
 	if report.Relation == reportvocab.ContactTouching {
 		publishOrientedBoxPatch(report, a, b)

@@ -10,9 +10,11 @@ const (
 	tokenUndecided    = "undecided"
 )
 
-// This package holds ContactRelation and SweepOutcome. It also holds Verify's
-// report vocabulary: outcome enums, effective-request records, bounded
-// readings, survey result records, and Report/BodyReport
+// This package holds ContactRelation and SweepOutcome, the contact report
+// (contact_report.go), and the sweep request with its start policy
+// (contact_sweep.go). It also holds Verify's report vocabulary: outcome enums,
+// effective-request records, bounded readings, survey result records, and
+// Report/BodyReport
 // (docs/verification-design.md §1-§9). Verify publication builds a Report
 // from survey outcomes and certified readings in verify_publish.go.
 

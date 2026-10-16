@@ -2112,3 +2112,5 @@
 10	0.00	TestContactPairKeepsAbsentResultsNil
 10	0.00	TestContactPairMemoHitKeepsTopologyIdentity
 10	0.00	TestSweepPairTrackKeepsTopologyIdentity
+10	0.00	TestSweepPairAffineBoxPoseBudgetIsExact
+10	0.00	TestSweepPairTouchStartFollowsStartPolicy

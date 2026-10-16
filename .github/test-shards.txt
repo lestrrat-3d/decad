@@ -1524,3 +1524,4 @@
 10	0.00	TestReportvocabNamesMatchPublicTypes
 10	0.00	TestStitchKeepsOwnerAssertions
 10	0.00	TestContactManifoldFromInternalKeepsNilAndEmpty
+10	0.00	TestSweepRequestToInternalCopiesEveryField

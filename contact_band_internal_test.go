@@ -109,7 +109,7 @@ func bandRun(t *testing.T, doc *Document, a, b *Body, pathA, pathB PairPath) *ro
 	}
 	req := SweepRequest{ContactRequest: ContactRequest{PointResolution: units.Millimeters(1e-3),
 		NormalResolution: units.Degrees(1)}}
-	return &rotationalPairSweep{doc: doc, a: paths[0], b: paths[1], req: req,
+	return &rotationalPairSweep{doc: doc, a: paths[0], b: paths[1], req: sweepRequestToInternal(req),
 		resolution: big.NewRat(1, 1<<20), report: &SweepReport{}, planar: true}
 }
 
@@ -126,7 +126,7 @@ func TestPlanarBandTransferChargesDeviation(t *testing.T) {
 	require.NoError(t, err)
 	poseB, err := run.b.path.RoundedPoseAt(half)
 	require.NoError(t, err)
-	contact, err := doc.ContactPair(t.Context(), floor, block, poseA, poseB, run.req.ContactRequest)
+	contact, err := doc.ContactPair(t.Context(), floor, block, poseA, poseB, contactRequestFromInternal(run.req.ContactRequest))
 	require.NoError(t, err)
 	require.Equal(t, ContactBand, contact.Relation)
 	_, etaA, okA, err := run.a.pointDeviation(poseA, half, noSweepPoll)
