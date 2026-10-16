@@ -20,7 +20,7 @@ The rules for rows live in `docs/layout.md`.
 | `clearance.go` | The pair kernel: `clearancePair` and `sheetSolidPair`. See clearance §1-§3/§6. |
 | `clearance_box.go` | Admits unplaced axis-aligned box pairs and maps the `internal/pair/box/` gap proof. |
 | `clearance_planar.go` | The exact planar pair arm for mitred, faceted and coil bodies: interference §3.2. |
-| `contact_pair.go` | Pair gates and public contact report types. See contact-geometry. |
+| `contact_pair.go` | Pair gates, public contact report types and their conversion from the `internal/reportvocab` report. See contact-geometry §6. |
 | `contact_pair_memo.go` | Bit-exact pair report keys, bounded memo, and result cloning. See contact-geometry. |
 | `contact_box.go` | Source-box admission and public face/measurement mapping. See contact-geometry §4. |
 | `contact_faceted_pair.go` | Planar admission, convexity and the bands. See multibody §9–§10. |

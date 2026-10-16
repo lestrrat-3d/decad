@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
@@ -118,7 +119,7 @@ func (d *Document) sweepRollingPair(ctx context.Context, a, b *Body,
 	if pathM.Drift == nil || pathM.Screw != nil || pathS.Drift != nil || pathS.Screw != nil {
 		return nil, false, nil
 	}
-	solid, delta, ok, err := planarSolidAtPose(ctx, proofbound.NewWorkBudget(ctx), bodyS, r3.Identity(), heldChordOf(req.ContactRequest))
+	solid, delta, ok, err := planarSolidAtPose(ctx, proofbound.NewWorkBudget(ctx), bodyS, r3.Identity(), heldChordOf(contactRequestToInternal(req.ContactRequest)))
 	if err != nil {
 		return nil, true, err
 	}
@@ -435,8 +436,8 @@ func (r *rollingPairSweep) track(first *SweepSample, support placedruling.Plane,
 			Exactness: exactnessFromBound(bound)}
 	}
 	track := &SweepContactTrack{start: new(big.Rat), end: new(big.Rat).Set(end), duration: M.path.Duration,
-		request: r.req.ContactRequest, normal: normal, rolling: proof, pointCount: len(ends)}
-	track.features[r.m], track.features[r.s] = featureM, featureS
+		request: contactRequestToInternal(r.req.ContactRequest), normal: normal, rolling: proof, pointCount: len(ends)}
+	track.features[r.m], track.features[r.s] = contactFeatureToInternal(featureM), contactFeatureToInternal(featureS)
 	// A track whose start manifold is refused is not published; the refusal
 	// is the answer.
 	if _, refused := track.ManifoldAt(units.Scalar(0)); refused != nil {
@@ -484,7 +485,7 @@ func (p *rollingTrackProof) rounded(f *big.Rat) ([2]r3.Transform, [2]*big.Rat, [
 // normal; the true rim point lies within M's pose deviation plus the lateral
 // drift of it, and its foot on S's rounded plane within S's deviation more.
 // The separation is the band's two-sided bound.
-func (p *rollingTrackProof) manifoldAt(f *big.Rat, req ContactRequest) (*ContactManifold, error) {
+func (p *rollingTrackProof) manifoldAt(f *big.Rat, req reportvocab.ContactRequest) (*ContactManifold, error) {
 	poses, eta, vertsS, ok := p.rounded(f)
 	if !ok {
 		return nil, fmt.Errorf("%w: rolling contact track pose has no finite bound", ErrUnsupported)

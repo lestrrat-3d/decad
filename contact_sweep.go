@@ -178,8 +178,8 @@ type SweepContactTrack struct {
 	cylinderFirst bool
 	start, end    *big.Rat
 	duration      *big.Rat
-	request       ContactRequest
-	features      [2]ContactFeature
+	request       reportvocab.ContactRequest
+	features      [2]reportvocab.ContactFeature
 	normal        VecMeasurement
 	pointCount    int
 	orientedA     *orientedSourceBox
@@ -194,7 +194,7 @@ func (t *SweepContactTrack) Start() SweepInstant { return sweepInstant(t.start, 
 func (t *SweepContactTrack) End() SweepInstant { return sweepInstant(t.end, t.duration) }
 
 func (t *SweepContactTrack) Features() (ContactFeature, ContactFeature) {
-	return t.features[0], t.features[1]
+	return contactFeatureFromInternal(t.features[0]), contactFeatureFromInternal(t.features[1])
 }
 
 func (t *SweepContactTrack) Normal() VecMeasurement { return t.normal }
@@ -284,19 +284,19 @@ func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, 
 		if !okA || !okB {
 			return nil, fmt.Errorf("%w: oriented contact-track fraction cannot be represented", ErrUnsupported)
 		}
-		report := &ContactReport{Request: t.request}
+		report := &reportvocab.ContactReport{Request: t.request}
 		report.Relation, _, _ = orientedBoxRelation(a, b)
-		if report.Relation == ContactTouching {
+		if report.Relation == reportvocab.ContactTouching {
 			publishOrientedBoxPatch(report, a, b)
 			if report.Manifold == nil {
 				publishClippedHorizontalPatch(report, a, b)
 			}
 		}
-		if report.Relation != ContactTouching || report.Manifold == nil ||
+		if report.Relation != reportvocab.ContactTouching || report.Manifold == nil ||
 			len(report.Manifold.Points) != t.pointCount {
 			return nil, fmt.Errorf("%w: oriented contact track lost its face patch", ErrUnsupported)
 		}
-		return report.Manifold, nil
+		return contactManifoldFromInternal(report.Manifold), nil
 	}
 	if t.sphere != nil {
 		sphereDelta, boxDelta := t.deltaB, t.deltaA
@@ -309,12 +309,12 @@ func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, 
 		if !okSphere || !okBox {
 			return nil, fmt.Errorf("%w: contact-track fraction cannot be represented", ErrUnsupported)
 		}
-		report := &ContactReport{Request: t.request}
+		report := &reportvocab.ContactReport{Request: t.request}
 		classifySourceSphereBox(report, sphere, box, t.sphereFirst)
-		if report.Relation != ContactTouching || report.Manifold == nil {
+		if report.Relation != reportvocab.ContactTouching || report.Manifold == nil {
 			return nil, fmt.Errorf("%w: contact track has no bounded sphere point", ErrUnsupported)
 		}
-		return report.Manifold, nil
+		return contactManifoldFromInternal(report.Manifold), nil
 	}
 	if t.spherePair != nil {
 		a, okA := translatedSphere(t.spherePair[0], t.deltaA, f)
@@ -322,26 +322,26 @@ func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, 
 		if !okA || !okB {
 			return nil, fmt.Errorf("%w: sphere-pair contact-track fraction cannot be represented", ErrUnsupported)
 		}
-		report := &ContactReport{Request: t.request}
+		report := &reportvocab.ContactReport{Request: t.request}
 		classifySourceSpherePair(report, a, b)
-		if report.Relation != ContactTouching || report.Manifold == nil ||
+		if report.Relation != reportvocab.ContactTouching || report.Manifold == nil ||
 			len(report.Manifold.Points) != 1 ||
 			report.Manifold.Points[0].FeatureA != t.features[0] ||
 			report.Manifold.Points[0].FeatureB != t.features[1] {
 			return nil, fmt.Errorf("%w: sphere-pair contact track lost its point", ErrUnsupported)
 		}
-		return report.Manifold, nil
+		return contactManifoldFromInternal(report.Manifold), nil
 	}
 	a, b, ok := translatedSourceBoxes(t.a, t.b, t.deltaA, t.deltaB, f)
 	if !ok {
 		return nil, fmt.Errorf("%w: fraction is not representable as a source-box translation", ErrUnsupported)
 	}
-	report := &ContactReport{Request: t.request}
+	report := &reportvocab.ContactReport{Request: t.request}
 	classifySourceBoxes(report, a, b)
-	if report.Relation != ContactTouching || report.Manifold == nil {
+	if report.Relation != reportvocab.ContactTouching || report.Manifold == nil {
 		return nil, fmt.Errorf("%w: contact track has no bounded face patch", ErrUnsupported)
 	}
-	return report.Manifold, nil
+	return contactManifoldFromInternal(report.Manifold), nil
 }
 
 // SweepEvent reports the ideal path relation at one sampled instant.
@@ -352,6 +352,14 @@ type SweepEvent struct {
 	Overlap  *Measurement
 	Manifold *ContactManifold
 	Reason   ContactReason
+}
+
+// sweepEventOf publishes a contact producer's finished report as the ideal
+// event at at, converting it to its public form.
+func sweepEventOf(at SweepInstant, contact *reportvocab.ContactReport) SweepEvent {
+	return SweepEvent{At: at, Relation: ContactRelation(contact.Relation),
+		Gap: measurementPtrFromInternal(contact.Gap), Overlap: measurementPtrFromInternal(contact.Overlap),
+		Manifold: contactManifoldFromInternal(contact.Manifold), Reason: ContactReason(contact.Reason)}
 }
 
 // SweepSample keeps the query pose and the transferred pair finding.
@@ -632,7 +640,8 @@ func (r *pairSweepRun) idealContact(f *big.Rat, at SweepInstant) SweepEvent {
 		a.lo[i], a.hi[i] = proofarith.DyAdd(a.lo[i], moveA), proofarith.DyAdd(a.hi[i], moveA)
 		b.lo[i], b.hi[i] = proofarith.DyAdd(b.lo[i], moveB), proofarith.DyAdd(b.hi[i], moveB)
 	}
-	report := &ContactReport{A: r.a, B: r.b, Request: r.req.ContactRequest}
+	report := &reportvocab.ContactReport{A: bodyNode(r.a), B: bodyNode(r.b),
+		Request: contactRequestToInternal(r.req.ContactRequest)}
 	if r.facetedFloor {
 		floor, faceted := a, b
 		if _, ok := r.a.n.Payload.(facetedPayload); ok {
@@ -643,8 +652,7 @@ func (r *pairSweepRun) idealContact(f *big.Rat, at SweepInstant) SweepEvent {
 		}
 	}
 	classifySourceBoxes(report, a, b)
-	return SweepEvent{At: at, Relation: report.Relation, Gap: report.Gap,
-		Overlap: report.Overlap, Manifold: report.Manifold, Reason: report.Reason}
+	return sweepEventOf(at, report)
 }
 
 // transferManifold checks that the float query and ideal boxes select the same
@@ -780,8 +788,9 @@ func (r *pairSweepRun) fullSourceBoxTrack(first *SweepSample, end *big.Rat) *Swe
 	return &SweepContactTrack{
 		a: r.boxA, b: r.boxB, deltaA: r.pa.Delta, deltaB: r.pb.Delta,
 		start: new(big.Rat), end: new(big.Rat).Set(end), duration: new(big.Rat).Set(r.pa.Duration),
-		request: r.req.ContactRequest, features: [2]ContactFeature{point.FeatureA, point.FeatureB},
-		normal: normal,
+		request:  contactRequestToInternal(r.req.ContactRequest),
+		features: [2]reportvocab.ContactFeature{contactFeatureToInternal(point.FeatureA), contactFeatureToInternal(point.FeatureB)},
+		normal:   normal,
 	}
 }
 

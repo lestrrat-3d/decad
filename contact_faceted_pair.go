@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/planarsnapshot"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/selectorquery"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
@@ -25,7 +26,7 @@ import (
 // This file admits exact planar solids to the general pair relation of
 // docs/multibody-dynamics-design.md §9.1 and caches each body's §9.2
 // convexity certificate. internal/pair decides the relation over the exact
-// snapshots built here; this file owns admission and the public report. A
+// snapshots built here; this file owns admission and the contact report. A
 // body whose held mesh is exact but stands for a true boundary up to a
 // positive displacement δ is admitted too, and §10.4's band rule turns the
 // held relation into the published one.
@@ -39,36 +40,36 @@ const planarHeldChord = 1.0
 // read at under req: the caller's HeldChord, zero when unset, which admits no
 // curved body (docs/multibody-dynamics-design.md §10.4). Every reader of the
 // chord goes through here, so the chord's source is chosen in one place.
-func heldChordOf(req ContactRequest) float64 {
+func heldChordOf(req reportvocab.ContactRequest) float64 {
 	return req.HeldChord.Base()
 }
 
 // classifyExactPlanarPair decides the pair through the exact planar kernel
 // when both bodies are admitted. It reports false, leaving report untouched,
 // when either body is not.
-func classifyExactPlanarPair(ctx context.Context, report *ContactReport) (bool, error) {
+func classifyExactPlanarPair(ctx context.Context, report *reportvocab.ContactReport) (bool, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	if err := budget.Err(); err != nil {
 		return false, err
 	}
 	chord := heldChordOf(report.Request)
-	a, deltaA, okA, err := planarSolidAtPose(ctx, budget, report.A, report.PoseA, chord)
+	a, deltaA, okA, err := planarSolidAtPose(ctx, budget, bodyHandle(report.A), report.PoseA, chord)
 	if err != nil || !okA {
 		return false, err
 	}
-	b, deltaB, okB, err := planarSolidAtPose(ctx, budget, report.B, report.PoseB, chord)
+	b, deltaB, okB, err := planarSolidAtPose(ctx, budget, bodyHandle(report.B), report.PoseB, chord)
 	if err != nil || !okB {
 		return false, err
 	}
-	hint := planarHintOf(report.A, report.B)
+	hint := planarHintOf(bodyHandle(report.A), bodyHandle(report.B))
 	result, err := planar.ClassifyPlanarHinted(&a, &b, hint, budget.Step)
 	if err != nil {
 		return false, err
 	}
 	if result.Nearest != (planar.PlanarHint{}) && result.Nearest != hint {
-		report.A.n.PlanarHints.Store(report.B, result.Nearest)
+		report.A.PlanarHints.Store(bodyHandle(report.B), result.Nearest)
 	}
-	report.Relation, report.Gap, report.Overlap, report.Manifold = ContactUndecided, nil, nil, nil
+	report.Relation, report.Gap, report.Overlap, report.Manifold = reportvocab.ContactUndecided, nil, nil, nil
 	report.Reason = sourceBoxReason(result.Reason)
 	if deltaA.Sign() > 0 || deltaB.Sign() > 0 {
 		band := planarBandPair{a: &a, b: &b, deltaA: deltaA, deltaB: deltaB}
@@ -80,41 +81,41 @@ func classifyExactPlanarPair(ctx context.Context, report *ContactReport) (bool, 
 	band := supportBandOf(report.Request)
 	switch result.Relation {
 	case pair.Separated:
-		report.Relation = ContactSeparated
+		report.Relation = reportvocab.ContactSeparated
 		gap := sourceBoxScalar(*result.Gap)
 		report.Gap = &gap
 		if err := planarSupportBand(budget, report, &a, &b, result, band); err != nil {
 			return false, err
 		}
 	case pair.Touching, pair.Overlapping:
-		report.Relation = ContactOverlapping
+		report.Relation = reportvocab.ContactOverlapping
 		if result.Relation == pair.Touching {
-			report.Relation = ContactTouching
-			gap := Measurement{Value: units.Millimeters(0), Exactness: Exact, Bound: units.Millimeters(0)}
+			report.Relation = reportvocab.ContactTouching
+			gap := measurement.Measurement{Value: units.Millimeters(0), Exactness: measurement.Exact, Bound: units.Millimeters(0)}
 			report.Gap = &gap
 		}
 		// §9.3 and §9.6 need one convex side for a manifold; without one an
 		// overlap's reason names the missing certificate, and a touch takes
 		// §10.5's non-convex guest path inside publishPlanarManifold.
-		convexA, err := planarConvexity(ctx, budget, report.A, chord)
+		convexA, err := planarConvexity(ctx, budget, bodyHandle(report.A), chord)
 		if err != nil {
 			return false, err
 		}
-		convexB, err := planarConvexity(ctx, budget, report.B, chord)
+		convexB, err := planarConvexity(ctx, budget, bodyHandle(report.B), chord)
 		if err != nil {
 			return false, err
 		}
 		if !convexA && !convexB && result.Relation == pair.Overlapping {
-			report.Reason = ContactNonConvex
+			report.Reason = reportvocab.ContactNonConvex
 			break
 		}
-		report.Reason = ContactNoNormalProof
+		report.Reason = reportvocab.ContactNoNormalProof
 		if err := publishPlanarManifold(budget, report, &a, &b, result, convexA, convexB, band); err != nil {
 			return false, err
 		}
 	default:
-		if report.Reason == ContactNoReason {
-			report.Reason = ContactAmbiguousFeature
+		if report.Reason == reportvocab.ContactNoReason {
+			report.Reason = reportvocab.ContactAmbiguousFeature
 		}
 	}
 	return true, budget.Err()
@@ -495,7 +496,7 @@ type planarBandPair struct {
 // than δ inside the other held body is a true overlap (planar.PlanarDeepVertex)
 // carrying the held penetration patch charged with δ (overlapManifold).
 // Anything between is undecided.
-func (p *planarBandPair) classify(ctx context.Context, budget *proofbound.WorkBudget, report *ContactReport,
+func (p *planarBandPair) classify(ctx context.Context, budget *proofbound.WorkBudget, report *reportvocab.ContactReport,
 	result planar.PlanarResult) error {
 	delta := proofarith.DyAdd(p.deltaA, p.deltaB).Rat()
 	switch result.Relation {
@@ -508,15 +509,15 @@ func (p *planarBandPair) classify(ctx context.Context, budget *proofbound.WorkBu
 		charged := new(big.Rat).Add(bound, delta)
 		if published := proofbound.RatFloatUp(charged); measurement.FiniteValues(published) &&
 			value.Cmp(proofarith.FloatRat(published)) > 0 {
-			report.Relation, report.Reason = ContactSeparated, ContactNoReason
-			report.Gap = &Measurement{Value: units.Millimeters(result.Gap.ValueMM),
-				Bound: units.Millimeters(published), Exactness: exactnessFromBound(published)}
+			report.Relation, report.Reason = reportvocab.ContactSeparated, reportvocab.ContactNoReason
+			report.Gap = &measurement.Measurement{Value: units.Millimeters(result.Gap.ValueMM),
+				Bound: units.Millimeters(published), Exactness: measurement.ExactnessOf(published)}
 			return nil
 		}
 		if upper.Cmp(delta) <= 0 {
 			return p.publishBand(ctx, budget, report, nil)
 		}
-		report.Reason = ContactNoGapProof
+		report.Reason = reportvocab.ContactNoGapProof
 	case pair.Touching:
 		convexA, convexB, err := p.convexity(ctx, budget, report)
 		if err != nil {
@@ -526,7 +527,7 @@ func (p *planarBandPair) classify(ctx context.Context, budget *proofbound.WorkBu
 			if err := p.publishBand(ctx, budget, report, nil); err != nil {
 				return err
 			}
-			report.Reason = ContactNonConvex
+			report.Reason = reportvocab.ContactNonConvex
 			return nil
 		}
 		manifold, err := planar.PlanarTouchManifold(p.a, p.b, result.Contacts, convexA, convexB, budget.Step)
@@ -545,10 +546,10 @@ func (p *planarBandPair) classify(ctx context.Context, budget *proofbound.WorkBu
 			return err
 		}
 		if deep {
-			report.Relation, report.Reason = ContactOverlapping, ContactNoNormalProof
+			report.Relation, report.Reason = reportvocab.ContactOverlapping, reportvocab.ContactNoNormalProof
 			return p.overlapManifold(ctx, budget, report, result)
 		}
-		report.Reason = ContactNoGapProof
+		report.Reason = reportvocab.ContactNoGapProof
 		convexA, convexB, err := p.convexity(ctx, budget, report)
 		if err != nil || !convexA || !convexB {
 			return err
@@ -579,7 +580,7 @@ func (p *planarBandPair) classify(ctx context.Context, budget *proofbound.WorkBu
 // lifted set however small SupportBand is. The gap becomes [0 ± (g + δ)], g
 // the held gap's upper float, and the manifold is the lifted sets charged
 // with δ (chargedManifold). It reports whether it published.
-func (p *planarBandPair) liftedBand(budget *proofbound.WorkBudget, report *ContactReport, result planar.PlanarResult,
+func (p *planarBandPair) liftedBand(budget *proofbound.WorkBudget, report *reportvocab.ContactReport, result planar.PlanarResult,
 	upper *big.Rat) (bool, error) {
 	band := p.liftedWidth(report.Request)
 	hostA, hostB := p.deltaA.Sign() == 0, p.deltaB.Sign() == 0
@@ -596,9 +597,9 @@ func (p *planarBandPair) liftedBand(budget *proofbound.WorkBudget, report *Conta
 	if !measurement.FiniteValues(g, charged) {
 		return false, nil
 	}
-	report.Relation, report.Reason = ContactBand, ContactNoReason
-	report.Gap = &Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(charged),
-		Exactness: exactnessFromBound(charged)}
+	report.Relation, report.Reason = reportvocab.ContactBand, reportvocab.ContactNoReason
+	report.Gap = &measurement.Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(charged),
+		Exactness: measurement.ExactnessOf(charged)}
 	manifold, reason, err := p.chargedManifold(budget, report, lifted, nil)
 	if err != nil {
 		return false, err
@@ -608,7 +609,7 @@ func (p *planarBandPair) liftedBand(budget *proofbound.WorkBudget, report *Conta
 }
 
 // liftedWidth is the lifted band b = max(SupportBand, δ) of a displaced pair.
-func (p *planarBandPair) liftedWidth(req ContactRequest) proofarith.Dyadic {
+func (p *planarBandPair) liftedWidth(req reportvocab.ContactRequest) proofarith.Dyadic {
 	band, delta := supportBandOf(req), proofarith.DyAdd(p.deltaA, p.deltaB)
 	if proofarith.DyCmp(band, delta) < 0 {
 		return delta
@@ -622,14 +623,14 @@ func (p *planarBandPair) liftedWidth(req ContactRequest) proofarith.Dyadic {
 // within the lifted band, every point charged with δ (chargedManifold). A
 // patch the kernel withholds keeps the reason it names, or the one report
 // carries.
-func (p *planarBandPair) overlapManifold(ctx context.Context, budget *proofbound.WorkBudget, report *ContactReport,
+func (p *planarBandPair) overlapManifold(ctx context.Context, budget *proofbound.WorkBudget, report *reportvocab.ContactReport,
 	result planar.PlanarResult) error {
 	convexA, convexB, err := p.convexity(ctx, budget, report)
 	if err != nil {
 		return err
 	}
 	if !convexA && !convexB {
-		report.Reason = ContactNonConvex
+		report.Reason = reportvocab.ContactNonConvex
 		return nil
 	}
 	points, planes, reason, err := planar.OverlapPatch(p.a, p.b, result, convexA, convexB,
@@ -661,33 +662,33 @@ func (p *planarBandPair) overlapManifold(ctx context.Context, budget *proofbound
 		}
 		manifold.Points = append(manifold.Points, extra.Points...)
 	}
-	report.Manifold, report.Reason = manifold, ContactNoReason
+	report.Manifold, report.Reason = manifold, reportvocab.ContactNoReason
 	return nil
 }
 
 func (p *planarBandPair) convexity(ctx context.Context, budget *proofbound.WorkBudget,
-	report *ContactReport) (bool, bool, error) {
+	report *reportvocab.ContactReport) (bool, bool, error) {
 	chord := heldChordOf(report.Request)
-	convexA, err := planarConvexity(ctx, budget, report.A, chord)
+	convexA, err := planarConvexity(ctx, budget, bodyHandle(report.A), chord)
 	if err != nil {
 		return false, false, err
 	}
-	convexB, err := planarConvexity(ctx, budget, report.B, chord)
+	convexB, err := planarConvexity(ctx, budget, bodyHandle(report.B), chord)
 	return convexA, convexB, err
 }
 
 // publishBand publishes ContactBand with Gap [−2δ, 2δ] and, when points is
 // not nil, the held manifold charged with the band, every Separation the
 // band itself (chargedManifold).
-func (p *planarBandPair) publishBand(ctx context.Context, budget *proofbound.WorkBudget, report *ContactReport,
+func (p *planarBandPair) publishBand(ctx context.Context, budget *proofbound.WorkBudget, report *reportvocab.ContactReport,
 	points []planar.PatchPoint) error {
 	band := proofbound.RatFloatUp(new(big.Rat).Mul(big.NewRat(2, 1), proofarith.DyAdd(p.deltaA, p.deltaB).Rat()))
 	if !measurement.FiniteValues(band) {
-		report.Reason = ContactNoGapProof
+		report.Reason = reportvocab.ContactNoGapProof
 		return nil
 	}
-	report.Relation, report.Reason = ContactBand, ContactNoNormalProof
-	gap := Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(band), Exactness: exactnessFromBound(band)}
+	report.Relation, report.Reason = reportvocab.ContactBand, reportvocab.ContactNoNormalProof
+	gap := measurement.Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(band), Exactness: measurement.ExactnessOf(band)}
 	report.Gap = &gap
 	if points == nil {
 		return nil
@@ -713,8 +714,8 @@ func (p *planarBandPair) publishBand(ctx context.Context, budget *proofbound.Wor
 // point: a held face of a displaced body only approximates the true face's
 // direction, so a point whose normal no exact face supplies withholds the
 // manifold with ContactNoNormalProof.
-func (p *planarBandPair) chargedManifold(budget *proofbound.WorkBudget, report *ContactReport, points []planar.PatchPoint,
-	band *Measurement) (*ContactManifold, ContactReason, error) {
+func (p *planarBandPair) chargedManifold(budget *proofbound.WorkBudget, report *reportvocab.ContactReport, points []planar.PatchPoint,
+	band *measurement.Measurement) (*reportvocab.ContactManifold, reportvocab.ContactReason, error) {
 	exact := -1
 	switch {
 	case p.deltaA.Sign() == 0:
@@ -723,12 +724,12 @@ func (p *planarBandPair) chargedManifold(budget *proofbound.WorkBudget, report *
 		exact = 1
 	}
 	if exact < 0 {
-		return nil, ContactNoNormalProof, nil
+		return nil, reportvocab.ContactNoNormalProof, nil
 	}
 	solids := [2]*planar.PlanarSolid{p.a, p.b}
 	for _, point := range points {
 		if err := budget.Step(); err != nil {
-			return nil, ContactNoReason, err
+			return nil, reportvocab.ContactNoReason, err
 		}
 		feature := point.A
 		if exact == 1 {
@@ -736,12 +737,12 @@ func (p *planarBandPair) chargedManifold(budget *proofbound.WorkBudget, report *
 		}
 		normal, ok := planar.FaceNormal(solids[exact], feature)
 		if !ok || !proofarith.DvIsZero(proofarith.DvCross(normal, point.Normal)) {
-			return nil, ContactNoNormalProof, nil
+			return nil, reportvocab.ContactNoNormalProof, nil
 		}
 	}
-	features, err := newPlanarFeatureMap(report.A, report.B, p.a, p.b)
+	features, err := newPlanarFeatureMap(bodyHandle(report.A), bodyHandle(report.B), p.a, p.b)
 	if err != nil {
-		return nil, ContactNoReason, err
+		return nil, reportvocab.ContactNoReason, err
 	}
 	manifold, reason := planarPatchManifold(report.Request, points, features)
 	if manifold == nil {
@@ -751,16 +752,16 @@ func (p *planarBandPair) chargedManifold(budget *proofbound.WorkBudget, report *
 	delta := proofarith.DyAdd(p.deltaA, p.deltaB).Rat()
 	for i := range manifold.Points {
 		point := &manifold.Points[i]
-		for side, position := range []*VecMeasurement{&point.OnA, &point.OnB} {
+		for side, position := range []*measurement.VecMeasurement{&point.OnA, &point.OnB} {
 			own := p.deltaA
 			if side == 1 {
 				own = p.deltaB
 			}
 			published := proofbound.RatFloatUp(new(big.Rat).Add(proofarith.FloatRat(position.Bound.Base()), own.Rat()))
 			if !measurement.FiniteValues(published) || proofarith.FloatRat(published).Cmp(resolution) > 0 {
-				return nil, ContactPointTooCoarse, nil
+				return nil, reportvocab.ContactPointTooCoarse, nil
 			}
-			position.Bound, position.Exactness = units.Millimeters(published), exactnessFromBound(published)
+			position.Bound, position.Exactness = units.Millimeters(published), measurement.ExactnessOf(published)
 		}
 		if band != nil {
 			point.Separation = *band
@@ -768,9 +769,9 @@ func (p *planarBandPair) chargedManifold(budget *proofbound.WorkBudget, report *
 		}
 		widened := proofbound.RatFloatUp(new(big.Rat).Add(proofarith.FloatRat(point.Separation.Bound.Base()), delta))
 		if !measurement.FiniteValues(widened) {
-			return nil, ContactNoGapProof, nil
+			return nil, reportvocab.ContactNoGapProof, nil
 		}
-		point.Separation.Bound, point.Separation.Exactness = units.Millimeters(widened), exactnessFromBound(widened)
+		point.Separation.Bound, point.Separation.Exactness = units.Millimeters(widened), measurement.ExactnessOf(widened)
 	}
-	return manifold, ContactNoReason, nil
+	return manifold, reportvocab.ContactNoReason, nil
 }

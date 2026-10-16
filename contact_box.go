@@ -6,6 +6,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/pair/box"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 
@@ -121,8 +122,8 @@ func signedAxisTransform(t r3.Transform) bool {
 	return box.CardinalBasis(b.EX, b.EY, b.EZ)
 }
 
-// The root package maps neutral pair readings to public units and topology.
-func publishSourceBoxPatch(report *ContactReport, a, b sourceBoxContactProof, axis, sign int,
+// The root package maps neutral pair readings to report units and topology.
+func publishSourceBoxPatch(report *reportvocab.ContactReport, a, b sourceBoxContactProof, axis, sign int,
 	separation proofarith.Dyadic) {
 	patch, reason := box.FacePatch(
 		box.AxisBox{Lo: a.lo, Hi: a.hi}, box.AxisBox{Lo: b.lo, Hi: b.hi},
@@ -135,40 +136,40 @@ func publishSourceBoxPatch(report *ContactReport, a, b sourceBoxContactProof, ax
 	}
 }
 
-func sourceBoxScalar(reading pair.ScalarReading) Measurement {
-	return Measurement{Value: units.Millimeters(reading.ValueMM),
-		Bound: units.Millimeters(reading.BoundMM), Exactness: exactnessOf(reading.BoundMM)}
+func sourceBoxScalar(reading pair.ScalarReading) measurement.Measurement {
+	return measurement.Measurement{Value: units.Millimeters(reading.ValueMM),
+		Bound: units.Millimeters(reading.BoundMM), Exactness: measurement.ExactnessOf(reading.BoundMM)}
 }
 
-func sourceBoxPointMeasurement(reading box.PointReading) VecMeasurement {
-	return VecMeasurement{Value: reading.Value, Bound: units.Millimeters(reading.BoundMM),
-		Exactness: exactnessOf(reading.BoundMM)}
+func sourceBoxPointMeasurement(reading box.PointReading) measurement.VecMeasurement {
+	return measurement.VecMeasurement{Value: reading.Value, Bound: units.Millimeters(reading.BoundMM),
+		Exactness: measurement.ExactnessOf(reading.BoundMM)}
 }
 
-func sourceBoxGap(gaps [3]proofarith.Dyadic) (Measurement, bool) {
+func sourceBoxGap(gaps [3]proofarith.Dyadic) (measurement.Measurement, bool) {
 	reading, ok := box.AxisGap(gaps)
 	if !ok {
-		return Measurement{}, false
+		return measurement.Measurement{}, false
 	}
 	return sourceBoxScalar(reading), true
 }
 
-func sourceBoxPoint(point proofarith.DyV3) (VecMeasurement, bool) {
+func sourceBoxPoint(point proofarith.DyV3) (measurement.VecMeasurement, bool) {
 	return sourceBoxPointAt(&point)
 }
 
-func sourceBoxPointAt(point *proofarith.DyV3) (VecMeasurement, bool) {
+func sourceBoxPointAt(point *proofarith.DyV3) (measurement.VecMeasurement, bool) {
 	reading, ok := box.ReadPointAt(point)
 	if !ok {
-		return VecMeasurement{}, false
+		return measurement.VecMeasurement{}, false
 	}
 	return sourceBoxPointMeasurement(reading), true
 }
 
-func sourceBoxSignedReading(value proofarith.Dyadic) (Measurement, bool) {
+func sourceBoxSignedReading(value proofarith.Dyadic) (measurement.Measurement, bool) {
 	reading, ok := box.SignedReading(value)
 	if !ok {
-		return Measurement{}, false
+		return measurement.Measurement{}, false
 	}
 	return sourceBoxScalar(reading), true
 }

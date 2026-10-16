@@ -207,10 +207,10 @@ func (r *SweepReport) replayPosesAtFraction(f *big.Rat) (r3.Transform, r3.Transf
 	if !ok || deviation.Cmp(resolution) > 0 {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded replay pose exceeds point resolution", ErrUnsupported)
 	}
-	contact := &ContactReport{Request: r.replay.request}
+	contact := &reportvocab.ContactReport{Request: contactRequestToInternal(r.replay.request)}
 	classifySourceBoxes(contact, actualA, actualB)
 	if !sweepmemo.RelationCovered(reportvocab.SweepOutcome(r.replay.outcome), f, r.replay.bracketLo,
-		resolution, reportvocab.ContactRelation(contact.Relation), actualA.axisBox(), actualB.axisBox()) {
+		resolution, contact.Relation, actualA.axisBox(), actualB.axisBox()) {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded replay pose changes the certified relation", ErrUnsupported)
 	}
 	return poseA, poseB, nil
@@ -337,7 +337,7 @@ func (r *SweepReport) certifiedSpherePairPosesAtFraction(f *big.Rat, poseA, pose
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: %s", ErrUnsupported, detail)
 	}
 	if p.outcome == SweepPersistentTouch {
-		contact := &ContactReport{Request: p.request}
+		contact := &reportvocab.ContactReport{Request: contactRequestToInternal(p.request)}
 		classifySourceSpherePair(contact, actualA, actualB)
 		if contact.Manifold == nil || len(contact.Manifold.Points) != 1 ||
 			contact.Manifold.Points[0].FeatureA != p.track.features[0] ||
@@ -445,7 +445,7 @@ func (r *SweepReport) certifiedRotationalPosesAtFraction(f *big.Rat) (
 		return pose[0], pose[1], nil
 	}
 	relation, gap, normSquared := orientedBoxRelation(box[0], box[1])
-	if relation != ContactSeparated {
+	if relation != reportvocab.ContactSeparated {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rotating replay pose is not separated", ErrUnsupported)
 	}
 	norm := proofbound.RatSqrtUp(normSquared.Rat())
@@ -468,15 +468,15 @@ func (r *SweepReport) certifiedOrientedTouchAtFraction(f *big.Rat, a, b oriented
 		r.replay.rotation[0].path.Drift != nil || r.replay.rotation[1].path.Drift != nil {
 		return false
 	}
-	report := &ContactReport{Request: r.replay.request}
+	report := &reportvocab.ContactReport{Request: contactRequestToInternal(r.replay.request)}
 	report.Relation, _, _ = orientedBoxRelation(a, b)
-	if report.Relation == ContactTouching {
+	if report.Relation == reportvocab.ContactTouching {
 		publishOrientedBoxPatch(report, a, b)
 		if report.Manifold == nil {
 			publishClippedHorizontalPatch(report, a, b)
 		}
 	}
-	if report.Relation != ContactTouching || report.Manifold == nil ||
+	if report.Relation != reportvocab.ContactTouching || report.Manifold == nil ||
 		len(report.Manifold.Points) != track.pointCount {
 		return false
 	}

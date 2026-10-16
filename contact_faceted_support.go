@@ -6,6 +6,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 
@@ -109,22 +110,22 @@ func boundedFacetedInsideFloor(extent boundedFacetedExtent, floor sourceBoxConta
 }
 
 func boundedFacetedFloorGap(extent boundedFacetedExtent,
-	floor sourceBoxContactProof) (Measurement, bool) {
+	floor sourceBoxContactProof) (measurement.Measurement, bool) {
 	held := proofarith.DySubScalar(extent.box.lo[2], floor.hi[2])
 	if proofarith.DyCmp(held, extent.bound) <= 0 {
-		return Measurement{}, false
+		return measurement.Measurement{}, false
 	}
 	reading, ok := sourceBoxSignedReading(held)
 	if !ok {
-		return Measurement{}, false
+		return measurement.Measurement{}, false
 	}
 	boundaryBound, _ := extent.bound.Float64()
 	bound := proofbound.AbsSumUpper(reading.Bound.Base(), boundaryBound)
 	if !measurement.FiniteValues(bound) || reading.Value.Base()-bound <= 0 {
-		return Measurement{}, false
+		return measurement.Measurement{}, false
 	}
 	reading.Bound = units.Millimeters(bound)
-	reading.Exactness = exactnessOf(bound)
+	reading.Exactness = measurement.ExactnessOf(bound)
 	return reading, true
 }
 
@@ -185,9 +186,9 @@ func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
 // classifyFacetedFloorBox admits a faceted body only when its complete lower
 // support patch lies strictly inside a source-box floor's upper face. The
 // certified support plane separates the whole occupied sets at and above it.
-func classifyFacetedFloorBox(ctx context.Context, report *ContactReport, faceted *Body,
+func classifyFacetedFloorBox(ctx context.Context, report *reportvocab.ContactReport, faceted *Body,
 	pose r3.Transform, floor sourceBoxContactProof, facetedIsA bool) error {
-	report.Reason = ContactPayloadUnsupported
+	report.Reason = reportvocab.ContactPayloadUnsupported
 	support, ok, err := sourceFacetedAxisSupport(ctx, faceted, pose, 2, 0)
 	if err != nil {
 		return err
@@ -202,7 +203,7 @@ func classifyFacetedFloorBox(ctx context.Context, report *ContactReport, faceted
 		}
 		if bounded && extent.bound.Sign() > 0 && boundedFacetedInsideFloor(extent, floor) {
 			if gap, measured := boundedFacetedFloorGap(extent, floor); measured {
-				report.Relation, report.Gap, report.Reason = ContactSeparated, &gap, ContactNoReason
+				report.Relation, report.Gap, report.Reason = reportvocab.ContactSeparated, &gap, reportvocab.ContactNoReason
 			}
 		}
 		return nil
@@ -222,14 +223,14 @@ func classifyFacetedFloorBox(ctx context.Context, report *ContactReport, faceted
 		gaps[2] = gap
 		m, measured := sourceBoxGap(gaps)
 		if !measured {
-			report.Reason = ContactNoGapProof
+			report.Reason = reportvocab.ContactNoGapProof
 			return nil
 		}
-		report.Relation, report.Gap, report.Reason = ContactSeparated, &m, ContactNoReason
+		report.Relation, report.Gap, report.Reason = reportvocab.ContactSeparated, &m, reportvocab.ContactNoReason
 		return nil
 	}
-	report.Relation = ContactTouching
-	exactZero := Measurement{Value: units.Millimeters(0), Exactness: Exact, Bound: units.Millimeters(0)}
+	report.Relation = reportvocab.ContactTouching
+	exactZero := measurement.Measurement{Value: units.Millimeters(0), Exactness: measurement.Exact, Bound: units.Millimeters(0)}
 	report.Gap = &exactZero
 	patch := sourceBoxContactProof{}
 	patch.lo[2], patch.hi[2] = support.plane, support.outerHi[2]
@@ -243,7 +244,7 @@ func classifyFacetedFloorBox(ctx context.Context, report *ContactReport, faceted
 		publishSourceBoxPatch(report, floor, patch, 2, 1, proofarith.DyZero())
 	}
 	if report.Manifold != nil {
-		report.Reason = ContactNoReason
+		report.Reason = reportvocab.ContactNoReason
 	}
 	return nil
 }

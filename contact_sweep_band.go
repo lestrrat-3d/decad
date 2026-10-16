@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
 	"github.com/lestrrat-3d/decad/internal/motionbound"
@@ -80,7 +81,7 @@ func (r *rotationalPairSweep) planarSupports(poll func() error) ([]planarSupport
 		rest = speed
 	}
 	inputs := [2]planarsweep.SupportPath{planarSupportPathOf(paths[0]), planarSupportPathOf(paths[1])}
-	candidates, err := planarsweep.FindSupports(inputs, supportBandOf(r.req.ContactRequest), rest, poll)
+	candidates, err := planarsweep.FindSupports(inputs, supportBandOf(contactRequestToInternal(r.req.ContactRequest)), rest, poll)
 	if err != nil {
 		return nil, err
 	}
@@ -217,8 +218,8 @@ type planarTrackProof struct {
 	paths     [2]rotationalSweepPath
 	m, s      int
 	contact   []int // M vertices in published order
-	featureM  []ContactFeature
-	featureS  ContactFeature
+	featureM  []reportvocab.ContactFeature
+	featureS  reportvocab.ContactFeature
 	normal    proofarith.DyV3 // S's exact outward normal
 	origin    int             // an S vertex on the plane
 	direction VecMeasurement  // the published A-to-B normal
@@ -346,7 +347,7 @@ func (r *rotationalPairSweep) planarTrack(support *planarSupport, face planarFac
 	}
 	type entry struct {
 		index   int
-		feature ContactFeature
+		feature reportvocab.ContactFeature
 		key     [2]int
 	}
 	// The contact set comes first and the lifted set after it (§10.5), each
@@ -395,7 +396,7 @@ func (r *rotationalPairSweep) planarTrack(support *planarSupport, face planarFac
 			Exactness: exactnessFromBound(bound)}
 	}
 	track := &SweepContactTrack{start: zero, end: new(big.Rat).Set(end), duration: r.a.path.Duration,
-		request: r.req.ContactRequest, normal: normal, planar: proof}
+		request: contactRequestToInternal(r.req.ContactRequest), normal: normal, planar: proof}
 	// A track whose start manifold is refused (a point ball over
 	// PointResolution) is not published; the refusal is the answer.
 	if _, refused := track.ManifoldAt(units.Scalar(0)); refused != nil {
@@ -431,7 +432,7 @@ func planarSupportFace(s *planarSupport) (planarFace, bool) {
 // normal. A true contact point of a positive-displacement M lies within its
 // δ of the held vertex, and its foot within δ of the held foot, so both balls
 // also carry M's δ. The separation is the band's two-sided bound.
-func (p *planarTrackProof) planarManifoldAt(f *big.Rat, req ContactRequest) (*ContactManifold, error) {
+func (p *planarTrackProof) planarManifoldAt(f *big.Rat, req reportvocab.ContactRequest) (*ContactManifold, error) {
 	verts, eta, ok := p.roundedVertices(f)
 	if !ok {
 		return nil, fmt.Errorf("%w: planar contact track pose has no finite bound", ErrUnsupported)
@@ -459,12 +460,13 @@ func (p *planarTrackProof) planarManifoldAt(f *big.Rat, req ContactRequest) (*Co
 			return nil, fmt.Errorf("%w: planar contact track point exceeds point resolution", ErrUnsupported)
 		}
 		point := ContactPoint{Normal: p.direction, NormalAngle: p.angle, Separation: separation}
+		featureM, featureS := contactFeatureFromInternal(p.featureM[slot]), contactFeatureFromInternal(p.featureS)
 		if p.m == 0 {
 			point.OnA, point.OnB = onM, onS
-			point.FeatureA, point.FeatureB = p.featureM[slot], p.featureS
+			point.FeatureA, point.FeatureB = featureM, featureS
 		} else {
 			point.OnA, point.OnB = onS, onM
-			point.FeatureA, point.FeatureB = p.featureS, p.featureM[slot]
+			point.FeatureA, point.FeatureB = featureS, featureM
 		}
 		point.FaceA, point.FaceB = point.FeatureA.Face, point.FeatureB.Face
 		points = append(points, point)

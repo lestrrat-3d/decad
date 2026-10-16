@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/pair/box"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -132,10 +133,9 @@ func (r *sourceSphereSweepRun) idealAt(f *big.Rat, at SweepInstant) SweepEvent {
 	if !okSphere || !okBox {
 		return SweepEvent{At: at, Relation: ContactUndecided, Reason: ContactPayloadUnsupported}
 	}
-	contact := &ContactReport{Request: r.req.ContactRequest}
+	contact := &reportvocab.ContactReport{Request: contactRequestToInternal(r.req.ContactRequest)}
 	classifySourceSphereBox(contact, sphere, box, r.sphereFirst)
-	return SweepEvent{At: at, Relation: contact.Relation, Gap: contact.Gap,
-		Manifold: contact.Manifold, Reason: contact.Reason}
+	return sweepEventOf(at, contact)
 }
 
 func (r *sourceSphereSweepRun) sample(ctx context.Context, f *big.Rat) (*SweepSample, error) {
@@ -268,9 +268,10 @@ func (r *sourceSphereSweepRun) track(first *SweepSample) *SweepContactTrack {
 	point := first.Ideal.Manifold.Points[0]
 	track := &SweepContactTrack{
 		start: new(big.Rat), end: big.NewRat(1, 1), duration: new(big.Rat).Set(r.pa.Duration),
-		request: r.req.ContactRequest, sphere: &r.sphere, sphereFirst: r.sphereFirst,
-		features: [2]ContactFeature{point.FeatureA, point.FeatureB}, normal: point.Normal,
-		deltaA: r.pa.Delta, deltaB: r.pb.Delta,
+		request: contactRequestToInternal(r.req.ContactRequest), sphere: &r.sphere, sphereFirst: r.sphereFirst,
+		features: [2]reportvocab.ContactFeature{contactFeatureToInternal(point.FeatureA), contactFeatureToInternal(point.FeatureB)},
+		normal:   point.Normal,
+		deltaA:   r.pa.Delta, deltaB: r.pb.Delta,
 	}
 	if r.sphereFirst {
 		track.b = r.box
