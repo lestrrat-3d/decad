@@ -289,7 +289,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 			sag := tessellation.CapBlendRingSagitta(proof, true)
 			capPts, capV := bc.lm.capPts, bc.capV
 			if bc.cbp.Fillet {
-				capPts, capV = compactCapBlendRing(capPts, capV)
+				capPts, capV = tessellation.CompactCapBlendRing(capPts, capV)
 			}
 			for j, p := range capPts {
 				pts = append(pts, p)

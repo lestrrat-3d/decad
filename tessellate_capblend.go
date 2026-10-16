@@ -671,7 +671,7 @@ func emitCapBlendCap(ctx context.Context, m *Mesh, cbp capBlendPayload, lms []ca
 			}
 			delta = math.Max(delta, d)
 			if cbp.Fillet {
-				ringPts, ringV = compactCapBlendRing(ringPts, ringV)
+				ringPts, ringV = tessellation.CompactCapBlendRing(ringPts, ringV)
 			}
 		}
 		base := len(pts)
@@ -716,26 +716,6 @@ func emitCapBlendCap(ctx context.Context, m *Mesh, cbp capBlendPayload, lms []ca
 	}
 	bump(face, proofbound.AbsSumUpper(trim, delta, axial))
 	return nil
-}
-
-// compactCapBlendRing omits zero-length contour edges where a fillet's
-// inward circular offset has collapsed to its centre. The band's samples
-// retain their full count so its strips still match the side wall.
-func compactCapBlendRing(pts []planePoint, vertices []int) ([]planePoint, []int) {
-	compactPts := make([]planePoint, 0, len(pts))
-	compactVertices := make([]int, 0, len(vertices))
-	for i, p := range pts {
-		if len(compactPts) != 0 && compactPts[len(compactPts)-1] == p {
-			continue
-		}
-		compactPts = append(compactPts, p)
-		compactVertices = append(compactVertices, vertices[i])
-	}
-	if len(compactPts) > 1 && compactPts[0] == compactPts[len(compactPts)-1] {
-		compactPts = compactPts[:len(compactPts)-1]
-		compactVertices = compactVertices[:len(compactVertices)-1]
-	}
-	return compactPts, compactVertices
 }
 
 // capBlendRingSagitta reads the side or cap ring's numeric proof.
