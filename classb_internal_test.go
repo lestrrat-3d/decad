@@ -348,7 +348,7 @@ func TestClassBCutGateMissesTakeMeshPath(t *testing.T) {
 // radius 3. A placement that is not the operands' own is a silent miss, and so
 // is a payload-free body in tryClassB.
 //
-// Shown to fail: with classbgeom.AdmitPair comparing the operands' transforms to
+// Shown to fail: with admitClassBPair (now classbgeom.AdmitPair) comparing the operands' transforms to
 // each other alone, the foreign placement admits the pair.
 func TestClassBOfPayloadsBuildsWithoutBodies(t *testing.T) {
 	t.Parallel()
