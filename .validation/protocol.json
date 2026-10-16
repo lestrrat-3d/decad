@@ -1,0 +1,55 @@
+{
+  "base": "3987ea5a84f662da2c307983e5c1f28988f6fbcc",
+  "candidate": "70e5c3e5be3dc72fcd4910df68e44c8eb131c3bd",
+  "phases": [
+    "census",
+    "primary",
+    "cold",
+    "gc",
+    "helper",
+    "helper_0",
+    "helper_8191",
+    "helper_rods",
+    "helper_washer",
+    "heap_consumer",
+    "heap_1",
+    "heap_2",
+    "heap_4",
+    "heap_8",
+    "cancel"
+  ],
+  "pairs": 5,
+  "order": [
+    "baseline",
+    "candidate",
+    "candidate",
+    "baseline",
+    "baseline",
+    "candidate",
+    "candidate",
+    "baseline",
+    "baseline",
+    "candidate"
+  ],
+  "primary": {
+    "median_bytes_ratio_max": 0.995,
+    "all_pairs_bytes_strictly_lower": true,
+    "all_pairs_allocs_no_increase": true,
+    "median_time_ratio_max": 1.02,
+    "pair_time_ratio_max": 1.05
+  },
+  "secondary": {
+    "median_time_ratio_max": 1.05,
+    "pair_time_ratio_max": 1.1
+  },
+  "fixed_count_rule": "Baseline-only1x probe perconsumer first;2x if ns/op<=10e9,1x if<=20e9,elseabort. Candidate timing follows selection. Primary modes warm; cold1x;gc selectedcount. Helper100x. Eachsource freshprocess perrow.",
+  "heap": "Keep raw snapshots and baseline-relative summaries. Report paired candidate-minus-baseline lifecycle deltas for HeapAlloc, HeapInuse and TotalAlloc as total bytes and bytes per worker, with five values and min/median/max. Always require retention tradeoff review.",
+  "cancel": "100iterations perstop; five freshprocess repetitions; p95increment>1ms ormaxincrement>5ms requiresreview. Resetproxyisnotactualpoolreleaseattribution.",
+  "slot": "Parent-coordinated serial hosted only; no launch authorization implied.",
+  "representative_census": {
+    "evidence_sha256": null,
+    "rods": null,
+    "washer": null
+  },
+  "representative_rule": "After accepted census, freeze each consumer first min(calls,32) observed sizes and control.json SHA256. Select lower median of positive observed sizes; require 1..65536. Empty or oversized evidence blocks phase and requires review. No automatic launch or selection from timing."
+}
