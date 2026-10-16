@@ -12,8 +12,8 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
-	"github.com/lestrrat-3d/decad/internal/stackedbrep"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
+	"github.com/lestrrat-3d/decad/internal/stackedunion"
 )
 
 // tryCrossingBlindCut builds the exact rectangular case where a blind tool
@@ -60,13 +60,9 @@ func tryCrossingBlindCut(ctx context.Context, a, b *Body) (brepPayload, bool, er
 	if reach[0] != [2]int{0, -1} || reach[1] != [2]int{0, 0} {
 		return brepPayload{}, false, nil
 	}
-	state := &stackedUnionState{budget: budget, va: va, vb: vb, reexpress: reexpress}
-	build := &ubBuild{st: state, cut: true, levels: levels, reach: reach,
-		scenes: map[string]*ubScene{}, geom: stackedbrep.NewEngine([]float64{
-			levels[0].Held, levels[1].Held, levels[2].Held,
-		})}
-	result, err := build.run(ctx)
-	if errors.Is(err, errUBMiss) || errors.Is(err, ErrUnsupported) || errors.Is(err, brepgeom.ErrStackedWallMiss) {
+	result, err := stackedunion.Cut(ctx, budget, stackedunion.OperandOf(va.proxy, va.slabs),
+		stackedunion.OperandOf(vb.proxy, vb.slabs), reexpress, levels, reach)
+	if errors.Is(err, brepgeom.ErrStackedWallMiss) || errors.Is(err, ErrUnsupported) {
 		return brepPayload{}, false, nil
 	}
 	if err != nil {

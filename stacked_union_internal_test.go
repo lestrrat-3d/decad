@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/classbgeom"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
+	"github.com/lestrrat-3d/decad/internal/stackedunion"
 
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
@@ -95,11 +96,11 @@ func TestStackedUnionRecordsSlabsAndFloor(t *testing.T) {
 func TestStackedUnionInterfaceReportsSplitBoundary(t *testing.T) {
 	plate, crossing := internalBossOnPlate(t, 18, 10, 15)
 	base := plate.n.Payload.(prismPayload)
-	m, err := stackedUnionInterfaceMatch(t.Context(), proofbound.NewWorkBudget(t.Context()), base, base.Profile,
+	m, err := stackedunion.InterfaceMatch(t.Context(), proofbound.NewWorkBudget(t.Context()), base, base.Profile,
 		crossing.n.Payload.(prismPayload).Profile)
 	require.NoError(t, err)
-	require.Equal(t, stackedNestNone, m.nest)
-	require.True(t, m.split, "the interface scene reports a Partial edge where the boss crosses the outline")
+	require.Equal(t, stackedunion.NestNone, m.Nest)
+	require.True(t, m.Split, "the interface scene reports a Partial edge where the boss crosses the outline")
 
 	// The stacked record cannot state it; the brep build does
 	// (stacked_union_brep_internal_test.go).
@@ -117,7 +118,7 @@ func TestStackedUnionInterfaceReportsSplitBoundary(t *testing.T) {
 // the plate-only cells are the exposed floor, 1500 mm². The stacked payload
 // cannot state the result (the flush walls are one plane across both
 // columns, and the floor's boundary takes part of each column's ring), so
-// the union is the brep of stacked_union_brep.go, whose floor is that
+// the union is the brep of internal/stackedunion/brep.go, whose floor is that
 // 1500 mm² cell.
 func TestStackedUnionFlushBossBuildsBrep(t *testing.T) {
 	t.Parallel()
@@ -126,20 +127,21 @@ func TestStackedUnionFlushBossBuildsBrep(t *testing.T) {
 	boss := internalBoxBodyAtZ(t, doc, 10, -20, 20, -10, 10, 15)
 	base := plate.n.Payload.(prismPayload)
 	budget := proofbound.NewWorkBudget(t.Context())
-	m, err := stackedUnionInterfaceMatch(t.Context(), budget, base, base.Profile, boss.n.Payload.(prismPayload).Profile)
+	m, err := stackedunion.InterfaceMatch(t.Context(), budget, base, base.Profile,
+		boss.n.Payload.(prismPayload).Profile)
 	require.NoError(t, err)
-	require.Equal(t, stackedNestNone, m.nest)
-	require.True(t, m.split, "the shared walls split the plate's outline at the boss's corners")
+	require.Equal(t, stackedunion.NestNone, m.Nest)
+	require.True(t, m.Split, "the shared walls split the plate's outline at the boss's corners")
 
-	reading, ok, err := prismcells.CoincidentEdges(budget, m.tags, m.profiles)
+	reading, ok, err := prismcells.CoincidentEdges(budget, m.Tags, m.Profiles)
 	require.NoError(t, err)
 	require.True(t, ok)
-	require.Len(t, reading.Spans, 2, "the walls x = 20 and y = −20 each share one span")
-	matterPlate, matterBoss, resolved, err := prismcells.Classify(budget, m.tags, m.profiles)
+	require.Equal(t, 2, len(reading.Spans), "the walls x = 20 and y = −20 each share one span")
+	matterPlate, matterBoss, resolved, err := prismcells.Classify(budget, m.Tags, m.Profiles)
 	require.NoError(t, err)
 	require.True(t, resolved)
 	floor := 0.0
-	for i, p := range m.profiles {
+	for i, p := range m.Profiles {
 		if matterPlate[i] && !matterBoss[i] {
 			floor += p.Area
 		}

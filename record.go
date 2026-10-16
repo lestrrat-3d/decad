@@ -278,7 +278,6 @@ type allEdgeChamferPayload = breprecord.AllEdgeChamferPayload
 type (
 	brepPayload      = breprecord.Payload
 	brepFace         = breprecord.Face
-	brepStack        = breprecord.Stack
 	brepLoopBand     = breprecord.LoopBand
 	brepBandTerminal = breprecord.BandTerminal
 	brepBandKind     = breprecord.BandKind

@@ -63,8 +63,9 @@ type Face struct {
 // (docs/general-boolean-design.md §3 "A1 as a brep", §4.1): each slab's
 // hole-free regions in the reference frame, and the section displacement
 // every region carries. A further co-directional Union reads it as its
-// operand's slabs (root stackedUnionOperandOf); no consumer reads it, and a
-// placement leaves it unchanged, since it moves xform alone.
+// operand's slabs (root stackedUnionOperandOf), and Section reads it to
+// reconstruct planar profiles. Placement leaves it unchanged because it
+// moves xform alone.
 type Stack struct {
 	Slabs []stackedrecord.Slab
 	Delta float64

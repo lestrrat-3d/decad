@@ -159,7 +159,7 @@ exact rational sum `A_plate·h_plate + A_boss·h_boss`, `Exact` where both are.
 
 #### A1 as a brep — the flush or crossing interface
 
-`stacked_union_brep.go` takes over when an interface's clean-nesting match
+`internal/stackedunion/brep.go` takes over when an interface's clean-nesting match
 is unresolved, with the slabs tryStackedUnion built. It admits the pair
 only where every carrier it records is exact: the identity re-expression
 (B's records enter every scene verbatim; a re-expressed B would be recorded
