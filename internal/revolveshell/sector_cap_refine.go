@@ -1,17 +1,19 @@
-package decad
+package revolveshell
 
 import (
 	"context"
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/pointcone"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
 
-func sectorConeCapBounds(nodes []pointcone.SectorNode, caps [][3]int,
-	record *pointConeTrimRecord) (float64, float64, error) {
+func SectorConeCapBounds(nodes []pointcone.SectorNode, caps [][3]int,
+	record *facetedrecord.PointConeTrimRecord) (float64, float64, error) {
 	far := make([]r3.Vec, len(nodes))
 	for i, node := range nodes {
 		far[i] = node.P
@@ -25,14 +27,14 @@ func sectorConeCapBounds(nodes []pointcone.SectorNode, caps [][3]int,
 	return upper, lower, err
 }
 
-// sectorRefineCap splits cells whose cone-map departure exceeds limit. All
+// SectorRefineCap splits cells whose cone-map departure exceeds limit. All
 // triangles sharing a marked edge split it, preserving the cap and root seam.
-func sectorRefineCap(ctx context.Context, nodes []pointcone.SectorNode,
-	triangles [][3]int, edges []pointcone.SectorEdge, record *pointConeTrimRecord,
+func SectorRefineCap(ctx context.Context, nodes []pointcone.SectorNode,
+	triangles [][3]int, edges []pointcone.SectorEdge, record *facetedrecord.PointConeTrimRecord,
 	limit float64, maxCells int) ([]pointcone.SectorNode, [][3]int, []pointcone.SectorEdge, float64, error) {
 	if !(limit > 0) || proofbound.IsNonFinite(limit) ||
 		len(triangles) == 0 || len(triangles) > maxCells {
-		return nil, nil, nil, 0, fmt.Errorf("%w: sector cap exceeds its refinement budget", ErrUnsupported)
+		return nil, nil, nil, 0, fmt.Errorf("%w: sector cap exceeds its refinement budget", decaderr.ErrUnsupported)
 	}
 	marked := make(map[pointcone.Edge]struct{})
 	for _, tri := range triangles {
@@ -127,7 +129,7 @@ func sectorRefineCap(ctx context.Context, nodes []pointcone.SectorNode,
 				[3]int{ca, bc, c}, [3]int{ab, bc, ca})
 		}
 		if len(next) > maxCells {
-			return nil, nil, nil, 0, fmt.Errorf("%w: sector cap exceeds the audit mesh limit", ErrUnsupported)
+			return nil, nil, nil, 0, fmt.Errorf("%w: sector cap exceeds the audit mesh limit", decaderr.ErrUnsupported)
 		}
 	}
 	newEdges := make([]pointcone.SectorEdge, 0, 2*len(edges))

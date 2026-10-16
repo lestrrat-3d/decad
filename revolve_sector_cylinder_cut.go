@@ -7,13 +7,13 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/circularbounds"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
-	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
+	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
@@ -172,17 +172,6 @@ func tryRevolveSectorCylinderCut(ctx context.Context, op meshbool.OperationKind,
 	return nil, true, fmt.Errorf("%w: bore has no certified section crossing", ErrUnsupported)
 }
 
-func revolveSectorTriangleClear(t [3]int, verts []r3.Vec, clearance float64) bool {
-	a, b, c := verts[t[0]], verts[t[1]], verts[t[2]]
-	loY, hiY := min(a.Y, b.Y, c.Y), max(a.Y, b.Y, c.Y)
-	loZ, hiZ := min(a.Z, b.Z, c.Z), max(a.Z, b.Z, c.Z)
-	if loY > clearance || hiY < -clearance || loZ > clearance || hiZ < -clearance {
-		return true
-	}
-	projected := [3]r3.Vec{{X: a.Y, Y: a.Z}, {X: b.Y, Y: b.Z}, {X: c.Y, Y: c.Z}}
-	return loftcylinder.TriangleMinRadius(projected[:], [3]int{0, 1, 2}) > clearance
-}
-
 func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producerID,
 	joined facetedPayload, caps revolveSectorBoreCaps, radius float64, wall *Face) (*Body, bool, error) {
 	ring := joined.RevolveLoftJoin.CapRing
@@ -257,7 +246,7 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 			highSeen[cell] = true
 			continue
 		}
-		if !revolveSectorTriangleClear(tri, joined.Verts, clearance) {
+		if !revolveshell.RevolveSectorTriangleClear(tri, joined.Verts, clearance) {
 			return nil, true, fmt.Errorf("%w: untouched face may enter the bore", ErrUnsupported)
 		}
 		mesh.Add(tri, joined.Src[i])

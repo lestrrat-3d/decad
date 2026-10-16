@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/pointcone"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 	"github.com/lestrrat-3d/r3"
@@ -98,7 +99,7 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 	cert *revolveLoftSectorCertificate, sources []facetedPayload,
 	sagAllowance, capLimit float64) (*Body, *revolvedSectionRing, error) {
 	section, record, base := cert.Section, cert.Trim, cert.Base
-	regularSource, sourceSector, err := revolveSectionAngles(section, cert.Sector, sagAllowance)
+	regularSource, sourceSector, err := revolveshell.RevolveSectionAngles(section, cert.Sector, sagAllowance)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -107,7 +108,7 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 		path[i] = pointcone.SectorNode{P: node.Point, GroupToNext: node.GroupToNext,
 			Crossing: node.Crossing, RootBoundary: node.RootBoundary, Angle: node.Angle}
 	}
-	original, err := revolveSectorCapBoundary(path, section,
+	original, err := revolveshell.RevolveSectorCapBoundary(path, section,
 		base.PointSection.Source.Frame, regularSource, sourceSector)
 	if err != nil {
 		return nil, nil, err
@@ -123,7 +124,7 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 	if !math.IsInf(capLimit, 1) {
 		maxCells := revolveSectorMaxAuditTriangles / (2 * len(sources))
 		for round := range 4 {
-			upper, lower, capErr := sectorConeCapBounds(original, caps, record)
+			upper, lower, capErr := revolveshell.SectorConeCapBounds(original, caps, record)
 			if capErr != nil {
 				return nil, nil, capErr
 			}
@@ -134,7 +135,7 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 				return nil, nil, fmt.Errorf("%w: sector cap refinement is exhausted", ErrUnsupported)
 			}
 			var extraRound float64
-			original, caps, edges, extraRound, err = sectorRefineCap(ctx,
+			original, caps, edges, extraRound, err = revolveshell.SectorRefineCap(ctx,
 				original, caps, edges, record, capLimit, maxCells)
 			if err != nil {
 				return nil, nil, err
@@ -160,7 +161,7 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 			return nil, nil, err
 		}
 	}
-	seam, err := revolveSectorSeam(cert.Loop, motions)
+	seam, err := revolveshell.RevolveSectorSeam(cert.Loop, motions)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -251,11 +252,11 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 		sectors[i] = plans[i].sector
 	}
 	mesh := &joinedMesh{}
-	ring, sectionSag, err := buildRevolvedSectionRing(mesh, section, angles, sectors, sagAllowance)
+	ring, sectionSag, err := revolveshell.BuildRevolvedSectionRing(mesh, section, angles, sectors, sagAllowance)
 	if err != nil {
 		return nil, nil, err
 	}
-	toolGap, ok := revolveSectionToolGap(section, record)
+	toolGap, ok := revolveshell.RevolveSectionToolGap(section, record)
 	if !ok {
 		return nil, nil, fmt.Errorf("%w: cone tools do not meet the recorded meridian", ErrUnsupported)
 	}

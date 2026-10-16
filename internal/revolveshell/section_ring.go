@@ -1,10 +1,12 @@
-package decad
+package revolveshell
 
 import (
 	"fmt"
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -12,41 +14,41 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// buildRevolvedSectionRing meshes every authenticated meridian span except
+// BuildRevolvedSectionRing meshes every authenticated meridian span except
 // the axial span and the root-face intervals replaced by admitted sectors.
 // The returned bound includes circular chording and held trig arithmetic.
 // A caller may refine angles and retry when the bound exceeds its allowance.
-func buildRevolvedSectionRing(mesh *joinedMesh, section revolveSectionCertificate,
-	angles []float64, sectors [][2]float64, maxSag float64) (revolvedSectionRing, float64, error) {
-	var empty revolvedSectionRing
+func BuildRevolvedSectionRing(mesh *facetedrecord.JoinedMesh, section facetedrecord.RevolveSectionCertificate,
+	angles []float64, sectors [][2]float64, maxSag float64) (facetedrecord.RevolvedSectionRing, float64, error) {
+	var empty facetedrecord.RevolvedSectionRing
 	spans := section.Spans
 	if mesh == nil || len(spans) < 4 || len(angles) < 3 ||
 		section.AxisSpan < 0 || section.AxisSpan >= len(spans) ||
 		section.RootSpan < 0 || section.RootSpan >= len(spans) ||
 		section.RootSpan == section.AxisSpan ||
 		maxSag <= 0 || proofbound.IsNonFinite(maxSag) {
-		return empty, 0, fmt.Errorf("%w: revolved section ring has invalid inputs", ErrUnsupported)
+		return empty, 0, fmt.Errorf("%w: revolved section ring has invalid inputs", decaderr.ErrUnsupported)
 	}
 	if spans[section.AxisSpan].Start.V != 0 || spans[section.AxisSpan].End.V != 0 ||
 		spans[section.RootSpan].Start.V <= 0 || spans[section.RootSpan].End.V <= 0 {
-		return empty, 0, fmt.Errorf("%w: revolved section has no finite root ring", ErrUnsupported)
+		return empty, 0, fmt.Errorf("%w: revolved section has no finite root ring", decaderr.ErrUnsupported)
 	}
 	for i, span := range spans {
 		if span.End != spans[(i+1)%len(spans)].Start ||
 			span.Start.V < 0 || proofbound.IsNonFinite(span.Start.U) ||
 			proofbound.IsNonFinite(span.Start.V) {
-			return empty, 0, fmt.Errorf("%w: revolved section walk is incomplete", ErrUnsupported)
+			return empty, 0, fmt.Errorf("%w: revolved section walk is incomplete", decaderr.ErrUnsupported)
 		}
 	}
 	for i, angle := range angles {
 		if proofbound.IsNonFinite(angle) || (i != 0 && !(angles[i-1] < angle)) {
-			return empty, 0, fmt.Errorf("%w: revolved ring angles are unordered", ErrUnsupported)
+			return empty, 0, fmt.Errorf("%w: revolved ring angles are unordered", decaderr.ErrUnsupported)
 		}
 	}
 	span := new(big.Rat).Sub(proofarith.FloatRat(angles[len(angles)-1]),
 		proofarith.FloatRat(angles[0]))
 	if span.Cmp(proofbound.TwoPiInterval().Lo) >= 0 {
-		return empty, 0, fmt.Errorf("%w: revolved ring covers more than one turn", ErrUnsupported)
+		return empty, 0, fmt.Errorf("%w: revolved ring covers more than one turn", decaderr.ErrUnsupported)
 	}
 	startVerts, startTris := len(mesh.Verts), len(mesh.Tris)
 	startSources, startGroups := len(mesh.Src), len(mesh.Groups)
@@ -60,7 +62,7 @@ func buildRevolvedSectionRing(mesh *joinedMesh, section revolveSectionCertificat
 		}
 	}()
 
-	ring := revolvedSectionRing{Angles: append([]float64(nil), angles...),
+	ring := facetedrecord.RevolvedSectionRing{Angles: append([]float64(nil), angles...),
 		Rings: make([][]int, len(spans))}
 	cosHeld, sinHeld := make([]float64, len(angles)), make([]float64, len(angles))
 	cosIv, sinIv := make([]proofbound.RatInterval, len(angles)),
@@ -69,7 +71,7 @@ func buildRevolvedSectionRing(mesh *joinedMesh, section revolveSectionCertificat
 		var ok bool
 		sinIv[i], cosIv[i], ok = proofbound.RadSinCosInterval(proofarith.FloatRat(angle))
 		if !ok {
-			return empty, 0, fmt.Errorf("%w: revolved ring angle has no trigonometric bound", ErrUnsupported)
+			return empty, 0, fmt.Errorf("%w: revolved ring angle has no trigonometric bound", decaderr.ErrUnsupported)
 		}
 		cosHeld[i], sinHeld[i] = math.Cos(angle), math.Sin(angle)
 	}
@@ -87,7 +89,7 @@ func buildRevolvedSectionRing(mesh *joinedMesh, section revolveSectionCertificat
 		for j := range angles {
 			held := r3.Vec{X: p.U, Y: p.V * cosHeld[j], Z: p.V * sinHeld[j]}
 			if !proofbound.FiniteVec(held) {
-				return empty, 0, fmt.Errorf("%w: revolved ring vertex is non-finite", ErrUnsupported)
+				return empty, 0, fmt.Errorf("%w: revolved ring vertex is non-finite", decaderr.ErrUnsupported)
 			}
 			yError := proofbound.IntervalFloatError(proofbound.IntervalScale(cosIv[j], radius), held.Y)
 			zError := proofbound.IntervalFloatError(proofbound.IntervalScale(sinIv[j], radius), held.Z)
@@ -97,7 +99,7 @@ func buildRevolvedSectionRing(mesh *joinedMesh, section revolveSectionCertificat
 		}
 	}
 	if maxRadius <= 0 {
-		return empty, 0, fmt.Errorf("%w: revolved section has no radial span", ErrUnsupported)
+		return empty, 0, fmt.Errorf("%w: revolved section has no radial span", decaderr.ErrUnsupported)
 	}
 
 	groupForSpan := make([]int, len(spans))
@@ -107,11 +109,11 @@ func buildRevolvedSectionRing(mesh *joinedMesh, section revolveSectionCertificat
 			continue
 		}
 		if span.Face == nil || len(span.Origins) == 0 {
-			return empty, 0, fmt.Errorf("%w: revolved section face is missing", ErrUnsupported)
+			return empty, 0, fmt.Errorf("%w: revolved section face is missing", decaderr.ErrUnsupported)
 		}
 		_, planar := span.Face.Surface.(surfacegeom.Plane)
 		groupForSpan[i] = len(mesh.Groups)
-		mesh.Groups = append(mesh.Groups, facetGroup{
+		mesh.Groups = append(mesh.Groups, facetedrecord.Group{
 			Origins: append([]provenance.Ref(nil), span.Origins...),
 			Surface: span.Face.Surface, Denoted: span.Face.Denoted,
 			Reversed: span.Face.Reversed, Planar: planar,
@@ -131,7 +133,7 @@ func buildRevolvedSectionRing(mesh *joinedMesh, section revolveSectionCertificat
 		}
 		stepUp := proofbound.RatFloatUp(step)
 		if step.Sign() <= 0 || proofbound.IsNonFinite(stepUp) {
-			return empty, 0, fmt.Errorf("%w: revolved ring has an invalid interval", ErrUnsupported)
+			return empty, 0, fmt.Errorf("%w: revolved ring has an invalid interval", decaderr.ErrUnsupported)
 		}
 		maxStep = max(maxStep, stepUp)
 		for i, span := range spans {
@@ -158,7 +160,7 @@ func buildRevolvedSectionRing(mesh *joinedMesh, section revolveSectionCertificat
 	sag := proofbound.AbsSumUpper(proofbound.ProductUpper(maxRadius,
 		proofbound.ProductUpper(maxStep, maxStep)/8), maxRound)
 	if proofbound.IsNonFinite(sag) || sag > maxSag {
-		return empty, 0, fmt.Errorf("%w: revolved ring exceeds its chord allowance", ErrUnsupported)
+		return empty, 0, fmt.Errorf("%w: revolved ring exceeds its chord allowance", decaderr.ErrUnsupported)
 	}
 	complete = true
 	return ring, sag, nil

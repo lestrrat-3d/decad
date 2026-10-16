@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -48,7 +49,7 @@ func tryRevolveLoftSectorUnionMany(ctx context.Context, d *Document, ref produce
 				}
 				sources = append(sources, placed)
 			}
-			if !revolveSectorSourcesSeparate(sources) {
+			if !revolveshell.RevolveSectorSourcesSeparate(sources) {
 				return nil, true, fmt.Errorf("%w: complete sector sources are not separate", ErrUnsupported)
 			}
 			body, ring, err := buildRevolveLoftSectorsJoin(ctx, d, ref, cert, sources)
@@ -142,7 +143,7 @@ func tryRevolveLoftNextSectorUnion(ctx context.Context, op meshbool.OperationKin
 	sectors = append(sectors, record.First)
 	sectors = append(sectors, record.Placed...)
 	sectors = append(sectors, p)
-	if !revolveSectorSourcesSeparate(sectors) {
+	if !revolveshell.RevolveSectorSourcesSeparate(sectors) {
 		return nil, false, nil
 	}
 	body, ring, err := buildRevolveLoftSectorsJoin(ctx, d, ref, record.Certificate, sectors)
