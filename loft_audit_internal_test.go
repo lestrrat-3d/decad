@@ -877,8 +877,9 @@ func BenchmarkLoftCrossingAuditBroadPhase(b *testing.B) {
 }
 
 // This file is a10-plan.md Part 3 PR 9 Task 1c: an END-TO-END fixture for
-// the wall's own three-leg AREA gap (internal/loftmesh/mass_accumulator.go's
-// m.Chorded.AreaExcess, MassAccumulator.Area's own composition line
+// the wall's own AREA residual (m.Chorded.AreaExcess, the ruled and
+// station-shift legs summed by internal/loftmesh/loft_chord_allow.go and added
+// by internal/loftmesh/mass_accumulator.go's MassAccumulator.Area on its own composition line
 // `bound = proofbound.AbsSumUpper(bound, m.Chorded.AreaExcess, m.Chorded.CapAreaExcess)`)
 // — the leg zeroing left the ENTIRE repository suite green before this file
 // existed. TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap

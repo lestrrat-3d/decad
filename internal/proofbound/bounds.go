@@ -1877,7 +1877,11 @@ func CellChordPatchNormalLower(vLo, vHi, wLo, wHi r3.Vec) float64 {
 //
 // # The three-leg composition at the call site
 //
-// MassAccumulator.Area (internal/loftmesh/mass_accumulator.go) charges one wall cell's whole gap as
+// MassAccumulator.Area (internal/loftmesh/mass_accumulator.go) corrects the
+// held triangle area to the bilinear patch area, then bounds the remaining
+// ruled and station-shift gaps. The mesh proof (internal/loftmesh/mass_proof.go)
+// separately bounds the held-to-bilinear twist gap with TwistAreaAllow. Together
+// they cover one wall cell's whole gap:
 //
 //	|A_true - T_held| <= ruled leg + twist leg + station-shift leg,
 //
