@@ -1,20 +1,20 @@
-package decad
+package sectionclip
 
 import (
 	"github.com/lestrrat-3d/decad/internal/pair/box"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/sectionclip"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
-// cardinalSphereSection cuts an authenticated whole-ball Revolve with a
-// cardinal plane. An exactly representable circle stays exact. Otherwise a
-// certified polygon carries the two-sided radial, chord and rounding gaps to Extrude.
-func cardinalSphereSection(b *Body, plane r3.Frame) (profileRecord, []planePoint, float64, bool) {
-	sphere, ok := sourceSphereAtPose(b, r3.Identity())
-	if !ok || !box.CardinalBasis(plane.U(), plane.V(), plane.N()) {
+// CardinalSphereSection cuts the whole ball of the given centre and radius,
+// which the caller has authenticated as a source sphere, with a cardinal
+// plane. An exactly representable circle stays exact. Otherwise a certified
+// polygon carries the two-sided radial, chord and rounding gaps to Extrude.
+func CardinalSphereSection(ballCenter proofarith.DyV3, ballRadius proofarith.Dyadic,
+	plane r3.Frame) (profileRecord, []planePoint, float64, bool) {
+	if !box.CardinalBasis(plane.U(), plane.V(), plane.N()) {
 		return profileRecord{}, nil, 0, false
 	}
 	u := proofarith.DyVec(plane.U())
@@ -23,9 +23,9 @@ func cardinalSphereSection(b *Body, plane r3.Frame) (profileRecord, []planePoint
 	if !proofarith.DvEqual(proofarith.DvCross(u, v), n) {
 		return profileRecord{}, nil, 0, false
 	}
-	delta := proofarith.DvSub(sphere.center, proofarith.DyVec(plane.Origin()))
+	delta := proofarith.DvSub(ballCenter, proofarith.DyVec(plane.Origin()))
 	offset := proofarith.DvDot(delta, n)
-	q := proofarith.DySubScalar(proofarith.DyMul(sphere.radius, sphere.radius),
+	q := proofarith.DySubScalar(proofarith.DyMul(ballRadius, ballRadius),
 		proofarith.DyMul(offset, offset))
 	if q.Sign() <= 0 {
 		return profileRecord{}, nil, 0, false
@@ -46,7 +46,7 @@ func cardinalSphereSection(b *Body, plane r3.Frame) (profileRecord, []planePoint
 		}}}}, nil, 0, true
 	}
 	upper := proofarith.DySqrtUp(q)
-	if !sectionclip.ObliqueCircleFinite(upper) || upper <= radius {
+	if !ObliqueCircleFinite(upper) || upper <= radius {
 		return profileRecord{}, nil, 0, false
 	}
 	// Both brackets are proven by exact square comparisons. Every point on
@@ -57,14 +57,14 @@ func cardinalSphereSection(b *Body, plane r3.Frame) (profileRecord, []planePoint
 	gapL1 := proofbound.RatFloatUp(proofarith.DyMul(gap, proofarith.DyInt(2)).Rat())
 	gapWorld := proofbound.ProductUpper(gapL1,
 		max(proofbound.DvLenUpper(u), proofbound.DvLenUpper(v)))
-	if !sectionclip.ObliqueCircleFinite(gapL1, gapWorld) {
+	if !ObliqueCircleFinite(gapL1, gapWorld) {
 		return profileRecord{}, nil, 0, false
 	}
-	center := sectionclip.SectionRatPoint{U: proofarith.FloatRat(centerU), V: proofarith.FloatRat(centerV)}
-	a := sectionclip.SectionRatPoint{U: proofarith.FloatRat(radius), V: proofarith.FloatRat(0)}
-	basisV := sectionclip.SectionRatPoint{U: proofarith.FloatRat(0), V: proofarith.FloatRat(radius)}
+	center := SectionRatPoint{U: proofarith.FloatRat(centerU), V: proofarith.FloatRat(centerV)}
+	a := SectionRatPoint{U: proofarith.FloatRat(radius), V: proofarith.FloatRat(0)}
+	basisV := SectionRatPoint{U: proofarith.FloatRat(0), V: proofarith.FloatRat(radius)}
 	for _, perQuadrant := range [...]int{8, 16, 32} {
-		polygon, bound, proved := sectionclip.ObliqueCirclePolygon(center, a, basisV, 1,
+		polygon, bound, proved := ObliqueCirclePolygon(center, a, basisV, 1,
 			plane, perQuadrant, gapL1, gapWorld)
 		if proved {
 			return profileRecord{}, polygon, bound, true
