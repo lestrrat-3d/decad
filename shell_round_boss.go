@@ -51,7 +51,7 @@ func shellRoundBoss(ctx context.Context, source *Body, sp stackedPrismPayload, v
 		proofbound.ExactSumRound(a.Z1-a.Z0, a.Z1, -a.Z0) != 0 ||
 		proofbound.ExactSumRound(b.Z1-b.Z0, b.Z1, -b.Z0) != 0 ||
 		proofbound.ExactSumRound(a.Z1-a.Z0-2*t, a.Z1, -a.Z0, -t, -t) != 0 ||
-		!bossRectArithmeticExact(plate, t) {
+		!prismshell.BossRectArithmeticExact(plate, t) {
 		return refuse("needs exactly represented offset coordinates")
 	}
 	for _, x := range []float64{c.U, c.V} {

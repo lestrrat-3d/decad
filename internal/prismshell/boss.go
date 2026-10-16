@@ -3,10 +3,12 @@ package prismshell
 import (
 	"context"
 	"math"
+	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
@@ -86,6 +88,47 @@ func PrismUnionBossShellCorners(r BossRect) [4][2]float64 {
 	return [4][2]float64{{r.U0, r.V0}, {r.U1, r.V0}, {r.U1, r.V1}, {r.U0, r.V1}}
 }
 
+// PrismUnionBossShellRoom requires room for two wall offsets in a scaled width.
+func PrismUnionBossShellRoom(width, scaleLo, t float64) bool {
+	left := new(big.Rat).Mul(proofarith.FloatRat(width), proofarith.FloatRat(scaleLo))
+	return left.Cmp(new(big.Rat).Mul(big.NewRat(2, 1), proofarith.FloatRat(t))) > 0
+}
+
+// PrismUnionBossShellInside requires a bounded point strictly inside an interval.
+func PrismUnionBossShellInside(value, beta, lo, hi float64) bool {
+	pt := func(v float64) *big.Rat { return proofarith.FloatRat(v) }
+	return new(big.Rat).Sub(pt(value), pt(beta)).Cmp(pt(lo)) > 0 &&
+		new(big.Rat).Add(pt(value), pt(beta)).Cmp(pt(hi)) < 0
+}
+
+// PrismUnionBossShellCompleteCap requires two triangles covering the boss cap.
+func PrismUnionBossShellCompleteCap(corners [4]int, tris [][3]int) bool {
+	if len(tris) != 2 {
+		return false
+	}
+	var masks [2]uint8
+	for i, tri := range tris {
+		for _, v := range tri {
+			corner := -1
+			for j, index := range corners {
+				if index == v {
+					corner = j
+					break
+				}
+			}
+			if corner < 0 || masks[i]&(1<<corner) != 0 {
+				return false
+			}
+			masks[i] |= 1 << corner
+		}
+	}
+	return masks[0] != masks[1] &&
+		((masks[0] == 0b0111 && masks[1] == 0b1101) ||
+			(masks[0] == 0b1101 && masks[1] == 0b0111) ||
+			(masks[0] == 0b1011 && masks[1] == 0b1110) ||
+			(masks[0] == 0b1110 && masks[1] == 0b1011))
+}
+
 // RoundBossCircle is the exact whole-circle variant of BossShellBand's two rings.
 // The plate remains rectangular; the single transition is a quarter torus.
 type RoundBossCircle struct {
@@ -153,6 +196,25 @@ func (r BossRect) Height() float64 { return r.V1 - r.V0 }
 // Inset returns the rectangle moved inward by t on every side.
 func (r BossRect) Inset(t float64) BossRect {
 	return BossRect{r.U0 + t, r.V0 + t, r.U1 - t, r.V1 - t}
+}
+
+// BossRectArithmeticExact checks that rectangle and inset arithmetic is exact.
+func BossRectArithmeticExact(r BossRect, t float64) bool {
+	if proofbound.ExactSumRound(r.Width(), r.U1, -r.U0) != 0 ||
+		proofbound.ExactSumRound(r.Height(), r.V1, -r.V0) != 0 {
+		return false
+	}
+	for _, x := range [4]float64{r.U0, r.V0, r.U1, r.V1} {
+		if proofbound.ExactSumRound(x+t, x, t) != 0 || proofbound.ExactSumRound(x-t, x, -t) != 0 {
+			return false
+		}
+	}
+	in := r.Inset(t)
+	if proofbound.ExactSumRound(in.Width(), in.U1, -in.U0) != 0 ||
+		proofbound.ExactSumRound(in.Height(), in.V1, -in.V0) != 0 {
+		return false
+	}
+	return true
 }
 
 // Profile returns the rectangle as a counter-clockwise recorded profile.

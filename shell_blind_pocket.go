@@ -63,7 +63,7 @@ func shellBlindPocket(ctx context.Context, source *Body, sp stackedPrismPayload,
 		proofbound.ExactSumRound(lower.Z0+t, lower.Z0, t) != 0 ||
 		proofbound.ExactSumRound(lower.Z1-lower.Z0, lower.Z1, -lower.Z0) != 0 ||
 		proofbound.ExactSumRound(upper.Z1-upper.Z0, upper.Z1, -upper.Z0) != 0 ||
-		!bossRectArithmeticExact(outer, t) || !bossRectArithmeticExact(pocket, t) {
+		!prismshell.BossRectArithmeticExact(outer, t) || !prismshell.BossRectArithmeticExact(pocket, t) {
 		return refuse("needs exactly represented offset coordinates")
 	}
 	budget := proofbound.NewWorkBudget(ctx)

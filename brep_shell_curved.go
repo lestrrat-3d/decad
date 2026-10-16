@@ -69,7 +69,7 @@ func shellThroughRoundPort(ctx context.Context, source *Body, bp brepPayload, tc
 		circle.Center.V-circle.Radius > inner.V0 && circle.Center.V+circle.Radius < inner.V1) {
 		return refuse("has too little wall thickness or port clearance")
 	}
-	if !bossRectArithmeticExact(rect, t) ||
+	if !prismshell.BossRectArithmeticExact(rect, t) ||
 		proofbound.ExactSumRound(loInner, tool.lo, t) != 0 ||
 		proofbound.ExactSumRound(hiInner, tool.hi, -t) != 0 ||
 		proofbound.ExactSumRound(tool.hi-tool.lo, tool.hi, -tool.lo) != 0 {
