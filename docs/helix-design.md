@@ -718,9 +718,9 @@ The §13 fixtures read (`examples/decad_thread_external_example_test.go`,
 | internal, annulus `5 ≤ ρ ≤ 10`, 20 mm, groove root `5.9`, mouth `4.7`, one turn | `π·(1500 − 2·Q(Ω ∩ {ρ ≥ 5}))` ≈ `4696.82 mm³` | `4696.4 ± 1.3 mm³` | valid, `Sound` |
 
 The gallery cuts an eight-turn V-groove from an `R = 5`, `L = 14` cylinder,
-starting at `ζ = -0.375` so the cut opens through its end. It checks material
-inside the groove and crest on opposite sides, including the half-pitch
-advance. It specifies neither a standard thread nor a mating fit.
+starting at `ζ = -0.375` so the cut opens through its end. It checks held-mesh parity
+inside the groove and crest on opposite sides, including quarter-pitch and
+half-pitch advances. These visual checks do not certify true-solid point membership. It specifies neither a standard thread nor a mating fit.
 
 **What the station count buys.** Measured on the eight-turn interior-groove fixture (`R = 5`, `L = 20`,
 starting at `ζ = 3`) with the facet-pair ceiling lifted for the measurement alone:

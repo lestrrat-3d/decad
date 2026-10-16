@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/internal/pointquery"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/solidlens"
@@ -105,33 +106,41 @@ func externalThread(ctx context.Context) (*decad.Body, error) {
 	return thread, nil
 }
 
-// checkThreadGroove checks the cut's material at radius 4.55, safely between
+// checkThreadGroove checks the rendered mesh at radius 4.55, safely between
 // the 4.1 root and 5 mm crest. Quarter and half turns advance the groove; a stack
 // of annular grooves cannot satisfy both the groove and crest checks.
-// These checks reuse the gallery's body rather than rebuilding a full model.
+// These are held-mesh parity checks, not certified membership in the true
+// solid. They do not change or bypass Body.LocatePoint's certification bounds.
+// Verify above independently checks the body's validity and measurement bounds.
 func checkThreadGroove(ctx context.Context, body *decad.Body) error {
+	mesh, err := body.Tessellate(ctx, units.Millimeters(featureChordTolerance), decad.WithVerification(decad.VerifyNone))
+	if err != nil {
+		return fmt.Errorf("mesh thread for visual checks: %w", err)
+	}
+	vertices, triangles := mesh.Vertices(), mesh.Triangles()
 	for _, sample := range []struct {
-		name  string
-		point r3.Vec
-		want  decad.PointLocation
+		name       string
+		point      r3.Vec
+		wantInside bool
 	}{
-		{"groove", r3.NewVec(4.55, 2.625, 0), decad.PointOutside},
-		{"next turn", r3.NewVec(4.55, 4.125, 0), decad.PointOutside},
-		{"quarter-turn groove", r3.NewVec(0, 3, -4.55), decad.PointOutside},
-		{"quarter-turn crest", r3.NewVec(0, 3.75, -4.55), decad.PointInside},
-		{"crest", r3.NewVec(4.55, 3.375, 0), decad.PointInside},
-		{"opposite groove", r3.NewVec(-4.55, 3.375, 0), decad.PointOutside},
-		{"opposite crest", r3.NewVec(-4.55, 2.625, 0), decad.PointInside},
+		{"groove", r3.NewVec(4.55, 2.625, 0), false},
+		{"next turn", r3.NewVec(4.55, 4.125, 0), false},
+		{"quarter-turn groove", r3.NewVec(0, 3, -4.55), false},
+		{"quarter-turn crest", r3.NewVec(0, 3.75, -4.55), true},
+		{"crest", r3.NewVec(4.55, 3.375, 0), true},
+		{"opposite groove", r3.NewVec(-4.55, 3.375, 0), false},
+		{"opposite crest", r3.NewVec(-4.55, 2.625, 0), true},
 		// This point is on the blank's end plane, inside the cutter's V.
-		{"end intersection", r3.NewVec(0, 0, -4.55), decad.PointOutside},
-		{"end opening", r3.NewVec(0, 0.05, -4.55), decad.PointOutside},
+		{"end intersection", r3.NewVec(0, 0, -4.55), false},
+		{"end opening", r3.NewVec(0, 0.05, -4.55), false},
 	} {
-		got, err := body.LocatePoint(ctx, sample.point, units.Millimeters(featureChordTolerance))
+		inside, resolved, err := pointquery.ObliqueParity(ctx, sample.point, vertices, triangles)
 		if err != nil {
 			return fmt.Errorf("check thread %s: %w", sample.name, err)
 		}
-		if got != sample.want {
-			return fmt.Errorf("thread %s: got %s, want %s", sample.name, got, sample.want)
+		if !resolved || inside != sample.wantInside {
+			return fmt.Errorf("thread mesh %s: resolved=%t, inside=%t, want inside=%t",
+				sample.name, resolved, inside, sample.wantInside)
 		}
 	}
 	return nil

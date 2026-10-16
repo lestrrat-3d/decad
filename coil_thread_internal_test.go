@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/pointquery"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -57,8 +58,8 @@ func threadTool(t *testing.T, doc *Document, root, mouth, z0, turns float64) *Bo
 // validity.
 func requireThreadResult(t *testing.T, doc *Document, res *Body, exactOverPi *big.Rat, lo, hi r3.Vec) *Report {
 	t.Helper()
-	require.Len(t, res.Lumps(), 1)
-	require.Len(t, res.Shells(), 1)
+	require.Equal(t, 1, len(res.Lumps()))
+	require.Equal(t, 1, len(res.Shells()))
 	vol, err := res.Volume()
 	require.NoError(t, err)
 	exact := new(big.Float).SetPrec(512).Mul(bigPi(), new(big.Float).SetPrec(512).SetRat(exactOverPi))
@@ -79,7 +80,7 @@ func requireThreadResult(t *testing.T, doc *Document, res *Body, exactOverPi *bi
 
 	rep, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.Len(t, rep.Bodies, 1)
+	require.Equal(t, 1, len(rep.Bodies))
 	require.Equal(t, ValidityValid, rep.Bodies[0].Validity.Outcome)
 	return rep
 }
@@ -234,7 +235,7 @@ func TestCoilThreadRunsOutOfTheEnd(t *testing.T) {
 	require.NoError(t, err)
 	res, err := Cut(t.Context(), cylinder, tool)
 	require.NoError(t, err)
-	require.Len(t, res.Lumps(), 1)
+	require.Equal(t, 1, len(res.Lumps()))
 
 	rat := func(x float64) *big.Rat { return new(big.Rat).SetFloat64(x) }
 	groove := [][2]*big.Rat{
@@ -251,11 +252,16 @@ func TestCoilThreadRunsOutOfTheEnd(t *testing.T) {
 
 	requireThreadResult(t, doc, res, exact, r3.NewVec(-5, 0, -5), r3.NewVec(5, 20, 5))
 
-	// At a quarter turn the groove centre reaches y = 0. This checks the
-	// removed material on the end plane, not merely the cutter's bounds.
-	location, err := res.LocatePoint(t.Context(), r3.NewVec(0, 0, -4.55), units.Millimeters(0.01))
+	// At a quarter turn the groove centre reaches y = 0. Check the held
+	// mesh's opening on that plane, not merely the cutter's bounds. This
+	// parity is not a certified true-solid point query; the closed form and
+	// validity assertions above independently check the body's guarantees.
+	mesh, err := res.Tessellate(t.Context(), units.Millimeters(0.01))
 	require.NoError(t, err)
-	require.Equal(t, PointOutside, location)
+	insideMesh, resolved, err := pointquery.ObliqueParity(t.Context(), r3.NewVec(0, 0, -4.55), mesh.Vertices(), mesh.Triangles())
+	require.NoError(t, err)
+	require.True(t, resolved)
+	require.False(t, insideMesh)
 }
 
 // TestCoilCapFlushWithAnAxialFaceRefuses cuts the groove from a half
