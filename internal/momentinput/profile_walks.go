@@ -64,7 +64,10 @@ type ProfileWalks struct {
 	// two figures onto its own counter (Charge) so the record's ceilings bind it
 	// exactly as the work itself would have (docs/spline-design.md §5.2).
 	Spent, ReconstructionSpent uint64
-	// Metered says the two figures above were MEASURED by ResolveProfileWalks.
+	// Metered says the two figures above were MEASURED by ResolveProfileWalks
+	// or by analyticWalkCapture around every successful preflight WalkOf.
+	// The latter accepts only a complete analytic set with both measured
+	// charges zero; it transfers those arrays to the prism's existing cache.
 	// A set assembled from walks resolved elsewhere — loft_stations.go builds
 	// one as a per-station view over walks its own pairing already charged —
 	// leaves it false, and Charge refuses such a set rather than replaying a
