@@ -5,6 +5,7 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -49,7 +50,11 @@ func TestContactPairMemoMatchesUncachedProof(t *testing.T) {
 	}
 	relations := map[ContactRelation]int{}
 	check := func(q query) {
-		want, wantErr := classifyContactPair(t.Context(), q.a, q.b, q.poseA, q.poseB, req)
+		found, wantErr := classifyContactPair(t.Context(), q.a, q.b, q.poseA, q.poseB, req)
+		var want *ContactReport
+		if found != nil {
+			want = contactReportFromInternal(found)
+		}
 		got, err := doc.ContactPair(t.Context(), q.a, q.b, q.poseA, q.poseB, req)
 		require.Equal(t, wantErr, err)
 		require.Equal(t, want, got)
@@ -121,4 +126,23 @@ func TestPairReportMemoEvictsOldest(t *testing.T) {
 	memo.Store(keyAt(0), &ContactReport{})
 	_, ok = memo.Load(keyAt(3))
 	require.False(t, ok, "the next oldest leaves for the next new key")
+}
+
+// TestContactManifoldFromInternalKeepsNilAndEmpty converts manifolds whose
+// Points are nil, empty and filled: nil stays nil, an empty slice stays empty
+// and non-nil, a filled one keeps its length, and a nil manifold stays nil.
+func TestContactManifoldFromInternalKeepsNilAndEmpty(t *testing.T) {
+	t.Parallel()
+	require.Nil(t, contactManifoldFromInternal(nil))
+	none := contactManifoldFromInternal(&reportvocab.ContactManifold{})
+	require.NotNil(t, none)
+	require.Nil(t, none.Points)
+	empty := contactManifoldFromInternal(&reportvocab.ContactManifold{Points: []reportvocab.ContactPoint{}})
+	require.NotNil(t, empty)
+	require.NotNil(t, empty.Points)
+	require.Empty(t, empty.Points)
+	one := contactManifoldFromInternal(&reportvocab.ContactManifold{Points: make([]reportvocab.ContactPoint, 1)})
+	require.Len(t, one.Points, 1)
+	require.Nil(t, one.Points[0].FaceA)
+	require.Equal(t, ContactFeature{}, one.Points[0].FeatureA)
 }

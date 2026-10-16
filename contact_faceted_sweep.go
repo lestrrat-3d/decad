@@ -156,10 +156,11 @@ func (d *Document) sweepBoundedFacetedFloorClear(ctx context.Context, a, b *Body
 		if index == 1 {
 			idealExtent, idealFloor = endExtent, endFloor
 		}
-		gap, ok := boundedFacetedFloorGap(idealExtent, idealFloor)
+		held, ok := boundedFacetedFloorGap(idealExtent, idealFloor)
 		if !ok {
 			return facetedSweepUndecided(report, pa.Duration), nil
 		}
+		gap := measurementFromInternal(held)
 		at := sweepInstant(fraction, pa.Duration)
 		report.Samples = append(report.Samples, SweepSample{At: at, PoseA: poseA, PoseB: poseB,
 			FloatContact: contact, Ideal: SweepEvent{At: at, Relation: ContactSeparated, Gap: &gap},

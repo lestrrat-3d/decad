@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/spherepath"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
@@ -45,10 +46,9 @@ func (r *orientedSphereSweepRun) idealAt(f *big.Rat, at SweepInstant) SweepEvent
 	if !okSphere || !okBox {
 		return SweepEvent{At: at, Relation: ContactUndecided, Reason: ContactPayloadUnsupported}
 	}
-	contact := &ContactReport{Request: r.req.ContactRequest}
+	contact := &reportvocab.ContactReport{Request: contactRequestToInternal(r.req.ContactRequest)}
 	classifySourceSphereOrientedBox(contact, sphere, box, r.sphereFirst)
-	return SweepEvent{At: at, Relation: contact.Relation, Gap: contact.Gap,
-		Manifold: contact.Manifold, Reason: contact.Reason}
+	return sweepEventOf(at, contact)
 }
 
 func (r *orientedSphereSweepRun) sample(ctx context.Context, f *big.Rat) (*SweepSample, error) {

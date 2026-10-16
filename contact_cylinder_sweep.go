@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
@@ -162,10 +163,9 @@ func (r *sourceCylinderImpactRun) sample(ctx context.Context, f *big.Rat) (*Swee
 	cylinder, box, ok := r.boxesAt(f)
 	ideal := SweepEvent{At: at, Relation: ContactUndecided, Reason: ContactPayloadUnsupported}
 	if ok {
-		contact := &ContactReport{Request: r.req.ContactRequest}
+		contact := &reportvocab.ContactReport{Request: contactRequestToInternal(r.req.ContactRequest)}
 		classifySourceCylinderBox(contact, cylinder, box, r.cylinderFirst)
-		ideal = SweepEvent{At: at, Relation: contact.Relation, Gap: contact.Gap,
-			Manifold: contact.Manifold, Reason: contact.Reason}
+		ideal = sweepEventOf(at, contact)
 	}
 	r.transferManifold(f, poseA, poseB, actual, &ideal)
 	sample := SweepSample{At: at, PoseA: poseA, PoseB: poseB,
@@ -394,8 +394,9 @@ func (r *sourceCylinderImpactRun) persistentTrack(ctx context.Context, first *Sw
 	track := &SweepContactTrack{a: firstBox, b: secondBox, deltaA: r.pa.Delta, deltaB: r.pb.Delta,
 		cylinder: &cylinder, cylinderFirst: r.cylinderFirst,
 		start: new(big.Rat), end: big.NewRat(1, 1), duration: new(big.Rat).Set(r.pa.Duration),
-		request: r.req.ContactRequest, features: [2]ContactFeature{point.FeatureA, point.FeatureB},
-		normal: point.Normal, pointCount: 1}
+		request:  contactRequestToInternal(r.req.ContactRequest),
+		features: [2]reportvocab.ContactFeature{contactFeatureToInternal(point.FeatureA), contactFeatureToInternal(point.FeatureB)},
+		normal:   point.Normal, pointCount: 1}
 	r.report.Outcome, r.report.ContactTrack = SweepPersistentTouch, track
 	r.report.replay.track = track
 	r.report.replay.snapshot(r.report)
@@ -418,14 +419,14 @@ func (t *SweepContactTrack) cylinderTrackManifold(f *big.Rat) (*ContactManifold,
 	}
 	cylinder := *t.cylinder
 	cylinder.box = movedCylinder
-	report := &ContactReport{Request: t.request}
+	report := &reportvocab.ContactReport{Request: t.request}
 	classifySourceCylinderBox(report, cylinder, movedBox, t.cylinderFirst)
-	if report.Relation != ContactTouching || report.Manifold == nil || len(report.Manifold.Points) != 1 ||
+	if report.Relation != reportvocab.ContactTouching || report.Manifold == nil || len(report.Manifold.Points) != 1 ||
 		report.Manifold.Points[0].FeatureA != t.features[0] ||
 		report.Manifold.Points[0].FeatureB != t.features[1] {
 		return nil, fmt.Errorf("%w: cylinder contact track lost its disk point", ErrUnsupported)
 	}
-	return report.Manifold, nil
+	return contactManifoldFromInternal(report.Manifold), nil
 }
 
 func cylinderSweepCause(report *SweepReport, duration *big.Rat, cause SweepCause) *SweepReport {

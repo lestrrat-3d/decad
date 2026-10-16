@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
 	"github.com/lestrrat-3d/decad/internal/spherepath"
@@ -95,10 +96,9 @@ func (r *sourceSpherePairSweepRun) idealAt(f *big.Rat, at SweepInstant) SweepEve
 	if !okA || !okB {
 		return SweepEvent{At: at, Relation: ContactUndecided, Reason: ContactPayloadUnsupported}
 	}
-	contact := &ContactReport{Request: r.req.ContactRequest}
+	contact := &reportvocab.ContactReport{Request: contactRequestToInternal(r.req.ContactRequest)}
 	classifySourceSpherePair(contact, a, b)
-	return SweepEvent{At: at, Relation: contact.Relation, Gap: contact.Gap,
-		Manifold: contact.Manifold, Reason: contact.Reason}
+	return sweepEventOf(at, contact)
 }
 
 func (r *sourceSpherePairSweepRun) sample(ctx context.Context, f *big.Rat) (*SweepSample, error) {
@@ -367,9 +367,10 @@ func (r *sourceSpherePairSweepRun) persistentTrack(first *SweepSample) *SweepCon
 	pair := [2]sourceSphereContactProof{r.sphereA, r.sphereB}
 	return &SweepContactTrack{
 		start: new(big.Rat), end: big.NewRat(1, 1), duration: new(big.Rat).Set(r.pa.Duration),
-		request: r.req.ContactRequest, spherePair: &pair,
+		request: contactRequestToInternal(r.req.ContactRequest), spherePair: &pair,
 		deltaA: r.pa.Delta, deltaB: r.pb.Delta,
-		features: [2]ContactFeature{point.FeatureA, point.FeatureB}, normal: point.Normal,
+		features:   [2]reportvocab.ContactFeature{contactFeatureToInternal(point.FeatureA), contactFeatureToInternal(point.FeatureB)},
+		normal:     point.Normal,
 		pointCount: 1,
 	}
 }
@@ -415,8 +416,8 @@ func (r *sourceSpherePairSweepRun) execute(ctx context.Context, resolution *big.
 				}
 				if last.Ideal.Relation == ContactTouching && last.Ideal.Manifold != nil &&
 					len(last.Ideal.Manifold.Points) == 1 &&
-					last.Ideal.Manifold.Points[0].FeatureA == track.features[0] &&
-					last.Ideal.Manifold.Points[0].FeatureB == track.features[1] {
+					contactFeatureToInternal(last.Ideal.Manifold.Points[0].FeatureA) == track.features[0] &&
+					contactFeatureToInternal(last.Ideal.Manifold.Points[0].FeatureB) == track.features[1] {
 					r.report.Outcome, r.report.ContactTrack = SweepPersistentTouch, track
 					r.report.replay.track = track
 					return r.report, nil

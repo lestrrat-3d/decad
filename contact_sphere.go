@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/pair"
 	"github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 
@@ -108,8 +109,8 @@ func sourceSphereRecord(b *Body) (sourceSphereContactProof, bool) {
 }
 
 // classifySourceSphereBox binds the neutral complete-ball result to the
-// source faces and public contact report.
-func classifySourceSphereBox(report *ContactReport, sphere sourceSphereContactProof,
+// source faces and the contact report.
+func classifySourceSphereBox(report *reportvocab.ContactReport, sphere sourceSphereContactProof,
 	boxProof sourceBoxContactProof, sphereFirst bool) {
 	result := box.ClassifyAxisSphere(
 		box.AxisSphere{Center: sphere.center, Radius: sphere.radius},
@@ -117,11 +118,11 @@ func classifySourceSphereBox(report *ContactReport, sphere sourceSphereContactPr
 	)
 	switch result.Relation {
 	case pair.Separated:
-		report.Relation = ContactSeparated
+		report.Relation = reportvocab.ContactSeparated
 	case pair.Touching:
-		report.Relation = ContactTouching
+		report.Relation = reportvocab.ContactTouching
 	case pair.Overlapping:
-		report.Relation = ContactOverlapping
+		report.Relation = reportvocab.ContactOverlapping
 	}
 	report.Reason = sourceBoxReason(result.Reason)
 	if result.Gap != nil {
@@ -134,7 +135,7 @@ func classifySourceSphereBox(report *ContactReport, sphere sourceSphereContactPr
 	witness := result.Witness
 	face := boxProof.faces[witness.Face.Axis][witness.Face.Side]
 	if face == nil {
-		report.Reason = ContactNoNormalProof
+		report.Reason = reportvocab.ContactNoNormalProof
 		return
 	}
 	sign := witness.NormalSign
@@ -152,16 +153,16 @@ func classifySourceSphereBox(report *ContactReport, sphere sourceSphereContactPr
 	}
 	onSphere := sourceBoxPointMeasurement(witness.SpherePoint)
 	onBox := sourceBoxPointMeasurement(witness.BoxPoint)
-	featureSphere, featureBox := ContactFeature{Face: sphere.face}, ContactFeature{Face: face}
+	featureSphere, featureBox := reportvocab.ContactFeature{Face: faceNode(sphere.face)}, reportvocab.ContactFeature{Face: faceNode(face)}
 	onA, onB := onBox, onSphere
 	featureA, featureB := featureBox, featureSphere
 	if sphereFirst {
 		onA, onB = onSphere, onBox
 		featureA, featureB = featureSphere, featureBox
 	}
-	report.Manifold = &ContactManifold{Points: []ContactPoint{{
-		OnA: onA, OnB: onB, Normal: VecMeasurement{
-			Value: normal, Bound: units.Scalar(0), Exactness: Exact},
+	report.Manifold = &reportvocab.ContactManifold{Points: []reportvocab.ContactPoint{{
+		OnA: onA, OnB: onB, Normal: measurement.VecMeasurement{
+			Value: normal, Bound: units.Scalar(0), Exactness: measurement.Exact},
 		NormalAngle: units.Radians(0), Separation: sourceBoxScalar(witness.Separation),
 		FaceA: featureA.Face, FaceB: featureB.Face, FeatureA: featureA, FeatureB: featureB,
 	}}}

@@ -3,6 +3,7 @@ package decad
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -27,14 +28,16 @@ func TestPlanarManifoldMatchesClippedBoxPatch(t *testing.T) {
 	require.NotNil(t, shipped.Manifold)
 	require.Len(t, shipped.Manifold.Points, 8)
 
-	general := &ContactReport{A: narrow, B: box, PoseA: r3.Identity(), PoseB: turn, Request: req}
+	general := &reportvocab.ContactReport{A: bodyNode(narrow), B: bodyNode(box), PoseA: r3.Identity(), PoseB: turn,
+		Request: contactRequestToInternal(req)}
 	planar, err := classifyExactPlanarPair(t.Context(), general)
 	require.NoError(t, err)
 	require.True(t, planar)
-	require.Equal(t, ContactTouching, general.Relation)
+	require.Equal(t, reportvocab.ContactTouching, general.Relation)
 	require.NotNil(t, general.Manifold, "reason=%v", general.Reason)
 	require.Len(t, general.Manifold.Points, 8)
+	published := contactManifoldFromInternal(general.Manifold)
 	for _, want := range shipped.Manifold.Points {
-		require.Contains(t, general.Manifold.Points, want)
+		require.Contains(t, published.Points, want)
 	}
 }

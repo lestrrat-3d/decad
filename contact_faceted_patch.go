@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
@@ -24,46 +25,47 @@ import (
 // ordered by A's feature, then B's, then exact coordinate (§9.5).
 
 type planarEntry struct {
-	point      ContactPoint
+	point      reportvocab.ContactPoint
 	keyA, keyB [2]int
 	onA, onB   planar.Point3
 }
 
-// planarPatchManifold converts the kernel's exact points to a public
+// planarPatchManifold converts the kernel's exact points to a contact
 // manifold, or reports why it is withheld: a feature without one source
 // identity (AmbiguousFeature), a witness ball over PointResolution
 // (PointTooCoarse), or a normal angle over NormalResolution (NoNormalProof).
-func planarPatchManifold(req ContactRequest, points []planar.PatchPoint,
-	features *planarFeatureMap) (*ContactManifold, ContactReason) {
+func planarPatchManifold(req reportvocab.ContactRequest, points []planar.PatchPoint,
+	features *planarFeatureMap) (*reportvocab.ContactManifold, reportvocab.ContactReason) {
 	entries := make([]planarEntry, 0, len(points))
 	for _, p := range points {
 		featureA, okA := features.feature(0, p.A)
 		featureB, okB := features.feature(1, p.B)
 		if !okA || !okB {
-			return nil, ContactAmbiguousFeature
+			return nil, reportvocab.ContactAmbiguousFeature
 		}
 		onA, validA := orientedBoxPoint([3]*big.Rat(p.OnA))
 		onB, validB := orientedBoxPoint([3]*big.Rat(p.OnB))
 		if !validA || !validB || onA.Bound.Base() > req.PointResolution.Base() ||
 			onB.Bound.Base() > req.PointResolution.Base() {
-			return nil, ContactPointTooCoarse
+			return nil, reportvocab.ContactPointTooCoarse
 		}
 		normal, angle, ok := planarNormal(p.Normal)
 		if !ok || angle.Base() > req.NormalResolution.Base() {
-			return nil, ContactNoNormalProof
+			return nil, reportvocab.ContactNoNormalProof
 		}
-		separation := Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(0), Exactness: Exact}
+		separation := measurement.Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(0), Exactness: measurement.Exact}
 		if p.Separation != (pair.ScalarReading{}) {
 			separation = sourceBoxScalar(p.Separation)
 		}
-		point := ContactPoint{OnA: onA, OnB: onB, Normal: normal, NormalAngle: angle,
+		point := reportvocab.ContactPoint{OnA: vecMeasurementToInternal(onA), OnB: vecMeasurementToInternal(onB),
+			Normal: vecMeasurementToInternal(normal), NormalAngle: angle,
 			Separation: separation, FaceA: featureA.Face, FaceB: featureB.Face,
 			FeatureA: featureA, FeatureB: featureB}
 		entries = append(entries, planarEntry{point: point, keyA: features.order(0, featureA),
 			keyB: features.order(1, featureB), onA: p.OnA, onB: p.OnB})
 	}
 	sort.SliceStable(entries, func(i, j int) bool { return planarEntryLess(&entries[i], &entries[j]) })
-	out := make([]ContactPoint, 0, len(entries))
+	out := make([]reportvocab.ContactPoint, 0, len(entries))
 	for i := range entries {
 		if i > 0 && !planarEntryLess(&entries[i-1], &entries[i]) {
 			// Equal keys and equal exact coordinates: the same entry reached
@@ -72,7 +74,7 @@ func planarPatchManifold(req ContactRequest, points []planar.PatchPoint,
 		}
 		out = append(out, entries[i].point)
 	}
-	return &ContactManifold{Points: out}, ContactNoReason
+	return &reportvocab.ContactManifold{Points: out}, reportvocab.ContactNoReason
 }
 
 func planarEntryLess(x, y *planarEntry) bool {

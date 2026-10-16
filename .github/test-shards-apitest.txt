@@ -2108,3 +2108,7 @@
 10	0.05	TestSweepChainStagedSurveyNamesPayloadClass
 10	0.05	TestStitchStagedSurveyNamesPayloadClass
 10	0.05	TestTessellateRefusalNamesUnstitchPayload
+10	0.00	TestContactPairReportKeepsTopologyIdentity
+10	0.00	TestContactPairKeepsAbsentResultsNil
+10	0.00	TestContactPairMemoHitKeepsTopologyIdentity
+10	0.00	TestSweepPairTrackKeepsTopologyIdentity

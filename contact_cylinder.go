@@ -6,6 +6,7 @@ import (
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -154,12 +155,12 @@ func sourceRevolvedCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderCon
 // The complete cylinder lies inside the two projected box-face intervals.
 // Its axial disks or full circular sidewall supply exact support at the
 // selected face; a sidewall touch has a complete axial line contact set.
-func classifySourceCylinderBox(report *ContactReport, cylinder sourceCylinderContactProof,
+func classifySourceCylinderBox(report *reportvocab.ContactReport, cylinder sourceCylinderContactProof,
 	box sourceBoxContactProof, cylinderFirst bool) {
 	axis, side, signedGap, ok := pairbox.CylinderFaceCorridor(
 		cylinder.box.axisBox(), box.axisBox(), cylinder.axis, cylinder.wall != nil)
 	if !ok {
-		report.Reason = ContactNoGapProof
+		report.Reason = reportvocab.ContactNoGapProof
 		return
 	}
 	if signedGap.Sign() > 0 {
@@ -167,43 +168,43 @@ func classifySourceCylinderBox(report *ContactReport, cylinder sourceCylinderCon
 		gaps[axis] = signedGap
 		gap, ok := sourceBoxGap(gaps)
 		if !ok {
-			report.Reason = ContactNoGapProof
+			report.Reason = reportvocab.ContactNoGapProof
 			return
 		}
-		report.Relation, report.Gap = ContactSeparated, &gap
+		report.Relation, report.Gap = reportvocab.ContactSeparated, &gap
 		return
 	}
 	if cylinder.faces[0] == nil || cylinder.faces[1] == nil {
-		report.Reason = ContactNoGapProof
+		report.Reason = reportvocab.ContactNoGapProof
 		return
 	}
 	if signedGap.IsZero() {
-		report.Relation = ContactTouching
-		gap := Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(0), Exactness: Exact}
+		report.Relation = reportvocab.ContactTouching
+		gap := measurement.Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(0), Exactness: measurement.Exact}
 		report.Gap = &gap
 	} else {
-		report.Relation = ContactOverlapping
+		report.Relation = reportvocab.ContactOverlapping
 	}
 	boxFace, cylinderFace := box.faces[axis][side], cylinder.faces[1-side]
 	if axis != cylinder.axis {
 		cylinderFace = cylinder.wall
 	}
 	if boxFace == nil || cylinderFace == nil {
-		report.Reason = ContactNoNormalProof
+		report.Reason = reportvocab.ContactNoNormalProof
 		return
 	}
 	boxReading, cylinderReading, signedReading, ok := pairbox.CylinderFacePoint(
 		cylinder.box.axisBox(), box.axisBox(), axis, side, signedGap,
 		report.Request.PointResolution.Base())
 	if !ok {
-		report.Reason = ContactPointTooCoarse
+		report.Reason = reportvocab.ContactPointTooCoarse
 		return
 	}
 	sign := signIfBoxSide(side)
 	boxWitness, cylinderWitness := sourceBoxPointMeasurement(boxReading), sourceBoxPointMeasurement(cylinderReading)
-	point := ContactPoint{OnA: boxWitness, OnB: cylinderWitness,
-		FaceA: boxFace, FaceB: cylinderFace,
-		FeatureA: ContactFeature{Face: boxFace}, FeatureB: ContactFeature{Face: cylinderFace},
+	point := reportvocab.ContactPoint{OnA: boxWitness, OnB: cylinderWitness,
+		FaceA: faceNode(boxFace), FaceB: faceNode(cylinderFace),
+		FeatureA: reportvocab.ContactFeature{Face: faceNode(boxFace)}, FeatureB: reportvocab.ContactFeature{Face: faceNode(cylinderFace)},
 		NormalAngle: units.Radians(0), Separation: sourceBoxScalar(signedReading)}
 	if cylinderFirst {
 		point.OnA, point.OnB = point.OnB, point.OnA
@@ -220,6 +221,6 @@ func classifySourceCylinderBox(report *ContactReport, cylinder sourceCylinderCon
 	case 2:
 		normal.Z = sign
 	}
-	point.Normal = VecMeasurement{Value: normal, Bound: units.Scalar(0), Exactness: Exact}
-	report.Manifold = &ContactManifold{Points: []ContactPoint{point}}
+	point.Normal = measurement.VecMeasurement{Value: normal, Bound: units.Scalar(0), Exactness: measurement.Exact}
+	report.Manifold = &reportvocab.ContactManifold{Points: []reportvocab.ContactPoint{point}}
 }

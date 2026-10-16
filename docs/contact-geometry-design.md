@@ -668,6 +668,15 @@ a body is immutable, so a repeat reads the stored report and changes no
 outcome. Only a completed query is stored, never an error or a
 cancellation, and every call returns its own copy of the report.
 
+The proof paths fill the report's internal form, `internal/reportvocab`'s
+`ContactReport`, which names topology nodes and holds internal readings.
+`ContactPair` converts a completed report to the public type once, before the
+memo stores it: each node maps to the handle that holds it, so every body,
+face, edge and vertex a report names is the very pointer the body's own
+accessors return, and a nil manifold, gap or overlap stays nil. A sweep that
+runs the same proof paths converts their reports in the same way where it
+publishes a `SweepEvent`, a contact track's features or a track manifold.
+
 ## 7. Delivery and computed tests
 
 | Stage | Delivered path | Computed obligation |

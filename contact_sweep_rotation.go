@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
@@ -600,10 +601,10 @@ func (r *rotationalPairSweep) execute(ctx context.Context) (*SweepReport, error)
 			r.report.ContactTrack = &SweepContactTrack{orientedA: &r.a.startBox,
 				orientedB: &r.b.startBox, orientedDelta: r.a.path.Delta,
 				start: zero, end: one,
-				duration: r.a.path.Duration, request: r.req.ContactRequest,
+				duration: r.a.path.Duration, request: contactRequestToInternal(r.req.ContactRequest),
 				pointCount: len(first.Ideal.Manifold.Points),
-				features: [2]ContactFeature{first.Ideal.Manifold.Points[0].FeatureA,
-					first.Ideal.Manifold.Points[0].FeatureB},
+				features: [2]reportvocab.ContactFeature{contactFeatureToInternal(first.Ideal.Manifold.Points[0].FeatureA),
+					contactFeatureToInternal(first.Ideal.Manifold.Points[0].FeatureB)},
 				normal: first.Ideal.Manifold.Points[0].Normal}
 			r.report.Outcome = SweepPersistentTouch
 			r.sortSamples()

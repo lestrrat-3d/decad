@@ -33,7 +33,7 @@ func (d *Document) sweepPlanarPair(ctx context.Context, a, b *Body,
 	pa, pb affinePairPath, req SweepRequest, resolution *big.Rat,
 	report *SweepReport) (*SweepReport, bool, error) {
 	budget := proofbound.NewWorkBudget(ctx)
-	chord := heldChordOf(req.ContactRequest)
+	chord := heldChordOf(contactRequestToInternal(req.ContactRequest))
 	solidA, deltaA, okA, err := planarSolidAtPose(ctx, budget, a, r3.Identity(), chord)
 	if err != nil {
 		return nil, true, err

@@ -3,15 +3,17 @@ package decad
 import (
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
 // publishClippedHorizontalPatch certifies the complete intersection of two
 // horizontal source faces when one box is rotated in the world XY plane.
-func publishClippedHorizontalPatch(report *ContactReport, a, b orientedSourceBox) {
+func publishClippedHorizontalPatch(report *reportvocab.ContactReport, a, b orientedSourceBox) {
 	if base, ok := axisAlignedOrientedBox(a); ok &&
 		publishClippedHorizontalPatchOrder(report, base, b, true) {
 		return
@@ -72,9 +74,9 @@ func axisAlignedOrientedBox(box orientedSourceBox) (sourceBoxContactProof, bool)
 	return aligned, true
 }
 
-func publishClippedHorizontalPatchOrder(report *ContactReport, base sourceBoxContactProof,
+func publishClippedHorizontalPatchOrder(report *reportvocab.ContactReport, base sourceBoxContactProof,
 	rotated orientedSourceBox, baseIsA bool) bool {
-	if report.Relation != ContactTouching {
+	if report.Relation != reportvocab.ContactTouching {
 		return false
 	}
 	vertical := -1
@@ -133,27 +135,28 @@ func publishClippedHorizontalPatchOrder(report *ContactReport, base sourceBoxCon
 	if faceBase == nil || faceRotated == nil {
 		return false
 	}
-	points := make([]ContactPoint, 0, len(polygon))
+	points := make([]reportvocab.ContactPoint, 0, len(polygon))
 	for _, vertex := range polygon {
 		world := [3]*big.Rat{vertex[0], vertex[1], faceZ.Rat()}
 		witness, valid := orientedBoxPoint(world)
 		if !valid || witness.Bound.Base() > report.Request.PointResolution.Base() {
-			report.Reason = ContactPointTooCoarse
+			report.Reason = reportvocab.ContactPointTooCoarse
 			return false
 		}
-		point := ContactPoint{OnA: witness, OnB: witness,
-			Normal:      VecMeasurement{Value: r3.Vec{Z: normalZ}, Bound: units.Scalar(0), Exactness: Exact},
+		onBoth := vecMeasurementToInternal(witness)
+		point := reportvocab.ContactPoint{OnA: onBoth, OnB: onBoth,
+			Normal:      measurement.VecMeasurement{Value: r3.Vec{Z: normalZ}, Bound: units.Scalar(0), Exactness: measurement.Exact},
 			NormalAngle: units.Radians(0),
-			Separation:  Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(0), Exactness: Exact}}
+			Separation:  measurement.Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(0), Exactness: measurement.Exact}}
 		if baseIsA {
-			point.FaceA, point.FaceB = faceBase, faceRotated
+			point.FaceA, point.FaceB = faceNode(faceBase), faceNode(faceRotated)
 		} else {
-			point.FaceA, point.FaceB = faceRotated, faceBase
+			point.FaceA, point.FaceB = faceNode(faceRotated), faceNode(faceBase)
 		}
-		point.FeatureA, point.FeatureB = ContactFeature{Face: point.FaceA}, ContactFeature{Face: point.FaceB}
+		point.FeatureA, point.FeatureB = reportvocab.ContactFeature{Face: point.FaceA}, reportvocab.ContactFeature{Face: point.FaceB}
 		points = append(points, point)
 	}
-	report.Manifold = &ContactManifold{Points: points}
-	report.Reason = ContactNoReason
+	report.Manifold = &reportvocab.ContactManifold{Points: points}
+	report.Reason = reportvocab.ContactNoReason
 	return true
 }

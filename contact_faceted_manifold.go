@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 
 	"github.com/lestrrat-3d/decad/internal/pair"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -17,7 +18,7 @@ import (
 // This file admits a proven exact planar relation to a contact manifold
 // (docs/multibody-dynamics-design.md §9.3) and maps the kernel's face ids
 // back to the bodies' live topology. internal/pair builds the exact points;
-// contact_faceted_patch.go turns them into bounded public witnesses.
+// contact_faceted_patch.go turns them into bounded witnesses.
 
 // publishPlanarManifold computes the manifold of a Touching pair, or the
 // shallow-penetration patch of an Overlapping pair, and publishes it on
@@ -31,7 +32,7 @@ import (
 // neither patch can certify otherwise keeps the reason report already carries.
 // A positive band appends the lifted set of each support plane after the
 // exact points (docs/multibody-dynamics-design.md §10.5).
-func publishPlanarManifold(budget *proofbound.WorkBudget, report *ContactReport, a, b *planar.PlanarSolid,
+func publishPlanarManifold(budget *proofbound.WorkBudget, report *reportvocab.ContactReport, a, b *planar.PlanarSolid,
 	result planar.PlanarResult, convexA, convexB bool, band proofarith.Dyadic) error {
 	var points []planar.PatchPoint
 	var planes []planar.SupportPlane
@@ -45,7 +46,7 @@ func publishPlanarManifold(budget *proofbound.WorkBudget, report *ContactReport,
 				return err
 			}
 			if manifold.Points == nil {
-				report.Reason = ContactNonConvex
+				report.Reason = reportvocab.ContactNonConvex
 				return nil
 			}
 			points, planes = manifold.Points, manifold.Supports
@@ -78,7 +79,7 @@ func publishPlanarManifold(budget *proofbound.WorkBudget, report *ContactReport,
 	default:
 		return nil
 	}
-	features, err := newPlanarFeatureMap(report.A, report.B, a, b)
+	features, err := newPlanarFeatureMap(bodyHandle(report.A), bodyHandle(report.B), a, b)
 	if err != nil {
 		return err
 	}
@@ -101,7 +102,7 @@ func publishPlanarManifold(budget *proofbound.WorkBudget, report *ContactReport,
 			manifold.Points = append(manifold.Points, extra.Points...)
 		}
 	}
-	report.Manifold, report.Reason = manifold, ContactNoReason
+	report.Manifold, report.Reason = manifold, reportvocab.ContactNoReason
 	return nil
 }
 
@@ -111,7 +112,7 @@ func publishPlanarManifold(budget *proofbound.WorkBudget, report *ContactReport,
 // The planes are read with the B body's faces first, then A's, each in face
 // order. The gap becomes [0 ± g], g its upper end, and the manifold is every
 // such plane's lifted set. A pair that meets neither stays Separated.
-func planarSupportBand(budget *proofbound.WorkBudget, report *ContactReport, a, b *planar.PlanarSolid,
+func planarSupportBand(budget *proofbound.WorkBudget, report *reportvocab.ContactReport, a, b *planar.PlanarSolid,
 	result planar.PlanarResult, band proofarith.Dyadic) error {
 	if band.Sign() <= 0 || result.Gap == nil {
 		return nil
@@ -129,9 +130,9 @@ func planarSupportBand(budget *proofbound.WorkBudget, report *ContactReport, a, 
 	if !measurement.FiniteValues(g) {
 		return nil
 	}
-	report.Relation, report.Reason = ContactBand, ContactNoReason
-	report.Gap = &Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(g), Exactness: exactnessFromBound(g)}
-	features, err := newPlanarFeatureMap(report.A, report.B, a, b)
+	report.Relation, report.Reason = reportvocab.ContactBand, reportvocab.ContactNoReason
+	report.Gap = &measurement.Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(g), Exactness: measurement.ExactnessOf(g)}
+	features, err := newPlanarFeatureMap(bodyHandle(report.A), bodyHandle(report.B), a, b)
 	if err != nil {
 		return err
 	}
@@ -142,7 +143,7 @@ func planarSupportBand(budget *proofbound.WorkBudget, report *ContactReport, a, 
 
 // supportBandOf is the request's SupportBand as an exact dyadic, zero for the
 // zero Value.
-func supportBandOf(req ContactRequest) proofarith.Dyadic {
+func supportBandOf(req reportvocab.ContactRequest) proofarith.Dyadic {
 	band, ok := proofarith.DyOf(req.SupportBand.Base())
 	if !ok || band.Sign() < 0 {
 		return proofarith.DyZero()
@@ -194,10 +195,10 @@ func newPlanarFeatureMap(a, b *Body, sa, sb *planar.PlanarSolid) (*planarFeature
 // feature resolves one side's kernel feature. A facet is its face; an edge is
 // the one live Edge both of its faces share; a vertex is the one live Vertex
 // every one of its faces holds. Anything else has no single source identity.
-func (m *planarFeatureMap) feature(side int, f planar.PatchFeature) (ContactFeature, bool) {
+func (m *planarFeatureMap) feature(side int, f planar.PatchFeature) (reportvocab.ContactFeature, bool) {
 	topology := &m.sides[side]
 	if len(f.Faces) == 0 {
-		return ContactFeature{}, false
+		return reportvocab.ContactFeature{}, false
 	}
 	faces := make([]*Face, len(f.Faces))
 	for i, id := range f.Faces {
@@ -206,12 +207,12 @@ func (m *planarFeatureMap) feature(side int, f planar.PatchFeature) (ContactFeat
 	switch f.Kind {
 	case planar.FeatureFacet:
 		if len(faces) != 1 {
-			return ContactFeature{}, false
+			return reportvocab.ContactFeature{}, false
 		}
-		return ContactFeature{Face: faces[0]}, true
+		return reportvocab.ContactFeature{Face: faceNode(faces[0])}, true
 	case planar.FeatureEdge:
 		if len(faces) != 2 {
-			return ContactFeature{}, false
+			return reportvocab.ContactFeature{}, false
 		}
 		var found *Edge
 		for _, edge := range faces[0].Edges() {
@@ -219,11 +220,11 @@ func (m *planarFeatureMap) feature(side int, f planar.PatchFeature) (ContactFeat
 				continue
 			}
 			if found != nil {
-				return ContactFeature{}, false
+				return reportvocab.ContactFeature{}, false
 			}
 			found = edge
 		}
-		return ContactFeature{Edge: found}, found != nil
+		return reportvocab.ContactFeature{Edge: edgeNode(found)}, found != nil
 	case planar.FeatureVertex:
 		var found *Vertex
 		for _, edge := range faces[0].Edges() {
@@ -232,27 +233,27 @@ func (m *planarFeatureMap) feature(side int, f planar.PatchFeature) (ContactFeat
 					continue
 				}
 				if found != nil {
-					return ContactFeature{}, false
+					return reportvocab.ContactFeature{}, false
 				}
 				found = vertex
 			}
 		}
-		return ContactFeature{Vertex: found}, found != nil
+		return reportvocab.ContactFeature{Vertex: vertexNode(found)}, found != nil
 	}
-	return ContactFeature{}, false
+	return reportvocab.ContactFeature{}, false
 }
 
 // order is the feature's rank in its body's topology: faces, then edges, then
 // vertices, each in the body's own order.
-func (m *planarFeatureMap) order(side int, f ContactFeature) [2]int {
+func (m *planarFeatureMap) order(side int, f reportvocab.ContactFeature) [2]int {
 	topology := &m.sides[side]
 	switch {
 	case f.Face != nil:
-		return [2]int{0, topology.faceAt[f.Face]}
+		return [2]int{0, topology.faceAt[faceHandle(f.Face)]}
 	case f.Edge != nil:
-		return [2]int{1, topology.edgeAt[f.Edge]}
+		return [2]int{1, topology.edgeAt[edgeHandle(f.Edge)]}
 	default:
-		return [2]int{2, topology.vertexAt[f.Vertex]}
+		return [2]int{2, topology.vertexAt[vertexHandle(f.Vertex)]}
 	}
 }
 
