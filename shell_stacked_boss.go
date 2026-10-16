@@ -107,7 +107,7 @@ func shellStackedBoss(ctx context.Context, source *Body, sp stackedPrismPayload,
 		proofbound.ExactSumRound(a.Z1-a.Z0, a.Z1, -a.Z0) != 0 ||
 		proofbound.ExactSumRound(b.Z1-b.Z0, b.Z1, -b.Z0) != 0 ||
 		proofbound.ExactSumRound(a.Z1-a.Z0-2*t, a.Z1, -a.Z0, -t, -t) != 0 ||
-		!bossRectArithmeticExact(plate, t) || !bossRectArithmeticExact(boss, t) {
+		!prismshell.BossRectArithmeticExact(plate, t) || !prismshell.BossRectArithmeticExact(boss, t) {
 		return refuse("needs exactly represented offset coordinates")
 	}
 	// The source view has a single top cap. All its other faces keep their
@@ -169,22 +169,4 @@ func shellStackedBoss(ctx context.Context, source *Body, sp stackedPrismPayload,
 	result.AssignRoles()
 	body, err := bodyResult(breprecord.Build(ctx, envOf(source.n.Doc, source.n.Doc.NextProducer), result))
 	return body, true, err
-}
-
-func bossRectArithmeticExact(r prismshell.BossRect, t float64) bool {
-	if proofbound.ExactSumRound(r.Width(), r.U1, -r.U0) != 0 ||
-		proofbound.ExactSumRound(r.Height(), r.V1, -r.V0) != 0 {
-		return false
-	}
-	for _, x := range [4]float64{r.U0, r.V0, r.U1, r.V1} {
-		if proofbound.ExactSumRound(x+t, x, t) != 0 || proofbound.ExactSumRound(x-t, x, -t) != 0 {
-			return false
-		}
-	}
-	in := r.Inset(t)
-	if proofbound.ExactSumRound(in.Width(), in.U1, -in.U0) != 0 ||
-		proofbound.ExactSumRound(in.Height(), in.V1, -in.V0) != 0 {
-		return false
-	}
-	return true
 }

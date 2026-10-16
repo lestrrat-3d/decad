@@ -86,8 +86,8 @@ func prismUnionBossShellAuthenticate(result *Body, fp facetedPayload, plateBody,
 	if !ok {
 		return src, false
 	}
-	if !prismUnionBossShellSimilarity(&src) || !bossRectArithmeticExact(src.plateRect, t) ||
-		!bossRectArithmeticExact(src.bossRect, 0) {
+	if !prismUnionBossShellSimilarity(&src) || !prismshell.BossRectArithmeticExact(src.plateRect, t) ||
+		!prismshell.BossRectArithmeticExact(src.bossRect, 0) {
 		return src, false
 	}
 	plateOrigin := src.plate.Frame.Origin()
@@ -118,8 +118,8 @@ func prismUnionBossShellAuthenticate(result *Body, fp facetedPayload, plateBody,
 		return src, false
 	}
 	if !prismUnionBossShellLevels(src, t) ||
-		!prismUnionBossShellRoom(src.bossRect.Width(), src.unitLo, t) ||
-		!prismUnionBossShellRoom(src.bossRect.Height(), src.unitLo, t) {
+		!prismshell.PrismUnionBossShellRoom(src.bossRect.Width(), src.unitLo, t) ||
+		!prismshell.PrismUnionBossShellRoom(src.bossRect.Height(), src.unitLo, t) {
 		return src, false
 	}
 	// The entire boss, enlarged by its source-point bound, must lie strictly
@@ -132,8 +132,8 @@ func prismUnionBossShellAuthenticate(result *Body, fp facetedPayload, plateBody,
 		beta := src.boss.PointBound(proofbound.ExactScalar(uv[0]),
 			proofbound.ExactScalar(uv[1]), proofbound.ExactScalar(src.boss.Z1))
 		if !proofbound.FiniteVec(p) || proofbound.IsNonFinite(beta) ||
-			!prismUnionBossShellInside(p.X, beta, plateInner.U0, plateInner.U1) ||
-			!prismUnionBossShellInside(p.Y, beta, plateInner.V0, plateInner.V1) ||
+			!prismshell.PrismUnionBossShellInside(p.X, beta, plateInner.U0, plateInner.U1) ||
+			!prismshell.PrismUnionBossShellInside(p.Y, beta, plateInner.V0, plateInner.V1) ||
 			p.Z != src.bossTop {
 			return src, false
 		}
@@ -200,7 +200,7 @@ func prismUnionBossShellAuthenticate(result *Body, fp facetedPayload, plateBody,
 		}
 		src.outer[i] = found
 	}
-	if !prismUnionBossShellCompleteCap(src.outer, topTris) {
+	if !prismshell.PrismUnionBossShellCompleteCap(src.outer, topTris) {
 		return src, false
 	}
 	return src, true
@@ -212,44 +212,6 @@ func prismUnionBossShellLevels(src prismUnionBossShellSource, t float64) bool {
 		pt(src.bossBottom).Cmp(pt(src.interfaceZ)) < 0 &&
 		pt(src.interfaceZ).Cmp(pt(src.bossTop)) < 0 &&
 		new(big.Rat).Sub(pt(src.interfaceZ), pt(src.bossBottom)).Cmp(pt(t)) == 0
-}
-
-func prismUnionBossShellRoom(width, scaleLo, t float64) bool {
-	left := new(big.Rat).Mul(proofarith.FloatRat(width), proofarith.FloatRat(scaleLo))
-	return left.Cmp(new(big.Rat).Mul(big.NewRat(2, 1), proofarith.FloatRat(t))) > 0
-}
-
-func prismUnionBossShellInside(value, beta, lo, hi float64) bool {
-	pt := func(v float64) *big.Rat { return proofarith.FloatRat(v) }
-	return new(big.Rat).Sub(pt(value), pt(beta)).Cmp(pt(lo)) > 0 &&
-		new(big.Rat).Add(pt(value), pt(beta)).Cmp(pt(hi)) < 0
-}
-
-func prismUnionBossShellCompleteCap(corners [4]int, tris [][3]int) bool {
-	if len(tris) != 2 {
-		return false
-	}
-	var masks [2]uint8
-	for i, tri := range tris {
-		for _, v := range tri {
-			corner := -1
-			for j, index := range corners {
-				if index == v {
-					corner = j
-					break
-				}
-			}
-			if corner < 0 || masks[i]&(1<<corner) != 0 {
-				return false
-			}
-			masks[i] |= 1 << corner
-		}
-	}
-	return masks[0] != masks[1] &&
-		((masks[0] == 0b0111 && masks[1] == 0b1101) ||
-			(masks[0] == 0b1101 && masks[1] == 0b0111) ||
-			(masks[0] == 0b1011 && masks[1] == 0b1110) ||
-			(masks[0] == 0b1110 && masks[1] == 0b1011))
 }
 
 func prismUnionBossShellSimilarity(src *prismUnionBossShellSource) bool {

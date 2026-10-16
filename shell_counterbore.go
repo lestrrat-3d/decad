@@ -83,7 +83,7 @@ func shellCounterbore(ctx context.Context, source *Body, sp stackedPrismPayload,
 		proofbound.ExactSumRound(capZ, stepZ, -sign*t) != 0 ||
 		proofbound.ExactSumRound(farH, stepZ*sign, -farZ*sign) != 0 ||
 		proofbound.ExactSumRound(nearH, nearZ*sign, -stepZ*sign) != 0 ||
-		!bossRectArithmeticExact(plate, t) {
+		!prismshell.BossRectArithmeticExact(plate, t) {
 		return refuse("needs exactly represented offset coordinates")
 	}
 	for _, radius := range []float64{small.Radius, large.Radius, smallR, largeR} {
