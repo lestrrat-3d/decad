@@ -4,11 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       commit:
-        description: Exact 40-character Decad commit SHA
-        required: true
-        type: string
-      test_name:
-        description: One root-package test name
+        description: Exact temporary CollectP2 scratch validation commit SHA
         required: true
         type: string
 
@@ -16,43 +12,31 @@ permissions:
   contents: read
 
 jobs:
-  focused:
+  collect-p2-scratch-validation:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    container:
-      image: golang:1.26.8-bookworm
-      options: --memory=4g --memory-swap=4g
+    timeout-minutes: 26
     steps:
-      - name: Validate inputs
-        shell: bash
-        env:
-          DECAD_COMMIT: ${{ inputs.commit }}
-          TEST_NAME: ${{ inputs.test_name }}
-        run: |
-          [[ "$DECAD_COMMIT" =~ ^[0-9a-f]{40}$ ]]
-          [[ "$TEST_NAME" =~ ^Test[A-Za-z0-9_]+$ ]]
-
-      - name: Check out Decad commit
+      - name: Check out the exact temporary commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.commit }}
+          fetch-depth: 3
           persist-credentials: false
 
-      - name: Require named root-package test
-        shell: bash
+      - name: Run bounded CollectP2 scratch validation validation
         env:
-          TEST_NAME: ${{ inputs.test_name }}
-        run: |
-          go test -list "^${TEST_NAME}$" . > "$RUNNER_TEMP/focused-go-test-list.txt"
-          grep -Fqx "$TEST_NAME" "$RUNNER_TEMP/focused-go-test-list.txt"
+          DECAD_SOURCE_SHA: ${{ inputs.commit }}
+          DECAD_DISPATCH_SHA: ${{ github.sha }}
+          DECAD_DISPATCH_REF: ${{ github.ref }}
+          DECAD_WORKFLOW_SHA: ${{ github.workflow_sha }}
+          DECAD_WORKFLOW_REF: ${{ github.workflow_ref }}
+        run: python3 .validation/run_hosted.py
 
-      - name: Run named root-package test
-        shell: bash
-        env:
-          TEST_NAME: ${{ inputs.test_name }}
-        run: |
-          go test -json -count=1 -timeout 8m -run "^${TEST_NAME}$" . |
-            tee "$RUNNER_TEMP/focused-go-test.json"
-          ! grep -Fq '"Action":"skip"' "$RUNNER_TEMP/focused-go-test.json"
-          grep -F '"Action":"pass"' "$RUNNER_TEMP/focused-go-test.json" |
-            grep -Fq "\"Test\":\"${TEST_NAME}\""
+      - name: Preserve bounded validation evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: collect-p2-scratch-${{ github.run_id }}
+          path: ${{ runner.temp }}/decad-collect-p2-scratch-*/artifacts/
+          if-no-files-found: error
+          retention-days: 1
