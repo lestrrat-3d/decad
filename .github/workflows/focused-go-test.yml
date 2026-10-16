@@ -4,55 +4,45 @@ on:
   workflow_dispatch:
     inputs:
       commit:
-        description: Exact 40-character Decad commit SHA
+        description: Exact reviewed temporary thread validation commit
         required: true
         type: string
-      test_name:
-        description: One root-package test name
+      validation:
+        description: Reporting-only clipped-volume diagnostic
         required: true
-        type: string
-
+        type: choice
+        options:
+          - diagnostic
 permissions:
   contents: read
-
+concurrency:
+  group: decad-thread-gallery-validation
+  cancel-in-progress: false
 jobs:
-  focused:
+  thread-gallery:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    container:
-      image: golang:1.26.8-bookworm
-      options: --memory=4g --memory-swap=4g
+    timeout-minutes: 30
     steps:
-      - name: Validate inputs
-        shell: bash
-        env:
-          DECAD_COMMIT: ${{ inputs.commit }}
-          TEST_NAME: ${{ inputs.test_name }}
-        run: |
-          [[ "$DECAD_COMMIT" =~ ^[0-9a-f]{40}$ ]]
-          [[ "$TEST_NAME" =~ ^Test[A-Za-z0-9_]+$ ]]
-
-      - name: Check out Decad commit
+      - name: Check out exact controls
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.commit }}
+          fetch-depth: 2
           persist-credentials: false
-
-      - name: Require named root-package test
-        shell: bash
+      - name: Run reviewed bounded validation
         env:
-          TEST_NAME: ${{ inputs.test_name }}
-        run: |
-          go test -list "^${TEST_NAME}$" . > "$RUNNER_TEMP/focused-go-test-list.txt"
-          grep -Fqx "$TEST_NAME" "$RUNNER_TEMP/focused-go-test-list.txt"
-
-      - name: Run named root-package test
-        shell: bash
-        env:
-          TEST_NAME: ${{ inputs.test_name }}
-        run: |
-          go test -json -count=1 -timeout 8m -run "^${TEST_NAME}$" . |
-            tee "$RUNNER_TEMP/focused-go-test.json"
-          ! grep -Fq '"Action":"skip"' "$RUNNER_TEMP/focused-go-test.json"
-          grep -F '"Action":"pass"' "$RUNNER_TEMP/focused-go-test.json" |
-            grep -Fq "\"Test\":\"${TEST_NAME}\""
+          DECAD_VALIDATION: ${{ inputs.validation }}
+          DECAD_SOURCE_SHA: ${{ inputs.commit }}
+          DECAD_DISPATCH_SHA: ${{ github.sha }}
+          DECAD_DISPATCH_REF: ${{ github.ref }}
+          DECAD_WORKFLOW_SHA: ${{ github.workflow_sha }}
+          DECAD_WORKFLOW_REF: ${{ github.workflow_ref }}
+        run: python3 .validation/run_hosted.py
+      - name: Preserve bounded evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: thread-gallery-${{ inputs.validation }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/decad-thread-gallery-*/artifacts/
+          if-no-files-found: error
+          retention-days: 1
