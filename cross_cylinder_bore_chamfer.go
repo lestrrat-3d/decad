@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/crossbore"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
@@ -65,11 +66,11 @@ func tryCrossCylinderBoreMouthChamfer(ctx context.Context, body *Body,
 	// fails keeps all its pairs in the exact pairwise audit, and cap-to-cap,
 	// cap-to-wall and every other pair is always classified exactly.
 	if err := loftmesh.LoftCrossingAuditBoundedProjectedPatchesStreaming(proofbound.NewPollWorkBudget(ctx),
-		mesh.verts, mesh.tris, crossBoreCapPatches(mesh.src), loftmesh.MaxLoftAuditTriangles,
-		crossBoreAuditScans); err != nil {
+		mesh.Verts, mesh.Tris, crossbore.CapPatches(mesh.Src), loftmesh.MaxLoftAuditTriangles,
+		crossbore.AuditScans); err != nil {
 		return nil, true, err
 	}
-	audit, err := facetproof.AuditFacetedMesh(ctx, mesh.verts, mesh.tris)
+	audit, err := facetproof.AuditFacetedMesh(ctx, mesh.Verts, mesh.Tris)
 	if err != nil {
 		return nil, true, err
 	}
@@ -80,18 +81,18 @@ func tryCrossCylinderBoreMouthChamfer(ctx context.Context, body *Body,
 	if heldVolume.Cmp(proofarith.FloatRat(volumeGap)) <= 0 {
 		return nil, true, fmt.Errorf("%w: the cross-bore chamfer has no proven positive volume", ErrUnsupported)
 	}
-	vertexBound := make([]float64, len(mesh.verts))
+	vertexBound := make([]float64, len(mesh.Verts))
 	for i := range vertexBound {
 		vertexBound[i] = bound
 	}
-	dPair := facetedrecord.SourceDiameterUpper(mesh.verts, bound)
+	dPair := facetedrecord.SourceDiameterUpper(mesh.Verts, bound)
 	if proofbound.IsNonFinite(dPair) {
 		return nil, true, fmt.Errorf("%w: the cross-bore chamfer has no finite diameter", ErrUnsupported)
 	}
 	ref := body.n.Doc.NextProducer
-	mesh.groups[4].Origins[0].Producer = ref
+	mesh.Groups[4].Origins[0].Producer = ref
 	result, err := bodyResult(facetedrecord.BuildWithProof(ctx, envOf(documentNode(documentHandle(body.n.Doc)), ref), facetedPayload{
-		Verts: mesh.verts, Tris: mesh.tris, Src: mesh.src, Groups: mesh.groups,
+		Verts: mesh.Verts, Tris: mesh.Tris, Src: mesh.Src, Groups: mesh.Groups,
 		VertexBound: vertexBound, MeshBound: bound, VolSymDiff: volumeGap,
 		AreaSlack: areaSlack, DPair: dPair, ContactAudited: true, Xform: r3.Identity(),
 	}, audit, measurementToInternal(volume), heldVolume))

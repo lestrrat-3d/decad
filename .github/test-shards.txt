@@ -598,8 +598,6 @@
 4	0.02	TestCopyRotationOrdinaryCopyOfExactCopyKeepsNoTags
 4	0.35	TestCornerSpanMatchesRationalForm
 4	0.37	TestCounterboreShellMeshVolumeProof
-4	0.00	TestCrossBoreCellMaximaHonoursCancelledContext
-4	0.01	TestCrossBoreCellMaximaMatchesSerial
 4	0.00	TestCurvedCapRayRejectsGridCollapse
 4	7.01	TestCurvedCensusMeridianMemoMatchesDirect
 4	11.75	TestCurvedCensusOwnedArcsMatchLiveCheck
@@ -858,7 +856,6 @@
 6	0.00	TestComputeLoftChordedAllowReversesSignedCorrections
 6	0.00	TestContactBatchSchedulesOnlyMemoMisses
 6	0.01	TestCoplanarCarrierPairIsNotSettledByCoplanarityAlone
-6	26.93	TestCrossBoreLazyCellsMatchReference
 6	0.00	TestCrossingAuditCancellationIsBounded
 6	4.63	TestCurvedCallScopeSharesLiveRecords
 6	0.00	TestDecidePullMatchesOpposesPullAtZeroAllowance
@@ -1116,7 +1113,6 @@
 8	0.03	TestContactPairBoundedFacetedFloorStrictClear
 8	0.02	TestContactPairFacetedFloorRefusesMultipleSupportFaces
 8	0.01	TestCopyRotationExactPlacedMarkFollowsPlacementOnly
-8	16.23	TestCrossBoreSignTestsMatchReference
 8	0.00	TestCupPayloadForTracksEachSourceEndDisplacement
 8	8.02	TestCurvedClearPatchRefusesUnprovedClaims
 8	18.92	TestCurvedContactGraphRejectsStaleSourceEvents
@@ -1375,16 +1371,8 @@
 10	0.00	TestConeFromFaceRefuses
 10	0.00	TestConeFromFaceShallowGeneratorKeepsDocument
 10	0.04	TestCounterboreArrangementPreservesWholeLoops
-10	0.00	TestCrossBoreCellMirrorMapsTurnsExactly
-10	0.64	TestCrossBoreCellProofsParallelMatchSerial
-10	0.00	TestCrossBoreCellSampleErrorReadsHeldZExactly
 10	0.00	TestCrossBoreCellsRefuseNearSymmetricPose
-10	0.00	TestCrossBoreMirroredCellsEncloseSamples
-10	0.00	TestCrossBoreMirroredMaximaFirstFailureAndContext
-10	0.00	TestCrossBoreMirroredMaximaFold
 10	0.00	TestCrossBoreMirroredRouteMatchesDirect
-10	0.00	TestCrossBoreMirroredRouteRefusesLikeDirect
-10	0.00	TestCrossBoreNegationIsExact
 10	0.95	TestCurveBoundsCoverMappedReference
 10	17.15	TestCurvedContactGraphHeldAnchors
 10	10.81	TestCurvedSourceCapCirclesSplitClosedBlankShell
