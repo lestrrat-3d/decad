@@ -27,18 +27,16 @@ func spiralCombineInputs(ctx context.Context, blank *Body, tools []*Body) (*spir
 	if !ok {
 		return nil, fmt.Errorf("%w: target and first tool have no spiral source certificate", ErrUnsupported)
 	}
-	// No proof carries the exact tangency and the one-step gaps of a
-	// cone-tangent first tooth to a copy of it.
-	if first.Tooth != nil && first.Tooth.Tangent != nil {
-		return nil, fmt.Errorf("%w: a cone-tangent first tooth has no patterned-copy proof", ErrUnsupported)
-	}
 	copies, err := certifyFacetedCopies(ctx, tools)
 	if err != nil {
 		return nil, err
 	}
 	// The blank is invariant under an exact rotation about X, so the first
-	// tooth's source facts hold for the copy. A float placement matrix is not
-	// orthogonal and would scale the blank, so every copy must carry the record.
+	// tooth's source facts hold for the copy. This includes a tangent cap:
+	// rotating its plane preserves its exact contact with the heel cone and
+	// every strict source gap. The copy proof above checks complete-tooth
+	// separation. A float placement matrix is not orthogonal and would scale
+	// the blank, so every copy must carry the exact record.
 	for i, rec := range copies.Exact[1:] {
 		if _, ok := spiralsector.AxisCopyMap(rec); !ok {
 			return nil, fmt.Errorf("%w: copied tool %d %w; copy it with WithCopyRotation "+
