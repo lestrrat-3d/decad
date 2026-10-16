@@ -1,4 +1,4 @@
-package decad
+package sectionclip
 
 import (
 	"math"
@@ -6,15 +6,16 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
-// loftCircleSectionRecord reads a parallel section directly from an
+// LoftCircleSectionRecord reads a parallel section directly from an
 // authenticated circle-pair Loft. Its identical outer records denote the
 // same region boundary at every level. Equal-angle correspondence makes the
 // moving hole a circle with linearly interpolated center and radius.
-func loftCircleSectionRecord(pl loftPayload, plane r3.Frame) (profileRecord, bool) {
+func LoftCircleSectionRecord(pl loftPayload, plane r3.Frame) (profileRecord, bool) {
 	// An exact-axis Cut is refused by analyticBore. The direct-circle gate
 	// refuses non-analytic Cut and Fillet rewrites; their markers remain
 	// reject-only backstops if those gates change.
@@ -63,10 +64,10 @@ func loftCircleSectionRecord(pl loftPayload, plane r3.Frame) (profileRecord, boo
 	}, true
 }
 
-// loftVaryingCircularOuterSectionRecord intersects equal-angle circle pairs
+// LoftVaryingCircularOuterSectionRecord intersects equal-angle circle pairs
 // from two authenticated source profiles. At a fixed height their ruled
 // boundary is a circle with linearly interpolated center and radius.
-func loftVaryingCircularOuterSectionRecord(pl loftPayload, plane r3.Frame) (profileRecord, bool) {
+func LoftVaryingCircularOuterSectionRecord(pl loftPayload, plane r3.Frame) (profileRecord, bool) {
 	// Cut/Fillet markers, hole-count disagreement, invalid alignment shapes
 	// and plane/frame disagreement are reject-only for current direct Lofts.
 	if !pl.AuthenticatedReconstruction || pl.SurfaceResult ||
@@ -108,11 +109,11 @@ func loftVaryingCircularOuterSectionRecord(pl loftPayload, plane r3.Frame) (prof
 	holePairs := make([][2]circleSeg, len(profile.Holes))
 	for i := range profile.Holes {
 		hole, pair, ok := loftSectionCirclePair(pl.Profile0.Holes[i], pl.Profile1.Holes[i], false, fraction)
-		if !ok || !loftSectionCircleGapAllLevels(outerPair, pair, true) {
+		if !ok || !LoftSectionCircleGapAllLevels(outerPair, pair, true) {
 			return profileRecord{}, false
 		}
 		for j := range i {
-			if !loftSectionCircleGapAllLevels(pair, holePairs[j], false) {
+			if !LoftSectionCircleGapAllLevels(pair, holePairs[j], false) {
 				return profileRecord{}, false
 			}
 		}
@@ -150,10 +151,10 @@ func loftSectionCirclePair(lower, upper loopRecord, ccw bool, fraction *big.Rat)
 	return loopRecord{Segments: []curveSegment{circle}}, [2]circleSeg{bottom, top}, true
 }
 
-// loftSectionCircleGapAllLevels proves two paired circles remain nested or
+// LoftSectionCircleGapAllLevels proves two paired circles remain nested or
 // separated for the whole Loft. Both center differences and the radius gap
 // or sum are linear in the sweep fraction, so their squared gap is quadratic.
-func loftSectionCircleGapAllLevels(a, b [2]circleSeg, contained bool) bool {
+func LoftSectionCircleGapAllLevels(a, b [2]circleSeg, contained bool) bool {
 	x := [2]*big.Rat{}
 	y := [2]*big.Rat{}
 	r := [2]*big.Rat{}
@@ -216,4 +217,149 @@ func loftSectionLerpExact(a, b float64, fraction *big.Rat) (float64, bool) {
 		new(big.Rat).Mul(fraction, new(big.Rat).Sub(proofarith.FloatRat(b), proofarith.FloatRat(a))))
 	held, exact := value.Float64()
 	return held, exact && !math.IsInf(held, 0)
+}
+
+// LoftMatchingSectionRecord reads an interior parallel section from a direct
+// solid Loft whose two authenticated profile records are identical. Zero
+// alignment pairs every outer and hole boundary point with itself, so every
+// ruled wall is vertical and every intermediate material region matches.
+func LoftMatchingSectionRecord(pl loftPayload, plane r3.Frame) (profileRecord, bool) {
+	if !pl.AuthenticatedReconstruction || pl.SurfaceResult ||
+		pl.ConstructionDelta != 0 || len(pl.BlendSegs) != 0 ||
+		pl.ThroughBoreCut || pl.AnalyticBore || pl.Xform != r3.Identity() ||
+		!sectionrecord.IdenticalRecord(pl.Profile0, pl.Profile1) {
+		return profileRecord{}, false
+	}
+	for _, offset := range pl.Alignment {
+		if offset != 0 {
+			return profileRecord{}, false
+		}
+	}
+	x, y, z := r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)
+	if pl.Frame0.U() != x || pl.Frame0.V() != y || pl.Frame0.N() != z ||
+		pl.Frame1.U() != x || pl.Frame1.V() != y || pl.Frame1.N() != z ||
+		plane.U() != x || plane.V() != y || plane.N() != z {
+		return profileRecord{}, false
+	}
+	if pl.Frame0.Origin().X != pl.Frame1.Origin().X ||
+		pl.Frame0.Origin().Y != pl.Frame1.Origin().Y ||
+		pl.Frame0.Origin().X != plane.Origin().X ||
+		pl.Frame0.Origin().Y != plane.Origin().Y ||
+		pl.Plane0.Origin.Z != pl.Frame0.Origin().Z ||
+		pl.Plane1.Origin.Z != pl.Frame1.Origin().Z {
+		return profileRecord{}, false
+	}
+	z0, z1 := proofarith.FloatRat(pl.Frame0.Origin().Z), proofarith.FloatRat(pl.Frame1.Origin().Z)
+	cut := proofarith.FloatRat(plane.Origin().Z)
+	if z0 == nil || z1 == nil || cut == nil || cut.Cmp(z0) <= 0 || cut.Cmp(z1) >= 0 {
+		return profileRecord{}, false
+	}
+	return pl.Profile0, true
+}
+
+// LoftRuledLineSectionRecord intersects the exact triangular walls of a
+// direct line-only Loft. Each line pair contributes two triangles with one
+// diagonal, so its interior section can contain a kink at that diagonal.
+// Zero vertex displacement ties the held triangle corners to the records.
+// Placement, source-origin, cap-level, and rewrite-marker guards are reject-only
+// for current Loft producers; keep them if those producers gain new routes.
+func LoftRuledLineSectionRecord(pl loftPayload, plane r3.Frame) (profileRecord, bool) {
+	if !pl.AuthenticatedReconstruction || pl.SurfaceResult || pl.Xform != r3.Identity() ||
+		pl.Delta != 0 || pl.SectionDelta != 0 || pl.Chorded ||
+		pl.ConstructionDelta != 0 || len(pl.BlendSegs) != 0 ||
+		pl.ThroughBoreCut || pl.AnalyticBore ||
+		len(pl.Profile0.Holes) != len(pl.Profile1.Holes) ||
+		(len(pl.Alignment) != 0 && len(pl.Alignment) != 1+len(pl.Profile0.Holes)) {
+		return profileRecord{}, false
+	}
+	for _, offset := range pl.Alignment {
+		if offset != 0 {
+			return profileRecord{}, false
+		}
+	}
+	x, y, z := r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)
+	if pl.Frame0.U() != x || pl.Frame0.V() != y || pl.Frame0.N() != z ||
+		pl.Frame1.U() != x || pl.Frame1.V() != y || pl.Frame1.N() != z ||
+		plane.U() != x || plane.V() != y || plane.N() != z ||
+		pl.Plane0.U != x || pl.Plane0.V != y ||
+		pl.Plane1.U != x || pl.Plane1.V != y ||
+		pl.Plane0.Origin != pl.Frame0.Origin() || pl.Plane1.Origin != pl.Frame1.Origin() ||
+		pl.Frame0.Origin().X != pl.Frame1.Origin().X ||
+		pl.Frame0.Origin().Y != pl.Frame1.Origin().Y ||
+		pl.Frame0.Origin().X != plane.Origin().X ||
+		pl.Frame0.Origin().Y != plane.Origin().Y {
+		return profileRecord{}, false
+	}
+	z0, z1 := proofarith.FloatRat(pl.Frame0.Origin().Z), proofarith.FloatRat(pl.Frame1.Origin().Z)
+	cut := proofarith.FloatRat(plane.Origin().Z)
+	if z0 == nil || z1 == nil || cut == nil || cut.Cmp(z0) <= 0 || cut.Cmp(z1) >= 0 {
+		return profileRecord{}, false
+	}
+	fraction := new(big.Rat).Quo(new(big.Rat).Sub(cut, z0), new(big.Rat).Sub(z1, z0))
+	outer, ok := loftRuledLineSectionLoop(pl.Profile0.Outer, pl.Profile1.Outer, fraction)
+	if !ok {
+		return profileRecord{}, false
+	}
+	holes := make([]loopRecord, len(pl.Profile0.Holes))
+	for i := range holes {
+		holes[i], ok = loftRuledLineSectionLoop(pl.Profile0.Holes[i], pl.Profile1.Holes[i], fraction)
+		if !ok {
+			return profileRecord{}, false
+		}
+	}
+	return profileRecord{Outer: outer, Holes: holes}, true
+}
+
+func loftRuledLineSectionLoop(lower, upper loopRecord, fraction *big.Rat) (loopRecord, bool) {
+	if len(lower.Segments) == 0 || len(lower.Segments) != len(upper.Segments) {
+		return loopRecord{}, false
+	}
+	section := loopRecord{Segments: make([]curveSegment, 0, 2*len(lower.Segments))}
+	for i, lowerSegment := range lower.Segments {
+		v0, v1, ok := loftSectionFullLineEnds(lowerSegment)
+		if !ok {
+			return loopRecord{}, false
+		}
+		w0, w1, ok := loftSectionFullLineEnds(upper.Segments[i])
+		if !ok {
+			return loopRecord{}, false
+		}
+		start, ok := loftRuledLineSectionPoint(v0, w0, fraction)
+		if !ok {
+			return loopRecord{}, false
+		}
+		diagonal, ok := loftRuledLineSectionPoint(v0, w1, fraction)
+		if !ok {
+			return loopRecord{}, false
+		}
+		end, ok := loftRuledLineSectionPoint(v1, w1, fraction)
+		if !ok || start == diagonal || diagonal == end {
+			return loopRecord{}, false
+		}
+		section.Segments = append(section.Segments,
+			lineSeg{Start: start, End: diagonal, TStart: 0, TEnd: 1},
+			lineSeg{Start: diagonal, End: end, TStart: 0, TEnd: 1})
+	}
+	return section, true
+}
+
+func loftSectionFullLineEnds(segment curveSegment) (sectionrecord.Point2, sectionrecord.Point2, bool) {
+	line, ok := segment.(lineSeg)
+	if !ok {
+		return sectionrecord.Point2{}, sectionrecord.Point2{}, false
+	}
+	switch {
+	case line.TStart == 0 && line.TEnd == 1:
+		return line.Start, line.End, true
+	case line.TStart == 1 && line.TEnd == 0:
+		return line.End, line.Start, true
+	default:
+		return sectionrecord.Point2{}, sectionrecord.Point2{}, false
+	}
+}
+
+func loftRuledLineSectionPoint(a, b sectionrecord.Point2, fraction *big.Rat) (sectionrecord.Point2, bool) {
+	u, okU := loftSectionLerpExact(a.U, b.U, fraction)
+	v, okV := loftSectionLerpExact(a.V, b.V, fraction)
+	return sectionrecord.Point2{U: u, V: v}, okU && okV
 }
