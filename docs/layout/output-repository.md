@@ -21,7 +21,7 @@ The rules for rows live in `docs/layout.md`.
 | `tessellate_verification.go` | `Verification`, `WithVerification` and mesh proof publication. See tessellation §1. |
 | `tessellate_revolve.go` | Assembles revolve cells and caps. See tessellation §8–§10. |
 | `tessellate_sweep_composite.go` | Plans shared profile stations and assembles composite Sweep meshes. See sweep Table D. |
-| `tessellate_revolve_volume.go` | Adapts the revolve volume proof. See tessellation §11. |
+| `tessellate_revolve_volume.go` | Adapts the revolve volume proof and its fitted-spline meridian charge. See tessellation §11. |
 | `tessellate_stitch.go` | Stitch mesh adapters. See tessellation §2 and surface §10.1. |
 | `tessellate_body_patch.go` | Triangulates planar PatchEdges sheets and proves face bounds. See tessellation §2. |
 | `tessellate_body_patch_prism.go` | Reuses circular surface-extrusion wall stations to mesh one or both PatchEdges fills with shared rim indices and verified face bounds. |
