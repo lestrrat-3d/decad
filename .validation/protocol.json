@@ -1,0 +1,63 @@
+{
+  "base": "3987ea5a84f662da2c307983e5c1f28988f6fbcc",
+  "candidate": "2092275e758e4075adefcd5402804052bc5897a1",
+  "phases": [
+    "correctness",
+    "consumer_rods",
+    "consumer_washer",
+    "constructor",
+    "projection_cold",
+    "projection_hot"
+  ],
+  "correctness_candidate": [
+    "TestHeldProjectionStorageMatchesOriginal",
+    "TestHeldProjectionStorageInvalidation",
+    "TestHeldProjectionStorageWorkerIsolation",
+    "TestHeldProjectionStorageSize"
+  ],
+  "correctness_both": [
+    "TestEnforceHeldEmbeddingMovesAFlattenedSliver",
+    "TestEnforceHeldEmbeddingRefusesWhenNoCornerClears",
+    "TestEnforceHeldEmbeddingRefusesTheUnion23Fold"
+  ],
+  "pairs": 5,
+  "order": [
+    "baseline",
+    "candidate",
+    "candidate",
+    "baseline",
+    "baseline",
+    "candidate",
+    "candidate",
+    "baseline",
+    "baseline",
+    "candidate"
+  ],
+  "consumer_gates": {
+    "both_required": true,
+    "median_bytes_ratio_max": 0.995,
+    "all_pairs_bytes_strictly_lower": true,
+    "all_pairs_allocs_no_increase": true,
+    "median_time_ratio_max": 1.02,
+    "pair_time_ratio_max": 1.05
+  },
+  "constructor_gates": {
+    "all_pairs_bytes_strictly_lower": true,
+    "all_pairs_allocs_no_increase": true,
+    "median_time_ratio_max": 1.05,
+    "pair_time_ratio_max": 1.1
+  },
+  "projection_cold_gates": {
+    "median_time_ratio_max": 1.05,
+    "pair_time_ratio_max": 1.1,
+    "all_pairs_allocs_no_increase": true
+  },
+  "projection_hot_gates": {
+    "median_time_ratio_max": 1.02,
+    "pair_time_ratio_max": 1.05,
+    "all_pairs_allocs_no_increase": true
+  },
+  "counts": "Consumer baseline-only warm 1x probe chooses 2x if <=10s/op, 1x if <=20s/op, else abort; constructor100x; cold/hot1000x. Five pairs in separate fresh processes. No adjustment after candidate results.",
+  "acceptance": "All six phases required; no constructor or predicate result substitutes for both real-consumer benefit gates. Record hardware/toolchain and reject missing final OOM/cleanup/source evidence.",
+  "slot": "Parent-coordinated serial hosted only. No launch authorization."
+}
