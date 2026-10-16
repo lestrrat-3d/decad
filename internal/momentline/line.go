@@ -153,37 +153,21 @@ func RatLerp(start, end, t float64) *big.Rat {
 // arithmetic: fl(p−anchor) rounds, and the rational taken over those rounded
 // coordinates would be a different chord's exact area.
 func ExactLineMoments(seg Line, anchor Point, order freeform.MomentIntegralOrder) freeform.ExactMoments {
-	u0 := RatLerp(seg.Start.U, seg.End.U, seg.TStart)
-	v0 := RatLerp(seg.Start.V, seg.End.V, seg.TStart)
-	u1 := RatLerp(seg.Start.U, seg.End.U, seg.TEnd)
-	v1 := RatLerp(seg.Start.V, seg.End.V, seg.TEnd)
-	anchorU, anchorV := proofarith.FloatRat(anchor.U), proofarith.FloatRat(anchor.V)
-	if u0 == nil || v0 == nil || u1 == nil || v1 == nil || anchorU == nil || anchorV == nil {
+	coordinates, ok := exactLineCoordinates(seg, anchor)
+	if !ok {
 		return freeform.ExactMoments{}
 	}
-	u0.Sub(u0, anchorU)
-	u1.Sub(u1, anchorU)
-	v0.Sub(v0, anchorV)
-	v1.Sub(v1, anchorV)
-	return ExactChordMoments(u0, v0, u1, v1, order)
+	return dyadicChordMoments(coordinates, order)
 }
 
 // ExactLineArea uses ExactLineMoments' endpoint and anchor operations, then
 // forms only its area expression.
 func ExactLineArea(seg Line, anchor Point) *big.Rat {
-	u0 := RatLerp(seg.Start.U, seg.End.U, seg.TStart)
-	v0 := RatLerp(seg.Start.V, seg.End.V, seg.TStart)
-	u1 := RatLerp(seg.Start.U, seg.End.U, seg.TEnd)
-	v1 := RatLerp(seg.Start.V, seg.End.V, seg.TEnd)
-	anchorU, anchorV := proofarith.FloatRat(anchor.U), proofarith.FloatRat(anchor.V)
-	if u0 == nil || v0 == nil || u1 == nil || v1 == nil || anchorU == nil || anchorV == nil {
+	coordinates, ok := exactLineCoordinates(seg, anchor)
+	if !ok {
 		return nil
 	}
-	u0.Sub(u0, anchorU)
-	u1.Sub(u1, anchorU)
-	v0.Sub(v0, anchorV)
-	v1.Sub(v1, anchorV)
-	return RatScale(new(big.Rat).Sub(proofbound.RatMul(u0, v1), proofbound.RatMul(u1, v0)), 1, 2)
+	return dyadicChordArea(coordinates)
 }
 
 // ExactChordMoments evaluates the polynomial line formulas over exact
