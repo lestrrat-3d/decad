@@ -42,10 +42,10 @@ import (
 // only when the radial minimum is PROVEN non-negative (rlo − rBound >= 0),
 // not merely un-disproven.
 //
-// NO FREE-FORM GATE IS ADDED HERE. revolveplan.ResolveAxisSide runs on every
-// revolve build, and its AuditProfileAxisContact (recorded_walks.go) refuses a
-// free-form generator unless the profile's radial minimum is proven clear of
-// the axis. This leg adds no free-form check of its own.
+// NO FREE-FORM GATE IS ADDED HERE. A revolve build calls
+// revolveplan.ResolveAxisSide, whose AuditProfileAxisContact
+// (recorded_walks.go) refuses a free-form generator when Frame.RadialLower is
+// not positive. This leg adds no free-form check of its own.
 //
 // A direct Revolve can carry the strict positive-side proof produced by
 // revolveplan.ResolveAxisSide's scan of this same profile and axis. Its scan adds a

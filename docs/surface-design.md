@@ -1731,10 +1731,9 @@ CLAUDE.md's reject-only rule forbids. For a direct Revolve on the positive
 axis side, `revolveplan.ResolveAxisSide` also records a strict zero-threshold proof from
 its profile scan when one exists. `revolveplan.Payload.ProvesSimple` reuses that
 proof only while the profile and axis are unchanged; otherwise it scans the
-recorded profile again at zero. A revolve profile carries a
-free-form segment only when its radial minimum is proven clear of the axis
-(`revolveaxis.AuditProfileAxisContact`, run by `revolveplan.ResolveAxisSide`,
-refuses one otherwise), so this leg adds no free-form gate of its own. A partial-turn revolve sheet, or one whose radial minimum is not proven
+recorded profile again at zero. A revolve build calls
+`revolveplan.ResolveAxisSide`, whose `revolveaxis.AuditProfileAxisContact`
+refuses a free-form segment when `Frame.RadialLower` is not positive, so this leg adds no free-form gate of its own. A partial-turn revolve sheet, or one whose radial minimum is not proven
 clear of the axis, earns no such proof: the fourth leg has nothing to stand
 on, which is undecided, not a violation. Any other construction earns no
 proof either, for the same reason, EXCEPT a `bodyPatchPayload` that admits

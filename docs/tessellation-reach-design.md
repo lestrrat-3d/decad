@@ -773,7 +773,8 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
 ### R1 — loft
 
 7. **Files:** `internal/loftmesh/loft_chord_allow.go`. **What:** the chorded-allowance `TwistAreaAllow`, accumulated in
-   `ComputeLoftChordedAllow`'s chorded-cell loop via `proofbound.CellTwistAreaAllow`. **Tests:**
+   `ComputeLoftChordedAllow`'s chorded-cell loop from the `TwistAreaAllow` that `proofbound.CellAllowsOf` or
+   `proofbound.CellAllowsWithSideSpansOf` returns. **Tests:**
    `loft_moments_internal_test.go`: zero for a `LineSeg`-only build, positive for an `ArcSeg` pair with a
    twisted cell, exactly the per-cell sum.
 8. **Files:** `loft_build.go`, `internal/loftmesh/mass_proof.go`. **What:** `loftmesh.MeshProof`; `loftPayload` gains `capStartCount`, `cell`, `side`,

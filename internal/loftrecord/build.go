@@ -312,8 +312,8 @@ func Build(ctx context.Context, env topo.Env, pl Payload, budget *proofbound.Wor
 			proofbound.MeasuredScalar(capEnd.Area, capEnd.AreaBound),
 		)
 		// Published Approximate EXPLICITLY, never derived from the composed
-		// bound: the solid loft's own MassAccumulator.Area always publishes
-		// Approximate (internal/loftmesh/mass_accumulator.go — a triangle's area is a square root,
+		// bound: the solid loft's own massArea always publishes
+		// Approximate (it wraps MassAccumulator.Area, internal/loftmesh/mass_accumulator.go — a triangle's area is a square root,
 		// never exactly representable), and a sheet built from the SAME wall
 		// triangles must never claim more exactness than the body it came
 		// from, whatever its own composed bound happens to round to.
