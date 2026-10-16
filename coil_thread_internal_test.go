@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/pointquery"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -52,13 +54,13 @@ func threadTool(t *testing.T, doc *Document, root, mouth, z0, turns float64) *Bo
 }
 
 // requireThreadResult asserts the cut's published volume encloses
-// π·(volume/π) where exactOverPi = base − 16·Q, its box holds the true
+// π·exactOverPi for the fixture's independent closed form, its box holds the true
 // extremes within its own bound, its mesh is watertight, and Verify proves
 // validity.
 func requireThreadResult(t *testing.T, doc *Document, res *Body, exactOverPi *big.Rat, lo, hi r3.Vec) *Report {
 	t.Helper()
-	require.Len(t, res.Lumps(), 1)
-	require.Len(t, res.Shells(), 1)
+	require.Equal(t, 1, len(res.Lumps()))
+	require.Equal(t, 1, len(res.Shells()))
 	vol, err := res.Volume()
 	require.NoError(t, err)
 	exact := new(big.Float).SetPrec(512).Mul(bigPi(), new(big.Float).SetPrec(512).SetRat(exactOverPi))
@@ -79,7 +81,7 @@ func requireThreadResult(t *testing.T, doc *Document, res *Body, exactOverPi *bi
 
 	rep, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.Len(t, rep.Bodies, 1)
+	require.Equal(t, 1, len(rep.Bodies))
 	require.Equal(t, ValidityValid, rep.Bodies[0].Validity.Outcome)
 	return rep
 }
@@ -234,7 +236,7 @@ func TestCoilThreadRunsOutOfTheEnd(t *testing.T) {
 	require.NoError(t, err)
 	res, err := Cut(t.Context(), cylinder, tool)
 	require.NoError(t, err)
-	require.Len(t, res.Lumps(), 1)
+	require.Equal(t, 1, len(res.Lumps()))
 
 	rat := func(x float64) *big.Rat { return new(big.Rat).SetFloat64(x) }
 	groove := [][2]*big.Rat{
@@ -249,10 +251,76 @@ func TestCoilThreadRunsOutOfTheEnd(t *testing.T) {
 	exact.Add(exact, new(big.Rat).Mul(big.NewRat(4, 3), below))
 	exact.Sub(big.NewRat(500, 1), exact)
 
+	requireThreadResult(t, doc, res, exact, r3.NewVec(-5, 0, -5), r3.NewVec(5, 20, 5))
+
+	// At a quarter turn the groove centre reaches y = 0. Check the held
+	// mesh's opening on that plane, not merely the cutter's bounds. This
+	// parity is not a certified true-solid point query; the closed form and
+	// validity assertions above independently check the body's guarantees.
+	mesh, err := res.Tessellate(t.Context(), units.Millimeters(0.01))
+	require.NoError(t, err)
+	vertices, triangles := mesh.Vertices(), mesh.Triangles()
+	endPoint := r3.NewVec(0, 0, -4.55)
+	distanceSquared, err := pointquery.MeshDistanceSquared(t.Context(), endPoint, vertices, triangles)
+	require.NoError(t, err)
+	require.Positive(t, distanceSquared.Sign(), "the end opening is not a point on a cap facet")
+	insideMesh, resolved, err := pointquery.ObliqueParity(t.Context(), endPoint, vertices, triangles)
+	require.NoError(t, err)
+	require.True(t, resolved)
+	require.False(t, insideMesh)
+}
+
+// TestCoilGalleryThreadVolume checks the actual R5, L14, eight-turn gallery
+// geometry. Its bound encloses the independently clipped volume even though
+// volume, area and centroid bounds all exceed the default tolerance limits.
+func TestCoilGalleryThreadVolume(t *testing.T) {
+	doc := New()
+	cs, cpf := coilLoopsSketch(t, [][2]float64{{0, 0}, {5, 0}, {5, 14}, {0, 14}})
+	cylinder, err := Revolve(t.Context(), doc, cs, cpf, coilAxisV, FullRevolution{})
+	require.NoError(t, err)
+	const start = -0.375
+	// Keep the same rounded sketch coordinates as _gallery/thread.go.
+	points := [][2]float64{{4.1, start}, {5.3, start - threadHalfWidth}, {5.3, start + threadHalfWidth}}
+	gs, gp := coilLoopsSketch(t, points)
+	tool, err := Coil(t.Context(), doc, gs, gp, coilAxisV, units.Millimeters(1.5), units.Scalar(8))
+	require.NoError(t, err)
+	res, err := Cut(t.Context(), cylinder, tool)
+	require.NoError(t, err)
+
+	// Integrate rho over the radial clip, then rho*zeta over its negative
+	// axial part. Only the lower end clips the sweep; adjacent turns do not
+	// overlap. Removed volume is pi*(16Q + (4/3)*Mminus).
+	rat := func(x float64) *big.Rat { return new(big.Rat).SetFloat64(x) }
+	groove := make([][2]*big.Rat, len(points))
+	for i, point := range points {
+		groove[i] = [2]*big.Rat{rat(point[0]), rat(point[1])}
+	}
+	inside := clipPolygon(groove, func(p [2]*big.Rat) *big.Rat { return new(big.Rat).Sub(rat(5), p[0]) })
+	q, _ := polygonMoments(inside)
+	_, below := polygonMoments(clipPolygon(inside, func(p [2]*big.Rat) *big.Rat { return new(big.Rat).Neg(p[1]) }))
+	exactOverPi := new(big.Rat).Mul(big.NewRat(16, 1), q)
+	exactOverPi.Add(exactOverPi, new(big.Rat).Mul(big.NewRat(4, 3), below))
+	exactOverPi.Sub(big.NewRat(350, 1), exactOverPi)
+	rep := requireThreadResult(t, doc, res, exactOverPi, r3.NewVec(-5, 0, -5), r3.NewVec(5, 14, 5))
+
 	vol, err := res.Volume()
 	require.NoError(t, err)
-	requireEnclosesBig(t, vol.Value.Base(), vol.Bound.Base(),
-		new(big.Float).SetPrec(512).Mul(bigPi(), new(big.Float).SetPrec(512).SetRat(exact)), "run-out volume")
+	publishedLo := new(big.Rat).Sub(rat(vol.Value.Base()), rat(vol.Bound.Base()))
+	publishedHi := new(big.Rat).Add(rat(vol.Value.Base()), rat(vol.Bound.Base()))
+	expectedLo := new(big.Rat).Mul(exactOverPi, proofbound.PiLower)
+	expectedHi := new(big.Rat).Mul(exactOverPi, proofbound.PiUpper)
+	require.LessOrEqual(t, publishedLo.Cmp(expectedLo), 0, "volume lower bound encloses the closed form")
+	require.GreaterOrEqual(t, publishedHi.Cmp(expectedHi), 0, "volume upper bound encloses the closed form")
+	require.Equal(t, Suspect, rep.Status)
+	require.Equal(t, 3, len(rep.Diagnostics))
+	readings := map[ReadingKind]int{}
+	for _, diagnostic := range rep.Diagnostics {
+		require.Equal(t, DiagMeasurementBeyondTolerance, diagnostic.Code)
+		readings[diagnostic.Reading]++
+	}
+	for _, reading := range []ReadingKind{ReadingArea, ReadingVolume, ReadingCentroid} {
+		require.Equal(t, 1, readings[reading], "one diagnostic for reading %s", reading)
+	}
 }
 
 // TestCoilCapFlushWithAnAxialFaceRefuses cuts the groove from a half

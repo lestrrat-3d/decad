@@ -116,14 +116,18 @@ leaving a sheet body.
 </tr>
 <tr>
 <td colspan="2">
-<img src="docs/images/features/thread.png" alt="An eight-turn groove cut into a cylinder" width="320"><br>
-<strong>Coil and Cut</strong> make a full thread by sweeping a groove around an axis and removing it from the cylinder.
+<img src="docs/images/features/thread.png" alt="A helical V-groove opens through one end of a cylinder, leaving a short plain collar at the other" width="320"><br>
+<strong>Coil and Cut</strong> sweep a V-groove around a cylinder and cut it through one end.
+The result has faceted faces. Its solid validity is proven, but <code>Verify</code> reports
+<code>Suspect</code> because area, volume and centroid bounds exceed the default tolerances.
+This example does not specify a standard thread or a mating fit.
 </td>
 </tr>
 </table>
 
 Regenerate the gallery GIFs with `cd _gallery && go run . features` (requires
-`ffmpeg`). The still images can be regenerated with `go run .`. From `_gallery`,
+`ffmpeg`). The still images can be regenerated with `go run .`; use `go run . -only thread`
+for the thread image. From `_gallery`,
 regenerate the animated hero with `go run . hero > hero-assemble.sh && sh hero-assemble.sh`.
 Its letters assemble, a light crosses them, the finished logo holds for ten
 seconds, and the letters lift away before the loop repeats.

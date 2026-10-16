@@ -38,10 +38,7 @@ func runFeatureAnimations(ctx context.Context, args []string) error {
 	if fs.NArg() > 0 {
 		return fmt.Errorf("features: unexpected argument %q", fs.Arg(0))
 	}
-	renders := slices.DeleteFunc(featureRenders(), func(render imageRender) bool {
-		return render.name() == "verify"
-	})
-	selected, err := selectRenders(renders, *only)
+	selected, err := selectRenders(animatedFeatureRenders(), *only)
 	if err != nil {
 		return err
 	}
@@ -62,6 +59,13 @@ func runFeatureAnimations(ctx context.Context, args []string) error {
 		}
 	}
 	return nil
+}
+
+// animatedFeatureRenders excludes the still-only entries from the GIF command.
+func animatedFeatureRenders() []imageRender {
+	return slices.DeleteFunc(featureRenders(), func(render imageRender) bool {
+		return render.name() == "verify" || render.name() == "thread"
+	})
 }
 
 func renderFeatureAnimation(ctx context.Context, name, root string) error {

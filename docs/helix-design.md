@@ -707,7 +707,7 @@ the test computes independently.
 | `Volume` | `Approximate`: the mesh boolean composes the cylinder operand's own chord `volSymDiff` at the pair tolerance, the coil's §8.2 term, and the rim terms of `docs/faceted-vertex-bounds-design.md` §3. The published interval encloses the closed form above; that enclosure is §13's assertion |
 | `Area`, `Centroid`, `Bounds` | `Approximate`, composed the same way |
 | faces | `Faceted` throughout: a boolean result loses analytic identity (`docs/api-design.md` §6.1) |
-| `Verify` | validity by the faceted verdict (`docs/payload-verification-design.md` §6.4): the held audit is clean and the feature scale — the crest-to-crest gap, a fraction of the pitch — clears `2·δ`, so validity is proven; `Status` is then the tolerance gate's answer over the composed bounds. The one-turn §13 fixtures read `Sound`. The complete eight-turn external thread in `_gallery/thread.go` has longer rims and reads `Suspect` on `Area` and `Centroid` |
+| `Verify` | validity by the faceted verdict (`docs/payload-verification-design.md` §6.4): the held audit is clean and the feature scale — the crest-to-crest gap, a fraction of the pitch — clears `2·δ`, so validity is proven; `Status` is then the tolerance gate's answer over the composed bounds. The one-turn §13 fixtures read `Sound`. The eight-turn end-reaching V-groove in `_gallery/thread.go` reads `Suspect` on `Area`, `Volume` and `Centroid` |
 
 The §13 fixtures read (`examples/decad_thread_external_example_test.go`,
 `examples/decad_thread_internal_example_test.go`):
@@ -717,11 +717,34 @@ The §13 fixtures read (`examples/decad_thread_external_example_test.go`,
 | external, `R = 5`, `L = 20` cylinder, groove root `4.1`, mouth `5.3`, one turn | `π·(500 − 2·Q(Ω ∩ {ρ ≤ 5}))` ≈ `1556.99 mm³` | `1556.6 ± 0.5 mm³` | valid, `Sound` |
 | internal, annulus `5 ≤ ρ ≤ 10`, 20 mm, groove root `5.9`, mouth `4.7`, one turn | `π·(1500 − 2·Q(Ω ∩ {ρ ≥ 5}))` ≈ `4696.82 mm³` | `4696.4 ± 1.3 mm³` | valid, `Sound` |
 
-The gallery renders the complete eight-turn external model. Its closed-form
-volume is `1460.31 mm³`; its published reading is `1460.0 ± 1.5 mm³`.
+The gallery cuts an eight-turn V-groove from an `R = 5`, `L = 14` cylinder,
+starting at `ζ = -0.375` so the cut opens through its end. It checks held-mesh parity
+inside the groove and crest on opposite sides, including quarter-pitch and
+half-pitch advances. These visual checks do not certify true-solid point membership.
+It specifies neither a standard thread nor a mating fit.
 
-**What the station count buys.** Measured on the eight-turn external model with the
-facet-pair ceiling lifted for the measurement alone:
+At the default relative tolerance `0.001`, the end-reaching gallery model reports:
+
+| Reading | Value | Absolute bound | Tolerance limit |
+|---|---|---|---|
+| Volume | `992.321103609811 mm³` | `1.332593020759 mm³` | `0.992321103610 mm³` |
+| Area | `796.087999724764 mm²` | `6.596652156892 mm²` | `0.796087999725 mm²` |
+| Centroid | `(0.006830893328, 7.127687732124, -0.010412655469) mm` | `0.028588054103 mm` | `0.017204650534 mm` |
+
+All three bounds exceed their limits, so the valid body is `Suspect`.
+`TestCoilGalleryThreadVolume` checks the independent end-clipped volume
+`π·(350 − 16Q − (4/3)·M⁻)`, where `Q = ∫ρ dA` over the profile inside
+`ρ ≤ 5` and `M⁻ = ∫ρζ dA` over its part below `ζ = 0`.
+The screw sweep's lower angle is `max(0, −ζ/k)`, with `k = 1.5/(2π)`;
+the turns do not overlap, and the upper end stays below the blank's top.
+The closed form is approximately `992.545905603195 mm³`, inside the published
+volume interval `[990.988510589052, 993.653696630569] mm³`.
+The regression compares exact rational coordinates and both endpoints of a
+π enclosure against the published bound. This enclosure does not tighten the
+body's reported bound or change its tolerance verdict.
+
+**What the station count buys.** Measured on the eight-turn interior-groove fixture (`R = 5`, `L = 20`,
+starting at `ζ = 3`) with the facet-pair ceiling lifted for the measurement alone:
 
 | Stations per turn | Tool triangles | `δ` | Tool build | Cut | `Volume` | `Area` bound | `Centroid` bound | Audit work, candidates |
 |---|---|---|---|---|---|---|---|---|
@@ -934,10 +957,11 @@ PR 2:
   tolerance, `Cut` refuses at the chain-depth gate.
 - The internal thread on an annular `Extrude`: the same enclosure with
   `Ω ∩ {ρ ≥ R}` and `Sound` verification.
-- `_gallery/thread.go` renders the complete eight-turn external thread during
-  gallery CI and checks its valid, `Suspect` verdict with only `Area` and
-  `Centroid` tolerance diagnostics. The one-turn tests above prove the cut's
-  bounds and mesh.
+- `_gallery/thread.go` renders the eight-turn end-reaching V-groove during
+  gallery CI and requires its valid, `Suspect` verdict with exactly `Area`,
+  `Volume` and `Centroid` tolerance diagnostics. `TestCoilGalleryThreadVolume`
+  checks the same eight-turn geometry's independent volume enclosure,
+  bounds, watertight mesh and validity.
 - The cylinder meshed at the raised pair tolerance is coarser than at the
   diameter-derived one, and its mesh volume and area still lie within its
   own `volSymDiff` and `areaSlack` of `500π` and `250π`.
