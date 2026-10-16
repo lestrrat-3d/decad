@@ -30,15 +30,15 @@ func threadRender() imageRender {
 			}
 			scene := featureScene(models...)
 			scene.Camera = solidlens.Camera{
-				Position: solidlens.Vec{X: 32, Y: -9, Z: 19},
+				Position: solidlens.Vec{X: 24, Y: -5, Z: -32},
 				Target:   solidlens.Vec{Y: 7},
 				Up:       solidlens.Vec{Y: 1},
 				FOV:      27,
 			}
-			// A low fill and a key with an axial component separate the V's flanks.
+			// Opposing axial light components illuminate both V-groove flanks.
 			scene.DirectionalLights = []solidlens.DirectionalLight{
-				{Direction: solidlens.Vec{X: -1, Y: -0.8, Z: -0.6}, Color: solidlens.RGB(1, 1, 1), Intensity: 0.9},
-				{Direction: solidlens.Vec{X: 0.6, Y: 0.4, Z: -1}, Color: solidlens.RGB(0.7, 0.8, 1), Intensity: 0.15},
+				{Direction: solidlens.Vec{X: -0.6, Y: -0.8, Z: 0.8}, Color: solidlens.RGB(1, 1, 1), Intensity: 0.8},
+				{Direction: solidlens.Vec{X: -0.4, Y: 0.8, Z: 0.8}, Color: solidlens.RGB(0.7, 0.8, 1), Intensity: 0.45},
 			}
 			scene.PointLights = nil
 			return scene, nil
