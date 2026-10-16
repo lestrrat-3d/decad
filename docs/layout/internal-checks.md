@@ -71,4 +71,4 @@ The rules for rows live in `docs/layout.md`.
 | `internal/surfacenormal/` | Exact enclosures and error bounds for analytic face normals. See `normal_bound.go`. |
 | `internal/spiralsector/` | Spiral first-join contact, exact X-axis copy map (`AxisCopyMap`), inverse copy placement against the exact transpose, output-edge and blank-meridian gates. See faceted-vertex-bounds §3.6–§3.7. |
 | `internal/shellseparation/` | Bounded source-shell and held-copy separation, exact slab projections, and placement error. See faceted-vertex-bounds §3.7. |
-| `internal/obliqueboss/` | Rational interval-vector arithmetic for the oblique boss fillet proof: interval points, exact dot product, enclosed normalisation and held-vertex error. See oblique-boss-fillet design. |
+| `internal/obliqueboss/` | The oblique boss fillet mesh and proof: source face groups, the angular plan and fillet mesh, the boundary, volume and area bounds, and the rational interval-vector arithmetic the proof uses. See oblique-boss-fillet design. |
