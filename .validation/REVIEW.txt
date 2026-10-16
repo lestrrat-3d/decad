@@ -1,0 +1,122 @@
+Decad H4 validation controls v2: independently review before any hosted dispatch.
+
+This bundle REPLACES validation-controls/ and supersedes the separate setup-delta proposal.
+The earlier snapshots remain reference only. No offline/custom image exists or is required.
+No production candidate changed in this turn:
+base 3987ea5a84f662da2c307983e5c1f28988f6fbcc
+section cd9cfa09426cd001ec9b00ad4a9e1ebd0266f58a
+section tree e341475c64f9db6b9a8c470dab75f04f43d4164a
+oblique 651a691366bf44c976d1da0219b043c98d82c03f
+oblique tree 788a639ce1705893e8badce629dee4761ffe5850
+
+REVIEW FILES
+validation_controller.py is the repaired hosted entry point.
+hosted_lifecycle.py copies named functions verbatim from the vetted coil controller.
+lifecycle-provenance.json names that source, its hash and the copied functions.
+stage.sh integrates the actual vetted official Go/lint setup.
+Both *-plan.json files retain exact named focused/race/differential/layout/lint/vet steps.
+Both *-source.sha256 files pin all tracked source content; review-files.txt lists changes.
+tools/ contains the verified existing official lint release and checksum file.
+harnesses/ contains validation-only differential overlays; their hashes are in the plans.
+test_failure_canaries.py and test_lifecycle_deadlines.py are mock-only bounded canaries.
+mock-canaries.log records 15 passes. No Docker, Go, network, real signals or workloads ran.
+SHA256SUMS covers the entire bundle, including source manifests, tool archives and harnesses.
+The caller supplies its externally reviewed SHA256 through --manifest-sha256.
+
+FIXES FOR REVIEW FINDINGS
+1. require_memory rejects final memory.peak >= 3 GiB even when the live sampler missed it.
+2. SIGTERM/SIGINT install the vetted request_cancel handler. Bounded commands observe it,
+   and all workload failure paths reach exact removal with its independent reserved budget.
+3. Removal is unconditional in a nested finally. Inspect and counter failures cannot gate it.
+4. The unique container name is saved in per-stage and overall reports before docker create.
+   An uncertain/timed-out create is removed using that exact persisted name.
+5. Final capture uses the vetted bounded helper with a 1.5-second deadline. Failure paths in
+   bounded_process pause/capture within 1.5 seconds, then reserve 3.5 seconds for removal,
+   launcher cleanup and verification. The initial inspect timeout is 2 seconds, not 30.
+6. /control and /src are read-only mounts outside the writable scratch filesystem.
+   /out alone exposes an owned, fixed-size 8 GiB ext4 scratch filesystem. stage.sh keeps
+   the vetted 1 GiB per-file ulimit. Go caches, module caches, linker temps and tool
+   extraction share that filesystem. Container /tmp is a separate 64 MiB tmpfs charged
+   to the same memory cgroup. Source archives have a 128 MiB hard output cap; reports
+   have a 64 KiB cap, and cumulative workload text has an 8 MiB cap.
+7. Launcher wait/cleanup exceptions are caught by the vetted bounded_process and run_stage.
+   Per-stage and overall evidence writing is the innermost finally. Removal, capture,
+   memory validation and disk-cleanup errors cannot skip that final write attempt.
+8. Only exact owned container IDs/names, process groups launched by this controller and
+   the run's unique scratch image are cleaned. No unrelated worktrees or caches are touched.
+9. A failed removal/verification is an inconclusive failure. Report errors rather than
+   claiming cleanup succeeded. An inability to write artifacts cannot be called success.
+10. No Python container worker is used. Python runs on the GitHub-hosted machine; it uses
+    the vetted docker-exec Bash lifecycle in the official Go container.
+
+RUNTIME LIMITS AND SETUP
+Use the parent's one serial hosted slot; this bundle dispatches nothing.
+The entry point rejects non-GitHub-hosted execution.
+Reuse official golang:1.26.8-bookworm. After a 90-second bounded pull, record its image Id
+and RepoDigests; every subsequent container uses that immutable Id. The tag is not falsely
+described as a pre-resolved digest. stage.sh checks the exact Go 1.26.8 linux/amd64 version.
+Official lint archive SHA256:
+8df580d2670fed8fa984aac0507099af8df275e665215f5c7a2ae3943893a553
+Official lint binary SHA256:
+e26335d9bd381a60e5769a13b0ccc7967db5b6fb9c39a896a1f6fd0befe0a661
+prepare_tool is bounded at 60 seconds with no network. It verifies the official checksum
+file, archive, binary, module build metadata and lint version before use.
+prepare_dependencies is bounded at 480 seconds with network bridge. It prepares only
+root go.mod dependencies and verifies them, without building tests or rendering.
+All correctness/race/differential/lint/vet stages are network none with GOPROXY=off,
+GOSUMDB=off and GOTOOLCHAIN=local. No derivative image is built.
+Each stage is a fresh 4 GiB hard / zero-swap / 2 CPU / 64-PID cgroup, limits verified.
+The sampler stops at 3 GiB; final peak and OOM counters also gate success.
+The controller checks process membership in its cgroup before executing the workload.
+The whole controller has a 65-minute stage-admission budget with cleanup reserve.
+Validation phases additionally obey the plan's 3600-second budget; phase bounds remain
+at most 900 seconds. Use a 70-minute outer hosted job deadline. No matrix or concurrency.
+A failure stops the sequence. No automatic retry, expanded limits or skipped evidence.
+The original small real producer/consumer test remains the first correctness workload.
+Use a fresh temporary controls checkout; do not put controls into production PRs.
+
+DIFFERENTIAL COVERAGE CHANGES
+TestCapBoundaryBisect now fails when flips==0; comparison logic is otherwise unchanged.
+zzFixtures reports configured count, admitted names, omitted names and radius-case count.
+An omitted y15, x15 or xy15 core fixture fails; other source-recognition refusals are
+explicitly named in the log. They are not counted as successful differential cases.
+Reduced ZZ_FAST mode now fails at fixture construction; stage.sh also unsets it and
+GRID_STRIDE. Duplicate radius variants share source bodies, so provenance is checked
+once per body; that omission now has an explicit comment.
+Do not describe a run as covering omitted configurations. Include the runtime fixture
+summary and cap flip count in SOUND evidence.
+Full source-body comparisons and bounded mismatch diagnostics remain intact.
+The ||/&& transform mutation is equivalent for pinned r3, as the reviewer confirmed.
+Keep the production || and the admission test; no mutant-kill claim is made.
+
+CANARIES
+15 mock tests passed under a 25-second outer timeout, in 0.027 seconds.
+They cover final peaks at/above the threshold, SIGTERM cancellation state, counter and
+inspect failures, create-timeout ownership recovery, launcher wait exceptions, removal
+failure, read-only control mounts and deadline reservation/expired-cancellation behavior.
+Docker, subprocess launch, process signals and cgroups were mocked. These passes do not
+claim live Docker/cgroup cleanup works. Live failure/cancellation canaries remain part
+of the next assigned hosted control-verification slot, before geometry workloads.
+No cgroup OOM evidence exists because no hosted workload was launched.
+
+SEQUENCING
+Validate/review/merge section first; rebase oblique onto the actual merged main, preserve
+both separate docs/layout/internal-checks.md rows, then repin base/head/tree/manifests.
+Require a fresh SOUND report and exact-head vet/lint and green required CI after rebase.
+Original dirty worktrees remain untouched. H5 twins and the abandoned sweep-report branch
+remain excluded. This bundle contains no workflow dispatch or merge authorization.
+
+
+PREPARED LIVE CANARIES (NOT RUN)
+hosted_canaries.py and canary_stage.sh prepare two tiny live failure cases for the next
+assigned hosted control-verification slot. They use the same run_stage, exact official
+image, resource limits, final evidence gates and scratch cleanup as real validation.
+The first exits 23 deliberately. The second sleeps after a start marker, and the
+controller signals only its own PID with SIGTERM after observing that marker.
+Both must return the expected failure with final counters and verified container/cgroup
+cleanup; the wrapper then verifies scratch cleanup. Missing evidence fails the canary.
+Neither builds nor tests Go or allocates a deliberate large object. The final-peak
+boundary remains covered by mocked counters, not an intentional 3 GiB allocation.
+Use a 10-minute outer hosted limit for the canary wrapper; each workload is capped at
+10 seconds, the image pull at 90 seconds, and all control operations retain vetted bounds.
+No canary is launched by preparing or importing these files.

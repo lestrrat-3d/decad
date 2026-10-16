@@ -1,0 +1,183 @@
+{
+  "status": "DRAFT_NOT_APPROVED_DO_NOT_LAUNCH",
+  "base": "3987ea5a84f662da2c307983e5c1f28988f6fbcc",
+  "candidate": "651a691366bf44c976d1da0219b043c98d82c03f",
+  "tree": "788a639ce1705893e8badce629dee4761ffe5850",
+  "total_wall_seconds": 3600,
+  "phases": [
+    {
+      "name": "01-real-consumer",
+      "argv": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-failfast",
+        "-timeout=12m",
+        "-run",
+        "^(TestObliqueBossJunctionFilletPublicWorkflow)$",
+        "."
+      ],
+      "tests": [
+        "TestObliqueBossJunctionFilletPublicWorkflow"
+      ],
+      "wall_seconds": 900
+    },
+    {
+      "name": "02-oblique-regressions",
+      "argv": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-failfast",
+        "-timeout=12m",
+        "-run",
+        "^(TestObliqueBossJunctionFilletPublicWorkflow|TestObliqueBossJunctionFilletXTiltPublicWorkflow|TestObliqueBossJunctionFilletDiagonalTiltPublicWorkflow|TestObliqueBossRejectsPartialJunctionSource)$",
+        "."
+      ],
+      "tests": [
+        "TestObliqueBossJunctionFilletPublicWorkflow",
+        "TestObliqueBossJunctionFilletXTiltPublicWorkflow",
+        "TestObliqueBossJunctionFilletDiagonalTiltPublicWorkflow",
+        "TestObliqueBossRejectsPartialJunctionSource"
+      ],
+      "wall_seconds": 900
+    },
+    {
+      "name": "03-diameter-bound",
+      "argv": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-failfast",
+        "-timeout=12m",
+        "-run",
+        "^(TestDiameterBoundTakesTheLargestWidenedExtent)$",
+        "./internal/obliqueboss"
+      ],
+      "tests": [
+        "TestDiameterBoundTakesTheLargestWidenedExtent"
+      ],
+      "wall_seconds": 900
+    },
+    {
+      "name": "04-cross-bore-consumers",
+      "argv": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-failfast",
+        "-timeout=12m",
+        "-run",
+        "^(TestCrossCylinderBoreMouthChamferVerified|TestCrossCylinderBoreMouthChamferRefusesUnprovedCases)$",
+        "./apitest"
+      ],
+      "tests": [
+        "TestCrossCylinderBoreMouthChamferVerified",
+        "TestCrossCylinderBoreMouthChamferRefusesUnprovedCases"
+      ],
+      "wall_seconds": 900
+    },
+    {
+      "name": "05-race-consumer",
+      "argv": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-failfast",
+        "-timeout=12m",
+        "-race",
+        "-run",
+        "^(TestObliqueBossJunctionFilletPublicWorkflow)$",
+        "."
+      ],
+      "tests": [
+        "TestObliqueBossJunctionFilletPublicWorkflow"
+      ],
+      "wall_seconds": 900
+    },
+    {
+      "name": "05b-differential",
+      "argv": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-failfast",
+        "-timeout=12m",
+        "-run",
+        "^(TestZZObliqueFaceGroupAndHasOrigin|TestZZObliqueDiameterBound|TestZZObliqueBuildAndProve|TestZZObliqueProveMeshShapes|TestZZObliqueBasisBoundaries|TestZZObliqueSourceBoundThreshold|TestZZObliquePlanAndRim|TestZZObliqueVariants|TestZZObliqueSynthPlates)$",
+        "."
+      ],
+      "tests": [
+        "TestZZObliqueFaceGroupAndHasOrigin",
+        "TestZZObliqueDiameterBound",
+        "TestZZObliqueBuildAndProve",
+        "TestZZObliqueProveMeshShapes",
+        "TestZZObliqueBasisBoundaries",
+        "TestZZObliqueSourceBoundThreshold",
+        "TestZZObliquePlanAndRim",
+        "TestZZObliqueVariants",
+        "TestZZObliqueSynthPlates"
+      ],
+      "wall_seconds": 900,
+      "differential": true
+    },
+    {
+      "name": "06-layout",
+      "argv": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-failfast",
+        "-timeout=12m",
+        "-run",
+        "^(TestCLAUDEMDLayoutStaysCompact)$",
+        "."
+      ],
+      "tests": [
+        "TestCLAUDEMDLayoutStaysCompact"
+      ],
+      "wall_seconds": 900
+    },
+    {
+      "name": "07-lint",
+      "argv": [
+        "golangci-lint",
+        "run",
+        "--timeout=5m"
+      ],
+      "wall_seconds": 420
+    },
+    {
+      "name": "08-vet",
+      "argv": [
+        "go",
+        "vet",
+        "./..."
+      ],
+      "wall_seconds": 900
+    }
+  ],
+  "overlays": [
+    {
+      "artifact": "harnesses/oblique/zz_oblique_diff_internal_test.go",
+      "destination": "zz_oblique_diff_internal_test.go",
+      "sha256": "87dfdeb42dbfb84f9de2c02bb0e31f0a9cc8a99feb58d8ff13709d1888f0fbd6",
+      "historical_source": ".tmp/h4-obliqueboss/zz_oblique_diff_internal_test.go",
+      "historical_sha256": "7317b67f82602fb593e74135ca3765e41c6140a9e9d5bda229024d4132940de8"
+    },
+    {
+      "artifact": "harnesses/oblique/zzold_oblique.go",
+      "destination": "zzold_oblique.go",
+      "sha256": "a777bbfece72ea1beead23397c457259ac48876377212fa5c6bf22b22561d5c9",
+      "historical_source": ".tmp/h4-obliqueboss/zzold_oblique.go",
+      "historical_sha256": "a777bbfece72ea1beead23397c457259ac48876377212fa5c6bf22b22561d5c9"
+    }
+  ]
+}

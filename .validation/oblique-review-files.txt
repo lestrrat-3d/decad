@@ -1,0 +1,8 @@
+M	cross_cylinder_bore_chamfer.go
+M	docs/layout/internal-checks.md
+M	docs/layout/modify-booleans.md
+M	internal/obliqueboss/interval.go
+A	internal/obliqueboss/mesh.go
+R077	oblique_boss_proof.go	internal/obliqueboss/proof.go
+A	internal/obliqueboss/proof_test.go
+M	oblique_boss_fillet.go

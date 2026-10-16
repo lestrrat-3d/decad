@@ -1,0 +1,4 @@
+All Python files parsed; bash -n passed for both shell scripts.
+15 mock canaries passed under a 25-second deadline.
+Overlay hashes verified; original dirty-worktree content hashes unchanged.
+No live canary, Docker operation, image preparation, Go test, lint, build, render, or hosted dispatch ran.

@@ -1,0 +1,30 @@
+{
+  "repository": "golangci/golangci-lint",
+  "release": "v2.12.2",
+  "platform": "linux-amd64",
+  "archive": "golangci-lint-2.12.2-linux-amd64.tar.gz",
+  "archive_bytes": 15022786,
+  "archive_sha256": "8df580d2670fed8fa984aac0507099af8df275e665215f5c7a2ae3943893a553",
+  "official_checksums_sha256": "9accc7943a5b4be44416a7d4efa7efb3d18c7f1919d6581cc3536e185301a2d4",
+  "binary_sha256": "e26335d9bd381a60e5769a13b0ccc7967db5b6fb9c39a896a1f6fd0befe0a661",
+  "build_go": "go1.26.2",
+  "source_revision": "c0d3ddc9cf3faa61a4e378e879ece580256d76e5",
+  "official_assets": [
+    {
+      "name": "golangci-lint-2.12.2-checksums.txt",
+      "url": "https://github.com/golangci/golangci-lint/releases/download/v2.12.2/golangci-lint-2.12.2-checksums.txt",
+      "digest": "sha256:9accc7943a5b4be44416a7d4efa7efb3d18c7f1919d6581cc3536e185301a2d4",
+      "size": 8413
+    },
+    {
+      "name": "golangci-lint-2.12.2-linux-amd64.tar.gz",
+      "url": "https://github.com/golangci/golangci-lint/releases/download/v2.12.2/golangci-lint-2.12.2-linux-amd64.tar.gz",
+      "digest": "sha256:8df580d2670fed8fa984aac0507099af8df275e665215f5c7a2ae3943893a553",
+      "size": 15022786
+    }
+  ],
+  "go_image": "golang:1.26.8-bookworm",
+  "go_image_identity": "Version tag from vetted controls; digest not present. Bounded hosted pull records RepoDigests and image Id, and all stages must use that exact Id.",
+  "reuse_from": "/home/lestrrat/dev/src/github.com/lestrrat-3d/decad/.worktrees/fix-thread-gallery/.tmp/thread-gallery-final-controls-draft",
+  "verified_archive_and_binary_locally": true
+}

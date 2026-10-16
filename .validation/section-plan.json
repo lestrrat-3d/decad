@@ -1,0 +1,224 @@
+{
+  "status": "DRAFT_NOT_APPROVED_DO_NOT_LAUNCH",
+  "base": "3987ea5a84f662da2c307983e5c1f28988f6fbcc",
+  "candidate": "cd9cfa09426cd001ec9b00ad4a9e1ebd0266f58a",
+  "tree": "e341475c64f9db6b9a8c470dab75f04f43d4164a",
+  "total_wall_seconds": 3600,
+  "phases": [
+    {
+      "name": "01-real-consumer",
+      "argv": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-failfast",
+        "-timeout=12m",
+        "-run",
+        "^(TestSectionCardinalSphereFeedsVerifiedExtrude)$",
+        "./apitest"
+      ],
+      "tests": [
+        "TestSectionCardinalSphereFeedsVerifiedExtrude"
+      ],
+      "wall_seconds": 900
+    },
+    {
+      "name": "02-section-regressions",
+      "argv": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-failfast",
+        "-timeout=12m",
+        "-run",
+        "^(TestSectionCardinalSphereFeedsVerifiedExtrude|TestSectionCardinalSphereNonSquareFeedsVerifiedExtrude|TestSectionObliqueCenterSphereFeedsVerifiedExtrude|TestSectionObliqueOffsetSphereFeedsVerifiedExtrude|TestSectionObliqueOffsetSpherePlacement|TestSectionObliqueOffsetSphereHeldGramCrossTerm|TestSectionObliqueCenterSpherePlacementAndPlaneSense|TestSectionObliqueSphereShiftedOrigins|TestSectionObliqueSphereRefusesTangentExterior|TestSectionCardinalSphereCutsAcrossRevolveAxis|TestSectionCardinalSpherePlacementAndPlaneSense|TestSectionCardinalSphereNonSquarePlacementAndPlaneSense|TestSectionCardinalSphereRefusesUnprovedCuts|TestSectionCardinalConeFeedsVerifiedExtrude|TestSectionCardinalConeInexactRadiusFeedsVerifiedExtrude|TestSectionCardinalConeRoundedProxyCarriesDisplacement|TestSectionCardinalConeRefusesInexactProjectedCenter|TestSectionCardinalConePlacementAndAxisSense|TestSectionCardinalConeRefusesUnprovedCuts|TestSectionObliqueCylinderFeedsVerifiedExtrude|TestSectionObliqueCylinderPlacementAndReverseAxis|TestSectionObliqueCylinderCapCrossingFeedsVerifiedExtrude|TestSectionObliqueCylinderRefusesTwoCapCrossing|TestSectionObliqueCylinderBottomCapCrossingFeedsVerifiedExtrude|TestSectionObliqueCylinderPlacedCapCrossingFeedsVerifiedExtrude|TestSectionObliqueCylinderRefusesCapTangent)$",
+        "./apitest"
+      ],
+      "tests": [
+        "TestSectionCardinalSphereFeedsVerifiedExtrude",
+        "TestSectionCardinalSphereNonSquareFeedsVerifiedExtrude",
+        "TestSectionObliqueCenterSphereFeedsVerifiedExtrude",
+        "TestSectionObliqueOffsetSphereFeedsVerifiedExtrude",
+        "TestSectionObliqueOffsetSpherePlacement",
+        "TestSectionObliqueOffsetSphereHeldGramCrossTerm",
+        "TestSectionObliqueCenterSpherePlacementAndPlaneSense",
+        "TestSectionObliqueSphereShiftedOrigins",
+        "TestSectionObliqueSphereRefusesTangentExterior",
+        "TestSectionCardinalSphereCutsAcrossRevolveAxis",
+        "TestSectionCardinalSpherePlacementAndPlaneSense",
+        "TestSectionCardinalSphereNonSquarePlacementAndPlaneSense",
+        "TestSectionCardinalSphereRefusesUnprovedCuts",
+        "TestSectionCardinalConeFeedsVerifiedExtrude",
+        "TestSectionCardinalConeInexactRadiusFeedsVerifiedExtrude",
+        "TestSectionCardinalConeRoundedProxyCarriesDisplacement",
+        "TestSectionCardinalConeRefusesInexactProjectedCenter",
+        "TestSectionCardinalConePlacementAndAxisSense",
+        "TestSectionCardinalConeRefusesUnprovedCuts",
+        "TestSectionObliqueCylinderFeedsVerifiedExtrude",
+        "TestSectionObliqueCylinderPlacementAndReverseAxis",
+        "TestSectionObliqueCylinderCapCrossingFeedsVerifiedExtrude",
+        "TestSectionObliqueCylinderRefusesTwoCapCrossing",
+        "TestSectionObliqueCylinderBottomCapCrossingFeedsVerifiedExtrude",
+        "TestSectionObliqueCylinderPlacedCapCrossingFeedsVerifiedExtrude",
+        "TestSectionObliqueCylinderRefusesCapTangent"
+      ],
+      "wall_seconds": 900
+    },
+    {
+      "name": "03-contact-consumers",
+      "argv": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-failfast",
+        "-timeout=12m",
+        "-run",
+        "^(TestContactPairCylinderRulingOnFloor|TestContactPairCylinderPairRuling|TestContactPairPlacedRuling|TestContactPairRevolvedCylinderAxialDiskFace|TestContactPairRevolvedCylinderRefusesUnprovedDiskCorridor)$",
+        "./apitest"
+      ],
+      "tests": [
+        "TestContactPairCylinderRulingOnFloor",
+        "TestContactPairCylinderPairRuling",
+        "TestContactPairPlacedRuling",
+        "TestContactPairRevolvedCylinderAxialDiskFace",
+        "TestContactPairRevolvedCylinderRefusesUnprovedDiskCorridor"
+      ],
+      "wall_seconds": 900
+    },
+    {
+      "name": "04-box-package",
+      "argv": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-failfast",
+        "-timeout=12m",
+        "-run",
+        "^(TestAxisBoxGapRefusesUnrepresentableLength|TestOrientedInteriorWitnessRequiresStrictErodedOverlap|TestSignedAxisTransformAdmission)$",
+        "./internal/pair/box"
+      ],
+      "tests": [
+        "TestAxisBoxGapRefusesUnrepresentableLength",
+        "TestOrientedInteriorWitnessRequiresStrictErodedOverlap",
+        "TestSignedAxisTransformAdmission"
+      ],
+      "wall_seconds": 900
+    },
+    {
+      "name": "05-race-consumer",
+      "argv": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-failfast",
+        "-timeout=12m",
+        "-race",
+        "-run",
+        "^(TestSectionCardinalSphereFeedsVerifiedExtrude)$",
+        "./apitest"
+      ],
+      "tests": [
+        "TestSectionCardinalSphereFeedsVerifiedExtrude"
+      ],
+      "wall_seconds": 900
+    },
+    {
+      "name": "05b-differential",
+      "argv": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-failfast",
+        "-timeout=12m",
+        "-run",
+        "^(TestSignedAxisTransform|TestSphereSection|TestSphereSectionHuge|TestConeSectionGrid|TestConeSectionKinds|TestConeGuards|TestCapDyadicGrid|TestCapBoundaryBisect|TestCapGuards)$",
+        "./internal/zzclipdiff"
+      ],
+      "tests": [
+        "TestSignedAxisTransform",
+        "TestSphereSection",
+        "TestSphereSectionHuge",
+        "TestConeSectionGrid",
+        "TestConeSectionKinds",
+        "TestConeGuards",
+        "TestCapDyadicGrid",
+        "TestCapBoundaryBisect",
+        "TestCapGuards"
+      ],
+      "wall_seconds": 900,
+      "differential": true
+    },
+    {
+      "name": "06-layout",
+      "argv": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-failfast",
+        "-timeout=12m",
+        "-run",
+        "^(TestCLAUDEMDLayoutStaysCompact)$",
+        "."
+      ],
+      "tests": [
+        "TestCLAUDEMDLayoutStaysCompact"
+      ],
+      "wall_seconds": 900
+    },
+    {
+      "name": "07-lint",
+      "argv": [
+        "golangci-lint",
+        "run",
+        "--timeout=5m"
+      ],
+      "wall_seconds": 420
+    },
+    {
+      "name": "08-vet",
+      "argv": [
+        "go",
+        "vet",
+        "./..."
+      ],
+      "wall_seconds": 900
+    }
+  ],
+  "overlays": [
+    {
+      "artifact": "harnesses/section/diff_axis_test.go",
+      "destination": "internal/zzclipdiff/diff_axis_test.go",
+      "sha256": "95346e5e297c9eb76711d61b7662ffe290e9a9871afa0d2a5fc1a66c2dc8ad08",
+      "historical_source": ".tmp/h4-sectionclips/zzclipdiff/diff_axis_test.go",
+      "historical_sha256": "95346e5e297c9eb76711d61b7662ffe290e9a9871afa0d2a5fc1a66c2dc8ad08"
+    },
+    {
+      "artifact": "harnesses/section/diff_cap_test.go",
+      "destination": "internal/zzclipdiff/diff_cap_test.go",
+      "sha256": "ba3352e42889647dd1ae7a4c263bd257fe6767009ffefba07367eb3f8069e92f",
+      "historical_source": ".tmp/h4-sectionclips/zzclipdiff/diff_cap_test.go",
+      "historical_sha256": "112e1af8061827ec219e66df90b5e0b6c724f57db7589797005bcecb210f9364"
+    },
+    {
+      "artifact": "harnesses/section/helpers_test.go",
+      "destination": "internal/zzclipdiff/helpers_test.go",
+      "sha256": "98a465a89ffb6784398fb552101b7e5dc3fd9342991322384cde6c1870632ba2",
+      "historical_source": ".tmp/h4-sectionclips/zzclipdiff/helpers_test.go",
+      "historical_sha256": "4c5515cc07e5b7ab8c44ccaa5a8f151a7cc779a7ff6cab50b626fc63ae73c189"
+    },
+    {
+      "artifact": "harnesses/section/old.go",
+      "destination": "internal/zzclipdiff/old.go",
+      "sha256": "31cdf89d83bce230a60895cb6fa6c239893caab55d0ccefb6c6b240b9490ca75",
+      "historical_source": ".tmp/h4-sectionclips/zzclipdiff/old.go",
+      "historical_sha256": "31cdf89d83bce230a60895cb6fa6c239893caab55d0ccefb6c6b240b9490ca75"
+    }
+  ]
+}

@@ -4,55 +4,36 @@ on:
   workflow_dispatch:
     inputs:
       commit:
-        description: Exact 40-character Decad commit SHA
+        description: Exact reviewed canary controls commit
         required: true
         type: string
-      test_name:
-        description: One root-package test name
-        required: true
-        type: string
-
 permissions:
   contents: read
-
+concurrency:
+  group: decad-refactor-canaries
+  cancel-in-progress: false
 jobs:
-  focused:
+  canaries:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    container:
-      image: golang:1.26.8-bookworm
-      options: --memory=4g --memory-swap=4g
     steps:
-      - name: Validate inputs
-        shell: bash
-        env:
-          DECAD_COMMIT: ${{ inputs.commit }}
-          TEST_NAME: ${{ inputs.test_name }}
-        run: |
-          [[ "$DECAD_COMMIT" =~ ^[0-9a-f]{40}$ ]]
-          [[ "$TEST_NAME" =~ ^Test[A-Za-z0-9_]+$ ]]
-
-      - name: Check out Decad commit
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check out dispatched controls
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: ${{ inputs.commit }}
           persist-credentials: false
-
-      - name: Require named root-package test
-        shell: bash
+      - name: Run only approved live canaries
         env:
-          TEST_NAME: ${{ inputs.test_name }}
+          REVIEWED_COMMIT: ${{ inputs.commit }}
         run: |
-          go test -list "^${TEST_NAME}$" . > "$RUNNER_TEMP/focused-go-test-list.txt"
-          grep -Fqx "$TEST_NAME" "$RUNNER_TEMP/focused-go-test-list.txt"
-
-      - name: Run named root-package test
-        shell: bash
-        env:
-          TEST_NAME: ${{ inputs.test_name }}
-        run: |
-          go test -json -count=1 -timeout 8m -run "^${TEST_NAME}$" . |
-            tee "$RUNNER_TEMP/focused-go-test.json"
-          ! grep -Fq '"Action":"skip"' "$RUNNER_TEMP/focused-go-test.json"
-          grep -F '"Action":"pass"' "$RUNNER_TEMP/focused-go-test.json" |
-            grep -Fq "\"Test\":\"${TEST_NAME}\""
+          test "$GITHUB_REF" = refs/heads/test-20261016-refactor-canaries-reviewed
+          test "$GITHUB_SHA" = "$REVIEWED_COMMIT"
+          test "$(git rev-parse HEAD)" = "$REVIEWED_COMMIT"
+          python3 -B .validation/hosted_canaries.py --manifest-sha256 3d995e9c1468a031e585a4dc796c60630db643af6ec5e758b73c4df9859a6080
+      - name: Preserve canary evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: refactor-canaries-${{ github.run_id }}
+          path: ${{ runner.temp }}/decad-h4-canary-*/artifacts/
+          if-no-files-found: error
+          retention-days: 1
