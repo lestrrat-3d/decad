@@ -1,0 +1,72 @@
+{
+  "base": "3987ea5a84f662da2c307983e5c1f28988f6fbcc",
+  "candidate": "48a7f0f6d3985697c9a6e2e24a41859b332018fc",
+  "phases": [
+    "correctness",
+    "consumer_rods",
+    "consumer_washer",
+    "constructor_empty",
+    "constructor_unused",
+    "constructor_sparse",
+    "constructor_fan",
+    "constructor_closed",
+    "constructor_sparse_unused",
+    "cancel_fan",
+    "cancel_sparse_unused"
+  ],
+  "correctness_candidate": [
+    "TestHeldIncidenceMatchesAppend",
+    "TestHeldIncidenceInvalidIndex",
+    "TestHeldIncidenceSize",
+    "TestHeldIncidenceGenerationAndStamps",
+    "TestHeldIncidenceBudgetAndCancellation",
+    "TestHeldIncidenceCancellationPollOrder"
+  ],
+  "correctness_both": [
+    "TestEnforceHeldEmbeddingMovesAFlattenedSliver",
+    "TestEnforceHeldEmbeddingRefusesWhenNoCornerClears",
+    "TestEnforceHeldEmbeddingRefusesTheUnion23Fold"
+  ],
+  "pairs": 5,
+  "order": [
+    "baseline",
+    "candidate",
+    "candidate",
+    "baseline",
+    "baseline",
+    "candidate",
+    "candidate",
+    "baseline",
+    "baseline",
+    "candidate"
+  ],
+  "consumer_gates": {
+    "both_consumers_required": true,
+    "median_bytes_ratio_max": 0.995,
+    "median_allocs_ratio_max": 0.99,
+    "all_pairs_bytes_and_allocs_strictly_lower": true,
+    "median_time_ratio_max": 1.02,
+    "pair_time_ratio_max": 1.05
+  },
+  "constructor_gates": {
+    "all_cases_median_time_ratio_max": 1.05,
+    "all_cases_pair_time_ratio_max": 1.1,
+    "fan_and_closed_all_pairs_allocs_strictly_lower": true,
+    "bytes_reported_not_gated": true,
+    "no_constructor_result_substitutes_for_consumer_benefit": true
+  },
+  "fixed_count_rule": "Each consumer uses a baseline-only warm 1x probe. Choose 2x for <=10e9 ns/op, 1x for <=20e9, otherwise abort before candidate samples. Each constructor uses 100x. Five pairs in fixed order, separate fresh processes. No count adjustment after candidate samples.",
+  "scope": "Private constructor and unchanged real rods Union / washer Cut; no other candidate, pooling, census or heap phases.",
+  "review": "All correctness, constructor and cancellation phases plus both consumer gates must pass. Constructor byte increases must be reported. No speedup claim until evidence accepted.",
+  "slot": "Parent-assigned serial hosted only. No launch authorization.",
+  "cancellation": {
+    "samples_per_process": 64,
+    "fresh_process_pairs": 5,
+    "point": "Cancel immediately after reading the successful initial context Err, before constructor; measure until EnforceHeldEmbedding returns at the next poll. This conservatively includes complete constructor and 256 query steps.",
+    "pair_p95_extra_ns_max": 1000000,
+    "pair_max_extra_ns_max": 5000000,
+    "candidate_p95_ns_max": 50000000,
+    "candidate_max_ns_max": 100000000,
+    "both_cases_required": true
+  }
+}
