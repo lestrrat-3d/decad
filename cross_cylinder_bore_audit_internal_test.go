@@ -3,6 +3,7 @@ package decad
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/crossbore"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/stretchr/testify/require"
@@ -22,14 +23,14 @@ func TestCrossBoreCapPatchesHold(t *testing.T) {
 			mesh, err := buildCrossBoreChamferMesh(t.Context(), rec, tc.setback)
 			require.NoError(t, err)
 
-			patches := crossBoreCapPatches(mesh.src)
+			patches := crossbore.CapPatches(mesh.Src)
 			require.Len(t, patches, 2)
-			minZ, maxZ := mesh.verts[0].Z, mesh.verts[0].Z
-			for _, v := range mesh.verts {
+			minZ, maxZ := mesh.Verts[0].Z, mesh.Verts[0].Z
+			for _, v := range mesh.Verts {
 				minZ, maxZ = min(minZ, v.Z), max(maxZ, v.Z)
 			}
 			var want [2][]int
-			for i, s := range mesh.src {
+			for i, s := range mesh.Src {
 				if s == 0 || s == 1 {
 					want[s] = append(want[s], i)
 				}
@@ -45,14 +46,14 @@ func TestCrossBoreCapPatchesHold(t *testing.T) {
 					wantZ = maxZ
 				}
 				for _, ti := range patch.Triangles {
-					require.Equal(t, s, mesh.src[ti])
-					for _, vi := range mesh.tris[ti] {
-						require.Equal(t, wantZ, mesh.verts[vi].Z)
+					require.Equal(t, s, mesh.Src[ti])
+					for _, vi := range mesh.Tris[ti] {
+						require.Equal(t, wantZ, mesh.Verts[vi].Z)
 					}
 				}
 				require.Equal(t, loftmesh.ProjectedPatchHolds,
 					loftmesh.ProjectedPatchProof(proofbound.NewPollWorkBudget(t.Context()),
-						mesh.verts, mesh.tris, patch), "cap %d", s)
+						mesh.Verts, mesh.Tris, patch), "cap %d", s)
 			}
 		})
 	}

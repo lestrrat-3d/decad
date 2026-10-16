@@ -1,4 +1,4 @@
-package decad
+package crossbore
 
 import (
 	"fmt"
@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -20,15 +22,16 @@ import (
 func crossFullPolar(aY, aZ, bY, bZ crossDual) crossIV {
 	return crossSub(crossMul(aY.v, bZ.d), crossMul(aZ.v, bY.d))
 }
+
 func crossFullJacobian(aY, aZ, dY, dZ crossDual) crossIV {
 	return crossSub(crossMul(aY.d, dZ.v), crossMul(aZ.d, dY.v))
 }
 
 // crossBoreCellProofFullEnds is crossBoreCellProof as it stood before the
 // clearance and fold tests computed only the endpoints they read.
-func crossBoreCellProofFullEnds(rec *crossCylinderBoreRecord, setback float64,
-	i int, angularGap *big.Rat) (crossBoreCellResult, error) {
-	const n = 2 * crossBoreHalfStations
+func crossBoreCellProofFullEnds(rec *facetedrecord.CrossCylinderBoreRecord, setback float64,
+	i int, angularGap *big.Rat) (CellResult, error) {
+	const n = 2 * HalfStations
 	turn := big.NewRat(int64(i), n)
 	s0, c0 := proofbound.TurnSinCosInterval(turn)
 	gapLazy := proofarith.LazyOf(angularGap)
@@ -40,40 +43,40 @@ func crossBoreCellProofFullEnds(rec *crossCylinderBoreRecord, setback float64,
 	xd, ok := crossDSqrt(crossDSub(crossDMul(Rd, Rd),
 		crossDMul(crossDMul(rd, rd), crossDMul(cd, cd))))
 	if !ok {
-		return crossBoreCellResult{}, fmt.Errorf("%w: the cross-bore seam has no real X", ErrUnsupported)
+		return CellResult{}, fmt.Errorf("%w: the cross-bore seam has no real X", decaderr.ErrUnsupported)
 	}
 	c2 := crossDMul(cd, cd)
 	Qd, ok := crossDSqrt(crossDSub(crossDMul(Rd, Rd),
 		crossDMul(crossDMul(rd, rd), crossDMul(c2, c2))))
 	if !ok {
-		return crossBoreCellResult{}, fmt.Errorf("%w: the cross-bore normal has no length", ErrUnsupported)
+		return CellResult{}, fmt.Errorf("%w: the cross-bore normal has no length", decaderr.ErrUnsupported)
 	}
 	do, ok := crossDQuo(crossDMul(crossDMul(dd, cd), xd), crossDMul(Rd, Qd))
 	if !ok {
-		return crossBoreCellResult{}, fmt.Errorf("%w: the outer setback has no finite angle", ErrUnsupported)
+		return CellResult{}, fmt.Errorf("%w: the outer setback has no finite angle", decaderr.ErrUnsupported)
 	}
 	sodo, codo, ok := crossDSinCos(do)
 	if !ok {
-		return crossBoreCellResult{}, fmt.Errorf("%w: the outer setback has no trig enclosure", ErrUnsupported)
+		return CellResult{}, fmt.Errorf("%w: the outer setback has no trig enclosure", decaderr.ErrUnsupported)
 	}
 	outX := crossDSub(crossDMul(xd, codo), crossDMul(crossDMul(rd, cd), sodo))
 	outY := crossDAdd(crossDMul(xd, sodo), crossDMul(crossDMul(rd, cd), codo))
 	outZ, ok := crossDQuo(crossDMul(crossDMul(dd, Rd), sd), Qd)
 	if !ok {
-		return crossBoreCellResult{}, fmt.Errorf("%w: the outer setback has no Z", ErrUnsupported)
+		return CellResult{}, fmt.Errorf("%w: the outer setback has no Z", decaderr.ErrUnsupported)
 	}
 	outZ = crossDAdd(crossDMul(rd, sd), outZ)
 	db, ok := crossDQuo(crossDMul(crossDMul(dd, cd), sd), Qd)
 	if !ok {
-		return crossBoreCellResult{}, fmt.Errorf("%w: the bore setback has no finite angle", ErrUnsupported)
+		return CellResult{}, fmt.Errorf("%w: the bore setback has no finite angle", decaderr.ErrUnsupported)
 	}
 	sodb, codb, ok := crossDSinCos(db)
 	if !ok {
-		return crossBoreCellResult{}, fmt.Errorf("%w: the bore setback has no trig enclosure", ErrUnsupported)
+		return CellResult{}, fmt.Errorf("%w: the bore setback has no trig enclosure", decaderr.ErrUnsupported)
 	}
 	dOverQ, ok := crossDQuo(dd, Qd)
 	if !ok {
-		return crossBoreCellResult{}, fmt.Errorf("%w: the bore setback has no X", ErrUnsupported)
+		return CellResult{}, fmt.Errorf("%w: the bore setback has no X", decaderr.ErrUnsupported)
 	}
 	inX := crossDMul(xd, crossDSub(crossConst(crossPoint(1)), dOverQ))
 	inY := crossDMul(rd, crossDSub(crossDMul(cd, codb), crossDMul(sd, sodb)))
@@ -85,14 +88,14 @@ func crossBoreCellProofFullEnds(rec *crossCylinderBoreRecord, setback float64,
 	polarMid, ok := crossQuo(crossAdd(crossFullPolar(inY, inZ, outY, outZ),
 		crossFullPolar(outY, outZ, inY, inZ)), crossPoint(2))
 	if !ok {
-		return crossBoreCellResult{}, fmt.Errorf("%w: the band polar proof is undefined", ErrUnsupported)
+		return CellResult{}, fmt.Errorf("%w: the band polar proof is undefined", decaderr.ErrUnsupported)
 	}
 	if outerBore.Lo.Sign() <= 0 || innerTarget.Lo.Sign() <= 0 || support.Lo.Sign() <= 0 ||
 		crossFullPolar(inY, inZ, inY, inZ).Lo.Sign() <= 0 ||
 		crossFullPolar(outY, outZ, outY, outZ).Lo.Sign() <= 0 || polarMid.Lo.Sign() <= 0 ||
 		crossFullJacobian(inY, inZ, diffY, diffZ).Hi.Sign() >= 0 ||
 		crossFullJacobian(outY, outZ, diffY, diffZ).Hi.Sign() >= 0 {
-		return crossBoreCellResult{}, fmt.Errorf("%w: a cross-bore chamfer cell loses clearance or folds", ErrUnsupported)
+		return CellResult{}, fmt.Errorf("%w: a cross-bore chamfer cell loses clearance or folds", decaderr.ErrUnsupported)
 	}
 	negativeX := crossSub(crossPoint(0), xd.v)
 	negativeY, negativeZ := crossMul(r, c), crossMul(r, s)
@@ -104,7 +107,7 @@ func crossBoreCellProofFullEnds(rec *crossCylinderBoreRecord, setback float64,
 		width = max(width, crossWidth(coordinate))
 	}
 	theta := 2 * math.Pi * float64(i) / n
-	outer, inner := crossBoreFeet(rec, setback, theta)
+	outer, inner := Feet(rec, setback, theta)
 	co, sn := math.Cos(theta), math.Sin(theta)
 	negative := r3.Vec{X: -math.Sqrt(rec.Radius*rec.Radius - rec.Bore*rec.Bore*co*co),
 		Y: rec.Bore * co, Z: rec.Bore * sn}
@@ -128,30 +131,30 @@ func crossBoreCellProofFullEnds(rec *crossCylinderBoreRecord, setback float64,
 		proofbound.LazyIntervalAbsUpperUp(diffX),
 		proofbound.LazyIntervalAbsUpperUp(diffY.v),
 		proofbound.LazyIntervalAbsUpperUp(diffZ.v))
-	return crossBoreCellResult{
-		width: width, sampleError: proofbound.Radius3D(sampleError),
-		speed: proofbound.Radius3D(speed), bandLength: proofbound.Radius3D(bandCoord),
+	return CellResult{
+		Width: width, SampleError: proofbound.Radius3D(sampleError),
+		Speed: proofbound.Radius3D(speed), BandLength: proofbound.Radius3D(bandCoord),
 	}, nil
 }
 
 func TestCrossBoreSignTestsMatchReference(t *testing.T) {
 	gap := new(big.Rat).Quo(new(big.Rat).Mul(big.NewRat(2, 1), proofbound.PiUpper),
-		big.NewRat(2*crossBoreHalfStations, 1))
+		big.NewRat(2*HalfStations, 1))
 	for _, tc := range []struct {
 		name    string
-		rec     crossCylinderBoreRecord
+		rec     facetedrecord.CrossCylinderBoreRecord
 		setback float64
 		failing bool
 	}{
-		{"five by one", crossCylinderBoreRecord{Radius: 5, Bore: 1, Height: 10, CenterZ: 5, SourceBound: 1e-9}, 0.5, false},
+		{"five by one", facetedrecord.CrossCylinderBoreRecord{Radius: 5, Bore: 1, Height: 10, CenterZ: 5, SourceBound: 1e-9}, 0.5, false},
 		{"eight by one and half",
-			crossCylinderBoreRecord{Radius: 8, Bore: 1.5, Height: 16, CenterZ: 8, SourceBound: 1e-9}, 0.1875, false},
+			facetedrecord.CrossCylinderBoreRecord{Radius: 8, Bore: 1.5, Height: 16, CenterZ: 8, SourceBound: 1e-9}, 0.1875, false},
 		{"loses clearance or folds",
-			crossCylinderBoreRecord{Radius: 5, Bore: 4.9, Height: 10, CenterZ: 5, SourceBound: 1e-9}, 0.5, true},
-		{"no real X", crossCylinderBoreRecord{Radius: 5, Bore: 5, Height: 10, CenterZ: 5, SourceBound: 1e-9}, 0.5, true},
+			facetedrecord.CrossCylinderBoreRecord{Radius: 5, Bore: 4.9, Height: 10, CenterZ: 5, SourceBound: 1e-9}, 0.5, true},
+		{"no real X", facetedrecord.CrossCylinderBoreRecord{Radius: 5, Bore: 5, Height: 10, CenterZ: 5, SourceBound: 1e-9}, 0.5, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			const n = 2 * crossBoreHalfStations
+			const n = 2 * HalfStations
 			failed := 0
 			for i := 0; i < n; i += 8 {
 				want, wantErr := crossBoreCellProofFullEnds(&tc.rec, tc.setback, i, gap)

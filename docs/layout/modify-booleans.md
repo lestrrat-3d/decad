@@ -17,8 +17,8 @@ The rules for rows live in `docs/layout.md`.
 | `draft_circle_shell.go` | Builds the inward cup of a positive-taper circular draft through a bounded meridian revolution. See draft §10.6. |
 | `loft_fillet.go` | Rewrites matching loft records at selected analytic and fitted-spline root corners. See loft §17. |
 | `oblique_boss_fillet.go` / `oblique_boss_proof.go` | Builds and proves the complete tilted cylinder boss-root fillet; the interval-vector arithmetic lives in `internal/obliqueboss/`. See oblique-boss-fillet design. |
-| `cross_cylinder_bore_chamfer.go` / `cross_cylinder_bore_chamfer_mesh.go` | Builds one perpendicular cylinder bore-mouth chamfer. See cross-cylinder-bore-chamfer design. |
-| `cross_cylinder_bore_chamfer_proof.go` | Proves that chamfer's boundary and volume. See cross-cylinder-bore-chamfer design. |
+| `cross_cylinder_bore_chamfer.go` / `cross_cylinder_bore_chamfer_mesh.go` | Builds one perpendicular cylinder bore-mouth chamfer: edge admission, source face groups and the mesh assembled from the `internal/crossbore/` station plan. See cross-cylinder-bore-chamfer design. |
+| `cross_cylinder_bore_chamfer_proof.go` | Proves that chamfer's boundary and volume: the mirror-pose check, the cell proof via `internal/crossbore/`, and the volume and area sums in root. See cross-cylinder-bore-chamfer design. |
 | `loft_chamfer.go` | Builds both outer cap bands on a matching axial loft's held polygon. See loft §18. |
 | `cap_edge_cutter.go` | Applies `internal/capedge/` admission and cutters to one oblique prism cap-edge fillet or chamfer. |
 | `brep_rounded_edge_fillet.go` | Rounds P8's one front top edge after matching its exact rounded, cross-drilled BRep record. See modify-general §4.3c. |

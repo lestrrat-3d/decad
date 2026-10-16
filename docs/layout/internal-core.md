@@ -34,6 +34,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/splinebezier/` | Exact Bézier conversion of recorded splines. See `docs/spline-design.md` §5.1. |
 | `internal/boundarywalk/` | Bounded walks, coalescing, junction vertices, rim convexity, and analytic survey and modify loops over recorded segments. |
 | `internal/classbgeom/` | Class B: the entry over two payloads (gates B1-B8, through reach, result record), the crossing reach, face geometry and shifted tool records. See general-boolean §3 B, §5. |
+| `internal/crossbore/` | Cross-bore mouth chamfer arithmetic: station plan and feet, outer-ring station errors, the dual-interval proof of the quarter-turn base cells and the mirror map from whole-turn cells. See cross-cylinder-bore-chamfer design. |
 | `internal/brepgeom/` / `internal/stackedbrep/` | BRep geometry, measurements, extents, face surveys, middle-rim audit and topology. See general-boolean §4–§5. |
 | `internal/throughshell/` | Through-cut recognition, strips and rims. See modify-general §3. |
 | `internal/capedge/` | Convex cap-edge cutter admission, quarter-cylinder profile, chamfer wedge and the P8 top front edge test. See vertex-blend §2. |
