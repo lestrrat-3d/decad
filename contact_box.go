@@ -114,13 +114,7 @@ func (m exactContactMap) apply(p proofarith.DyV3) proofarith.DyV3 {
 		proofarith.DvAdd(proofarith.DvScale(m.ey, p[1]), proofarith.DvScale(m.ez, p[2]))))
 }
 
-func signedAxisTransform(t r3.Transform) bool {
-	if !t.IsValid() || !proofbound.FiniteVec(t.Translation()) {
-		return false
-	}
-	b := t.Basis()
-	return box.CardinalBasis(b.EX, b.EY, b.EZ)
-}
+func signedAxisTransform(t r3.Transform) bool { return box.SignedAxisTransform(t) }
 
 // The root package maps neutral pair readings to report units and topology.
 func publishSourceBoxPatch(report *reportvocab.ContactReport, a, b sourceBoxContactProof, axis, sign int,
