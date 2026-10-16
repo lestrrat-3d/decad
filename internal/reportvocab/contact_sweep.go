@@ -40,10 +40,12 @@ const (
 )
 
 // SweepRequest is the internal form of the root package's SweepRequest
-// (docs/contact-sweep-design.md §2, §7): the contact request every sampled
-// pair query uses, the time resolution, the pose evaluation budget, the start
-// policy and the rest speed of a band track. The sweep producers read it; the
-// root package converts the caller's request to it once, at the public entry.
+// (docs/contact-sweep-design.md §2, §7): the contact request, the time
+// resolution, the pose evaluation budget, the start policy and the rest speed
+// of a band track. The sweep producers read it. The root package's SweepPair
+// converts the caller's request to it after validation, and planarContinuation
+// converts a finished rotating source-box report's saved public Request again
+// when it reruns that pair through sweepPlanarPair.
 type SweepRequest struct {
 	ContactRequest
 	TimeResolution     units.Value

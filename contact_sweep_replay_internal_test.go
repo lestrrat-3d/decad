@@ -243,7 +243,8 @@ func poseBits(pose r3.Transform) [12]uint64 { return sweepmemo.PoseBits(pose) }
 // TestSweepRequestToInternalCopiesEveryField converts a request whose every
 // field holds a distinct value, once per start policy: each field arrives in
 // its reportvocab twin unchanged, each policy maps to the twin constant of the
-// same name, and the two structs name the same fields in the same order.
+// same name, and SweepRequest and ContactRequest each name the same fields, in
+// the same order, as their twins.
 func TestSweepRequestToInternalCopiesEveryField(t *testing.T) {
 	t.Parallel()
 	contact := ContactRequest{PointResolution: units.Millimeters(1e-3), NormalResolution: units.Degrees(1),

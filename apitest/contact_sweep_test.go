@@ -764,9 +764,9 @@ func TestSweepPairSourceBoxSlideEdgeTransition(t *testing.T) {
 }
 
 // TestSweepPairAffineBoxPoseBudgetIsExact drives a source box into another
-// along an affine PoseSegment. A budget of exactly the evaluations the
-// unbounded run spends brackets the same impact, and one fewer stops at the
-// budget with SweepPoseBudget after spending every evaluation it allows.
+// along a translating PoseSegment. A budget of exactly the evaluations a run
+// with a budget of 64 spends brackets the same impact, and one fewer stops at
+// the budget with SweepPoseBudget after spending every evaluation it allows.
 func TestSweepPairAffineBoxPoseBudgetIsExact(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
@@ -798,13 +798,13 @@ func TestSweepPairAffineBoxPoseBudgetIsExact(t *testing.T) {
 	require.NotNil(t, short.Unresolved)
 }
 
-// TestSweepPairTouchStartFollowsStartPolicy starts two affine pairs touching
-// and reads each start policy's answer. A source box pressed into a floor box
-// stops at the touch under StopAtInitialContact, and otherwise cannot depart:
-// ContinueSeparatingTouch names SweepDepartureUnproved and
-// ContinueCertifiedTouch names SweepContactTrackUnproved. A source sphere
-// resting on a turned box face stops at the touch, and departs clear when it
-// rises under ContinueSeparatingTouch.
+// TestSweepPairTouchStartFollowsStartPolicy starts two pairs touching on
+// PoseSegment paths that do not rotate. A source box pressed into a floor box
+// stops at the touch under StopAtInitialContact, and proves no departure under
+// the other two policies: ContinueSeparatingTouch names SweepDepartureUnproved
+// and ContinueCertifiedTouch names SweepContactTrackUnproved. A source sphere
+// resting on a turned box face stops at the touch under StopAtInitialContact,
+// and departs clear when it rises under ContinueSeparatingTouch.
 func TestSweepPairTouchStartFollowsStartPolicy(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()

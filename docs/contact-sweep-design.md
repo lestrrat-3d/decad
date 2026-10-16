@@ -911,12 +911,16 @@ sentinel (`ErrDegenerate`, `ErrForeignBody`, `ErrRetiredBody`, `ErrUnitKind`,
 solid whose pair kernel lacks a proof returns `SweepUndecided`, not an input
 error. An internal invariant failure remains an error with no report.
 
-A validated request is converted once to its internal form,
+`SweepPair` converts the validated request to its internal form,
 `internal/reportvocab`'s `SweepRequest`, whose contact request and start policy
-are the internal twins with the same fields and constants; every sweep path
-reads that form. The report's `Request` holds the caller's own value, and each
-sampled `ContactPair` query receives the contact request converted back to the
-public type.
+are the internal twins with the same fields and constants, and passes that form
+to the sweep path it selects. When a rotating source-box run ends undecided
+with `SweepDepartureUnproved` or `SweepContactTrackUnproved` at a touching or
+`ContactBand` start, `planarContinuation` converts the report's saved public
+`Request` again to rerun the pair through `sweepPlanarPair`. The
+report's `Request` holds the caller's own value. A `ContactPair` query made by a
+sweep receives the internal contact request converted back to the public type;
+the departure-gap query of a rotating run clears its `SupportBand` first.
 
 The dyadic grid depth is `ceil(log2(Duration / TimeResolution))`. Fully
 exploring it evaluates at most `2^depth + 1` distinct times, if that count is
