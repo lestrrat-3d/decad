@@ -27,9 +27,9 @@ func requireOneWallFace(t *testing.T, body *decad.Body, n r3.Vec, area float64) 
 
 func requireEveryEdgeOnTwoFaces(t *testing.T, body *decad.Body) {
 	t.Helper()
-	require.Len(t, body.Lumps(), 1)
+	require.Equal(t, 1, len(body.Lumps()))
 	for _, e := range body.Edges() {
-		require.Len(t, e.Faces(), 2)
+		require.Equal(t, 2, len(e.Faces()))
 	}
 }
 
@@ -46,7 +46,7 @@ func TestStackedUnionFlushCornerBoss(t *testing.T) {
 	got, err := decad.Union(t.Context(), plate, boss)
 	require.NoError(t, err)
 	require.False(t, anyFaceIsFaceted(got))
-	require.Len(t, got.Faces(), 9)
+	require.Equal(t, 9, len(got.Faces()))
 	requireEveryEdgeOnTwoFaces(t, got)
 	requireOneWallFace(t, got, r3.NewVec(1, 0, 0), 550)
 	requireOneWallFace(t, got, r3.NewVec(0, -1, 0), 550)
@@ -73,7 +73,7 @@ func TestStackedUnionFlushCornerBoss(t *testing.T) {
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
 	require.NoError(t, err)
 	require.Equal(t, decad.Sound, report.Status)
-	require.Empty(t, report.Interferences)
+	require.Equal(t, 0, len(report.Interferences))
 	gaps := map[*decad.Body]decad.Measurement{}
 	for _, row := range report.Clearances {
 		switch got {
@@ -101,7 +101,7 @@ func TestStackedUnionFlushEdgeBoss(t *testing.T) {
 	got, err := decad.Union(t.Context(), plate, boss)
 	require.NoError(t, err)
 	require.False(t, anyFaceIsFaceted(got))
-	require.Len(t, got.Faces(), 10)
+	require.Equal(t, 10, len(got.Faces()))
 	requireEveryEdgeOnTwoFaces(t, got)
 	requireOneWallFace(t, got, r3.NewVec(1, 0, 0), 550)
 	requireOneWallFace(t, got, r3.NewVec(0, 0, -1), 1600)
@@ -134,11 +134,11 @@ func TestStackedUnionCrossingBossStanding(t *testing.T) {
 	got, err := decad.Union(t.Context(), plate, boss)
 	require.NoError(t, err)
 	require.False(t, anyFaceIsFaceted(got))
-	require.Len(t, got.Faces(), 10)
+	require.Equal(t, 10, len(got.Faces()))
 	requireEveryEdgeOnTwoFaces(t, got)
 	cylinders, err := decad.Faces(decad.Cylindrical()).Exactly(2).SelectFaces(got)
 	require.NoError(t, err)
-	require.Len(t, cylinders, 2)
+	require.Equal(t, 2, len(cylinders))
 
 	volume, err := got.Volume()
 	require.NoError(t, err)
@@ -183,7 +183,7 @@ func TestStackedUnionBrepOperandChain(t *testing.T) {
 	two, err := decad.Union(t.Context(), one, second)
 	require.NoError(t, err)
 	require.False(t, anyFaceIsFaceted(two))
-	require.Len(t, two.Faces(), 12)
+	require.Equal(t, 12, len(two.Faces()))
 	requireEveryEdgeOnTwoFaces(t, two)
 	requireOneWallFace(t, two, r3.NewVec(0, 0, -1), 1600)
 	volume, err := two.Volume()
@@ -199,7 +199,7 @@ func TestStackedUnionBrepOperandChain(t *testing.T) {
 	three, err := decad.Union(t.Context(), two, third)
 	require.NoError(t, err)
 	require.False(t, anyFaceIsFaceted(three))
-	require.Len(t, three.Faces(), 16)
+	require.Equal(t, 16, len(three.Faces()))
 	volume, err = three.Volume()
 	require.NoError(t, err)
 	require.Equal(t, decad.Exact, volume.Exactness)
@@ -208,5 +208,5 @@ func TestStackedUnionBrepOperandChain(t *testing.T) {
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.Sound, report.Status)
-	require.Len(t, doc.Bodies(), 1, "each union consumes both operands")
+	require.Equal(t, 1, len(doc.Bodies()), "each union consumes both operands")
 }

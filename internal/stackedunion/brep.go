@@ -23,7 +23,7 @@ import (
 // This file is docs/general-boolean-design.md §3 A1's brep result: a
 // stacked union whose interface the clean-nesting match leaves unresolved — a
 // boss flush with the plate's wall, or crossing its outline — stated as a
-// brepPayload (§4) from the slabs tryStackedUnion already built.
+// brepPayload (§4) from the admitted operand slabs.
 //
 // Every 2D answer is a private scene's: a slab both operands reach arranges
 // every record reaching it and its regions are the select-all merge's loops;

@@ -117,11 +117,8 @@ type stackedUnionRegionRef struct {
 	slab int
 }
 
-// stackedUnionState is the per-call state one tryStackedUnion threads through
-// its scenes: the charges each scene adds, B's regions already recorded in
-// A's frame, and every scene of two operand regions arranged so far, keyed by
-// the two regions, so a slab merge and the interfaces that read the same two
-// regions share one arrangement and its vertices.
+// stackedUnionState tracks one Join or Cut call's scene charges, B regions
+// recorded in A's frame, and slab scenes keyed by their operand regions.
 type stackedUnionState struct {
 	budget        *proofbound.WorkBudget
 	va, vb        Operand
@@ -157,9 +154,7 @@ func (st *stackedUnionState) scene(ctx context.Context, x, y stackedUnionRegionR
 	}
 	reexpress := st.reexpress
 	if x.isB == y.isB {
-		// Two regions of one operand share a frame: the brep build, the only
-		// caller that arranges such a pair, admits the identity
-		// re-expression alone, so B's regions are already in A's frame.
+		// Two regions of one operand share a frame and need no re-expression.
 		reexpress = &prismReexpression{Identity: true}
 	}
 	m, err := nestingOf(ctx, st.budget, px, py, reexpress)
