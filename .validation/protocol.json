@@ -1,0 +1,54 @@
+{
+  "base": "3987ea5a84f662da2c307983e5c1f28988f6fbcc",
+  "candidate": "fc8d12c4b3151c78b6fd3b36c754347aa9c4b691",
+  "phases": [
+    "correctness",
+    "cancel_prefix64",
+    "cancel_prefix512",
+    "cancel_prefix8192",
+    "cancel_nosplit",
+    "heap_exact",
+    "heap_spare"
+  ],
+  "samples_per_process": 64,
+  "pairs": 5,
+  "order": [
+    "baseline",
+    "candidate",
+    "candidate",
+    "baseline",
+    "baseline",
+    "candidate",
+    "candidate",
+    "baseline",
+    "baseline",
+    "candidate"
+  ],
+  "gates": {
+    "paired_p95_increment_ns_max": 1000000,
+    "paired_max_increment_ns_max": 5000000,
+    "candidate_p95_ns_max": 50000000,
+    "candidate_max_ns_max": 100000000
+  },
+  "scope": "Correctness and cancellation only; no real-consumer performance measurement. Fixtures and checks excluded from latency. Every sample must actually cancel with unchanged output headers and correct partial bounds.",
+  "hook": "Late-split cases request cancellation immediately before first-split prefix materialization; baseline at corresponding first split. No-split cancels inside second Err after reading nil; third Err returns cancellation.",
+  "acceptance": "All seven phases and independent evidence review required. No timing result substitutes for correctness or real-consumer benefit.",
+  "resources": "4GiB hard; zero swap;3GiB monitored stop;CPU2;PIDs64;tmpfs64MiB;1MiB output;64KiB report;22minute controller;24minute workflow;serial stage cleanup.",
+  "slot": "Parent-assigned serial hosted only. No dispatch authorization.",
+  "heap": {
+    "triangles": 8192,
+    "input_capacity_multipliers": [
+      1,
+      4
+    ],
+    "phases": [
+      "before",
+      "after_call",
+      "one_gc",
+      "two_gc",
+      "released"
+    ],
+    "fresh_process_pairs": 5,
+    "interpretation": "Record raw capacities and MemStats plus signed baseline-relative paired retained HeapAlloc/HeapInuse deltas after one/two GC. Any candidate retention increase requires explicit tradeoff review; no automatic optimization acceptance. Artificial exact/spare capacity fixtures are diagnostics, not real-consumer savings."
+  }
+}
