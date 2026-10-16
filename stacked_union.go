@@ -31,10 +31,10 @@ import (
 // `z0_b' <= z1_a && z0_a <= z1_b'` over big.Rat. Past that point an
 // unresolved topology still falls back to the mesh path, as prism-boolean
 // §4.4 states: a disjoint overlap, and a cell the match cannot find. An
-// interface the clean-nesting match leaves unresolved — footprints that
-// cross or share a wall — hands the same slabs to internal/stackedunion/brep.go,
-// which classifies that interface's cells and states the result as a
-// brepPayload; a pair that build does not cover takes the mesh path.
+// When a stacked record cannot state an interface, or an operand requires
+// a BRep, internal/stackedunion/brep.go rebuilds result slabs from the
+// admitted operand slabs and classifies their exposed interfaces. A pair
+// that build does not cover takes the mesh path.
 
 // stackedUnionOperand is one operand of the stacked union read as slabs: a
 // prism is one slab over its own interval; a stacked prism is its own slabs.
