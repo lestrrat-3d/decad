@@ -1,9 +1,10 @@
-package decad
+package revolveproof
 
 import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -14,7 +15,7 @@ import (
 // revolveCrossingPoint lifts Sketch's rounded line evaluation and bounds the
 // true cone crossing enclosed by its parameter interval. The returned point
 // is only a mesh station; pointBound must enter every seam displacement proof.
-func revolveCrossingPoint(src *pointSectionSource, cert sketch.ConeLineCrossing) (
+func revolveCrossingPoint(src *facetedrecord.PointSectionSource, cert sketch.ConeLineCrossing) (
 	r3.Vec, float64, bool) {
 	if src == nil || cert.IsStale() || !cert.TExact() ||
 		cert.SketchRevision() != src.Revision {
@@ -71,8 +72,8 @@ func revolveCrossingPoint(src *pointSectionSource, cert sketch.ConeLineCrossing)
 // meridian recorded by Revolve. F is strictly monotone along the whole line;
 // its endpoint margins dominate the meridian perturbation. The inverse slope
 // then encloses how far the true source contact can move along the connector.
-func revolveSeatPoint(src *pointSectionSource, cert sketch.ConeLineCrossing,
-	section revolveSectionCertificate, base facetedPayload) (r3.Vec, float64, bool) {
+func revolveSeatPoint(src *facetedrecord.PointSectionSource, cert sketch.ConeLineCrossing,
+	section facetedrecord.RevolveSectionCertificate, base facetedrecord.Payload) (r3.Vec, float64, bool) {
 	point, pointBound, ok := revolveCrossingPoint(src, cert)
 	if !ok || len(base.Verts) < 4 || base.MeshBound < 0 {
 		return r3.Vec{}, 0, false

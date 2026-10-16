@@ -1,21 +1,23 @@
-package decad
+package revolveproof
 
 import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
 
-// revolveExteriorPath inserts certified root contacts into the original
+// RevolveExteriorPath inserts certified root contacts into the original
 // point-loft ring. Only the path through a certified outside segment remains
 // exposed.
-func revolveExteriorPath(base facetedPayload, boundary revolveSectorBoundary,
-	source *pointSectionSource, section revolveSectionCertificate) ([]revolveSectorNode, float64, error) {
+func RevolveExteriorPath(base facetedrecord.Payload, boundary facetedrecord.RevolveSectorBoundary,
+	source *facetedrecord.PointSectionSource, section facetedrecord.RevolveSectionCertificate) ([]facetedrecord.RevolveSectorNode, float64, error) {
 	n := len(base.Verts) - 1
 	if n < 6 || len(base.Tris) < n || len(base.Src) != len(base.Tris) {
-		return nil, 0, fmt.Errorf("%w: point-loft fan is incomplete", ErrUnsupported)
+		return nil, 0, fmt.Errorf("%w: point-loft fan is incomplete", decaderr.ErrUnsupported)
 	}
 	groups := make([]int, n)
 	seen := make([]bool, n)
@@ -25,19 +27,19 @@ func revolveExteriorPath(base facetedPayload, boundary revolveSectorBoundary,
 		}
 		u, v := tri[1]-1, tri[2]-1
 		if u < 0 || u >= n || v < 0 || v >= n {
-			return nil, 0, fmt.Errorf("%w: point-loft fan has a changed boundary order", ErrUnsupported)
+			return nil, 0, fmt.Errorf("%w: point-loft fan has a changed boundary order", decaderr.ErrUnsupported)
 		}
 		if v != (u+1)%n {
 			u, v = v, u
 		}
 		if v != (u+1)%n || seen[u] {
-			return nil, 0, fmt.Errorf("%w: point-loft fan has a changed boundary order", ErrUnsupported)
+			return nil, 0, fmt.Errorf("%w: point-loft fan has a changed boundary order", decaderr.ErrUnsupported)
 		}
 		seen[u], groups[u] = true, base.Src[i]
 	}
 	for _, yes := range seen {
 		if !yes {
-			return nil, 0, fmt.Errorf("%w: point-loft fan lacks an edge", ErrUnsupported)
+			return nil, 0, fmt.Errorf("%w: point-loft fan lacks an edge", decaderr.ErrUnsupported)
 		}
 	}
 	var crossing [2]struct {
@@ -59,14 +61,14 @@ func revolveExteriorPath(base facetedPayload, boundary revolveSectorBoundary,
 			p, bound, ok = revolveSeatPoint(source, boundary.Contacts[k].Line, section, base)
 		}
 		if !ok {
-			return nil, 0, fmt.Errorf("%w: cone crossing has no finite spatial enclosure", ErrUnsupported)
+			return nil, 0, fmt.Errorf("%w: cone crossing has no finite spatial enclosure", decaderr.ErrUnsupported)
 		}
 		best, edge := math.Inf(1), -1
 		if boundary.FitRoute {
 			edge, ok = revolveFitStationEdge(base, groups, source, edgeIndex,
 				boundary.Contacts[k].Fit, root)
 			if !ok {
-				return nil, 0, fmt.Errorf("%w: cone crossing has no unique source fan cell", ErrUnsupported)
+				return nil, 0, fmt.Errorf("%w: cone crossing has no unique source fan cell", decaderr.ErrUnsupported)
 			}
 			best = revolvePointSegmentDistance(p, base.Verts[edge+1], base.Verts[(edge+1)%n+1])
 		} else {
@@ -82,7 +84,7 @@ func revolveExteriorPath(base facetedPayload, boundary revolveSectorBoundary,
 		}
 		allow := proofbound.AbsSumUpper(base.MeshBound, bound)
 		if edge < 0 || !(best <= allow) || !proofbound.FiniteVec(p) {
-			return nil, 0, fmt.Errorf("%w: certified root contact is outside its source fan edge", ErrUnsupported)
+			return nil, 0, fmt.Errorf("%w: certified root contact is outside its source fan edge", decaderr.ErrUnsupported)
 		}
 		// The fan bound admits this source edge for insertion. The contact's
 		// distance from the exact source is the seat enclosure alone; Join
@@ -95,25 +97,25 @@ func revolveExteriorPath(base facetedPayload, boundary revolveSectorBoundary,
 		maxCrossBound = max(maxCrossBound, bound)
 	}
 	if crossing[0].edge == crossing[1].edge {
-		return nil, 0, fmt.Errorf("%w: both root contacts occupy one fan edge", ErrUnsupported)
+		return nil, 0, fmt.Errorf("%w: both root contacts occupy one fan edge", decaderr.ErrUnsupported)
 	}
-	full := make([]revolveSectorNode, 0, n+2)
+	full := make([]facetedrecord.RevolveSectorNode, 0, n+2)
 	var crossPosition [2]int
 	for i := range n {
-		full = append(full, revolveSectorNode{Point: base.Verts[i+1], GroupToNext: groups[i], Crossing: -1})
+		full = append(full, facetedrecord.RevolveSectorNode{Point: base.Verts[i+1], GroupToNext: groups[i], Crossing: -1})
 		for k := range crossing {
 			if crossing[k].edge == i {
 				crossPosition[k] = len(full)
-				full = append(full, revolveSectorNode{Point: crossing[k].p,
+				full = append(full, facetedrecord.RevolveSectorNode{Point: crossing[k].p,
 					GroupToNext: groups[i], Crossing: k})
 			}
 		}
 	}
 	witness := boundary.OutsideWitness
 	if witness < 0 || witness >= len(source.Entities) || witness == boundary.InsideSegment {
-		return nil, 0, fmt.Errorf("%w: trimmed Loft has no certified outside segment", ErrUnsupported)
+		return nil, 0, fmt.Errorf("%w: trimmed Loft has no certified outside segment", decaderr.ErrUnsupported)
 	}
-	forward := make([]revolveSectorNode, 0, len(full))
+	forward := make([]facetedrecord.RevolveSectorNode, 0, len(full))
 	for i := crossPosition[0]; ; i = (i + 1) % len(full) {
 		forward = append(forward, full[i])
 		if i == crossPosition[1] {
@@ -126,7 +128,7 @@ func revolveExteriorPath(base facetedPayload, boundary revolveSectorBoundary,
 		hasRoot = hasRoot || forward[i].GroupToNext == boundary.InsideSegment
 	}
 	if !hasTip || hasRoot {
-		other := make([]revolveSectorNode, 0, len(full))
+		other := make([]facetedrecord.RevolveSectorNode, 0, len(full))
 		for i := crossPosition[1]; ; i = (i + 1) % len(full) {
 			other = append(other, full[i])
 			if i == crossPosition[0] {
@@ -140,11 +142,11 @@ func revolveExteriorPath(base facetedPayload, boundary revolveSectorBoundary,
 			hasRoot = hasRoot || forward[i].GroupToNext == boundary.InsideSegment
 		}
 		if !hasTip || hasRoot {
-			return nil, 0, fmt.Errorf("%w: source fan has no unique outside path", ErrUnsupported)
+			return nil, 0, fmt.Errorf("%w: source fan has no unique outside path", decaderr.ErrUnsupported)
 		}
 	}
 	if forward[0].Crossing < 0 || forward[len(forward)-1].Crossing < 0 {
-		return nil, 0, fmt.Errorf("%w: source path lost its cone crossings", ErrUnsupported)
+		return nil, 0, fmt.Errorf("%w: source path lost its cone crossings", decaderr.ErrUnsupported)
 	}
 	for _, i := range []int{0, len(forward) - 1} {
 		forward[i].RootBoundary = true
@@ -163,7 +165,8 @@ func revolvePointSegmentDistance(p, a, b r3.Vec) float64 {
 	return p.Sub(a.Add(d.Scale(t))).Len()
 }
 
-func revolveRootAngles(path []revolveSectorNode) (float64, float64, bool) {
+// RevolveRootAngles reads the two certified root endpoints of an exterior path.
+func RevolveRootAngles(path []facetedrecord.RevolveSectorNode) (float64, float64, bool) {
 	if len(path) < 2 || !path[0].RootBoundary || !path[len(path)-1].RootBoundary {
 		return 0, 0, false
 	}
