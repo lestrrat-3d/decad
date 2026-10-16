@@ -52,7 +52,7 @@ func threadTool(t *testing.T, doc *Document, root, mouth, z0, turns float64) *Bo
 }
 
 // requireThreadResult asserts the cut's published volume encloses
-// π·(volume/π) where exactOverPi = base − 16·Q, its box holds the true
+// π·exactOverPi for the fixture's independent closed form, its box holds the true
 // extremes within its own bound, its mesh is watertight, and Verify proves
 // validity.
 func requireThreadResult(t *testing.T, doc *Document, res *Body, exactOverPi *big.Rat, lo, hi r3.Vec) *Report {
@@ -249,10 +249,13 @@ func TestCoilThreadRunsOutOfTheEnd(t *testing.T) {
 	exact.Add(exact, new(big.Rat).Mul(big.NewRat(4, 3), below))
 	exact.Sub(big.NewRat(500, 1), exact)
 
-	vol, err := res.Volume()
+	requireThreadResult(t, doc, res, exact, r3.NewVec(-5, 0, -5), r3.NewVec(5, 20, 5))
+
+	// At a quarter turn the groove centre reaches y = 0. This checks the
+	// removed material on the end plane, not merely the cutter's bounds.
+	location, err := res.LocatePoint(t.Context(), r3.NewVec(0, 0, -4.55), units.Millimeters(0.01))
 	require.NoError(t, err)
-	requireEnclosesBig(t, vol.Value.Base(), vol.Bound.Base(),
-		new(big.Float).SetPrec(512).Mul(bigPi(), new(big.Float).SetPrec(512).SetRat(exact)), "run-out volume")
+	require.Equal(t, PointOutside, location)
 }
 
 // TestCoilCapFlushWithAnAxialFaceRefuses cuts the groove from a half

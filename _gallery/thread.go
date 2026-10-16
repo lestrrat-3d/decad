@@ -5,12 +5,13 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/solidlens"
 	"github.com/lestrrat-3d/units"
 )
 
-// threadRender builds the complete eight-turn external thread for the gallery.
+// threadRender shows an eight-turn V-groove opening through one end of a cylinder.
 // Rendering this image in CI also exercises the consumer's full Coil and Cut.
 func threadRender() imageRender {
 	return imageRender{
@@ -22,17 +23,23 @@ func threadRender() imageRender {
 			if err != nil {
 				return solidlens.Scene{}, err
 			}
-			models, err := oneModel(ctx, body, cyan, chord)
+			models, err := oneModel(ctx, body, solidlens.RGB(0.32, 0.55, 0.68), chord)
 			if err != nil {
 				return solidlens.Scene{}, err
 			}
 			scene := featureScene(models...)
 			scene.Camera = solidlens.Camera{
-				Position: solidlens.Vec{X: 30, Y: -45, Z: 25},
-				Target:   solidlens.Vec{Y: 10},
-				Up:       solidlens.Vec{Z: 1},
-				FOV:      30,
+				Position: solidlens.Vec{X: 32, Y: -9, Z: 19},
+				Target:   solidlens.Vec{Y: 7},
+				Up:       solidlens.Vec{Y: 1},
+				FOV:      27,
 			}
+			// A low fill and a key with an axial component separate the V's flanks.
+			scene.DirectionalLights = []solidlens.DirectionalLight{
+				{Direction: solidlens.Vec{X: -1, Y: -0.8, Z: -0.6}, Color: solidlens.RGB(1, 1, 1), Intensity: 0.9},
+				{Direction: solidlens.Vec{X: 0.6, Y: 0.4, Z: -1}, Color: solidlens.RGB(0.7, 0.8, 1), Intensity: 0.15},
+			}
+			scene.PointLights = nil
 			return scene, nil
 		},
 	}
@@ -41,7 +48,7 @@ func threadRender() imageRender {
 func externalThread(ctx context.Context) (*decad.Body, error) {
 	w := sketch.NewWorld()
 	axis := decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{V: 1}}
-	section, profile, err := sketchLoops(ctx, w, w.XY(), rectangle(0, 0, 5, 20))
+	section, profile, err := sketchLoops(ctx, w, w.XY(), rectangle(0, 0, 5, 14))
 	if err != nil {
 		return nil, fmt.Errorf("draw thread cylinder: %w", err)
 	}
@@ -50,9 +57,12 @@ func externalThread(ctx context.Context) (*decad.Body, error) {
 	if err != nil {
 		return nil, fmt.Errorf("revolve thread cylinder: %w", err)
 	}
+	// Start a quarter pitch below the end, as in TestCoilThreadRunsOutOfTheEnd.
+	// The blank trims the cutter; its other end leaves a short plain collar.
+	const start = -0.375
 	const halfWidth = 0.6928203230275509
 	groove, grooveProfile, err := sketchLoops(ctx, w, w.XY(), []point{
-		{4.1, 3}, {5.3, 3 - halfWidth}, {5.3, 3 + halfWidth},
+		{4.1, start}, {5.3, start - halfWidth}, {5.3, start + halfWidth},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("draw thread groove: %w", err)
@@ -89,5 +99,40 @@ func externalThread(ctx context.Context) (*decad.Body, error) {
 	if !area || !centroid {
 		return nil, fmt.Errorf("external thread lacks area or centroid tolerance diagnostics")
 	}
+	if err := checkThreadGroove(ctx, thread); err != nil {
+		return nil, err
+	}
 	return thread, nil
+}
+
+// checkThreadGroove checks the cut's material at radius 4.55, safely between
+// the 4.1 root and 5 mm crest. Quarter and half turns advance the groove; a stack
+// of annular grooves cannot satisfy both the groove and crest checks.
+// These checks reuse the gallery's body rather than rebuilding a full model.
+func checkThreadGroove(ctx context.Context, body *decad.Body) error {
+	for _, sample := range []struct {
+		name  string
+		point r3.Vec
+		want  decad.PointLocation
+	}{
+		{"groove", r3.NewVec(4.55, 2.625, 0), decad.PointOutside},
+		{"next turn", r3.NewVec(4.55, 4.125, 0), decad.PointOutside},
+		{"quarter-turn groove", r3.NewVec(0, 3, -4.55), decad.PointOutside},
+		{"quarter-turn crest", r3.NewVec(0, 3.75, -4.55), decad.PointInside},
+		{"crest", r3.NewVec(4.55, 3.375, 0), decad.PointInside},
+		{"opposite groove", r3.NewVec(-4.55, 3.375, 0), decad.PointOutside},
+		{"opposite crest", r3.NewVec(-4.55, 2.625, 0), decad.PointInside},
+		// This point is on the blank's end plane, inside the cutter's V.
+		{"end intersection", r3.NewVec(0, 0, -4.55), decad.PointOutside},
+		{"end opening", r3.NewVec(0, 0.05, -4.55), decad.PointOutside},
+	} {
+		got, err := body.LocatePoint(ctx, sample.point, units.Millimeters(featureChordTolerance))
+		if err != nil {
+			return fmt.Errorf("check thread %s: %w", sample.name, err)
+		}
+		if got != sample.want {
+			return fmt.Errorf("thread %s: got %s, want %s", sample.name, got, sample.want)
+		}
+	}
+	return nil
 }
