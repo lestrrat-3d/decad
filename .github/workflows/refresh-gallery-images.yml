@@ -1,0 +1,108 @@
+name: Refresh gallery images
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_set:
+        description: Which gallery images to regenerate
+        required: true
+        type: choice
+        default: stills
+        options:
+          - stills
+          - features
+          - hero
+          - motion
+          - all
+      only:
+        description: Optional comma-separated image names for stills, features, or motion
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate selection
+        shell: bash
+        env:
+          IMAGE_SET: ${{ inputs.image_set }}
+          IMAGE_NAMES: ${{ inputs.only }}
+        run: |
+          [[ "$GITHUB_REF" == refs/heads/* ]]
+          if [[ "$IMAGE_SET" == all || "$IMAGE_SET" == hero ]]; then
+            [[ -z "$IMAGE_NAMES" ]] || {
+              echo 'The all and hero groups do not accept image names.' >&2
+              exit 1
+            }
+          fi
+
+      - name: Install Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: _gallery/go.mod
+          cache: true
+          cache-dependency-path: |
+            go.sum
+            _gallery/go.sum
+
+      - name: Install GIF encoder
+        if: inputs.image_set != 'stills'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Render still images
+        if: inputs.image_set == 'stills' || inputs.image_set == 'all'
+        working-directory: _gallery
+        env:
+          IMAGE_NAMES: ${{ inputs.only }}
+        run: go run . -only "$IMAGE_NAMES"
+
+      - name: Render feature GIFs
+        if: inputs.image_set == 'features' || inputs.image_set == 'all'
+        working-directory: _gallery
+        env:
+          IMAGE_NAMES: ${{ inputs.only }}
+        run: go run . features -only "$IMAGE_NAMES"
+
+      - name: Render hero GIF
+        if: inputs.image_set == 'hero' || inputs.image_set == 'all'
+        working-directory: _gallery
+        run: |
+          mkdir -p ../.tmp
+          go run . hero > ../.tmp/hero-assemble.sh
+          sh ../.tmp/hero-assemble.sh
+
+      - name: Render motion GIFs
+        if: inputs.image_set == 'motion' || inputs.image_set == 'all'
+        working-directory: _gallery
+        env:
+          IMAGE_NAMES: ${{ inputs.only }}
+        run: go run . motion -only "$IMAGE_NAMES" -workers 4
+
+      - name: Commit images to a branch
+        shell: bash
+        run: |
+          git add -- docs/images
+          if git diff --cached --quiet; then
+            echo 'No gallery images changed.' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          branch="chore-refresh-gallery-images-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          git switch -c "$branch"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'refresh gallery images'
+          git push --set-upstream origin "$branch"
+          printf 'Images were refreshed on branch `%s`.\n\n[Open a pull request](%s/%s/compare/%s...%s?expand=1).\n' \
+            "$branch" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_REF_NAME" "$branch" \
+            >> "$GITHUB_STEP_SUMMARY"
