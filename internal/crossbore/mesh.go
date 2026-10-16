@@ -1,8 +1,9 @@
 // Package crossbore holds the exact proof arithmetic and the mesh plan of the
 // perpendicular cylinder bore-mouth chamfer: the station plan over both
 // mouths and the rest of the outer ring, the seam feet of the positive mouth,
-// the held outer-ring station errors, and the dual-interval cell proof over
-// the 4,096 whole-turn cells with its quarter-turn mirror map. The root
+// the held outer-ring station errors, the dual-interval proof of the 1,025
+// quarter-turn base cells, and the map from the 4,096 whole-turn cells onto
+// them. The root
 // package reads the source bodies, assembles the mesh and sums the volume and
 // area bounds. See docs/cross-cylinder-bore-chamfer-design.md.
 package crossbore
@@ -23,8 +24,10 @@ import (
 )
 
 const (
-	// HalfStations is the station count of each mouth's half turn. The
-	// positive-mouth proof splits the full turn into 2*HalfStations cells.
+	// HalfStations is the number of intervals between the stations of a
+	// mouth's half turn; StationPlan places HalfStations+1 stations on each
+	// mouth. The positive-mouth proof splits the full turn into
+	// 2*HalfStations cells.
 	HalfStations = 2048
 	restStations = 512
 	// AuditScans is the scan limit the root passes to the streaming crossing
@@ -130,9 +133,11 @@ func CapPatches(src []int) []loftmesh.ProjectedPatch {
 	return patches
 }
 
-// Station is one angular station of the outer ring. Phi is its angle, Lower
-// and Upper are its two mouth vertices, Kind is Positive, Negative or Rest,
-// and J is its index within a mouth's half turn (zero for Rest).
+// Station is one angular station of the outer ring. Phi is its angle and Kind
+// is Positive, Negative or Rest. For a Positive or Negative station, Lower and
+// Upper are the mouth's lower and upper vertices and J is the station's index
+// within that mouth's half turn. For a Rest station, Lower and Upper are the
+// same outer-ring point and J is zero.
 type Station struct {
 	Phi          float64
 	Lower, Upper r3.Vec

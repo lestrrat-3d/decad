@@ -81,8 +81,8 @@ func TestStationPlanOrdersEveryMouthStation(t *testing.T) {
 	_, err = crossbore.StationPlan(rec, 20)
 	require.ErrorIs(t, err, decaderr.ErrUnsupported)
 	require.ErrorContains(t, err, "a cross-bore mouth turns backward")
-	// A zero bore puts every positive-mouth station at one angle: equal
-	// neighbours are refused like ones that go backward.
+	// A zero bore and zero setback put every station of a mouth at one angle:
+	// equal neighbours are refused like ones that go backward.
 	_, err = crossbore.StationPlan(&facetedrecord.CrossCylinderBoreRecord{Radius: 5, Height: 10, CenterZ: 5}, 0)
 	require.ErrorIs(t, err, decaderr.ErrUnsupported)
 	require.ErrorContains(t, err, "a cross-bore mouth turns backward")
@@ -105,8 +105,8 @@ func TestFeetMeetTheSourceSeamAtZeroSetback(t *testing.T) {
 // TestFeetSitAtTheSetbackOnTheDevelopedCylinders reads each foot's distance
 // from the seam point on its own unrolled cylinder. The outer foot unrolls the
 // target cylinder (arc length R*angle, height z); the bore foot unrolls the
-// bore cylinder (arc length r*angle about the X axis, distance along X). Both
-// distances equal the setback.
+// bore cylinder (arc length r*angle about the X axis, distance along X). At
+// the tested angles both distances equal the setback to within 1e-9.
 func TestFeetSitAtTheSetbackOnTheDevelopedCylinders(t *testing.T) {
 	const R, r, c, setback = 5.0, 1.0, 5.0, 0.5
 	rec := &facetedrecord.CrossCylinderBoreRecord{Radius: R, Bore: r, Height: 10, CenterZ: c}
@@ -148,8 +148,8 @@ func TestMeshBuildersAppendIndexedPrimitives(t *testing.T) {
 
 func TestStationErrorEnclosesTheSourceCircle(t *testing.T) {
 	radius := proofarith.FloatRat(5)
-	// A point on the circle at angle phi reads a small positive bound; one
-	// moved radially by 1e-3 reads a bound of at least that distance.
+	// A point on the circle at angle zero reads an error below 1e-12; one
+	// moved radially by 1e-3 reads an error of at least that distance.
 	on := r3.Vec{X: 5, Y: 0}
 	e, ok := crossbore.StationError(on, radius, 0)
 	require.True(t, ok)

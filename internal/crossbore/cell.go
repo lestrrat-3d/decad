@@ -62,9 +62,9 @@ func crossDSinCos(a crossDual) (crossDual, crossDual, bool) {
 		crossDual{v: c, d: crossSub(crossPoint(0), crossMul(s, a.d))}, true
 }
 
-// CellResult holds the maxima MirroredCellMaxima folds over the cells: the
-// coordinate width, the derivative speed, the band length and the
-// held-sample error.
+// CellResult is what MirroredCellMaxima returns: the maxima of the coordinate
+// width, the derivative speed and the band length over the quarter-turn base
+// cells, and the maximum held-sample error over all whole-turn cells.
 type CellResult struct {
 	Width, SampleError, Speed, BandLength float64
 }
