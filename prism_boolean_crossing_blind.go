@@ -32,7 +32,7 @@ func tryCrossingBlindCut(ctx context.Context, a, b *Body) (brepPayload, bool, er
 	}
 	if pa.SectionDelta != 0 || pb.SectionDelta != 0 ||
 		pa.Z0Delta != 0 || pa.Z1Delta != 0 || pb.Z0Delta != 0 || pb.Z1Delta != 0 ||
-		!crossingBlindAxisLines(pa.Profile) || !crossingBlindAxisLines(pb.Profile) {
+		!momentinput.CrossingBlindAxisLines(pa.Profile) || !momentinput.CrossingBlindAxisLines(pb.Profile) {
 		return brepPayload{}, false, nil
 	}
 	reexpress, err := prismcells.NewReexpression(pa.PlacementOperand(), pb.PlacementOperand())
@@ -69,8 +69,4 @@ func tryCrossingBlindCut(ctx context.Context, a, b *Body) (brepPayload, bool, er
 		return brepPayload{}, false, err
 	}
 	return result, true, nil
-}
-
-func crossingBlindAxisLines(p profileRecord) bool {
-	return momentinput.CrossingBlindAxisLines(p)
 }
