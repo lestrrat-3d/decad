@@ -5,6 +5,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/spiralsector"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -190,13 +191,13 @@ func spiralValidateFirstUnion(ctx context.Context, blank, tooth *Body,
 		if faceGroup < 0 {
 			return false, nil
 		}
-		chain, accepted, err := spiralHeldHeelSwitch(ctx, result,
+		chain, accepted, err := spiralsector.HeldHeelSwitch(ctx, result,
 			groups.blankRoot, faceGroup)
 		if err != nil || !accepted {
 			return false, err
 		}
-		ordered := make([]r3.Vec, len(chain.vertices))
-		for i, vertex := range chain.vertices {
+		ordered := make([]r3.Vec, len(chain.Vertices))
+		for i, vertex := range chain.Vertices {
 			ordered[i] = result.Verts[vertex]
 		}
 		var prepared []*spiralRootFlankSourceBoxes
@@ -204,7 +205,7 @@ func spiralValidateFirstUnion(ctx context.Context, blank, tooth *Body,
 			prepared = append(prepared, admission.rootBoxes[sourceSide])
 		}
 		if _, accepted, err := spiralRootFlankWholeBound(ctx, proof,
-			sourceSide, ordered, chain.minBeta, prepared...); err != nil || !accepted {
+			sourceSide, ordered, chain.MinBeta, prepared...); err != nil || !accepted {
 			return false, err
 		}
 	}

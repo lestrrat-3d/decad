@@ -1,4 +1,4 @@
-package decad
+package spiralsector
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -137,7 +138,7 @@ func cloneHeld(held *meshbool.StitchedMesh) *meshbool.StitchedMesh {
 
 func TestSpiralHeldEdgesRefusesBrokenMeshes(t *testing.T) {
 	box := heldBox(false)
-	owners, ok, err := spiralHeldEdges(t.Context(), box)
+	owners, ok, err := HeldEdges(t.Context(), box)
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Len(t, owners, 18)
@@ -146,7 +147,7 @@ func TestSpiralHeldEdgesRefusesBrokenMeshes(t *testing.T) {
 	}
 	// The +y face is facets 0-1 and the -x face facets 2-3, so the edge they
 	// share lists group 1 first (lower facet) and group 2 second.
-	require.Equal(t, [2]int{1, 2}, owners[spiralHeldEdge{2, 6}].src)
+	require.Equal(t, [2]int{1, 2}, owners[HeldEdge{2, 6}].src)
 
 	tests := []struct {
 		name   string
@@ -169,7 +170,7 @@ func TestSpiralHeldEdgesRefusesBrokenMeshes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			held := cloneHeld(box)
 			tt.mutate(held)
-			owners, ok, err := spiralHeldEdges(t.Context(), held)
+			owners, ok, err := HeldEdges(t.Context(), held)
 			require.NoError(t, err)
 			require.False(t, ok)
 			require.Nil(t, owners)
@@ -177,11 +178,11 @@ func TestSpiralHeldEdgesRefusesBrokenMeshes(t *testing.T) {
 	}
 
 	t.Run("nil mesh and nil context", func(t *testing.T) {
-		_, ok, err := spiralHeldEdges(t.Context(), nil)
+		_, ok, err := HeldEdges(t.Context(), nil)
 		require.NoError(t, err)
 		require.False(t, ok)
 		//nolint:staticcheck // a nil context is the refusal under test
-		_, ok, err = spiralHeldEdges(nil, box)
+		_, ok, err = HeldEdges(nil, box)
 		require.NoError(t, err)
 		require.False(t, ok)
 	})
@@ -189,20 +190,20 @@ func TestSpiralHeldEdgesRefusesBrokenMeshes(t *testing.T) {
 	t.Run("cancelled context", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
-		_, ok, err := spiralHeldEdges(ctx, box)
+		_, ok, err := HeldEdges(ctx, box)
 		require.ErrorIs(t, err, context.Canceled)
 		require.False(t, ok)
 	})
 }
 
-// spiralHeldSwitchPathReference is the switch search as it stood before the
+// heldSwitchPathReference is the switch search as it stood before the
 // edge table was split out: one table rebuilt per call from two maps.
-func spiralHeldSwitchPathReference(ctx context.Context, held *meshbool.StitchedMesh,
-	blankHeel, toothRoot int, monotone bool) (spiralHeldSwitch, bool, error) {
+func heldSwitchPathReference(ctx context.Context, held *meshbool.StitchedMesh,
+	blankHeel, toothRoot int, monotone bool) (HeldSwitch, bool, error) {
 	if ctx == nil || held == nil || blankHeel < 0 || toothRoot < 0 || blankHeel == toothRoot ||
 		len(held.Tris) == 0 || len(held.Tris) > 1<<17 ||
 		len(held.Src) != len(held.Tris) || len(held.VertexBound) != len(held.Verts) {
-		return spiralHeldSwitch{}, false, nil
+		return HeldSwitch{}, false, nil
 	}
 	type edge struct{ lo, hi int }
 	owners := make(map[edge][2]int, len(held.Tris)*3/2)
@@ -210,20 +211,20 @@ func spiralHeldSwitchPathReference(ctx context.Context, held *meshbool.StitchedM
 	for i, tri := range held.Tris {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
-				return spiralHeldSwitch{}, false, err
+				return HeldSwitch{}, false, err
 			}
 		}
 		for side := range 3 {
 			a, b := tri[side], tri[(side+1)%3]
 			if a < 0 || b < 0 || a >= len(held.Verts) || b >= len(held.Verts) || a == b {
-				return spiralHeldSwitch{}, false, nil
+				return HeldSwitch{}, false, nil
 			}
 			if a > b {
 				a, b = b, a
 			}
 			key := edge{a, b}
 			if counts[key] >= 2 {
-				return spiralHeldSwitch{}, false, nil
+				return HeldSwitch{}, false, nil
 			}
 			owner := owners[key]
 			owner[counts[key]] = held.Src[i]
@@ -237,12 +238,12 @@ func spiralHeldSwitchPathReference(ctx context.Context, held *meshbool.StitchedM
 	for key, pair := range owners {
 		if seen%256 == 0 {
 			if err := ctx.Err(); err != nil {
-				return spiralHeldSwitch{}, false, err
+				return HeldSwitch{}, false, err
 			}
 		}
 		seen++
 		if counts[key] != 2 {
-			return spiralHeldSwitch{}, false, nil
+			return HeldSwitch{}, false, nil
 		}
 		if pair[0] != blankHeel || pair[1] != toothRoot {
 			if pair[0] != toothRoot || pair[1] != blankHeel {
@@ -254,7 +255,7 @@ func spiralHeldSwitchPathReference(ctx context.Context, held *meshbool.StitchedM
 		seamEdges++
 	}
 	if seamEdges < 1 || seamEdges > 4096 {
-		return spiralHeldSwitch{}, false, nil
+		return HeldSwitch{}, false, nil
 	}
 	starts := make([]int, 0, 2)
 	for vertex, neighbors := range adj {
@@ -263,42 +264,42 @@ func spiralHeldSwitchPathReference(ctx context.Context, held *meshbool.StitchedM
 			starts = append(starts, vertex)
 		case 2:
 		default:
-			return spiralHeldSwitch{}, false, nil
+			return HeldSwitch{}, false, nil
 		}
 	}
 	if len(starts) != 2 || len(adj) != seamEdges+1 {
-		return spiralHeldSwitch{}, false, nil
+		return HeldSwitch{}, false, nil
 	}
 	ordered := make([]int, 0, len(adj))
 	previous, current := -1, starts[0]
 	sign := 0
 	minBeta := math.Inf(1)
-	var x loftFaceInterval
-	var box [3]loftFaceInterval
+	var x loftface.Interval
+	var box [3]loftface.Interval
 	for len(ordered) < len(adj) {
 		if len(ordered)%128 == 0 {
 			if err := ctx.Err(); err != nil {
-				return spiralHeldSwitch{}, false, err
+				return HeldSwitch{}, false, err
 			}
 		}
 		p := held.Verts[current]
 		beta := held.VertexBound[current]
 		if !proofbound.FiniteVec(p) || p.Y <= 0 ||
 			proofbound.IsNonFinite(beta) || beta < 0 {
-			return spiralHeldSwitch{}, false, nil
+			return HeldSwitch{}, false, nil
 		}
 		if len(ordered) == 0 {
-			x = loftFaceInterval{Lo: lfF(p.X), Hi: lfF(p.X)}
+			x = loftface.Interval{Lo: ratF(p.X), Hi: ratF(p.X)}
 		} else {
-			if lfF(p.X).Cmp(x.Lo) < 0 {
-				x.Lo = lfF(p.X)
+			if ratF(p.X).Cmp(x.Lo) < 0 {
+				x.Lo = ratF(p.X)
 			}
-			if lfF(p.X).Cmp(x.Hi) > 0 {
-				x.Hi = lfF(p.X)
+			if ratF(p.X).Cmp(x.Hi) > 0 {
+				x.Hi = ratF(p.X)
 			}
 		}
 		for axis, coordinate := range [...]float64{p.X, p.Y, p.Z} {
-			value := lfF(coordinate)
+			value := ratF(coordinate)
 			if box[axis].Lo == nil || value.Cmp(box[axis].Lo) < 0 {
 				box[axis].Lo = value
 			}
@@ -320,23 +321,23 @@ func spiralHeldSwitchPathReference(ctx context.Context, held *meshbool.StitchedM
 		}
 		q := held.Verts[next]
 		if !proofbound.FiniteVec(q) || q.Y <= 0 {
-			return spiralHeldSwitch{}, false, nil
+			return HeldSwitch{}, false, nil
 		}
-		cross := lfSub(lfMul(lfF(p.Y), lfF(q.Z)), lfMul(lfF(p.Z), lfF(q.Y))).Sign()
+		cross := ratSub(ratMul(ratF(p.Y), ratF(q.Z)), ratMul(ratF(p.Z), ratF(q.Y))).Sign()
 		if cross == 0 || monotone && sign != 0 && cross != sign {
-			return spiralHeldSwitch{}, false, nil
+			return HeldSwitch{}, false, nil
 		}
 		sign = cross
 		previous, current = current, next
 	}
 	if len(ordered) != len(adj) || ordered[len(ordered)-1] != starts[1] ||
 		proofbound.IsNonFinite(minBeta) || minBeta <= 0 {
-		return spiralHeldSwitch{}, false, nil
+		return HeldSwitch{}, false, nil
 	}
 	first, last := held.Verts[ordered[0]], held.Verts[ordered[len(ordered)-1]]
-	return spiralHeldSwitch{vertices: ordered, x: x, box: box,
-		slope:   [2]*big.Rat{lfDiv(lfF(first.Z), lfF(first.Y)), lfDiv(lfF(last.Z), lfF(last.Y))},
-		minBeta: minBeta, increasing: sign > 0}, true, nil
+	return HeldSwitch{Vertices: ordered, X: x, box: box,
+		slope:   [2]*big.Rat{new(big.Rat).Quo(ratF(first.Z), ratF(first.Y)), new(big.Rat).Quo(ratF(last.Z), ratF(last.Y))},
+		MinBeta: minBeta, Increasing: sign > 0}, true, nil
 }
 
 // requireSameHeldSwitch checks that two accepted switches describe the same
@@ -346,47 +347,47 @@ func spiralHeldSwitchPathReference(ctx context.Context, held *meshbool.StitchedM
 // Only a monotone chain has one turning direction. For any other chain
 // increasing is the sign of the last edge walked, which depends on the end the
 // walk started from, so it is compared only when the walks agree.
-func requireSameHeldSwitch(t *testing.T, want, got spiralHeldSwitch, monotone bool) {
+func requireSameHeldSwitch(t *testing.T, want, got HeldSwitch, monotone bool) {
 	t.Helper()
-	reversed := !slices.Equal(want.vertices, got.vertices)
+	reversed := !slices.Equal(want.Vertices, got.Vertices)
 	if reversed {
-		back := slices.Clone(got.vertices)
+		back := slices.Clone(got.Vertices)
 		slices.Reverse(back)
-		require.Equal(t, want.vertices, back)
+		require.Equal(t, want.Vertices, back)
 	}
-	require.Equal(t, want.minBeta, got.minBeta)
-	require.Zero(t, want.x.Lo.Cmp(got.x.Lo))
-	require.Zero(t, want.x.Hi.Cmp(got.x.Hi))
+	require.Equal(t, want.MinBeta, got.MinBeta)
+	require.Zero(t, want.X.Lo.Cmp(got.X.Lo))
+	require.Zero(t, want.X.Hi.Cmp(got.X.Hi))
 	for axis := range 3 {
 		require.Zero(t, want.box[axis].Lo.Cmp(got.box[axis].Lo))
 		require.Zero(t, want.box[axis].Hi.Cmp(got.box[axis].Hi))
 	}
 	first, last := got.slope[0], got.slope[1]
-	increasing := got.increasing
+	increasing := got.Increasing
 	if reversed {
 		first, last, increasing = last, first, !increasing
 	}
 	require.Zero(t, want.slope[0].Cmp(first))
 	require.Zero(t, want.slope[1].Cmp(last))
 	if monotone || !reversed {
-		require.Equal(t, want.increasing, increasing)
+		require.Equal(t, want.Increasing, increasing)
 	}
 }
 
-// requireHeldSwitchesAgree runs the reference, spiralHeldSwitchPath and
-// spiralHeldSwitchFrom over one shared table and requires the same verdict,
+// requireHeldSwitchesAgree runs the reference, heldSwitchPath and
+// HeldSwitchFrom over one shared table and requires the same verdict,
 // error and chain. It reports whether the switch was accepted.
 func requireHeldSwitchesAgree(ctx context.Context, t *testing.T, held *meshbool.StitchedMesh,
-	owners map[spiralHeldEdge]spiralHeldEdgeOwners, a, b int, monotone bool) bool {
+	owners map[HeldEdge]HeldEdgeOwners, a, b int, monotone bool) bool {
 	t.Helper()
-	want, wantOK, wantErr := spiralHeldSwitchPathReference(ctx, held, a, b, monotone)
-	path, pathOK, pathErr := spiralHeldSwitchPath(ctx, held, a, b, monotone)
+	want, wantOK, wantErr := heldSwitchPathReference(ctx, held, a, b, monotone)
+	path, pathOK, pathErr := heldSwitchPath(ctx, held, a, b, monotone)
 	require.Equal(t, wantErr, pathErr)
 	require.Equal(t, wantOK, pathOK)
 	if owners == nil {
 		require.False(t, wantOK)
 	} else {
-		from, fromOK, fromErr := spiralHeldSwitchFrom(ctx, held, owners, a, b, monotone)
+		from, fromOK, fromErr := HeldSwitchFrom(ctx, held, owners, a, b, monotone)
 		require.Equal(t, wantErr, fromErr)
 		require.Equal(t, wantOK, fromOK)
 		if fromOK {
@@ -403,7 +404,7 @@ func TestSpiralHeldSwitchFromMatchesSwitchPath(t *testing.T) {
 	pairs := [][2]int{{1, 2}, {2, 1}, {1, 3}, {3, 3}, {-1, 2}}
 	for _, splitSeam := range []bool{false, true} {
 		held := heldBox(splitSeam)
-		owners, ok, err := spiralHeldEdges(t.Context(), held)
+		owners, ok, err := HeldEdges(t.Context(), held)
 		require.NoError(t, err)
 		require.True(t, ok)
 		for _, pair := range pairs {
@@ -414,11 +415,11 @@ func TestSpiralHeldSwitchFromMatchesSwitchPath(t *testing.T) {
 					"split %v pair %v monotone %v", splitSeam, pair, monotone)
 			}
 		}
-		chain, accepted, err := spiralHeldSwitchFrom(t.Context(), held, owners, 1, 2, true)
+		chain, accepted, err := HeldSwitchFrom(t.Context(), held, owners, 1, 2, true)
 		require.NoError(t, err)
 		require.True(t, accepted)
-		require.Len(t, chain.vertices, 2+btoi(splitSeam))
-		require.Equal(t, math.Float64bits(0.001), math.Float64bits(chain.minBeta))
+		require.Len(t, chain.Vertices, 2+btoi(splitSeam))
+		require.Equal(t, math.Float64bits(0.001), math.Float64bits(chain.MinBeta))
 	}
 }
 
@@ -445,7 +446,7 @@ func TestSpiralHeldSwitchFromMatchesSwitchPathRandomMeshes(t *testing.T) {
 				held.Tris[len(held.Tris)/2][1] = len(held.Verts)
 			}
 		}
-		owners, ok, err := spiralHeldEdges(t.Context(), held)
+		owners, ok, err := HeldEdges(t.Context(), held)
 		require.NoError(t, err)
 		require.Equal(t, trial%3 != 2, ok, "trial %d", trial)
 		for a := range 4 {
@@ -469,16 +470,16 @@ func TestSpiralHeldSwitchFromMatchesSwitchPathCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	held := heldBox(false)
-	owners, ok, err := spiralHeldEdges(t.Context(), held)
+	owners, ok, err := HeldEdges(t.Context(), held)
 	require.NoError(t, err)
 	require.True(t, ok)
-	_, _, wantErr := spiralHeldSwitchPathReference(ctx, held, 1, 2, true)
+	_, _, wantErr := heldSwitchPathReference(ctx, held, 1, 2, true)
 	require.ErrorIs(t, wantErr, context.Canceled)
-	_, pathOK, pathErr := spiralHeldSwitchPath(ctx, held, 1, 2, true)
+	_, pathOK, pathErr := heldSwitchPath(ctx, held, 1, 2, true)
 	require.Equal(t, wantErr, pathErr)
 	require.False(t, pathOK)
 	// A table built before the cancel still reaches the chain walk's own poll.
-	_, fromOK, fromErr := spiralHeldSwitchFrom(ctx, held, owners, 1, 2, true)
+	_, fromOK, fromErr := HeldSwitchFrom(ctx, held, owners, 1, 2, true)
 	require.Equal(t, wantErr, fromErr)
 	require.False(t, fromOK)
 }
