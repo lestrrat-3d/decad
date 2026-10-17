@@ -1065,8 +1065,11 @@ builds one result and retires every input together. The exact prism class
 accepts hole-free whole-line sections on the identical recorded plane and
 sweep interval, with distinct source line carriers. It arranges every section
 in one Sketch scene, audits the resulting boundary, and charges its cuts
-once. Other prism inputs enter the two-body evaluator in source order after
-the specialized multi-body classes miss. Each intermediate result stays
+once. Authenticated straight-source axial Lofts can enter that same scene as
+private prisms when each Loft has a positive-area overlap with the first
+prism and all operands meet the scene's stricter source requirements. Other
+prism inputs enter the two-body evaluator in source order after the
+specialized multi-body classes miss. Each intermediate result stays
 transient; the final result commits only if every pair passes its proof.
 A pair can still return `ErrUnsupported`.
 

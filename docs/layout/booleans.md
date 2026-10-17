@@ -8,7 +8,7 @@ The rules for rows live in `docs/layout.md`.
 | Path | Responsibility |
 |---|---|
 | `boolean.go` | Public `Union`/`Cut`/`Intersect`, `BooleanError` mapping, and audited scale-source marking. See evaluator §9. |
-| `boolean_many.go` | Validates and commits a multi-body Union, including transient prism pair chains. See API §8. |
+| `boolean_many.go` | Validates and commits a multi-body Union, including certified straight-source Loft one-scene unions and transient prism pair chains. See API §8. |
 | `boolean_many_prism.go` | Arranges identical-interval line prisms in one Sketch scene. See prism-boolean §4.6. |
 | `point_cone_trim.go` | Retains point-loft and cone source faces through coaxial Cut/Intersect. See loft-point design. |
 | `loft_faces_cone_trim.go` | Certifies the one-use LoftFaces toe Cut to heel Intersect cone continuation, including the tangent heel's extended tooth operand. See loft-face-sections design. |

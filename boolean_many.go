@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
 // performUnionMany validates every input before evaluation and commits the
@@ -53,6 +54,9 @@ func performUnionMany(ctx context.Context, operands []*Body) (*Body, error) {
 	if !matched && err == nil {
 		body, matched, err = tryPrismPatternUnionMany(ctx, d, ref, operands)
 	}
+	if !matched && err == nil {
+		body, matched, err = tryStraightLoftPrismUnionMany(ctx, d, ref, operands)
+	}
 	span := producerID(1)
 	if !matched && err == nil {
 		body, span, matched, err = tryPrismUnionChain(ctx, ref, operands)
@@ -68,6 +72,47 @@ func performUnionMany(ctx context.Context, operands []*Body) (*Body, error) {
 	}
 	d.commitSpan(body, span, operands...)
 	return body, nil
+}
+
+// tryStraightLoftPrismUnionMany converts only authenticated straight-source
+// Lofts before asking the existing prism evaluator to arrange one scene. Each
+// Loft must overlap the first prism over positive area, so a tangent contact
+// cannot enter this route merely because another operand joins the scene.
+func tryStraightLoftPrismUnionMany(ctx context.Context, d *Document, ref producerID,
+	operands []*Body) (*Body, bool, error) {
+	if _, ok := operands[0].n.Payload.(prismPayload); !ok {
+		return nil, false, nil
+	}
+	converted := make([]*Body, len(operands))
+	converted[0] = operands[0]
+	lofts := 0
+	for i, operand := range operands[1:] {
+		if err := ctx.Err(); err != nil {
+			return nil, true, err
+		}
+		if _, ok := operand.n.Payload.(prismPayload); ok {
+			converted[i+1] = operand
+			continue
+		}
+		loft, ok := operand.n.Payload.(loftPayload)
+		if !ok {
+			return nil, false, nil
+		}
+		prism, ok, err := exactAxialLoftPrism(ctx, loft)
+		if err != nil || !ok {
+			return nil, false, err
+		}
+		converted[i+1] = bornBody(&Body{n: topo.Body{Payload: prism}})
+		_, overlap, err := tryPrismBoolean(ctx, meshbool.OpIntersect, converted[0], converted[i+1])
+		if err != nil || !overlap {
+			return nil, false, err
+		}
+		lofts++
+	}
+	if lofts == 0 {
+		return nil, false, nil
+	}
+	return tryPrismUnionMany(ctx, d, ref, converted)
 }
 
 // tryPrismUnionChain gives prism inputs and exact straight-source Loft inputs

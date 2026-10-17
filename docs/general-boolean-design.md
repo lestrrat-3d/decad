@@ -1298,7 +1298,10 @@ Each PR ships code and tests; this document ships with PR 1.
 Loft whose source records denote a straight prism. The gate reads the Loft's
 recorded geometry, not its source identity, segment count, or radial position.
 Two independently created Lofts can therefore join the same prism in separate
-pair operations or through the transient many-body chain.
+pair operations. A many-body call can arrange their certified private prism
+records in one scene when each Loft overlaps the first prism over positive
+area, and all inputs share the same whole-line, hole-free plane and interval.
+Otherwise the transient many-body pair chain remains available.
 
 The Loft-to-prism source certificate requires all of these facts:
 
@@ -1317,7 +1320,8 @@ The Loft-to-prism source certificate requires all of these facts:
 
 The route creates private prism operands only after the source certificate.
 The existing prism `Intersect` scene must resolve a positive-area shared
-region; an edge-only tangent declines. The existing prism `Union` scene then
+region for a pair, or for each Loft against the first prism in a many-body
+scene; an edge-only tangent declines. The existing prism `Union` scene then
 authenticates the same profiles through Sketch's exact fragments, selects the
 material cells, audits the merged section, and publishes the normal computed
 section and axial bounds. A miss falls through to the existing Boolean path.
