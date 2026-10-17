@@ -16,6 +16,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/radiusmemo"
 	"github.com/lestrrat-3d/decad/internal/sweepdeparture"
 	"github.com/lestrrat-3d/decad/internal/sweepmemo"
 	"github.com/lestrrat-3d/r3"
@@ -98,7 +99,7 @@ func prepareSweepMotion(body *Body, path affinePairPath) (rotationalSweepPath, b
 // the largest is chosen by its numerator, which is exact dyadic arithmetic
 // for the dyadic corners, pivot and axis every caller holds; one division
 // then gives the same rational the per-corner quotients' maximum is. A body's
-// readings are memoized on it (sweepRadiusMemo), since a step reads each
+// readings are memoized on it (internal/radiusmemo), since a step reads each
 // path's radius both for its swept box and for its sweep.
 func rotationalSweepRadius(body *Body, from r3.Transform, center r3.Vec,
 	axis motionbound.RatVec) (*big.Rat, bool) {
@@ -121,8 +122,8 @@ func rotationalSweepRadius(body *Body, from r3.Transform, center r3.Vec,
 		}
 		return motionbound.SweepRadiusDyadic(corners[:], from, center, dyAxis)
 	}
-	key := newSweepRadiusKey(from, center, dyAxis)
-	if radius, ok, hit := body.sweepRadii.Load(key); hit {
+	key := radiusmemo.NewRadiusKey(from, center, dyAxis)
+	if radius, ok, hit := body.n.SweepRadii.Load(key); hit {
 		if !ok {
 			return nil, false
 		}
@@ -130,7 +131,7 @@ func rotationalSweepRadius(body *Body, from r3.Transform, center r3.Vec,
 	}
 	corners, ok := inflatedBoundsCorners(body)
 	if !ok {
-		body.sweepRadii.Store(key, 0, false)
+		body.n.SweepRadii.Store(key, 0, false)
 		return nil, false
 	}
 	radius, ok := motionbound.SweepRadiusDyadic(corners[:], from, center, dyAxis)
@@ -138,7 +139,7 @@ func rotationalSweepRadius(body *Body, from r3.Transform, center r3.Vec,
 	if ok {
 		held, _ = radius.Float64()
 	}
-	body.sweepRadii.Store(key, held, ok)
+	body.n.SweepRadii.Store(key, held, ok)
 	return radius, ok
 }
 

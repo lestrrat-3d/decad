@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/radiusmemo"
 	"github.com/lestrrat-3d/decad/internal/sweepmemo"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
@@ -299,9 +300,9 @@ func TestRotationalSweepRadiusMatchesPerCornerForm(t *testing.T) {
 	require.Greater(t, compared, 100)
 	hits := 0
 	for _, body := range bodies {
-		body.sweepRadii.Mu.Lock()
-		hits += body.sweepRadii.Hits
-		body.sweepRadii.Mu.Unlock()
+		body.n.SweepRadii.Mu.Lock()
+		hits += body.n.SweepRadii.Hits
+		body.n.SweepRadii.Mu.Unlock()
 	}
 	require.Greater(t, hits, 100, "the second reads are the memo's")
 
@@ -310,32 +311,33 @@ func TestRotationalSweepRadiusMatchesPerCornerForm(t *testing.T) {
 	minus, err := r3.Translation(r3.Vec{X: 1, Y: math.Copysign(0, -1)})
 	require.NoError(t, err)
 	unit := proofarith.DyV3{proofarith.DyZero(), proofarith.DyZero(), proofarith.MustDyOf(1)}
-	require.NotEqual(t, newSweepRadiusKey(plus, r3.Vec{}, unit), newSweepRadiusKey(minus, r3.Vec{}, unit))
+	require.NotEqual(t, radiusmemo.NewRadiusKey(plus, r3.Vec{}, unit),
+		radiusmemo.NewRadiusKey(minus, r3.Vec{}, unit))
 }
 
 func TestSweepRadiusMemoEvictsOldest(t *testing.T) {
 	t.Parallel()
-	keyAt := func(i int) sweepRadiusKey {
+	keyAt := func(i int) radiusmemo.RadiusKey {
 		pose, err := r3.Translation(r3.Vec{X: float64(i)})
 		require.NoError(t, err)
-		return newSweepRadiusKey(pose, r3.Vec{}, proofarith.DyV3{})
+		return radiusmemo.NewRadiusKey(pose, r3.Vec{}, proofarith.DyV3{})
 	}
-	var memo sweepRadiusMemo
-	for i := range sweepRadiusMemoCap + 3 {
+	var memo radiusmemo.RadiusMemo
+	for i := range radiusmemo.RadiusCap + 3 {
 		memo.Store(keyAt(i), float64(i), true)
 	}
-	require.Len(t, memo.Entries, sweepRadiusMemoCap)
+	require.Len(t, memo.Entries, radiusmemo.RadiusCap)
 	for i := range 3 {
 		_, _, hit := memo.Load(keyAt(i))
 		require.False(t, hit, "entry %d is among the oldest", i)
 	}
-	radius, ok, hit := memo.Load(keyAt(sweepRadiusMemoCap + 2))
+	radius, ok, hit := memo.Load(keyAt(radiusmemo.RadiusCap + 2))
 	require.True(t, hit)
 	require.True(t, ok)
-	require.Equal(t, float64(sweepRadiusMemoCap+2), radius)
-	memo.Store(keyAt(sweepRadiusMemoCap+2), 0, false)
-	radius, _, _ = memo.Load(keyAt(sweepRadiusMemoCap + 2))
-	require.Equal(t, float64(sweepRadiusMemoCap+2), radius, "a stored key keeps its first reading")
+	require.Equal(t, float64(radiusmemo.RadiusCap+2), radius)
+	memo.Store(keyAt(radiusmemo.RadiusCap+2), 0, false)
+	radius, _, _ = memo.Load(keyAt(radiusmemo.RadiusCap + 2))
+	require.Equal(t, float64(radiusmemo.RadiusCap+2), radius, "a stored key keeps its first reading")
 }
 
 // TestSweepRunMemoChangesNoReport runs one rotating sweep, a spinning and
@@ -382,5 +384,3 @@ func TestSweepRunMemoChangesNoReport(t *testing.T) {
 type sweepMemoStats = sweepmemo.Stats
 
 const sweepMemoCap = sweepmemo.PathCap
-
-const sweepRadiusMemoCap = sweepmemo.RadiusCap
