@@ -40,7 +40,7 @@ func sourceBoxAtPose(b *Body, pose r3.Transform) (sourceBoxContactProof, bool) {
 		pp.SectionDelta != 0 || pp.Z0Delta != 0 || pp.Z1Delta != 0 ||
 		!box.RectangularProfile(pp.Profile) ||
 		!box.CardinalBasis(pp.Frame.U(), pp.Frame.V(), pp.Frame.N()) ||
-		!signedAxisTransform(pp.Xform) || !signedAxisTransform(pose) {
+		!box.SignedAxisTransform(pp.Xform) || !box.SignedAxisTransform(pose) {
 		return sourceBoxContactProof{}, false
 	}
 	if !proofbound.FiniteVec(pp.Frame.Origin()) || !measurement.FiniteValues(pp.Z0, pp.Z1) {
@@ -113,8 +113,6 @@ func (m exactContactMap) apply(p proofarith.DyV3) proofarith.DyV3 {
 	return proofarith.DvAdd(m.translation, proofarith.DvAdd(proofarith.DvScale(m.ex, p[0]),
 		proofarith.DvAdd(proofarith.DvScale(m.ey, p[1]), proofarith.DvScale(m.ez, p[2]))))
 }
-
-func signedAxisTransform(t r3.Transform) bool { return box.SignedAxisTransform(t) }
 
 // The root package maps neutral pair readings to report units and topology.
 func publishSourceBoxPatch(report *reportvocab.ContactReport, a, b sourceBoxContactProof, axis, sign int,

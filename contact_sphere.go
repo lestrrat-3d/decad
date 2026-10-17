@@ -31,11 +31,11 @@ func sourceSphereAtPose(b *Body, pose r3.Transform) (sourceSphereContactProof, b
 		return sourceSphereContactProof{}, false
 	}
 	rp, ok := b.n.Payload.(revolvePayload)
-	if !ok || !signedAxisTransform(rp.Xform) || !pose.IsValid() || pose.IsReflection() {
+	if !ok || !box.SignedAxisTransform(rp.Xform) || !pose.IsValid() || pose.IsReflection() {
 		return sourceSphereContactProof{}, false
 	}
 	center := proofarith.DvTransform(rp.Xform, proof.center)
-	if !signedAxisTransform(pose) {
+	if !box.SignedAxisTransform(pose) {
 		// A read rotation cannot move a ball centered at the query origin.
 		// Other centers need an exact rotation of their offset before admission.
 		for _, component := range center {

@@ -25,7 +25,7 @@ func sourceOrientedBoxAtPose(body *Body, pose r3.Transform) (orientedSourceBox, 
 	pp, ok := body.n.Payload.(prismPayload)
 	if !ok || !body.n.Solid || body.n.Kind != topo.BodySolid || pp.SurfaceResult ||
 		pp.SectionDelta != 0 || pp.Z0Delta != 0 || pp.Z1Delta != 0 ||
-		!signedAxisTransform(pp.Xform) {
+		!pairbox.SignedAxisTransform(pp.Xform) {
 		return orientedSourceBox{}, false
 	}
 	geometry, placedEdge, ok := pairbox.SourceOrientedBox(pp.Profile, pp.Frame, pp.Z0, pp.Z1, pp.Xform, pose)
