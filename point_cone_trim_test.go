@@ -83,7 +83,7 @@ func TestPointConeOutsideWitnessRejectsUncertainContact(t *testing.T) {
 	t.Parallel()
 	cone := &pointConeLimit{Apex: big.NewRat(13, 1), Slope: big.NewRat(1, 1)}
 	base := facetedPayload{Verts: []r3.Vec{{}, {X: 8, Y: 5.00001}}}
-	require.True(t, pointConeHasOutsideWitness(base, cone))
+	require.True(t, facetedrecord.PointConeHasOutsideWitness(base, cone))
 	base.MeshBound = 0.001
-	require.False(t, pointConeHasOutsideWitness(base, cone))
+	require.False(t, facetedrecord.PointConeHasOutsideWitness(base, cone))
 }

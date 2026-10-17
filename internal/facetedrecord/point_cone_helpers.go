@@ -1,8 +1,14 @@
 package facetedrecord
 
 import (
+	"context"
+	"fmt"
+	"math/big"
+
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	"github.com/lestrrat-3d/decad/internal/pointcone"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -67,4 +73,46 @@ func PointConeFactors(points []r3.Vec, cone *PointConeLimit, workers int) ([]poi
 		return errs[i]
 	})
 	return samples, errs
+}
+
+// The larger cone's radial crossing lies farther from the point-loft apex.
+// This comparison uses a deliberately wide exact-rational enclosure of the
+// source fan, so nearly coincident or crossing cones fall back to mesh Boolean.
+func PointConeLimitLater(old, next *PointConeLimit, base Payload) bool {
+	return PointConeLimitOrdered(old, next, base)
+}
+
+func PointConeLimitEarlier(old, next *PointConeLimit, base Payload) bool {
+	return PointConeLimitOrdered(next, old, base)
+}
+
+func PointConeLimitOrdered(earlier, later *PointConeLimit, base Payload) bool {
+	return pointcone.Ordered(earlier.Apex, earlier.Slope, later.Apex, later.Slope,
+		base.Verts, base.MeshBound)
+}
+
+func PointConeHasOutsideWitness(base Payload, cone *PointConeLimit) bool {
+	move := new(big.Rat).Quo(new(big.Rat).Mul(
+		new(big.Rat).Add(big.NewRat(1, 1), cone.Slope),
+		proofarith.FloatRat(base.MeshBound)), cone.Apex)
+	for _, p := range base.Verts[1:] {
+		sample, err := PointConeFactor(p, cone)
+		if err != nil {
+			continue
+		}
+		margin := new(big.Rat).Sub(proofarith.FloatRat(sample.Q), big.NewRat(1, 1))
+		margin.Sub(margin, proofarith.FloatRat(sample.QError))
+		if margin.Cmp(move) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func PointConeSubdivide(ctx context.Context, base Payload, rounds int) (
+	[]r3.Vec, [][3]int, []pointcone.Side, float64, error) {
+	if base.PointSection == nil {
+		return nil, nil, nil, 0, fmt.Errorf("%w: the point-cone source has no fan", decaderr.ErrUnsupported)
+	}
+	return pointcone.Subdivide(ctx, base.Verts, base.Tris, base.Src, rounds)
 }
