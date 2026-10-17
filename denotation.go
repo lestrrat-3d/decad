@@ -10,5 +10,3 @@ import (
 type levelID = denotation.LevelID
 type levelToken = denotation.LevelToken
 type curveToken = denotation.CurveToken
-
-func sameLevel(a, b levelToken) bool { return denotation.SameLevel(a, b) }
