@@ -66,7 +66,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/smoothloft/` | Three-section homothety and independent rectangles with exact height curves for Section; varying curves and four-section rounded rectangles. See loft-sections design. |
 | `internal/loftfillet/` | Loft fit/circle root-fillet candidate, tangent-root certificate, connector and carrier departures, section contact audits and circle-bore containment. See loft §17–§18. |
 | `internal/revolvemesh/` | Revolve rings, cells, caps, cap frames, construction and area proofs, quarter-turn cap-rim blend stations and bounds, and sector-bore cap fans, station steps and projected patches. |
-| `internal/revolveplan/` | The revolve and chain revolve records and their builders over nodes (`Build`, `BuildChain`, `Placed`, sweep and extent bounds); revolve mesh walk resolution, coordinate ceilings and chord counts; `ResolveAxisSide`. Root `revolvePayload` aliases it. See evaluator §6, §8, tessellation §8. |
+| `internal/revolveplan/` | Revolve and chain records, node builders, axis-side and meridian-clearance gates, mesh walks, coordinate ceilings, and chord counts. Root `revolvePayload` aliases its record. See evaluator §6, §8; tessellation §8; surface-intersection §2.1. |
 | `internal/revolvesampling/` | Revolve meridian junctions, stations, samples and section readings. |
 | `internal/revolveproof/` | Meridian envelopes, facet budgets, circular and fitted-spline meridian volume charges, cell bounds, chain-arc source density, and point-Loft sector root, seat and exterior-path proofs. See tessellation §8–§11, sweep §15.9 and revolve-loft-sector design. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping over recorded `Point2`; indexed triangles and chording refusals. |

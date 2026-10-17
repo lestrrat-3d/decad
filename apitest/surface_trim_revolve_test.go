@@ -195,6 +195,52 @@ func TestSurfaceTrimRevolveRefusalsNameTheirOwnGate(t *testing.T) {
 	})
 }
 
+func TestSurfaceTrimAndExtendRevolveRefuseAxisTouch(t *testing.T) {
+	t.Run("Trim refuses a tool meridian touching the axis", func(t *testing.T) {
+		doc := decad.New()
+		sheet := trimRevolveRing(t, doc, 3, 0, 5, 20, true)
+		tool := trimRevolveRing(t, doc, 0, 5, 8, 10, false)
+		_, err := decad.Trim(t.Context(), sheet, tool, decad.KeepOutside)
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.ErrorContains(t, err, "both meridians clear of the revolve axis")
+		require.Equal(t, 2, len(doc.Bodies()))
+	})
+
+	t.Run("Extend refuses a tool meridian touching the axis", func(t *testing.T) {
+		doc := decad.New()
+		ribbon := extendRevolveRibbon(t, doc, decad.FullRevolution{})
+		rims, moved := extendRevolveFreeRim(t, ribbon, 40)
+		query := decad.Edges(decad.Free(),
+			decad.EndpointAt(rims[moved].Start().Position().Value)).Exactly(1)
+		tool := trimRevolveRing(t, doc, 0, 60, 8, 80, false)
+		_, err := decad.Extend(t.Context(), ribbon, query, tool)
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.ErrorContains(t, err, "both meridians clear of the revolve axis")
+		require.Equal(t, 2, len(doc.Bodies()))
+	})
+
+	t.Run("Extend refuses a receiver chain touching the axis", func(t *testing.T) {
+		doc := decad.New()
+		world := sketch.NewWorld()
+		s, err := world.CreateSketch(world.XY())
+		require.NoError(t, err)
+		rim := s.CreatePoint(3, 40)
+		s.Fix(rim)
+		s.CreateLine(rim, s.CreatePoint(0, 0))
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		require.Equal(t, 1, len(s.Chains()))
+		ribbon, err := decad.Revolve(t.Context(), doc, s, s.Chains()[0],
+			trimRevolveAxis(), decad.FullRevolution{})
+		require.NoError(t, err)
+		tool := trimRevolveRing(t, doc, 2, 60, 8, 80, false)
+		_, err = decad.Extend(t.Context(), ribbon, decad.Edges(decad.Free()).Exactly(1), tool)
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.ErrorContains(t, err, "both meridians clear of the revolve axis")
+		require.Equal(t, 2, len(doc.Bodies()))
+	})
+}
+
 // extendRevolveRibbon builds T183's receiver: the line meridian from (3, 0) to
 // (3, 100) cut at v = 40 by a crossing line, its lower fragment spun about the
 // same v axis every fixture above spins about. The recorded range is TStart 0,
