@@ -8,7 +8,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
-	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -73,7 +72,7 @@ func chamferPrismUnionSource(ctx context.Context, d *Document, pp prismPayload,
 	if err != nil {
 		return nil, err
 	}
-	if !prismUnionChamferChord(pp, corner, setback, blend) {
+	if !offset2d.PrismUnionChamferChord(pp.Profile, corner, setback, blend) {
 		return nil, fmt.Errorf("%w: the rectangular corner has no exact inward chamfer chord", ErrUnsupported)
 	}
 	blends := []map[int]*cornerBlend{{ci: blend}}
@@ -91,37 +90,4 @@ func chamferPrismUnionSource(ctx context.Context, d *Document, pp prismPayload,
 		Profile: profile, Frame: pp.Frame, Z0: pp.Z0, Z1: pp.Z1,
 		Xform: pp.Xform, BlendSegs: connectors, BlendKind: string(breprecord.BandChamfer),
 	}, freeform.NewFreeformWork()))
-}
-
-// Exact directed feet and a whole line connector prove that the rewrite
-// removes precisely the right triangle in the source rectangle's corner.
-func prismUnionChamferChord(pp prismPayload, corner sectionrecord.Point2,
-	setback float64, blend *cornerBlend) bool {
-	line, ok := blend.Connector.(lineSeg)
-	if !ok || line.TStart != 0 || line.TEnd != 1 || line.Start != blend.FA || line.End != blend.FB ||
-		blend.CutbackA != setback || blend.CutbackB != setback {
-		return false
-	}
-	rect, ok := momentinput.AxisRectangle(pp.Profile)
-	if !ok {
-		return false
-	}
-	xDir, yDir := 1, 1
-	if corner.U == rect.U1 {
-		xDir = -1
-	}
-	if corner.V == rect.V1 {
-		yDir = -1
-	}
-	xInner, xOK := momentinput.PrismUnionFilletExactShift(corner.U, setback, xDir)
-	yInner, yOK := momentinput.PrismUnionFilletExactShift(corner.V, setback, yDir)
-	if !xOK || !yOK {
-		return false
-	}
-	xFoot := sectionrecord.Point2{U: xInner, V: corner.V}
-	yFoot := sectionrecord.Point2{U: corner.U, V: yInner}
-	if xDir == yDir {
-		return blend.FA == yFoot && blend.FB == xFoot
-	}
-	return blend.FA == xFoot && blend.FB == yFoot
 }

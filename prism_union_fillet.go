@@ -177,7 +177,7 @@ func filletPrismUnionSource(ctx context.Context, d *Document, pp prismPayload,
 	if err != nil {
 		return nil, err
 	}
-	if !prismUnionFilletQuarterArc(pp, corner, radius, blend) {
+	if !offset2d.PrismUnionFilletQuarterArc(pp.Profile, corner, radius, blend) {
 		return nil, fmt.Errorf("%w: the rectangular corner has no exact inward quarter-circle", ErrUnsupported)
 	}
 	blends := []map[int]*cornerBlend{{ci: blend}}
@@ -195,37 +195,4 @@ func filletPrismUnionSource(ctx context.Context, d *Document, pp prismPayload,
 		Profile: profile, Frame: pp.Frame, Z0: pp.Z0, Z1: pp.Z1,
 		Xform: pp.Xform, BlendSegs: arcs, BlendKind: string(breprecord.BandFillet),
 	}, freeform.NewFreeformWork()))
-}
-
-// The rectangle's two source walls are perpendicular, and its material is
-// inside their corner. Confirm that the rewrite's own arc is precisely the
-// inward quadrant, with exactly representable centre and tangent feet.
-func prismUnionFilletQuarterArc(pp prismPayload, corner sectionrecord.Point2, radius float64, blend *cornerBlend) bool {
-	arc, ok := blend.Connector.(arcSeg)
-	if !ok || arc.TStart != 0 || arc.TEnd != 1 || arc.Start != blend.FA || arc.End != blend.FB ||
-		blend.CutbackA != radius || blend.CutbackB != radius {
-		return false
-	}
-	rect, ok := momentinput.AxisRectangle(pp.Profile)
-	if !ok {
-		return false
-	}
-	xDir, yDir := 1, 1
-	if corner.U == rect.U1 {
-		xDir = -1
-	}
-	if corner.V == rect.V1 {
-		yDir = -1
-	}
-	xInner, xOK := momentinput.PrismUnionFilletExactShift(corner.U, radius, xDir)
-	yInner, yOK := momentinput.PrismUnionFilletExactShift(corner.V, radius, yDir)
-	if !xOK || !yOK || arc.Center != (sectionrecord.Point2{U: xInner, V: yInner}) {
-		return false
-	}
-	xFoot := sectionrecord.Point2{U: xInner, V: corner.V}
-	yFoot := sectionrecord.Point2{U: corner.U, V: yInner}
-	if xDir == yDir {
-		return blend.FA == yFoot && blend.FB == xFoot
-	}
-	return blend.FA == xFoot && blend.FB == yFoot
 }
