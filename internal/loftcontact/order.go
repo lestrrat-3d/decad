@@ -30,9 +30,9 @@ func lineSeamOrderingBound(budget *proofbound.WorkBudget, seam LineSeam) (bool, 
 		if value == nil {
 			return false, nil
 		}
-		num, den := value.Num(), value.Denom()
-		if num.BitLen() > orderedSeamMaxPartBits || den.BitLen() > orderedSeamMaxPartBits ||
-			den.BitLen() == 0 || den.TrailingZeroBits() != uint(den.BitLen()-1) {
+		denBits := value.Denom().BitLen()
+		if value.Num().BitLen() > orderedSeamMaxPartBits || denBits > orderedSeamMaxPartBits ||
+			denBits == 0 || value.Denom().TrailingZeroBits() != uint(denBits-1) {
 			return false, nil
 		}
 	}
