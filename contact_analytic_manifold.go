@@ -49,7 +49,8 @@ func publishRulingManifold(report *reportvocab.ContactReport, ruling *clearance.
 		return
 	}
 	ends, ok := rulingContactSet(sideA, sideB)
-	if !ok || !rulingEndsEqual(ends, ruling.Ends) {
+	if !ok || !proofarith.DvEqual(ends[0], ruling.Ends[0]) ||
+		!proofarith.DvEqual(ends[1], ruling.Ends[1]) {
 		report.Reason = reportvocab.ContactAmbiguousFeature
 		return
 	}
@@ -177,7 +178,7 @@ func rulingContactSet(a, b rulingSide) ([2]proofarith.DyV3, bool) {
 				return [2]proofarith.DyV3{}, false
 			}
 		}
-		if rulingEndsEqual([2]proofarith.DyV3{lo, lo}, [2]proofarith.DyV3{hi, hi}) {
+		if proofarith.DvEqual(lo, hi) {
 			return [2]proofarith.DyV3{}, false
 		}
 		return clearance.OrderedRulingEnds([2]proofarith.DyV3{lo, hi}), true
@@ -188,17 +189,6 @@ func rulingContactSet(a, b rulingSide) ([2]proofarith.DyV3, bool) {
 	default:
 		return [2]proofarith.DyV3{}, false
 	}
-}
-
-func rulingEndsEqual(a, b [2]proofarith.DyV3) bool {
-	for i := range a {
-		for k := range 3 {
-			if proofarith.DyCmp(a[i][k], b[i][k]) != 0 {
-				return false
-			}
-		}
-	}
-	return true
 }
 
 // rulingNormal reads each side's Face.NormalAt at the witness and publishes
