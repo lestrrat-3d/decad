@@ -733,12 +733,12 @@ func TestLinkageProjectionSegmentTerm(t *testing.T) {
 
 	ca, ok := dr.cornersAt(a, 0, b0, 0, false)
 	require.True(t, ok)
-	up, _ := (projectionSide{Corners: ca, H: h, Seg: stepsFrom(steps, false), Rem: rem}).Extents()
+	up, _ := (projectionSide{Corners: ca, H: h, Seg: linkagebound.StepsFrom(steps, false), Rem: rem}).Extents()
 	require.InDelta(t, -40+5*hf+remF, linkRatFloat(t, up[1]), 1e-9)
 
 	cb, ok := dr.cornersAt(b, 0, b0, 0, false)
 	require.True(t, ok)
-	up, _ = (projectionSide{Corners: cb, H: h, Seg: stepsFrom(steps, true), Rem: rem}).Extents()
+	up, _ = (projectionSide{Corners: cb, H: h, Seg: linkagebound.StepsFrom(steps, true), Rem: rem}).Extents()
 	require.InDelta(t, 5*math.Sin(hf)-40*math.Cos(hf)+remF, linkRatFloat(t, up[1]), 1e-9)
 	boxUp, _ := (projectionSide{Corners: cb, H: h, Rem: rem}).Extents()
 	require.Greater(t, linkRatFloat(t, boxUp[1]), linkRatFloat(t, up[1]), `the box form charges the rising corners too`)

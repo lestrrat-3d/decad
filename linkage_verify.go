@@ -439,7 +439,7 @@ func (dr *linkageDriver) projection(i, k int, a, b *motionPose) *big.Rat {
 		}
 		// From end b the segment runs backward.
 		backward := n == 1
-		side := projectionSide{Corners: cm, H: hMine, Seg: stepsFrom(segMine, backward), Rem: remMine}
+		side := projectionSide{Corners: cm, H: hMine, Seg: linkagebound.StepsFrom(segMine, backward), Rem: remMine}
 		var partner projectionSide
 		if other < 0 {
 			lo, hi, ok := motionbound.BoxCornersExact(r.statics[k].body.n.Bounds, new(big.Rat))
@@ -456,7 +456,7 @@ func (dr *linkageDriver) projection(i, k int, a, b *motionPose) *big.Rat {
 			if !ok {
 				return nil
 			}
-			partner = projectionSide{Corners: ct, H: hTheirs, Seg: stepsFrom(segTheirs, backward), Rem: remTheirs}
+			partner = projectionSide{Corners: ct, H: hTheirs, Seg: linkagebound.StepsFrom(segTheirs, backward), Rem: remTheirs}
 		}
 		if l := linkagebound.Lower(side, partner); best == nil || l.Cmp(best) > 0 {
 			best = l
@@ -539,20 +539,6 @@ func (dr *linkageDriver) projectionSteps(b linkBound, below int, sa, sb *big.Rat
 		steps = append(steps, step)
 	}
 	return steps
-}
-
-// stepsFrom is the segment steps read from one end: as they are from the
-// interval's first end, negated from its second, where the segment runs
-// backward. nil stays nil.
-func stepsFrom(steps []proofbound.RatInterval, backward bool) []proofbound.RatInterval {
-	if steps == nil || !backward {
-		return steps
-	}
-	out := make([]proofbound.RatInterval, len(steps))
-	for n, step := range steps {
-		out[n] = proofbound.IntervalNeg(step)
-	}
-	return out
 }
 
 // cornersAt is mover m's corner reading at a pose under the joints on its

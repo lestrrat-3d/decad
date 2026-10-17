@@ -29,6 +29,20 @@ type Side struct {
 	Rem     *big.Rat
 }
 
+// StepsFrom is the segment steps read from one end: as they are from the
+// interval's first end, negated from its second, where the segment runs
+// backward. nil stays nil.
+func StepsFrom(steps []proofbound.RatInterval, backward bool) []proofbound.RatInterval {
+	if steps == nil || !backward {
+		return steps
+	}
+	out := make([]proofbound.RatInterval, len(steps))
+	for n, step := range steps {
+		out[n] = proofbound.IntervalNeg(step)
+	}
+	return out
+}
+
 func ivAbsUpper(iv proofbound.RatInterval) *big.Rat {
 	out := new(big.Rat).Abs(iv.Lo)
 	if hi := new(big.Rat).Abs(iv.Hi); hi.Cmp(out) > 0 {
