@@ -30,11 +30,39 @@ type (
 type Operand struct {
 	Proxy prismPayload
 	Slabs []stackedrecord.Slab
+	// Brep marks an A1 result read through its stack: its slabs may hold
+	// several regions, and only the brep build arranges them.
+	Brep bool
 }
 
-// OperandOf retains the root operand's record and slab order.
-func OperandOf(proxy prismPayload, slabs []stackedrecord.Slab) Operand {
-	return Operand{Proxy: proxy, Slabs: slabs}
+// OperandFromPayload reads one operand as slabs: a prism is one slab over its
+// interval, a stacked prism keeps its slabs, and an A1 brep keeps its stack.
+// Its proxy carries the frame, placement and section displacement read by
+// root admission. A brep without an A1 stack is not an operand.
+func OperandFromPayload(payload topo.Payload) (Operand, bool) {
+	switch p := payload.(type) {
+	case prismPayload:
+		return Operand{Proxy: p, Slabs: []stackedrecord.Slab{{
+			Regions: []profileRecord{p.Profile},
+			Z0:      p.Z0, Z1: p.Z1, Z0Delta: p.Z0Delta, Z1Delta: p.Z1Delta,
+		}}}, true
+	case stackedPrismPayload:
+		return Operand{Proxy: p.OuterPrism(), Slabs: p.Slabs}, true
+	case brepPayload:
+		// An A1 result keeps the slabs it was built from; a class-B result
+		// keeps none and is no operand here.
+		if p.Stack == nil || len(p.Stack.Slabs) == 0 {
+			return Operand{}, false
+		}
+		first, last := p.Stack.Slabs[0], p.Stack.Slabs[len(p.Stack.Slabs)-1]
+		return Operand{Proxy: prismrecord.Payload{
+			Profile: profileRecord{Outer: first.Regions[0].Outer},
+			Frame:   p.Faces[0].Frame, Xform: p.Xform, SectionDelta: p.Stack.Delta,
+			Z0: first.Z0, Z0Delta: first.Z0Delta, Z1: last.Z1, Z1Delta: last.Z1Delta,
+		}, Slabs: p.Stack.Slabs, Brep: true}, true
+	default:
+		return Operand{}, false
+	}
 }
 
 func (o Operand) view(region profileRecord) prismPayload {

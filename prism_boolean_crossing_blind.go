@@ -44,24 +44,23 @@ func tryCrossingBlindCut(ctx context.Context, a, b *Body) (brepPayload, bool, er
 		z0.Cmp(proofarith.FloatRat(pa.Z1)) >= 0 || z1.Cmp(proofarith.FloatRat(pa.Z1)) != 0 {
 		return brepPayload{}, false, nil
 	}
-	va, _ := stackedUnionOperandOf(a)
-	vb, _ := stackedUnionOperandOf(b)
+	va, _ := stackedunion.OperandFromPayload(a.n.Payload)
+	vb, _ := stackedunion.OperandFromPayload(b.n.Payload)
 	shift := prismplacement.ZShift(pa.PlacementOperand(), pb.PlacementOperand())
-	levels, ok := stackedrecord.UnionLevels(va.slabs, vb.slabs, shift)
+	levels, ok := stackedrecord.UnionLevels(va.Slabs, vb.Slabs, shift)
 	if !ok || len(levels) != 3 || levels[0].Delta != 0 || levels[1].Delta != 0 || levels[2].Delta != 0 {
 		return brepPayload{}, false, nil
 	}
 	zero := new(big.Rat)
 	reach := make([][2]int, 2)
 	for k := range reach {
-		reach[k][0] = stackedrecord.UnionSlabOf(va.slabs, zero, levels[k].Exact, levels[k+1].Exact)
-		reach[k][1] = stackedrecord.UnionSlabOf(vb.slabs, shift, levels[k].Exact, levels[k+1].Exact)
+		reach[k][0] = stackedrecord.UnionSlabOf(va.Slabs, zero, levels[k].Exact, levels[k+1].Exact)
+		reach[k][1] = stackedrecord.UnionSlabOf(vb.Slabs, shift, levels[k].Exact, levels[k+1].Exact)
 	}
 	if reach[0] != [2]int{0, -1} || reach[1] != [2]int{0, 0} {
 		return brepPayload{}, false, nil
 	}
-	result, err := stackedunion.Cut(ctx, budget, stackedunion.OperandOf(va.proxy, va.slabs),
-		stackedunion.OperandOf(vb.proxy, vb.slabs), reexpress, levels, reach)
+	result, err := stackedunion.Cut(ctx, budget, va, vb, reexpress, levels, reach)
 	if errors.Is(err, brepgeom.ErrStackedWallMiss) || errors.Is(err, ErrUnsupported) {
 		return brepPayload{}, false, nil
 	}

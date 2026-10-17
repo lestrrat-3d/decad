@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/sectionclip"
+	"github.com/lestrrat-3d/decad/internal/stackedunion"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -106,11 +107,11 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 		return sectionclip.ReconstructExactSection(ctx, profile, plane)
 	}
 	if _, ok := b.n.Payload.(brepPayload); ok {
-		operand, admitted := stackedUnionOperandOf(b)
+		operand, admitted := stackedunion.OperandFromPayload(b.n.Payload)
 		if !admitted {
 			return nil, nil, fmt.Errorf(`%w: section needs an authenticated BRep slab`, ErrUnsupported)
 		}
-		return sectionclip.SectionBrepStack(ctx, operand.proxy, operand.slabs, plane)
+		return sectionclip.SectionBrepStack(ctx, operand.Proxy, operand.Slabs, plane)
 	}
 	if fp, ok := b.n.Payload.(facetedPayload); ok {
 		profile, admitted := sectionclip.SmoothRectangularSectionRecord(fp, plane)
