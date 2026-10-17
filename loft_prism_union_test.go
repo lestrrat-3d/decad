@@ -96,17 +96,31 @@ func TestAxialLoftPrismUnionIndependentUnequalTabs(t *testing.T) {
 }
 
 func TestAxialLoftPrismUnionManyIndependentTabs(t *testing.T) {
-	doc := New()
-	blank := internalBoxBody(t, doc, 0, 0, 10, 10, 4)
-	left := axialLineLoft(t, doc, -3, 7, 2, 9, 4)
-	right := axialLineLoft(t, doc, 8, 4, 12, 6, 4)
-	joined, err := Union(t.Context(), blank, left, right)
-	require.NoError(t, err)
-	_, analytic := joined.n.Payload.(prismPayload)
-	require.True(t, analytic)
-	volume, err := joined.Volume()
-	require.NoError(t, err)
-	require.LessOrEqual(t, math.Abs(volume.Value.Base()-440), volume.Bound.Base())
+	for _, order := range []struct {
+		name    string
+		reverse bool
+	}{{name: "left_right"}, {name: "right_left", reverse: true}} {
+		t.Run(order.name, func(t *testing.T) {
+			doc := New()
+			blank := internalBoxBody(t, doc, 0, 0, 10, 10, 4)
+			left := axialLineLoft(t, doc, -3, 7, 2, 9, 4)
+			right := axialLineLoft(t, doc, 8, 4, 12, 6, 4)
+			if order.reverse {
+				left, right = right, left
+			}
+			operands := []*Body{blank, left, right}
+			_, admitted, err := tryStraightLoftPrismUnionMany(t.Context(), doc, doc.nextProducerID(), operands)
+			require.NoError(t, err)
+			require.True(t, admitted, "the independent tabs should use one prism scene")
+			joined, err := Union(t.Context(), operands[0], operands[1:]...)
+			require.NoError(t, err)
+			_, analytic := joined.n.Payload.(prismPayload)
+			require.True(t, analytic)
+			volume, err := joined.Volume()
+			require.NoError(t, err)
+			require.LessOrEqual(t, math.Abs(volume.Value.Base()-440), volume.Bound.Base())
+		})
+	}
 }
 
 func TestAxialLoftPrismUnionTangentDoesNotAdmit(t *testing.T) {
@@ -114,6 +128,11 @@ func TestAxialLoftPrismUnionTangentDoesNotAdmit(t *testing.T) {
 	blank := internalBoxBody(t, doc, 0, 0, 10, 10, 4)
 	tangent := axialLineLoft(t, doc, 10, 4, 12, 6, 4)
 	_, admitted, err := tryAxialLoftPrismUnion(t.Context(), meshbool.OpUnion, blank, tangent)
+	require.NoError(t, err)
+	require.False(t, admitted)
+	valid := axialLineLoft(t, doc, 8, 4, 12, 6, 4)
+	_, admitted, err = tryStraightLoftPrismUnionMany(t.Context(), doc, doc.nextProducerID(),
+		[]*Body{blank, valid, tangent})
 	require.NoError(t, err)
 	require.False(t, admitted)
 }
