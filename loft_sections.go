@@ -62,7 +62,7 @@ func (d *Document) LoftSections(ctx context.Context, sections ...LoftSection) (*
 			return nil, err
 		}
 		work[i] = freeform.NewFreeformWork()
-		if _, err := falsifyRecordedArea(profile, sketchArea, work[i]); err != nil {
+		if _, err := profile.FalsifyRecordedArea(sketchArea, work[i]); err != nil {
 			return nil, err
 		}
 		records[i], planes[i] = profile, plane
@@ -112,7 +112,7 @@ func (d *Document) buildManyRectangularSections(ctx context.Context, sections []
 		if err != nil {
 			return nil, err
 		}
-		if _, err := falsifyRecordedArea(profile, sketchArea, freeform.NewFreeformWork()); err != nil {
+		if _, err := profile.FalsifyRecordedArea(sketchArea, freeform.NewFreeformWork()); err != nil {
 			return nil, err
 		}
 		records[i], planes[i] = profile, plane
@@ -135,7 +135,7 @@ func (d *Document) buildFourRoundedSections(ctx context.Context, sections []Loft
 		if err != nil {
 			return nil, err
 		}
-		if _, err := falsifyRecordedArea(profile, sketchArea, freeform.NewFreeformWork()); err != nil {
+		if _, err := profile.FalsifyRecordedArea(sketchArea, freeform.NewFreeformWork()); err != nil {
 			return nil, err
 		}
 		records[i], planes[i] = profile, plane

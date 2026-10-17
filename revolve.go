@@ -219,7 +219,7 @@ func revolveProfileBuild(ctx context.Context, d *Document, s *sketch.Sketch, p *
 	// own preflight continue it, and every walkOf under them spends what is left
 	// (docs/spline-design.md §5.2).
 	work := freeform.NewFreeformWork()
-	if _, err := falsifyRecordedArea(profile, profileArea, work); err != nil {
+	if _, err := profile.FalsifyRecordedArea(profileArea, work); err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {

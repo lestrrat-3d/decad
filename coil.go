@@ -115,7 +115,7 @@ func Coil(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile,
 		return nil, err
 	}
 	work := freeform.NewFreeformWork()
-	if _, err := falsifyRecordedArea(profile, profileArea, work); err != nil {
+	if _, err := profile.FalsifyRecordedArea(profileArea, work); err != nil {
 		return nil, err
 	}
 

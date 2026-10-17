@@ -49,7 +49,7 @@ import (
 //
 // work0/work1 are the per-profile free-form work counters (spline design
 // §5.2): the R7 ceiling is one record's across a whole OPERATION, and
-// Loft also runs falsifyRecordedArea on both records before Build
+// Loft also runs Profile.FalsifyLoftRecordedArea on both records before Build
 // is called, so those counters — not two fresh ones minted here — must be
 // the ones every walkOf call site in this build spends against, and the ones
 // a same-kind free-form pair's station generator charges
