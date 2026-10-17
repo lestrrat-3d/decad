@@ -3,9 +3,9 @@
 // mouths and the rest of the outer ring, the seam feet of the positive mouth,
 // the held outer-ring station errors, the dual-interval proof of the 1,025
 // quarter-turn base cells, and the map from the 4,096 whole-turn cells onto
-// them. The root
-// package reads the source bodies, assembles the mesh and sums the volume and
-// area bounds. See docs/cross-cylinder-bore-chamfer-design.md.
+// them. The package also assembles the held mesh and computes its boundary,
+// volume and area bounds. Root reads the source bodies and admits the pose.
+// See docs/cross-cylinder-bore-chamfer-design.md.
 package crossbore
 
 import (
