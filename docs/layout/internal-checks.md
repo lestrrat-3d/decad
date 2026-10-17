@@ -48,7 +48,8 @@ The rules for rows live in `docs/layout.md`.
 | `internal/motionoption/` | Motion options. See motion-check §3. |
 | `internal/planarsweep/` | Support-plane records, motion, vertex rates, depth and rolling bounds. |
 | `internal/sweepdeparture/` | Exact source-box departure proofs. See multibody §10.2. |
-| `internal/sweepmemo/` | Sweep replay coverage and memo tables. See contact-sweep §6–§7. |
+| `internal/sweepmemo/` | Sweep path replay coverage, pose bits and path memo tables. See contact-sweep §6–§7. |
+| `internal/radiusmemo/` | Body rotational sweep-radius keys and bounded memo readings. See contact-sweep §6–§7. |
 | `internal/spherepath/` | Sphere path gaps, face corridors, point transfer, track bounds, brackets and pair replay. See contact-sweep §4–§6. |
 | `internal/linkagebound/` | Link bounds and projections. See linkage §5, §15. |
 | `internal/loopscene/` | Closed-loop sketch scenes. See linkage §15.2. |
