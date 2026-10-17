@@ -4,14 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
-	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/freeform"
-	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
-	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/smoothloft"
@@ -69,7 +65,7 @@ func (d *Document) LoftSections(ctx context.Context, sections ...LoftSection) (*
 	}
 	var built smoothloft.Build
 	var err error
-	if hasCurvedSection(records[0]) {
+	if smoothloft.HasCurvedSection(records[0]) {
 		built, err = smoothloft.BuildThreeCircles(ctx, records, planes)
 		if errors.Is(err, ErrUnsupported) {
 			body, constantErr := d.buildConstantCurvedSections(ctx, records, planes, work[0])
@@ -196,54 +192,13 @@ func (d *Document) buildSmoothSectionBody(ctx context.Context, built smoothloft.
 	return body, nil
 }
 
-func hasCurvedSection(profile profileRecord) bool {
-	for _, segment := range profile.Outer.Segments {
-		if _, ok := segment.(lineSeg); !ok {
-			return true
-		}
-	}
-	return false
-}
-
 // buildConstantCurvedSections uses the analytic prism kernel only after
 // exact recorded identity proves every stated section is the same region.
 func (d *Document) buildConstantCurvedSections(ctx context.Context, profiles [3]profileRecord,
 	planes [3]planeRecord, work *freeform.FreeformWork) (*Body, error) {
-	if len(profiles[0].Holes) != 0 || len(profiles[0].Outer.Segments) < 3 ||
-		len(profiles[0].Outer.Segments) > 64 {
-		return nil, fmt.Errorf("%w: a curved three-section loft needs one outer loop of 3 to 64 segments", ErrUnsupported)
-	}
-	budget := proofbound.NewWorkBudget(ctx)
-	for i := 1; i < 3; i++ {
-		same, err := momentinput.ExactProfileEqual(budget, profiles[0], profiles[i])
-		if err != nil {
-			return nil, err
-		}
-		if !same {
-			return nil, fmt.Errorf("%w: curved three-section loft profiles must have identical records", ErrUnsupported)
-		}
-	}
-	for i := range planes {
-		if !proofbound.FiniteVec(planes[i].Origin) ||
-			planes[i].U != (r3.Vec{X: 1}) || planes[i].V != (r3.Vec{Y: 1}) ||
-			planes[i].Origin.X != planes[0].Origin.X || planes[i].Origin.Y != planes[0].Origin.Y {
-			return nil, fmt.Errorf("%w: curved three-section loft planes need common world-XY axes and origin", ErrUnsupported)
-		}
-	}
-	z0 := new(big.Rat).SetFloat64(planes[0].Origin.Z)
-	z1 := new(big.Rat).SetFloat64(planes[1].Origin.Z)
-	z2 := new(big.Rat).SetFloat64(planes[2].Origin.Z)
-	if z0.Cmp(z1) >= 0 || z1.Cmp(z2) >= 0 ||
-		new(big.Rat).Mul(big.NewRat(2, 1), z1).Cmp(new(big.Rat).Add(z0, z2)) != 0 {
-		return nil, fmt.Errorf("%w: curved three-section loft planes need ascending, equally spaced levels", ErrUnsupported)
-	}
-	height, exact := new(big.Rat).Sub(z2, z0).Float64()
-	if !exact || math.IsInf(height, 0) || height <= 0 {
-		return nil, fmt.Errorf("%w: curved three-section loft height must be held exactly", ErrUnsupported)
-	}
-	frame, err := r3.NewFrame(planes[0].Origin, planes[0].U, planes[0].V)
+	frame, height, err := smoothloft.ConstantCurvedFrameHeight(ctx, profiles, planes)
 	if err != nil {
-		return nil, fmt.Errorf("%w: curved three-section loft has no first frame: %s", ErrDegenerate, err)
+		return nil, err
 	}
 	ref := d.nextProducerID()
 	return bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), ref), prismrecord.Payload{
