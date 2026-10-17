@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/compositesweep"
@@ -14,7 +13,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -82,7 +80,7 @@ func prismUnionFilletCorner(source *Body, pp prismPayload, result *Edge, radius 
 		return sectionrecord.Point2{}, compositesweep.AuditBox{}, nil, false
 	}
 	rect, ok := momentinput.AxisRectangle(pp.Profile)
-	if !ok || pp.Z0 == pp.Z1 || !prismUnionFilletRadiusFits(rect, radius) {
+	if !ok || pp.Z0 == pp.Z1 || !momentinput.PrismUnionFilletRadiusFits(rect, radius) {
 		return sectionrecord.Point2{}, compositesweep.AuditBox{}, nil, false
 	}
 	curve, ok := result.n.Curve.(surfacegeom.FacetedCurve)
@@ -127,14 +125,6 @@ func prismUnionFilletCorner(source *Body, pp prismPayload, result *Edge, radius 
 func prismUnionFilletSameEnds(edge *Edge, p, q r3.Vec) bool {
 	return (edge.n.Start.Position == p && edge.n.End.Position == q) ||
 		(edge.n.Start.Position == q && edge.n.End.Position == p)
-}
-
-func prismUnionFilletRadiusFits(rect momentinput.AxisRect, radius float64) bool {
-	r := proofarith.FloatRat(radius)
-	twice := new(big.Rat).Mul(r, big.NewRat(2, 1))
-	width := new(big.Rat).Sub(proofarith.FloatRat(rect.U1), proofarith.FloatRat(rect.U0))
-	height := new(big.Rat).Sub(proofarith.FloatRat(rect.V1), proofarith.FloatRat(rect.V0))
-	return twice.Cmp(width) < 0 && twice.Cmp(height) < 0
 }
 
 func prismUnionFilletSourceFaces(result, source *Edge) bool {
@@ -227,8 +217,8 @@ func prismUnionFilletQuarterArc(pp prismPayload, corner sectionrecord.Point2, ra
 	if corner.V == rect.V1 {
 		yDir = -1
 	}
-	xInner, xOK := prismUnionFilletExactShift(corner.U, radius, xDir)
-	yInner, yOK := prismUnionFilletExactShift(corner.V, radius, yDir)
+	xInner, xOK := momentinput.PrismUnionFilletExactShift(corner.U, radius, xDir)
+	yInner, yOK := momentinput.PrismUnionFilletExactShift(corner.V, radius, yDir)
 	if !xOK || !yOK || arc.Center != (sectionrecord.Point2{U: xInner, V: yInner}) {
 		return false
 	}
@@ -238,15 +228,4 @@ func prismUnionFilletQuarterArc(pp prismPayload, corner sectionrecord.Point2, ra
 		return blend.FA == yFoot && blend.FB == xFoot
 	}
 	return blend.FA == xFoot && blend.FB == yFoot
-}
-
-func prismUnionFilletExactShift(c, radius float64, direction int) (float64, bool) {
-	sum := new(big.Rat).Set(proofarith.FloatRat(c))
-	if direction > 0 {
-		sum.Add(sum, proofarith.FloatRat(radius))
-	} else {
-		sum.Sub(sum, proofarith.FloatRat(radius))
-	}
-	held, _ := sum.Float64()
-	return held, !proofbound.IsNonFinite(held) && proofarith.FloatRat(held).Cmp(sum) == 0
 }
