@@ -3,7 +3,6 @@ package decad
 import (
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 )
@@ -93,7 +92,7 @@ func revolveLoftFacesToolCapSidesOf(proof *revolveLoftFacesSourceCertificate) (
 			out.circles = append(out.circles, revolveLoftFacesToolCapCircle{
 				blankFace: faceHandle(span.Face), capFace: tool.face, capOrigin: origin,
 				span: spanIndex, tool: toolIndex, x: x, radius: radius,
-				sourceMiss: revolveLoftFacesToolCircleOutsideSource(proof.trim, x, radius)})
+				sourceMiss: revolveloftfaces.ToolCircleOutsideSource(proof.trim, x, radius)})
 		}
 	}
 	return out, true
@@ -131,21 +130,4 @@ func revolveLoftFacesToolCircleOnSpan(tool *pointConeLimit, span revolveSectionS
 
 func revolveLoftFacesToolResidual(tool *pointConeLimit, point planePoint) *big.Rat {
 	return lfSub(lfAdd(lfF(point.U), lfMul(tool.Slope, lfF(point.V))), tool.Apex)
-}
-
-// Every true LoftFaces band is inside the image of the authenticated source
-// rectangle. A circle missed by every full band image cannot meet the
-// surviving Cut/Intersect cap. Exact coordinate hulls intentionally include
-// more than the actual Sketch region and therefore only prove misses.
-func revolveLoftFacesToolCircleOutsideSource(trim *loftFacesTrimRecord,
-	x, radius *big.Rat) bool {
-	if trim == nil || trim.Source == nil || x == nil || radius == nil ||
-		radius.Sign() <= 0 {
-		return false
-	}
-	box, err := revolveloftfaces.LfSourceBox(trim.Source)
-	if err != nil {
-		return false
-	}
-	return loftface.CircleOutsideMaps(trim.Maps, box, x, radius)
 }
