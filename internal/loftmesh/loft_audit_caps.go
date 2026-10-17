@@ -193,3 +193,40 @@ func FanRing(sides [][3]int) ([]int, bool) {
 	}
 	return ring, true
 }
+
+// PointPlaneSlabCapLayout records the wall and cap triangle order emitted by
+// a point-plane slab: n apex walls or 2n walls between two planes, followed by
+// far-cap triangles interleaved between upper and lower caps when both exist.
+func PointPlaneSlabCapLayout(sides [][3]int, triCount, upperOffset int, hasApex bool) (LoftCapLayout, bool) {
+	ring, ok := FanRing(sides)
+	if !ok {
+		return LoftCapLayout{}, false
+	}
+	n := len(sides)
+	shift := func(offset int) []int {
+		out := make([]int, len(ring))
+		for i, r := range ring {
+			out[i] = offset + r
+		}
+		return out
+	}
+	if hasApex {
+		if triCount < n {
+			return LoftCapLayout{}, false
+		}
+		layout := LoftCapLayout{Walls: n, Loops0: [][]int{shift(upperOffset)}, Loops1: [][]int{{0}}}
+		for t := n; t < triCount; t++ {
+			layout.Cap0 = append(layout.Cap0, t)
+		}
+		return layout, true
+	}
+	if triCount < 2*n || (triCount-2*n)%2 != 0 {
+		return LoftCapLayout{}, false
+	}
+	layout := LoftCapLayout{Walls: 2 * n, Loops0: [][]int{shift(upperOffset)}, Loops1: [][]int{shift(0)}}
+	for t := 2 * n; t < triCount; t += 2 {
+		layout.Cap0 = append(layout.Cap0, t)
+		layout.Cap1 = append(layout.Cap1, t+1)
+	}
+	return layout, true
+}
