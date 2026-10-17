@@ -189,7 +189,7 @@ func validatePointPlane(base facetedPayload, plane *pointPlaneLimit) error {
 	z0 := pointPlaneAdd(ratOfPointPlane(plane.Z0), zMargin)
 	z1 := pointPlaneSub(ratOfPointPlane(plane.Z1), zMargin)
 	for _, far := range base.Verts[1:] {
-		q, err := pointPlaneMapExact(apex, far, plane)
+		q, err := facetedrecord.PointPlaneMapExact(apex, far, plane)
 		if err != nil {
 			return err
 		}
@@ -203,22 +203,6 @@ func validatePointPlane(base facetedPayload, plane *pointPlaneLimit) error {
 		}
 	}
 	return nil
-}
-
-func pointPlaneMapExact(apex, far r3.Vec, plane *pointPlaneLimit) ([3]*big.Rat, error) {
-	den := plane.Denominator(apex, far)
-	if den.Sign() <= 0 {
-		return [3]*big.Rat{}, fmt.Errorf("%w: a source ray does not meet the split plane", ErrUnsupported)
-	}
-	alpha := new(big.Rat).Quo(plane.D, den)
-	a := [3]float64{apex.X, apex.Y, apex.Z}
-	p := [3]float64{far.X, far.Y, far.Z}
-	var q [3]*big.Rat
-	for i := range q {
-		q[i] = pointPlaneAdd(ratOfPointPlane(a[i]),
-			pointPlaneMul(alpha, pointPlaneSub(ratOfPointPlane(p[i]), ratOfPointPlane(a[i]))))
-	}
-	return q, nil
 }
 
 // splitPointPlane is a separate Split arm. It handles only authenticated
@@ -237,10 +221,10 @@ func (d *Document) splitPointPlane(ctx context.Context, budget *proofbound.WorkB
 	if err := validatePointPlane(record.Base, plane); err != nil {
 		return nil, true, err
 	}
-	if center, proved, err := pointPlaneCapCentroid(ctx, record.Base, plane); err != nil {
+	if center, proved, err := facetedrecord.PointPlaneCapCentroid(ctx, record.Base, plane); err != nil {
 		return nil, true, err
 	} else {
-		plane.Centroid, plane.HasCentroid = vecMeasurementToInternal(center), proved
+		plane.Centroid, plane.HasCentroid = center, proved
 	}
 	if record.Lower != nil {
 		switch pointPlaneOrder(record.Base, record.Lower, plane) {
@@ -325,7 +309,7 @@ func pointPlaneRing(ctx context.Context, base facetedPayload, plane *pointPlaneL
 				return nil, 0, err
 			}
 		}
-		q, err := pointPlaneMapExact(base.PointSection.Apex, far, plane)
+		q, err := facetedrecord.PointPlaneMapExact(base.PointSection.Apex, far, plane)
 		if err != nil {
 			return nil, 0, err
 		}

@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -60,7 +61,7 @@ func BenchmarkPointPlaneCapCentroidRealSplit(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for b.Loop() {
-		_, proved, err := pointPlaneCapCentroid(b.Context(), base, plane)
+		_, proved, err := facetedrecord.PointPlaneCapCentroid(b.Context(), base, plane)
 		if err != nil || !proved {
 			b.Fatalf("cap centroid was not certified: proved=%t err=%v", proved, err)
 		}
