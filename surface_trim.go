@@ -597,7 +597,7 @@ func admitTrimRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, re
 	if rcv.Frame != tl.Frame {
 		return fail(`%w: the receiver and tool do not spin about the same frame, exactly`, ErrUnsupported)
 	}
-	if !revolveAxisIdentical(rcv.Ax, tl.Ax) {
+	if !revolveplan.AxisIdentical(rcv.Ax, tl.Ax) {
 		return fail(`%w: the receiver and tool do not spin about the same axis, exactly`, ErrUnsupported)
 	}
 	rcvClear, err := revolveplan.MeridianClearOfAxis(ctx, rcv)
@@ -648,23 +648,6 @@ func admitTrimRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, re
 	}
 
 	return rcv, rcvView, tlView, nil
-}
-
-// revolveAxisIdentical is S4's revolve comparison: the resolved axis's own
-// anchor, direction and each of those four fields' proven bound, under Go ==
-// on the stored floats and never a tolerance
-// (docs/surface-intersection-design.md §2.1 S4).
-//
-// It compares EIGHT fields and not the whole axisFrame. The remaining four —
-// snapTol, radialAdmitAllow, axialExtentUpper and snap — are each operand's own
-// admission allowances, derived from ITS OWN section rather than from the
-// generator the two share, so two genuinely co-axial operands differ in them by
-// construction and comparing them would refuse every admissible pair.
-func revolveAxisIdentical(a, b axisFrame) bool {
-	return a.AU == b.AU && a.AV == b.AV &&
-		a.AUBound == b.AUBound && a.AVBound == b.AVBound &&
-		a.DU == b.DU && a.DV == b.DV &&
-		a.DUBound == b.DUBound && a.DVBound == b.DVBound
 }
 
 // extendRevolve is Extend over a pair S1 has already routed to the revolve
@@ -782,7 +765,7 @@ func admitExtendRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, 
 	if rcv.Frame != tl.Frame {
 		return fail(`%w: the receiver and tool do not spin about the same frame, exactly`, ErrUnsupported)
 	}
-	if !revolveAxisIdentical(rcv.Ax, tl.Ax) {
+	if !revolveplan.AxisIdentical(rcv.Ax, tl.Ax) {
 		return fail(`%w: the receiver and tool do not spin about the same axis, exactly`, ErrUnsupported)
 	}
 	rcvClear, err := revolveplan.ChainClearOfAxis(ctx, rcv)

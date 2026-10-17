@@ -24,7 +24,7 @@ func tryCommonAxisRevolveBoolean(ctx context.Context, op meshbool.OperationKind,
 	ref producerID, a, b *Body) (*Body, bool, error) {
 	ra, aok := a.n.Payload.(revolvePayload)
 	rb, bok := b.n.Payload.(revolvePayload)
-	if !aok || !bok || !commonAxisRevolvePair(ra, rb) {
+	if !aok || !bok || !revolveplan.CommonAxisPair(ra, rb) {
 		return nil, false, nil
 	}
 	budget := proofbound.NewWorkBudget(ctx)
@@ -130,18 +130,6 @@ func tryCommonAxisRevolveBoolean(ctx context.Context, op meshbool.OperationKind,
 		return nil, false, err
 	}
 	return body, true, nil
-}
-
-func commonAxisRevolvePair(a, b revolvePayload) bool {
-	if !a.Full || !b.Full || a.SurfaceResult || b.SurfaceResult ||
-		a.SectionDelta != 0 || b.SectionDelta != 0 || a.SectionWhole || b.SectionWhole ||
-		a.Frame != b.Frame || a.Xform != b.Xform || a.Phi0 != b.Phi0 || a.Phi1 != b.Phi1 {
-		return false
-	}
-	return a.Ax.AU == b.Ax.AU && a.Ax.AV == b.Ax.AV &&
-		a.Ax.DU == b.Ax.DU && a.Ax.DV == b.Ax.DV &&
-		a.Ax.AUBound == b.Ax.AUBound && a.Ax.AVBound == b.Ax.AVBound &&
-		a.Ax.DUBound == b.Ax.DUBound && a.Ax.DVBound == b.Ax.DVBound
 }
 
 func commonAxisKeep(op meshbool.OperationKind) func(bool, bool) bool {
