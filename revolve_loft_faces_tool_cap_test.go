@@ -116,7 +116,7 @@ func TestRevolveLoftFacesToolCircleOnFiniteSection(t *testing.T) {
 	tool := &pointConeLimit{Apex: big.NewRat(8, 1), Far: big.NewRat(-2, 1),
 		Slope: big.NewRat(1, 1)}
 	section := revolveSectionSpan{Start: planePoint{U: 5, V: 2}, End: planePoint{U: 6, V: 4}}
-	x, radius, crosses, decided := revolveLoftFacesToolCircleOnSpan(tool, section)
+	x, radius, crosses, decided := revolveloftfaces.ToolCircleOnSpan(tool, section)
 	require.True(t, decided)
 	require.True(t, crosses)
 	requireReducedRat := func(q *big.Rat) {
@@ -132,7 +132,7 @@ func TestRevolveLoftFacesToolCircleOnFiniteSection(t *testing.T) {
 
 	// A vertical Revolve side can also meet the cone at an interior circle.
 	section = revolveSectionSpan{Start: planePoint{U: 6, V: 1}, End: planePoint{U: 6, V: 3}}
-	x, radius, crosses, decided = revolveLoftFacesToolCircleOnSpan(tool, section)
+	x, radius, crosses, decided = revolveloftfaces.ToolCircleOnSpan(tool, section)
 	require.True(t, decided)
 	require.True(t, crosses)
 	require.Zero(t, x.Cmp(big.NewRat(6, 1)))
@@ -142,13 +142,13 @@ func TestRevolveLoftFacesToolCircleOnFiniteSection(t *testing.T) {
 
 	// A complete generator on one strict side has no contact circle.
 	section = revolveSectionSpan{Start: planePoint{U: 5, V: 1}, End: planePoint{U: 6, V: 1}}
-	_, _, crosses, decided = revolveLoftFacesToolCircleOnSpan(tool, section)
+	_, _, crosses, decided = revolveloftfaces.ToolCircleOnSpan(tool, section)
 	require.True(t, decided)
 	require.False(t, crosses)
 
 	// A shared endpoint needs a separate topology proof.
 	section.End = planePoint{U: 7, V: 1}
-	_, _, crosses, decided = revolveLoftFacesToolCircleOnSpan(tool, section)
+	_, _, crosses, decided = revolveloftfaces.ToolCircleOnSpan(tool, section)
 	require.False(t, decided)
 	require.False(t, crosses)
 }

@@ -81,7 +81,7 @@ func revolveLoftFacesToolCapSidesOf(proof *revolveLoftFacesSourceCertificate) (
 				span.Start == span.End {
 				return revolveLoftFacesToolCapSides{}, false
 			}
-			x, radius, crosses, decided := revolveLoftFacesToolCircleOnSpan(tool.limit, span)
+			x, radius, crosses, decided := revolveloftfaces.ToolCircleOnSpan(tool.limit, span)
 			if !decided {
 				return revolveLoftFacesToolCapSides{}, false
 			}
@@ -96,38 +96,4 @@ func revolveLoftFacesToolCapSidesOf(proof *revolveLoftFacesSourceCertificate) (
 		}
 	}
 	return out, true
-}
-
-func revolveLoftFacesToolCircleOnSpan(tool *pointConeLimit, span revolveSectionSpan) (
-	*big.Rat, *big.Rat, bool, bool,
-) {
-	if tool == nil || tool.Apex == nil || tool.Far == nil || tool.Slope == nil ||
-		tool.Slope.Sign() <= 0 || tool.Far.Cmp(tool.Apex) >= 0 ||
-		span.Start == span.End || span.Start.V < 0 || span.End.V < 0 {
-		return nil, nil, false, false
-	}
-	a := revolveLoftFacesToolResidual(tool, span.Start)
-	b := revolveLoftFacesToolResidual(tool, span.End)
-	if a.Sign() != 0 && a.Sign() == b.Sign() {
-		return nil, nil, false, true
-	}
-	if a.Sign() == 0 || b.Sign() == 0 || a.Cmp(b) == 0 {
-		return nil, nil, false, false
-	}
-	fraction := lfDiv(a, lfSub(a, b))
-	if fraction.Sign() <= 0 || fraction.Cmp(lfOne()) >= 0 {
-		return nil, nil, false, false
-	}
-	x := lfAdd(lfF(span.Start.U), lfMul(fraction,
-		lfSub(lfF(span.End.U), lfF(span.Start.U))))
-	radius := lfAdd(lfF(span.Start.V), lfMul(fraction,
-		lfSub(lfF(span.End.V), lfF(span.Start.V))))
-	if radius.Sign() <= 0 || x.Cmp(tool.Far) <= 0 || x.Cmp(tool.Apex) >= 0 {
-		return nil, nil, false, false
-	}
-	return x, radius, true, true
-}
-
-func revolveLoftFacesToolResidual(tool *pointConeLimit, point planePoint) *big.Rat {
-	return lfSub(lfAdd(lfF(point.U), lfMul(tool.Slope, lfF(point.V))), tool.Apex)
 }
