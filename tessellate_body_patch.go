@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/patchchain"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stitchrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -18,7 +19,7 @@ import (
 // triangulates an all-planar PatchEdges result over its shared vertices.
 // Other curved sources need their own shared chording and are refused here.
 func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chord float64, verify Verification) (*Mesh, error) {
-	if prism, ok := bodyPatchCircularPrismSource(pp); ok {
+	if prism, ok := patchchain.CircularPrismSource(pp); ok {
 		return tessellateBodyPatchCircularPrism(ctx, b, pp, prism, chord, verify)
 	}
 	faces := b.Faces()
