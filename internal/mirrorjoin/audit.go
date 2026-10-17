@@ -55,3 +55,17 @@ func AuditJoinedSection(budget *proofbound.WorkBudget, p momentinput.Profile, wo
 	}
 	return sectionaudit.Nesting(budget, segs, len(loops))
 }
+
+// Assemble splices a region and audits the resulting recorded section.
+func (l Line) Assemble(budget *proofbound.WorkBudget, region Region) (momentinput.Profile, float64, error) {
+	work := freeform.NewFreeformWork()
+	spliced, err := l.Splice(budget, region)
+	if err != nil {
+		return momentinput.Profile{}, 0, err
+	}
+	out := momentinput.Profile{Outer: spliced.Outer, Holes: spliced.Holes}
+	if err := AuditJoinedSection(budget, out, work); err != nil {
+		return momentinput.Profile{}, 0, err
+	}
+	return out, spliced.Delta, nil
+}
