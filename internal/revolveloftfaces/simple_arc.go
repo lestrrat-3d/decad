@@ -1,4 +1,4 @@
-package decad
+package revolveloftfaces
 
 import (
 	"math/big"
@@ -6,11 +6,19 @@ import (
 	"github.com/lestrrat-3d/decad/internal/circularbounds"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/sketch"
 )
 
-func revolveLoftFacesSimpleArc(trim *loftFacesTrimRecord, segment int,
+func lfF(v float64) *big.Rat       { return proofarith.FloatRat(v) }
+func lfAdd(a, b *big.Rat) *big.Rat { return proofarith.AddRat(new(big.Rat), a, b) }
+func lfSub(a, b *big.Rat) *big.Rat { return proofarith.SubRat(new(big.Rat), a, b) }
+func lfMul(a, b *big.Rat) *big.Rat { return proofarith.MulRat(new(big.Rat), a, b) }
+
+// SimpleArc builds the cell for one whole, short, current Sketch arc.
+func SimpleArc(trim *loftFacesTrimRecord, segment int,
 	arc arcSeg, reversed bool) (loftface.SimpleCell, bool) {
 	var cell loftface.SimpleCell
 	if segment < 0 || segment >= len(trim.Source.Source.Entities) ||
@@ -22,12 +30,12 @@ func revolveLoftFacesSimpleArc(trim *loftFacesTrimRecord, segment int,
 	if _, ok := trim.Source.Source.Entities[segment].(*sketch.Arc); !ok {
 		return cell, false
 	}
-	center := revolveLoftFacesSimplePoint(arc.Center)
-	start := revolveLoftFacesSimplePoint(arc.Start)
-	end := revolveLoftFacesSimplePoint(arc.End)
-	if !revolveLoftFacesSimplePointFinite(center) ||
-		!revolveLoftFacesSimplePointFinite(start) ||
-		!revolveLoftFacesSimplePointFinite(end) {
+	center := simplePoint(arc.Center)
+	start := simplePoint(arc.Start)
+	end := simplePoint(arc.End)
+	if !simplePointFinite(center) ||
+		!simplePointFinite(start) ||
+		!simplePointFinite(end) {
 		return cell, false
 	}
 	radius2 := func(point freeform.RatPoint) *big.Rat {
@@ -59,25 +67,26 @@ func revolveLoftFacesSimpleArc(trim *loftFacesTrimRecord, segment int,
 	return cell, true
 }
 
-func revolveLoftFacesSimplePoint(point planePoint) freeform.RatPoint {
+func simplePoint(point sectionrecord.Point2) freeform.RatPoint {
 	return freeform.RatPoint{U: lfF(point.U), V: lfF(point.V)}
 }
 
-func revolveLoftFacesSimplePointFinite(point freeform.RatPoint) bool {
+func simplePointFinite(point freeform.RatPoint) bool {
 	return point.U != nil && point.V != nil
 }
 
-// A short arc with both ends on one axis-aligned chord lies strictly away
+// SimpleArcChordSide proves that a short arc with both ends on one
+// axis-aligned chord lies strictly away
 // from its center in that coordinate throughout its interior. Equal exact
 // endpoint radii ensure the arc's denoted endpoint is the recorded endpoint.
-func revolveLoftFacesSimpleArcChordSide(arc arcSeg, axis int,
+func SimpleArcChordSide(arc arcSeg, axis int,
 	contact *big.Rat, side int) bool {
 	if contact == nil || side != -1 && side != 1 {
 		return false
 	}
-	start := loftface.SimpleCoordinate(revolveLoftFacesSimplePoint(arc.Start), axis)
-	end := loftface.SimpleCoordinate(revolveLoftFacesSimplePoint(arc.End), axis)
-	center := loftface.SimpleCoordinate(revolveLoftFacesSimplePoint(arc.Center), axis)
+	start := loftface.SimpleCoordinate(simplePoint(arc.Start), axis)
+	end := loftface.SimpleCoordinate(simplePoint(arc.End), axis)
+	center := loftface.SimpleCoordinate(simplePoint(arc.Center), axis)
 	if start == nil || end == nil || center == nil ||
 		start.Cmp(contact) != 0 || end.Cmp(contact) != 0 {
 		return false
@@ -85,20 +94,21 @@ func revolveLoftFacesSimpleArcChordSide(arc arcSeg, axis int,
 	return side*(center.Cmp(contact)) < 0
 }
 
-// A short arc whose endpoints lie strictly in one half-plane stays there:
+// SimpleArcMonotoneSide proves that a short arc whose endpoints lie strictly
+// in one half-plane stays there:
 // leaving and reentering would traverse at least a half-turn. The coordinate
 // perpendicular to that half-plane is strictly monotone on the arc.
-func revolveLoftFacesSimpleArcMonotoneSide(arc arcSeg, axis int,
+func SimpleArcMonotoneSide(arc arcSeg, axis int,
 	contact *big.Rat, side int) bool {
 	if contact == nil || side != -1 && side != 1 {
 		return false
 	}
-	start, end := revolveLoftFacesSimplePoint(arc.Start),
-		revolveLoftFacesSimplePoint(arc.End)
-	center := revolveLoftFacesSimplePoint(arc.Center)
-	if !revolveLoftFacesSimplePointFinite(start) ||
-		!revolveLoftFacesSimplePointFinite(end) ||
-		!revolveLoftFacesSimplePointFinite(center) {
+	start, end := simplePoint(arc.Start),
+		simplePoint(arc.End)
+	center := simplePoint(arc.Center)
+	if !simplePointFinite(start) ||
+		!simplePointFinite(end) ||
+		!simplePointFinite(center) {
 		return false
 	}
 	startAxis := loftface.SimpleCoordinate(start, axis)
@@ -115,8 +125,8 @@ func revolveLoftFacesSimpleArcMonotoneSide(arc arcSeg, axis int,
 		endAxis.Cmp(contact) == 0 && side*startAxis.Cmp(contact) > 0
 }
 
-func revolveLoftFacesSimpleArcSide(arc arcSeg, axis int,
+func simpleArcSide(arc arcSeg, axis int,
 	contact *big.Rat, side int) bool {
-	return revolveLoftFacesSimpleArcChordSide(arc, axis, contact, side) ||
-		revolveLoftFacesSimpleArcMonotoneSide(arc, axis, contact, side)
+	return SimpleArcChordSide(arc, axis, contact, side) ||
+		SimpleArcMonotoneSide(arc, axis, contact, side)
 }

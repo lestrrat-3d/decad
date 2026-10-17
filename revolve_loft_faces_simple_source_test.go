@@ -5,6 +5,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/stretchr/testify/require"
@@ -63,11 +64,11 @@ func TestRevolveLoftFacesSimpleSourceCertifiesWholeCurveLoop(t *testing.T) {
 		neutralSimpleSourceRecord(t, s, profile))
 	require.NoError(t, err)
 	require.True(t, certified)
-	require.True(t, loop.ccw)
-	require.Len(t, loop.cells, 8, "two fitted flanks each reconstruct as two Bezier spans")
-	for i, cell := range loop.cells {
-		next := loop.cells[(i+1)%len(loop.cells)]
-		require.True(t, revolveLoftFacesSimpleNeighbors(cell, next), "joint %d", i)
+	require.True(t, loop.CCW)
+	require.Len(t, loop.Cells, 8, "two fitted flanks each reconstruct as two Bezier spans")
+	for i, cell := range loop.Cells {
+		next := loop.Cells[(i+1)%len(loop.Cells)]
+		require.True(t, revolveloftfaces.SimpleNeighbors(cell, next), "joint %d", i)
 	}
 }
 
@@ -100,8 +101,8 @@ func TestRevolveLoftFacesSimpleNeighborsRequireOppositeInteriorSides(t *testing.
 		return cell
 	}
 	first := span(0, 1)
-	require.True(t, revolveLoftFacesSimpleNeighbors(first, span(1, 2)))
-	require.False(t, revolveLoftFacesSimpleNeighbors(first, span(1, 0)),
+	require.True(t, revolveloftfaces.SimpleNeighbors(first, span(1, 2)))
+	require.False(t, revolveloftfaces.SimpleNeighbors(first, span(1, 0)),
 		"a curve that doubles back shares more than the endpoint")
 }
 
