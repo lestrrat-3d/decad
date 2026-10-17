@@ -73,7 +73,7 @@ so that chain crosses the circle once in this interval.
 The root arc may have a small radius excess at either cap. Its endpoint
 angle intervals must then prove a nonzero twist with one common sign. For
 every arc parameter, squared radius along a ruling is convex in height.
-`loftCylinderRootCollar` proves both interior endpoints at `ε` and `1−ε`
+`loftcylinder.RootCollar` proves both interior endpoints at `ε` and `1−ε`
 lie inside the circle. The root wall is inside the blank between the two
 `ε·height` cap collars. The collar, its lateral root-wall sweep, and radial
 gap are charged. Both radius readings multiply the recorded squared radius
