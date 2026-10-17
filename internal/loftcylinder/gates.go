@@ -3,10 +3,29 @@ package loftcylinder
 import (
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
+
+// SourceIdentitiesMatch reports whether payloads 0..n-1, read in index order,
+// are authenticated Lofts sharing the first tooth's source identity. n must
+// be at least 1.
+func SourceIdentitiesMatch(n int, payload func(i int) topo.Payload) bool {
+	first, ok := payload(0).(loftrecord.Payload)
+	if !ok || first.SourceIdentity == nil {
+		return false
+	}
+	for i := 1; i < n; i++ {
+		next, ok := payload(i).(loftrecord.Payload)
+		if !ok || next.SourceIdentity != first.SourceIdentity {
+			return false
+		}
+	}
+	return true
+}
 
 // TriangleMinRadius is a rounded-down lower bound on the triangle's minimum
 // projected radius. It is computed over its whole convex
