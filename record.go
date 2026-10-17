@@ -258,9 +258,6 @@ type arcSeg = sectionrecord.ArcSeg
 type fitSplineSeg = sectionrecord.FitSplineSeg
 
 func cloneLoopRecord(loop loopRecord) loopRecord { return sectionrecord.CloneLoopRecord(loop) }
-func normalizeSegment(segment curveSegment) (curveSegment, error) {
-	return sectionrecord.NormalizeSegment(segment)
-}
 
 // allEdgeChamferPayload is the evaluator's record of the box all-edge chamfer
 // of modify-general §4.3b: the internal/breprecord payload, which
