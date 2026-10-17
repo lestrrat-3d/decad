@@ -2117,3 +2117,4 @@
 10	0.00	TestSectionHomotheticThreeSectionLoftKeepsTranslatedSourceAndMiddleLevel
 10	0.00	TestSectionHomotheticThreeSectionLoftRefusesUnprovedInputs
 10	0.00	TestSectionHomotheticConcavePolygonFeedsVerifiedExtrude
+10	0.00	TestSurfaceTrimAndExtendRevolveRefuseAxisTouch

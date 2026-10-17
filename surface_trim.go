@@ -10,7 +10,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 )
 
@@ -601,11 +600,11 @@ func admitTrimRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, re
 	if !revolveAxisIdentical(rcv.Ax, tl.Ax) {
 		return fail(`%w: the receiver and tool do not spin about the same axis, exactly`, ErrUnsupported)
 	}
-	rcvClear, err := revolveMeridianClearOfAxis(ctx, rcv)
+	rcvClear, err := revolveplan.MeridianClearOfAxis(ctx, rcv)
 	if err != nil {
 		return revolvePayload{}, prismPayload{}, prismPayload{}, err
 	}
-	tlClear, err := revolveMeridianClearOfAxis(ctx, tl)
+	tlClear, err := revolveplan.MeridianClearOfAxis(ctx, tl)
 	if err != nil {
 		return revolvePayload{}, prismPayload{}, prismPayload{}, err
 	}
@@ -666,53 +665,6 @@ func revolveAxisIdentical(a, b axisFrame) bool {
 		a.AUBound == b.AUBound && a.AVBound == b.AVBound &&
 		a.DU == b.DU && a.DV == b.DV &&
 		a.DUBound == b.DUBound && a.DVBound == b.DVBound
-}
-
-// revolveMeridianClearOfAxis reads S4's clearance clause off the axis snap that
-// has ALREADY run: axisFrame.walk assigns a walk endpoint ρ exactly zero when
-// the resolved axis's own snap tolerance covers it, so "clear" is the published
-// structural fact that no endpoint carries that zero, never a fresh measurement
-// decad takes on the geometry it was handed. A meridian touching the axis
-// sweeps a pole, and a cut fragment ending at one would need pole topology this
-// arm does not place.
-func revolveMeridianClearOfAxis(ctx context.Context, rp revolvePayload) (bool, error) {
-	work := freeform.NewFreeformWork()
-	for _, loop := range append([]loopRecord{rp.Profile.Outer}, rp.Profile.Holes...) {
-		resolved, err := revolveaxis.ResolveLoop(ctx, loop, work, "the trim axis-clearance gate",
-			rp.ChargedWalk, rp.Ax.SnapTol)
-		if err != nil {
-			return false, err
-		}
-		for _, w := range resolved.Walks {
-			if w.StartV == 0 || w.EndV == 0 {
-				return false, nil
-			}
-		}
-	}
-	return true, nil
-}
-
-// revolveChainClearOfAxis is revolveMeridianClearOfAxis over an OPEN meridian
-// walk set, read through the chain resolver rather than the loop one: an open
-// walk's last segment does not continue into its first, so coalescing it as a
-// loop could merge the two free ends into one walk and hide an endpoint the
-// clearance clause has to see.
-func revolveChainClearOfAxis(ctx context.Context, rp chainRevolvePayload) (bool, error) {
-	work := freeform.NewFreeformWork()
-	for ci := range rp.Chains {
-		view := rp.WalkView(ci)
-		resolved, err := revolveaxis.ResolveChain(ctx, rp.Chains[ci], work, "the revolve wall build",
-			view.ChargedWalk, view.Ax.SnapTol)
-		if err != nil {
-			return false, err
-		}
-		for _, w := range resolved.Walks {
-			if w.StartV == 0 || w.EndV == 0 {
-				return false, nil
-			}
-		}
-	}
-	return true, nil
 }
 
 // extendRevolve is Extend over a pair S1 has already routed to the revolve
@@ -833,11 +785,11 @@ func admitExtendRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, 
 	if !revolveAxisIdentical(rcv.Ax, tl.Ax) {
 		return fail(`%w: the receiver and tool do not spin about the same axis, exactly`, ErrUnsupported)
 	}
-	rcvClear, err := revolveChainClearOfAxis(ctx, rcv)
+	rcvClear, err := revolveplan.ChainClearOfAxis(ctx, rcv)
 	if err != nil {
 		return pass(err)
 	}
-	tlClear, err := revolveMeridianClearOfAxis(ctx, tl)
+	tlClear, err := revolveplan.MeridianClearOfAxis(ctx, tl)
 	if err != nil {
 		return pass(err)
 	}
