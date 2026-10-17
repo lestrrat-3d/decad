@@ -39,44 +39,15 @@ func loftCylinderRingToothOf(body *Body, radius float64) (loftCylinderRingTooth,
 	if bound < 0 || proofbound.IsNonFinite(bound) {
 		return loftCylinderRingTooth{}, fmt.Errorf("%w: ring tooth has no finite wall bound", ErrUnsupported)
 	}
-	n := len(lp.Verts) / 2
-	root := -1
-	for j, segment := range lp.Segment[0] {
-		if segment == 5 {
-			root = j
-			break
-		}
-	}
-	if root < 3 || lp.Walls != 2*n {
+	exterior, fitted, ok := loftcylinder.RingToothWalls(lp, bound)
+	if !ok {
 		return loftCylinderRingTooth{}, fmt.Errorf("%w: ring tooth has no wall cell map", ErrUnsupported)
 	}
-	result := loftCylinderRingTooth{
+	return loftCylinderRingTooth{
 		loft: lp, circle: circle,
-		bound2: new(big.Rat).Mul(proofarith.FloatRat(bound), proofarith.FloatRat(bound)),
-	}
-	result.exterior = make([]loftcylinder.RingWall, 0, 2*root)
-	result.fitted = make([]loftcylinder.RingWall, 0, 2*(root-2))
-	for cell := range n {
-		for half := range 2 {
-			indices := lp.Tris[2*cell+half]
-			tri := [3]r3.Vec{lp.Verts[indices[0]], lp.Verts[indices[1]], lp.Verts[indices[2]]}
-			wall := loftcylinder.RingWall{Box: loftcylinder.RingTriangleBox(tri, bound)}
-			for k, p := range tri {
-				wall.Points[k] = loftcylinder.RingVertex(p)
-			}
-			wall.Normal = loftcylinder.RingCross(loftcylinder.RingSub(wall.Points[1], wall.Points[0]),
-				loftcylinder.RingSub(wall.Points[2], wall.Points[0]))
-			wall.Normal2 = loftcylinder.RingDot(wall.Normal, wall.Normal)
-			wall.Plane0 = loftcylinder.RingDot(wall.Points[0], wall.Normal)
-			if cell < root {
-				result.exterior = append(result.exterior, wall)
-			}
-			if cell > 0 && cell < root-1 {
-				result.fitted = append(result.fitted, wall)
-			}
-		}
-	}
-	return result, nil
+		bound2:   new(big.Rat).Mul(proofarith.FloatRat(bound), proofarith.FloatRat(bound)),
+		exterior: exterior, fitted: fitted,
+	}, nil
 }
 
 // loftCylinderRingToothKey names the inputs of loftCylinderRingToothOf.
