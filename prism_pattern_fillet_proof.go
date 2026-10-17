@@ -48,27 +48,11 @@ func prismPatternFilletBody(ctx context.Context, body *Body, edges []*Edge,
 	// inside the same disk enlarged by the original source-to-held bound and
 	// the certified arc sampling error. Triangle inequality with the old
 	// Union's occupied-volume certificate gives the following sum.
-	piUpper := proofbound.RatFloatUp(proofbound.PiUpper)
-	trueDisk := proofbound.ProductUpper(3, radius)
-	heldDisk := proofbound.AbsSumUpper(trueDisk, old.MeshBound, arcBound)
 	height := rec.Source.Blank.Z1 - rec.Source.Blank.Z0
-	if height <= 0 || proofbound.IsNonFinite(heldDisk) {
-		return nil, fmt.Errorf("%w: joined-prism fillet has no finite local disk", ErrUnsupported)
-	}
-	n := float64(len(contacts))
-	trueDiskArea := proofbound.ProductUpper(piUpper, proofbound.ProductUpper(trueDisk, trueDisk))
-	heldDiskArea := proofbound.ProductUpper(piUpper, proofbound.ProductUpper(heldDisk, heldDisk))
-	volumeBand := proofbound.ProductUpper(n, proofbound.ProductUpper(height,
-		proofbound.AbsSumUpper(trueDiskArea, heldDiskArea)))
-	volumeGap := proofbound.AbsSumUpper(old.VolSymDiff, volumeBand)
-	// Old and new walls inside each disk have total area below four full
-	// cylinder walls; both changed caps fit in four complete disk faces.
-	areaBand := proofbound.ProductUpper(n, proofbound.ProductUpper(4*piUpper,
-		proofbound.AbsSumUpper(proofbound.ProductUpper(heldDisk, height),
-			proofbound.ProductUpper(heldDisk, heldDisk))))
-	areaSlack := proofbound.AbsSumUpper(old.AreaSlack, areaBand)
-	if proofbound.IsNonFinite(volumeGap) || proofbound.IsNonFinite(areaSlack) {
-		return nil, fmt.Errorf("%w: joined-prism fillet has no finite volume or area proof", ErrUnsupported)
+	volumeGap, areaSlack, err := prismpattern.FilletProofBounds(old.MeshBound,
+		old.VolSymDiff, old.AreaSlack, arcBound, radius, height, len(contacts))
+	if err != nil {
+		return nil, err
 	}
 	vertexBound := make([]float64, len(mesh.Verts))
 	for i := range vertexBound {
