@@ -215,10 +215,10 @@ func certifyLoftSourcePartition(ctx context.Context, first, second *Body,
 	}
 	result := loftSourcePartition{carrier: carrier, crossing: crossing, seams: seams, walls: walls}
 	result.capLevels = [3]*big.Rat{big.NewRat(0, 1), new(big.Rat).Set(axis.Shift), new(big.Rat).Set(prismTop)}
-	for cap := 0; cap < 2; cap++ {
+	for capIndex := range 2 {
 		loftLines := bottom
-		level := result.capLevels[cap]
-		if cap == 1 {
+		level := result.capLevels[capIndex]
+		if capIndex == 1 {
 			loftLines = top
 		}
 		if err := budget.Err(); err != nil {
@@ -227,15 +227,15 @@ func certifyLoftSourcePartition(ctx context.Context, first, second *Body,
 		var admitted bool
 		var err error
 		capProof, admitted, err := loftPartitionCap(ctx, budget, pp, prismLines, loftLines,
-			carrier, crossing, seams, sides, walls, cap, level)
+			carrier, crossing, seams, sides, walls, capIndex, level)
 		if err != nil || !admitted {
 			return no, false, err
 		}
 		if capProof.level == nil || capProof.level.Cmp(level) != 0 {
 			return no, false, nil
 		}
-		result.junction[cap], result.capOwners[cap] = capProof.junction, capProof.owners
-		if cap == 0 && capProof.carrierUses != 2 || cap == 1 && capProof.carrierUses != 1 {
+		result.junction[capIndex], result.capOwners[capIndex] = capProof.junction, capProof.owners
+		if capIndex == 0 && capProof.carrierUses != 2 || capIndex == 1 && capProof.carrierUses != 1 {
 			return no, false, nil
 		}
 	}
@@ -393,7 +393,7 @@ func loftPartitionSpanEqual(budget *proofbound.WorkBudget, got, want []loftParti
 
 func loftPartitionSceneOrigins(budget *proofbound.WorkBudget, scene *sketch.Sketch,
 	tags map[sketch.Entity]prismcells.Origin, prismLines, loftLines []sectionrecord.LineSeg,
-	cap int, level *big.Rat,
+	capIndex int, level *big.Rat,
 ) (map[sketch.Entity]loftPartitionCapOrigin, bool, error) {
 	if len(tags) != len(prismLines)+len(loftLines) {
 		return nil, false, nil
@@ -430,7 +430,7 @@ func loftPartitionSceneOrigins(budget *proofbound.WorkBudget, scene *sketch.Sket
 		seen[op][origin.Segment] = true
 		mapped[entity] = loftPartitionCapOrigin{
 			operand: op, loop: -1, segment: origin.Segment, reversed: origin.AuthoredReversed,
-			cap: cap, level: new(big.Rat).Set(level), line: lines[origin.Segment],
+			cap: capIndex, level: new(big.Rat).Set(level), line: lines[origin.Segment],
 		}
 	}
 	for _, operand := range seen {
@@ -460,7 +460,7 @@ func loftPartitionFragmentGeometryKey(a, b loftPartitionPoint) string {
 func loftPartitionCertifyFragments(budget *proofbound.WorkBudget, scene *sketch.Sketch,
 	cells []*sketch.Profile, origins map[sketch.Entity]loftPartitionCapOrigin,
 	prismLines, loftLines []sectionrecord.LineSeg, carrier int, crossing [2]int,
-	cut, carrierCut [2]*big.Rat, cap int, level *big.Rat,
+	cut, carrierCut [2]*big.Rat, capIndex int, level *big.Rat,
 ) (bool, error) {
 	zero, one := big.NewRat(0, 1), big.NewRat(1, 1)
 	expected := [2][][]loftPartitionSpan{
@@ -527,7 +527,7 @@ func loftPartitionCertifyFragments(budget *proofbound.WorkBudget, scene *sketch.
 				return false, err
 			}
 			origin, ok := origins[edge.Entity]
-			if !ok || origin.cap != cap || origin.level.Cmp(level) != 0 || origin.loop != -1 ||
+			if !ok || origin.cap != capIndex || origin.level.Cmp(level) != 0 || origin.loop != -1 ||
 				len(edge.Polyline) != 2 || !edge.TExact || math.IsNaN(edge.TStart) || math.IsNaN(edge.TEnd) ||
 				edge.TStart < 0 || edge.TEnd > 1 || edge.TStart >= edge.TEnd {
 				return false, nil
@@ -578,10 +578,10 @@ func loftPartitionCertifyFragments(budget *proofbound.WorkBudget, scene *sketch.
 
 func loftPartitionCap(ctx context.Context, budget *proofbound.WorkBudget, pp prismPayload,
 	prismLines, loftLines []sectionrecord.LineSeg, carrier int, crossing [2]int, seams [2]loftcontact.LineSeam,
-	sides []int8, walls []int8, cap int, level *big.Rat,
+	sides []int8, walls []int8, capIndex int, level *big.Rat,
 ) (loftPartitionCapProof, bool, error) {
 	none := loftPartitionCapProof{level: new(big.Rat).Set(level)}
-	height := big.NewRat(int64(cap), 1)
+	height := big.NewRat(int64(capIndex), 1)
 	var points [2]loftPartitionPoint
 	var cut [2]*big.Rat
 	var carrierCut [2]*big.Rat
@@ -621,7 +621,7 @@ func loftPartitionCap(ctx context.Context, budget *proofbound.WorkBudget, pp pri
 	if err != nil {
 		return none, false, err
 	}
-	origins, mapped, err := loftPartitionSceneOrigins(budget, scene, tags, prismLines, loftLines, cap, level)
+	origins, mapped, err := loftPartitionSceneOrigins(budget, scene, tags, prismLines, loftLines, capIndex, level)
 	if err != nil || !mapped {
 		return none, false, err
 	}
@@ -669,7 +669,7 @@ func loftPartitionCap(ctx context.Context, budget *proofbound.WorkBudget, pp pri
 		}
 	}
 	fragments, err := loftPartitionCertifyFragments(budget, scene, raw, origins,
-		prismLines, loftLines, carrier, crossing, cut, carrierCut, cap, level)
+		prismLines, loftLines, carrier, crossing, cut, carrierCut, capIndex, level)
 	if err != nil || !fragments {
 		return none, false, err
 	}
@@ -685,7 +685,7 @@ func loftPartitionCap(ctx context.Context, budget *proofbound.WorkBudget, pp pri
 			return none, false, err
 		}
 		owner := -1
-		if cap == 0 {
+		if capIndex == 0 {
 			if insideP[i] {
 				owner = 0 // P owns the nonempty lower overlap once.
 				if insideL[i] {
@@ -707,8 +707,8 @@ func loftPartitionCap(ctx context.Context, budget *proofbound.WorkBudget, pp pri
 		none.owners[owner]++
 		selected = append(selected, cell)
 	}
-	if cap == 0 && (none.owners[0] == 0 || none.owners[1] == 0 || none.owners[2] == 0) ||
-		cap == 1 && (none.owners[0] != 0 || none.owners[1] == 0 || none.owners[2] != 0) ||
+	if capIndex == 0 && (none.owners[0] == 0 || none.owners[1] == 0 || none.owners[2] == 0) ||
+		capIndex == 1 && (none.owners[0] != 0 || none.owners[1] == 0 || none.owners[2] != 0) ||
 		none.owners[0]+none.owners[1] != len(selected) {
 		return none, false, nil
 	}
@@ -727,7 +727,7 @@ func loftPartitionCap(ctx context.Context, budget *proofbound.WorkBudget, pp pri
 			return none, false, err
 		}
 		origin, ok := origins[edge.Entity]
-		if !ok || origin.cap != cap || origin.level.Cmp(level) != 0 || origin.loop != -1 ||
+		if !ok || origin.cap != capIndex || origin.level.Cmp(level) != 0 || origin.loop != -1 ||
 			len(edge.Polyline) != 2 || !edge.TExact {
 			return none, false, nil
 		}
@@ -737,8 +737,8 @@ func loftPartitionCap(ctx context.Context, budget *proofbound.WorkBudget, pp pri
 			lineSet, op = loftLines, 1
 		}
 		if origin.segment < 0 || origin.segment >= len(lineSet) ||
-			edge.Reversed != origin.reversed && (cap == 0 || op == 1) ||
-			cap == 1 && op == 0 && edge.Reversed == origin.reversed {
+			edge.Reversed != origin.reversed && (capIndex == 0 || op == 1) ||
+			capIndex == 1 && op == 0 && edge.Reversed == origin.reversed {
 			return none, false, nil
 		}
 		line := origin.line
@@ -788,11 +788,11 @@ func loftPartitionCap(ctx context.Context, budget *proofbound.WorkBudget, pp pri
 		}
 		var expected []loftPartitionSpan
 		switch {
-		case i != carrier && cap == 0:
+		case i != carrier && capIndex == 0:
 			expected = []loftPartitionSpan{{zero, one}}
-		case i == carrier && cap == 0:
+		case i == carrier && capIndex == 0:
 			expected = []loftPartitionSpan{{zero, carrierCut[0]}, {carrierCut[1], one}}
-		case i == carrier && cap == 1:
+		case i == carrier && capIndex == 1:
 			expected = []loftPartitionSpan{{carrierCut[0], carrierCut[1]}}
 		}
 		matched, err := loftPartitionSpanEqual(budget, spans[0][i], expected)

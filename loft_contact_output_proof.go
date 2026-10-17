@@ -35,9 +35,11 @@ func certifyLoftOutputBoundary(ctx context.Context, first, second *Body,
 	var pp prismPayload
 	var lp loftPayload
 	if p, yes := first.n.Payload.(prismPayload); yes {
-		pp, lp = p, second.n.Payload.(loftPayload)
+		pp = p
+		lp = second.n.Payload.(loftPayload)
 	} else {
-		pp, lp = second.n.Payload.(prismPayload), first.n.Payload.(loftPayload)
+		pp = second.n.Payload.(prismPayload)
+		lp = first.n.Payload.(loftPayload)
 	}
 	limit := proofbound.NewWallWorkBudgetWithOperation(65_536, operation)
 	var visits uint64
@@ -248,10 +250,9 @@ func loftOutputLineQuad(budget *proofbound.WorkBudget, frame r3.Frame,
 		if err := budget.Step(); err != nil {
 			return false, err
 		}
-		ok, err := shell.triangle(frame,
-			[3]loftOutputPoint{quad[tri[0]], quad[tri[1]], quad[tri[2]]}, face)
-		if err != nil || !ok {
-			return false, err
+		if !shell.triangle(frame,
+			[3]loftOutputPoint{quad[tri[0]], quad[tri[1]], quad[tri[2]]}, face) {
+			return false, nil
 		}
 	}
 	return true, nil
@@ -438,7 +439,7 @@ func loftOutputAuditSource(budget *proofbound.WorkBudget,
 		if shell.faces[i].kind != 0 {
 			continue
 		}
-		for j := 0; j < i; j++ {
+		for j := range i {
 			if err := budget.Step(); err != nil {
 				return false, err
 			}
@@ -476,18 +477,18 @@ func loftOutputEdgeOwnersCompatible(shell loftOutputShell, source loftSourcePart
 		return true // two selected cells share a certified internal cap edge
 	}
 	if a.kind == 0 && b.kind == 1 || a.kind == 1 && b.kind == 0 {
-		cap, side := a, b
+		capFace, side := a, b
 		if b.kind == 0 {
-			cap, side = b, a
+			capFace, side = b, a
 		}
-		if cap.level < 0 || cap.level >= len(source.capLevels) ||
-			p.z.Cmp(q.z) != 0 || p.z.Cmp(source.capLevels[cap.level]) != 0 {
+		if capFace.level < 0 || capFace.level >= len(source.capLevels) ||
+			p.z.Cmp(q.z) != 0 || p.z.Cmp(source.capLevels[capFace.level]) != 0 {
 			return false
 		}
-		if cap.owner == side.owner {
+		if capFace.owner == side.owner {
 			return true
 		}
-		if cap.level != 1 || cap.owner != 1 || side.owner != 0 ||
+		if capFace.level != 1 || capFace.owner != 1 || side.owner != 0 ||
 			side.segment != source.carrier || side.level != 3 {
 			return false
 		}
@@ -645,13 +646,13 @@ func loftOutputPlaneTrace(budget *proofbound.WorkBudget, shell loftOutputShell,
 }
 
 func loftOutputTraceInCapTriangle(trace []loftPartitionPoint,
-	cap [3]int, shell loftOutputShell) (*big.Rat, *big.Rat, bool) {
+	capTriangle [3]int, shell loftOutputShell) (*big.Rat, *big.Rat, bool) {
 	lo, hi := loftOutputRat(0), loftOutputRat(1)
 	if len(trace) == 1 {
 		hi = loftOutputRat(0)
 	}
-	for k, v := range cap {
-		a, b := shell.vertices[v].point, shell.vertices[cap[(k+1)%3]].point
+	for k, v := range capTriangle {
+		a, b := shell.vertices[v].point, shell.vertices[capTriangle[(k+1)%3]].point
 		start := loftPartitionCross(loftPartitionPoint{a.u, a.v},
 			loftPartitionPoint{b.u, b.v}, trace[0])
 		end := start

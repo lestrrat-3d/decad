@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"maps"
 	"math/big"
 	"testing"
 
@@ -212,9 +213,7 @@ func TestLoftContactPartitionCapMapRefusesAmbiguousFragments(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, complete)
 	wrongLevel := make(map[sketch.Entity]loftPartitionCapOrigin, len(origins))
-	for entity, origin := range origins {
-		wrongLevel[entity] = origin
-	}
+	maps.Copy(wrongLevel, origins)
 	for entity, origin := range wrongLevel {
 		origin.level = big.NewRat(5, 1)
 		wrongLevel[entity] = origin
@@ -226,9 +225,7 @@ func TestLoftContactPartitionCapMapRefusesAmbiguousFragments(t *testing.T) {
 	require.False(t, complete)
 
 	duplicateTag := make(map[sketch.Entity]prismcells.Origin, len(tags))
-	for entity, origin := range tags {
-		duplicateTag[entity] = origin
-	}
+	maps.Copy(duplicateTag, tags)
 	for entity, origin := range duplicateTag {
 		if origin.IsB {
 			origin.Segment = (origin.Segment + 1) % len(loftLines)
@@ -360,11 +357,11 @@ func TestLoftContactPartitionSourceAndWorkRefusals(t *testing.T) {
 		}},
 	} {
 		t.Run(change.name, func(t *testing.T) {
-			copyBody := *loft
 			payload := loft.n.Payload.(loftPayload)
 			change.edit(&payload)
-			copyBody.n.Payload = payload
-			_, admitted, err := certifyLoftSourcePartition(t.Context(), prism, &copyBody,
+			alteredBody := &Body{}
+			alteredBody.n.Payload = payload
+			_, admitted, err := certifyLoftSourcePartition(t.Context(), prism, alteredBody,
 				proofbound.NewWorkBudget(t.Context()))
 			require.NoError(t, err)
 			require.False(t, admitted)

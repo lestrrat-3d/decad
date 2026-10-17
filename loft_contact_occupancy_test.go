@@ -113,34 +113,49 @@ func TestLoftContactOccupancyReadsVaryingRecordedWalls(t *testing.T) {
 	}
 	require.True(t, check(bottom, bottom, carrier))
 	require.True(t, check(rotated, rotated, carrier))
-	_, _, _, admitted, err := loftcontact.CertifyCarrierOccupancy(t.Context(),
+	edges, seams, sides, admitted, err := loftcontact.CertifyCarrierOccupancy(t.Context(),
 		proofbound.NewWorkBudget(t.Context()), bottom, rotated, carrier)
 	require.NoError(t, err)
 	require.False(t, admitted)
+	require.Zero(t, edges)
+	require.Zero(t, seams)
+	require.Nil(t, sides)
 
 	tangent := carrier
 	tangent[0].U, tangent[1].U = 8, 8
-	_, _, _, admitted, err = loftcontact.CertifyCarrierOccupancy(t.Context(),
+	edges, seams, sides, admitted, err = loftcontact.CertifyCarrierOccupancy(t.Context(),
 		proofbound.NewWorkBudget(t.Context()), bottom, top, tangent)
 	require.NoError(t, err)
 	require.False(t, admitted)
+	require.Zero(t, edges)
+	require.Zero(t, seams)
+	require.Nil(t, sides)
 
 	broken := append([]sectionrecord.LineSeg(nil), top...)
 	broken[0].End.U++
-	_, _, _, admitted, err = loftcontact.CertifyCarrierOccupancy(t.Context(),
+	edges, seams, sides, admitted, err = loftcontact.CertifyCarrierOccupancy(t.Context(),
 		proofbound.NewWorkBudget(t.Context()), bottom, broken, carrier)
 	require.NoError(t, err)
 	require.False(t, admitted)
+	require.Zero(t, edges)
+	require.Zero(t, seams)
+	require.Nil(t, sides)
 
 	exhausted := &proofbound.WorkBudget{StepFn: func() error { return context.DeadlineExceeded }}
-	_, _, _, admitted, err = loftcontact.CertifyCarrierOccupancy(t.Context(), exhausted, bottom, top, carrier)
+	edges, seams, sides, admitted, err = loftcontact.CertifyCarrierOccupancy(t.Context(), exhausted, bottom, top, carrier)
 	require.ErrorIs(t, err, context.DeadlineExceeded)
 	require.False(t, admitted)
+	require.Zero(t, edges)
+	require.Zero(t, seams)
+	require.Nil(t, sides)
 
 	canceled, cancel := context.WithCancel(t.Context())
 	cancel()
-	_, _, _, admitted, err = loftcontact.CertifyCarrierOccupancy(canceled,
+	edges, seams, sides, admitted, err = loftcontact.CertifyCarrierOccupancy(canceled,
 		proofbound.NewWorkBudget(canceled), bottom, top, carrier)
 	require.ErrorIs(t, err, context.Canceled)
 	require.False(t, admitted)
+	require.Zero(t, edges)
+	require.Zero(t, seams)
+	require.Nil(t, sides)
 }

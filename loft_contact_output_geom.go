@@ -119,27 +119,27 @@ func (s *loftOutputShell) vertex(frame r3.Frame, p loftOutputPoint, face loftOut
 }
 
 func (s *loftOutputShell) triangle(frame r3.Frame, points [3]loftOutputPoint,
-	face loftOutputFace) (bool, error) {
+	face loftOutputFace) bool {
 	if len(s.triangles) == 512 {
-		return false, nil
+		return false
 	}
 	var ids [3]int
 	for i, p := range points {
 		var ok bool
 		ids[i], ok = s.vertex(frame, p, face)
 		if !ok {
-			return false, nil
+			return false
 		}
 	}
 	if ids[0] == ids[1] || ids[1] == ids[2] || ids[2] == ids[0] ||
 		loftOutputCrossZero(points) {
-		return false, nil
+		return false
 	}
 	s.triangles = append(s.triangles, ids)
 	s.faces = append(s.faces, face)
 	s.triangleBounds = append(s.triangleBounds, max(s.vertices[ids[0]].bound,
 		s.vertices[ids[1]].bound, s.vertices[ids[2]].bound))
-	return true, nil
+	return true
 }
 
 func loftOutputCrossZero(p [3]loftOutputPoint) bool {

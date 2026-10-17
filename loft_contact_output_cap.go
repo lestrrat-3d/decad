@@ -13,8 +13,8 @@ import (
 
 func loftOutputCap(ctx context.Context, budget *proofbound.WorkBudget, pp prismPayload,
 	prismLines, bottom, top []sectionrecord.LineSeg, source loftSourcePartition,
-	shell *loftOutputShell, cap int) (bool, error) {
-	if cap == 2 {
+	shell *loftOutputShell, capIndex int) (bool, error) {
+	if capIndex == 2 {
 		polygon := make([]loftPartitionPoint, 0, len(prismLines)+2)
 		for i, line := range prismLines {
 			if err := budget.Step(); err != nil {
@@ -43,10 +43,10 @@ func loftOutputCap(ctx context.Context, budget *proofbound.WorkBudget, pp prismP
 			loftOutputFace{kind: 0, owner: 0, level: 2, cell: 0}, false)
 	}
 	loftLines := bottom
-	if cap == 1 {
+	if capIndex == 1 {
 		loftLines = top
 	}
-	level := source.capLevels[cap]
+	level := source.capLevels[capIndex]
 	// Re-run the accepted cap source proof against this call's live records.
 	var cuts, carrierCuts [2]*big.Rat
 	for k, seam := range source.seams {
@@ -54,7 +54,7 @@ func loftOutputCap(ctx context.Context, budget *proofbound.WorkBudget, pp prismP
 			return false, err
 		}
 		var ok bool
-		cuts[k], carrierCuts[k], ok = seam.At(loftOutputRat(int64(cap)))
+		cuts[k], carrierCuts[k], ok = seam.At(loftOutputRat(int64(capIndex)))
 		if !ok {
 			return false, nil
 		}
@@ -71,9 +71,9 @@ func loftOutputCap(ctx context.Context, budget *proofbound.WorkBudget, pp prismP
 		sides = append(sides, int8(side.Sign()))
 	}
 	capProof, ok, err := loftPartitionCap(ctx, budget, pp, prismLines, loftLines,
-		source.carrier, source.crossing, source.seams, sides, source.walls, cap, level)
-	if err != nil || !ok || capProof.owners != source.capOwners[cap] ||
-		capProof.junction != source.junction[cap] {
+		source.carrier, source.crossing, source.seams, sides, source.walls, capIndex, level)
+	if err != nil || !ok || capProof.owners != source.capOwners[capIndex] ||
+		capProof.junction != source.junction[capIndex] {
 		return false, err
 	}
 	loftLoop := sectionrecord.LoopRecord{Segments: make([]sectionrecord.CurveSegment, len(loftLines))}
@@ -91,7 +91,7 @@ func loftOutputCap(ctx context.Context, budget *proofbound.WorkBudget, pp prismP
 		return false, err
 	}
 	origins, mapped, err := loftPartitionSceneOrigins(budget, scene, tags,
-		prismLines, loftLines, cap, level)
+		prismLines, loftLines, capIndex, level)
 	if err != nil || !mapped {
 		return false, err
 	}
@@ -100,7 +100,7 @@ func loftOutputCap(ctx context.Context, budget *proofbound.WorkBudget, pp prismP
 		return false, err
 	}
 	mapped, err = loftPartitionCertifyFragments(budget, scene, cells, origins,
-		prismLines, loftLines, source.carrier, source.crossing, cuts, carrierCuts, cap, level)
+		prismLines, loftLines, source.carrier, source.crossing, cuts, carrierCuts, capIndex, level)
 	if err != nil || !mapped {
 		return false, err
 	}
@@ -116,7 +116,7 @@ func loftOutputCap(ctx context.Context, budget *proofbound.WorkBudget, pp prismP
 			return false, err
 		}
 		owner := -1
-		if cap == 0 {
+		if capIndex == 0 {
 			if insideP[i] {
 				owner = 0
 				if insideL[i] {
@@ -142,21 +142,21 @@ func loftOutputCap(ctx context.Context, budget *proofbound.WorkBudget, pp prismP
 			return false, err
 		}
 		valid, err = loftOutputTileCap(ctx, budget, pp, shell, polygon, level,
-			loftOutputFace{kind: 0, owner: owner, level: cap, cell: i}, cap == 0)
+			loftOutputFace{kind: 0, owner: owner, level: capIndex, cell: i}, capIndex == 0)
 		if err != nil || !valid {
 			return false, err
 		}
 	}
-	if selected == 0 || count != source.capOwners[cap] {
+	if selected == 0 || count != source.capOwners[capIndex] {
 		return false, nil
 	}
 	return loftOutputCapBoundary(budget, selectedCells, origins, prismLines, loftLines,
-		source, cuts, carrierCuts, cap)
+		source, cuts, carrierCuts, capIndex)
 }
 
 func loftOutputCapBoundary(budget *proofbound.WorkBudget, selected []*sketch.Profile,
 	origins map[sketch.Entity]loftPartitionCapOrigin, prismLines, loftLines []sectionrecord.LineSeg,
-	source loftSourcePartition, cut, carrierCut [2]*big.Rat, cap int) (bool, error) {
+	source loftSourcePartition, cut, carrierCut [2]*big.Rat, capIndex int) (bool, error) {
 	_, _, chain, closed, err := prismcells.MergeWithChain(budget, selected, "Loft output cap")
 	if err != nil || !closed {
 		return false, err
@@ -171,7 +171,7 @@ func loftOutputCapBoundary(budget *proofbound.WorkBudget, selected []*sketch.Pro
 		}
 		origin, found := origins[edge.Entity]
 		if !found || len(edge.Polyline) != 2 || !edge.TExact ||
-			origin.cap != cap || origin.level.Cmp(source.capLevels[cap]) != 0 {
+			origin.cap != capIndex || origin.level.Cmp(source.capLevels[capIndex]) != 0 {
 			return false, nil
 		}
 		a, okA := loftPartitionPointOf(sectionrecord.Point2{U: edge.Polyline[0][0], V: edge.Polyline[0][1]})
@@ -197,11 +197,11 @@ func loftOutputCapBoundary(budget *proofbound.WorkBudget, selected []*sketch.Pro
 		}
 		var want []loftPartitionSpan
 		switch {
-		case i != source.carrier && cap == 0:
+		case i != source.carrier && capIndex == 0:
 			want = []loftPartitionSpan{{zero, one}}
-		case i == source.carrier && cap == 0:
+		case i == source.carrier && capIndex == 0:
 			want = []loftPartitionSpan{{zero, carrierCut[0]}, {carrierCut[1], one}}
-		case i == source.carrier && cap == 1:
+		case i == source.carrier && capIndex == 1:
 			want = []loftPartitionSpan{{carrierCut[0], carrierCut[1]}}
 		}
 		matched, err := loftPartitionSpanEqual(budget, spans[0][i], want)
@@ -319,9 +319,8 @@ func loftOutputTileCap(ctx context.Context, budget *proofbound.WorkBudget, pp pr
 			loftOutputP2(polygon[t[1]], level),
 			loftOutputP2(polygon[t[2]], level),
 		}
-		ok, err := shell.triangle(pp.Frame, points, face)
-		if err != nil || !ok {
-			return false, err
+		if !shell.triangle(pp.Frame, points, face) {
+			return false, nil
 		}
 	}
 	return true, nil
@@ -368,7 +367,7 @@ func loftOutputCertifyCapTiling(budget *proofbound.WorkBudget, polygon []loftPar
 			}
 			edges[key] += dir
 		}
-		for j := 0; j < i; j++ {
+		for j := range i {
 			if err := budget.Step(); err != nil {
 				return false, err
 			}
