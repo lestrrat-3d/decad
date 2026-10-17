@@ -2,7 +2,10 @@ package momentinput
 
 import (
 	"math"
+	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 )
 
@@ -79,4 +82,25 @@ func AxisRectangle(p Profile) (AxisRect, bool) {
 		}
 	}
 	return r, sides == 15
+}
+
+// PrismUnionFilletRadiusFits checks that a radius fits both rectangle spans.
+func PrismUnionFilletRadiusFits(rect AxisRect, radius float64) bool {
+	r := proofarith.FloatRat(radius)
+	twice := new(big.Rat).Mul(r, big.NewRat(2, 1))
+	width := new(big.Rat).Sub(proofarith.FloatRat(rect.U1), proofarith.FloatRat(rect.U0))
+	height := new(big.Rat).Sub(proofarith.FloatRat(rect.V1), proofarith.FloatRat(rect.V0))
+	return twice.Cmp(width) < 0 && twice.Cmp(height) < 0
+}
+
+// PrismUnionFilletExactShift checks the exact inward corner coordinate.
+func PrismUnionFilletExactShift(c, radius float64, direction int) (float64, bool) {
+	sum := new(big.Rat).Set(proofarith.FloatRat(c))
+	if direction > 0 {
+		sum.Add(sum, proofarith.FloatRat(radius))
+	} else {
+		sum.Sub(sum, proofarith.FloatRat(radius))
+	}
+	held, _ := sum.Float64()
+	return held, !proofbound.IsNonFinite(held) && proofarith.FloatRat(held).Cmp(sum) == 0
 }

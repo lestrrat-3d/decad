@@ -113,8 +113,8 @@ func prismUnionChamferChord(pp prismPayload, corner sectionrecord.Point2,
 	if corner.V == rect.V1 {
 		yDir = -1
 	}
-	xInner, xOK := prismUnionFilletExactShift(corner.U, setback, xDir)
-	yInner, yOK := prismUnionFilletExactShift(corner.V, setback, yDir)
+	xInner, xOK := momentinput.PrismUnionFilletExactShift(corner.U, setback, xDir)
+	yInner, yOK := momentinput.PrismUnionFilletExactShift(corner.V, setback, yDir)
 	if !xOK || !yOK {
 		return false
 	}
