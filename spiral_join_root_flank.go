@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/spiralsector"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -178,11 +179,11 @@ func spiralRootFlankWholeBound(ctx context.Context, proof *spiralFirstJoinSource
 			return 0, false, nil
 		}
 		trueBox[0] = loftFaceInterval{Lo: xLo, Hi: xHi}
-		heldBox, yes := spiralHeldXStrip(held, xLo, xHi)
+		heldBox, yes := spiralsector.HeldXStrip(held, xLo, xHi)
 		if !yes {
 			return 0, false, nil
 		}
-		bound, yes := spiralRootFlankBoxesBound(trueBox, heldBox, minBound)
+		bound, yes := spiralsector.RootFlankBoxesBound(trueBox, heldBox, minBound)
 		if !yes {
 			return bound, false, nil
 		}
@@ -193,11 +194,11 @@ func spiralRootFlankWholeBound(ctx context.Context, proof *spiralFirstJoinSource
 	if !ok || endpoint[0].Lo.Cmp(cap2.Lo) > 0 || endpoint[0].Hi.Cmp(cap2.Hi) < 0 {
 		return 0, false, nil
 	}
-	tail, ok := spiralHeldXStrip(held, cap2.Lo, lfF(held[len(held)-1].X))
+	tail, ok := spiralsector.HeldXStrip(held, cap2.Lo, lfF(held[len(held)-1].X))
 	if !ok {
 		return 0, false, nil
 	}
-	bound, ok := spiralRootFlankBoxesBound(endpoint, tail, minBound)
+	bound, ok := spiralsector.RootFlankBoxesBound(endpoint, tail, minBound)
 	if err := ctx.Err(); err != nil {
 		return 0, false, err
 	}
@@ -332,21 +333,21 @@ func spiralRootFlankHeldAgainstSource(ctx context.Context, held []r3.Vec,
 		if err := ctx.Err(); err != nil {
 			return 0, false, err
 		}
-		heldBox, yes := spiralHeldXStrip(held, source[0].Lo, source[0].Hi)
+		heldBox, yes := spiralsector.HeldXStrip(held, source[0].Lo, source[0].Hi)
 		if !yes {
 			return 0, false, nil
 		}
-		bound, yes := spiralRootFlankBoxesBound(source, heldBox, minBound)
+		bound, yes := spiralsector.RootFlankBoxesBound(source, heldBox, minBound)
 		if !yes {
 			return bound, false, nil
 		}
 		largest = max(largest, bound)
 	}
-	tail, ok := spiralHeldXStrip(held, plan.cap2.Lo, lfF(held[len(held)-1].X))
+	tail, ok := spiralsector.HeldXStrip(held, plan.cap2.Lo, lfF(held[len(held)-1].X))
 	if !ok {
 		return 0, false, nil
 	}
-	bound, ok := spiralRootFlankBoxesBound(plan.endpoint, tail, minBound)
+	bound, ok := spiralsector.RootFlankBoxesBound(plan.endpoint, tail, minBound)
 	if err := ctx.Err(); err != nil {
 		return 0, false, err
 	}
@@ -354,65 +355,4 @@ func spiralRootFlankHeldAgainstSource(ctx context.Context, held []r3.Vec,
 		return bound, false, nil
 	}
 	return max(largest, bound), true, nil
-}
-
-// spiralHeldXStrip encloses every straight held edge portion in a closed X
-// interval. The caller already checked that all path vertices strictly
-// increase in X, so exact endpoint interpolation covers the full strip.
-func spiralHeldXStrip(held []r3.Vec, xLo, xHi *big.Rat) ([3]loftFaceInterval, bool) {
-	var box [3]loftFaceInterval
-	if xLo == nil || xHi == nil || xLo.Cmp(xHi) > 0 {
-		return box, false
-	}
-	seen := false
-	for i := 1; i < len(held); i++ {
-		a, z := held[i-1], held[i]
-		ax, zx := lfF(a.X), lfF(z.X)
-		lo, hi := xLo, xHi
-		if lo.Cmp(ax) < 0 {
-			lo = ax
-		}
-		if hi.Cmp(zx) > 0 {
-			hi = zx
-		}
-		if lo.Cmp(hi) > 0 {
-			continue
-		}
-		for _, x := range []*big.Rat{lo, hi} {
-			t := lfDiv(lfSub(x, ax), lfSub(zx, ax))
-			coordinates := [3]*big.Rat{x,
-				lfAdd(lfF(a.Y), lfMul(t, lfSub(lfF(z.Y), lfF(a.Y)))),
-				lfAdd(lfF(a.Z), lfMul(t, lfSub(lfF(z.Z), lfF(a.Z))))}
-			for axis, coordinate := range coordinates {
-				if !seen || coordinate.Cmp(box[axis].Lo) < 0 {
-					box[axis].Lo = coordinate
-				}
-				if !seen || coordinate.Cmp(box[axis].Hi) > 0 {
-					box[axis].Hi = coordinate
-				}
-			}
-			seen = true
-		}
-	}
-	return box, seen
-}
-
-func spiralRootFlankBoxesBound(trueBox, heldBox [3]loftFaceInterval,
-	minBound float64) (float64, bool) {
-	squared := new(big.Rat)
-	for axis := range trueBox {
-		a, b := trueBox[axis], heldBox[axis]
-		if a.Lo == nil || a.Hi == nil || b.Lo == nil || b.Hi == nil ||
-			a.Lo.Cmp(a.Hi) > 0 || b.Lo.Cmp(b.Hi) > 0 {
-			return 0, false
-		}
-		lo := lfAbs(lfSub(a.Lo, b.Hi))
-		hi := lfAbs(lfSub(a.Hi, b.Lo))
-		if hi.Cmp(lo) > 0 {
-			lo = hi
-		}
-		squared = lfAdd(squared, lfMul(lo, lo))
-	}
-	bound := proofbound.RatSqrtUp(squared)
-	return bound, !proofbound.IsNonFinite(bound) && bound < minBound
 }
