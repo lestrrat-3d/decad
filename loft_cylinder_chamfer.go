@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -70,49 +71,6 @@ func loftCylinderChamferSourceOf(fp facetedPayload) (loftCylinderChamferSource, 
 	return loftCylinderChamferSource{}, false
 }
 
-// The cap audit proves the mesh boundary is exactly ring. Public edges may
-// coalesce adjacent segments, so their endpoints must partition that whole
-// boundary once in the cap's walk direction.
-func loftCylinderChamferCapWalk(loop *topo.Loop, verts []r3.Vec, ring []int, bottom bool) bool {
-	if loop == nil || !loop.Outer || len(loop.CoEdges) < 3 || len(loop.CoEdges) > len(ring) {
-		return false
-	}
-	index := make(map[r3.Vec]int, len(ring))
-	for i, vertex := range ring {
-		if vertex < 0 || vertex >= len(verts) {
-			return false
-		}
-		if _, duplicate := index[verts[vertex]]; duplicate {
-			return false
-		}
-		index[verts[vertex]] = i
-	}
-	covered := 0
-	for i, use := range loop.CoEdges {
-		if coedgeStart(use) == nil || coedgeEnd(use) == nil ||
-			coedgeEnd(use).Position != coedgeStart(loop.CoEdges[(i+1)%len(loop.CoEdges)]).Position {
-			return false
-		}
-		a, okA := index[coedgeStart(use).Position]
-		b, okB := index[coedgeEnd(use).Position]
-		if !okA || !okB {
-			return false
-		}
-		steps := (b - a + len(ring)) % len(ring)
-		if bottom {
-			steps = (a - b + len(ring)) % len(ring)
-		}
-		if steps == 0 {
-			return false
-		}
-		covered += steps
-		if covered > len(ring) {
-			return false
-		}
-	}
-	return covered == len(ring)
-}
-
 // tryLoftCylinderCapChamfer accepts exactly the two full outer cap loops of
 // an authenticated, unplaced loft/cylinder join or its centered bore result.
 // It never interprets an arbitrary faceted edge as an offset carrier.
@@ -167,7 +125,7 @@ func tryLoftCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPayload,
 		return nil, true, fmt.Errorf("%w: loft/cylinder chamfer repeats an edge", ErrUnsupported)
 	}
 	for cap, face := range caps {
-		if len(face.n.Loops) == 0 || !loftCylinderChamferCapWalk(
+		if len(face.n.Loops) == 0 || !loftcylinder.ChamferCapWalk(
 			face.n.Loops[0], fp.Verts, source.outer[cap], cap == 0) {
 			return nil, true, fmt.Errorf("%w: loft/cylinder cap %d has no outer loop", ErrUnsupported, cap)
 		}
