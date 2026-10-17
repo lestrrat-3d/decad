@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -29,6 +30,16 @@ type (
 type Region struct {
 	Loops []LoopRecord
 	Sel   []map[int]struct{}
+}
+
+// NewRegion records the outer loop first and allocates one wall selection per loop.
+func NewRegion(p momentinput.Profile) Region {
+	loops := append([]LoopRecord{p.Outer}, p.Holes...)
+	sel := make([]map[int]struct{}, len(loops))
+	for i := range sel {
+		sel[i] = map[int]struct{}{}
+	}
+	return Region{Loops: loops, Sel: sel}
 }
 
 // Line is the join's mirror line in the section's plane: the carrier of

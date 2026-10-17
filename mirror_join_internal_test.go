@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
+	"github.com/lestrrat-3d/decad/internal/mirrorjoin"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -91,10 +92,10 @@ func TestMirrorJoinChargesTheReflectionRounding(t *testing.T) {
 // record walkOf refuses.
 func TestMirrorJoinCircleImageKeepsItsSense(t *testing.T) {
 	t.Parallel()
-	line, err := admitMirrorLine([]lineSeg{{Start: planePoint{U: 0, V: 10}, End: planePoint{U: 0, V: 0}, TStart: 0, TEnd: 1}})
+	line, err := mirrorjoin.AdmitLine([]lineSeg{{Start: planePoint{U: 0, V: 10}, End: planePoint{U: 0, V: 0}, TStart: 0, TEnd: 1}})
 	require.NoError(t, err)
 	hole := circleSeg{Center: planePoint{U: 5, V: 5}, Radius: units.Millimeters(2), CCW: false, TStart: 1, TEnd: 0}
-	img, charge, err := line.mirrorReversedRun(proofbound.NewWorkBudget(t.Context()), []curveSegment{hole})
+	img, charge, err := line.ReverseRun(proofbound.NewWorkBudget(t.Context()), []curveSegment{hole})
 	require.NoError(t, err)
 	require.Zero(t, charge)
 	want := circleSeg{Center: planePoint{U: -5, V: 5}, Radius: units.Millimeters(2), CCW: false, TStart: 1, TEnd: 0}
@@ -106,8 +107,4 @@ func TestMirrorJoinCircleImageKeepsItsSense(t *testing.T) {
 	flipped.CCW = true
 	_, err = boundarywalk.WalkOf(flipped, nil)
 	require.Error(t, err, "the premise: a flipped flag contradicts the range")
-}
-
-func (l mirrorLine) mirrorReversedRun(budget *proofbound.WorkBudget, run []curveSegment) ([]curveSegment, float64, error) {
-	return l.line.ReverseRun(budget, run)
 }

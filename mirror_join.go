@@ -15,8 +15,8 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
-// This file adapts internal/mirrorjoin's record rewrite to prism and stacked
-// payloads, then runs the modify §5 audit on each assembled region.
+// This file adapts internal/mirrorjoin's record rewrite and joined-section
+// audit to prism and stacked payloads.
 
 type mirrorJoinOption struct{}
 
@@ -200,47 +200,31 @@ func selectAtLeastOneFace(body *Body, sel FaceSelector, what string) ([]*Face, e
 	return faces, nil
 }
 
-// joinRegion is one recorded region under the join: its loops (outer first)
-// and, per loop, the segment indices that are selected walls.
-type joinRegion struct {
-	loops []loopRecord
-	sel   []map[int]struct{}
-}
-
-func newJoinRegion(p profileRecord) joinRegion {
-	loops := append([]loopRecord{p.Outer}, p.Holes...)
-	sel := make([]map[int]struct{}, len(loops))
-	for i := range sel {
-		sel[i] = map[int]struct{}{}
-	}
-	return joinRegion{loops: loops, sel: sel}
-}
-
 // joinPrismPayload runs J2-J7 over a prism receiver and returns the joined
 // payload: the same frame, placement, interval and axial displacements over
 // the assembled record, with δ_mirror as its section displacement.
 func joinPrismPayload(budget *proofbound.WorkBudget, pp prismPayload, walls []joinWall) (prismPayload, error) {
-	region := newJoinRegion(pp.Profile)
+	region := mirrorjoin.NewRegion(pp.Profile)
 	segs := make([]lineSeg, 0, len(walls))
 	for _, w := range walls {
-		seg, err := joinWallSegment(region.loops, w)
+		seg, err := joinWallSegment(region.Loops, w)
 		if err != nil {
 			return prismPayload{}, err
 		}
 		segs = append(segs, seg)
-		region.sel[w.loop][w.seg] = struct{}{}
+		region.Sel[w.loop][w.seg] = struct{}{}
 	}
-	line, err := admitMirrorLine(segs)
+	line, err := mirrorjoin.AdmitLine(segs)
 	if err != nil {
 		return prismPayload{}, err
 	}
-	if err := line.admitRegions(budget, []joinRegion{region}); err != nil {
+	if err := line.AdmitRegions(budget, []mirrorjoin.Region{region}); err != nil {
 		return prismPayload{}, err
 	}
 	if pp.SectionDelta != 0 {
 		return prismPayload{}, errJoinDisplaced
 	}
-	joined, delta, err := line.assemble(budget, region)
+	joined, delta, err := line.Assemble(budget, region)
 	if err != nil {
 		return prismPayload{}, err
 	}
@@ -264,43 +248,43 @@ func joinStackedPayload(ctx context.Context, budget *proofbound.WorkBudget, sp s
 	if len(sp.OuterRuns()) != 1 {
 		return stackedPrismPayload{}, fmt.Errorf(`%w: a union-built stack changes its outer loop between slabs, which the join does not rewrite; join the operands before the union (J1)`, ErrUnsupported)
 	}
-	regions := make([]joinRegion, len(sp.Slabs))
+	regions := make([]mirrorjoin.Region, len(sp.Slabs))
 	for k, slab := range sp.Slabs {
 		if len(slab.Regions) != 1 {
 			return stackedPrismPayload{}, fmt.Errorf(`%w: slab %d has no single region`, ErrUnsupported, k)
 		}
-		regions[k] = newJoinRegion(slab.Regions[0])
+		regions[k] = mirrorjoin.NewRegion(slab.Regions[0])
 	}
 	segs := make([]lineSeg, 0, len(walls))
 	for _, w := range walls {
 		if w.slab < 0 || w.slab >= len(regions) {
 			return stackedPrismPayload{}, fmt.Errorf(`%w: a selected wall names slab %d, which the receiver does not have`, ErrDegenerate, w.slab)
 		}
-		seg, err := joinWallSegment(regions[w.slab].loops, w)
+		seg, err := joinWallSegment(regions[w.slab].Loops, w)
 		if err != nil {
 			return stackedPrismPayload{}, err
 		}
 		segs = append(segs, seg)
 		// The wall's face spans its whole column: mark the same loop and
 		// segment wherever an equal loop appears.
-		wallLoop := regions[w.slab].loops[w.loop]
+		wallLoop := regions[w.slab].Loops[w.loop]
 		for _, region := range regions {
-			for li, loop := range region.loops {
+			for li, loop := range region.Loops {
 				equal, err := momentinput.ExactLoopEqual(budget, wallLoop, loop)
 				if err != nil {
 					return stackedPrismPayload{}, err
 				}
 				if equal {
-					region.sel[li][w.seg] = struct{}{}
+					region.Sel[li][w.seg] = struct{}{}
 				}
 			}
 		}
 	}
-	line, err := admitMirrorLine(segs)
+	line, err := mirrorjoin.AdmitLine(segs)
 	if err != nil {
 		return stackedPrismPayload{}, err
 	}
-	if err := line.admitRegions(budget, regions); err != nil {
+	if err := line.AdmitRegions(budget, regions); err != nil {
 		return stackedPrismPayload{}, err
 	}
 	if sp.SectionDelta != 0 {
@@ -309,7 +293,7 @@ func joinStackedPayload(ctx context.Context, budget *proofbound.WorkBudget, sp s
 	out := sp
 	out.Slabs = make([]stackedrecord.Slab, len(sp.Slabs))
 	for k, region := range regions {
-		joined, delta, err := line.assemble(budget, region)
+		joined, delta, err := line.Assemble(budget, region)
 		if err != nil {
 			return stackedPrismPayload{}, err
 		}
@@ -344,34 +328,4 @@ func joinWallSegment(loops []loopRecord, w joinWall) (lineSeg, error) {
 		return lineSeg{}, fmt.Errorf(`%w: selected wall (%d, %d) is a %T, and a curved wall names no mirror plane`, ErrDegenerate, w.loop, w.seg, seg)
 	}
 	return line, nil
-}
-
-// mirrorLine adapts root callers to the record admission and splice.
-type mirrorLine struct{ line mirrorjoin.Line }
-
-func admitMirrorLine(walls []lineSeg) (mirrorLine, error) {
-	line, err := mirrorjoin.AdmitLine(walls)
-	return mirrorLine{line: line}, err
-}
-
-func (l mirrorLine) admitRegions(budget *proofbound.WorkBudget, regions []joinRegion) error {
-	records := make([]mirrorjoin.Region, len(regions))
-	for i, region := range regions {
-		records[i] = mirrorjoin.Region{Loops: region.loops, Sel: region.sel}
-	}
-	return l.line.AdmitRegions(budget, records)
-}
-
-// assemble adapts §5.2's record splice and runs §5.3's section audit.
-func (l mirrorLine) assemble(budget *proofbound.WorkBudget, region joinRegion) (profileRecord, float64, error) {
-	work := freeform.NewFreeformWork()
-	spliced, err := l.line.Splice(budget, mirrorjoin.Region{Loops: region.loops, Sel: region.sel})
-	if err != nil {
-		return profileRecord{}, 0, err
-	}
-	out := profileRecord{Outer: spliced.Outer, Holes: spliced.Holes}
-	if err := mirrorjoin.AuditJoinedSection(budget, out, work); err != nil {
-		return profileRecord{}, 0, err
-	}
-	return out, spliced.Delta, nil
 }
