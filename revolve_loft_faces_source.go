@@ -15,7 +15,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/r3"
-	"github.com/lestrrat-3d/sketch"
 )
 
 // revolveLoftFacesCrossing binds one source fitted curve to the unique span
@@ -225,7 +224,7 @@ func certifyRevolveLoftFacesAgainstRoot(ctx context.Context, blank, tooth *Body,
 		lfF(section.RootEnd.U).Cmp(heelX) >= 0 ||
 		!spiralFiniteConeSide(trim.Toe, section.RootStart, section.RootEnd, 1) ||
 		!spiralFiniteConeSide(trim.Heel, section.RootStart, section.RootEnd, -1) ||
-		!revolveLoftFacesCapsAvoidToolRootCircles(trim, m, b, toeX, heelX) {
+		!revolveloftfaces.CapsAvoidToolRootCircles(trim, m, b, toeX, heelX) {
 		return nil, false, nil
 	}
 	segments := trim.Source.Profile.Outer.Segments
@@ -257,7 +256,7 @@ func certifyRevolveLoftFacesAgainstRoot(ctx context.Context, blank, tooth *Body,
 			start[i], end[i], proof.sides[i] = side, side, side
 			continue
 		}
-		if !revolveLoftFacesSegmentKind(trim, i) {
+		if !revolveloftfaces.SegmentKind(trim, i) {
 			return nil, false, nil
 		}
 		side := revolveLoftFacesStationSide(ctx, trim, m, b, i)
@@ -319,39 +318,6 @@ func certifyRevolveLoftFacesAgainstRoot(ctx context.Context, blank, tooth *Body,
 		return nil, false, nil
 	}
 	return proof, true, nil
-}
-
-// The first cap lies wholly before its tool/root circle. The last cap's
-// supporting plane misses the full heel circle, including its interior.
-func revolveLoftFacesCapsAvoidToolRootCircles(trim *loftFacesTrimRecord,
-	m, b, toeX, heelX *big.Rat) bool {
-	box, err := revolveloftfaces.LfSourceBox(trim.Source)
-	if err != nil || len(trim.Maps) < 2 {
-		return false
-	}
-	first, last := trim.Maps[0], trim.Maps[len(trim.Maps)-1]
-	if loftface.PositiveDenominator(first, box) != nil || loftface.PositiveDenominator(last, box) != nil {
-		return false
-	}
-	corners := loftface.BoxCorners(box)
-	xAxis := loftFaceRatVec{lfOne(), lfZero(), lfZero()}
-	return loftface.ScalarRange(first, xAxis, corners).Hi.Cmp(toeX) < 0 &&
-		loftface.CapPlaneAvoidsRootCircle(last, corners, m, b, heelX)
-}
-
-func revolveLoftFacesSegmentKind(trim *loftFacesTrimRecord, index int) bool {
-	segment := trim.Source.Profile.Outer.Segments[index]
-	entity := trim.Source.Source.Entities[index]
-	switch entity.(type) {
-	case *sketch.Line:
-		_, ok := segment.(lineSeg)
-		return ok
-	case *sketch.Arc:
-		_, ok := segment.(arcSeg)
-		return ok
-	default:
-		return false
-	}
 }
 
 // The source station departure encloses each complete nonfitted edge. A
