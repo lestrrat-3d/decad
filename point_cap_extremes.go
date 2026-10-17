@@ -3,9 +3,8 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
-	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetedtopology"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -60,7 +59,7 @@ func (b *Body) ExtremeFacesByCentroid(ctx context.Context, axis r3.Vec) (*Face, 
 	if !ok {
 		return nil, nil, fmt.Errorf("%w: the end cap has no bounded centroid", ErrUnsupported)
 	}
-	lowerLo, lowerHi, ok, err := pointCapRingInterval(ctx, fp.Verts[:n], axis, axisLen,
+	lowerLo, lowerHi, ok, err := facetedrecord.PointCapRingInterval(ctx, fp.Verts[:n], axis, axisLen,
 		fp.PointPlaneCapDisplacement)
 	if err != nil {
 		return nil, nil, err
@@ -68,7 +67,7 @@ func (b *Body) ExtremeFacesByCentroid(ctx context.Context, axis r3.Vec) (*Face, 
 	if !ok {
 		return nil, nil, fmt.Errorf("%w: the lower cap boundary has no finite projection", ErrUnsupported)
 	}
-	upperLo, upperHi, ok, err := pointCapRingInterval(ctx, fp.Verts[n:], axis, axisLen,
+	upperLo, upperHi, ok, err := facetedrecord.PointCapRingInterval(ctx, fp.Verts[n:], axis, axisLen,
 		fp.PointPlaneCapDisplacement)
 	if err != nil {
 		return nil, nil, err
@@ -81,10 +80,10 @@ func (b *Body) ExtremeFacesByCentroid(ctx context.Context, axis r3.Vec) (*Face, 
 	// from the lower cap is (2u+l)/(3(u+l)), always in [1/2, 2/3]. A side
 	// face's centroid is a positive-weight average over any subset of rays.
 	// Evaluate both endpoint fractions so a reversed projection also works.
-	sideLo := min(pointCapAffineDown(lowerLo, upperLo, 1, 1, 2),
-		pointCapAffineDown(lowerLo, upperLo, 1, 2, 3))
-	sideHi := max(pointCapAffineUp(lowerHi, upperHi, 1, 1, 2),
-		pointCapAffineUp(lowerHi, upperHi, 1, 2, 3))
+	sideLo := min(facetedrecord.PointCapAffineDown(lowerLo, upperLo, 1, 1, 2),
+		facetedrecord.PointCapAffineDown(lowerLo, upperLo, 1, 2, 3))
+	sideHi := max(facetedrecord.PointCapAffineUp(lowerHi, upperHi, 1, 1, 2),
+		facetedrecord.PointCapAffineUp(lowerHi, upperHi, 1, 2, 3))
 	if startHi < sideLo && sideHi < endLo {
 		return start, end, nil
 	}
@@ -109,38 +108,4 @@ func pointCapCenterInterval(face *Face, axis r3.Vec, axisLen float64) (float64, 
 		return 0, 0, false
 	}
 	return proofbound.CenterAxisInterval(center.Value, center.Bound.Base(), axis, axisLen)
-}
-
-func pointCapRingInterval(ctx context.Context, ring []r3.Vec, axis r3.Vec,
-	axisLen, displacement float64) (float64, float64, bool, error) {
-	lo, hi := math.Inf(1), math.Inf(-1)
-	for i, vertex := range ring {
-		if i%256 == 0 {
-			if err := ctx.Err(); err != nil {
-				return 0, 0, false, err
-			}
-		}
-		if !proofbound.FiniteVec(vertex) {
-			return 0, 0, false, nil
-		}
-		dot := proofbound.AxisDot(vertex, axis)
-		lo = min(lo, proofbound.RatFloatDown(dot))
-		hi = max(hi, proofbound.RatFloatUp(dot))
-	}
-	delta := proofbound.ProductUpper(displacement, axisLen)
-	lo = math.Nextafter(lo-delta, math.Inf(-1))
-	hi = math.Nextafter(hi+delta, math.Inf(1))
-	return lo, hi, !proofbound.IsNonFinite(lo) && !proofbound.IsNonFinite(hi), nil
-}
-
-func pointCapAffineDown(lower, upper float64, lowerWeight, upperWeight, divisor int64) float64 {
-	q := pointPlaneAdd(pointPlaneMul(big.NewRat(lowerWeight, 1), ratOfPointPlane(lower)),
-		pointPlaneMul(big.NewRat(upperWeight, 1), ratOfPointPlane(upper)))
-	return proofbound.RatFloatDown(new(big.Rat).Quo(q, big.NewRat(divisor, 1)))
-}
-
-func pointCapAffineUp(lower, upper float64, lowerWeight, upperWeight, divisor int64) float64 {
-	q := pointPlaneAdd(pointPlaneMul(big.NewRat(lowerWeight, 1), ratOfPointPlane(lower)),
-		pointPlaneMul(big.NewRat(upperWeight, 1), ratOfPointPlane(upper)))
-	return proofbound.RatFloatUp(new(big.Rat).Quo(q, big.NewRat(divisor, 1)))
 }
