@@ -83,7 +83,7 @@ type Payload struct {
 	SurfaceResult bool
 
 	// RecordArea holds each record's own exact region integral, the value
-	// falsifyRecordedArea computed and compared against sketch's area in
+	// Profile.FalsifyLoftRecordedArea computed and compared against sketch's area in
 	// Loft. The chord target reads it (loftmesh.ChordTarget,
 	// docs/loft-gear-bounds-design.md §5), so no evaluation integrates a
 	// record a second time to size its chords. A rigid placement moves

@@ -135,7 +135,7 @@ func PerimeterUpper(p momentinput.Profile, walks [][]survey2d.SegmentWalk) float
 // ChordTarget is one loft build's own chord target
 // (docs/loft-gear-bounds-design.md §5): ChordFraction times the smaller of
 // the two sections' feature sizes. area0/area1 are the records' own exact
-// region integrals falsifyRecordedArea computed in Loft, never sketch's claimed
+// region areas Profile.FalsifyLoftRecordedArea computed in Loft, never sketch's claimed
 // areas, and perim0/perim1 are PerimeterUpper's bounds.
 //
 // A target that is not a positive finite number — a perimeter bound that

@@ -233,7 +233,7 @@ func wedgeSplineSketch(t *testing.T, w *sketch.World, plane *sketch.Plane) (*ske
 // wedgeFeatureSize reads the chord target's feature size off a TRUE wedge
 // record on both planes (docs/loft-gear-bounds-design.md §5): the smaller of
 // the two records' |area| over perimeter bound, each read the way a real build
-// reads it — falsifyRecordedArea's own area integral and loftmesh.PerimeterUpper
+// reads it — Profile.FalsifyRecordedArea's own area integral and loftmesh.PerimeterUpper
 // over the record's resolved walks. loftmesh.ChordFraction times it is the target a
 // real build of that wedge chords at.
 func wedgeFeatureSize(t *testing.T, sketchOn func(*testing.T, *sketch.World, *sketch.Plane) (*sketch.Sketch, *sketch.Profile)) float64 {
@@ -244,7 +244,7 @@ func wedgeFeatureSize(t *testing.T, sketchOn func(*testing.T, *sketch.World, *sk
 		s, p := sketchOn(t, w, plane)
 		rec, _, sketchArea, err := sectioncert.RecordProfile(s, p)
 		require.NoError(t, err)
-		area, err := falsifyRecordedArea(rec, sketchArea, freeform.NewFreeformWork())
+		area, err := rec.FalsifyRecordedArea(sketchArea, freeform.NewFreeformWork())
 		require.NoError(t, err)
 		size = math.Min(size, loftmesh.FeatureSize(area, loftmesh.PerimeterUpper(rec, resolveLoftLoopWalks(t, rec))))
 	}

@@ -408,9 +408,9 @@ func TestLoftStationWalkWorkPerStation(t *testing.T) {
 			work1.RaiseLimit(limit)
 			require.Equal(t, limit, work0.WorkLimit())
 			require.Equal(t, limit, work1.WorkLimit())
-			a0, err := falsifyRecordedArea(profile0, area0, work0)
+			a0, err := profile0.FalsifyRecordedArea(area0, work0)
 			require.NoError(t, err)
-			a1, err := falsifyRecordedArea(profile1, area1, work1)
+			a1, err := profile1.FalsifyRecordedArea(area1, work1)
 			require.NoError(t, err)
 			works := []*freeform.FreeformWork{work0, work1}
 			before := []uint64{work0.Spent, work1.Spent}

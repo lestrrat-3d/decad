@@ -3,7 +3,6 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
 
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/featureoption"
@@ -156,7 +155,7 @@ func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 	// (docs/spline-design.md §5.2). A counter per phase would give the same
 	// record a fresh full ceiling in each.
 	work := freeform.NewFreeformWork()
-	if _, err := falsifyRecordedAreaContext(ctx, profile, profileArea, work); err != nil {
+	if _, err := profile.FalsifyRecordedAreaContext(ctx, profileArea, work); err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
@@ -235,48 +234,6 @@ func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 	}
 	d.commit(body)
 	return body, nil
-}
-
-// falsifyRecordedArea is evaluator-design §1's one live-profile read: the
-// recorded region's closed-form area is compared against sketch's own Area
-// answer, and a LARGE mismatch rejects the call — the record and the profile
-// disagree, which is a bug somewhere. A small residual proves nothing and
-// admits nothing; the check can only reject, the same one-sided shape as the
-// seam's range falsifier.
-//
-// It returns the record's own area integral it compared, never sketch's
-// answer, so a caller that needs the record's area (Loft's chord target,
-// docs/loft-gear-bounds-design.md §5) reads it here instead of integrating
-// the record a second time.
-func falsifyRecordedArea(profile profileRecord, sketchArea float64, work *freeform.FreeformWork) (float64, error) {
-	ig, err := profile.EvaluatorIntegrals(freeform.MomentAreaOrder, work)
-	if err != nil {
-		return 0, err
-	}
-	return compareRecordedArea(ig.Area, sketchArea)
-}
-
-// falsifyRecordedAreaContext is falsifyRecordedArea with the record's
-// integration polling ctx; a canceled ctx returns ctx.Err() unchanged.
-func falsifyRecordedAreaContext(ctx context.Context, profile profileRecord, sketchArea float64,
-	work *freeform.FreeformWork) (float64, error) {
-	ig, err := profile.EvaluatorIntegralsContext(ctx, freeform.MomentAreaOrder, work)
-	if err != nil {
-		return 0, err
-	}
-	return compareRecordedArea(ig.Area, sketchArea)
-}
-
-// compareRecordedArea rejects a recorded area that differs from sketch's by
-// more than 1e-9 of the larger of 1 and sketch's magnitude, and returns the
-// recorded area otherwise.
-func compareRecordedArea(recorded, sketchArea float64) (float64, error) {
-	scale := math.Max(1, math.Abs(sketchArea))
-	if math.Abs(recorded-sketchArea) > 1e-9*scale {
-		return 0, fmt.Errorf(`%w: the recorded boundary's area %v does not reproduce sketch's %v; report upstream as a bug`,
-			ErrUnrecordableProfile, recorded, sketchArea)
-	}
-	return recorded, nil
 }
 
 // linearSweep is a resolved linear extent: the signed sweep interval [z0, z1]

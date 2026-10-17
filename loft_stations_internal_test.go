@@ -1399,7 +1399,7 @@ func (g featureSizeGear) sketchOn(t *testing.T, w *sketch.World, plane *sketch.P
 
 // loftTargetReading is what the production readers give for one record
 // lofted against itself: the chord target, the record's own area integral as
-// falsifyRecordedArea returns it, its perimeter bound, the sum of its walks'
+// Profile.FalsifyRecordedArea returns it, its perimeter bound, the sum of its walks'
 // held lengths, and the coordinate envelope the previous chord-target rule
 // read.
 type loftTargetReading struct {
@@ -1415,7 +1415,7 @@ func readLoftTarget(t *testing.T, s *sketch.Sketch, p *sketch.Profile) loftTarge
 	t.Helper()
 	rec, _, sketchArea, err := sectioncert.RecordProfile(s, p)
 	require.NoError(t, err)
-	area, err := falsifyRecordedArea(rec, sketchArea, freeform.NewFreeformWork())
+	area, err := rec.FalsifyRecordedArea(sketchArea, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	walks := [][]survey2d.SegmentWalk{make([]survey2d.SegmentWalk, len(rec.Outer.Segments))}
 	require.Empty(t, rec.Holes)

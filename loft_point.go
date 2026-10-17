@@ -97,7 +97,7 @@ func (d *Document) LoftFromPoint(ctx context.Context, apex r3.Vec,
 	work1.RaiseLimit(limit)
 	work0.RaiseReconstructionLimit(freeform.LoftReconstructionWorkLimit)
 	work1.RaiseReconstructionLimit(freeform.LoftReconstructionWorkLimit)
-	area, err := falsifyRecordedArea(profile, sketchArea, work0)
+	area, err := profile.FalsifyRecordedArea(sketchArea, work0)
 	if err != nil {
 		return nil, err
 	}

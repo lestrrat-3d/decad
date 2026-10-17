@@ -121,7 +121,7 @@ func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 	if len(path.Records) > 1 && !cfg.Mitred && !cfg.Scaled {
 		work = sweeprecord.NewCompositeWork(profile)
 	}
-	recordArea, err := falsifyRecordedArea(profile, profileArea, work)
+	recordArea, err := profile.FalsifyRecordedArea(profileArea, work)
 	if err != nil {
 		return nil, err
 	}

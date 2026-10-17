@@ -847,7 +847,7 @@ func validateLoftRecordsErr(p0, p1 profileRecord, pl0, pl1 planeRecord, alignmen
 }
 
 // loftRecordAreas is the pair of exact region integrals Loft reads off
-// falsifyRecordedArea and stores on the payload (loftPayload.RecordArea), for
+// Profile.FalsifyLoftRecordedArea and stores on the payload (loftPayload.RecordArea), for
 // a test that builds a payload or calls loftmesh.ValidateLoftRecords directly.
 func loftRecordAreas(t testing.TB, p0, p1 profileRecord) [2]float64 {
 	t.Helper()
