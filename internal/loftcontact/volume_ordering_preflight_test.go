@@ -56,9 +56,10 @@ func TestVolumeOrderingPreflightRefusesOversizedProduct(t *testing.T) {
 			{Start: rightTop, End: leftTop, TStart: 0, TEnd: 1},
 			{Start: leftTop, End: leftBottom, TStart: 0, TEnd: 1},
 		}
-		_, _, _, admitted, err := loftcontact.CertifyCarrierOccupancy(t.Context(),
+		crossing, _, _, admitted, err := loftcontact.CertifyCarrierOccupancy(t.Context(),
 			proofbound.NewWorkBudget(t.Context()), bottom, bottom, carrier)
 		require.NoError(t, err)
 		require.False(t, admitted, "carrier occupancy must refuse the oversized seam ordering")
+		require.Equal(t, [2]int{}, crossing)
 	})
 }

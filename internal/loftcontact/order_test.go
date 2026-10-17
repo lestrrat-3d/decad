@@ -45,9 +45,10 @@ func TestOrderedSeamBoundRefusesExtremeFiniteRectangle(t *testing.T) {
 			Start: vertices[i], End: vertices[(i+1)%len(vertices)], TStart: 0, TEnd: 1,
 		}
 	}
-	_, _, _, ok, err = CertifyCarrierOccupancy(t.Context(), budget, lines, lines, carrier)
+	crossing, _, _, ok, err := CertifyCarrierOccupancy(t.Context(), budget, lines, lines, carrier)
 	require.NoError(t, err)
 	require.False(t, ok)
+	require.Equal(t, [2]int{}, crossing)
 }
 
 func TestOrderedSeamBoundPollsCancellation(t *testing.T) {
