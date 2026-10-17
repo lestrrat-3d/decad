@@ -69,28 +69,11 @@ func prismPatternJoinedBody(ctx context.Context, d *Document, ref producerID,
 			}
 		}
 	}
-	ringSag := proofbound.ProductUpper(radius,
-		proofbound.ProductUpper(maxStep, maxStep)/8)
-	seamBand := proofbound.AbsSumUpper(source.RootGap, connectorReach,
-		rootHeldExcess, ringSag, ringRound)
-	bound := proofbound.AbsSumUpper(toothBound, seamBand)
-	if proofbound.IsNonFinite(bound) || bound > 0.1 {
-		return nil, fmt.Errorf("%w: copied-prism join exceeds the 0.1 mm boundary proof: bound %g tooth %g root %g reach %g ring %g",
-			ErrUnsupported, bound, toothBound, source.RootGap, connectorReach, ringSag)
+	bound, volumeGap, err := prismpattern.UnionProofBounds(source, radius, toothBound, toothVolume,
+		connectorReach, rootHeldExcess, maxStep, ringRound)
+	if err != nil {
+		return nil, err
 	}
-	if seamBand >= radius {
-		return nil, fmt.Errorf("%w: copied-prism join band reaches the axis", ErrUnsupported)
-	}
-	// The symmetric annulus encloses every face changed by removal of the
-	// root wall and replacement of the cylinder wall. Its volume is exactly
-	// 4*pi*radius*band*height. Each original tooth mesh contributes its own
-	// independently verified occupied-volume error once.
-	annulusArea := proofbound.ProductUpper(
-		proofbound.RatFloatUp(proofbound.PiUpper),
-		proofbound.ProductUpper(proofbound.ProductUpper(4, radius), seamBand))
-	height := proofbound.RatFloatUp(new(big.Rat).Sub(
-		proofarith.FloatRat(source.Blank.Z1), proofarith.FloatRat(source.Blank.Z0)))
-	volumeGap := proofbound.AbsSumUpper(toothVolume, proofbound.ProductUpper(annulusArea, height))
 	areaUpper, err := proofbound.PerturbedAreaUpperContext(ctx, mesh.Verts, mesh.Tris, bound)
 	if err != nil {
 		return nil, err
