@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/loftcontact"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/sketch"
@@ -46,6 +47,16 @@ func TestLoftContactPartitionRealVaryingCapJunctions(t *testing.T) {
 			{{U: 10, V: 4}, {U: 10, V: 6}},
 			{{U: 10, V: 4}, {U: 10, V: 6}},
 		}, partition.junction)
+		require.Equal(t, [3]string{"0", "4", "5"}, [3]string{
+			partition.capLevels[0].RatString(), partition.capLevels[1].RatString(),
+			partition.capLevels[2].RatString()})
+		require.Positive(t, partition.capOwners[0][0])
+		require.Positive(t, partition.capOwners[0][1])
+		require.Positive(t, partition.capOwners[0][2]) // overlap belongs to P once
+		require.Equal(t, 0, partition.capOwners[1][0])
+		require.Positive(t, partition.capOwners[1][1])
+		require.Equal(t, 0, partition.capOwners[1][2])
+		require.Equal(t, 4, partition.topWallJoins)
 	}
 	for capIndex, loftProfile := range []profileRecord{lp.Profile0, lp.Profile1} {
 		budget := proofbound.NewWallWorkBudgetWithOperation(4096, proofbound.NewWorkBudget(t.Context()))
@@ -56,8 +67,7 @@ func TestLoftContactPartitionRealVaryingCapJunctions(t *testing.T) {
 		require.NoError(t, err)
 		cells, err := prismcells.ProfilesContext(t.Context(), scene.Profiles)
 		require.NoError(t, err)
-		classified, err := prismcells.CellProfiles(t.Context(), budget, scene)
-		require.NoError(t, err)
+		classified := cells
 		matterA, matterB, resolved, err := prismcells.Classify(budget, tags, classified)
 		require.NoError(t, err)
 		require.True(t, resolved, "cap %d", capIndex)
@@ -121,6 +131,114 @@ func loftPartitionRealBodies(t *testing.T, lower, upper [4]float64, z0, z1 float
 	require.NoError(t, err)
 	prism := internalBoxBody(t, New(), 0, 0, 10, 10, 5)
 	return prism, loft
+}
+
+func TestLoftContactPartitionCapMapRefusesAmbiguousFragments(t *testing.T) {
+	prism, loft := loftPartitionRealBodies(t,
+		[4]float64{8, 4, 12, 6}, [4]float64{8, 4, 13, 6}, 0, 4)
+	partition, admitted, err := certifyLoftSourcePartition(t.Context(), prism, loft,
+		proofbound.NewWorkBudget(t.Context()))
+	require.NoError(t, err)
+	require.True(t, admitted)
+	budget := proofbound.NewWallWorkBudgetWithOperation(4096, proofbound.NewWorkBudget(t.Context()))
+	pp := prism.n.Payload.(prismPayload)
+	lp := loft.n.Payload.(loftPayload)
+	prismLines, ok, err := loftPartitionLines(budget, pp.Profile.Outer)
+	require.NoError(t, err)
+	require.True(t, ok)
+	loftLines, ok, err := loftPartitionLines(budget, lp.Profile1.Outer)
+	require.NoError(t, err)
+	require.True(t, ok)
+	scene, tags, _, err := prismcells.BuildSceneRegions(budget,
+		[]prismcells.SceneProfile{{Outer: pp.Profile.Outer}},
+		[]prismcells.SceneProfile{{Outer: lp.Profile1.Outer}},
+		&prismcells.Reexpression{Identity: true})
+	require.NoError(t, err)
+	level := big.NewRat(4, 1)
+	origins, mapped, err := loftPartitionSceneOrigins(budget, scene, tags, prismLines, loftLines, 1, level)
+	require.NoError(t, err)
+	require.True(t, mapped)
+	require.Len(t, origins, 8)
+	var cut, carrierCut [2]*big.Rat
+	for k, seam := range partition.seams {
+		cut[k], carrierCut[k], ok = seam.At(big.NewRat(1, 1))
+		require.True(t, ok)
+	}
+	cells, err := prismcells.ProfilesContext(t.Context(), scene.Profiles)
+	require.NoError(t, err)
+	complete, err := loftPartitionCertifyFragments(budget, scene, cells, origins,
+		prismLines, loftLines, partition.carrier, partition.crossing, cut, carrierCut, 1, level)
+	require.NoError(t, err)
+	require.True(t, complete)
+
+	// The top crossing parameter 2/5 is not binary64. Its exact source
+	// location is certified from the paired junction and recorded line.
+	cutPointFound := false
+	var cutCell, cutEdge int
+	for ci, cell := range cells {
+		for ei, edge := range cell.Outer {
+			origin, exists := origins[edge.Entity]
+			if !exists || origin.operand != 1 || !edge.Partial {
+				continue
+			}
+			p, valid := loftPartitionPointOf(sectionrecord.Point2{
+				U: edge.Polyline[0][0], V: edge.Polyline[0][1]})
+			if !valid {
+				continue
+			}
+			q, valid := loftPartitionPointOf(sectionrecord.Point2{
+				U: edge.Polyline[1][0], V: edge.Polyline[1][1]})
+			if !valid {
+				continue
+			}
+			a, okA := loftPartitionParameter(origin.line, p)
+			b, okB := loftPartitionParameter(origin.line, q)
+			if !okA || !okB || a.Cmp(big.NewRat(2, 5)) != 0 && b.Cmp(big.NewRat(2, 5)) != 0 {
+				continue
+			}
+			require.NotEqual(t, 0, proofarith.FloatRat(edge.TStart).Cmp(big.NewRat(2, 5)))
+			require.NotEqual(t, 0, proofarith.FloatRat(edge.TEnd).Cmp(big.NewRat(2, 5)))
+			cutPointFound, cutCell, cutEdge = true, ci, ei
+		}
+	}
+	require.True(t, cutPointFound)
+	altered := append([]*sketch.Profile(nil), cells...)
+	copyCell := *cells[cutCell]
+	copyCell.Outer = append([]sketch.BoundaryEdge(nil), cells[cutCell].Outer...)
+	copyCell.Outer[cutEdge].Partial = false
+	altered[cutCell] = &copyCell
+	complete, err = loftPartitionCertifyFragments(budget, scene, altered, origins,
+		prismLines, loftLines, partition.carrier, partition.crossing, cut, carrierCut, 1, level)
+	require.NoError(t, err)
+	require.False(t, complete)
+	wrongLevel := make(map[sketch.Entity]loftPartitionCapOrigin, len(origins))
+	for entity, origin := range origins {
+		wrongLevel[entity] = origin
+	}
+	for entity, origin := range wrongLevel {
+		origin.level = big.NewRat(5, 1)
+		wrongLevel[entity] = origin
+		break
+	}
+	complete, err = loftPartitionCertifyFragments(budget, scene, cells, wrongLevel,
+		prismLines, loftLines, partition.carrier, partition.crossing, cut, carrierCut, 1, level)
+	require.NoError(t, err)
+	require.False(t, complete)
+
+	duplicateTag := make(map[sketch.Entity]prismcells.Origin, len(tags))
+	for entity, origin := range tags {
+		duplicateTag[entity] = origin
+	}
+	for entity, origin := range duplicateTag {
+		if origin.IsB {
+			origin.Segment = (origin.Segment + 1) % len(loftLines)
+			duplicateTag[entity] = origin
+			break
+		}
+	}
+	_, mapped, err = loftPartitionSceneOrigins(budget, scene, duplicateTag, prismLines, loftLines, 1, level)
+	require.NoError(t, err)
+	require.False(t, mapped)
 }
 
 func TestLoftContactPartitionInteriorCutIsNotCapChord(t *testing.T) {
