@@ -160,7 +160,7 @@ func revolveLoftFacesVerticalTraceSegmentBound(proof *revolveLoftFacesSourceCert
 			}
 			box := [3]loftface.Interval{{Lo: piece.x, Hi: piece.x},
 				{Lo: point[0], Hi: point[0]}, {Lo: point[1], Hi: point[1]}}
-			return revolveLoftFacesVerticalTraceBoxDistance(box, held)
+			return loftface.VerticalTraceBoxDistance(box, held)
 		}
 		startDistance, ok := endpointDistance(from, held)
 		if !ok {
@@ -203,11 +203,11 @@ func revolveLoftFacesVerticalTraceSegmentBound(proof *revolveLoftFacesSourceCert
 		if !ok {
 			return 0, false
 		}
-		startBound, ok := revolveLoftFacesVerticalTraceBoxDistance(start, held)
+		startBound, ok := loftface.VerticalTraceBoxDistance(start, held)
 		if !ok {
 			return 0, false
 		}
-		endBound, ok := revolveLoftFacesVerticalTraceBoxDistance(end, endHeld)
+		endBound, ok := loftface.VerticalTraceBoxDistance(end, endHeld)
 		return max(startBound, endBound), ok
 	}
 	lo, hi := from.lo, to.hi
@@ -226,7 +226,7 @@ func revolveLoftFacesVerticalTraceSegmentBound(proof *revolveLoftFacesSourceCert
 	if !ok {
 		return 0, false
 	}
-	return revolveLoftFacesVerticalTraceBoxDistance(box, held)
+	return loftface.VerticalTraceBoxDistance(box, held)
 }
 
 func revolveLoftFacesVerticalTracePath(ctx context.Context,
