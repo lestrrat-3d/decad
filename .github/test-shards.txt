@@ -1522,3 +1522,9 @@
 10	0.00	TestStitchKeepsOwnerAssertions
 10	0.00	TestContactManifoldFromInternalKeepsNilAndEmpty
 10	0.00	TestSweepRequestToInternalCopiesEveryField
+10	0.00	TestAxialLoftPrismUnionRectangularTab
+10	0.00	TestAxialLoftPrismUnionIndependentUnequalTabs
+10	0.00	TestAxialLoftPrismUnionManyIndependentTabs
+10	0.00	TestAxialLoftPrismUnionTangentDoesNotAdmit
+10	0.00	TestAxialLoftPrismUnionRefusesVaryingSource
+10	0.00	TestAxialLoftPrismUnionRefusesUnequalCapsAndCancellation

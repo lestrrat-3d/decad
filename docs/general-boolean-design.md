@@ -1291,3 +1291,41 @@ Each PR ships code and tests; this document ships with PR 1.
    `ClassifySplit` and `CrossingCharge`, line-run splitting, the span's width
    charge and the displaced-interior-span fallback, `Trim`'s RS5 refusal,
    and §9's A3 tests. S12c stays on the mesh path (§9).
+
+## 12. Straight-source axial Loft Union
+
+`tryAxialLoftPrismUnion` accepts a prism and an authenticated two-section
+Loft whose source records denote a straight prism. The gate reads the Loft's
+recorded geometry, not its source identity, segment count, or radial position.
+Two independently created Lofts can therefore join the same prism in separate
+pair operations or through the transient many-body chain.
+
+The Loft-to-prism source certificate requires all of these facts:
+
+1. The Loft has a solid authenticated reconstruction and a source identity.
+   It has no hole, blend, bore rewrite, curved chord, or construction
+   displacement.
+2. Both profiles contain the same full-domain line records in the same order.
+   Every pairing offset is zero. Equal line source curves under that pairing
+   generate the same planar wall at both sections and throughout the ruled
+   interval.
+3. Both section frames have identical in-plane axes.
+   `prismplacement.SharedAxisOf` proves over exact rationals that their origins
+   differ only along the common normal. A nonpositive interval declines.
+   The prism sweep level is the rounded rational shift; `Z1Delta` encloses
+   precisely that rounding. The source profile and base frame are unchanged.
+
+The route creates private prism operands only after the source certificate.
+The existing prism `Intersect` scene must resolve a positive-area shared
+region; an edge-only tangent declines. The existing prism `Union` scene then
+authenticates the same profiles through Sketch's exact fragments, selects the
+material cells, audits the merged section, and publishes the normal computed
+section and axial bounds. A miss falls through to the existing Boolean path.
+An arranger refusal or exhausted work budget propagates; neither becomes a
+small-residual admission. The old Loft/cylinder route and its bounds are
+unchanged.
+
+This reduction does not admit moving sections, twisted pairings, free-form
+walls, or the gallery's helical tooth Loft. Such contacts need a separate
+source-wall intersection and held-shell certificate before this route can
+replace the structural Loft/cylinder path.

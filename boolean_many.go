@@ -70,15 +70,31 @@ func performUnionMany(ctx context.Context, operands []*Body) (*Body, error) {
 	return body, nil
 }
 
-// tryPrismUnionChain gives prism inputs that miss the specialized many-body
-// paths the same pair evaluator as two-body Union. Every intermediate body is
+// tryPrismUnionChain gives prism inputs and exact straight-source Loft inputs
+// the same pair evaluator as two-body Union. Every intermediate body is
 // transient. The caller commits only the final certified result and reserves
 // every producer identity used by its intermediate features.
 func tryPrismUnionChain(ctx context.Context, ref producerID, operands []*Body) (*Body, producerID, bool, error) {
-	for _, operand := range operands {
-		if _, ok := operand.n.Payload.(prismPayload); !ok {
+	firstPrism := false
+	for i, operand := range operands {
+		if _, ok := operand.n.Payload.(prismPayload); ok {
+			if i < 2 {
+				firstPrism = true
+			}
+			continue
+		}
+		loft, ok := operand.n.Payload.(loftPayload)
+		if !ok {
 			return nil, 0, false, nil
 		}
+		if _, ok, err := exactAxialLoftPrism(ctx, loft); err != nil {
+			return nil, 0, true, err
+		} else if !ok {
+			return nil, 0, false, nil
+		}
+	}
+	if !firstPrism {
+		return nil, 0, false, nil
 	}
 	result := operands[0]
 	for i, operand := range operands[1:] {
