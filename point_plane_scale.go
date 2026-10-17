@@ -3,7 +3,6 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
@@ -135,8 +134,8 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 			return nil, err
 		}
 		if group.HasCentroid {
-			centroid, centroidErr := similarCapCentroid(vecMeasurementFromInternal(group.Centroid), anchor, s)
-			group.Centroid, err = vecMeasurementToInternal(centroid), centroidErr
+			centroid, centroidErr := facetedrecord.SimilarCapCentroid(group.Centroid, anchor, s)
+			group.Centroid, err = centroid, centroidErr
 			if err != nil {
 				return nil, err
 			}
@@ -180,23 +179,4 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 	}
 	d.commit(scaled, b)
 	return scaled, nil
-}
-
-func similarCapCentroid(source VecMeasurement, anchor r3.Vec, factor float64) (VecMeasurement, error) {
-	p := [3]float64{source.Value.X, source.Value.Y, source.Value.Z}
-	a := [3]float64{anchor.X, anchor.Y, anchor.Z}
-	var exact [3]*big.Rat
-	for i := range exact {
-		exact[i] = pointPlaneAdd(ratOfPointPlane(a[i]),
-			pointPlaneMul(ratOfPointPlane(factor), pointPlaneSub(ratOfPointPlane(p[i]), ratOfPointPlane(a[i]))))
-	}
-	value, round, err := facetedrecord.PointPlaneRound(exact)
-	if err != nil {
-		return VecMeasurement{}, err
-	}
-	bound := proofbound.AbsSumUpper(proofbound.ProductUpper(source.Bound.Base(), factor), round)
-	if proofbound.IsNonFinite(bound) {
-		return VecMeasurement{}, fmt.Errorf("%w: the scaled cap centroid has no finite bound", ErrUnsupported)
-	}
-	return VecMeasurement{Value: value, Exactness: exactnessOf(bound), Bound: units.Millimeters(bound)}, nil
 }
