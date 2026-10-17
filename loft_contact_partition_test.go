@@ -11,6 +11,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/stretchr/testify/require"
 )
@@ -359,8 +360,7 @@ func TestLoftContactPartitionSourceAndWorkRefusals(t *testing.T) {
 		t.Run(change.name, func(t *testing.T) {
 			payload := loft.n.Payload.(loftPayload)
 			change.edit(&payload)
-			alteredBody := &Body{}
-			alteredBody.n.Payload = payload
+			alteredBody := bornBody(&Body{n: topo.Body{Payload: payload}})
 			_, admitted, err := certifyLoftSourcePartition(t.Context(), prism, alteredBody,
 				proofbound.NewWorkBudget(t.Context()))
 			require.NoError(t, err)
