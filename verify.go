@@ -338,38 +338,6 @@ func undecidedPairDiag(a, b *Body, verdict reportvocab.PairVerdict, outcome repo
 	}
 }
 
-// facePlaneKey is a's canonicalized (normal, signed offset) key for one planar
-// face, built so two coplanar faces key equal regardless of which way each
-// one's normal happens to face.
-type facePlaneKey struct {
-	nx, ny, nz, off float64
-}
-
-// canonicalFacePlaneKey builds p's facePlaneKey: the normal's sign is fixed by
-// its first nonzero component being positive (flipping the offset along with
-// it), so a pair of opposite-facing coplanar faces produces the same key, and
-// every component is passed through zeroSign so -0.0 and 0.0 never key
-// differently.
-func canonicalFacePlaneKey(p surfacegeom.Plane) facePlaneKey {
-	n := p.Frame.N()
-	off := n.Dot(p.Frame.Origin())
-	flip := n.X < 0 || (n.X == 0 && (n.Y < 0 || (n.Y == 0 && n.Z < 0)))
-	if flip {
-		n = n.Scale(-1)
-		off = -off
-	}
-	return facePlaneKey{zeroSign(n.X), zeroSign(n.Y), zeroSign(n.Z), zeroSign(off)}
-}
-
-// zeroSign normalizes a negative zero to a positive zero so it never keys a
-// map entry differently from 0.0.
-func zeroSign(f float64) float64 {
-	if f == 0 {
-		return 0
-	}
-	return f
-}
-
 // sharesFacePlane reports whether a and b have a planar face whose infinite
 // plane coincides — exact float comparison on the canonicalized normal and
 // offset, reject-only in spirit: it can only fail to name a shared plane it
@@ -377,10 +345,10 @@ func zeroSign(f float64) float64 {
 // diagnostic aid, not a proof: it never changes a Diagnostic's Code, Status,
 // Reading, or Pair, only whether its Message names the cause.
 func sharesFacePlane(a, b *Body) bool {
-	keys := make(map[facePlaneKey]struct{})
+	keys := make(map[surfacegeom.DiagnosticPlaneKey]struct{})
 	for _, f := range a.Faces() {
 		if p, ok := f.n.Surface.(surfacegeom.Plane); ok {
-			keys[canonicalFacePlaneKey(p)] = struct{}{}
+			keys[surfacegeom.CanonicalDiagnosticPlaneKey(p)] = struct{}{}
 		}
 	}
 	for _, f := range b.Faces() {
@@ -388,7 +356,7 @@ func sharesFacePlane(a, b *Body) bool {
 		if !ok {
 			continue
 		}
-		if _, found := keys[canonicalFacePlaneKey(p)]; found {
+		if _, found := keys[surfacegeom.CanonicalDiagnosticPlaneKey(p)]; found {
 			return true
 		}
 	}
