@@ -183,3 +183,26 @@ func MappedArcRecordMatches(segment arcSeg, arc *sketch.Arc) bool {
 		segment.Start.U == arc.Start.X() && segment.Start.V == arc.Start.Y() &&
 		segment.End.U == arc.End.X() && segment.End.V == arc.End.Y()
 }
+
+// VerticalArcBox bounds a whole live arc in the authenticated loft band.
+func VerticalArcBox(arc *sketch.Arc, trim *loftFacesTrimRecord,
+	band int, time *big.Rat) ([3]loftFaceInterval, bool) {
+	var box [3]loftFaceInterval
+	u, v, err := arc.CertifiedSpanBounds(0, 1)
+	if err != nil {
+		return box, false
+	}
+	sourceBox, err := LfSourceBox(trim.Source)
+	if err != nil || lfF(u.Lo).Cmp(sourceBox[0]) < 0 ||
+		lfF(u.Hi).Cmp(sourceBox[1]) > 0 ||
+		lfF(v.Lo).Cmp(sourceBox[2]) < 0 || lfF(v.Hi).Cmp(sourceBox[3]) > 0 {
+		return box, false
+	}
+	corners := loftface.TileCorners(lfF(u.Lo), lfF(u.Hi), lfF(v.Lo), lfF(v.Hi))
+	first, last := loftface.ArcCapRanges(trim.Maps[band], corners),
+		loftface.ArcCapRanges(trim.Maps[band+1], corners)
+	for axis := range box {
+		box[axis] = loftface.ArcBlend(first[axis], last[axis], time)
+	}
+	return box, true
+}

@@ -10,7 +10,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
-	"github.com/lestrrat-3d/sketch"
 )
 
 // A vertical source crossing is taken from the authenticated LoftFaces map,
@@ -356,7 +355,7 @@ func revolveLoftFacesVerticalArc(ctx context.Context, trim *loftFacesTrimRecord,
 	}
 	cell.lower.Side, cell.upper.Side = loSign, hiSign
 	if loSign > 0 && hiSign < 0 {
-		box, valid := revolveLoftFacesVerticalArcBox(radial.Arc, trim, band, time)
+		box, valid := revolveloftfaces.VerticalArcBox(radial.Arc, trim, band, time)
 		if !valid || box[0].Lo.Cmp(x) != 0 || box[0].Hi.Cmp(x) != 0 {
 			return cell, false
 		}
@@ -364,26 +363,4 @@ func revolveLoftFacesVerticalArc(ctx context.Context, trim *loftFacesTrimRecord,
 			Source: loftFaceInterval{Lo: lfZero(), Hi: lfOne()}, Box: box}}
 	}
 	return cell, true
-}
-
-func revolveLoftFacesVerticalArcBox(arc *sketch.Arc, trim *loftFacesTrimRecord,
-	band int, time *big.Rat) ([3]loftFaceInterval, bool) {
-	var box [3]loftFaceInterval
-	u, v, err := arc.CertifiedSpanBounds(0, 1)
-	if err != nil {
-		return box, false
-	}
-	sourceBox, err := revolveloftfaces.LfSourceBox(trim.Source)
-	if err != nil || lfF(u.Lo).Cmp(sourceBox[0]) < 0 ||
-		lfF(u.Hi).Cmp(sourceBox[1]) > 0 ||
-		lfF(v.Lo).Cmp(sourceBox[2]) < 0 || lfF(v.Hi).Cmp(sourceBox[3]) > 0 {
-		return box, false
-	}
-	corners := loftface.TileCorners(lfF(u.Lo), lfF(u.Hi), lfF(v.Lo), lfF(v.Hi))
-	first, last := loftface.ArcCapRanges(trim.Maps[band], corners),
-		loftface.ArcCapRanges(trim.Maps[band+1], corners)
-	for axis := range box {
-		box[axis] = loftface.ArcBlend(first[axis], last[axis], time)
-	}
-	return box, true
 }
