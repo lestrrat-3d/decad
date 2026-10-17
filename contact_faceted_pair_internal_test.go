@@ -52,6 +52,55 @@ func randomContactPose(t *testing.T, rng *rand.Rand) r3.Transform {
 	return pose
 }
 
+// TestPlanarHintUsesNodeKeysAcrossRelations checks the cache key through
+// public ContactPair calls at two poses, then compares the second relation to
+// the same classifier with its hint removed.
+func TestPlanarHintUsesNodeKeysAcrossRelations(t *testing.T) {
+	doc := New()
+	a := bandOctagonFloor(t, doc)
+	b := bandChamferedBlock(t, doc)
+	req := ContactRequest{PointResolution: units.Millimeters(1e-6),
+		NormalResolution: units.Degrees(1), SupportBand: units.Millimeters(0.5),
+		HeldChord: units.Millimeters(0.05)}
+	poseA := r3.Identity()
+	poseB, err := r3.Translation(r3.Vec{Z: 20})
+	require.NoError(t, err)
+	first, err := doc.ContactPair(t.Context(), a, b, poseA, poseB, req)
+	require.NoError(t, err)
+	require.Equal(t, ContactSeparated, first.Relation)
+
+	stored, ok := a.n.PlanarHints.Load(&b.n)
+	require.True(t, ok, "the first relation stores a node-key hint")
+	hint, ok := stored.(planar.PlanarHint)
+	require.True(t, ok)
+	require.NotEqual(t, planar.PlanarHint{}, hint)
+	require.Equal(t, hint, planarHintOf(&a.n, &b.n))
+	_, handleKeyPresent := a.n.PlanarHints.Load(b)
+	require.False(t, handleKeyPresent, "the cache must not use a root body handle")
+
+	poseB, err = r3.Translation(r3.Vec{Z: 20.25})
+	require.NoError(t, err)
+	_, memoHit := a.pairReports.Load(newPairReportKey(b, poseA, poseB, req))
+	require.False(t, memoHit, "the changed pose must enter the classifier")
+	second, err := doc.ContactPair(t.Context(), a, b, poseA, poseB, req)
+	require.NoError(t, err)
+	require.Equal(t, ContactSeparated, second.Relation)
+	require.NotNil(t, second.Gap)
+	require.Nil(t, second.Overlap)
+	require.Nil(t, second.Manifold)
+
+	a.n.PlanarHints.Delete(&b.n)
+	uncached, err := classifyContactPair(t.Context(), a, b, poseA, poseB, req)
+	require.NoError(t, err)
+	want := contactReportFromInternal(uncached)
+	require.Equal(t, want.Relation, second.Relation)
+	require.Equal(t, want.Reason, second.Reason)
+	require.NotNil(t, want.Gap)
+	require.Equal(t, want.Gap.Value.Base(), second.Gap.Value.Base())
+	require.Equal(t, want.Gap.Bound.Base(), second.Gap.Bound.Base())
+	require.Equal(t, want.Gap.Exactness, second.Gap.Exactness)
+}
+
 func requireDyV3Equal(t *testing.T, want, got proofarith.DyV3, msg string, args ...any) {
 	t.Helper()
 	for axis := range 3 {

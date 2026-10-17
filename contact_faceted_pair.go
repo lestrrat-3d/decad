@@ -61,13 +61,13 @@ func classifyExactPlanarPair(ctx context.Context, report *reportvocab.ContactRep
 	if err != nil || !okB {
 		return false, err
 	}
-	hint := planarHintOf(bodyHandle(report.A), bodyHandle(report.B))
+	hint := planarHintOf(report.A, report.B)
 	result, err := planar.ClassifyPlanarHinted(&a, &b, hint, budget.Step)
 	if err != nil {
 		return false, err
 	}
 	if result.Nearest != (planar.PlanarHint{}) && result.Nearest != hint {
-		report.A.PlanarHints.Store(bodyHandle(report.B), result.Nearest)
+		report.A.PlanarHints.Store(report.B, result.Nearest)
 	}
 	report.Relation, report.Gap, report.Overlap, report.Manifold = reportvocab.ContactUndecided, nil, nil, nil
 	report.Reason = sourceBoxReason(result.Reason)
@@ -125,8 +125,8 @@ func classifyExactPlanarPair(ctx context.Context, report *reportvocab.ContactRep
 // relation of a, as the first solid, against b found, or the zero hint. A
 // hint never changes a relation (planar.ClassifyPlanarHinted), so one left by a
 // pose far from this one, or by a snapshot at another chord, only costs time.
-func planarHintOf(a, b *Body) planar.PlanarHint {
-	stored, _ := a.n.PlanarHints.Load(b)
+func planarHintOf(a, b *topo.Body) planar.PlanarHint {
+	stored, _ := a.PlanarHints.Load(b)
 	hint, _ := stored.(planar.PlanarHint)
 	return hint
 }

@@ -1415,6 +1415,7 @@
 10	0.06	TestPairStationsSharedStationSetAcrossDifferentScale
 10	0.02	TestPatternCopiesChargesTheMotion
 10	0.00	TestPatternedOverlapIsNotProvenDisjoint
+10	0.00	TestPlanarHintUsesNodeKeysAcrossRelations
 10	3.69	TestPlacedProxyShellsChargeExactCopies
 10	0.56	TestPlacedReusesPublishedWalks
 10	0.00	TestPointConeTrimRejectsRoundTrippedPointLoft
