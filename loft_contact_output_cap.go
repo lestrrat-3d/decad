@@ -339,6 +339,14 @@ func loftOutputCertifyCapTiling(budget *proofbound.WorkBudget, polygon []loftPar
 		if err := budget.Step(); err != nil {
 			return false, err
 		}
+		for _, vertex := range tri {
+			if err := budget.Step(); err != nil {
+				return false, err
+			}
+			if vertex < 0 || vertex >= len(polygon) {
+				return false, nil
+			}
+		}
 		if tri[0] == tri[1] || tri[1] == tri[2] || tri[2] == tri[0] {
 			return false, nil
 		}

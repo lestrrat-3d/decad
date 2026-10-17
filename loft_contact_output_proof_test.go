@@ -137,6 +137,12 @@ func TestLoftContactOutputBoundarySourceRefusals(t *testing.T) {
 		[][3]int{{0, 1, 2}})
 	require.NoError(t, err)
 	require.False(t, resolved)
+	for _, triangle := range [][3]int{{-1, 1, 2}, {0, 1, len(polygon)}} {
+		resolved, err = loftOutputCertifyCapTiling(proofbound.NewWorkBudget(t.Context()), polygon,
+			[][3]int{triangle})
+		require.NoError(t, err)
+		require.False(t, resolved)
+	}
 }
 
 func TestLoftContactOutputBoundaryLimitsAndCancellation(t *testing.T) {
