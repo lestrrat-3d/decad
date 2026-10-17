@@ -13,91 +13,6 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// loftCylinderAffine compares the exact rational maps represented by stored
-// frame and transform entries. It is an admission check, not coordinate math
-// used to construct geometry. A rounded composition cannot establish that
-// two source solids are rigid images of the same local source.
-type loftCylinderAffine struct {
-	linear [3][3]*big.Rat
-	shift  [3]*big.Rat
-}
-
-func loftCylinderAffineOf(t r3.Transform) loftCylinderAffine {
-	b := t.Basis()
-	columns := [3]r3.Vec{b.EX, b.EY, b.EZ}
-	var out loftCylinderAffine
-	for j, column := range columns {
-		for i, value := range [3]float64{column.X, column.Y, column.Z} {
-			out.linear[i][j] = proofarith.FloatRat(value)
-		}
-	}
-	for i, value := range [3]float64{t.Translation().X, t.Translation().Y, t.Translation().Z} {
-		out.shift[i] = proofarith.FloatRat(value)
-	}
-	return out
-}
-
-func (a loftCylinderAffine) then(next loftCylinderAffine) loftCylinderAffine {
-	var out loftCylinderAffine
-	for i := range 3 {
-		out.shift[i] = new(big.Rat).Set(next.shift[i])
-		for k := range 3 {
-			out.shift[i].Add(out.shift[i], new(big.Rat).Mul(next.linear[i][k], a.shift[k]))
-		}
-		for j := range 3 {
-			out.linear[i][j] = new(big.Rat)
-			for k := range 3 {
-				out.linear[i][j].Add(out.linear[i][j],
-					new(big.Rat).Mul(next.linear[i][k], a.linear[k][j]))
-			}
-		}
-	}
-	return out
-}
-
-func (a loftCylinderAffine) equals(b loftCylinderAffine) bool {
-	for i := range 3 {
-		if a.shift[i].Cmp(b.shift[i]) != 0 {
-			return false
-		}
-		for j := range 3 {
-			if a.linear[i][j].Cmp(b.linear[i][j]) != 0 {
-				return false
-			}
-		}
-	}
-	return true
-}
-
-// A signed permutation has exact unit length, determinant +1, and no basis
-// roundoff. Other common rotations can use the generic Boolean until their
-// source-image and output bounds have a separate proof.
-func loftCylinderSignedPose(pose r3.Transform) bool {
-	if !pose.IsValid() || pose.IsReflection() || !proofbound.FiniteVec(pose.Translation()) {
-		return false
-	}
-	b := pose.Basis()
-	used := [3]bool{}
-	for _, column := range [3]r3.Vec{b.EX, b.EY, b.EZ} {
-		values := [3]float64{column.X, column.Y, column.Z}
-		found := -1
-		for i, value := range values {
-			if value == 0 {
-				continue
-			}
-			if (value != 1 && value != -1) || found >= 0 || used[i] {
-				return false
-			}
-			found = i
-		}
-		if found < 0 {
-			return false
-		}
-		used[found] = true
-	}
-	return true
-}
-
 func loftCylinderCanonicalFrame(z float64) (r3.Frame, error) {
 	return r3.NewFrame(r3.Vec{Z: z}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 }
@@ -154,8 +69,8 @@ func loftCylinderLocalBlank(ctx context.Context, d *Document, blank *Body) (*Bod
 		return nil, r3.Transform{}, false, err
 	}
 	pose, err := frame.Then(pp.Xform)
-	if err != nil || pose == r3.Identity() || !loftCylinderSignedPose(pose) ||
-		!loftCylinderAffineOf(frame).then(loftCylinderAffineOf(pp.Xform)).equals(loftCylinderAffineOf(pose)) {
+	if err != nil || pose == r3.Identity() || !loftcylinder.SignedPose(pose) ||
+		!loftcylinder.AffineOf(frame).Then(loftcylinder.AffineOf(pp.Xform)).Equals(loftcylinder.AffineOf(pose)) {
 		return nil, r3.Transform{}, false, nil //nolint:nilerr // an invalid pose cannot use this certificate
 	}
 	localFrame, err := loftCylinderCanonicalFrame(0)
@@ -215,13 +130,13 @@ func loftCylinderLocalTooth(ctx context.Context, d *Document, tooth *Body,
 	if err != nil {
 		return nil, false, err
 	}
-	actual0 := loftCylinderAffineOf(first).then(loftCylinderAffineOf(lp.Xform))
-	actual1 := loftCylinderAffineOf(last).then(loftCylinderAffineOf(lp.Xform))
-	want0 := loftCylinderAffineOf(localFirst).then(loftCylinderAffineOf(localXform)).
-		then(loftCylinderAffineOf(pose))
-	want1 := loftCylinderAffineOf(localLast).then(loftCylinderAffineOf(localXform)).
-		then(loftCylinderAffineOf(pose))
-	if !actual0.equals(want0) || !actual1.equals(want1) {
+	actual0 := loftcylinder.AffineOf(first).Then(loftcylinder.AffineOf(lp.Xform))
+	actual1 := loftcylinder.AffineOf(last).Then(loftcylinder.AffineOf(lp.Xform))
+	want0 := loftcylinder.AffineOf(localFirst).Then(loftcylinder.AffineOf(localXform)).
+		Then(loftcylinder.AffineOf(pose))
+	want1 := loftcylinder.AffineOf(localLast).Then(loftcylinder.AffineOf(localXform)).
+		Then(loftcylinder.AffineOf(pose))
+	if !actual0.Equals(want0) || !actual1.Equals(want1) {
 		return nil, false, nil
 	}
 	local := lp
@@ -368,8 +283,8 @@ func tryPlacedLoftCylinderBoreCut(ctx context.Context, d *Document, ref producer
 	if err != nil {
 		return nil, false, err
 	}
-	if !loftCylinderAffineOf(frame).then(loftCylinderAffineOf(pp.Xform)).equals(
-		loftCylinderAffineOf(localMap).then(loftCylinderAffineOf(placement.Pose))) {
+	if !loftcylinder.AffineOf(frame).Then(loftcylinder.AffineOf(pp.Xform)).Equals(
+		loftcylinder.AffineOf(localMap).Then(loftcylinder.AffineOf(placement.Pose))) {
 		return nil, false, nil
 	}
 	origin := localFrame.Origin()
