@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -73,6 +74,23 @@ func FaceAreaUpper[F comparable](vertices []r3.Vec, triangles [][3]int, source [
 			proofbound.PerturbedTriangleAreaAllow(a, b, c, d))
 	}
 	return out
+}
+
+// BrepPlanarDisplacement bounds the area moved by one planar BRep face's
+// recorded section displacement over its walks.
+func BrepPlanarDisplacement(delta float64, walks [][]survey2d.SegmentWalk) float64 {
+	if delta == 0 {
+		return 0
+	}
+	count := 0
+	perimeter := 0.0
+	for _, loop := range walks {
+		for _, w := range loop {
+			perimeter = proofbound.AbsSumUpper(perimeter, w.Length, w.LengthBound)
+			count++
+		}
+	}
+	return proofbound.SectionDisplacementArea(delta, count, perimeter)
 }
 
 // SymDiff sums an analytic payload's occupied-volume terms and refuses a

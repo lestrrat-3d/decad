@@ -379,7 +379,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 			return nil, err
 		}
 		if f.Planar() {
-			region := brepPlanarDisplacement(f, btopo.Planar[fi])
+			region := tessellation.BrepPlanarDisplacement(f.Delta, btopo.Planar[fi])
 			mesh.n.AreaSlack = proofbound.AbsSumUpper(mesh.n.AreaSlack, region)
 			terms = append(terms, proofbound.ProductUpper(f.Z0Delta,
 				proofbound.AbsSumUpper(areaUpper[faceNode(face)], faceCapSlack[face], region)))
@@ -434,23 +434,6 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 		return nil, err
 	}
 	return mesh, nil
-}
-
-// brepPlanarDisplacement is the area a planar face's section displacement
-// moves: proofbound.SectionDisplacementArea over its own walks.
-func brepPlanarDisplacement(f brepFace, walks [][]survey2d.SegmentWalk) float64 {
-	if f.Delta == 0 {
-		return 0
-	}
-	count := 0
-	perimeter := 0.0
-	for _, loop := range walks {
-		for _, w := range loop {
-			perimeter = proofbound.AbsSumUpper(perimeter, w.Length, w.LengthBound)
-			count++
-		}
-	}
-	return proofbound.SectionDisplacementArea(f.Delta, count, perimeter)
 }
 
 // brepChordWall chords one swept face's wall with tessellation.SampleLoop
