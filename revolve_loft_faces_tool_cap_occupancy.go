@@ -55,7 +55,7 @@ func revolveLoftFacesHeelVerticalOccupiedArc(ctx context.Context,
 		len(proof.trim.Source.Source.Profile.Holes) != 0 {
 		return nil, false, nil
 	}
-	x, radius, crosses, decided := revolveLoftFacesToolCircleOnSpan(
+	x, radius, crosses, decided := revolveloftfaces.ToolCircleOnSpan(
 		proof.trim.Heel, proof.section.Spans[circle.span])
 	if !decided || !crosses || x.Cmp(circle.x) != 0 ||
 		radius.Cmp(circle.radius) != 0 {
