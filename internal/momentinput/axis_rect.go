@@ -10,6 +10,23 @@ import (
 // rectangle's least and greatest u and v.
 type AxisRect struct{ U0, V0, U1, V1 float64 }
 
+// CrossingBlindAxisLines accepts profiles whose loops contain exactly four
+// axis-aligned line records for the crossing-blind Cut route.
+func CrossingBlindAxisLines(p Profile) bool {
+	for _, loop := range append([]LoopRecord{p.Outer}, p.Holes...) {
+		if len(loop.Segments) != 4 {
+			return false
+		}
+		for _, segment := range loop.Segments {
+			line, ok := segment.(sectionrecord.LineSeg)
+			if !ok || (line.Start.U != line.End.U && line.Start.V != line.End.V) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // AxisRectangle accepts only four complete line records, one on each side
 // of a nondegenerate axis-aligned rectangle. Profile validation already proves
 // a closed outer walk; this check proves its precise rectangular footprint.
