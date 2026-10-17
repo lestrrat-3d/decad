@@ -7,11 +7,11 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/decad/internal/stackedunion"
 )
@@ -72,16 +72,5 @@ func tryCrossingBlindCut(ctx context.Context, a, b *Body) (brepPayload, bool, er
 }
 
 func crossingBlindAxisLines(p profileRecord) bool {
-	for _, loop := range append([]loopRecord{p.Outer}, p.Holes...) {
-		if len(loop.Segments) != 4 {
-			return false
-		}
-		for _, segment := range loop.Segments {
-			line, ok := segment.(sectionrecord.LineSeg)
-			if !ok || (line.Start.U != line.End.U && line.Start.V != line.End.V) {
-				return false
-			}
-		}
-	}
-	return true
+	return momentinput.CrossingBlindAxisLines(p)
 }
