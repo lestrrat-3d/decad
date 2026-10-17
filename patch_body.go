@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/denotation"
 	"github.com/lestrrat-3d/decad/internal/patchchain"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
@@ -239,13 +240,13 @@ func provePatchChainPlaneLevel(edges []*Edge) (levelToken, float64, bool) {
 	}
 	bound := 0.0
 	for _, v := range verts {
-		if !sameLevel(v.n.Level, lvl) {
+		if !denotation.SameLevel(v.n.Level, lvl) {
 			return levelToken{}, 0, false
 		}
 		bound = math.Max(bound, v.n.Bound.Base())
 	}
 	for _, e := range edges {
-		if !sameLevel(e.n.Level, lvl) {
+		if !denotation.SameLevel(e.n.Level, lvl) {
 			return levelToken{}, 0, false
 		}
 	}
