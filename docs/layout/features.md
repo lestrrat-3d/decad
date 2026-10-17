@@ -20,7 +20,6 @@ The rules for rows live in `docs/layout.md`.
 | `patch.go` | `PatchProfile`: records the profile and builds its face through `patchchain.Build`. See surface §5.1. |
 | `thicken.go` | `Thicken`. See surface §16. |
 | `thicken_prism.go` | Builds the certified wall of a prism sheet. See surface §16.2. |
-| `thicken_axis.go` | Assembles thicken sections. See surface §16. |
 | `thicken_chain_sweep.go` | Thickens admitted one-arc and cardinal composite chain sheets. See surface §16.8. |
 | `offset.go` | `Offset`: a second sheet at a normal distance. See surface §17. |
 | `patch_body.go` | `PatchEdges` selection and chain gates 1-3; Rule P lives in `internal/patchchain/`. See surface §5.2. |
