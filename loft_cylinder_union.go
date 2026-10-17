@@ -216,7 +216,8 @@ func tryLoftCylinderUnionTeethWithUpperBridge(ctx context.Context, d *Document, 
 		}
 		height := proofbound.RatFloatUp(new(big.Rat).Sub(
 			proofarith.FloatRat(pp.Z1), proofarith.FloatRat(pp.Z0)))
-		collar, ok := loftCylinderRootCollar(lp, radius, height)
+		collar, ok := loftcylinder.RootCollar(lp.Xform,
+			[2]momentinput.Profile{lp.Profile0, lp.Profile1}, radius, height)
 		if !ok {
 			return nil, false, nil
 		}
@@ -293,91 +294,6 @@ func loftCylinderAxialPlacement(xform r3.Transform) bool {
 	return xform.Translation() == (r3.Vec{}) && b.EZ == (r3.Vec{Z: 1}) &&
 		b.EX.Z == 0 && b.EY.Z == 0 && b.EX.X == b.EY.Y &&
 		b.EX.Y == -b.EY.X
-}
-
-// A matched pair of centered circular arcs has a constant radius at each
-// cap and a linearly interpolated angular difference along its parameter.
-// At every arc parameter, squared radius along a Loft ruling is convex in
-// height. Both interior endpoint inequalities certify the interval between
-// the returned cap collars. A positive cap radius roundoff is admitted only
-// when this proof places the root wall inside the blank between them.
-func loftCylinderRootCollar(lp loftPayload, radius, height float64) (float64, bool) {
-	var q [2]*big.Rat
-	var angles [2][2]proofbound.RatInterval
-	basis := lp.Xform.Basis()
-	c, s := proofarith.FloatRat(basis.EX.X), proofarith.FloatRat(basis.EX.Y)
-	scale2 := new(big.Rat).Add(new(big.Rat).Mul(c, c), new(big.Rat).Mul(s, s))
-	for cap, profile := range []profileRecord{lp.Profile0, lp.Profile1} {
-		arc, ok := profile.Outer.Segments[5].(arcSeg)
-		if !ok {
-			return 0, false
-		}
-		x, y := proofarith.FloatRat(arc.Start.U), proofarith.FloatRat(arc.Start.V)
-		q[cap] = new(big.Rat).Mul(scale2,
-			new(big.Rat).Add(new(big.Rat).Mul(x, x), new(big.Rat).Mul(y, y)))
-		for end, p := range []planePoint{arc.Start, arc.End} {
-			angles[cap][end] = proofbound.Atan2Interval(
-				proofarith.FloatRat(p.V), proofarith.FloatRat(p.U), false)
-		}
-		if angles[cap][1].Hi.Cmp(angles[cap][0].Lo) <= 0 {
-			angles[cap][1] = proofbound.IntervalAdd(angles[cap][1], proofbound.TwoPiInterval())
-		}
-	}
-	r2 := new(big.Rat).Mul(proofarith.FloatRat(radius), proofarith.FloatRat(radius))
-	if q[0].Cmp(r2) <= 0 && q[1].Cmp(r2) <= 0 {
-		return 0, true
-	}
-	minTwist := new(big.Rat)
-	twistSign := 0
-	for end := range 2 {
-		delta := proofbound.IntervalSub(angles[1][end], angles[0][end])
-		var lower *big.Rat
-		sign := 0
-		switch {
-		case delta.Lo.Sign() > 0 && delta.Hi.Cmp(proofarith.FloatRat(0.4)) < 0:
-			lower = delta.Lo
-			sign = 1
-		case delta.Hi.Sign() < 0 && delta.Lo.Cmp(proofarith.FloatRat(-0.4)) > 0:
-			lower = new(big.Rat).Neg(delta.Hi)
-			sign = -1
-		default:
-			return 0, false
-		}
-		if twistSign != 0 && sign != twistSign {
-			return 0, false
-		}
-		twistSign = sign
-		if end == 0 || lower.Cmp(minTwist) < 0 {
-			minTwist = lower
-		}
-	}
-	_, cosine, ok := proofbound.RadSinCosInterval(minTwist)
-	if !ok {
-		return 0, false
-	}
-	oneMinusCos := new(big.Rat).Sub(big.NewRat(1, 1), cosine.Hi)
-	if oneMinusCos.Sign() <= 0 {
-		return 0, false
-	}
-	rProductLo := proofarith.FloatRat(proofbound.RatSqrtDown(
-		new(big.Rat).Mul(q[0], q[1])))
-	for shift := 52; shift >= 8; shift-- {
-		epsilon := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), uint(shift)))
-		oneMinus := new(big.Rat).Sub(big.NewRat(1, 1), epsilon)
-		inward := new(big.Rat).Mul(big.NewRat(2, 1), epsilon)
-		inward.Mul(inward, oneMinus)
-		inward.Mul(inward, rProductLo)
-		inward.Mul(inward, oneMinusCos)
-		bottom := new(big.Rat).Add(new(big.Rat).Mul(oneMinus, q[0]),
-			new(big.Rat).Mul(epsilon, q[1]))
-		top := new(big.Rat).Add(new(big.Rat).Mul(epsilon, q[0]),
-			new(big.Rat).Mul(oneMinus, q[1]))
-		if bottom.Sub(bottom, inward).Cmp(r2) < 0 && top.Sub(top, inward).Cmp(r2) < 0 {
-			collar := proofbound.ProductUpper(proofbound.RatFloatUp(epsilon), height)
-			return collar, !proofbound.IsNonFinite(collar)
-		}
-	}
-	return 0, false
 }
 
 func loftCylinderSeparate(parts []loftCylinderTooth) bool {
