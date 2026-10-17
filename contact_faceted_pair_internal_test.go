@@ -108,7 +108,7 @@ func requireDyV3Equal(t *testing.T, want, got proofarith.DyV3, msg string, args 
 	}
 }
 
-// TestExactContactMapMatchesTransform holds exactContactMap, which lifts a
+// TestExactContactMapMatchesTransform holds the cached exact map, which lifts a
 // pose once for many points, to proof.DvTransform on random poses and
 // points: zero, integer, fine and large coordinates.
 //
@@ -127,10 +127,10 @@ func TestExactContactMapMatchesTransform(t *testing.T) {
 	}
 	for range 500 {
 		pose := randomContactPose(t, rng)
-		place := newExactContactMap(pose)
+		place := proofarith.NewDyadicMap(pose)
 		for range 8 {
 			p := proofarith.DyVec(r3.Vec{X: coordinate(), Y: coordinate(), Z: coordinate()})
-			requireDyV3Equal(t, proofarith.DvTransform(pose, p), place.apply(p), "pose %v point %v", pose, p)
+			requireDyV3Equal(t, proofarith.DvTransform(pose, p), place.Apply(p), "pose %v point %v", pose, p)
 		}
 	}
 }
