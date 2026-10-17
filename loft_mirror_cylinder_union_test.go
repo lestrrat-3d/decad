@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -577,7 +578,7 @@ func oracleLoftMirrorCylinderPairs(ctx context.Context, d *Document, ref produce
 		if !ok {
 			return nil, true, fmt.Errorf("%w: mirrored cylinder pair %d has no authenticated axial placement", ErrUnsupported, i+1)
 		}
-		if !loftCylinderAxialPlacement(motion) {
+		if !loftcylinder.AxialPlacement(motion) {
 			shift, swept, ok, err := loftMirrorCylinderUpperBridge(pair, motion, middle)
 			if err != nil {
 				return nil, true, err

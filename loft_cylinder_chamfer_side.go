@@ -252,7 +252,7 @@ func loftCylinderChamferMiddleToothSource(ctx context.Context, q [3]proofarith.X
 	circle, ok := circles[face.body]
 	if !ok {
 		var err error
-		circle, err = loftCylinderSourceCircleOf(lp, blankRadius)
+		circle, err = loftcylinder.SourceCircleOf(lp, blankRadius)
 		if err != nil {
 			return err
 		}

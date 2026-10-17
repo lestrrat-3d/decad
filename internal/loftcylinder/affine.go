@@ -17,6 +17,15 @@ type Affine struct {
 	Shift  [3]*big.Rat
 }
 
+// AxialPlacement reports whether the transform keeps the source's axial
+// direction and has an exact planar rotation with no translation.
+func AxialPlacement(xform r3.Transform) bool {
+	b := xform.Basis()
+	return xform.Translation() == (r3.Vec{}) && b.EZ == (r3.Vec{Z: 1}) &&
+		b.EX.Z == 0 && b.EY.Z == 0 && b.EX.X == b.EY.Y &&
+		b.EX.Y == -b.EY.X
+}
+
 func AffineOf(t r3.Transform) Affine {
 	b := t.Basis()
 	columns := [3]r3.Vec{b.EX, b.EY, b.EZ}

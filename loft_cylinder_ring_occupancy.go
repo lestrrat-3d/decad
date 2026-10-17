@@ -31,7 +31,7 @@ func loftCylinderRingToothOf(body *Body, radius float64) (loftCylinderRingTooth,
 	if !ok {
 		return loftCylinderRingTooth{}, fmt.Errorf("%w: ring tooth has no Loft source", ErrUnsupported)
 	}
-	circle, err := loftCylinderSourceCircleOf(lp, radius)
+	circle, err := loftcylinder.SourceCircleOf(lp, radius)
 	if err != nil {
 		return loftCylinderRingTooth{}, err
 	}

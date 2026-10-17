@@ -140,7 +140,7 @@ func tryLoftCylinderUnionTeethWithUpperBridge(ctx context.Context, d *Document, 
 		}
 		tooth = proofTooth
 		lp, ok = tooth.n.Payload.(loftPayload)
-		if !ok || !loftCylinderAxialPlacement(lp.Xform) {
+		if !ok || !loftcylinder.AxialPlacement(lp.Xform) {
 			return nil, false, nil
 		}
 		n := len(lp.Verts) / 2
@@ -229,7 +229,7 @@ func tryLoftCylinderUnionTeethWithUpperBridge(ctx context.Context, d *Document, 
 		reach, shift, angular, ok := loftcylinder.ConnectorReach(lp.Verts, lp.Tris, lp.Segment,
 			[2]profileRecord{lp.Profile0, lp.Profile1}, lp.Xform.Basis().EX, lp.Proof.FacetDeparture, root, radius, collar)
 		if ok {
-			circle, err := loftCylinderSourceCircleOf(lp, radius)
+			circle, err := loftcylinder.SourceCircleOf(lp, radius)
 			ok = err == nil && circle.OrderedOverSafeInterval()
 		}
 		reachOK := ok
@@ -255,13 +255,6 @@ func tryLoftCylinderUnionTeethWithUpperBridge(ctx context.Context, d *Document, 
 	}
 	body, err := buildLoftCylinderUnion(ctx, d, ref, blank, pp, radius, parts)
 	return body, true, err
-}
-
-func loftCylinderAxialPlacement(xform r3.Transform) bool {
-	b := xform.Basis()
-	return xform.Translation() == (r3.Vec{}) && b.EZ == (r3.Vec{Z: 1}) &&
-		b.EX.Z == 0 && b.EY.Z == 0 && b.EX.X == b.EY.Y &&
-		b.EX.Y == -b.EY.X
 }
 
 func loftCylinderSeparate(parts []loftCylinderTooth) bool {
