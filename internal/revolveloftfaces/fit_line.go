@@ -1,4 +1,4 @@
-package decad
+package revolveloftfaces
 
 import (
 	"context"
@@ -6,20 +6,21 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/sketch"
 )
 
 // A fit/line joint binds both whole Sketch entities to the same live point.
 // The two source spans must give that point identical exact meridian values.
 type revolveLoftFacesFitLineVertex struct {
-	point                   *sketch.Point
-	fitSegment, lineSegment int
-	fitSpan, lineSpan       freeform.BezierSpan
-	fitAtEnd, lineAtEnd     bool
-	coordinate              [2]*big.Rat
+	Point                   *sketch.Point
+	FitSegment, LineSegment int
+	FitSpan, LineSpan       freeform.BezierSpan
+	fitAtEnd, LineAtEnd     bool
+	Coordinate              [2]*big.Rat
 }
 
-func revolveLoftFacesFitLineVertexAt(trim *loftFacesTrimRecord,
+func RevolveLoftFacesFitLineVertexAt(trim *loftFacesTrimRecord,
 	fitIndex, lineIndex int, fitAtWalkEnd bool) (revolveLoftFacesFitLineVertex, bool) {
 	var empty revolveLoftFacesFitLineVertex
 	if trim == nil || trim.Source == nil || trim.Source.Source == nil {
@@ -71,11 +72,11 @@ func revolveLoftFacesFitLineVertexAt(trim *loftFacesTrimRecord,
 		recordedFit.V != fitPoint.Y() {
 		return empty, false
 	}
-	fitSpans, ok := revolveLoftFacesStraightOrFitSpans(trim, fitIndex, fitRecord)
+	fitSpans, ok := RevolveLoftFacesStraightOrFitSpans(trim, fitIndex, fitRecord)
 	if !ok || len(fitSpans) == 0 {
 		return empty, false
 	}
-	lineSpans, ok := revolveLoftFacesStraightOrFitSpans(trim, lineIndex, lineRecord)
+	lineSpans, ok := RevolveLoftFacesStraightOrFitSpans(trim, lineIndex, lineRecord)
 	if !ok || len(lineSpans) != 1 {
 		return empty, false
 	}
@@ -83,57 +84,57 @@ func revolveLoftFacesFitLineVertexAt(trim *loftFacesTrimRecord,
 	if fitAtHigh {
 		fitSpan = fitSpans[len(fitSpans)-1]
 	}
-	fitParameter, lineParameter := lfZero(), lfZero()
+	fitParameter, lineParameter := new(big.Rat), new(big.Rat)
 	if fitAtHigh {
-		fitParameter = lfOne()
+		fitParameter = big.NewRat(1, 1)
 	}
 	if lineAtEnd {
-		lineParameter = lfOne()
+		lineParameter = big.NewRat(1, 1)
 	}
 	fitLocation := loftface.BezierPoint(fitSpan, fitParameter)
 	lineLocation := loftface.BezierPoint(lineSpans[0], lineParameter)
-	if fitLocation[0].Cmp(lfF(recordedFit.U)) != 0 ||
-		fitLocation[1].Cmp(lfF(recordedFit.V)) != 0 ||
+	if fitLocation[0].Cmp(proofarith.FloatRat(recordedFit.U)) != 0 ||
+		fitLocation[1].Cmp(proofarith.FloatRat(recordedFit.V)) != 0 ||
 		fitLocation[0].Cmp(lineLocation[0]) != 0 ||
 		fitLocation[1].Cmp(lineLocation[1]) != 0 {
 		return empty, false
 	}
-	return revolveLoftFacesFitLineVertex{point: fitPoint,
-		fitSegment: fitIndex, lineSegment: lineIndex,
-		fitSpan: fitSpan, lineSpan: lineSpans[0],
-		fitAtEnd: fitAtHigh, lineAtEnd: lineAtEnd,
-		coordinate: [2]*big.Rat{fitLocation[0], fitLocation[1]}}, true
+	return revolveLoftFacesFitLineVertex{Point: fitPoint,
+		FitSegment: fitIndex, LineSegment: lineIndex,
+		FitSpan: fitSpan, LineSpan: lineSpans[0],
+		fitAtEnd: fitAtHigh, LineAtEnd: lineAtEnd,
+		Coordinate: [2]*big.Rat{fitLocation[0], fitLocation[1]}}, true
 }
 
-type revolveLoftFacesFitLineJoint struct {
-	vertex    revolveLoftFacesFitLineVertex
-	band      int
-	roots     []loftface.EndpointRoot
-	fitCells  []revolveLoftFacesJointCell
-	lineCells []revolveLoftFacesJointCell
+type RevolveLoftFacesFitLineJoint struct {
+	Vertex    revolveLoftFacesFitLineVertex
+	Band      int
+	Roots     []loftface.EndpointRoot
+	fitCells  []RevolveLoftFacesJointCell
+	lineCells []RevolveLoftFacesJointCell
 }
 
-func certifyRevolveLoftFacesFitLineJoint(ctx context.Context, trim *loftFacesTrimRecord,
+func CertifyRevolveLoftFacesFitLineJoint(ctx context.Context, trim *loftFacesTrimRecord,
 	section revolveSectionSpan, fitIndex, lineIndex, band int, fitAtWalkEnd bool) (
-	revolveLoftFacesFitLineJoint, bool,
+	RevolveLoftFacesFitLineJoint, bool,
 ) {
-	var empty revolveLoftFacesFitLineJoint
+	var empty RevolveLoftFacesFitLineJoint
 	if ctx == nil || ctx.Err() != nil || trim == nil || band < 0 || band+1 >= len(trim.Maps) {
 		return empty, false
 	}
-	vertex, ok := revolveLoftFacesFitLineVertexAt(trim, fitIndex, lineIndex, fitAtWalkEnd)
+	vertex, ok := RevolveLoftFacesFitLineVertexAt(trim, fitIndex, lineIndex, fitAtWalkEnd)
 	if !ok {
 		return empty, false
 	}
-	m, b := revolveLoftFacesMeridian(section)
-	memo := revolveLoftFacesMeridianMemoOf(ctx)
-	fitQ := memo.QRows(trim.Maps[band], trim.Maps[band+1], vertex.fitSpan, m, b)
-	lineQ := memo.QRows(trim.Maps[band], trim.Maps[band+1], vertex.lineSpan, m, b)
+	m, b := RevolveLoftFacesMeridian(section)
+	memo := RevolveLoftFacesMeridianMemoOf(ctx)
+	fitQ := memo.QRows(trim.Maps[band], trim.Maps[band+1], vertex.FitSpan, m, b)
+	lineQ := memo.QRows(trim.Maps[band], trim.Maps[band+1], vertex.LineSpan, m, b)
 	fitEndpoint, lineEndpoint := 0, 0
 	if vertex.fitAtEnd {
 		fitEndpoint = len(fitQ[0]) - 1
 	}
-	if vertex.lineAtEnd {
+	if vertex.LineAtEnd {
 		lineEndpoint = len(lineQ[0]) - 1
 	}
 	for row := range fitQ {
@@ -141,13 +142,13 @@ func certifyRevolveLoftFacesFitLineJoint(ctx context.Context, trim *loftFacesTri
 			return empty, false
 		}
 	}
-	roots, ok := revolveLoftFacesEndpointFiniteRootsWith(memo, trim, section,
-		vertex.fitSpan, band, vertex.fitAtEnd)
+	roots, ok := RevolveLoftFacesEndpointFiniteRootsWith(memo, trim, section,
+		vertex.FitSpan, band, vertex.fitAtEnd)
 	if !ok || len(roots) == 0 {
 		return empty, false
 	}
-	lineRoots, lineOK := revolveLoftFacesEndpointFiniteRootsWith(memo, trim, section,
-		vertex.lineSpan, band, vertex.lineAtEnd)
+	lineRoots, lineOK := RevolveLoftFacesEndpointFiniteRootsWith(memo, trim, section,
+		vertex.LineSpan, band, vertex.LineAtEnd)
 	if !lineOK || len(lineRoots) != len(roots) {
 		return empty, false
 	}
@@ -161,36 +162,36 @@ func certifyRevolveLoftFacesFitLineJoint(ctx context.Context, trim *loftFacesTri
 			return empty, false
 		}
 	}
-	fitCells := make([]revolveLoftFacesJointCell, len(roots))
-	lineCells := make([]revolveLoftFacesJointCell, len(roots))
+	fitCells := make([]RevolveLoftFacesJointCell, len(roots))
+	lineCells := make([]RevolveLoftFacesJointCell, len(roots))
 	for i, root := range roots {
 		fitCells[i], ok = revolveLoftFacesKnotRootCellWith(memo, trim, section,
-			vertex.fitSpan, band, vertex.fitAtEnd, root)
+			vertex.FitSpan, band, vertex.fitAtEnd, root)
 		if !ok {
 			return empty, false
 		}
 		lineCells[i], ok = revolveLoftFacesKnotRootCellWith(memo, trim, section,
-			vertex.lineSpan, band, vertex.lineAtEnd, root)
+			vertex.LineSpan, band, vertex.LineAtEnd, root)
 		if !ok {
 			return empty, false
 		}
 	}
-	return revolveLoftFacesFitLineJoint{vertex: vertex, band: band,
-		roots: roots, fitCells: fitCells, lineCells: lineCells}, true
+	return RevolveLoftFacesFitLineJoint{Vertex: vertex, Band: band,
+		Roots: roots, fitCells: fitCells, lineCells: lineCells}, true
 }
 
 // Every owned time root is paired with a one-sided source cell. This route
 // also handles a fit knot or radial arc at the opposite end of the same span.
-func revolveLoftFacesFitLinePartitionCells(ctx context.Context,
+func RevolveLoftFacesFitLinePartitionCells(ctx context.Context,
 	trim *loftFacesTrimRecord, section revolveSectionSpan,
 	segment, spanIndex, band int, span freeform.BezierSpan,
 	knot *revolveLoftFacesFitKnotJoint, knotLeft bool,
 	radial *revolveLoftFacesRadialJoint,
-	fitLines []*revolveLoftFacesFitLineJoint) ([]revolveLoftFacesMappedCell, bool, error) {
+	fitLines []*RevolveLoftFacesFitLineJoint) ([]RevolveLoftFacesMappedCell, bool, error) {
 	if len(fitLines) == 0 || len(span) == 0 {
 		return nil, false, nil
 	}
-	var roots []revolveLoftFacesOwnedRoot
+	var roots []RevolveLoftFacesOwnedRoot
 	if knot != nil {
 		if knot.band != band || knot.vertex.segment != segment ||
 			knotLeft && spanIndex != knot.vertex.leftIndex ||
@@ -205,44 +206,44 @@ func revolveLoftFacesFitLinePartitionCells(ctx context.Context,
 			return nil, false, nil
 		}
 		for i, root := range knot.roots {
-			roots = append(roots, revolveLoftFacesOwnedRoot{root: root, cell: cells[i],
-				kind: revolveLoftFacesFitKnotContact, point: knot.vertex.point, atEnd: knotLeft})
+			roots = append(roots, RevolveLoftFacesOwnedRoot{Root: root, Cell: cells[i],
+				Kind: RevolveLoftFacesFitKnotContact, Point: knot.vertex.point, AtEnd: knotLeft})
 		}
 	}
 	if radial != nil {
-		if radial.radial.band != band || radial.vertex.fitSegment != segment ||
+		if radial.radial.Band != band || radial.vertex.fitSegment != segment ||
 			len(radial.roots) != len(radial.fitCells) {
 			return nil, false, nil
 		}
 		for i, root := range radial.roots {
-			roots = append(roots, revolveLoftFacesOwnedRoot{root: root,
-				cell: radial.fitCells[i], kind: revolveLoftFacesRadialArcContact,
-				point: radial.vertex.point, atEnd: radial.vertex.fitAtEnd})
+			roots = append(roots, RevolveLoftFacesOwnedRoot{Root: root,
+				Cell: radial.fitCells[i], Kind: RevolveLoftFacesRadialArcContact,
+				Point: radial.vertex.point, AtEnd: radial.vertex.fitAtEnd})
 		}
 	}
 	for _, joint := range fitLines {
-		if joint == nil || joint.band != band ||
-			len(joint.roots) == 0 || len(joint.roots) != len(joint.fitCells) ||
-			len(joint.roots) != len(joint.lineCells) {
+		if joint == nil || joint.Band != band ||
+			len(joint.Roots) == 0 || len(joint.Roots) != len(joint.fitCells) ||
+			len(joint.Roots) != len(joint.lineCells) {
 			return nil, false, nil
 		}
-		cells, atEnd := joint.fitCells, joint.vertex.fitAtEnd
-		if joint.vertex.fitSegment == segment {
-			if !revolveLoftFacesSameBezier(span, joint.vertex.fitSpan) {
+		cells, atEnd := joint.fitCells, joint.Vertex.fitAtEnd
+		if joint.Vertex.FitSegment == segment {
+			if !RevolveLoftFacesSameBezier(span, joint.Vertex.FitSpan) {
 				return nil, false, nil
 			}
-		} else if joint.vertex.lineSegment == segment && spanIndex == 0 {
-			cells, atEnd = joint.lineCells, joint.vertex.lineAtEnd
-			if !revolveLoftFacesSameBezier(span, joint.vertex.lineSpan) {
+		} else if joint.Vertex.LineSegment == segment && spanIndex == 0 {
+			cells, atEnd = joint.lineCells, joint.Vertex.LineAtEnd
+			if !RevolveLoftFacesSameBezier(span, joint.Vertex.LineSpan) {
 				return nil, false, nil
 			}
 		} else {
 			return nil, false, nil
 		}
-		for i, root := range joint.roots {
-			roots = append(roots, revolveLoftFacesOwnedRoot{root: root,
-				cell: cells[i], kind: revolveLoftFacesFitLineContact,
-				point: joint.vertex.point, atEnd: atEnd})
+		for i, root := range joint.Roots {
+			roots = append(roots, RevolveLoftFacesOwnedRoot{Root: root,
+				Cell: cells[i], Kind: RevolveLoftFacesFitLineContact,
+				Point: joint.Vertex.Point, AtEnd: atEnd})
 		}
 	}
 	return revolveLoftFacesPartitionOwnedEndpointCells(ctx, trim, section,

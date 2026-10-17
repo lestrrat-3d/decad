@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/stretchr/testify/require"
 )
 
@@ -17,7 +18,7 @@ func TestRevolveLoftFacesToolCapArcBindsLiveSourceCells(t *testing.T) {
 	require.True(t, ok)
 	sides, ok := revolveLoftFacesToolCapSidesOf(proof)
 	require.True(t, ok)
-	box, err := lfSourceBox(proof.trim.Source)
+	box, err := revolveloftfaces.LfSourceBox(proof.trim.Source)
 	require.NoError(t, err)
 	checked := 0
 	for _, circle := range sides.circles {

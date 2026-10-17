@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -149,7 +150,7 @@ func revolveLoftFacesConstantXSourceCells(ctx context.Context,
 		!revolveLoftFacesSourceRefsCurrent(trim, proof.tooth, proof.sourceRefs) {
 		return nil, false, nil
 	}
-	box, err := lfSourceBox(trim.Source)
+	box, err := revolveloftfaces.LfSourceBox(trim.Source)
 	if err != nil {
 		return nil, false, err
 	}
@@ -166,7 +167,7 @@ func revolveLoftFacesConstantXSourceCells(ctx context.Context,
 			return nil, false, err
 		}
 		ref := proof.sourceRefs[band][segment]
-		spans, ok := revolveLoftFacesStraightOrFitSpans(trim, segment, source)
+		spans, ok := revolveloftfaces.RevolveLoftFacesStraightOrFitSpans(trim, segment, source)
 		if !ok {
 			if _, arc := source.(arcSeg); !arc {
 				return nil, false, nil
@@ -187,7 +188,7 @@ func revolveLoftFacesConstantXSourceCells(ctx context.Context,
 			continue
 		}
 		for spanIndex, span := range spans {
-			cell, certified := revolveLoftFacesVerticalBezierWith(revolveLoftFacesMeridianMemoOf(ctx), trim, segment, spanIndex,
+			cell, certified := revolveLoftFacesVerticalBezierWith(revolveloftfaces.RevolveLoftFacesMeridianMemoOf(ctx), trim, segment, spanIndex,
 				band, time, lower, upper, ref, span)
 			if !certified {
 				return nil, false, nil
@@ -340,11 +341,11 @@ func revolveLoftFacesVerticalArc(ctx context.Context, trim *loftFacesTrimRecord,
 	ref provenance.Ref) (revolveLoftFacesVerticalCell, bool) {
 	cell := revolveLoftFacesVerticalCell{segment: segment, band: band, ref: ref}
 	unit := revolveSectionSpan{Start: planePoint{V: 1}, End: planePoint{U: 1, V: 1}}
-	radial, ok := mappedArcRadialTimeBand(ctx, trim, segment, band, unit)
-	if !ok || radial.arc == nil {
+	radial, ok := revolveloftfaces.MappedArcRadialTimeBand(ctx, trim, segment, band, unit)
+	if !ok || radial.Arc == nil {
 		return cell, false
 	}
-	radius2 := lfAdd(polynomial.BernsteinValue(radial.q[:], time), lfOne())
+	radius2 := lfAdd(polynomial.BernsteinValue(radial.Q[:], time), lfOne())
 	if radius2.Sign() <= 0 {
 		return cell, false
 	}
@@ -355,7 +356,7 @@ func revolveLoftFacesVerticalArc(ctx context.Context, trim *loftFacesTrimRecord,
 	}
 	cell.lower.Side, cell.upper.Side = loSign, hiSign
 	if loSign > 0 && hiSign < 0 {
-		box, valid := revolveLoftFacesVerticalArcBox(radial.arc, trim, band, time)
+		box, valid := revolveLoftFacesVerticalArcBox(radial.Arc, trim, band, time)
 		if !valid || box[0].Lo.Cmp(x) != 0 || box[0].Hi.Cmp(x) != 0 {
 			return cell, false
 		}
@@ -372,7 +373,7 @@ func revolveLoftFacesVerticalArcBox(arc *sketch.Arc, trim *loftFacesTrimRecord,
 	if err != nil {
 		return box, false
 	}
-	sourceBox, err := lfSourceBox(trim.Source)
+	sourceBox, err := revolveloftfaces.LfSourceBox(trim.Source)
 	if err != nil || lfF(u.Lo).Cmp(sourceBox[0]) < 0 ||
 		lfF(u.Hi).Cmp(sourceBox[1]) > 0 ||
 		lfF(v.Lo).Cmp(sourceBox[2]) < 0 || lfF(v.Hi).Cmp(sourceBox[3]) > 0 {

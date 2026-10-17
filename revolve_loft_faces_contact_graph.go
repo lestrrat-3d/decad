@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/loftface"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -52,7 +53,7 @@ type revolveLoftFacesGraphRun struct {
 func revolveLoftFacesGraphSameVerticalCell(a, b revolveLoftFacesVerticalCell) bool {
 	if a.segment != b.segment || a.span != b.span || a.band != b.band ||
 		a.ref != b.ref || a.face != b.face ||
-		!revolveLoftFacesSameBezier(a.source, b.source) ||
+		!revolveloftfaces.RevolveLoftFacesSameBezier(a.source, b.source) ||
 		!revolveLoftFacesSameVerticalLimit(a.lower, b.lower) ||
 		!revolveLoftFacesSameVerticalLimit(a.upper, b.upper) ||
 		len(a.retained) != len(b.retained) {
@@ -167,8 +168,8 @@ func revolveLoftFacesContactGraphOf(ctx context.Context,
 		pairID := len(g.pairs)
 		for _, cell := range pair.sourceCells {
 			if pair.verdict == revolveLoftFacesPairMiss &&
-				(cell.mapped.side == revolveLoftFacesJointContact ||
-					cell.mapped.side == loftface.SideCrossed) {
+				(cell.mapped.Side == revolveloftfaces.RevolveLoftFacesJointContact ||
+					cell.mapped.Side == loftface.SideCrossed) {
 				return nil, false, nil
 			}
 			id, found := g.sourceCellID(pair.sectionIndex, pair.blankFace, cell)
@@ -211,11 +212,11 @@ func revolveLoftFacesContactGraphOf(ctx context.Context,
 		}
 		if cell.source == nil || cell.pairID < 0 ||
 			g.pairs[cell.pairID].verdict != revolveLoftFacesPairSourceCandidate ||
-			cell.source.mapped.side != revolveLoftFacesJointContact ||
-			cell.source.mapped.jointKind != revolveLoftFacesWholeArcContact {
+			cell.source.mapped.Side != revolveloftfaces.RevolveLoftFacesJointContact ||
+			cell.source.mapped.JointKind != revolveloftfaces.RevolveLoftFacesWholeArcContact {
 			continue
 		}
-		stations, complete := revolveLoftFacesCompleteArcRun(proof.trim, cell.source.mapped.segment)
+		stations, complete := revolveLoftFacesCompleteArcRun(proof.trim, cell.source.mapped.Segment)
 		if !complete {
 			return nil, false, nil
 		}
@@ -301,8 +302,8 @@ func (g *revolveLoftFacesContactGraph) bindBlankShell(ctx context.Context,
 	}
 	mapped := cell.source.mapped
 	seam, blankPatch, loftPatch, ok, err := revolveLoftFacesCertifiedArcPatches(ctx,
-		proof.blank, proof.tooth, cell.sectionIndex, mapped.segment, mapped.band,
-		loftFaceInterval{Lo: mapped.tLo, Hi: mapped.tHi}, run.stations)
+		proof.blank, proof.tooth, cell.sectionIndex, mapped.Segment, mapped.Band,
+		loftFaceInterval{Lo: mapped.TLo, Hi: mapped.THi}, run.stations)
 	if err != nil || !ok ||
 		!g.bindOpenPatches(run, seam, &blankPatch, &loftPatch) {
 		return false, err

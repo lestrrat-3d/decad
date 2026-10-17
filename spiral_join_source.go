@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/decad/internal/splinebezier"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -257,7 +258,7 @@ func certifySpiralFirstJoin(ctx context.Context, blank, tooth *Body) (*spiralFir
 // exact rational separation proof for every angle, including cap interiors.
 func spiralOriginalCapsAvoidToolRootCircles(trim *loftFacesTrimRecord,
 	m, b, toeX, heelX *big.Rat) bool {
-	box, err := lfSourceBox(trim.Source)
+	box, err := revolveloftfaces.LfSourceBox(trim.Source)
 	if err != nil || len(trim.Maps) != 9 {
 		return false
 	}
@@ -287,7 +288,7 @@ func spiralTangentCapTouchesHeelCircle(trim *loftFacesTrimRecord, m, b, toeX, he
 	if trim == nil || trim.Tangent == nil || !spiralTangentRecordCurrent(trim) || len(trim.Maps) != 9 {
 		return false
 	}
-	box, err := lfSourceBox(trim.Source)
+	box, err := revolveloftfaces.LfSourceBox(trim.Source)
 	if err != nil {
 		return false
 	}
@@ -368,7 +369,7 @@ func spiralTrimSourceCurrent(trim *loftFacesTrimRecord) bool {
 			return false
 		}
 	}
-	box, err := lfSourceBox(trim.Source)
+	box, err := revolveloftfaces.LfSourceBox(trim.Source)
 	if err != nil {
 		return false
 	}
@@ -385,7 +386,7 @@ func spiralTrimSourceCurrent(trim *loftFacesTrimRecord) bool {
 // Y, while a root of the squared implicit with negative signed radius would
 // not be a physical cone crossing.
 func spiralSourcePhysicalSector(trim *loftFacesTrimRecord, m, b *big.Rat) bool {
-	box, err := lfSourceBox(trim.Source)
+	box, err := revolveloftfaces.LfSourceBox(trim.Source)
 	if err != nil {
 		return false
 	}

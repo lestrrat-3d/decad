@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 )
 
 // A cap endpoint and a source-side cell name the same true mapped source
@@ -143,9 +144,9 @@ func revolveLoftFacesHeelBoundarySideTie(proof *revolveLoftFacesSourceCertificat
 		}
 		for _, cell := range pair.sourceCells {
 			mapped := cell.mapped
-			if mapped.segment != boundary.segment || mapped.span != boundary.span ||
-				mapped.band != arc.band || cell.ref != boundary.ref ||
-				cell.face != boundary.face || mapped.side != loftface.SideCrossed ||
+			if mapped.Segment != boundary.segment || mapped.Span != boundary.span ||
+				mapped.Band != arc.band || cell.ref != boundary.ref ||
+				cell.face != boundary.face || mapped.Side != loftface.SideCrossed ||
 				!revolveLoftFacesTimeInCell(arc.time, mapped) {
 				continue
 			}
@@ -173,7 +174,7 @@ func revolveLoftFacesCapMeridianIdentity(proof *revolveLoftFacesSourceCertificat
 		boundary.segment >= len(proof.trim.Source.Profile.Outer.Segments) {
 		return false
 	}
-	box, err := lfSourceBox(proof.trim.Source)
+	box, err := revolveloftfaces.LfSourceBox(proof.trim.Source)
 	if err != nil {
 		return false
 	}
@@ -181,12 +182,12 @@ func revolveLoftFacesCapMeridianIdentity(proof *revolveLoftFacesSourceCertificat
 	if !ok || band != arc.band || time.Cmp(arc.time) != 0 {
 		return false
 	}
-	m, b := revolveLoftFacesMeridian(section)
+	m, b := revolveloftfaces.RevolveLoftFacesMeridian(section)
 	if lfAdd(lfMul(m, arc.circle.x), b).Cmp(arc.circle.radius) != 0 {
 		return false
 	}
 	segment := proof.trim.Source.Profile.Outer.Segments[boundary.segment]
-	spans, ok := revolveLoftFacesStraightOrFitSpans(proof.trim, boundary.segment, segment)
+	spans, ok := revolveloftfaces.RevolveLoftFacesStraightOrFitSpans(proof.trim, boundary.segment, segment)
 	if !ok || boundary.span < 0 || boundary.span >= len(spans) {
 		return false
 	}
@@ -208,13 +209,13 @@ func revolveLoftFacesCapMeridianIdentity(proof *revolveLoftFacesSourceCertificat
 	return true
 }
 
-func revolveLoftFacesTimeInCell(time *big.Rat, cell revolveLoftFacesMappedCell) bool {
-	if time == nil || cell.tLo == nil || cell.tHi == nil {
+func revolveLoftFacesTimeInCell(time *big.Rat, cell revolveloftfaces.RevolveLoftFacesMappedCell) bool {
+	if time == nil || cell.TLo == nil || cell.THi == nil {
 		return false
 	}
-	lo, hi := time.Cmp(cell.tLo), time.Cmp(cell.tHi)
-	return (lo > 0 || lo == 0 && !cell.tLoOpen) &&
-		(hi < 0 || hi == 0 && !cell.tHiOpen)
+	lo, hi := time.Cmp(cell.TLo), time.Cmp(cell.THi)
+	return (lo > 0 || lo == 0 && !cell.TLoOpen) &&
+		(hi < 0 || hi == 0 && !cell.THiOpen)
 }
 
 func revolveLoftFacesCapBoundaryBoxEqual(a, b [3]loftFaceInterval) bool {

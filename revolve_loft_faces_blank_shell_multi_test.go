@@ -38,8 +38,8 @@ func TestCurvedMultiRunShellConsumesLiveGraph(t *testing.T) {
 		cell := graph.cells[run.cellID]
 		mapped := cell.source.mapped
 		seam, blankPatch, loftPatch, patched, patchErr := revolveLoftFacesCertifiedArcPatches(t.Context(),
-			blank, trimmed, cell.sectionIndex, mapped.segment, mapped.band,
-			loftFaceInterval{Lo: mapped.tLo, Hi: mapped.tHi}, run.stations)
+			blank, trimmed, cell.sectionIndex, mapped.Segment, mapped.Band,
+			loftFaceInterval{Lo: mapped.TLo, Hi: mapped.THi}, run.stations)
 		require.NoError(t, patchErr)
 		require.True(t, patched)
 		for station, index := range shell.seams[i] {

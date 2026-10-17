@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/stretchr/testify/require"
 )
 
@@ -74,11 +75,11 @@ func TestCurvedHeelArcSideTiesRejectChangedSourceRecord(t *testing.T) {
 }
 
 func TestCurvedHeelArcSideTieTimeEndpointOwnership(t *testing.T) {
-	cell := revolveLoftFacesMappedCell{tLo: big.NewRat(1, 4), tHi: big.NewRat(3, 4)}
+	cell := revolveloftfaces.RevolveLoftFacesMappedCell{TLo: big.NewRat(1, 4), THi: big.NewRat(3, 4)}
 	require.True(t, revolveLoftFacesTimeInCell(big.NewRat(1, 4), cell))
 	require.True(t, revolveLoftFacesTimeInCell(big.NewRat(1, 2), cell))
 	require.True(t, revolveLoftFacesTimeInCell(big.NewRat(3, 4), cell))
-	cell.tLoOpen, cell.tHiOpen = true, true
+	cell.TLoOpen, cell.THiOpen = true, true
 	require.False(t, revolveLoftFacesTimeInCell(big.NewRat(1, 4), cell))
 	require.True(t, revolveLoftFacesTimeInCell(big.NewRat(1, 2), cell))
 	require.False(t, revolveLoftFacesTimeInCell(big.NewRat(3, 4), cell))

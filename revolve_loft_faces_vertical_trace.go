@@ -5,6 +5,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -163,7 +164,7 @@ func revolveLoftFacesVerticalTraceChain(graph *revolveLoftFacesContactGraph,
 			}
 			record, recorded := trim.Source.Profile.Outer.Segments[cell.segment].(arcSeg)
 			live, liveArc := trim.Source.Source.Entities[cell.segment].(*sketch.Arc)
-			if !recorded || !liveArc || !mappedArcRecordMatches(record, live) ||
+			if !recorded || !liveArc || !revolveloftfaces.MappedArcRecordMatches(record, live) ||
 				cell.span != 0 || cell.band != side.band {
 				return nil, false
 			}

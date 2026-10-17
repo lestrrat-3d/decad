@@ -160,8 +160,8 @@ func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
 		var owner *Face
 		for _, entry := range manifest.nonvertical {
 			for _, cell := range entry.cells {
-				if cell.mapped.segment != proof.crossings[0].segment &&
-					cell.mapped.segment != proof.crossings[1].segment {
+				if cell.mapped.Segment != proof.crossings[0].segment &&
+					cell.mapped.Segment != proof.crossings[1].segment {
 					ref, owner = cell.ref, cell.face
 					break
 				}

@@ -3,6 +3,7 @@ package decad
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/stretchr/testify/require"
 )
 
@@ -10,8 +11,8 @@ func TestCurvedLoftFacesArcSeamPatchesShareCertifiedVertices(t *testing.T) {
 	blank, trimmed, trim := neutralArcSeamSource(t)
 	sectionIndex, contact, stations := neutralArcSeamContact(t, blank, trimmed, trim)
 	seam, blankPatch, loftPatch, ok, err := revolveLoftFacesCertifiedArcPatches(t.Context(),
-		blank, trimmed, sectionIndex, contact.segment, contact.band,
-		loftFaceInterval{Lo: contact.tLo, Hi: contact.tHi}, stations)
+		blank, trimmed, sectionIndex, contact.Segment, contact.Band,
+		loftFaceInterval{Lo: contact.TLo, Hi: contact.THi}, stations)
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Len(t, blankPatch.triangles, 4*(len(stations)-1))
@@ -36,7 +37,7 @@ func TestCurvedLoftFacesArcSeamPatchesShareCertifiedVertices(t *testing.T) {
 }
 
 func neutralArcSeamContact(t *testing.T, blank, trimmed *Body, trim *loftFacesTrimRecord) (
-	int, revolveLoftFacesMappedCell, []int,
+	int, revolveloftfaces.RevolveLoftFacesMappedCell, []int,
 ) {
 	t.Helper()
 	proof, ok, err := certifyRevolveLoftFacesSource(t.Context(), blank, trimmed)
@@ -48,7 +49,7 @@ func neutralArcSeamContact(t *testing.T, blank, trimmed *Body, trim *loftFacesTr
 
 	var section revolveSectionSpan
 	sectionIndex := -1
-	var contact revolveLoftFacesMappedCell
+	var contact revolveloftfaces.RevolveLoftFacesMappedCell
 	found := false
 	for _, pair := range census.pairs {
 		if pair.verdict != revolveLoftFacesPairSourceCandidate {
@@ -56,8 +57,8 @@ func neutralArcSeamContact(t *testing.T, blank, trimmed *Body, trim *loftFacesTr
 		}
 		for _, cell := range pair.sourceCells {
 			mapped := cell.mapped
-			if mapped.side != revolveLoftFacesJointContact ||
-				mapped.jointKind != revolveLoftFacesWholeArcContact || found {
+			if mapped.Side != revolveloftfaces.RevolveLoftFacesJointContact ||
+				mapped.JointKind != revolveloftfaces.RevolveLoftFacesWholeArcContact || found {
 				continue
 			}
 			section = proof.section.Spans[pair.sectionIndex]
@@ -68,12 +69,12 @@ func neutralArcSeamContact(t *testing.T, blank, trimmed *Body, trim *loftFacesTr
 	}
 	require.True(t, found)
 	require.NotNil(t, section.Face)
-	require.NotNil(t, contact.jointArc)
-	require.NotNil(t, contact.tLo)
-	require.NotNil(t, contact.tHi)
+	require.NotNil(t, contact.JointArc)
+	require.NotNil(t, contact.TLo)
+	require.NotNil(t, contact.THi)
 	var stations []int
 	for index, group := range trim.StationGroup {
-		if group == contact.segment {
+		if group == contact.Segment {
 			stations = append(stations, index)
 		}
 	}
@@ -89,8 +90,8 @@ func TestCurvedArcSeamRefusesChangedStationAndIncompleteRun(t *testing.T) {
 		trim.Source.SourceStation[stations[1]].U += 0.001
 		require.False(t, pointSourceCurrent(trim.Source))
 		_, _, _, ok, err := revolveLoftFacesCertifiedArcPatches(t.Context(), blank, trimmed,
-			sectionIndex, contact.segment, contact.band,
-			loftFaceInterval{Lo: contact.tLo, Hi: contact.tHi}, stations)
+			sectionIndex, contact.Segment, contact.Band,
+			loftFaceInterval{Lo: contact.TLo, Hi: contact.THi}, stations)
 		require.NoError(t, err)
 		require.False(t, ok)
 	})
@@ -101,8 +102,8 @@ func TestCurvedArcSeamRefusesChangedStationAndIncompleteRun(t *testing.T) {
 		trim.Source.SourceStationRound = 0
 		require.False(t, pointSourceCurrent(trim.Source))
 		_, _, _, ok, err := revolveLoftFacesCertifiedArcPatches(t.Context(), blank, trimmed,
-			sectionIndex, contact.segment, contact.band,
-			loftFaceInterval{Lo: contact.tLo, Hi: contact.tHi}, stations)
+			sectionIndex, contact.Segment, contact.Band,
+			loftFaceInterval{Lo: contact.TLo, Hi: contact.THi}, stations)
 		require.NoError(t, err)
 		require.False(t, ok)
 	})
@@ -111,8 +112,8 @@ func TestCurvedArcSeamRefusesChangedStationAndIncompleteRun(t *testing.T) {
 		sectionIndex, contact, stations := neutralArcSeamContact(t, blank, trimmed, trim)
 		require.Greater(t, len(stations), 2)
 		_, _, _, ok, err := revolveLoftFacesCertifiedArcPatches(t.Context(), blank, trimmed,
-			sectionIndex, contact.segment, contact.band,
-			loftFaceInterval{Lo: contact.tLo, Hi: contact.tHi}, stations[:2])
+			sectionIndex, contact.Segment, contact.Band,
+			loftFaceInterval{Lo: contact.TLo, Hi: contact.THi}, stations[:2])
 		require.NoError(t, err)
 		require.False(t, ok)
 	})

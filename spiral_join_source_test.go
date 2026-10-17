@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/stretchr/testify/require"
 )
 
@@ -53,7 +54,7 @@ func TestSpiralFirstJoinDeclinesTangentToeCapPastToeCircle(t *testing.T) {
 	require.True(t, ok)
 	heelX, ok := spiralRootToolX(m, b, trim.Heel)
 	require.True(t, ok)
-	box, err := lfSourceBox(trim.Source)
+	box, err := revolveloftfaces.LfSourceBox(trim.Source)
 	require.NoError(t, err)
 	capX := loftface.ScalarRange(trim.Maps[0], loftFaceRatVec{lfOne(), lfZero(), lfZero()},
 		loftface.BoxCorners(box))

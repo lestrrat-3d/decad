@@ -1,10 +1,11 @@
-package decad
+package revolveloftfaces
 
 import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -70,7 +71,7 @@ func revolveLoftFacesFitArcVertex(trim *loftFacesTrimRecord,
 		recordedFit.V != point.Y() {
 		return revolveLoftFacesJointVertex{}, false
 	}
-	spans, ok := revolveLoftFacesStraightOrFitSpans(trim, fitIndex, fitRecord)
+	spans, ok := RevolveLoftFacesStraightOrFitSpans(trim, fitIndex, fitRecord)
 	if !ok || len(spans) == 0 {
 		return revolveLoftFacesJointVertex{}, false
 	}
@@ -79,13 +80,13 @@ func revolveLoftFacesFitArcVertex(trim *loftFacesTrimRecord,
 	if sourceAtEnd {
 		span = spans[len(spans)-1]
 	}
-	parameter := lfZero()
+	parameter := new(big.Rat)
 	if sourceAtEnd {
-		parameter = lfOne()
+		parameter = big.NewRat(1, 1)
 	}
 	location := loftface.BezierPoint(span, parameter)
-	if location[0].Cmp(lfF(recordedFit.U)) != 0 ||
-		location[1].Cmp(lfF(recordedFit.V)) != 0 {
+	if location[0].Cmp(proofarith.FloatRat(recordedFit.U)) != 0 ||
+		location[1].Cmp(proofarith.FloatRat(recordedFit.V)) != 0 {
 		return revolveLoftFacesJointVertex{}, false
 	}
 	return revolveLoftFacesJointVertex{point: point, fitSegment: fitIndex,

@@ -1,10 +1,11 @@
-package decad
+package revolveloftfaces
 
 import (
 	"context"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/loftface"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -12,7 +13,7 @@ import (
 // straight Revolve generator, or stays on one strict side wherever its axial
 // range overlaps that generator. An undecidable box, including a possible
 // crossing, refuses. No faceted station grants admission.
-func mappedArcFiniteSide(ctx context.Context, trim *loftFacesTrimRecord,
+func MappedArcFiniteSide(ctx context.Context, trim *loftFacesTrimRecord,
 	segmentIndex int, meridian revolveSectionSpan) (int, bool) {
 	if trim == nil || len(trim.Maps) < 2 {
 		return 0, false
@@ -20,7 +21,7 @@ func mappedArcFiniteSide(ctx context.Context, trim *loftFacesTrimRecord,
 	var side int
 	for band := 0; band+1 < len(trim.Maps); band++ {
 		bandSide, ok := mappedArcFiniteSideCell(ctx, trim, segmentIndex, meridian,
-			band, 0, 1, lfZero(), lfOne())
+			band, 0, 1, new(big.Rat), big.NewRat(1, 1))
 		if !ok || side != 0 && bandSide != 0 && side != bandSide {
 			return 0, false
 		}
@@ -44,7 +45,7 @@ func mappedArcFiniteSideCell(ctx context.Context, trim *loftFacesTrimRecord,
 		band < 0 || band+1 >= len(trim.Maps) ||
 		sLo < 0 || sHi > 1 || sLo > sHi ||
 		tLo == nil || tHi == nil || tLo.Sign() < 0 ||
-		tLo.Cmp(tHi) > 0 || tHi.Cmp(lfOne()) > 0 {
+		tLo.Cmp(tHi) > 0 || tHi.Cmp(big.NewRat(1, 1)) > 0 {
 		return 0, false
 	}
 	segment, ok := trim.Source.Profile.Outer.Segments[segmentIndex].(arcSeg)
@@ -53,20 +54,20 @@ func mappedArcFiniteSideCell(ctx context.Context, trim *loftFacesTrimRecord,
 		return 0, false
 	}
 	arc, ok := trim.Source.Source.Entities[segmentIndex].(*sketch.Arc)
-	if !ok || !mappedArcRecordMatches(segment, arc) {
+	if !ok || !MappedArcRecordMatches(segment, arc) {
 		return 0, false
 	}
-	sourceBox, err := lfSourceBox(trim.Source)
+	sourceBox, err := LfSourceBox(trim.Source)
 	if err != nil {
 		return 0, false
 	}
-	x0, x1 := lfF(meridian.Start.U), lfF(meridian.End.U)
-	r0, r1 := lfF(meridian.Start.V), lfF(meridian.End.V)
+	x0, x1 := proofarith.FloatRat(meridian.Start.U), proofarith.FloatRat(meridian.End.U)
+	r0, r1 := proofarith.FloatRat(meridian.Start.V), proofarith.FloatRat(meridian.End.V)
 	if x0.Cmp(x1) == 0 || r0.Sign() < 0 || r1.Sign() < 0 {
 		return 0, false
 	}
-	m := lfDiv(lfSub(r1, r0), lfSub(x1, x0))
-	b := lfSub(r0, lfMul(m, x0))
+	m := proofarith.QuoRat(new(big.Rat), proofarith.SubRat(new(big.Rat), r1, r0), proofarith.SubRat(new(big.Rat), x1, x0))
+	b := proofarith.SubRat(new(big.Rat), r0, proofarith.MulRat(new(big.Rat), m, x0))
 	if x0.Cmp(x1) > 0 {
 		x0, x1 = x1, x0
 	}
@@ -81,22 +82,22 @@ func mappedArcFiniteSideCell(ctx context.Context, trim *loftFacesTrimRecord,
 		if err != nil {
 			return 0, false
 		}
-		box := [4]*big.Rat{lfF(u.Lo), lfF(u.Hi), lfF(v.Lo), lfF(v.Hi)}
+		box := [4]*big.Rat{proofarith.FloatRat(u.Lo), proofarith.FloatRat(u.Hi), proofarith.FloatRat(v.Lo), proofarith.FloatRat(v.Hi)}
 		if lo == 0 {
 			point := segment.Start
-			box[0] = loftface.RatMin(box[0], lfF(point.U))
-			box[1] = loftface.RatMax(box[1], lfF(point.U))
-			box[2] = loftface.RatMin(box[2], lfF(point.V))
-			box[3] = loftface.RatMax(box[3], lfF(point.V))
+			box[0] = loftface.RatMin(box[0], proofarith.FloatRat(point.U))
+			box[1] = loftface.RatMax(box[1], proofarith.FloatRat(point.U))
+			box[2] = loftface.RatMin(box[2], proofarith.FloatRat(point.V))
+			box[3] = loftface.RatMax(box[3], proofarith.FloatRat(point.V))
 		}
 		// A pinned end can miss the ideal circular carrier by the Sketch solve
 		// residual. Include it whenever this slice reaches that endpoint.
 		if hi == 1 {
 			point := segment.End
-			box[0] = loftface.RatMin(box[0], lfF(point.U))
-			box[1] = loftface.RatMax(box[1], lfF(point.U))
-			box[2] = loftface.RatMin(box[2], lfF(point.V))
-			box[3] = loftface.RatMax(box[3], lfF(point.V))
+			box[0] = loftface.RatMin(box[0], proofarith.FloatRat(point.U))
+			box[1] = loftface.RatMax(box[1], proofarith.FloatRat(point.U))
+			box[2] = loftface.RatMin(box[2], proofarith.FloatRat(point.V))
+			box[3] = loftface.RatMax(box[3], proofarith.FloatRat(point.V))
 		}
 		if box[0].Cmp(sourceBox[0]) < 0 || box[1].Cmp(sourceBox[1]) > 0 ||
 			box[2].Cmp(sourceBox[2]) < 0 || box[3].Cmp(sourceBox[3]) > 0 {
@@ -139,7 +140,7 @@ func mappedArcFiniteSideCell(ctx context.Context, trim *loftFacesTrimRecord,
 	return visit(sLo, sHi, 10)
 }
 
-func mappedArcRecordMatches(segment arcSeg, arc *sketch.Arc) bool {
+func MappedArcRecordMatches(segment arcSeg, arc *sketch.Arc) bool {
 	return arc != nil && arc.Center != nil && arc.Start != nil && arc.End != nil &&
 		segment.Center.U == arc.Center.X() && segment.Center.V == arc.Center.Y() &&
 		segment.Start.U == arc.Start.X() && segment.Start.V == arc.Start.Y() &&

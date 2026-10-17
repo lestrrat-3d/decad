@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -99,21 +100,6 @@ func lfCapMap(section loftFaceSection, source *pointSectionRecord) (loftFaceMap,
 	}
 	return loftFaceMap{Constant: loftface.VAdd(loftface.MatVec(affine.A, apex), affine.B),
 		Q0: q0, QU: qu, QV: qv, G0: g0, GU: gu, GV: gv, Stretch: stretch}, nil
-}
-
-func lfSourceBox(source *pointSectionRecord) ([4]*big.Rat, error) {
-	var box [4]*big.Rat
-	for i, v := range source.SourceBox {
-		if proofbound.IsNonFinite(v) {
-			return box,
-				fmt.Errorf("%w: loft source rectangle is not finite", ErrUnsupported)
-		}
-		box[i] = lfF(v)
-	}
-	if box[0].Cmp(box[1]) >= 0 || box[2].Cmp(box[3]) >= 0 {
-		return box, fmt.Errorf("%w: loft source rectangle has no area", ErrUnsupported)
-	}
-	return box, nil
 }
 
 type loftFaceEmbedding struct {
@@ -285,7 +271,7 @@ func proveLoftFaceBounds(ctx context.Context, sections []loftFaceSection,
 func proveLoftFaceEmbedding(ctx context.Context, sections []loftFaceSection,
 	source *pointSectionRecord) (loftFaceEmbedding, error) {
 	var proof loftFaceEmbedding
-	box, err := lfSourceBox(source)
+	box, err := revolveloftfaces.LfSourceBox(source)
 	if err != nil {
 		return proof, err
 	}

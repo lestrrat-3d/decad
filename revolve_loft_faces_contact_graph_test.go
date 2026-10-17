@@ -75,8 +75,8 @@ func TestCurvedContactGraphHeldAnchors(t *testing.T) {
 		require.NotNil(t, cell.source)
 		mapped := cell.source.mapped
 		seam, blankPatch, loftPatch, patched, patchErr := revolveLoftFacesCertifiedArcPatches(t.Context(),
-			blank, trimmed, cell.sectionIndex, mapped.segment, mapped.band,
-			loftFaceInterval{Lo: mapped.tLo, Hi: mapped.tHi}, run.stations)
+			blank, trimmed, cell.sectionIndex, mapped.Segment, mapped.Band,
+			loftFaceInterval{Lo: mapped.TLo, Hi: mapped.THi}, run.stations)
 		require.NoError(t, patchErr)
 		require.True(t, patched)
 		shell, built, shellErr := revolveLoftFacesBlankShellWithCapRings(t.Context(), proof,
@@ -184,10 +184,10 @@ func TestCurvedContactGraphRejectsStaleSourceEvents(t *testing.T) {
 		graph.cells[0].source.ref = original
 	})
 	t.Run("changed open interval", func(t *testing.T) {
-		original := graph.cells[0].source.mapped.tLoOpen
-		graph.cells[0].source.mapped.tLoOpen = !original
+		original := graph.cells[0].source.mapped.TLoOpen
+		graph.cells[0].source.mapped.TLoOpen = !original
 		require.False(t, current())
-		graph.cells[0].source.mapped.tLoOpen = original
+		graph.cells[0].source.mapped.TLoOpen = original
 	})
 	t.Run("changed live station", func(t *testing.T) {
 		original := trim.Source.SourceStation[0]

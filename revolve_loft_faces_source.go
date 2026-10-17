@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 )
@@ -173,7 +174,7 @@ func revolveLoftFacesTrimCurrent(tooth *Body, trim *loftFacesTrimRecord) bool {
 			return false
 		}
 	}
-	box, err := lfSourceBox(trim.Source)
+	box, err := revolveloftfaces.LfSourceBox(trim.Source)
 	if err != nil {
 		return false
 	}
@@ -264,7 +265,7 @@ func certifyRevolveLoftFacesAgainstRoot(ctx context.Context, blank, tooth *Body,
 			return nil, false, nil
 		}
 		if _, arc := segment.(arcSeg); arc {
-			finiteSide, certified := mappedArcFiniteSide(ctx, trim, i,
+			finiteSide, certified := revolveloftfaces.MappedArcFiniteSide(ctx, trim, i,
 				section.Spans[section.RootSpan])
 			if !certified || finiteSide != loftface.ArcMiss && finiteSide != side {
 				return nil, false, nil
@@ -324,7 +325,7 @@ func certifyRevolveLoftFacesAgainstRoot(ctx context.Context, blank, tooth *Body,
 // supporting plane misses the full heel circle, including its interior.
 func revolveLoftFacesCapsAvoidToolRootCircles(trim *loftFacesTrimRecord,
 	m, b, toeX, heelX *big.Rat) bool {
-	box, err := lfSourceBox(trim.Source)
+	box, err := revolveloftfaces.LfSourceBox(trim.Source)
 	if err != nil || len(trim.Maps) < 2 {
 		return false
 	}

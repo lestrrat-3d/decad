@@ -8,13 +8,14 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/stretchr/testify/require"
 )
 
 // legacyRevolveLoftFacesBracketTimeRoot is revolveLoftFacesBracketTimeRoot as
 // it was when every restriction repeated the band-time stage on q.
 func legacyRevolveLoftFacesBracketTimeRoot(q, j [3][]*big.Rat,
-	segment, span, band int, tLo, tHi *big.Rat) ([]revolveLoftFacesMappedCell, bool) {
+	segment, span, band int, tLo, tHi *big.Rat) ([]revolveloftfaces.RevolveLoftFacesMappedCell, bool) {
 	box := polynomial.BernsteinRectRestrict(q, lfZero(), lfOne(), tLo, tHi)
 	for _, orientation := range []int{1, -1} {
 		oriented := box
@@ -76,16 +77,16 @@ func legacyRevolveLoftFacesBracketTimeRoot(q, j [3][]*big.Rat,
 		if xDirection == 0 {
 			continue
 		}
-		makeCell := func(side int, a, z *big.Rat) revolveLoftFacesMappedCell {
-			return revolveLoftFacesMappedCell{segment: segment, span: span,
-				band: band, side: side, sLo: a, sHi: z, tLo: tLo, tHi: tHi}
+		makeCell := func(side int, a, z *big.Rat) revolveloftfaces.RevolveLoftFacesMappedCell {
+			return revolveloftfaces.RevolveLoftFacesMappedCell{Segment: segment, Span: span,
+				Band: band, Side: side, SLo: a, SHi: z, TLo: tLo, THi: tHi}
 		}
-		var cells []revolveLoftFacesMappedCell
+		var cells []revolveloftfaces.RevolveLoftFacesMappedCell
 		if sLo.Sign() > 0 {
 			cells = append(cells, makeCell(-orientation, lfZero(), sLo))
 		}
 		crossing := makeCell(loftface.SideCrossed, sLo, sHi)
-		crossing.xDirection = xDirection
+		crossing.XDirection = xDirection
 		cells = append(cells, crossing)
 		if sHi.Cmp(lfOne()) < 0 {
 			cells = append(cells, makeCell(orientation, sHi, lfOne()))
@@ -99,13 +100,13 @@ func legacyRevolveLoftFacesBracketTimeRoot(q, j [3][]*big.Rat,
 // was when every restriction repeated the band-time stage on q.
 func legacyRevolveLoftFacesKnotRootCell(trim *loftFacesTrimRecord,
 	section revolveSectionSpan, span freeform.BezierSpan, band int,
-	atEnd bool, root loftface.EndpointRoot) (revolveLoftFacesJointCell, bool) {
-	var empty revolveLoftFacesJointCell
+	atEnd bool, root loftface.EndpointRoot) (revolveloftfaces.RevolveLoftFacesJointCell, bool) {
+	var empty revolveloftfaces.RevolveLoftFacesJointCell
 	if trim == nil || band < 0 || band+1 >= len(trim.Maps) ||
 		root.Time.Lo == nil || root.Time.Hi == nil {
 		return empty, false
 	}
-	m, b := revolveLoftFacesMeridian(section)
+	m, b := revolveloftfaces.RevolveLoftFacesMeridian(section)
 	q := loftface.MeridianQRows(trim.Maps[band], trim.Maps[band+1], span, m, b)
 	endpoint := lfZero()
 	if atEnd {
@@ -179,9 +180,9 @@ func legacyRevolveLoftFacesKnotRootCell(trim *loftFacesTrimRecord,
 			!root.Finite && x.Hi.Cmp(startX) >= 0 && x.Lo.Cmp(endX) <= 0 {
 			continue
 		}
-		return revolveLoftFacesJointCell{sLo: sLo, sHi: sHi,
-			time: root.Time, outsideSide: fixedSide,
-			sDerivative: direction, x: x, finite: root.Finite}, true
+		return revolveloftfaces.RevolveLoftFacesJointCell{SLo: sLo, SHi: sHi,
+			Time: root.Time, OutsideSide: fixedSide,
+			SDerivative: direction, X: x, Finite: root.Finite}, true
 	}
 	return empty, false
 }
@@ -212,20 +213,20 @@ func timeStageSmallRat(rng *rand.Rand, scale int64) *big.Rat {
 	return big.NewRat(rng.Int64N(2*scale+1)-scale, rng.Int64N(7)+1)
 }
 
-func requireMappedCellsSame(t *testing.T, want, got []revolveLoftFacesMappedCell) {
+func requireMappedCellsSame(t *testing.T, want, got []revolveloftfaces.RevolveLoftFacesMappedCell) {
 	t.Helper()
 	require.Len(t, got, len(want))
 	for i := range want {
 		w, g := want[i], got[i]
-		require.Equal(t, w.segment, g.segment)
-		require.Equal(t, w.span, g.span)
-		require.Equal(t, w.band, g.band)
-		require.Equal(t, w.side, g.side)
-		require.Equal(t, w.xDirection, g.xDirection)
-		require.Zero(t, w.sLo.Cmp(g.sLo), "cell %d sLo", i)
-		require.Zero(t, w.sHi.Cmp(g.sHi), "cell %d sHi", i)
-		require.Zero(t, w.tLo.Cmp(g.tLo), "cell %d tLo", i)
-		require.Zero(t, w.tHi.Cmp(g.tHi), "cell %d tHi", i)
+		require.Equal(t, w.Segment, g.Segment)
+		require.Equal(t, w.Span, g.Span)
+		require.Equal(t, w.Band, g.Band)
+		require.Equal(t, w.Side, g.Side)
+		require.Equal(t, w.XDirection, g.XDirection)
+		require.Zero(t, w.SLo.Cmp(g.SLo), "cell %d sLo", i)
+		require.Zero(t, w.SHi.Cmp(g.SHi), "cell %d sHi", i)
+		require.Zero(t, w.TLo.Cmp(g.TLo), "cell %d tLo", i)
+		require.Zero(t, w.THi.Cmp(g.THi), "cell %d tHi", i)
 	}
 }
 
@@ -258,7 +259,7 @@ func requireTimeStageBracketRootsMatch(t *testing.T) {
 		}
 		tLo, tHi := timeStageInterval(rng)
 		wantCells, wantOK := legacyRevolveLoftFacesBracketTimeRoot(q, j, 3, 4, 5, tLo, tHi)
-		gotCells, gotOK := revolveLoftFacesBracketTimeRoot(
+		gotCells, gotOK := revolveloftfaces.RevolveLoftFacesBracketTimeRoot(
 			polynomial.BernsteinRectTimeRestrict(q, tLo, tHi), j, 3, 4, 5, tLo, tHi)
 		require.Equal(t, wantOK, gotOK, "trial %d", trial)
 		requireMappedCellsSame(t, wantCells, gotCells)
@@ -317,7 +318,7 @@ func requireTimeStageKnotRootCellsMatch(t *testing.T) {
 		end := start + 0.02 + float64(rng.IntN(45))/100
 		section := revolveSectionSpan{Start: planePoint{U: start, V: 1.5}, End: planePoint{U: end, V: 1.5}}
 		for _, atEnd := range []bool{false, true} {
-			roots, ok := revolveLoftFacesEndpointFiniteRoots(trim, section, span, band, atEnd)
+			roots, ok := revolveloftfaces.RevolveLoftFacesEndpointFiniteRoots(trim, section, span, band, atEnd)
 			if !ok {
 				continue
 			}
@@ -335,21 +336,21 @@ func requireTimeStageKnotRootCellsMatch(t *testing.T) {
 			}
 			for _, root := range cases {
 				want, wantOK := legacyRevolveLoftFacesKnotRootCell(trim, section, span, band, atEnd, root)
-				got, gotOK := revolveLoftFacesKnotRootCell(trim, section, span, band, atEnd, root)
+				got, gotOK := revolveloftfaces.RevolveLoftFacesKnotRootCell(trim, section, span, band, atEnd, root)
 				require.Equal(t, wantOK, gotOK, "trial %d atEnd %t", trial, atEnd)
 				if !gotOK {
 					continue
 				}
 				withCell++
-				require.Equal(t, want.finite, got.finite)
-				require.Equal(t, want.outsideSide, got.outsideSide)
-				require.Equal(t, want.sDerivative, got.sDerivative)
-				require.Zero(t, want.sLo.Cmp(got.sLo))
-				require.Zero(t, want.sHi.Cmp(got.sHi))
-				require.Zero(t, want.time.Lo.Cmp(got.time.Lo))
-				require.Zero(t, want.time.Hi.Cmp(got.time.Hi))
-				require.Zero(t, want.x.Lo.Cmp(got.x.Lo))
-				require.Zero(t, want.x.Hi.Cmp(got.x.Hi))
+				require.Equal(t, want.Finite, got.Finite)
+				require.Equal(t, want.OutsideSide, got.OutsideSide)
+				require.Equal(t, want.SDerivative, got.SDerivative)
+				require.Zero(t, want.SLo.Cmp(got.SLo))
+				require.Zero(t, want.SHi.Cmp(got.SHi))
+				require.Zero(t, want.Time.Lo.Cmp(got.Time.Lo))
+				require.Zero(t, want.Time.Hi.Cmp(got.Time.Hi))
+				require.Zero(t, want.X.Lo.Cmp(got.X.Lo))
+				require.Zero(t, want.X.Hi.Cmp(got.X.Hi))
 			}
 		}
 	}

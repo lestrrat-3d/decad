@@ -1,4 +1,4 @@
-package decad
+package revolveloftfaces
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -37,7 +38,7 @@ func revolveLoftFacesFitKnotVertex(trim *loftFacesTrimRecord,
 	if !ok || len(record.Fit) < 3 || len(record.Fit) != len(fit.Fit) {
 		return empty, false
 	}
-	spans, ok := revolveLoftFacesStraightOrFitSpans(trim, segmentIndex, record)
+	spans, ok := RevolveLoftFacesStraightOrFitSpans(trim, segmentIndex, record)
 	if !ok || len(spans) != len(fit.Fit)-1 || leftIndex < 0 || leftIndex+1 >= len(spans) {
 		return empty, false
 	}
@@ -49,7 +50,7 @@ func revolveLoftFacesFitKnotVertex(trim *loftFacesTrimRecord,
 	left, right := spans[leftIndex], spans[leftIndex+1]
 	end, start := left[len(left)-1], right[0]
 	if end.U.Cmp(start.U) != 0 || end.V.Cmp(start.V) != 0 ||
-		end.U.Cmp(lfF(point.X())) != 0 || end.V.Cmp(lfF(point.Y())) != 0 {
+		end.U.Cmp(proofarith.FloatRat(point.X())) != 0 || end.V.Cmp(proofarith.FloatRat(point.Y())) != 0 {
 		return empty, false
 	}
 	return revolveLoftFacesFitKnot{point: point, segment: segmentIndex,
@@ -65,8 +66,8 @@ type revolveLoftFacesFitKnotJoint struct {
 	band       int
 	roots      []loftface.EndpointRoot
 	pieces     []loftface.TimePiece
-	leftCells  []revolveLoftFacesJointCell
-	rightCells []revolveLoftFacesJointCell
+	leftCells  []RevolveLoftFacesJointCell
+	rightCells []RevolveLoftFacesJointCell
 }
 
 func certifyRevolveLoftFacesFitKnotJoint(ctx context.Context, trim *loftFacesTrimRecord,
@@ -82,8 +83,8 @@ func certifyRevolveLoftFacesFitKnotJoint(ctx context.Context, trim *loftFacesTri
 	if !ok {
 		return empty, false
 	}
-	m, b := revolveLoftFacesMeridian(section)
-	memo := revolveLoftFacesMeridianMemoOf(ctx)
+	m, b := RevolveLoftFacesMeridian(section)
+	memo := RevolveLoftFacesMeridianMemoOf(ctx)
 	leftQ := memo.QRows(trim.Maps[band], trim.Maps[band+1], vertex.left, m, b)
 	rightQ := memo.QRows(trim.Maps[band], trim.Maps[band+1], vertex.right, m, b)
 	leftEnd := len(leftQ[0]) - 1
@@ -92,7 +93,7 @@ func certifyRevolveLoftFacesFitKnotJoint(ctx context.Context, trim *loftFacesTri
 			return empty, false
 		}
 	}
-	roots, ok := revolveLoftFacesEndpointFiniteRootsWith(memo, trim, section, vertex.left, band, true)
+	roots, ok := RevolveLoftFacesEndpointFiniteRootsWith(memo, trim, section, vertex.left, band, true)
 	if !ok {
 		return empty, false
 	}
@@ -101,8 +102,8 @@ func certifyRevolveLoftFacesFitKnotJoint(ctx context.Context, trim *loftFacesTri
 	if !ok {
 		return empty, false
 	}
-	leftCells := make([]revolveLoftFacesJointCell, len(roots))
-	rightCells := make([]revolveLoftFacesJointCell, len(roots))
+	leftCells := make([]RevolveLoftFacesJointCell, len(roots))
+	rightCells := make([]RevolveLoftFacesJointCell, len(roots))
 	for i, root := range roots {
 		leftCells[i], ok = revolveLoftFacesKnotRootCellWith(memo, trim, section,
 			vertex.left, band, true, root)

@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 )
@@ -81,7 +82,7 @@ func revolveLoftFacesSimpleSourceLoop(ctx context.Context,
 			if !loftface.SimpleRecordDirection(source, outer[segment].Reversed) {
 				return nil, false, nil
 			}
-			spans, ok := revolveLoftFacesStraightOrFitSpans(trim, segment, source)
+			spans, ok := revolveloftfaces.RevolveLoftFacesStraightOrFitSpans(trim, segment, source)
 			if !ok || len(spans) == 0 {
 				return nil, false, nil
 			}
