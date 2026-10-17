@@ -1529,3 +1529,4 @@
 10	0.00	TestAxialLoftPrismUnionRefusesVaryingSource
 10	0.00	TestAxialLoftPrismUnionRefusesUnequalCapsAndCancellation
 10	0.00	TestLoftContactSeamReadsVaryingRecordedLines
+10	0.00	TestLoftContactOccupancyReadsVaryingRecordedWalls
