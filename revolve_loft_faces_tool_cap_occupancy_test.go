@@ -44,7 +44,7 @@ func TestRevolveLoftFacesHeelVerticalArcConsumesLiveNeutralSource(t *testing.T) 
 	loop, simple, err := revolveLoftFacesSimpleSourceLoop(t.Context(), proof.trim)
 	require.NoError(t, err)
 	require.True(t, simple)
-	require.Len(t, loop.cells, 8)
+	require.Len(t, loop.Cells, 8)
 	sides, ok := revolveLoftFacesToolCapSidesOf(proof)
 	require.True(t, ok)
 	for _, circle := range sides.circles {

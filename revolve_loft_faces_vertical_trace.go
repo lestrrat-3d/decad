@@ -168,7 +168,7 @@ func revolveLoftFacesVerticalTraceChain(graph *revolveLoftFacesContactGraph,
 				cell.span != 0 || cell.band != side.band {
 				return nil, false
 			}
-			simpleCell, simple := revolveLoftFacesSimpleArc(trim, cell.segment,
+			simpleCell, simple := revolveloftfaces.SimpleArc(trim, cell.segment,
 				record, record.TStart > record.TEnd)
 			if !simple {
 				return nil, false

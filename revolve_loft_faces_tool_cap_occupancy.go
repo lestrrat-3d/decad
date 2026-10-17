@@ -106,7 +106,7 @@ func revolveLoftFacesHeelOccupiedFromSource(ctx context.Context,
 		return nil, false, err
 	}
 	loop, simple, err := revolveLoftFacesSimpleSourceLoop(ctx, proof.trim)
-	if err != nil || !simple || loop == nil || !loop.ccw {
+	if err != nil || !simple || loop == nil || !loop.CCW {
 		return nil, false, err
 	}
 	outer := proof.trim.Source.Source.Profile.Outer
