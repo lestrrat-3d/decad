@@ -29,6 +29,7 @@ var floor = map[string]struct{}{
 	"surfacenormal":  {},
 	"surfacegeom":    {},
 	"provenance":     {},
+	"radiusmemo":     {},
 }
 
 func TestTopoDependsOnlyOnFloor(t *testing.T) {
@@ -49,10 +50,9 @@ func TestTopoDependsOnlyOnFloor(t *testing.T) {
 }
 
 // TestBodyMovedFields holds the Body node's field list fixed. The root Body
-// handle keeps pairReports and sweepRadii, because their types name root
-// types or pull packages outside the floor (sweepRadii's type
-// reaches sweepmemo, motionbound and capband). Adding a field here is a
-// deliberate change to that boundary.
+// handle keeps pairReports because its type names root report types.
+// SweepRadii uses the leaf radiusmemo type and belongs in the node.
+// Adding a field here is a deliberate change to that boundary.
 func TestBodyMovedFields(t *testing.T) {
 	// reflect is confined to this test: it lists the struct's field names, and
 	// no static construct can enumerate them.
@@ -61,6 +61,5 @@ func TestBodyMovedFields(t *testing.T) {
 	for f := range typ.Fields() {
 		got = append(got, f.Name)
 	}
-	require.Equal(t, []string{"Solid", "PlanarConvexity", "PlanarSnapshot", "PlanarHints", "Tess", "Origin", "Volume", "Area", "Centroid", "Bounds", "Kind", "Doc", "Lumps", "Owner", "Payload"}, got)
-	require.NotContains(t, got, "SweepRadii")
+	require.Equal(t, []string{"Solid", "PlanarConvexity", "PlanarSnapshot", "PlanarHints", "Tess", "SweepRadii", "Origin", "Volume", "Area", "Centroid", "Bounds", "Kind", "Doc", "Lumps", "Owner", "Payload"}, got)
 }

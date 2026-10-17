@@ -548,9 +548,6 @@ type Body struct {
 	// pairReports keeps the recent ContactPair reports this body is the
 	// first operand of (internal/reportvocab/contact_memo.go); it changes no outcome either.
 	pairReports pairReportMemo
-	// sweepRadii keeps the recent sweep radii read on this body
-	// (contact_sweep_memo.go); it changes no outcome either.
-	sweepRadii sweepRadiusMemo
 }
 
 // Document returns the document that owns (or owned) this body.
