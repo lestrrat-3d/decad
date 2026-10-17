@@ -10,6 +10,35 @@ import (
 
 type cubic [4]*big.Rat
 
+// A constructor-produced seam has dyadic coefficients. Limiting each part
+// to 512 bits bounds every raw integer product and sum in the endpoint
+// comparison and cubic Bernstein test below 6000 bits. Check before those
+// operations: a finite float64 alone does not bound their cubic products
+// below the source proof's 8192-bit ceiling.
+const orderedSeamMaxPartBits = 512
+
+func lineSeamOrderingBound(budget *proofbound.WorkBudget, seam LineSeam) (bool, error) {
+	coefficients := [9]*big.Rat{
+		seam.lineNum[0], seam.lineNum[1], seam.lineDen[0], seam.lineDen[1],
+		seam.carrierNum[0], seam.carrierNum[1], seam.carrierNum[2],
+		seam.carrierDen[0], seam.carrierDen[1],
+	}
+	for _, value := range coefficients {
+		if err := budget.Step(); err != nil {
+			return false, err
+		}
+		if value == nil {
+			return false, nil
+		}
+		denBits := value.Denom().BitLen()
+		if value.Num().BitLen() > orderedSeamMaxPartBits || denBits > orderedSeamMaxPartBits ||
+			denBits == 0 || value.Denom().TrailingZeroBits() != uint(denBits-1) {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
 // CertifyOrderedLineSeams proves that two transverse wall contacts stay
 // strictly ordered on the same straight carrier at every axial height.
 // The caller must authenticate both paired Loft lines and their common frame.
@@ -24,8 +53,14 @@ func CertifyOrderedLineSeams(ctx context.Context, budget *proofbound.WorkBudget,
 	if err != nil || !ok {
 		return [2]LineSeam{}, false, err
 	}
+	if ok, err = lineSeamOrderingBound(budget, seams[0]); err != nil || !ok {
+		return [2]LineSeam{}, false, err
+	}
 	seams[1], ok, err = CertifyLineSeam(ctx, budget, bottomB, topB, carrier)
 	if err != nil || !ok {
+		return [2]LineSeam{}, false, err
+	}
+	if ok, err = lineSeamOrderingBound(budget, seams[1]); err != nil || !ok {
 		return [2]LineSeam{}, false, err
 	}
 	if err := budget.Step(); err != nil {
