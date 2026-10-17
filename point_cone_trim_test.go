@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/pointcone"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -67,7 +68,7 @@ func TestPointConeUpperFarPlaneNodeRequiresCapCharge(t *testing.T) {
 	t.Parallel()
 	cone := &pointConeLimit{Apex: big.NewRat(10, 1), Slope: big.NewRat(1, 1)}
 	far := r3.Vec{X: 5, Y: 4.9}
-	sample, err := pointConeFactor(far, cone)
+	sample, err := facetedrecord.PointConeFactor(far, cone)
 	require.NoError(t, err)
 	require.Less(t, sample.Q+sample.QError, 1.0)
 	_, _, err = pointcone.UpperCapNode(far, sample, false)

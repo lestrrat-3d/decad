@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	"github.com/lestrrat-3d/decad/internal/pointcone"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -50,13 +51,13 @@ func buildRevolveSectorMesh(mesh *joinedMesh, ring revolvedSectionRing,
 		mesh.Groups = append(mesh.Groups, group)
 	}
 	upperGroup := len(mesh.Groups)
-	upperFace := pointConeFacetGroup(record.Upper, false)
+	upperFace := facetedrecord.PointConeFacetGroup(record.Upper, false)
 	if placedGroups != nil {
 		upperFace = placedGroups[len(record.Base.Groups)]
 	}
 	mesh.Groups = append(mesh.Groups, upperFace)
 	lowerGroup := len(mesh.Groups)
-	lowerFace := pointConeFacetGroup(record.Lower, true)
+	lowerFace := facetedrecord.PointConeFacetGroup(record.Lower, true)
 	if placedGroups != nil {
 		lowerFace = placedGroups[len(record.Base.Groups)+1]
 	}
@@ -75,9 +76,9 @@ func buildRevolveSectorMesh(mesh *joinedMesh, ring revolvedSectionRing,
 		for i := range original {
 			points[i] = original[i].P
 		}
-		w := orderedwork.EachWorkers(len(points), pointConeFactorParallelMin)
-		samples.up, upErrs = pointConeFactors(points, record.Upper, w)
-		samples.down, downErrs = pointConeFactors(points, record.Lower, w)
+		w := orderedwork.EachWorkers(len(points), facetedrecord.PointConeFactorParallelMin)
+		samples.up, upErrs = facetedrecord.PointConeFactors(points, record.Upper, w)
+		samples.down, downErrs = facetedrecord.PointConeFactors(points, record.Lower, w)
 	}
 	for i := range nodes {
 		far := original[i].P

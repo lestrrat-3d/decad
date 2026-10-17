@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -37,7 +38,7 @@ func TestPointConeFactorsMatchSerial(t *testing.T) {
 			ref := newCone()
 			first, firstErr := -1, error(nil)
 			for i, p := range points {
-				if _, err := pointConeFactor(p, ref); err != nil {
+				if _, err := facetedrecord.PointConeFactor(p, ref); err != nil {
 					first, firstErr = i, err
 					break
 				}
@@ -45,7 +46,7 @@ func TestPointConeFactorsMatchSerial(t *testing.T) {
 			t.Logf("first error at %d: %v", first, firstErr)
 			for _, workers := range []int{1, 4} {
 				cone := newCone()
-				samples, errs := pointConeFactors(points, cone, workers)
+				samples, errs := facetedrecord.PointConeFactors(points, cone, workers)
 				gotFirst := -1
 				for i, err := range errs {
 					if err != nil {
@@ -62,7 +63,7 @@ func TestPointConeFactorsMatchSerial(t *testing.T) {
 					end = first
 				}
 				for i := range end {
-					want, err := pointConeFactor(points[i], ref)
+					want, err := facetedrecord.PointConeFactor(points[i], ref)
 					require.NoError(t, err)
 					got := samples[i]
 					require.Equal(t, math.Float64bits(want.Q), math.Float64bits(got.Q), "Q %d", i)

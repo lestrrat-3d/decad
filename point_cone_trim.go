@@ -19,23 +19,6 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-func pointConeFacetGroup(cone *pointConeLimit, flip bool) facetGroup {
-	denoted := cone.Denoted
-	if flip {
-		// A straight revolve wall's denotation stores its oriented meridian
-		// runs. Its Allow method reads that orientation directly.
-		denotedCopy := *denoted
-		denotedCopy.Runs = append([][2]proofbound.RatInterval(nil), denoted.Runs...)
-		for i := range denotedCopy.Runs {
-			denotedCopy.Runs[i][0] = proofbound.IntervalNeg(denotedCopy.Runs[i][0])
-			denotedCopy.Runs[i][1] = proofbound.IntervalNeg(denotedCopy.Runs[i][1])
-		}
-		denoted = &denotedCopy
-	}
-	return facetGroup{Origins: cone.Origins, Surface: cone.Surface,
-		Denoted: denoted, Reversed: cone.Reversed != flip}
-}
-
 // exactPointCone recognizes the unplaced, full, straight-meridian cone whose
 // axis is world X. Every parameter is read from the authenticated meridian;
 // the rounded public Cone tag is used only for surface reporting.
@@ -189,8 +172,8 @@ func buildPointConeInsideBand(ctx context.Context, d *Document, ref producerID,
 	}
 	capArea, reach := pointcone.CapArea(far, caps), pointcone.ReachUpper(far)
 	upperNodeRound, upperQError := 0.0, 0.0
-	upperSamples, upperErrs := pointConeFactors(far, upper,
-		orderedwork.EachWorkers(len(far), pointConeFactorParallelMin))
+	upperSamples, upperErrs := facetedrecord.PointConeFactors(far, upper,
+		orderedwork.EachWorkers(len(far), facetedrecord.PointConeFactorParallelMin))
 	for i := range far {
 		if upperErrs[i] != nil {
 			return nil, upperErrs[i]
@@ -226,8 +209,8 @@ func buildPointConeInsideBand(ctx context.Context, d *Document, ref producerID,
 	if lower != nil {
 		lowerQError := 0.0
 		var lowerErrs []error
-		lowerSamples, lowerErrs = pointConeFactors(far, lower,
-			orderedwork.EachWorkers(len(far), pointConeFactorParallelMin))
+		lowerSamples, lowerErrs = facetedrecord.PointConeFactors(far, lower,
+			orderedwork.EachWorkers(len(far), facetedrecord.PointConeFactorParallelMin))
 		for i := range far {
 			if lowerErrs[i] != nil {
 				return nil, lowerErrs[i]
@@ -261,11 +244,11 @@ func buildPointConeInsideBand(ctx context.Context, d *Document, ref producerID,
 	groups := append([]facetGroup(nil), base.Groups...)
 	farGroup := len(groups) - 1
 	upperGroup := len(groups)
-	groups = append(groups, pointConeFacetGroup(upper, false))
+	groups = append(groups, facetedrecord.PointConeFacetGroup(upper, false))
 	lowerGroup := -1
 	if lower != nil {
 		lowerGroup = len(groups)
-		groups = append(groups, pointConeFacetGroup(lower, true))
+		groups = append(groups, facetedrecord.PointConeFacetGroup(lower, true))
 	}
 	for i := range farGroup {
 		groups[i].Surface = surfacegeom.NURBSSurface{}
@@ -364,8 +347,8 @@ func buildPointConeOuterBand(ctx context.Context, d *Document, ref producerID,
 	fullCapArea := pointcone.CapArea(far, caps)
 	fullReach := pointcone.ReachUpper(far)
 	maxNodeRound, maxQError := 0.0, 0.0
-	samples, sampleErrs := pointConeFactors(far, cone,
-		orderedwork.EachWorkers(len(far), pointConeFactorParallelMin))
+	samples, sampleErrs := facetedrecord.PointConeFactors(far, cone,
+		orderedwork.EachWorkers(len(far), facetedrecord.PointConeFactorParallelMin))
 	for i := range far {
 		if sampleErrs[i] != nil {
 			return nil, sampleErrs[i]
@@ -399,7 +382,7 @@ func buildPointConeOuterBand(ctx context.Context, d *Document, ref producerID,
 	groups := append([]facetGroup(nil), base.Groups...)
 	capGroup := len(groups) - 1
 	coneGroup := len(groups)
-	groups = append(groups, pointConeFacetGroup(cone, true))
+	groups = append(groups, facetedrecord.PointConeFacetGroup(cone, true))
 	for i := range capGroup {
 		groups[i].Surface = surfacegeom.NURBSSurface{}
 	}
@@ -480,7 +463,7 @@ func pointConeHasOutsideWitness(base facetedPayload, cone *pointConeLimit) bool 
 		new(big.Rat).Add(big.NewRat(1, 1), cone.Slope),
 		proofarith.FloatRat(base.MeshBound)), cone.Apex)
 	for _, p := range base.Verts[1:] {
-		sample, err := pointConeFactor(p, cone)
+		sample, err := facetedrecord.PointConeFactor(p, cone)
 		if err != nil {
 			continue
 		}
@@ -499,48 +482,4 @@ func pointConeSubdivide(ctx context.Context, base facetedPayload, rounds int) (
 		return nil, nil, nil, 0, fmt.Errorf("%w: the point-cone source has no fan", ErrUnsupported)
 	}
 	return pointcone.Subdivide(ctx, base.Verts, base.Tris, base.Src, rounds)
-}
-
-// pointConeFactor dispatches a held far-cap point to the Dyadic crossing for a
-// positive apex and slope, and to the big.Rat form otherwise.
-func pointConeFactor(p r3.Vec, cone *pointConeLimit) (pointcone.Sample, error) {
-	if cone.Apex.Sign() <= 0 || cone.Slope.Sign() <= 0 {
-		return pointcone.FactorRat(p, cone.Apex, cone.Slope)
-	}
-	return pointcone.FactorDyadic(p, cone.Constants())
-}
-
-// pointConeFactorParallelMin is the point count from which pointConeFactors
-// callers ask for more than one worker.
-const pointConeFactorParallelMin = 1024
-
-// pointConeFactors is pointConeFactor over every point: samples[i] and errs[i]
-// are point i's. With workers below 2, or a non-positive apex or slope (the
-// big.Rat form), it runs in point order on the calling goroutine and stops
-// after the first error, leaving later slots zero. Otherwise the cone
-// constants are resolved first and the points are spread over workers; the
-// lowest non-nil errs index is then the serial first error, and slots past it
-// may or may not be filled.
-func pointConeFactors(points []r3.Vec, cone *pointConeLimit, workers int) ([]pointcone.Sample, []error) {
-	samples := make([]pointcone.Sample, len(points))
-	errs := make([]error, len(points))
-	if cone.Apex.Sign() <= 0 || cone.Slope.Sign() <= 0 {
-		workers = 1
-	}
-	if workers < 2 {
-		for i, p := range points {
-			samples[i], errs[i] = pointConeFactor(p, cone)
-			if errs[i] != nil {
-				break
-			}
-		}
-		return samples, errs
-	}
-	consts := cone.Constants()
-	// The per-index error lives in errs, so Each's own result is unused.
-	_, _ = orderedwork.Each(len(points), workers, 256, nil, func(i int) error {
-		samples[i], errs[i] = pointcone.FactorDyadic(points[i], consts)
-		return errs[i]
-	})
-	return samples, errs
 }
