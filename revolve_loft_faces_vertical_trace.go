@@ -174,7 +174,7 @@ func revolveLoftFacesVerticalTraceChain(graph *revolveLoftFacesContactGraph,
 			p.cell.band != arc.arc.band || p.cell.ref != boundary.ref ||
 			p.cell.face != boundary.face ||
 			!loftface.IntervalEqual(p.cell.upper.Root, boundary.parameter) ||
-			!revolveLoftFacesCapBoundaryBoxEqual(p.cell.upper.Box, boundary.box) {
+			!revolveloftfaces.CapBoundaryBoxEqual(p.cell.upper.Box, boundary.box) {
 			return nil, nil, false
 		}
 		if p.piece.Source.Lo.Cmp(boundary.parameter.Hi) == 0 {

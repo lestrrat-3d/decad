@@ -50,6 +50,26 @@ type RevolveLoftFacesMappedCell struct {
 	TLoOpen, THiOpen    bool
 }
 
+// TimeInCell reports whether time belongs to the cell's exact time interval.
+func TimeInCell(time *big.Rat, cell RevolveLoftFacesMappedCell) bool {
+	if time == nil || cell.TLo == nil || cell.THi == nil {
+		return false
+	}
+	lo, hi := time.Cmp(cell.TLo), time.Cmp(cell.THi)
+	return (lo > 0 || lo == 0 && !cell.TLoOpen) &&
+		(hi < 0 || hi == 0 && !cell.THiOpen)
+}
+
+// CapBoundaryBoxEqual compares the three exact intervals of two cap boundary boxes.
+func CapBoundaryBoxEqual(a, b [3]loftface.Interval) bool {
+	for axis := range a {
+		if !loftface.IntervalEqual(a[axis], b[axis]) {
+			return false
+		}
+	}
+	return true
+}
+
 // revolveLoftFacesFiniteSpanCells classifies every fitted and straight
 // source span against a finite, nonvertical Revolve section side. A finite
 // contact is only possible where the crossing's axial interval overlaps the
