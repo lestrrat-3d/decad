@@ -70,6 +70,6 @@ The rules for rows live in `docs/layout.md`.
 | `internal/stitchweld/` | Stitch welds, topology and bounds. See surface §6.2–6.4. |
 | `internal/denotation/` | Level and curve identity certificates. See surface §5.2, §6.2. |
 | `internal/surfacenormal/` | Exact enclosures and error bounds for analytic face normals. See `normal_bound.go`. |
-| `internal/spiralsector/` | Spiral first-join held edge and switch chains, contact and output-edge gates, blank meridian, exact X-axis copy map and inverse copy placement. See faceted-vertex-bounds §3.6–§3.7. |
+| `internal/spiralsector/` | Spiral first-join held edge and switch chains, short-cap and root-flank box bounds, contact and output-edge gates, blank meridian, exact X-axis copy map and inverse copy placement. See faceted-vertex-bounds §3.6–§3.7 and loft-face-sections design. |
 | `internal/shellseparation/` | Bounded source-shell and held-copy separation, exact slab projections, and placement error. See faceted-vertex-bounds §3.7. |
 | `internal/obliqueboss/` | The oblique boss fillet mesh and proof: source face groups, the angular plan and fillet mesh, the boundary, volume and area bounds, and the rational interval-vector arithmetic the proof uses. See oblique-boss-fillet design. |
