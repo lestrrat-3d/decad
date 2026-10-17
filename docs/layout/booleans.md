@@ -38,7 +38,6 @@ The rules for rows live in `docs/layout.md`.
 | `loft_cylinder_union.go` | Joins a source Loft tooth pattern to a coaxial cylinder with certified seam and volume bounds. See loft-cylinder-boolean design. |
 | `loft_cylinder_placement.go` | Rebuilds a common signed-axis cylinder/Loft join in local coordinates and places its audited shell. See loft-cylinder-boolean design. |
 | `loft_cylinder_axial_bridge.go` | Bounds a one-ulp axial placement difference between original Loft sources and private Union proof copies. See loft-cylinder-boolean design. |
-| `loft_cylinder_separation.go` | Proves twisted Loft teeth remain separated at every height. See loft-cylinder-boolean design. |
 | `loft_cylinder_cap.go` | Reads joined meshes into the exact cap disk and annulus audits and tags certified cap faces. See loft-cylinder-boolean design. |
 | `loft_cylinder_source_circle.go` | Builds a source Loft tooth's exact circle record after strict root-collar admission. See loft-cylinder-boolean design. |
 | `loft_cylinder_ring_occupancy.go` | Gathers tooth circles and walls for the strict interior split-ring check. See loft-cylinder-boolean design. |

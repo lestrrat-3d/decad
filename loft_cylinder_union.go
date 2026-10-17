@@ -250,7 +250,17 @@ func tryLoftCylinderUnionTeethWithUpperBridge(ctx context.Context, d *Document, 
 		return nil, false, nil
 	}
 	sort.Slice(parts, func(i, j int) bool { return parts[i].bottom[0] < parts[j].bottom[0] })
-	if !loftCylinderSeparate(parts) {
+	separation := make([]loftcylinder.SeparationTooth, len(parts))
+	for i, part := range parts {
+		separation[i] = loftcylinder.SeparationTooth{
+			Bottom: part.bottom, Top: part.top,
+			Verts: part.loft.Verts, Tris: part.loft.Tris,
+			Z0: part.loft.Frame0.Origin().Z, Z1: part.loft.Frame1.Origin().Z,
+			MeshBound: part.mesh.Bound().Base(), WallBound: part.loft.Proof.FacetDeparture,
+			Bridge: part.bridge, UpperBridge: part.upperSeparationBridge,
+		}
+	}
+	if !loftcylinder.SeparateTeeth(separation) {
 		return nil, false, nil
 	}
 	body, err := buildLoftCylinderUnion(ctx, d, ref, blank, pp, radius, parts)
@@ -294,71 +304,6 @@ func loftCylinderAxialPlacement(xform r3.Transform) bool {
 	return xform.Translation() == (r3.Vec{}) && b.EZ == (r3.Vec{Z: 1}) &&
 		b.EX.Z == 0 && b.EY.Z == 0 && b.EX.X == b.EY.Y &&
 		b.EX.Y == -b.EY.X
-}
-
-func loftCylinderSeparate(parts []loftCylinderTooth) bool {
-	// Try a fixed through-axis plane first. A twisted pair may need a plane
-	// whose normal changes with height; that case checks whole triangles.
-	movingWork := 8_000_000
-	for i := range parts {
-		for j := i + 1; j < len(parts); j++ {
-			center := func(part loftCylinderTooth) (float64, float64) {
-				angle := (part.bottom[0] + part.bottom[1] +
-					part.top[0] + part.top[1]) / 4
-				return math.Cos(angle), math.Sin(angle)
-			}
-			ax, ay := center(parts[i])
-			bx, by := center(parts[j])
-			nx, ny := bx-ax, by-ay
-			if !proofbound.FiniteVec(r3.Vec{X: nx, Y: ny}) {
-				return false
-			}
-			rx, ry := proofarith.FloatRat(nx), proofarith.FloatRat(ny)
-			length2 := new(big.Rat).Add(new(big.Rat).Mul(rx, rx),
-				new(big.Rat).Mul(ry, ry))
-			length := proofbound.RatSqrtUp(length2)
-			if length <= 0 || proofbound.IsNonFinite(length) {
-				return false
-			}
-			fixed := true
-			for k, part := range []loftCylinderTooth{parts[i], parts[j]} {
-				margin := proofbound.ProductUpper(length, part.mesh.Bound().Base())
-				marginRat := proofarith.FloatRat(margin)
-				for _, p := range part.loft.Verts {
-					dot := new(big.Rat).Add(new(big.Rat).Mul(rx, proofarith.FloatRat(p.X)),
-						new(big.Rat).Mul(ry, proofarith.FloatRat(p.Y)))
-					if k == 0 && dot.Cmp(new(big.Rat).Neg(marginRat)) >= 0 ||
-						k == 1 && dot.Cmp(marginRat) <= 0 {
-						fixed = false
-						break
-					}
-				}
-				if !fixed {
-					break
-				}
-			}
-			if !fixed && !loftCylinderMovingSeparate(parts[i], parts[j], &movingWork) {
-				return false
-			}
-		}
-	}
-	for i := range parts {
-		j := (i + 1) % len(parts)
-		for cap := range 2 {
-			a, b := parts[i].bottom, parts[j].bottom
-			if cap == 1 {
-				a, b = parts[i].top, parts[j].top
-			}
-			for b[0] <= a[0] {
-				b[0] += 2 * math.Pi
-				b[1] += 2 * math.Pi
-			}
-			if a[1]+0.02 >= b[0] || b[0]-a[1] >= 2*math.Pi {
-				return false
-			}
-		}
-	}
-	return true
 }
 
 func buildLoftCylinderUnion(ctx context.Context, d *Document, ref producerID,
