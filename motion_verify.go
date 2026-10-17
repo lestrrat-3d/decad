@@ -978,7 +978,7 @@ func (r *motionRun) place(mp *motionPose, i int, placed []*motionPlaced) (*motio
 		if err := r.ctx.Err(); err != nil {
 			return nil, err
 		}
-		key = poseTransformBits(composed)
+		key = motionbound.TransformBits(composed)
 		transient = r.poseBodies[i].get(key)
 	}
 	if transient == nil {
