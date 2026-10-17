@@ -410,7 +410,7 @@ func (k *pairKernel) nestingRelation() (reportvocab.PairVerdict, *Body, error) {
 			if err := budget.Step(); err != nil {
 				return membership{}, err
 			}
-			inside, ok, err := outer.pointInBody(k.ctx, w, k.tol)
+			inside, ok, err := clearance.PointInBody(k.ctx, outer.faces, w, k.tol)
 			if err != nil {
 				return membership{}, err
 			}
@@ -564,7 +564,7 @@ func sheetSolidPair(ctx context.Context, sheet, solid *Body, boxDisjoint bool, c
 	if len(gs.shellWit) != 1 {
 		return reportvocab.SheetSolidResult{Verdict: reportvocab.SheetSolidUndecided, Diam: diam}, nil
 	}
-	inside, ok, err := gb.pointInBody(ctx, gs.shellWit[0], k.tol)
+	inside, ok, err := clearance.PointInBody(ctx, gb.faces, gs.shellWit[0], k.tol)
 	if err != nil {
 		return reportvocab.SheetSolidResult{}, err
 	}
