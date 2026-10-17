@@ -33,6 +33,31 @@ type Origin struct {
 	AuthoredReversed bool
 }
 
+// TaggedSegments reports whether the scene retained one distinct entity for
+// every segment in each operand's outer loop.
+func TaggedSegments(tags map[sketch.Entity]Origin, countA, countB int) bool {
+	seenA, seenB := make([]bool, countA), make([]bool, countB)
+	for _, origin := range tags {
+		if origin.Region != 0 || origin.Hole != -1 {
+			return false
+		}
+		seen := seenA
+		if origin.IsB {
+			seen = seenB
+		}
+		if origin.Segment < 0 || origin.Segment >= len(seen) || seen[origin.Segment] {
+			return false
+		}
+		seen[origin.Segment] = true
+	}
+	for _, seen := range append(seenA, seenB...) {
+		if !seen {
+			return false
+		}
+	}
+	return true
+}
+
 // LoopEntitySet is the tag map's per-loop view: the set of entities
 // BuildScene created for one operand's one loop (Outer at hole = -1,
 // else Holes[hole]), read for the structural match (§4.2) alone.

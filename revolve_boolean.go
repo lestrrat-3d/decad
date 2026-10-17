@@ -59,7 +59,7 @@ func tryCommonAxisRevolveBoolean(ctx context.Context, op meshbool.OperationKind,
 	}
 	// Provenance by segment index requires a distinct scene entity for each
 	// source segment. The scene may deduplicate segments within an operand.
-	if !revolveBooleanTaggedSegments(tags, len(ra.Profile.Outer.Segments), len(rb.Profile.Outer.Segments)) {
+	if !prismcells.TaggedSegments(tags, len(ra.Profile.Outer.Segments), len(rb.Profile.Outer.Segments)) {
 		return nil, false, nil
 	}
 	profiles, err := prismcells.CellProfiles(ctx, budget, s)
@@ -141,29 +141,6 @@ func commonAxisKeep(op meshbool.OperationKind) func(bool, bool) bool {
 	default:
 		return func(a, b bool) bool { return a && b }
 	}
-}
-
-func revolveBooleanTaggedSegments(tags map[sketch.Entity]prismcells.Origin, countA, countB int) bool {
-	seenA, seenB := make([]bool, countA), make([]bool, countB)
-	for _, origin := range tags {
-		if origin.Region != 0 || origin.Hole != -1 {
-			return false
-		}
-		seen := seenA
-		if origin.IsB {
-			seen = seenB
-		}
-		if origin.Segment < 0 || origin.Segment >= len(seen) || seen[origin.Segment] {
-			return false
-		}
-		seen[origin.Segment] = true
-	}
-	for _, seen := range append(seenA, seenB...) {
-		if !seen {
-			return false
-		}
-	}
-	return true
 }
 
 func revolveBooleanSources(ctx context.Context, a, b *Body, ra, rb revolvePayload,
