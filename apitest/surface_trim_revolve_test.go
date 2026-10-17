@@ -148,7 +148,7 @@ func TestSurfaceTrimRevolveKeepOutsideSplitsIntoTwoWalks(t *testing.T) {
 // this evaluator refuses, each read by MESSAGE TEXT so the refusal is pinned
 // to its own gate rather than only to the sentinel every one of them shares.
 func TestSurfaceTrimRevolveRefusalsNameTheirOwnGate(t *testing.T) {
-	// Shown-to-fail for both S4 sub-cases: replacing revolveAxisIdentical's
+	// Shown-to-fail for both S4 sub-cases: replacing revolveplan.AxisIdentical's
 	// stored-float comparison with an angle comparison admits BOTH pairs, and
 	// no later gate refuses either. The parallel-axis pair then returns a body
 	// whose area reads 854.513 mm² — the answer for a genuinely co-axial tool —

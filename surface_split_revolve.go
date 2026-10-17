@@ -132,7 +132,7 @@ func admitSplitRevolvePair(budget *proofbound.WorkBudget, target, tool *Body) (r
 	if rcv.Frame != tl.Frame {
 		return fail(`%w: the target and tool do not spin about the same frame, exactly`, ErrUnsupported)
 	}
-	if !revolveAxisIdentical(rcv.Ax, tl.Ax) {
+	if !revolveplan.AxisIdentical(rcv.Ax, tl.Ax) {
 		return fail(`%w: the target and tool do not spin about the same axis, exactly`, ErrUnsupported)
 	}
 
