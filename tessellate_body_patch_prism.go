@@ -10,7 +10,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stationbound"
-	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -18,35 +17,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 	"github.com/lestrrat-3d/r3"
 )
-
-// bodyPatchCircularPrismSource admits a complete single-circle surface
-// extrusion. Its one source face supplies both rim station grids, and each
-// selected rim is exactly one of the source body's own full-circle edges.
-func bodyPatchCircularPrismSource(pp bodyPatchPayload) (prismPayload, bool) {
-	if len(pp.Faces) != 1 || len(pp.Chains) == 0 || len(pp.Chains) > 2 || pp.Faces[0].Body == nil {
-		return prismPayload{}, false
-	}
-	prism, ok := pp.Faces[0].Body.Payload.(prismPayload)
-	if !ok || !prism.SurfaceResult || prism.SectionDelta != 0 || len(prism.Profile.Holes) != 0 ||
-		len(prism.Profile.Outer.Segments) != 1 {
-		return prismPayload{}, false
-	}
-	if _, ok := pp.Faces[0].Surface.(surfacegeom.Cylinder); !ok {
-		return prismPayload{}, false
-	}
-	for _, chain := range pp.Chains {
-		if len(chain.Edges) != 1 {
-			return prismPayload{}, false
-		}
-		if _, ok := chain.Edges[0].Curve.(surfacegeom.Circle3); !ok {
-			return prismPayload{}, false
-		}
-		if len(chain.Edges[0].Faces) != 1 || chain.Edges[0].Faces[0] != pp.Faces[0] {
-			return prismPayload{}, false
-		}
-	}
-	return prism, true
-}
 
 // tessellateBodyPatchCircularPrism reuses the wall mesh's own ring vertices
 // when it fills either end. The source mesh has already certified the wall;
