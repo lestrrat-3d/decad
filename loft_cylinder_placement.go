@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -132,30 +133,13 @@ func loftCylinderPlacedToothShape(body *Body) bool {
 // authenticated Loft source. Check this before rebuilding the next tooth so
 // an unrelated Loft keeps the ordinary Boolean's error and admission policy.
 func loftCylinderPlacedSourcesMatch(teeth []*Body) bool {
-	return loftCylinderSourceIdentitiesMatch(len(teeth), func(i int) topo.Payload { return teeth[i].n.Payload })
+	return loftcylinder.SourceIdentitiesMatch(len(teeth), func(i int) topo.Payload { return teeth[i].n.Payload })
 }
 
 // loftCylinderPlacedNodeSourcesMatch is loftCylinderPlacedSourcesMatch over
 // the body nodes a join record stores.
 func loftCylinderPlacedNodeSourcesMatch(teeth []*topo.Body) bool {
-	return loftCylinderSourceIdentitiesMatch(len(teeth), func(i int) topo.Payload { return teeth[i].Payload })
-}
-
-// loftCylinderSourceIdentitiesMatch reports whether the payloads of teeth
-// 0..n-1, read through payload in index order, are authenticated Lofts
-// sharing the first tooth's source identity. n must be at least 1.
-func loftCylinderSourceIdentitiesMatch(n int, payload func(i int) topo.Payload) bool {
-	first, ok := payload(0).(loftPayload)
-	if !ok || first.SourceIdentity == nil {
-		return false
-	}
-	for i := 1; i < n; i++ {
-		next, ok := payload(i).(loftPayload)
-		if !ok || next.SourceIdentity != first.SourceIdentity {
-			return false
-		}
-	}
-	return true
+	return loftcylinder.SourceIdentitiesMatch(len(teeth), func(i int) topo.Payload { return teeth[i].Payload })
 }
 
 // loftCylinderLocalBlank rebuilds the exact circular source in XY. The two
