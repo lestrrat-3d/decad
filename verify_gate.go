@@ -55,7 +55,7 @@ import (
 // witnesses (CFace.Wit) are float samples whose gaps (clearance.Witness) are
 // proven to the carriers, not to the body, and a placed body's carrier
 // maximum reads above its own diameter, so no reading here takes them. A prism reads station witnesses along its walls
-// (stationGateDiameter), each held within a proven gap of a point of the
+// (diameter.PrismGateDiameter), each held within a proven gap of a point of the
 // body, and shrinks their maximum by twice the widest gap plus its
 // AxialDelta. fallbackGateDiameter applies the same reading to the prisms it
 // reads, over each one's own displacement. Every revolve, solid or sheet and
@@ -278,7 +278,7 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 	}
 	if ok {
 		if payload, isPrism := body.n.Payload.(prismPayload); isPrism {
-			return stationGateDiameter(budget, []prismPayload{payload}, payload.AxialDelta())
+			return diameter.PrismGateDiameter(budget, []prismPayload{payload}, payload.AxialDelta())
 		}
 		return 0, false, nil
 	}
@@ -355,7 +355,7 @@ func chainRevolveEdgeGateDiameter(ctx context.Context, body *Body, sectionDelta 
 // lower bound §3 requires.
 //
 // What this function reports is a reading of that geometry through
-// stationGateDiameter: the station witnesses diameter.PrismStationWitnesses places
+// diameter.PrismGateDiameter: the station witnesses diameter.PrismStationWitnesses places
 // along every wall of every witness prism at both of its levels, each one
 // charged with its own proven gap. A station is a point of the body only
 // where the witness prism's walls run the full height between its two levels
@@ -391,7 +391,7 @@ func fallbackGateDiameter(budget *proofbound.WorkBudget, body *Body) (float64, b
 	if !ok {
 		return 0, false, nil
 	}
-	return stationGateDiameter(budget, witnesses, displacement)
+	return diameter.PrismGateDiameter(budget, witnesses, displacement)
 }
 
 // draftGateDiameter is bodyGateDiameter's arm for a draft body
@@ -407,7 +407,7 @@ func fallbackGateDiameter(budget *proofbound.WorkBudget, body *Body) (float64, b
 // reads the body's vertices with their published bounds instead.
 func draftGateDiameter(ctx context.Context, body *Body, dp draftPayload) (float64, bool, error) {
 	prisms, displacement := dp.CapPrisms()
-	d, ok, err := stationGateDiameter(proofbound.NewWorkBudget(ctx), prisms, displacement)
+	d, ok, err := diameter.PrismGateDiameter(proofbound.NewWorkBudget(ctx), prisms, displacement)
 	if err != nil || ok {
 		return d, ok, err
 	}

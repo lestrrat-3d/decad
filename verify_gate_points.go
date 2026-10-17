@@ -20,54 +20,6 @@ import (
 
 type gatePoints = diameter.GatePoints
 
-// stationGateDiameter reads a diameter from the station witnesses of prisms
-// alone (prismGatePoints). ok is false, with no error, when any prism's
-// stations cannot be read.
-func stationGateDiameter(budget *proofbound.WorkBudget, prisms []prismPayload, displacement float64) (float64, bool, error) {
-	g, ok, err := prismGatePoints(budget, prisms, displacement)
-	if err != nil || !ok {
-		return 0, false, err
-	}
-	return g.Diameter(budget)
-}
-
-// prismGatePoints lists the station witnesses of prisms
-// (diameter.PrismStationWitnesses). Each station is held within a proven gap of a
-// point of its prism's recorded walls, and the recorded walls lie within
-// displacement of the walls the payload denotes, so allow is displacement
-// plus the widest gap. ok is false, with no error, when any prism's stations
-// cannot be read.
-//
-// The carrier witnesses addPrismFaces places (CFace.Wit) are float samples
-// with no proven gap to the body: a placed prism's held carrier maximum reads
-// above the body's own diameter. This reading never reads them. Each one sits between
-// two stations at its own angle, at a station, or inside the section.
-//
-// Every prism handed in must have walls that run the full height from z0 to
-// z1 on the body (or z0 equal to z1, with its section's boundary on the
-// body at that level), so that each station is a point of the body (within
-// its gap and displacement).
-func prismGatePoints(budget *proofbound.WorkBudget, prisms []prismPayload, displacement float64) (gatePoints, bool, error) {
-	return prismGatePointsMemo(budget, prisms, displacement, nil)
-}
-
-// prismGatePointsMemo is prismGatePoints reading section stations through
-// stations (nil reads them fresh).
-func prismGatePointsMemo(budget *proofbound.WorkBudget, prisms []prismPayload, displacement float64,
-	stations *diameter.StationMemo) (gatePoints, bool, error) {
-	work := freeform.NewFreeformWork()
-	var g gatePoints
-	for _, pp := range prisms {
-		points, stationAllow, read, err := diameter.PrismStationWitnessesMemo(budget, pp, work, stations)
-		if err != nil || !read {
-			return gatePoints{}, false, err
-		}
-		g.Join(gatePoints{Points: points, Allow: stationAllow})
-	}
-	g.Allow = proofbound.AbsSumUpper(displacement, g.Allow)
-	return g, true, nil
-}
-
 // revolveGateDiameter reads a revolvePayload's diameter from the points
 // revolveGatePoints proves lie on the body.
 func revolveGateDiameter(budget *proofbound.WorkBudget, rp revolvePayload) (float64, bool, error) {
@@ -125,7 +77,7 @@ func chainGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body *B
 		return gatePoints{}, false, err
 	}
 	view := pp.Prism()
-	stations, read, err := prismGatePoints(budget, []prismPayload{view}, proofbound.AbsSumUpper(pp.SectionDelta, view.AxialDelta()))
+	stations, read, err := diameter.PrismGatePoints(budget, []prismPayload{view}, proofbound.AbsSumUpper(pp.SectionDelta, view.AxialDelta()))
 	if err != nil {
 		return gatePoints{}, false, err
 	}
@@ -170,7 +122,7 @@ func capBlendGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body
 	if err := ctx.Err(); err != nil {
 		return gatePoints{}, false, err
 	}
-	g, ok, err := prismGatePoints(budget, capblend.WitnessPrisms(cbp), cbp.AxialDelta())
+	g, ok, err := diameter.PrismGatePoints(budget, capblend.WitnessPrisms(cbp), cbp.AxialDelta())
 	if err != nil || !ok {
 		return gatePoints{}, false, err
 	}
@@ -191,7 +143,7 @@ func capBlendGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body
 		rims = append(rims, rim)
 	}
 	if len(rims) > 0 {
-		caps, ok, err := prismGatePoints(budget, rims, proofbound.AbsSumUpper(cbp.AxialDelta(), contour))
+		caps, ok, err := diameter.PrismGatePoints(budget, rims, proofbound.AbsSumUpper(cbp.AxialDelta(), contour))
 		if err != nil {
 			return gatePoints{}, false, err
 		}
@@ -204,7 +156,7 @@ func capBlendGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body
 		if !ok {
 			continue
 		}
-		arc, ok, err := prismGatePoints(budget, []prismPayload{rim}, proofbound.AbsSumUpper(cbp.AxialDelta(), arcAllow))
+		arc, ok, err := diameter.PrismGatePoints(budget, []prismPayload{rim}, proofbound.AbsSumUpper(cbp.AxialDelta(), arcAllow))
 		if err != nil {
 			return gatePoints{}, false, err
 		}
@@ -314,7 +266,7 @@ func bodyGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body *Bo
 		return brepGatePoints(budget, body, pl)
 	case draftPayload:
 		prisms, displacement := pl.CapPrisms()
-		if g, ok, err := prismGatePoints(budget, prisms, displacement); err != nil || ok {
+		if g, ok, err := diameter.PrismGatePoints(budget, prisms, displacement); err != nil || ok {
 			return g, ok, err
 		}
 		return vertexGatePoints(budget, body, 0)
@@ -322,7 +274,7 @@ func bodyGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body *Bo
 		negative, negDelta := pl.Negative.CapPrisms()
 		positive, posDelta := pl.Positive.CapPrisms()
 		prisms := append(negative, positive...)
-		if g, ok, err := prismGatePoints(budget, prisms, math.Max(negDelta, posDelta)); err != nil || ok {
+		if g, ok, err := diameter.PrismGatePoints(budget, prisms, math.Max(negDelta, posDelta)); err != nil || ok {
 			return g, ok, err
 		}
 		return vertexGatePoints(budget, body, 0)
@@ -335,14 +287,14 @@ func bodyGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body *Bo
 		return capBlendGatePoints(ctx, budget, body, pl)
 	case prismPayload:
 		if pl.SectionDelta == 0 {
-			if g, ok, err := prismGatePointsMemo(budget, []prismPayload{pl}, pl.AxialDelta(), stations); err != nil || ok {
+			if g, ok, err := diameter.PrismGatePointsMemo(budget, []prismPayload{pl}, pl.AxialDelta(), stations); err != nil || ok {
 				return g, ok, err
 			}
 			return vertexGatePoints(budget, body, 0)
 		}
 	}
 	if prisms, displacement, ok := gateWitnessPrisms(body.n.Payload); ok {
-		if g, ok, err := prismGatePoints(budget, prisms, displacement); err != nil || ok {
+		if g, ok, err := diameter.PrismGatePoints(budget, prisms, displacement); err != nil || ok {
 			return g, ok, err
 		}
 	}

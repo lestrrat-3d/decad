@@ -53,6 +53,53 @@ func PrismStationWitnessesMemo(budget *proofbound.WorkBudget, pp prismrecord.Pay
 	return pts, allow, true, nil
 }
 
+// PrismGateDiameter reads a diameter from the station witnesses of prisms.
+// ok is false, with no error, when any prism's stations cannot be read.
+func PrismGateDiameter(budget *proofbound.WorkBudget, prisms []prismrecord.Payload, displacement float64) (float64, bool, error) {
+	g, ok, err := PrismGatePoints(budget, prisms, displacement)
+	if err != nil || !ok {
+		return 0, false, err
+	}
+	return g.Diameter(budget)
+}
+
+// PrismGatePoints lists the station witnesses of prisms
+// (PrismStationWitnesses). Each station is held within a proven gap of a
+// point of its prism's recorded walls, and the recorded walls lie within
+// displacement of the walls the payload denotes, so allow is displacement
+// plus the widest gap. ok is false, with no error, when any prism's stations
+// cannot be read.
+//
+// The carrier witnesses addPrismFaces places (CFace.Wit) are float samples
+// with no proven gap to the body: a placed prism's held carrier maximum reads
+// above the body's own diameter. This reading never reads them. Each one sits between
+// two stations at its own angle, at a station, or inside the section.
+//
+// Every prism handed in must have walls that run the full height from z0 to
+// z1 on the body (or z0 equal to z1, with its section's boundary on the
+// body at that level), so that each station is a point of the body (within
+// its gap and displacement).
+func PrismGatePoints(budget *proofbound.WorkBudget, prisms []prismrecord.Payload, displacement float64) (GatePoints, bool, error) {
+	return PrismGatePointsMemo(budget, prisms, displacement, nil)
+}
+
+// PrismGatePointsMemo is PrismGatePoints reading section stations through
+// stations; nil reads them fresh.
+func PrismGatePointsMemo(budget *proofbound.WorkBudget, prisms []prismrecord.Payload, displacement float64,
+	stations *StationMemo) (GatePoints, bool, error) {
+	work := freeform.NewFreeformWork()
+	var g GatePoints
+	for _, pp := range prisms {
+		points, stationAllow, read, err := PrismStationWitnessesMemo(budget, pp, work, stations)
+		if err != nil || !read {
+			return GatePoints{}, false, err
+		}
+		g.Join(GatePoints{Points: points, Allow: stationAllow})
+	}
+	g.Allow = proofbound.AbsSumUpper(displacement, g.Allow)
+	return g, true, nil
+}
+
 // PrismFreeformSection is the root bodyGateDiameter's arm for a free-form-walled
 // prismPayload (docs/verification-design.md §3): the clearance kernel's exact
 // carrier model has no arm for a NURBSSurface side face any more than it has
