@@ -943,7 +943,7 @@ func (r *brepEdgeRoute) rewrite(blends []*brepEdgeBlend) (brepPayload, error) {
 		f := r.bp.Faces[fi]
 		if f.Planar() {
 			loops := r.loops[fi]
-			profile, _, err := rewriteProfileBudget(r.budget, *f.Region, loops, edit.blendAt)
+			profile, _, err := offset2d.RewriteProfileBudget(r.budget, *f.Region, loops, edit.blendAt)
 			if err != nil {
 				return brepPayload{}, err
 			}

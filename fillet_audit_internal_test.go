@@ -432,6 +432,6 @@ func TestNestingAuditCancellationReachesBoundaryScan(t *testing.T) {
 // ProfileRecord and, per loop, the segment indices that are blend connectors
 // (their faces carry the second fillet(i,j) / chamfer(i,j) role, Table B).
 func rewriteProfile(orig profileRecord, loops []cornerLoop, blendAt []map[int]*cornerBlend) (profileRecord, []map[int]struct{}) {
-	profile, blendSegs, _ := rewriteProfileBudget(nil, orig, loops, blendAt)
+	profile, blendSegs, _ := offset2d.RewriteProfileBudget(nil, orig, loops, blendAt)
 	return profile, blendSegs
 }

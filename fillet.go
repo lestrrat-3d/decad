@@ -370,7 +370,7 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 	}
 
 	// The rewritten section, and the fillet arcs' (loop, segment) indices.
-	profile, filletArcs, err := rewriteProfileBudget(budget, pp.Profile, loops, blendAt)
+	profile, filletArcs, err := offset2d.RewriteProfileBudget(budget, pp.Profile, loops, blendAt)
 	if err != nil {
 		return nil, err
 	}
@@ -581,32 +581,6 @@ type cornerBlend = offset2d.Blend
 // computeFillet builds one section corner blend.
 func computeFillet(loop cornerLoop, ci int, r float64) (*cornerBlend, error) {
 	return offset2d.Fillet(loop.Walks, ci, r, filletTol)
-}
-
-func rewriteProfileBudget(budget *proofbound.WorkBudget, orig profileRecord, loops []cornerLoop, blendAt []map[int]*cornerBlend) (profileRecord, []map[int]struct{}, error) {
-	origLoops := append([]loopRecord{orig.Outer}, orig.Holes...)
-	newLoops := make([]loopRecord, len(origLoops))
-	blendSegs := make([]map[int]struct{}, len(origLoops))
-	for li := range origLoops {
-		if err := survey2d.WallBudgetStep(budget); err != nil {
-			return profileRecord{}, nil, err
-		}
-		blendSegs[li] = map[int]struct{}{}
-		if len(blendAt[li]) == 0 {
-			newLoops[li] = cloneLoopRecord(origLoops[li])
-			continue
-		}
-		segs, connectors, err := rewriteLoop(budget, loops[li], blendAt[li])
-		if err != nil {
-			return profileRecord{}, nil, err
-		}
-		newLoops[li] = loopRecord{Segments: segs}
-		blendSegs[li] = connectors
-	}
-	if err := survey2d.WallBudgetErr(budget); err != nil {
-		return profileRecord{}, nil, err
-	}
-	return profileRecord{Outer: newLoops[0], Holes: newLoops[1:]}, blendSegs, nil
 }
 
 // rewriteLoop applies the section blend to one coalesced loop.

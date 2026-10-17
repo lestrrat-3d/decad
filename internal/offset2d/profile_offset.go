@@ -47,6 +47,34 @@ func ProfileCornerLoopsBudget(budget *proofbound.WorkBudget, profile momentinput
 	return out, nil
 }
 
+// RewriteProfileBudget rebuilds the loops of a recorded profile with their
+// selected corner blends and returns the connector positions in each loop.
+func RewriteProfileBudget(budget *proofbound.WorkBudget, orig momentinput.Profile, loops []survey2d.CornerLoop, blendAt []map[int]*Blend) (momentinput.Profile, []map[int]struct{}, error) {
+	origLoops := append([]sectionrecord.LoopRecord{orig.Outer}, orig.Holes...)
+	newLoops := make([]sectionrecord.LoopRecord, len(origLoops))
+	blendSegs := make([]map[int]struct{}, len(origLoops))
+	for li := range origLoops {
+		if err := survey2d.WallBudgetStep(budget); err != nil {
+			return momentinput.Profile{}, nil, err
+		}
+		blendSegs[li] = map[int]struct{}{}
+		if len(blendAt[li]) == 0 {
+			newLoops[li] = sectionrecord.CloneLoopRecord(origLoops[li])
+			continue
+		}
+		segs, connectors, err := RewriteLoop(budget, loops[li].Walks, blendAt[li])
+		if err != nil {
+			return momentinput.Profile{}, nil, err
+		}
+		newLoops[li] = sectionrecord.LoopRecord{Segments: segs}
+		blendSegs[li] = connectors
+	}
+	if err := survey2d.WallBudgetErr(budget); err != nil {
+		return momentinput.Profile{}, nil, err
+	}
+	return momentinput.Profile{Outer: newLoops[0], Holes: newLoops[1:]}, blendSegs, nil
+}
+
 // AuditRewriteBudget converts the root corner records into the neutral
 // section audit's ordered rewrite inputs.
 func AuditRewriteBudget(budget *proofbound.WorkBudget, orig, rewritten momentinput.Profile,
