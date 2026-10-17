@@ -151,7 +151,7 @@ func spiralShortSourceCells(ctx context.Context, proof *spiralFirstJoinSource,
 		for row := range restricted {
 			restricted[row] = polynomial.BernsteinRestrict(part.q[row], lo, hi)
 		}
-		t, yes := spiralShortCapTBracket(restricted)
+		t, yes := spiralsector.ShortCapTBracket(restricted)
 		if !yes {
 			return nil, false, nil
 		}
