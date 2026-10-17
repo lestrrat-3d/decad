@@ -6,6 +6,7 @@ import (
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sweeppath"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -36,6 +37,57 @@ func RationalPointReading(point [3]*big.Rat) (PointReading, bool) {
 type NormalReading struct {
 	Value        r3.Vec
 	Bound, Angle float64
+}
+
+// PlanarNormalReading normalizes an exact direction. It first scales the
+// direction by its largest absolute component, an exact rational that is the
+// same for every positive multiple of the direction and exactly negated for
+// its opposite, so a pair queried in either order publishes exactly opposite
+// normals. The ball encloses the true unit vector through exact square-root
+// brackets of the scaled direction's squared length.
+func PlanarNormalReading(dir proofarith.DyV3) (NormalReading, bool) {
+	largest := proofarith.DyAbs(dir[0])
+	for _, c := range dir[1:] {
+		if proofarith.DyCmp(proofarith.DyAbs(c), largest) > 0 {
+			largest = proofarith.DyAbs(c)
+		}
+	}
+	if largest.Sign() == 0 {
+		return NormalReading{}, false
+	}
+	var scaled [3]*big.Rat
+	squared := new(big.Rat)
+	for k := range 3 {
+		scaled[k] = new(big.Rat).Quo(dir[k].Rat(), largest.Rat())
+		squared.Add(squared, new(big.Rat).Mul(scaled[k], scaled[k]))
+	}
+	low, high := proofbound.RatSqrtDown(squared), proofbound.RatSqrtUp(squared)
+	if low <= 0 || !finite(low) || !finite(high) {
+		return NormalReading{}, false
+	}
+	raw := r3.Vec{X: sweeppath.RatFloatNearest(scaled[0]), Y: sweeppath.RatFloatNearest(scaled[1]), Z: sweeppath.RatFloatNearest(scaled[2])}
+	value, ok := raw.Normalize()
+	if !ok || !proofbound.FiniteVec(value) {
+		return NormalReading{}, false
+	}
+	components := [3]float64{value.X, value.Y, value.Z}
+	maxError := new(big.Rat)
+	for k := range 3 {
+		for _, length := range []float64{low, high} {
+			deviation := new(big.Rat).Quo(scaled[k], proofarith.FloatRat(length))
+			deviation.Sub(proofarith.FloatRat(components[k]), deviation)
+			deviation.Abs(deviation)
+			if deviation.Cmp(maxError) > 0 {
+				maxError = deviation
+			}
+		}
+	}
+	bound := proofbound.Radius3D(proofbound.RatFloatUp(maxError))
+	angle := proofbound.UpRound(4 * bound)
+	if !finite(bound) || !finite(angle) || angle >= math.Pi {
+		return NormalReading{}, false
+	}
+	return NormalReading{Value: value, Bound: bound, Angle: angle}, true
 }
 
 // DyadicNormalReading rounds a dyadic axis into a bounded unit normal.
