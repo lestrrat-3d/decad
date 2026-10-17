@@ -2,7 +2,6 @@ package loftcylinder
 
 import (
 	"github.com/lestrrat-3d/decad/internal/topo"
-	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -25,12 +24,26 @@ func ChamferCapWalk(loop *topo.Loop, verts []r3.Vec, ring []int, bottom bool) bo
 	}
 	covered := 0
 	for i, use := range loop.CoEdges {
-		if topobuild.CoEdgeStart(use) == nil || topobuild.CoEdgeEnd(use) == nil ||
-			topobuild.CoEdgeEnd(use).Position != topobuild.CoEdgeStart(loop.CoEdges[(i+1)%len(loop.CoEdges)]).Position {
+		if use.Edge == nil {
 			return false
 		}
-		a, okA := index[topobuild.CoEdgeStart(use).Position]
-		b, okB := index[topobuild.CoEdgeEnd(use).Position]
+		start, end := use.Edge.Start, use.Edge.End
+		if !use.Forward {
+			start, end = end, start
+		}
+		if start == nil || end == nil {
+			return false
+		}
+		next := loop.CoEdges[(i+1)%len(loop.CoEdges)]
+		nextStart := next.Edge.Start
+		if !next.Forward {
+			nextStart = next.Edge.End
+		}
+		if end.Position != nextStart.Position {
+			return false
+		}
+		a, okA := index[start.Position]
+		b, okB := index[end.Position]
 		if !okA || !okB {
 			return false
 		}
