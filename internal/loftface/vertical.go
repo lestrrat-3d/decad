@@ -5,6 +5,8 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/r3"
 )
 
 // VerticalLimit is one radial limit of a vertical source cross section.
@@ -30,6 +32,28 @@ type VerticalAffine struct {
 	Offset [2]*big.Rat
 	Column [2][2]*big.Rat // [source U or V][world Y or Z]
 	Det    *big.Rat
+}
+
+// VerticalTraceBoxDistance bounds a held point's distance from an exact
+// vertical-trace source box.
+func VerticalTraceBoxDistance(box [3]Interval, held r3.Vec) (float64, bool) {
+	coordinates := [3]float64{held.X, held.Y, held.Z}
+	distance := ratZero()
+	for axis, coordinate := range coordinates {
+		interval := box[axis]
+		if interval.Lo == nil || interval.Hi == nil || interval.Lo.Cmp(interval.Hi) > 0 {
+			return 0, false
+		}
+		lo := ratAbs(ratSub(ratF(coordinate), interval.Lo))
+		hi := ratAbs(ratSub(ratF(coordinate), interval.Hi))
+		if lo.Cmp(hi) > 0 {
+			distance = ratAdd(distance, lo)
+		} else {
+			distance = ratAdd(distance, hi)
+		}
+	}
+	bound := proofbound.RatFloatUp(distance)
+	return bound, !proofbound.IsNonFinite(bound) && bound >= 0
 }
 
 // ConstantXBand returns the band, and the exact time in it, at which the

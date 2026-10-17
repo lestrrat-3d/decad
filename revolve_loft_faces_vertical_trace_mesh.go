@@ -224,27 +224,6 @@ func revolveLoftFacesVerticalTraceHeldPoint(proof *revolveLoftFacesSourceCertifi
 	if !ok || proofbound.IsNonFinite(blankBound) {
 		return empty, 0, 0, false
 	}
-	loftBound, valid := revolveLoftFacesVerticalTraceBoxDistance(box, held)
+	loftBound, valid := loftface.VerticalTraceBoxDistance(box, held)
 	return held, blankBound, loftBound, valid
-}
-
-func revolveLoftFacesVerticalTraceBoxDistance(box [3]loftface.Interval,
-	held r3.Vec) (float64, bool) {
-	coordinates := [3]float64{held.X, held.Y, held.Z}
-	distance := lfZero()
-	for axis, coordinate := range coordinates {
-		interval := box[axis]
-		if interval.Lo == nil || interval.Hi == nil || interval.Lo.Cmp(interval.Hi) > 0 {
-			return 0, false
-		}
-		lo := lfAbs(lfSub(lfF(coordinate), interval.Lo))
-		hi := lfAbs(lfSub(lfF(coordinate), interval.Hi))
-		if lo.Cmp(hi) > 0 {
-			distance = lfAdd(distance, lo)
-		} else {
-			distance = lfAdd(distance, hi)
-		}
-	}
-	bound := proofbound.RatFloatUp(distance)
-	return bound, !proofbound.IsNonFinite(bound) && bound >= 0
 }
