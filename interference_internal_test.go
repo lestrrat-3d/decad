@@ -122,12 +122,12 @@ func TestPointInBodyCancellationReachesTorusRootPath(t *testing.T) {
 	t.Parallel()
 	z := r3.NewVec(0, 0, 1)
 	torus := torFace(r3.Vec{}, z, 5, 1)
-	g := &bodyGeom{faces: []*clearance.CFace{torus}}
+	faces := []*clearance.CFace{torus}
 	ctx := &internalCancelContext{Context: t.Context(), limit: 4}
 
-	_, _, err := g.pointInBody(ctx, r3.NewVec(0.31, 0.73, 0.19), 1e-9)
+	_, _, err := clearance.PointInBody(ctx, faces, r3.NewVec(0.31, 0.73, 0.19), 1e-9)
 	require.ErrorIs(t, err, context.Canceled)
-	require.GreaterOrEqual(t, ctx.calls, 4, `cancellation must pass pointInBody and rayCrossings into the torus root path`)
+	require.GreaterOrEqual(t, ctx.calls, 4, `cancellation must pass PointInBody and rayCrossings into the torus root path`)
 }
 
 func TestCertifiedRootRefinementCancellation(t *testing.T) {

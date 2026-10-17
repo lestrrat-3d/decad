@@ -285,7 +285,7 @@ outcome (an unsure candidate, an unresolved upper bound, a lower bound at or
 below tolerance) leaves the pair undecided exactly as it does for a
 solid-solid pair. What changes is what happens next: a proven POSITIVE lower
 bound is settled by ONE deterministic witness cast — a sheet vertex, cast
-through the solid's own `pointInBody` (§2's three-outcome cast) — rather than
+through `clearance.PointInBody` (§2's three-outcome cast) — rather than
 the two-directional nesting relation §2 runs for a solid pair. §2 states why
 one witness suffices: the sheet's boundary misses the solid's boundary
 entirely once the distance is proven positive, and a one-shell sheet has no

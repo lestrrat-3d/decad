@@ -24,6 +24,37 @@ func ClrLadder() []r3.Vec {
 	return out
 }
 
+// PointInBody decides strict membership from certified crossings of every
+// carrier face. An ambiguous cast retries the next deterministic direction.
+// ok is false when every direction remains ambiguous.
+func PointInBody(ctx context.Context, faces []*CFace, p r3.Vec, tol float64) (bool, bool, error) {
+	budget := proofbound.NewWorkBudget(ctx)
+	for _, dir := range ClrLadder() {
+		if err := ctx.Err(); err != nil {
+			return false, false, err
+		}
+		total, ok := 0, true
+		for _, f := range faces {
+			if err := budget.Step(); err != nil {
+				return false, false, err
+			}
+			n, good, err := f.RayCrossings(ctx, p, dir, tol)
+			if err != nil {
+				return false, false, err
+			}
+			if !good {
+				ok = false
+				break
+			}
+			total += n
+		}
+		if ok {
+			return total%2 == 1, true, nil
+		}
+	}
+	return false, false, nil
+}
+
 // survey2d.RayCrossings counts certified transversal crossings of the ray p + t·dir
 // (t > tol) with the trimmed face; good is false on any ambiguity.
 func (f *CFace) RayCrossings(ctx context.Context, p, dir r3.Vec, tol float64) (int, bool, error) {

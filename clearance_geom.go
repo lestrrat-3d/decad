@@ -553,37 +553,3 @@ func (g *bodyGeom) addStitchFaces(budget *proofbound.WorkBudget, b *Body, sp sti
 	}
 	return true, nil
 }
-
-// pointInBody decides strict membership of a point in the body's material by
-// a certified ray cast (§2): crossings counted against every face, each
-// crossing certified transversal and interior to its trim; a grazing cast
-// retries the next ladder direction. ok is false when every direction stays
-// ambiguous.
-
-func (g *bodyGeom) pointInBody(ctx context.Context, p r3.Vec, tol float64) (bool, bool, error) {
-	budget := proofbound.NewWorkBudget(ctx)
-	for _, dir := range clearance.ClrLadder() {
-		if err := ctx.Err(); err != nil {
-			return false, false, err
-		}
-		total, ok := 0, true
-		for _, f := range g.faces {
-			if err := budget.Step(); err != nil {
-				return false, false, err
-			}
-			n, good, err := f.RayCrossings(ctx, p, dir, tol)
-			if err != nil {
-				return false, false, err
-			}
-			if !good {
-				ok = false
-				break
-			}
-			total += n
-		}
-		if ok {
-			return total%2 == 1, true, nil
-		}
-	}
-	return false, false, nil
-}
