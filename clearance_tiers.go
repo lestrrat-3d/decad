@@ -11,7 +11,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// This file adapts internal clearance tiers and counts the vertex work budget.
+// This file adapts internal clearance tiers to the pair kernel.
 
 // feCell dispatches one face × edge pair through §4's curve-tier table.
 func (k *pairKernel) feCell(f *clearance.CFace, e *clearance.CEdge, sink *cellSink) {
@@ -41,41 +41,10 @@ func (k *pairKernel) captureCurveCells(cells *curvecells.Kernel) {
 // face or edge whose box lies beyond the sink's best upper bound is pruned
 // (cellSink.Pruned).
 func (k *pairKernel) vertexTier(budget *proofbound.WorkBudget, v r3.Vec, other *bodyGeom, sink *cellSink) error {
-	at := [2]r3.Vec{v, v}
-	for _, f := range other.faces {
-		if err := budget.Step(); err != nil {
-			return err
-		}
-		if sink.Pruned(clearance.ClrBoxDist(at, f.Box)) {
-			continue
-		}
-		if err := k.vertexFace(budget, v, f, sink); err != nil {
-			return err
-		}
-	}
-	for _, e := range other.edges {
-		if err := budget.Step(); err != nil {
-			return err
-		}
-		if sink.Pruned(clearance.ClrBoxDist(at, e.Box)) {
-			continue
-		}
-		k.vertexEdge(v, e, sink)
-	}
-	return nil
-}
-
-func (k *pairKernel) vertexFace(budget *proofbound.WorkBudget, v r3.Vec, f *clearance.CFace, sink *cellSink) error {
 	cells := tier.New(k.ctx, k.tol, k.slack)
-	err := cells.VertexFace(budget, v, f, sink)
+	err := cells.EnumerateVertex(budget, v, other.faces, other.edges, sink)
 	k.captureTier(cells)
 	return err
-}
-
-func (k *pairKernel) vertexEdge(v r3.Vec, e *clearance.CEdge, sink *cellSink) {
-	cells := tier.New(k.ctx, k.tol, k.slack)
-	cells.VertexEdge(v, e, sink)
-	k.captureTier(cells)
 }
 
 func (k *pairKernel) captureTier(cells *tier.Kernel) {

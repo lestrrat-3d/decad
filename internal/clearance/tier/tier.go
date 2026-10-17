@@ -38,6 +38,47 @@ func (k *Kernel) pointCircleCrits(p, c, axis, refU, refV r3.Vec, rad float64, wi
 	return out, ok
 }
 
+// EnumerateVertex visits one vertex against the other body's faces, then
+// edges. Each admitted cell has its own kernel, as in the pair's other tiers.
+// The budget, sink, and each face and edge must be non-nil.
+func (k *Kernel) EnumerateVertex(budget *proofbound.WorkBudget, v r3.Vec,
+	faces []*clearance.CFace, edges []*clearance.CEdge, sink *clearance.CellSink) error {
+	at := [2]r3.Vec{v, v}
+	for _, f := range faces {
+		if err := budget.Step(); err != nil {
+			return err
+		}
+		if sink.Pruned(clearance.ClrBoxDist(at, f.Box)) {
+			continue
+		}
+		cell := New(k.ctx, k.tol, k.slack)
+		err := cell.VertexFace(budget, v, f, sink)
+		k.captureCell(cell)
+		if err != nil {
+			return err
+		}
+	}
+	for _, e := range edges {
+		if err := budget.Step(); err != nil {
+			return err
+		}
+		if sink.Pruned(clearance.ClrBoxDist(at, e.Box)) {
+			continue
+		}
+		cell := New(k.ctx, k.tol, k.slack)
+		cell.VertexEdge(v, e, sink)
+		k.captureCell(cell)
+	}
+	return nil
+}
+
+func (k *Kernel) captureCell(cell *Kernel) {
+	if err := cell.Err(); err != nil {
+		k.err = err
+	}
+	k.refused = k.refused || cell.Refused()
+}
+
 // VertexFace contributes the point-to-face candidates to sink.
 func (k *Kernel) VertexFace(budget *proofbound.WorkBudget, v r3.Vec, f *clearance.CFace, sink *clearance.CellSink) error {
 	switch f.Kind {
