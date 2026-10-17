@@ -38,9 +38,9 @@ func revolveLoftFacesCertifiedArcPatches(ctx context.Context, blank, tooth *Body
 			continue
 		}
 		mapped := cell.source.mapped
-		if mapped.segment != segment || mapped.band != band ||
-			mapped.jointArc == nil || mapped.tLo == nil || mapped.tHi == nil ||
-			mapped.tLo.Cmp(root.Lo) != 0 || mapped.tHi.Cmp(root.Hi) != 0 {
+		if mapped.Segment != segment || mapped.Band != band ||
+			mapped.JointArc == nil || mapped.TLo == nil || mapped.THi == nil ||
+			mapped.TLo.Cmp(root.Lo) != 0 || mapped.THi.Cmp(root.Hi) != 0 {
 			continue
 		}
 		if selected != nil {

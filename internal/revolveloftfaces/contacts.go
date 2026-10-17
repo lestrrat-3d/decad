@@ -1,10 +1,11 @@
-package decad
+package revolveloftfaces
 
 import (
 	"context"
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/sketch"
@@ -17,10 +18,10 @@ import (
 type revolveLoftFacesNonverticalJoints struct {
 	fitKnots []revolveLoftFacesFitKnotJoint
 	radial   []revolveLoftFacesRadialJoint
-	fitLines []revolveLoftFacesFitLineJoint
+	FitLines []RevolveLoftFacesFitLineJoint
 }
 
-func revolveLoftFacesEnumerateNonverticalJoints(ctx context.Context,
+func RevolveLoftFacesEnumerateNonverticalJoints(ctx context.Context,
 	trim *loftFacesTrimRecord, section revolveSectionSpan) (
 	revolveLoftFacesNonverticalJoints, bool, error,
 ) {
@@ -41,7 +42,7 @@ func revolveLoftFacesEnumerateNonverticalJoints(ctx context.Context,
 		if _, ok := source.(fitSplineSeg); !ok {
 			continue
 		}
-		spans, ok := revolveLoftFacesStraightOrFitSpans(trim, segmentIndex, source)
+		spans, ok := RevolveLoftFacesStraightOrFitSpans(trim, segmentIndex, source)
 		if !ok {
 			return out, false, nil
 		}
@@ -51,11 +52,11 @@ func revolveLoftFacesEnumerateNonverticalJoints(ctx context.Context,
 				return out, false, nil
 			}
 			for band := 0; band+1 < len(trim.Maps); band++ {
-				roots, ok := revolveLoftFacesEndpointFiniteRootsWith(revolveLoftFacesMeridianMemoOf(ctx), trim, section,
+				roots, ok := RevolveLoftFacesEndpointFiniteRootsWith(RevolveLoftFacesMeridianMemoOf(ctx), trim, section,
 					vertex.left, band, true)
 				if !ok {
 					return out, false, fmt.Errorf("%w: fitted source knot %d/%d band %d has undecidable time roots",
-						ErrUnsupported, segmentIndex, left, band)
+						decaderr.ErrUnsupported, segmentIndex, left, band)
 				}
 				if len(roots) == 0 {
 					continue
@@ -64,7 +65,7 @@ func revolveLoftFacesEnumerateNonverticalJoints(ctx context.Context,
 					section, segmentIndex, left, band)
 				if !ok {
 					return out, false, fmt.Errorf("%w: fitted source knot %d/%d band %d lacks a joint cell proof",
-						ErrUnsupported, segmentIndex, left, band)
+						decaderr.ErrUnsupported, segmentIndex, left, band)
 				}
 				out.fitKnots = append(out.fitKnots, joint)
 			}
@@ -75,28 +76,28 @@ func revolveLoftFacesEnumerateNonverticalJoints(ctx context.Context,
 				arcIndex = (segmentIndex - 1 + len(segments)) % len(segments)
 			}
 			if _, isLine := entities[arcIndex].(*sketch.Line); isLine {
-				vertex, valid := revolveLoftFacesFitLineVertexAt(trim,
+				vertex, valid := RevolveLoftFacesFitLineVertexAt(trim,
 					segmentIndex, arcIndex, fitAtEnd)
 				if !valid {
 					return out, false, nil
 				}
 				for band := 0; band+1 < len(trim.Maps); band++ {
-					roots, valid := revolveLoftFacesEndpointFiniteRootsWith(revolveLoftFacesMeridianMemoOf(ctx), trim, section,
-						vertex.fitSpan, band, vertex.fitAtEnd)
+					roots, valid := RevolveLoftFacesEndpointFiniteRootsWith(RevolveLoftFacesMeridianMemoOf(ctx), trim, section,
+						vertex.FitSpan, band, vertex.fitAtEnd)
 					if !valid {
 						return out, false, fmt.Errorf("%w: fit/line source joint %d/%d band %d has undecidable time roots",
-							ErrUnsupported, segmentIndex, arcIndex, band)
+							decaderr.ErrUnsupported, segmentIndex, arcIndex, band)
 					}
 					if len(roots) == 0 {
 						continue
 					}
-					joint, valid := certifyRevolveLoftFacesFitLineJoint(ctx, trim,
+					joint, valid := CertifyRevolveLoftFacesFitLineJoint(ctx, trim,
 						section, segmentIndex, arcIndex, band, fitAtEnd)
-					if !valid || joint.vertex.point != vertex.point {
+					if !valid || joint.Vertex.Point != vertex.Point {
 						return out, false, fmt.Errorf("%w: fit/line source joint %d/%d band %d lacks a joint cell proof",
-							ErrUnsupported, segmentIndex, arcIndex, band)
+							decaderr.ErrUnsupported, segmentIndex, arcIndex, band)
 					}
-					out.fitLines = append(out.fitLines, joint)
+					out.FitLines = append(out.FitLines, joint)
 				}
 				continue
 			}
@@ -108,15 +109,15 @@ func revolveLoftFacesEnumerateNonverticalJoints(ctx context.Context,
 				return out, false, nil
 			}
 			for band := 0; band+1 < len(trim.Maps); band++ {
-				radial, ok := mappedArcRadialTimeBand(ctx, trim, arcIndex, band, section)
+				radial, ok := MappedArcRadialTimeBand(ctx, trim, arcIndex, band, section)
 				if !ok {
 					continue // a nonradial arc is classified by its own source cells
 				}
-				q := [3][]*big.Rat{{radial.q[0]}, {radial.q[1]}, {radial.q[2]}}
+				q := [3][]*big.Rat{{radial.Q[0]}, {radial.Q[1]}, {radial.Q[2]}}
 				roots, ok := loftface.EndpointTimeRoots(q, false)
 				if !ok {
 					return out, false, fmt.Errorf("%w: radial source arc %d band %d has undecidable time roots",
-						ErrUnsupported, arcIndex, band)
+						decaderr.ErrUnsupported, arcIndex, band)
 				}
 				if len(roots) == 0 {
 					continue
@@ -125,7 +126,7 @@ func revolveLoftFacesEnumerateNonverticalJoints(ctx context.Context,
 					section, segmentIndex, arcIndex, band, fitAtEnd)
 				if !ok || joint.vertex.point != vertex.point {
 					return out, false, fmt.Errorf("%w: radial source arc %d band %d lacks a fitted joint proof",
-						ErrUnsupported, arcIndex, band)
+						decaderr.ErrUnsupported, arcIndex, band)
 				}
 				out.radial = append(out.radial, joint)
 			}
@@ -137,12 +138,12 @@ func revolveLoftFacesEnumerateNonverticalJoints(ctx context.Context,
 func revolveLoftFacesRadialPartitionCells(ctx context.Context,
 	trim *loftFacesTrimRecord, section revolveSectionSpan,
 	segment, spanIndex, band int, span freeform.BezierSpan,
-	joint revolveLoftFacesRadialJoint) ([]revolveLoftFacesMappedCell, bool, error) {
-	if joint.vertex.fitSegment != segment || joint.radial.band != band ||
+	joint revolveLoftFacesRadialJoint) ([]RevolveLoftFacesMappedCell, bool, error) {
+	if joint.vertex.fitSegment != segment || joint.radial.Band != band ||
 		len(joint.fitCells) != len(joint.roots) {
 		return nil, false, nil
 	}
-	spans, ok := revolveLoftFacesStraightOrFitSpans(trim, segment,
+	spans, ok := RevolveLoftFacesStraightOrFitSpans(trim, segment,
 		trim.Source.Profile.Outer.Segments[segment])
 	if !ok || spanIndex < 0 || spanIndex >= len(spans) ||
 		joint.vertex.fitAtEnd && spanIndex != len(spans)-1 ||
@@ -160,9 +161,9 @@ func revolveLoftFacesRadialPartitionCells(ctx context.Context,
 		spanIndex, band, span, joint.roots, joint.pieces,
 		joint.fitCells, joint.vertex.fitAtEnd)
 	for i := range cells {
-		if cells[i].side == revolveLoftFacesJointContact {
-			cells[i].jointKind = revolveLoftFacesRadialArcContact
-			cells[i].jointPoint = joint.vertex.point
+		if cells[i].Side == RevolveLoftFacesJointContact {
+			cells[i].JointKind = RevolveLoftFacesRadialArcContact
+			cells[i].JointPoint = joint.vertex.point
 		}
 	}
 	return cells, certified, err

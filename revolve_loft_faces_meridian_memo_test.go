@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/lestrrat-3d/decad/internal/loftface"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 )
 
 // The census installs one meridian memo; the manifest path installs none.
@@ -32,17 +33,17 @@ func TestCurvedCensusMeridianMemoMatchesDirect(t *testing.T) {
 			continue
 		}
 		for segment, source := range trim.Source.Profile.Outer.Segments {
-			spans, ok := revolveLoftFacesStraightOrFitSpans(trim, segment, source)
+			spans, ok := revolveloftfaces.RevolveLoftFacesStraightOrFitSpans(trim, segment, source)
 			if !ok {
 				continue
 			}
 			for _, span := range spans {
 				for band := 0; band+1 < len(trim.Maps); band++ {
 					for _, atEnd := range [...]bool{false, true} {
-						want, wantOK := revolveLoftFacesEndpointFiniteRootsWith(nil,
+						want, wantOK := revolveloftfaces.RevolveLoftFacesEndpointFiniteRootsWith(nil,
 							trim, section, span, band, atEnd)
 						for range 2 {
-							got, gotOK := revolveLoftFacesEndpointFiniteRootsWith(memo,
+							got, gotOK := revolveloftfaces.RevolveLoftFacesEndpointFiniteRootsWith(memo,
 								trim, section, span, band, atEnd)
 							require.Equal(t, wantOK, gotOK)
 							require.Len(t, got, len(want))

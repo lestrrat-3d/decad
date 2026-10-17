@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 )
 
 func TestMappedEndpointTimeRoots(t *testing.T) {
@@ -50,20 +51,20 @@ func TestMappedEndpointFiniteSection(t *testing.T) {
 	x0, x1 := big.NewRat(5, 1), big.NewRat(6, 1)
 	outside := loftface.EndpointRoot{Time: loftFaceInterval{
 		Lo: big.NewRat(1, 8), Hi: big.NewRat(1, 8)}}
-	outside, ok := revolveLoftFacesEndpointAxialClass(outside, x0, x1, section)
+	outside, ok := revolveloftfaces.RevolveLoftFacesEndpointAxialClass(outside, x0, x1, section)
 	if !ok || outside.Finite || outside.X.Hi.Cmp(big.NewRat(41, 8)) != 0 {
 		t.Fatalf("expected a certified axial miss, got %+v, %t", outside, ok)
 	}
 	inside := loftface.EndpointRoot{Time: loftFaceInterval{
 		Lo: big.NewRat(3, 4), Hi: big.NewRat(3, 4)}}
-	inside, ok = revolveLoftFacesEndpointAxialClass(inside, x0, x1, section)
+	inside, ok = revolveloftfaces.RevolveLoftFacesEndpointAxialClass(inside, x0, x1, section)
 	if !ok || !inside.Finite || inside.X.Lo.Cmp(big.NewRat(23, 4)) != 0 {
 		t.Fatalf("expected a certified finite crossing, got %+v, %t", inside, ok)
 	}
 	boundaryTime := lfSub(lfF(section.Start.U), x0)
 	boundary := loftface.EndpointRoot{Time: loftFaceInterval{
 		Lo: boundaryTime, Hi: boundaryTime}}
-	if _, ok := revolveLoftFacesEndpointAxialClass(boundary, x0, x1, section); ok {
+	if _, ok := revolveloftfaces.RevolveLoftFacesEndpointAxialClass(boundary, x0, x1, section); ok {
 		t.Fatal("a contact on the section end must refuse")
 	}
 }
@@ -93,12 +94,12 @@ func TestMappedSpanAxialHull(t *testing.T) {
 	}
 	section := revolveSectionSpan{Start: planePoint{U: 6.5, V: 1},
 		End: planePoint{U: 7, V: 2}}
-	if !revolveLoftFacesSpanAxialMiss(first, last, span, section,
+	if !revolveloftfaces.RevolveLoftFacesSpanAxialMiss(first, last, span, section,
 		big.NewRat(1, 2), big.NewRat(1, 1), big.NewRat(1, 8), big.NewRat(1, 4)) {
 		t.Fatal("mapped span should miss the finite section")
 	}
 	section.Start.U = 6
-	if revolveLoftFacesSpanAxialMiss(first, last, span, section,
+	if revolveloftfaces.RevolveLoftFacesSpanAxialMiss(first, last, span, section,
 		big.NewRat(1, 2), big.NewRat(1, 1), big.NewRat(1, 8), big.NewRat(1, 4)) {
 		t.Fatal("overlapping mapped span cannot be clipped")
 	}

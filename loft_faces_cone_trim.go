@@ -15,6 +15,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/pointcone"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -108,7 +109,7 @@ func recordLoftFacesConeToe(ctx context.Context, source, tool, result *Body) err
 	if !ok || !pointcone.AboveFarCap(base.Verts, base.MeshBound, cone.Far) {
 		return nil
 	}
-	box, err := lfSourceBox(base.LoftFacesCap.Source)
+	box, err := revolveloftfaces.LfSourceBox(base.LoftFacesCap.Source)
 	if err != nil {
 		return err
 	}
@@ -193,7 +194,7 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 		!orderedLoftFacesConeLimits(p.LoftFacesToe.Toe, cone, p.LoftFacesToe.Base) {
 		return nil, false, nil
 	}
-	box, err := lfSourceBox(p.LoftFacesToe.Cap.Source)
+	box, err := revolveloftfaces.LfSourceBox(p.LoftFacesToe.Cap.Source)
 	if err != nil {
 		return nil, true, asBooleanError(op, err)
 	}

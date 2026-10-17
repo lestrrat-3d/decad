@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/stretchr/testify/require"
 )
@@ -39,25 +40,25 @@ func TestMappedArcRadialTimeBandTwoExactTimeCrossings(t *testing.T) {
 		Maps: []loftFaceMap{first, second},
 	}
 	meridian := revolveSectionSpan{Start: planePoint{V: 1.5}, End: planePoint{U: 1, V: 1.5}}
-	_, certified := mappedArcFiniteSide(context.Background(), &loftFacesTrimRecord{}, 0, meridian)
+	_, certified := revolveloftfaces.MappedArcFiniteSide(context.Background(), &loftFacesTrimRecord{}, 0, meridian)
 	require.False(t, certified)
-	got, certified := mappedArcRadialTimeBand(context.Background(), trim, 0, 0, meridian)
+	got, certified := revolveloftfaces.MappedArcRadialTimeBand(context.Background(), trim, 0, 0, meridian)
 	require.True(t, certified)
-	require.Same(t, arc, got.arc)
-	require.Equal(t, 0, got.segment)
-	require.Equal(t, 0, got.band)
+	require.Same(t, arc, got.Arc)
+	require.Equal(t, 0, got.Segment)
+	require.Equal(t, 0, got.Band)
 	for i, want := range [...]string{"7/4", "-9/4", "7/4"} {
-		require.Equal(t, want, got.q[i].RatString())
+		require.Equal(t, want, got.Q[i].RatString())
 	}
-	require.Zero(t, got.x[0].Sign())
-	require.Equal(t, 0, got.x[1].Cmp(lfOne()))
+	require.Zero(t, got.X[0].Sign())
+	require.Equal(t, 0, got.X[1].Cmp(lfOne()))
 	segment.TStart, segment.TEnd = 1, 0
 	trim.Source.Profile.Outer.Segments[0] = segment
-	_, certified = mappedArcRadialTimeBand(context.Background(), trim, 0, 0, meridian)
+	_, certified = revolveloftfaces.MappedArcRadialTimeBand(context.Background(), trim, 0, 0, meridian)
 	require.True(t, certified)
 	segment.Start.U = 2.1
 	trim.Source.Profile.Outer.Segments[0] = segment
-	_, certified = mappedArcRadialTimeBand(context.Background(), trim, 0, 0, meridian)
+	_, certified = revolveloftfaces.MappedArcRadialTimeBand(context.Background(), trim, 0, 0, meridian)
 	require.False(t, certified)
 	segment.Start.U = 2
 	trim.Source.Profile.Outer.Segments[0] = segment
@@ -65,10 +66,10 @@ func TestMappedArcRadialTimeBandTwoExactTimeCrossings(t *testing.T) {
 	// A shear breaks the all-time radial identity even though the cap still
 	// maps every sampled endpoint to a finite point.
 	trim.Maps[1].QV[2] = big.NewRat(1, 100)
-	_, certified = mappedArcRadialTimeBand(context.Background(), trim, 0, 0, meridian)
+	_, certified = revolveloftfaces.MappedArcRadialTimeBand(context.Background(), trim, 0, 0, meridian)
 	require.False(t, certified)
 	trim.Maps[1].QV[2] = zero
 	require.True(t, s.RemoveEntity(arc))
-	_, certified = mappedArcRadialTimeBand(context.Background(), trim, 0, 0, meridian)
+	_, certified = revolveloftfaces.MappedArcRadialTimeBand(context.Background(), trim, 0, 0, meridian)
 	require.False(t, certified)
 }

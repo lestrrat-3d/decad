@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/stretchr/testify/require"
 )
@@ -21,8 +22,8 @@ func TestCurvedSourceArcSplitsClosedRevolveShell(t *testing.T) {
 	sectionIndex, cellIndex := -1, -1
 	for _, side := range manifest.nonvertical {
 		for index, cell := range side.cells {
-			if cell.mapped.side == revolveLoftFacesJointContact &&
-				cell.mapped.jointKind == revolveLoftFacesWholeArcContact {
+			if cell.mapped.Side == revolveloftfaces.RevolveLoftFacesJointContact &&
+				cell.mapped.JointKind == revolveloftfaces.RevolveLoftFacesWholeArcContact {
 				sectionIndex, cellIndex = side.sectionIndex, index
 				break
 			}
@@ -93,8 +94,8 @@ func TestCurvedSourceArcSplitsClosedRevolveShell(t *testing.T) {
 		}
 	}
 	require.True(t, changedRef)
-	require.Less(t, original.mapped.tLo.Cmp(original.mapped.tHi), 0)
-	selected.mapped.tLo = lfDiv(lfAdd(original.mapped.tLo, original.mapped.tHi),
+	require.Less(t, original.mapped.TLo.Cmp(original.mapped.THi), 0)
+	selected.mapped.TLo = lfDiv(lfAdd(original.mapped.TLo, original.mapped.THi),
 		big.NewRat(2, 1))
 	_, admitted, err := revolveLoftFacesBlankShellAtArc(t.Context(), proof, manifest,
 		sectionIndex, cellIndex)

@@ -1,9 +1,11 @@
-package decad
+package revolveloftfaces
 
 import (
 	"context"
+	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/loftface"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
 // A radial joint is one authenticated Sketch fit/arc adjacency mapped through
@@ -16,7 +18,7 @@ type revolveLoftFacesRadialJoint struct {
 	radial   mappedArcRadialBand
 	roots    []loftface.EndpointRoot
 	pieces   []loftface.TimePiece
-	fitCells []revolveLoftFacesJointCell
+	fitCells []RevolveLoftFacesJointCell
 }
 
 func certifyRevolveLoftFacesRadialJoint(ctx context.Context, trim *loftFacesTrimRecord,
@@ -30,12 +32,12 @@ func certifyRevolveLoftFacesRadialJoint(ctx context.Context, trim *loftFacesTrim
 	if !ok {
 		return empty, false
 	}
-	radial, ok := mappedArcRadialTimeBand(ctx, trim, arcIndex, band, section)
+	radial, ok := MappedArcRadialTimeBand(ctx, trim, arcIndex, band, section)
 	if !ok {
 		return empty, false
 	}
-	m, b := revolveLoftFacesMeridian(section)
-	memo := revolveLoftFacesMeridianMemoOf(ctx)
+	m, b := RevolveLoftFacesMeridian(section)
+	memo := RevolveLoftFacesMeridianMemoOf(ctx)
 	q := memo.QRows(trim.Maps[band], trim.Maps[band+1], vertex.fitSpan, m, b)
 	index := 0
 	if vertex.fitAtEnd {
@@ -46,28 +48,28 @@ func certifyRevolveLoftFacesRadialJoint(ctx context.Context, trim *loftFacesTrim
 	if g0.Sign() <= 0 || g1.Sign() <= 0 {
 		return empty, false
 	}
-	d := lfMul(g0, g1)
-	d2 := lfMul(d, d)
+	d := proofarith.MulRat(new(big.Rat), g0, g1)
+	d2 := proofarith.MulRat(new(big.Rat), d, d)
 	for row := range q {
-		if lfDiv(q[row][index], d2).Cmp(radial.q[row]) != 0 {
+		if proofarith.QuoRat(new(big.Rat), q[row][index], d2).Cmp(radial.Q[row]) != 0 {
 			return empty, false
 		}
 	}
 	for capIndex, mapped := range [...]loftFaceMap{trim.Maps[band], trim.Maps[band+1]} {
-		if mapped.At(vertex.coordinate[0], vertex.coordinate[1])[0].Cmp(radial.x[capIndex]) != 0 {
+		if mapped.At(vertex.coordinate[0], vertex.coordinate[1])[0].Cmp(radial.X[capIndex]) != 0 {
 			return empty, false
 		}
 	}
-	roots, ok := revolveLoftFacesEndpointFiniteRootsWith(memo, trim, section,
+	roots, ok := RevolveLoftFacesEndpointFiniteRootsWith(memo, trim, section,
 		vertex.fitSpan, band, vertex.fitAtEnd)
 	if !ok {
 		return empty, false
 	}
-	pieces, ok := loftface.PartitionTime(radial.q, roots)
+	pieces, ok := loftface.PartitionTime(radial.Q, roots)
 	if !ok {
 		return empty, false
 	}
-	fitCells := make([]revolveLoftFacesJointCell, len(roots))
+	fitCells := make([]RevolveLoftFacesJointCell, len(roots))
 	for i, root := range roots {
 		fitCells[i], ok = revolveLoftFacesKnotRootCellWith(memo, trim, section,
 			vertex.fitSpan, band, vertex.fitAtEnd, root)

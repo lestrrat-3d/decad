@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 )
 
 func TestCurvedMappedSourceConsumesLiveProducer(t *testing.T) {
@@ -21,7 +22,7 @@ func TestCurvedMappedSourceConsumesLiveProducer(t *testing.T) {
 		t.Fatalf("live source was not admitted: %v, %t", err, ok)
 	}
 	section := proof.section.Spans[proof.section.RootSpan]
-	cells, ok, err := revolveLoftFacesFiniteSpanCells(t.Context(), trim, section)
+	cells, ok, err := revolveloftfaces.RevolveLoftFacesFiniteSpanCells(t.Context(), trim, section)
 	if err != nil || !ok {
 		t.Fatalf("live source did not reach mapped finite-span consumer: %v, %t", err, ok)
 	}
@@ -57,7 +58,7 @@ func TestCurvedMappedSourceConsumesLiveProducer(t *testing.T) {
 			continue
 		}
 		for band := 0; band+1 < len(trim.Maps); band++ {
-			if _, certified := mappedArcRadialTimeBand(t.Context(), trim, segment, band, section); certified {
+			if _, certified := revolveloftfaces.MappedArcRadialTimeBand(t.Context(), trim, segment, band, section); certified {
 				radial++
 			}
 		}
@@ -77,8 +78,8 @@ func TestCurvedMappedSourceConsumesLiveProducer(t *testing.T) {
 			t.Fatalf("nonvertical section %d has no retained source cells", side.sectionIndex)
 		}
 		for _, cell := range side.cells {
-			if cell.mapped.segment != proof.crossings[0].segment &&
-				cell.mapped.segment != proof.crossings[1].segment && owner == nil {
+			if cell.mapped.Segment != proof.crossings[0].segment &&
+				cell.mapped.Segment != proof.crossings[1].segment && owner == nil {
 				ref, owner = cell.ref, cell.face
 			}
 		}

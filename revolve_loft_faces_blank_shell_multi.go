@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 )
 
 // Each selected source cell must reprove its whole-arc contact before its
@@ -42,24 +43,24 @@ func revolveLoftFacesShellSeamCutOf(ctx context.Context,
 	}
 	cell := side.cells[cellIndex]
 	mapped := cell.mapped
-	if mapped.side != revolveLoftFacesJointContact ||
-		mapped.jointKind != revolveLoftFacesWholeArcContact || mapped.jointArc == nil ||
-		mapped.tLo == nil || mapped.tHi == nil || mapped.tLoOpen || mapped.tHiOpen ||
-		mapped.segment < 0 || mapped.segment >= len(proof.trim.Source.Source.Entities) ||
-		proof.trim.Source.Source.Entities[mapped.segment] != mapped.jointArc ||
-		mapped.band < 0 || mapped.band+1 >= len(proof.trim.Maps) {
+	if mapped.Side != revolveloftfaces.RevolveLoftFacesJointContact ||
+		mapped.JointKind != revolveloftfaces.RevolveLoftFacesWholeArcContact || mapped.JointArc == nil ||
+		mapped.TLo == nil || mapped.THi == nil || mapped.TLoOpen || mapped.THiOpen ||
+		mapped.Segment < 0 || mapped.Segment >= len(proof.trim.Source.Source.Entities) ||
+		proof.trim.Source.Source.Entities[mapped.Segment] != mapped.JointArc ||
+		mapped.Band < 0 || mapped.Band+1 >= len(proof.trim.Maps) {
 		return empty, nil, false, nil
 	}
-	if mapped.band >= len(proof.sourceRefs) ||
-		mapped.segment >= len(proof.sourceRefs[mapped.band]) ||
-		cell.ref != proof.sourceRefs[mapped.band][mapped.segment] {
+	if mapped.Band >= len(proof.sourceRefs) ||
+		mapped.Segment >= len(proof.sourceRefs[mapped.Band]) ||
+		cell.ref != proof.sourceRefs[mapped.Band][mapped.Segment] {
 		return empty, nil, false, nil
 	}
 	liveFace, unique := revolveLoftFacesUniqueOriginFace(proof.tooth, cell.ref)
 	if !unique || liveFace == nil || liveFace != cell.face {
 		return empty, nil, false, nil
 	}
-	arcCells, certified, err := revolveLoftFacesArcSpanCells(ctx, proof.trim, section, mapped.segment)
+	arcCells, certified, err := revolveloftfaces.RevolveLoftFacesArcSpanCells(ctx, proof.trim, section, mapped.Segment)
 	if err != nil || !certified {
 		return empty, nil, false, err
 	}
@@ -70,13 +71,13 @@ func revolveLoftFacesShellSeamCutOf(ctx context.Context,
 	if !matched {
 		return empty, nil, false, nil
 	}
-	stations, complete := revolveLoftFacesCompleteArcRun(proof.trim, mapped.segment)
+	stations, complete := revolveLoftFacesCompleteArcRun(proof.trim, mapped.Segment)
 	if !complete {
 		return empty, nil, false, nil
 	}
 	seam, _, _, built, err := revolveLoftFacesCertifiedArcPatches(ctx, proof.blank, proof.tooth,
-		sectionIndex, mapped.segment, mapped.band,
-		loftFaceInterval{Lo: mapped.tLo, Hi: mapped.tHi}, stations)
+		sectionIndex, mapped.Segment, mapped.Band,
+		loftFaceInterval{Lo: mapped.TLo, Hi: mapped.THi}, stations)
 	if err != nil || !built {
 		return empty, nil, false, err
 	}
@@ -86,7 +87,7 @@ func revolveLoftFacesShellSeamCutOf(ctx context.Context,
 			return empty, nil, false, nil
 		}
 	}
-	m, b := revolveLoftFacesMeridian(section)
+	m, b := revolveloftfaces.RevolveLoftFacesMeridian(section)
 	radius := lfAdd(lfMul(m, x), b)
 	if radius.Sign() <= 0 {
 		return empty, nil, false, nil

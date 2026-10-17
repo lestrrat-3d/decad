@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/stretchr/testify/require"
 )
 
@@ -44,11 +45,11 @@ func TestRevolveLoftFacesOpenMovingCrossingRefuses(t *testing.T) {
 	}
 	section := revolveSectionSpan{Start: planePoint{U: 0, V: 1},
 		End: planePoint{U: 2, V: 1}}
-	m, b := revolveLoftFacesMeridian(section)
+	m, b := revolveloftfaces.RevolveLoftFacesMeridian(section)
 	q := loftface.MeridianQRows(first, last, span, m, b)
 	j := loftface.MeridianJRows(first, last, span, q)
-	remaining := revolveLoftFacesMaxBandCells
-	_, ok, _ := revolveLoftFacesOpenTimeSlab(t.Context(), q, j,
+	remaining := revolveloftfaces.RevolveLoftFacesMaxBandCells
+	_, ok, _ := revolveloftfaces.RevolveLoftFacesOpenTimeSlab(t.Context(), q, j,
 		first, last, span, section, 0, 0, 0,
 		lfZero(), big.NewRat(1, 2), false, true, &remaining)
 	require.False(t, ok)

@@ -5,6 +5,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 )
 
 // A tool-cap circle is the exact intersection of one authenticated finite
@@ -142,7 +143,7 @@ func revolveLoftFacesToolCircleOutsideSource(trim *loftFacesTrimRecord,
 		radius.Sign() <= 0 {
 		return false
 	}
-	box, err := lfSourceBox(trim.Source)
+	box, err := revolveloftfaces.LfSourceBox(trim.Source)
 	if err != nil {
 		return false
 	}

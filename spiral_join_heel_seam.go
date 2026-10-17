@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 )
 
 // A rational half-angle interval encloses the short source arc. These limits
@@ -344,7 +345,7 @@ func spiralTangentCapEightOutsideBlank(trim *loftFacesTrimRecord, coneC *big.Rat
 	if trim == nil || trim.Tangent == nil || !spiralTangentRecordCurrent(trim) || len(trim.Maps) != 9 {
 		return false
 	}
-	box, err := lfSourceBox(trim.Source)
+	box, err := revolveloftfaces.LfSourceBox(trim.Source)
 	if err != nil {
 		return false
 	}

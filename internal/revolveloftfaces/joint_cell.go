@@ -1,4 +1,4 @@
-package decad
+package revolveloftfaces
 
 import (
 	"math/big"
@@ -6,6 +6,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
 // A joint cell confines one source-side change to a one-sided Bezier sliver
@@ -13,34 +14,34 @@ import (
 // in that sliver for every time in the exact root bracket; the rest of the
 // source span has one strict side. Its mapped X hull lies within the finite
 // Revolve section. No held vertex enters this certificate.
-type revolveLoftFacesJointCell struct {
-	sLo, sHi    *big.Rat
-	time        loftFaceInterval
-	outsideSide int
-	sDerivative int
-	x           loftFaceInterval
-	finite      bool
+type RevolveLoftFacesJointCell struct {
+	SLo, SHi    *big.Rat
+	Time        loftFaceInterval
+	OutsideSide int
+	SDerivative int
+	X           loftFaceInterval
+	Finite      bool
 }
 
-func revolveLoftFacesKnotRootCell(trim *loftFacesTrimRecord,
+func RevolveLoftFacesKnotRootCell(trim *loftFacesTrimRecord,
 	section revolveSectionSpan, span freeform.BezierSpan, band int,
-	atEnd bool, root loftface.EndpointRoot) (revolveLoftFacesJointCell, bool) {
+	atEnd bool, root loftface.EndpointRoot) (RevolveLoftFacesJointCell, bool) {
 	return revolveLoftFacesKnotRootCellWith(nil, trim, section, span, band, atEnd, root)
 }
 
 func revolveLoftFacesKnotRootCellWith(memo *loftface.MeridianMemo, trim *loftFacesTrimRecord,
 	section revolveSectionSpan, span freeform.BezierSpan, band int,
-	atEnd bool, root loftface.EndpointRoot) (revolveLoftFacesJointCell, bool) {
-	var empty revolveLoftFacesJointCell
+	atEnd bool, root loftface.EndpointRoot) (RevolveLoftFacesJointCell, bool) {
+	var empty RevolveLoftFacesJointCell
 	if trim == nil || band < 0 || band+1 >= len(trim.Maps) ||
 		root.Time.Lo == nil || root.Time.Hi == nil {
 		return empty, false
 	}
-	m, b := revolveLoftFacesMeridian(section)
+	m, b := RevolveLoftFacesMeridian(section)
 	q := memo.QRows(trim.Maps[band], trim.Maps[band+1], span, m, b)
-	endpoint := lfZero()
+	endpoint := new(big.Rat)
 	if atEnd {
-		endpoint = lfOne()
+		endpoint = big.NewRat(1, 1)
 	}
 	endQ := []*big.Rat{
 		polynomial.BernsteinValue(q[0], endpoint),
@@ -57,16 +58,16 @@ func revolveLoftFacesKnotRootCellWith(memo *loftface.MeridianMemo, trim *loftFac
 	} else if loSign != -root.Direction || hiSign != root.Direction {
 		return empty, false
 	}
-	startX, endX := lfF(section.Start.U), lfF(section.End.U)
+	startX, endX := proofarith.FloatRat(section.Start.U), proofarith.FloatRat(section.End.U)
 	if startX.Cmp(endX) > 0 {
 		startX, endX = endX, startX
 	}
 	timeRows := polynomial.BernsteinRectTimeRestrict(q, root.Time.Lo, root.Time.Hi)
 	for depth := range 13 {
 		width := big.NewRat(1, int64(1<<depth))
-		sLo, sHi := lfZero(), width
+		sLo, sHi := new(big.Rat), width
 		if atEnd {
-			sLo, sHi = lfSub(lfOne(), width), lfOne()
+			sLo, sHi = proofarith.SubRat(new(big.Rat), big.NewRat(1, 1), width), big.NewRat(1, 1)
 		}
 		box := polynomial.BernsteinRectSourceRestrict(timeRows, sLo, sHi)
 
@@ -83,18 +84,18 @@ func revolveLoftFacesKnotRootCellWith(memo *loftface.MeridianMemo, trim *loftFac
 		if direction == 0 {
 			continue
 		}
-		fixed := lfZero()
+		fixed := new(big.Rat)
 		if !atEnd {
-			fixed = lfOne()
+			fixed = big.NewRat(1, 1)
 		}
 		fixedSide := polynomial.BernsteinRowsPointSign(box, fixed)
 		if fixedSide == 0 {
 			continue
 		}
 		if depth > 0 {
-			outerLo, outerHi := lfZero(), sLo
+			outerLo, outerHi := new(big.Rat), sLo
 			if !atEnd {
-				outerLo, outerHi = sHi, lfOne()
+				outerLo, outerHi = sHi, big.NewRat(1, 1)
 			}
 			outer := polynomial.BernsteinRectSourceRestrict(timeRows, outerLo, outerHi)
 
@@ -109,9 +110,9 @@ func revolveLoftFacesKnotRootCellWith(memo *loftface.MeridianMemo, trim *loftFac
 			!root.Finite && x.Hi.Cmp(startX) >= 0 && x.Lo.Cmp(endX) <= 0 {
 			continue
 		}
-		return revolveLoftFacesJointCell{sLo: sLo, sHi: sHi,
-			time: root.Time, outsideSide: fixedSide,
-			sDerivative: direction, x: x, finite: root.Finite}, true
+		return RevolveLoftFacesJointCell{SLo: sLo, SHi: sHi,
+			Time: root.Time, OutsideSide: fixedSide,
+			SDerivative: direction, X: x, Finite: root.Finite}, true
 	}
 	return empty, false
 }

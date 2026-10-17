@@ -5,6 +5,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/stretchr/testify/require"
 )
 
@@ -19,8 +20,8 @@ func TestCurvedSourceCapCirclesSplitClosedBlankShell(t *testing.T) {
 	sectionIndex, cellIndex := -1, -1
 	for _, side := range manifest.nonvertical {
 		for index, cell := range side.cells {
-			if cell.mapped.side == revolveLoftFacesJointContact &&
-				cell.mapped.jointKind == revolveLoftFacesWholeArcContact {
+			if cell.mapped.Side == revolveloftfaces.RevolveLoftFacesJointContact &&
+				cell.mapped.JointKind == revolveloftfaces.RevolveLoftFacesWholeArcContact {
 				sectionIndex, cellIndex = side.sectionIndex, index
 				break
 			}

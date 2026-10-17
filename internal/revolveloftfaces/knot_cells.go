@@ -1,4 +1,4 @@
-package decad
+package revolveloftfaces
 
 import (
 	"context"
@@ -17,7 +17,7 @@ func revolveLoftFacesKnotPartitionCells(ctx context.Context,
 	trim *loftFacesTrimRecord, section revolveSectionSpan,
 	segment, spanIndex, band int, span freeform.BezierSpan,
 	joint revolveLoftFacesFitKnotJoint, leftSpan bool) (
-	[]revolveLoftFacesMappedCell, bool, error,
+	[]RevolveLoftFacesMappedCell, bool, error,
 ) {
 	if ctx == nil || trim == nil || joint.vertex.segment != segment ||
 		joint.band != band ||
@@ -25,7 +25,7 @@ func revolveLoftFacesKnotPartitionCells(ctx context.Context,
 		!leftSpan && spanIndex != joint.vertex.leftIndex+1 {
 		return nil, false, nil
 	}
-	var knotCells []revolveLoftFacesJointCell
+	var knotCells []RevolveLoftFacesJointCell
 	if leftSpan {
 		knotCells = joint.leftCells
 	} else {
@@ -34,9 +34,9 @@ func revolveLoftFacesKnotPartitionCells(ctx context.Context,
 	cells, ok, err := revolveLoftFacesEndpointPartitionCells(ctx, trim, section, segment, spanIndex,
 		band, span, joint.roots, joint.pieces, knotCells, leftSpan)
 	for i := range cells {
-		if cells[i].side == revolveLoftFacesJointContact {
-			cells[i].jointKind = revolveLoftFacesFitKnotContact
-			cells[i].jointPoint = joint.vertex.point
+		if cells[i].Side == RevolveLoftFacesJointContact {
+			cells[i].JointKind = RevolveLoftFacesFitKnotContact
+			cells[i].JointPoint = joint.vertex.point
 		}
 	}
 	return cells, ok, err
@@ -46,19 +46,19 @@ func revolveLoftFacesEndpointPartitionCells(ctx context.Context,
 	trim *loftFacesTrimRecord, section revolveSectionSpan,
 	segment, spanIndex, band int, span freeform.BezierSpan,
 	roots []loftface.EndpointRoot, pieces []loftface.TimePiece,
-	jointCells []revolveLoftFacesJointCell, atEnd bool) (
-	[]revolveLoftFacesMappedCell, bool, error,
+	jointCells []RevolveLoftFacesJointCell, atEnd bool) (
+	[]RevolveLoftFacesMappedCell, bool, error,
 ) {
 	if ctx == nil || trim == nil || band < 0 || band+1 >= len(trim.Maps) ||
 		len(roots) == 0 || len(pieces) != 2*len(roots)+1 ||
 		len(jointCells) != len(roots) {
 		return nil, false, nil
 	}
-	m, b := revolveLoftFacesMeridian(section)
-	q := revolveLoftFacesMeridianMemoOf(ctx).QRows(trim.Maps[band], trim.Maps[band+1], span, m, b)
+	m, b := RevolveLoftFacesMeridian(section)
+	q := RevolveLoftFacesMeridianMemoOf(ctx).QRows(trim.Maps[band], trim.Maps[band+1], span, m, b)
 	j := loftface.MeridianJRows(trim.Maps[band], trim.Maps[band+1], span, q)
-	remaining := revolveLoftFacesMaxBandCells
-	var cells []revolveLoftFacesMappedCell
+	remaining := RevolveLoftFacesMaxBandCells
+	var cells []RevolveLoftFacesMappedCell
 	for _, piece := range pieces {
 		if err := ctx.Err(); err != nil {
 			return nil, false, err
@@ -68,33 +68,33 @@ func revolveLoftFacesEndpointPartitionCells(ctx context.Context,
 				return nil, false, nil
 			}
 			rootCell := jointCells[piece.RootIndex]
-			if rootCell.time.Lo == nil || rootCell.time.Lo.Cmp(piece.Lo) != 0 ||
-				rootCell.time.Hi.Cmp(piece.Hi) != 0 {
+			if rootCell.Time.Lo == nil || rootCell.Time.Lo.Cmp(piece.Lo) != 0 ||
+				rootCell.Time.Hi.Cmp(piece.Hi) != 0 {
 				return nil, false, nil
 			}
-			makeCell := func(side int, sLo, sHi *big.Rat) revolveLoftFacesMappedCell {
-				return revolveLoftFacesMappedCell{segment: segment, span: spanIndex,
-					band: band, side: side, sLo: sLo, sHi: sHi,
-					tLo: piece.Lo, tHi: piece.Hi}
+			makeCell := func(side int, sLo, sHi *big.Rat) RevolveLoftFacesMappedCell {
+				return RevolveLoftFacesMappedCell{Segment: segment, Span: spanIndex,
+					Band: band, Side: side, SLo: sLo, SHi: sHi,
+					TLo: piece.Lo, THi: piece.Hi}
 			}
-			if atEnd && rootCell.sLo.Sign() > 0 {
-				cells = append(cells, makeCell(rootCell.outsideSide, lfZero(), rootCell.sLo))
+			if atEnd && rootCell.SLo.Sign() > 0 {
+				cells = append(cells, makeCell(rootCell.OutsideSide, new(big.Rat), rootCell.SLo))
 			}
-			if !atEnd && rootCell.sHi.Cmp(lfOne()) < 0 {
-				cells = append(cells, makeCell(rootCell.outsideSide, rootCell.sHi, lfOne()))
+			if !atEnd && rootCell.SHi.Cmp(big.NewRat(1, 1)) < 0 {
+				cells = append(cells, makeCell(rootCell.OutsideSide, rootCell.SHi, big.NewRat(1, 1)))
 			}
-			side := revolveLoftFacesJointContact
-			if !rootCell.finite {
-				side = revolveLoftFacesAxialMiss
+			side := RevolveLoftFacesJointContact
+			if !rootCell.Finite {
+				side = RevolveLoftFacesAxialMiss
 			}
-			cells = append(cells, makeCell(side, rootCell.sLo, rootCell.sHi))
+			cells = append(cells, makeCell(side, rootCell.SLo, rootCell.SHi))
 			continue
 		}
 		if piece.LoOpen && piece.Lo.Cmp(piece.Hi) == 0 ||
 			piece.HiOpen && piece.Lo.Cmp(piece.Hi) == 0 {
 			return nil, false, nil
 		}
-		openCells, ok, err := revolveLoftFacesOpenTimeSlab(ctx, q, j,
+		openCells, ok, err := RevolveLoftFacesOpenTimeSlab(ctx, q, j,
 			trim.Maps[band], trim.Maps[band+1], span, section,
 			segment, spanIndex, band, piece.Lo, piece.Hi,
 			piece.LoOpen, piece.HiOpen, &remaining)

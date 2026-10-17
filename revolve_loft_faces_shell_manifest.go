@@ -1,11 +1,10 @@
 package decad
 
 import (
-	"math/big"
 	"slices"
 
-	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 )
 
 // The source record is rebuilt before shell construction. A copied face
@@ -39,15 +38,8 @@ func revolveLoftFacesSameShellManifest(a, b *revolveLoftFacesContactManifest) bo
 	return true
 }
 
-func revolveLoftFacesSameRat(a, b *big.Rat) bool {
-	if a == nil || b == nil {
-		return a == nil && b == nil
-	}
-	return a.Cmp(b) == 0
-}
-
 func revolveLoftFacesSameInterval(a, b loftFaceInterval) bool {
-	return revolveLoftFacesSameRat(a.Lo, b.Lo) && revolveLoftFacesSameRat(a.Hi, b.Hi)
+	return revolveloftfaces.RevolveLoftFacesSameRat(a.Lo, b.Lo) && revolveloftfaces.RevolveLoftFacesSameRat(a.Hi, b.Hi)
 }
 
 func revolveLoftFacesSameBox(a, b [3]loftFaceInterval) bool {
@@ -60,37 +52,24 @@ func revolveLoftFacesSameBox(a, b [3]loftFaceInterval) bool {
 }
 
 func revolveLoftFacesSameCrossing(a, b loftface.RootCrossing) bool {
-	return a.Span == b.Span && revolveLoftFacesSameRat(a.Lo, b.Lo) &&
-		revolveLoftFacesSameRat(a.Hi, b.Hi)
+	return a.Span == b.Span && revolveloftfaces.RevolveLoftFacesSameRat(a.Lo, b.Lo) &&
+		revolveloftfaces.RevolveLoftFacesSameRat(a.Hi, b.Hi)
 }
 
-func revolveLoftFacesSameMappedCell(a, b revolveLoftFacesMappedCell) bool {
-	return a.segment == b.segment && a.span == b.span && a.band == b.band &&
-		a.side == b.side && a.jointKind == b.jointKind &&
-		a.jointPoint == b.jointPoint && a.jointArc == b.jointArc &&
-		revolveLoftFacesSameCrossing(a.first, b.first) &&
-		revolveLoftFacesSameCrossing(a.last, b.last) &&
-		revolveLoftFacesSameInterval(a.xFirst, b.xFirst) &&
-		revolveLoftFacesSameInterval(a.xLast, b.xLast) &&
-		a.xDirection == b.xDirection &&
-		revolveLoftFacesSameRat(a.sLo, b.sLo) &&
-		revolveLoftFacesSameRat(a.sHi, b.sHi) &&
-		revolveLoftFacesSameRat(a.tLo, b.tLo) &&
-		revolveLoftFacesSameRat(a.tHi, b.tHi) &&
-		a.tLoOpen == b.tLoOpen && a.tHiOpen == b.tHiOpen
-}
-
-func revolveLoftFacesSameBezier(a, b freeform.BezierSpan) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if !revolveLoftFacesSameRat(a[i].U, b[i].U) ||
-			!revolveLoftFacesSameRat(a[i].V, b[i].V) {
-			return false
-		}
-	}
-	return true
+func revolveLoftFacesSameMappedCell(a, b revolveloftfaces.RevolveLoftFacesMappedCell) bool {
+	return a.Segment == b.Segment && a.Span == b.Span && a.Band == b.Band &&
+		a.Side == b.Side && a.JointKind == b.JointKind &&
+		a.JointPoint == b.JointPoint && a.JointArc == b.JointArc &&
+		revolveLoftFacesSameCrossing(a.First, b.First) &&
+		revolveLoftFacesSameCrossing(a.Last, b.Last) &&
+		revolveLoftFacesSameInterval(a.XFirst, b.XFirst) &&
+		revolveLoftFacesSameInterval(a.XLast, b.XLast) &&
+		a.XDirection == b.XDirection &&
+		revolveloftfaces.RevolveLoftFacesSameRat(a.SLo, b.SLo) &&
+		revolveloftfaces.RevolveLoftFacesSameRat(a.SHi, b.SHi) &&
+		revolveloftfaces.RevolveLoftFacesSameRat(a.TLo, b.TLo) &&
+		revolveloftfaces.RevolveLoftFacesSameRat(a.THi, b.THi) &&
+		a.TLoOpen == b.TLoOpen && a.THiOpen == b.THiOpen
 }
 
 func revolveLoftFacesSameVerticalLimit(a, b loftface.VerticalLimit) bool {
@@ -104,16 +83,16 @@ func revolveLoftFacesSameVerticalAffine(a, b *loftface.VerticalAffine) bool {
 		return a == nil && b == nil
 	}
 	for i := range a.Offset {
-		if !revolveLoftFacesSameRat(a.Offset[i], b.Offset[i]) {
+		if !revolveloftfaces.RevolveLoftFacesSameRat(a.Offset[i], b.Offset[i]) {
 			return false
 		}
 		for j := range a.Column[i] {
-			if !revolveLoftFacesSameRat(a.Column[i][j], b.Column[i][j]) {
+			if !revolveloftfaces.RevolveLoftFacesSameRat(a.Column[i][j], b.Column[i][j]) {
 				return false
 			}
 		}
 	}
-	return revolveLoftFacesSameRat(a.Det, b.Det)
+	return revolveloftfaces.RevolveLoftFacesSameRat(a.Det, b.Det)
 }
 
 func revolveLoftFacesSameVerticalSide(a, b *revolveLoftFacesVerticalSide) bool {
@@ -125,10 +104,10 @@ func revolveLoftFacesSameVerticalSide(a, b *revolveLoftFacesVerticalSide) bool {
 	}
 	if a.face != b.face || !slices.Equal(a.origins, b.origins) ||
 		a.band != b.band || a.hasRetained != b.hasRetained ||
-		!revolveLoftFacesSameRat(a.time, b.time) ||
-		!revolveLoftFacesSameRat(a.x, b.x) ||
-		!revolveLoftFacesSameRat(a.lower, b.lower) ||
-		!revolveLoftFacesSameRat(a.upper, b.upper) ||
+		!revolveloftfaces.RevolveLoftFacesSameRat(a.time, b.time) ||
+		!revolveloftfaces.RevolveLoftFacesSameRat(a.x, b.x) ||
+		!revolveloftfaces.RevolveLoftFacesSameRat(a.lower, b.lower) ||
+		!revolveloftfaces.RevolveLoftFacesSameRat(a.upper, b.upper) ||
 		!revolveLoftFacesSameVerticalAffine(a.yzAffine, b.yzAffine) ||
 		len(a.cells) != len(b.cells) {
 		return false
@@ -137,7 +116,7 @@ func revolveLoftFacesSameVerticalSide(a, b *revolveLoftFacesVerticalSide) bool {
 		other := b.cells[i]
 		if cell.segment != other.segment || cell.span != other.span ||
 			cell.band != other.band || cell.ref != other.ref || cell.face != other.face ||
-			!revolveLoftFacesSameBezier(cell.source, other.source) ||
+			!revolveloftfaces.RevolveLoftFacesSameBezier(cell.source, other.source) ||
 			!revolveLoftFacesSameVerticalLimit(cell.lower, other.lower) ||
 			!revolveLoftFacesSameVerticalLimit(cell.upper, other.upper) ||
 			len(cell.retained) != len(other.retained) {

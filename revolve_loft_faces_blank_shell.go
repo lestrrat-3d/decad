@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -500,16 +501,16 @@ func revolveLoftFacesBlankShellEulerTwo(mesh *joinedMesh) bool {
 	return len(mesh.Verts)-len(edges)+len(mesh.Tris) == 2
 }
 
-func revolveLoftFacesSameArcContact(a, b revolveLoftFacesMappedCell) bool {
-	return a.segment == b.segment && a.span == b.span && a.band == b.band &&
-		a.side == revolveLoftFacesJointContact && b.side == a.side &&
-		a.jointKind == revolveLoftFacesWholeArcContact && b.jointKind == a.jointKind &&
-		a.jointArc == b.jointArc && a.jointPoint == b.jointPoint &&
-		a.sLo != nil && b.sLo != nil && a.sLo.Cmp(b.sLo) == 0 &&
-		a.sHi != nil && b.sHi != nil && a.sHi.Cmp(b.sHi) == 0 &&
-		a.tLo != nil && b.tLo != nil && a.tLo.Cmp(b.tLo) == 0 &&
-		a.tHi != nil && b.tHi != nil && a.tHi.Cmp(b.tHi) == 0 &&
-		a.tLoOpen == b.tLoOpen && a.tHiOpen == b.tHiOpen
+func revolveLoftFacesSameArcContact(a, b revolveloftfaces.RevolveLoftFacesMappedCell) bool {
+	return a.Segment == b.Segment && a.Span == b.Span && a.Band == b.Band &&
+		a.Side == revolveloftfaces.RevolveLoftFacesJointContact && b.Side == a.Side &&
+		a.JointKind == revolveloftfaces.RevolveLoftFacesWholeArcContact && b.JointKind == a.JointKind &&
+		a.JointArc == b.JointArc && a.JointPoint == b.JointPoint &&
+		a.SLo != nil && b.SLo != nil && a.SLo.Cmp(b.SLo) == 0 &&
+		a.SHi != nil && b.SHi != nil && a.SHi.Cmp(b.SHi) == 0 &&
+		a.TLo != nil && b.TLo != nil && a.TLo.Cmp(b.TLo) == 0 &&
+		a.THi != nil && b.THi != nil && a.THi.Cmp(b.THi) == 0 &&
+		a.TLoOpen == b.TLoOpen && a.THiOpen == b.THiOpen
 }
 
 // A candidate must carry its retained source cells; a marked outcome alone

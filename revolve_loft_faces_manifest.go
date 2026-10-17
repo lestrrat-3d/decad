@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 )
 
 // This is a source-only record. A mapped cell names its complete Sketch
@@ -13,7 +14,7 @@ import (
 // interval. Contact cells also name the exact live endpoint that owns them.
 // Tool clipping and held-switch construction are separate certificates.
 type revolveLoftFacesSourceCell struct {
-	mapped revolveLoftFacesMappedCell
+	mapped revolveloftfaces.RevolveLoftFacesMappedCell
 	ref    provenance.Ref
 	face   *Face
 }
@@ -79,7 +80,7 @@ func revolveLoftFacesNonverticalManifest(ctx context.Context,
 			section.Start.V <= 0 || section.End.V <= 0 {
 			continue
 		}
-		mapped, ok, err := revolveLoftFacesFiniteSpanCells(ctx, proof.trim, section)
+		mapped, ok, err := revolveloftfaces.RevolveLoftFacesFiniteSpanCells(ctx, proof.trim, section)
 		if err != nil {
 			return nil, false, fmt.Errorf("finite Revolve source side %d: %w", sectionIndex, err)
 		}
@@ -90,16 +91,16 @@ func revolveLoftFacesNonverticalManifest(ctx context.Context,
 		entry := revolveLoftFacesNonverticalSide{sectionIndex: sectionIndex,
 			face: faceHandle(section.Face), origins: append([]provenance.Ref(nil), section.Origins...)}
 		for _, cell := range mapped {
-			if cell.band < 0 || cell.band >= len(proof.sourceRefs) ||
-				cell.segment < 0 || cell.segment >= len(proof.sourceRefs[cell.band]) ||
-				cell.sLo == nil || cell.sHi == nil || cell.tLo == nil || cell.tHi == nil ||
-				cell.side == revolveLoftFacesJointContact &&
-					(cell.jointKind == 0 ||
-						cell.jointKind == revolveLoftFacesWholeArcContact && cell.jointArc == nil ||
-						cell.jointKind != revolveLoftFacesWholeArcContact && cell.jointPoint == nil) {
+			if cell.Band < 0 || cell.Band >= len(proof.sourceRefs) ||
+				cell.Segment < 0 || cell.Segment >= len(proof.sourceRefs[cell.Band]) ||
+				cell.SLo == nil || cell.SHi == nil || cell.TLo == nil || cell.THi == nil ||
+				cell.Side == revolveloftfaces.RevolveLoftFacesJointContact &&
+					(cell.JointKind == 0 ||
+						cell.JointKind == revolveloftfaces.RevolveLoftFacesWholeArcContact && cell.JointArc == nil ||
+						cell.JointKind != revolveloftfaces.RevolveLoftFacesWholeArcContact && cell.JointPoint == nil) {
 				return nil, false, nil
 			}
-			ref := liveRefs[cell.band][cell.segment]
+			ref := liveRefs[cell.Band][cell.Segment]
 			index, valid := revolveLoftFacesRefFaceIndex(p, ref, len(faces))
 			face, originValid := revolveLoftFacesUniqueOriginFace(proof.tooth, ref)
 			if !valid || !originValid || (index >= 0) != (face != nil) ||

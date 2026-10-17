@@ -1,4 +1,4 @@
-package decad
+package revolveloftfaces
 
 import (
 	"context"
@@ -8,13 +8,14 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
 const (
 	revolveLoftFacesMaxBandDepth = 12
-	revolveLoftFacesMaxBandCells = 256
-	revolveLoftFacesAxialMiss    = 3
-	revolveLoftFacesJointContact = 4
+	RevolveLoftFacesMaxBandCells = 256
+	RevolveLoftFacesAxialMiss    = 3
+	RevolveLoftFacesJointContact = 4
 )
 
 // Each accepted time slab has either one strict side or one moving source
@@ -24,23 +25,23 @@ const (
 func revolveLoftFacesAdaptiveBezierCells(ctx context.Context, trim *loftFacesTrimRecord,
 	m, b *big.Rat, segment, spanIndex, band int, span freeform.BezierSpan,
 	section revolveSectionSpan) (
-	[]revolveLoftFacesMappedCell, bool, error,
+	[]RevolveLoftFacesMappedCell, bool, error,
 ) {
 	if ctx == nil || trim == nil || band < 0 || band+1 >= len(trim.Maps) {
 		return nil, false, nil
 	}
 	first, last := trim.Maps[band], trim.Maps[band+1]
-	q := revolveLoftFacesMeridianMemoOf(ctx).QRows(first, last, span, m, b)
+	q := RevolveLoftFacesMeridianMemoOf(ctx).QRows(first, last, span, m, b)
 	j := loftface.MeridianJRows(first, last, span, q)
-	remaining := revolveLoftFacesMaxBandCells
+	remaining := RevolveLoftFacesMaxBandCells
 	return revolveLoftFacesTimeSlab(ctx, q, j, first, last, span, section, segment, spanIndex, band,
-		lfZero(), lfOne(), 0, &remaining)
+		new(big.Rat), big.NewRat(1, 1), 0, &remaining)
 }
 
 func revolveLoftFacesTimeSlab(ctx context.Context, q, j [3][]*big.Rat,
 	first, last loftFaceMap, sourceSpan freeform.BezierSpan, section revolveSectionSpan,
 	segment, span, band int, tLo, tHi *big.Rat, depth int,
-	remaining *int) ([]revolveLoftFacesMappedCell, bool, error) {
+	remaining *int) ([]RevolveLoftFacesMappedCell, bool, error) {
 	if *remaining <= 0 {
 		return nil, false, fmt.Errorf("adaptive Bernstein time-cell budget exhausted at t=[%s,%s]", tLo, tHi)
 	}
@@ -51,19 +52,19 @@ func revolveLoftFacesTimeSlab(ctx context.Context, q, j [3][]*big.Rat,
 		}
 	}
 	timeRows := polynomial.BernsteinRectTimeRestrict(q, tLo, tHi)
-	box := polynomial.BernsteinRectSourceRestrict(timeRows, lfZero(), lfOne())
+	box := polynomial.BernsteinRectSourceRestrict(timeRows, new(big.Rat), big.NewRat(1, 1))
 	kind, _ := loftface.ClassifyRows(box)
-	whole := revolveLoftFacesMappedCell{segment: segment, span: span,
-		band: band, side: kind, sLo: lfZero(), sHi: lfOne(), tLo: tLo, tHi: tHi}
+	whole := RevolveLoftFacesMappedCell{Segment: segment, Span: span,
+		Band: band, Side: kind, SLo: new(big.Rat), SHi: big.NewRat(1, 1), TLo: tLo, THi: tHi}
 	if kind == loftface.SideInside || kind == loftface.SideOutside {
-		return []revolveLoftFacesMappedCell{whole}, true, nil
+		return []RevolveLoftFacesMappedCell{whole}, true, nil
 	}
-	if revolveLoftFacesSpanAxialMiss(first, last, sourceSpan, section,
-		lfZero(), lfOne(), tLo, tHi) {
-		whole.side = revolveLoftFacesAxialMiss
-		return []revolveLoftFacesMappedCell{whole}, true, nil
+	if RevolveLoftFacesSpanAxialMiss(first, last, sourceSpan, section,
+		new(big.Rat), big.NewRat(1, 1), tLo, tHi) {
+		whole.Side = RevolveLoftFacesAxialMiss
+		return []RevolveLoftFacesMappedCell{whole}, true, nil
 	}
-	if cells, ok := revolveLoftFacesBracketTimeRoot(timeRows, j,
+	if cells, ok := RevolveLoftFacesBracketTimeRoot(timeRows, j,
 		segment, span, band, tLo, tHi); ok {
 		return cells, true, nil
 	}
@@ -73,7 +74,7 @@ func revolveLoftFacesTimeSlab(ctx context.Context, q, j [3][]*big.Rat,
 			tLo, tHi, low[0].Sign(), low[len(low)-1].Sign(),
 			high[0].Sign(), high[len(high)-1].Sign())
 	}
-	mid := lfMul(lfAdd(tLo, tHi), big.NewRat(1, 2))
+	mid := proofarith.MulRat(new(big.Rat), proofarith.AddRat(new(big.Rat), tLo, tHi), big.NewRat(1, 2))
 	left, ok, err := revolveLoftFacesTimeSlab(ctx, q, j, first, last, sourceSpan, section,
 		segment, span, band,
 		tLo, mid, depth+1, remaining)
@@ -86,24 +87,24 @@ func revolveLoftFacesTimeSlab(ctx context.Context, q, j [3][]*big.Rat,
 	return append(left, right...), ok, err
 }
 
-func revolveLoftFacesOpenTimeSlab(ctx context.Context, q, j [3][]*big.Rat,
+func RevolveLoftFacesOpenTimeSlab(ctx context.Context, q, j [3][]*big.Rat,
 	first, last loftFaceMap, span freeform.BezierSpan, section revolveSectionSpan,
 	segment, spanIndex, band int, tLo, tHi *big.Rat,
-	loOpen, hiOpen bool, remaining *int) ([]revolveLoftFacesMappedCell, bool, error) {
+	loOpen, hiOpen bool, remaining *int) ([]RevolveLoftFacesMappedCell, bool, error) {
 	if ctx == nil || remaining == nil || *remaining <= 0 {
 		return nil, false, nil
 	}
 	if side := polynomial.BernsteinRectOpenSide(q, tLo, tHi, loOpen, hiOpen); side != 0 {
 		*remaining--
-		return []revolveLoftFacesMappedCell{{segment: segment, span: spanIndex,
-			band: band, side: side, sLo: lfZero(), sHi: lfOne(),
-			tLo: tLo, tHi: tHi, tLoOpen: loOpen, tHiOpen: hiOpen}}, true, nil
+		return []RevolveLoftFacesMappedCell{{Segment: segment, Span: spanIndex,
+			Band: band, Side: side, SLo: new(big.Rat), SHi: big.NewRat(1, 1),
+			TLo: tLo, THi: tHi, TLoOpen: loOpen, THiOpen: hiOpen}}, true, nil
 	}
 	cells, ok, err := revolveLoftFacesTimeSlab(ctx, q, j, first, last, span,
 		section, segment, spanIndex, band, tLo, tHi, 0, remaining)
 	for i := range cells {
-		cells[i].tLoOpen = loOpen && cells[i].tLo.Cmp(tLo) == 0
-		cells[i].tHiOpen = hiOpen && cells[i].tHi.Cmp(tHi) == 0
+		cells[i].TLoOpen = loOpen && cells[i].TLo.Cmp(tLo) == 0
+		cells[i].THiOpen = hiOpen && cells[i].THi.Cmp(tHi) == 0
 	}
 	return cells, ok, err
 }
@@ -111,21 +112,21 @@ func revolveLoftFacesOpenTimeSlab(ctx context.Context, q, j [3][]*big.Rat,
 // revolveLoftFacesBracketTimeRoot looks for one source bracket where the
 // meridian rows cross. timeRows are the meridian rows already restricted to
 // band time [tLo, tHi]; j is restricted here.
-func revolveLoftFacesBracketTimeRoot(timeRows, j [3][]*big.Rat,
-	segment, span, band int, tLo, tHi *big.Rat) ([]revolveLoftFacesMappedCell, bool) {
-	box := polynomial.BernsteinRectSourceRestrict(timeRows, lfZero(), lfOne())
+func RevolveLoftFacesBracketTimeRoot(timeRows, j [3][]*big.Rat,
+	segment, span, band int, tLo, tHi *big.Rat) ([]RevolveLoftFacesMappedCell, bool) {
+	box := polynomial.BernsteinRectSourceRestrict(timeRows, new(big.Rat), big.NewRat(1, 1))
 	for _, orientation := range []int{1, -1} {
 		oriented := box
 		if orientation < 0 {
 			oriented = loftface.NegateRows(box)
 		}
-		if polynomial.BernsteinRowsPointSign(oriented, lfZero()) != -1 ||
-			polynomial.BernsteinRowsPointSign(oriented, lfOne()) != 1 {
+		if polynomial.BernsteinRowsPointSign(oriented, new(big.Rat)) != -1 ||
+			polynomial.BernsteinRowsPointSign(oriented, big.NewRat(1, 1)) != 1 {
 			continue
 		}
-		sLo, sHi := lfZero(), lfOne()
+		sLo, sHi := new(big.Rat), big.NewRat(1, 1)
 		for range 10 {
-			mid := lfMul(lfAdd(sLo, sHi), big.NewRat(1, 2))
+			mid := proofarith.MulRat(new(big.Rat), proofarith.AddRat(new(big.Rat), sLo, sHi), big.NewRat(1, 2))
 			switch polynomial.BernsteinRowsPointSign(oriented, mid) {
 			case -1:
 				sLo = mid
@@ -146,7 +147,7 @@ func revolveLoftFacesBracketTimeRoot(timeRows, j [3][]*big.Rat,
 			continue
 		}
 		if sLo.Sign() > 0 {
-			left := polynomial.BernsteinRectSourceRestrict(timeRows, lfZero(), sLo)
+			left := polynomial.BernsteinRectSourceRestrict(timeRows, new(big.Rat), sLo)
 			if orientation > 0 {
 				left = loftface.NegateRows(left)
 			}
@@ -154,8 +155,8 @@ func revolveLoftFacesBracketTimeRoot(timeRows, j [3][]*big.Rat,
 				continue
 			}
 		}
-		if sHi.Cmp(lfOne()) < 0 {
-			right := polynomial.BernsteinRectSourceRestrict(timeRows, sHi, lfOne())
+		if sHi.Cmp(big.NewRat(1, 1)) < 0 {
+			right := polynomial.BernsteinRectSourceRestrict(timeRows, sHi, big.NewRat(1, 1))
 			if orientation < 0 {
 				right = loftface.NegateRows(right)
 			}
@@ -176,19 +177,19 @@ func revolveLoftFacesBracketTimeRoot(timeRows, j [3][]*big.Rat,
 		if xDirection == 0 {
 			continue
 		}
-		makeCell := func(side int, a, z *big.Rat) revolveLoftFacesMappedCell {
-			return revolveLoftFacesMappedCell{segment: segment, span: span,
-				band: band, side: side, sLo: a, sHi: z, tLo: tLo, tHi: tHi}
+		makeCell := func(side int, a, z *big.Rat) RevolveLoftFacesMappedCell {
+			return RevolveLoftFacesMappedCell{Segment: segment, Span: span,
+				Band: band, Side: side, SLo: a, SHi: z, TLo: tLo, THi: tHi}
 		}
-		var cells []revolveLoftFacesMappedCell
+		var cells []RevolveLoftFacesMappedCell
 		if sLo.Sign() > 0 {
-			cells = append(cells, makeCell(-orientation, lfZero(), sLo))
+			cells = append(cells, makeCell(-orientation, new(big.Rat), sLo))
 		}
 		crossing := makeCell(loftface.SideCrossed, sLo, sHi)
-		crossing.xDirection = xDirection
+		crossing.XDirection = xDirection
 		cells = append(cells, crossing)
-		if sHi.Cmp(lfOne()) < 0 {
-			cells = append(cells, makeCell(orientation, sHi, lfOne()))
+		if sHi.Cmp(big.NewRat(1, 1)) < 0 {
+			cells = append(cells, makeCell(orientation, sHi, big.NewRat(1, 1)))
 		}
 		return cells, true
 	}

@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -75,7 +76,7 @@ func tangentGateInputs(t *testing.T, c tangentTrimChain) (final, previous loftFa
 	t.Helper()
 	record := c.cut.n.Payload.(facetedPayload).LoftFacesToe.Cap
 	var err error
-	box, err = lfSourceBox(record.Source)
+	box, err = revolveloftfaces.LfSourceBox(record.Source)
 	require.NoError(t, err)
 	heel, ok := exactPointCone(c.heelTool)
 	require.True(t, ok)
@@ -403,7 +404,7 @@ func TestLoftFacesTangentHeelRefusesOtherCone(t *testing.T) {
 	limit, ok := exactPointCone(other)
 	require.True(t, ok)
 	require.False(t, c.loftRecord.Tangent.MatchesCone(limit.Apex, limit.Slope))
-	box, err := lfSourceBox(c.loftRecord.Source)
+	box, err := revolveloftfaces.LfSourceBox(c.loftRecord.Source)
 	require.NoError(t, err)
 	require.False(t, loftCapOutsideHeelCone(c.loftRecord.Final, box, limit))
 	plane, err := loftCapTangentToHeelCone(c.loftRecord, box, limit)
