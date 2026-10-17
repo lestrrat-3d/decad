@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/stretchr/testify/require"
@@ -189,7 +190,7 @@ func TestRevolveLoftFacesCircleMissConsumesLiveNeutralSource(t *testing.T) {
 	require.NotEmpty(t, sides.circles)
 	misses := 0
 	for _, circle := range sides.circles {
-		require.Equal(t, revolveLoftFacesToolCircleOutsideSource(
+		require.Equal(t, revolveloftfaces.ToolCircleOutsideSource(
 			proof.trim, circle.x, circle.radius), circle.sourceMiss)
 		if circle.sourceMiss {
 			misses++
