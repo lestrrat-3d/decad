@@ -7,6 +7,7 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/stretchr/testify/require"
 )
@@ -140,8 +141,8 @@ func TestLoftFaceDivByZeroPanicsLikeQuo(t *testing.T) {
 	}
 }
 
-// The slope in pointPlaneCapDroppedCoordinate is one of the three quotients
-// pointPlaneCapCentroid takes; this test compares it with the raw expression.
+// The slope in facetedrecord.PointPlaneCapDroppedCoordinate is one of the
+// three quotients its cap centroid takes; this test compares the raw expression.
 func TestPointPlaneCapDroppedCoordinateMatchesRawRat(t *testing.T) {
 	normals := []*big.Rat{
 		big.NewRat(3, 5), big.NewRat(-4, 5), big.NewRat(1, 1), big.NewRat(-7, 2),
@@ -164,7 +165,7 @@ func TestPointPlaneCapDroppedCoordinateMatchesRawRat(t *testing.T) {
 				slope := new(big.Rat).Quo(normal[keep], normal[drop])
 				diff := new(big.Rat).Sub(center[keep], anchor[keep])
 				want := new(big.Rat).Sub(anchor[drop], new(big.Rat).Mul(slope, diff))
-				got := pointPlaneCapDroppedCoordinate(center, anchor, plane, keep)
+				got := facetedrecord.PointPlaneCapDroppedCoordinate(center, anchor, plane, keep)
 				require.Zero(t, got.Cmp(want))
 				require.Equal(t, ratSnapshot(want), ratSnapshot(got))
 			}
@@ -209,7 +210,7 @@ func TestPointPlaneCapDroppedCoordinateAcceptsNonReducedByValue(t *testing.T) {
 		normal := [2]*big.Rat{plane.Nx, plane.Ny}
 		slope := new(big.Rat).Quo(normal[keep], normal[drop])
 		want := new(big.Rat).Sub(anchor[drop], new(big.Rat).Mul(slope, new(big.Rat).Sub(center[keep], anchor[keep])))
-		got := pointPlaneCapDroppedCoordinate(center, anchor, plane, keep)
+		got := facetedrecord.PointPlaneCapDroppedCoordinate(center, anchor, plane, keep)
 		require.Zero(t, got.Cmp(want))
 	}
 }

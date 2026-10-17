@@ -29,7 +29,7 @@ func pointPlaneCapCentroidThreeMomentReference(ctx context.Context, base faceted
 				return VecMeasurement{}, [3]*big.Rat{}, false, err
 			}
 		}
-		q, err := pointPlaneMapExact(base.PointSection.Apex, far, plane)
+		q, err := facetedrecord.PointPlaneMapExact(base.PointSection.Apex, far, plane)
 		if err != nil {
 			return VecMeasurement{}, [3]*big.Rat{}, false, nil //nolint:nilerr // the frozen reference withholds an optional reading
 		}
@@ -52,7 +52,7 @@ func pointPlaneCapCentroidThreeMomentReference(ctx context.Context, base faceted
 			}
 		}
 		b := polygon[(i+1)%len(polygon)]
-		perimeter = proofbound.AbsSumUpper(perimeter, pointCapDistanceUpper(a, b))
+		perimeter = proofbound.AbsSumUpper(perimeter, facetedrecord.PointCapDistanceUpper(a, b))
 	}
 	anchor := polygon[0]
 	for i := 1; i+1 < len(polygon); i++ {
@@ -87,7 +87,7 @@ func pointPlaneCapCentroidThreeMomentReference(ctx context.Context, base faceted
 				return VecMeasurement{}, center, false, err
 			}
 		}
-		radius = max(radius, pointCapDistanceUpper(q, center))
+		radius = max(radius, facetedrecord.PointCapDistanceUpper(q, center))
 	}
 	floor := math.Nextafter(areaLower-tube, math.Inf(-1))
 	if floor <= 0 || proofbound.IsNonFinite(radius) {
@@ -117,24 +117,25 @@ func requirePointCapThreeMomentMatch(t *testing.T, base facetedPayload, plane *p
 	ctx context.Context) {
 	t.Helper()
 	want, exact, wantOK, wantErr := pointPlaneCapCentroidThreeMomentReference(ctx, base, plane)
-	got, gotOK, gotErr := pointPlaneCapCentroid(ctx, base, plane)
+	gotInternal, gotOK, gotErr := facetedrecord.PointPlaneCapCentroid(ctx, base, plane)
 	require.ErrorIs(t, gotErr, wantErr)
 	require.Equal(t, wantOK, gotOK)
 	if !wantOK {
 		return
 	}
+	got := vecMeasurementFromInternal(gotInternal)
 	require.Equal(t, want.Exactness, got.Exactness)
 	require.Equal(t, math.Float64bits(want.Value.X), math.Float64bits(got.Value.X))
 	require.Equal(t, math.Float64bits(want.Value.Y), math.Float64bits(got.Value.Y))
 	require.Equal(t, math.Float64bits(want.Value.Z), math.Float64bits(got.Value.Z))
 	require.Equal(t, math.Float64bits(want.Bound.Base()), math.Float64bits(got.Bound.Base()))
-	anchor, err := pointPlaneMapExact(base.PointSection.Apex, base.Verts[1], plane)
+	anchor, err := facetedrecord.PointPlaneMapExact(base.PointSection.Apex, base.Verts[1], plane)
 	require.NoError(t, err)
 	keep := 0
 	if pointPlaneAbs(plane.Nx).Cmp(pointPlaneAbs(plane.Ny)) > 0 {
 		keep = 1
 	}
-	recovered := pointPlaneCapDroppedCoordinate(exact, anchor, plane, keep)
+	recovered := facetedrecord.PointPlaneCapDroppedCoordinate(exact, anchor, plane, keep)
 	require.Zero(t, recovered.Cmp(exact[1-keep]), "the exact dropped centroid coordinate changed")
 }
 
@@ -272,7 +273,7 @@ func TestPointPlaneCapCentroidRefusalsMatchThreeMoments(t *testing.T) {
 		oldCtx := &pointCapCancelAfterContext{cancelAt: 5}
 		_, _, oldOK, oldErr := pointPlaneCapCentroidThreeMomentReference(oldCtx, base, plane)
 		newCtx := &pointCapCancelAfterContext{cancelAt: 5}
-		_, newOK, newErr := pointPlaneCapCentroid(newCtx, base, plane)
+		_, newOK, newErr := facetedrecord.PointPlaneCapCentroid(newCtx, base, plane)
 		require.ErrorIs(t, oldErr, context.Canceled)
 		require.ErrorIs(t, newErr, context.Canceled)
 		require.False(t, oldOK)
