@@ -96,24 +96,6 @@ func sourceBoxAtPose(b *Body, pose r3.Transform) (sourceBoxContactProof, bool) {
 	return box, true
 }
 
-// exactContactMap is proof.DvTransform with the transform's translation
-// and basis lifted once, for a caller mapping many points through one pose.
-// apply returns exactly what proof.DvTransform returns.
-type exactContactMap struct {
-	translation, ex, ey, ez proofarith.DyV3
-}
-
-func newExactContactMap(t r3.Transform) exactContactMap {
-	b := t.Basis()
-	return exactContactMap{translation: proofarith.DyVec(t.Translation()),
-		ex: proofarith.DyVec(b.EX), ey: proofarith.DyVec(b.EY), ez: proofarith.DyVec(b.EZ)}
-}
-
-func (m exactContactMap) apply(p proofarith.DyV3) proofarith.DyV3 {
-	return proofarith.DvAdd(m.translation, proofarith.DvAdd(proofarith.DvScale(m.ex, p[0]),
-		proofarith.DvAdd(proofarith.DvScale(m.ey, p[1]), proofarith.DvScale(m.ez, p[2]))))
-}
-
 // The root package maps neutral pair readings to report units and topology.
 func publishSourceBoxPatch(report *reportvocab.ContactReport, a, b sourceBoxContactProof, axis, sign int,
 	separation proofarith.Dyadic) {

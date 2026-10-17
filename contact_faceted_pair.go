@@ -211,12 +211,12 @@ func placePlanarSnapshot(budget *proofbound.WorkBudget, snapshot *planarsnapshot
 	pose r3.Transform) (planar.PlanarSolid, bool, error) {
 	solid := planar.PlanarSolid{Verts: make([]proofarith.DyV3, len(snapshot.Solid.Verts)),
 		Tris: slices.Clip(snapshot.Solid.Tris), Faces: slices.Clip(snapshot.Solid.Faces)}
-	place := newExactContactMap(pose)
+	place := proofarith.NewDyadicMap(pose)
 	for i, v := range snapshot.Solid.Verts {
 		if err := budget.Step(); err != nil {
 			return planar.PlanarSolid{}, false, err
 		}
-		solid.Verts[i] = place.apply(v)
+		solid.Verts[i] = place.Apply(v)
 	}
 	audited, err := planar.CheckPlanarPose(&solid, snapshot.Topology, budget.Step)
 	if err != nil || !audited {
