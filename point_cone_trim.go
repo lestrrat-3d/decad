@@ -115,38 +115,22 @@ func tryPointConeBoolean(ctx context.Context, op meshbool.OperationKind, d *Docu
 		return nil, false, nil
 	}
 	if op == meshbool.OpCut {
-		if record.Lower != nil && !pointConeLimitLater(record.Lower, cone, record.Base) {
+		if record.Lower != nil && !facetedrecord.PointConeLimitLater(record.Lower, cone, record.Base) {
 			return nil, false, nil
 		}
 		record.Lower = cone
 	} else {
-		if record.Upper != nil && !pointConeLimitEarlier(record.Upper, cone, record.Base) {
+		if record.Upper != nil && !facetedrecord.PointConeLimitEarlier(record.Upper, cone, record.Base) {
 			return nil, false, nil
 		}
 		record.Upper = cone
 	}
 	if record.Lower != nil && record.Upper != nil &&
-		!pointConeLimitOrdered(record.Lower, record.Upper, record.Base) {
+		!facetedrecord.PointConeLimitOrdered(record.Lower, record.Upper, record.Base) {
 		return nil, false, nil
 	}
 	body, err := buildPointConeTrim(ctx, d, ref, record)
 	return body, true, err
-}
-
-// The larger cone's radial crossing lies farther from the point-loft apex.
-// This comparison uses a deliberately wide exact-rational enclosure of the
-// source fan, so nearly coincident or crossing cones fall back to mesh Boolean.
-func pointConeLimitLater(old, next *pointConeLimit, base facetedPayload) bool {
-	return pointConeLimitOrdered(old, next, base)
-}
-
-func pointConeLimitEarlier(old, next *pointConeLimit, base facetedPayload) bool {
-	return pointConeLimitOrdered(next, old, base)
-}
-
-func pointConeLimitOrdered(earlier, later *pointConeLimit, base facetedPayload) bool {
-	return pointcone.Ordered(earlier.Apex, earlier.Slope, later.Apex, later.Slope,
-		base.Verts, base.MeshBound)
 }
 
 func buildPointConeTrim(ctx context.Context, d *Document, ref producerID,
@@ -166,7 +150,7 @@ func buildPointConeTrim(ctx context.Context, d *Document, ref producerID,
 func buildPointConeInsideBand(ctx context.Context, d *Document, ref producerID,
 	record pointConeTrimRecord) (*Body, error) {
 	base, upper, lower := record.Base, record.Upper, record.Lower
-	far, caps, sides, farRound, err := pointConeSubdivide(ctx, base, 4)
+	far, caps, sides, farRound, err := facetedrecord.PointConeSubdivide(ctx, base, 4)
 	if err != nil {
 		return nil, err
 	}
@@ -334,10 +318,10 @@ func buildPointConeInsideBand(ctx context.Context, d *Document, ref producerID,
 func buildPointConeOuterBand(ctx context.Context, d *Document, ref producerID,
 	record pointConeTrimRecord) (*Body, error) {
 	base, cone := record.Base, record.Lower
-	if !pointConeHasOutsideWitness(base, cone) {
+	if !facetedrecord.PointConeHasOutsideWitness(base, cone) {
 		return nil, fmt.Errorf("%w: the point loft has no certified material outside the cone", ErrUnsupported)
 	}
-	far, caps, sides, farRound, err := pointConeSubdivide(ctx, base, 3)
+	far, caps, sides, farRound, err := facetedrecord.PointConeSubdivide(ctx, base, 3)
 	if err != nil {
 		return nil, err
 	}
@@ -456,30 +440,4 @@ func buildPointConeOuterBand(ctx context.Context, d *Document, ref producerID,
 		DPair: base.DPair, Xform: r3.Identity(), PointCone: &record,
 	}
 	return bodyResult(facetedrecord.Build(ctx, envOf(documentNode(d), ref), pp))
-}
-
-func pointConeHasOutsideWitness(base facetedPayload, cone *pointConeLimit) bool {
-	move := new(big.Rat).Quo(new(big.Rat).Mul(
-		new(big.Rat).Add(big.NewRat(1, 1), cone.Slope),
-		proofarith.FloatRat(base.MeshBound)), cone.Apex)
-	for _, p := range base.Verts[1:] {
-		sample, err := facetedrecord.PointConeFactor(p, cone)
-		if err != nil {
-			continue
-		}
-		margin := new(big.Rat).Sub(proofarith.FloatRat(sample.Q), big.NewRat(1, 1))
-		margin.Sub(margin, proofarith.FloatRat(sample.QError))
-		if margin.Cmp(move) > 0 {
-			return true
-		}
-	}
-	return false
-}
-
-func pointConeSubdivide(ctx context.Context, base facetedPayload, rounds int) (
-	[]r3.Vec, [][3]int, []pointcone.Side, float64, error) {
-	if base.PointSection == nil {
-		return nil, nil, nil, 0, fmt.Errorf("%w: the point-cone source has no fan", ErrUnsupported)
-	}
-	return pointcone.Subdivide(ctx, base.Verts, base.Tris, base.Src, rounds)
 }
