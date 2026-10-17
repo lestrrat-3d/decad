@@ -552,7 +552,7 @@ parameter range, at most 15° apart, plus the points opposite its start and
 its end when it sweeps past 180°. Each station is a point the record denotes,
 held within the gap `boundarywalk.CircularPointBound` proves (or a line end's
 own walk-end bound), and `prismrecord.Payload.PointBound` carries that gap through the frame
-and placement and adds the lift's own rounding. `stationGateDiameter` reads
+and placement and adds the lift's own rounding. `diameter.PrismGateDiameter` reads
 the stations alone and shrinks their maximum by the widest such gap plus
 `AxialDelta`, since each held level sits within `AxialDelta` of the level it
 denotes. The stations never join `CFace.Wit`, which the clearance search
@@ -780,7 +780,7 @@ the contour displacement each held vertex sits within of its corner foot and
 cap arcs, which its corners alone read as `√420`. A reflex corner's
 connector arc is read at its ends alone.
 
-What `fallbackGateDiameter` reports is `stationGateDiameter`'s reading over
+What `fallbackGateDiameter` reports is `diameter.PrismGateDiameter`'s reading over
 those witness prisms. A station is a point of the body only when the witness
 prism's walls run the full height between its two levels on the body, which
 holds for every witness prism above, a stacked prism's outer runs, a

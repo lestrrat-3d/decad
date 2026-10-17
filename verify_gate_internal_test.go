@@ -299,7 +299,7 @@ func TestCapBlendGateDiameterReadsTrimmedCapArcs(t *testing.T) {
 // frustum's diameter, but reads the placed tapered disc's seam alone:
 // 8.0109788 against a floor of 12.4816079.
 //
-// Legs shown to fail: dropping the stations' gap from stationGateDiameter's
+// Legs shown to fail: dropping the stations' gap from diameter.PrismGateDiameter's
 // shrink sends the prism and the displaced prism red; dropping
 // revolveGateDiameter's shrink sends every revolve red; dropping the vertex
 // bounds and station gaps from brepGateDiameter's shrink sends the brep red;
