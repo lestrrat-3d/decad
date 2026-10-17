@@ -36,10 +36,16 @@ func certifyLoftOutputBoundary(ctx context.Context, first, second *Body,
 	var lp loftPayload
 	if p, yes := first.n.Payload.(prismPayload); yes {
 		pp = p
-		lp = second.n.Payload.(loftPayload)
+		lp, ok = second.n.Payload.(loftPayload)
 	} else {
-		pp = second.n.Payload.(prismPayload)
-		lp = first.n.Payload.(loftPayload)
+		lp, ok = first.n.Payload.(loftPayload)
+		if !ok {
+			return no, false, nil
+		}
+		pp, ok = second.n.Payload.(prismPayload)
+	}
+	if !ok {
+		return no, false, nil
 	}
 	limit := proofbound.NewWallWorkBudgetWithOperation(65_536, operation)
 	var visits uint64
