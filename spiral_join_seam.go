@@ -10,160 +10,6 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// spiralHeelSameRayBound applies only after another gate proves that the
-// source and held seams cover the same angular interval. A held point lies
-// within radialError of the blank's exact linear heel meridian at its X.
-func spiralHeelSameRayBound(held spiralsector.HeldSwitch, trueX loftFaceInterval,
-	meridianSlope *big.Rat, radialError, stitchRound float64) (float64, bool) {
-	if held.X.Lo == nil || held.X.Hi == nil || trueX.Lo == nil || trueX.Hi == nil ||
-		meridianSlope == nil || held.X.Lo.Cmp(held.X.Hi) > 0 ||
-		trueX.Lo.Cmp(trueX.Hi) > 0 || proofbound.IsNonFinite(radialError) ||
-		proofbound.IsNonFinite(stitchRound) || radialError < 0 || stitchRound < 0 ||
-		proofbound.IsNonFinite(held.MinBeta) || held.MinBeta <= 0 {
-		return 0, false
-	}
-	dx := new(big.Rat)
-	for _, a := range []*big.Rat{held.X.Lo, held.X.Hi} {
-		for _, b := range []*big.Rat{trueX.Lo, trueX.Hi} {
-			d := lfAbs(lfSub(a, b))
-			if d.Cmp(dx) > 0 {
-				dx = d
-			}
-		}
-	}
-	absSlope := lfAbs(meridianSlope)
-	stitchRadial := lfMul(lfAdd(big.NewRat(1, 1), absSlope), lfF(stitchRound))
-	dr := lfAdd(lfMul(absSlope, dx), lfAdd(lfF(radialError), stitchRadial))
-	distance := proofbound.RatSqrtUp(lfAdd(lfMul(dx, dx), lfMul(dr, dr)))
-	return distance, !proofbound.IsNonFinite(distance) && distance < held.MinBeta
-}
-
-// spiralHeelTailBoxBound encloses a whole source seam tail by one held
-// endpoint. The source proof must certify that every tail point lies in box.
-func spiralHeelTailBoxBound(box [3]loftFaceInterval, endpoint r3.Vec,
-	curveBound float64) (float64, bool) {
-	if !proofbound.FiniteVec(endpoint) || proofbound.IsNonFinite(curveBound) || curveBound <= 0 {
-		return 0, false
-	}
-	return spiralPointBoxDistance(box,
-		[3]*big.Rat{lfF(endpoint.X), lfF(endpoint.Y), lfF(endpoint.Z)}, curveBound)
-}
-
-func spiralPointBoxDistance(box [3]loftFaceInterval,
-	coordinates [3]*big.Rat, curveBound float64) (float64, bool) {
-	if proofbound.IsNonFinite(curveBound) || curveBound <= 0 {
-		return 0, false
-	}
-	squared := new(big.Rat)
-	for axis, interval := range box {
-		if coordinates[axis] == nil || interval.Lo == nil || interval.Hi == nil ||
-			interval.Lo.Cmp(interval.Hi) > 0 {
-			return 0, false
-		}
-		lo := lfAbs(lfSub(interval.Lo, coordinates[axis]))
-		hi := lfAbs(lfSub(interval.Hi, coordinates[axis]))
-		if hi.Cmp(lo) > 0 {
-			lo = hi
-		}
-		squared = lfAdd(squared, lfMul(lo, lo))
-	}
-	distance := proofbound.RatSqrtUp(squared)
-	return distance, !proofbound.IsNonFinite(distance) && distance < curveBound
-}
-
-// spiralHeldMonotoneTailBound covers every held edge between one chain end
-// and the uncertain source endpoint slope. Strict angular order and Y>0 make
-// the slope cut unique. Squared distance to any fixed source endpoint is
-// convex along each straight held edge, so its maximum is at a vertex or
-// the exact cut where this conservative tail ends.
-func spiralHeldMonotoneTailBound(ctx context.Context, held *meshbool.StitchedMesh,
-	chain spiralsector.HeldSwitch, sourceEndpoint [3]loftFaceInterval,
-	tailAtLow bool) (float64, bool, error) {
-	if ctx == nil || held == nil || len(chain.Vertices) < 2 ||
-		proofbound.IsNonFinite(chain.MinBeta) || chain.MinBeta <= 0 {
-		return 0, false, nil
-	}
-	sourceSlope, ok := spiralSeamEndpointSlope(sourceEndpoint)
-	if !ok {
-		return 0, false, nil
-	}
-	start, step := 0, 1
-	if tailAtLow != chain.Increasing {
-		start, step = len(chain.Vertices)-1, -1
-	}
-	target := sourceSlope.Lo
-	if tailAtLow {
-		target = sourceSlope.Hi
-	}
-	point := func(index int) ([3]*big.Rat, bool) {
-		v := held.Verts[chain.Vertices[index]]
-		if !proofbound.FiniteVec(v) || v.Y <= 0 {
-			return [3]*big.Rat{}, false
-		}
-		return [3]*big.Rat{lfF(v.X), lfF(v.Y), lfF(v.Z)}, true
-	}
-	first, ok := point(start)
-	if !ok {
-		return 0, false, nil
-	}
-	firstSlope := lfDiv(first[2], first[1])
-	if tailAtLow && firstSlope.Cmp(sourceSlope.Lo) >= 0 ||
-		!tailAtLow && firstSlope.Cmp(sourceSlope.Hi) <= 0 {
-		return 0, false, nil
-	}
-	maxDistance := 0.0
-	for index, walked := start, 0; index+step >= 0 && index+step < len(chain.Vertices); index, walked = index+step, walked+1 {
-		if walked%128 == 0 {
-			if err := ctx.Err(); err != nil {
-				return 0, false, err
-			}
-		}
-		p, pOK := point(index)
-		q, qOK := point(index + step)
-		if !pOK || !qOK {
-			return 0, false, nil
-		}
-		distance, within := spiralPointBoxDistance(sourceEndpoint, p, chain.MinBeta)
-		if !within {
-			return distance, false, nil
-		}
-		maxDistance = max(maxDistance, distance)
-		pSlope, qSlope := lfDiv(p[2], p[1]), lfDiv(q[2], q[1])
-		if tailAtLow && pSlope.Cmp(qSlope) >= 0 ||
-			!tailAtLow && pSlope.Cmp(qSlope) <= 0 {
-			return 0, false, nil
-		}
-		crossed := tailAtLow && qSlope.Cmp(target) >= 0 ||
-			!tailAtLow && qSlope.Cmp(target) <= 0
-		if !crossed {
-			continue
-		}
-		numerator := lfSub(lfMul(target, p[1]), p[2])
-		denominator := lfSub(lfSub(q[2], p[2]),
-			lfMul(target, lfSub(q[1], p[1])))
-		if denominator.Sign() == 0 {
-			return 0, false, nil
-		}
-		t := lfDiv(numerator, denominator)
-		if t.Sign() < 0 || t.Cmp(lfOne()) > 0 {
-			return 0, false, nil
-		}
-		var cut [3]*big.Rat
-		for axis := range cut {
-			cut[axis] = lfAdd(p[axis], lfMul(t, lfSub(q[axis], p[axis])))
-		}
-		distance, within = spiralPointBoxDistance(sourceEndpoint, cut, chain.MinBeta)
-		if !within {
-			return distance, false, nil
-		}
-		if err := ctx.Err(); err != nil {
-			return 0, false, err
-		}
-		return max(maxDistance, distance), true, nil
-	}
-	return 0, false, nil
-}
-
 // spiralHeldShortCapProof compares every complete short cap/flank or
 // cap/connector switch with its authenticated source crossing. Global held
 // group ids come from the original two operands' face order, not a gallery
@@ -244,27 +90,6 @@ func spiralHeldShortCapProof(ctx context.Context, held *meshbool.StitchedMesh,
 	return maxDistance, true, nil
 }
 
-func spiralSeamEndpointSlope(box [3]loftFaceInterval) (loftFaceInterval, bool) {
-	if box[1].Lo == nil || box[1].Hi == nil || box[2].Lo == nil || box[2].Hi == nil ||
-		box[1].Lo.Sign() <= 0 || box[1].Lo.Cmp(box[1].Hi) > 0 ||
-		box[2].Lo.Cmp(box[2].Hi) > 0 {
-		return loftFaceInterval{}, false
-	}
-	var out loftFaceInterval
-	for _, z := range []*big.Rat{box[2].Lo, box[2].Hi} {
-		for _, y := range []*big.Rat{box[1].Lo, box[1].Hi} {
-			slope := lfDiv(z, y)
-			if out.Lo == nil || slope.Cmp(out.Lo) < 0 {
-				out.Lo = slope
-			}
-			if out.Hi == nil || slope.Cmp(out.Hi) > 0 {
-				out.Hi = slope
-			}
-		}
-	}
-	return out, true
-}
-
 func spiralConeSlopeBox(seam *spiralHeelRootSeam,
 	slope loftFaceInterval) ([3]loftFaceInterval, bool) {
 	var result [3]loftFaceInterval
@@ -343,8 +168,8 @@ func spiralHeldHeelSeamProof(ctx context.Context, held *meshbool.StitchedMesh,
 	if heldLow.Cmp(heldHigh) >= 0 {
 		return 0, false, nil
 	}
-	end0, ok0 := spiralSeamEndpointSlope(seam.Ends[0])
-	end1, ok1 := spiralSeamEndpointSlope(seam.Ends[1])
+	end0, ok0 := spiralsector.SeamEndpointSlope(seam.Ends[0])
+	end1, ok1 := spiralsector.SeamEndpointSlope(seam.Ends[1])
 	if !ok0 || !ok1 {
 		return 0, false, nil
 	}
@@ -359,7 +184,7 @@ func spiralHeldHeelSeamProof(ctx context.Context, held *meshbool.StitchedMesh,
 		seam.Slope.Hi.Cmp(sourceHigh.Hi) < 0 {
 		return 0, false, nil
 	}
-	inner, ok := spiralHeelSameRayBound(chain, seam.X, big.NewRat(-1, 1),
+	inner, ok := spiralsector.HeelSameRayBound(chain, seam.X, big.NewRat(-1, 1),
 		radialError, held.Round)
 	if !ok {
 		return inner, false, nil
@@ -387,7 +212,7 @@ func spiralHeldHeelSeamProof(ctx context.Context, held *meshbool.StitchedMesh,
 		minAbsSlope = heldHigh
 		tailAtLow = true
 	}
-	heldTail, ok, err := spiralHeldMonotoneTailBound(ctx, held, chain, endpoint, tailAtLow)
+	heldTail, ok, err := spiralsector.HeldMonotoneTailBound(ctx, held, chain, endpoint, tailAtLow)
 	if err != nil || !ok {
 		return heldTail, false, err
 	}
@@ -395,7 +220,7 @@ func spiralHeldHeelSeamProof(ctx context.Context, held *meshbool.StitchedMesh,
 	if !ok {
 		return 0, false, nil
 	}
-	trueTail, ok := spiralHeelTailBoxBound(box,
+	trueTail, ok := spiralsector.HeelTailBoxBound(box,
 		held.Verts[chain.Vertices[highAbsIndex]], chain.MinBeta)
 	if !ok {
 		return trueTail, false, nil
@@ -434,8 +259,8 @@ func spiralHeldToeSeamProof(ctx context.Context, held *meshbool.StitchedMesh,
 	if heldLow.Cmp(heldHigh) >= 0 {
 		return 0, false, nil
 	}
-	end0, ok0 := spiralSeamEndpointSlope(seam.Ends[0])
-	end1, ok1 := spiralSeamEndpointSlope(seam.Ends[1])
+	end0, ok0 := spiralsector.SeamEndpointSlope(seam.Ends[0])
+	end1, ok1 := spiralsector.SeamEndpointSlope(seam.Ends[1])
 	if !ok0 || !ok1 {
 		return 0, false, nil
 	}
@@ -450,7 +275,7 @@ func spiralHeldToeSeamProof(ctx context.Context, held *meshbool.StitchedMesh,
 		seam.Slope.Hi.Cmp(sourceHigh.Hi) < 0 {
 		return 0, false, nil
 	}
-	inner, ok := spiralHeelSameRayBound(chain, seam.X, big.NewRat(-1, 1),
+	inner, ok := spiralsector.HeelSameRayBound(chain, seam.X, big.NewRat(-1, 1),
 		radialError, held.Round)
 	if !ok {
 		return inner, false, nil
@@ -476,7 +301,7 @@ func spiralHeldToeSeamProof(ctx context.Context, held *meshbool.StitchedMesh,
 	default:
 		return 0, false, nil
 	}
-	heldTail, ok, err := spiralHeldMonotoneTailBound(ctx, held, chain, endpoint, tailAtLow)
+	heldTail, ok, err := spiralsector.HeldMonotoneTailBound(ctx, held, chain, endpoint, tailAtLow)
 	if err != nil || !ok {
 		return heldTail, false, err
 	}
@@ -484,7 +309,7 @@ func spiralHeldToeSeamProof(ctx context.Context, held *meshbool.StitchedMesh,
 	if !ok {
 		return 0, false, nil
 	}
-	trueTail, ok := spiralHeelTailBoxBound(box,
+	trueTail, ok := spiralsector.HeelTailBoxBound(box,
 		held.Verts[chain.Vertices[opposite]], chain.MinBeta)
 	if !ok {
 		return trueTail, false, nil
