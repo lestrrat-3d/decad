@@ -41,7 +41,7 @@ func loftCylinderPlacedToothShape(body *Body) bool {
 		len(lp.Profile0.Holes) == 0 && len(lp.Profile1.Holes) == 0 &&
 		len(lp.Profile0.Outer.Segments) == 6 && len(lp.Profile1.Outer.Segments) == 6 &&
 		len(lp.Segment) == 1 && len(lp.Verts)%2 == 0 && len(lp.Verts) >= 16 &&
-		loftCylinderSectionKinds(lp)
+		loftcylinder.SectionKinds(lp)
 }
 
 // A continuation can only reuse the prior local certificate for the same

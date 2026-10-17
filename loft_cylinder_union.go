@@ -124,7 +124,7 @@ func tryLoftCylinderUnionTeethWithUpperBridge(ctx context.Context, d *Document, 
 		} else if source != lp.SourceIdentity {
 			return nil, false, nil
 		}
-		if !loftCylinderSectionKinds(lp) || lp.Frame0.U() != (r3.Vec{X: 1}) ||
+		if !loftcylinder.SectionKinds(lp) || lp.Frame0.U() != (r3.Vec{X: 1}) ||
 			lp.Frame0.V() != (r3.Vec{Y: 1}) || lp.Frame1.U() != (r3.Vec{X: 1}) ||
 			lp.Frame1.V() != (r3.Vec{Y: 1}) ||
 			lp.Frame0.Origin() != (r3.Vec{Z: pp.Z0}) ||
@@ -255,38 +255,6 @@ func tryLoftCylinderUnionTeethWithUpperBridge(ctx context.Context, d *Document, 
 	}
 	body, err := buildLoftCylinderUnion(ctx, d, ref, blank, pp, radius, parts)
 	return body, true, err
-}
-
-func loftCylinderSectionKinds(lp loftPayload) bool {
-	for _, profile := range []profileRecord{lp.Profile0, lp.Profile1} {
-		segments := profile.Outer.Segments
-		start, ok := segments[0].(lineSeg)
-		if !ok {
-			return false
-		}
-		if _, ok := segments[1].(fitSplineSeg); !ok {
-			return false
-		}
-		if _, ok := segments[2].(arcSeg); !ok {
-			return false
-		}
-		if _, ok := segments[3].(fitSplineSeg); !ok {
-			return false
-		}
-		end, ok := segments[4].(lineSeg)
-		if !ok {
-			return false
-		}
-		arc, ok := segments[5].(arcSeg)
-		if !ok || arc.Center != (planePoint{}) || arc.TStart != 1 || arc.TEnd != 0 {
-			return false
-		}
-		if start.TStart != 0 || start.TEnd != 1 || end.TStart != 0 || end.TEnd != 1 ||
-			start.Start != arc.Start || end.End != arc.End {
-			return false
-		}
-	}
-	return true
 }
 
 func loftCylinderAxialPlacement(xform r3.Transform) bool {
