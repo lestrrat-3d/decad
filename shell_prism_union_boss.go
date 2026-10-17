@@ -86,7 +86,8 @@ func prismUnionBossShellAuthenticate(result *Body, fp facetedPayload, plateBody,
 	if !ok {
 		return src, false
 	}
-	if !prismUnionBossShellSimilarity(&src) || !prismshell.BossRectArithmeticExact(src.plateRect, t) ||
+	src.unitLo, src.unitHi, ok = prismshell.PrismUnionBossShellSimilarity(src.boss.Xform)
+	if !ok || !prismshell.BossRectArithmeticExact(src.plateRect, t) ||
 		!prismshell.BossRectArithmeticExact(src.bossRect, 0) {
 		return src, false
 	}
@@ -205,21 +206,6 @@ func prismUnionBossShellAuthenticate(result *Body, fp facetedPayload, plateBody,
 		return src, false
 	}
 	return src, true
-}
-
-func prismUnionBossShellSimilarity(src *prismUnionBossShellSource) bool {
-	basis := src.boss.Xform.Basis()
-	c, s := basis.EX.X, basis.EX.Y
-	if basis.EX.Z != 0 || basis.EY != (r3.Vec{X: -s, Y: c}) ||
-		basis.EZ != (r3.Vec{Z: 1}) || !proofbound.FiniteVec(basis.EX) ||
-		!proofbound.FiniteVec(src.boss.Xform.Translation()) {
-		return false
-	}
-	length2 := new(big.Rat).Add(
-		new(big.Rat).Mul(proofarith.FloatRat(c), proofarith.FloatRat(c)),
-		new(big.Rat).Mul(proofarith.FloatRat(s), proofarith.FloatRat(s)))
-	src.unitLo, src.unitHi = proofbound.RatSqrtDown(length2), proofbound.RatSqrtUp(length2)
-	return src.unitLo > 0.99 && src.unitHi < 1.01
 }
 
 type prismUnionBossShellMesh struct {
