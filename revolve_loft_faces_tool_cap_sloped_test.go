@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/stretchr/testify/require"
 )
@@ -22,13 +23,13 @@ func TestRevolveLoftFacesSlopedRadialInsideNeedsUniqueOuterCrossing(t *testing.T
 	x := lfF(5.75)
 	fraction := lfDiv(lfSub(x, lfF(5.8)), lfSub(lfF(5.7), lfF(5.8)))
 	radius := lfAdd(lfF(3.3), lfMul(fraction, lfSub(lfF(2.28), lfF(3.3))))
-	require.True(t, revolveLoftFacesSlopedRadialInside(section, 3, x, radius))
-	require.False(t, revolveLoftFacesSlopedRadialInside(section, 3, lfF(5.7), lfF(2.28)),
+	require.True(t, revolveloftfaces.SlopedRadialInside(section, 3, x, radius))
+	require.False(t, revolveloftfaces.SlopedRadialInside(section, 3, lfF(5.7), lfF(2.28)),
 		"a section vertex at the circle X needs another proof")
-	require.False(t, revolveLoftFacesSlopedRadialInside(section, 2, x, radius),
+	require.False(t, revolveloftfaces.SlopedRadialInside(section, 2, x, radius),
 		"the selected face must be the sole positive-radius crossing")
 	section.Spans[5].Start.U = 5.9
-	require.False(t, revolveLoftFacesSlopedRadialInside(section, 3, x, radius),
+	require.False(t, revolveloftfaces.SlopedRadialInside(section, 3, x, radius),
 		"another side crossing leaves the radial fill undecided")
 }
 
@@ -38,9 +39,9 @@ func TestRevolveLoftFacesSlopedRadialInsideRequiresAxisWalkDirection(t *testing.
 			{Start: planePoint{U: 3}, End: planePoint{U: 6}},
 			{Start: planePoint{U: 6, V: 2}, End: planePoint{U: 3, V: 2}},
 		}}
-	require.True(t, revolveLoftFacesSlopedRadialInside(section, 1, lfF(4), lfF(2)))
+	require.True(t, revolveloftfaces.SlopedRadialInside(section, 1, lfF(4), lfF(2)))
 	section.Spans[0].Start.U, section.Spans[0].End.U = 6, 3
-	require.False(t, revolveLoftFacesSlopedRadialInside(section, 1, lfF(4), lfF(2)))
+	require.False(t, revolveloftfaces.SlopedRadialInside(section, 1, lfF(4), lfF(2)))
 }
 
 func TestRevolveLoftFacesHeelSlopedArcConsumesLiveNeutralSource(t *testing.T) {

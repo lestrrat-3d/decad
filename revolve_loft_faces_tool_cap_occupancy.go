@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -201,7 +202,7 @@ func revolveLoftFacesToolCapSourceCurrent(ctx context.Context,
 		}
 		fresh = vertical.revolveLoftFacesConstantXSource
 	} else {
-		if !revolveLoftFacesSlopedRadialInside(proof.section, circle.span,
+		if !revolveloftfaces.SlopedRadialInside(proof.section, circle.span,
 			circle.x, circle.radius) || proof.trim.Toe == nil ||
 			proof.trim.Toe.Apex == nil || proof.trim.Toe.Slope == nil ||
 			proof.trim.Toe.Slope.Sign() <= 0 {
