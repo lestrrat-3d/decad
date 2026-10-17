@@ -130,7 +130,6 @@
 0	0.00	TestSideOpeningRegionsUChannel
 0	0.00	TestSpanExtremeEnclosureNonFiniteDirectionRefuses
 0	0.06	TestSpanSagittaUpperEnclosesOvershootingChordSegment
-0	0.00	TestSpiralHeldEdgesRefusesBrokenMeshes
 0	0.13	TestStackedUnionBrepCrossingBoss
 0	0.00	TestStitchConeApexRefusesNonzeroRadius
 0	0.01	TestStitchCurvedMassCorrectsInwardOrientationForCone
@@ -264,8 +263,6 @@
 1	0.00	TestSideOriginsContextPollsEachSegment
 1	0.00	TestSpanExtremeEnclosureRefusesOverBudget
 1	0.01	TestSpanSpeedUpperEnclosesDenseSampleAndNeverFallsBelowChordLength
-1	0.00	TestSpiralHeldSwitchFromMatchesSwitchPath
-1	0.46	TestSpiralHeldSwitchFromMatchesSwitchPathRandomMeshes
 1	0.06	TestSplineBezierSpansUseSketchFloatKnots
 1	0.02	TestStackedUnionGateDiameterStaysOnTheBody
 1	0.03	TestStackedUnionInterfaceReportsSplitBoundary
@@ -400,7 +397,6 @@
 2	0.00	TestSpanMatchedDeltaUpperHalvesAnOrdinaryGapExactly
 2	0.01	TestSpiralBlankRefusesSevenSideRevolveSection
 2	0.02	TestSpiralCopyKeepsToeCertificateOnlyUnderExactRotation
-2	0.00	TestSpiralHeldSwitchFromMatchesSwitchPathCancelled
 2	0.00	TestStitchConeFluxAndMomentChargeRimRadiusBound
 2	0.01	TestStitchCurvedMassCorrectsInwardOrientationForTorus
 2	0.13	TestStitchCurvedMeshInheritsEverySourceFaceBound

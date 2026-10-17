@@ -2,235 +2,28 @@ package decad
 
 import (
 	"context"
-	"math"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/spiralsector"
 	"github.com/lestrrat-3d/r3"
 )
-
-// spiralHeldSwitch is a complete, simple source-face switch on the held
-// Boolean boundary. The ordered vertices make both sides of an angular chart
-// available to the separate exact-source correspondence proof.
-type spiralHeldSwitch struct {
-	vertices   []int
-	x          loftFaceInterval
-	box        [3]loftFaceInterval
-	slope      [2]*big.Rat
-	minBeta    float64
-	increasing bool
-}
-
-// spiralHeldHeelSwitch accepts only one angularly ordered cap/root chain.
-// A closed output audit remains the caller's prerequisite; this gate checks
-// the local face identities and chain topology before any smaller source-
-// specific contact allowance may be used.
-func spiralHeldHeelSwitch(ctx context.Context, held *meshbool.StitchedMesh,
-	blankHeel, toothRoot int) (spiralHeldSwitch, bool, error) {
-	return spiralHeldSwitchPath(ctx, held, blankHeel, toothRoot, true)
-}
-
-// spiralHeldEdge is one undirected held edge, lo < hi.
-type spiralHeldEdge struct{ lo, hi int }
-
-// spiralHeldEdgeOwners holds the source groups of an edge's first two facets,
-// in facet order, and how many facets use the edge.
-type spiralHeldEdgeOwners struct {
-	src   [2]int
-	count uint8
-}
-
-// spiralHeldEdges is the facet-owner table of one held mesh. It depends only
-// on the mesh, so a caller may build it once and use it for several switches
-// of that unchanged mesh within one call. ok is false when an index is
-// invalid or an edge does not have exactly two facets.
-func spiralHeldEdges(ctx context.Context,
-	held *meshbool.StitchedMesh) (map[spiralHeldEdge]spiralHeldEdgeOwners, bool, error) {
-	if ctx == nil || held == nil || len(held.Tris) == 0 || len(held.Tris) > 1<<17 ||
-		len(held.Src) != len(held.Tris) || len(held.VertexBound) != len(held.Verts) {
-		return nil, false, nil
-	}
-	owners := make(map[spiralHeldEdge]spiralHeldEdgeOwners, len(held.Tris)*3/2)
-	for i, tri := range held.Tris {
-		if i%256 == 0 {
-			if err := ctx.Err(); err != nil {
-				return nil, false, err
-			}
-		}
-		for side := range 3 {
-			a, b := tri[side], tri[(side+1)%3]
-			if a < 0 || b < 0 || a >= len(held.Verts) || b >= len(held.Verts) || a == b {
-				return nil, false, nil
-			}
-			if a > b {
-				a, b = b, a
-			}
-			key := spiralHeldEdge{a, b}
-			owner := owners[key]
-			if owner.count >= 2 {
-				return nil, false, nil
-			}
-			owner.src[owner.count] = held.Src[i]
-			owner.count++
-			owners[key] = owner
-		}
-	}
-	seen := 0
-	for _, owner := range owners {
-		if seen%256 == 0 {
-			if err := ctx.Err(); err != nil {
-				return nil, false, err
-			}
-		}
-		seen++
-		if owner.count != 2 {
-			return nil, false, nil
-		}
-	}
-	return owners, true, nil
-}
-
-func spiralHeldSwitchPath(ctx context.Context, held *meshbool.StitchedMesh,
-	blankHeel, toothRoot int, monotone bool) (spiralHeldSwitch, bool, error) {
-	if blankHeel < 0 || toothRoot < 0 || blankHeel == toothRoot {
-		return spiralHeldSwitch{}, false, nil
-	}
-	owners, ok, err := spiralHeldEdges(ctx, held)
-	if err != nil || !ok {
-		return spiralHeldSwitch{}, false, err
-	}
-	return spiralHeldSwitchFrom(ctx, held, owners, blankHeel, toothRoot, monotone)
-}
-
-// spiralHeldSwitchFrom is spiralHeldSwitchPath over a table that
-// spiralHeldEdges built from this same, unchanged held mesh.
-func spiralHeldSwitchFrom(ctx context.Context, held *meshbool.StitchedMesh,
-	owners map[spiralHeldEdge]spiralHeldEdgeOwners,
-	blankHeel, toothRoot int, monotone bool) (spiralHeldSwitch, bool, error) {
-	if blankHeel < 0 || toothRoot < 0 || blankHeel == toothRoot {
-		return spiralHeldSwitch{}, false, nil
-	}
-	adj := make(map[int][]int)
-	seamEdges := 0
-	seen := 0
-	for key, owner := range owners {
-		if seen%256 == 0 {
-			if err := ctx.Err(); err != nil {
-				return spiralHeldSwitch{}, false, err
-			}
-		}
-		seen++
-		pair := owner.src
-		if pair[0] != blankHeel || pair[1] != toothRoot {
-			if pair[0] != toothRoot || pair[1] != blankHeel {
-				continue
-			}
-		}
-		adj[key.lo] = append(adj[key.lo], key.hi)
-		adj[key.hi] = append(adj[key.hi], key.lo)
-		seamEdges++
-	}
-	if seamEdges < 1 || seamEdges > 4096 {
-		return spiralHeldSwitch{}, false, nil
-	}
-	starts := make([]int, 0, 2)
-	for vertex, neighbors := range adj {
-		switch len(neighbors) {
-		case 1:
-			starts = append(starts, vertex)
-		case 2:
-		default:
-			return spiralHeldSwitch{}, false, nil
-		}
-	}
-	if len(starts) != 2 || len(adj) != seamEdges+1 {
-		return spiralHeldSwitch{}, false, nil
-	}
-	ordered := make([]int, 0, len(adj))
-	previous, current := -1, starts[0]
-	sign := 0
-	minBeta := math.Inf(1)
-	var x loftFaceInterval
-	var box [3]loftFaceInterval
-	for len(ordered) < len(adj) {
-		if len(ordered)%128 == 0 {
-			if err := ctx.Err(); err != nil {
-				return spiralHeldSwitch{}, false, err
-			}
-		}
-		p := held.Verts[current]
-		beta := held.VertexBound[current]
-		if !proofbound.FiniteVec(p) || p.Y <= 0 ||
-			proofbound.IsNonFinite(beta) || beta < 0 {
-			return spiralHeldSwitch{}, false, nil
-		}
-		if len(ordered) == 0 {
-			x = loftFaceInterval{Lo: lfF(p.X), Hi: lfF(p.X)}
-		} else {
-			if lfF(p.X).Cmp(x.Lo) < 0 {
-				x.Lo = lfF(p.X)
-			}
-			if lfF(p.X).Cmp(x.Hi) > 0 {
-				x.Hi = lfF(p.X)
-			}
-		}
-		for axis, coordinate := range [...]float64{p.X, p.Y, p.Z} {
-			value := lfF(coordinate)
-			if box[axis].Lo == nil || value.Cmp(box[axis].Lo) < 0 {
-				box[axis].Lo = value
-			}
-			if box[axis].Hi == nil || value.Cmp(box[axis].Hi) > 0 {
-				box[axis].Hi = value
-			}
-		}
-		minBeta = min(minBeta, beta)
-		ordered = append(ordered, current)
-		next := -1
-		for _, neighbor := range adj[current] {
-			if neighbor != previous {
-				next = neighbor
-				break
-			}
-		}
-		if next < 0 {
-			break
-		}
-		q := held.Verts[next]
-		if !proofbound.FiniteVec(q) || q.Y <= 0 {
-			return spiralHeldSwitch{}, false, nil
-		}
-		cross := lfSub(lfMul(lfF(p.Y), lfF(q.Z)), lfMul(lfF(p.Z), lfF(q.Y))).Sign()
-		if cross == 0 || monotone && sign != 0 && cross != sign {
-			return spiralHeldSwitch{}, false, nil
-		}
-		sign = cross
-		previous, current = current, next
-	}
-	if len(ordered) != len(adj) || ordered[len(ordered)-1] != starts[1] ||
-		proofbound.IsNonFinite(minBeta) || minBeta <= 0 {
-		return spiralHeldSwitch{}, false, nil
-	}
-	first, last := held.Verts[ordered[0]], held.Verts[ordered[len(ordered)-1]]
-	return spiralHeldSwitch{vertices: ordered, x: x, box: box,
-		slope:   [2]*big.Rat{lfDiv(lfF(first.Z), lfF(first.Y)), lfDiv(lfF(last.Z), lfF(last.Y))},
-		minBeta: minBeta, increasing: sign > 0}, true, nil
-}
 
 // spiralHeelSameRayBound applies only after another gate proves that the
 // source and held seams cover the same angular interval. A held point lies
 // within radialError of the blank's exact linear heel meridian at its X.
-func spiralHeelSameRayBound(held spiralHeldSwitch, trueX loftFaceInterval,
+func spiralHeelSameRayBound(held spiralsector.HeldSwitch, trueX loftFaceInterval,
 	meridianSlope *big.Rat, radialError, stitchRound float64) (float64, bool) {
-	if held.x.Lo == nil || held.x.Hi == nil || trueX.Lo == nil || trueX.Hi == nil ||
-		meridianSlope == nil || held.x.Lo.Cmp(held.x.Hi) > 0 ||
+	if held.X.Lo == nil || held.X.Hi == nil || trueX.Lo == nil || trueX.Hi == nil ||
+		meridianSlope == nil || held.X.Lo.Cmp(held.X.Hi) > 0 ||
 		trueX.Lo.Cmp(trueX.Hi) > 0 || proofbound.IsNonFinite(radialError) ||
 		proofbound.IsNonFinite(stitchRound) || radialError < 0 || stitchRound < 0 ||
-		proofbound.IsNonFinite(held.minBeta) || held.minBeta <= 0 {
+		proofbound.IsNonFinite(held.MinBeta) || held.MinBeta <= 0 {
 		return 0, false
 	}
 	dx := new(big.Rat)
-	for _, a := range []*big.Rat{held.x.Lo, held.x.Hi} {
+	for _, a := range []*big.Rat{held.X.Lo, held.X.Hi} {
 		for _, b := range []*big.Rat{trueX.Lo, trueX.Hi} {
 			d := lfAbs(lfSub(a, b))
 			if d.Cmp(dx) > 0 {
@@ -242,7 +35,7 @@ func spiralHeelSameRayBound(held spiralHeldSwitch, trueX loftFaceInterval,
 	stitchRadial := lfMul(lfAdd(big.NewRat(1, 1), absSlope), lfF(stitchRound))
 	dr := lfAdd(lfMul(absSlope, dx), lfAdd(lfF(radialError), stitchRadial))
 	distance := proofbound.RatSqrtUp(lfAdd(lfMul(dx, dx), lfMul(dr, dr)))
-	return distance, !proofbound.IsNonFinite(distance) && distance < held.minBeta
+	return distance, !proofbound.IsNonFinite(distance) && distance < held.MinBeta
 }
 
 // spiralHeelTailBoxBound encloses a whole source seam tail by one held
@@ -284,10 +77,10 @@ func spiralPointBoxDistance(box [3]loftFaceInterval,
 // convex along each straight held edge, so its maximum is at a vertex or
 // the exact cut where this conservative tail ends.
 func spiralHeldMonotoneTailBound(ctx context.Context, held *meshbool.StitchedMesh,
-	chain spiralHeldSwitch, sourceEndpoint [3]loftFaceInterval,
+	chain spiralsector.HeldSwitch, sourceEndpoint [3]loftFaceInterval,
 	tailAtLow bool) (float64, bool, error) {
-	if ctx == nil || held == nil || len(chain.vertices) < 2 ||
-		proofbound.IsNonFinite(chain.minBeta) || chain.minBeta <= 0 {
+	if ctx == nil || held == nil || len(chain.Vertices) < 2 ||
+		proofbound.IsNonFinite(chain.MinBeta) || chain.MinBeta <= 0 {
 		return 0, false, nil
 	}
 	sourceSlope, ok := spiralSeamEndpointSlope(sourceEndpoint)
@@ -295,15 +88,15 @@ func spiralHeldMonotoneTailBound(ctx context.Context, held *meshbool.StitchedMes
 		return 0, false, nil
 	}
 	start, step := 0, 1
-	if tailAtLow != chain.increasing {
-		start, step = len(chain.vertices)-1, -1
+	if tailAtLow != chain.Increasing {
+		start, step = len(chain.Vertices)-1, -1
 	}
 	target := sourceSlope.Lo
 	if tailAtLow {
 		target = sourceSlope.Hi
 	}
 	point := func(index int) ([3]*big.Rat, bool) {
-		v := held.Verts[chain.vertices[index]]
+		v := held.Verts[chain.Vertices[index]]
 		if !proofbound.FiniteVec(v) || v.Y <= 0 {
 			return [3]*big.Rat{}, false
 		}
@@ -319,7 +112,7 @@ func spiralHeldMonotoneTailBound(ctx context.Context, held *meshbool.StitchedMes
 		return 0, false, nil
 	}
 	maxDistance := 0.0
-	for index, walked := start, 0; index+step >= 0 && index+step < len(chain.vertices); index, walked = index+step, walked+1 {
+	for index, walked := start, 0; index+step >= 0 && index+step < len(chain.Vertices); index, walked = index+step, walked+1 {
 		if walked%128 == 0 {
 			if err := ctx.Err(); err != nil {
 				return 0, false, err
@@ -330,7 +123,7 @@ func spiralHeldMonotoneTailBound(ctx context.Context, held *meshbool.StitchedMes
 		if !pOK || !qOK {
 			return 0, false, nil
 		}
-		distance, within := spiralPointBoxDistance(sourceEndpoint, p, chain.minBeta)
+		distance, within := spiralPointBoxDistance(sourceEndpoint, p, chain.MinBeta)
 		if !within {
 			return distance, false, nil
 		}
@@ -359,7 +152,7 @@ func spiralHeldMonotoneTailBound(ctx context.Context, held *meshbool.StitchedMes
 		for axis := range cut {
 			cut[axis] = lfAdd(p[axis], lfMul(t, lfSub(q[axis], p[axis])))
 		}
-		distance, within = spiralPointBoxDistance(sourceEndpoint, cut, chain.minBeta)
+		distance, within = spiralPointBoxDistance(sourceEndpoint, cut, chain.MinBeta)
 		if !within {
 			return distance, false, nil
 		}
@@ -390,7 +183,7 @@ func spiralHeldShortCapProof(ctx context.Context, held *meshbool.StitchedMesh,
 	maxDistance := 0.0
 	// Every switch below reads the same unchanged held mesh, so its edge
 	// table is built once, at the first switch, and reused within this call.
-	var edges map[spiralHeldEdge]spiralHeldEdgeOwners
+	var edges map[spiralsector.HeldEdge]spiralsector.HeldEdgeOwners
 	for end := range 2 {
 		if err := ctx.Err(); err != nil {
 			return 0, false, err
@@ -425,23 +218,23 @@ func spiralHeldShortCapProof(ctx context.Context, held *meshbool.StitchedMesh,
 				return 0, false, nil
 			}
 			if edges == nil {
-				built, ok, err := spiralHeldEdges(ctx, held)
+				built, ok, err := spiralsector.HeldEdges(ctx, held)
 				if err != nil || !ok {
 					return 0, false, err
 				}
 				edges = built
 			}
-			chain, ok, err := spiralHeldSwitchFrom(ctx, held, edges,
+			chain, ok, err := spiralsector.HeldSwitchFrom(ctx, held, edges,
 				blankCap, len(blank.Faces())+toothFace, false)
 			if err != nil || !ok {
 				return 0, false, err
 			}
-			ordered := make([]r3.Vec, len(chain.vertices))
-			for i, vertex := range chain.vertices {
+			ordered := make([]r3.Vec, len(chain.Vertices))
+			for i, vertex := range chain.Vertices {
 				ordered[i] = held.Verts[vertex]
 			}
 			distance, accepted, err := spiralShortHeldBound(ctx,
-				proof, family, ordered, chain.minBeta)
+				proof, family, ordered, chain.MinBeta)
 			if err != nil || !accepted {
 				return distance, false, err
 			}
@@ -531,19 +324,19 @@ func spiralHeldHeelSeamProof(ctx context.Context, held *meshbool.StitchedMesh,
 		proofbound.IsNonFinite(radialError) || radialError < 0 {
 		return 0, false, nil
 	}
-	chain, ok, err := spiralHeldHeelSwitch(ctx, held, blankHeel, toothRoot)
+	chain, ok, err := spiralsector.HeldHeelSwitch(ctx, held, blankHeel, toothRoot)
 	if err != nil || !ok {
 		return 0, false, err
 	}
-	low, high := 0, len(chain.vertices)-1
-	if !chain.increasing {
+	low, high := 0, len(chain.Vertices)-1
+	if !chain.Increasing {
 		low, high = high, low
 	}
-	if len(chain.vertices) < 3 {
+	if len(chain.Vertices) < 3 {
 		return 0, false, nil
 	}
 	slopeAt := func(index int) *big.Rat {
-		point := held.Verts[chain.vertices[index]]
+		point := held.Verts[chain.Vertices[index]]
 		return lfDiv(lfF(point.Z), lfF(point.Y))
 	}
 	heldLow, heldHigh := slopeAt(low), slopeAt(high)
@@ -603,7 +396,7 @@ func spiralHeldHeelSeamProof(ctx context.Context, held *meshbool.StitchedMesh,
 		return 0, false, nil
 	}
 	trueTail, ok := spiralHeelTailBoxBound(box,
-		held.Verts[chain.vertices[highAbsIndex]], chain.minBeta)
+		held.Verts[chain.Vertices[highAbsIndex]], chain.MinBeta)
 	if !ok {
 		return trueTail, false, nil
 	}
@@ -622,19 +415,19 @@ func spiralHeldToeSeamProof(ctx context.Context, held *meshbool.StitchedMesh,
 		proofbound.IsNonFinite(radialError) || radialError < 0 {
 		return 0, false, nil
 	}
-	chain, ok, err := spiralHeldHeelSwitch(ctx, held, blankToe, toothRoot)
+	chain, ok, err := spiralsector.HeldHeelSwitch(ctx, held, blankToe, toothRoot)
 	if err != nil || !ok {
 		return 0, false, err
 	}
-	if len(chain.vertices) < 3 {
+	if len(chain.Vertices) < 3 {
 		return 0, false, nil
 	}
-	low, high := 0, len(chain.vertices)-1
-	if !chain.increasing {
+	low, high := 0, len(chain.Vertices)-1
+	if !chain.Increasing {
 		low, high = high, low
 	}
 	slopeAt := func(index int) *big.Rat {
-		point := held.Verts[chain.vertices[index]]
+		point := held.Verts[chain.Vertices[index]]
 		return lfDiv(lfF(point.Z), lfF(point.Y))
 	}
 	heldLow, heldHigh := slopeAt(low), slopeAt(high)
@@ -692,7 +485,7 @@ func spiralHeldToeSeamProof(ctx context.Context, held *meshbool.StitchedMesh,
 		return 0, false, nil
 	}
 	trueTail, ok := spiralHeelTailBoxBound(box,
-		held.Verts[chain.vertices[opposite]], chain.minBeta)
+		held.Verts[chain.Vertices[opposite]], chain.MinBeta)
 	if !ok {
 		return trueTail, false, nil
 	}
