@@ -4,14 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/mirrorjoin"
-	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
@@ -38,12 +36,6 @@ func (mirrorJoinOption) mirrorOption() {}
 // never handed to Union instead. A repeated WithJoin() is idempotent.
 func WithJoin() MirrorOption {
 	return mirrorJoinOption{}
-}
-
-// joinWall is one selected wall of the receiver: the (loop, segment) its role
-// names, in slab slab's region for a stacked receiver and -1 for a prism.
-type joinWall struct {
-	slab, loop, seg int
 }
 
 // mirroredJoin is Mirrored under WithJoin. It runs Transform's receiver gates,
@@ -86,7 +78,7 @@ func (b *Body) mirroredJoin(ctx context.Context, plane MirrorPlane) (*Body, erro
 	var body *Body
 	switch p := b.n.Payload.(type) {
 	case prismPayload:
-		joined, err := joinPrismPayload(budget, p, walls)
+		joined, err := mirrorjoin.JoinPrismPayload(budget, p, walls)
 		if err != nil {
 			return nil, err
 		}
@@ -95,7 +87,7 @@ func (b *Body) mirroredJoin(ctx context.Context, plane MirrorPlane) (*Body, erro
 			return nil, err
 		}
 	case stackedPrismPayload:
-		joined, err := joinStackedPayload(ctx, budget, p, walls)
+		joined, err := mirrorjoin.JoinStackedPayload(ctx, budget, p, walls)
 		if err != nil {
 			return nil, err
 		}
@@ -115,7 +107,7 @@ func (b *Body) mirroredJoin(ctx context.Context, plane MirrorPlane) (*Body, erro
 // the receiver, its selector resolves to at least one face, and every face
 // must be a wall the receiver's own producer minted a side role for. Whether
 // that wall is planar is read off the record by the payload's own join.
-func (d *Document) resolveJoinWalls(b *Body, plane MirrorPlane) ([]joinWall, error) {
+func (d *Document) resolveJoinWalls(b *Body, plane MirrorPlane) ([]mirrorjoin.WallRef, error) {
 	var mf MirrorFace
 	switch p := plane.(type) {
 	case MirrorFace:
@@ -150,7 +142,7 @@ func (d *Document) resolveJoinWalls(b *Body, plane MirrorPlane) ([]joinWall, err
 	}
 	_, stacked := b.n.Payload.(stackedPrismPayload)
 	producer := b.originProducer()
-	var walls []joinWall
+	var walls []mirrorjoin.WallRef
 	for fi, f := range faces {
 		found := false
 		for _, o := range f.n.Origins {
@@ -159,12 +151,12 @@ func (d *Document) resolveJoinWalls(b *Body, plane MirrorPlane) ([]joinWall, err
 			}
 			var k, i, j int
 			if n, _ := fmt.Sscanf(o.Role, "slab(%d).region(0).side(%d,%d)", &k, &i, &j); n == 3 && stacked {
-				walls = append(walls, joinWall{slab: k, loop: i, seg: j})
+				walls = append(walls, mirrorjoin.WallRef{Slab: k, Loop: i, Segment: j})
 				found = true
 				continue
 			}
 			if n, _ := fmt.Sscanf(o.Role, "side(%d,%d)", &i, &j); n == 2 && !stacked {
-				walls = append(walls, joinWall{slab: -1, loop: i, seg: j})
+				walls = append(walls, mirrorjoin.WallRef{Slab: -1, Loop: i, Segment: j})
 				found = true
 			}
 		}
@@ -198,134 +190,4 @@ func selectAtLeastOneFace(body *Body, sel FaceSelector, what string) ([]*Face, e
 		return nil, err
 	}
 	return faces, nil
-}
-
-// joinPrismPayload runs J2-J7 over a prism receiver and returns the joined
-// payload: the same frame, placement, interval and axial displacements over
-// the assembled record, with δ_mirror as its section displacement.
-func joinPrismPayload(budget *proofbound.WorkBudget, pp prismPayload, walls []joinWall) (prismPayload, error) {
-	region := mirrorjoin.NewRegion(pp.Profile)
-	segs := make([]lineSeg, 0, len(walls))
-	for _, w := range walls {
-		seg, err := joinWallSegment(region.Loops, w)
-		if err != nil {
-			return prismPayload{}, err
-		}
-		segs = append(segs, seg)
-		region.Sel[w.loop][w.seg] = struct{}{}
-	}
-	line, err := mirrorjoin.AdmitLine(segs)
-	if err != nil {
-		return prismPayload{}, err
-	}
-	if err := line.AdmitRegions(budget, []mirrorjoin.Region{region}); err != nil {
-		return prismPayload{}, err
-	}
-	if pp.SectionDelta != 0 {
-		return prismPayload{}, errJoinDisplaced
-	}
-	joined, delta, err := line.Assemble(budget, region)
-	if err != nil {
-		return prismPayload{}, err
-	}
-	out := pp
-	out.Profile = joined
-	out.SectionDelta = delta
-	out.Walks = nil
-	out.BlendSegs = nil
-	out.BlendKind = ""
-	return out, nil
-}
-
-// joinStackedPayload runs J2-J7 over every slab's region of a stacked
-// receiver, rewrites each region by the same splice, and re-derives every
-// interface's exposed records from the rewritten regions. Equal loops rewrite
-// to equal loops, so the outer wall stays one column and each interface stays
-// monotone; stackedrecord.Build's Falsify call re-checks both.
-func joinStackedPayload(ctx context.Context, budget *proofbound.WorkBudget, sp stackedPrismPayload, walls []joinWall) (stackedPrismPayload, error) {
-	// J1: the join re-derives each interface from exclusive holes, which a
-	// union-built stack's changing outer loop does not record.
-	if len(sp.OuterRuns()) != 1 {
-		return stackedPrismPayload{}, fmt.Errorf(`%w: a union-built stack changes its outer loop between slabs, which the join does not rewrite; join the operands before the union (J1)`, ErrUnsupported)
-	}
-	regions := make([]mirrorjoin.Region, len(sp.Slabs))
-	for k, slab := range sp.Slabs {
-		if len(slab.Regions) != 1 {
-			return stackedPrismPayload{}, fmt.Errorf(`%w: slab %d has no single region`, ErrUnsupported, k)
-		}
-		regions[k] = mirrorjoin.NewRegion(slab.Regions[0])
-	}
-	segs := make([]lineSeg, 0, len(walls))
-	for _, w := range walls {
-		if w.slab < 0 || w.slab >= len(regions) {
-			return stackedPrismPayload{}, fmt.Errorf(`%w: a selected wall names slab %d, which the receiver does not have`, ErrDegenerate, w.slab)
-		}
-		seg, err := joinWallSegment(regions[w.slab].Loops, w)
-		if err != nil {
-			return stackedPrismPayload{}, err
-		}
-		segs = append(segs, seg)
-		// The wall's face spans its whole column: mark the same loop and
-		// segment wherever an equal loop appears.
-		wallLoop := regions[w.slab].Loops[w.loop]
-		for _, region := range regions {
-			for li, loop := range region.Loops {
-				equal, err := momentinput.ExactLoopEqual(budget, wallLoop, loop)
-				if err != nil {
-					return stackedPrismPayload{}, err
-				}
-				if equal {
-					region.Sel[li][w.seg] = struct{}{}
-				}
-			}
-		}
-	}
-	line, err := mirrorjoin.AdmitLine(segs)
-	if err != nil {
-		return stackedPrismPayload{}, err
-	}
-	if err := line.AdmitRegions(budget, regions); err != nil {
-		return stackedPrismPayload{}, err
-	}
-	if sp.SectionDelta != 0 {
-		return stackedPrismPayload{}, errJoinDisplaced
-	}
-	out := sp
-	out.Slabs = make([]stackedrecord.Slab, len(sp.Slabs))
-	for k, region := range regions {
-		joined, delta, err := line.Assemble(budget, region)
-		if err != nil {
-			return stackedPrismPayload{}, err
-		}
-		out.Slabs[k] = sp.Slabs[k]
-		out.Slabs[k].Regions = []profileRecord{joined}
-		out.SectionDelta = math.Max(out.SectionDelta, delta)
-	}
-	interfaces, err := stackedrecord.Derive(ctx, out.Slabs, sp.Interfaces)
-	if err != nil {
-		return stackedPrismPayload{}, err
-	}
-	out.Interfaces = interfaces
-	return out, nil
-}
-
-// errJoinDisplaced is J7: the §5.3 audit proves closure on the recorded
-// coordinates, and a displaced record does not state the section it denotes.
-var errJoinDisplaced = fmt.Errorf(`%w: the receiver's section carries a displacement from the section it denotes, so the join cannot prove its splice closes; join a receiver drawn directly (J7)`, ErrUnsupported)
-
-// joinWallSegment is J2's record half: the selected wall's segment, which
-// must be a line. A curved wall names no mirror plane.
-func joinWallSegment(loops []loopRecord, w joinWall) (lineSeg, error) {
-	if w.loop < 0 || w.loop >= len(loops) || w.seg < 0 || w.seg >= len(loops[w.loop].Segments) {
-		return lineSeg{}, fmt.Errorf(`%w: a selected wall names segment (%d, %d), which the receiver's record does not have`, ErrDegenerate, w.loop, w.seg)
-	}
-	seg, err := normalizeSegment(loops[w.loop].Segments[w.seg])
-	if err != nil {
-		return lineSeg{}, err
-	}
-	line, ok := seg.(lineSeg)
-	if !ok {
-		return lineSeg{}, fmt.Errorf(`%w: selected wall (%d, %d) is a %T, and a curved wall names no mirror plane`, ErrDegenerate, w.loop, w.seg, seg)
-	}
-	return line, nil
 }
