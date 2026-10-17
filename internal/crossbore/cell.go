@@ -329,3 +329,18 @@ func MirroredCellMaxima(ctx context.Context, workers int,
 	}
 	return maximum, nil
 }
+
+// ProveCells proves the mirror-related cells after the root caller verifies
+// the record's exact mirror pose.
+func ProveCells(ctx context.Context, rec *facetedrecord.CrossCylinderBoreRecord,
+	setback float64, mesh *Mesh) (CellResult, error) {
+	const n = 2 * HalfStations
+	gap := new(big.Rat).Quo(new(big.Rat).Mul(big.NewRat(2, 1), proofbound.PiUpper), big.NewRat(n, 1))
+	return MirroredCellMaxima(ctx, orderedwork.EachWorkers(n/4+1, CellParallelMin),
+		func(k int) (CellExact, error) { return CellExactProof(rec, setback, k, gap) },
+		func(j int, base *CellExact, flipY, flipZ bool) float64 {
+			cell := mesh.CellHeld[j]
+			held := [3]r3.Vec{mesh.Verts[cell[0]], mesh.Verts[cell[1]], mesh.Verts[cell[2]]}
+			return CellSampleError(&held, rec.CenterZ, &base.Coords, flipY, flipZ)
+		})
+}
