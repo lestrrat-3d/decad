@@ -2,7 +2,8 @@ package decad
 
 import (
 	"context"
-	"math/big"
+
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 )
 
 // A sloped finite Revolve generator intersects the heel tool cone at one
@@ -53,7 +54,7 @@ func revolveLoftFacesHeelSlopedOccupiedArc(ctx context.Context,
 		radius.Cmp(circle.radius) != 0 {
 		return nil, false, nil
 	}
-	if !revolveLoftFacesSlopedRadialInside(proof.section, circle.span, x, radius) {
+	if !revolveloftfaces.SlopedRadialInside(proof.section, circle.span, x, radius) {
 		return nil, false, nil
 	}
 	if trim.Toe.Apex == nil || trim.Toe.Far == nil || trim.Toe.Slope == nil ||
@@ -74,49 +75,4 @@ func revolveLoftFacesHeelSlopedOccupiedArc(ctx context.Context,
 		return nil, false, err
 	}
 	return revolveLoftFacesHeelOccupiedFromSource(ctx, proof, circle, section)
-}
-
-// At an X value away from every section vertex, two and only two transverse
-// boundary crossings certify the local radial slice of a whole-line profile.
-// The axis walks toward +X and the selected outer side walks toward -X.
-// Their signed crossings make the open interval (0,radius) the filled side;
-// an extra side crossing, vertex touch, or reversed walk is undecided.
-func revolveLoftFacesSlopedRadialInside(section revolveSectionCertificate,
-	spanIndex int, x, radius *big.Rat) bool {
-	if x == nil || radius == nil || radius.Sign() <= 0 ||
-		spanIndex < 0 || spanIndex >= len(section.Spans) ||
-		section.AxisSpan < 0 || section.AxisSpan >= len(section.Spans) ||
-		spanIndex == section.AxisSpan {
-		return false
-	}
-	axis := section.Spans[section.AxisSpan]
-	if axis.Start.V != 0 || axis.End.V != 0 ||
-		lfF(axis.Start.U).Cmp(x) >= 0 || lfF(axis.End.U).Cmp(x) <= 0 {
-		return false
-	}
-	found := false
-	for i, span := range section.Spans {
-		startX, endX := lfF(span.Start.U), lfF(span.End.U)
-		if startX.Cmp(x) == 0 || endX.Cmp(x) == 0 {
-			return false
-		}
-		if i == section.AxisSpan {
-			continue
-		}
-		if startX.Cmp(x) == endX.Cmp(x) {
-			continue
-		}
-		if i != spanIndex || startX.Cmp(x) <= 0 || endX.Cmp(x) >= 0 ||
-			span.Start.V < 0 || span.End.V < 0 {
-			return false
-		}
-		fraction := lfDiv(lfSub(x, startX), lfSub(endX, startX))
-		atX := lfAdd(lfF(span.Start.V), lfMul(fraction,
-			lfSub(lfF(span.End.V), lfF(span.Start.V))))
-		if atX.Cmp(radius) != 0 {
-			return false
-		}
-		found = true
-	}
-	return found
 }
