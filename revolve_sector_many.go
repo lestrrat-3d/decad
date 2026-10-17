@@ -284,7 +284,7 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 	}
 	localBound, localRound, sourceVolume, sourceArea := 0.0, 0.0, 0.0, 0.0
 	refineCapLimit, capRefinePossible := math.Inf(1), true
-	var samples revolveSectorSamples
+	var samples revolveshell.SectorSamples
 	for i := range plans {
 		plan := &plans[i]
 		var placedGroups []facetGroup
@@ -294,7 +294,7 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 		baseGroup := len(mesh.Groups)
 		plan.capGroups = [2]int{baseGroup + len(record.Base.Groups) - 1,
 			baseGroup + len(record.Base.Groups)}
-		plan.nodeRound, plan.snap, err = buildRevolveSectorMesh(mesh, ring, section,
+		plan.nodeRound, plan.snap, err = revolveshell.BuildRevolveSectorMesh(mesh, ring, section,
 			plan.nodes, original, caps, edges, plan.rootNode, record, plan.motion, placedGroups, &samples)
 		if err != nil {
 			return nil, nil, err
