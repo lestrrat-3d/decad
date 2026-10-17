@@ -117,7 +117,8 @@ func prismUnionBossShellAuthenticate(result *Body, fp facetedPayload, plateBody,
 			src.bossTop, -src.interfaceZ) != 0 {
 		return src, false
 	}
-	if !prismUnionBossShellLevels(src, t) ||
+	if !prismshell.PrismUnionBossShellLevels(src.plateBottom, src.bossBottom,
+		src.interfaceZ, src.bossTop, t) ||
 		!prismshell.PrismUnionBossShellRoom(src.bossRect.Width(), src.unitLo, t) ||
 		!prismshell.PrismUnionBossShellRoom(src.bossRect.Height(), src.unitLo, t) {
 		return src, false
@@ -206,14 +207,6 @@ func prismUnionBossShellAuthenticate(result *Body, fp facetedPayload, plateBody,
 	return src, true
 }
 
-func prismUnionBossShellLevels(src prismUnionBossShellSource, t float64) bool {
-	pt := func(v float64) *big.Rat { return proofarith.FloatRat(v) }
-	return new(big.Rat).Add(pt(src.plateBottom), pt(t)).Cmp(pt(src.bossBottom)) < 0 &&
-		pt(src.bossBottom).Cmp(pt(src.interfaceZ)) < 0 &&
-		pt(src.interfaceZ).Cmp(pt(src.bossTop)) < 0 &&
-		new(big.Rat).Sub(pt(src.interfaceZ), pt(src.bossBottom)).Cmp(pt(t)) == 0
-}
-
 func prismUnionBossShellSimilarity(src *prismUnionBossShellSource) bool {
 	basis := src.boss.Xform.Basis()
 	c, s := basis.EX.X, basis.EX.Y
@@ -259,12 +252,14 @@ func buildPrismUnionBossShell(ctx context.Context, source *Body, fp facetedPaylo
 	if err != nil {
 		return nil, err
 	}
-	trueVolume := prismUnionBossShellTrueVolume(src, t)
+	trueVolume := prismshell.PrismUnionBossShellTrueVolume(src.plateRect, src.bossRect,
+		src.plateBottom, src.interfaceZ, src.bossBottom, src.bossTop,
+		src.unitLo, src.unitHi, t)
 	if trueVolume.Lo == nil || trueVolume.Lo.Sign() <= 0 ||
 		len(audit.CompVol) != 1 || audit.CompVol[0].Sign() <= 0 {
 		return nil, fmt.Errorf("%w: boss shell has no proven positive occupied volume", ErrUnsupported)
 	}
-	curve := prismUnionBossShellCurveBound(t)
+	curve := prismshell.PrismUnionBossShellCurveBound(t, prismUnionBossShellStations)
 	// All source-preserving exterior facets keep their Boolean proof. The new
 	// cavity is a family of nested convex rectangles. The root's true
 	// quarter-circle surface stays within curve plus the station lift of a
@@ -478,39 +473,4 @@ func prismUnionBossShellMeshOf(ctx context.Context, ref producerID, fp facetedPa
 	tri(floor[0], floor[1], floor[2], floorGroup)
 	tri(floor[0], floor[2], floor[3], floorGroup)
 	return out, nil
-}
-
-func prismUnionBossShellCurveBound(t float64) float64 {
-	// The planar quarter circle (q(w), s(w)) has second-derivative norm at
-	// most 4t on 0 <= w <= 1. Linear interpolation at matching w across a
-	// cell of width 1/N differs by at most 4t/(8N²) = t/(2N²). Insetting
-	// both rectangle coordinates stretches this gap by at most sqrt(2),
-	// rounded safely to 3/2.
-	n := float64(prismUnionBossShellStations)
-	return proofbound.DivUpper(proofbound.ProductUpper(1.5, t), 2*n*n)
-}
-
-func prismUnionBossShellTrueVolume(src prismUnionBossShellSource, t float64) proofbound.RatInterval {
-	point := func(v float64) proofbound.RatInterval { return proofbound.PointInterval(proofarith.FloatRat(v)) }
-	add, sub, mul := proofbound.IntervalAdd, proofbound.IntervalSub, proofbound.IntervalMul
-	scale := proofbound.Interval(proofarith.FloatRat(src.unitLo), proofarith.FloatRat(src.unitHi))
-	w := mul(point(src.bossRect.Width()), scale)
-	h := mul(point(src.bossRect.Height()), scale)
-	tv := point(t)
-	t2, t3 := mul(tv, tv), mul(mul(tv, tv), tv)
-	plateArea := mul(point(src.plateRect.Width()), point(src.plateRect.Height()))
-	lowerRect := src.plateRect.Inset(t)
-	lowerArea := mul(point(lowerRect.Width()), point(lowerRect.Height()))
-	outer := add(mul(plateArea, point(src.interfaceZ-src.plateBottom)),
-		mul(mul(w, h), point(src.bossTop-src.interfaceZ)))
-	lower := mul(lowerArea, point(src.bossBottom-src.plateBottom-t))
-	upper := mul(mul(sub(w, mul(point(2), tv)), sub(h, mul(point(2), tv))),
-		point(src.bossTop-src.interfaceZ))
-	pi := proofbound.Interval(proofbound.PiLower, proofbound.PiUpper)
-	widths := add(w, h)
-	band := add(sub(mul(mul(w, h), tv), mul(mul(point(2), widths), t2)),
-		add(mul(mul(mul(widths, pi), t2), point(0.5)),
-			sub(mul(t3, proofbound.Interval(big.NewRat(20, 3), big.NewRat(20, 3))),
-				mul(mul(point(2), pi), t3))))
-	return sub(outer, add(add(lower, upper), band))
 }
