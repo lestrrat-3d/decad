@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -130,7 +131,7 @@ func loftCylinderPlacedBoxOverlap(t *testing.T, actual, local Box, pose r3.Trans
 	require.True(t, proofFiniteBox(local), "canonical box has a nonfinite reading")
 	require.GreaterOrEqual(t, actual.Bound.Base(), 0.0, "placed box bound is negative")
 	require.GreaterOrEqual(t, local.Bound.Base(), 0.0, "canonical box bound is negative")
-	mapOf := loftCylinderAffineOf(pose)
+	mapOf := loftcylinder.AffineOf(pose)
 	var lo, hi [3]*big.Rat
 	for corner := range 8 {
 		coordinates := [3]float64{local.Min.X, local.Min.Y, local.Min.Z}
@@ -141,9 +142,9 @@ func loftCylinderPlacedBoxOverlap(t *testing.T, actual, local Box, pose r3.Trans
 			}
 		}
 		for i := range 3 {
-			value := new(big.Rat).Set(mapOf.shift[i])
+			value := new(big.Rat).Set(mapOf.Shift[i])
 			for j := range 3 {
-				value.Add(value, new(big.Rat).Mul(mapOf.linear[i][j], proofarith.FloatRat(coordinates[j])))
+				value.Add(value, new(big.Rat).Mul(mapOf.Linear[i][j], proofarith.FloatRat(coordinates[j])))
 			}
 			if lo[i] == nil || value.Cmp(lo[i]) < 0 {
 				lo[i] = value
@@ -551,7 +552,7 @@ func TestLoftCylinderCommonPlacementLeavesArbitraryAngleGeneric(t *testing.T) {
 func TestLoftCylinderCommonPlacementRejectsOrdinaryQuarterTurn(t *testing.T) {
 	quarter, err := r3.Rotation(r3.Vec{X: 1}, units.Degrees(90))
 	require.NoError(t, err)
-	require.False(t, loftCylinderSignedPose(quarter),
+	require.False(t, loftcylinder.SignedPose(quarter),
 		"the current r3.Rotation quarter-turn has rounded sine/cosine entries")
 }
 
@@ -560,9 +561,9 @@ func TestLoftCylinderCommonPlacementRejectsRoundedComposition(t *testing.T) {
 	second := loftCylinderTestTranslation(t, 0.2)
 	pose, err := first.Then(second)
 	require.NoError(t, err)
-	require.True(t, loftCylinderSignedPose(pose))
-	require.False(t, loftCylinderAffineOf(first).then(loftCylinderAffineOf(second)).
-		equals(loftCylinderAffineOf(pose)),
+	require.True(t, loftcylinder.SignedPose(pose))
+	require.False(t, loftcylinder.AffineOf(first).Then(loftcylinder.AffineOf(second)).
+		Equals(loftcylinder.AffineOf(pose)),
 		"a rounded native height/translation composition needs a source-map allowance")
 	lower := loftCylinderTestFrame(t, r3.Vec{Z: 0.1}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	upper := loftCylinderTestFrame(t, r3.Vec{Z: 2.1}, r3.Vec{X: 1}, r3.Vec{Y: 1})
