@@ -6,8 +6,45 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/sketch"
 )
+
+// VerticalTraceMapPoint maps a source point into the exact vertical side plane.
+func VerticalTraceMapPoint(affine *loftface.VerticalAffine,
+	point sectionrecord.Point2) [2]*big.Rat {
+	u, v := lfF(point.U), lfF(point.V)
+	return [2]*big.Rat{
+		lfAdd(affine.Offset[0], lfAdd(lfMul(affine.Column[0][0], u), lfMul(affine.Column[1][0], v))),
+		lfAdd(affine.Offset[1], lfAdd(lfMul(affine.Column[0][1], u), lfMul(affine.Column[1][1], v))),
+	}
+}
+
+// VerticalTraceArcRadius accepts a centered circular source only under an exact
+// positive similarity. This is the class whose ray hit and arc length can be
+// bounded without treating a sampled arc point as exact.
+func VerticalTraceArcRadius(affine *loftface.VerticalAffine,
+	arc arcSeg) (*big.Rat, bool) {
+	if affine == nil || affine.Det == nil || affine.Det.Sign() <= 0 {
+		return nil, false
+	}
+	center := VerticalTraceMapPoint(affine, arc.Center)
+	if center[0].Sign() != 0 || center[1].Sign() != 0 {
+		return nil, false
+	}
+	u, v := affine.Column[0], affine.Column[1]
+	u2 := lfAdd(lfMul(u[0], u[0]), lfMul(u[1], u[1]))
+	v2 := lfAdd(lfMul(v[0], v[0]), lfMul(v[1], v[1]))
+	if u2.Sign() <= 0 || u2.Cmp(v2) != 0 ||
+		lfAdd(lfMul(u[0], v[0]), lfMul(u[1], v[1])).Sign() != 0 {
+		return nil, false
+	}
+	start := VerticalTraceMapPoint(affine, arc.Start)
+	end := VerticalTraceMapPoint(affine, arc.End)
+	r2 := lfAdd(lfMul(start[0], start[0]), lfMul(start[1], start[1]))
+	end2 := lfAdd(lfMul(end[0], end[0]), lfMul(end[1], end[1]))
+	return r2, r2.Sign() > 0 && r2.Cmp(end2) == 0
+}
 
 // mappedArcFiniteSide proves that the whole mapped Sketch arc misses a finite
 // straight Revolve generator, or stays on one strict side wherever its axial

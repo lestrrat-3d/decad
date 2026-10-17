@@ -42,7 +42,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/prismshell/` | Prism side-opening sections, shell wall bands, boss rectangles and bands, slab levels and stack faces. See shell-opening §3–§5, modify-reach §9.2. |
 | `internal/revolveaxis/` | Axis frames, walks, side/contact gates, snap and section charges, extent readings, the simple-revolution radial proof, and wall and cap denotations. See evaluator §6. |
 | `internal/revolveshell/` | Surveys shell walls and builds section rings, sector caps, sector meshes and bore checks. See modify-reach §9.3 and revolve-loft-sector design. |
-| `internal/revolveloftfaces/` | Certifies the simple oriented source walk, live fitted and arc cells, exact time roots and finite Revolve side contacts. See loft-face-sections design. |
+| `internal/revolveloftfaces/` | Certifies the simple oriented source walk, live fitted and arc cells, vertical-arc radius, exact time roots and finite Revolve side contacts. See loft-face-sections design. |
 | `internal/revolvemass/` | Revolve moments and centroid bounds. |
 | `internal/revolveangle/` | Exact angle denotations and certified sweep extremes. See evaluator §6 and sweep §3. |
 | `internal/sweeparc/` | Exact circle carriers, rational vectors, axis lines, plane gates and angle bounds. See sweep §3. |
