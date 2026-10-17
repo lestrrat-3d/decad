@@ -60,7 +60,7 @@ that does not match the source never becomes a section result.
 ## Exact slab of an authenticated Boolean BRep
 
 An A1 planar `Union` may return a BRep with an authenticated stack of prism
-slabs. `Body.Section` reads that stack through `stackedUnionOperandOf`, rather
+slabs. `Body.Section` reads that stack through `stackedunion.OperandFromPayload`, rather
 than inferring a section from the visible faces. It requires zero global
 section displacement and zero displacement at both ends of the selected slab.
 The slab must contain exactly one recorded region. A BRep without this stack,

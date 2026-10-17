@@ -49,7 +49,7 @@ func internalFlushCornerUnion(t *testing.T, doc *Document) *Body {
 // The upper slab holds both bosses apart, the interface arranges the plate
 // against both, and every flush wall is one L-shaped face. 16000 + 1500 +
 // 1500 mm³ and 1600 + 1400 + 2·100 + 4·550 + 4·150 mm², exactly. Shown to
-// fail with stackedUnionOperandOf's brepPayload arm deleted (the pair took
+// fail with stackedunion.OperandFromPayload's brepPayload arm deleted (the pair took
 // the mesh path and refused the coplanar contact) and with slabRegions'
 // several-loop merge replaced by the one-loop merge (the apart bosses then
 // missed).
