@@ -25,7 +25,7 @@ func loftCylinderSourceCircleOf(lp loftPayload, radius float64) (loftcylinder.So
 		lp.SourceIdentity == nil || lp.SurfaceResult || !loftCylinderAxialPlacement(lp.Xform) ||
 		lp.Proof.FacetDeparture < 0 || proofbound.IsNonFinite(lp.Proof.FacetDeparture) ||
 		len(lp.Profile0.Outer.Segments) != 6 || len(lp.Profile1.Outer.Segments) != 6 ||
-		!loftCylinderSectionKinds(lp) || len(lp.Verts)%2 != 0 || len(lp.Verts) < 16 ||
+		!loftcylinder.SectionKinds(lp) || len(lp.Verts)%2 != 0 || len(lp.Verts) < 16 ||
 		len(lp.Segment) != 1 {
 		return refuse("source circle lacks an authenticated axial Loft")
 	}
