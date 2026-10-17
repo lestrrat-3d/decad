@@ -83,7 +83,9 @@ func thickenSectionOf(ctx context.Context, profile profileRecord, side ThickenSi
 			return thickenCircleSection(profile, circle, side, amount, budget, radial)
 		}
 	}
-	return thickenAxisSection(ctx, profile, side, amount, budget, radial)
+	return thickenaxis.AxisSection(ctx, profile,
+		side != ThickenNegative, side != ThickenPositive,
+		amount, shellTol, budget, radial)
 }
 
 // thickenCircleSection certifies the concentric offsets of a whole-circle
