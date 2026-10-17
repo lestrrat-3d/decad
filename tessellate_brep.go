@@ -154,7 +154,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 			}
 		}
 		for j := 0; j+1 < len(wm.cols); j++ {
-			brepZipColumns(wm.cols[j], wm.cols[j+1], wm.levels[j], wm.levels[j+1], func(tri [3]int) {
+			tessellation.ZipColumns(wm.cols[j], wm.cols[j+1], wm.levels[j], wm.levels[j+1], func(tri [3]int) {
 				topobuild.AddTriangle(&mesh.n, tri, faceNode(face))
 			})
 		}
@@ -487,7 +487,7 @@ func brepChordWall(ctx context.Context, f brepFace, w survey2d.SegmentWalk, e br
 	// Each side line's column holds a vertex at its own splits alone, so the
 	// side pieces' vertices are the wall's own and the face across the side
 	// line meets no vertex it does not hold; the interior columns hold every
-	// split of either side, and brepZipColumns closes the strips between.
+	// split of either side, and tessellation.ZipColumns closes the strips between.
 	levelsOf := func(splits ...[]brepSplit) []float64 {
 		out := []float64{f.Z0}
 		for _, side := range splits {
@@ -525,24 +525,6 @@ func brepChordWall(ctx context.Context, f brepFace, w survey2d.SegmentWalk, e br
 		wm.top = append(wm.top, wm.top[0])
 	}
 	return wm, nil
-}
-
-// brepZipColumns triangulates the strip between two adjacent vertex columns
-// of one wall, a and b ascending at heights za and zb from one common bottom
-// to one common top: it climbs whichever column's next vertex is lower, b
-// first at a shared height, so two columns holding the same heights close
-// in quads split as (a, b, b↑) and (a, b↑, a↑).
-func brepZipColumns(a, b []int, za, zb []float64, emit func([3]int)) {
-	i, k := 0, 0
-	for i < len(a)-1 || k < len(b)-1 {
-		if i == len(a)-1 || (k < len(b)-1 && zb[k+1] <= za[i+1]) {
-			emit([3]int{a[i], b[k], b[k+1]})
-			k++
-			continue
-		}
-		emit([3]int{a[i], b[k], a[i+1]})
-		i++
-	}
 }
 
 // brepWallClearance refuses a mesh whose chorded walls could cross where the
