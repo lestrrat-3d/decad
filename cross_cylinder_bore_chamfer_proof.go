@@ -7,10 +7,8 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/crossbore"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
-	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/r3"
 )
 
 // crossBoreMirrorPose reports whether rec is exactly the record admission
@@ -34,19 +32,11 @@ func crossBoreMirrorPose(rec *crossCylinderBoreRecord) bool {
 // fold in cell order.
 func proveCrossBoreCells(ctx context.Context, rec *crossCylinderBoreRecord,
 	setback float64, mesh *crossbore.Mesh) (crossbore.CellResult, error) {
-	const n = 2 * crossbore.HalfStations
 	if !crossBoreMirrorPose(rec) {
 		return crossbore.CellResult{}, fmt.Errorf("%w: the cross-bore record is not the exact mirror-symmetric pose",
 			ErrUnsupported)
 	}
-	gap := new(big.Rat).Quo(new(big.Rat).Mul(big.NewRat(2, 1), proofbound.PiUpper), big.NewRat(n, 1))
-	return crossbore.MirroredCellMaxima(ctx, orderedwork.EachWorkers(n/4+1, crossbore.CellParallelMin),
-		func(k int) (crossbore.CellExact, error) { return crossbore.CellExactProof(rec, setback, k, gap) },
-		func(j int, base *crossbore.CellExact, flipY, flipZ bool) float64 {
-			cell := mesh.CellHeld[j]
-			held := [3]r3.Vec{mesh.Verts[cell[0]], mesh.Verts[cell[1]], mesh.Verts[cell[2]]}
-			return crossbore.CellSampleError(&held, rec.CenterZ, &base.Coords, flipY, flipZ)
-		})
+	return crossbore.ProveCells(ctx, rec, setback, mesh)
 }
 
 // proveCrossBoreChamfer encloses all source-to-held boundary motion. Its
