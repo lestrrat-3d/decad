@@ -3,7 +3,6 @@ package decad
 import (
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveproof"
 )
 
@@ -43,20 +42,7 @@ import (
 //     therefore proven once per mesh rather than once per cell.
 
 func revolveFreeformMeridianMoment(p *revolvePlan) float64 {
-	total := 0.0
-	for li, loop := range p.Freeform {
-		for k, chain := range loop {
-			if chain == nil {
-				continue
-			}
-			rho := proofbound.AbsSumUpper(p.resolved[li].Walks[k].AxisRadiusUpper, chain.Sagitta)
-			for _, arc := range chain.CellArcUpper {
-				area := proofbound.SectionDisplacementArea(chain.Sagitta, 1, arc)
-				total = proofbound.AbsSumUpper(total, proofbound.ProductUpper(area, rho))
-			}
-		}
-	}
-	return proofbound.ProductUpper(revolveSweepUpper(p), total)
+	return revolveproof.FreeformMeridianMoment(p.Freeform, revolveWalkView(p.resolved), p.Sweep, p.rp.Full)
 }
 
 // revolveSweepUpper reads the outward bound on the swept angle.

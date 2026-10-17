@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/r3"
@@ -48,6 +49,25 @@ func MeridianMoment(walks WalkLoops, counts [][]int, sweep float64, full bool) f
 	}
 	if total == 0 {
 		return 0
+	}
+	return proofbound.ProductUpper(SweepUpper(sweep, full), total)
+}
+
+// FreeformMeridianMoment charges each fitted-spline cell's bowed meridian
+// tube separately before multiplying by the outward bound on the sweep angle.
+func FreeformMeridianMoment(chains [][]*freeform.FreeformChain, walks WalkLoops, sweep float64, full bool) float64 {
+	total := 0.0
+	for li, loop := range chains {
+		for k, chain := range loop {
+			if chain == nil {
+				continue
+			}
+			rho := proofbound.AbsSumUpper(walks.Walks(li)[k].AxisRadiusUpper, chain.Sagitta)
+			for _, arc := range chain.CellArcUpper {
+				area := proofbound.SectionDisplacementArea(chain.Sagitta, 1, arc)
+				total = proofbound.AbsSumUpper(total, proofbound.ProductUpper(area, rho))
+			}
+		}
 	}
 	return proofbound.ProductUpper(SweepUpper(sweep, full), total)
 }
