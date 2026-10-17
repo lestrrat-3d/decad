@@ -5,6 +5,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/measurement"
+	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -68,7 +69,7 @@ type boundedFacetedExtent struct {
 
 func sourceBoundedFacetedExtent(ctx context.Context, b *Body,
 	pose r3.Transform) (boundedFacetedExtent, bool, error) {
-	if b == nil || !b.n.Solid || b.n.Kind != topo.BodySolid || !signedAxisTransform(pose) {
+	if b == nil || !b.n.Solid || b.n.Kind != topo.BodySolid || !pairbox.SignedAxisTransform(pose) {
 		return boundedFacetedExtent{}, false, nil
 	}
 	pp, ok := b.n.Payload.(facetedPayload)
@@ -152,7 +153,7 @@ type facetedAxisSupport struct {
 func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
 	axis, side int) (facetedAxisSupport, bool, error) {
 	if b == nil || axis < 0 || axis > 2 || (side != 0 && side != 1) ||
-		!b.n.Solid || b.n.Kind != topo.BodySolid || !signedAxisTransform(pose) {
+		!b.n.Solid || b.n.Kind != topo.BodySolid || !pairbox.SignedAxisTransform(pose) {
 		return facetedAxisSupport{}, false, nil
 	}
 	pp, ok := b.n.Payload.(facetedPayload)

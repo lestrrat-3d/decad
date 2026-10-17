@@ -277,7 +277,7 @@ func bodySymmetryAxis(b *Body) (point, dir motionbound.RatVec, ok bool) {
 	}
 	if rp, isRevolve := b.n.Payload.(revolvePayload); isRevolve {
 		if !b.n.Solid || b.n.Kind != topo.BodySolid || rp.SurfaceResult || !rp.Full || rp.SectionDelta != 0 ||
-			!pairbox.CardinalBasis(rp.Frame.U(), rp.Frame.V(), rp.Frame.N()) || !signedAxisTransform(rp.Xform) ||
+			!pairbox.CardinalBasis(rp.Frame.U(), rp.Frame.V(), rp.Frame.N()) || !pairbox.SignedAxisTransform(rp.Xform) ||
 			!proofbound.FiniteVec(rp.Frame.Origin()) || !measurement.FiniteValues(rp.Ax.AU, rp.Ax.AV, rp.Ax.DU, rp.Ax.DV) ||
 			rp.Ax.AUBound != 0 || rp.Ax.AVBound != 0 || rp.Ax.DUBound != 0 || rp.Ax.DVBound != 0 ||
 			(rp.Ax.DU == 0 && rp.Ax.DV == 0) {

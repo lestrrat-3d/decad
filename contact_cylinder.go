@@ -32,7 +32,7 @@ func sourceCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProo
 		pp.SectionDelta != 0 || pp.Z0Delta != 0 || pp.Z1Delta != 0 ||
 		len(pp.Profile.Holes) != 0 || len(pp.Profile.Outer.Segments) != 1 ||
 		!pairbox.CardinalBasis(pp.Frame.U(), pp.Frame.V(), pp.Frame.N()) ||
-		!signedAxisTransform(pp.Xform) || !signedAxisTransform(pose) ||
+		!pairbox.SignedAxisTransform(pp.Xform) || !pairbox.SignedAxisTransform(pose) ||
 		!proofbound.FiniteVec(pp.Frame.Origin()) || !measurement.FiniteValues(pp.Z0, pp.Z1) ||
 		pp.Z0 >= pp.Z1 {
 		return sourceCylinderContactProof{}, false
@@ -95,7 +95,7 @@ func sourceRevolvedCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderCon
 	if !ok || !b.n.Solid || b.n.Kind != topo.BodySolid || rp.SurfaceResult || !rp.Full ||
 		rp.SectionDelta != 0 || !pairbox.RectangularProfile(rp.Profile) ||
 		!pairbox.CardinalBasis(rp.Frame.U(), rp.Frame.V(), rp.Frame.N()) ||
-		!signedAxisTransform(rp.Xform) || !signedAxisTransform(pose) ||
+		!pairbox.SignedAxisTransform(rp.Xform) || !pairbox.SignedAxisTransform(pose) ||
 		!proofbound.FiniteVec(rp.Frame.Origin()) ||
 		rp.Ax.AUBound != 0 || rp.Ax.AVBound != 0 ||
 		rp.Ax.DUBound != 0 || rp.Ax.DVBound != 0 {
