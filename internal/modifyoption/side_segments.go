@@ -19,3 +19,14 @@ func SideSegments(roles []string, li int) map[int]struct{} {
 	}
 	return out
 }
+
+// WalkHoldsAny reports whether any recorded segment of a coalesced walk is
+// in segs.
+func WalkHoldsAny(walkSegs []int, segs map[int]struct{}) bool {
+	for _, s := range walkSegs {
+		if _, ok := segs[s]; ok {
+			return true
+		}
+	}
+	return false
+}

@@ -205,8 +205,8 @@ func (a *asymmetricChamfer) setbacks(loop cornerLoop, li, ci int, e *Edge) (floa
 	}
 	segs := faceSideSegments(a.body, ref, li)
 	n := len(loop.Walks)
-	arriving := walkHoldsAny(loop.Walks[(ci+n-1)%n].Segs, segs)
-	leaving := walkHoldsAny(loop.Walks[ci].Segs, segs)
+	arriving := modifyoption.WalkHoldsAny(loop.Walks[(ci+n-1)%n].Segs, segs)
+	leaving := modifyoption.WalkHoldsAny(loop.Walks[ci].Segs, segs)
 	switch {
 	case arriving && !leaving:
 		return a.d, a.other, nil
@@ -278,15 +278,4 @@ func faceSideSegments(b *Body, f *Face, li int) map[int]struct{} {
 		}
 	}
 	return modifyoption.SideSegments(roles, li)
-}
-
-// walkHoldsAny reports whether any recorded segment of a coalesced walk is
-// in segs.
-func walkHoldsAny(walkSegs []int, segs map[int]struct{}) bool {
-	for _, s := range walkSegs {
-		if _, ok := segs[s]; ok {
-			return true
-		}
-	}
-	return false
 }
