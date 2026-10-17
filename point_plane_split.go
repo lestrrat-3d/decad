@@ -347,37 +347,7 @@ func pointPlaneRoundInto(q [3]*big.Rat, prior float64) (r3.Vec, float64, error) 
 // then the far-cap triangles, interleaved upper/lower for a two-plane slab.
 // sides are the source fan's side triangles.
 func pointPlaneSlabCapLayout(sides [][3]int, triCount, upperOffset int, hasApex bool) (loftmesh.LoftCapLayout, bool) {
-	ring, ok := loftmesh.FanRing(sides)
-	if !ok {
-		return loftmesh.LoftCapLayout{}, false
-	}
-	n := len(sides)
-	shift := func(offset int) []int {
-		out := make([]int, len(ring))
-		for i, r := range ring {
-			out[i] = offset + r
-		}
-		return out
-	}
-	if hasApex {
-		if triCount < n {
-			return loftmesh.LoftCapLayout{}, false
-		}
-		layout := loftmesh.LoftCapLayout{Walls: n, Loops0: [][]int{shift(upperOffset)}, Loops1: [][]int{{0}}}
-		for t := n; t < triCount; t++ {
-			layout.Cap0 = append(layout.Cap0, t)
-		}
-		return layout, true
-	}
-	if triCount < 2*n || (triCount-2*n)%2 != 0 {
-		return loftmesh.LoftCapLayout{}, false
-	}
-	layout := loftmesh.LoftCapLayout{Walls: 2 * n, Loops0: [][]int{shift(upperOffset)}, Loops1: [][]int{shift(0)}}
-	for t := 2 * n; t < triCount; t += 2 {
-		layout.Cap0 = append(layout.Cap0, t)
-		layout.Cap1 = append(layout.Cap1, t+1)
-	}
-	return layout, true
+	return loftmesh.PointPlaneSlabCapLayout(sides, triCount, upperOffset, hasApex)
 }
 
 func buildPointPlaneSlab(ctx context.Context, d *Document, ref producerID,
