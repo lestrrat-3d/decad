@@ -289,6 +289,14 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 	if err := refuseSheetOperand(b, op.String()); err != nil {
 		return nil, err
 	}
+	if pp, ok, err := tryAxialLoftPrismUnion(ctx, op, a, b); err != nil {
+		if errors.Is(err, ErrUnsupported) {
+			return nil, asBooleanError(op, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err))
+		}
+		return nil, err
+	} else if ok {
+		return analyticBooleanBody(ctx, d, ref, pp)
+	}
 	// docs/prism-boolean-design.md: a reject-only analytic reduction for a
 	// co-directional coplanar prism pair, dispatched ahead of the mesh path
 	// for Union's select-all/merge/chain path (§4.2) and Cut/Intersect's

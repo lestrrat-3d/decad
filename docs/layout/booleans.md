@@ -36,6 +36,7 @@ The rules for rows live in `docs/layout.md`.
 | `loft_mirror_cylinder_chamfer.go` | Rewrites both exterior cap loops through one audited bored half and a reflected seam. See loft-mirror-boolean design. |
 | `loft_mirror_cylinder_chamfer_bridge.go` | Certifies translated upper source teeth and the reflected cap band. See loft-mirror-boolean design. |
 | `loft_cylinder_union.go` | Joins a source Loft tooth pattern to a coaxial cylinder with certified seam and volume bounds. See loft-cylinder-boolean design. |
+| `loft_prism_union.go` | Reduces authenticated straight-source axial Lofts to prism operands for exact Sketch Union. See general-boolean design §12. |
 | `loft_cylinder_placement.go` | Rebuilds a common signed-axis cylinder/Loft join in local coordinates and places its audited shell. See loft-cylinder-boolean design. |
 | `loft_cylinder_axial_bridge.go` | Bounds a one-ulp axial placement difference between original Loft sources and private Union proof copies. See loft-cylinder-boolean design. |
 | `loft_cylinder_separation.go` | Proves twisted Loft teeth remain separated at every height. See loft-cylinder-boolean design. |
