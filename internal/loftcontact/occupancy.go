@@ -142,6 +142,10 @@ func CertifyCarrierOccupancy(ctx context.Context, budget *proofbound.WorkBudget,
 		if err != nil || !admitted {
 			return noEdges, noSeams, nil, false, err
 		}
+		bounded, err := lineSeamOrderingBound(budget, first[k])
+		if err != nil || !bounded {
+			return noEdges, noSeams, nil, false, err
+		}
 	}
 	_, v0, _ := first[0].At(big.NewRat(0, 1))
 	_, v1, _ := first[1].At(big.NewRat(0, 1))
