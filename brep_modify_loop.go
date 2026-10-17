@@ -1064,7 +1064,7 @@ func (r *brepLoopRead) rewriteLoopFaces(ctx context.Context, sels []brepLoopSel)
 		if err != nil {
 			return brepPayload{}, err
 		}
-		profile, _, err := rewriteProfileBudget(r.budget, *f.Region, loops, trims[fi])
+		profile, _, err := offset2d.RewriteProfileBudget(r.budget, *f.Region, loops, trims[fi])
 		if err != nil {
 			return brepPayload{}, err
 		}

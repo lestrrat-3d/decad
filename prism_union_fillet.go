@@ -223,7 +223,7 @@ func filletPrismUnionSource(ctx context.Context, d *Document, pp prismPayload,
 		return nil, fmt.Errorf("%w: the rectangular corner has no exact inward quarter-circle", ErrUnsupported)
 	}
 	blends := []map[int]*cornerBlend{{ci: blend}}
-	profile, arcs, err := rewriteProfileBudget(budget, pp.Profile, loops, blends)
+	profile, arcs, err := offset2d.RewriteProfileBudget(budget, pp.Profile, loops, blends)
 	if err != nil {
 		return nil, err
 	}

@@ -259,7 +259,7 @@ func (r *brepLoopRead) rewritePartialChamfer(sel brepLoopSel, selected []bool,
 		if err != nil {
 			return brepPayload{}, err
 		}
-		region, connectors, err := rewriteProfileBudget(r.budget, *old.Region, loops, trims[fi])
+		region, connectors, err := offset2d.RewriteProfileBudget(r.budget, *old.Region, loops, trims[fi])
 		if err != nil {
 			return brepPayload{}, err
 		}

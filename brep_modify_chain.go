@@ -364,7 +364,7 @@ func (r *brepLoopRead) rewritePartialFillet(sel brepLoopSel, selected []bool, bl
 		if err != nil {
 			return brepPayload{}, err
 		}
-		region, connectors, err := rewriteProfileBudget(r.budget, *old.Region, loops, trims[fi])
+		region, connectors, err := offset2d.RewriteProfileBudget(r.budget, *old.Region, loops, trims[fi])
 		if err != nil {
 			return brepPayload{}, err
 		}

@@ -77,7 +77,7 @@ func chamferPrismUnionSource(ctx context.Context, d *Document, pp prismPayload,
 		return nil, fmt.Errorf("%w: the rectangular corner has no exact inward chamfer chord", ErrUnsupported)
 	}
 	blends := []map[int]*cornerBlend{{ci: blend}}
-	profile, connectors, err := rewriteProfileBudget(budget, pp.Profile, loops, blends)
+	profile, connectors, err := offset2d.RewriteProfileBudget(budget, pp.Profile, loops, blends)
 	if err != nil {
 		return nil, err
 	}

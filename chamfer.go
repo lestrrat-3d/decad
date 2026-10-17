@@ -430,7 +430,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 	}
 
 	// The rewritten section, and the bevel chords' (loop, segment) indices.
-	profile, chamferSegs, err := rewriteProfileBudget(budget, pp.Profile, loops, blendAt)
+	profile, chamferSegs, err := offset2d.RewriteProfileBudget(budget, pp.Profile, loops, blendAt)
 	if err != nil {
 		return nil, err
 	}

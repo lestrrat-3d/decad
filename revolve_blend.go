@@ -115,7 +115,7 @@ func (b *Body) blendRevolveJunctions(ctx context.Context, sel EdgeSelector, edge
 		blendAt[corner.loop][corner.corner] = cb
 	}
 
-	profile, blendSegs, err := rewriteProfileBudget(budget, rp.Profile, loops, blendAt)
+	profile, blendSegs, err := offset2d.RewriteProfileBudget(budget, rp.Profile, loops, blendAt)
 	if err != nil {
 		return nil, err
 	}
