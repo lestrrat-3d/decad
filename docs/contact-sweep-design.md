@@ -290,7 +290,7 @@ denominator `|axis|²`; the largest is chosen by that numerator and divided
 once before the upward root, which is the rational the per-corner quotients'
 maximum is. A step reads a path's radius for its swept box and again for its
 sweep, so each body keeps its last 256 radii, keyed by the `From` and pivot
-bits and the exact axis (`contact_sweep_memo.go`).
+bits and the exact axis (`internal/sweeppath/radius_reader.go`).
 
 ### 4.2 Swept boxes
 

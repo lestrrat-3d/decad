@@ -16,7 +16,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/radiusmemo"
 	"github.com/lestrrat-3d/decad/internal/sweepdeparture"
 	"github.com/lestrrat-3d/decad/internal/sweepmemo"
 	"github.com/lestrrat-3d/r3"
@@ -79,7 +78,7 @@ func prepareRotationalSweepPath(body *Body, path affinePairPath) (rotationalSwee
 func prepareSweepMotion(body *Body, path affinePairPath) (rotationalSweepPath, bool) {
 	motion, ok := sweeppath.PrepareMotion(path, func(from r3.Transform, center r3.Vec,
 		axis motionbound.RatVec) (*big.Rat, bool) {
-		return rotationalSweepRadius(body, from, center, axis)
+		return sweeppath.RotationalSweepRadius(&body.n, from, center, axis)
 	})
 	if !ok {
 		return rotationalSweepPath{}, false
@@ -90,57 +89,6 @@ func prepareSweepMotion(body *Body, path affinePairPath) (rotationalSweepPath, b
 		velocity: motion.Velocity, frame: motion.Frame,
 		omegaLow: motion.OmegaLow, omegaHigh: motion.OmegaHigh,
 	}, true
-}
-
-// rotationalSweepRadius is §4.1's ρ: an upper bound, rounded to a float, on
-// the largest distance of the From-mapped inflated bounds corners from the
-// axis line through center, the root of max |(corner − center) × axis|² /
-// |axis|². Every squared cross product shares the one denominator |axis|², so
-// the largest is chosen by its numerator, which is exact dyadic arithmetic
-// for the dyadic corners, pivot and axis every caller holds; one division
-// then gives the same rational the per-corner quotients' maximum is. A body's
-// readings are memoized on it (internal/radiusmemo), since a step reads each
-// path's radius both for its swept box and for its sweep.
-func rotationalSweepRadius(body *Body, from r3.Transform, center r3.Vec,
-	axis motionbound.RatVec) (*big.Rat, bool) {
-	var dyAxis proofarith.DyV3
-	for k := range 3 {
-		component, ok := proofarith.DyOfRat(axis[k])
-		if !ok {
-			corners, ok := inflatedBoundsCorners(body)
-			if !ok {
-				return nil, false
-			}
-			return motionbound.SweepRadiusRational(corners[:], from, center, axis)
-		}
-		dyAxis[k] = component
-	}
-	if !motionbound.MemosOn() {
-		corners, ok := inflatedBoundsCorners(body)
-		if !ok {
-			return nil, false
-		}
-		return motionbound.SweepRadiusDyadic(corners[:], from, center, dyAxis)
-	}
-	key := radiusmemo.NewRadiusKey(from, center, dyAxis)
-	if radius, ok, hit := body.n.SweepRadii.Load(key); hit {
-		if !ok {
-			return nil, false
-		}
-		return proofarith.FloatRat(radius), true
-	}
-	corners, ok := inflatedBoundsCorners(body)
-	if !ok {
-		body.n.SweepRadii.Store(key, 0, false)
-		return nil, false
-	}
-	radius, ok := motionbound.SweepRadiusDyadic(corners[:], from, center, dyAxis)
-	held := 0.0
-	if ok {
-		held, _ = radius.Float64()
-	}
-	body.n.SweepRadii.Store(key, held, ok)
-	return radius, ok
 }
 
 // idealAt is the ideal pose at fraction f. A rotating path's rotation

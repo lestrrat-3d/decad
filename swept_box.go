@@ -92,26 +92,16 @@ func (s SweptBox) Box() Box {
 // sweeps that certify clearance by a box gap all read it. It reports false
 // when b's bounds or the path's travel bound are not finite.
 func sweptBoxOf(b *Body, p affinePairPath) (SweptBox, bool) {
-	corners, ok := inflatedBoundsCorners(b)
+	corners, ok := sweeppath.NodeBoundsCorners(&b.n)
 	if !ok {
 		return SweptBox{}, false
 	}
 	bounds, ok := sweeppath.SweepBounds(corners, p, proofarith.DvTransform,
 		func(from r3.Transform, center r3.Vec, axis motionbound.RatVec) (*big.Rat, bool) {
-			return rotationalSweepRadius(b, from, center, axis)
+			return sweeppath.RotationalSweepRadius(&b.n, from, center, axis)
 		})
 	if !ok {
 		return SweptBox{}, false
 	}
 	return SweptBox{lo: bounds.Lo, hi: bounds.Hi, body: b}, true
-}
-
-// inflatedBoundsCorners returns the eight corners of b's Bounds() at its
-// current placement, each coordinate pushed outward by the box's Bound.
-func inflatedBoundsCorners(b *Body) ([8]proofarith.DyV3, bool) {
-	box, err := b.Bounds()
-	if err != nil {
-		return [8]proofarith.DyV3{}, false
-	}
-	return sweeppath.CheckedBoundsCorners(box.Min, box.Max, box.Bound)
 }

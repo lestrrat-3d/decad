@@ -199,7 +199,7 @@ func TestSweepPathMemoTablesStayBounded(t *testing.T) {
 // largest corner by its squared numerator: one big.Rat quotient per corner.
 func rotationalSweepRadiusPerCorner(body *Body, from r3.Transform, center r3.Vec,
 	axis motionbound.RatVec) (*big.Rat, bool) {
-	corners, ok := inflatedBoundsCorners(body)
+	corners, ok := sweeppath.NodeBoundsCorners(&body.n)
 	if !ok {
 		return nil, false
 	}
@@ -279,7 +279,7 @@ func TestRotationalSweepRadiusMatchesPerCornerForm(t *testing.T) {
 		from, center, axis := froms[rng.IntN(3)], centers[rng.IntN(3)], axes[rng.IntN(3)]
 		want, wantOK := rotationalSweepRadiusPerCorner(body, from, center, axis)
 		for read := range 2 {
-			got, ok := rotationalSweepRadius(body, from, center, axis)
+			got, ok := sweeppath.RotationalSweepRadius(&body.n, from, center, axis)
 			require.Equal(t, wantOK, ok, "read %d", read)
 			if !ok {
 				continue
@@ -291,7 +291,7 @@ func TestRotationalSweepRadiusMatchesPerCornerForm(t *testing.T) {
 		third := new(big.Rat).SetFrac64(1, 3)
 		nonDyadic := motionbound.RatVec{third, axis[1], axis[2]}
 		want, wantOK = rotationalSweepRadiusPerCorner(body, from, center, nonDyadic)
-		got, ok := rotationalSweepRadius(body, from, center, nonDyadic)
+		got, ok := sweeppath.RotationalSweepRadius(&body.n, from, center, nonDyadic)
 		require.Equal(t, wantOK, ok)
 		if ok {
 			require.Zero(t, want.Cmp(got))
