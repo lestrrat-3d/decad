@@ -5,7 +5,25 @@ import (
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/r3"
 )
+
+// PrismUnionBossShellSimilarity checks the boss transform and brackets its
+// horizontal similarity scale before the local offset is mapped to the boss.
+func PrismUnionBossShellSimilarity(xform r3.Transform) (float64, float64, bool) {
+	basis := xform.Basis()
+	c, s := basis.EX.X, basis.EX.Y
+	if basis.EX.Z != 0 || basis.EY != (r3.Vec{X: -s, Y: c}) ||
+		basis.EZ != (r3.Vec{Z: 1}) || !proofbound.FiniteVec(basis.EX) ||
+		!proofbound.FiniteVec(xform.Translation()) {
+		return 0, 0, false
+	}
+	length2 := new(big.Rat).Add(
+		new(big.Rat).Mul(proofarith.FloatRat(c), proofarith.FloatRat(c)),
+		new(big.Rat).Mul(proofarith.FloatRat(s), proofarith.FloatRat(s)))
+	lo, hi := proofbound.RatSqrtDown(length2), proofbound.RatSqrtUp(length2)
+	return lo, hi, lo > 0.99 && hi < 1.01
+}
 
 // PrismUnionBossShellLevels checks the exact order and root thickness of the
 // plate and boss levels.
