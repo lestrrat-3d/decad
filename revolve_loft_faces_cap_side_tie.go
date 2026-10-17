@@ -2,7 +2,6 @@ package decad
 
 import (
 	"context"
-	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
@@ -133,7 +132,7 @@ func revolveLoftFacesHeelBoundarySideTie(proof *revolveLoftFacesSourceCertificat
 					cell.band != arc.band || cell.ref != boundary.ref ||
 					cell.face != boundary.face ||
 					!loftface.IntervalEqual(cell.upper.Root, boundary.parameter) ||
-					!revolveLoftFacesCapBoundaryBoxEqual(cell.upper.Box, boundary.box) {
+					!revolveloftfaces.CapBoundaryBoxEqual(cell.upper.Box, boundary.box) {
 					continue
 				}
 				matches++
@@ -147,7 +146,7 @@ func revolveLoftFacesHeelBoundarySideTie(proof *revolveLoftFacesSourceCertificat
 			if mapped.Segment != boundary.segment || mapped.Span != boundary.span ||
 				mapped.Band != arc.band || cell.ref != boundary.ref ||
 				cell.face != boundary.face || mapped.Side != loftface.SideCrossed ||
-				!revolveLoftFacesTimeInCell(arc.time, mapped) {
+				!revolveloftfaces.TimeInCell(arc.time, mapped) {
 				continue
 			}
 			matches++
@@ -203,24 +202,6 @@ func revolveLoftFacesCapMeridianIdentity(proof *revolveLoftFacesSourceCertificat
 	}
 	for index := range side {
 		if side[index].Cmp(capPolynomial[index]) != 0 {
-			return false
-		}
-	}
-	return true
-}
-
-func revolveLoftFacesTimeInCell(time *big.Rat, cell revolveloftfaces.RevolveLoftFacesMappedCell) bool {
-	if time == nil || cell.TLo == nil || cell.THi == nil {
-		return false
-	}
-	lo, hi := time.Cmp(cell.TLo), time.Cmp(cell.THi)
-	return (lo > 0 || lo == 0 && !cell.TLoOpen) &&
-		(hi < 0 || hi == 0 && !cell.THiOpen)
-}
-
-func revolveLoftFacesCapBoundaryBoxEqual(a, b [3]loftFaceInterval) bool {
-	for axis := range a {
-		if !loftface.IntervalEqual(a[axis], b[axis]) {
 			return false
 		}
 	}

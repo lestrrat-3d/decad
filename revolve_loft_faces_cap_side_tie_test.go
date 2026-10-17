@@ -76,11 +76,11 @@ func TestCurvedHeelArcSideTiesRejectChangedSourceRecord(t *testing.T) {
 
 func TestCurvedHeelArcSideTieTimeEndpointOwnership(t *testing.T) {
 	cell := revolveloftfaces.RevolveLoftFacesMappedCell{TLo: big.NewRat(1, 4), THi: big.NewRat(3, 4)}
-	require.True(t, revolveLoftFacesTimeInCell(big.NewRat(1, 4), cell))
-	require.True(t, revolveLoftFacesTimeInCell(big.NewRat(1, 2), cell))
-	require.True(t, revolveLoftFacesTimeInCell(big.NewRat(3, 4), cell))
+	require.True(t, revolveloftfaces.TimeInCell(big.NewRat(1, 4), cell))
+	require.True(t, revolveloftfaces.TimeInCell(big.NewRat(1, 2), cell))
+	require.True(t, revolveloftfaces.TimeInCell(big.NewRat(3, 4), cell))
 	cell.TLoOpen, cell.THiOpen = true, true
-	require.False(t, revolveLoftFacesTimeInCell(big.NewRat(1, 4), cell))
-	require.True(t, revolveLoftFacesTimeInCell(big.NewRat(1, 2), cell))
-	require.False(t, revolveLoftFacesTimeInCell(big.NewRat(3, 4), cell))
+	require.False(t, revolveloftfaces.TimeInCell(big.NewRat(1, 4), cell))
+	require.True(t, revolveloftfaces.TimeInCell(big.NewRat(1, 2), cell))
+	require.False(t, revolveloftfaces.TimeInCell(big.NewRat(3, 4), cell))
 }
