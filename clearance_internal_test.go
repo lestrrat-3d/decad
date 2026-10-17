@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/clearance/curvecells"
 	"github.com/lestrrat-3d/decad/internal/clearance/spine"
+	"github.com/lestrrat-3d/decad/internal/clearance/tier"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 
@@ -809,9 +810,9 @@ func TestVertexFaceCountsBoundaryDistance(t *testing.T) {
 	t.Parallel()
 	region := internalPolygonRegion(t, 0, 0, 100, proofbound.WorkPollInterval+64)
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "RegionBoundaryDistBudget"}
-	k := &pairKernel{ctx: ctx, tol: region.Tol()}
+	cells := tier.New(ctx, region.Tol(), 0)
 
-	err := k.vertexFace(proofbound.NewWorkBudget(ctx), r3.NewVec(0, 0, 5), tierPlaneFace(region), &cellSink{})
+	err := cells.VertexFace(proofbound.NewWorkBudget(ctx), r3.NewVec(0, 0, 5), tierPlaneFace(region), &cellSink{})
 
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered)
@@ -821,9 +822,9 @@ func TestVertexFaceCountsWindingScan(t *testing.T) {
 	t.Parallel()
 	region := internalPolygonRegion(t, 0, 0, 100, proofbound.WorkPollInterval-16)
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "RegionContainsBudget"}
-	k := &pairKernel{ctx: ctx, tol: region.Tol()}
+	cells := tier.New(ctx, region.Tol(), 0)
 
-	err := k.vertexFace(proofbound.NewWorkBudget(ctx), r3.NewVec(0, 0, 5), tierPlaneFace(region), &cellSink{})
+	err := cells.VertexFace(proofbound.NewWorkBudget(ctx), r3.NewVec(0, 0, 5), tierPlaneFace(region), &cellSink{})
 
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered)
