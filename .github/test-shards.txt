@@ -1533,6 +1533,10 @@
 10	0.00	TestLoftContactOutputBoundaryLimitsAndCancellation
 10	0.00	TestLoftContactOutputBoundaryMiddleRegionContact
 10	0.00	TestLoftContactOutputBoundaryPlanarityAndVertexRefusals
+10	0.00	TestLoftOutputCapConcaveEscapingDiagonal
+10	0.00	TestLoftOutputCapEqualAreaOverlapAndGap
+10	0.00	TestLoftOutputCapCollinearBoundarySplit
+10	0.00	TestLoftOutputCapPredicatesCancelInFlight
 10	0.00	TestLoftContactSeamReadsVaryingRecordedLines
 10	0.00	TestLoftContactOccupancyReadsVaryingRecordedWalls
 10	0.00	TestLoftContactOrderReadsVaryingRecordedLines
