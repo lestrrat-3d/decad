@@ -40,7 +40,7 @@ The rules for rows live in `docs/layout.md`.
 | `loft_contact_output_cap.go` | Reconstructs and tiles exact source cap cells for the transient Loft/prism shell. See its proof comments. |
 | `loft_contact_output_geom.go` | Holds local exact/held vertex correspondence and boundary bounds for the transient Loft/prism shell. See its proof comments. |
 | `loft_contact_volume_embedding.go` | Checks exact embedding and outward volume of the transient Loft/prism shell. See its proof comments. |
-| `loft_contact_volume_proof.go` | Composes private, inactive source, shell and moving-triangle volume checks. See its proof comments. |
+| `loft_contact_volume_proof.go` | Computes a transient source/shell volume proof consumed by the admitted public varying line-only Loft/prism Union route. See its proof comments. |
 | `loft_contact_volume_source.go` | Checks the authenticated Loft/prism source against the transient exact shell. See its proof comments. |
 | `loft_cylinder_placement.go` | Rebuilds a common signed-axis cylinder/Loft join in local coordinates and places its audited shell. See loft-cylinder-boolean design. |
 | `loft_cylinder_axial_bridge.go` | Bounds a one-ulp axial placement difference between original Loft sources and private Union proof copies. See loft-cylinder-boolean design. |
