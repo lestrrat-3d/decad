@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -75,8 +76,8 @@ func tryLoftCapChamfer(ctx context.Context, b *Body, pl loftPayload, edges []*Ed
 	}
 	outer := make([]curveSegment, 0, len(caps[1].n.Loops[0].CoEdges))
 	for _, ce := range caps[1].n.Loops[0].CoEdges {
-		start := pl.Frame0.ToLocal(coedgeStart(ce).Position)
-		stop := pl.Frame0.ToLocal(coedgeEnd(ce).Position)
+		start := pl.Frame0.ToLocal(topobuild.CoEdgeStart(ce).Position)
+		stop := pl.Frame0.ToLocal(topobuild.CoEdgeEnd(ce).Position)
 		outer = append(outer, lineSeg{
 			Start:  sectionrecord.Point2{U: start.X, V: start.Y},
 			End:    sectionrecord.Point2{U: stop.X, V: stop.Y},
@@ -109,7 +110,7 @@ func matchingLoftHeldCapOuters(frame r3.Frame, start, end *Face) bool {
 		return false
 	}
 	keyOf := func(ce topo.CoEdge) [2]planePoint {
-		a, b := frame.ToLocal(coedgeStart(ce).Position), frame.ToLocal(coedgeEnd(ce).Position)
+		a, b := frame.ToLocal(topobuild.CoEdgeStart(ce).Position), frame.ToLocal(topobuild.CoEdgeEnd(ce).Position)
 		p := planePoint{U: a.X, V: a.Y}
 		q := planePoint{U: b.X, V: b.Y}
 		if p.U > q.U || (p.U == q.U && p.V > q.V) {

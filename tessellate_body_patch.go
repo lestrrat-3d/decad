@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -147,7 +148,7 @@ func orientBodyPatchFilledFaces(m *Mesh, b *Body, classOf map[*topo.Vertex]int, 
 			return fmt.Errorf(`%w: a PatchEdges fill has no boundary walk to orient`, ErrDegenerate)
 		}
 		ce := f.n.Loops[0].CoEdges[0]
-		start, end := classOf[coedgeStart(ce)], classOf[coedgeEnd(ce)]
+		start, end := classOf[topobuild.CoEdgeStart(ce)], classOf[topobuild.CoEdgeEnd(ce)]
 		var source *topo.Face
 		for _, adjacent := range ce.Edge.Faces {
 			if adjacent != &f.n {

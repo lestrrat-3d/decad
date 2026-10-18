@@ -86,7 +86,7 @@ func tessellateAllEdgeChamfer(ctx context.Context, body *Body, p allEdgeChamferP
 		var meshIndices []int
 		outer := make([]int, 0, len(face.n.Loops[0].CoEdges))
 		for _, ce := range face.n.Loops[0].CoEdges {
-			v := coedgeStart(ce).Position
+			v := topobuild.CoEdgeStart(ce).Position
 			local := plane.Frame.ToLocal(v)
 			points = append(points, sectionrecord.Point2{U: local.X, V: local.Y})
 			meshIndices = append(meshIndices, add(v, 0))

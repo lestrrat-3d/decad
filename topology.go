@@ -315,11 +315,11 @@ func (ce CoEdge) Edge() *Edge { return edgeHandle(ce.n.Edge) }
 
 // Start returns the vertex where this loop use starts. It returns nil for the
 // zero CoEdge.
-func (ce CoEdge) Start() *Vertex { return vertexHandle(coedgeStart(ce.n)) }
+func (ce CoEdge) Start() *Vertex { return vertexHandle(topobuild.CoEdgeStart(ce.n)) }
 
 // End returns the vertex where this loop use ends. It returns nil for the zero
 // CoEdge.
-func (ce CoEdge) End() *Vertex { return vertexHandle(coedgeEnd(ce.n)) }
+func (ce CoEdge) End() *Vertex { return vertexHandle(topobuild.CoEdgeEnd(ce.n)) }
 
 // IsForward reports whether this loop use walks from Edge.Start to Edge.End.
 // False means it walks from Edge.End to Edge.Start.

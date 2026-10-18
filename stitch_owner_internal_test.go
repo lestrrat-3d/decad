@@ -85,7 +85,7 @@ func TestStitchKeepsOwnerAssertions(t *testing.T) {
 		}},
 		{"stitch vertex", ownerVertex, func(t *testing.T) {
 			patch := ownerPatch(t)
-			coedgeStart(ownerFirstCoEdge(topobuild.Faces(&patch.n)[0])).Owner = struct{}{}
+			topobuild.CoEdgeStart(ownerFirstCoEdge(topobuild.Faces(&patch.n)[0])).Owner = struct{}{}
 			_, _ = Stitch(t.Context(), patch)
 		}},
 		{"stitch free edge", ownerEdge, func(t *testing.T) {
