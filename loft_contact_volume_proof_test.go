@@ -114,7 +114,7 @@ func TestLoftVolumeSourceRefusesNonbinaryJunction(t *testing.T) {
 	for _, tc := range []struct {
 		name          string
 		first, second *Body
-	}{{"prism_first", prism, loft}, {"loft_first", loft, prism}} {
+	}{{loftOperandPrismFirst, prism, loft}, {loftOperandLoftFirst, loft, prism}} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, admitted, err := certifyLoftSourcePartition(t.Context(), tc.first, tc.second,
 				proofbound.NewWorkBudget(t.Context()))
@@ -215,7 +215,7 @@ func TestLoftVolumeComposeRealTriangleFractionalSeam(t *testing.T) {
 	for _, tc := range []struct {
 		name          string
 		first, second *Body
-	}{{"prism_first", prism, loft}, {"loft_first", loft, prism}} {
+	}{{loftOperandPrismFirst, prism, loft}, {loftOperandLoftFirst, loft, prism}} {
 		t.Run(tc.name, func(t *testing.T) {
 			pp, lp, boundary, operation := loftVolumeRealCertificates(t, tc.first, tc.second)
 			proof, admitted, composeErr := loftVolumeCompose(t.Context(), operation, pp, lp, boundary)

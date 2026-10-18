@@ -24,9 +24,9 @@ func TestLoftVolumeSourceEqualityRealAndRefusals(t *testing.T) {
 			prism, loft := loftPartitionRealBodies(t, tc.lower, tc.upper, 0, 4)
 			pp, lp := prism.n.Payload.(prismPayload), loft.n.Payload.(loftPayload)
 			for order, pair := range [][2]*Body{{prism, loft}, {loft, prism}} {
-				name := "prism_first"
+				name := loftOperandPrismFirst
 				if order == 1 {
-					name = "loft_first"
+					name = loftOperandLoftFirst
 				}
 				t.Run(name, func(t *testing.T) {
 					operation := proofbound.NewWorkBudget(t.Context())
