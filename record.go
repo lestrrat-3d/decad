@@ -275,12 +275,10 @@ type (
 
 // brepSplit is one side-line split: a level and its displacement. brepEmbed
 // maps one face frame's local axes onto the reference frame's by a signed
-// permutation, and brepUse is one face's use of one edge in the shared
-// topology builder.
+// permutation.
 type (
 	brepSplit = brepgeom.Split
 	brepEmbed = brepgeom.Embed
-	brepUse   = brepgeom.Use
 )
 
 const (

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/draftrecord"
@@ -23,7 +24,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
-	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -560,19 +560,12 @@ func matchCornerBudget(budget *proofbound.WorkBudget, pp prismPayload, loops []c
 			}
 			j0 := pp.Point(w.StartU, w.StartV, pp.Z0)
 			j1 := pp.Point(w.StartU, w.StartV, pp.Z1)
-			if matchEndpoints(e.n.Start.Position, e.n.End.Position, j0, j1, tol) {
+			if brepgeom.MatchEndpoints(e.n.Start.Position, e.n.End.Position, j0, j1, tol) {
 				return li, ci, true, nil
 			}
 		}
 	}
 	return 0, 0, false, nil
-}
-
-// matchEndpoints reports whether {a, b} equals {p, q} as an unordered pair
-// within tol.
-func matchEndpoints(a, b, p, q r3.Vec, tol float64) bool {
-	near := func(u, v r3.Vec) bool { return u.Sub(v).Len() <= tol }
-	return (near(a, p) && near(b, q)) || (near(a, q) && near(b, p))
 }
 
 // cornerBlend is the shared fillet and chamfer section rewrite.
