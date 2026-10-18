@@ -195,7 +195,7 @@ func certifySpiralNearFaceRoles(ctx context.Context, blank, tooth *Body,
 	var empty [2][4]spiralsector.ShortCapFamily
 	if ctx == nil || blank == nil || tooth == nil || proof == nil ||
 		proof.Blank == nil || proof.Tooth == nil || proof.HeelSeam == nil ||
-		!spiralNearTrimSides(proof) || !spiralTrimSourceCurrent(proof.Tooth) {
+		!spiralNearTrimSides(proof) || !spiralsector.TrimSourceCurrent(proof.Tooth) {
 		return nil, empty, false, nil
 	}
 	if err := ctx.Err(); err != nil {

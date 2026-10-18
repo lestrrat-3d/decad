@@ -29,7 +29,7 @@ func TestSpiralFirstJoinDeclinesTangentHeelOutsideFiniteBlankOnly(t *testing.T) 
 	require.True(t, ok)
 	heelX, ok := spiralRootToolX(m, b, trim.Heel)
 	require.True(t, ok)
-	_, ok = spiralToolOuterGap(trim.Heel, section.Ded, section.HeelOuter, -1)
+	_, ok = spiralsector.ToolOuterGap(trim.Heel, section.Ded, section.HeelOuter, -1)
 	require.True(t, ok, "the finite heel gap admits this producer-built tool")
 	require.True(t, spiralsector.TangentCapTouchesHeelCircle(trim, m, b, toeX, heelX))
 	require.False(t, spiralsector.SpiralHeelCapEightOutside(trim.Maps[8],
@@ -108,19 +108,19 @@ func TestSpiralToolCapMustStayOnCertifiedSideOfBlankMeridian(t *testing.T) {
 	outer := planePoint{U: 3, V: 7}
 	cone := &pointConeLimit{Apex: big.NewRat(9999999999999999, 1000000000000000),
 		Slope: big.NewRat(1, 1)}
-	gap, ok := spiralToolOuterGap(cone, toe, outer, 1)
+	gap, ok := spiralsector.ToolOuterGap(cone, toe, outer, 1)
 	require.True(t, ok)
 	require.Equal(t, big.NewRat(1, 1000000000000000), gap)
 
 	// A tiny side reversal must refuse the source-specific join.
 	cone.Apex = big.NewRat(10000000000000001, 1000000000000000)
-	_, ok = spiralToolOuterGap(cone, toe, outer, 1)
+	_, ok = spiralsector.ToolOuterGap(cone, toe, outer, 1)
 	require.False(t, ok)
 
 	// A different slope may keep the side, but its full finite-meridian
 	// separation must be returned for the later cap-strip allowance gate.
 	cone.Apex, cone.Slope = big.NewRat(10, 1), big.NewRat(2, 1)
-	gap, ok = spiralToolOuterGap(cone, toe, outer, 1)
+	gap, ok = spiralsector.ToolOuterGap(cone, toe, outer, 1)
 	require.True(t, ok)
 	require.Equal(t, big.NewRat(8, 1), gap)
 }

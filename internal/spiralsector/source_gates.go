@@ -7,10 +7,94 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
+	"github.com/lestrrat-3d/decad/internal/pointcone"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/sketch"
 )
+
+// TrimSourceCurrent checks the authenticated six-side trim, its source, and
+// its cap records before the spiral first-join proof uses them.
+func TrimSourceCurrent(trim *loftFacesTrimRecord) bool {
+	if trim == nil || trim.Source == nil || !facetedrecord.PointSourceCurrent(trim.Source) ||
+		trim.Toe == nil || trim.Heel == nil || len(trim.Maps) != 9 || len(trim.Bounds) != 9 ||
+		!pointcone.ToeHeelOrdered(trim.Toe.Apex, trim.Toe.Slope, trim.Heel.Apex, trim.Heel.Slope,
+			trim.Base.Verts, trim.Base.MeshBound) ||
+		!trim.Base.LoftFacesPrimitive || trim.Base.LoftFacesCap == nil ||
+		trim.Base.LoftFacesCap.Source != trim.Source ||
+		len(trim.Base.LoftFacesCap.Maps) != 9 || len(trim.Base.LoftFacesCap.Bounds) != 9 ||
+		len(trim.StationGroup) != len(trim.Source.SourceStation) ||
+		len(trim.Base.LoftFacesCap.StationGroup) != len(trim.Source.SourceStation) ||
+		len(trim.Source.Profile.Outer.Segments) != 6 || len(trim.Source.Source.Entities) != 6 ||
+		len(trim.Source.Profile.Holes) != 0 {
+		return false
+	}
+	// A tangent record on either side must be the same one, current for the
+	// heel cone and the final map. No record on either side is the strict case.
+	if (trim.Tangent != nil || trim.Base.LoftFacesCap.Tangent != nil) && !SpiralTangentRecordCurrent(trim) {
+		return false
+	}
+	for _, entry := range trim.Source.Source.Profile.Outer {
+		if entry.Partial {
+			return false
+		}
+	}
+	segments := trim.Source.Profile.Outer.Segments
+	entities := trim.Source.Source.Entities
+	for _, group := range [...]int{0, 2} {
+		if _, ok := segments[group].(sectionrecord.FitSplineSeg); !ok {
+			return false
+		}
+		if _, ok := entities[group].(*sketch.FitSpline); !ok {
+			return false
+		}
+	}
+	for _, group := range [...]int{1, 4} {
+		if _, ok := segments[group].(sectionrecord.ArcSeg); !ok {
+			return false
+		}
+		if _, ok := entities[group].(*sketch.Arc); !ok {
+			return false
+		}
+	}
+	for _, group := range [...]int{3, 5} {
+		if _, ok := segments[group].(sectionrecord.LineSeg); !ok {
+			return false
+		}
+		if _, ok := entities[group].(*sketch.Line); !ok {
+			return false
+		}
+	}
+	box, err := revolveloftfaces.LfSourceBox(trim.Source)
+	if err != nil {
+		return false
+	}
+	for _, mapped := range trim.Maps {
+		if loftface.PositiveDenominator(mapped, box) != nil {
+			return false
+		}
+	}
+	return true
+}
+
+// ToolOuterGap returns the largest exact endpoint residual of the straight
+// blank cap meridian against the tool cone, after checking both endpoint signs.
+func ToolOuterGap(cone *facetedrecord.PointConeLimit, first, last sectionrecord.Point2, sign int) (*big.Rat, bool) {
+	residual := func(point sectionrecord.Point2) *big.Rat {
+		return seamRatSub(seamRatAdd(seamRatF(point.U), seamRatMul(cone.Slope, seamRatF(point.V))), cone.Apex)
+	}
+	a, z := residual(first), residual(last)
+	if a.Sign() != sign || z.Sign() != sign {
+		return nil, false
+	}
+	a, z = seamRatAbs(a), seamRatAbs(z)
+	if a.Cmp(z) < 0 {
+		return z, true
+	}
+	return a, true
+}
 
 // The toe cap lies wholly before the toe tool/root circle in X. The heel
 // cap may span heelX, so its full supporting plane must miss the entire
