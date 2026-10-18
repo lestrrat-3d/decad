@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/breprecord"
+	"github.com/lestrrat-3d/decad/internal/brepwallmesh"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
@@ -29,7 +30,7 @@ import (
 // Shown-to-fail, each leg alone: with tessellation.SampleLoop charging each
 // sample its own walk's StartBound (no JunctionStartBound), the prism case's
 // sample at End reads a zero bound; with SampleCapBlend's side ring doing the
-// same, the cap-blend case's does; with brepChordWall charging its end sample
+// same, the cap-blend case's does; with brepwallmesh.ChordWall charging its end sample
 // the walk's own EndBound (no DenotedEndBound), the brep case's vertex at End
 // does; and with revolvesampling.MeridianJunctions enclosing the walk's own StartBound, the
 // revolve junction at End encloses only End's own z.
@@ -202,7 +203,7 @@ func TestBrepChordWallReachesArcNaturalEnd(t *testing.T) {
 			index++
 			return index - 1
 		}
-		_, err := brepChordWall(t.Context(), f, w, e, nil, 0.2, freeform.NewFreeformWork(), nil, capture)
+		_, err := brepwallmesh.ChordWall[*Face](t.Context(), f, w, e, nil, 0.2, freeform.NewFreeformWork(), nil, capture)
 		require.NoError(t, err)
 		for _, z := range []float64{f.Z0, f.Z1} {
 			bound, ok := bounds[e.Canon(w.EndU, w.EndV, z)]

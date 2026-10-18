@@ -35,7 +35,8 @@ The rules for rows live in `docs/layout.md`.
 | `internal/boundarywalk/` | Bounded walks, coalescing, junction vertices, rim convexity, and analytic survey and modify loops over recorded segments. |
 | `internal/classbgeom/` | Class B: the entry over two payloads (gates B1-B8, through reach, result record), the crossing reach, face geometry and shifted tool records. See general-boolean §3 B, §5. |
 | `internal/crossbore/` | Builds the held bore-mouth mesh, proves its cells and computes boundary, volume and area bounds from source records. See cross-cylinder-bore-chamfer design. |
-| `internal/brepgeom/` / `internal/stackedbrep/` | BRep geometry, measurements, extents, face surveys, middle-rim audit and topology. See general-boolean §4–§5. |
+| `internal/brepgeom/` / `internal/stackedbrep/` | BRep geometry and topology. See general-boolean §4–§5. |
+| `internal/brepwallmesh/` | Chords BRep swept walls and checks clearance between their mesh loops. See general-boolean §4.4 and tessellation §5. |
 | `internal/stackedunion/` | Builds A1 stacked Union slabs, private scenes, and BRep faces after root admission. See general-boolean §3 A1. |
 | `internal/throughshell/` | Through-cut recognition, strips and rims. See modify-general §3. |
 | `internal/capedge/` | Convex cap-edge cutter admission, quarter-cylinder profile, chamfer wedge and the P8 top front edge test. See vertex-blend §2. |
@@ -60,7 +61,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/partialband/` | Selected cap-edge fillet band sample layouts and open boundary polylines, and exact partial-chamfer quad gates and mass. See loop-fillet §7.1, modify-general §4.3a. |
 | `internal/stationbound/` | Bounds circular chord stations, offset cap stations and chain-sweep arc stations against their exact recorded parameters. |
 | `internal/loftrecord/` | The loft and chain loft payloads and their builders over nodes: records, evaluation, placement, flat-triangle topology, certified circular-hole walls and bore proofs, mass readings. Root `loftPayload` and `chainLoftPayload` alias it. See loft §5, §7, §16, §18, evaluator §8. |
-| `internal/breprecord/` | The brep and all-edge chamfer payloads and their node builders: prism and stack face views, audit, topology, route L and shell bands, measurements, bevels, placement. Root `brepPayload` and `allEdgeChamferPayload` alias them. See general-boolean §4, modify-general §4, evaluator §8. |
+| `internal/breprecord/` | BRep and all-edge chamfer records and node builders; root payloads alias them. See general-boolean §4, modify-general §4, evaluator §8. |
 | `internal/capblend/` | The cap-loop chamfer payload and its builder over nodes: setbacks, gates, the mixed offset, band patches, cap edges (also draft and brep walls), departure bounds, mass readings, receiver refusal, admission, witness prisms. Root `capBlendPayload` aliases it. See modify-reach §8.3–§8.4, evaluator §8. |
 | `internal/loftmesh/` | Loft and chain mesh assembly, point-plane cap layouts and proofs, stations, bounds, split and collar grids, triangle clearance, and contact scans. See loft-point and tessellation designs. |
 | `internal/smoothloft/` | Three-section homothety, constant curved-section admission and independent rectangles with exact height curves for Section; varying curves and four-section rounded rectangles. See loft-sections design. |
