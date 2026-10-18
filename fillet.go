@@ -583,11 +583,6 @@ func computeFillet(loop cornerLoop, ci int, r float64) (*cornerBlend, error) {
 	return offset2d.Fillet(loop.Walks, ci, r, filletTol)
 }
 
-// rewriteLoop applies the section blend to one coalesced loop.
-func rewriteLoop(budget *proofbound.WorkBudget, loop cornerLoop, blends map[int]*cornerBlend) ([]curveSegment, map[int]struct{}, error) {
-	return offset2d.RewriteLoop(budget, loop.Walks, blends)
-}
-
 // walkSegment re-emits a coalesced walk trimmed to its two endpoints.
 func walkSegment(w survey2d.SideWalk, sU, sV, eU, eV float64) curveSegment {
 	return offset2d.OriginalSegment(w, sU, sV, eU, eV)
