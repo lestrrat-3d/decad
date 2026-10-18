@@ -13,8 +13,8 @@ The rules for rows live in `docs/layout.md`.
 | `verify_pairs.go` | `Verify`'s pair proofs and job list. See interference §2. |
 | `report.go` | Public verdict and diagnostic enums, diagnostic and pair result types, and private report adapters. |
 | `verify_tolerance.go` | Adapts `internal/tolerance/` to `Verify` readings and diagnostics. See verification §2-§3. |
-| `verify_gate.go` | Verify's payload diameter adapters; `internal/gatewitness/` selects fallback prisms. See verification §3. |
-| `verify_gate_points.go` | Points a gate diameter reads, including fallback prisms from `internal/gatewitness/`, and the pair diameter. See verification §3. |
+| `verify_gate.go` | Verify's faceted diameter and carrier boundary; `internal/gatediameter/` selects other payload witnesses. See verification §3. |
+| `verify_gate_points.go` | Verify's faceted point table and cached pair diameter; `internal/gatediameter/` selects other point sets. See verification §3. |
 | `verify_result.go` | Public survey outcome enums, reports, requests, bounded readings and survey results. |
 | `verify_publish.go` | Adapts private surveys to `internal/reportvocab` publication. See verification §1, §6. |
 | `clearance.go` | The pair kernel: `clearancePair` and `sheetSolidPair`. See clearance §1-§3/§6. |
