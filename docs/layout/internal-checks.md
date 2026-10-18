@@ -45,6 +45,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/shellsurvey/` | Shell inradius, section cavity limit, work budget and contained-disk witness. See modify §8. |
 | `internal/survey2d/` | 2D disks, prism readers, walks, corner loops, Bézier carriers. See verification §6. |
 | `internal/thickenaxis/` | Holds certified section pairs, checks offsets, ribbons and interval clearance, and builds the circle and axis offset sections of a prism sheet. See surface §16, §17. |
+| `internal/thickenbuild/` | Computes Thicken amounts and certified sections, then builds revolve and chain solids from admitted sheets. See surface §16. |
 | `internal/revolvesurvey/` | Revolve wall, undercut and concave-radius readers. See verification §6. |
 | `internal/wallsurvey/` | Prism and revolve wall record preparation and bounded readings, and the revolve clearance carrier input. See verification §6, clearance §2. |
 | `internal/radiussurvey/` | Prism, revolve, cup and BRep concave-radius readings. See verification §6. |
