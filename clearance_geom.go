@@ -16,7 +16,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/r3"
-	"github.com/lestrrat-3d/units"
 )
 
 // This file is the clearance kernel's boundary model (docs/clearance-design.md
@@ -154,7 +153,7 @@ func (g *bodyGeom) addTopology(budget *proofbound.WorkBudget, b *Body) (bool, er
 		if err := budget.Step(); err != nil {
 			return false, err
 		}
-		ce, ok := newCEdge(e)
+		ce, ok := clearance.NewCEdge(edgeNode(e))
 		if !ok {
 			return false, nil
 		}
@@ -175,89 +174,13 @@ func (g *bodyGeom) addTopology(budget *proofbound.WorkBudget, b *Body) (bool, er
 		if err := budget.Step(); err != nil {
 			return false, err
 		}
-		w, ok := shellWitness(sh)
+		w, ok := clearance.ShellWitness(faceShellNode(sh))
 		if !ok {
 			return false, nil
 		}
 		g.shellWit = append(g.shellWit, w)
 	}
 	return true, nil
-}
-
-func newCEdge(e *Edge) (*clearance.CEdge, bool) {
-	switch c := e.n.Curve.(type) {
-	case surfacegeom.Line3:
-		if e.n.Start.Position.Sub(e.n.End.Position).Len() == 0 {
-			return nil, true
-		}
-		ce := &clearance.CEdge{Line: true, A: e.n.Start.Position, B: e.n.End.Position}
-		ce.Box = clearance.BoxOf(ce.A, ce.B)
-		return ce, true
-	case surfacegeom.Circle3:
-		r, err := c.Radius.In(units.Millimeter)
-		if err != nil {
-			return nil, false
-		}
-		u := clearance.PerpTo(c.Axis)
-		v := c.Axis.Cross(u)
-		ce := &clearance.CEdge{Center: c.Center, Axis: c.Axis, RefU: u, RefV: v, Radius: r, Ang: clearance.AngWindow{Full: true}}
-		ce.Box = clearance.CircleBox(c.Center, c.Axis, r)
-		return ce, true
-	case surfacegeom.Arc3:
-		r, err := c.Radius.In(units.Millimeter)
-		if err != nil {
-			return nil, false
-		}
-		rel := e.n.Start.Position.Sub(c.Center)
-		u, ok := rel.Normalize()
-		if !ok {
-			return nil, false
-		}
-		v := c.Axis.Cross(u)
-		relEnd := e.n.End.Position.Sub(c.Center)
-		sweep := math.Atan2(relEnd.Dot(v), relEnd.Dot(u))
-		if sweep <= 0 {
-			sweep += 2 * math.Pi
-		}
-		ce := &clearance.CEdge{Center: c.Center, Axis: c.Axis, RefU: u, RefV: v, Radius: r, Ang: clearance.NewAngWindow(0, sweep)}
-		ce.Box = clearance.CircleBox(c.Center, c.Axis, r)
-		return ce, true
-	default:
-		return nil, false
-	}
-}
-
-// shellWitness returns a point provenly on the shell: a vertex where one
-// exists, else the loop-less closed face's own synthesized point off stored
-// surface data (§2).
-func shellWitness(sh *FaceShell) (r3.Vec, bool) {
-	for _, f := range sh.n.Faces {
-		for _, l := range f.Loops {
-			for _, ce := range l.CoEdges {
-				if ce.Edge.Start != nil {
-					return ce.Edge.Start.Position, true
-				}
-			}
-		}
-	}
-	for _, f := range sh.n.Faces {
-		switch s := f.Surface.(type) {
-		case surfacegeom.Sphere:
-			r, err := s.Radius.In(units.Millimeter)
-			if err != nil {
-				return r3.Vec{}, false
-			}
-			return s.Center.Add(clearance.PerpTo(r3.NewVec(0, 0, 1)).Scale(r)), true
-		case surfacegeom.Torus:
-			major, err1 := s.Major.In(units.Millimeter)
-			minor, err2 := s.Minor.In(units.Millimeter)
-			if err1 != nil || err2 != nil {
-				return r3.Vec{}, false
-			}
-			return s.Center.Add(clearance.PerpTo(s.Axis).Scale(major + minor)), true
-		}
-	}
-	return r3.Vec{}, false
 }
 
 // addPrismFaces builds the prism's faces from its own payload, mirroring the
