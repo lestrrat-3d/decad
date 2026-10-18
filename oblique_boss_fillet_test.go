@@ -5,6 +5,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/obliqueboss"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -145,7 +146,7 @@ func testObliqueBossJunctionFilletPublicWorkflow(t *testing.T, tiltAxis r3.Vec) 
 
 func TestObliqueBossRejectsPartialJunctionSource(t *testing.T) {
 	plate, boss := buildObliqueBossSources(t, r3.Vec{X: 18, Y: 10, Z: 3.5}, r3.Vec{Y: 1})
-	if record := recognizeObliqueBoss(plate, boss); record != nil {
+	if record := obliqueboss.Recognize(bodyNode(plate), bodyNode(boss)); record != nil {
 		t.Fatal("a boss intersecting the plate side received a complete-junction record")
 	}
 }

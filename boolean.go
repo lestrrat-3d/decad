@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/obliqueboss"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/revolvetess"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
@@ -458,7 +459,7 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 		return nil, asBooleanError(op, err)
 	}
 	if op == meshbool.OpUnion {
-		eval.payload.ObliqueBoss = recognizeObliqueBoss(a, b)
+		eval.payload.ObliqueBoss = obliqueboss.Recognize(bodyNode(a), bodyNode(b))
 		eval.payload.PrismUnionFillet = recognizePrismUnionFillet(a, b)
 	}
 	if op == meshbool.OpCut {
