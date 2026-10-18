@@ -132,11 +132,7 @@ func loftMirrorCylinderChamferUpperCapBridge(ctx context.Context, old, upper fac
 		mesh.Verts = append(mesh.Verts, old.Verts[index])
 		ideal = append(ideal, proofarith.XptOf(old.Verts[index]))
 	}
-	source := loftCylinderChamferSource{
-		z1: blank.Z1, bridgeBound: shift,
-		topSourceLevel: new(big.Rat).Sub(proofarith.FloatRat(blank.Z1), proofarith.FloatRat(shift)),
-	}
-	source.outer[1] = outer
-	return loftCylinderChamferBridgeCap(ctx, old, source, mesh, ideal, half.band,
-		half.outer[0], setback)
+	topSourceLevel := new(big.Rat).Sub(proofarith.FloatRat(blank.Z1), proofarith.FloatRat(shift))
+	return loftcylinder.ChamferBridgeCap(ctx, old, mesh, ideal, half.band,
+		half.outer[0], setback, blank.Z1, shift, topSourceLevel, outer)
 }

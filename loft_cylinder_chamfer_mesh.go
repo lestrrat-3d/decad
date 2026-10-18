@@ -515,8 +515,9 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 	}
 	bridgeReach := 0.0
 	if active[1] {
-		bridgeReach, err = loftCylinderChamferBridgeCap(ctx, fp, source, mesh, ideal,
-			bands[1], inset[1], setback)
+		bridgeReach, err = loftcylinder.ChamferBridgeCap(ctx, fp, mesh, ideal,
+			bands[1], inset[1], setback, source.z1, source.bridgeBound,
+			source.topSourceLevel, source.outer[1])
 		if err != nil {
 			return nil, err
 		}

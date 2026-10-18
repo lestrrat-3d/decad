@@ -41,9 +41,14 @@ func tryLoftMirrorCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPay
 	if !ok {
 		return nil, true, fmt.Errorf("%w: mirrored cap chamfer lost its lower source", ErrUnsupported)
 	}
-	if err := loftCylinderChamferBridgeSources(&source); err != nil {
+	bridgeBound, topSourceLevel, err := loftcylinder.ChamferBridgeSources(&loftcylinder.ChamferBridgeSourcesInput{
+		ProofTeeth: bodyNodes(source.teeth), OriginalTeeth: bodyNodes(source.originalTeeth),
+		AxialBridge: source.axialBridge, Z0: source.z0, Z1: source.z1, BridgeBound: source.bridgeBound,
+	})
+	if err != nil {
 		return nil, true, err
 	}
+	source.bridgeBound, source.topSourceLevel = bridgeBound, topSourceLevel
 	start := new(big.Rat).Add(proofarith.FloatRat(source.z0), proofarith.FloatRat(setback))
 	end := new(big.Rat).Sub(proofarith.FloatRat(source.z1), proofarith.FloatRat(setback))
 	if start.Cmp(end) >= 0 || source.z0+setback == source.z0 || source.z1-setback == source.z1 {
