@@ -124,7 +124,7 @@ func TestLoftVolumeSourceRefusesNonbinaryJunction(t *testing.T) {
 	}
 }
 
-func TestLoftVolumeComposeRealFractionalSeam(t *testing.T) {
+func TestLoftOutputBoundaryRefusesTinyTranslatedSeam(t *testing.T) {
 	world := sketch.NewWorld()
 	frame, err := r3.NewFrame(r3.Vec{Y: math.Ldexp(1, -52)}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	require.NoError(t, err)
@@ -145,26 +145,34 @@ func TestLoftVolumeComposeRealFractionalSeam(t *testing.T) {
 	require.NoError(t, err)
 	wantWorldY := new(big.Rat).Add(big.NewRat(13, 2),
 		new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 52)))
-	for _, pair := range [][2]*Body{{prism, loft}, {loft, prism}} {
-		pp, lp, boundary, operation := loftVolumeRealCertificates(t, pair[0], pair[1])
-		proof, admitted, err := loftVolumeCompose(t.Context(), operation, pp, lp, boundary)
-		require.NoError(t, err)
-		require.True(t, admitted)
-		displaced := false
-		for _, vertex := range proof.boundary.shell.vertices {
-			if vertex.point.u.Cmp(big.NewRat(10, 1)) == 0 &&
-				vertex.point.v.Cmp(big.NewRat(13, 2)) == 0 {
-				require.Equal(t, wantWorldY.RatString(), vertex.world[1].RatString())
-				require.Equal(t, 6.5, vertex.held.Y)
-				require.Positive(t, vertex.bound)
-				displaced = true
+	heldY, exact := wantWorldY.Float64()
+	require.False(t, exact)
+	require.Equal(t, 6.5, heldY)
+	for _, tc := range []struct {
+		name          string
+		first, second *Body
+	}{{loftOperandPrismFirst, prism, loft}, {loftOperandLoftFirst, loft, prism}} {
+		t.Run(tc.name, func(t *testing.T) {
+			source, admitted, sourceErr := certifyLoftSourcePartition(t.Context(),
+				tc.first, tc.second, proofbound.NewWorkBudget(t.Context()))
+			require.NoError(t, sourceErr)
+			require.True(t, admitted)
+			require.Positive(t, source.sourceVisits)
+			for _, cap := range source.prepared {
+				require.NotNil(t, cap.scene)
+				require.Positive(t, len(cap.raw))
 			}
-		}
-		require.True(t, displaced)
-		require.Equal(t, 0, proof.sourceVolume.Cmp(big.NewRat(522, 1)))
-		require.True(t, proof.symDiffUpper > 0 &&
-			proof.sourceVolume.Cmp(proofarith.FloatRat(proof.symDiffUpper)) > 0,
-			"bound=%g", proof.symDiffUpper)
+
+			boundary, accepted, boundaryErr := certifyLoftOutputBoundary(t.Context(),
+				tc.first, tc.second, proofbound.NewWorkBudget(t.Context()))
+			require.ErrorIs(t, boundaryErr, ErrUnsupported)
+			require.ErrorContains(t, boundaryErr, "private loft crossing vertex exceeds the exact-bit gate")
+			require.False(t, accepted)
+			require.Zero(t, boundary.workVisits)
+			require.Zero(t, len(boundary.shell.vertices))
+			require.Zero(t, len(boundary.shell.triangles))
+			require.True(t, boundary.heldAudit == nil)
+		})
 	}
 }
 
