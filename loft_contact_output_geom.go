@@ -38,6 +38,30 @@ type loftOutputShell struct {
 
 func loftOutputRat(v int64) *big.Rat { return big.NewRat(v, 1) }
 
+func loftReplayArithmetic(optional []*loftVolumeArithmetic) *loftVolumeArithmetic {
+	if len(optional) != 0 {
+		return optional[0]
+	}
+	return &loftVolumeArithmetic{ok: true}
+}
+
+// float64 checks the alignment performed by big.Rat.Float64 before it can
+// allocate a temporary wider than the replay rational limit.
+func (c *loftVolumeArithmetic) float64(a *big.Rat) (float64, bool) {
+	if !c.valid(a) {
+		return 0, false
+	}
+	if numeratorBits := a.Num().BitLen(); numeratorBits != 0 {
+		denominatorBits := a.Denom().BitLen()
+		if shift := 54 - (numeratorBits - denominatorBits); shift > 0 &&
+			numeratorBits+shift > loftVolumeRationalBits {
+			c.ok = false
+			return 0, false
+		}
+	}
+	return a.Float64()
+}
+
 func loftOutputP2(p loftPartitionPoint, z *big.Rat) loftOutputPoint {
 	return loftOutputPoint{p.u, p.v, z}
 }
@@ -47,11 +71,18 @@ func loftOutputPointKey(p loftOutputPoint) string {
 }
 
 func loftOutputSamePoint(a, b loftOutputPoint) bool {
-	return a.u.Cmp(b.u) == 0 && a.v.Cmp(b.v) == 0 && a.z.Cmp(b.z) == 0
+	arithmetic := &loftVolumeArithmetic{ok: true}
+	same := arithmetic.cmp(a.u, b.u) == 0 && arithmetic.cmp(a.v, b.v) == 0 &&
+		arithmetic.cmp(a.z, b.z) == 0
+	return arithmetic.ok && same
 }
 
 func loftOutputWorld(frame r3.Frame, p loftOutputPoint) ([3]*big.Rat, r3.Vec, float64, bool) {
 	var exact [3]*big.Rat
+	c := &loftVolumeArithmetic{ok: true}
+	if !c.valid(p.u) || !c.valid(p.v) || !c.valid(p.z) {
+		return exact, r3.Vec{}, 0, false
+	}
 	o, u, v, n := frame.Origin(), frame.U(), frame.V(), frame.N()
 	if !proofbound.FiniteVec(o) || !proofbound.FiniteVec(u) ||
 		!proofbound.FiniteVec(v) || !proofbound.FiniteVec(n) {
@@ -65,15 +96,27 @@ func loftOutputWorld(frame r3.Frame, p loftOutputPoint) ([3]*big.Rat, r3.Vec, fl
 	for i := range exact {
 		exact[i] = proofarith.FloatRat(coords[0][i])
 		for j, param := range params {
-			term := new(big.Rat).Mul(proofarith.FloatRat(coords[j+1][i]), param)
-			exact[i].Add(exact[i], term)
+			term := c.mul(proofarith.FloatRat(coords[j+1][i]), param)
+			exact[i] = c.add(exact[i], term)
+			if !c.ok {
+				return exact, r3.Vec{}, 0, false
+			}
 		}
-		held[i], _ = exact[i].Float64()
-		if proofbound.IsNonFinite(held[i]) {
+		held[i], _ = c.float64(exact[i])
+		if !c.ok || proofbound.IsNonFinite(held[i]) {
 			return exact, r3.Vec{}, 0, false
 		}
-		delta := new(big.Rat).Sub(exact[i], proofarith.FloatRat(held[i]))
-		gap2.Add(gap2, new(big.Rat).Mul(delta, delta))
+		delta := c.sub(exact[i], proofarith.FloatRat(held[i]))
+		gap2 = c.add(gap2, c.mul(delta, delta))
+		if !c.ok {
+			return exact, r3.Vec{}, 0, false
+		}
+	}
+	// RatSqrtUp compares a finite float square with gap2 using up to 2,252
+	// shift bits on its numerator or 2,048 on its denominator.
+	if gap2.Num().BitLen() > loftVolumeRationalBits-2252 ||
+		gap2.Denom().BitLen() > loftVolumeRationalBits-2048 {
+		return exact, r3.Vec{}, 0, false
 	}
 	bound := proofbound.RatSqrtUp(gap2)
 	if proofbound.IsNonFinite(bound) {
@@ -94,6 +137,10 @@ func loftOutputHeldKey(v r3.Vec) [3]uint64 {
 }
 
 func (s *loftOutputShell) vertex(frame r3.Frame, p loftOutputPoint, face loftOutputFace) (int, bool) {
+	c := &loftVolumeArithmetic{ok: true}
+	if !c.valid(p.u) || !c.valid(p.v) || !c.valid(p.z) {
+		return 0, false
+	}
 	key := loftOutputPointKey(p)
 	if index, exists := s.index[key]; exists {
 		s.vertices[index].incidences[face] = struct{}{}
@@ -143,13 +190,20 @@ func (s *loftOutputShell) triangle(frame r3.Frame, points [3]loftOutputPoint,
 }
 
 func loftOutputCrossZero(p [3]loftOutputPoint) bool {
-	a := [3]*big.Rat{new(big.Rat).Sub(p[1].u, p[0].u),
-		new(big.Rat).Sub(p[1].v, p[0].v), new(big.Rat).Sub(p[1].z, p[0].z)}
-	b := [3]*big.Rat{new(big.Rat).Sub(p[2].u, p[0].u),
-		new(big.Rat).Sub(p[2].v, p[0].v), new(big.Rat).Sub(p[2].z, p[0].z)}
+	c := &loftVolumeArithmetic{ok: true}
+	a := [3]*big.Rat{c.sub(p[1].u, p[0].u),
+		c.sub(p[1].v, p[0].v), c.sub(p[1].z, p[0].z)}
+	b := [3]*big.Rat{c.sub(p[2].u, p[0].u),
+		c.sub(p[2].v, p[0].v), c.sub(p[2].z, p[0].z)}
+	if !c.ok {
+		return true
+	}
 	for i := range a {
 		j, k := (i+1)%3, (i+2)%3
-		cross := new(big.Rat).Sub(new(big.Rat).Mul(a[j], b[k]), new(big.Rat).Mul(a[k], b[j]))
+		cross := c.sub(c.mul(a[j], b[k]), c.mul(a[k], b[j]))
+		if !c.ok {
+			return true
+		}
 		if cross.Sign() != 0 {
 			return false
 		}

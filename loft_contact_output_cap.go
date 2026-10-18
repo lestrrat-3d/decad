@@ -13,7 +13,8 @@ import (
 
 func loftOutputCap(ctx context.Context, budget *proofbound.WorkBudget, pp prismPayload,
 	prismLines, bottom, top []sectionrecord.LineSeg, source loftSourcePartition,
-	shell *loftOutputShell, capIndex int) (bool, error) {
+	shell *loftOutputShell, capIndex int, checked ...*loftVolumeArithmetic) (bool, error) {
+	arithmetic := loftReplayArithmetic(checked)
 	if capIndex == 2 {
 		polygon := make([]loftPartitionPoint, 0, len(prismLines)+2)
 		for i, line := range prismLines {
@@ -31,8 +32,8 @@ func loftOutputCap(ctx context.Context, budget *proofbound.WorkBudget, pp prismP
 					if !ok {
 						return false, nil
 					}
-					p, ok = loftPartitionLinePoint(line, t)
-					if !ok {
+					p = arithmetic.partitionLinePoint(line, t)
+					if !arithmetic.ok {
 						return false, nil
 					}
 					polygon = append(polygon, p)
@@ -40,7 +41,7 @@ func loftOutputCap(ctx context.Context, budget *proofbound.WorkBudget, pp prismP
 			}
 		}
 		return loftOutputTileCap(ctx, budget, pp, shell, polygon, source.capLevels[2],
-			loftOutputFace{kind: 0, owner: 0, level: 2, cell: 0}, false)
+			loftOutputFace{kind: 0, owner: 0, level: 2, cell: 0}, false, arithmetic)
 	}
 	loftLines := bottom
 	if capIndex == 1 {
@@ -55,7 +56,7 @@ func loftOutputCap(ctx context.Context, budget *proofbound.WorkBudget, pp prismP
 		}
 		var ok bool
 		cuts[k], carrierCuts[k], ok = seam.At(loftOutputRat(int64(capIndex)))
-		if !ok {
+		if !ok || !arithmetic.valid(cuts[k]) || !arithmetic.valid(carrierCuts[k]) {
 			return false, nil
 		}
 	}
@@ -64,15 +65,15 @@ func loftOutputCap(ctx context.Context, budget *proofbound.WorkBudget, pp prismP
 		if err := budget.Step(); err != nil {
 			return false, err
 		}
-		side := loftPartitionSide(prismLines[source.carrier], line.Start)
-		if side == nil || side.Sign() == 0 {
+		side := arithmetic.partitionSide(prismLines[source.carrier], line.Start)
+		if !arithmetic.ok || side.Sign() == 0 {
 			return false, nil
 		}
 		sides = append(sides, int8(side.Sign()))
 	}
 	capProof, ok, err := loftPartitionCap(ctx, budget, pp, prismLines, loftLines,
-		source.carrier, source.crossing, source.seams, sides, source.walls, capIndex, level)
-	if err != nil || !ok || capProof.owners != source.capOwners[capIndex] ||
+		source.carrier, source.crossing, source.seams, sides, source.walls, capIndex, level, arithmetic)
+	if err != nil || !ok || !arithmetic.ok || capProof.owners != source.capOwners[capIndex] ||
 		capProof.junction != source.junction[capIndex] {
 		return false, err
 	}
@@ -100,7 +101,7 @@ func loftOutputCap(ctx context.Context, budget *proofbound.WorkBudget, pp prismP
 		return false, err
 	}
 	mapped, err = loftPartitionCertifyFragments(budget, scene, cells, origins,
-		prismLines, loftLines, source.carrier, source.crossing, cuts, carrierCuts, capIndex, level)
+		prismLines, loftLines, source.carrier, source.crossing, cuts, carrierCuts, capIndex, level, arithmetic)
 	if err != nil || !mapped {
 		return false, err
 	}
@@ -142,7 +143,7 @@ func loftOutputCap(ctx context.Context, budget *proofbound.WorkBudget, pp prismP
 			return false, err
 		}
 		valid, err = loftOutputTileCap(ctx, budget, pp, shell, polygon, level,
-			loftOutputFace{kind: 0, owner: owner, level: capIndex, cell: i}, capIndex == 0)
+			loftOutputFace{kind: 0, owner: owner, level: capIndex, cell: i}, capIndex == 0, arithmetic)
 		if err != nil || !valid {
 			return false, err
 		}
@@ -151,12 +152,14 @@ func loftOutputCap(ctx context.Context, budget *proofbound.WorkBudget, pp prismP
 		return false, nil
 	}
 	return loftOutputCapBoundary(budget, selectedCells, origins, prismLines, loftLines,
-		source, cuts, carrierCuts, capIndex)
+		source, cuts, carrierCuts, capIndex, arithmetic)
 }
 
 func loftOutputCapBoundary(budget *proofbound.WorkBudget, selected []*sketch.Profile,
 	origins map[sketch.Entity]loftPartitionCapOrigin, prismLines, loftLines []sectionrecord.LineSeg,
-	source loftSourcePartition, cut, carrierCut [2]*big.Rat, capIndex int) (bool, error) {
+	source loftSourcePartition, cut, carrierCut [2]*big.Rat, capIndex int,
+	arithmetic ...*loftVolumeArithmetic) (bool, error) {
+	c := loftReplayArithmetic(arithmetic)
 	_, _, chain, closed, err := prismcells.MergeWithChain(budget, selected, "Loft output cap")
 	if err != nil || !closed {
 		return false, err
@@ -171,7 +174,7 @@ func loftOutputCapBoundary(budget *proofbound.WorkBudget, selected []*sketch.Pro
 		}
 		origin, found := origins[edge.Entity]
 		if !found || len(edge.Polyline) != 2 || !edge.TExact ||
-			origin.cap != capIndex || origin.level.Cmp(source.capLevels[capIndex]) != 0 {
+			origin.cap != capIndex || c.cmp(origin.level, source.capLevels[capIndex]) != 0 || !c.ok {
 			return false, nil
 		}
 		a, okA := loftPartitionPointOf(sectionrecord.Point2{U: edge.Polyline[0][0], V: edge.Polyline[0][1]})
@@ -179,12 +182,12 @@ func loftOutputCapBoundary(budget *proofbound.WorkBudget, selected []*sketch.Pro
 		if !okA || !okB {
 			return false, nil
 		}
-		lo, okLo := loftPartitionParameter(origin.line, a)
-		hi, okHi := loftPartitionParameter(origin.line, b)
-		if !okLo || !okHi || lo.Cmp(hi) == 0 {
+		lo, okLo := c.partitionParameter(origin.line, a)
+		hi, okHi := c.partitionParameter(origin.line, b)
+		if !okLo || !okHi || c.cmp(lo, hi) == 0 || !c.ok {
 			return false, nil
 		}
-		if lo.Cmp(hi) > 0 {
+		if c.cmp(lo, hi) > 0 {
 			lo, hi = hi, lo
 		}
 		spans[origin.operand][origin.segment] = append(spans[origin.operand][origin.segment],
@@ -222,8 +225,8 @@ func loftOutputCapBoundary(budget *proofbound.WorkBudget, selected []*sketch.Pro
 			if source.crossing[1] == i {
 				k = 1
 			}
-			side := loftPartitionSide(prismLines[source.carrier], loftLines[i].Start)
-			if side == nil || side.Sign() == 0 {
+			side := c.partitionSide(prismLines[source.carrier], loftLines[i].Start)
+			if !c.ok || side.Sign() == 0 {
 				return false, nil
 			}
 			if side.Sign() < 0 {
@@ -237,12 +240,13 @@ func loftOutputCapBoundary(budget *proofbound.WorkBudget, selected []*sketch.Pro
 			return false, err
 		}
 	}
-	return true, nil
+	return c.ok, nil
 }
 
 func loftOutputCellPolygon(budget *proofbound.WorkBudget, cell *sketch.Profile,
 	origins map[sketch.Entity]loftPartitionCapOrigin) ([]loftPartitionPoint, bool, error) {
 	polygon := make([]loftPartitionPoint, 0, len(cell.Outer))
+	arithmetic := &loftVolumeArithmetic{ok: true}
 	for i, edge := range cell.Outer {
 		if err := budget.Step(); err != nil {
 			return nil, false, err
@@ -256,9 +260,16 @@ func loftOutputCellPolygon(budget *proofbound.WorkBudget, cell *sketch.Profile,
 		if !okA || !okB {
 			return nil, false, nil
 		}
-		_, srcA := loftPartitionParameter(origin.line, a)
-		_, srcB := loftPartitionParameter(origin.line, b)
-		if !srcA || !srcB || !loftPartitionSamePoint(b, polygonPointAt(cell.Outer, i+1)) {
+		_, srcA := arithmetic.partitionParameter(origin.line, a)
+		_, srcB := arithmetic.partitionParameter(origin.line, b)
+		next := cell.Outer[(i+1)%len(cell.Outer)]
+		if !srcA || !srcB || !arithmetic.ok || len(next.Polyline) != 2 {
+			return nil, false, nil
+		}
+		start, ok := loftPartitionPointOf(sectionrecord.Point2{
+			U: next.Polyline[0][0], V: next.Polyline[0][1],
+		})
+		if !ok || !loftPartitionSamePoint(b, start) {
 			return nil, false, nil
 		}
 		polygon = append(polygon, a)
@@ -266,19 +277,22 @@ func loftOutputCellPolygon(budget *proofbound.WorkBudget, cell *sketch.Profile,
 	return polygon, true, nil
 }
 
-func polygonPointAt(edges []sketch.BoundaryEdge, i int) loftPartitionPoint {
-	data := edges[i%len(edges)].Polyline[0]
-	p, _ := loftPartitionPointOf(sectionrecord.Point2{U: data[0], V: data[1]})
-	return p
-}
-
 func loftOutputTileCap(ctx context.Context, budget *proofbound.WorkBudget, pp prismPayload,
 	shell *loftOutputShell, polygon []loftPartitionPoint, level *big.Rat,
-	face loftOutputFace, downward bool) (bool, error) {
+	face loftOutputFace, downward bool, arithmetic ...*loftVolumeArithmetic) (bool, error) {
 	n := len(polygon)
 	if n < 3 || n > 16 || len(shell.triangles)+n-2 > 512 ||
 		len(shell.vertices)+n > 512 {
 		return false, nil
+	}
+	c := loftReplayArithmetic(arithmetic)
+	if !c.valid(level) {
+		return false, nil
+	}
+	for _, point := range polygon {
+		if !c.valid(point.u) || !c.valid(point.v) {
+			return false, nil
+		}
 	}
 	// Hole-free EarClip attempts at most k ears of at most k vertex scans
 	// at each polygon size k. Reserve its work in the shared output counter.
@@ -295,16 +309,19 @@ func loftOutputTileCap(ctx context.Context, budget *proofbound.WorkBudget, pp pr
 		if err := budget.Step(); err != nil {
 			return false, err
 		}
-		pts[i].U, _ = p.u.Float64()
-		pts[i].V, _ = p.v.Float64()
+		pts[i].U, _ = c.float64(p.u)
+		pts[i].V, _ = c.float64(p.v)
+		if !c.ok || proofbound.IsNonFinite(pts[i].U) || proofbound.IsNonFinite(pts[i].V) {
+			return false, nil
+		}
 		idx[i] = i
 	}
 	candidate, err := triangulation.Triangulate(ctx, pts, [][]int{idx})
 	if err != nil || len(candidate) != n-2 {
 		return false, err
 	}
-	valid, err := loftOutputCertifyCapTiling(budget, polygon, candidate)
-	if err != nil || !valid {
+	valid, err := loftOutputCertifyCapTiling(budget, polygon, candidate, c)
+	if err != nil || !valid || !c.ok {
 		return false, err
 	}
 	for _, t := range candidate {
@@ -327,9 +344,10 @@ func loftOutputTileCap(ctx context.Context, budget *proofbound.WorkBudget, pp pr
 }
 
 func loftOutputCertifyCapTiling(budget *proofbound.WorkBudget, polygon []loftPartitionPoint,
-	tris [][3]int) (bool, error) {
-	area := loftOutputPolygonArea(polygon)
-	if area.Sign() <= 0 {
+	tris [][3]int, arithmetic ...*loftVolumeArithmetic) (bool, error) {
+	c := loftReplayArithmetic(arithmetic)
+	area := loftOutputPolygonArea(polygon, c)
+	if !c.ok || area.Sign() <= 0 {
 		return false, nil
 	}
 	sum := new(big.Rat)
@@ -350,20 +368,29 @@ func loftOutputCertifyCapTiling(budget *proofbound.WorkBudget, polygon []loftPar
 			return false, nil
 		}
 		p := [3]loftPartitionPoint{polygon[tri[0]], polygon[tri[1]], polygon[tri[2]]}
-		double := loftPartitionCross(p[0], p[1], p[2])
-		if double.Sign() <= 0 {
+		double := c.partitionCross(p[0], p[1], p[2])
+		if !c.ok || double.Sign() <= 0 {
 			return false, nil
 		}
-		sum.Add(sum, double)
-		inside, err := loftOutputTriangleInside(budget, polygon, p)
-		if err != nil || !inside {
+		sum = c.add(sum, double)
+		if !c.ok {
+			return false, nil
+		}
+		inside, err := loftOutputTriangleInside(budget, polygon, p, c)
+		if err != nil || !inside || !c.ok {
 			return false, err
 		}
 		for j := range 3 {
-			key := loftPartitionFragmentGeometryKey(p[j], p[(j+1)%3])
+			key := loftPartitionFragmentGeometryKey(p[j], p[(j+1)%3], c)
+			if !c.ok {
+				return false, nil
+			}
 			dir := 1
-			if loftOutputP2After(p[j], p[(j+1)%3]) {
+			if loftOutputP2After(p[j], p[(j+1)%3], c) {
 				dir = -1
+			}
+			if !c.ok {
+				return false, nil
 			}
 			edges[key] += dir
 		}
@@ -372,8 +399,8 @@ func loftOutputCertifyCapTiling(budget *proofbound.WorkBudget, polygon []loftPar
 				return false, err
 			}
 			q := [3]loftPartitionPoint{polygon[tris[j][0]], polygon[tris[j][1]], polygon[tris[j][2]]}
-			overlap, err := loftOutputTrianglesOverlap(budget, p, q)
-			if err != nil {
+			overlap, err := loftOutputTrianglesOverlap(budget, p, q, c)
+			if err != nil || !c.ok {
 				return false, err
 			}
 			if overlap {
@@ -381,7 +408,7 @@ func loftOutputCertifyCapTiling(budget *proofbound.WorkBudget, polygon []loftPar
 			}
 		}
 	}
-	if sum.Cmp(new(big.Rat).Mul(area, loftOutputRat(2))) != 0 {
+	if c.cmp(sum, c.mul(area, loftOutputRat(2))) != 0 || !c.ok {
 		return false, nil
 	}
 	for i, a := range polygon {
@@ -389,10 +416,16 @@ func loftOutputCertifyCapTiling(budget *proofbound.WorkBudget, polygon []loftPar
 			return false, err
 		}
 		b := polygon[(i+1)%len(polygon)]
-		key := loftPartitionFragmentGeometryKey(a, b)
+		key := loftPartitionFragmentGeometryKey(a, b, c)
+		if !c.ok {
+			return false, nil
+		}
 		dir := 1
-		if loftOutputP2After(a, b) {
+		if loftOutputP2After(a, b, c) {
 			dir = -1
+		}
+		if !c.ok {
+			return false, nil
 		}
 		edges[key] -= dir
 	}
@@ -407,39 +440,48 @@ func loftOutputCertifyCapTiling(budget *proofbound.WorkBudget, polygon []loftPar
 	return true, nil
 }
 
-func loftOutputP2After(a, b loftPartitionPoint) bool {
-	if cmp := a.u.Cmp(b.u); cmp != 0 {
+func loftOutputP2After(a, b loftPartitionPoint, arithmetic ...*loftVolumeArithmetic) bool {
+	c := loftReplayArithmetic(arithmetic)
+	if cmp := c.cmp(a.u, b.u); cmp != 0 {
 		return cmp > 0
 	}
-	return a.v.Cmp(b.v) > 0
+	return c.cmp(a.v, b.v) > 0 && c.ok
 }
 
-func loftOutputPolygonArea(p []loftPartitionPoint) *big.Rat {
+func loftOutputPolygonArea(p []loftPartitionPoint, arithmetic ...*loftVolumeArithmetic) *big.Rat {
+	c := loftReplayArithmetic(arithmetic)
 	area := new(big.Rat)
 	for i, a := range p {
 		b := p[(i+1)%len(p)]
-		area.Add(area, new(big.Rat).Sub(new(big.Rat).Mul(a.u, b.v), new(big.Rat).Mul(a.v, b.u)))
+		area = c.add(area, c.sub(c.mul(a.u, b.v), c.mul(a.v, b.u)))
+		if !c.ok {
+			return area
+		}
 	}
-	return new(big.Rat).Quo(area, loftOutputRat(2))
+	return c.quo(area, loftOutputRat(2))
 }
 
-func loftOutputOnSegment(p, a, b loftPartitionPoint) bool {
-	if loftPartitionCross(a, b, p).Sign() != 0 {
+func loftOutputOnSegment(p, a, b loftPartitionPoint, arithmetic ...*loftVolumeArithmetic) bool {
+	c := loftReplayArithmetic(arithmetic)
+	if c.partitionCross(a, b, p).Sign() != 0 || !c.ok {
 		return false
 	}
-	return p.u.Cmp(loftOutputMinRat(a.u, b.u)) >= 0 && p.u.Cmp(loftOutputMaxRat(a.u, b.u)) <= 0 &&
-		p.v.Cmp(loftOutputMinRat(a.v, b.v)) >= 0 && p.v.Cmp(loftOutputMaxRat(a.v, b.v)) <= 0
+	inside := c.cmp(p.u, loftOutputMinRat(a.u, b.u, c)) >= 0 &&
+		c.cmp(p.u, loftOutputMaxRat(a.u, b.u, c)) <= 0 &&
+		c.cmp(p.v, loftOutputMinRat(a.v, b.v, c)) >= 0 &&
+		c.cmp(p.v, loftOutputMaxRat(a.v, b.v, c)) <= 0
+	return c.ok && inside
 }
 
-func loftOutputMinRat(a, b *big.Rat) *big.Rat {
-	if a.Cmp(b) < 0 {
+func loftOutputMinRat(a, b *big.Rat, arithmetic ...*loftVolumeArithmetic) *big.Rat {
+	if loftReplayArithmetic(arithmetic).cmp(a, b) < 0 {
 		return a
 	}
 	return b
 }
 
-func loftOutputMaxRat(a, b *big.Rat) *big.Rat {
-	if a.Cmp(b) > 0 {
+func loftOutputMaxRat(a, b *big.Rat, arithmetic ...*loftVolumeArithmetic) *big.Rat {
+	if loftReplayArithmetic(arithmetic).cmp(a, b) > 0 {
 		return a
 	}
 	return b
@@ -447,24 +489,32 @@ func loftOutputMaxRat(a, b *big.Rat) *big.Rat {
 
 // 1 is strict interior, 0 boundary, -1 exterior.
 func loftOutputPointInPolygon(budget *proofbound.WorkBudget, p loftPartitionPoint,
-	polygon []loftPartitionPoint) (int, error) {
+	polygon []loftPartitionPoint, arithmetic ...*loftVolumeArithmetic) (int, error) {
+	c := loftReplayArithmetic(arithmetic)
 	inside := false
 	for i, a := range polygon {
 		if err := budget.Step(); err != nil {
 			return -1, err
 		}
 		b := polygon[(i+1)%len(polygon)]
-		if loftOutputOnSegment(p, a, b) {
+		if loftOutputOnSegment(p, a, b, c) {
 			return 0, nil
 		}
-		if (a.v.Cmp(p.v) > 0) == (b.v.Cmp(p.v) > 0) {
+		if !c.ok {
+			return -1, nil
+		}
+		if (c.cmp(a.v, p.v) > 0) == (c.cmp(b.v, p.v) > 0) {
+			if !c.ok {
+				return -1, nil
+			}
 			continue
 		}
-		x := new(big.Rat).Sub(b.u, a.u)
-		x.Mul(x, new(big.Rat).Quo(new(big.Rat).Sub(p.v, a.v), new(big.Rat).Sub(b.v, a.v)))
-		x.Add(x, a.u)
-		if x.Cmp(p.u) > 0 {
+		x := c.add(c.mul(c.sub(b.u, a.u), c.quo(c.sub(p.v, a.v), c.sub(b.v, a.v))), a.u)
+		if c.cmp(x, p.u) > 0 {
 			inside = !inside
+		}
+		if !c.ok {
+			return -1, nil
 		}
 	}
 	if inside {
@@ -473,74 +523,91 @@ func loftOutputPointInPolygon(budget *proofbound.WorkBudget, p loftPartitionPoin
 	return -1, nil
 }
 
-func loftOutputInterpolate(a, b loftPartitionPoint, t *big.Rat) loftPartitionPoint {
-	return loftPartitionPoint{
-		u: new(big.Rat).Add(a.u, new(big.Rat).Mul(t, new(big.Rat).Sub(b.u, a.u))),
-		v: new(big.Rat).Add(a.v, new(big.Rat).Mul(t, new(big.Rat).Sub(b.v, a.v))),
-	}
-}
-
-func loftOutputSegmentParam(a, b, p loftPartitionPoint) (*big.Rat, bool) {
-	if !loftOutputOnSegment(p, a, b) {
+func loftOutputSegmentParam(a, b, p loftPartitionPoint,
+	arithmetic ...*loftVolumeArithmetic) (*big.Rat, bool) {
+	c := loftReplayArithmetic(arithmetic)
+	if !loftOutputOnSegment(p, a, b, c) || !c.ok {
 		return nil, false
 	}
-	if a.u.Cmp(b.u) != 0 {
-		return new(big.Rat).Quo(new(big.Rat).Sub(p.u, a.u), new(big.Rat).Sub(b.u, a.u)), true
+	if c.cmp(a.u, b.u) != 0 {
+		t := c.quo(c.sub(p.u, a.u), c.sub(b.u, a.u))
+		return t, c.ok
 	}
-	if a.v.Cmp(b.v) != 0 {
-		return new(big.Rat).Quo(new(big.Rat).Sub(p.v, a.v), new(big.Rat).Sub(b.v, a.v)), true
+	if c.cmp(a.v, b.v) != 0 {
+		t := c.quo(c.sub(p.v, a.v), c.sub(b.v, a.v))
+		return t, c.ok
 	}
 	return nil, false
 }
 
 func loftOutputEdgeInside(budget *proofbound.WorkBudget, a, b loftPartitionPoint,
-	polygon []loftPartitionPoint) (bool, error) {
+	polygon []loftPartitionPoint, arithmetic ...*loftVolumeArithmetic) (bool, error) {
+	c := loftReplayArithmetic(arithmetic)
 	values := []*big.Rat{loftOutputRat(0), loftOutputRat(1)}
-	for i, c := range polygon {
+	for i := range polygon {
 		if err := budget.Step(); err != nil {
 			return false, err
 		}
 		d := polygon[(i+1)%len(polygon)]
-		r := loftPartitionPoint{new(big.Rat).Sub(b.u, a.u), new(big.Rat).Sub(b.v, a.v)}
-		s := loftPartitionPoint{new(big.Rat).Sub(d.u, c.u), new(big.Rat).Sub(d.v, c.v)}
-		den := new(big.Rat).Sub(new(big.Rat).Mul(r.u, s.v), new(big.Rat).Mul(r.v, s.u))
+		r := loftPartitionPoint{c.sub(b.u, a.u), c.sub(b.v, a.v)}
+		s := loftPartitionPoint{c.sub(d.u, polygon[i].u), c.sub(d.v, polygon[i].v)}
+		den := c.sub(c.mul(r.u, s.v), c.mul(r.v, s.u))
+		if !c.ok {
+			return false, nil
+		}
 		if den.Sign() == 0 {
-			for _, p := range []loftPartitionPoint{c, d} {
-				if t, ok := loftOutputSegmentParam(a, b, p); ok {
+			for _, p := range []loftPartitionPoint{polygon[i], d} {
+				if t, ok := loftOutputSegmentParam(a, b, p, c); ok {
 					values = append(values, t)
+				}
+				if !c.ok {
+					return false, nil
 				}
 			}
 			continue
 		}
-		ca := loftPartitionPoint{new(big.Rat).Sub(c.u, a.u), new(big.Rat).Sub(c.v, a.v)}
-		t := new(big.Rat).Quo(new(big.Rat).Sub(new(big.Rat).Mul(ca.u, s.v),
-			new(big.Rat).Mul(ca.v, s.u)), den)
-		u := new(big.Rat).Quo(new(big.Rat).Sub(new(big.Rat).Mul(ca.u, r.v),
-			new(big.Rat).Mul(ca.v, r.u)), den)
-		if t.Sign() >= 0 && t.Cmp(loftOutputRat(1)) <= 0 &&
-			u.Sign() >= 0 && u.Cmp(loftOutputRat(1)) <= 0 {
+		ca := loftPartitionPoint{c.sub(polygon[i].u, a.u), c.sub(polygon[i].v, a.v)}
+		t := c.quo(c.sub(c.mul(ca.u, s.v), c.mul(ca.v, s.u)), den)
+		u := c.quo(c.sub(c.mul(ca.u, r.v), c.mul(ca.v, r.u)), den)
+		if !c.ok {
+			return false, nil
+		}
+		if t.Sign() >= 0 && c.cmp(t, loftOutputRat(1)) <= 0 &&
+			u.Sign() >= 0 && c.cmp(u, loftOutputRat(1)) <= 0 {
 			values = append(values, t)
+		}
+		if !c.ok {
+			return false, nil
 		}
 	}
 	for i := 1; i < len(values); i++ {
-		for j := i; j > 0 && values[j].Cmp(values[j-1]) < 0; j-- {
+		for j := i; j > 0 && c.cmp(values[j], values[j-1]) < 0; j-- {
 			if err := budget.Step(); err != nil {
 				return false, err
 			}
 			values[j], values[j-1] = values[j-1], values[j]
 		}
+		if !c.ok {
+			return false, nil
+		}
 	}
 	for i := 1; i < len(values); i++ {
 		if err := budget.Step(); err != nil {
 			return false, err
 		}
-		if values[i].Cmp(values[i-1]) == 0 {
+		if c.cmp(values[i], values[i-1]) == 0 {
+			if !c.ok {
+				return false, nil
+			}
 			continue
 		}
-		mid := new(big.Rat).Add(values[i-1], values[i])
-		mid.Quo(mid, loftOutputRat(2))
-		status, err := loftOutputPointInPolygon(budget, loftOutputInterpolate(a, b, mid), polygon)
-		if err != nil || status < 0 {
+		mid := c.quo(c.add(values[i-1], values[i]), loftOutputRat(2))
+		point := c.partitionInterpolate(a, b, mid)
+		if !c.ok {
+			return false, nil
+		}
+		status, err := loftOutputPointInPolygon(budget, point, polygon, c)
+		if err != nil || status < 0 || !c.ok {
 			return false, err
 		}
 	}
@@ -548,34 +615,39 @@ func loftOutputEdgeInside(budget *proofbound.WorkBudget, a, b loftPartitionPoint
 }
 
 func loftOutputTriangleInside(budget *proofbound.WorkBudget, polygon []loftPartitionPoint,
-	tri [3]loftPartitionPoint) (bool, error) {
+	tri [3]loftPartitionPoint, arithmetic ...*loftVolumeArithmetic) (bool, error) {
+	c := loftReplayArithmetic(arithmetic)
 	for _, p := range tri {
-		status, err := loftOutputPointInPolygon(budget, p, polygon)
-		if err != nil || status < 0 {
+		status, err := loftOutputPointInPolygon(budget, p, polygon, c)
+		if err != nil || status < 0 || !c.ok {
 			return false, err
 		}
 	}
 	for i := range 3 {
-		inside, err := loftOutputEdgeInside(budget, tri[i], tri[(i+1)%3], polygon)
-		if err != nil || !inside {
+		inside, err := loftOutputEdgeInside(budget, tri[i], tri[(i+1)%3], polygon, c)
+		if err != nil || !inside || !c.ok {
 			return false, err
 		}
 	}
 	centroid := loftPartitionPoint{new(big.Rat), new(big.Rat)}
 	for _, p := range tri {
-		centroid.u.Add(centroid.u, p.u)
-		centroid.v.Add(centroid.v, p.v)
+		centroid.u = c.add(centroid.u, p.u)
+		centroid.v = c.add(centroid.v, p.v)
 	}
-	centroid.u.Quo(centroid.u, loftOutputRat(3))
-	centroid.v.Quo(centroid.v, loftOutputRat(3))
-	status, err := loftOutputPointInPolygon(budget, centroid, polygon)
-	return status == 1, err
+	centroid.u = c.quo(centroid.u, loftOutputRat(3))
+	centroid.v = c.quo(centroid.v, loftOutputRat(3))
+	if !c.ok {
+		return false, nil
+	}
+	status, err := loftOutputPointInPolygon(budget, centroid, polygon, c)
+	return c.ok && status == 1, err
 }
 
 func loftOutputTrianglesOverlap(budget *proofbound.WorkBudget,
-	a, b [3]loftPartitionPoint) (bool, error) {
+	a, b [3]loftPartitionPoint, arithmetic ...*loftVolumeArithmetic) (bool, error) {
+	c := loftReplayArithmetic(arithmetic)
 	poly := []loftPartitionPoint{a[0], a[1], a[2]}
-	for i, c := range b {
+	for i := range b {
 		d := b[(i+1)%3]
 		input := poly
 		poly = nil
@@ -584,19 +656,26 @@ func loftOutputTrianglesOverlap(budget *proofbound.WorkBudget,
 				return false, err
 			}
 			q := input[(j+1)%len(input)]
-			sp, sq := loftPartitionCross(c, d, p), loftPartitionCross(c, d, q)
+			sp, sq := c.partitionCross(b[i], d, p), c.partitionCross(b[i], d, q)
+			if !c.ok {
+				return false, nil
+			}
 			if sp.Sign() >= 0 {
 				poly = append(poly, p)
 			}
 			if sp.Sign() == 0 || sq.Sign() == 0 || sp.Sign() == sq.Sign() {
 				continue
 			}
-			t := new(big.Rat).Quo(sp, new(big.Rat).Sub(sp, sq))
-			poly = append(poly, loftOutputInterpolate(p, q, t))
+			t := c.quo(sp, c.sub(sp, sq))
+			poly = append(poly, c.partitionInterpolate(p, q, t))
+			if !c.ok {
+				return false, nil
+			}
 		}
 		if len(poly) < 3 {
 			return false, nil
 		}
 	}
-	return loftOutputPolygonArea(poly).Sign() > 0, nil
+	area := loftOutputPolygonArea(poly, c)
+	return c.ok && area.Sign() > 0, nil
 }

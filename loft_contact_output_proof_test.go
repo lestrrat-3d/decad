@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"errors"
+	"math"
 	"math/big"
 	"testing"
 
@@ -269,4 +270,147 @@ func TestLoftContactOutputBoundaryPlanarityAndVertexRefusals(t *testing.T) {
 		u: big.NewRat(1, 3), v: big.NewRat(0, 1), z: big.NewRat(0, 1)})
 	require.True(t, admitted)
 	require.Positive(t, bound)
+}
+
+func TestLoftOutputWorldRefusesOversizedReplayArithmetic(t *testing.T) {
+	prism, _ := loftPartitionRealBodies(t,
+		[4]float64{8, 4, 12, 6}, [4]float64{8, 4, 13, 6}, 0, 4)
+	frame := prism.n.Payload.(prismPayload).Frame
+	largeDenominator := new(big.Int).Lsh(big.NewInt(1), 8000)
+	world, _, _, admitted := loftOutputWorld(frame, loftOutputPoint{
+		u: new(big.Rat).SetFrac(big.NewInt(1), largeDenominator),
+		v: big.NewRat(0, 1), z: big.NewRat(0, 1),
+	})
+	_ = world
+	require.False(t, admitted)
+	// Float64 aligns the numerator before dividing. This input fits the
+	// rational operands but would allocate 8,195 bits during alignment.
+	alignmentDenominator := new(big.Int).Lsh(big.NewInt(1), 8140)
+	world, _, _, admitted = loftOutputWorld(frame, loftOutputPoint{
+		u: new(big.Rat).SetFrac(big.NewInt(1), alignmentDenominator),
+		v: big.NewRat(0, 1), z: big.NewRat(0, 1),
+	})
+	_ = world
+	require.False(t, admitted)
+
+	largeNumerator := new(big.Int).Lsh(big.NewInt(1), 8192)
+	shell := loftOutputNewShell()
+	_, admitted = shell.vertex(frame, loftOutputPoint{
+		u: new(big.Rat).SetInt(largeNumerator),
+		v: big.NewRat(0, 1), z: big.NewRat(0, 1),
+	}, loftOutputFace{kind: 0})
+	require.False(t, admitted)
+}
+
+func TestLoftReplayFloat64RefusesOversizedAlignment(t *testing.T) {
+	denominator := new(big.Int).Lsh(big.NewInt(1), 8140)
+	arithmetic := &loftVolumeArithmetic{ok: true}
+	_, exact := arithmetic.float64(new(big.Rat).SetFrac(big.NewInt(1), denominator))
+	require.False(t, exact)
+	require.False(t, arithmetic.ok)
+
+	// The last permitted numerator alignment is exactly 8,192 bits.
+	denominator = new(big.Int).Lsh(big.NewInt(1), 8137)
+	arithmetic = &loftVolumeArithmetic{ok: true}
+	_, _ = arithmetic.float64(new(big.Rat).SetFrac(big.NewInt(1), denominator))
+	require.True(t, arithmetic.ok)
+}
+
+func TestLoftOutputCrossZeroRefusesOversizedReplayArithmetic(t *testing.T) {
+	denominator := new(big.Int).Lsh(big.NewInt(1), 8000)
+	tiny := new(big.Rat).SetFrac(big.NewInt(1), denominator)
+	zero := big.NewRat(0, 1)
+	points := [3]loftOutputPoint{
+		{u: zero, v: zero, z: zero},
+		{u: tiny, v: zero, z: zero},
+		{u: zero, v: tiny, z: zero},
+	}
+	// The exact triangle has nonzero area; the unsafe cross product refuses.
+	require.True(t, loftOutputCrossZero(points))
+}
+
+func TestLoftOutputOrientationRefusesOversizedReplayArithmetic(t *testing.T) {
+	zero, one := big.NewRat(0, 1), big.NewRat(1, 1)
+	large := new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), 8192))
+	low := sectionrecord.LineSeg{Start: sectionrecord.Point2{U: 0, V: 0},
+		End: sectionrecord.Point2{U: 1, V: 0}}
+	high := low
+	require.False(t, loftOutputPlanarWall(low, high, large))
+	require.False(t, loftOutputNormalsAgree(
+		loftOutputVertex{world: [3]*big.Rat{large, zero, zero}},
+		loftOutputVertex{world: [3]*big.Rat{one, zero, zero}},
+		loftOutputVertex{world: [3]*big.Rat{zero, one, zero}},
+	))
+}
+
+func TestLoftOutputTileCapRefusesOversizedReturnedPoint(t *testing.T) {
+	prism, _ := loftPartitionRealBodies(t,
+		[4]float64{8, 4, 12, 6}, [4]float64{8, 4, 13, 6}, 0, 4)
+	pp := prism.n.Payload.(prismPayload)
+	zero, one := big.NewRat(0, 1), big.NewRat(1, 1)
+	large := new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), 8192))
+	polygon := []loftPartitionPoint{
+		{u: zero, v: zero}, {u: large, v: zero}, {u: zero, v: one},
+	}
+	shell := loftOutputNewShell()
+	admitted, err := loftOutputTileCap(t.Context(), proofbound.NewWorkBudget(t.Context()),
+		pp, &shell, polygon, zero, loftOutputFace{kind: 0}, false)
+	require.NoError(t, err)
+	require.False(t, admitted)
+	require.Empty(t, shell.triangles)
+	tiny := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 8140))
+	polygon = []loftPartitionPoint{
+		{u: zero, v: zero}, {u: tiny, v: zero}, {u: zero, v: one},
+	}
+	admitted, err = loftOutputTileCap(t.Context(), proofbound.NewWorkBudget(t.Context()),
+		pp, &shell, polygon, zero, loftOutputFace{kind: 0}, false)
+	require.NoError(t, err)
+	require.False(t, admitted)
+	require.Empty(t, shell.triangles)
+}
+
+func TestLoftOutputSideRefusesOversizedLineInterpolation(t *testing.T) {
+	prism, _ := loftPartitionRealBodies(t,
+		[4]float64{8, 4, 12, 6}, [4]float64{8, 4, 13, 6}, 0, 4)
+	frame := prism.n.Payload.(prismPayload).Frame
+	line := sectionrecord.LineSeg{
+		Start: sectionrecord.Point2{U: 1, V: 0},
+		End:   sectionrecord.Point2{U: math.Nextafter(1, 2), V: 0},
+	}
+	tiny := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 8150))
+	shell := loftOutputNewShell()
+	admitted, err := loftOutputLineQuad(proofbound.NewWorkBudget(t.Context()), frame,
+		&shell, line, line, loftOutputRat(0), tiny, loftOutputRat(0), tiny,
+		loftOutputRat(0), loftOutputRat(1), loftOutputFace{kind: 1})
+	require.NoError(t, err)
+	require.False(t, admitted)
+	require.Empty(t, shell.triangles)
+}
+
+func TestLoftOutputMiddleTraceRefusesOversizedHeightDifference(t *testing.T) {
+	first := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 5000))
+	second := new(big.Rat).SetFrac(big.NewInt(-1), new(big.Int).Lsh(big.NewInt(1), 5001))
+	shell := loftOutputShell{vertices: []loftOutputVertex{
+		{point: loftOutputPoint{u: loftOutputRat(0), v: loftOutputRat(0), z: first}},
+		{point: loftOutputPoint{u: loftOutputRat(1), v: loftOutputRat(0), z: second}},
+		{point: loftOutputPoint{u: loftOutputRat(0), v: loftOutputRat(1), z: first}},
+	}}
+	arithmetic := &loftVolumeArithmetic{ok: true}
+	trace, _, err := loftOutputPlaneTrace(proofbound.NewWorkBudget(t.Context()), shell,
+		[3]int{0, 1, 2}, loftOutputRat(0), arithmetic)
+	require.NoError(t, err)
+	require.False(t, arithmetic.ok)
+	require.Empty(t, trace)
+}
+
+func TestLoftOutputCapRefusesOversizedAreaProduct(t *testing.T) {
+	tiny := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 5000))
+	zero := loftOutputRat(0)
+	polygon := []loftPartitionPoint{
+		{u: zero, v: zero}, {u: tiny, v: zero}, {u: zero, v: tiny},
+	}
+	admitted, err := loftOutputCertifyCapTiling(proofbound.NewWorkBudget(t.Context()),
+		polygon, [][3]int{{0, 1, 2}})
+	require.NoError(t, err)
+	require.False(t, admitted)
 }
