@@ -47,7 +47,7 @@ type brepBandChord struct {
 	// sideV and capV are the mesh vertices of the side ring at the side level
 	// and of the cap contour ring at F's level.
 	sideV, capV []int
-	// fillet holds a fillet band's interior rings (tessellate_brep_fillet.go),
+	// fillet holds a fillet band's interior rings (internal/brepfilletmesh/),
 	// nil for a chamfer band.
 	fillet  *brepfilletmesh.Rings
 	partial *partialband.PartialBandLayout
