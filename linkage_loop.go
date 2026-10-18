@@ -143,7 +143,7 @@ func (l *Linkage) Close(a, b *Link, center, axis r3.Vec) (*LinkageLoop, error) {
 		return nil, fmt.Errorf(`%w: a zero closure axis names no direction`, ErrDegenerate)
 	}
 	lp := &LinkageLoop{linkage: l, a: a, b: b, closure: RevoluteJoint{Center: center, Axis: axis}, normal: ratVecExact(axis), coord: -1}
-	if idx, _, ok := coordinateAxis(axis); ok {
+	if idx, _, ok := linkagebound.CoordinateAxis(axis); ok {
 		lp.coord = idx
 	}
 	lp.common = commonAncestor(a, b)
@@ -197,9 +197,6 @@ func (l *Linkage) Close(a, b *Link, center, axis r3.Vec) (*LinkageLoop, error) {
 	l.loops = append(l.loops, lp)
 	return lp, nil
 }
-
-// coordinateAxis reads an exactly coordinate-aligned axis and its sense.
-func coordinateAxis(v r3.Vec) (int, int, bool) { return linkagebound.CoordinateAxis(v) }
 
 // ratVecExact reads a finite held vector exactly.
 func ratVecExact(v r3.Vec) motionbound.RatVec { return linkagebound.ExactVec(v) }
