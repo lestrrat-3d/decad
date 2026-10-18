@@ -387,11 +387,6 @@ func admitTrimPair(budget *proofbound.WorkBudget, receiver, tool *Body) (rcv, tl
 	return rcv, tl, nil
 }
 
-// The trim record's cut charges are shared with revolve callers.
-func trimProfileFullyWhole(budget *proofbound.WorkBudget, p profileRecord) (bool, error) {
-	return prismcells.TrimProfileFullyWhole(budget, p.Outer, p.Holes)
-}
-
 // Split cuts target with tool and returns one solid per arranged target cell
 // in sketch's cell order. The target is a solid and the tool a sheet sharing
 // its generator: both straight sweeps, or both revolves about one axis
@@ -635,11 +630,11 @@ func admitTrimRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, re
 	if !reexpress.Identity {
 		return fail(`%w: the receiver and tool do not share one frame and placement, so their re-expression is not the identity`, ErrUnsupported)
 	}
-	rcvWhole, err := trimProfileFullyWhole(budget, rcv.Profile)
+	rcvWhole, err := prismcells.TrimProfileFullyWhole(budget, rcv.Profile.Outer, rcv.Profile.Holes)
 	if err != nil {
 		return revolvePayload{}, prismPayload{}, prismPayload{}, err
 	}
-	tlWhole, err := trimProfileFullyWhole(budget, tl.Profile)
+	tlWhole, err := prismcells.TrimProfileFullyWhole(budget, tl.Profile.Outer, tl.Profile.Holes)
 	if err != nil {
 		return revolvePayload{}, prismPayload{}, prismPayload{}, err
 	}
@@ -800,7 +795,7 @@ func admitExtendRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, 
 	if !reexpress.Identity {
 		return fail(`%w: the receiver and tool do not share one frame and placement, so their re-expression is not the identity`, ErrUnsupported)
 	}
-	tlWhole, err := trimProfileFullyWhole(budget, tl.Profile)
+	tlWhole, err := prismcells.TrimProfileFullyWhole(budget, tl.Profile.Outer, tl.Profile.Holes)
 	if err != nil {
 		return pass(err)
 	}
