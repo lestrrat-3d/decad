@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import re
 import selectors
+import signal
 import subprocess
 import sys
 import time
@@ -31,10 +32,37 @@ APPROVED_TARGET_TREE = ""
 
 HEX40 = re.compile(r"[0-9a-f]{40}\Z")
 HEX64 = re.compile(r"[0-9a-f]{64}\Z")
+INTERRUPTED = None
 
 
 class GateError(RuntimeError):
     pass
+
+
+def note_signal(number, _frame):
+    global INTERRUPTED
+    INTERRUPTED = signal.Signals(number).name
+
+
+def check_signal():
+    if INTERRUPTED:
+        raise GateError("received " + INTERRUPTED)
+
+
+def monitored_failure(now, deadline, current=None):
+    if INTERRUPTED:
+        return "received " + INTERRUPTED
+    if now >= deadline:
+        return "workload timeout with 30-second stop reserve"
+    if current is not None and current >= STOP:
+        return "3 GiB monitored stop"
+    return None
+
+
+def append_bounded(raw, chunk):
+    allowed = max(0, RAW_MAX - len(raw))
+    raw.extend(chunk[:allowed])
+    return len(chunk) <= allowed
 
 
 def command(argv, *, timeout=15, check=True):
@@ -138,6 +166,7 @@ def bounded_process(argv, seconds, limit):
     deadline = time.monotonic() + seconds
     try:
         while proc.poll() is None or selector.get_map():
+            check_signal()
             if time.monotonic() >= deadline:
                 raise GateError(f"provisioning timeout: {argv[:2]}")
             for key, _ in selector.select(timeout=0.25):
@@ -181,6 +210,52 @@ def counters(path):
     return {"current": read_number(path / "memory.current"),
             "peak": read_number(path / "memory.peak"),
             "swap": read_number(path / "memory.swap.current"), "events": events}
+
+
+def init_is_only_process(container_id, init_pid, path, inode):
+    if path.stat().st_ino != inode:
+        return False
+    info = json.loads(docker("inspect", container_id, timeout=2).stdout)[0]
+    if not info["State"]["Running"] or info["State"]["Pid"] != init_pid:
+        return False
+    top = docker("top", container_id, "-eo", "pid", timeout=2).stdout.decode().splitlines()
+    return len(top) == 2 and top[0].strip() == "PID" and int(top[1]) == init_pid
+
+
+def final_after_quiescence(container_id, init_pid, path, inode):
+    if not init_is_only_process(container_id, init_pid, path, inode):
+        return None
+    return counters(path)
+
+
+def stop_and_capture(container_id, init_pid, path, inode, group, permit_sent, deadline,
+                     drain=lambda: None):
+    """Return counters only after the same init is the sole live process."""
+    if not permit_sent:
+        return final_after_quiescence(container_id, init_pid, path, inode)
+    if group is None:
+        result = docker("exec", container_id, "sh", "-c", "cat /tmp/pgid",
+                        timeout=2, check=False)
+        candidate = result.stdout.decode().strip()
+        if result.returncode or not candidate.isdecimal():
+            return None
+        group = int(candidate)
+    if group <= 1:
+        return None
+    docker("exec", container_id, "bash", "-c", f"kill -TERM -- -{group}",
+           timeout=2, check=False)
+    kill_at = min(time.monotonic() + 5, deadline - 2)
+    killed = False
+    while time.monotonic() < deadline:
+        drain()
+        if init_is_only_process(container_id, init_pid, path, inode):
+            return counters(path)
+        if not killed and time.monotonic() >= kill_at:
+            docker("exec", container_id, "bash", "-c", f"kill -KILL -- -{group}",
+                   timeout=2, check=False)
+            killed = True
+        time.sleep(0.25)
+    return None
 
 
 def verify_limits(path, pid, container_id):
@@ -228,6 +303,7 @@ setsid bash -ceu '
     -run "^TestLoftContactDirectShellUnionVaryingRectangleBothOrders$" .
 ' &
 pgid=$!
+printf '%s\n' "$pgid" > /tmp/pgid
 printf '@@GATE_PGID %s@@\n' "$pgid"
 if wait "$pgid"; then result=0; else result=$?; fi
 printf '@@GATE_DONE %s@@\n' "$result"
@@ -296,7 +372,7 @@ def run(args, report):
     container_id = None
     start_proc = None
     group = None
-    group_stopped = False
+    permit_sent = False
     cgroup_path = None
     cgroup_inode = None
     init_pid = None
@@ -305,7 +381,24 @@ def run(args, report):
     done_code = None
     failure = None
     began = time.monotonic()
+    absolute_deadline = None
+
+    def drain_after_stop():
+        nonlocal failure
+        if not start_proc or not start_proc.stdout:
+            return
+        for _ in range(8):
+            try:
+                chunk = os.read(start_proc.stdout.fileno(), 8192)
+            except BlockingIOError:
+                return
+            if not chunk:
+                return
+            if not append_bounded(raw, chunk):
+                failure = failure or "1 MiB raw output limit during stop"
+
     try:
+        check_signal()
         pull = bounded_process(["docker", "pull", "--platform", "linux/amd64", "-q", IMAGE], 90, 64 * 1024)
         report["image_pull_sha256"] = hashlib.sha256(pull).hexdigest()
         raw.extend(pull)
@@ -326,32 +419,25 @@ def run(args, report):
         report["container_id"] = container_id
         start_proc = subprocess.Popen(["docker", "start", "-a", container_id],
                                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        os.set_blocking(start_proc.stdout.fileno(), False)
+        absolute_deadline = time.monotonic() + OUTER_SECONDS
         sel = selectors.DefaultSelector()
         sel.register(start_proc.stdout, selectors.EVENT_READ)
         pending = bytearray()
-        deadline = time.monotonic() + OUTER_SECONDS
-        stop_deadline = None
+        workload_deadline = absolute_deadline - 30
         try:
             while True:
                 now = time.monotonic()
-                if now >= deadline and failure is None:
-                    failure = "360-second workload timeout"
+                if failure is None:
+                    failure = monitored_failure(now, workload_deadline)
                 if cgroup_path is not None and done_code is None:
                     try:
-                        if read_number(cgroup_path / "memory.current") >= STOP and failure is None:
-                            failure = "3 GiB monitored stop"
+                        if failure is None:
+                            failure = monitored_failure(now, workload_deadline,
+                                                        read_number(cgroup_path / "memory.current"))
                     except OSError:
                         failure = "cgroup disappeared during workload"
-                if failure and group and not group_stopped:
-                    docker("exec", container_id, "bash", "-c", f"kill -TERM -- -{group}",
-                           timeout=5, check=False)
-                    group_stopped = True
-                    stop_deadline = now + 10
-                if failure and group is None:
-                    break
-                if stop_deadline and now >= stop_deadline and done_code is None:
-                    docker("exec", container_id, "bash", "-c", f"kill -KILL -- -{group}",
-                           timeout=5, check=False)
+                if failure:
                     break
                 if done_code is not None:
                     break
@@ -362,10 +448,9 @@ def run(args, report):
                     if not chunk:
                         sel.unregister(key.fileobj)
                         continue
-                    if len(raw) + len(chunk) > RAW_MAX:
+                    if not append_bounded(raw, chunk):
                         failure = "1 MiB raw output limit"
-                        chunk = chunk[:max(0, RAW_MAX - len(raw))]
-                    raw.extend(chunk)
+                        chunk = b""
                     pending.extend(chunk)
                     while b"\n" in pending:
                         line, _, pending = pending.partition(b"\n")
@@ -388,19 +473,15 @@ def run(args, report):
                                                "--format", "{{.Id}}").stdout.decode().strip():
                         raise GateError("container image identity differs from pinned image")
                     report["image_id"] = info["Image"]
+                    permit_sent = True
                     docker("exec", container_id, "sh", "-c", "printf 'go\\n' > /tmp/permit")
             if cgroup_path is None or init_pid is None or not saw_begin or done_code is None:
                 raise GateError("workload or cgroup evidence is incomplete")
-            if cgroup_path.stat().st_ino != cgroup_inode:
-                raise GateError("cgroup identity changed")
-            info = json.loads(docker("inspect", container_id).stdout)[0]
-            if info["State"]["Pid"] != init_pid or not info["State"]["Running"]:
-                raise GateError("container init changed or stopped")
-            top = docker("top", container_id, "-eo", "pid").stdout.decode().splitlines()
-            if len(top) != 2 or top[0].strip() != "PID" or int(top[1]) != init_pid:
+            final = final_after_quiescence(container_id, init_pid, cgroup_path, cgroup_inode)
+            if final is None:
                 raise GateError("Go workload or child remains alive")
-            final = counters(cgroup_path)
             report["final_cgroup"] = final
+            report["final_evidence"] = "quiescent same-cgroup counters"
             report["cgroup_inode"] = cgroup_inode
             report["init_pid"] = init_pid
             if final["peak"] >= STOP or final["swap"] or \
@@ -413,32 +494,56 @@ def run(args, report):
         finally:
             sel.close()
     except (GateError, OSError, ValueError, subprocess.TimeoutExpired) as exc:
-        failure = str(exc)
+        failure = failure or str(exc)
     finally:
         if container_id:
             if cgroup_path and "final_cgroup" not in report:
                 try:
-                    report["final_cgroup"] = counters(cgroup_path)
-                except (OSError, ValueError):
-                    failure = (failure or "failure") + "; final cgroup counters unavailable"
-            if start_proc and start_proc.poll() is None:
+                    final = stop_and_capture(container_id, init_pid, cgroup_path, cgroup_inode,
+                                             group, permit_sent,
+                                             min(time.monotonic() + 15, absolute_deadline - 15),
+                                             drain_after_stop)
+                    if final is not None:
+                        report["final_cgroup"] = final
+                        report["final_evidence"] = "quiescent same-cgroup counters after stop"
+                except (GateError, OSError, ValueError, subprocess.TimeoutExpired):
+                    pass
+            if "final_cgroup" not in report:
+                report["final_evidence"] = "unknown"
+                failure = (failure or "failure") + "; final cgroup evidence unknown"
+            if start_proc and start_proc.poll() is None and "final_cgroup" in report:
                 try:
                     docker("exec", container_id, "sh", "-c", "printf 'release\\n' > /tmp/release",
                            timeout=5, check=False)
-                    start_proc.wait(timeout=5)
+                    if start_proc.wait(timeout=5):
+                        failure = (failure or "failure") + "; container init exited nonzero"
                 except (GateError, subprocess.TimeoutExpired):
                     failure = (failure or "failure") + "; clean init release failed"
             try:
                 removed = docker("rm", "-f", container_id, timeout=10, check=False)
                 gone = docker("inspect", container_id, check=False).returncode != 0
-                report["cleanup_verified"] = removed.returncode == 0 and gone
+                for _ in range(20):
+                    cgroup_gone = cgroup_path is None or not cgroup_path.exists()
+                    init_gone = init_pid is None or not Path(f"/proc/{init_pid}").exists()
+                    if cgroup_gone and init_gone:
+                        break
+                    time.sleep(0.25)
+                report["cgroup_removed"] = cgroup_gone
+                report["init_pid_gone"] = init_gone
+                report["scratch_mounts_removed"] = gone and cgroup_gone and init_gone
+                report["cleanup_verified"] = removed.returncode == 0 and gone and cgroup_gone and init_gone
                 if not report["cleanup_verified"]:
                     failure = (failure or "failure") + "; exact container cleanup failed"
-            except (GateError, subprocess.TimeoutExpired):
+            except (GateError, OSError, ValueError, subprocess.TimeoutExpired):
                 failure = (failure or "failure") + "; exact container cleanup unverified"
         if start_proc and start_proc.poll() is None:
-            start_proc.kill()
-            start_proc.wait(timeout=5)
+            try:
+                start_proc.kill()
+                start_proc.wait(timeout=5)
+            except (OSError, subprocess.TimeoutExpired):
+                failure = (failure or "failure") + "; Docker client cleanup unverified"
+    if INTERRUPTED and not failure:
+        failure = "received " + INTERRUPTED
     report["elapsed_seconds"] = round(time.monotonic() - began, 3)
     report["raw_output_bytes"] = len(raw)
     report["raw_output_sha256"] = hashlib.sha256(raw).hexdigest()
@@ -447,6 +552,8 @@ def run(args, report):
 
 
 def main():
+    for number in (signal.SIGINT, signal.SIGTERM):
+        signal.signal(number, note_signal)
     parser = argparse.ArgumentParser()
     parser.add_argument("--control", type=Path, required=True)
     parser.add_argument("--source", type=Path, required=True)
@@ -471,7 +578,9 @@ def main():
     raw = b""
     failure = None
     try:
+        check_signal()
         report.update(preflight(args))
+        check_signal()
         if not args.preflight_only:
             raw, failure = run(args, report)
     except (GateError, OSError, ValueError, subprocess.TimeoutExpired) as exc:
