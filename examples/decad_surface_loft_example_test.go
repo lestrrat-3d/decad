@@ -50,7 +50,7 @@ func Example_decad_surfaceLoft() {
 	}
 
 	doc := decad.New()
-	sheet, err := doc.Loft(context.Background(), s0, s0.Profiles()[0], s1, s1.Profiles()[0], decad.WithSurfaceResult())
+	sheet, err := decad.Loft(context.Background(), doc, s0, s0.Profiles()[0], s1, s1.Profiles()[0], decad.WithSurfaceResult())
 	if err != nil {
 		fmt.Printf("failed to loft: %s\n", err)
 		return

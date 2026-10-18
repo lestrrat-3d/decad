@@ -927,7 +927,7 @@ func partsBinLoft(t *testing.T, doc *decad.Document) *decad.Body {
 	s1, p1 := partsBinPolygon(t, w, top, [][2]float64{
 		{6, -2.5}, {6, 2.5}, {2.5, 6}, {-2.5, 6}, {-6, 2.5}, {-6, -2.5}, {-2.5, -6}, {2.5, -6},
 	})
-	loft, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	loft, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
 	require.NoError(t, err)
 	return loft
 }

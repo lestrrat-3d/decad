@@ -297,7 +297,7 @@ func loftDuctAtHeight(ctx context.Context, height float64) (*decad.Body, error) 
 	if err != nil {
 		return nil, err
 	}
-	duct, err := decad.New().Loft(ctx, bottom, bottomProfile, top, topProfile)
+	duct, err := decad.Loft(ctx, decad.New(), bottom, bottomProfile, top, topProfile)
 	if err != nil {
 		return nil, fmt.Errorf("loft the duct: %w", err)
 	}

@@ -300,7 +300,7 @@ tooth's target instead of the gear's. A per-segment target was considered and
 declined: the residual is a perimeter-weighted sum of departures, so no allocation
 across segments lowers it for a given station count by more than a constant.
 
-**Where it is computed.** `Document.Loft` stores the two record-area readings
+**Where it is computed.** `Loft` stores the two record-area readings
 `momentinput.Profile.FalsifyLoftRecordedArea` computed on the payload (`loftPayload.RecordArea`), and
 `Placed` carries them over unchanged. `loftStationCapGate` computes the target once
 per evaluation from them and the walks `validateLoftRecords` resolves, decides S15
@@ -467,7 +467,7 @@ limit. The hand-off
 arrangement and for a chord count that scales with a curve's size rather than
 `16 · controls` with a floor of 64, with the gear as the reference case.
 
-`Document.Loft` build time with every increment in place, measured on an AMD Ryzen 9
+`Loft` build time with every increment in place, measured on an AMD Ryzen 9
 7900X3D: tooth cases 0.25–0.34 s; z8 1.4 s; z20 2.4 s; z40 4.2 s; and the same gear at
 z = 69, the largest the reconstruction ceiling admits, 8.5 s. Under `-race` the tooth
 cases take 1.1–1.7 s, z8 8.8 s, z20 16.0 s and z40 33.0 s, so the race shards carry the

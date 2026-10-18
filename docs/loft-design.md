@@ -95,7 +95,7 @@ between two full-circle loops is not reachable by this construction.
   audit story; it is not needed for a twisted (rotated) top loop, which is
   what the target case is.
 
-**`Document.Loft` takes two closed profiles and always will. The OPEN sketch
+**`Loft` takes two closed profiles and always will. The OPEN sketch
 chain uses `LoftChain`, a separate entry point, and §16 owns it** — how
 Table P reads over two open walks, the one row that has no counterpart there,
 the gate that replaces it, the refusals, and the staging. Everything §3
@@ -110,7 +110,10 @@ and proof; it does not change this section-pair correspondence.
 ## 2. Public signature and options
 
 ```go
-func (d *Document) Loft(ctx context.Context, s0 *sketch.Sketch, p0 *sketch.Profile, s1 *sketch.Sketch, p1 *sketch.Profile, opts ...LoftOption) (*Body, error)
+func Loft(ctx context.Context, d *Document,
+    s0 *sketch.Sketch, p0 *sketch.Profile,
+    s1 *sketch.Sketch, p1 *sketch.Profile,
+    opts ...LoftOption) (*Body, error)
 
 type LoftOption interface{ /* ... */ }
 
@@ -384,13 +387,13 @@ reached** — so a chorded build reaches it under `r3.Identity()` too. §5.2's
 table owns which terms that combination carries and when each is positive.
 
 **S9, S10, S11 and S4's ARITY half belong to the original call alone.** Each
-judges an argument the caller passed to `Document.Loft` — the two live
+judges an argument the caller passed to `Loft` — the two live
 `*sketch.Profile`s and their sketches (S9), a nil argument (S10), an option
 value (S11), a repeated `WithLoftAlignment` (S4's arity half) — and a
 placement receives none of them: the payload carries two already-recorded
 `ProfileRecord`s and one normalized alignment slice, with no `*sketch.Sketch`
 and no `*sketch.Profile` left to authenticate. So a profile that goes stale
-after the loft is built refuses a FRESH `Document.Loft` on that profile while
+after the loft is built refuses a FRESH `Loft` on that profile while
 `Transform`/`Copy` of the already-built body still succeed,
 which is the evaluate-from-the-record rule every other feature's placement
 follows (`docs/evaluator-design.md` §1).
@@ -620,7 +623,7 @@ loftChordFraction = 2.5e-4
 
 `docs/loft-gear-bounds-design.md` §5 owns this rule and its derivation.
 `area(p)` is the record's own region integral, the value
-`momentinput.Profile.FalsifyLoftRecordedArea` already computes in `Document.Loft`; the payload
+`momentinput.Profile.FalsifyLoftRecordedArea` already computes in `Loft`; the payload
 carries the two integrals (`loftPayload.RecordArea`), so no evaluation
 integrates a record a second time and a placement re-reads the same two
 values. `perimeterUpper(p)` sums `perCellArcUpper(seg, walk, 1)` over every
@@ -1843,7 +1846,7 @@ global evaluator increment.
 
 | PR | Lands | Still refused after it |
 |---|---|---|
-| 1 | `Document.Loft`, structural profile conversion and alignment options, Table P pairing + Table S gates S1–S5/S9–S11, the flat-triangle wall construction (§5), the crossing audit (§6, Table S S6's RECORDED arm, S7's audit arm, S8), `Volume` / `Centroid` (§8's rational accumulator) / `Area` / `Bounds`, `Verify` (D6: the structural audit and the tolerance gate over all four) | same-kind `CircleSeg`/`ArcSeg` correspondence; N-section/guide-rail/centerline loft; `Transform`/`Copy`; reversed correspondence; surveys, clearance, interference beyond box-disjoint |
+| 1 | `Loft`, structural profile conversion and alignment options, Table P pairing + Table S gates S1–S5/S9–S11, the flat-triangle wall construction (§5), the crossing audit (§6, Table S S6's RECORDED arm, S7's audit arm, S8), `Volume` / `Centroid` (§8's rational accumulator) / `Area` / `Bounds`, `Verify` (D6: the structural audit and the tolerance gate over all four) | same-kind `CircleSeg`/`ArcSeg` correspondence; N-section/guide-rail/centerline loft; `Transform`/`Copy`; reversed correspondence; surveys, clearance, interference beyond box-disjoint |
 | 2a | `Transform` / `Copy` (D7): the payload's own proven displacement term `delta` (§5), composed into every vertex, edge length, face area, and all four body measurements; Table S gains S12 and S13 | D1/D2 (`Tessellate`/`STL`/`OBJ`, mesh-boolean admission); D3/D4's analytic-kernel case; D5 |
 | 2b | `Tessellate` / `STL` / `OBJ` (D1), mesh-boolean admission (D2). **This row is landed.** | D3/D4's analytic-kernel case, D5 |
 | 3 | same-kind `CircleSeg`/`ArcSeg` correspondence (§1): the chord-chain construction and its shared station generator (§5.1), every term §5.2's table lists that a chorded build reaches — the certified per-cell sagitta and the `sectionDelta` it publishes, the `stationRound` term `delta` gains, the `matchedDelta` those two compose, the exact bilinear-patch volume and first-moment corrections with three residual volume terms (§8.1), and the wall's certified bilinear-area reading with two residual area legs beside the two caps' `capAreaAllow` (§8) — composed into `Volume`/`Centroid`/`Area`/`Bounds`, Table S gates S14–S16, S6's COMPUTED arm, and S7's structural walk-sense arm (P5). **This row is landed.** | same-kind Tier A free-form evaluator integration, until PR 4 lands it; mixed-kind correspondence, permanently (§1); N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
@@ -1859,7 +1862,7 @@ detached records retain `1 << 28` (`docs/loft-gear-bounds-design.md` §7).
 **The four measurements land with the operation, never after it.** A `Body`
 caches `Volume` / `Centroid` / `Area` / `Bounds` at build and its accessors
 return that cache with no staging error path, and `Exact` is `Exactness`'s
-zero value, so a PR that published `Document.Loft` before §8's derivations
+zero value, so a PR that published `Loft` before §8's derivations
 would answer `Volume()` with a proven-exact zero and `Verify` would call it
 `Sound` — a confidently wrong number, which is the one outcome core §1 exists
 to prevent. §8 derives all four in closed form from the same triangle set the
@@ -2293,7 +2296,7 @@ against this budget.
   sum `-0.0 + 0.0`, which IEEE 754 rounds to `+0.0`) — the identity fast
   path's premise is the zero DISPLACEMENT, not the sign of zero, and both
   halves are pinned. A test that a stale profile refuses a fresh
-  `Document.Loft` while `Copy`/`Transform` of the
+  `Loft` while `Copy`/`Transform` of the
   already-built body each succeed pins §4's original-call-only S9.
   `Copy` of a fresh loft reproduces bit-identical vertices, Exact
   16000 mm³ volume, Exact centroid, Exact bounds, and an Area measurement whose
@@ -2599,7 +2602,7 @@ type ChainLoftOption interface { /* sealed */ }
 ```
 
 `s0`/`c0` is the **from** chain and `s1`/`c1` the **to** chain — the same
-argument order `Document.Loft` uses for its two sections, and the order §16.2's
+argument order `Loft` uses for its two sections, and the order §16.2's
 gate reads `N0` from. Two sketches are required for the reason `Loft` requires
 them: `sketch.Sketch` has one plane, and two sections on distinct planes need
 two.

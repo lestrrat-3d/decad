@@ -750,7 +750,7 @@ components are not proven separate, rather than publish an unrecorded cavity.
 
 An operation is a package-level function. A query is a method. This section
 owns the rule; a companion design that writes an operation as a method
-(`func (d *Document) Sweep(...)`, `func (d *Document) Loft(...)`) means the
+(`func (d *Document) Sweep(...)`, `func (d *Document) LoftFromPoint(...)`) means the
 free function the table below names for it.
 
 **An operation is any call that builds a body, retires a body, or registers a
@@ -788,7 +788,7 @@ body (§6) and takes no `*Document` argument. An operation that takes no body
 
 | Shipped method form | Free function |
 |---|---|
-| `Document.Loft`, `LoftFromPoint` | the same names with `ctx, doc` leading |
+| `Document.LoftFromPoint` | `LoftFromPoint(ctx, doc, apex, sketch, profile)` |
 | `Document.Sweep` over a profile or a chain | `Sweep(ctx, doc, s, sec, path, opts...)`, one generic function over `Section` (§8) |
 
 **Every operation that builds a body from a sketch takes a `ctx`, `Extrude`,

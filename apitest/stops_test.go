@@ -873,7 +873,7 @@ func TestExtrudeToFaceInheritsPlacedLoftBound(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
-	loft, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	loft, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
 	require.NoError(t, err)
 
 	move, err := r3.Translation(r3.NewVec(0.1, 0.2, 0.3))

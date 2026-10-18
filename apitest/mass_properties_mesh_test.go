@@ -191,7 +191,7 @@ func TestMassPropertiesLoftOctagons(t *testing.T) {
 	s1, p1 := meshPolygonSketch(t, w, top, [][2]float64{
 		{5, -1.5}, {5, 2.5}, {3, 4.5}, {-1, 4.5}, {-3, 2.5}, {-3, -1.5}, {-1, -3.5}, {3, -3.5},
 	})
-	loft, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	loft, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
 	require.NoError(t, err)
 	got, err := loft.MassProperties(t.Context(), meshMassDensity)
 	require.NoError(t, err)

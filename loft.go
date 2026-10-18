@@ -85,7 +85,7 @@ func WithLoftAlignment(offsets ...int) LoftOption {
 // (docs/surface-design.md §4).
 //
 // A failed call leaves the document untouched.
-func (d *Document) Loft(ctx context.Context, s0 *sketch.Sketch, p0 *sketch.Profile, s1 *sketch.Sketch, p1 *sketch.Profile, opts ...LoftOption) (*Body, error) {
+func Loft(ctx context.Context, d *Document, s0 *sketch.Sketch, p0 *sketch.Profile, s1 *sketch.Sketch, p1 *sketch.Profile, opts ...LoftOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a loft`, ErrDegenerate)
 	}

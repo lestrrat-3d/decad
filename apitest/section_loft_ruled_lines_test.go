@@ -13,7 +13,7 @@ import (
 
 func TestSectionRuledSquareLoftFeedsExtrude(t *testing.T) {
 	bottom, bottomProfile, top, topProfile := loftSquaresAt(t, r3.NewVec(0, 0, 0), 5, 4, 2)
-	source, err := decad.New().Loft(t.Context(), bottom, bottomProfile, top, topProfile)
+	source, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile)
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
@@ -61,7 +61,7 @@ func TestSectionRuledNonplanarWallsKeepDiagonalKinks(t *testing.T) {
 	upper := [4][2]float64{{-4, -4}, {4, -3}, {4, 4}, {-4, 4}}
 	bottom, bottomProfile := build(world.XY(), lower)
 	top, topProfile := build(topPlane, upper)
-	source, err := decad.New().Loft(t.Context(), bottom, bottomProfile, top, topProfile)
+	source, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile)
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
@@ -108,7 +108,7 @@ func TestSectionRuledLoftWithChangingHoleFeedsExtrude(t *testing.T) {
 	}
 	bottom, bottomProfile := build(world.XY(), 5, 1)
 	top, topProfile := build(topPlane, 4, 2)
-	source, err := decad.New().Loft(t.Context(), bottom, bottomProfile, top, topProfile)
+	source, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile)
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
@@ -135,7 +135,7 @@ func TestSectionRuledLoftWithChangingHoleFeedsExtrude(t *testing.T) {
 
 func TestSectionRuledLoftRefusesNonexactCrossing(t *testing.T) {
 	bottom, bottomProfile, top, topProfile := loftSquaresAt(t, r3.NewVec(0, 0, 0), 5, 4, 2)
-	source, err := decad.New().Loft(t.Context(), bottom, bottomProfile, top, topProfile)
+	source, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile)
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 0.2), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
@@ -147,7 +147,7 @@ func TestSectionRuledLoftRefusesNonexactCrossing(t *testing.T) {
 
 func TestSectionRuledLoftRefusesShiftedCutOrigin(t *testing.T) {
 	bottom, bottomProfile, top, topProfile := loftSquaresAt(t, r3.NewVec(0, 0, 0), 5, 4, 2)
-	source, err := decad.New().Loft(t.Context(), bottom, bottomProfile, top, topProfile)
+	source, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile)
 	require.NoError(t, err)
 	for _, tc := range []struct {
 		name   string
@@ -190,7 +190,7 @@ func TestSectionRuledLoftRefusesNonzeroAlignment(t *testing.T) {
 	}
 	bottom, bottomProfile := build(world.XY(), 0)
 	top, topProfile := build(topPlane, 1)
-	source, err := decad.New().Loft(t.Context(), bottom, bottomProfile, top, topProfile,
+	source, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile,
 		decad.WithLoftAlignment(4))
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
@@ -204,7 +204,7 @@ func TestSectionRuledLoftRefusesNonzeroAlignment(t *testing.T) {
 func TestSectionRuledLoftRefusesDisplacedVertices(t *testing.T) {
 	origin := r3.NewVec(1e9, 0, 0)
 	bottom, bottomProfile, top, topProfile := loftSquaresAt(t, origin, 5, 5+math.Ldexp(1, -23), 2)
-	source, err := decad.New().Loft(t.Context(), bottom, bottomProfile, top, topProfile)
+	source, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile)
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(origin.X, 0, 1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)

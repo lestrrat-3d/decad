@@ -28,7 +28,7 @@ func axialLineLoft(t *testing.T, doc *Document, x0, y0, x1, y1, height float64) 
 		require.NoError(t, err)
 		sections[i], profiles[i] = s, s.Profiles()[0]
 	}
-	body, err := doc.Loft(t.Context(), sections[0], profiles[0], sections[1], profiles[1])
+	body, err := Loft(t.Context(), doc, sections[0], profiles[0], sections[1], profiles[1])
 	require.NoError(t, err)
 	return body
 }
@@ -157,7 +157,7 @@ func TestAxialLoftPrismUnionRefusesVaryingSource(t *testing.T) {
 		require.NoError(t, err)
 		sketches[i], profiles[i] = s, s.Profiles()[0]
 	}
-	body, err := New().Loft(t.Context(), sketches[0], profiles[0], sketches[1], profiles[1])
+	body, err := Loft(t.Context(), New(), sketches[0], profiles[0], sketches[1], profiles[1])
 	require.NoError(t, err)
 	_, admitted, err := exactAxialLoftPrism(t.Context(), body.n.Payload.(loftPayload))
 	require.NoError(t, err)

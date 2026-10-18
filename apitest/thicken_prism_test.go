@@ -286,7 +286,7 @@ func TestThickenStagedFamiliesRefuse(t *testing.T) {
 
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	loftDoc := decad.New()
-	loftSheet, err := loftDoc.Loft(t.Context(), s0, p0, s1, p1, decad.WithSurfaceResult())
+	loftSheet, err := decad.Loft(t.Context(), loftDoc, s0, p0, s1, p1, decad.WithSurfaceResult())
 	require.NoError(t, err)
 	_, err = decad.Thicken(t.Context(), loftSheet, units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)

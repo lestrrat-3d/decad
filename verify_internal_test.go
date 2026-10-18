@@ -1244,7 +1244,7 @@ func TestBuiltBodiesStorePayloadsByValue(t *testing.T) {
 			s1.CreateCircle(c1, 5)
 			_, err = s1.Solve(t.Context())
 			require.NoError(t, err)
-			b, err := New().Loft(t.Context(), s0, s0.Profiles()[0], s1, s1.Profiles()[0])
+			b, err := Loft(t.Context(), New(), s0, s0.Profiles()[0], s1, s1.Profiles()[0])
 			require.NoError(t, err)
 			return b
 		}},

@@ -921,7 +921,7 @@ func polygonLoft(ctx context.Context, doc *decad.Document) (*decad.Body, error) 
 	if err != nil {
 		return nil, err
 	}
-	return doc.Loft(ctx, s0, p0, s1, p1)
+	return decad.Loft(ctx, doc, s0, p0, s1, p1)
 }
 
 // hexagonSweep sweeps partsBinHexagon 14 mm up a straight path.

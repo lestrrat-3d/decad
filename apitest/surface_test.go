@@ -535,7 +535,7 @@ func TestSheetUndercutsReadUnavailableOnALoftSheet(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 10)
 	doc := decad.New()
-	sheet, err := doc.Loft(t.Context(), s0, p0, s1, p1, decad.WithSurfaceResult())
+	sheet, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1, decad.WithSurfaceResult())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, 1)))

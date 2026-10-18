@@ -90,7 +90,7 @@ func loftVolumePolygonBody(t *testing.T, world *sketch.World, base, upper *sketc
 		require.NoError(t, err)
 		sections[i], profiles[i] = s, s.Profiles()[0]
 	}
-	loft, err := New().Loft(t.Context(), sections[0], profiles[0], sections[1], profiles[1])
+	loft, err := Loft(t.Context(), New(), sections[0], profiles[0], sections[1], profiles[1])
 	require.NoError(t, err)
 	return loft
 }
@@ -193,7 +193,7 @@ func TestLoftVolumeComposeRealTriangleFractionalSeam(t *testing.T) {
 		require.NoError(t, createErr)
 		sections[i], profiles[i] = s, s.Profiles()[0]
 	}
-	loft, err := New().Loft(t.Context(), sections[0], profiles[0], sections[1], profiles[1])
+	loft, err := Loft(t.Context(), New(), sections[0], profiles[0], sections[1], profiles[1])
 	require.NoError(t, err)
 	s, err := world.CreateSketch(base)
 	require.NoError(t, err)

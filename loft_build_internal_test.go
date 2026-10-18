@@ -1111,7 +1111,7 @@ func TestLoftFrameLiftRoundingChargedInDelta(t *testing.T) {
 			require.NoError(t, err)
 			s0, p0 := straightSidedSketch(t, w, pl0, quad, false)
 			s1, p1 := straightSidedSketch(t, w, pl1, quad, false)
-			body, err := New().Loft(t.Context(), s0, p0, s1, p1)
+			body, err := Loft(t.Context(), New(), s0, p0, s1, p1)
 			require.NoError(t, err)
 			pl := body.n.Payload.(loftPayload)
 

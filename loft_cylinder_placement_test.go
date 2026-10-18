@@ -27,7 +27,7 @@ func loftCylinderPlacedTabPair(t *testing.T, lower, upper r3.Frame) (*Document, 
 	s0, p0 := loftCylinderTabProfile(t, ctx, world, bottomPlane, 0)
 	s1, p1 := loftCylinderTabProfile(t, ctx, world, topPlane, 10*math.Pi/180)
 	doc := New()
-	tooth, err := doc.Loft(ctx, s0, p0, s1, p1)
+	tooth, err := Loft(ctx, doc, s0, p0, s1, p1)
 	require.NoError(t, err)
 	s, err := world.CreateSketch(bottomPlane)
 	require.NoError(t, err)
@@ -350,7 +350,7 @@ func TestLoftCylinderCommonPlacementDifferentLoftSourceFallsBack(t *testing.T) {
 	require.NoError(t, err)
 	s0, p0 := loftCylinderTabProfile(t, ctx, world, bottomPlane, 0)
 	s1, p1 := loftCylinderTabProfile(t, ctx, world, topPlane, 10*math.Pi/180)
-	other, err := doc.Loft(ctx, s0, p0, s1, p1)
+	other, err := Loft(ctx, doc, s0, p0, s1, p1)
 	require.NoError(t, err)
 	firstSource := tooth.n.Payload.(loftPayload).SourceIdentity
 	otherSource := other.n.Payload.(loftPayload).SourceIdentity
