@@ -234,7 +234,7 @@ func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
 			return nil, false
 		}
 		if radius.Sign() == 0 {
-			point, bound, valid := revolveLoftFacesHeldPoint(loftFaceRatVec{x, lfZero(), lfZero()})
+			point, bound, valid := revolveloftfaces.HeldPoint(loftFaceRatVec{x, lfZero(), lfZero()})
 			if !valid {
 				return nil, false
 			}
@@ -646,7 +646,7 @@ func revolveLoftFacesMeridianRayPoint(ray [2]*big.Rat, x, radius *big.Rat) (r3.V
 	}
 	scale := lfDiv(radius, lfF(denominator))
 	exact := loftFaceRatVec{x, lfMul(ray[0], scale), lfMul(ray[1], scale)}
-	point, round, ok := revolveLoftFacesHeldPoint(exact)
+	point, round, ok := revolveloftfaces.HeldPoint(exact)
 	if !ok {
 		return r3.Vec{}, 0, false
 	}
