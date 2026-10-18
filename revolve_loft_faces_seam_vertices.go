@@ -35,8 +35,3 @@ func revolveLoftFacesArcSeamVerticesUnchecked(ctx context.Context, trim *loftFac
 	}
 	return result, true, nil
 }
-
-// revolveLoftFacesHeldPoint retains root callers of the shared rounding leaf.
-func revolveLoftFacesHeldPoint(exact loftFaceRatVec) (r3.Vec, float64, bool) {
-	return revolveloftfaces.HeldPoint(exact)
-}

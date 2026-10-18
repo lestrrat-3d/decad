@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -220,7 +221,7 @@ func revolveLoftFacesVerticalTraceHeldPoint(proof *revolveLoftFacesSourceCertifi
 	if radial2.Sign() <= 0 || radial2.Cmp(lfMul(radius, radius)) >= 0 {
 		return empty, 0, 0, false
 	}
-	held, blankBound, ok := revolveLoftFacesHeldPoint(exact)
+	held, blankBound, ok := revolveloftfaces.HeldPoint(exact)
 	if !ok || proofbound.IsNonFinite(blankBound) {
 		return empty, 0, 0, false
 	}

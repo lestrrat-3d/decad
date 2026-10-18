@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -65,7 +66,7 @@ func revolveLoftFacesTraceJoin(proof *revolveLoftFacesSourceCertificate,
 		proof == nil || proof.trim == nil {
 		return r3.Vec{}, 0, [2]*big.Rat{}, false
 	}
-	held, bound, ok := revolveLoftFacesHeldPoint(loftFaceRatVec{piece.x, point[0], point[1]})
+	held, bound, ok := revolveloftfaces.HeldPoint(loftFaceRatVec{piece.x, point[0], point[1]})
 	return held, bound, point, ok && !proofbound.IsNonFinite(bound)
 }
 
