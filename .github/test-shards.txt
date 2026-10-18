@@ -101,7 +101,6 @@
 0	0.04	TestPairStationsStationsAdvanceMonotonicallyAlongTheChain
 0	0.02	TestPatternCopiesUnionStackArm
 0	0.33	TestPatternedGroupDisplacement
-0	1.54	TestPlacedFacetedBodyStaysEmbedded
 0	0.00	TestPrismBooleanGateG3RequiresCoDirectionalSharedAxisPlanes
 0	0.01	TestPrismCutTrimmedTargetChargesItsWalkedEndpoint
 0	0.32	TestPrismGroupSixHoleCutIsUndisplaced
@@ -297,7 +296,6 @@
 2	0.00	TestChordStationBoundRefusesWhatItCannotEnclose
 2	0.03	TestClassBCrossingToolCrossingAWall
 2	0.01	TestClassBCutCrossSlot
-2	0.00	TestClusteredUnionChainSurvey
 2	5.66	TestCoilArcFacetBoundHoldsTheSurface
 2	2.17	TestCoilExternalThread
 2	0.53	TestCoilFractionalTurnCentroid
@@ -1418,7 +1416,6 @@
 10	0.01	TestTessellateStitchPublishesZeroSymDiffForClosedZeroBoundBody
 10	0.00	TestThickenRibbonUnrepresentableOffset
 10	0.00	TestTriTriClassifyNamesTheInPlaneEdge
-10	2.66	TestUnionKeepsTheHeldMeshEmbedded
 10	0.00	TestValidateLoftRecordsHoleCountMismatch
 10	0.00	TestVerifyPublishRectangularPrismPath
 10	0.03	TestVerifyPublishRevolveVoid

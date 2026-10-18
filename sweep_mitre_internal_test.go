@@ -439,6 +439,80 @@ func requireMitredSumsMatch(t *testing.T, exact []sweeparc.RatVec, tris [][3]int
 	}
 }
 
+func clusterPolygon(t *testing.T, n int, r float64) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	poly, err := s.CreatePolygon(0, 0, n, r)
+	require.NoError(t, err)
+	s.Fix(poly.Center)
+	for _, v := range poly.Vertices {
+		s.Fix(v)
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+	return s, s.Profiles()[0]
+}
+
+func clusterPath(t *testing.T, pts ...r3.Vec) *Path {
+	t.Helper()
+	segs := make([]PathSegment, 0, len(pts)-1)
+	for _, p := range pts[1:] {
+		segs = append(segs, LineTo{End: p})
+	}
+	p, err := NewPath(pts[0], segs...)
+	require.NoError(t, err)
+	return p
+}
+
+// clusteredTree is the overlapping-branch tree that broke the mesh boolean's
+// cutter: a tapered mitred 16-gon trunk, and tilted tapered mitred 16-gon
+// branches rooted inside it, each turned spread radians about z from the last
+// and rooted zstep millimetres higher, so neighbouring branches overlap.
+type clusteredTree struct {
+	doc           *Document
+	trunk         *Body
+	branchSketch  *sketch.Sketch
+	branchProfile *sketch.Profile
+	spread, zstep float64
+}
+
+func newClusteredTree(t *testing.T, spreadDeg, zstep float64) clusteredTree {
+	t.Helper()
+	doc := New()
+	s, p := clusterPolygon(t, 16, 5)
+	trunk, err := Sweep(t.Context(), doc, s, p,
+		clusterPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 30), r3.NewVec(3, 0, 60)),
+		WithMitredJoins(), WithSectionScale(units.Scalar(1), units.Scalar(0.9)))
+	require.NoError(t, err)
+	bs, bp := clusterPolygon(t, 16, 1.5)
+	return clusteredTree{doc: doc, trunk: trunk, branchSketch: bs, branchProfile: bp,
+		spread: spreadDeg * math.Pi / 180, zstep: zstep}
+}
+
+func (c clusteredTree) branch(t *testing.T, k int) *Body {
+	t.Helper()
+	unit, err := Sweep(t.Context(), c.doc, c.branchSketch, c.branchProfile,
+		clusterPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 2.5), r3.NewVec(0.8, 0.3, 6), r3.NewVec(2.5, 0.6, 9.5)),
+		WithMitredJoins(), WithSectionScale(units.Scalar(1.375/1.5), units.Scalar(1.2/1.5), units.Scalar(1/1.5)))
+	require.NoError(t, err)
+	phi := c.spread * float64(k)
+	u := r3.NewVec(math.Cos(phi), math.Sin(phi), 0)
+	alpha := 40 * math.Pi / 180
+	d := u.Scale(math.Sin(alpha)).Add(r3.NewVec(0, 0, math.Cos(alpha)))
+	fu := r3.NewVec(0, 0, 1).Cross(d)
+	fu = fu.Scale(1 / fu.Len())
+	frame, err := r3.NewFrame(u.Scale(2.6).Add(r3.NewVec(0, 0, 4+c.zstep*float64(k))), fu, d.Cross(fu))
+	require.NoError(t, err)
+	xf, err := r3.FromFrame(frame)
+	require.NoError(t, err)
+	placed, err := Transform(t.Context(), unit, xf)
+	require.NoError(t, err)
+	return placed
+}
+
 // TestMitredSweepMomentsMatchRationalSum pins sweepmitre.VolumeMoments to the
 // term-by-term rational sum over the built mitred fixtures (the tree branch,
 // the clustered trunk and three placed branches, each with the anchor its
