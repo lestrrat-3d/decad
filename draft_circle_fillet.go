@@ -5,15 +5,11 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/lestrrat-3d/decad/internal/extent"
+	"github.com/lestrrat-3d/decad/internal/draftrecord"
 	"github.com/lestrrat-3d/decad/internal/freeform"
-	"github.com/lestrrat-3d/decad/internal/prismrecord"
-	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
-	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
-	"github.com/lestrrat-3d/units"
 )
 
 // tryDraftCircleRimFillet rounds one circular end rim of a one-sided, inward
@@ -40,76 +36,12 @@ func tryDraftCircleRimFillet(ctx context.Context, b *Body, edges []*Edge, radius
 		return nil, false, nil
 	}
 
-	nearRadius, nearDelta, err := extent.MagnitudeInBounded(circle.Radius, units.Length, units.Millimeter, "the source circle radius")
+	meridian, err := draftrecord.CircleFilletMeridian(dp, circle, radius, radiusDelta)
 	if err != nil {
 		return nil, true, err
 	}
-	near := proofbound.MeasuredScalar(nearRadius, nearDelta)
-	height := proofbound.BoundedSub(
-		proofbound.MeasuredScalar(dp.Z1, dp.Z1Delta),
-		proofbound.MeasuredScalar(dp.Z0, dp.Z0Delta))
-	amount := proofbound.MeasuredScalar(dp.D, dp.DDelta)
-	fillet := proofbound.MeasuredScalar(radius, radiusDelta)
-	slope := proofbound.BoundedDiv(amount, height)
-	unit := proofbound.ExactScalar(1)
-	norm := proofbound.BoundedSqrt(proofbound.BoundedAdd(unit, proofbound.BoundedMul(slope, slope)))
-	far := proofbound.BoundedSub(near, amount)
-	centerR := proofbound.BoundedSub(
-		proofbound.BoundedAdd(far, proofbound.BoundedMul(slope, fillet)),
-		proofbound.BoundedMul(fillet, norm))
-	centerZ := proofbound.BoundedSub(height, fillet)
-	sideZ := proofbound.BoundedAdd(centerZ,
-		proofbound.BoundedDiv(proofbound.BoundedMul(fillet, slope), norm))
-	sideR := proofbound.BoundedAdd(centerR, proofbound.BoundedDiv(fillet, norm))
-	if !draftCircleFilletFits(near, far, height, slope, fillet, centerR, centerZ, sideR, sideZ) {
-		return nil, true, fmt.Errorf(`%w: the tapered circular rim fillet reaches the axis or the opposite cap`, ErrDegenerate)
-	}
-
-	// Source and held meridian pair line for line and arc for arc. Each
-	// centre/end coordinate differs by at most epsilon, so its plane vector
-	// differs by at most sqrt(2)*epsilon and each endpoint ray changes by at
-	// most 2*sqrt(2)*epsilon. The gate below makes epsilon < radius/1024:
-	// true/held radii stay above radius-2*sqrt(2)*epsilon, so each endpoint
-	// angle moves by less than 4*epsilon/radius. Interpolating the unwrapped
-	// sweep of at most a quarter turn, and adding centre and radius motion,
-	// moves every arc point by less than 16*epsilon. The 64-fold charge also
-	// covers every constructed line and the frame-origin lift.
-	point := prismrecord.Payload{Profile: dp.Profile, Frame: dp.Frame, Z0: dp.Z0,
-		Z0Delta: dp.Z0Delta, Xform: r3.Identity()}
-	originDelta := point.PointBound(proofbound.ExactScalar(circle.Center.U),
-		proofbound.ExactScalar(circle.Center.V), proofbound.MeasuredScalar(dp.Z0, dp.Z0Delta))
-
-	epsilon := math.Max(originDelta, dp.FarDelta)
-	for _, q := range []proofbound.BoundedScalar{near, far, height, fillet,
-		centerR, centerZ, sideR, sideZ} {
-		epsilon = math.Max(epsilon, q.Bound)
-	}
-	sectionDelta := proofbound.ProductUpper(64, epsilon)
-	if proofbound.IsNonFinite(sectionDelta) || sectionDelta >= radius/16 {
-		return nil, true, fmt.Errorf(`%w: the tapered circular rim fillet's source displacement cannot certify its arc`, ErrUnsupported)
-	}
-
-	pt := func(u, v float64) sectionrecord.Point2 { return sectionrecord.Point2{U: u, V: v} }
-	zero := pt(0, 0)
-	axisEnd := pt(height.Value, 0)
-	capEnd := pt(height.Value, centerR.Value)
-	sideEnd := pt(sideZ.Value, sideR.Value)
-	baseEnd := pt(0, near.Value)
-	line := func(a, z sectionrecord.Point2) lineSeg { return lineSeg{Start: a, End: z, TEnd: 1} }
-	profile := profileRecord{Outer: loopRecord{Segments: []curveSegment{
-		line(zero, axisEnd),
-		line(axisEnd, capEnd),
-		arcSeg{Center: pt(centerZ.Value, centerR.Value), Start: capEnd, End: sideEnd, TEnd: 1},
-		line(sideEnd, baseEnd),
-		line(baseEnd, zero),
-	}}}
-	origin := dp.Frame.ToWorldUV(circle.Center.U, circle.Center.V).Add(dp.Frame.N().Scale(dp.Z0))
-	frame, err := r3.NewFrame(origin, dp.Frame.N(), dp.Frame.U())
-	if err != nil {
-		return nil, true, fmt.Errorf(`%w: the tapered circle's meridian frame: %v`, ErrUnsupported, err)
-	}
 	work := freeform.NewFreeformWork()
-	ax, side, err := revolveplan.ResolveAxisSide(ctx, profile, revolveaxis.Line2{DU: 1}, work)
+	ax, side, err := revolveplan.ResolveAxisSide(ctx, meridian.Profile, revolveaxis.Line2{DU: 1}, work)
 	if err != nil {
 		return nil, true, err
 	}
@@ -121,9 +53,9 @@ func tryDraftCircleRimFillet(ctx context.Context, b *Body, edges []*Edge, radius
 		return nil, true, err
 	}
 	result, err := bodyResult(revolveplan.Build(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), revolvePayload{
-		Profile: profile, Frame: frame, Ax: ax, Phi0: phi0, Phi1: phi1, Full: full,
+		Profile: meridian.Profile, Frame: meridian.Frame, Ax: ax, Phi0: phi0, Phi1: phi1, Full: full,
 		Den: den, Xform: dp.Xform, RadialProof: ax.RadialProof,
-		SectionDelta: sectionDelta, SectionWhole: true,
+		SectionDelta: meridian.SectionDelta, SectionWhole: true,
 		BlendSegs: []map[int]struct{}{{2: {}}}, BlendKind: "fillet",
 		DraftCircleCaps: true,
 	}, work))
@@ -132,20 +64,6 @@ func tryDraftCircleRimFillet(ctx context.Context, b *Body, edges []*Edge, radius
 	}
 	out, err := commitModifyResult(ctx, b, result)
 	return out, true, err
-}
-
-func draftCircleFilletFits(near, far, height, slope, fillet, centerR, centerZ, sideR, sideZ proofbound.BoundedScalar) bool {
-	positive := func(q proofbound.BoundedScalar) bool { lo, _ := proofbound.BoundedEnds(q); return lo > 0 }
-	if !positive(near) || !positive(far) || !positive(height) || !positive(slope) ||
-		!positive(fillet) || !positive(centerZ) || !positive(sideR) || !positive(sideZ) {
-		return false
-	}
-	if !positive(proofbound.BoundedSub(centerR, fillet)) ||
-		!positive(proofbound.BoundedSub(height, sideZ)) ||
-		!positive(proofbound.BoundedSub(near, sideR)) {
-		return false
-	}
-	return true
 }
 
 func exactSignedAxisFrame(frame r3.Frame) bool {
