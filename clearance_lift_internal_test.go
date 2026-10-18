@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -83,7 +84,7 @@ func TestBodyGeomLiftDeltaReadsTheFrameOrigin(t *testing.T) {
 			t.Run(name, func(t *testing.T) {
 				g, ok := newBodyGeom(b)
 				require.True(t, ok)
-				require.Zero(t, carrierLiftRound(g.faces), "an exact lift records no rounding")
+				require.Zero(t, clearance.CarrierLiftRound(g.faces), "an exact lift records no rounding")
 				require.Zero(t, g.carrierDelta, "an exact lift must keep the model's carrier displacement zero")
 			})
 		}
@@ -94,7 +95,7 @@ func TestBodyGeomLiftDeltaReadsTheFrameOrigin(t *testing.T) {
 			t.Run(name, func(t *testing.T) {
 				g, ok := newBodyGeom(b)
 				require.True(t, ok)
-				lift := carrierLiftRound(g.faces)
+				lift := clearance.CarrierLiftRound(g.faces)
 				require.Positive(t, lift, fmt.Sprintf("the %s carriers' far lift rounds", name))
 				require.GreaterOrEqual(t, g.carrierDelta, lift)
 				require.GreaterOrEqual(t, g.delta, g.carrierDelta)
