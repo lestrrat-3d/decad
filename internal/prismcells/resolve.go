@@ -30,7 +30,7 @@ import (
 // each created entity traces to (record.go's own "outer loops CCW, holes CW"
 // convention is unaffected — this is provenance, not orientation). Union's
 // resolution ignores it; Cut/Intersect's clean-nesting match
-// (prism_boolean_nesting.go, §4.2) reads it to prove the nesting relation
+// (payload_nesting.go, §4.2) reads it to prove the nesting relation
 // structurally.
 //
 // Every entity is built from the segment's own WALKED geometry (walkOf),

@@ -59,7 +59,7 @@ The rules for rows live in `docs/layout.md`.
 | `loft_cylinder_chamfer_side.go` | Certifies retained middle-side reach into the source union. See loft-cylinder-boolean design. |
 | `prism_boolean.go` | Analytic booleans of co-directional prisms. See `docs/prism-boolean-design.md`. |
 | `revolve_boolean.go` | Arranges authenticated common-axis full-Revolve meridians for public `Union`, `Cut` and `Intersect`. See general-boolean design. |
-| `prism_boolean_nesting.go` | Clean-nesting scene adapters. See prism-boolean §4.2. |
+| `prism_boolean_nesting.go` | Admits one-hole Intersect prism pairs before the clean-nesting scene resolver. See prism-boolean §3.1, §4.2. |
 | `prism_boolean_blind.go` | Blind and spanning Cuts via the whole-loop match. See `docs/prism-boolean-design.md` §3.2. |
 | `prism_boolean_crossing_blind.go` | Exact rectangular blind Cut across one through hole. See general-boolean A7. |
 | `prism_group.go` | Prism-group `Cut` tools and disjoint `Union` results. See general-boolean A5. |
