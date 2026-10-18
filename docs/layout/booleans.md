@@ -73,7 +73,7 @@ The rules for rows live in `docs/layout.md`.
 | `classb.go` | `tryClassB`: class B over two bodies' payloads through `internal/classbgeom`. See general-boolean §3 B. |
 | `oblique_boss.go` | Recognizes the two prism sources a complete oblique cylinder and plate Union retains. See oblique-boss-fillet design. |
 | `cross_cylinder_bore_source.go` | Recognizes the two circular prism sources a perpendicular cylinder Cut retains. See cross-cylinder-bore-chamfer design. |
-| `surface_trim.go` / `surface_split_revolve.go` | Surface body gates and revolve `Split`. See surface-intersection §2–§3. |
+| `surface_trim.go` / `surface_split_revolve.go` | Surface entry gates, root result construction and revolve `Split`. See surface-intersection §2–§3. |
 | `point_plane_split.go` | Authenticates point-loft and sheet operands, orders split planes, and commits facetedrecord slabs. See loft-point design. |
 | `point_plane_scale.go` | Validates ScaledAt sources and commits similarity images; facetedrecord carries Split maps. See loft-point design and evaluator §8. |
 | `prism_scale.go` | Admits prism and full-Revolve certified similarity sources and transfers their face roles. See evaluator §8. |
