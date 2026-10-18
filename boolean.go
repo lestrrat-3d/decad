@@ -623,7 +623,7 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 		return booleanEvaluation{}, err
 	}
 	// A payload whose mesh cannot carry an occupied-volume proof is refused
-	// BEFORE it is meshed. operandSymDiff below is still the gate that decides
+	// BEFORE it is meshed. meshbool.OperandSymDiff is still the gate that decides
 	// it — this only asks the same question of the payload class, where the
 	// answer is already known, so a refusal costs a map lookup instead of a
 	// complete tessellation and its facet-pair audit.
@@ -840,11 +840,11 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 	if err := meshbool.RefuseRimPastPair(maxRim, dPair); err != nil {
 		return booleanEvaluation{}, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err)
 	}
-	symA, err := operandSymDiff(ma)
+	symA, err := meshbool.OperandSymDiff(ma.n.BoundaryOK, ma.n.SymDiffOK, ma.n.VolSymDiff)
 	if err != nil {
 		return booleanEvaluation{}, meshbool.ExpectedBooleanForOperand(meshbool.BooleanExpectedVolumeProof, 0, err)
 	}
-	symB, err := operandSymDiff(mb)
+	symB, err := meshbool.OperandSymDiff(mb.n.BoundaryOK, mb.n.SymDiffOK, mb.n.VolSymDiff)
 	if err != nil {
 		return booleanEvaluation{}, meshbool.ExpectedBooleanForOperand(meshbool.BooleanExpectedVolumeProof, 1, err)
 	}
@@ -950,7 +950,7 @@ func booleanProofBounds(symA, symB, roundVol, slackA, slackB, dropArea float64) 
 		proofbound.AbsSumUpper(slackA, slackB, dropArea)
 }
 
-// operandSymDiff reads the volume of the symmetric difference between the
+// meshbool.OperandSymDiff reads the volume of the symmetric difference between the
 // operand's held tessellation and the body it stands for from the MESH's own
 // proof record (docs/tessellation-design.md §2's volSymDiff), which the
 // tessellator composed for that payload class.
@@ -968,7 +968,7 @@ func booleanProofBounds(symA, symB, roundVol, slackA, slackB, dropArea float64) 
 // requireVolumeProvingPayload refuses an operand whose payload class publishes
 // no occupied-volume proof on its mesh, before that mesh is built.
 //
-// It is operandSymDiff's question asked one step earlier. A cap-loop chamfer,
+// It is meshbool.OperandSymDiff's question asked one step earlier. A cap-loop chamfer,
 // and a draft body through the same band (draftOccupiedVolumeAdmission),
 // narrows rather than refuses outright: both arms read the SAME predicate,
 // capblend.OccupiedVolumeAdmission — this one before the
@@ -979,7 +979,7 @@ func booleanProofBounds(symA, symB, roundVol, slackA, slackB, dropArea float64) 
 // fails on. Meshing a refused operand for a boolean only to refuse it
 // afterwards buys nothing and costs the whole tessellation and its facet-pair
 // audit — which the evaluator's own internal tolerance makes the most
-// expensive part of the call. Both this and operandSymDiff must name the same
+// expensive part of the call. Both this and meshbool.OperandSymDiff must name the same
 // payload classes, and each proof retires both arms of its own row together.
 // The matching axial loft's held-polygon cap band has a separate slab proof
 // for its reflex corners; tessellateCapBlend publishes that proof for this
@@ -991,7 +991,7 @@ func booleanProofBounds(symA, symB, roundVol, slackA, slackB, dropArea float64) 
 // defence in depth rather than dead code — performBoolean's own
 // refuseSheetOperand already fires first in the ordinary call path (Table X),
 // so this arm exists to keep this function's own stated invariant, that it
-// and operandSymDiff name the same set of payload classes, true even for a
+// and meshbool.OperandSymDiff name the same set of payload classes, true even for a
 // caller that reaches this function by some other path.
 //
 // A stitchPayload operand narrows rather than refuses outright: a CLOSED,
@@ -1000,7 +1000,7 @@ func booleanProofBounds(symA, symB, roundVol, slackA, slackB, dropArea float64) 
 // tessellate_stitch.go's own occupied-volume publication and
 // clearance_geom.go's carrier-model dispatch both apply) will publish
 // symDiffOK == true once meshed, so refusing it here would contradict what
-// operandSymDiff decides one step later over the same payload. Every other
+// meshbool.OperandSymDiff decides one step later over the same payload. Every other
 // stitched body — open, curved/mixed, placed, or certificate-welded — still
 // refuses here, before it is ever meshed.
 func requireVolumeProvingPayload(ctx context.Context, b *Body, index int) error {
@@ -1078,17 +1078,6 @@ func requireVolumeProvingPayload(ctx context.Context, b *Body, index int) error 
 		}
 	}
 	return meshbool.ExpectedBooleanForOperand(meshbool.BooleanExpectedVolumeProof, index, err)
-}
-
-// An operand mesh built below VerifyBoundary is refused FIRST, and with its own
-// message. Every homotopy §11 composes has §9's facet-contact audit as an
-// antecedent, so such a mesh fails for the audit it declined rather than for
-// the payload class it belongs to, and the volume-proof message would misstate
-// the cause. No public call path reaches it — evaluateBoolean tessellates both
-// operands at VerifyAll and the one-entry cache keys on the level — so this
-// arm holds the invariant for any other path to the same composition.
-func operandSymDiff(m *Mesh) (float64, error) {
-	return meshbool.OperandSymDiff(m.n.BoundaryOK, m.n.SymDiffOK, m.n.VolSymDiff)
 }
 
 // refuseUndecidableProximityWithConeCap is the tangency gate (docs/evaluator-design.md §9,

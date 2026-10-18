@@ -746,7 +746,7 @@ func tessellatePrismWithCountFloor(ctx context.Context, b *Body, pp prismPayload
 		// A sheet encloses no region, so there is no occupied volume to
 		// prove: the mesh publishes NO volSymDiff and leaves symDiffOK
 		// false (docs/surface-design.md §10). That omission IS the proof's
-		// absence, not a placeholder for one still to come — operandSymDiff
+		// absence, not a placeholder for one still to come — meshbool.OperandSymDiff
 		// (boolean.go) is the consumer that reads symDiffOK and refuses a
 		// boolean that reaches this operand.
 		return mesh, nil

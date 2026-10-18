@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/extent"
+	"github.com/lestrrat-3d/decad/internal/meshbool"
 
 	"github.com/lestrrat-3d/decad/internal/capcontour"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -364,7 +365,7 @@ func TestCapBlendMeshPublishesNoVolumeProofForAMiteredBand(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, mesh.n.SymDiffOK, `a mitered circular wall is not covered by the slice-wise proof`)
 	require.Equal(t, 0.0, mesh.n.VolSymDiff)
-	_, err = operandSymDiff(mesh)
+	_, err = meshbool.OperandSymDiff(mesh.n.BoundaryOK, mesh.n.SymDiffOK, mesh.n.VolSymDiff)
 	require.ErrorIs(t, err, ErrUnsupported)
 	refusal, err := capblend.OccupiedVolumeAdmission(proofbound.NewWorkBudget(t.Context()), cbp)
 	require.NoError(t, err)
@@ -402,7 +403,7 @@ func capBlendMotionUnderTest(t *testing.T, cbp capBlendPayload, chord float64) (
 // TestCapBlendMeshPublishesVolumeProofForAnAdmittedBand reads §7's proof off
 // the flange's mesh: every corner is exactly tangent and the bore a whole turn,
 // so the mesh publishes a finite volSymDiff at least as large as its own
-// chord-polygon term, and operandSymDiff hands that figure to the boolean.
+// chord-polygon term, and meshbool.OperandSymDiff hands that figure to the boolean.
 //
 // It also guards the cap leg of the per-vertex motion. The bore's seam cap
 // station is held at the float full turn while B1 places it at (19, 0)
@@ -420,12 +421,12 @@ func TestCapBlendMeshPublishesVolumeProofForAnAdmittedBand(t *testing.T) {
 	chordVolume := capBlendChordVolume(cbp, lms)
 	require.Positive(t, chordVolume, `the fillet arcs and the bore are chorded`)
 	require.GreaterOrEqual(t, mesh.n.VolSymDiff, chordVolume)
-	// tessellateContext is the one writer of boundaryOK, which operandSymDiff
+	// tessellateContext is the one writer of boundaryOK, which meshbool.OperandSymDiff
 	// reads first; the cap-blend path runs no facet-contact audit, so it is
 	// true at VerifyAll and the published figure reaches the boolean.
 	viaContext, err := tessellateContext(t.Context(), chamfered, units.Millimeters(tol), VerifyAll)
 	require.NoError(t, err)
-	got, err := operandSymDiff(viaContext)
+	got, err := meshbool.OperandSymDiff(viaContext.n.BoundaryOK, viaContext.n.SymDiffOK, viaContext.n.VolSymDiff)
 	require.NoError(t, err)
 	require.Equal(t, mesh.n.VolSymDiff, got)
 
