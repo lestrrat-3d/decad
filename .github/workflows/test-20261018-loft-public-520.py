@@ -16,8 +16,8 @@ import time
 TEST = "TestLoftContactDirectShellUnionVaryingRectangleBothOrders"
 WORKFLOW = ".github/workflows/test-20261018-loft-public-520.yml"
 IMAGE = "golang@sha256:26de5cf8eac40c12a1ff8de1a634971b4654fd881225eed7ace643b8c769f2f5"
-SKETCH = "v0.0.0-20261018052140-60cc6aa3eea7"
-SKETCH_SUM = "h1:pcuJ+W1txUXhM+w1FzzqLohkScJTyW5vU3VZDiWujFA="
+SKETCH = "v0.0.0-20261018061054-11e47549756a"
+SKETCH_SUM = "h1:r2fQqaXoFuQt5xllEPuWR8tFHmmhdiMMhbu+DDFfGDI="
 SKETCH_MOD_SUM = "h1:yU8fsrfp5gVwwjxD96OCgw/2R25SW4Smuz+U7iBWzT0="
 HARD = 4 * 1024**3
 STOP = 3 * 1024**3
