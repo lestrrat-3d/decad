@@ -369,6 +369,13 @@ func TestChordSagittaNeverUnderflowsToZero(t *testing.T) {
 
 // ------------------------------------- chording a published walk resolution
 
+func tessellateFreeformProfile() profileRecord {
+	return profileRecord{Outer: loopRecord{Segments: []curveSegment{
+		lineSeg{Start: planePoint{}, End: planePoint{U: 8}, TEnd: 1},
+		fitSplineSeg{Fit: []planePoint{{}, {U: 4, V: 3}, {U: 8}}, TStart: 1},
+	}}}
+}
+
 // TestChordLoopReadsResolvedWalks is the observable half of the tessellation's
 // own reuse: handed the resolution the build published, tessellation.ChordLoop returns the
 // chording it produces from a fresh resolution, field for field, and it does
@@ -379,7 +386,7 @@ func TestChordSagittaNeverUnderflowsToZero(t *testing.T) {
 // chain) is spent by both runs alike.
 func TestChordLoopReadsResolvedWalks(t *testing.T) {
 	t.Parallel()
-	profile := involuteFitProfile()
+	profile := tessellateFreeformProfile()
 	pw, err := momentinput.ResolveProfileWalks(profile, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	require.Greater(t, pw.Spent, uint64(0), "premise: resolving this record costs free-form work")
@@ -411,7 +418,7 @@ func TestChordLoopReadsResolvedWalks(t *testing.T) {
 // own refusal, on the same exact-comparison terms.
 func TestChordLoopRefusesMismatchedResolvedWalks(t *testing.T) {
 	t.Parallel()
-	pw, err := momentinput.ResolveProfileWalks(involuteFitProfile(), freeform.NewFreeformWork())
+	pw, err := momentinput.ResolveProfileWalks(tessellateFreeformProfile(), freeform.NewFreeformWork())
 	require.NoError(t, err)
 
 	other := profileRecord{Outer: loopRecord{Segments: []curveSegment{
@@ -435,9 +442,11 @@ func TestChordLoopRefusesMismatchedResolvedWalks(t *testing.T) {
 // of chording it, so a reuse that changed any answer would change one here.
 func TestTessellatePrismReusesPublishedWalks(t *testing.T) {
 	t.Parallel()
-	body, err := evalPrism(New(), 0, involuteFitPrismPayload(t), freeform.NewFreeformWork())
+	payload := prismPayload{Profile: tessellateFreeformProfile(), Frame: identityFrame(t), Z1: 5, Xform: r3.Identity()}
+	body, err := evalPrism(New(), 0, payload, freeform.NewFreeformWork())
 	require.NoError(t, err)
-	published := prismPayloadOf(t, body)
+	published, ok := body.n.Payload.(prismPayload)
+	require.True(t, ok)
 	require.True(t, published.Walks.Reusable(published.Profile),
 		"premise: the build published a resolution of this very record")
 
@@ -446,6 +455,8 @@ func TestTessellatePrismReusesPublishedWalks(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, reused.n.Triangles)
 
+	uncached := published
+	uncached.Walks = nil
 	withoutResolution := bornBody(&Body{
 		n: topo.Body{Solid: body.n.Solid, Origin: body.n.Origin, Volume: body.n.Volume,
 			Area:     body.n.Area,
@@ -453,7 +464,7 @@ func TestTessellatePrismReusesPublishedWalks(t *testing.T) {
 			Bounds:   body.n.Bounds,
 			Lumps:    body.n.Lumps,
 			Doc:      body.n.Doc,
-			Payload:  withoutWalks(published),
+			Payload:  uncached,
 		},
 	})
 	resolvedAgain, err := withoutResolution.Tessellate(t.Context(), tol)

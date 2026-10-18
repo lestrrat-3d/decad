@@ -134,7 +134,10 @@ func TestFirstOrderMomentsMatchFullAreaCentroidAndBounds(t *testing.T) {
 	})
 
 	t.Run("freeform work charges", func(t *testing.T) {
-		profile := involuteFitProfile()
+		profile := profileRecord{Outer: loopRecord{Segments: []curveSegment{
+			lineSeg{Start: planePoint{}, End: planePoint{U: 8}, TEnd: 1},
+			fitSplineSeg{Fit: []planePoint{{}, {U: 4, V: 3}, {U: 8}}, TStart: 1},
+		}}}
 		areaWork := freeform.NewFreeformWork()
 		_, err := profile.EvaluatorIntegrals(freeform.MomentAreaOrder, areaWork)
 		require.NoError(t, err)
