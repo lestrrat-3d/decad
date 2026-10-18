@@ -36,7 +36,7 @@ func BenchmarkPointPlaneCapCentroidRealSplit(b *testing.B) {
 	require.NoError(b, err)
 	require.Len(b, profileSketch.Profiles(), 1)
 	apex := r3.NewVec(1, 0, 0)
-	tooth, err := doc.LoftFromPoint(b.Context(), apex, profileSketch, profileSketch.Profiles()[0])
+	tooth, err := LoftFromPoint(b.Context(), doc, apex, profileSketch, profileSketch.Profiles()[0])
 	require.NoError(b, err)
 
 	sheetSketch, err := world.CreateSketch(world.XY())

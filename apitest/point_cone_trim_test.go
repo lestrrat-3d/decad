@@ -34,7 +34,7 @@ func pointConeTooth(t *testing.T, doc *decad.Document) *decad.Body {
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
 	require.True(t, profiles[0].Valid)
-	tooth, err := doc.LoftFromPoint(t.Context(), r3.Vec{}, s, profiles[0])
+	tooth, err := decad.LoftFromPoint(t.Context(), doc, r3.Vec{}, s, profiles[0])
 	require.NoError(t, err)
 	return tooth
 }

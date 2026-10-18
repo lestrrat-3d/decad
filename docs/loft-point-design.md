@@ -1,9 +1,9 @@
 # Point-section loft
 
-`Document.LoftFromPoint(ctx, apex, sketch, profile)` builds the cone over one
+`LoftFromPoint(ctx, doc, apex, sketch, profile)` builds the cone over one
 authenticated, closed Sketch region. The point is a world coordinate in
 millimetres. The region keeps its recorded segment kinds and exact Sketch trim
-ranges. The method accepts a single outer loop and refuses holes: coning every
+ranges. The function accepts a single outer loop and refuses holes: coning every
 hole loop to the same point would give the apex a non-disk vertex link.
 
 The apex must lie off the profile plane. The evaluator keeps one apex vertex,

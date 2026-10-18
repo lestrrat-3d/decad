@@ -29,7 +29,7 @@ func Example_decad_loft_from_point() {
 		fmt.Println(err)
 		return
 	}
-	body, err := decad.New().LoftFromPoint(ctx, r3.NewVec(0, 0, 0), s, s.Profiles()[0])
+	body, err := decad.LoftFromPoint(ctx, decad.New(), r3.NewVec(0, 0, 0), s, s.Profiles()[0])
 	if err != nil {
 		fmt.Println(err)
 		return
