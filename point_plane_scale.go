@@ -120,10 +120,6 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 	next.LoftFacesTrim = nil
 	next.CopyLineage = nil
 	next.SpiralTools = nil
-	if pointSlab {
-		next.PointPlaneCapDisplacement = proofbound.AbsSumUpper(
-			proofbound.ProductUpper(fp.PointPlaneCapDisplacement, s), mesh.Round)
-	}
 	next.PointSection, next.PointCone = nil, nil
 	next.ExactSourceVerts, next.ExactSourceTris = nil, nil
 	next.LowerSupport = nil
@@ -152,22 +148,11 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 			group.NormalBound = 2
 		}
 	}
+	if pointSlab {
+		facetedrecord.CarryPointPlaneScale(fp, &next, anchor, s, mesh.Round)
+	}
 	if proofbound.IsNonFinite(next.DPair) || proofbound.IsNonFinite(next.PointPlaneCapDisplacement) {
 		return nil, fmt.Errorf("%w: the scaled source proof is not finite", ErrUnsupported)
-	}
-	if pointSlab {
-		record := pointPlaneSimilarityRecord{Slice: fp.PointPlane}
-		if fp.PointSimilarity == nil {
-			if fp.Xform != r3.Identity() {
-				record.Steps = append(record.Steps, pointPlaneSimilarityStep{Motion: fp.Xform,
-					MeshBound: fp.MeshBound, CapDisplacement: fp.PointPlaneCapDisplacement})
-			}
-		} else {
-			record.Steps = append(record.Steps, fp.PointSimilarity.Steps...)
-		}
-		record.Steps = append(record.Steps, pointPlaneSimilarityStep{Anchor: anchor, Factor: s,
-			MeshBound: next.MeshBound, CapDisplacement: next.PointPlaneCapDisplacement})
-		next.PointSimilarity = &record
 	}
 	ref := d.nextProducerID()
 	scaled, err := bodyResult(facetedrecord.Build(ctx, envOf(documentNode(d), ref), next))
