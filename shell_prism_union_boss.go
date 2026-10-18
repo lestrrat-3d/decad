@@ -2,7 +2,6 @@ package decad
 
 import (
 	"context"
-	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
@@ -160,56 +159,9 @@ func prismUnionBossShellAuthenticate(result *Body, fp facetedPayload, plateBody,
 		opening.n.Origins[0] != refOf(CapEnd(bossBody)) {
 		return src, false
 	}
-	var topVerts map[int]struct{}
-	var topTris [][3]int
-	for fi, faceIdx := range fp.FaceOf {
-		if faceIdx != openingIdx {
-			continue
-		}
-		if topVerts == nil {
-			topVerts = map[int]struct{}{}
-			src.topGroup = fp.Src[fi]
-		}
-		if fp.Src[fi] != src.topGroup {
-			return src, false
-		}
-		topTris = append(topTris, fp.Tris[fi])
-		for _, vi := range fp.Tris[fi] {
-			topVerts[vi] = struct{}{}
-		}
-	}
-	if len(topVerts) != 4 || len(topTris) != 2 || src.topGroup < 0 || src.topGroup >= len(fp.Groups) ||
-		len(fp.Groups[src.topGroup].Origins) != 1 || !fp.Groups[src.topGroup].Planar ||
-		fp.Groups[src.topGroup].Origins[0] != refOf(CapEnd(bossBody)) {
-		return src, false
-	}
-	for fi, group := range fp.Src {
-		if group == src.topGroup && fp.FaceOf[fi] != openingIdx {
-			return src, false
-		}
-	}
-	for i, group := range fp.Groups {
-		if i == src.topGroup {
-			continue
-		}
-		if slices.Contains(group.Origins, refOf(CapEnd(bossBody))) {
-			return src, false
-		}
-	}
-	for i, p := range corners {
-		found := -1
-		for vi := range topVerts {
-			if fp.Verts[vi] == p {
-				found = vi
-				break
-			}
-		}
-		if found < 0 {
-			return src, false
-		}
-		src.outer[i] = found
-	}
-	if !prismshell.PrismUnionBossShellCompleteCap(src.outer, topTris) {
+	src.outer, src.topGroup, ok = prismshell.PrismUnionBossShellCapOwners(
+		fp, openingIdx, refOf(CapEnd(bossBody)), corners)
+	if !ok {
 		return src, false
 	}
 	return src, true
