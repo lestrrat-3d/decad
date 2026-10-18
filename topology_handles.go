@@ -184,30 +184,6 @@ func coedgeHandles(ns []topo.CoEdge) []CoEdge {
 	return out
 }
 
-// coedgeStart returns the node of the vertex where the use n starts, or nil
-// for a use with no edge: CoEdge.Start's answer, as a node.
-func coedgeStart(n topo.CoEdge) *topo.Vertex {
-	if n.Edge == nil {
-		return nil
-	}
-	if n.Forward {
-		return n.Edge.Start
-	}
-	return n.Edge.End
-}
-
-// coedgeEnd returns the node of the vertex where the use n ends, or nil for a
-// use with no edge: CoEdge.End's answer, as a node.
-func coedgeEnd(n topo.CoEdge) *topo.Vertex {
-	if n.Edge == nil {
-		return nil
-	}
-	if n.Forward {
-		return n.Edge.End
-	}
-	return n.Edge.Start
-}
-
 // bornLoop sets l's node Owner to l and returns l. Every root Loop is born
 // through it, so loopHandle maps any loop node a face links back to the one
 // handle that holds it.

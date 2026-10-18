@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/stitchrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -312,7 +313,8 @@ func TestStitchCurvedMassCorrectsInwardOrientation(t *testing.T) {
 		stitchrecord.ReverseFaceOrientation(faceNode(f))
 	}
 
-	vol, cen, err := stitchrecord.CurvedMass(context.Background(), faceNodes(faces), vertexHandle(coedgeStart(faces[0].n.Loops[0].CoEdges[0])).Position().Value, 0)
+	vol, cen, err := stitchrecord.CurvedMass(context.Background(), faceNodes(faces),
+		vertexHandle(topobuild.CoEdgeStart(faces[0].n.Loops[0].CoEdges[0])).Position().Value, 0)
 	require.NoError(t, err)
 	require.Greater(t, vol.Value.Base(), 0.0, "the global sign correction must recover a positive volume from an inward-reversed face set")
 	require.InDelta(t, 2000*3.141592653589793, vol.Value.Base(), 1e-6)
@@ -343,7 +345,7 @@ func TestStitchCurvedMassPlacementAllowanceWidensBounds(t *testing.T) {
 	sheet, err := Revolve(t.Context(), d, s, s.Profiles()[0], uAxis, FullRevolution{}, WithSurfaceResult())
 	require.NoError(t, err)
 	faces := sheet.Faces()
-	anchor := vertexHandle(coedgeStart(faces[0].n.Loops[0].CoEdges[0])).Position().Value
+	anchor := vertexHandle(topobuild.CoEdgeStart(faces[0].n.Loops[0].CoEdges[0])).Position().Value
 
 	unplacedVol, unplacedCen, err := stitchrecord.CurvedMass(context.Background(), faceNodes(faces), anchor, 0)
 	require.NoError(t, err)
@@ -718,7 +720,7 @@ func TestStitchCurvedMassCorrectsInwardOrientationForCone(t *testing.T) {
 		stitchrecord.ReverseFaceOrientation(faceNode(f))
 	}
 
-	anchor := vertexHandle(coedgeStart(faces[0].n.Loops[0].CoEdges[0])).Position().Value
+	anchor := vertexHandle(topobuild.CoEdgeStart(faces[0].n.Loops[0].CoEdges[0])).Position().Value
 	vol, cen, err := stitchrecord.CurvedMass(context.Background(), faceNodes(faces), anchor, 0)
 	require.NoError(t, err)
 	require.Greater(t, vol.Value.Base(), 0.0, "the global sign correction must recover a positive volume from an inward-reversed Cone face set")
@@ -1143,7 +1145,7 @@ func TestStitchCurvedMassCorrectsInwardOrientationForTorus(t *testing.T) {
 		stitchrecord.ReverseFaceOrientation(faceNode(f))
 	}
 
-	anchor := vertexHandle(coedgeStart(faces[0].n.Loops[0].CoEdges[0])).Position().Value
+	anchor := vertexHandle(topobuild.CoEdgeStart(faces[0].n.Loops[0].CoEdges[0])).Position().Value
 	vol, cen, err := stitchrecord.CurvedMass(context.Background(), faceNodes(faces), anchor, 0)
 	require.NoError(t, err)
 	require.Greater(t, vol.Value.Base(), 0.0, "the global sign correction must recover a positive volume from an inward-reversed Torus face set")

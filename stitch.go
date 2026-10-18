@@ -104,12 +104,12 @@ func assertStitchSourceOwners(faces []*topo.Face) {
 	for _, f := range faces {
 		for _, l := range f.Loops {
 			for _, ce := range l.CoEdges {
-				start := coedgeStart(ce)
+				start := topobuild.CoEdgeStart(ce)
 				if start == nil {
 					return
 				}
 				vertexHandle(start)
-				end := coedgeEnd(ce)
+				end := topobuild.CoEdgeEnd(ce)
 				if end == nil {
 					return
 				}
