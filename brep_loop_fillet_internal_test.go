@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"math/big"
@@ -900,6 +901,22 @@ func TestPartialFilletContourCollapsesSelectedArc(t *testing.T) {
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "matched [selected edge[0]")
 	require.NotContains(t, err.Error(), "selected edge[2]")
+	budgetRead, err := newBrepLoopRead(t.Context(), bp, brepModifyRequest{edges: []*Edge{top[0]}})
+	require.NoError(t, err)
+	budgetRead.state.Budget = proofbound.NewWallWorkBudget(0)
+	require.ErrorIs(t, budgetRead.matchEdges(), proofbound.ErrWallWorkBudget)
+	require.Equal(t, -1, budgetRead.state.Matched[0])
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancelRead, err := newBrepLoopRead(ctx, bp, brepModifyRequest{edges: []*Edge{top[0]}})
+	require.NoError(t, err)
+	for range proofbound.WorkPollInterval - 1 {
+		require.NoError(t, cancelRead.state.Budget.Step())
+	}
+	cancel()
+	require.ErrorIs(t, cancelRead.matchEdges(), context.Canceled)
+	require.Equal(t, -1, cancelRead.state.Matched[0])
+
 	sel, selected, ok := r.fullSelection().partialSelectedLoop()
 	require.True(t, ok)
 	cl, err := capblend.OneLoopCornerLoop(r.state.Budget, bp.Faces[sel.Face].RegionLoop(sel.Loop), freeform.NewFreeformWork())

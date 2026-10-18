@@ -202,7 +202,7 @@ func (r *brepEdgeRoute) admitEdge(ordinal int, e *Edge) (*brepEdgeBlend, error) 
 		}
 		p := refView.Point(owner.DirFrom[0], owner.DirFrom[1], owner.DirFrom[2])
 		q := refView.Point(owner.DirTo[0], owner.DirTo[1], owner.DirTo[2])
-		if !matchEndpoints(e.n.Start.Position, e.n.End.Position, p, q, tol) {
+		if !brepgeom.MatchEndpoints(e.n.Start.Position, e.n.End.Position, p, q, tol) {
 			continue
 		}
 		if found >= 0 {
@@ -256,7 +256,7 @@ func (r *brepEdgeRoute) asymmetricReferenceSide(eb *brepEdgeBlend) (int, error) 
 	}
 	selected := -1
 	for j, index := range eb.Adj {
-		if !r.call.asym.matchesRecordFace(ref, index) {
+		if !breprecord.MatchRecordFace(&r.call.asym.body.n, &ref.n, r.call.asym.recordRoles, index) {
 			continue
 		}
 		if selected >= 0 && selected != j {

@@ -39,42 +39,7 @@ func selectedStraightEdgesShareVertex(edges []*Edge) bool {
 // as a proper subset. A Fillet of one route E edge whose endpoint-face
 // corner has the wrong material wedge may also reach this reading.
 func (s brepLoopSelection) partialSelectedLoop() (brepLoopSel, []bool, bool) {
-	r := s.read
-	if s.len() == 0 || s.match(0) < 0 {
-		return brepLoopSel{}, nil, false
-	}
-	for _, firstUse := range r.state.Topology.Edges[s.match(0)] {
-		u := r.state.Topology.Uses[firstUse]
-		if u.Part != brepLoopSeg || !r.state.Payload.Faces[u.Face].Planar() {
-			continue
-		}
-		selected := make([]bool, len(r.state.Topology.Planar[u.Face][u.Loop]))
-		valid := true
-		for i := range s.len() {
-			ei := s.match(i)
-			if ei < 0 {
-				valid = false
-				break
-			}
-			found := false
-			for _, ui := range r.state.Topology.Edges[ei] {
-				v := r.state.Topology.Uses[ui]
-				if v.Part == brepLoopSeg && v.Face == u.Face && v.Loop == u.Loop {
-					selected[v.Seg] = true
-					found = true
-				}
-			}
-			if !found {
-				valid = false
-				break
-			}
-		}
-		if !valid || s.len() >= len(selected) {
-			continue
-		}
-		return brepLoopSel{Face: u.Face, Loop: u.Loop}, selected, true
-	}
-	return brepLoopSel{}, nil, false
+	return s.view.PartialSelectedLoop()
 }
 
 // brepFilletPartialLoop reads each selected edge through route E, then moves

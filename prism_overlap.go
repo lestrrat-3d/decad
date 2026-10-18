@@ -49,7 +49,7 @@ func prismOverlapVolume(ctx context.Context, a, b *Body) (Measurement, bool, err
 	// and unchanged via Task 1's extracted helper — G1-G4, the
 	// trimmed-circular refusal, G6's hole-free arms, G5's Intersect
 	// z-relation, the arrangement cap, and the re-expression.
-	budget, pa, pb, reexpress, ok, err := admitPrismIntersectPair(ctx, a, b)
+	budget, pa, pb, reexpress, ok, err := prismcells.AdmitIntersectPair(ctx, a.n.Payload, b.n.Payload)
 	if err != nil {
 		if errors.Is(err, ErrUnsupported) {
 			// RB7 (§9): the arrangement cap. Wrapped exactly as

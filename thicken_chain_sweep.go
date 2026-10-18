@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
 	"github.com/lestrrat-3d/decad/internal/sweeprecord"
 	"github.com/lestrrat-3d/decad/internal/thickenaxis"
+	"github.com/lestrrat-3d/decad/internal/thickenbuild"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -35,7 +36,8 @@ func thickenArcChainSweep(ctx context.Context, d *Document, sp chainSweepPayload
 	if !reverse && (sp.Revolve.Phi0 != 0 || sp.Revolve.Phi1 <= 0) {
 		return nil, fmt.Errorf(`%w: this chain Sweep has no path-order cap proof`, ErrUnsupported)
 	}
-	body, err := thickenChainRevolve(ctx, d, sp.Revolve, side, tmm, tDelta)
+	body, err := bodyResult(thickenbuild.ChainRevolve(ctx, envOf(documentNode(d), d.nextProducerID()),
+		sp.Revolve, thickenbuild.Side(side), tmm, tDelta))
 	if err != nil {
 		return nil, err
 	}
@@ -68,13 +70,13 @@ func thickenCompositeChainSweep(ctx context.Context, d *Document, sp chainSweepP
 	if err := sweepinput.CardinalChainSweepClass(straight.Chains[0], plane, sp.Path); err != nil {
 		return nil, err
 	}
-	amount, err := thickenAmount(tmm, tDelta, side)
+	amount, err := thickenbuild.Amount(tmm, tDelta, thickenbuild.Side(side))
 	if err != nil {
 		return nil, err
 	}
 	budget := proofbound.NewWorkBudget(ctx)
 	work := freeform.NewFreeformWork()
-	right, left := thickenRibbonSteps(side)
+	right, left := thickenbuild.RibbonSteps(thickenbuild.Side(side))
 	// The path's exact half-circle rotates about U=R along +V. RibbonProfile's
 	// interval scan checks every moving piece against that axis, so the whole
 	// offset family has positive hoop radius before either solid span builds.

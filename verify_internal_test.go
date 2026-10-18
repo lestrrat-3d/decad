@@ -9,6 +9,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/gatediameter"
 	"github.com/lestrrat-3d/decad/internal/gatewitness"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
@@ -528,7 +529,7 @@ func TestBodyGateDiameterFreeformArmDeclineReachesFallbackWithNoArm(t *testing.T
 			require.False(t, armOK, "the arm must withhold on this path")
 
 			body := bornBody(&Body{n: topo.Body{Payload: pp}})
-			_, fallbackOK, err := fallbackGateDiameter(proofbound.NewWorkBudget(t.Context()), body)
+			_, fallbackOK, err := gatediameter.FallbackGateDiameter(proofbound.NewWorkBudget(t.Context()), &body.n)
 			require.NoError(t, err)
 			require.False(t, fallbackOK,
 				"the fallback a withheld answer falls through to has no arm for a zero-sectionDelta prism")
@@ -590,7 +591,8 @@ func TestBodyGateDiameterFreeformArmSkipsSectionDisplacedPrism(t *testing.T) {
 	require.False(t, armOK, "no free-form segment is present, so the new arm must decline outright")
 	require.Zero(t, armD)
 
-	want, wantOK, err := fallbackGateDiameter(proofbound.NewWorkBudget(t.Context()), bornBody(&Body{n: topo.Body{Payload: pp}}))
+	wantBody := bornBody(&Body{n: topo.Body{Payload: pp}})
+	want, wantOK, err := gatediameter.FallbackGateDiameter(proofbound.NewWorkBudget(t.Context()), &wantBody.n)
 	require.NoError(t, err)
 	require.True(t, wantOK)
 
@@ -1094,7 +1096,8 @@ func TestFallbackGateDiameterReadsCurvedWallStations(t *testing.T) {
 	require.True(t, isPrism)
 	pp.SectionDelta = math.Ldexp(1, -40)
 
-	d, ok, err := fallbackGateDiameter(proofbound.NewWorkBudget(t.Context()), bornBody(&Body{n: topo.Body{Payload: pp}}))
+	fallbackBody := bornBody(&Body{n: topo.Body{Payload: pp}})
+	d, ok, err := gatediameter.FallbackGateDiameter(proofbound.NewWorkBudget(t.Context()), &fallbackBody.n)
 	require.NoError(t, err)
 	require.True(t, ok)
 	requireStationDiameter(t, d, 0.001, arcChordDiameterSquare(t, pp))
