@@ -54,8 +54,8 @@ func NewCEdge(e *topo.Edge) (*CEdge, bool) {
 	}
 }
 
-// ShellWitness returns a point provenly on the shell: the first available
-// coedge start, or a loop-less closed face's synthesized surface point (§2).
+// ShellWitness returns a point provenly on the shell: the first non-nil
+// underlying edge start it finds, or a loop-less closed face's surface point (§2).
 func ShellWitness(sh *topo.FaceShell) (r3.Vec, bool) {
 	for _, f := range sh.Faces {
 		for _, l := range f.Loops {
