@@ -516,7 +516,7 @@ func TestChainFedRefusalsStillRunTheSeamGates(t *testing.T) {
 	_, err = decad.Sweep(t.Context(), doc, s, ch, path)
 	require.ErrorIs(t, err, decad.ErrStaleProfile)
 
-	_, err = doc.LoftChain(t.Context(), s, ch, s, ch)
+	_, err = decad.LoftChain(t.Context(), doc, s, ch, s, ch)
 	require.ErrorIs(t, err, decad.ErrStaleProfile)
 }
 

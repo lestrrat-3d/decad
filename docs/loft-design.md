@@ -96,7 +96,7 @@ between two full-circle loops is not reachable by this construction.
   what the target case is.
 
 **`Document.Loft` takes two closed profiles and always will. The OPEN sketch
-chain is `Document.LoftChain`, a separate entry point, and §16 owns it** — how
+chain uses `LoftChain`, a separate entry point, and §16 owns it** — how
 Table P reads over two open walks, the one row that has no counterpart there,
 the gate that replaces it, the refusals, and the staging. Everything §3
 through §15 states about correspondence, construction, the crossing audit and
@@ -2590,7 +2590,7 @@ is where a non-parallel chain loft would land once it can state one.
 ### 16.3 The entry point
 
 ```go
-func (d *Document) LoftChain(ctx context.Context, s0 *sketch.Sketch,
+func LoftChain(ctx context.Context, d *Document, s0 *sketch.Sketch,
     c0 *sketch.Chain, s1 *sketch.Sketch, c1 *sketch.Chain,
     opts ...ChainLoftOption) (*Body, error)
 
@@ -2684,7 +2684,7 @@ not build change nothing about that.
 
 | PR | Lands | Still staged |
 |---|---|---|
-| **L1** | `Document.LoftChain` over a `LineSeg`-only correspondence: the sealed `ChainLoftOption` tier, Table SL rows SL1 through SL6, §16.2's plane gate, the open-walk cell walk, and the four readings §16.5 states | a curved correspondence (SL7); a non-parallel plane pair; every Table D consumer beyond D6 |
+| **L1** | `LoftChain` over a `LineSeg`-only correspondence: the sealed `ChainLoftOption` tier, Table SL rows SL1 through SL6, §16.2's plane gate, the open-walk cell walk, and the four readings §16.5 states | a curved correspondence (SL7); a non-parallel plane pair; every Table D consumer beyond D6 |
 | **L2** | a same-kind `ArcSeg` correspondence, once §5.1's station generator states each COMPUTED station's own side against the from-plane rather than inheriting it from the plane pair | a non-parallel plane pair |
 | **L3 (reach, not committed by this document)** | a non-parallel plane pair, which needs a stated positive side that the two planes' own offset no longer supplies | — |
 

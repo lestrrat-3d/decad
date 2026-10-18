@@ -28,7 +28,7 @@ func TestTessellateRefusalNamesChainLoftPayload(t *testing.T) {
 		[][2]float64{{0, 0}, {40, 0}},
 		[][2]float64{{0, 0}, {40, 0}},
 	)
-	body, err := decad.New().LoftChain(t.Context(), s0, ch0, s1, ch1)
+	body, err := decad.LoftChain(t.Context(), decad.New(), s0, ch0, s1, ch1)
 	require.NoError(t, err)
 	_, err = body.Tessellate(t.Context(), units.Millimeters(0.5))
 	require.ErrorIs(t, err, decad.ErrUnsupported)

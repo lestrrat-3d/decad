@@ -14,7 +14,7 @@ func TestLoftChainVerifyValidityAfterAudit(t *testing.T) {
 			pts := [][2]float64{{0, 0}, {10, 0}, {10, 8}, {22, 8}}
 			s0, ch0, s1, ch1 := chainLoftPair(t, 5, pts, pts)
 			doc := decad.New()
-			body, err := doc.LoftChain(t.Context(), s0, ch0, s1, ch1)
+			body, err := decad.LoftChain(t.Context(), doc, s0, ch0, s1, ch1)
 			require.NoError(t, err)
 			require.Len(t, body.Faces(), 6)
 

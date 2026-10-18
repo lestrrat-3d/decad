@@ -790,7 +790,6 @@ body (§6) and takes no `*Document` argument. An operation that takes no body
 |---|---|
 | `Document.Loft`, `LoftFaces`, `LoftFromPoint`, `LoftSections` | the same names with `ctx, doc` leading |
 | `Document.Sweep` over a profile or a chain | `Sweep(ctx, doc, s, sec, path, opts...)`, one generic function over `Section` (§8) |
-| `Document.LoftChain` | the same name with `ctx, doc` leading |
 
 **Every operation that builds a body from a sketch takes a `ctx`, `Extrude`,
 `Revolve` over a chain included.** Each checks `ctx` at
@@ -1324,7 +1323,7 @@ func WithThickenSide(side ThickenSide) ThickenOption
 // BodySheet, so WithSurfaceResult() is not among their options: ChainLoftOption
 // is LoftChain's own sealed tier, which SurfaceResultOption does not implement.
 // Extrude, Sweep and Revolve take a chain through Section instead (above).
-func (d *Document) LoftChain(ctx context.Context, s0 *sketch.Sketch, c0 *sketch.Chain, s1 *sketch.Sketch, c1 *sketch.Chain, opts ...ChainLoftOption) (*Body, error)
+func LoftChain(ctx context.Context, d *Document, s0 *sketch.Sketch, c0 *sketch.Chain, s1 *sketch.Sketch, c1 *sketch.Chain, opts ...ChainLoftOption) (*Body, error)
 ```
 
 `ThickenSide` is `ThickenPositive` (default), `ThickenNegative` or
