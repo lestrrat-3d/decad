@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/exactrotation"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/shellseparation"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -49,48 +49,6 @@ func bindFacetedCopyLineage(image, source *Body, targetPlacement r3.Transform, d
 func facetedShell(p facetedPayload) shellseparation.Shell {
 	return shellseparation.Shell{Verts: p.Verts, Tris: p.Tris,
 		VertexBound: p.VertexBound, MeshBound: p.MeshBound}
-}
-
-func facetedCopyFaceOwners(source, image *Body, first, placed facetedPayload) (map[*topo.Face]*topo.Face, bool) {
-	if len(first.Tris) != len(placed.Tris) || len(first.Src) != len(first.Tris) ||
-		len(placed.Src) != len(placed.Tris) || len(first.FaceOf) != len(first.Tris) ||
-		len(placed.FaceOf) != len(placed.Tris) || len(first.Verts) != len(placed.Verts) {
-		return nil, false
-	}
-	sourceFaces, imageFaces := source.Faces(), image.Faces()
-	owners := make(map[*topo.Face]*topo.Face, len(sourceFaces))
-	reverse := make(map[*topo.Face]*topo.Face, len(imageFaces))
-	for i, triangle := range first.Tris {
-		want := triangle
-		if placed.CopyLineage.Motion.IsReflection() {
-			want[1], want[2] = want[2], want[1]
-		}
-		if placed.Tris[i] != want || first.Src[i] != placed.Src[i] ||
-			first.FaceOf[i] < 0 || first.FaceOf[i] >= len(sourceFaces) ||
-			placed.FaceOf[i] < 0 || placed.FaceOf[i] >= len(imageFaces) {
-			return nil, false
-		}
-		original, copyFace := faceNode(sourceFaces[first.FaceOf[i]]), faceNode(imageFaces[placed.FaceOf[i]])
-		if owner := owners[original]; owner != nil && owner != copyFace {
-			return nil, false
-		}
-		if prior := reverse[copyFace]; prior != nil && prior != original {
-			return nil, false
-		}
-		owners[original], reverse[copyFace] = copyFace, original
-	}
-	if len(owners) != len(sourceFaces) || len(reverse) != len(imageFaces) {
-		return nil, false
-	}
-	for original, copyFace := range owners {
-		copyOrigins := faceHandle(copyFace).originRefs()
-		for _, sourceOrigin := range faceHandle(original).originRefs() {
-			if !slices.Contains(copyOrigins, sourceOrigin) {
-				return nil, false
-			}
-		}
-	}
-	return owners, true
 }
 
 // certifyFacetedCopies consumes live source and Copy outputs. It rechecks
@@ -150,7 +108,7 @@ func certifyFacetedCopies(ctx context.Context, tools []*Body) (*facetedCopySet, 
 		if err != nil || motion != record.Motion {
 			return nil, fmt.Errorf("%w: copied tool %d changed its recorded motion", ErrUnsupported, i+1)
 		}
-		owners, mapped := facetedCopyFaceOwners(source, tool, first, part)
+		owners, mapped := facetedrecord.CopyFaceOwners(bodyNode(source), bodyNode(tool), first, part)
 		if !mapped {
 			return nil, fmt.Errorf("%w: copied tool %d lost source face ownership", ErrUnsupported, i+1)
 		}
