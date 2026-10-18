@@ -414,37 +414,98 @@ func TestVerifyLinkageAgreesWithVerifyMotion(t *testing.T) {
 			func(th float64) float64 { return 14 * (1 - math.Cos(th)) },
 			nil, decad.WithResolution(units.Scalar(1.0 / 1024))},
 	}
-	both := func(t *testing.T, static func(t *testing.T, doc *decad.Document), motionRes []decad.MotionOption, linkageRes decad.MotionOption) (*decad.MotionReport, *decad.LinkageReport) {
+	both := func(t *testing.T, static func(t *testing.T, doc *decad.Document), motionRes []decad.MotionOption, linkageRes decad.MotionOption) (*decad.MotionReport, *decad.LinkageReport, *decad.Body, *decad.Body) {
 		t.Helper()
 		doc := decad.New()
 		arm := motionArm(t, doc)
 		static(t, doc)
+		live := doc.Bodies()
+		require.Equal(t, 2, len(live))
 		motion := verifyMotion(t, doc, []*decad.Body{arm}, armSwing(), motionRes...)
 		l := decad.NewLinkage()
 		link, err := l.Ground().Revolute(r3.Vec{}, r3.NewVec(0, 0, 1), []*decad.Body{arm})
 		require.NoError(t, err)
 		drive := decad.Drive{{Link: link, From: units.Degrees(0), To: units.Degrees(90)}}
-		return motion, verifyLinkage(t, doc, l, drive, linkageRes)
+		return motion, verifyLinkage(t, doc, l, drive, linkageRes), arm, live[1]
 	}
-	requireSameCollisions := func(t *testing.T, motion *decad.MotionReport, linkage *decad.LinkageReport) {
+	requireSameFindings := func(t *testing.T, motion, linkage []decad.Diagnostic, arm, stationary *decad.Body) {
 		t.Helper()
-		require.Len(t, linkage.Collisions, len(motion.Collisions))
+		require.Equal(t, motion == nil, linkage == nil)
+		require.Equal(t, len(motion), len(linkage))
+		for k, want := range motion {
+			got := linkage[k]
+			require.Equal(t, want.Code, got.Code, "diagnostic %d code", k)
+			require.Truef(t, want.Body == got.Body, "diagnostic %d body identity", k)
+			if want.Body != nil {
+				require.Truef(t, want.Body == arm || want.Body == stationary, "diagnostic %d original body", k)
+			}
+			require.Equal(t, want.Pair == nil, got.Pair == nil, "diagnostic %d pair shape", k)
+			if want.Pair != nil {
+				require.Truef(t, want.Pair.A == arm && want.Pair.B == stationary, "diagnostic %d original pair", k)
+				require.Truef(t, want.Pair.A == got.Pair.A && want.Pair.B == got.Pair.B,
+					"diagnostic %d pair identity and order", k)
+			}
+			require.Equal(t, want.At == nil, got.At == nil, "diagnostic %d parameter shape", k)
+			if want.At != nil {
+				require.InDelta(t, want.At.Mag(), 90*got.At.Mag(), 1e-9, "diagnostic %d parameter order", k)
+			}
+		}
+	}
+	requireSameShape := func(t *testing.T, motion *decad.MotionReport, linkage *decad.LinkageReport,
+		arm, stationary *decad.Body) {
+		t.Helper()
+		require.Equal(t, 1, len(motion.Moving))
+		require.True(t, motion.Moving[0] == arm, "moving body retains its original handle")
+		require.Equal(t, 1, len(motion.Against))
+		require.Equal(t, len(motion.Against), len(linkage.Against))
+		require.True(t, motion.Against[0] == stationary && linkage.Against[0] == stationary,
+			"both static rows retain the original handle")
+		require.Equal(t, motion.Against == nil, linkage.Against == nil)
+		require.Equal(t, motion.Poses == nil, linkage.Poses == nil)
+		require.Equal(t, motion.Intervals == nil, linkage.Intervals == nil)
+		require.Equal(t, motion.Collisions == nil, linkage.Collisions == nil)
+		require.False(t, motion.Collisions == nil, "empty collision rows remain non-nil")
+		require.Equal(t, motion.Clearance == nil, linkage.Clearance == nil)
+		require.False(t, motion.Diagnostics == nil, "empty report diagnostics remain non-nil")
+		requireSameFindings(t, motion.Diagnostics, linkage.Diagnostics, arm, stationary)
+		if len(motion.Collisions) > 0 {
+			found := false
+			for _, diag := range motion.Diagnostics {
+				found = found || diag.Code == decad.DiagMotionCollision
+			}
+			require.True(t, found, "a colliding fixture must exercise pair diagnostics")
+		}
+		for k, pose := range motion.Poses {
+			got := linkage.Poses[k]
+			require.Equal(t, pose.Interferences == nil, got.Interferences == nil, "pose %d interference shape", k)
+			require.Equal(t, pose.Clearances == nil, got.Clearances == nil, "pose %d clearance shape", k)
+			require.False(t, pose.Interferences == nil, "pose %d empty interference rows remain non-nil", k)
+			require.False(t, pose.Clearances == nil, "pose %d empty clearance rows remain non-nil", k)
+			require.False(t, pose.Diagnostics == nil, "pose %d empty diagnostics remain non-nil", k)
+			requireSameFindings(t, pose.Diagnostics, got.Diagnostics, arm, stationary)
+		}
+	}
+	requireSameCollisions := func(t *testing.T, motion *decad.MotionReport, linkage *decad.LinkageReport,
+		arm, stationary *decad.Body) {
+		t.Helper()
+		require.Equal(t, len(motion.Collisions), len(linkage.Collisions))
 		for k, c := range motion.Collisions {
 			got := linkage.Collisions[k]
 			require.InDelta(t, c.At.Mag(), 90*got.At.Mag(), 1e-9)
-			require.Same(t, c.Moving, got.A)
-			require.Same(t, c.Static, got.B)
+			require.Truef(t, c.Moving == arm && got.A == arm, "collision %d moving handle", k)
+			require.Truef(t, c.Static == stationary && got.B == stationary, "collision %d static handle", k)
 			require.InDelta(t, c.Volume.Value.Mag(), got.Volume.Value.Mag(), 1e-9)
 		}
 	}
 	for _, tc := range fixtures {
 		t.Run(tc.name+" at the endpoints alone", func(t *testing.T) {
 			t.Parallel()
-			motion, linkage := both(t, tc.static, []decad.MotionOption{endpointsOnly(armSwing())}, decad.WithResolution(units.Scalar(1)))
+			motion, linkage, arm, stationary := both(t, tc.static,
+				[]decad.MotionOption{endpointsOnly(armSwing())}, decad.WithResolution(units.Scalar(1)))
 			require.Equal(t, motion.Status, linkage.Status)
-			require.Equal(t, motion.Against, linkage.Against)
-			require.Len(t, linkage.Poses, len(motion.Poses))
-			require.Len(t, linkage.Intervals, len(motion.Intervals))
+			require.Equal(t, len(motion.Poses), len(linkage.Poses))
+			require.Equal(t, len(motion.Intervals), len(linkage.Intervals))
+			requireSameShape(t, motion, linkage, arm, stationary)
 			for k, iv := range motion.Intervals {
 				got := linkage.Intervals[k]
 				require.Equal(t, iv.Outcome, got.Outcome)
@@ -456,10 +517,10 @@ func TestVerifyLinkageAgreesWithVerifyMotion(t *testing.T) {
 				require.NotNil(t, got.Clearance)
 				require.InDelta(t, iv.Clearance.Value.Mag(), got.Clearance.Value.Mag(), 1e-9)
 			}
-			requireSameCollisions(t, motion, linkage)
+			requireSameCollisions(t, motion, linkage, arm, stationary)
 			for k, pose := range motion.Poses {
 				linkPose := linkage.Poses[k]
-				require.Len(t, linkPose.Clearances, len(pose.Clearances))
+				require.Equal(t, len(pose.Clearances), len(linkPose.Clearances))
 				for n, row := range pose.Clearances {
 					require.Equal(t, row.Gap, linkPose.Clearances[n].Gap, `both paths place the arm by the same pose`)
 				}
@@ -467,11 +528,12 @@ func TestVerifyLinkageAgreesWithVerifyMotion(t *testing.T) {
 		})
 		t.Run(tc.name+" bisected", func(t *testing.T) {
 			t.Parallel()
-			motion, linkage := both(t, tc.static, tc.motionRes, tc.linkageRes)
-			requireSameCollisions(t, motion, linkage)
+			motion, linkage, arm, stationary := both(t, tc.static, tc.motionRes, tc.linkageRes)
+			requireSameCollisions(t, motion, linkage, arm, stationary)
 			require.Equal(t, motion.Status, linkage.Status)
-			require.Len(t, linkage.Poses, len(motion.Poses))
-			require.Len(t, linkage.Intervals, len(motion.Intervals))
+			require.Equal(t, len(motion.Poses), len(linkage.Poses))
+			require.Equal(t, len(motion.Intervals), len(linkage.Intervals))
+			requireSameShape(t, motion, linkage, arm, stationary)
 			for k, iv := range motion.Intervals {
 				got := linkage.Intervals[k]
 				require.Equal(t, iv.Outcome, got.Outcome)
