@@ -253,6 +253,35 @@ func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 	}
 	result := loftSourcePartition{carrier: carrier, crossing: crossing, seams: seams, walls: walls}
 	result.capLevels = [3]*big.Rat{big.NewRat(0, 1), new(big.Rat).Set(axis.Shift), new(big.Rat).Set(prismTop)}
+	if !reportSeamSize {
+		// Reject cuts Sketch cannot witness before its paired-cap producer runs.
+		for capIndex := range 2 {
+			loftLines := bottom
+			if capIndex == 1 {
+				loftLines = top
+			}
+			height := big.NewRat(int64(capIndex), 1)
+			for k, i := range crossing {
+				if err := budget.Step(); err != nil {
+					return no, false, err
+				}
+				lineParam, carrierParam, ok := seams[k].At(height)
+				if !ok || !arithmetic.valid(lineParam) || !arithmetic.valid(carrierParam) {
+					return no, false, nil
+				}
+				cut := arithmetic.partitionLinePoint(loftLines[i], lineParam)
+				carrierCut := arithmetic.partitionLinePoint(prismLines[carrier], carrierParam)
+				if !arithmetic.partitionSamePoint(cut, carrierCut) || !arithmetic.ok {
+					return no, false, nil
+				}
+				_, exactX := arithmetic.float64(cut.u)
+				_, exactY := arithmetic.float64(cut.v)
+				if !exactX || !exactY || !arithmetic.ok {
+					return no, false, nil
+				}
+			}
+		}
+	}
 	var prepared [2]loftPartitionPreparedCap
 	var scenes [2]*sketch.Sketch
 	for capIndex := range 2 {
