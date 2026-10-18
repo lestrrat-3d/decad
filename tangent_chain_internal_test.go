@@ -171,11 +171,11 @@ func TestTangentContinuesFaceSheets(t *testing.T) {
 
 	far := bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(20, 0, 4)}})
 	cont := bornEdge(&Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(v), End: vertexNode(far), Faces: []*topo.Face{faceNode(front), faceNode(top)}}})
-	require.Equal(t, clearance.DegYes, tangentContinues(e, cont, v))
+	require.Equal(t, clearance.DegYes, tangentchain.Continues(edgeNode(e), edgeNode(cont), vertexNode(v)))
 	stop := bornEdge(&Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(v), End: vertexNode(far), Faces: []*topo.Face{faceNode(right), faceNode(top)}}})
-	require.Equal(t, clearance.DegNo, tangentContinues(e, stop, v))
+	require.Equal(t, clearance.DegNo, tangentchain.Continues(edgeNode(e), edgeNode(stop), vertexNode(v)))
 	// The same line walked back over e is no continuation: its ray from v
 	// points along e's own.
 	back := bornEdge(&Edge{n: topo.Edge{Curve: surfacegeom.Line3{}, Start: vertexNode(v), End: vertexNode(bornVertex(&Vertex{n: topo.Vertex{Position: r3.NewVec(5, 0, 4)}})), Faces: []*topo.Face{faceNode(front), faceNode(top)}}})
-	require.Equal(t, clearance.DegNo, tangentContinues(e, back, v))
+	require.Equal(t, clearance.DegNo, tangentchain.Continues(edgeNode(e), edgeNode(back), vertexNode(v)))
 }
