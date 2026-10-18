@@ -4,30 +4,24 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/lestrrat-3d/decad/internal/boundarywalk"
+	"github.com/lestrrat-3d/decad/internal/compositemesh"
 	"github.com/lestrrat-3d/decad/internal/compositesweep"
-	"github.com/lestrrat-3d/decad/internal/freeform"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
-	"github.com/lestrrat-3d/decad/internal/revolveplan"
-	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/sweeprecord"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
-	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 )
-
-const maxCompositeMeshFacets = 65_536
 
 // tessellateCompositeSweep assembles one indexed profile grid across the
 // reduced spans. The station adapter admits recorded lines and circular walks
 // and fitted splines whose span meshes expose the same profile parameter at
 // each join. It maps those samples by profile index, never spatial proximity.
 func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, chord float64, verify Verification) (*Mesh, error) {
-	counts, profileSamples, freeformTarget, err := compositeProfileCountPlan(ctx, sp, chord)
+	counts, profileSamples, freeformTarget, err := compositemesh.PlanProfileCounts(ctx, sp, chord, resolveRevolveWithLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -71,14 +65,14 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 		}
 		var piece *Mesh
 		if span.Arc {
-			floor, floorErr := compositeRevolveFloor(ctx, span.Revolve, counts, freeformTarget)
+			floor, floorErr := compositemesh.RevolveFloor(ctx, span.Revolve, counts, freeformTarget, resolveRevolveWithLimit)
 			if floorErr != nil {
 				return nil, fmt.Errorf(`sweep path span %d: %w`, i, floorErr)
 			}
 			piece, err = tessellateRevolveWithCountFloor(ctx, part, span.Revolve, chord, verify, nil, floor, freeformTarget)
 		} else {
 			piece, err = tessellatePrismWithCountFloor(ctx, part, span.Prism, prismWallRole, chord, verify,
-				func(loop, seg int) int { return counts[compositeStationKey{loop, seg}] }, freeformTarget)
+				func(loop, seg int) int { return counts[compositemesh.StationKey{Loop: loop, Segment: seg}] }, freeformTarget)
 		}
 		if err != nil {
 			return nil, fmt.Errorf(`sweep path span %d: %w`, i, err)
@@ -87,7 +81,7 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 		if err != nil {
 			return nil, fmt.Errorf(`sweep path span %d: %w`, i, err)
 		}
-		start, end, spanCoordinateBound, err := compositeSpanRings(ctx, span, piece, profileSamples, freeformTarget)
+		start, end, spanCoordinateBound, err := compositemesh.SpanRings(ctx, span, &piece.n, profileSamples, freeformTarget, resolveRevolveWithLimit)
 		if err != nil {
 			return nil, fmt.Errorf(`sweep path span %d: %w`, i, err)
 		}
@@ -145,7 +139,7 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 			if err := budget.Step(); err != nil {
 				return nil, err
 			}
-			role, err := compositeSpanFaceRole(piece.n.Source[t], i, span.ReverseArcCaps)
+			role, err := compositemesh.SpanFaceRole(piece.n.Source[t], i, span.ReverseArcCaps)
 			if err != nil {
 				return nil, err
 			}
@@ -159,7 +153,7 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 				return nil, fmt.Errorf(`%w: the composite sweep carries no face for role %q`, ErrDegenerate, role)
 			}
 			topobuild.AddTriangle(&mesh.n, [3]int{local[triangle[0]], local[triangle[1]], local[triangle[2]]}, faceNode(face))
-			if len(mesh.n.Triangles) > maxCompositeMeshFacets {
+			if len(mesh.n.Triangles) > compositemesh.MaxFacets {
 				return nil, fmt.Errorf(`%w: the composite sweep mesh exceeds the fixed facet ceiling`, ErrUnsupported)
 			}
 			triangleSpan = append(triangleSpan, i)
@@ -208,187 +202,4 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 	}
 	mesh.n.SymDiffOK = verify >= VerifyAll && !sp.SurfaceResult
 	return mesh, nil
-}
-
-func compositeSpanRings(ctx context.Context, span sweepSpanPayload, mesh *Mesh,
-	samples int, freeformTarget float64) ([]int, []int, float64, error) {
-	start := make([]int, samples)
-	end := make([]int, samples)
-	if !span.Arc {
-		if len(mesh.n.Vertices) != 2*samples {
-			return nil, nil, 0, fmt.Errorf(`%w: a straight sweep span has a different profile station chain`, ErrUnsupported)
-		}
-		for j := range samples {
-			start[j], end[j] = 2*j, 2*j+1
-		}
-		return start, end, mesh.n.CoordBound, nil
-	}
-	res, err := resolveRevolveWithLimit(ctx, span.Revolve, compositeWorkLimit(freeformTarget))
-	if err != nil {
-		return nil, nil, 0, err
-	}
-	for _, loop := range res.Junctions {
-		for _, junction := range loop {
-			if junction.OnAxis {
-				return nil, nil, 0, fmt.Errorf(`%w: an arc sweep span's pole needs a shared station plan`, ErrUnsupported)
-			}
-		}
-	}
-	if len(mesh.n.Vertices)%samples != 0 {
-		return nil, nil, 0, fmt.Errorf(`%w: an arc sweep span has an incomplete angular station chain`, ErrUnsupported)
-	}
-	angular := len(mesh.n.Vertices) / samples
-	if angular < 2 {
-		return nil, nil, 0, fmt.Errorf(`%w: an arc sweep span has no angular cell`, ErrUnsupported)
-	}
-	for j := range samples {
-		start[j], end[j] = j*angular, j*angular+angular-1
-		if span.ReverseArcCaps {
-			start[j], end[j] = end[j], start[j]
-		}
-	}
-	return start, end, mesh.n.CoordBound, nil
-}
-
-func compositeSpanFaceRole(face *topo.Face, span int, reverseCaps bool) (string, error) {
-	origins := face.Origins
-	if len(origins) == 0 {
-		return "", fmt.Errorf(`%w: a sweep span face has no origin role`, ErrDegenerate)
-	}
-	return compositesweep.SpanFaceRole(origins[0].Role, span, reverseCaps, provenance.RoleCapStart, provenance.RoleCapEnd), nil
-}
-
-type compositeStationKey struct{ loop, segment int }
-
-func compositeWorkLimit(freeformTarget float64) uint64 {
-	if freeformTarget > 0 {
-		return sweeprecord.CompositeFitWorkLimit
-	}
-	return 0
-}
-
-// compositeProfileCountPlan chooses one parameter count per recorded profile
-// segment before any span emits vertices. Each circular reduction's own count
-// is a lower bound. Fitted splines instead share the smallest certified
-// chording target across their prism and Revolve spans.
-func compositeProfileCountPlan(ctx context.Context, sp sweepPayload, chord float64) (map[compositeStationKey]int, int, float64, error) {
-	loops := append([]loopRecord{sp.Prism.Profile.Outer}, sp.Prism.Profile.Holes...)
-	counts := map[compositeStationKey]int{}
-	work := sweeprecord.NewCompositeWork(sp.Prism.Profile)
-	freeformTarget := chord
-	hasFreeform := false
-	for li, loop := range loops {
-		for si, seg := range loop.Segments {
-			if err := ctx.Err(); err != nil {
-				return nil, 0, 0, err
-			}
-			key := compositeStationKey{li, si}
-			switch seg.(type) {
-			case sectionrecord.LineSeg:
-				counts[key] = 1
-			case sectionrecord.ArcSeg, sectionrecord.CircleSeg:
-				walk, err := boundarywalk.WalkOf(seg, work)
-				if err != nil {
-					return nil, 0, 0, err
-				}
-				n, _, err := tessellation.ChordCount(walk, chord, tessellation.ChordWalkMin(walk))
-				if err != nil {
-					return nil, 0, 0, err
-				}
-				counts[key] = n
-			case sectionrecord.FitSplineSeg:
-				hasFreeform = true
-			default:
-				return nil, 0, 0, fmt.Errorf(`%w: composite sweep mesh profile stations do not cover segment %T`, ErrUnsupported, seg)
-			}
-		}
-	}
-	for _, span := range sp.Spans {
-		if !span.Arc {
-			continue
-		}
-		workLimit := uint64(0)
-		if hasFreeform {
-			workLimit = sweeprecord.CompositeFitWorkLimit
-		}
-		res, err := resolveRevolveWithLimit(ctx, span.Revolve, workLimit)
-		if err != nil {
-			return nil, 0, 0, err
-		}
-		planned, err := revolveplan.PlanCounts(revolveplan.CountInput{
-			Resolution: res, Chord: chord, SectionDelta: span.Revolve.SectionDelta,
-			Phi0: span.Revolve.Phi0, Phi1: span.Revolve.Phi1, Full: span.Revolve.Full,
-			WorkLimit: workLimit,
-		})
-		if err != nil {
-			return nil, 0, 0, err
-		}
-		freeformTarget = min(freeformTarget, planned.MeridianTarget)
-		for li, loop := range res.Resolved {
-			for wi, walk := range loop.Walks {
-				key := compositeStationKey{li, walk.Segs[0]}
-				counts[key] = max(counts[key], planned.Meridian[li][wi])
-			}
-		}
-	}
-	if hasFreeform {
-		for li, loop := range loops {
-			for si, seg := range loop.Segments {
-				if _, ok := seg.(sectionrecord.FitSplineSeg); !ok {
-					continue
-				}
-				walk, err := boundarywalk.WalkOf(seg, work)
-				if err != nil {
-					return nil, 0, 0, err
-				}
-				chain, err := freeform.ChainStations(walk.Spans, freeformTarget, work)
-				if err != nil {
-					return nil, 0, 0, err
-				}
-				counts[compositeStationKey{li, si}] = len(chain.Stations)
-			}
-		}
-	} else {
-		freeformTarget = 0
-	}
-	total := 0
-	for li, loop := range loops {
-		loopSamples := 0
-		for si := range loop.Segments {
-			count := counts[compositeStationKey{li, si}]
-			if count > maxCompositeMeshFacets-loopSamples {
-				return nil, 0, 0, fmt.Errorf(`%w: the composite sweep profile exceeds the fixed mesh station ceiling`, ErrUnsupported)
-			}
-			loopSamples += count
-		}
-		if loopSamples < 3 {
-			return nil, 0, 0, fmt.Errorf(`%w: a composite sweep mesh loop needs at least three profile samples`, ErrDegenerate)
-		}
-		if loopSamples > maxCompositeMeshFacets-total {
-			return nil, 0, 0, fmt.Errorf(`%w: the composite sweep profile exceeds the fixed mesh station ceiling`, ErrUnsupported)
-		}
-		total += loopSamples
-	}
-	return counts, total, freeformTarget, nil
-}
-
-func compositeRevolveFloor(ctx context.Context, rp revolvePayload,
-	counts map[compositeStationKey]int, freeformTarget float64) ([][]int, error) {
-	res, err := resolveRevolveWithLimit(ctx, rp, compositeWorkLimit(freeformTarget))
-	if err != nil {
-		return nil, err
-	}
-	floor := make([][]int, len(res.Resolved))
-	for li, loop := range res.Resolved {
-		floor[li] = make([]int, len(loop.Walks))
-		for wi, walk := range loop.Walks {
-			key := compositeStationKey{li, walk.Segs[0]}
-			count, ok := counts[key]
-			if !ok {
-				return nil, fmt.Errorf(`%w: an arc sweep meridian has no shared profile station count`, ErrUnsupported)
-			}
-			floor[li][wi] = count
-		}
-	}
-	return floor, nil
 }
