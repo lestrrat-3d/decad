@@ -3,7 +3,6 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
 	"math/big"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -55,7 +54,7 @@ func tessellateChainSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 	for i, nominal := range []r3.Vec{{}, {X: w}, {X: w, Z: height}, {Z: height}} {
 		v := lineCo[i].Start()
 		mesh.n.Vertices = append(mesh.n.Vertices, v.n.Position)
-		store = append(store, chainSweepVertexGap(v, nominal))
+		store = append(store, tessellation.ChainSweepVertexGap(v.n.Position, v.n.Bound.Mag(), nominal))
 	}
 	topobuild.AddTriangle(&mesh.n, [3]int{0, 1, 2}, faceNode(straight))
 	topobuild.AddTriangle(&mesh.n, [3]int{0, 2, 3}, faceNode(straight))
@@ -76,7 +75,8 @@ func tessellateChainSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 				if k == 1 {
 					x.Sub(x, proofarith.FloatRat(w))
 				}
-				gap = chainSweepVertexGapRat(v, x, new(big.Rat), proofarith.FloatRat(height))
+				gap = tessellation.ChainSweepVertexGapRat(v.n.Position, v.n.Bound.Mag(),
+					x, new(big.Rat), proofarith.FloatRat(height))
 			} else {
 				p, gap, err = stationbound.ChainSweepArcStation(height, radius, radial, j, n)
 				if err != nil {
@@ -110,21 +110,21 @@ func tessellateChainSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 	// A per-triangle exact area bracket checks positive area at every level.
 	// At VerifyAll, the two live faces' certified area intervals bound the
 	// difference from their attributed held triangle sums.
-	areas := map[*topo.Face]chainSweepAreaInterval{}
+	areas := map[*topo.Face]proofbound.RatInterval{}
 	for i, tri := range mesh.n.Triangles {
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
-		lo, hi, ok := chainSweepTriangleArea(mesh.n.Vertices, tri)
+		lo, hi, ok := tessellation.ChainSweepTriangleArea(mesh.n.Vertices, tri)
 		if !ok {
 			return nil, fmt.Errorf(`%w: chain sweep facet %d has no positive area`, ErrUnsupported, i)
 		}
 		pair := areas[mesh.n.Source[i]]
-		if pair.lo == nil {
-			pair.lo, pair.hi = new(big.Rat), new(big.Rat)
+		if pair.Lo == nil {
+			pair.Lo, pair.Hi = new(big.Rat), new(big.Rat)
 		}
-		pair.lo.Add(pair.lo, proofarith.FloatRat(lo))
-		pair.hi.Add(pair.hi, proofarith.FloatRat(hi))
+		pair.Lo.Add(pair.Lo, proofarith.FloatRat(lo))
+		pair.Hi.Add(pair.Hi, proofarith.FloatRat(hi))
 		areas[mesh.n.Source[i]] = pair
 	}
 	if verify >= VerifyBoundary {
@@ -138,7 +138,8 @@ func tessellateChainSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 	}
 	if verify >= VerifyAll {
 		for _, f := range []*Face{straight, curved} {
-			slack, proofErr := chainSweepFaceAreaSlack(f, areas[faceNode(f)])
+			slack, proofErr := tessellation.ChainSweepFaceAreaSlack(
+				f.n.Area, f.n.AreaBound, areas[faceNode(f)])
 			if proofErr != nil {
 				return nil, proofErr
 			}
@@ -224,41 +225,4 @@ func chainSweepMeshClass(b *Body, sp chainSweepPayload) (float64, float64, float
 		return refuse()
 	}
 	return w, height, radius, straight, curved, nil
-}
-
-func chainSweepVertexGap(v *Vertex, ideal r3.Vec) float64 {
-	if !proofbound.FiniteVec(ideal) {
-		return math.Inf(1)
-	}
-	return chainSweepVertexGapRat(v, proofarith.FloatRat(ideal.X), proofarith.FloatRat(ideal.Y),
-		proofarith.FloatRat(ideal.Z))
-}
-
-func chainSweepVertexGapRat(v *Vertex, x, y, z *big.Rat) float64 {
-	if v == nil || !proofbound.FiniteVec(v.n.Position) {
-		return math.Inf(1)
-	}
-	dx := proofarith.RationalFloatError(x, v.n.Position.X)
-	dy := proofarith.RationalFloatError(y, v.n.Position.Y)
-	dz := proofarith.RationalFloatError(z, v.n.Position.Z)
-	return proofbound.AbsSumUpper(v.n.Bound.Mag(), dx, dy, dz)
-}
-
-type chainSweepAreaInterval struct{ lo, hi *big.Rat }
-
-func chainSweepTriangleArea(vertices []r3.Vec, tri [3]int) (float64, float64, bool) {
-	a, b, c := proofarith.DyVec(vertices[tri[0]]), proofarith.DyVec(vertices[tri[1]]),
-		proofarith.DyVec(vertices[tri[2]])
-	n := proofarith.DvCross(proofarith.DvSub(b, a), proofarith.DvSub(c, a))
-	squared := proofarith.DyShift(proofarith.DvDot(n, n), -2)
-	lo, hi := proofarith.DySqrtDown(squared), proofarith.DySqrtUp(squared)
-	return lo, hi, lo > 0 && !proofbound.IsNonFinite(hi)
-}
-
-func chainSweepFaceAreaSlack(f *Face, held chainSweepAreaInterval) (float64, error) {
-	slack, ok := proofbound.AreaSlack(f.n.Area, f.n.AreaBound, held.lo, held.hi)
-	if !ok {
-		return 0, fmt.Errorf(`%w: a chain sweep face has no certified area interval`, ErrUnsupported)
-	}
-	return slack, nil
 }
