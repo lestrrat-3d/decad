@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -53,7 +54,33 @@ func TestBuildWithProofBoundedCubeAndRefusals(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Greater(t, steps, uint64(256+96*len(pp.Tris)+32*len(pp.Verts)))
-	refused, ok, err := BuildWithProofBounded(t.Context(), proofbound.NewWallWorkBudget(steps-1),
+	originCopies, validOrigins := boundedOriginCopies(meshOfPayload(pp))
+	require.True(t, validOrigins)
+	scanCharge := uint64(len(pp.Verts) + 9*len(pp.Tris) + len(audit.Members) +
+		2*len(audit.Members)*len(audit.Members))
+	storageCharge := uint64(256+96*len(pp.Tris)+32*len(pp.Verts)+
+		8*len(audit.Members)*len(audit.Members)) + originCopies
+	require.Greater(t, steps-1, scanCharge+storageCharge)
+	lateCtx, lateCancel := context.WithCancel(t.Context())
+	defer lateCancel()
+	lateSteps := uint64(0)
+	lateBudget := &proofbound.WorkBudget{
+		StepFn: func() error {
+			lateSteps++
+			if lateSteps == steps-1 {
+				lateCancel()
+			}
+			return lateCtx.Err()
+		},
+		ErrFn: lateCtx.Err,
+	}
+	refused, ok, err := BuildWithProofBounded(lateCtx, lateBudget, env, pp, audit, volume, volRat)
+	require.ErrorIs(t, err, context.Canceled)
+	require.False(t, ok)
+	require.Nil(t, refused)
+	require.Equal(t, steps-1, lateSteps)
+
+	refused, ok, err = BuildWithProofBounded(t.Context(), proofbound.NewWallWorkBudget(steps-1),
 		env, pp, audit, volume, volRat)
 	require.NoError(t, err)
 	require.False(t, ok)
@@ -64,6 +91,17 @@ func TestBuildWithProofBoundedCubeAndRefusals(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, ok)
 	require.Nil(t, refused)
+	for _, badPayload := range []Payload{
+		func() Payload { p := pp; p.VolSymDiff = -1; return p }(),
+		func() Payload { p := pp; p.AreaSlack = -1; return p }(),
+		func() Payload { p := pp; p.DPair = -1; return p }(),
+	} {
+		refused, ok, err = BuildWithProofBounded(t.Context(), proofbound.NewWallWorkBudget(65536),
+			env, badPayload, audit, volume, volRat)
+		require.NoError(t, err)
+		require.False(t, ok)
+		require.Nil(t, refused)
+	}
 	withOrigins := pp
 	withOrigins.Groups = append([]Group(nil), pp.Groups...)
 	withOrigins.Groups[0].Origins = make([]provenance.Ref, 65537)
@@ -72,10 +110,36 @@ func TestBuildWithProofBoundedCubeAndRefusals(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, ok)
 	require.Nil(t, refused)
+	tooManyMembers := *audit
+	tooManyMembers.Members = [][]int{make([]int, len(pp.Tris)+1)}
+	refused, ok, err = BuildWithProofBounded(t.Context(), proofbound.NewWallWorkBudget(65536),
+		env, pp, &tooManyMembers, volume, volRat)
+	require.NoError(t, err)
+	require.False(t, ok)
+	require.Nil(t, refused)
+	duplicateMember := *audit
+	duplicateMember.Members = [][]int{append([]int(nil), audit.Members[0]...)}
+	duplicateMember.Members[0][1] = duplicateMember.Members[0][0]
+	refused, ok, err = BuildWithProofBounded(t.Context(), proofbound.NewWallWorkBudget(65536),
+		env, pp, &duplicateMember, volume, volRat)
+	require.NoError(t, err)
+	require.False(t, ok)
+	require.Nil(t, refused)
 
 	oversized := new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), 8192))
 	refused, ok, err = BuildWithProofBounded(t.Context(), proofbound.NewWallWorkBudget(65536),
 		env, pp, audit, volume, oversized)
+	require.NoError(t, err)
+	require.False(t, ok)
+	require.Nil(t, refused)
+	largeMantissa := new(big.Int).Add(new(big.Int).Lsh(big.NewInt(1), 8192), big.NewInt(1))
+	largeDet, dyadic := proof.DyOfRat(new(big.Rat).SetInt(largeMantissa))
+	require.True(t, dyadic)
+	tooLargeDet := *audit
+	tooLargeDet.Det = append([]proof.Dyadic(nil), audit.Det...)
+	tooLargeDet.Det[0] = largeDet
+	refused, ok, err = BuildWithProofBounded(t.Context(), proofbound.NewWallWorkBudget(65536),
+		env, pp, &tooLargeDet, volume, volRat)
 	require.NoError(t, err)
 	require.False(t, ok)
 	require.Nil(t, refused)

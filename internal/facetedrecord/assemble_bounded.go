@@ -32,11 +32,21 @@ func AssembleBodyBounded(ctx context.Context, budget *proofbound.WorkBudget, env
 	}
 	// Charge every input and audit entry before walking it below. The 8F
 	// term covers facets, source groups, determinant records, three corners,
-	// three adjacencies, and component members. The 2C² term covers the
-	// containment matrix and its shape checks.
-	if _, err := budget.StepN(uint64(len(in.Verts) + 8*len(in.Tris) +
-		2*len(audit.Members)*len(audit.Members))); err != nil {
+	// three adjacencies, and component members. The extra F reserves the
+	// membership bitmap; C and 2C² cover length and containment checks.
+	if _, err := budget.StepN(uint64(len(in.Verts) + 9*len(in.Tris) +
+		len(audit.Members) + 2*len(audit.Members)*len(audit.Members))); err != nil {
 		return nil, nil, 0, false, boundedBuildError(ctx, err)
+	}
+	memberCount := 0
+	for _, members := range audit.Members {
+		if len(members) > len(in.Tris)-memberCount {
+			return nil, nil, 0, false, nil
+		}
+		memberCount += len(members)
+	}
+	if memberCount != len(in.Tris) {
+		return nil, nil, 0, false, nil
 	}
 	if !boundedFacetedInput(in, audit, volRat) {
 		return nil, nil, 0, false, nil
@@ -55,9 +65,11 @@ func AssembleBodyBounded(ctx context.Context, budget *proofbound.WorkBudget, env
 			return nil, nil, 0, false, nil
 		}
 	}
-	var mantissa big.Int
 	for _, d := range audit.Det {
-		if d.Exp() < -512 || d.Exp() > 512 || d.MantInto(&mantissa).BitLen() > 512 {
+		if d.Exp() < -512 || d.Exp() > 512 {
+			return nil, nil, 0, false, nil
+		}
+		if mantissa := d.Mant(); mantissa != nil && mantissa.BitLen() > 512 {
 			return nil, nil, 0, false, nil
 		}
 	}
@@ -97,7 +109,9 @@ func boundedFacetedInput(in Mesh, audit *facetproof.MeshAudit, volRat *big.Rat) 
 		len(audit.Members) == 0 || len(audit.Members) > f ||
 		len(audit.CompVol) != len(audit.Members) || len(audit.Contains) != len(audit.Members) ||
 		volRat.Sign() <= 0 || volRat.Num().BitLen() > 512 || volRat.Denom().BitLen() > 512 ||
-		!boundedFloat(in.VolSymDiff) || !boundedFloat(in.AreaSlack) || !boundedFloat(in.DPair) {
+		!boundedFloat(in.VolSymDiff) || in.VolSymDiff < 0 ||
+		!boundedFloat(in.AreaSlack) || in.AreaSlack < 0 ||
+		!boundedFloat(in.DPair) || in.DPair < 0 {
 		return false
 	}
 	for i, p := range in.Verts {
@@ -138,11 +152,13 @@ func boundedFacetedInput(in Mesh, audit *facetproof.MeshAudit, volRat *big.Rat) 
 			}
 		}
 	}
+	seen := make([]bool, f) // Its capacity was charged before this input walk.
 	for component, members := range audit.Members {
 		for _, facet := range members {
-			if facet < 0 || facet >= f || audit.Comp[facet] != component {
+			if facet < 0 || facet >= f || seen[facet] || audit.Comp[facet] != component {
 				return false
 			}
+			seen[facet] = true
 		}
 	}
 	return true
