@@ -130,7 +130,7 @@ func spiralNonTangentBlankAndTooth(t *testing.T, doc *Document) (*Body, *Body) {
 	total := spiralTraceTotal(t, d, f)
 	twisted, _ := spiralTwistSlabs(t, slabs, f, total)
 	crowned := spiralCrownSlabs(t, twisted, f, total)
-	curved, err := doc.LoftFaces(t.Context(), spiralLoftSections(t, crowned, f)...)
+	curved, err := LoftFaces(t.Context(), doc, spiralLoftSections(t, crowned, f)...)
 	require.NoError(t, err)
 	for _, slab := range crowned {
 		require.NoError(t, Remove(slab))

@@ -788,7 +788,7 @@ body (§6) and takes no `*Document` argument. An operation that takes no body
 
 | Shipped method form | Free function |
 |---|---|
-| `Document.Loft`, `LoftFaces`, `LoftFromPoint`, `LoftSections` | the same names with `ctx, doc` leading |
+| `Document.Loft`, `LoftFromPoint`, `LoftSections` | the same names with `ctx, doc` leading |
 | `Document.Sweep` over a profile or a chain | `Sweep(ctx, doc, s, sec, path, opts...)`, one generic function over `Section` (§8) |
 
 **Every operation that builds a body from a sketch takes a `ctx`, `Extrude`,
@@ -989,7 +989,7 @@ chain's seam gates and before the axis gates and any commit
 `Profile` together. It admits the bounded classes in
 `docs/loft-sections-design.md`.
 
-`LoftFaces(ctx, sections ...*Face)` consumes two to thirty-two ordered planar caps from
+`LoftFaces(ctx, doc, sections ...*Face)` consumes two to thirty-two ordered planar caps from
 authenticated point-loft Split slabs. It retains their original Sketch
 profile and exact cut-plane maps through rigid placement and positive
 uniform scale. Its bounded source class and proof are in

@@ -61,24 +61,24 @@ func TestLoftFacesTwoAndThreeCapsFromPointSlabs(t *testing.T) {
 		neutralSlabCap(t, far, decad.CapEnd(far)),
 	}
 	before := doc.Bodies()
-	_, err = doc.LoftFaces(t.Context(), sections[:1]...)
+	_, err = decad.LoftFaces(t.Context(), doc, sections[:1]...)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Equal(t, before, doc.Bodies())
 	tooMany := make([]*decad.Face, 33)
 	for i := range tooMany {
 		tooMany[i] = sections[i%len(sections)]
 	}
-	_, err = doc.LoftFaces(t.Context(), tooMany...)
+	_, err = decad.LoftFaces(t.Context(), doc, tooMany...)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Equal(t, before, doc.Bodies())
-	_, err = doc.LoftFaces(t.Context(), sections[0], sections[1], sections[1])
+	_, err = decad.LoftFaces(t.Context(), doc, sections[0], sections[1], sections[1])
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, before, doc.Bodies())
-	_, err = doc.LoftFaces(t.Context(), sections[0], sections[2], sections[1])
+	_, err = decad.LoftFaces(t.Context(), doc, sections[0], sections[2], sections[1])
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, before, doc.Bodies())
 
-	twoCaps, err := doc.LoftFaces(t.Context(), sections[:2]...)
+	twoCaps, err := decad.LoftFaces(t.Context(), doc, sections[:2]...)
 	require.NoError(t, err)
 	verify := func(body *decad.Body, wantVolume float64) {
 		t.Helper()
@@ -93,7 +93,7 @@ func TestLoftFacesTwoAndThreeCapsFromPointSlabs(t *testing.T) {
 	}
 	verify(twoCaps, 217.0/75.0)
 
-	result, err := doc.LoftFaces(t.Context(), sections...)
+	result, err := decad.LoftFaces(t.Context(), doc, sections...)
 	require.NoError(t, err)
 	verify(result, 488.0/75.0)
 }

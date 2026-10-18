@@ -443,7 +443,7 @@ func spiralBlankAndTooth(t *testing.T, doc *decad.Document) (*decad.Body, *decad
 	total := spiralTraceTotal(t, d, f)
 	twisted, _ := spiralTwistSlabs(t, slabs, f, total)
 	crowned := spiralCrownSlabs(t, twisted, f, total)
-	curved, err := doc.LoftFaces(t.Context(), spiralLoftSections(t, crowned, f)...)
+	curved, err := decad.LoftFaces(t.Context(), doc, spiralLoftSections(t, crowned, f)...)
 	require.NoError(t, err)
 	for _, slab := range crowned {
 		require.NoError(t, decad.Remove(slab))

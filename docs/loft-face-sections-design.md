@@ -1,6 +1,6 @@
 # Source-cap face-fed loft
 
-`Document.LoftFaces(ctx, sections ...*Face)` builds one solid through two to
+`LoftFaces(ctx, doc, sections ...*Face)` builds one solid through two to
 thirty-two ordered planar caps. The admitted producer is one to thirty-one
 live, complete Split slabs from one authenticated `LoftFromPoint` source.
 Each section is an original Split cap, its rigid image, or its positive uniform image. The
