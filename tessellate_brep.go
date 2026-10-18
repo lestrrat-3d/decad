@@ -7,38 +7,17 @@ import (
 	"math"
 	"slices"
 
-	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/breprecord"
+	"github.com/lestrrat-3d/decad/internal/brepwallmesh"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/stationbound"
-	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 	"github.com/lestrrat-3d/units"
 )
-
-// brepWallMesh is one swept face's chording: its rim polylines at z0 and z1 as
-// mesh vertex indices in walk order (closed for a whole circle), its largest
-// sagitta, and the chord-versus-arc charges tessellation §5 reads.
-type brepWallMesh struct {
-	// cols holds one vertex column per rim sample, ascending from z0 to z1,
-	// and levels each column's heights: a side line's column stops at its
-	// own splits alone, so the neighbouring face across it meets exactly the
-	// side pieces' vertices, and every interior column at every split of
-	// either side. bottom and top are the rims, each column's first and last
-	// vertex.
-	cols        [][]int
-	levels      [][]float64
-	bottom, top []int
-	sag         float64
-	wallSlack   float64
-	capSlack    float64
-	segmentArea float64
-}
 
 // tessellateBrep meshes a brepPayload (docs/general-boolean-design.md §4.4).
 // Every swept face chords its own wall once with tessellation.SampleLoop, the
@@ -113,7 +92,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 	faceTrim := map[*topo.Face]float64{}
 	faceAxial := map[*topo.Face]float64{}
 	edgePoly := make([][]int, len(btopo.Edges))
-	walls := map[int]brepWallMesh{}
+	walls := map[int]brepwallmesh.WallMesh{}
 	work := freeform.NewFreeformWork()
 	for fi, f := range bp.Faces {
 		if f.Planar() {
@@ -130,7 +109,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 		if s, ok := imposed[fi]; ok {
 			samples = &s
 		}
-		wm, err := brepChordWall(ctx, f, btopo.Walls[fi], btopo.Embeds[fi], face, budget, work, samples, addVertex)
+		wm, err := brepwallmesh.ChordWall(ctx, f, btopo.Walls[fi], btopo.Embeds[fi], face, budget, work, samples, addVertex)
 		if err != nil {
 			return nil, err
 		}
@@ -141,11 +120,11 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 			switch u := btopo.Uses[ui]; u.Part {
 			case brepRim0:
 				if ei := btopo.EdgeOf[ui]; ei >= 0 {
-					edgePoly[ei] = wm.bottom
+					edgePoly[ei] = wm.Bottom
 				}
 			case brepRim1:
 				if ei := btopo.EdgeOf[ui]; ei >= 0 {
-					edgePoly[ei] = wm.top
+					edgePoly[ei] = wm.Top
 				}
 			case brepSide0, brepSide1:
 				// The piece's two vertices are the wall's own row ends at
@@ -153,16 +132,16 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 				edgePoly[btopo.EdgeOf[ui]] = []int{addVertex(u.DirFrom, proofbound.WalkEndBound{}), addVertex(u.DirTo, proofbound.WalkEndBound{})}
 			}
 		}
-		for j := 0; j+1 < len(wm.cols); j++ {
-			tessellation.ZipColumns(wm.cols[j], wm.cols[j+1], wm.levels[j], wm.levels[j+1], func(tri [3]int) {
+		for j := 0; j+1 < len(wm.Cols); j++ {
+			tessellation.ZipColumns(wm.Cols[j], wm.Cols[j+1], wm.Levels[j], wm.Levels[j+1], func(tri [3]int) {
 				topobuild.AddTriangle(&mesh.n, tri, faceNode(face))
 			})
 		}
-		faceTrim[faceNode(face)] = wm.sag
+		faceTrim[faceNode(face)] = wm.Sag
 		faceAxial[faceNode(face)] = proofbound.AbsSumUpper(math.Max(f.Z0Delta, f.Z1Delta), f.Delta)
-		mesh.n.AreaSlack = proofbound.AbsSumUpper(mesh.n.AreaSlack, wm.wallSlack)
+		mesh.n.AreaSlack = proofbound.AbsSumUpper(mesh.n.AreaSlack, wm.WallSlack)
 	}
-	if err := brepWallClearance(ctx, bp, btopo, walls, canon); err != nil {
+	if err := brepwallmesh.WallClearance(ctx, bp, btopo, walls, canon); err != nil {
 		return nil, err
 	}
 
@@ -232,9 +211,9 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 					slices.Reverse(poly)
 				}
 				if wm, ok := walls[owner.Face]; ok && brepgeom.IsRim(owner.Part) {
-					trim = math.Max(trim, wm.sag)
-					loopSag[u.Loop] = math.Max(loopSag[u.Loop], wm.sag)
-					capSlack = proofbound.AbsSumUpper(capSlack, wm.capSlack)
+					trim = math.Max(trim, wm.Sag)
+					loopSag[u.Loop] = math.Max(loopSag[u.Loop], wm.Sag)
+					capSlack = proofbound.AbsSumUpper(capSlack, wm.CapSlack)
 				}
 			default:
 				// An open use is a band's boundary. The band's cap contour
@@ -391,7 +370,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 		mesh.n.AreaSlack = proofbound.AbsSumUpper(mesh.n.AreaSlack,
 			proofbound.ProductUpper(proofbound.SectionDisplacementLength(f.Delta, 1), moved))
 		terms = append(terms,
-			proofbound.ProductUpper(height, walls[fi].segmentArea),
+			proofbound.ProductUpper(height, walls[fi].SegmentArea),
 			proofbound.ProductUpper(moved, proofbound.SectionDisplacementArea(f.Delta, 1, proofbound.AbsSumUpper(w.Length, w.LengthBound))))
 	}
 	mesh.n.AreaSlack = proofbound.AbsSumUpper(mesh.n.AreaSlack,
@@ -434,143 +413,4 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 		return nil, err
 	}
 	return mesh, nil
-}
-
-// brepChordWall chords one swept face's wall with tessellation.SampleLoop
-// over its one walk and places its rim samples at both levels. An open wall's
-// polyline ends at its walk's end; a whole circle's closes on its first
-// sample. Each end sample is charged the bound from its held point to the
-// point the wall's record denotes there (boundarywalk.DenotedStartBound and
-// DenotedEndBound), which adds an arc's radial residual at its natural t = 1
-// end; addVertex keeps the largest bound any use places at one vertex.
-// imposed, when non-nil, replaces the chording with the samples a route L band
-// states for this wall (tessellation.ImposeBandWall); the wall's own end is still appended.
-func brepChordWall(ctx context.Context, f brepFace, w survey2d.SegmentWalk, e brepEmbed, face *Face, chord float64,
-	work *freeform.FreeformWork, imposed *tessellation.ChordSamples[*Face], addVertex func([3]float64, proofbound.WalkEndBound) int) (brepWallMesh, error) {
-	walk := survey2d.SideWalk{SegmentWalk: w, Segs: []int{0}}
-	var sampled tessellation.ChordSamples[*Face]
-	if imposed != nil {
-		sampled = *imposed
-	} else {
-		var err error
-		sampled, err = tessellation.SampleLoop[*Face]([]survey2d.SideWalk{walk}, []curveSegment{f.Wall}, chord,
-			f.Z1-f.Z0, work, proofbound.NewWorkBudget(ctx), func(survey2d.SideWalk) (*Face, error) { return face, nil },
-			stationbound.ChordStationBound)
-		if err != nil {
-			return brepWallMesh{}, err
-		}
-	}
-	samples, bounds := sampled.Samples, sampled.BoundOf
-	if !w.Closed {
-		samples = append(samples, planePoint{U: w.EndU, V: w.EndV})
-		bounds = append(bounds, boundarywalk.DenotedEndBound(f.Wall, w))
-	}
-	wm := brepWallMesh{sag: sampled.MaxSag, wallSlack: sampled.WallSlack, capSlack: sampled.CapSlack,
-		segmentArea: sampled.SegmentArea}
-	// Each side line's column holds a vertex at its own splits alone, so the
-	// side pieces' vertices are the wall's own and the face across the side
-	// line meets no vertex it does not hold; the interior columns hold every
-	// split of either side, and tessellation.ZipColumns closes the strips between.
-	levelsOf := func(splits ...[]brepSplit) []float64 {
-		out := []float64{f.Z0}
-		for _, side := range splits {
-			for _, sp := range side {
-				out = append(out, sp.Z)
-			}
-		}
-		out = append(out, f.Z1)
-		slices.Sort(out)
-		return slices.Compact(out)
-	}
-	every := levelsOf(f.Side0, f.Side1)
-	for j, p := range samples {
-		levels := every
-		switch {
-		case w.Closed:
-		case j == 0:
-			levels = levelsOf(f.Side0)
-		case j == len(samples)-1:
-			levels = levelsOf(f.Side1)
-		}
-		col := make([]int, 0, len(levels))
-		for _, z := range levels {
-			col = append(col, addVertex(e.Canon(p.U, p.V, z), bounds[j]))
-		}
-		wm.cols = append(wm.cols, col)
-		wm.levels = append(wm.levels, levels)
-		wm.bottom = append(wm.bottom, col[0])
-		wm.top = append(wm.top, col[len(col)-1])
-	}
-	if w.Closed {
-		wm.cols = append(wm.cols, wm.cols[0])
-		wm.levels = append(wm.levels, wm.levels[0])
-		wm.bottom = append(wm.bottom, wm.bottom[0])
-		wm.top = append(wm.top, wm.top[0])
-	}
-	return wm, nil
-}
-
-// brepWallClearance refuses a mesh whose chorded walls could cross where the
-// analytic walls do not: every two walls sweeping along one reference axis over
-// overlapping intervals, and sharing no endpoint, must clear each other by
-// more than their summed sagittae plus the section's rounding floor — the
-// per-slab loop clearance the stacked tessellator proves, read per wall pair.
-// Each open wall polyline is walked out and back so the loop clearance reader
-// measures exactly its own chords.
-func brepWallClearance(ctx context.Context, bp brepPayload, btopo *brepTopology, walls map[int]brepWallMesh, canon [][3]float64) error {
-	type wallLine struct {
-		axis   int
-		lo, hi float64
-		pts    []planePoint
-		sag    float64
-	}
-	var lines []wallLine
-	for fi, f := range bp.Faces {
-		wm, ok := walls[fi]
-		if !ok {
-			continue
-		}
-		e := btopo.Embeds[fi]
-		k := e.Axis[2]
-		lo, hi := e.Sign[2]*f.Z0, e.Sign[2]*f.Z1
-		if lo > hi {
-			lo, hi = hi, lo
-		}
-		line := wallLine{axis: k, lo: lo, hi: hi, sag: wm.sag}
-		for _, vi := range wm.bottom {
-			c := canon[vi]
-			var p [2]float64
-			n := 0
-			for i, x := range c {
-				if i != k {
-					p[n] = x
-					n++
-				}
-			}
-			line.pts = append(line.pts, planePoint{U: p[0], V: p[1]})
-		}
-		lines = append(lines, line)
-	}
-	for i := range lines {
-		for j := i + 1; j < len(lines); j++ {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			a, b := lines[i], lines[j]
-			if a.axis != b.axis || math.Max(a.lo, b.lo) >= math.Min(a.hi, b.hi) {
-				continue
-			}
-			ends := []planePoint{a.pts[0], a.pts[len(a.pts)-1]}
-			if slices.Contains(ends, b.pts[0]) || slices.Contains(ends, b.pts[len(b.pts)-1]) {
-				continue
-			}
-			pts := append(slices.Clone(a.pts), b.pts...)
-			if err := requireLoopClearance(ctx, pts,
-				[][]int{tessellation.OutAndBack(0, len(a.pts)), tessellation.OutAndBack(len(a.pts), len(b.pts))},
-				[]float64{a.sag, b.sag}); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
