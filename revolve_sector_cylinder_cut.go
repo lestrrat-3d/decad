@@ -20,11 +20,6 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-const (
-	revolveSectorBoreMaxAuditTriangles = 1_321_696
-	revolveSectorBoreMaxAuditScans     = uint64(400_000_000)
-)
-
 // tryRevolveSectorCylinderCut handles only a complete coaxial cylinder across
 // an authenticated Revolve/point-Loft join. Other booleans keep their usual
 // dispatch. This route runs before the general faceted contact-tolerance gate.
@@ -93,7 +88,14 @@ func tryRevolveSectorCylinderCut(ctx context.Context, op meshbool.OperationKind,
 		return buildRevolveSectorAnnularCut(ctx, d, ref, joined, caps, radius, wall)
 	}
 	if radius > caps.LowRadius && radius < caps.HighRadius {
-		return buildRevolveSectorBandCut(ctx, d, ref, joined, caps, radius, wall)
+		wallGroup := facetedrecord.Group{Origins: wall.originRefs(),
+			Surface: wall.n.Surface, NormalBound: wall.n.NormalBound, Reversed: !wall.n.Reversed}
+		result, err := revolveshell.BuildSectorBandCut(ctx, joined, caps, radius, wallGroup)
+		if err != nil {
+			return nil, true, err
+		}
+		body, err := bodyResult(facetedrecord.Build(ctx, envOf(documentNode(d), ref), result))
+		return body, true, err
 	}
 	return nil, true, fmt.Errorf("%w: bore has no certified section crossing", ErrUnsupported)
 }
@@ -102,7 +104,7 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 	joined facetedPayload, caps revolveshell.SectorBoreCaps, radius float64, wall *Face) (*Body, bool, error) {
 	ring := joined.RevolveLoftJoin.CapRing
 	n := len(ring.Angles)
-	if len(joined.Tris) > revolveSectorBoreMaxAuditTriangles-4*n ||
+	if len(joined.Tris) > revolveshell.SectorBoreMaxAuditTriangles-4*n ||
 		radius >= min(caps.LowRadius, caps.HighRadius) {
 		return nil, true, fmt.Errorf("%w: bore does not fit inside both radial caps", ErrUnsupported)
 	}
@@ -224,8 +226,8 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 	}
 	patches := revolvemesh.SectorBorePatches(mesh.Src, oldCount, n, false, caps.LowGroup, caps.HighGroup, -1, wallGroup)
 	if err := loftmesh.LoftCrossingAuditBoundedProjectedPatchesStreaming(proofbound.NewWorkBudget(ctx),
-		mesh.Verts, mesh.Tris, patches, revolveSectorBoreMaxAuditTriangles,
-		revolveSectorBoreMaxAuditScans); err != nil {
+		mesh.Verts, mesh.Tris, patches, revolveshell.SectorBoreMaxAuditTriangles,
+		revolveshell.SectorBoreMaxAuditScans); err != nil {
 		return nil, true, err
 	}
 	height := proofbound.RatFloatUp(new(big.Rat).Sub(
