@@ -301,7 +301,6 @@
 2	0.53	TestCoilFractionalTurnCentroid
 2	0.78	TestCoilMeshRestatesTheHeldShell
 2	1.94	TestCoilThreadPartnerKeepsItsBounds
-2	0.00	TestContactBatchAllocatesBuffersOnDemand
 2	0.00	TestConvexityCertificateSpendIncreases
 2	6.92	TestCrossBoreStationErrorsMatchSerial
 2	0.00	TestCurveTokenComposeDeclinesTheZeroToken
@@ -340,7 +339,6 @@
 2	0.04	TestLoftShippedFractionOnReferenceWedge
 2	0.00	TestLoftStationExtraBudgetReservesOneCellPerPair
 2	0.21	TestLoftWalkResolutionChargesOncePerSegment
-2	3.77	TestMeshBooleanWorkerCountsProduceIdenticalResults
 2	0.00	TestMintCurveNeverRepeats
 2	0.01	TestMirrorJoinChargesTheReflectionRounding
 2	0.00	TestMotionPathAreaUpper
@@ -434,7 +432,6 @@
 3	2.55	TestCoilFacetBoundHoldsTheSurface
 3	0.36	TestCoilRefusals
 3	0.76	TestCoilSquareSpring
-3	0.00	TestContactBatchMergesOutOfOrderCompletionsInInputOrder
 3	0.00	TestCoplanarRelationCancellationIsBounded
 3	2.31	TestCrossBoreCapPatchesHold
 3	0.03	TestCupProofRecordCoversEveryPatchItHolds
@@ -695,7 +692,6 @@
 5	0.91	TestCoilLeftHandMirrors
 5	1.06	TestCoilTiltedAxisAgrees
 5	0.00	TestComputeLoftChordedAllowChargesTheHeldStationDisplacement
-5	0.00	TestContactBatchReturnsEarliestOrderedError
 5	0.04	TestCounterboreReverseArrangementProvesEmptyCut
 5	0.00	TestCrossingAuditAcceptsDisjointLoops
 5	7.19	TestCurvedHeelArcEndpointsBindToLiveSideCells
@@ -820,7 +816,6 @@
 6	2.70	TestCoilFullTurnArcClosesLikeACircle
 6	0.02	TestCompositeChainSweepAreaSlackEnclosesTheAnalyticSheet
 6	0.00	TestComputeLoftChordedAllowReversesSignedCorrections
-6	0.00	TestContactBatchSchedulesOnlyMemoMisses
 6	0.01	TestCoplanarCarrierPairIsNotSettledByCoplanarityAlone
 6	0.00	TestCrossingAuditCancellationIsBounded
 6	4.63	TestCurvedCallScopeSharesLiveRecords
@@ -942,7 +937,6 @@
 7	0.03	TestClassBCrossingBlindCrossHole
 7	0.00	TestClassifyRegionsReadsEachRecord
 7	0.00	TestComputeLoftChordedAllowTwistAreaSumsEveryChordedCell
-7	0.00	TestContactBatchStopsOnCancellationDuringMerge
 7	0.26	TestCopyRotationMotionRefusalSurvivesDescendants
 7	0.00	TestCrossingAuditRejectsBoundaryContact
 7	16.47	TestCurvedSourceArcSplitsClosedRevolveShell
