@@ -394,7 +394,7 @@ func capBlendMotionUnderTest(t *testing.T, cbp capBlendPayload, chord float64) (
 		lms[li] = lm
 	}
 	mesh := bornMesh(new(Mesh))
-	store, motion, err := capBlendVertices(budget, cbp, cbp.PrismLike(0, 0), lms, mesh, true)
+	store, motion, err := capblend.Vertices(budget, cbp, cbp.PrismLike(0, 0), lms, &mesh.n, true)
 	require.NoError(t, err)
 	require.Len(t, motion, len(store), `motion is a parallel array, one entry per vertex`)
 	return lms, motion
@@ -431,7 +431,7 @@ func TestCapBlendMeshPublishesVolumeProofForAnAdmittedBand(t *testing.T) {
 	require.Equal(t, mesh.n.VolSymDiff, got)
 
 	// Shown to fail: dropping lm.CapMotion[j] from the cap vertex's motion in
-	// capBlendVertices turns this assertion red.
+	// capblend.Vertices turns this assertion red.
 	bore := lms[1]
 	require.True(t, bore.Whole)
 	seg := bore.Loop.Segments[bore.Walks[0].Segs[0]]
@@ -495,7 +495,7 @@ func TestCapBlendMeshMotionCarriesEachLevelBound(t *testing.T) {
 	lm := lms[0]
 	require.Equal(t, 0.0, capblend.ChordVolume(cbp, lms), `nothing in a rectangle is chorded`)
 	// Shown to fail: dropping lm.ZHi.bound (the side leg) or
-	// capBandLevel(...).bound (the cap leg) from capBlendVertices' motion turns
+	// capBandLevel(...).bound (the cap leg) from capblend.Vertices' motion turns
 	// the matching assertion red.
 	require.Positive(t, lm.ZHi.Bound)
 	for j := range lm.SidePts {
@@ -531,7 +531,7 @@ func TestCapBlendMeshMotionCarriesPlacementRounding(t *testing.T) {
 	require.True(t, mesh.n.SymDiffOK)
 	_, motion := capBlendMotionUnderTest(t, cbp, 1)
 	require.Equal(t, 0.0, capblend.ChordVolume(cbp, nil))
-	// Shown to fail: dropping round from capBlendVertices' motion leaves every
+	// Shown to fail: dropping round from capblend.Vertices' motion leaves every
 	// entry zero and this assertion red.
 	require.Positive(t, mesh.n.VolSymDiff, `a placed plate rounds every coordinate it writes`)
 	worst := 0.0
