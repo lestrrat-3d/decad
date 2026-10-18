@@ -548,7 +548,10 @@ func (b *Body) trimRevolve(ctx context.Context, budget *proofbound.WorkBudget, t
 // own record. Only the gate and the free-edge reading differ.
 func (b *Body) extendRevolve(ctx context.Context, budget *proofbound.WorkBudget, selected []*Edge, tool *Body) (*Body, error) {
 	d := documentHandle(b.n.Doc)
-	rcv, rcvView, tlView, err := admitExtendRevolvePair(ctx, budget, b, tool)
+	// Read S7 from both root payload shapes before the revolve-only gate.
+	rcvDelta, tlDelta := trimOperandSectionDelta(b), trimOperandSectionDelta(tool)
+	rcv, rcvView, tlView, err := revolveplan.AdmitExtendPair(ctx, budget,
+		&b.n, &tool.n, rcvDelta, tlDelta)
 	if err != nil {
 		return nil, err
 	}
@@ -583,123 +586,6 @@ func (b *Body) extendRevolve(ctx context.Context, budget *proofbound.WorkBudget,
 	}
 	d.commit(result, b, tool)
 	return result, nil
-}
-
-// admitExtendRevolvePair runs S2-S4, S6 and S7 for an Extend over the revolve
-// family; S1 has already routed the pair here. S5 does not reach an Extend,
-// which reads no side. It returns the receiver's own chain record — what the
-// result is rebuilt on — beside the two MERIDIAN views §3's resolution
-// consumes.
-func admitExtendRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, receiver, tool *Body) (chainRevolvePayload, prismPayload, prismPayload, error) {
-	fail := func(format string, args ...any) (chainRevolvePayload, prismPayload, prismPayload, error) {
-		return chainRevolvePayload{}, prismPayload{}, prismPayload{}, fmt.Errorf(format, args...)
-	}
-	pass := func(err error) (chainRevolvePayload, prismPayload, prismPayload, error) {
-		return chainRevolvePayload{}, prismPayload{}, prismPayload{}, err
-	}
-
-	// S7's section-displacement clause runs first and reads generically off
-	// either revolve payload shape, so a body this design already trimmed names
-	// ITS OWN displacement rather than the shape of its section.
-	rcvDelta, tlDelta := trimOperandSectionDelta(receiver), trimOperandSectionDelta(tool)
-	if rcvDelta != 0 || tlDelta != 0 {
-		return fail(`%w: Extend does not admit an operand carrying its own section displacement (receiver %v mm, tool %v mm)`,
-			ErrUnsupported, rcvDelta, tlDelta)
-	}
-
-	rcv, rcvOk := receiver.n.Payload.(chainRevolvePayload)
-	if !rcvOk || receiver.Kind() != BodySheet {
-		return fail(`%w: Extend's receiver needs an open meridian to lengthen; a closed one has no free end and its other free direction is its own sweep`, ErrUnsupported)
-	}
-	// The FULL-revolution restriction, and it is a reading rather than a bound:
-	// extendRevolveEndSegment below names a free end by the single-coedge
-	// latitude loop fullRevLoops (internal/revolveplan/build.go) puts on the first and last
-	// wall. A PARTIAL revolution carries no such loop — each wall holds one loop
-	// gathering its two cap edges beside the swept arcs, and which member of it
-	// is the meridian's own free end is not a recorded fact — so the pair is
-	// refused rather than resolved by position.
-	if !rcv.Full {
-		return fail(`%w: Extend over the revolve family admits a full revolution alone; a partially revolved ribbon's swept free edge shares one loop with its wall's two cap edges, and no recorded fact separates them`, ErrUnsupported)
-	}
-	var tl revolvePayload
-	switch p := tool.n.Payload.(type) {
-	case revolvePayload:
-		tl = p
-	case chainRevolvePayload:
-		tl = p.Revolve()
-	default:
-		return fail(`%w: Extend's tool has no revolve meridian`, ErrUnsupported)
-	}
-
-	rcvRev := rcv.Revolve()
-	rcvView, tlView := rcvRev.Meridian(), tl.Meridian()
-
-	// S2: neither operand's accumulated placement is a reflection.
-	if rcvView.Reflected() || tlView.Reflected() {
-		return fail(`%w: Extend does not admit a reflected operand`, ErrUnsupported)
-	}
-
-	// S3: every segment of both meridians is a LineSeg, CircleSeg or ArcSeg.
-	rcvAnalytic, err := prismcells.ProfileAnalytic(budget, rcvRev.Profile)
-	if err != nil {
-		return pass(err)
-	}
-	tlAnalytic, err := prismcells.ProfileAnalytic(budget, tl.Profile)
-	if err != nil {
-		return pass(err)
-	}
-	if !rcvAnalytic || !tlAnalytic {
-		return fail(`%w: Extend admits only line, circle and arc segments; a free-form segment blinds sketch's whole-scene TExact gate`, ErrUnsupported)
-	}
-
-	// S4's revolve arm, the identical eight-field comparison Trim's own takes.
-	if rcv.Frame != tl.Frame {
-		return fail(`%w: the receiver and tool do not spin about the same frame, exactly`, ErrUnsupported)
-	}
-	if !revolveplan.AxisIdentical(rcv.Ax, tl.Ax) {
-		return fail(`%w: the receiver and tool do not spin about the same axis, exactly`, ErrUnsupported)
-	}
-	rcvClear, err := revolveplan.ChainClearOfAxis(ctx, rcv)
-	if err != nil {
-		return pass(err)
-	}
-	tlClear, err := revolveplan.MeridianClearOfAxis(ctx, tl)
-	if err != nil {
-		return pass(err)
-	}
-	if !rcvClear || !tlClear {
-		return fail(`%w: Extend needs both meridians clear of the revolve axis; one of them touches it, and the end a lengthening would place there sweeps a pole this arm does not build`, ErrUnsupported)
-	}
-
-	// S6's revolve arm: S4 has proven the two axes identical, so the prism
-	// arm's origin shift has no counterpart and the comparison is on the
-	// stored endpoint floats alone.
-	if tl.Phi0 > rcv.Phi0 || tl.Phi1 < rcv.Phi1 {
-		return fail(`%w: the tool's angular span [%v, %v] does not cover the receiver's [%v, %v]`,
-			ErrUnsupported, tl.Phi0, tl.Phi1, rcv.Phi0, rcv.Phi1)
-	}
-
-	// S7's remaining two clauses. Only the TOOL is required whole: §3.1 puts
-	// the receiver's extended segment into the scene over its own full domain
-	// and leaves every other receiver segment outside it, so a receiver
-	// carrying narrowed segments elsewhere clears S7 for an Extend and refuses
-	// it for a Trim.
-	reexpress, err := prismcells.NewReexpression(rcvView.PlacementOperand(), tlView.PlacementOperand())
-	if err != nil {
-		return pass(err)
-	}
-	if !reexpress.Identity {
-		return fail(`%w: the receiver and tool do not share one frame and placement, so their re-expression is not the identity`, ErrUnsupported)
-	}
-	tlWhole, err := prismcells.TrimProfileFullyWhole(budget, tl.Profile.Outer, tl.Profile.Holes)
-	if err != nil {
-		return pass(err)
-	}
-	if !tlWhole {
-		return fail(`%w: every segment the tool consumes must span its entity's own natural domain`, ErrUnsupported)
-	}
-
-	return rcv, rcvView, tlView, nil
 }
 
 // extendRevolveEndSegment maps a selected topology edge to the recorded
