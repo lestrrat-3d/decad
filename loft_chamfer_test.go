@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -57,13 +58,17 @@ func TestLoftCapBandMotionRequiresReflexVertexIndices(t *testing.T) {
 	}
 	vertices := make([]r3.Vec, 6)
 	motion := []float64{1, 1, math.Inf(1), 1, math.Inf(1), 1}
-	maxMotion, err := loftCapBandFiniteMotion(outer, vertices, motion)
+	maxMotion, err := tessellation.LoftCapBandFiniteMotion(
+		outer.arcCount, outer.capArcStart, outer.capLoV, outer.capHiV,
+		len(outer.capPts), vertices, motion)
 	require.NoError(t, err)
 	require.Equal(t, 1.0, maxMotion)
 	require.Equal(t, 0.0, motion[2])
 	require.Equal(t, 0.0, motion[4])
 	motion = []float64{1, math.Inf(1), 1, 1, math.Inf(1), 1}
-	_, err = loftCapBandFiniteMotion(outer, vertices, motion)
+	_, err = tessellation.LoftCapBandFiniteMotion(
+		outer.arcCount, outer.capArcStart, outer.capLoV, outer.capHiV,
+		len(outer.capPts), vertices, motion)
 	require.ErrorIs(t, err, ErrUnsupported, "an equal count at different vertices cannot prove the cap slab")
 }
 
