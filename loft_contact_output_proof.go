@@ -15,17 +15,35 @@ import (
 // loftOutputBoundaryProof is private, transient and has no occupied-volume or
 // measurement claim. The source records must remain live throughout its call.
 type loftOutputBoundaryProof struct {
-	source     loftSourcePartition
-	shell      loftOutputShell
-	workVisits uint64
+	source       loftSourcePartition
+	shell        loftOutputShell
+	workVisits   uint64
+	heldAudit    *facetproof.MeshAudit
+	auditedVerts []r3.Vec
+	auditedTris  [][3]int
 }
 
-// certifyLoftOutputBoundary's source and output step budgets count only their
-// Decad proof loops. Held mesh audits and Sketch Profiles publication are
-// outside those counters. Cancellation during Profiles publication waits for
-// the Sketch call to finish.
+// The private proof keeps its existing audit behavior. The direct-shell
+// mode charges and retains the held audit for the result builder.
 func certifyLoftOutputBoundary(ctx context.Context, first, second *Body,
 	operation *proofbound.WorkBudget) (loftOutputBoundaryProof, bool, error) {
+	return certifyLoftOutputBoundaryMode(ctx, first, second, operation, false, nil)
+}
+
+func certifyLoftOutputBoundaryForDirectShell(ctx context.Context, first, second *Body,
+	operation *proofbound.WorkBudget) (loftOutputBoundaryProof, bool, error) {
+	var sourceCertified bool
+	proof, admitted, err := certifyLoftOutputBoundaryMode(ctx, first, second,
+		operation, true, &sourceCertified)
+	if err == nil && !admitted && sourceCertified {
+		return loftOutputBoundaryProof{}, false, errLoftDirectProofRefused
+	}
+	return proof, admitted, err
+}
+
+func certifyLoftOutputBoundaryMode(ctx context.Context, first, second *Body,
+	operation *proofbound.WorkBudget, directShell bool,
+	sourceCertified *bool) (loftOutputBoundaryProof, bool, error) {
 	var no loftOutputBoundaryProof
 	arithmetic := &loftVolumeArithmetic{ok: true}
 	if err := ctx.Err(); err != nil {
@@ -34,9 +52,30 @@ func certifyLoftOutputBoundary(ctx context.Context, first, second *Body,
 	if first == nil || second == nil || operation == nil {
 		return no, false, nil
 	}
-	source, ok, err := certifyLoftSourcePartition(ctx, first, second, operation, arithmetic)
-	if err != nil || !ok || !arithmetic.ok {
+	var source loftSourcePartition
+	var ok bool
+	var err error
+	if directShell {
+		source, ok, err = certifyLoftSourcePartitionForDirectShell(
+			ctx, first, second, operation, arithmetic)
+	} else {
+		source, ok, err = certifyLoftSourcePartition(
+			ctx, first, second, operation, arithmetic)
+	}
+	if err != nil {
 		return no, false, err
+	}
+	if !arithmetic.ok {
+		if directShell {
+			return no, false, errLoftDirectLimit
+		}
+		return no, false, nil
+	}
+	if !ok {
+		return no, false, nil
+	}
+	if sourceCertified != nil {
+		*sourceCertified = true
 	}
 	var pp prismPayload
 	var lp loftPayload
@@ -53,7 +92,11 @@ func certifyLoftOutputBoundary(ctx context.Context, first, second *Body,
 	if !ok {
 		return no, false, nil
 	}
-	limit := proofbound.NewWallWorkBudgetWithOperation(65_536, operation)
+	outputLimit := uint64(65_536)
+	if directShell {
+		outputLimit = loftDirectOutputLimit(ctx)
+	}
+	limit := proofbound.NewWallWorkBudgetWithOperation(outputLimit, operation)
 	var visits uint64
 	budget := &proofbound.WorkBudget{
 		StepFn: func() error {
@@ -95,6 +138,14 @@ func certifyLoftOutputBoundary(ctx context.Context, first, second *Body,
 	if err := budget.Err(); err != nil {
 		return no, false, err
 	}
+	if directShell {
+		if _, err := budget.StepN(uint64(len(shell.vertices) + len(shell.triangles))); err != nil {
+			return no, false, err
+		}
+		if err := budget.Err(); err != nil {
+			return no, false, err
+		}
+	}
 	verts := make([]r3.Vec, len(shell.vertices))
 	for i, v := range shell.vertices {
 		if err := budget.Step(); err != nil {
@@ -102,15 +153,37 @@ func certifyLoftOutputBoundary(ctx context.Context, first, second *Body,
 		}
 		verts[i] = v.held
 	}
+	var auditedTris [][3]int
+	if directShell {
+		auditedTris = append([][3]int(nil), shell.triangles...)
+	}
 	// The exact source labels and orientation are already fixed. Neither audit
 	// may reverse a triangle to repair an ownership mistake.
-	if err := loftmesh.LoftCrossingAuditBounded(operation, verts, shell.triangles,
-		512, 1_000_000); err != nil {
-		return no, false, err
+	if directShell {
+		if err := loftmesh.LoftCrossingAuditPrivateBounded(budget, verts, shell.triangles); err != nil {
+			return no, false, err
+		}
+	} else {
+		if err := loftmesh.LoftCrossingAuditBounded(operation, verts, shell.triangles,
+			512, 1_000_000); err != nil {
+			return no, false, err
+		}
 	}
-	audit, err := facetproof.AuditFacetedMesh(ctx, verts, shell.triangles)
-	if err != nil || audit == nil || len(audit.Members) != 1 {
-		return no, false, err
+	var audit *facetproof.MeshAudit
+	if directShell {
+		var audited bool
+		audit, audited, err = facetproof.AuditFacetedMeshBounded(ctx, budget, verts, auditedTris)
+		if err != nil || !audited {
+			return no, false, err
+		}
+	} else {
+		audit, err = facetproof.AuditFacetedMesh(ctx, verts, shell.triangles)
+		if err != nil {
+			return no, false, err
+		}
+	}
+	if audit == nil || len(audit.Members) != 1 {
+		return no, false, nil
 	}
 	if err := budget.Err(); err != nil {
 		return no, false, err
@@ -118,7 +191,11 @@ func certifyLoftOutputBoundary(ctx context.Context, first, second *Body,
 	if !arithmetic.ok {
 		return no, false, nil
 	}
-	return loftOutputBoundaryProof{source: source, shell: shell, workVisits: visits}, true, nil
+	out := loftOutputBoundaryProof{source: source, shell: shell, workVisits: visits}
+	if directShell {
+		out.heldAudit, out.auditedVerts, out.auditedTris = audit, verts, auditedTris
+	}
+	return out, true, nil
 }
 
 func loftOutputSides(budget *proofbound.WorkBudget, pp prismPayload,
@@ -200,14 +277,15 @@ func loftOutputSides(budget *proofbound.WorkBudget, pp prismPayload,
 		if err := budget.Step(); err != nil {
 			return false, err
 		}
+		if source.walls[i] == -1 {
+			continue
+		}
 		if !loftOutputPlanarWall(bottom[i], top[i], zL) {
 			return false, nil
 		}
 		lo, hi := loftOutputRat(0), loftOutputRat(1)
 		upperLo, upperHi := loftOutputRat(0), loftOutputRat(1)
 		switch source.walls[i] {
-		case -1:
-			continue
 		case 0:
 			k := 0
 			if source.crossing[1] == i {

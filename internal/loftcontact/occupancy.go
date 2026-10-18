@@ -19,6 +19,7 @@ import (
 // does not certify output closure, bounds, or a Boolean result.
 func CertifyCarrierOccupancy(ctx context.Context, budget *proofbound.WorkBudget,
 	bottom, top []sectionrecord.LineSeg, carrier [2]sectionrecord.Point2,
+	reportSize ...bool,
 ) ([2]int, [2]LineSeam, []int8, bool, error) {
 	var noEdges [2]int
 	var noSeams [2]LineSeam
@@ -142,7 +143,7 @@ func CertifyCarrierOccupancy(ctx context.Context, budget *proofbound.WorkBudget,
 		if err != nil || !admitted {
 			return noEdges, noSeams, nil, false, err
 		}
-		bounded, err := lineSeamOrderingBound(budget, first[k])
+		bounded, err := lineSeamOrderingBound(budget, first[k], reportSize...)
 		if err != nil || !bounded {
 			return noEdges, noSeams, nil, false, err
 		}
@@ -160,7 +161,7 @@ func CertifyCarrierOccupancy(ctx context.Context, budget *proofbound.WorkBudget,
 		[2]sectionrecord.Point2{bottom[a].Start, bottom[a].End},
 		[2]sectionrecord.Point2{top[a].Start, top[a].End},
 		[2]sectionrecord.Point2{bottom[b].Start, bottom[b].End},
-		[2]sectionrecord.Point2{top[b].Start, top[b].End}, carrier)
+		[2]sectionrecord.Point2{top[b].Start, top[b].End}, carrier, reportSize...)
 	if err != nil || !admitted {
 		return noEdges, noSeams, nil, false, err
 	}

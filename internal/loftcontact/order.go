@@ -2,6 +2,7 @@ package loftcontact
 
 import (
 	"context"
+	"errors"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -17,7 +18,12 @@ type cubic [4]*big.Rat
 // below the source proof's 8192-bit ceiling.
 const orderedSeamMaxPartBits = 512
 
-func lineSeamOrderingBound(budget *proofbound.WorkBudget, seam LineSeam) (bool, error) {
+// ErrOrderedSeamSize lets a bounded direct consumer distinguish this exact
+// arithmetic ceiling from an ordinary source geometry miss.
+var ErrOrderedSeamSize = errors.New("ordered seam exact size ceiling")
+
+func lineSeamOrderingBound(budget *proofbound.WorkBudget, seam LineSeam,
+	reportSize ...bool) (bool, error) {
 	coefficients := [9]*big.Rat{
 		seam.lineNum[0], seam.lineNum[1], seam.lineDen[0], seam.lineDen[1],
 		seam.carrierNum[0], seam.carrierNum[1], seam.carrierNum[2],
@@ -31,8 +37,13 @@ func lineSeamOrderingBound(budget *proofbound.WorkBudget, seam LineSeam) (bool, 
 			return false, nil
 		}
 		denBits := value.Denom().BitLen()
-		if value.Num().BitLen() > orderedSeamMaxPartBits || denBits > orderedSeamMaxPartBits ||
-			denBits == 0 || value.Denom().TrailingZeroBits() != uint(denBits-1) {
+		if denBits == 0 || value.Denom().TrailingZeroBits() != uint(denBits-1) {
+			return false, nil
+		}
+		if value.Num().BitLen() > orderedSeamMaxPartBits || denBits > orderedSeamMaxPartBits {
+			if len(reportSize) != 0 && reportSize[0] {
+				return false, ErrOrderedSeamSize
+			}
 			return false, nil
 		}
 	}
@@ -45,7 +56,7 @@ func lineSeamOrderingBound(budget *proofbound.WorkBudget, seam LineSeam) (bool, 
 // Refusal leaves all source geometry untouched.
 func CertifyOrderedLineSeams(ctx context.Context, budget *proofbound.WorkBudget,
 	bottomA, topA, bottomB, topB [2]sectionrecord.Point2,
-	carrier [2]sectionrecord.Point2) ([2]LineSeam, bool, error) {
+	carrier [2]sectionrecord.Point2, reportSize ...bool) ([2]LineSeam, bool, error) {
 	var seams [2]LineSeam
 	var ok bool
 	var err error
@@ -53,14 +64,14 @@ func CertifyOrderedLineSeams(ctx context.Context, budget *proofbound.WorkBudget,
 	if err != nil || !ok {
 		return [2]LineSeam{}, false, err
 	}
-	if ok, err = lineSeamOrderingBound(budget, seams[0]); err != nil || !ok {
+	if ok, err = lineSeamOrderingBound(budget, seams[0], reportSize...); err != nil || !ok {
 		return [2]LineSeam{}, false, err
 	}
 	seams[1], ok, err = CertifyLineSeam(ctx, budget, bottomB, topB, carrier)
 	if err != nil || !ok {
 		return [2]LineSeam{}, false, err
 	}
-	if ok, err = lineSeamOrderingBound(budget, seams[1]); err != nil || !ok {
+	if ok, err = lineSeamOrderingBound(budget, seams[1], reportSize...); err != nil || !ok {
 		return [2]LineSeam{}, false, err
 	}
 	if err := budget.Step(); err != nil {

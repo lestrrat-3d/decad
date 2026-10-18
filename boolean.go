@@ -446,6 +446,11 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 	} else if ok {
 		return body, nil
 	}
+	if body, ok, err := tryLoftContactDirectShellUnion(ctx, op, d, ref, a, b); err != nil {
+		return nil, err
+	} else if ok {
+		return body, nil
+	}
 
 	eval, err := evaluateBoolean(ctx, op, a, b)
 	if err != nil {
