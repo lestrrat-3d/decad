@@ -29,7 +29,7 @@ import (
 // one shared mechanism: a one-span straight or arc path sets the flag on its
 // reduced prismPayload/revolvePayload and gets the whole sheet behaviour for
 // free from internal/prismrecord/build.go and internal/revolveplan/build.go, while a composite path's spans
-// stay solid (sweepSpanPayload never carries the flag) and
+// stay solid (sweeprecord.SpanPayload never carries the flag) and
 // compositesweep.Assemble (internal/compositesweep/assemble.go) consumes sweepPayload's own
 // flag to omit the two outer caps after every span has built solid.
 //

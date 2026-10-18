@@ -37,8 +37,11 @@ func TestPlanProfileCountsLinesAndRefusal(t *testing.T) {
 	}
 
 	sp.Prism.Profile.Outer.Segments = sp.Prism.Profile.Outer.Segments[:2]
-	_, _, _, err = compositemesh.PlanProfileCounts(t.Context(), sp, 0.01, nil)
+	counts, total, target, err = compositemesh.PlanProfileCounts(t.Context(), sp, 0.01, nil)
 	require.ErrorIs(t, err, decaderr.ErrDegenerate)
+	require.Nil(t, counts)
+	require.Zero(t, total)
+	require.Zero(t, target)
 }
 
 func TestSpanRingsReverseArcCaps(t *testing.T) {
@@ -57,22 +60,31 @@ func TestSpanRingsReverseArcCaps(t *testing.T) {
 
 func TestSpanRingsRefusals(t *testing.T) {
 	mesh := &topo.Mesh{Vertices: make([]r3.Vec, 5)}
-	_, _, _, err := compositemesh.SpanRings(t.Context(), sweeprecord.SpanPayload{}, mesh, 3, 0, nil)
+	start, end, bound, err := compositemesh.SpanRings(t.Context(), sweeprecord.SpanPayload{}, mesh, 3, 0, nil)
 	require.ErrorIs(t, err, decaderr.ErrUnsupported)
+	require.Nil(t, start)
+	require.Nil(t, end)
+	require.Zero(t, bound)
 
 	span := sweeprecord.SpanPayload{Arc: true}
 	resolve := func(_ context.Context, _ revolveplan.Payload, _ uint64) (*revolveplan.Resolution, error) {
 		return &revolveplan.Resolution{}, nil
 	}
-	_, _, _, err = compositemesh.SpanRings(t.Context(), span, mesh, 3, 0, resolve)
+	start, end, bound, err = compositemesh.SpanRings(t.Context(), span, mesh, 3, 0, resolve)
 	require.ErrorIs(t, err, decaderr.ErrUnsupported)
+	require.Nil(t, start)
+	require.Nil(t, end)
+	require.Zero(t, bound)
 
 	stop := errors.New("resolver stopped")
 	resolve = func(_ context.Context, _ revolveplan.Payload, _ uint64) (*revolveplan.Resolution, error) {
 		return nil, stop
 	}
-	_, _, _, err = compositemesh.SpanRings(t.Context(), span, mesh, 3, 0, resolve)
+	start, end, bound, err = compositemesh.SpanRings(t.Context(), span, mesh, 3, 0, resolve)
 	require.ErrorIs(t, err, stop)
+	require.Nil(t, start)
+	require.Nil(t, end)
+	require.Zero(t, bound)
 }
 
 func TestSpanFaceRoleProvenance(t *testing.T) {
