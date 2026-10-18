@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismshell"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
+	"github.com/lestrrat-3d/decad/internal/throughshell"
 )
 
 // shellThroughRoundPort shells a rectangular prism cut by one whole-circle
@@ -17,13 +18,13 @@ import (
 // exterior wall thickness. Between them the inset rectangular cavity opens
 // into the port. All three sections are exact stack records, so the stack's
 // analytic mass and mesh proofs apply without a new surface kind.
-func shellThroughRoundPort(ctx context.Context, source *Body, bp brepPayload, tc throughCut,
+func shellThroughRoundPort(ctx context.Context, source *Body, bp brepPayload, tc throughshell.Cut,
 	call brepShellCall) (*Body, bool, error) {
-	if len(call.removed) != 1 || len(tc.tools) != 1 || len(tc.tools[0].walls) != 1 {
+	if len(call.removed) != 1 || len(tc.Tools) != 1 || len(tc.Tools[0].Walls) != 1 {
 		return nil, false, nil
 	}
-	tool := tc.tools[0]
-	wall := bp.Faces[tool.walls[0]]
+	tool := tc.Tools[0]
+	wall := bp.Faces[tool.Walls[0]]
 	if call.removed[0] != facesByRole(source)[wall.Role] {
 		return nil, false, nil
 	}
@@ -34,11 +35,11 @@ func shellThroughRoundPort(ctx context.Context, source *Body, bp brepPayload, tc
 	// Seven source faces and the two rectangular cap readings certify that
 	// the one tool passes through a box. No other hole or curved outer wall
 	// can be discarded by the three-section rewrite.
-	if len(bp.Faces) != 7 || len(tc.caps.Section.Holes) != 0 || len(bp.Faces[tool.w0].Region.Holes) != 1 ||
-		len(bp.Faces[tool.w1].Region.Holes) != 1 {
+	if len(bp.Faces) != 7 || len(tc.Caps.Section.Holes) != 0 || len(bp.Faces[tool.LowerFace].Region.Holes) != 1 ||
+		len(bp.Faces[tool.UpperFace].Region.Holes) != 1 {
 		return refuse("needs one rectangular box and one through hole")
 	}
-	if _, ok := prismshell.RecordedBossRect(tc.caps.Section); !ok {
+	if _, ok := prismshell.RecordedBossRect(tc.Caps.Section); !ok {
 		return refuse("needs a rectangular box section")
 	}
 	for _, face := range bp.Faces {
@@ -49,7 +50,7 @@ func shellThroughRoundPort(ctx context.Context, source *Body, bp brepPayload, tc
 	if call.tDelta != 0 {
 		return refuse("needs an exactly converted thickness")
 	}
-	outer, ok := brepgeom.NewPrismMap(tc.embeds[tool.w0], tool.frameEmb).Loop(bp.Faces[tool.w0].Region.Outer)
+	outer, ok := brepgeom.NewPrismMap(tc.Embeds[tool.LowerFace], tool.FrameEmbed).Loop(bp.Faces[tool.LowerFace].Region.Outer)
 	if !ok {
 		return refuse("cannot restate the pierced rectangle in the tool frame")
 	}
@@ -57,22 +58,22 @@ func shellThroughRoundPort(ctx context.Context, source *Body, bp brepPayload, tc
 	if !ok {
 		return refuse("needs a rectangular pierced wall")
 	}
-	circle, ok := prismshell.RecordedBossCircle(tool.prism.Profile)
+	circle, ok := prismshell.RecordedBossCircle(tool.Prism.Profile)
 	if !ok {
 		return refuse("needs one exact whole-circle through tool")
 	}
 	t := call.tmm
 	inner := rect.Inset(t)
-	loInner, hiInner := tool.lo+t, tool.hi-t
+	loInner, hiInner := tool.Lo+t, tool.Hi-t
 	if !(loInner < hiInner && inner.Width() > 0 && inner.Height() > 0 &&
 		circle.Center.U-circle.Radius > inner.U0 && circle.Center.U+circle.Radius < inner.U1 &&
 		circle.Center.V-circle.Radius > inner.V0 && circle.Center.V+circle.Radius < inner.V1) {
 		return refuse("has too little wall thickness or port clearance")
 	}
 	if !prismshell.BossRectArithmeticExact(rect, t) ||
-		proofbound.ExactSumRound(loInner, tool.lo, t) != 0 ||
-		proofbound.ExactSumRound(hiInner, tool.hi, -t) != 0 ||
-		proofbound.ExactSumRound(tool.hi-tool.lo, tool.hi, -tool.lo) != 0 {
+		proofbound.ExactSumRound(loInner, tool.Lo, t) != 0 ||
+		proofbound.ExactSumRound(hiInner, tool.Hi, -t) != 0 ||
+		proofbound.ExactSumRound(tool.Hi-tool.Lo, tool.Hi, -tool.Lo) != 0 {
 		return refuse("needs exactly represented offset coordinates")
 	}
 	for _, c := range []float64{circle.Center.U, circle.Center.V} {
@@ -98,11 +99,11 @@ func shellThroughRoundPort(ctx context.Context, source *Body, bp brepPayload, tc
 	if err != nil {
 		return nil, true, err
 	}
-	sp := stackedPrismPayload{Frame: tool.prism.Frame, Xform: bp.Xform,
+	sp := stackedPrismPayload{Frame: tool.Prism.Frame, Xform: bp.Xform,
 		Slabs: []stackedrecord.Slab{
-			{Regions: []profileRecord{end}, Z0: tool.lo, Z1: loInner},
+			{Regions: []profileRecord{end}, Z0: tool.Lo, Z1: loInner},
 			{Regions: []profileRecord{middle}, Z0: loInner, Z1: hiInner},
-			{Regions: []profileRecord{end}, Z0: hiInner, Z1: tool.hi},
+			{Regions: []profileRecord{end}, Z0: hiInner, Z1: tool.Hi},
 		},
 		Interfaces: []stackedrecord.Interface{{LowerExposed: ring}, {UpperExposed: ring}},
 	}
