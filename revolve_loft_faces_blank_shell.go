@@ -176,8 +176,29 @@ func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
 				rays[i].seamIndex = rays[i].seamRefs[0].station
 			}
 		}
-		if !revolveLoftFacesCapRayOrderBounded(rays, seams[0], capVertices) {
-			return nil, false, nil
+		if len(capVertices) != 0 {
+			orderRays := make([]revolveloftfaces.RayOrderRay, len(rays))
+			for i, ray := range rays {
+				orderRays[i] = revolveloftfaces.RayOrderRay{
+					Y: ray.y, Z: ray.z, SeamIndex: ray.seamIndex, CapCount: len(ray.capIDs),
+				}
+				if len(ray.capIDs) != 0 {
+					orderRays[i].CapID = ray.capIDs[0]
+				}
+			}
+			orderSeam := make([]revolveloftfaces.RayOrderSeam, len(seams[0]))
+			for i, point := range seams[0] {
+				orderSeam[i] = revolveloftfaces.RayOrderSeam{Point: point.point, LoftBound: point.loftBound}
+			}
+			capBoxes := make([]revolveloftfaces.RayBox, len(capVertices))
+			for i, point := range capVertices {
+				capBoxes[i] = revolveloftfaces.RayBox{
+					Y: point.boundary.box[1], Z: point.boundary.box[2],
+				}
+			}
+			if !revolveloftfaces.CapRayOrderBounded(orderRays, orderSeam, capBoxes) {
+				return nil, false, nil
+			}
 		}
 	} else if !revolveLoftFacesAllRayOrderBounded(rays, seams, capVertices) {
 		return nil, false, nil
@@ -594,7 +615,9 @@ func revolveLoftFacesShellRays(n int, seam []revolveLoftFacesSeamVertex,
 			y: lfF(point.point.Y), z: lfF(point.point.Z), seamIndex: -1,
 			capIDs: []int{i}})
 	}
-	sort.Slice(rays, func(i, j int) bool { return revolveLoftFacesRayBefore(rays[i], rays[j]) })
+	sort.Slice(rays, func(i, j int) bool {
+		return revolveloftfaces.RayBefore(rays[i].y, rays[i].z, rays[j].y, rays[j].z)
+	})
 	unique := rays[:0]
 	for _, ray := range rays {
 		if len(unique) == 0 || !revolveLoftFacesSameRay(unique[len(unique)-1], ray) {
@@ -614,16 +637,6 @@ func revolveLoftFacesShellRays(n int, seam []revolveLoftFacesSeamVertex,
 		}
 	}
 	return unique
-}
-
-func revolveLoftFacesRayBefore(a, b revolveLoftFacesRay) bool {
-	upper := func(ray revolveLoftFacesRay) bool {
-		return ray.z.Sign() > 0 || ray.z.Sign() == 0 && ray.y.Sign() >= 0
-	}
-	if upper(a) != upper(b) {
-		return upper(a)
-	}
-	return lfSub(lfMul(a.y, b.z), lfMul(a.z, b.y)).Sign() > 0
 }
 
 func revolveLoftFacesSameRay(a, b revolveLoftFacesRay) bool {
