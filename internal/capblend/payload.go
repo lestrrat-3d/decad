@@ -167,6 +167,22 @@ func (cbp Payload) WalkAmounts(li int, walks []survey2d.SideWalk, d float64) []f
 // loopOffset is loop li's own in-plane offset, its loopSetback's dc.
 func (cbp Payload) LoopOffset(li int) float64 { return cbp.LoopSetback(li).Dc }
 
+// DraftNearLevel is the near cap's level in a draft band view beside its own
+// axial displacement: the cap no loop is chamfered on.
+func (cbp Payload) DraftNearLevel() proofbound.BoundedScalar {
+	if len(cbp.EndLoops) > 0 {
+		return proofbound.MeasuredScalar(cbp.Z0, cbp.Z0Delta)
+	}
+	return proofbound.MeasuredScalar(cbp.Z1, cbp.Z1Delta)
+}
+
+// DraftBandHeightUpper bounds the axial extent of a draft body: the held
+// sweep height with both ends' displacements and subtraction rounding.
+func (cbp Payload) DraftBandHeightUpper() float64 {
+	h := proofbound.BoundedSub(proofbound.MeasuredScalar(cbp.Z1, cbp.Z1Delta), proofbound.MeasuredScalar(cbp.Z0, cbp.Z0Delta))
+	return proofbound.AbsSumUpper(math.Abs(h.Value), h.Bound)
+}
+
 // noun names the body a refusal over this payload speaks of: the draft view's
 // tapered extrude, or the cap-loop chamfer.
 func (cbp Payload) Noun() string {

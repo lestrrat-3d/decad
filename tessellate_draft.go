@@ -3,7 +3,6 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
@@ -22,7 +21,7 @@ import (
 //     apex patch, because every reflex line-line corner is a miter
 //     (capBlendPayload.offsetJoins);
 //   - the slice-wise chord term integrates over the whole sweep height with
-//     both ends' displacements (draftBandHeightUpper);
+//     both ends' displacements (capblend.Payload.DraftBandHeightUpper);
 //   - a subset draft's kept wall reads a zero setback (walkAmounts,
 //     docs/draft-design.md §10.2) in the cap radius, the band's radius
 //     rounding and the cap samples' motion, where a chamfer reads its one
@@ -42,26 +41,6 @@ func tessellateDraft(ctx context.Context, b *Body, dp draftPayload, chord float6
 		return nil, fmt.Errorf(`%w: the tapered extrude's payload states no wall band geometry`, ErrDegenerate)
 	}
 	return tessellateCapBlend(ctx, b, dp.Band(), chord, verify)
-}
-
-// draftNearLevel is the near cap's level in a draft band view beside its own
-// axial displacement: the cap no loop is chamfered on.
-func draftNearLevel(cbp capBlendPayload) proofbound.BoundedScalar {
-	if len(cbp.EndLoops) > 0 {
-		return proofbound.MeasuredScalar(cbp.Z0, cbp.Z0Delta)
-	}
-	return proofbound.MeasuredScalar(cbp.Z1, cbp.Z1Delta)
-}
-
-// draftBandHeightUpper is a proven upper bound on the axial extent of a draft
-// body: the held sweep height with both ends' displacements and the
-// subtraction's rounding. The band runs the whole of it, so it is the height
-// the slice-wise chord term integrates over (tessellation.CapBlendChordVolume's
-// band term), in place of the side setback, which carries neither end's
-// displacement.
-func draftBandHeightUpper(cbp capBlendPayload) float64 {
-	h := proofbound.BoundedSub(proofbound.MeasuredScalar(cbp.Z1, cbp.Z1Delta), proofbound.MeasuredScalar(cbp.Z0, cbp.Z0Delta))
-	return proofbound.AbsSumUpper(math.Abs(h.Value), h.Bound)
 }
 
 // draftNearRing writes one loop's side ring once, at the near level, as the
