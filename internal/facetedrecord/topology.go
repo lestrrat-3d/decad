@@ -12,26 +12,12 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// buildTopology chains the face-boundary mesh edges into topological
+// buildTopologyWithBudget chains the face-boundary mesh edges into topological
 // Edges (split where the adjacent face pair or the exact hinge convexity
 // changes) and builds each face's loops by walking the facet fans. Each
 // Vertex reports its own held bound VertexBound[v], and each Edge the largest
 // of its chain's vertices' bounds (docs/faceted-vertex-bounds-design.md
 // §4.2). Every vertex, edge and loop node comes from alloc.
-func buildTopology(
-	ctx context.Context,
-	alloc topo.Alloc,
-	verts []r3.Vec,
-	tris [][3]int,
-	facetFace []*topo.Face,
-	facePlanar map[*topo.Face]bool,
-	vertexBound []float64,
-	axialSectionJoin bool,
-) error {
-	return buildTopologyWithBudget(ctx, nil, alloc, verts, tris, facetFace,
-		facePlanar, vertexBound, axialSectionJoin)
-}
-
 func buildTopologyWithBudget(
 	ctx context.Context,
 	budget *proofbound.WorkBudget,
