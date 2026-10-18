@@ -141,7 +141,7 @@ func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepMo
 		if selectedStraightEdgesShareVertex(call.edges) {
 			er, blends, err := prepareBrepEdgeBlends(ctx, bp, call, true, nil)
 			if err == nil {
-				next, err := newBrepLoopRead(ctx, er.bp, call)
+				next, err := newBrepLoopRead(ctx, er.BP, call)
 				if err != nil {
 					return nil, err
 				}
@@ -151,13 +151,13 @@ func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepMo
 				if sel, selected, ok := next.partialSelectedLoop(); ok {
 					selectedAt := map[[3]float64]int{}
 					for _, eb := range blends {
-						for _, v := range eb.v {
+						for _, v := range eb.V {
 							selectedAt[v]++
 						}
 					}
 					for _, eb := range blends {
-						for k, v := range eb.v {
-							eb.terminal[k] = selectedAt[v] == 1
+						for k, v := range eb.V {
+							eb.Terminal[k] = selectedAt[v] == 1
 						}
 					}
 					return next.buildPartialFillet(ctx, d, sel, selected, blends)

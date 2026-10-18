@@ -2,13 +2,9 @@ package decad
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/breprecord"
-	"github.com/lestrrat-3d/decad/internal/offset2d"
-	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
@@ -16,107 +12,37 @@ import (
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
-// This file is route E of docs/brep-modify-design.md ("brep-modify §N"): a
-// Fillet or Chamfer of straight brep edges that run along one reference
-// axis (§5). Table EB admits each edge; the corner blend is computed in both
-// end faces, which must agree (SB9); the end faces take the corner rewrite,
-// the two faces beside the edge are trimmed to the blend's feet, one swept
-// blend face is appended per edge, and the rewritten record proves its own
-// closure by pairing every edge again (§5.3).
-//
-// A swept straight wall the construction needs as a plane — an end face, or
-// a wall holding the edge as a rim — is first restated as the planar
-// rectangle it sweeps (§5.2, brepgeom.Restate), once for the whole call, and
-// every edge is then classified against the restated record.
+// Route E (brep-modify §5) authenticates public edge and reference-face
+// handles here. breprecord reads and rewrites the selected BRep record.
+type brepEdgeBlend = breprecord.EdgeBlend
+type brepEdgeEnd = breprecord.EdgeEnd
+type brepRestated = breprecord.EdgeRestated
+type brepMaterialWedgeMismatchError = breprecord.MaterialWedgeMismatchError
 
-// brepEdgeSide classifies one face beside an admitted edge (Table EB, EB4).
-type brepEdgeSide int
-
-const (
-	brepSideSwept  brepEdgeSide = iota // (sw): a swept face along the edge's axis whose side line is the edge
-	brepSidePlanar                     // (pl): a planar face that holds the edge as one loop segment
-)
-
-// brepEdgeEnd is one end face's corner at an admitted edge's vertex: the
-// loop and corner of the face's corner walk whose junction is the vertex
-// (brepgeom.BrepCornerAt), and which of the edge's two adjacent faces the arriving
-// walk there pairs with.
-type brepEdgeEnd struct {
-	face     int
-	loop     int
-	corner   int
-	arriving int
-}
-
-// brepEdgeBlend is one selected edge through route E: its use pair in the
-// receiver's topology, its axis, its two vertices in reference coordinates
-// (V0 at the lower axis coordinate), its two adjacent faces with their
-// classes, its two end faces, and the blend computed in each end face.
-type brepEdgeBlend struct {
-	ordinal  int
-	edge     *Edge
-	pair     [2]int
-	axis     int
-	v        [2][3]float64
-	adj      [2]int
-	side     [2]brepEdgeSide
-	end      [2]brepEdgeEnd
-	blend    [2]*cornerBlend
-	terminal [2]bool
-}
-
-// brepEdgeRoute holds one route E call's readings of the receiver: its
-// record, topology, and each planar face's corner walk, read once.
 type brepEdgeRoute struct {
-	bp     brepPayload
-	btopo  *brepTopology
-	call   brepModifyRequest
-	budget *proofbound.WorkBudget
-	loops  map[int][]cornerLoop
-	// loopUse maps a planar face's (face, loop, segment) to its use index.
-	loopUse   map[[3]int]int
-	terminals map[[3]float64]bool
+	*breprecord.EdgeRoute
+	call brepModifyRequest
 }
 
-// brepMaterialWedgeMismatchError marks the route E corner-model refusal that a
-// selected partial planar loop may be able to build through route L instead.
-type brepMaterialWedgeMismatchError struct{ error }
-
-func (e *brepMaterialWedgeMismatchError) Unwrap() error { return e.error }
-
-// newBrepEdgeRoute reads one record for route E: its topology's loop-segment
-// uses are indexed once, and corner walks are read on demand.
-func newBrepEdgeRoute(bp brepPayload, btopo *brepTopology, call brepModifyRequest, budget *proofbound.WorkBudget) *brepEdgeRoute {
-	r := &brepEdgeRoute{bp: bp, btopo: btopo, call: call, budget: budget,
-		loops: map[int][]cornerLoop{}, loopUse: map[[3]int]int{}}
-	for ui, u := range btopo.Uses {
-		if u.Part == brepLoopSeg {
-			r.loopUse[[3]int{u.Face, u.Loop, u.Seg}] = ui
-		}
-	}
-	return r
+func newBrepEdgeRoute(bp brepPayload, topo *brepTopology,
+	call brepModifyRequest, budget *proofbound.WorkBudget) *brepEdgeRoute {
+	return &brepEdgeRoute{EdgeRoute: breprecord.NewEdgeRoute(bp, topo,
+		call.op, fmt.Sprint(call.sel), selectedEdgesContext(call.edges), call.blend.kind,
+		budget), call: call}
 }
 
-// brepBlendEdges is route E (brep-modify §5): it builds the Fillet or
-// Chamfer of call.edges on the receiver record bp, or refuses in Table SB's
-// gate order (§6): EB1/SB4 per edge, EB7/SB5 over the set; then EB2/SB6
-// over every edge; then the restatement passes (§5.2), EB3/SB7 over every
-// edge's end faces and SB8 over every wall holding an edge as a rim; then,
-// against the restated record, EB4/SB8, EB5/SB8 and EB6 over every edge;
-// then each edge's corner blend (S4, S5) in both end faces and SB9; then the
-// audit of every rewritten face (S8, S6, S7, S9) and trimmed wall (S6); then
-// the closure.
+// brepBlendEdges commits the route E record after its edge and face gates.
 func brepBlendEdges(ctx context.Context, d *Document, bp brepPayload, call brepModifyRequest) (*Body, error) {
 	r, blends, err := prepareBrepEdgeBlends(ctx, bp, call, false, nil)
 	if err != nil {
 		return nil, err
 	}
 	for _, blend := range blends {
-		if err := r.requireBlendMaterialWedge(blend); err != nil {
+		if err := r.RequireBlendMaterialWedge(blend); err != nil {
 			return nil, err
 		}
 	}
-	out, err := r.rewrite(blends)
+	out, err := r.Rewrite(blends)
 	if err != nil {
 		return nil, err
 	}
@@ -138,39 +64,8 @@ func brepBlendEdges(ctx context.Context, d *Document, bp brepPayload, call brepM
 	return body, nil
 }
 
-// requireBlendMaterialWedge checks route E's section premise at both ends.
-// A face across an edge may have a convex corner while the material between
-// the end faces has a reflex corner, as at one edge of a stacked boss root.
-// Its corner blend would remove material where the requested blend fills it.
-func (r *brepEdgeRoute) requireBlendMaterialWedge(eb *brepEdgeBlend) error {
-	materialConvex, decided := brepgeom.MaterialWedgeConvex(eb.pair, r.btopo.Uses,
-		r.btopo.Embeds, r.btopo.Walls)
-	if !decided {
-		return r.refuse(eb, "SB8", `the interior material wedge has no decided turn`)
-	}
-	for k, end := range eb.end {
-		loops, err := r.cornerLoops(end.face)
-		if err != nil {
-			return err
-		}
-		walks := loops[end.loop].Walks
-		previous := walks[(end.corner+len(walks)-1)%len(walks)]
-		current := walks[end.corner]
-		cornerConvex := previous.TanOutU*current.TanInV-previous.TanOutV*current.TanInU > 0
-		face := r.bp.Faces[end.face]
-		other := r.btopo.Embeds[end.face].Local(eb.v[1-k])
-		inner := (other[2] > face.Z0) != face.Outward
-		if materialConvex != (cornerConvex == inner) {
-			return &brepMaterialWedgeMismatchError{r.refuse(eb, "SB8",
-				`the endpoint face corner differs from the interior material wedge`)}
-		}
-	}
-	return nil
-}
-
-// prepareBrepEdgeBlends reads the route E edges and their corner blends
-// before any face is changed. A chain build may admit shared vertices here;
-// its patch construction then has to close every such corner itself.
+// prepareBrepEdgeBlends runs route E's gates in Table SB order. It also
+// allows shared vertices where the later partial-route builder closes them.
 func prepareBrepEdgeBlends(ctx context.Context, bp brepPayload, call brepModifyRequest, shared bool,
 	terminals map[[3]float64]bool) (*brepEdgeRoute, []*brepEdgeBlend, error) {
 	btopo, err := breprecord.TopologyContext(ctx, bp)
@@ -178,7 +73,7 @@ func prepareBrepEdgeBlends(ctx context.Context, bp brepPayload, call brepModifyR
 		return nil, nil, err
 	}
 	r := newBrepEdgeRoute(bp, btopo, call, proofbound.NewWorkBudget(ctx))
-	r.terminals = terminals
+	r.Terminals = terminals
 
 	// Stage 2c: each edge is a straight line along one reference axis (EB1),
 	// and no two share a vertex (EB7).
@@ -193,10 +88,10 @@ func prepareBrepEdgeBlends(ctx context.Context, bp brepPayload, call brepModifyR
 	if !shared {
 		vertexOf := map[[3]float64]*brepEdgeBlend{}
 		for _, eb := range blends {
-			for _, v := range eb.v {
+			for _, v := range eb.V {
 				if other, ok := vertexOf[v]; ok {
-					return nil, nil, r.refuse(eb, "SB5", fmt.Sprintf(`it shares the vertex at (%s) with %s; a vertex blend is not supported`,
-						r.render(v), selectedEdgeContext(other.ordinal, other.edge)))
+					return nil, nil, r.Refuse(eb, "SB5", fmt.Sprintf(`it shares the vertex at (%s) with %s; a vertex blend is not supported`,
+						r.Render(v), other.Context))
 				}
 				vertexOf[v] = eb
 			}
@@ -204,9 +99,9 @@ func prepareBrepEdgeBlends(ctx context.Context, bp brepPayload, call brepModifyR
 	}
 
 	// Stage 3: the edge topology, gate by gate over every edge.
-	incident := r.incidence()
+	incident := r.Incidence()
 	for _, eb := range blends {
-		if err := r.requireThreeEdges(eb, incident); err != nil {
+		if err := r.RequireThreeEdges(eb, incident); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -215,56 +110,58 @@ func prepareBrepEdgeBlends(ctx context.Context, bp brepPayload, call brepModifyR
 	// edge needs as an end face and another beside it is one plane for both.
 	restated := map[int]brepRestated{}
 	for _, eb := range blends {
-		if err := r.findEndFaces(eb, incident, restated); err != nil {
+		if err := r.FindEndFaces(eb, incident, restated); err != nil {
 			return nil, nil, err
 		}
 	}
 	for _, eb := range blends {
-		if err := r.restateRims(eb, restated); err != nil {
+		if err := r.RestateRims(eb, restated); err != nil {
 			return nil, nil, err
 		}
 	}
 	if len(restated) > 0 {
-		oldView := r.bp.RefView()
-		if r, err = r.withRestated(ctx, restated); err != nil {
+		oldView := r.BP.RefView()
+		next, err := r.WithRestated(ctx, restated)
+		if err != nil {
 			return nil, nil, err
 		}
+		r = &brepEdgeRoute{EdgeRoute: next, call: call}
 		// The restated record keeps every face index and every edge, but
 		// numbers its uses afresh. Restating face zero can also change the
 		// reference frame and reverse the edge's axis order, so preserve each
 		// end face by its physical vertex when matching the edge again.
-		newView := r.bp.RefView()
+		newView := r.BP.RefView()
 		for ei, eb := range blends {
-			again, err := r.admitEdge(eb.ordinal, eb.edge)
+			again, err := r.admitEdge(eb.Ordinal, call.edges[eb.Ordinal])
 			if err != nil {
 				return nil, nil, err
 			}
-			oldFirst := oldView.Point(eb.v[0][0], eb.v[0][1], eb.v[0][2])
-			newFirst := newView.Point(again.v[0][0], again.v[0][1], again.v[0][2])
-			newLast := newView.Point(again.v[1][0], again.v[1][1], again.v[1][2])
+			oldFirst := oldView.Point(eb.V[0][0], eb.V[0][1], eb.V[0][2])
+			newFirst := newView.Point(again.V[0][0], again.V[0][1], again.V[0][2])
+			newLast := newView.Point(again.V[1][0], again.V[1][1], again.V[1][2])
 			switch {
 			case oldFirst.Sub(newFirst).Len() <= 1e-6:
-				again.end = eb.end
+				again.End = eb.End
 			case oldFirst.Sub(newLast).Len() <= 1e-6:
-				again.end = [2]brepEdgeEnd{eb.end[1], eb.end[0]}
+				again.End = [2]brepEdgeEnd{eb.End[1], eb.End[0]}
 			default:
-				return nil, nil, r.refuse(again, "SB8", `restating its walls moved an end vertex`)
+				return nil, nil, r.Refuse(again, "SB8", `restating its walls moved an end vertex`)
 			}
 			blends[ei] = again
 		}
 	}
 	for _, eb := range blends {
-		if err := r.classifySides(eb); err != nil {
+		if err := r.ClassifySides(eb); err != nil {
 			return nil, nil, err
 		}
 	}
 	for _, eb := range blends {
-		if err := r.requireNaturalFaces(eb); err != nil {
+		if err := r.RequireNaturalFaces(eb); err != nil {
 			return nil, nil, err
 		}
 	}
 	for _, eb := range blends {
-		if err := r.locateCorners(eb); err != nil {
+		if err := r.LocateCorners(eb); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -279,69 +176,27 @@ func prepareBrepEdgeBlends(ctx context.Context, bp brepPayload, call brepModifyR
 	return r, blends, nil
 }
 
-// refuse is one Table SB refusal for one selected edge.
-func (r *brepEdgeRoute) refuse(eb *brepEdgeBlend, row, reason string) error {
-	return fmt.Errorf(`%w: this evaluator %s a brep edge through route E only where Table EB admits it; %s (brep-modify %s); selector %s, %s`,
-		ErrUnsupported, r.call.op, reason, row, r.call.sel, selectedEdgeContext(eb.ordinal, eb.edge))
-}
-
-// render names a reference-coordinate point by its placed position.
-func (r *brepEdgeRoute) render(c [3]float64) string {
-	return renderVec(r.bp.RefView().Point(c[0], c[1], c[2]))
-}
-
-// partner is the other use of use ui's edge, -1 when ui is a route L band's
-// boundary, which pairs with no face of the record.
-func (r *brepEdgeRoute) partner(ui int) int {
-	if r.btopo.EdgeOf[ui] < 0 {
-		return -1
-	}
-	pair := r.btopo.Edges[r.btopo.EdgeOf[ui]]
-	if pair[0] == ui {
-		return pair[1]
-	}
-	return pair[0]
-}
-
-// cornerLoops reads a planar face's region into its corner walks once.
-func (r *brepEdgeRoute) cornerLoops(fi int) ([]cornerLoop, error) {
-	if loops, ok := r.loops[fi]; ok {
-		return loops, nil
-	}
-	loops, err := offset2d.ProfileCornerLoopsBudget(r.budget, *r.bp.Faces[fi].Region)
-	if err != nil {
-		return nil, err
-	}
-	r.loops[fi] = loops
-	return loops, nil
-}
-
-// admitEdge is EB1 (SB4): the selected edge is a Line3 that matches one
-// edge of the receiver's face record, and its two vertices differ in exactly
-// one reference coordinate, the edge's axis. The match lifts each recorded
-// edge's ends through the reference frame and placement and compares them
-// with the selected edge's vertices within 1e-6, as matchCornerBudget does for
-// a prism; it identifies the edge and admits no geometry.
+// admitEdge authenticates one public edge against the record at EB1/SB4.
 func (r *brepEdgeRoute) admitEdge(ordinal int, e *Edge) (*brepEdgeBlend, error) {
-	eb := &brepEdgeBlend{ordinal: ordinal, edge: e}
+	eb := &brepEdgeBlend{Ordinal: ordinal, Context: selectedEdgeContext(ordinal, e)}
 	switch e.n.Curve.(type) {
 	case surfacegeom.Line3:
 	case surfacegeom.Circle3, surfacegeom.Arc3:
-		return nil, r.refuse(eb, "SB4", `the edge is a circle or an arc (a hole rim or a boss root), and a cone or torus band is not a face this record holds`)
+		return nil, r.Refuse(eb, "SB4", `the edge is a circle or an arc (a hole rim or a boss root), and a cone or torus band is not a face this record holds`)
 	default:
-		return nil, r.refuse(eb, "SB4", fmt.Sprintf(`the edge is a %T, not a straight line`, publicCurve(e.n.Curve)))
+		return nil, r.Refuse(eb, "SB4", fmt.Sprintf(`the edge is a %T, not a straight line`, publicCurve(e.n.Curve)))
 	}
 	if e.n.Start == nil || e.n.End == nil {
-		return nil, r.refuse(eb, "SB4", `the edge has no vertices`)
+		return nil, r.Refuse(eb, "SB4", `the edge has no vertices`)
 	}
-	refView := r.bp.RefView()
+	refView := r.BP.RefView()
 	const tol = 1e-6
 	found := -1
-	for ei, pair := range r.btopo.Edges {
-		if err := survey2d.WallBudgetStep(r.budget); err != nil {
+	for ei, pair := range r.Topo.Edges {
+		if err := survey2d.WallBudgetStep(r.Budget); err != nil {
 			return nil, err
 		}
-		owner := r.btopo.Uses[pair[0]]
+		owner := r.Topo.Uses[pair[0]]
 		if owner.Key.Circular {
 			continue
 		}
@@ -351,15 +206,15 @@ func (r *brepEdgeRoute) admitEdge(ordinal int, e *Edge) (*brepEdgeBlend, error) 
 			continue
 		}
 		if found >= 0 {
-			return nil, r.refuse(eb, "SB6", `the edge matches more than one edge of the receiver's face record`)
+			return nil, r.Refuse(eb, "SB6", `the edge matches more than one edge of the receiver's face record`)
 		}
 		found = ei
 	}
 	if found < 0 {
-		return nil, r.refuse(eb, "SB6", `the edge matches no whole edge of the receiver's face record`)
+		return nil, r.Refuse(eb, "SB6", `the edge matches no whole edge of the receiver's face record`)
 	}
-	eb.pair = r.btopo.Edges[found]
-	owner := r.btopo.Uses[eb.pair[0]]
+	eb.Pair = r.Topo.Edges[found]
+	owner := r.Topo.Uses[eb.Pair[0]]
 	a, b := owner.DirFrom, owner.DirTo
 	axis := -1
 	for i := range 3 {
@@ -367,367 +222,40 @@ func (r *brepEdgeRoute) admitEdge(ordinal int, e *Edge) (*brepEdgeBlend, error) 
 			continue
 		}
 		if axis >= 0 {
-			return nil, r.refuse(eb, "SB4", `the edge is an oblique line, not one along a reference axis`)
+			return nil, r.Refuse(eb, "SB4", `the edge is an oblique line, not one along a reference axis`)
 		}
 		axis = i
 	}
 	if axis < 0 {
-		return nil, r.refuse(eb, "SB4", `the edge has no length`)
+		return nil, r.Refuse(eb, "SB4", `the edge has no length`)
 	}
 	if a[axis] > b[axis] {
 		a, b = b, a
 	}
-	eb.axis, eb.v = axis, [2][3]float64{a, b}
-	for k, v := range eb.v {
-		eb.terminal[k] = r.terminals == nil || r.terminals[v]
+	eb.Axis, eb.V = axis, [2][3]float64{a, b}
+	for k, v := range eb.V {
+		eb.Terminal[k] = r.Terminals == nil || r.Terminals[v]
 	}
-	eb.adj = [2]int{owner.Face, r.btopo.Uses[eb.pair[1]].Face}
+	eb.Adj = [2]int{owner.Face, r.Topo.Uses[eb.Pair[1]].Face}
 	return eb, nil
 }
 
-// incidence lists, per reference-coordinate vertex, the topology edges that
-// start or end there. A closed edge counts once, at its seam.
-func (r *brepEdgeRoute) incidence() map[[3]float64][]int {
-	out := map[[3]float64][]int{}
-	for ei, pair := range r.btopo.Edges {
-		owner := r.btopo.Uses[pair[0]]
-		out[owner.DirFrom] = append(out[owner.DirFrom], ei)
-		if owner.DirTo != owner.DirFrom {
-			out[owner.DirTo] = append(out[owner.DirTo], ei)
-		}
-	}
-	return out
-}
-
-// requireThreeEdges is EB2 (SB6): each vertex of the edge meets exactly
-// three edges, and the edge is a whole side line, not one piece of a split
-// one.
-func (r *brepEdgeRoute) requireThreeEdges(eb *brepEdgeBlend, incident map[[3]float64][]int) error {
-	for _, v := range eb.v {
-		if n := len(incident[v]); n != 3 {
-			return r.refuse(eb, "SB6", fmt.Sprintf(`its vertex at (%s) meets %d edges, not three`, r.render(v), n))
-		}
-	}
-	for _, ui := range eb.pair {
-		u := r.btopo.Uses[ui]
-		f := r.bp.Faces[u.Face]
-		if (u.Part == brepSide0 && len(f.Side0) > 0) || (u.Part == brepSide1 && len(f.Side1) > 0) {
-			return r.refuse(eb, "SB6", fmt.Sprintf(`the edge is one piece of brep face %s's split side line`, f.Role))
-		}
-	}
-	return nil
-}
-
-// brepRestated is one swept straight wall restated as a planar face
-// (brep-modify §5.2), with its new frame's embed.
-type brepRestated struct {
-	face  brepFace
-	embed brepEmbed
-}
-
-// restate is brep-modify §5.2 on brep face fi, a swept face: the planar
-// rectangle its straight wall sweeps, recorded with its frame normal
-// outward and the wall's own sweep (general-boolean §4.2), or
-// brepgeom.ErrRestate naming why the wall is no such rectangle.
-// A face restated earlier in the call is returned as it was.
-func (r *brepEdgeRoute) restate(fi int, restated map[int]brepRestated) (brepRestated, error) {
-	if rs, ok := restated[fi]; ok {
-		return rs, nil
-	}
-	f := r.bp.Faces[fi]
-	rec, embed, err := brepgeom.Restate(brepgeom.FaceRecord{
-		Frame: f.Frame, Wall: f.Wall, Z0: f.Z0, Z1: f.Z1, Z0Delta: f.Z0Delta, Z1Delta: f.Z1Delta,
-		Side0: f.Side0, Side1: f.Side1, Delta: f.Delta, Role: f.Role,
-	}, r.bp.Faces[0].Frame)
-	if err != nil {
-		return brepRestated{}, err
-	}
-	region := profileRecord{Outer: rec.Region.Outer}
-	rs := brepRestated{embed: embed, face: brepFace{Frame: rec.Frame, Region: &region, Outward: true,
-		Sweep: f.Frame.N(), Z0: rec.Z0, Z1: rec.Z1, Z0Delta: rec.Z0Delta, Z1Delta: rec.Z1Delta, Delta: rec.Delta, Role: rec.Role}}
-	restated[fi] = rs
-	return rs, nil
-}
-
-// restateRims is the restatement pass's SB8 half: a swept face beside the
-// edge that sweeps across the edge's axis holds the edge as a rim, and is
-// restated as a plane.
-func (r *brepEdgeRoute) restateRims(eb *brepEdgeBlend, restated map[int]brepRestated) error {
-	for _, fi := range eb.adj {
-		f := r.bp.Faces[fi]
-		if f.Planar() || r.btopo.Embeds[fi].Axis[2] == eb.axis {
-			continue
-		}
-		if _, err := r.restate(fi, restated); err != nil {
-			return r.refuse(eb, "SB8", fmt.Sprintf(`brep face %s beside the edge holds it as a rim and is not a straight wall that reads as a plane: %v`, f.Role, err))
-		}
-	}
-	return nil
-}
-
-// withRestated is the route over the record with every restated face in
-// place, at its own index, and the topology read again. Each restated face's
-// four segments carry the coordinates the wall's rims and side lines did, so
-// every edge pairs as before; a record that does not is ErrUnsupported.
-func (r *brepEdgeRoute) withRestated(ctx context.Context, restated map[int]brepRestated) (*brepEdgeRoute, error) {
-	bp := r.bp
-	bp.Faces = slices.Clone(r.bp.Faces)
-	for fi, rs := range restated {
-		bp.Faces[fi] = rs.face
-	}
-	btopo, err := breprecord.TopologyContext(ctx, bp)
-	if err != nil {
-		return nil, fmt.Errorf(`%w; the restated brep record (brep-modify §5.2); selector %s matched [%s]`,
-			err, r.call.sel, selectedEdgesContext(r.call.edges))
-	}
-	next := newBrepEdgeRoute(bp, btopo, r.call, r.budget)
-	if r.terminals != nil {
-		next.terminals = map[[3]float64]bool{}
-		oldView, newView := r.bp.RefView(), bp.RefView()
-		for old, on := range r.terminals {
-			if !on {
-				continue
-			}
-			point := oldView.Point(old[0], old[1], old[2])
-			for _, use := range btopo.Uses {
-				for _, candidate := range [2][3]float64{use.DirFrom, use.DirTo} {
-					if point.Sub(newView.Point(candidate[0], candidate[1], candidate[2])).Len() <= 1e-6 {
-						next.terminals[candidate] = true
-					}
-				}
-			}
-		}
-	}
-	return next, nil
-}
-
-// findEndFaces is EB3 (SB7) and the restatement pass's end-face half: at
-// each vertex the third face — the face both other edges there bound, beside
-// neither adjacent face — is a planar face across the edge's axis, or a swept
-// straight wall that restates as one (recorded in restated). G0 is the end
-// face at the lower axis coordinate.
-func (r *brepEdgeRoute) findEndFaces(eb *brepEdgeBlend, incident map[[3]float64][]int, restated map[int]brepRestated) error {
-	self := r.btopo.EdgeOf[eb.pair[0]]
-	for k, v := range eb.v {
-		if !eb.terminal[k] {
-			continue
-		}
-		third := -1
-		for _, ei := range incident[v] {
-			if ei == self {
-				continue
-			}
-			pair := r.btopo.Edges[ei]
-			fa, fb := r.btopo.Uses[pair[0]].Face, r.btopo.Uses[pair[1]].Face
-			aAdj, bAdj := slices.Contains(eb.adj[:], fa), slices.Contains(eb.adj[:], fb)
-			g := -1
-			switch {
-			case aAdj && !bAdj:
-				g = fb
-			case bAdj && !aAdj:
-				g = fa
-			}
-			if g < 0 || (third >= 0 && g != third) {
-				return r.refuse(eb, "SB7", fmt.Sprintf(`no single third face meets the edge's vertex at (%s)`, r.render(v)))
-			}
-			third = g
-		}
-		g := r.bp.Faces[third]
-		normal := r.btopo.Embeds[third].Axis[2]
-		var what string
-		switch {
-		case g.Blend != "":
-			what = fmt.Sprintf(`the %s face of an earlier call`, g.Blend)
-		case !g.Planar() && r.btopo.Walls[third].IsLine():
-			rs, err := r.restate(third, restated)
-			if err != nil {
-				what = fmt.Sprintf(`a swept straight wall that does not read as a plane (%v)`, err)
-				break
-			}
-			normal = rs.embed.Axis[2]
-		case !g.Planar():
-			what = `a curved face`
-		}
-		if what == "" && normal != eb.axis {
-			what = `a plane along the edge's axis`
-		}
-		if what != "" {
-			return r.refuse(eb, "SB7", fmt.Sprintf(`the face across the edge's axis at its vertex (%s), brep face %s, is %s, not a plane across the axis`,
-				r.render(v), g.Role, what))
-		}
-		eb.end[k].face = third
-	}
-	return nil
-}
-
-// classifySides is EB4 (SB8) over the restated record: each face beside the
-// edge is (sw), a swept face along the edge's axis whose side line is the
-// edge, or (pl), a planar face that holds the edge as one loop segment whose
-// two neighbouring segments are straight lines at constant axis coordinate.
-// A restated wall that held the edge as a rim or a side line is (pl).
-func (r *brepEdgeRoute) classifySides(eb *brepEdgeBlend) error {
-	for j, ui := range eb.pair {
-		u := r.btopo.Uses[ui]
-		f := r.bp.Faces[u.Face]
-		along := r.btopo.Embeds[u.Face].Axis[2] == eb.axis
-		switch {
-		case !f.Planar() && along && (u.Part == brepSide0 || u.Part == brepSide1):
-			eb.side[j] = brepSideSwept
-		case f.Planar() && !along && u.Part == brepLoopSeg:
-			n := len(r.btopo.Planar[u.Face][u.Loop])
-			for endIndex, s := range []int{(u.Seg + n - 1) % n, (u.Seg + 1) % n} {
-				vertex := u.From
-				if endIndex == 1 {
-					vertex = u.To
-				}
-				if r.terminals != nil && !r.terminals[vertex] {
-					continue
-				}
-				nu := r.btopo.Uses[r.loopUse[[3]int{u.Face, u.Loop, s}]]
-				if !nu.Walk.IsLine() || nu.From[eb.axis] != nu.To[eb.axis] {
-					return r.refuse(eb, "SB8", fmt.Sprintf(`brep face %s beside the edge continues past the edge's vertex on a segment that is not a straight line across the edge's axis`, f.Role))
-				}
-			}
-			eb.side[j] = brepSidePlanar
-		default:
-			return r.refuse(eb, "SB8", fmt.Sprintf(`brep face %s beside the edge neither sweeps along the edge nor holds it as a loop segment`, f.Role))
-		}
-	}
-	return nil
-}
-
-// requireNaturalFaces is EB5 (SB8): every segment of the end faces and the
-// adjacent faces runs over its natural range, and no loop of a planar one
-// holds two consecutive segments on one carrier — each corner walk is one
-// segment, and no two consecutive arcs share centre, radius and sense.
-func (r *brepEdgeRoute) requireNaturalFaces(eb *brepEdgeBlend) error {
-	faces := []int{eb.adj[0], eb.adj[1]}
-	for k, active := range eb.terminal {
-		if active {
-			faces = append(faces, eb.end[k].face)
-		}
-	}
-	for _, fi := range faces {
-		f := r.bp.Faces[fi]
-		if !f.Planar() {
-			if !brepgeom.NaturalRange(f.Wall) {
-				return r.refuse(eb, "SB8", fmt.Sprintf(`brep face %s's wall runs over a narrowed range`, f.Role))
-			}
-			continue
-		}
-		loops, err := r.cornerLoops(fi)
-		if err != nil {
-			return err
-		}
-		records := append([]loopRecord{f.Region.Outer}, f.Region.Holes...)
-		for li, loop := range records {
-			for _, seg := range loop.Segments {
-				if !brepgeom.NaturalRange(seg) {
-					return r.refuse(eb, "SB8", fmt.Sprintf(`brep face %s holds a segment over a narrowed range`, f.Role))
-				}
-			}
-			walks := loops[li].Walks
-			if len(walks) != len(loop.Segments) {
-				return r.refuse(eb, "SB8", fmt.Sprintf(`brep face %s holds two consecutive segments on one line`, f.Role))
-			}
-			n := len(walks)
-			for i, w := range walks {
-				next := walks[(i+1)%n]
-				if n > 1 && w.IsCircular() && next.IsCircular() && !w.Closed && !next.Closed &&
-					w.CU == next.CU && w.CV == next.CV && w.Radius == next.Radius && (w.Th1 > w.Th0) == (next.Th1 > next.Th0) {
-					return r.refuse(eb, "SB8", fmt.Sprintf(`brep face %s holds two consecutive arcs on one circle`, f.Role))
-				}
-			}
-		}
-	}
-	return nil
-}
-
-// locateCorners is EB6 (SB8): in each end face the corner at the edge's
-// vertex is found (brepgeom.BrepCornerAt), and its two walks are the traces of the
-// two adjacent faces — the arriving and the leaving walk each pair, in the
-// receiver's topology, with one adjacent face's rim (sw) or with its
-// neighbouring segment of the edge (pl), one walk per face.
-func (r *brepEdgeRoute) locateCorners(eb *brepEdgeBlend) error {
-	for k, v := range eb.v {
-		if !eb.terminal[k] {
-			continue
-		}
-		end := &eb.end[k]
-		g := r.bp.Faces[end.face]
-		loops, err := r.cornerLoops(end.face)
-		if err != nil {
-			return err
-		}
-		li, ci, ok := brepgeom.BrepCornerAt(loops, r.btopo.Embeds[end.face], g.Z0, v)
-		if !ok {
-			return r.refuse(eb, "SB8", fmt.Sprintf(`brep face %s has no single corner at the edge's vertex (%s)`, g.Role, r.render(v)))
-		}
-		end.loop, end.corner = li, ci
-		walks := loops[li].Walks
-		n := len(walks)
-		var faceOf [2]int
-		for w, wi := range [2]int{(ci + n - 1) % n, ci} {
-			ui := r.loopUse[[3]int{end.face, li, walks[wi].Segs[0]}]
-			faceOf[w] = -1
-			mateUse := r.partner(ui)
-			if mateUse < 0 {
-				continue
-			}
-			mate := r.btopo.Uses[mateUse]
-			for j := range 2 {
-				if mate.Face == eb.adj[j] && r.traces(eb, j, mate) {
-					faceOf[w] = j
-				}
-			}
-		}
-		if faceOf[0] < 0 || faceOf[1] < 0 || faceOf[0] == faceOf[1] {
-			return r.refuse(eb, "SB8", fmt.Sprintf(`brep face %s's two segments at the edge's vertex (%s) are not the traces of the two faces beside the edge`,
-				g.Role, r.render(v)))
-		}
-		end.arriving = faceOf[0]
-	}
-	return nil
-}
-
-// traces reports whether use mate, on adjacent face j, is the part of that
-// face an end-face segment at the edge's vertex must pair with: a rim of a
-// (sw) face, or the (pl) face's segment next to the edge.
-func (r *brepEdgeRoute) traces(eb *brepEdgeBlend, j int, mate brepUse) bool {
-	if eb.side[j] == brepSideSwept {
-		return brepgeom.IsRim(mate.Part)
-	}
-	self := r.btopo.Uses[eb.pair[j]]
-	n := len(r.btopo.Planar[self.Face][self.Loop])
-	return mate.Part == brepLoopSeg && mate.Loop == self.Loop &&
-		(mate.Seg == (self.Seg+n-1)%n || mate.Seg == (self.Seg+1)%n)
-}
-
-// footOf is the blend's foot on adjacent face j's carrier in one end face:
-// fA where the arriving walk pairs with that face, fB otherwise, with the
-// cutback the foot claims from the corner.
-func footOf(end brepEdgeEnd, cb *cornerBlend, j int) (planePoint, float64) {
-	if end.arriving == j {
-		return cb.FA, cb.CutbackA
-	}
-	return cb.FB, cb.CutbackB
-}
-
+// refuseAsymmetricReference reports an SX16 reference-face mismatch.
 func (r *brepEdgeRoute) refuseAsymmetricReference(eb *brepEdgeBlend, reason string) error {
 	return fmt.Errorf(`%w: %s (modify-reach SX16); selector %s, %s`, ErrUnsupported,
-		reason, r.call.sel, selectedEdgeContext(eb.ordinal, eb.edge))
+		reason, r.call.sel, eb.Context)
 }
 
 // asymmetricReferenceSide maps the resolved public face to one of the two
 // record faces beside the edge. Restatement can change wall(i) to face(i),
 // but it keeps i, so the record index is the shared identity across it.
 func (r *brepEdgeRoute) asymmetricReferenceSide(eb *brepEdgeBlend) (int, error) {
-	ref := r.call.asym.refs[eb.edge]
+	ref := r.call.asym.refs[r.call.edges[eb.Ordinal]]
 	if ref == nil {
 		return -1, r.refuseAsymmetricReference(eb, `the asymmetric reference has no face for this edge`)
 	}
 	selected := -1
-	for j, index := range eb.adj {
+	for j, index := range eb.Adj {
 		if !r.call.asym.matchesRecordFace(ref, index) {
 			continue
 		}
@@ -754,266 +282,59 @@ func (r *brepEdgeRoute) computeBlends(eb *brepEdgeBlend) error {
 			return err
 		}
 	}
-	for k := range eb.end {
-		if !eb.terminal[k] {
+	for k := range eb.End {
+		if !eb.Terminal[k] {
 			continue
 		}
-		if err := survey2d.WallBudgetStep(r.budget); err != nil {
+		if err := survey2d.WallBudgetStep(r.Budget); err != nil {
 			return err
 		}
-		end := eb.end[k]
-		loops, err := r.cornerLoops(end.face)
+		end := eb.End[k]
+		loops, err := r.CornerLoops(end.Face)
 		if err != nil {
 			return err
 		}
 		var cb *cornerBlend
 		if referenceSide < 0 {
-			cb, err = r.call.blend.corner(loops[end.loop], end.loop, end.corner, eb.edge)
+			cb, err = r.call.blend.corner(loops[end.Loop], end.Loop, end.Corner, r.call.edges[eb.Ordinal])
 		} else {
 			dA, dB := r.call.asym.other, r.call.asym.d
-			if end.arriving == referenceSide {
+			if end.Arriving == referenceSide {
 				dA, dB = dB, dA
 			}
-			cb, err = computeChamfer(loops[end.loop], end.corner, dA, dB)
+			cb, err = computeChamfer(loops[end.Loop], end.Corner, dA, dB)
 		}
 		if err != nil {
 			return fmt.Errorf(`%w; selector %s, %s at brep face %s's corner (%s)`, err, r.call.sel,
-				selectedEdgeContext(eb.ordinal, eb.edge), r.bp.Faces[end.face].Role, r.render(eb.v[k]))
+				eb.Context, r.BP.Faces[end.Face].Role, r.Render(eb.V[k]))
 		}
-		eb.blend[k] = cb
+		eb.Blend[k] = cb
 	}
-	if !eb.terminal[0] || !eb.terminal[1] {
+	if !eb.Terminal[0] || !eb.Terminal[1] {
 		return nil
 	}
-	g0, g1 := eb.end[0].face, eb.end[1].face
-	m, ok := brepgeom.NewMap2(r.btopo.Embeds[g1], r.btopo.Embeds[g0])
+	g0, g1 := eb.End[0].Face, eb.End[1].Face
+	m, ok := brepgeom.NewMap2(r.Topo.Embeds[g1], r.Topo.Embeds[g0])
 	if !ok {
-		return r.refuse(eb, "SB9", `the two end faces do not lie across one axis`)
+		return r.Refuse(eb, "SB9", `the two end faces do not lie across one axis`)
 	}
 	for j := range 2 {
-		f0, _ := footOf(eb.end[0], eb.blend[0], j)
-		f1, _ := footOf(eb.end[1], eb.blend[1], j)
+		f0, _ := breprecord.FootOf(eb.End[0], eb.Blend[0], j)
+		f1, _ := breprecord.FootOf(eb.End[1], eb.Blend[1], j)
 		u, v := m.Point(f1.U, f1.V)
 		if u != f0.U || v != f0.V {
-			return r.refuse(eb, "SB9", fmt.Sprintf(`the blend's foot on brep face %s computed in the two end faces disagrees: (%s, %s) against (%s, %s) in brep face %s's frame`,
-				r.bp.Faces[eb.adj[j]].Role, renderCoord(f0.U), renderCoord(f0.V), renderCoord(u), renderCoord(v), r.bp.Faces[g0].Role))
+			return r.Refuse(eb, "SB9", fmt.Sprintf(`the blend's foot on brep face %s computed in the two end faces disagrees: (%s, %s) against (%s, %s) in brep face %s's frame`,
+				r.BP.Faces[eb.Adj[j]].Role, renderCoord(f0.U), renderCoord(f0.V), renderCoord(u), renderCoord(v), r.BP.Faces[g0].Role))
 		}
 	}
-	mapped, err := brepgeom.MapSegment(m, eb.blend[1].Connector)
+	mapped, err := brepgeom.MapSegment(m, eb.Blend[1].Connector)
 	if err != nil {
-		return r.refuse(eb, "SB9", err.Error())
+		return r.Refuse(eb, "SB9", err.Error())
 	}
-	c0, arc0 := eb.blend[0].Connector.(arcSeg)
+	c0, arc0 := eb.Blend[0].Connector.(arcSeg)
 	c1, arc1 := mapped.(arcSeg)
 	if arc0 != arc1 || (arc0 && c0.Center != c1.Center) {
-		return r.refuse(eb, "SB9", `the blend's centre computed in the two end faces disagrees`)
+		return r.Refuse(eb, "SB9", `the blend's centre computed in the two end faces disagrees`)
 	}
 	return nil
-}
-
-// brepFaceEdit collects one face's rewrite across every admitted edge: for
-// a planar face, per loop, the blend or trim at each corner (rewriteLoop's
-// input, whose cutbacks are the S6 claims); for a swept face, the trimmed
-// wall ends and their claims.
-type brepFaceEdit struct {
-	blendAt              []map[int]*cornerBlend
-	start, end           *planePoint
-	claimStart, claimEnd float64
-}
-
-// rewrite is brep-modify §5.3 steps 3 to 6 and the assembly of step 7: every
-// end face takes its corner blends, every (pl) face its edge segment moved
-// onto the feet, every (sw) face its wall end trimmed to its foot; one swept
-// blend face is appended per edge; then every rewritten planar face runs the
-// modify §5 audit and every trimmed wall the S6 claim test.
-func (r *brepEdgeRoute) rewrite(blends []*brepEdgeBlend) (brepPayload, error) {
-	edits := map[int]*brepFaceEdit{}
-	editOf := func(fi int) *brepFaceEdit {
-		if e, ok := edits[fi]; ok {
-			return e
-		}
-		e := &brepFaceEdit{}
-		if loops, ok := r.loops[fi]; ok {
-			e.blendAt = make([]map[int]*cornerBlend, len(loops))
-			for i := range e.blendAt {
-				e.blendAt[i] = map[int]*cornerBlend{}
-			}
-		}
-		edits[fi] = e
-		return e
-	}
-	mark := func(eb *brepEdgeBlend, fi, li, ci int, cb *cornerBlend) error {
-		at := editOf(fi).blendAt[li]
-		if at[ci] != nil {
-			return r.refuse(eb, "SB5", fmt.Sprintf(`brep face %s's corner there is claimed by another selected edge`, r.bp.Faces[fi].Role))
-		}
-		at[ci] = cb
-		return nil
-	}
-
-	var blendFaces []brepFace
-	for _, eb := range blends {
-		g0 := eb.end[0].face
-		e0 := r.btopo.Embeds[g0]
-		level0 := r.bp.Faces[g0].Z0
-		for k, end := range eb.end {
-			if err := mark(eb, end.face, end.loop, end.corner, eb.blend[k]); err != nil {
-				return brepPayload{}, err
-			}
-		}
-		for j, fi := range eb.adj {
-			foot, _ := footOf(eb.end[0], eb.blend[0], j)
-			ref := e0.Canon(foot.U, foot.V, level0)
-			embed := r.btopo.Embeds[fi]
-			u := r.btopo.Uses[eb.pair[j]]
-			if eb.side[j] == brepSideSwept {
-				local := embed.Local(ref)
-				p := planePoint{U: local[0], V: local[1]}
-				_, claim := footOf(eb.end[0], eb.blend[0], j)
-				e := editOf(fi)
-				if u.Part == brepSide1 {
-					if e.end != nil {
-						return brepPayload{}, r.refuse(eb, "SB5", `the wall's end is claimed by another selected edge`)
-					}
-					e.end, e.claimEnd = &p, claim
-					continue
-				}
-				if e.start != nil {
-					return brepPayload{}, r.refuse(eb, "SB5", `the wall's start is claimed by another selected edge`)
-				}
-				e.start, e.claimStart = &p, claim
-				continue
-			}
-			// (pl): the edge's segment moves onto the foot at both levels, and
-			// each neighbour ends there instead of at the vertex. The trim is a
-			// connector-free blend at each end of the segment, whose cutback is
-			// the neighbour's claim: the end face's own cutback on this carrier.
-			loops, err := r.cornerLoops(fi)
-			if err != nil {
-				return brepPayload{}, err
-			}
-			walks := loops[u.Loop].Walks
-			n := len(walks)
-			seg := walks[u.Seg]
-			startRef := embed.Canon(seg.StartU, seg.StartV, r.bp.Faces[fi].Z0)
-			for c, at := range [2][3]float64{startRef, embed.Canon(seg.EndU, seg.EndV, r.bp.Faces[fi].Z0)} {
-				k := 0
-				if at == eb.v[1] {
-					k = 1
-				}
-				moved := ref
-				moved[eb.axis] = eb.v[k][eb.axis]
-				local := embed.Local(moved)
-				p := planePoint{U: local[0], V: local[1]}
-				_, claim := footOf(eb.end[k], eb.blend[k], j)
-				trim := &cornerBlend{FA: p, FB: p}
-				ci := u.Seg
-				if c == 0 {
-					trim.CutbackA = claim
-				} else {
-					trim.CutbackB = claim
-					ci = (u.Seg + 1) % n
-				}
-				if err := mark(eb, fi, u.Loop, ci, trim); err != nil {
-					return brepPayload{}, err
-				}
-			}
-		}
-		blendFaces = append(blendFaces, r.blendFace(eb))
-	}
-
-	faces := slices.Clone(r.bp.Faces)
-	order := make([]int, 0, len(edits))
-	for fi := range edits {
-		order = append(order, fi)
-	}
-	// Stage 5 audits every rewritten planar face before any trimmed wall.
-	slices.SortFunc(order, func(a, b int) int {
-		pa, pb := r.bp.Faces[a].Planar(), r.bp.Faces[b].Planar()
-		if pa != pb {
-			if pa {
-				return -1
-			}
-			return 1
-		}
-		return a - b
-	})
-	for _, fi := range order {
-		edit := edits[fi]
-		f := r.bp.Faces[fi]
-		if f.Planar() {
-			loops := r.loops[fi]
-			profile, _, err := offset2d.RewriteProfileBudget(r.budget, *f.Region, loops, edit.blendAt)
-			if err != nil {
-				return brepPayload{}, err
-			}
-			// Modify §5's audit of the face's final record: S8, S6, S7, S9.
-			if err := offset2d.AuditRewriteBudget(r.budget, *f.Region, profile, loops, edit.blendAt); err != nil {
-				return brepPayload{}, r.auditFailure(f, err)
-			}
-			faces[fi].Region = &profile
-			continue
-		}
-		w := r.btopo.Walls[fi]
-		if err := sectionaudit.TrimmedWall(w, edit.claimStart, edit.claimEnd); err != nil {
-			return brepPayload{}, r.auditFailure(f, err)
-		}
-		sU, sV, eU, eV := w.StartU, w.StartV, w.EndU, w.EndV
-		if edit.start != nil {
-			sU, sV = edit.start.U, edit.start.V
-		}
-		if edit.end != nil {
-			eU, eV = edit.end.U, edit.end.V
-		}
-		faces[fi].Wall = walkSegment(survey2d.SideWalk{SegmentWalk: w, Segs: []int{0}}, sU, sV, eU, eV)
-	}
-	// A receiver's route L bands keep their faces and loops: route E rewrites
-	// faces in place and appends its blend faces after them, and a selected
-	// edge ending on a band's boundary meets too few record edges (SB6).
-	out := brepPayload{Faces: append(faces, blendFaces...), Xform: r.bp.Xform, LoopBands: r.bp.LoopBands}
-	out.AssignRoles()
-	return out, nil
-}
-
-// auditFailure wraps an audit refusal of one rewritten face with the face's
-// role and the selection, passing a context error through unwrapped.
-func (r *brepEdgeRoute) auditFailure(f brepFace, err error) error {
-	if errors.Is(err, context.Canceled) {
-		return context.Canceled
-	}
-	if errors.Is(err, context.DeadlineExceeded) {
-		return context.DeadlineExceeded
-	}
-	return fmt.Errorf(`%w; in brep face %s; selector %s matched [%s]`,
-		renderAuditCoordinates(err), f.Role, r.call.sel, selectedEdgesContext(r.call.edges))
-}
-
-// blendFace is brep-modify §5.3 step 5: one swept face in G0's frame whose
-// wall is G0's connector, swept between the two end faces' levels, with the
-// solid's material on the wall's left.
-//
-// The walk sense reads G0's own record, not Edge.IsConvex: a line two planar
-// faces of different sweeps share reads its convexity from a loop's role (an
-// outer loop's edge reads convex), which a concave edge need not match
-// (general-boolean §4.2). G0's connector already walks with G0's region on its left. Near the
-// corner the solid between the two end faces is bounded by the two adjacent
-// faces alone, and its section there is G0's region where G1 lies on G0's
-// inner side (against G0's outward normal), and the rest of the plane where
-// G1 lies on G0's outer side. So the connector keeps its sense in the first
-// case and is reversed in the second.
-func (r *brepEdgeRoute) blendFace(eb *brepEdgeBlend) brepFace {
-	g0 := r.bp.Faces[eb.end[0].face]
-	embed := r.btopo.Embeds[eb.end[0].face]
-	z0, z0Delta := g0.Z0, g0.Z0Delta
-	z1, z1Delta := embed.Local(eb.v[1])[2], r.bp.Faces[eb.end[1].face].Z0Delta
-	wall := eb.blend[0].Connector
-	if inner := (z1 > z0) != g0.Outward; !inner {
-		wall = brepgeom.ReverseSegment(wall)
-	}
-	if z1 < z0 {
-		z0, z1 = z1, z0
-		z0Delta, z1Delta = z1Delta, z0Delta
-	}
-	return brepFace{Frame: g0.Frame, Wall: wall, Z0: z0, Z1: z1,
-		Z0Delta: z0Delta, Z1Delta: z1Delta, Blend: r.call.blend.kind}
 }

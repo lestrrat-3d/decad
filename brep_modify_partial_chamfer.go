@@ -61,16 +61,16 @@ func brepChamferPartialLoop(ctx context.Context, d *Document, bp brepPayload,
 	}
 	selectedAt := map[[3]float64]int{}
 	for _, eb := range blends {
-		for _, v := range eb.v {
+		for _, v := range eb.V {
 			selectedAt[v]++
 		}
 	}
 	for _, eb := range blends {
-		for k, v := range eb.v {
-			eb.terminal[k] = selectedAt[v] == 1
+		for k, v := range eb.V {
+			eb.Terminal[k] = selectedAt[v] == 1
 		}
 	}
-	r, err := newBrepLoopRead(ctx, er.bp, call)
+	r, err := newBrepLoopRead(ctx, er.BP, call)
 	if err != nil {
 		return nil, err
 	}
@@ -217,8 +217,8 @@ func (r *brepLoopRead) rewritePartialChamfer(sel brepLoopSel, selected []bool,
 		}
 	}
 	for _, eb := range blends {
-		for k := range eb.v {
-			if !eb.terminal[k] {
+		for k := range eb.V {
+			if !eb.Terminal[k] {
 				continue
 			}
 			capLoop := profile.Outer
@@ -228,24 +228,24 @@ func (r *brepLoopRead) rewritePartialChamfer(sel brepLoopSel, selected []bool,
 			if err := r.partialTerminalChamfer(sel, orig, capLoop, capWalk, eb, k, sideRef); err != nil {
 				return brepPayload{}, err
 			}
-			end := eb.end[k]
-			if _, ok := restore[end.face]; !ok {
-				restore[end.face] = r.bp.Faces[end.face]
+			end := eb.End[k]
+			if _, ok := restore[end.Face]; !ok {
+				restore[end.Face] = r.bp.Faces[end.Face]
 			}
-			if trims[end.face] == nil {
-				loops, err := offset2d.ProfileCornerLoopsBudget(r.budget, *r.bp.Faces[end.face].Region)
+			if trims[end.Face] == nil {
+				loops, err := offset2d.ProfileCornerLoopsBudget(r.budget, *r.bp.Faces[end.Face].Region)
 				if err != nil {
 					return brepPayload{}, err
 				}
-				trims[end.face] = make([]map[int]*cornerBlend, len(loops))
-				for i := range trims[end.face] {
-					trims[end.face][i] = map[int]*cornerBlend{}
+				trims[end.Face] = make([]map[int]*cornerBlend, len(loops))
+				for i := range trims[end.Face] {
+					trims[end.Face][i] = map[int]*cornerBlend{}
 				}
 			}
-			if trims[end.face][end.loop][end.corner] != nil {
+			if trims[end.Face][end.Loop][end.Corner] != nil {
 				return brepPayload{}, r.refuse("SL1", `two terminal lines claim one end-face corner`)
 			}
-			trims[end.face][end.loop][end.corner] = eb.blend[k]
+			trims[end.Face][end.Loop][end.Corner] = eb.Blend[k]
 		}
 	}
 	var order []int
@@ -287,9 +287,9 @@ func (r *brepLoopRead) rewritePartialChamfer(sel brepLoopSel, selected []bool,
 // common-face contour has fixed the cap foot.
 func (r *brepLoopRead) partialTerminalChamfer(sel brepLoopSel, orig, contour loopRecord,
 	capWalk []int, eb *brepEdgeBlend, k int, sideRef float64) error {
-	v := eb.v[k]
+	v := eb.V[k]
 	seg := -1
-	for _, ui := range r.btopo.Edges[r.matched[eb.ordinal]] {
+	for _, ui := range r.btopo.Edges[r.matched[eb.Ordinal]] {
 		u := r.btopo.Uses[ui]
 		if u.Face == sel.face && u.Loop == sel.loop && u.Part == brepLoopSeg {
 			seg = u.Seg
@@ -325,13 +325,13 @@ func (r *brepLoopRead) partialTerminalChamfer(sel brepLoopSel, orig, contour loo
 	n := eF.Axis[2]
 	side := v
 	side[n] = sideRef
-	endFace := r.bp.Faces[eb.end[k].face]
-	eEnd := r.btopo.Embeds[eb.end[k].face]
+	endFace := r.bp.Faces[eb.End[k].Face]
+	eEnd := r.btopo.Embeds[eb.End[k].Face]
 	capLocal, sideLocal := eEnd.Local(capRef), eEnd.Local(side)
 	if capLocal[2] != endFace.Z0 || sideLocal[2] != endFace.Z0 {
 		return r.refuse("SL1", `a terminal line leaves its end face`)
 	}
-	blend := eb.blend[k]
+	blend := eb.Blend[k]
 	oldA, oldB := eEnd.Canon(blend.FA.U, blend.FA.V, endFace.Z0),
 		eEnd.Canon(blend.FB.U, blend.FB.V, endFace.Z0)
 	level := v[n]

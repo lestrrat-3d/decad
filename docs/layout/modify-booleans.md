@@ -41,7 +41,7 @@ The rules for rows live in `docs/layout.md`.
 | `brep_modify.go` / `brep_modify_prism.go` | Brep and stacked modify receivers: dispatch, SB1/SB2, route P. See brep-modify. |
 | `brep_shell.go` / `brep_shell_curved.go` | Route S: through-cut shell and one circular tool-wall opening. See modify-general §3. |
 | `brep_shell_rim.go` | Route S rims. See modify-general §3.3. |
-| `brep_modify_edge.go` | Route E: Table EB, restatement, blends, trims and closure. See brep-modify §5. |
+| `brep_modify_edge.go` | Route E: public edge and reference-face checks, ordered gate dispatch and result commit. `internal/breprecord/edge_route.go` reads, restates and rewrites the record. See brep-modify §5. |
 | `brep_modify_loop.go` / `brep_loop_band.go` | Route L: record rewrite and the bands' mesh-boolean admission; `breprecord` builds the bands and their mass. See modify-general §4. |
 | `brep_modify_chain.go` | Route L: selected cap-edge chains and partial-loop record adapters over `internal/offset2d/` and `internal/capband/`. |
 | `brep_modify_partial_chamfer.go` | Rewrites one or two straight edges on part of a brep cap loop, including terminal lines. See modify-general §4.3a. |
