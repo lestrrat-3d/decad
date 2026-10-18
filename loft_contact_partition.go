@@ -282,18 +282,30 @@ func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 		}
 		scenes[capIndex] = scene
 	}
-	paired, err := sketch.ProfilesTwoRectangleCapsBounded(ctx, scenes, func(n uint64) error {
-		_, chargeErr := budget.StepN(n)
-		return chargeErr
-	})
-	if errors.Is(err, geom.ErrUnsupportedLineScene) {
-		return no, false, nil
-	}
-	if err != nil {
-		return no, false, err
-	}
-	for i := range prepared {
-		prepared[i].raw = paired[i]
+	// The private proof reads each cap's Sketch regions, including three-line
+	// caps. The direct-shell path requires a charged paired rectangle witness.
+	if reportSeamSize {
+		paired, err := sketch.ProfilesTwoRectangleCapsBounded(ctx, scenes, func(n uint64) error {
+			_, chargeErr := budget.StepN(n)
+			return chargeErr
+		})
+		if errors.Is(err, geom.ErrUnsupportedLineScene) {
+			return no, false, nil
+		}
+		if err != nil {
+			return no, false, err
+		}
+		for i := range prepared {
+			prepared[i].raw = paired[i]
+		}
+	} else {
+		for i := range prepared {
+			raw, err := prismcells.ProfilesContext(ctx, prepared[i].scene.Profiles)
+			if err != nil {
+				return no, false, err
+			}
+			prepared[i].raw = raw
+		}
 	}
 	if prepared[0].scene == prepared[1].scene {
 		return no, false, nil
