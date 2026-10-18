@@ -319,12 +319,6 @@ func planarFacetedSolid(budget *proofbound.WorkBudget, pp facetedPayload) (plana
 	})
 }
 
-// planarHeldSolid lifts a held triangle mesh to an exact snapshot. faceOf
-// names each triangle's face; a length mismatch leaves Faces unset.
-func planarHeldSolid(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int, faceOf []int) (planar.PlanarSolid, bool, error) {
-	return planarsnapshot.HeldSolid(budget, verts, tris, faceOf)
-}
-
 // planarStitchSolid reads a closed all-planar stitched solid off its own
 // audited triangle set (§9). Stitch records Tris, TriFaces and VertBound only
 // for an all-planar weld, and AuditClean only when the crossing audit ran and
@@ -368,7 +362,7 @@ func planarStitchSolid(budget *proofbound.WorkBudget, b *Body, sp stitchPayload)
 		}
 		faceOf[t] = at
 	}
-	solid, ok, err := planarHeldSolid(budget, sp.Verts, sp.Tris, faceOf)
+	solid, ok, err := planarsnapshot.HeldSolid(budget, sp.Verts, sp.Tris, faceOf)
 	if err != nil || !ok {
 		return planar.PlanarSolid{}, none, false, err
 	}
@@ -410,7 +404,7 @@ func planarCoilSolid(ctx context.Context, budget *proofbound.WorkBudget, b *Body
 		}
 		faceOf[t] = at
 	}
-	solid, ok, err := planarHeldSolid(budget, mesh.n.Vertices, mesh.n.Triangles, faceOf)
+	solid, ok, err := planarsnapshot.HeldSolid(budget, mesh.n.Vertices, mesh.n.Triangles, faceOf)
 	if err != nil || !ok {
 		return planar.PlanarSolid{}, none, false, err
 	}
@@ -471,7 +465,7 @@ func planarHeldMeshSolid(ctx context.Context, budget *proofbound.WorkBudget, b *
 		}
 		faceOf[t] = at
 	}
-	solid, ok, err := planarHeldSolid(budget, mesh.n.Vertices, mesh.n.Triangles, faceOf)
+	solid, ok, err := planarsnapshot.HeldSolid(budget, mesh.n.Vertices, mesh.n.Triangles, faceOf)
 	if err != nil || !ok {
 		return planar.PlanarSolid{}, none, false, chordFree, err
 	}
