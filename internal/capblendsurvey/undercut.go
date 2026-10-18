@@ -1,4 +1,4 @@
-package decad
+package capblendsurvey
 
 import (
 	"fmt"
@@ -7,13 +7,22 @@ import (
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/capblend"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/radiussurvey"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
+	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	"github.com/lestrrat-3d/r3"
 )
+
+type prismPayload = prismrecord.Payload
+type capPatch = capblend.Patch
+type capPatchGeom = capband.Patch
+type undercutOutcome = reportvocab.UndercutSurvey[*topo.Face]
 
 // This file is the cap-blend payload's DX7/DX8 surveys
 // (docs/modify-reach-design.md Table DX): per-patch normal ranges against a
@@ -41,8 +50,8 @@ import (
 // satisfies exactly — and it reads it at a POINT the survey itself computed,
 // which is not the azimuth the reading is then treated as. A decision that
 // keeps the sampled value and drops either gap answers for a direction the face
-// never claimed, so capPatchNormalRange charges the whole distance from its
-// sampled reading to the patch's own exactly enclosed one (capblend_normal.go)
+// never claimed, so PatchNormalRange charges the whole distance from its
+// sampled reading to the patch's own exactly enclosed one (normal.go)
 // as part of the allowance it returns. It is what keeps a pull the reading
 // cannot separate from the patch's own tangent undecided rather than cleared,
 // and no all-clear is proven outright unless BOTH terms are proven zero.
@@ -51,14 +60,14 @@ import (
 // constant section at one height, and the existing 2D spanning-disk proof
 // does not decide it (runSurveys, survey.go).
 
-// capBlendUndercuts surveys a cap-blend body's patches against the pull
+// CapBlendUndercuts surveys a cap-blend body's patches against the pull
 // (DX7): each patch's published normal range is read from its OWN built Face —
 // Face.NormalAt already carries the correct outward sign (the .reversed bit
 // each patch sets at build time, internal/capblend/band.go) — sampled at enough
 // azimuths to recover the patch's normal as A*cos(theta)+B*sin(theta)+C (a
 // Cone's normal is that form in its own local azimuth; a Plane's is the
 // degenerate A=B=0 case) and then read over the window [th0, th1] through a
-// proven enclosure of that form's own extremes (capblend_normal.go). The
+// proven enclosure of that form's own extremes (normal.go). The
 // ordinary (unchanged) side walls and caps are surveyed by the SAME exact
 // three-valued reader prismUndercuts runs (survey_undercut.go), since a
 // cap-blend body's non-patch faces are built exactly like a prism's — and, as
@@ -71,11 +80,11 @@ import (
 // departure the build already stamped on the face (internal/capblend/departure.go);
 // every patch's reading is also widened by the whole distance its own readings
 // can sit from the surface it publishes. Both widenings are composed inside
-// capPatchNormalRange, so the reading it returns is already the complete
+// PatchNormalRange, so the reading it returns is already the complete
 // allowance — this survey reads it rather than composing it further. The
 // existential listing and universal all-clear rules then decide it per point:
 // see the loop below.
-func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcome {
+func CapBlendUndercuts(b *topo.Body, cbp capblend.Payload, pull r3.Vec) reportvocab.UndercutSurvey[*topo.Face] {
 	p, ok := pull.Normalize()
 	if !ok {
 		return undercutOutcome{}
@@ -99,7 +108,7 @@ func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcom
 	// all-clear and a nil one is the undecided answer (BodyReport.Undercut.Faces,
 	// verify_publish.go), so the two shapes must stay distinguishable — the
 	// same distinction prismUndercuts already keeps.
-	faces := []*Face{}
+	faces := []*topo.Face{}
 	undecided := false
 	for li, loop := range loops {
 		for _, w := range loop {
@@ -127,23 +136,23 @@ func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcom
 		}
 	}
 
-	if !capPatchUndercuts(roles, pl, cbp.Patches, p, &faces, &undecided) {
+	if !PatchUndercuts(roles, pl, cbp.Patches, p, &faces, &undecided) {
 		return undercutOutcome{}
 	}
 	if undecided && len(faces) == 0 {
 		// Keep an entirely undecided result distinct from a proven all-clear.
 		faces = nil
 	}
-	return undercutOutcome{faces: faces, ok: true, undecided: undecided}
+	return undercutOutcome{Faces: faces, OK: true, Undecided: undecided}
 }
 
-// capPatchUndercuts folds DX7's reading of every band patch into the running
+// PatchUndercuts folds DX7's reading of every band patch into the running
 // faces list and undecided flag, as listVerdict does for a receiver face. p is
 // the unit pull. It reports false, a total refusal, when a patch's face is
-// missing or its normal range cannot be enclosed. capBlendUndercuts and
-// draftUndercuts (draft_survey.go) share it, so a draft wall and a chamfer
+// missing or its normal range cannot be enclosed. CapBlendUndercuts and
+// DraftUndercuts (draft.go) share it, so a draft wall and a chamfer
 // patch are read by one rule.
-func capPatchUndercuts(roles map[string]*Face, pl prismPayload, patches []capPatch, p r3.Vec, faces *[]*Face, undecided *bool) bool {
+func PatchUndercuts(roles map[string]*topo.Face, pl prismPayload, patches []capPatch, p r3.Vec, faces *[]*topo.Face, undecided *bool) bool {
 	// Read each patch's OWN built Face.NormalAt, walked in the payload's own
 	// deterministic patch order (Table BX row BX3), so the faces this survey
 	// reports — public output through Report.Bodies[i].Undercut.Faces — come
@@ -153,16 +162,16 @@ func capPatchUndercuts(roles map[string]*Face, pl prismPayload, patches []capPat
 		if f == nil {
 			return false
 		}
-		mn, mx, reading, ok := capPatchNormalRange(f, pl, patch.Geom, p)
+		mn, mx, reading, ok := PatchNormalRange(f, pl, patch.Geom, p)
 		if !ok {
 			return false
 		}
-		// reading already arrives complete: capPatchNormalRange's circular arm
+		// reading already arrives complete: PatchNormalRange's circular arm
 		// composes the patch's own departure from the surface it publishes
 		// (internal/capblend/departure.go) into it directly, and its flat arm takes
 		// that same departure already composed into Face.NormalAt's own
 		// published bound (topology.go), since a flat patch has only the one
-		// reading to widen. Composing f.n.NormalBound again here would charge a
+		// reading to widen. Composing f.NormalBound again here would charge a
 		// flat patch's departure twice.
 		allow := reading
 		if allow <= 0 {
@@ -195,19 +204,19 @@ func capPatchUndercuts(roles map[string]*Face, pl prismPayload, patches []capPat
 	return true
 }
 
-// capPatchNormalRange samples the published face and passes its exact normal
+// PatchNormalRange samples the published face and passes its exact normal
 // model to capband, which encloses the circular patch's complete range.
-func capPatchNormalRange(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (float64, float64, float64, bool) {
+func PatchNormalRange(f *topo.Face, pl prismPayload, g capPatchGeom, p r3.Vec) (float64, float64, float64, bool) {
 	pLen, ok := capband.PullLengthUpper(p)
 	if !ok {
 		return 0, 0, 0, false
 	}
 	sampleAt := func(pt r3.Vec) (float64, float64, bool) {
-		n, err := f.NormalAt(pt)
+		n, err := topobuild.NormalAt(f, pt)
 		if err != nil {
 			return 0, 0, false
 		}
-		return capband.PullComponent(vecMeasurementToInternal(n), p, pLen)
+		return capband.PullComponent(n, p, pLen)
 	}
 	if !g.Circular {
 		v, allow, ok := sampleAt(pl.Point(g.SideA.U, g.SideA.V, g.SideZ))
@@ -226,10 +235,10 @@ func capPatchNormalRange(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (fl
 		v, _, ok := sampleAt(pl.Point(g.CU+r*cos, g.CV+r*sin, g.CapZ))
 		return v, ok
 	}
-	return capband.CircularNormalRange(g.Th0, g.Th1, g.WholeTurn, f.n.NormalBound, model, sample)
+	return capband.CircularNormalRange(g.Th0, g.Th1, g.WholeTurn, f.NormalBound, model, sample)
 }
 
-// capBlendMinRadius is the tightest concave principal radius over a
+// CapBlendMinRadius is the tightest concave principal radius over a
 // cap-blend body (Table DX, DX8).
 //
 // The reduction below is a claim about the patch the BUILD assembled, not
@@ -237,7 +246,7 @@ func capPatchNormalRange(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (fl
 // patch's radius" is only a fact about the built surface where the built
 // surface really is that Plane or Cone. The build already proves and stamps
 // how far a patch's ruled surface can point away from the surface it
-// publishes (`f.n.NormalBound`, `internal/capblend`'s `setPatchReadings`, derived
+// publishes (`f.NormalBound`, `internal/capblend`'s `setPatchReadings`, derived
 // in `internal/capblend/departure.go`), and this survey answers only where that stamp
 // is an EXACT zero — a zero there means the built normal agrees with the
 // tag's everywhere on the patch, so the two surfaces share every tangent plane
@@ -291,17 +300,16 @@ func capPatchNormalRange(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (fl
 // So for a band of those patches the correct answer is exactly "no new
 // concave principal radius" and the whole survey reduces to radiussurvey.Prism on
 // the receiver's own untouched profile.
-func capBlendMinRadius(b *Body, cbp capBlendPayload) (radiusOutcome, bool) {
+func CapBlendMinRadius(b *topo.Body, cbp capblend.Payload) reportvocab.ScalarSurvey {
 	roles := facesByRole(b)
 	for _, patch := range cbp.Patches {
 		f := roles[patch.Role]
 		if f == nil {
-			return radiusOutcome{}, false
+			return reportvocab.ScalarSurvey{}
 		}
-		if capblend.PatchWindowSkew(patch.Geom) > 0 || f.n.NormalBound != 0 {
-			return radiusOutcome{}, false
+		if capblend.PatchWindowSkew(patch.Geom) > 0 || f.NormalBound != 0 {
+			return reportvocab.ScalarSurvey{}
 		}
 	}
-	reading := radiussurvey.Prism(cbp.Profile, 0)
-	return radiusOutcome{reading: reading.Reading, bound: reading.Bound, ok: reading.OK}, reading.OK
+	return radiussurvey.Prism(cbp.Profile, 0)
 }

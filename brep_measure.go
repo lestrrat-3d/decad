@@ -4,10 +4,12 @@ import (
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/capblend"
+	"github.com/lestrrat-3d/decad/internal/capblendsurvey"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/radiussurvey"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -55,6 +57,10 @@ func brepUndercuts(budget *proofbound.WorkBudget, b *Body, bp brepPayload, pull 
 	// A route L body's band patches are no face of the record: each is read
 	// through its own built Face.NormalAt in its band's face frame, by the
 	// reader a cap-blend body's patches take (modify-general Table DG's DG7).
+	nodeRoles := make(map[string]*topo.Face, len(roles))
+	for role, face := range roles {
+		nodeRoles[role] = faceNode(face)
+	}
 	for bi, band := range bp.LoopBands {
 		if bi >= len(bp.LoopPatches) {
 			return undercutOutcome{}
@@ -66,8 +72,12 @@ func brepUndercuts(budget *proofbound.WorkBudget, b *Body, bp brepPayload, pull 
 			continue
 		}
 		pl := bp.Faces[band.Face].View(bp.Xform)
-		if !capPatchUndercuts(roles, pl, bp.LoopPatches[bi], p, &faces, &undecided) {
+		var patchFaces []*topo.Face
+		if !capblendsurvey.PatchUndercuts(nodeRoles, pl, bp.LoopPatches[bi], p, &patchFaces, &undecided) {
 			return undercutOutcome{}
+		}
+		for _, face := range patchFaces {
+			faces = append(faces, faceHandle(face))
 		}
 	}
 	if undecided && len(faces) == 0 {
@@ -88,7 +98,7 @@ func brepUndercuts(budget *proofbound.WorkBudget, b *Body, bp brepPayload, pull 
 // recorded wall, which the face only denotes within that displacement.
 //
 // A route L body's band patches add no radius the record's walls do not
-// already read, on capBlendMinRadius's reduction (capblend_survey.go): a
+// already read, on capblendsurvey.CapBlendMinRadius's reduction: a
 // Plane is flat, a Cone's tightest azimuthal radius is its side wall's own,
 // and an apex Cone shrinks to zero only at a boundary vertex. That holds only
 // for a patch the build proves is the Cone it publishes, so a band whose
