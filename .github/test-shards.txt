@@ -61,7 +61,6 @@
 0	0.00	TestDegPointCircleCritsNeverGuessAnAzimuth
 0	0.00	TestDocumentRemoveMintsNoProducer
 0	0.01	TestDraftMeshEmbeddedCheckRefusesACrossing
-0	0.00	TestEvalCupIgnoresUnusedOverflowedSecondMoments
 0	0.00	TestEvalLoftUnitBoxTopology
 0	0.00	TestFaceIsTetrahedronEligibleRefusesHeldPlanarFaceted
 0	0.00	TestFilletSphereWalkRequiresExactRecordedRadius
@@ -200,7 +199,6 @@
 1	0.00	TestDegSpineSupIsBoundedOnlyWhenProven
 1	0.00	TestDraftKeptWallsReadsRoles
 1	0.04	TestDraftPayloadRecordsTheFarSection
-1	0.00	TestEvalCupRejectsOverflowedMeasurements
 1	0.01	TestEvalLoftLoopWalksFollowTheFaceNormal
 1	0.00	TestEvalLoftWholeShellOrientationCorrectsSign
 1	0.00	TestFacesOfMeshReadsTheMeshProofRecord
@@ -327,7 +325,6 @@
 2	0.01	TestDraftMeshSharesTheNearRing
 2	0.24	TestDraftMoverRecordRadiusEnclosesTheBody
 2	0.00	TestEvalLoftCancellation
-2	0.00	TestEvalPrismRejectsOverflowedMeasurements
 2	0.00	TestFacetAdjacencyCancellationIsBounded
 2	0.04	TestFacetedAreaBoundsCoverSliverFacet
 2	0.03	TestFacetedAxisSupportRefusesHoledFootprint
@@ -450,7 +447,6 @@
 3	0.61	TestChordLocusRegionVolumeCoversTheDip
 3	0.00	TestChordedBoundsNeverPublishAFlushedZero
 3	0.16	TestClassBThroughPin
-3	0.00	TestCoalescedAnalyticEdgesCarryLengthBounds
 3	2.55	TestCoilFacetBoundHoldsTheSurface
 3	0.36	TestCoilRefusals
 3	0.76	TestCoilSquareSpring
@@ -472,7 +468,6 @@
 3	0.09	TestEvalCupChargesOffsetDisplacement
 3	1.27	TestEvalLoftAuditCountsCandidatesNotPairs
 3	0.00	TestEvalLoftCollapsedTriangleIsDegenerate
-3	0.00	TestEvalRevolveRejectsOverflowedMeasurements
 3	0.00	TestFacetCutCancellationIsBounded
 3	0.00	TestFitInterpolantNonFiniteMapsToR16
 3	0.01	TestFitPointsAreNeitherTheChainNorItsHull
@@ -1337,7 +1332,6 @@
 9	0.00	TestVertexTierPropagatesBudgetExhaustion
 9	0.00	TestWallKernelFitGateReadsTheCandidateInterval
 9	0.00	TestWallKernelSetupCancellationIsBounded
-10	0.01	TestAnalyticCircularEdgesCarryLengthBounds
 10	0.06	TestBodyGateDiameterFreeformArmFitSplineReadsConvertedChain
 10	0.54	TestBooleanVertexBoundsComposePerPair
 10	0.03	TestBoundaryExtremesBoundedInteriorMaximumBeatsEndpointOnly

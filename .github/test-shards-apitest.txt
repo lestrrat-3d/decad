@@ -1891,9 +1891,11 @@
 10	0.97	TestExtrudeBoundsSweepEnclosesArcApex
 10	0.00	TestExtrudeChainOverEachChainOfACutVertex
 10	0.01	TestExtrudeCirclePrismBoundsTighten
+10	0.00	TestExtrudeCoalescedEdgesCarryLengthBounds
 10	0.00	TestExtrudeFreeformCollapsedControlNetRefusesR14
 10	0.07	TestExtrudeFreeformConvexityBothDirections
 10	0.10	TestExtrudeNGonPrismBoundsTighten
+10	0.00	TestExtrudeRejectsOverflowedVolume
 10	0.01	TestExtrudeThroughAll
 10	0.00	TestExtrudedBoxThroughBoreCutPublishesCircularTopology
 10	0.01	TestExtrudeVertexReachesDenotedMergedRun
@@ -1949,6 +1951,7 @@
 10	0.02	TestRevolvePartialSweepWithHole
 10	0.01	TestRevolvePartialSweeps
 10	0.19	TestRevolveReflexSweepBoundsTighten
+10	0.00	TestRevolveRejectsOverflowedVolume
 10	6.21	TestRevolveSectorRepeatedStraightBandCylinderCutVerified
 10	0.01	TestRevolveSphere
 10	1.43	TestRevolveTessellateCircularMeridianChordsWithTolerance
