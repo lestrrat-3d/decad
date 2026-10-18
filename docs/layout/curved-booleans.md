@@ -34,5 +34,5 @@ The rules for rows live in `docs/layout.md`.
 | `revolve_loft_faces_vertical_trace.go` | Links graph-owned vertical source cells into one exact parameter path. See revolve-loft-contact-graph design. |
 | `revolve_loft_faces_vertical_trace_proof.go` | Proves the line and centered-arc source path stays simple inside its cap circle. See revolve-loft-contact-graph design. |
 | `revolve_loft_faces_vertical_trace_path.go` | Finds every source crossing on shell rays and bounds the held contact path. See revolve-loft-contact-graph design. |
-| `revolve_loft_faces_vertical_trace_wedge.go` | Splits planar shell wedges around bounded contact edges with exact triangulation. See revolve-loft-contact-graph design. |
+| `revolve_loft_faces_vertical_trace_wedge.go` | Selects shell wedges and inserts bounded contact edges; internal/revolveloftfaces triangulates them. See revolve-loft-contact-graph design. |
 | `revolve_loft_faces_vertical_trace_mesh.go` | Inserts the vertical path into a fresh all-run shell and repeats shell audits. See revolve-loft-contact-graph design. |
