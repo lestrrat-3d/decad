@@ -316,6 +316,69 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 				report, err := d.Verify(t.Context())
 				require.NoError(t, err)
 				require.True(t, report.Passed(), "status=%v bodies=%d", report.Status, len(report.Bodies))
+				if !reverse {
+					t.Run("second_union_disjoint_prism", func(t *testing.T) {
+						thirdSketch, createErr := world.CreateSketch(base)
+						require.NoError(t, createErr)
+						thirdRect := thirdSketch.CreateRectangle(20, 20, 21, 21)
+						thirdSketch.Fix(thirdRect.A)
+						_, createErr = thirdSketch.Solve(t.Context())
+						require.NoError(t, createErr)
+						thirdProfiles := thirdSketch.Profiles()
+						require.Equal(t, 1, len(thirdProfiles))
+						third, createErr := Extrude(t.Context(), d, thirdSketch, thirdProfiles[0],
+							Distance{D: units.Millimeters(1), Dir: Along})
+						require.NoError(t, createErr)
+
+						before := append([]*Body(nil), d.Bodies()...)
+						beforeProducer := d.nextProducerID()
+						cancelCtx, cancel := context.WithCancel(t.Context())
+						cancel()
+						refused, refusalErr := Union(cancelCtx, result, third)
+						require.True(t, refused == nil)
+						require.ErrorIs(t, refusalErr, context.Canceled)
+						after := d.Bodies()
+						require.Equal(t, len(before), len(after), "refusal changed the live body count")
+						for i := range before {
+							require.True(t, before[i] == after[i], "refusal changed live body %d", i)
+						}
+						require.Equal(t, beforeProducer, d.nextProducerID(),
+							"refusal advanced the document producer")
+
+						combined, unionErr := Union(t.Context(), result, third)
+						require.NoError(t, unionErr)
+						require.True(t, combined.IsSolid())
+						require.Equal(t, 1, len(d.Bodies()), "the union must leave one live body")
+						require.True(t, d.Bodies()[0] == combined)
+						require.Equal(t, 2, len(combined.Lumps()))
+						combinedVolume, volumeErr := combined.Volume()
+						require.NoError(t, volumeErr)
+						require.LessOrEqual(t, math.Abs(combinedVolume.Value.Base()-525),
+							combinedVolume.Bound.Base(), "measured=%g bound=%g",
+							combinedVolume.Value.Base(), combinedVolume.Bound.Base())
+						for _, role := range []string{"side(0,0,0)", "side(0,0,1)"} {
+							ref := featureRefOf(provenance.Ref{Producer: loft.n.Origin.Producer, Role: role})
+							faces, selectErr := Faces(FaceCreatedBy(ref)).SelectFaces(combined)
+							require.NoError(t, selectErr)
+							require.Greater(t, len(faces), 0, "missing Loft source role %q", role)
+						}
+						thirdFaces, selectErr := Faces(FaceCreatedBy(CapStart(third))).SelectFaces(combined)
+						require.NoError(t, selectErr)
+						require.Greater(t, len(thirdFaces), 0, "missing third-prism source cap")
+						for _, edge := range combined.Edges() {
+							require.Equal(t, 2, len(edge.Faces()))
+						}
+						mesh, meshErr := combined.Tessellate(t.Context(), units.Millimeters(0.1),
+							WithVerification(VerifyAll))
+						require.NoError(t, meshErr)
+						require.True(t, mesh.BoundaryVerified())
+						require.True(t, mesh.VolumeVerified())
+						combinedReport, verifyErr := d.Verify(t.Context())
+						require.NoError(t, verifyErr)
+						require.True(t, combinedReport.Passed(), "status=%v bodies=%d",
+							combinedReport.Status, len(combinedReport.Bodies))
+					})
+				}
 			})
 		}
 	})
