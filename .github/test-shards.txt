@@ -356,7 +356,6 @@
 2	0.00	TestPrismPlacementCoeffAllowIdentityWorldAxes
 2	0.01	TestPrismReflectedOperandChargesItsWalk
 2	0.00	TestPrismWallFreeformRefusalKeepsItsSentinels
-2	0.00	TestProvenNormFixturesLargeMagnitudeCornersPastFloor
 2	0.00	TestRejectAxisCrossingRefusesUnprobableCurve
 2	0.00	TestRequireSheetMeshRejectsBrokenFreeEdgeAttribution
 2	0.01	TestRevolveAngularSequenceEnclosesItsOwnStoredTrig
@@ -397,7 +396,6 @@
 2	0.05	TestVertexBlendPartialSphereAfterLateralEdge
 2	0.07	TestVertexBlendThreeEdgesAtOneBoxVertex
 2	0.03	TestWalkChargesTheCounterItIsGiven
-2	0.00	TestWalkEndpointAllow
 2	0.01	TestWideSpanBracketRefusesBeforeSubdividing
 3	0.00	TestAngularHomotopyBulgesBoundTheSecondDerivatives
 3	0.01	TestAtanSmallIntervalEnclosesMathAtan
@@ -407,7 +405,6 @@
 3	0.00	TestBodyPatchMeshChargesTheFilledCapsAxialBound
 3	0.04	TestBooleanRoundingUnderflowKeepsProofPositive
 3	0.06	TestBooleanVolumesAreUnchangedByTheKernelRewrite
-3	0.00	TestBoundedFloatErrorEnclosesEveryTruthTheScalarAdmits
 3	0.02	TestBrepBandMotionCoversContourDisplacement
 3	0.01	TestBrepFaceViewChargesSectionDisplacement
 3	0.29	TestBrepFilletSurveys
@@ -427,7 +424,6 @@
 3	0.04	TestChainStationsBracketsEveryCellArcByItsChord
 3	0.00	TestChordCountHonoursTheWalkMinimum
 3	0.61	TestChordLocusRegionVolumeCoversTheDip
-3	0.00	TestChordedBoundsNeverPublishAFlushedZero
 3	0.16	TestClassBThroughPin
 3	2.55	TestCoilFacetBoundHoldsTheSurface
 3	0.36	TestCoilRefusals
@@ -489,7 +485,6 @@
 3	0.01	TestPrismOverlapVolumeMatchesEvalPrismOnASingleCell
 3	0.00	TestPrismPlacementCoeffAllowKeepsGeneralProof
 3	0.00	TestPrismWallFreeformSectionPropagatesCancellation
-3	0.00	TestRatLenAtLeastDecidesExactly
 3	0.00	TestRequireVertexLinksRejectsAPinchedVertex
 3	0.05	TestRevolveArcFanSlackBoundsAPoleCell
 3	0.00	TestRevolveAxisBandChargesTheOffsetSubtraction
@@ -502,7 +497,6 @@
 3	0.00	TestSameCurveRequiresEqualXform
 3	0.01	TestScaledRotationMatchesRotation
 3	0.04	TestSideOpeningRegionsArcExtension
-3	0.00	TestSnapToZeroAllowEnclosesTheOverwrittenCoordinate
 3	0.00	TestSpanMatchedDeltaUpperNeverUnderflowsASubnormalGapToZero
 3	0.01	TestSpiralBlankUsesAuthenticatedRevolveSection
 3	0.00	TestSpiralRootTubePropagatesCancellation
@@ -533,7 +527,6 @@
 4	0.06	TestBoehmSplineJointsStayExactlyZeroOnTheSamePoints
 4	0.02	TestBoundaryExtremesBoundedEndpointExtremeIsExact
 4	0.12	TestBoundaryExtremesContextRegression
-4	0.00	TestBoundedFloatErrorRefusesANonFiniteOperand
 4	0.01	TestBrepArcWallHasTheAnalyticSTEPShape
 4	0.11	TestBrepConsumersOnTheClassBCutResult
 4	0.09	TestBrepFaceViewOfStackedUnionCoversItsMeasurements
@@ -550,7 +543,6 @@
 4	0.00	TestCapStationBoundEnclosesTheStationItDenotes
 4	0.07	TestCellChordCurveAreaAllowFallsBackOnADegenerateCell
 4	0.00	TestCellSinkPrunesOnlyStrictlyBeyondTheMargin
-4	4.31	TestCellTwistAreaLinearArmEnclosesOrdinaryCells
 4	0.04	TestChainBoundsCachedWalksMatchFreshResolution
 4	0.03	TestChainStationsChargesTheCounterItIsHanded
 4	0.00	TestChordCountRefusesTheToleranceWindowAtTheMeshCap
@@ -630,7 +622,6 @@
 4	0.00	TestRevolveFanAreaSlackIsHalfTheDensityGap
 4	0.00	TestRevolveLoftFacesSimpleSeparatedRequiresStrictAxisGap
 4	0.00	TestRevolveMinRadiusNumeratorIsIntervalMinimum
-4	0.00	TestRigidRoundAllowEnclosesAPlacedCoordinate
 4	0.00	TestSectorCapRefinementKeepsSharedEdges
 4	0.01	TestSharesFacePlane
 4	0.04	TestSideOpeningRegionsArcArcCut
@@ -662,7 +653,6 @@
 5	0.01	TestBlindStackedLevelCarriesToolConversion
 5	0.07	TestBodyGateDiameterFreeformArmDeclineReachesFallbackWithNoArm
 5	0.00	TestBodyPatchPayloadProvesSimpleRefusesNonAdmittingReceiver
-5	0.00	TestBoundedSqrtKeepsAZeroBoundOperandExact
 5	12.21	TestBrepFilletUndercutAgainstSamples
 5	0.11	TestBrepLoopChamferCrossDrilledBothLoops
 5	0.02	TestBrepLoopChamferPlateTopLoop
@@ -681,7 +671,6 @@
 5	0.48	TestCapPatchIntegralsCoverTheirHeldNumbers
 5	0.19	TestCapWallArcBoundChargesTheRoundedOffsetRadius
 5	0.00	TestCellBilinearAreaMatchesUncachedBits
-5	0.00	TestCellTwistAreaLinearArmEnclosesTheExactProduct
 5	0.15	TestChainStationsHonorsItsTargetAndLoosensWithIt
 5	0.00	TestChordLoopSampleReachesArcNaturalEnd
 5	0.00	TestCircularStationChainRefusesAnUnenclosableRecord
@@ -703,7 +692,6 @@
 5	0.00	TestExactRigidPointRoundIsZeroOnlyForAnExactPlacement
 5	0.00	TestFacetFaceIndicesRejectsUnmappedFacet
 5	0.00	TestFitSplineAllCoincidentReturnsNoSpans
-5	9.86	TestFloatRatMatchesSetFloat64
 5	0.00	TestFreeformBracketCostGrowsWithDegree
 5	0.03	TestFreeformWalkRefusedByAnalyticConsumers
 5	0.00	TestLineCircleBracketsAcceptsFinitePolynomial
@@ -737,7 +725,6 @@
 5	0.69	TestPrismPatternFilletSectorBeyondRootDisk
 5	0.00	TestPrismReexpressionRewound
 5	0.01	TestPrismUnionCleanOperandsMergedLoopClosesExactly
-5	0.00	TestProductUpperRefusesRatherThanAnnihilatesARefusal
 5	0.00	TestRatPolyOfRejectsNonFiniteCoefficient
 5	0.00	TestReplayPoseMemoEvictsOldest
 5	0.00	TestResolveThroughAllComposesEveryFarEndInterval
@@ -752,7 +739,6 @@
 5	0.00	TestRevolvePayloadProvesSimpleChargesTheAxisOffsetShift
 5	0.08	TestRevolveShellDisplacedUndercutUndecided
 5	0.37	TestRevolveSymDiffChargesEveryStageSeparately
-5	0.00	TestRigidRoundAllowIsAlwaysAFiniteBound
 5	0.53	TestRunVerifyPairsKeepsJobOrder
 5	1.31	TestSegmentCoordinateUpperCoversTheArc
 5	0.03	TestSideOpeningRegionsDSection
@@ -788,7 +774,6 @@
 6	0.01	TestBlindStackedLevelChargesExactOffsetSum
 6	0.00	TestBodyPatchPayloadProvesSimpleRefusesVertexLevelMismatch
 6	0.40	TestBooleanComposesTheOperandsOwnSymmetricDifferenceProofs
-6	0.00	TestBoundedSqrtWidensABoundedOperand
 6	0.11	TestBrepLoopFilletRefusals
 6	0.09	TestBrepLoopFilletRoundBoss
 6	0.02	TestBrepModifyEdgeChamferCornerBoss
@@ -803,7 +788,6 @@
 6	0.21	TestCapMiterLocusUpperReadsTheStatedAxialRise
 6	1.88	TestCapPatchNormalRangeCoversWhatThePatchTakes
 6	0.06	TestCapPolygonAreaRatNetsEveryLoop
-6	0.00	TestCellChordCurveAreaAllowAdmitsAnExactlyTightArcClaim
 6	0.00	TestCertifiedRootRefinementCancellation
 6	0.39	TestChainStationsIsOneSideOfThePairWalk
 6	0.00	TestChordSagittaCoarsestClosedWalkStaysProven
@@ -861,7 +845,6 @@
 6	0.50	TestPairStationsStationDeterminism
 6	0.00	TestPartialFilletContourCollapsesSelectedArc
 6	0.05	TestPatternedGroupRunsNoBoolean
-6	0.44	TestPerturbedTriangleAreaAllowEnclosesBruteForceSweep
 6	0.01	TestPlacedWithChargesTheGapToExactRotation
 6	0.11	TestPlaneMapMassCoversFrameDefect
 6	0.00	TestPositiveAreaGateConsultsExactRational
@@ -1049,7 +1032,6 @@
 8	0.11	TestCIWorkflowRaceShardsCoverEveryPackage
 8	0.05	TestCapBlendChordVolumeChargesEachCapsBandHeight
 8	0.00	TestCapBlendConeFluxIntervalEnclosesFloatClosedForm
-8	0.00	TestCellChordCurveAreaAllowEnclosesItsExactTerms
 8	3.28	TestChainStationsRefusals
 8	0.00	TestChainStep
 8	0.34	TestChordLoopRefusesMismatchedResolvedWalks
@@ -1287,7 +1269,6 @@
 10	0.06	TestBodyGateDiameterFreeformArmFitSplineReadsConvertedChain
 10	0.54	TestBooleanVertexBoundsComposePerPair
 10	0.03	TestBoundaryExtremesBoundedInteriorMaximumBeatsEndpointOnly
-10	5.11	TestBoundedSqrtExactSquareMatchesBracket
 10	0.05	TestBrepChordWallReachesArcNaturalEnd
 10	0.01	TestBrepCrossDrilledBoxMeasuresAcrossPermutedFrames
 10	0.02	TestBrepFaceViewOfCircularPrismCoversItsMeasurements
@@ -1323,7 +1304,6 @@
 10	0.00	TestDirectLoftCircleGateRejectsEqualBaseDifferentRecord
 10	0.00	TestDirectLoftRuledCircleWallHasBodyNode
 10	0.01	TestDisplacedStationCellNeedsTheStationShiftLeg
-10	2.10	TestExactSumRoundDyadicMatchesRational
 10	1.32	TestFacetedPlacementReflectsPlaneTag
 10	1.94	TestFiniteRevolveFitLineJointKeepsBothLiveSourceSides
 10	0.01	TestFreeformCoincidentControlNetRefused
@@ -1354,7 +1334,6 @@
 10	0.00	TestMotionExceedsResolution
 10	0.00	TestMotionTranslationPoseChargesFacetedReplacement
 10	0.00	TestOffsetPrismUnrepresentableOffset
-10	0.08	TestOutwardRoundingNeverPublishesAFlushedZero
 10	0.01	TestPairReportMemoEvictsOldest
 10	0.00	TestPairStationsRefusesAZeroControlSpanInsteadOfPanicking
 10	0.06	TestPairStationsSharedStationSetAcrossDifferentScale
@@ -1389,7 +1368,6 @@
 10	0.05	TestRevolveSheetPublishesNoOccupiedVolumeProof
 10	0.10	TestRevolveSymDiffRefusesAnAbsentAngularTerm
 10	0.52	TestRotationalSweepRadiusMatchesPerCornerForm
-10	0.00	TestRvLenUpperEnclosesTheExactNorm
 10	0.00	TestRuledCircleQuarterControlNet
 10	0.02	TestScaledAtBoundsFacetedCentroidDiameterAfterVertexRounding
 10	0.00	TestShellRectCircleWitnessKeepsToleranceAndFallsBack

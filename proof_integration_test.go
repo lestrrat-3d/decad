@@ -2,7 +2,6 @@ package decad
 
 import (
 	"math"
-	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -15,18 +14,6 @@ var proofIntegrationFloats = []float64{
 	0, 1, -1, 0.5, 0.1, math.Pi, 1e-300, 1e300,
 	math.SmallestNonzeroFloat64, math.MaxFloat64,
 	math.Nextafter(1, 2), math.Nextafter(1, 0),
-}
-
-func ratOfDyadic(t *testing.T, d proofarith.Dyadic) *big.Rat {
-	t.Helper()
-	if d.Mant() == nil {
-		return new(big.Rat)
-	}
-	out := new(big.Rat).SetInt(d.Mant())
-	if d.Exp() >= 0 {
-		return out.Mul(out, new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), uint(d.Exp()))))
-	}
-	return out.Quo(out, new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), uint(-d.Exp()))))
 }
 
 // TestDyadicSqrtBracketsMatchTheRationalOnes pins the directed square-root

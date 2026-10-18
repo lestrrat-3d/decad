@@ -26,6 +26,33 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// naiveNorm is the sum-of-squares norm with each square explicitly rounded to
+// float64 BEFORE the sum, so the result is identical on every architecture Go
+// supports. The Go language spec ("Floating-point operators",
+// https://go.dev/ref/spec) permits an implementation to fuse a multiply
+// straight into a following add — a fused multiply-add (FMA) — UNLESS the
+// product passes through an explicit floating-point type conversion first.
+// Its own worked examples state the boundary precisely: `t = x*y; r = t + z`
+// is FMA-ALLOWED (a bare assignment to a variable does not stop fusion, even
+// across statements — the spec says the rewrite may happen "possibly across
+// statements"), while `r = float64(x*y) + z` is FMA-DISALLOWED, because the
+// explicit conversion forces x*y's rounding before the add. That is why each
+// term below is wrapped in float64(...) rather than merely assigned to a
+// local: assignment alone is not the guarantee.
+//
+// r3.Vec.Len() now blocks the same fusion the same way, so it is
+// architecture-independent by construction rather than by the compiler
+// backend's choice. This file still computes naiveNorm as its own reference
+// arithmetic instead of asserting on r3.Vec.Len(): a test that wants a raw
+// float norm's error to demonstrate something states that arithmetic itself,
+// so its claims never depend on an upstream package's own rounding choices.
+func naiveNorm(v r3.Vec) float64 {
+	xx := float64(v.X * v.X)
+	yy := float64(v.Y * v.Y)
+	zz := float64(v.Z * v.Z)
+	return math.Sqrt(xx + yy + zz)
+}
+
 func TestBoxesDisjointUsesExactInflatedEndpoints(t *testing.T) {
 	t.Parallel()
 	a := Box{
@@ -143,9 +170,9 @@ func requireCertifiedDiameter(t *testing.T, published float64, exactSquare *big.
 // The shared witness-maximum reader publishes a DOWNWARD-rounded pair maximum,
 // so an ordinary analytic body read through bodyGateDiameter's exact carrier
 // arm never reports a diameter above its own. This test demonstrates the
-// hazard the reader guards against using naiveNorm (bounds_internal_test.go),
-// never r3.Vec.Len itself: naiveNorm's own comment explains why this file
-// states its reference arithmetic itself rather than asserting on r3's, so
+// hazard the reader guards against using naiveNorm, never r3.Vec.Len itself:
+// naiveNorm's own comment explains why this file states its reference
+// arithmetic itself rather than asserting on r3's, so
 // the fixture below discriminates on every architecture regardless of r3's
 // own implementation. naiveNorm's sum is exact whenever it fits under
 // 2^53 — so a small box's farthest pair (its own squared distance well under
@@ -188,7 +215,7 @@ func TestBodyGateDiameterExactCarrierArmNeverOverstates(t *testing.T) {
 // The same scaled 4-8-19-21 box (TestBodyGateDiameterExactCarrierArmNeverOverstates's
 // own comment derives it) is the fixture, so the exact witness maximum is
 // 498,258,033 while naiveNorm of that pair reads 498258033.0000000596 on
-// every architecture (see naiveNorm's own comment for why this file states
+// every architecture (see its own comment for why this file states
 // that arithmetic itself rather than asserting on r3's). Both displacements
 // are 0.125, so twice their sum is 0.5 and the exact shrunken value is exactly
 // 498,258,032.5 — every quantity here is representable, and the two routes

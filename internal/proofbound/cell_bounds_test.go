@@ -468,7 +468,7 @@ func TestCellAllowsWithSideSpansKeepsExactCellReadings(t *testing.T) {
 	}
 }
 
-// rawNormIsBelowExact reports whether naiveNorm (bounds_internal_test.go) of
+// rawNormIsBelowExact reports whether naiveNorm of
 // a−b lands STRICTLY below the exact |a−b|, decided by exact rational
 // comparison of the raw reading's own square against the exactly-rational
 // squared norm (both operands are float64 corners, hence exact rationals, so
@@ -486,7 +486,7 @@ func rawNormIsBelowExact(a, b r3.Vec) bool {
 // edgeProductRow is one corner set for the two raw-norm regressions below,
 // shared because both pin the identical channel over the identical corners.
 // rawChannelExpected is false for the original, ordinary-CAD-scale corners:
-// they sit well below rawNormShortfallFloor (bounds_internal_test.go), so
+// they sit well below rawNormShortfallFloor (bounds_precision_test.go), so
 // naiveNorm no longer misses the exact value there, and the row now exercises
 // only the property that must ALWAYS hold. The large-magnitude row carries the
 // raw-norm-channel proof instead, built past that floor.
