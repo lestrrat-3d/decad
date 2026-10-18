@@ -191,6 +191,7 @@ var (
 		layoutPartSpec("verification.md"),
 		layoutPartSpec("output-repository.md"),
 		layoutPartSpec("internal-core.md"),
+		layoutPartSpec("internal-revolve-sweep.md"),
 		layoutPartSpec("internal-checks.md"),
 	}
 )
