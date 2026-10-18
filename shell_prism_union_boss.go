@@ -3,8 +3,6 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
-	"math/big"
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
@@ -12,9 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismshell"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
-	"github.com/lestrrat-3d/decad/internal/triangulation"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -208,33 +204,31 @@ func prismUnionBossShellAuthenticate(result *Body, fp facetedPayload, plateBody,
 	return src, true
 }
 
-type prismUnionBossShellMesh struct {
-	verts          []r3.Vec
-	tris           [][3]int
-	src            []int
-	groups         []facetGroup
-	beta           []float64
-	maxVertexError float64
-	rootStart      int
-	bossPointEnd   int
-}
-
 func buildPrismUnionBossShell(ctx context.Context, source *Body, fp facetedPayload,
 	src prismUnionBossShellSource, t float64) (*Body, error) {
 	ref := source.n.Doc.NextProducer
-	mesh, err := prismUnionBossShellMeshOf(ctx, ref, fp, src, t)
+	mesh, err := prismshell.PrismUnionBossShellMeshOf(ctx, ref, prismshell.BossMeshInput{
+		Verts: fp.Verts, VertexBound: fp.VertexBound, Groups: fp.Groups,
+		Tris: fp.Tris, Src: fp.Src, Boss: src.boss,
+		PlateRect: src.plateRect, BossRect: src.bossRect,
+		PlateBottom: src.plateBottom, InterfaceZ: src.interfaceZ,
+		BossBottom: src.bossBottom, BossTop: src.bossTop,
+		UnitLo: src.unitLo, UnitHi: src.unitHi,
+		Outer: src.outer, TopGroup: src.topGroup,
+		Stations: prismUnionBossShellStations,
+	}, t)
 	if err != nil {
 		return nil, err
 	}
 	budget := proofbound.NewWorkBudget(ctx)
-	data, err := revolvemesh.RequireRevolveFacetAreas(budget, mesh.verts, mesh.tris, 0)
+	data, err := revolvemesh.RequireRevolveFacetAreas(budget, mesh.Verts, mesh.Tris, 0)
 	if err != nil {
 		return nil, err
 	}
-	if err := revolvemesh.RevolveContactAudit(budget, data, mesh.tris, 0); err != nil {
+	if err := revolvemesh.RevolveContactAudit(budget, data, mesh.Tris, 0); err != nil {
 		return nil, err
 	}
-	audit, err := facetproof.AuditFacetedMesh(ctx, mesh.verts, mesh.tris)
+	audit, err := facetproof.AuditFacetedMesh(ctx, mesh.Verts, mesh.Tris)
 	if err != nil {
 		return nil, err
 	}
@@ -260,7 +254,7 @@ func buildPrismUnionBossShell(ctx context.Context, source *Body, fp facetedPaylo
 	width := proofbound.ProductUpper(src.bossRect.Width(), src.unitHi)
 	height := proofbound.ProductUpper(src.bossRect.Height(), src.unitHi)
 	perimeter := proofbound.ProductUpper(2, proofbound.AbsSumUpper(width, height))
-	station := mesh.maxVertexError
+	station := mesh.MaxVertexError
 	rootGap := proofbound.AbsSumUpper(curve, proofbound.ProductUpper(4, station))
 	upperGap := proofbound.ProductUpper(4, station)
 	if !(rootGap < t/16) {
@@ -281,10 +275,10 @@ func buildPrismUnionBossShell(ctx context.Context, source *Body, fp facetedPaylo
 		proofbound.PointInterval(heldVolume))).Cmp(proofarith.FloatRat(volumeBound)) > 0 {
 		return nil, fmt.Errorf("%w: boss shell held volume exceeds its occupied-volume allowance", ErrUnsupported)
 	}
-	for i := mesh.rootStart; i < mesh.bossPointEnd; i++ {
-		mesh.beta[i] = proofbound.AbsSumUpper(mesh.beta[i], curve)
+	for i := mesh.RootStart; i < mesh.BossPointEnd; i++ {
+		mesh.VertexBound[i] = proofbound.AbsSumUpper(mesh.VertexBound[i], curve)
 	}
-	bound := facetproof.FacetBoundMax(mesh.tris, mesh.beta)
+	bound := facetproof.FacetBoundMax(mesh.Tris, mesh.VertexBound)
 	// The root patch's curved area is no larger than the boss perimeter times
 	// sqrt(2) times a quarter-circle arc. Bounding both true and held root
 	// patches by twice that value covers their area difference independently
@@ -292,171 +286,11 @@ func buildPrismUnionBossShell(ctx context.Context, source *Body, fp facetedPaylo
 	rootAreaSlack := proofbound.ProductUpper(
 		proofbound.ProductUpper(4, perimeter), proofbound.ProductUpper(t, proofbound.RatFloatUp(proofbound.PiUpper)))
 	payload := facetedPayload{
-		Verts: mesh.verts, Tris: mesh.tris, Src: mesh.src, Groups: mesh.groups,
-		VertexBound: mesh.beta, MeshBound: bound, VolSymDiff: volumeBound,
+		Verts: mesh.Verts, Tris: mesh.Tris, Src: mesh.Src, Groups: mesh.Groups,
+		VertexBound: mesh.VertexBound, MeshBound: bound, VolSymDiff: volumeBound,
 		AreaSlack: proofbound.AbsSumUpper(fp.AreaSlack, rootAreaSlack),
-		DPair:     facetedrecord.SourceDiameterUpper(mesh.verts, bound),
+		DPair:     facetedrecord.SourceDiameterUpper(mesh.Verts, bound),
 		Xform:     r3.Identity(), ContactAudited: true,
 	}
 	return bodyResult(facetedrecord.BuildWithProof(ctx, envOf(documentNode(documentHandle(source.n.Doc)), ref), payload, audit, measurementToInternal(Measurement{}), nil))
-}
-
-func prismUnionBossShellMeshOf(ctx context.Context, ref producerID, fp facetedPayload,
-	src prismUnionBossShellSource, t float64) (prismUnionBossShellMesh, error) {
-	var out prismUnionBossShellMesh
-	out.verts = append(out.verts, fp.Verts...)
-	out.beta = append(out.beta, fp.VertexBound...)
-	out.groups = append(out.groups, fp.Groups...)
-	addGroup := func(role string, planar bool) int {
-		i := len(out.groups)
-		out.groups = append(out.groups, facetGroup{Origins: []provenance.Ref{{Producer: ref, Role: role}}, Planar: planar})
-		return i
-	}
-	// The source's top cap is replaced by the opening's narrow horizontal rim.
-	for i, tri := range fp.Tris {
-		if fp.Src[i] == src.topGroup {
-			continue
-		}
-		out.tris = append(out.tris, tri)
-		out.src = append(out.src, fp.Src[i])
-	}
-	add := func(v r3.Vec, beta float64) int {
-		i := len(out.verts)
-		out.verts = append(out.verts, v)
-		out.beta = append(out.beta, beta)
-		out.maxVertexError = max(out.maxVertexError, beta)
-		return i
-	}
-	tri := func(a, b, c, group int) {
-		out.tris = append(out.tris, [3]int{a, b, c})
-		out.src = append(out.src, group)
-	}
-	quad := func(bottom, top [4]int, groups [4]int) {
-		for i := range 4 {
-			j := (i + 1) % 4
-			tri(bottom[i], top[i], top[j], groups[i])
-			tri(bottom[i], top[j], bottom[j], groups[i])
-		}
-	}
-	sideGroups := func(role string, planar bool) [4]int {
-		var groups [4]int
-		for i := range groups {
-			groups[i] = addGroup(fmt.Sprintf("%s(%d)", role, i), planar)
-		}
-		return groups
-	}
-	point := func(corner int, qWorld, qError, zWorld, zError float64) (int, error) {
-		uv := prismshell.PrismUnionBossShellCorners(src.bossRect)[corner]
-		sx, sy := 1.0, 1.0
-		if corner == 1 || corner == 2 {
-			sx = -1
-		}
-		if corner >= 2 {
-			sy = -1
-		}
-		qLocal := proofbound.DivUpper(qWorld, src.unitLo)
-		qLoRat := new(big.Rat).Quo(new(big.Rat).Sub(
-			proofarith.FloatRat(qWorld), proofarith.FloatRat(qError)), proofarith.FloatRat(src.unitHi))
-		qLo := proofbound.RatFloatDown(qLoRat)
-		qBound := proofbound.ProvenUpRound(qLocal - qLo)
-		localZ := zWorld - src.boss.Frame.Origin().Z
-		uLocal, vLocal := uv[0]+sx*qLocal, uv[1]+sy*qLocal
-		uBound := proofbound.AbsSumUpper(qBound, proofbound.ExactSumRound(uLocal, uv[0], sx*qLocal))
-		vBound := proofbound.AbsSumUpper(qBound, proofbound.ExactSumRound(vLocal, uv[1], sy*qLocal))
-		zBound := proofbound.AbsSumUpper(zError,
-			proofbound.ExactSumRound(localZ, zWorld, -src.boss.Frame.Origin().Z))
-		v := src.boss.Point(uLocal, vLocal, localZ)
-		beta := src.boss.PointBound(
-			proofbound.MeasuredScalar(uLocal, uBound),
-			proofbound.MeasuredScalar(vLocal, vBound),
-			proofbound.MeasuredScalar(localZ, zBound))
-		if !proofbound.FiniteVec(v) || proofbound.IsNonFinite(beta) || math.Abs(v.Z-zWorld) > beta {
-			return 0, fmt.Errorf("%w: boss shell station has no bounded horizontal lift", ErrUnsupported)
-		}
-		if (zWorld == src.bossBottom || zWorld == src.interfaceZ || zWorld == src.bossTop) &&
-			v.Z != zWorld {
-			return 0, fmt.Errorf("%w: boss shell rim or ledge moved off its source plane", ErrUnsupported)
-		}
-		return add(v, beta), nil
-	}
-	out.rootStart = len(out.verts)
-	var upperTop, upperBase [4]int
-	for i := range 4 {
-		var err error
-		upperTop[i], err = point(i, t, 0, src.bossTop, 0)
-		if err != nil {
-			return out, err
-		}
-		upperBase[i], err = point(i, t, 0, src.interfaceZ, 0)
-		if err != nil {
-			return out, err
-		}
-	}
-	for i := range 4 {
-		j := (i + 1) % 4
-		g := addGroup(fmt.Sprintf("shellRim(%d)", i), true)
-		tri(src.outer[i], src.outer[j], upperTop[j], g)
-		tri(src.outer[i], upperTop[j], upperTop[i], g)
-	}
-	quad(upperBase, upperTop, sideGroups("shellUpperWall", true))
-	prev := upperBase
-	rootGroups := sideGroups("shellRootBand", false)
-	for k := prismUnionBossShellStations - 1; k >= 0; k-- {
-		w := big.NewRat(int64(k), prismUnionBossShellStations)
-		w2 := new(big.Rat).Mul(w, w)
-		den := new(big.Rat).Add(big.NewRat(1, 1), w2)
-		qRat := new(big.Rat).Quo(new(big.Rat).Mul(proofarith.FloatRat(t),
-			new(big.Rat).Mul(big.NewRat(2, 1), w2)), den)
-		sRat := new(big.Rat).Quo(new(big.Rat).Mul(proofarith.FloatRat(t),
-			new(big.Rat).Mul(big.NewRat(2, 1), w)), den)
-		zRat := new(big.Rat).Add(proofarith.FloatRat(src.bossBottom), sRat)
-		q := proofbound.RatFloatUp(qRat)
-		z, _ := zRat.Float64()
-		qError := proofarith.RationalFloatError(qRat, q)
-		zError := proofarith.RationalFloatError(zRat, z)
-		if k == 0 {
-			q = 0
-			z = src.bossBottom
-			qError, zError = 0, 0
-		}
-		var ring [4]int
-		for i := range 4 {
-			var err error
-			ring[i], err = point(i, q, qError, z, zError)
-			if err != nil {
-				return out, err
-			}
-		}
-		quad(ring, prev, rootGroups)
-		prev = ring
-	}
-	root := prev
-	out.bossPointEnd = len(out.verts)
-	plateInner := src.plateRect.Inset(t)
-	plateCorners := prismshell.PrismUnionBossShellCorners(plateInner)
-	var ledgeOuter, floor [4]int
-	for i, uv := range plateCorners {
-		ledgeOuter[i] = add(r3.Vec{X: uv[0], Y: uv[1], Z: src.bossBottom}, 0)
-		floor[i] = add(r3.Vec{X: uv[0], Y: uv[1], Z: src.plateBottom + t}, 0)
-	}
-	pts := make([]triangulation.Point2, len(out.verts))
-	for i, v := range out.verts {
-		pts[i] = triangulation.Point2{U: v.X, V: v.Y}
-	}
-	ledge, err := triangulation.Triangulate(ctx, pts, [][]int{
-		{ledgeOuter[0], ledgeOuter[1], ledgeOuter[2], ledgeOuter[3]},
-		{root[3], root[2], root[1], root[0]},
-	})
-	if err != nil {
-		return out, fmt.Errorf("%w: boss shell ledge triangulation: %v", ErrUnsupported, err)
-	}
-	ledgeGroup := addGroup("shellLedge", true)
-	for _, tr := range ledge {
-		tri(tr[0], tr[2], tr[1], ledgeGroup)
-	}
-	quad(floor, ledgeOuter, sideGroups("shellLowerWall", true))
-	floorGroup := addGroup("shellFloor", true)
-	tri(floor[0], floor[1], floor[2], floorGroup)
-	tri(floor[0], floor[2], floor[3], floorGroup)
-	return out, nil
 }
