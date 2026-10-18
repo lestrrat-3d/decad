@@ -365,24 +365,24 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 			bands[cap] = [2]int{len(mesh.Tris), len(mesh.Tris)}
 			continue
 		}
-		samples, err := loftCylinderInset(ctx, fp, source.outer[cap], setback)
+		samples, err := loftcylinder.ChamferInset(ctx, fp.Verts, source.outer[cap], setback)
 		if err != nil {
 			return nil, fmt.Errorf("loft/cylinder cap %d inset: %w", cap, err)
 		}
-		if len(samples.points) > maxInsetVertices {
+		if len(samples.Points) > maxInsetVertices {
 			return nil, fmt.Errorf("%w: loft/cylinder inset exceeds the chamfer work ceiling", ErrUnsupported)
 		}
-		maxInset = max(maxInset, samples.bound)
+		maxInset = max(maxInset, samples.Bound)
 		level := source.z0
 		if cap == 1 {
 			level = source.z1
 		}
-		inset[cap] = make([]int, len(samples.points))
-		for i, p := range samples.points {
+		inset[cap] = make([]int, len(samples.Points))
+		for i, p := range samples.Points {
 			p.Z = level
 			inset[cap][i] = len(mesh.Verts)
 			mesh.Verts = append(mesh.Verts, p)
-			bounds = append(bounds, proofbound.AbsSumUpper(fp.MeshBound, samples.bound))
+			bounds = append(bounds, proofbound.AbsSumUpper(fp.MeshBound, samples.Bound))
 		}
 		if !loftcylinder.BoreRingSimple(ctx, mesh.Verts, inset[cap]) {
 			return nil, fmt.Errorf("%w: loft/cylinder inset is not one simple outer ring", ErrUnsupported)
@@ -421,7 +421,7 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 			return nil, err
 		}
 		if len(source.inner[cap]) > 0 {
-			boreReach := proofbound.AbsSumUpper(source.boreRadius, fp.MeshBound, samples.bound,
+			boreReach := proofbound.AbsSumUpper(source.boreRadius, fp.MeshBound, samples.Bound,
 				clipped.clipBound)
 			for i, index := range inset[cap] {
 				next := inset[cap][(i+1)%len(inset[cap])]
@@ -449,7 +449,7 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 			Role: fmt.Sprintf("chamferCap(%d,0,0)", cap)}}})
 		bandFirst := len(mesh.Tris)
 		bandTris, err := loftcylinder.ChamferBandTriangles(clipped.rings[cap], inset[cap],
-			samples.lineStart, samples.arcStart, len(samples.points))
+			samples.LineStart, samples.ArcStart, len(samples.Points))
 		if err != nil {
 			return nil, fmt.Errorf("loft/cylinder band %d: %w", cap, err)
 		}
@@ -458,7 +458,7 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 		}
 		bands[cap] = [2]int{bandFirst, len(mesh.Tris)}
 		if len(source.inner[cap]) > 0 {
-			boreReach := proofbound.AbsSumUpper(source.boreRadius, fp.MeshBound, samples.bound,
+			boreReach := proofbound.AbsSumUpper(source.boreRadius, fp.MeshBound, samples.Bound,
 				clipped.clipBound)
 			for _, tri := range mesh.Tris[bandFirst:] {
 				if loftcylinder.TriangleMinRadius(mesh.Verts, tri) <= boreReach {

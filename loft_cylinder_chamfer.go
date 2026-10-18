@@ -5,15 +5,9 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
-	"github.com/lestrrat-3d/decad/internal/offset2d"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/sectionrecord"
-	"github.com/lestrrat-3d/decad/internal/stationbound"
-	"github.com/lestrrat-3d/decad/internal/survey2d"
-	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
@@ -142,98 +136,4 @@ func tryLoftCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPayload,
 	}
 	body, err := buildLoftCylinderCapChamfer(ctx, documentHandle(b.n.Doc), b.n.Doc.NextProducer, fp, source, d)
 	return body, true, err
-}
-
-type loftCylinderInsetSamples struct {
-	points              []r3.Vec
-	lineStart, arcStart []int
-	bound               float64
-}
-
-// loftCylinderInset chords the analytic offset of one authenticated held cap
-// outline. Each source edge owns one offset line and its following corner arc.
-func loftCylinderInset(ctx context.Context, fp facetedPayload, ring []int, d float64) (loftCylinderInsetSamples, error) {
-	if len(ring) < 3 {
-		return loftCylinderInsetSamples{}, fmt.Errorf("%w: cap outline has fewer than three vertices", ErrUnsupported)
-	}
-	segs := make([]curveSegment, len(ring))
-	for i, index := range ring {
-		next := ring[(i+1)%len(ring)]
-		if index < 0 || next < 0 || index >= len(fp.Verts) || next >= len(fp.Verts) {
-			return loftCylinderInsetSamples{}, fmt.Errorf("%w: cap outline has an invalid vertex", ErrUnsupported)
-		}
-		a, b := fp.Verts[index], fp.Verts[next]
-		segs[i] = lineSeg{Start: sectionrecord.Point2{U: a.X, V: a.Y},
-			End: sectionrecord.Point2{U: b.X, V: b.Y}, TStart: 0, TEnd: 1}
-	}
-	profile := profileRecord{Outer: loopRecord{Segments: segs}}
-	budget := proofbound.NewWorkBudget(ctx)
-	inset, err := offsetProfile(budget, profile, 1, d)
-	if err != nil {
-		return loftCylinderInsetSamples{}, err
-	}
-	if err := offset2d.AuditOffsetSectionBudget(budget, profile, inset); err != nil {
-		return loftCylinderInsetSamples{}, err
-	}
-	delta, err := offsetSectionDelta(budget, profile, 1, d, 0)
-	if err != nil {
-		return loftCylinderInsetSamples{}, err
-	}
-	const chord = 1e-4
-	samples, err := tessellation.ChordLoop(ctx, inset.Outer, chord, d,
-		freeform.NewFreeformWork(), nil, 0,
-		func(w survey2d.SideWalk) (int, error) { return w.Segs[0], nil }, stationbound.ChordStationBound)
-	if err != nil {
-		return loftCylinderInsetSamples{}, err
-	}
-	out := loftCylinderInsetSamples{
-		points:    make([]r3.Vec, len(samples.Samples)),
-		lineStart: make([]int, len(ring)), arcStart: make([]int, len(ring)),
-		bound: proofbound.AbsSumUpper(delta, samples.MaxSag),
-	}
-	for i := range out.arcStart {
-		out.arcStart[i] = -1
-	}
-	for i, p := range samples.Samples {
-		out.points[i] = r3.Vec{X: p.U, Y: p.V}
-		if !proofbound.FiniteVec(out.points[i]) {
-			return loftCylinderInsetSamples{}, fmt.Errorf("%w: cap inset has a nonfinite station", ErrUnsupported)
-		}
-	}
-	segmentStart := make([]int, len(inset.Outer.Segments))
-	for i := range segmentStart {
-		segmentStart[i] = -1
-	}
-	for i, segment := range samples.FaceOf {
-		if segment < 0 || segment >= len(segmentStart) {
-			return loftCylinderInsetSamples{}, fmt.Errorf("%w: inset walk lost its source segment", ErrUnsupported)
-		}
-		if segmentStart[segment] < 0 {
-			segmentStart[segment] = i
-		}
-	}
-	segment := 0
-	for i := range ring {
-		if segment >= len(segmentStart) || segmentStart[segment] < 0 {
-			return loftCylinderInsetSamples{}, fmt.Errorf("%w: inset line lost its source edge", ErrUnsupported)
-		}
-		if _, ok := inset.Outer.Segments[segment].(lineSeg); !ok {
-			return loftCylinderInsetSamples{}, fmt.Errorf("%w: inset source edge is not a line", ErrUnsupported)
-		}
-		out.lineStart[i] = segmentStart[segment]
-		segment++
-		if segment < len(segmentStart) {
-			if _, ok := inset.Outer.Segments[segment].(arcSeg); ok {
-				if segmentStart[segment] < 0 {
-					return loftCylinderInsetSamples{}, fmt.Errorf("%w: inset arc lost its source corner", ErrUnsupported)
-				}
-				out.arcStart[(i+1)%len(ring)] = segmentStart[segment]
-				segment++
-			}
-		}
-	}
-	if segment != len(segmentStart) {
-		return loftCylinderInsetSamples{}, fmt.Errorf("%w: inset has unmatched offset pieces", ErrUnsupported)
-	}
-	return out, nil
 }
