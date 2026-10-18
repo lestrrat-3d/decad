@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -101,8 +102,13 @@ func certifyLoftSourceSpanCaps(ctx context.Context, budget *proofbound.WorkBudge
 		lp.Walls > len(lp.Tris) || len(lp.Tris) > 512 || len(lp.Verts) > 512 {
 		return no, false, nil
 	}
+	fitVisits, fitOK, err := loftSourceFitPreflight(budget, prismSegments, lower, upper)
+	if err != nil || !fitOK {
+		return no, false, err
+	}
 	result := loftSourceSpanCaps{prism: prism, loft: loft,
-		levels: [3]*big.Rat{big.NewRat(0, 1), new(big.Rat).Set(axis.Shift), prismTop}}
+		levels: [3]*big.Rat{big.NewRat(0, 1), new(big.Rat).Set(axis.Shift), prismTop},
+		visits: fitVisits}
 	for cap := range 2 {
 		prismRole := provenance.RoleCapStart
 		loftRole := provenance.RoleCapStart
@@ -176,6 +182,36 @@ func certifyLoftSourceSpanCaps(ctx context.Context, budget *proofbound.WorkBudge
 	return result, true, nil
 }
 
+// loftSourceFitPreflight charges the fit-point scan and the established
+// interpolant cost before the source reader allocates per-cap span arrays.
+// This source-only stage does not solve the interpolant; a later consumer
+// must still charge and validate any conversion it actually performs.
+func loftSourceFitPreflight(budget *proofbound.WorkBudget,
+	prism, lower, upper []sectionrecord.CurveSegment) (uint64, bool, error) {
+	var visits uint64
+	for _, loop := range [4][]sectionrecord.CurveSegment{prism, lower, upper, prism} {
+		for _, segment := range loop {
+			fit, ok := segment.(sectionrecord.FitSplineSeg)
+			if !ok {
+				continue
+			}
+			if len(fit.Fit) < 2 {
+				return 0, false, nil
+			}
+			cost, valid := proofbound.WallCheckedAdd(
+				freeform.FitInterpolantCost(len(fit.Fit)), uint64(len(fit.Fit)))
+			if !valid {
+				return 0, false, proofbound.ErrWallWorkBudget
+			}
+			if _, err := budget.StepN(cost); err != nil {
+				return 0, false, err
+			}
+			visits += cost
+		}
+	}
+	return visits, true, nil
+}
+
 func loftSourceCapSpanOf(body *Body, role string, index int,
 	curve sectionrecord.CurveSegment) (loftSourceCapSpan, bool) {
 	var no loftSourceCapSpan
@@ -188,6 +224,12 @@ func loftSourceCapSpanOf(body *Body, role string, index int,
 	case sectionrecord.ArcSeg:
 		start, end = c.TStart, c.TEnd
 		points = []sectionrecord.Point2{c.Center, c.Start, c.End}
+	case sectionrecord.FitSplineSeg:
+		if len(c.Fit) < 2 {
+			return no, false
+		}
+		start, end = c.TStart, c.TEnd
+		points = c.Fit
 	default:
 		return no, false
 	}
@@ -215,6 +257,9 @@ func loftSourceSameKind(first, second sectionrecord.CurveSegment) bool {
 		return ok
 	case sectionrecord.ArcSeg:
 		_, ok := second.(sectionrecord.ArcSeg)
+		return ok
+	case sectionrecord.FitSplineSeg:
+		_, ok := second.(sectionrecord.FitSplineSeg)
 		return ok
 	default:
 		return false
