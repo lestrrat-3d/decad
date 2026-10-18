@@ -24,7 +24,7 @@ The rules for rows live in `docs/layout.md`.
 | `tessellate_body_patch_prism.go` | Reuses circular surface-extrusion wall stations to mesh one or both PatchEdges fills with shared rim indices and verified face bounds. |
 | `tessellate_chain.go` | A chain ribbon's exact-quad mesh. See surface §13.4. |
 | `tessellate_coil.go` | A coil's held-shell mesh with its area and volume proofs. See helix §8. |
-| `tessellate_capblend.go` | The cap-loop chamfer mesh. See tessellation reach §7. |
+| `tessellate_capblend.go` | Adapts cap-blend mesh nodes to public handles and retains the shared BRep band emitter and Loft proof. See tessellation reach §7. |
 | `loft_capband_proof.go` | Adapts a matching loft's cap-band payload and mesh to the numeric occupied-volume proof in `internal/tessellation`. See loft §18. |
 | `tessellate_draft.go` | A draft body's mesh through its band view. See draft §9.1. |
 | `tessellate_draft_two_sided.go` | Sewn two-slab draft mesh. See draft §9.1. |
