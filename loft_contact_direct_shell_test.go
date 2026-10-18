@@ -138,7 +138,11 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 			}
 			before := append([]*Body(nil), d.Bodies()...)
 			beforeProducer := d.nextProducerID()
-			firstNode, secondNode := first.n, second.n
+			firstNode, secondNode := bodyNode(first), bodyNode(second)
+			firstDoc, secondDoc := first.n.Doc, second.n.Doc
+			firstOrigin, secondOrigin := first.n.Origin, second.n.Origin
+			firstLumps, secondLumps := first.Lumps(), second.Lumps()
+			firstVolume, secondVolume := first.n.Volume.Value.Base(), second.n.Volume.Value.Base()
 			limited := context.WithValue(t.Context(), loftDirectOutputLimitKey{}, uint64(1))
 			refused, refusalErr := Union(limited, first, second)
 			require.True(t, refused == nil)
@@ -149,8 +153,29 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 			for i := range before {
 				require.True(t, after[i] == before[i], "body %d changed after refusal", i)
 			}
-			require.True(t, first.n == firstNode && second.n == secondNode,
-				"the refusal must not replace either operand")
+			require.True(t, bodyNode(first) == firstNode && bodyNode(second) == secondNode,
+				"the refusal must not replace either operand node")
+			require.True(t, first.n.Owner == first && second.n.Owner == second,
+				"the refusal must preserve both node owners")
+			require.True(t, first.n.Doc == firstDoc && second.n.Doc == secondDoc,
+				"the refusal must preserve both owning documents")
+			require.True(t, first.n.Origin == firstOrigin && second.n.Origin == secondOrigin,
+				"the refusal must preserve both source identities")
+			require.Equal(t, firstVolume, first.n.Volume.Value.Base(),
+				"the refusal must preserve the first operand volume")
+			require.Equal(t, secondVolume, second.n.Volume.Value.Base(),
+				"the refusal must preserve the second operand volume")
+			afterFirstLumps, afterSecondLumps := first.Lumps(), second.Lumps()
+			require.Len(t, afterFirstLumps, len(firstLumps))
+			require.Len(t, afterSecondLumps, len(secondLumps))
+			for i := range firstLumps {
+				require.True(t, afterFirstLumps[i] == firstLumps[i],
+					"first operand lump %d changed after refusal", i)
+			}
+			for i := range secondLumps {
+				require.True(t, afterSecondLumps[i] == secondLumps[i],
+					"second operand lump %d changed after refusal", i)
+			}
 			require.Equal(t, beforeProducer, d.nextProducerID(),
 				"the refusal must not advance the document producer")
 
