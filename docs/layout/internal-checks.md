@@ -46,6 +46,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/wallsurvey/` | Prism and revolve wall record preparation and bounded readings, and the revolve clearance carrier input. See verification §6, clearance §2. |
 | `internal/radiussurvey/` | Prism, revolve, cup and BRep concave-radius readings. See verification §6. |
 | `internal/motionbound/` | Motion variants, exact parameters, poses, box bounds, pair certificates, record radii, overlap transfer and sweeps. |
+| `internal/motionrun/` | Static mover/stationary pair validity, swept-box exclusion and sheet classification over topology nodes. See motion-check §2–§6. |
 | `internal/motionoption/` | Motion options. See motion-check §3. |
 | `internal/planarsweep/` | Support-plane records, motion, vertex rates, depth and rolling bounds. |
 | `internal/sweepdeparture/` | Exact source-box departure proofs. See multibody §10.2. |
