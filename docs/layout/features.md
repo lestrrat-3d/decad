@@ -22,7 +22,7 @@ The rules for rows live in `docs/layout.md`.
 | `thicken_prism.go` | Builds the certified wall of a prism sheet. See surface §16.2. |
 | `thicken_chain_sweep.go` | Thickens admitted one-arc and cardinal composite chain sheets. See surface §16.8. |
 | `offset.go` | `Offset`: a second sheet at a normal distance. See surface §17. |
-| `patch_body.go` | `PatchEdges` selection and chain gates 1-3; Rule P lives in `internal/patchchain/`. See surface §5.2. |
+| `patch_body.go` | `PatchEdges` selection, chain gates 1-2 and exact-plane topology adapter; the level proof and Rule P live in `internal/patchchain/`. See surface §5.2. |
 | `denotation.go` | Level and curve token names and comparisons; the document node mints them. |
 | `stitch.go` | `Stitch`; builds through `internal/stitchrecord/`. See surface §6.4. |
 | `unstitch.go` | `Unstitch` sheet split; builds through `internal/stitchrecord/`. See surface §6.5. |

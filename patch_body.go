@@ -4,9 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 
-	"github.com/lestrrat-3d/decad/internal/denotation"
 	"github.com/lestrrat-3d/decad/internal/patchchain"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
@@ -196,7 +194,7 @@ func renderCoord3(p r3.Vec) string {
 // provePatchChainPlane is gate 3: proves one chain's edges lie in a single
 // plane. The first, exact arm (provePatchChainPlaneExact) is tried first and
 // is the whole of what earlier increments proved; a second, LEVEL arm
-// (provePatchChainPlaneLevel) is tried only when the first refuses on a
+// (patchchain.ProvePlaneLevel) is tried only when the first refuses on a
 // nonzero bound, and never reads a coordinate, a residual or a bound
 // magnitude (docs/surface-design.md §5.2's own two-arm amendment). Its
 // return states what the level arm admitted: the levelToken and axialBound
@@ -211,46 +209,10 @@ func provePatchChainPlane(edges []*Edge) (levelToken, float64, bool, error) {
 	if !errors.Is(exactErr, ErrUnsupported) {
 		return levelToken{}, 0, false, exactErr
 	}
-	if lvl, bound, ok := provePatchChainPlaneLevel(edges); ok {
+	if lvl, bound, ok := patchchain.ProvePlaneLevel(edgeNodes(edges)); ok {
 		return lvl, bound, true, nil
 	}
 	return levelToken{}, 0, false, exactErr
-}
-
-// provePatchChainPlaneLevel is gate 3's second arm: it requires every chain
-// vertex, and every chain edge, to carry a levelToken with the SAME
-// non-zero id (denotation.go) — an identity comparison alone, never a
-// coordinate, a residual or a bound magnitude. A shared level proves the
-// chain's true vertices lie on one plane by shared construction
-// (docs/surface-design.md §5.2), so nothing here reads a position or a
-// bound to decide admission; the returned token and bound are read back off
-// the chain's own vertices only to state what the new face's own plane and
-// AxialDelta must publish, never to decide whether this arm admits. ok is
-// false whenever the chain holds no vertex, any vertex or edge carries no
-// level (the zero value, "no certificate"), or not every one of them shares
-// the same id.
-func provePatchChainPlaneLevel(edges []*Edge) (levelToken, float64, bool) {
-	verts := patchChainVertices(edges)
-	if len(verts) == 0 {
-		return levelToken{}, 0, false
-	}
-	lvl := verts[0].n.Level
-	if lvl.ID == 0 {
-		return levelToken{}, 0, false
-	}
-	bound := 0.0
-	for _, v := range verts {
-		if !denotation.SameLevel(v.n.Level, lvl) {
-			return levelToken{}, 0, false
-		}
-		bound = math.Max(bound, v.n.Bound.Base())
-	}
-	for _, e := range edges {
-		if !denotation.SameLevel(e.n.Level, lvl) {
-			return levelToken{}, 0, false
-		}
-	}
-	return lvl, bound, true
 }
 
 // provePatchChainPlaneExact is gate 3's first, exact arm: proves one chain's
@@ -285,10 +247,10 @@ func provePatchChainPlaneLevel(edges []*Edge) (levelToken, float64, bool) {
 // [ErrUnsupported] (R6): decad's reject-only rule treats "not proven
 // planar" and "proven non-planar" alike, since neither admits the chain.
 func provePatchChainPlaneExact(edges []*Edge) error {
-	verts := patchChainVertices(edges)
+	verts := patchchain.ChainVertices(edgeNodes(edges))
 	points := make([]patchchain.Vertex, len(verts))
 	for i, v := range verts {
-		points[i] = patchchain.Vertex{Position: v.n.Position, Bound: v.n.Bound.Base()}
+		points[i] = patchchain.Vertex{Position: v.Position, Bound: v.Bound.Base()}
 	}
 	curves := make([]patchchain.Edge, len(edges))
 	for i, e := range edges {
@@ -296,23 +258,6 @@ func provePatchChainPlaneExact(edges []*Edge) error {
 		curves[i] = patchchain.Edge{Exact: patchEdgeGeometryExact(e), Center: center, Axis: axis, Curved: curved}
 	}
 	return patchchain.ProvePlane(points, curves)
-}
-
-// patchChainVertices returns the chain's distinct vertices, deduplicated by
-// pointer identity, in first-seen order.
-func patchChainVertices(edges []*Edge) []*Vertex {
-	seen := map[*Vertex]struct{}{}
-	var out []*Vertex
-	for _, e := range edges {
-		for _, v := range [2]*Vertex{vertexHandle(e.n.Start), vertexHandle(e.n.End)} {
-			if _, ok := seen[v]; ok {
-				continue
-			}
-			seen[v] = struct{}{}
-			out = append(out, v)
-		}
-	}
-	return out
 }
 
 // patchEdgeGeometryExact reports whether e's own curve is proven exact,
