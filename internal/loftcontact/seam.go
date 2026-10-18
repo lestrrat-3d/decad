@@ -1,4 +1,5 @@
-// Package loftcontact proves source contacts for axial Loft/prism Union.
+// Package loftcontact proves source contacts and moving-triangle hull bounds
+// for axial Loft/prism Union.
 package loftcontact
 
 import (

@@ -1479,13 +1479,6 @@
 10	0.00	TestLoftVolumeHullCoverIndependentTetra
 10	0.00	TestLoftVolumeHullZeroWidthAndMidWorkCancellation
 10	0.00	TestLoftVolumeRationalCeiling
-10	0.00	TestLoftVolumeHullBoundExactPolyhedra
-10	0.00	TestLoftVolumeHullBoundRationalAndOwnership
-10	0.00	TestLoftVolumeHullBoundAffineAndPermutation
-10	0.00	TestLoftVolumeHullBoundRefusals
-10	0.00	TestLoftVolumeHullBoundWorkAndCancellation
-10	0.00	TestLoftVolumeHullBoundZeroMotion
-10	0.00	TestLoftVolumeHullBoundZeroMotionWorkAndRefusals
 10	0.00	TestLoftVolumeExactShellEmbeddedPositive
 10	0.00	TestLoftVolumeExactShellRealVaryingTab
 10	0.00	TestLoftVolumeExactShellRefusesCrossingAndReversal

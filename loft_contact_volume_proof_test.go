@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/loftcontact"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -423,7 +424,7 @@ func TestLoftVolumeHullCoverIndependentTetra(t *testing.T) {
 			points[i] = base[index]
 			points[i+3] = held[index]
 		}
-		term, admitted, err := loftVolumeHullBound(proofbound.NewWallWorkBudget(65_536), points)
+		term, admitted, err := loftcontact.VolumeHullBound(proofbound.NewWallWorkBudget(65_536), points)
 		require.NoError(t, err)
 		require.True(t, admitted)
 		require.True(t, term.Sign() >= 0)
@@ -442,7 +443,7 @@ func TestLoftVolumeHullZeroWidthAndMidWorkCancellation(t *testing.T) {
 	for i := range triangle {
 		points[i], points[i+3] = triangle[i], triangle[i]
 	}
-	volume, admitted, err := loftVolumeHullBound(proofbound.NewWallWorkBudget(65_536), points)
+	volume, admitted, err := loftcontact.VolumeHullBound(proofbound.NewWallWorkBudget(65_536), points)
 	require.NoError(t, err)
 	require.True(t, admitted)
 	require.Zero(t, volume.Sign())
@@ -460,7 +461,7 @@ func TestLoftVolumeHullZeroWidthAndMidWorkCancellation(t *testing.T) {
 		},
 		ErrFn: ctx.Err,
 	}
-	_, admitted, err = loftVolumeHullBound(budget, points)
+	_, admitted, err = loftcontact.VolumeHullBound(budget, points)
 	require.False(t, admitted)
 	require.True(t, errors.Is(err, context.Canceled))
 	require.GreaterOrEqual(t, steps, 25)
