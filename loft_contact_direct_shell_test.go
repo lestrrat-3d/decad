@@ -282,6 +282,22 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 				require.NoError(t, err)
 				require.True(t, admitted, "the public trapezoid must reach the direct shell")
 				require.NotNil(t, candidate)
+				if !reverse {
+					before := append([]*Body(nil), d.Bodies()...)
+					beforeProducer := d.nextProducerID()
+					limited := context.WithValue(t.Context(), loftDirectOutputLimitKey{}, uint64(1))
+					refused, refusalErr := Union(limited, first, second)
+					require.True(t, refused == nil)
+					require.ErrorIs(t, refusalErr, ErrUnsupported)
+					require.ErrorContains(t, refusalErr, "direct Loft/prism bounded proof limit")
+					after := d.Bodies()
+					require.Equal(t, len(before), len(after), "the refusal must not commit a body")
+					for i := range before {
+						require.True(t, before[i] == after[i], "body %d changed after refusal", i)
+					}
+					require.Equal(t, beforeProducer, d.nextProducerID(),
+						"the refusal must not advance the document producer")
+				}
 				result, err := Union(t.Context(), first, second)
 				require.NoError(t, err)
 				require.True(t, result.IsSolid())
