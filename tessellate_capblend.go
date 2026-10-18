@@ -21,7 +21,7 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	mesh := new(Mesh)
+	mesh := bornMesh(new(Mesh))
 	emit := func(budget *proofbound.WorkBudget, lm *capblend.LoopMesh, start bool,
 		faceOfRole func(string) (*topo.Face, error), geomOfRole map[string]capband.Patch,
 		bump func(*topo.Face, float64)) error {
@@ -41,7 +41,7 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 			return nil, err
 		}
 	}
-	return bornMesh(mesh), nil
+	return mesh, nil
 }
 
 // emitCapBand maps built patch roles to the numeric band emitter. roleOf, when
