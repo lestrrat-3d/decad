@@ -175,51 +175,9 @@ func tryPrismGroupUnion(ctx context.Context, a, b *Body) (topo.Payload, bool, er
 	if err != nil || !ok {
 		return nil, false, err
 	}
-	payload, ok, err := prismGroupUnionTail(ctx, budget, scene, oa, ob)
+	payload, ok, err := stackedrecord.GroupUnionTail(ctx, budget, scene, oa.proxy, ob.proxy)
 	if fallBack, err := prismcells.AmplifiedFallback(scene.Delta.Amplified, err); fallBack || err != nil {
 		return nil, false, err
 	}
 	return payload, ok, nil
-}
-
-// prismGroupUnionTail audits each assembled loop and publishes one prism or
-// a group after proving its regions disjoint. Its errors are the
-// caller's to route (prismcells.AmplifiedFallback).
-func prismGroupUnionTail(ctx context.Context, budget *proofbound.WorkBudget, scene prismcells.GroupScene,
-	oa, ob prismGroupOperand) (topo.Payload, bool, error) {
-	loops, cutDelta, resolved, err := prismcells.GroupUnionLoops(budget, scene)
-	if err != nil || !resolved {
-		return nil, false, err
-	}
-	// §7's incoming terms with A6's crossing charge.
-	inA, inB := scene.Delta.Incoming(oa.proxy.SectionDelta, ob.proxy.SectionDelta, scene.ReexpressionDelta)
-	inputDelta := max(inA, inB, scene.Delta.Crossing)
-	regions := make([]profileRecord, len(loops))
-	for i, loop := range loops {
-		regions[i] = profileRecord{Outer: loop}
-		// Point of no return (§3.4): §6's audit on each assembled loop.
-		if err := prismcells.AuditMergeSection(budget, oa.proxy, regions[i]); err != nil {
-			return nil, false, err
-		}
-	}
-	z0Delta, z1Delta := max(oa.proxy.Z0Delta, ob.proxy.Z0Delta), max(oa.proxy.Z1Delta, ob.proxy.Z1Delta)
-	if len(regions) == 1 {
-		return prismrecord.Payload{Profile: regions[0], Frame: oa.proxy.Frame, Xform: oa.proxy.Xform,
-			Z0: oa.proxy.Z0, Z1: oa.proxy.Z1, Z0Delta: z0Delta, Z1Delta: z1Delta,
-			SectionDelta: proofbound.AbsSumUpper(inputDelta, cutDelta)}, true, nil
-	}
-	disjoint, disjointWalk, err := prismcells.ProveGroupDisjoint(ctx, budget, regions)
-	if err != nil || !disjoint {
-		return nil, false, err
-	}
-	sp := stackedPrismPayload{
-		Slabs: []stackedrecord.Slab{{Regions: regions, Z0: oa.proxy.Z0, Z1: oa.proxy.Z1,
-			Z0Delta: z0Delta, Z1Delta: z1Delta}},
-		Frame: oa.proxy.Frame, Xform: oa.proxy.Xform,
-		SectionDelta: proofbound.AbsSumUpper(max(inputDelta, disjointWalk), cutDelta),
-	}
-	if err := stackedrecord.Falsify(ctx, stackedrecord.Record{Slabs: sp.Slabs, Interfaces: sp.Interfaces}); err != nil {
-		return nil, false, err
-	}
-	return sp, true, nil
 }
