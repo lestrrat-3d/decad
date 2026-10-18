@@ -27,8 +27,8 @@ OUTER_SECONDS = 360
 
 # Fill these from the separately reviewed, clean public-route commit. The
 # control cannot execute a Go workload while either value is unset.
-APPROVED_TARGET_SHA = "cba5c9679f332afae377918a93ef352ca390da84"
-APPROVED_TARGET_TREE = "62b1c207c4a805ff97297de61f7aa5a9d8f4e2a4"
+APPROVED_TARGET_SHA = "7d9e2c5fa187db091314d94c8e47afc4814733e5"
+APPROVED_TARGET_TREE = "86ea8c06aa56c4987a190b2fb247651e77f83241"
 
 HEX40 = re.compile(r"[0-9a-f]{40}\Z")
 HEX64 = re.compile(r"[0-9a-f]{64}\Z")
