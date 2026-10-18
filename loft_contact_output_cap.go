@@ -15,6 +15,12 @@ func loftOutputCap(ctx context.Context, budget *proofbound.WorkBudget, pp prismP
 	prismLines, bottom, top []sectionrecord.LineSeg, source loftSourcePartition,
 	shell *loftOutputShell, capIndex int, checked ...*loftVolumeArithmetic) (bool, error) {
 	arithmetic := loftReplayArithmetic(checked)
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	if err := budget.Err(); err != nil {
+		return false, err
+	}
 	if capIndex == 2 {
 		polygon := make([]loftPartitionPoint, 0, len(prismLines)+2)
 		for i, line := range prismLines {
@@ -48,6 +54,10 @@ func loftOutputCap(ctx context.Context, budget *proofbound.WorkBudget, pp prismP
 		loftLines = top
 	}
 	level := source.capLevels[capIndex]
+	prepared := &source.prepared[capIndex]
+	if prepared.scene == nil || prepared.scene == source.prepared[1-capIndex].scene {
+		return false, nil
+	}
 	// Re-run the accepted cap source proof against this call's live records.
 	var cuts, carrierCuts [2]*big.Rat
 	for k, seam := range source.seams {
@@ -71,33 +81,17 @@ func loftOutputCap(ctx context.Context, budget *proofbound.WorkBudget, pp prismP
 		}
 		sides = append(sides, int8(side.Sign()))
 	}
-	capProof, ok, err := loftPartitionCap(ctx, budget, pp, prismLines, loftLines,
-		source.carrier, source.crossing, source.seams, sides, source.walls, capIndex, level, arithmetic)
+	capProof, ok, err := loftPartitionCap(ctx, budget, prismLines, loftLines,
+		source.carrier, source.crossing, source.seams, sides, source.walls, capIndex, level,
+		prepared, arithmetic)
 	if err != nil || !ok || !arithmetic.ok || capProof.owners != source.capOwners[capIndex] ||
 		capProof.junction != source.junction[capIndex] {
 		return false, err
 	}
-	loftLoop := sectionrecord.LoopRecord{Segments: make([]sectionrecord.CurveSegment, len(loftLines))}
-	for i, line := range loftLines {
-		if err := budget.Step(); err != nil {
-			return false, err
-		}
-		loftLoop.Segments[i] = line
-	}
-	scene, tags, _, err := prismcells.BuildSceneRegions(budget,
-		[]prismcells.SceneProfile{{Outer: pp.Profile.Outer}},
-		[]prismcells.SceneProfile{{Outer: loftLoop}},
-		&prismcells.Reexpression{Identity: true})
-	if err != nil {
-		return false, err
-	}
+	scene, tags, cells := prepared.scene, prepared.tags, prepared.raw
 	origins, mapped, err := loftPartitionSceneOrigins(budget, scene, tags,
 		prismLines, loftLines, capIndex, level)
 	if err != nil || !mapped {
-		return false, err
-	}
-	cells, err := prismcells.ProfilesContext(ctx, scene.Profiles)
-	if err != nil {
 		return false, err
 	}
 	mapped, err = loftPartitionCertifyFragments(budget, scene, cells, origins,

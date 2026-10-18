@@ -3,6 +3,7 @@ package loftcontact
 import (
 	"context"
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -29,6 +30,9 @@ func TestOrderedSeamBoundRefusesExtremeFiniteRectangle(t *testing.T) {
 		bounded, err := lineSeamOrderingBound(budget, seam)
 		require.NoError(t, err)
 		require.False(t, bounded)
+		bounded, err = lineSeamOrderingBound(budget, seam, true)
+		require.ErrorIs(t, err, ErrOrderedSeamSize)
+		require.False(t, bounded)
 	}
 	// Each factor is already constructed. Their bit lengths prove the raw
 	// cubic product exceeds the ceiling without allocating that product.
@@ -37,6 +41,9 @@ func TestOrderedSeamBoundRefusesExtremeFiniteRectangle(t *testing.T) {
 	require.Greater(t, productMinBits, 8192)
 	_, ok, err := CertifyOrderedLineSeams(t.Context(), budget, left, left, right, right, carrier)
 	require.NoError(t, err)
+	require.False(t, ok)
+	_, ok, err = CertifyOrderedLineSeams(t.Context(), budget, left, left, right, right, carrier, true)
+	require.ErrorIs(t, err, ErrOrderedSeamSize)
 	require.False(t, ok)
 
 	lines := make([]sectionrecord.LineSeg, len(vertices))
@@ -47,6 +54,10 @@ func TestOrderedSeamBoundRefusesExtremeFiniteRectangle(t *testing.T) {
 	}
 	crossing, _, _, ok, err := CertifyCarrierOccupancy(t.Context(), budget, lines, lines, carrier)
 	require.NoError(t, err)
+	require.False(t, ok)
+	require.Equal(t, [2]int{}, crossing)
+	crossing, _, _, ok, err = CertifyCarrierOccupancy(t.Context(), budget, lines, lines, carrier, true)
+	require.ErrorIs(t, err, ErrOrderedSeamSize)
 	require.False(t, ok)
 	require.Equal(t, [2]int{}, crossing)
 }
@@ -68,8 +79,21 @@ func TestOrderedSeamBoundPollsCancellation(t *testing.T) {
 		}
 		return ctx.Err()
 	}}
-	bounded, err := lineSeamOrderingBound(budget, seam)
+	bounded, err := lineSeamOrderingBound(budget, seam, true)
 	require.ErrorIs(t, err, context.Canceled)
 	require.False(t, bounded)
 	require.Equal(t, 2, steps)
+}
+
+func TestOrderedSeamSizeReasonLeavesNonDyadicMiss(t *testing.T) {
+	line := [2]sectionrecord.Point2{{U: 0, V: -1}, {U: 0, V: 1}}
+	carrier := [2]sectionrecord.Point2{{U: -1}, {U: 1}}
+	budget := proofbound.NewWorkBudget(t.Context())
+	seam, admitted, err := CertifyLineSeam(t.Context(), budget, line, line, carrier)
+	require.NoError(t, err)
+	require.True(t, admitted)
+	seam.carrierNum[0] = big.NewRat(1, 3)
+	bounded, err := lineSeamOrderingBound(budget, seam, true)
+	require.NoError(t, err)
+	require.False(t, bounded)
 }
