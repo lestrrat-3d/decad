@@ -442,7 +442,7 @@ func capBlendChordVolume(cbp capBlendPayload, lms []capBlendLoopMesh) float64 {
 		proofbound.AbsSumUpper(cbp.End.Ds, cbp.End.DsDelta),
 	}
 	if cbp.Draft {
-		h := draftBandHeightUpper(cbp)
+		h := cbp.DraftBandHeightUpper()
 		height = [2]float64{h, h}
 	}
 	return tessellation.CapBlendChordVolume(height, loops)
@@ -490,7 +490,7 @@ func chordCapBlendLoop(ctx context.Context, budget *proofbound.WorkBudget, cbp c
 	if cbp.Draft {
 		// A draft band's side level is the near cap itself, and no trimmed
 		// wall separates two side rings.
-		lm.zLo = draftNearLevel(cbp)
+		lm.zLo = cbp.DraftNearLevel()
 		lm.zHi = lm.zLo
 	}
 
