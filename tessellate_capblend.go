@@ -39,7 +39,7 @@ import (
 // from the ideal polyhedron B1. Every other band — a circular wall at a genuine
 // miter, a reflex corner — leaves the mesh export-only with symDiffOK false,
 // and the mesh boolean refuses that operand (boolean.go's
-// requireVolumeProvingPayload and operandSymDiff) with the same reason.
+// requireVolumeProvingPayload and meshbool.OperandSymDiff) with the same reason.
 // Substituting bound × held area for a missing proof is forbidden outright
 // (tess §11).
 //
@@ -301,7 +301,7 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 	if refusal != nil {
 		// docs/tessellation-reach-design.md §7: this band's cells are not proven
 		// to reproduce the exact offset family slice by slice, so the mesh serves
-		// export alone and requireVolumeProvingPayload/operandSymDiff refuse it
+		// export alone and requireVolumeProvingPayload/meshbool.OperandSymDiff refuse it
 		// with the same reason.
 		mesh.n.SymDiffOK = false
 		return mesh, nil //nolint:nilerr // refusal is the admission result; err was checked above

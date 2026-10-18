@@ -1269,9 +1269,9 @@ func TestBooleanComposesTheOperandsOwnSymmetricDifferenceProofs(t *testing.T) {
 	mb, err := tessellateContext(t.Context(), pin, units.Millimeters(tolMM), VerifyAll)
 	require.NoError(t, err)
 
-	symA, err := operandSymDiff(ma)
+	symA, err := meshbool.OperandSymDiff(ma.n.BoundaryOK, ma.n.SymDiffOK, ma.n.VolSymDiff)
 	require.NoError(t, err)
-	symB, err := operandSymDiff(mb)
+	symB, err := meshbool.OperandSymDiff(mb.n.BoundaryOK, mb.n.SymDiffOK, mb.n.VolSymDiff)
 	require.NoError(t, err)
 	require.Equal(t, ma.n.VolSymDiff, symA, `the boolean reads the mesh's own proof, not a substitution`)
 	require.Equal(t, mb.n.VolSymDiff, symB)
@@ -1300,11 +1300,11 @@ func TestOperandSymDiffRefusesAMeshWithNoOccupiedVolumeProof(t *testing.T) {
 	// An export-only mesh — one whose payload class has no occupied-volume proof
 	// yet — is refused as a staging limit, never composed as a zero. Its
 	// boundary audits all ran, so the refusal names the missing volume proof.
-	_, err := operandSymDiff(bornMesh(&Mesh{n: topo.Mesh{VolSymDiff: 17, SymDiffOK: false, BoundaryOK: true}}))
+	_, err := meshbool.OperandSymDiff(true, false, 17)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "no proof of the volume")
 
-	got, err := operandSymDiff(bornMesh(&Mesh{n: topo.Mesh{VolSymDiff: 17, SymDiffOK: true, BoundaryOK: true}}))
+	got, err := meshbool.OperandSymDiff(true, true, 17)
 	require.NoError(t, err)
 	require.Equal(t, 17.0, got)
 
@@ -1312,7 +1312,7 @@ func TestOperandSymDiffRefusesAMeshWithNoOccupiedVolumeProof(t *testing.T) {
 	// and by its own cause: every homotopy the volume proof composes has that
 	// audit as an antecedent (docs/tessellation-design.md §11), so blaming the
 	// payload class here would misstate why this operand cannot be composed.
-	_, err = operandSymDiff(bornMesh(&Mesh{n: topo.Mesh{VolSymDiff: 17, SymDiffOK: true, BoundaryOK: false}}))
+	_, err = meshbool.OperandSymDiff(false, true, 17)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "no facet-contact audit")
 }
@@ -1328,7 +1328,7 @@ func TestOperandSymDiffRefusesARealUnverifiedMesh(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, drawn.BoundaryVerified())
 	require.False(t, drawn.VolumeVerified())
-	_, err = operandSymDiff(drawn)
+	_, err = meshbool.OperandSymDiff(drawn.n.BoundaryOK, drawn.n.SymDiffOK, drawn.n.VolSymDiff)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "no facet-contact audit")
 
@@ -1336,7 +1336,7 @@ func TestOperandSymDiffRefusesARealUnverifiedMesh(t *testing.T) {
 	// refusal is the level's doing and not the body's.
 	proven, err := tessellateContext(t.Context(), body, tol, VerifyAll)
 	require.NoError(t, err)
-	sym, err := operandSymDiff(proven)
+	sym, err := meshbool.OperandSymDiff(proven.n.BoundaryOK, proven.n.SymDiffOK, proven.n.VolSymDiff)
 	require.NoError(t, err)
 	require.Positive(t, sym)
 }

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/revolveproof"
@@ -487,7 +488,7 @@ func TestRevolveMeshCarriesItsOccupiedVolumeProof(t *testing.T) {
 	// docs/tessellation-design.md §11: a revolve mesh publishes the
 	// occupied-volume bound the mesh boolean reads, and both gates that once
 	// stood in its way now let it through — the payload-class pre-check and
-	// operandSymDiff on the mesh itself. What still refuses is the cap-loop
+	// meshbool.OperandSymDiff on the mesh itself. What still refuses is the cap-loop
 	// chamfer, whose own proof is §13's increment T7.
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
@@ -503,7 +504,7 @@ func TestRevolveMeshCarriesItsOccupiedVolumeProof(t *testing.T) {
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.2))
 	require.NoError(t, err)
 	require.True(t, mesh.n.SymDiffOK)
-	sym, err := operandSymDiff(mesh)
+	sym, err := meshbool.OperandSymDiff(mesh.n.BoundaryOK, mesh.n.SymDiffOK, mesh.n.VolSymDiff)
 	require.NoError(t, err)
 	require.Positive(t, sym)
 	require.Equal(t, mesh.n.VolSymDiff, sym)

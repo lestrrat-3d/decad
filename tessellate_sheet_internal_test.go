@@ -3,6 +3,7 @@ package decad
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -71,7 +72,7 @@ func TestSheetMeshPublishesNoOccupiedVolumeProof(t *testing.T) {
 	require.False(t, sheetMesh.n.SymDiffOK)
 	require.Zero(t, sheetMesh.n.VolSymDiff)
 
-	_, err = operandSymDiff(sheetMesh)
+	_, err = meshbool.OperandSymDiff(sheetMesh.n.BoundaryOK, sheetMesh.n.SymDiffOK, sheetMesh.n.VolSymDiff)
 	require.ErrorIs(t, err, ErrUnsupported)
 }
 
