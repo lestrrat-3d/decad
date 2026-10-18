@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/loftcontact"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
@@ -92,7 +93,7 @@ func loftVolumeCompose(ctx context.Context, operation *proofbound.WorkBudget,
 				}
 			}
 		}
-		term, admitted, err := loftVolumeHullBound(budget, points)
+		term, admitted, err := loftcontact.VolumeHullBound(budget, points)
 		if err != nil || !admitted {
 			return no, false, err
 		}

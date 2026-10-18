@@ -1,4 +1,4 @@
-package decad
+package loftcontact
 
 import (
 	"context"
@@ -48,7 +48,7 @@ func TestLoftVolumeHullBoundExactPolyhedra(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			points := loftHullIntegerPoints(tc.points)
-			got, ok, err := loftVolumeHullBound(proofbound.NewWorkBudget(t.Context()), points)
+			got, ok, err := VolumeHullBound(proofbound.NewWorkBudget(t.Context()), points)
 			require.NoError(t, err)
 			require.True(t, ok)
 			require.Equal(t, tc.want, got.RatString())
@@ -62,7 +62,7 @@ func TestLoftVolumeHullBoundRationalAndOwnership(t *testing.T) {
 		{0, 0, 0}, {1, 0, 0}, {0, 2, 0}, {0, 0, 3}, {0, 0, 0}, {0, 0, 0},
 	})
 	points[1][0] = big.NewRat(1, 2)
-	got, ok, err := loftVolumeHullBound(proofbound.NewWorkBudget(t.Context()), points)
+	got, ok, err := VolumeHullBound(proofbound.NewWorkBudget(t.Context()), points)
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, "1/2", got.RatString())
@@ -83,7 +83,7 @@ func TestLoftVolumeHullBoundAffineAndPermutation(t *testing.T) {
 			p := base[(i+shift)%6]
 			transformed[i] = [3]int64{2*p[0] + p[1] + 3, p[1] - p[2] - 2, 3*p[2] + 5}
 		}
-		got, ok, err := loftVolumeHullBound(proofbound.NewWorkBudget(t.Context()), loftHullIntegerPoints(transformed))
+		got, ok, err := VolumeHullBound(proofbound.NewWorkBudget(t.Context()), loftHullIntegerPoints(transformed))
 		require.NoError(t, err)
 		require.True(t, ok)
 		require.Equal(t, "8", got.RatString())
@@ -94,21 +94,21 @@ func TestLoftVolumeHullBoundRefusals(t *testing.T) {
 	points := loftHullIntegerPoints([6][3]int64{
 		{0, 0, 0}, {1, 0, 0}, {0, 1, 0}, {0, 0, 1}, {0, 0, 0}, {0, 0, 0},
 	})
-	got, ok, err := loftVolumeHullBound(nil, points)
+	got, ok, err := VolumeHullBound(nil, points)
 	require.Nil(t, got)
 	require.False(t, ok)
 	require.NoError(t, err)
 
 	missing := points
 	missing[4][1] = nil
-	got, ok, err = loftVolumeHullBound(proofbound.NewWorkBudget(t.Context()), missing)
+	got, ok, err = VolumeHullBound(proofbound.NewWorkBudget(t.Context()), missing)
 	require.Nil(t, got)
 	require.False(t, ok)
 	require.NoError(t, err)
 
 	oversized := points
 	oversized[4][0] = new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), loftHullRatBits))
-	got, ok, err = loftVolumeHullBound(proofbound.NewWorkBudget(t.Context()), oversized)
+	got, ok, err = VolumeHullBound(proofbound.NewWorkBudget(t.Context()), oversized)
 	require.Nil(t, got)
 	require.False(t, ok)
 	require.NoError(t, err)
@@ -119,7 +119,7 @@ func TestLoftVolumeHullBoundRefusals(t *testing.T) {
 		new(big.Int).Lsh(big.NewInt(1), 5000))
 	intermediate[2][1] = new(big.Rat).SetFrac(big.NewInt(1),
 		new(big.Int).Lsh(big.NewInt(1), 5000))
-	got, ok, err = loftVolumeHullBound(proofbound.NewWorkBudget(t.Context()), intermediate)
+	got, ok, err = VolumeHullBound(proofbound.NewWorkBudget(t.Context()), intermediate)
 	require.Nil(t, got)
 	require.False(t, ok)
 	require.NoError(t, err)
@@ -134,7 +134,7 @@ func TestLoftVolumeHullBoundWorkAndCancellation(t *testing.T) {
 		StepFn: func() error { steps++; return nil },
 		ErrFn:  t.Context().Err,
 	}
-	got, ok, err := loftVolumeHullBound(budget, points)
+	got, ok, err := VolumeHullBound(budget, points)
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, "4/3", got.RatString())
@@ -153,7 +153,7 @@ func TestLoftVolumeHullBoundWorkAndCancellation(t *testing.T) {
 		},
 		ErrFn: t.Context().Err,
 	}
-	got, ok, err = loftVolumeHullBound(budget, points)
+	got, ok, err = VolumeHullBound(budget, points)
 	require.Nil(t, got)
 	require.False(t, ok)
 	require.ErrorIs(t, err, stopped)
@@ -172,7 +172,7 @@ func TestLoftVolumeHullBoundWorkAndCancellation(t *testing.T) {
 		},
 		ErrFn: ctx.Err,
 	}
-	got, ok, err = loftVolumeHullBound(budget, points)
+	got, ok, err = VolumeHullBound(budget, points)
 	require.Nil(t, got)
 	require.False(t, ok)
 	require.ErrorIs(t, err, context.Canceled)
@@ -180,7 +180,7 @@ func TestLoftVolumeHullBoundWorkAndCancellation(t *testing.T) {
 
 	preCanceled, stop := context.WithCancel(t.Context())
 	stop()
-	got, ok, err = loftVolumeHullBound(proofbound.NewWorkBudget(preCanceled), points)
+	got, ok, err = VolumeHullBound(proofbound.NewWorkBudget(preCanceled), points)
 	require.Nil(t, got)
 	require.False(t, ok)
 	require.ErrorIs(t, err, context.Canceled)
@@ -209,7 +209,7 @@ func TestLoftVolumeHullBoundZeroMotion(t *testing.T) {
 					points[vertex+3][axis] = new(big.Rat).Set(points[vertex][axis])
 				}
 			}
-			got, ok, err := loftVolumeHullBound(proofbound.NewWorkBudget(t.Context()), points)
+			got, ok, err := VolumeHullBound(proofbound.NewWorkBudget(t.Context()), points)
 			require.NoError(t, err)
 			require.True(t, ok)
 			require.Equal(t, "0", got.RatString())
@@ -222,7 +222,7 @@ func TestLoftVolumeHullBoundZeroMotion(t *testing.T) {
 	moved := loftHullIntegerPoints([6][3]int64{
 		{0, 0, 0}, {1, 0, 0}, {0, 1, 0}, {0, 0, 1}, {1, 0, 0}, {0, 1, 0},
 	})
-	got, ok, err := loftVolumeHullBound(proofbound.NewWorkBudget(t.Context()), moved)
+	got, ok, err := VolumeHullBound(proofbound.NewWorkBudget(t.Context()), moved)
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, "1/6", got.RatString())
@@ -237,7 +237,7 @@ func TestLoftVolumeHullBoundZeroMotionWorkAndRefusals(t *testing.T) {
 		StepFn: func() error { steps++; return nil },
 		ErrFn:  t.Context().Err,
 	}
-	got, ok, err := loftVolumeHullBound(budget, points)
+	got, ok, err := VolumeHullBound(budget, points)
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, "0", got.RatString())
@@ -267,7 +267,7 @@ func TestLoftVolumeHullBoundZeroMotionWorkAndRefusals(t *testing.T) {
 		},
 		ErrFn: t.Context().Err,
 	}
-	got, ok, err = loftVolumeHullBound(budget, points)
+	got, ok, err = VolumeHullBound(budget, points)
 	require.Nil(t, got)
 	require.False(t, ok)
 	require.ErrorIs(t, err, stopped)
@@ -286,7 +286,7 @@ func TestLoftVolumeHullBoundZeroMotionWorkAndRefusals(t *testing.T) {
 		},
 		ErrFn: ctx.Err,
 	}
-	got, ok, err = loftVolumeHullBound(budget, points)
+	got, ok, err = VolumeHullBound(budget, points)
 	require.Nil(t, got)
 	require.False(t, ok)
 	require.ErrorIs(t, err, context.Canceled)
@@ -294,14 +294,14 @@ func TestLoftVolumeHullBoundZeroMotionWorkAndRefusals(t *testing.T) {
 
 	tooLarge := points
 	tooLarge[0][0] = new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), loftHullRatBits))
-	got, ok, err = loftVolumeHullBound(proofbound.NewWorkBudget(t.Context()), tooLarge)
+	got, ok, err = VolumeHullBound(proofbound.NewWorkBudget(t.Context()), tooLarge)
 	require.Nil(t, got)
 	require.False(t, ok)
 	require.NoError(t, err)
 
 	missing := points
 	missing[0][0] = nil
-	got, ok, err = loftVolumeHullBound(proofbound.NewWorkBudget(t.Context()), missing)
+	got, ok, err = VolumeHullBound(proofbound.NewWorkBudget(t.Context()), missing)
 	require.Nil(t, got)
 	require.False(t, ok)
 	require.NoError(t, err)
@@ -312,7 +312,7 @@ func TestLoftVolumeHullBoundZeroMotionWorkAndRefusals(t *testing.T) {
 	safeDenominator := new(big.Int).Lsh(big.NewInt(1), 3900)
 	safe[0][0] = new(big.Rat).SetFrac(safeNumerator, safeDenominator)
 	safe[3][0] = new(big.Rat).Set(safe[0][0])
-	got, ok, err = loftVolumeHullBound(proofbound.NewWorkBudget(t.Context()), safe)
+	got, ok, err = VolumeHullBound(proofbound.NewWorkBudget(t.Context()), safe)
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, "0", got.RatString())
@@ -324,7 +324,7 @@ func TestLoftVolumeHullBoundZeroMotionWorkAndRefusals(t *testing.T) {
 	d := new(big.Int).Lsh(big.NewInt(1), 5000)
 	large[0][0] = new(big.Rat).SetFrac(n, d)
 	large[3][0] = new(big.Rat).Set(large[0][0])
-	got, ok, err = loftVolumeHullBound(proofbound.NewWorkBudget(t.Context()), large)
+	got, ok, err = VolumeHullBound(proofbound.NewWorkBudget(t.Context()), large)
 	require.Nil(t, got)
 	require.False(t, ok)
 	require.NoError(t, err)

@@ -1,4 +1,4 @@
-package decad
+package loftcontact
 
 import (
 	"errors"
@@ -139,13 +139,13 @@ func (m loftHullMath) dot(a, b [3]*big.Rat) (*big.Rat, error) {
 	return sum, nil
 }
 
-// loftVolumeHullBound returns the exact volume of the convex hull of six
+// VolumeHullBound returns the exact volume of the convex hull of six
 // matched triangle endpoint positions. This nonnegative rational is also a
 // conservative upper bound on the volume swept by that triangle. Each point
 // must contain three non-nil exact rationals. A nil budget or a size refusal
 // returns (nil, false, nil); a budget or cancellation error returns that error.
 // The caller must still prove source occupancy and both endpoint shells.
-func loftVolumeHullBound(budget *proofbound.WorkBudget, points [6][3]*big.Rat) (*big.Rat, bool, error) {
+func VolumeHullBound(budget *proofbound.WorkBudget, points [6][3]*big.Rat) (*big.Rat, bool, error) {
 	if budget == nil {
 		return nil, false, nil
 	}
