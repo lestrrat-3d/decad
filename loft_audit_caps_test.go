@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/pointloft"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -93,7 +94,7 @@ func TestPointLoftAuditsDecideCapsAsFamilies(t *testing.T) {
 		proofs int
 	}
 	var cases []audited
-	layout, ok := pointLoftCapLayout(loftPayload.Tris, n)
+	layout, ok := pointloft.CapLayout(loftPayload.Tris, n)
 	require.True(t, ok)
 	cases = append(cases, audited{"point loft", layout, loftPayload.Verts, loftPayload.Tris, 1})
 
