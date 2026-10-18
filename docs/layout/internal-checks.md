@@ -24,6 +24,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/verifyoption/` | Verify options. See verification §2. |
 | `internal/featureoption/` | Profile-fed feature option records and validation. See evaluator §5–§6, sweep §2/§16, loft §2. |
 | `internal/modifyoption/` | Fillet, Chamfer and Shell option codecs and side-role segment reading. See modify-reach §2. |
+| `internal/tangentchain/` | Ordered tangent-chain walk and analytic continuation decisions over topology nodes. See modify-reach §5. |
 | `internal/orderedwork/` | Runs independent jobs and returns results in input order. |
 | `internal/prismextent/` | Prism and profile boundary extremes, bounds and extent readings. See evaluator §5. |
 | `internal/prismplacement/` | Exact prism axis shifts, sweep spans, relative placement and exact rectangular boxes in a reference frame. See prism-boolean §3. |

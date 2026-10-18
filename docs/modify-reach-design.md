@@ -268,7 +268,8 @@ expansion.
 
 ### 5.1 Implementation
 
-`tangent_chain.go` runs this section; `Fillet` and `Chamfer` call it
+`internal/tangentchain/geometry.go` decides continuations;
+`tangent_chain.go` adapts handles, selectors and refusals. `Fillet` and `Chamfer` call it
 right after the seed query resolves. The oracle is the clearance kernel's
 `Oracle.ParallelExact` (`internal/clearance/oracle.go`): an exact zero cross
 product over the held floats proves "parallel", a cross above `ClrAngTol`

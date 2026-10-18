@@ -24,7 +24,7 @@ The rules for rows live in `docs/layout.md`.
 | `brep_rounded_edge_fillet.go` | Rounds P8's one front top edge after matching its exact rounded, cross-drilled BRep record. See modify-general §4.3c. |
 | `chamfer.go` | `Chamfer`; cap loops route to `capblend.go`. See modify §7. |
 | `modify_options.go` | Public reach option tiers, codec adapters and asymmetric reference resolution (SX3). See modify-reach §2, §6. |
-| `tangent_chain.go` | `WithTangentChain` expansion. See modify-reach §5. |
+| `tangent_chain.go` | Adapts `WithTangentChain` to public handles, selectors and refusals; `internal/tangentchain/` decides continuations. See modify-reach §5. |
 | `shell.go` | Public `ShellOption`, `ShellSense` and `Shell`: prism, Sweep and Revolve dispatch. See modify §8 and Table R. |
 | `shell_twist.go` | Admits and commits the inward top-cap Shell of a straight twisted rounded Sweep. See shell-twisted-sweep design. |
 | `shell_twist_mesh.go` | Builds the five-face faceted cup from the proven twisted-shell mesh and audits it. See shell-twisted-sweep design. |
