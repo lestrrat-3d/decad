@@ -51,7 +51,7 @@ func TestLoftFacesThreeCapConeContinuationKeepsSource(t *testing.T) {
 		require.Len(t, fs, 1)
 		return fs[0]
 	}
-	loft, err := doc.LoftFaces(t.Context(), section(near, refOf(CapStart(near))),
+	loft, err := LoftFaces(t.Context(), doc, section(near, refOf(CapStart(near))),
 		section(near, refOf(CapEnd(near))), section(far, refOf(CapEnd(far))))
 	require.NoError(t, err)
 	baseRecord := loft.n.Payload.(facetedPayload).LoftFacesCap

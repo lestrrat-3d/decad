@@ -103,7 +103,7 @@ func neutralArcSeamSource(t *testing.T) (*Body, *Body, *loftFacesTrimRecord) {
 	for i := range slices.Backward(slabs) {
 		sections = append(sections, neutralArcSeamCap(t, slabs[i], refOf(CapEnd(slabs[i]))))
 	}
-	loft, err := doc.LoftFaces(t.Context(), sections...)
+	loft, err := LoftFaces(t.Context(), doc, sections...)
 	require.NoError(t, err)
 	toe, err := Cut(t.Context(), loft, neutralArcSeamCone(t, doc, 6.5))
 	require.NoError(t, err)

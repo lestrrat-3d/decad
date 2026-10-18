@@ -39,17 +39,17 @@ func TestLoftFacesEightSourceSlabsKeepVolumeAndRejectBadCapOrder(t *testing.T) {
 		sections = append(sections, pointSlabCap(t, slab, decad.CapEnd(slab)))
 	}
 	before := doc.Bodies()
-	_, err := doc.LoftFaces(t.Context(), sections[:1]...)
+	_, err := decad.LoftFaces(t.Context(), doc, sections[:1]...)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Equal(t, before, doc.Bodies())
 	duplicate := append([]*decad.Face(nil), sections...)
 	duplicate[2] = duplicate[1]
-	_, err = doc.LoftFaces(t.Context(), duplicate...)
+	_, err = decad.LoftFaces(t.Context(), doc, duplicate...)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, before, doc.Bodies())
 	reordered := append([]*decad.Face(nil), sections...)
 	reordered[3], reordered[4] = reordered[4], reordered[3]
-	_, err = doc.LoftFaces(t.Context(), reordered...)
+	_, err = decad.LoftFaces(t.Context(), doc, reordered...)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, before, doc.Bodies())
 	start := pointSlabCap(t, kept[0], decad.CapStart(kept[0]))
@@ -63,16 +63,16 @@ func TestLoftFacesEightSourceSlabsKeepVolumeAndRejectBadCapOrder(t *testing.T) {
 	require.NotNil(t, side)
 	withSide := append([]*decad.Face(nil), sections...)
 	withSide[len(withSide)-1] = side
-	_, err = doc.LoftFaces(t.Context(), withSide...)
+	_, err = decad.LoftFaces(t.Context(), doc, withSide...)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, before, doc.Bodies())
 	canceled, cancel := context.WithCancel(t.Context())
 	cancel()
-	_, err = doc.LoftFaces(canceled, sections...)
+	_, err = decad.LoftFaces(canceled, doc, sections...)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Equal(t, before, doc.Bodies())
 
-	loft, err := doc.LoftFaces(t.Context(), sections...)
+	loft, err := decad.LoftFaces(t.Context(), doc, sections...)
 	require.NoError(t, err)
 	mesh, err := loft.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))

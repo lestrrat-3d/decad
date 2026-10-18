@@ -157,7 +157,7 @@ func TestLoftFacesToConeTangentBuildsExactEnd(t *testing.T) {
 
 	// The tangent plane is the source plane, so the volume matches the plain
 	// loft through the far slab's own end cap, within both proven bounds.
-	plain, err := f.doc.LoftFaces(t.Context(), f.toe, f.heel, f.farCapFace)
+	plain, err := LoftFaces(t.Context(), f.doc, f.toe, f.heel, f.farCapFace)
 	require.NoError(t, err)
 	tv, err := body.Volume()
 	require.NoError(t, err)

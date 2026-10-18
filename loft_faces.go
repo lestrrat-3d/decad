@@ -18,7 +18,7 @@ const maxLoftFacesSections = 32
 
 // LoftFaces builds one solid through ordered complete caps of the same
 // authenticated point-loft Split source (docs/loft-face-sections-design.md).
-func (d *Document) LoftFaces(ctx context.Context, sections ...*Face) (*Body, error) {
+func LoftFaces(ctx context.Context, d *Document, sections ...*Face) (*Body, error) {
 	if ctx == nil || d == nil || len(sections) < 2 || len(sections) > maxLoftFacesSections {
 		return nil, fmt.Errorf("%w: LoftFaces needs a context, document and 2 to %d cap faces",
 			ErrDegenerate, maxLoftFacesSections)
