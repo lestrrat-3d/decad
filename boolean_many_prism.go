@@ -75,7 +75,7 @@ func tryPrismUnionMany(ctx context.Context, d *Document, ref producerID,
 			if err := budget.Step(); err != nil {
 				return nil, true, err
 			}
-			if samePrismCarrier(prior.line, line.line) {
+			if prismcells.SameLineCarrier(prior.line, line.line) {
 				return nil, true, fmt.Errorf("%w: Union's one-scene prism class needs distinct source line carriers",
 					ErrUnsupported)
 			}
@@ -146,19 +146,4 @@ func tryPrismUnionMany(ctx context.Context, d *Document, ref producerID,
 	}
 	body, err := analyticBooleanBody(ctx, d, ref, sp)
 	return body, true, err
-}
-
-// samePrismCarrier compares the two complete supporting lines in exact
-// dyadic arithmetic. This path has no proof for a span shared by inputs.
-func samePrismCarrier(a, b lineSeg) bool {
-	dx := lfSub(lfF(a.End.U), lfF(a.Start.U))
-	dy := lfSub(lfF(a.End.V), lfF(a.Start.V))
-	for _, endpoint := range []planePoint{b.Start, b.End} {
-		ex := lfSub(lfF(endpoint.U), lfF(a.Start.U))
-		ey := lfSub(lfF(endpoint.V), lfF(a.Start.V))
-		if lfSub(lfMul(dx, ey), lfMul(dy, ex)).Sign() != 0 {
-			return false
-		}
-	}
-	return true
 }
