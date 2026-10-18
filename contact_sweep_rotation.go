@@ -226,20 +226,12 @@ func (p rotationalSweepPath) pointDeviationFrom(pose r3.Transform, ideal sweepId
 	if !pose.IsValid() {
 		return nil, 0, false, nil
 	}
-	actual, squared, err := p.pointDeviationSquared(pose, ideal, poll)
+	actual, squared, err := motionbound.SweepPointDeviation(p.sourcePoints, pose, ideal.Rot, ideal.Shift, poll)
 	if err != nil {
 		return nil, 0, false, err
 	}
 	bound := proofbound.RatSqrtUp(squared)
 	return actual, bound, measurement.FiniteValues(bound), nil
-}
-
-// pointDeviationSquared stages the source points through pose and returns
-// them with the exact largest squared distance bound, maxSquared/whole², the
-// value pointDeviationFrom rounds up.
-func (p rotationalSweepPath) pointDeviationSquared(pose r3.Transform, ideal sweepIdealPose,
-	poll func() error) ([]proofarith.DyV3, *big.Rat, error) {
-	return motionbound.SweepPointDeviation(p.sourcePoints, pose, ideal.Rot, ideal.Shift, poll)
 }
 
 type rotationalPairSweep struct {
