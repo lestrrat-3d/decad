@@ -28,7 +28,7 @@ func TestLoftFromPointPyramidPreservesApexAndVolume(t *testing.T) {
 	s, profile := pointLoftSquare(t, sketch.NewWorld(), 6)
 	doc := decad.New()
 	apex := r3.NewVec(0, 0, 0)
-	body, err := doc.LoftFromPoint(t.Context(), apex, s, profile)
+	body, err := decad.LoftFromPoint(t.Context(), doc, apex, s, profile)
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, body.Kind())
 	require.Len(t, doc.Bodies(), 1)
@@ -80,7 +80,7 @@ func TestLoftFromPointKeepsFittedFarBoundary(t *testing.T) {
 	require.True(t, profiles[0].Valid)
 	_, fitted := profiles[0].Outer[0].Entity.(*sketch.FitSpline)
 	require.True(t, fitted)
-	body, err := decad.New().LoftFromPoint(t.Context(), r3.NewVec(0, 0, 0), s, profiles[0])
+	body, err := decad.LoftFromPoint(t.Context(), decad.New(), r3.NewVec(0, 0, 0), s, profiles[0])
 	require.NoError(t, err)
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.01), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
@@ -108,7 +108,7 @@ func TestLoftFromPointRejectsApexInPlaneAndHoles(t *testing.T) {
 	w := sketch.NewWorld()
 	s, profile := pointLoftSquare(t, w, 6)
 	doc := decad.New()
-	_, err := doc.LoftFromPoint(t.Context(), r3.NewVec(0, 0, 6), s, profile)
+	_, err := decad.LoftFromPoint(t.Context(), doc, r3.NewVec(0, 0, 6), s, profile)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Empty(t, doc.Bodies())
 
@@ -126,7 +126,7 @@ func TestLoftFromPointRejectsApexInPlaneAndHoles(t *testing.T) {
 		if len(p.Holes) != 1 {
 			continue
 		}
-		_, err = doc.LoftFromPoint(t.Context(), r3.NewVec(0, 0, 0), holed, p)
+		_, err = decad.LoftFromPoint(t.Context(), doc, r3.NewVec(0, 0, 0), holed, p)
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Empty(t, doc.Bodies())
 		return

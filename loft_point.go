@@ -25,7 +25,7 @@ import (
 // profile. The apex is in millimetres. This operation accepts one outer loop
 // and no holes; every fitted flank remains the recorded Sketch curve. The
 // boundary is a certified chorded fan and a cap (docs/loft-point-design.md).
-func (d *Document) LoftFromPoint(ctx context.Context, apex r3.Vec,
+func LoftFromPoint(ctx context.Context, d *Document, apex r3.Vec,
 	s *sketch.Sketch, p *sketch.Profile) (*Body, error) {
 	if ctx == nil || d == nil || s == nil || p == nil {
 		return nil, fmt.Errorf("%w: point loft needs a context, document, sketch and profile", ErrDegenerate)

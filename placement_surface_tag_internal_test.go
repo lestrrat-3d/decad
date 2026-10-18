@@ -182,7 +182,7 @@ func placementConeCut(t *testing.T) *Body {
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	tooth, err := doc.LoftFromPoint(t.Context(), r3.Vec{}, s, s.Profiles()[0])
+	tooth, err := LoftFromPoint(t.Context(), doc, r3.Vec{}, s, s.Profiles()[0])
 	require.NoError(t, err)
 
 	tw := sketch.NewWorld()

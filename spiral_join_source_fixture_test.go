@@ -174,7 +174,7 @@ func spiralPointTooth(t *testing.T, doc *Document, d spiralDims, tilt float64) *
 	require.Len(t, s.Profiles(), 1)
 	require.True(t, s.Profiles()[0].Valid)
 	require.Len(t, s.Profiles()[0].Outer, 6)
-	tooth, err := doc.LoftFromPoint(t.Context(), r3.Vec{}, s, s.Profiles()[0])
+	tooth, err := LoftFromPoint(t.Context(), doc, r3.Vec{}, s, s.Profiles()[0])
 	require.NoError(t, err)
 	return tooth
 }

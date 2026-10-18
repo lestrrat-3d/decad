@@ -113,7 +113,7 @@ func TestPointLoftParallelSheetFarCapFollowsApexSide(t *testing.T) {
 			_, err = profileSketch.Solve(t.Context())
 			require.NoError(t, err)
 			require.Len(t, profileSketch.Profiles(), 1)
-			tooth, err := doc.LoftFromPoint(t.Context(), r3.NewVec(apexX, 0, 0),
+			tooth, err := decad.LoftFromPoint(t.Context(), doc, r3.NewVec(apexX, 0, 0),
 				profileSketch, profileSketch.Profiles()[0])
 			require.NoError(t, err)
 			farFaces, err := decad.Faces(decad.FaceCreatedBy(decad.CapEnd(tooth))).SelectFaces(tooth)

@@ -750,7 +750,7 @@ components are not proven separate, rather than publish an unrecorded cavity.
 
 An operation is a package-level function. A query is a method. This section
 owns the rule; a companion design that writes an operation as a method
-(`func (d *Document) Sweep(...)`, `func (d *Document) LoftFromPoint(...)`) means the
+(`func (d *Document) Sweep(...)`) means the
 free function the table below names for it.
 
 **An operation is any call that builds a body, retires a body, or registers a
@@ -788,7 +788,6 @@ body (§6) and takes no `*Document` argument. An operation that takes no body
 
 | Shipped method form | Free function |
 |---|---|
-| `Document.LoftFromPoint` | `LoftFromPoint(ctx, doc, apex, sketch, profile)` |
 | `Document.Sweep` over a profile or a chain | `Sweep(ctx, doc, s, sec, path, opts...)`, one generic function over `Section` (§8) |
 
 **Every operation that builds a body from a sketch takes a `ctx`, `Extrude`,
@@ -940,7 +939,7 @@ exactly identical curved sections, linearly varying four-arc circles, and the
 bounded varying fitted-flank class with fixed arcs; or four rounded-rectangle
 sections with cubic width and fixed height and corner radius.
 `docs/loft-point-design.md` owns the separate
-`Document.LoftFromPoint(ctx, apex, sketch, profile)` solid construction from
+`LoftFromPoint(ctx, doc, apex, sketch, profile)` solid construction from
 an exact world point to one recorded Sketch profile. `docs/sweep-design.md` owns `Sweep`'s
 signature, spatial `Path`, frame transport, refusals, and staged reach.
 `docs/helix-design.md` owns `Coil`'s signature, its axis and its extent in
@@ -958,7 +957,7 @@ func Extrude[S Section](ctx context.Context, d *Document, s *sketch.Sketch, sec 
 func Revolve[S Section](ctx context.Context, d *Document, s *sketch.Sketch, sec S, axis Axis, a AngularExtent, opts ...RevolveOption) (*Body, error)
 func Sweep[S Section](ctx context.Context, d *Document, s *sketch.Sketch, sec S, path *Path, opts ...SweepOption) (*Body, error)
 func Coil(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile, axis Axis, pitch, turns units.Value, opts ...CoilOption) (*Body, error)
-func (d *Document) LoftFromPoint(ctx context.Context, apex r3.Vec, s *sketch.Sketch, p *sketch.Profile) (*Body, error)
+func LoftFromPoint(ctx context.Context, d *Document, apex r3.Vec, s *sketch.Sketch, p *sketch.Profile) (*Body, error)
 
 // Section is the sketch geometry a section-fed operation consumes: a closed
 // *sketch.Profile or an open *sketch.Chain.
