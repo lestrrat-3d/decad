@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
@@ -42,6 +43,68 @@ type BossMesh struct {
 	VertexBound             []float64
 	MaxVertexError          float64
 	RootStart, BossPointEnd int
+}
+
+// PrismUnionBossShellCapOwners matches the removed cap's two triangles to
+// its four recorded boss corners and rejects any shared or misplaced source
+// group. The caller has already authenticated the live opening face.
+func PrismUnionBossShellCapOwners(fp facetedrecord.Payload, openingIdx int,
+	openingOrigin provenance.Ref, corners [4]r3.Vec) ([4]int, int, bool) {
+	var outer [4]int
+	var topVerts map[int]struct{}
+	var topTris [][3]int
+	topGroup := 0
+	for fi, faceIdx := range fp.FaceOf {
+		if faceIdx != openingIdx {
+			continue
+		}
+		if topVerts == nil {
+			topVerts = map[int]struct{}{}
+			topGroup = fp.Src[fi]
+		}
+		if fp.Src[fi] != topGroup {
+			return outer, topGroup, false
+		}
+		topTris = append(topTris, fp.Tris[fi])
+		for _, vi := range fp.Tris[fi] {
+			topVerts[vi] = struct{}{}
+		}
+	}
+	if len(topVerts) != 4 || len(topTris) != 2 || topGroup < 0 || topGroup >= len(fp.Groups) ||
+		len(fp.Groups[topGroup].Origins) != 1 || !fp.Groups[topGroup].Planar ||
+		fp.Groups[topGroup].Origins[0] != openingOrigin {
+		return outer, topGroup, false
+	}
+	for fi, group := range fp.Src {
+		if group == topGroup && fp.FaceOf[fi] != openingIdx {
+			return outer, topGroup, false
+		}
+	}
+	for i, group := range fp.Groups {
+		if i == topGroup {
+			continue
+		}
+		if slices.Contains(group.Origins, openingOrigin) {
+			return outer, topGroup, false
+		}
+	}
+	for i, p := range corners {
+		found := -1
+		for vi := range topVerts {
+			if fp.Verts[vi] == p {
+				found = vi
+				break
+			}
+		}
+		if found < 0 {
+			return outer, topGroup, false
+		}
+		outer[i] = found
+	}
+	if !PrismUnionBossShellCompleteCap(outer, topTris) {
+		return outer, topGroup, false
+	}
+	return outer, topGroup, true
 }
 
 func PrismUnionBossShellMeshOf(ctx context.Context, ref provenance.Producer,
