@@ -76,6 +76,16 @@ func TestStackedUnionBossOnPlate(t *testing.T) {
 	mesh, err := got.Tessellate(t.Context(), units.Millimeters(0.05))
 	require.NoError(t, err)
 	require.True(t, mesh.VolumeVerified())
+	sources := mesh.SourceFaces()
+	require.Equal(t, len(mesh.Triangles()), len(sources))
+	faces := make(map[*decad.Face]struct{}, len(got.Faces()))
+	for _, face := range got.Faces() {
+		faces[face] = struct{}{}
+	}
+	for i, source := range sources {
+		_, ok := faces[source]
+		require.True(t, ok, "triangle %d names a face outside the result", i)
+	}
 	requireBodyWatertight(t, got)
 
 	report, err := doc.Verify(t.Context())
