@@ -15,21 +15,27 @@ import (
 // loftOutputBoundaryProof is private, transient and has no occupied-volume or
 // measurement claim. The source records must remain live throughout its call.
 type loftOutputBoundaryProof struct {
+	source     loftSourcePartition
 	shell      loftOutputShell
 	workVisits uint64
 }
 
+// certifyLoftOutputBoundary's source and output step budgets count only their
+// Decad proof loops. Held mesh audits and Sketch Profiles publication are
+// outside those counters. Cancellation during Profiles publication waits for
+// the Sketch call to finish.
 func certifyLoftOutputBoundary(ctx context.Context, first, second *Body,
 	operation *proofbound.WorkBudget) (loftOutputBoundaryProof, bool, error) {
 	var no loftOutputBoundaryProof
+	arithmetic := &loftVolumeArithmetic{ok: true}
 	if err := ctx.Err(); err != nil {
 		return no, false, err
 	}
 	if first == nil || second == nil || operation == nil {
 		return no, false, nil
 	}
-	source, ok, err := certifyLoftSourcePartition(ctx, first, second, operation)
-	if err != nil || !ok {
+	source, ok, err := certifyLoftSourcePartition(ctx, first, second, operation, arithmetic)
+	if err != nil || !ok || !arithmetic.ok {
 		return no, false, err
 	}
 	var pp prismPayload
@@ -73,17 +79,17 @@ func certifyLoftOutputBoundary(ctx context.Context, first, second *Body,
 	}
 	shell := loftOutputNewShell()
 	for cap := range 3 {
-		ok, err = loftOutputCap(ctx, budget, pp, prismLines, bottom, top, source, &shell, cap)
-		if err != nil || !ok {
+		ok, err = loftOutputCap(ctx, budget, pp, prismLines, bottom, top, source, &shell, cap, arithmetic)
+		if err != nil || !ok || !arithmetic.ok {
 			return no, false, err
 		}
 	}
-	ok, err = loftOutputSides(budget, pp, prismLines, bottom, top, source, &shell)
-	if err != nil || !ok {
+	ok, err = loftOutputSides(budget, pp, prismLines, bottom, top, source, &shell, arithmetic)
+	if err != nil || !ok || !arithmetic.ok {
 		return no, false, err
 	}
-	ok, err = loftOutputAuditSource(budget, shell, source)
-	if err != nil || !ok {
+	ok, err = loftOutputAuditSource(budget, shell, source, arithmetic)
+	if err != nil || !ok || !arithmetic.ok {
 		return no, false, err
 	}
 	if err := budget.Err(); err != nil {
@@ -109,12 +115,16 @@ func certifyLoftOutputBoundary(ctx context.Context, first, second *Body,
 	if err := budget.Err(); err != nil {
 		return no, false, err
 	}
-	return loftOutputBoundaryProof{shell: shell, workVisits: visits}, true, nil
+	if !arithmetic.ok {
+		return no, false, nil
+	}
+	return loftOutputBoundaryProof{source: source, shell: shell, workVisits: visits}, true, nil
 }
 
 func loftOutputSides(budget *proofbound.WorkBudget, pp prismPayload,
 	prismLines, bottom, top []sectionrecord.LineSeg, source loftSourcePartition,
-	shell *loftOutputShell) (bool, error) {
+	shell *loftOutputShell, checked ...*loftVolumeArithmetic) (bool, error) {
+	arithmetic := loftReplayArithmetic(checked)
 	z0, zL, zP := source.capLevels[0], source.capLevels[1], source.capLevels[2]
 	var lineCut, carrierCut [2][2]*big.Rat
 	for k, seam := range source.seams {
@@ -124,12 +134,12 @@ func loftOutputSides(budget *proofbound.WorkBudget, pp prismPayload,
 			}
 			var ok bool
 			lineCut[t][k], carrierCut[t][k], ok = seam.At(loftOutputRat(int64(t)))
-			if !ok {
+			if !ok || !arithmetic.valid(lineCut[t][k]) || !arithmetic.valid(carrierCut[t][k]) {
 				return false, nil
 			}
 		}
 		mid, midCarrier, ok := seam.At(big.NewRat(1, 2))
-		if !ok || mid == nil || midCarrier == nil {
+		if !ok || !arithmetic.valid(mid) || !arithmetic.valid(midCarrier) {
 			return false, nil
 		}
 		moving := source.crossing[k]
@@ -137,14 +147,13 @@ func loftOutputSides(budget *proofbound.WorkBudget, pp prismPayload,
 			big.NewRat(1, 2))
 		midEnd, okEnd := loftOutputMovingPoint(bottom[moving].End, top[moving].End,
 			big.NewRat(1, 2))
-		carrierPoint, okCarrier := loftPartitionLinePoint(prismLines[source.carrier], midCarrier)
-		if !okStart || !okEnd || !okCarrier ||
-			!loftPartitionSamePoint(loftOutputInterpolate(midStart, midEnd, mid), carrierPoint) {
+		carrierPoint := arithmetic.partitionLinePoint(prismLines[source.carrier], midCarrier)
+		interpolated := arithmetic.partitionInterpolate(midStart, midEnd, mid)
+		if !okStart || !okEnd || !arithmetic.partitionSamePoint(interpolated, carrierPoint) || !arithmetic.ok {
 			return false, nil
 		}
-		linear := new(big.Rat).Add(carrierCut[0][k], carrierCut[1][k])
-		linear.Quo(linear, loftOutputRat(2))
-		if midCarrier.Cmp(linear) != 0 {
+		linear := arithmetic.quo(arithmetic.add(carrierCut[0][k], carrierCut[1][k]), loftOutputRat(2))
+		if arithmetic.cmp(midCarrier, linear) != 0 || !arithmetic.ok {
 			return false, nil
 		}
 		// CertifyLineSeam establishes unique transverse intersections over the
@@ -206,8 +215,8 @@ func loftOutputSides(budget *proofbound.WorkBudget, pp prismPayload,
 			} else if source.crossing[0] != i {
 				return false, nil
 			}
-			side := loftPartitionSide(prismLines[source.carrier], bottom[i].Start)
-			if side == nil || side.Sign() == 0 {
+			side := arithmetic.partitionSide(prismLines[source.carrier], bottom[i].Start)
+			if !arithmetic.ok || side.Sign() == 0 {
 				return false, nil
 			}
 			if side.Sign() < 0 {
@@ -226,7 +235,7 @@ func loftOutputSides(budget *proofbound.WorkBudget, pp prismPayload,
 			return false, err
 		}
 	}
-	return true, nil
+	return arithmetic.ok, nil
 }
 
 func loftOutputLineQuad(budget *proofbound.WorkBudget, frame r3.Frame,
@@ -235,7 +244,9 @@ func loftOutputLineQuad(budget *proofbound.WorkBudget, frame r3.Frame,
 	if err := budget.Step(); err != nil {
 		return false, err
 	}
-	if lo0.Cmp(hi0) >= 0 || lo1.Cmp(hi1) >= 0 || z0.Cmp(z1) >= 0 {
+	arithmetic := &loftVolumeArithmetic{ok: true}
+	if arithmetic.cmp(lo0, hi0) >= 0 || arithmetic.cmp(lo1, hi1) >= 0 ||
+		arithmetic.cmp(z0, z1) >= 0 || !arithmetic.ok {
 		return false, nil
 	}
 	params := [4]*big.Rat{lo0, hi0, hi1, lo1}
@@ -243,8 +254,8 @@ func loftOutputLineQuad(budget *proofbound.WorkBudget, frame r3.Frame,
 	levels := [4]*big.Rat{z0, z0, z1, z1}
 	var quad [4]loftOutputPoint
 	for i := range quad {
-		p, ok := loftPartitionLinePoint(lines[i], params[i])
-		if !ok {
+		p := arithmetic.partitionLinePoint(lines[i], params[i])
+		if !arithmetic.ok {
 			return false, nil
 		}
 		quad[i] = loftOutputP2(p, levels[i])
@@ -264,27 +275,27 @@ func loftOutputLineQuad(budget *proofbound.WorkBudget, frame r3.Frame,
 	return true, nil
 }
 
-func loftOutputDet3(a, b, c [3]*big.Rat) *big.Rat {
-	x := new(big.Rat).Sub(new(big.Rat).Mul(b[1], c[2]), new(big.Rat).Mul(b[2], c[1]))
-	y := new(big.Rat).Sub(new(big.Rat).Mul(b[2], c[0]), new(big.Rat).Mul(b[0], c[2]))
-	z := new(big.Rat).Sub(new(big.Rat).Mul(b[0], c[1]), new(big.Rat).Mul(b[1], c[0]))
-	return new(big.Rat).Add(new(big.Rat).Add(new(big.Rat).Mul(a[0], x),
-		new(big.Rat).Mul(a[1], y)), new(big.Rat).Mul(a[2], z))
+func loftOutputDet3(arithmetic *loftVolumeArithmetic, a, b, c [3]*big.Rat) *big.Rat {
+	x := arithmetic.sub(arithmetic.mul(b[1], c[2]), arithmetic.mul(b[2], c[1]))
+	y := arithmetic.sub(arithmetic.mul(b[2], c[0]), arithmetic.mul(b[0], c[2]))
+	z := arithmetic.sub(arithmetic.mul(b[0], c[1]), arithmetic.mul(b[1], c[0]))
+	return arithmetic.add(arithmetic.add(arithmetic.mul(a[0], x),
+		arithmetic.mul(a[1], y)), arithmetic.mul(a[2], z))
 }
 
-func loftOutputCrossVec(a, b [3]*big.Rat) [3]*big.Rat {
+func loftOutputCrossVec(arithmetic *loftVolumeArithmetic, a, b [3]*big.Rat) [3]*big.Rat {
 	var c [3]*big.Rat
 	for i := range c {
 		j, k := (i+1)%3, (i+2)%3
-		c[i] = new(big.Rat).Sub(new(big.Rat).Mul(a[j], b[k]), new(big.Rat).Mul(a[k], b[j]))
+		c[i] = arithmetic.sub(arithmetic.mul(a[j], b[k]), arithmetic.mul(a[k], b[j]))
 	}
 	return c
 }
 
-func loftOutputWorldDelta(a, b [3]*big.Rat) [3]*big.Rat {
+func loftOutputWorldDelta(arithmetic *loftVolumeArithmetic, a, b [3]*big.Rat) [3]*big.Rat {
 	var d [3]*big.Rat
 	for i := range d {
-		d[i] = new(big.Rat).Sub(b[i], a[i])
+		d[i] = arithmetic.sub(b[i], a[i])
 	}
 	return d
 }
@@ -294,15 +305,17 @@ func loftOutputHeldExact(v r3.Vec) [3]*big.Rat {
 }
 
 func loftOutputNormalsAgree(a, b, c loftOutputVertex) bool {
-	source := loftOutputCrossVec(loftOutputWorldDelta(a.world, b.world),
-		loftOutputWorldDelta(a.world, c.world))
+	arithmetic := &loftVolumeArithmetic{ok: true}
+	source := loftOutputCrossVec(arithmetic, loftOutputWorldDelta(arithmetic, a.world, b.world),
+		loftOutputWorldDelta(arithmetic, a.world, c.world))
 	ha, hb, hc := loftOutputHeldExact(a.held), loftOutputHeldExact(b.held), loftOutputHeldExact(c.held)
-	held := loftOutputCrossVec(loftOutputWorldDelta(ha, hb), loftOutputWorldDelta(ha, hc))
+	held := loftOutputCrossVec(arithmetic, loftOutputWorldDelta(arithmetic, ha, hb),
+		loftOutputWorldDelta(arithmetic, ha, hc))
 	dot := new(big.Rat)
 	for i := range source {
-		dot.Add(dot, new(big.Rat).Mul(source[i], held[i]))
+		dot = arithmetic.add(dot, arithmetic.mul(source[i], held[i]))
 	}
-	return dot.Sign() > 0
+	return arithmetic.ok && dot.Sign() > 0
 }
 
 func loftOutputMovingPoint(low, high sectionrecord.Point2, t *big.Rat) (loftPartitionPoint, bool) {
@@ -311,12 +324,17 @@ func loftOutputMovingPoint(low, high sectionrecord.Point2, t *big.Rat) (loftPart
 	if !okA || !okB {
 		return loftPartitionPoint{}, false
 	}
-	return loftOutputInterpolate(a, b, t), true
+	arithmetic := &loftVolumeArithmetic{ok: true}
+	point := loftPartitionPoint{
+		u: arithmetic.add(a.u, arithmetic.mul(t, arithmetic.sub(b.u, a.u))),
+		v: arithmetic.add(a.v, arithmetic.mul(t, arithmetic.sub(b.v, a.v))),
+	}
+	return point, arithmetic.ok
 }
 
-func loftOutputDelta(a, b loftOutputPoint) [3]*big.Rat {
-	return [3]*big.Rat{new(big.Rat).Sub(b.u, a.u), new(big.Rat).Sub(b.v, a.v),
-		new(big.Rat).Sub(b.z, a.z)}
+func loftOutputDelta(arithmetic *loftVolumeArithmetic, a, b loftOutputPoint) [3]*big.Rat {
+	return [3]*big.Rat{arithmetic.sub(b.u, a.u), arithmetic.sub(b.v, a.v),
+		arithmetic.sub(b.z, a.z)}
 }
 
 func loftOutputPlanarWall(low, high sectionrecord.LineSeg, z *big.Rat) bool {
@@ -329,30 +347,37 @@ func loftOutputPlanarWall(low, high sectionrecord.LineSeg, z *big.Rat) bool {
 	}
 	p, q, r, s := loftOutputP2(a, loftOutputRat(0)), loftOutputP2(b, loftOutputRat(0)),
 		loftOutputP2(c, z), loftOutputP2(d, z)
-	return loftOutputDet3(loftOutputDelta(p, q), loftOutputDelta(p, r),
-		loftOutputDelta(p, s)).Sign() == 0
+	arithmetic := &loftVolumeArithmetic{ok: true}
+	det := loftOutputDet3(arithmetic, loftOutputDelta(arithmetic, p, q),
+		loftOutputDelta(arithmetic, p, r), loftOutputDelta(arithmetic, p, s))
+	return arithmetic.ok && det.Sign() == 0
 }
 
 func loftOutputQuadPlanarConvex(q [4]loftOutputPoint) bool {
-	if loftOutputDet3(loftOutputDelta(q[0], q[1]), loftOutputDelta(q[0], q[2]),
-		loftOutputDelta(q[0], q[3])).Sign() != 0 ||
+	arithmetic := &loftVolumeArithmetic{ok: true}
+	if loftOutputDet3(arithmetic, loftOutputDelta(arithmetic, q[0], q[1]),
+		loftOutputDelta(arithmetic, q[0], q[2]),
+		loftOutputDelta(arithmetic, q[0], q[3])).Sign() != 0 || !arithmetic.ok ||
 		loftOutputCrossZero([3]loftOutputPoint{q[0], q[1], q[2]}) ||
 		loftOutputCrossZero([3]loftOutputPoint{q[0], q[2], q[3]}) {
 		return false
 	}
-	n0 := loftOutputCrossVec(loftOutputDelta(q[0], q[1]), loftOutputDelta(q[0], q[2]))
-	n1 := loftOutputCrossVec(loftOutputDelta(q[0], q[2]), loftOutputDelta(q[0], q[3]))
+	n0 := loftOutputCrossVec(arithmetic, loftOutputDelta(arithmetic, q[0], q[1]),
+		loftOutputDelta(arithmetic, q[0], q[2]))
+	n1 := loftOutputCrossVec(arithmetic, loftOutputDelta(arithmetic, q[0], q[2]),
+		loftOutputDelta(arithmetic, q[0], q[3]))
 	dot := new(big.Rat)
 	for i := range n0 {
-		dot.Add(dot, new(big.Rat).Mul(n0[i], n1[i]))
+		dot = arithmetic.add(dot, arithmetic.mul(n0[i], n1[i]))
 	}
 	// Monotone height and ordered edge parameters then make this a simple
 	// planar quadrilateral; matching normals establish both triangle sides.
-	return dot.Sign() > 0
+	return arithmetic.ok && dot.Sign() > 0
 }
 
 func loftOutputAuditSource(budget *proofbound.WorkBudget,
-	shell loftOutputShell, source loftSourcePartition) (bool, error) {
+	shell loftOutputShell, source loftSourcePartition, checked ...*loftVolumeArithmetic) (bool, error) {
+	arithmetic := loftReplayArithmetic(checked)
 	if len(shell.triangles) == 0 || len(shell.triangles) > 512 ||
 		len(shell.vertices) == 0 || len(shell.vertices) > 512 ||
 		len(shell.faces) != len(shell.triangles) ||
@@ -396,7 +421,8 @@ func loftOutputAuditSource(budget *proofbound.WorkBudget,
 			return false, err
 		}
 		peer, found := directed[[2]int{edge[1], edge[0]}]
-		if !found || !loftOutputEdgeOwnersCompatible(shell, source, fi, peer, edge) {
+		if !found || !loftOutputEdgeOwnersCompatible(shell, source, fi, peer, edge, arithmetic) ||
+			!arithmetic.ok {
 			return false, nil
 		}
 	}
@@ -462,17 +488,18 @@ func loftOutputAuditSource(budget *proofbound.WorkBudget,
 				p[1], p[2] = p[2], p[1]
 				q[1], q[2] = q[2], q[1]
 			}
-			overlap, err := loftOutputTrianglesOverlap(budget, p, q)
-			if err != nil || overlap {
+			overlap, err := loftOutputTrianglesOverlap(budget, p, q, arithmetic)
+			if err != nil || overlap || !arithmetic.ok {
 				return false, err
 			}
 		}
 	}
-	return loftOutputMiddleContact(budget, shell, source.capLevels[1], directed)
+	return loftOutputMiddleContact(budget, shell, source.capLevels[1], directed, arithmetic)
 }
 
 func loftOutputEdgeOwnersCompatible(shell loftOutputShell, source loftSourcePartition,
-	fi, peer int, edge [2]int) bool {
+	fi, peer int, edge [2]int, arithmetic ...*loftVolumeArithmetic) bool {
+	c := loftReplayArithmetic(arithmetic)
 	a, b := shell.faces[fi], shell.faces[peer]
 	if a.kind == b.kind && a.owner == b.owner {
 		return true
@@ -488,7 +515,7 @@ func loftOutputEdgeOwnersCompatible(shell loftOutputShell, source loftSourcePart
 			capFace, side = b, a
 		}
 		if capFace.level < 0 || capFace.level >= len(source.capLevels) ||
-			p.z.Cmp(q.z) != 0 || p.z.Cmp(source.capLevels[capFace.level]) != 0 {
+			c.cmp(p.z, q.z) != 0 || c.cmp(p.z, source.capLevels[capFace.level]) != 0 || !c.ok {
 			return false
 		}
 		if capFace.owner == side.owner {
@@ -537,7 +564,12 @@ func loftOutputJunctionEdge(a, b loftOutputPoint, junction [2]sectionrecord.Poin
 }
 
 func loftOutputMiddleContact(budget *proofbound.WorkBudget,
-	shell loftOutputShell, level *big.Rat, directed map[[2]int]int) (bool, error) {
+	shell loftOutputShell, level *big.Rat, directed map[[2]int]int,
+	arithmetic ...*loftVolumeArithmetic) (bool, error) {
+	c := loftReplayArithmetic(arithmetic)
+	if !c.valid(level) {
+		return false, nil
+	}
 	boundary := make(map[string][2]int)
 	capVertices := make(map[string]struct{})
 	for fi, tri := range shell.triangles {
@@ -564,8 +596,8 @@ func loftOutputMiddleContact(budget *proofbound.WorkBudget,
 		if shell.faces[fi].kind != 1 {
 			continue
 		}
-		trace, coplanar, err := loftOutputPlaneTrace(budget, shell, tri, level)
-		if err != nil || coplanar {
+		trace, coplanar, err := loftOutputPlaneTrace(budget, shell, tri, level, c)
+		if err != nil || coplanar || !c.ok {
 			return false, err
 		}
 		if len(trace) == 0 {
@@ -578,22 +610,34 @@ func loftOutputMiddleContact(budget *proofbound.WorkBudget,
 			if shell.faces[ci].kind != 0 || shell.faces[ci].level != 1 {
 				continue
 			}
-			lo, hi, hit := loftOutputTraceInCapTriangle(trace, cap, shell)
+			lo, hi, hit := loftOutputTraceInCapTriangle(trace, cap, shell, c)
+			if !c.ok {
+				return false, nil
+			}
 			if !hit {
 				continue
 			}
-			if lo.Cmp(hi) == 0 {
+			if c.cmp(lo, hi) == 0 {
+				if !c.ok {
+					return false, nil
+				}
 				p := trace[0]
 				if len(trace) == 2 {
-					p = loftOutputInterpolate(trace[0], trace[1], lo)
+					p = c.partitionInterpolate(trace[0], trace[1], lo)
+				}
+				if !c.ok {
+					return false, nil
 				}
 				if _, found := capVertices[loftOutputPointKey(loftOutputP2(p, level))]; !found {
 					return false, nil
 				}
 				continue
 			}
-			a, b := loftOutputInterpolate(trace[0], trace[1], lo),
-				loftOutputInterpolate(trace[0], trace[1], hi)
+			a, b := c.partitionInterpolate(trace[0], trace[1], lo),
+				c.partitionInterpolate(trace[0], trace[1], hi)
+			if !c.ok {
+				return false, nil
+			}
 			key := loftOutputP2EdgeKey(a, b, level)
 			edge, found := boundary[key]
 			if !found || directed[[2]int{edge[1], edge[0]}] != fi {
@@ -601,7 +645,7 @@ func loftOutputMiddleContact(budget *proofbound.WorkBudget,
 			}
 		}
 	}
-	return true, nil
+	return c.ok, nil
 }
 
 func loftOutputEdgeKey(shell loftOutputShell, edge [2]int) string {
@@ -621,11 +665,12 @@ func loftOutputP2EdgeKey(a, b loftPartitionPoint, z *big.Rat) string {
 }
 
 func loftOutputPlaneTrace(budget *proofbound.WorkBudget, shell loftOutputShell,
-	tri [3]int, z *big.Rat) ([]loftPartitionPoint, bool, error) {
+	tri [3]int, z *big.Rat, arithmetic ...*loftVolumeArithmetic) ([]loftPartitionPoint, bool, error) {
+	c := loftReplayArithmetic(arithmetic)
 	var points []loftPartitionPoint
 	add := func(p loftPartitionPoint) {
 		for _, q := range points {
-			if loftPartitionSamePoint(p, q) {
+			if c.partitionSamePoint(p, q) {
 				return
 			}
 		}
@@ -638,33 +683,44 @@ func loftOutputPlaneTrace(budget *proofbound.WorkBudget, shell loftOutputShell,
 		}
 		a := shell.vertices[vertex].point
 		b := shell.vertices[tri[(i+1)%3]].point
-		as, bs := a.z.Cmp(z), b.z.Cmp(z)
+		as, bs := c.cmp(a.z, z), c.cmp(b.z, z)
+		if !c.ok {
+			return nil, false, nil
+		}
 		if as == 0 {
 			onPlane++
 			add(loftPartitionPoint{a.u, a.v})
 		}
 		if as*bs < 0 {
-			t := new(big.Rat).Quo(new(big.Rat).Sub(z, a.z), new(big.Rat).Sub(b.z, a.z))
-			add(loftOutputInterpolate(loftPartitionPoint{a.u, a.v}, loftPartitionPoint{b.u, b.v}, t))
+			t := c.quo(c.sub(z, a.z), c.sub(b.z, a.z))
+			add(c.partitionInterpolate(loftPartitionPoint{a.u, a.v}, loftPartitionPoint{b.u, b.v}, t))
+			if !c.ok {
+				return nil, false, nil
+			}
 		}
 	}
 	return points, onPlane == 3 || len(points) > 2, nil
 }
 
 func loftOutputTraceInCapTriangle(trace []loftPartitionPoint,
-	capTriangle [3]int, shell loftOutputShell) (*big.Rat, *big.Rat, bool) {
+	capTriangle [3]int, shell loftOutputShell,
+	arithmetic ...*loftVolumeArithmetic) (*big.Rat, *big.Rat, bool) {
+	c := loftReplayArithmetic(arithmetic)
 	lo, hi := loftOutputRat(0), loftOutputRat(1)
 	if len(trace) == 1 {
 		hi = loftOutputRat(0)
 	}
 	for k, v := range capTriangle {
 		a, b := shell.vertices[v].point, shell.vertices[capTriangle[(k+1)%3]].point
-		start := loftPartitionCross(loftPartitionPoint{a.u, a.v},
+		start := c.partitionCross(loftPartitionPoint{a.u, a.v},
 			loftPartitionPoint{b.u, b.v}, trace[0])
 		end := start
 		if len(trace) == 2 {
-			end = loftPartitionCross(loftPartitionPoint{a.u, a.v},
+			end = c.partitionCross(loftPartitionPoint{a.u, a.v},
 				loftPartitionPoint{b.u, b.v}, trace[1])
+		}
+		if !c.ok {
+			return nil, nil, false
 		}
 		if start.Sign() < 0 && end.Sign() < 0 {
 			return nil, nil, false
@@ -672,13 +728,16 @@ func loftOutputTraceInCapTriangle(trace []loftPartitionPoint,
 		if start.Sign() == end.Sign() || start.Sign() >= 0 && end.Sign() >= 0 {
 			continue
 		}
-		t := new(big.Rat).Quo(start, new(big.Rat).Sub(start, end))
-		if start.Sign() < 0 {
-			lo = loftOutputMaxRat(lo, t)
-		} else {
-			hi = loftOutputMinRat(hi, t)
+		t := c.quo(start, c.sub(start, end))
+		if !c.ok {
+			return nil, nil, false
 		}
-		if lo.Cmp(hi) > 0 {
+		if start.Sign() < 0 {
+			lo = loftOutputMaxRat(lo, t, c)
+		} else {
+			hi = loftOutputMinRat(hi, t, c)
+		}
+		if c.cmp(lo, hi) > 0 || !c.ok {
 			return nil, nil, false
 		}
 	}
