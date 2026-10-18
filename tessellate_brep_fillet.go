@@ -3,6 +3,7 @@ package decad
 import (
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/filletband"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -50,9 +51,9 @@ func (bc *brepBandChord) placeRings(e brepEmbed, addVertex func([3]float64, proo
 	}
 	lm := &bc.lm
 	match, cells, patches, err := tessellation.FilletLoopLayout(tessellation.FilletLoopInput{
-		Walks: lm.walks, Joins: capBlendSampleJoins(lm.joins),
-		Count: lm.count, ArcCount: lm.arcCount, SideStart: lm.sideStart,
-		CapSamples: len(lm.capPts),
+		Walks: lm.Walks, Joins: capblend.SampleJoins(lm.Joins),
+		Count: lm.Count, ArcCount: lm.ArcCount, SideStart: lm.SideStart,
+		CapSamples: len(lm.CapPts),
 	})
 	if err != nil {
 		return err
@@ -60,10 +61,10 @@ func (bc *brepBandChord) placeRings(e brepEmbed, addVertex func([3]float64, proo
 	n := bc.fillet.n
 	side := make([]planePoint, len(match))
 	for c, index := range match {
-		side[c] = lm.sidePts[index]
+		side[c] = lm.SidePts[index]
 	}
 	points, err := tessellation.FilletRingGeometry(tessellation.FilletRingInput{
-		Side: point2ToRecordSlice(side), Cap: point2ToRecordSlice(lm.capPts), Radius: bc.band.Setback.Dc,
+		Side: point2ToRecordSlice(side), Cap: point2ToRecordSlice(lm.CapPts), Radius: bc.band.Setback.Dc,
 		RadiusDelta: bc.band.Setback.DcDelta, CapLevel: bc.face.Z0,
 		CapLevelDelta: bc.face.Z0Delta, SideLevel: bc.sideZ,
 		MaterialSign: bc.band.MatSign(bc.face), Count: n,
@@ -78,7 +79,7 @@ func (bc *brepBandChord) placeRings(e brepEmbed, addVertex func([3]float64, proo
 			return err
 		}
 		bc.fillet.seamGap, err = tessellation.CurvedMiterRings(points, tessellation.CurvedMiterInput{
-			Walks: lm.walks, Curved: bc.curved, CapWallStart: lm.capWallStart,
+			Walks: lm.Walks, Curved: bc.curved, CapWallStart: lm.CapWallStart,
 			Radius: rIv, HeldRadius: bc.band.Setback.Dc,
 			CapLevel: bc.face.Z0, CapLevelDelta: bc.face.Z0Delta,
 			MaterialSign: bc.band.MatSign(bc.face),
@@ -87,10 +88,10 @@ func (bc *brepBandChord) placeRings(e brepEmbed, addVertex func([3]float64, proo
 			return err
 		}
 	}
-	N := len(lm.capPts)
+	N := len(lm.CapPts)
 	fr := bc.fillet
 	if len(fr.seamGap) == 0 {
-		fr.seamGap = make([]float64, len(lm.walks))
+		fr.seamGap = make([]float64, len(lm.Walks))
 	}
 	fr.match = match
 	fr.cells, fr.patches = cells, patches
@@ -180,18 +181,18 @@ func (bc *brepBandChord) emitFillet(m *Mesh, faceOfRole func(string) (*Face, err
 	}
 
 	fr.patchEps = map[*Face]float64{}
-	n := len(lm.walks)
+	n := len(lm.Walks)
 	p := 0
 	for i := range n {
 		ring := 0.0
-		if lm.walks[i].IsCircular() {
-			ring = math.Max(lm.sideSag[i], lm.capSag[i])
+		if lm.Walks[i].IsCircular() {
+			ring = math.Max(lm.SideSag[i], lm.CapSag[i])
 		}
 		eps := proofbound.AbsSumUpper(sPhi, ring, twist[p], fr.seamGap[i], fr.seamGap[(i+1)%n])
 		bc.finishPatch(m, faces[p], eps, delta, levelDelta, axial, first[p], last[p], bump)
 		p++
-		if ni := (i + 1) % n; lm.joins != nil && lm.joins[ni].Arc {
-			eps := proofbound.AbsSumUpper(sPhi, lm.arcSag[ni], twist[p])
+		if ni := (i + 1) % n; lm.Joins != nil && lm.Joins[ni].Arc {
+			eps := proofbound.AbsSumUpper(sPhi, lm.ArcSag[ni], twist[p])
 			bc.finishPatch(m, faces[p], eps, delta, levelDelta, axial, first[p], last[p], bump)
 			p++
 		}
@@ -210,19 +211,19 @@ func (bc *brepBandChord) finishPatch(m *Mesh, face *Face, eps, delta, levelDelta
 }
 
 // arcMotion fills in the motion of a reflex connector's cap samples, which the
-// chamfer's motion proof leaves unbounded (capBlendCapMotion). A fillet band's
+// chamfer's motion proof leaves unbounded (capblend.CapMotion). A fillet band's
 // connector sample lies on the circle of radius r about the corner at the
 // station its azimuth names, within its station bound, plus the radius's unit
 // conversion and the contour displacement the connector's ends carry
 // (loop-fillet DF5: the fan's stations are the connector arc's azimuths at
 // every ring).
-func (fr *filletRings) arcMotion(lm *capBlendLoopMesh, faceDelta, radiusDelta float64) {
-	for i, start := range lm.capArcStart {
+func (fr *filletRings) arcMotion(lm *capblend.LoopMesh, faceDelta, radiusDelta float64) {
+	for i, start := range lm.CapArcStart {
 		if start < 0 {
 			continue
 		}
-		for j := start; j < start+lm.arcCount[i]; j++ {
-			lm.capMotion[j] = proofbound.AbsSumUpper(proofbound.WalkEndBoundAllow(lm.capBound[j]), radiusDelta, faceDelta)
+		for j := start; j < start+lm.ArcCount[i]; j++ {
+			lm.CapMotion[j] = proofbound.AbsSumUpper(proofbound.WalkEndBoundAllow(lm.CapBound[j]), radiusDelta, faceDelta)
 		}
 	}
 }
