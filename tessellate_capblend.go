@@ -188,7 +188,7 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 
 	// Trimmed side walls: the prism's own cells between the loop's two rings.
 	// A draft view has none: its band runs the whole sweep, and its one side
-	// ring is the near cap's rim (draftNearRing).
+	// ring is the near cap's rim (capblend.DraftNearRing).
 	if !cbp.Draft {
 		for li := range lms {
 			lm := &lms[li]
@@ -348,12 +348,16 @@ func capBlendVertices(budget *proofbound.WorkBudget, cbp capBlendPayload, pl pri
 	endLevel := cbp.CapBandLevel(cbp.Z1, -1)
 	for li := range lms {
 		lm := &lms[li]
-		sideRing := capBlendSideRing
+		var sideErr error
 		if cbp.Draft {
-			sideRing = draftNearRing
+			lm.sideLo, lm.sideHi, sideErr = capblend.DraftNearRing(
+				budget, lm.sidePts, lm.sideBound, lm.zLo, addVertex, &motion, proveVolume)
+		} else {
+			lm.sideLo, lm.sideHi, sideErr = capblend.SideRing(
+				budget, lm.sidePts, lm.sideBound, lm.zLo, lm.zHi, addVertex, &motion, proveVolume)
 		}
-		if err := sideRing(budget, lm, addVertex, &motion, proveVolume); err != nil {
-			return nil, nil, err
+		if sideErr != nil {
+			return nil, nil, sideErr
 		}
 		if len(lm.capPts) == 0 {
 			continue
@@ -381,35 +385,6 @@ func capBlendVertices(budget *proofbound.WorkBudget, cbp capBlendPayload, pl pri
 		}
 	}
 	return store, motion, nil
-}
-
-// capBlendVertexWriter places one plane-local point at level z beside its
-// plane-local bound and returns the new vertex with the lift's rounding
-// (capBlendVertices' addVertex).
-type capBlendVertexWriter func(p planePoint, z, plane float64) (int, float64)
-
-// capBlendSideRing writes one loop's side ring twice, at zLo and at zHi, the
-// two rims of its trimmed side wall, and appends each vertex's motion when the
-// volume proof is built.
-func capBlendSideRing(budget *proofbound.WorkBudget, lm *capBlendLoopMesh, addVertex capBlendVertexWriter, motion *[]float64, proveVolume bool) error {
-	lm.sideLo = make([]int, len(lm.sidePts))
-	lm.sideHi = make([]int, len(lm.sidePts))
-	for j, p := range lm.sidePts {
-		if err := budget.Step(); err != nil {
-			return err
-		}
-		plane := proofbound.WalkEndBoundAllow(lm.sideBound[j])
-		var round float64
-		lm.sideLo[j], round = addVertex(p, lm.zLo.Value, plane)
-		if proveVolume {
-			*motion = append(*motion, proofbound.AbsSumUpper(plane, round, lm.zLo.Bound))
-		}
-		lm.sideHi[j], round = addVertex(p, lm.zHi.Value, plane)
-		if proveVolume {
-			*motion = append(*motion, proofbound.AbsSumUpper(plane, round, lm.zHi.Bound))
-		}
-	}
-	return nil
 }
 
 // capBlendCapMotion reads the loop's numeric record through internal/tessellation.

@@ -3,8 +3,6 @@ package decad
 import (
 	"context"
 	"fmt"
-
-	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
 // This file is docs/draft-design.md Table DD row DD1: a draft body's
@@ -15,7 +13,7 @@ import (
 // §7) with four differences, each stated where it applies:
 //
 //   - there is no trimmed side wall, and the band's side ring is the near
-//     cap's rim, written once (draftNearRing) and read by both the near cap
+//     cap's rim, written once (capblend.DraftNearRing) and read by both the near cap
 //     and the wall band;
 //   - a wall patch carries the prism's side(i, j) role, and the band has no
 //     apex patch, because every reflex line-line corner is a miter
@@ -41,26 +39,4 @@ func tessellateDraft(ctx context.Context, b *Body, dp draftPayload, chord float6
 		return nil, fmt.Errorf(`%w: the tapered extrude's payload states no wall band geometry`, ErrDegenerate)
 	}
 	return tessellateCapBlend(ctx, b, dp.Band(), chord, verify)
-}
-
-// draftNearRing writes one loop's side ring once, at the near level, as the
-// near cap's rim. The near cap and the wall band read the same vertices, so
-// sideLo and sideHi are one slice. Each vertex's motion is its station bound,
-// its lift rounding and the near level's own displacement, as a side ring's is
-// (capBlendSideRing).
-func draftNearRing(budget *proofbound.WorkBudget, lm *capBlendLoopMesh, addVertex capBlendVertexWriter, motion *[]float64, proveVolume bool) error {
-	lm.sideLo = make([]int, len(lm.sidePts))
-	for j, p := range lm.sidePts {
-		if err := budget.Step(); err != nil {
-			return err
-		}
-		plane := proofbound.WalkEndBoundAllow(lm.sideBound[j])
-		var round float64
-		lm.sideLo[j], round = addVertex(p, lm.zLo.Value, plane)
-		if proveVolume {
-			*motion = append(*motion, proofbound.AbsSumUpper(plane, round, lm.zLo.Bound))
-		}
-	}
-	lm.sideHi = lm.sideLo
-	return nil
 }
