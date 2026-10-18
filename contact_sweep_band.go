@@ -118,14 +118,6 @@ func (s *planarSupport) column(f *big.Rat, poll func() error) (*big.Rat, bool, e
 	return planar.PlanarColumnClear(&solid, s.Normal, s.Origin, lo, hi, poll)
 }
 
-// gridHorizon returns the largest fraction m/2^depth in (0, 1] at which holds
-// is true, the grid being the sweep's own dyadic search grid capped at 52
-// levels so every fraction is a float. holds must be monotone: true at a
-// fraction implies true at every smaller one.
-func (r *rotationalPairSweep) gridHorizon(holds func(f *big.Rat) (bool, error)) (*big.Rat, bool, error) {
-	return planarsweep.GridHorizon(r.resolution, r.a.path.Duration, holds)
-}
-
 // planarDepartureProof is §10.2's certificate: on (0, until] every M vertex
 // height stays positive, so the pair is strictly separated there.
 type planarDepartureProof struct {
@@ -197,7 +189,7 @@ func (r *rotationalPairSweep) planarDepartureFraction(ctx context.Context) (*big
 			_, open, err := support.column(f, budget.Step)
 			return open, err
 		}
-		until, ok, err := r.gridHorizon(holds)
+		until, ok, err := planarsweep.GridHorizon(r.resolution, r.a.path.Duration, holds)
 		if err != nil {
 			return nil, false, err
 		}
@@ -307,7 +299,7 @@ func (r *rotationalPairSweep) planarBand(ctx context.Context) (*SweepContactTrac
 			return planarsweep.FaceContains(&face.SupportFace, spans, support.pathS.path.Delta,
 				support.Contact, support.Lifted, f, depth, budget.Step)
 		}
-		end, ok, err := r.gridHorizon(holds)
+		end, ok, err := planarsweep.GridHorizon(r.resolution, r.a.path.Duration, holds)
 		if err != nil {
 			return nil, false, err
 		}
