@@ -230,3 +230,36 @@ func PointPlaneSlabCapLayout(sides [][3]int, triCount, upperOffset int, hasApex 
 	}
 	return layout, true
 }
+
+// LoftFacesCapLayout is assembleLoftFaces' wall and cap structure: 2n walls
+// per band, then start/end cap triangles interleaved. The start ring is
+// vertices [0, n), the end ring [bands*n, (bands+1)*n), and the rings between
+// them are Interior. sides are the source fan's side triangles.
+func LoftFacesCapLayout(sides [][3]int, bands, triCount int) (LoftCapLayout, bool) {
+	ring, ok := FanRing(sides)
+	if !ok || bands < 1 {
+		return LoftCapLayout{}, false
+	}
+	n := len(sides)
+	walls := 2 * n * bands
+	if triCount < walls || (triCount-walls)%2 != 0 {
+		return LoftCapLayout{}, false
+	}
+	shift := func(offset int) []int {
+		out := make([]int, len(ring))
+		for i, r := range ring {
+			out[i] = offset + r
+		}
+		return out
+	}
+	layout := LoftCapLayout{Walls: walls,
+		Loops0: [][]int{shift(0)}, Loops1: [][]int{shift(bands * n)}}
+	for t := walls; t < triCount; t += 2 {
+		layout.Cap0 = append(layout.Cap0, t)
+		layout.Cap1 = append(layout.Cap1, t+1)
+	}
+	for v := n; v < bands*n; v++ {
+		layout.Interior = append(layout.Interior, v)
+	}
+	return layout, true
+}
