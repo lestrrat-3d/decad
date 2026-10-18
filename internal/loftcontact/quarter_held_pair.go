@@ -110,9 +110,10 @@ func quarterPairPrism(m loftHullMath, prism *topo.Body) (float64, float64, bool,
 		if edge[0].V != edge[1].V {
 			continue
 		}
-		if edge[0].V == corners[0].V {
+		switch edge[0].V {
+		case corners[0].V:
 			y1 = edge[0].V
-		} else if edge[0].V == corners[2].V {
+		case corners[2].V:
 			y3 = edge[0].V
 		}
 	}
