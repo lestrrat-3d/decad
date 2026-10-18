@@ -159,26 +159,31 @@ func TestVolumeFromAuditBoundedRefusesArithmeticAndWork(t *testing.T) {
 		proofbound.NewWallWorkBudget(5788), verts, tris)
 	require.NoError(t, err)
 	require.True(t, admitted)
-	_, _, _, admitted, err = facetproof.VolumeFromAuditBounded(
+	var volumeRat *big.Rat
+	_, _, volumeRat, admitted, err = facetproof.VolumeFromAuditBounded(
 		proofbound.NewWallWorkBudget(1), audit, 0)
 	require.NoError(t, err)
 	require.False(t, admitted)
-	_, _, _, admitted, err = facetproof.VolumeFromAuditBounded(
+	require.Nil(t, volumeRat)
+	_, _, volumeRat, admitted, err = facetproof.VolumeFromAuditBounded(
 		proofbound.NewWallWorkBudget(256), audit, 0)
 	require.NoError(t, err)
 	require.True(t, admitted)
+	require.NotNil(t, volumeRat)
 
 	tooLarge := &facetproof.MeshAudit{CompVol: []*big.Rat{
 		new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), 4096)),
 	}}
-	_, _, _, admitted, err = facetproof.VolumeFromAuditBounded(
+	_, _, volumeRat, admitted, err = facetproof.VolumeFromAuditBounded(
 		proofbound.NewWallWorkBudget(256), tooLarge, 0)
 	require.NoError(t, err)
 	require.False(t, admitted)
-	_, _, _, admitted, err = facetproof.VolumeFromAuditBounded(
+	require.Nil(t, volumeRat)
+	_, _, volumeRat, admitted, err = facetproof.VolumeFromAuditBounded(
 		proofbound.NewWallWorkBudget(256), audit, math.Inf(1))
 	require.NoError(t, err)
 	require.False(t, admitted)
+	require.Nil(t, volumeRat)
 
 	ctx, cancel := context.WithCancel(t.Context())
 	steps := 0
@@ -192,9 +197,10 @@ func TestVolumeFromAuditBoundedRefusesArithmeticAndWork(t *testing.T) {
 		},
 		ErrFn: ctx.Err,
 	}
-	_, _, _, admitted, err = facetproof.VolumeFromAuditBounded(budget, audit, 0)
+	_, _, volumeRat, admitted, err = facetproof.VolumeFromAuditBounded(budget, audit, 0)
 	require.ErrorIs(t, err, context.Canceled)
 	require.False(t, admitted)
+	require.Nil(t, volumeRat)
 	require.Equal(t, 30, steps)
 }
 
@@ -202,9 +208,10 @@ func TestVolumeFromAuditBoundedRequiresOperationAwareCancellation(t *testing.T) 
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	budget := proofbound.NewWallWorkBudgetWithOperation(0, proofbound.NewWorkBudget(ctx))
-	_, _, _, admitted, err := facetproof.VolumeFromAuditBounded(budget, nil, 0)
+	_, _, volumeRat, admitted, err := facetproof.VolumeFromAuditBounded(budget, nil, 0)
 	require.ErrorIs(t, err, context.Canceled)
 	require.False(t, admitted)
+	require.Nil(t, volumeRat)
 
 	ctx, cancel = context.WithCancel(t.Context())
 	wall := proofbound.NewWallWorkBudget(29)
@@ -225,8 +232,9 @@ func TestVolumeFromAuditBoundedRequiresOperationAwareCancellation(t *testing.T) 
 		},
 	}
 	audit := &facetproof.MeshAudit{CompVol: []*big.Rat{big.NewRat(1, 1)}}
-	_, _, _, admitted, err = facetproof.VolumeFromAuditBounded(budget, audit, 0)
+	_, _, volumeRat, admitted, err = facetproof.VolumeFromAuditBounded(budget, audit, 0)
 	require.ErrorIs(t, err, context.Canceled)
 	require.False(t, admitted)
+	require.Nil(t, volumeRat)
 	require.Equal(t, 30, steps)
 }
