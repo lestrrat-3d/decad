@@ -163,6 +163,16 @@ func loftVolumeHullBound(budget *proofbound.WorkBudget, points [6][3]*big.Rat) (
 			}
 		}
 	}
+	stationary, err := m.zeroMotion(points)
+	if err != nil {
+		return nil, false, err
+	}
+	if stationary {
+		if err := budget.Err(); err != nil {
+			return nil, false, err
+		}
+		return big.NewRat(0, 1), true, nil
+	}
 	volume, err := m.volume(points)
 	if errors.Is(err, errLoftHullSize) {
 		return nil, false, nil
@@ -174,6 +184,27 @@ func loftVolumeHullBound(budget *proofbound.WorkBudget, points [6][3]*big.Rat) (
 		return nil, false, err
 	}
 	return volume, true, nil
+}
+
+// An unchanged triangle has at most three distinct endpoint positions, so its
+// convex hull has zero volume. If a comparison would exceed the rational limit,
+// the general hull path decides whether the input can be admitted.
+func (m loftHullMath) zeroMotion(points [6][3]*big.Rat) (bool, error) {
+	for vertex := range 3 {
+		for axis := range 3 {
+			cmp, err := m.cmp(points[vertex][axis], points[vertex+3][axis])
+			if errors.Is(err, errLoftHullSize) {
+				return false, nil
+			}
+			if err != nil {
+				return false, err
+			}
+			if cmp != 0 {
+				return false, nil
+			}
+		}
+	}
+	return true, nil
 }
 
 func (m loftHullMath) volume(points [6][3]*big.Rat) (*big.Rat, error) {
