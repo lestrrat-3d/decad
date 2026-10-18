@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"context"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -94,6 +95,56 @@ func TestLoftCurvedSourceCapsRealIndependentWedgeRefusesWithoutBoundaryProof(t *
 		}
 		require.Equal(t, 1, arcsWithWalls)
 	}
+	ordered, certifiedOrder, orderErr := certifyLoftCapSourceOrder(t.Context(),
+		proofbound.NewWallWorkBudgetWithOperation(4096, proofbound.NewWorkBudget(t.Context())),
+		certificate)
+	require.NoError(t, orderErr)
+	require.True(t, certifiedOrder)
+	require.Positive(t, ordered.visits)
+	for cap := range 2 {
+		require.NotEmpty(t, ordered.caps[cap])
+		var sharedCells, cutArcs int
+		for _, cell := range ordered.caps[cap] {
+			require.NotEmpty(t, cell.edges)
+			if cell.prism && cell.loft {
+				sharedCells++
+			}
+			for _, edge := range cell.edges {
+				require.True(t, edge.span.body == prism || edge.span.body == loft)
+				require.Less(t, edge.tStart, edge.tEnd)
+				require.Equal(t, edge.span.body.n.Origin.Producer,
+					edge.span.capFace.Producer)
+				if _, arc := edge.span.curve.(sectionrecord.ArcSeg); arc && edge.partial {
+					require.True(t, edge.span.body == loft)
+					cutArcs++
+				}
+			}
+		}
+		require.Positive(t, sharedCells)
+		require.Positive(t, cutArcs)
+	}
+	_, certifiedOrder, orderErr = certifyLoftCapSourceOrder(t.Context(),
+		proofbound.NewWallWorkBudgetWithOperation(1, proofbound.NewWorkBudget(t.Context())),
+		certificate)
+	require.ErrorIs(t, orderErr, proofbound.ErrWallWorkBudget)
+	require.False(t, certifiedOrder)
+	canceled, cancel := context.WithCancel(t.Context())
+	steps := 0
+	operation := &proofbound.WorkBudget{
+		StepFn: func() error {
+			steps++
+			if steps == 30 {
+				cancel()
+			}
+			return canceled.Err()
+		},
+		ErrFn: canceled.Err,
+	}
+	_, certifiedOrder, orderErr = certifyLoftCapSourceOrder(canceled,
+		proofbound.NewWallWorkBudgetWithOperation(4096, operation), certificate)
+	require.ErrorIs(t, orderErr, context.Canceled)
+	require.False(t, certifiedOrder)
+	require.Equal(t, 30, steps)
 	for _, tc := range []struct {
 		name          string
 		first, second *Body

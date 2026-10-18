@@ -171,9 +171,16 @@ func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 	}
 	if !ok {
 		if !reportSeamSize {
-			// Source spans alone do not prove curved cap ownership or output
-			// coverage. Keep this private lane at a safe refusal for now.
-			_, _, err = certifyLoftSourceSpanCaps(ctx, budget, prismBody, loftBody)
+			// Source spans and ordered cap cells do not prove output coverage
+			// or occupied volume. Keep this private lane at a safe refusal.
+			source, certified, sourceErr := certifyLoftSourceSpanCaps(
+				ctx, budget, prismBody, loftBody)
+			if sourceErr != nil {
+				return no, false, sourceErr
+			}
+			if certified {
+				_, _, err = certifyLoftCapSourceOrder(ctx, budget, source)
+			}
 		}
 		return no, false, err
 	}
