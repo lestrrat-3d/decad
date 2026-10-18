@@ -38,6 +38,7 @@ first.
   examples, test kits, tooling and CI.
 - `docs/layout/internal-core.md`: internal packages for arithmetic, records,
   geometry and mesh construction.
+- `docs/layout/internal-revolve-sweep.md`: Revolve, Sweep, and coil internal packages.
 - `docs/layout/internal-checks.md`: internal packages for bounds, surveys,
   sweeps and clearance.
 
