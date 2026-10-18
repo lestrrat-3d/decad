@@ -38,8 +38,7 @@ The rules for rows live in `docs/layout.md`.
 | `shell_blind_pocket.go` | Admits and records the exact two-slab rectangular blind-pocket shell; `breprecord` builds and measures it. See modify-general §3.1b. |
 | `shell_counterbore.go` | Admits and records the exact two-level coaxial counterbore shell; `breprecord` builds and measures it. See modify-general §3.1e. |
 | `brep_modify.go` / `brep_modify_prism.go` | Brep and stacked modify receivers: dispatch, SB1/SB2, route P. See brep-modify. |
-| `brep_shell.go` / `brep_shell_curved.go` | Route S: through-cut shell and one circular tool-wall opening. See modify-general §3. |
-| `brep_shell_rim.go` | Route S rims. See modify-general §3.3. |
+| `brep_shell.go` / `brep_shell_curved.go` | Route S: live face selection, stage order, result commit, and one circular tool-wall opening. `internal/throughshell/` owns its record geometry. See modify-general §3. |
 | `brep_modify_edge.go` | Route E: public edge and reference-face checks, ordered gate dispatch and result commit. `internal/breprecord/edge_route.go` reads, restates and rewrites the record. See brep-modify §5. |
 | `brep_modify_loop.go` / `brep_loop_band.go` | Route L/V public selection and asymmetric reference mapping; `breploop` proves the record rewrite, and `breprecord` builds the bands and mass. See modify-general §4. |
 | `brep_modify_chain.go` | Route L: selected cap-edge chains and partial-loop record adapters over `internal/offset2d/` and `internal/capband/`. |

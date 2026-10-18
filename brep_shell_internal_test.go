@@ -11,6 +11,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/throughshell"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -276,29 +277,32 @@ func TestBrepShellThroughCutReadsP1(t *testing.T) {
 	embeds, err := breprecord.Embeds(bp.Faces)
 	require.NoError(t, err)
 	for k := range 2 {
-		_, _, ok, err := readThroughCut(t.Context(), bp, embeds, k)
+		_, _, ok, err := throughshell.ReadCut(t.Context(), bp, embeds, k)
 		require.NoError(t, err)
 		require.False(t, ok, "axis %d", k)
 	}
-	tc, reason, ok, err := readThroughCut(t.Context(), bp, embeds, 2)
+	tc, reason, ok, err := throughshell.ReadCut(t.Context(), bp, embeds, 2)
 	require.NoError(t, err)
 	require.True(t, ok, reason)
-	require.Len(t, tc.tools, 1)
-	tool := tc.tools[0]
-	require.Equal(t, 1, tool.j)
-	require.Equal(t, [2]float64{0, 20}, [2]float64{tool.lo, tool.hi})
-	require.Len(t, tool.walls, 1)
-	require.Equal(t, throughTool, tc.kinds[tool.walls[0]])
-	require.Len(t, tool.prism.Profile.Outer.Segments, 1)
-	circle, ok := tool.prism.Profile.Outer.Segments[0].(circleSeg)
+	require.Len(t, tc.Tools, 1)
+	tool := tc.Tools[0]
+	require.Equal(t, 1, tool.Axis)
+	require.Equal(t, [2]float64{0, 20}, [2]float64{tool.Lo, tool.Hi})
+	require.Len(t, tool.Walls, 1)
+	require.Equal(t, brepgeom.ThroughTool, tc.Kinds[tool.Walls[0]])
+	require.Len(t, tool.Prism.Profile.Outer.Segments, 1)
+	circle, ok := tool.Prism.Profile.Outer.Segments[0].(circleSeg)
 	require.True(t, ok)
 	require.True(t, circle.CCW, "the tool's section is an outer loop")
 	require.Equal(t, 3.0, circle.Radius.Base())
-	counts := map[throughFace]int{}
-	for _, kind := range tc.kinds {
+	counts := map[brepgeom.ThroughFace]int{}
+	for _, kind := range tc.Kinds {
 		counts[kind]++
 	}
-	require.Equal(t, map[throughFace]int{throughCap: 2, throughWall: 2, throughPierced: 2, throughTool: 1}, counts)
+	require.Equal(t, map[brepgeom.ThroughFace]int{
+		brepgeom.ThroughCap: 2, brepgeom.ThroughWall: 2,
+		brepgeom.ThroughPierced: 2, brepgeom.ThroughTool: 1,
+	}, counts)
 }
 
 // TestBrepShellThroughCutP1 pins §9's first S-1 fixture: P1 shelled at 2 mm
@@ -308,7 +312,7 @@ func TestBrepShellThroughCutReadsP1(t *testing.T) {
 // hole is the eroded rectangle, the cavity's hole wall is a cylinder of
 // radius 5 along y over y ∈ [2, 18], Verify reads the body Sound, and the
 // mesh's occupied-volume proof covers the same figure. Shown to fail with
-// throughCutRims keeping the cavity face in the removed plane (an edge then
+// throughshell.Cut.Rims keeping the cavity face in the removed plane (an edge then
 // bounded three face uses and the build refused) and with the cavity faces
 // left unreversed (the volume read the receiver's plus the cavity's).
 func TestBrepShellThroughCutP1(t *testing.T) {
@@ -355,7 +359,7 @@ func TestBrepShellThroughCutP1(t *testing.T) {
 // keeps both levels, so it grows by the bottom slab 36·16·2 the dilated hole
 // does not reach, and the volume is 5632 + 220π − 1152 = 4480 + 220π, with a
 // rim at each level. A translated P1 shells to the same volume. Shown to
-// fail with throughCut.removedFaces reading the bottom as kept (the floor stayed, and the
+// fail with removedThroughFaces reading the bottom as kept (the floor stayed, and the
 // volume read 5632 + 220π) and with the rim assembled at the top alone (an
 // edge then bounded one face use and the build refused).
 func TestBrepShellThroughCutBothCaps(t *testing.T) {
@@ -572,7 +576,7 @@ func shellInchClosedForm() (*big.Rat, *big.Rat) {
 // vertex of the cavity's wall at x = 40 − t, on y = 3 and y = 17, encloses
 // its exact rational position, and the volume encloses the exact closed
 // form; P8 placed 10⁶ mm along x encloses it too. Shown to fail with the
-// cavity faces' offset displacement deleted (throughCut.cavity's delta set to
+// cavity faces' offset displacement deleted (throughshell.Cut.Cavity's delta set to
 // zero): the floor vertices' bounds then missed their exact positions. The
 // volume does not see that leg: its own rounding bound exceeds the cavity's
 // displacement charge by four orders of magnitude.
@@ -636,7 +640,7 @@ func TestBrepShellThroughCutDisplacedOffset(t *testing.T) {
 //
 // Shown to fail with requireStripsClear's call deleted (the U fixture then
 // refused with class B's SG6 text instead of TC7's), with
-// readThroughCutAnyAxis naming axis 0's reason always (P3 and P6c then
+// throughshell.ReadAnyAxis naming axis 0's reason always (P3 and P6c then
 // named no face), with removedFaces' straight-wall test deleted (the fillet
 // cylinder then refused with SO1's text, its ends meeting the walls
 // smoothly), and with openingThroughSection's reflex-end test deleted (P7's
@@ -727,7 +731,7 @@ func TestBrepShellThroughCutRefusals(t *testing.T) {
 // box's record: a cavity whose top face lost its hole leaves the removed
 // face's hole with no partner, and one holding a loop that is no hole of the
 // eroded section partners nothing. Both refuse rather than build a rim. Shown
-// to fail with throughCutRims' partner count check deleted (the first case
+// to fail with throughshell.Cut.Rims' partner count check deleted (the first case
 // then assembled a rim with no band) and with the hole match taking the
 // first hole for any loop (the second case then refused with another SG7
 // reason).
@@ -737,21 +741,21 @@ func TestBrepShellThroughCutRimFalsifier(t *testing.T) {
 	bp := body.n.Payload.(brepPayload)
 	embeds, err := breprecord.Embeds(bp.Faces)
 	require.NoError(t, err)
-	tc, reason, ok, err := readThroughCut(t.Context(), bp, embeds, 2)
+	tc, reason, ok, err := throughshell.ReadCut(t.Context(), bp, embeds, 2)
 	require.NoError(t, err)
 	require.True(t, ok, reason)
 	budget := proofbound.NewWorkBudget(t.Context())
-	eroded, err := offsetProfile(budget, tc.caps.Section, 1, 2)
+	eroded, err := offsetProfile(budget, tc.Caps.Section, 1, 2)
 	require.NoError(t, err)
-	dilated := make([]profileRecord, len(tc.tools))
-	for i, tool := range tc.tools {
-		dilated[i], err = offsetProfile(budget, tool.prism.Profile, -1, 2)
+	dilated := make([]profileRecord, len(tc.Tools))
+	for i, tool := range tc.Tools {
+		dilated[i], err = offsetProfile(budget, tool.Prism.Profile, -1, 2)
 		require.NoError(t, err)
 	}
-	topOnly := throughRemoval{Top: true}
-	cavity, err := tc.cavity(t.Context(), bp, eroded, dilated, topOnly, brepShellCall{tmm: 2}, 0)
+	topOnly := throughshell.Removal{Top: true}
+	cavity, err := tc.Cavity(t.Context(), bp, eroded, dilated, topOnly, throughshell.ShellInput{HeldThickness: 2, Tolerance: shellTol}, 0)
 	require.NoError(t, err)
-	_, err = throughCutRims(t.Context(), budget, bp, tc, cavity, eroded, dilated, topOnly)
+	_, err = tc.Rims(t.Context(), budget, bp, cavity, eroded, dilated, topOnly)
 	require.NoError(t, err, "the undoctored cavity assembles")
 
 	doctor := func(edit func(*profileRecord)) brepPayload {
@@ -767,11 +771,11 @@ func TestBrepShellThroughCutRimFalsifier(t *testing.T) {
 		}
 		return out
 	}
-	_, err = throughCutRims(t.Context(), budget, bp, tc, doctor(func(r *profileRecord) { r.Holes = nil }), eroded, dilated, topOnly)
+	_, err = tc.Rims(t.Context(), budget, bp, doctor(func(r *profileRecord) { r.Holes = nil }), eroded, dilated, topOnly)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "has no cavity hole to partner")
 	require.ErrorContains(t, err, "modify-general SG7")
-	_, err = throughCutRims(t.Context(), budget, bp, tc, doctor(func(r *profileRecord) {
+	_, err = tc.Rims(t.Context(), budget, bp, doctor(func(r *profileRecord) {
 		r.Holes = append(r.Holes, loopRecord{Segments: []curveSegment{circleSeg{Center: planePoint{U: 30, V: 10}, Radius: units.Millimeters(1), TEnd: 1}}})
 	}), eroded, dilated, topOnly)
 	require.ErrorIs(t, err, ErrUnsupported)
@@ -1002,29 +1006,29 @@ func TestBrepShellThroughCutWallRimCharge(t *testing.T) {
 	bp := s1.n.Payload.(brepPayload)
 	embeds, err := breprecord.Embeds(bp.Faces)
 	require.NoError(t, err)
-	tc, reason, ok, err := readThroughCut(t.Context(), bp, embeds, 2)
+	tc, reason, ok, err := throughshell.ReadCut(t.Context(), bp, embeds, 2)
 	require.NoError(t, err)
 	require.True(t, ok, reason)
 	removed, err := Faces(shellFacePred(t, s1, shellY.Scale(-1), 0)).Or(Facing(shellUp)).Exactly(2).SelectFaces(s1)
 	require.NoError(t, err)
-	rm, err := tc.removedFaces(s1, bp, removed)
+	rm, err := removedThroughFaces(tc, s1, bp, removed)
 	require.NoError(t, err)
 	require.True(t, rm.Top)
 	require.Len(t, rm.Walls, 1)
 
 	budget := proofbound.NewWorkBudget(t.Context())
 	call := brepShellCall{t: units.Millimeters(2), tmm: 2, tDelta: 1e-9}
-	sec, err := tc.openingThroughSection(budget, rm, call)
+	sec, err := tc.OpeningSection(budget, rm, throughshell.ShellInput{Thickness: call.t, HeldThickness: call.tmm, ThicknessDelta: call.tDelta, Tolerance: shellTol})
 	require.NoError(t, err)
-	dilated := make([]profileRecord, len(tc.tools))
-	for i, tool := range tc.tools {
-		dilated[i], err = offsetProfile(budget, tool.prism.Profile, -1, 2)
+	dilated := make([]profileRecord, len(tc.Tools))
+	for i, tool := range tc.Tools {
+		dilated[i], err = offsetProfile(budget, tool.Prism.Profile, -1, 2)
 		require.NoError(t, err)
 	}
-	cavity, err := tc.cavity(t.Context(), bp, sec.eroded, dilated, rm, call, 0)
+	cavity, err := tc.Cavity(t.Context(), bp, sec.Eroded, dilated, rm, throughshell.ShellInput{Thickness: call.t, HeldThickness: call.tmm, ThicknessDelta: call.tDelta, Tolerance: shellTol}, 0)
 	require.NoError(t, err)
 	require.Zero(t, cavity.SectionDelta())
-	out, err := throughCutRims(t.Context(), budget, bp, tc, cavity, sec.eroded, dilated, rm)
+	out, err := tc.Rims(t.Context(), budget, bp, cavity, sec.Eroded, dilated, rm)
 	require.NoError(t, err)
 	n := len(out.Faces)
 	require.Zero(t, out.Faces[n-3].Delta, "the cap's rim")
