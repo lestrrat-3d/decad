@@ -221,6 +221,88 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 				report.Status, len(report.Bodies))
 		})
 	}
+	t.Run("trapezoid_524", func(t *testing.T) {
+		for _, reverse := range []bool{false, true} {
+			name := loftOperandPrismFirst
+			if reverse {
+				name = loftOperandLoftFirst
+			}
+			t.Run(name, func(t *testing.T) {
+				world := sketch.NewWorld()
+				base := world.XY()
+				upper, err := world.CreateOffsetPlane(base, 4)
+				require.NoError(t, err)
+				var sections [2]*sketch.Sketch
+				var profiles [2]*sketch.Profile
+				for cap, corners := range [2][4][2]float64{
+					{{8, 4}, {12, 4}, {13, 6}, {8, 6}},
+					{{8, 4}, {13, 4}, {14, 6}, {8, 6}},
+				} {
+					plane := base
+					if cap == 1 {
+						plane = upper
+					}
+					s, createErr := world.CreateSketch(plane)
+					require.NoError(t, createErr)
+					var points [4]*sketch.Point
+					for i, xy := range corners {
+						points[i] = s.CreatePoint(xy[0], xy[1])
+						s.Fix(points[i])
+					}
+					for i := range points {
+						s.CreateLine(points[i], points[(i+1)%len(points)])
+					}
+					_, createErr = s.Solve(t.Context())
+					require.NoError(t, createErr)
+					found := s.Profiles()
+					require.Equal(t, 1, len(found))
+					require.True(t, found[0].Valid)
+					sections[cap], profiles[cap] = s, found[0]
+				}
+				d := New()
+				prismSketch, err := world.CreateSketch(base)
+				require.NoError(t, err)
+				rect := prismSketch.CreateRectangle(0, 0, 10, 10)
+				prismSketch.Fix(rect.A)
+				_, err = prismSketch.Solve(t.Context())
+				require.NoError(t, err)
+				prismProfiles := prismSketch.Profiles()
+				require.Equal(t, 1, len(prismProfiles))
+				prism, err := Extrude(t.Context(), d, prismSketch, prismProfiles[0],
+					Distance{D: units.Millimeters(5), Dir: Along})
+				require.NoError(t, err)
+				loft, err := Loft(t.Context(), d, sections[0], profiles[0], sections[1], profiles[1])
+				require.NoError(t, err)
+				first, second := prism, loft
+				if reverse {
+					first, second = loft, prism
+				}
+				candidate, admitted, err := tryLoftContactDirectShellUnion(t.Context(),
+					meshbool.OpUnion, d, d.nextProducerID(), first, second)
+				require.NoError(t, err)
+				require.True(t, admitted, "the public trapezoid must reach the direct shell")
+				require.NotNil(t, candidate)
+				result, err := Union(t.Context(), first, second)
+				require.NoError(t, err)
+				require.True(t, result.IsSolid())
+				volume, err := result.Volume()
+				require.NoError(t, err)
+				require.LessOrEqual(t, math.Abs(volume.Value.Base()-524), volume.Bound.Base())
+				for _, role := range []string{"side(0,0,0)", "side(0,0,1)"} {
+					ref := featureRefOf(provenance.Ref{Producer: loft.n.Origin.Producer, Role: role})
+					faces, selectErr := Faces(FaceCreatedBy(ref)).SelectFaces(result)
+					require.NoError(t, selectErr)
+					require.Greater(t, len(faces), 0, "missing Loft source role %q", role)
+				}
+				for _, edge := range result.Edges() {
+					require.Equal(t, 2, len(edge.Faces()))
+				}
+				report, err := d.Verify(t.Context())
+				require.NoError(t, err)
+				require.True(t, report.Passed(), "status=%v bodies=%d", report.Status, len(report.Bodies))
+			})
+		}
+	})
 }
 
 func TestLoftContactDirectShellUnionRealVaryingTab(t *testing.T) {
