@@ -3,13 +3,10 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
 
-	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/patternassembly"
 	"github.com/lestrrat-3d/decad/internal/patternrecord"
-	"github.com/lestrrat-3d/decad/internal/prismcells"
-	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -132,7 +129,7 @@ func (b *Body) patternReceiver(ctx context.Context, spec PatternSpec) (*Document
 	if err := ctx.Err(); err != nil {
 		return nil, resolvedPattern{}, false, err
 	}
-	keeping, err := rp.keepsFrame(proofbound.NewWorkBudget(ctx), b.n.Payload)
+	keeping, err := patternassembly.KeepsFrame(proofbound.NewWorkBudget(ctx), rp.Spec, b.n.Payload)
 	if err != nil {
 		return nil, resolvedPattern{}, false, err
 	}
@@ -151,7 +148,18 @@ func (rp resolvedPattern) buildInstances(ctx context.Context, d *Document, base 
 		var body *Body
 		var err error
 		if keeping {
-			body, err = rp.frameKeepingInstance(ctx, d, ref, payload, i)
+			var node *topo.Body
+			var fallback bool
+			node, fallback, err = patternassembly.FrameKeepingInstance(ctx,
+				envOf(documentNode(d), ref), rp.Spec, payload, i)
+			if err != nil {
+				return nil, err
+			}
+			if fallback {
+				body, err = rp.placedInstance(ctx, d, ref, payload, i)
+			} else {
+				body, err = bodyResult(node, nil)
+			}
 		} else {
 			body, err = rp.placedInstance(ctx, d, ref, payload, i)
 		}
@@ -180,128 +188,6 @@ func (rp resolvedPattern) placedInstance(ctx context.Context, d *Document, ref p
 	return placePayload(ctx, payload, d, ref, composed)
 }
 
-// patternFrame is the frame and placement a frame-keeping instance shares
-// with its receiver, and the regions it moves.
-func patternFrameOf(payload topo.Payload) (r3.Frame, r3.Transform, []profileRecord, bool) {
-	switch p := payload.(type) {
-	case prismPayload:
-		return p.Frame, p.Xform, []profileRecord{p.Profile}, true
-	case stackedPrismPayload:
-		regions := make([]profileRecord, 0, len(p.Slabs))
-		for _, slab := range p.Slabs {
-			regions = append(regions, slab.Regions...)
-		}
-		return p.Frame, p.Xform, regions, true
-	default:
-		return r3.Frame{}, r3.Transform{}, nil, false
-	}
-}
-
-// keepsFrame decides §4.3's frame-keeping arm: a prism or stacked receiver
-// whose every segment is a line, arc or circle with no trimmed arc or circle,
-// under a co-directional motion. Co-direction is read on the composed world
-// normal xform.ApplyDir(frame.N()), as prism-boolean G3 reads it: a linear
-// Dir whose exact rational dot product with that normal is zero, or a
-// circular Axis bit-identical to ±that normal.
-func (rp resolvedPattern) keepsFrame(budget *proofbound.WorkBudget, payload topo.Payload) (bool, error) {
-	frame, xform, regions, ok := patternFrameOf(payload)
-	if !ok {
-		return false, nil
-	}
-	for _, region := range regions {
-		for _, loop := range append([]loopRecord{region.Outer}, region.Holes...) {
-			for _, seg := range loop.Segments {
-				switch seg.(type) {
-				case lineSeg, arcSeg, circleSeg:
-				default:
-					return false, nil
-				}
-			}
-		}
-		trimmed, err := prismcells.ProfileHasTrimmedCircularSource(budget, region.Outer, region.Holes)
-		if err != nil {
-			return false, err
-		}
-		if trimmed {
-			return false, nil
-		}
-	}
-	n := xform.ApplyDir(frame.N())
-	if rp.Circular {
-		return rp.Axis == n || rp.Axis == n.Scale(-1), nil
-	}
-	return patternrecord.Perpendicular(rp.Dir, n), nil
-}
-
-// pointMotion is the plane-local mapping used by the root payload builders.
-type pointMotion = patternrecord.PointMotion
-
-func moveRegion(budget *proofbound.WorkBudget, region profileRecord, mv pointMotion) (profileRecord, float64, error) {
-	moved, delta, err := patternrecord.MoveRegion(budget,
-		patternrecord.Region{Outer: region.Outer, Holes: region.Holes}, mv)
-	if err != nil {
-		return profileRecord{}, 0, err
-	}
-	return profileRecord{Outer: moved.Outer, Holes: moved.Holes}, delta, nil
-}
-
-// frameKeepingInstance builds instance i of the frame-keeping arm: the
-// receiver's own frame, placement, interval and axial displacements over its
-// record moved in the plane, charged δ_pattern into the section displacement.
-func (rp resolvedPattern) frameKeepingInstance(ctx context.Context, d *Document, ref producerID, payload topo.Payload, i int) (*Body, error) {
-	budget := proofbound.NewWorkBudget(ctx)
-	frame, xform, _, _ := patternFrameOf(payload)
-	mv, err := rp.Motion(frame, xform, i)
-	if err != nil {
-		return nil, err
-	}
-	switch p := payload.(type) {
-	case prismPayload:
-		moved, delta, err := moveRegion(budget, p.Profile, mv)
-		if err != nil {
-			return nil, err
-		}
-		p.Profile = moved
-		p.SectionDelta = patternrecord.WithDelta(p.SectionDelta, delta)
-		p.Walks = nil
-		return bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), ref), p, freeform.NewFreeformWork()))
-	case stackedPrismPayload:
-		slabs := make([]stackedrecord.Slab, len(p.Slabs))
-		delta := 0.0
-		for k, slab := range p.Slabs {
-			slabs[k] = slab
-			slabs[k].Regions = make([]profileRecord, len(slab.Regions))
-			for r, region := range slab.Regions {
-				moved, charge, err := moveRegion(budget, region, mv)
-				if err != nil {
-					return nil, err
-				}
-				slabs[k].Regions[r] = moved
-				delta = math.Max(delta, charge)
-			}
-		}
-		if delta != 0 {
-			runs := p.OuterRuns()
-			if len(runs) != 1 {
-				// A union-built stack's narrower outer sits inside the wider
-				// one by construction, which no audit re-proves. A motion that
-				// rounds could move the two outers apart by its own rounding,
-				// so only an exact motion keeps the frame; the rest copy.
-				return rp.placedInstance(ctx, d, ref, payload, i)
-			}
-		}
-		interfaces, err := stackedrecord.Derive(ctx, slabs, p.Interfaces)
-		if err != nil {
-			return nil, err
-		}
-		p.Slabs, p.Interfaces = slabs, interfaces
-		p.SectionDelta = patternrecord.WithDelta(p.SectionDelta, delta)
-		return bodyResult(stackedrecord.Build(ctx, envOf(documentNode(d), ref), p, stackedrecord.OwnPlan{}))
-	default:
-		return nil, fmt.Errorf(`%w: a %T receiver has no frame-keeping pattern instance`, ErrUnsupported, payload)
-	}
-}
-
 // Patterned returns ONE body holding every instance of spec, b included,
 // and retires b (docs/mirror-pattern-design.md §4.3, §6.1). Its gates are PatternCopies'. The instances combine by the first
 // rule that applies:
@@ -327,7 +213,7 @@ func Patterned(ctx context.Context, b *Body, spec PatternSpec) (*Body, error) {
 	}
 	base := d.nextProducerID()
 	if keeping && b.Kind() != BodySheet {
-		sp, ok, err := rp.patternGroup(ctx, b.n.Payload)
+		sp, ok, err := patternassembly.Group(ctx, rp.Spec, b.n.Payload)
 		if err != nil {
 			return nil, err
 		}
@@ -364,75 +250,4 @@ func Patterned(ctx context.Context, b *Body, spec PatternSpec) (*Body, error) {
 	}
 	d.commitSpan(acc, ref-base, b)
 	return acc, nil
-}
-
-// patternGroup is §6.1's rules 1 and 2 on the frame-keeping arm. For a prism
-// or a prism group it moves every region into every instance (§6.2) and asks
-// prismcells.ProveGroupDisjoint whether sketch's structural read proves the
-// outers pairwise disjoint; proven, the group is the one-slab stacked prism
-// over all of them (ok), and not proven is a silent miss to rule 3. A
-// multi-slab stack proven disjoint the same way, over its one outer loop, is
-// rule 2's ErrUnsupported. A union-built stack, whose outer changes between
-// slabs, is not tried.
-//
-// The group's section displacement is the receiver's own plus the largest
-// instance δ_pattern, and at least the disjointness scene's walk charge, as a
-// group Union's is (prism_group.go).
-func (rp resolvedPattern) patternGroup(ctx context.Context, payload topo.Payload) (stackedPrismPayload, bool, error) {
-	budget := proofbound.NewWorkBudget(ctx)
-	frame, xform, _, _ := patternFrameOf(payload)
-	var regions []profileRecord
-	var slab stackedrecord.Slab
-	var sectionDelta float64
-	multiSlab := false
-	switch p := payload.(type) {
-	case prismPayload:
-		regions = []profileRecord{p.Profile}
-		slab = stackedrecord.Slab{Z0: p.Z0, Z1: p.Z1, Z0Delta: p.Z0Delta, Z1Delta: p.Z1Delta}
-		sectionDelta = p.SectionDelta
-	case stackedPrismPayload:
-		if p.IsGroup() {
-			regions = p.Slabs[0].Regions
-			slab = p.Slabs[0]
-			sectionDelta = p.SectionDelta
-			break
-		}
-		runs := p.OuterRuns()
-		if len(runs) != 1 {
-			return stackedPrismPayload{}, false, nil
-		}
-		regions = []profileRecord{{Outer: p.Slabs[0].Regions[0].Outer}}
-		multiSlab = true
-	default:
-		return stackedPrismPayload{}, false, nil
-	}
-	all := append([]profileRecord(nil), regions...)
-	delta := 0.0
-	for i := 1; i < rp.Count; i++ {
-		mv, err := rp.Motion(frame, xform, i)
-		if err != nil {
-			return stackedPrismPayload{}, false, err
-		}
-		for _, region := range regions {
-			moved, charge, err := moveRegion(budget, region, mv)
-			if err != nil {
-				return stackedPrismPayload{}, false, err
-			}
-			all = append(all, moved)
-			delta = math.Max(delta, charge)
-		}
-	}
-	disjoint, walk, err := prismcells.ProveGroupDisjoint(ctx, budget, all)
-	if err != nil || !disjoint {
-		return stackedPrismPayload{}, false, err
-	}
-	if multiSlab {
-		return stackedPrismPayload{}, false, fmt.Errorf(`%w: the pattern's instances are disjoint stacked prisms, and no payload holds several lumps of a multi-slab stack; use PatternCopies to keep them as separate bodies`, ErrUnsupported)
-	}
-	slab.Regions = all
-	return stackedPrismPayload{
-		Slabs: []stackedrecord.Slab{slab},
-		Frame: frame, Xform: xform,
-		SectionDelta: math.Max(patternrecord.WithDelta(sectionDelta, delta), walk),
-	}, true, nil
 }

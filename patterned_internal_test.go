@@ -104,9 +104,11 @@ func TestPatternedOverlapIsNotProvenDisjoint(t *testing.T) {
 	mv, err := rp.Motion(frame, r3.Identity(), 1)
 	require.NoError(t, err)
 	budget := proofbound.NewWorkBudget(t.Context())
-	b, charge, err := moveRegion(budget, a, mv)
+	moved, charge, err := patternrecord.MoveRegion(budget,
+		patternrecord.Region{Outer: a.Outer, Holes: a.Holes}, mv)
 	require.NoError(t, err)
 	require.Zero(t, charge)
+	b := profileRecord{Outer: moved.Outer, Holes: moved.Holes}
 	disjoint, _, err := prismcells.ProveGroupDisjoint(t.Context(), budget, []profileRecord{a, b})
 	require.NoError(t, err)
 	require.False(t, disjoint)
