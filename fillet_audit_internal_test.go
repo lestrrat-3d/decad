@@ -298,7 +298,7 @@ func TestCrossingAuditRejectsBoundaryContact(t *testing.T) {
 		require.NoError(t, err)
 		err = sectionaudit.Crossing(budget, segs)
 		require.ErrorIs(t, err, ErrUnsupported, "two loop segments crossing in their interiors are unsupported")
-		require.ErrorContains(t, renderAuditCoordinates(err), `rewritten loop 0 segment 0 and loop 1 segment 0 cross`,
+		require.ErrorContains(t, sectionaudit.RenderCoordinates(err), `rewritten loop 0 segment 0 and loop 1 segment 0 cross`,
 			`the refusal names both loop segments in the crossing pair`)
 	})
 
@@ -322,7 +322,7 @@ func TestCrossingAuditRejectsBoundaryContact(t *testing.T) {
 		require.NoError(t, err)
 		err = sectionaudit.Crossing(budget, segs)
 		require.ErrorIs(t, err, ErrUnsupported, "a hole vertex touching an outer arc is boundary contact")
-		require.ErrorContains(t, renderAuditCoordinates(err), `rewritten loop 0 segment 1 and loop 1 segment 0 are in contact`,
+		require.ErrorContains(t, sectionaudit.RenderCoordinates(err), `rewritten loop 0 segment 1 and loop 1 segment 0 are in contact`,
 			`the refusal names both loop segments in the contacting pair`)
 	})
 
@@ -343,7 +343,7 @@ func TestCrossingAuditRejectsBoundaryContact(t *testing.T) {
 		require.NoError(t, err)
 		err = sectionaudit.Crossing(budget, segs)
 		require.ErrorIs(t, err, ErrUnsupported, "a loop touching itself away from its shared vertices is a pinch")
-		require.ErrorContains(t, renderAuditCoordinates(err), `rewritten loop 0 segment 0 and loop 0 segment 2 are in contact`,
+		require.ErrorContains(t, sectionaudit.RenderCoordinates(err), `rewritten loop 0 segment 0 and loop 0 segment 2 are in contact`,
 			`the refusal names both loop segments in the contacting pair`)
 	})
 }

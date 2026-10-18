@@ -529,7 +529,7 @@ func wrapModifyAuditError(sel EdgeSelector, matched []matchedCorner, err error) 
 	for i, corner := range matched {
 		coordinates[i] = corner.String()
 	}
-	err = renderAuditCoordinates(err)
+	err = sectionaudit.RenderCoordinates(err)
 	return fmt.Errorf(`%w; selector %s matched [%s]`, err, sel, strings.Join(coordinates, `; `))
 }
 

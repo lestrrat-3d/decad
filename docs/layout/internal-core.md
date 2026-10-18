@@ -28,7 +28,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/reportvocab/` | Contact and sweep enums; contact reports and planar feature mapping over topology nodes; the sweep request; Verify reports, motion verification records, survey diagnostics, and pair, interference and sheet outcomes. See contact-geometry §6, contact-sweep §7. |
 | `internal/extent/` | Unit bounds and stop levels for extents. See API §8.1, evaluator §5/§6. |
 | `internal/patchchain/` | Patch payloads and node builders; chain partition, exact and shared-level plane proofs, orientation, segment records, area bounds, Rule P and circular-prism admission. See surface §5.1-§5.2 and §10. |
-| `internal/sectionaudit/` | Rewrite audit order, signed area, cutback, crossing, contact and nesting checks. See modify §5. |
+| `internal/sectionaudit/` | Rewrite audit order, signed area, cutback, crossing, contact, nesting and detailed error rendering. See modify §5. |
 | `internal/sketchrecord/` | Sketch snapshot authentication, edge conversion, and join checks. See sketch-seam §2. |
 | `internal/splinebezier/` | Exact Bézier conversion of recorded splines. See `docs/spline-design.md` §5.1. |
 | `internal/boundarywalk/` | Bounded walks, coalescing, junction vertices, rim convexity, and analytic survey and modify loops over recorded segments. |
@@ -50,6 +50,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/stationbound/` | Bounds circular chord stations, offset cap stations and chain-sweep arc stations against their exact recorded parameters. |
 | `internal/loftrecord/` | The loft and chain loft payloads and their builders over nodes: records, evaluation, placement, flat-triangle topology, certified circular-hole walls and bore proofs, mass readings. Root `loftPayload` and `chainLoftPayload` alias it. See loft §5, §7, §16, §18, evaluator §8. |
 | `internal/breprecord/` | BRep records, route E's record gates and rewrite, all-edge chamfer records and node builders; root payloads alias them. See general-boolean §4, brep-modify §5, modify-general §4, evaluator §8. |
+| `internal/breploop/` | Route L record topology, classification, reach, contours and rewrite over one budget; root maps public selectors and face references. See modify-general §4. |
 | `internal/capblend/` | Chamfer payload/build: setbacks, draft bounds, offsets, patches, cap edges, departure/mass bounds, refusal, admission, witness prisms, mesh-loop chording/motion. Root `capBlendPayload` alias. See modify-reach §8, tessellation-reach §7. |
 | `internal/loftmesh/` | Loft and chain mesh assembly, point-plane and LoftFaces cap layouts and proofs, stations, bounds, split and collar grids, triangle clearance, and contact scans. See loft-point and tessellation designs. |
 | `internal/smoothloft/` | Three-section homothety, constant curved-section admission and independent rectangles with exact height curves for Section; varying curves and four-section rounded rectangles. See loft-sections design. |

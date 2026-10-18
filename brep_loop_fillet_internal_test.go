@@ -895,14 +895,14 @@ func TestPartialFilletContourCollapsesSelectedArc(t *testing.T) {
 	require.NoError(t, r.matchEdges())
 	subset := r.selection([]int{2, 0})
 	require.True(t, subset.edge(0) == top[4])
-	require.Equal(t, r.matched[2], subset.match(0))
+	require.Equal(t, r.state.Matched[2], subset.match(0))
 	_, err = subset.admitLoops()
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "matched [selected edge[0]")
 	require.NotContains(t, err.Error(), "selected edge[2]")
 	sel, selected, ok := r.fullSelection().partialSelectedLoop()
 	require.True(t, ok)
-	cl, err := capblend.OneLoopCornerLoop(r.budget, bp.Faces[sel.face].RegionLoop(sel.loop), freeform.NewFreeformWork())
+	cl, err := capblend.OneLoopCornerLoop(r.state.Budget, bp.Faces[sel.Face].RegionLoop(sel.Loop), freeform.NewFreeformWork())
 	require.NoError(t, err)
 	amounts := make([]float64, len(selected))
 	sphere := make([]bool, len(selected))
@@ -913,7 +913,7 @@ func TestPartialFilletContourCollapsesSelectedArc(t *testing.T) {
 		}
 	}
 	segs, joins, capWalk, _, err := offset2d.PartialFilletContour(
-		r.budget, cl.Walks, selected, sphere, amounts, shellTol)
+		r.state.Budget, cl.Walks, selected, sphere, amounts, shellTol)
 	require.NoError(t, err)
 	require.Len(t, segs, 4)
 	for i, w := range cl.Walks {

@@ -25,7 +25,6 @@ The rules for rows live in `docs/layout.md`.
 | `chamfer.go` | `Chamfer`; cap loops route to `capblend.go`. See modify §7. |
 | `modify_options.go` | Public reach option tiers, codec adapters and asymmetric reference resolution (SX3). See modify-reach §2, §6. |
 | `tangent_chain.go` | `WithTangentChain` expansion. See modify-reach §5. |
-| `fillet_audit.go` | Renders `internal/sectionaudit/`'s detailed refusals. See modify §5. |
 | `shell.go` | Public `ShellOption`, `ShellSense` and `Shell`: prism, Sweep and Revolve dispatch. See modify §8 and Table R. |
 | `shell_twist.go` | Admits and commits the inward top-cap Shell of a straight twisted rounded Sweep. See shell-twisted-sweep design. |
 | `shell_twist_mesh.go` | Builds the five-face faceted cup from the proven twisted-shell mesh and audits it. See shell-twisted-sweep design. |
@@ -42,7 +41,7 @@ The rules for rows live in `docs/layout.md`.
 | `brep_shell.go` / `brep_shell_curved.go` | Route S: through-cut shell and one circular tool-wall opening. See modify-general §3. |
 | `brep_shell_rim.go` | Route S rims. See modify-general §3.3. |
 | `brep_modify_edge.go` | Route E: public edge and reference-face checks, ordered gate dispatch and result commit. `internal/breprecord/edge_route.go` reads, restates and rewrites the record. See brep-modify §5. |
-| `brep_modify_loop.go` / `brep_loop_band.go` | Route L: record rewrite and the bands' mesh-boolean admission; `breprecord` builds the bands and their mass. See modify-general §4. |
+| `brep_modify_loop.go` / `brep_loop_band.go` | Route L/V public selection and asymmetric reference mapping; `breploop` proves the record rewrite, and `breprecord` builds the bands and mass. See modify-general §4. |
 | `brep_modify_chain.go` | Route L: selected cap-edge chains and partial-loop record adapters over `internal/offset2d/` and `internal/capband/`. |
 | `brep_modify_partial_chamfer.go` | Rewrites one or two straight edges on part of a brep cap loop, including terminal lines. See modify-general §4.3a. |
 | `brep_loop_fillet.go` | Route L's fillet-band pull survey (DF7). See loop-fillet. |
