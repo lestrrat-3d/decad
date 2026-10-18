@@ -628,7 +628,7 @@ func TestCapBlendReflexApexUndercutSurvey(t *testing.T) {
 // straight-down pull (0,0,-1) is caught as an undercut by the end-cap
 // chamfer bevels (they tilt outward-and-up, so extracting downward passes
 // through the wider unchamfered wall below — the same reasoning
-// prismUndercuts already applies to an ordinary wall), while a straight-up
+// analyticundercut.Prism already applies to an ordinary wall), while a straight-up
 // pull sees no undercut from them.
 func TestCapBlendUndercutSurvey(t *testing.T) {
 	t.Parallel()

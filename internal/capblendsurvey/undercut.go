@@ -69,7 +69,7 @@ type undercutOutcome = reportvocab.UndercutSurvey[*topo.Face]
 // degenerate A=B=0 case) and then read over the window [th0, th1] through a
 // proven enclosure of that form's own extremes (normal.go). The
 // ordinary (unchanged) side walls and caps are surveyed by the SAME exact
-// three-valued reader prismUndercuts runs (survey_undercut.go), since a
+// three-valued reader analyticundercut.Prism runs (internal/survey2d/survey_undercut.go), since a
 // cap-blend body's non-patch faces are built exactly like a prism's — and, as
 // with a prism's own faces, an undecided receiver face sets the SAME
 // undecided flag the patch loop below sets, so one body's two halves compose
@@ -92,7 +92,7 @@ func CapBlendUndercuts(b *topo.Body, cbp capblend.Payload, pull r3.Vec) reportvo
 	roles := facesByRole(b)
 
 	// The ordinary side walls and caps: the same exact three-valued read
-	// prismUndercuts runs, over the RECEIVER's own recorded profile — a
+	// analyticundercut.Prism runs, over the RECEIVER's own recorded profile — a
 	// chamfered loop's unchanged (non-band) portion has the same wall role
 	// and the same normal as an untouched one.
 	pl := cbp.PrismLike(0, 0)
@@ -107,7 +107,7 @@ func CapBlendUndercuts(b *topo.Body, cbp capblend.Payload, pull r3.Vec) reportvo
 	// Non-nil from the start: an EMPTY listing is this survey's proven
 	// all-clear and a nil one is the undecided answer (BodyReport.Undercut.Faces,
 	// verify_publish.go), so the two shapes must stay distinguishable — the
-	// same distinction prismUndercuts already keeps.
+	// same distinction analyticundercut.Prism already keeps.
 	faces := []*topo.Face{}
 	undecided := false
 	for li, loop := range loops {

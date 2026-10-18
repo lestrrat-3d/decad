@@ -218,7 +218,7 @@ func DecideIntervalComponent(num, scale2 proofbound.RatInterval, pull2 *big.Rat)
 // CapNormalDecision answers §6's rule for a planar face whose outward normal
 // is an exact `sign` multiple of the placed frame's own n direction (sign is
 // always ±1: a prism's two caps, or a cup's kept cap/pocket floor/rims under
-// their own sOpen sign, shell_cup.go's cupUndercuts). m.dn's own held length
+// their own sOpen sign, internal/analyticundercut.Cup). m.dn's own held length
 // need not be exactly one — a placed frame's image of a unit vector is only
 // near-unit — so the antiparallel arm compares squares against |m.dn|²
 // rather than assuming a unit reading, exactly as the wall reader compares

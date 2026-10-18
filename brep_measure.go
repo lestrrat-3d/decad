@@ -21,7 +21,7 @@ import (
 // (docs/general-boolean-design.md §4.5's undercut row, DX7's reading): a
 // planar face carries one normal, its frame's N turned outward, and a swept
 // face sweeps its wall walk's normal range exactly as a prism's side does.
-// Both readings go through the exact three-valued decisions prismUndercuts
+// Both readings go through the exact three-valued decisions analyticundercut.Prism
 // uses (survey2d.CapNormalDecision, survey2d.WallNormalDecision) over each
 // face's own placed frame, so a straddling face sets undecided without
 // discarding a face already proven to oppose. Every outward normal maps
