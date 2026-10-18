@@ -59,38 +59,15 @@ func (b *Body) ExtremeFacesByCentroid(ctx context.Context, axis r3.Vec) (*Face, 
 	if !ok {
 		return nil, nil, fmt.Errorf("%w: the end cap has no bounded centroid", ErrUnsupported)
 	}
-	lowerLo, lowerHi, ok, err := facetedrecord.PointCapRingInterval(ctx, fp.Verts[:n], axis, axisLen,
-		fp.PointPlaneCapDisplacement)
+	order, err := facetedrecord.PointCapExtremeOrder(ctx, fp, axis, axisLen,
+		startLo, startHi, endLo, endHi)
 	if err != nil {
 		return nil, nil, err
 	}
-	if !ok {
-		return nil, nil, fmt.Errorf("%w: the lower cap boundary has no finite projection", ErrUnsupported)
-	}
-	upperLo, upperHi, ok, err := facetedrecord.PointCapRingInterval(ctx, fp.Verts[n:], axis, axisLen,
-		fp.PointPlaneCapDisplacement)
-	if err != nil {
-		return nil, nil, err
-	}
-	if !ok {
-		return nil, nil, fmt.Errorf("%w: the upper cap boundary has no finite projection", ErrUnsupported)
-	}
-	// On each true source ray, the area density of a conical strip is
-	// t*|(p-a)×p'|. Between ray fractions l and u, the centroid fraction
-	// from the lower cap is (2u+l)/(3(u+l)), always in [1/2, 2/3]. A side
-	// face's centroid is a positive-weight average over any subset of rays.
-	// Evaluate both endpoint fractions so a reversed projection also works.
-	sideLo := min(facetedrecord.PointCapAffineDown(lowerLo, upperLo, 1, 1, 2),
-		facetedrecord.PointCapAffineDown(lowerLo, upperLo, 1, 2, 3))
-	sideHi := max(facetedrecord.PointCapAffineUp(lowerHi, upperHi, 1, 1, 2),
-		facetedrecord.PointCapAffineUp(lowerHi, upperHi, 1, 2, 3))
-	if startHi < sideLo && sideHi < endLo {
+	if order > 0 {
 		return start, end, nil
 	}
-	if endHi < sideLo && sideHi < startLo {
-		return end, start, nil
-	}
-	return nil, nil, fmt.Errorf("%w: cap centroid intervals do not separate every side centroid", ErrUnsupported)
+	return end, start, nil
 }
 
 func pointCapGroupFace(b *Body, fp facetedPayload, group int) (*Face, bool) {

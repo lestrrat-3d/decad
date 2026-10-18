@@ -10,7 +10,7 @@ The rules for rows live in `docs/layout.md`.
 | `boolean.go` | Public `Union`/`Cut`/`Intersect`, `BooleanError` mapping, and audited scale-source marking. See evaluator §9. |
 | `boolean_many.go` | Validates and commits a multi-body Union, including certified straight-source Loft one-scene unions and transient prism pair chains. See API §8. |
 | `boolean_many_prism.go` | Arranges identical-interval line prisms in one Sketch scene. See prism-boolean §4.6. |
-| `point_cone_trim.go` | Retains point-loft and cone source faces through coaxial Cut/Intersect. See loft-point design. |
+| `point_cone_trim.go` | Recognizes exact cone tools and routes point-loft Cut/Intersect to facetedrecord. See loft-point design. |
 | `loft_faces_cone_trim.go` | Certifies the one-use LoftFaces toe Cut to heel Intersect cone continuation, including the tangent heel's extended tooth operand. See loft-face-sections design. |
 | `spiral_join_source.go` | Adapts an authenticated Revolve section to the six-side join and orchestrates source gates for a cone-trimmed nine-section tooth. See loft-face-sections design. |
 | `spiral_join_short.go` | Bounds fitted-flank and connector intersections with both finite blank end caps. See loft-face-sections design. |
@@ -73,11 +73,11 @@ The rules for rows live in `docs/layout.md`.
 | `oblique_boss.go` | Recognizes the two prism sources a complete oblique cylinder and plate Union retains. See oblique-boss-fillet design. |
 | `cross_cylinder_bore_source.go` | Recognizes the two circular prism sources a perpendicular cylinder Cut retains. See cross-cylinder-bore-chamfer design. |
 | `surface_trim.go` / `surface_split_revolve.go` | Surface body gates and revolve `Split`. See surface-intersection §2–§3. |
-| `point_plane_split.go` | Splits a point loft by a planar chain sheet. See loft-point design. |
-| `point_plane_scale.go` | Dispatches certified similar bodies and carries Split-slab maps over `internal/facetedrecord/`'s Boolean source check. See loft-point design and evaluator §8. |
+| `point_plane_split.go` | Authenticates point-loft and sheet operands, orders split planes, and commits facetedrecord slabs. See loft-point design. |
+| `point_plane_scale.go` | Validates ScaledAt sources and commits similarity images; facetedrecord carries Split maps. See loft-point design and evaluator §8. |
 | `prism_scale.go` | Admits prism and full-Revolve certified similarity sources and transfers their face roles. See evaluator §8. |
 | `stack_brep_scale.go` | Admits exact line-only stacks and stack-backed BReps for certified similarity. See evaluator §8. |
-| `point_cap_extremes.go` | Bounds side-face centroid projections and selects the extreme Split cap faces. See loft-point design. |
+| `point_cap_extremes.go` | Resolves Split cap faces and selects the ends using facetedrecord's centroid-order proof. See loft-point design. |
 | `boolean_mesh.go` | Prepares an operand's mesh for `internal/meshbool/`. See evaluator §9. |
 | `boolean_body.go` | Reads an audited mesh's exact volume into a measurement and keys exactness off a proven bound. See evaluator §9. |
 | `faceted_copy_lineage.go` | Binds live faceted copies to source faces, recorded motion, and separate source and held shells in a `facetedrecord` copy set. See faceted-vertex-bounds §3.7. |
