@@ -38,18 +38,20 @@ func selectedStraightEdgesShareVertex(edges []*Edge) bool {
 // partialSelectedLoop finds one planar loop that contains every selected edge
 // as a proper subset. A Fillet of one route E edge whose endpoint-face
 // corner has the wrong material wedge may also reach this reading.
-func (r *brepLoopRead) partialSelectedLoop() (brepLoopSel, []bool, bool) {
-	if len(r.matched) == 0 || r.matched[0] < 0 {
+func (s brepLoopSelection) partialSelectedLoop() (brepLoopSel, []bool, bool) {
+	r := s.read
+	if s.len() == 0 || s.match(0) < 0 {
 		return brepLoopSel{}, nil, false
 	}
-	for _, firstUse := range r.btopo.Edges[r.matched[0]] {
+	for _, firstUse := range r.btopo.Edges[s.match(0)] {
 		u := r.btopo.Uses[firstUse]
 		if u.Part != brepLoopSeg || !r.bp.Faces[u.Face].Planar() {
 			continue
 		}
 		selected := make([]bool, len(r.btopo.Planar[u.Face][u.Loop]))
 		valid := true
-		for _, ei := range r.matched {
+		for i := range s.len() {
+			ei := s.match(i)
 			if ei < 0 {
 				valid = false
 				break
@@ -67,7 +69,7 @@ func (r *brepLoopRead) partialSelectedLoop() (brepLoopSel, []bool, bool) {
 				break
 			}
 		}
-		if !valid || len(r.matched) >= len(selected) {
+		if !valid || s.len() >= len(selected) {
 			continue
 		}
 		return brepLoopSel{face: u.Face, loop: u.Loop}, selected, true

@@ -47,6 +47,40 @@ type brepLoopRead struct {
 	matched []int
 }
 
+// brepLoopSelection reads selected edges in order from one matched record.
+// Its ordinals are private to the view; the reader's matches and budget are
+// shared, and constructing a subset never matches an edge again.
+type brepLoopSelection struct {
+	read     *brepLoopRead
+	ordinals []int
+}
+
+func (r *brepLoopRead) fullSelection() brepLoopSelection {
+	ordinals := make([]int, len(r.call.edges))
+	for i := range ordinals {
+		ordinals[i] = i
+	}
+	return brepLoopSelection{read: r, ordinals: ordinals}
+}
+
+func (r *brepLoopRead) selection(ordinals []int) brepLoopSelection {
+	return brepLoopSelection{read: r, ordinals: slices.Clone(ordinals)}
+}
+
+func (s brepLoopSelection) len() int { return len(s.ordinals) }
+
+func (s brepLoopSelection) edge(i int) *Edge { return s.read.call.edges[s.ordinals[i]] }
+
+func (s brepLoopSelection) match(i int) int { return s.read.matched[s.ordinals[i]] }
+
+func (s brepLoopSelection) edges() []*Edge {
+	edges := make([]*Edge, s.len())
+	for i := range edges {
+		edges[i] = s.edge(i)
+	}
+	return edges
+}
+
 // brepLoopSel is one touched loop of Table LB: the loop of index loop on the
 // planar face of index face, what lies beside each of its segments (LB3),
 // and the band's sense (LB6), −1 for walls descending into the body and +1
@@ -84,24 +118,24 @@ func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepMo
 	if err := r.matchEdges(); err != nil {
 		return nil, err
 	}
-	if r.singleStraightEdges() {
+	if r.fullSelection().singleStraightEdges() {
 		body, err := brepBlendEdges(ctx, d, bp, call)
 		var mismatch *brepMaterialWedgeMismatchError
 		if len(call.edges) == 1 && call.loopKind == breprecord.BandFillet && errors.As(err, &mismatch) {
-			if sel, selected, ok := r.partialSelectedLoop(); ok {
+			if sel, selected, ok := r.fullSelection().partialSelectedLoop(); ok {
 				return brepFilletPartialLoop(ctx, d, bp, call, sel, selected)
 			}
 		}
 		if len(call.edges) == 1 && call.loopKind == breprecord.BandChamfer && call.asym == nil &&
 			errors.As(err, &mismatch) {
-			if sel, selected, ok := r.partialSelectedLoop(); ok {
+			if sel, selected, ok := r.fullSelection().partialSelectedLoop(); ok {
 				return brepChamferPartialLoop(ctx, d, bp, call, sel, selected)
 			}
 		}
 		return body, err
 	}
 	if call.asym != nil {
-		loops, err := r.admitLoops()
+		loops, err := r.fullSelection().admitLoops()
 		if err != nil {
 			return nil, fmt.Errorf(`%w: an asymmetric chamfer on a brep requires independent straight edges or complete planar-face loops (modify-reach SX16): %v`, ErrUnsupported, err)
 		}
@@ -132,7 +166,7 @@ func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepMo
 			}
 			return next.buildSelectedLoops(ctx, d, loops)
 		}
-		if sel, selected, ok := r.partialSelectedLoop(); ok {
+		if sel, selected, ok := r.fullSelection().partialSelectedLoop(); ok {
 			return brepFilletPartialLoop(ctx, d, bp, call, sel, selected)
 		}
 		// A pair of edges can share a swept wall without sharing a planar
@@ -148,7 +182,7 @@ func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepMo
 				if err := next.matchEdges(); err != nil {
 					return nil, err
 				}
-				if sel, selected, ok := next.partialSelectedLoop(); ok {
+				if sel, selected, ok := next.fullSelection().partialSelectedLoop(); ok {
 					selectedAt := map[[3]float64]int{}
 					for _, eb := range blends {
 						for _, v := range eb.V {
@@ -166,7 +200,7 @@ func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepMo
 		}
 	}
 	if call.loopKind == breprecord.BandChamfer && len(call.edges) == 2 {
-		if sel, selected, ok := r.partialSelectedLoop(); ok {
+		if sel, selected, ok := r.fullSelection().partialSelectedLoop(); ok {
 			return brepChamferPartialLoop(ctx, d, bp, call, sel, selected)
 		}
 	}
@@ -200,18 +234,15 @@ func (r *brepLoopRead) cornerTriad(ctx context.Context, d *Document) (*Body, boo
 				j++
 			}
 		}
-		capRead := *r
-		capRead.call.edges = []*Edge{r.call.edges[others[0]], r.call.edges[others[1]]}
-		capRead.matched = []int{r.matched[others[0]], r.matched[others[1]]}
-		capSel, selected, ok := capRead.partialSelectedLoop()
+		capSelection := r.selection(others[:])
+		capSel, selected, ok := capSelection.partialSelectedLoop()
 		if !ok {
 			continue
 		}
+		singleSelection := r.selection([]int{single})
 		singleCall := r.call
-		singleCall.edges = []*Edge{r.call.edges[single]}
-		singleRead := *r
-		singleRead.call, singleRead.matched = singleCall, []int{r.matched[single]}
-		if !singleRead.singleStraightEdges() {
+		singleCall.edges = singleSelection.edges()
+		if !singleSelection.singleStraightEdges() {
 			continue
 		}
 		// Only a pair of neighbouring walks at the shared vertex can close
@@ -300,7 +331,7 @@ func (r *brepLoopRead) cornerTriad(ctx context.Context, d *Document) (*Body, boo
 		if err := next.matchEdges(); err != nil {
 			return nil, true, err
 		}
-		newCap, newSelected, ok := next.partialSelectedLoop()
+		newCap, newSelected, ok := next.fullSelection().partialSelectedLoop()
 		if !ok || newCap.face != capSel.face || newCap.loop != capSel.loop {
 			return nil, true, next.refuse("SL1", `the rounded corner has no selected cap chain`)
 		}
@@ -317,8 +348,7 @@ func (r *brepLoopRead) splitVertexBlend() ([]brepLoopSel, []*Edge, bool, error) 
 	// faces. Assign one reference axis's independent edges to route E first;
 	// the remaining selected edges then name their cap loops unambiguously.
 	for axis := range 3 {
-		var singles, loopEdges []*Edge
-		var singleMatches, loopMatches []int
+		var singleOrdinals, loopOrdinals []int
 		for i, ei := range r.matched {
 			if ei < 0 {
 				return nil, nil, false, nil
@@ -331,26 +361,22 @@ func (r *brepLoopRead) splitVertexBlend() ([]brepLoopSel, []*Edge, bool, error) 
 				}
 			}
 			if along {
-				singles = append(singles, r.call.edges[i])
-				singleMatches = append(singleMatches, ei)
+				singleOrdinals = append(singleOrdinals, i)
 			} else {
-				loopEdges = append(loopEdges, r.call.edges[i])
-				loopMatches = append(loopMatches, ei)
+				loopOrdinals = append(loopOrdinals, i)
 			}
 		}
-		if len(singles) == 0 || len(loopEdges) == 0 {
+		if len(singleOrdinals) == 0 || len(loopOrdinals) == 0 {
 			continue
 		}
-		singleRead := *r
-		singleRead.call.edges, singleRead.matched = singles, singleMatches
-		if !singleRead.singleStraightEdges() {
+		singleSelection := r.selection(singleOrdinals)
+		if !singleSelection.singleStraightEdges() {
 			continue
 		}
-		loopRead := *r
-		loopRead.call.edges, loopRead.matched = loopEdges, loopMatches
-		loops, err := loopRead.admitLoops()
+		loopSelection := r.selection(loopOrdinals)
+		loops, err := loopSelection.admitLoops()
 		if err == nil {
-			return loops, singles, true, nil
+			return loops, singleSelection.edges(), true, nil
 		}
 	}
 
@@ -372,8 +398,7 @@ func (r *brepLoopRead) splitVertexBlend() ([]brepLoopSel, []*Edge, bool, error) 
 			selected[fl][u.Seg] = struct{}{}
 		}
 	}
-	var loopEdges, singles []*Edge
-	var loopMatches, singleMatches []int
+	var loopOrdinals, singleOrdinals []int
 	for i, ei := range r.matched {
 		covering := 0
 		for _, ui := range r.btopo.Edges[ei] {
@@ -386,28 +411,24 @@ func (r *brepLoopRead) splitVertexBlend() ([]brepLoopSel, []*Edge, bool, error) 
 			return nil, nil, false, r.refuse("SL1", fmt.Sprintf(`%s lies on two selected complete loops`, selectedEdgeContext(i, r.call.edges[i])))
 		}
 		if covering == 1 {
-			loopEdges = append(loopEdges, r.call.edges[i])
-			loopMatches = append(loopMatches, ei)
+			loopOrdinals = append(loopOrdinals, i)
 			continue
 		}
-		singles = append(singles, r.call.edges[i])
-		singleMatches = append(singleMatches, ei)
+		singleOrdinals = append(singleOrdinals, i)
 	}
-	if len(loopEdges) == 0 || len(singles) == 0 {
+	if len(loopOrdinals) == 0 || len(singleOrdinals) == 0 {
 		return nil, nil, false, nil
 	}
-	singleRead := *r
-	singleRead.call.edges, singleRead.matched = singles, singleMatches
-	if !singleRead.singleStraightEdges() {
+	singleSelection := r.selection(singleOrdinals)
+	if !singleSelection.singleStraightEdges() {
 		return nil, nil, false, r.refuse("SL1", `the edges outside the complete loops are not independent straight edges along reference axes`)
 	}
-	loopRead := *r
-	loopRead.call.edges, loopRead.matched = loopEdges, loopMatches
-	loops, err := loopRead.admitLoops()
+	loopSelection := r.selection(loopOrdinals)
+	loops, err := loopSelection.admitLoops()
 	if err != nil {
 		return nil, nil, false, err
 	}
-	return loops, singles, true, nil
+	return loops, singleSelection.edges(), true, nil
 }
 
 // buildLoops is route L over the matched selection: Table LB admits the
@@ -418,7 +439,7 @@ func (r *brepLoopRead) buildLoops(ctx context.Context, d *Document) (*Body, erro
 	if call.loop == nil {
 		return nil, fmt.Errorf(`%w: route L reads a %s request with no setback`, ErrUnsupported, call.op)
 	}
-	loops, err := r.admitLoops()
+	loops, err := r.fullSelection().admitLoops()
 	if err != nil {
 		return nil, err
 	}
@@ -482,8 +503,16 @@ func prismFaceViewBlend(ctx context.Context, d *Document, pp prismPayload, call 
 
 // refuse is one route L refusal naming its row and the selection.
 func (r *brepLoopRead) refuse(row, reason string) error {
+	return r.refuseWithEdges(row, reason, r.call.edges)
+}
+
+func (s brepLoopSelection) refuse(row, reason string) error {
+	return s.read.refuseWithEdges(row, reason, s.edges())
+}
+
+func (r *brepLoopRead) refuseWithEdges(row, reason string, edges []*Edge) error {
 	return fmt.Errorf(`%w: this evaluator %s complete loops of planar brep faces through route L only where Table LB admits them; %s (modify-general %s); selector %s matched [%s]`,
-		ErrUnsupported, r.call.op, reason, row, r.call.sel, selectedEdgesContext(r.call.edges))
+		ErrUnsupported, r.call.op, reason, row, r.call.sel, selectedEdgesContext(edges))
 }
 
 // partner is the other use of use ui's edge.
@@ -559,13 +588,14 @@ func brepEdgeMatches(refView prismPayload, owner brepUse, e *Edge, tol float64) 
 // singleStraightEdges reports whether the selection is route E's class: every
 // edge matched one straight record edge along a reference axis (Table EB's
 // EB1), and no two share a vertex (EB7).
-func (r *brepLoopRead) singleStraightEdges() bool {
+func (s brepLoopSelection) singleStraightEdges() bool {
 	seen := map[[3]float64]struct{}{}
-	for _, ei := range r.matched {
+	for i := range s.len() {
+		ei := s.match(i)
 		if ei < 0 {
 			return false
 		}
-		owner := r.btopo.Uses[r.btopo.Edges[ei][0]]
+		owner := s.read.btopo.Uses[s.read.btopo.Edges[ei][0]]
 		if owner.Key.Circular {
 			return false
 		}
@@ -595,16 +625,18 @@ func (r *brepLoopRead) singleStraightEdges() bool {
 // The loops are returned in the order the selection first reaches them. A
 // loop on a face with a section displacement is SB1, which the brep route
 // already refused for the whole record.
-func (r *brepLoopRead) admitLoops() ([]brepLoopSel, error) {
+func (s brepLoopSelection) admitLoops() ([]brepLoopSel, error) {
+	r := s.read
 	type faceLoop struct{ face, loop int }
 	selected := map[faceLoop]map[int]struct{}{}
-	loopsOf := make([][]faceLoop, len(r.call.edges))
-	for i, ei := range r.matched {
+	loopsOf := make([][]faceLoop, s.len())
+	for i := range s.len() {
+		ei := s.match(i)
 		switch ei {
 		case -1:
-			return nil, r.refuse("SL1", fmt.Sprintf(`%s matches no edge of the receiver's face record`, selectedEdgeContext(i, r.call.edges[i])))
+			return nil, s.refuse("SL1", fmt.Sprintf(`%s matches no edge of the receiver's face record`, selectedEdgeContext(i, s.edge(i))))
 		case -2:
-			return nil, r.refuse("SL1", fmt.Sprintf(`%s matches more than one edge of the receiver's face record`, selectedEdgeContext(i, r.call.edges[i])))
+			return nil, s.refuse("SL1", fmt.Sprintf(`%s matches more than one edge of the receiver's face record`, selectedEdgeContext(i, s.edge(i))))
 		}
 		for _, ui := range r.btopo.Edges[ei] {
 			u := r.btopo.Uses[ui]
@@ -622,7 +654,7 @@ func (r *brepLoopRead) admitLoops() ([]brepLoopSel, error) {
 	complete := func(fl faceLoop) bool { return len(selected[fl]) == len(r.btopo.Planar[fl.face][fl.loop]) }
 	chosen := map[faceLoop]struct{}{}
 	var out []brepLoopSel
-	for i := range r.call.edges {
+	for i := range s.len() {
 		var covering []faceLoop
 		for _, fl := range loopsOf[i] {
 			if complete(fl) {
@@ -631,12 +663,12 @@ func (r *brepLoopRead) admitLoops() ([]brepLoopSel, error) {
 		}
 		switch {
 		case len(loopsOf[i]) == 0:
-			return nil, r.refuse("SL1", fmt.Sprintf(`%s lies on no loop of a planar face, so it belongs to no complete loop; a %s of loops mixed with single edges needs a corner patch in no reference frame`, selectedEdgeContext(i, r.call.edges[i]), r.call.loopKind))
+			return nil, s.refuse("SL1", fmt.Sprintf(`%s lies on no loop of a planar face, so it belongs to no complete loop; a %s of loops mixed with single edges needs a corner patch in no reference frame`, selectedEdgeContext(i, s.edge(i)), r.call.loopKind))
 		case len(covering) == 0:
-			return nil, r.refuse("SL1", fmt.Sprintf(`the selection covers only part of a loop of brep face %s; every geometric edge of a complete loop must be selected`, r.bp.Faces[loopsOf[i][0].face].Role))
+			return nil, s.refuse("SL1", fmt.Sprintf(`the selection covers only part of a loop of brep face %s; every geometric edge of a complete loop must be selected`, r.bp.Faces[loopsOf[i][0].face].Role))
 		case len(covering) > 1:
-			return nil, r.refuse("SL1", fmt.Sprintf(`%s lies on two selected complete loops, of brep faces %s and %s, which share it`,
-				selectedEdgeContext(i, r.call.edges[i]), r.bp.Faces[covering[0].face].Role, r.bp.Faces[covering[1].face].Role))
+			return nil, s.refuse("SL1", fmt.Sprintf(`%s lies on two selected complete loops, of brep faces %s and %s, which share it`,
+				selectedEdgeContext(i, s.edge(i)), r.bp.Faces[covering[0].face].Role, r.bp.Faces[covering[1].face].Role))
 		}
 		fl := covering[0]
 		if _, ok := chosen[fl]; ok {
