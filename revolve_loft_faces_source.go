@@ -12,7 +12,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
-	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/decad/internal/spiralsector"
@@ -261,7 +260,7 @@ func certifyRevolveLoftFacesAgainstRoot(ctx context.Context, blank, tooth *Body,
 		if !revolveloftfaces.SegmentKind(trim, i) {
 			return nil, false, nil
 		}
-		side := revolveLoftFacesStationSide(ctx, trim, m, b, i)
+		side := spiralsector.StationSide(ctx, trim, m, b, i)
 		if side == 0 {
 			return nil, false, nil
 		}
@@ -320,59 +319,6 @@ func certifyRevolveLoftFacesAgainstRoot(ctx context.Context, blank, tooth *Body,
 		return nil, false, nil
 	}
 	return proof, true, nil
-}
-
-// The source station departure encloses each complete nonfitted edge. A
-// crossing or an undecidable cell refuses; no sampled sign grants admission.
-func revolveLoftFacesStationSide(ctx context.Context, trim *loftFacesTrimRecord,
-	m, b *big.Rat, segment int) int {
-	source := trim.Source
-	n := len(source.SourceStation)
-	if n == 0 || len(trim.StationGroup) != n {
-		return 0
-	}
-	inside, outside, seen := true, true, false
-	for band := 0; band+1 < len(trim.Maps); band++ {
-		lo, hi := trim.Bounds[band], trim.Bounds[band+1]
-		if len(lo.SourceDeparture) != n || len(hi.SourceDeparture) != n ||
-			len(lo.ProjectiveDeparture) != n || len(hi.ProjectiveDeparture) != n {
-			return 0
-		}
-		for j, station := range source.SourceStation {
-			if trim.StationGroup[j] != segment {
-				continue
-			}
-			if j%64 == 0 && ctx.Err() != nil {
-				return 0
-			}
-			seen = true
-			departure := max(
-				proofbound.AbsSumUpper(lo.SourceDeparture[j], lo.ProjectiveDeparture[j]),
-				proofbound.AbsSumUpper(hi.SourceDeparture[j], hi.ProjectiveDeparture[j]))
-			if proofbound.IsNonFinite(departure) || departure < 0 {
-				return 0
-			}
-			next := source.SourceStation[(j+1)%n]
-			if inside && !spiralsector.SpiralCellSide(trim.Maps[band], trim.Maps[band+1], station,
-				next, lfF(departure), m, b, false, lfZero(), lfOne(), 8) {
-				inside = false
-			}
-			if outside && !spiralsector.SpiralCellSide(trim.Maps[band], trim.Maps[band+1], station,
-				next, lfF(departure), m, b, true, lfZero(), lfOne(), 8) {
-				outside = false
-			}
-			if !inside && !outside {
-				return 0
-			}
-		}
-	}
-	if !seen || inside == outside {
-		return 0
-	}
-	if inside {
-		return -1
-	}
-	return 1
 }
 
 func revolveLoftFacesSourceRefs(trim *loftFacesTrimRecord, tooth *Body) ([][]provenance.Ref, bool) {
