@@ -615,16 +615,11 @@ func TestSweepMitredHollowTrunkBranch(t *testing.T) {
 	require.Equal(t, decad.HeldTopology{Lumps: 1, Voids: 1}, r.Topology)
 }
 
-// TestSweepMitredClusteredBranchUnionChain unions overlapping tilted branches
-// onto a mitred trunk, each turned 25° from the last and rooted 1.1 mm higher,
-// as mtilt's tree supports cluster them. The chain crosses union 14, where a
-// rim vertex that rounding had folded through the trunk wall once broke the
-// mesh boolean's facet cutter (docs/evaluator-design.md §9, the rounding that
-// keeps the held mesh embedded). Each union stays one lump whose volume lies
-// within its bound of the operands' union, and the final tree's mesh proves
-// its boundary at 0.01 mm.
-func TestSweepMitredClusteredBranchUnionChain(t *testing.T) {
-	t.Parallel()
+// clusteredBranchUnion builds a mitred trunk and unions the requested number
+// of overlapping tilted branches. Each union stays one lump with volume
+// bounded by its operands.
+func clusteredBranchUnion(t *testing.T, branches int) *decad.Body {
+	t.Helper()
 	doc := decad.New()
 	trunkSketch, trunkProfile := polygonSweepSketch(t, 16, 5)
 	trunk, err := decad.Sweep(t.Context(), doc, trunkSketch, trunkProfile,
@@ -634,7 +629,6 @@ func TestSweepMitredClusteredBranchUnionChain(t *testing.T) {
 	branchSketch, branchProfile := polygonSweepSketch(t, 16, 1.5)
 	branchPath := mustPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 2.5), r3.NewVec(0.8, 0.3, 6), r3.NewVec(2.5, 0.6, 9.5))
 
-	const branches = 15
 	tilt := 40 * math.Pi / 180
 	tree := trunk
 	for k := range branches {
@@ -672,7 +666,39 @@ func TestSweepMitredClusteredBranchUnionChain(t *testing.T) {
 		require.Greater(t, got.Value.Base()+slack, treeVol.Value.Base(), `union %d adds the branch's exposed part`, k+1)
 	}
 
+	return tree
+}
+
+// TestSweepMitredClusteredBranchUnionChain reaches union 14, where a rounded
+// rim vertex once broke the mesh facet cutter (docs/evaluator-design.md §9).
+// It checks each union's volume and lump count, then verifies the final mesh.
+func TestSweepMitredClusteredBranchUnionChain(t *testing.T) {
+	t.Parallel()
+	tree := clusteredBranchUnion(t, 15)
 	mesh, err := tree.Tessellate(t.Context(), units.Millimeters(0.01), decad.WithVerification(decad.VerifyBoundary))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	requireWatertight(t, mesh)
+}
+
+// TestSweepMitredClusteredBranchUnionPlaced checks that rotating a clustered
+// union keeps its volume and produces a verified, watertight boundary mesh.
+func TestSweepMitredClusteredBranchUnionPlaced(t *testing.T) {
+	t.Parallel()
+	tree := clusteredBranchUnion(t, 2)
+	before, err := tree.Volume()
+	require.NoError(t, err)
+	axis := r3.NewVec(1, 2, 3)
+	turn, err := r3.Rotation(axis.Scale(1/axis.Len()), units.Radians(0.7))
+	require.NoError(t, err)
+	placed, err := decad.Transform(t.Context(), tree, turn)
+	require.NoError(t, err)
+	require.Len(t, placed.Lumps(), 1)
+	after, err := placed.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(after.Value.Base()-before.Value.Base()),
+		after.Bound.Base()+before.Bound.Base(), `rotation preserves volume within the published bounds`)
+	mesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.01), decad.WithVerification(decad.VerifyBoundary))
 	require.NoError(t, err)
 	require.True(t, mesh.BoundaryVerified())
 	requireWatertight(t, mesh)

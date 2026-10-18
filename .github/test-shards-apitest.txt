@@ -2124,3 +2124,4 @@
 10	0.00	TestSurfaceTrimAndExtendRevolveRefuseAxisTouch
 10	0.00	TestFacetedUnionKeepsUntouchedVertexAndFaceBounds
 10	0.00	TestFacetedPlacementKeepsNearOriginVertexBoundTight
+10	0.00	TestSweepMitredClusteredBranchUnionPlaced
