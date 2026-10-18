@@ -1550,9 +1550,9 @@
 10	0.00	TestLoftOutputCapCollinearBoundarySplit
 10	0.00	TestLoftOutputCapPredicatesCancelInFlight
 10	0.00	TestLoftVolumeComposeRealVaryingTabBothOrders
-10	0.00	TestLoftVolumeComposeRealFractionalSeam
-10	0.00	TestLoftVolumeComposeRealTriangleFractionalSeam
+10	0.00	TestLoftOutputBoundaryRefusesTinyTranslatedSeam
 10	0.00	TestLoftVolumeSourceRefusesNonbinaryJunction
+10	0.00	TestLoftVolumeSourceRefusesRealTriangleFractionalSeam
 10	0.00	TestLoftVolumeComposeRefusesUnprovedShells
 10	0.00	TestLoftVolumeComposeBudgetAndCancellation
 10	0.00	TestLoftVolumeComposeKeepsBoundaryOperationBudget
@@ -1587,3 +1587,5 @@
 10	0.00	TestLoftContactPartitionOtherPrismCarrier
 10	0.00	TestLoftContactPartitionRealProducerRefusals
 10	0.00	TestLoftContactPartitionSourceAndWorkRefusals
+10	0.00	TestLoftContactTwoLineCapsRealTrapezoid524
+10	0.00	TestLoftContactTwoLineCapsNarrowTranslated524

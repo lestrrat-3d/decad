@@ -253,6 +253,35 @@ func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 	}
 	result := loftSourcePartition{carrier: carrier, crossing: crossing, seams: seams, walls: walls}
 	result.capLevels = [3]*big.Rat{big.NewRat(0, 1), new(big.Rat).Set(axis.Shift), new(big.Rat).Set(prismTop)}
+	if !reportSeamSize {
+		// Reject cuts Sketch cannot witness before its paired-cap producer runs.
+		for capIndex := range 2 {
+			loftLines := bottom
+			if capIndex == 1 {
+				loftLines = top
+			}
+			height := big.NewRat(int64(capIndex), 1)
+			for k, i := range crossing {
+				if err := budget.Step(); err != nil {
+					return no, false, err
+				}
+				lineParam, carrierParam, ok := seams[k].At(height)
+				if !ok || !arithmetic.valid(lineParam) || !arithmetic.valid(carrierParam) {
+					return no, false, nil
+				}
+				cut := arithmetic.partitionLinePoint(loftLines[i], lineParam)
+				carrierCut := arithmetic.partitionLinePoint(prismLines[carrier], carrierParam)
+				if !arithmetic.partitionSamePoint(cut, carrierCut) || !arithmetic.ok {
+					return no, false, nil
+				}
+				_, exactX := arithmetic.float64(cut.u)
+				_, exactY := arithmetic.float64(cut.v)
+				if !exactX || !exactY || !arithmetic.ok {
+					return no, false, nil
+				}
+			}
+		}
+	}
 	var prepared [2]loftPartitionPreparedCap
 	var scenes [2]*sketch.Sketch
 	for capIndex := range 2 {
@@ -282,30 +311,24 @@ func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 		}
 		scenes[capIndex] = scene
 	}
-	// The private proof reads each cap's Sketch regions, including three-line
-	// caps. The direct-shell path requires a charged paired rectangle witness.
+	// The public direct-shell route retains its reviewed rectangle admission.
+	// Only the private proof consumes the generalized line-cap producer.
+	publishCaps := sketch.ProfilesTwoLineCapsBounded
 	if reportSeamSize {
-		paired, err := sketch.ProfilesTwoRectangleCapsBounded(ctx, scenes, func(n uint64) error {
-			_, chargeErr := budget.StepN(n)
-			return chargeErr
-		})
-		if errors.Is(err, geom.ErrUnsupportedLineScene) {
-			return no, false, nil
-		}
-		if err != nil {
-			return no, false, err
-		}
-		for i := range prepared {
-			prepared[i].raw = paired[i]
-		}
-	} else {
-		for i := range prepared {
-			raw, err := prismcells.ProfilesContext(ctx, prepared[i].scene.Profiles)
-			if err != nil {
-				return no, false, err
-			}
-			prepared[i].raw = raw
-		}
+		publishCaps = sketch.ProfilesTwoRectangleCapsBounded
+	}
+	paired, err := publishCaps(ctx, scenes, func(n uint64) error {
+		_, chargeErr := budget.StepN(n)
+		return chargeErr
+	})
+	if errors.Is(err, geom.ErrUnsupportedLineScene) {
+		return no, false, nil
+	}
+	if err != nil {
+		return no, false, err
+	}
+	for i := range prepared {
+		prepared[i].raw = paired[i]
 	}
 	if prepared[0].scene == prepared[1].scene {
 		return no, false, nil

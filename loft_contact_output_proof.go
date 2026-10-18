@@ -23,8 +23,7 @@ type loftOutputBoundaryProof struct {
 	auditedTris  [][3]int
 }
 
-// The private proof keeps its existing audit behavior. The direct-shell
-// mode charges and retains the held audit for the result builder.
+// Both proof modes charge their held audits to the output budget.
 func certifyLoftOutputBoundary(ctx context.Context, first, second *Body,
 	operation *proofbound.WorkBudget) (loftOutputBoundaryProof, bool, error) {
 	return certifyLoftOutputBoundaryMode(ctx, first, second, operation, false, nil)
@@ -159,28 +158,16 @@ func certifyLoftOutputBoundaryMode(ctx context.Context, first, second *Body,
 	}
 	// The exact source labels and orientation are already fixed. Neither audit
 	// may reverse a triangle to repair an ownership mistake.
-	if directShell {
-		if err := loftmesh.LoftCrossingAuditPrivateBounded(budget, verts, shell.triangles); err != nil {
-			return no, false, err
-		}
-	} else {
-		if err := loftmesh.LoftCrossingAuditBounded(operation, verts, shell.triangles,
-			512, 1_000_000); err != nil {
-			return no, false, err
-		}
+	if err := loftmesh.LoftCrossingAuditPrivateBounded(budget, verts, shell.triangles); err != nil {
+		return no, false, err
 	}
-	var audit *facetproof.MeshAudit
+	auditTris := shell.triangles
 	if directShell {
-		var audited bool
-		audit, audited, err = facetproof.AuditFacetedMeshBounded(ctx, budget, verts, auditedTris)
-		if err != nil || !audited {
-			return no, false, err
-		}
-	} else {
-		audit, err = facetproof.AuditFacetedMesh(ctx, verts, shell.triangles)
-		if err != nil {
-			return no, false, err
-		}
+		auditTris = auditedTris
+	}
+	audit, audited, err := facetproof.AuditFacetedMeshBounded(ctx, budget, verts, auditTris)
+	if err != nil || !audited {
+		return no, false, err
 	}
 	if audit == nil || len(audit.Members) != 1 {
 		return no, false, nil
