@@ -29,7 +29,6 @@ The rules for rows live in `docs/layout.md`.
 | `revolve_loft_faces_clear_patch.go` | Certifies tool occupancy for a blank-shell triangle whose entire patch clears the trimmed tool. See revolve-loft-contact-graph design. |
 | `revolve_loft_faces_blank_shell_caps.go` | Splits the closed Revolve shell at every live occupied heel-cap circle. See loft-face-sections design. |
 | `revolve_loft_faces_cap_seam_vertices.go` | Bounds held heel-cap endpoints against live source boxes. See loft-face-sections design. |
-| `revolve_loft_faces_cap_ray_order.go` | Checks inserted cap rays against source-box angular order. See loft-face-sections design. |
 | `revolve_loft_faces_shell_manifest.go` | Compares every retained Revolve and LoftFaces source-side cell against current producers. See loft-face-sections design. |
 | `revolve_loft_faces_vertical_trace.go` | Links graph-owned vertical source cells into one exact parameter path. See revolve-loft-contact-graph design. |
 | `revolve_loft_faces_vertical_trace_proof.go` | Proves the line and centered-arc source path stays simple inside its cap circle. See revolve-loft-contact-graph design. |

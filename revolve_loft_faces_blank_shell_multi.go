@@ -110,7 +110,9 @@ func revolveLoftFacesShellRaysForRuns(n int, seams [][]revolveLoftFacesSeamVerte
 				seamIndex: -1, seamRefs: []revolveLoftFacesRaySeamRef{{run: run, station: station}}})
 		}
 	}
-	sort.Slice(rays, func(i, j int) bool { return revolveLoftFacesRayBefore(rays[i], rays[j]) })
+	sort.Slice(rays, func(i, j int) bool {
+		return revolveloftfaces.RayBefore(rays[i].y, rays[i].z, rays[j].y, rays[j].z)
+	})
 	unique := rays[:0]
 	for _, ray := range rays {
 		if len(unique) == 0 || !revolveLoftFacesSameRay(unique[len(unique)-1], ray) {
@@ -140,7 +142,7 @@ func revolveLoftFacesAllRayOrderBounded(rays []revolveLoftFacesRay,
 	if len(rays) < 4 {
 		return false
 	}
-	boxes := make([][]revolveLoftFacesRayBox, len(rays))
+	boxes := make([][]revolveloftfaces.RayBox, len(rays))
 	seenCaps := make([]bool, len(capVertices))
 	seenStations := make([][]bool, len(seams))
 	for run := range seams {
@@ -152,9 +154,9 @@ func revolveLoftFacesAllRayOrderBounded(rays []revolveLoftFacesRay,
 			return false
 		}
 		if len(ray.capIDs) == 0 && len(ray.seamRefs) == 0 {
-			boxes[index] = []revolveLoftFacesRayBox{{
-				y: loftFaceInterval{Lo: ray.y, Hi: ray.y},
-				z: loftFaceInterval{Lo: ray.z, Hi: ray.z}}}
+			boxes[index] = []revolveloftfaces.RayBox{{
+				Y: loftFaceInterval{Lo: ray.y, Hi: ray.y},
+				Z: loftFaceInterval{Lo: ray.z, Hi: ray.z}}}
 		}
 		for _, id := range ray.capIDs {
 			if id < 0 || id >= len(capVertices) || seenCaps[id] {
@@ -162,8 +164,8 @@ func revolveLoftFacesAllRayOrderBounded(rays []revolveLoftFacesRay,
 			}
 			seenCaps[id] = true
 			boundary := capVertices[id].boundary
-			boxes[index] = append(boxes[index], revolveLoftFacesRayBox{
-				y: boundary.box[1], z: boundary.box[2]})
+			boxes[index] = append(boxes[index], revolveloftfaces.RayBox{
+				Y: boundary.box[1], Z: boundary.box[2]})
 		}
 		for _, ref := range ray.seamRefs {
 			if ref.run < 0 || ref.run >= len(seams) ||
@@ -178,12 +180,12 @@ func revolveLoftFacesAllRayOrderBounded(rays []revolveLoftFacesRay,
 			}
 			bound := lfF(point.loftBound)
 			y, z := lfF(point.point.Y), lfF(point.point.Z)
-			boxes[index] = append(boxes[index], revolveLoftFacesRayBox{
-				y: loftFaceInterval{Lo: lfSub(y, bound), Hi: lfAdd(y, bound)},
-				z: loftFaceInterval{Lo: lfSub(z, bound), Hi: lfAdd(z, bound)}})
+			boxes[index] = append(boxes[index], revolveloftfaces.RayBox{
+				Y: loftFaceInterval{Lo: lfSub(y, bound), Hi: lfAdd(y, bound)},
+				Z: loftFaceInterval{Lo: lfSub(z, bound), Hi: lfAdd(z, bound)}})
 		}
 		for _, box := range boxes[index] {
-			if !revolveLoftFacesRayBoxValid(box) {
+			if !revolveloftfaces.RayBoxValid(box) {
 				return false
 			}
 		}
@@ -204,7 +206,7 @@ func revolveLoftFacesAllRayOrderBounded(rays []revolveLoftFacesRay,
 		next := (index + 1) % len(rays)
 		for _, first := range boxes[index] {
 			for _, second := range boxes[next] {
-				if revolveLoftFacesRayCrossRange(first, second).Lo.Sign() <= 0 {
+				if revolveloftfaces.RayCrossRange(first, second).Lo.Sign() <= 0 {
 					return false
 				}
 			}
