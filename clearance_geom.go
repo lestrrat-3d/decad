@@ -117,7 +117,7 @@ func newBodyGeomBudget(budget *proofbound.WorkBudget, b *Body) (*bodyGeom, bool,
 		}
 	case stitchPayload:
 		// Refuse outright unless the recorded triangle set exists (an
-		// all-planar body, open or closed — tessellate_stitch.go's own gate).
+		// all-planar body, open or closed — internal/stitchtess/stitch.go's own gate).
 		// A bounded body — placed (internal/stitchrecord/build.go's proofbound.RigidRoundAllow widens every
 		// vertex bound) or closed by the CURVE weld certificate at a nonzero
 		// class bound — no longer refuses on that alone: bodyGeom.delta now

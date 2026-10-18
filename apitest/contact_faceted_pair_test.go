@@ -206,7 +206,7 @@ func TestContactPairExactPlanarNonConvex(t *testing.T) {
 // The VertBound widening has no identity-placed fixture: only a
 // certificate-welded stitch (docs/surface-design.md §6.2) carries a positive
 // class bound at the identity. The term is the per-vertex bound Stitch
-// stamps on each live Vertex, the one tessellate_stitch.go publishes per
+// stamps on each live Vertex, the one internal/stitchtess/stitch.go publishes per
 // face, read back rather than proved twice; the placed copy's band below is
 // asserted against it.
 func TestExactPlanarPairAdmitsStitchedSolid(t *testing.T) {

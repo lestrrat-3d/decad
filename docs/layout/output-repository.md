@@ -19,7 +19,6 @@ The rules for rows live in `docs/layout.md`.
 | `tessellate_all_edge_chamfer.go` | Meshes the box all-edge bevels and shared circular bore with occupied-volume proof. See modify-general §4.3b. |
 | `tessellate_verification.go` | `Verification`, `WithVerification` and mesh proof publication. See tessellation §1. |
 | `tessellate_sweep_composite.go` | Builds composite Sweep span handles and runs the body audit around internal station assembly. See sweep Table D. |
-| `tessellate_stitch.go` | Stitch mesh adapters. See tessellation §2 and surface §10.1. |
 | `tessellate_body_patch.go` | Triangulates planar PatchEdges sheets and proves face bounds. See tessellation §2. |
 | `tessellate_body_patch_prism.go` | Reuses circular surface-extrusion wall stations to mesh one or both PatchEdges fills with shared rim indices and verified face bounds. |
 | `tessellate_chain.go` | A chain ribbon's exact-quad mesh. See surface §13.4. |

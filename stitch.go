@@ -164,7 +164,7 @@ func assertPlacedStitchOwners(faces []*topo.Face, xform r3.Transform) {
 
 // stitchVertexBounds yields the proven bound magnitude of each of b's own
 // vertices, in b.Vertices() order. clearance_geom.go's addStitchFaces dispatch
-// gate (docs/clearance-design.md §2) and tessellate_stitch.go's occupied-volume
+// gate (docs/clearance-design.md §2) and internal/stitchtess/stitch.go's occupied-volume
 // admission (docs/tessellation-design.md §2's stitchPayload row) both reduce
 // it through stitchweld.ZeroBound, and clearance_geom.go reads the largest
 // through stitchweld.MaxBound as the body's own bodyGeom.delta once a bounded

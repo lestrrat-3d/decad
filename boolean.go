@@ -1004,7 +1004,7 @@ func booleanProofBounds(symA, symB, roundVol, slackA, slackB, dropArea float64) 
 // A stitchPayload operand narrows rather than refuses outright: a CLOSED,
 // all-planar body (sp.Tris != nil) whose every vertex carries a proven bound
 // of exactly zero (stitchweld.ZeroBound over stitchVertexBounds, stitch.go — the identical gate
-// tessellate_stitch.go's own occupied-volume publication and
+// internal/stitchtess/stitch.go's own occupied-volume publication and
 // clearance_geom.go's carrier-model dispatch both apply) will publish
 // symDiffOK == true once meshed, so refusing it here would contradict what
 // meshbool.OperandSymDiff decides one step later over the same payload. Every other

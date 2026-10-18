@@ -2599,7 +2599,7 @@ lines below do not repeat it.
   deleted, a placed copy of the tetrahedron (positive `delta`) reads an exact `Touching` where §10.4
   requires a `ContactBand`. The `VertBound` widening has no identity-placed fixture: only a
   certificate-welded stitch (`docs/surface-design.md` §6.2) carries a positive class bound at the
-  identity, and the test file records that the term is the same per-vertex bound `tessellate_stitch.go`
+  identity, and the test file records that the term is the same per-vertex bound `internal/stitchtess/stitch.go`
   publishes per face, read back rather than proved twice. `.github/test-shards-apitest.txt` lists both tests.
 - Depends on: PRs 10, 11. PR 14 for the scene's mass only.
 - Shipped. The tests also read the tetrahedron on the `Cut` tray's floor, whose manifold needs the
