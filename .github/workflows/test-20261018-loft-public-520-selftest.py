@@ -117,6 +117,53 @@ class FailurePathTests(unittest.TestCase):
             with self.assertRaises(subprocess.TimeoutExpired):
                 gate.verify_scratch_sizes("a" * 64)
 
+    def test_tmp_exec_probe_rejects_a_non_executable_scratch_mount(self):
+        with mock.patch.object(gate, "docker",
+                               return_value=SimpleNamespace(returncode=0)) as docker:
+            gate.verify_tmp_exec("a" * 64)
+        docker.assert_called_once_with("exec", "a" * 64, "bash", "-ceu",
+                                       gate.TMP_EXEC_PROBE, timeout=5, check=False)
+        self.assertIn('chmod 700 "$probe"; "$probe"', gate.TMP_EXEC_PROBE)
+        self.assertIn('trap \'rm -f "$probe"\' EXIT', gate.TMP_EXEC_PROBE)
+        subprocess.run(["bash", "-n", "-c", gate.TMP_EXEC_PROBE], check=True)
+
+        with mock.patch.object(gate, "docker",
+                               return_value=SimpleNamespace(returncode=126)):
+            with self.assertRaisesRegex(gate.GateError, "/tmp cannot execute"):
+                gate.verify_tmp_exec("a" * 64)
+
+    def test_tmp_mount_preflight_checks_exec_before_go_permit(self):
+        limits = {"memory.max": gate.HARD, "memory.swap.max": 0,
+                  "pids.max": 64, "memory.current": 0}
+
+        def read_text(path, *_args, **_kwargs):
+            if str(path) == "/cgroup/cpu.max":
+                return "200000 100000"
+            if str(path) == "/proc/123/mountinfo":
+                return mountinfo
+            raise AssertionError(path)
+
+        for options, permitted in (("rw,noexec", False), ("rw", True)):
+            with self.subTest(options=options):
+                mountinfo = ("1 0 0:1 / /src ro - ext4 /dev/test ro\n"
+                             f"2 0 0:2 / /tmp {options} - tmpfs tmpfs rw\n"
+                             "3 0 0:3 / /go-cache rw - tmpfs tmpfs rw\n")
+                with mock.patch.object(gate, "read_number",
+                                       side_effect=lambda path: limits[path.name]), \
+                        mock.patch.object(gate.Path, "read_text", new=read_text), \
+                        mock.patch.object(gate, "counters", return_value=self.sample), \
+                        mock.patch.object(gate, "verify_scratch_sizes") as sizes, \
+                        mock.patch.object(gate, "verify_tmp_exec") as probe:
+                    if permitted:
+                        gate.verify_limits(Path("/cgroup"), 123, "a" * 64)
+                        sizes.assert_called_once_with("a" * 64)
+                        probe.assert_called_once_with("a" * 64)
+                    else:
+                        with self.assertRaisesRegex(gate.GateError, "mounted noexec"):
+                            gate.verify_limits(Path("/cgroup"), 123, "a" * 64)
+                        sizes.assert_not_called()
+                        probe.assert_not_called()
+
     def mocked_gate_run(self, verify_error=None, permit_error=None):
         container_id = "a" * 64
         state = {"removed": False, "exited": False}

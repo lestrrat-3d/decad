@@ -274,6 +274,21 @@ def verify_scratch_sizes(container_id):
             raise GateError(f"scratch mount differs: {name}")
 
 
+TMP_EXEC_PROBE = (
+    'probe=$(mktemp /tmp/.gate-exec.XXXXXX); '
+    'trap \'rm -f "$probe"\' EXIT; '
+    'printf "#!/bin/sh\\nexit 0\\n" > "$probe"; '
+    'chmod 700 "$probe"; "$probe"'
+)
+
+
+def verify_tmp_exec(container_id):
+    result = docker("exec", container_id, "bash", "-ceu", TMP_EXEC_PROBE,
+                    timeout=5, check=False)
+    if result.returncode:
+        raise GateError("scratch /tmp cannot execute the Go test binary")
+
+
 def verify_limits(path, pid, container_id):
     if read_number(path / "memory.max") != HARD or \
             read_number(path / "memory.swap.max") != 0 or \
@@ -294,7 +309,10 @@ def verify_limits(path, pid, container_id):
         opts, info = mounts[name]
         if info[0] != "tmpfs" or "rw" not in opts:
             raise GateError(f"scratch mount differs: {name}")
+    if "noexec" in mounts["/tmp"][0]:
+        raise GateError("scratch /tmp is mounted noexec")
     verify_scratch_sizes(container_id)
+    verify_tmp_exec(container_id)
     if read_number(path / "memory.current") >= STOP:
         raise GateError("memory reached stop threshold before Go")
     if counters(path)["swap"] or counters(path)["events"].get("oom", 0) or \
@@ -424,7 +442,7 @@ def run(args, report):
         create = ["docker", "create", "--platform", "linux/amd64", "--memory=4g",
                   "--memory-swap=4g", "--cpus=2", "--pids-limit=64", "--read-only",
                   "--security-opt=no-new-privileges", "--cap-drop=ALL",
-                  "--tmpfs", "/tmp:rw,size=1024m", "--tmpfs", "/go-cache:rw,size=1024m",
+                  "--tmpfs", "/tmp:rw,exec,size=1024m", "--tmpfs", "/go-cache:rw,size=1024m",
                   "--mount", f"type=bind,src={args.source},dst=/src,readonly",
                   "-w", "/src", "-e", "TMPDIR=/tmp", "-e", "GOTMPDIR=/tmp",
                   "-e", "GOMODCACHE=/tmp/mod", "-e", "GOCACHE=/go-cache",
