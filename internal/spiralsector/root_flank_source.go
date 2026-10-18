@@ -1,4 +1,4 @@
-package decad
+package spiralsector
 
 import (
 	"context"
@@ -7,7 +7,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/spiralsector"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -26,21 +25,21 @@ func spiralBandOneRootBox(ctx context.Context, proof *spiralFirstJoinSource,
 	if err := ctx.Err(); err != nil {
 		return empty, false, err
 	}
-	toeRoot := lfF(proof.Blank.ToeRoot.U)
+	toeRoot := seamRatF(proof.Blank.ToeRoot.U)
 	cap2 := loftface.CapXRange(proof.Tooth.Maps[2], proof.Flank[side], proof.Crossings[side][2])
 	if cap2.Lo == nil || cap2.Hi == nil || toeRoot.Cmp(cap2.Lo) >= 0 ||
-		cap2.Hi.Cmp(lfF(proof.Blank.Ded.U)) >= 0 {
+		cap2.Hi.Cmp(seamRatF(proof.Blank.Ded.U)) >= 0 {
 		return empty, false, nil
 	}
-	low, ok := spiralIsolateJunction(ctx, proof.Tooth.Maps, proof.Flank[side],
+	low, ok := IsolateJunction(ctx, proof.Tooth.Maps, proof.Flank[side],
 		proof.RootM, proof.RootB, proof.Crossings[side], toeRoot)
-	if !ok || low.Band != 1 || low.THi.Cmp(lfOne()) >= 0 {
+	if !ok || low.Band != 1 || low.THi.Cmp(seamRatOne()) >= 0 {
 		return empty, false, ctx.Err()
 	}
 	q := loftface.MeridianQRows(proof.Tooth.Maps[1], proof.Tooth.Maps[2],
 		proof.Flank[side], proof.RootM, proof.RootB)
-	sLo, sHi := lfZero(), lfOne()
-	if !spiralJunctionRootBracket(q, sLo, sHi, low.TLo, lfOne()) {
+	sLo, sHi := seamRatZero(), seamRatOne()
+	if !JunctionRootBracket(q, sLo, sHi, low.TLo, seamRatOne()) {
 		return empty, false, ctx.Err()
 	}
 	for step := range 64 {
@@ -49,19 +48,19 @@ func spiralBandOneRootBox(ctx context.Context, proof *spiralFirstJoinSource,
 				return empty, false, err
 			}
 		}
-		mid := lfMul(lfAdd(sLo, sHi), big.NewRat(1, 2))
-		if polynomial.BernsteinRowsSignAt(q, mid, low.TLo, lfOne(), -1) {
+		mid := seamRatMul(seamRatAdd(sLo, sHi), big.NewRat(1, 2))
+		if polynomial.BernsteinRowsSignAt(q, mid, low.TLo, seamRatOne(), -1) {
 			sLo = mid
 			continue
 		}
-		if polynomial.BernsteinRowsSignAt(q, mid, low.TLo, lfOne(), 1) {
+		if polynomial.BernsteinRowsSignAt(q, mid, low.TLo, seamRatOne(), 1) {
 			sHi = mid
 			continue
 		}
 		break
 	}
 	box, ok := loftface.JunctionBox(proof.Tooth.Maps[1], proof.Tooth.Maps[2],
-		proof.Flank[side], sLo, sHi, low.TLo, lfOne())
+		proof.Flank[side], sLo, sHi, low.TLo, seamRatOne())
 	if err := ctx.Err(); err != nil {
 		return empty, false, err
 	}
@@ -73,16 +72,16 @@ func spiralBandOneRootBox(ctx context.Context, proof *spiralFirstJoinSource,
 	return box, true, nil
 }
 
-// spiralRootFlankWholeBound checks every point of the true first-band seam
+// RootFlankWholeBound checks every point of the true first-band seam
 // against the complete held switched path, and conversely. The caller must
 // first authenticate that held is the one complete blank-root/fitted-flank
 // path and minBound is no larger than every published curve bound on it.
 // Strict held X order and source J>0 let each exact time slab use the same
 // X interval on both curves. An endpoint box covers the held tail after the
 // source seam reaches cap 2.
-func spiralRootFlankWholeBound(ctx context.Context, proof *spiralFirstJoinSource,
+func RootFlankWholeBound(ctx context.Context, proof *spiralFirstJoinSource,
 	side int, held []r3.Vec, minBound float64,
-	prepared ...*spiralRootFlankSourceBoxes) (float64, bool, error) {
+	prepared ...*RootFlankSourceBoxes) (float64, bool, error) {
 	if ctx == nil || proof == nil || side < 0 || side >= len(proof.Flank) ||
 		len(held) < 2 || len(held) > 4097 || proofbound.IsNonFinite(minBound) || minBound <= 0 {
 		return 0, false, nil
@@ -97,7 +96,7 @@ func spiralRootFlankWholeBound(ctx context.Context, proof *spiralFirstJoinSource
 		if prepared[0] == nil || prepared[0].proof != proof || prepared[0].side != side {
 			return 0, false, nil
 		}
-		return spiralRootFlankHeldAgainstSource(ctx, held, minBound, prepared[0])
+		return rootFlankHeldAgainstSource(ctx, held, minBound, prepared[0])
 	}
 	_, ok, err := spiralBandOneRootBox(ctx, proof, side)
 	if err != nil || !ok {
@@ -111,32 +110,32 @@ func spiralRootFlankWholeBound(ctx context.Context, proof *spiralFirstJoinSource
 		held = reversed
 	}
 	for i, p := range held {
-		if !proofbound.FiniteVec(p) || i > 0 && lfF(held[i-1].X).Cmp(lfF(p.X)) >= 0 {
+		if !proofbound.FiniteVec(p) || i > 0 && seamRatF(held[i-1].X).Cmp(seamRatF(p.X)) >= 0 {
 			return 0, false, nil
 		}
 	}
-	toeRoot := lfF(proof.Blank.ToeRoot.U)
+	toeRoot := seamRatF(proof.Blank.ToeRoot.U)
 	cap2 := loftface.CapXRange(proof.Tooth.Maps[2], proof.Flank[side], proof.Crossings[side][2])
-	if lfF(held[0].X).Cmp(toeRoot) != 0 || lfF(held[len(held)-1].X).Cmp(cap2.Hi) < 0 {
+	if seamRatF(held[0].X).Cmp(toeRoot) != 0 || seamRatF(held[len(held)-1].X).Cmp(cap2.Hi) < 0 {
 		return 0, false, nil
 	}
 	start := proof.Junctions[side][0]
-	if start.Band != 1 || start.TLo.Sign() < 0 || start.TLo.Cmp(lfOne()) >= 0 {
+	if start.Band != 1 || start.TLo.Sign() < 0 || start.TLo.Cmp(seamRatOne()) >= 0 {
 		return 0, false, nil
 	}
 	first, second := proof.Tooth.Maps[1], proof.Tooth.Maps[2]
 	span := proof.Flank[side]
 	q := loftface.MeridianQRows(first, second, span, proof.RootM, proof.RootB)
-	width := lfSub(lfOne(), start.TLo)
+	width := seamRatSub(seamRatOne(), start.TLo)
 	const slabs = 16
 	var largest float64
 	for slab := range slabs {
 		if err := ctx.Err(); err != nil {
 			return 0, false, err
 		}
-		a := lfAdd(start.TLo, lfMul(width, big.NewRat(int64(slab), slabs)))
-		z := lfAdd(start.TLo, lfMul(width, big.NewRat(int64(slab+1), slabs)))
-		if !spiralJunctionRootBracket(q, lfZero(), lfOne(), a, z) {
+		a := seamRatAdd(start.TLo, seamRatMul(width, big.NewRat(int64(slab), slabs)))
+		z := seamRatAdd(start.TLo, seamRatMul(width, big.NewRat(int64(slab+1), slabs)))
+		if !JunctionRootBracket(q, seamRatZero(), seamRatOne(), a, z) {
 			return 0, false, nil
 		}
 		rootA := loftface.IsolateRootN(polynomial.BernsteinRowsAt(q, a), 64)
@@ -156,14 +155,14 @@ func spiralRootFlankWholeBound(ctx context.Context, proof *spiralFirstJoinSource
 		if xLo.Cmp(xHi) >= 0 {
 			return 0, false, nil
 		}
-		sLo, sHi := lfZero(), lfOne()
+		sLo, sHi := seamRatZero(), seamRatOne()
 		for step := range 64 {
 			if step%8 == 0 {
 				if err := ctx.Err(); err != nil {
 					return 0, false, err
 				}
 			}
-			mid := lfMul(lfAdd(sLo, sHi), big.NewRat(1, 2))
+			mid := seamRatMul(seamRatAdd(sLo, sHi), big.NewRat(1, 2))
 			if polynomial.BernsteinRowsSignAt(q, mid, a, z, -1) {
 				sLo = mid
 				continue
@@ -179,26 +178,26 @@ func spiralRootFlankWholeBound(ctx context.Context, proof *spiralFirstJoinSource
 			return 0, false, nil
 		}
 		trueBox[0] = loftFaceInterval{Lo: xLo, Hi: xHi}
-		heldBox, yes := spiralsector.HeldXStrip(held, xLo, xHi)
+		heldBox, yes := HeldXStrip(held, xLo, xHi)
 		if !yes {
 			return 0, false, nil
 		}
-		bound, yes := spiralsector.RootFlankBoxesBound(trueBox, heldBox, minBound)
+		bound, yes := RootFlankBoxesBound(trueBox, heldBox, minBound)
 		if !yes {
 			return bound, false, nil
 		}
 		largest = max(largest, bound)
 	}
 	endpoint, ok := loftface.JunctionBox(second, second, span,
-		proof.Crossings[side][2].Lo, proof.Crossings[side][2].Hi, lfZero(), lfZero())
+		proof.Crossings[side][2].Lo, proof.Crossings[side][2].Hi, seamRatZero(), seamRatZero())
 	if !ok || endpoint[0].Lo.Cmp(cap2.Lo) > 0 || endpoint[0].Hi.Cmp(cap2.Hi) < 0 {
 		return 0, false, nil
 	}
-	tail, ok := spiralsector.HeldXStrip(held, cap2.Lo, lfF(held[len(held)-1].X))
+	tail, ok := HeldXStrip(held, cap2.Lo, seamRatF(held[len(held)-1].X))
 	if !ok {
 		return 0, false, nil
 	}
-	bound, ok := spiralsector.RootFlankBoxesBound(endpoint, tail, minBound)
+	bound, ok := RootFlankBoxesBound(endpoint, tail, minBound)
 	if err := ctx.Err(); err != nil {
 		return 0, false, err
 	}
@@ -211,7 +210,7 @@ func spiralRootFlankWholeBound(ctx context.Context, proof *spiralFirstJoinSource
 // The source slab boxes depend only on one authenticated first-tooth record.
 // A multi-body Union computes them once before validating its independent held
 // switch chains. The record pointer and side bind the cache to that source.
-type spiralRootFlankSourceBoxes struct {
+type RootFlankSourceBoxes struct {
 	proof    *spiralFirstJoinSource
 	side     int
 	toeRoot  *big.Rat
@@ -220,8 +219,8 @@ type spiralRootFlankSourceBoxes struct {
 	endpoint [3]loftFaceInterval
 }
 
-func spiralPrepareRootFlankSource(ctx context.Context, proof *spiralFirstJoinSource,
-	side int) (*spiralRootFlankSourceBoxes, bool, error) {
+func PrepareRootFlankSource(ctx context.Context, proof *spiralFirstJoinSource,
+	side int) (*RootFlankSourceBoxes, bool, error) {
 	if ctx == nil || proof == nil || side < 0 || side >= len(proof.Flank) ||
 		proof.Blank == nil || proof.Tooth == nil || len(proof.Tooth.Maps) != 9 {
 		return nil, false, nil
@@ -233,30 +232,30 @@ func spiralPrepareRootFlankSource(ctx context.Context, proof *spiralFirstJoinSou
 	if err != nil || !ok {
 		return nil, false, err
 	}
-	toeRoot := lfF(proof.Blank.ToeRoot.U)
+	toeRoot := seamRatF(proof.Blank.ToeRoot.U)
 	cap2 := loftface.CapXRange(proof.Tooth.Maps[2], proof.Flank[side], proof.Crossings[side][2])
 	if rootBox[0].Lo.Cmp(toeRoot) != 0 || rootBox[0].Hi.Cmp(cap2.Hi) != 0 {
 		return nil, false, nil
 	}
 	start := proof.Junctions[side][0]
 	if cap2.Lo == nil || cap2.Hi == nil ||
-		start.Band != 1 || start.TLo.Sign() < 0 || start.TLo.Cmp(lfOne()) >= 0 {
+		start.Band != 1 || start.TLo.Sign() < 0 || start.TLo.Cmp(seamRatOne()) >= 0 {
 		return nil, false, nil
 	}
 	first, second := proof.Tooth.Maps[1], proof.Tooth.Maps[2]
 	span := proof.Flank[side]
 	q := loftface.MeridianQRows(first, second, span, proof.RootM, proof.RootB)
-	width := lfSub(lfOne(), start.TLo)
-	plan := &spiralRootFlankSourceBoxes{
+	width := seamRatSub(seamRatOne(), start.TLo)
+	plan := &RootFlankSourceBoxes{
 		proof: proof, side: side, toeRoot: toeRoot, cap2: cap2,
 	}
 	for slab := range plan.slabs {
 		if err := ctx.Err(); err != nil {
 			return nil, false, err
 		}
-		a := lfAdd(start.TLo, lfMul(width, big.NewRat(int64(slab), 16)))
-		z := lfAdd(start.TLo, lfMul(width, big.NewRat(int64(slab+1), 16)))
-		if !spiralJunctionRootBracket(q, lfZero(), lfOne(), a, z) {
+		a := seamRatAdd(start.TLo, seamRatMul(width, big.NewRat(int64(slab), 16)))
+		z := seamRatAdd(start.TLo, seamRatMul(width, big.NewRat(int64(slab+1), 16)))
+		if !JunctionRootBracket(q, seamRatZero(), seamRatOne(), a, z) {
 			return nil, false, nil
 		}
 		rootA := loftface.IsolateRootN(polynomial.BernsteinRowsAt(q, a), 64)
@@ -276,14 +275,14 @@ func spiralPrepareRootFlankSource(ctx context.Context, proof *spiralFirstJoinSou
 		if xLo.Cmp(xHi) >= 0 {
 			return nil, false, nil
 		}
-		sLo, sHi := lfZero(), lfOne()
+		sLo, sHi := seamRatZero(), seamRatOne()
 		for step := range 64 {
 			if step%8 == 0 {
 				if err := ctx.Err(); err != nil {
 					return nil, false, err
 				}
 			}
-			mid := lfMul(lfAdd(sLo, sHi), big.NewRat(1, 2))
+			mid := seamRatMul(seamRatAdd(sLo, sHi), big.NewRat(1, 2))
 			if polynomial.BernsteinRowsSignAt(q, mid, a, z, -1) {
 				sLo = mid
 				continue
@@ -302,7 +301,7 @@ func spiralPrepareRootFlankSource(ctx context.Context, proof *spiralFirstJoinSou
 		plan.slabs[slab] = trueBox
 	}
 	endpoint, ok := loftface.JunctionBox(second, second, span,
-		proof.Crossings[side][2].Lo, proof.Crossings[side][2].Hi, lfZero(), lfZero())
+		proof.Crossings[side][2].Lo, proof.Crossings[side][2].Hi, seamRatZero(), seamRatZero())
 	if !ok || endpoint[0].Lo.Cmp(cap2.Lo) > 0 || endpoint[0].Hi.Cmp(cap2.Hi) < 0 {
 		return nil, false, nil
 	}
@@ -310,8 +309,8 @@ func spiralPrepareRootFlankSource(ctx context.Context, proof *spiralFirstJoinSou
 	return plan, true, ctx.Err()
 }
 
-func spiralRootFlankHeldAgainstSource(ctx context.Context, held []r3.Vec,
-	minBound float64, plan *spiralRootFlankSourceBoxes) (float64, bool, error) {
+func rootFlankHeldAgainstSource(ctx context.Context, held []r3.Vec,
+	minBound float64, plan *RootFlankSourceBoxes) (float64, bool, error) {
 	if held[0].X > held[len(held)-1].X {
 		reversed := make([]r3.Vec, len(held))
 		for i, p := range held {
@@ -320,12 +319,12 @@ func spiralRootFlankHeldAgainstSource(ctx context.Context, held []r3.Vec,
 		held = reversed
 	}
 	for i, p := range held {
-		if !proofbound.FiniteVec(p) || i > 0 && lfF(held[i-1].X).Cmp(lfF(p.X)) >= 0 {
+		if !proofbound.FiniteVec(p) || i > 0 && seamRatF(held[i-1].X).Cmp(seamRatF(p.X)) >= 0 {
 			return 0, false, nil
 		}
 	}
-	if lfF(held[0].X).Cmp(plan.toeRoot) != 0 ||
-		lfF(held[len(held)-1].X).Cmp(plan.cap2.Hi) < 0 {
+	if seamRatF(held[0].X).Cmp(plan.toeRoot) != 0 ||
+		seamRatF(held[len(held)-1].X).Cmp(plan.cap2.Hi) < 0 {
 		return 0, false, nil
 	}
 	var largest float64
@@ -333,21 +332,21 @@ func spiralRootFlankHeldAgainstSource(ctx context.Context, held []r3.Vec,
 		if err := ctx.Err(); err != nil {
 			return 0, false, err
 		}
-		heldBox, yes := spiralsector.HeldXStrip(held, source[0].Lo, source[0].Hi)
+		heldBox, yes := HeldXStrip(held, source[0].Lo, source[0].Hi)
 		if !yes {
 			return 0, false, nil
 		}
-		bound, yes := spiralsector.RootFlankBoxesBound(source, heldBox, minBound)
+		bound, yes := RootFlankBoxesBound(source, heldBox, minBound)
 		if !yes {
 			return bound, false, nil
 		}
 		largest = max(largest, bound)
 	}
-	tail, ok := spiralsector.HeldXStrip(held, plan.cap2.Lo, lfF(held[len(held)-1].X))
+	tail, ok := HeldXStrip(held, plan.cap2.Lo, seamRatF(held[len(held)-1].X))
 	if !ok {
 		return 0, false, nil
 	}
-	bound, ok := spiralsector.RootFlankBoxesBound(plan.endpoint, tail, minBound)
+	bound, ok := RootFlankBoxesBound(plan.endpoint, tail, minBound)
 	if err := ctx.Err(); err != nil {
 		return 0, false, err
 	}

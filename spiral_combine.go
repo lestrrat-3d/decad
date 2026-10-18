@@ -138,10 +138,10 @@ func spiralValidateCombinedUnion(ctx context.Context, blank *Body, blankHeld *me
 	}
 	firstAdmission := &spiralFirstUnionAdmission{
 		source: admission.source.First, short: admission.short,
-		rootBoxes: new([2]*spiralRootFlankSourceBoxes),
+		rootBoxes: new([2]*spiralsector.RootFlankSourceBoxes),
 	}
 	for side := range firstAdmission.rootBoxes {
-		boxes, ok, err := spiralPrepareRootFlankSource(ctx, firstAdmission.source, side)
+		boxes, ok, err := spiralsector.PrepareRootFlankSource(ctx, firstAdmission.source, side)
 		if err != nil || !ok {
 			return false, err
 		}
