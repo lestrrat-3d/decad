@@ -1469,6 +1469,7 @@
 10	0.00	TestLoftOutputCapCollinearBoundarySplit
 10	0.00	TestLoftOutputCapPredicatesCancelInFlight
 10	0.00	TestLoftVolumeComposeRealVaryingTabBothOrders
+10	0.00	TestLoftVolumeComposeRealDisplacedNonjunction
 10	0.00	TestLoftOutputBoundaryRefusesTinyTranslatedSeam
 10	0.00	TestLoftVolumeSourceRefusesNonbinaryJunction
 10	0.00	TestLoftVolumeSourceRefusesRealTriangleFractionalSeam
