@@ -1446,6 +1446,7 @@
 10	0.00	TestAxialLoftPrismUnionRefusesVaryingSource
 10	0.00	TestAxialLoftPrismUnionRefusesUnequalCapsAndCancellation
 10	0.00	TestLoftContactOutputBoundaryRealVaryingTab
+10	0.00	TestLoftQuarterOriginalHeldY1RealProducer
 10	0.00	TestLoftContactOutputBoundarySourceRefusals
 10	0.00	TestLoftContactOutputBoundaryLimitsAndCancellation
 10	0.00	TestLoftContactOutputBoundaryMiddleRegionContact
