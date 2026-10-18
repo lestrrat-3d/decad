@@ -117,7 +117,7 @@ func requireCupPrismLevelBounds(t *testing.T, prism prismPayload, a, b proofboun
 //   - The interference guard (interference.go): two equal displaced records
 //     read as one set.
 //   - radiussurvey.Cup's offset term: the cavity radius misses.
-//   - tessellateCup's face, area-slack and occupied-volume terms: the cavity
+//   - the cup mesh's face, area-slack and occupied-volume terms: the cavity
 //     wall's face bound, the mesh area and the mesh volume each miss.
 //
 // The centroid's envelope widening is not exhibited: the envelope is the
@@ -372,7 +372,7 @@ func TestDisplacedCupMesh(t *testing.T) {
 	cp := displacedCup(t, Inward)
 	body, err := evalDisplacedCup(cp)
 	require.NoError(t, err)
-	mesh, err := tessellateCup(t.Context(), body, cp, 0.1, VerifyAll)
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
 	require.True(t, mesh.n.SymDiffOK)
 

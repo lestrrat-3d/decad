@@ -809,7 +809,7 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
 15. **Files:** `tessellate_revolve.go`, `internal/revolvesampling/meridian.go`. **What:**
     `revolvesampling.MeridianSamples`, `revolvesampling.RequireAxisIncidence`,
     `revolveproof.Extents`, `revolvePreflightFacets`, rings, poles, `revolvemesh.EmitCellTriangles`, `revolvemesh.EmitCapTriangles`,
-    orientation; dispatch; refuse circular walks. **Pattern:** `tessellateCup` for ring sharing and cap
+    orientation; dispatch; refuse circular walks. **Pattern:** `cuptess.Tessellate` for ring sharing and cap
     emission. **Depends on:** 6, 14. **Tests:** R3's list in new `apitest/tessellate_revolve_test.go`; export byte
     identity there too.
 16. **Files:** `internal/revolvemesh/revolve_proof.go` and `tessellate_revolve.go`. **What:** `revolvemesh.AngularSequence` and its certified trig,
@@ -850,7 +850,7 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
 23. **Files:** `capblend.go`, `internal/capblend/band.go`. **What:** store each band's `delta` on the payload
     (`bandDelta`), keyed by `(loop, cap)`. **Tests:** internal: the stored value equals `capblend.BandResult.Delta`.
 24. **Files:** new `tessellate_capblend.go`. **What:** shared count `n(w)`, rings, cap contour rings, patch
-    cells, apex fans, cap faces, the §7 term table, refusals; dispatch. **Pattern:** `tessellateCup` for
+    cells, apex fans, cap faces, the §7 term table, refusals; dispatch. **Pattern:** `cuptess.Tessellate` for
     rings, `tessellate_revolve.go` for cone cells and fans. **Depends on:** 9 (twist helper use), 15, 23.
     **Tests:** §7's list in new `apitest/tessellate_capblend_test.go`.
 25. **Files:** `docs/modify-reach-design.md` §12 DX3/DX4 cells (§8's change), `doc.go`. **Depends on:** 24.
