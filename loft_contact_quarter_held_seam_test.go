@@ -96,7 +96,7 @@ func TestLoftQuarterOriginalHeldY1RealProducer(t *testing.T) {
 		ErrFn:  ctx.Err,
 	}
 	budget := proofbound.NewWallWorkBudgetWithOperation(65_536, operation)
-	report, accepted, err := loftcontact.CertifyQuarterHeldSeam(ctx, budget, lp, arcSegment, carrierY)
+	report, accepted, err := loftcontact.CertifyQuarterHeldSeam(ctx, budget, &loft.n, arcSegment, carrierY)
 	require.NoError(t, err)
 	if !accepted {
 		t.Fatalf("held y=1 refused: reason=%s cell=%d side=%d triangle=%d stations=%d pieces=%d visits=%d verts=%d tris=%d",
@@ -121,16 +121,18 @@ func TestLoftQuarterOriginalHeldY1RealProducer(t *testing.T) {
 	t.Run("facet limit refuses before scan", func(t *testing.T) {
 		oversized := lp
 		oversized.Verts = make([]r3.Vec, 513)
+		loft.n.Payload = oversized
+		defer func() { loft.n.Payload = lp }()
 		steps := 0
 		one := &proofbound.WorkBudget{
 			StepFn: func() error { steps++; return nil },
 			ErrFn:  func() error { return nil },
 		}
-		got, ok, err := loftcontact.CertifyQuarterHeldSeam(t.Context(), one, oversized, arcSegment, carrierY)
+		got, ok, err := loftcontact.CertifyQuarterHeldSeam(t.Context(), one, &loft.n, arcSegment, carrierY)
 		require.NoError(t, err)
 		require.False(t, ok)
 		require.Equal(t, "facet_limit", got.Reason)
-		require.Zero(t, steps)
+		require.Equal(t, 1, steps) // live-body check only; no mesh visit
 	})
 
 	t.Run("altered original role refuses", func(t *testing.T) {
@@ -145,9 +147,11 @@ func TestLoftQuarterOriginalHeldY1RealProducer(t *testing.T) {
 			}
 		}
 		require.True(t, changed)
+		loft.n.Payload = altered
+		defer func() { loft.n.Payload = lp }()
 		got, ok, err := loftcontact.CertifyQuarterHeldSeam(t.Context(),
 			proofbound.NewWallWorkBudgetWithOperation(65_536, proofbound.NewWorkBudget(t.Context())),
-			altered, arcSegment, carrierY)
+			&loft.n, arcSegment, carrierY)
 		require.NoError(t, err)
 		require.False(t, ok)
 		require.Equal(t, "wall_role", got.Reason)
@@ -156,7 +160,7 @@ func TestLoftQuarterOriginalHeldY1RealProducer(t *testing.T) {
 	t.Run("shared work limit refuses", func(t *testing.T) {
 		_, ok, err := loftcontact.CertifyQuarterHeldSeam(t.Context(),
 			proofbound.NewWallWorkBudgetWithOperation(1, proofbound.NewWorkBudget(t.Context())),
-			lp, arcSegment, carrierY)
+			&loft.n, arcSegment, carrierY)
 		require.False(t, ok)
 		require.ErrorIs(t, err, proofbound.ErrWallWorkBudget)
 	})
@@ -176,9 +180,49 @@ func TestLoftQuarterOriginalHeldY1RealProducer(t *testing.T) {
 			ErrFn: cancelCtx.Err,
 		}
 		_, ok, err := loftcontact.CertifyQuarterHeldSeam(cancelCtx,
-			proofbound.NewWallWorkBudgetWithOperation(65_536, operation), lp, arcSegment, carrierY)
+			proofbound.NewWallWorkBudgetWithOperation(65_536, operation), &loft.n, arcSegment, carrierY)
 		require.False(t, ok)
 		require.ErrorIs(t, err, context.Canceled)
 		require.Equal(t, 100, steps)
+	})
+
+	t.Run("live copied producer refuses", func(t *testing.T) {
+		copied, copyErr := Copy(t.Context(), loft)
+		require.NoError(t, copyErr)
+		copyPayload, payloadOK := copied.n.Payload.(loftPayload)
+		require.True(t, payloadOK)
+		require.True(t, copyPayload.AuthenticatedReconstruction)
+		require.Same(t, lp.SourceIdentity, copyPayload.SourceIdentity)
+		require.NotEqual(t, loft.n.Origin.Producer, copied.n.Origin.Producer)
+		require.True(t, copied.n.Doc.IsLive(&copied.n))
+		got, ok, readErr := loftcontact.CertifyQuarterHeldSeam(t.Context(),
+			proofbound.NewWallWorkBudgetWithOperation(65_536, proofbound.NewWorkBudget(t.Context())),
+			&copied.n, arcSegment, carrierY)
+		require.NoError(t, readErr)
+		require.False(t, ok)
+		require.Equal(t, "source_identity", got.Reason)
+	})
+
+	t.Run("rewrite markers refuse", func(t *testing.T) {
+		altered := lp
+		altered.BlendSegs = []map[int]struct{}{{arcSegment: {}}}
+		loft.n.Payload = altered
+		defer func() { loft.n.Payload = lp }()
+		got, ok, readErr := loftcontact.CertifyQuarterHeldSeam(t.Context(),
+			proofbound.NewWallWorkBudgetWithOperation(65_536, proofbound.NewWorkBudget(t.Context())),
+			&loft.n, arcSegment, carrierY)
+		require.NoError(t, readErr)
+		require.False(t, ok)
+		require.Equal(t, "source_identity", got.Reason)
+	})
+
+	t.Run("retired original refuses", func(t *testing.T) {
+		require.NoError(t, Remove(loft))
+		got, ok, readErr := loftcontact.CertifyQuarterHeldSeam(t.Context(),
+			proofbound.NewWallWorkBudgetWithOperation(65_536, proofbound.NewWorkBudget(t.Context())),
+			&loft.n, arcSegment, carrierY)
+		require.NoError(t, readErr)
+		require.False(t, ok)
+		require.Equal(t, "live_original", got.Reason)
 	})
 }

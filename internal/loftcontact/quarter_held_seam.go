@@ -6,7 +6,9 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -207,11 +209,11 @@ func (m loftHullMath) heldCapEdgeCount(tris [][3]int, a, b int) (int, error) {
 	return count, nil
 }
 
-// CertifyQuarterHeldSeam reads one y-plane crossing of the original Loft
-// payload. The caller supplies the real carrier's y coordinate and one shared
-// output budget. A false result carries the first bounded refusal in Reason.
+// CertifyQuarterHeldSeam reads one y-plane crossing of a live original Loft.
+// The caller supplies the real carrier's y coordinate and one shared output
+// budget. A false result carries the first bounded refusal in Reason.
 func CertifyQuarterHeldSeam(ctx context.Context, budget *proofbound.WorkBudget,
-	pl loftrecord.Payload, arcSegment int, carrierY float64) (QuarterHeldSeam, bool, error) {
+	loft *topo.Body, arcSegment int, carrierY float64) (QuarterHeldSeam, bool, error) {
 	report := QuarterHeldSeam{Cell: -1, Triangle: -1}
 	decline := func(reason string) (QuarterHeldSeam, bool, error) {
 		report.Reason = reason
@@ -226,11 +228,39 @@ func CertifyQuarterHeldSeam(ctx context.Context, budget *proofbound.WorkBudget,
 	if err := budget.Err(); err != nil {
 		return report, false, err
 	}
+	if loft == nil || loft.Doc == nil || loft.Owner == nil || loft.Origin.Role != provenance.RoleBody {
+		return decline("live_original")
+	}
+	loft.Doc.LiveMu.RLock()
+	if len(loft.Doc.LiveSet) > 65_536 {
+		loft.Doc.LiveMu.RUnlock()
+		return decline("live_set_limit")
+	}
+	liveSet := append([]*topo.Body(nil), loft.Doc.LiveSet...)
+	loft.Doc.LiveMu.RUnlock()
+	live := false
+	for _, candidate := range liveSet {
+		if err := budget.Step(); err != nil {
+			return report, false, err
+		}
+		if candidate == loft {
+			live = true
+			break
+		}
+	}
+	if !live {
+		return decline("live_original")
+	}
+	pl, payloadOK := loft.Payload.(loftrecord.Payload)
+	if !payloadOK || pl.SourceIdentity == nil || pl.SourceIdentity.Origin != loft.Origin.Producer {
+		return decline("source_identity")
+	}
 	if len(pl.Verts) == 0 || len(pl.Verts) > 512 || len(pl.Tris) == 0 || len(pl.Tris) > 512 {
 		return decline("facet_limit")
 	}
-	if !pl.AuthenticatedReconstruction || pl.SourceIdentity == nil || pl.SurfaceResult ||
-		pl.ThroughBoreCut || pl.AnalyticBore || pl.Xform != r3.Identity() {
+	if !pl.AuthenticatedReconstruction || pl.SurfaceResult || pl.ThroughBoreCut || pl.AnalyticBore ||
+		pl.Xform != r3.Identity() || pl.ConstructionDelta != 0 || len(pl.BlendSegs) != 0 ||
+		len(pl.ConstructionArcUpper) != 0 || len(pl.ConstructionLengthExtra) != 0 {
 		return decline("source_identity")
 	}
 	if pl.Frame0.U() != (r3.Vec{X: 1}) || pl.Frame0.V() != (r3.Vec{Y: 1}) ||
