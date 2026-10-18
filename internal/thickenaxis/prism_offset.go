@@ -105,7 +105,7 @@ func offsetAxisSection(ctx context.Context, profile momentinput.Profile, sense i
 	}
 	// radial is nil: a prism sheet's walls sweep along a fixed normal and turn
 	// about no axis, so there is no radius for the scan to keep positive
-	// (the root's thickenRadial is the revolve arm's gate alone).
+	// (thickenbuild's radial gate is for the revolve arm alone).
 	if err := AxisIntervalClear(ctx, loop.Walks, dirs, sense, amount, budget, nil); err != nil {
 		return momentinput.Profile{}, err
 	}

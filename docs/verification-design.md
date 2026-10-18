@@ -516,7 +516,7 @@ any reference is consulted (`verify_tolerance.go`'s `scalarToleranceRef` and
 always forms a usable reference — its `payload.Diameter` is guaranteed at build
 (`internal/facetedrecord/assemble.go`'s `AssembleBody`) and an edge length is
 a finite chord sum (`internal/facetedtopology/build.go`'s chain walk). For the other shipped payloads `bodyGateDiameter`
-(`verify_gate.go`) forms a body diameter too. A `revolvePayload`, or an
+(`verify_gate.go`, using `internal/gatediameter/`) forms a body diameter too. A `revolvePayload`, or an
 analytic-walled `prismPayload` with no section displacement, is a payload the
 clearance kernel's exact carrier model covers
 (`newBodyGeomBudget`/`clearance_geom.go`), and reads its diameter from
@@ -537,7 +537,7 @@ gap a proof states: the frame and placement rounding of its lift, its
 recorded coordinate's own bound, and the payload's section and level
 displacements. Two points each within `g` of body points are at most `2g`
 farther apart than those body points, so subtracting `2g` from the held
-maximum, rounded toward zero (`lowerDiameterForDisplacement`), leaves a
+maximum, rounded toward zero (`diameter.LowerForDisplacement`), leaves a
 certified LOWER bound on the denoted body's diameter.
 
 **A `prismPayload` reads station witnesses along its walls.** The carrier
@@ -597,9 +597,10 @@ face is its wall over the whole of its two levels, its side splits adding
 vertices and removing nothing, and a planar face's view holds its region at
 its one level. A face whose stations cannot be read adds none.
 
-**The pair's `D` reads both bodies' points together.** `pairGateDiameter`
+**The pair's `D` reads both bodies' points together.** `pairGateDiameterCached`
 (`verify_gate_points.go`) joins the point sets each body proves lie on it
-(`bodyGatePoints`: the points its own gate arm reads, or its vertices with
+(`bodyGatePoints` in root and `internal/gatediameter/body_gate_points.go`:
+the points its own gate arm reads, or its vertices with
 their published bounds; a coil reads every held station vertex, each within
 its station rounding of a point of its true helix edge) and reads the largest distance among them, pairs
 across the two bodies included, shrunk by twice the larger gap. The
@@ -625,8 +626,8 @@ arrives after the last check can still race with the call, as it can for any
 reading. Every reading returned equals a fresh one bit for bit.
 
 **Every arm publishes through one witness-maximum reader, and that reader
-rounds toward zero.** `pointSetDiameterWithBudget` (`verify_gate.go`, backed by
-`internal/diameter/points.go`) is the single
+rounds toward zero.** `diameter.PointsWithBudget`
+(`internal/diameter/points.go`) is the single
 site each arm below — the exact carrier model, the `loftPayload` arm, the
 free-form arm, `fallbackGateDiameter`, and the cached `payload.Diameter` a
 faceted build stores — hands its witness set to, and what it publishes is the
@@ -685,7 +686,7 @@ rounding. The maximum is shrunk by twice the widest gap, and the shared
 reader publishes it rounded toward zero, so the reading can only UNDERSTATE
 the body's true diameter and never overstate it — the same construction
 `bodyGateDiameter` already runs over a `loftPayload`'s own held vertex set
-(`verify_gate.go`), differing only in what the published displacement values earn
+(`internal/gatediameter/body_gate.go`), differing only in what the published displacement values earn
 (loft §12). A `LineSeg`-only loft whose published `delta == 0` has a
 polyhedral boundary, so its vertex maximum IS the true diameter. A chorded
 loft whose published `sectionDelta > 0` and `stationRound == 0` earns only a
@@ -781,7 +782,8 @@ the contour displacement each held vertex sits within of its corner foot and
 cap arcs, which its corners alone read as `√420`. A reflex corner's
 connector arc is read at its ends alone.
 
-What `fallbackGateDiameter` reports is `diameter.PrismGateDiameter`'s reading over
+What `gatediameter.FallbackGateDiameter` (`internal/gatediameter/body_gate.go`)
+reports is `diameter.PrismGateDiameter`'s reading over
 those witness prisms. A station is a point of the body only when the witness
 prism's walls run the full height between its two levels on the body, which
 holds for every witness prism above, a stacked prism's outer runs, a

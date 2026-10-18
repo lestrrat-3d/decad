@@ -1255,7 +1255,6 @@
 9	0.00	TestSweepDenotationHalfTurnExcess
 9	0.18	TestTessellateBrepBandsPlaced
 9	0.01	TestTessellateChargesSectionDisplacementToEveryProof
-9	0.00	TestThickenRadialRefusesBoundedAxis
 9	0.00	TestTriTriClassifyIsSymmetric
 9	0.00	TestValidateLoftRecordsDistinctPlanesPass
 9	0.02	TestVerifyPublishCoarseReadingKeepsGeometry

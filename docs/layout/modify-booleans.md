@@ -12,9 +12,9 @@ The rules for rows live in `docs/layout.md`.
 | `fillet.go` | Fillet entry and section rewrite adapter. See modify §6. |
 | `prism_union_fillet.go` | Authenticates one untouched outer edge of a faceted prism Union and rebuilds its isolated source fillet. See modify-reach §10.1. |
 | `prism_union_chamfer.go` | Reuses an authenticated outer edge and corner separation to rebuild one isolated source chamfer. See modify-reach §10.1. |
-| `draft_circle_fillet.go` | Rebuilds a positive-taper circular draft's far cap-rim fillet as a bounded full meridian revolution. See draft §10.4. |
-| `draft_circle_chamfer.go` | Rebuilds a positive-taper circular draft's far cap-rim chamfer as a bounded full meridian revolution. See draft §10.5. |
-| `draft_circle_shell.go` | Builds the inward cup of a positive-taper circular draft through a bounded meridian revolution. See draft §10.6. |
+| `draft_circle_fillet.go` | Admits the live far rim and commits its fillet; `internal/draftrecord/` builds the bounded meridian. See draft §10.4. |
+| `draft_circle_chamfer.go` | Admits the live far rim and commits its chamfer; `internal/draftrecord/` builds the bounded meridian. See draft §10.5. |
+| `draft_circle_shell.go` | Admits the far cap and inward sense, then commits the cup; `internal/draftrecord/` builds the bounded meridian. See draft §10.6. |
 | `loft_fillet.go` | Rewrites matching loft records at selected analytic and fitted-spline root corners. See loft §17. |
 | `oblique_boss_fillet.go` | Admits the junction edge of a complete tilted cylinder boss-root fillet, then builds and proves the mesh through `internal/obliqueboss/` and commits the faceted result. See oblique-boss-fillet design. |
 | `cross_cylinder_bore_chamfer.go` / `cross_cylinder_bore_chamfer_mesh.go` | Admits the perpendicular bore-mouth edge, reads source face groups, and asks `internal/crossbore/` to assemble the held mesh. See cross-cylinder-bore-chamfer design. |
@@ -38,8 +38,7 @@ The rules for rows live in `docs/layout.md`.
 | `shell_blind_pocket.go` | Admits and records the exact two-slab rectangular blind-pocket shell; `breprecord` builds and measures it. See modify-general §3.1b. |
 | `shell_counterbore.go` | Admits and records the exact two-level coaxial counterbore shell; `breprecord` builds and measures it. See modify-general §3.1e. |
 | `brep_modify.go` / `brep_modify_prism.go` | Brep and stacked modify receivers: dispatch, SB1/SB2, route P. See brep-modify. |
-| `brep_shell.go` / `brep_shell_curved.go` | Route S: through-cut shell and one circular tool-wall opening. See modify-general §3. |
-| `brep_shell_rim.go` | Route S rims. See modify-general §3.3. |
+| `brep_shell.go` / `brep_shell_curved.go` | Route S: live face selection, stage order, result commit, and one circular tool-wall opening. `internal/throughshell/` owns its record geometry. See modify-general §3. |
 | `brep_modify_edge.go` | Route E: public edge and reference-face checks, ordered gate dispatch and result commit. `breprecord` reads and rewrites the record and checks reference-face roles. See brep-modify §5. |
 | `brep_modify_loop.go` / `brep_loop_band.go` | Route L/V public edge and face adapters and result commit; `breploop` selects and rewrites the record, and `breprecord` builds the bands and mass. See modify-general §4. |
 | `brep_modify_chain.go` | Route L: selected cap-edge chains and partial-loop record adapters over `internal/breploop/`, `internal/offset2d/` and `internal/capband/`. |

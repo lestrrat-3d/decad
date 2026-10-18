@@ -172,11 +172,11 @@ func positiveVolume(v Measurement) bool {
 }
 
 // interferencePairDiameter reads the pair's diameter D through
-// pairGateDiameter: points each body proves lie on it, each charged its
+// pairGateDiameterCached: points each body proves lie on it, each charged its
 // proven gap, read across both bodies together. An incomplete set can only
 // understate D and tighten the noise floor, never admit a coarse answer.
 func interferencePairDiameter(ctx context.Context, a, b *Body) (float64, error) {
-	return pairGateDiameter(ctx, a, b)
+	return pairGateDiameterCached(ctx, a, b, nil)
 }
 
 // interferenceToleranceRef applies the pair-local volume gate and returns the

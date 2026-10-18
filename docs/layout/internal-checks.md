@@ -10,7 +10,7 @@ The rules for rows live in `docs/layout.md`.
 | Path | Responsibility |
 |---|---|
 | `internal/chainrecord/` | The chain ribbon record and its builder over nodes (`Build`, `Placed`, `Prism` view, walk capture and bounds walks); builds one wall face per recorded segment of every walk. Root `chainPayload` aliases it. See surface §13.4, evaluator §8. |
-| `internal/draftrecord/` | The draft and two-sided draft records and their builder over nodes (`Build`, `BuildTwoSided`, `Placed`, band view, offset span, measurements, gate and motion readings). Root `draftPayload` and `twoSidedDraftPayload` alias it. See draft §5–§8, evaluator §8. |
+| `internal/draftrecord/` | The draft and two-sided draft records and their builder over nodes (`Build`, `BuildTwoSided`, `Placed`, band view, offset span, measurements, gate and motion readings, bounded fillet/chamfer/shell meridians). Root `draftPayload` and `twoSidedDraftPayload` alias it. See draft §5–§10.6, evaluator §8. |
 | `internal/stackedrecord/` | Stacked record and node builder (`Build`, `Placed`, `Plan`, extents, runs, bounds); builds blind-cut slabs through `prismcells`; derives and audits interfaces, wall columns, exposed patches and the stacked mesh. Root `stackedPrismPayload` aliases it. See stacked-prism §2.2–§5, evaluator §8. |
 | `internal/twistsweep/` | The twisted sweep payloads and their builder over nodes, with polygon admission, stations, Loft cell sewing, wall areas, offset source and cup mesh. Root `twistedSweepPayload` and `compositeTwistedSweepPayload` alias it. See sweep §17, evaluator §8. |
 | `internal/sectionclip/` | Exact section records for prism, stack slab and Loft (parallel, smooth rectangle, homothetic); oblique clips, cap polygons and circle-line trim; cardinal sphere and cone sections; rational plane arithmetic. See section design. |
@@ -20,6 +20,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/compositemesh/` | Plans shared composite Sweep stations, maps reduced span rings and source roles, and assembles a transient mesh node with its numeric audits. See sweep Table D. |
 | `internal/compositesweep/` | Composite Sweep limits, span assembly (cap pairing, rim sewing, cap removal), boundary and vertex-link audits, bounded and body measurements, separation, body-extent and cross-span facet audits, rim-join certificate, side-role and cap-role rewrites. See sweep §7, §9. |
 | `internal/diameter/` | Lower-bound diameter of held witness points, including vertex, axis-extreme and prism station witnesses and the free-form prism section arm. See verification §3. |
+| `internal/gatediameter/` | Selects non-faceted Verify gate diameter and pair point witnesses over payload records; lower-bound arithmetic stays in `internal/diameter/`. See verification §3. |
 | `internal/tolerance/` | Relative tolerance comparisons, body reference formulas, and reading diagnostics. See verification §2-§3. |
 | `internal/verifyoption/` | Verify options. See verification §2. |
 | `internal/featureoption/` | Profile-fed feature option records and validation. See evaluator §5–§6, sweep §2/§16, loft §2. |
@@ -33,6 +34,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/prismpattern/` | Prism-pattern Union blank and copy authentication, radial source gaps, wall certificates, interval fillet contacts, ring cuts, polar sectors, clearance, rounded shell and caps, root chords and section separation. See prism-pattern-union design. |
 | `internal/mirrorjoin/` | Exact line admission, reflection, prism and stacked record rewrites, splice and joined-section audit. See mirror-pattern §5. |
 | `internal/patternrecord/` | Pattern spec gates, instance motion and record mapping. See mirror-pattern §4.3, §6.2. |
+| `internal/patternassembly/` | Pattern frame-keeping instances and disjoint group planning over recorded payloads. See mirror-pattern §4.3, §6. |
 | `internal/massmoment/` | Rational mass moments and inertia, and X-axis placement map charges. See dynamic-mass §2–§3. |
 | `internal/capcontour/` | Cap contour displacement, shell offset intervals, and edge and arc bounds. See modify-reach §8.3-§8.4. |
 | `internal/offset2d/` | Offset carriers, proofs, profile offsets and corner loops, rewrite and offset audits, offset displacement, and the draft near and far section stages. See modify §5–§9, shell-opening §3–§5, draft §2, §7. |
@@ -45,6 +47,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/shellsurvey/` | Shell inradius, section cavity limit, work budget and contained-disk witness. See modify §8. |
 | `internal/survey2d/` | 2D disks, prism readers, walks, corner loops, Bézier carriers. See verification §6. |
 | `internal/thickenaxis/` | Holds certified section pairs, checks offsets, ribbons and interval clearance, and builds the circle and axis offset sections of a prism sheet. See surface §16, §17. |
+| `internal/thickenbuild/` | Computes Thicken amounts and certified sections, then builds revolve and chain solids from admitted sheets. See surface §16. |
 | `internal/revolvesurvey/` | Revolve wall, undercut and concave-radius readers. See verification §6. |
 | `internal/wallsurvey/` | Prism and revolve wall record preparation and bounded readings, and the revolve clearance carrier input. See verification §6, clearance §2. |
 | `internal/radiussurvey/` | Prism, revolve, cup and BRep concave-radius readings. See verification §6. |
