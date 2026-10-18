@@ -21,8 +21,8 @@ The rules for rows live in `docs/layout.md`.
 | `revolve_loft_faces_pair_census.go` | Classifies every live finite Revolve and trimmed LoftFaces face pair from current source records. See loft-face-sections design. |
 | `revolve_loft_faces_contact_graph.go` | Assigns source-event IDs and binds them to checked open patches and cap-ring blank shells. See revolve-loft-contact-graph design. |
 | `revolve_loft_faces_cap_side_tie.go` | Binds occupied heel cap arc endpoints to unique live LoftFaces wall contact cells. See loft-face-sections design. |
-| `revolve_loft_faces_seam_vertices.go` | Places one shared held vertex row inside a certified radial arc root bracket and bounds each source side. See loft-face-sections design. |
-| `revolve_loft_faces_seam_patch.go` | Splits open Revolve and LoftFaces source strips through shared seam vertices. See loft-face-sections design. |
+| `revolve_loft_faces_seam_vertices.go` | Preserves root seam-vertex records and delegates unchecked placement to internal/revolveloftfaces. See loft-face-sections design. |
+| `revolve_loft_faces_seam_patch.go` | Preserves root open-patch records and graph-owned station IDs while delegating unchecked strip splitting. See loft-face-sections design. |
 | `revolve_loft_faces_seam_checked.go` | Rechecks live source face pairs and the complete radial arc station run before building open seam patches. See loft-face-sections design. |
 | `revolve_loft_faces_blank_shell.go` | Builds and audits a closed Revolve shell with source-aligned meridian cuts. See revolve-loft-contact-graph design. |
 | `revolve_loft_faces_blank_shell_multi.go` | Binds all contact graph runs and occupied cap arcs into one audited Revolve shell. See revolve-loft-contact-graph design. |
