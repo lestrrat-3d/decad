@@ -20,6 +20,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/facetproof/` | Faceted shell audits, placement, similarity and revolve sector-separation proofs, sector seams and angular gaps, and the faceted centroid allowance. See `docs/evaluator-design.md` §9. |
 | `internal/facetedrecord/` | Faceted payloads, point-loft source authentication, slab and cone-trim builders, bounds, caps, centroids, similarity proofs, placement, and node building. Root aliases its records. See evaluator §8–§9 and loft-point design. |
 | `internal/pointcone/` | Point-loft cone crossing samples, far-cap subdivision and contact split, cap and triangle crossing bounds, and sector cap paths, subdivision, merged angles and root-edge order, and the strict-side offset of a cone meridian (`offset.go`). See loft-point and loft-face-sections designs. |
+| `internal/pointloft/` | Builds the point-section Loft apex fan and proves its source stations, boundary, area and volume. See loft-point design. |
 | `internal/sectionrecord/` | Curve records and validation. |
 | `internal/selectorquery/` | Selector matching, query rendering, residual counts, and face-role indexes. See API §9. |
 | `internal/provenance/` | Producer identity, feature-role reference and the `RoleBody`/`RoleCapStart`/`RoleCapEnd` names the topology nodes hold; root `FeatureRef` is the public form. See evaluator §3. |
