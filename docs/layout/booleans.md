@@ -34,7 +34,7 @@ The rules for rows live in `docs/layout.md`.
 | `loft_cylinder_union.go` | Joins a source Loft tooth pattern to a coaxial cylinder with certified seam and volume bounds. See loft-cylinder-boolean design. |
 | `loft_prism_union.go` | Reduces authenticated straight-source axial Lofts to prism operands for exact Sketch Union. See general-boolean design §12. |
 | `loft_contact_partition.go` | Certifies a private varying-line Loft/prism source partition and both Sketch cap correspondences. See its proof comments. |
-| `loft_contact_source_spans.go` | Reads authenticated LineSeg and ArcSeg cap spans and Loft wall-cell source roles for the private curved-contact lane; it publishes no output proof. |
+| `loft_contact_source_spans.go` | Reads authenticated line, arc and fit-spline cap spans and Loft wall-cell source roles for the private curved-contact lane; it publishes no output proof. |
 | `loft_contact_cap_source.go` | Reads ordered Sketch cap cells and maps their exact line and arc fragments to original source segments for the private curved-contact lane. |
 | `loft_contact_direct_shell.go` | Builds a bounded public Union shell from certified Loft/prism source and output proofs. See its proof comments. |
 | `loft_contact_output_proof.go` | Builds and audits a transient held shell for planar varying-line Loft/prism contact. See its proof comments. |
