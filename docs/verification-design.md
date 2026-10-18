@@ -649,8 +649,9 @@ analytic `Union` of a placed prism pair, or of any pair whose merge cut a wall)
 reaches neither model: the clearance kernel's carrier model refuses it
 (`clearance_geom.go`'s `addPrismFaces`), because a certificate has to be an
 exact statement about a boundary and that payload holds its own only within
-`sectionDelta`. A diameter is not a certificate, so `gatewitness.Prism` below
-gives it the third arm of `fallbackGateDiameter`: the body's OWN recorded
+`sectionDelta`. A diameter is not a certificate, so `gatewitness.Prism`
+(`internal/gatewitness/prism.go`) gives it the third arm of
+`fallbackGateDiameter`: the body's OWN recorded
 section, read through the same station witnesses every other prism is read
 through. §7 proves each recorded boundary point sits within `sectionDelta` of
 the section the payload denotes, and each recorded level within `AxialDelta` of

@@ -32,8 +32,8 @@ import (
 // A cup payload reads its view's outer, the cup's own outer region — the
 // receiver's unmodified section for an INWARD shell, but the wider OFFSET
 // (expanded) region for an OUTWARD one, since an outward shell adds material
-// and cupPayloadFor (shell_cup.go) always assigns the wider of the two profiles
-// to outer regardless of sense. Either way the whole cup body — walls, floor
+// and cupwall.ViewFor (internal/cupwall/payload.go) assigns the wider of the
+// two profiles to Outer for either sense. The whole cup body — walls, floor
 // and cavity alike — sits inside the outer's own full-height prism: the cavity
 // never reaches farther than the outer region, the same containment
 // cupwall.Payload.ExtentAlong already relies on. Its outer walls run the cup's
@@ -43,8 +43,9 @@ import (
 // prismrecord.Payload.RequireExactSection), so an inward cup's witnesses carry
 // only the axial displacement. An outward cup's outer region is the OFFSET
 // one, recorded within the cup's offsetDelta of the region it denotes
-// (shell_cup.go), so its witnesses carry that displacement beside the axial
-// one, composed the way the displaced-prism arm below composes its own.
+// (`cupwall.ViewFor` in internal/cupwall/payload.go), so its witnesses carry
+// that displacement beside the axial one, composed the way the displaced-prism
+// arm below composes its own.
 //
 // A prism payload whose own sectionDelta is nonzero (docs/prism-boolean-design.md
 // §7's re-expressed or cut section — every analytic Union whose merge cut a

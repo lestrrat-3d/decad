@@ -1465,8 +1465,8 @@ only the call site each of its rows lands at. What the consumer does at
 `wallsurvey.PrismWall` and `radiussurvey.Prism` are §12's "Surveys
 (wall/undercut/min-radius)" row, `internal/prismrecord/extent.go`'s `ExtentAlong` is its
 "`ThroughAll` / `ThroughAllSide`" row, `clearance_geom.go`'s
-`addPrismFaces` is its "Clearance kernel" row, and `verify.go`'s
-`gatewitness.Prism` is its "`Verify`'s structural/tolerance gates" row.
+`addPrismFaces` is its "Clearance kernel" row, and `internal/gatewitness`'s
+`Prism` is its "`Verify`'s structural/tolerance gates" row.
 
 No §12 row rules on the two remaining consumers, and this section owns them.
 Each withholds its answer rather than measure the recorded section as the one
