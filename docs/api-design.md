@@ -788,7 +788,7 @@ body (§6) and takes no `*Document` argument. An operation that takes no body
 
 | Shipped method form | Free function |
 |---|---|
-| `Document.Loft`, `LoftFromPoint`, `LoftSections` | the same names with `ctx, doc` leading |
+| `Document.Loft`, `LoftFromPoint` | the same names with `ctx, doc` leading |
 | `Document.Sweep` over a profile or a chain | `Sweep(ctx, doc, s, sec, path, opts...)`, one generic function over `Section` (§8) |
 
 **Every operation that builds a body from a sketch takes a `ctx`, `Extrude`,
@@ -934,7 +934,7 @@ PatchProfile, PatchEdges, Stitch, Unstitch, Thicken**, plus the sweeps of an OPE
 `*sketch.Profile` and always build a sheet.
 `docs/loft-design.md` owns `Loft`'s signature, its two-profile correspondence
 rule, and its increment-1 scope. `docs/loft-sections-design.md` owns the
-separate `Document.LoftSections`: three quadratic homothetic line sections or
+separate `LoftSections`: three quadratic homothetic line sections or
 three to thirty-two independently varying axis-aligned rectangles,
 exactly identical curved sections, linearly varying four-arc circles, and the
 bounded varying fitted-flank class with fixed arcs; or four rounded-rectangle
@@ -985,7 +985,7 @@ returns `ErrUnsupported` for `WithSurfaceResult()` on a chain, after the
 chain's seam gates and before the axis gates and any commit
 (`docs/surface-design.md` §13.2).
 
-`LoftSections(ctx, sections ...LoftSection)` carries each `Sketch` and
+`LoftSections(ctx, doc, sections ...LoftSection)` carries each `Sketch` and
 `Profile` together. It admits the bounded classes in
 `docs/loft-sections-design.md`.
 

@@ -53,7 +53,7 @@ func TestLoftSectionsVaryingCirclesKeepVolumeAndMeshProof(t *testing.T) {
 	t.Parallel()
 	sections := threeArcCircleSections(t, [3]float64{8, 10, 12}, [3]float64{0, 5, 10})
 	doc := decad.New()
-	body, err := doc.LoftSections(t.Context(), sections[:]...)
+	body, err := decad.LoftSections(t.Context(), doc, sections[:]...)
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, body.Kind())
 	require.Len(t, doc.Bodies(), 1)
@@ -151,7 +151,7 @@ func TestLoftSectionsVaryingCirclesRefuseOtherShapes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			sections := threeArcCircleSections(t, tc.radii, tc.heights)
 			doc := decad.New()
-			body, err := doc.LoftSections(t.Context(), sections[:]...)
+			body, err := decad.LoftSections(t.Context(), doc, sections[:]...)
 			require.Nil(t, body)
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.Empty(t, doc.Bodies())

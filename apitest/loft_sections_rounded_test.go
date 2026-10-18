@@ -66,7 +66,7 @@ func TestLoftSectionsFourRoundedProfilesInterpolateNonAffineWidth(t *testing.T) 
 		sections[i] = roundedLoftSection(t, w, width, 1, 4*float64(i))
 	}
 	doc := decad.New()
-	body, err := doc.LoftSections(t.Context(), sections[:]...)
+	body, err := decad.LoftSections(t.Context(), doc, sections[:]...)
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1)
 	require.Len(t, body.Faces(), 10)
@@ -134,7 +134,7 @@ func TestLoftSectionsFourRoundedProfilesRefuseUnprovedShape(t *testing.T) {
 				sections[i] = roundedLoftSection(t, w, tc.widths[i], tc.radii[i], tc.levels[i])
 			}
 			doc := decad.New()
-			body, err := doc.LoftSections(t.Context(), sections[:]...)
+			body, err := decad.LoftSections(t.Context(), doc, sections[:]...)
 			require.Nil(t, body)
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.Empty(t, doc.Bodies())

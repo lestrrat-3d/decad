@@ -93,7 +93,7 @@ func TestLoftSectionsConstantCurvesKeepAnalyticFacesAndProof(t *testing.T) {
 	sections := threeCurvedSections(t, [3]float64{-0.24, -0.24, -0.24},
 		[3]float64{8, 8, 8}, [3]float64{0, 5, 10})
 	doc := decad.New()
-	body, err := doc.LoftSections(t.Context(), sections[:]...)
+	body, err := decad.LoftSections(t.Context(), doc, sections[:]...)
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, body.Kind())
 	require.Len(t, doc.Bodies(), 1)
@@ -168,7 +168,7 @@ func TestLoftSectionsVaryingFittedFlanksKeepSourceProof(t *testing.T) {
 	sections := threeCurvedSections(t, [3]float64{-0.24, -0.23, -0.24},
 		[3]float64{8, 8, 8}, [3]float64{0, 5, 10})
 	doc := decad.New()
-	body, err := doc.LoftSections(t.Context(), sections[:]...)
+	body, err := decad.LoftSections(t.Context(), doc, sections[:]...)
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, body.Kind())
 	require.Len(t, doc.Bodies(), 1)
@@ -248,7 +248,7 @@ func TestLoftSectionsRefuseChangedArcAndUnequalSpacing(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			sections := threeCurvedSections(t, tc.mids, tc.tips, tc.heights)
 			doc := decad.New()
-			body, err := doc.LoftSections(t.Context(), sections[:]...)
+			body, err := decad.LoftSections(t.Context(), doc, sections[:]...)
 			require.Nil(t, body)
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.Empty(t, doc.Bodies())

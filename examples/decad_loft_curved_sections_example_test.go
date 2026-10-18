@@ -64,7 +64,7 @@ func Example_decad_loftCurvedSections() {
 			return
 		}
 	}
-	body, err := decad.New().LoftSections(ctx, sections[:]...)
+	body, err := decad.LoftSections(ctx, decad.New(), sections[:]...)
 	if err != nil {
 		fmt.Printf("loft failed: %s\n", err)
 		return

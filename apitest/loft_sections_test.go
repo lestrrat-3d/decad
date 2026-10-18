@@ -40,7 +40,7 @@ func threeRectangleSections(t *testing.T, halfX, halfY, centerX, heights [3]floa
 func TestLoftSectionsInterpolatesThreeSketchesWithCertifiedMesh(t *testing.T) {
 	t.Parallel()
 	sections := threeSquareSections(t, [3]float64{10, 15, 8}, [3]float64{0, 5, 10})
-	body, err := decad.New().LoftSections(t.Context(), sections[:]...)
+	body, err := decad.LoftSections(t.Context(), decad.New(), sections[:]...)
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, body.Kind())
 
@@ -121,7 +121,7 @@ func TestLoftSectionsInterpolatesThreeSketchesWithCertifiedMesh(t *testing.T) {
 func TestLoftSectionsPlacedCapsRemainPlanar(t *testing.T) {
 	t.Parallel()
 	sections := threeSquareSections(t, [3]float64{10, 15, 8}, [3]float64{0, 5, 10})
-	body, err := decad.New().LoftSections(t.Context(), sections[:]...)
+	body, err := decad.LoftSections(t.Context(), decad.New(), sections[:]...)
 	require.NoError(t, err)
 	checkNormals := func(b *decad.Body, expected map[float64]float64) {
 		t.Helper()
@@ -185,7 +185,7 @@ func TestLoftSectionsRefusesUnprovenScaleAndSpacing(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			sections := threeRectangleSections(t, tc.half, tc.halfY, tc.centerX, tc.heights)
 			doc := decad.New()
-			body, err := doc.LoftSections(t.Context(), sections[:]...)
+			body, err := decad.LoftSections(t.Context(), doc, sections[:]...)
 			require.Nil(t, body)
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.Empty(t, doc.Bodies())
@@ -197,7 +197,7 @@ func TestLoftSectionsRequiresThreeSections(t *testing.T) {
 	t.Parallel()
 	sections := threeSquareSections(t, [3]float64{10, 15, 8}, [3]float64{0, 5, 10})
 	doc := decad.New()
-	body, err := doc.LoftSections(t.Context(), sections[:2]...)
+	body, err := decad.LoftSections(t.Context(), doc, sections[:2]...)
 	require.Nil(t, body)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Empty(t, doc.Bodies())

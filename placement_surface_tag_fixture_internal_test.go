@@ -67,7 +67,7 @@ func curvedLoftFlankSections(t *testing.T, mids, tips, heights [3]float64) [3]Lo
 func curvedLoftBody(t *testing.T) *Body {
 	t.Helper()
 	sections := curvedLoftFlankSections(t, [3]float64{-0.24, -0.23, -0.24}, [3]float64{8, 8, 8}, [3]float64{0, 5, 10})
-	body, err := New().LoftSections(t.Context(), sections[:]...)
+	body, err := LoftSections(t.Context(), New(), sections[:]...)
 	require.NoError(t, err)
 	return body
 }

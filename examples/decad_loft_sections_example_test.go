@@ -37,7 +37,7 @@ func Example_decad_loft_sections() {
 		}
 		sections[i] = decad.LoftSection{Sketch: s, Profile: s.Profiles()[0]}
 	}
-	body, err := decad.New().LoftSections(ctx, sections[:]...)
+	body, err := decad.LoftSections(ctx, decad.New(), sections[:]...)
 	if err != nil {
 		fmt.Printf("failed to loft sections: %s\n", err)
 		return
