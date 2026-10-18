@@ -138,36 +138,47 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 			}
 			before := append([]*Body(nil), d.Bodies()...)
 			beforeProducer := d.nextProducerID()
-			firstNode, secondNode := bodyNode(first), bodyNode(second)
 			firstDoc, secondDoc := first.n.Doc, second.n.Doc
 			firstOrigin, secondOrigin := first.n.Origin, second.n.Origin
 			firstLumps, secondLumps := first.Lumps(), second.Lumps()
+			firstKind, secondKind := first.n.Kind, second.n.Kind
+			firstSolid, secondSolid := first.n.Solid, second.n.Solid
 			firstVolume, secondVolume := first.n.Volume.Value.Base(), second.n.Volume.Value.Base()
+			firstVolumeBound, secondVolumeBound := first.n.Volume.Bound.Base(), second.n.Volume.Bound.Base()
+			firstVolumeExact, secondVolumeExact := first.n.Volume.Exactness, second.n.Volume.Exactness
 			limited := context.WithValue(t.Context(), loftDirectOutputLimitKey{}, uint64(1))
 			refused, refusalErr := Union(limited, first, second)
 			require.True(t, refused == nil)
 			require.ErrorIs(t, refusalErr, ErrUnsupported)
 			require.ErrorContains(t, refusalErr, "direct Loft/prism bounded proof limit")
 			after := d.Bodies()
-			require.Len(t, after, len(before), "the refusal must not commit a body")
+			require.Equal(t, len(before), len(after), "the refusal must not commit a body")
 			for i := range before {
 				require.True(t, after[i] == before[i], "body %d changed after refusal", i)
 			}
-			require.True(t, bodyNode(first) == firstNode && bodyNode(second) == secondNode,
-				"the refusal must not replace either operand node")
 			require.True(t, first.n.Owner == first && second.n.Owner == second,
 				"the refusal must preserve both node owners")
 			require.True(t, first.n.Doc == firstDoc && second.n.Doc == secondDoc,
 				"the refusal must preserve both owning documents")
 			require.True(t, first.n.Origin == firstOrigin && second.n.Origin == secondOrigin,
 				"the refusal must preserve both source identities")
+			require.True(t, first.n.Kind == firstKind && second.n.Kind == secondKind,
+				"the refusal must preserve both body kinds")
+			require.True(t, first.n.Solid == firstSolid && second.n.Solid == secondSolid,
+				"the refusal must preserve both solid flags")
 			require.Equal(t, firstVolume, first.n.Volume.Value.Base(),
 				"the refusal must preserve the first operand volume")
 			require.Equal(t, secondVolume, second.n.Volume.Value.Base(),
 				"the refusal must preserve the second operand volume")
+			require.True(t, first.n.Volume.Bound.Base() == firstVolumeBound &&
+				second.n.Volume.Bound.Base() == secondVolumeBound,
+				"the refusal must preserve both volume bounds")
+			require.True(t, first.n.Volume.Exactness == firstVolumeExact &&
+				second.n.Volume.Exactness == secondVolumeExact,
+				"the refusal must preserve both volume exactness values")
 			afterFirstLumps, afterSecondLumps := first.Lumps(), second.Lumps()
-			require.Len(t, afterFirstLumps, len(firstLumps))
-			require.Len(t, afterSecondLumps, len(secondLumps))
+			require.Equal(t, len(firstLumps), len(afterFirstLumps))
+			require.Equal(t, len(secondLumps), len(afterSecondLumps))
 			for i := range firstLumps {
 				require.True(t, afterFirstLumps[i] == firstLumps[i],
 					"first operand lump %d changed after refusal", i)
