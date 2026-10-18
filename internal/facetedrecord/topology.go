@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/lestrrat-3d/decad/internal/facetedtopology"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
@@ -11,14 +12,15 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// buildTopology chains the face-boundary mesh edges into topological
+// buildTopologyWithBudget chains the face-boundary mesh edges into topological
 // Edges (split where the adjacent face pair or the exact hinge convexity
 // changes) and builds each face's loops by walking the facet fans. Each
 // Vertex reports its own held bound VertexBound[v], and each Edge the largest
 // of its chain's vertices' bounds (docs/faceted-vertex-bounds-design.md
 // §4.2). Every vertex, edge and loop node comes from alloc.
-func buildTopology(
+func buildTopologyWithBudget(
 	ctx context.Context,
+	budget *proofbound.WorkBudget,
 	alloc topo.Alloc,
 	verts []r3.Vec,
 	tris [][3]int,
@@ -41,7 +43,13 @@ func buildTopology(
 		}
 		facetID[i] = id
 	}
-	plan, err := facetedtopology.Build(ctx, verts, tris, facetID, planarID, vertexBound)
+	var plan facetedtopology.Result
+	var err error
+	if budget == nil {
+		plan, err = facetedtopology.Build(ctx, verts, tris, facetID, planarID, vertexBound)
+	} else {
+		plan, err = facetedtopology.BuildWithBudget(ctx, budget, verts, tris, facetID, planarID, vertexBound)
+	}
 	if err != nil {
 		return err
 	}

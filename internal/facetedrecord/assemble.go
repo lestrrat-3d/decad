@@ -50,6 +50,11 @@ type Mesh struct {
 // held boundary's diameter; the caller stores the payload on the body.
 func AssembleBody(ctx context.Context, env topo.Env, in Mesh,
 	audit *facetproof.MeshAudit, volume measurement.Measurement, volRat *big.Rat) (*topo.Body, []int, float64, error) {
+	return assembleBody(ctx, nil, env, in, audit, volume, volRat)
+}
+
+func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.Env, in Mesh,
+	audit *facetproof.MeshAudit, volume measurement.Measurement, volRat *big.Rat) (*topo.Body, []int, float64, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, nil, 0, err
 	}
@@ -57,7 +62,9 @@ func AssembleBody(ctx context.Context, env topo.Env, in Mesh,
 	var diameterReading float64
 	var ok bool
 	var err error
-	if in.SpiralTools {
+	if shared != nil {
+		diameterReading, ok, err = diameter.PointsWithBudget(shared, verts)
+	} else if in.SpiralTools {
 		// The transient multi-tool operand needs only a lower witness. Its
 		// coordinate-extreme vertices give one without a quadratic all-pairs
 		// scan over every patterned copy.
@@ -77,7 +84,10 @@ func AssembleBody(ctx context.Context, env topo.Env, in Mesh,
 			return nil, nil, 0, err
 		}
 	}
-	budget := proofbound.NewWorkBudget(ctx)
+	budget := shared
+	if budget == nil {
+		budget = proofbound.NewWorkBudget(ctx)
+	}
 	if err := budget.Err(); err != nil {
 		return nil, nil, 0, err
 	}
@@ -190,7 +200,7 @@ func AssembleBody(ctx context.Context, env topo.Env, in Mesh,
 		}
 	}
 
-	if err := buildTopology(ctx, env.Alloc, verts, tris, facetFace, facePlanar,
+	if err := buildTopologyWithBudget(ctx, shared, env.Alloc, verts, tris, facetFace, facePlanar,
 		in.VertexBound, in.AxialSectionJoin); err != nil {
 		return nil, nil, 0, err
 	}
@@ -314,6 +324,9 @@ func AssembleBody(ctx context.Context, env topo.Env, in Mesh,
 	cxF, _ := cx.Float64()
 	cyF, _ := cy.Float64()
 	czF, _ := cz.Float64()
+	if shared != nil && !proofbound.FiniteVec(r3.Vec{X: cxF, Y: cyF, Z: czF}) {
+		return nil, nil, 0, errBoundedArithmetic
+	}
 	// The three coordinates round independently, and the VecMeasurement bound
 	// is a 3D radius (internal/proofbound/bounds.go, proofbound.Radius3D).
 	cenRound := proofbound.Radius3D(math.Max(proofbound.RatAbsDiff(cx, cxF), math.Max(proofbound.RatAbsDiff(cy, cyF), proofbound.RatAbsDiff(cz, czF))))
@@ -354,7 +367,12 @@ func AssembleBody(ctx context.Context, env topo.Env, in Mesh,
 	if err := budget.Err(); err != nil {
 		return nil, nil, 0, err
 	}
-	faceOf, err := facetproof.FaceIndices(ctx, topobuild.Faces(body), facetFace)
+	var faceOf []int
+	if shared == nil {
+		faceOf, err = facetproof.FaceIndices(ctx, topobuild.Faces(body), facetFace)
+	} else {
+		faceOf, err = faceIndicesBounded(ctx, shared, topobuild.Faces(body), facetFace)
+	}
 	if err != nil {
 		return nil, nil, 0, err
 	}
