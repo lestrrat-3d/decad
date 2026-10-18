@@ -68,7 +68,7 @@ func TestAxialLoftPrismUnionRectangularTab(t *testing.T) {
 
 func TestAxialLoftPrismUnionIndependentUnequalTabs(t *testing.T) {
 	for _, reverse := range []bool{false, true} {
-		t.Run(map[bool]string{false: "prism_first", true: "loft_first"}[reverse], func(t *testing.T) {
+		t.Run(map[bool]string{false: loftOperandPrismFirst, true: loftOperandLoftFirst}[reverse], func(t *testing.T) {
 			doc := New()
 			blank := internalBoxBody(t, doc, 0, 0, 10, 10, 4)
 			left := axialLineLoft(t, doc, -3, 7, 2, 9, 4)

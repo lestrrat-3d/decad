@@ -15,11 +15,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const (
+	loftOperandPrismFirst = "prism_first"
+	loftOperandLoftFirst  = "loft_first"
+)
+
 func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 	for _, reverse := range []bool{false, true} {
-		name := "prism_first"
+		name := loftOperandPrismFirst
 		if reverse {
-			name = "loft_first"
+			name = loftOperandLoftFirst
 		}
 		t.Run(name, func(t *testing.T) {
 			world := sketch.NewWorld()
