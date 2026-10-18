@@ -262,4 +262,39 @@ func TestLoftQuarterHeldPairRealProducerGate(t *testing.T) {
 		require.Equal(t, "live_pair", got.Reason)
 		require.Greater(t, steps, 3000)
 	})
+	t.Run("copied prism after original removal", func(t *testing.T) {
+		copyDoc := New()
+		copyLoft, buildErr := Loft(t.Context(), copyDoc,
+			sections[0], profiles[0], sections[1], profiles[1])
+		require.NoError(t, buildErr)
+		original, buildErr := Extrude(t.Context(), copyDoc, prismSketch, found[0],
+			Distance{D: units.Millimeters(12), Dir: Along})
+		require.NoError(t, buildErr)
+		copied, copyErr := Copy(t.Context(), original)
+		require.NoError(t, copyErr)
+		require.NoError(t, Remove(original))
+		originalRecord, recordOK := original.n.Payload.(prismPayload)
+		require.True(t, recordOK)
+		copiedRecord, recordOK := copied.n.Payload.(prismPayload)
+		require.True(t, recordOK)
+		require.Equal(t, originalRecord.Frame, copiedRecord.Frame)
+		require.Equal(t, originalRecord.Xform, copiedRecord.Xform)
+		require.Equal(t, originalRecord.Z0, copiedRecord.Z0)
+		require.Equal(t, originalRecord.Z1, copiedRecord.Z1)
+		require.Equal(t, originalRecord.Profile.Outer.Segments, copiedRecord.Profile.Outer.Segments)
+
+		live := copyDoc.n.Live()
+		require.Len(t, live, 2)
+		require.Same(t, &copyLoft.n, live[0])
+		require.Same(t, &copied.n, live[1])
+		require.Equal(t, 0, int(copyLoft.n.Origin.Producer))
+		require.Equal(t, 1, int(original.n.Origin.Producer))
+		require.Equal(t, 2, int(copied.n.Origin.Producer))
+
+		got, accepted, readErr := loftcontact.CertifyQuarterHeldPair(t.Context(),
+			proofbound.NewWorkBudget(t.Context()), &copied.n, &copyLoft.n)
+		require.NoError(t, readErr)
+		require.False(t, accepted)
+		require.Equal(t, "live_pair", got.Reason)
+	})
 }
