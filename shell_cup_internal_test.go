@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/cupwall"
+	"github.com/lestrrat-3d/decad/internal/gatediameter"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -321,7 +322,7 @@ func TestDisplacedCupGateAndIdentity(t *testing.T) {
 	cp := displacedCup(t, Outward)
 	body, err := evalDisplacedCup(cp)
 	require.NoError(t, err)
-	gate, ok, err := fallbackGateDiameter(proofbound.NewWorkBudget(t.Context()), body)
+	gate, ok, err := gatediameter.FallbackGateDiameter(proofbound.NewWorkBudget(t.Context()), &body.n)
 	require.NoError(t, err)
 	require.True(t, ok)
 	// The smallest denoted cup's farthest pair is its outer box's diagonal,
