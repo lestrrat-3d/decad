@@ -1,8 +1,11 @@
 package decad
 
 import (
+	"context"
+	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/sketch"
@@ -94,6 +97,121 @@ func TestLoftCurvedSourceCapsRealIndependentWedgeRefusesWithoutBoundaryProof(t *
 		}
 		require.Equal(t, 1, arcsWithWalls)
 	}
+	ordered, certifiedOrder, orderErr := certifyLoftCapSourceOrder(t.Context(),
+		proofbound.NewWallWorkBudgetWithOperation(4096, proofbound.NewWorkBudget(t.Context())),
+		certificate)
+	require.NoError(t, orderErr)
+	require.True(t, certifiedOrder)
+	require.Positive(t, ordered.visits)
+	for cap := range 2 {
+		require.NotEmpty(t, ordered.caps[cap])
+		var sharedCells, cutArcs int
+		for _, cell := range ordered.caps[cap] {
+			require.NotEmpty(t, cell.edges)
+			if cell.prism && cell.loft {
+				sharedCells++
+			}
+			for _, edge := range cell.edges {
+				require.True(t, edge.span.body == prism || edge.span.body == loft)
+				require.Less(t, edge.tStart, edge.tEnd)
+				require.Equal(t, edge.span.body.n.Origin.Producer,
+					edge.span.capFace.Producer)
+				if _, arc := edge.span.curve.(sectionrecord.ArcSeg); arc && edge.partial {
+					require.True(t, edge.span.body == loft)
+					cutArcs++
+				}
+			}
+		}
+		require.Positive(t, sharedCells)
+		require.Positive(t, cutArcs)
+	}
+	_, certifiedOrder, orderErr = certifyLoftCapSourceOrder(t.Context(),
+		proofbound.NewWallWorkBudgetWithOperation(1, proofbound.NewWorkBudget(t.Context())),
+		certificate)
+	require.ErrorIs(t, orderErr, proofbound.ErrWallWorkBudget)
+	require.False(t, certifiedOrder)
+	canceled, cancel := context.WithCancel(t.Context())
+	steps := 0
+	operation := &proofbound.WorkBudget{
+		StepFn: func() error {
+			steps++
+			if steps == 30 {
+				cancel()
+			}
+			return canceled.Err()
+		},
+		ErrFn: canceled.Err,
+	}
+	_, certifiedOrder, orderErr = certifyLoftCapSourceOrder(canceled,
+		proofbound.NewWallWorkBudgetWithOperation(4096, operation), certificate)
+	require.ErrorIs(t, orderErr, context.Canceled)
+	require.False(t, certifiedOrder)
+	require.Equal(t, 30, steps)
+	t.Run("over_cap_arcs", func(t *testing.T) {
+		const arcs = 17
+		arcWorld := sketch.NewWorld()
+		arcUpper, upperErr := arcWorld.CreateOffsetPlane(arcWorld.XY(), 10)
+		require.NoError(t, upperErr)
+		var arcSections [2]*sketch.Sketch
+		var arcProfiles [2]*sketch.Profile
+		for cap, radius := range [2]float64{5, 5.5} {
+			plane := arcWorld.XY()
+			if cap == 1 {
+				plane = arcUpper
+			}
+			s, createErr := arcWorld.CreateSketch(plane)
+			require.NoError(t, createErr)
+			center := s.CreatePoint(0, 0)
+			s.Fix(center)
+			points := make([]*sketch.Point, arcs+1)
+			for i := range points {
+				angle := math.Pi * float64(i) / (2 * arcs)
+				points[i] = s.CreatePoint(radius*math.Cos(angle), radius*math.Sin(angle))
+			}
+			s.CreateLine(center, points[0])
+			for i := range arcs {
+				s.CreateArc(center, points[i], points[i+1])
+			}
+			s.CreateLine(points[arcs], center)
+			_, createErr = s.Solve(t.Context())
+			require.NoError(t, createErr)
+			found := s.Profiles()
+			require.Len(t, found, 1)
+			require.True(t, found[0].Valid)
+			arcSections[cap], arcProfiles[cap] = s, found[0]
+		}
+		arcLoft, loftErr := Loft(t.Context(), New(), arcSections[0], arcProfiles[0],
+			arcSections[1], arcProfiles[1])
+		require.NoError(t, loftErr)
+		arcSource, sourceOK, sourceErr := certifyLoftSourceSpanCaps(t.Context(),
+			proofbound.NewWallWorkBudgetWithOperation(4096, proofbound.NewWorkBudget(t.Context())),
+			prism, arcLoft)
+		require.NoError(t, sourceErr)
+		require.True(t, sourceOK)
+		require.Len(t, arcSource.loftCaps[0], arcs+2)
+		arcCount := 0
+		for _, span := range arcSource.loftCaps[0] {
+			if _, isArc := span.curve.(sectionrecord.ArcSeg); isArc {
+				arcCount++
+			}
+		}
+		require.Equal(t, arcs, arcCount)
+		conservativeSegments := len(arcSource.prismCaps[0]) +
+			len(arcSource.loftCaps[0]) - arcCount + 256*arcCount
+		require.Greater(t, conservativeSegments, prismcells.MaxArrangementSegments)
+		steps := 0
+		operation := &proofbound.WorkBudget{
+			StepFn: func() error { steps++; return nil },
+			ErrFn:  t.Context().Err,
+		}
+		_, admitted, capErr := certifyLoftCapSourceOrder(t.Context(),
+			proofbound.NewWallWorkBudgetWithOperation(4096, operation), arcSource)
+		require.NoError(t, capErr)
+		require.False(t, admitted)
+		require.Positive(t, steps)
+		require.Less(t, steps,
+			len(arcSource.prismCaps[0])+len(arcSource.loftCaps[0]))
+	})
 	for _, tc := range []struct {
 		name          string
 		first, second *Body
