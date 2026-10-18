@@ -116,7 +116,7 @@ func TestLoftEmbeddedFlankRecordsSurviveFilletAndBore(t *testing.T) {
 	require.Len(t, source, 4)
 	require.Len(t, rootCorners, 4)
 	doc := New()
-	lofted, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	lofted, err := Loft(t.Context(), doc, s0, p0, s1, p1)
 	require.NoError(t, err)
 	requireEmbeddedFlanks(t, lofted, source)
 	axis := r3.NewVec(0, 0, 1)

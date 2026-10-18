@@ -167,7 +167,7 @@ func TestToFaceRefusesFacetedLoftCap(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquaresAt(t, r3.NewVec(0, 0, 0.1), 2, 1, 10)
 	doc := decad.New()
-	lower, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	lower, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
 	require.NoError(t, err)
 	mirrorFrame, err := r3.NewFrame(r3.NewVec(0, 0, 10.1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)

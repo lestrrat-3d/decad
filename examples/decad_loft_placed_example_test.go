@@ -55,7 +55,7 @@ func Example_decad_loft_placed() {
 	}
 
 	doc := decad.New()
-	tooth, err := doc.Loft(context.Background(), s0, s0.Profiles()[0], s1, s1.Profiles()[0])
+	tooth, err := decad.Loft(context.Background(), doc, s0, s0.Profiles()[0], s1, s1.Profiles()[0])
 	if err != nil {
 		fmt.Printf("failed to loft the tooth: %s\n", err)
 		return

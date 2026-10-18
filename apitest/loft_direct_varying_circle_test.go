@@ -51,7 +51,7 @@ func TestLoftDirectCircleRoundedAxisKeepsFacetedTopology(t *testing.T) {
 	}
 	s0, p0 := section(bottomPlane)
 	s1, p1 := section(topPlane)
-	body, err := decad.New().Loft(t.Context(), s0, p0, s1, p1)
+	body, err := decad.Loft(t.Context(), decad.New(), s0, p0, s1, p1)
 	require.NoError(t, err)
 	cylinders, err := decad.Faces(decad.Cylindrical()).SelectFaces(body)
 	require.ErrorIs(t, err, decad.ErrNoMatch)
@@ -105,7 +105,7 @@ func directLoftCirclesWithOuterRadii(t *testing.T, outerCircle bool,
 		require.NoError(t, err)
 		sections[i], profiles[i] = s, s.Profiles()[0]
 	}
-	body, err := decad.New().Loft(t.Context(), sections[0], profiles[0], sections[1], profiles[1])
+	body, err := decad.Loft(t.Context(), decad.New(), sections[0], profiles[0], sections[1], profiles[1])
 	require.NoError(t, err)
 	return body
 }
@@ -460,7 +460,7 @@ func directLoftRotatedCircleFrameBody(t *testing.T, u, v, bottomCenter, topCente
 		require.NoError(t, err)
 		sections[i], profiles[i] = s, s.Profiles()[0]
 	}
-	body, err := decad.New().Loft(t.Context(), sections[0], profiles[0], sections[1], profiles[1])
+	body, err := decad.Loft(t.Context(), decad.New(), sections[0], profiles[0], sections[1], profiles[1])
 	require.NoError(t, err)
 	return body
 }

@@ -104,7 +104,7 @@ func newTeethFixture(t *testing.T) teethFixture {
 	require.NoError(t, err)
 	bottomSketch, bottomProfile := teethSection(t, world, world.XY(), 0)
 	middleSketch, middleProfile := teethSection(t, world, middlePlane, 0.03)
-	lower, err := d.Loft(t.Context(), bottomSketch, bottomProfile, middleSketch, middleProfile)
+	lower, err := Loft(t.Context(), d, bottomSketch, bottomProfile, middleSketch, middleProfile)
 	require.NoError(t, err)
 	upper, err := MirroredCopy(t.Context(), lower, MirrorFrame{Frame: middleFrame})
 	require.NoError(t, err)

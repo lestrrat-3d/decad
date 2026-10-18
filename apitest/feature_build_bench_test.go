@@ -35,7 +35,7 @@ func BenchmarkLoftFrustum(b *testing.B) {
 	s0, p0, s1, p1 := loftSquares(b, 20, 10)
 	b.ResetTimer()
 	for b.Loop() {
-		body, err := decad.New().Loft(b.Context(), s0, p0, s1, p1)
+		body, err := decad.Loft(b.Context(), decad.New(), s0, p0, s1, p1)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -99,7 +99,7 @@ func BenchmarkLoftCurvedCircle(b *testing.B) {
 	require.NoError(b, err)
 	b.ResetTimer()
 	for b.Loop() {
-		body, err := decad.New().Loft(b.Context(), s0, s0.Profiles()[0], s1, s1.Profiles()[0])
+		body, err := decad.Loft(b.Context(), decad.New(), s0, s0.Profiles()[0], s1, s1.Profiles()[0])
 		if err != nil {
 			b.Fatal(err)
 		}

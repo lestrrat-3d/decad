@@ -13,7 +13,7 @@ import (
 
 func TestSectionDirectHoleFreeLoftFeedsExtrude(t *testing.T) {
 	bottom, bottomProfile, top, topProfile := loftSquaresAt(t, r3.NewVec(0, 0, 0), 5, 5, 2)
-	source, err := decad.New().Loft(t.Context(), bottom, bottomProfile, top, topProfile)
+	source, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile)
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
@@ -46,7 +46,7 @@ func TestSectionDirectHoleFreeCircleLoftFeedsExtrude(t *testing.T) {
 	require.NoError(t, err)
 	bottom, bottomProfile := loftCircleProfile(t, world, world.XY(), 2)
 	top, topProfile := loftCircleProfile(t, world, topPlane, 2)
-	source, err := decad.New().Loft(t.Context(), bottom, bottomProfile, top, topProfile)
+	source, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile)
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
@@ -69,7 +69,7 @@ func TestSectionDirectHoleFreeCircleLoftFeedsExtrude(t *testing.T) {
 
 func TestSectionDirectHoleFreeLoftRefusesUnprovedCases(t *testing.T) {
 	bottom, bottomProfile, top, topProfile := loftSquaresAt(t, r3.NewVec(0, 0, 0), 5, 5, 2)
-	source, err := decad.New().Loft(t.Context(), bottom, bottomProfile, top, topProfile)
+	source, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile)
 	require.NoError(t, err)
 	for _, tc := range []struct {
 		name   string
@@ -119,7 +119,7 @@ func TestSectionDirectHoleFreeLoftRefusesTwistedCorrespondence(t *testing.T) {
 	}
 	bottom, bottomProfile := makeProfile(world.XY())
 	top, topProfile := makeProfile(topPlane)
-	twisted, err := decad.New().Loft(t.Context(), bottom, bottomProfile, top, topProfile,
+	twisted, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile,
 		decad.WithLoftAlignment(1))
 	require.NoError(t, err)
 	requireDirectLoftSectionUnsupported(t, twisted, r3.NewVec(0, 0, 5))
@@ -137,7 +137,7 @@ func TestSectionDirectHoleFreeLoftRefusesShiftedSourceY(t *testing.T) {
 
 func TestSectionDirectHoleFreeLoftRefusesShiftedRequestedY(t *testing.T) {
 	bottom, bottomProfile, top, topProfile := loftSquaresAt(t, r3.NewVec(0, 0, 0), 5, 5, 2)
-	source, err := decad.New().Loft(t.Context(), bottom, bottomProfile, top, topProfile)
+	source, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile)
 	require.NoError(t, err)
 	requireDirectLoftSectionUnsupported(t, source, r3.NewVec(0, 1, 1))
 }
@@ -160,7 +160,7 @@ func holeFreeLoftWithShiftedTop(t *testing.T, topOrigin r3.Vec) *decad.Body {
 	}
 	bottom, bottomProfile := makeSquare(r3.NewVec(0, 0, 0))
 	top, topProfile := makeSquare(topOrigin)
-	source, err := decad.New().Loft(t.Context(), bottom, bottomProfile, top, topProfile)
+	source, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile)
 	require.NoError(t, err)
 	return source
 }

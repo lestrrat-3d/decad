@@ -77,7 +77,7 @@ func TestLoftBuildsCongruentSquares(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
-	body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
 	require.NoError(t, err)
 
 	vol, err := body.Volume()
@@ -135,7 +135,7 @@ func TestLoftHoledProfilesMakePassage(t *testing.T) {
 		sketches[i] = s
 	}
 
-	body, err := decad.New().Loft(t.Context(), sketches[0], profiles[0], sketches[1], profiles[1])
+	body, err := decad.Loft(t.Context(), decad.New(), sketches[0], profiles[0], sketches[1], profiles[1])
 	require.NoError(t, err)
 	vol, err := body.Volume()
 	require.NoError(t, err)
@@ -153,7 +153,7 @@ func TestLoftFrustumVolumeMatchesClosedForm(t *testing.T) {
 	// proven bound that encloses the closed-form value.
 	s0, p0, s1, p1 := loftSquares(t, 20, 10)
 	doc := decad.New()
-	body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
 	require.NoError(t, err)
 
 	const a0, a1, h = 1600.0, 400.0, 10.0
@@ -263,7 +263,7 @@ func TestLoftAlignmentSelectsTheCorrespondence(t *testing.T) {
 		// one-step shift, so it builds a twisted, non-vertical-rung pentagon
 		// loft whose volume is strictly less than the untwisted one.
 		doc := decad.New()
-		body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+		body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
 		require.NoError(t, err)
 		vol, err := body.Volume()
 		require.NoError(t, err)
@@ -275,7 +275,7 @@ func TestLoftAlignmentSelectsTheCorrespondence(t *testing.T) {
 
 	t.Run("OffsetFourReachesTheUntwistedCorrespondence", func(t *testing.T) {
 		doc := decad.New()
-		body, err := doc.Loft(t.Context(), s0, p0, s1, p1, decad.WithLoftAlignment(4))
+		body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1, decad.WithLoftAlignment(4))
 		require.NoError(t, err)
 		vol, err := body.Volume()
 		require.NoError(t, err)
@@ -289,7 +289,7 @@ func TestLoftAlignmentSelectsTheCorrespondence(t *testing.T) {
 	t.Run("EveryOffsetEitherBuildsAtOrBelowTheUntwistedVolumeOrRefuses", func(t *testing.T) {
 		for off := range 5 {
 			doc := decad.New()
-			body, err := doc.Loft(t.Context(), s0, p0, s1, p1, decad.WithLoftAlignment(off))
+			body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1, decad.WithLoftAlignment(off))
 			if err != nil {
 				require.ErrorIsf(t, err, decad.ErrDegenerate, "offset %d must either build or refuse with S7's ErrDegenerate", off)
 				continue
@@ -318,7 +318,7 @@ func TestLoftSeamGates(t *testing.T) {
 		require.NoError(t, err)
 
 		doc := decad.New()
-		body, err := doc.Loft(t.Context(), s0, foreign.Profiles()[0], s1, p1)
+		body, err := decad.Loft(t.Context(), doc, s0, foreign.Profiles()[0], s1, p1)
 		require.Nil(t, body)
 		require.ErrorIs(t, err, decad.ErrForeignProfile)
 		require.Empty(t, doc.Bodies())
@@ -336,7 +336,7 @@ func TestLoftSeamGates(t *testing.T) {
 		require.NoError(t, err)
 
 		doc := decad.New()
-		body, err := doc.Loft(t.Context(), s0, p0, s1, foreign.Profiles()[0])
+		body, err := decad.Loft(t.Context(), doc, s0, p0, s1, foreign.Profiles()[0])
 		require.Nil(t, body)
 		require.ErrorIs(t, err, decad.ErrForeignProfile)
 		require.Empty(t, doc.Bodies())
@@ -351,7 +351,7 @@ func TestLoftSeamGates(t *testing.T) {
 		require.True(t, p0.IsStale())
 
 		doc := decad.New()
-		body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+		body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
 		require.Nil(t, body)
 		require.ErrorIs(t, err, decad.ErrStaleProfile)
 		require.Empty(t, doc.Bodies())
@@ -366,7 +366,7 @@ func TestLoftSeamGates(t *testing.T) {
 		require.True(t, p1.IsStale())
 
 		doc := decad.New()
-		body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+		body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
 		require.Nil(t, body)
 		require.ErrorIs(t, err, decad.ErrStaleProfile)
 		require.Empty(t, doc.Bodies())
@@ -397,7 +397,7 @@ func TestLoftSeamGates(t *testing.T) {
 		require.NoError(t, err)
 
 		doc := decad.New()
-		body, err := doc.Loft(t.Context(), s0, profiles[0], s1, s1.Profiles()[0])
+		body, err := decad.Loft(t.Context(), doc, s0, profiles[0], s1, s1.Profiles()[0])
 		require.Nil(t, body)
 		require.ErrorIs(t, err, decad.ErrInvalidProfile)
 		require.Empty(t, doc.Bodies())
@@ -428,7 +428,7 @@ func TestLoftSeamGates(t *testing.T) {
 		require.NoError(t, err)
 
 		doc := decad.New()
-		body, err := doc.Loft(t.Context(), s0, s0.Profiles()[0], s1, profiles[0])
+		body, err := decad.Loft(t.Context(), doc, s0, s0.Profiles()[0], s1, profiles[0])
 		require.Nil(t, body)
 		require.ErrorIs(t, err, decad.ErrInvalidProfile)
 		require.Empty(t, doc.Bodies())
@@ -456,7 +456,7 @@ func TestLoftNilArguments(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			doc := decad.New()
-			body, err := doc.Loft(t.Context(), tc.s0, tc.p0, tc.s1, tc.p1)
+			body, err := decad.Loft(t.Context(), doc, tc.s0, tc.p0, tc.s1, tc.p1)
 			require.Nil(t, body)
 			require.ErrorIs(t, err, decad.ErrDegenerate)
 			require.Empty(t, doc.Bodies())
@@ -491,7 +491,7 @@ func TestLoftForeignOption(t *testing.T) {
 			LoftOption: decad.WithLoftAlignment(0),
 			calls:      &calls,
 		}
-		body, err := doc.Loft(t.Context(), s0, p0, s1, p1, opt)
+		body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1, opt)
 		require.Nil(t, body)
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.ErrorContains(t, err, "not a decad loft option")
@@ -502,7 +502,7 @@ func TestLoftForeignOption(t *testing.T) {
 
 	t.Run("NilElement", func(t *testing.T) {
 		doc := decad.New()
-		body, err := doc.Loft(t.Context(), s0, p0, s1, p1, nil)
+		body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1, nil)
 		require.Nil(t, body)
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.Empty(t, doc.Bodies())
@@ -514,7 +514,7 @@ func TestLoftDuplicateAlignmentOption(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
-	body, err := doc.Loft(t.Context(), s0, p0, s1, p1, decad.WithLoftAlignment(0), decad.WithLoftAlignment(0))
+	body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1, decad.WithLoftAlignment(0), decad.WithLoftAlignment(0))
 	require.Nil(t, body)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Empty(t, doc.Bodies())
@@ -528,7 +528,7 @@ func TestLoftEmptyAlignmentPayload(t *testing.T) {
 	// so it refuses as S4 (wrong length) rather than silently defaulting.
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
-	body, err := doc.Loft(t.Context(), s0, p0, s1, p1, decad.WithLoftAlignment())
+	body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1, decad.WithLoftAlignment())
 	require.Nil(t, body)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Empty(t, doc.Bodies())
@@ -542,7 +542,7 @@ func TestLoftCoplanarSectionsRefuse(t *testing.T) {
 	t.Run("SameSketch", func(t *testing.T) {
 		s0, p0, _, _ := loftSquares(t, 20, 20)
 		doc := decad.New()
-		body, err := doc.Loft(t.Context(), s0, p0, s0, p0)
+		body, err := decad.Loft(t.Context(), doc, s0, p0, s0, p0)
 		require.Nil(t, body)
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.Empty(t, doc.Bodies())
@@ -570,7 +570,7 @@ func TestLoftCoplanarSectionsRefuse(t *testing.T) {
 		require.NoError(t, err)
 
 		doc := decad.New()
-		body, err := doc.Loft(t.Context(), s0, s0.Profiles()[0], s1, s1.Profiles()[0])
+		body, err := decad.Loft(t.Context(), doc, s0, s0.Profiles()[0], s1, s1.Profiles()[0])
 		require.Nil(t, body)
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.Empty(t, doc.Bodies())
@@ -598,7 +598,7 @@ func TestLoftCurvedPairRefuses(t *testing.T) {
 		require.NoError(t, err)
 
 		doc := decad.New()
-		body, err := doc.Loft(t.Context(), s0, p0, s1, s1.Profiles()[0])
+		body, err := decad.Loft(t.Context(), doc, s0, p0, s1, s1.Profiles()[0])
 		require.Nil(t, body)
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Empty(t, doc.Bodies())
@@ -630,7 +630,7 @@ func TestLoftSameKindCircleAgainstCircleAdmitted(t *testing.T) {
 	s1, p1 := loftCircleProfile(t, w, top, 5)
 
 	doc := decad.New()
-	body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
 	require.NoError(t, err)
 	require.NotNil(t, body)
 }
@@ -641,7 +641,7 @@ func TestLoftVerifySound(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 10)
 	doc := decad.New()
-	_, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	_, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())
@@ -678,7 +678,7 @@ func TestLoftVerifySurveysStaySuspect(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			s0, p0, s1, p1 := loftSquares(t, 20, 10)
 			doc := decad.New()
-			_, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+			_, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
 			require.NoError(t, err)
 
 			report, err := doc.Verify(t.Context(), tc.opt)
@@ -696,11 +696,11 @@ func TestLoftVerifyBoxDisjointPairIsSound(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 10, 10)
 	doc := decad.New()
-	_, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	_, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
 	require.NoError(t, err)
 
 	t0, tp0, t1, tp1 := loftSquaresAt(t, r3.NewVec(1000, 0, 0), 10, 10, 10)
-	_, err = doc.Loft(t.Context(), t0, tp0, t1, tp1)
+	_, err = decad.Loft(t.Context(), doc, t0, tp0, t1, tp1)
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())
@@ -726,7 +726,7 @@ func TestLoftContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	body, err := doc.Loft(ctx, s0, p0, s1, p1)
+	body, err := decad.Loft(ctx, doc, s0, p0, s1, p1)
 	require.Nil(t, body)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Empty(t, doc.Bodies())
@@ -792,7 +792,7 @@ func TestLoftHelicalToothClearsDefaultTolerance(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	body, err := doc.Loft(t.Context(), s0, s0.Profiles()[0], s1, s1.Profiles()[0])
+	body, err := decad.Loft(t.Context(), doc, s0, s0.Profiles()[0], s1, s1.Profiles()[0])
 	require.NoError(t, err)
 	volume, err := body.Volume()
 	require.NoError(t, err)
@@ -832,7 +832,7 @@ func TestLoftHugeCircleRefusesNonFiniteVolume(t *testing.T) {
 	s1, p1 := loftCircleProfile(t, w, top, 1e103)
 	doc := decad.New()
 	require.NotPanics(t, func() {
-		body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+		body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
 		require.Nil(t, body)
 		require.ErrorIs(t, err, decad.ErrNotFinite)
 	})

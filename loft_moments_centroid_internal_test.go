@@ -104,7 +104,7 @@ func lobeLoft(t *testing.T, bulgeOffset, twist float64) *Body {
 	require.NoError(t, err)
 	s0, p0 := lobeSketch(t, w, pl0, bulgeOffset)
 	s1, p1 := lobeSketch(t, w, pl1, bulgeOffset)
-	body, err := New().Loft(t.Context(), s0, p0, s1, p1)
+	body, err := Loft(t.Context(), New(), s0, p0, s1, p1)
 	require.NoError(t, err)
 	return body
 }
@@ -378,7 +378,7 @@ func helicalToothLoft(t *testing.T, g involuteGear) *Body {
 	require.NoError(t, err)
 	s0, p0 := g.toothSketch(t, w, pl0)
 	s1, p1 := g.toothSketch(t, w, pl1)
-	body, err := New().Loft(t.Context(), s0, p0, s1, p1)
+	body, err := Loft(t.Context(), New(), s0, p0, s1, p1)
 	require.NoError(t, err)
 	return body
 }

@@ -304,7 +304,7 @@ func requireLoftGearSound(t *testing.T, c loftGearCase) {
 	s0, p0, s1, p1 := loftGearSketches(t, loftGearZ(c.teeth), c.count)
 	doc := New()
 	start := time.Now()
-	body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	body, err := Loft(t.Context(), doc, s0, p0, s1, p1)
 	built := time.Since(start)
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context())

@@ -40,7 +40,7 @@ func TestLoftFitSplineWedgeMatchesExtrude(t *testing.T) {
 	s0, p0 := wedgeSplineSketch(t, w, base)
 	s1, p1 := wedgeSplineSketch(t, w, top)
 	doc := New()
-	body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	body, err := Loft(t.Context(), doc, s0, p0, s1, p1)
 	require.NoError(t, err)
 
 	extDoc := New()
@@ -135,7 +135,7 @@ func TestLoftFitSplineWedgeVerifiesSound(t *testing.T) {
 	s0, p0 := wedgeSplineSketch(t, w, base)
 	s1, p1 := wedgeSplineSketch(t, w, top)
 	doc := New()
-	body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	body, err := Loft(t.Context(), doc, s0, p0, s1, p1)
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())
@@ -371,7 +371,7 @@ func TestLoftFreeformTwistedClosedSplineBracketsDenseReference(t *testing.T) {
 	s1, p1 := closedSplineSketch(t, w, plane1)
 
 	doc := New()
-	body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	body, err := Loft(t.Context(), doc, s0, p0, s1, p1)
 	require.NoError(t, err)
 	lp := body.n.Payload.(loftPayload)
 	require.Positive(t, lp.SectionDelta)
@@ -428,7 +428,7 @@ func TestLoftFreeformWedgePlacedAndTessellated(t *testing.T) {
 	s0, p0 := wedgeSplineSketch(t, w, base)
 	s1, p1 := wedgeSplineSketch(t, w, top)
 	doc := New()
-	body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	body, err := Loft(t.Context(), doc, s0, p0, s1, p1)
 	require.NoError(t, err)
 	ext, err := Extrude(t.Context(), New(), s0, p0, Distance{D: units.Millimeters(wedgeHeight), Dir: Along})
 	require.NoError(t, err)
@@ -481,7 +481,7 @@ func TestLoftFreeformUnequalSpanCounts(t *testing.T) {
 	s0, p0 := fitSplineWedgeSketch(t, w, base, 5)
 	s1, p1 := fitSplineWedgeSketch(t, w, top, 6)
 	doc := New()
-	body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	body, err := Loft(t.Context(), doc, s0, p0, s1, p1)
 	require.NoError(t, err)
 	vol, err := body.Volume()
 	require.NoError(t, err)
@@ -586,7 +586,7 @@ func TestLoftDegreeOneTwistedPairPublishesTheRuledBody(t *testing.T) {
 		require.NoError(t, err)
 		s0, p0 := straightSidedSketch(t, w, pl0, square, nurbs)
 		s1, p1 := straightSidedSketch(t, w, pl1, diamond, nurbs)
-		body, err := New().Loft(t.Context(), s0, p0, s1, p1, opts...)
+		body, err := Loft(t.Context(), New(), s0, p0, s1, p1, opts...)
 		require.NoError(t, err)
 		return body
 	}

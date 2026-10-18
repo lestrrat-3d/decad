@@ -35,7 +35,7 @@ func TestLoftContactPartitionRealVaryingCapJunctions(t *testing.T) {
 		require.NoError(t, err)
 		sections[i], profiles[i] = s, s.Profiles()[0]
 	}
-	loft, err := New().Loft(t.Context(), sections[0], profiles[0], sections[1], profiles[1])
+	loft, err := Loft(t.Context(), New(), sections[0], profiles[0], sections[1], profiles[1])
 	require.NoError(t, err)
 	lp := loft.n.Payload.(loftPayload)
 	prism := internalBoxBody(t, New(), 0, 0, 10, 10, 5)
@@ -129,7 +129,7 @@ func loftPartitionRealBodies(t *testing.T, lower, upper [4]float64, z0, z1 float
 		require.NoError(t, err)
 		sections[i], profiles[i] = s, s.Profiles()[0]
 	}
-	loft, err := New().Loft(t.Context(), sections[0], profiles[0], sections[1], profiles[1])
+	loft, err := Loft(t.Context(), New(), sections[0], profiles[0], sections[1], profiles[1])
 	require.NoError(t, err)
 	prism := internalBoxBody(t, New(), 0, 0, 10, 10, 5)
 	return prism, loft

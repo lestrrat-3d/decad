@@ -20,7 +20,7 @@ func TestLoftMirrorCylinderBoreChamfersExteriorCaps(t *testing.T) {
 	require.NoError(t, err)
 	bottomSketch, bottomProfile := loftMirrorChamferSection(t, world, world.XY(), 0)
 	middleSketch, middleProfile := loftMirrorChamferSection(t, world, middlePlane, 0.03)
-	lower, err := doc.Loft(t.Context(), bottomSketch, bottomProfile, middleSketch, middleProfile)
+	lower, err := decad.Loft(t.Context(), doc, bottomSketch, bottomProfile, middleSketch, middleProfile)
 	require.NoError(t, err)
 	upper, err := decad.MirroredCopy(t.Context(), lower, decad.MirrorFrame{Frame: middleFrame})
 	require.NoError(t, err)

@@ -34,7 +34,7 @@ func TestLoftContactSeamReadsVaryingRecordedLines(t *testing.T) {
 		require.NoError(t, err)
 		sections[i], profiles[i] = s, s.Profiles()[0]
 	}
-	loft, err := New().Loft(t.Context(), sections[0], profiles[0], sections[1], profiles[1])
+	loft, err := Loft(t.Context(), New(), sections[0], profiles[0], sections[1], profiles[1])
 	require.NoError(t, err)
 	pl := loft.n.Payload.(loftPayload)
 	require.True(t, pl.AuthenticatedReconstruction)

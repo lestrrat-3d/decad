@@ -34,7 +34,7 @@ func TestLoftWallAreaCacheMatchesHeldTriangles(t *testing.T) {
 	s1.CreateCircle(c1, 5)
 	_, err = s1.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := New().Loft(t.Context(), s0, s0.Profiles()[0], s1, s1.Profiles()[0])
+	body, err := Loft(t.Context(), New(), s0, s0.Profiles()[0], s1, s1.Profiles()[0])
 	require.NoError(t, err)
 	pl, ok := body.n.Payload.(loftPayload)
 	require.True(t, ok)

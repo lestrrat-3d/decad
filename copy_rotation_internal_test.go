@@ -33,7 +33,7 @@ func mirrorJoinedLoft(t *testing.T) *Body {
 	s0, p0 := square(base, 2)
 	s1, p1 := square(top, 1)
 	doc := New()
-	lower, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	lower, err := Loft(t.Context(), doc, s0, p0, s1, p1)
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 10), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)

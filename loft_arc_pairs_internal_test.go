@@ -47,7 +47,7 @@ func TestLoftArcWedgeBuildsAndMatchesClosedForm(t *testing.T) {
 	s0, p0 := wedgeArcSketch(t, w, base)
 	s1, p1 := wedgeArcSketch(t, w, top)
 	doc := New()
-	body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	body, err := Loft(t.Context(), doc, s0, p0, s1, p1)
 	require.NoError(t, err)
 
 	const wantVolume = math.Pi * 25 / 4 * wedgeHeight // 196.349540849...
@@ -70,7 +70,7 @@ func TestLoftArcWedgeMatchesExtrudeOracle(t *testing.T) {
 	s0, p0 := wedgeArcSketch(t, w, base)
 	s1, p1 := wedgeArcSketch(t, w, top)
 	loftDoc := New()
-	loftBody, err := loftDoc.Loft(t.Context(), s0, p0, s1, p1)
+	loftBody, err := Loft(t.Context(), loftDoc, s0, p0, s1, p1)
 	require.NoError(t, err)
 
 	extrudeDoc := New()
@@ -156,7 +156,7 @@ func TestLoftArcWedgeAreaOracleAtGrowingRadius(t *testing.T) {
 			s0, p0 := wedgeArcSketchR(t, w, base, radius)
 			s1, p1 := wedgeArcSketchR(t, w, top, radius)
 			loftDoc := New()
-			loftBody, err := loftDoc.Loft(t.Context(), s0, p0, s1, p1)
+			loftBody, err := Loft(t.Context(), loftDoc, s0, p0, s1, p1)
 			require.NoError(t, err)
 
 			extrudeDoc := New()
@@ -198,7 +198,7 @@ func TestLoftConeFrustumWallAreaEnclosed(t *testing.T) {
 	s0, p0 := wedgeArcSketchR(t, w, base, r0)
 	s1, p1 := wedgeArcSketchR(t, w, top, r1)
 	doc := New()
-	body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	body, err := Loft(t.Context(), doc, s0, p0, s1, p1)
 	require.NoError(t, err)
 
 	loaded, ok := body.n.Payload.(loftPayload)
@@ -380,7 +380,7 @@ func TestLoftArcWedgeVerifiesSound(t *testing.T) {
 	s0, p0 := wedgeArcSketch(t, w, base)
 	s1, p1 := wedgeArcSketch(t, w, top)
 	doc := New()
-	body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	body, err := Loft(t.Context(), doc, s0, p0, s1, p1)
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())
@@ -414,7 +414,7 @@ func TestLoftArcWedgeReadingsApproximateWithPositiveBounds(t *testing.T) {
 	s0, p0 := wedgeArcSketch(t, w, base)
 	s1, p1 := wedgeArcSketch(t, w, top)
 	doc := New()
-	body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	body, err := Loft(t.Context(), doc, s0, p0, s1, p1)
 	require.NoError(t, err)
 
 	vol, err := body.Volume()
@@ -821,7 +821,7 @@ func TestLoftPlacedArcWedgeCarriesBothDisplacements(t *testing.T) {
 	s0, p0 := smallSweepWedgeSketch(t, w, base)
 	s1, p1 := smallSweepWedgeSketch(t, w, top)
 	doc := New()
-	body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	body, err := Loft(t.Context(), doc, s0, p0, s1, p1)
 	require.NoError(t, err)
 
 	moved, err := r3.Translation(r3.NewVec(3, -2, 1))
@@ -844,7 +844,7 @@ func TestLoftCopyPlacementTenTimesSectionDeltaUnchanged(t *testing.T) {
 	s0, p0 := smallSweepWedgeSketch(t, w, base)
 	s1, p1 := smallSweepWedgeSketch(t, w, top)
 	doc := New()
-	body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	body, err := Loft(t.Context(), doc, s0, p0, s1, p1)
 	require.NoError(t, err)
 
 	loaded0, ok := body.n.Payload.(loftPayload)

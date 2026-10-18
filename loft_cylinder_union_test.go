@@ -64,7 +64,7 @@ func loftCylinderTabJoin(t *testing.T) (*Document, *Body) {
 	s0, p0 := loftCylinderTabProfile(t, ctx, world, world.XY(), 0)
 	s1, p1 := loftCylinderTabProfile(t, ctx, world, top, 10*math.Pi/180)
 	doc := New()
-	tab, err := doc.Loft(ctx, s0, p0, s1, p1)
+	tab, err := Loft(ctx, doc, s0, p0, s1, p1)
 	require.NoError(t, err)
 
 	s, err := world.CreateSketch(world.XY())

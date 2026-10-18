@@ -2,7 +2,7 @@
 
 `LoftSections` builds one smooth solid through three to thirty-two
 recorded Sketch profiles. `docs/loft-design.md` continues to own the two-profile ruled
-`Document.Loft`. This document owns the separate smooth constructions, their
+`Loft`. This document owns the separate smooth constructions, their
 admission gates, and the proofs attached to their held meshes.
 
 ## 1. Public operation and admitted class

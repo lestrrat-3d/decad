@@ -79,7 +79,7 @@ func benchLoft() *decad.Body {
 	tr := s1.CreateRectangle(-10, -10, 10, 10)
 	s1.Fix(tr.A)
 	must(s1.Solve(context.Background()))
-	return must(decad.New().Loft(context.Background(), s0, s0.Profiles()[0], s1, s1.Profiles()[0]))
+	return must(decad.Loft(context.Background(), decad.New(), s0, s0.Profiles()[0], s1, s1.Profiles()[0]))
 }
 
 func benchCut() *decad.Body {
