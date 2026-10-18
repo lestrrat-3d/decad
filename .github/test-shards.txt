@@ -1589,3 +1589,4 @@
 10	0.00	TestLoftContactPartitionSourceAndWorkRefusals
 10	0.00	TestLoftContactTwoLineCapsRealTrapezoid524
 10	0.00	TestLoftContactTwoLineCapsNarrowTranslated524
+10	0.00	TestLoftCurvedSourceCapsRealIndependentWedgeRefusesWithoutBoundaryProof
