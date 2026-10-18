@@ -191,16 +191,6 @@ func (g *bodyGeom) addTopology(budget *proofbound.WorkBudget, b *Body) (bool, er
 	return true, nil
 }
 
-// carrierLiftRound is the largest frame/placement lift rounding any of faces
-// recorded (clearance.CFace.LiftRound): the point term of bodyGeom.delta.
-func carrierLiftRound(faces []*clearance.CFace) float64 {
-	round := 0.0
-	for _, f := range faces {
-		round = math.Max(round, f.LiftRound)
-	}
-	return round
-}
-
 // addRevolveFaces builds the revolved body's faces from its own payload. Its
 // cap planes, clearance.AngWindow and witnesses all read rp.Phi0/rp.Phi1 as the held
 // sweep angle rather than the angle the record denotes, and folds
@@ -238,7 +228,7 @@ func (g *bodyGeom) addRevolveFaces(budget *proofbound.WorkBudget, rp revolvePayl
 	// wallPlane/cap carrier normal commits. It is exactly zero for an
 	// axis-aligned, unplaced, full-turn revolve whose lifts are exact for its
 	// own coordinates, which keeps an ordinary revolve's Clearance rows Exact.
-	pointTerm := carrierLiftRound(built.Faces)
+	pointTerm := clearance.CarrierLiftRound(built.Faces)
 	angularTerm := proofbound.ProductUpper(built.AxisRadiusUpper, rp.AngularDelta())
 	tiltTerm := clearance.BodyFaceTiltDelta(g.faces, rp.Frame, rp.Xform)
 	g.delta = proofbound.AbsSumUpper(pointTerm, angularTerm, tiltTerm)

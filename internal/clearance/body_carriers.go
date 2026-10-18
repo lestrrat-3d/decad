@@ -38,13 +38,15 @@ func BuildPrismBodyCarriers(budget *proofbound.WorkBudget, pp prismrecord.Payloa
 	if err != nil || !ok {
 		return no, false, err
 	}
-	pointTerm := carrierLiftRound(built.Faces)
+	pointTerm := CarrierLiftRound(built.Faces)
 	delta := proofbound.AbsSumUpper(pointTerm, pp.AxialDelta(),
 		BodyFaceTiltDelta(built.Faces, pp.Frame, pp.Xform))
 	return BodyCarriers{Faces: built.Faces, Delta: delta}, true, nil
 }
 
-func carrierLiftRound(faces []*CFace) float64 {
+// CarrierLiftRound returns the largest frame or placement lift rounding
+// recorded by the faces.
+func CarrierLiftRound(faces []*CFace) float64 {
 	round := 0.0
 	for _, f := range faces {
 		round = math.Max(round, f.LiftRound)
