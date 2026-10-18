@@ -7,7 +7,6 @@ The rules for rows live in `docs/layout.md`.
 
 | Path | Responsibility |
 |---|---|
-| `prism_pattern_source.go` | Authenticates the blank and radial section copies. See prism-pattern-union design. |
 | `prism_pattern_union.go` | Certifies sectors and dispatches the structural Union. See prism-pattern-union design. |
 | `prism_pattern_shell.go` | Builds and audits the shared wall and caps. See prism-pattern-union design. |
 | `prism_pattern_proof.go` | Checks retained source walls, then builds the joined body from certified bounds. See prism-pattern-union design. |
