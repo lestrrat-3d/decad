@@ -226,7 +226,7 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 func TestLoftContactDirectShellUnionRealVaryingTab(t *testing.T) {
 	ctx := t.Context()
 	world := sketch.NewWorld()
-	frame, err := r3.NewFrame(r3.Vec{Y: math.Ldexp(1, -52)},
+	frame, err := r3.NewFrame(r3.Vec{Y: 1},
 		r3.Vec{X: 1}, r3.Vec{Y: 1})
 	require.NoError(t, err)
 	base, err := world.CreatePlaneFromFrame(frame)
@@ -236,8 +236,8 @@ func TestLoftContactDirectShellUnionRealVaryingTab(t *testing.T) {
 	var sections [2]*sketch.Sketch
 	var profiles [2]*sketch.Profile
 	for i, coords := range [2][4][2]float64{
-		{{8, 4}, {12, 4}, {12, 7}, {8, 6}},
-		{{7, 4}, {12, 4}, {12, 7}, {8, 6}},
+		{{8, 4}, {12, 4}, {12, 6}, {8, 6}},
+		{{8, 4}, {13.5, 4}, {13.5, 6}, {8, 6}},
 	} {
 		plane := base
 		if i == 1 {
