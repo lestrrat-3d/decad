@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/capblend"
+	"github.com/lestrrat-3d/decad/internal/capblendsurvey"
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -775,7 +776,7 @@ func placedFarMotion(t *testing.T) r3.Transform {
 // TestCapPatchNormalRangeChargesAFlatPatchsDepartureOnce is the flat arm's own
 // half of fu154: a placed flat patch's Face.NormalAt already composes the
 // patch's departure from the Plane it publishes (normalMeasurement,
-// topology.go), so capPatchNormalRange's flat branch must take that bound
+// topology.go), so PatchNormalRange's flat branch must take that bound
 // AS the allowance rather than add its own copy of it on top. An allowance
 // charging the departure twice covers the patch just as soundly, but chases
 // away the ~2x margin this test pins.
@@ -789,7 +790,7 @@ func TestCapPatchNormalRangeChargesAFlatPatchsDepartureOnce(t *testing.T) {
 		t.Run(fmt.Sprintf("patch %d", i), func(t *testing.T) {
 			require.Positive(t, band.face.n.NormalBound,
 				"a placed flat patch has a real departure from the plane it publishes")
-			lo, hi, allow, ok := capPatchNormalRange(band.face, band.pl, band.geom, pull)
+			lo, hi, allow, ok := capblendsurvey.PatchNormalRange(faceNode(band.face), band.pl, band.geom, pull)
 			require.True(t, ok)
 			require.Equal(t, lo, hi, "a flat patch's own normal component does not vary with position")
 			require.GreaterOrEqual(t, allow, band.face.n.NormalBound, "the departure is still covered")
@@ -799,7 +800,7 @@ func TestCapPatchNormalRangeChargesAFlatPatchsDepartureOnce(t *testing.T) {
 }
 
 // TestCapPatchNormalRangeCoversWhatAFlatPatchTakes is the correctness half:
-// the single allowance capPatchNormalRange reports for a flat patch, read at
+// the single allowance PatchNormalRange reports for a flat patch, read at
 // its one sampled corner, must still bound Face.NormalAt's own published
 // bound everywhere else on the patch's quad — not only where it was sampled.
 func TestCapPatchNormalRangeCoversWhatAFlatPatchTakes(t *testing.T) {
@@ -810,7 +811,7 @@ func TestCapPatchNormalRangeCoversWhatAFlatPatchTakes(t *testing.T) {
 
 	for i, band := range chamferedRectFlatPatches(t, motion) {
 		t.Run(fmt.Sprintf("patch %d", i), func(t *testing.T) {
-			_, _, allow, ok := capPatchNormalRange(band.face, band.pl, band.geom, pull)
+			_, _, allow, ok := capblendsurvey.PatchNormalRange(faceNode(band.face), band.pl, band.geom, pull)
 			require.True(t, ok)
 
 			// The quad's own walk order (internal/capblend/band.go): sideA -> sideB
@@ -934,10 +935,10 @@ func TestCapPatchNormalRangeCoversWhatThePatchTakes(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			band := chamferedCircularBand(t, tc.section, 10, 0.2, tc.motion)
-			lo, hi, allow, ok := capPatchNormalRange(band.face, band.pl, band.geom, pull)
+			lo, hi, allow, ok := capblendsurvey.PatchNormalRange(faceNode(band.face), band.pl, band.geom, pull)
 			require.True(t, ok)
 			require.GreaterOrEqual(t, allow, band.face.n.NormalBound,
-				"the circular arm composes the patch's own departure inside capPatchNormalRange")
+				"the circular arm composes the patch's own departure inside PatchNormalRange")
 
 			g := band.geom
 			if tc.centreFar > 0 {

@@ -1,9 +1,10 @@
-package decad
+package capblendsurvey
 
 import (
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/r3"
 )
@@ -14,8 +15,8 @@ import (
 type capPatchModel = capband.NormalModel
 
 // capPatchNormalModel adapts the published face and placed frame for capband.
-func capPatchNormalModel(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (capPatchModel, bool) {
-	sinH, cosH, origin, axis, ok := capblend.ConeTagTerms(&f.n)
+func capPatchNormalModel(f *topo.Face, pl prismPayload, g capPatchGeom, p r3.Vec) (capPatchModel, bool) {
+	sinH, cosH, origin, axis, ok := capblend.ConeTagTerms(f)
 	if !ok {
 		return capPatchModel{}, false
 	}
@@ -26,6 +27,6 @@ func capPatchNormalModel(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (ca
 	return capband.PatchNormalModel(capband.NormalInput{
 		SinH: sinH, CosH: cosH, Origin: origin, Axis: axis, Pull: p,
 		World: world, CU: g.CU, CV: g.CV, CapZ: g.CapZ,
-		Radius: g.CapRadius, Th0: g.Th0, Reversed: f.n.Reversed,
+		Radius: g.CapRadius, Th0: g.Th0, Reversed: f.Reversed,
 	})
 }

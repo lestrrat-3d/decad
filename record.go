@@ -180,7 +180,6 @@ type (
 	capBlendPayload   = capblend.Payload
 	capSetback        = capblend.Setback
 	capBandKey        = capblend.BandKey
-	capPatch          = capblend.Patch
 	loftCapBandSource = capblend.LoftSource
 	capPatchGeom      = capband.Patch
 )

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
+	"github.com/lestrrat-3d/decad/internal/capblendsurvey"
 	"github.com/lestrrat-3d/decad/internal/cupwall"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
@@ -14,6 +15,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/selectorquery"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/wallsurvey"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -38,7 +40,7 @@ import (
 // by the caps for a partial one). A prism, cup, cap-blend and draft body's
 // undercut survey reads each face's normal-component range enclosed over the
 // rationals and decides it three-valued — clear, opposing, or undecided
-// (survey_undercut.go, draft_survey.go) — rather than taking a float range at
+// (survey_undercut.go, internal/capblendsurvey/) — rather than taking a float range at
 // face value;
 // revolveUndercuts is not yet converted to it, a deliberate scope line rather
 // than an oversight. A body this file cannot decide — a payload no shipped
@@ -85,6 +87,19 @@ type undercutOutcome struct {
 	ok        bool
 	undecided bool
 	reason    surveyReason
+}
+
+// undercutFromNodes preserves face identity and the distinction between an
+// empty proven all-clear and a nil undecided listing.
+func undercutFromNodes(in reportvocab.UndercutSurvey[*topo.Face]) undercutOutcome {
+	var faces []*Face
+	if in.Faces != nil {
+		faces = make([]*Face, len(in.Faces))
+		for i, f := range in.Faces {
+			faces[i] = faceHandle(f)
+		}
+	}
+	return undercutOutcome{faces: faces, ok: in.OK, undecided: in.Undecided, reason: in.Reason}
 }
 
 // radiusOutcome is one body's tightest concave radius: ok=false is
@@ -461,9 +476,9 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 		case cupPayload:
 			out = cupUndercuts(b, pl.View(), *cfg.Pull)
 		case capBlendPayload:
-			out = capBlendUndercuts(b, pl, *cfg.Pull)
+			out = undercutFromNodes(capblendsurvey.CapBlendUndercuts(&b.n, pl, *cfg.Pull))
 		case draftPayload:
-			out = draftUndercuts(b, pl, *cfg.Pull)
+			out = undercutFromNodes(capblendsurvey.DraftUndercuts(&b.n, pl, *cfg.Pull))
 		case brepPayload:
 			out = brepUndercuts(budget, b, pl, *cfg.Pull)
 		case facetedPayload:
@@ -498,7 +513,8 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 			reading := radiussurvey.Cup(view.Outer, view.Cavity, view.OffsetDelta)
 			out, ok = radiusOutcome{reading: reading.Reading, bound: reading.Bound, ok: reading.OK}, reading.OK
 		case capBlendPayload:
-			out, ok = capBlendMinRadius(b, pl)
+			reading := capblendsurvey.CapBlendMinRadius(&b.n, pl)
+			out, ok = radiusOutcome{reading: reading.Reading, bound: reading.Bound, ok: reading.OK}, reading.OK
 		case brepPayload:
 			out, ok = brepMinRadius(b, pl)
 		case facetedPayload:

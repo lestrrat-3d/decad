@@ -29,7 +29,6 @@ The rules for rows live in `docs/layout.md`.
 | `extrude.go` | Generic `Extrude` over a profile or chain, `WithTaper`, linear-extent resolution, the chain ribbon entry point. See evaluator §5 and surface §13.2. |
 | `draft.go` | `Draft`, `NeutralPlane`, `Walls` gates. See draft §10. |
 | `draft_build.go` | Tapered extrude angle and surface-result gates, extent resolution and slab dispatch. See draft §5, §7. |
-| `draft_survey.go` | Draft body undercut survey. See draft DD7. |
 | `section_input.go` | `Section`: the profile-or-chain constraint a section-fed operation is generic over. See surface §13.2. |
 | `sweep.go` | Generic `Sweep` over a profile or chain and path admission adapters; builds through `internal/sweeprecord/`. See sweep design. |
 | `sweep_chain_composite.go` | Admits the cardinal line/arc chain Sweep and builds it through `sweeprecord.ReplayChainWork`. See sweep §15.8. |
@@ -57,5 +56,3 @@ The rules for rows live in `docs/layout.md`.
 | Path | Responsibility |
 |---|---|
 | `capblend.go` | Complete-cap-loop chamfer: selection classification, build gates and the hand-off to `internal/capblend/`. See modify-reach §8.3/§4. |
-| `capblend_survey.go` | Cap-blend undercut and minimum-radius surveys. See modify-reach Table DX (DX7/DX8). |
-| `capblend_normal.go` | Reads band-patch tags for DX7's normal model. |
