@@ -152,8 +152,6 @@
 0	0.00	TestWalkChargeOfCoversLerpCancellation
 0	0.00	TestWallKernelGenerateCancellationIsBounded
 0	0.01	TestWallKernelPublishesDiameterBounds
-0	0.03	TestXHPLerpDenotesTheSameCoordinate
-0	0.00	TestXPTKeyDistinguishesCoordinates
 1	0.00	TestAddBlendRolesContextPollsNestedMetadata
 1	0.00	TestAddRevolveFacesPreservesMeridianErrorMapping
 1	2.65	TestAtanSmallIntervalContainsExactSeries
@@ -202,7 +200,6 @@
 1	0.00	TestEvalLoftWholeShellOrientationCorrectsSign
 1	0.00	TestFacesOfMeshReadsTheMeshProofRecord
 1	0.00	TestFitInterpolantChargeRefusesBeforeSolving
-1	0.00	TestFloatIntervalArithmeticSanity
 1	0.00	TestHeldGateReadsFacetsWithinThePrePassSlack
 1	0.01	TestJointBoxHalfTravel
 1	0.00	TestJointBoxStuckRule
@@ -226,7 +223,6 @@
 1	0.01	TestNewBodyGeomRefusesSurfaceResultRevolve
 1	3.75	TestPairStationsAcceptsTheStatedChordCap
 1	0.00	TestPairStationsSagittaUpperReflectsTheLargerSide
-1	0.03	TestParityFacetBoxStatesTheProjection
 1	0.01	TestParseCLAUDEMDAcceptsTheShapesTheFormatMakesSafe
 1	0.07	TestPatternedSixPinsGroup
 1	0.72	TestPointDeviationMatchesRationalForm
@@ -276,7 +272,6 @@
 1	0.05	TestVertexBlendTrapezoidRefusal
 1	0.00	TestWalkEndBoundAllowRefusesNonFiniteComponent
 1	0.00	TestWallKernelGenerateStreamsCandidates
-1	0.00	TestXHPDenominatorStaysBounded
 2	0.07	TestAbsLinearIntegralMatchesTheClosedForm
 2	0.00	TestAnalyticBodiesEqualCancellationIsBounded
 2	0.00	TestAuthenticateChainMatchesByContentAfterRename
@@ -357,10 +352,8 @@
 2	0.00	TestP8SpineFixturesAreCircles
 2	3.91	TestPairStationsOverCapRefuses
 2	0.00	TestPairStationsSpanCountMismatchRefuses
-2	0.77	TestParityBoxFilterOnlySkipsStrictlyOutsideFacets
 2	0.02	TestPlacedPrismChargesEveryFaceItsPlacementRounding
 2	0.00	TestPlanarReplayLowerGapChargesTravel
-2	0.01	TestPolyArea2SignAgreesWithRationalArea
 2	0.00	TestPrismBooleanGateG5RequiresMatchingZInterval
 2	0.11	TestPrismExtentAlongWorkRefusesFreeformBoxAnswersApproximate
 2	0.32	TestPrismPatternUnionSelectsProvenAxialChains
@@ -410,7 +403,6 @@
 2	0.03	TestWalkChargesTheCounterItIsGiven
 2	0.00	TestWalkEndpointAllow
 2	0.01	TestWideSpanBracketRefusesBeforeSubdividing
-2	0.00	TestXHPCanonIsAUniqueIdentity
 3	0.00	TestAngularHomotopyBulgesBoundTheSecondDerivatives
 3	0.01	TestAtanSmallIntervalEnclosesMathAtan
 3	0.00	TestAxisFrameWalkChargeIsAbsentAtZero
@@ -493,7 +485,6 @@
 3	0.01	TestObliqueBossRejectsPartialJunctionSource
 3	0.11	TestOffsetSectionDeltaEnclosesDenotedOffset
 3	0.00	TestPairGapMeasurementChargeReachesToleranceGate
-3	0.00	TestParityBoxFilterLeavesAnEmptySubsetAlone
 3	2.10	TestPlacedGateDiameterChargesEveryPoint
 3	0.03	TestPlanarBandTransferChargesDeviation
 3	0.20	TestPointConeFactorsMatchSerial
@@ -538,7 +529,6 @@
 3	0.00	TestVerifyPublishUndercutRunsOnAProvenSheet
 3	0.00	TestWalkSegmentAreaIsTheCircularSegmentClosedForm
 3	0.01	TestWideSpanIntegrationRefusesBeforeExpanding
-3	0.00	TestXHPArithmeticKeepsBorrowedOperands
 4	0.01	TestAddStitchFacesBuildsExactPlanarCarriers
 4	0.00	TestAngularStopEdgeNamesPublicCurveType
 4	0.03	TestArcWalkRadiusBoundStaysUnderTheKernelSlack
@@ -722,7 +712,6 @@
 5	9.86	TestFloatRatMatchesSetFloat64
 5	0.00	TestFreeformBracketCostGrowsWithDegree
 5	0.03	TestFreeformWalkRefusedByAnalyticConsumers
-5	0.00	TestHomogeneousProjectedCrossMatchesRational
 5	0.00	TestLineCircleBracketsAcceptsFinitePolynomial
 5	0.01	TestLinkageChainTravel
 5	0.02	TestLoftAuditTriangleCeilingRefuses
@@ -746,7 +735,6 @@
 5	0.35	TestPairGateDiameterReadsStations
 5	0.00	TestPairReportKeyIsBitExact
 5	0.01	TestPairStationsChargesBothCountersSeparately
-5	0.07	TestParityQueryProjectionMatchesReference
 5	0.00	TestParseLayoutRowsRejectsMalformedRows
 5	0.00	TestPointInBodyCancellationReachesTorusRootPath
 5	0.02	TestPointPlaneCapCentroidRefusalsMatchThreeMoments
@@ -772,7 +760,6 @@
 5	0.37	TestRevolveSymDiffChargesEveryStageSeparately
 5	0.00	TestRigidRoundAllowIsAlwaysAFiniteBound
 5	0.53	TestRunVerifyPairsKeepsJobOrder
-5	0.00	TestSegAdmissionRadiusCoversTheRoundingItMustCover
 5	1.31	TestSegmentCoordinateUpperCoversTheArc
 5	0.03	TestSideOpeningRegionsDSection
 5	0.01	TestSideOpeningRegionsOblique
@@ -903,7 +890,6 @@
 6	0.15	TestRevolveSheetAreaSlackBelowSolidOnCircularMeridian
 6	0.00	TestRotatedPrismMassChargesDisplacement
 6	0.12	TestRoundBossShellMeshVolumeProof
-6	0.00	TestSegFilterAbstainsOnEverySaturatedIntermediate
 6	0.00	TestSortAlongEdgeCancellationIsBounded
 6	0.03	TestSpanMatchedDeltaUpperEnclosesDenseSampleOnOrdinarySpans
 6	0.00	TestSpanSagittaUpperRoundsOutward
@@ -928,7 +914,6 @@
 6	0.00	TestWallKernelCleanProfileDoesNotFlag
 6	0.00	TestWallKernelValidateReadsTheCandidateInterval
 6	0.19	TestWallNormalDecisionEnclosesExactComponent
-6	0.14	TestXHPAgreesWithTheRationalOrientSign
 7	0.01	TestAnalyticBodiesEqualMatchesPlainPrismSetIdentity
 7	5.89	TestArcWalkRadiusBoundMatchesEnclosureBracket
 7	0.00	TestBodyGateDiameterCancellation
@@ -1004,7 +989,6 @@
 7	0.00	TestNestingAuditCancellationReachesSectionBBox
 7	1.60	TestObliqueBossJunctionFilletDiagonalTiltPublicWorkflow
 7	0.08	TestOperandSymDiffRefusesARealUnverifiedMesh
-7	0.01	TestOrientRatAgreesWithOrientSignExact
 7	0.55	TestPairGateDiameterReadsCoilStations
 7	0.00	TestPairStationsChargesEveryPhaseOfAWalkThatNeverSplits
 7	0.06	TestPairStationsSettlesOnSmallestLevelForTarget
@@ -1034,7 +1018,6 @@
 7	0.00	TestRevolveSectorNearUnitAxisPlacement
 7	0.10	TestRevolveSheetOrientationSignIsAnchorDependent
 7	0.00	TestRotatedPrismMassMatchesCardinalPath
-7	0.00	TestSegFilterKeepsWhatTheExactPredicateAccepts
 7	0.01	TestShellClosedPrismLevelsCarryThicknessConversion
 7	0.00	TestSortAlongEdgeOrdersByExactParameter
 7	0.00	TestSpanTangentEnergyUpperChargesItsOwnCodePath
@@ -1101,7 +1084,6 @@
 8	0.01	TestFacetedAxisSupportRefusesTwoLowestFaces
 8	0.00	TestFacetedMeasurementSumsEncloseSmallAllowances
 8	0.00	TestFitSplineTooFewPointsRefuses
-8	0.04	TestFloatIntervalNextMatchesMath
 8	1.58	TestFreeformArcLengthBracketEnclosesAndNarrows
 8	0.33	TestFreeformArcLengthReportsPositiveBound
 8	0.00	TestFreeformWalkWithoutCounterRefuses
@@ -1154,8 +1136,6 @@
 8	0.00	TestRevolveLoftFacesToolCapSourceCellsPreserveSlicePresence
 8	0.00	TestRevolveSectorProjectionRefusesOverlap
 8	0.00	TestRotatingBracketDepthChargesTravelAndDeviation
-8	0.08	TestSegFilterNeverRejectsAnExactHit
-8	0.00	TestSegFilterRejectsTheOverwhelmingMajority
 8	0.23	TestShellStackedBossMeshVolumeProof
 8	0.00	TestSpanExtremeEnclosureCancelsInsideTheChainBuild
 8	0.00	TestSpanTangentEnergyUpperIsTheExactIntegral
@@ -1260,7 +1240,6 @@
 9	0.00	TestNormalAtRefusesNURBSSurface
 9	0.00	TestPairStationsOverBudgetRefusesR7
 9	0.04	TestPairStationsSagittaStrictlyDecreasesWithLevel
-9	0.85	TestParityBoxFilterMatchesTheUnfilteredKernel
 9	0.00	TestPatternLinearMotionUsesTheDenotedStep
 9	0.01	TestPlanarManifoldMatchesClippedBoxPatch
 9	0.69	TestPlanarPairAdmitsCoilPartners
@@ -1287,7 +1266,6 @@
 9	0.56	TestRevolveSectionDisplacementTessellates
 9	0.00	TestRevolveSectorProjectionSeparatesRotatedSources
 9	0.00	TestRunVerifyPairsRunsContactBatchesOnTheirWorker
-9	0.52	TestSegFilterNeverRejectsAnExactHitAtEveryScale
 9	0.00	TestSeparatedOpposedHoleScene
 9	0.08	TestSideOpeningCutReachCoversExactCut
 9	0.00	TestSpanExtremeEnclosureCollapsedSpanIsExact
@@ -1394,7 +1372,6 @@
 10	3.69	TestPlacedProxyShellsChargeExactCopies
 10	0.00	TestPointConeTrimRejectsRoundTrippedPointLoft
 10	0.17	TestPointPlaneCapCentroidMatchesThreeMoments
-10	0.11	TestPreparedParityProjectionReuse
 10	0.00	TestPrismBooleanGateG2AdmitsAReflectedOperand
 10	0.01	TestPrismBooleanWholeSourceSegmentsChargeNothing
 10	0.00	TestPrismOverlapVolumeRegressionFallbacks
@@ -1441,7 +1418,6 @@
 10	0.01	TestTessellateStitchPublishesZeroSymDiffForClosedZeroBoundBody
 10	0.00	TestThickenRibbonUnrepresentableOffset
 10	0.00	TestTriTriClassifyNamesTheInPlaneEdge
-10	0.29	TestTriTriIntervalEnclosesExact
 10	2.66	TestUnionKeepsTheHeldMeshEmbedded
 10	0.00	TestValidateLoftRecordsHoleCountMismatch
 10	0.00	TestVerifyPublishRectangularPrismPath
