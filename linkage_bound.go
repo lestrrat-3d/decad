@@ -114,10 +114,6 @@ func (s reachSource) RestBox(i int) (motionbound.RatVec, motionbound.RatVec, boo
 }
 func (s reachSource) Reach(i int) *big.Rat { return jointReach(s.spec.joints[i]) }
 
-func readLinkBounds(spec *linkageSpec, frames []motionbound.MotionFrame) ([]linkBound, bool) {
-	return linkagebound.ReadReachBounds(reachSource{spec: spec, frames: frames})
-}
-
 // chainTravel is τ^(L)_k of docs/linkage-check-design.md §5.2: a proven upper
 // bound on how far any point of link k moves, relative to the links at and
 // above its ancestor L, while the fraction runs from a to b — the telescoping

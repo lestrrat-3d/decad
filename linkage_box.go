@@ -265,7 +265,7 @@ func (d *Document) VerifyJointBox(ctx context.Context, l *Linkage, box JointBox,
 			return nil, err
 		}
 	}
-	bounds, ok := readLinkBounds(spec, frames)
+	bounds, ok := linkagebound.ReadReachBounds(reachSource{spec: spec, frames: frames})
 	if !ok {
 		return nil, linkageBoundsError()
 	}

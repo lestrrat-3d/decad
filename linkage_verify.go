@@ -93,7 +93,7 @@ func (d *Document) VerifyLinkage(ctx context.Context, l *Linkage, drive Drive, o
 	}
 	var bounds []linkBound
 	if len(spec.loops) == 0 {
-		if bounds, ok = readLinkBounds(spec, frames); !ok {
+		if bounds, ok = linkagebound.ReadReachBounds(reachSource{spec: spec, frames: frames}); !ok {
 			return nil, linkageBoundsError()
 		}
 	} else if err := spec.prepareLoops(ctx, cfg.ResolutionP.Base); err != nil {
@@ -101,7 +101,7 @@ func (d *Document) VerifyLinkage(ctx context.Context, l *Linkage, drive Drive, o
 		// pose and its certifiable set, down to the verdict floor, before
 		// any pose; a dependent's reach enters the bounds.
 		return nil, err
-	} else if bounds, ok = readLinkBounds(spec, frames); !ok {
+	} else if bounds, ok = linkagebound.ReadReachBounds(reachSource{spec: spec, frames: frames}); !ok {
 		return nil, linkageBoundsError()
 	}
 	if err := ctx.Err(); err != nil {
