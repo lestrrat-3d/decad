@@ -39,7 +39,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/stackedunion/` | Builds A1 stacked Union slabs, private scenes, and BRep faces after root admission. See general-boolean §3 A1. |
 | `internal/throughshell/` | Through-cut recognition, strips and rims. See modify-general §3. |
 | `internal/capedge/` | Convex cap-edge cutter admission, quarter-cylinder profile, chamfer wedge and the P8 top front edge test. See vertex-blend §2. |
-| `internal/prismshell/` | Prism side-opening sections, shell wall bands, boss rectangles and bands, slab levels and stack faces. See shell-opening §3–§5, modify-reach §9.2. |
+| `internal/prismshell/` | Prism side sections, wall bands, nested boss mesh, slab levels and stack faces. See shell-opening §3–§5, modify-reach §9.2. |
 | `internal/revolveaxis/` | Axis frames, walks, side/contact gates, snap and section charges, extent readings, the simple-revolution radial proof, and wall and cap denotations. See evaluator §6. |
 | `internal/revolveshell/` | Surveys shell walls and builds section rings, sector caps, sector meshes and bore checks. See modify-reach §9.3 and revolve-loft-sector design. |
 | `internal/revolveloftfaces/` | Certifies the simple oriented source walk, live fitted and arc cells, vertical-arc radius, exact time roots, finite Revolve side contacts, tool-circle crossings, cap/root-circle avoidance, and live segment-kind gates. See loft-face-sections design. |
