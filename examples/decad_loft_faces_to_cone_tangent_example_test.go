@@ -37,7 +37,7 @@ func Example_decad_loft_faces_to_cone_tangent() {
 		fmt.Println(err)
 		return
 	}
-	point, err := doc.LoftFromPoint(ctx, r3.Vec{}, s, s.Profiles()[0])
+	point, err := decad.LoftFromPoint(ctx, doc, r3.Vec{}, s, s.Profiles()[0])
 	if err != nil {
 		fmt.Println(err)
 		return

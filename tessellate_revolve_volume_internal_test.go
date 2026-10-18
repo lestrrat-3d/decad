@@ -7,8 +7,12 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/revolveproof"
+	"github.com/lestrrat-3d/decad/internal/revolvetess"
+	"github.com/lestrrat-3d/decad/internal/survey2d"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -249,24 +253,21 @@ func TestRevolveMeridianMomentChargesACurvedGenerator(t *testing.T) {
 	// and Mmeridian is the term that says by how much. A cylinder's is straight,
 	// so its slivers are empty and the term is exactly zero.
 	sphere := internalSphereBody(t)
-	plan, err := planRevolveWithRoles(t.Context(), sphere, sphere.n.Payload.(revolvePayload), 0.05, VerifyAll, nil)
-	require.NoError(t, err)
+	plan := planRevolveProofForTest(t, sphere)
 	require.Positive(t, revolveMeridianMoment(plan))
 
 	cyl := internalCylinderBody(t)
-	cylPlan, err := planRevolveWithRoles(t.Context(), cyl, cyl.n.Payload.(revolvePayload), 0.05, VerifyAll, nil)
-	require.NoError(t, err)
+	cylPlan := planRevolveProofForTest(t, cyl)
 	require.Zero(t, revolveMeridianMoment(cylPlan))
 }
 
 func TestRevolveSweepUpperNeverUnderstatesAFullTurn(t *testing.T) {
 	t.Parallel()
 	body := internalCylinderBody(t)
-	plan, err := planRevolveWithRoles(t.Context(), body, body.n.Payload.(revolvePayload), 0.05, VerifyAll, nil)
-	require.NoError(t, err)
+	plan := planRevolveProofForTest(t, body)
 	// math.Pi is the nearest float to π and sits BELOW it, which is the wrong
 	// side for a bound, so the published figure must beat it strictly.
-	require.Greater(t, revolveSweepUpper(plan), 2*math.Pi)
+	require.Greater(t, revolveproof.SweepUpper(plan.counts.Sweep, plan.rp.Full), 2*math.Pi)
 }
 
 func TestPairChordToleranceClearsARevolveCoordinateReservation(t *testing.T) {
@@ -356,17 +357,15 @@ func TestRevolveSymDiffChargesEveryStageSeparately(t *testing.T) {
 	// figure on its own. Feeding the composition one stage at a time is the
 	// falsifier: a leg that has stopped being charged leaves the answer where it
 	// was.
-	build := func(t *testing.T, body *Body) (*Mesh, *revolvePlan) {
+	build := func(t *testing.T, body *Body) (*Mesh, *revolveProofPlan) {
 		t.Helper()
 		mesh, err := tessellateContext(t.Context(), body, units.Millimeters(0.05), VerifyAll)
 		require.NoError(t, err)
-		plan, err := planRevolveWithRoles(t.Context(), body, body.n.Payload.(revolvePayload), 0.05, VerifyAll, nil)
-		require.NoError(t, err)
-		return mesh, plan
+		return mesh, planRevolveProofForTest(t, body)
 	}
-	sum := func(t *testing.T, m *Mesh, p *revolvePlan, angular *big.Rat, dC, dR float64) float64 {
+	sum := func(t *testing.T, m *Mesh, p *revolveProofPlan, angular *big.Rat, dC, dR float64) float64 {
 		t.Helper()
-		got, err := revolveSymDiff(m, p, angular, dC, dR)
+		got, err := revolveSymDiffForTest(m, p, angular, dC, dR)
 		require.NoError(t, err)
 		return got
 	}
@@ -398,16 +397,50 @@ func TestRevolveSymDiffRefusesAnAbsentAngularTerm(t *testing.T) {
 	mesh, err := tessellateContext(t.Context(), internalCylinderBody(t), units.Millimeters(0.05), VerifyAll)
 	require.NoError(t, err)
 	body := internalCylinderBody(t)
-	plan, err := planRevolveWithRoles(t.Context(), body, body.n.Payload.(revolvePayload), 0.05, VerifyAll, nil)
-	require.NoError(t, err)
-	_, err = revolveSymDiff(mesh, plan, nil, 0, 0)
+	plan := planRevolveProofForTest(t, body)
+	_, err = revolveSymDiffForTest(mesh, plan, nil, 0, 0)
 	require.ErrorIs(t, err, ErrUnsupported)
-	_, err = revolveSymDiff(mesh, plan, big.NewRat(-1, 1), 0, 0)
+	_, err = revolveSymDiffForTest(mesh, plan, big.NewRat(-1, 1), 0, 0)
 	require.ErrorIs(t, err, ErrUnsupported)
 }
 
-// revolveMeridianMoment reads the circular meridian displacement.
-func revolveMeridianMoment(p *revolvePlan) float64 {
-	return proofbound.AbsSumUpper(revolveproof.MeridianMoment(revolveWalkView(p.resolved), p.Meridian, p.Sweep, p.rp.Full),
-		revolveFreeformMeridianMoment(p))
+type revolveProofPlan struct {
+	rp     revolvePayload
+	res    *revolveplan.Resolution
+	counts revolveplan.Counts
+}
+
+// planRevolveProofForTest replays the production resolver and count planner
+// over a body made by the public Revolve producer.
+func planRevolveProofForTest(t *testing.T, body *Body) *revolveProofPlan {
+	t.Helper()
+	rp := body.n.Payload.(revolvePayload)
+	res, err := revolvetess.ResolveRevolve(t.Context(), rp)
+	require.NoError(t, err)
+	counts, err := revolveplan.PlanCounts(revolveplan.CountInput{
+		Resolution: res, Chord: 0.05, SectionDelta: rp.SectionDelta,
+		Phi0: rp.Phi0, Phi1: rp.Phi1, Full: rp.Full,
+	})
+	require.NoError(t, err)
+	return &revolveProofPlan{rp: rp, res: res, counts: counts}
+}
+
+type revolveProofWalkView []revolveaxis.ResolvedWalks
+
+func (loops revolveProofWalkView) Len() int                        { return len(loops) }
+func (loops revolveProofWalkView) Walks(i int) []survey2d.SideWalk { return loops[i].Walks }
+
+// revolveMeridianMoment reads the circular and fitted meridian displacement.
+func revolveMeridianMoment(p *revolveProofPlan) float64 {
+	walks := revolveProofWalkView(p.res.Resolved)
+	return proofbound.AbsSumUpper(
+		revolveproof.MeridianMoment(walks, p.counts.Meridian, p.counts.Sweep, p.rp.Full),
+		revolveproof.FreeformMeridianMoment(p.counts.Freeform, walks, p.counts.Sweep, p.rp.Full))
+}
+
+func revolveSymDiffForTest(m *Mesh, p *revolveProofPlan, angular *big.Rat, deltaC, deltaR float64) (float64, error) {
+	return revolveproof.SymDiff(m.n.Vertices, m.n.Triangles, revolveProofWalkView(p.res.Resolved),
+		p.counts.Meridian, p.counts.Sweep, p.rp.Full,
+		revolveproof.FreeformMeridianMoment(p.counts.Freeform, revolveProofWalkView(p.res.Resolved),
+			p.counts.Sweep, p.rp.Full), angular, deltaC, deltaR)
 }

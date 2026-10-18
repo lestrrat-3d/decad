@@ -1,4 +1,4 @@
-package decad
+package revolvetess
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
@@ -14,7 +15,9 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/revolveproof"
 	"github.com/lestrrat-3d/decad/internal/revolvesampling"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/sweeprecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -23,6 +26,12 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 )
+
+type revolvePayload = revolveplan.Payload
+type loopRecord = sectionrecord.LoopRecord
+type revolveWalks = revolveaxis.ResolvedWalks
+
+const wallAxis = revolveaxis.WallAxis
 
 // This file is docs/tessellation-design.md §13's increments T2 and T3
 // (docs/tessellation-reach-design.md §6, R3 and R4): revolve tessellation. It
@@ -92,14 +101,14 @@ func (e *revolveRefineError) Unwrap() error { return e.err }
 // once; the counts and the two chording displacements below them are what a
 // refinement moves.
 type revolvePlan struct {
-	body      *Body
+	body      *topo.Body
 	rp        revolvePayload
 	basis     revolvemesh.RevolveBasis
 	ideal     revolvemesh.RevolveBasis3Iv
 	loops     []loopRecord
 	resolved  []revolveWalks
 	junctions [][]revolvemesh.RevMeridian
-	faceOf    func(string) (*Face, error)
+	faceOf    func(string) (*topo.Face, error)
 	work      *revolveWork
 
 	revolveplan.Counts
@@ -120,24 +129,25 @@ type revolvePlan struct {
 	// pair-test ceiling is charged nothing, and below VerifyAll the per-cell
 	// area slack and occupied-volume terms are never composed. Every other
 	// audit, and the face bounds, run at each level.
-	verify Verification
+	verify Level
 }
 
-// tessellateRevolve meshes a revolved body (docs/tessellation-design.md §§8-10).
-func tessellateRevolve(ctx context.Context, b *Body, rp revolvePayload, chord float64, verify Verification) (*Mesh, error) {
-	return tessellateRevolveWithRoles(ctx, b, rp, chord, verify, nil)
+// TessellateRevolve meshes a revolved body (docs/tessellation-design.md §§8-10).
+func TessellateRevolve(ctx context.Context, b *topo.Body, rp revolvePayload, chord float64, verify Level) (*topo.Mesh, error) {
+	return TessellateRevolveWithRoles(ctx, b, rp, chord, verify, nil)
 }
 
-// tessellateRevolveWithRoles reads a reduced revolve's analytic roles through
+// TessellateRevolveWithRoles reads a reduced revolve's analytic roles through
 // the live body's role vocabulary. A one-span arc sweep prefixes its wall
 // roles and may exchange its cap roles, while every geometric proof remains
 // the reduction's own.
-func tessellateRevolveWithRoles(ctx context.Context, b *Body, rp revolvePayload, chord float64, verify Verification, roleOf func(string) string) (*Mesh, error) {
-	return tessellateRevolveWithCountFloor(ctx, b, rp, chord, verify, roleOf, nil, 0)
+func TessellateRevolveWithRoles(ctx context.Context, b *topo.Body, rp revolvePayload, chord float64, verify Level, roleOf func(string) string) (*topo.Mesh, error) {
+	return TessellateRevolveWithCountFloor(ctx, b, rp, chord, verify, roleOf, nil, 0)
 }
 
-func tessellateRevolveWithCountFloor(ctx context.Context, b *Body, rp revolvePayload,
-	chord float64, verify Verification, roleOf func(string) string, floor [][]int, freeformTarget float64) (*Mesh, error) {
+// TessellateRevolveWithCountFloor keeps a composite sweep's shared meridian counts.
+func TessellateRevolveWithCountFloor(ctx context.Context, b *topo.Body, rp revolvePayload,
+	chord float64, verify Level, roleOf func(string) string, floor [][]int, freeformTarget float64) (*topo.Mesh, error) {
 	var plan *revolvePlan
 	var err error
 	if floor == nil {
@@ -164,7 +174,7 @@ func tessellateRevolveWithCountFloor(ctx context.Context, b *Body, rp revolvePay
 			return nil, refine.err
 		}
 		if floor != nil && refine.retry.Loop >= 0 {
-			return nil, fmt.Errorf(`%w: a shared sweep profile needs a higher common meridian count`, ErrUnsupported)
+			return nil, fmt.Errorf(`%w: a shared sweep profile needs a higher common meridian count`, decaderr.ErrUnsupported)
 		}
 		if rerr := plan.Refine(plan.resolved, refine.retry); rerr != nil {
 			return nil, refine.err
@@ -172,13 +182,14 @@ func tessellateRevolveWithCountFloor(ctx context.Context, b *Body, rp revolvePay
 	}
 }
 
-// resolveRevolve adapts the payload's private axis and profile records to
+// ResolveRevolve adapts the payload's private axis and profile records to
 // the shared count-independent revolve mesh resolution.
-func resolveRevolve(ctx context.Context, rp revolvePayload) (*revolveplan.Resolution, error) {
-	return resolveRevolveWithLimit(ctx, rp, 0)
+func ResolveRevolve(ctx context.Context, rp revolvePayload) (*revolveplan.Resolution, error) {
+	return ResolveRevolveWithLimit(ctx, rp, 0)
 }
 
-func resolveRevolveWithLimit(ctx context.Context, rp revolvePayload, workLimit uint64) (*revolveplan.Resolution, error) {
+// ResolveRevolveWithLimit applies the composite sweep's shared work ceiling.
+func ResolveRevolveWithLimit(ctx context.Context, rp revolvePayload, workLimit uint64) (*revolveplan.Resolution, error) {
 	return revolveplan.Resolve(ctx, revolveplan.ResolveInput{
 		Lift: rp.Lift(), Loops: append([]loopRecord{rp.Profile.Outer}, rp.Profile.Holes...),
 		Charge: rp.ChargedWalk, SnapTol: rp.Ax.SnapTol, RadialLower: rp.Ax.RadialLower,
@@ -190,28 +201,28 @@ func resolveRevolveWithLimit(ctx context.Context, rp revolvePayload, workLimit u
 // §8's tolerance split in its stated order: both coordinate stages are reserved
 // against count-independent ceilings, the meridian takes half of what is left
 // and chords every circular walk, and the angular sequence takes the remainder.
-func planRevolveWithRoles(ctx context.Context, b *Body, rp revolvePayload, chord float64, verify Verification, roleOf func(string) string) (*revolvePlan, error) {
+func planRevolveWithRoles(ctx context.Context, b *topo.Body, rp revolvePayload, chord float64, verify Level, roleOf func(string) string) (*revolvePlan, error) {
 	return planRevolveWithRoleCountFloor(ctx, b, rp, chord, verify, roleOf, nil, 0)
 }
 
-func planRevolveWithRoleCountFloor(ctx context.Context, b *Body, rp revolvePayload,
-	chord float64, verify Verification, roleOf func(string) string, floor [][]int, freeformTarget float64) (*revolvePlan, error) {
+func planRevolveWithRoleCountFloor(ctx context.Context, b *topo.Body, rp revolvePayload,
+	chord float64, verify Level, roleOf func(string) string, floor [][]int, freeformTarget float64) (*revolvePlan, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	byRole := map[string]*Face{}
-	for _, f := range b.Faces() {
-		for _, o := range f.Origins() {
+	byRole := map[string]*topo.Face{}
+	for _, f := range topobuild.Faces(b) {
+		for _, o := range f.Origins {
 			byRole[o.Role] = f
 		}
 	}
-	faceOf := func(role string) (*Face, error) {
+	faceOf := func(role string) (*topo.Face, error) {
 		if roleOf != nil {
 			role = roleOf(role)
 		}
 		f, ok := byRole[role]
 		if !ok {
-			return nil, fmt.Errorf(`%w: the body carries no face for role %q`, ErrDegenerate, role)
+			return nil, fmt.Errorf(`%w: the body carries no face for role %q`, decaderr.ErrDegenerate, role)
 		}
 		return f, nil
 	}
@@ -220,7 +231,7 @@ func planRevolveWithRoleCountFloor(ctx context.Context, b *Body, rp revolvePaylo
 	if freeformTarget > 0 {
 		workLimit = sweeprecord.CompositeFitWorkLimit
 	}
-	res, err := resolveRevolveWithLimit(ctx, rp, workLimit)
+	res, err := ResolveRevolveWithLimit(ctx, rp, workLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -253,7 +264,7 @@ func planRevolveWithRoleCountFloor(ctx context.Context, b *Body, rp revolvePaylo
 // buildRevolveMesh is one attempt at the whole mesh, at the plan's current
 // counts. A failure a finer chording could still answer is wrapped in a
 // revolveRefineError naming what to refine; every other failure is final.
-func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
+func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*topo.Mesh, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -269,7 +280,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	// arms below key on rp.Full alone; sheet is its own separate condition
 	// wherever a solid's full-turn behavior and a sheet's differ.
 	sheet := rp.SurfaceResult
-	mesh := bornMesh(&Mesh{})
+	mesh := &topo.Mesh{}
 	loopMesh := make([]revLoopMesh, len(p.resolved))
 	meridianSamples := make([][]revolvemesh.RevMeridian, len(p.resolved))
 	sampleGap := 0.0
@@ -285,11 +296,11 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 		meridianSamples[li] = samples
 	}
 	if sampleGap > p.samplePrior {
-		return nil, fmt.Errorf(`%w: a revolve meridian sample sits farther from the axis coordinates its record denotes than the tolerance split reserved for it`, ErrUnsupported)
+		return nil, fmt.Errorf(`%w: a revolve meridian sample sits farther from the axis coordinates its record denotes than the tolerance split reserved for it`, decaderr.ErrUnsupported)
 	}
 	if li, k, erased := revolvesampling.OffAxisWalk(p.resolved, meridianSamples); erased {
 		return nil, &revolveRefineError{
-			err:   fmt.Errorf(`%w: a circular revolve generator chords to a polyline lying entirely on the axis, which sweeps no face`, ErrUnsupported),
+			err:   fmt.Errorf(`%w: a circular revolve generator chords to a polyline lying entirely on the axis, which sweeps no face`, decaderr.ErrUnsupported),
 			retry: revolveplan.Refinement{Loop: li, Walk: k},
 		}
 	}
@@ -325,13 +336,13 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	if err != nil {
 		return nil, err
 	}
-	mesh.n.Vertices = vertices
+	mesh.Vertices = vertices
 	if deltaC > p.deltaCPrior || deltaR > p.deltaRPrior {
-		return nil, fmt.Errorf(`%w: this revolve's stored coordinates sit farther from the samples they denote than the tolerance split reserved for them`, ErrUnsupported)
+		return nil, fmt.Errorf(`%w: this revolve's stored coordinates sit farther from the samples they denote than the tolerance split reserved for them`, decaderr.ErrUnsupported)
 	}
 	deltaR = math.Min(deltaR, proofbound.RigidRoundAllow(proofbound.AbsSumUpper(p.coordMax, deltaC), proofbound.VecMaxAbs(rp.Xform.Translation())))
 	coord := proofbound.AbsSumUpper(deltaC, deltaR)
-	mesh.n.CoordBound = coord
+	mesh.CoordBound = coord
 
 	// Walls, cell by cell. Both rings off the axis give a planar quad on the
 	// fixed diagonal; exactly one on the axis gives a fan; both on the axis is
@@ -353,7 +364,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 			return nil, err
 		}
 	}
-	faceCells := map[*Face]revFaceExtent{}
+	faceCells := map[*topo.Face]revFaceExtent{}
 	cellSlack := 0.0
 	cellVolume := new(big.Rat)
 	for li := range loopMesh {
@@ -369,14 +380,14 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 				continue
 			}
 			if lo.OnAxis && hi.OnAxis {
-				return nil, fmt.Errorf(`%w: a revolve generator with both ends on the axis sweeps no face, yet the recorded walk is not an axis line`, ErrUnsupported)
+				return nil, fmt.Errorf(`%w: a revolve generator with both ends on the axis sweeps no face, yet the recorded walk is not an axis line`, decaderr.ErrUnsupported)
 			}
 			face, err := p.faceOf(fmt.Sprintf("side(%d,%d)", li, lm.resolved.Walks[k].Segs[0]))
 			if err != nil {
 				return nil, err
 			}
 			revolvemesh.EmitCellTriangles(lo, hi, p.Angular, func(tri [3]int) {
-				topobuild.AddTriangle(&mesh.n, tri, faceNode(face))
+				topobuild.AddTriangle(mesh, tri, face)
 			})
 			cur := faceCells[face]
 			cur.rho = math.Max(cur.rho, math.Max(lo.Rho, hi.Rho))
@@ -423,7 +434,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 		// branch (tessellate.go) SKIPS, rather than refuses, a small loop,
 		// so it is not a substitute for this check.
 		if len(sectionLoops) == 0 || len(sectionLoops[0]) < 3 {
-			return nil, fmt.Errorf(`%w: a surface-result revolve wall loop needs at least three meridian samples`, ErrDegenerate)
+			return nil, fmt.Errorf(`%w: a surface-result revolve wall loop needs at least three meridian samples`, decaderr.ErrDegenerate)
 		}
 	default:
 		capStart, err := p.faceOf(provenance.RoleCapStart)
@@ -436,8 +447,8 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 		}
 		if err := revolvemesh.EmitCapTriangles(ctx, meridianSamples, sectionPts, sectionLoops,
 			angular.Samples-1, func(end, start [3]int) {
-				topobuild.AddTriangle(&mesh.n, end, faceNode(capEnd))
-				topobuild.AddTriangle(&mesh.n, start, faceNode(capStart))
+				topobuild.AddTriangle(mesh, end, capEnd)
+				topobuild.AddTriangle(mesh, start, capStart)
 			}); err != nil {
 			return nil, err
 		}
@@ -450,15 +461,15 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 				proofbound.ProductUpper(2, capSlack))
 		}
 	}
-	if len(mesh.n.Triangles) == 0 {
-		return nil, fmt.Errorf(`%w: this revolve's recorded section sweeps no face`, ErrDegenerate)
+	if len(mesh.Triangles) == 0 {
+		return nil, fmt.Errorf(`%w: this revolve's recorded section sweeps no face`, decaderr.ErrDegenerate)
 	}
 
 	// A reflected placement flips handedness, turning every counter-clockwise
 	// winding clockwise; reversing them restores outward orientation.
 	if rp.Reflected() {
-		for i := range mesh.n.Triangles {
-			mesh.n.Triangles[i][1], mesh.n.Triangles[i][2] = mesh.n.Triangles[i][2], mesh.n.Triangles[i][1]
+		for i := range mesh.Triangles {
+			mesh.Triangles[i][1], mesh.Triangles[i][2] = mesh.Triangles[i][2], mesh.Triangles[i][1]
 		}
 	}
 
@@ -468,17 +479,17 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	// its own cycle-or-path vertex-link safety net in their place
 	// (requireMeshAudit, tessellate.go — the same dispatch the prism sheet
 	// path already reaches). A full revolution's sheet carries no free edge
-	// at all, so requireSheetMesh agrees with tessellation.RequireClosedMesh with no arm
+	// at all, so topobuild.RequireSheetMesh agrees with tessellation.RequireClosedMesh with no arm
 	// of its own (docs/surface-design.md §14).
 	if sheet {
-		if err := requireMeshAudit(ctx, sheet, p.body, mesh); err != nil {
+		if err := topobuild.RequireSheetMesh(ctx, p.body, mesh); err != nil {
 			return nil, err
 		}
 	} else {
-		if err := tessellation.RequireClosedMesh(mesh.n.Triangles); err != nil {
-			return nil, fmt.Errorf(`%w: this revolve's cells do not close into a watertight boundary`, ErrUnsupported)
+		if err := tessellation.RequireClosedMesh(mesh.Triangles); err != nil {
+			return nil, fmt.Errorf(`%w: this revolve's cells do not close into a watertight boundary`, decaderr.ErrUnsupported)
 		}
-		if err := tessellation.RequireVertexLinks(ctx, len(mesh.n.Vertices), mesh.n.Triangles); err != nil {
+		if err := tessellation.RequireVertexLinks(ctx, len(mesh.Vertices), mesh.Triangles); err != nil {
 			return nil, err
 		}
 	}
@@ -489,17 +500,17 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	// facets. It also builds the audit triangles the facet-pair audit below
 	// consumes, so the two share one pass and one work budget.
 	auditBudget := proofbound.NewWorkBudget(ctx)
-	auditTris, err := revolvemesh.RequireRevolveFacetAreas(auditBudget, mesh.n.Vertices, mesh.n.Triangles, coord)
+	auditTris, err := revolvemesh.RequireRevolveFacetAreas(auditBudget, mesh.Vertices, mesh.Triangles, coord)
 	if err != nil {
 		return nil, err
 	}
 	if p.verify >= VerifyBoundary {
-		if err := revolvemesh.RevolveContactAudit(auditBudget, auditTris, mesh.n.Triangles, coord); err != nil {
+		if err := revolvemesh.RevolveContactAudit(auditBudget, auditTris, mesh.Triangles, coord); err != nil {
 			// A crossing or an undecided contact is the one failure a finer
 			// angular sequence can still answer, and §3 makes the global count the
 			// thing an angular failure increments. A canceled context or an
 			// exhausted work budget is not that failure and is returned unchanged.
-			if !errors.Is(err, ErrUnsupported) {
+			if !errors.Is(err, decaderr.ErrUnsupported) {
 				return nil, err
 			}
 			return nil, &revolveRefineError{err: err, retry: revolveplan.Refinement{Loop: -1}}
@@ -512,8 +523,8 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	// sheet — which carries no free edge at all — is closed and keeps it.
 	if !sheet || rp.Full {
 		anchor := rp.Xform.Apply(p.basis.A3)
-		if !proofbound.FiniteVec(anchor) || tessellation.OrientationSign(mesh.n.Vertices, mesh.n.Triangles, anchor) <= 0 {
-			return nil, fmt.Errorf(`%w: this revolve's assembled cells do not enclose a positive volume`, ErrUnsupported)
+		if !proofbound.FiniteVec(anchor) || tessellation.OrientationSign(mesh.Vertices, mesh.Triangles, anchor) <= 0 {
+			return nil, fmt.Errorf(`%w: this revolve's assembled cells do not enclose a positive volume`, decaderr.ErrUnsupported)
 		}
 	}
 
@@ -543,7 +554,7 @@ type revFaceExtent struct {
 // that is not the clearance gate's — a canceled context, an exhausted work
 // budget — is returned unchanged too.
 func revolveSectionRetry(loops []revLoopMesh, err error) error {
-	if !errors.Is(err, ErrDegenerate) {
+	if !errors.Is(err, decaderr.ErrDegenerate) {
 		return err
 	}
 	var named *tessellation.SectionClearanceError
@@ -601,7 +612,7 @@ func (loops revolveFacetLoops) AxisWalk(i, walk int) bool {
 // both coordinate stages; a partial cap carries the mesh's meridian
 // displacement and the coordinate stages, since a cap's own trim is exact
 // wherever the meridian is straight. volSymDiff composes §11's four stages
-// (tessellate_revolve_volume.go) rather than bound × held area, which §11
+// (revolve_volume.go) rather than bound × held area, which §11
 // forbids outright, and only that composition sets symDiffOK.
 //
 // A [BodySheet] encloses no region, so there is no occupied volume to prove
@@ -611,7 +622,7 @@ func (loops revolveFacetLoops) AxisWalk(i, walk int) bool {
 // same permanent absence the prism sheet path documents (tessellate.go).
 // cellVolume stays whatever buildRevolveMesh left it at, the zero *big.Rat
 // it never added a term to, and is never read.
-func publishRevolveProof(m *Mesh, faceCells map[*Face]revFaceExtent, p *revolvePlan, deltaC, deltaR, cellSlack float64, cellVolume *big.Rat) error {
+func publishRevolveProof(m *topo.Mesh, faceCells map[*topo.Face]revFaceExtent, p *revolvePlan, deltaC, deltaR, cellSlack float64, cellVolume *big.Rat) error {
 	coord := proofbound.AbsSumUpper(deltaC, deltaR)
 	// moved is the section displacement every face reads beside its chording
 	// and coordinate stages (revolvePlan.section); zero folds nothing.
@@ -627,23 +638,23 @@ func publishRevolveProof(m *Mesh, faceCells map[*Face]revFaceExtent, p *revolveP
 		// before the counts were chosen. Reaching here would mean the
 		// reservation did not hold, which is a proof failure rather than a
 		// coarser mesh (docs/tessellation-design.md §8).
-		return fmt.Errorf(`%w: this revolve mesh's chording exceeds the tolerance its own budget reserved for it`, ErrUnsupported)
+		return fmt.Errorf(`%w: this revolve mesh's chording exceeds the tolerance its own budget reserved for it`, decaderr.ErrUnsupported)
 	}
 	for f, ext := range faceCells {
 		bound := proofbound.UpRound(moved(proofbound.AbsSumUpper(ext.sag, tessellation.ChordSagitta(ext.rho, p.Sweep, p.Angular), coord)))
 		if proofbound.IsNonFinite(bound) {
-			return fmt.Errorf(`%w: a revolve wall face's composed displacement is not finite`, ErrUnsupported)
+			return fmt.Errorf(`%w: a revolve wall face's composed displacement is not finite`, decaderr.ErrUnsupported)
 		}
-		topobuild.SetFaceBound(&m.n, faceNode(f), bound)
+		topobuild.SetFaceBound(m, f, bound)
 	}
 	capBound := proofbound.UpRound(moved(proofbound.AbsSumUpper(p.MeridianDelta, coord)))
-	for _, f := range m.n.Source {
-		if _, ok := m.n.FaceBound[f]; !ok {
-			topobuild.SetFaceBound(&m.n, f, capBound)
+	for _, f := range m.Source {
+		if _, ok := m.FaceBound[f]; !ok {
+			topobuild.SetFaceBound(m, f, capBound)
 		}
 	}
-	if proofbound.IsNonFinite(m.n.Bound) {
-		return fmt.Errorf(`%w: this revolve mesh states no finite displacement bound`, ErrUnsupported)
+	if proofbound.IsNonFinite(m.Bound) {
+		return fmt.Errorf(`%w: this revolve mesh states no finite displacement bound`, decaderr.ErrUnsupported)
 	}
 	if p.verify < VerifyAll {
 		// The face bounds above are complete and published; §10.2's area slack
@@ -652,15 +663,15 @@ func publishRevolveProof(m *Mesh, faceCells map[*Face]revFaceExtent, p *revolveP
 		// would otherwise leave behind).
 		return nil
 	}
-	slack := proofbound.AbsSumUpper(cellSlack, revolvemesh.CoordinateAreaAllow(m.n.Vertices, m.n.Triangles, coord))
+	slack := proofbound.AbsSumUpper(cellSlack, revolvemesh.CoordinateAreaAllow(m.Vertices, m.Triangles, coord))
 	if allow := revolveaxis.SectionAreaAllow(p.rp.SectionDelta, p.Sweep, p.rp.Sweep().Bound,
 		p.resolved, !p.rp.Full && !p.rp.SurfaceResult, p.section); allow > 0 {
 		slack = proofbound.AbsSumUpper(slack, allow)
 	}
 	if proofbound.IsNonFinite(slack) {
-		return fmt.Errorf(`%w: this revolve mesh states no finite area slack`, ErrUnsupported)
+		return fmt.Errorf(`%w: this revolve mesh states no finite area slack`, decaderr.ErrUnsupported)
 	}
-	m.n.AreaSlack = slack
+	m.AreaSlack = slack
 	if p.rp.SurfaceResult {
 		return nil
 	}
@@ -671,7 +682,7 @@ func publishRevolveProof(m *Mesh, faceCells map[*Face]revFaceExtent, p *revolveP
 	if allow := revolveaxis.SectionVolumeAllow(p.rp.SectionDelta, p.Sweep, p.rp.Sweep().Bound, p.section); allow > 0 {
 		sym = proofbound.AbsSumUpper(sym, allow)
 	}
-	m.n.VolSymDiff = sym
-	m.n.SymDiffOK = true
+	m.VolSymDiff = sym
+	m.SymDiffOK = true
 	return nil
 }

@@ -412,7 +412,7 @@ nothing else.
 | **DD4** | STEP | the analytic writer when every face is a `Plane` — a drafted polygon writes `ADVANCED_FACE`s over tilted planes with `Line3` loops, which `supportsAnalyticSTEP` admits today; any `Cone` sends the whole body to the faceted writer, as `docs/missing-features.md`'s STEP row states for cones | 2 |
 | **DD5** | `Verify` validity | built by construction after the §5 audit, as a prism is; `Built` and `Solid` read true | 1 |
 | **DD6** | `Verify` tolerance reference | `bodyGateDiameter` gains an arm (`draftGateDiameter`): the lower-bound diameter over wall stations on the near section at the near level and on the recorded far section at the far level, each charged its gap plus the level displacement and `farDelta`, falling back to the held vertices with their bounds (verification §3). Without it every draft body would read `DiagToleranceReferenceUnavailable`, since its bounds are never zero | 1 |
-| **DD7** | `Verify` undercut survey (`WithPullDirection`) | decided (`draft_survey.go`): each wall patch's normal component along the pull is read through `Face.NormalAt` and enclosed by `capPatchNormalRange` (DX7's reading; `capPatchUndercuts` in `capblend_survey.go`, which the cap-blend survey runs over its own patches), each cap by `CapNormalDecision`, and `DecidePull` lists, clears or leaves undecided per modify-reach §8.3's rule. A wall drafted at `α > 0` against a pull along `e` reads `sin α > 0` and clears. A pull in a wall's own tangent plane leaves that wall undecided: its reading carries the taper's enclosure, so its sign is not proven | 4 |
+| **DD7** | `Verify` undercut survey (`WithPullDirection`) | `internal/capblendsurvey` reads built face normals and decides each wall and cap as described below. | 4 |
 | **DD8** | `Verify` wall and concave-radius surveys | `Suspect` with `DiagUnsupportedSurveyPayload` (staged). The reduction a later PR takes: the thinnest wall between two drafted skins is the far section's 2D reading scaled by `cos α`, and the smallest concave radius of a hole wall is its radius at the narrower end; neither is scheduled here | — |
 | **DD9** | `Verify` clearance (`WithClearances`) | `Suspect` (`reportvocab.PairUndecided`): `newBodyGeomBudget` has no carrier model for the class. A later PR adds the Plane/Cone carriers; not scheduled | — |
 | **DD10** | `Verify` interference | box-disjoint proofs from the body's `Bounds`; the read-only mesh intersection over DD1's mesh | 2 |
@@ -424,6 +424,15 @@ nothing else.
 | **DD16** | `Thicken`, `Offset`, `Patch`, `Stitch`, `Trim`/`Extend`/`Split` | not reached: a draft body is a solid (SD12 refuses the sheet form) | — |
 | **DD17** | Motion and linkage bounds | `motion_bound.go` reads near and widened far section bounds. `internal/motionbound/record_radius.go` reads each segment's carrier and walk. | 2 |
 | **DD18** | Selectors | `Planar()`, `FaceCreatedBy`, `CapStart`/`CapEnd` and the new `Walls(b)` (§10) select as on a prism. `Facing(v)` and `NormalTo(v)` match a drafted `Plane` wall only for its own tilted normal, since both require parallelism; a caller naming a drafted wall by direction passes that normal, or selects by role | 1, 3 |
+
+DD7's `capblendsurvey.DraftUndercuts` reads each built wall's `*topo.Face`
+through `topobuild.NormalAt`. `capblendsurvey.PatchNormalRange` encloses its
+normal component along the pull, and `capblendsurvey.PatchUndercuts` shares
+that reading with cap-blend bodies (DX7). `survey2d.CapNormalDecision` reads
+each cap; `survey2d.DecidePull` lists, clears or leaves a face undecided under
+modify-reach §8.3's rule. A wall drafted at `α > 0` against a pull along `e`
+reads `sin α > 0` and clears. A pull in a wall's tangent plane leaves it
+undecided because the reading includes the taper's enclosure.
 
 The two-sided payload composes DD1–DD6, DD10–DD13 and DD17 from its two
 slabs. Its undercut survey is still `Suspect`: DD7's current face-role lookup
@@ -783,8 +792,8 @@ undecided.
 | DD6's diameter arm | omitted | every F fixture under `Verify` (`DiagToleranceReferenceUnavailable`) |
 | the mesh proof's chord term (`draftBandHeightUpper`) | zeroed | F2, F3 and F7: each mesh volume sits tens of mm³ outside a `volSymDiff` near `1e-11` |
 | the mesh proof's vertex motion (`SweptVolumeAllow`) | omitted | F1, F4, F5 and F6: a zero `volSymDiff` against the far corners' rounding |
-| DD7's dispatch arm (`draftUndercuts`) | removed from `runSurveys` | every PR 4 fixture: the survey reads the draft body as an unsupported payload |
-| the wall reading's allowance (`capPatchNormalRange`'s third result) | zeroed in `capPatchUndercuts` | the tangent pull: the wall reads the sign of its own rounding and no `DiagUndecidedUndercut` is reported |
+| DD7's dispatch arm (`capblendsurvey.DraftUndercuts`) | removed from `runSurveys` | every PR 4 fixture: the survey reads the draft body as an unsupported payload |
+| the wall reading's allowance (`capblendsurvey.PatchNormalRange`'s third result) | zeroed in `capblendsurvey.PatchUndercuts` | the tangent pull: the wall reads the sign of its own rounding and no `DiagUndecidedUndercut` is reported |
 | a moved walk's span at a mixed corner | `capcontour.AmountsDisplacement` reads every span as its point amount | the subset F10: each moved far corner `1.06e-16` outside its bound |
 | the mixed-amount refusal | `offset2d.SharpCornerJoin` reads a mixed circular corner as an equal one | the slot's SD4 fixture refuses as SD13 instead |
 | a kept wall's setback in the mesh | the chord pass's cap radius, or the cap motion, reads the draft's `d` | the hole-alone mesh: `volSymDiff` above its ceiling |

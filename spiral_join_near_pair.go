@@ -190,9 +190,9 @@ func spiralNearFaceTable(blank, tooth *Body, proof *spiralFirstJoinSource) (
 // separated held face pair has no facet contact.
 func certifySpiralNearFaceRoles(ctx context.Context, blank, tooth *Body,
 	proof *spiralFirstJoinSource) (
-	map[[2]*Face]spiralNearPairKind, [2][4]spiralShortCapFamily, bool, error,
+	map[[2]*Face]spiralNearPairKind, [2][4]spiralsector.ShortCapFamily, bool, error,
 ) {
-	var empty [2][4]spiralShortCapFamily
+	var empty [2][4]spiralsector.ShortCapFamily
 	if ctx == nil || blank == nil || tooth == nil || proof == nil ||
 		proof.Blank == nil || proof.Tooth == nil || proof.HeelSeam == nil ||
 		!spiralNearTrimSides(proof) || !spiralTrimSourceCurrent(proof.Tooth) {
@@ -220,9 +220,9 @@ func certifySpiralNearFaceRoles(ctx context.Context, blank, tooth *Body,
 		}
 		for index, group := range [...]int{0, 2, 3, 5} {
 			family := short[end][index]
-			if family.band != band || family.group != group || len(family.pieces) != 1 ||
-				family.x.Lo == nil || family.x.Hi == nil ||
-				family.x.Lo.Cmp(family.x.Hi) >= 0 {
+			if family.Band != band || family.Group != group || len(family.Pieces) != 1 ||
+				family.X.Lo == nil || family.X.Hi == nil ||
+				family.X.Lo.Cmp(family.X.Hi) >= 0 {
 				return nil, empty, false, nil
 			}
 		}

@@ -170,7 +170,7 @@ func draftMeshFixtures() []draftMeshFixture {
 // vacuous.
 //
 // Shown to fail first: with the draft's band height in capBlendChordVolume
-// zeroed (draftBandHeightUpper's term), F2 at tol 0.25 published a volSymDiff
+// zeroed (capblend.Payload.DraftBandHeightUpper's term), F2 at tol 0.25 published a volSymDiff
 // of 1.4e-11 against a 76 mm³ chord deficit, and F3 and F7 failed alike; with
 // the vertex-motion leg (SweptVolumeAllow) omitted, F1 published a zero
 // volSymDiff against the 2.9e-13 its far corners' rounding moves the volume,

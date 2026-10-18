@@ -1,9 +1,7 @@
 package decad
 
 import (
-	"fmt"
 	"math/big"
-	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
@@ -79,7 +77,8 @@ func publishPlanarManifold(budget *proofbound.WorkBudget, report *reportvocab.Co
 	default:
 		return nil
 	}
-	features, err := newPlanarFeatureMap(bodyHandle(report.A), bodyHandle(report.B), a, b)
+	features, err := reportvocab.NewPlanarFeatureMap(
+		bodyNode(bodyHandle(report.A)), bodyNode(bodyHandle(report.B)), a, b)
 	if err != nil {
 		return err
 	}
@@ -132,7 +131,8 @@ func planarSupportBand(budget *proofbound.WorkBudget, report *reportvocab.Contac
 	}
 	report.Relation, report.Reason = reportvocab.ContactBand, reportvocab.ContactNoReason
 	report.Gap = &measurement.Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(g), Exactness: measurement.ExactnessOf(g)}
-	features, err := newPlanarFeatureMap(bodyHandle(report.A), bodyHandle(report.B), a, b)
+	features, err := reportvocab.NewPlanarFeatureMap(
+		bodyNode(bodyHandle(report.A)), bodyNode(bodyHandle(report.B)), a, b)
 	if err != nil {
 		return err
 	}
@@ -149,126 +149,4 @@ func supportBandOf(req reportvocab.ContactRequest) proofarith.Dyadic {
 		return proofarith.DyZero()
 	}
 	return band
-}
-
-// planarFeatureMap resolves kernel face ids to the two bodies' live
-// topology, and orders features by that topology (§9.5).
-type planarFeatureMap struct {
-	sides [2]planarTopology
-}
-
-type planarTopology struct {
-	faces    []*Face
-	faceAt   map[*Face]int
-	edgeAt   map[*Edge]int
-	vertexAt map[*Vertex]int
-}
-
-func newPlanarFeatureMap(a, b *Body, sa, sb *planar.PlanarSolid) (*planarFeatureMap, error) {
-	m := &planarFeatureMap{}
-	for i, side := range []struct {
-		body  *Body
-		solid *planar.PlanarSolid
-	}{{a, sa}, {b, sb}} {
-		topology := planarTopology{faces: side.body.Faces(), faceAt: make(map[*Face]int),
-			edgeAt: make(map[*Edge]int), vertexAt: make(map[*Vertex]int)}
-		for _, id := range side.solid.Faces {
-			if id < 0 || id >= len(topology.faces) {
-				return nil, fmt.Errorf("%w: planar snapshot names face %d of a body with %d faces",
-					ErrDegenerate, id, len(topology.faces))
-			}
-		}
-		for at, face := range topology.faces {
-			topology.faceAt[face] = at
-		}
-		for at, edge := range side.body.Edges() {
-			topology.edgeAt[edge] = at
-		}
-		for at, vertex := range side.body.Vertices() {
-			topology.vertexAt[vertex] = at
-		}
-		m.sides[i] = topology
-	}
-	return m, nil
-}
-
-// feature resolves one side's kernel feature. A facet is its face; an edge is
-// the one live Edge both of its faces share; a vertex is the one live Vertex
-// every one of its faces holds. Anything else has no single source identity.
-func (m *planarFeatureMap) feature(side int, f planar.PatchFeature) (reportvocab.ContactFeature, bool) {
-	topology := &m.sides[side]
-	if len(f.Faces) == 0 {
-		return reportvocab.ContactFeature{}, false
-	}
-	faces := make([]*Face, len(f.Faces))
-	for i, id := range f.Faces {
-		faces[i] = topology.faces[id]
-	}
-	switch f.Kind {
-	case planar.FeatureFacet:
-		if len(faces) != 1 {
-			return reportvocab.ContactFeature{}, false
-		}
-		return reportvocab.ContactFeature{Face: faceNode(faces[0])}, true
-	case planar.FeatureEdge:
-		if len(faces) != 2 {
-			return reportvocab.ContactFeature{}, false
-		}
-		var found *Edge
-		for _, edge := range faces[0].Edges() {
-			if edge == found || !slices.Contains(edge.Faces(), faces[1]) {
-				continue
-			}
-			if found != nil {
-				return reportvocab.ContactFeature{}, false
-			}
-			found = edge
-		}
-		return reportvocab.ContactFeature{Edge: edgeNode(found)}, found != nil
-	case planar.FeatureVertex:
-		var found *Vertex
-		for _, edge := range faces[0].Edges() {
-			for _, vertex := range []*Vertex{edge.Start(), edge.End()} {
-				if vertex == nil || vertex == found || !vertexOnFaces(vertex, faces[1:]) {
-					continue
-				}
-				if found != nil {
-					return reportvocab.ContactFeature{}, false
-				}
-				found = vertex
-			}
-		}
-		return reportvocab.ContactFeature{Vertex: vertexNode(found)}, found != nil
-	}
-	return reportvocab.ContactFeature{}, false
-}
-
-// order is the feature's rank in its body's topology: faces, then edges, then
-// vertices, each in the body's own order.
-func (m *planarFeatureMap) order(side int, f reportvocab.ContactFeature) [2]int {
-	topology := &m.sides[side]
-	switch {
-	case f.Face != nil:
-		return [2]int{0, topology.faceAt[faceHandle(f.Face)]}
-	case f.Edge != nil:
-		return [2]int{1, topology.edgeAt[edgeHandle(f.Edge)]}
-	default:
-		return [2]int{2, topology.vertexAt[vertexHandle(f.Vertex)]}
-	}
-}
-
-func vertexOnFaces(vertex *Vertex, faces []*Face) bool {
-	for _, face := range faces {
-		held := false
-		for _, edge := range face.Edges() {
-			if edge.Start() == vertex || edge.End() == vertex {
-				held = true
-				break
-			}
-		}
-		if !held {
-			return false
-		}
-	}
-	return true
 }

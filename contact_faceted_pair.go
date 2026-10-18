@@ -734,7 +734,8 @@ func (p *planarBandPair) chargedManifold(budget *proofbound.WorkBudget, report *
 			return nil, reportvocab.ContactNoNormalProof, nil
 		}
 	}
-	features, err := newPlanarFeatureMap(bodyHandle(report.A), bodyHandle(report.B), p.a, p.b)
+	features, err := reportvocab.NewPlanarFeatureMap(
+		bodyNode(bodyHandle(report.A)), bodyNode(bodyHandle(report.B)), p.a, p.b)
 	if err != nil {
 		return nil, reportvocab.ContactNoReason, err
 	}

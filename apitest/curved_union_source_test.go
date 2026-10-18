@@ -45,7 +45,7 @@ func fittedSectorPointLoft(t *testing.T, doc *decad.Document) *decad.Body {
 	for _, edge := range s.Profiles()[0].Outer {
 		require.False(t, edge.Partial)
 	}
-	loft, err := doc.LoftFromPoint(t.Context(), r3.Vec{}, s, s.Profiles()[0])
+	loft, err := decad.LoftFromPoint(t.Context(), doc, r3.Vec{}, s, s.Profiles()[0])
 	require.NoError(t, err)
 	return loft
 }

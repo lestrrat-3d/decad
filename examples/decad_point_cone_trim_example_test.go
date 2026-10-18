@@ -62,7 +62,7 @@ func Example_decad_point_cone_trim() {
 		return
 	}
 	doc := decad.New()
-	tooth, err := doc.LoftFromPoint(ctx, r3.Vec{}, profileSketch, profileSketch.Profiles()[0])
+	tooth, err := decad.LoftFromPoint(ctx, doc, r3.Vec{}, profileSketch, profileSketch.Profiles()[0])
 	if err != nil {
 		fmt.Printf("failed to loft from point: %s\n", err)
 		return

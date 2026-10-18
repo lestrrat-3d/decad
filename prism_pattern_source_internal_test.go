@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/prismpattern"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -46,7 +47,7 @@ func TestPrismPatternSourceProvesCircularJoinOfRotatedFittedSections(t *testing.
 	copyBody := bornBody(&Body{n: topo.Body{Payload: copySection}})
 	operands := []*Body{blank, first, copyBody}
 
-	source, matched, err := prismPatternSourceOf(t.Context(), operands)
+	source, matched, err := prismpattern.SourceOf(t.Context(), bodyNodes(operands))
 	require.NoError(t, err)
 	require.True(t, matched)
 	require.Len(t, source.Sections, 2)
@@ -56,7 +57,7 @@ func TestPrismPatternSourceProvesCircularJoinOfRotatedFittedSections(t *testing.
 	separate := copySection
 	separate.Profile.Outer.Segments = append([]curveSegment(nil), copySection.Profile.Outer.Segments...)
 	operands[2] = bornBody(&Body{n: topo.Body{Payload: separate}})
-	_, matched, err = prismPatternSourceOf(t.Context(), operands)
+	_, matched, err = prismpattern.SourceOf(t.Context(), bodyNodes(operands))
 	require.True(t, matched)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "not a radial copy")

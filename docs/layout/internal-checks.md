@@ -29,13 +29,14 @@ The rules for rows live in `docs/layout.md`.
 | `internal/prismplacement/` | Exact prism axis shifts, sweep spans, relative placement and exact rectangular boxes in a reference frame. See prism-boolean §3. |
 | `internal/circularbounds/` | Circular endpoints, lengths, area, moment and arc-box bounds over neutral records, and certified circular bore rings. |
 | `internal/prismcells/` | Prism admission, scene budgets and construction, §4.2 union, cut, intersect and crossing resolution and records, merge audits, cells, charges, trim walks, the placed-axis rectangle gate, surface operands, Split pieces and profile record context helpers. See prism-boolean §4, §6, G3. |
-| `internal/prismpattern/` | Prism-pattern Union radial source gaps, wall certificates, interval fillet contacts, ring cuts, polar sectors, clearance, rounded shell and caps, root chords and section separation. See prism-pattern-union design. |
+| `internal/prismpattern/` | Prism-pattern Union blank and copy authentication, radial source gaps, wall certificates, interval fillet contacts, ring cuts, polar sectors, clearance, rounded shell and caps, root chords and section separation. See prism-pattern-union design. |
 | `internal/mirrorjoin/` | Exact line admission, reflection, prism and stacked record rewrites, splice and joined-section audit. See mirror-pattern §5. |
 | `internal/patternrecord/` | Pattern spec gates, instance motion and record mapping. See mirror-pattern §4.3, §6.2. |
 | `internal/massmoment/` | Rational mass moments and inertia, and X-axis placement map charges. See dynamic-mass §2–§3. |
 | `internal/capcontour/` | Cap contour displacement, shell offset intervals, and edge and arc bounds. See modify-reach §8.3-§8.4. |
 | `internal/offset2d/` | Offset carriers, proofs, profile offsets and corner loops, rewrite and offset audits, offset displacement, and the draft near and far section stages. See modify §5–§9, shell-opening §3–§5, draft §2, §7. |
 | `internal/capband/` | Cap-band loop walks, offset joins, contour, loop boundary, patch, locus, volume, first-moment and centroid bounds, and cap-loop chamfer refusals. See modify-reach §8.3–§8.4. |
+| `internal/capblendsurvey/` | Cap-blend and Draft undercut readers, patch normal ranges, and cap-blend concave-radius reading. See modify-reach Table DX and draft DD7. |
 | `internal/filletband/` | Loop-fillet closed forms and reference-frame band mass. See loop-fillet §5. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
 | `internal/cupwall/` | The cup record and its two-prism view, its builder over nodes (`Build`, `Placed`, cup roles and face order), and the cup wall theorem and morphology recheck. Root `cupPayload` and `cupView` alias it. See modify-reach §9.1, payload verification §4, evaluator §8. |
@@ -46,6 +47,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/wallsurvey/` | Prism and revolve wall record preparation and bounded readings, and the revolve clearance carrier input. See verification §6, clearance §2. |
 | `internal/radiussurvey/` | Prism, revolve, cup and BRep concave-radius readings. See verification §6. |
 | `internal/motionbound/` | Motion variants, exact parameters, poses, box bounds, pair certificates, record radii, overlap transfer and sweeps. |
+| `internal/motionrun/` | Static mover/stationary pair validity, swept-box exclusion and sheet classification over topology nodes. See motion-check §2–§6. |
 | `internal/motionoption/` | Motion options. See motion-check §3. |
 | `internal/planarsweep/` | Support-plane records, motion, vertex rates, depth and rolling bounds. |
 | `internal/sweepdeparture/` | Exact source-box departure proofs. See multibody §10.2. |
@@ -61,7 +63,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/meshbool/` | Pair chord inputs, mesh boolean contact, subdivision, stitching, embedding, exact similarity images, audits, and staging and rim refusals. See evaluator §9. |
 | `internal/pointquery/` | Exact point-to-mesh distance and the occupied-volume transfer proof. See point-containment design. |
 | `internal/facetedtopology/` | Chains audited mesh face boundaries, proves axial chain directions, selects loops, resolves source-group faces and matches cap patches. See evaluator §9. |
-| `internal/clearance/` | Clearance geometry and cell sums. See clearance design. |
+| `internal/clearance/` | Clearance geometry, edge carriers, shell witnesses and cell sums. See clearance design. |
 | `internal/clearance/facepair/` | Face-pair cells. See clearance §4. |
 | `internal/clearance/curvecells/` | Face-edge and edge-edge cells. See clearance §4. |
 | `internal/clearance/tier/` | Vertex cells and ruling proofs. See clearance §3/§6. |

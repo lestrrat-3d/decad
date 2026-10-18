@@ -31,7 +31,7 @@ func TestLoftFacesTwoAndThreeCapsFromPointSlabs(t *testing.T) {
 	s.Fix(p.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	loft, err := doc.LoftFromPoint(t.Context(), r3.Vec{}, s, s.Profiles()[0])
+	loft, err := decad.LoftFromPoint(t.Context(), doc, r3.Vec{}, s, s.Profiles()[0])
 	require.NoError(t, err)
 	makeSheet := func(x float64) *decad.Body {
 		sheetSketch, err := world.CreateSketch(world.XY())

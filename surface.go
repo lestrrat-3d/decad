@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/featureoption"
-	"github.com/lestrrat-3d/decad/internal/surfacegroup"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 )
 
 // This file is the shared surface-result vocabulary of docs/surface-design.md
@@ -18,7 +18,7 @@ import (
 // rule for one added later. boolean.go, fillet.go, chamfer.go, shell.go and
 // stops.go consume refuseSheetOperand at their own gates.
 //
-// Its topology adapters read face and edge adjacency for internal/surfacegroup:
+// Its topology adapters read face and edge adjacency through internal/topobuild:
 // topobuild.ShellIsOpen reads a shell's open state from its edges, while
 // topobuild.SplitConnectedFaces/topobuild.SheetLumps build one Lump per connected face group.
 
@@ -51,32 +51,13 @@ func refuseSheetOperand(b *Body, operation string) error {
 	return nil
 }
 
-// freeChainCountsByFace groups the body's own recorded free Edges by their
-// single adjacent face and counts, per face, the CONNECTED COMPONENTS its
-// free Edges form over their own Vertex pointers — one boundary CHAIN per
-// component, not one per Edge object. A coalesced wall's rim is usually one
-// recorded curve, a single segment or several merged collinear ones, so it
-// is usually one Edge object AND one chain. But two of a face's free Edges
-// that share an interned Vertex — a revolve wall's two rims meeting at a pole
-// the payload interns between them — are still only ONE chain: the two
-// Edges are two chords of the same connected boundary walk, exactly as
-// internal/tessellation.RequireSheetBoundary reads the mesh side of the same
-// face by connected component rather than by directed-edge count.
+// freeChainCountsByFace adapts the node-side connected-component count to the
+// live face handles used by the root Loft restatement.
 func freeChainCountsByFace(b *Body) map[*Face]int {
-	byFace := map[*Face][][2]*Vertex{}
-	for _, e := range b.Edges() {
-		if !e.IsFree() {
-			continue
-		}
-		faces := e.Faces()
-		if len(faces) != 1 {
-			continue // IsFree already guarantees exactly one; defensive only
-		}
-		byFace[faces[0]] = append(byFace[faces[0]], [2]*Vertex{e.Start(), e.End()})
-	}
-	counts := make(map[*Face]int, len(byFace))
-	for face, edges := range byFace {
-		counts[face] = surfacegroup.ChainCount(edges)
+	nodes := topobuild.FreeChainCountsByFace(&b.n)
+	counts := make(map[*Face]int, len(nodes))
+	for face, count := range nodes {
+		counts[faceHandle(face)] = count
 	}
 	return counts
 }

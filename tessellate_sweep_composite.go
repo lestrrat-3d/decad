@@ -10,8 +10,10 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
+	"github.com/lestrrat-3d/decad/internal/revolvetess"
 	"github.com/lestrrat-3d/decad/internal/sweeprecord"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 )
@@ -21,7 +23,7 @@ import (
 // and fitted splines whose span meshes expose the same profile parameter at
 // each join. It maps those samples by profile index, never spatial proximity.
 func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, chord float64, verify Verification) (*Mesh, error) {
-	counts, profileSamples, freeformTarget, err := compositemesh.PlanProfileCounts(ctx, sp, chord, resolveRevolveWithLimit)
+	counts, profileSamples, freeformTarget, err := compositemesh.PlanProfileCounts(ctx, sp, chord, revolvetess.ResolveRevolveWithLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -65,11 +67,16 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 		}
 		var piece *Mesh
 		if span.Arc {
-			floor, floorErr := compositemesh.RevolveFloor(ctx, span.Revolve, counts, freeformTarget, resolveRevolveWithLimit)
+			floor, floorErr := compositemesh.RevolveFloor(ctx, span.Revolve, counts, freeformTarget, revolvetess.ResolveRevolveWithLimit)
 			if floorErr != nil {
 				return nil, fmt.Errorf(`sweep path span %d: %w`, i, floorErr)
 			}
-			piece, err = tessellateRevolveWithCountFloor(ctx, part, span.Revolve, chord, verify, nil, floor, freeformTarget)
+			var node *topo.Mesh
+			node, err = revolvetess.TessellateRevolveWithCountFloor(
+				ctx, &part.n, span.Revolve, chord, revolvetess.Level(verify), nil, floor, freeformTarget)
+			if err == nil {
+				piece = bornMesh(&Mesh{n: *node})
+			}
 		} else {
 			piece, err = tessellatePrismWithCountFloor(ctx, part, span.Prism, prismWallRole, chord, verify,
 				func(loop, seg int) int { return counts[compositemesh.StationKey{Loop: loop, Segment: seg}] }, freeformTarget)
@@ -81,7 +88,7 @@ func tessellateCompositeSweep(ctx context.Context, b *Body, sp sweepPayload, cho
 		if err != nil {
 			return nil, fmt.Errorf(`sweep path span %d: %w`, i, err)
 		}
-		start, end, spanCoordinateBound, err := compositemesh.SpanRings(ctx, span, &piece.n, profileSamples, freeformTarget, resolveRevolveWithLimit)
+		start, end, spanCoordinateBound, err := compositemesh.SpanRings(ctx, span, &piece.n, profileSamples, freeformTarget, revolvetess.ResolveRevolveWithLimit)
 		if err != nil {
 			return nil, fmt.Errorf(`sweep path span %d: %w`, i, err)
 		}

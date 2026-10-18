@@ -415,7 +415,7 @@ func taperedHubAndRadialLug(t *testing.T, splitU, toeApex, rootRadius float64, f
 	require.NoError(t, err)
 	lugProfiles := lugSketch.Profiles()
 	require.Len(t, lugProfiles, 1)
-	lug, err := doc.LoftFromPoint(t.Context(), r3.Vec{}, lugSketch, lugProfiles[0])
+	lug, err := decad.LoftFromPoint(t.Context(), doc, r3.Vec{}, lugSketch, lugProfiles[0])
 	require.NoError(t, err)
 	toeTrim, err := decad.Cut(t.Context(), lug, radialLugConeTool(t, doc, toeApex))
 	require.NoError(t, err)

@@ -43,7 +43,7 @@ import (
 // uses prismcells.Merge — the same chain/merge
 // tail the crossing sub-case below reuses over its own, narrower cell
 // selection. Cut/Intersect's clean-nesting structural match (§4.2's "clean"
-// sub-case) is prism_boolean_nesting.go — see that file's own header for why
+// sub-case) is internal/prismcells/payload_nesting.go — see that file's own header for why
 // it needs no assembly and no §6 audit. This file owns what every path
 // shares: G1-G4 admission, the work-budget cap, the private scene
 // construction (prismcells.BuildScene) and the operand coordinate re-expression
@@ -52,7 +52,7 @@ import (
 // Cut/Intersect's crossing sub-case — genuine boundary contact, not clean
 // nesting — is internal/prismcells/payload_resolve.go: §4.2's edge-orientation
 // propagation over hole-free operands, dispatched by
-// prism_boolean_nesting.go's resolveAndBuildPrismCut/Intersect once the
+// prismcells.ResolveAndBuildCut/Intersect once the
 // clean-nesting search comes back unresolved. It does not yet identify a
 // coincident carrier shared under only one operand's entity (§4.2's own
 // further extension) or admit a holed operand past what G6 already allows
@@ -91,7 +91,7 @@ func tryPrismBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body)
 		if !ok {
 			return prismPayload{}, false, nil
 		}
-		return resolveAndBuildPrismIntersect(ctx, budget, pa, pb, reexpress)
+		return prismcells.ResolveAndBuildIntersect(ctx, budget, pa, pb, reexpress)
 	}
 
 	budget := proofbound.NewWorkBudget(ctx) // §10: one counter for the whole attempt
@@ -167,7 +167,7 @@ func tryPrismBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body)
 		result, ok, err := prismcells.ResolveAndBuildUnion(ctx, budget, pa, pb, reexpress)
 		return result, ok, err
 	default: // meshbool.OpCut
-		return resolveAndBuildPrismCut(ctx, budget, pa, pb, reexpress)
+		return prismcells.ResolveAndBuildCut(ctx, budget, pa, pb, reexpress)
 	}
 }
 

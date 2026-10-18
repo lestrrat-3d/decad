@@ -21,7 +21,7 @@ type spiralCombinedAdmission struct {
 	source  *spiralCombineSource
 	roles   map[[2]*Face]spiralNearPairKind
 	allowed map[[2]int]bool
-	short   [2][4]spiralShortCapFamily
+	short   [2][4]spiralsector.ShortCapFamily
 	groups  []map[int]int
 }
 

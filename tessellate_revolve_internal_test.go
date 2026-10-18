@@ -11,7 +11,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/revolveproof"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
-	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -428,42 +427,56 @@ func TestRevolveMeshAreaSlackCoversTheHeldAreaGap(t *testing.T) {
 	}
 }
 
+type facetLoopFixture struct {
+	kinds   []revolveaxis.WallKind
+	samples []revolvemesh.RevMeridian
+}
+
+type facetLoopFixtures []facetLoopFixture
+
+func (loops facetLoopFixtures) Len() int                                { return len(loops) }
+func (loops facetLoopFixtures) Samples(i int) []revolvemesh.RevMeridian { return loops[i].samples }
+func (loops facetLoopFixtures) AxisWalk(i, walk int) bool {
+	return loops[i].kinds[walk] == revolveaxis.WallAxis
+}
+
 func TestRevolvePreflightFacetsChargesTheCeilingBeforeAllocating(t *testing.T) {
 	t.Parallel()
 	// One loop, four meridian samples, three of its four generators sweeping a
 	// wall: 6·n wall facets plus the two caps' four. Both §3 ceilings are
 	// charged here, before a single vertex is built.
-	loop := revLoopMesh{
-		resolved: revolveWalks{
-			Walks: make([]survey2d.SideWalk, 4),
-			Kinds: []wallKind{wallCylinder, wallPlane, wallCone, wallAxis},
+	loop := facetLoopFixture{
+		kinds: []revolveaxis.WallKind{
+			revolveaxis.WallCylinder, revolveaxis.WallPlane, revolveaxis.WallCone, revolveaxis.WallAxis,
 		},
 		samples: []revolvemesh.RevMeridian{{Walk: 0}, {Walk: 1}, {Walk: 2}, {Walk: 3}},
+	}
+	preflight := func(loops facetLoopFixtures, nPhi int, work *revolveproof.FacetWork) error {
+		return revolveproof.PreflightFacets(loops, nPhi, false, false, true, work)
 	}
 	// The facet-pair ceiling is the binding one: F·(F−1)/2 stays inside
 	// proofbound.MaxFacetPairTestsPerCall only up to 4000 facets, which this shape reaches
 	// at n = 666 exactly. One angular step more refuses.
-	require.NoError(t, revolvePreflightFacets([]revLoopMesh{loop}, 666, false, false, true, &revolveWork{}))
-	require.ErrorIs(t, revolvePreflightFacets([]revLoopMesh{loop}, 667, false, false, true, &revolveWork{}), ErrUnsupported)
-	require.ErrorIs(t, revolvePreflightFacets([]revLoopMesh{loop}, 10923, false, false, true, &revolveWork{}), ErrUnsupported)
+	require.NoError(t, preflight(facetLoopFixtures{loop}, 666, &revolveproof.FacetWork{}))
+	require.ErrorIs(t, preflight(facetLoopFixtures{loop}, 667, &revolveproof.FacetWork{}), ErrUnsupported)
+	require.ErrorIs(t, preflight(facetLoopFixtures{loop}, 10923, &revolveproof.FacetWork{}), ErrUnsupported)
 
 	// A pole ring fans rather than quads, so its own cell costs half as many
 	// facets per angular step and the same walks admit a finer count.
 	poled := loop
 	poled.samples = []revolvemesh.RevMeridian{{Walk: 0, OnAxis: true}, {Walk: 1}, {Walk: 2}, {Walk: 3}}
-	require.NoError(t, revolvePreflightFacets([]revLoopMesh{poled}, 799, false, false, true, &revolveWork{}))
-	require.ErrorIs(t, revolvePreflightFacets([]revLoopMesh{poled}, 800, false, false, true, &revolveWork{}), ErrUnsupported)
+	require.NoError(t, preflight(facetLoopFixtures{poled}, 799, &revolveproof.FacetWork{}))
+	require.ErrorIs(t, preflight(facetLoopFixtures{poled}, 800, &revolveproof.FacetWork{}), ErrUnsupported)
 
 	// A refinement retry never resets the cumulative counters
 	// (docs/tessellation-design.md §3): the same shape that fits on its own is
 	// refused once an earlier attempt has already spent most of the ceiling.
-	work := &revolveWork{}
-	require.NoError(t, revolvePreflightFacets([]revLoopMesh{loop}, 600, false, false, true, work))
-	require.Positive(t, work.facets)
-	require.Positive(t, work.pairs)
-	require.ErrorIs(t, revolvePreflightFacets([]revLoopMesh{loop}, 600, false, false, true, work), ErrUnsupported)
+	work := &revolveproof.FacetWork{}
+	require.NoError(t, preflight(facetLoopFixtures{loop}, 600, work))
+	require.Positive(t, work.Facets)
+	require.Positive(t, work.Pairs)
+	require.ErrorIs(t, preflight(facetLoopFixtures{loop}, 600, work), ErrUnsupported)
 }
-
 func TestCheckedIntegerArithmeticRefusesOverflow(t *testing.T) {
 	t.Parallel()
 	sum, ok := revolveproof.AddChecked(math.MaxUint64, 1)

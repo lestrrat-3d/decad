@@ -20,7 +20,7 @@ import (
 // the public Union commits only a fully audited result.
 func tryPrismPatternUnionMany(ctx context.Context, d *Document, ref producerID,
 	operands []*Body) (*Body, bool, error) {
-	source, matched, err := prismPatternSourceOf(ctx, operands)
+	source, matched, err := prismpattern.SourceOf(ctx, bodyNodes(operands))
 	if !matched || err != nil {
 		return nil, matched, err
 	}

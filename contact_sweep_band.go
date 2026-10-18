@@ -321,14 +321,14 @@ func (r *rotationalPairSweep) planarBand(ctx context.Context) (*SweepContactTrac
 func (r *rotationalPairSweep) planarTrack(support *planarSupport, face planarFace,
 	end, heldDepth, rate *big.Rat) (*SweepContactTrack, bool, error) {
 	solids := [2]*planar.PlanarSolid{r.a.solid, r.b.solid}
-	features, err := newPlanarFeatureMap(r.a.body, r.b.body, solids[0], solids[1])
+	features, err := reportvocab.NewPlanarFeatureMap(bodyNode(r.a.body), bodyNode(r.b.body), solids[0], solids[1])
 	if err != nil {
 		return nil, false, err
 	}
 	if solids[support.Owner].Faces == nil || solids[support.Guest].Faces == nil {
 		return nil, false, nil
 	}
-	featureS, ok := features.feature(support.Owner, planar.PatchFeature{Kind: planar.FeatureFacet,
+	featureS, ok := features.Feature(support.Owner, planar.PatchFeature{Kind: planar.FeatureFacet,
 		Faces: []int{face.ID}})
 	if !ok {
 		return nil, false, nil
@@ -344,12 +344,12 @@ func (r *rotationalPairSweep) planarTrack(support *planarSupport, face planarFac
 	for _, set := range [2][]int{support.Contact, support.Lifted} {
 		from := len(entries)
 		for _, index := range set {
-			feature, ok := features.feature(support.Guest, planar.PatchFeature{Kind: planar.FeatureVertex,
+			feature, ok := features.Feature(support.Guest, planar.PatchFeature{Kind: planar.FeatureVertex,
 				Faces: planar.VertexFaceIDs(solids[support.Guest], index)})
 			if !ok {
 				return nil, false, nil
 			}
-			entries = append(entries, entry{index: index, feature: feature, key: features.order(support.Guest, feature)})
+			entries = append(entries, entry{index: index, feature: feature, key: features.Order(support.Guest, feature)})
 		}
 		part := entries[from:]
 		sort.SliceStable(part, func(i, j int) bool { return compareKey(part[i].key, part[j].key) < 0 })

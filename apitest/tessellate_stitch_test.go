@@ -431,7 +431,7 @@ func TestStitchPlacedSolidTessellateBoundReadsVertexBound(t *testing.T) {
 // every face planar — restates its own triangle set exactly as a closed
 // stitched solid's mesh does (TestStitchSolidTessellatesItsOwnTriangleSet,
 // above), running docs/tessellation-design.md §1.2's manifold-with-boundary
-// audit (requireSheetMesh, tessellation.RequireSheetVertexLinks) in the closed-mesh
+// audit (topobuild.RequireSheetMesh) in the closed-mesh
 // audit's place. The free-boundary attribution needs no role at all: the
 // mesh side and the body side agree by the identical live face pointer
 // stitchPayload records and Body.Edges() reads back

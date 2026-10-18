@@ -180,7 +180,6 @@ type (
 	capBlendPayload   = capblend.Payload
 	capSetback        = capblend.Setback
 	capBandKey        = capblend.BandKey
-	capPatch          = capblend.Patch
 	loftCapBandSource = capblend.LoftSource
 	capPatchGeom      = capband.Patch
 )
@@ -236,7 +235,6 @@ type (
 	spiralCombinedTools          = facetedrecord.SpiralCombinedTools
 	spiralFirstJoinSource        = facetedrecord.SpiralFirstJoinSource
 	spiralHeelRootSeam           = facetedrecord.SpiralHeelRootSeam
-	spiralJunction               = facetedrecord.SpiralJunction
 )
 
 type loopRecord = sectionrecord.LoopRecord

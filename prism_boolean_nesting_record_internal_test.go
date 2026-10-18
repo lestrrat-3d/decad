@@ -51,7 +51,7 @@ func TestPrismIntersectArrangedRecordMatchesAuthenticated(t *testing.T) {
 			require.Equal(t, outerBefore, match.Outer)
 			require.Equal(t, holesBefore, match.Holes)
 
-			result, ok, err := resolveAndBuildPrismIntersect(t.Context(),
+			result, ok, err := prismcells.ResolveAndBuildIntersect(t.Context(),
 				proofbound.NewWorkBudget(t.Context()), pa, pb, reexpression)
 			require.NoError(t, err)
 			require.True(t, ok)

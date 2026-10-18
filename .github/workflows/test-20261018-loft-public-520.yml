@@ -1,0 +1,71 @@
+name: Temporary public Loft prism 520 gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: Reviewed public route commit SHA
+        required: true
+        type: string
+      target_tree:
+        description: Reviewed public route tree SHA
+        required: true
+        type: string
+      control_sha:
+        description: Independently reviewed control commit SHA
+        required: true
+        type: string
+      workflow_sha256:
+        description: Independently reviewed workflow file SHA-256
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  public-520:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Check input shape
+        shell: bash
+        env:
+          TARGET_SHA: ${{ inputs.target_sha }}
+          TARGET_TREE: ${{ inputs.target_tree }}
+          CONTROL_SHA: ${{ inputs.control_sha }}
+          WORKFLOW_SHA256: ${{ inputs.workflow_sha256 }}
+        run: |
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$TARGET_TREE" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$CONTROL_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$WORKFLOW_SHA256" =~ ^[0-9a-f]{64}$ ]]
+
+      - name: Check out reviewed control
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: control
+          persist-credentials: false
+
+      - name: Check out reviewed source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.target_sha }}
+          path: source
+          persist-credentials: false
+
+      - name: Run one capped public Union test
+        shell: bash
+        env:
+          TARGET_SHA: ${{ inputs.target_sha }}
+          TARGET_TREE: ${{ inputs.target_tree }}
+          CONTROL_SHA: ${{ inputs.control_sha }}
+          WORKFLOW_SHA256: ${{ inputs.workflow_sha256 }}
+        run: |
+          python3 control/.github/workflows/test-20261018-loft-public-520.py \
+            --control "$GITHUB_WORKSPACE/control" \
+            --source "$GITHUB_WORKSPACE/source" \
+            --report-dir "$RUNNER_TEMP" \
+            --target-sha "$TARGET_SHA" --target-tree "$TARGET_TREE" \
+            --control-sha "$CONTROL_SHA" --workflow-sha256 "$WORKFLOW_SHA256"

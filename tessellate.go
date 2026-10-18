@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
+	"github.com/lestrrat-3d/decad/internal/revolvetess"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/decad/internal/sweeprecord"
@@ -417,7 +418,11 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		return tessellatePatch(ctx, b, pp, chord, verify)
 	}
 	if rp, ok := b.n.Payload.(revolvePayload); ok {
-		return tessellateRevolve(ctx, b, rp, chord, verify)
+		node, err := revolvetess.TessellateRevolve(ctx, &b.n, rp, chord, revolvetess.Level(verify))
+		if err != nil {
+			return nil, err
+		}
+		return bornMesh(&Mesh{n: *node}), nil
 	}
 	if cbp, ok := b.n.Payload.(capBlendPayload); ok {
 		return tessellateCapBlend(ctx, b, cbp, chord, verify)
@@ -449,10 +454,18 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 	}
 	if sp, ok := b.n.Payload.(chainSweepPayload); ok {
 		if len(sp.Spans) != 0 {
-			return tessellateChainSweep(ctx, b, sp, chord, verify)
+			node, err := revolvetess.TessellateChainSweep(ctx, &b.n, sp, chord, revolvetess.Level(verify))
+			if err != nil {
+				return nil, err
+			}
+			return bornMesh(&Mesh{n: *node}), nil
 		}
 		if sp.Arc {
-			return tessellateChainArcSweep(ctx, b, sp, chord, verify)
+			node, err := revolvetess.TessellateChainArcSweep(ctx, &b.n, sp, chord, revolvetess.Level(verify))
+			if err != nil {
+				return nil, err
+			}
+			return bornMesh(&Mesh{n: *node}), nil
 		}
 		// the chain Sweep's one-span straight reduction builds through the
 		// identical chainrecord.Build a plain chain Extrude does, over
@@ -478,7 +491,12 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 			return tessellateCompositeSweep(ctx, b, sp, chord, verify)
 		}
 		if sp.Arc {
-			return tessellateRevolveWithRoles(ctx, b, sp.Revolve, chord, verify, sweepArcRole(sp.ReverseArcCaps))
+			node, err := revolvetess.TessellateRevolveWithRoles(
+				ctx, &b.n, sp.Revolve, chord, revolvetess.Level(verify), sweepArcRole(sp.ReverseArcCaps))
+			if err != nil {
+				return nil, err
+			}
+			return bornMesh(&Mesh{n: *node}), nil
 		}
 		return tessellatePrism(ctx, b, sp.Prism, sweepWallRole, chord, verify)
 	}
@@ -780,53 +798,14 @@ func tessellatePrismWithCountFloor(ctx context.Context, b *Body, pp prismPayload
 }
 
 // requireMeshAudit dispatches docs/tessellation-design.md §1's mandatory
-// mesh audit by body kind: a BodySolid keeps §1's closed-mesh audit
-// (tessellation.RequireClosedMesh, through topobuild.RequireClosedMesh)
-// verbatim, and a BodySheet runs §1.2's
-// manifold-with-boundary audit (requireSheetMesh) plus its own vertex-link
-// safety net (tessellation.RequireSheetVertexLinks) in its place. Both audits
-// live in internal/tessellation. This is the one place a surface-result build
-// reaches either sheet audit, so the prism, revolve, chain and stitch sheet
-// paths all get them from here.
+// mesh audit by body kind. A solid takes the closed-mesh audit; a sheet takes
+// topobuild.RequireSheetMesh's free-boundary and vertex-link audits. Angular
+// Revolve and chain Sweep builders call that node audit directly.
 func requireMeshAudit(ctx context.Context, sheet bool, b *Body, m *Mesh) error {
 	if sheet {
-		if err := requireSheetMesh(ctx, b, m); err != nil {
-			return err
-		}
-		return topobuild.LiftAuditError(tessellation.RequireSheetVertexLinks(ctx, len(m.n.Vertices), m.n.Triangles))
+		return topobuild.RequireSheetMesh(ctx, &b.n, &m.n)
 	}
 	return topobuild.RequireClosedMesh(&m.n)
-}
-
-// requireSheetMesh is the root side of docs/tessellation-design.md §1.2's
-// free-boundary attribution audit: it numbers the body's faces in Body.Faces
-// order, carries each mesh triangle's source face and the body's own recorded
-// free-edge chains over as those numbers, and lets internal/tessellation
-// compare the two sides. A source face the body does not carry keeps its own
-// fresh number, so pointer identity decides the grouping exactly as before.
-func requireSheetMesh(ctx context.Context, b *Body, m *Mesh) error {
-	faces := b.Faces()
-	number := make(map[*topo.Face]int, len(faces))
-	for i, f := range faces {
-		number[faceNode(f)] = i
-	}
-	source := make([]int, len(m.n.Source))
-	for k, f := range m.n.Source {
-		i, ok := number[f]
-		if !ok {
-			i = len(number)
-			number[f] = i
-		}
-		source[k] = i
-	}
-	counts := freeChainCountsByFace(b)
-	byNumber := make(map[int]int, len(counts))
-	for f, n := range counts {
-		byNumber[number[faceNode(f)]] = n
-	}
-	return topobuild.LiftAuditError(tessellation.RequireSheetBoundary(ctx, tessellation.SheetBoundary{
-		Triangles: m.n.Triangles, SourceFaces: source, FreeChainCounts: byNumber,
-	}))
 }
 
 // composeFaceBounds publishes docs/tessellation-design.md §2's sourceBound for

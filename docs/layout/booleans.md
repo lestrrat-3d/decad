@@ -13,8 +13,7 @@ The rules for rows live in `docs/layout.md`.
 | `point_cone_trim.go` | Recognizes exact cone tools and routes point-loft Cut/Intersect to facetedrecord. See loft-point design. |
 | `loft_faces_cone_trim.go` | Certifies the one-use LoftFaces toe Cut to heel Intersect cone continuation, including the tangent heel's extended tooth operand. See loft-face-sections design. |
 | `spiral_join_source.go` | Adapts an authenticated Revolve section and orchestrates source gates for a cone-trimmed nine-section tooth. See loft-face-sections design. |
-| `spiral_join_short.go` | Bounds fitted-flank and connector intersections with both finite blank end caps. See loft-face-sections design. |
-| `spiral_join_short_bound.go` | Compares each finite cap crossing cell with complete held switch edges. See loft-face-sections design. |
+| `spiral_join_short.go` | Authenticates fitted-flank and connector families at both finite blank end caps. See loft-face-sections design. |
 | `spiral_join_near_pair.go` | Binds first curved-tooth near-face roles to live sources and exact cone-trim sides. See loft-face-sections design. |
 | `spiral_join_faces.go` | Resolves authenticated blank and trimmed-tooth source faces in the first curved join. See faceted-vertex-bounds §3.6. |
 | `spiral_join_blank_graph.go` | Checks held blank meridian facets form a radial graph. See faceted-vertex-bounds §3.6. |
@@ -61,7 +60,7 @@ The rules for rows live in `docs/layout.md`.
 | `loft_cylinder_chamfer_side.go` | Certifies retained middle-side reach into the source union. See loft-cylinder-boolean design. |
 | `prism_boolean.go` | Analytic booleans of co-directional prisms. See `docs/prism-boolean-design.md`. |
 | `revolve_boolean.go` | Arranges authenticated common-axis full-Revolve meridians for public `Union`, `Cut` and `Intersect`. See general-boolean design. |
-| `prism_boolean_nesting.go` | Clean-nesting scene adapters. See prism-boolean §4.2. |
+| `prism_boolean_nesting.go` | Admits one-hole Intersect prism pairs before the clean-nesting scene resolver. See prism-boolean §3.1, §4.2. |
 | `prism_boolean_blind.go` | Blind and spanning Cuts via the whole-loop match. See `docs/prism-boolean-design.md` §3.2. |
 | `prism_boolean_crossing_blind.go` | Exact rectangular blind Cut across one through hole. See general-boolean A7. |
 | `prism_group.go` | Prism-group `Cut` tools and disjoint `Union` results. See general-boolean A5. |
