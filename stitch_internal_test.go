@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stitchflux"
 	"github.com/lestrrat-3d/decad/internal/stitchrecord"
+	"github.com/lestrrat-3d/decad/internal/stitchtess"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
@@ -1156,7 +1157,7 @@ func TestStitchCurvedMassCorrectsInwardOrientationForTorus(t *testing.T) {
 }
 
 // TestFaceIsTetrahedronEligibleRefusesHeldPlanarFaceted closes the mismatch
-// tessellate_stitch.go's mesh restatement gives a second caller:
+// internal/stitchtess/stitch.go's mesh restatement gives a second caller:
 // f.isPlanar() also admits a heldPlanar Faceted face — a boolean-built face
 // standing for flat source geometry, never a Plane itself — while
 // stitchrecord.TriangulateFaces demands f.surface.(Plane) and errors on anything
@@ -1212,7 +1213,7 @@ func stitchTestClosedBoxTriangles(off int) [12][3]int {
 
 // stitchTestLumpFace builds one lump's own bookkeeping face — a single
 // cyclic loop chaining every vertex in vs, in order, carrying no surface and
-// never triangulated — purely so stitchLumpFaceGroups (tessellate_stitch.go)
+// never triangulated — purely so lumpFaceGroups (internal/stitchtess/stitch.go)
 // can read the component's own held vertex positions back through the
 // ordinary Lump -> FaceShell -> Face -> Loop -> CoEdge -> Edge -> Vertex chain,
 // exactly as it does for a body Stitch itself built.
@@ -1226,16 +1227,16 @@ func stitchTestLumpFace(vs []*Vertex) *Face {
 }
 
 // TestTessellateStitchClearsSymDiffForOverlappingLumps is docs/surface-design.md's
-// T122, tessellate_stitch.go's own half of the nesting repair: two
+// T122, internal/stitchtess/stitch.go's own half of the nesting repair: two
 // independent, fully-overlapping closed boxes (stitchTestClosedBoxVerts
 // built twice over the SAME base corner, so all 16 vertices are zero-bound
 // yet the two boxes occupy the identical world region), each its own
-// single-lump component, fed straight to tessellateStitch on a hand-built
+// single-lump component, fed straight to stitchtess.Restate on a hand-built
 // Body/stitchPayload. decad's public seam has no way to reach this: once
 // stitchrecord.Build's own lump-separation gate lands (internal/stitchrecord/build.go), Stitch
 // itself refuses this exact shape before a body this overlapped could ever
 // reach tessellation (TestStitchRefusesNestedBoxes, apitest/stitch_test.go). This
-// fixture is what proves tessellateStitch's own symDiffOK reading does not
+// fixture is what proves stitchtess.Restate's own symDiffOK reading does not
 // merely inherit that earlier refusal: stitchweld.ZeroBound alone holds
 // here (every one of the 16 vertices is zero-bound), so without this file's
 // OWN lump-separation reading, symDiffOK would wrongly read true.
@@ -1278,9 +1279,10 @@ func TestTessellateStitchClearsSymDiffForOverlappingLumps(t *testing.T) {
 		TriFaces:  faceNodes(triFaces),
 	}
 
-	mesh, err := tessellateStitch(context.Background(), body, sp)
+	mesh, err := stitchtess.Restate(context.Background(), &body.n, sp,
+		func(s surfacegeom.Surface) any { return publicSurface(s) })
 	require.NoError(t, err)
-	require.False(t, mesh.n.SymDiffOK, "two fully-overlapping lumps must not earn the zero occupied-volume proof")
+	require.False(t, mesh.SymDiffOK, "two fully-overlapping lumps must not earn the zero occupied-volume proof")
 }
 
 // TestStitchConeArmChargesApexDeparture pins the cone apex bound on a

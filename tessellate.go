@@ -14,6 +14,8 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolvetess"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
+	"github.com/lestrrat-3d/decad/internal/stitchtess"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
 
@@ -427,13 +429,19 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		return tessellateTwoSidedDraft(ctx, b, dp, chord, verify)
 	}
 	if sp, ok := b.n.Payload.(stitchPayload); ok {
+		formatSurface := func(s surfacegeom.Surface) any { return publicSurface(s) }
+		var node *topo.Mesh
+		var err error
 		if sp.Tris == nil {
-			return tessellateStitchCurved(ctx, b, sp, chord, verify)
+			node, err = stitchtess.Curved(ctx, &b.n, sp, chord, revolvetess.Level(verify), formatSurface)
+		} else {
+			// The all-planar stitch restatement takes no chord tolerance.
+			node, err = stitchtess.Restate(ctx, &b.n, sp, formatSurface)
 		}
-		// The all-planar stitch restatement takes no chord tolerance at all
-		// (tessellate_stitch.go's own doc comment owns why), the same
-		// reasoning tessellateLoft's own arm above states for a loft.
-		return tessellateStitch(ctx, b, sp)
+		if err != nil {
+			return nil, err
+		}
+		return bornMesh(&Mesh{n: *node}), nil
 	}
 	if pp, ok := b.n.Payload.(bodyPatchPayload); ok {
 		return tessellateBodyPatch(ctx, b, pp, chord, verify)

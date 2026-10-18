@@ -94,7 +94,7 @@ func Build(ctx context.Context, env topo.Env, srcFaces []*topo.Face, plan *Plan,
 	// vertBound reads back, per vertex CLASS index (the same index tris and
 	// verts share), the widened bound rebuildTopology's vertexForClass
 	// already stamped onto the live Vertex it built for that class —
-	// tessellate_stitch.go's own per-face bound is the largest of these over
+	// internal/stitchtess/stitch.go's own per-face bound is the largest of these over
 	// the vertices a face's triangles touch, so this is a read of an
 	// existing proof, never a second one.
 	vertBound := make([]float64, len(verts))
@@ -338,7 +338,7 @@ func Build(ctx context.Context, env topo.Env, srcFaces []*topo.Face, plan *Plan,
 		return nil, err
 	}
 
-	// tessellate_stitch.go's exact restatement is scoped to the all-planar
+	// internal/stitchtess/stitch.go's exact restatement is scoped to the all-planar
 	// case, CLOSED or OPEN (docs/surface-design.md §14 Table D row 5): the
 	// curved-closure arm's own faces have no triangle set to restate, but an
 	// OPEN all-planar sheet's own triangle set is exactly the one this arm
@@ -651,7 +651,7 @@ func FaceLumpsProvenSeparate(components [][]*topo.Face) bool {
 //
 // It returns the LIVE face each returned triangle belongs to, parallel to
 // the triangle set, so a caller that must attribute a triangle to its face
-// (tessellate_stitch.go) reads it back directly rather than reconstructing
+// (internal/stitchtess/stitch.go) reads it back directly rather than reconstructing
 // the mapping afterward — Payload.Faces holds only the retired
 // operand faces, and a stitched body's faces carry no per-body-unique role
 // to recover it from either (docs/tessellation-design.md §4).

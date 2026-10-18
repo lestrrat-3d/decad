@@ -208,7 +208,7 @@ pair a `VerifyAll` one does.
 **§1's table states no vertex-link requirement for a `BodySolid` mesh, but
 §12's "a vertex link is not one connected cycle" refusal row assumes one
 runs.** Today only the revolve, one-span arc sweep, cap-loop chamfer and stitched-solid
-restatement paths (§2's `stitchPayload` row, `tessellate_stitch.go`) actually
+restatement paths (§2's `stitchPayload` row, `internal/stitchtess/stitch.go`) actually
 call `tessellation.RequireVertexLinks` on their solid branch, beside `internal/tessellation.RequireClosedMesh`:
 each welds or joins independently walked or independently authored geometry,
 where nothing upstream already proves a pinched vertex cannot occur the way a

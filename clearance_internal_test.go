@@ -1050,7 +1050,7 @@ func TestAddStitchFacesBuildsExactPlanarCarriers(t *testing.T) {
 // transversal crossing — directly against clearancePair, independent of
 // whatever the mesh boolean itself later decides. This fixture's block
 // shares the box's own y-range and z = 0 base plane, so even after the
-// occupied-volume proof lifted (tessellate_stitch.go, this stitched
+// occupied-volume proof lifted (internal/stitchtess/stitch.go, this stitched
 // operand's own gate), Verify's public report on it still reads Suspect: the
 // mesh boolean's own (pre-existing, unrelated) coplanar-contact gate
 // refuses a shared face plane as undecided, a genuine limit of the general

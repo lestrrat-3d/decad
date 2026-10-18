@@ -4,7 +4,9 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/revolvetess"
 	"github.com/lestrrat-3d/decad/internal/stitchrecord"
+	"github.com/lestrrat-3d/decad/internal/stitchtess"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -14,7 +16,7 @@ import (
 )
 
 // This file is docs/surface-design.md §15's T60, T70 and T87, over
-// tessellate_stitch.go's own private proof terms: T60 needs areaSlack, which
+// internal/stitchtess's own private proof terms: T60 needs areaSlack, which
 // the public API does not expose, and T70 needs a hand-built triangle set no
 // public seam can construct (stitchrecord.CheckClosure already catches it at build
 // time).
@@ -28,7 +30,9 @@ func TestStitchCurvedMeshNamesUnsupportedSurface(t *testing.T) {
 		LiveFaces: faceNodes([]*Face{bornFace(&Face{n: topo.Face{Surface: surfacegeom.Plane{}}}), bornFace(&Face{n: topo.Face{Surface: surfacegeom.NURBSSurface{}}})}),
 		Plan:      &stitchrecord.Plan{Table: stitchrecord.NewVertexTable()},
 	}
-	_, err := tessellateStitchCurved(t.Context(), bornBody(&Body{n: topo.Body{Kind: topo.BodySheet}}), sp, 0.1, VerifyAll)
+	b := bornBody(&Body{n: topo.Body{Kind: topo.BodySheet}})
+	_, err := stitchtess.Curved(t.Context(), &b.n, sp, 0.1, revolvetess.Level(VerifyAll),
+		func(s surfacegeom.Surface) any { return publicSurface(s) })
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "NURBSSurface")
 }
@@ -116,7 +120,8 @@ func TestStitchCurvedWeldedRevolveSiblingRejectsWrongEdgeAncestry(t *testing.T) 
 		}
 	}
 	sp.Plan = &plan
-	_, err = tessellateStitchCurved(t.Context(), stitched, sp, 0.1, VerifyAll)
+	_, err = stitchtess.Curved(t.Context(), &stitched.n, sp, 0.1, revolvetess.Level(VerifyAll),
+		func(s surfacegeom.Surface) any { return publicSurface(s) })
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "a weld joins different original edges")
 }
@@ -408,7 +413,7 @@ func triAreaXY(a, b, c r3.Vec) float64 {
 
 // TestTriangulateStitchFacesTilesAHoledFaceExactly is docs/surface-design.md's
 // T75, the tiling leg of this increment's own three-part exactness argument
-// (tessellate_stitch.go's own volSymDiff comment, step 3), narrowed to the
+// (internal/stitchtess/stitch.go's own volSymDiff comment, step 3), narrowed to the
 // HOLED case: hole-bridging
 // ahead of ear clipping (triangulate.go) must not merely avoid an error, it
 // must tile the outer-minus-hole region with no gap and no overlap. Every
@@ -439,7 +444,7 @@ func TestTriangulateStitchFacesTilesAHoledFaceExactly(t *testing.T) {
 // TestTessellateStitchRefusesARepeatedDirectedEdge is docs/surface-design.md's
 // T70: a hand-built triangle set whose two triangles repeat the SAME
 // directed edge (rather than tracing it in the opposite sense the way two
-// triangles sharing an edge must) drives tessellateStitch directly.
+// triangles sharing an edge must) drives stitchtess.Restate directly.
 // stitchrecord.CheckClosure already catches this shape at Stitch's own build time
 // (Table R row R7), so no public seam can ever construct a stitchPayload
 // this broken; the fixture is fed straight to the restatement instead.
@@ -455,7 +460,8 @@ func TestTessellateStitchRefusesARepeatedDirectedEdge(t *testing.T) {
 	}
 	b := bornBody(&Body{n: topo.Body{Solid: true, Kind: topo.BodySolid}})
 
-	mesh, err := tessellateStitch(t.Context(), b, sp)
+	mesh, err := stitchtess.Restate(t.Context(), &b.n, sp,
+		func(s surfacegeom.Surface) any { return publicSurface(s) })
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Nil(t, mesh)
 }

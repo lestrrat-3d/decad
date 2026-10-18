@@ -274,7 +274,7 @@ func AllTetrahedronEligible(faces []*topo.Face) bool {
 // boolean-built face that stands for flat source geometry but is not itself
 // a Plane — and TriangulateFaces demands a Plane outright, erroring on
 // anything else. Latent today because no Faceted face is ever a stitch
-// operand, but the mesh restatement (tessellate_stitch.go) gives the
+// operand, but the mesh restatement (internal/stitchtess/stitch.go) gives the
 // mismatch a second caller, so the tighter check closes it here rather than
 // leave two admission rules that can disagree.
 func FaceIsTetrahedronEligible(f *topo.Face) bool {

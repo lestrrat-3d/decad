@@ -39,12 +39,12 @@ type Payload struct {
 	// VertBound is Verts' own per-vertex proven bound (millimetres), the
 	// same widened class bound rebuildTopology's vertexForClass
 	// stamps onto the live Vertex it builds for that class — read back here
-	// so tessellate_stitch.go can publish a per-face bound without
+	// so internal/stitchtess/stitch.go can publish a per-face bound without
 	// recomputing it. Populated only alongside Tris/TriFaces below.
 	VertBound []float64
 	// Tris is the final wound triangle set (indices into Verts) an
 	// all-planar (AllTetrahedronEligible) build assembled and
-	// audited, CLOSED or OPEN — the exact set tessellate_stitch.go restates
+	// audited, CLOSED or OPEN — the exact set internal/stitchtess/stitch.go restates
 	// with no chording. Nil for a curved or mixed stitched body: it has no
 	// triangle set to restate.
 	Tris [][3]int
