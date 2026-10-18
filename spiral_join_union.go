@@ -164,7 +164,7 @@ func spiralValidateFirstUnion(ctx context.Context, blank, tooth *Body,
 		groups.blankHeel, groups.toothRootHeel, proof.HeelSeam, radial[1]); err != nil || !ok {
 		return false, err
 	}
-	toeSeam, ok, err := certifySpiralToeRootSeam(ctx, proof)
+	toeSeam, ok, err := spiralsector.CertifySpiralToeRootSeam(ctx, proof)
 	if err != nil || !ok {
 		return false, err
 	}

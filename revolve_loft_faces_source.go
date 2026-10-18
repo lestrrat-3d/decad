@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
+	"github.com/lestrrat-3d/decad/internal/spiralsector"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -351,11 +352,11 @@ func revolveLoftFacesStationSide(ctx context.Context, trim *loftFacesTrimRecord,
 				return 0
 			}
 			next := source.SourceStation[(j+1)%n]
-			if inside && !spiralCellSide(trim.Maps[band], trim.Maps[band+1], station,
+			if inside && !spiralsector.SpiralCellSide(trim.Maps[band], trim.Maps[band+1], station,
 				next, lfF(departure), m, b, false, lfZero(), lfOne(), 8) {
 				inside = false
 			}
-			if outside && !spiralCellSide(trim.Maps[band], trim.Maps[band+1], station,
+			if outside && !spiralsector.SpiralCellSide(trim.Maps[band], trim.Maps[band+1], station,
 				next, lfF(departure), m, b, true, lfZero(), lfOne(), 8) {
 				outside = false
 			}

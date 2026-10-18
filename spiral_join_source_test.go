@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
+	"github.com/lestrrat-3d/decad/internal/spiralsector"
 	"github.com/stretchr/testify/require"
 )
 
@@ -22,7 +23,7 @@ func TestSpiralFirstJoinDeclinesTangentHeelOutsideFiniteBlankOnly(t *testing.T) 
 	require.True(t, ok)
 	trim := tooth.n.Payload.(facetedPayload).LoftFacesTrim
 	require.NotNil(t, trim)
-	require.True(t, spiralTangentRecordCurrent(trim))
+	require.True(t, spiralsector.SpiralTangentRecordCurrent(trim))
 	m, b := section.Section.MeridianEquation()
 	toeX, ok := spiralRootToolX(m, b, trim.Toe)
 	require.True(t, ok)
@@ -31,7 +32,7 @@ func TestSpiralFirstJoinDeclinesTangentHeelOutsideFiniteBlankOnly(t *testing.T) 
 	_, ok = spiralToolOuterGap(trim.Heel, section.Ded, section.HeelOuter, -1)
 	require.True(t, ok, "the finite heel gap admits this producer-built tool")
 	require.True(t, spiralTangentCapTouchesHeelCircle(trim, m, b, toeX, heelX))
-	require.False(t, spiralHeelCapEightOutside(trim.Maps[8],
+	require.False(t, spiralsector.SpiralHeelCapEightOutside(trim.Maps[8],
 		lfAdd(lfF(section.Ded.U), lfF(section.Ded.V))))
 
 	proof, accepted, err := certifySpiralFirstJoin(t.Context(), blank, tooth)
@@ -48,7 +49,7 @@ func TestSpiralFirstJoinDeclinesTangentToeCapPastToeCircle(t *testing.T) {
 	require.True(t, ok)
 	trim := tooth.n.Payload.(facetedPayload).LoftFacesTrim
 	require.NotNil(t, trim)
-	require.True(t, spiralTangentRecordCurrent(trim))
+	require.True(t, spiralsector.SpiralTangentRecordCurrent(trim))
 	m, b := section.Section.MeridianEquation()
 	toeX, ok := spiralRootToolX(m, b, trim.Toe)
 	require.True(t, ok)

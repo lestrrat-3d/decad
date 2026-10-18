@@ -216,7 +216,7 @@ func spiralHeldHeelSeamProof(ctx context.Context, held *meshbool.StitchedMesh,
 	if err != nil || !ok {
 		return heldTail, false, err
 	}
-	box, ok := spiralHeelTailBox(seam, minAbsSlope)
+	box, ok := spiralsector.SpiralHeelTailBox(seam, minAbsSlope)
 	if !ok {
 		return 0, false, nil
 	}
@@ -233,7 +233,7 @@ func spiralHeldHeelSeamProof(ctx context.Context, held *meshbool.StitchedMesh,
 // overlap. Their only nonoverlap is one held end edge and the opposite source
 // end; the latter stays on the exact blank cap cone.
 func spiralHeldToeSeamProof(ctx context.Context, held *meshbool.StitchedMesh,
-	blankToe, toothRoot int, seam *spiralToeRootSeam,
+	blankToe, toothRoot int, seam *spiralHeelRootSeam,
 	radialError float64) (float64, bool, error) {
 	if seam == nil || seam.X.Lo == nil || seam.X.Hi == nil ||
 		seam.Slope.Lo == nil || seam.Slope.Hi == nil || held == nil ||

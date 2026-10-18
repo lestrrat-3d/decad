@@ -12,9 +12,7 @@ The rules for rows live in `docs/layout.md`.
 | `boolean_many_prism.go` | Arranges identical-interval line prisms in one Sketch scene. See prism-boolean §4.6. |
 | `point_cone_trim.go` | Retains point-loft and cone source faces through coaxial Cut/Intersect. See loft-point design. |
 | `loft_faces_cone_trim.go` | Certifies the one-use LoftFaces toe Cut to heel Intersect cone continuation, including the tangent heel's extended tooth operand. See loft-face-sections design. |
-| `spiral_join_source.go` | Adapts an authenticated Revolve section to the legacy six-side join and certifies a cone-trimmed nine-section tooth's flank crossings. See loft-face-sections design. |
-| `spiral_join_heel_seam.go` | Bounds the source root arc's intersection with the blank heel cap. See loft-face-sections design. |
-| `spiral_join_toe_seam.go` | Bounds the source root arc's intersection with the blank toe cap. See loft-face-sections design. |
+| `spiral_join_source.go` | Adapts an authenticated Revolve section to the six-side join and orchestrates source gates for a cone-trimmed nine-section tooth. See loft-face-sections design. |
 | `spiral_join_short.go` | Bounds fitted-flank and connector intersections with both finite blank end caps. See loft-face-sections design. |
 | `spiral_join_short_bound.go` | Compares each finite cap crossing cell with complete held switch edges. See loft-face-sections design. |
 | `spiral_join_near_pair.go` | Binds first curved-tooth near-face roles to live sources and exact cone-trim sides. See loft-face-sections design. |
