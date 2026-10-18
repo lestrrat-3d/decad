@@ -16,8 +16,8 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// BossMeshInput contains only the authenticated source data needed to build
-// the inward cup mesh. Authentication and final proof remain with the caller.
+// BossMeshInput contains the authenticated source data needed to build and
+// prove the inward cup mesh. The caller retains source authentication.
 type BossMeshInput struct {
 	Verts                                        []r3.Vec
 	VertexBound                                  []float64
@@ -33,7 +33,7 @@ type BossMeshInput struct {
 	Stations                                     int
 }
 
-// BossMesh is a transient mesh for the caller's contact and volume audits.
+// BossMesh is a transient mesh for the contact and volume audits.
 type BossMesh struct {
 	Verts                   []r3.Vec
 	Tris                    [][3]int

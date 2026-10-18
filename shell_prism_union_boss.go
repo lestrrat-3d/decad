@@ -2,15 +2,11 @@ package decad
 
 import (
 	"context"
-	"fmt"
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
-	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -41,7 +37,22 @@ func (b *Body) shellPrismUnionBoss(ctx context.Context, fp facetedPayload,
 		if !ok {
 			continue
 		}
-		out, err := buildPrismUnionBossShell(ctx, b, fp, source, t)
+		ref := b.n.Doc.NextProducer
+		payload, audit, err := prismshell.PrismUnionBossShellPayload(ctx, ref, prismshell.BossMeshInput{
+			Verts: fp.Verts, VertexBound: fp.VertexBound, Groups: fp.Groups,
+			Tris: fp.Tris, Src: fp.Src, Boss: source.boss,
+			PlateRect: source.plateRect, BossRect: source.bossRect,
+			PlateBottom: source.plateBottom, InterfaceZ: source.interfaceZ,
+			BossBottom: source.bossBottom, BossTop: source.bossTop,
+			UnitLo: source.unitLo, UnitHi: source.unitHi,
+			Outer: source.outer, TopGroup: source.topGroup,
+			Stations: prismUnionBossShellStations,
+		}, fp.VolSymDiff, fp.AreaSlack, t)
+		if err != nil {
+			return nil, true, err
+		}
+		out, err := bodyResult(facetedrecord.BuildWithProof(ctx,
+			envOf(b.n.Doc, ref), payload, audit, measurementToInternal(Measurement{}), nil))
 		if err != nil {
 			return nil, true, err
 		}
@@ -202,95 +213,4 @@ func prismUnionBossShellAuthenticate(result *Body, fp facetedPayload, plateBody,
 		return src, false
 	}
 	return src, true
-}
-
-func buildPrismUnionBossShell(ctx context.Context, source *Body, fp facetedPayload,
-	src prismUnionBossShellSource, t float64) (*Body, error) {
-	ref := source.n.Doc.NextProducer
-	mesh, err := prismshell.PrismUnionBossShellMeshOf(ctx, ref, prismshell.BossMeshInput{
-		Verts: fp.Verts, VertexBound: fp.VertexBound, Groups: fp.Groups,
-		Tris: fp.Tris, Src: fp.Src, Boss: src.boss,
-		PlateRect: src.plateRect, BossRect: src.bossRect,
-		PlateBottom: src.plateBottom, InterfaceZ: src.interfaceZ,
-		BossBottom: src.bossBottom, BossTop: src.bossTop,
-		UnitLo: src.unitLo, UnitHi: src.unitHi,
-		Outer: src.outer, TopGroup: src.topGroup,
-		Stations: prismUnionBossShellStations,
-	}, t)
-	if err != nil {
-		return nil, err
-	}
-	budget := proofbound.NewWorkBudget(ctx)
-	data, err := revolvemesh.RequireRevolveFacetAreas(budget, mesh.Verts, mesh.Tris, 0)
-	if err != nil {
-		return nil, err
-	}
-	if err := revolvemesh.RevolveContactAudit(budget, data, mesh.Tris, 0); err != nil {
-		return nil, err
-	}
-	audit, err := facetproof.AuditFacetedMesh(ctx, mesh.Verts, mesh.Tris)
-	if err != nil {
-		return nil, err
-	}
-	trueVolume := prismshell.PrismUnionBossShellTrueVolume(src.plateRect, src.bossRect,
-		src.plateBottom, src.interfaceZ, src.bossBottom, src.bossTop,
-		src.unitLo, src.unitHi, t)
-	if trueVolume.Lo == nil || trueVolume.Lo.Sign() <= 0 ||
-		len(audit.CompVol) != 1 || audit.CompVol[0].Sign() <= 0 {
-		return nil, fmt.Errorf("%w: boss shell has no proven positive occupied volume", ErrUnsupported)
-	}
-	curve := prismshell.PrismUnionBossShellCurveBound(t, prismUnionBossShellStations)
-	// All source-preserving exterior facets keep their Boolean proof. The new
-	// cavity is a family of nested convex rectangles. The root's true
-	// quarter-circle surface stays within curve plus the station lift of a
-	// chorded surface matched at the same rational curve parameter. This
-	// matching lets Z move near the horizontal tangent;
-	// a same-Z radial gap would be larger. Every homotopy section remains a
-	// strictly nested rectangle. Its swept root area is below 4 P t, where P
-	// is the boss perimeter; multiplying by the displacement bounds the
-	// occupied-volume change without using a same-Z horizontal gap, which
-	// becomes large near the quarter-circle's horizontal tangent. The lower
-	// cavity is exact; the upper cavity uses a fixed inset.
-	width := proofbound.ProductUpper(src.bossRect.Width(), src.unitHi)
-	height := proofbound.ProductUpper(src.bossRect.Height(), src.unitHi)
-	perimeter := proofbound.ProductUpper(2, proofbound.AbsSumUpper(width, height))
-	station := mesh.MaxVertexError
-	rootGap := proofbound.AbsSumUpper(curve, proofbound.ProductUpper(4, station))
-	upperGap := proofbound.ProductUpper(4, station)
-	if !(rootGap < t/16) {
-		return nil, fmt.Errorf("%w: boss shell root stations are too coarse for a bounded cavity", ErrUnsupported)
-	}
-	rootVol := proofbound.ProductUpper(
-		proofbound.ProductUpper(4, proofbound.ProductUpper(perimeter, t)), rootGap)
-	upperVol := proofbound.ProductUpper(src.bossTop-src.interfaceZ,
-		proofbound.AbsSumUpper(proofbound.ProductUpper(perimeter, upperGap),
-			proofbound.ProductUpper(4, proofbound.ProductUpper(upperGap, upperGap))))
-	capArea := proofbound.AbsSumUpper(
-		proofbound.ProductUpper(width, height),
-		proofbound.ProductUpper(src.plateRect.Inset(t).Width(), src.plateRect.Inset(t).Height()))
-	levelVol := proofbound.ProductUpper(proofbound.ProductUpper(4, capArea), station)
-	volumeBound := proofbound.AbsSumUpper(fp.VolSymDiff, rootVol, upperVol, levelVol)
-	heldVolume := audit.CompVol[0]
-	if proofbound.IntervalAbsUpper(proofbound.IntervalSub(trueVolume,
-		proofbound.PointInterval(heldVolume))).Cmp(proofarith.FloatRat(volumeBound)) > 0 {
-		return nil, fmt.Errorf("%w: boss shell held volume exceeds its occupied-volume allowance", ErrUnsupported)
-	}
-	for i := mesh.RootStart; i < mesh.BossPointEnd; i++ {
-		mesh.VertexBound[i] = proofbound.AbsSumUpper(mesh.VertexBound[i], curve)
-	}
-	bound := facetproof.FacetBoundMax(mesh.Tris, mesh.VertexBound)
-	// The root patch's curved area is no larger than the boss perimeter times
-	// sqrt(2) times a quarter-circle arc. Bounding both true and held root
-	// patches by twice that value covers their area difference independently
-	// of any cancellation across the four sides.
-	rootAreaSlack := proofbound.ProductUpper(
-		proofbound.ProductUpper(4, perimeter), proofbound.ProductUpper(t, proofbound.RatFloatUp(proofbound.PiUpper)))
-	payload := facetedPayload{
-		Verts: mesh.Verts, Tris: mesh.Tris, Src: mesh.Src, Groups: mesh.Groups,
-		VertexBound: mesh.VertexBound, MeshBound: bound, VolSymDiff: volumeBound,
-		AreaSlack: proofbound.AbsSumUpper(fp.AreaSlack, rootAreaSlack),
-		DPair:     facetedrecord.SourceDiameterUpper(mesh.Verts, bound),
-		Xform:     r3.Identity(), ContactAudited: true,
-	}
-	return bodyResult(facetedrecord.BuildWithProof(ctx, envOf(documentNode(documentHandle(source.n.Doc)), ref), payload, audit, measurementToInternal(Measurement{}), nil))
 }

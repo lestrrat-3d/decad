@@ -34,7 +34,7 @@ The rules for rows live in `docs/layout.md`.
 | `shell_opening.go` | Prism and straight Sweep side openings: classify removed faces and dispatch the audited region build. See shell-opening §3–§5. |
 | `shell_opening_brep.go` | Records a prism side opening whose caps are both removed; `breprecord` records the stacked case. See shell-opening §4. |
 | `shell_stacked_boss.go` | Admits and records the exact two-slab rectangular-boss shell; `breprecord` builds and measures it. See modify-general §3.1a. |
-| `shell_prism_union_boss.go` | Authenticates the faceted nested boss, then audits and commits the inward cup mesh from `prismshell`. See shell-faceted-boss design. |
+| `shell_prism_union_boss.go` | Authenticates the faceted nested boss and commits the inward cup proved by `prismshell`. See shell-faceted-boss design. |
 | `shell_round_boss.go` | Admits and records the exact two-slab circular-boss shell; `breprecord` builds and measures it. See modify-general §3.1c. |
 | `shell_blind_pocket.go` | Admits and records the exact two-slab rectangular blind-pocket shell; `breprecord` builds and measures it. See modify-general §3.1b. |
 | `shell_counterbore.go` | Admits and records the exact two-level coaxial counterbore shell; `breprecord` builds and measures it. See modify-general §3.1e. |
