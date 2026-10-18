@@ -234,7 +234,6 @@ type (
 	spiralCombineSource          = facetedrecord.SpiralCombineSource
 	spiralCombinedTools          = facetedrecord.SpiralCombinedTools
 	spiralFirstJoinSource        = facetedrecord.SpiralFirstJoinSource
-	spiralHeelRootSeam           = facetedrecord.SpiralHeelRootSeam
 )
 
 type loopRecord = sectionrecord.LoopRecord

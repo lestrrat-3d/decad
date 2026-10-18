@@ -1,4 +1,4 @@
-package decad
+package spiralsector
 
 import (
 	"context"
@@ -6,16 +6,15 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
-	"github.com/lestrrat-3d/decad/internal/spiralsector"
 	"github.com/lestrrat-3d/decad/internal/splinebezier"
 )
 
-// spiralShortCapFamilies authenticates all four short crossing families at
+// ShortCapFamilies authenticates all four short crossing families at
 // each cap. It refuses if a connector no longer coincides with its recorded
 // line segment or if any crossing reaches beyond the blank's finite cap.
-func spiralShortCapFamilies(ctx context.Context, proof *spiralFirstJoinSource) (
-	[2][4]spiralsector.ShortCapFamily, bool, error) {
-	var out [2][4]spiralsector.ShortCapFamily
+func ShortCapFamilies(ctx context.Context, proof *spiralFirstJoinSource) (
+	[2][4]ShortCapFamily, bool, error) {
+	var out [2][4]ShortCapFamily
 	if ctx == nil || proof == nil || proof.Blank == nil || proof.Tooth == nil ||
 		proof.Tooth.Source == nil || len(proof.Tooth.Maps) != 9 {
 		return out, false, nil
@@ -31,25 +30,25 @@ func spiralShortCapFamilies(ctx context.Context, proof *spiralFirstJoinSource) (
 			band = 7
 			first, last = proof.Blank.Ded, proof.Blank.HeelOuter
 		}
-		m := lfDiv(lfSub(lfF(last.V), lfF(first.V)), lfSub(lfF(last.U), lfF(first.U)))
-		b := lfSub(lfF(first.V), lfMul(m, lfF(first.U)))
-		capStart, capEnd := lfF(first.U), lfF(last.U)
+		m := seamRatDiv(seamRatSub(seamRatF(last.V), seamRatF(first.V)), seamRatSub(seamRatF(last.U), seamRatF(first.U)))
+		b := seamRatSub(seamRatF(first.V), seamRatMul(m, seamRatF(first.U)))
+		capStart, capEnd := seamRatF(first.U), seamRatF(last.U)
 		if m.Cmp(proof.RootM) >= 0 ||
-			lfAdd(lfMul(proof.RootM, capStart), proof.RootB).Cmp(lfF(first.V)) != 0 ||
-			lfAdd(lfMul(proof.RootM, capEnd), proof.RootB).Sign() <= 0 ||
-			lfF(first.V).Sign() <= 0 || lfF(last.V).Sign() <= 0 {
+			seamRatAdd(seamRatMul(proof.RootM, capStart), proof.RootB).Cmp(seamRatF(first.V)) != 0 ||
+			seamRatAdd(seamRatMul(proof.RootM, capEnd), proof.RootB).Sign() <= 0 ||
+			seamRatF(first.V).Sign() <= 0 || seamRatF(last.V).Sign() <= 0 {
 			return out, false, nil
 		}
 		for index, group := range groups {
 			var spans []freeform.BezierSpan
 			if index >= 2 {
-				span, ok := spiralsector.ShortCapSpan(proof.Tooth.Source, proof.Tooth.StationGroup, group)
+				span, ok := ShortCapSpan(proof.Tooth.Source, proof.Tooth.StationGroup, group)
 				if !ok {
 					return out, false, nil
 				}
 				spans = []freeform.BezierSpan{span}
 			} else {
-				fit, ok := proof.Tooth.Source.Profile.Outer.Segments[group].(fitSplineSeg)
+				fit, ok := proof.Tooth.Source.Profile.Outer.Segments[group].(splinebezier.FitSplineSeg)
 				if !ok {
 					return out, false, nil
 				}
@@ -71,7 +70,7 @@ func spiralShortCapFamilies(ctx context.Context, proof *spiralFirstJoinSource) (
 					}
 				}
 			}
-			family := spiralsector.ShortCapFamily{Band: band, Group: group}
+			family := ShortCapFamily{Band: band, Group: group}
 			for piece, span := range spans {
 				if piece%4 == 0 {
 					if err := ctx.Err(); err != nil {
@@ -89,7 +88,7 @@ func spiralShortCapFamilies(ctx context.Context, proof *spiralFirstJoinSource) (
 					}
 					continue
 				}
-				certificate, ok := spiralsector.ShortCapCrossingProof(proof.Tooth.Maps[band],
+				certificate, ok := ShortCapCrossingProof(proof.Tooth.Maps[band],
 					proof.Tooth.Maps[band+1], span, m, b, capStart, capEnd, index >= 2)
 				if !ok {
 					return out, false, nil
@@ -103,9 +102,9 @@ func spiralShortCapFamilies(ctx context.Context, proof *spiralFirstJoinSource) (
 				family.Pieces = append(family.Pieces, certificate)
 			}
 			if index < 2 {
-				left, leftOK := spiralsector.ShortCapEndpointX(proof.Tooth.Maps[band],
+				left, leftOK := ShortCapEndpointX(proof.Tooth.Maps[band],
 					proof.Tooth.Maps[band+1], spans[0], family.Pieces[0].Q, 0)
-				right, rightOK := spiralsector.ShortCapEndpointX(proof.Tooth.Maps[band],
+				right, rightOK := ShortCapEndpointX(proof.Tooth.Maps[band],
 					proof.Tooth.Maps[band+1], spans[0], family.Pieces[0].Q, 1)
 				if !leftOK || !rightOK {
 					return out, false, nil
@@ -125,7 +124,7 @@ func spiralShortCapFamilies(ctx context.Context, proof *spiralFirstJoinSource) (
 				// At capStart the blank cap and root meridians coincide. The
 				// authenticated root crossing is unique and X-ordered throughout
 				// this band, so this is the only finite-start clip of the cap arc.
-				clip, ok := spiralsector.IsolateJunction(ctx, proof.Tooth.Maps, spans[0],
+				clip, ok := IsolateJunction(ctx, proof.Tooth.Maps, spans[0],
 					proof.RootM, proof.RootB, proof.Crossings[index], capStart)
 				if !ok || clip.Band != band {
 					if err := ctx.Err(); err != nil {
@@ -134,7 +133,7 @@ func spiralShortCapFamilies(ctx context.Context, proof *spiralFirstJoinSource) (
 					return out, false, nil
 				}
 				family.FiniteClip = clip
-				box, ok, err := spiralsector.ShortCubicBox(ctx, proof.Tooth.Maps[band],
+				box, ok, err := ShortCubicBox(ctx, proof.Tooth.Maps[band],
 					proof.Tooth.Maps[band+1], spans[0], family.Pieces[0].Q,
 					clip.SLo, clip.SHi, family.FiniteEnd)
 				if err != nil || !ok {

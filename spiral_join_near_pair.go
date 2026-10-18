@@ -205,7 +205,7 @@ func certifySpiralNearFaceRoles(ctx context.Context, blank, tooth *Body,
 	// crossings over all bands. The short-cap certificate covers both
 	// finite outer caps against flanks and source connectors. The toe seam
 	// covers the one remaining cap/root-arc contact.
-	short, ok, err := spiralShortCapFamilies(ctx, proof)
+	short, ok, err := spiralsector.ShortCapFamilies(ctx, proof)
 	if err != nil || !ok {
 		return nil, empty, false, err
 	}
