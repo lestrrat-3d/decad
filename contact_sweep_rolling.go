@@ -315,7 +315,7 @@ func (r *rollingPairSweep) band(ctx context.Context, first *SweepSample) (*Sweep
 		return nil, false, nil
 	}
 	duration := r.paths[r.m].path.Duration
-	box, ok := r.columnBox()
+	box, ok := planarsweep.RollingColumnBoxOf(r.cylinder.Cylinder)
 	if !ok {
 		return nil, false, nil
 	}
@@ -347,10 +347,6 @@ func (r *rollingPairSweep) band(ctx context.Context, first *SweepSample) (*Sweep
 // of its axis segment in the same section: that offset is B·w with |w| <= r,
 // and |B·w|² <= (1 + gram)·|w|².
 type rollingColumnBox = planarsweep.RollingColumnBox
-
-func (r *rollingPairSweep) columnBox() (rollingColumnBox, bool) {
-	return planarsweep.RollingColumnBoxOf(r.cylinder.Cylinder)
-}
 
 // column is §10.6's column test through fraction f on a face-local plane.
 // Two boxes hold the cylinder at every instant of [0, f]: the coordinate box
