@@ -8,7 +8,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
-	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/decad/internal/spiralsector"
 	"github.com/lestrrat-3d/decad/internal/splinebezier"
@@ -132,7 +131,7 @@ func certifySpiralFirstJoin(ctx context.Context, blank, tooth *Body) (*spiralFir
 	if !spiralSourcePhysicalSector(trim, m, b) {
 		return nil, false, nil
 	}
-	if !spiralOtherSides(ctx, trim, m, b) {
+	if !spiralsector.OtherSides(ctx, trim, m, b) {
 		if err := ctx.Err(); err != nil {
 			return nil, false, err
 		}
@@ -166,8 +165,8 @@ func certifySpiralFirstJoin(ctx context.Context, blank, tooth *Body) (*spiralFir
 	if proof.ToeOffset.Sign() >= 0 || proof.HeelOffset.Sign() <= 0 {
 		return nil, false, nil
 	}
-	if !spiralOriginalCapsAvoidToolRootCircles(trim, m, b, toeX, heelX) &&
-		!spiralTangentCapTouchesHeelCircle(trim, m, b, toeX, heelX) {
+	if !spiralsector.OriginalCapsAvoidToolRootCircles(trim, m, b, toeX, heelX) &&
+		!spiralsector.TangentCapTouchesHeelCircle(trim, m, b, toeX, heelX) {
 		return nil, false, nil
 	}
 	for side, group := range [...]int{0, 2} {
@@ -219,7 +218,7 @@ func certifySpiralFirstJoin(ctx context.Context, blank, tooth *Body) (*spiralFir
 			return nil, false, nil
 		}
 		for end, targetX := range []*big.Rat{toeX, heelX} {
-			junction, ok := spiralIsolateJunction(ctx, trim.Maps, spans[0], m, b,
+			junction, ok := spiralsector.IsolateJunction(ctx, trim.Maps, spans[0], m, b,
 				proof.Crossings[side], targetX)
 			if !ok {
 				if err := ctx.Err(); err != nil {
@@ -236,7 +235,7 @@ func certifySpiralFirstJoin(ctx context.Context, blank, tooth *Body) (*spiralFir
 	// misses its heel tool/root circle (the strict branch), or, for a
 	// cone-tangent end with a matching record, touches that circle at one
 	// point with the circle on the source side of the plane
-	// (spiralTangentCapTouchesHeelCircle). Either way neither end-cap
+	// (spiralsector.TangentCapTouchesHeelCircle). Either way neither end-cap
 	// interior can create an extra contact, even though cap 8 spans the
 	// heelX coordinate.
 	// Q_s and J make both junctions transverse. Circle membership therefore
@@ -251,55 +250,6 @@ func certifySpiralFirstJoin(ctx context.Context, blank, tooth *Body) (*spiralFir
 	}
 	proof.HeelSeam = seam
 	return proof, true, nil
-}
-
-// The toe cap lies wholly before the toe tool/root circle in X. The heel
-// cap may span heelX, so its full supporting plane must miss the entire
-// heel tool/root circle. For A+B*cos(theta)+C*sin(theta), A²>B²+C² is an
-// exact rational separation proof for every angle, including cap interiors.
-func spiralOriginalCapsAvoidToolRootCircles(trim *loftFacesTrimRecord,
-	m, b, toeX, heelX *big.Rat) bool {
-	box, err := revolveloftfaces.LfSourceBox(trim.Source)
-	if err != nil || len(trim.Maps) != 9 {
-		return false
-	}
-	for _, end := range [...]int{0, 8} {
-		if loftface.PositiveDenominator(trim.Maps[end], box) != nil {
-			return false
-		}
-	}
-	return spiralToeCapBeforeToeCircle(trim, box, toeX) &&
-		loftface.CapPlaneAvoidsRootCircle(trim.Maps[8], loftface.BoxCorners(box), m, b, heelX)
-}
-
-// spiralToeCapBeforeToeCircle reports whether the whole original cap 0 lies
-// below toeX. The caller has proved cap 0's denominator positive over box.
-func spiralToeCapBeforeToeCircle(trim *loftFacesTrimRecord, box [4]*big.Rat, toeX *big.Rat) bool {
-	xAxis := loftFaceRatVec{lfOne(), lfZero(), lfZero()}
-	return loftface.ScalarRange(trim.Maps[0], xAxis, loftface.BoxCorners(box)).Hi.Cmp(toeX) < 0
-}
-
-// spiralTangentCapTouchesHeelCircle is the cone-tangent branch of the heel
-// half of spiralOriginalCapsAvoidToolRootCircles. It runs only when the trim
-// record carries a cone-tangent end that matches the heel cone and the final
-// cap map exactly. The cap-8 plane then touches the heel tool/root circle at
-// one point instead of missing it, which loftface.CapPlaneTouchesRootCircle
-// decides exactly, with the circle on the side of the preceding cap.
-func spiralTangentCapTouchesHeelCircle(trim *loftFacesTrimRecord, m, b, toeX, heelX *big.Rat) bool {
-	if trim == nil || trim.Tangent == nil || !spiralsector.SpiralTangentRecordCurrent(trim) || len(trim.Maps) != 9 {
-		return false
-	}
-	box, err := revolveloftfaces.LfSourceBox(trim.Source)
-	if err != nil {
-		return false
-	}
-	for _, end := range [...]int{0, 7, 8} {
-		if loftface.PositiveDenominator(trim.Maps[end], box) != nil {
-			return false
-		}
-	}
-	return spiralToeCapBeforeToeCircle(trim, box, toeX) &&
-		loftface.CapPlaneTouchesRootCircle(trim.Maps[8], loftface.BoxCorners(box), m, b, heelX, trim.Maps[7])
 }
 
 func spiralTrimSourceCurrent(trim *loftFacesTrimRecord) bool {
@@ -388,52 +338,6 @@ func spiralSourcePhysicalSector(trim *loftFacesTrimRecord, m, b *big.Rat) bool {
 	return true
 }
 
-// The four non-flank source edges cannot create another root crossing.
-// Each authenticated source contour cell lies within its cap's certified
-// source and projective departure from the chord joining exact mapped
-// stations. Band interpolation is convex in the two caps, so the entire
-// ruled cell lies in the four-corner box enlarged by that departure.
-func spiralOtherSides(ctx context.Context, trim *loftFacesTrimRecord, m, b *big.Rat) bool {
-	source := trim.Source
-	n := len(source.SourceStation)
-	if n == 0 || len(trim.StationGroup) != n {
-		return false
-	}
-	var seen [6]int
-	for band := range 8 {
-		lo, hi := trim.Bounds[band], trim.Bounds[band+1]
-		if len(lo.SourceDeparture) != n || len(hi.SourceDeparture) != n ||
-			len(lo.ProjectiveDeparture) != n || len(hi.ProjectiveDeparture) != n {
-			return false
-		}
-		for j, station := range source.SourceStation {
-			if j%64 == 0 && ctx.Err() != nil {
-				return false
-			}
-			group := trim.StationGroup[j]
-			if group < 0 || group >= len(seen) {
-				return false
-			}
-			if group == 0 || group == 2 {
-				continue
-			}
-			seen[group]++
-			departure := max(
-				proofbound.AbsSumUpper(lo.SourceDeparture[j], lo.ProjectiveDeparture[j]),
-				proofbound.AbsSumUpper(hi.SourceDeparture[j], hi.ProjectiveDeparture[j]))
-			if proofbound.IsNonFinite(departure) || departure < 0 {
-				return false
-			}
-			next := source.SourceStation[(j+1)%n]
-			if !spiralsector.SpiralCellSide(trim.Maps[band], trim.Maps[band+1], station, next,
-				lfF(departure), m, b, group == 1, lfZero(), lfOne(), 8) {
-				return false
-			}
-		}
-	}
-	return seen[1] > 0 && seen[3] > 0 && seen[4] > 0 && seen[5] > 0
-}
-
 // On the blank root, r=m*x+b. The tool cone generator is x+k*r=apex,
 // so their intersection has an exact rational axial coordinate.
 func spiralRootToolX(m, b *big.Rat, cone *pointConeLimit) (*big.Rat, bool) {
@@ -463,82 +367,4 @@ func spiralToolOuterGap(cone *pointConeLimit, first, last planePoint, sign int) 
 		return z, true
 	}
 	return a, true
-}
-
-func spiralIsolateJunction(ctx context.Context, maps []loftFaceMap, span freeform.BezierSpan,
-	m, b *big.Rat, caps [9]loftface.RootCrossing, targetX *big.Rat) (spiralJunction, bool) {
-	band := -1
-	for i := range 8 {
-		left, right := loftface.CapXRange(maps[i], span, caps[i]),
-			loftface.CapXRange(maps[i+1], span, caps[i+1])
-		if left.Hi.Cmp(targetX) < 0 && right.Lo.Cmp(targetX) > 0 {
-			if band >= 0 {
-				return spiralJunction{}, false
-			}
-			band = i
-		}
-	}
-	if band < 0 {
-		return spiralJunction{}, false
-	}
-	q := loftface.MeridianQRows(maps[band], maps[band+1], span, m, b)
-	tLo, tHi := lfZero(), lfOne()
-	for step := range 48 {
-		if step%8 == 0 && ctx.Err() != nil {
-			return spiralJunction{}, false
-		}
-		mid := lfMul(lfAdd(tLo, tHi), big.NewRat(1, 2))
-		fixed := polynomial.BernsteinRowsAt(q, mid)
-		root := loftface.IsolateRootN(fixed, 64)
-		x := loftface.BandXRange(maps[band], maps[band+1], span, root, mid)
-		switch {
-		case x.Hi.Cmp(targetX) < 0:
-			tLo = mid
-		case x.Lo.Cmp(targetX) > 0:
-			tHi = mid
-		default:
-			root = loftface.IsolateRootN(fixed, 128)
-			x = loftface.BandXRange(maps[band], maps[band+1], span, root, mid)
-			if x.Hi.Cmp(targetX) < 0 {
-				tLo = mid
-			} else if x.Lo.Cmp(targetX) > 0 {
-				tHi = mid
-			} else {
-				return spiralJunction{}, false
-			}
-		}
-	}
-	leftRoot := loftface.IsolateRootN(polynomial.BernsteinRowsAt(q, tLo), 64)
-	rightRoot := loftface.IsolateRootN(polynomial.BernsteinRowsAt(q, tHi), 64)
-	sLo, sHi := leftRoot.Lo, leftRoot.Hi
-	if rightRoot.Lo.Cmp(sLo) < 0 {
-		sLo = rightRoot.Lo
-	}
-	if rightRoot.Hi.Cmp(sHi) > 0 {
-		sHi = rightRoot.Hi
-	}
-	margin := big.NewRat(1, 1<<40)
-	sLo, sHi = lfSub(sLo, margin), lfAdd(sHi, margin)
-	if sLo.Sign() <= 0 || sHi.Cmp(lfOne()) >= 0 ||
-		!spiralJunctionRootBracket(q, sLo, sHi, tLo, tHi) {
-		return spiralJunction{}, false
-	}
-	box, ok := loftface.JunctionBox(maps[band], maps[band+1], span, sLo, sHi, tLo, tHi)
-	if !ok || box[0].Lo.Cmp(targetX) > 0 || box[0].Hi.Cmp(targetX) < 0 {
-		return spiralJunction{}, false
-	}
-	box[0] = loftFaceInterval{Lo: targetX, Hi: targetX}
-	return spiralJunction{Band: band, SLo: sLo, SHi: sHi, TLo: tLo, THi: tHi, Box: box}, true
-}
-
-func spiralJunctionRootBracket(q [3][]*big.Rat, sLo, sHi, tLo, tHi *big.Rat) bool {
-	for _, entry := range []struct {
-		s    *big.Rat
-		sign int
-	}{{sLo, -1}, {sHi, 1}} {
-		if !polynomial.BernsteinRowsSignAt(q, entry.s, tLo, tHi, entry.sign) {
-			return false
-		}
-	}
-	return true
 }

@@ -217,7 +217,7 @@ func spiralShortCapFamilies(ctx context.Context, proof *spiralFirstJoinSource) (
 				// At capStart the blank cap and root meridians coincide. The
 				// authenticated root crossing is unique and X-ordered throughout
 				// this band, so this is the only finite-start clip of the cap arc.
-				clip, ok := spiralIsolateJunction(ctx, proof.Tooth.Maps, spans[0],
+				clip, ok := spiralsector.IsolateJunction(ctx, proof.Tooth.Maps, spans[0],
 					proof.RootM, proof.RootB, proof.Crossings[index], capStart)
 				if !ok || clip.Band != band {
 					if err := ctx.Err(); err != nil {

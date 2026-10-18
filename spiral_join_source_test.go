@@ -31,7 +31,7 @@ func TestSpiralFirstJoinDeclinesTangentHeelOutsideFiniteBlankOnly(t *testing.T) 
 	require.True(t, ok)
 	_, ok = spiralToolOuterGap(trim.Heel, section.Ded, section.HeelOuter, -1)
 	require.True(t, ok, "the finite heel gap admits this producer-built tool")
-	require.True(t, spiralTangentCapTouchesHeelCircle(trim, m, b, toeX, heelX))
+	require.True(t, spiralsector.TangentCapTouchesHeelCircle(trim, m, b, toeX, heelX))
 	require.False(t, spiralsector.SpiralHeelCapEightOutside(trim.Maps[8],
 		lfAdd(lfF(section.Ded.U), lfF(section.Ded.V))))
 
@@ -62,7 +62,7 @@ func TestSpiralFirstJoinDeclinesTangentToeCapPastToeCircle(t *testing.T) {
 	require.GreaterOrEqual(t, capX.Hi.Cmp(toeX), 0, "cap 0 reaches the toe tool/root circle")
 	require.True(t, loftface.CapPlaneTouchesRootCircle(trim.Maps[8], loftface.BoxCorners(box),
 		m, b, heelX, trim.Maps[7]), "the heel-circle leg still passes")
-	require.False(t, spiralOriginalCapsAvoidToolRootCircles(trim, m, b, toeX, heelX))
+	require.False(t, spiralsector.OriginalCapsAvoidToolRootCircles(trim, m, b, toeX, heelX))
 
 	proof, accepted, err := certifySpiralFirstJoin(t.Context(), blank, tooth)
 	require.NoError(t, err)
@@ -282,12 +282,12 @@ func spiralRootTube(ctx context.Context, proof *spiralFirstJoinSource, side int,
 		return empty, false, nil
 	}
 	span := proof.Flank[side]
-	low, ok := spiralIsolateJunction(ctx, proof.Tooth.Maps, span,
+	low, ok := spiralsector.IsolateJunction(ctx, proof.Tooth.Maps, span,
 		proof.RootM, proof.RootB, proof.Crossings[side], xLo)
 	if !ok {
 		return empty, false, ctx.Err()
 	}
-	high, ok := spiralIsolateJunction(ctx, proof.Tooth.Maps, span,
+	high, ok := spiralsector.IsolateJunction(ctx, proof.Tooth.Maps, span,
 		proof.RootM, proof.RootB, proof.Crossings[side], xHi)
 	if !ok || low.Band != high.Band || low.THi.Cmp(high.TLo) >= 0 {
 		return empty, false, ctx.Err()
@@ -296,7 +296,7 @@ func spiralRootTube(ctx context.Context, proof *spiralFirstJoinSource, side int,
 	q := loftface.MeridianQRows(proof.Tooth.Maps[band], proof.Tooth.Maps[band+1],
 		span, proof.RootM, proof.RootB)
 	sLo, sHi := lfZero(), lfOne()
-	if !spiralJunctionRootBracket(q, sLo, sHi, low.TLo, high.THi) {
+	if !spiralsector.JunctionRootBracket(q, sLo, sHi, low.TLo, high.THi) {
 		return empty, false, ctx.Err()
 	}
 	for step := range 64 {

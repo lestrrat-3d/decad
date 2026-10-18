@@ -17,7 +17,7 @@ type spiralFirstUnionAdmission struct {
 	short     [2][4]spiralShortCapFamily
 	roles     map[[2]*Face]spiralNearPairKind
 	allowed   map[[2]int]bool
-	rootBoxes *[2]*spiralRootFlankSourceBoxes
+	rootBoxes *[2]*spiralsector.RootFlankSourceBoxes
 }
 
 // spiralPrepareFirstUnion authenticates source geometry before modifying a
@@ -200,11 +200,11 @@ func spiralValidateFirstUnion(ctx context.Context, blank, tooth *Body,
 		for i, vertex := range chain.Vertices {
 			ordered[i] = result.Verts[vertex]
 		}
-		var prepared []*spiralRootFlankSourceBoxes
+		var prepared []*spiralsector.RootFlankSourceBoxes
 		if admission.rootBoxes != nil {
 			prepared = append(prepared, admission.rootBoxes[sourceSide])
 		}
-		if _, accepted, err := spiralRootFlankWholeBound(ctx, proof,
+		if _, accepted, err := spiralsector.RootFlankWholeBound(ctx, proof,
 			sourceSide, ordered, chain.MinBeta, prepared...); err != nil || !accepted {
 			return false, err
 		}
