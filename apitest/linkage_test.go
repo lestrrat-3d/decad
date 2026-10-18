@@ -468,13 +468,6 @@ func TestVerifyLinkageAgreesWithVerifyMotion(t *testing.T) {
 		require.Equal(t, motion.Clearance == nil, linkage.Clearance == nil)
 		require.False(t, motion.Diagnostics == nil, "empty report diagnostics remain non-nil")
 		requireSameFindings(t, motion.Diagnostics, linkage.Diagnostics, arm, stationary)
-		if len(motion.Collisions) > 0 {
-			found := false
-			for _, diag := range motion.Diagnostics {
-				found = found || diag.Code == decad.DiagMotionCollision
-			}
-			require.True(t, found, "a colliding fixture must exercise pair diagnostics")
-		}
 		for k, pose := range motion.Poses {
 			got := linkage.Poses[k]
 			require.Equal(t, pose.Interferences == nil, got.Interferences == nil, "pose %d interference shape", k)
@@ -484,6 +477,30 @@ func TestVerifyLinkageAgreesWithVerifyMotion(t *testing.T) {
 			require.False(t, pose.Diagnostics == nil, "pose %d empty diagnostics remain non-nil", k)
 			requireSameFindings(t, pose.Diagnostics, got.Diagnostics, arm, stationary)
 		}
+	}
+	requireHitEvidence := func(t *testing.T, motion *decad.MotionReport, linkage *decad.LinkageReport,
+		arm, stationary *decad.Body) {
+		t.Helper()
+		require.Positive(t, len(motion.Collisions), "the hit fixture must prove a collision")
+		require.Positive(t, len(linkage.Collisions), "the linkage hit fixture must prove a collision")
+		found := false
+		for _, collision := range motion.Collisions {
+			for k, diag := range motion.Diagnostics {
+				if diag.Code == decad.DiagMotionCollision && diag.Pair != nil &&
+					diag.Pair.A == arm && diag.Pair.B == stationary && diag.At != nil &&
+					diag.At.Mag() == collision.At.Mag() {
+					require.Truef(t, k < len(linkage.Diagnostics), "collision diagnostic %d exists in linkage", k)
+					got := linkage.Diagnostics[k]
+					require.Truef(t, got.Code == decad.DiagMotionCollision && got.Pair != nil &&
+						got.Pair.A == arm && got.Pair.B == stationary && got.At != nil,
+						"collision diagnostic %d keeps linkage pair and parameter", k)
+					require.InDelta(t, diag.At.Mag(), 90*got.At.Mag(), 1e-9,
+						"collision diagnostic %d parameter", k)
+					found = true
+				}
+			}
+		}
+		require.True(t, found, "the hit fixture must publish a matching collision diagnostic")
 	}
 	requireSameCollisions := func(t *testing.T, motion *decad.MotionReport, linkage *decad.LinkageReport,
 		arm, stationary *decad.Body) {
@@ -502,6 +519,9 @@ func TestVerifyLinkageAgreesWithVerifyMotion(t *testing.T) {
 			t.Parallel()
 			motion, linkage, arm, stationary := both(t, tc.static,
 				[]decad.MotionOption{endpointsOnly(armSwing())}, decad.WithResolution(units.Scalar(1)))
+			if tc.name == "a wall the arm hits" {
+				requireHitEvidence(t, motion, linkage, arm, stationary)
+			}
 			require.Equal(t, motion.Status, linkage.Status)
 			require.Equal(t, len(motion.Poses), len(linkage.Poses))
 			require.Equal(t, len(motion.Intervals), len(linkage.Intervals))
@@ -529,6 +549,9 @@ func TestVerifyLinkageAgreesWithVerifyMotion(t *testing.T) {
 		t.Run(tc.name+" bisected", func(t *testing.T) {
 			t.Parallel()
 			motion, linkage, arm, stationary := both(t, tc.static, tc.motionRes, tc.linkageRes)
+			if tc.name == "a wall the arm hits" {
+				requireHitEvidence(t, motion, linkage, arm, stationary)
+			}
 			requireSameCollisions(t, motion, linkage, arm, stationary)
 			require.Equal(t, motion.Status, linkage.Status)
 			require.Equal(t, len(motion.Poses), len(linkage.Poses))
