@@ -52,6 +52,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/motionrun/` | Static mover/stationary pair validity, swept-box exclusion and sheet classification over topology nodes. See motion-check §2–§6. |
 | `internal/motionoption/` | Motion options. See motion-check §3. |
 | `internal/planarsweep/` | Support-plane records, motion, vertex rates, depth and rolling bounds. |
+| `internal/planarband/` | Positive-displacement planar contact relation and charged manifold. See multibody §10.4. |
 | `internal/sweepdeparture/` | Exact source-box departure proofs. See multibody §10.2. |
 | `internal/sweepmemo/` | Sweep path replay coverage, pose bits and path memo tables. See contact-sweep §6–§7. |
 | `internal/radiusmemo/` | Body rotational sweep-radius keys and bounded memo readings. See contact-sweep §6–§7. |
