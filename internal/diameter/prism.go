@@ -103,7 +103,7 @@ func PrismGatePointsMemo(budget *proofbound.WorkBudget, prisms []prismrecord.Pay
 // PrismFreeformSection is the root bodyGateDiameter's arm for a free-form-walled
 // prismPayload (docs/verification-design.md §3): the clearance kernel's exact
 // carrier model has no arm for a NURBSSurface side face any more than it has
-// one for a displaced section, and gateWitnessPrism gives this payload none
+// one for a displaced section, and gatewitness.Prism gives this payload none
 // either, because its own sectionDelta reads zero — the one value that arm
 // treats as "the section is already its own denotation, read newBodyGeomBudget
 // instead". A free-form wall is not read through either model, so this
@@ -152,7 +152,7 @@ func PrismGatePointsMemo(budget *proofbound.WorkBudget, prisms []prismrecord.Pay
 // here rather than keeping a second copy:
 //
 //   - the profile carries no free-form segment at all, so this arm has nothing
-//     to read the exact carrier model or gateWitnessPrism's own
+//     to read the exact carrier model or gatewitness.Prism's own
 //     displaced-section arm does not already read;
 //   - a recorded segment normalizeSegment refuses, or walkOf refuses (an
 //     R-table sentinel), so the section never becomes a walk at all;
@@ -168,7 +168,7 @@ func PrismGatePointsMemo(budget *proofbound.WorkBudget, prisms []prismrecord.Pay
 //     (LowerForDisplacement).
 //
 // A withheld answer is not rescued downstream. bodyGateDiameter falls through to
-// fallbackGateDiameter, whose gateWitnessPrism has no arm for a prismPayload
+// fallbackGateDiameter, whose gatewitness.Prism has no arm for a prismPayload
 // whose sectionDelta is zero, so the body ends with NO gate diameter and its
 // bounded readings read Suspect. That is the sound direction to fail in — an
 // absent reference admits nothing — but it is a real outcome of this arm, not

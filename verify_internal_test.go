@@ -9,6 +9,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/gatewitness"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
@@ -205,7 +206,7 @@ func TestBodyGateDiameterExactCarrierArmNeverOverstates(t *testing.T) {
 
 // A prismPayload carrying BOTH displacements still earns a gate reference
 // (docs/prism-boolean-design.md §12's "Verify's structural/tolerance gates"
-// row): the exact carrier model refuses it, so gateWitnessPrism hands
+// row): the exact carrier model refuses it, so gatewitness.Prism hands
 // fallbackGateDiameter the body's own recorded section beside the displacement
 // each witness carries. This test pins what that arm proves — the charge is
 // twice the SUM of the section and axial displacements, and the value it is
@@ -239,7 +240,7 @@ func TestBodyGateDiameterDisplacedPrismShrinksByTwiceTheSum(t *testing.T) {
 	pp.Z1Delta = delta
 	require.InDelta(t, delta, pp.AxialDelta(), 0)
 
-	witness, displacement, ok := gateWitnessPrism(pp)
+	witness, displacement, ok := gatewitness.Prism(pp)
 	require.True(t, ok, `a displaced prism earns a witness prism instead of losing its gate reference`)
 	require.Zero(t, witness.SectionDelta, `the witness prism's own section is read as held, never as displaced`)
 	require.Equal(t, proofbound.AbsSumUpper(delta, pp.AxialDelta()), displacement,
@@ -567,7 +568,7 @@ func TestBodyGateDiameterFreeformArmSkipsAnalyticPrism(t *testing.T) {
 }
 
 // 6b. Regression: a section-displaced analytic prism (sectionDelta != 0, the
-// analytic Union/Cut/Intersect case) still reads gateWitnessPrism's own
+// analytic Union/Cut/Intersect case) still reads gatewitness.Prism's own
 // displaced-section arm through fallbackGateDiameter, bit for bit — the new
 // free-form arm declines outright (no free-form segment present) and never
 // changes this reading.

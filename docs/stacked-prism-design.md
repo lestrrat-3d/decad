@@ -336,7 +336,7 @@ reads its `sectionDelta` through `sectionDisplacementOf`, as it reads a prism's.
 | `ThroughAll` / `ThroughAllSide` stops | `ExtentAlong` (§4), `ErrUnsupported` at `sectionDelta > 0` as for a prism |
 | `ToFace` stops | read the selected face's own `AxialDelta` and cap record |
 | `Verify` structural audit | every edge bounds two faces by construction (§3) |
-| `Verify` tolerance gate | `gateWitnessPrisms` reads every outer run's prism over its own interval, whose wall stations are all points of the body, and shrinks their maximum by `sectionDelta + axialDelta` plus the widest station gap (`docs/verification-design.md` §3) |
+| `Verify` tolerance gate | `gatewitness.Prisms` reads every outer run's prism over its own interval, whose wall stations are all points of the body, and shrinks their maximum by `sectionDelta + axialDelta` plus the widest station gap (`docs/verification-design.md` §3) |
 | `Verify` wall survey | staged: `DiagUnsupportedSurveyPayload`, `Suspect` (modify-reach Table DX, DX9); a pocket floor is a wall the 2D spanning-disk proof does not read |
 | `Verify` undercut and minimum-radius surveys | staged: `DiagUnsupportedSurveyPayload`, `Suspect` (stage 4 adds DX7 face normals and DX8 `radiussurvey.Prism` over each loop) |
 | `Verify` clearance | `newBodyGeomBudget` has no arm, so a pair the boxes do not separate reads `Suspect`; a box-disjoint pair is proven (stage 4 adds the exposed-face model, DX6) |

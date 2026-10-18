@@ -649,8 +649,9 @@ analytic `Union` of a placed prism pair, or of any pair whose merge cut a wall)
 reaches neither model: the clearance kernel's carrier model refuses it
 (`clearance_geom.go`'s `addPrismFaces`), because a certificate has to be an
 exact statement about a boundary and that payload holds its own only within
-`sectionDelta`. A diameter is not a certificate, so `gateWitnessPrism` below
-gives it the third arm of `fallbackGateDiameter`: the body's OWN recorded
+`sectionDelta`. A diameter is not a certificate, so `gatewitness.Prism`
+(`internal/gatewitness/prism.go`) gives it the third arm of
+`fallbackGateDiameter`: the body's OWN recorded
 section, read through the same station witnesses every other prism is read
 through. §7 proves each recorded boundary point sits within `sectionDelta` of
 the section the payload denotes, and each recorded level within `AxialDelta` of
@@ -669,7 +670,7 @@ fixture's own true diameter.
 structural reason, and gets an arm of its own to try rather than an automatic
 reference-less `Suspect`.** That model has no arm for a `NURBSSurface`
 side face any more than it has one for the `sectionDelta` case, and
-`gateWitnessPrism`'s own displaced-section arm answers only for a section a
+`gatewitness.Prism`'s own displaced-section arm answers only for a section a
 displacement separates from its denotation, not for a wall shape the reader
 cannot sample. What this arm reports is a certified LOWER bound on the body's own diameter: the maximum
 distance over a finite set of points KNOWN TO LIE ON the body — every
@@ -698,7 +699,7 @@ the published values, never whether placement occurred.
 arm yields a diameter only when its own witness conversion and the shared
 reader both succeed. On any other path it withholds one outright — it never
 substitutes a weaker reference, and it never rounds a partial witness set into
-an answer. A withheld diameter is not rescued below either: `gateWitnessPrism`
+an answer. A withheld diameter is not rescued below either: `gatewitness.Prism`
 has no arm for a `prismPayload` whose own `sectionDelta` is zero, so the body
 ends with no tolerance reference at all and its bounded readings read
 `Suspect`. That is the sound direction to fail in — an absent reference

@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/diameter"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/gatewitness"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -293,7 +294,7 @@ func bodyGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body *Bo
 			return vertexGatePoints(budget, body, 0)
 		}
 	}
-	if prisms, displacement, ok := gateWitnessPrisms(body.n.Payload); ok {
+	if prisms, displacement, ok := gatewitness.Prisms(body.n.Payload); ok {
 		if g, ok, err := diameter.PrismGatePoints(budget, prisms, displacement); err != nil || ok {
 			return g, ok, err
 		}
