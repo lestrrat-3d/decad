@@ -504,7 +504,10 @@ func admitSplitPair(budget *proofbound.WorkBudget, target, tool *Body) (prismPay
 // outside stub arrive identically (§4's own row, RS3).
 func (b *Body) trimRevolve(ctx context.Context, budget *proofbound.WorkBudget, tool *Body, keepInside bool) (*Body, error) {
 	d := documentHandle(b.n.Doc)
-	rcv, rcvView, tlView, err := admitTrimRevolvePair(ctx, budget, b, tool)
+	// Read S7 from both root payload shapes before the revolve-only gate.
+	rcvDelta, tlDelta := trimOperandSectionDelta(b), trimOperandSectionDelta(tool)
+	rcv, rcvView, tlView, err := revolveplan.AdmitTrimPair(ctx, budget,
+		&b.n, &tool.n, rcvDelta, tlDelta)
 	if err != nil {
 		return nil, err
 	}
@@ -536,113 +539,6 @@ func (b *Body) trimRevolve(ctx context.Context, budget *proofbound.WorkBudget, t
 	}
 	d.commit(body, b, tool)
 	return body, nil
-}
-
-// admitTrimRevolvePair runs S2-S7 for a Trim over the revolve family; S1 has
-// already routed the pair here. It returns the receiver's own revolve record —
-// what the result is rebuilt on — beside the two MERIDIAN views §3's
-// resolution consumes.
-func admitTrimRevolvePair(ctx context.Context, budget *proofbound.WorkBudget, receiver, tool *Body) (revolvePayload, prismPayload, prismPayload, error) {
-	fail := func(format string, args ...any) (revolvePayload, prismPayload, prismPayload, error) {
-		return revolvePayload{}, prismPayload{}, prismPayload{}, fmt.Errorf(format, args...)
-	}
-
-	// S7's section-displacement clause runs first and reads generically off
-	// EITHER revolve payload shape, so a body this design already trimmed names
-	// ITS OWN displacement rather than the open-walk shape every
-	// chainRevolvePayload receiver carries regardless.
-	rcvDelta, tlDelta := trimOperandSectionDelta(receiver), trimOperandSectionDelta(tool)
-	if rcvDelta != 0 || tlDelta != 0 {
-		return fail(`%w: Trim does not admit an operand carrying its own section displacement (receiver %v mm, tool %v mm)`,
-			ErrUnsupported, rcvDelta, tlDelta)
-	}
-
-	rcv, rcvOk := receiver.n.Payload.(revolvePayload)
-	if !rcvOk {
-		return fail(`%w: Trim's receiver meridian is an open walk, which closes onto nothing for the tool to trim`, ErrUnsupported)
-	}
-	tl, tlOk := tool.n.Payload.(revolvePayload)
-	if !tlOk {
-		return fail(`%w: Trim's tool meridian is an open walk, which bounds no region to keep a side of`, ErrUnsupported)
-	}
-
-	rcvView, tlView := rcv.Meridian(), tl.Meridian()
-
-	// S2: neither operand's accumulated placement is a reflection.
-	if rcvView.Reflected() || tlView.Reflected() {
-		return fail(`%w: Trim does not admit a reflected operand`, ErrUnsupported)
-	}
-
-	// S3: every segment of both meridians is a LineSeg, CircleSeg or ArcSeg.
-	rcvAnalytic, err := prismcells.ProfileAnalytic(budget, rcv.Profile)
-	if err != nil {
-		return revolvePayload{}, prismPayload{}, prismPayload{}, err
-	}
-	tlAnalytic, err := prismcells.ProfileAnalytic(budget, tl.Profile)
-	if err != nil {
-		return revolvePayload{}, prismPayload{}, prismPayload{}, err
-	}
-	if !rcvAnalytic || !tlAnalytic {
-		return fail(`%w: Trim admits only line, circle and arc segments; a free-form segment blinds sketch's whole-scene TExact gate`, ErrUnsupported)
-	}
-
-	// S4's revolve arm. The plane frames and the RESOLVED AXIS must agree
-	// component-wise on the stored floats, and both meridians must stand clear
-	// of that axis.
-	if rcv.Frame != tl.Frame {
-		return fail(`%w: the receiver and tool do not spin about the same frame, exactly`, ErrUnsupported)
-	}
-	if !revolveplan.AxisIdentical(rcv.Ax, tl.Ax) {
-		return fail(`%w: the receiver and tool do not spin about the same axis, exactly`, ErrUnsupported)
-	}
-	rcvClear, err := revolveplan.MeridianClearOfAxis(ctx, rcv)
-	if err != nil {
-		return revolvePayload{}, prismPayload{}, prismPayload{}, err
-	}
-	tlClear, err := revolveplan.MeridianClearOfAxis(ctx, tl)
-	if err != nil {
-		return revolvePayload{}, prismPayload{}, prismPayload{}, err
-	}
-	if !rcvClear || !tlClear {
-		return fail(`%w: Trim needs both meridians clear of the revolve axis; one of them touches it, and the fragment a cut would leave there sweeps a pole this arm does not yet place`, ErrUnsupported)
-	}
-
-	// S5: for Trim, the tool's meridian is one closed hole-free loop.
-	if len(tl.Profile.Holes) != 0 {
-		return fail(`%w: Trim's tool meridian carries a hole, whose interior this evaluator cannot yet distinguish as a side`, ErrUnsupported)
-	}
-
-	// S6's revolve arm: the same span relation the prism arm reads over its
-	// sweep levels, taken over the angular interval instead. S4 has already
-	// proven the two axes identical, so the prism arm's origin shift has no
-	// counterpart here and the comparison is on the stored endpoint floats
-	// alone.
-	if tl.Phi0 > rcv.Phi0 || tl.Phi1 < rcv.Phi1 {
-		return fail(`%w: the tool's angular span [%v, %v] does not cover the receiver's [%v, %v]`,
-			ErrUnsupported, tl.Phi0, tl.Phi1, rcv.Phi0, rcv.Phi1)
-	}
-
-	// S7's remaining two clauses.
-	reexpress, err := prismcells.NewReexpression(rcvView.PlacementOperand(), tlView.PlacementOperand())
-	if err != nil {
-		return revolvePayload{}, prismPayload{}, prismPayload{}, err
-	}
-	if !reexpress.Identity {
-		return fail(`%w: the receiver and tool do not share one frame and placement, so their re-expression is not the identity`, ErrUnsupported)
-	}
-	rcvWhole, err := prismcells.TrimProfileFullyWhole(budget, rcv.Profile.Outer, rcv.Profile.Holes)
-	if err != nil {
-		return revolvePayload{}, prismPayload{}, prismPayload{}, err
-	}
-	tlWhole, err := prismcells.TrimProfileFullyWhole(budget, tl.Profile.Outer, tl.Profile.Holes)
-	if err != nil {
-		return revolvePayload{}, prismPayload{}, prismPayload{}, err
-	}
-	if !rcvWhole || !tlWhole {
-		return fail(`%w: every segment the receiver or tool consumes must span its entity's own natural domain`, ErrUnsupported)
-	}
-
-	return rcv, rcvView, tlView, nil
 }
 
 // extendRevolve is Extend over a pair S1 has already routed to the revolve
