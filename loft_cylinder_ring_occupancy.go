@@ -85,9 +85,14 @@ func loftCylinderSourceRingInside(ctx context.Context, fp facetedPayload,
 		return loftcylinder.RingOccupancy{},
 			fmt.Errorf("%w: split ring has no retained loft/cylinder source", ErrUnsupported)
 	}
-	if err := loftCylinderChamferBridgeSources(&source); err != nil {
+	bridgeBound, topSourceLevel, err := loftcylinder.ChamferBridgeSources(&loftcylinder.ChamferBridgeSourcesInput{
+		ProofTeeth: bodyNodes(source.teeth), OriginalTeeth: bodyNodes(source.originalTeeth),
+		AxialBridge: source.axialBridge, Z0: source.z0, Z1: source.z1, BridgeBound: source.bridgeBound,
+	})
+	if err != nil {
 		return loftcylinder.RingOccupancy{}, err
 	}
+	source.bridgeBound, source.topSourceLevel = bridgeBound, topSourceLevel
 	return loftCylinderSourceRingInsideInputs(ctx, source, edges, teeth, records)
 }
 

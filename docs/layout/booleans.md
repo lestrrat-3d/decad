@@ -49,7 +49,6 @@ The rules for rows live in `docs/layout.md`.
 | `loft_cylinder_ring_occupancy.go` | Gathers tooth circles and walls for the strict interior split-ring check. See loft-cylinder-boolean design. |
 | `loft_cylinder_bore.go` | Cuts a centered through-bore from an audited loft/cylinder join. See loft-cylinder-boolean design. |
 | `loft_cylinder_chamfer.go` | Admits both outer cap loops of an audited loft/cylinder result. See loft-cylinder-boolean design. |
-| `loft_cylinder_chamfer_bridge.go` | Checks paired original and axial proof teeth for cap Chamfer. See loft-cylinder-boolean design. |
 | `loft_cylinder_chamfer_mesh.go` | Builds and audits the rational outer-cap cutter and rounded mesh. See loft-cylinder-boolean design. |
 | `loft_cylinder_chamfer_proof.go` | Builds ideal side vertices, the blank solid witness and the tooth face map. See loft-cylinder-boolean design. |
 | `loft_cylinder_chamfer_near.go` | Bounds band points through a source-occupied split ring. See loft-cylinder-boolean design. |

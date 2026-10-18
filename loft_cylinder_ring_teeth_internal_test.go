@@ -101,7 +101,12 @@ func TestLoftCylinderRingTeethReuseMatchesFresh(t *testing.T) {
 	require.True(t, ok)
 	source, ok := loftCylinderChamferSourceOf(fp)
 	require.True(t, ok)
-	require.NoError(t, loftCylinderChamferBridgeSources(&source))
+	bridgeBound, topSourceLevel, err := loftcylinder.ChamferBridgeSources(&loftcylinder.ChamferBridgeSourcesInput{
+		ProofTeeth: bodyNodes(source.teeth), OriginalTeeth: bodyNodes(source.originalTeeth),
+		AxialBridge: source.axialBridge, Z0: source.z0, Z1: source.z1, BridgeBound: source.bridgeBound,
+	})
+	require.NoError(t, err)
+	source.bridgeBound, source.topSourceLevel = bridgeBound, topSourceLevel
 	require.NotEmpty(t, source.teeth)
 	level := (source.z0 + source.z1) / 2
 
@@ -159,7 +164,7 @@ func TestLoftCylinderRingTeethReuseMatchesFresh(t *testing.T) {
 		_, cached = teeth[loftCylinderRingToothKey{body: body, radius: other.blankRadius}]
 		require.False(t, cached)
 	}
-	_, err := loftCylinderRingToothOf(source.teeth[0], other.blankRadius)
+	_, err = loftCylinderRingToothOf(source.teeth[0], other.blankRadius)
 	require.Error(t, err)
 
 	// A cancelled context returns the context error and leaves a fresh memo empty.

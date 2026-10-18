@@ -85,9 +85,14 @@ func tryLoftCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPayload,
 	if startExact.Cmp(endExact) >= 0 || source.z0+d == source.z0 || source.z1-d == source.z1 {
 		return nil, true, fmt.Errorf("%w: loft/cylinder cap bands reach each other or round onto a cap", ErrUnsupported)
 	}
-	if err := loftCylinderChamferBridgeSources(&source); err != nil {
+	bridgeBound, topSourceLevel, err := loftcylinder.ChamferBridgeSources(&loftcylinder.ChamferBridgeSourcesInput{
+		ProofTeeth: bodyNodes(source.teeth), OriginalTeeth: bodyNodes(source.originalTeeth),
+		AxialBridge: source.axialBridge, Z0: source.z0, Z1: source.z1, BridgeBound: source.bridgeBound,
+	})
+	if err != nil {
 		return nil, true, err
 	}
+	source.bridgeBound, source.topSourceLevel = bridgeBound, topSourceLevel
 	if source.topSourceLevel.Cmp(endExact) <= 0 {
 		return nil, true, fmt.Errorf("%w: cap chamfer bridge reaches its side level", ErrUnsupported)
 	}
