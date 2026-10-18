@@ -33,7 +33,7 @@ type LoftSection struct {
 // centered rectangles may vary width and height independently. All routes require
 // ascending, equally spaced world-XY planes and interpolate every section exactly
 // (docs/loft-sections-design.md). Other shapes refuse.
-func (d *Document) LoftSections(ctx context.Context, sections ...LoftSection) (*Body, error) {
+func LoftSections(ctx context.Context, d *Document, sections ...LoftSection) (*Body, error) {
 	if ctx == nil || d == nil || len(sections) < 3 {
 		return nil, fmt.Errorf("%w: LoftSections needs a context, document and at least three sections", ErrDegenerate)
 	}

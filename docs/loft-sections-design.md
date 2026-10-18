@@ -1,6 +1,6 @@
 # Smooth Section Loft Design
 
-`Document.LoftSections` builds one smooth solid through three to thirty-two
+`LoftSections` builds one smooth solid through three to thirty-two
 recorded Sketch profiles. `docs/loft-design.md` continues to own the two-profile ruled
 `Document.Loft`. This document owns the separate smooth constructions, their
 admission gates, and the proofs attached to their held meshes.
@@ -13,7 +13,7 @@ type LoftSection struct {
     Profile *sketch.Profile
 }
 
-func (d *Document) LoftSections(ctx context.Context, sections ...LoftSection) (*Body, error)
+func LoftSections(ctx context.Context, d *Document, sections ...LoftSection) (*Body, error)
 ```
 
 The call requires at least three sections. Each passes the ordinary profile

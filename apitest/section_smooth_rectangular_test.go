@@ -14,7 +14,7 @@ import (
 func TestSectionSmoothRectangularLoftRealFlow(t *testing.T) {
 	sections := manyRectangleSections(t, []float64{2, 3, 4, 5, 6},
 		[]float64{3, 4, 5, 7, 8}, []float64{0, 4, 8, 12, 16})
-	body, err := decad.New().LoftSections(t.Context(), sections...)
+	body, err := decad.LoftSections(t.Context(), decad.New(), sections...)
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 6), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
@@ -64,7 +64,7 @@ func TestSectionSmoothRectangularLoftSourceCurves(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			sections := manyRectangleSections(t, tc.widths, tc.depths, tc.levels)
-			body, err := decad.New().LoftSections(t.Context(), sections...)
+			body, err := decad.LoftSections(t.Context(), decad.New(), sections...)
 			require.NoError(t, err)
 			frame, err := r3.NewFrame(r3.NewVec(0, 0, tc.cut), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 			require.NoError(t, err)
@@ -106,7 +106,7 @@ func TestSectionSmoothRectangularLoftTranslatedSourceFrame(t *testing.T) {
 		require.Len(t, profiles, 1)
 		sections[i] = decad.LoftSection{Sketch: s, Profile: profiles[0]}
 	}
-	body, err := decad.New().LoftSections(t.Context(), sections...)
+	body, err := decad.LoftSections(t.Context(), decad.New(), sections...)
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(10, 20, 9), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
@@ -123,7 +123,7 @@ func TestSectionSmoothRectangularLoftTranslatedSourceFrame(t *testing.T) {
 func TestSectionSmoothRectangularLoftRefusesUnprovedPlanesAndCopies(t *testing.T) {
 	sections := manyRectangleSections(t, []float64{2, 3, 4, 5, 6},
 		[]float64{3, 4, 5, 7, 8}, []float64{0, 4, 8, 12, 16})
-	body, err := decad.New().LoftSections(t.Context(), sections...)
+	body, err := decad.LoftSections(t.Context(), decad.New(), sections...)
 	require.NoError(t, err)
 	for _, tc := range []struct {
 		name   string
@@ -166,7 +166,7 @@ func TestSectionSmoothRectangularLoftRefusesUnprovedPlanesAndCopies(t *testing.T
 func TestSectionSmoothRectangularLoftRefusesInexactWidth(t *testing.T) {
 	sections := manyRectangleSections(t, []float64{2, 3, 4, 5, 6},
 		[]float64{3, 3, 3, 3, 3}, []float64{0, 4, 8, 12, 16})
-	body, err := decad.New().LoftSections(t.Context(), sections...)
+	body, err := decad.LoftSections(t.Context(), decad.New(), sections...)
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 0.1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
@@ -177,7 +177,7 @@ func TestSectionSmoothRectangularLoftRefusesInexactWidth(t *testing.T) {
 func TestSectionSmoothRectangularLoftRefusesInexactHeight(t *testing.T) {
 	sections := manyRectangleSections(t, []float64{2, 2, 2, 2, 2},
 		[]float64{3, 4, 5, 6, 7}, []float64{0, 4, 8, 12, 16})
-	body, err := decad.New().LoftSections(t.Context(), sections...)
+	body, err := decad.LoftSections(t.Context(), decad.New(), sections...)
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 0.1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)

@@ -16,7 +16,7 @@ func TestLoftSectionsIndependentRectanglesVerifyVolumeAndBoundary(t *testing.T) 
 	sections := threeRectangleSections(t, [3]float64{5, 4, 2.5}, [3]float64{4, 5, 6.5},
 		[3]float64{}, [3]float64{0, 5, 10})
 	doc := decad.New()
-	body, err := doc.LoftSections(t.Context(), sections[:]...)
+	body, err := decad.LoftSections(t.Context(), doc, sections[:]...)
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1)
 	require.Equal(t, decad.BodySolid, body.Kind())
@@ -73,7 +73,7 @@ func TestLoftSectionsIndependentRectanglesPlaceWithVerifiedMesh(t *testing.T) {
 	t.Parallel()
 	sections := threeRectangleSections(t, [3]float64{5, 4, 2.5}, [3]float64{4, 4, 4},
 		[3]float64{}, [3]float64{0, 5, 10})
-	body, err := decad.New().LoftSections(t.Context(), sections[:]...)
+	body, err := decad.LoftSections(t.Context(), decad.New(), sections[:]...)
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.NewVec(13, -7, 2))
 	require.NoError(t, err)
@@ -126,7 +126,7 @@ func TestLoftSectionsRotatedRectangleWalksKeepVerifiedMesh(t *testing.T) {
 	start0 := sections[0].Profile.Outer[0].Polyline[0]
 	start1 := sections[1].Profile.Outer[0].Polyline[0]
 	require.NotEqual(t, start0, start1, "the Sketch walks must start at different corners")
-	body, err := decad.New().LoftSections(t.Context(), sections[:]...)
+	body, err := decad.LoftSections(t.Context(), decad.New(), sections[:]...)
 	require.NoError(t, err)
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
@@ -158,7 +158,7 @@ func TestLoftSectionsIndependentRectanglesRefuseUnprovedInputs(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			sections := threeRectangleSections(t, tc.widths, tc.heights, tc.centers, tc.levels)
 			doc := decad.New()
-			body, err := doc.LoftSections(t.Context(), sections[:]...)
+			body, err := decad.LoftSections(t.Context(), doc, sections[:]...)
 			require.Nil(t, body)
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			if tc.wantReason != "" {

@@ -39,7 +39,7 @@ func TestLoftSectionsFourIndependentRectanglesKeepVolumeAndMeshProof(t *testing.
 	sections := fourRectangleSections(t, [4]float64{2, 3, 4, 5},
 		[4]float64{3, 4, 5, 7}, [4]float64{0, 4, 8, 12})
 	doc := decad.New()
-	body, err := doc.LoftSections(t.Context(), sections[:]...)
+	body, err := decad.LoftSections(t.Context(), doc, sections[:]...)
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1)
 	require.Len(t, body.Faces(), 6)
@@ -99,7 +99,7 @@ func TestLoftSectionsFourIndependentRectanglesRefuseUnprovedInputs(t *testing.T)
 		t.Run(tc.name, func(t *testing.T) {
 			sections := fourRectangleSections(t, tc.widths, tc.depths, tc.levels)
 			doc := decad.New()
-			body, err := doc.LoftSections(t.Context(), sections[:]...)
+			body, err := decad.LoftSections(t.Context(), doc, sections[:]...)
 			require.Nil(t, body)
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.ErrorContains(t, err, tc.wantReason)
