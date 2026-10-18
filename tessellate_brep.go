@@ -308,7 +308,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 			}
 			return out
 		}
-		bump := func(f *Face, v float64) { faceTrim[faceNode(f)] = math.Max(faceTrim[faceNode(f)], v) }
+		bump := func(f *topo.Face, v float64) { faceTrim[f] = math.Max(faceTrim[f], v) }
 		wb := proofbound.NewWorkBudget(ctx)
 		for bi := range bands {
 			if err := bands[bi].emit(wb, mesh, geomOf(bi), faceOfRole, bump); err != nil {
@@ -402,8 +402,8 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 			if bands[bi].fillet == nil {
 				continue
 			}
-			for face, eps := range bands[bi].fillet.patchEps {
-				terms = append(terms, proofbound.ProductUpper(areaUpper[faceNode(face)], eps))
+			for face, eps := range bands[bi].fillet.PatchEps {
+				terms = append(terms, proofbound.ProductUpper(areaUpper[face], eps))
 			}
 		}
 	}

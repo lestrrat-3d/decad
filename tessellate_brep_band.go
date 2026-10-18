@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
+	"github.com/lestrrat-3d/decad/internal/brepfilletmesh"
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/capblend"
@@ -15,6 +16,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/partialband"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
 // This file is the brep tessellator's reading of a route L body's bands
@@ -45,13 +47,41 @@ type brepBandChord struct {
 	// sideV and capV are the mesh vertices of the side ring at the side level
 	// and of the cap contour ring at F's level.
 	sideV, capV []int
-	// fillet holds a fillet band's interior rings (tessellate_brep_fillet.go),
+	// fillet holds a fillet band's interior rings (internal/brepfilletmesh/),
 	// nil for a chamfer band.
-	fillet  *filletRings
+	fillet  *brepfilletmesh.Rings
 	partial *partialband.PartialBandLayout
 	// curved marks LF8 seams at the start of each walk. Their interior ring
 	// positions follow offset-carrier intersections instead of affine ends.
 	curved []bool
+}
+
+func (bc *brepBandChord) filletInput() brepfilletmesh.Input {
+	return brepfilletmesh.Input{
+		Band: bc.band, Face: bc.face, Payload: bc.cbp, Loop: &bc.lm,
+		Start: bc.start, SideZ: bc.sideZ, SideV: bc.sideV, CapV: bc.capV,
+		Curved: bc.curved,
+	}
+}
+
+func (bc *brepBandChord) placeRings(e brepEmbed,
+	addVertex func([3]float64, proofbound.WalkEndBound) int) error {
+	if bc.partial != nil {
+		return bc.fillet.PlacePartial(bc.filletInput(), bc.partial, e, addVertex)
+	}
+	return bc.fillet.Place(bc.filletInput(), e, addVertex)
+}
+
+func (bc *brepBandChord) emitFillet(m *Mesh,
+	faceOfRole func(string) (*Face, error), bump func(*topo.Face, float64)) error {
+	nodeOfRole := func(role string) (*topo.Face, error) {
+		face, err := faceOfRole(role)
+		if err != nil {
+			return nil, err
+		}
+		return faceNode(face), nil
+	}
+	return bc.fillet.Emit(bc.filletInput(), &m.n, nodeOfRole, bump)
 }
 
 // brepChordBands chords every band of the record and imposes each wall walk's
@@ -151,7 +181,7 @@ func brepChordBands(ctx context.Context, bp brepPayload, btopo *brepTopology, ch
 				}
 				rings = max(rings, int(needed))
 			}
-			bc.fillet = &filletRings{n: rings}
+			bc.fillet = &brepfilletmesh.Rings{Count: rings}
 		}
 		bands[bi] = bc
 	}
@@ -170,7 +200,7 @@ func brepChordBands(ctx context.Context, bp brepPayload, btopo *brepTopology, ch
 		sideZ, sideDelta := b.SideLevel(f)
 		bc := brepBandChord{band: b, face: f, cbp: cbp, lm: lm, start: false,
 			sideZ: sideZ, sideDelta: sideDelta, bossShell: true,
-			fillet: &filletRings{n: tessellation.FilletRingCount(b.Setback.AxialUpper(), chord)}}
+			fillet: &brepfilletmesh.Rings{Count: tessellation.FilletRingCount(b.Setback.AxialUpper(), chord)}}
 		if shell.Round != nil {
 			// The upper cavity wall starts on the band's smaller circle.
 			// Impose the band's count and stations on that wall so the
@@ -225,7 +255,7 @@ func brepChordBands(ctx context.Context, bp brepPayload, btopo *brepTopology, ch
 		sideZ, sideDelta := b.SideLevel(f)
 		bc := brepBandChord{band: b, face: f, cbp: cbp, lm: lm, start: b.MatSign(f) > 0,
 			sideZ: sideZ, sideDelta: sideDelta, pocketShell: true,
-			fillet: &filletRings{n: tessellation.FilletRingCount(b.Setback.AxialUpper(), bandChord)}}
+			fillet: &brepfilletmesh.Rings{Count: tessellation.FilletRingCount(b.Setback.AxialUpper(), bandChord)}}
 		e := btopo.Embeds[b.Face]
 		for i, w := range lm.Walks {
 			key, _ := brepgeom.CurveKey(e, w.SegmentWalk, sideZ)
@@ -276,14 +306,15 @@ func (bc *brepBandChord) place(e brepEmbed, addVertex func([3]float64, proofboun
 // (sigma +1) fills a concave corner rather than removing a wedge, and its
 // patches face the other way (breprecord's attachLoopBands), so its windings turn over.
 func (bc *brepBandChord) emit(budget *proofbound.WorkBudget, m *Mesh, geom map[string]capPatchGeom,
-	faceOfRole func(string) (*Face, error), bump func(*Face, float64)) error {
+	faceOfRole func(string) (*Face, error), bump func(*topo.Face, float64)) error {
+	bumpFace := func(face *Face, v float64) { bump(faceNode(face), v) }
 	if bc.partial != nil {
 		first := len(m.n.Triangles)
 		var err error
 		if bc.band.Kind == breprecord.BandFillet {
 			err = bc.emitPartialFillet(m, faceOfRole, bump)
 		} else {
-			err = bc.emitPartialChamfer(m, faceOfRole, bump)
+			err = bc.emitPartialChamfer(m, faceOfRole, bumpFace)
 		}
 		if err != nil {
 			return err
@@ -317,7 +348,7 @@ func (bc *brepBandChord) emit(budget *proofbound.WorkBudget, m *Mesh, geom map[s
 		lm.SideHi, lm.CapHiV = bc.sideV, bc.capV
 	}
 	first := len(m.n.Triangles)
-	if err := emitCapBand(budget, m, bc.cbp, lm, bc.start, faceOfRole, geom, bump, bc.band.PatchRole); err != nil {
+	if err := emitCapBand(budget, m, bc.cbp, lm, bc.start, faceOfRole, geom, bumpFace, bc.band.PatchRole); err != nil {
 		return err
 	}
 	if bc.band.Sigma > 0 {
@@ -349,7 +380,7 @@ func brepBandMotion(ctx context.Context, bands []brepBandChord, store, round []f
 			return nil, err
 		}
 		if bc.fillet != nil {
-			bc.fillet.arcMotion(&bc.lm, bc.face.Delta, bc.band.Setback.DcDelta)
+			bc.fillet.ArcMotion(&bc.lm, bc.face.Delta, bc.band.Setback.DcDelta)
 		}
 		for j, vi := range bc.capV {
 			motion[vi] = proofbound.AbsSumUpper(bc.lm.CapMotion[j], round[vi], bc.face.Z0Delta)
@@ -357,10 +388,10 @@ func brepBandMotion(ctx context.Context, bands []brepBandChord, store, round []f
 		if fr := bc.fillet; fr != nil {
 			// An interior ring vertex lies within its own interpolation error
 			// of the point between its two ends' ideal positions.
-			for k := 1; k < fr.n; k++ {
-				for c, vi := range fr.ringV[k] {
-					ends := math.Max(motion[fr.ringV[0][c]], motion[fr.ringV[fr.n][c]])
-					motion[vi] = proofbound.AbsSumUpper(ends, fr.dev[k][c], round[vi])
+			for k := 1; k < fr.Count; k++ {
+				for c, vi := range fr.RingV[k] {
+					ends := math.Max(motion[fr.RingV[0][c]], motion[fr.RingV[fr.Count][c]])
+					motion[vi] = proofbound.AbsSumUpper(ends, fr.Dev[k][c], round[vi])
 				}
 			}
 		}

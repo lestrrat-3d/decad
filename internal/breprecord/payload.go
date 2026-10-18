@@ -89,7 +89,7 @@ type Payload struct {
 	// loopPatches is each band's patch geometry, beside its role
 	// chamferLoop(f,l,p), in band order, nil for a fillet band, whose
 	// patches the readers take from the band record and the body's faces
-	// (root tessellate_brep_fillet.go, brepFilletUndercuts). The body build fills it
+	// (internal/brepfilletmesh/, brepFilletUndercuts). The body build fills it
 	// (attachLoopBands); a record handed to the build carries none, and
 	// the tessellator and the surveys read it from the payload the build
 	// left on the body, as capblend.Payload.patches is read.
