@@ -163,6 +163,13 @@ func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 	}
 	prismLines, ok, err := loftPartitionLines(budget, pp.Profile.Outer)
 	if err != nil || !ok {
+		if err == nil && !ok && !reportSeamSize && len(pp.Profile.Outer.Segments) == 1 {
+			if _, circle := pp.Profile.Outer.Segments[0].(sectionrecord.CircleSeg); circle {
+				// Read the original disc source within this same wall budget. A
+				// circle/Loft cap intersection and output shell remain unproved.
+				_, _, err = certifyLoftSourceSpanCaps(ctx, budget, prismBody, loftBody)
+			}
+		}
 		return no, false, err
 	}
 	bottom, ok, err := loftPartitionLines(budget, lp.Profile0.Outer)
