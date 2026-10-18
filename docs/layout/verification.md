@@ -40,7 +40,7 @@ The rules for rows live in `docs/layout.md`.
 | `clearance_tiers.go` | Tier adapters; `vertexTier` passes the shared budget to `internal/clearance/tier` and folds its error/refusal state into the pair. See clearance §3/§6. |
 | `clearance_geom.go` | `bodyGeom`: clearance faces, edges and nesting over `internal/clearance/`. See clearance §2–§3. |
 | `point_containment.go` | Public point location and body/face distance through verified meshes. See point-containment design. |
-| `survey.go` | Adapts analytic wall, undercut and radius readers. See verification §6. |
+| `survey.go` | Dispatches wall, undercut and radius readers and adapts their readings to public body and face handles. See verification §6. |
 | `survey_undercut.go` | Folds three-valued undercut readings. |
 | `interference.go` | Pairwise overlap behind `Verify`. See interference §4-§8. |
 | `motion.go` / `motion_verify.go` | Public motion inputs, options, requests and reports; pose checks over `internal/motionbound/` and static pair classification through `internal/motionrun/`. See motion-check §2–§6. |
