@@ -338,7 +338,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 	if err != nil {
 		return nil, err
 	}
-	if err := composeFaceBounds(mesh, faceTrim, faceAxial, store, 0); err != nil {
+	if err := composeFaceBounds(mesh, faceTrim, faceAxial, store); err != nil {
 		return nil, err
 	}
 	if verify < VerifyAll {

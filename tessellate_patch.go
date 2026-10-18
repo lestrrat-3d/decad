@@ -117,7 +117,7 @@ func tessellatePatch(ctx context.Context, b *Body, pp patchPayload, chord float6
 	if err := requireMeshAudit(ctx, true, b, mesh); err != nil {
 		return nil, err
 	}
-	if err := composeFaceBounds(mesh, map[*topo.Face]float64{faceNode(face): trim}, nil, store, 0); err != nil {
+	if err := composeFaceBounds(mesh, map[*topo.Face]float64{faceNode(face): trim}, nil, store); err != nil {
 		return nil, err
 	}
 	if verify >= VerifyAll {

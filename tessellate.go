@@ -560,11 +560,11 @@ func requireMeshAudit(ctx context.Context, sheet bool, b *Body, m *Mesh) error {
 }
 
 // composeFaceBounds publishes docs/tessellation-design.md §2's sourceBound for
-// every face the mesh names, as §3's sum of that face's own trim, store, section
-// and axial displacements, and lifts Mesh.bound to their maximum. Every source
+// every face the mesh names, as §3's sum of that face's own trim, store, and
+// axial displacements, and lifts Mesh.bound to their maximum. Every source
 // face is present by construction: the walk is over the mesh's Source itself.
-func composeFaceBounds(m *Mesh, trim, axial map[*topo.Face]float64, store []float64, section float64) error {
-	bounds, err := tessellation.FaceBounds(m.n.Triangles, m.n.Source, trim, axial, store, section)
+func composeFaceBounds(m *Mesh, trim, axial map[*topo.Face]float64, store []float64) error {
+	bounds, err := tessellation.FaceBounds(m.n.Triangles, m.n.Source, trim, axial, store, 0)
 	if err != nil {
 		return err
 	}
@@ -823,7 +823,7 @@ func tessellateCup(ctx context.Context, b *Body, cp cupView, chord float64, veri
 			faceTrim[f] = proofbound.AbsSumUpper(faceTrim[f], cp.OffsetDelta)
 		}
 	}
-	if err := composeFaceBounds(mesh, faceTrim, faceAxial, vertexStore, 0); err != nil {
+	if err := composeFaceBounds(mesh, faceTrim, faceAxial, vertexStore); err != nil {
 		return nil, err
 	}
 	if verify < VerifyAll {
