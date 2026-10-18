@@ -277,18 +277,20 @@ func TestLoftOutputWorldRefusesOversizedReplayArithmetic(t *testing.T) {
 		[4]float64{8, 4, 12, 6}, [4]float64{8, 4, 13, 6}, 0, 4)
 	frame := prism.n.Payload.(prismPayload).Frame
 	largeDenominator := new(big.Int).Lsh(big.NewInt(1), 8000)
-	_, _, _, admitted := loftOutputWorld(frame, loftOutputPoint{
+	world, _, _, admitted := loftOutputWorld(frame, loftOutputPoint{
 		u: new(big.Rat).SetFrac(big.NewInt(1), largeDenominator),
 		v: big.NewRat(0, 1), z: big.NewRat(0, 1),
 	})
+	_ = world
 	require.False(t, admitted)
 	// Float64 aligns the numerator before dividing. This input fits the
 	// rational operands but would allocate 8,195 bits during alignment.
 	alignmentDenominator := new(big.Int).Lsh(big.NewInt(1), 8140)
-	_, _, _, admitted = loftOutputWorld(frame, loftOutputPoint{
+	world, _, _, admitted = loftOutputWorld(frame, loftOutputPoint{
 		u: new(big.Rat).SetFrac(big.NewInt(1), alignmentDenominator),
 		v: big.NewRat(0, 1), z: big.NewRat(0, 1),
 	})
+	_ = world
 	require.False(t, admitted)
 
 	largeNumerator := new(big.Int).Lsh(big.NewInt(1), 8192)

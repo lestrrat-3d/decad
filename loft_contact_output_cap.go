@@ -523,11 +523,6 @@ func loftOutputPointInPolygon(budget *proofbound.WorkBudget, p loftPartitionPoin
 	return -1, nil
 }
 
-func loftOutputInterpolate(a, b loftPartitionPoint, t *big.Rat,
-	arithmetic ...*loftVolumeArithmetic) loftPartitionPoint {
-	return loftReplayArithmetic(arithmetic).partitionInterpolate(a, b, t)
-}
-
 func loftOutputSegmentParam(a, b, p loftPartitionPoint,
 	arithmetic ...*loftVolumeArithmetic) (*big.Rat, bool) {
 	c := loftReplayArithmetic(arithmetic)

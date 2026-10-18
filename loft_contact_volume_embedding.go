@@ -2,6 +2,7 @@ package decad
 
 import (
 	"math/big"
+	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
@@ -147,17 +148,18 @@ func loftVolumeExactShell(budget *proofbound.WorkBudget, shell loftOutputShell) 
 			return nil, false, err
 		}
 		points[i] = loftVolumeVec(v.world)
-		key := ""
+		var key strings.Builder
 		for _, coordinate := range points[i] {
 			if !c.valid(coordinate) {
 				return refuse()
 			}
-			key += coordinate.RatString() + ","
+			key.WriteString(coordinate.RatString())
+			key.WriteByte(',')
 		}
-		if _, duplicate := seenPoints[key]; duplicate {
+		if _, duplicate := seenPoints[key.String()]; duplicate {
 			return refuse()
 		}
-		seenPoints[key] = struct{}{}
+		seenPoints[key.String()] = struct{}{}
 	}
 	triangles := make([]loftVolumeTriangle, len(shell.triangles))
 	directed := make(map[[2]int][2]int, 3*len(triangles))
@@ -268,7 +270,7 @@ func loftVolumeExactShell(budget *proofbound.WorkBudget, shell loftOutputShell) 
 		}
 	}
 	for i := range triangles {
-		for j := 0; j < i; j++ {
+		for j := range i {
 			if err := budget.Step(); err != nil {
 				return nil, false, err
 			}
@@ -455,7 +457,7 @@ func loftVolumeInside2(c *loftVolumeArithmetic, p [2]*big.Rat, tri [3][2]*big.Ra
 		positive = positive || cross.Sign() > 0
 		negative = negative || cross.Sign() < 0
 	}
-	return c.ok && !(positive && negative)
+	return c.ok && (!positive || !negative)
 }
 
 func loftVolumeOnSegment2(c *loftVolumeArithmetic, p, a, b [2]*big.Rat) bool {

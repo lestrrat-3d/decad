@@ -391,12 +391,6 @@ func loftPartitionConvexPrism(budget *proofbound.WorkBudget, lines []sectionreco
 	return true, nil
 }
 
-func loftPartitionLinePoint(line sectionrecord.LineSeg, t *big.Rat) (loftPartitionPoint, bool) {
-	arithmetic := &loftVolumeArithmetic{ok: true}
-	point := arithmetic.partitionLinePoint(line, t)
-	return point, arithmetic.ok
-}
-
 func loftPartitionSamePoint(a, b loftPartitionPoint) bool {
 	arithmetic := &loftVolumeArithmetic{ok: true}
 	return arithmetic.partitionSamePoint(a, b)

@@ -3,6 +3,7 @@ package decad
 import (
 	"errors"
 	"math/big"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
@@ -211,7 +212,7 @@ func (m loftHullMath) volume(points [6][3]*big.Rat) (*big.Rat, error) {
 	}
 	seen := make(map[uint8]struct{}, 20)
 	total := big.NewRat(0, 1)
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		for j := i + 1; j < 6; j++ {
 			for k := j + 1; k < 6; k++ {
 				if err := m.budget.Err(); err != nil {
@@ -406,8 +407,7 @@ func (m loftHullMath) faceVolume(points [6][3]*big.Rat, center [3]*big.Rat,
 		}
 		lower = append(lower, id)
 	}
-	for i := len(unique) - 1; i >= 0; i-- {
-		id := unique[i]
+	for _, id := range slices.Backward(unique) {
 		for len(upper) >= 2 {
 			turn, err := m.projectedTurn(points, upper[len(upper)-2], upper[len(upper)-1], id, x, y)
 			if err != nil {
