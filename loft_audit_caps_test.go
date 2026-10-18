@@ -125,7 +125,7 @@ func TestPointLoftAuditsDecideCapsAsFamilies(t *testing.T) {
 	require.NoError(t, err)
 	facesPayload, ok := loft.n.Payload.(facetedPayload)
 	require.True(t, ok)
-	facesLayout, ok := loftFacesCapLayout(sides, 2, len(facesPayload.Tris))
+	facesLayout, ok := loftmesh.LoftFacesCapLayout(sides, 2, len(facesPayload.Tris))
 	require.True(t, ok)
 	cases = append(cases, audited{"LoftFaces", facesLayout, facesPayload.Verts, facesPayload.Tris, 2})
 
