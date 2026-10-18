@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
+	"github.com/lestrrat-3d/decad/internal/spiralsector"
 	"github.com/lestrrat-3d/decad/internal/splinebezier"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -244,7 +245,7 @@ func certifySpiralFirstJoin(ctx context.Context, blank, tooth *Body) (*spiralFir
 	// The ordered exact Cut and Intersect define the operative tool-cone cap
 	// as this source solid's trace on that cone. The retained cap group IDs
 	// identify held facets only; they do not establish the true trace.
-	seam, ok, err := certifySpiralHeelRootSeam(ctx, proof)
+	seam, ok, err := spiralsector.CertifySpiralHeelRootSeam(ctx, proof)
 	if err != nil || !ok {
 		return nil, false, err
 	}
@@ -285,7 +286,7 @@ func spiralToeCapBeforeToeCircle(trim *loftFacesTrimRecord, box [4]*big.Rat, toe
 // one point instead of missing it, which loftface.CapPlaneTouchesRootCircle
 // decides exactly, with the circle on the side of the preceding cap.
 func spiralTangentCapTouchesHeelCircle(trim *loftFacesTrimRecord, m, b, toeX, heelX *big.Rat) bool {
-	if trim == nil || trim.Tangent == nil || !spiralTangentRecordCurrent(trim) || len(trim.Maps) != 9 {
+	if trim == nil || trim.Tangent == nil || !spiralsector.SpiralTangentRecordCurrent(trim) || len(trim.Maps) != 9 {
 		return false
 	}
 	box, err := revolveloftfaces.LfSourceBox(trim.Source)
@@ -299,25 +300,6 @@ func spiralTangentCapTouchesHeelCircle(trim *loftFacesTrimRecord, m, b, toeX, he
 	}
 	return spiralToeCapBeforeToeCircle(trim, box, toeX) &&
 		loftface.CapPlaneTouchesRootCircle(trim.Maps[8], loftface.BoxCorners(box), m, b, heelX, trim.Maps[7])
-}
-
-// spiralTangentRecordCurrent reports whether the cone-tangent record of trim
-// is present on both the trim and its base cap record, equal on both by
-// exact value, built for exactly the heel cone's apex and slope, and
-// reproduces the recorded final cap map. Every comparison is an exact Cmp of
-// immutable values, never a pointer or a flag. It is false when either
-// record is missing, so the tangent branches run only for a matching record;
-// a trim with no tangent record on either side is not tangent, and the
-// strict branches decide it.
-func spiralTangentRecordCurrent(trim *loftFacesTrimRecord) bool {
-	if trim == nil || trim.Tangent == nil || trim.Heel == nil || len(trim.Maps) == 0 ||
-		trim.Base.LoftFacesCap == nil || trim.Base.LoftFacesCap.Tangent == nil {
-		return false
-	}
-	end := trim.Tangent
-	return end.Equal(*trim.Base.LoftFacesCap.Tangent) &&
-		end.MatchesCone(trim.Heel.Apex, trim.Heel.Slope) &&
-		loftface.MapEqual(end.Map(), trim.Maps[len(trim.Maps)-1])
 }
 
 func spiralTrimSourceCurrent(trim *loftFacesTrimRecord) bool {
@@ -335,7 +317,7 @@ func spiralTrimSourceCurrent(trim *loftFacesTrimRecord) bool {
 	}
 	// A tangent record on either side must be the same one, current for the
 	// heel cone and the final map. No record on either side is the strict case.
-	if (trim.Tangent != nil || trim.Base.LoftFacesCap.Tangent != nil) && !spiralTangentRecordCurrent(trim) {
+	if (trim.Tangent != nil || trim.Base.LoftFacesCap.Tangent != nil) && !spiralsector.SpiralTangentRecordCurrent(trim) {
 		return false
 	}
 	for _, entry := range trim.Source.Source.Profile.Outer {
@@ -443,59 +425,13 @@ func spiralOtherSides(ctx context.Context, trim *loftFacesTrimRecord, m, b *big.
 				return false
 			}
 			next := source.SourceStation[(j+1)%n]
-			if !spiralCellSide(trim.Maps[band], trim.Maps[band+1], station, next,
+			if !spiralsector.SpiralCellSide(trim.Maps[band], trim.Maps[band+1], station, next,
 				lfF(departure), m, b, group == 1, lfZero(), lfOne(), 8) {
 				return false
 			}
 		}
 	}
 	return seen[1] > 0 && seen[3] > 0 && seen[4] > 0 && seen[5] > 0
-}
-
-func spiralCellSide(first, second loftFaceMap, a, z planePoint, departure, m, b *big.Rat,
-	outside bool, tLo, tHi *big.Rat, depth int) bool {
-	firstA := first.At(lfF(a.U), lfF(a.V))
-	firstZ := first.At(lfF(z.U), lfF(z.V))
-	secondA := second.At(lfF(a.U), lfF(a.V))
-	secondZ := second.At(lfF(z.U), lfF(z.V))
-	blend := func(x, y loftFaceRatVec, t *big.Rat) loftFaceRatVec {
-		return loftface.VAdd(loftface.VScale(x, lfSub(lfOne(), t)), loftface.VScale(y, t))
-	}
-	corners := [4]loftFaceRatVec{
-		blend(firstA, secondA, tLo), blend(firstZ, secondZ, tLo),
-		blend(firstA, secondA, tHi), blend(firstZ, secondZ, tHi),
-	}
-	var box [3]loftFaceInterval
-	for axis := range box {
-		minimum, maximum := corners[0][axis], corners[0][axis]
-		for _, corner := range corners[1:] {
-			if corner[axis].Cmp(minimum) < 0 {
-				minimum = corner[axis]
-			}
-			if corner[axis].Cmp(maximum) > 0 {
-				maximum = corner[axis]
-			}
-		}
-		box[axis] = loftFaceInterval{Lo: lfSub(minimum, departure), Hi: lfAdd(maximum, departure)}
-	}
-	r0, r1 := lfAdd(lfMul(m, box[0].Lo), b), lfAdd(lfMul(m, box[0].Hi), b)
-	if r0.Cmp(r1) > 0 {
-		r0, r1 = r1, r0
-	}
-	radius := loftFaceInterval{Lo: r0, Hi: r1}
-	minimumF := lfSub(lfAdd(loftface.IntervalSquareMin(box[1]), loftface.IntervalSquareMin(box[2])),
-		loftface.IntervalSquareMax(radius))
-	maximumF := lfSub(lfAdd(loftface.IntervalSquareMax(box[1]), loftface.IntervalSquareMax(box[2])),
-		loftface.IntervalSquareMin(radius))
-	if outside && minimumF.Sign() > 0 || !outside && maximumF.Sign() < 0 {
-		return true
-	}
-	if depth == 0 {
-		return false
-	}
-	mid := lfMul(lfAdd(tLo, tHi), big.NewRat(1, 2))
-	return spiralCellSide(first, second, a, z, departure, m, b, outside, tLo, mid, depth-1) &&
-		spiralCellSide(first, second, a, z, departure, m, b, outside, mid, tHi, depth-1)
 }
 
 // On the blank root, r=m*x+b. The tool cone generator is x+k*r=apex,

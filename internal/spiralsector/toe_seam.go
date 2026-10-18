@@ -1,4 +1,4 @@
-package decad
+package spiralsector
 
 import (
 	"context"
@@ -25,12 +25,12 @@ func spiralToeMapCharge(first, second loftFaceMap, box [4]*big.Rat,
 	}
 	stretch := math.Max(first.Stretch, second.Stretch)
 	if proofbound.IsNonFinite(stretch) ||
-		lfMul(lfF(stretch), radiusBound).Cmp(big.NewRat(1, 1_000_000_000_000)) >= 0 {
+		seamRatMul(seamRatF(stretch), radiusBound).Cmp(big.NewRat(1, 1_000_000_000_000)) >= 0 {
 		return false, false
 	}
 	corners := loftface.BoxCorners(box)
-	axis := [3]loftFaceRatVec{{lfOne(), lfZero(), lfZero()},
-		{lfZero(), lfOne(), lfZero()}, {lfZero(), lfZero(), lfOne()}}
+	axis := [3]loftFaceRatVec{{seamRatOne(), seamRatZero(), seamRatZero()},
+		{seamRatZero(), seamRatOne(), seamRatZero()}, {seamRatZero(), seamRatZero(), seamRatOne()}}
 	var firstRange, secondRange, delta [3]loftFaceInterval
 	for i := range axis {
 		firstRange[i] = loftface.ScalarRange(first, axis[i], corners)
@@ -41,7 +41,7 @@ func spiralToeMapCharge(first, second loftFaceMap, box [4]*big.Rat,
 		if cap[0].Lo.Cmp(big.NewRat(9, 1)) <= 0 || cap[0].Hi.Cmp(big.NewRat(12, 1)) >= 0 ||
 			cap[1].Lo.Cmp(big.NewRat(8, 1)) <= 0 || cap[1].Hi.Cmp(big.NewRat(11, 1)) >= 0 ||
 			cap[2].Lo.Cmp(big.NewRat(-4, 1)) <= 0 || cap[2].Hi.Cmp(big.NewRat(4, 1)) >= 0 ||
-			lfSub(capC, cap[0].Lo).Cmp(big.NewRat(12, 1)) >= 0 {
+			seamRatSub(capC, cap[0].Lo).Cmp(big.NewRat(12, 1)) >= 0 {
 			return false, false
 		}
 	}
@@ -122,23 +122,23 @@ func spiralToeRootCells(ctx context.Context, trim *loftFacesTrimRecord,
 		}
 		a := trim.Source.SourceStation[j]
 		z := trim.Source.SourceStation[(j+1)%len(trim.StationGroup)]
-		if !spiralCellSide(trim.Maps[1], trim.Maps[2], a, z, lfF(departure),
-			big.NewRat(-1, 1), capC, false, lfZero(), lfZero(), 0) ||
-			!spiralCellSide(trim.Maps[1], trim.Maps[2], a, z, lfF(departure),
-				big.NewRat(-1, 1), capC, true, lfOne(), lfOne(), 0) {
+		if !SpiralCellSide(trim.Maps[1], trim.Maps[2], a, z, seamRatF(departure),
+			big.NewRat(-1, 1), capC, false, seamRatZero(), seamRatZero(), 0) ||
+			!SpiralCellSide(trim.Maps[1], trim.Maps[2], a, z, seamRatF(departure),
+				big.NewRat(-1, 1), capC, true, seamRatOne(), seamRatOne(), 0) {
 			return false, nil
 		}
 		var caps [2][3]loftFaceInterval
 		for index, mapped := range [...]loftFaceMap{trim.Maps[1], trim.Maps[2]} {
-			first := mapped.At(lfF(a.U), lfF(a.V))
-			second := mapped.At(lfF(z.U), lfF(z.V))
+			first := mapped.At(seamRatF(a.U), seamRatF(a.V))
+			second := mapped.At(seamRatF(z.U), seamRatF(z.V))
 			for axis := range 3 {
 				minimum, maximum := first[axis], second[axis]
 				if minimum.Cmp(maximum) > 0 {
 					minimum, maximum = maximum, minimum
 				}
 				caps[index][axis] = loftFaceInterval{
-					Lo: lfSub(minimum, lfF(departure)), Hi: lfAdd(maximum, lfF(departure))}
+					Lo: seamRatSub(minimum, seamRatF(departure)), Hi: seamRatAdd(maximum, seamRatF(departure))}
 			}
 		}
 		var point, delta [3]loftFaceInterval
@@ -165,18 +165,18 @@ func spiralToeRootCells(ctx context.Context, trim *loftFacesTrimRecord,
 func spiralToeEndpointBox(ctx context.Context, first, second loftFaceMap,
 	point planePoint, capC, charge *big.Rat) ([3]loftFaceInterval, bool, error) {
 	var empty [3]loftFaceInterval
-	a := first.At(lfF(point.U), lfF(point.V))
-	b := second.At(lfF(point.U), lfF(point.V))
+	a := first.At(seamRatF(point.U), seamRatF(point.V))
+	b := second.At(seamRatF(point.U), seamRatF(point.V))
 	delta := loftface.VSub(b, a)
 	at := func(t *big.Rat) loftFaceRatVec {
 		return loftface.VAdd(a, loftface.VScale(delta, t))
 	}
 	q := func(t *big.Rat) *big.Rat {
 		p := at(t)
-		r := lfSub(capC, p[0])
-		return lfSub(lfAdd(lfMul(p[1], p[1]), lfMul(p[2], p[2])), lfMul(r, r))
+		r := seamRatSub(capC, p[0])
+		return seamRatSub(seamRatAdd(seamRatMul(p[1], p[1]), seamRatMul(p[2], p[2])), seamRatMul(r, r))
 	}
-	lo, hi := big.NewRat(9, 10), lfOne()
+	lo, hi := big.NewRat(9, 10), seamRatOne()
 	if q(lo).Sign() >= 0 || q(hi).Sign() <= 0 {
 		return empty, false, nil
 	}
@@ -186,7 +186,7 @@ func spiralToeEndpointBox(ctx context.Context, first, second loftFaceMap,
 				return empty, false, err
 			}
 		}
-		mid := lfMul(lfAdd(lo, hi), big.NewRat(1, 2))
+		mid := seamRatMul(seamRatAdd(lo, hi), big.NewRat(1, 2))
 		if q(mid).Sign() < 0 {
 			lo = mid
 		} else {
@@ -200,15 +200,15 @@ func spiralToeEndpointBox(ctx context.Context, first, second loftFaceMap,
 		if minValue.Cmp(maxValue) > 0 {
 			minValue, maxValue = maxValue, minValue
 		}
-		out[axis] = loftFaceInterval{Lo: lfSub(minValue, charge), Hi: lfAdd(maxValue, charge)}
+		out[axis] = loftFaceInterval{Lo: seamRatSub(minValue, charge), Hi: seamRatAdd(maxValue, charge)}
 	}
 	return out, true, nil
 }
 
-// certifySpiralToeRootSeam accepts only a current first-tooth source proof.
+// CertifySpiralToeRootSeam accepts only a current first-tooth source proof.
 // It certifies one continuous transverse source root-arc crossing with the
 // blank toe cap, a finite X and angular-slope range, and both exact ends.
-func certifySpiralToeRootSeam(ctx context.Context,
+func CertifySpiralToeRootSeam(ctx context.Context,
 	proof *spiralFirstJoinSource) (*spiralToeRootSeam, bool, error) {
 	if ctx == nil || proof == nil || proof.Tooth == nil || proof.Blank == nil {
 		return nil, false, nil
@@ -222,9 +222,9 @@ func certifySpiralToeRootSeam(ctx context.Context,
 	if !ok {
 		return nil, false, nil
 	}
-	capC := lfAdd(lfF(proof.Blank.ToeRoot.U), lfF(proof.Blank.ToeRoot.V))
-	if lfAdd(lfF(proof.Blank.ToeOuter.U), lfF(proof.Blank.ToeOuter.V)).Cmp(capC) != 0 ||
-		capC.Sign() <= 0 || lfF(proof.Blank.ToeRoot.U).Cmp(lfF(proof.Blank.ToeOuter.U)) >= 0 {
+	capC := seamRatAdd(seamRatF(proof.Blank.ToeRoot.U), seamRatF(proof.Blank.ToeRoot.V))
+	if seamRatAdd(seamRatF(proof.Blank.ToeOuter.U), seamRatF(proof.Blank.ToeOuter.V)).Cmp(capC) != 0 ||
+		capC.Sign() <= 0 || seamRatF(proof.Blank.ToeRoot.U).Cmp(seamRatF(proof.Blank.ToeOuter.U)) >= 0 {
 		return nil, false, nil
 	}
 	mapOK, negative := spiralToeMapCharge(trim.Maps[1], trim.Maps[2], box, radiusBound, capC)
@@ -238,7 +238,7 @@ func certifySpiralToeRootSeam(ctx context.Context,
 	for _, gate := range [...]struct {
 		coeff []*big.Rat
 		sign  int
-	}{{p.d, 1}, {p.deltaX, 1}, {p.at(lfZero()), -1}, {p.at(lfOne()), 1}} {
+	}{{p.d, 1}, {p.deltaX, 1}, {p.at(seamRatZero()), -1}, {p.at(seamRatOne()), 1}} {
 		if yes, err := polynomial.BernsteinSignByHalving(ctx, gate.coeff, gate.sign, 8); err != nil || !yes {
 			return nil, false, err
 		}
@@ -257,7 +257,7 @@ func certifySpiralToeRootSeam(ctx context.Context,
 	}
 	idealSLo, idealSHi := big.NewRat(345, 2000), big.NewRat(307, 1000)
 	if negative {
-		idealSLo, idealSHi = lfSub(lfZero(), idealSHi), lfSub(lfZero(), idealSLo)
+		idealSLo, idealSHi = seamRatSub(seamRatZero(), idealSHi), seamRatSub(seamRatZero(), idealSLo)
 	}
 	for _, gate := range [...]struct {
 		slope *big.Rat
@@ -272,13 +272,13 @@ func certifySpiralToeRootSeam(ctx context.Context,
 	}
 	coordCharge, slopeCharge := big.NewRat(1, 10_000_000_000), big.NewRat(1, 1_000_000_000)
 	seam := &spiralToeRootSeam{
-		X:        loftFaceInterval{Lo: lfSub(idealXLo, coordCharge), Hi: lfAdd(idealXHi, coordCharge)},
-		Slope:    loftFaceInterval{Lo: lfSub(idealSLo, slopeCharge), Hi: lfAdd(idealSHi, slopeCharge)},
+		X:        loftFaceInterval{Lo: seamRatSub(idealXLo, coordCharge), Hi: seamRatAdd(idealXHi, coordCharge)},
+		Slope:    loftFaceInterval{Lo: seamRatSub(idealSLo, slopeCharge), Hi: seamRatAdd(idealSHi, slopeCharge)},
 		ConeC:    capC,
 		Negative: negative,
 	}
-	if seam.X.Lo.Cmp(lfF(proof.Blank.ToeRoot.U)) <= 0 ||
-		seam.X.Hi.Cmp(lfF(proof.Blank.ToeOuter.U)) >= 0 {
+	if seam.X.Lo.Cmp(seamRatF(proof.Blank.ToeRoot.U)) <= 0 ||
+		seam.X.Hi.Cmp(seamRatF(proof.Blank.ToeOuter.U)) >= 0 {
 		return nil, false, nil
 	}
 	for end, point := range [...]planePoint{arc.Start, arc.End} {

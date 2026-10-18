@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/spiralsector"
 )
 
 // spiralNearPairKind is the source verdict for one otherwise undecidable
@@ -208,7 +209,7 @@ func certifySpiralNearFaceRoles(ctx context.Context, blank, tooth *Body,
 	if err != nil || !ok {
 		return nil, empty, false, err
 	}
-	toeSeam, ok, err := certifySpiralToeRootSeam(ctx, proof)
+	toeSeam, ok, err := spiralsector.CertifySpiralToeRootSeam(ctx, proof)
 	if err != nil || !ok || toeSeam == nil {
 		return nil, empty, false, err
 	}

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/loftface"
+	"github.com/lestrrat-3d/decad/internal/spiralsector"
 	"github.com/stretchr/testify/require"
 )
 
@@ -19,13 +20,13 @@ func TestSpiralTangentRecordCurrent(t *testing.T) {
 	trim := trimBody.n.Payload.(facetedPayload).LoftFacesTrim
 	require.NotNil(t, trim)
 	require.NotNil(t, trim.Tangent)
-	require.True(t, spiralTangentRecordCurrent(trim), "the real record is current")
+	require.True(t, spiralsector.SpiralTangentRecordCurrent(trim), "the real record is current")
 
 	t.Run("no record is not current", func(t *testing.T) {
 		bare := *trim
 		bare.Tangent = nil
-		require.False(t, spiralTangentRecordCurrent(&bare))
-		require.False(t, spiralTangentRecordCurrent(nil))
+		require.False(t, spiralsector.SpiralTangentRecordCurrent(&bare))
+		require.False(t, spiralsector.SpiralTangentRecordCurrent(nil))
 	})
 
 	t.Run("unequal tangent copy", func(t *testing.T) {
@@ -33,7 +34,7 @@ func TestSpiralTangentRecordCurrent(t *testing.T) {
 		other.T = new(big.Rat).Add(other.T, big.NewRat(1, 1<<40))
 		mutated := *trim
 		mutated.Tangent = &other
-		require.False(t, spiralTangentRecordCurrent(&mutated))
+		require.False(t, spiralsector.SpiralTangentRecordCurrent(&mutated))
 	})
 
 	t.Run("equal copy by value is current", func(t *testing.T) {
@@ -44,7 +45,7 @@ func TestSpiralTangentRecordCurrent(t *testing.T) {
 		same.Slope = new(big.Rat).Set(same.Slope)
 		copied := *trim
 		copied.Tangent = &same
-		require.True(t, spiralTangentRecordCurrent(&copied), "equality is by value, not pointer")
+		require.True(t, spiralsector.SpiralTangentRecordCurrent(&copied), "equality is by value, not pointer")
 	})
 
 	t.Run("base cap record tangent differs", func(t *testing.T) {
@@ -54,9 +55,9 @@ func TestSpiralTangentRecordCurrent(t *testing.T) {
 		capRecord.Tangent = &other
 		mutated := *trim
 		mutated.Base.LoftFacesCap = &capRecord
-		require.False(t, spiralTangentRecordCurrent(&mutated))
+		require.False(t, spiralsector.SpiralTangentRecordCurrent(&mutated))
 		capRecord.Tangent = nil
-		require.False(t, spiralTangentRecordCurrent(&mutated), "the base record must carry it too")
+		require.False(t, spiralsector.SpiralTangentRecordCurrent(&mutated), "the base record must carry it too")
 	})
 
 	t.Run("heel slope one float step off", func(t *testing.T) {
@@ -68,7 +69,7 @@ func TestSpiralTangentRecordCurrent(t *testing.T) {
 		heel.Slope = stepped
 		mutated := *trim
 		mutated.Heel = &heel
-		require.False(t, spiralTangentRecordCurrent(&mutated))
+		require.False(t, spiralsector.SpiralTangentRecordCurrent(&mutated))
 	})
 
 	t.Run("one changed final-map coefficient", func(t *testing.T) {
@@ -80,7 +81,7 @@ func TestSpiralTangentRecordCurrent(t *testing.T) {
 		maps[len(maps)-1] = last
 		mutated := *trim
 		mutated.Maps = maps
-		require.False(t, spiralTangentRecordCurrent(&mutated))
+		require.False(t, spiralsector.SpiralTangentRecordCurrent(&mutated))
 		require.True(t, loftface.MapEqual(trim.Tangent.Map(), trim.Maps[len(trim.Maps)-1]),
 			"the original map is untouched")
 	})

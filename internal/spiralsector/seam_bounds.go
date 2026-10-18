@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
+func seamRatZero() *big.Rat             { return new(big.Rat) }
 func seamRatOne() *big.Rat              { return big.NewRat(1, 1) }
 func seamRatF(v float64) *big.Rat       { return proof.FloatRat(v) }
 func seamRatAdd(a, b *big.Rat) *big.Rat { return proof.AddRat(new(big.Rat), a, b) }
