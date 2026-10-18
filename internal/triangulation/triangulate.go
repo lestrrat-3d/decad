@@ -44,6 +44,17 @@ func Cross2(a, b, c Point2) float64 {
 	return (b.U-a.U)*(c.V-a.V) - (b.V-a.V)*(c.U-a.U)
 }
 
+// SignedLoopArea returns twice the signed area of an indexed loop. A positive
+// result means the loop winds counter-clockwise.
+func SignedLoopArea(points []Point2, loop []int) float64 {
+	var sum float64
+	for i, id := range loop {
+		a, b := points[id], points[loop[(i+1)%len(loop)]]
+		sum += a.U*b.V - a.V*b.U
+	}
+	return sum
+}
+
 // pointInTri reports whether p lies inside or on the triangle a, b, c,
 // whichever way the triangle is wound.
 func pointInTri(p, a, b, c Point2) bool {
