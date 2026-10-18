@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 	"github.com/lestrrat-3d/decad/internal/motionoption"
+	"github.com/lestrrat-3d/decad/internal/motionrun"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -428,8 +429,18 @@ func (r *motionRun) formPairs(swept []motionSweptBox) {
 	for i, mv := range r.movers {
 		row := make([]motionPair, 0, len(r.statics))
 		for _, st := range r.statics {
-			pair := staticPair(mv, st, swept[i])
-			pair.declared = r.isDeclared(mv.body, st.body)
+			state, lower := motionrun.ClassifyStaticPair(&mv.body.n, &st.body.n,
+				mv.validity.Outcome == ValidityValid, st.validity.Outcome == ValidityValid,
+				swept[i].lo, swept[i].hi, swept[i].ok)
+			pair := motionPair{other: -1, declared: r.isDeclared(mv.body, st.body), lower: lower}
+			switch state {
+			case motionrun.StaticPairInvalid:
+				pair.invalid = true
+			case motionrun.StaticPairExcluded:
+				pair.excluded = true
+			case motionrun.StaticPairSheet:
+				pair.sheet = true
+			}
 			row = append(row, pair)
 		}
 		for o := i + 1; o < len(r.movers); o++ {
@@ -454,25 +465,6 @@ func (r *motionRun) formPairs(swept []motionSweptBox) {
 func (r *motionRun) isDeclared(a, b *Body) bool {
 	_, ok := r.declared[[2]*Body{a, b}]
 	return ok
-}
-
-// staticPair settles a (mover, static) pair: invalid when an operand is not
-// proven valid, excluded when the swept-box exclusion separates it, a sheet
-// pair when an operand is a sheet, and evaluated otherwise.
-func staticPair(mv motionMover, st motionStatic, swept motionSweptBox) motionPair {
-	pair := motionPair{other: -1}
-	if mv.validity.Outcome != ValidityValid || st.validity.Outcome != ValidityValid {
-		pair.invalid = true
-		return pair
-	}
-	if swept.ok {
-		if lower, ok := motionbound.SweptBoxLower(swept.lo, swept.hi, st.body.n.Bounds); ok {
-			pair.excluded, pair.lower = true, lower
-			return pair
-		}
-	}
-	pair.sheet = mv.body.Kind() == BodySheet || st.body.Kind() == BodySheet
-	return pair
 }
 
 // partner is the caller's own body pair k of mover i names beside the mover.
