@@ -204,8 +204,6 @@
 1	0.01	TestEvalLoftLoopWalksFollowTheFaceNormal
 1	0.00	TestEvalLoftWholeShellOrientationCorrectsSign
 1	0.00	TestFacesOfMeshReadsTheMeshProofRecord
-1	0.58	TestFacetedPlacementChargesEachVertexAtItsOwnMagnitude
-1	1.23	TestFacetedReadingsReportEachVertexsOwnBound
 1	0.00	TestFitInterpolantChargeRefusesBeforeSolving
 1	0.00	TestFloatIntervalArithmeticSanity
 1	0.00	TestHeldGateReadsFacetsWithinThePrePassSlack
@@ -986,7 +984,6 @@
 7	0.00	TestEvalLoftOverTwistedCorrespondenceCrosses
 7	0.03	TestEvalPrismCollapsedSpanRunStillBuilds
 7	0.00	TestExtendFullDomainSceneSharesTheRecordParameterisation
-7	0.00	TestFacetedExtremeErrorCoversAnInnerVertexsReach
 7	0.07	TestFallbackGateDiameterReadsCurvedWallStations
 7	0.00	TestFitSplineEndpointsAreFitZeroAndActiveLast
 7	0.01	TestFitSplineGenuineSpanConflictStillRefuses
