@@ -4,12 +4,11 @@ import (
 	"context"
 	"math"
 
-	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/diameter"
+	"github.com/lestrrat-3d/decad/internal/gatewitness"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
-	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
 // This file proves the reference diameter Verify's tolerance gate is
@@ -238,7 +237,7 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 	}
 	if _, ok := body.n.Payload.(patchPayload); ok {
 		// A patch has no exact carrier model of its own (it is a single flat
-		// face, not a prism or a revolve), and no witness set gateWitnessPrism
+		// face, not a prism or a revolve), and no witness set gatewitness.Prism
 		// reads either. Its own box is a proven LOWER bound on its diameter
 		// instead: the largest single-axis extent of the body's own box is at
 		// or below the true diameter (a diameter realizes as SOME pair's
@@ -337,11 +336,11 @@ func chainRevolveEdgeGateDiameter(ctx context.Context, body *Body, sectionDelta 
 // prismPayload misses that same exact carrier too, and bodyGateDiameter tries
 // diameter.PrismFreeformSection for it ahead of this function — but when that arm
 // withholds its diameter the body DOES reach here, and this function has no arm
-// for it either: its own sectionDelta is zero, the one value gateWitnessPrism
-// below reads as "no arm at all" for a prismPayload. Such a body ends with no
+// for it either: its own sectionDelta is zero, the one value gatewitness.Prism
+// reads as "no arm at all" for a prismPayload. Such a body ends with no
 // gate diameter and its bounded readings read Suspect.
 //
-// Each payload earns a witness prism for its own reason, and gateWitnessPrism's
+// Each payload earns a witness prism for its own reason, and gatewitness.Prism's
 // doc comment states each arm separately rather than pooling them behind one
 // justification: a cap-loop chamfer never cuts past the receiver's own recorded
 // walls, a cup's shell can ADD material (an outward shell), and a displaced
@@ -384,10 +383,10 @@ func chainRevolveEdgeGateDiameter(ctx context.Context, body *Body, sectionDelta 
 // displacement of the point the payload denotes, so the held maximum can
 // overstate the denoted body's diameter by twice it. The fallback shrinks the
 // held witness maximum by that amount before it becomes a lower-bound
-// reference, which is why gateWitnessPrisms hands back a displacement beside
+// reference, which is why gatewitness.Prisms hands back a displacement beside
 // the prisms to read.
 func fallbackGateDiameter(budget *proofbound.WorkBudget, body *Body) (float64, bool, error) {
-	witnesses, displacement, ok := gateWitnessPrisms(body.n.Payload)
+	witnesses, displacement, ok := gatewitness.Prisms(body.n.Payload)
 	if !ok {
 		return 0, false, nil
 	}
@@ -412,106 +411,4 @@ func draftGateDiameter(ctx context.Context, body *Body, dp draftPayload) (float6
 		return d, ok, err
 	}
 	return chainVertexGateDiameter(ctx, body, 0)
-}
-
-// gateWitnessPrism builds the straight prism fallbackGateDiameter reads its
-// witnesses off, beside the displacement each of those witnesses can carry
-// from the point of the denoted body it stands for. ok is false for every
-// payload with no arm here, including a revolvePayload (already exact through
-// newBodyGeomBudget, which is why it never reaches this fallback) and an
-// analytic-walled prismPayload whose section is its own denotation (the same
-// reason). A free-form-walled prismPayload's own section is its denotation
-// too, so this switch answers false for it exactly as it does for the analytic
-// case: bodyGateDiameter routes a free-form-walled prismPayload through
-// diameter.PrismFreeformSection before fallbackGateDiameter, and calls this
-// function only when that arm has already declined — at which point this false
-// answer is what leaves the body with no gate diameter at all.
-//
-// The three arms read different geometry and earn a witness for different
-// reasons. A capBlendPayload reads one witness prism per loop instead
-// (capblend.WitnessPrisms, through gateWitnessPrisms).
-//
-// cupPayload reads its view's outer, the cup's own outer region — the receiver's unmodified section
-// for an INWARD shell, but the wider OFFSET (expanded) region for an OUTWARD
-// one, since an outward shell adds material and cupPayloadFor
-// (shell_cup.go) always assigns the wider of the two profiles to outer
-// regardless of sense. Either way the whole cup body — walls, floor and
-// cavity alike — sits inside pl.outer's own full-height prism: the cavity
-// never reaches farther than the outer region, the same containment
-// cupPayload.ExtentAlong already relies on. Its outer walls run the cup's
-// full height, so every station on them is a point of the body. The
-// receiver's own section is its own denotation, because every modify op
-// refuses a receiver carrying a section displacement (fillet.go's
-// prismrecord.Payload.RequireExactSection), so an inward cup's witnesses carry only the axial
-// displacement. An outward cup's outer region is the OFFSET one, recorded
-// within the cup's offsetDelta of the region it denotes (shell_cup.go), so
-// its witnesses carry that displacement beside the axial one, composed the
-// way the displaced-prism arm below composes its own.
-//
-// A prismPayload whose own sectionDelta is nonzero (docs/prism-boolean-design.md
-// §7's re-expressed or cut section — every analytic Union whose merge cut a
-// wall, plus any placed prism pair) reads its OWN recorded section, and is not
-// a containing shape at all: the denoted section may sit either side of the
-// recorded one. It does not need to be. What this gate needs is a lower bound
-// on the body's own diameter, and §7 proves every recorded boundary point sits
-// within sectionDelta of the section the payload denotes, while each recorded
-// level sits within AxialDelta of the level it denotes. Those two displacements
-// are perpendicular — one moves a coordinate IN the plane, the other moves a
-// level ALONG the normal — so their sum is an upper bound on how far a lifted
-// witness sits from the denoted body point below it, and diameter.LowerForDisplacement
-// turns the held maximum into the lower bound the gate wants. The copy zeroes
-// sectionDelta because addPrismFaces (clearance_geom.go) refuses a displaced
-// section outright: it builds the clearance kernel's certificate carriers,
-// which have to be exact statements about a boundary, and a witness set for a
-// diameter is neither a certificate nor a carrier.
-func gateWitnessPrism(payload topo.Payload) (prismPayload, float64, bool) {
-	switch pl := payload.(type) {
-	case cupPayload:
-		cup := pl.View()
-		witness := cup.OuterPrism()
-		witness.Profile = cup.Outer
-		displacement := proofbound.AbsSumUpper(witness.SectionDelta, witness.AxialDelta())
-		witness.SectionDelta = 0
-		return witness, displacement, true
-	case prismPayload:
-		if pl.SectionDelta == 0 {
-			return prismPayload{}, 0, false
-		}
-		displacement := proofbound.AbsSumUpper(pl.SectionDelta, pl.AxialDelta())
-		witness := pl
-		witness.SectionDelta = 0
-		return witness, displacement, true
-	case sweepPayload:
-		witness := pl.Prism
-		displacement := proofbound.AbsSumUpper(witness.SectionDelta, witness.AxialDelta())
-		witness.SectionDelta = 0
-		return witness, displacement, true
-	default:
-		return prismPayload{}, 0, false
-	}
-}
-
-// gateWitnessPrisms is gateWitnessPrism's reading for every payload. A stacked
-// prism reads one witness prism per outer run (stackedPrismPayload.OuterRuns)
-// over that run's own interval. Every run's outer loop is the outer wall of
-// the slabs it spans, so every witness is a point of the body. The first
-// slab's outer swept over the whole stack would hold points a union-built
-// stack does not reach, and would overstate its diameter. A capBlendPayload
-// reads capblend.WitnessPrisms.
-func gateWitnessPrisms(payload topo.Payload) ([]prismPayload, float64, bool) {
-	if pl, ok := payload.(capBlendPayload); ok {
-		return capblend.WitnessPrisms(pl), pl.AxialDelta(), true
-	}
-	if pl, ok := payload.(stackedPrismPayload); ok {
-		runs := pl.OuterRuns()
-		for i := range runs {
-			runs[i].SectionDelta = 0
-		}
-		return runs, proofbound.AbsSumUpper(pl.SectionDelta, pl.AxialDelta()), true
-	}
-	witness, displacement, ok := gateWitnessPrism(payload)
-	if !ok {
-		return nil, 0, false
-	}
-	return []prismPayload{witness}, displacement, true
 }
