@@ -323,7 +323,7 @@ func TestScaledRotationMatchesRotation(t *testing.T) {
 	}
 }
 
-// pointDeviationSquaredCommonDenom is pointDeviationSquared before it read
+// pointDeviationSquaredCommonDenom is SweepPointDeviation before it read
 // the common denominator off the coordinates' dyadic exponents: q is the LCM
 // of all 6V rational denominators, and each numerator is ScaledNum over q.
 func pointDeviationSquaredCommonDenom(p rotationalSweepPath, pose r3.Transform,
@@ -385,7 +385,7 @@ func pointDeviationSquaredCommonDenom(p rotationalSweepPath, pose r3.Transform,
 	return actual, new(big.Rat).SetFrac(maxSquared, new(big.Int).Mul(whole, whole))
 }
 
-// TestPointDeviationMatchesCommonDenomForm holds pointDeviationSquared, which
+// TestPointDeviationMatchesCommonDenomForm holds SweepPointDeviation, which
 // reads the points' common denominator 2^shift off their dyadic exponents, to
 // the CommonDenom form it replaces: the same staged points and the identical
 // rational maxSquared/whole², so proofbound.RatSqrtUp rounds the same. Every path kind of
@@ -437,7 +437,8 @@ func TestPointDeviationMatchesCommonDenomForm(t *testing.T) {
 			}
 			for k, at := range poses {
 				wantPoints, wantSquared := pointDeviationSquaredCommonDenom(path, at, ideal)
-				gotPoints, gotSquared, err := path.pointDeviationSquared(at, ideal, noSweepPoll)
+				gotPoints, gotSquared, err := motionbound.SweepPointDeviation(
+					path.sourcePoints, at, ideal.Rot, ideal.Shift, noSweepPoll)
 				require.NoError(t, err, name)
 				require.Len(t, gotPoints, len(wantPoints), name)
 				sourceShift, stagedShift := 0, 0
