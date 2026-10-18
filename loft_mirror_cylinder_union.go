@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetedtopology"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/orderedwork"
@@ -164,7 +165,7 @@ func loftMirrorCylinderCheckPairs(d *Document, pairs []*Body, record *loftMirror
 			return refuse(i, true, fmt.Errorf(
 				"%w: mirrored cylinder pair %d has no authenticated axial placement", ErrUnsupported, i+1))
 		}
-		if !loftCylinderAxialPlacement(motion) {
+		if !loftcylinder.AxialPlacement(motion) {
 			shift, swept, ok, err := loftMirrorCylinderUpperBridge(pair, motion, middle)
 			if err != nil {
 				return refuse(i, true, err)
@@ -208,7 +209,7 @@ func loftMirrorCylinderPairMotion(fp facetedPayload, source *loftMirrorJoinRecor
 	}
 	if fp.LoftMirrorCopy == nil || fp.LoftMirrorCopy.Source != source ||
 		fp.Xform != fp.LoftMirrorCopy.Motion ||
-		!loftCylinderAxialPlacement(fp.LoftMirrorCopy.Motion) &&
+		!loftcylinder.AxialPlacement(fp.LoftMirrorCopy.Motion) &&
 			!loftmesh.NearAxialPlacement(fp.LoftMirrorCopy.Motion) {
 		return r3.Transform{}, false
 	}

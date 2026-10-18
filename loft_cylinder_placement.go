@@ -111,7 +111,7 @@ func loftCylinderLocalTooth(ctx context.Context, d *Document, tooth *Body,
 		return nil, false, nil //nolint:nilerr // an invalid source map keeps the generic fallback
 	}
 	localXform, err := firstWorld.Then(inverse)
-	if err != nil || !loftCylinderAxialPlacement(localXform) {
+	if err != nil || !loftcylinder.AxialPlacement(localXform) {
 		return nil, false, nil //nolint:nilerr // an invalid local map cannot certify axial placement
 	}
 	local0, err := loftCylinderCanonicalFrame(0)

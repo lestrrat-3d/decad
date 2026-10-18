@@ -150,7 +150,7 @@ roles still select both exterior rims.
 
 ## Source-circle interval for a later cap cutter
 
-`loftCylinderSourceCircleOf` accepts one authenticated source Loft retained by
+`loftcylinder.SourceCircleOf` accepts one authenticated source Loft retained by
 the join or its centered bore. The six-curve admission and matched Loft facet
 departure still apply. The root wall stays strictly inside the exact blank
 circle at open heights between its certified cap collars. When the existing

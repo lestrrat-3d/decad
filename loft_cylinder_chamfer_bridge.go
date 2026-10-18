@@ -41,7 +41,7 @@ func loftCylinderChamferBridgeSources(source *loftCylinderChamferSource) error {
 			len(original.Segment) != len(proxy.Segment) || shift < 0 ||
 			proofbound.IsNonFinite(shift) ||
 			proxy.Proof.FacetDeparture < original.Proof.FacetDeparture ||
-			!loftCylinderAxialPlacement(proxy.Xform) {
+			!loftcylinder.AxialPlacement(proxy.Xform) {
 			return fmt.Errorf("%w: cap chamfer tooth bridge lost its source identity", ErrUnsupported)
 		}
 		for j := range original.Segment {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -38,7 +39,7 @@ func loftMirrorCylinderChamferUpperShifts(record *loftMirrorCylinderBoreRecord,
 		if _, duplicate := byMotion[motion]; duplicate {
 			return nil, fmt.Errorf("%w: mirrored cap has duplicate tooth placement", ErrUnsupported)
 		}
-		if loftCylinderAxialPlacement(motion) {
+		if loftcylinder.AxialPlacement(motion) {
 			byMotion[motion] = new(big.Rat)
 			continue
 		}

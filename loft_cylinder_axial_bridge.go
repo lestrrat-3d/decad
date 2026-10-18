@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -22,7 +23,7 @@ func loftCylinderProofTooth(ctx context.Context, d *Document, tooth *Body,
 	if !ok {
 		return nil, 0, false, nil
 	}
-	if loftCylinderAxialPlacement(lp.Xform) {
+	if loftcylinder.AxialPlacement(lp.Xform) {
 		return tooth, 0, true, nil
 	}
 	basis := lp.Xform.Basis()
@@ -39,7 +40,7 @@ func loftCylinderProofTooth(ctx context.Context, d *Document, tooth *Body,
 	if err != nil {
 		return nil, 0, true, err
 	}
-	if !loftCylinderAxialPlacement(normalized) ||
+	if !loftcylinder.AxialPlacement(normalized) ||
 		normalized.Basis().EX != basis.EX || normalized.Basis().EY != basis.EY {
 		return nil, 0, false, nil
 	}
