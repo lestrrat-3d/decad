@@ -140,7 +140,7 @@ func tessellateAllEdgeChamfer(ctx context.Context, body *Body, p allEdgeChamferP
 	}
 	trim := map[*topo.Face]float64{faceNode(faces[2]): samples.MaxSag, faceNode(faces[3]): samples.MaxSag,
 		faceNode(faces[18]): samples.MaxSag}
-	if err := composeFaceBounds(mesh, trim, nil, store, 0); err != nil {
+	if err := composeFaceBounds(mesh, trim, nil, store); err != nil {
 		return nil, err
 	}
 	mesh.setVertexBounds(store)

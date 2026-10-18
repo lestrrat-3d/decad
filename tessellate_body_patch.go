@@ -100,7 +100,7 @@ func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chor
 	for _, f := range faces {
 		axial[faceNode(f)] = f.n.AxialDelta
 	}
-	if err := composeFaceBounds(mesh, nil, axial, store, 0); err != nil {
+	if err := composeFaceBounds(mesh, nil, axial, store); err != nil {
 		return nil, err
 	}
 	if verify < VerifyAll {

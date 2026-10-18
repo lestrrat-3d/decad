@@ -24,7 +24,7 @@ import (
 // two-sided sheet proof without making an occupied-volume claim.
 func tessellateBodyPatchCircularPrism(ctx context.Context, b *Body, pp bodyPatchPayload,
 	prism prismPayload, chord float64, verify Verification) (*Mesh, error) {
-	source, err := tessellatePrism(ctx, bodyHandle(pp.Faces[0].Body), prism, prismWallRole, chord, VerifyBoundary)
+	source, err := tessellatePrismWithCountFloor(ctx, bodyHandle(pp.Faces[0].Body), prism, prismWallRole, chord, VerifyBoundary, nil, 0)
 	if err != nil {
 		return nil, err
 	}
