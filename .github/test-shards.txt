@@ -1572,5 +1572,7 @@
 10	0.00	TestLoftContactTwoLineCapsRealTrapezoid524
 10	0.00	TestLoftContactTwoLineCapsNarrowTranslated524
 10	0.00	TestLoftCurvedSourceCapsRealIndependentWedgeRefusesWithoutBoundaryProof
+10	0.00	TestLoftCircleSourceCapsRealDiscRefusesWithoutBoundaryProof
+10	0.00	TestLoftCircleSourceSpanRefusesInvalidRecord
 10	0.00	TestLoftFitSplineSourceCapsRealWedge
 10	0.00	TestLoftFitSplineSourcePreflightRefusesOversizedInput

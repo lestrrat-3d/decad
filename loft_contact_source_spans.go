@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
 )
 
 // loftSourceCapSpan borrows one authenticated producer segment for this call.
@@ -221,6 +222,16 @@ func loftSourceCapSpanOf(body *Body, role string, index int,
 	case sectionrecord.LineSeg:
 		start, end = c.TStart, c.TEnd
 		points = []sectionrecord.Point2{c.Start, c.End}
+	case sectionrecord.CircleSeg:
+		start, end = c.TStart, c.TEnd
+		radius, err := c.Radius.In(units.Millimeter)
+		if err != nil || proofbound.IsNonFinite(radius) || radius <= 0 ||
+			!loftVolumeRatFits(proofarith.FloatRat(radius)) ||
+			!((start == 0 && end == 1) || (start == 1 && end == 0)) ||
+			c.CCW != (start < end) {
+			return no, false
+		}
+		points = []sectionrecord.Point2{c.Center}
 	case sectionrecord.ArcSeg:
 		start, end = c.TStart, c.TEnd
 		points = []sectionrecord.Point2{c.Center, c.Start, c.End}
@@ -254,6 +265,9 @@ func loftSourceSameKind(first, second sectionrecord.CurveSegment) bool {
 	switch first.(type) {
 	case sectionrecord.LineSeg:
 		_, ok := second.(sectionrecord.LineSeg)
+		return ok
+	case sectionrecord.CircleSeg:
+		_, ok := second.(sectionrecord.CircleSeg)
 		return ok
 	case sectionrecord.ArcSeg:
 		_, ok := second.(sectionrecord.ArcSeg)
