@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 )
@@ -36,7 +37,7 @@ func revolveLoftFacesNonverticalManifest(ctx context.Context,
 	p, ok := proof.tooth.n.Payload.(facetedPayload)
 	if !ok || p.LoftFacesTrim != proof.trim ||
 		!revolveLoftFacesTrimCurrent(proof.tooth, proof.trim) ||
-		!pointSourceCurrent(proof.trim.Source) {
+		!facetedrecord.PointSourceCurrent(proof.trim.Source) {
 		return nil, false, nil
 	}
 	liveRefs, ok := revolveLoftFacesSourceRefs(proof.trim, proof.tooth)

@@ -5,6 +5,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
@@ -204,9 +205,9 @@ func TestRevolveLoftFacesCircleMissConsumesLiveNeutralSource(t *testing.T) {
 	require.False(t, accepted, "the source-miss flag needs the current live maps")
 	proof.trim.Maps[0] = map0
 	sourceBox := proof.trim.Source.SourceBox
-	require.True(t, pointSourceCurrent(proof.trim.Source))
+	require.True(t, facetedrecord.PointSourceCurrent(proof.trim.Source))
 	proof.trim.Source.SourceBox[1] = (sourceBox[0] + sourceBox[1]) / 2
-	require.False(t, pointSourceCurrent(proof.trim.Source))
+	require.False(t, facetedrecord.PointSourceCurrent(proof.trim.Source))
 	_, accepted = revolveLoftFacesToolCapSidesOf(proof)
 	require.False(t, accepted, "a narrowed stored source box cannot prove a whole-circle miss")
 	proof.trim.Source.SourceBox = sourceBox

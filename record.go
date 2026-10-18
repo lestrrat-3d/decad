@@ -230,8 +230,6 @@ type (
 	revolveLoftSectorPlacement   = facetedrecord.RevolveLoftSectorPlacement
 	revolveSectionCertificate    = facetedrecord.RevolveSectionCertificate
 	revolveSectionSpan           = facetedrecord.RevolveSectionSpan
-	revolveSectorBoundary        = facetedrecord.RevolveSectorBoundary
-	revolveSectorContact         = facetedrecord.RevolveSectorContact
 	revolvedSectionRing          = facetedrecord.RevolvedSectionRing
 	spiralBlankSource            = facetedrecord.SpiralBlankSource
 	spiralCombineSource          = facetedrecord.SpiralCombineSource

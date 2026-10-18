@@ -3,6 +3,7 @@ package decad
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
@@ -86,7 +87,7 @@ func TestRevolveLoftFacesSimpleSourceRefusesChangedRecordedArc(t *testing.T) {
 	arc := trim.Source.Profile.Outer.Segments[1].(arcSeg)
 	arc.Center.U = 2
 	trim.Source.Profile.Outer.Segments[1] = arc
-	require.True(t, pointSourceCurrent(trim.Source),
+	require.True(t, facetedrecord.PointSourceCurrent(trim.Source),
 		"the existing revision gate does not compare stored curve geometry")
 	_, certified, err := revolveLoftFacesSimpleSourceLoop(t.Context(), trim)
 	require.NoError(t, err)

@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 )
 
@@ -11,7 +12,7 @@ import (
 func revolveLoftFacesSimpleSourceLoop(ctx context.Context,
 	trim *loftFacesTrimRecord) (*revolveloftfaces.SimpleLoop, bool, error) {
 	if ctx == nil || trim == nil || trim.Source == nil ||
-		!pointSourceCurrent(trim.Source) ||
+		!facetedrecord.PointSourceCurrent(trim.Source) ||
 		trim.Source.Source.Profile == nil ||
 		!trim.Source.Source.Profile.Valid ||
 		len(trim.Source.Source.Profile.Holes) != 0 {
