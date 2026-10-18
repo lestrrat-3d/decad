@@ -480,8 +480,8 @@ func prismFaceViewBlend(ctx context.Context, d *Document, pp prismPayload, call 
 	return brepLoopRoute(ctx, d, bp, call)
 }
 
-func (s brepLoopSelection) refuse(row, reason string) error {
-	return s.read.state.RefuseWithSelection(row, reason, selectedEdgesContext(s.edges()))
+func (s brepLoopSelection) refuse(reason string) error {
+	return s.read.state.RefuseWithSelection("SL1", reason, selectedEdgesContext(s.edges()))
 }
 
 // matchEdges matches each selected edge to the one record edge whose ends,
@@ -594,9 +594,9 @@ func (s brepLoopSelection) admitLoops() ([]brepLoopSel, error) {
 		ei := s.match(i)
 		switch ei {
 		case -1:
-			return nil, s.refuse("SL1", fmt.Sprintf(`%s matches no edge of the receiver's face record`, selectedEdgeContext(i, s.edge(i))))
+			return nil, s.refuse(fmt.Sprintf(`%s matches no edge of the receiver's face record`, selectedEdgeContext(i, s.edge(i))))
 		case -2:
-			return nil, s.refuse("SL1", fmt.Sprintf(`%s matches more than one edge of the receiver's face record`, selectedEdgeContext(i, s.edge(i))))
+			return nil, s.refuse(fmt.Sprintf(`%s matches more than one edge of the receiver's face record`, selectedEdgeContext(i, s.edge(i))))
 		}
 		for _, ui := range r.state.Topology.Edges[ei] {
 			u := r.state.Topology.Uses[ui]
@@ -623,11 +623,11 @@ func (s brepLoopSelection) admitLoops() ([]brepLoopSel, error) {
 		}
 		switch {
 		case len(loopsOf[i]) == 0:
-			return nil, s.refuse("SL1", fmt.Sprintf(`%s lies on no loop of a planar face, so it belongs to no complete loop; a %s of loops mixed with single edges needs a corner patch in no reference frame`, selectedEdgeContext(i, s.edge(i)), r.call.loopKind))
+			return nil, s.refuse(fmt.Sprintf(`%s lies on no loop of a planar face, so it belongs to no complete loop; a %s of loops mixed with single edges needs a corner patch in no reference frame`, selectedEdgeContext(i, s.edge(i)), r.call.loopKind))
 		case len(covering) == 0:
-			return nil, s.refuse("SL1", fmt.Sprintf(`the selection covers only part of a loop of brep face %s; every geometric edge of a complete loop must be selected`, r.state.Payload.Faces[loopsOf[i][0].face].Role))
+			return nil, s.refuse(fmt.Sprintf(`the selection covers only part of a loop of brep face %s; every geometric edge of a complete loop must be selected`, r.state.Payload.Faces[loopsOf[i][0].face].Role))
 		case len(covering) > 1:
-			return nil, s.refuse("SL1", fmt.Sprintf(`%s lies on two selected complete loops, of brep faces %s and %s, which share it`,
+			return nil, s.refuse(fmt.Sprintf(`%s lies on two selected complete loops, of brep faces %s and %s, which share it`,
 				selectedEdgeContext(i, s.edge(i)), r.state.Payload.Faces[covering[0].face].Role, r.state.Payload.Faces[covering[1].face].Role))
 		}
 		fl := covering[0]
