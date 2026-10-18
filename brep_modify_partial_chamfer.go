@@ -28,7 +28,7 @@ func brepChamferPartialLoop(ctx context.Context, d *Document, bp brepPayload,
 		return nil, err
 	}
 	if len(call.edges) < 1 || len(call.edges) > 2 || len(selected) < 4 {
-		return nil, initial.refuse("SL1", `a partial chamfer requires one or two adjacent edges with two free ends`)
+		return nil, initial.state.Refuse("SL1", `a partial chamfer requires one or two adjacent edges with two free ends`)
 	}
 	var walks []int
 	for i, on := range selected {
@@ -39,18 +39,18 @@ func brepChamferPartialLoop(ctx context.Context, d *Document, bp brepPayload,
 	if len(walks) != len(call.edges) ||
 		len(walks) == 2 &&
 			(walks[0]+1)%len(selected) != walks[1] && (walks[1]+1)%len(selected) != walks[0] {
-		return nil, initial.refuse("SL1", `a partial chamfer's selected walks are not one chain`)
+		return nil, initial.state.Refuse("SL1", `a partial chamfer's selected walks are not one chain`)
 	}
-	cl, err := capblend.OneLoopCornerLoop(initial.budget, bp.Faces[sel.face].RegionLoop(sel.loop), freeform.NewFreeformWork())
+	cl, err := capblend.OneLoopCornerLoop(initial.state.Budget, bp.Faces[sel.Face].RegionLoop(sel.Loop), freeform.NewFreeformWork())
 	if err != nil {
 		return nil, err
 	}
 	if len(cl.Walks) != len(selected) {
-		return nil, initial.refuse("SL1", `a partial chamfer's face coalesces recorded walks`)
+		return nil, initial.state.Refuse("SL1", `a partial chamfer's face coalesces recorded walks`)
 	}
 	for i, on := range selected {
 		if on && !cl.Walks[i].IsLine() {
-			return nil, initial.refuse("SL1", `a partial chamfer selects a curved walk`)
+			return nil, initial.state.Refuse("SL1", `a partial chamfer selects a curved walk`)
 		}
 	}
 	// The two selected edges must be a proper chain with two terminal vertices.
@@ -77,30 +77,30 @@ func brepChamferPartialLoop(ctx context.Context, d *Document, bp brepPayload,
 	if err := r.matchEdges(); err != nil {
 		return nil, err
 	}
-	planar := r.btopo.Planar[sel.face]
-	if sel.loop >= len(planar) || len(planar[sel.loop]) != len(selected) {
-		return nil, r.refuse("SL1", `restating the straight walls changed the selected partial loop`)
+	planar := r.state.Topology.Planar[sel.Face]
+	if sel.Loop >= len(planar) || len(planar[sel.Loop]) != len(selected) {
+		return nil, r.state.Refuse("SL1", `restating the straight walls changed the selected partial loop`)
 	}
 	again := make([]bool, len(selected))
-	for _, ei := range r.matched {
+	for _, ei := range r.state.Matched {
 		if ei < 0 {
-			return nil, r.refuse("SL1", `restating the straight walls lost a selected edge`)
+			return nil, r.state.Refuse("SL1", `restating the straight walls lost a selected edge`)
 		}
 		found := false
-		for _, ui := range r.btopo.Edges[ei] {
-			u := r.btopo.Uses[ui]
-			if u.Face == sel.face && u.Loop == sel.loop && u.Part == brepLoopSeg &&
+		for _, ui := range r.state.Topology.Edges[ei] {
+			u := r.state.Topology.Uses[ui]
+			if u.Face == sel.Face && u.Loop == sel.Loop && u.Part == brepLoopSeg &&
 				u.Seg >= 0 && u.Seg < len(again) {
 				again[u.Seg] = true
 				found = true
 			}
 		}
 		if !found {
-			return nil, r.refuse("SL1", `restating the straight walls moved a selected edge off its planar loop`)
+			return nil, r.state.Refuse("SL1", `restating the straight walls moved a selected edge off its planar loop`)
 		}
 	}
 	if !slices.Equal(selected, again) {
-		return nil, r.refuse("SL1", `restating the straight walls changed the selected partial loop`)
+		return nil, r.state.Refuse("SL1", `restating the straight walls changed the selected partial loop`)
 	}
 	out, err := r.rewritePartialChamfer(sel, selected, blends)
 	if err != nil {
@@ -119,24 +119,24 @@ func brepChamferPartialLoop(ctx context.Context, d *Document, bp brepPayload,
 func (r *brepLoopRead) rewritePartialChamfer(sel brepLoopSel, selected []bool,
 	blends []*brepEdgeBlend) (brepPayload, error) {
 	if r.call.loop == nil {
-		return brepPayload{}, r.refuse("SL1", `the partial chamfer has no setback`)
+		return brepPayload{}, r.state.Refuse("SL1", `the partial chamfer has no setback`)
 	}
-	if err := r.classifyLoop(&sel); err != nil {
+	if err := r.state.ClassifyLoop(&sel); err != nil {
 		return brepPayload{}, err
 	}
 	active := sel
-	active.beside = nil
+	active.Beside = nil
 	for i, on := range selected {
 		if on {
-			active.beside = append(active.beside, sel.beside[i])
+			active.Beside = append(active.Beside, sel.Beside[i])
 		}
 	}
-	if err := r.requireBandReach([]brepLoopSel{active}); err != nil {
+	if err := r.state.RequireBandReach([]brepLoopSel{active}); err != nil {
 		return brepPayload{}, err
 	}
-	f := r.bp.Faces[sel.face]
-	orig := f.RegionLoop(sel.loop)
-	cl, err := capblend.OneLoopCornerLoop(r.budget, orig, freeform.NewFreeformWork())
+	f := r.state.Payload.Faces[sel.Face]
+	orig := f.RegionLoop(sel.Loop)
+	cl, err := capblend.OneLoopCornerLoop(r.state.Budget, orig, freeform.NewFreeformWork())
 	if err != nil {
 		return brepPayload{}, err
 	}
@@ -147,26 +147,26 @@ func (r *brepLoopRead) rewritePartialChamfer(sel brepLoopSel, selected []bool,
 		}
 	}
 	segs, joins, capWalk, capArc, err := offset2d.PartialChamferContour(
-		r.budget, cl.Walks, selected, amounts, shellTol)
+		r.state.Budget, cl.Walks, selected, amounts, shellTol)
 	if err != nil {
-		return brepPayload{}, r.wrapFace(sel.face, err)
+		return brepPayload{}, r.state.WrapFace(sel.Face, err)
 	}
 	for _, arc := range capArc {
 		if arc >= 0 {
-			return brepPayload{}, r.refuse("SL1", `a partial chamfer has a curved connector`)
+			return brepPayload{}, r.state.Refuse("SL1", `a partial chamfer has a curved connector`)
 		}
 	}
 	profile := profileRecord{Outer: cloneLoopRecord(f.Region.Outer)}
 	for _, h := range f.Region.Holes {
 		profile.Holes = append(profile.Holes, cloneLoopRecord(h))
 	}
-	if sel.loop == 0 {
+	if sel.Loop == 0 {
 		profile.Outer = loopRecord{Segments: segs}
 	} else {
-		profile.Holes[sel.loop-1] = loopRecord{Segments: segs}
+		profile.Holes[sel.Loop-1] = loopRecord{Segments: segs}
 	}
-	if err := offset2d.AuditOffsetSectionBudget(r.budget, *f.Region, profile); err != nil {
-		return brepPayload{}, r.wrapFace(sel.face, err)
+	if err := offset2d.AuditOffsetSectionBudget(r.state.Budget, *f.Region, profile); err != nil {
+		return brepPayload{}, r.state.WrapFace(sel.Face, err)
 	}
 	readings := make([]capcontour.Join, len(joins))
 	for i, j := range joins {
@@ -177,16 +177,16 @@ func (r *brepLoopRead) rewritePartialChamfer(sel brepLoopSel, selected []bool,
 	delta, err := capband.AmountsContourDisplacement(cl.Walks, readings, amounts,
 		r.call.loop.DcDelta, shellTol)
 	if err != nil {
-		return brepPayload{}, r.wrapFace(sel.face, err)
+		return brepPayload{}, r.state.WrapFace(sel.Face, err)
 	}
-	faces := slices.Clone(r.bp.Faces)
-	restore := map[int]brepFace{sel.face: r.bp.Faces[sel.face]}
-	faces[sel.face].Region = &profile
-	faces[sel.face].Delta = math.Max(faces[sel.face].Delta, delta)
-	band := brepLoopBand{Face: sel.face, Loop: sel.loop, Orig: cloneLoopRecord(orig),
-		Setback: *r.call.loop, Sigma: sel.sigma, Kind: breprecord.BandChamfer,
+	faces := slices.Clone(r.state.Payload.Faces)
+	restore := map[int]brepFace{sel.Face: r.state.Payload.Faces[sel.Face]}
+	faces[sel.Face].Region = &profile
+	faces[sel.Face].Delta = math.Max(faces[sel.Face].Delta, delta)
+	band := brepLoopBand{Face: sel.Face, Loop: sel.Loop, Orig: cloneLoopRecord(orig),
+		Setback: *r.call.loop, Sigma: sel.Sigma, Kind: breprecord.BandChamfer,
 		Selected: slices.Clone(selected), CapWalk: capWalk, CapArc: capArc, Restore: restore}
-	eF := r.btopo.Embeds[sel.face]
+	eF := r.state.Topology.Embeds[sel.Face]
 	n := eF.Axis[2]
 	sideZ, sideDelta := band.SideLevel(f)
 	sideRef := eF.Canon(0, 0, sideZ)[n]
@@ -195,20 +195,20 @@ func (r *brepLoopRead) rewritePartialChamfer(sel brepLoopSel, selected []bool,
 		if !on {
 			continue
 		}
-		b := sel.beside[i]
-		pu := r.btopo.Uses[b.use]
+		b := sel.Beside[i]
+		pu := r.state.Topology.Uses[b.Use]
 		if _, ok := restore[pu.Face]; !ok {
-			restore[pu.Face] = r.bp.Faces[pu.Face]
+			restore[pu.Face] = r.state.Payload.Faces[pu.Face]
 		}
 		a := &faces[pu.Face]
-		if b.planar {
-			if err := r.trimPlanar(trims, pu, n, sideRef, r.call.loop.Ds); err != nil {
+		if b.Planar {
+			if err := r.state.TrimPlanar(trims, pu, n, sideRef, r.call.loop.Ds); err != nil {
 				return brepPayload{}, err
 			}
 			a.Delta = math.Max(a.Delta, sideDelta)
 			continue
 		}
-		eA := r.btopo.Embeds[pu.Face]
+		eA := r.state.Topology.Embeds[pu.Face]
 		local := eA.Sign[2] * sideRef
 		if pu.Part == brepRim0 {
 			a.Z0, a.Z0Delta = local, proofbound.AbsSumUpper(math.Max(a.Z0Delta, f.Z0Delta), sideDelta)
@@ -222,18 +222,18 @@ func (r *brepLoopRead) rewritePartialChamfer(sel brepLoopSel, selected []bool,
 				continue
 			}
 			capLoop := profile.Outer
-			if sel.loop > 0 {
-				capLoop = profile.Holes[sel.loop-1]
+			if sel.Loop > 0 {
+				capLoop = profile.Holes[sel.Loop-1]
 			}
 			if err := r.partialTerminalChamfer(sel, orig, capLoop, capWalk, eb, k, sideRef); err != nil {
 				return brepPayload{}, err
 			}
 			end := eb.End[k]
 			if _, ok := restore[end.Face]; !ok {
-				restore[end.Face] = r.bp.Faces[end.Face]
+				restore[end.Face] = r.state.Payload.Faces[end.Face]
 			}
 			if trims[end.Face] == nil {
-				loops, err := offset2d.ProfileCornerLoopsBudget(r.budget, *r.bp.Faces[end.Face].Region)
+				loops, err := offset2d.ProfileCornerLoopsBudget(r.state.Budget, *r.state.Payload.Faces[end.Face].Region)
 				if err != nil {
 					return brepPayload{}, err
 				}
@@ -243,7 +243,7 @@ func (r *brepLoopRead) rewritePartialChamfer(sel brepLoopSel, selected []bool,
 				}
 			}
 			if trims[end.Face][end.Loop][end.Corner] != nil {
-				return brepPayload{}, r.refuse("SL1", `two terminal lines claim one end-face corner`)
+				return brepPayload{}, r.state.Refuse("SL1", `two terminal lines claim one end-face corner`)
 			}
 			trims[end.Face][end.Loop][end.Corner] = eb.Blend[k]
 		}
@@ -254,17 +254,17 @@ func (r *brepLoopRead) rewritePartialChamfer(sel brepLoopSel, selected []bool,
 	}
 	slices.Sort(order)
 	for _, fi := range order {
-		old := r.bp.Faces[fi]
-		loops, err := offset2d.ProfileCornerLoopsBudget(r.budget, *old.Region)
+		old := r.state.Payload.Faces[fi]
+		loops, err := offset2d.ProfileCornerLoopsBudget(r.state.Budget, *old.Region)
 		if err != nil {
 			return brepPayload{}, err
 		}
-		region, connectors, err := offset2d.RewriteProfileBudget(r.budget, *old.Region, loops, trims[fi])
+		region, connectors, err := offset2d.RewriteProfileBudget(r.state.Budget, *old.Region, loops, trims[fi])
 		if err != nil {
 			return brepPayload{}, err
 		}
-		if err := offset2d.AuditRewriteBudget(r.budget, *old.Region, region, loops, trims[fi]); err != nil {
-			return brepPayload{}, r.wrapFace(fi, err)
+		if err := offset2d.AuditRewriteBudget(r.state.Budget, *old.Region, region, loops, trims[fi]); err != nil {
+			return brepPayload{}, r.state.WrapFace(fi, err)
 		}
 		faces[fi].Region = &region
 		for li, segs := range connectors {
@@ -274,10 +274,10 @@ func (r *brepLoopRead) rewritePartialChamfer(sel brepLoopSel, selected []bool,
 		}
 	}
 	if len(band.Terminals) != 2 {
-		return brepPayload{}, r.refuse("SL1", `a two-edge partial chamfer has no two terminal lines`)
+		return brepPayload{}, r.state.Refuse("SL1", `a two-edge partial chamfer has no two terminal lines`)
 	}
-	out := brepPayload{Faces: faces, Xform: r.bp.Xform,
-		LoopBands: append(slices.Clone(r.bp.LoopBands), band)}
+	out := brepPayload{Faces: faces, Xform: r.state.Payload.Xform,
+		LoopBands: append(slices.Clone(r.state.Payload.LoopBands), band)}
 	out.AssignRoles()
 	return out, nil
 }
@@ -289,30 +289,30 @@ func (r *brepLoopRead) partialTerminalChamfer(sel brepLoopSel, orig, contour loo
 	capWalk []int, eb *brepEdgeBlend, k int, sideRef float64) error {
 	v := eb.V[k]
 	seg := -1
-	for _, ui := range r.btopo.Edges[r.matched[eb.Ordinal]] {
-		u := r.btopo.Uses[ui]
-		if u.Face == sel.face && u.Loop == sel.loop && u.Part == brepLoopSeg {
+	for _, ui := range r.state.Topology.Edges[r.state.Matched[eb.Ordinal]] {
+		u := r.state.Topology.Uses[ui]
+		if u.Face == sel.Face && u.Loop == sel.Loop && u.Part == brepLoopSeg {
 			seg = u.Seg
 			break
 		}
 	}
 	if seg < 0 || capWalk[seg] < 0 || capWalk[seg] >= len(contour.Segments) {
-		return r.refuse("SL1", `a terminal has no selected cap segment`)
+		return r.state.Refuse("SL1", `a terminal has no selected cap segment`)
 	}
 	work := freeform.NewFreeformWork()
-	ow, err := capblend.OneLoopCornerLoop(r.budget, loopRecord{Segments: []curveSegment{orig.Segments[seg]}}, work)
+	ow, err := capblend.OneLoopCornerLoop(r.state.Budget, loopRecord{Segments: []curveSegment{orig.Segments[seg]}}, work)
 	if err != nil {
 		return err
 	}
-	cw, err := capblend.OneLoopCornerLoop(r.budget, loopRecord{Segments: []curveSegment{contour.Segments[capWalk[seg]]}}, work)
+	cw, err := capblend.OneLoopCornerLoop(r.state.Budget, loopRecord{Segments: []curveSegment{contour.Segments[capWalk[seg]]}}, work)
 	if err != nil {
 		return err
 	}
 	if len(ow.Walks) != 1 || len(cw.Walks) != 1 {
-		return r.refuse("SL1", `a terminal is not a single straight walk`)
+		return r.state.Refuse("SL1", `a terminal is not a single straight walk`)
 	}
-	f := r.bp.Faces[sel.face]
-	eF := r.btopo.Embeds[sel.face]
+	f := r.state.Payload.Faces[sel.Face]
+	eF := r.state.Topology.Embeds[sel.Face]
 	var capRef [3]float64
 	switch {
 	case eF.Canon(ow.Walks[0].StartU, ow.Walks[0].StartV, f.Z0) == v:
@@ -320,16 +320,16 @@ func (r *brepLoopRead) partialTerminalChamfer(sel brepLoopSel, orig, contour loo
 	case eF.Canon(ow.Walks[0].EndU, ow.Walks[0].EndV, f.Z0) == v:
 		capRef = eF.Canon(cw.Walks[0].EndU, cw.Walks[0].EndV, f.Z0)
 	default:
-		return r.refuse("SL1", `a terminal vertex is not an end of its cap segment`)
+		return r.state.Refuse("SL1", `a terminal vertex is not an end of its cap segment`)
 	}
 	n := eF.Axis[2]
 	side := v
 	side[n] = sideRef
-	endFace := r.bp.Faces[eb.End[k].Face]
-	eEnd := r.btopo.Embeds[eb.End[k].Face]
+	endFace := r.state.Payload.Faces[eb.End[k].Face]
+	eEnd := r.state.Topology.Embeds[eb.End[k].Face]
 	capLocal, sideLocal := eEnd.Local(capRef), eEnd.Local(side)
 	if capLocal[2] != endFace.Z0 || sideLocal[2] != endFace.Z0 {
-		return r.refuse("SL1", `a terminal line leaves its end face`)
+		return r.state.Refuse("SL1", `a terminal line leaves its end face`)
 	}
 	blend := eb.Blend[k]
 	oldA, oldB := eEnd.Canon(blend.FA.U, blend.FA.V, endFace.Z0),
@@ -341,7 +341,7 @@ func (r *brepLoopRead) partialTerminalChamfer(sel brepLoopSel, orig, contour loo
 	case oldB[n] == level && oldA[n] == sideRef:
 		blend.FA, blend.FB = planePoint{U: sideLocal[0], V: sideLocal[1]}, planePoint{U: capLocal[0], V: capLocal[1]}
 	default:
-		return r.refuse("SL1", `a terminal blend has no cap and side feet`)
+		return r.state.Refuse("SL1", `a terminal blend has no cap and side feet`)
 	}
 	blend.Connector = sectionrecord.LineSeg{Start: blend.FA, End: blend.FB, TStart: 0, TEnd: 1}
 	corner := eEnd.Local(v)

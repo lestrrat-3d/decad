@@ -1,12 +1,8 @@
-package decad
+package sectionaudit
 
-import (
-	"github.com/lestrrat-3d/decad/internal/sectionaudit"
-)
-
-// This file orders the §5 audit of a fillet's rewritten section
-// (docs/modify-design.md §5) over internal/sectionaudit/, before any face is
-// built, in the order §4 fixes: S8 (orientation, asked first), S6 (no walk
+// The §5 audit of a fillet's rewritten section (docs/modify-design.md §5)
+// runs before any face is built, in the order §4 fixes: S8 (orientation,
+// asked first), S6 (no walk
 // consumed by its own corners), S7 (no crossing or boundary contact), then S9
 // (nesting). Every test is a closed-form fact of decad's own line and arc
 // segments, so its verdict is the same under every evaluator — never a residual.
@@ -33,25 +29,21 @@ import (
 // the region the caller's section lived in, so no such body exists and it is an
 // S8-family ErrDegenerate (§1 existence test).
 
-type renderedAuditDiagnosticError struct {
+type renderedDiagnosticError struct {
 	cause   error
 	message string
 }
 
-func (e *renderedAuditDiagnosticError) Error() string {
-	return e.message
-}
+func (e *renderedDiagnosticError) Error() string { return e.message }
 
-func (e *renderedAuditDiagnosticError) Unwrap() error {
-	return e.cause
-}
+func (e *renderedDiagnosticError) Unwrap() error { return e.cause }
 
-// renderAuditCoordinates opts a Fillet or Chamfer failure into the detailed
+// RenderCoordinates opts a Fillet or Chamfer failure into the detailed
 // diagnostic without changing the shared audit error seen by Shell.
-func renderAuditCoordinates(err error) error {
-	diagnostic, ok := err.(*sectionaudit.DiagnosticError)
+func RenderCoordinates(err error) error {
+	diagnostic, ok := err.(*DiagnosticError)
 	if !ok {
 		return err
 	}
-	return &renderedAuditDiagnosticError{cause: err, message: diagnostic.Detailed()}
+	return &renderedDiagnosticError{cause: err, message: diagnostic.Detailed()}
 }
