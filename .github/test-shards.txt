@@ -1587,3 +1587,4 @@
 10	0.00	TestLoftContactPartitionOtherPrismCarrier
 10	0.00	TestLoftContactPartitionRealProducerRefusals
 10	0.00	TestLoftContactPartitionSourceAndWorkRefusals
+10	0.00	TestLoftContactTwoLineCapsRealTrapezoid524

@@ -282,7 +282,13 @@ func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 		}
 		scenes[capIndex] = scene
 	}
-	paired, err := sketch.ProfilesTwoRectangleCapsBounded(ctx, scenes, func(n uint64) error {
+	// The public direct-shell route retains its reviewed rectangle admission.
+	// Only the private proof consumes the generalized line-cap producer.
+	publishCaps := sketch.ProfilesTwoLineCapsBounded
+	if reportSeamSize {
+		publishCaps = sketch.ProfilesTwoRectangleCapsBounded
+	}
+	paired, err := publishCaps(ctx, scenes, func(n uint64) error {
 		_, chargeErr := budget.StepN(n)
 		return chargeErr
 	})
