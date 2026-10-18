@@ -281,7 +281,7 @@ func TestPointDeviationMatchesRationalForm(t *testing.T) {
 				displaced.delta = proofarith.MustDyOf(1.0 / 4096)
 				ideal, ok := displaced.idealAt(f)
 				require.True(t, ok, name)
-				charge, ok := displaced.transferCharge(at, ideal)
+				charge, ok := motionbound.SweepTransferCharge(at, ideal.Rot, displaced.delta)
 				wantCharge, wantOK := transferChargeRational(displaced, at, f)
 				require.Equal(t, wantOK, ok, name)
 				require.Zero(t, wantCharge.Cmp(charge), "%s at %v", name, f)

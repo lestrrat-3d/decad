@@ -141,7 +141,7 @@ func noSweepPoll() error { return nil }
 
 // replayDeviation is what replay charges one rounded pose at f: the staged
 // points' distance bound from the ideal path (pointDeviation), and for a
-// positive-displacement planar body the §10.4 transfer charge (transferCharge).
+// positive-displacement planar body the §10.4 transfer charge (motionbound.SweepTransferCharge).
 // A source-box path holds δ zero and charges nothing.
 func (p rotationalSweepPath) replayDeviation(pose r3.Transform, f *big.Rat) (*big.Rat, *big.Rat, bool) {
 	ideal, ok := p.idealAt(f)
@@ -157,24 +157,11 @@ func (p rotationalSweepPath) replayDeviation(pose r3.Transform, f *big.Rat) (*bi
 	if !ok {
 		return nil, nil, false
 	}
-	charge, ok := p.transferCharge(pose, ideal)
+	charge, ok := motionbound.SweepTransferCharge(pose, ideal.Rot, p.delta)
 	if !ok {
 		return nil, nil, false
 	}
 	return proofarith.FloatRat(bound), charge, true
-}
-
-// transferCharge is the §10.4 transfer charge ‖R_r − R_i‖_F·δ of one rounded
-// pose: R_r is the pose's float basis, the linear part proof.DvTransform
-// stages a point through, and R_i the ideal rotation's interval enclosure at
-// the pose's fraction (idealAt). A true point is x + e with |e| <= δ in the
-// body's frame, so its rounded image differs from its ideal one by the held
-// deviation plus (R_r − R_i)·e, whose length is at most the Frobenius norm of
-// R_r − R_i times δ. The norm is the upper bound over every member of the
-// enclosure (motionbound.MagnitudeSquaredUpper). A translating path's enclosure is its
-// From basis exactly, which the rounded pose keeps, so it charges zero.
-func (p rotationalSweepPath) transferCharge(pose r3.Transform, ideal sweepIdealPose) (*big.Rat, bool) {
-	return motionbound.SweepTransferCharge(pose, ideal.Rot, p.delta)
 }
 
 // pointDeviation maps the exact source points through the read query pose,

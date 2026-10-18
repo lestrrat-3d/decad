@@ -3007,8 +3007,8 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   in the test, and lies below `2⁻⁴⁰·δ`. Leg shown to fail: the charge zeroed, the rotating fixture's
   charge reads zero.
 - Depends on: PR 18.
-- Shipped. `rotationalSweepPath.transferCharge` in `contact_sweep_rotation.go` computes the charge and
-  `replayDeviation` returns it, so replay (`contact_sweep_replay.go`) and the rotating bracket's
+- Shipped. `replayDeviation` calls `motionbound.SweepTransferCharge` and returns its charge, so replay
+  (`contact_sweep_replay.go`) and the rotating bracket's
   narrowing read the same figure. `apitest/contact_band_test.go`'s knob falling onto the floor replays its
   bracket's left edge, whose proven gap is far under `δ`.
 

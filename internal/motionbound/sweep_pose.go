@@ -55,6 +55,12 @@ func SweepIdealPoseAt(fromRot IvMat, fromT RatVec, delta [3]proofarith.Dyadic,
 
 // SweepTransferCharge bounds the displacement of a point within delta of a
 // source point when the rounded pose basis differs from the ideal enclosure.
+// A true point is x + e with |e| <= delta in the body's frame. Its rounded
+// image differs from its ideal one by the held source-point deviation plus
+// (R_r - R_i)·e, where R_r is the rounded basis and R_i is any member of the
+// ideal rotation enclosure. The Frobenius norm of that basis difference times
+// delta bounds the latter term. The norm is rounded upward over every member
+// of the enclosure. A translating path retains its From basis and charges zero.
 func SweepTransferCharge(pose r3.Transform, rot ScaledIvMat, delta proofarith.Dyadic) (*big.Rat, bool) {
 	if delta.Sign() == 0 {
 		return new(big.Rat), true
