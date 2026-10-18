@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
