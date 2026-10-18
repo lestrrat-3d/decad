@@ -46,12 +46,23 @@ func Build(
 	vertexBound []float64,
 ) (Result, error) {
 	var result Result
-	err := build(ctx, verts, tris, facetFace, facePlanar, vertexBound, &result)
+	err := build(ctx, proofbound.NewWorkBudget(ctx), verts, tris, facetFace, facePlanar, vertexBound, &result)
+	return result, err
+}
+
+// BuildWithBudget charges the caller's shared proof counter. The caller
+// precharges bounded container storage before this function allocates it.
+func BuildWithBudget(ctx context.Context, budget *proofbound.WorkBudget,
+	verts []r3.Vec, tris [][3]int, facetFace []int, facePlanar map[int]bool,
+	vertexBound []float64) (Result, error) {
+	var result Result
+	err := build(ctx, budget, verts, tris, facetFace, facePlanar, vertexBound, &result)
 	return result, err
 }
 
 func build(
 	ctx context.Context,
+	budget *proofbound.WorkBudget,
 	verts []r3.Vec,
 	tris [][3]int,
 	facetFace []int,
@@ -59,7 +70,9 @@ func build(
 	vertexBound []float64,
 	result *Result,
 ) error {
-	budget := proofbound.NewWorkBudget(ctx)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := budget.Err(); err != nil {
 		return err
 	}

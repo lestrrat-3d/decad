@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/lestrrat-3d/decad/internal/facetedtopology"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
@@ -27,6 +28,21 @@ func buildTopology(
 	vertexBound []float64,
 	axialSectionJoin bool,
 ) error {
+	return buildTopologyWithBudget(ctx, nil, alloc, verts, tris, facetFace,
+		facePlanar, vertexBound, axialSectionJoin)
+}
+
+func buildTopologyWithBudget(
+	ctx context.Context,
+	budget *proofbound.WorkBudget,
+	alloc topo.Alloc,
+	verts []r3.Vec,
+	tris [][3]int,
+	facetFace []*topo.Face,
+	facePlanar map[*topo.Face]bool,
+	vertexBound []float64,
+	axialSectionJoin bool,
+) error {
 	faceID := map[*topo.Face]int{}
 	faces := []*topo.Face{}
 	facetID := make([]int, len(facetFace))
@@ -41,7 +57,13 @@ func buildTopology(
 		}
 		facetID[i] = id
 	}
-	plan, err := facetedtopology.Build(ctx, verts, tris, facetID, planarID, vertexBound)
+	var plan facetedtopology.Result
+	var err error
+	if budget == nil {
+		plan, err = facetedtopology.Build(ctx, verts, tris, facetID, planarID, vertexBound)
+	} else {
+		plan, err = facetedtopology.BuildWithBudget(ctx, budget, verts, tris, facetID, planarID, vertexBound)
+	}
 	if err != nil {
 		return err
 	}
