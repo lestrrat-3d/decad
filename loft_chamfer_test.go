@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -49,26 +50,26 @@ func notchedLoft(t *testing.T, withBore bool) *Body {
 }
 
 func TestLoftCapBandMotionRequiresReflexVertexIndices(t *testing.T) {
-	outer := capBlendLoopMesh{
-		capPts:      []planePoint{pt(1, 1)},
-		capLoV:      []int{2},
-		capHiV:      []int{4},
-		arcCount:    []int{1},
-		capArcStart: []int{0},
+	outer := capblend.LoopMesh{
+		CapPts:      []planePoint{pt(1, 1)},
+		CapLoV:      []int{2},
+		CapHiV:      []int{4},
+		ArcCount:    []int{1},
+		CapArcStart: []int{0},
 	}
 	vertices := make([]r3.Vec, 6)
 	motion := []float64{1, 1, math.Inf(1), 1, math.Inf(1), 1}
 	maxMotion, err := tessellation.LoftCapBandFiniteMotion(
-		outer.arcCount, outer.capArcStart, outer.capLoV, outer.capHiV,
-		len(outer.capPts), vertices, motion)
+		outer.ArcCount, outer.CapArcStart, outer.CapLoV, outer.CapHiV,
+		len(outer.CapPts), vertices, motion)
 	require.NoError(t, err)
 	require.Equal(t, 1.0, maxMotion)
 	require.Equal(t, 0.0, motion[2])
 	require.Equal(t, 0.0, motion[4])
 	motion = []float64{1, math.Inf(1), 1, 1, math.Inf(1), 1}
 	_, err = tessellation.LoftCapBandFiniteMotion(
-		outer.arcCount, outer.capArcStart, outer.capLoV, outer.capHiV,
-		len(outer.capPts), vertices, motion)
+		outer.ArcCount, outer.CapArcStart, outer.CapLoV, outer.CapHiV,
+		len(outer.CapPts), vertices, motion)
 	require.ErrorIs(t, err, ErrUnsupported, "an equal count at different vertices cannot prove the cap slab")
 }
 

@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/brepwallmesh"
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
@@ -229,15 +230,15 @@ func TestCapBlendSideRingReachesArcNaturalEnd(t *testing.T) {
 	loops := cbp.Loops()
 	require.Len(t, loops, 1)
 	arc := onlyArc(t, loops[0].Segments)
-	lm, err := chordCapBlendLoop(t.Context(), proofbound.NewWorkBudget(t.Context()), cbp, 0, loops[0], 0.2, freeform.NewFreeformWork())
+	lm, err := capblend.ChordLoop(t.Context(), proofbound.NewWorkBudget(t.Context()), cbp, 0, loops[0], 0.2, freeform.NewFreeformWork())
 	require.NoError(t, err)
 	found := false
-	for j, p := range lm.sidePts {
+	for j, p := range lm.SidePts {
 		if p != arc.End {
 			continue
 		}
 		found = true
-		gap := requireReachesArcEnd(t, arc, p.U, p.V, lm.sideBound[j])
+		gap := requireReachesArcEnd(t, arc, p.U, p.V, lm.SideBound[j])
 		require.Greater(t, gap, 1e-12, `End sits well off the denoted point`)
 	}
 	require.True(t, found, `one side sample sits at End`)
