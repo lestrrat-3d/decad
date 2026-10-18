@@ -103,7 +103,7 @@ func tessellateAllEdgeChamfer(ctx context.Context, body *Body, p allEdgeChamferP
 				meshIndices = append(meshIndices, meshIndex)
 				hole = append(hole, len(points)-1)
 			}
-			if signedLoopArea(points, hole) > 0 {
+			if triangulation.SignedLoopArea(points, hole) > 0 {
 				slices.Reverse(hole)
 			}
 			loops = append(loops, hole)
@@ -160,13 +160,4 @@ func tessellateAllEdgeChamfer(ctx context.Context, body *Body, p allEdgeChamferP
 		}
 	}
 	return mesh, nil
-}
-
-func signedLoopArea(points []sectionrecord.Point2, loop []int) float64 {
-	var sum float64
-	for i, id := range loop {
-		a, b := points[id], points[loop[(i+1)%len(loop)]]
-		sum += a.U*b.V - a.V*b.U
-	}
-	return sum
 }
