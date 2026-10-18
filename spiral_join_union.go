@@ -160,7 +160,7 @@ func spiralValidateFirstUnion(ctx context.Context, blank, tooth *Body,
 		proof, admission.short); err != nil || !ok {
 		return false, err
 	}
-	if _, ok, err := spiralHeldHeelSeamProof(ctx, result,
+	if _, ok, err := spiralsector.HeldHeelSeamProof(ctx, result,
 		groups.blankHeel, groups.toothRootHeel, proof.HeelSeam, radial[1]); err != nil || !ok {
 		return false, err
 	}
@@ -168,7 +168,7 @@ func spiralValidateFirstUnion(ctx context.Context, blank, tooth *Body,
 	if err != nil || !ok {
 		return false, err
 	}
-	if _, ok, err := spiralHeldToeSeamProof(ctx, result,
+	if _, ok, err := spiralsector.HeldToeSeamProof(ctx, result,
 		groups.blankToe, groups.toothRootToe, toeSeam, radial[0]); err != nil || !ok {
 		return false, err
 	}
