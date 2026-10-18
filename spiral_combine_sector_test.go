@@ -40,7 +40,7 @@ func TestSpiralCopyKeepsToeCertificateOnlyUnderExactRotation(t *testing.T) {
 	cone := recordedToeCone(t)
 
 	// Leg 1: the inputs reproduce the certified original side.
-	_, ok := spiralToolOuterGap(cone, recordedToeRoot, recordedToeOuter, 1)
+	_, ok := spiralsector.ToolOuterGap(cone, recordedToeRoot, recordedToeOuter, 1)
 	require.True(t, ok)
 	original := toeResidual(cone, recordedToeRoot, big.NewRat(1, 1), big.NewRat(1, 1))
 	require.Equal(t, 1, original.Sign())

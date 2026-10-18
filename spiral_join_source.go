@@ -4,7 +4,6 @@ import (
 	"context"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetedtopology"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
@@ -13,7 +12,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/spiralsector"
 	"github.com/lestrrat-3d/decad/internal/splinebezier"
 	"github.com/lestrrat-3d/r3"
-	"github.com/lestrrat-3d/sketch"
 )
 
 func exactSpiralBlank(blank *Body) (*spiralBlankSource, bool) {
@@ -45,7 +43,7 @@ func certifySpiralFirstJoin(ctx context.Context, blank, tooth *Body) (*spiralFir
 		return nil, false, nil
 	}
 	trim := p.LoftFacesTrim
-	if !spiralTrimSourceCurrent(trim) || !facetedtopology.CapGroupsPresent(p.Src, p.FaceOf, len(p.Groups),
+	if !spiralsector.TrimSourceCurrent(trim) || !facetedtopology.CapGroupsPresent(p.Src, p.FaceOf, len(p.Groups),
 		trim.ToeCapGroup, trim.HeelCapGroup) {
 		return nil, false, nil
 	}
@@ -69,11 +67,11 @@ func certifySpiralFirstJoin(ctx context.Context, blank, tooth *Body) (*spiralFir
 		lfAdd(lfMul(m, heelX), b).Sign() <= 0 {
 		return nil, false, nil
 	}
-	toeGap, ok := spiralToolOuterGap(trim.Toe, section.ToeRoot, section.ToeOuter, 1)
+	toeGap, ok := spiralsector.ToolOuterGap(trim.Toe, section.ToeRoot, section.ToeOuter, 1)
 	if !ok {
 		return nil, false, nil
 	}
-	heelGap, ok := spiralToolOuterGap(trim.Heel, section.Ded, section.HeelOuter, -1)
+	heelGap, ok := spiralsector.ToolOuterGap(trim.Heel, section.Ded, section.HeelOuter, -1)
 	if !ok {
 		return nil, false, nil
 	}
@@ -174,67 +172,6 @@ func certifySpiralFirstJoin(ctx context.Context, blank, tooth *Body) (*spiralFir
 	return proof, true, nil
 }
 
-func spiralTrimSourceCurrent(trim *loftFacesTrimRecord) bool {
-	if trim == nil || trim.Source == nil || !facetedrecord.PointSourceCurrent(trim.Source) ||
-		trim.Toe == nil || trim.Heel == nil || len(trim.Maps) != 9 || len(trim.Bounds) != 9 ||
-		!orderedLoftFacesConeLimits(trim.Toe, trim.Heel, trim.Base) ||
-		!trim.Base.LoftFacesPrimitive || trim.Base.LoftFacesCap == nil ||
-		trim.Base.LoftFacesCap.Source != trim.Source ||
-		len(trim.Base.LoftFacesCap.Maps) != 9 || len(trim.Base.LoftFacesCap.Bounds) != 9 ||
-		len(trim.StationGroup) != len(trim.Source.SourceStation) ||
-		len(trim.Base.LoftFacesCap.StationGroup) != len(trim.Source.SourceStation) ||
-		len(trim.Source.Profile.Outer.Segments) != 6 || len(trim.Source.Source.Entities) != 6 ||
-		len(trim.Source.Profile.Holes) != 0 {
-		return false
-	}
-	// A tangent record on either side must be the same one, current for the
-	// heel cone and the final map. No record on either side is the strict case.
-	if (trim.Tangent != nil || trim.Base.LoftFacesCap.Tangent != nil) && !spiralsector.SpiralTangentRecordCurrent(trim) {
-		return false
-	}
-	for _, entry := range trim.Source.Source.Profile.Outer {
-		if entry.Partial {
-			return false
-		}
-	}
-	segments := trim.Source.Profile.Outer.Segments
-	entities := trim.Source.Source.Entities
-	for _, group := range [...]int{0, 2} {
-		if _, ok := segments[group].(fitSplineSeg); !ok {
-			return false
-		}
-		if _, ok := entities[group].(*sketch.FitSpline); !ok {
-			return false
-		}
-	}
-	for _, group := range [...]int{1, 4} {
-		if _, ok := segments[group].(arcSeg); !ok {
-			return false
-		}
-		if _, ok := entities[group].(*sketch.Arc); !ok {
-			return false
-		}
-	}
-	for _, group := range [...]int{3, 5} {
-		if _, ok := segments[group].(lineSeg); !ok {
-			return false
-		}
-		if _, ok := entities[group].(*sketch.Line); !ok {
-			return false
-		}
-	}
-	box, err := revolveloftfaces.LfSourceBox(trim.Source)
-	if err != nil {
-		return false
-	}
-	for _, mapped := range trim.Maps {
-		if loftface.PositiveDenominator(mapped, box) != nil {
-			return false
-		}
-	}
-	return true
-}
-
 // The whole ruled source stays in positive Y and above zero signed radius
 // on the blank's root meridian. The opposite root-circle arc passes negative
 // Y, while a root of the squared implicit with negative signed radius would
@@ -271,22 +208,4 @@ func spiralRootToolX(m, b *big.Rat, cone *pointConeLimit) (*big.Rat, bool) {
 		return nil, false
 	}
 	return lfDiv(lfSub(cone.Apex, lfMul(cone.Slope, b)), denominator), true
-}
-
-// The exact straight blank cap meridian and tool cone differ affinely.
-// Endpoint signs and the largest absolute endpoint residual bound their
-// separation over the entire finite blank cap generator.
-func spiralToolOuterGap(cone *pointConeLimit, first, last planePoint, sign int) (*big.Rat, bool) {
-	residual := func(point planePoint) *big.Rat {
-		return lfSub(lfAdd(lfF(point.U), lfMul(cone.Slope, lfF(point.V))), cone.Apex)
-	}
-	a, z := residual(first), residual(last)
-	if a.Sign() != sign || z.Sign() != sign {
-		return nil, false
-	}
-	a, z = lfAbs(a), lfAbs(z)
-	if a.Cmp(z) < 0 {
-		return z, true
-	}
-	return a, true
 }

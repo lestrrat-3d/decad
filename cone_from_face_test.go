@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/spiralsector"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -79,7 +80,7 @@ func TestConeFromFaceIsStrictlyOffBlankFaces(t *testing.T) {
 			require.NoError(t, doc.requireLive(blank), "the source stays live")
 			limit, ok := exactPointCone(cone)
 			require.True(t, ok, "the result must be an exact point cone")
-			gap, ok := spiralToolOuterGap(limit, tc.first, tc.last, tc.sign)
+			gap, ok := spiralsector.ToolOuterGap(limit, tc.first, tc.last, tc.sign)
 			require.True(t, ok, "both face ends must lie strictly on the certified side")
 			require.Positive(t, gap.Sign())
 			require.True(t, spiralFiniteConeSide(limit, tc.first, tc.last, tc.sign),
