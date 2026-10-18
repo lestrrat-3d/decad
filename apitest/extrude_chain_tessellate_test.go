@@ -59,7 +59,7 @@ func TestExtrudeChainTessellatesOneWallRibbon(t *testing.T) {
 
 // TestExtrudeChainTessellatesThreeWallRibbon is T132's rectangle-minus-one-
 // side chain, tessellated: three walls, six triangles, and the free-edge
-// attribution requireSheetMesh proves matches the body's own recorded free
+// attribution topobuild.RequireSheetMesh proves matches the body's own recorded free
 // edges — the same census the profile-fed sheet test runs
 // (tessellate_sheet_test.go's TestSurfaceExtrudeSheetTessellates).
 func TestExtrudeChainTessellatesThreeWallRibbon(t *testing.T) {

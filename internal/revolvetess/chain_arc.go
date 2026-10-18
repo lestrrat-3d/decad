@@ -1,10 +1,11 @@
-package decad
+package revolvetess
 
 import (
 	"context"
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
@@ -15,21 +16,21 @@ import (
 	"github.com/lestrrat-3d/decad/internal/topobuild"
 )
 
-// tessellateChainArcSweep restates one straight, off-axis source chain swept
+// TessellateChainArcSweep restates one straight, off-axis source chain swept
 // through one arc. The two endpoint rings are the complete open meridian;
 // their angular cells share vertices by index and leave exactly four rims.
 // Other chain shapes need their own meridian station and clearance proof.
-func tessellateChainArcSweep(ctx context.Context, b *Body, sp chainSweepPayload,
-	chord float64, verify Verification) (*Mesh, error) {
-	refuse := func(detail string) (*Mesh, error) {
-		return nil, fmt.Errorf(`%w: %s`, ErrUnsupported, detail)
+func TessellateChainArcSweep(ctx context.Context, b *topo.Body, sp chainSweepPayload,
+	chord float64, verify Level) (*topo.Mesh, error) {
+	refuse := func(detail string) (*topo.Mesh, error) {
+		return nil, fmt.Errorf(`%w: %s`, decaderr.ErrUnsupported, detail)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	if !sp.Arc || len(sp.Spans) != 0 || len(sp.Revolve.Chains) != 1 ||
 		len(sp.Revolve.Chains[0].Segments) != 1 || sp.Revolve.Full ||
-		sp.Revolve.SectionDelta != 0 || b.Kind() != BodySheet || len(b.Faces()) != 1 {
+		sp.Revolve.SectionDelta != 0 || b.Kind != topo.BodySheet || len(topobuild.Faces(b)) != 1 {
 		return refuse("a chain arc Sweep mesh needs one straight source and one partial arc wall")
 	}
 	if _, ok := sp.Revolve.Chains[0].Segments[0].(lineSeg); !ok {
@@ -94,7 +95,7 @@ func tessellateChainArcSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 	if !ok {
 		return refuse("the chain arc Sweep has no enclosed axis basis")
 	}
-	face := b.Faces()[0]
+	face := topobuild.Faces(b)[0]
 	for n := 8; n <= maxChainSweepArcCells; n *= 2 {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -138,27 +139,27 @@ func tessellateChainArcSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 		if proofbound.IsNonFinite(bound) || bound > chord {
 			continue
 		}
-		mesh := bornMesh(&Mesh{n: topo.Mesh{Vertices: verts, CoordBound: math.Max(coord, vertexGap)}})
+		mesh := &topo.Mesh{Vertices: verts, CoordBound: math.Max(coord, vertexGap)}
 		revolvemesh.EmitCellTriangles(samples[0][0], samples[0][1], n, func(tri [3]int) {
-			topobuild.AddTriangle(&mesh.n, tri, faceNode(face))
+			topobuild.AddTriangle(mesh, tri, face)
 		})
 		if rp.Reflected() {
-			for i := range mesh.n.Triangles {
-				mesh.n.Triangles[i][1], mesh.n.Triangles[i][2] = mesh.n.Triangles[i][2], mesh.n.Triangles[i][1]
+			for i := range mesh.Triangles {
+				mesh.Triangles[i][1], mesh.Triangles[i][2] = mesh.Triangles[i][2], mesh.Triangles[i][1]
 			}
 		}
-		topobuild.SetFaceBound(&mesh.n, faceNode(face), bound)
-		if err := requireMeshAudit(ctx, true, b, mesh); err != nil {
+		topobuild.SetFaceBound(mesh, face, bound)
+		if err := topobuild.RequireSheetMesh(ctx, b, mesh); err != nil {
 			return nil, err
 		}
-		audit, err := revolvemesh.RequireRevolveFacetAreas(budget, mesh.n.Vertices, mesh.n.Triangles,
-			mesh.n.CoordBound)
+		audit, err := revolvemesh.RequireRevolveFacetAreas(budget, mesh.Vertices, mesh.Triangles,
+			mesh.CoordBound)
 		if err != nil {
 			return nil, topobuild.LiftAuditError(err)
 		}
 		if verify >= VerifyBoundary {
-			if err := revolvemesh.RevolveContactAudit(budget, audit, mesh.n.Triangles,
-				mesh.n.CoordBound); err != nil {
+			if err := revolvemesh.RevolveContactAudit(budget, audit, mesh.Triangles,
+				mesh.CoordBound); err != nil {
 				return nil, topobuild.LiftAuditError(err)
 			}
 		}
@@ -172,10 +173,10 @@ func tessellateChainArcSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 			if err != nil {
 				return nil, err
 			}
-			mesh.n.AreaSlack = proofbound.AbsSumUpper(
+			mesh.AreaSlack = proofbound.AbsSumUpper(
 				proofbound.ProductUpper(float64(n), proofbound.AbsSumUpper(cell, axisAllow)),
-				revolvemesh.CoordinateAreaAllow(mesh.n.Vertices, mesh.n.Triangles, coord))
-			if proofbound.IsNonFinite(mesh.n.AreaSlack) {
+				revolvemesh.CoordinateAreaAllow(mesh.Vertices, mesh.Triangles, coord))
+			if proofbound.IsNonFinite(mesh.AreaSlack) {
 				return refuse("the chain arc Sweep has no finite area slack")
 			}
 		}

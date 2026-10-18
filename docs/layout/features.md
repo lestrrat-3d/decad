@@ -15,7 +15,7 @@ The rules for rows live in `docs/layout.md`.
 | `mirror.go` | `MirrorPlane` and `Mirrored`/`MirroredCopy`. See mirror-pattern §4. |
 | `mirror_join.go` | `WithJoin`, face selection and document commit around `internal/mirrorjoin/`'s record rewrite. See mirror-pattern §5. |
 | `pattern.go` | Public pattern specs, entry points and payload adapters. See mirror-pattern §4.3, §6. |
-| `surface.go` | `WithSurfaceResult`, sheet refusal and per-face free-edge chain counts over `internal/surfacegroup/`; `internal/topobuild/` builds shells and lumps. See surface §2-§4, §7, §11. |
+| `surface.go` | `WithSurfaceResult`, sheet refusal and the handle adapter for `internal/topobuild/`'s free-edge chain counts. See surface §2–§4, §7, §11. |
 | `feature_options.go` | Public feature option tiers and adapters to `internal/featureoption/`. See surface §4, sweep §2 and loft §2. |
 | `patch.go` | `PatchProfile`: records the profile and builds its face through `patchchain.Build`. See surface §5.1. |
 | `thicken.go` | `Thicken`. See surface §16. |

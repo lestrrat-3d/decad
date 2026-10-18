@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/revolvetess"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -1332,7 +1333,7 @@ func heldPrimitiveFloorOf(b *Body) float64 {
 // coordDisplacementOf is the count-INDEPENDENT coordinate reservation an
 // operand's own tessellation spends before it chords anything: for a revolve,
 // docs/tessellation-design.md §8's deltaC and deltaR ceilings composed
-// (resolveRevolve). Every other payload class answers zero, and so does a
+// (revolvetess.ResolveRevolve). Every other payload class answers zero, and so does a
 // revolve whose resolution fails — the tessellation that follows refuses it
 // with its own sentinel, and inventing a tolerance here would only hide which
 // one.
@@ -1344,7 +1345,7 @@ func coordDisplacementOf(ctx context.Context, b *Body) float64 {
 	if !ok {
 		return 0
 	}
-	res, err := resolveRevolve(ctx, rp)
+	res, err := revolvetess.ResolveRevolve(ctx, rp)
 	if err != nil {
 		return 0
 	}

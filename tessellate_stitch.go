@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolvetess"
 	"github.com/lestrrat-3d/decad/internal/stitchrecord"
 	"github.com/lestrrat-3d/decad/internal/stitchweld"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -32,7 +33,7 @@ import (
 // Unstitch siblings re-welded along their original edges (§10.2). Other
 // curved sources refuse with ErrUnsupported. An OPEN
 // all-planar sheet runs docs/tessellation-design.md §1.2's manifold-with-
-// boundary audit (requireSheetMesh, tessellation.RequireSheetVertexLinks) in the
+// boundary audit (topobuild.RequireSheetMesh) in the
 // closed-mesh audit's place, exactly as a surface-result prism or revolve
 // sheet's own mesh does (docs/surface-design.md §10).
 
@@ -280,10 +281,11 @@ func tessellateStitchCurved(ctx context.Context, b *Body, sp stitchPayload, chor
 		return nil, err
 	}
 
-	sourceMesh, err := tessellateRevolve(ctx, sourceBody, rp, chord, verify)
+	sourceNode, err := revolvetess.TessellateRevolve(ctx, &sourceBody.n, rp, chord, revolvetess.Level(verify))
 	if err != nil {
 		return nil, err
 	}
+	sourceMesh := bornMesh(&Mesh{n: *sourceNode})
 	mesh := bornMesh(&Mesh{
 		n: topo.Mesh{
 			Vertices:  append([]r3.Vec(nil), sourceMesh.n.Vertices...),
@@ -448,7 +450,7 @@ func tessellateStitch(ctx context.Context, b *Body, sp stitchPayload) (*Mesh, er
 	// A BodySheet runs docs/tessellation-design.md §1.2's manifold-with-
 	// boundary audit in the closed-mesh audit's place, exactly as a
 	// surface-result prism or revolve sheet's own mesh does
-	// (docs/surface-design.md §10): requireSheetMesh proves every free
+	// (docs/surface-design.md §10): topobuild.RequireSheetMesh proves every free
 	// directed edge attributes, face by face and chain count by chain
 	// count, to the body's own recorded free Edges — the one leg Stitch's
 	// own build never itself checked, since stitchrecord.CheckClosure only ever

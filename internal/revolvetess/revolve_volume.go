@@ -1,9 +1,10 @@
-package decad
+package revolvetess
 
 import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/revolveproof"
+	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
 // This file adapts docs/tessellation-design.md §13's increment T4
@@ -45,13 +46,8 @@ func revolveFreeformMeridianMoment(p *revolvePlan) float64 {
 	return revolveproof.FreeformMeridianMoment(p.Freeform, revolveWalkView(p.resolved), p.Sweep, p.rp.Full)
 }
 
-// revolveSweepUpper reads the outward bound on the swept angle.
-func revolveSweepUpper(p *revolvePlan) float64 {
-	return revolveproof.SweepUpper(p.Sweep, p.rp.Full)
-}
-
 // revolveSymDiff reads the occupied-volume difference bound.
-func revolveSymDiff(m *Mesh, p *revolvePlan, angular *big.Rat, deltaC, deltaR float64) (float64, error) {
-	return revolveproof.SymDiff(m.n.Vertices, m.n.Triangles, revolveWalkView(p.resolved),
+func revolveSymDiff(m *topo.Mesh, p *revolvePlan, angular *big.Rat, deltaC, deltaR float64) (float64, error) {
+	return revolveproof.SymDiff(m.Vertices, m.Triangles, revolveWalkView(p.resolved),
 		p.Meridian, p.Sweep, p.rp.Full, revolveFreeformMeridianMoment(p), angular, deltaC, deltaR)
 }

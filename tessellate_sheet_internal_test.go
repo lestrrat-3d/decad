@@ -6,6 +6,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -124,14 +125,14 @@ func TestSheetAreaSlackIsBelowTheSolidsOnTheHoledFixture(t *testing.T) {
 // attribution's own falsifier. The public API can never construct a mesh
 // whose free boundary is attributed to the wrong face — tessellation.ChordLoop always
 // attributes a wall's own triangles to its own face — so this test hand-
-// corrupts a real mesh's SourceFaces to prove requireSheetMesh actually
+// corrupts a real mesh's SourceFaces to prove topobuild.RequireSheetMesh actually
 // refuses the mismatch it exists to catch, rather than passing vacuously.
 func TestRequireSheetMeshRejectsBrokenFreeEdgeAttribution(t *testing.T) {
 	t.Parallel()
 	sheet := internalSheetBoxBody(t, New(), 0, 0, 10, 10, 5)
 	mesh, err := tessellateContext(t.Context(), sheet, units.Millimeters(1), VerifyAll)
 	require.NoError(t, err)
-	require.NoError(t, requireSheetMesh(t.Context(), sheet, mesh), `premise: the real mesh passes the audit as built`)
+	require.NoError(t, topobuild.RequireSheetMesh(t.Context(), &sheet.n, &mesh.n), `premise: the real mesh passes the audit as built`)
 
 	faceA := mesh.n.Source[0]
 	var faceB *Face
@@ -146,7 +147,7 @@ func TestRequireSheetMeshRejectsBrokenFreeEdgeAttribution(t *testing.T) {
 	broken := bornMesh(&Mesh{n: mesh.n})
 	broken.n.Source = append([]*topo.Face(nil), mesh.n.Source...)
 	broken.n.Source[0] = faceNode(faceB)
-	err = requireSheetMesh(t.Context(), sheet, broken)
+	err = topobuild.RequireSheetMesh(t.Context(), &sheet.n, &broken.n)
 	require.Error(t, err, `reassigning one triangle's source face unbalances the chain count on both faces`)
 	require.ErrorIs(t, err, ErrDegenerate)
 }
@@ -169,7 +170,7 @@ func TestRequireSheetMeshCatchesADuplicatedDirectedEdge(t *testing.T) {
 	broken.n.Triangles[1] = [3]int{broken.n.Triangles[0][0], broken.n.Triangles[0][1], broken.n.Triangles[0][2]}
 	broken.n.Source = append([]*topo.Face(nil), mesh.n.Source...)
 
-	err = requireSheetMesh(t.Context(), sheet, broken)
+	err = topobuild.RequireSheetMesh(t.Context(), &sheet.n, &broken.n)
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrDegenerate)
 }
@@ -214,6 +215,6 @@ func TestRequireSheetMeshAndVertexLinksAdmitAClosedSheet(t *testing.T) {
 	body := bornBody(&Body{n: topo.Body{Lumps: []*topo.Lump{lumpNode(bornLump(&Lump{n: topo.Lump{Shells: []*topo.FaceShell{faceShellNode(bornFaceShell(&FaceShell{n: topo.FaceShell{Faces: []*topo.Face{faceNode(faceA), faceNode(faceB)}}}))}}}))}}})
 	require.Empty(t, freeChainCountsByFace(body), `premise: this body records no free edge`)
 
-	require.NoError(t, requireSheetMesh(t.Context(), body, mesh), `no free edge on either side: the manifold-with-boundary audit passes for the same reason the closed-mesh audit would`)
+	require.NoError(t, topobuild.RequireSheetMesh(t.Context(), &body.n, &mesh.n), `no free edge on either side: the manifold-with-boundary audit passes for the same reason the closed-mesh audit would`)
 	require.NoError(t, tessellation.RequireSheetVertexLinks(t.Context(), len(mesh.n.Vertices), mesh.n.Triangles))
 }
