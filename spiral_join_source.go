@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetedtopology"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
@@ -253,7 +254,7 @@ func certifySpiralFirstJoin(ctx context.Context, blank, tooth *Body) (*spiralFir
 }
 
 func spiralTrimSourceCurrent(trim *loftFacesTrimRecord) bool {
-	if trim == nil || trim.Source == nil || !pointSourceCurrent(trim.Source) ||
+	if trim == nil || trim.Source == nil || !facetedrecord.PointSourceCurrent(trim.Source) ||
 		trim.Toe == nil || trim.Heel == nil || len(trim.Maps) != 9 || len(trim.Bounds) != 9 ||
 		!orderedLoftFacesConeLimits(trim.Toe, trim.Heel, trim.Base) ||
 		!trim.Base.LoftFacesPrimitive || trim.Base.LoftFacesCap == nil ||

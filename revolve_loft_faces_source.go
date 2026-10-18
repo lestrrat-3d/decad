@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetedtopology"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
@@ -139,7 +140,7 @@ func revolveLoftFacesTrimCurrent(tooth *Body, trim *loftFacesTrimRecord) bool {
 		return false
 	}
 	if p.Xform != r3.Identity() || trim == nil || trim.Source == nil ||
-		!pointSourceCurrent(trim.Source) ||
+		!facetedrecord.PointSourceCurrent(trim.Source) ||
 		!revolveLoftFacesConeCurrent(bodyHandle(trim.ToeTool), trim.Toe) ||
 		!revolveLoftFacesConeCurrent(bodyHandle(trim.HeelTool), trim.Heel) ||
 		len(trim.Maps) < 3 || len(trim.Maps) > 64 ||

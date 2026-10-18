@@ -3,6 +3,7 @@ package decad
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/stretchr/testify/require"
 )
@@ -88,7 +89,7 @@ func TestCurvedArcSeamRefusesChangedStationAndIncompleteRun(t *testing.T) {
 		blank, trimmed, trim := neutralArcSeamSource(t)
 		sectionIndex, contact, stations := neutralArcSeamContact(t, blank, trimmed, trim)
 		trim.Source.SourceStation[stations[1]].U += 0.001
-		require.False(t, pointSourceCurrent(trim.Source))
+		require.False(t, facetedrecord.PointSourceCurrent(trim.Source))
 		_, _, _, ok, err := revolveLoftFacesCertifiedArcPatches(t.Context(), blank, trimmed,
 			sectionIndex, contact.Segment, contact.Band,
 			loftFaceInterval{Lo: contact.TLo, Hi: contact.THi}, stations)
@@ -100,7 +101,7 @@ func TestCurvedArcSeamRefusesChangedStationAndIncompleteRun(t *testing.T) {
 		sectionIndex, contact, stations := neutralArcSeamContact(t, blank, trimmed, trim)
 		require.Positive(t, trim.Source.SourceStationRound)
 		trim.Source.SourceStationRound = 0
-		require.False(t, pointSourceCurrent(trim.Source))
+		require.False(t, facetedrecord.PointSourceCurrent(trim.Source))
 		_, _, _, ok, err := revolveLoftFacesCertifiedArcPatches(t.Context(), blank, trimmed,
 			sectionIndex, contact.Segment, contact.Band,
 			loftFaceInterval{Lo: contact.TLo, Hi: contact.THi}, stations)

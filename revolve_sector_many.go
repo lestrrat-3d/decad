@@ -57,7 +57,7 @@ func buildRevolveLoftSectorsJoin(ctx context.Context, d *Document, ref producerI
 	cert *revolveLoftSectorCertificate, sources []facetedPayload) (*Body, *revolvedSectionRing, error) {
 	if cert == nil || cert.Trim == nil || cert.Blank == nil ||
 		len(sources) == 0 || len(sources) > 128 ||
-		!pointSourceCurrent(cert.Trim.Base.PointSection) {
+		!facetedrecord.PointSourceCurrent(cert.Trim.Base.PointSection) {
 		return nil, nil, fmt.Errorf("%w: sector source is incomplete or stale", ErrUnsupported)
 	}
 	sag := 0.01

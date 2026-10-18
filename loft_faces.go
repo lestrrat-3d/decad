@@ -135,7 +135,7 @@ func collectLoftFaces(d *Document, faces []*Face) ([]loftFaceSection, *pointSect
 			return nil, nil, fmt.Errorf("%w: LoftFaces section %d has no authenticated Split cap", ErrUnsupported, i)
 		}
 		record := fp.PointPlane.Base.PointSection
-		if !pointSourceCurrent(record) {
+		if !facetedrecord.PointSourceCurrent(record) {
 			return nil, nil, fmt.Errorf("%w: LoftFaces section %d has a stale source profile", ErrStaleProfile, i)
 		}
 		if source == nil {
