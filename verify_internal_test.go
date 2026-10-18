@@ -1254,7 +1254,7 @@ func TestBuiltBodiesStorePayloadsByValue(t *testing.T) {
 			require.NoError(t, err)
 			s0, ch0 := openWalk(t, w, w.XY(), walk)
 			s1, ch1 := openWalk(t, w, top, walk)
-			b, err := New().LoftChain(t.Context(), s0, ch0, s1, ch1)
+			b, err := LoftChain(t.Context(), New(), s0, ch0, s1, ch1)
 			require.NoError(t, err)
 			return b
 		}},

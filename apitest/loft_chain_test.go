@@ -69,7 +69,7 @@ func TestLoftChainOneCellRibbonPinsTheSideToExtrudeChain(t *testing.T) {
 	)
 
 	doc := decad.New()
-	body, err := doc.LoftChain(t.Context(), s0, ch0, s1, ch1)
+	body, err := decad.LoftChain(t.Context(), doc, s0, ch0, s1, ch1)
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySheet, body.Kind())
@@ -139,7 +139,7 @@ func TestLoftChainMultiCellRibbonFreeEdgesAndArea(t *testing.T) {
 	s0, ch0, s1, ch1 := chainLoftPair(t, 5, pts, pts)
 
 	doc := decad.New()
-	body, err := doc.LoftChain(t.Context(), s0, ch0, s1, ch1)
+	body, err := decad.LoftChain(t.Context(), doc, s0, ch0, s1, ch1)
 	require.NoError(t, err)
 
 	require.Len(t, body.Faces(), 6, "three chord cells build two triangles each")
@@ -190,21 +190,21 @@ func TestLoftChainRefusesANonParallelOrNegativePlanePair(t *testing.T) {
 	s1, ch1 := openWalkSketch(t, tilted, w, pts)
 
 	doc := decad.New()
-	_, err = doc.LoftChain(t.Context(), s0, ch0, s1, ch1)
+	_, err = decad.LoftChain(t.Context(), doc, s0, ch0, s1, ch1)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "not exactly parallel")
 	require.Empty(t, doc.Bodies())
 
 	// A second plane 10 mm BELOW the first: exactly parallel, wrong side.
 	belowS0, belowCh0, belowS1, belowCh1 := chainLoftPair(t, -10, pts, pts)
-	_, err = doc.LoftChain(t.Context(), belowS0, belowCh0, belowS1, belowCh1)
+	_, err = decad.LoftChain(t.Context(), doc, belowS0, belowCh0, belowS1, belowCh1)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "positive side")
 	require.Empty(t, doc.Bodies())
 
 	// Swapping the argument order puts the same two planes the right way
 	// round, which pins the refusal to the ORDER rather than to the pair.
-	body, err := doc.LoftChain(t.Context(), belowS1, belowCh1, belowS0, belowCh0)
+	body, err := decad.LoftChain(t.Context(), doc, belowS1, belowCh1, belowS0, belowCh0)
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, body.Kind())
 }
@@ -244,7 +244,7 @@ func TestLoftChainCrossingCorrespondenceIsRefused(t *testing.T) {
 		[][2]float64{{0, 0}, {0, 20}, {20, 20}, {20, 0}},
 	)
 	doc := decad.New()
-	_, err := doc.LoftChain(t.Context(), s0, ch0, s1, ch1)
+	_, err := decad.LoftChain(t.Context(), doc, s0, ch0, s1, ch1)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.ErrorContains(t, err, "share no recorded vertex, but make contact")
 	require.Empty(t, doc.Bodies())
@@ -259,7 +259,7 @@ func TestLoftChainCrossingCorrespondenceIsRefused(t *testing.T) {
 	require.Equal(t, 0.0, oppCh0.Edges[0].Polyline[0][1], "the lower walk starts at y = 0")
 	require.Equal(t, 20.0, oppCh1.Edges[0].Polyline[0][1], "the upper walk starts at y = 20")
 
-	twisted, err := doc.LoftChain(t.Context(), oppS0, oppCh0, oppS1, oppCh1)
+	twisted, err := decad.LoftChain(t.Context(), doc, oppS0, oppCh0, oppS1, oppCh1)
 	require.NoError(t, err, "an opposed walk pair is twisted, not necessarily self-crossing")
 	require.Equal(t, decad.BodySheet, twisted.Kind())
 	require.Len(t, twisted.Faces(), 4)
@@ -279,7 +279,7 @@ func TestLoftChainRefusesAMismatchedOrCurvedPairing(t *testing.T) {
 		[][2]float64{{0, 0}, {20, 0}, {40, 0}},
 		[][2]float64{{0, 0}, {40, 0}},
 	)
-	_, err := doc.LoftChain(t.Context(), s0, ch0, s1, ch1)
+	_, err := decad.LoftChain(t.Context(), doc, s0, ch0, s1, ch1)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "segment-count mismatch")
 
@@ -289,7 +289,7 @@ func TestLoftChainRefusesAMismatchedOrCurvedPairing(t *testing.T) {
 	require.NoError(t, err)
 	arcS0, arcCh0 := arcWalkSketch(t, w.XY(), w)
 	arcS1, arcCh1 := arcWalkSketch(t, top, w)
-	_, err = doc.LoftChain(t.Context(), arcS0, arcCh0, arcS1, arcCh1)
+	_, err = decad.LoftChain(t.Context(), doc, arcS0, arcCh0, arcS1, arcCh1)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "LineSeg pair only")
 
@@ -298,7 +298,7 @@ func TestLoftChainRefusesAMismatchedOrCurvedPairing(t *testing.T) {
 		[][2]float64{{0, 0}, {40, 0}},
 		[][2]float64{{0, 0}, {40, 0}},
 	)
-	_, err = doc.LoftChain(t.Context(), flatS, flatCh, flatS, flatCh)
+	_, err = decad.LoftChain(t.Context(), doc, flatS, flatCh, flatS, flatCh)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.ErrorContains(t, err, "same geometric plane")
 
@@ -337,7 +337,7 @@ func TestLoftChainPlacedRibbonKeepsItsAreaAndChargesItsVertices(t *testing.T) {
 	s0, ch0, s1, ch1 := chainLoftPair(t, 10, pts, pts)
 
 	doc := decad.New()
-	body, err := doc.LoftChain(t.Context(), s0, ch0, s1, ch1)
+	body, err := decad.LoftChain(t.Context(), doc, s0, ch0, s1, ch1)
 	require.NoError(t, err)
 	before, err := body.Area()
 	require.NoError(t, err)

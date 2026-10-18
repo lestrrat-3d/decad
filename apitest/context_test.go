@@ -12,7 +12,7 @@ import (
 )
 
 // Every context-taking operation refuses a nil context before inspecting its
-// receiver, operands, or options.
+// document, operands, or options.
 func TestContextOperationsRejectNilBeforeOperands(t *testing.T) {
 	t.Parallel()
 	var doc *decad.Document
@@ -25,7 +25,7 @@ func TestContextOperationsRejectNilBeforeOperands(t *testing.T) {
 		{"Document.VerifyMotion", func(ctx context.Context) error { _, err := doc.VerifyMotion(ctx, nil, nil); return err }},
 		{"PatchProfile", func(ctx context.Context) error { _, err := decad.PatchProfile(ctx, doc, nil, nil); return err }},
 		{"Document.Loft", func(ctx context.Context) error { _, err := doc.Loft(ctx, nil, nil, nil, nil); return err }},
-		{"Document.LoftChain", func(ctx context.Context) error { _, err := doc.LoftChain(ctx, nil, nil, nil, nil); return err }},
+		{"LoftChain", func(ctx context.Context) error { _, err := decad.LoftChain(ctx, doc, nil, nil, nil, nil); return err }},
 		{"Sweep profile", func(ctx context.Context) error {
 			_, err := decad.Sweep(ctx, doc, nil, (*sketch.Profile)(nil), nil)
 			return err

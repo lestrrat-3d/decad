@@ -104,7 +104,7 @@ func TestChainGateDiameterLoftHasToleranceReference(t *testing.T) {
 	s0, c0 := makeLine(w.XY())
 	s1, c1 := makeLine(top)
 	doc := decad.New()
-	body, err := doc.LoftChain(t.Context(), s0, c0, s1, c1)
+	body, err := decad.LoftChain(t.Context(), doc, s0, c0, s1, c1)
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, body.Kind())
 	require.Len(t, body.Faces(), 2)

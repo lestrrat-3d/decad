@@ -171,7 +171,7 @@ func BenchmarkModelingLoftChainCold(b *testing.B) {
 		b.StopTimer()
 		doc := decad.New()
 		b.StartTimer()
-		body, err := doc.LoftChain(b.Context(), s0, c0, s1, c1)
+		body, err := decad.LoftChain(b.Context(), doc, s0, c0, s1, c1)
 		if err != nil {
 			b.Fatal(err)
 		}

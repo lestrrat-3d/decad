@@ -41,7 +41,7 @@ func Example_decad_loft_chain() {
 	}
 
 	doc := decad.New()
-	body, err := doc.LoftChain(context.Background(), lower, lowerChain, upper, upperChain)
+	body, err := decad.LoftChain(context.Background(), doc, lower, lowerChain, upper, upperChain)
 	if err != nil {
 		fmt.Printf("failed to loft chain: %s\n", err)
 		return
@@ -70,7 +70,7 @@ func Example_decad_loft_chain() {
 
 	// The same two walks the other way round: the second plane is then below
 	// the first, which states no side for the ribbon between them.
-	_, err = doc.LoftChain(context.Background(), upper, upperChain, lower, lowerChain)
+	_, err = decad.LoftChain(context.Background(), doc, upper, upperChain, lower, lowerChain)
 	fmt.Printf("reversed argument order: %v\n", err)
 	fmt.Printf("bodies: %d\n", len(doc.Bodies()))
 

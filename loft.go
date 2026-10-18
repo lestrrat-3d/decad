@@ -232,7 +232,7 @@ type ChainLoftOption interface {
 // The result is always a sheet — Kind() == BodySheet — two flat triangles per
 // chord cell with no cap and no closing face, so WithSurfaceResult() does not
 // compile against this call. A failed call leaves the document untouched.
-func (d *Document) LoftChain(ctx context.Context, s0 *sketch.Sketch, c0 *sketch.Chain, s1 *sketch.Sketch, c1 *sketch.Chain, opts ...ChainLoftOption) (*Body, error) {
+func LoftChain(ctx context.Context, d *Document, s0 *sketch.Sketch, c0 *sketch.Chain, s1 *sketch.Sketch, c1 *sketch.Chain, opts ...ChainLoftOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a loft`, ErrDegenerate)
 	}
