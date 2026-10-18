@@ -161,10 +161,11 @@ func TestBrepFilletMotionCoversEnds(t *testing.T) {
 	motion, err := brepBandMotion(t.Context(), bands, store, round)
 	require.NoError(t, err)
 	fr := bands[0].fillet
-	require.Greater(t, fr.n, 2)
-	for k := 1; k < fr.n; k++ {
-		for c, vi := range fr.ringV[k] {
-			ends := math.Max(motion[fr.ringV[0][c]], motion[fr.ringV[fr.n][c]])
+	require.Greater(t, fr.Count, 2)
+	for k := 1; k < fr.Count; k++ {
+		require.Len(t, fr.Dev[k], len(fr.RingV[k]))
+		for c, vi := range fr.RingV[k] {
+			ends := math.Max(motion[fr.RingV[0][c]], motion[fr.RingV[fr.Count][c]])
 			require.GreaterOrEqual(t, motion[vi], delta, "ring %d sample %d", k, c)
 			require.Greater(t, motion[vi], ends, "ring %d sample %d", k, c)
 		}

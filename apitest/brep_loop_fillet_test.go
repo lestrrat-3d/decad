@@ -100,9 +100,11 @@ func TestBrepLoopFilletPublicPlateTopLoop(t *testing.T) {
 	}
 	require.Equal(t, 4, ellipses)
 
-	mesh, err := got.Tessellate(t.Context(), units.Millimeters(0.1))
+	mesh, err := got.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
 	require.NotEmpty(t, mesh.Triangles())
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
 
 	// A fillet-banded body exports to STEP (faceted or analytic: which is
 	// export's own concern, loop-fillet DF10).

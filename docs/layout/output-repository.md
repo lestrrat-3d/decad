@@ -12,9 +12,8 @@ The rules for rows live in `docs/layout.md`.
 | `tessellate.go` | `Mesh`, `Body.Tessellate`, prism mesh handle adapter and dispatch. See tessellation design. |
 | `tessellate_patch.go` | Chords and triangulates a recorded `PatchProfile` sheet. See tessellation §5.1. |
 | `tessellate_brep.go` | Meshes a brep body and proves its occupied volume. See general-boolean §4.4. |
-| `tessellate_brep_band.go` | Adapts route L band geometry to shared wall samples and emits mesh patches. See modify-general DG3. |
-| `tessellate_brep_fillet.go` | Adapts fillet band ring geometry, strips and proof terms. See loop-fillet §7.1. |
-| `tessellate_brep_partial_fillet.go` | Adapts `internal/partialband/` layouts to selected cap-edge fillet meshes. |
+| `tessellate_brep_band.go` | Adapts route L bands to shared wall samples and delegates fillet rings and strips to `internal/brepfilletmesh/`. See modify-general DG3. |
+| `tessellate_brep_partial_fillet.go` | Selects `internal/partialband/` layouts and places their boundary vertices for `internal/brepfilletmesh/`. |
 | `tessellate_brep_partial_chamfer.go` | Emits two selected planar chamfer strips over their shared contour vertices. See modify-general §4.3a. |
 | `tessellate_all_edge_chamfer.go` | Meshes the box all-edge bevels and shared circular bore with occupied-volume proof. See modify-general §4.3b. |
 | `tessellate_verification.go` | `Verification`, `WithVerification` and mesh proof publication. See tessellation §1. |

@@ -38,6 +38,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/crossbore/` | Builds the held bore-mouth mesh, proves its cells and computes boundary, volume and area bounds from source records. See cross-cylinder-bore-chamfer design. |
 | `internal/brepgeom/` / `internal/stackedbrep/` | BRep geometry and topology. See general-boolean §4–§5. |
 | `internal/brepwallmesh/` | Chords BRep swept walls and checks clearance between their mesh loops. See general-boolean §4.4 and tessellation §5. |
+| `internal/brepfilletmesh/` | Places full and selected BRep fillet rings, emits patch triangles, and computes their area and motion bounds. See loop-fillet §7.1. |
 | `internal/stackedunion/` | Builds A1 stacked Union slabs, private scenes, and BRep faces after root admission. See general-boolean §3 A1. |
 | `internal/throughshell/` | Through-cut recognition, strips and rims. See modify-general §3. |
 | `internal/capedge/` | Convex cap-edge cutter admission, quarter-cylinder profile, chamfer wedge and the P8 top front edge test. See vertex-blend §2. |
