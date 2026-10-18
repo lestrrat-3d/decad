@@ -1971,7 +1971,7 @@ signed-volume audit, whose sum depends on the anchor when caps are absent.
 The sheet mesh carries no occupied-volume proof.
 
 An all-planar `PatchEdges` result tessellates when every face has a zero-bound
-normal and only `Line3` edges. `tessellateBodyPatch` triangulates the live
+normal and only `Line3` edges. `internal/patchmesh.Planar` triangulates the live
 faces over one shared vertex table. Each new fill's triangles use the
 opposite direction from the source face's triangles along their shared rim;
 the whole set reverses under a later reflected placement. A filled open rim

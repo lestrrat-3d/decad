@@ -2,126 +2,35 @@ package decad
 
 import (
 	"context"
-	"fmt"
-	"math"
 
-	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/patchchain"
-	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/stitchrecord"
+	"github.com/lestrrat-3d/decad/internal/patchmesh"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
-	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
-	"github.com/lestrrat-3d/r3"
 )
 
-// tessellateBodyPatch reuses a circular source prism's station grid or
-// triangulates an all-planar PatchEdges result over its shared vertices.
-// Other curved sources need their own shared chording and are refused here.
-func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload, chord float64, verify Verification) (*Mesh, error) {
-	if prism, ok := patchchain.CircularPrismSource(pp); ok {
-		return tessellateBodyPatchCircularPrism(ctx, b, pp, prism, chord, verify)
-	}
-	faces := b.Faces()
-	// curveBound applies only to Circle3 and Arc3. A Line3 follows its end
-	// vertices; the cap-band miter whose Line3 tag holds a curved locus has
-	// a ruled face with nonzero normalBound, so this gate rejects that case.
-	allEligible := true
-	for _, f := range faces {
-		if !stitchrecord.FaceIsTetrahedronEligible(faceNode(f)) {
-			allEligible = false
-			break
-		}
-	}
-	if !allEligible {
-		for _, f := range faces {
-			if _, ok := f.n.Surface.(surfacegeom.Plane); !ok {
-				return nil, fmt.Errorf(`%w: this evaluator has no shared chording for a PatchEdges result's %T face`,
-					ErrUnsupported, f.Surface())
-			}
-			if f.n.NormalBound != 0 {
-				return nil, fmt.Errorf(`%w: a PatchEdges result's planar face has no zero-bound normal`, ErrUnsupported)
-			}
-			for _, l := range f.n.Loops {
-				for _, ce := range l.CoEdges {
-					if _, ok := ce.Edge.Curve.(surfacegeom.Line3); !ok {
-						return nil, fmt.Errorf(`%w: this evaluator has no shared chording for a PatchEdges result's %T edge`,
-							ErrUnsupported, publicCurve(ce.Edge.Curve))
-					}
-				}
-			}
-		}
-		return nil, fmt.Errorf(`%w: this evaluator cannot triangulate the PatchEdges result`, ErrUnsupported)
-	}
-	vertices := b.Vertices()
-	mesh := bornMesh(&Mesh{n: topo.Mesh{Vertices: make([]r3.Vec, len(vertices))}})
-	classOf := make(map[*topo.Vertex]int, len(vertices))
-	store := make([]float64, len(vertices))
-	budget := proofbound.NewWorkBudget(ctx)
-	for i, v := range vertices {
-		if err := budget.Step(); err != nil {
-			return nil, err
-		}
-		mesh.n.Vertices[i] = v.n.Position
-		classOf[vertexNode(v)] = i
-		store[i] = v.n.Bound.Base()
-	}
-	if _, err := tessellation.StoreMax(store); err != nil {
-		return nil, err
-	}
+// tessellateBodyPatch binds source handles and public refusal names to the
+// PatchEdges node builder. The circular source mesh is certified first at
+// VerifyBoundary even when the requested result level is VerifyNone.
+func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload,
+	chord float64, verify Verification,
+) (*Mesh, error) {
+	var node *topo.Mesh
 	var err error
-	mesh.n.Triangles, mesh.n.Source, err = stitchrecord.TriangulateFaces(ctx, faceNodes(faces), classOf)
+	if prism, ok := patchchain.CircularPrismSource(pp); ok {
+		source, sourceErr := tessellatePrismWithCountFloor(ctx, bodyHandle(pp.Faces[0].Body), prism,
+			prismWallRole, chord, VerifyBoundary, nil, 0)
+		if sourceErr != nil {
+			return nil, sourceErr
+		}
+		node, err = patchmesh.CircularPrism(ctx, &b.n, pp, prism, &source.n, chord, patchmesh.Level(verify))
+	} else {
+		node, err = patchmesh.Planar(ctx, &b.n, pp, patchmesh.Level(verify),
+			func(s surfacegeom.Surface) any { return publicSurface(s) },
+			func(c surfacegeom.Curve) any { return publicCurve(c) })
+	}
 	if err != nil {
 		return nil, err
 	}
-	if err := patchchain.OrientBodyPatchFilledFaces(&mesh.n, &b.n, classOf, budget); err != nil {
-		return nil, err
-	}
-	if pp.Xform.IsReflection() {
-		for i := range mesh.n.Triangles {
-			mesh.n.Triangles[i][1], mesh.n.Triangles[i][2] = mesh.n.Triangles[i][2], mesh.n.Triangles[i][1]
-		}
-	}
-	if err := tessellation.RequireCapBlendFacetAreas(mesh.n.Vertices, mesh.n.Triangles, "PatchEdges sheet"); err != nil {
-		return nil, err
-	}
-	if err := requireMeshAudit(ctx, true, b, mesh); err != nil {
-		return nil, err
-	}
-	if verify >= VerifyBoundary {
-		if err := loftmesh.LoftCrossingAudit(budget, mesh.n.Vertices, mesh.n.Triangles); err != nil {
-			if ctxErr := ctx.Err(); ctxErr != nil {
-				return nil, ctxErr
-			}
-			return nil, fmt.Errorf(`%w: a PatchEdges sheet's facets are not proven embedded: %s`, ErrUnsupported, err)
-		}
-	}
-	axial := make(map[*topo.Face]float64, len(faces))
-	for _, f := range faces {
-		axial[faceNode(f)] = f.n.AxialDelta
-	}
-	if err := composeFaceBounds(mesh, nil, axial, store); err != nil {
-		return nil, err
-	}
-	if verify < VerifyAll {
-		return mesh, nil
-	}
-	for i, tri := range mesh.n.Triangles {
-		if err := budget.Step(); err != nil {
-			return nil, err
-		}
-		face := mesh.n.Source[i]
-		delta := math.Max(store[tri[0]], math.Max(store[tri[1]], store[tri[2]]))
-		delta = proofbound.AbsSumUpper(delta, face.AxialDelta)
-		if delta == 0 {
-			continue
-		}
-		a, bb, c := mesh.n.Vertices[tri[0]], mesh.n.Vertices[tri[1]], mesh.n.Vertices[tri[2]]
-		mesh.n.AreaSlack = proofbound.AbsSumUpper(mesh.n.AreaSlack,
-			proofbound.PerturbedTriangleAreaAllow(a, bb, c, delta))
-	}
-	if proofbound.IsNonFinite(mesh.n.AreaSlack) {
-		return nil, fmt.Errorf(`%w: a PatchEdges result states no finite area bound`, ErrUnsupported)
-	}
-	return mesh, nil
+	return bornMesh(&Mesh{n: *node}), nil
 }
