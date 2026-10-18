@@ -180,14 +180,6 @@ func (d *Document) splitPointPlane(ctx context.Context, budget *proofbound.WorkB
 	return pieces, true, nil
 }
 
-// pointPlaneSlabCapLayout is a slab's wall and cap structure as
-// buildPointPlaneSlab emits it: n side walls (apex slab) or 2n (two planes),
-// then the far-cap triangles, interleaved upper/lower for a two-plane slab.
-// sides are the source fan's side triangles.
-func pointPlaneSlabCapLayout(sides [][3]int, triCount, upperOffset int, hasApex bool) (loftmesh.LoftCapLayout, bool) {
-	return loftmesh.PointPlaneSlabCapLayout(sides, triCount, upperOffset, hasApex)
-}
-
 func buildPointPlaneSlab(ctx context.Context, d *Document, ref producerID,
 	record pointPlaneSliceRecord) (*Body, error) {
 	base := record.Base
@@ -276,7 +268,7 @@ func buildPointPlaneSlab(ctx context.Context, d *Document, ref producerID,
 			sources = append(sources, lowerGroup)
 		}
 	}
-	if layout, ok := pointPlaneSlabCapLayout(base.Tris[:n], len(triangles), upperOffset, hasApex); ok {
+	if layout, ok := loftmesh.PointPlaneSlabCapLayout(base.Tris[:n], len(triangles), upperOffset, hasApex); ok {
 		err = loftmesh.LoftCrossingAuditWithCaps(ctx, vertices, triangles, layout)
 	} else {
 		err = loftmesh.LoftCrossingAudit(proofbound.NewWorkBudget(ctx), vertices, triangles)
