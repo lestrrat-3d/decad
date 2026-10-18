@@ -218,7 +218,6 @@ type (
 	pointConeTrimRecord          = facetedrecord.PointConeTrimRecord
 	pointPlaneLimit              = facetedrecord.PointPlaneLimit
 	pointPlaneSimilarityRecord   = facetedrecord.PointPlaneSimilarityRecord
-	pointPlaneSimilarityStep     = facetedrecord.PointPlaneSimilarityStep
 	pointPlaneSliceRecord        = facetedrecord.PointPlaneSliceRecord
 	pointSectionRecord           = facetedrecord.PointSectionRecord
 	pointSectionSource           = facetedrecord.PointSectionSource
