@@ -151,11 +151,11 @@ func admitSplitRevolvePair(budget *proofbound.WorkBudget, target, tool *Body) (r
 	if !reexpress.Identity {
 		return fail(`%w: the target and tool do not share one frame and placement, so their re-expression is not the identity`, ErrUnsupported)
 	}
-	rcvWhole, err := trimProfileFullyWhole(budget, rcv.Profile)
+	rcvWhole, err := prismcells.TrimProfileFullyWhole(budget, rcv.Profile.Outer, rcv.Profile.Holes)
 	if err != nil {
 		return pass(err)
 	}
-	tlWhole, err := trimProfileFullyWhole(budget, tl.Profile)
+	tlWhole, err := prismcells.TrimProfileFullyWhole(budget, tl.Profile.Outer, tl.Profile.Holes)
 	if err != nil {
 		return pass(err)
 	}
