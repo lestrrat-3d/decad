@@ -98,9 +98,11 @@ func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 	}
 	var pp prismPayload
 	var lp loftPayload
+	var prismBody, loftBody *Body
 	switch p := first.n.Payload.(type) {
 	case prismPayload:
 		pp = p
+		prismBody, loftBody = first, second
 		var ok bool
 		lp, ok = second.n.Payload.(loftPayload)
 		if !ok {
@@ -108,6 +110,7 @@ func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 		}
 	case loftPayload:
 		lp = p
+		prismBody, loftBody = second, first
 		var ok bool
 		pp, ok = second.n.Payload.(prismPayload)
 		if !ok {
@@ -163,7 +166,15 @@ func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 		return no, false, err
 	}
 	bottom, ok, err := loftPartitionLines(budget, lp.Profile0.Outer)
-	if err != nil || !ok {
+	if err != nil {
+		return no, false, err
+	}
+	if !ok {
+		if !reportSeamSize {
+			// Source spans alone do not prove curved cap ownership or output
+			// coverage. Keep this private lane at a safe refusal for now.
+			_, _, err = certifyLoftSourceSpanCaps(ctx, budget, prismBody, loftBody)
+		}
 		return no, false, err
 	}
 	top, ok, err := loftPartitionLines(budget, lp.Profile1.Outer)
