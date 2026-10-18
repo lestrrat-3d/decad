@@ -1561,6 +1561,8 @@
 10	0.00	TestLoftVolumeHullBoundAffineAndPermutation
 10	0.00	TestLoftVolumeHullBoundRefusals
 10	0.00	TestLoftVolumeHullBoundWorkAndCancellation
+10	0.00	TestLoftVolumeHullBoundZeroMotion
+10	0.00	TestLoftVolumeHullBoundZeroMotionWorkAndRefusals
 10	0.00	TestLoftVolumeExactShellEmbeddedPositive
 10	0.00	TestLoftVolumeExactShellRealVaryingTab
 10	0.00	TestLoftVolumeExactShellRefusesCrossingAndReversal
