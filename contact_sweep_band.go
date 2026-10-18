@@ -45,10 +45,6 @@ import (
 // planarMotion is the sweep's exact first-order rigid motion.
 type planarMotion = planarsweep.Motion
 
-func planarMotionOf(p *rotationalSweepPath) (planarMotion, bool) {
-	return planarsweep.MotionOf(planarSupportPathOf(p).Motion)
-}
-
 func planarSupportPathOf(p *rotationalSweepPath) planarsweep.SupportPath {
 	return planarsweep.SupportPath{
 		Points: p.startPoints, Solid: p.solid,
