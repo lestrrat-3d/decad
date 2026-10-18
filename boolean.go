@@ -969,7 +969,7 @@ func booleanProofBounds(symA, symB, roundVol, slackA, slackB, dropArea float64) 
 // no occupied-volume proof on its mesh, before that mesh is built.
 //
 // It is meshbool.OperandSymDiff's question asked one step earlier. A cap-loop chamfer,
-// and a draft body through the same band (draftOccupiedVolumeAdmission),
+// and a draft body through the same band,
 // narrows rather than refuses outright: both arms read the SAME predicate,
 // capblend.OccupiedVolumeAdmission — this one before the
 // mesh is built, and tessellateCapBlend through symDiffOK after it — so a
@@ -1040,7 +1040,7 @@ func requireVolumeProvingPayload(ctx context.Context, b *Body, index int) error 
 			}
 			err = refusal
 		case draftPayload:
-			refusal, aErr := draftOccupiedVolumeAdmission(proofbound.NewWorkBudget(ctx), pl)
+			refusal, aErr := capblend.OccupiedVolumeAdmission(proofbound.NewWorkBudget(ctx), pl.Band())
 			if aErr != nil {
 				return aErr
 			}
@@ -1050,7 +1050,7 @@ func requireVolumeProvingPayload(ctx context.Context, b *Body, index int) error 
 			err = refusal
 		case twoSidedDraftPayload:
 			for _, half := range []draftPayload{pl.Negative, pl.Positive} {
-				refusal, aErr := draftOccupiedVolumeAdmission(proofbound.NewWorkBudget(ctx), half)
+				refusal, aErr := capblend.OccupiedVolumeAdmission(proofbound.NewWorkBudget(ctx), half.Band())
 				if aErr != nil {
 					return aErr
 				}
