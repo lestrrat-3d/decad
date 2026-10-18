@@ -14,7 +14,7 @@ import (
 // operands and their retained exact source records do not change.
 type spiralFirstUnionAdmission struct {
 	source    *spiralFirstJoinSource
-	short     [2][4]spiralShortCapFamily
+	short     [2][4]spiralsector.ShortCapFamily
 	roles     map[[2]*Face]spiralNearPairKind
 	allowed   map[[2]int]bool
 	rootBoxes *[2]*spiralsector.RootFlankSourceBoxes
@@ -88,11 +88,11 @@ func spiralFirstUnionPairs(blank, tooth *Body, admission *spiralFirstUnionAdmiss
 		}
 		for index, segment := range [...]int{0, 2, 3, 5} {
 			family := admission.short[end][index]
-			if family.group != segment || family.band != proof.Junctions[0][end].Band ||
-				family.band != proof.Junctions[1][end].Band {
+			if family.Group != segment || family.Band != proof.Junctions[0][end].Band ||
+				family.Band != proof.Junctions[1][end].Band {
 				return nil, false
 			}
-			origin, found := spiralOriginalSideRef(proof.Tooth, family.band, segment)
+			origin, found := spiralOriginalSideRef(proof.Tooth, family.Band, segment)
 			if !found {
 				return nil, false
 			}
