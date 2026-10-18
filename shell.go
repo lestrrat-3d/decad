@@ -235,7 +235,7 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value, opts .
 				body, matched, err := shellStackedBoss(ctx, b, sp, view,
 					brepShellCall{sense: sense, t: t, tmm: tmm, tDelta: tDelta})
 				if !matched && err == nil {
-					reversed, eligible, reverseErr := reverseClosedBossStack(ctx, sp)
+					reversed, eligible, reverseErr := prismshell.ReverseClosedBossStack(ctx, sp)
 					if reverseErr != nil {
 						return nil, reverseErr
 					}
