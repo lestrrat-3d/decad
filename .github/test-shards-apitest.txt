@@ -1893,6 +1893,7 @@
 10	0.01	TestExtrudeCirclePrismBoundsTighten
 10	0.00	TestExtrudeFreeformCollapsedControlNetRefusesR14
 10	0.07	TestExtrudeFreeformConvexityBothDirections
+10	0.00	TestExtrudeFreeformReflectedCopyPreservesGeometry
 10	0.10	TestExtrudeNGonPrismBoundsTighten
 10	0.01	TestExtrudeThroughAll
 10	0.00	TestExtrudedBoxThroughBoreCutPublishesCircularTopology
