@@ -16,15 +16,21 @@ import (
 // vertices, and only the square root and the halving are taken in big.Float.
 func exactFacetAreaSum(verts []r3.Vec, tris [][3]int) *big.Float {
 	const prec = 2048
-	rat := func(f float64) *big.Rat { return new(big.Rat).SetFloat64(f) }
+	rat := func(x, y float64) *big.Rat {
+		return new(big.Rat).Sub(new(big.Rat).SetFloat64(x), new(big.Rat).SetFloat64(y))
+	}
 	sum := new(big.Float).SetPrec(prec)
 	for _, t := range tris {
 		a, b, c := verts[t[0]], verts[t[1]], verts[t[2]]
 		u := [3]*big.Rat{
-			new(big.Rat).Sub(rat(b.X), rat(a.X)), new(big.Rat).Sub(rat(b.Y), rat(a.Y)), new(big.Rat).Sub(rat(b.Z), rat(a.Z)),
+			rat(b.X, a.X),
+			rat(b.Y, a.Y),
+			rat(b.Z, a.Z),
 		}
 		v := [3]*big.Rat{
-			new(big.Rat).Sub(rat(c.X), rat(a.X)), new(big.Rat).Sub(rat(c.Y), rat(a.Y)), new(big.Rat).Sub(rat(c.Z), rat(a.Z)),
+			rat(c.X, a.X),
+			rat(c.Y, a.Y),
+			rat(c.Z, a.Z),
 		}
 		sq := new(big.Rat)
 		for i := range 3 {
@@ -76,7 +82,11 @@ func facetAreaGap(held float64, verts []r3.Vec, tris [][3]int) *big.Float {
 func TestFacetedAreaBoundsCoverSliverFacet(t *testing.T) {
 	t.Parallel()
 	doc := New()
-	sliver := internalPolyPrismBody(t, doc, [][2]float64{{-100.1, 7.1}, {100.3, 7.3}, {0.123, 7.20004}}, 10)
+	sliver := internalPolyPrismBody(t, doc, [][2]float64{
+		{-100.1, 7.1},
+		{100.3, 7.3},
+		{0.123, 7.20004},
+	}, 10)
 	union, err := Union(t.Context(), sliver, internalCrossingFramedBox(t, doc))
 	require.NoError(t, err)
 	fp, ok := union.n.Payload.(facetedPayload)
