@@ -11,11 +11,10 @@ import (
 )
 
 // This file is docs/prism-boolean-design.md §4.2's crossing sub-case for Cut
-// and Intersect: edge-orientation propagation over the SAME private scene
-// the root prism_boolean.go's BuildScene builds, dispatched by
-// the root prism_boolean_nesting.go's resolveAndBuildPrismCut/Intersect once the
-// clean-nesting structural match (the root prism_boolean_nesting.go) comes back
-// unresolved. Every cell sketch's arrangement returns is classified against
+// and Intersect: edge-orientation propagation over the same private scene
+// BuildScene constructs. ResolveAndBuildCut/Intersect call this path when
+// payload_nesting.go's clean-nesting structural match is unresolved.
+// Every cell sketch's arrangement returns is classified against
 // each operand by comparing a boundary edge's own Reversed flag against the
 // entity's authoredReversed bookkeeping BuildScene records at creation
 // time (Origin) — a flag comparison, never a geometric test — and
@@ -118,7 +117,7 @@ func AuditMergeSection(budget *proofbound.WorkBudget, pa prismrecord.Payload, me
 }
 
 // ResolveAndBuildCutCrossing runs §4.2's crossing sub-case for
-// Cut(target, tool) once the root prism_boolean_nesting.go's clean-nesting search
+// Cut(target, tool) once payload_nesting.go's clean-nesting search
 // comes back unresolved. resolved=false (err always nil in that case) is
 // silent fallback per this file's own header; a non-nil error is a genuine
 // refusal past §3.4's point of no return.
@@ -168,7 +167,7 @@ func ResolveAndBuildCutCrossing(ctx context.Context, budget *proofbound.WorkBudg
 // ResolveAndBuildIntersectCrossing is the Intersect twin: keeps the
 // cells that are material of BOTH operands. §3.2's Intersect z-interval and
 // axial displacement selection reuse prismplacement.ZShift/IntersectLowerEnd/IntersectUpperEnd
-// (the root prism_boolean_nesting.go) unchanged.
+// (payload_nesting.go) unchanged.
 func ResolveAndBuildIntersectCrossing(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismrecord.Payload, reexpress *Reexpression) (prismrecord.Payload, bool, error) {
 	if len(pa.Profile.Holes) != 0 || len(pb.Profile.Holes) != 0 {
 		return prismrecord.Payload{}, false, nil
