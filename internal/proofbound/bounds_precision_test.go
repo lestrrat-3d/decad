@@ -1,19 +1,25 @@
-package decad
+package proofbound_test
 
 import (
+	"fmt"
 	"math"
 	"math/big"
 	"math/rand/v2"
 	"testing"
 
-	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
+	"github.com/lestrrat-3d/decad/internal/facetproof"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
+
+func requireBoundsSameFloatBits(t *testing.T, want, got float64, msg string, args ...any) {
+	t.Helper()
+	require.Equal(t, math.Float64bits(want), math.Float64bits(got), fmt.Sprintf(msg, args...))
+}
 
 // This file tests internal/proofbound/bounds.go's proofbound.PerturbedTriangleAreaAllow, the one new
 // helper docs/loft-design.md §12 PR 2a extracts from
@@ -395,9 +401,9 @@ func TestBoundedSqrtExactSquareMatchesBracket(t *testing.T) {
 		t.Helper()
 		got := proofbound.BoundedSqrt(x)
 		want := boundedSqrtBracketOracle(x)
-		requireSameFloatBits(t, want.Value, got.Value, "the root of %v", x)
+		requireBoundsSameFloatBits(t, want.Value, got.Value, "the root of %v", x)
 		if x.Bound == 0 && ratIsFloatSquare(got.Value, x.Value) {
-			requireSameFloatBits(t, 0, got.Bound, "an exact square %v must read a zero bound", x.Value)
+			requireBoundsSameFloatBits(t, 0, got.Bound, "an exact square %v must read a zero bound", x.Value)
 			if want.Bound != 0 {
 				require.LessOrEqual(t, want.Bound, proofbound.UpRound(proofbound.UlpOf(got.Value)),
 					"the oracle may miss an exact square %v by one ulp at most", x.Value)
@@ -409,7 +415,7 @@ func TestBoundedSqrtExactSquareMatchesBracket(t *testing.T) {
 			}
 			return
 		}
-		requireSameFloatBits(t, want.Bound, got.Bound, "the bound on the root of %v", x)
+		requireBoundsSameFloatBits(t, want.Bound, got.Bound, "the bound on the root of %v", x)
 		if x.Bound == 0 && x.Value >= 0 && !proofbound.IsNonFinite(x.Value) {
 			require.Positive(t, got.Bound, "%v is not the square of %v and must not read exact", x.Value, got.Value)
 			requireEnclosesSqrt(t, proofarith.FloatRat(x.Value), got)
@@ -637,7 +643,7 @@ func TestProductUpperRefusesRatherThanAnnihilatesARefusal(t *testing.T) {
 // not a representable neighbour away from a positive number, it IS the rounded
 // answer. The consequence is not a slightly loose bound but an UNSOUND one:
 // the published interval [value−bound, value+bound] collapses to a point that
-// excludes the truth, and exactnessOf reads the same 0 as the CLAIM that the
+// excludes the truth, and a consumer reads the same 0 as the CLAIM that the
 // value is exactly representable, so a flushed cell publishes an Exact
 // measurement for a body whose error is merely tiny.
 //
@@ -648,19 +654,18 @@ func TestProductUpperRefusesRatherThanAnnihilatesARefusal(t *testing.T) {
 // bound (proofbound.ChordedBoundaryMomentAllow's own matchedDelta > 0 branch) need.
 //
 // No leg below pins a float literal a platform's own FMA contraction could
-// move: each asserts the SIGN of the published bound and the exactness class
-// it lands in, and the primitive legs pin only the smallest subnormal itself,
-// which a single multiply or divide reaches identically on every target.
+// move: each checks the published bound's sign, value or enclosure, and the
+// primitive legs pin only the smallest subnormal itself, which a single
+// multiply or divide reaches identically on every target.
 
 // TestOutwardRoundingNeverPublishesAFlushedZero pins the rule proofbound.ProductUpper and
 // proofbound.DivUpper carry for every bound in this package: two operands the helper has
 // itself PROVEN positive can never answer 0.
 //
 // An operand at or below zero is an ABSENT term, not a flushed one. It is the
-// only way a product or quotient legitimately vanishes, and the only zero
-// exactnessOf may read as a claim of exactness, so it must keep answering an
-// honest 0 — widening it would convert every genuinely exact reading in the
-// package into Approximate.
+// only way a product or quotient legitimately vanishes, and a consumer may
+// read only that honest 0 as exact. Widening it would convert every genuinely
+// exact reading in the package into an approximate one.
 func TestOutwardRoundingNeverPublishesAFlushedZero(t *testing.T) {
 	t.Parallel()
 	const tiny = math.SmallestNonzeroFloat64
@@ -677,7 +682,6 @@ func TestOutwardRoundingNeverPublishesAFlushedZero(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				require.Equal(t, 0.0, tc.a*tc.b, `the fixture must actually exercise a flush`)
 				require.Equal(t, tiny, proofbound.ProductUpper(tc.a, tc.b))
-				require.Equal(t, Approximate, exactnessOf(proofbound.ProductUpper(tc.a, tc.b)))
 			})
 		}
 	})
@@ -717,7 +721,6 @@ func TestOutwardRoundingNeverPublishesAFlushedZero(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				require.Equal(t, 0.0, tc.num/tc.den, `the fixture must actually exercise a flush`)
 				require.Equal(t, tiny, proofbound.DivUpper(tc.num, tc.den))
-				require.Equal(t, Approximate, exactnessOf(proofbound.DivUpper(tc.num, tc.den)))
 			})
 		}
 	})
@@ -728,7 +731,6 @@ func TestOutwardRoundingNeverPublishesAFlushedZero(t *testing.T) {
 		require.Equal(t, 0.0, proofbound.ProductUpper(-1, 5))
 		require.Equal(t, 0.0, proofbound.DivUpper(0, 2))
 		require.Equal(t, 0.0, proofbound.DivUpper(-1, 2))
-		require.Equal(t, Exact, exactnessOf(proofbound.ProductUpper(0, 1e300)))
 	})
 
 	t.Run("an ordinary reading still rounds outward", func(t *testing.T) {
@@ -826,7 +828,6 @@ func TestChordedBoundsNeverPublishAFlushedZero(t *testing.T) {
 		got := proofbound.CellChordCurveAreaUpper(vLo, vHi, wLo, wHi, 4*s, 4*s, 0)
 		require.Greater(t, got, 0.0,
 			`a cell with four distinct corners bounds a positive area`)
-		require.Equal(t, Approximate, exactnessOf(got))
 	})
 
 	t.Run("cell twist volume", func(t *testing.T) {
@@ -837,7 +838,6 @@ func TestChordedBoundsNeverPublishAFlushedZero(t *testing.T) {
 		got := proofbound.CellTwistVolumeAllow(vLo, vHi, wLo, twHi)
 		require.Greater(t, got, 0.0,
 			`a twisted cell bounds a positive ruled-to-triangle volume`)
-		require.Equal(t, Approximate, exactnessOf(got))
 	})
 
 	t.Run("moment", func(t *testing.T) {
@@ -847,13 +847,12 @@ func TestChordedBoundsNeverPublishAFlushedZero(t *testing.T) {
 		got := proofbound.ChordedBoundaryMomentAllow(s, s, 0, 0, 0, 0, 0)
 		require.Greater(t, got, 0.0,
 			`a positive displaced volume at a positive radius bounds a positive moment`)
-		require.Equal(t, Approximate, exactnessOf(got))
 	})
 
 	t.Run("a genuinely absent term still publishes an honest zero", func(t *testing.T) {
 		// Every zero below comes from a term that is ABSENT, not flushed, and
 		// each must survive the change: these are the only readings in the
-		// family exactnessOf may keep calling Exact.
+		// family a consumer may keep calling exact.
 		require.Equal(t, 0.0, proofbound.CellChordCurveAreaUpper(vLo, vLo, vLo, vLo, 0, 0, 0))
 		require.Equal(t, 0.0, proofbound.CellTwistVolumeAllow(vLo, vHi, wLo, wHi))
 		require.Equal(t, 0.0, proofbound.ChordedBoundaryMomentAllow(0, 1, 0, 0, 0, 0, 0))
@@ -915,9 +914,10 @@ type cellQuad struct {
 	floatShortfallExpected bool
 }
 
-// naiveNorm is the sum-of-squares norm with each square explicitly rounded to
-// float64 BEFORE the sum, so the result is identical on every architecture Go
-// supports. The Go language spec ("Floating-point operators",
+// naiveNorm in cell_bounds_test.go sums three component squares after each
+// square has rounded to float64. Go may fuse a multiplication with a following
+// addition unless the product passes through an explicit float conversion.
+// The Go language spec ("Floating-point operators",
 // https://go.dev/ref/spec) permits an implementation to fuse a multiply
 // straight into a following add — a fused multiply-add (FMA) — UNLESS the
 // product passes through an explicit floating-point type conversion first.
@@ -925,28 +925,12 @@ type cellQuad struct {
 // is FMA-ALLOWED (a bare assignment to a variable does not stop fusion, even
 // across statements — the spec says the rewrite may happen "possibly across
 // statements"), while `r = float64(x*y) + z` is FMA-DISALLOWED, because the
-// explicit conversion forces x*y's rounding before the add. That is why each
-// term below is wrapped in float64(...) rather than merely assigned to a
-// local: assignment alone is not the guarantee.
-//
-// r3.Vec.Len() now blocks the same fusion the same way, so it is
-// architecture-independent by construction rather than by the compiler
-// backend's choice. This file still computes naiveNorm as its own reference
-// arithmetic instead of asserting on r3.Vec.Len(): a test that wants a raw
-// float norm's error to demonstrate something states that arithmetic itself,
-// so its claims never depend on an upstream package's own rounding choices.
-func naiveNorm(v r3.Vec) float64 {
-	xx := float64(v.X * v.X)
-	yy := float64(v.Y * v.Y)
-	zz := float64(v.Z * v.Z)
-	return math.Sqrt(xx + yy + zz)
-}
-
-// rawNormShortfallFloor is why every fixture below that demonstrates a
-// naiveNorm shortfall needs a leg past this magnitude — the ONE place this
-// derivation is stated; every other fixture in this file or bounds_sweep_
-// internal_test.go that needs a large-magnitude case points back here rather
-// than restating it.
+// explicit conversion forces x*y's rounding before the add. naiveNorm uses
+// that conversion to fix each rounded square before the sum. The
+// rawNormShortfallFloor below marks where a rounded square can first lose
+// enough bits for naiveNorm to understate the exact norm. Fixtures that claim
+// this shortfall need a component above that floor; this comment gives the
+// derivation for fixtures in this file and bounds_sweep_internal_test.go.
 //
 // naiveNorm's sum of three squares is exact whenever it fits under 2^53, so
 // naiveNorm is CORRECTLY ROUNDED there and cannot understate (or overstate)
