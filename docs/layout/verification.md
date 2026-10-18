@@ -23,7 +23,7 @@ The rules for rows live in `docs/layout.md`.
 | `contact_pair.go` | Pair gates, public contact report types and their conversion from the `internal/reportvocab` report. See contact-geometry §6. |
 | `contact_pair_memo.go` | Bit-exact pair report keys, bounded memo, and result cloning. See contact-geometry. |
 | `contact_box.go` | Source-box admission and public face/measurement mapping. See contact-geometry §4. |
-| `contact_faceted_pair.go` | Planar admission, convexity and the bands. See multibody §9–§10. |
+| `contact_faceted_pair.go` | Planar admission, snapshots and convexity cache; dispatch to `internal/planarband/`. See multibody §9–§10. |
 | `contact_faceted_manifold.go` / `contact_faceted_patch.go` | Planar manifold faces and witnesses. See multibody §9. |
 | `contact_faceted_support.go` | Exact faceted support-face proof and bounded strict separation. See contact-geometry §4. |
 | `contact_faceted_sweep.go` | Faceted floor sweeps: exact support face, or clearance by swept boxes. See contact-sweep. |

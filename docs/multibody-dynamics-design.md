@@ -2889,7 +2889,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 
 ### PR 20c (Phase 3) — the displaced pair's support set and penetration manifold
 
-- Delivers §10.4's relation rows for a lifted set and a deep overlap: `planarBandPair.classify` routes a
+- Delivers §10.4's relation rows for a lifted set and a deep overlap: `internal/planarband.Classify` routes a
   held `Separated` pair within `b = max(SupportBand, δ)` through §10.5's support band over the zero-`δ`
   host's planes alone, charges `g + δ` on the gap, `δ` on each lifted point's `Separation` and each body's
   `δ` on its own witness ball; a held overlap deeper than `δ` publishes §9.3's convex-convex manifold or
@@ -2918,7 +2918,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   `StepManifoldMissing`. The bottle's drop is PR 20g's fixture: its landing solve needs §6.3's witness
   torque.
 - Depends on: PRs 14d, 18, 20b.
-- Shipped. `planarBandPair.liftedBand` publishes the lifted set and `overlapManifold` the deep overlap's
+- Shipped. `internal/planarband`'s `liftedBand` publishes the lifted set and `overlapManifold` the deep overlap's
   patch, both charged by `chargedManifold`; `pair.PlanarFacePenetrationGrown` reads §9.6's conditions 3
   and 4 over M grown by its δ. `PlanarSupportSets` reads every guest, as PR 20d states. The §9.6 path needs
   M's §9.2 certificate, which the `2.1 mm` block's held mesh does not carry (a rounded foot leaves a vertex
