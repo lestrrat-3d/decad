@@ -107,7 +107,7 @@ func TestPointLoftAuditsDecideCapsAsFamilies(t *testing.T) {
 		if hasApex {
 			upperOffset = 1
 		}
-		layout, ok := pointPlaneSlabCapLayout(payload.PointPlane.Base.Tris[:n], len(payload.Tris), upperOffset, hasApex)
+		layout, ok := loftmesh.PointPlaneSlabCapLayout(payload.PointPlane.Base.Tris[:n], len(payload.Tris), upperOffset, hasApex)
 		require.True(t, ok, name)
 		cases = append(cases, audited{name, layout, payload.Verts, payload.Tris, proofs})
 	}
