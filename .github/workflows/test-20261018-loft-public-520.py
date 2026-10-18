@@ -228,10 +228,10 @@ def final_after_quiescence(container_id, init_pid, path, inode):
     return counters(path)
 
 
-def stop_and_capture(container_id, init_pid, path, inode, group, permit_sent, deadline,
+def stop_and_capture(container_id, init_pid, path, inode, group, permit_attempted, deadline,
                      drain=lambda: None):
     """Return counters only after the same init is the sole live process."""
-    if not permit_sent:
+    if not permit_attempted:
         return final_after_quiescence(container_id, init_pid, path, inode)
     if group is None:
         result = docker("exec", container_id, "sh", "-c", "cat /tmp/pgid",
@@ -258,6 +258,22 @@ def stop_and_capture(container_id, init_pid, path, inode, group, permit_sent, de
     return None
 
 
+def verify_scratch_sizes(container_id):
+    result = docker("exec", container_id, "stat", "-f", "-c", "%n %T %S %b",
+                    "/tmp", "/go-cache", timeout=5)
+    lines = result.stdout.decode("ascii", "strict").splitlines()
+    if len(lines) != 2:
+        raise GateError("scratch stat output differs")
+    for name, line in zip(("/tmp", "/go-cache"), lines, strict=True):
+        fields = line.split()
+        if len(fields) != 4 or fields[:2] != [name, "tmpfs"] or \
+                not all(re.fullmatch(r"[0-9]{1,20}", part) for part in fields[2:]):
+            raise GateError(f"scratch mount differs: {name}")
+        block_size, blocks = map(int, fields[2:])
+        if not block_size or not blocks or block_size * blocks > 1024**3:
+            raise GateError(f"scratch mount differs: {name}")
+
+
 def verify_limits(path, pid, container_id):
     if read_number(path / "memory.max") != HARD or \
             read_number(path / "memory.swap.max") != 0 or \
@@ -276,9 +292,9 @@ def verify_limits(path, pid, container_id):
         raise GateError("source mount is not read only")
     for name in ("/tmp", "/go-cache"):
         opts, info = mounts[name]
-        stat = os.statvfs(f"/proc/{pid}/root{name}")
-        if info[0] != "tmpfs" or "rw" not in opts or stat.f_blocks * stat.f_frsize > 1024**3:
+        if info[0] != "tmpfs" or "rw" not in opts:
             raise GateError(f"scratch mount differs: {name}")
+    verify_scratch_sizes(container_id)
     if read_number(path / "memory.current") >= STOP:
         raise GateError("memory reached stop threshold before Go")
     if counters(path)["swap"] or counters(path)["events"].get("oom", 0) or \
@@ -293,6 +309,8 @@ set -eu
 mkfifo /tmp/permit /tmp/release
 printf '@@GATE_READY@@\n'
 read -r permit < /tmp/permit
+if [ "$permit" = abort ]; then exit 0; fi
+test "$permit" = go
 setsid bash -ceu '
   version=$(go version)
   test "$version" = "go version go1.26.8 linux/amd64"
@@ -372,6 +390,7 @@ def run(args, report):
     container_id = None
     start_proc = None
     group = None
+    permit_attempted = False
     permit_sent = False
     cgroup_path = None
     cgroup_inode = None
@@ -473,8 +492,9 @@ def run(args, report):
                                                "--format", "{{.Id}}").stdout.decode().strip():
                         raise GateError("container image identity differs from pinned image")
                     report["image_id"] = info["Image"]
-                    permit_sent = True
+                    permit_attempted = True
                     docker("exec", container_id, "sh", "-c", "printf 'go\\n' > /tmp/permit")
+                    permit_sent = True
             if cgroup_path is None or init_pid is None or not saw_begin or done_code is None:
                 raise GateError("workload or cgroup evidence is incomplete")
             final = final_after_quiescence(container_id, init_pid, cgroup_path, cgroup_inode)
@@ -500,7 +520,7 @@ def run(args, report):
             if cgroup_path and "final_cgroup" not in report:
                 try:
                     final = stop_and_capture(container_id, init_pid, cgroup_path, cgroup_inode,
-                                             group, permit_sent,
+                                             group, permit_attempted,
                                              min(time.monotonic() + 15, absolute_deadline - 15),
                                              drain_after_stop)
                     if final is not None:
@@ -512,13 +532,19 @@ def run(args, report):
                 report["final_evidence"] = "unknown"
                 failure = (failure or "failure") + "; final cgroup evidence unknown"
             if start_proc and start_proc.poll() is None and "final_cgroup" in report:
-                try:
-                    docker("exec", container_id, "sh", "-c", "printf 'release\\n' > /tmp/release",
-                           timeout=5, check=False)
-                    if start_proc.wait(timeout=5):
-                        failure = (failure or "failure") + "; container init exited nonzero"
-                except (GateError, subprocess.TimeoutExpired):
-                    failure = (failure or "failure") + "; clean init release failed"
+                if permit_attempted and not permit_sent:
+                    # A timed-out exec may already have written go; neither FIFO is safe.
+                    failure = (failure or "failure") + "; permit write outcome unknown"
+                else:
+                    token = "release" if permit_sent else "abort"
+                    fifo = "/tmp/release" if permit_sent else "/tmp/permit"
+                    try:
+                        docker("exec", container_id, "sh", "-c",
+                               f"printf '{token}\\n' > {fifo}", timeout=5)
+                        if start_proc.wait(timeout=5):
+                            failure = (failure or "failure") + "; container init exited nonzero"
+                    except (GateError, subprocess.TimeoutExpired):
+                        failure = (failure or "failure") + f"; clean init {token} failed"
             try:
                 removed = docker("rm", "-f", container_id, timeout=10, check=False)
                 gone = docker("inspect", container_id, check=False).returncode != 0
