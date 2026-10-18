@@ -655,7 +655,7 @@ func emitCapBlendCap(ctx context.Context, m *Mesh, cbp capBlendPayload, lms []ca
 			chamfered = lm.onEnd
 		}
 		ringPts, ringV := lm.sidePts, lm.sideLo
-		ringSag := capBlendRingSagitta(lm, false)
+		ringSag := tessellation.CapBlendRingSagitta(lm.proof(), false)
 		if !start {
 			ringV = lm.sideHi
 		}
@@ -664,7 +664,7 @@ func emitCapBlendCap(ctx context.Context, m *Mesh, cbp capBlendPayload, lms []ca
 			if !start {
 				ringV = lm.capHiV
 			}
-			ringSag = capBlendRingSagitta(lm, true)
+			ringSag = tessellation.CapBlendRingSagitta(lm.proof(), true)
 			d, ok := cbp.BandDelta[capBandKey{Loop: lm.li, Start: start}]
 			if !ok {
 				return fmt.Errorf(`%w: the payload states no contour displacement for the chamfer band on loop %d`, ErrDegenerate, lm.li)
@@ -697,7 +697,8 @@ func emitCapBlendCap(ctx context.Context, m *Mesh, cbp capBlendPayload, lms []ca
 		if !start {
 			chamfered = lm.onEnd
 		}
-		m.n.AreaSlack = proofbound.AbsSumUpper(m.n.AreaSlack, capBlendRingSegmentArea(lm, chamfered, cbp.LoopOffset(lm.li)))
+		m.n.AreaSlack = proofbound.AbsSumUpper(m.n.AreaSlack,
+			tessellation.CapBlendRingSegmentArea(lm.proof(), chamfered, cbp.LoopOffset(lm.li)))
 	}
 	tris, err := triangulation.Triangulate(ctx, point2ToRecordSlice(pts), loopIdx)
 	if err != nil {
@@ -716,14 +717,4 @@ func emitCapBlendCap(ctx context.Context, m *Mesh, cbp capBlendPayload, lms []ca
 	}
 	bump(face, proofbound.AbsSumUpper(trim, delta, axial))
 	return nil
-}
-
-// capBlendRingSagitta reads the side or cap ring's numeric proof.
-func capBlendRingSagitta(lm *capBlendLoopMesh, contour bool) float64 {
-	return tessellation.CapBlendRingSagitta(lm.proof(), contour)
-}
-
-// capBlendRingSegmentArea reads the matching circular-segment area proof.
-func capBlendRingSegmentArea(lm *capBlendLoopMesh, contour bool, d float64) float64 {
-	return tessellation.CapBlendRingSegmentArea(lm.proof(), contour, d)
 }

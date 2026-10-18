@@ -3,10 +3,9 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 )
 
 // proveLoftCapBandVolume covers the narrow loft cap band: straight held outer
@@ -37,11 +36,18 @@ func proveLoftCapBandVolume(ctx context.Context, mesh *Mesh, body *Body,
 			return fmt.Errorf("%w: loft cap-band reflex corner has no chorded apex fan", ErrUnsupported)
 		}
 	}
-	motionMax, err := loftCapBandFiniteMotion(lms[0], mesh.n.Vertices, motion)
+	outer := lms[0]
+	motionMax, err := tessellation.LoftCapBandFiniteMotion(
+		outer.arcCount, outer.capArcStart, outer.capLoV, outer.capHiV,
+		len(outer.capPts), mesh.n.Vertices, motion)
 	if err != nil {
 		return err
 	}
-	slab, err := loftCapBandSlabVolume(ctx, body, mesh, cbp)
+	slab, err := tessellation.LoftCapBandSlabVolume(ctx,
+		cbp.PrismLike(0, 0).Point(0, 0, cbp.Z0),
+		body.n.Bounds.Min, body.n.Bounds.Max, body.n.Bounds.Bound.Base(),
+		mesh.n.Vertices, cbp.AxialDelta(), mesh.n.Bound,
+		cbp.Start.AxialUpper(), cbp.End.AxialUpper())
 	if err != nil {
 		return err
 	}
@@ -52,90 +58,4 @@ func proveLoftCapBandVolume(ctx context.Context, mesh *Mesh, body *Body,
 		slab,
 		cbp.LoftSource.Proof.VolSymDiff,
 	})
-}
-
-// loftCapBandFiniteMotion replaces only the two cap-level copies of each
-// reflex connector station. capBlendVertices appends one motion entry when it
-// appends each vertex, so its vertex indices also index motion.
-func loftCapBandFiniteMotion(outer capBlendLoopMesh, vertices []r3.Vec, motion []float64) (float64, error) {
-	if len(motion) != len(vertices) || len(outer.capLoV) != len(outer.capPts) ||
-		len(outer.capHiV) != len(outer.capPts) {
-		return 0, fmt.Errorf("%w: loft cap-band motion does not match its vertices", ErrUnsupported)
-	}
-	reflex := make([]bool, len(motion))
-	for i, count := range outer.arcCount {
-		if count == 0 {
-			continue
-		}
-		start := outer.capArcStart[i]
-		if start < 0 || start+count > len(outer.capPts) {
-			return 0, fmt.Errorf("%w: loft cap-band reflex stations are incomplete", ErrUnsupported)
-		}
-		for k := start; k < start+count; k++ {
-			lo, hi := outer.capLoV[k], outer.capHiV[k]
-			if lo < 0 || lo >= len(motion) || hi < 0 || hi >= len(motion) || lo == hi || reflex[lo] || reflex[hi] {
-				return 0, fmt.Errorf("%w: loft cap-band reflex vertices are incomplete", ErrUnsupported)
-			}
-			reflex[lo], reflex[hi] = true, true
-		}
-	}
-	worst := 0.0
-	for i, value := range motion {
-		if reflex[i] {
-			if !math.IsInf(value, 1) {
-				return 0, fmt.Errorf("%w: loft cap-band reflex motion is not an apex sample", ErrUnsupported)
-			}
-			motion[i] = 0
-			continue
-		}
-		if proofbound.IsNonFinite(value) || value < 0 {
-			return 0, fmt.Errorf("%w: loft cap-band vertex motion is not finite", ErrUnsupported)
-		}
-		worst = math.Max(worst, value)
-	}
-	return worst, nil
-}
-
-// loftCapBandSlabVolume bounds the uncertain part by two axial slabs inside
-// one cylinder. A world-space sphere enclosing the body and mesh gives a
-// radius for the cylinder around any sweep axis, including after placement.
-// The body box's own error is charged at each coordinate; the mesh vertices
-// are the exact held points. Both cap levels are widened by their inherited
-// axial error and the mesh's full displacement, so the slab includes all
-// floating-point level motion as well as every reflex apex fan.
-func loftCapBandSlabVolume(ctx context.Context, body *Body, mesh *Mesh, cbp capBlendPayload) (float64, error) {
-	center := cbp.PrismLike(0, 0).Point(0, 0, cbp.Z0)
-	boxError := body.n.Bounds.Bound.Base()
-	axisMax := 0.0
-	include := func(p [3]float64, errorBound float64) {
-		coords := [3]float64{center.X, center.Y, center.Z}
-		for i := range p {
-			diff := proofbound.BoundedSub(proofbound.MeasuredScalar(p[i], errorBound),
-				proofbound.ExactScalar(coords[i]))
-			axisMax = math.Max(axisMax, proofbound.AbsSumUpper(diff.Value, diff.Bound))
-		}
-	}
-	include([3]float64{body.n.Bounds.Min.X, body.n.Bounds.Min.Y, body.n.Bounds.Min.Z}, boxError)
-	include([3]float64{body.n.Bounds.Max.X, body.n.Bounds.Max.Y, body.n.Bounds.Max.Z}, boxError)
-	for i, p := range mesh.n.Vertices {
-		if i%1024 == 0 {
-			if err := ctx.Err(); err != nil {
-				return 0, err
-			}
-		}
-		include([3]float64{p.X, p.Y, p.Z}, 0)
-	}
-	radius := proofbound.Radius3D(axisMax)
-	// The true band and its mesh can each move on both sides of a nominal
-	// level. Two copies of the inherited axial and tessellation allowances
-	// cover those opposite motions before the two cap slabs are summed.
-	levelError := proofbound.AbsSumUpper(cbp.AxialDelta(), mesh.n.Bound)
-	startHeight := proofbound.AbsSumUpper(cbp.Start.AxialUpper(), proofbound.ProductUpper(2, levelError))
-	endHeight := proofbound.AbsSumUpper(cbp.End.AxialUpper(), proofbound.ProductUpper(2, levelError))
-	area := proofbound.ProductUpper(4, proofbound.ProductUpper(radius, radius))
-	volume := proofbound.ProductUpper(area, proofbound.AbsSumUpper(startHeight, endHeight))
-	if proofbound.IsNonFinite(volume) {
-		return 0, fmt.Errorf("%w: loft cap-band slab has no finite volume bound", ErrUnsupported)
-	}
-	return volume, nil
 }

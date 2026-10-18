@@ -57,7 +57,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/momentinput/` | Profile records, exact comparison, area falsifiers, rectangle bounds, moments, walk cache and coordinate envelopes. See evaluator §1/§4 and spline §5.2. |
 | `internal/momentline/` | Computes line moments. See evaluator §4. |
 | `internal/momentregion/` | Accumulates record moments. See evaluator §4. |
-| `internal/tessellation/` | Recorded-loop and band chording, BRep wall strip triangulation, section loop and walk clearance refusals, mesh topology and joined-mesh orientation, chain-sweep proof readings, bounds and audits. See tessellation-design. |
+| `internal/tessellation/` | Recorded-loop and band chording, cap-band motion and slab volume, BRep wall strip triangulation, section loop and walk clearance refusals, mesh topology and joined-mesh orientation, chain-sweep proof readings, bounds and audits. See tessellation-design. |
 | `internal/partialband/` | Selected cap-edge fillet band sample layouts and open boundary polylines, and exact partial-chamfer quad gates and mass. See loop-fillet §7.1, modify-general §4.3a. |
 | `internal/stationbound/` | Bounds circular chord stations, offset cap stations and chain-sweep arc stations against their exact recorded parameters. |
 | `internal/loftrecord/` | The loft and chain loft payloads and their builders over nodes: records, evaluation, placement, flat-triangle topology, certified circular-hole walls and bore proofs, mass readings. Root `loftPayload` and `chainLoftPayload` alias it. See loft §5, §7, §16, §18, evaluator §8. |
