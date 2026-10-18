@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
@@ -98,7 +99,7 @@ func tryStraightLoftPrismUnionMany(ctx context.Context, d *Document, ref produce
 		if !ok {
 			return nil, false, nil
 		}
-		prism, ok, err := exactAxialLoftPrism(ctx, loft)
+		prism, ok, err := loftrecord.ExactAxialPrism(ctx, loft)
 		if err != nil || !ok {
 			return nil, false, err
 		}
@@ -132,7 +133,7 @@ func tryPrismUnionChain(ctx context.Context, ref producerID, operands []*Body) (
 		if !ok {
 			return nil, 0, false, nil
 		}
-		if _, ok, err := exactAxialLoftPrism(ctx, loft); err != nil {
+		if _, ok, err := loftrecord.ExactAxialPrism(ctx, loft); err != nil {
 			return nil, 0, true, err
 		} else if !ok {
 			return nil, 0, false, nil

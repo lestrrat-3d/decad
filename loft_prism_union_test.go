@@ -5,6 +5,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -159,7 +160,7 @@ func TestAxialLoftPrismUnionRefusesVaryingSource(t *testing.T) {
 	}
 	body, err := Loft(t.Context(), New(), sketches[0], profiles[0], sketches[1], profiles[1])
 	require.NoError(t, err)
-	_, admitted, err := exactAxialLoftPrism(t.Context(), body.n.Payload.(loftPayload))
+	_, admitted, err := loftrecord.ExactAxialPrism(t.Context(), body.n.Payload.(loftPayload))
 	require.NoError(t, err)
 	require.False(t, admitted)
 }
