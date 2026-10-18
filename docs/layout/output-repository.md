@@ -26,7 +26,7 @@ The rules for rows live in `docs/layout.md`.
 | `tessellate_body_patch.go` | Triangulates planar PatchEdges sheets and proves face bounds. See tessellation §2. |
 | `tessellate_body_patch_prism.go` | Reuses circular surface-extrusion wall stations to mesh one or both PatchEdges fills with shared rim indices and verified face bounds. |
 | `tessellate_chain.go` | A chain ribbon's exact-quad mesh. See surface §13.4. |
-| `tessellate_chain_sweep.go` | Shared-station mesh and bounds for the cardinal composite chain sheet. See sweep §15.8. |
+| `tessellate_chain_sweep.go` | Shared-station mesh assembly and face selection for the cardinal composite chain sheet. See sweep §15.8. |
 | `tessellate_chain_arc.go` | Certified angular-cell mesh for one-line single-arc chain sheets. See sweep §15.9. |
 | `tessellate_coil.go` | A coil's held-shell mesh with its area and volume proofs. See helix §8. |
 | `tessellate_capblend.go` | The cap-loop chamfer mesh. See tessellation reach §7. |
