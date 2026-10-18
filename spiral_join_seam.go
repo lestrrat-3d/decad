@@ -16,7 +16,7 @@ import (
 // layout. Exact source-cell and held-edge boxes cover both curves.
 func spiralHeldShortCapProof(ctx context.Context, held *meshbool.StitchedMesh,
 	blank, tooth *Body, proof *spiralFirstJoinSource,
-	short [2][4]spiralShortCapFamily) (float64, bool, error) {
+	short [2][4]spiralsector.ShortCapFamily) (float64, bool, error) {
 	if ctx == nil || held == nil || blank == nil || tooth == nil || proof == nil ||
 		proof.Tooth == nil {
 		return 0, false, nil
@@ -40,13 +40,13 @@ func spiralHeldShortCapProof(ctx context.Context, held *meshbool.StitchedMesh,
 		}
 		for index, role := range roles {
 			family := short[end][index]
-			if family.group != role || len(family.pieces) != 1 ||
-				family.band < 0 || family.band >= len(proof.Tooth.Maps)-1 ||
-				family.band != proof.Junctions[0][end].Band ||
-				family.band != proof.Junctions[1][end].Band {
+			if family.Group != role || len(family.Pieces) != 1 ||
+				family.Band < 0 || family.Band >= len(proof.Tooth.Maps)-1 ||
+				family.Band != proof.Junctions[0][end].Band ||
+				family.Band != proof.Junctions[1][end].Band {
 				return 0, false, nil
 			}
-			origin, found := spiralOriginalSideRef(proof.Tooth, family.band, role)
+			origin, found := spiralOriginalSideRef(proof.Tooth, family.Band, role)
 			if !found {
 				return 0, false, nil
 			}
@@ -79,7 +79,7 @@ func spiralHeldShortCapProof(ctx context.Context, held *meshbool.StitchedMesh,
 			for i, vertex := range chain.Vertices {
 				ordered[i] = held.Verts[vertex]
 			}
-			distance, accepted, err := spiralShortHeldBound(ctx,
+			distance, accepted, err := spiralsector.ShortHeldBound(ctx,
 				proof, family, ordered, chain.MinBeta)
 			if err != nil || !accepted {
 				return distance, false, err

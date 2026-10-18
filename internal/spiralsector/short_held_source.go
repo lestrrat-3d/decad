@@ -1,17 +1,17 @@
-package decad
+package spiralsector
 
 import (
 	"context"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/spiralsector"
 	"github.com/lestrrat-3d/r3"
 )
 
-// spiralShortHeldBound compares an authenticated finite cap intersection
+// ShortHeldBound compares an authenticated finite cap intersection
 // with one complete held switch chain. The caller authenticates the source
 // family, the chain's face roles and topology, and minBound against every
 // public curve bound on the chain.
@@ -23,19 +23,19 @@ import (
 // box. The maximum possible distance between either pair of boxes proves
 // both directions, including their endpoints, without assuming that X or
 // angle is ordered on the source curve.
-func spiralShortHeldBound(ctx context.Context, proof *spiralFirstJoinSource,
-	family spiralShortCapFamily, held []r3.Vec, minBound float64) (float64, bool, error) {
+func ShortHeldBound(ctx context.Context, proof *facetedrecord.SpiralFirstJoinSource,
+	family ShortCapFamily, held []r3.Vec, minBound float64) (float64, bool, error) {
 	if ctx == nil || proof == nil || proof.Tooth == nil || len(proof.Tooth.Maps) != 9 ||
-		len(family.pieces) != 1 || len(held) < 2 || len(held) > 1025 ||
+		len(family.Pieces) != 1 || len(held) < 2 || len(held) > 1025 ||
 		proofbound.IsNonFinite(minBound) || minBound <= 0 ||
-		family.band != 1 && family.band != 7 ||
-		family.group != 0 && family.group != 2 && family.group != 3 && family.group != 5 {
+		family.Band != 1 && family.Band != 7 ||
+		family.Group != 0 && family.Group != 2 && family.Group != 3 && family.Group != 5 {
 		return 0, false, nil
 	}
 	if err := ctx.Err(); err != nil {
 		return 0, false, err
 	}
-	source, ok, err := spiralShortSourceCells(ctx, proof, family)
+	source, ok, err := shortSourceCells(ctx, proof, family)
 	if err != nil || !ok {
 		return 0, false, err
 	}
@@ -51,9 +51,9 @@ func spiralShortHeldBound(ctx context.Context, proof *spiralFirstJoinSource,
 		for piece := range edgePieces {
 			var box [3]loftFaceInterval
 			for axis := range box {
-				left := lfAdd(lfF(a[axis]), lfMul(lfSub(lfF(z[axis]), lfF(a[axis])),
+				left := shortRatAdd(seamRatF(a[axis]), shortRatMul(shortRatSub(seamRatF(z[axis]), seamRatF(a[axis])),
 					big.NewRat(int64(piece), edgePieces)))
-				right := lfAdd(lfF(a[axis]), lfMul(lfSub(lfF(z[axis]), lfF(a[axis])),
+				right := shortRatAdd(seamRatF(a[axis]), shortRatMul(shortRatSub(seamRatF(z[axis]), seamRatF(a[axis])),
 					big.NewRat(int64(piece+1), edgePieces)))
 				if left.Cmp(right) > 0 {
 					left, right = right, left
@@ -66,10 +66,10 @@ func spiralShortHeldBound(ctx context.Context, proof *spiralFirstJoinSource,
 	// Most matching boxes are much closer than minBound. Outward float boxes
 	// can certify those pairs without repeating large rational subtractions
 	// for every tooth copy. Uncertain cases retain the exact search below.
-	if fast, accepted := spiralsector.ShortFloatCover(ctx, source, mesh, minBound); accepted {
+	if fast, accepted := ShortFloatCover(ctx, source, mesh, minBound); accepted {
 		return fast, true, nil
 	}
-	limit := lfMul(lfF(minBound), lfF(minBound))
+	limit := shortRatMul(seamRatF(minBound), seamRatF(minBound))
 	var largest *big.Rat
 	for direction := range 2 {
 		from, to := source, mesh
@@ -84,7 +84,7 @@ func spiralShortHeldBound(ctx context.Context, proof *spiralFirstJoinSource,
 			}
 			var nearest *big.Rat
 			for _, b := range to {
-				distance, valid := spiralsector.ShortBoxesDistanceSquared(a, b)
+				distance, valid := ShortBoxesDistanceSquared(a, b)
 				if !valid {
 					return 0, false, nil
 				}
@@ -110,28 +110,28 @@ func spiralShortHeldBound(ctx context.Context, proof *spiralFirstJoinSource,
 	return bound, !proofbound.IsNonFinite(bound) && bound < minBound, nil
 }
 
-func spiralShortSourceCells(ctx context.Context, proof *spiralFirstJoinSource,
-	family spiralShortCapFamily) ([][3]loftFaceInterval, bool, error) {
-	part := family.pieces[0]
-	if len(part.span) != 2 && len(part.span) != 4 || len(part.q[0]) == 0 {
+func shortSourceCells(ctx context.Context, proof *facetedrecord.SpiralFirstJoinSource,
+	family ShortCapFamily) ([][3]loftFaceInterval, bool, error) {
+	part := family.Pieces[0]
+	if len(part.Span) != 2 && len(part.Span) != 4 || len(part.Q[0]) == 0 {
 		return nil, false, nil
 	}
-	start, end := lfZero(), lfOne()
-	if len(part.span) == 4 {
-		clip := family.finiteClip
-		if clip.Band != family.band || clip.SLo == nil || clip.SHi == nil ||
+	start, end := new(big.Rat), shortRatOne()
+	if len(part.Span) == 4 {
+		clip := family.FiniteClip
+		if clip.Band != family.Band || clip.SLo == nil || clip.SHi == nil ||
 			clip.SLo.Sign() <= 0 || clip.SLo.Cmp(clip.SHi) >= 0 ||
-			clip.SHi.Cmp(lfOne()) >= 0 || family.finiteEnd < 0 || family.finiteEnd > 1 {
+			clip.SHi.Cmp(shortRatOne()) >= 0 || family.FiniteEnd < 0 || family.FiniteEnd > 1 {
 			return nil, false, nil
 		}
-		if family.finiteEnd == 0 {
+		if family.FiniteEnd == 0 {
 			end = clip.SHi
 		} else {
 			start = clip.SLo
 		}
 	}
-	width := lfDiv(lfSub(end, start), big.NewRat(16, 1))
-	first, second := proof.Tooth.Maps[family.band], proof.Tooth.Maps[family.band+1]
+	width := shortRatDiv(shortRatSub(end, start), big.NewRat(16, 1))
+	first, second := proof.Tooth.Maps[family.Band], proof.Tooth.Maps[family.Band+1]
 	boxes := make([][3]loftFaceInterval, 0, 16)
 	for cell := range 16 {
 		if cell%4 == 0 {
@@ -139,23 +139,23 @@ func spiralShortSourceCells(ctx context.Context, proof *spiralFirstJoinSource,
 				return nil, false, err
 			}
 		}
-		lo := lfAdd(start, lfMul(big.NewRat(int64(cell), 1), width))
-		hi := lfAdd(lo, width)
-		if len(part.span) == 4 && (family.finiteEnd == 0 && cell == 15 && lo.Cmp(family.finiteClip.SLo) >= 0 ||
-			family.finiteEnd == 1 && cell == 0 && hi.Cmp(family.finiteClip.SHi) <= 0) {
+		lo := shortRatAdd(start, shortRatMul(big.NewRat(int64(cell), 1), width))
+		hi := shortRatAdd(lo, width)
+		if len(part.Span) == 4 && (family.FiniteEnd == 0 && cell == 15 && lo.Cmp(family.FiniteClip.SLo) >= 0 ||
+			family.FiniteEnd == 1 && cell == 0 && hi.Cmp(family.FiniteClip.SHi) <= 0) {
 			// The one enlarged clip cell must still contain a real, finite
 			// source arc; it cannot be only the excluded side of the cap.
 			return nil, false, nil
 		}
 		var restricted [3][]*big.Rat
 		for row := range restricted {
-			restricted[row] = polynomial.BernsteinRestrict(part.q[row], lo, hi)
+			restricted[row] = polynomial.BernsteinRestrict(part.Q[row], lo, hi)
 		}
-		t, yes := spiralsector.ShortCapTBracket(restricted)
+		t, yes := ShortCapTBracket(restricted)
 		if !yes {
 			return nil, false, nil
 		}
-		box, yes := loftface.JunctionBox(first, second, part.span, lo, hi, t.Lo, t.Hi)
+		box, yes := loftface.JunctionBox(first, second, part.Span, lo, hi, t.Lo, t.Hi)
 		if !yes {
 			return nil, false, nil
 		}
