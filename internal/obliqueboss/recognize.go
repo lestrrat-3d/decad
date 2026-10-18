@@ -1,24 +1,29 @@
-package decad
+package obliqueboss
 
 import (
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 )
 
-// recognizeObliqueBoss is reject-only. It never changes the mesh Union or
-// asserts that a mesh intersection alone authenticates a source surface.
-func recognizeObliqueBoss(a, b *Body) *obliqueBossRecord {
+// Recognize is reject-only. It never changes the mesh Union or asserts that
+// a mesh intersection alone authenticates a source surface.
+func Recognize(a, b *topo.Body) *facetedrecord.ObliqueBossRecord {
 	plate, boss := a, b
-	pp, plateOK := plate.n.Payload.(prismPayload)
-	cp, circleOK := boss.n.Payload.(prismPayload)
+	pp, plateOK := plate.Payload.(prismrecord.Payload)
+	cp, circleOK := boss.Payload.(prismrecord.Payload)
 	if !plateOK || !circleOK || len(cp.Profile.Outer.Segments) != 1 {
 		plate, boss = b, a
-		pp, plateOK = plate.n.Payload.(prismPayload)
-		cp, circleOK = boss.n.Payload.(prismPayload)
+		pp, plateOK = plate.Payload.(prismrecord.Payload)
+		cp, circleOK = boss.Payload.(prismrecord.Payload)
 	}
 	if !plateOK || !circleOK || pp.SurfaceResult || cp.SurfaceResult ||
 		pp.SectionDelta != 0 || cp.SectionDelta != 0 ||
@@ -34,8 +39,8 @@ func recognizeObliqueBoss(a, b *Body) *obliqueBossRecord {
 	if !ok {
 		return nil
 	}
-	circle, ok := cp.Profile.Outer.Segments[0].(circleSeg)
-	if !ok || circle.Center != (planePoint{}) || !circle.CCW ||
+	circle, ok := cp.Profile.Outer.Segments[0].(sectionrecord.CircleSeg)
+	if !ok || circle.Center != (sectionrecord.Point2{}) || !circle.CCW ||
 		!(circle.TStart == 0 && circle.TEnd == 1) {
 		return nil
 	}
@@ -68,14 +73,14 @@ func recognizeObliqueBoss(a, b *Body) *obliqueBossRecord {
 	// certificate for the placed Sketch circle.
 	sourceBound := 0.0
 	capCount := 0
-	for _, edge := range boss.Edges() {
-		if _, ok := edge.n.Curve.(surfacegeom.Circle3); !ok {
+	for _, edge := range topobuild.Edges(boss) {
+		if _, ok := edge.Curve.(surfacegeom.Circle3); !ok {
 			continue
 		}
-		if !edge.n.CurveBounded {
+		if !edge.CurveBounded {
 			return nil
 		}
-		sourceBound = max(sourceBound, edge.n.CurveBound)
+		sourceBound = max(sourceBound, edge.CurveBound)
 		capCount++
 	}
 	if capCount != 2 || !(sourceBound < radius/1000) {
@@ -111,8 +116,8 @@ func recognizeObliqueBoss(a, b *Body) *obliqueBossRecord {
 			return nil
 		}
 	}
-	return &obliqueBossRecord{
-		Plate: bodyNode(plate), Boss: bodyNode(boss), Rect: rect, Bottom: pp.Z0, Top: pp.Z1,
+	return &facetedrecord.ObliqueBossRecord{
+		Plate: plate, Boss: boss, Rect: rect, Bottom: pp.Z0, Top: pp.Z1,
 		Base: base, Axis: axis, Ex: ex, Ey: ey, Radius: radius,
 		Length: length, SourceBound: sourceBound,
 	}
