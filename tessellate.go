@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/decad/internal/sweeprecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
@@ -368,7 +369,11 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		return tessellateCup(ctx, b, cp.View(), chord, verify)
 	}
 	if sp, ok := b.n.Payload.(stackedPrismPayload); ok {
-		return tessellateStacked(ctx, b, sp, chord, verify)
+		node, err := stackedrecord.Tessellate(ctx, &b.n, sp, chord, verify >= VerifyAll)
+		if err != nil {
+			return nil, err
+		}
+		return bornMesh(&Mesh{n: *node}), nil
 	}
 	if bp, ok := b.n.Payload.(brepPayload); ok {
 		return tessellateBrep(ctx, b, bp, chord, verify)
