@@ -41,6 +41,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/capedge/` | Convex cap-edge cutter admission, quarter-cylinder profile, chamfer wedge and the P8 top front edge test. See vertex-blend §2. |
 | `internal/prismshell/` | Prism side sections, wall bands, nested boss mesh and proof, closed stack reversal, slab levels and stack faces. See shell-opening §3–§5, shell-faceted-boss design. |
 | `internal/prismrecord/` | The prism record and its builder over nodes (`Build`, `Placed`, extents, map charge); plane-local lifts, point bounds, lift factor, centroid envelope, placement operand, cap frames, mass record, exact box, section-plane test, exact-section gate. Root `prismPayload` aliases it. See evaluator §5, §8. |
+| `internal/prismtess/` | Builds a prism payload's chorded mesh node and its face, area and occupied-volume bounds. See tessellation §5. |
 | `internal/momentinput/` | Profile records, exact comparison, area falsifiers, rectangle bounds, moments, walk cache and coordinate envelopes. See evaluator §1/§4 and spline §5.2. |
 | `internal/momentline/` | Computes line moments. See evaluator §4. |
 | `internal/momentregion/` | Accumulates record moments. See evaluator §4. |
