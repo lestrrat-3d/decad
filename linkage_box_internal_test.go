@@ -42,7 +42,7 @@ func craneBoxRun(t *testing.T, budget int) *boxRun {
 	require.Equal(t, []int{0, 1}, axes)
 	frames, ok := linkageFrames(spec)
 	require.True(t, ok)
-	bounds, ok := readLinkBounds(spec, frames)
+	bounds, ok := linkagebound.ReadReachBounds(reachSource{spec: spec, frames: frames})
 	require.True(t, ok)
 	cfg, budgetRead, err := resolveJointBoxOptions([]JointBoxOption{WithCellBudget(budget)})
 	require.NoError(t, err)
@@ -317,7 +317,7 @@ func rockerGateBoxRun(t *testing.T) *boxRun {
 	cfg, budget, err := resolveJointBoxOptions(nil)
 	require.NoError(t, err)
 	require.NoError(t, spec.prepareLoops(t.Context(), cfg.ResolutionP.Base))
-	bounds, ok := readLinkBounds(spec, frames)
+	bounds, ok := linkagebound.ReadReachBounds(reachSource{spec: spec, frames: frames})
 	require.True(t, ok)
 	run := newLinkageRun(t.Context(), doc, spec, frames, bounds, cfg)
 	return &boxRun{run: run, dr: run.drive.(*linkageDriver), axes: axes, budget: budget}

@@ -76,7 +76,7 @@ func linkageChain(t *testing.T) (*linkageSpec, []motionbound.MotionFrame, []link
 	require.NoError(t, err)
 	frames, ok := linkageFrames(spec)
 	require.True(t, ok)
-	bounds, ok := readLinkBounds(spec, frames)
+	bounds, ok := linkagebound.ReadReachBounds(reachSource{spec: spec, frames: frames})
 	require.True(t, ok)
 	return spec, frames, bounds
 }
@@ -173,7 +173,7 @@ func TestLinkageBallReading(t *testing.T) {
 	require.NoError(t, err)
 	frames, ok := linkageFrames(spec)
 	require.True(t, ok)
-	crossed, ok := readLinkBounds(spec, frames)
+	crossed, ok := linkagebound.ReadReachBounds(reachSource{spec: spec, frames: frames})
 	require.True(t, ok)
 	require.InDelta(t, math.Sqrt(150), linkRatFloat(t, crossed[1].Rho[0]), 1e-9)
 }
@@ -237,7 +237,7 @@ func TestLinkageChainTravelAcrossWaypoints(t *testing.T) {
 	require.NoError(t, err)
 	frames, ok := linkageFrames(spec)
 	require.True(t, ok)
-	bounds, ok := readLinkBounds(spec, frames)
+	bounds, ok := linkagebound.ReadReachBounds(reachSource{spec: spec, frames: frames})
 	require.True(t, ok)
 
 	rho := linkRatFloat(t, bounds[0].Rho[0])
@@ -285,7 +285,7 @@ func foldingArmRun(t *testing.T) (*motionRun, *Body, *Body) {
 	require.NoError(t, err)
 	frames, ok := linkageFrames(spec)
 	require.True(t, ok)
-	bounds, ok := readLinkBounds(spec, frames)
+	bounds, ok := linkagebound.ReadReachBounds(reachSource{spec: spec, frames: frames})
 	require.True(t, ok)
 	cfg, err := motionoption.Resolve(nil, motionbound.FractionDomain())
 	require.NoError(t, err)
@@ -444,7 +444,7 @@ func TestLinkageConstantPlacementIsReused(t *testing.T) {
 	require.NoError(t, err)
 	frames, ok := linkageFrames(spec)
 	require.True(t, ok)
-	bounds, ok := readLinkBounds(spec, frames)
+	bounds, ok := linkagebound.ReadReachBounds(reachSource{spec: spec, frames: frames})
 	require.True(t, ok)
 	cfg, err := motionoption.Resolve(nil, motionbound.FractionDomain())
 	require.NoError(t, err)
@@ -474,7 +474,7 @@ func linkageRunOf(t *testing.T, doc *Document, l *Linkage, drive Drive, opts ...
 	require.NoError(t, err)
 	frames, ok := linkageFrames(spec)
 	require.True(t, ok)
-	bounds, ok := readLinkBounds(spec, frames)
+	bounds, ok := linkagebound.ReadReachBounds(reachSource{spec: spec, frames: frames})
 	require.True(t, ok)
 	encoded, err := decodeMotionOptions(opts)
 	require.NoError(t, err)
