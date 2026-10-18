@@ -566,24 +566,11 @@ func brepWallClearance(ctx context.Context, bp brepPayload, btopo *brepTopology,
 			}
 			pts := append(slices.Clone(a.pts), b.pts...)
 			if err := requireLoopClearance(ctx, pts,
-				[][]int{brepOutAndBack(0, len(a.pts)), brepOutAndBack(len(a.pts), len(b.pts))},
+				[][]int{tessellation.OutAndBack(0, len(a.pts)), tessellation.OutAndBack(len(a.pts), len(b.pts))},
 				[]float64{a.sag, b.sag}); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
-}
-
-// brepOutAndBack indexes an open polyline of n points starting at base as a
-// closed loop that runs out to its end and back.
-func brepOutAndBack(base, n int) []int {
-	out := make([]int, 0, 2*n)
-	for i := range n {
-		out = append(out, base+i)
-	}
-	for i := n - 2; i >= 1; i-- {
-		out = append(out, base+i)
-	}
-	return out
 }

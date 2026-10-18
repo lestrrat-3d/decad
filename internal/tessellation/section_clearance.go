@@ -48,6 +48,19 @@ func SectionLoopClearance(ctx context.Context, pts []SectionPoint, loopIdx [][]i
 	return LoopClearanceFailure{}, false, nil
 }
 
+// OutAndBack indexes an open polyline of n points starting at base as a
+// closed loop that runs out to its end and back.
+func OutAndBack(base, n int) []int {
+	out := make([]int, 0, 2*n)
+	for i := range n {
+		out = append(out, base+i)
+	}
+	for i := n - 2; i >= 1; i-- {
+		out = append(out, base+i)
+	}
+	return out
+}
+
 // sectionClearanceFloor combines 1e-9 of the section span with four ulps of
 // its largest coordinate magnitude. The span is translation invariant; the
 // ulp term charges rounding at the actual coordinate scale.
