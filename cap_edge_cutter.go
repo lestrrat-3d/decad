@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/capedge"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -122,7 +123,7 @@ func obliqueCapEdgeProfile(pp prismPayload, edge *Edge, radius float64) bool {
 	for i, a := range vertices {
 		b := vertices[(i+1)%len(vertices)]
 		for _, level := range []float64{pp.Z0, pp.Z1} {
-			if !matchEndpoints(edge.n.Start.Position, edge.n.End.Position,
+			if !brepgeom.MatchEndpoints(edge.n.Start.Position, edge.n.End.Position,
 				pp.Point(a.U, a.V, level), pp.Point(b.U, b.V, level), 1e-6) {
 				continue
 			}

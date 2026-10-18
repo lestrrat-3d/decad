@@ -45,29 +45,6 @@ type brepModifyRequest struct {
 	loopKind  brepBandKind
 }
 
-// matchesRecordFace keeps a resolved public reference face tied to its
-// receiver's record face across restatement, which preserves the face index.
-func (a *asymmetricChamfer) matchesRecordFace(ref *Face, index int) bool {
-	if ref == nil {
-		return false
-	}
-	faceRole := fmt.Sprintf("face(%d)", index)
-	wallRole := fmt.Sprintf("wall(%d)", index)
-	if a.recordRoles != nil {
-		if index < 0 || index >= len(a.recordRoles) {
-			return false
-		}
-		faceRole, wallRole = a.recordRoles[index], a.recordRoles[index]
-	}
-	for _, origin := range ref.n.Origins {
-		if origin.Producer == a.body.n.Origin.Producer &&
-			(origin.Role == faceRole || origin.Role == wallRole) {
-			return true
-		}
-	}
-	return false
-}
-
 // brepRoute is what the brep route hands back to the op. It is empty for a
 // receiver the brep route does not take, and the op continues on its own
 // path. Route P sets prism, the recognised prism (never stored; the op's
