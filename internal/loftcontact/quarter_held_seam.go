@@ -23,6 +23,7 @@ type QuarterHeldSeam struct {
 	Pieces   int
 	BottomX  *big.Rat
 	TopX     *big.Rat
+	pieces   []heldPiece
 }
 
 type heldPoint struct{ x, y, z *big.Rat }
@@ -530,5 +531,6 @@ func CertifyQuarterHeldSeam(ctx context.Context, budget *proofbound.WorkBudget,
 	if err := budget.Err(); err != nil {
 		return report, false, err
 	}
+	report.pieces = pieces
 	return report, true, nil
 }
