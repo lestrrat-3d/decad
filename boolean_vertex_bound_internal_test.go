@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"math"
 	"math/big"
 	"testing"
 
@@ -14,6 +15,53 @@ import (
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
+
+// vertexBoundTree builds the mitred trunk and n tilted branches used by the
+// contact-bound gate test. The callback sees each pair before Union consumes it.
+func vertexBoundTree(t *testing.T, n int, each func(tree, branch *Body)) *Body {
+	t.Helper()
+	path := func(pts ...r3.Vec) *Path {
+		segs := make([]PathSegment, 0, len(pts)-1)
+		for _, p := range pts[1:] {
+			segs = append(segs, LineTo{End: p})
+		}
+		p, err := NewPath(pts[0], segs...)
+		require.NoError(t, err)
+		return p
+	}
+	doc := New()
+	ts, tp := vertexBoundPolygonSketch(t, 16, 5)
+	tree, err := Sweep(t.Context(), doc, ts, tp,
+		path(r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 30), r3.NewVec(3, 0, 60)),
+		WithMitredJoins(), WithSectionScale(units.Scalar(1), units.Scalar(0.9)))
+	require.NoError(t, err)
+	bs, bp := vertexBoundPolygonSketch(t, 16, 1.5)
+	golden := math.Pi * (3 - math.Sqrt(5))
+	alpha := 40 * math.Pi / 180
+	for k := range n {
+		phi := golden * float64(k)
+		u := r3.NewVec(math.Cos(phi), math.Sin(phi), 0)
+		unit, err := Sweep(t.Context(), doc, bs, bp,
+			path(r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 2.5), r3.NewVec(0.8, 0.3, 6), r3.NewVec(2.5, 0.6, 9.5)),
+			WithMitredJoins(), WithSectionScale(units.Scalar(1.375/1.5), units.Scalar(1.2/1.5), units.Scalar(1/1.5)))
+		require.NoError(t, err)
+		d := u.Scale(math.Sin(alpha)).Add(r3.NewVec(0, 0, math.Cos(alpha)))
+		fu := r3.NewVec(0, 0, 1).Cross(d)
+		fu = fu.Scale(1 / fu.Len())
+		frame, err := r3.NewFrame(u.Scale(2.6).Add(r3.NewVec(0, 0, 4+1.1*float64(k))), fu, d.Cross(fu))
+		require.NoError(t, err)
+		xf, err := r3.FromFrame(frame)
+		require.NoError(t, err)
+		branch, err := Transform(t.Context(), unit, xf)
+		require.NoError(t, err)
+		if each != nil {
+			each(tree, branch)
+		}
+		tree, err = Union(t.Context(), tree, branch)
+		require.NoError(t, err)
+	}
+	return tree
+}
 
 // vertexBoundSketch fixes a closed polygon through pts on the XY plane and
 // returns its one profile.
@@ -385,7 +433,7 @@ func TestHeldGateReadsFacetsWithinThePrePassSlack(t *testing.T) {
 func TestHeldGateCertifiesEachUnionsRimCeiling(t *testing.T) {
 	t.Parallel()
 	unions := 0
-	_, body := vertexBoundTree(t, 20, func(tree, branch *Body) {
+	body := vertexBoundTree(t, 20, func(tree, branch *Body) {
 		ctx := t.Context()
 		tol, _, err := pairChordTolerance(ctx, tree, branch)
 		require.NoError(t, err)
