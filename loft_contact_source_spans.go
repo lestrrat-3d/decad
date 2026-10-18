@@ -142,7 +142,7 @@ func certifyLoftSourceSpanCaps(ctx context.Context, budget *proofbound.WorkBudge
 		}
 	}
 	seen := make([][2]uint8, len(lp.Segment[0]))
-	for triangle := 0; triangle < lp.Walls; triangle++ {
+	for triangle := range lp.Walls {
 		if err := budget.Step(); err != nil {
 			return no, false, err
 		}
