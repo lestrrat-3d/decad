@@ -38,6 +38,8 @@ type loftCapSourceOrder struct {
 // wall budget. Sketch supplies cut ranges and walk order; every resulting
 // fragment must authenticate to one original LineSeg or ArcSeg. Coincident
 // source spans await a separate two-owner certificate and safely decline.
+// The 4096-segment scene preflight bounds Sketch publication; tag scans and
+// the later profile-record walk are separately charged to the source wall.
 func certifyLoftCapSourceOrder(ctx context.Context, budget *proofbound.WorkBudget,
 	source loftSourceSpanCaps) (loftCapSourceOrder, bool, error) {
 	var no loftCapSourceOrder
@@ -63,10 +65,21 @@ func certifyLoftCapSourceOrder(ctx context.Context, budget *proofbound.WorkBudge
 			len(source.loftCaps[cap]) != len(loftLoop.Segments) {
 			return no, false, nil
 		}
+		_, withinCap, err := prismcells.RegionsWithinWorkCap(budget,
+			pp.Profile, profileRecord{Outer: loftLoop})
+		if err != nil || !withinCap {
+			return no, false, err
+		}
 		scene, tags, _, err := prismcells.BuildSceneRegions(budget,
 			[]prismcells.SceneProfile{{Outer: pp.Profile.Outer}},
 			[]prismcells.SceneProfile{{Outer: loftLoop}},
 			&prismcells.Reexpression{Identity: true})
+		if err != nil {
+			return no, false, err
+		}
+		// TaggedSegments scans the tags and both source-index arrays.
+		_, err = budget.StepN(uint64(len(tags) + len(source.prismCaps[cap]) +
+			len(source.loftCaps[cap])))
 		if err != nil {
 			return no, false, err
 		}
@@ -123,6 +136,11 @@ func certifyLoftCapSourceOrder(ctx context.Context, budget *proofbound.WorkBudge
 					walkWithSource: edge.Reversed == origin.AuthoredReversed,
 				}
 				result.visits++
+			}
+			// RecordProfileLoops records and joins each edge, then checks closure.
+			_, err := budget.StepN(uint64(len(cell.Outer))*2 + 1)
+			if err != nil {
+				return no, false, err
 			}
 			if _, err := prismcells.RecordArrangedProfileContext(ctx, cell); err != nil {
 				if errors.Is(err, ErrUnrecordableProfile) {
