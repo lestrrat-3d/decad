@@ -57,7 +57,7 @@ The rules for rows live in `docs/layout.md`.
 | `loft_cylinder_chamfer_cap_source.go` | Matches inset cap edges to the original tooth contours. See loft-cylinder-boolean design. |
 | `loft_cylinder_chamfer_bore.go` | Preserves the centered bore wall and inner loops. See loft-cylinder-boolean design. |
 | `loft_cylinder_chamfer_side.go` | Certifies retained middle-side reach into the source union. See loft-cylinder-boolean design. |
-| `prism_boolean.go` | Analytic booleans of co-directional prisms. See `docs/prism-boolean-design.md`. |
+| `prism_boolean.go` | Root holed-Intersect route and body-to-payload adapters for analytic prism booleans. See `docs/prism-boolean-design.md`. |
 | `revolve_boolean.go` | Arranges authenticated common-axis full-Revolve meridians for public `Union`, `Cut` and `Intersect`. See general-boolean design. |
 | `prism_boolean_nesting.go` | Admits one-hole Intersect prism pairs before the clean-nesting scene resolver. See prism-boolean §3.1, §4.2. |
 | `prism_boolean_blind.go` | Admits blind and spanning Cut operands; stacked blind transitions live in `internal/stackedrecord`. See prism-boolean §3.2. |
