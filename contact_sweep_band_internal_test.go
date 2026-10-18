@@ -127,7 +127,7 @@ func (r *rotationalPairSweep) planarSupportsScan(poll func() error) ([]planarSup
 	var motions [2]planarMotion
 	var spins [2][]*big.Rat
 	for i, path := range paths {
-		motion, ok := planarMotionOf(path)
+		motion, ok := planarsweep.MotionOf(planarSupportPathOf(path).Motion)
 		if !ok {
 			return nil, nil
 		}

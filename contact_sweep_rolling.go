@@ -284,8 +284,8 @@ func (r *rollingPairSweep) undecided(from, to *big.Rat, cause SweepCause) *Sweep
 type rollingCoefficients = planarsweep.RollingCoefficients
 
 func (r *rollingPairSweep) coefficients(support placedruling.Plane) (rollingCoefficients, bool) {
-	motionM, okM := planarMotionOf(&r.paths[r.m])
-	motionS, okS := planarMotionOf(&r.paths[r.s])
+	motionM, okM := planarsweep.MotionOf(planarSupportPathOf(&r.paths[r.m]).Motion)
+	motionS, okS := planarsweep.MotionOf(planarSupportPathOf(&r.paths[r.s]).Motion)
 	if !okM || !okS || motionS.Rotating || proofarith.DyCmp(r.cylinder.Gram, rulingGramLimit) > 0 {
 		return rollingCoefficients{}, false
 	}
