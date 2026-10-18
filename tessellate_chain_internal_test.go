@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -59,7 +60,7 @@ func TestTessellateChainBuildsOneExactQuadPerWall(t *testing.T) {
 // sheet: the public API can never build a chain mesh whose free boundary
 // attributes to the wrong wall — every triangle tessellateChain emits
 // carries its own wall's Face — so this hand-corrupts a real chain mesh's
-// SourceFaces to prove requireSheetMesh actually refuses a wrongly chorded
+// SourceFaces to prove topobuild.RequireSheetMesh actually refuses a wrongly chorded
 // wall set rather than passing vacuously.
 //
 // internal/tessellation.RequireSheetBoundary compares CHAIN counts per face,
@@ -78,7 +79,7 @@ func TestTessellateChainRejectsWronglyAttributedWalls(t *testing.T) {
 	require.True(t, ok)
 	mesh, err := tessellateChain(t.Context(), body, pp)
 	require.NoError(t, err)
-	require.NoError(t, requireSheetMesh(t.Context(), body, mesh), "premise: the real mesh passes the audit as built")
+	require.NoError(t, topobuild.RequireSheetMesh(t.Context(), &body.n, &mesh.n), "premise: the real mesh passes the audit as built")
 
 	const moveIdx = 0
 	moved := mesh.n.Triangles[moveIdx]
@@ -104,7 +105,7 @@ search:
 	broken := bornMesh(&Mesh{n: mesh.n})
 	broken.n.Source = append([]*topo.Face(nil), mesh.n.Source...)
 	broken.n.Source[moveIdx] = faceNode(targetFace)
-	err = requireSheetMesh(t.Context(), body, broken)
+	err = topobuild.RequireSheetMesh(t.Context(), &body.n, &broken.n)
 	require.Error(t, err, "moving a triangle to a vertex-disjoint wall mints a new free-boundary chain there, which the body's own recorded count does not have")
 	require.ErrorIs(t, err, ErrDegenerate)
 }

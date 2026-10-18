@@ -1,19 +1,25 @@
-package decad
+package revolvetess
 
 import (
 	"context"
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/stationbound"
+	"github.com/lestrrat-3d/decad/internal/sweeprecord"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 )
+
+type chainSweepPayload = sweeprecord.ChainPayload
+type lineSeg = sectionrecord.LineSeg
 
 // The line/half-circle chain sweep is a planar rectangle joined to a half
 // annulus. Its one recorded line supplies the two profile stations at every
@@ -21,8 +27,9 @@ import (
 // the far rim reuses the arc wall's vertices. No coordinate-based weld occurs.
 const maxChainSweepArcCells = 4096
 
-func tessellateChainSweep(ctx context.Context, b *Body, sp chainSweepPayload,
-	chord float64, verify Verification) (*Mesh, error) {
+// TessellateChainSweep assembles the admitted cardinal line/arc chain sheet.
+func TessellateChainSweep(ctx context.Context, b *topo.Body, sp chainSweepPayload,
+	chord float64, verify Level) (*topo.Mesh, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -37,45 +44,45 @@ func tessellateChainSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 	}
 	if n > maxChainSweepArcCells {
 		return nil, fmt.Errorf(`%w: the chain sweep arc needs more than %d chord cells at this tolerance`,
-			ErrUnsupported, maxChainSweepArcCells)
+			decaderr.ErrUnsupported, maxChainSweepArcCells)
 	}
 
-	lineCo := straight.Loops()[0].CoEdges()
-	arcCo := curved.Loops()[0].CoEdges()
+	lineCo := straight.Loops[0].CoEdges
+	arcCo := curved.Loops[0].CoEdges
 	if len(lineCo) != 4 || len(arcCo) != 4 ||
-		arcCo[0].Start() != lineCo[3].Start() || arcCo[1].Start() != lineCo[2].Start() {
-		return nil, fmt.Errorf(`%w: the chain sweep walls do not share their two indexed join vertices`, ErrUnsupported)
+		topobuild.CoEdgeStart(arcCo[0]) != topobuild.CoEdgeStart(lineCo[3]) || topobuild.CoEdgeStart(arcCo[1]) != topobuild.CoEdgeStart(lineCo[2]) {
+		return nil, fmt.Errorf(`%w: the chain sweep walls do not share their two indexed join vertices`, decaderr.ErrUnsupported)
 	}
 	// The straight wall's coedge order is source-start at its near rim,
 	// source-end at its near rim, source-end at the join, source-start at
 	// the join. The arc wall walks the same source indices at its start.
-	mesh := bornMesh(&Mesh{})
+	mesh := &topo.Mesh{}
 	store := make([]float64, 0, 2*n+4)
 	for i, nominal := range []r3.Vec{{}, {X: w}, {X: w, Z: height}, {Z: height}} {
-		v := lineCo[i].Start()
-		mesh.n.Vertices = append(mesh.n.Vertices, v.n.Position)
-		store = append(store, tessellation.ChainSweepVertexGap(v.n.Position, v.n.Bound.Mag(), nominal))
+		v := topobuild.CoEdgeStart(lineCo[i])
+		mesh.Vertices = append(mesh.Vertices, v.Position)
+		store = append(store, tessellation.ChainSweepVertexGap(v.Position, v.Bound.Mag(), nominal))
 	}
-	topobuild.AddTriangle(&mesh.n, [3]int{0, 1, 2}, faceNode(straight))
-	topobuild.AddTriangle(&mesh.n, [3]int{0, 2, 3}, faceNode(straight))
+	topobuild.AddTriangle(mesh, [3]int{0, 1, 2}, straight)
+	topobuild.AddTriangle(mesh, [3]int{0, 2, 3}, straight)
 	outer, inner := 3, 2
 	budget := proofbound.NewWorkBudget(ctx)
 	for j := 1; j <= n; j++ {
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
-		nextOuter, nextInner := len(mesh.n.Vertices), len(mesh.n.Vertices)+1
+		nextOuter, nextInner := len(mesh.Vertices), len(mesh.Vertices)+1
 		for k, radial := range []float64{radius, radius - w} {
 			var p r3.Vec
 			var gap float64
 			if j == n {
-				v := arcCo[3-k].Start()
-				p = v.n.Position
+				v := topobuild.CoEdgeStart(arcCo[3-k])
+				p = v.Position
 				x := new(big.Rat).Mul(proofarith.FloatRat(radius), big.NewRat(2, 1))
 				if k == 1 {
 					x.Sub(x, proofarith.FloatRat(w))
 				}
-				gap = tessellation.ChainSweepVertexGapRat(v.n.Position, v.n.Bound.Mag(),
+				gap = tessellation.ChainSweepVertexGapRat(v.Position, v.Bound.Mag(),
 					x, new(big.Rat), proofarith.FloatRat(height))
 			} else {
 				p, gap, err = stationbound.ChainSweepArcStation(height, radius, radial, j, n)
@@ -83,11 +90,11 @@ func tessellateChainSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 					return nil, err
 				}
 			}
-			mesh.n.Vertices = append(mesh.n.Vertices, p)
+			mesh.Vertices = append(mesh.Vertices, p)
 			store = append(store, gap)
 		}
-		topobuild.AddTriangle(&mesh.n, [3]int{outer, inner, nextInner}, faceNode(curved))
-		topobuild.AddTriangle(&mesh.n, [3]int{outer, nextInner, nextOuter}, faceNode(curved))
+		topobuild.AddTriangle(mesh, [3]int{outer, inner, nextInner}, curved)
+		topobuild.AddTriangle(mesh, [3]int{outer, nextInner, nextOuter}, curved)
 		outer, inner = nextOuter, nextInner
 	}
 	if err := budget.Err(); err != nil {
@@ -97,59 +104,59 @@ func tessellateChainSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 	if err != nil {
 		return nil, err
 	}
-	mesh.n.CoordBound = coord
+	mesh.CoordBound = coord
 	straightBound := max(store[0], store[1], store[2], store[3])
-	topobuild.SetFaceBound(&mesh.n, faceNode(straight), proofbound.UpRound(straightBound))
+	topobuild.SetFaceBound(mesh, straight, proofbound.UpRound(straightBound))
 	arcBound := proofbound.AbsSumUpper(tessellation.ChordSagitta(radius, upperPi, n), coord)
 	if proofbound.IsNonFinite(arcBound) || arcBound > chord {
 		return nil, fmt.Errorf(`%w: the chain sweep arc's chord and coordinate bound exceeds the requested tolerance`,
-			ErrUnsupported)
+			decaderr.ErrUnsupported)
 	}
-	topobuild.SetFaceBound(&mesh.n, faceNode(curved), arcBound)
+	topobuild.SetFaceBound(mesh, curved, arcBound)
 
 	// A per-triangle exact area bracket checks positive area at every level.
 	// At VerifyAll, the two live faces' certified area intervals bound the
 	// difference from their attributed held triangle sums.
 	areas := map[*topo.Face]proofbound.RatInterval{}
-	for i, tri := range mesh.n.Triangles {
+	for i, tri := range mesh.Triangles {
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
-		lo, hi, ok := tessellation.ChainSweepTriangleArea(mesh.n.Vertices, tri)
+		lo, hi, ok := tessellation.ChainSweepTriangleArea(mesh.Vertices, tri)
 		if !ok {
-			return nil, fmt.Errorf(`%w: chain sweep facet %d has no positive area`, ErrUnsupported, i)
+			return nil, fmt.Errorf(`%w: chain sweep facet %d has no positive area`, decaderr.ErrUnsupported, i)
 		}
-		pair := areas[mesh.n.Source[i]]
+		pair := areas[mesh.Source[i]]
 		if pair.Lo == nil {
 			pair.Lo, pair.Hi = new(big.Rat), new(big.Rat)
 		}
 		pair.Lo.Add(pair.Lo, proofarith.FloatRat(lo))
 		pair.Hi.Add(pair.Hi, proofarith.FloatRat(hi))
-		areas[mesh.n.Source[i]] = pair
+		areas[mesh.Source[i]] = pair
 	}
 	if verify >= VerifyBoundary {
-		data, auditErr := revolvemesh.RequireRevolveFacetAreas(budget, mesh.n.Vertices, mesh.n.Triangles, coord)
+		data, auditErr := revolvemesh.RequireRevolveFacetAreas(budget, mesh.Vertices, mesh.Triangles, coord)
 		if auditErr != nil {
 			return nil, topobuild.LiftAuditError(auditErr)
 		}
-		if auditErr = revolvemesh.RevolveContactAudit(budget, data, mesh.n.Triangles, coord); auditErr != nil {
+		if auditErr = revolvemesh.RevolveContactAudit(budget, data, mesh.Triangles, coord); auditErr != nil {
 			return nil, topobuild.LiftAuditError(auditErr)
 		}
 	}
 	if verify >= VerifyAll {
-		for _, f := range []*Face{straight, curved} {
+		for _, f := range []*topo.Face{straight, curved} {
 			slack, proofErr := tessellation.ChainSweepFaceAreaSlack(
-				f.n.Area, f.n.AreaBound, areas[faceNode(f)])
+				f.Area, f.AreaBound, areas[f])
 			if proofErr != nil {
 				return nil, proofErr
 			}
-			mesh.n.AreaSlack = proofbound.AbsSumUpper(mesh.n.AreaSlack, slack)
+			mesh.AreaSlack = proofbound.AbsSumUpper(mesh.AreaSlack, slack)
 		}
-		if proofbound.IsNonFinite(mesh.n.AreaSlack) {
-			return nil, fmt.Errorf(`%w: the chain sweep mesh has no finite area bound`, ErrUnsupported)
+		if proofbound.IsNonFinite(mesh.AreaSlack) {
+			return nil, fmt.Errorf(`%w: the chain sweep mesh has no finite area bound`, decaderr.ErrUnsupported)
 		}
 	}
-	if err := requireMeshAudit(ctx, true, b, mesh); err != nil {
+	if err := topobuild.RequireSheetMesh(ctx, b, mesh); err != nil {
 		return nil, err
 	}
 	// A sheet has no occupied volume, so symDiffOK stays false.
@@ -158,12 +165,12 @@ func tessellateChainSweep(ctx context.Context, b *Body, sp chainSweepPayload,
 
 // chainSweepMeshClass admits exactly the producer's cardinal one-line class.
 // Other line and arc orientations need a separate certified station map.
-func chainSweepMeshClass(b *Body, sp chainSweepPayload) (float64, float64, float64, *Face, *Face, error) {
-	refuse := func() (float64, float64, float64, *Face, *Face, error) {
+func chainSweepMeshClass(b *topo.Body, sp chainSweepPayload) (float64, float64, float64, *topo.Face, *topo.Face, error) {
+	refuse := func() (float64, float64, float64, *topo.Face, *topo.Face, error) {
 		return 0, 0, 0, nil, nil,
-			fmt.Errorf(`%w: this chain sweep mesh requires one cardinal line and one positive half-circle`, ErrUnsupported)
+			fmt.Errorf(`%w: this chain sweep mesh requires one cardinal line and one positive half-circle`, decaderr.ErrUnsupported)
 	}
-	if b.Kind() != BodySheet || len(sp.Spans) != 2 || sp.Spans[0].Arc || !sp.Spans[1].Arc ||
+	if b.Kind != topo.BodySheet || len(sp.Spans) != 2 || sp.Spans[0].Arc || !sp.Spans[1].Arc ||
 		sp.Spans[1].ReverseArcRims || sp.Path == nil || len(sp.Path.Segments) != 2 ||
 		sp.Spans[0].Chain.Xform != r3.Identity() ||
 		sp.Spans[1].Revolve.Xform != r3.Identity() || len(sp.Spans[0].Chain.Chains) != 1 ||
@@ -209,9 +216,9 @@ func chainSweepMeshClass(b *Body, sp chainSweepPayload) (float64, float64, float
 		sp.Spans[1].Revolve.Ax.DUBound != 0 || sp.Spans[1].Revolve.Ax.DVBound != 0 {
 		return refuse()
 	}
-	var straight, curved *Face
-	for _, f := range b.Faces() {
-		for _, origin := range f.Origins() {
+	var straight, curved *topo.Face
+	for _, f := range topobuild.Faces(b) {
+		for _, origin := range f.Origins {
 			switch origin.Role {
 			case "side(0,0,0)":
 				straight = f
@@ -220,8 +227,8 @@ func chainSweepMeshClass(b *Body, sp chainSweepPayload) (float64, float64, float
 			}
 		}
 	}
-	if straight == nil || curved == nil || straight == curved || len(b.Faces()) != 2 ||
-		len(straight.Loops()) != 1 || len(curved.Loops()) != 1 {
+	if straight == nil || curved == nil || straight == curved || len(topobuild.Faces(b)) != 2 ||
+		len(straight.Loops) != 1 || len(curved.Loops) != 1 {
 		return refuse()
 	}
 	return w, height, radius, straight, curved, nil

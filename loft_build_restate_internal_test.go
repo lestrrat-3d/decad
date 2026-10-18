@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -31,7 +32,7 @@ func TestLoftSheetAuditRejectsCapInPlaceOfWall(t *testing.T) {
 	require.Greater(t, lp.CapStartCount, 0)
 
 	mesh.n.Triangles[0] = lp.Tris[lp.Walls]
-	err = requireSheetMesh(t.Context(), body, mesh)
+	err = topobuild.RequireSheetMesh(t.Context(), &body.n, &mesh.n)
 	require.True(t, errors.Is(err, ErrDegenerate), "a cap replacing a wall must fail free-edge attribution: %v", err)
 	t.Logf("wrong-drop audit: %v", err)
 }
