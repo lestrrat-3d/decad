@@ -1,6 +1,6 @@
 # decad file layout: internal revolve and sweep packages
 
-Internal packages for Revolve, Sweep, and coil geometry and records.
+Internal packages for Revolve, Sweep, and coil geometry and records, and for pair-sweep paths.
 The rules for rows live in `docs/layout.md`.
 
 ## Layout
@@ -10,6 +10,9 @@ The rules for rows live in `docs/layout.md`.
 | Path | Responsibility |
 |---|---|
 | `internal/sweeppath/` | Pair paths, validation, rounded poses, motion travel bounds, and the node's checked rotational radius reader. |
+| `internal/planarsweep/` | Prepared sweep body paths (ideal pose, point deviation, rounded box, corner spans and their memo), support-plane records, motion, vertex rates, depth and rolling bounds. See contact-sweep §3, §7 and multibody §10. |
+| `internal/sweepdeparture/` | Exact source-box departure proofs. See multibody §10.2. |
+| `internal/sweepmemo/` | Sweep path replay coverage, pose bits, path memo tables and corner-span hull gaps. See contact-sweep §6–§7 and multibody §10.4. |
 | `internal/revolveaxis/` | Axis frames, walks, side/contact gates, snap and section charges, extent readings, the simple-revolution radial proof, and wall and cap denotations. See evaluator §6. |
 | `internal/revolveshell/` | Surveys shell walls and builds section rings, sector caps, sector plans, numeric bounds, sector meshes, contact checks, bore checks, and the straight-band cylinder Cut mesh and proof. See modify-reach §9.3 and revolve-loft-sector design. |
 | `internal/revolveloftfaces/` | Certifies LoftFaces source geometry and Revolve contacts; builds seams, strips, the audited blank-shell mesh with its rays and triangle labels, and vertical-trace paths: ray crossings, held vertices, displacement bounds and wedge splits. See loft-face-sections and revolve-loft-contact-graph. |

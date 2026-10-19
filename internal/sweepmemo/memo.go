@@ -18,21 +18,21 @@ import (
 const PathCap = 1024
 
 // PathMemo holds one prepared path's repeated readings during a sweep
-// run: its ideal pose by fraction (idealAt), its staged points' deviation by
-// pose and fraction (pointDeviation), and its point spans by fraction span
-// (cornerSpan). The sweep refines, re-samples and re-reads the same fractions
-// and poses many times over; each reading is a pure function of its key and
-// of path fields no copy changes once the run attaches the memo, so the memo
-// changes no value. A copy may swap its point sets (the rolling column test
-// reads other corners through the same path), so the point-set keys carry
-// the set's identity.
+// run: its ideal pose by fraction (planarsweep.BodyPath.IdealAt), its staged
+// points' deviation by pose and fraction (PointDeviation), and its point
+// spans by fraction span (CornerSpan). The sweep refines, re-samples and
+// re-reads the same fractions and poses many times over; each reading is a
+// pure function of its key and of path fields no copy changes once the run
+// attaches the memo, so the memo changes no value. A copy may swap its point
+// sets (the rolling column test reads other corners through the same path),
+// so the point-set keys carry the set's identity.
 //
-// The run attaches one memo per path (attachSweepMemos) and closes it before
-// it returns (Close). A closed memo holds nothing and serves nothing, so the
-// copies a proof keeps compute afresh, keep no memory alive, and compare equal
-// to a run without memos, whose paths carry an already closed memo. A memo is
-// read and written by its run's goroutine only, and only read once closed.
-// Every reading it serves is a copy the caller owns.
+// The run attaches one memo per path (planarsweep.AttachMemos) and closes it
+// before it returns (Close). A closed memo holds nothing and serves nothing,
+// so the copies a proof keeps compute afresh, keep no memory alive, and
+// compare equal to a run without memos, whose paths carry an already closed
+// memo. A memo is read and written by its run's goroutine only, and only read
+// once closed. Every reading it serves is a copy the caller owns.
 type PathMemo struct {
 	Closed    bool
 	Ideal     map[string]IdealPose
@@ -72,7 +72,7 @@ func PointSetOf(points []proofarith.DyV3) PointSetID {
 	return PointSetID{first: &points[0], count: len(points)}
 }
 
-// DeviationKey names one pointDeviation reading: the source points, the
+// DeviationKey names one PointDeviation reading: the source points, the
 // pose's bits (a −0 apart from a +0) and the exact fraction.
 type DeviationKey struct {
 	points PointSetID
@@ -80,7 +80,7 @@ type DeviationKey struct {
 	f      string
 }
 
-// Deviation is one pointDeviation result. Only a reading whose ideal
+// Deviation is one PointDeviation result. Only a reading whose ideal
 // pose exists and whose poll never failed is stored.
 type Deviation struct {
 	Points []proofarith.DyV3
@@ -88,7 +88,7 @@ type Deviation struct {
 	OK     bool
 }
 
-// SpanKey names one cornerSpan reading: the start points and the exact
+// SpanKey names one CornerSpan reading: the start points and the exact
 // fraction span.
 type SpanKey struct {
 	points   PointSetID

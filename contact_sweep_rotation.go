@@ -6,49 +6,24 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/measurement"
-	"github.com/lestrrat-3d/decad/internal/motionbound"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
-	"github.com/lestrrat-3d/decad/internal/pair/planar"
+	"github.com/lestrrat-3d/decad/internal/planarsweep"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
-	"github.com/lestrrat-3d/decad/internal/sweepdeparture"
-	"github.com/lestrrat-3d/decad/internal/sweepmemo"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
-// rotationalSweepPath is one body's prepared path: its ideal motion and travel
-// bound, and the exact source points whose images bound the float-to-ideal
-// pose deviation. A source box carries its eight corners; an exact planar body
-// (contact_sweep_planar.go) carries every vertex of its snapshot.
+// rotationalSweepPath is one body's prepared path (planarsweep.BodyPath)
+// with the public body ContactPair reads and, for a source box, its start box
+// with the source face identities. It stays in the root because both are
+// public handles.
 type rotationalSweepPath struct {
-	body         *Body
-	path         affinePairPath
-	fullTravel   *big.Rat
-	startBox     orientedSourceBox
-	sourceBox    orientedSourceBox
-	startPoints  []proofarith.DyV3   // exact source points under the path's From
-	sourcePoints []proofarith.DyV3   // exact source points at the identity query pose
-	solid        *planar.PlanarSolid // the identity-pose planar snapshot, planar paths only
-	delta        proofarith.Dyadic   // the snapshot's held displacement δ (§10.4), planar paths only
-	frame        motionbound.MotionFrame
-	fromRot      motionbound.IvMat
-	fromT        motionbound.RatVec
-	velocity     motionbound.RatVec
-	omegaLow     *big.Rat
-	omegaHigh    *big.Rat
-	memo         *sweepPathMemo // the run's memo (contact_sweep_rotation.go); nil outside a run
-}
-
-func (p rotationalSweepPath) departurePath() sweepdeparture.Path {
-	return sweepdeparture.Path{
-		Box: p.startBox.OrientedBox, Delta: p.path.Delta,
-		Axis: p.frame.Axis, Center: p.frame.Center, Velocity: p.velocity,
-		Duration: p.path.Duration, OmegaUpper: p.omegaHigh,
-		Drift: p.path.Drift != nil, Screw: p.path.Screw != nil,
-	}
+	planarsweep.BodyPath
+	body     *Body
+	startBox orientedSourceBox
 }
 
 func prepareRotationalSweepPath(body *Body, path affinePairPath) (rotationalSweepPath, bool) {
@@ -60,162 +35,13 @@ func prepareRotationalSweepPath(body *Body, path affinePairPath) (rotationalSwee
 	if !ok {
 		return rotationalSweepPath{}, false
 	}
-	prepared, ok := prepareSweepMotion(body, path)
+	prepared, ok := planarsweep.PrepareBodyPath(&body.n, path)
 	if !ok {
 		return rotationalSweepPath{}, false
 	}
-	prepared.startBox, prepared.sourceBox = startBox, sourceBox
-	prepared.startPoints = append([]proofarith.DyV3(nil), startBox.Corner[:]...)
-	prepared.sourcePoints = append([]proofarith.DyV3(nil), sourceBox.Corner[:]...)
-	return prepared, true
-}
-
-// prepareSweepMotion reads the body's radius for internal/sweeppath's motion
-// plan. The caller supplies the source points.
-func prepareSweepMotion(body *Body, path affinePairPath) (rotationalSweepPath, bool) {
-	motion, ok := sweeppath.PrepareMotion(path, func(from r3.Transform, center r3.Vec,
-		axis motionbound.RatVec) (*big.Rat, bool) {
-		return sweeppath.RotationalSweepRadius(&body.n, from, center, axis)
-	})
-	if !ok {
-		return rotationalSweepPath{}, false
-	}
-	return rotationalSweepPath{
-		body: body, path: motion.Path, fullTravel: motion.FullTravel,
-		fromRot: motion.FromRot, fromT: motion.FromT,
-		velocity: motion.Velocity, frame: motion.Frame,
-		omegaLow: motion.OmegaLow, omegaHigh: motion.OmegaHigh,
-	}, true
-}
-
-// idealAt is the ideal pose at fraction f. A rotating path's rotation
-// encloses the turn ω·t over both rate bounds, and its shift is the pivot's
-// image R·(t(From) − c) + c + v·t. ok is false only when the From basis does
-// not read as points, which motionbound.ExactTransform never produces.
-func (p rotationalSweepPath) idealAt(f *big.Rat) (sweepIdealPose, bool) {
-	if !p.memo.Open() {
-		return p.idealAtAfresh(f)
-	}
-	key := sweepmemo.RatKey(f)
-	if ideal, ok := p.memo.LoadIdeal(key); ok {
-		return ideal, true
-	}
-	ideal, ok := p.idealAtAfresh(f)
-	if ok {
-		p.memo.StoreIdeal(key, ideal)
-	}
-	return ideal, ok
-}
-
-// idealAtAfresh is idealAt computed without the memo.
-func (p rotationalSweepPath) idealAtAfresh(f *big.Rat) (sweepIdealPose, bool) {
-	rot, shift, ok := motionbound.SweepIdealPoseAt(p.fromRot, p.fromT, p.path.Delta,
-		p.frame, p.velocity, p.omegaLow, p.omegaHigh, p.path.Duration, f, p.path.Drift != nil)
-	return sweepIdealPose{Rot: rot, Shift: shift}, ok
-}
-
-// roundedAt compares the exact staged source corners used by ContactPair with
-// their ideal path positions and returns the rounded pose's source box.
-func (p rotationalSweepPath) roundedAt(pose r3.Transform, f *big.Rat) (orientedSourceBox, float64, bool) {
-	points, bound, ok, _ := p.pointDeviation(pose, f, noSweepPoll)
-	if !ok {
-		return orientedSourceBox{}, 0, false
-	}
-	var box orientedSourceBox
-	copy(box.Corner[:], points)
-	box.faces = p.startBox.faces
-	box.Edge = [3]proofarith.DyV3{proofarith.DvSub(box.Corner[1], box.Corner[0]),
-		proofarith.DvSub(box.Corner[2], box.Corner[0]), proofarith.DvSub(box.Corner[4], box.Corner[0])}
-	for _, edge := range box.Edge {
-		if proofarith.DvIsZero(edge) {
-			return orientedSourceBox{}, 0, false
-		}
-	}
-	return box, bound, true
-}
-
-func noSweepPoll() error { return nil }
-
-// replayDeviation is what replay charges one rounded pose at f: the staged
-// points' distance bound from the ideal path (pointDeviation), and for a
-// positive-displacement planar body the §10.4 transfer charge (motionbound.SweepTransferCharge).
-// A source-box path holds δ zero and charges nothing.
-func (p rotationalSweepPath) replayDeviation(pose r3.Transform, f *big.Rat) (*big.Rat, *big.Rat, bool) {
-	ideal, ok := p.idealAt(f)
-	if !ok {
-		return nil, nil, false
-	}
-	var bound float64
-	if p.memo.Open() {
-		_, bound, ok, _ = p.pointDeviation(pose, f, noSweepPoll)
-	} else {
-		_, bound, ok, _ = p.pointDeviationFrom(pose, ideal, noSweepPoll)
-	}
-	if !ok {
-		return nil, nil, false
-	}
-	charge, ok := motionbound.SweepTransferCharge(pose, ideal.Rot, p.delta)
-	if !ok {
-		return nil, nil, false
-	}
-	return proofarith.FloatRat(bound), charge, true
-}
-
-// pointDeviation maps the exact source points through the read query pose,
-// staged exactly as ContactPair stages them, and bounds their distance from
-// their ideal path positions (contact-sweep §3). The rounded and ideal bodies
-// are two affine images of one source, so their difference is affine and the
-// largest point distance bounds every point of the points' hull. This charges
-// placement and pose-composition rounding without trusting a rounded composed
-// transform. poll is charged once per point.
-//
-// Each point's squared distance bound is Σ max(|o − hi|, |o − lo|)² over the
-// axes, o the staged coordinate and [lo, hi] the ideal one,
-// rot·p + shift, evaluated exactly in the common-denominator form (see
-// motionbound.ScaledIvMat): the source and staged points share one q, and every point's
-// sum shares one denominator, so points compare by numerator.
-//
-// A memo hit charges poll once per point, as the reading it replaces did.
-func (p rotationalSweepPath) pointDeviation(pose r3.Transform, f *big.Rat,
-	poll func() error) ([]proofarith.DyV3, float64, bool, error) {
-	if !pose.IsValid() {
-		return nil, 0, false, nil
-	}
-	var key sweepDeviationKey
-	if p.memo.Open() {
-		key = sweepmemo.DeviationKeyOf(p.sourcePoints, pose, f)
-		if entry, ok := p.memo.LoadDeviation(key); ok {
-			for range p.sourcePoints {
-				if err := poll(); err != nil {
-					return nil, 0, false, err
-				}
-			}
-			return entry.Points, entry.Bound, entry.OK, nil
-		}
-	}
-	ideal, ok := p.idealAt(f)
-	if !ok {
-		return nil, 0, false, nil
-	}
-	points, bound, ok, err := p.pointDeviationFrom(pose, ideal, poll)
-	if err == nil && p.memo.Open() {
-		p.memo.StoreDeviation(key, sweepDeviation{Points: points, Bound: bound, OK: ok})
-	}
-	return points, bound, ok, err
-}
-
-// pointDeviationFrom is pointDeviation against an already enclosed ideal pose.
-func (p rotationalSweepPath) pointDeviationFrom(pose r3.Transform, ideal sweepIdealPose,
-	poll func() error) ([]proofarith.DyV3, float64, bool, error) {
-	if !pose.IsValid() {
-		return nil, 0, false, nil
-	}
-	actual, squared, err := motionbound.SweepPointDeviation(p.sourcePoints, pose, ideal.Rot, ideal.Shift, poll)
-	if err != nil {
-		return nil, 0, false, err
-	}
-	bound := proofbound.RatSqrtUp(squared)
-	return actual, bound, measurement.FiniteValues(bound), nil
+	prepared.StartPoints = append([]proofarith.DyV3(nil), startBox.Corner[:]...)
+	prepared.SourcePoints = append([]proofarith.DyV3(nil), sourceBox.Corner[:]...)
+	return rotationalSweepPath{BodyPath: prepared, body: body, startBox: startBox}, true
 }
 
 type rotationalPairSweep struct {
@@ -242,8 +68,8 @@ func (d *Document) sweepRotatingPair(ctx context.Context, a, b *Body,
 			To: sweepInstant(big.NewRat(1, 1), pa.Duration)}
 		return report, nil
 	}
-	attachSweepMemos(&aPath, &bPath)
-	defer closeSweepMemos(&aPath, &bPath)
+	planarsweep.AttachMemos(&aPath.BodyPath, &bPath.BodyPath)
+	defer planarsweep.CloseMemos(&aPath.BodyPath, &bPath.BodyPath)
 	run := rotationalPairSweep{doc: d, a: aPath, b: bPath, req: req,
 		resolution: resolution, report: report}
 	result, err := run.execute(ctx)
@@ -257,7 +83,7 @@ func (d *Document) sweepRotatingPair(ctx context.Context, a, b *Body,
 		result.Outcome == SweepImpactBracket && result.Bracket != nil ||
 		result.Outcome == SweepPersistentTouch &&
 			result.ContactTrack != nil && result.ContactTrack.orientedA != nil &&
-			result.ContactTrack.orientedB != nil && aPath.path.Drift == nil && bPath.path.Drift == nil {
+			result.ContactTrack.orientedB != nil && aPath.Path.Drift == nil && bPath.Path.Drift == nil {
 		result.replay = &sweepReplayProof{rotation: &[2]rotationalSweepPath{aPath, bPath},
 			track: result.ContactTrack, request: req.ContactRequest}
 		result.replay.snapshot(result)
@@ -268,7 +94,7 @@ func (d *Document) sweepRotatingPair(ctx context.Context, a, b *Body,
 				result.replay = nil
 			} else {
 				result.replay.setBracket(left, right)
-				result.replay.setRotatingBracketGap(result, new(big.Rat).Add(aPath.fullTravel, bPath.fullTravel))
+				result.replay.setRotatingBracketGap(result, new(big.Rat).Add(aPath.FullTravel, bPath.FullTravel))
 			}
 		}
 	}
@@ -282,11 +108,11 @@ func (r *rotationalPairSweep) sample(ctx context.Context, f *big.Rat) (*SweepSam
 	if r.report.PoseEvaluations >= r.req.MaxPoseEvaluations {
 		return nil, errSweepPoseBudget
 	}
-	poseA, err := r.a.path.RoundedPoseAt(f)
+	poseA, err := r.a.Path.RoundedPoseAt(f)
 	if err != nil {
 		return nil, err
 	}
-	poseB, err := r.b.path.RoundedPoseAt(f)
+	poseB, err := r.b.Path.RoundedPoseAt(f)
 	if err != nil {
 		return nil, err
 	}
@@ -294,7 +120,7 @@ func (r *rotationalPairSweep) sample(ctx context.Context, f *big.Rat) (*SweepSam
 	if err != nil {
 		return nil, err
 	}
-	at := sweepInstant(f, r.a.path.Duration)
+	at := sweepInstant(f, r.a.Path.Duration)
 	var event SweepEvent
 	if r.planar {
 		event, err = r.planarIdealEvent(ctx, f, at, poseA, poseB, contact)
@@ -341,8 +167,8 @@ func separatedIdealGap(contact *ContactReport, etaA, etaB float64) (*Measurement
 // ideal path through the rounded source boxes.
 func (r *rotationalPairSweep) orientedIdealEvent(f *big.Rat, at SweepInstant,
 	poseA, poseB r3.Transform, contact *ContactReport) SweepEvent {
-	boxA, etaA, okA := r.a.roundedAt(poseA, f)
-	boxB, etaB, okB := r.b.roundedAt(poseB, f)
+	boxA, etaA, okA := r.a.RoundedBox(poseA, f)
+	boxB, etaB, okB := r.b.RoundedBox(poseB, f)
 	event := SweepEvent{At: at, Relation: ContactUndecided, Reason: contact.Reason}
 	if okA && okB {
 		switch contact.Relation {
@@ -351,7 +177,7 @@ func (r *rotationalPairSweep) orientedIdealEvent(f *big.Rat, at SweepInstant,
 				event.Relation, event.Gap, event.Reason = ContactSeparated, gap, ContactNoReason
 			}
 		case ContactOverlapping:
-			if pairbox.OrientedInteriorWitness(boxA.OrientedBox, boxB.OrientedBox,
+			if pairbox.OrientedInteriorWitness(boxA, boxB,
 				proofarith.FloatRat(etaA), proofarith.FloatRat(etaB)) {
 				event.Relation, event.Reason = ContactOverlapping, contact.Reason
 			}
@@ -394,12 +220,12 @@ func (r *rotationalPairSweep) horizontalSpinContact(f *big.Rat, poseA, poseB r3.
 	stationary, spinning := -1, -1
 	paths := [2]rotationalSweepPath{r.a, r.b}
 	for i, path := range paths {
-		if path.path.Drift == nil && path.path.Delta == [3]proofarith.Dyadic{} {
+		if path.Path.Drift == nil && path.Path.Delta == [3]proofarith.Dyadic{} {
 			stationary = i
 		}
-		if path.path.Drift != nil && path.frame.Axis[0].Sign() == 0 &&
-			path.frame.Axis[1].Sign() == 0 && path.frame.Axis[2].Sign() != 0 &&
-			path.velocity[0].Sign() == 0 && path.velocity[1].Sign() == 0 {
+		if path.Path.Drift != nil && path.Frame.Axis[0].Sign() == 0 &&
+			path.Frame.Axis[1].Sign() == 0 && path.Frame.Axis[2].Sign() != 0 &&
+			path.Velocity[0].Sign() == 0 && path.Velocity[1].Sign() == 0 {
 			spinning = i
 		}
 	}
@@ -408,8 +234,8 @@ func (r *rotationalPairSweep) horizontalSpinContact(f *big.Rat, poseA, poseB r3.
 	}
 	poses := [2]r3.Transform{poseA, poseB}
 	base, okBase := sourceBoxAtPose(paths[stationary].body, poses[stationary])
-	startA, okA := sourceBoxAtPose(r.a.body, r.a.path.From)
-	startB, okB := sourceBoxAtPose(r.b.body, r.b.path.From)
+	startA, okA := sourceBoxAtPose(r.a.body, r.a.Path.From)
+	startB, okB := sourceBoxAtPose(r.b.body, r.b.Path.From)
 	if !okBase || !okA || !okB {
 		return SweepEvent{}, false
 	}
@@ -417,8 +243,8 @@ func (r *rotationalPairSweep) horizontalSpinContact(f *big.Rat, poseA, poseB r3.
 	if normal != (r3.Vec{Z: 1}) && normal != (r3.Vec{Z: -1}) {
 		return SweepEvent{}, false
 	}
-	elapsed := new(big.Rat).Mul(r.a.path.Duration, f)
-	travel := new(big.Rat).Mul(paths[spinning].velocity[2], elapsed)
+	elapsed := new(big.Rat).Mul(r.a.Path.Duration, f)
+	travel := new(big.Rat).Mul(paths[spinning].Velocity[2], elapsed)
 	loA, hiA := startA.lo[2].Rat(), startA.hi[2].Rat()
 	loB, hiB := startB.lo[2].Rat(), startB.hi[2].Rat()
 	if spinning == 0 {
@@ -486,7 +312,7 @@ func (r *rotationalPairSweep) horizontalSpinContact(f *big.Rat, poseA, poseB r3.
 			Exactness: exactnessFromBound(bound)}
 	}
 	zero := Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(0), Exactness: Exact}
-	event := SweepEvent{At: sweepInstant(f, r.a.path.Duration), Manifold: &ContactManifold{Points: points}}
+	event := SweepEvent{At: sweepInstant(f, r.a.Path.Duration), Manifold: &ContactManifold{Points: points}}
 	if gap.Sign() == 0 {
 		event.Relation, event.Gap = ContactTouching, &zero
 	} else {
@@ -524,9 +350,9 @@ func (r *rotationalPairSweep) execute(ctx context.Context) (*SweepReport, error)
 				return r.undecided(zero, one, SweepContactTrackUnproved), nil
 			}
 			r.report.ContactTrack = &SweepContactTrack{orientedA: &r.a.startBox,
-				orientedB: &r.b.startBox, orientedDelta: r.a.path.Delta,
+				orientedB: &r.b.startBox, orientedDelta: r.a.Path.Delta,
 				start: zero, end: one,
-				duration: r.a.path.Duration, request: r.req.ContactRequest,
+				duration: r.a.Path.Duration, request: r.req.ContactRequest,
 				pointCount: len(first.Ideal.Manifold.Points),
 				features: [2]reportvocab.ContactFeature{contactFeatureToInternal(first.Ideal.Manifold.Points[0].FeatureA),
 					contactFeatureToInternal(first.Ideal.Manifold.Points[0].FeatureB)},
@@ -576,7 +402,7 @@ func (r *rotationalPairSweep) execute(ctx context.Context) (*SweepReport, error)
 		// §10.5: an exact pair apart within its SupportBand has every vertex
 		// above the support plane, so it departs when §10.2's proof holds.
 		if r.planar && r.req.StartPolicy == reportvocab.ContinueSeparatingTouch &&
-			r.a.delta.Sign() == 0 && r.b.delta.Sign() == 0 {
+			r.a.HeldDelta.Sign() == 0 && r.b.HeldDelta.Sign() == 0 {
 			departure, departs, err := r.planarDepartureFraction(ctx)
 			if err != nil {
 				return nil, err
@@ -617,33 +443,4 @@ func (r *rotationalPairSweep) execute(ctx context.Context) (*SweepReport, error)
 	}
 	r.sortSamples()
 	return r.report, nil
-}
-
-type sweepPathMemo = sweepmemo.PathMemo
-
-type sweepDeviationKey = sweepmemo.DeviationKey
-
-type sweepDeviation = sweepmemo.Deviation
-
-type sweepIdealPose = sweepmemo.IdealPose
-
-type cornerSpans = sweepmemo.CornerSpans
-
-func newSweepPathMemo() *sweepPathMemo { return sweepmemo.NewPathMemo() }
-
-// attachSweepMemos gives both of a run's paths their own memo; closeSweepMemos
-// closes them. Each sweep entry point attaches before its run and closes,
-// deferred, before it returns.
-func attachSweepMemos(paths ...*rotationalSweepPath) {
-	for _, path := range paths {
-		path.memo = newSweepPathMemo()
-	}
-}
-
-func closeSweepMemos(paths ...*rotationalSweepPath) {
-	for _, path := range paths {
-		if path.memo != nil {
-			path.memo.Close()
-		}
-	}
 }

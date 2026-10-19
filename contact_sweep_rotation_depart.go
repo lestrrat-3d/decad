@@ -7,7 +7,6 @@ import (
 	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
-	"github.com/lestrrat-3d/decad/internal/motionbound"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
@@ -106,7 +105,7 @@ func (r *rotationalPairSweep) continuationCause() SweepCause {
 // completed (an edge or vertex on a face, or a support set) is left to the
 // planar continuation, since the oriented track rereads face patches only.
 func (r *rotationalPairSweep) coMovingOrientedTouch(first *SweepSample) bool {
-	if r.a.path.Drift != nil || r.b.path.Drift != nil || first.Ideal.Manifold == nil {
+	if r.a.Path.Drift != nil || r.b.Path.Drift != nil || first.Ideal.Manifold == nil {
 		return false
 	}
 	for _, point := range first.Ideal.Manifold.Points {
@@ -115,7 +114,7 @@ func (r *rotationalPairSweep) coMovingOrientedTouch(first *SweepSample) bool {
 		}
 	}
 	for axis := range 3 {
-		if proofarith.DyCmp(r.a.path.Delta[axis], r.b.path.Delta[axis]) != 0 {
+		if proofarith.DyCmp(r.a.Path.Delta[axis], r.b.Path.Delta[axis]) != 0 {
 			return false
 		}
 	}
@@ -138,7 +137,7 @@ func (r *rotationalPairSweep) rotationalDepartureFraction(first *SweepSample) (*
 	if fraction, ok := r.axisFaceDepartureFraction(first); ok {
 		return fraction, true
 	}
-	if r.a.path.Drift == nil || r.b.path.Drift == nil || first.Ideal.Manifold == nil ||
+	if r.a.Path.Drift == nil || r.b.Path.Drift == nil || first.Ideal.Manifold == nil ||
 		len(first.Ideal.Manifold.Points) == 0 {
 		return nil, false
 	}
@@ -147,14 +146,14 @@ func (r *rotationalPairSweep) rotationalDepartureFraction(first *SweepSample) (*
 	if !ok || point.Normal.Bound.Base() != 0 || point.NormalAngle.Base() != 0 {
 		return nil, false
 	}
-	boxA, okA := sourceBoxAtPose(r.a.body, r.a.path.From)
-	boxB, okB := sourceBoxAtPose(r.b.body, r.b.path.From)
+	boxA, okA := sourceBoxAtPose(r.a.body, r.a.Path.From)
+	boxB, okB := sourceBoxAtPose(r.b.body, r.b.Path.From)
 	if !okA || !okB ||
 		(side == 1 && proofarith.DyCmp(boxA.hi[axis], boxB.lo[axis]) != 0) ||
 		(side == 0 && proofarith.DyCmp(boxB.hi[axis], boxA.lo[axis]) != 0) {
 		return nil, false
 	}
-	return sweepdeparture.CommonSpin([2]sweepdeparture.Path{r.a.departurePath(), r.b.departurePath()}, axis, side)
+	return sweepdeparture.CommonSpin(r.departurePaths(), axis, side)
 }
 
 // obliqueAffineDepartureFraction proves an open-at-zero gap between the
@@ -165,8 +164,7 @@ func (r *rotationalPairSweep) obliqueAffineDepartureFraction(first *SweepSample)
 	if first.Ideal.Manifold == nil {
 		return nil, false
 	}
-	return sweepdeparture.ObliqueAffine([2]sweepdeparture.Path{r.a.departurePath(), r.b.departurePath()},
-		len(first.Ideal.Manifold.Points))
+	return sweepdeparture.ObliqueAffine(r.departurePaths(), len(first.Ideal.Manifold.Points))
 }
 
 // A spin around the contact normal leaves both bodies' Z supports unchanged.
@@ -176,11 +174,9 @@ func (r *rotationalPairSweep) horizontalSpinDepartureFraction(first *SweepSample
 		return nil, false
 	}
 	paths := [2]rotationalSweepPath{r.a, r.b}
-	return sweepdeparture.HorizontalSpin(
-		[2]sweepdeparture.Path{paths[0].departurePath(), paths[1].departurePath()},
-		first.Ideal.Manifold.Points[0].Normal.Value,
+	return sweepdeparture.HorizontalSpin(r.departurePaths(), first.Ideal.Manifold.Points[0].Normal.Value,
 		func(i int) (pairbox.OrientedBox, bool) {
-			box, ok := sourceOrientedBoxAtPose(paths[i].body, paths[i].path.From)
+			box, ok := sourceOrientedBoxAtPose(paths[i].body, paths[i].Path.From)
 			return box.OrientedBox, ok
 		},
 	)
@@ -203,7 +199,7 @@ func (r *rotationalPairSweep) tangentAxisSpinDepartureFraction(first *SweepSampl
 			Exact: point.Normal.Bound.Base() == 0 && point.NormalAngle.Base() == 0,
 		}
 	}
-	return sweepdeparture.TangentAxisSpin([2]sweepdeparture.Path{r.a.departurePath(), r.b.departurePath()}, normals)
+	return sweepdeparture.TangentAxisSpin(r.departurePaths(), normals)
 }
 
 // A rotation about an axis-normal contact face does not move either support
@@ -229,7 +225,7 @@ func (r *rotationalPairSweep) axisFaceDepartureFraction(first *SweepSample) (*bi
 		proofarith.DyCmp(faceA.Origin[axis], faceB.Origin[axis]) != 0 {
 		return nil, false
 	}
-	return sweepdeparture.AxisFace([2]sweepdeparture.Path{r.a.departurePath(), r.b.departurePath()}, axis, side)
+	return sweepdeparture.AxisFace(r.departurePaths(), axis, side)
 }
 
 func (r *rotationalPairSweep) refine(ctx context.Context, left, right *SweepSample,
@@ -239,7 +235,7 @@ func (r *rotationalPairSweep) refine(ctx context.Context, left, right *SweepSamp
 		r.intervalClear(left, right, lf, rf) {
 		return false, nil
 	}
-	width := new(big.Rat).Mul(new(big.Rat).Sub(rf, lf), r.a.path.Duration)
+	width := new(big.Rat).Mul(new(big.Rat).Sub(rf, lf), r.a.Path.Duration)
 	if width.Cmp(r.resolution) <= 0 {
 		if left.Ideal.Relation == ContactSeparated && meetingRelation(right.Ideal.Relation) {
 			left, right, err := r.narrowBracket(ctx, left, right)
@@ -339,11 +335,11 @@ func (r *rotationalPairSweep) bracketRightReplays(left, right *SweepSample) bool
 	lo, hi := proofarith.FloatRat(left.At.Fraction.Base()), proofarith.FloatRat(right.At.Fraction.Base())
 	charge := new(big.Rat)
 	for _, path := range [2]rotationalSweepPath{r.a, r.b} {
-		pose, err := path.path.RoundedPoseAt(hi)
+		pose, err := path.Path.RoundedPoseAt(hi)
 		if err != nil {
 			return true
 		}
-		deviation, displacement, ok := path.replayDeviation(pose, hi)
+		deviation, displacement, ok := path.ReplayDeviation(pose, hi)
 		if !ok {
 			return true
 		}
@@ -351,7 +347,7 @@ func (r *rotationalPairSweep) bracketRightReplays(left, right *SweepSample) bool
 		charge.Add(charge, displacement)
 	}
 	return sweepmemo.BracketDepthWithin(hi, charge, resolution, lo, hi, gap,
-		new(big.Rat).Add(r.a.fullTravel, r.b.fullTravel))
+		new(big.Rat).Add(r.a.FullTravel, r.b.FullTravel))
 }
 
 // intervalClear proves the pair clear over [lf, rf] between two separated
@@ -362,9 +358,9 @@ func (r *rotationalPairSweep) bracketRightReplays(left, right *SweepSample) bool
 // (intervalAxisGap) or when the two proven lower gaps exceed the span's
 // travel.
 func (r *rotationalPairSweep) intervalClear(left, right *SweepSample, lf, rf *big.Rat) bool {
-	if !r.planar && r.a.path.Drift == nil && r.b.path.Drift == nil &&
+	if !r.planar && r.a.Path.Drift == nil && r.b.Path.Drift == nil &&
 		pairbox.OrientedIntervalSeparated(r.a.startBox.OrientedBox, r.b.startBox.OrientedBox,
-			r.a.path.Delta, r.b.path.Delta, lf, rf) {
+			r.a.Path.Delta, r.b.Path.Delta, lf, rf) {
 		return true
 	}
 	if r.intervalAxisGap(lf, rf) != nil {
@@ -375,45 +371,23 @@ func (r *rotationalPairSweep) intervalClear(left, right *SweepSample, lf, rf *bi
 		return false
 	}
 	travel := new(big.Rat).Mul(new(big.Rat).Sub(rf, lf),
-		new(big.Rat).Add(r.a.fullTravel, r.b.fullTravel))
+		new(big.Rat).Add(r.a.FullTravel, r.b.FullTravel))
 	return new(big.Rat).Add(a, b).Cmp(travel) > 0
 }
 
 // intervalAxisGap encloses every ideal source-point path over the fraction
 // span and returns sweepmemo.HullGap of the two hulls less both held
 // displacements (§10.4): a lower bound on the pair's separation throughout
-// the span, or nil when no such gap stays positive. It reads each path's
-// memoized corner spans, so it stays in the root with cornerSpan.
+// the span, or nil when no such gap stays positive.
 func (r *rotationalPairSweep) intervalAxisGap(from, to *big.Rat) *big.Rat {
-	return sweepmemo.HullGap(r.a.cornerSpan(from, to), r.b.cornerSpan(from, to),
-		proofarith.DyAdd(r.a.delta, r.b.delta).Rat())
+	return sweepmemo.HullGap(r.a.CornerSpan(from, to), r.b.CornerSpan(from, to),
+		proofarith.DyAdd(r.a.HeldDelta, r.b.HeldDelta).Rat())
 }
 
-// cornerSpan encloses each source point's ideal path over the fraction span
-// [from, to]. An affine path moves a point by delta·f. A rotating one takes
-// the point at the span's mid time, rotationMid·(p − c) + c + v·t_mid, grown
-// on each axis by its largest speed over the span, |v + ω × rotationSpan·(p −
-// c)| per axis, times the half span: the per-point arithmetic runs in the
-// common-denominator form, so every endpoint is the exact rational the
-// interval expression denotes.
-func (p rotationalSweepPath) cornerSpan(from, to *big.Rat) cornerSpans {
-	if !p.memo.Open() {
-		return p.cornerSpanAfresh(from, to)
-	}
-	key := sweepmemo.SpanKeyOf(p.startPoints, from, to)
-	if spans, ok := p.memo.LoadSpans(key); ok {
-		return spans
-	}
-	spans := p.cornerSpanAfresh(from, to)
-	p.memo.StoreSpans(key, spans)
-	return spans
-}
-
-// cornerSpanAfresh is cornerSpan computed without the memo.
-func (p rotationalSweepPath) cornerSpanAfresh(from, to *big.Rat) cornerSpans {
-	spans := motionbound.SweepCornerSpan(p.startPoints, p.path.Delta, p.frame, p.velocity,
-		p.omegaLow, p.omegaHigh, p.path.Duration, from, to, p.path.Drift != nil)
-	return cornerSpans{Den: spans.Den, Lo: spans.Lo, Hi: spans.Hi}
+// departurePaths is the pair's view for internal/sweepdeparture's proofs,
+// each path with its start box.
+func (r *rotationalPairSweep) departurePaths() [2]sweepdeparture.Path {
+	return [2]sweepdeparture.Path{r.a.Departure(r.a.startBox.OrientedBox), r.b.Departure(r.b.startBox.OrientedBox)}
 }
 
 func (r *rotationalPairSweep) sortSamples() {
@@ -424,8 +398,8 @@ func (r *rotationalPairSweep) sortSamples() {
 
 func (r *rotationalPairSweep) undecided(from, to *big.Rat, cause SweepCause) *SweepReport {
 	r.report.Outcome, r.report.Cause = SweepUndecided, cause
-	r.report.Unresolved = &SweepInterval{From: sweepInstant(from, r.a.path.Duration),
-		To: sweepInstant(to, r.a.path.Duration)}
+	r.report.Unresolved = &SweepInterval{From: sweepInstant(from, r.a.Path.Duration),
+		To: sweepInstant(to, r.a.Path.Duration)}
 	r.sortSamples()
 	return r.report
 }

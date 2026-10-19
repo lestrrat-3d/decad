@@ -17,7 +17,7 @@ import (
 // 2^20 (about 2e-10 mm), far above the gap reading's own sqrt enclosure.
 //
 // Legs shown to fail (each zeroed in turn, fixture red, then restored):
-//   - the pose deviation (pointDeviation's vertex distance bound):
+//   - the pose deviation (planarsweep.BodyPath.PointDeviation's vertex distance bound):
 //     TestSweepPairPlanarTumblingWedge's separated samples publish gaps
 //     whose enclosures miss the closed-form ideal gap;
 //   - the deep-vertex margin: internal/pair/planar/planar_depth_test.go's vertex at

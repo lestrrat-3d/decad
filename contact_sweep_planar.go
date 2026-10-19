@@ -26,8 +26,8 @@ import (
 // over the exact vertex set of two §9 planar bodies instead of eight source-box
 // corners. Each sample's relation and gap come from ContactPair's exact planar
 // relation at the rounded pose, and the float-to-ideal deviation is the largest
-// outward vertex distance (pointDeviation). Affine paths take the same run with
-// a zero angular term.
+// outward vertex distance (planarsweep.BodyPath.PointDeviation). Affine paths
+// take the same run with a zero angular term.
 
 // sweepPlanarPair runs the general sweep when both bodies are admitted §9
 // planar solids. When either is not, a source cylinder rolling on a planar
@@ -50,16 +50,17 @@ func (d *Document) sweepPlanarPair(ctx context.Context, a, b *Body,
 	if !okA || !okB {
 		return d.sweepRollingPair(ctx, a, b, pa, pb, req, resolution, report)
 	}
-	aPath, okA := preparePlanarSweepPath(a, pa, &solidA, deltaA)
-	bPath, okB := preparePlanarSweepPath(b, pb, &solidB, deltaB)
+	planarA, okA := planarsweep.PreparePlanarPath(&a.n, pa, &solidA, deltaA)
+	planarB, okB := planarsweep.PreparePlanarPath(&b.n, pb, &solidB, deltaB)
 	if !okA || !okB {
 		report.Outcome, report.Cause = SweepUndecided, SweepMissingBound
 		report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), pa.Duration),
 			To: sweepInstant(big.NewRat(1, 1), pa.Duration)}
 		return report, true, nil
 	}
-	attachSweepMemos(&aPath, &bPath)
-	defer closeSweepMemos(&aPath, &bPath)
+	aPath, bPath := rotationalSweepPath{BodyPath: planarA, body: a}, rotationalSweepPath{BodyPath: planarB, body: b}
+	planarsweep.AttachMemos(&aPath.BodyPath, &bPath.BodyPath)
+	defer planarsweep.CloseMemos(&aPath.BodyPath, &bPath.BodyPath)
 	run := rotationalPairSweep{doc: d, a: aPath, b: bPath, req: req,
 		resolution: resolution, report: report, planar: true}
 	result, err := run.execute(ctx)
@@ -149,7 +150,7 @@ func (r *rotationalPairSweep) planarReplayProof(result *SweepReport) *sweepRepla
 	proof := &sweepReplayProof{rotation: &[2]rotationalSweepPath{r.a, r.b},
 		request: r.req.ContactRequest, outcome: result.Outcome}
 	planar := &planarReplay{departure: r.departure,
-		travel: new(big.Rat).Add(r.a.fullTravel, r.b.fullTravel)}
+		travel: new(big.Rat).Add(r.a.FullTravel, r.b.FullTravel)}
 	proof.planar = planar
 	start, end := new(big.Rat), big.NewRat(1, 1)
 	switch result.Outcome {
@@ -225,27 +226,6 @@ func sampleLowerGap(sample *SweepSample) *big.Rat {
 	return lower
 }
 
-// preparePlanarSweepPath pairs a body's ideal motion with its identity-pose
-// planar snapshot and its held displacement δ (§10.4, zero for an exact
-// body). The snapshot's vertices are the source points: ContactPair stages
-// the same vertices through the query pose, and the held body is their hull's
-// subset, so they bound its deviation (pointDeviation) and its coordinate span
-// (cornerSpan); the true body lies within δ of that hull.
-func preparePlanarSweepPath(body *Body, path affinePairPath, solid *planar.PlanarSolid,
-	delta proofarith.Dyadic) (rotationalSweepPath, bool) {
-	prepared, ok := prepareSweepMotion(body, path)
-	if !ok {
-		return rotationalSweepPath{}, false
-	}
-	prepared.solid, prepared.delta = solid, delta
-	prepared.sourcePoints = solid.Verts
-	prepared.startPoints = make([]proofarith.DyV3, len(solid.Verts))
-	for i, v := range solid.Verts {
-		prepared.startPoints[i] = proofarith.DvTransform(path.From, v)
-	}
-	return prepared, true
-}
-
 // planarIdealEvent transfers the float-pose planar relation to the ideal path
 // (contact-sweep §3). With zero deviation on both bodies the rounded pose is
 // the ideal pose and the report transfers whole. Otherwise a gap transfers
@@ -262,11 +242,11 @@ func (r *rotationalPairSweep) planarIdealEvent(ctx context.Context, f *big.Rat, 
 	poseA, poseB r3.Transform, contact *ContactReport) (SweepEvent, error) {
 	event := SweepEvent{At: at, Relation: ContactUndecided, Reason: contact.Reason}
 	budget := proofbound.NewWorkBudget(ctx)
-	vertsA, etaA, okA, err := r.a.pointDeviation(poseA, f, budget.Step)
+	vertsA, etaA, okA, err := r.a.PointDeviation(poseA, f, budget.Step)
 	if err != nil {
 		return SweepEvent{}, err
 	}
-	vertsB, etaB, okB, err := r.b.pointDeviation(poseB, f, budget.Step)
+	vertsB, etaB, okB, err := r.b.PointDeviation(poseB, f, budget.Step)
 	if err != nil {
 		return SweepEvent{}, err
 	}
@@ -289,10 +269,10 @@ func (r *rotationalPairSweep) planarIdealEvent(ctx context.Context, f *big.Rat, 
 			return event, nil
 		}
 		margin := proofarith.DyAdd(proofarith.MustDyOf(etaA), proofarith.MustDyOf(etaB))
-		margin = proofarith.DyAdd(margin, proofarith.DyMul(r.a.delta, planarsnapshot.PoseScale(poseA)))
-		margin = proofarith.DyAdd(margin, proofarith.DyMul(r.b.delta, planarsnapshot.PoseScale(poseB)))
-		a := planar.PlanarSolid{Verts: vertsA, Tris: r.a.solid.Tris}
-		b := planar.PlanarSolid{Verts: vertsB, Tris: r.b.solid.Tris}
+		margin = proofarith.DyAdd(margin, proofarith.DyMul(r.a.HeldDelta, planarsnapshot.PoseScale(poseA)))
+		margin = proofarith.DyAdd(margin, proofarith.DyMul(r.b.HeldDelta, planarsnapshot.PoseScale(poseB)))
+		a := planar.PlanarSolid{Verts: vertsA, Tris: r.a.Solid.Tris}
+		b := planar.PlanarSolid{Verts: vertsB, Tris: r.b.Solid.Tris}
 		deep, err := planar.PlanarDeepVertex(&a, &b, margin, budget.Step)
 		if err != nil {
 			return SweepEvent{}, err
@@ -346,18 +326,6 @@ func widenedBand(contact *ContactReport, etaA, etaB float64) (*Measurement, bool
 // request's RestSpeed on both sides of the plane (§10.8), and publishes the
 // depth those bounds allow.
 
-func planarSupportPathOf(p *rotationalSweepPath) planarsweep.SupportPath {
-	return planarsweep.SupportPath{
-		Points: p.startPoints, Solid: p.solid,
-		MovingOwner: p.path.Drift != nil || p.path.Screw != nil,
-		Motion: planarsweep.MotionInput{
-			Points: p.startPoints, Delta: p.path.Delta, Duration: p.path.Duration,
-			Velocity: p.velocity, Frame: p.frame,
-			Drift: p.path.Drift != nil, Screw: p.path.Screw != nil,
-		},
-	}
-}
-
 // planarSupport adds the root sweep paths to an exact internal support plane.
 type planarSupport struct {
 	planarsweep.SupportCandidate
@@ -377,7 +345,7 @@ func (r *rotationalPairSweep) planarSupports(poll func() error) ([]planarSupport
 		}
 		rest = speed
 	}
-	inputs := [2]planarsweep.SupportPath{planarSupportPathOf(paths[0]), planarSupportPathOf(paths[1])}
+	inputs := [2]planarsweep.SupportPath{paths[0].SupportPath(), paths[1].SupportPath()}
 	candidates, err := planarsweep.FindSupports(inputs, planarband.SupportBand(r.req.ContactRequest), rest, poll)
 	if err != nil {
 		return nil, err
@@ -403,15 +371,15 @@ func (s *planarSupport) column(f *big.Rat, poll func() error) (*big.Rat, bool, e
 	if !s.Local {
 		return nil, true, nil
 	}
-	spans := s.pathM.cornerSpan(new(big.Rat), f)
+	spans := s.pathM.CornerSpan(new(big.Rat), f)
 	var lo, hi [3]*big.Rat
 	for axis := range 3 {
 		lo[axis], hi[axis] = spans.Hull(axis)
-		shift := new(big.Rat).Mul(s.pathS.path.Delta[axis].Rat(), f)
+		shift := new(big.Rat).Mul(s.pathS.Path.Delta[axis].Rat(), f)
 		lo[axis] = new(big.Rat).Sub(lo[axis], proofbound.RatMax(shift, new(big.Rat)))
 		hi[axis] = new(big.Rat).Sub(hi[axis], proofbound.RatMin(shift, new(big.Rat)))
 	}
-	solid := planar.PlanarSolid{Verts: s.pathS.startPoints, Tris: s.pathS.solid.Tris}
+	solid := planar.PlanarSolid{Verts: s.pathS.StartPoints, Tris: s.pathS.Solid.Tris}
 	return planar.PlanarColumnClear(&solid, s.Normal, s.Origin, lo, hi, poll)
 }
 
@@ -435,7 +403,7 @@ func (p *planarDepartureProof) lowerGap(f *big.Rat) *big.Rat {
 	if least.Sign() <= 0 {
 		return least
 	}
-	clearance, open, err := p.support.column(f, noSweepPoll)
+	clearance, open, err := p.support.column(f, planarsweep.NoPoll)
 	if err != nil || !open {
 		return nil
 	}
@@ -486,7 +454,7 @@ func (r *rotationalPairSweep) planarDepartureFraction(ctx context.Context) (*big
 			_, open, err := support.column(f, budget.Step)
 			return open, err
 		}
-		until, ok, err := planarsweep.GridHorizon(r.resolution, r.a.path.Duration, holds)
+		until, ok, err := planarsweep.GridHorizon(r.resolution, r.a.Path.Duration, holds)
 		if err != nil {
 			return nil, false, err
 		}
@@ -560,7 +528,7 @@ func (r *rotationalPairSweep) planarBand(ctx context.Context) (*SweepContactTrac
 	}
 	for i := range supports {
 		support := &supports[i]
-		if support.OwnerMotion.Rotating || support.pathS.path.Drift != nil || support.pathS.delta.Sign() != 0 {
+		if support.OwnerMotion.Rotating || support.pathS.Path.Drift != nil || support.pathS.HeldDelta.Sign() != 0 {
 			continue
 		}
 		face, ok := planarSupportFace(support)
@@ -591,12 +559,12 @@ func (r *rotationalPairSweep) planarBand(ctx context.Context) (*SweepContactTrac
 			if _, open, err := support.column(f, budget.Step); err != nil || !open {
 				return false, err
 			}
-			spans := support.pathM.cornerSpan(new(big.Rat), f)
-			depth := new(big.Rat).Add(depthAt(t, k), support.pathM.delta.Rat())
-			return planarsweep.FaceContains(&face.SupportFace, spans, support.pathS.path.Delta,
+			spans := support.pathM.CornerSpan(new(big.Rat), f)
+			depth := new(big.Rat).Add(depthAt(t, k), support.pathM.HeldDelta.Rat())
+			return planarsweep.FaceContains(&face.SupportFace, spans, support.pathS.Path.Delta,
 				support.Contact, support.Lifted, f, depth, budget.Step)
 		}
-		end, ok, err := planarsweep.GridHorizon(r.resolution, r.a.path.Duration, holds)
+		end, ok, err := planarsweep.GridHorizon(r.resolution, r.a.Path.Duration, holds)
 		if err != nil {
 			return nil, false, err
 		}
@@ -621,7 +589,7 @@ func (r *rotationalPairSweep) planarBand(ctx context.Context) (*SweepContactTrac
 // published one adds 2δ.
 func (r *rotationalPairSweep) planarTrack(support *planarSupport, face planarFace,
 	end, heldDepth, rate *big.Rat) (*SweepContactTrack, bool, error) {
-	solids := [2]*planar.PlanarSolid{r.a.solid, r.b.solid}
+	solids := [2]*planar.PlanarSolid{r.a.Solid, r.b.Solid}
 	features, err := reportvocab.NewPlanarFeatureMap(bodyNode(r.a.body), bodyNode(r.b.body), solids[0], solids[1])
 	if err != nil {
 		return nil, false, err
@@ -665,12 +633,12 @@ func (r *rotationalPairSweep) planarTrack(support *planarSupport, face planarFac
 		return nil, false, nil
 	}
 	normal := vecMeasurementFromInternal(reading)
-	widening := proofbound.RatMul(big.NewRat(2, 1), proofarith.DyAdd(r.a.delta, r.b.delta).Rat())
+	widening := proofbound.RatMul(big.NewRat(2, 1), proofarith.DyAdd(r.a.HeldDelta, r.b.HeldDelta).Rat())
 	depth := new(big.Rat).Add(heldDepth, widening)
 	proof := &planarTrackProof{paths: [2]rotationalSweepPath{r.a, r.b}, m: support.Guest, s: support.Owner,
 		featureS: featureS, normal: support.Normal, origin: r.solidTriVertex(support),
 		direction: normal, angle: angle, heldDepth: heldDepth, depth: depth, depthUp: proofbound.RatFloatUp(depth),
-		deltaM: support.pathM.delta.Rat(), nHigh: support.NormalHigh, support: *support, rate: rate, widening: widening}
+		deltaM: support.pathM.HeldDelta.Rat(), nHigh: support.NormalHigh, support: *support, rate: rate, widening: widening}
 	if !measurement.FiniteValues(proof.depthUp) {
 		return nil, false, nil
 	}
@@ -685,7 +653,7 @@ func (r *rotationalPairSweep) planarTrack(support *planarSupport, face planarFac
 		proof.band = &Measurement{Value: units.Millimeters(value), Bound: units.Millimeters(bound),
 			Exactness: exactnessFromBound(bound)}
 	}
-	track := &SweepContactTrack{start: zero, end: new(big.Rat).Set(end), duration: r.a.path.Duration,
+	track := &SweepContactTrack{start: zero, end: new(big.Rat).Set(end), duration: r.a.Path.Duration,
 		request: r.req.ContactRequest, normal: normal, planar: proof}
 	// A track whose start manifold is refused (a point ball over
 	// PointResolution) is not published; the refusal is the answer.
@@ -699,9 +667,9 @@ func (r *rotationalPairSweep) planarTrack(support *planarSupport, face planarFac
 
 // solidTriVertex names the S vertex the support plane was read through.
 func (r *rotationalPairSweep) solidTriVertex(support *planarSupport) int {
-	solid := r.a.solid
+	solid := r.a.Solid
 	if support.Owner == 1 {
-		solid = r.b.solid
+		solid = r.b.Solid
 	}
 	return solid.Tris[support.Triangle][0]
 }
@@ -710,7 +678,7 @@ func (r *rotationalPairSweep) solidTriVertex(support *planarSupport) int {
 type planarFace struct{ planar.SupportFace }
 
 func planarSupportFace(s *planarSupport) (planarFace, bool) {
-	face, ok := planar.BuildSupportFace(s.pathS.solid, s.pathS.startPoints, s.Normal, s.Origin)
+	face, ok := planar.BuildSupportFace(s.pathS.Solid, s.pathS.StartPoints, s.Normal, s.Origin)
 	return planarFace{face}, ok
 }
 
@@ -789,14 +757,14 @@ func (p *planarTrackProof) roundedVertices(f *big.Rat) ([2][]proofarith.DyV3, [2
 	var verts [2][]proofarith.DyV3
 	var eta [2]*big.Rat
 	for i := range p.paths {
-		pose, err := p.paths[i].path.RoundedPoseAt(f)
+		pose, err := p.paths[i].Path.RoundedPoseAt(f)
 		if err != nil {
 			return verts, eta, false
 		}
-		if i == p.s && pose.Basis() != p.paths[i].path.From.Basis() {
+		if i == p.s && pose.Basis() != p.paths[i].Path.From.Basis() {
 			return verts, eta, false
 		}
-		points, bound, ok, _ := p.paths[i].pointDeviation(pose, f, noSweepPoll)
+		points, bound, ok, _ := p.paths[i].PointDeviation(pose, f, planarsweep.NoPoll)
 		if !ok {
 			return verts, eta, false
 		}
