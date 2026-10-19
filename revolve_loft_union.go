@@ -222,17 +222,9 @@ func tryRevolveLoftSectorUnionMany(ctx context.Context, d *Document, ref produce
 			if !ok {
 				continue
 			}
-			path, bound, err := revolveproof.RevolveExteriorPath(cert.Base, cert.Boundary,
-				cert.Trim.Base.PointSection.Source, cert.Section)
-			if err != nil {
+			if err := revolveshell.TraceSectorLoop(cert); err != nil {
 				return nil, true, err
 			}
-			lo, hi, ok := revolveproof.RevolveRootAngles(path)
-			if !ok {
-				return nil, true, ErrUnsupported
-			}
-			cert.Sector, cert.CrossingBound = [2]float64{lo, hi}, bound
-			cert.Loop = path
 			sources := make([]facetedPayload, 0, len(operands)-1)
 			sources = append(sources, cert.Trimmed)
 			for i, operand := range operands {
@@ -250,21 +242,9 @@ func tryRevolveLoftSectorUnionMany(ctx context.Context, d *Document, ref produce
 			if !revolveshell.RevolveSectorSourcesSeparate(sources) {
 				return nil, true, fmt.Errorf("%w: complete sector sources are not separate", ErrUnsupported)
 			}
-			body, ring, err := buildRevolveLoftSectorsJoin(ctx, d, ref, cert, sources)
-			if err != nil {
-				return nil, true, err
-			}
-			payload, ok := body.n.Payload.(facetedPayload)
-			if !ok {
-				return nil, true, ErrUnsupported
-			}
-			payload.RevolveLoftJoin = &revolveLoftJoinRecord{Certificate: cert,
-				Blank: bodyNode(blank), First: sources[0],
-				Placed: append([]facetedPayload(nil), sources[1:]...), CapRing: ring,
-				BoundaryBound: payload.MeshBound, VolumeBound: payload.VolSymDiff,
-				AreaBound: payload.AreaSlack}
-			body.n.Payload = payload
-			return body, true, nil
+			body, err := bodyResult(revolveshell.BuildSectorsJoin(ctx, envOf(documentNode(d), ref),
+				cert, sources))
+			return body, true, err
 		}
 	}
 	return nil, false, nil
@@ -285,31 +265,12 @@ func tryRevolveLoftSectorUnion(ctx context.Context, op meshbool.OperationKind,
 			return nil, false, nil
 		}
 	}
-	path, bound, err := revolveproof.RevolveExteriorPath(cert.Base, cert.Boundary,
-		cert.Trim.Base.PointSection.Source, cert.Section)
-	if err != nil {
+	if err := revolveshell.TraceSectorLoop(cert); err != nil {
 		return nil, true, err
 	}
-	lo, hi, ok := revolveproof.RevolveRootAngles(path)
-	if !ok {
-		return nil, true, ErrUnsupported
-	}
-	cert.Sector, cert.CrossingBound = [2]float64{lo, hi}, bound
-	cert.Loop = path
-	body, ring, err := buildRevolveLoftSectorsJoin(ctx, d, ref, cert,
-		[]facetedPayload{cert.Trimmed})
-	if err != nil {
-		return nil, true, err
-	}
-	payload, ok := body.n.Payload.(facetedPayload)
-	if !ok {
-		return nil, true, ErrUnsupported
-	}
-	payload.RevolveLoftJoin = &revolveLoftJoinRecord{Certificate: cert, Blank: bodyNode(blank),
-		First: cert.Trimmed, CapRing: ring, BoundaryBound: payload.MeshBound,
-		VolumeBound: payload.VolSymDiff, AreaBound: payload.AreaSlack}
-	body.n.Payload = payload
-	return body, true, nil
+	body, err := bodyResult(revolveshell.BuildSectorsJoin(ctx, envOf(documentNode(d), ref), cert,
+		[]facetedPayload{cert.Trimmed}))
+	return body, true, err
 }
 
 // tryRevolveLoftNextSectorUnion rebuilds a serial join from the retained
@@ -344,21 +305,9 @@ func tryRevolveLoftNextSectorUnion(ctx context.Context, op meshbool.OperationKin
 	if !revolveshell.RevolveSectorSourcesSeparate(sectors) {
 		return nil, false, nil
 	}
-	body, ring, err := buildRevolveLoftSectorsJoin(ctx, d, ref, record.Certificate, sectors)
-	if err != nil {
-		return nil, true, err
-	}
-	result, ok := body.n.Payload.(facetedPayload)
-	if !ok {
-		return nil, true, ErrUnsupported
-	}
-	result.RevolveLoftJoin = &revolveLoftJoinRecord{Certificate: record.Certificate,
-		Blank: record.Blank, First: record.First,
-		Placed: append([]facetedPayload(nil), sectors[1:]...), CapRing: ring,
-		BoundaryBound: result.MeshBound, VolumeBound: result.VolSymDiff,
-		AreaBound: result.AreaSlack}
-	body.n.Payload = result
-	return body, true, nil
+	body, err := bodyResult(revolveshell.BuildSectorsJoin(ctx, envOf(documentNode(d), ref),
+		record.Certificate, sectors))
+	return body, true, err
 }
 
 // certifyRevolveLoftSector tries each authenticated finite conical face of

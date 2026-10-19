@@ -210,12 +210,10 @@ type (
 	prismPatternPart             = facetedrecord.PrismPatternPart
 	prismPatternSource           = facetedrecord.PrismPatternSource
 	prismUnionFilletRecord       = facetedrecord.PrismUnionFilletRecord
-	revolveLoftJoinRecord        = facetedrecord.RevolveLoftJoinRecord
 	revolveLoftSectorCertificate = facetedrecord.RevolveLoftSectorCertificate
 	revolveLoftSectorPlacement   = facetedrecord.RevolveLoftSectorPlacement
 	revolveSectionCertificate    = facetedrecord.RevolveSectionCertificate
 	revolveSectionSpan           = facetedrecord.RevolveSectionSpan
-	revolvedSectionRing          = facetedrecord.RevolvedSectionRing
 	spiralBlankSource            = facetedrecord.SpiralBlankSource
 	spiralCombineSource          = facetedrecord.SpiralCombineSource
 	spiralCombinedTools          = facetedrecord.SpiralCombinedTools
