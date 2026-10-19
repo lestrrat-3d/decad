@@ -2,15 +2,12 @@ package decad
 
 import (
 	"context"
-	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
-	"github.com/lestrrat-3d/units"
 )
 
 func loftCylinderCanonicalFrame(z float64) (r3.Frame, error) {
@@ -236,27 +233,15 @@ func tryPlacedLoftCylinderBoreCut(ctx context.Context, d *Document, ref producer
 		return nil, false, nil
 	}
 	record := joined.LoftCylinderJoin
-	// Mirror the local bore's source-level gates before rebuilding the tool.
-	// A mismatch belongs to generic Cut; a rebuild error remains observable.
+	// Run the local bore's tool-profile and through-span gates before
+	// rebuilding the tool. A mismatch belongs to generic Cut; a rebuild error
+	// remains observable.
 	pp, ok := tool.n.Payload.(prismPayload)
-	if !ok || pp.SurfaceResult || pp.SectionDelta != 0 || pp.Z0Delta != 0 ||
-		pp.Z1Delta != 0 || len(pp.Profile.Holes) != 0 ||
-		len(pp.Profile.Outer.Segments) != 1 {
+	if !ok {
 		return nil, false, nil
 	}
-	circle, ok := pp.Profile.Outer.Segments[0].(circleSeg)
-	if !ok || circle.Center != (planePoint{}) ||
-		!((circle.TStart == 0 && circle.TEnd == 1) ||
-			(circle.TStart == 1 && circle.TEnd == 0)) {
-		return nil, false, nil
-	}
-	radius, err := circle.Radius.In(units.Millimeter)
-	if err != nil {
+	if _, ok, err := loftcylinder.BoreTool(pp, record.Radius); err != nil || !ok {
 		return nil, false, err
-	}
-	if radius <= 0 || radius >= record.Radius || proofbound.IsNonFinite(radius) ||
-		proofbound.IsNonFinite(pp.Z0) || proofbound.IsNonFinite(pp.Z1) {
-		return nil, false, nil
 	}
 	frame, err := r3.FromFrame(pp.Frame)
 	if err != nil {
@@ -288,13 +273,7 @@ func tryPlacedLoftCylinderBoreCut(ctx context.Context, d *Document, ref producer
 		return nil, false, nil
 	}
 	origin := localFrame.Origin()
-	if !proofbound.FiniteVec(origin) {
-		return nil, false, nil
-	}
-	start := new(big.Rat).Add(proofarith.FloatRat(origin.Z), proofarith.FloatRat(pp.Z0))
-	end := new(big.Rat).Add(proofarith.FloatRat(origin.Z), proofarith.FloatRat(pp.Z1))
-	if start.Cmp(proofarith.FloatRat(record.Z0)) >= 0 ||
-		end.Cmp(proofarith.FloatRat(record.Z1)) <= 0 {
+	if !proofbound.FiniteVec(origin) || !loftcylinder.BoreThrough(origin.Z, pp.Z0, pp.Z1, record.Z0, record.Z1) {
 		return nil, false, nil
 	}
 	// The source and tool gates above precede both private rebuilds. The join

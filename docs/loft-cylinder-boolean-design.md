@@ -360,7 +360,9 @@ checks a rational section of the bevel band below every original tooth cap.
 `Cut` accepts an unplaced, audited join record and one centered circular
 prism whose exact axial ends extend past both blank caps. The tool has an XY
 frame, one whole-circle section, and no section displacement. Its radius is
-smaller than the exact blank radius. The exact cap audit runs again before
+smaller than the exact blank radius. `loftcylinder.BoreCut` admits the tool
+and builds the bore; its tool-profile and through-span checks are
+`loftcylinder.BoreTool` and `BoreThrough`. The exact cap audit runs again before
 either disk is replaced. The held bore radius, its certified polygon error,
 and the joined boundary bound must together stay below the recorded minimum
 projected radius of every retained side triangle.
@@ -405,7 +407,8 @@ Placement clears this post-bore record.
 
 For a common-placement join, `Cut` first checks that the tool's recorded
 circle, radius, axial span, plane and placement match a local centered bore
-under the same exact pose. An ineligible tool reaches generic Cut before
+under the same exact pose, running the same `BoreTool` and `BoreThrough`
+checks. An ineligible tool reaches generic Cut before
 either private body is rebuilt. For an eligible tool, `Cut` rebuilds the
 canonical join from the retained local sources and then builds a private tool
 with the actual tool's producer identity. Reconstruction errors propagate.
