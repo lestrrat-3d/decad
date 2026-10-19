@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/exactrotation"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/shellseparation"
@@ -39,7 +40,7 @@ func TestCertifyFacetedCopiesPassesExactMaps(t *testing.T) {
 	b := exactCopyOf(t, source, 40)
 	looseBounds(b)
 
-	set, err := certifyFacetedCopies(t.Context(), []*Body{source, a, b})
+	set, err := facetedrecord.CertifyCopies(t.Context(), bodyNodes([]*Body{source, a, b}))
 	require.NoError(t, err)
 	require.Len(t, set.Exact, 3)
 	require.Len(t, set.Maps, 3)
@@ -55,7 +56,7 @@ func TestCertifyFacetedCopiesPassesExactMaps(t *testing.T) {
 		c := ordinaryCopyOf(t, source, 20)
 		d := ordinaryCopyOf(t, source, 40)
 		looseBounds(d)
-		set, err := certifyFacetedCopies(t.Context(), []*Body{source, c, d})
+		set, err := facetedrecord.CertifyCopies(t.Context(), bodyNodes([]*Body{source, c, d}))
 		require.NoError(t, err)
 		require.Nil(t, set.Maps)
 		require.Equal(t, []*exactrotation.Rotation{nil, nil, nil}, set.Exact)
@@ -64,7 +65,7 @@ func TestCertifyFacetedCopiesPassesExactMaps(t *testing.T) {
 		c := ordinaryCopyOf(t, source, 20)
 		d := exactCopyOf(t, source, 40)
 		looseBounds(d)
-		set, err := certifyFacetedCopies(t.Context(), []*Body{source, c, d})
+		set, err := facetedrecord.CertifyCopies(t.Context(), bodyNodes([]*Body{source, c, d}))
 		require.NoError(t, err)
 		require.Nil(t, set.Maps[1][0][0])
 		require.NotNil(t, set.Maps[2][0][0])
@@ -88,7 +89,7 @@ func TestCertifyFacetedCopiesPassesExactMaps(t *testing.T) {
 		lineage.Exact = shifted
 		part.CopyLineage = &lineage
 		d.n.Payload = part
-		_, err = certifyFacetedCopies(t.Context(), []*Body{source, c, d})
+		_, err = facetedrecord.CertifyCopies(t.Context(), bodyNodes([]*Body{source, c, d}))
 		require.ErrorIs(t, err, ErrUnsupported)
 		require.ErrorContains(t, err, "not separate")
 	})
@@ -107,7 +108,7 @@ func TestCertifyFacetedCopiesPassesExactMaps(t *testing.T) {
 		lineage.Exact = other
 		part.CopyLineage = &lineage
 		d.n.Payload = part
-		_, err = certifyFacetedCopies(t.Context(), []*Body{source, c, d})
+		_, err = facetedrecord.CertifyCopies(t.Context(), bodyNodes([]*Body{source, c, d}))
 		require.ErrorIs(t, err, ErrUnsupported)
 		require.ErrorContains(t, err, "not separate")
 	})
@@ -118,7 +119,7 @@ func TestCertifyFacetedCopiesPassesExactMaps(t *testing.T) {
 		lineage.Direct = false
 		part.CopyLineage = &lineage
 		c.n.Payload = part
-		_, err := certifyFacetedCopies(t.Context(), []*Body{source, c})
+		_, err := facetedrecord.CertifyCopies(t.Context(), bodyNodes([]*Body{source, c}))
 		require.ErrorIs(t, err, ErrUnsupported)
 		require.ErrorContains(t, err, "without a direct placement")
 	})
@@ -146,13 +147,13 @@ func TestPlacedProxyShellsChargeExactCopies(t *testing.T) {
 	image := exactCopyOf(t, source, 40)
 	twin := ordinaryCopyOf(t, source, 40)
 
-	set, err := certifyFacetedCopies(t.Context(), []*Body{source, image})
+	set, err := facetedrecord.CertifyCopies(t.Context(), bodyNodes([]*Body{source, image}))
 	require.NoError(t, err)
-	placed, err := placedProxyShells(t.Context(), set, proxy)
+	placed, err := facetedrecord.PlacedProxyShells(t.Context(), set, meshNode(proxy))
 	require.NoError(t, err)
-	twinSet, err := certifyFacetedCopies(t.Context(), []*Body{source, twin})
+	twinSet, err := facetedrecord.CertifyCopies(t.Context(), bodyNodes([]*Body{source, twin}))
 	require.NoError(t, err)
-	legacy, err := placedProxyShells(t.Context(), twinSet, proxy)
+	legacy, err := facetedrecord.PlacedProxyShells(t.Context(), twinSet, meshNode(proxy))
 	require.NoError(t, err)
 	require.Equal(t, legacy[1].Verts, placed[1].Verts, "the held placement is the same float transform")
 
@@ -190,7 +191,7 @@ func TestPlacedProxyShellsChargeExactCopies(t *testing.T) {
 		lineage.Exact = nil
 		part.CopyLineage = &lineage
 		image.n.Payload = part
-		_, err := placedProxyShells(t.Context(), set, proxy)
+		_, err := facetedrecord.PlacedProxyShells(t.Context(), set, meshNode(proxy))
 		require.ErrorIs(t, err, ErrUnsupported)
 		require.ErrorContains(t, err, "changed its exact rotation")
 	})
@@ -203,7 +204,7 @@ func TestRealCurvedCopiedToolLineage(t *testing.T) {
 	image, err := Copy(t.Context(), source, WithCopyPlacement(turn))
 	require.NoError(t, err)
 
-	set, err := certifyFacetedCopies(t.Context(), []*Body{source, image})
+	set, err := facetedrecord.CertifyCopies(t.Context(), bodyNodes([]*Body{source, image}))
 	require.NoError(t, err)
 	require.Same(t, source, bodyHandle(set.Source))
 	require.Equal(t, turn, set.Moves[1])
@@ -211,7 +212,7 @@ func TestRealCurvedCopiedToolLineage(t *testing.T) {
 	require.Len(t, set.FaceOwner[1], len(source.Faces()))
 	proxy, _, err := tessellateBooleanOperand(t.Context(), source, 0.1)
 	require.NoError(t, err)
-	placed, err := placedProxyShells(t.Context(), set, proxy)
+	placed, err := facetedrecord.PlacedProxyShells(t.Context(), set, meshNode(proxy))
 	require.NoError(t, err)
 	require.Len(t, placed, 2)
 	for _, face := range source.Faces() {
@@ -224,7 +225,7 @@ func TestRealCurvedCopiedToolLineage(t *testing.T) {
 	overlap, err := Copy(t.Context(), source)
 	require.NoError(t, err)
 	before := documentHandle(source.n.Doc).Bodies()
-	_, err = certifyFacetedCopies(t.Context(), []*Body{source, overlap})
+	_, err = facetedrecord.CertifyCopies(t.Context(), bodyNodes([]*Body{source, overlap}))
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "not separate")
 	require.Equal(t, before, documentHandle(source.n.Doc).Bodies())
@@ -236,7 +237,7 @@ func TestRealCurvedCopiedToolLineage(t *testing.T) {
 	thirdPayload := third.n.Payload.(facetedPayload)
 	require.Nil(t, thirdPayload.LoftFacesTrim)
 	require.Same(t, source, bodyHandle(thirdPayload.CopyLineage.Source))
-	set, err = certifyFacetedCopies(t.Context(), []*Body{source, image, third})
+	set, err = facetedrecord.CertifyCopies(t.Context(), bodyNodes([]*Body{source, image, third}))
 	require.NoError(t, err)
 	require.Len(t, set.FaceOwner[2], len(source.Faces()))
 
@@ -246,10 +247,10 @@ func TestRealCurvedCopiedToolLineage(t *testing.T) {
 	require.NoError(t, err)
 	mirrored, err := Copy(t.Context(), source, WithCopyPlacement(reflection))
 	require.NoError(t, err)
-	set, err = certifyFacetedCopies(t.Context(), []*Body{source, mirrored})
+	set, err = facetedrecord.CertifyCopies(t.Context(), bodyNodes([]*Body{source, mirrored}))
 	require.NoError(t, err)
 	require.Equal(t, reflection, set.Moves[1])
-	placed, err = placedProxyShells(t.Context(), set, proxy)
+	placed, err = facetedrecord.PlacedProxyShells(t.Context(), set, meshNode(proxy))
 	require.NoError(t, err)
 	require.Len(t, placed, 2)
 
@@ -258,7 +259,7 @@ func TestRealCurvedCopiedToolLineage(t *testing.T) {
 	changed.Motion = r3.Identity()
 	part.CopyLineage = &changed
 	image.n.Payload = part
-	_, err = certifyFacetedCopies(t.Context(), []*Body{source, image})
+	_, err = facetedrecord.CertifyCopies(t.Context(), bodyNodes([]*Body{source, image}))
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "changed its recorded motion")
 }
@@ -283,7 +284,7 @@ func TestFacetedCopyLineageDirectTransfer(t *testing.T) {
 	require.Same(t, source, bodyHandle(cLineage.Source))
 	require.False(t, cLineage.Direct)
 
-	set, err := certifyFacetedCopies(t.Context(), []*Body{source, a, b})
+	set, err := facetedrecord.CertifyCopies(t.Context(), bodyNodes([]*Body{source, a, b}))
 	require.NoError(t, err)
 	require.Equal(t, shellseparation.AxisX, set.Axis)
 
@@ -291,14 +292,14 @@ func TestFacetedCopyLineageDirectTransfer(t *testing.T) {
 	tools := []*Body{source, a, b}
 	shells := make([]shellseparation.Shell, len(tools))
 	for i, tool := range tools {
-		shells[i] = facetedShell(tool.n.Payload.(facetedPayload))
+		shells[i] = facetedrecord.SeparationShell(tool.n.Payload.(facetedPayload))
 	}
 	for _, linked := range []bool{true, false} {
 		require.True(t, shellseparation.Separate(t.Context(), shells, set.Moves,
 			nil, shellseparation.SourceShell, shellseparation.AxisX, linked), "linked=%v", linked)
 	}
 
-	_, err = certifyFacetedCopies(t.Context(), []*Body{source, a, c})
+	_, err = facetedrecord.CertifyCopies(t.Context(), bodyNodes([]*Body{source, a, c}))
 	require.NoError(t, err)
 
 	moved, err := Transform(t.Context(), a, rotate(30))
@@ -351,14 +352,14 @@ func TestFacetedCopyTransferSeparation(t *testing.T) {
 		// refuses, so certification succeeding proves transfer replaced it. The mixed
 		// lineage subtest shows that refusal on the same geometry.
 		tools := []*Body{source, a, direct}
-		set, err := certifyFacetedCopies(t.Context(), tools)
+		set, err := facetedrecord.CertifyCopies(t.Context(), bodyNodes(tools))
 		require.NoError(t, err)
 		require.Equal(t, shellseparation.AxisX, set.Axis)
 	})
 	t.Run("mixed lineage refuses", func(t *testing.T) {
 		// Same geometry, but one copy is a copy of a copy. sourceLinked stays
 		// false, so only pairwise checks run and they refuse the wider bound.
-		_, err := certifyFacetedCopies(t.Context(), []*Body{source, a, nested})
+		_, err := facetedrecord.CertifyCopies(t.Context(), bodyNodes([]*Body{source, a, nested}))
 		require.ErrorIs(t, err, ErrUnsupported)
 		require.ErrorContains(t, err, "not separate")
 	})
@@ -373,7 +374,7 @@ func TestFacetedCopyTransferSeparation(t *testing.T) {
 		moves[0] = r3.Identity()
 		for i, tool := range tools {
 			part := tool.n.Payload.(facetedPayload)
-			shells[i] = facetedShell(part)
+			shells[i] = facetedrecord.SeparationShell(part)
 			if i > 0 {
 				moves[i] = part.CopyLineage.Motion
 			}

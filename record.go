@@ -186,8 +186,6 @@ type (
 // internal/facetedrecord types; these aliases keep the evaluator's local names.
 type (
 	crossCylinderBoreRecord      = facetedrecord.CrossCylinderBoreRecord
-	facetedCopyLineage           = facetedrecord.FacetedCopyLineage
-	facetedCopySet               = facetedrecord.FacetedCopySet
 	joinedMesh                   = facetedrecord.JoinedMesh
 	loftCylinderPlacement        = facetedrecord.LoftCylinderPlacement
 	loftFaceCapBounds            = facetedrecord.LoftFaceCapBounds

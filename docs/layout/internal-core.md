@@ -18,7 +18,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/planarsnapshot/` | Planar contact snapshots, cached records and pose gates. See multibody §9.1–§9.2. |
 | `internal/placedruling/` | Placed cylinder staging, support and relation proofs. See contact-geometry §4.5. |
 | `internal/facetproof/` | Faceted shell audits, placement, similarity and revolve sector-separation proofs, sector seams and angular gaps, and the faceted centroid allowance. See `docs/evaluator-design.md` §9. |
-| `internal/facetedrecord/` | Faceted payloads, point-loft source authentication, slab and cone-trim builders, bounds, caps, centroids, similarity proofs, placement, node building and mesh restatement. Root aliases its records. See evaluator §8–§9 and loft-point design. |
+| `internal/facetedrecord/` | Faceted payloads, point-loft source authentication, slab and cone-trim builders, bounds, caps, centroids, similarity proofs, placement, node building, mesh restatement and copy separation proofs. Root aliases its records. See evaluator §8–§9, loft-point design and faceted-vertex-bounds §3.7. |
 | `internal/pointcone/` | Point-loft cone crossing samples, far-cap subdivision and contact split, cap and triangle crossing bounds, and sector cap paths, subdivision, merged angles and root-edge order, and the strict-side offset of a cone meridian (`offset.go`). See loft-point and loft-face-sections designs. |
 | `internal/pointloft/` | Builds the point-section Loft apex fan and proves its source stations, boundary, area and volume. See loft-point design. |
 | `internal/sectionrecord/` | Curve records and validation. |

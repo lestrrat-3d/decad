@@ -32,4 +32,3 @@ The rules for rows live in `docs/layout.md`.
 | `stack_brep_scale.go` | Admits exact line-only stacks and stack-backed BReps for certified similarity. See evaluator §8. |
 | `point_cap_extremes.go` | Resolves Split cap faces and selects the ends using facetedrecord's centroid-order proof. See loft-point design. |
 | `boolean_mesh.go` | Prepares an operand's mesh for `internal/meshbool/`, runs the cone-cap mesh boolean with the `internal/spiralsector` first curved-tooth join gates, and reads an audited mesh's volume into a measurement. See evaluator §9. |
-| `faceted_copy.go` | Binds live faceted copies to source faces, recorded motion and separate source and held shells in a `facetedrecord` copy set, and places a source-certified proxy with its shell separation proof. See faceted-vertex-bounds §3.7. |
