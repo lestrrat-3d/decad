@@ -41,14 +41,15 @@ alone.
 The pair result also records the strongest certificate already obtained:
 
 ```go
-type pairResult struct {
-    verdict reportvocab.PairVerdict // undecided / disjoint / touching / overlapping
+// internal/clearance/pairkernel
+type Result struct {
+    Verdict reportvocab.PairVerdict // undecided / disjoint / touching / overlapping
     // gap interval + exactness + pair diameter when disjoint or touching
     // containment classification when a strict nesting proof ran
 }
 ```
 
-The concrete fields stay private. The relation and its certificate MUST be
+The type stays internal; nothing public exposes it. The relation and its certificate MUST be
 structural values, never inferred from an error string.
 
 ## 2. Stable, non-mutating report walk

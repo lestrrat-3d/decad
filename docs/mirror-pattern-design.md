@@ -100,7 +100,7 @@ placement a float composition the caller never asked for, orthonormalised by
 | STEP | analytic writer follows the outward normal and reverses opposing loop walks (`docs/step-export-design.md`); measured M1 |
 | STL/OBJ/3MF | read the mesh |
 | `Verify` validity, surveys, tolerance gate | per payload, unchanged; measured `Sound` on prism, revolve, fillet result |
-| Clearance kernel | `clearance_geom.go` reads `reflected()`; measured T3 |
+| Clearance kernel | `internal/clearance/pairkernel/geom.go` reads `reflected()`; measured T3 |
 | Interference | a reflected prism beside a coplanar prism enters the analytic Intersect and overlap readings (`docs/general-boolean-design.md` class A4); a pair whose outlines cross under a one-sided reflection is charged its crossings (general-boolean A6); T2's shared collinear walls are read as one carrier (general-boolean A3), and its overlap is measured: `Interfering`, 500 mm³ |
 | `Union`/`Cut`/`Intersect` | a reflected operand enters the analytic path with its record re-wound (general-boolean class A4: M5, T1); M3's shared walls bound its union and build analytically (A3); M2's shared wall lies inside its union and the image is displaced, so `Union` takes the mesh path's coplanar refusal, and the mirror join builds it (§5) |
 | `Trim`/`Extend`/`Split` | refuse a reflected operand (`surface_trim.go`). Unchanged by this design |

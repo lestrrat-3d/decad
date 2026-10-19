@@ -6,6 +6,7 @@ import (
 	"math"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/clearance/pairkernel"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/pair"
 	"github.com/lestrrat-3d/decad/internal/pair/box"
@@ -514,11 +515,11 @@ func classifyPlanarSupportBand(ctx context.Context, report *reportvocab.ContactR
 // verdict. Only a touch the kernel proved by a ruling certificate keeps its
 // faces and feet, so only that touch can publish a manifold here.
 func classifyAnalyticContact(ctx context.Context, report *reportvocab.ContactReport) error {
-	res, err := clearancePair(ctx, bodyHandle(report.A), bodyHandle(report.B), false)
+	res, err := pairkernel.Pair(ctx, report.A, report.B, false, nil)
 	if err != nil {
 		return err
 	}
-	switch res.verdict {
+	switch res.Verdict {
 	case reportvocab.PairDisjoint:
 		gap := measurementToInternal(pairGapMeasurement(res))
 		if !measurement.FiniteValues(gap.Value.Base(), gap.Bound.Base()) ||
@@ -533,8 +534,8 @@ func classifyAnalyticContact(ctx context.Context, report *reportvocab.ContactRep
 		gap := measurement.Measurement{Value: units.Millimeters(0), Exactness: measurement.Exact, Bound: units.Millimeters(0)}
 		report.Gap = &gap
 		report.Reason = reportvocab.ContactNoNormalProof
-		if res.ruling != nil {
-			publishRulingManifold(report, res.ruling)
+		if res.Ruling != nil {
+			publishRulingManifold(report, res.Ruling)
 		}
 	case reportvocab.PairOverlapping:
 		report.Relation = reportvocab.ContactOverlapping

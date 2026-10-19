@@ -174,7 +174,7 @@ func bigSinCos(x float64) (*big.Float, *big.Float) {
 // 0.3 along each of the three faces' normals, so the corner itself is the
 // nearest point and the true gap is |C − V| − 1/8 with V the exact corner.
 //
-// Shown to fail: before clearanceDeltaWiden read bodyGeom.widenDelta (the
+// Shown to fail: before pairkernel.DeltaWiden read bodyGeom.widenDelta (the
 // largest vertex bound beside delta), φ = 0.001 read the row 7.0e-11 off the
 // truth with a bound of 3.2e-15, and φ = 0.003 1.9e-11 off with 7.1e-15.
 func TestClearanceRevolveCapVertexContainsTruth(t *testing.T) {

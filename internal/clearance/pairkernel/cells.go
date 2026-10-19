@@ -1,4 +1,4 @@
-package decad
+package pairkernel
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/clearance/facepair"
 	"github.com/lestrrat-3d/decad/internal/clearance/tier"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -24,13 +25,7 @@ import (
 // does not). A discarded candidate is a candidate whose feet provably leave
 // the trims — a lower tier holds its minimum; a candidate whose admission is
 // in doubt is kept for the lower bound and never counted toward exactness.
-
-// cellSink is the clearance kernel's contribution accumulator.
-type cellSink = clearance.CellSink
-
-func newPruningSink(margin float64) *cellSink {
-	return clearance.NewPruningSink(margin)
-}
+// It also adapts the internal clearance tiers to the pair kernel.
 
 // enumerate runs every tier over the pair, pruning per §5. One shared budget
 // bounds cancellation latency across the cell queue build, the outer
@@ -44,13 +39,8 @@ func newPruningSink(margin float64) *cellSink {
 // exactly when its box distance, less the margin, exceeds the final best
 // upper bound: every cell nearer than it has already run, the one holding
 // the best hi among them.
-func (k *pairKernel) enumerate() (*cellSink, error) {
-	return k.enumerateInto(newPruningSink(k.slack))
-}
-
-// enumerateInto runs enumerate's walk into the given sink. A zero-value sink
-// never prunes, so it runs every cell.
-func (k *pairKernel) enumerateInto(sink *cellSink) (*cellSink, error) {
+func (k *pairKernel) enumerate() (*clearance.CellSink, error) {
+	sink := clearance.NewPruningSink(k.slack)
 	budget := proofbound.NewWorkBudget(k.ctx)
 	a := clearance.FeatureSet{Faces: k.a.faces, Edges: k.a.edges, Vertices: k.a.verts}
 	b := clearance.FeatureSet{Faces: k.b.faces, Edges: k.b.edges, Vertices: k.b.verts}
@@ -77,7 +67,7 @@ func (k *pairKernel) enumerateInto(sink *cellSink) (*cellSink, error) {
 }
 
 // ffCell dispatches one face pair through the §4 table.
-func (k *pairKernel) ffCell(f, g *clearance.CFace, sink *cellSink) {
+func (k *pairKernel) ffCell(f, g *clearance.CFace, sink *clearance.CellSink) {
 	cells := facepair.New(k.ctx, k.tol, k.slack)
 	cells.FaceCell(f, g, sink)
 	k.captureFaceCells(cells)
@@ -90,17 +80,15 @@ func (k *pairKernel) captureFaceCells(cells *facepair.Kernel) {
 	k.clearanceRefused = k.clearanceRefused || cells.Refused()
 }
 
-// This file adapts internal clearance tiers to the pair kernel.
-
 // feCell dispatches one face × edge pair through §4's curve-tier table.
-func (k *pairKernel) feCell(f *clearance.CFace, e *clearance.CEdge, sink *cellSink) {
+func (k *pairKernel) feCell(f *clearance.CFace, e *clearance.CEdge, sink *clearance.CellSink) {
 	cells := curvecells.New(k.ctx, k.tol, k.slack)
 	cells.FaceEdge(f, e, sink)
 	k.captureCurveCells(cells)
 }
 
 // eeCell dispatches one edge pair through §4's curve tiers.
-func (k *pairKernel) eeCell(ea, eb *clearance.CEdge, sink *cellSink) {
+func (k *pairKernel) eeCell(ea, eb *clearance.CEdge, sink *clearance.CellSink) {
 	cells := curvecells.New(k.ctx, k.tol, k.slack)
 	cells.EdgeEdge(ea, eb, sink)
 	k.captureCurveCells(cells)
@@ -118,8 +106,8 @@ func (k *pairKernel) captureCurveCells(cells *curvecells.Kernel) {
 // edges — every cell closed form (§3's vertex tiers). It continues the
 // enumerator's budget through every face, edge, and planar trim scan. A
 // face or edge whose box lies beyond the sink's best upper bound is pruned
-// (cellSink.Pruned).
-func (k *pairKernel) vertexTier(budget *proofbound.WorkBudget, v r3.Vec, other *bodyGeom, sink *cellSink) error {
+// (clearance.CellSink.Pruned).
+func (k *pairKernel) vertexTier(budget *proofbound.WorkBudget, v r3.Vec, other *bodyGeom, sink *clearance.CellSink) error {
 	cells := tier.New(k.ctx, k.tol, k.slack)
 	err := cells.EnumerateVertex(budget, v, other.faces, other.edges, sink)
 	k.captureTier(cells)
@@ -135,8 +123,8 @@ func (k *pairKernel) captureTier(cells *tier.Kernel) {
 
 // rulingContactCertified scans the plane-cylinder and cylinder-cylinder
 // face pairs for a §6 ruling certificate. The caller runs it only when both
-// bodies' bodyGeom.delta are exactly zero, so every carrier value is the
-// boundary it names and every comparison below is exact.
+// bodies' bodyGeom.carrierDelta are exactly zero, so every carrier value is
+// the boundary it names and every comparison below is exact.
 func (k *pairKernel) rulingContactCertified(ctx context.Context) (*clearance.RulingContact, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -165,7 +153,7 @@ func (k *pairKernel) rulingContactCertified(ctx context.Context) (*clearance.Rul
 }
 
 func (k *pairKernel) planeCylinderRuling(ctx context.Context, plane, cyl *clearance.CFace,
-	planeBody, cylBody *Body, cylinderFirst bool) *clearance.RulingContact {
+	planeBody, cylBody *topo.Body, cylinderFirst bool) *clearance.RulingContact {
 	cells := tier.New(ctx, k.tol, k.slack)
 	return cells.PlaneCylinderRuling(plane, cyl,
 		func(dir r3.Vec) (float64, float64, bool) { return payloadExtent(ctx, planeBody, dir) },

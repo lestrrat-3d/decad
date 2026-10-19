@@ -535,7 +535,7 @@ Every bound composes through `proofbound.BoundedAdd`/`BoundedMul` and
 rounds outward at every publication. `Exact` requires every term exact;
 operation history grants nothing.
 
-The tolerance-gate diameter is the loft arm's (`verify_gate.go`): the held
+The tolerance-gate diameter is the loft arm's (`internal/gatediameter/`): the held
 table's own `pointSetDiameterContext` less `2·δ`, rounded down.
 
 ### 7.1 `proofbound.AsinhInterval`

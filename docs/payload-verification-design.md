@@ -481,7 +481,7 @@ runs only after the analytic kernel leaves the pair undecided, so no pair
 that kernel decides changes. §7.1's `bodyGeom` adapter is the design this
 replaces for that pair shape; it is kept as the shape a carrier model would
 take if one were ever needed, and §7.3's extent and pair-diameter rules stand
-(the diameter is `interferencePairDiameter`'s reading).
+(the diameter is `pairkernel.PairGateDiameter`'s reading).
 
 ### 7.1 `bodyGeom`
 
@@ -723,8 +723,8 @@ lands, overlapping pairs remain `Suspect` by verification's pair-partition rule.
 | File | Change |
 |---|---|
 | `internal/proofbound/bounds.go` | interval expansion, distance slop, direction-bound composition |
-| `clearance_geom.go` | `addCupFaces`, `addFacetedFaces`, payload delta |
-| `clearance.go` | bounded extent/contact gates + true interval expansion |
+| `internal/clearance/pairkernel/geom.go` | `addCupFaces`, `addFacetedFaces`, payload delta |
+| `internal/clearance/pairkernel/kernel.go` | bounded extent/contact gates + true interval expansion |
 | `shell.go` / `internal/cupwall/payload.go` | expose/recheck exact morphology certificate internally |
 | `internal/cupwall/wall.go` | cup wall theorem and morphology recheck |
 | `survey.go` | cup wall adapter; dispatch faceted surveys |

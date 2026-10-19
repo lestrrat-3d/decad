@@ -60,7 +60,7 @@ type CFace struct {
 	// revolvemesh.RevolveLift.ExactPointRound), so a lift that is exact for the
 	// coordinates at hand contributes zero. Witnesses are float samples and
 	// record nothing. The caller folds it into the body's own displacement
-	// (decad's bodyGeom.delta); the kernel itself never reads it.
+	// (pairkernel's bodyGeom.delta); the kernel itself never reads it.
 	LiftRound float64
 }
 

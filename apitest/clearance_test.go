@@ -433,7 +433,7 @@ func TestClearancePlacedStopBuiltStackTouchingIsUndecided(t *testing.T) {
 	// (proofbound.DirRoundAllow, nonzero under any non-identity placement),
 	// which makes the placed box's bodyGeom.delta nonzero, so the §6 coplanar
 	// contact certificate — an exact material-side claim — refuses to fire
-	// (clearancePair's own doc comment). The partition is still proven disjoint through the
+	// (pairkernel.Pair's own doc comment). The partition is still proven disjoint through the
 	// mesh-boolean fallback (verification §1's own "no fabricated rows"
 	// alternative route), but the requested gap stays unmeasured: Suspect,
 	// DiagUndecidedClearance, no Clearance row. This is the honest cost of

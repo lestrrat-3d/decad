@@ -338,7 +338,7 @@ of interference §3 over every (placed mover, static) pair. Three rules make it 
   `internal/proofbound/rat_interval.go`'s `π` enclosures for a radian-stated one; `R0` is the mover's record-coordinate radius
   read off its payload envelope (`internal/prismrecord`'s profile envelopes and the axial extent for a prism, the
   revolve's generator envelope and radius for a revolve). `η_k` is then subtracted from `lo_k` exactly as
-  `clearanceDeltaWiden` subtracts a delta, by `downRound`, and `exact` collapses to false whenever it is
+  `pairkernel.DeltaWiden` subtracts a delta, by `downRound`, and `exact` collapses to false whenever it is
   nonzero. It is of order `1e-15 · R0` and never matters to a verdict in practice, which is precisely why it
   must be charged rather than argued away: a bound stops covering a value the moment unproven float ops touch
   it, and the pose is such an op.

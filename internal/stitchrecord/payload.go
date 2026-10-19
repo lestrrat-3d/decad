@@ -33,7 +33,7 @@ type Payload struct {
 	// A curved source mesh uses this pairing without looking up copied roles.
 	LiveFaces []*topo.Face
 	// Verts is the shared vertex table actually built for THIS body, in
-	// world coordinates — verify_gate.go's own diameter arm reads it back,
+	// world coordinates — the gate diameter's stitch arm reads it back,
 	// modelled on loftPayload's identical field.
 	Verts []r3.Vec
 	// VertBound is Verts' own per-vertex proven bound (millimetres), the

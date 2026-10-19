@@ -100,7 +100,7 @@ func PrismGatePointsMemo(budget *proofbound.WorkBudget, prisms []prismrecord.Pay
 	return g, true, nil
 }
 
-// PrismFreeformSection is the root bodyGateDiameter's arm for a free-form-walled
+// PrismFreeformSection is pairkernel.BodyGateDiameter's arm for a free-form-walled
 // prismPayload (docs/verification-design.md §3): the clearance kernel's exact
 // carrier model has no arm for a NURBSSurface side face any more than it has
 // one for a displaced section, and gatewitness.Prism gives this payload none
@@ -167,7 +167,7 @@ func PrismGatePointsMemo(budget *proofbound.WorkBudget, prisms []prismrecord.Pay
 //   - the displacement subtraction collapses the reading to non-positive
 //     (LowerForDisplacement).
 //
-// A withheld answer is not rescued downstream. bodyGateDiameter falls through to
+// A withheld answer is not rescued downstream. pairkernel.BodyGateDiameter falls through to
 // fallbackGateDiameter, whose gatewitness.Prism has no arm for a prismPayload
 // whose sectionDelta is zero, so the body ends with NO gate diameter and its
 // bounded readings read Suspect. That is the sound direction to fail in — an

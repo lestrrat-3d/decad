@@ -941,7 +941,7 @@ func TestTaperFarCornerChargesTheTangentSpan(t *testing.T) {
 
 // TestTaperVerify is DD5 and DD6: every drafted fixture verifies valid, built
 // and solid, and the tolerance gate reads a diameter for each. Shown to fail
-// first: without the gate's draft arm (verify_gate.go) every body read
+// first: without the gate's draft arm (internal/gatediameter) every body read
 // DiagToleranceReferenceUnavailable.
 func TestTaperVerify(t *testing.T) {
 	t.Parallel()

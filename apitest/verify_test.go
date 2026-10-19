@@ -1098,7 +1098,7 @@ func TestVerifyDiagnosticsUndecidedClearance(t *testing.T) {
 // verification design §3's arm for a prismPayload whose own sectionDelta is
 // nonzero (docs/prism-boolean-design.md §7's re-expressed section — here the
 // analytic Union of a placed prism pair). The clearance kernel's exact carrier
-// model refuses that payload (clearance_geom.go's addPrismFaces), so the
+// model refuses that payload (internal/clearance/pairkernel/geom.go), so the
 // reference comes from fallbackGateDiameter reading the body's OWN recorded
 // section and shrinking the witness maximum by the displacement each witness
 // carries. Two things follow, and this test asserts both: bounds this tight
@@ -1381,7 +1381,7 @@ func TestVerifyComputedToFaceDiameterThreshold(t *testing.T) {
 }
 
 // TestVerifyCupWithinToleranceIsSound is the cup coverage the tolerance gate
-// was missing: bodyGateDiameter had no fallback for cupPayload, so its
+// was missing: pairkernel.BodyGateDiameter had no fallback for cupPayload, so its
 // nonzero (if minuscule) centroid Bound failed the gate closed with no
 // reference to judge it against, however far inside tolerance the true
 // figure sat. A cup whose readings are genuinely within tolerance must
@@ -1400,7 +1400,7 @@ func TestVerifyCupWithinToleranceIsSound(t *testing.T) {
 
 	// The mass-subtracted centroid leaves a genuine nonzero (Approximate)
 	// bound, unlike the cup's Exact area and volume, so this body exercises
-	// bodyGateDiameter's cup fallback rather than passing on a zero Bound
+	// pairkernel.BodyGateDiameter's cup fallback rather than passing on a zero Bound
 	// that needs no reference at all.
 	require.NotNil(t, report.Bodies[0].Region)
 	require.Equal(t, decad.Approximate, report.Bodies[0].Region.Centroid.Exactness)
@@ -1414,7 +1414,7 @@ func TestVerifyCupWithinToleranceIsSound(t *testing.T) {
 // TestVerifyCapBlendChamferAreaVolumeCentroidAllPass is the cap-blend
 // coverage the tolerance gate was missing, on the exact body
 // docs/modify-reach-design.md's own example builds (a 100x60x20 plate with a
-// complete end-cap chamfer at d=5mm): bodyGateDiameter had no fallback for
+// complete end-cap chamfer at d=5mm): pairkernel.BodyGateDiameter had no fallback for
 // capBlendPayload either, so its area, volume AND centroid readings all
 // failed the gate closed with no reference, regardless of how each reading's
 // own bound compared to the caller's tolerance. With the envelope-prism

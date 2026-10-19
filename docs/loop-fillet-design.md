@@ -118,7 +118,7 @@ since `c` is the offset corner's float solve. Every production switch on
 where the default would be wrong: `surfaceplace/placement.go` (map `Center`,
 `Axis`, `Major`), `selectedEdgeContext` (render centre and semi-axes),
 `brepEdgeMatches` (match nothing: a band edge is in no record); it verifies
-that `stops.go`, `verify_gate.go`, `clearance_geom.go` and `selector.go`
+that `stops.go`, `internal/clearance/pairkernel/gate.go`, `internal/clearance/pairkernel/geom.go` and `selector.go`
 read an unknown curve through its two vertices or refuse it. `Edge.Length`
 of an LF4 edge is the quarter-ellipse arc length
 `∫₀^{π/2} √(b² + (a² − b²)·sin²φ) dφ`, `a = r/sin(θ/2)`, `b = r`, enclosed by

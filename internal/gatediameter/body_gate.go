@@ -27,7 +27,7 @@ import (
 // This file proves the reference diameter Verify's tolerance gate is
 // anchored on, per body and per payload.
 //
-// The root bodyGateDiameter is the entry point and states the order it tries: a
+// pairkernel.BodyGateDiameter is the entry point and states the order it tries: a
 // payload that can state its own diameter does, a free-form prism section
 // resolves one through diameter.PrismFreeformSection, and fallbackGateDiameter
 // is the last resort over the body's own vertices. A payload with no
@@ -35,7 +35,7 @@ import (
 // gate instead of anchoring it on a number nothing proved. See
 // docs/verification-design.md §3.
 
-// bodyGateDiameter returns the body's own diameter, never a document scale or
+// pairkernel.BodyGateDiameter returns the body's own diameter, never a document scale or
 // a bounds-box diagonal — and returns it as a value proven to be at or below
 // that diameter. Point witnesses publish through diameter.PointsWithBudget,
 // and every arm charges each point it reads the gap a proof states between it
@@ -45,9 +45,9 @@ import (
 // payload vertex, including vertices absent from the B-rep boundary loops. The
 // analytic carrier model is built through the shared work budget (§7.2), so a
 // cancelled Verify observes cancellation during the build instead of waiting for
-// the whole model to finish. newBodyGeomBudget's payload switch is the
+// the whole model to finish. The carrier build's payload switch is the
 // clearance kernel's own — it only covers the payloads whose carrier model is
-// an exact restatement of the shipped boundary, because clearance.go and
+// an exact restatement of the shipped boundary, because internal/clearance/pairkernel and
 // interference.go trust that model for containment and contact proofs, not
 // only for a diameter. A miss there is not necessarily a body with no usable
 // diameter: a free-form-walled prismrecord.Payload — the one shipped payload whose
@@ -342,12 +342,12 @@ func chainRevolveEdgeGateDiameter(ctx context.Context, body *topo.Body, sectionD
 	}, sectionDelta)
 }
 
-// fallbackGateDiameter is bodyGateDiameter's fallback for a payload whose true
+// fallbackGateDiameter is pairkernel.BodyGateDiameter's fallback for a payload whose true
 // boundary the clearance kernel's exact carrier model does not cover
 // (cupPayload, capblend.Payload, and a prismrecord.Payload carrying a section
 // displacement — verification design §3's "usable finite, non-negative body
 // diameter", never a box diagonal, document scale or zero). A free-form-walled
-// prismrecord.Payload misses that same exact carrier too, and bodyGateDiameter tries
+// prismrecord.Payload misses that same exact carrier too, and pairkernel.BodyGateDiameter tries
 // PrismFreeformSection for it ahead of this function — but when that arm
 // withholds its diameter the body DOES reach here, and this function has no arm
 // for it either: its own sectionDelta is zero, the one value gatewitness.Prism
@@ -377,7 +377,7 @@ func chainRevolveEdgeGateDiameter(ctx context.Context, body *topo.Body, sectionD
 // itself, or the start section at one level). A cap-loop chamfer cuts the
 // receiver's walls back at the cap levels, so its witness prisms
 // (capblend.WitnessPrisms) stop each chamfered loop at its band's side level;
-// bodyGateDiameter reads such a body through capBlendGateDiameter, which
+// pairkernel.BodyGateDiameter reads such a body through capBlendGateDiameter, which
 // adds its cap circles and vertices to those stations.
 //
 // For an all-line section the reading reaches the farthest pair, which is
@@ -407,7 +407,7 @@ func FallbackGateDiameter(budget *proofbound.WorkBudget, body *topo.Body) (float
 	return diameter.PrismGateDiameter(budget, witnesses, displacement)
 }
 
-// draftGateDiameter is bodyGateDiameter's arm for a draft body
+// draftGateDiameter is pairkernel.BodyGateDiameter's arm for a draft body
 // (docs/draft-design.md Table DD row DD6). The body has no exact carrier
 // model here and no single witness prism: its far section is not the near
 // one. It reads the stations SectionStations places on the near section P at

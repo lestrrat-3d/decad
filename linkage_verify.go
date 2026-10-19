@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/clearance/pairkernel"
 	"github.com/lestrrat-3d/decad/internal/linkagebound"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 	"github.com/lestrrat-3d/decad/internal/motionoption"
@@ -133,7 +134,7 @@ func readingResolution(cfg motionConfig) units.Value {
 // moving group per link, in Linkage.Links() order, every other live body
 // static, and each link body's swept box for the exclusion against them.
 func newLinkageRun(ctx context.Context, d *Document, spec *linkageSpec, frames []motionbound.MotionFrame, bounds []linkBound, cfg motionConfig) *motionRun {
-	run := &motionRun{ctx: ctx, d: d, dom: motionbound.FractionDomain(), cfg: cfg, cache: &bodyGeomCache{}}
+	run := &motionRun{ctx: ctx, d: d, dom: motionbound.FractionDomain(), cfg: cfg, cache: &pairkernel.Cache{}}
 	dr := &linkageDriver{run: run, spec: spec, frames: frames, bounds: bounds, standing: linkStandings(spec, bounds)}
 	run.drive = dr
 	run.declared = make(map[[2]*Body]struct{}, 2*len(spec.linkage.contacts))

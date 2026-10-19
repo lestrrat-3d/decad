@@ -720,7 +720,7 @@ func stitchBoxSheetsAtZ(t *testing.T, doc *decad.Document, z0 float64) (walls, b
 // (docs/clearance-design.md §2/§6.4's zero-bound gate) lets a pair holding
 // it reach a proven, Sound answer instead of reading undecided. Shown-to-
 // fail: pulling the stitchPayload arm out of newBodyGeomBudget
-// (clearance_geom.go) turns this same Sound report into Suspect with
+// (internal/clearance/pairkernel/geom.go) turns this same Sound report into Suspect with
 // DiagUndecidedClearance and zero Clearance rows (verified by hand while
 // writing this test).
 func TestStitchBoxReachesAProvenClearanceGap(t *testing.T) {
@@ -815,11 +815,11 @@ func TestStitchSmallStitchedBoxContainedInABlock(t *testing.T) {
 // TestStitchBoundedStitchedSolidGetsClearance is docs/surface-design.md's
 // T68: T42's own certificate-welded stitched solid — every vertex bound
 // nonzero even at identity, no placement in play. It now reaches the
-// clearance kernel's own carrier model (clearance_geom.go's stitchPayload
+// clearance kernel's own carrier model (pairkernel/geom.go's stitchPayload
 // arm), charging its worst proven vertex bound into bodyGeom.delta rather
 // than refusing a model outright, so the pair reads a real, honestly
 // Approximate Clearance row instead of DiagUndecidedClearance. Shown-to-fail:
-// reverting the stitch arm's zero-bound gate (clearance_geom.go's
+// reverting the stitch arm's zero-bound gate (pairkernel/geom.go's
 // stitchPayload case) turns this pair back to Suspect with no row, watched
 // red by hand while writing this test.
 func TestStitchBoundedStitchedSolidGetsClearance(t *testing.T) {

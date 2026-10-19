@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/clearance/pairkernel"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -107,9 +108,9 @@ func cupViewsEqual(budget *proofbound.WorkBudget, pa, pb cupView) (bool, error) 
 //
 // meshes supplies the mesh path's operand meshes: Verify's per-call cache,
 // or pairMeshes{} where a caller measures one pair on its own.
-func measuredInterference(ctx context.Context, a, b *Body, res pairResult, meshes operandMeshes) (Measurement, reportvocab.InterferenceOutcome, error) {
-	if res.contained != nil {
-		return measurementFromInternal(res.contained.n.Volume), reportvocab.InterferenceMeasured, nil
+func measuredInterference(ctx context.Context, a, b *Body, res pairkernel.Result, meshes operandMeshes) (Measurement, reportvocab.InterferenceOutcome, error) {
+	if res.Contained != nil {
+		return measurementFromInternal(res.Contained.Volume), reportvocab.InterferenceMeasured, nil
 	}
 	equal, err := analyticBodiesEqual(proofbound.NewWorkBudget(ctx), a, b)
 	if err != nil {
@@ -169,14 +170,6 @@ func measuredInterference(ctx context.Context, a, b *Body, res pairResult, meshe
 func positiveVolume(v Measurement) bool {
 	value := math.Abs(v.Value.Base())
 	return value-v.Bound.Base() > 0
-}
-
-// interferencePairDiameter reads the pair's diameter D through
-// pairGateDiameterCached: points each body proves lie on it, each charged its
-// proven gap, read across both bodies together. An incomplete set can only
-// understate D and tighten the noise floor, never admit a coarse answer.
-func interferencePairDiameter(ctx context.Context, a, b *Body) (float64, error) {
-	return pairGateDiameterCached(ctx, a, b, nil)
 }
 
 // interferenceToleranceRef applies the pair-local volume gate and returns the

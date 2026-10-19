@@ -16,11 +16,11 @@ import (
 // witnesses off, beside the displacement each of those witnesses can carry
 // from the point of the denoted body it stands for. ok is false for every
 // payload with no arm here, including a revolve payload (already exact through
-// the root clearance carrier model, which is why it never reaches this fallback)
+// the pairkernel clearance carrier model, which is why it never reaches this fallback)
 // and an analytic-walled prism payload whose section is its own denotation
 // (the same reason). A free-form-walled prism payload's own section is its
 // denotation too, so this switch answers false for it exactly as it does for
-// the analytic case: root bodyGateDiameter routes a free-form-walled prism
+// the analytic case: pairkernel.BodyGateDiameter routes a free-form-walled prism
 // through diameter.PrismFreeformSection before its fallback, and calls this
 // function only when that arm has already declined. This false answer then
 // leaves the body with no gate diameter at all.
@@ -60,7 +60,7 @@ import (
 // witness sits from the denoted body point below it, and
 // diameter.LowerForDisplacement turns the held maximum into the lower bound
 // the gate wants. The copy zeroes sectionDelta because addPrismFaces
-// (clearance_geom.go) refuses a displaced section outright: it builds the
+// (internal/clearance/pairkernel/geom.go) refuses a displaced section outright: it builds the
 // clearance kernel's certificate carriers, which have to be exact statements
 // about a boundary, and a witness set for a diameter is neither a certificate
 // nor a carrier.

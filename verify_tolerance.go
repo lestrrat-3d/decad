@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 
+	"github.com/lestrrat-3d/decad/internal/clearance/pairkernel"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
 )
 
@@ -12,8 +13,8 @@ import (
 // Every comparison here is RELATIVE, against a reference the body itself
 // supplies — its gate diameter, an edge length, an area or a volume — which
 // is what keeps the gate scale-free. bodyToleranceInputs owns the choice of
-// reference per reading kind; verify_gate.go owns how the diameter that
-// anchors it is proven. See docs/verification-design.md §2-§3.
+// reference per reading kind; pairkernel.BodyGateDiameter owns how the
+// diameter that anchors it is proven. See docs/verification-design.md §2-§3.
 
 // bodyToleranceInputs lazily reads one body's intrinsic reference data. The
 // laziness is part of the contract: a zero Bound passes even when no usable D
@@ -38,7 +39,7 @@ type bodyToleranceInputs struct {
 
 func (in *bodyToleranceInputs) diameter() (float64, bool) {
 	if !in.diameterLoaded {
-		in.diameterValue, in.diameterOK, in.err = bodyGateDiameter(in.ctx, in.body)
+		in.diameterValue, in.diameterOK, in.err = pairkernel.BodyGateDiameter(in.ctx, bodyNode(in.body))
 		in.diameterLoaded = true
 	}
 	return in.diameterValue, in.diameterOK

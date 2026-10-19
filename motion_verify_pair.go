@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/clearance/pairkernel"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
@@ -73,10 +74,10 @@ func (r *motionRun) settleConstant(i, k int) error {
 	pair.constant = false
 	mover, partner := r.movers[i].body, r.partner(i, k)
 	boxProven := measurement.BoxesDisjoint(mover.n.Bounds, partner.n.Bounds)
-	res, fast := clearanceAxisBoxes(mover, partner)
+	res, fast := pairkernel.AxisBoxes(&mover.n, &partner.n)
 	if !fast {
 		var err error
-		if res, err = clearancePairCached(r.ctx, mover, partner, boxProven, r.cache); err != nil {
+		if res, err = pairkernel.Pair(r.ctx, &mover.n, &partner.n, boxProven, r.cache); err != nil {
 			return err
 		}
 	}
@@ -84,10 +85,10 @@ func (r *motionRun) settleConstant(i, k int) error {
 		return err
 	}
 	switch {
-	case res.verdict == reportvocab.PairDisjoint:
+	case res.Verdict == reportvocab.PairDisjoint:
 		pair.once = &constantOutcome{res: res}
 		return nil
-	case res.verdict == reportvocab.PairTouching || boxProven:
+	case res.Verdict == reportvocab.PairTouching || boxProven:
 		return nil
 	}
 	volume, outcome, err := measuredInterference(r.ctx, mover, partner, res, pairMeshes{})
@@ -174,7 +175,7 @@ func (r *motionRun) place(mp *motionPose, i int, placed []*motionPlaced) (*motio
 		}
 		if cacheable {
 			if old := r.poseBodies[i].put(key, transient); old != nil {
-				delete(r.cache.entries, old)
+				r.cache.Evict(&old.n)
 			}
 		}
 	}
@@ -227,10 +228,10 @@ func (r *motionRun) evaluatePair(mp *motionPose, i, k int, a, b *motionPlaced) e
 		target, etaB, allowance = b.body, b.eta, proofbound.AbsSumUpper(a.allowance, b.allowance)
 	}
 	boxProven := measurement.BoxesDisjoint(a.body.n.Bounds, target.n.Bounds)
-	res, fast := clearanceAxisBoxes(a.body, target)
+	res, fast := pairkernel.AxisBoxes(&a.body.n, &target.n)
 	if !fast {
 		var err error
-		res, err = clearancePairCached(r.ctx, a.body, target, boxProven, r.cache)
+		res, err = pairkernel.Pair(r.ctx, &a.body.n, &target.n, boxProven, r.cache)
 		if err != nil {
 			return err
 		}
@@ -238,7 +239,7 @@ func (r *motionRun) evaluatePair(mp *motionPose, i, k int, a, b *motionPlaced) e
 	if err := r.ctx.Err(); err != nil {
 		return err
 	}
-	if res.verdict == reportvocab.PairDisjoint || res.verdict == reportvocab.PairTouching {
+	if res.Verdict == reportvocab.PairDisjoint || res.Verdict == reportvocab.PairTouching {
 		r.recordGap(mp, i, k, res, a.eta, etaB)
 		return nil
 	}
@@ -254,11 +255,11 @@ func (r *motionRun) evaluatePair(mp *motionPose, i, k int, a, b *motionPlaced) e
 	if err != nil {
 		return err
 	}
-	if outcome != reportvocab.InterferenceMeasured && res.verdict != reportvocab.PairOverlapping {
+	if outcome != reportvocab.InterferenceMeasured && res.Verdict != reportvocab.PairOverlapping {
 		if declared {
 			return nil
 		}
-		diag := undecidedPairDiag(a.body, target, res.verdict, outcome)
+		diag := undecidedPairDiag(a.body, target, res.Verdict, outcome)
 		diag.Pair = &DiagnosticPair{A: mover, B: partner}
 		r.poseDiag(mp, mp.stamp(diag))
 		return nil
@@ -293,7 +294,7 @@ func (r *motionRun) evaluatePair(mp *motionPose, i, k int, a, b *motionPlaced) e
 // fails is false, and the finding empty, when the volume reading passes the
 // relative tolerance.
 func (r *motionRun) collisionBeyond(a, b, mover, partner *Body, published Measurement) (Diagnostic, bool, error) {
-	pairD, err := interferencePairDiameter(r.ctx, a, b)
+	pairD, err := pairkernel.PairGateDiameter(r.ctx, &a.n, &b.n, nil)
 	if err != nil {
 		return Diagnostic{}, false, err
 	}
@@ -358,7 +359,7 @@ func (r *motionRun) poseDiag(mp *motionPose, diag Diagnostic) {
 // 1-Lipschitz in a displacement of either set — makes it a proven interval on
 // the IDEAL poses, which is what the interval certificate consumes. A static
 // partner's η is zero. An η that cannot be bounded leaves the gap unmeasured.
-func (r *motionRun) recordGap(mp *motionPose, i, k int, res pairResult, etaA, etaB float64) {
+func (r *motionRun) recordGap(mp *motionPose, i, k int, res pairkernel.Result, etaA, etaB float64) {
 	mover, partner := r.movers[i].body, r.partner(i, k)
 	if r.pairs[i][k].declared {
 		r.recordDeclaredGap(mp, mover, partner, res, etaA, etaB)
@@ -369,9 +370,9 @@ func (r *motionRun) recordGap(mp *motionPose, i, k int, res pairResult, etaA, et
 			"the pair is proven disjoint at this pose, but the pose's departure from the ideal motion is unbounded for this payload, so its gap is unmeasured")))
 		return
 	}
-	lo, hi, exact := clearanceDeltaWiden(res.lo, res.hi, res.exact, etaA, etaB)
-	mp.pairs[i][k] = motionPairPose{hasGap: true, lo: lo, hi: hi, diam: res.diam}
-	gap := pairGapMeasurement(pairResult{lo: lo, hi: hi, exact: exact})
+	lo, hi, exact := pairkernel.DeltaWiden(res.Lo, res.Hi, res.Exact, etaA, etaB)
+	mp.pairs[i][k] = motionPairPose{hasGap: true, lo: lo, hi: hi, diam: res.Diam}
+	gap := pairGapMeasurement(pairkernel.Result{Lo: lo, Hi: hi, Exact: exact})
 	mp.result.Clearances = append(mp.result.Clearances, Clearance{A: mover, B: partner, Gap: gap})
 	if r.cfg.MinimumMM != nil && proofarith.FloatRat(hi).Cmp(r.cfg.MinimumMM) < 0 {
 		// The proven upper end of the ideal pose's gap lies below the spec:
@@ -389,7 +390,7 @@ func (r *motionRun) recordGap(mp *motionPose, i, k int, res pairResult, etaA, et
 		}))
 	}
 	pass, ref, haveRef := tolerance.Scalar(gap.Value, gap.Bound, r.cfg.Rel,
-		pairToleranceInputs{diameter: res.diam}.lengthReference)
+		pairToleranceInputs{diameter: res.Diam}.lengthReference)
 	if pass {
 		return
 	}
@@ -413,12 +414,12 @@ func (r *motionRun) recordGap(mp *motionPose, i, k int, res pairResult, etaA, et
 // touching pair or an unbounded η publishes nothing, no finding is raised,
 // and the gap feeds neither an interval certificate nor the whole-path
 // reading.
-func (r *motionRun) recordDeclaredGap(mp *motionPose, mover, partner *Body, res pairResult, etaA, etaB float64) {
-	if res.verdict != reportvocab.PairDisjoint || proofbound.IsNonFinite(etaA) || proofbound.IsNonFinite(etaB) {
+func (r *motionRun) recordDeclaredGap(mp *motionPose, mover, partner *Body, res pairkernel.Result, etaA, etaB float64) {
+	if res.Verdict != reportvocab.PairDisjoint || proofbound.IsNonFinite(etaA) || proofbound.IsNonFinite(etaB) {
 		return
 	}
-	lo, hi, exact := clearanceDeltaWiden(res.lo, res.hi, res.exact, etaA, etaB)
-	gap := pairGapMeasurement(pairResult{lo: lo, hi: hi, exact: exact})
+	lo, hi, exact := pairkernel.DeltaWiden(res.Lo, res.Hi, res.Exact, etaA, etaB)
+	gap := pairGapMeasurement(pairkernel.Result{Lo: lo, Hi: hi, Exact: exact})
 	mp.result.Clearances = append(mp.result.Clearances, Clearance{A: mover, B: partner, Gap: gap})
 }
 
@@ -574,7 +575,7 @@ func (r *motionRun) pathClearance(poses []*motionPose, lowest *Measurement, scop
 	// upper end — which sound bounds never produce — is clamped rather than
 	// published inverted.
 	lower := math.Min(lowest.Value.Base(), upper)
-	gap := pairGapMeasurement(pairResult{lo: lower, hi: upper})
+	gap := pairGapMeasurement(pairkernel.Result{Lo: lower, Hi: upper})
 	gap.Exactness = Approximate
 	pass, ref, haveRef := tolerance.Scalar(gap.Value, gap.Bound, r.cfg.Rel,
 		pairToleranceInputs{diameter: diam}.lengthReference)
