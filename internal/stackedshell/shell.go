@@ -1,9 +1,11 @@
-// Package stackedshell admits and records the exact stacked shells that run
-// before route S's through-cut reading (docs/modify-general-design.md
-// §3.1a-§3.1e): the nested rectangular boss, the circular boss, the
-// rectangular blind pocket and the coaxial counterbore. Each builder reads only
-// the two-slab stacked record and its face view, refuses any offset it cannot
-// represent exactly, and builds its result through breprecord.
+// Package stackedshell admits and records the exact stacked shells of
+// docs/modify-general-design.md §3.1a-§3.1c and §3.1e: the nested rectangular
+// boss, the circular boss, the rectangular blind pocket and the coaxial
+// counterbore. Build runs the four open shells before route S's through-cut
+// reading. Closed runs the closed rectangular boss on Shell's WithNoOpenings
+// path. Each builder reads only the two-slab stacked record and its face view,
+// refuses any offset it cannot represent exactly, and builds its result
+// through breprecord.
 package stackedshell
 
 import (

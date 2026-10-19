@@ -1,4 +1,4 @@
-package stackedshell_test
+package filletband_test
 
 import (
 	"testing"
@@ -12,6 +12,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// The blind-pocket shell's floor band (internal/stackedshell) reads the
+// pocket's rounded offset as fillet walks. Their offset loop must collapse
+// back to the source square, and each of the four corners must be a sphere.
 func TestBlindPocketFloorBandHasFourSphereOctants(t *testing.T) {
 	t.Parallel()
 	budget := proofbound.NewWorkBudget(t.Context())
