@@ -429,7 +429,9 @@ func (r *orientedSphereSweepRun) deltas() ([3]proofarith.Dyadic, [3]proofarith.D
 func (r *orientedSphereSweepRun) idealAt(f *big.Rat, at SweepInstant) SweepEvent {
 	sphereDelta, boxDelta := r.deltas()
 	sphere, okSphere := translatedSphere(r.sphere, sphereDelta, f)
-	box, okBox := translatedOrientedBox(r.box, boxDelta, f)
+	box := r.box // the translated box keeps its source face identities
+	geometry, okBox := pairbox.TranslateOriented(box.OrientedBox, boxDelta, f)
+	box.OrientedBox = geometry
 	if !okSphere || !okBox {
 		return SweepEvent{At: at, Relation: ContactUndecided, Reason: ContactPayloadUnsupported}
 	}

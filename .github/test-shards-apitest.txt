@@ -2117,6 +2117,7 @@
 10	0.00	TestSweepPairTrackKeepsTopologyIdentity
 10	0.00	TestSweepPairAffineBoxPoseBudgetIsExact
 10	0.00	TestSweepPairTouchStartFollowsStartPolicy
+10	0.00	TestSweepPairObliqueBoxesIntervalSeparation
 10	0.00	TestSectionHomotheticThreeSectionLoftFeedsExtrude
 10	0.00	TestSectionHomotheticThreeSectionLoftKeepsTranslatedSourceAndMiddleLevel
 10	0.00	TestSectionHomotheticThreeSectionLoftRefusesUnprovedInputs

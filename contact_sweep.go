@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/measurement"
+	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
@@ -293,8 +294,11 @@ func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, 
 		return t.cylinderTrackManifold(f)
 	}
 	if t.orientedA != nil && t.orientedB != nil {
-		a, okA := translatedOrientedBox(*t.orientedA, t.orientedDelta, f)
-		b, okB := translatedOrientedBox(*t.orientedB, t.orientedDelta, f)
+		// Translation keeps both boxes' source face identities.
+		a, b := *t.orientedA, *t.orientedB
+		var okA, okB bool
+		a.OrientedBox, okA = pairbox.TranslateOriented(a.OrientedBox, t.orientedDelta, f)
+		b.OrientedBox, okB = pairbox.TranslateOriented(b.OrientedBox, t.orientedDelta, f)
 		if !okA || !okB {
 			return nil, fmt.Errorf("%w: oriented contact-track fraction cannot be represented", ErrUnsupported)
 		}

@@ -848,3 +848,56 @@ func TestSweepPairTouchStartFollowsStartPolicy(t *testing.T) {
 	require.Equal(t, decad.SweepDepartedClear, departed.Outcome, "cause=%v", departed.Cause)
 	require.NotNil(t, departed.Departure)
 }
+
+func TestSweepPairObliqueBoxesIntervalSeparation(t *testing.T) {
+	// Two 10 mm cubes turned 45° about Z. b sits 8 mm along X and Y from a, so
+	// a's diagonal face plane (normal (1,1,0)/√2, at 10 mm) and b's facing
+	// plane (at 8√2 mm) leave a gap of 8√2 − 10 mm, while the two world-axis
+	// hulls overlap on every axis.
+	doc := decad.New()
+	a := boxBody(t, doc, 0, 0, 10, 10, 10)
+	b := boxBody(t, doc, 0, 0, 10, 10, 10)
+	turned := func(v r3.Vec, at r3.Vec) decad.RigidDriftSegment {
+		drift := sweepDrift(v, 1)
+		drift.From = rotationPose(t, r3.Vec{Z: 1}, 45, at)
+		return drift
+	}
+
+	t.Run("co-moving pair stays separated", func(t *testing.T) {
+		// Both travel 64 mm along X, far more than the two end gaps add up to,
+		// and the hulls never part. Only a's face normal separating the pair at
+		// both ends of [0, 1] proves the whole path clear from the two end
+		// samples.
+		report, err := doc.SweepPair(t.Context(), a, b,
+			turned(r3.Vec{X: 64}, r3.Vec{}), turned(r3.Vec{X: 64}, r3.Vec{X: 8, Y: 8}), sweepRequest())
+		require.NoError(t, err)
+		require.Equal(t, decad.SweepClear, report.Outcome, "cause=%v", report.Cause)
+		require.Equal(t, uint64(2), report.PoseEvaluations)
+		require.Len(t, report.Samples, 2)
+		gap := 8*math.Sqrt2 - 10
+		for _, sample := range report.Samples {
+			require.Equal(t, decad.ContactSeparated, sample.Ideal.Relation)
+			require.NotNil(t, sample.Ideal.Gap)
+			require.InDelta(t, gap, sample.Ideal.Gap.Value.Base(), 1e-9)
+		}
+	})
+
+	t.Run("pass-through pair is not separated", func(t *testing.T) {
+		// b crosses a along the diagonal, from 8 mm to −8 mm on each axis. Both
+		// end samples are separated, but on opposite faces, so no face normal
+		// separates the pair at both ends. b's back face first meets a's front
+		// face when 8 − 16·t = 10/√2.
+		req := sweepRequest()
+		req.TimeResolution = units.Seconds(1e-3)
+		req.MaxPoseEvaluations = 64
+		report, err := doc.SweepPair(t.Context(), a, b,
+			turned(r3.Vec{}, r3.Vec{}), turned(r3.Vec{X: -16, Y: -16}, r3.Vec{X: 8, Y: 8}), req)
+		require.NoError(t, err)
+		require.Equal(t, decad.SweepImpactBracket, report.Outcome, "cause=%v", report.Cause)
+		require.NotNil(t, report.Bracket)
+		impact := (8 - 10/math.Sqrt2) / 16
+		require.LessOrEqual(t, report.Bracket.From.Fraction.Base(), impact)
+		require.GreaterOrEqual(t, report.Bracket.To.Fraction.Base(), impact)
+		require.LessOrEqual(t, report.Bracket.To.Fraction.Base()-report.Bracket.From.Fraction.Base(), 1e-3)
+	})
+}
