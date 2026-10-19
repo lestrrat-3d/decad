@@ -24,8 +24,7 @@ import (
 // built body's payload with this struct, so a flag that rode only the reduced
 // prism/revolve payload would still reach Kind()/solid correctly on first
 // build (prismrecord.Build/revolveplan.Build read it there) but would give
-// a later consumer — auditSheetBoundary's own sweepPayload case
-// (verify.go) — no uniform field to read across all three build paths. For
+// a later consumer no uniform field to read across all three build paths. For
 // the composite path it is the ONLY place the flag lives at all: every span
 // stays solid (SpanPayload carries no such field), and
 // compositesweep.Assemble reads this field alone to decide which two caps

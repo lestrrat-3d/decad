@@ -8,9 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
-	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
-	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/verifyoption"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -295,72 +293,12 @@ func pairDiagNone(a, b *Body, code DiagnosticCode, msg string) Diagnostic {
 	}
 }
 
-// undecidedPairDiag picks the diagnostic for a pair whose overlap volume the
-// evaluator could not measure (verification §1.1): payload, contact, and
-// in-pipeline limits each keep their own code and action; only an overlap with
-// an otherwise undecided measurement is DiagUndecidedInterference; an
-// unresolved partition is DiagUndecidedPair. Verify emits only this
-// cause-specific diagnostic. A pair holding a sheet operand never reaches
-// this function: it is resolved earlier,
-// by box separation or the sheet decision procedure (pairkernel.SheetSolid,
-// internal/clearance/pairkernel/kernel.go), and takes DiagUnsupportedPairSheet or DiagSheetSolidCrossing
-// instead (docs/surface-design.md §9.3).
+// undecidedPairDiag converts reportvocab.UndecidedPairReason's code and
+// message for a pair whose overlap volume the evaluator could not measure into
+// the public pair diagnostic.
 func undecidedPairDiag(a, b *Body, verdict reportvocab.PairVerdict, outcome reportvocab.InterferenceOutcome) Diagnostic {
-	switch {
-	case outcome == reportvocab.InterferenceUnsupportedPayloadFirst:
-		return pairDiagNone(a, b, DiagUnsupportedPairPayload,
-			"the first operand cannot enter the read-only intersection at the chord tolerance this check derives from the pair's own size, which no option sets: its tessellation refused that tolerance, or its held facets where the pair meets are coarser than it; simplify that operand or reduce the pair's extent, or wait for wider tessellation reach")
-	case outcome == reportvocab.InterferenceUnsupportedPayloadSecond:
-		return pairDiagNone(a, b, DiagUnsupportedPairPayload,
-			"the second operand cannot enter the read-only intersection at the chord tolerance this check derives from the pair's own size, which no option sets: its tessellation refused that tolerance, or its held facets where the pair meets are coarser than it; simplify that operand or reduce the pair's extent, or wait for wider tessellation reach")
-	case outcome == reportvocab.InterferenceUnsupportedVolumeProofFirst:
-		return pairDiagNone(a, b, DiagUnsupportedPairPayload,
-			"the first operand tessellates, but its mesh carries no proof of the volume it and the body it stands for differ by, so no read-only intersection may compose it; keep this body out of overlapping pairs, or wait for its occupied-volume proof")
-	case outcome == reportvocab.InterferenceUnsupportedVolumeProofSecond:
-		return pairDiagNone(a, b, DiagUnsupportedPairPayload,
-			"the second operand tessellates, but its mesh carries no proof of the volume it and the body it stands for differ by, so no read-only intersection may compose it; keep this body out of overlapping pairs, or wait for its occupied-volume proof")
-	case outcome == reportvocab.InterferenceUnsupportedContact:
-		if sharesFacePlane(a, b) {
-			return pairDiagNone(a, b, DiagUnsupportedPairContact,
-				"the pair reaches a contact or near-contact that the read-only intersection cannot classify, and the operands share a face plane; offset the operands so no face plane is shared, or adjust the geometry to create clear separation or deeper overlap, or wait for contact support")
-		}
-		return pairDiagNone(a, b, DiagUnsupportedPairContact,
-			"the pair reaches a contact or near-contact that the read-only intersection cannot classify; adjust the geometry to create clear separation or deeper overlap, or wait for contact support")
-	case outcome == reportvocab.InterferenceUnsupportedPipeline:
-		return pairDiagNone(a, b, DiagUnsupportedPairPipeline,
-			"both operands tessellate, but later read-only intersection geometry exceeds the boolean pipeline's reach; simplify the boolean geometry or wait for pipeline support")
-	case outcome == reportvocab.InterferenceUndecided && verdict == reportvocab.PairOverlapping:
-		return pairDiagNone(a, b, DiagUndecidedInterference,
-			"the pair is proven to overlap but the overlap volume is unmeasured")
-	default:
-		return pairDiagNone(a, b, DiagUndecidedPair,
-			"the disjoint/overlap partition proof resolved neither way")
-	}
-}
-
-// sharesFacePlane reports whether a and b have a planar face whose infinite
-// plane coincides — exact float comparison on the canonicalized normal and
-// offset, reject-only in spirit: it can only fail to name a shared plane it
-// cannot exactly confirm, never invent one that is not there. It is a
-// diagnostic aid, not a proof: it never changes a Diagnostic's Code, Status,
-// Reading, or Pair, only whether its Message names the cause.
-func sharesFacePlane(a, b *Body) bool {
-	keys := make(map[surfacegeom.DiagnosticPlaneKey]struct{})
-	for _, f := range a.Faces() {
-		if p, ok := f.n.Surface.(surfacegeom.Plane); ok {
-			keys[surfacegeom.CanonicalDiagnosticPlaneKey(p)] = struct{}{}
-		}
-	}
-	for _, f := range b.Faces() {
-		p, ok := f.n.Surface.(surfacegeom.Plane)
-		if !ok {
-			continue
-		}
-		if _, found := keys[surfacegeom.CanonicalDiagnosticPlaneKey(p)]; found {
-			return true
-		}
-	}
-	return false
+	code, msg := reportvocab.UndecidedPairReason(&a.n, &b.n, verdict, outcome)
+	return pairDiagNone(a, b, DiagnosticCode(code), msg)
 }
 
 // verifyBody audits one body and assembles its BodyReport through
@@ -384,10 +322,10 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 		}
 	}
 
-	// The held boundary's structural audit. A BodySolid runs auditBoundary:
-	// every edge bounds exactly two faces, every face carries at least one
-	// loop of at least one edge. A BodySheet runs auditSheetBoundary instead
-	// (docs/surface-design.md §9.1). This evaluator's boundary is exact, so a
+	// The held boundary's structural audit. A BodySolid runs
+	// reportvocab.AuditSolidBoundary: every edge bounds exactly two faces,
+	// every face carries at least one loop of at least one edge. A BodySheet
+	// runs AuditSheetBoundary instead (docs/surface-design.md §9.1). This evaluator's boundary is exact, so a
 	// defect is proven — Unsound — and a clean audit on a feature-built body
 	// is proven validity. publishValidityResult (verify_publish.go) maps the
 	// evidence onto ValidityResult and carries the one diagnostic that
@@ -563,144 +501,21 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 // bodyValidityEvidence gathers the evidence publishValidityResult decides one
 // body's validity from: the sheet audit for a BodySheet, the closed-skin audit
 // plus the build and solidity facts otherwise. Verify and VerifyMotion share
-// it so the two never judge one body two different ways.
+// it so the two never judge one body two different ways. It reads the faceted
+// image's audit facts itself because internal/facetedrecord imports
+// internal/reportvocab.
 func bodyValidityEvidence(ctx context.Context, b *Body) validityEvidence {
 	evidence := validityEvidence{Kind: b.Kind()}
 	switch b.Kind() {
 	case BodySheet:
-		evidence.Sheet = auditSheetBoundary(ctx, b)
+		evidence.Sheet = reportvocab.AuditSheetBoundary(ctx, &b.n)
 	default:
-		evidence.Clean = auditBoundary(b)
+		fp, faceted := b.n.Payload.(facetedPayload)
+		evidence.Clean = reportvocab.AuditSolidBoundary(&b.n, faceted && fp.ContactAudited && len(fp.Tris) > 0)
 		evidence.Built = b.n.Payload != nil
 		evidence.Solid = b.n.Solid
 	}
 	return evidence
-}
-
-// auditBoundary checks the structural invariants of the held boundary:
-// every edge bounds exactly two faces (manifold and watertight at once, for
-// a closed skin), and every face carries at least one loop with at least one
-// edge.
-func auditBoundary(b *Body) bool {
-	faces := b.Faces()
-	if len(faces) == 0 {
-		return false
-	}
-	for _, f := range faces {
-		loops := f.Loops()
-		if len(loops) == 0 {
-			// A closed surface of revolution bounds a solid with no edges
-			// at all. A faceted one-face image may have the same topology
-			// only after its embedded closed mesh passed the build audit.
-			switch f.n.Surface.Kind() {
-			case surfacegeom.KindSphere, surfacegeom.KindTorus:
-				continue
-			case surfacegeom.KindFaceted:
-				fp, ok := b.n.Payload.(facetedPayload)
-				if ok && fp.ContactAudited && len(faces) == 1 && len(fp.Tris) > 0 && len(b.Edges()) == 0 {
-					continue
-				}
-				return false
-			default:
-				return false
-			}
-		}
-		for _, l := range loops {
-			if len(l.Edges()) == 0 {
-				return false
-			}
-		}
-	}
-	for _, e := range b.Edges() {
-		if len(e.n.Faces) != 2 {
-			return false
-		}
-	}
-	return true
-}
-
-// auditSheetBoundary decides Table V's sheet validity audit
-// (docs/surface-design.md §9.1): three structural legs read off the recorded
-// topology, plus non-self-intersection admitted BY CONSTRUCTION alone. It is
-// deliberately NOT §6.4's closure audit (`loftmesh.LoftCrossingAudit`) with closure
-// dropped: that audit runs over a triangulated, all-planar face set sharing
-// one exact vertex table, which a surface-extruded wall's `Plane`,
-// `Cylinder` or `NURBSSurface` geometry — rimmed by `Arc3`, `Circle3` or
-// `NURBSCurve` segments — cannot supply without first being chorded. Admitting
-// a sheet because its chord mesh audits clean would be an admission gate
-// resting on an approximation, which CLAUDE.md's reject-only rule forbids
-// outright.
-//
-// Leg 1 — every face has at least one loop, and every loop has at least one
-// coedge. Unlike auditBoundary's closed-solid audit, there is NO sphere/torus
-// exemption: that allowance is a fact about a closed surface of revolution
-// bounding a solid, and does not carry to a sheet, whose free edges are
-// already the expected shape (docs/surface-design.md §2.2).
-//
-// Leg 2 — every edge is adjacent to one or two faces. Three or more is
-// non-manifold, a defect on either body kind.
-//
-// Leg 3 — every edge adjacent to two faces is traversed by exactly one
-// forward and one backward coedge, counted over every face's every loop's
-// every coedge use. A coedge-use count that disagrees with the edge's own
-// adjacent-face count is also a violation: it means some face's loop walks an
-// edge Faces() does not know about, or fails to walk one it does.
-//
-// Leg 4 — non-self-intersection, decided by topo.ProvesSimple on the
-// body's own payload. See topo.SimpleProver and each payload's ProvesSimple
-// method for the admission rule, one payload at a time.
-func auditSheetBoundary(ctx context.Context, b *Body) reportvocab.SheetAuditOutcome {
-	faces := b.Faces()
-	if len(faces) == 0 {
-		return reportvocab.SheetAuditViolated
-	}
-	for _, f := range faces {
-		loops := f.Loops()
-		if len(loops) == 0 {
-			return reportvocab.SheetAuditViolated
-		}
-		for _, l := range loops {
-			if len(l.Edges()) == 0 {
-				return reportvocab.SheetAuditViolated
-			}
-		}
-	}
-
-	for _, e := range b.Edges() {
-		if len(e.n.Faces) == 0 || len(e.n.Faces) > 2 {
-			return reportvocab.SheetAuditViolated
-		}
-	}
-
-	uses := map[*Edge]int{}
-	forward := map[*Edge]int{}
-	backward := map[*Edge]int{}
-	for _, f := range faces {
-		for _, l := range f.Loops() {
-			for _, ce := range l.CoEdges() {
-				e := ce.Edge()
-				uses[e]++
-				if ce.IsForward() {
-					forward[e]++
-				} else {
-					backward[e]++
-				}
-			}
-		}
-	}
-	for _, e := range b.Edges() {
-		if uses[e] != len(e.n.Faces) {
-			return reportvocab.SheetAuditViolated
-		}
-		if len(e.n.Faces) == 2 && (forward[e] != 1 || backward[e] != 1) {
-			return reportvocab.SheetAuditViolated
-		}
-	}
-
-	if topo.ProvesSimple(ctx, b.n.Payload) {
-		return reportvocab.SheetAuditProven
-	}
-	return reportvocab.SheetAuditUndecided
 }
 
 // aggregateStatus is the worst-wins precedence of verification §6.
