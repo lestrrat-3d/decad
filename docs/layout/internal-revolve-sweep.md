@@ -22,7 +22,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/coil/` | Coil magnitude, profile side and pitch gates, preflight gates, stations, axis coordinates, moments and closed forms. See helix §4, §5, §7. |
 | `internal/coilshell/` | The coil payload and its builder over nodes: the held shell, Table CB topology, Table CM readings, mesh proofs and wall-area enclosures. Root `coilPayload` aliases it. See helix §5, §7, §8, evaluator §8. |
 | `internal/sweeptransport/` | Bounded rotation-minimizing endpoint frames over recorded line and arc spans, and frames along a recorded path. See sweep §3.2. |
-| `internal/revolvemesh/` | Revolve rings, cells, caps, cap frames, construction and area proofs, quarter-turn cap-rim blend stations and bounds, and sector-bore cap fans, station steps and projected patches. |
+| `internal/revolvemesh/` | Revolve rings, cells, caps, cap frames, construction and area proofs, quarter-turn cap-rim blend stations, faceted mesh and bounds, and sector-bore cap fans, station steps and projected patches. |
 | `internal/revolvetess/` | Assembles Revolve and chain Sweep angular meshes over topology nodes, including retries, sheet and solid audits, and proof publication. See tessellation §8–§11 and sweep §15.8–§15.9. |
 | `internal/revolveplan/` | Revolve and chain records, common-axis Boolean preparation, node builders, axis-side, Trim and Extend pair gates, and mesh walks. Root `revolvePayload` aliases its record. See evaluator §6, §8; general-boolean §3; surface-intersection §2.1. |
 | `internal/revolvesampling/` | Revolve meridian junctions, stations, samples and section readings. |
