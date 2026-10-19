@@ -37,21 +37,16 @@ func tryLoftMirrorCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPay
 	if !ok || lower.LoftCylinderBore == nil || !lower.ContactAudited || lower.Xform != r3.Identity() {
 		return nil, true, fmt.Errorf("%w: mirrored cap chamfer lost its lower bore", ErrUnsupported)
 	}
-	source, ok := loftCylinderChamferSourceOf(lower)
+	source, ok := loftcylinder.ChamferSourceOf(lower)
 	if !ok {
 		return nil, true, fmt.Errorf("%w: mirrored cap chamfer lost its lower source", ErrUnsupported)
 	}
-	bridgeBound, topSourceLevel, err := loftcylinder.ChamferBridgeSources(&loftcylinder.ChamferBridgeSourcesInput{
-		ProofTeeth: bodyNodes(source.teeth), OriginalTeeth: bodyNodes(source.originalTeeth),
-		AxialBridge: source.axialBridge, Z0: source.z0, Z1: source.z1, BridgeBound: source.bridgeBound,
-	})
-	if err != nil {
+	if err := source.BindBridge(); err != nil {
 		return nil, true, err
 	}
-	source.bridgeBound, source.topSourceLevel = bridgeBound, topSourceLevel
-	start := new(big.Rat).Add(proofarith.FloatRat(source.z0), proofarith.FloatRat(setback))
-	end := new(big.Rat).Sub(proofarith.FloatRat(source.z1), proofarith.FloatRat(setback))
-	if start.Cmp(end) >= 0 || source.z0+setback == source.z0 || source.z1-setback == source.z1 {
+	start := new(big.Rat).Add(proofarith.FloatRat(source.Z0), proofarith.FloatRat(setback))
+	end := new(big.Rat).Sub(proofarith.FloatRat(source.Z1), proofarith.FloatRat(setback))
+	if start.Cmp(end) >= 0 || source.Z0+setback == source.Z0 || source.Z1-setback == source.Z1 {
 		return nil, true, fmt.Errorf("%w: mirrored cap setback reaches the middle side section", ErrUnsupported)
 	}
 	if err := loftMirrorCylinderChamferSelect(ctx, b, fp, record, edges); err != nil {
@@ -454,10 +449,10 @@ func loftMirrorCylinderChamferBoreUnchanged(old facetedPayload, mesh *joinedMesh
 // Recompute the original upper-tooth translations from the authenticated
 // source placements. The Join's accumulated bounds must still contain them.
 func loftMirrorCylinderChamferUpperShifts(record *loftMirrorCylinderBoreRecord,
-	source loftCylinderChamferSource) ([]*big.Rat, error) {
+	source loftcylinder.ChamferSource) ([]*big.Rat, error) {
 	if record == nil || record.Join == nil || record.Join.Source == nil ||
 		record.Join.Source.Lower == nil || len(record.Join.Pairs) == 0 ||
-		len(record.Join.Pairs) != len(source.originalTeeth) {
+		len(record.Join.Pairs) != len(source.OriginalTeeth) {
 		return nil, fmt.Errorf("%w: mirrored cap chamfer lost its upper tooth source", ErrUnsupported)
 	}
 	loft, ok := record.Join.Source.Lower.Payload.(loftPayload)
@@ -508,9 +503,9 @@ func loftMirrorCylinderChamferUpperShifts(record *loftMirrorCylinderBoreRecord,
 	}
 	// Circular Join sorts teeth by polar position. Match the authenticated
 	// placed lower Loft, rather than relying on the caller's pair order.
-	shifts := make([]*big.Rat, len(source.originalTeeth))
-	for i, tooth := range source.originalTeeth {
-		lp, ok := tooth.n.Payload.(loftPayload)
+	shifts := make([]*big.Rat, len(source.OriginalTeeth))
+	for i, tooth := range source.OriginalTeeth {
+		lp, ok := tooth.Payload.(loftPayload)
 		if !ok || !lp.AuthenticatedReconstruction ||
 			lp.SourceIdentity != loft.SourceIdentity {
 			return nil, fmt.Errorf("%w: mirrored cap tooth %d lost its source identity", ErrUnsupported, i)

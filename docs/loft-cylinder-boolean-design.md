@@ -198,12 +198,13 @@ itself does not place a complete cutter facet inside the source union.
 
 ## Strict interior split-ring occupancy
 
-`loftCylinderSourceRingInside` accepts unordered exact edges at one height
-strictly between the blank's caps and below every tooth's certified top root
-collar. It checks exact endpoint equality, nonzero edges, degree two at every
-vertex, and one connected cycle. The entire ring stays outside a centered
-bore's exact radius. At least one ring vertex lies strictly inside the
-blank circle, which gives the connected ring an occupied witness.
+The split-ring reader in `internal/loftcylinder` (`ring_inside.go`) accepts
+unordered exact edges at one height strictly between the blank's caps and
+below every tooth's certified top root collar. It checks exact endpoint
+equality, nonzero edges, degree two at every vertex, and one connected
+cycle. The entire ring stays outside a centered bore's exact radius. At
+least one ring vertex lies strictly inside the blank circle, which gives the
+connected ring an occupied witness.
 
 For an admitted one-ULP axial bridge, the ring's physical height is mapped
 to `z/s` for each private proof tooth separately. Its XY coordinates stay
