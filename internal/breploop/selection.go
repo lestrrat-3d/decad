@@ -215,7 +215,9 @@ func (s Selection) AdmitLoops() ([]Sel, error) {
 	return out, nil
 }
 
-// PartialSelectedLoop finds one planar loop containing this selection as a proper subset.
+// PartialSelectedLoop finds one planar loop containing this selection as a
+// proper subset. A Fillet of one route E edge whose endpoint-face corner has
+// the wrong material wedge may also reach this reading.
 func (s Selection) PartialSelectedLoop() (Sel, []bool, bool) {
 	if s.Len() == 0 || s.Match(0) < 0 {
 		return Sel{}, nil, false

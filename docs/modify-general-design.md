@@ -663,6 +663,11 @@ direction for both the removed wedge and the filled boss root. The mesh uses
 those same four vertices per patch; `VerifyAll` checks its closed boundary
 and occupied volume. Curved, longer and disjoint chains continue to SL1.
 
+`internal/breploop/partial.go` holds the selection gate, the restatement
+check, the record rewrite and the terminal lines for this chamfer and for
+the selected-chain fillet. `brep_modify_partial.go` passes the selected
+public edges to route E's preparation and builds the body.
+
 ### 4.3b Simultaneous outer-edge chamfer of a cross-drilled box
 
 The symmetric `Chamfer` of all twelve straight outer edges of P1 has a
