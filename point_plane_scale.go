@@ -5,9 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
-	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -61,98 +59,9 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 			return nil, err
 		}
 	}
-	pointSlab := fp.PointPlane != nil && fp.PointPlane.Base.PointSection != nil
-	booleanSource := fp.BooleanSimilaritySource && b.Kind() == BodySolid && b.IsSolid()
-	if (!pointSlab && !fp.SimilaritySource && !booleanSource) || !fp.Xform.IsValid() ||
-		len(fp.Verts) == 0 || len(fp.VertexBound) != len(fp.Verts) {
-		return nil, fmt.Errorf("%w: this body has no certified similarity source", ErrUnsupported)
-	}
-	if booleanSource && !facetedrecord.CertifiedBooleanSimilaritySource(fp, len(b.Faces())) {
-		return nil, fmt.Errorf("%w: the Boolean similarity source has no complete proof", ErrUnsupported)
-	}
-	if fp.PointSimilarity != nil && fp.PointSimilarity.Slice != fp.PointPlane {
-		return nil, fmt.Errorf("%w: the slab similarity source does not match its Split source", ErrUnsupported)
-	}
-	for _, group := range fp.Groups {
-		if group.Denoted != nil {
-			return nil, fmt.Errorf("%w: a denoted surface has no similarity proof", ErrUnsupported)
-		}
-		if _, ok := group.Surface.(surfacegeom.Plane); group.Surface != nil && !ok {
-			return nil, fmt.Errorf("%w: a retained curved surface has no similarity proof", ErrUnsupported)
-		}
-	}
-	budget := proofbound.NewWorkBudget(ctx)
-	mesh, err := facetproof.ScaleMesh(ctx, budget, fp.Verts, fp.Tris, fp.VertexBound,
-		fp.VolSymDiff, fp.AreaSlack, anchor, s)
+	next, err := facetedrecord.ScaleImage(ctx, &b.n, fp, anchor, s)
 	if err != nil {
 		return nil, err
-	}
-	next := fp
-	next.SmoothRectSection = nil
-	next.SmoothHomotheticSection = nil
-	next.Verts, next.Tris = mesh.Verts, mesh.Tris
-	next.VertexBound, next.MeshBound = mesh.VertexBound, mesh.MeshBound
-	next.VolSymDiff, next.AreaSlack = mesh.VolSymDiff, mesh.AreaSlack
-	// Scaling the old diameter does not include the held vertices' new
-	// rounding or an embedding adjustment. The centroid's yardstick must
-	// cover both the true body and this rounded held body.
-	next.DPair = max(proofbound.ProductUpper(fp.DPair, s),
-		facetedrecord.SourceDiameterUpper(next.Verts, next.MeshBound))
-	next.Xform = r3.Identity()
-	next.PointPlaneSourceEligible = false
-	next.AxialSectionJoin = false
-	next.PrismPatternJoin = nil
-	next.ObliqueBoss = nil
-	next.PrismUnionFillet = nil
-	next.CrossCylinderBore = nil
-	next.LoftCylinderJoin = nil
-	next.LoftCylinderBore = nil
-	next.LoftMirrorJoin = nil
-	next.LoftMirrorCopy = nil
-	next.MirrorCapGroups = nil
-	next.LoftMirrorCylinderJoin = nil
-	next.LoftMirrorCylinderBore = nil
-	next.RevolveLoftJoin = nil
-	next.RevolveLoftSector = nil
-	next.LoftFacesPrimitive = false
-	next.LoftFacesCap = nil
-	next.LoftFacesToe = nil
-	next.LoftFacesTrim = nil
-	next.CopyLineage = nil
-	next.SpiralTools = nil
-	next.PointSection, next.PointCone = nil, nil
-	next.ExactSourceVerts, next.ExactSourceTris = nil, nil
-	next.LowerSupport = nil
-	next.Groups = append([]facetGroup(nil), fp.Groups...)
-	for i := range next.Groups {
-		group := &next.Groups[i]
-		if err := budget.Step(); err != nil {
-			return nil, err
-		}
-		if group.HasCentroid {
-			centroid, centroidErr := facetedrecord.SimilarCapCentroid(group.Centroid, anchor, s)
-			group.Centroid, err = centroid, centroidErr
-			if err != nil {
-				return nil, err
-			}
-		}
-		if plane, ok := group.Surface.(surfacegeom.Plane); ok {
-			origin := anchor.Add(plane.Frame.Origin().Sub(anchor).Scale(s))
-			frame, frameErr := r3.NewFrame(origin, plane.Frame.U(), plane.Frame.V())
-			if frameErr != nil {
-				return nil, fmt.Errorf("%w: a scaled cap frame is not representable: %s", ErrUnsupported, frameErr)
-			}
-			group.Surface = surfacegeom.Plane{Frame: frame}
-			// NewFrame may round the held axes again. The exact similar plane
-			// keeps its old normal; two unit normals differ by at most 2.
-			group.NormalBound = 2
-		}
-	}
-	if pointSlab {
-		facetedrecord.CarryPointPlaneScale(fp, &next, anchor, s, mesh.Round)
-	}
-	if proofbound.IsNonFinite(next.DPair) || proofbound.IsNonFinite(next.PointPlaneCapDisplacement) {
-		return nil, fmt.Errorf("%w: the scaled source proof is not finite", ErrUnsupported)
 	}
 	ref := d.nextProducerID()
 	scaled, err := bodyResult(facetedrecord.Build(ctx, envOf(documentNode(d), ref), next))

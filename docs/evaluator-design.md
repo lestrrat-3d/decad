@@ -1001,8 +1001,9 @@ target refuses. A later scale of the faceted result does not rechord it, so a
 caller may need a tolerance above the accumulated `Mesh.Bound()`.
 
 The verified source mesh already has shared-edge, closed and embedded topology.
-A positive similarity preserves its exact topology. `facetproof.ScaleMesh`
-maps every held vertex through an exact rational similarity, audits the rounded
+A positive similarity preserves its exact topology. `facetedrecord.ScaleImage`
+admits the source and builds the image payload; it calls `facetproof.ScaleMesh`,
+which maps every held vertex through an exact rational similarity, audits the rounded
 image for embedding, multiplies each source vertex displacement by the scale
 (including each circular face's chord departure derived from its source bound),
 and adds the image's rounding. It multiplies the source area allowance by the

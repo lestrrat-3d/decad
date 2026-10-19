@@ -27,7 +27,7 @@ The rules for rows live in `docs/layout.md`.
 | `brep_measure.go` | The brep surveys, including fillet-band pull readings and the undercut verdict fold; `internal/breprecord` states prisms and stacked prisms as face views, then builds and measures the record. See general-boolean §4. |
 | `surface_trim.go` / `surface_split_revolve.go` | Public `Trim`, `Extend` and `Split` entry checks, result builds and commits, and revolve `Split`; gates in `internal/surfacetrim/`. See surface-intersection §2–§3. |
 | `point_plane_split.go` | Routes a point-loft Split through facetedrecord's source and sheet gates and plane order, and commits its two slabs. See loft-point design. |
-| `point_plane_scale.go` | Validates ScaledAt sources and commits similarity images; facetedrecord carries Split maps. See loft-point design and evaluator §8. |
+| `point_plane_scale.go` | ScaledAt: resolves the similarity source by payload kind and commits the image; facetedrecord.ScaleImage admits and scales it. See loft-point design and evaluator §8. |
 | `prism_scale.go` | Admits prism and full-Revolve certified similarity sources and transfers their face roles. See evaluator §8. |
 | `stack_brep_scale.go` | Admits exact line-only stacks and stack-backed BReps for certified similarity. See evaluator §8. |
 | `point_cap_extremes.go` | Resolves Split cap faces and selects the ends using facetedrecord's centroid-order proof. See loft-point design. |
