@@ -510,7 +510,7 @@ func extendTangentCap(ctx context.Context, held *Mesh, toe *loftFacesToeRecord,
 // toeStationLink ties the held vertices of the toe-cut tooth to the stations
 // of the LoftFaces end ring: a vertex equal, as floats, to station vertex j of
 // the last cap has station j. Chord j's bound is the certified distance
-// between the held chord and the true cap-boundary piece (lfCapBounds).
+// between the held chord and the true cap-boundary piece (record.Bounds[last]).
 func toeStationLink(vertices []r3.Vec, toe *loftFacesToeRecord) (loftface.StationLink, error) {
 	refuse := func(why string) (loftface.StationLink, error) {
 		return loftface.StationLink{}, fmt.Errorf("%w: the tangent tooth %s", ErrUnsupported, why)

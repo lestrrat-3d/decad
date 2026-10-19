@@ -47,7 +47,7 @@ The rules for rows live in `docs/layout.md`.
 | `cone_from_face.go` | `ConeFromFace`: the full tool cone one float step off a Revolve blank's selected conical face. See loft-face-sections design. |
 | `loft_faces.go` | Bounded source-cap loft admission and held wall assembly. See loft-face-sections design. |
 | `loft_faces_tangent.go` | `LoftFacesToConeTangent` and `ConeTangentEnd`: the LoftFaces loft whose last section is the plane exactly tangent to a point cone. See loft-face-sections design. |
-| `loft_faces_proof.go` | Exact cap-map, band embedding and occupied-volume proof for face-fed lofts. See loft-face-sections design. |
+| `loft_faces_proof.go` | Exact cap maps, band embedding, and held-mesh orientation for face-fed lofts. See loft-face-sections design. |
 | `loft_point.go` | Admits a point-section Loft from Sketch and publishes the `internal/pointloft/` payload. See loft-point design. |
 | `loft_build.go` | Tessellation adapter for a lofted body. Root `loftPayload` aliases `loftrecord.Payload`. See loft §5, §8, §12. |
 

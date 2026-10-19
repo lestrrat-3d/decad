@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 )
@@ -67,13 +68,20 @@ func buildLoftFaces(ctx context.Context, d *Document, selected []loftFaceSection
 	if err != nil {
 		return nil, err
 	}
-	mesh, err = proveLoftFaceBounds(ctx, selected, source, embedding, mesh)
+	boundSections := make([]revolveloftfaces.BoundsSection, len(selected))
+	for i, section := range selected {
+		boundSections[i] = revolveloftfaces.BoundsSection{
+			Ring: section.ring, BaseMeshBound: section.slice.Base.MeshBound,
+		}
+	}
+	mesh, err = revolveloftfaces.ProveBounds(ctx, boundSections, source,
+		embedding.maps, embedding.jacobianSum, mesh, selected[0].slice.Base)
 	if err != nil {
 		return nil, err
 	}
 	capBounds := make([]loftFaceCapBounds, len(selected))
-	for i, section := range selected {
-		capBounds[i], err = lfCapBounds(ctx, embedding.maps[i], section, source)
+	for i := range selected {
+		capBounds[i], err = revolveloftfaces.CapBounds(ctx, embedding.maps[i], boundSections[i], source)
 		if err != nil {
 			return nil, err
 		}
