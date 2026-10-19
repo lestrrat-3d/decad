@@ -754,9 +754,13 @@ negative taper and a holed section refuse.
 **PR 2 fixtures** (`apitest/draft_mesh_test.go`): F1–F7 tessellated at three
 tolerances, each mesh closed and consistently wound, its boundary and volume
 proofs published, every facet attributed to a face of the body, and
-`Mesh.Bound` covering the chording it took; `Union` of F1 with a straight prism through it; STEP of
-F1 analytic (`analytic decad solid`) and of F2 faceted; `MassProperties` of
-F1 against the closed form.
+`Mesh.Bound` covering the chording it took; the same F1–F7 records meshed at
+three tolerances through `draftrecord.Tessellate`, each held mesh embedded and
+its exact volume within `volSymDiff` of the closed form, and each record's
+DD17 radius at least every mesh vertex's L1 norm and at most twice the largest
+(`internal/draftrecord/draft_fixtures_test.go`); `Union` of F1 with a straight
+prism through it; STEP of F1 analytic (`analytic decad solid`) and of F2
+faceted; `MassProperties` of F1 against the closed form.
 
 **PR 5 fixtures** (`apitest/draft_subset_test.go`): F1's box with its `+u`
 wall drafted alone, `Volume = h·a(a − d/2)`, its area, centroid, far corners
@@ -768,7 +772,9 @@ wall drafted, each moved far corner within its bound; `Verify` on the subset
 bodies (DD5, DD6); SD4 for one straight wall of F3's slot; the mixed-amount
 corner rows in `internal/offset2d/sharp_test.go`; the box and ring subsets
 meshed at three tolerances, closed, with the volume proof published, and each
-mesh `Bound` no larger than its tapered extrude's; the one-wall box under DD7, its drafted
+mesh `Bound` no larger than its tapered extrude's; the one-wall, notch-wall and
+hole-alone records meshed through `draftrecord.Tessellate`, each exact volume
+within `volSymDiff` of its closed form (`internal/draftrecord/draft_fixtures_test.go`); the one-wall box under DD7, its drafted
 wall listed along `−e` and cleared along `+e`, its kept walls undecided.
 
 **PR 4 fixtures** (`apitest/draft_verify_test.go`): F1 under
@@ -790,10 +796,14 @@ undecided.
 | the far cap's `sectionDisplacementArea` | omitted | F6's far cap area |
 | the wall normal's denoted term (`capband.DenotedNormalAllow`) | omitted | F8's slot at `v = 10⁶`: a straight wall publishes a `2.2e-16` bound `3.3e-12` from its denoted normal |
 | DD6's diameter arm | omitted | every F fixture under `Verify` (`DiagToleranceReferenceUnavailable`) |
+| the mesh proof's chord term (`DraftBandHeightUpper`) | zeroed | F2, F3, F7 and the hole-alone subset: each mesh volume sits outside its `volSymDiff` |
+| the mesh proof's vertex motion (`SweptVolumeAllow`) | omitted | F1, F4, F5, F6 and the one-wall and notch-wall subsets: `volSymDiff` misses the far corners' rounding |
+| the far section in DD17's record radius | dropped from `MoverRecordRadius` | F5's flare: a far vertex lies past the radius |
 | DD7's dispatch arm (`capblendsurvey.DraftUndercuts`) | removed from `runSurveys` | every PR 4 fixture: the survey reads the draft body as an unsupported payload |
 | the wall reading's allowance (`capblendsurvey.PatchNormalRange`'s third result) | zeroed in `capblendsurvey.PatchUndercuts` | the tangent pull: the wall reads the sign of its own rounding and no `DiagUndecidedUndercut` is reported |
 | a moved walk's span at a mixed corner | `capcontour.AmountsDisplacement` reads every span as its point amount | the subset F10: each moved far corner `1.06e-16` outside its bound |
 | the mixed-amount refusal | `offset2d.SharpCornerJoin` reads a mixed circular corner as an equal one | the slot's SD4 fixture refuses as SD13 instead |
+| a kept wall's setback in the mesh | the chord pass's cap radius, or the cap motion, reads the draft's `d` | the hole-alone subset: its mesh volume sits outside its `volSymDiff` |
 | a kept wall's setback in the band's radius rounding | read against the draft's `d` | the hole-alone mesh `Bound` above F7's |
 
 ## 12. Do not do this
