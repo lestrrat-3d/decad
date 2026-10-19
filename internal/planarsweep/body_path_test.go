@@ -58,6 +58,39 @@ func requireSameSpans(t *testing.T, want, got sweepmemo.CornerSpans) {
 	}
 }
 
+// spansEqual reports whether two span sets enclose the same exact intervals.
+func spansEqual(a, b sweepmemo.CornerSpans) bool {
+	if a.Len() != b.Len() {
+		return false
+	}
+	for k := range 3 {
+		if a.Den[k].Cmp(b.Den[k]) != 0 {
+			return false
+		}
+	}
+	for i := range a.Lo {
+		for k := range 3 {
+			if a.Lo[i][k].Cmp(b.Lo[i][k]) != 0 || a.Hi[i][k].Cmp(b.Hi[i][k]) != 0 {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// pointsEqual reports whether two staged point sets are exactly equal.
+func pointsEqual(a, b []proofarith.DyV3) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if !proofarith.DvEqual(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 func TestBodyPathMemo(t *testing.T) {
 	corners := boxCorners([3]float64{0, 0, 0}, [3]float64{1, 2, 3})
 	fresh := translatingBoxPath(t, corners)
@@ -130,4 +163,45 @@ func TestBodyPathRoundedBox(t *testing.T) {
 		_, _, ok := path.RoundedBox(path.Path.From, new(big.Rat))
 		require.False(t, ok)
 	})
+}
+
+// TestBodyPathMemoKeys reads two different inputs through one memo, each
+// twice. Every reading must equal the fresh one for its own input, so a memo
+// key that dropped part of its input would serve the first input's reading
+// for the second.
+func TestBodyPathMemoKeys(t *testing.T) {
+	corners := boxCorners([3]float64{0, 0, 0}, [3]float64{1, 2, 3})
+	fresh := translatingBoxPath(t, corners)
+	near, far := big.NewRat(1, 3), big.NewRat(2, 3)
+	poseNear, err := fresh.Path.RoundedPoseAt(near)
+	require.NoError(t, err)
+	poseFar, err := fresh.Path.RoundedPoseAt(far)
+	require.NoError(t, err)
+
+	wantSpanNear := fresh.CornerSpan(new(big.Rat), near)
+	wantSpanFar := fresh.CornerSpan(new(big.Rat), far)
+	require.False(t, spansEqual(wantSpanNear, wantSpanFar), "the two spans must differ for the test to bite")
+	wantNear, _, ok, err := fresh.PointDeviation(poseNear, near, planarsweep.NoPoll)
+	require.NoError(t, err)
+	require.True(t, ok)
+	wantFar, _, ok, err := fresh.PointDeviation(poseFar, far, planarsweep.NoPoll)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.False(t, pointsEqual(wantNear, wantFar), "the two readings must differ for the test to bite")
+
+	memoized := fresh
+	planarsweep.AttachMemos(&memoized)
+	defer planarsweep.CloseMemos(&memoized)
+	for reading := range 2 {
+		require.True(t, spansEqual(wantSpanNear, memoized.CornerSpan(new(big.Rat), near)), "near span, reading %d", reading)
+		require.True(t, spansEqual(wantSpanFar, memoized.CornerSpan(new(big.Rat), far)), "far span, reading %d", reading)
+		points, _, ok, err := memoized.PointDeviation(poseNear, near, planarsweep.NoPoll)
+		require.NoError(t, err)
+		require.True(t, ok)
+		require.True(t, pointsEqual(wantNear, points), "near deviation, reading %d", reading)
+		points, _, ok, err = memoized.PointDeviation(poseFar, far, planarsweep.NoPoll)
+		require.NoError(t, err)
+		require.True(t, ok)
+		require.True(t, pointsEqual(wantFar, points), "far deviation, reading %d", reading)
+	}
 }

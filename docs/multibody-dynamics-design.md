@@ -1408,10 +1408,10 @@ passes through has one.
 
 `contact_sweep_rotation.go`'s `rotationalPairSweep` already carries the general machinery for a rigid
 drift: `prepareRotationalSweepPath` builds the ideal path and travel bound, `refine`
-(`contact_sweep_rotation_depart.go`) is contact-sweep
-§5's left-first dyadic search, `intervalClear` is §4.3's `g_l + g_r > T` certificate, and
-`planarsweep.BodyPath.RoundedBox` (`internal/planarsweep/`) bounds the float-to-ideal pose deviation
-from the body's exact corners. It is limited to source boxes by its eight-corner inputs. `contact_sweep_planar.go` generalizes it to any §9 body: the exact vertex set
+(`contact_sweep_rotation_depart.go`) is contact-sweep §5's left-first dyadic search, `intervalClear` is
+§4.3's `g_l + g_r > T` certificate, and `planarsweep.BodyPath.RoundedBox` (`internal/planarsweep/`)
+bounds the float-to-ideal pose deviation from the body's exact corners. It is limited to source boxes by
+its eight-corner inputs. `contact_sweep_planar.go` generalizes it to any §9 body: the exact vertex set
 replaces the corners, the per-sample relation and gap come from §9.1 at the rounded pose, and the
 deviation is the largest outward corner distance over all vertices. `SweepPair` dispatches to it when
 either path rotates and both bodies are §9 bodies; affine paths of §9 bodies take the same run with a
