@@ -17,13 +17,17 @@ type Vec [3]*big.Rat
 
 // Arithmetic refuses before allocating an intermediate whose numerator or
 // denominator could exceed RationalBits. OK starts true and is sticky: the
-// first refused operand or operation clears it and every later operation
-// returns a zero result. Callers construct it as &Arithmetic{OK: true} and
-// must read OK before they trust a result.
+// first refused operand or operation clears it, and no method sets it again.
+// Once OK is false, Add, Sub, Mul and Quo return zero, Cmp returns 0, and
+// every other result is meaningless until OK is read: Same and OnSegment may
+// report true, and LinePoint returns a Point with nil coordinates. Callers
+// construct it as &Arithmetic{OK: true} and must read OK before they trust
+// any result.
 type Arithmetic struct{ OK bool }
 
-// Valid reports whether a is non-nil and within RationalBits, clearing OK
-// when it is not.
+// Valid reports whether OK still holds and a is non-nil and within
+// RationalBits. It clears OK when a is not, and returns false whenever OK is
+// already false.
 func (c *Arithmetic) Valid(a *big.Rat) bool {
 	if !c.OK || a == nil || a.Num().BitLen() > RationalBits ||
 		a.Denom().BitLen() > RationalBits {
