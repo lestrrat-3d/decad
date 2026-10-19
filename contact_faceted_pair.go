@@ -186,7 +186,7 @@ func planarConvexity(ctx context.Context, budget *proofbound.WorkBudget, b *Body
 // read off its VerifyAll tessellation with δ that mesh's Bound
 // (planarHeldMeshSolid), a body with a curved face at chord. The
 // returned displacement is δ at the query pose: the body-frame figure times
-// an upper bound on the pose's stretch (planarPoseScale). It is zero for an
+// an upper bound on the pose's stretch (planarsnapshot.PoseScale). It is zero for an
 // exact body.
 //
 // The snapshot at the identity pose is built once per body and chord and
@@ -196,7 +196,7 @@ func planarConvexity(ctx context.Context, budget *proofbound.WorkBudget, b *Body
 func planarSolidAtPose(ctx context.Context, budget *proofbound.WorkBudget, b *Body,
 	pose r3.Transform, chord float64) (planar.PlanarSolid, proofarith.Dyadic, bool, error) {
 	none := proofarith.DyZero()
-	if b == nil || !b.n.Solid || b.n.Kind != topo.BodySolid || !positiveAffine(pose) {
+	if b == nil || !b.n.Solid || b.n.Kind != topo.BodySolid || !planarsnapshot.PositiveAffine(pose) {
 		return planar.PlanarSolid{}, none, false, nil
 	}
 	snapshot, err := planarSnapshotOf(ctx, budget, b, chord)
@@ -209,7 +209,7 @@ func planarSolidAtPose(ctx context.Context, budget *proofbound.WorkBudget, b *Bo
 	}
 	delta := snapshot.Delta
 	if delta.Sign() > 0 {
-		delta = proofarith.DyMul(delta, planarPoseScale(pose))
+		delta = proofarith.DyMul(delta, planarsnapshot.PoseScale(pose))
 	}
 	return solid, delta, true, nil
 }
@@ -276,17 +276,6 @@ func planarSnapshotOf(ctx context.Context, budget *proofbound.WorkBudget, b *Bod
 	b.n.PlanarSnapshot.Store(entry)
 	return entry, nil
 }
-
-// planarPoseScale is an exact upper bound, at least one, on how far the
-// linear part L of an admitted transform stretches any length. The largest
-// absolute row sum g of the Gram matrix LᵀL bounds its largest eigenvalue,
-// which is |L|², and (1 + g)/2 bounds √g from above. A valid r3 transform is
-// orthonormal to rounding, so the bound sits a hair above one; it is charged
-// all the same, since the held mesh and its displacement move through the
-// exact float map, not through a rotation.
-func planarPoseScale(t r3.Transform) proofarith.Dyadic { return planarsnapshot.PoseScale(t) }
-
-func positiveAffine(t r3.Transform) bool { return planarsnapshot.PositiveAffine(t) }
 
 // prismFaceIndex maps a prism face's provenance role to its index in the
 // body's Faces order, the roles evalPrism gives its caps and side walls.

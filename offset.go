@@ -36,7 +36,7 @@ import (
 // publishes no such relation and denotes nothing whatever about the source, so
 // that audit has no subject here and offset2d.ReverseLoopRecordContext and
 // evalTubeContext are not on this path (§17.2). Everything else §16.2 states —
-// offsetProfile, offset2d.AuditOffsetSectionBudget, the exact-generation gate and the
+// offset2d.OffsetProfile, offset2d.AuditOffsetSectionBudget, the exact-generation gate and the
 // whole-interval certification of thicken_axis.go — runs unchanged.
 
 // OffsetOption configures which side of a sheet the offset is taken on.
@@ -191,7 +191,7 @@ func offsetPrism(ctx context.Context, d *Document, pp prismPayload, side OffsetS
 	if dDelta != 0 {
 		return nil, fmt.Errorf(`%w: the offset distance cannot be generated exactly in millimetres`, ErrUnsupported)
 	}
-	// sense is offsetProfile's own: −1 grows the section (P ⊕ d) and +1 erodes
+	// sense is offset2d.OffsetProfile's own: −1 grows the section (P ⊕ d) and +1 erodes
 	// it (P ⊖ d), so the positive side of a profile-fed prism sheet — the
 	// profile region's exterior on every loop wall (§17.1) — grows.
 	sense := -1

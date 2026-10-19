@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
+	"github.com/lestrrat-3d/decad/internal/planarsnapshot"
 	"github.com/lestrrat-3d/decad/internal/planarsweep"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -281,12 +282,12 @@ func (r *rotationalPairSweep) planarIdealEvent(ctx context.Context, f *big.Rat, 
 			event.Relation, event.Gap, event.Reason = ContactSeparated, gap, ContactNoReason
 		}
 	case ContactOverlapping:
-		if !positiveAffine(poseA) || !positiveAffine(poseB) {
+		if !planarsnapshot.PositiveAffine(poseA) || !planarsnapshot.PositiveAffine(poseB) {
 			return event, nil
 		}
 		margin := proofarith.DyAdd(proofarith.MustDyOf(etaA), proofarith.MustDyOf(etaB))
-		margin = proofarith.DyAdd(margin, proofarith.DyMul(r.a.delta, planarPoseScale(poseA)))
-		margin = proofarith.DyAdd(margin, proofarith.DyMul(r.b.delta, planarPoseScale(poseB)))
+		margin = proofarith.DyAdd(margin, proofarith.DyMul(r.a.delta, planarsnapshot.PoseScale(poseA)))
+		margin = proofarith.DyAdd(margin, proofarith.DyMul(r.b.delta, planarsnapshot.PoseScale(poseB)))
 		a := planar.PlanarSolid{Verts: vertsA, Tris: r.a.solid.Tris}
 		b := planar.PlanarSolid{Verts: vertsB, Tris: r.b.solid.Tris}
 		deep, err := planar.PlanarDeepVertex(&a, &b, margin, budget.Step)

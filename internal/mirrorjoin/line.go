@@ -311,7 +311,7 @@ func sqDist(a, b Point2) *big.Rat {
 // It returns the images beside how far any point of a held image can sit from
 // the exact image of the segment's denoted walk: the largest point rounding,
 // tripled when the run holds an arc (its centre and radius both move with the
-// rounding of its three points, the argument offsetSectionDelta states for a
+// rounding of its three points, the argument offset2d.OffsetSectionDelta states for a
 // recorded arc), plus the walk charge of any narrowed line, whose walked
 // endpoints were computed.
 func (l Line) ReverseRun(budget *proofbound.WorkBudget, run []CurveSegment) ([]CurveSegment, float64, error) {

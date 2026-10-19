@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/planarsnapshot"
 	"github.com/lestrrat-3d/decad/internal/planarsweep"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -269,7 +270,7 @@ type placedCylinder struct {
 // stages it through any pose with a positive determinant.
 func placedCylinderAt(b *Body, pose r3.Transform) (placedCylinder, bool) {
 	source, ok := sourceCylinderAtPose(b, r3.Identity())
-	if !ok || !positiveAffine(pose) {
+	if !ok || !planarsnapshot.PositiveAffine(pose) {
 		return placedCylinder{}, false
 	}
 	var wall *Face

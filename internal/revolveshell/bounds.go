@@ -18,11 +18,11 @@ func AxisCurve(ax revolveaxis.Frame) offset2d.Curve {
 	return offset2d.Curve{IsLine: true, PX: ax.AU, PY: ax.AV, DX: ax.DU, DY: ax.DV}
 }
 
-// ChainSectionDelta is offsetSectionDelta for the open offset chain of a
+// ChainSectionDelta is offset2d.OffsetSectionDelta for the open offset chain of a
 // revolve shell's wall (docs/modify-reach-design.md §9.3.1): a proven upper
 // bound on how far any boundary point of the recorded wall sits from the wall
 // the shell denotes, three times offset2d.ChainReach's largest reach on
-// offsetSectionDelta's own argument. The denoted axis is the receiver's axis
+// offset2d.OffsetSectionDelta's own argument. The denoted axis is the receiver's axis
 // line widened by axisInPlane's four proven bounds, so an axis end's mirror
 // join is enclosed against every line the record allows. The kept chain K and
 // the axis points it leaves from are the receiver's own record and move by

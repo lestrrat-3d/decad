@@ -35,7 +35,7 @@ func TestThickenPrismUnrepresentableOffset(t *testing.T) {
 	require.NoError(t, err)
 	dirs, err := thickenaxis.AxisDirections(loops[0].Walks, budget)
 	require.NoError(t, err)
-	generated, err := offsetProfile(budget, pp.Profile, +1, 1)
+	generated, err := offset2d.OffsetProfile(budget, pp.Profile, +1, 1, shellTol)
 	require.NoError(t, err)
 	first, ok := generated.Outer.Segments[0].(lineSeg)
 	require.True(t, ok)

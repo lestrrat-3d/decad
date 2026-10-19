@@ -1503,10 +1503,10 @@ slanted carrier with the axis (the cone apex's `20 − √5`), a connector arc's
 foot. The wall therefore carries the proven distance from its record to the
 wall it denotes as its `sectionDelta`, with `sectionWhole` set, and every
 reading charges it (`docs/surface-intersection-design.md` §7.2). The figure is
-modify §9's `offsetSectionDelta` argument: three times the largest reach of a
+modify §9's `offset2d.OffsetSectionDelta` argument: three times the largest reach of a
 recorded join point from its rational enclosure, over every denoted thickness
 within the thickness's own conversion bound. A wall off the axis reads the
-prism cup's `offsetSectionDelta` over the meridian's closed offset unchanged.
+prism cup's `offset2d.OffsetSectionDelta` over the meridian's closed offset unchanged.
 A wall with an axis end or an opening end reads `offset2d.ChainReach` over the
 open chain `K`: an interior corner by `LoopReach`'s own enclosures, an opening
 end by its rim cut (`offset2d.OpeningReach`, `docs/shell-opening-design.md`

@@ -181,7 +181,7 @@ func BridgeHole(ctx context.Context, pts []Point2, merged, hole []int) ([]int, e
 		// would emit duplicate directed edges — a cracked mesh. Each chording
 		// lies within its own sagitta of the true curve, so a pinch between
 		// them is a property of where the chords fell, the same class
-		// requireLoopClearance refuses: an expected undecided outcome
+		// tessellation.RequireLoopClearance refuses: an expected undecided outcome
 		// (docs/interference-design.md §7.1), never a wrong mesh.
 		return nil, tessellation.NewExpectedError(fmt.Errorf(`%w: a hole touches its cap boundary`, decaderr.ErrDegenerate))
 	}
@@ -247,7 +247,7 @@ func BridgeHole(ctx context.Context, pts []Point2, merged, hole []int) ([]int, e
 		// No occurrence's interior wedge admits the bridge: the anchor is already
 		// so densely bridged that this hole's channel has nowhere consistent to
 		// go. That is a property of where the chords fell, the same class
-		// requireLoopClearance refuses — an expected undecided outcome, never a
+		// tessellation.RequireLoopClearance refuses — an expected undecided outcome, never a
 		// wrong mesh.
 		return nil, tessellation.NewExpectedError(fmt.Errorf(`%w: no occurrence of a hole's bridge anchor admits the bridge`, decaderr.ErrDegenerate))
 	}
@@ -318,7 +318,7 @@ func EarClip(ctx context.Context, pts []Point2, poly []int) ([][3]int, error) {
 		}
 		if !clipped {
 			// The operand is valid; its CHORDING is too coarse to prove the
-			// region's topology. requireLoopClearance proves distinct loops
+			// region's topology. tessellation.RequireLoopClearance proves distinct loops
 			// apart, but a single loop's own chords can still cross over a
 			// narrow concave feature, and that lands here. So this is an
 			// expected undecided outcome, not an evaluator failure

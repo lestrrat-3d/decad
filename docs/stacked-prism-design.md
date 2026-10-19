@@ -283,7 +283,7 @@ per planar patch):
   samples get one vertex at the column's `z0` and one at its `z1`; its walls
   are the prism's outward quads. Chording per column is modify-reach §9.1's
   "once per shared carrier".
-- Prove loop clearance (`requireLoopClearance`) **per slab**, over the rings of
+- Prove loop clearance (`tessellation.RequireLoopClearance`) **per slab**, over the rings of
   the columns that slab carries. Two pockets from opposite faces may overlap in
   plan while never sharing a slab; a whole-body clearance proof would refuse a
   valid body.
@@ -293,7 +293,7 @@ per planar patch):
   each ceiling from its lower-only column's top ring, reversed, emitted
   reversed (`-N`). A union-built patch triangulates the wider outer column's
   ring as its outer and the narrower outer column's ring, reversed, as its
-  hole. Its two rings come from two slabs, so `requireLoopClearance` runs over
+  hole. Its two rings come from two slabs, so `tessellation.RequireLoopClearance` runs over
   the patch's own rings before it is triangulated. Every planar patch indexes the already allocated ring
   vertices, so the mesh closes by construction and `internal/tessellation.RequireClosedMesh` proves it.
   A separated opposed interface emits its floor and ceiling patches from

@@ -225,7 +225,7 @@ rim around the rounded expansion, four straight and four cylindrical walls
 along the expanded pocket, and a square underside at `zfloor-t`. The floor
 transition uses the loop-fillet band's exact-radius arc collapse: four
 quarter cylinders meet four sphere octants. The expanded pocket's rounded
-rectangle is `offsetProfile(pocket, -1, t)`; its certified displacement must
+rectangle is `offset2d.OffsetProfile(pocket, -1, t)`; its certified displacement must
 be zero, and its fillet contour at `t` must reproduce the source square.
 
 For a pocket of width `w`, depth `d`, axial depth `h`, and thickness `t`, the
@@ -364,9 +364,9 @@ With `s = +1`, `t` the thickness in millimetres with its conversion bound
 1. **Gates on `S`.** Modify §8's shell gates on `A`'s section, in modify §4's
    order: S18, S10's section limit (`shellsurvey.SectionInradius`), S10's
    height limit per kept cap (`t < h` with one cap kept, `t < h/2` with both:
-   reach SX11's reading), S11a as `offsetProfile(S, +1, t)` is built, then
+   reach SX11's reading), S11a as `offset2d.OffsetProfile(S, +1, t)` is built, then
    `offset2d.AuditOffsetSectionBudget` (S8, S11b, S9).
-2. **Each tool dilated.** `Dᵢ = offsetProfile(Tᵢ.profile, −1, t)`: S11a for a
+2. **Each tool dilated.** `Dᵢ = offset2d.OffsetProfile(Tᵢ.profile, −1, t)`: S11a for a
    dropped feature, then the same audit on `Dᵢ` against `Tᵢ`'s section. The
    dilation rounds the tool's convex corners into arcs of radius `t` and
    miters its reflex ones, modify §8's outward row, so a square port's cavity
@@ -385,9 +385,9 @@ With `s = +1`, `t` the thickness in millimetres with its conversion bound
 4. **The cavity.** `A' = prismPayload{profile: S ⊖ t, frame: F, z0, z1}` on
    step 1's interval, with the moved level's displacement `z0Delta + tDelta +`
    the float sum's rounding, as `shellClosedPrism` derives it, and every face
-   of its view carrying `offsetSectionDelta(S, +1, t, tDelta)` (modify §9's
+   of its view carrying `offset2d.OffsetSectionDelta(S, +1, t, tDelta)` (modify §9's
    figure). `Tᵢ' = prismPayload{profile: Dᵢ, frame: F_j, z0: L0 − t, z1: L1 + t}`
-   with `offsetSectionDelta(Tᵢ, −1, t, tDelta)`. The cavity is
+   with `offset2d.OffsetSectionDelta(Tᵢ, −1, t, tDelta)`. The cavity is
    `Cut(…Cut(A', T₁'), …, Tₙ')` through class B's own entry over payloads
    (`classbgeom.OfPayloads`, PR 0's `classBOfPayloads`, the body-free form of `tryClassB`): each cut
    must build a `brepPayload`; a pair class B does not admit — two dilated
@@ -476,7 +476,7 @@ With `s = +1`, `t` the thickness in millimetres with its conversion bound
 Why the pieces pair by identity: a removed cap's region is `S` (TC1), the
 cavity's cap there is `S ⊖ t` verbatim where no tool reaches the cap plane
 (general-boolean B.3: a tool along `j ≠ k` meets only faces across `j`), and
-its hole `i` is `(S ⊖ t).Holes[i]` as `offsetProfile` keeps loop order. A
+its hole `i` is `(S ⊖ t).Holes[i]` as `offset2d.OffsetProfile` keeps loop order. A
 tool that does reach the cap plane splits or notches that cap through the
 crossing reach, which step 4 admits only where the cavity's charge is zero;
 step 5 then reads the pieces as they come and step 6 proves the rim's

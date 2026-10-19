@@ -2617,7 +2617,7 @@ ANSWER is accepted and reads `Suspect`.
 | 12 | `Sweep` over a chain along a ONE-SPAN straight path (`docs/sweep-design.md` §15, PR C1): `SweepOption` with the chain refusals of §13.2, Table SC's gate set, the chain prism reduction over the path's own height and composed length bound, and §15's T190–T195. An arc span and every composite path stay R34 |
 | 13 | A chain `Sweep`'s bounded cardinal composite (`docs/sweep-design.md` §15.8): two real chain spans, indexed wall-rim sew, separation and boundary audits, and a certified sheet mesh. Standalone arcs and other composites stay R34 |
 | 14 | `LoftChain` over a `LineSeg`-only correspondence (`docs/loft-design.md` §16, PR L1): the sealed `ChainLoftOption` tier, Table SL's gate set, §16.2's exactly-parallel plane gate and per-wall positive side, the open-walk cell walk with its two free end rungs, and §15's T196–T199 and T208. A curved correspondence stays R36 and a non-parallel plane pair stays R35 |
-| 15 | `Offset` for §17's patch and profile-fed prism families, both sides: the patch arm's translation over the existing placement rebuild; the prism arm's `offsetProfile` section reused from §16.2 with its exact-generation gate, its offset audit and its whole-interval certification, and WITHOUT the source-and-offset nesting audit an annulus needs; Table R's R37–R41; Table X's own row; and §15's T200–T207. Other sheet families stay R37 |
+| 15 | `Offset` for §17's patch and profile-fed prism families, both sides: the patch arm's translation over the existing placement rebuild; the prism arm's `offset2d.OffsetProfile` section reused from §16.2 with its exact-generation gate, its offset audit and its whole-interval certification, and WITHOUT the source-and-offset nesting audit an annulus needs; Table R's R37–R41; Table X's own row; and §15's T200–T207. Other sheet families stay R37 |
 | 16 | `Thicken` on a profile-fed revolve sheet (§16.5): the exact axis class, the meridian annulus over §16.2's own offsets, the radial gate over the interval scan's own boxes, the re-resolved axis frame, and §15's T158–T161 |
 | 17 | `Thicken` on a chain ribbon (§16.6): the closed-form assembled section, its exact-generation gate and endpoint crossing audit, all three sides, and §15's T162–T164 |
 | 18 | `Thicken` on a chain revolve shell (§16.7): §16.6's assembled section under §16.5's sweep and radial gate, and §15's T165–T169. A free end on the axis stays R43 |
@@ -2632,7 +2632,7 @@ It depends on none of increments 2–6.
 
 **Increment 15 has increment 7's dependency set exactly, and neither increment
 depends on the other**: 7 builds a solid from the offset section and 15 a
-sheet, over the same `offsetProfile` construction and the same two gates. Either
+sheet, over the same `offset2d.OffsetProfile` construction and the same two gates. Either
 may land first; 15 after 7 costs less review, because the gates 15 reuses are
 then already in the tree.
 
@@ -3092,7 +3092,7 @@ radius-`t` arc and a concave inside corner miters, as `docs/modify-design.md`
 §8 states. Centered thickness uses radius `t/2` on each side. A face is
 never shifted by changing the source prism's axial levels.
 
-`shell.go`'s `offsetProfile` supplies each requested closed section;
+`offset2d.OffsetProfile` supplies each requested closed section;
 `offset2d.AuditOffsetSectionBudget` checks each one. Its `reverseLoopRecordContext`
 and `shell.go`'s `evalTubeContext` already form and build the one-sided,
 hole-free annulus. A centered call forms the analogous annulus from TWO
@@ -3229,7 +3229,7 @@ This fixed-distance section construction does not land tapered extrude.
 `WithTaper` needs an offset for EVERY axial level and a proof that no two
 intermediate sections or their ruled walls cross, including a proof for
 computed taper angles and their bounds. Certifying one endpoint section with
-`offsetProfile` proves none of those statements. `docs/evaluator-design.md`
+`offset2d.OffsetProfile` proves none of those statements. `docs/evaluator-design.md`
 §12's tapered-extrude refusal therefore remains in force.
 
 ### 16.5 The revolve sheet
@@ -3334,7 +3334,7 @@ T158's fixture.
 ### 16.6 The chain ribbon
 
 **An open walk has no interior to erode, so a ribbon needs no open-walk
-offset.** §16.1 names `offsetProfile`'s closed `momentinput.Profile` contract as what
+offset.** §16.1 names `offset2d.OffsetProfile`'s closed `momentinput.Profile` contract as what
 a ribbon lacks, and the reduction that lands is to stop asking for an offset at
 all: what a thickened ribbon sweeps is ONE closed section, assembled in closed
 form from pieces the same corner rule already decides. The section is the
@@ -3613,7 +3613,7 @@ source's own sweep: the same `frame`, the same `z0`/`z1` with the same
 `z0Delta`/`z1Delta`, the same accumulated placement, `surfaceResult` true, and
 `Q` as the section. A convex outside corner grows a radius-`d` arc and a
 concave inside corner miters, as `docs/modify-design.md` §8 states.
-`shell.go`'s `offsetProfile` supplies `Q` and `offset2d.AuditOffsetSectionBudget`
+`offset2d.OffsetProfile` supplies `Q` and `offset2d.AuditOffsetSectionBudget`
 checks it, exactly as §16.2 has them supply and check each of Thicken's
 requested sections, and the certification of the whole offset interval
 `0 < τ ≤ d` runs unchanged for §16.2's own reason: an endpoint that looks

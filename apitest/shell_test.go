@@ -110,7 +110,7 @@ func (c *offsetPreprocessingCancelContext) Err() error {
 	frames := runtime.CallersFrames(pcs[:runtime.Callers(2, pcs)])
 	for {
 		frame, more := frames.Next()
-		if strings.HasSuffix(frame.Function, ".offsetProfile") {
+		if strings.HasSuffix(frame.Function, ".OffsetProfile") {
 			c.entered = true
 			return context.Canceled
 		}

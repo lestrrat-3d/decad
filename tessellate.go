@@ -626,10 +626,6 @@ func tessellateFaceted(ctx context.Context, b *Body, fp facetedPayload, chord fl
 	return m, nil
 }
 
-func requireLoopClearance(ctx context.Context, pts []planePoint, loopIdx [][]int, loopSag []float64) error {
-	return tessellation.RequireLoopClearance(ctx, point2ToRecordSlice(pts), loopIdx, loopSag)
-}
-
 // tessellateBodyPatch binds source handles and public refusal names to the
 // PatchEdges node builder. The circular source mesh is certified first at
 // VerifyBoundary even when the requested result level is VerifyNone.

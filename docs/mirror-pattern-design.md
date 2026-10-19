@@ -304,7 +304,7 @@ charge is its two coordinates' `rationalFloatError` summed (the one that
 rounded, when only one did), which bounds the held image's distance from the
 exact one. A segment's charge is its largest point charge, tripled for an arc
 (its centre and radius both move with its three points' rounding, the
-argument `offsetSectionDelta` states for a recorded arc), plus a narrowed
+argument `offset2d.OffsetSectionDelta` states for a recorded arc), plus a narrowed
 line's `δ_walk`. `δ_mirror` is the largest segment charge. For a wall on an
 axis-aligned line through integer millimetre coordinates every reflected
 coordinate is a float, and `δ_mirror == 0`.
@@ -434,7 +434,7 @@ under an in-plane motion of the section:
 - A point's charge is its two coordinates' errors summed (the one that
   rounded, when only one did). A segment's charge is its largest point
   charge, tripled for an arc (its centre and radius both move with its three
-  points' rounding, the argument `offsetSectionDelta` states), and
+  points' rounding, the argument `offset2d.OffsetSectionDelta` states), and
   `δ_pattern` is the largest segment charge, added to the receiver's own
   `sectionDelta`.
 - Every `CircleSeg`'s `CCW`, every `ArcSeg`'s sense and every `TStart`/`TEnd`

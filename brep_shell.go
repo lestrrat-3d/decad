@@ -107,7 +107,7 @@ func shellThroughCut(ctx context.Context, b *Body, bp brepPayload, call brepShel
 	}
 	dilated := make([]profileRecord, len(tc.Tools))
 	for i, tool := range tc.Tools {
-		dilated[i], err = offsetProfile(budget, tool.Prism.Profile, -1, call.tmm)
+		dilated[i], err = offset2d.OffsetProfile(budget, tool.Prism.Profile, -1, call.tmm, shellTol)
 		if err != nil {
 			return nil, err
 		}
@@ -135,12 +135,12 @@ func shellThroughCut(ctx context.Context, b *Body, bp brepPayload, call brepShel
 	// the rims carry the largest of them.
 	delta := sec.Delta
 	if len(rm.Walls) == 0 {
-		if delta, err = offsetSectionDelta(budget, tc.Caps.Section, 1, call.tmm, call.tDelta); err != nil {
+		if delta, err = offset2d.OffsetSectionDelta(budget, tc.Caps.Section, 1, call.tmm, call.tDelta, shellTol); err != nil {
 			return nil, shellCancelCause(err)
 		}
 	}
 	for _, tool := range tc.Tools {
-		d, err := offsetSectionDelta(budget, tool.Prism.Profile, -1, call.tmm, call.tDelta)
+		d, err := offset2d.OffsetSectionDelta(budget, tool.Prism.Profile, -1, call.tmm, call.tDelta, shellTol)
 		if err != nil {
 			return nil, shellCancelCause(err)
 		}

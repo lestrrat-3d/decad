@@ -28,7 +28,7 @@ type Region struct {
 // It returns the moved region beside the largest segment charge: a line's
 // larger endpoint charge, a circle's centre charge, and an arc's largest
 // point charge tripled, since its centre and radius both move with its three
-// points' rounding (the argument offsetSectionDelta states for a recorded
+// points' rounding (the argument offset2d.OffsetSectionDelta states for a recorded
 // arc).
 func MoveRegion(budget *proofbound.WorkBudget, region Region, mv PointMotion) (Region, float64, error) {
 	delta := 0.0

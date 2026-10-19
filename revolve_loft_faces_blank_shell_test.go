@@ -34,8 +34,8 @@ func TestCurvedSourceArcSplitsClosedRevolveShell(t *testing.T) {
 		}
 	}
 	require.GreaterOrEqual(t, sectionIndex, 0)
-	shell, ok, err := revolveLoftFacesBlankShellAtArc(t.Context(), proof, manifest,
-		sectionIndex, cellIndex)
+	shell, ok, err := revolveLoftFacesBlankShellAtRunsWithCuts(t.Context(), proof, manifest,
+		[]revolveLoftFacesShellSeamSelector{{sectionIndex: sectionIndex, cellIndex: cellIndex}}, nil)
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.NotEmpty(t, shell.mesh.Tris)
@@ -82,8 +82,8 @@ func TestCurvedSourceArcSplitsClosedRevolveShell(t *testing.T) {
 				continue
 			}
 			selected.ref, selected.face = other.ref, other.face
-			_, admitted, err := revolveLoftFacesBlankShellAtArc(t.Context(), proof, manifest,
-				sectionIndex, cellIndex)
+			_, admitted, err := revolveLoftFacesBlankShellAtRunsWithCuts(t.Context(), proof, manifest,
+				[]revolveLoftFacesShellSeamSelector{{sectionIndex: sectionIndex, cellIndex: cellIndex}}, nil)
 			require.NoError(t, err)
 			require.False(t, admitted)
 			*selected = original
@@ -98,8 +98,8 @@ func TestCurvedSourceArcSplitsClosedRevolveShell(t *testing.T) {
 	require.Less(t, original.mapped.TLo.Cmp(original.mapped.THi), 0)
 	selected.mapped.TLo = lfDiv(lfAdd(original.mapped.TLo, original.mapped.THi),
 		big.NewRat(2, 1))
-	_, admitted, err := revolveLoftFacesBlankShellAtArc(t.Context(), proof, manifest,
-		sectionIndex, cellIndex)
+	_, admitted, err := revolveLoftFacesBlankShellAtRunsWithCuts(t.Context(), proof, manifest,
+		[]revolveLoftFacesShellSeamSelector{{sectionIndex: sectionIndex, cellIndex: cellIndex}}, nil)
 	require.NoError(t, err)
 	require.False(t, admitted)
 	*selected = original
@@ -112,8 +112,8 @@ func TestCurvedSourceArcSplitsClosedRevolveShell(t *testing.T) {
 		before := *entry
 		entry.outcome, entry.side = revolveLoftFacesVerticalMiss, nil
 		manifest.sideOutcome[entry.sectionIndex] = revolveLoftFacesSideMiss
-		_, admitted, err := revolveLoftFacesBlankShellAtArc(t.Context(), proof, manifest,
-			sectionIndex, cellIndex)
+		_, admitted, err := revolveLoftFacesBlankShellAtRunsWithCuts(t.Context(), proof, manifest,
+			[]revolveLoftFacesShellSeamSelector{{sectionIndex: sectionIndex, cellIndex: cellIndex}}, nil)
 		require.NoError(t, err)
 		require.False(t, admitted)
 		manifest.sideOutcome[entry.sectionIndex] = revolveLoftFacesSideSourceCandidate
@@ -131,8 +131,8 @@ func TestCurvedSourceArcSplitsClosedRevolveShell(t *testing.T) {
 		}
 		before := entry.side.cells[0]
 		entry.side.cells[0].span++
-		_, admitted, err := revolveLoftFacesBlankShellAtArc(t.Context(), proof, manifest,
-			sectionIndex, cellIndex)
+		_, admitted, err := revolveLoftFacesBlankShellAtRunsWithCuts(t.Context(), proof, manifest,
+			[]revolveLoftFacesShellSeamSelector{{sectionIndex: sectionIndex, cellIndex: cellIndex}}, nil)
 		require.NoError(t, err)
 		require.False(t, admitted)
 		entry.side.cells[0] = before
@@ -147,8 +147,8 @@ func TestCurvedSourceArcSplitsClosedRevolveShell(t *testing.T) {
 		}
 		cells := manifest.nonvertical[i].cells
 		manifest.nonvertical[i].cells = nil
-		_, admitted, err := revolveLoftFacesBlankShellAtArc(t.Context(), proof, manifest,
-			sectionIndex, cellIndex)
+		_, admitted, err := revolveLoftFacesBlankShellAtRunsWithCuts(t.Context(), proof, manifest,
+			[]revolveLoftFacesShellSeamSelector{{sectionIndex: sectionIndex, cellIndex: cellIndex}}, nil)
 		require.NoError(t, err)
 		require.False(t, admitted)
 		manifest.nonvertical[i].cells = cells
@@ -163,8 +163,8 @@ func TestCurvedSourceArcSplitsClosedRevolveShell(t *testing.T) {
 		}
 		cells := manifest.nonvertical[i].cells
 		manifest.nonvertical[i].cells = []revolveLoftFacesSourceCell{original}
-		_, admitted, err := revolveLoftFacesBlankShellAtArc(t.Context(), proof, manifest,
-			sectionIndex, cellIndex)
+		_, admitted, err := revolveLoftFacesBlankShellAtRunsWithCuts(t.Context(), proof, manifest,
+			[]revolveLoftFacesShellSeamSelector{{sectionIndex: sectionIndex, cellIndex: cellIndex}}, nil)
 		require.NoError(t, err)
 		require.False(t, admitted)
 		manifest.nonvertical[i].cells = cells
@@ -176,8 +176,8 @@ func TestCurvedSourceArcSplitsClosedRevolveShell(t *testing.T) {
 	originalFaces := liveShell.n.Faces
 	t.Cleanup(func() { liveShell.n.Faces = originalFaces })
 	liveShell.n.Faces = append(slices.Clone(originalFaces), faceNode(bornFace(&Face{n: topo.Face{Origins: []provenance.Ref{{Role: "unowned retained face"}}, Body: bodyNode(trimmed)}})))
-	_, admitted, err = revolveLoftFacesBlankShellAtArc(t.Context(), proof, manifest,
-		sectionIndex, cellIndex)
+	_, admitted, err = revolveLoftFacesBlankShellAtRunsWithCuts(t.Context(), proof, manifest,
+		[]revolveLoftFacesShellSeamSelector{{sectionIndex: sectionIndex, cellIndex: cellIndex}}, nil)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.False(t, admitted)
 	liveShell.n.Faces = originalFaces

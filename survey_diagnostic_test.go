@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/cupwall"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/units"
@@ -22,7 +23,7 @@ func TestRunSurveysReportsUndecidedCupWall(t *testing.T) {
 		line(0, 0, 100, 0), line(100, 0, 100, 60),
 		line(100, 60, 0, 60), line(0, 60, 0, 0),
 	}}}
-	cavity, err := offsetProfile(proofbound.NewWorkBudget(t.Context()), outer, 1, 5)
+	cavity, err := offset2d.OffsetProfile(proofbound.NewWorkBudget(t.Context()), outer, 1, 5, shellTol)
 	require.NoError(t, err)
 	for i, segment := range cavity.Outer.Segments {
 		moved := segment.(lineSeg)

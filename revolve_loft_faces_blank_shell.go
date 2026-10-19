@@ -79,27 +79,10 @@ func (s revolveLoftFacesShellRaySource) Cap(id int) revolveloftfaces.ShellRayCap
 		Box: revolveloftfaces.RayBox{Y: point.boundary.box[1], Z: point.boundary.box[2]}}
 }
 
-// This builds every authenticated Revolve wall and end cap on one angular
-// grid. One whole-arc source contact splits its finite meridian side. Source
-// cells select the ring; held output edges never supply a crossing location.
-func revolveLoftFacesBlankShellAtArc(ctx context.Context,
-	proof *revolveLoftFacesSourceCertificate,
-	manifest *revolveLoftFacesContactManifest,
-	sectionIndex, cellIndex int,
-) (*revolveLoftFacesBlankSeamShell, bool, error) {
-	return revolveLoftFacesBlankShellAtArcWithCuts(ctx, proof, manifest,
-		sectionIndex, cellIndex, nil)
-}
-
-func revolveLoftFacesBlankShellAtArcWithCuts(ctx context.Context,
-	proof *revolveLoftFacesSourceCertificate,
-	manifest *revolveLoftFacesContactManifest,
-	sectionIndex, cellIndex int, capCuts []revolveLoftFacesShellCut,
-) (*revolveLoftFacesBlankSeamShell, bool, error) {
-	return revolveLoftFacesBlankShellAtRunsWithCuts(ctx, proof, manifest,
-		[]revolveLoftFacesShellSeamSelector{{sectionIndex: sectionIndex, cellIndex: cellIndex}}, capCuts)
-}
-
+// revolveLoftFacesBlankShellAtRunsWithCuts builds every authenticated Revolve
+// wall and end cap on one angular grid. Each selected whole-arc source contact
+// splits its finite meridian side. Source cells select the ring; held output
+// edges never supply a crossing location.
 func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
 	proof *revolveLoftFacesSourceCertificate,
 	manifest *revolveLoftFacesContactManifest,

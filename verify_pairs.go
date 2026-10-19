@@ -6,6 +6,7 @@ import (
 	"math"
 	"sync"
 
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
@@ -47,7 +48,7 @@ func verifyPairJobs(ctx context.Context, bodies []*BodyReport, cfg verifyConfig)
 				return nil, err
 			}
 			a, b := bodies[i].Body, bodies[j].Body
-			boxProven := boxesDisjoint(bodies[i].Bounds.Box, bodies[j].Bounds.Box)
+			boxProven := measurement.BoxesDisjoint(boxToInternal(bodies[i].Bounds.Box), boxToInternal(bodies[j].Bounds.Box))
 			if boxProven {
 				sheetPair := a.Kind() == BodySheet && b.Kind() == BodySheet
 				if sheetPair || !cfg.Clearances {

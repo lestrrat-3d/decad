@@ -333,8 +333,8 @@ func revolveLoftFacesBlankShellWithCapRings(ctx context.Context,
 	if !valid {
 		return nil, false, nil
 	}
-	shell, built, err := revolveLoftFacesBlankShellAtArcWithCuts(ctx, proof, graph.manifest,
-		sectionIndex, cellIndex, cuts)
+	shell, built, err := revolveLoftFacesBlankShellAtRunsWithCuts(ctx, proof, graph.manifest,
+		[]revolveLoftFacesShellSeamSelector{{sectionIndex: sectionIndex, cellIndex: cellIndex}}, cuts)
 	if err != nil || !built {
 		return nil, false, err
 	}

@@ -234,7 +234,7 @@ func tessellateBrep(ctx context.Context, b *Body, bp brepPayload, chord float64,
 			loopSag[loop] = math.Max(loopSag[loop], sag)
 			capSlack = proofbound.AbsSumUpper(capSlack, slack)
 		}
-		if err := requireLoopClearance(ctx, pts, loops, loopSag); err != nil {
+		if err := tessellation.RequireLoopClearance(ctx, point2ToRecordSlice(pts), loops, loopSag); err != nil {
 			return nil, err
 		}
 		tris, err := triangulation.Triangulate(ctx, point2ToRecordSlice(pts), loops)
