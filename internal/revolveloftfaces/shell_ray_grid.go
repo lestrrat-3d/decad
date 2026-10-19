@@ -130,7 +130,8 @@ func sameShellRay(a, b ShellRay) bool {
 		lfAdd(lfMul(a.Y, b.Y), lfMul(a.Z, b.Z)).Sign() > 0
 }
 
-// ShellRayOrderBounded preserves the separate single-run cap and multi-run checks.
+// ShellRayOrderBounded checks the angular order of every source anchor. With
+// one run it also sets each ray's SeamIndex.
 func ShellRayOrderBounded(rays []ShellRay, source ShellRaySource) bool {
 	if source.RunCount() == 1 {
 		for i := range rays {
