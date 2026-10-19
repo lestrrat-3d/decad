@@ -78,9 +78,10 @@ func (r *State) PartialFilletLines(sel Sel, selected []bool) ([]int, map[[3]floa
 	return ordinals, terminals, nil
 }
 
-// AdmitPartialChamfer is §4.3a's selection gate on the partial loop sel: the
-// call's edges selected edges are one or two adjacent straight walks of a
-// loop of at least four walks, each recorded segment its own walk.
+// AdmitPartialChamfer is §4.3a's selection gate on the partial loop sel.
+// edges is the number of edges the call selected. They must be one or two
+// adjacent straight walks of a loop of at least four walks, and each
+// recorded segment of the loop must be its own walk.
 func (r *State) AdmitPartialChamfer(sel Sel, selected []bool, edges int) error {
 	if edges < 1 || edges > 2 || len(selected) < 4 {
 		return r.Refuse("SL1", `a partial chamfer requires one or two adjacent edges with two free ends`)
@@ -113,11 +114,12 @@ func (r *State) AdmitPartialChamfer(sel Sel, selected []bool, edges int) error {
 
 // RequirePartialRestated checks that route E's restatement of the straight
 // walls kept the partial loop sel: the face's loop keeps its walk count, and
-// the matched edges select exactly the walks of selected on it.
-func (r *State) RequirePartialRestated(sel Sel, selected []bool) error {
+// the matched edges select exactly the walks of selected on it. loopChanged
+// is the SL1 reason given when the loop is gone or its walk count changed.
+func (r *State) RequirePartialRestated(sel Sel, selected []bool, loopChanged string) error {
 	planar := r.Topology.Planar[sel.Face]
 	if sel.Loop >= len(planar) || len(planar[sel.Loop]) != len(selected) {
-		return r.Refuse("SL1", `restating the straight walls changed the selected planar loop`)
+		return r.Refuse("SL1", loopChanged)
 	}
 	again := make([]bool, len(selected))
 	for _, ei := range r.Matched {

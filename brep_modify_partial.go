@@ -72,7 +72,8 @@ func brepFilletPartialLoop(ctx context.Context, d *Document, bp brepPayload, cal
 	if err := r.matchEdges(); err != nil {
 		return nil, err
 	}
-	if err := r.state.RequirePartialRestated(sel, selected); err != nil {
+	if err := r.state.RequirePartialRestated(sel, selected,
+		`restating the straight walls changed the selected planar loop`); err != nil {
 		return nil, err
 	}
 	return r.buildPartialFillet(ctx, d, sel, selected, blends)
@@ -161,7 +162,8 @@ func brepChamferPartialLoop(ctx context.Context, d *Document, bp brepPayload,
 	if err := r.matchEdges(); err != nil {
 		return nil, err
 	}
-	if err := r.state.RequirePartialRestated(sel, selected); err != nil {
+	if err := r.state.RequirePartialRestated(sel, selected,
+		`restating the straight walls changed the selected partial loop`); err != nil {
 		return nil, err
 	}
 	out, err := r.state.RewritePartialChamfer(sel, selected, blends)
