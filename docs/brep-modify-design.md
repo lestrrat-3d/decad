@@ -444,7 +444,7 @@ general-boolean §4.5 reads it unchanged:
 | **DB3** | `Tessellate`, STL/OBJ/3MF | §4.4: the blend wall chords its arc once and shares the samples with both end faces |
 | **DB4** | mesh boolean, class B operand | a fillet result passes B2 and B6 (an arc has no direction); a chamfer's oblique wall misses B6 and takes the mesh path |
 | **DB5** | `ThroughAll`/`ToFace` | the per-face extremes; a brep with zero displacement answers |
-| **DB6** | clearance | `addBrepFaces` adds the blend's cylinder or plane carrier |
+| **DB6** | clearance | `clearance.BuildBrepBodyCarriers` adds the blend's cylinder or plane carrier |
 | **DB7** | undercut survey | per face; the blend wall's normal range from its walk |
 | **DB8** | concave-radius survey | a concave fillet is a clockwise arc walked with the material on its left and is read; a convex fillet is not a concave feature |
 | **DB9** | wall survey | staged `Suspect`, as for every brep |

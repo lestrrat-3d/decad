@@ -923,7 +923,7 @@ trim would yield a false disjointness certificate, which is worse than an
 undecided pair — `Verify` would report a clearance the geometry does not have.
 
 An all-planar `stitchPayload` (docs/surface-design.md §6.4) with a recorded
-triangle set has §2's carrier model, `addStitchFaces`, whatever its vertex
+triangle set has §2's carrier model, `clearance.BuildStitchBodyCarriers`, whatever its vertex
 bounds: a bounded body charges its largest vertex bound into `bodyGeom.delta`
 (§2). Its mesh publishes a zero occupied-volume proof only when the body is
 CLOSED, every vertex carries a proven bound of exactly zero
