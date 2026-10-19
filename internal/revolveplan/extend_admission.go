@@ -39,7 +39,7 @@ func AdmitExtendPair(ctx context.Context, budget *proofbound.WorkBudget,
 		return fail(`%w: Extend's receiver needs an open meridian to lengthen; a closed one has no free end and its other free direction is its own sweep`, decaderr.ErrUnsupported)
 	}
 	// The FULL-revolution restriction, and it is a reading rather than a bound:
-	// root extendRevolveEndSegment names a free end by the single-coedge
+	// surfacetrim.ExtendRevolve names a free end by the single-coedge
 	// latitude loop fullRevLoops (build.go) puts on the first and last
 	// wall. A PARTIAL revolution carries no such loop — each wall holds one loop
 	// gathering its two cap edges beside the swept arcs, and which member of it

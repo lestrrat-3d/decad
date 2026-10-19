@@ -56,7 +56,7 @@ func (pp Payload) Z1Scalar() proofbound.BoundedScalar {
 // stay bit-identical to the untrimmed sheet's own. The tight, per-extreme
 // charge this design actually needs is carried instead by the WALKS
 // Build resolves through prismcells.TrimProfileWalks
-// (root surface_trim.go) when pp.SectionDelta != 0, never by this view's own
+// (internal/prismcells/trim_walks.go) when pp.SectionDelta != 0, never by this view's own
 // field. The first chain stands in for a profile's outer loop, the rest for
 // its holes — the extent reading treats every one the same way, caring only
 // about the segments, never about winding or closure.
