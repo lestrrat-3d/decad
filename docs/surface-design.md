@@ -1380,7 +1380,8 @@ states for a placed loft.
 admits a stitched body only when the recorded triangle set exists — every
 face tetrahedron-eligible, this section's own closed, all-planar case — AND
 every vertex of the body carries a proven bound of exactly zero**, on
-`addPrismFaces`' own `sectionDelta != 0` reasoning (`internal/clearance/pairkernel/geom.go`): the
+`clearance.BuildPrismBodyCarriers`' own `SectionDelta != 0` reasoning
+(`internal/clearance/body_carriers.go`): the
 kernel's certificates are exact statements about the carriers it reads, so a
 body whose vertices are only within a bound of their true position is a body
 it cannot model. The second condition subsumes a nonzero placement `delta`,

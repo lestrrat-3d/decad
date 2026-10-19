@@ -604,9 +604,11 @@ the points its own gate arm reads, or its vertices with
 their published bounds; a coil reads every held station vertex, each within
 its station rounding of a point of its true helix edge) and reads the largest distance among them, pairs
 across the two bodies included, shrunk by twice the larger gap. The
-clearance kernel's pair reading (`pairKernel.pairDiameter`) and the
-interference and planar pair paths all read it; neither reads the carriers'
-witnesses. Two unit cylinders 1 mm tall, their axes 10 mm apart along
+clearance kernel's pair reading (`pairKernel.pairDiameter`), `Verify`'s
+interference row (`verify_pairs.go`), the motion run's collision gate
+(`motionRun.collisionBeyond`) and the exact planar arm (`planarPairVerdict`)
+all read it. The reading itself never reads the carriers' witnesses
+(`CFace.Wit`). Two unit cylinders 1 mm tall, their axes 10 mm apart along
 `(0.6, 0.8)`, are `√145` across between wall points no carrier witness
 samples; the stations reach within 7.5° of each.
 

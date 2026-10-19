@@ -59,8 +59,8 @@ import (
 // level ALONG the normal — so their sum is an upper bound on how far a lifted
 // witness sits from the denoted body point below it, and
 // diameter.LowerForDisplacement turns the held maximum into the lower bound
-// the gate wants. The copy zeroes sectionDelta because addPrismFaces
-// (internal/clearance/pairkernel/geom.go) refuses a displaced section outright: it builds the
+// the gate wants. The copy zeroes sectionDelta because
+// clearance.BuildPrismBodyCarriers refuses a displaced section outright: it builds the
 // clearance kernel's certificate carriers, which have to be exact statements
 // about a boundary, and a witness set for a diameter is neither a certificate
 // nor a carrier.
