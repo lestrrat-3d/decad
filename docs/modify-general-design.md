@@ -359,7 +359,7 @@ into a torus, a box corner into a sphere — so `Outward` is SG1.
 `WithNoOpenings` takes §3.1a's closed rectangular-boss case. It is SG2 on
 other brep or stacked receivers: a brep record's lumps are its connected face
 sets (general-boolean §4.2), and a closed cavity's faces would read as a
-second solid without a nesting proof. The void shell `shellClosedPrism`
+second solid without a nesting proof. The void shell `prismshell.BuildClosed`
 builds lives on the stacked record alone.
 
 ### 3.3 Construction
@@ -390,7 +390,7 @@ With `s = +1`, `t` the thickness in millimetres with its conversion bound
    body (a far segment whose box happens to reach the strip).
 4. **The cavity.** `A' = prismPayload{profile: S ⊖ t, frame: F, z0, z1}` on
    step 1's interval, with the moved level's displacement `z0Delta + tDelta +`
-   the float sum's rounding, as `shellClosedPrism` derives it, and every face
+   the float sum's rounding, as `prismshell.BuildClosed` derives it, and every face
    of its view carrying `offset2d.OffsetSectionDelta(S, +1, t, tDelta)` (modify §9's
    figure). `Tᵢ' = prismPayload{profile: Dᵢ, frame: F_j, z0: L0 − t, z1: L1 + t}`
    with `offset2d.OffsetSectionDelta(Tᵢ, −1, t, tDelta)`. The cavity is

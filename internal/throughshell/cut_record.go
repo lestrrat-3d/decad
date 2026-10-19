@@ -31,16 +31,6 @@ type ShellInput struct {
 	HeldThickness, ThicknessDelta, Tolerance float64
 }
 
-func cancelCause(err error) error {
-	if errors.Is(err, context.Canceled) {
-		return context.Canceled
-	}
-	if errors.Is(err, context.DeadlineExceeded) {
-		return context.DeadlineExceeded
-	}
-	return err
-}
-
 func prismFaces(bp breprecord.Payload) []brepgeom.PrismRectFace {
 	faces := make([]brepgeom.PrismRectFace, len(bp.Faces))
 	for i, f := range bp.Faces {
@@ -216,7 +206,7 @@ func (tc Cut) OpeningSection(budget *proofbound.WorkBudget, rm Removal, call She
 		ThicknessDelta: call.ThicknessDelta, Tolerance: call.Tolerance,
 	}, offset2d.AuditOffsetSectionBudget)
 	if err != nil {
-		return Section{}, cancelCause(err)
+		return Section{}, prismshell.CancelCause(err)
 	}
 	if len(sec.Corners) > 0 {
 		return Section{}, fmt.Errorf(`%w: the removed wall run meets a kept wall at a reflex corner, where the rim runs back along the removed wall's carrier into the material, a face this evaluator does not state for a through-cut record (modify-general SG5)`, decaderr.ErrUnsupported)
@@ -419,7 +409,7 @@ func (tc Cut) Rims(ctx context.Context, budget *proofbound.WorkBudget, bp brepre
 		}
 		regions, reason, err := RimRegions(ctx, budget, r.Region.Outer, trace.Outers)
 		if err != nil {
-			return breprecord.Payload{}, cancelCause(err)
+			return breprecord.Payload{}, prismshell.CancelCause(err)
 		}
 		if reason != "" {
 			return breprecord.Payload{}, rimError(r, reason)
@@ -501,14 +491,14 @@ func auditRim(budget *proofbound.WorkBudget, region momentinput.Profile) error {
 	for li, loop := range append([]sectionrecord.LoopRecord{region.Outer}, region.Holes...) {
 		area, err := sectionaudit.LoopSignedArea(budget, loop)
 		if err != nil {
-			return cancelCause(err)
+			return prismshell.CancelCause(err)
 		}
 		if (li == 0 && !(area > 0)) || (li > 0 && !(area < 0)) {
 			return fmt.Errorf(`%w: the shell's rim loop %d is walked against its material`, decaderr.ErrDegenerate, li)
 		}
 	}
 	if err := offset2d.AuditOffsetSectionBudget(budget, region, region); err != nil {
-		return cancelCause(err)
+		return prismshell.CancelCause(err)
 	}
 	return nil
 }

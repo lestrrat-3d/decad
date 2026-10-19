@@ -3095,7 +3095,7 @@ never shifted by changing the source prism's axial levels.
 
 `offset2d.OffsetProfile` supplies each requested closed section;
 `offset2d.AuditOffsetSectionBudget` checks each one. Its `reverseLoopRecordContext`
-and `shell.go`'s `evalTubeContext` already form and build the one-sided,
+and `prismshell.BuildTube` already form and build the one-sided,
 hole-free annulus. A centered call forms the analogous annulus from TWO
 offsets and uses `prismrecord.Build`. `internal/cupwall/payload.go`'s calls to
 `internal/prismrecord/build.go`'s `prismrecord.BuildLoopSidesAs`, its `renameCavityRoles` and bounded region-prism
@@ -3264,7 +3264,7 @@ names it as the radial-axis half of this arm's missing proof.
 **The construction** takes §16.2's offsets unchanged: `Q+ = P ⊕ t` positive,
 `Q- = P ⊖ t` negative, both at `t/2` centered, and the result's section is
 `Q+ ∖ P`, `P ∖ Q-` or `Q+ ∖ Q-` with the inner loop reversed into the hole walk
-by `reverseLoopRecordContext` — the identical annulus `evalTubeContext`
+by `reverseLoopRecordContext` — the identical annulus `prismshell.BuildTube`
 assembles for a prism. That section then goes to `revolveplan.Build` under
 a `revolvePayload` whose `phi0`, `phi1`, `full`, `den`, `frame` and `xform` are
 the sheet's own, unchanged, and whose `surfaceResult` is false. No level, no
@@ -3627,7 +3627,7 @@ before building an annulus has nothing here to run on — the result holds ONE
 region, bounded by `Q` alone, and denotes nothing whatever about `P`, so no
 nesting relation is published and none is needed. The result is likewise not an
 outer region less an inner one, so `reverseLoopRecordContext` and
-`evalTubeContext` are not on this path. Everything else §16.2 states — the
+`prismshell.BuildTube` are not on this path. Everything else §16.2 states — the
 exact-generation gate below, the offset audit, the interval certification and
 the refusal set — is this arm's unchanged.
 

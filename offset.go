@@ -35,7 +35,7 @@ import (
 // the source and offset loops disjoint and strictly nested; this build
 // publishes no such relation and denotes nothing whatever about the source, so
 // that audit has no subject here and offset2d.ReverseLoopRecordContext and
-// evalTubeContext are not on this path (§17.2). Everything else §16.2 states —
+// prismshell.BuildTube are not on this path (§17.2). Everything else §16.2 states —
 // offset2d.OffsetProfile, offset2d.AuditOffsetSectionBudget, the exact-generation gate and the
 // whole-interval certification of thicken_axis.go — runs unchanged.
 

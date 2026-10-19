@@ -1369,8 +1369,8 @@ is `h - k*t`, where `k` is kept cap count; reaching zero is SX11.
 inward, `Q \ P` outward. It produces one outer shell plus one void shell.
 `FaceShell.IsVoid()` is true only on the inner shell.
 
-`shellClosedPrism` (`shell.go`) builds it as three slabs: inward `P` on
-`[z0, z0 + t]`, the band `{P, reverse(Q)}` on `[z0 + t, z1 − t]` and `P` on
+`prismshell.BuildClosed` (`internal/prismshell/cap_shell.go`) builds it as
+three slabs: inward `P` on `[z0, z0 + t]`, the band `{P, reverse(Q)}` on `[z0 + t, z1 − t]` and `P` on
 `[z1 − t, z1]`; outward `Q` on `[z0 − t, z0]`, `{Q, reverse(P)}` on `[z0, z1]`
 and `Q` on `[z1, z1 + t]`. Both interfaces are monotone
 (`docs/stacked-prism-design.md` §2.2): the band's one hole is upper-only at the

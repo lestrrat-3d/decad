@@ -120,7 +120,7 @@ making booleans this shape will ever observe.
 
 Checked before any `sketch` call, on the two operands' *current* payloads
 (`prismPayload`, which includes a shell-built tube — modify §8's
-`evalTube` builds one). Every row is a routing decision: failing it takes the
+`prismshell.BuildTube` builds one). Every row is a routing decision: failing it takes the
 unchanged mesh path with no error surfaced, identical to today's behavior for
 that pair.
 

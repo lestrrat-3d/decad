@@ -123,7 +123,7 @@ func (b *Body) shellSideOpening(ctx context.Context, pp prismPayload, removedSta
 		ThicknessDelta: tDelta, Tolerance: shellTol,
 	}, offset2d.AuditOffsetSectionBudget)
 	if err != nil {
-		return nil, shellCancelCause(err)
+		return nil, prismshell.CancelCause(err)
 	}
 	ref := d.nextProducerID()
 	var body *Body
@@ -137,7 +137,7 @@ func (b *Body) shellSideOpening(ctx context.Context, pp prismPayload, removedSta
 		}
 	}
 	if err != nil {
-		return nil, shellCancelCause(err)
+		return nil, prismshell.CancelCause(err)
 	}
 	return commitModifyResult(ctx, b, body)
 }

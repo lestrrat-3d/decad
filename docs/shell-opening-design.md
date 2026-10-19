@@ -231,7 +231,7 @@ Levels: with the receiver on `[z0, z1]`, inward the cavity spans
 removed, `[z0, z1 − t]` with the start cap removed, `[z0, z1]` with both
 removed; outward the caps extend to `z0 − t` and `z1 + t` where kept. Each
 derived level carries its source end's displacement, the thickness conversion
-and its own float sum's rounding, as `shellClosedPrism` derives its levels.
+and its own float sum's rounding, as `prismshell.BuildClosed` derives its levels.
 
 ## 4. The brep construction
 
