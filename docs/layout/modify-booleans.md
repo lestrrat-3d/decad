@@ -24,14 +24,11 @@ The rules for rows live in `docs/layout.md`.
 | `brep_rounded_edge_fillet.go` | Rounds P8's one front top edge after matching its exact rounded, cross-drilled BRep record. See modify-general §4.3c. |
 | `chamfer.go` | `Chamfer`; cap loops route to `capblend.go`. See modify §7. |
 | `modify_options.go` | Public reach option tiers, codec adapters and asymmetric reference resolution (SX3). See modify-reach §2, §6. |
-| `tangent_chain.go` | Adapts `WithTangentChain` to public handles, selectors and refusals; `internal/tangentchain/` decides continuations. See modify-reach §5. |
-| `shell.go` | Public `ShellOption`, `ShellSense` and `Shell`: prism, Sweep and Revolve dispatch. See modify §8 and Table R. |
+| `shell.go` | Public `ShellOption`, `ShellSense` and `Shell`: prism, Sweep and Revolve dispatch, and the section offset bound to `shellTol`. See modify §7–§9 and Table R. |
 | `shell_twist.go` | Admits and commits the inward top-cap Shell of a straight twisted rounded Sweep. See shell-twisted-sweep design. |
 | `shell_twist_mesh.go` | Builds the five-face faceted cup from the proven twisted-shell mesh and audits it. See shell-twisted-sweep design. |
-| `shell_offset.go` | Binds `internal/offset2d/`'s section offset and its displacement to `shellTol`. See modify §7–§9. |
 | `shell_revolve.go` | `Shell` of a revolve. See modify-reach §9.3. |
-| `shell_opening.go` | Prism and straight Sweep side openings: classify removed faces and dispatch the audited region build. See shell-opening §3–§5. |
-| `shell_opening_brep.go` | Records a prism side opening whose caps are both removed; `breprecord` records the stacked case. See shell-opening §4. |
+| `shell_opening.go` | Prism and straight Sweep side openings: classify removed faces, dispatch the audited region build and record the cap-removed prism case. See shell-opening §3–§5. |
 | `shell_stacked_boss.go` | Admits and records the nested rectangular-boss shell; `prismshell` reverses a closed source and `breprecord` builds the result. See modify-general §3.1a. |
 | `shell_prism_union_boss.go` | Authenticates the faceted nested boss and commits the inward cup proved by `prismshell`. See shell-faceted-boss design. |
 | `shell_round_boss.go` | Admits and records the exact two-slab circular-boss shell; `breprecord` builds and measures it. See modify-general §3.1c. |
@@ -40,8 +37,8 @@ The rules for rows live in `docs/layout.md`.
 | `brep_modify.go` / `brep_modify_prism.go` | Brep and stacked modify receivers: dispatch, SB1/SB2, route P. See brep-modify. |
 | `brep_shell.go` / `brep_shell_curved.go` | Route S: live face selection, stage order, result commit, and one circular tool-wall opening. `internal/throughshell/` owns its record geometry. See modify-general §3. |
 | `brep_modify_edge.go` | Route E: public edge and reference-face checks, ordered gate dispatch and result commit. `breprecord` reads and rewrites the record and checks reference-face roles. See brep-modify §5. |
-| `brep_modify_loop.go` / `brep_loop_band.go` | Route L/V public edge and face adapters and result commit; `breploop` selects and rewrites the record, and `breprecord` builds the bands and mass. See modify-general §4. |
-| `brep_modify_chain.go` | Route L: selected cap-edge chains and partial-loop record adapters over `internal/breploop/`, `internal/offset2d/` and `internal/capband/`. |
+| `brep_modify_loop.go` | Route L/V public edge and face adapters and result commit; `breploop` selects and rewrites the record, and `breprecord` builds the bands and mass. See modify-general §4. |
+| `brep_modify_chain.go` | Route L: selected cap-edge chains and partial-loop record adapters, and `WithTangentChain`'s public handles, selectors and refusals. See modify-reach §5. |
 | `brep_modify_partial_chamfer.go` | Rewrites one or two straight edges on part of a brep cap loop, including terminal lines. See modify-general §4.3a. |
 | `brep_loop_fillet.go` | Route L's fillet-band pull survey (DF7). See loop-fillet. |
 | `brep_all_edge_chamfer.go` | Admits an exact cross-drilled box and its twelve selected outer edges, then builds the all-edge chamfer through `breprecord`. See modify-general §4.3b. |

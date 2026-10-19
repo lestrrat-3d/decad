@@ -6,27 +6,23 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/capblend"
-	"github.com/lestrrat-3d/decad/internal/sweeprecord"
-
-	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/cupwall"
 	"github.com/lestrrat-3d/decad/internal/draftrecord"
 	"github.com/lestrrat-3d/decad/internal/extent"
+	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/modifyoption"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
-	"github.com/lestrrat-3d/decad/internal/shellsurvey"
-	"github.com/lestrrat-3d/decad/internal/stackedrecord"
-	"github.com/lestrrat-3d/decad/internal/topo"
-
-	"github.com/lestrrat-3d/decad/internal/freeform"
-
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-
+	"github.com/lestrrat-3d/decad/internal/shellsurvey"
+	"github.com/lestrrat-3d/decad/internal/stackedrecord"
+	"github.com/lestrrat-3d/decad/internal/sweeprecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -683,4 +679,18 @@ func evalTubeContext(ctx context.Context, d *Document, ref producerID, pp prismP
 		Z1Delta: pp.Z1Delta,
 		Xform:   pp.Xform,
 	}, freeform.NewFreeformWork()))
+}
+
+// This file binds the exact section offset of docs/modify-design.md §7 to
+// shellTol; the construction, its S11a/S11 refusals and the §5 audit live in
+// internal/offset2d/profile_offset.go.
+
+// offsetProfile binds offset2d.OffsetProfile to shellTol.
+func offsetProfile(budget *proofbound.WorkBudget, profile profileRecord, s, t float64) (profileRecord, error) {
+	return offset2d.OffsetProfile(budget, profile, s, t, shellTol)
+}
+
+// offsetSectionDelta binds offset2d.OffsetSectionDelta to shellTol.
+func offsetSectionDelta(budget *proofbound.WorkBudget, profile profileRecord, s, t, tDelta float64) (float64, error) {
+	return offset2d.OffsetSectionDelta(budget, profile, s, t, tDelta, shellTol)
 }

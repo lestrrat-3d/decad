@@ -598,7 +598,7 @@ vertices and removing nothing, and a planar face's view holds its region at
 its one level. A face whose stations cannot be read adds none.
 
 **The pair's `D` reads both bodies' points together.** `pairGateDiameterCached`
-(`verify_gate_points.go`) joins the point sets each body proves lie on it
+(`verify_gate.go`) joins the point sets each body proves lie on it
 (`bodyGatePoints` in root and `internal/gatediameter/body_gate_points.go`:
 the points its own gate arm reads, or its vertices with
 their published bounds; a coil reads every held station vertex, each within

@@ -11,7 +11,7 @@ import (
 
 // This file owns the axis-snap charges: what a revolve publishes about a
 // profile or chain whose on-axis endpoint the evaluator moved onto the axis
-// itself (revolve_axis.go's axisFrame.walk). The snap is a displacement decad
+// itself (revolve.go's axisFrame.walk). The snap is a displacement decad
 // COMMITS, so every published measurement must enclose the geometry decad
 // actually built rather than the geometry it was handed, and each fixture below
 // reads the published interval back against that geometry's exact truth in

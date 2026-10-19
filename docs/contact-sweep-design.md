@@ -935,7 +935,7 @@ budget caps each pose's geometric cost.
 A rotating run re-reads the same fractions and poses as it refines, samples
 and tracks: each prepared path keeps a memo of its ideal pose by fraction,
 its staged points' deviation by pose and fraction, and its point spans by
-fraction span (`contact_sweep_memo.go`). A served deviation still charges
+fraction span (`contact_sweep_rotation.go`). A served deviation still charges
 the poll once per point. The run closes both memos before it returns, so the
 path copies a proof keeps compute afresh and hold no memory. The radian
 sine and cosine enclosures behind them are a pure function of the exact

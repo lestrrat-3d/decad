@@ -122,3 +122,24 @@ func TestRevolveLoftFacesSimpleSeparatedRequiresStrictAxisGap(t *testing.T) {
 	require.False(t, loftface.SimpleSeparated(first, span(0.5, 0.5, 1.5, 1.5)),
 		"overlap in both coordinate boxes needs a stronger proof")
 }
+
+func TestRevolveLoftFacesShortArcSupportsOnlyItsChordOutside(t *testing.T) {
+	arc := arcSeg{Center: planePoint{},
+		Start: planePoint{U: 4, V: -0.5}, End: planePoint{U: 4, V: 0.5},
+		TStart: 0, TEnd: 1}
+	require.True(t, revolveloftfaces.SimpleArcChordSide(arc, 0, lfF(4), 1))
+	require.False(t, revolveloftfaces.SimpleArcChordSide(arc, 0, lfF(4), -1))
+	require.True(t, revolveloftfaces.SimpleArcMonotoneSide(arc, 1, lfF(-0.5), 1))
+	require.True(t, revolveloftfaces.SimpleArcMonotoneSide(arc, 1, lfF(0.5), -1))
+	require.False(t, revolveloftfaces.SimpleArcMonotoneSide(arc, 0, lfF(4), 1),
+		"the bulging coordinate is not monotone")
+}
+
+func TestRevolveLoftFacesArcRefusesUnequalEndpointRadius(t *testing.T) {
+	s, profile := neutralSimpleSourceSketch(t, false)
+	trim := neutralSimpleSourceRecord(t, s, profile)
+	arc := trim.Source.Profile.Outer.Segments[1].(arcSeg)
+	arc.End.U += 0.01
+	_, certified := revolveloftfaces.SimpleArc(trim, 1, arc, false)
+	require.False(t, certified)
+}

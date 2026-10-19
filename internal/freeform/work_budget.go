@@ -320,7 +320,7 @@ func FreeformChords(count int) uint64 {
 // ChargeFreeformShift preflights the re-anchoring of a whole converted chain:
 // two rational subtractions per control point of every span. It is levied at
 // the record-level preflight beside the conversion and integration charges
-// (moments_validate.go), never where the shift itself runs — a charge levied at
+// (moments.go), never where the shift itself runs — a charge levied at
 // the point of use lands after the sketch reconstruction the ceiling exists to
 // precede, so a chain that fits the budget everywhere except its re-anchoring
 // would run minutes of uncancellable work before refusing.

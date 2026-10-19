@@ -1062,7 +1062,7 @@ func TestFreeformPrismFilletChamferRefuse(t *testing.T) {
 }
 
 // TestFreeformPrismShellRefuses pins Shell (fillet.go's audit and
-// shell_offset.go's own offset loop reversal), over both a curved and a
+// shell.go's own offset loop reversal), over both a curved and a
 // straight-walk (degree-1) free-form wall.
 func TestFreeformPrismShellRefuses(t *testing.T) {
 	t.Parallel()

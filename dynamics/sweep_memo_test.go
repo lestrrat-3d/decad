@@ -33,7 +33,7 @@ func sweepMemoRun(t *testing.T, world *dynamics.World, state dynamics.State, ste
 // TestSweepMemosChangeNoStep runs the rotating scenes with the sweep memos
 // off and then on, from the same state on the same bodies, and requires
 // every step's published state, events and scheduled-pair certificates
-// equal: the memos (contact_sweep_memo.go, motionbound's RadianSinCos memo)
+// equal: the memos (contact_sweep_rotation.go, motionbound's RadianSinCos memo)
 // change no value. Each run is cut short of its test's full length but past
 // the steps whose sweeps read the memos: the wedge's rotating sweeps from
 // step 15, the box's from step 17, the bottle's band sweeps from step 0, the

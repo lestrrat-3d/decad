@@ -113,7 +113,7 @@ func WithLeftHand() CoilOption
 
 | Parameter | Kind | Meaning |
 |---|---|---|
-| `axis` | `Axis` | `SketchLine`, `ConstructionAxis` or `EdgeAxis` — `Revolve`'s own sealed vocabulary (`revolve.go`), resolved into the sketch plane by `axisInPlane` (`revolve_axis.go`). The axis direction fixes the advance direction |
+| `axis` | `Axis` | `SketchLine`, `ConstructionAxis` or `EdgeAxis` — `Revolve`'s own sealed vocabulary (`revolve.go`), resolved into the sketch plane by `axisInPlane` (`revolve.go`). The axis direction fixes the advance direction |
 | `pitch` | `units.Length`, finite, `> 0` | the axial advance per full turn |
 | `turns` | `units.Dimensionless` (`units.Scalar`), finite, `> 0` | the number of full turns; the total angle is `Θ = 2π·turns` |
 | `WithLeftHand()` | option, at most once | reverses the rotation sense; the advance direction is unchanged |

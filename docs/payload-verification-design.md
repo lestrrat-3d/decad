@@ -729,7 +729,7 @@ lands, overlapping pairs remain `Suspect` by verification's pair-partition rule.
 | `internal/cupwall/wall.go` | cup wall theorem and morphology recheck |
 | `survey.go` | cup wall adapter; dispatch faceted surveys |
 | `tessellate.go` | create/carry per-facet source certificates + `sourceBound` internally |
-| `boolean.go` / `boolean_body.go` | hidden-tangency `sourceBound` consumption; compose `boundaryCert`; preserve facet survey metadata |
+| `boolean.go` / `boolean_mesh.go` | hidden-tangency `sourceBound` consumption; compose `boundaryCert`; preserve facet survey metadata |
 | `topology.go` | faceted `NormalAt` through certificate; no public type change |
 | new `verify_mesh.go` | BVH feature scale + faceted validity |
 | new `survey_mesh.go` | faceted undercut/radius/wall kernels |

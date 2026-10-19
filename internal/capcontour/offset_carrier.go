@@ -10,7 +10,7 @@ import (
 
 // Carrier is one wall's offset carrier, enclosed: an offset LINE (a point on
 // it plus its unit direction) or a concentric CIRCLE (the wall's own exact
-// centre and the exact offset radius). It mirrors shell_offset.go's
+// centre and the exact offset radius). It mirrors shell.go's
 // offsetCarrier field for field, so the enclosure is of the same object the
 // float miter solve intersects.
 type Carrier struct {

@@ -460,7 +460,7 @@ chamfer patch's does, and no near-level term: the near end of every admitted
 one-sided extent is the sketch plane, exact (§8). Each slab of a two-sided
 extent has the same exact near level and its own bounded far level.
 
-`tessellate_draft_two_sided.go` meshes both slabs through that same
+`tessellate_draft.go` meshes both slabs through that same
 tessellator, drops the two middle caps, and identifies vertices with equal
 held coordinates. The closed-mesh audit refuses a mismatch in the two middle
 rings. The outer facets retain their source faces and displacement bounds;
@@ -879,7 +879,7 @@ every new root file. This document ships with PR 1.
 | **4** | DD7: the undercut survey over draft bodies | `draft_survey.go`, `survey.go` (dispatch), `capblend_survey.go` (`capPatchUndercuts`, the patch loop both surveys run), `apitest/draft_verify_test.go` | the PR 4 fixtures; the `−e` pull lists every wall | 2 |
 | **5** | RD3: the subset draft (§10.2): per-walk amounts in `BuildSharpLoop`, the mixed-corner rule, SD21 narrowed | `internal/offset2d/sharp.go`, `internal/capcontour/displacement.go`, `internal/capband/`, `draft.go`, `internal/draftrecord/build.go`, `internal/draftrecord/payload.go`, `capblend*.go` (the band view's per-walk amounts), `tessellate_capblend.go` and `internal/tessellation/` (the mesh's per-walk setbacks), `apitest/draft_subset_test.go` | one wall of F1's box drafted: `A(z) = a(a − z·tan α)`, so `Volume = h·a(a − d/2)`; the L with one notch wall drafted; a hole drafted alone (F7's cone with vertical outer walls) | 3 |
 | **6** | RD1 with a one-sided `ToFace` or `ThroughAll`: resolve the stop through `resolveLinearExtent`, then build the existing single-slab draft with the stop's axial bound | `draft_build.go`, `apitest/extrude_taper_test.go` | the far-cap vertex and volume match the selected stop level within their bounds | 5 |
-| **7** | RD1 with `Symmetric` or `TwoSided`: build and sew the two slabs, combine bounded readings and meshes | `internal/draftrecord/two_sided.go`, `tessellate_draft_two_sided.go`, `draft_build.go`, `internal/compositesweep/body_audit.go` | public volume, manifold, curved mesh and placement cases | 6 |
+| **7** | RD1 with `Symmetric` or `TwoSided`: build and sew the two slabs, combine bounded readings and meshes | `internal/draftrecord/two_sided.go`, `tessellate_draft.go`, `draft_build.go`, `internal/compositesweep/body_audit.go` | public volume, manifold, curved mesh and placement cases | 6 |
 
 PRs 2 and 3 run in parallel after PR 1; PR 4 follows 2; PR 5 follows 3.
 PRs 1, 2 and 4 are proof specifications (bounds, closure terms, the mesh

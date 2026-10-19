@@ -77,10 +77,9 @@ The rules for rows live in `docs/layout.md`.
 | `doc.go` | Package scope, support map and layering. |
 | `errors.go` | Sentinel errors (from `internal/decaderr/`) and `BooleanError`. See api §12, §8. |
 | `measurement.go` | Public bounded reading types and their internal adapters. |
-| `identity.go` | The root spelling of the provenance producer identity and the shared zero-vector predicate. |
 | `record.go` | Root-owned `Point2`, structural record and payload aliases (including the faceted payload and its records), and slice adapters. See sketch-seam §2. |
 | `seam.go` | Sketch chain recording adapters and `MeasureProfile`; profile recording lives in `internal/sectioncert/`. See sketch-seam §1–§2. |
-| `section.go` | Public planar section query over certified prism, stack-backed BRep, direct and smooth Loft, sphere and cone records; exact builders and clips live in `internal/sectionclip/`. See section design. |
+| `section.go` | Public planar section query over certified prism, stack-backed BRep, direct and smooth Loft, sphere and cone records; exact builders and clips live in `internal/sectionclip/`; also the `Section` profile-or-chain constraint. See section design, surface §13.2. |
 | `path.go` | The immutable spatial `Path`, sealed segments and its recorded `internal/sweepinput.Path`. See sweep §2–§3. |
 | `extent.go` | Public linear and angular extent variants and normalization. See API §8.1. |
 | `selector.go` | `EdgeQuery`/`FaceQuery` and live-topology adapters for `internal/selectorquery`. See API §9. |
@@ -90,6 +89,6 @@ The rules for rows live in `docs/layout.md`.
 
 | Path | Responsibility |
 |---|---|
-| `moments.go` / `moments_validate.go` | Public second moments and moment adapters. See evaluator §4. |
+| `moments.go` | Public second moments and moment adapters. See evaluator §4. |
 | `mass_properties.go` | Public mass and inertia types, mass dispatch and payload adapters. See `docs/dynamic-mass-design.md` §2–§3. |
-| `mass_properties_faceted.go` / `mass_properties_mesh.go` | Mass read off verified meshes. See dynamic-mass. |
+| `mass_properties_mesh.go` | Mass read off verified meshes. See dynamic-mass. |

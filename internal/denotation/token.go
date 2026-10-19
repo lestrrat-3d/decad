@@ -61,7 +61,7 @@ import "github.com/lestrrat-3d/r3"
 // evaluator through a rotation or a cross product of its own — so
 // sectionDelta == 0 alone already states the whole precondition for every
 // prismPayload this evaluator builds. A revolve's axis frame, by contrast, is
-// COMPUTED (revolve_axis.go's axisFrame), and a revolve's own seam
+// COMPUTED (revolve.go's axisFrame), and a revolve's own seam
 // half-plane has a BOUNDED normal, not merely a bounded offset — so
 // internal/revolveplan/build.go mints no level token at all, and a revolve seam chain
 // stays refused by PatchEdges's existing exact gate (R6). A section

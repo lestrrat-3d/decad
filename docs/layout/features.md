@@ -11,7 +11,7 @@ The rules for rows live in `docs/layout.md`.
 |---|---|
 | `topology.go` | Topology types from `Body` to `Vertex` and public surface and curve variants. See API §6.1 and evaluator §3. |
 | `topology_handles.go` | Born-handle constructors, the node-to-handle mapping of linked topology nodes, `handleAlloc` and `envOf` for internal builders, `bodyResult`, and `placePayload`, the root path into `topo.Payload.Placed`. See evaluator §3, §8. |
-| `document.go` | `Document`: live body set, commit, `Remove`, liveness gates, `Transform` and `Copy`. See evaluator §8. |
+| `document.go` | `Document`: live body set, commit, `Remove`, liveness gates, `Transform` and `Copy`; the producer identity spelling and zero-vector predicate. See evaluator §8. |
 | `mirror.go` | `MirrorPlane` and `Mirrored`/`MirroredCopy`. See mirror-pattern §4. |
 | `mirror_join.go` | `WithJoin`, face selection and document commit around `internal/mirrorjoin/`'s record rewrite. See mirror-pattern §5. |
 | `pattern.go` | Public pattern specs, admission, Copy/Union fallback and publication; `internal/patternassembly/` plans frame-keeping instances and disjoint groups. See mirror-pattern §4.3, §6. |
@@ -29,25 +29,21 @@ The rules for rows live in `docs/layout.md`.
 | `extrude.go` | Generic `Extrude` over a profile or chain, `WithTaper`, linear-extent resolution, the chain ribbon entry point. See evaluator §5 and surface §13.2. |
 | `draft.go` | `Draft`, `NeutralPlane`, `Walls` gates. See draft §10. |
 | `draft_build.go` | Tapered extrude angle and surface-result gates, extent resolution and slab dispatch. See draft §5, §7. |
-| `section_input.go` | `Section`: the profile-or-chain constraint a section-fed operation is generic over. See surface §13.2. |
 | `sweep.go` | Generic `Sweep` over a profile or chain and path admission adapters; builds through `internal/sweeprecord/`. See sweep design. |
-| `sweep_chain_composite.go` | Admits the cardinal line/arc chain Sweep and builds it through `sweeprecord.ReplayChainWork`. See sweep §15.8. |
-| `sweep_arc_chain.go` | Reduces a one-arc chain Sweep to the authenticated chain Revolve wall. See sweep §15.9. |
+| `sweep_chain_composite.go` | Admits the cardinal line/arc chain Sweep and builds it through `sweeprecord.ReplayChainWork`; reduces a one-arc chain Sweep to the chain Revolve wall. See sweep §15.8–§15.9. |
 | `sweep_closed_circle.go` | Checks the exact two-arc full-circle path and evaluates its full Revolve reduction. See sweep §3.3. |
 | `sweep_mitre.go` | Mitred options, entry adapters and restatement; builds through `sweepmitre.Build`. See sweep §16. |
 | `coil.go` | `Coil`, `CoilOption`, Table CS gates. Root `coilPayload` aliases `coilshell.Payload`. See helix §2, §4, §5.6. |
-| `revolve.go` | Generic `Revolve` over a profile or chain: `Axis` variants, options, angular extents. See evaluator §6 and surface §13.2. |
+| `revolve.go` | Generic `Revolve` over a profile or chain: `Axis` variants, options, angular extents, and the public axis adapter to `internal/revolveaxis/`. See evaluator §6 and surface §13.2. |
 | `revolve_blend.go` | Fillet/Chamfer of revolve meridian junctions. See modify-reach §7. |
 | `revolve_cap_edge_blend.go` | Admits the quarter-turn radial cap rim, binds its source faces and publishes the mesh from `internal/revolvemesh/`. See modify-reach §7.2. |
-| `revolve_axis.go` | Adapts the public axis to `internal/revolveaxis/`. See evaluator §6. |
 | `stops.go` | Body-relative stop resolution. See evaluator §5/§6/§11. |
 | `internal/extent/stop_revolve.go` | Exact `ToFace` level for a planar Revolve wall or angular cap. See evaluator §5. |
 | `loft.go` | Loft and LoftChain entry points and options. Root `chainLoftPayload` aliases `loftrecord.ChainPayload`. See loft §2/§4/§10/§16. |
 | `loft_sections.go` | Public smooth-section loft entry point and source-face assembly. See loft-sections design. |
 | `cone_from_face.go` | `ConeFromFace`: the full tool cone one float step off a Revolve blank's selected conical face. See loft-face-sections design. |
-| `loft_faces.go` | Bounded source-cap loft admission and held wall assembly. See loft-face-sections design. |
+| `loft_faces.go` | Bounded source-cap loft admission and held wall assembly, with the shared rational helpers and map aliases. See loft-face-sections design. |
 | `loft_faces_tangent.go` | `LoftFacesToConeTangent` and `ConeTangentEnd`: the LoftFaces loft whose last section is the plane exactly tangent to a point cone. See loft-face-sections design. |
-| `loft_faces_proof.go` | Shared rational helpers and map aliases used by face-fed LoftFaces proof code. |
 | `loft_point.go` | Admits a point-section Loft from Sketch and publishes the `internal/pointloft/` payload. See loft-point design. |
 | `loft_build.go` | Tessellation adapter for a lofted body. Root `loftPayload` aliases `loftrecord.Payload`. See loft §5, §8, §12. |
 

@@ -4,6 +4,10 @@ import (
 	"context"
 	"slices"
 	"sync"
+
+	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
+	"github.com/lestrrat-3d/r3"
 )
 
 // revolveLoftFacesCertifiedArcPatches is the source-to-held gate for one
@@ -186,4 +190,66 @@ func revolveLoftFacesCensusIn(ctx context.Context,
 		scope.mu.Unlock()
 	}
 	return census, ok, err
+}
+
+// revolveLoftFacesSeamVertex is one shared held point on a certified radial
+// source arc. The two bounds belong to the finite Revolve and LoftFaces sides.
+type revolveLoftFacesSeamVertex struct {
+	station    int
+	exact      loftFaceRatVec
+	point      r3.Vec
+	blankBound float64
+	loftBound  float64
+}
+
+// revolveLoftFacesArcSeamVerticesUnchecked preserves the root record shape.
+// Its caller first authenticates the complete ordered source-arc station run.
+func revolveLoftFacesArcSeamVerticesUnchecked(ctx context.Context, trim *loftFacesTrimRecord,
+	band int, stations []int, root loftFaceInterval, section revolveSectionSpan,
+) ([]revolveLoftFacesSeamVertex, bool, error) {
+	vertices, ok, err := revolveloftfaces.ArcSeamVerticesUnchecked(ctx, trim, band, stations, root, section)
+	if err != nil || !ok {
+		return nil, false, err
+	}
+	result := make([]revolveLoftFacesSeamVertex, len(vertices))
+	for i, vertex := range vertices {
+		result[i] = revolveLoftFacesSeamVertex{
+			station: vertex.Station, exact: vertex.Exact, point: vertex.Point,
+			blankBound: vertex.BlankBound, loftBound: vertex.LoftBound,
+		}
+	}
+	return result, true, nil
+}
+
+// revolveLoftFacesSeamPatch is one open source-face patch split through a
+// common held seam. Complete face bounds need separate curve and twist proofs.
+type revolveLoftFacesSeamPatch struct {
+	vertices     []r3.Vec
+	triangles    [][3]int
+	vertexBounds []float64
+	origins      []provenance.Ref
+	seam         []int
+	stationIDs   []int
+}
+
+// revolveLoftFacesArcPatchesUnchecked preserves root graph ownership of
+// station IDs. Its caller authenticates the live source pair and arc run.
+func revolveLoftFacesArcPatchesUnchecked(ctx context.Context, trim *loftFacesTrimRecord,
+	band, segment int, section revolveSectionSpan, seam []revolveLoftFacesSeamVertex,
+) (revolveLoftFacesSeamPatch, revolveLoftFacesSeamPatch, bool, error) {
+	entries := make([]revolveloftfaces.ArcSeamVertex, len(seam))
+	for i, entry := range seam {
+		entries[i] = revolveloftfaces.ArcSeamVertex{
+			Station: entry.station, Exact: entry.exact, Point: entry.point,
+			BlankBound: entry.blankBound, LoftBound: entry.loftBound,
+		}
+	}
+	blank, loft, ok, err := revolveloftfaces.ArcPatchesUnchecked(ctx, trim, band, segment, section, entries)
+	return revolveLoftFacesSeamPatch{
+			vertices: blank.Vertices, triangles: blank.Triangles,
+			vertexBounds: blank.VertexBounds, origins: blank.Origins, seam: blank.Seam,
+		}, revolveLoftFacesSeamPatch{
+			vertices: loft.Vertices, triangles: loft.Triangles,
+			vertexBounds: loft.VertexBounds, origins: loft.Origins, seam: loft.Seam,
+		}, ok, err
 }

@@ -5,7 +5,9 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/breprecord"
+	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/units"
@@ -19,7 +21,7 @@ import (
 // walk's own carrier cut by the offset. Three regions follow (§3): the wall
 // section W, the cavity section C and the cap slabs' region (P inward, the
 // outer region O outward), and each faces modify §5's audit and an exact area
-// identity before shell_opening_brep.go builds the body from them. Every walk
+// identity before shell_opening.go builds the body from them. Every walk
 // of the section must be a line, along a section axis or oblique, or a
 // circular arc. internal/prismshell builds the three sections and audits them.
 
@@ -138,4 +140,37 @@ func (b *Body) shellSideOpening(ctx context.Context, pp prismPayload, removedSta
 		return nil, shellCancelCause(err)
 	}
 	return commitModifyResult(ctx, b, body)
+}
+
+// This file records a prism side opening's BO1 case (docs/shell-opening-design.md
+// §4): with both caps removed the wall section W swept over the receiver's own
+// sweep is a prism. Otherwise the result is a stack of at most three slabs — a
+// kept cap's slab over the cap region, the wall slab over W — which
+// breprecord.SideOpening restates into a brepPayload (BO2) with flush walls
+// merged into one planar face, the removed face's own plane holding the
+// opening as its hole. Every loop is decad's own record, so no sketch scene
+// is built; a topology the engine does not cover is SO5, never a fallback.
+
+// evalSideOpeningPrism is BO1: W over the receiver's interval, frame and
+// placement, carrying the offset's section displacement and, where a rim on
+// a removed arc names its cut at a float parameter, three times that cut's
+// gap on top (§4.4).
+func evalSideOpeningPrism(ctx context.Context, d *Document, ref producerID, pp prismPayload, sec prismshell.Section) (*Body, error) {
+	delta := sec.Delta
+	if sec.CutGap > 0 {
+		delta = proofbound.AbsSumUpper(delta, proofbound.ProductUpper(3, sec.CutGap))
+		if proofbound.IsNonFinite(delta) {
+			return nil, offset2d.ErrUnbounded
+		}
+	}
+	return bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), ref), prismrecord.Payload{
+		Profile:      sec.Wall,
+		Frame:        pp.Frame,
+		Z0:           pp.Z0,
+		Z1:           pp.Z1,
+		Z0Delta:      pp.Z0Delta,
+		Z1Delta:      pp.Z1Delta,
+		Xform:        pp.Xform,
+		SectionDelta: delta,
+	}, freeform.NewFreeformWork()))
 }

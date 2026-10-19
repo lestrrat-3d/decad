@@ -50,7 +50,7 @@ import (
 // (symDiffOK == true) — see the comment at that publication below for the
 // three-step argument. Every other stitched body — open, curved/mixed,
 // placed, or certificate-welded — keeps symDiffOK false, so Union, Cut and
-// Intersect keep refusing it (boolean.go's own requireVolumeProvingPayload
+// Intersect keep refusing it (boolean_mesh.go's own requireVolumeProvingPayload
 // arm), whatever the exact tetrahedron sum itself already proves about
 // signed volume.
 // lumpFaceGroups returns b's own lumps' constituent faces, one slice
@@ -256,7 +256,7 @@ func Restate(ctx context.Context, b *topo.Body, sp stitchrecord.Payload,
 	// stitched body's exact tetrahedron sum proves only SIGNED volume, never
 	// the occupied-volume symmetric-difference bound a boolean requires, so
 	// symDiffOK stays false for it (docs/surface-design.md §14 Table D row 5)
-	// and boolean.go's requireVolumeProvingPayload refuses it before this
+	// and boolean_mesh.go's requireVolumeProvingPayload refuses it before this
 	// mesh is even built.
 	//
 	// The zero claim rests on three steps, each of which must hold for every

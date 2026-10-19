@@ -1042,7 +1042,7 @@ deltas.
 A solid loft's mesh is the exact restatement of its held triangles
 (`docs/tessellation-design.md` §2's `loftPayload` row), so its mass takes §8.5's path and settles at
 the ladder's first step: `mass_properties_mesh.go` integrates the held triangles through the
-`tetraMoments` sums (the `/120` form) it shares with `mass_properties_faceted.go`, widened by the
+`tetraMoments` sums (the `/120` form) it shares with `mass_properties_mesh.go`, widened by the
 mesh proof's `volSymDiff` as dynamic-mass §2.2 states. `loftmesh.MassAccumulator` is not
 reused: its Volume and Centroid apply the exact twist corrections of chorded cells, which have no
 second-moment counterpart, while the restated triangles are uncorrected and their four-leg
@@ -1050,7 +1050,7 @@ second-moment counterpart, while the restated triangles are uncorrected and thei
 
 ### 8.4 Stitched planar solid, zero-bound Boolean, translation-placed Boolean
 
-The Boolean path is `mass_properties_faceted.go`'s, over the payload's own held triangle set and
+The Boolean path is `mass_properties_mesh.go`'s, over the payload's own held triangle set and
 bound. A stitched solid takes §8.5's path over its restated triangles. Its mesh carries an
 occupied-volume proof only when it is closed, all-planar and zero-bound at every vertex
 (tessellation §2's `stitchPayload` row), so a placed or certificate-welded stitched solid returns
@@ -1407,7 +1407,8 @@ passes through has one.
 ### 10.1 Rotating drift over exact planar bodies
 
 `contact_sweep_rotation.go`'s `rotationalPairSweep` already carries the general machinery for a rigid
-drift: `prepareRotationalSweepPath` builds the ideal path and travel bound, `refine` is contact-sweep
+drift: `prepareRotationalSweepPath` builds the ideal path and travel bound, `refine`
+(`contact_sweep_rotation_depart.go`) is contact-sweep
 §5's left-first dyadic search, `intervalClear` is §4.3's `g_l + g_r > T` certificate, and `roundedAt`
 bounds the float-to-ideal pose deviation from the body's exact corners. It is limited to source boxes by
 its eight-corner inputs. `contact_sweep_faceted.go` generalizes it to any §9 body: the exact vertex set
@@ -2529,7 +2530,7 @@ lines below do not repeat it.
 ### PR 14 (Phase 2) — loft, stitched and fallback mass
 
 - Delivers §8.3, §8.4 and §8.5.
-- Files: `mass_properties.go`, `mass_properties_faceted.go`, new `mass_properties_mesh.go`.
+- Files: `mass_properties.go`, `mass_properties_mesh.go`, new `mass_properties_mesh.go`.
 - Test (`apitest`): `apitest/mass_properties_mesh_test.go`: the stitched tetrahedron's tensor against the closed
   form; a loft between two exact octagons, one a square with its edge midpoints pushed out (a loft
   pairs equal segment counts and its cap triangulator refuses collinear corners); a cup against its
