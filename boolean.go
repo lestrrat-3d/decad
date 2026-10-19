@@ -16,7 +16,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/obliqueboss"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
-	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -588,48 +587,6 @@ func evaluateBooleanMeshes(ctx context.Context, op meshbool.OperationKind, a, b 
 func evaluateBooleanMeshesAtScale(ctx context.Context, op meshbool.OperationKind, a, b *Body,
 	meshes operandMeshes, chordScale float64) (booleanEvaluation, error) {
 	return evaluateBooleanMeshesWithConeCap(ctx, op, a, b, meshes, chordScale, nil, nil)
-}
-
-// faceFacets is one analytic face of an operand: its facets, and the chord
-// displacement between them and the true face.
-type faceFacets struct {
-	source *Face
-	delta  float64
-	facets []int
-}
-
-// facesOfMesh groups a tessellation's facets by their source face, in first-
-// appearance order, and charges each face the displacement the MESH proved for
-// it: docs/tessellation-design.md §2's sourceBound(face), which the tessellator
-// composed from that face's own trim chording, coordinate construction, section
-// and axial terms. The gate never re-infers a displacement from the surface
-// kind — a planar carrier does not make a trimmed patch exact, and a zero here
-// is the claim that the held polygon IS the true trimmed patch with stored
-// coordinates that add nothing.
-//
-// A source face the mesh states no bound for is a broken evaluator, not a
-// staged capability: it returns ErrBooleanFailed rather than an ErrUnsupported
-// that Verify would hide as an undecided pair, and never a zero.
-func facesOfMesh(budget *proofbound.WorkBudget, m *Mesh) ([]faceFacets, error) {
-	index := map[*topo.Face]int{}
-	var out []faceFacets
-	for i, f := range m.n.Source {
-		if err := budget.Step(); err != nil {
-			return nil, err
-		}
-		k, ok := index[f]
-		if !ok {
-			delta, stated := m.sourceBound(f)
-			if !stated {
-				return nil, fmt.Errorf(`%w: an operand's tessellation states no displacement bound for one of its own source faces`, ErrBooleanFailed)
-			}
-			k = len(out)
-			index[f] = k
-			out = append(out, faceFacets{source: faceHandle(f), delta: delta})
-		}
-		out[k].facets = append(out[k].facets, i)
-	}
-	return out, nil
 }
 
 // analyticBooleanBody evaluates an analytic boolean's result payload under

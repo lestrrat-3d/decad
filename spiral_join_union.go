@@ -20,7 +20,7 @@ import (
 type spiralFirstUnionAdmission struct {
 	source    *spiralFirstJoinSource
 	short     [2][4]spiralsector.ShortCapFamily
-	roles     map[[2]*Face]spiralNearPairKind
+	roles     map[[2]*topo.Face]meshbool.NearPairRole
 	allowed   map[[2]int]bool
 	rootBoxes *[2]*spiralsector.RootFlankSourceBoxes
 }
@@ -76,11 +76,11 @@ func spiralFirstUnionPairs(blank, tooth *Body, admission *spiralFirstUnionAdmiss
 		{groups.blankHeel, groups.toothRootHeel}: true,
 	}
 	for pair, kind := range admission.roles {
-		if kind != spiralNearPairCrossing {
+		if kind != meshbool.NearPairCrossing {
 			continue
 		}
-		a, aOK := faceID[pair[0]]
-		b, bOK := faceID[pair[1]]
+		a, aOK := faceID[faceHandle(pair[0])]
+		b, bOK := faceID[faceHandle(pair[1])]
 		if !aOK || !bOK {
 			return nil, false
 		}

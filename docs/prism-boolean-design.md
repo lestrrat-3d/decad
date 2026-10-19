@@ -1479,13 +1479,13 @@ it denotes:
   `Fillet`/`Chamfer`/`Shell` with `ErrUnsupported`, since a rewrite of that
   section has no proven displacement of its own.
 
-### boolean.go
+### internal/meshbool/tangency_gate.go
 
-`boolean.go`'s `facesOfMesh` is one of the two consumers that do NOT
+`meshbool`'s `facesOfMesh` is one of the two consumers that do NOT
 withhold: it charges each face the displacement the operand's own mesh proved
 for it (`docs/tessellation-design.md` §2's `sourceBound`), and `tessellate.go`
 composes a nonzero `sectionDelta` into every one of them, so the mesh path's
-tangency gate (`refuseUndecidableProximity`) cannot read a face of a displaced
+tangency gate (`meshbool.RefuseUndecidableProximity`) cannot read a face of a displaced
 section as held exactly. See `facesOfMesh`'s own doc comment. The other is
 `gatewitness.Prism` above, which charges `δ` as a shrink on the
 tolerance gate's reference diameter.

@@ -239,7 +239,7 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 	for scale := 4.0; scale <= 32; scale *= 2 {
 		if plane == nil {
 			eval, err = evaluateBooleanMeshesWithConeCap(ctx, op, target, tool, pairMeshes{}, scale,
-				faceHandle(p.LoftFacesToe.CapFace), coneFace)
+				p.LoftFacesToe.CapFace, faceNode(coneFace))
 		} else {
 			// The tangent cap touches the cone, so no pair is exempted. The
 			// tooth enters the ordinary gate with an exact prism glued to its
@@ -505,29 +505,4 @@ func extendTangentCap(ctx context.Context, held *Mesh, toe *loftFacesToeRecord,
 		return refuse("cap extension has an unbounded bound")
 	}
 	return next, ext.Slab, nil
-}
-
-// The true cap and cone are disjoint by the source-map proof. Require the
-// held facets to be disjoint too before skipping their proximity refusal.
-func disjointConeCapFacets(ctx context.Context, a, b *meshbool.BoolMesh,
-	capFacets, cone []int, memo *meshbool.ContactMemo) error {
-	budget := proofbound.NewWorkBudget(ctx)
-	for _, i := range capFacets {
-		for _, j := range cone {
-			if err := budget.Step(); err != nil {
-				return err
-			}
-			if !meshbool.BoxesWithin(a.Boxes[i], b.Boxes[j], 0) {
-				continue
-			}
-			contact, err := memo.Classify(i, j)
-			if err != nil {
-				return err
-			}
-			if contact.Kind != meshbool.ContactNone {
-				return fmt.Errorf("%w: the certified cone cap has a held facet contact", ErrUnsupported)
-			}
-		}
-	}
-	return nil
 }

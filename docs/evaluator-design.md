@@ -1186,9 +1186,11 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   allowance. A faceted face's δ is the largest facet bound over that face's
   own facets, each the largest of its corners' per-vertex bounds
   (`docs/faceted-vertex-bounds-design.md` §4.4).
-  Mesh facets carry this value as internal `sourceBound` beside their current
-  operand `*Face`; grouping facets for the pre-pass takes the maximum bound for
-  that face. NEVER derive zero from `KindFaceted` alone.
+  Mesh facets carry this value as internal `sourceBound` (`topo.Mesh.FaceBound`)
+  beside their current operand face node (`topo.Mesh.Source`); grouping facets
+  for the pre-pass takes the maximum bound for that face. NEVER derive zero
+  from `KindFaceted` alone. The pre-pass is `meshbool.RefuseUndecidableProximity`
+  (`internal/meshbool/tangency_gate.go`).
   Upward-round `b = δ_A + δ_B`. When `b > 0`, a held-facet meet is decidable
   exactly when the facet sets INTERPENETRATE — cross with a signed penetration
   depth strictly GREATER than `b`. Then the true patches provably cross: A's
