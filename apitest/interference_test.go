@@ -156,7 +156,7 @@ func TestVerifyAdmittedDisplacedPrismPairCarriesItsOwnBound(t *testing.T) {
 	// intersection is the nested operand A itself, so the two measurements
 	// state the same value and exactness; the bound is A's own displacement
 	// plus this resolution's own charge under an outward-rounded sum
-	// (prism_boolean.go's sectionDelta), so it can only be at least
+	// (the payload's SectionDelta), so it can only be at least
 	// as wide as A's. A row that dropped the displacement charge would fall
 	// below it.
 	require.Equal(t, own.Value, row.Volume.Value, "the intersection of A with a body containing A is A's own volume")

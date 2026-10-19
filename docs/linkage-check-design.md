@@ -2050,7 +2050,7 @@ publishes, so limits on it have nothing to compare against. The closing pin's bo
 ### 15.2 The scene
 
 decad builds one private `sketch.Sketch` per loop and per drive, from the loop's recorded pins and nothing
-else, as `prism_boolean.go` builds a scene from recorded sections. The scene is never published and no
+else, as `internal/prismcells` builds a scene from recorded sections. The scene is never published and no
 `sketch` type crosses decad's API.
 
 **Frame.** The plane's axes are `u* = u/|u|` and `v* = v/|v|`, with `u` and `v` exact rational directions,

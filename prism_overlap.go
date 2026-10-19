@@ -32,7 +32,7 @@ import (
 // public boolean owes its caller a Body, and this reading builds none. §13
 // records that asymmetry as a deliberate decision.
 //
-// ok=false always carries err=nil, matching tryPrismBoolean's own contract:
+// ok=false always carries err=nil, matching prismboolean.Try's own contract:
 // it means "not admitted" or "answers nothing" — every gate miss, an
 // unresolved classification, an empty selection (the exactly-tangent case),
 // and a selected cell whose own section the region integrals refuse as

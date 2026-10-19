@@ -40,7 +40,8 @@ The rules for rows live in `docs/layout.md`.
 | `internal/brepwallmesh/` | Chords BRep swept walls and checks clearance between their mesh loops. See general-boolean §4.4 and tessellation §5. |
 | `internal/brepbandmesh/` | Chords route L bands and the shell bands, imposes their counts on the walls beside them, places their rings, emits their strips, and states their motion, volume terms and occupied-volume admission. See modify-general DG3/DG4, §4.3a. |
 | `internal/brepfilletmesh/` | Places full and selected BRep fillet rings, emits patch triangles, and computes their area and motion bounds. See loop-fillet §7.1. |
-| `internal/stackedunion/` | Builds A1 stacked Union slabs, private scenes, and BRep faces after root admission. See general-boolean §3 A1. |
+| `internal/prismboolean/` | Analytic boolean admission over operand payloads: the prism pair with its holed `Intersect` route, axial-Loft and face-patch `Union`, blind, spanning and crossing-blind `Cut`, A5 prism groups and A1 stacked `Union`. See prism-boolean §3, general-boolean §3 A1, A5, A7. |
+| `internal/stackedunion/` | Builds A1 stacked Union slabs, private scenes, and BRep faces after `internal/prismboolean` admits them. See general-boolean §3 A1. |
 | `internal/throughshell/` | Through-cut record recognition, section and cavity construction, strips, rim assembly, and audits. See modify-general §3. |
 | `internal/stackedshell/` | Admits and records the exact stacked shells (nested rectangular boss, circular boss, rectangular blind pocket, coaxial counterbore) from a two-slab record and its face view; `breprecord` builds the result. See modify-general §3.1a-§3.1c, §3.1e. |
 | `internal/capedge/` | Convex cap-edge cutter admission, quarter-cylinder profile, chamfer wedge and the P8 top front edge test. See vertex-blend §2. |

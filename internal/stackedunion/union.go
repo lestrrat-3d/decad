@@ -26,7 +26,7 @@ type (
 	prismSceneDelta     = prismcells.SceneDelta
 )
 
-// Operand carries a root-admitted prism or stack into the internal builder.
+// Operand carries a prism or stack prismboolean admitted into the builder.
 type Operand struct {
 	Proxy prismPayload
 	Slabs []stackedrecord.Slab
@@ -38,7 +38,7 @@ type Operand struct {
 // OperandFromPayload reads one operand as slabs: a prism is one slab over its
 // interval, a stacked prism keeps its slabs, and an A1 brep keeps its stack.
 // Its proxy carries the frame, placement and section displacement read by
-// root admission. A brep without an A1 stack is not an operand.
+// prismboolean's admission. A brep without an A1 stack is not an operand.
 func OperandFromPayload(payload topo.Payload) (Operand, bool) {
 	switch p := payload.(type) {
 	case prismPayload:
@@ -71,7 +71,7 @@ func (o Operand) view(region profileRecord) prismPayload {
 	return v
 }
 
-// Join resolves root-admitted stacked Union slabs and their interfaces.
+// Join resolves stacked Union slabs prismboolean admitted, and their interfaces.
 func Join(ctx context.Context, budget *proofbound.WorkBudget, va, vb Operand,
 	reexpress *prismReexpression, levels []stackedrecord.UnionLevel, shift *big.Rat,
 	brepOnly bool) (topo.Payload, bool, error) {

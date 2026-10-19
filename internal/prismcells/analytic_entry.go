@@ -59,11 +59,11 @@ import (
 // for Cut's target; either miss is silent fallback, never a refusal, so a
 // pair needing them still reaches the mesh path exactly as before this
 // increment. A pair whose operands' boundaries genuinely cross and whose
-// membership this propagation cannot reach falls through to tryPrismBoolean
+// membership this propagation cannot reach falls through to TryAnalytic
 // returning ok=false, err=nil, exactly like any other unresolved topology
 // (§4.4).
 
-// tryPrismBoolean attempts the analytic reduction for op. ok=false (err
+// TryAnalytic attempts the analytic reduction for op. ok=false (err
 // always nil in that case) means "not admitted" per §3.1/§3.4: the caller
 // MUST fall back to the unchanged mesh path with no error surfaced. A
 // non-nil err means the bounded analytic resolution reached a genuine
@@ -73,8 +73,8 @@ import (
 //
 // G1-G4 (AdmitPairBudget) and the work cap are shared, unchanged, by
 // every op; G5 and G6 (§3.1) and the resolution path (§4.2) are op-specific,
-// per §3.2's table.
-// TryAnalytic runs the admitted prism operation after root-only Intersect routes miss.
+// per §3.2's table. prismboolean.Try calls it after its holed Intersect
+// route misses.
 func TryAnalytic(ctx context.Context, op meshbool.OperationKind, a, b topo.Payload) (prismrecord.Payload, bool, error) {
 	if op == meshbool.OpIntersect {
 		budget, pa, pb, reexpress, ok, err := AdmitIntersectPair(ctx, a, b)
@@ -177,7 +177,7 @@ func TryAnalytic(ctx context.Context, op meshbool.OperationKind, a, b topo.Paylo
 // (prismOverlapVolume, prism_overlap.go). Every gate below keeps its order.
 //
 // ok=false (err always nil in that case) means "not admitted" (§3.1/§3.4):
-// every miss above is silent fallback, exactly as tryPrismBoolean's own
+// every miss above is silent fallback, exactly as TryAnalytic's own
 // contract states. A non-nil err is RB7 (§9, the arrangement work cap — the
 // one preamble refusal that is a genuine error, not a silent miss) or ctx
 // cancellation.

@@ -2334,8 +2334,7 @@ func CutDisplacementAllow(tangentUpper float64) float64 {
 // endpoint commits when the record's parameterisation is evaluated at a
 // narrowed t rather than read off the segment's own natural bound
 // (docs/prism-boolean-design.md §7's δ_walk — the analytic boolean's private
-// scene is built from walkOf's own walked geometry, prism_boolean.go's
-// prismcells.BuildScene).
+// scene is built from walkOf's own walked geometry, prismcells.BuildScene).
 //
 // operandUpper must be a PROVEN upper bound on the magnitude of every operand
 // the walk's OWN arithmetic touches — not on the answer that arithmetic
@@ -2345,7 +2344,7 @@ func CutDisplacementAllow(tangentUpper float64) float64 {
 // near the plane origin on a far-reaching carrier rounds by ulps of the
 // CARRIER while its own endpoint magnitude is tiny. Charging the endpoint's
 // magnitude would under-charge that walk without limit, so callers pass the
-// SOURCE envelope: prism_boolean.go's lineWalkOperandUpper for a line (the
+// SOURCE envelope: prismcells' lineWalkOperandUpper for a line (the
 // recorded Start/End coordinates, folded together with the walked endpoint so
 // the envelope stands whatever the recorded parameter is).
 //

@@ -154,7 +154,7 @@ func FrameKeepingInstance(ctx context.Context, env topo.Env, rp patternrecord.Sp
 //
 // The group's section displacement is the receiver's own plus the largest
 // instance δ_pattern, and at least the disjointness scene's walk charge, as a
-// group Union's is (prism_group.go).
+// group Union's is (prismboolean.TryGroupUnion).
 func Group(ctx context.Context, rp patternrecord.Spec, payload topo.Payload) (stackedrecord.Payload, bool, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	frame, xform, _, _ := frameOf(payload)

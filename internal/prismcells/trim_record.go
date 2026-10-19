@@ -77,7 +77,7 @@ func TrimBoundsWalks(outerLoop sectionrecord.LoopRecord, holeLoops []sectionreco
 // answer: the cut parameter stays sketch's, and the only thing settled here is
 // which of decad's own two parameterisations of decad's own recorded entity the
 // scene is built in. The derivation is per kind, off BuildScene's own
-// entity creation (prism_boolean.go), which reads walkOf's walked geometry of
+// entity creation (resolve.go), which reads walkOf's walked geometry of
 // exactly the segment handed to it:
 //
 //   - LineSeg. BuildScene creates CreateLine(P(TStart), P(TEnd)). At
@@ -171,7 +171,7 @@ func ExtendSetBound(seg CurveSegment, atStart bool, bound float64) CurveSegment 
 // TrimProfileFullyWhole reports whether every segment of the supplied loops
 // spans its entity's own natural domain (S7's third clause) — read off the
 // recorded range through WholeSegmentRange, the identical prism-boolean
-// reading (prism_boolean.go), and never off any walk's closed-ness. Stating
+// reading (charges.go), and never off any walk's closed-ness. Stating
 // it this way is a record property, decidable before the arrangement runs,
 // which is what lets every miss here be one refusal at the call
 // (docs/surface-intersection-design.md §2.1 S7).
