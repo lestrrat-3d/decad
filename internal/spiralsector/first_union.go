@@ -1,74 +1,87 @@
-package decad
+package spiralsector
 
 import (
 	"context"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/spiralsector"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
-// spiralFirstUnionAdmission is scoped to one exact blank and its first
+// FirstUnionAdmission is scoped to one exact blank and its first
 // unplaced cone-trimmed curved tooth. The proxy mesh is temporary: public
 // operands and their retained exact source records do not change.
-type spiralFirstUnionAdmission struct {
-	source    *spiralFirstJoinSource
-	short     [2][4]spiralsector.ShortCapFamily
-	roles     map[[2]*topo.Face]meshbool.NearPairRole
-	allowed   map[[2]int]bool
-	rootBoxes *[2]*spiralsector.RootFlankSourceBoxes
+type FirstUnionAdmission struct {
+	Source    *spiralFirstJoinSource
+	Short     [2][4]ShortCapFamily
+	Roles     map[[2]*topo.Face]meshbool.NearPairRole
+	Allowed   map[[2]int]bool
+	RootBoxes *[2]*RootFlankSourceBoxes
 }
 
-// spiralPrepareFirstUnion authenticates source geometry before modifying a
+// PrepareFirstUnion authenticates source geometry before modifying a
 // temporary held operand. Any failed source gate leaves generic Union in
-// charge; cancellation and evaluator errors still propagate.
-func spiralPrepareFirstUnion(ctx context.Context, op meshbool.OperationKind,
-	blank, tooth *Body, held *Mesh, sourceIDs []int) (*Mesh, *spiralFirstUnionAdmission, error) {
+// charge; cancellation and evaluator errors still propagate. It returns the
+// temporary held tooth node and its admission, or two nils when the pair is
+// not this class. sections are the blank's candidate Revolve root sections.
+func PrepareFirstUnion(ctx context.Context, op meshbool.OperationKind,
+	sections []facetedrecord.RevolveSectionCertificate, blank, tooth *topo.Body,
+	held *topo.Mesh, sourceIDs []int) (*topo.Mesh, *FirstUnionAdmission, error) {
 	if ctx == nil || blank == nil || tooth == nil || held == nil ||
 		op != meshbool.OpUnion {
-		return held, nil, nil
+		return nil, nil, nil
 	}
-	sections := revolveRootCandidates(blank)
-	if _, ok := spiralsector.ExactBlank(sections); !ok {
-		return held, nil, nil
+	if _, ok := ExactBlank(sections); !ok {
+		return nil, nil, nil
 	}
-	payload, ok := tooth.n.Payload.(facetedPayload)
+	payload, ok := tooth.Payload.(facetedrecord.Payload)
 	if !ok || payload.LoftFacesTrim == nil {
-		return held, nil, nil
+		return nil, nil, nil
 	}
-	source, ok, err := spiralsector.CertifyFirstJoin(ctx, sections, bodyNode(tooth))
+	source, ok, err := CertifyFirstJoin(ctx, sections, tooth)
 	if err != nil || !ok {
-		return held, nil, err
+		return nil, nil, err
 	}
-	roles, short, ok, err := spiralsector.CertifyNearFaceRoles(ctx, bodyNode(blank), bodyNode(tooth), source)
+	roles, short, ok, err := CertifyNearFaceRoles(ctx, blank, tooth, source)
 	if err != nil || !ok {
-		return held, nil, err
+		return nil, nil, err
 	}
-	proxy, ok, err := spiralOffsetToothMesh(ctx, blank, tooth, held, sourceIDs, source)
+	proxy, ok, err := OffsetToothMesh(ctx, blank, tooth, held, sourceIDs, source)
 	if err != nil || !ok {
-		return held, nil, err
+		return nil, nil, err
 	}
-	return proxy, &spiralFirstUnionAdmission{source: source, short: short,
-		roles: roles}, nil
+	return proxy, &FirstUnionAdmission{Source: source, Short: short, Roles: roles}, nil
 }
 
-// spiralFirstUnionPairs lists the only source-face switches supported by the
+// faceGroupOf returns the held group of face in the joint blank-then-tooth
+// face order, or -1 when tooth does not hold it.
+func faceGroupOf(blank, tooth *topo.Body, face *topo.Face) int {
+	for i, live := range topobuild.Faces(tooth) {
+		if live == face {
+			return len(topobuild.Faces(blank)) + i
+		}
+	}
+	return -1
+}
+
+// FirstUnionPairs lists the only source-face switches supported by the
 // curved first-join certificate. Full FeatureRef matches bind the source
 // flanks to live faces; source group numbers alone are insufficient after the
-// two cone trims.
-func spiralFirstUnionPairs(blank, tooth *Body, admission *spiralFirstUnionAdmission,
-	faceID map[*Face]int) (map[[2]int]bool, bool) {
-	if blank == nil || tooth == nil || admission == nil || admission.source == nil {
+// two cone trims. faceID maps each operand face to its held group.
+func FirstUnionPairs(blank, tooth *topo.Body, admission *FirstUnionAdmission,
+	faceID map[*topo.Face]int) (map[[2]int]bool, bool) {
+	if blank == nil || tooth == nil || admission == nil || admission.Source == nil {
 		return nil, false
 	}
-	proof := admission.source
-	groups, ok := spiralsector.JoinGroups(bodyNode(blank), bodyNode(tooth), proof)
+	proof := admission.Source
+	groups, ok := JoinGroups(blank, tooth, proof)
 	if !ok {
 		return nil, false
 	}
@@ -76,12 +89,12 @@ func spiralFirstUnionPairs(blank, tooth *Body, admission *spiralFirstUnionAdmiss
 		{groups.BlankToe, groups.ToothRootToe}:   true,
 		{groups.BlankHeel, groups.ToothRootHeel}: true,
 	}
-	for pair, kind := range admission.roles {
+	for pair, kind := range admission.Roles {
 		if kind != meshbool.NearPairCrossing {
 			continue
 		}
-		a, aOK := faceID[faceHandle(pair[0])]
-		b, bOK := faceID[faceHandle(pair[1])]
+		a, aOK := faceID[pair[0]]
+		b, bOK := faceID[pair[1]]
 		if !aOK || !bOK {
 			return nil, false
 		}
@@ -93,16 +106,16 @@ func spiralFirstUnionPairs(blank, tooth *Body, admission *spiralFirstUnionAdmiss
 			blankCap = groups.BlankHeel
 		}
 		for index, segment := range [...]int{0, 2, 3, 5} {
-			family := admission.short[end][index]
+			family := admission.Short[end][index]
 			if family.Group != segment || family.Band != proof.Junctions[0][end].Band ||
 				family.Band != proof.Junctions[1][end].Band {
 				return nil, false
 			}
-			origin, found := spiralsector.OriginalSideRef(proof.Tooth, family.Band, segment)
+			origin, found := OriginalSideRef(proof.Tooth, family.Band, segment)
 			if !found {
 				return nil, false
 			}
-			face := faceHandle(spiralsector.UniqueFaceWithOrigin(bodyNode(tooth), origin))
+			face := UniqueFaceWithOrigin(tooth, origin)
 			group, present := faceID[face]
 			if face == nil || !present {
 				return nil, false
@@ -112,11 +125,11 @@ func spiralFirstUnionPairs(blank, tooth *Body, admission *spiralFirstUnionAdmiss
 	}
 	for band := 1; band < len(proof.Tooth.Maps)-1; band++ {
 		for _, segment := range [...]int{0, 2} {
-			origin, found := spiralsector.OriginalSideRef(proof.Tooth, band, segment)
+			origin, found := OriginalSideRef(proof.Tooth, band, segment)
 			if !found {
 				return nil, false
 			}
-			face := faceHandle(spiralsector.UniqueFaceWithOrigin(bodyNode(tooth), origin))
+			face := UniqueFaceWithOrigin(tooth, origin)
 			group, present := faceID[face]
 			if face == nil || !present {
 				return nil, false
@@ -127,19 +140,19 @@ func spiralFirstUnionPairs(blank, tooth *Body, admission *spiralFirstUnionAdmiss
 	return allowed, len(allowed) == 24
 }
 
-// spiralValidateFirstUnion runs after the ordinary stitched-solid audit. The
+// ValidateFirstUnion runs after the ordinary stitched-solid audit. The
 // source-pair gate permits only named near pairs, and this gate checks every
 // resulting switched curve against its complete authenticated source seam.
 // The unchanged mesh-Boolean and stitch volume proofs still apply.
-func spiralValidateFirstUnion(ctx context.Context, blank, tooth *Body,
+func ValidateFirstUnion(ctx context.Context, blank, tooth *topo.Body,
 	blankHeld *meshbool.BoolMesh, result *meshbool.StitchedMesh,
-	admission *spiralFirstUnionAdmission, radialExtra ...float64) (bool, error) {
+	admission *FirstUnionAdmission, radialExtra ...float64) (bool, error) {
 	if ctx == nil || blank == nil || tooth == nil || blankHeld == nil ||
-		result == nil || admission == nil || admission.source == nil {
+		result == nil || admission == nil || admission.Source == nil {
 		return false, nil
 	}
-	proof := admission.source
-	groups, ok := spiralsector.JoinGroups(bodyNode(blank), bodyNode(tooth), proof)
+	proof := admission.Source
+	groups, ok := JoinGroups(blank, tooth, proof)
 	if !ok || proof.HeelSeam == nil {
 		return false, nil
 	}
@@ -148,12 +161,11 @@ func spiralValidateFirstUnion(ctx context.Context, blank, tooth *Body,
 	// the stitch displacement charged by the long-seam helpers.
 	var radial [2]float64
 	for end, edge := range [...]int{4, 2} {
-		graph, err := spiralsector.HeldBlankCellGraph(ctx, bodyNode(blank), blankHeld, proof.Blank, edge)
+		graph, err := HeldBlankCellGraph(ctx, blank, blankHeld, proof.Blank, edge)
 		if err != nil || !graph {
 			return false, err
 		}
-		bound, accepted, err := spiralsector.HeldBlankRadialAllowance(ctx,
-			bodyNode(blank), blankHeld, proof.Blank, edge)
+		bound, accepted, err := HeldBlankRadialAllowance(ctx, blank, blankHeld, proof.Blank, edge)
 		if err != nil || !accepted {
 			return false, err
 		}
@@ -162,43 +174,37 @@ func spiralValidateFirstUnion(ctx context.Context, blank, tooth *Body,
 			radial[end] = proofbound.AbsSumUpper(radial[end], radialExtra[0])
 		}
 	}
-	if _, ok, err := spiralHeldShortCapProof(ctx, result, blank, tooth,
-		proof, admission.short); err != nil || !ok {
+	if _, ok, err := heldShortCapProof(ctx, result, blank, tooth,
+		proof, admission.Short); err != nil || !ok {
 		return false, err
 	}
-	if _, ok, err := spiralsector.HeldHeelSeamProof(ctx, result,
+	if _, ok, err := HeldHeelSeamProof(ctx, result,
 		groups.BlankHeel, groups.ToothRootHeel, proof.HeelSeam, radial[1]); err != nil || !ok {
 		return false, err
 	}
-	toeSeam, ok, err := spiralsector.CertifySpiralToeRootSeam(ctx, proof)
+	toeSeam, ok, err := CertifySpiralToeRootSeam(ctx, proof)
 	if err != nil || !ok {
 		return false, err
 	}
-	if _, ok, err := spiralsector.HeldToeSeamProof(ctx, result,
+	if _, ok, err := HeldToeSeamProof(ctx, result,
 		groups.BlankToe, groups.ToothRootToe, toeSeam, radial[0]); err != nil || !ok {
 		return false, err
 	}
 	for sourceSide, segment := range [...]int{0, 2} {
-		origin, found := spiralsector.OriginalSideRef(proof.Tooth,
+		origin, found := OriginalSideRef(proof.Tooth,
 			proof.Junctions[sourceSide][0].Band, segment)
 		if !found {
 			return false, nil
 		}
-		face := faceHandle(spiralsector.UniqueFaceWithOrigin(bodyNode(tooth), origin))
+		face := UniqueFaceWithOrigin(tooth, origin)
 		if face == nil {
 			return false, nil
 		}
-		faceGroup := -1
-		for i, live := range tooth.Faces() {
-			if live == face {
-				faceGroup = len(blank.Faces()) + i
-			}
-		}
+		faceGroup := faceGroupOf(blank, tooth, face)
 		if faceGroup < 0 {
 			return false, nil
 		}
-		chain, accepted, err := spiralsector.HeldHeelSwitch(ctx, result,
-			groups.BlankRoot, faceGroup)
+		chain, accepted, err := HeldHeelSwitch(ctx, result, groups.BlankRoot, faceGroup)
 		if err != nil || !accepted {
 			return false, err
 		}
@@ -206,11 +212,11 @@ func spiralValidateFirstUnion(ctx context.Context, blank, tooth *Body,
 		for i, vertex := range chain.Vertices {
 			ordered[i] = result.Verts[vertex]
 		}
-		var prepared []*spiralsector.RootFlankSourceBoxes
-		if admission.rootBoxes != nil {
-			prepared = append(prepared, admission.rootBoxes[sourceSide])
+		var prepared []*RootFlankSourceBoxes
+		if admission.RootBoxes != nil {
+			prepared = append(prepared, admission.RootBoxes[sourceSide])
 		}
-		if _, accepted, err := spiralsector.RootFlankWholeBound(ctx, proof,
+		if _, accepted, err := RootFlankWholeBound(ctx, proof,
 			sourceSide, ordered, chain.MinBeta, prepared...); err != nil || !accepted {
 			return false, err
 		}
@@ -218,12 +224,12 @@ func spiralValidateFirstUnion(ctx context.Context, blank, tooth *Body,
 	return ctx.Err() == nil, ctx.Err()
 }
 
-// spiralJoinAreaAllowance uses the whole operand boundary areas as a
+// JoinAreaAllowance uses the whole operand boundary areas as a
 // deliberately coarse ceiling on the true Union boundary area. This lets a
 // source-specific radial patch proof state a smaller boundary displacement
 // without pretending its facet areas follow the ordinary affine-corner
 // construction. The Union boundary is a subset of the two operand boundaries.
-func spiralJoinAreaAllowance(ctx context.Context, a, b *Body,
+func JoinAreaAllowance(ctx context.Context, a, b *topo.Body,
 	held *meshbool.StitchedMesh) (float64, bool, error) {
 	if ctx == nil || a == nil || b == nil || held == nil {
 		return 0, false, nil
@@ -236,16 +242,12 @@ func spiralJoinAreaAllowance(ctx context.Context, a, b *Body,
 		return 0, false, nil
 	}
 	trueUpper := 0.0
-	for _, body := range [...]*Body{a, b} {
-		area, err := body.Area()
+	for _, body := range [...]*topo.Body{a, b} {
+		value, err := body.Area.Value.In(units.SquareMillimeter)
 		if err != nil {
 			return 0, false, err
 		}
-		value, err := area.Value.In(units.SquareMillimeter)
-		if err != nil {
-			return 0, false, err
-		}
-		bound, err := area.Bound.In(units.SquareMillimeter)
+		bound, err := body.Area.Bound.In(units.SquareMillimeter)
 		if err != nil {
 			return 0, false, err
 		}
@@ -258,41 +260,45 @@ func spiralJoinAreaAllowance(ctx context.Context, a, b *Body,
 	return allowance, !proofbound.IsNonFinite(allowance), nil
 }
 
-const spiralFirstJoinCapOffset = 0.032 // millimetres; every actual move is charged below
+const firstJoinCapOffset = 0.032 // millimetres; every actual move is charged below
 
-// spiralOffsetToothMesh makes a temporary held operand for the authenticated
+// OffsetToothMesh makes a temporary held operand for the authenticated
 // first spiral join. The exact source solid remains the original tooth. Every
 // moved vertex changes only Y; its incident side facets follow the same indexed
 // mesh and are audited again before the caller can use the proxy in a Boolean.
+// It returns a new mesh node that shares original's triangles and source faces
+// and owns its vertices, vertex bounds and face bounds; the caller gives it a
+// handle.
 //
 // The old and new boundary surfaces agree outside the swept changed facets.
 // Their solids can differ only inside those sweeps, each of which lies above
 // the same exact XZ triangle with vertical thickness at most maxShift. This
 // proves the symmetric-difference charge even if an intermediate surface
 // during the linear Y motion crosses itself.
-func spiralOffsetToothMesh(ctx context.Context, blank, tooth *Body, original *Mesh,
-	src []int, proof *spiralFirstJoinSource) (*Mesh, bool, error) {
+func OffsetToothMesh(ctx context.Context, blank, tooth *topo.Body, original *topo.Mesh,
+	src []int, proof *spiralFirstJoinSource) (*topo.Mesh, bool, error) {
 	if ctx == nil || blank == nil || tooth == nil || original == nil || proof == nil ||
-		proof.Tooth == nil || !original.n.BoundaryOK || !original.n.SymDiffOK ||
-		len(src) != len(original.n.Triangles) || len(original.n.Vertices) == 0 ||
-		len(original.n.Vertices) > 1<<16 || len(original.n.Triangles) > 1<<17 ||
-		len(original.n.VertexBound) != len(original.n.Vertices) ||
-		len(original.n.Source) != len(original.n.Triangles) {
+		proof.Tooth == nil || !original.BoundaryOK || !original.SymDiffOK ||
+		len(src) != len(original.Triangles) || len(original.Vertices) == 0 ||
+		len(original.Vertices) > 1<<16 || len(original.Triangles) > 1<<17 ||
+		len(original.VertexBound) != len(original.Vertices) ||
+		len(original.Source) != len(original.Triangles) {
 		return nil, false, nil
 	}
-	p, ok := tooth.n.Payload.(facetedPayload)
+	p, ok := tooth.Payload.(facetedrecord.Payload)
 	if !ok || p.LoftFacesTrim != proof.Tooth {
 		return nil, false, nil
 	}
-	toeFace := spiralsector.TrimFaceGroup(bodyNode(tooth), proof.Tooth.ToeCapGroup)
-	heelFace := spiralsector.TrimFaceGroup(bodyNode(tooth), proof.Tooth.HeelCapGroup)
+	toeFace := TrimFaceGroup(tooth, proof.Tooth.ToeCapGroup)
+	heelFace := TrimFaceGroup(tooth, proof.Tooth.HeelCapGroup)
 	if toeFace < 0 || heelFace < 0 || toeFace == heelFace {
 		return nil, false, nil
 	}
-	toeGroup, heelGroup := len(blank.Faces())+toeFace, len(blank.Faces())+heelFace
-	move := make([]int8, len(original.n.Vertices))
+	blankFaces := len(topobuild.Faces(blank))
+	toeGroup, heelGroup := blankFaces+toeFace, blankFaces+heelFace
+	move := make([]int8, len(original.Vertices))
 	var capFacets [2]int
-	for i, tri := range original.n.Triangles {
+	for i, tri := range original.Triangles {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
 				return nil, false, err
@@ -320,18 +326,19 @@ func spiralOffsetToothMesh(ctx context.Context, blank, tooth *Body, original *Me
 		}
 	}
 	if capFacets[0] == 0 || capFacets[1] == 0 ||
-		len(original.n.FaceBound) == 0 {
+		len(original.FaceBound) == 0 {
 		return nil, false, nil
 	}
-	next := bornMesh(&Mesh{n: original.n})
-	next.n.Vertices = append([]r3.Vec(nil), original.n.Vertices...)
-	next.n.VertexBound = append([]float64(nil), original.n.VertexBound...)
-	next.n.FaceBound = make(map[*topo.Face]float64, len(original.n.FaceBound))
-	for face, bound := range original.n.FaceBound {
+	next := new(topo.Mesh)
+	*next = *original
+	next.Vertices = append([]r3.Vec(nil), original.Vertices...)
+	next.VertexBound = append([]float64(nil), original.VertexBound...)
+	next.FaceBound = make(map[*topo.Face]float64, len(original.FaceBound))
+	for face, bound := range original.FaceBound {
 		if proofbound.IsNonFinite(bound) || bound < 0 {
 			return nil, false, nil
 		}
-		next.n.FaceBound[face] = bound
+		next.FaceBound[face] = bound
 	}
 	maxShift := new(big.Rat)
 	moved := 0
@@ -339,24 +346,24 @@ func spiralOffsetToothMesh(ctx context.Context, blank, tooth *Body, original *Me
 		if side == 0 {
 			continue
 		}
-		old := original.n.Vertices[i]
+		old := original.Vertices[i]
 		if !proofbound.FiniteVec(old) || old.Y <= 0 {
 			return nil, false, nil
 		}
-		next.n.Vertices[i].Y += float64(side) * spiralFirstJoinCapOffset
-		if !proofbound.FiniteVec(next.n.Vertices[i]) || next.n.Vertices[i].Y <= 0 {
+		next.Vertices[i].Y += float64(side) * firstJoinCapOffset
+		if !proofbound.FiniteVec(next.Vertices[i]) || next.Vertices[i].Y <= 0 {
 			return nil, false, nil
 		}
-		actual := lfAbs(lfSub(lfF(next.n.Vertices[i].Y), lfF(old.Y)))
+		actual := seamRatAbs(seamRatSub(seamRatF(next.Vertices[i].Y), seamRatF(old.Y)))
 		if actual.Cmp(maxShift) > 0 {
 			maxShift = actual
 		}
 		shiftUp := proofbound.RatFloatUp(actual)
-		if proofbound.IsNonFinite(shiftUp) || proofbound.IsNonFinite(next.n.VertexBound[i]) ||
-			next.n.VertexBound[i] < 0 {
+		if proofbound.IsNonFinite(shiftUp) || proofbound.IsNonFinite(next.VertexBound[i]) ||
+			next.VertexBound[i] < 0 {
 			return nil, false, nil
 		}
-		next.n.VertexBound[i] = proofbound.AbsSumUpper(next.n.VertexBound[i], shiftUp)
+		next.VertexBound[i] = proofbound.AbsSumUpper(next.VertexBound[i], shiftUp)
 		moved++
 	}
 	if moved == 0 || maxShift.Sign() == 0 {
@@ -369,7 +376,7 @@ func spiralOffsetToothMesh(ctx context.Context, blank, tooth *Body, original *Me
 	areaXZ := new(big.Rat)
 	changed := make([][3]int, 0)
 	seenFace := make(map[*topo.Face]bool)
-	for i, tri := range original.n.Triangles {
+	for i, tri := range original.Triangles {
 		if move[tri[0]] == 0 && move[tri[1]] == 0 && move[tri[2]] == 0 {
 			continue
 		}
@@ -384,51 +391,51 @@ func spiralOffsetToothMesh(ctx context.Context, blank, tooth *Body, original *Me
 		// new facet departure read from the maximum of its vertex bounds.
 		largest := tri[0]
 		for _, vertex := range tri {
-			bound := original.n.VertexBound[vertex]
+			bound := original.VertexBound[vertex]
 			if proofbound.IsNonFinite(bound) || bound < 0 {
 				return nil, false, nil
 			}
-			if bound > original.n.VertexBound[largest] {
+			if bound > original.VertexBound[largest] {
 				largest = vertex
 			}
 		}
-		required := proofbound.AbsSumUpper(original.n.VertexBound[largest], maxShiftUp)
+		required := proofbound.AbsSumUpper(original.VertexBound[largest], maxShiftUp)
 		if proofbound.IsNonFinite(required) {
 			return nil, false, nil
 		}
-		next.n.VertexBound[largest] = max(next.n.VertexBound[largest], required)
-		face := original.n.Source[i]
-		bound, present := original.n.FaceBound[face]
+		next.VertexBound[largest] = max(next.VertexBound[largest], required)
+		face := original.Source[i]
+		bound, present := original.FaceBound[face]
 		if !present {
 			return nil, false, nil
 		}
 		if !seenFace[face] {
-			next.n.FaceBound[face] = proofbound.AbsSumUpper(bound, maxShiftUp)
+			next.FaceBound[face] = proofbound.AbsSumUpper(bound, maxShiftUp)
 			seenFace[face] = true
 		}
-		a, b, c := original.n.Vertices[tri[0]], original.n.Vertices[tri[1]], original.n.Vertices[tri[2]]
-		cross := lfSub(lfMul(lfSub(lfF(b.X), lfF(a.X)), lfSub(lfF(c.Z), lfF(a.Z))),
-			lfMul(lfSub(lfF(b.Z), lfF(a.Z)), lfSub(lfF(c.X), lfF(a.X))))
-		areaXZ.Add(areaXZ, lfAbs(cross))
+		a, b, c := original.Vertices[tri[0]], original.Vertices[tri[1]], original.Vertices[tri[2]]
+		cross := seamRatSub(seamRatMul(seamRatSub(seamRatF(b.X), seamRatF(a.X)), seamRatSub(seamRatF(c.Z), seamRatF(a.Z))),
+			seamRatMul(seamRatSub(seamRatF(b.Z), seamRatF(a.Z)), seamRatSub(seamRatF(c.X), seamRatF(a.X))))
+		areaXZ.Add(areaXZ, seamRatAbs(cross))
 	}
 	areaXZ.Quo(areaXZ, big.NewRat(2, 1))
-	volumeCharge := proofbound.RatFloatUp(lfMul(maxShift, areaXZ))
+	volumeCharge := proofbound.RatFloatUp(seamRatMul(maxShift, areaXZ))
 	if proofbound.IsNonFinite(volumeCharge) {
 		return nil, false, nil
 	}
-	next.n.VolSymDiff = proofbound.AbsSumUpper(original.n.VolSymDiff, volumeCharge)
-	next.n.AreaSlack = proofbound.AbsSumUpper(original.n.AreaSlack,
-		facetproof.MeshAreaUpper(original.n.Vertices, changed),
-		facetproof.MeshAreaUpper(next.n.Vertices, changed))
-	next.n.CoordBound = proofbound.AbsSumUpper(original.n.CoordBound, maxShiftUp)
-	for _, bound := range next.n.FaceBound {
-		next.n.Bound = max(next.n.Bound, bound)
+	next.VolSymDiff = proofbound.AbsSumUpper(original.VolSymDiff, volumeCharge)
+	next.AreaSlack = proofbound.AbsSumUpper(original.AreaSlack,
+		facetproof.MeshAreaUpper(original.Vertices, changed),
+		facetproof.MeshAreaUpper(next.Vertices, changed))
+	next.CoordBound = proofbound.AbsSumUpper(original.CoordBound, maxShiftUp)
+	for _, bound := range next.FaceBound {
+		next.Bound = max(next.Bound, bound)
 	}
-	if proofbound.IsNonFinite(next.n.VolSymDiff) || proofbound.IsNonFinite(next.n.AreaSlack) ||
-		proofbound.IsNonFinite(next.n.Bound) || proofbound.IsNonFinite(next.n.CoordBound) {
+	if proofbound.IsNonFinite(next.VolSymDiff) || proofbound.IsNonFinite(next.AreaSlack) ||
+		proofbound.IsNonFinite(next.Bound) || proofbound.IsNonFinite(next.CoordBound) {
 		return nil, false, nil
 	}
-	if err := massmoment.AuditMesh(ctx, next.n.Vertices, next.n.Triangles, false); err != nil {
+	if err := massmoment.AuditMesh(ctx, next.Vertices, next.Triangles, false); err != nil {
 		if ctx.Err() != nil {
 			return nil, false, ctx.Err()
 		}
@@ -440,18 +447,18 @@ func spiralOffsetToothMesh(ctx context.Context, blank, tooth *Body, original *Me
 	return next, true, nil
 }
 
-// spiralHeldShortCapProof compares every complete short cap/flank or
+// heldShortCapProof compares every complete short cap/flank or
 // cap/connector switch with its authenticated source crossing. Global held
 // group ids come from the original two operands' face order, not a gallery
 // layout. Exact source-cell and held-edge boxes cover both curves.
-func spiralHeldShortCapProof(ctx context.Context, held *meshbool.StitchedMesh,
-	blank, tooth *Body, proof *spiralFirstJoinSource,
-	short [2][4]spiralsector.ShortCapFamily) (float64, bool, error) {
+func heldShortCapProof(ctx context.Context, held *meshbool.StitchedMesh,
+	blank, tooth *topo.Body, proof *spiralFirstJoinSource,
+	short [2][4]ShortCapFamily) (float64, bool, error) {
 	if ctx == nil || held == nil || blank == nil || tooth == nil || proof == nil ||
 		proof.Tooth == nil {
 		return 0, false, nil
 	}
-	groups, ok := spiralsector.JoinGroups(bodyNode(blank), bodyNode(tooth), proof)
+	groups, ok := JoinGroups(blank, tooth, proof)
 	if !ok {
 		return 0, false, nil
 	}
@@ -459,7 +466,7 @@ func spiralHeldShortCapProof(ctx context.Context, held *meshbool.StitchedMesh,
 	maxDistance := 0.0
 	// Every switch below reads the same unchanged held mesh, so its edge
 	// table is built once, at the first switch, and reused within this call.
-	var edges map[spiralsector.HeldEdge]spiralsector.HeldEdgeOwners
+	var edges map[HeldEdge]HeldEdgeOwners
 	for end := range 2 {
 		if err := ctx.Err(); err != nil {
 			return 0, false, err
@@ -476,32 +483,26 @@ func spiralHeldShortCapProof(ctx context.Context, held *meshbool.StitchedMesh,
 				family.Band != proof.Junctions[1][end].Band {
 				return 0, false, nil
 			}
-			origin, found := spiralsector.OriginalSideRef(proof.Tooth, family.Band, role)
+			origin, found := OriginalSideRef(proof.Tooth, family.Band, role)
 			if !found {
 				return 0, false, nil
 			}
-			face := faceHandle(spiralsector.UniqueFaceWithOrigin(bodyNode(tooth), origin))
+			face := UniqueFaceWithOrigin(tooth, origin)
 			if face == nil {
 				return 0, false, nil
 			}
-			toothFace := -1
-			for i, live := range tooth.Faces() {
-				if live == face {
-					toothFace = i
-				}
-			}
+			toothFace := faceGroupOf(blank, tooth, face)
 			if toothFace < 0 {
 				return 0, false, nil
 			}
 			if edges == nil {
-				built, ok, err := spiralsector.HeldEdges(ctx, held)
+				built, ok, err := HeldEdges(ctx, held)
 				if err != nil || !ok {
 					return 0, false, err
 				}
 				edges = built
 			}
-			chain, ok, err := spiralsector.HeldSwitchFrom(ctx, held, edges,
-				blankCap, len(blank.Faces())+toothFace, false)
+			chain, ok, err := HeldSwitchFrom(ctx, held, edges, blankCap, toothFace, false)
 			if err != nil || !ok {
 				return 0, false, err
 			}
@@ -509,8 +510,7 @@ func spiralHeldShortCapProof(ctx context.Context, held *meshbool.StitchedMesh,
 			for i, vertex := range chain.Vertices {
 				ordered[i] = held.Verts[vertex]
 			}
-			distance, accepted, err := spiralsector.ShortHeldBound(ctx,
-				proof, family, ordered, chain.MinBeta)
+			distance, accepted, err := ShortHeldBound(ctx, proof, family, ordered, chain.MinBeta)
 			if err != nil || !accepted {
 				return distance, false, err
 			}

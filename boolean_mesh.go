@@ -147,21 +147,25 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 	if err := ctx.Err(); err != nil {
 		return booleanEvaluation{}, err
 	}
-	mb, spiralJoin, err := spiralPrepareFirstUnion(ctx, op, a, b, mb, srcB)
+	spiralHeld, spiralJoin, err := spiralsector.PrepareFirstUnion(ctx, op, revolveRootCandidates(a),
+		bodyNode(a), bodyNode(b), &mb.n, srcB)
 	if err != nil {
 		return booleanEvaluation{}, err
+	}
+	if spiralHeld != nil {
+		mb = bornMesh(&Mesh{n: *spiralHeld})
 	}
 	mb, spiralCombine, err := spiralPrepareCombinedUnion(ctx, op, a, b, mb, tolMM)
 	if err != nil {
 		return booleanEvaluation{}, err
 	}
 	if spiralJoin != nil {
-		allowed, ok := spiralFirstUnionPairs(a, b, spiralJoin, faceID)
+		allowed, ok := spiralsector.FirstUnionPairs(bodyNode(a), bodyNode(b), spiralJoin, sourceID)
 		if !ok {
 			return booleanEvaluation{}, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported,
 				fmt.Errorf("%w: first spiral join source faces", ErrUnsupported))
 		}
-		spiralJoin.allowed = allowed
+		spiralJoin.Allowed = allowed
 	}
 	var combinedAdmission *spiralCombinedAdmission
 	if spiralCombine != nil {
@@ -212,7 +216,7 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 	memo := meshbool.NewContactMemo(bmA, bmB)
 	var spiralPairs map[[2]*topo.Face]meshbool.NearPairRole
 	if spiralJoin != nil {
-		spiralPairs = spiralJoin.roles
+		spiralPairs = spiralJoin.Roles
 	}
 	if combinedAdmission != nil {
 		spiralPairs = combinedAdmission.roles
@@ -227,7 +231,7 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 	}
 	if spiralJoin != nil {
 		ok, err := spiralsector.ScopeWidenedContacts(ctx, bmA, bmB, memo,
-			spiralJoin.allowed, tolMM)
+			spiralJoin.Allowed, tolMM)
 		if err != nil {
 			return booleanEvaluation{}, err
 		}
@@ -307,7 +311,7 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 		ma.n.AreaSlack, mb.n.AreaSlack, stitched.DropArea,
 	)
 	if spiralJoin != nil || combinedAdmission != nil {
-		allowance, ok, err := spiralJoinAreaAllowance(ctx, a, b, stitched)
+		allowance, ok, err := spiralsector.JoinAreaAllowance(ctx, bodyNode(a), bodyNode(b), stitched)
 		if err != nil {
 			return booleanEvaluation{}, err
 		}
@@ -338,7 +342,7 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 	}
 	if spiralJoin != nil {
 		ok, err := spiralsector.ScopeOutputSwitches(ctx, stitched,
-			len(a.Faces()), spiralJoin.allowed)
+			len(a.Faces()), spiralJoin.Allowed)
 		if err != nil {
 			return booleanEvaluation{}, err
 		}
@@ -346,7 +350,7 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 			return booleanEvaluation{}, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported,
 				fmt.Errorf("%w: first spiral join output faces", ErrUnsupported))
 		}
-		ok, err = spiralValidateFirstUnion(ctx, a, b, bmA, stitched, spiralJoin)
+		ok, err = spiralsector.ValidateFirstUnion(ctx, bodyNode(a), bodyNode(b), bmA, stitched, spiralJoin)
 		if err != nil {
 			return booleanEvaluation{}, err
 		}

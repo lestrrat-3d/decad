@@ -36,15 +36,15 @@ func spiralCombineFaceRoles(ctx context.Context, blank, combined *Body,
 	if err != nil || !ok {
 		return nil, err
 	}
-	firstID := make(map[*Face]int)
+	firstID := make(map[*topo.Face]int)
 	for i, face := range blank.Faces() {
-		firstID[face] = i
+		firstID[faceNode(face)] = i
 	}
 	for i, face := range first.Faces() {
-		firstID[face] = len(blank.Faces()) + i
+		firstID[faceNode(face)] = len(blank.Faces()) + i
 	}
-	firstAdmission := &spiralFirstUnionAdmission{source: source.First, short: short, roles: roles}
-	firstAllowed, ok := spiralFirstUnionPairs(blank, first, firstAdmission, firstID)
+	firstAdmission := &spiralsector.FirstUnionAdmission{Source: source.First, Short: short, Roles: roles}
+	firstAllowed, ok := spiralsector.FirstUnionPairs(bodyNode(blank), source.Tools[0], firstAdmission, firstID)
 	if !ok {
 		return nil, fmt.Errorf("%w: combined source has no first-tooth role table", ErrUnsupported)
 	}
@@ -99,7 +99,7 @@ func spiralCombineFaceRoles(ctx context.Context, blank, combined *Body,
 			}
 			mapped[original], reverse[compositeFace] = compositeFace, original
 			global, globalOK := faceID[compositeFace]
-			local, localOK := firstID[original]
+			local, localOK := firstID[faceNode(original)]
 			if !globalOK || !localOK || local < len(blank.Faces()) {
 				return nil, fmt.Errorf("%w: copied tooth lost a source group", ErrUnsupported)
 			}
@@ -137,16 +137,16 @@ func spiralValidateCombinedUnion(ctx context.Context, blank *Body, blankHeld *me
 		admission.source == nil || len(admission.groups) != len(admission.source.Tools) {
 		return false, nil
 	}
-	firstAdmission := &spiralFirstUnionAdmission{
-		source: admission.source.First, short: admission.short,
-		rootBoxes: new([2]*spiralsector.RootFlankSourceBoxes),
+	firstAdmission := &spiralsector.FirstUnionAdmission{
+		Source: admission.source.First, Short: admission.short,
+		RootBoxes: new([2]*spiralsector.RootFlankSourceBoxes),
 	}
-	for side := range firstAdmission.rootBoxes {
-		boxes, ok, err := spiralsector.PrepareRootFlankSource(ctx, firstAdmission.source, side)
+	for side := range firstAdmission.RootBoxes {
+		boxes, ok, err := spiralsector.PrepareRootFlankSource(ctx, firstAdmission.Source, side)
 		if err != nil || !ok {
 			return false, err
 		}
-		firstAdmission.rootBoxes[side] = boxes
+		firstAdmission.RootBoxes[side] = boxes
 	}
 	type verdict struct {
 		accepted bool
@@ -183,7 +183,7 @@ func spiralValidateCombinedUnion(ctx context.Context, blank *Body, blankHeld *me
 // certified blank, source records and stitched triangles are read only.
 func spiralValidateCombinedCopy(ctx context.Context, blank *Body, blankHeld *meshbool.BoolMesh,
 	result *meshbool.StitchedMesh, admission *spiralCombinedAdmission,
-	firstAdmission *spiralFirstUnionAdmission, copyIndex int) (bool, error) {
+	firstAdmission *spiralsector.FirstUnionAdmission, copyIndex int) (bool, error) {
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
@@ -214,7 +214,7 @@ func spiralValidateCombinedCopy(ctx context.Context, blank *Body, blankHeld *mes
 			return false, nil
 		}
 	}
-	return spiralValidateFirstUnion(ctx, blank, first,
+	return spiralsector.ValidateFirstUnion(ctx, bodyNode(blank), admission.source.Tools[0],
 		blankHeld, &local, firstAdmission, radialExtra)
 }
 
@@ -259,11 +259,12 @@ func spiralPrepareCombinedUnion(ctx context.Context, op meshbool.OperationKind,
 	if err != nil {
 		return nil, nil, err
 	}
-	proxy, certified, err := spiralOffsetToothMesh(ctx, blank, first, firstMesh, src, meta.First)
+	proxy, certified, err := spiralsector.OffsetToothMesh(ctx, bodyNode(blank), meta.Tools[0],
+		&firstMesh.n, src, meta.First)
 	if err != nil || !certified {
 		return nil, nil, err
 	}
-	placedParts, err := placedProxyShells(ctx, meta.Copies, proxy)
+	placedParts, err := placedProxyShells(ctx, meta.Copies, bornMesh(&Mesh{n: *proxy}))
 	if err != nil {
 		return nil, nil, err
 	}

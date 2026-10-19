@@ -11,7 +11,6 @@ The rules for rows live in `docs/layout.md`.
 | `boolean_many.go` | Validates and commits a multi-body Union, including certified straight-source Loft one-scene unions, transient prism pair chains, and identical-interval line prisms arranged in one Sketch scene. See API §8 and prism-boolean §4.6. |
 | `point_cone_trim.go` | Recognizes exact cone tools and routes point-loft Cut/Intersect to facetedrecord. See loft-point design. |
 | `loft_faces_cone_trim.go` | Certifies the one-use LoftFaces toe Cut to heel Intersect cone continuation, including the tangent heel's extended tooth operand. See loft-face-sections design. |
-| `spiral_join_union.go` | Gates the first curved-tooth Union's source pairs, held contacts and output curves, adds its area allowance, builds the temporary cap proxy, and matches held seam switches to source curves. `internal/spiralsector` certifies the source and binds faces. See faceted-vertex-bounds §3.6. |
 | `spiral_combine.go` | Builds and validates a multi-tool spiral-bevel join, and admits the first curved join by requiring every copy to carry an exact X-axis rotation (`WithCopyRotation`). See faceted-vertex-bounds §3.7. |
 | `loft_cut.go` | Preserves a matching axial loft through a certified coaxial circle-bore Cut. See loft §18. |
 | `loft_mirror_union.go` | Joins one authenticated axial Loft to its end-cap reflection. See loft-mirror-boolean design. |
@@ -33,5 +32,5 @@ The rules for rows live in `docs/layout.md`.
 | `prism_scale.go` | Admits prism and full-Revolve certified similarity sources and transfers their face roles. See evaluator §8. |
 | `stack_brep_scale.go` | Admits exact line-only stacks and stack-backed BReps for certified similarity. See evaluator §8. |
 | `point_cap_extremes.go` | Resolves Split cap faces and selects the ends using facetedrecord's centroid-order proof. See loft-point design. |
-| `boolean_mesh.go` | Prepares an operand's mesh for `internal/meshbool/`, runs the cone-cap mesh boolean, and reads an audited mesh's volume into a measurement. See evaluator §9. |
+| `boolean_mesh.go` | Prepares an operand's mesh for `internal/meshbool/`, runs the cone-cap mesh boolean with the `internal/spiralsector` first curved-tooth join gates, and reads an audited mesh's volume into a measurement. See evaluator §9. |
 | `faceted_copy.go` | Binds live faceted copies to source faces, recorded motion and separate source and held shells in a `facetedrecord` copy set, and places a source-certified proxy with its shell separation proof. See faceted-vertex-bounds §3.7. |
