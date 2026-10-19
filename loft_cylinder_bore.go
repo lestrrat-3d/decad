@@ -283,10 +283,10 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 			return nil, fmt.Errorf("%w: circular bore cap does not tile its annulus", ErrUnsupported)
 		}
 	}
-	if err := loftCylinderTagCaps(&result, bodyHandle(record.Blank), record.CapGroups,
+	if err := loftcylinder.TagCaps(&result, record.Blank, record.CapGroups,
 		[2]float64{record.Z0, record.Z1}, ref); err != nil {
 		return nil, err
 	}
-	loftCylinderTagBridgedTop(&result, record.CapGroups[1], record.AxialBridge)
+	loftcylinder.TagBridgedTop(&result, record.CapGroups[1], record.AxialBridge)
 	return bodyResult(facetedrecord.Build(ctx, envOf(documentNode(d), ref), result))
 }

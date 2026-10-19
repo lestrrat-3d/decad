@@ -46,11 +46,11 @@ func tryLoftCylinderUnionTeeth(ctx context.Context, d *Document, ref producerID,
 }
 
 // tryLoftCylinderUnionTeethWithUpperBridge admits the blank and each tooth,
-// builds every tooth's private proof body and verified mesh, and hands the
-// plain proof data to loftcylinder. A non-nil upperBridges holds one
-// moving-plane separation widening per tooth; the mirrored Union passes
-// them for its lower slab. It stays in root because the proof teeth and
-// both verified meshes are built through root Body handles.
+// verifies the mesh of the private proof body loftcylinder.ProofTooth gives
+// each tooth, and hands the plain proof data to loftcylinder. A non-nil
+// upperBridges holds one moving-plane separation widening per tooth; the
+// mirrored Union passes them for its lower slab. It stays in root because
+// the tooth and blank meshes are verified through root Body.Tessellate.
 func tryLoftCylinderUnionTeethWithUpperBridge(ctx context.Context, d *Document, ref producerID,
 	blank *Body, teeth []*Body, upperBridges []float64) (*Body, bool, error) {
 	if upperBridges != nil && len(upperBridges) != len(teeth) {
@@ -77,13 +77,15 @@ func tryLoftCylinderUnionTeethWithUpperBridge(ctx context.Context, d *Document, 
 		} else if source != lp.SourceIdentity {
 			return nil, false, nil
 		}
-		proofTooth, bridge, admitted, err := loftCylinderProofTooth(ctx, d, tooth, pp.Z0, pp.Z1)
+		proofNode, bridge, admitted, err := loftcylinder.ProofTooth(ctx, envOf(documentNode(d), ref),
+			bodyNode(tooth), pp.Z0, pp.Z1)
 		if err != nil {
 			return nil, true, err
 		}
 		if !admitted {
 			return nil, false, nil
 		}
+		proofTooth := bodyHandle(proofNode)
 		lp, ok = proofTooth.n.Payload.(loftPayload)
 		if !ok {
 			return nil, false, nil
@@ -126,10 +128,10 @@ func tryLoftCylinderUnionTeethWithUpperBridge(ctx context.Context, d *Document, 
 		return nil, true, err
 	}
 	record := fp.LoftCylinderJoin
-	if err := loftCylinderTagCaps(&fp, blank, record.CapGroups, [2]float64{pp.Z0, pp.Z1}, ref); err != nil {
+	if err := loftcylinder.TagCaps(&fp, bodyNode(blank), record.CapGroups, [2]float64{pp.Z0, pp.Z1}, ref); err != nil {
 		return nil, true, err
 	}
-	loftCylinderTagBridgedTop(&fp, record.CapGroups[1], record.AxialBridge)
+	loftcylinder.TagBridgedTop(&fp, record.CapGroups[1], record.AxialBridge)
 	body, err := bodyResult(facetedrecord.Build(ctx, envOf(documentNode(d), ref), fp))
 	return body, true, err
 }

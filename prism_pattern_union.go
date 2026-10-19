@@ -206,7 +206,7 @@ func prismPatternJoinedBody(ctx context.Context, d *Document, ref producerID,
 	if proofbound.IsNonFinite(fp.DPair) {
 		return nil, fmt.Errorf("%w: copied-prism join has no finite diameter proof", ErrUnsupported)
 	}
-	if err := loftCylinderTagCaps(&fp, blank, [2]int{groups[1], groups[2]},
+	if err := loftcylinder.TagCaps(&fp, bodyNode(blank), [2]int{groups[1], groups[2]},
 		[2]float64{source.Blank.Z0, source.Blank.Z1}, ref); err != nil {
 		return nil, err
 	}
