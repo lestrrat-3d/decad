@@ -367,8 +367,9 @@ type TrackProof struct {
 // NewTrackProof builds the certificate of a proven band from paths, in sweep
 // order, and the pair's feature map. The contact set comes first and the
 // lifted set after it (§10.5), each in the body's feature order. ok is false
-// when a feature does not resolve, the published normal is wider than
-// normalResolution, or the depth is not finite.
+// when either snapshot carries no face IDs, a feature does not resolve, the
+// published normal has no finite reading or is wider than normalResolution,
+// or the depth is not finite.
 func NewTrackProof(paths [2]BodyPath, band *BandHorizon, features *reportvocab.PlanarFeatureMap,
 	normalResolution units.Value) (*TrackProof, bool) {
 	support := band.Support

@@ -2626,7 +2626,7 @@ lines below do not repeat it.
   the cube's path box reaches the wall's projection and whose later search brackets the wall impact within
   `TimeResolution` of the exact drift. Legs shown to fail: the column test deleted, the wall fixture's
   horizon runs past the wall and the sweep is `SweepUndecided` with `SweepDepartureUnproved`; the
-  lateral clearance deleted from `lowerGap`, `contact_sweep_band_internal_test.go`'s
+  lateral clearance deleted from `DepartureProof.LowerGap`, `contact_sweep_band_internal_test.go`'s
   `TestPlanarDepartureLowerGapIsBoundedByLateralClearance`, the cube rising `1 µm` from a wall, publishes a
   lower gap above `1 µm`. `internal/pair/planar/planar_column_test.go` checks the projected gap of a triangle
   diagonal to a box against its closed form and that a triangle behind the plane is not read.

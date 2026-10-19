@@ -453,7 +453,7 @@ func TestSweepPairPlanarClearReplay(t *testing.T) {
 // poses read the ideal ones up to the cube's own rotation rounding.
 //
 // Legs shown to fail (each deleted in turn, fixture red, then restored):
-//   - the lifted term of the band's depth (planarSupport.depthAt):
+//   - the lifted term of the band's depth (planarsweep.SupportCandidate.DepthAt):
 //     TestSweepPairSupportSetBand's BandAt no longer encloses the far edge's
 //     height;
 //   - the lifted vertices' lower height bound (planarsweep.ClearAt over the lifted set):
