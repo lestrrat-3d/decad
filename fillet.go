@@ -6,14 +6,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/draftrecord"
 	"github.com/lestrrat-3d/decad/internal/extent"
+	"github.com/lestrrat-3d/decad/internal/modifyselect"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
-	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/sweeprecord"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -290,7 +289,7 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 	}
 	if !ok {
 		return nil, fmt.Errorf(`%w: this evaluator fillets a straight prism, its one-line Sweep reduction, a revolve, or a matching-section axial loft only; selector %s matched [%s]`,
-			ErrUnsupported, sel, selectedEdgesContext(edges))
+			ErrUnsupported, sel, modifyselect.EdgesContext(edgeNodes(edges)))
 	}
 	if err := pp.RequireExactSection("fillets"); err != nil {
 		return nil, err
@@ -306,9 +305,9 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 	for i := range blendAt {
 		blendAt[i] = map[int]*cornerBlend{}
 	}
-	matched := make([]matchedCorner, 0, len(edges))
+	matched := make([]modifyselect.MatchedCorner, 0, len(edges))
 	for ei, e := range edges {
-		li, ci, found, err := matchCornerBudget(budget, pp, loops, e)
+		li, ci, found, err := modifyselect.MatchCorner(budget, pp, loops, edgeNode(e))
 		if err != nil {
 			return nil, err
 		}
@@ -316,11 +315,11 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 			if sweepReduction {
 				if len(edges) != 1 {
 					return nil, fmt.Errorf(`%w: a straight Sweep fillets one cap edge at a time; selector %s matched [%s]`,
-						ErrUnsupported, sel, selectedEdgesContext(edges))
+						ErrUnsupported, sel, modifyselect.EdgesContext(edgeNodes(edges)))
 				}
 				if !straightSweepCapEdge(e) {
 					return nil, fmt.Errorf(`%w: %s is not a cap edge of the straight Sweep`,
-						ErrUnsupported, selectedEdgeContext(ei, e))
+						ErrUnsupported, modifyselect.EdgeContext(ei, edgeNode(e)))
 				}
 				// The one-line Sweep was built from pp. Route E matches this
 				// published edge to that exact prism's face view, then checks the
@@ -352,7 +351,7 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 			}
 			return commitModifyResult(ctx, b, body)
 		}
-		matched = append(matched, newMatchedCorner(ei, e, li, ci, loops[li]))
+		matched = append(matched, modifyselect.NewMatchedCorner(ei, edgeNode(e), li, ci, loops[li]))
 		blendAt[li][ci] = nil // marked; the blend is computed in stage 3
 	}
 
@@ -362,11 +361,11 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return nil, err
 		}
-		cb, err := computeFillet(loops[corner.loop], corner.corner, rmm)
+		cb, err := computeFillet(loops[corner.Loop], corner.Corner, rmm)
 		if err != nil {
 			return nil, fmt.Errorf(`%w; selector %s, %s`, err, sel, corner)
 		}
-		blendAt[corner.loop][corner.corner] = cb
+		blendAt[corner.Loop][corner.Corner] = cb
 	}
 
 	// The rewritten section, and the fillet arcs' (loop, segment) indices.
@@ -383,7 +382,7 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 		if errors.Is(err, context.DeadlineExceeded) {
 			return nil, context.DeadlineExceeded
 		}
-		return nil, wrapModifyAuditError(sel, matched, err)
+		return nil, modifyselect.WrapAuditError(fmt.Sprint(sel), matched, err)
 	}
 
 	// Build through evalPrism (§2): same frame, interval and placement, only
@@ -445,128 +444,6 @@ func straightSweepCapEdge(edge *Edge) bool {
 // cornerLoop is survey2d.CornerLoop: one boundary loop resolved into its
 // coalesced corner walk.
 type cornerLoop = survey2d.CornerLoop
-
-// matchedCorner retains one selector result beside the section coordinate it
-// resolved to. The selected-edge ordinal follows SelectEdges' stable result
-// order; the loop/corner coordinate and plane-local point identify the same
-// junction in the recorded section.
-type matchedCorner struct {
-	edgeOrdinal int
-	edge        *Edge
-	loop        int
-	corner      int
-	point       planePoint
-}
-
-func newMatchedCorner(edgeOrdinal int, edge *Edge, loop, corner int, cl cornerLoop) matchedCorner {
-	w := cl.Walks[corner]
-	return matchedCorner{
-		edgeOrdinal: edgeOrdinal,
-		edge:        edge,
-		loop:        loop,
-		corner:      corner,
-		point:       planePoint{U: w.StartU, V: w.StartV},
-	}
-}
-
-func (m matchedCorner) String() string {
-	return fmt.Sprintf(`%s maps to loop %d corner %d at (u, v) = (%s, %s)`,
-		selectedEdgeContext(m.edgeOrdinal, m.edge), m.loop, m.corner,
-		renderCoord(m.point.U), renderCoord(m.point.V))
-}
-
-// selectedEdgeContext renders one selected edge as its result ordinal plus the
-// geometry that identifies it.
-//
-// Closure is decided by shared vertex identity, never by coordinates: both
-// builders that mint a closed edge intern one *Vertex for its two ends
-// (internal/facetedrecord/topology.go's vertexOf memoizes by mesh-vertex index; extrude.go
-// assigns a full circle's edge the same start and end vertex), so the test is
-// the pointer comparison edge.Start() == edge.End(). A Circle3 additionally
-// reports the centre and radius no endpoint pair can carry, and falls under
-// that same closed case; every other closed curve — including a
-// boolean-built body's FacetedCurve rim — renders "closed through (p)"
-// instead of repeating the one point as if it were two. Two DISTINCT
-// vertices that merely sit at one position are a genuinely collapsed edge,
-// not a closed one, and still render "from (p) to (p)" — that is the
-// zero-length edge they are. Coordinates go through renderVec, so
-// value-equal geometry renders identically.
-func selectedEdgeContext(ordinal int, edge *Edge) string {
-	if edge == nil || edge.n.Start == nil || edge.n.End == nil {
-		return fmt.Sprintf(`selected edge[%d]`, ordinal)
-	}
-	if c, ok := edge.n.Curve.(surfacegeom.Circle3); ok {
-		return fmt.Sprintf(`selected edge[%d] closed circle through (%s), centre (%s), radius %s`,
-			ordinal, renderVec(edge.n.Start.Position), renderVec(c.Center), c.Radius)
-	}
-	if c, ok := edge.n.Curve.(surfacegeom.Ellipse3); ok {
-		return fmt.Sprintf(`selected edge[%d] ellipse arc from (%s) to (%s), centre (%s), semi-axes %s and %s`,
-			ordinal, renderVec(edge.n.Start.Position), renderVec(edge.n.End.Position), renderVec(c.Center),
-			c.SemiMajor, c.SemiMinor)
-	}
-	if edge.n.Start == edge.n.End {
-		return fmt.Sprintf(`selected edge[%d] closed through (%s)`, ordinal, renderVec(edge.n.Start.Position))
-	}
-	return fmt.Sprintf(`selected edge[%d] from (%s) to (%s)`, ordinal,
-		renderVec(edge.n.Start.Position), renderVec(edge.n.End.Position))
-}
-
-func selectedEdgesContext(edges []*Edge) string {
-	contexts := make([]string, len(edges))
-	for i, edge := range edges {
-		contexts[i] = selectedEdgeContext(i, edge)
-	}
-	return strings.Join(contexts, `; `)
-}
-
-// wrapModifyAuditError attaches the matched-entity context to an audit failure.
-// The audit's own error — sentinel and reason — leads, and the selector plus the
-// per-corner mappings follow it, so a refusal over many selected edges still
-// reads its cause first. The wrapped sentinel is unchanged, so errors.Is keeps
-// branching on it.
-func wrapModifyAuditError(sel EdgeSelector, matched []matchedCorner, err error) error {
-	coordinates := make([]string, len(matched))
-	for i, corner := range matched {
-		coordinates[i] = corner.String()
-	}
-	err = sectionaudit.RenderCoordinates(err)
-	return fmt.Errorf(`%w; selector %s matched [%s]`, err, sel, strings.Join(coordinates, `; `))
-}
-
-// matchCornerBudget maps a selected edge to a (loop, corner) of the section: a
-// lateral edge is the vertical junction at a corner, so its two vertices are
-// the corner point lifted to the two caps. A cap edge matches nothing (its
-// endpoints share a cap plane), which is exactly S1's honest reading of the
-// class.
-func matchCornerBudget(budget *proofbound.WorkBudget, pp prismPayload, loops []cornerLoop, e *Edge) (int, int, bool, error) {
-	if _, ok := e.n.Curve.(surfacegeom.Line3); !ok {
-		return 0, 0, false, nil
-	}
-	if e.n.Start == nil || e.n.End == nil {
-		return 0, 0, false, nil
-	}
-	const tol = 1e-6
-	for li, loop := range loops {
-		if err := survey2d.WallBudgetStep(budget); err != nil {
-			return 0, 0, false, err
-		}
-		n := len(loop.Walks)
-		if n == 1 && loop.Walks[0].Closed {
-			continue
-		}
-		for ci, w := range loop.Walks {
-			if err := survey2d.WallBudgetStep(budget); err != nil {
-				return 0, 0, false, err
-			}
-			j0 := pp.Point(w.StartU, w.StartV, pp.Z0)
-			j1 := pp.Point(w.StartU, w.StartV, pp.Z1)
-			if brepgeom.MatchEndpoints(e.n.Start.Position, e.n.End.Position, j0, j1, tol) {
-				return li, ci, true, nil
-			}
-		}
-	}
-	return 0, 0, false, nil
-}
 
 // cornerBlend is the shared fillet and chamfer section rewrite.
 type cornerBlend = offset2d.Blend

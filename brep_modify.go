@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/breprecord"
+	"github.com/lestrrat-3d/decad/internal/modifyselect"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -326,7 +327,7 @@ func recognisePrism(ctx context.Context, bp brepPayload, embeds []brepEmbed, k i
 
 // requireLateralEdges is Fillet's route P classification (brep-modify §4.2):
 // every selected edge is a lateral edge of pp, the junction at one corner of
-// its section (matchCornerBudget). Any other edge is modify S1's class.
+// its section (modifyselect.MatchCorner). Any other edge is modify S1's class.
 func requireLateralEdges(ctx context.Context, pp prismPayload, edges []*Edge) error {
 	budget := proofbound.NewWorkBudget(ctx)
 	loops, err := offset2d.ProfileCornerLoopsBudget(budget, pp.Profile)
@@ -334,12 +335,12 @@ func requireLateralEdges(ctx context.Context, pp prismPayload, edges []*Edge) er
 		return err
 	}
 	for ei, e := range edges {
-		_, _, found, err := matchCornerBudget(budget, pp, loops, e)
+		_, _, found, err := modifyselect.MatchCorner(budget, pp, loops, edgeNode(e))
 		if err != nil {
 			return err
 		}
 		if !found {
-			return fmt.Errorf(`%w: %s is not a lateral edge of the prism`, ErrUnsupported, selectedEdgeContext(ei, e))
+			return fmt.Errorf(`%w: %s is not a lateral edge of the prism`, ErrUnsupported, modifyselect.EdgeContext(ei, edgeNode(e)))
 		}
 	}
 	return nil

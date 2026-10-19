@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/modifyoption"
+	"github.com/lestrrat-3d/decad/internal/modifyselect"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -165,7 +166,7 @@ func resolveAsymmetricReference(b *Body, a *asymmetricChamferOpts, edges []*Edge
 		}
 		if count != 1 {
 			return nil, fmt.Errorf(`%w: the asymmetric chamfer's reference %s names %d of the faces adjacent to %s; it must name exactly one (modify-reach SX3)`,
-				ErrCardinality, a.Reference, count, selectedEdgeContext(ei, e))
+				ErrCardinality, a.Reference, count, modifyselect.EdgeContext(ei, edgeNode(e)))
 		}
 		refs[e] = ref
 		touched[ref] = struct{}{}
@@ -244,7 +245,7 @@ func (a *asymmetricChamfer) capSetbacks(caps prismCaps, edges []*Edge, startLoop
 			}
 		}
 		if c < 0 {
-			return capSetback{}, capSetback{}, fmt.Errorf(`%w: the asymmetric chamfer's %s borders neither cap face`, ErrUnsupported, selectedEdgeContext(ei, e))
+			return capSetback{}, capSetback{}, fmt.Errorf(`%w: the asymmetric chamfer's %s borders neither cap face`, ErrUnsupported, modifyselect.EdgeContext(ei, edgeNode(e)))
 		}
 		ref := a.refs[e] == capFace
 		if seen[c] && capRef[c] != ref {

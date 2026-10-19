@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/breploop"
 	"github.com/lestrrat-3d/decad/internal/breprecord"
+	"github.com/lestrrat-3d/decad/internal/modifyselect"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
@@ -347,11 +348,11 @@ func (r *brepLoopRead) buildSelectedLoops(ctx context.Context, d *Document, loop
 			return nil, ctxErr
 		}
 		return nil, fmt.Errorf(`%w; the %s's rewritten brep record (modify-general §4.2 step 6); selector %s matched [%s]`,
-			err, call.loopKind, call.sel, selectedEdgesContext(call.edges))
+			err, call.loopKind, call.sel, modifyselect.EdgesContext(edgeNodes(call.edges)))
 	}
 	if body.n.Volume.Value.Base() <= 0 {
 		return nil, fmt.Errorf(`%w: the %s's rewritten brep record encloses no volume (modify-general §4.2 step 6); selector %s matched [%s]`,
-			ErrDegenerate, call.loopKind, call.sel, selectedEdgesContext(call.edges))
+			ErrDegenerate, call.loopKind, call.sel, modifyselect.EdgesContext(edgeNodes(call.edges)))
 	}
 	return body, nil
 }
@@ -365,11 +366,11 @@ func newBrepLoopRead(ctx context.Context, bp brepPayload, call brepModifyRequest
 		return nil, err
 	}
 	state.Selector = fmt.Sprintf("%s", call.sel)
-	state.SelectedText = selectedEdgesContext(call.edges)
+	state.SelectedText = modifyselect.EdgesContext(edgeNodes(call.edges))
 	input := breploop.SelectionInput{
 		Edges: make([]*topo.Edge, len(call.edges)),
 		Describe: func(local, original int) string {
-			return selectedEdgeContext(local, call.edges[original])
+			return modifyselect.EdgeContext(local, edgeNode(call.edges[original]))
 		},
 	}
 	for i, edge := range call.edges {
