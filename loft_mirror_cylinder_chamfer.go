@@ -141,8 +141,8 @@ func loftMirrorCylinderChamferSelect(ctx context.Context, b *Body, fp facetedPay
 
 // buildLoftMirrorCylinderCapChamfer reflects the chamfered lower half through
 // placePayload, has internal/loftcylinder assemble and prove the mirrored
-// shell, then gives its exterior caps the bored Join's cap origins and the
-// blank's planar cap tags, which read the blank's root Face handles.
+// shell, then gives its exterior caps the bored Join's cap origins and has
+// loftcylinder.TagCaps give them the blank's planar cap tags.
 func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref producerID,
 	old facetedPayload, record *loftMirrorCylinderBoreRecord, lowerBody *Body,
 	half loftcylinder.ChamferHalf, reflectionReserve, bridgeReserve, setback float64) (*Body, error) {
@@ -171,7 +171,7 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 	for cap, group := range assembled.CapGroups {
 		result.Groups[group].Origins = append([]provenance.Ref(nil), old.Groups[record.CapGroups[cap]].Origins...)
 	}
-	if err := loftCylinderTagCaps(&result, bodyHandle(record.Join.Blank), assembled.CapGroups,
+	if err := loftcylinder.TagCaps(&result, record.Join.Blank, assembled.CapGroups,
 		assembled.CapLevels, ref); err != nil {
 		return nil, err
 	}

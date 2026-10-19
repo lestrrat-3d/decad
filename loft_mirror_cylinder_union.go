@@ -253,11 +253,11 @@ func buildLoftMirrorCylinderUnion(ctx context.Context, d *Document, ref producer
 	if err := loftMirrorCylinderCapOrigins(&fp, blank, fp.LoftMirrorCylinderJoin.Pairs, shell.CapGroups); err != nil {
 		return nil, err
 	}
-	if err := loftCylinderTagCaps(&fp, blank, shell.CapGroups,
+	if err := loftcylinder.TagCaps(&fp, bodyNode(blank), shell.CapGroups,
 		[2]float64{fullBlank.Z0, fullBlank.Z1}, ref); err != nil {
 		return nil, err
 	}
-	loftCylinderTagBridgedTop(&fp, shell.CapGroups[1], []float64{bridgeBound})
+	loftcylinder.TagBridgedTop(&fp, shell.CapGroups[1], []float64{bridgeBound})
 	return bodyResult(facetedrecord.Build(ctx, envOf(documentNode(d), ref), fp))
 }
 
@@ -420,10 +420,10 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 	if err := loftMirrorCylinderCapOrigins(&fp, bodyHandle(record.Blank), record.Pairs, shell.CapGroups); err != nil {
 		return nil, err
 	}
-	if err := loftCylinderTagCaps(&fp, bodyHandle(record.Blank), shell.CapGroups,
+	if err := loftcylinder.TagCaps(&fp, record.Blank, shell.CapGroups,
 		[2]float64{fullBlank.Z0, fullBlank.Z1}, ref); err != nil {
 		return nil, err
 	}
-	loftCylinderTagBridgedTop(&fp, shell.CapGroups[1], []float64{record.BridgeBound})
+	loftcylinder.TagBridgedTop(&fp, shell.CapGroups[1], []float64{record.BridgeBound})
 	return bodyResult(facetedrecord.Build(ctx, envOf(documentNode(d), ref), fp))
 }

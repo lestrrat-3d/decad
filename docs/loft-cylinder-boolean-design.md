@@ -46,7 +46,7 @@ error after those checks is returned, as in the original certified path;
 context cancellation is returned unchanged.
 
 When a placed tooth's Z basis is exactly the float immediately below one,
-`loftCylinderProofTooth` may build a private axial proxy with Z basis one.
+`loftcylinder.ProofTooth` may build a private axial proxy with Z basis one.
 Admission requires zero translation, zero XY/Z mixing, a positive blank
 height starting at zero, and bit-identical XY basis and held vertex positions.
 The proxy uses the original tooth's authenticated sections and source identity.
@@ -112,8 +112,8 @@ boundary points during the axial bridge.
 
 ## Constructed shell
 
-`loftcylinder.Join` builds and proves the joined shell; root keeps the
-private proof teeth, both verified meshes, and the cap tagging. The join
+`loftcylinder.Join` builds and proves the joined shell, and
+`loftcylinder.TagCaps` tags its caps; root keeps both verified meshes. The join
 retains each tooth's exterior Loft wall facets, removes its root wall
 facets, and fills the gaps with a ring on the circular blank. Every
 ring point encloses its true angle with `Atan2Interval` and its trigonometric

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
+	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/prismpattern"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -126,7 +127,7 @@ func prismPatternFilletBody(ctx context.Context, body *Body, edges []*Edge,
 	if proofbound.IsNonFinite(result.DPair) {
 		return nil, fmt.Errorf("%w: joined-prism fillet has no finite diameter proof", ErrUnsupported)
 	}
-	if err := loftCylinderTagCaps(&result, bodyHandle(rec.Blank),
+	if err := loftcylinder.TagCaps(&result, rec.Blank,
 		[2]int{rec.Groups[1], rec.Groups[2]},
 		[2]float64{rec.Source.Blank.Z0, rec.Source.Blank.Z1}, ref); err != nil {
 		return nil, err

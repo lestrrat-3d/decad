@@ -208,5 +208,5 @@ occupied-volume allowance sums both half allowances and the Join's
 swept-volume charge. The area allowance sums both half allowances and twice
 the larger one for the removed middle annuli. The held diameter and boundary
 bound give the centroid allowance. The root reflects the lower half within its
-document, gives the exterior cap groups the bored Join's cap origins, and tags
-them with the blank's planar cap surfaces.
+document and gives the exterior cap groups the bored Join's cap origins;
+`loftcylinder.TagCaps` tags them with the blank's planar cap surfaces.
