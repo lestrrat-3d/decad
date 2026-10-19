@@ -72,9 +72,10 @@ against the exact lower half of the blank. A rotation whose axial basis is
 one float step below one uses the bounded bridge below.
 `loftcylinder.MirrorBlank` checks the blank and `loftcylinder.MirrorPairMotion`
 reads each pair's recorded placement. `loftcylinder.MirrorLevels` checks that
-the source middle height is exactly halfway between the blank caps, and
-`loftcylinder.CheckMirrorPairs` checks every pair before any lower tooth is
-placed.
+the source middle height is exactly halfway between the blank caps.
+`loftcylinder.CheckMirrorPairs` checks the pairs in order and stops at the
+first that fails; the lower teeth of the pairs before it are placed before
+that refusal returns.
 
 For every step, the existing Loft-to-cylinder Join rebuilds that lower-half
 union from the original source Loft and the admitted rotated copies. It proves
