@@ -291,7 +291,7 @@ func TestTangentCapExtensionOnRealChain(t *testing.T) {
 
 	// Every ring vertex maps to its station, and each extension wall facet bound
 	// is at least the chord bound that the final cap's proof certifies.
-	link, err := toeStationLink(held.n.Vertices, toe)
+	link, err := revolveloftfaces.TangentToeStationLink(held.n.Vertices, toe)
 	require.NoError(t, err)
 	record := toe.Cap
 	last := len(record.Maps) - 1
