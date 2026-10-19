@@ -1510,6 +1510,11 @@
 10	0.00	TestLoftQuarterJunctionOneRealCase
 10	0.00	TestLoftQuarterWallOrderRealSketchPair
 10	0.00	TestQuarterSourceHeldY1RealProducerGate
+10	0.00	TestQuarterSourceHeldY3RealProducerGate
+10	0.00	TestQuarterSourceHeldY3ReverseOrder
+10	0.00	TestQuarterSourceHeldY3Refusals
+10	0.00	TestQuarterSourceHeldY3WrongRealRadius
+10	0.00	TestQuarterSourceHeldY3MissingRealJunction
 10	0.00	TestQuarterSourceHeldY1Refusals
 10	0.00	TestQuarterSourceHeldY1MissingRealJunction
 10	0.00	TestQuarterSourceHeldY1WrongRealRadius

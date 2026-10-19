@@ -17,12 +17,12 @@ func quarterRootComparisonFits(a, b *big.Rat) bool {
 		b.Num().BitLen()+a.Denom().BitLen() <= 8192
 }
 
-func quarterRootBracketFits(xlo, xhi, ylo, yhi, square *big.Rat) bool {
+func quarterRootBracketFitsAtY(xlo, xhi, ylo, yhi, carrier, square *big.Rat) bool {
 	if !quarterRootComparisonFits(xlo, xhi) ||
 		!quarterRootComparisonFits(xlo, big.NewRat(2, 1)) ||
 		!quarterRootComparisonFits(xhi, big.NewRat(6, 1)) ||
-		!quarterRootComparisonFits(ylo, big.NewRat(1, 1)) ||
-		!quarterRootComparisonFits(yhi, big.NewRat(1, 1)) || square == nil {
+		!quarterRootComparisonFits(ylo, carrier) ||
+		!quarterRootComparisonFits(yhi, carrier) || square == nil {
 		return false
 	}
 	for _, x := range []*big.Rat{xlo, xhi} {
@@ -35,16 +35,20 @@ func quarterRootBracketFits(xlo, xhi, ylo, yhi, square *big.Rat) bool {
 	return true
 }
 
-// loftQuarterSourceHeldY1 is an inactive private proof of one selected seam.
-// It does not certify the y=3 seam, complete shell, volume, or public Union.
-func loftQuarterSourceHeldY1(ctx context.Context, first, second *Body,
+func quarterRootBracketFits(xlo, xhi, ylo, yhi, square *big.Rat) bool {
+	return quarterRootBracketFitsAtY(xlo, xhi, ylo, yhi, big.NewRat(1, 1), square)
+}
+
+// loftQuarterSourceHeld is an inactive private proof of one selected seam.
+// It does not certify the paired seam, complete shell, volume, or public Union.
+func loftQuarterSourceHeld(ctx context.Context, first, second *Body, carrierY int,
 	sourceOperation, outputOperation *proofbound.WorkBudget) (
-	loftcontact.QuarterSourceHeldY1, bool, error) {
-	var no loftcontact.QuarterSourceHeldY1
+	loftcontact.QuarterSourceHeldSeam, bool, error) {
+	var no loftcontact.QuarterSourceHeldSeam
 	if err := ctx.Err(); err != nil {
 		return no, false, err
 	}
-	if sourceOperation == nil || outputOperation == nil {
+	if (carrierY != 1 && carrierY != 3) || sourceOperation == nil || outputOperation == nil {
 		return no, false, nil
 	}
 	withContext := func(operation *proofbound.WorkBudget) *proofbound.WorkBudget {
@@ -72,7 +76,7 @@ func loftQuarterSourceHeldY1(ctx context.Context, first, second *Body,
 	}
 	wall := envelope.wall
 	if wall.prism == nil || wall.loft == nil || wall.prism == wall.loft ||
-		wall.lower < 0 || wall.arcSegment < 0 ||
+		wall.lower < 0 || wall.upper < 0 || wall.arcSegment < 0 ||
 		len(envelope.order.quarter[0]) != 2 ||
 		len(envelope.order.quarter[1]) != 2 ||
 		envelope.order.source.levels[0] == nil ||
@@ -88,13 +92,19 @@ func loftQuarterSourceHeldY1(ctx context.Context, first, second *Body,
 			return no, false, nil
 		}
 	}
-	for capIndex, wantQ := range [2]*big.Rat{big.NewRat(24, 1), big.NewRat(117, 4)} {
+	selectedLine := wall.lower
+	wantSquares := [2]*big.Rat{big.NewRat(24, 1), big.NewRat(117, 4)}
+	if carrierY == 3 {
+		selectedLine = wall.upper
+		wantSquares = [2]*big.Rat{big.NewRat(16, 1), big.NewRat(85, 4)}
+	}
+	for capIndex, wantQ := range wantSquares {
 		found := false
 		for _, event := range envelope.order.quarter[capIndex] {
 			if err := sourceBudget.Step(); err != nil {
 				return no, false, err
 			}
-			if event.line.segment != wall.lower {
+			if event.line.segment != selectedLine {
 				continue
 			}
 			if found || event.line.body != wall.prism ||
@@ -104,7 +114,7 @@ func loftQuarterSourceHeldY1(ctx context.Context, first, second *Body,
 			}
 			found = true
 			line, isLine := event.line.curve.(sectionrecord.LineSeg)
-			if !isLine || line.Start.V != 1 || line.End.V != 1 ||
+			if !isLine || line.Start.V != float64(carrierY) || line.End.V != float64(carrierY) ||
 				!((line.Start.U == 2 && line.End.U == 6) ||
 					(line.Start.U == 6 && line.End.U == 2)) {
 				return no, false, nil
@@ -112,7 +122,8 @@ func loftQuarterSourceHeldY1(ctx context.Context, first, second *Body,
 			x, y := event.witness.Point()
 			xlo, xhi := x.Bounds()
 			ylo, yhi := y.Bounds()
-			if !quarterRootBracketFits(xlo, xhi, ylo, yhi, wantQ) {
+			carrier := big.NewRat(int64(carrierY), 1)
+			if !quarterRootBracketFitsAtY(xlo, xhi, ylo, yhi, carrier, wantQ) {
 				return no, false, nil
 			}
 			if err := sourceBudget.Step(); err != nil {
@@ -124,9 +135,8 @@ func loftQuarterSourceHeldY1(ctx context.Context, first, second *Body,
 			if _, err := sourceBudget.StepN(6); err != nil {
 				return no, false, err
 			}
-			one := big.NewRat(1, 1)
 			if xlo.Cmp(big.NewRat(2, 1)) <= 0 || xhi.Cmp(big.NewRat(6, 1)) >= 0 ||
-				ylo.Cmp(one) > 0 || yhi.Cmp(one) < 0 ||
+				ylo.Cmp(carrier) > 0 || yhi.Cmp(carrier) < 0 ||
 				new(big.Rat).Mul(xlo, xlo).Cmp(wantQ) > 0 ||
 				new(big.Rat).Mul(xhi, xhi).Cmp(wantQ) < 0 {
 				return no, false, nil
@@ -139,8 +149,14 @@ func loftQuarterSourceHeldY1(ctx context.Context, first, second *Body,
 	if err := sourceBudget.Err(); err != nil {
 		return no, false, err
 	}
-	result, accepted, err := loftcontact.CertifyQuarterSourceHeldY1(ctx,
-		outputBudget, &wall.prism.n, &wall.loft.n, wall.arcSegment, wall.radius)
+	var result loftcontact.QuarterSourceHeldSeam
+	if carrierY == 1 {
+		result, accepted, err = loftcontact.CertifyQuarterSourceHeldY1(ctx,
+			outputBudget, &wall.prism.n, &wall.loft.n, wall.arcSegment, wall.radius)
+	} else {
+		result, accepted, err = loftcontact.CertifyQuarterSourceHeldY3(ctx,
+			outputBudget, &wall.prism.n, &wall.loft.n, wall.arcSegment, wall.radius)
+	}
 	if err != nil || !accepted {
 		return no, false, err
 	}
@@ -154,4 +170,16 @@ func loftQuarterSourceHeldY1(ctx context.Context, first, second *Body,
 		return no, false, err
 	}
 	return result, true, nil
+}
+
+func loftQuarterSourceHeldY1(ctx context.Context, first, second *Body,
+	sourceOperation, outputOperation *proofbound.WorkBudget) (
+	loftcontact.QuarterSourceHeldY1, bool, error) {
+	return loftQuarterSourceHeld(ctx, first, second, 1, sourceOperation, outputOperation)
+}
+
+func loftQuarterSourceHeldY3(ctx context.Context, first, second *Body,
+	sourceOperation, outputOperation *proofbound.WorkBudget) (
+	loftcontact.QuarterSourceHeldY3, bool, error) {
+	return loftQuarterSourceHeld(ctx, first, second, 3, sourceOperation, outputOperation)
 }
