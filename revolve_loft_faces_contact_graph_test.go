@@ -101,10 +101,10 @@ func TestCurvedContactGraphHeldAnchors(t *testing.T) {
 			shellIndex, blankIndex, loftIndex := shell.seam[i], blankPatch.Seam[i], loftPatch.Seam[i]
 			require.False(t, seenShellVertices[shellIndex])
 			seenShellVertices[shellIndex] = true
-			require.Equal(t, seam[i].Point, shell.mesh.Verts[shellIndex])
+			require.Equal(t, seam[i].Point, shell.Mesh.Verts[shellIndex])
 			require.Equal(t, seam[i].Point, blankPatch.Vertices[blankIndex])
 			require.Equal(t, seam[i].Point, loftPatch.Vertices[loftIndex])
-			require.GreaterOrEqual(t, shell.vertexBounds[shellIndex], seam[i].BlankBound)
+			require.GreaterOrEqual(t, shell.VertexBounds[shellIndex], seam[i].BlankBound)
 			require.GreaterOrEqual(t, blankPatch.VertexBounds[blankIndex], seam[i].BlankBound)
 			require.GreaterOrEqual(t, loftPatch.VertexBounds[loftIndex], seam[i].LoftBound)
 		}
@@ -129,7 +129,7 @@ func TestCurvedContactGraphHeldAnchors(t *testing.T) {
 				require.False(t, seenEndpointIDs[id])
 				seenEndpointIDs[id] = true
 				require.Equal(t, ring.endpointProof[endpoint].point,
-					shell.mesh.Verts[ring.endpoints[endpoint]])
+					shell.Mesh.Verts[ring.Endpoints[endpoint]])
 				require.GreaterOrEqual(t, graph.cells[cellID].pairID, 0)
 				require.True(t, graph.endpointCellMatches(arc, &ring, endpoint, cellID))
 			}
@@ -558,15 +558,15 @@ func unscopedAllRunsShell(ctx context.Context, proof *revolveLoftFacesSourceCert
 	}
 	shell, built, err := revolveLoftFacesBlankShellAtRunsWithCuts(ctx, proof,
 		graph.manifest, selectors, capCuts)
-	if err != nil || !built || shell == nil || shell.faceBound >= 0.1 ||
-		len(shell.seams) != len(graph.runs) ||
-		len(shell.triangleCells) != len(shell.mesh.Tris) {
+	if err != nil || !built || shell == nil || shell.FaceBound >= 0.1 ||
+		len(shell.Seams) != len(graph.runs) ||
+		len(shell.TriangleCells) != len(shell.Mesh.Tris) {
 		return nil, nil, false, err
 	}
 	shell.seamRunIDs = make([][]int, len(graph.runs))
 	for i := range graph.runs {
 		view := *shell
-		view.seam = shell.seams[i]
+		view.seam = shell.Seams[i]
 		bound, bindErr := graph.bindBlankShell(ctx, proof, &graph.runs[i], &view)
 		if bindErr != nil || !bound {
 			return nil, nil, false, bindErr
@@ -589,23 +589,23 @@ func TestCurvedCallScopeShellMatchesUnscoped(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 
-	require.Equal(t, ref.mesh.Verts, shell.mesh.Verts)
-	require.Equal(t, ref.mesh.Tris, shell.mesh.Tris)
-	require.Equal(t, ref.vertexBounds, shell.vertexBounds)
-	require.Equal(t, ref.seams, shell.seams)
+	require.Equal(t, ref.Mesh.Verts, shell.Mesh.Verts)
+	require.Equal(t, ref.Mesh.Tris, shell.Mesh.Tris)
+	require.Equal(t, ref.VertexBounds, shell.VertexBounds)
+	require.Equal(t, ref.Seams, shell.Seams)
 	require.Equal(t, ref.seamRunIDs, shell.seamRunIDs)
 	require.Equal(t, ref.seamIDs, shell.seamIDs)
-	require.Equal(t, ref.chordBound, shell.chordBound)
-	require.Equal(t, ref.faceBound, shell.faceBound)
-	require.Equal(t, ref.triangleCells, shell.triangleCells)
+	require.Equal(t, ref.ChordBound, shell.ChordBound)
+	require.Equal(t, ref.FaceBound, shell.FaceBound)
+	require.Equal(t, ref.TriangleCells, shell.TriangleCells)
 	require.NotEmpty(t, shell.capRings)
 	require.Len(t, shell.capRings, len(ref.capRings))
 	for i, ring := range shell.capRings {
 		want := ref.capRings[i]
 		require.Equal(t, want.endpointGraphIDs, ring.endpointGraphIDs)
 		require.Equal(t, want.endpointCellIDs, ring.endpointCellIDs)
-		require.Equal(t, want.endpoints, ring.endpoints)
-		require.Equal(t, want.vertices, ring.vertices)
+		require.Equal(t, want.Endpoints, ring.Endpoints)
+		require.Equal(t, want.Vertices, ring.Vertices)
 	}
 
 	require.Len(t, graph.pairs, len(refGraph.pairs))

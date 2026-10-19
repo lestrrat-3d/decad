@@ -338,7 +338,7 @@ func revolveLoftFacesBlankShellWithCapRings(ctx context.Context,
 	if err != nil || !built {
 		return nil, false, err
 	}
-	if shell == nil || shell.faceBound >= 0.1 {
+	if shell == nil || shell.FaceBound >= 0.1 {
 		return nil, false, nil
 	}
 	bound, bindErr := graph.bindBlankShell(ctx, proof, selected, shell)
@@ -371,64 +371,12 @@ func revolveLoftFacesGraphCapCuts(graph *revolveLoftFacesContactGraph) (
 			arc.circle.radius.Sign() <= 0 {
 			return nil, false
 		}
-		cuts = append(cuts, revolveLoftFacesShellCut{
-			sectionIndex: pair.sectionIndex, x: arc.circle.x,
-			radius: arc.circle.radius, arc: arc})
+		cuts = append(cuts, revolveLoftFacesShellCut{ShellCut: revolveloftfaces.ShellCut{
+			Section: pair.sectionIndex, X: arc.circle.x,
+			Radius: arc.circle.radius}, arc: arc})
 	}
 	if len(cuts) == 0 {
 		return nil, false
 	}
 	return cuts, true
-}
-
-// The certified cap arc selects one of the two walks between its source
-// endpoints. The positive Y axis distinguishes the occupied walk.
-func revolveLoftFacesOccupiedRingPath(ring []int, endpoints [2]int,
-	positiveYAxis int, throughPositiveY bool) ([]int, bool) {
-	if len(ring) < 4 || positiveYAxis < 0 || positiveYAxis >= len(ring) ||
-		endpoints[0] == endpoints[1] {
-		return nil, false
-	}
-	indices := [2]int{-1, -1}
-	for index, vertex := range ring {
-		for side, endpoint := range endpoints {
-			if vertex != endpoint {
-				continue
-			}
-			if indices[side] >= 0 {
-				return nil, false
-			}
-			indices[side] = index
-		}
-	}
-	if indices[0] < 0 || indices[1] < 0 ||
-		indices[0] == positiveYAxis || indices[1] == positiveYAxis {
-		return nil, false
-	}
-	walk := func(direction int) ([]int, bool) {
-		var result []int
-		for index := indices[0]; ; index = (index + direction + len(ring)) % len(ring) {
-			result = append(result, ring[index])
-			if index == indices[1] {
-				break
-			}
-			if len(result) >= len(ring) {
-				return nil, false
-			}
-		}
-		containsAxis := false
-		for _, vertex := range result {
-			containsAxis = containsAxis || vertex == ring[positiveYAxis]
-		}
-		return result, containsAxis
-	}
-	forward, hasAxis := walk(1)
-	if len(forward) == 0 {
-		return nil, false
-	}
-	if hasAxis == throughPositiveY {
-		return forward, true
-	}
-	backward, hasAxis := walk(-1)
-	return backward, len(backward) >= 2 && hasAxis == throughPositiveY
 }

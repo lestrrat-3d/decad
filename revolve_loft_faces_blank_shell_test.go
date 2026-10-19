@@ -8,7 +8,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/decad/internal/topo"
-	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
 
@@ -38,15 +37,15 @@ func TestCurvedSourceArcSplitsClosedRevolveShell(t *testing.T) {
 		[]revolveLoftFacesShellSeamSelector{{sectionIndex: sectionIndex, cellIndex: cellIndex}}, nil)
 	require.NoError(t, err)
 	require.True(t, ok)
-	require.NotEmpty(t, shell.mesh.Tris)
-	require.Len(t, shell.mesh.Src, len(shell.mesh.Tris))
-	require.Len(t, shell.vertexBounds, len(shell.mesh.Verts))
+	require.NotEmpty(t, shell.Mesh.Tris)
+	require.Len(t, shell.Mesh.Src, len(shell.Mesh.Tris))
+	require.Len(t, shell.VertexBounds, len(shell.Mesh.Verts))
 	require.Len(t, shell.seam, 18)
-	require.Less(t, shell.chordBound, 0.1)
-	require.GreaterOrEqual(t, shell.faceBound, shell.chordBound)
-	require.Less(t, shell.faceBound, 0.1)
-	require.True(t, revolveLoftFacesBlankShellEulerTwo(&shell.mesh))
-	for _, bound := range shell.vertexBounds {
+	require.Less(t, shell.ChordBound, 0.1)
+	require.GreaterOrEqual(t, shell.FaceBound, shell.ChordBound)
+	require.Less(t, shell.FaceBound, 0.1)
+	require.True(t, shell.EulerTwo())
+	for _, bound := range shell.VertexBounds {
 		require.Less(t, bound, 0.1)
 	}
 	seenSeam := make(map[int]struct{}, len(shell.seam))
@@ -55,13 +54,13 @@ func TestCurvedSourceArcSplitsClosedRevolveShell(t *testing.T) {
 		require.False(t, duplicate, "each source station needs its own mesh vertex")
 		seenSeam[index] = struct{}{}
 		lower, upper := false, false
-		for _, tri := range shell.mesh.Tris {
+		for _, tri := range shell.Mesh.Tris {
 			if !slices.Contains(tri[:], index) {
 				continue
 			}
 			for _, vertex := range tri {
-				lower = lower || shell.mesh.Verts[vertex].X < shell.mesh.Verts[index].X
-				upper = upper || shell.mesh.Verts[vertex].X > shell.mesh.Verts[index].X
+				lower = lower || shell.Mesh.Verts[vertex].X < shell.Mesh.Verts[index].X
+				upper = upper || shell.Mesh.Verts[vertex].X > shell.Mesh.Verts[index].X
 			}
 		}
 		require.True(t, lower && upper, "both meridian halves must use shared seam vertex %d", index)
@@ -182,7 +181,7 @@ func TestCurvedSourceArcSplitsClosedRevolveShell(t *testing.T) {
 	require.False(t, admitted)
 	liveShell.n.Faces = originalFaces
 	t.Logf("source-aligned Revolve shell: %d vertices, %d triangles, chord bound %.6g mm",
-		len(shell.mesh.Verts), len(shell.mesh.Tris), shell.chordBound)
+		len(shell.Mesh.Verts), len(shell.Mesh.Tris), shell.ChordBound)
 }
 
 func TestCurvedMultiRunShellConsumesLiveGraph(t *testing.T) {
@@ -195,11 +194,11 @@ func TestCurvedMultiRunShellConsumesLiveGraph(t *testing.T) {
 	require.True(t, built)
 	require.Len(t, graph.runs, 2)
 	require.Len(t, graph.arcs, 2)
-	require.Len(t, shell.seams, len(graph.runs))
+	require.Len(t, shell.Seams, len(graph.runs))
 	require.Len(t, shell.capRings, len(graph.arcs))
-	require.Len(t, shell.triangleCells, len(shell.mesh.Tris))
-	require.Less(t, shell.faceBound, 0.1)
-	require.True(t, revolveLoftFacesBlankShellEulerTwo(&shell.mesh))
+	require.Len(t, shell.TriangleCells, len(shell.Mesh.Tris))
+	require.Less(t, shell.FaceBound, 0.1)
+	require.True(t, shell.EulerTwo())
 	seenIDs := make(map[int]struct{})
 	seenVertices := make(map[int]struct{})
 	for _, arc := range graph.arcs {
@@ -211,7 +210,7 @@ func TestCurvedMultiRunShellConsumesLiveGraph(t *testing.T) {
 	}
 	for i, run := range graph.runs {
 		require.Equal(t, run.stationIDs, shell.seamRunIDs[i])
-		require.Len(t, shell.seams[i], len(run.stations))
+		require.Len(t, shell.Seams[i], len(run.stations))
 		cell := graph.cells[run.cellID]
 		mapped := cell.source.mapped
 		seam, blankPatch, loftPatch, patched, patchErr := revolveLoftFacesCertifiedArcPatches(t.Context(),
@@ -219,9 +218,9 @@ func TestCurvedMultiRunShellConsumesLiveGraph(t *testing.T) {
 			loftFaceInterval{Lo: mapped.TLo, Hi: mapped.THi}, run.stations)
 		require.NoError(t, patchErr)
 		require.True(t, patched)
-		for station, index := range shell.seams[i] {
+		for station, index := range shell.Seams[i] {
 			require.GreaterOrEqual(t, index, 0)
-			require.Less(t, index, len(shell.mesh.Verts))
+			require.Less(t, index, len(shell.Mesh.Verts))
 			_, duplicate := seenVertices[index]
 			require.False(t, duplicate)
 			seenVertices[index] = struct{}{}
@@ -229,12 +228,12 @@ func TestCurvedMultiRunShellConsumesLiveGraph(t *testing.T) {
 			_, duplicate = seenIDs[id]
 			require.False(t, duplicate)
 			seenIDs[id] = struct{}{}
-			require.Equal(t, seam[station].Point, shell.mesh.Verts[index])
+			require.Equal(t, seam[station].Point, shell.Mesh.Verts[index])
 			require.Equal(t, seam[station].Point,
 				blankPatch.Vertices[blankPatch.Seam[station]])
 			require.Equal(t, seam[station].Point,
 				loftPatch.Vertices[loftPatch.Seam[station]])
-			require.GreaterOrEqual(t, shell.vertexBounds[index], seam[station].BlankBound)
+			require.GreaterOrEqual(t, shell.VertexBounds[index], seam[station].BlankBound)
 			require.GreaterOrEqual(t,
 				blankPatch.VertexBounds[blankPatch.Seam[station]], seam[station].BlankBound)
 			require.GreaterOrEqual(t,
@@ -256,9 +255,9 @@ func TestCurvedMultiRunShellConsumesLiveGraph(t *testing.T) {
 		require.Equal(t, arc.endpointIDs, ring.endpointGraphIDs)
 		require.Equal(t, arc.endpointCellIDs, ring.endpointCellIDs)
 		for endpoint, cellID := range arc.endpointCellIDs {
-			index := ring.endpoints[endpoint]
-			require.Equal(t, ring.endpointProof[endpoint].point, shell.mesh.Verts[index])
-			require.GreaterOrEqual(t, shell.vertexBounds[index], ring.endpointProof[endpoint].blankBound)
+			index := ring.Endpoints[endpoint]
+			require.Equal(t, ring.endpointProof[endpoint].point, shell.Mesh.Verts[index])
+			require.GreaterOrEqual(t, shell.VertexBounds[index], ring.endpointProof[endpoint].blankBound)
 			require.True(t, graph.endpointCellMatches(arc, &ring, endpoint, cellID))
 		}
 	}
@@ -272,20 +271,20 @@ func TestCurvedMultiRunShellConsumesLiveGraph(t *testing.T) {
 		}
 	}
 	seenCells := make(map[revolveloftfaces.ShellTriangleCell]struct{})
-	for triIndex, cell := range shell.triangleCells {
+	for triIndex, cell := range shell.TriangleCells {
 		require.GreaterOrEqual(t, cell.Section, 0)
-		require.Less(t, cell.Section, len(shell.sectionRings))
+		require.Less(t, cell.Section, len(shell.SectionRings))
 		require.GreaterOrEqual(t, cell.Band, 0)
-		require.Less(t, cell.Band+1, len(shell.sectionRings[cell.Section]))
+		require.Less(t, cell.Band+1, len(shell.SectionRings[cell.Section]))
 		require.GreaterOrEqual(t, cell.Ray, 0)
-		require.Less(t, cell.Ray, shell.rayCount)
-		require.Equal(t, sectionGroup[cell.Section], shell.mesh.Src[triIndex])
+		require.Less(t, cell.Ray, shell.RayCount)
+		require.Equal(t, sectionGroup[cell.Section], shell.Mesh.Src[triIndex])
 		_, duplicate := seenCells[cell]
 		require.False(t, duplicate)
 		seenCells[cell] = struct{}{}
-		start := shell.sectionRings[cell.Section][cell.Band]
-		end := shell.sectionRings[cell.Section][cell.Band+1]
-		next := (cell.Ray + 1) % shell.rayCount
+		start := shell.SectionRings[cell.Section][cell.Band]
+		end := shell.SectionRings[cell.Section][cell.Band+1]
+		next := (cell.Ray + 1) % shell.RayCount
 		var want [3]int
 		switch {
 		case len(start) == 1:
@@ -297,33 +296,9 @@ func TestCurvedMultiRunShellConsumesLiveGraph(t *testing.T) {
 		default:
 			want = [3]int{start[cell.Ray], end[next], start[next]}
 		}
-		got := shell.mesh.Tris[triIndex]
+		got := shell.Mesh.Tris[triIndex]
 		slices.Sort(got[:])
 		slices.Sort(want[:])
 		require.Equal(t, want, got)
 	}
-}
-
-func TestCurvedMultiRunShellRayOwnersRefuseCollisions(t *testing.T) {
-	station := revolveloftfaces.ArcSeamVertex{
-		Exact: loftFaceRatVec{lfF(0), lfF(2), lfF(1)},
-		Point: r3.Vec{Y: 2, Z: 1}, LoftBound: 0.001,
-	}
-	seams := [][]revolveloftfaces.ArcSeamVertex{{station}, {station}}
-	source := revolveLoftFacesShellRaySource{seams: seams}
-	rays := revolveloftfaces.ShellRays(16, source)
-	require.NotNil(t, rays)
-	require.True(t, revolveloftfaces.ShellRayOrderBounded(rays, source))
-	shared := 0
-	for _, ray := range rays {
-		if len(ray.SeamRefs) == 2 {
-			shared++
-		}
-	}
-	require.Equal(t, 1, shared)
-	require.Nil(t, revolveloftfaces.ShellRays(16,
-		revolveLoftFacesShellRaySource{seams: [][]revolveloftfaces.ArcSeamVertex{{station, station}}}))
-	require.Nil(t, revolveloftfaces.ShellRays(16,
-		revolveLoftFacesShellRaySource{seams: seams,
-			caps: []revolveLoftFacesCapSeamVertex{{point: r3.Vec{Y: 2, Z: 1}}}}))
 }

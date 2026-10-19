@@ -9,7 +9,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/pointquery"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -69,57 +68,11 @@ func sameRevolveLoftFacesProofMesh(a, b *Mesh) bool {
 
 func cloneRevolveLoftFacesClearShell(shell *revolveLoftFacesBlankSeamShell) *revolveLoftFacesBlankSeamShell {
 	cloned := *shell
-	cloned.mesh.Verts = slices.Clone(shell.mesh.Verts)
-	cloned.mesh.Tris = slices.Clone(shell.mesh.Tris)
-	cloned.mesh.Src = slices.Clone(shell.mesh.Src)
-	cloned.mesh.Groups = slices.Clone(shell.mesh.Groups)
-	for i := range cloned.mesh.Groups {
-		cloned.mesh.Groups[i].Origins = slices.Clone(shell.mesh.Groups[i].Origins)
-	}
-	cloned.vertexBounds = slices.Clone(shell.vertexBounds)
-	cloned.triangleCells = slices.Clone(shell.triangleCells)
-	cloned.sectionRings = make([][][]int, len(shell.sectionRings))
-	for i, section := range shell.sectionRings {
-		cloned.sectionRings[i] = make([][]int, len(section))
-		for j, ring := range section {
-			cloned.sectionRings[i][j] = slices.Clone(ring)
-		}
-	}
-	cloned.seams = make([][]int, len(shell.seams))
-	for i, seam := range shell.seams {
-		cloned.seams[i] = slices.Clone(seam)
-	}
-	if len(cloned.seams) != 0 {
-		cloned.seam = cloned.seams[0]
+	cloned.ShellMesh = shell.Clone()
+	if len(cloned.Seams) != 0 {
+		cloned.seam = cloned.Seams[0]
 	}
 	return &cloned
-}
-
-func sameRevolveLoftFacesClearShell(a, b *revolveLoftFacesBlankSeamShell) bool {
-	if a == nil || b == nil ||
-		!slices.Equal(a.mesh.Verts, b.mesh.Verts) ||
-		!slices.Equal(a.mesh.Tris, b.mesh.Tris) ||
-		!slices.Equal(a.mesh.Src, b.mesh.Src) ||
-		!slices.EqualFunc(a.mesh.Groups, b.mesh.Groups, func(x, y facetGroup) bool {
-			return slices.Equal(x.Origins, y.Origins)
-		}) ||
-		!slices.Equal(a.vertexBounds, b.vertexBounds) ||
-		!slices.Equal(a.triangleCells, b.triangleCells) ||
-		a.rayCount != b.rayCount || a.chordBound != b.chordBound || a.faceBound != b.faceBound ||
-		len(a.sectionRings) != len(b.sectionRings) {
-		return false
-	}
-	for i := range a.sectionRings {
-		if len(a.sectionRings[i]) != len(b.sectionRings[i]) {
-			return false
-		}
-		for j := range a.sectionRings[i] {
-			if !slices.Equal(a.sectionRings[i][j], b.sectionRings[i][j]) {
-				return false
-			}
-		}
-	}
-	return true
 }
 
 // This private context owns the real producers consumed by every candidate
@@ -188,7 +141,7 @@ func (c *revolveLoftFacesClearPatchContext) classifyClearPatch(ctx context.Conte
 	if ctx == nil || source == nil || shell == nil || tool == nil ||
 		source.tooth == nil || source.trim == nil ||
 		!revolveLoftFacesClearPatchToolCurrent(source) ||
-		!sameRevolveLoftFacesClearShell(shell, c.shellProof) ||
+		c.shellProof == nil || !shell.SameMesh(&c.shellProof.ShellMesh) ||
 		!sameRevolveLoftFacesProofMesh(tool, c.toolProof) ||
 		!revolveLoftFacesSectionCurrent(source) ||
 		!revolveLoftFacesTrimCurrent(source.tooth, source.trim) ||
@@ -196,52 +149,51 @@ func (c *revolveLoftFacesClearPatchContext) classifyClearPatch(ctx context.Conte
 		!tool.n.BoundaryOK || !tool.n.SymDiffOK ||
 		proofbound.IsNonFinite(tool.n.Bound) || tool.n.Bound < 0 ||
 		proofbound.IsNonFinite(tool.n.VolSymDiff) || tool.n.VolSymDiff < 0 ||
-		index < 0 || index >= len(shell.mesh.Tris) ||
-		len(shell.triangleCells) != len(shell.mesh.Tris) ||
-		len(shell.mesh.Src) != len(shell.mesh.Tris) ||
-		len(shell.vertexBounds) != len(shell.mesh.Verts) ||
-		proofbound.IsNonFinite(shell.faceBound) || shell.faceBound < shell.chordBound {
+		index < 0 || index >= len(shell.Mesh.Tris) ||
+		len(shell.TriangleCells) != len(shell.Mesh.Tris) ||
+		len(shell.Mesh.Src) != len(shell.Mesh.Tris) ||
+		len(shell.VertexBounds) != len(shell.Mesh.Verts) ||
+		proofbound.IsNonFinite(shell.FaceBound) || shell.FaceBound < shell.ChordBound {
 		return pointquery.Undecided, false, nil
 	}
-	cell := shell.triangleCells[index]
+	cell := shell.TriangleCells[index]
 	if cell.Section < 0 || cell.Section >= len(source.section.Spans) ||
-		cell.Section >= len(shell.sectionRings) ||
+		cell.Section >= len(shell.SectionRings) ||
 		source.section.Spans[cell.Section].Face == nil ||
-		cell.Band < 0 || cell.Band+1 >= len(shell.sectionRings[cell.Section]) ||
-		cell.Ray < 0 || cell.Ray >= shell.rayCount {
+		cell.Band < 0 || cell.Band+1 >= len(shell.SectionRings[cell.Section]) ||
+		cell.Ray < 0 || cell.Ray >= shell.RayCount {
 		return pointquery.Undecided, false, nil
 	}
-	group := shell.mesh.Src[index]
-	if group < 0 || group >= len(shell.mesh.Groups) ||
-		!sameRevolveLoftFacesShellGroup(source, shell, cell.Section, group) {
+	group := shell.Mesh.Src[index]
+	if group < 0 || group >= len(shell.Mesh.Groups) ||
+		!shell.SectionGroup(source.section.Spans, cell.Section, group) {
 		return pointquery.Undecided, false, nil
 	}
-	tri := shell.mesh.Tris[index]
+	tri := shell.Mesh.Tris[index]
 	for _, vertex := range tri {
-		if vertex < 0 || vertex >= len(shell.mesh.Verts) ||
-			!proofbound.FiniteVec(shell.mesh.Verts[vertex]) ||
-			proofbound.IsNonFinite(shell.vertexBounds[vertex]) ||
-			shell.vertexBounds[vertex] < 0 {
+		if vertex < 0 || vertex >= len(shell.Mesh.Verts) ||
+			!proofbound.FiniteVec(shell.Mesh.Verts[vertex]) ||
+			proofbound.IsNonFinite(shell.VertexBounds[vertex]) ||
+			shell.VertexBounds[vertex] < 0 {
 			return pointquery.Undecided, false, nil
 		}
 	}
-	want, valid := revolveLoftFacesShellCellTriangle(shell, cell)
-	if !valid || !sameTriangleVertices(tri, want) {
+	if !shell.CellMatches(tri, cell) {
 		return pointquery.Undecided, false, nil
 	}
-	required := proofbound.AbsSumUpper(shell.chordBound,
-		max(shell.vertexBounds[tri[0]], shell.vertexBounds[tri[1]], shell.vertexBounds[tri[2]]))
-	if proofbound.IsNonFinite(required) || shell.faceBound < required {
+	required := proofbound.AbsSumUpper(shell.ChordBound,
+		max(shell.VertexBounds[tri[0]], shell.VertexBounds[tri[1]], shell.VertexBounds[tri[2]]))
+	if proofbound.IsNonFinite(required) || shell.FaceBound < required {
 		return pointquery.Undecided, false, nil
 	}
-	separation := proofbound.AbsSumUpper(shell.faceBound, tool.n.Bound)
+	separation := proofbound.AbsSumUpper(shell.FaceBound, tool.n.Bound)
 	if proofbound.IsNonFinite(separation) || separation <= 0 {
 		return pointquery.Undecided, false, nil
 	}
 	held := [3]proof.Xpt{
-		proof.XptOf(shell.mesh.Verts[tri[0]]),
-		proof.XptOf(shell.mesh.Verts[tri[1]]),
-		proof.XptOf(shell.mesh.Verts[tri[2]]),
+		proof.XptOf(shell.Mesh.Verts[tri[0]]),
+		proof.XptOf(shell.Mesh.Verts[tri[1]]),
+		proof.XptOf(shell.Mesh.Verts[tri[2]]),
 	}
 	for _, facet := range tool.n.Triangles {
 		if err := ctx.Err(); err != nil {
@@ -265,7 +217,7 @@ func (c *revolveLoftFacesClearPatchContext) classifyClearPatch(ctx context.Conte
 	}
 	// The rounded query lies within the proved separation margin of the
 	// exact interior centroid; its displacement is charged explicitly.
-	if meshbool.PointRoundBound(centroid, point) >= shell.faceBound {
+	if meshbool.PointRoundBound(centroid, point) >= shell.FaceBound {
 		return pointquery.Undecided, false, nil
 	}
 	location, err := pointquery.Locate(ctx, point, tool.n.Vertices, tool.n.Triangles,
@@ -282,60 +234,4 @@ func revolveLoftFacesClearPatchToolCurrent(source *revolveLoftFacesSourceCertifi
 	}
 	payload, ok := source.tooth.n.Payload.(facetedPayload)
 	return ok && source.toolProof.current(source.tooth, payload)
-}
-
-func sameRevolveLoftFacesShellGroup(source *revolveLoftFacesSourceCertificate,
-	shell *revolveLoftFacesBlankSeamShell, section, group int) bool {
-	span := source.section.Spans[section]
-	if span.Face == nil || group >= len(shell.mesh.Groups) ||
-		!slices.Equal(shell.mesh.Groups[group].Origins, span.Origins) {
-		return false
-	}
-	want := 0
-	for i := range source.section.Spans {
-		if i == section {
-			return group == want
-		}
-		if source.section.Spans[i].Face != nil {
-			want++
-		}
-	}
-	return false
-}
-
-func revolveLoftFacesShellCellTriangle(shell *revolveLoftFacesBlankSeamShell,
-	cell revolveloftfaces.ShellTriangleCell) ([3]int, bool) {
-	var zero [3]int
-	start := shell.sectionRings[cell.Section][cell.Band]
-	end := shell.sectionRings[cell.Section][cell.Band+1]
-	if (len(start) != 1 && len(start) != shell.rayCount) ||
-		(len(end) != 1 && len(end) != shell.rayCount) ||
-		len(start) == 1 && len(end) == 1 {
-		return zero, false
-	}
-	next := (cell.Ray + 1) % shell.rayCount
-	switch {
-	case len(start) == 1:
-		if cell.Half != 0 {
-			return zero, false
-		}
-		return [3]int{start[0], end[cell.Ray], end[next]}, true
-	case len(end) == 1:
-		if cell.Half != 0 {
-			return zero, false
-		}
-		return [3]int{start[cell.Ray], end[0], start[next]}, true
-	case cell.Half == 0:
-		return [3]int{start[cell.Ray], end[cell.Ray], end[next]}, true
-	case cell.Half == 1:
-		return [3]int{start[cell.Ray], end[next], start[next]}, true
-	default:
-		return zero, false
-	}
-}
-
-func sameTriangleVertices(a, b [3]int) bool {
-	slices.Sort(a[:])
-	slices.Sort(b[:])
-	return a == b
 }

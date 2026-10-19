@@ -10,27 +10,20 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// ShellRaySeam is a source station's exact direction and held-point bound.
-type ShellRaySeam struct {
-	Y, Z      *big.Rat
-	Point     r3.Vec
-	LoftBound float64
-}
-
-// ShellRayCap is a certified cap endpoint and its radial source box.
+// ShellRayCap is a certified cap endpoint: its held point, its blank-side
+// bound and its radial source box.
 type ShellRayCap struct {
-	Point r3.Vec
-	Box   RayBox
+	Point      r3.Vec
+	BlankBound float64
+	Box        RayBox
 }
 
-// ShellRaySource reads authenticated anchors without copying them before the
-// caller's ray-count gate.
-type ShellRaySource interface {
-	RunCount() int
-	StationCount(run int) int
-	Station(run, station int) ShellRaySeam
-	CapCount() int
-	Cap(id int) ShellRayCap
+// ShellAnchors holds the authenticated source stations and cap endpoints that
+// one blank shell places on its angular grid. Seams holds one station run per
+// whole-arc source contact; a cap endpoint's ID is its index in Caps.
+type ShellAnchors struct {
+	Seams [][]ArcSeamVertex
+	Caps  []ShellRayCap
 }
 
 // ShellRayRef names one station of one source run.
@@ -52,8 +45,8 @@ type ShellTriangleCell struct {
 
 // ShellRays builds one angular grid for all source station runs and cap endpoints.
 // Coincident stations from different runs keep separate source IDs.
-func ShellRays(n int, source ShellRaySource) []ShellRay {
-	rays := make([]ShellRay, 0, 4*n+source.CapCount())
+func ShellRays(n int, anchors ShellAnchors) []ShellRay {
+	rays := make([]ShellRay, 0, 4*n+len(anchors.Caps))
 	for quadrant := range 4 {
 		for i := range n {
 			q := big.NewRat(int64(i), int64(n))
@@ -75,8 +68,7 @@ func ShellRays(n int, source ShellRaySource) []ShellRay {
 			rays = append(rays, ray)
 		}
 	}
-	for i := range source.CapCount() {
-		point := source.Cap(i)
+	for i, point := range anchors.Caps {
 		if point.Point.Y == 0 && point.Point.Z == 0 {
 			return nil
 		}
@@ -100,10 +92,9 @@ func ShellRays(n int, source ShellRaySource) []ShellRay {
 		}
 	}
 	rays = unique
-	for run := range source.RunCount() {
-		for station := range source.StationCount(run) {
-			point := source.Station(run, station)
-			rays = append(rays, ShellRay{Y: point.Y, Z: point.Z,
+	for run, seam := range anchors.Seams {
+		for station, point := range seam {
+			rays = append(rays, ShellRay{Y: point.Exact[1], Z: point.Exact[2],
 				SeamIndex: -1, SeamRefs: []ShellRayRef{{Run: run, Station: station}}})
 		}
 	}
@@ -139,14 +130,14 @@ func sameShellRay(a, b ShellRay) bool {
 
 // ShellRayOrderBounded checks the angular order of every source anchor. With
 // one run it also sets each ray's SeamIndex.
-func ShellRayOrderBounded(rays []ShellRay, source ShellRaySource) bool {
-	if source.RunCount() == 1 {
+func ShellRayOrderBounded(rays []ShellRay, anchors ShellAnchors) bool {
+	if len(anchors.Seams) == 1 {
 		for i := range rays {
 			if len(rays[i].SeamRefs) == 1 {
 				rays[i].SeamIndex = rays[i].SeamRefs[0].Station
 			}
 		}
-		if source.CapCount() == 0 {
+		if len(anchors.Caps) == 0 {
 			return true
 		}
 		orderRays := make([]RayOrderRay, len(rays))
@@ -158,31 +149,30 @@ func ShellRayOrderBounded(rays []ShellRay, source ShellRaySource) bool {
 				orderRays[i].CapID = ray.CapIDs[0]
 			}
 		}
-		orderSeam := make([]RayOrderSeam, source.StationCount(0))
-		for i := range orderSeam {
-			point := source.Station(0, i)
+		orderSeam := make([]RayOrderSeam, len(anchors.Seams[0]))
+		for i, point := range anchors.Seams[0] {
 			orderSeam[i] = RayOrderSeam{Point: point.Point, LoftBound: point.LoftBound}
 		}
-		capBoxes := make([]RayBox, source.CapCount())
-		for i := range capBoxes {
-			capBoxes[i] = source.Cap(i).Box
+		capBoxes := make([]RayBox, len(anchors.Caps))
+		for i, point := range anchors.Caps {
+			capBoxes[i] = point.Box
 		}
 		return CapRayOrderBounded(orderRays, orderSeam, capBoxes)
 	}
-	return allShellRayOrderBounded(rays, source)
+	return allShellRayOrderBounded(rays, anchors)
 }
 
 // Every source anchor must stay in the same cyclic angular order as the
 // shared ring grid. A cap endpoint and a seam station cannot share a ray.
-func allShellRayOrderBounded(rays []ShellRay, source ShellRaySource) bool {
+func allShellRayOrderBounded(rays []ShellRay, anchors ShellAnchors) bool {
 	if len(rays) < 4 {
 		return false
 	}
 	boxes := make([][]RayBox, len(rays))
-	seenCaps := make([]bool, source.CapCount())
-	seenStations := make([][]bool, source.RunCount())
+	seenCaps := make([]bool, len(anchors.Caps))
+	seenStations := make([][]bool, len(anchors.Seams))
 	for run := range seenStations {
-		seenStations[run] = make([]bool, source.StationCount(run))
+		seenStations[run] = make([]bool, len(anchors.Seams[run]))
 	}
 	for index, ray := range rays {
 		if ray.Y == nil || ray.Z == nil || len(ray.CapIDs) > 1 ||
@@ -195,20 +185,20 @@ func allShellRayOrderBounded(rays []ShellRay, source ShellRaySource) bool {
 				Z: loftface.Interval{Lo: ray.Z, Hi: ray.Z}}}
 		}
 		for _, id := range ray.CapIDs {
-			if id < 0 || id >= source.CapCount() || seenCaps[id] {
+			if id < 0 || id >= len(anchors.Caps) || seenCaps[id] {
 				return false
 			}
 			seenCaps[id] = true
-			boxes[index] = append(boxes[index], source.Cap(id).Box)
+			boxes[index] = append(boxes[index], anchors.Caps[id].Box)
 		}
 		for _, ref := range ray.SeamRefs {
-			if ref.Run < 0 || ref.Run >= source.RunCount() ||
-				ref.Station < 0 || ref.Station >= source.StationCount(ref.Run) ||
+			if ref.Run < 0 || ref.Run >= len(anchors.Seams) ||
+				ref.Station < 0 || ref.Station >= len(anchors.Seams[ref.Run]) ||
 				seenStations[ref.Run][ref.Station] {
 				return false
 			}
 			seenStations[ref.Run][ref.Station] = true
-			point := source.Station(ref.Run, ref.Station)
+			point := anchors.Seams[ref.Run][ref.Station]
 			if proofbound.IsNonFinite(point.LoftBound) || point.LoftBound < 0 {
 				return false
 			}

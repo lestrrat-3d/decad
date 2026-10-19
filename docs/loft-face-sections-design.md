@@ -618,7 +618,7 @@ requires its exact circle to lie strictly inside one straight section side,
 and orders multiple cuts by their exact meridian fractions. Both bands next
 to a cut reuse the same ring vertex indices. The complete shell then repeats
 the crossing, Euler, volume, and face-bound audits. A changed arc refuses.
-The neutral producer yields two cap rings, 658 vertices, and 1312 triangles.
+The neutral producer yields two cap rings, 690 vertices, and 1376 triangles.
 The shell still does not admit `Union`.
 
 For each occupied heel arc, the endpoint builder checks its live source

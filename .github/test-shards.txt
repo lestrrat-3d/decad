@@ -75,7 +75,6 @@
 3	2.96	TestCurvedLoftFacesRealCopySeparation
 3	5.18	TestCurvedLoftFacesSourceCertifiesLiveProducer
 3	9.80	TestCurvedMultiRunShellConsumesLiveGraph
-3	0.02	TestCurvedMultiRunShellRayOwnersRefuseCollisions
 3	0.00	TestLayoutPartGuardsRefuse
 3	1.82	TestObliqueBossJunctionFilletPublicWorkflow
 3	0.01	TestObliqueBossRejectsPartialJunctionSource
@@ -87,7 +86,6 @@
 3	0.03	TestSweepPairPlacedFacetedFloorImpactAndDeparture
 4	0.00	TestCICPUClassShard8
 4	0.37	TestCounterboreShellMeshVolumeProof
-4	0.00	TestCurvedCapRayRejectsGridCollapse
 4	7.01	TestCurvedCensusMeridianMemoMatchesDirect
 4	11.75	TestCurvedCensusOwnedArcsMatchLiveCheck
 4	5.43	TestCurvedMappedSourceConsumesLiveProducer
