@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/measurement"
+	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
@@ -409,10 +410,11 @@ func (r *rollingPairSweep) track(first *SweepSample, support placedruling.Plane,
 	if r.m == 0 {
 		direction = proofarith.DvSub(proofarith.DyV3{}, direction)
 	}
-	normal, angle, ok := planarNormal(direction)
+	reading, angle, ok := pairbox.PlanarNormalMeasurement(direction)
 	if !ok || angle.Base() > r.req.NormalResolution.Base() {
 		return nil, false, nil
 	}
+	normal := vecMeasurementFromInternal(reading)
 	// The ends publish in the exact coordinate order of their start rims, as
 	// ContactPair publishes the ruling; a rigid motion keeps that pairing.
 	ends := r.cylinder.source

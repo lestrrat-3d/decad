@@ -124,9 +124,9 @@ func classifySourceSphereBox(report *reportvocab.ContactReport, sphere sourceSph
 	case pair.Overlapping:
 		report.Relation = reportvocab.ContactOverlapping
 	}
-	report.Reason = sourceBoxReason(result.Reason)
+	report.Reason = reportvocab.ContactReasonOf(result.Reason)
 	if result.Gap != nil {
-		gap := sourceBoxScalar(*result.Gap)
+		gap := result.Gap.Measurement()
 		report.Gap = &gap
 	}
 	if result.Witness == nil {
@@ -151,8 +151,8 @@ func classifySourceSphereBox(report *reportvocab.ContactReport, sphere sourceSph
 	case 2:
 		normal.Z = float64(sign)
 	}
-	onSphere := sourceBoxPointMeasurement(witness.SpherePoint)
-	onBox := sourceBoxPointMeasurement(witness.BoxPoint)
+	onSphere := witness.SpherePoint.Measurement()
+	onBox := witness.BoxPoint.Measurement()
 	featureSphere, featureBox := reportvocab.ContactFeature{Face: faceNode(sphere.face)}, reportvocab.ContactFeature{Face: faceNode(face)}
 	onA, onB := onBox, onSphere
 	featureA, featureB := featureBox, featureSphere
@@ -163,7 +163,7 @@ func classifySourceSphereBox(report *reportvocab.ContactReport, sphere sourceSph
 	report.Manifold = &reportvocab.ContactManifold{Points: []reportvocab.ContactPoint{{
 		OnA: onA, OnB: onB, Normal: measurement.VecMeasurement{
 			Value: normal, Bound: units.Scalar(0), Exactness: measurement.Exact},
-		NormalAngle: units.Radians(0), Separation: sourceBoxScalar(witness.Separation),
+		NormalAngle: units.Radians(0), Separation: witness.Separation.Measurement(),
 		FaceA: featureA.Face, FaceB: featureB.Face, FeatureA: featureA, FeatureB: featureB,
 	}}}
 }
@@ -202,9 +202,9 @@ func classifySourceSpherePair(report *reportvocab.ContactReport, a, b sourceSphe
 	case pair.Overlapping:
 		report.Relation = reportvocab.ContactOverlapping
 	}
-	report.Reason = sourceBoxReason(result.Reason)
+	report.Reason = reportvocab.ContactReasonOf(result.Reason)
 	if result.Gap != nil {
-		gap := sourceBoxScalar(*result.Gap)
+		gap := result.Gap.Measurement()
 		report.Gap = &gap
 	}
 	if result.Witness == nil {
@@ -215,9 +215,9 @@ func classifySourceSpherePair(report *reportvocab.ContactReport, a, b sourceSphe
 		Bound:     units.Scalar(witness.Normal.Bound),
 		Exactness: measurement.ExactnessOf(witness.Normal.Bound)}
 	report.Manifold = &reportvocab.ContactManifold{Points: []reportvocab.ContactPoint{{
-		OnA: sourceBoxPointMeasurement(witness.OnA), OnB: sourceBoxPointMeasurement(witness.OnB),
+		OnA: witness.OnA.Measurement(), OnB: witness.OnB.Measurement(),
 		Normal: normal, NormalAngle: units.Radians(witness.Normal.Angle),
-		Separation: sourceBoxScalar(witness.Separation),
+		Separation: witness.Separation.Measurement(),
 		FaceA:      faceNode(a.face), FaceB: faceNode(b.face),
 		FeatureA: reportvocab.ContactFeature{Face: faceNode(a.face)}, FeatureB: reportvocab.ContactFeature{Face: faceNode(b.face)},
 	}}}
@@ -239,9 +239,9 @@ func classifySourceSphereOrientedBox(report *reportvocab.ContactReport, sphere s
 	case pair.Overlapping:
 		report.Relation = reportvocab.ContactOverlapping
 	}
-	report.Reason = sourceBoxReason(result.Reason)
+	report.Reason = reportvocab.ContactReasonOf(result.Reason)
 	if result.Gap != nil {
-		gap := sourceBoxScalar(*result.Gap)
+		gap := result.Gap.Measurement()
 		report.Gap = &gap
 	}
 	if result.Witness == nil {
@@ -256,9 +256,9 @@ func classifySourceSphereOrientedBox(report *reportvocab.ContactReport, sphere s
 	normal := measurement.VecMeasurement{Value: witness.Normal.Value,
 		Bound: units.Scalar(witness.Normal.Bound), Exactness: measurement.ExactnessOf(witness.Normal.Bound)}
 	point := reportvocab.ContactPoint{Normal: normal, NormalAngle: units.Radians(witness.Normal.Angle),
-		Separation: sourceBoxScalar(witness.Separation)}
-	boxPoint := sourceBoxPointMeasurement(witness.BoxPoint)
-	spherePoint := sourceBoxPointMeasurement(witness.SpherePoint)
+		Separation: witness.Separation.Measurement()}
+	boxPoint := witness.BoxPoint.Measurement()
+	spherePoint := witness.SpherePoint.Measurement()
 	if sphereFirst {
 		point.OnA, point.OnB = spherePoint, boxPoint
 		point.FeatureA, point.FeatureB = reportvocab.ContactFeature{Face: faceNode(sphere.face)}, reportvocab.ContactFeature{Face: faceNode(face)}

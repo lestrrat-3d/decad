@@ -1,8 +1,6 @@
 package decad
 
 import (
-	"math/big"
-
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/pair"
@@ -317,9 +315,8 @@ func publishOrientedBoxPatch(report *reportvocab.ContactReport, a, b orientedSou
 	points := make([]reportvocab.ContactPoint, 0, 4)
 	for _, corner := range [][2]int{{0, 0}, {1, 0}, {1, 1}, {0, 1}} {
 		point := geometry.Point(a.OrientedBox, corner)
-		witness, valid := orientedBoxPoint(point)
-		onBoth := vecMeasurementToInternal(witness)
-		if !valid || witness.Bound.Base() > report.Request.PointResolution.Base() {
+		onBoth, valid := pairbox.PointMeasurement(point)
+		if !valid || onBoth.Bound.Base() > report.Request.PointResolution.Base() {
 			report.Reason = reportvocab.ContactPointTooCoarse
 			return
 		}
@@ -332,20 +329,11 @@ func publishOrientedBoxPatch(report *reportvocab.ContactReport, a, b orientedSou
 	report.Reason = reportvocab.ContactNoReason
 }
 
-func orientedBoxPoint(point [3]*big.Rat) (VecMeasurement, bool) {
-	reading, ok := pairbox.RationalPointReading(point)
-	if !ok {
-		return VecMeasurement{}, false
-	}
-	return VecMeasurement{Value: reading.Value, Bound: units.Millimeters(reading.BoundMM),
-		Exactness: exactnessOf(reading.BoundMM)}, true
-}
-
 func orientedBoxNormal(axis proofarith.DyV3) (measurement.VecMeasurement, units.Value, bool) {
 	reading, ok := pairbox.DyadicNormalReading(axis)
 	if !ok {
 		return measurement.VecMeasurement{}, units.Value{}, false
 	}
-	return measurement.VecMeasurement{Value: reading.Value, Bound: units.Scalar(reading.Bound),
-		Exactness: measurement.ExactnessOf(reading.Bound)}, units.Radians(reading.Angle), true
+	normal, angle := reading.Measurement()
+	return normal, angle, true
 }

@@ -4,11 +4,50 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
 )
+
+// Measurement publishes the reading as a position, Exact only for a zero
+// bound.
+func (r PointReading) Measurement() measurement.VecMeasurement {
+	return measurement.VecMeasurement{Value: r.Value, Bound: units.Millimeters(r.BoundMM),
+		Exactness: measurement.ExactnessOf(r.BoundMM)}
+}
+
+// Measurement publishes the reading as a unit direction, Exact only for a
+// zero bound, and its angular error in radians.
+func (r NormalReading) Measurement() (measurement.VecMeasurement, units.Value) {
+	return measurement.VecMeasurement{Value: r.Value, Bound: units.Scalar(r.Bound),
+		Exactness: measurement.ExactnessOf(r.Bound)}, units.Radians(r.Angle)
+}
+
+// PointMeasurement converts an exact world point once to a float witness
+// with an outward ball (RationalPointReading). It reports false when the
+// point or its ball is not finite.
+func PointMeasurement(point [3]*big.Rat) (measurement.VecMeasurement, bool) {
+	reading, ok := RationalPointReading(point)
+	if !ok {
+		return measurement.VecMeasurement{}, false
+	}
+	return reading.Measurement(), true
+}
+
+// PlanarNormalMeasurement normalizes an exact direction with an enclosing
+// ball and its angle (PlanarNormalReading). It reports false for a zero
+// direction or a reading that is not finite.
+func PlanarNormalMeasurement(dir proofarith.DyV3) (measurement.VecMeasurement, units.Value, bool) {
+	reading, ok := PlanarNormalReading(dir)
+	if !ok {
+		return measurement.VecMeasurement{}, units.Value{}, false
+	}
+	normal, angle := reading.Measurement()
+	return normal, angle, true
+}
 
 // RationalPointReading rounds an exact world point and bounds its 3D error.
 func RationalPointReading(point [3]*big.Rat) (PointReading, bool) {

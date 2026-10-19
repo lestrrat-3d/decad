@@ -12,10 +12,8 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
-	"github.com/lestrrat-3d/decad/internal/pair"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
-	"github.com/lestrrat-3d/units"
 )
 
 // sourceBoxContactProof is the complete exact occupied interval of a source
@@ -104,20 +102,10 @@ func publishSourceBoxPatch(report *reportvocab.ContactReport, a, b sourceBoxCont
 		axis, sign, separation,
 		box.AxisBoxRequest{PointResolutionMM: report.Request.PointResolution.Base()},
 	)
-	report.Reason = sourceBoxReason(reason)
+	report.Reason = reportvocab.ContactReasonOf(reason)
 	if patch != nil {
 		publishAxisBoxPatch(report, a, b, patch)
 	}
-}
-
-func sourceBoxScalar(reading pair.ScalarReading) measurement.Measurement {
-	return measurement.Measurement{Value: units.Millimeters(reading.ValueMM),
-		Bound: units.Millimeters(reading.BoundMM), Exactness: measurement.ExactnessOf(reading.BoundMM)}
-}
-
-func sourceBoxPointMeasurement(reading box.PointReading) measurement.VecMeasurement {
-	return measurement.VecMeasurement{Value: reading.Value, Bound: units.Millimeters(reading.BoundMM),
-		Exactness: measurement.ExactnessOf(reading.BoundMM)}
 }
 
 func sourceBoxGap(gaps [3]proofarith.Dyadic) (measurement.Measurement, bool) {
@@ -125,7 +113,7 @@ func sourceBoxGap(gaps [3]proofarith.Dyadic) (measurement.Measurement, bool) {
 	if !ok {
 		return measurement.Measurement{}, false
 	}
-	return sourceBoxScalar(reading), true
+	return reading.Measurement(), true
 }
 
 func sourceBoxPoint(point proofarith.DyV3) (measurement.VecMeasurement, bool) {
@@ -137,7 +125,7 @@ func sourceBoxPointAt(point *proofarith.DyV3) (measurement.VecMeasurement, bool)
 	if !ok {
 		return measurement.VecMeasurement{}, false
 	}
-	return sourceBoxPointMeasurement(reading), true
+	return reading.Measurement(), true
 }
 
 func sourceBoxSignedReading(value proofarith.Dyadic) (measurement.Measurement, bool) {
@@ -145,7 +133,7 @@ func sourceBoxSignedReading(value proofarith.Dyadic) (measurement.Measurement, b
 	if !ok {
 		return measurement.Measurement{}, false
 	}
-	return sourceBoxScalar(reading), true
+	return reading.Measurement(), true
 }
 
 func dyMax(a, b proofarith.Dyadic) proofarith.Dyadic {

@@ -201,11 +201,11 @@ func classifySourceCylinderBox(report *reportvocab.ContactReport, cylinder sourc
 		return
 	}
 	sign := signIfBoxSide(side)
-	boxWitness, cylinderWitness := sourceBoxPointMeasurement(boxReading), sourceBoxPointMeasurement(cylinderReading)
+	boxWitness, cylinderWitness := boxReading.Measurement(), cylinderReading.Measurement()
 	point := reportvocab.ContactPoint{OnA: boxWitness, OnB: cylinderWitness,
 		FaceA: faceNode(boxFace), FaceB: faceNode(cylinderFace),
 		FeatureA: reportvocab.ContactFeature{Face: faceNode(boxFace)}, FeatureB: reportvocab.ContactFeature{Face: faceNode(cylinderFace)},
-		NormalAngle: units.Radians(0), Separation: sourceBoxScalar(signedReading)}
+		NormalAngle: units.Radians(0), Separation: signedReading.Measurement()}
 	if cylinderFirst {
 		point.OnA, point.OnB = point.OnB, point.OnA
 		point.FaceA, point.FaceB = point.FaceB, point.FaceA

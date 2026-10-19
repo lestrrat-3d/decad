@@ -4,10 +4,13 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"slices"
 	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/measurement"
+	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
+	"github.com/lestrrat-3d/decad/internal/planarband"
 	"github.com/lestrrat-3d/decad/internal/planarsnapshot"
 	"github.com/lestrrat-3d/decad/internal/planarsweep"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -375,7 +378,7 @@ func (r *rotationalPairSweep) planarSupports(poll func() error) ([]planarSupport
 		rest = speed
 	}
 	inputs := [2]planarsweep.SupportPath{planarSupportPathOf(paths[0]), planarSupportPathOf(paths[1])}
-	candidates, err := planarsweep.FindSupports(inputs, supportBandOf(r.req.ContactRequest), rest, poll)
+	candidates, err := planarsweep.FindSupports(inputs, planarband.SupportBand(r.req.ContactRequest), rest, poll)
 	if err != nil {
 		return nil, err
 	}
@@ -650,17 +653,18 @@ func (r *rotationalPairSweep) planarTrack(support *planarSupport, face planarFac
 			entries = append(entries, entry{index: index, feature: feature, key: features.Order(support.Guest, feature)})
 		}
 		part := entries[from:]
-		sort.SliceStable(part, func(i, j int) bool { return compareKey(part[i].key, part[j].key) < 0 })
+		sort.SliceStable(part, func(i, j int) bool { return slices.Compare(part[i].key[:], part[j].key[:]) < 0 })
 	}
 	direction := support.Normal
 	if support.Guest == 0 {
 		direction = proofarith.DyV3{proofarith.DyNeg(direction[0]), proofarith.DyNeg(direction[1]),
 			proofarith.DyNeg(direction[2])}
 	}
-	normal, angle, ok := planarNormal(direction)
+	reading, angle, ok := pairbox.PlanarNormalMeasurement(direction)
 	if !ok || angle.Base() > r.req.NormalResolution.Base() {
 		return nil, false, nil
 	}
+	normal := vecMeasurementFromInternal(reading)
 	widening := proofbound.RatMul(big.NewRat(2, 1), proofarith.DyAdd(r.a.delta, r.b.delta).Rat())
 	depth := new(big.Rat).Add(heldDepth, widening)
 	proof := &planarTrackProof{paths: [2]rotationalSweepPath{r.a, r.b}, m: support.Guest, s: support.Owner,
@@ -763,10 +767,11 @@ func (p *planarTrackProof) planarManifoldAt(f *big.Rat, req reportvocab.ContactR
 // planarTrackPoint converts an exact point once and widens its ball by the
 // pose deviation; the result must fit the resolution.
 func planarTrackPoint(point [3]*big.Rat, deviation, resolution *big.Rat) (VecMeasurement, bool) {
-	value, ok := orientedBoxPoint(point)
+	reading, ok := pairbox.PointMeasurement(point)
 	if !ok {
 		return VecMeasurement{}, false
 	}
+	value := vecMeasurementFromInternal(reading)
 	bound := new(big.Rat).Add(proofarith.FloatRat(value.Bound.Base()), deviation)
 	published := proofbound.RatFloatUp(bound)
 	if !measurement.FiniteValues(published) || bound.Cmp(resolution) > 0 ||

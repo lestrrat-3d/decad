@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/pair"
 	"github.com/lestrrat-3d/decad/internal/pair/box"
+	"github.com/lestrrat-3d/decad/internal/planarband"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -493,7 +494,7 @@ func classifyUndecidedCylinder(ctx context.Context, report *reportvocab.ContactR
 // know no band, so the exact planar path decides whether the pair is §10.5's
 // ContactBand, and its report replaces this one when it is.
 func classifyPlanarSupportBand(ctx context.Context, report *reportvocab.ContactReport) error {
-	if supportBandOf(report.Request).Sign() <= 0 || report.Relation != reportvocab.ContactSeparated || report.Gap == nil ||
+	if planarband.SupportBand(report.Request).Sign() <= 0 || report.Relation != reportvocab.ContactSeparated || report.Gap == nil ||
 		report.Gap.Value.Base()-report.Gap.Bound.Base() > report.Request.SupportBand.Base() {
 		return nil
 	}
@@ -560,32 +561,15 @@ func classifySourceBoxes(report *reportvocab.ContactReport, a, b sourceBoxContac
 	default:
 		report.Relation = reportvocab.ContactUndecided
 	}
-	report.Reason = sourceBoxReason(result.Reason)
+	report.Reason = reportvocab.ContactReasonOf(result.Reason)
 	if result.Gap != nil {
-		gap := sourceBoxScalar(*result.Gap)
+		gap := result.Gap.Measurement()
 		report.Gap = &gap
 	}
 	if result.Patch == nil {
 		return
 	}
 	publishAxisBoxPatch(report, a, b, result.Patch)
-}
-
-func sourceBoxReason(reason pair.Reason) reportvocab.ContactReason {
-	switch reason {
-	case pair.NoGapProof:
-		return reportvocab.ContactNoGapProof
-	case pair.AmbiguousFeature:
-		return reportvocab.ContactAmbiguousFeature
-	case pair.PointTooCoarse:
-		return reportvocab.ContactPointTooCoarse
-	case pair.PayloadUnsupported:
-		return reportvocab.ContactPayloadUnsupported
-	case pair.NoNormalProof:
-		return reportvocab.ContactNoNormalProof
-	default:
-		return reportvocab.ContactNoReason
-	}
 }
 
 func publishAxisBoxPatch(report *reportvocab.ContactReport, a, b sourceBoxContactProof, patch *box.AxisBoxPatch) {
@@ -600,12 +584,12 @@ func publishAxisBoxPatch(report *reportvocab.ContactReport, a, b sourceBoxContac
 	case 2:
 		normal.Z = float64(patch.NormalSign)
 	}
-	separation := sourceBoxScalar(patch.Separation)
+	separation := patch.Separation.Measurement()
 	points := make([]reportvocab.ContactPoint, 0, len(patch.Points))
 	for _, point := range patch.Points {
 		points = append(points, reportvocab.ContactPoint{
-			OnA:         sourceBoxPointMeasurement(point.OnA),
-			OnB:         sourceBoxPointMeasurement(point.OnB),
+			OnA:         point.OnA.Measurement(),
+			OnB:         point.OnB.Measurement(),
 			Normal:      measurement.VecMeasurement{Value: normal, Exactness: measurement.Exact, Bound: units.Scalar(0)},
 			NormalAngle: units.Radians(0),
 			Separation:  separation,

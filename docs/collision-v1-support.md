@@ -133,7 +133,7 @@ on a tray's floor publishes its four bottom corners. Any other touch or
 overlap of two non-convex bodies names `ContactNonConvex`, such as that cup
 against the tray's floor and wall at once. A touch it cannot resolve
 locally, such as two flush bodies meeting at a saddle point, stays
-`ContactUndecided`. [Planar pair tests](../contact_faceted_pair_test.go)
+`ContactUndecided`. [Planar pair tests](../apitest/contact_faceted_pair_test.go)
 check each relation.
 
 When one body is convex, a touch also publishes a manifold of exact points.

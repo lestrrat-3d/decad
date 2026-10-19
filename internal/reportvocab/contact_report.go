@@ -2,6 +2,7 @@ package reportvocab
 
 import (
 	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/pair"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -36,6 +37,25 @@ const (
 	ContactPointTooCoarse
 	ContactNonConvex
 )
+
+// ContactReasonOf names a pair kernel's missing certificate as a contact
+// reason; pair.NoReason, and any reason it does not name, is ContactNoReason.
+func ContactReasonOf(reason pair.Reason) ContactReason {
+	switch reason {
+	case pair.NoGapProof:
+		return ContactNoGapProof
+	case pair.AmbiguousFeature:
+		return ContactAmbiguousFeature
+	case pair.PointTooCoarse:
+		return ContactPointTooCoarse
+	case pair.PayloadUnsupported:
+		return ContactPayloadUnsupported
+	case pair.NoNormalProof:
+		return ContactNoNormalProof
+	default:
+		return ContactNoReason
+	}
+}
 
 // ContactFeature names an original topological feature by its node.
 type ContactFeature struct {
