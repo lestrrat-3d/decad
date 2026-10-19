@@ -133,7 +133,7 @@ func TestLoftFacesToConeTangentBuildsExactEnd(t *testing.T) {
 	end := body.n.Payload.(facetedPayload)
 	n := len(record.Source.SourceStation)
 	for j, station := range record.Source.SourceStation {
-		u, v := lfStationUV(station)
+		u, v := lfF(station.U), lfF(station.V)
 		want := loftface.RoundPoint(record.Final.At(u, v))
 		require.Equal(t, want, end.Verts[2*n+j])
 	}

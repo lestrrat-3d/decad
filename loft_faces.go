@@ -44,7 +44,13 @@ func buildLoftFaces(ctx context.Context, d *Document, selected []loftFaceSection
 	if err != nil {
 		return nil, err
 	}
-	embedding, err := proveLoftFaceEmbedding(ctx, selected, source)
+	embedSections := make([]revolveloftfaces.EmbeddingSection, len(selected))
+	for i, section := range selected {
+		embedSections[i] = revolveloftfaces.EmbeddingSection{
+			Mesh: section.mesh, Limit: section.limit, Constructed: section.constructed,
+		}
+	}
+	embedding, err := revolveloftfaces.ProveEmbedding(ctx, embedSections, source)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +63,7 @@ func buildLoftFaces(ctx context.Context, d *Document, selected []loftFaceSection
 	if err != nil {
 		return nil, err
 	}
-	if err := orientLoftFaces(&mesh, selected[0].slice.Base, source, embedding.sign); err != nil {
+	if err := revolveloftfaces.Orient(&mesh, selected[0].slice.Base, source, embedding.Sign); err != nil {
 		return nil, err
 	}
 	audit, err := facetproof.AuditFacetedMesh(ctx, mesh.Verts, mesh.Tris)
@@ -75,13 +81,13 @@ func buildLoftFaces(ctx context.Context, d *Document, selected []loftFaceSection
 		}
 	}
 	mesh, err = revolveloftfaces.ProveBounds(ctx, boundSections, source,
-		embedding.maps, embedding.jacobianSum, mesh, selected[0].slice.Base)
+		embedding.Maps, embedding.JacobianSum, mesh, selected[0].slice.Base)
 	if err != nil {
 		return nil, err
 	}
 	capBounds := make([]loftFaceCapBounds, len(selected))
 	for i := range selected {
-		capBounds[i], err = revolveloftfaces.CapBounds(ctx, embedding.maps[i], boundSections[i], source)
+		capBounds[i], err = revolveloftfaces.CapBounds(ctx, embedding.Maps[i], boundSections[i], source)
 		if err != nil {
 			return nil, err
 		}
@@ -94,10 +100,10 @@ func buildLoftFaces(ctx context.Context, d *Document, selected []loftFaceSection
 	}
 	mesh.LoftFacesPrimitive = true
 	mesh.LoftFacesCap = &loftFacesCapRecord{Source: source,
-		Maps:         append([]loftFaceMap(nil), embedding.maps...),
+		Maps:         append([]loftFaceMap(nil), embedding.Maps...),
 		Bounds:       capBounds,
 		StationGroup: append([]int(nil), selected[0].slice.Base.Src[:len(source.SourceStation)]...),
-		Final:        embedding.maps[len(embedding.maps)-1], Group: len(mesh.Groups) - 1,
+		Final:        embedding.Maps[len(embedding.Maps)-1], Group: len(mesh.Groups) - 1,
 		Tangent: tangent}
 	body, err := bodyResult(facetedrecord.BuildWithProof(ctx, envOf(documentNode(d), ref), mesh, audit, measurementToInternal(Measurement{}), nil))
 	if err != nil {
