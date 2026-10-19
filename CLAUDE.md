@@ -38,6 +38,7 @@ APIs are design-only.**
 | Anything the surrounding `.go` file documents | its doc comments |
 | Answering what is missing, or closing/adding a refusal | `docs/missing-features.md` |
 | Tests and CI shards | `docs/testing.md` |
+| Adding or importing a `go.mod` module | `docs/modules.md` |
 
 ## Hard rules
 
@@ -88,23 +89,8 @@ APIs are design-only.**
   fullness `Rho` — which is a dimensionless index into a parameterisation, not a
   measurement of anything.
   Neither is a licence for a bare float anywhere else.
-- **NEVER add a `go.mod` module without recording the decision here.** Approved:
-  - `github.com/lestrrat-3d/sketch` — parametric 2D constraint engine.
-  - `github.com/lestrrat-3d/r3` — 3D coordinate math (`Vec`, `Frame`,
-    `Transform`).
-  - `github.com/lestrrat-3d/units` — typed quantities (`Value`, `Kind`).
-    decad's inputs and `Measurement`s are `units.Value`, the module `sketch`
-    uses too, so no parallel unit system exists.
-  - `github.com/lestrrat-3d/step` — AP214; `export` package only.
-  - `github.com/lestrrat-go/option/v3` — functional options (house library). Used
-    by feature options.
-  - `github.com/stretchr/testify/require` — assertions, **test code only**.
-    NEVER import from production code.
-  - `_gallery` module ALONE; the root `go.mod`/`go.sum` never list them:
-    - `github.com/lestrrat-3d/solidlens` — pure-Go mesh rasterizer; README
-      images.
-    - `github.com/lestrrat-3d/kinetograph` — animates decad bodies; landing
-      clip (`go run . clip`) and dynamics scenes (`go run . dynamics`).
+- **NEVER add a `go.mod` module without recording the decision in
+  `docs/modules.md`.**
 - **Tooling lives in its own nested module.** `_gallery/` renders the README
   images and landing clip, and `_shardgen/` packs the race shards. Both carry
   their own `go.mod` and an `_` prefix, so the root module, its linter and
