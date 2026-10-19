@@ -141,7 +141,11 @@ func TestVerticalTraceRefusesChangedSourceAndRayOwners(t *testing.T) {
 	require.NotNil(t, ring)
 	pieces, chained := revolveLoftFacesVerticalTraceChain(graph, arc)
 	require.True(t, chained)
-	require.True(t, revolveLoftFacesVerticalTraceSourceProof(pieces, arc.arc.circle.radius))
+	sourcePieces := make([]revolveloftfaces.VerticalTraceSourcePiece, len(pieces))
+	for i := range pieces {
+		sourcePieces[i] = pieces[i].VerticalTraceSourcePiece
+	}
+	require.True(t, revolveloftfaces.VerticalTraceSourceProof(sourcePieces, arc.arc.circle.radius))
 
 	copyGraph := func() *revolveLoftFacesContactGraph {
 		clone := *graph
@@ -173,9 +177,9 @@ func TestVerticalTraceRefusesChangedSourceAndRayOwners(t *testing.T) {
 	_, chained = revolveLoftFacesVerticalTraceChain(graph, &missing)
 	require.False(t, chained)
 
-	wrongCenter := *pieces[1].affine
+	wrongCenter := *pieces[1].Affine
 	wrongCenter.Offset[0] = lfAdd(wrongCenter.Offset[0], lfOne())
-	_, centered := revolveloftfaces.VerticalTraceArcRadius(&wrongCenter, *pieces[1].arc)
+	_, centered := revolveloftfaces.VerticalTraceArcRadius(&wrongCenter, *pieces[1].Arc)
 	require.False(t, centered, "a moved Sketch arc is not centered on the blank axis")
 	payload := tooth.n.Payload.(facetedPayload)
 	trim := *payload.LoftFacesTrim
@@ -215,7 +219,7 @@ func TestVerticalTraceRefusesChangedSourceAndRayOwners(t *testing.T) {
 	require.Empty(t, pathEdges)
 	require.Zero(t, pathBound)
 	startRay := shell.rays[capRays[0]]
-	join, _, direction, joined := revolveLoftFacesTraceJoin(proof, pieces[0], pieces[0].to)
+	join, _, direction, joined := revolveLoftFacesTraceJoin(proof, pieces[0], pieces[0].To)
 	require.True(t, joined)
 	moved := shell.mesh.Verts[ring.endpoints[0]]
 	moved.Y++
@@ -223,7 +227,7 @@ func TestVerticalTraceRefusesChangedSourceAndRayOwners(t *testing.T) {
 		revolveLoftFacesVerticalTraceHit{piece: 0, ray: capRays[0],
 			lo: pieces[0].cell.upper.Root.Lo, hi: pieces[0].cell.upper.Root.Hi},
 		revolveLoftFacesVerticalTraceHit{piece: 0, ray: -1,
-			lo: pieces[0].to, hi: pieces[0].to},
+			lo: pieces[0].To, hi: pieces[0].To},
 		[2]*big.Rat{startRay.y, startRay.z}, direction, moved, join, shell.rays)
 	require.True(t, bounded)
 	require.Greater(t, motionBound, 0.1, "a moved endpoint exceeds the trace fit limit")

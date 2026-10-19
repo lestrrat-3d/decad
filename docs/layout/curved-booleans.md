@@ -30,7 +30,6 @@ The rules for rows live in `docs/layout.md`.
 | `revolve_loft_faces_cap_seam_vertices.go` | Bounds held heel-cap endpoints against live source boxes. See loft-face-sections design. |
 | `revolve_loft_faces_shell_manifest.go` | Compares every retained Revolve and LoftFaces source-side cell against current producers. See loft-face-sections design. |
 | `revolve_loft_faces_vertical_trace.go` | Links graph-owned vertical source cells into one exact parameter path. See revolve-loft-contact-graph design. |
-| `revolve_loft_faces_vertical_trace_proof.go` | Proves the line and centered-arc source path stays simple inside its cap circle. See revolve-loft-contact-graph design. |
 | `revolve_loft_faces_vertical_trace_path.go` | Finds every source crossing on shell rays and bounds the held contact path. See revolve-loft-contact-graph design. |
 | `revolve_loft_faces_vertical_trace_wedge.go` | Selects shell wedges and inserts bounded contact edges; internal/revolveloftfaces triangulates them. See revolve-loft-contact-graph design. |
 | `revolve_loft_faces_vertical_trace_mesh.go` | Inserts the vertical path into a fresh all-run shell and repeats shell audits. See revolve-loft-contact-graph design. |

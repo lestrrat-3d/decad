@@ -23,17 +23,10 @@ type revolveLoftFacesVerticalTrace struct {
 }
 
 type revolveLoftFacesVerticalTracePiece struct {
+	revolveloftfaces.VerticalTraceSourcePiece
 	cellID         int
 	cell           *revolveLoftFacesVerticalCell
-	piece          loftface.VerticalPiece
 	x, time, upper *big.Rat
-	from           *big.Rat
-	to             *big.Rat
-	y, z           []*big.Rat
-	arc            *arcSeg
-	affine         *loftface.VerticalAffine
-	radius2        *big.Rat
-	arcBox         [2]loftFaceInterval
 }
 
 type revolveLoftFacesVerticalTraceHit struct {
@@ -58,21 +51,6 @@ func revolveLoftFacesVerticalTraceControl(cell *revolveLoftFacesVerticalCell,
 			lfMul(affine.Column[0][1], point.U), lfMul(affine.Column[1][1], point.V)))
 	}
 	return y, z, true
-}
-
-func revolveLoftFacesVerticalTracePoint(piece revolveLoftFacesVerticalTracePiece,
-	s *big.Rat) [2]*big.Rat {
-	if piece.arc != nil {
-		if s.Cmp(lfZero()) == 0 {
-			return revolveloftfaces.VerticalTraceMapPoint(piece.affine, piece.arc.Start)
-		}
-		if s.Cmp(lfOne()) == 0 {
-			return revolveloftfaces.VerticalTraceMapPoint(piece.affine, piece.arc.End)
-		}
-		return [2]*big.Rat{}
-	}
-	return [2]*big.Rat{polynomial.BernsteinValue(piece.y, s),
-		polynomial.BernsteinValue(piece.z, s)}
 }
 
 func revolveLoftFacesVerticalTraceSamePoint(a, b [2]*big.Rat) bool {
@@ -159,10 +137,13 @@ func revolveLoftFacesVerticalTraceChain(graph *revolveLoftFacesContactGraph,
 				return nil, false
 			}
 			pieces = append(pieces, revolveLoftFacesVerticalTracePiece{
-				cellID: id, cell: cell, piece: piece, x: side.x,
+				VerticalTraceSourcePiece: revolveloftfaces.VerticalTraceSourcePiece{
+					Piece: piece, Y: y, Z: z, Arc: arc, Affine: side.yzAffine,
+					Radius2: radius2, ArcBox: arcBox,
+				},
+				cellID: id, cell: cell, x: side.x,
 				time: side.time, upper: side.upper,
-				y: y, z: z, arc: arc, affine: side.yzAffine,
-				radius2: radius2, arcBox: arcBox})
+			})
 		}
 	}
 	if len(pieces) < 1 || len(pieces) > 128 {
@@ -177,11 +158,11 @@ func revolveLoftFacesVerticalTraceChain(graph *revolveLoftFacesContactGraph,
 			!revolveloftfaces.CapBoundaryBoxEqual(p.cell.upper.Box, boundary.box) {
 			return nil, nil, false
 		}
-		if p.piece.Source.Lo.Cmp(boundary.parameter.Hi) == 0 {
-			return p.piece.Source.Lo, p.piece.Source.Hi, true
+		if p.Piece.Source.Lo.Cmp(boundary.parameter.Hi) == 0 {
+			return p.Piece.Source.Lo, p.Piece.Source.Hi, true
 		}
-		if p.piece.Source.Hi.Cmp(boundary.parameter.Lo) == 0 {
-			return p.piece.Source.Hi, p.piece.Source.Lo, true
+		if p.Piece.Source.Hi.Cmp(boundary.parameter.Lo) == 0 {
+			return p.Piece.Source.Hi, p.Piece.Source.Lo, true
 		}
 		return nil, nil, false
 	}
@@ -193,7 +174,7 @@ func revolveLoftFacesVerticalTraceChain(graph *revolveLoftFacesContactGraph,
 					return nil, false
 				}
 				start = i
-				pieces[i].from, pieces[i].to = from, to
+				pieces[i].From, pieces[i].To = from, to
 			}
 		}
 		if piece.cellID == arc.endpointCellIDs[1] {
@@ -203,7 +184,7 @@ func revolveLoftFacesVerticalTraceChain(graph *revolveLoftFacesContactGraph,
 				}
 				finish = i
 				// The chain enters the positive cap owner at the opposite end.
-				pieces[i].from, pieces[i].to = to, from
+				pieces[i].From, pieces[i].To = to, from
 			}
 		}
 	}
@@ -223,10 +204,10 @@ func revolveLoftFacesVerticalTraceChain(graph *revolveLoftFacesContactGraph,
 		if current == finish {
 			break
 		}
-		end := revolveLoftFacesVerticalTracePoint(piece, piece.to)
+		end := revolveloftfaces.VerticalTraceSourcePoint(piece.VerticalTraceSourcePiece, piece.To)
 		next := -1
 		for i := range pieces {
-			if used[i] || i == finish && pieces[i].from == nil {
+			if used[i] || i == finish && pieces[i].From == nil {
 				continue
 			}
 			candidate := pieces[i]
@@ -234,19 +215,19 @@ func revolveLoftFacesVerticalTraceChain(graph *revolveLoftFacesContactGraph,
 				continue
 			}
 			for _, endpoint := range [...]struct{ from, to *big.Rat }{
-				{candidate.piece.Source.Lo, candidate.piece.Source.Hi},
-				{candidate.piece.Source.Hi, candidate.piece.Source.Lo},
+				{candidate.Piece.Source.Lo, candidate.Piece.Source.Hi},
+				{candidate.Piece.Source.Hi, candidate.Piece.Source.Lo},
 			} {
-				if i == finish && endpoint.from.Cmp(candidate.from) != 0 ||
+				if i == finish && endpoint.from.Cmp(candidate.From) != 0 ||
 					!revolveLoftFacesVerticalTraceSamePoint(end,
-						revolveLoftFacesVerticalTracePoint(candidate, endpoint.from)) {
+						revolveloftfaces.VerticalTraceSourcePoint(candidate.VerticalTraceSourcePiece, endpoint.from)) {
 					continue
 				}
 				if next >= 0 {
 					return nil, false
 				}
 				next = i
-				pieces[i].from, pieces[i].to = endpoint.from, endpoint.to
+				pieces[i].From, pieces[i].To = endpoint.from, endpoint.to
 			}
 		}
 		if next < 0 {
@@ -262,70 +243,6 @@ func revolveLoftFacesVerticalTraceChain(graph *revolveLoftFacesContactGraph,
 	return ordered, len(ordered) == len(pieces)
 }
 
-// Each strict sign makes a ray meet a source piece at most once. Adjacent
-// pieces may reverse direction; the insertion retains every separate hit.
-func revolveLoftFacesVerticalTracePieceSigns(pieces []revolveLoftFacesVerticalTracePiece) ([]int, bool) {
-	signs := make([]int, len(pieces))
-	for index, piece := range pieces {
-		if piece.arc != nil {
-			// A positive similarity about the blank axis preserves the live
-			// arc's counter-clockwise sweep. The certified source box keeps
-			// the entire short arc in the positive-Y half-plane.
-			if piece.arcBox[0].Lo == nil || piece.arcBox[0].Hi == nil ||
-				piece.arcBox[1].Lo == nil || piece.arcBox[1].Hi == nil ||
-				piece.piece.Source.Lo.Cmp(lfZero()) != 0 ||
-				piece.piece.Source.Hi.Cmp(lfOne()) != 0 {
-				return nil, false
-			}
-			minY := (*big.Rat)(nil)
-			for _, u := range []*big.Rat{piece.arcBox[0].Lo, piece.arcBox[0].Hi} {
-				for _, v := range []*big.Rat{piece.arcBox[1].Lo, piece.arcBox[1].Hi} {
-					y := lfAdd(piece.affine.Offset[0], lfAdd(
-						lfMul(piece.affine.Column[0][0], u),
-						lfMul(piece.affine.Column[1][0], v)))
-					if minY == nil || y.Cmp(minY) < 0 {
-						minY = y
-					}
-				}
-			}
-			if minY == nil || minY.Sign() <= 0 {
-				return nil, false
-			}
-			sign := 1
-			if piece.from.Cmp(piece.to) > 0 {
-				sign = -1
-			}
-			signs[index] = sign
-			continue
-		}
-		y := polynomial.BernsteinRestrict(piece.y, piece.piece.Source.Lo, piece.piece.Source.Hi)
-		z := polynomial.BernsteinRestrict(piece.z, piece.piece.Source.Lo, piece.piece.Source.Hi)
-		for _, control := range y {
-			if control.Sign() <= 0 {
-				return nil, false
-			}
-		}
-		angular := polynomial.BernsteinSub(
-			polynomial.BernsteinMul(y, polynomial.BernsteinDeriv(z)),
-			polynomial.BernsteinMul(z, polynomial.BernsteinDeriv(y)))
-		sign := angular[0].Sign()
-		if piece.from.Cmp(piece.to) > 0 {
-			sign = -sign
-		}
-		if sign == 0 {
-			return nil, false
-		}
-		for _, control := range angular {
-			if control.Sign() != sign && piece.from.Cmp(piece.to) < 0 ||
-				control.Sign() != -sign && piece.from.Cmp(piece.to) > 0 {
-				return nil, false
-			}
-		}
-		signs[index] = sign
-	}
-	return signs, len(signs) > 0
-}
-
 // The ray root is enclosed by exact rational source parameters. A rational
 // crossing is returned as a zero-width interval; otherwise 80 dyadic steps
 // bound its full mapped source box before any held point is chosen.
@@ -334,18 +251,18 @@ func revolveLoftFacesVerticalTraceRayHit(piece revolveLoftFacesVerticalTracePiec
 	if ray.y == nil || ray.z == nil {
 		return revolveLoftFacesVerticalTraceHit{}, false
 	}
-	if piece.arc != nil {
-		start := revolveLoftFacesVerticalTracePoint(piece, lfZero())
-		end := revolveLoftFacesVerticalTracePoint(piece, lfOne())
+	if piece.Arc != nil {
+		start := revolveloftfaces.VerticalTraceSourcePoint(piece.VerticalTraceSourcePiece, lfZero())
+		end := revolveloftfaces.VerticalTraceSourcePoint(piece.VerticalTraceSourcePiece, lfOne())
 		before := lfSub(lfMul(start[0], ray.z), lfMul(start[1], ray.y))
 		after := lfSub(lfMul(ray.y, end[1]), lfMul(ray.z, end[0]))
 		return revolveLoftFacesVerticalTraceHit{}, before.Sign() > 0 && after.Sign() > 0
 	}
-	cross := make([]*big.Rat, len(piece.y))
+	cross := make([]*big.Rat, len(piece.Y))
 	for i := range cross {
-		cross[i] = lfSub(lfMul(piece.y[i], ray.z), lfMul(piece.z[i], ray.y))
+		cross[i] = lfSub(lfMul(piece.Y[i], ray.z), lfMul(piece.Z[i], ray.y))
 	}
-	lo, hi := piece.piece.Source.Lo, piece.piece.Source.Hi
+	lo, hi := piece.Piece.Source.Lo, piece.Piece.Source.Hi
 	a, b := polynomial.BernsteinSign(cross, lo), polynomial.BernsteinSign(cross, hi)
 	if a == 0 {
 		return revolveLoftFacesVerticalTraceHit{lo: lo, hi: lo}, true

@@ -89,9 +89,17 @@ func revolveLoftFacesInsertVerticalTrace(ctx context.Context,
 		return nil, false, nil
 	}
 	pieces, chained := revolveLoftFacesVerticalTraceChain(graph, event)
-	_, monotone := revolveLoftFacesVerticalTracePieceSigns(pieces)
-	if !chained || !monotone ||
-		!revolveLoftFacesVerticalTraceSourceProof(pieces, event.arc.circle.radius) {
+	if !chained {
+		return nil, false, nil
+	}
+	// The chain already caps this transient projection at 128 ordered pieces.
+	sourcePieces := make([]revolveloftfaces.VerticalTraceSourcePiece, len(pieces))
+	for i := range pieces {
+		sourcePieces[i] = pieces[i].VerticalTraceSourcePiece
+	}
+	_, monotone := revolveloftfaces.VerticalTracePieceSigns(sourcePieces)
+	if !monotone ||
+		!revolveloftfaces.VerticalTraceSourceProof(sourcePieces, event.arc.circle.radius) {
 		return nil, false, nil
 	}
 	selectedInChain := false
@@ -173,12 +181,12 @@ func revolveLoftFacesVerticalTraceHeldPoint(proof *revolveLoftFacesSourceCertifi
 		piece.cell.band < 0 || piece.cell.band+1 >= len(proof.trim.Maps) {
 		return empty, 0, 0, false
 	}
-	if piece.arc != nil {
-		if piece.radius2 == nil || piece.radius2.Sign() <= 0 ||
-			piece.radius2.Cmp(lfMul(radius, radius)) >= 0 {
+	if piece.Arc != nil {
+		if piece.Radius2 == nil || piece.Radius2.Sign() <= 0 ||
+			piece.Radius2.Cmp(lfMul(radius, radius)) >= 0 {
 			return empty, 0, 0, false
 		}
-		r2, _ := piece.radius2.Float64()
+		r2, _ := piece.Radius2.Float64()
 		if proofbound.IsNonFinite(r2) || r2 <= 0 {
 			return empty, 0, 0, false
 		}
@@ -192,7 +200,7 @@ func revolveLoftFacesVerticalTraceHeldPoint(proof *revolveLoftFacesSourceCertifi
 			return empty, 0, 0, false
 		}
 		residual := proofbound.RatFloatUp(lfDiv(
-			lfAbs(lfSub(lfMul(approx, approx), piece.radius2)), approx))
+			lfAbs(lfSub(lfMul(approx, approx), piece.Radius2)), approx))
 		loftBound := proofbound.AbsSumUpper(blankBound, residual)
 		return point, blankBound, loftBound,
 			!proofbound.IsNonFinite(loftBound) && loftBound >= 0
