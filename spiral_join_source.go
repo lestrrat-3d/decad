@@ -8,7 +8,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
-	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/decad/internal/spiralsector"
 	"github.com/lestrrat-3d/decad/internal/splinebezier"
 	"github.com/lestrrat-3d/r3"
@@ -48,7 +47,7 @@ func certifySpiralFirstJoin(ctx context.Context, blank, tooth *Body) (*spiralFir
 		return nil, false, nil
 	}
 	m, b := section.Section.MeridianEquation()
-	if !spiralSourcePhysicalSector(trim, m, b) {
+	if !spiralsector.SourcePhysicalSector(trim, m, b) {
 		return nil, false, nil
 	}
 	if !spiralsector.OtherSides(ctx, trim, m, b) {
@@ -57,11 +56,11 @@ func certifySpiralFirstJoin(ctx context.Context, blank, tooth *Body) (*spiralFir
 		}
 		return nil, false, nil
 	}
-	toeX, ok := spiralRootToolX(m, b, trim.Toe)
+	toeX, ok := spiralsector.RootToolX(m, b, trim.Toe)
 	if !ok {
 		return nil, false, nil
 	}
-	heelX, ok := spiralRootToolX(m, b, trim.Heel)
+	heelX, ok := spiralsector.RootToolX(m, b, trim.Heel)
 	if !ok || toeX.Cmp(heelX) >= 0 ||
 		lfAdd(lfMul(m, toeX), b).Sign() <= 0 ||
 		lfAdd(lfMul(m, heelX), b).Sign() <= 0 {
@@ -170,42 +169,4 @@ func certifySpiralFirstJoin(ctx context.Context, blank, tooth *Body) (*spiralFir
 	}
 	proof.HeelSeam = seam
 	return proof, true, nil
-}
-
-// The whole ruled source stays in positive Y and above zero signed radius
-// on the blank's root meridian. The opposite root-circle arc passes negative
-// Y, while a root of the squared implicit with negative signed radius would
-// not be a physical cone crossing.
-func spiralSourcePhysicalSector(trim *loftFacesTrimRecord, m, b *big.Rat) bool {
-	box, err := revolveloftfaces.LfSourceBox(trim.Source)
-	if err != nil {
-		return false
-	}
-	corners := loftface.BoxCorners(box)
-	y := loftFaceRatVec{lfZero(), lfOne(), lfZero()}
-	x := loftFaceRatVec{lfOne(), lfZero(), lfZero()}
-	for _, mapped := range trim.Maps {
-		if loftface.ScalarRange(mapped, y, corners).Lo.Sign() <= 0 {
-			return false
-		}
-		xRange := loftface.ScalarRange(mapped, x, corners)
-		r0, r1 := lfAdd(lfMul(m, xRange.Lo), b), lfAdd(lfMul(m, xRange.Hi), b)
-		if r0.Sign() <= 0 || r1.Sign() <= 0 {
-			return false
-		}
-	}
-	return true
-}
-
-// On the blank root, r=m*x+b. The tool cone generator is x+k*r=apex,
-// so their intersection has an exact rational axial coordinate.
-func spiralRootToolX(m, b *big.Rat, cone *pointConeLimit) (*big.Rat, bool) {
-	if cone == nil || cone.Apex == nil || cone.Slope == nil || cone.Slope.Sign() <= 0 {
-		return nil, false
-	}
-	denominator := lfAdd(lfOne(), lfMul(cone.Slope, m))
-	if denominator.Sign() <= 0 {
-		return nil, false
-	}
-	return lfDiv(lfSub(cone.Apex, lfMul(cone.Slope, b)), denominator), true
 }

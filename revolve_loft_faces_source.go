@@ -212,19 +212,19 @@ func certifyRevolveLoftFacesAgainstRoot(ctx context.Context, blank, tooth *Body,
 	*revolveLoftFacesSourceCertificate, bool, error,
 ) {
 	m, b := section.MeridianEquation()
-	if !spiralSourcePhysicalSector(trim, m, b) {
+	if !spiralsector.SourcePhysicalSector(trim, m, b) {
 		return nil, false, nil
 	}
-	toeX, ok := spiralRootToolX(m, b, trim.Toe)
+	toeX, ok := spiralsector.RootToolX(m, b, trim.Toe)
 	if !ok {
 		return nil, false, nil
 	}
-	heelX, ok := spiralRootToolX(m, b, trim.Heel)
+	heelX, ok := spiralsector.RootToolX(m, b, trim.Heel)
 	if !ok || toeX.Cmp(heelX) >= 0 ||
 		lfF(section.RootStart.U).Cmp(toeX) <= 0 ||
 		lfF(section.RootEnd.U).Cmp(heelX) >= 0 ||
-		!spiralFiniteConeSide(trim.Toe, section.RootStart, section.RootEnd, 1) ||
-		!spiralFiniteConeSide(trim.Heel, section.RootStart, section.RootEnd, -1) ||
+		!spiralsector.FiniteConeSide(trim.Toe, section.RootStart, section.RootEnd, 1) ||
+		!spiralsector.FiniteConeSide(trim.Heel, section.RootStart, section.RootEnd, -1) ||
 		!revolveloftfaces.CapsAvoidToolRootCircles(trim, m, b, toeX, heelX) {
 		return nil, false, nil
 	}

@@ -83,7 +83,7 @@ func TestConeFromFaceIsStrictlyOffBlankFaces(t *testing.T) {
 			gap, ok := spiralsector.ToolOuterGap(limit, tc.first, tc.last, tc.sign)
 			require.True(t, ok, "both face ends must lie strictly on the certified side")
 			require.Positive(t, gap.Sign())
-			require.True(t, spiralFiniteConeSide(limit, tc.first, tc.last, tc.sign),
+			require.True(t, spiralsector.FiniteConeSide(limit, tc.first, tc.last, tc.sign),
 				"the whole finite generator must lie on the certified side")
 			require.Zero(t, limit.Far.Cmp(lfF(-5)), "far plane is the requested one")
 		})

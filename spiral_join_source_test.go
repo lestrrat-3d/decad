@@ -25,9 +25,9 @@ func TestSpiralFirstJoinDeclinesTangentHeelOutsideFiniteBlankOnly(t *testing.T) 
 	require.NotNil(t, trim)
 	require.True(t, spiralsector.SpiralTangentRecordCurrent(trim))
 	m, b := section.Section.MeridianEquation()
-	toeX, ok := spiralRootToolX(m, b, trim.Toe)
+	toeX, ok := spiralsector.RootToolX(m, b, trim.Toe)
 	require.True(t, ok)
-	heelX, ok := spiralRootToolX(m, b, trim.Heel)
+	heelX, ok := spiralsector.RootToolX(m, b, trim.Heel)
 	require.True(t, ok)
 	_, ok = spiralsector.ToolOuterGap(trim.Heel, section.Ded, section.HeelOuter, -1)
 	require.True(t, ok, "the finite heel gap admits this producer-built tool")
@@ -51,9 +51,9 @@ func TestSpiralFirstJoinDeclinesTangentToeCapPastToeCircle(t *testing.T) {
 	require.NotNil(t, trim)
 	require.True(t, spiralsector.SpiralTangentRecordCurrent(trim))
 	m, b := section.Section.MeridianEquation()
-	toeX, ok := spiralRootToolX(m, b, trim.Toe)
+	toeX, ok := spiralsector.RootToolX(m, b, trim.Toe)
 	require.True(t, ok)
-	heelX, ok := spiralRootToolX(m, b, trim.Heel)
+	heelX, ok := spiralsector.RootToolX(m, b, trim.Heel)
 	require.True(t, ok)
 	box, err := revolveloftfaces.LfSourceBox(trim.Source)
 	require.NoError(t, err)
@@ -129,17 +129,17 @@ func TestSpiralFiniteConeSideRequiresWholeGeneratorAndFiniteTool(t *testing.T) {
 	cone := &pointConeLimit{Apex: big.NewRat(10, 1), Far: big.NewRat(-1, 1),
 		Slope: big.NewRat(1, 1)}
 	first, last := planePoint{U: 2, V: 9}, planePoint{U: 3, V: 8}
-	require.True(t, spiralFiniteConeSide(cone, first, last, 1))
+	require.True(t, spiralsector.FiniteConeSide(cone, first, last, 1))
 	last.V = 6
-	require.False(t, spiralFiniteConeSide(cone, first, last, 1),
+	require.False(t, spiralsector.FiniteConeSide(cone, first, last, 1),
 		"opposite endpoint signs cannot certify a complete face")
 	last.V = 8
 	cone.Far = big.NewRat(0, 1)
-	require.False(t, spiralFiniteConeSide(cone, first, last, 1),
+	require.False(t, spiralsector.FiniteConeSide(cone, first, last, 1),
 		"the admitted tool must have a finite far plane before the source face")
 	cone.Far = big.NewRat(-1, 1)
 	last.U = 10
-	require.False(t, spiralFiniteConeSide(cone, first, last, 1),
+	require.False(t, spiralsector.FiniteConeSide(cone, first, last, 1),
 		"the admitted generator must end before the cone apex")
 }
 

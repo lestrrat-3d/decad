@@ -3,7 +3,6 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/spiralsector"
@@ -19,45 +18,6 @@ const (
 	spiralNearPairCrossing
 	spiralNearPairSeparated
 )
-
-// A straight cone meridian is affine in X. Strict signs at both recorded
-// endpoints prove the same side over the entire finite generator. The far
-// plane and apex checks ensure this sign describes the operative cone wall.
-func spiralFiniteConeSide(cone *pointConeLimit, first, last planePoint, sign int) bool {
-	if cone == nil || cone.Apex == nil || cone.Far == nil || cone.Slope == nil ||
-		cone.Slope.Sign() <= 0 || cone.Far.Sign() >= 0 ||
-		first.U <= 0 || last.U <= first.U || first.V <= 0 || last.V <= 0 ||
-		lfF(first.U).Cmp(cone.Far) <= 0 || lfF(last.U).Cmp(cone.Apex) >= 0 {
-		return false
-	}
-	residual := func(p planePoint) *big.Rat {
-		return lfSub(lfAdd(lfF(p.U), lfMul(cone.Slope, lfF(p.V))), cone.Apex)
-	}
-	return residual(first).Sign() == sign && residual(last).Sign() == sign
-}
-
-// The two trims retain a LoftFaces wall where it meets a blank cap only if
-// the point is outside the toe Cut and inside the heel Intersect. These exact
-// meridian signs prove that fact over both finite blank outer caps. They also
-// separate the matching tool-cap faces, the toe cap from the heel tool, and
-// the entire finite blank root from both tool caps.
-func spiralNearTrimSides(proof *spiralFirstJoinSource) bool {
-	if proof == nil || proof.Blank == nil || proof.Tooth == nil ||
-		proof.Tooth.Toe == nil || proof.Tooth.Heel == nil ||
-		proof.ToeCapGap == nil || proof.HeelCapGap == nil ||
-		proof.ToeCapGap.Sign() <= 0 || proof.HeelCapGap.Sign() <= 0 ||
-		proof.ToeOffset == nil || proof.HeelOffset == nil ||
-		proof.ToeOffset.Sign() >= 0 || proof.HeelOffset.Sign() <= 0 {
-		return false
-	}
-	blank := proof.Blank
-	return spiralFiniteConeSide(proof.Tooth.Toe, blank.ToeRoot, blank.ToeOuter, 1) &&
-		spiralFiniteConeSide(proof.Tooth.Heel, blank.ToeRoot, blank.ToeOuter, -1) &&
-		spiralFiniteConeSide(proof.Tooth.Toe, blank.Ded, blank.HeelOuter, 1) &&
-		spiralFiniteConeSide(proof.Tooth.Heel, blank.Ded, blank.HeelOuter, -1) &&
-		spiralFiniteConeSide(proof.Tooth.Toe, blank.ToeRoot, blank.Ded, 1) &&
-		spiralFiniteConeSide(proof.Tooth.Heel, blank.ToeRoot, blank.Ded, -1)
-}
 
 func spiralUniqueFaceWithOrigin(body *Body, want provenance.Ref) *Face {
 	if body == nil {
@@ -195,7 +155,7 @@ func certifySpiralNearFaceRoles(ctx context.Context, blank, tooth *Body,
 	var empty [2][4]spiralsector.ShortCapFamily
 	if ctx == nil || blank == nil || tooth == nil || proof == nil ||
 		proof.Blank == nil || proof.Tooth == nil || proof.HeelSeam == nil ||
-		!spiralNearTrimSides(proof) || !spiralsector.TrimSourceCurrent(proof.Tooth) {
+		!spiralsector.NearTrimSides(proof) || !spiralsector.TrimSourceCurrent(proof.Tooth) {
 		return nil, empty, false, nil
 	}
 	if err := ctx.Err(); err != nil {
