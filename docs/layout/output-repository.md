@@ -10,13 +10,12 @@ The rules for rows live in `docs/layout.md`.
 | Path | Responsibility |
 |---|---|
 | `tessellate.go` | `Mesh`, `Body.Tessellate`, prism mesh handle adapter and dispatch, and the PatchEdges source mesh adapter. See tessellation design, surface §10.1. |
-| `tessellate_brep.go` | Meshes a brep body, proves its occupied volume, and admits each loop band's occupied volume. See general-boolean §4.4. |
-| `tessellate_brep_band.go` | Adapts route L bands to shared wall samples, delegates fillet rings and strips to `internal/brepfilletmesh/`, and places partial fillet layouts and planar chamfer strips. See modify-general DG3, §4.3a. |
+| `tessellate_brep.go` | Meshes a brep body over its handles: walls, planar faces, closure audits and the occupied-volume sum, with the route L bands from `internal/brepbandmesh/`. See general-boolean §4.4. |
 | `tessellate_verification.go` | `Verification`, `WithVerification`, mesh proof publication, and the joined mesh orientation check. See tessellation §1, §4. |
 | `tessellate_sweep_composite.go` | Builds composite Sweep span handles and runs the body audit around internal station assembly. See sweep Table D. |
 | `tessellate_chain.go` | A chain ribbon's exact-quad mesh. See surface §13.4. |
 | `tessellate_coil.go` | A coil's held-shell mesh with its area and volume proofs. See helix §8. |
-| `tessellate_capblend.go` | Adapts cap-blend mesh nodes to public handles and retains the shared BRep band emitter and Loft proof. See tessellation reach §7. |
+| `tessellate_capblend.go` | Adapts the cap-blend mesh build to public handles and runs the Loft proof. See tessellation reach §7. |
 | `loft_capband_proof.go` | Adapts a matching loft's cap-band payload and mesh to the numeric occupied-volume proof in `internal/tessellation`. See loft §18. |
 | `tessellate_draft.go` | A draft body's mesh through its band view, and the sewn two-slab draft mesh. See draft §9.1. |
 | `export/` | STL, OBJ, 3MF and AP214 writers. See `docs/step-export-design.md`, `docs/3mf-export-design.md`. |

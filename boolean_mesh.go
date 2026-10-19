@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/brepbandmesh"
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -478,7 +479,7 @@ func requireVolumeProvingPayload(ctx context.Context, b *Body, index int) error 
 			if len(pl.LoopBands) == 0 {
 				return nil
 			}
-			refusal, aErr := brepBandsOccupiedVolumeAdmission(proofbound.NewWorkBudget(ctx), pl)
+			refusal, aErr := brepbandmesh.OccupiedVolumeAdmission(proofbound.NewWorkBudget(ctx), pl)
 			if aErr != nil {
 				return aErr
 			}

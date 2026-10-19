@@ -3,7 +3,6 @@ package decad
 import (
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/breprecord"
-	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/chainrecord"
 	"github.com/lestrrat-3d/decad/internal/coilshell"
@@ -165,14 +164,12 @@ type (
 // and of the band view a draft or brep loop band builds through: the
 // internal/capblend payload, which capblend.Build evaluates over topology
 // nodes and which implements topo.Payload (docs/modify-reach-design.md §8.3,
-// docs/evaluator-design.md §8). The other names are its setbacks, band keys,
-// patches and loft source.
+// docs/evaluator-design.md §8). The other names are its setbacks and its
+// loft source.
 type (
 	capBlendPayload   = capblend.Payload
 	capSetback        = capblend.Setback
-	capBandKey        = capblend.BandKey
 	loftCapBandSource = capblend.LoftSource
-	capPatchGeom      = capband.Patch
 )
 
 // facetedPayload is the evaluator's record of a mesh-built body, and

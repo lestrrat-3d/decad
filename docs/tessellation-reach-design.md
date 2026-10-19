@@ -477,15 +477,15 @@ patch and the cap contour (below).
 
 ### Geometry the payload states
 
-`capBlendPayload` (`capblend.go`) holds the receiver's `profile`, `frame`, `z0/z1` with their axial
+`capBlendPayload` (`capblend.Payload`, `internal/capblend/payload.go`) holds the receiver's `profile`, `frame`, `z0/z1` with their axial
 displacements, each chamfered cap's two setbacks (`capSetback`: `dc` across the cap and `ds` down the side,
 each with its conversion rounding `dcDelta`, `dsDelta`; `docs/modify-reach-design.md` §8.3.1), the selected
-`startLoops`/`endLoops`, and `patches []capPatch` — every
-`chamferCap(cap, loop, k)` role beside its plane-local `capPatchGeom` (`internal/capblend/band.go`): a `Plane` patch's
+`startLoops`/`endLoops`, and `Patches []capblend.Patch` — every
+`chamferCap(cap, loop, k)` role beside its plane-local `capband.Patch` (`internal/capband/patch.go`): a `Plane` patch's
 four corners, or a `Cone` patch's centre, `sideRadius`/`capRadius`, side window `th0..th1`, cap window
 `capTh0..capTh1`, `sideZ`/`capZ`, `sweepCCW`, `wholeTurn`, `contourAllow`, `levelDelta`, `capThAllow`. Each
 band's cap contour displacement `band.delta` is `capblend.BandResult.Delta`; it must also be stored per band on the
-payload (`bandDelta map[bandKey]float64`) for the tessellator to read.
+payload (`BandDelta map[capblend.BandKey]float64`) for the tessellator to read.
 
 Below, `d` names the setback of whichever axis a term measures. An in-plane term — the cap contour, an
 offset radius `R ∓ d`, a connector arc of radius `d`, a G1 foot `P + s·d·n` — reads the cap's `dc`, and its
