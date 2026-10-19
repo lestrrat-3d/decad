@@ -115,9 +115,10 @@ func TestBoreThrough(t *testing.T) {
 func TestBoreCutLeavesOtherOperands(t *testing.T) {
 	joined := facetedrecord.Payload{ContactAudited: true, Xform: r3.Identity(),
 		LoftCylinderJoin: &facetedrecord.LoftCylinderJoinRecord{Radius: 2, Z0: 0, Z1: 2}}
-	// Every tool but the last carries the cylindrical side wall BoreCut looks
-	// for, so each case is refused by its own gate: past them all, the empty
-	// join record is admitted and its build fails.
+	// Every tool built here carries the cylindrical side wall BoreCut looks
+	// for, so each case using it is refused by its own gate: past them all,
+	// the empty join record is admitted and its build fails. The non-prism
+	// tool and the tool without a side wall face are built without it.
 	tool := func(edit func(pp *prismrecord.Payload)) *topo.Body {
 		pp := boreToolPayload(t)
 		if edit != nil {
