@@ -278,8 +278,8 @@ func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget
 		axis.Shift.Sign() <= 0 {
 		return false, nil
 	}
-	// A refused Valid or Cmp clears arithmetic.OK for good. Every refusal
-	// below returns at once, so a later check never reads a cleared state.
+	// A refused Valid or Cmp clears arithmetic.OK for good, and every check
+	// below returns false once OK is clear.
 	if arithmetic.Cmp(axis.Shift, prismTop) >= 0 || !arithmetic.OK || source.CapLevels[0].Sign() != 0 {
 		return false, nil
 	}
