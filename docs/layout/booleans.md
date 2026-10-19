@@ -35,6 +35,8 @@ The rules for rows live in `docs/layout.md`.
 | `loft_contact_partition.go` | Certifies a private varying-line Loft/prism source partition and both Sketch cap correspondences. See its proof comments. |
 | `loft_contact_source_spans.go` | Reads authenticated line, circle, arc and fit-spline cap spans and Loft wall-cell source roles for the private curved-contact lane; it publishes no output proof. |
 | `loft_contact_cap_source.go` | Reads ordered Sketch cap cells and maps their exact line and arc fragments to original source segments for the private curved-contact lane. |
+| `loft_contact_quarter_source.go` | Relates certified quarter-arc cap crossings to original Loft wall sources under one private source budget. |
+| `loft_contact_quarter_wall_order.go` | Checks the source ordering of a paired quarter-arc wall against two crossing prism edges. |
 | `loft_contact_direct_shell.go` | Builds a bounded public Union shell from certified Loft/prism source and output proofs. See its proof comments. |
 | `loft_contact_output_proof.go` | Builds and audits a transient held shell for planar varying-line Loft/prism contact. See its proof comments. |
 | `loft_contact_output_cap.go` | Reconstructs and tiles exact source cap cells for the transient Loft/prism shell. See its proof comments. |
