@@ -14,12 +14,12 @@ type Vertex struct {
 	// Bound is the proven displacement of Position.
 	Bound units.Value
 	// Level is the LEVEL half of the shared-denotation certificate
-	// (root denotation.go): non-zero only for a vertex a builder stamped at one
+	// (internal/denotation): non-zero only for a vertex a builder stamped at one
 	// denoted sweep level, and zero ("no certificate") for every vertex no
 	// builder in this package mints one for.
 	Level denotation.LevelToken
 	// Denot is the CURVE half of the shared-denotation certificate
-	// (root denotation.go): non-zero only for a vertex a builder minted one for —
+	// (internal/denotation): non-zero only for a vertex a builder minted one for —
 	// today a straight prism's rim corner (internal/prismrecord/build.go) and a revolve's
 	// own internal junction vertex (internal/revolveplan/build.go; a partial revolve's
 	// own SEAM — its boundary copy at phi0/phi1 — mints none) — and

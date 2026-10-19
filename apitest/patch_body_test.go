@@ -123,7 +123,7 @@ func TestBodyPatchFillsASingleClosedCircularRim(t *testing.T) {
 
 // TestBodyPatchFillsAHoleWithTheSameNormal is §5.2's own hole-filling case,
 // the mirror image of TestBodyPatchDoublesAFlatSheetWithANegatedNormal: the
-// holed face traverses the hole's rim CLOCKWISE (moments.go's own "holes
+// holed face traverses the hole's rim CLOCKWISE (internal/momentregion's own "holes
 // clockwise" convention), and the patch must traverse the SAME edge
 // counter-clockwise (the opposite sense), which the right-hand rule sends
 // back to the SAME side rather than the opposite one — filling a hole keeps
@@ -373,7 +373,7 @@ func TestBodyPatchCapsBothBoundedRimsOfASymmetricSurfaceExtrudedWall(t *testing.
 // rotated-frame regression: held vertex coordinates at one recorded level
 // are only APPROXIMATELY coplanar in float64 once the sketch plane is not
 // axis-aligned (frame.ToWorldUV(u, v) rounds differently per (u, v) —
-// denotation.go's own doc comment), so a normal FITTED to them would be
+// internal/denotation's own doc comment), so a normal FITTED to them would be
 // tilted by that rounding, with no term in axialDelta to cover it. Every
 // other fixture in this file sits on the XY plane, where that rounding is
 // always exactly zero (u*U+v*V never touches a nonzero cross term) and so

@@ -473,7 +473,7 @@ func TestStitchClosesABoundedPatchedWallWithChargedVolumeBound(t *testing.T) {
 // axis-aligned nor centred on the origin, then re-stitching all six, must
 // NOT re-weld the moved sheet's own 4 edges against its former neighbours —
 // it no longer occupies the place any curve token comparison is stated
-// under (denotation.go's curveToken.xform) — while the 5 UNPLACED siblings
+// under (internal/denotation's curve token xform) — while the 5 UNPLACED siblings
 // still weld normally among themselves, exactly as they would if the moved
 // sheet had never been unstitched at all.
 func TestStitchRefusesAPlacedSheetAgainstItsUnplacedSiblings(t *testing.T) {

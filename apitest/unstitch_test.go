@@ -212,7 +212,7 @@ func TestUnstitchRestitchRoundTripClosesABoundedBox(t *testing.T) {
 // body and re-stitching it stays a SHEET, because the profile's own seam —
 // its boundary copy at phi0 and phi1, a partial revolve's own free rim —
 // never had a partner to weld against, before or after the round trip. The
-// CURVE half of the shared-denotation certificate (denotation.go) now
+// CURVE half of the shared-denotation certificate (internal/denotation) now
 // closes the revolve's own internal junction welds it could not before
 // (a Circle3/Arc3 carries no bound field of its own, so Table J's J5 could
 // never decide them on bit-identity alone), reproducing the never-unstitched

@@ -24,7 +24,7 @@ import (
 //
 // Every candidate carries a PROVEN bound beside its radius (DiskCand.rBound):
 // each family derives it from its own closed form over the bounded-scalar
-// arithmetic moments.go already owns (proofbound.BoundedAdd/proofbound.BoundedSub/proofbound.BoundedMul/
+// arithmetic internal/momentregion already owns (proofbound.BoundedAdd/proofbound.BoundedSub/proofbound.BoundedMul/
 // proofbound.BoundedQuotient/proofbound.BoundedSqrt), reading every element COORDINATE (line
 // endpoints and normals, arc centers, junction vertices) as an EXACT leaf —
 // the same convention prismPayload's own directional readings use — so for

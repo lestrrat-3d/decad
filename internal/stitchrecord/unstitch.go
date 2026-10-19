@@ -161,7 +161,7 @@ func copyFaceUnder(ctx context.Context, alloc topo.Alloc, srcFace *topo.Face, xf
 		if delta > 0 {
 			bound = proofbound.AbsSumUpper(bound, delta)
 		}
-		// The CURVE half of the shared-denotation certificate (denotation.go)
+		// The CURVE half of the shared-denotation certificate (internal/denotation)
 		// restates under xform, composing rather than overwriting, so a
 		// vertex unstitched and later placed still carries the true
 		// accumulated motion.

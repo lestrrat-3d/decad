@@ -214,7 +214,7 @@ func copyFacesUnder(ctx context.Context, alloc topo.Alloc, srcFaces []*topo.Face
 		if delta > 0 {
 			bound = proofbound.AbsSumUpper(bound, delta)
 		}
-		// The CURVE half of the shared-denotation certificate (denotation.go)
+		// The CURVE half of the shared-denotation certificate (internal/denotation)
 		// restates under xform, composing rather than overwriting, exactly
 		// as the unstitch face copy does.
 		nv := topobuild.NewVertex(alloc, topo.Vertex{Position: p, Bound: units.Millimeters(bound), Denot: old.Denot.Compose(xform)})
@@ -318,7 +318,7 @@ func copyFacesUnder(ctx context.Context, alloc topo.Alloc, srcFaces []*topo.Face
 // A chain the LEVEL arm admitted instead reads the plane's normal and
 // origin from the chain's own level token, transformed by this evaluation's
 // own placement (xform) — never fitted to held vertex coordinates, which
-// gate 3's level arm never proved exactly coplanar (denotation.go's own doc
+// gate 3's level arm never proved exactly coplanar (internal/denotation's own doc
 // comment states why a fit would be unsound here). OrientedNormal
 // still runs for such a chain, but only to settle which of the token's two
 // normal directions (±) matches the chain's own walk sense
@@ -438,7 +438,7 @@ func buildFace(ctx context.Context, alloc topo.Alloc, ref provenance.Producer, c
 }
 
 // chainIntegrals runs the same closed-form region integral
-// PatchProfile's own single planar face uses (moments.go), over a
+// PatchProfile's own single planar face uses (internal/momentregion), over a
 // single-loop, no-hole record — reused rather than a bespoke shoelace sum,
 // so a patch face's Area answers on the identical Exactness/Bound terms
 // docs/surface-design.md §5.1 already states for a sketch-recorded patch.

@@ -43,12 +43,12 @@ type Edge struct {
 	CurveBound   float64
 	CurveBounded bool
 	// Level is the LEVEL half of the shared-denotation certificate
-	// (root denotation.go): non-zero only for a rim edge a builder stamped at one
+	// (internal/denotation): non-zero only for a rim edge a builder stamped at one
 	// denoted sweep level, and zero ("no certificate") for every edge no
 	// builder in this package mints one for.
 	Level denotation.LevelToken
 	// Denot is the CURVE half of the shared-denotation certificate
-	// (root denotation.go): non-zero only for an edge a builder minted one for —
+	// (internal/denotation): non-zero only for an edge a builder minted one for —
 	// today a straight prism's rim edge (internal/prismrecord/build.go) and a revolve's
 	// junction edge (internal/revolveplan/build.go) — and propagated unchanged, composing
 	// xform, by every copier that reproduces the same curve (stitchrecord's

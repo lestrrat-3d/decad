@@ -80,7 +80,7 @@ func WholeSegmentRange(tStart, tEnd float64) bool {
 // verbatim.
 //
 // A WHOLE segment's walk restates the entity's own defining data exactly —
-// lerp2 (moments.go) and pinArcWalkEnds (extrude.go) both special-case the
+// lerp2 (internal/momentregion) and pinArcWalkEnds (extrude.go) both special-case the
 // natural bounds t=0/t=1 to return the record's own Point2 verbatim
 // regardless of which field holds which (a Reversed whole edge records
 // TStart=1, TEnd=0 — recordEdge's own "TStart and TEnd swapped" comment —

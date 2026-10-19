@@ -272,7 +272,7 @@ func provePatchChainPlaneExact(edges []*Edge) error {
 // their own (docs/surface-design.md §6.2's Table J amendment) — those ARE
 // the held values, with nothing further to widen — so lengthBound is NOT
 // this reading for them: a circular arc's length is never an exact
-// rational (moments.go), so lengthBound is nonzero for essentially every
+// rational (internal/momentregion), so lengthBound is nonzero for essentially every
 // circular edge regardless of how exactly its Center, Axis and Radius are
 // known, and reading it here would refuse the commonest thing this gate
 // exists to admit (a lone closed circular rim). lengthUnbounded is the one

@@ -722,7 +722,7 @@ func TestExtrudeRescaledDistanceCarriesConversionRounding(t *testing.T) {
 
 // BenchmarkExtrudePlate measures the public end-to-end cost of extruding
 // plateSketch's four-line rectangle, the call shape ratLerp's endpoint fast
-// path (moments.go) targets: every whole LineSeg's TStart/TEnd is exactly 0
+// path (internal/momentregion) targets: every whole LineSeg's TStart/TEnd is exactly 0
 // and 1 (seam.go carries sketch's range through unchanged), so
 // momentline.ExactLineMoments and lineWalkBounds each take the fast path twice per
 // segment.

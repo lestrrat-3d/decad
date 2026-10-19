@@ -295,7 +295,7 @@ var errFreeformWalkUncounted = fmt.Errorf(
 // restated; the walk's centre, radius, angles and tangents keep circularWalk's
 // own values, and every reading derived from them keeps its own bound.
 //
-// This is the rule lerp2 (moments.go) applies at a line's own bounds, and the
+// This is the rule lerp2 (internal/momentregion) applies at a line's own bounds, and the
 // rule seam.go's edgeJoin applies when it reads an uncut bound off the record
 // rather than off sketch's node. It matters for the same reason: prismcells.BuildScene
 // (prism_boolean.go) creates one sketch point per walked endpoint, so a walk
@@ -324,7 +324,7 @@ func pinArcWalkEnds(w *survey2d.SegmentWalk, seg ArcSeg) {
 // coordinate, with no rounding of this walk's own. It does NOT state that the
 // recorded coordinate is the point the DENOTED curve passes through there. For
 // an arc the two coincide at t == 0 and need not at t == 1: the denoted curve
-// takes its radius from Start alone (circularEndpointInterval, moments.go), so
+// takes its radius from Start alone (circularEndpointInterval, internal/momentregion), so
 // its t == 1 point sits at Start's radius and End's angle, which is the
 // recorded End only where the two recorded radii are equal — an equality
 // nothing in this package certifies. A consumer that publishes a station's

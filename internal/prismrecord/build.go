@@ -78,7 +78,7 @@ func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.Freefor
 	body.Kind = kind
 	body.Doc = env.Doc
 
-	// The LEVEL half of the shared-denotation certificate (root denotation.go):
+	// The LEVEL half of the shared-denotation certificate (internal/denotation):
 	// minted only when this payload's own section is drawn straight from its
 	// record — a section the analytic prism boolean re-expresses sets
 	// sectionDelta nonzero and mints neither — so every vertex and rim edge
@@ -386,7 +386,7 @@ func BuildWallGeometry(alloc topo.Alloc, pp Payload, w survey2d.SideWalk, convex
 		// A straight wall has no turn of its own to disagree with the
 		// loop's: which side its material lies on is decided by the sense
 		// the whole loop is walked, and that sense IS the loop's role —
-		// the outer loop counter-clockwise, holes clockwise (root moments.go).
+		// the outer loop counter-clockwise, holes clockwise (internal/momentregion).
 		bottomEdge := topobuild.NewEdge(alloc, topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: surfacegeom.Line3{}, Start: bStart, End: bEnd})
 		topEdge := topobuild.NewEdge(alloc, topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: surfacegeom.Line3{}, Start: tStart, End: tEnd})
 		mid := pp.Point((w.StartU+w.EndU)/2, (w.StartV+w.EndV)/2, pp.Z0)
@@ -446,7 +446,7 @@ func BuildLoopSides(ctx context.Context, env topo.Env, body *topo.Body, pp Paylo
 // index the *momentinput.ProfileWalks was resolved at.
 //
 // levelZ0 and levelZ1 are the LEVEL half of the shared-denotation certificate
-// (root denotation.go), minted once per build by the caller's own Build
+// (internal/denotation), minted once per build by the caller's own Build
 // and stamped here onto every vertex and rim edge this loop places at its
 // respective end — the zero value declines for every OTHER caller of this
 // function (root shell_cup.go, root capblend_moments.go), which mint neither and so
@@ -457,7 +457,7 @@ func BuildLoopSides(ctx context.Context, env topo.Env, body *topo.Body, pp Paylo
 // rim edge this loop places, at EITHER end, unconditionally — unlike the
 // LEVEL half, minting a curve identity claims nothing about the section
 // itself, so it needs no sectionDelta==0 precondition; freshness alone is
-// what keeps two separate builds from ever sharing one (root denotation.go).
+// what keeps two separate builds from ever sharing one (internal/denotation).
 // False for every OTHER caller of this function, which mints no curve
 // identity for their own rim.
 func BuildLoopSidesAs(ctx context.Context, env topo.Env, body *topo.Body, pp Payload, roleLoop int, holeLoop bool, loop sectionrecord.LoopRecord, work *freeform.FreeformWork, resolved *momentinput.ProfileWalks, levelZ0, levelZ1 denotation.LevelToken, mintCurveTokens bool) ([]*topo.Face, []topo.CoEdge, []topo.CoEdge, proofbound.BoundedScalar, error) {

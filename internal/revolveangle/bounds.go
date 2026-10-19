@@ -40,7 +40,7 @@ func Extremes(c0, c1, phi0, phi1 float64, full bool) (float64, float64) {
 // math.Sin/Cos/Atan2/Hypot's accuracy: c0 and c1 are read as exact rationals
 // (their own float64 bit patterns — the same convention Extremes' own
 // callers already take), each endpoint's own denoted angle is enclosed by
-// den.Phi0/den.Phi1 (denotation.go) — falling back to the HELD
+// den.Phi0/den.Phi1 (internal/denotation) — falling back to the HELD
 // phi0/phi1 read as exact rationals wherever the denotation cannot state one,
 // which reproduces today's reading exactly — sin/cos of each denoted angle by
 // Angle.SinCosFor, which reads a pure-turn end (a degree-stated

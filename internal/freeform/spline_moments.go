@@ -40,7 +40,7 @@ func FreeformSpanCost(controls int) uint64 {
 
 // ChargeFreeformSpans preflights the exact integration of a WHOLE converted
 // chain, before any of it runs. It is the SINGLE owner of that charge: the
-// record-level preflight levies it (moments.go) and the moments pass
+// record-level preflight levies it (internal/momentregion) and the moments pass
 // then integrates the chain the preflight already paid for. A record whose
 // integration cannot fit the budget must refuse before anything downstream of
 // the conversion samples or reconstructs the curve, since the ceiling exists
@@ -163,14 +163,14 @@ func ExactFreeformMoments(spans []BezierSpan, reversed bool, order MomentIntegra
 
 // PolyThirdMoments integrates one polynomial boundary path's third-order
 // contributions exactly, through the dv form every third-order contribution
-// takes (moments.go's MomentThirdOrder):
+// takes (internal/momentregion's MomentThirdOrder):
 //
 //	∫u³ dA  = ¼∮u⁴ dv
 //	∫u²v dA = ⅓∮u³v dv
 //	∫uv² dA = ½∮u²v² dv
 //	∫v³ dA  = ∮uv³ dv
 //
-// A line is the degree-1 path, so moments.go's line arm and this file's span
+// A line is the degree-1 path, so internal/momentregion's line arm and this file's span
 // arm share it.
 func PolyThirdMoments(u, v polynomial.RatPoly) [4]*big.Rat {
 	dv := polynomial.RpDeriv(v)

@@ -105,7 +105,7 @@ moments over its signed axial interval. For a section at `(u,v)` and axial
 coordinate `z`, `∫u²dV = (z1-z0)∫u²dA`, `∫uzdV =
 (z1²-z0²)∫u dA/2`, and `∫z²dV = (z1³-z0³)A/3` before rotation into world
 axes. The corresponding `v` and `uv` terms follow the same rule. Holes use
-their recorded winding. `moments.go` already owns section moments through
+their recorded winding. `internal/momentregion` already owns section moments through
 second order; this path must reuse that validated record and its bounds.
 `docs/multibody-dynamics-design.md` §8.1 owns the rotation of the local
 tensor through a non-cardinal frame or placement basis, and §8.2 the

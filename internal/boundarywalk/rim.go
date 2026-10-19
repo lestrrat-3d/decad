@@ -82,7 +82,7 @@ func RimConvexity(ctx context.Context, w survey2d.SideWalk, holeLoop bool, work 
 		// A straight wall has no turn of its own to disagree with the
 		// loop's: which side its material lies on is decided by the sense
 		// the whole loop is walked, and that sense IS the loop's role —
-		// the outer loop counter-clockwise, holes clockwise (moments.go).
+		// the outer loop counter-clockwise, holes clockwise (internal/momentregion).
 		return !holeLoop, nil
 	}
 }

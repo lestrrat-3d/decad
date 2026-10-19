@@ -771,7 +771,7 @@ implementation cannot falsify itself.
 `ConicSeg` and whole `EllipseSeg` have closed-form moments carrying π, trig or
 `atanh` terms. That is the standing `CircleSeg`/`ArcSeg` already have: the closed
 form is exact in the reals, and the reported result is a `ratInterval` bracket
-around the float evaluation (`moments.go`). Same machinery, new formulas.
+around the float evaluation (`internal/momentregion`). Same machinery, new formulas.
 
 ### 5.4 Tier C — certified quadrature for a rational NURBS
 
@@ -1690,7 +1690,7 @@ reach for the moments path (§5.1.2) before P4b.
 
 **A Tier A section's exactly-rational reach is its free-form walks' alone.**
 Analytic walks join them in the same section freely (§4.1), and a circular one
-contributes `moments.go`'s own proven interval, so every row below reads "the
+contributes `internal/momentregion`'s own proven interval, so every row below reads "the
 Tier A rational" as the section's COMPOSED moments — one rounding only where
 every walk of the section is itself exactly rational (§3).
 

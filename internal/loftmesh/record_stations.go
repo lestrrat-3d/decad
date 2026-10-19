@@ -293,7 +293,7 @@ func CircularCellPoints(w0, w1 survey2d.SegmentWalk, seg0, seg1 sectionrecord.Cu
 // upper bound on each share.
 //
 // For a circular segment (sectionrecord.CircleSeg/sectionrecord.ArcSeg) that whole-length bound is
-// moments.go's circularLengthInterval — an EXACT rational bracket on the
+// internal/momentregion's circularLengthInterval — an EXACT rational bracket on the
 // segment's true length — never survey2d.SegmentWalk.lengthUpper: that field's own
 // bound is deliberately loose (proofbound.CircularSweepUpper bounds any sectionrecord.ArcSeg's sweep
 // by the full 2*pi it could reach, never the sweep THIS record states, per
@@ -374,7 +374,7 @@ func CircularStationChain(w survey2d.SegmentWalk, seg sectionrecord.CurveSegment
 // The term exists because a pin is a statement about a POSITION and not about
 // the point the record denotes at that parameter. An sectionrecord.ArcSeg records three
 // points and the curve it denotes takes its radius from Start ALONE —
-// circularEndpointInterval and circularWalkEnclosures (moments.go) both read
+// circularEndpointInterval and circularWalkEnclosures (internal/momentregion) both read
 // |Start − Center|, the reading docs/sketch-seam-design.md states outright —
 // so the denoted point at t == 1 lies at THAT radius and End's own angle. The
 // walk holds the recorded End there (arcWalkEnd), and the two coincide only
