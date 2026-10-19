@@ -56,6 +56,12 @@ func TestContactPairRotatedBoxContainedHorizontalFace(t *testing.T) {
 	require.Equal(t, decad.ContactTouching, clipped.Relation)
 	require.NotNil(t, clipped.Manifold)
 	require.Len(t, clipped.Manifold.Points, 8)
+	for _, point := range clipped.Manifold.Points {
+		require.Equal(t, r3.Vec{Z: 1}, point.Normal.Value)
+		require.InDelta(t, 0, point.OnA.Value.Z, point.OnA.Bound.Base())
+		require.LessOrEqual(t, math.Abs(point.OnA.Value.X), 5+point.OnA.Bound.Base())
+		require.LessOrEqual(t, math.Abs(point.OnA.Value.Y), 5+point.OnA.Bound.Base())
+	}
 }
 
 func TestContactPairOrientedSourceBoxes(t *testing.T) {
