@@ -9,7 +9,7 @@ import (
 
 // ProvePlaneLevel is gate 3's second arm: it requires every chain vertex,
 // and every chain edge, to carry a level token with the SAME non-zero id
-// (denotation.go) — an identity comparison alone, never a coordinate, a
+// (internal/denotation) — an identity comparison alone, never a coordinate, a
 // residual or a bound magnitude. A shared level proves the chain's true
 // vertices lie on one plane by shared construction
 // (docs/surface-design.md §5.2), so nothing here reads a position or a

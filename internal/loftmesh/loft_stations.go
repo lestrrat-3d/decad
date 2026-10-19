@@ -116,7 +116,7 @@ func LoftLineCellStations(w0, w1 survey2d.SegmentWalk) ([]LoftStation, []LoftSta
 // end.
 //
 // The quantity is 2·r·sin²(Δθ/4m) with r the segment's radius and Δθ the angle
-// its walk sweeps. Both come from circularWalkEnclosures (moments.go), which
+// its walk sweeps. Both come from circularWalkEnclosures (internal/momentregion), which
 // states them from the RECORD — an ArcSeg's proofbound.RatSqrtDown/proofbound.RatSqrtUp radius and
 // its proofbound.Atan2Interval swept angle, a CircleSeg's recorded radius and exact
 // rational turn — never from the walk's held math.Hypot radius and math.Atan2
@@ -156,7 +156,7 @@ func LoftCertifiedSagittaUpper(radius, sweep proofbound.RatInterval, enclosed bo
 //
 // The quantity is 2·r·sin(Δθ/2m), r the segment's radius and Δθ the angle its
 // walk sweeps: the same two enclosures CertifiedSagittaUpper reads, from the
-// same owner (moments.go's circularWalkEnclosures), taken at the cell's own HALF
+// same owner (internal/momentregion's circularWalkEnclosures), taken at the cell's own HALF
 // angle rather than its quarter. Reading them here rather than the walk's held
 // w.radius/w.th0/w.th1 is not a preference: those floats carry no enclosure
 // (circularWalkEnclosures' own doc comment), a math.Atan2 endpoint's own error
@@ -283,7 +283,7 @@ func LoftSettleStationCount(a, b LoftCircularSide, target float64) (int, float64
 // Those two readings are not the whole charge at an UNTRIMMED ArcSeg end.
 // arcWalkEnd's zero states that the held station IS the recorded coordinate,
 // which is a statement about the POSITION and not about the point the record
-// DENOTES there: circularEndpointInterval (moments.go) takes the denoted
+// DENOTES there: circularEndpointInterval (internal/momentregion) takes the denoted
 // curve's radius from Start alone, so at t == 1 the denoted point sits at
 // Start's radius and End's own angle and misses the recorded End by the
 // arc-end radial residual. ArcNaturalEndRadialUpper charges exactly that

@@ -20,7 +20,6 @@ The rules for rows live in `docs/layout.md`.
 | `loft_mirror_cylinder_union.go` | Authenticates repeated reflected Loft pairs and a through-bore Cut, places the lower teeth, audits the exact blank, and publishes the joined or bored shell. `internal/loftcylinder` assembles the mirrored halves. See loft-mirror-boolean design. |
 | `loft_mirror_cylinder_chamfer.go` | Rewrites both exterior cap loops through one audited bored half and a reflected seam, and certifies translated upper source teeth and the reflected cap band. See loft-mirror-boolean design. |
 | `loft_cylinder_union.go` | Dispatches a coaxial cylinder and Loft tooth `Union`, builds each tooth's private proof body and verified mesh, and tags and builds the joined result. Tooth admission, separation and the joined shell's seam and volume proofs live in `internal/loftcylinder`. See loft-cylinder-boolean design. |
-| `loft_prism_union.go` | Reduces authenticated straight-source axial Lofts to prism operands for exact Sketch Union. See general-boolean design §12. |
 | `loft_contact_partition.go` | Certifies a private varying-line Loft/prism source partition and both Sketch cap correspondences. `internal/loftcontact` holds the partition record and certifies each cap. See its proof comments. |
 | `loft_contact_source_spans.go` | Reads authenticated line, circle, arc and fit-spline cap spans, ordered Sketch cap cells and Loft wall-cell source roles for the private curved-contact lane; it publishes no output proof. |
 | `loft_contact_quarter.go` | Relates certified quarter-arc cap crossings to original Loft wall sources, pairs witnesses with held seams, and checks a paired wall's source order, under private source and output budgets. |
@@ -31,12 +30,11 @@ The rules for rows live in `docs/layout.md`.
 | `loft_cylinder_cap.go` | Tags certified cap faces, and bounds a one-ulp axial placement difference for Union proof copies. See loft-cylinder-boolean design. |
 | `loft_cylinder_bore.go` | Cuts a centered through-bore from an audited loft/cylinder join. See loft-cylinder-boolean design. |
 | `loft_cylinder_chamfer.go` | Recognizes the two-cap Chamfer of an audited loft/cylinder result, reads the receiver's cap refs, and maps the result node built in `internal/loftcylinder` to its handle. See loft-cylinder-boolean design. |
-| `prism_boolean.go` | Root holed-Intersect route, its one-hole nesting admission, body-to-payload adapters for analytic prism booleans, blind and spanning Cut admission, and the exact blind Cut across one through hole. See prism-boolean §3, general-boolean A7. |
+| `prism_boolean.go` | Root holed-Intersect route, axial-Loft and exact face-patch Union adapters, its one-hole nesting admission, body-to-payload adapters for analytic prism booleans, blind and spanning Cut admission, and the exact blind Cut across one through hole. See prism-boolean §3, general-boolean A7. |
 | `prism_group.go` | Prism-group `Cut` tools and disjoint `Union` results. See general-boolean A5. |
 | `stacked_union.go` | Admits A1 `Union` operands and passes their slabs to `internal/stackedunion`. See general-boolean A1. |
-| `prism_face_patch_union.go` | Re-expresses exact rectangular face-patch Union operands for prism or A1 scenes. See general-boolean A1. |
 | `prism_overlap.go` | Prism-boolean §4.5's overlap-area reading for `Verify`. See its doc comment. |
-| `brep_measure.go` | The brep surveys; `internal/breprecord` states prisms and stacked prisms as face views, then builds and measures the record. See general-boolean §4. |
+| `brep_measure.go` | The brep surveys, including fillet-band pull readings and the undercut verdict fold; `internal/breprecord` states prisms and stacked prisms as face views, then builds and measures the record. See general-boolean §4. |
 | `surface_trim.go` / `surface_split_revolve.go` | Surface entry gates, root result construction and revolve `Split`. See surface-intersection §2–§3. |
 | `point_plane_split.go` | Authenticates point-loft and sheet operands, orders split planes, and commits facetedrecord slabs. See loft-point design. |
 | `point_plane_scale.go` | Validates ScaledAt sources and commits similarity images; facetedrecord carries Split maps. See loft-point design and evaluator §8. |

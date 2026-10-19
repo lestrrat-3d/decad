@@ -64,7 +64,7 @@ func (pp Payload) Prism() prismrecord.Payload {
 // chain the LEVEL arm admitted instead publishes ITS OWN token, below, which
 // the face build reads for the plane's origin and normal directly — never a
 // value fitted to held vertex coordinates, which are only approximately
-// coplanar for a chain admitted this way (denotation.go's own doc comment
+// coplanar for a chain admitted this way (internal/denotation's own doc comment
 // states why).
 type Chain struct {
 	Edges []*topo.Edge
@@ -80,7 +80,7 @@ type Chain struct {
 	// value whenever HasAxialBound is false. The face build reads its own
 	// origin/normal, transformed by this evaluation's own placement, as the
 	// published plane: never the fitted vector, which this token's own doc
-	// comment (denotation.go) states is unsound for a chain admitted by
+	// comment (internal/denotation) states is unsound for a chain admitted by
 	// identity rather than by proven-exact coplanarity.
 	Level denotation.LevelToken
 }

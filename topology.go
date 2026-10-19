@@ -347,7 +347,7 @@ func (e *Edge) Faces() []*Face { return faceHandles(e.n.Faces) }
 // rim.
 //
 // Every profile is walked with the material on the left: the outer loop
-// counter-clockwise, every hole clockwise (moments.go). Three classes of edge
+// counter-clockwise, every hole clockwise (internal/momentregion). Three classes of edge
 // read that walk:
 //
 //   - A JUNCTION edge, where two walls meet, is convex when the walk turns

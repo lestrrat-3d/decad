@@ -1074,7 +1074,7 @@ payloads and curved stitched solids publish no occupied-volume proof and return 
 
 ### 8.6 General revolve, full or partial, any admitted section
 
-Analytic, in `internal/massmoment/revolve_properties.go`. `moments.go`'s `momentThirdOrder` adds `∫u³`, `∫u²v`, `∫uv²`,
+Analytic, in `internal/massmoment/revolve_properties.go`. `internal/momentregion`'s `momentThirdOrder` adds `∫u³`, `∫u²v`, `∫uv²`,
 `∫v³` as rational intervals about the plane origin, every segment kind in the one boundary form
 `∮u^(p+1)·v^q dv/(p+1)`: lines there, arcs and circles in `moments_circular.go` through the trig-power
 reduction `circularMonomials`, Tier A spans in `spline_moments.go`. The plane moments are re-expressed as
@@ -2783,7 +2783,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 ### PR 16 (Phase 3) — third-order section moments and the general revolve
 
 - Delivers §8.6.
-- Files: `moments.go`, `moments_circular.go`, `spline_moments.go`, `internal/massmoment/revolve_properties.go`.
+- Files: `internal/momentregion`, `moments_circular.go`, `spline_moments.go`, `internal/massmoment/revolve_properties.go`.
 - Test (`apitest`): `apitest/mass_properties_revolve_test.go`: a quarter revolve of an off-axis rectangle encloses
   the independently integrated `r³`, `r²z` and `rz²` terms in its mixed components, and an off-axis
   triangle makes the `r²z` products nonzero; a full torus against the closed form; a rotated placement

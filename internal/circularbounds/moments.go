@@ -760,7 +760,7 @@ func circularGreenMoment(walk circularMomentWalk, j [][]proofbound.RatInterval, 
 // circularThirdMomentInterval encloses one circular walk's third-order
 // contributions (∫u³ dA, ∫u²v dA, ∫uv² dA, ∫v³ dA) about the plane origin,
 // under circularMomentWalkOf's admission. The boundary form is the dv one for all
-// four, the same form moments.go's line and spline_moments.go's span
+// four, the same form internal/momentregion's line and spline_moments.go's span
 // contributions take, so a loop mixing the three kinds sums one consistent
 // Green's-theorem integral.
 func circularThirdMomentInterval(seg CurveSegment) ([4]proofbound.RatInterval, bool) {

@@ -5,10 +5,12 @@ import (
 	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/capblendsurvey"
+	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/radiussurvey"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
@@ -146,4 +148,98 @@ func brepMinRadius(b *Body, bp brepPayload) (radiusOutcome, bool) {
 	}
 	reading := radiussurvey.Brep(walls, fillets, bp.SectionDelta())
 	return radiusOutcome{reading: reading.Reading, bound: reading.Bound, ok: reading.OK}, reading.OK
+}
+
+// The undercut readers below fold a root body's own face handles into an
+// undercut result (docs/verification-design.md §6). Analytic prism, cup, and
+// cap-blend surveys read the exact three-valued wall and cap decisions in
+// internal/survey2d/survey_undercut.go.
+//
+// A receiver face's normal-component range is decided over the rationals, not
+// as a bare float: a genuinely perpendicular or antiparallel face need not
+// land exactly on 0 or -1 in floating point. Both carve-outs are exactly
+// decidable from held numbers alone: a straight wall's plane-local tangent, a
+// circular wall's swept angle, and the placed frame's own exact directions
+// (survey2d.NewPlacedFrameMap, capblend_normal.go).
+//
+// The caller's ORIGINAL pull is used throughout, never its normalized form,
+// because normalizing rounds. Squaring both sides of every comparison against
+// -1 (or 0) lets the reader decide without taking a square root of an
+// irrational quantity: a component c = num / sqrt(scale2 * pull2) satisfies
+// c >= 0 iff num >= 0, and (for num <= 0) c <= -1 iff num^2 >= scale2*pull2,
+// an exact rational test either way.
+//
+// analyticundercut.Revolve reads through revolveangle.Extremes, a different
+// reader, and does not use this decision.
+
+// listVerdict folds one public face's verdict into the running faces list and
+// undecided flag used by the root BRep undercut readers. Analytic
+// undercut packages have their own node-typed fold. Here ok=false (a
+// non-finite input or a failed enclosure) propagates as a total refusal to
+// the caller, matching every other refusal path these surveys already take.
+func listVerdict(faces *[]*Face, undecided *bool, f *Face, verdict survey2d.PullVerdict, ok bool) bool {
+	if !ok {
+		return false
+	}
+	switch verdict {
+	case survey2d.PullOpposes:
+		*faces = append(*faces, f)
+	case survey2d.PullUndecided:
+		*undecided = true
+	}
+	return true
+}
+
+// brepFilletUndercuts folds DF7's reading of band's pipe patches into the
+// running faces list and undecided flag (loop-fillet Table DF's DF7). Patch
+// p of the band is read through the closed-form range of cos φ·A + sin φ·B(θ)
+// of its outward normal along the pull: A from F's frame normal, B from the
+// inward normal of F's region at the patch's walk (survey2d.InwardRange) or
+// through the turn of a reflex corner (survey2d.CornerRange), decided by the
+// three-valued rule every undercut reading uses. The patch tags are the built
+// surfaces (their stamped departure is zero), so no allowance beyond that
+// arithmetic arises. It reports false, a total refusal, when a patch's face is
+// missing or a range cannot be enclosed.
+func brepFilletUndercuts(budget *proofbound.WorkBudget, roles map[string]*Face, bp brepPayload, band brepLoopBand, pull r3.Vec,
+	faces *[]*Face, undecided *bool, work *freeform.FreeformWork) bool {
+	f := bp.Faces[band.Face]
+	view := f.View(bp.Xform)
+	m, ok := survey2d.NewPlacedFrameMap(view.Frame, view.Xform)
+	if !ok {
+		return false
+	}
+	fr, err := breprecord.FilletLoopOf(budget, band.Orig, band.Setback.Dc, f.Role, work)
+	if err != nil {
+		return false
+	}
+	sign := int64(-1)
+	if f.Outward {
+		sign = 1
+	}
+	sigma := int64(band.Sigma)
+	n := len(fr.Walks)
+	p := 0
+	patch := func(rng survey2d.PullBracket, ok bool) bool {
+		if !ok {
+			return false
+		}
+		face := roles[band.PatchRole(p)]
+		p++
+		if face == nil {
+			return false
+		}
+		verdict, ok := survey2d.PatchPullVerdict(m, pull, sign, rng)
+		return listVerdict(faces, undecided, face, verdict, ok)
+	}
+	for i, w := range fr.Walks {
+		if !patch(survey2d.InwardRange(w, m, pull, sigma)) {
+			return false
+		}
+		if ni := (i + 1) % n; !fr.Loop.WholeTurn() && fr.Loop.Corners[ni] == filletband.Reflex {
+			if !patch(survey2d.CornerRange(w, fr.Walks[ni], m, pull, sigma)) {
+				return false
+			}
+		}
+	}
+	return p == len(fr.Pieces)
 }

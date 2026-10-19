@@ -79,7 +79,7 @@ func TestBuildFaceCarriesTheLevelBoundOntoTheNewFacesAxialDelta(t *testing.T) {
 // coordinator's own concern, made concrete: for a chain admitted by the level
 // arm, held vertex coordinates at a common recorded level are only
 // APPROXIMATELY coplanar in float64 once the frame is not axis-aligned
-// (frame.ToWorldUV(u, v) rounds differently per (u, v) — see denotation.go's
+// (frame.ToWorldUV(u, v) rounds differently per (u, v) — see internal/denotation's
 // own doc comment), so a normal FITTED to them (OrientedNormal's Newell sum)
 // would carry that same rounding as an unbounded tilt no AxialDelta covers.
 // This fixture deliberately perturbs one vertex's held coordinate by far more

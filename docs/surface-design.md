@@ -509,7 +509,7 @@ loop walks counter-clockwise in the plane frame and every hole clockwise, so a
 patch's walk is the profile's own, and `Edge.IsConvex` reads it by
 `docs/evaluator-design.md` §3's rim rule: a hole's edges are concave.
 
-**Its `Area` is the profile's own region area from `moments.go`**, net of
+**Its `Area` is the profile's own region area from `internal/momentregion`**, net of
 holes, with that engine's own exactness and bound — `Exact` for a line/arc
 boundary, and the free-form tiers of `docs/spline-design.md` §5 where the
 boundary carries them. Nothing is integrated twice and nothing new is proven.
@@ -686,7 +686,7 @@ finite bound.
 
 **Filling a HOLE loop is one of this operation's own cases, and it keeps the
 holed face's normal rather than negating it.** A hole loop is walked
-clockwise (moments.go's own "outer counter-clockwise, holes clockwise"
+clockwise (internal/momentregion's own "outer counter-clockwise, holes clockwise"
 convention), so the opposite sense the patch takes reads counter-clockwise —
 the same rotation an outer boundary's own fill reads — and the right-hand
 rule sends that back to the SAME side the hole already faced. Filling a
@@ -939,7 +939,7 @@ manifold, watertight (when closed) and free of self-intersection:
 own area is a square root of a rational and is therefore never `Exact` the
 way `internal/freeform/spline_length.go`'s outward brackets state for `docs/loft-design.md`
 §8's wall reading; each stitched face's own area, by contrast, already comes
-from the closed-form region integral (`moments.go`) or the surface-result
+from the closed-form region integral (`internal/momentregion`) or the surface-result
 subtraction (§4.3) that built it, and is `Exact` wherever that integral is.
 Summing those already-proven readings is what §8 already prescribes for a
 sheet, and `Stitch` reuses it unchanged for a solid: the box worked example
@@ -2384,7 +2384,7 @@ read through `s.Plane().Frame()`. The chain and profile admission gates live in
 
 **What it cannot share is `LoopRecord`.** A `LoopRecord` states that its last
 segment's walk closes onto its first, and every consumer downstream reads one as
-the boundary of a closed region — `moments.go`'s region integrals,
+the boundary of a closed region — `internal/momentregion`'s region integrals,
 `triangulate.go`'s cap tiling, `segment_walk.go`'s region walks. A chain states
 the opposite at its two ends, so recording one as a `LoopRecord` carrying a flag
 would hand each of those consumers a closure that is not there. Two further
@@ -2395,7 +2395,7 @@ closed-kind segment's own `CCW` survives, because it still records the walk
 sense — but it survives only on a FRAGMENT, since a whole `*Circle`, `*Ellipse`
 or `*ClosedSpline` edge is a closed run `sketch` publishes as a `Profile` or
 publishes nowhere, and so never reaches a chain. Nor does a `ChainRecord` feed
-any region reading: `moments.go` integrates `Area`, `Centroid` and
+any region reading: `internal/momentregion` integrates `Area`, `Centroid` and
 `SecondMoments` over a region, and a chain bounds none. Its only 2D reading is
 per-segment arc length, through `segment_walk.go` and, for a free-form segment,
 `internal/freeform/spline_length.go`'s proven bracket.

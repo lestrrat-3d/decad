@@ -551,7 +551,7 @@ func TestPrismUnionDownstreamFilletAndWallSurvey(t *testing.T) {
 // Union of two circles (docs/prism-boolean-design.md PR1) merges both
 // operands' recorded sections through a private sketch scene, which is what
 // turns each operand's WHOLE circle into a TRIMMED CircleSeg in the merged
-// result — the fragment moments.go's certified brackets used to refuse.
+// result — the fragment internal/momentregion's certified brackets used to refuse.
 // Before internal/proofbound/turn_trig.go's fractional-turn arm, this body's Volume and Area
 // bounds were loose by orders of magnitude (a bound proportional to the
 // body rather than to the actual error); the closed forms below are the

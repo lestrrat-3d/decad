@@ -39,7 +39,7 @@ import (
 // the surface actually carried is only bounded-close to its published tag.
 //
 // Every enclosure here is a rational interval, so the answer never depends on
-// what the platform's own libm did — the same discipline moments.go and
+// what the platform's own libm did — the same discipline internal/momentregion and
 // capblend_contour.go already run on. Where an enclosure cannot separate the
 // direction from zero the reading REFUSES, rather than publish a bound
 // nothing proves.

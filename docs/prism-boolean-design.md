@@ -1014,7 +1014,7 @@ The result's `Exactness` is then the existing rule with these displacement
 terms added:
 
 - **`Exact`, zero bound**, when every surviving segment is a `LineSeg` **and**
-  `δ == 0` and both axial end bounds are zero — `moments.go`'s region-level
+  `δ == 0` and both axial end bounds are zero — `internal/momentregion`'s region-level
   exact rational accumulator with its single final rounding, over a section and
   sweep interval no coordinate of which was recomputed.
   `δ == 0` requires every survivor to be a WHOLE edge, so this arm is reached
@@ -1028,7 +1028,7 @@ terms added:
   segment kinds are. Every partially overlapping pair lands here.
 
 Volume, Centroid and `Box` all read that same accumulator and that same
-displacement term (evaluator §4, `moments.go`), so no separate derivation is
+displacement term (evaluator §4, `internal/momentregion`), so no separate derivation is
 needed for each.
 
 ## 8. Consequences removed, and what stands outside the admitted class
@@ -1356,7 +1356,7 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
   explains (assert it scales with the placement's own magnitude, so a payload
   silently dropping the term fails);
   a merged section retaining a `CircleSeg`/`ArcSeg` reports `Approximate` with
-  a bound composed from `moments.go`'s and `internal/proofbound/bounds.go`'s machinery, asserted
+  a bound composed from `internal/momentregion`'s and `internal/proofbound/bounds.go`'s machinery, asserted
   against the closed-form answer.
 - An arranged profile containing a `Partial` boundary edge, where either
   source carries a nonzero section displacement, either source carries a

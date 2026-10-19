@@ -11,7 +11,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// Document.Remove takes a body back out of the model. A caller that adds a
+// Remove(b) takes a body back out of the model. A caller that adds a
 // body to someone else's document — a support, a fixture — and then sees
 // Verify fail can undo its own addition. The removed body is retired: it
 // leaves Bodies() and Verify, still answers its measurements, and no

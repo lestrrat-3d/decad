@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Document.Remove is retirement by the caller's own hand (core §6): the body
+// Remove(b *Body) is retirement by the caller's own hand (core §6): the body
 // leaves Bodies() and Verify, stays readable, and no operation takes it.
 
 func TestDocumentRemoveTakesBodyOutOfTheModel(t *testing.T) {

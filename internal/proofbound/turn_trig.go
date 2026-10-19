@@ -46,7 +46,7 @@ import (
 
 // TrigFixedBits is the fixed-point scale exponent P: the package's shared
 // fixed-point grid, every value on it an integer count of 2^-TrigFixedBits.
-// This file's TrigFixedSeries and moments.go's AtanSmallInterval both
+// This file's TrigFixedSeries and internal/momentregion's AtanSmallInterval both
 // evaluate their series on it.
 const TrigFixedBits = 200
 

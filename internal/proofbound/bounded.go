@@ -18,7 +18,7 @@ import (
 // interval straddling the threshold answers SurvStraddle rather than picking
 // the side its held value happens to sit on.
 //
-// moments.go and every reading built on it consume this vocabulary; bounds.go
+// internal/momentregion and every reading built on it consume this vocabulary; bounds.go
 // owns the mechanism-specific allowances that feed it.
 
 // BoundedScalar is a held float64 and a proven absolute error bound. The

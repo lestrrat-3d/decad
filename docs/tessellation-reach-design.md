@@ -110,7 +110,7 @@ Per tess §5/§6, with the terms the current code already computes plus the two 
 | `deltaTrim(face)` | wall: its walk's `chordCount` sagitta; cap/floor/rim: max sagitta over the loops bounding that patch (`chordedLoop.maxSag`) |
 | `deltaSection` | `pp.SectionDelta` (0 for a cup) |
 | `deltaAxial(face)` | `z0Delta` for `capStart`, `z1Delta` for `capEnd`, `max` for a wall; cup floors/rims read `cp.zDelta` per level |
-| `deltaStore(face)` | NEW. Two mechanisms, max over the face's vertices: (a) a computed circular sample's own gap from the certified enclosure of the point it denotes — `circularWalkEndBound`'s mechanism (`extrude.go`) applied at interior fraction `k/n` through `turnSinCosInterval` for a `CircleSeg` and `radSinCosSpan` over `atan2Interval` for an `ArcSeg` (`moments.go`, `internal/proofbound/turn_trig.go`), carried by `walkEndBoundAllow`; (b) `prismrecord.Payload.PointRound(pp, u, v, z, held)` (`extrude.go`) for the frame/placement write. Both are zero for a recorded line vertex under an axis-aligned identity payload |
+| `deltaStore(face)` | NEW. Two mechanisms, max over the face's vertices: (a) a computed circular sample's own gap from the certified enclosure of the point it denotes — `circularWalkEndBound`'s mechanism (`extrude.go`) applied at interior fraction `k/n` through `turnSinCosInterval` for a `CircleSeg` and `radSinCosSpan` over `atan2Interval` for an `ArcSeg` (`internal/momentregion`, `internal/proofbound/turn_trig.go`), carried by `walkEndBoundAllow`; (b) `prismrecord.Payload.PointRound(pp, u, v, z, held)` (`extrude.go`) for the frame/placement write. Both are zero for a recorded line vertex under an axis-aligned identity payload |
 
 `faceBound(f) = upRound(deltaTrim + deltaStore + deltaSection + deltaAxial)`. `bound` stays the conservative
 composition tess §5 already permits (largest sagitta + payload-wide axial max + `deltaStore` max).
@@ -663,7 +663,7 @@ exact unit normals' azimuths, which no record states — rather than a recorded 
 interval-window station enclosure this increment does not build. Both keep `symDiffOK == false`.
 
 The matching axial loft's zero-or-one-bore, both-outer-cap chamfer is a narrow
-exception (§7's `loft_capband_proof.go`; `docs/loft-design.md` §18). Its band
+exception (§7's `tessellate_capblend.go`; `docs/loft-design.md` §18). Its band
 denotes the loft's certified held cap polygon, not the fit-spline offset.
 Every outer walk is straight, and any unchanged bore is one whole circle.
 For this payload, the proof locates the reflex connector's cap-level vertex

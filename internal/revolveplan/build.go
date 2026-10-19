@@ -438,7 +438,7 @@ func buildRevolveLoop(ctx context.Context, alloc topo.Alloc, body *topo.Body, re
 					Length:      latitudeLength,
 					LengthBound: frame.LengthBound(latitudeLength, latitudeBound),
 					// The CURVE half of the shared-denotation certificate
-					// (denotation.go): this junction latitude circle is
+					// (internal/denotation): this junction latitude circle is
 					// shared, by construction, between side faces i-1 and i
 					// of THIS build alone (fullRevLoops below), exactly the
 					// role a prism's own rim edge plays for its two caps.
@@ -468,7 +468,7 @@ func buildRevolveLoop(ctx context.Context, alloc topo.Alloc, body *topo.Body, re
 						Length:      arcLength,
 						LengthBound: frame.LengthBound(arcLength, arcBound),
 						// The CURVE half of the shared-denotation certificate
-						// (denotation.go): this junction arc is shared, by
+						// (internal/denotation): this junction arc is shared, by
 						// construction, between side faces i-1 and i of THIS
 						// build alone.
 						Denot: body.Doc.MintCurve(),

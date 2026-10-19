@@ -17,7 +17,7 @@ import (
 )
 
 // This file tests the certified-bracket tightening of a straight prism's
-// Area/Centroid/edge-length bounds (moments.go's circularAreaInterval sibling
+// Area/Centroid/edge-length bounds (internal/momentregion's circularAreaInterval sibling
 // circularFirstMomentInterval, circularLengthInterval, and the sqrt-bracket
 // fallback in lineWalkBounds): every bound must still PROVE what it claims
 // (soundness — the true value lies within Value±Bound) while landing close
@@ -74,7 +74,7 @@ func TestExtrudeNGonPrismBoundsTighten(t *testing.T) {
 // exactly twice its own value and a Centroid bound over 13 times the radius,
 // because conservativeValueError's magnitude envelope carries no information
 // about the actual error. circularAreaInterval and circularFirstMomentInterval
-// (moments.go) now bracket a whole-turn CircleSeg exactly (pi times a rational,
+// (internal/momentregion) now bracket a whole-turn CircleSeg exactly (pi times a rational,
 // certified to 76 decimal digits), so the bound shrinks to a few ulps and the
 // body reads Sound at the default tolerance.
 func TestExtrudeCirclePrismBoundsTighten(t *testing.T) {
@@ -298,7 +298,7 @@ func quarterDiscRecord(r float64) momentinput.Profile {
 }
 
 // TestExtrudeTrimmedCircleSegPrismBoundsTighten is the diagnosed defect's own
-// fixture: moments.go's circularAreaInterval/circularFirstMomentInterval
+// fixture: internal/momentregion's circularAreaInterval/circularFirstMomentInterval
 // refused a CircleSeg whose recorded range was not a whole turn, falling back
 // to conservativeValueError's body-scale envelope — a bound 4.9 orders of
 // magnitude looser than the identical quarter disc recorded as an ArcSeg
