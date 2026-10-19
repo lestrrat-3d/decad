@@ -26,8 +26,7 @@ The rules for rows live in `docs/layout.md`.
 | `loft_contact_quarter.go` | Relates certified quarter-arc cap crossings to original Loft wall sources, pairs witnesses with held seams, and checks a paired wall's source order, under private source and output budgets. |
 | `loft_contact_direct_shell.go` | Builds a bounded public Union shell from certified Loft/prism source and output proofs. See its proof comments. |
 | `loft_contact_output_proof.go` | Builds and audits a transient held shell for planar varying-line Loft/prism contact. `internal/loftcontact` tiles its exact caps and holds the shell. See its proof comments. |
-| `loft_contact_volume_embedding.go` | Checks exact embedding and outward volume of the transient Loft/prism shell. See its proof comments. |
-| `loft_contact_volume_proof.go` | Computes a transient source/shell volume proof consumed by the admitted public varying line-only Loft/prism Union route, and checks the authenticated source against the shell. See its proof comments. |
+| `loft_contact_volume_proof.go` | Computes a transient source/shell volume proof consumed by the admitted public varying line-only Loft/prism Union route, and checks the authenticated source against the shell. `internal/loftcontact` checks the shell's exact embedding and outward volume. See its proof comments. |
 | `loft_cylinder_placement.go` | Rebuilds a common signed-axis cylinder/Loft join in local coordinates and places its audited shell. See loft-cylinder-boolean design. |
 | `loft_cylinder_cap.go` | Tags certified cap faces, and bounds a one-ulp axial placement difference for Union proof copies. See loft-cylinder-boolean design. |
 | `loft_cylinder_bore.go` | Cuts a centered through-bore from an audited loft/cylinder join. See loft-cylinder-boolean design. |
