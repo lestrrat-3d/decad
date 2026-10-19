@@ -1214,7 +1214,6 @@
 9	0.00	TestPairStationsOverBudgetRefusesR7
 9	0.04	TestPairStationsSagittaStrictlyDecreasesWithLevel
 9	0.00	TestPatternLinearMotionUsesTheDenotedStep
-9	0.01	TestPlanarManifoldMatchesClippedBoxPatch
 9	0.69	TestPlanarPairAdmitsCoilPartners
 9	1.19	TestPlanarPairVerdictDisplacementBand
 9	2.60	TestPlanarSupportsMatchScan
