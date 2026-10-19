@@ -8,9 +8,11 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
+	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -105,12 +107,24 @@ func TestMirrorChamferUpperShifts(t *testing.T) {
 	middle, err := r3.NewFrame(r3.Vec{Z: 1}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	require.NoError(t, err)
 	identity := r3.Identity()
-	near, err := r3.Rotation(r3.Vec{Z: 1}, units.Radians(10*2*math.Pi/17))
-	require.NoError(t, err)
-	require.Equal(t, math.Nextafter(1, 0), near.Basis().EZ.Z, "the rotation must be near-axial")
-	axial, err := r3.Rotation(r3.Vec{Z: 1}, units.Radians(math.Pi/4))
-	require.NoError(t, err)
-	require.Equal(t, 1.0, axial.Basis().EZ.Z, "the rotation must be axial")
+	// Whether a Z rotation's EZ.Z rounds to one or one step below it depends
+	// on the platform's sine and cosine, so take the first whole degree of
+	// each kind this platform produces instead of pinning one angle.
+	rotation := func(want func(r3.Transform) bool) r3.Transform {
+		for degree := 1; degree < 360; degree++ {
+			motion, err := r3.Rotation(r3.Vec{Z: 1}, units.Degrees(float64(degree)))
+			require.NoError(t, err)
+			if want(motion) {
+				return motion
+			}
+		}
+		require.FailNow(t, "no whole-degree Z rotation of the wanted kind")
+		return r3.Transform{}
+	}
+	near := rotation(loftmesh.NearAxialPlacement)
+	axial := rotation(func(motion r3.Transform) bool {
+		return motion != identity && loftcylinder.AxialPlacement(motion)
+	})
 
 	identityRecord := &loftrecord.SourceIdentity{}
 	join := &facetedrecord.LoftMirrorJoinRecord{Lower: &topo.Body{Payload: loftrecord.Payload{
@@ -150,9 +164,12 @@ func TestMirrorChamferUpperShifts(t *testing.T) {
 	shifts, err := loftcylinder.MirrorChamferUpperShifts(record(identity, axial, near), source)
 	require.NoError(t, err)
 	require.Len(t, shifts, 3)
-	// 2m(1-EZ.Z) with m = 1 and EZ.Z one float step below one.
-	want := big.NewRat(1, 1<<52)
+	// The exact shift 2m(1-EZ.Z) with m = 1, read from the fixture's own placement.
+	want := new(big.Rat).Mul(big.NewRat(2, 1),
+		new(big.Rat).Sub(big.NewRat(1, 1), proofarith.FloatRat(near.Basis().EZ.Z)))
+	require.Positive(t, want.Sign(), "the near-axial tooth must have a shift")
 	for i, expected := range []*big.Rat{want, new(big.Rat), new(big.Rat)} {
+		require.NotNil(t, shifts[i], "tooth %d", i)
 		require.Zero(t, expected.Cmp(shifts[i]), "tooth %d has shift %s, want %s", i, shifts[i], expected)
 	}
 
