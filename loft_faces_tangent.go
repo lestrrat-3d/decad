@@ -72,7 +72,7 @@ func LoftFacesToConeTangent(ctx context.Context, end ConeTangentEnd, sections ..
 	endMap := tangent.Map()
 	ring := make([]r3.Vec, len(source.SourceStation))
 	for j, station := range source.SourceStation {
-		u, v := lfStationUV(station)
+		u, v := lfF(station.U), lfF(station.V)
 		ring[j] = loftface.RoundPoint(endMap.At(u, v))
 	}
 	selected = append(selected, loftFaceSection{slice: selected[0].slice, ring: ring, constructed: &endMap})
