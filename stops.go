@@ -3,11 +3,9 @@ package decad
 import (
 	"errors"
 	"fmt"
-	"math"
 
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
-	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -34,11 +32,6 @@ import (
 type directionalExtent interface {
 	ExtentAlong(g r3.Vec) (float64, float64, float64, error)
 }
-
-// stopTol is the scale-relative tolerance the stop resolutions classify
-// contact with: a stop within it of the sketch plane (or of the axis) IS on
-// it.
-const stopTol = 1e-9
 
 // axialDisplacement is what a body-relative stop reads of a stop body's
 // payload: a proven displacement covering its analytic planar stop faces. A
@@ -250,25 +243,10 @@ func (d *Document) angularStopCtx(frame r3.Frame, line revolveaxis.Line2, ax axi
 	return angularStops{d: d, a3: a3, w: w, r0: r0, e1: w.Cross(r0)}
 }
 
-// angTol decides angular agreement between a stop face's boundary points: a
-// radial plane's points all sit at one angle about the axis, up to round-off.
-const angTol = 1e-9
-
 // resolveToFaceAngular resolves an angular to-face stop into the signed stop
-// angle about the axis, caller frame, radians. The resolved face must be
-// usable as a revolve cap — the §6 build table's caps are planar faces in
-// the rotated profile plane, which CONTAINS the axis — so the face must be
-// PLANAR, its plane must contain the revolve axis, and its material must lie
-// in one half-plane of the axis; a non-planar face, or a plane that does not
-// contain the axis, is a solid this evaluator cannot build
-// (ErrUnsupported, staged), while a face spanning both half-planes names two
-// stops at once and one in the profile's own half-plane a zero sweep — both
-// ErrDegenerate.
-//
-// travel is 0 for a standalone ToFaceAngular — the target face supplies the
-// sense (core §8.1), and both senses reach a radial plane, so the sweep
-// takes the nearer way around (Along on the exact half-turn tie) — and ±1
-// for a TwoSidedAngle side.
+// angle about the axis, caller frame, radians. It selects the live stop body
+// and its one face; extent.ToFaceAngularStop reads the face. travel is 0 for a
+// standalone ToFaceAngular and ±1 for a TwoSidedAngle side.
 func (st angularStops) resolveToFaceAngular(tfa ToFaceAngular, travel float64, what string) (float64, producerID, error) {
 	body, err := st.d.resolveStopBody(tfa.Body, what)
 	if err != nil {
@@ -278,73 +256,13 @@ func (st angularStops) resolveToFaceAngular(tfa ToFaceAngular, travel float64, w
 	if err != nil {
 		return 0, 0, err
 	}
-	pl, ok := face.n.Surface.(surfacegeom.Plane)
-	if !ok {
-		// The gate is an ANALYTIC planar surface (a Plane — a revolve radial
-		// cap), not merely a flat face: a boolean-built face can be flat
-		// (isPlanar) yet carry a Faceted surface, and this evaluator cannot use
-		// it as a stop. %T reports the actual surface so the caller sees why.
-		return 0, 0, fmt.Errorf(`%w: ToFaceAngular requires a stop face with an analytic Plane surface whose plane contains the revolve axis, not merely a flat face; this face's surface is %T, which this evaluator cannot use as a stop even when flat — choose any analytic planar face whose plane contains the axis, or use an angle extent (AngleExtent, or AngleSide inside a TwoSidedAngle extent)`, ErrUnsupported, face.Surface())
-	}
-	nf := pl.Frame.N()
-	if math.Abs(nf.Dot(st.w)) > stopTol {
-		return 0, 0, fmt.Errorf(`%w: ToFaceAngular requires the stop face's plane to contain the revolve axis; this plane is not parallel to the axis — choose a radial face or use an angle extent (AngleExtent, or AngleSide inside a TwoSidedAngle extent)`, ErrUnsupported)
-	}
-	off := pl.Frame.Origin().Sub(st.a3).Dot(nf)
-	if math.Abs(off) > extent.RelativeStopTolerance(math.Max(pl.Frame.Origin().Len(), st.a3.Len())) {
-		return 0, 0, fmt.Errorf(`%w: ToFaceAngular requires the stop face's plane to contain the revolve axis; this plane runs parallel to the axis but offset from it — choose a face through the axis or use an angle extent (AngleExtent, or AngleSide inside a TwoSidedAngle extent)`, ErrUnsupported)
-	}
-	phi, err := st.faceHalfPlane(face)
+	stop, err := extent.ToFaceAngularStop(faceNode(face), st.stopGeometry(), travel)
 	if err != nil {
 		return 0, 0, err
 	}
-	if phi <= angTol || phi >= 2*math.Pi-angTol {
-		return 0, 0, fmt.Errorf(`%w: the stop face lies in the profile's own half-plane`, ErrDegenerate)
-	}
-	switch {
-	case travel > 0:
-		return phi, body.originProducer(), nil
-	case travel < 0:
-		return phi - 2*math.Pi, body.originProducer(), nil
-	case phi <= math.Pi:
-		return phi, body.originProducer(), nil
-	default:
-		return phi - 2*math.Pi, body.originProducer(), nil
-	}
-}
-
-// faceHalfPlane maps source edges to the geometry the stop evaluator reads.
-func (st angularStops) faceHalfPlane(face *Face) (float64, error) {
-	edges := face.Edges()
-	boundary := make([]extent.AngularEdge, len(edges))
-	for i, edge := range edges {
-		boundary[i] = angularStopEdge(edge)
-	}
-	return extent.FaceHalfPlane(st.stopGeometry(), boundary)
+	return stop, body.originProducer(), nil
 }
 
 func (st angularStops) stopGeometry() extent.AngularStop {
-	return extent.AngularStop{A3: st.a3, R0: st.r0, E1: st.e1}
-}
-
-func angularStopEdge(e *Edge) extent.AngularEdge {
-	curve := e.n.Curve
-	record := extent.AngularEdge{CurveType: fmt.Sprintf("%T", publicCurve(curve))}
-	if e.n.Start != nil {
-		record.Start = &e.n.Start.Position
-	}
-	if e.n.End != nil {
-		record.End = &e.n.End.Position
-	}
-	switch c := curve.(type) {
-	case surfacegeom.Line3:
-		record.Kind = extent.AngularEdgeLine
-	case surfacegeom.Circle3:
-		record.Kind, record.Center, record.Axis, record.Radius =
-			extent.AngularEdgeCircle, c.Center, c.Axis, c.Radius
-	case surfacegeom.Arc3:
-		record.Kind, record.Center, record.Axis, record.Radius =
-			extent.AngularEdgeArc, c.Center, c.Axis, c.Radius
-	}
-	return record
+	return extent.AngularStop{A3: st.a3, W: st.w, R0: st.r0, E1: st.e1}
 }

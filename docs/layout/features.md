@@ -31,7 +31,7 @@ The rules for rows live in `docs/layout.md`.
 | `revolve.go` | Generic `Revolve` over a profile or chain: `Axis` variants, options, angular extents, and the public axis adapter to `internal/revolveaxis/`. See evaluator §6 and surface §13.2. |
 | `revolve_blend.go` | Fillet/Chamfer of revolve meridian junctions. See modify-reach §7. |
 | `revolve_cap_edge_blend.go` | Admits the quarter-turn radial cap rim, binds its source faces and publishes the mesh from `internal/revolvemesh/`. See modify-reach §7.2. |
-| `stops.go` | Body-relative stop resolution: live stop bodies, face selection, through-all and angular stops; `internal/extent` admits a `ToFace` face and computes its level. See evaluator §5/§6/§11. |
+| `stops.go` | Body-relative stop resolution: live stop bodies, face selection, through-all and angular stops; `internal/extent` admits a `ToFace` or `ToFaceAngular` face and computes its stop. See evaluator §5/§6/§11. |
 | `internal/extent/stop_revolve.go` | Exact `ToFace` level for a planar Revolve wall or angular cap. See evaluator §5. |
 | `loft.go` | Loft and LoftChain entry points and options. Root `chainLoftPayload` aliases `loftrecord.ChainPayload`. See loft §2/§4/§10/§16. |
 | `loft_sections.go` | Public smooth-section loft entry point and source-face assembly. See loft-sections design. |
