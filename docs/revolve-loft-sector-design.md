@@ -96,9 +96,12 @@ edges split together, including root edges. It rebuilds the shared ring and
 recomputes the cone cap and full boundary bounds after refinement. Each
 construction attempt permits at most three additional cap passes within the same mesh
 ceiling; a cap that still exceeds the budget refuses the join.
-An occupied-volume refusal may refine the angular plan up to eight times.
-A specific cap/root adjacency contact may also trigger refinement; the new
-mesh must pass the same exact audit. Refusal leaves all operands live.
+The builder makes at most eight construction attempts. Before the next one,
+a cap bound refusal lowers the cone cap limit, a specific cap/root adjacency
+contact quarters the angular sag allowance, and an occupied-volume refusal
+scales that allowance by a factor from 0.1 to 0.5 set by its measured
+margin. Each new mesh must pass the
+same exact audit. Refusal leaves all operands live.
 The current source class requires a canonical unplaced, full axis-X Revolve.
 Off-axis and transformed Revolves use the ordinary Boolean route or refuse.
 
@@ -160,8 +163,10 @@ split-cap source roles and an analytic root cone.
 ## Public routing
 
 Public serial and variadic `Union` use the same certified section-ring and
-sector-cap builder. Public `Cut` uses the joined section record for a centered,
-spanning cylinder. The legacy six-line join and bore constructors are absent.
+sector-cap builder. The root routes certify the sources and collect the placed
+copies; `internal/revolveshell` traces the exterior loop, builds, refines and
+audits the joined body, and attaches its join record. Public `Cut` uses the
+joined section record for a centered, spanning cylinder. The legacy six-line join and bore constructors are absent.
 A section with unsupported source geometry or an unproved contact refuses.
 Full gear acceptance tests run in `decad-gallery`; Decad tests use small
 Revolve and point-Loft producers.
