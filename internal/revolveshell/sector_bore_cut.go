@@ -26,9 +26,12 @@ import (
 
 // SectorCylinderCut handles only a complete coaxial cylinder across an
 // authenticated Revolve/point-Loft join and builds the result in env. It
-// reports false, with no error, for any other operation or operand pair, so
-// other booleans keep their usual dispatch. This route runs before the
-// general faceted contact-tolerance gate.
+// reports false, with no error, for an operation other than Cut, a target
+// with no join record, or a tool that is not an unplaced axis-X prism of one
+// whole origin-centered circle; other booleans then keep their usual
+// dispatch. A joined target without a complete planar cap-ring record
+// refuses before the tool is read, and so does any later failed check. This
+// route runs before the general faceted contact-tolerance gate.
 func SectorCylinderCut(ctx context.Context, op meshbool.OperationKind, env topo.Env,
 	target, tool *topo.Body) (*topo.Body, bool, error) {
 	if op != meshbool.OpCut {
