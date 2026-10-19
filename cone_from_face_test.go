@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/decad/internal/spiralsector"
 	"github.com/lestrrat-3d/r3"
@@ -79,7 +80,7 @@ func TestConeFromFaceIsStrictlyOffBlankFaces(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, doc.Bodies(), before+1)
 			require.NoError(t, doc.requireLive(blank), "the source stays live")
-			limit, ok := exactPointCone(cone)
+			limit, ok := revolveplan.PointConeSource(&cone.n)
 			require.True(t, ok, "the result must be an exact point cone")
 			gap, ok := spiralsector.ToolOuterGap(limit, tc.first, tc.last, tc.sign)
 			require.True(t, ok, "both face ends must lie strictly on the certified side")
@@ -144,7 +145,7 @@ func TestConeFromFaceRefuses(t *testing.T) {
 			"above the face": units.Millimeters(100),
 			"at the face":    units.Millimeters(section[3].U),
 			"nonnegative":    units.Millimeters(0),
-			// Below the face but above the origin: exactPointCone needs far < 0.
+			// Below the face but above the origin: revolveplan.PointConeSource needs far < 0.
 			"positive below the face": units.Millimeters(1),
 		} {
 			_, err := ConeFromFace(t.Context(), blank, sel, value)
@@ -299,7 +300,7 @@ func TestConeFromFaceNonConvexSectionIsAccepted(t *testing.T) {
 	cone, err := ConeFromFace(t.Context(), blank, coneFromFaceSelector(t, blank, section[4], section[5]),
 		units.Millimeters(-5))
 	require.NoError(t, err)
-	limit, ok := exactPointCone(cone)
+	limit, ok := revolveplan.PointConeSource(&cone.n)
 	require.True(t, ok)
 	// The side lies on x + r/2 = 5/2 and the empty half-plane is x + r/2 < 5/2,
 	// so the apex is the float just below 5/2 and the far radius the float

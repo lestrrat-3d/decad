@@ -16,6 +16,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/pointcone"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
@@ -106,7 +107,7 @@ func recordLoftFacesConeToe(ctx context.Context, source, tool, result *Body) err
 		base.Xform != r3.Identity() {
 		return nil
 	}
-	cone, ok := exactPointCone(tool)
+	cone, ok := revolveplan.PointConeSource(&tool.n)
 	if !ok || !pointcone.AboveFarCap(base.Verts, base.MeshBound, cone.Far) {
 		return nil
 	}
@@ -189,7 +190,7 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 		p.LoftFacesToe.CapFace == nil || p.LoftFacesToe.CapFace.Body != bodyNode(target) {
 		return nil, false, nil
 	}
-	cone, ok := exactPointCone(tool)
+	cone, ok := revolveplan.PointConeSource(&tool.n)
 	if !ok || cone.Far.Cmp(p.LoftFacesToe.Toe.Far) != 0 ||
 		!pointcone.AboveFarCap(p.LoftFacesToe.Base.Verts, p.LoftFacesToe.Base.MeshBound, cone.Far) ||
 		!orderedLoftFacesConeLimits(p.LoftFacesToe.Toe, cone, p.LoftFacesToe.Base) {

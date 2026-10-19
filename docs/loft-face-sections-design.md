@@ -336,7 +336,7 @@ endpoints without assuming that source X or angle is monotone.
 `LoftFacesToConeTangent(ctx, end, sections...)` lofts through the selected
 caps and then through a last section that no selected cap supplies. The last
 section is the plane that touches `end.Cone` along one ruling. It is built
-from the cone's exact apex `A` and slope `k` (read by `exactPointCone`) and the
+from the cone's exact apex `A` and slope `k` (read by `revolveplan.PointConeSource`) and the
 float direction `end.Radial = (0, y, z)`.
 
 `loftface.NewTangentEnd` chooses a unit vector `e = (e_y, e_z)` by the
@@ -405,11 +405,11 @@ rounds toward the finite side when the exact value lies beyond the float64
 range, by exact comparison against the largest finite float. `far` must be a
 finite negative axial coordinate (below X = 0) and below both face ends, `A`
 must be above `far`, `R` must be positive, and `A > 0 > far` so that
-`exactPointCone` reads the result.
+`revolveplan.PointConeSource` reads the result.
 
 Revolve classifies a generator as a cylinder when `|dr| <= 1e-9*hypot(dx, dr)`,
 and the directed rounding can cross that boundary. The built body is checked
-with `exactPointCone`, which needs a face classified Cone, before it is
+with `revolveplan.PointConeSource`, which needs a face classified Cone, before it is
 registered in the document. A failed check is `ErrUnsupported` and leaves the
 document and its provenance numbering unchanged.
 
