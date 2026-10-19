@@ -63,9 +63,9 @@ caps reuse the original point loft's triangulation, reversing the first.
 The exact held mesh must pass the whole-mesh crossing and closed-solid
 audits. Each wall face names its source segment and band. The end faces
 carry fresh `capStart` and `capEnd` roles and their selected source origins.
-`revolveloftfaces.BuildLoftFaces` assembles this mesh and runs the embedding,
-audit and bound proofs below; root checks the selected faces against their
-Split slabs and commits the result.
+`revolveloftfaces.BuildLoftFaces` assembles this mesh and runs the embedding
+gates above, these audits, and the bound proofs below; root checks the
+selected faces against their Split slabs and commits the result.
 
 The source region difference `area(D △ P)` is bounded by the original
 station displacement area tube. An upper bound `J_i` on the absolute
