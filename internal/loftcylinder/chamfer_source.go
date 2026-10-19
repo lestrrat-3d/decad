@@ -1,9 +1,13 @@
 package loftcylinder
 
 import (
+	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
@@ -64,4 +68,28 @@ func ChamferSourceOf(fp facetedrecord.Payload) (ChamferSource, bool) {
 		}, true
 	}
 	return ChamferSource{}, false
+}
+
+// BindCapSetback admits one equal setback d for both cap bands and then
+// binds the bridge (BindBridge). dDelta is the setback's asymmetric part and
+// must be zero. The exact band levels z0+d and z1−d must be ordered, d must
+// move each float cap level, and the bound top source level must lie above
+// z1−d. The level checks run before the bind, so their refusals leave s
+// unchanged.
+func (s *ChamferSource) BindCapSetback(d, dDelta float64) error {
+	if dDelta != 0 || d <= 0 || !proofbound.FiniteVec(r3.Vec{X: d, Y: s.Z0, Z: s.Z1}) {
+		return fmt.Errorf("%w: loft/cylinder cap setback has no exact millimeter magnitude", decaderr.ErrUnsupported)
+	}
+	start := new(big.Rat).Add(proofarith.FloatRat(s.Z0), proofarith.FloatRat(d))
+	end := new(big.Rat).Sub(proofarith.FloatRat(s.Z1), proofarith.FloatRat(d))
+	if start.Cmp(end) >= 0 || s.Z0+d == s.Z0 || s.Z1-d == s.Z1 {
+		return fmt.Errorf("%w: loft/cylinder cap bands reach each other or round onto a cap", decaderr.ErrUnsupported)
+	}
+	if err := s.BindBridge(); err != nil {
+		return err
+	}
+	if s.TopSourceLevel.Cmp(end) <= 0 {
+		return fmt.Errorf("%w: cap chamfer bridge reaches its side level", decaderr.ErrUnsupported)
+	}
+	return nil
 }

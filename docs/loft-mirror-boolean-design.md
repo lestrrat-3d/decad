@@ -171,6 +171,8 @@ and the common middle vertices are welded. Separate cap and wall audits prove
 the two exterior annuli, unchanged bore wall, and strict separation of the
 lower and upper slabs outside their shared seam.
 
+The lower-half Chamfer is `loftcylinder.ChamferBottomCap`, the two-cap
+builder of the loft-cylinder design run with its top cap inactive.
 The one-cap cutter uses exact side and inset loops, three source-occupied
 split rings, and exact full-band distance checks. Its band can cross the
 side-level ring in XY when the three-dimensional contact audit proves the

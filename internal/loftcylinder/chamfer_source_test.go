@@ -1,6 +1,7 @@
 package loftcylinder_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -88,4 +89,42 @@ func TestChamferSourceBindBridgeRefusal(t *testing.T) {
 	require.ErrorIs(t, err, decaderr.ErrUnsupported)
 	require.Equal(t, 0.5, source.BridgeBound, "a refused bind must keep the recorded bridge bound")
 	require.Nil(t, source.TopSourceLevel, "a refused bind must not set a source level")
+}
+
+// TestChamferSourceBindCapSetback refuses a setback with no exact equal
+// magnitude, or one whose cap bands meet or round onto a cap, before the
+// bridge is bound, and passes a bridge refusal through.
+func TestChamferSourceBindCapSetback(t *testing.T) {
+	t.Parallel()
+	const (
+		noMagnitude = "no exact millimeter magnitude"
+		bandsMeet   = "reach each other or round onto a cap"
+	)
+	for _, tc := range []struct {
+		name      string
+		z0, z1    float64
+		d, dDelta float64
+		want      string
+	}{
+		{"asymmetric", 0, 4, 1, 0.5, noMagnitude},
+		{"zero", 0, 4, 0, 0, noMagnitude},
+		{"negative", 0, 4, -1, 0, noMagnitude},
+		{"infinite", 0, 4, math.Inf(1), 0, noMagnitude},
+		{"infinite cap", 0, math.Inf(1), 1, 0, noMagnitude},
+		{"bands meet", 0, 4, 2, 0, bandsMeet},
+		{"bands cross", 0, 4, 3, 0, bandsMeet},
+		{"rounds onto start cap", -1e20, 4, 1, 0, bandsMeet},
+		{"rounds onto end cap", 0, 1e20, 1, 0, bandsMeet},
+		{"bridge refused", 0, 4, 1, 0, "lost its original and proof teeth"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			source := loftcylinder.ChamferSource{BridgeBound: 0.5, Z0: tc.z0, Z1: tc.z1}
+			err := source.BindCapSetback(tc.d, tc.dDelta)
+			require.ErrorIs(t, err, decaderr.ErrUnsupported)
+			require.ErrorContains(t, err, tc.want)
+			require.Equal(t, 0.5, source.BridgeBound, "a refusal must keep the recorded bridge bound")
+			require.Nil(t, source.TopSourceLevel, "a refusal must not set a source level")
+		})
+	}
 }
