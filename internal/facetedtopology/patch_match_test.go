@@ -85,4 +85,15 @@ func TestCapsOppose(t *testing.T) {
 	require.False(t, facetedtopology.CapsOppose(lower, lowerSrc, [][3]int{{0, 2, 1}}, []int{4}, []int{0, 1}, 4, 4))
 	require.False(t, facetedtopology.CapsOppose(lower, lowerSrc,
 		[][3]int{{0, 2, 1}, {0, 2, 1}}, []int{4, 4}, []int{0, 1, 2}, 4, 4))
+
+	quad, quadSrc := [][3]int{{0, 1, 2}, {0, 2, 3}}, []int{4, 4}
+	upper, upperSrc := [][3]int{{2, 1, 0}, {3, 2, 0}}, []int{4, 4}
+	identity := []int{0, 1, 2, 3}
+	require.True(t, facetedtopology.CapsOppose(quad, quadSrc, upper, upperSrc, identity, 4, 4))
+	require.False(t, facetedtopology.CapsOppose(quad, quadSrc, [][3]int{{2, 1, 0}, {0, 2, 3}}, upperSrc,
+		identity, 4, 4), "one upper triangle keeps the lower winding")
+	require.False(t, facetedtopology.CapsOppose(quad, quadSrc, upper, upperSrc, []int{0, 1, 2, 4}, 4, 4),
+		"the map moves an upper vertex off the lower cap")
+	require.False(t, facetedtopology.CapsOppose(quad, quadSrc, upper, []int{4, 3}, identity, 4, 4),
+		"one upper triangle leaves the cap group")
 }

@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
+	"github.com/lestrrat-3d/decad/internal/facetedtopology"
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -52,7 +53,7 @@ func tryLoftMirrorCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPay
 	if err := loftMirrorCylinderChamferSelect(ctx, b, fp, record, edges); err != nil {
 		return nil, true, err
 	}
-	shifts, err := loftMirrorCylinderChamferUpperShifts(record, source)
+	shifts, err := loftcylinder.MirrorChamferUpperShifts(record, source)
 	if err != nil {
 		return nil, true, err
 	}
@@ -146,7 +147,7 @@ func loftMirrorCylinderChamferSelect(ctx context.Context, b *Body, fp facetedPay
 		return fmt.Errorf("%w: mirrored cap chamfer repeats an edge", ErrUnsupported)
 	}
 	blank, ok := record.Join.Blank.Payload.(prismPayload)
-	if !ok || !loftMirrorCylinderBlank(blank) || caps[0] == nil || caps[1] == nil {
+	if !ok || !loftcylinder.MirrorBlank(blank) || caps[0] == nil || caps[1] == nil {
 		return fmt.Errorf("%w: mirrored bore lost its two exterior annuli", ErrUnsupported)
 	}
 	for cap, face := range caps {
@@ -244,7 +245,7 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 		verts = append(verts, vertex)
 		vertexBound = append(vertexBound, proofbound.AbsSumUpper(upper.VertexBound[i], bridgeReach))
 	}
-	if !loftMirrorCylinderCapsOppose(lower, upper, mapUpper,
+	if !facetedtopology.CapsOppose(lower.Tris, lower.Src, upper.Tris, upper.Src, mapUpper,
 		half.CapGroups[1], half.CapGroups[1]) {
 		return nil, fmt.Errorf("%w: mirrored cap chamfer middle annuli do not tile equally", ErrUnsupported)
 	}
@@ -297,7 +298,7 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 		return nil, fmt.Errorf("%w: mirrored cap chamfer has an invalid vertex link: %s", ErrUnsupported, err)
 	}
 	blank, ok := record.Join.Blank.Payload.(prismPayload)
-	if !ok || !loftMirrorCylinderBlank(blank) {
+	if !ok || !loftcylinder.MirrorBlank(blank) {
 		return nil, fmt.Errorf("%w: mirrored cap chamfer lost its exact blank", ErrUnsupported)
 	}
 	var outer, inner [2][]int
@@ -443,83 +444,6 @@ func loftMirrorCylinderChamferBoreUnchanged(old facetedPayload, mesh *joinedMesh
 	return nil
 }
 
-// Recompute the original upper-tooth translations from the authenticated
-// source placements. The Join's accumulated bounds must still contain them.
-func loftMirrorCylinderChamferUpperShifts(record *loftMirrorCylinderBoreRecord,
-	source loftcylinder.ChamferSource) ([]*big.Rat, error) {
-	if record == nil || record.Join == nil || record.Join.Source == nil ||
-		record.Join.Source.Lower == nil || len(record.Join.Pairs) == 0 ||
-		len(record.Join.Pairs) != len(source.OriginalTeeth) {
-		return nil, fmt.Errorf("%w: mirrored cap chamfer lost its upper tooth source", ErrUnsupported)
-	}
-	loft, ok := record.Join.Source.Lower.Payload.(loftPayload)
-	if !ok || !loft.AuthenticatedReconstruction {
-		return nil, fmt.Errorf("%w: mirrored cap chamfer lost its source Loft", ErrUnsupported)
-	}
-	middle := loft.Frame1.Origin().Z
-	byMotion := make(map[r3.Transform]*big.Rat, len(record.Join.Pairs))
-	var sweptTotal, greatest float64
-	for i, pair := range record.Join.Pairs {
-		fp, ok := pair.Payload.(facetedPayload)
-		if !ok || !fp.ContactAudited {
-			return nil, fmt.Errorf("%w: mirrored cap tooth %d lost its source", ErrUnsupported, i)
-		}
-		motion, ok := loftMirrorCylinderPairMotion(fp, record.Join.Source)
-		if !ok {
-			return nil, fmt.Errorf("%w: mirrored cap tooth %d lost its placement", ErrUnsupported, i)
-		}
-		if _, duplicate := byMotion[motion]; duplicate {
-			return nil, fmt.Errorf("%w: mirrored cap has duplicate tooth placement", ErrUnsupported)
-		}
-		if loftcylinder.AxialPlacement(motion) {
-			byMotion[motion] = new(big.Rat)
-			continue
-		}
-		shift, swept, proved, err := loftMirrorCylinderUpperBridge(bodyHandle(pair), motion, middle)
-		if err != nil {
-			return nil, err
-		}
-		if !proved {
-			return nil, fmt.Errorf("%w: mirrored cap tooth %d has no axial bridge", ErrUnsupported, i)
-		}
-		exactShift := new(big.Rat).Mul(
-			new(big.Rat).Mul(big.NewRat(2, 1), proofarith.FloatRat(middle)),
-			new(big.Rat).Sub(big.NewRat(1, 1), proofarith.FloatRat(motion.Basis().EZ.Z)))
-		if exactShift.Sign() <= 0 || exactShift.Cmp(proofarith.FloatRat(shift)) > 0 {
-			return nil, fmt.Errorf("%w: mirrored cap tooth %d exceeds its exact bridge", ErrUnsupported, i)
-		}
-		byMotion[motion] = exactShift
-		greatest = max(greatest, shift)
-		sweptTotal = proofbound.AbsSumUpper(sweptTotal, swept)
-	}
-	if greatest > record.Join.BridgeBound || sweptTotal > record.Join.BridgeVolume {
-		return nil, fmt.Errorf("%w: mirrored cap source exceeds the inherited bridge", ErrUnsupported)
-	}
-	if greatest == 0 {
-		return nil, nil
-	}
-	// Circular Join sorts teeth by polar position. Match the authenticated
-	// placed lower Loft, rather than relying on the caller's pair order.
-	shifts := make([]*big.Rat, len(source.OriginalTeeth))
-	for i, tooth := range source.OriginalTeeth {
-		lp, ok := tooth.Payload.(loftPayload)
-		if !ok || !lp.AuthenticatedReconstruction ||
-			lp.SourceIdentity != loft.SourceIdentity {
-			return nil, fmt.Errorf("%w: mirrored cap tooth %d lost its source identity", ErrUnsupported, i)
-		}
-		shift, matched := byMotion[lp.Xform]
-		if !matched || shift == nil {
-			return nil, fmt.Errorf("%w: mirrored cap tooth %d has no matching placement", ErrUnsupported, i)
-		}
-		shifts[i] = shift
-		delete(byMotion, lp.Xform)
-	}
-	if len(byMotion) != 0 {
-		return nil, fmt.Errorf("%w: mirrored cap has unmatched pair placements", ErrUnsupported)
-	}
-	return shifts, nil
-}
-
 // The upper source is the reflected lower source shifted down by each
 // tooth's authenticated bridge. The one-cap split rings were independently
 // checked at these physical levels. Its remaining top sliver is covered by
@@ -531,7 +455,7 @@ func loftMirrorCylinderChamferUpperCapBridge(ctx context.Context, old, upper fac
 		return 0, nil
 	}
 	blank, ok := record.Join.Blank.Payload.(prismPayload)
-	if !ok || !loftMirrorCylinderBlank(blank) || len(half.Ideal) != len(upper.Verts) ||
+	if !ok || !loftcylinder.MirrorBlank(blank) || len(half.Ideal) != len(upper.Verts) ||
 		half.Band[0] >= half.Band[1] || len(record.Outer[1]) < 3 {
 		return 0, fmt.Errorf("%w: mirrored cap bridge lost its upper band", ErrUnsupported)
 	}
