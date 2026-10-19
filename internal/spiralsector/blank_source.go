@@ -5,6 +5,18 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 )
 
+// ExactBlank returns the six-side blank source of the first candidate
+// Revolve root section that SixSideBlank accepts, in candidate order.
+func ExactBlank(sections []facetedrecord.RevolveSectionCertificate) (*facetedrecord.SpiralBlankSource, bool) {
+	for _, section := range sections {
+		source, ok := SixSideBlank(section)
+		if ok {
+			return source, true
+		}
+	}
+	return nil, false
+}
+
 // SixSideBlank identifies the finite six-span blank source in a recorded
 // Revolve section. It declines sections with missing or repeated sides.
 func SixSideBlank(section facetedrecord.RevolveSectionCertificate) (*facetedrecord.SpiralBlankSource, bool) {

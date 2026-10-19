@@ -34,18 +34,19 @@ func spiralPrepareFirstUnion(ctx context.Context, op meshbool.OperationKind,
 		op != meshbool.OpUnion {
 		return held, nil, nil
 	}
-	if _, ok := exactSpiralBlank(blank); !ok {
+	sections := revolveRootCandidates(blank)
+	if _, ok := spiralsector.ExactBlank(sections); !ok {
 		return held, nil, nil
 	}
 	payload, ok := tooth.n.Payload.(facetedPayload)
 	if !ok || payload.LoftFacesTrim == nil {
 		return held, nil, nil
 	}
-	source, ok, err := certifySpiralFirstJoin(ctx, blank, tooth)
+	source, ok, err := spiralsector.CertifyFirstJoin(ctx, sections, bodyNode(tooth))
 	if err != nil || !ok {
 		return held, nil, err
 	}
-	roles, short, ok, err := certifySpiralNearFaceRoles(ctx, blank, tooth, source)
+	roles, short, ok, err := spiralsector.CertifyNearFaceRoles(ctx, bodyNode(blank), bodyNode(tooth), source)
 	if err != nil || !ok {
 		return held, nil, err
 	}
@@ -67,13 +68,13 @@ func spiralFirstUnionPairs(blank, tooth *Body, admission *spiralFirstUnionAdmiss
 		return nil, false
 	}
 	proof := admission.source
-	groups, ok := spiralJoinGroups(blank, tooth, proof)
+	groups, ok := spiralsector.JoinGroups(bodyNode(blank), bodyNode(tooth), proof)
 	if !ok {
 		return nil, false
 	}
 	allowed := map[[2]int]bool{
-		{groups.blankToe, groups.toothRootToe}:   true,
-		{groups.blankHeel, groups.toothRootHeel}: true,
+		{groups.BlankToe, groups.ToothRootToe}:   true,
+		{groups.BlankHeel, groups.ToothRootHeel}: true,
 	}
 	for pair, kind := range admission.roles {
 		if kind != meshbool.NearPairCrossing {
@@ -87,9 +88,9 @@ func spiralFirstUnionPairs(blank, tooth *Body, admission *spiralFirstUnionAdmiss
 		allowed[[2]int{a, b}] = true
 	}
 	for end := range 2 {
-		blankCap := groups.blankToe
+		blankCap := groups.BlankToe
 		if end == 1 {
-			blankCap = groups.blankHeel
+			blankCap = groups.BlankHeel
 		}
 		for index, segment := range [...]int{0, 2, 3, 5} {
 			family := admission.short[end][index]
@@ -97,11 +98,11 @@ func spiralFirstUnionPairs(blank, tooth *Body, admission *spiralFirstUnionAdmiss
 				family.Band != proof.Junctions[1][end].Band {
 				return nil, false
 			}
-			origin, found := spiralOriginalSideRef(proof.Tooth, family.Band, segment)
+			origin, found := spiralsector.OriginalSideRef(proof.Tooth, family.Band, segment)
 			if !found {
 				return nil, false
 			}
-			face := spiralUniqueFaceWithOrigin(tooth, origin)
+			face := faceHandle(spiralsector.UniqueFaceWithOrigin(bodyNode(tooth), origin))
 			group, present := faceID[face]
 			if face == nil || !present {
 				return nil, false
@@ -111,16 +112,16 @@ func spiralFirstUnionPairs(blank, tooth *Body, admission *spiralFirstUnionAdmiss
 	}
 	for band := 1; band < len(proof.Tooth.Maps)-1; band++ {
 		for _, segment := range [...]int{0, 2} {
-			origin, found := spiralOriginalSideRef(proof.Tooth, band, segment)
+			origin, found := spiralsector.OriginalSideRef(proof.Tooth, band, segment)
 			if !found {
 				return nil, false
 			}
-			face := spiralUniqueFaceWithOrigin(tooth, origin)
+			face := faceHandle(spiralsector.UniqueFaceWithOrigin(bodyNode(tooth), origin))
 			group, present := faceID[face]
 			if face == nil || !present {
 				return nil, false
 			}
-			allowed[[2]int{groups.blankRoot, group}] = true
+			allowed[[2]int{groups.BlankRoot, group}] = true
 		}
 	}
 	return allowed, len(allowed) == 24
@@ -138,7 +139,7 @@ func spiralValidateFirstUnion(ctx context.Context, blank, tooth *Body,
 		return false, nil
 	}
 	proof := admission.source
-	groups, ok := spiralJoinGroups(blank, tooth, proof)
+	groups, ok := spiralsector.JoinGroups(bodyNode(blank), bodyNode(tooth), proof)
 	if !ok || proof.HeelSeam == nil {
 		return false, nil
 	}
@@ -147,12 +148,12 @@ func spiralValidateFirstUnion(ctx context.Context, blank, tooth *Body,
 	// the stitch displacement charged by the long-seam helpers.
 	var radial [2]float64
 	for end, edge := range [...]int{4, 2} {
-		graph, err := spiralHeldBlankCellGraph(ctx, blank, blankHeld, proof.Blank, edge)
+		graph, err := spiralsector.HeldBlankCellGraph(ctx, bodyNode(blank), blankHeld, proof.Blank, edge)
 		if err != nil || !graph {
 			return false, err
 		}
-		bound, accepted, err := spiralHeldBlankRadialAllowance(ctx,
-			blank, blankHeld, proof.Blank, edge)
+		bound, accepted, err := spiralsector.HeldBlankRadialAllowance(ctx,
+			bodyNode(blank), blankHeld, proof.Blank, edge)
 		if err != nil || !accepted {
 			return false, err
 		}
@@ -166,7 +167,7 @@ func spiralValidateFirstUnion(ctx context.Context, blank, tooth *Body,
 		return false, err
 	}
 	if _, ok, err := spiralsector.HeldHeelSeamProof(ctx, result,
-		groups.blankHeel, groups.toothRootHeel, proof.HeelSeam, radial[1]); err != nil || !ok {
+		groups.BlankHeel, groups.ToothRootHeel, proof.HeelSeam, radial[1]); err != nil || !ok {
 		return false, err
 	}
 	toeSeam, ok, err := spiralsector.CertifySpiralToeRootSeam(ctx, proof)
@@ -174,16 +175,16 @@ func spiralValidateFirstUnion(ctx context.Context, blank, tooth *Body,
 		return false, err
 	}
 	if _, ok, err := spiralsector.HeldToeSeamProof(ctx, result,
-		groups.blankToe, groups.toothRootToe, toeSeam, radial[0]); err != nil || !ok {
+		groups.BlankToe, groups.ToothRootToe, toeSeam, radial[0]); err != nil || !ok {
 		return false, err
 	}
 	for sourceSide, segment := range [...]int{0, 2} {
-		origin, found := spiralOriginalSideRef(proof.Tooth,
+		origin, found := spiralsector.OriginalSideRef(proof.Tooth,
 			proof.Junctions[sourceSide][0].Band, segment)
 		if !found {
 			return false, nil
 		}
-		face := spiralUniqueFaceWithOrigin(tooth, origin)
+		face := faceHandle(spiralsector.UniqueFaceWithOrigin(bodyNode(tooth), origin))
 		if face == nil {
 			return false, nil
 		}
@@ -197,7 +198,7 @@ func spiralValidateFirstUnion(ctx context.Context, blank, tooth *Body,
 			return false, nil
 		}
 		chain, accepted, err := spiralsector.HeldHeelSwitch(ctx, result,
-			groups.blankRoot, faceGroup)
+			groups.BlankRoot, faceGroup)
 		if err != nil || !accepted {
 			return false, err
 		}
@@ -283,8 +284,8 @@ func spiralOffsetToothMesh(ctx context.Context, blank, tooth *Body, original *Me
 	if !ok || p.LoftFacesTrim != proof.Tooth {
 		return nil, false, nil
 	}
-	toeFace := spiralTrimFaceGroup(tooth, proof.Tooth.ToeCapGroup)
-	heelFace := spiralTrimFaceGroup(tooth, proof.Tooth.HeelCapGroup)
+	toeFace := spiralsector.TrimFaceGroup(bodyNode(tooth), proof.Tooth.ToeCapGroup)
+	heelFace := spiralsector.TrimFaceGroup(bodyNode(tooth), proof.Tooth.HeelCapGroup)
 	if toeFace < 0 || heelFace < 0 || toeFace == heelFace {
 		return nil, false, nil
 	}
@@ -450,7 +451,7 @@ func spiralHeldShortCapProof(ctx context.Context, held *meshbool.StitchedMesh,
 		proof.Tooth == nil {
 		return 0, false, nil
 	}
-	groups, ok := spiralJoinGroups(blank, tooth, proof)
+	groups, ok := spiralsector.JoinGroups(bodyNode(blank), bodyNode(tooth), proof)
 	if !ok {
 		return 0, false, nil
 	}
@@ -463,9 +464,9 @@ func spiralHeldShortCapProof(ctx context.Context, held *meshbool.StitchedMesh,
 		if err := ctx.Err(); err != nil {
 			return 0, false, err
 		}
-		blankCap := groups.blankToe
+		blankCap := groups.BlankToe
 		if end == 1 {
-			blankCap = groups.blankHeel
+			blankCap = groups.BlankHeel
 		}
 		for index, role := range roles {
 			family := short[end][index]
@@ -475,11 +476,11 @@ func spiralHeldShortCapProof(ctx context.Context, held *meshbool.StitchedMesh,
 				family.Band != proof.Junctions[1][end].Band {
 				return 0, false, nil
 			}
-			origin, found := spiralOriginalSideRef(proof.Tooth, family.Band, role)
+			origin, found := spiralsector.OriginalSideRef(proof.Tooth, family.Band, role)
 			if !found {
 				return 0, false, nil
 			}
-			face := spiralUniqueFaceWithOrigin(tooth, origin)
+			face := faceHandle(spiralsector.UniqueFaceWithOrigin(bodyNode(tooth), origin))
 			if face == nil {
 				return 0, false, nil
 			}

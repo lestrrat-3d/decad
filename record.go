@@ -214,7 +214,6 @@ type (
 	revolveLoftSectorPlacement   = facetedrecord.RevolveLoftSectorPlacement
 	revolveSectionCertificate    = facetedrecord.RevolveSectionCertificate
 	revolveSectionSpan           = facetedrecord.RevolveSectionSpan
-	spiralBlankSource            = facetedrecord.SpiralBlankSource
 	spiralCombineSource          = facetedrecord.SpiralCombineSource
 	spiralCombinedTools          = facetedrecord.SpiralCombinedTools
 	spiralFirstJoinSource        = facetedrecord.SpiralFirstJoinSource

@@ -32,7 +32,7 @@ type spiralCombinedAdmission struct {
 func spiralCombineFaceRoles(ctx context.Context, blank, combined *Body,
 	source *spiralCombineSource, faceID map[*Face]int) (*spiralCombinedAdmission, error) {
 	first := bodyHandle(source.Tools[0])
-	roles, short, ok, err := certifySpiralNearFaceRoles(ctx, blank, first, source.First)
+	roles, short, ok, err := spiralsector.CertifyNearFaceRoles(ctx, bodyNode(blank), source.Tools[0], source.First)
 	if err != nil || !ok {
 		return nil, err
 	}
@@ -431,7 +431,7 @@ func spiralCombineInputs(ctx context.Context, blank *Body, tools []*Body) (*spir
 	if len(tools) < 2 || len(tools) > 31 {
 		return nil, fmt.Errorf("%w: this spiral-tooth Union class accepts two to 31 tools", ErrUnsupported)
 	}
-	first, ok, err := certifySpiralFirstJoin(ctx, blank, tools[0])
+	first, ok, err := spiralsector.CertifyFirstJoin(ctx, revolveRootCandidates(blank), bodyNode(tools[0]))
 	if err != nil {
 		return nil, err
 	}
