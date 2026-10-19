@@ -6,13 +6,11 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/brepbandmesh"
-	"github.com/lestrrat-3d/decad/internal/capblend"
+	"github.com/lestrrat-3d/decad/internal/booloperand"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/spiralsector"
-	"github.com/lestrrat-3d/decad/internal/stitchweld"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -62,7 +60,7 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 		return booleanEvaluation{}, err
 	}
 
-	tolMM, dPair, err := pairChordTolerance(ctx, a, b)
+	tolMM, dPair, err := booloperand.PairChord(ctx, &a.n, &b.n)
 	if err != nil {
 		return booleanEvaluation{}, err
 	}
@@ -75,10 +73,10 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 	// it — this only asks the same question of the payload class, where the
 	// answer is already known, so a refusal costs a map lookup instead of a
 	// complete tessellation and its facet-pair audit.
-	if err := requireVolumeProvingPayload(ctx, a, 0); err != nil {
+	if err := booloperand.RequireVolumeProof(ctx, &a.n, 0); err != nil {
 		return booleanEvaluation{}, err
 	}
-	if err := requireVolumeProvingPayload(ctx, b, 1); err != nil {
+	if err := booloperand.RequireVolumeProof(ctx, &b.n, 1); err != nil {
 		return booleanEvaluation{}, err
 	}
 	// VerifyAll, passed explicitly rather than taken from Tessellate's default
@@ -396,136 +394,6 @@ func booleanProofBounds(symA, symB, roundVol, slackA, slackB, dropArea float64) 
 ) {
 	return proofbound.AbsSumUpper(symA, symB, roundVol),
 		proofbound.AbsSumUpper(slackA, slackB, dropArea)
-}
-
-// meshbool.OperandSymDiff reads the volume of the symmetric difference between the
-// operand's held tessellation and the body it stands for from the MESH's own
-// proof record (docs/tessellation-design.md §2's volSymDiff), which the
-// tessellator composed for that payload class.
-//
-// There is no fallback. `Mesh.Bound × held area` is NOT an occupied-volume
-// proof — a two-sided Hausdorff bound alone does not bound it, because a
-// doubly-curved cell can gain material where another loses it and the signed
-// error cancels while the symmetric difference does not — and
-// docs/tessellation-design.md §11 forbids the substitution outright. A payload
-// whose occupied-volume proof has not landed publishes symDiffOK false, and its
-// mesh serves export only: the boolean refuses the operand with ErrUnsupported,
-// a staging refusal reached before any contact is examined, so the caller routes
-// it through meshbool.BooleanExpectedVolumeProof, which reaches the same public error as
-// an untessellatable operand and a distinct Verify diagnostic message.
-// requireVolumeProvingPayload refuses an operand whose payload class publishes
-// no occupied-volume proof on its mesh, before that mesh is built.
-//
-// It is meshbool.OperandSymDiff's question asked one step earlier. A cap-loop chamfer,
-// and a draft body through the same band,
-// narrows rather than refuses outright: both arms read the SAME predicate,
-// capblend.OccupiedVolumeAdmission — this one before the
-// mesh is built, and tessellateCapBlend through symDiffOK after it — so a
-// payload whose every band docs/tessellation-reach-design.md §7 admits (whole
-// turns, line-line miters, exactly G1 joins) passes here and publishes its
-// proof there, and every other one refuses here with the loop and corner it
-// fails on. Meshing a refused operand for a boolean only to refuse it
-// afterwards buys nothing and costs the whole tessellation and its facet-pair
-// audit — which the evaluator's own internal tolerance makes the most
-// expensive part of the call. Both this and meshbool.OperandSymDiff must name the same
-// payload classes, and each proof retires both arms of its own row together.
-// The matching axial loft's held-polygon cap band has a separate slab proof
-// for its reflex corners; tessellateCapBlend publishes that proof for this
-// marked payload, so it passes this precheck too (loft §18).
-//
-// A sheet operand refuses HERE too, ahead of the payload-class switch below:
-// docs/surface-design.md §10 states that a sheet mesh carries no
-// occupied-volume proof, on the same terms as a refused cap-loop chamfer's. This is
-// defence in depth rather than dead code — performBoolean's own
-// refuseSheetOperand already fires first in the ordinary call path (Table X),
-// so this arm exists to keep this function's own stated invariant, that it
-// and meshbool.OperandSymDiff name the same set of payload classes, true even for a
-// caller that reaches this function by some other path.
-//
-// A stitchPayload operand narrows rather than refuses outright: a CLOSED,
-// all-planar body (sp.Tris != nil) whose every vertex carries a proven bound
-// of exactly zero (stitchweld.ZeroBound over stitchVertexBounds, stitch.go — the identical gate
-// internal/stitchtess/stitch.go's own occupied-volume publication and
-// clearance_geom.go's carrier-model dispatch both apply) will publish
-// symDiffOK == true once meshed, so refusing it here would contradict what
-// meshbool.OperandSymDiff decides one step later over the same payload. Every other
-// stitched body — open, curved/mixed, placed, or certificate-welded — still
-// refuses here, before it is ever meshed.
-func requireVolumeProvingPayload(ctx context.Context, b *Body, index int) error {
-	var err error
-	switch {
-	case b.Kind() == BodySheet:
-		err = fmt.Errorf(`%w: a sheet's mesh carries no proof of the volume it and the body it stands for differ by, so no boolean may compose it`, ErrUnsupported)
-	default:
-		switch pl := b.n.Payload.(type) {
-		case capBlendPayload:
-			if pl.LoftSource != nil {
-				// The loft-only cap band proves its occupied volume with
-				// a bounded reflex-corner slab in tessellateCapBlend.
-				return nil
-			}
-			refusal, aErr := capblend.OccupiedVolumeAdmission(proofbound.NewWorkBudget(ctx), pl)
-			if aErr != nil {
-				return aErr
-			}
-			if refusal == nil {
-				return nil
-			}
-			err = refusal
-		case brepPayload:
-			// A route L body's mesh proves its occupied volume only for bands
-			// the cap-loop chamfer's rule admits (modify-general Table DG's
-			// DG4); a plain brep's proof is unconditional.
-			if len(pl.LoopBands) == 0 {
-				return nil
-			}
-			refusal, aErr := brepbandmesh.OccupiedVolumeAdmission(proofbound.NewWorkBudget(ctx), pl)
-			if aErr != nil {
-				return aErr
-			}
-			if refusal == nil {
-				return nil
-			}
-			err = refusal
-		case draftPayload:
-			refusal, aErr := capblend.OccupiedVolumeAdmission(proofbound.NewWorkBudget(ctx), pl.Band())
-			if aErr != nil {
-				return aErr
-			}
-			if refusal == nil {
-				return nil
-			}
-			err = refusal
-		case twoSidedDraftPayload:
-			for _, half := range []draftPayload{pl.Negative, pl.Positive} {
-				refusal, aErr := capblend.OccupiedVolumeAdmission(proofbound.NewWorkBudget(ctx), half.Band())
-				if aErr != nil {
-					return aErr
-				}
-				if refusal != nil {
-					err = refusal
-					break
-				}
-			}
-			if err == nil {
-				return nil
-			}
-		case stitchPayload:
-			if pl.Tris != nil {
-				zeroBound, zErr := stitchweld.ZeroBound(proofbound.NewWorkBudget(ctx), stitchVertexBounds(b))
-				if zErr != nil {
-					return zErr
-				}
-				if zeroBound {
-					return nil
-				}
-			}
-			err = fmt.Errorf(`%w: a stitched body's mesh carries no proof of the volume it and the body it stands for differ by, so no boolean may compose it`, ErrUnsupported)
-		default:
-			return nil
-		}
-	}
-	return meshbool.ExpectedBooleanForOperand(meshbool.BooleanExpectedVolumeProof, index, err)
 }
 
 // refuseUndecidableProximityWithConeCap is the tangency gate (docs/evaluator-design.md §9,

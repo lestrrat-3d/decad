@@ -577,7 +577,7 @@ func publishSymDiff(m *Mesh, terms []float64) error {
 // finer than the bound the faceted body holds (docs/tessellation-design.md
 // §7). Only a Tessellate caller, who chose the tolerance, reaches it: the
 // boolean asks a restating operand at its held floor and gates the facets the
-// pair touches instead (heldFloorOf, meshbool.RefuseCoarseHeldContact).
+// pair touches instead (booloperand.HeldFloor, meshbool.RefuseCoarseHeldContact).
 type facetedBoundError struct{ requested, held float64 }
 
 func (e *facetedBoundError) Error() string {

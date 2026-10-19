@@ -212,7 +212,7 @@ func TessellateMesh(ctx context.Context, b *topo.Body, cbp Payload, chord float6
 	if refusal != nil {
 		// docs/tessellation-reach-design.md §7: this band's cells are not proven
 		// to reproduce the exact offset family slice by slice, so the mesh serves
-		// export alone and requireVolumeProvingPayload/meshbool.OperandSymDiff refuse it
+		// export alone and booloperand.RequireVolumeProof/meshbool.OperandSymDiff refuse it
 		// with the same reason.
 		mesh.SymDiffOK = false
 		return lms, motion, nil //nolint:nilerr // refusal is the admission result; err was checked above

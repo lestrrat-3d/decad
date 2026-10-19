@@ -65,7 +65,7 @@ Checked before any `sketch` call, on the two operands' current payloads.
 **Every miss is `ErrUnsupported` at the call, never a fallback** — prism §3.1's
 own gate misses reroute to the mesh boolean, and no mesh path exists here: a
 sheet's mesh carries no proof of the volume it and the body it stands for
-differ by, so `boolean_mesh.go`'s `requireVolumeProvingPayload` refuses it, and a
+differ by, so `booloperand.RequireVolumeProof` refuses it, and a
 mesh trim would decide which fragment survives from float sign tests on
 chorded triangles, which is core §2.1's own discrete-error failure. Staging
 therefore surfaces as `docs/evaluator-design.md` §11 requires for an intent
@@ -600,7 +600,7 @@ tessellator's terms, refuses a tolerance that cannot pay for it, and adds `δ`
 to every face bound. The area slack gains every wall's moment term over the
 sweep and, for a partial solid, both caps' `A`. The occupied-volume bound gains
 `Δφ_upper·E·A`, the volume's own term, since the recorded and denoted solids
-differ by the band swept at a radius no greater than `E`. `pairChordTolerance`
+differ by the band swept at a radius no greater than `E`. `booloperand.PairChord`
 reads the reservation beside the two coordinate stages.
 
 **What stays undecided.** The consumers that read the recorded meridian as

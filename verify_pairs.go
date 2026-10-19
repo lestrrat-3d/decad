@@ -6,6 +6,7 @@ import (
 	"math"
 	"sync"
 
+	"github.com/lestrrat-3d/decad/internal/booloperand"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
@@ -236,14 +237,14 @@ func (o *verifyPairOutcome) appendClearance(a, b *Body, res pairResult, rel floa
 // verifyMeshCache meshes each body once per Verify call, at one chord for
 // every pair it takes part in (docs/interference-design.md §5.3). The chord is
 // the tightest one any of the body's candidate pairs would have asked for:
-// the least pairChordTolerance over the solid pairs whose boxes meet, which
+// the least booloperand.PairChord over the solid pairs whose boxes meet, which
 // are the only pairs that can reach the mesh path. The entries are fixed
 // before the worker pool starts and only read after it, and each entry's mesh
 // is built under its own sync.Once, so one Verify call meshes and audits a
 // body once however many workers ask for it at the same time.
 //
 // A body whose tessellation restates a held mesh (a faceted Boolean result,
-// a mitred sweep; heldFloorOf) chords nothing, so there is nothing to share:
+// a mitred sweep; booloperand.HeldFloor) chords nothing, so there is nothing to share:
 // it has no entry, and every pair meshes it as the public booleans do, at the
 // pair's own tolerance raised to its held floor, and gates the facets that
 // pair touches at the pair's own tolerance (docs/api-design.md §8 "The chain
@@ -261,29 +262,20 @@ type verifyMeshEntry struct {
 	err   error
 }
 
-// newVerifyMeshCache fixes every body's chord from the pair jobs. A body or a
-// pair whose chord share cannot be read contributes nothing here: a pair that
-// reaches the mesh path anyway reads its own pairChordTolerance there and
-// fails with that error exactly as it would without the cache. The context is
-// polled once per job.
+// newVerifyMeshCache fixes every body's chord from the pair jobs. A pair with
+// no chord tolerance contributes nothing here: if it reaches the mesh path
+// anyway, booloperand.PairChord refuses it there exactly as it would without
+// the cache. The context is polled once per job.
 func newVerifyMeshCache(ctx context.Context, jobs []verifyPairJob) (*verifyMeshCache, error) {
 	cache := &verifyMeshCache{entries: map[*Body]*verifyMeshEntry{}}
 	shares := map[*Body]meshbool.ChordOperand{}
-	unreadable := map[*Body]struct{}{}
-	share := func(b *Body) (meshbool.ChordOperand, bool) {
-		if s, ok := shares[b]; ok {
-			return s, true
+	share := func(b *Body) meshbool.ChordOperand {
+		s, ok := shares[b]
+		if !ok {
+			s = booloperand.ChordShare(ctx, &b.n)
+			shares[b] = s
 		}
-		if _, ok := unreadable[b]; ok {
-			return meshbool.ChordOperand{}, false
-		}
-		s, err := chordOperandOf(ctx, b)
-		if err != nil {
-			unreadable[b] = struct{}{}
-			return meshbool.ChordOperand{}, false
-		}
-		shares[b] = s
-		return s, true
+		return s
 	}
 	for _, job := range jobs {
 		if err := ctx.Err(); err != nil {
@@ -292,20 +284,14 @@ func newVerifyMeshCache(ctx context.Context, jobs []verifyPairJob) (*verifyMeshC
 		if job.boxProven || job.a.Kind() == BodySheet || job.b.Kind() == BodySheet {
 			continue
 		}
-		sa, ok := share(job.a)
-		if !ok {
-			continue
-		}
-		sb, ok := share(job.b)
-		if !ok {
-			continue
-		}
-		tol, _, ok := meshbool.PairChordFrom(sa, sb)
+		tol, _, ok := meshbool.PairChordFrom(share(job.a), share(job.b))
 		if !ok {
 			continue
 		}
 		for _, b := range [2]*Body{job.a, job.b} {
-			if !sharesVerifyMesh(b) {
+			// A body that restates a held mesh chords nothing, so one mesh at
+			// one chord cannot serve its pairs.
+			if _, restating := booloperand.HeldFloor(&b.n); restating {
 				continue
 			}
 			e, ok := cache.entries[b]
@@ -317,14 +303,6 @@ func newVerifyMeshCache(ctx context.Context, jobs []verifyPairJob) (*verifyMeshC
 		}
 	}
 	return cache, nil
-}
-
-// sharesVerifyMesh reports whether b's tessellation chords its boundary, so
-// that one mesh at one chord can serve every pair b takes part in: whether b
-// restates no held mesh.
-func sharesVerifyMesh(b *Body) bool {
-	_, restating := heldFloorOf(b)
-	return !restating
 }
 
 // operandMesh returns b's shared mesh, building it on the first call. A body

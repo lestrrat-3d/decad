@@ -46,11 +46,11 @@ import (
 // exactly when every one of them is; its areaSlack is the matching
 // proofbound.PerturbedTriangleAreaAllow sum. A CLOSED body (b.Kind == topo.BodySolid)
 // whose every vertex carries a proven bound of exactly zero
-// (stitchweld.ZeroBound over vertexBounds) publishes a zero occupied-volume proof
+// (stitchweld.ZeroBound over VertexBounds) publishes a zero occupied-volume proof
 // (symDiffOK == true) — see the comment at that publication below for the
 // three-step argument. Every other stitched body — open, curved/mixed,
 // placed, or certificate-welded — keeps symDiffOK false, so Union, Cut and
-// Intersect keep refusing it (boolean_mesh.go's own requireVolumeProvingPayload
+// Intersect keep refusing it (booloperand.RequireVolumeProof's own
 // arm), whatever the exact tetrahedron sum itself already proves about
 // signed volume.
 // lumpFaceGroups returns b's own lumps' constituent faces, one slice
@@ -70,8 +70,9 @@ func lumpFaceGroups(b *topo.Body) [][]*topo.Face {
 	return groups
 }
 
-// vertexBounds yields the same ordered node bounds as root Body.Vertices.
-func vertexBounds(b *topo.Body) iter.Seq[float64] {
+// VertexBounds yields the proven bound magnitude of each of b's own
+// vertices, in topobuild.Vertices order (the order root Body.Vertices reports).
+func VertexBounds(b *topo.Body) iter.Seq[float64] {
 	return func(yield func(float64) bool) {
 		for _, v := range topobuild.Vertices(b) {
 			if !yield(v.Bound.Mag()) {
@@ -256,7 +257,7 @@ func Restate(ctx context.Context, b *topo.Body, sp stitchrecord.Payload,
 	// stitched body's exact tetrahedron sum proves only SIGNED volume, never
 	// the occupied-volume symmetric-difference bound a boolean requires, so
 	// symDiffOK stays false for it (docs/surface-design.md §14 Table D row 5)
-	// and boolean_mesh.go's requireVolumeProvingPayload refuses it before this
+	// and booloperand.RequireVolumeProof refuses it before this
 	// mesh is even built.
 	//
 	// The zero claim rests on three steps, each of which must hold for every
@@ -264,9 +265,7 @@ func Restate(ctx context.Context, b *topo.Body, sp stitchrecord.Payload,
 	//
 	//  1. Every held vertex IS the true boundary vertex, not merely near it.
 	//     stitchweld.ZeroBound (internal/stitchweld/bounds.go) proves every
-	//     vertex's bound is exactly zero — the same gate
-	//     clearance_geom.go's addStitchFaces dispatch already applies, reused
-	//     verbatim rather than re-derived. That rules out both a nonzero
+	//     vertex's bound is exactly zero. That rules out both a nonzero
 	//     placement delta (internal/stitchrecord/build.go's proofbound.RigidRoundAllow, stitchrecord.Build)
 	//     and a certificate-welded class bound (docs/surface-design.md §6.4's
 	//     massDelta amendment) — the only two ways this evaluator ever widens
@@ -298,7 +297,7 @@ func Restate(ctx context.Context, b *topo.Body, sp stitchrecord.Payload,
 	mesh.VolSymDiff = 0
 	mesh.SymDiffOK = false
 	if b.Kind == topo.BodySolid {
-		zeroBound, err := stitchweld.ZeroBound(budget, vertexBounds(b))
+		zeroBound, err := stitchweld.ZeroBound(budget, VertexBounds(b))
 		if err != nil {
 			return nil, err
 		}

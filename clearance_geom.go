@@ -4,6 +4,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
+	"github.com/lestrrat-3d/decad/internal/stitchtess"
 	"github.com/lestrrat-3d/decad/internal/wallsurvey"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -128,14 +129,14 @@ func newBodyGeomBudget(budget *proofbound.WorkBudget, b *Body) (*bodyGeom, bool,
 		// vertex bound) or closed by the CURVE weld certificate at a nonzero
 		// class bound — no longer refuses on that alone: bodyGeom.delta now
 		// exists for it to charge its own worst vertex bound against
-		// (stitchweld.MaxBound over stitchVertexBounds, stitch.go), the
+		// (stitchweld.MaxBound over stitchtess.VertexBounds), the
 		// identical charge a placed prism's frame/placement rounding takes
 		// (bodyGeom's own doc comment), so this arm needs no standing narrower than addPrismFaces'
 		// own anymore.
 		if pl.Tris == nil {
 			return nil, false, nil
 		}
-		maxVertexBound, mErr := stitchweld.MaxBound(budget, stitchVertexBounds(b))
+		maxVertexBound, mErr := stitchweld.MaxBound(budget, stitchtess.VertexBounds(&b.n))
 		if mErr != nil {
 			return nil, false, mErr
 		}

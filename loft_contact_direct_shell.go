@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/booloperand"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/loftcontact"
@@ -213,7 +214,7 @@ func loftContactFacetedBody(ctx context.Context, d *Document, ref producerID,
 	if _, err := budget.StepN(2); err != nil {
 		return loftContactBoundedResult(ctx, err)
 	}
-	_, dPair, err := pairChordTolerance(ctx, first, second)
+	_, dPair, err := booloperand.PairChord(ctx, &first.n, &second.n)
 	if err != nil {
 		return nil, true, err
 	}

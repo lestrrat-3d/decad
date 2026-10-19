@@ -632,7 +632,7 @@ func TestStitchSolidTessellateIsDeterministic(t *testing.T) {
 
 // TestStitchSolidUnionComposesTheCorrectVolume is docs/surface-design.md's
 // T71: a CLOSED, all-planar, zero-vertex-bound stitched solid now publishes
-// an occupied-volume proof of exactly zero, so requireVolumeProvingPayload's
+// an occupied-volume proof of exactly zero, so booloperand.RequireVolumeProof's
 // stitchPayload arm no longer refuses it and Union composes the two disjoint
 // operands' exact volumes — the mesh-boolean analog of TestUnionDisjointCubes
 // (boolean_test.go), over a stitched operand instead of a plain one. This
@@ -668,7 +668,7 @@ func TestStitchSolidUnionComposesTheCorrectVolume(t *testing.T) {
 // docs/surface-design.md's T73: T58's own zero-bound box, Placed under a
 // non-identity rigid motion, still refuses a boolean — the placement's own
 // RigidRoundAllow widens every vertex bound (internal/stitchrecord/build.go), so
-// stitchweld.ZeroBound no longer holds and requireVolumeProvingPayload
+// stitchweld.ZeroBound no longer holds and booloperand.RequireVolumeProof
 // keeps refusing this operand exactly as it did before this increment. This
 // reaches the gate by the PLACEMENT route; T74 reaches it by the
 // CERTIFICATE-WELD route, and neither alone would prove the gate reads the

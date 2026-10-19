@@ -319,8 +319,8 @@ per planar patch):
   own prism bound.
 
 The mesh carries the occupied-volume proof, so a stacked body is an ordinary
-mesh-path boolean operand and an ordinary export input. `pairChordTolerance`
-reads its `sectionDelta` through `sectionDisplacementOf`, as it reads a prism's.
+mesh-path boolean operand and an ordinary export input. `booloperand.PairChord`
+reads its `sectionDelta` through `booloperand.sectionDisplacement`, as it reads a prism's.
 
 ## 6. Consumers
 
@@ -351,7 +351,7 @@ Each admitted arm ships its implementation and tests together.
 1. **Blind cut and through cuts on the result.** The payload, `stackedrecord.Build`,
    `tessellateStacked` with its occupied-volume proof, prism-boolean §3.2's two
    new `Cut` rows (a blind tool on a prism target, a spanning tool on a stacked
-   target), the `Verify` gate arm, `sectionDisplacementOf`'s arm, the explicit
+   target), the `Verify` gate arm, `booloperand.sectionDisplacement`'s arm, the explicit
    stagings in §6, and an executable example. The gallery's landing clip cuts
    one blind hole per frame and renders the body, so the tessellator ships in
    the same stage as the cut that produces the payload.

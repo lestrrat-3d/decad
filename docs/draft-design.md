@@ -407,7 +407,7 @@ nothing else.
 | DD | Consumer | What it does with a draft body | PR |
 |---|---|---|---|
 | **DD1** | `Body.Tessellate` | chords both records once with the shared curve samples (tessellation §3), rules each wall between its two rims with the cap-band strip emitter (`capblend.EmitBand` in `internal/capblend/mesh_band.go`, over `internal/tessellation`'s rings), triangulates both caps; manifold by construction; the volume proof is the band admission of `docs/tessellation-reach-design.md` §7 with no slab (§9.1). A band the admission refuses meshes for export with no volume proof | 2 |
-| **DD2** | `Union`/`Cut`/`Intersect` | the mesh path (evaluator §9) over DD1's mesh, admitted by `requireVolumeProvingPayload` through the same band admission; the analytic prism reduction's entry gate (`prism_boolean.go`) does not admit the class and takes the mesh path | 2 |
+| **DD2** | `Union`/`Cut`/`Intersect` | the mesh path (evaluator §9) over DD1's mesh, admitted by `booloperand.RequireVolumeProof` through the same band admission; the analytic prism reduction's entry gate (`prism_boolean.go`) does not admit the class and takes the mesh path | 2 |
 | **DD3** | STL / OBJ / 3MF | the mesh of DD1 | 2 |
 | **DD4** | STEP | the analytic writer when every face is a `Plane` — a drafted polygon writes `ADVANCED_FACE`s over tilted planes with `Line3` loops, which `supportsAnalyticSTEP` admits today; any `Cone` sends the whole body to the faceted writer, as `docs/missing-features.md`'s STEP row states for cones | 2 |
 | **DD5** | `Verify` validity | built by construction after the §5 audit, as a prism is; `Built` and `Solid` read true | 1 |
