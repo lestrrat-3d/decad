@@ -748,7 +748,7 @@ func TestStitchBoxReachesAProvenClearanceGap(t *testing.T) {
 // reportvocab.PairOverlapping before this increment
 // (TestClearancePairProvesStitchedSolidOverlapDespiteTheBooleanRefusal,
 // clearance_internal_test.go), but booloperand.RequireVolumeProof
-// (boolean.go) refused the stitched operand before measuredInterference
+// (internal/booloperand/volume_proof.go) refused the stitched operand before measuredInterference
 // ever consulted that verdict. A CLOSED, all-planar, zero-vertex-bound
 // stitched solid no longer hits that refusal, so the pair now resolves
 // through the ordinary mesh boolean (measuredInterference's own

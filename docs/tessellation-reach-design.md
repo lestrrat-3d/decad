@@ -765,7 +765,7 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
 5. **Files:** `tessellate.go`. **What:** `volSymDiff` per §3's prism/cup formulas; `symDiffOK = true`.
    **Depends on:** 2, 4. **Tests:** the cylinder circular-segment example (§3).
 6. **Files:** `boolean.go`. **What:** `facesOfMesh` reads `m.faceBound`; delete `faceChordDelta` and
-   `sectionDisplacementOf` if unreferenced; `operandSymDiff` returns `(float64, error)` reading
+   `booloperand.sectionDisplacement` (`internal/booloperand/chord.go`) if unreferenced; `operandSymDiff` returns `(float64, error)` reading
    `m.n.VolSymDiff` under `m.n.SymDiffOK`, else a staging `ErrUnsupported`. **Depends on:** 1, 4, 5.
    **Tests:** `boolean_internal_test.go` reconstructs a prism×prism result bound from the two `volSymDiff`s;
    `apitest/prism_boolean_displacement_test.go`'s existing refusal fixtures still refuse.

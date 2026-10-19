@@ -265,9 +265,7 @@ func Restate(ctx context.Context, b *topo.Body, sp stitchrecord.Payload,
 	//
 	//  1. Every held vertex IS the true boundary vertex, not merely near it.
 	//     stitchweld.ZeroBound (internal/stitchweld/bounds.go) proves every
-	//     vertex's bound is exactly zero — the same gate
-	//     clearance_geom.go's addStitchFaces dispatch already applies, reused
-	//     verbatim rather than re-derived. That rules out both a nonzero
+	//     vertex's bound is exactly zero. That rules out both a nonzero
 	//     placement delta (internal/stitchrecord/build.go's proofbound.RigidRoundAllow, stitchrecord.Build)
 	//     and a certificate-welded class bound (docs/surface-design.md §6.4's
 	//     massDelta amendment) — the only two ways this evaluator ever widens

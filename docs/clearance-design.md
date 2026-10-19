@@ -196,8 +196,8 @@ It is admitted whenever the recorded triangle set exists (an all-planar body,
 open or closed); a placement's own widened vertex bound (`internal/stitchrecord/build.go`'s
 `RigidRoundAllow`) or a certificate weld's own nonzero class bound no longer
 refuses it. Instead, `newBodyGeomBudget` charges the body's own largest
-proven vertex bound into `bodyGeom.delta` (`stitchweld.MaxBound`,
-`stitch.go`). The prism and revolve carrier builders likewise charge their
+proven vertex bound into `bodyGeom.delta` (`stitchweld.MaxBound` over
+`stitchtess.VertexBounds`). The prism and revolve carrier builders likewise charge their
 own frame/placement rounding, axial or angular displacement, per-face tilt
 and, for a revolve, the carriers' axis gap into that per-body displacement.
 `clearancePair` widens the proven interval by it once candidate aggregation
@@ -913,20 +913,20 @@ and for the same reason: admitting a trimmed patch face without a proof of its
 trim would yield a false disjointness certificate, which is worse than an
 undecided pair — `Verify` would report a clearance the geometry does not have.
 
-A closed, all-planar `stitchPayload` (docs/surface-design.md §6.4) gains a
-carrier model, §2's `addStitchFaces`, once every vertex of the body carries a
-proven bound of exactly zero — the identical gate (`stitchweld.ZeroBound`)
-that lets its mesh publish a zero occupied-volume proof
-(`docs/tessellation-design.md` §2's `stitchPayload` row), so a pair the
-kernel proves `reportvocab.PairOverlapping` for such a body now reaches a real
-`Interference` row through the ordinary mesh boolean: `booloperand.RequireVolumeProof`
-(`boolean.go`) no longer refuses the operand once its own carrier model
-exists. A placed stitched solid, or one closed by the CURVE weld certificate
-at a nonzero class bound, still gets no model and publishes no occupied-volume
-proof either — the pair stays `Suspect` (`DiagUndecidedClearance` when box
-separation already proved the partition and only the gap is unmeasured,
-`DiagUnsupportedPairPayload` family otherwise) rather than a falsely precise
-gap or a falsely decided interference.
+An all-planar `stitchPayload` (docs/surface-design.md §6.4) with a recorded
+triangle set has §2's carrier model, `addStitchFaces`, whatever its vertex
+bounds: a bounded body charges its largest vertex bound into `bodyGeom.delta`
+(§2). Its mesh publishes a zero occupied-volume proof only when the body is
+CLOSED, every vertex carries a proven bound of exactly zero
+(`stitchweld.ZeroBound`), and its lumps are proven separate
+(`docs/tessellation-design.md` §2's `stitchPayload` row). Such a body passes
+`booloperand.RequireVolumeProof` (`internal/booloperand/volume_proof.go`), so a
+pair the kernel proves `reportvocab.PairOverlapping` for it reaches a real
+`Interference` row through the ordinary mesh boolean. A placed stitched solid,
+or one closed by the CURVE weld certificate at a nonzero class bound, publishes
+no occupied-volume proof: its clearance reads through the bounded carrier
+model, and an overlapping pair stays `Suspect` (`DiagUnsupportedPairPayload`,
+the volume-proof message) rather than a falsely decided interference.
 
 ## 9. Open questions
 

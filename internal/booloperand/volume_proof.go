@@ -61,14 +61,15 @@ import (
 // that reaches this function by some other path.
 //
 // A stitched operand narrows rather than refuses outright: a CLOSED,
-// all-planar body (Tris != nil) whose every vertex carries a proven bound of
-// exactly zero (stitchweld.ZeroBound over stitchtess.VertexBounds — the
-// identical gate stitchtess.Restate applies before it publishes the
-// occupied-volume proof) will publish symDiffOK == true once meshed, so
-// refusing it here would contradict what
-// meshbool.OperandSymDiff decides one step later over the same payload. Every
-// other stitched body — open, curved/mixed, placed, or certificate-welded —
-// still refuses here, before it is ever meshed.
+// all-planar body (Tris != nil; an open one is a sheet and refused above)
+// whose every vertex carries a proven bound of exactly zero
+// (stitchweld.ZeroBound over stitchtess.VertexBounds) passes here, because
+// that is the vertex gate stitchtess.Restate applies before it publishes the
+// occupied-volume proof. Restate also requires its lumps proven separate
+// (stitchrecord.FaceLumpsProvenSeparate), so a body passing here may still be
+// refused by meshbool.OperandSymDiff after it is meshed. Every other stitched
+// body — curved/mixed, placed, or certificate-welded — refuses here, before
+// it is ever meshed.
 func RequireVolumeProof(ctx context.Context, b *topo.Body, index int) error {
 	if b.Kind == topo.BodySheet {
 		return meshbool.ExpectedBooleanForOperand(meshbool.BooleanExpectedVolumeProof, index,
