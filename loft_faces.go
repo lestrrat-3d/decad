@@ -6,14 +6,10 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
-	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/loftface"
-	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
-	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -36,78 +32,12 @@ func LoftFaces(ctx context.Context, d *Document, sections ...*Face) (*Body, erro
 	return buildLoftFaces(ctx, d, selected, source, nil)
 }
 
-// buildLoftFaces lofts through the collected sections and commits the body.
-// A non-nil tangent means the last section is the constructed cone-tangent
-// end described by tangent; every earlier section is a selected cap.
-func buildLoftFaces(ctx context.Context, d *Document, selected []loftFaceSection,
+// buildLoftFaces has revolveloftfaces.BuildLoftFaces loft through the
+// collected sections, then commits the body.
+func buildLoftFaces(ctx context.Context, d *Document, sections []revolveloftfaces.LoftFacesSection,
 	source *pointSectionRecord, tangent *loftface.TangentEnd) (*Body, error) {
 	ref := d.nextProducerID()
-	mesh, err := assembleLoftFaces(ctx, ref, selected, source)
-	if err != nil {
-		return nil, err
-	}
-	embedSections := make([]revolveloftfaces.EmbeddingSection, len(selected))
-	for i, section := range selected {
-		embedSections[i] = revolveloftfaces.EmbeddingSection{
-			Mesh: section.mesh, Limit: section.limit, Constructed: section.constructed,
-		}
-	}
-	embedding, err := revolveloftfaces.ProveEmbedding(ctx, embedSections, source)
-	if err != nil {
-		return nil, err
-	}
-	if layout, ok := loftmesh.LoftFacesCapLayout(selected[0].slice.Base.Tris[:len(selected[0].ring)],
-		len(selected)-1, len(mesh.Tris)); ok {
-		err = loftmesh.LoftCrossingAuditWithCaps(ctx, mesh.Verts, mesh.Tris, layout)
-	} else {
-		err = loftmesh.LoftCrossingAudit(proofbound.NewWorkBudget(ctx), mesh.Verts, mesh.Tris)
-	}
-	if err != nil {
-		return nil, err
-	}
-	if err := revolveloftfaces.Orient(&mesh, selected[0].slice.Base, source, embedding.Sign); err != nil {
-		return nil, err
-	}
-	audit, err := facetproof.AuditFacetedMesh(ctx, mesh.Verts, mesh.Tris)
-	if err != nil {
-		return nil, err
-	}
-	_, heldRat, err := meshVolumeMeasurement(ctx, audit, 0)
-	if err != nil {
-		return nil, err
-	}
-	boundSections := make([]revolveloftfaces.BoundsSection, len(selected))
-	for i, section := range selected {
-		boundSections[i] = revolveloftfaces.BoundsSection{
-			Ring: section.ring, BaseMeshBound: section.slice.Base.MeshBound,
-		}
-	}
-	mesh, err = revolveloftfaces.ProveBounds(ctx, boundSections, source,
-		embedding.Maps, embedding.JacobianSum, mesh, selected[0].slice.Base)
-	if err != nil {
-		return nil, err
-	}
-	capBounds := make([]loftFaceCapBounds, len(selected))
-	for i := range selected {
-		capBounds[i], err = revolveloftfaces.CapBounds(ctx, embedding.Maps[i], boundSections[i], source)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if facetedrecord.VolFloor(heldRat, mesh.VolSymDiff) <= 0 {
-		return nil, fmt.Errorf("%w: face-fed loft occupied-volume proof exceeds the held volume", ErrUnsupported)
-	}
-	if len(selected[0].slice.Base.Src) < len(source.SourceStation) {
-		return nil, fmt.Errorf("%w: loft source cell roles are incomplete", ErrUnsupported)
-	}
-	mesh.LoftFacesPrimitive = true
-	mesh.LoftFacesCap = &loftFacesCapRecord{Source: source,
-		Maps:         append([]loftFaceMap(nil), embedding.Maps...),
-		Bounds:       capBounds,
-		StationGroup: append([]int(nil), selected[0].slice.Base.Src[:len(source.SourceStation)]...),
-		Final:        embedding.Maps[len(embedding.Maps)-1], Group: len(mesh.Groups) - 1,
-		Tangent: tangent}
-	body, err := bodyResult(facetedrecord.BuildWithProof(ctx, envOf(documentNode(d), ref), mesh, audit, measurementToInternal(Measurement{}), nil))
+	body, err := bodyResult(revolveloftfaces.BuildLoftFaces(ctx, envOf(documentNode(d), ref), sections, source, tangent))
 	if err != nil {
 		return nil, err
 	}
@@ -118,23 +48,11 @@ func buildLoftFaces(ctx context.Context, d *Document, selected []loftFaceSection
 	return body, nil
 }
 
-type loftFaceSection struct {
-	face  *Face
-	body  *Body
-	mesh  facetedPayload
-	slice *pointPlaneSliceRecord
-	limit *pointPlaneLimit
-	group int
-	ring  []r3.Vec
-	// constructed is the exact cap map of a section that no selected cap
-	// supplies (the cone-tangent end). Then face, body, mesh and limit are
-	// unset, and slice is the first selected section's, read only for its
-	// base mesh bound.
-	constructed *loftFaceMap
-}
-
-func collectLoftFaces(d *Document, faces []*Face) ([]loftFaceSection, *pointSectionRecord, error) {
-	sections := make([]loftFaceSection, len(faces))
+// collectLoftFaces checks every selected face against the document and its
+// Split slab, which reads root Face and Body handles, and returns the
+// sections revolveloftfaces.BuildLoftFaces lofts through.
+func collectLoftFaces(d *Document, faces []*Face) ([]revolveloftfaces.LoftFacesSection, *pointSectionRecord, error) {
+	sections := make([]revolveloftfaces.LoftFacesSection, len(faces))
 	var source *pointSectionRecord
 	seen := make(map[*Body]bool, len(faces)-1)
 	for i, face := range faces {
@@ -208,97 +126,10 @@ func collectLoftFaces(d *Document, faces []*Face) ([]loftFaceSection, *pointSect
 			ring = fp.Verts[:n]
 			limit = fp.PointPlane.Lower
 		}
-		sections[i] = loftFaceSection{face: face, body: body, mesh: fp,
-			slice: fp.PointPlane, limit: limit, group: group, ring: ring}
+		sections[i] = revolveloftfaces.LoftFacesSection{Mesh: fp, Slice: fp.PointPlane, Limit: limit,
+			Group: group, Ring: ring, Surface: face.n.Surface}
 	}
 	return sections, source, nil
-}
-
-func assembleLoftFaces(ctx context.Context, ref producerID,
-	sections []loftFaceSection, source *pointSectionRecord) (facetedPayload, error) {
-	n := len(sections[0].ring)
-	base := sections[0].slice.Base
-	segmentCount := len(source.Profile.Outer.Segments)
-	if len(base.Src) < n || len(base.Tris) < n || len(base.Groups) != segmentCount+1 {
-		return facetedPayload{}, fmt.Errorf("%w: LoftFaces source fan has no complete side correspondence", ErrUnsupported)
-	}
-	verts := make([]r3.Vec, 0, len(sections)*n)
-	for i, section := range sections {
-		if err := ctx.Err(); err != nil {
-			return facetedPayload{}, err
-		}
-		if len(section.ring) != n {
-			return facetedPayload{}, fmt.Errorf("%w: LoftFaces section %d has different stations", ErrUnsupported, i)
-		}
-		verts = append(verts, section.ring...)
-	}
-	tris := make([][3]int, 0, 2*n*(len(sections)-1)+2*len(base.Tris[n:]))
-	src := make([]int, 0, cap(tris))
-	groups := make([]facetGroup, (len(sections)-1)*segmentCount+2)
-	for band := range len(sections) - 1 {
-		for segment := range segmentCount {
-			groups[band*segmentCount+segment] = facetGroup{Origins: []provenance.Ref{{Producer: ref,
-				Role: fmt.Sprintf("side(%d,%d)", band, segment)}}}
-		}
-		for j := range n {
-			if j%256 == 0 {
-				if err := ctx.Err(); err != nil {
-					return facetedPayload{}, err
-				}
-			}
-			side := base.Tris[j]
-			if side[0] != 0 || side[1] <= 0 || side[2] <= 0 {
-				return facetedPayload{}, fmt.Errorf("%w: LoftFaces source fan has no ordered side", ErrUnsupported)
-			}
-			b, c := side[1]-1, side[2]-1
-			group := base.Src[j]
-			if group < 0 || group >= segmentCount {
-				return facetedPayload{}, fmt.Errorf("%w: LoftFaces source side has no segment", ErrUnsupported)
-			}
-			lo, hi := band*n, (band+1)*n
-			tris = append(tris, [3]int{lo + b, hi + b, hi + c}, [3]int{lo + b, hi + c, lo + c})
-			src = append(src, band*segmentCount+group, band*segmentCount+group)
-		}
-	}
-	startGroup, endGroup := len(groups)-2, len(groups)-1
-	startOrigins := append([]provenance.Ref(nil), sections[0].mesh.Groups[sections[0].group].Origins...)
-	last := sections[len(sections)-1]
-	groups[startGroup] = facetGroup{Origins: append(startOrigins, provenance.Ref{Producer: ref, Role: provenance.RoleCapStart}),
-		Surface: sections[0].face.n.Surface, Planar: true, Reversed: true, NormalBound: 2}
-	if last.constructed != nil {
-		plane, err := loftFacesConstructedPlane(*last.constructed)
-		if err != nil {
-			return facetedPayload{}, err
-		}
-		groups[endGroup] = facetGroup{Origins: []provenance.Ref{{Producer: ref, Role: provenance.RoleCapEnd}},
-			Surface: plane, Planar: true, NormalBound: 2}
-	} else {
-		endOrigins := append([]provenance.Ref(nil), last.mesh.Groups[last.group].Origins...)
-		groups[endGroup] = facetGroup{Origins: append(endOrigins, provenance.Ref{Producer: ref, Role: provenance.RoleCapEnd}),
-			Surface: last.face.n.Surface, Planar: true, NormalBound: 2}
-	}
-	for _, capTri := range base.Tris[n:] {
-		if capTri[0] == 0 || capTri[1] == 0 || capTri[2] == 0 {
-			return facetedPayload{}, fmt.Errorf("%w: LoftFaces source cap includes the apex", ErrUnsupported)
-		}
-		tris = append(tris,
-			[3]int{capTri[0] - 1, capTri[2] - 1, capTri[1] - 1},
-			[3]int{(len(sections)-1)*n + capTri[0] - 1, (len(sections)-1)*n + capTri[1] - 1,
-				(len(sections)-1)*n + capTri[2] - 1})
-		src = append(src, startGroup, endGroup)
-	}
-	return facetedPayload{Verts: verts, Tris: tris, Src: src, Groups: groups, Xform: r3.Identity()}, nil
-}
-
-// loftFacesConstructedPlane returns the rounded Plane tag of a constructed
-// planar end map. The tag is for reporting only; the exact map is the proof.
-func loftFacesConstructedPlane(m loftFaceMap) (surfacegeom.Plane, error) {
-	u, v := loftface.RoundPoint(m.QU), loftface.RoundPoint(m.QV)
-	frame, err := r3.NewFrame(loftface.RoundPoint(m.Constant), u, v)
-	if err != nil {
-		return surfacegeom.Plane{}, fmt.Errorf("%w: the constructed loft end has no plane frame: %s", ErrUnsupported, err)
-	}
-	return surfacegeom.Plane{Frame: frame}, nil
 }
 
 // The LoftFaces cap-map carriers live in internal/loftface.
@@ -398,6 +229,6 @@ func LoftFacesToConeTangent(ctx context.Context, end ConeTangentEnd, sections ..
 		u, v := lfF(station.U), lfF(station.V)
 		ring[j] = loftface.RoundPoint(endMap.At(u, v))
 	}
-	selected = append(selected, loftFaceSection{slice: selected[0].slice, ring: ring, constructed: &endMap})
+	selected = append(selected, revolveloftfaces.LoftFacesSection{Slice: selected[0].Slice, Ring: ring, Constructed: &endMap})
 	return buildLoftFaces(ctx, d, selected, source, &tangent)
 }
