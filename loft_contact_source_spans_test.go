@@ -222,13 +222,13 @@ func TestLoftCurvedSourceCapsRealIndependentWedgeRefusesWithoutBoundaryProof(t *
 				tc.first, tc.second, proofbound.NewWorkBudget(t.Context()))
 			require.NoError(t, sourceErr)
 			require.False(t, admitted)
-			require.Zero(t, source.sourceVisits)
+			require.Zero(t, source.SourceVisits)
 
 			boundary, accepted, boundaryErr := certifyLoftOutputBoundary(t.Context(),
 				tc.first, tc.second, proofbound.NewWorkBudget(t.Context()))
 			require.NoError(t, boundaryErr)
 			require.False(t, accepted)
-			require.Zero(t, len(boundary.shell.vertices))
+			require.Zero(t, len(boundary.shell.Vertices))
 		})
 	}
 }
@@ -431,7 +431,7 @@ func TestLoftFitSplineSourceCapsRealWedge(t *testing.T) {
 			order[0], order[1], proofbound.NewWorkBudget(t.Context()))
 		require.NoError(t, outputErr)
 		require.False(t, outputAdmitted)
-		require.Empty(t, boundary.shell.triangles)
+		require.Empty(t, boundary.shell.Triangles)
 	}
 
 	shortBudget := proofbound.NewWallWorkBudgetWithOperation(1, proofbound.NewWorkBudget(t.Context()))

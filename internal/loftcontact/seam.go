@@ -6,7 +6,6 @@ import (
 	"context"
 	"math/big"
 
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 )
@@ -36,27 +35,27 @@ func CertifyLineSeam(ctx context.Context, budget *proofbound.WorkBudget,
 	if err := budget.Step(); err != nil {
 		return LineSeam{}, false, err
 	}
-	l0, ok := lift(bottom[0])
+	l0, ok := PointOf(bottom[0])
 	if !ok {
 		return LineSeam{}, false, nil
 	}
-	r0, ok := lift(bottom[1])
+	r0, ok := PointOf(bottom[1])
 	if !ok {
 		return LineSeam{}, false, nil
 	}
-	l1, ok := lift(top[0])
+	l1, ok := PointOf(top[0])
 	if !ok {
 		return LineSeam{}, false, nil
 	}
-	r1, ok := lift(top[1])
+	r1, ok := PointOf(top[1])
 	if !ok {
 		return LineSeam{}, false, nil
 	}
-	c, ok := lift(carrier[0])
+	c, ok := PointOf(carrier[0])
 	if !ok {
 		return LineSeam{}, false, nil
 	}
-	d, ok := lift(carrier[1])
+	d, ok := PointOf(carrier[1])
 	if !ok {
 		return LineSeam{}, false, nil
 	}
@@ -104,11 +103,6 @@ func (s LineSeam) At(t *big.Rat) (*big.Rat, *big.Rat, bool) {
 	line := new(big.Rat).Quo(evalLinear(s.lineNum, t), evalLinear(s.lineDen, t))
 	carrier := new(big.Rat).Quo(evalQuadratic(s.carrierNum, t), evalLinear(s.carrierDen, t))
 	return line, carrier, true
-}
-
-func lift(p sectionrecord.Point2) (Point, bool) {
-	u, v := proofarith.FloatRat(p.U), proofarith.FloatRat(p.V)
-	return Point{u, v}, u != nil && v != nil
 }
 
 func sub(a, b Point) Point {

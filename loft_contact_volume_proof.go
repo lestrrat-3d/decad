@@ -35,8 +35,8 @@ func loftVolumeCompose(ctx context.Context, operation *proofbound.WorkBudget,
 	}
 	if operation == nil || boundary.workVisits == 0 ||
 		boundary.workVisits >= loftVolumeOutputSteps ||
-		len(boundary.shell.triangles) == 0 || len(boundary.shell.triangles) > 512 ||
-		len(boundary.shell.vertices) == 0 || len(boundary.shell.vertices) > 512 {
+		len(boundary.shell.Triangles) == 0 || len(boundary.shell.Triangles) > 512 ||
+		len(boundary.shell.Vertices) == 0 || len(boundary.shell.Vertices) > 512 {
 		return no, false, nil
 	}
 	limit := proofbound.NewWallWorkBudgetWithOperation(
@@ -64,7 +64,7 @@ func loftVolumeCompose(ctx context.Context, operation *proofbound.WorkBudget,
 		return no, false, nil
 	}
 	bound := new(big.Rat)
-	for _, tri := range shell.triangles {
+	for _, tri := range shell.Triangles {
 		if err := ctx.Err(); err != nil {
 			return no, false, err
 		}
@@ -73,17 +73,17 @@ func loftVolumeCompose(ctx context.Context, operation *proofbound.WorkBudget,
 		}
 		var points [6][3]*big.Rat
 		for corner, index := range tri {
-			if index < 0 || index >= len(shell.vertices) {
+			if index < 0 || index >= len(shell.Vertices) {
 				return no, false, nil
 			}
-			vertex := shell.vertices[index]
-			for axis, coordinate := range vertex.world {
+			vertex := shell.Vertices[index]
+			for axis, coordinate := range vertex.World {
 				if !loftVolumeRatFits(coordinate) {
 					return no, false, nil
 				}
 				points[corner][axis] = coordinate
 			}
-			for axis, coordinate := range [3]float64{vertex.held.X, vertex.held.Y, vertex.held.Z} {
+			for axis, coordinate := range [3]float64{vertex.Held.X, vertex.Held.Y, vertex.Held.Z} {
 				if proofbound.IsNonFinite(coordinate) {
 					return no, false, nil
 				}
@@ -194,8 +194,6 @@ func loftVolumeCompareFits(a, b *big.Rat) bool {
 		b.Num().BitLen()+a.Denom().BitLen() <= loftVolumeComposerRatBits
 }
 
-const loftVolumeSourceMaxRatBits = 8192
-
 // loftVolumeSourceEquality proves that the exact triangles in shell tile the
 // outward boundary of the admitted source union. The caller must pass the
 // partition of these live, authenticated line-only records and the same
@@ -213,16 +211,16 @@ const loftVolumeSourceMaxRatBits = 8192
 // those disjoint patches once. A triangle-by-triangle comparison then proves
 // that shell has neither an omitted nor a doubled or internal patch.
 func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget,
-	pp prismPayload, lp loftPayload, source loftSourcePartition, shell loftOutputShell) (bool, error) {
+	pp prismPayload, lp loftPayload, source loftcontact.SourcePartition, shell loftcontact.OutputShell) (bool, error) {
 	arithmetic := &loftcontact.Arithmetic{OK: true}
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
-	if budget == nil || len(shell.vertices) == 0 || len(shell.vertices) > 512 ||
-		len(shell.triangles) == 0 || len(shell.triangles) > 512 ||
-		len(shell.faces) != len(shell.triangles) || len(shell.triangleBounds) != len(shell.triangles) ||
-		len(source.walls) < 3 || len(source.walls) > 32 ||
-		source.capLevels[0] == nil || source.capLevels[1] == nil || source.capLevels[2] == nil {
+	if budget == nil || len(shell.Vertices) == 0 || len(shell.Vertices) > 512 ||
+		len(shell.Triangles) == 0 || len(shell.Triangles) > 512 ||
+		len(shell.Faces) != len(shell.Triangles) || len(shell.TriangleBounds) != len(shell.Triangles) ||
+		len(source.Walls) < 3 || len(source.Walls) > 32 ||
+		source.CapLevels[0] == nil || source.CapLevels[1] == nil || source.CapLevels[2] == nil {
 		return false, nil
 	}
 	parent := budget
@@ -260,7 +258,7 @@ func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget
 			return false, nil
 		}
 	}
-	for _, level := range source.capLevels {
+	for _, level := range source.CapLevels {
 		if err := budget.Step(); err != nil {
 			return false, err
 		}
@@ -278,23 +276,23 @@ func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget
 		return false, nil
 	}
 	comparison, bounded := loftVolumeSourceCmp(axis.Shift, prismTop)
-	if !bounded || comparison >= 0 || source.capLevels[0].Sign() != 0 {
+	if !bounded || comparison >= 0 || source.CapLevels[0].Sign() != 0 {
 		return false, nil
 	}
-	comparison, bounded = loftVolumeSourceCmp(source.capLevels[1], axis.Shift)
+	comparison, bounded = loftVolumeSourceCmp(source.CapLevels[1], axis.Shift)
 	if !bounded || comparison != 0 {
 		return false, nil
 	}
-	comparison, bounded = loftVolumeSourceCmp(source.capLevels[2], prismTop)
+	comparison, bounded = loftVolumeSourceCmp(source.CapLevels[2], prismTop)
 	if !bounded || comparison != 0 {
 		return false, nil
 	}
-	for _, vertex := range shell.vertices {
+	for _, vertex := range shell.Vertices {
 		if err := ctx.Err(); err != nil {
 			return false, err
 		}
-		for _, value := range []*big.Rat{vertex.point.u, vertex.point.v, vertex.point.z,
-			vertex.world[0], vertex.world[1], vertex.world[2]} {
+		for _, value := range []*big.Rat{vertex.Point.U, vertex.Point.V, vertex.Point.Z,
+			vertex.World[0], vertex.World[1], vertex.World[2]} {
 			if err := budget.Step(); err != nil {
 				return false, err
 			}
@@ -312,8 +310,8 @@ func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget
 		return false, err
 	}
 	top, ok, err := loftPartitionLines(budget, lp.Profile1.Outer)
-	if err != nil || !ok || len(bottom) != len(top) || len(source.walls) != len(bottom) ||
-		source.carrier < 0 || source.carrier >= len(prismLines) {
+	if err != nil || !ok || len(bottom) != len(top) || len(source.Walls) != len(bottom) ||
+		source.Carrier < 0 || source.Carrier >= len(prismLines) {
 		return false, err
 	}
 	for _, frame := range []r3.Frame{pp.Frame, lp.Frame0, lp.Frame1} {
@@ -343,12 +341,12 @@ func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget
 			}
 		}
 	}
-	comparison, bounded = loftVolumeSourceCmp(source.capLevels[0], source.capLevels[1])
+	comparison, bounded = loftVolumeSourceCmp(source.CapLevels[0], source.CapLevels[1])
 	if !bounded || comparison >= 0 {
 		return false, nil
 	}
-	comparison, bounded = loftVolumeSourceCmp(source.capLevels[1], source.capLevels[2])
-	if !bounded || comparison >= 0 || source.topWallJoins != len(prismLines) {
+	comparison, bounded = loftVolumeSourceCmp(source.CapLevels[1], source.CapLevels[2])
+	if !bounded || comparison >= 0 || source.TopWallJoins != len(prismLines) {
 		return false, nil
 	}
 	convex, err := loftPartitionConvexPrism(budget, prismLines)
@@ -368,10 +366,10 @@ func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget
 	// Thus At cannot exceed the 8192-bit ceiling before its result is checked.
 	// A zero seam is refused by At; the four comparisons authenticate the
 	// supplied seam against a freshly certified seam from these source lines.
-	carrier := prismLines[source.carrier]
+	carrier := prismLines[source.Carrier]
 	crossing, seams, sides, admitted, err := loftcontact.CertifyCarrierOccupancy(ctx, budget,
 		bottom, top, [2]sectionrecord.Point2{carrier.Start, carrier.End})
-	if err != nil || !admitted || crossing != source.crossing {
+	if err != nil || !admitted || crossing != source.Crossing {
 		return false, err
 	}
 	for k := range seams {
@@ -384,7 +382,7 @@ func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget
 				return false, err
 			}
 			a, b, validA := seams[k].At(t)
-			c, d, validB := source.seams[k].At(t)
+			c, d, validB := source.Seams[k].At(t)
 			if !validA || !validB || !loftVolumeSourceRatOK(a) || !loftVolumeSourceRatOK(b) ||
 				!loftVolumeSourceRatOK(c) || !loftVolumeSourceRatOK(d) {
 				return false, nil
@@ -403,7 +401,7 @@ func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget
 	// both Loft ends. The signed side of an interpolated vertex is affine in
 	// height, so no other prism wall can acquire a hidden crossing.
 	for i, line := range prismLines {
-		if i == source.carrier {
+		if i == source.Carrier {
 			continue
 		}
 		for j := range bottom {
@@ -438,7 +436,7 @@ func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget
 		default:
 			return false, nil
 		}
-		if source.walls[i] != expectedWalls[i] {
+		if source.Walls[i] != expectedWalls[i] {
 			return false, nil
 		}
 	}
@@ -451,12 +449,12 @@ func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget
 	// exposed boundary. The side constructor uses the same whole-height seam
 	// identities just checked and refuses nonplanar wall patches. Rebuilding
 	// in a separate shell avoids relying on labels supplied by the candidate.
-	want := loftOutputNewShell()
+	want := loftcontact.NewOutputShell()
 	for capIndex := range 3 {
 		if err := ctx.Err(); err != nil {
 			return false, err
 		}
-		valid, err := loftOutputCap(ctx, budget, pp, prismLines, bottom, top, source, &want, capIndex, arithmetic)
+		valid, err := loftcontact.OutputCap(ctx, budget, pp.Frame, prismLines, bottom, top, source, &want, capIndex, arithmetic)
 		if err != nil || !valid || !arithmetic.OK {
 			return false, err
 		}
@@ -473,21 +471,21 @@ func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget
 	if err != nil || !valid || !arithmetic.OK {
 		return false, err
 	}
-	if len(want.vertices) != len(shell.vertices) || len(want.triangles) != len(shell.triangles) {
+	if len(want.Vertices) != len(shell.Vertices) || len(want.Triangles) != len(shell.Triangles) {
 		return false, nil
 	}
-	for i, vertex := range want.vertices {
+	for i, vertex := range want.Vertices {
 		if err := ctx.Err(); err != nil {
 			return false, err
 		}
 		if err := budget.Step(); err != nil {
 			return false, err
 		}
-		other := shell.vertices[i]
+		other := shell.Vertices[i]
 		for _, pair := range [][2]*big.Rat{
-			{vertex.point.u, other.point.u}, {vertex.point.v, other.point.v},
-			{vertex.point.z, other.point.z}, {vertex.world[0], other.world[0]},
-			{vertex.world[1], other.world[1]}, {vertex.world[2], other.world[2]},
+			{vertex.Point.U, other.Point.U}, {vertex.Point.V, other.Point.V},
+			{vertex.Point.Z, other.Point.Z}, {vertex.World[0], other.World[0]},
+			{vertex.World[1], other.World[1]}, {vertex.World[2], other.World[2]},
 		} {
 			if err := budget.Step(); err != nil {
 				return false, err
@@ -498,14 +496,14 @@ func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget
 			}
 		}
 	}
-	for i := range want.triangles {
+	for i := range want.Triangles {
 		if err := ctx.Err(); err != nil {
 			return false, err
 		}
 		if err := budget.Step(); err != nil {
 			return false, err
 		}
-		if want.triangles[i] != shell.triangles[i] || want.faces[i] != shell.faces[i] {
+		if want.Triangles[i] != shell.Triangles[i] || want.Faces[i] != shell.Faces[i] {
 			return false, nil
 		}
 	}
@@ -519,16 +517,16 @@ func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget
 }
 
 func loftVolumeSourceRatOK(x *big.Rat) bool {
-	return x != nil && x.Num().BitLen() <= loftVolumeSourceMaxRatBits &&
-		x.Denom().BitLen() <= loftVolumeSourceMaxRatBits
+	return x != nil && x.Num().BitLen() <= loftcontact.RationalBits &&
+		x.Denom().BitLen() <= loftcontact.RationalBits
 }
 
 // Rat.Cmp cross-multiplies both numerator/denominator pairs. Refuse before
 // either raw product could exceed the private 8192-bit arithmetic ceiling.
 func loftVolumeSourceCmp(a, b *big.Rat) (int, bool) {
 	if !loftVolumeSourceRatOK(a) || !loftVolumeSourceRatOK(b) ||
-		a.Num().BitLen()+b.Denom().BitLen() > loftVolumeSourceMaxRatBits ||
-		b.Num().BitLen()+a.Denom().BitLen() > loftVolumeSourceMaxRatBits {
+		a.Num().BitLen()+b.Denom().BitLen() > loftcontact.RationalBits ||
+		b.Num().BitLen()+a.Denom().BitLen() > loftcontact.RationalBits {
 		return 0, false
 	}
 	return a.Cmp(b), true

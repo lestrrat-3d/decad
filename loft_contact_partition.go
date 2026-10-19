@@ -16,78 +16,25 @@ import (
 	"github.com/lestrrat-3d/sketch/geom"
 )
 
-// loftSourcePartition is a transient source certificate, never a body payload.
-// It describes open side patches and cap incidence, not a held output shell.
-type loftSourcePartition struct {
-	carrier  int
-	crossing [2]int
-	seams    [2]loftcontact.LineSeam
-	// -1 hides the whole Loft wall, +1 exposes it, 0 splits it at a seam.
-	walls        []int8
-	junction     [2][2]sectionrecord.Point2
-	capOwners    [2][3]int // prism, Loft, prism-owned overlap cells
-	capLevels    [3]*big.Rat
-	topWallJoins int
-	prepared     [2]loftPartitionPreparedCap
-	sourceVisits uint64
-}
-
-type loftPartitionSpan struct{ lo, hi *big.Rat }
-
-// Each reconstructed entity gets exactly one source, direction, and cap level.
-// This map is local to one Sketch arrangement and is never retained by a body.
-type loftPartitionCapOrigin struct {
-	operand, loop, segment int
-	reversed               bool
-	cap                    int
-	level                  *big.Rat
-	line                   sectionrecord.LineSeg
-}
-
-type loftPartitionFragmentKey struct {
-	operand, segment int
-	lo, hi           string
-}
-
-type loftPartitionFragmentUse struct {
-	cell     int
-	reversed bool
-}
-
-type loftPartitionCapProof struct {
-	junction    [2]sectionrecord.Point2
-	level       *big.Rat
-	owners      [3]int
-	carrierUses int
-}
-
-type loftPartitionPreparedCap struct {
-	scene    *sketch.Sketch
-	tags     map[sketch.Entity]prismcells.Origin
-	raw      []*sketch.Profile
-	capIndex int
-	level    *big.Rat
-}
-
 // certifyLoftSourcePartition authenticates two live producer records and proves
 // one strictly transverse, single-carrier source partition. The result cannot
 // be used as a Union body without a separate output closure and two-way bound.
 func certifyLoftSourcePartition(ctx context.Context, first, second *Body,
-	operation *proofbound.WorkBudget, checked ...*loftcontact.Arithmetic) (loftSourcePartition, bool, error) {
+	operation *proofbound.WorkBudget, checked ...*loftcontact.Arithmetic) (loftcontact.SourcePartition, bool, error) {
 	return certifyLoftSourcePartitionMode(ctx, first, second, operation, false, checked...)
 }
 
 func certifyLoftSourcePartitionForDirectShell(ctx context.Context, first, second *Body,
-	operation *proofbound.WorkBudget, checked ...*loftcontact.Arithmetic) (loftSourcePartition, bool, error) {
+	operation *proofbound.WorkBudget, checked ...*loftcontact.Arithmetic) (loftcontact.SourcePartition, bool, error) {
 	return certifyLoftSourcePartitionMode(ctx, first, second, operation, true, checked...)
 }
 
 func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 	operation *proofbound.WorkBudget, reportSeamSize bool,
-	checked ...*loftcontact.Arithmetic) (loftSourcePartition, bool, error) {
-	var no loftSourcePartition
+	checked ...*loftcontact.Arithmetic) (loftcontact.SourcePartition, bool, error) {
+	var no loftcontact.SourcePartition
 	var sourceSteps uint64
-	arithmetic := loftReplayArithmetic(checked)
+	arithmetic := loftcontact.ReplayArithmetic(checked)
 	if err := ctx.Err(); err != nil {
 		return no, false, err
 	}
@@ -274,8 +221,8 @@ func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 		sides[crossing[0]] == sides[crossing[1]] {
 		return no, false, nil
 	}
-	result := loftSourcePartition{carrier: carrier, crossing: crossing, seams: seams, walls: walls}
-	result.capLevels = [3]*big.Rat{big.NewRat(0, 1), new(big.Rat).Set(axis.Shift), new(big.Rat).Set(prismTop)}
+	result := loftcontact.SourcePartition{Carrier: carrier, Crossing: crossing, Seams: seams, Walls: walls}
+	result.CapLevels = [3]*big.Rat{big.NewRat(0, 1), new(big.Rat).Set(axis.Shift), new(big.Rat).Set(prismTop)}
 	if !reportSeamSize {
 		// Reject cuts Sketch cannot witness before its paired-cap producer runs.
 		for capIndex := range 2 {
@@ -305,7 +252,7 @@ func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 			}
 		}
 	}
-	var prepared [2]loftPartitionPreparedCap
+	var prepared [2]loftcontact.PreparedCap
 	var scenes [2]*sketch.Sketch
 	for capIndex := range 2 {
 		loftLines := bottom
@@ -329,8 +276,8 @@ func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 		if err := groundLoftPartitionScene(budget, scene); err != nil {
 			return no, false, err
 		}
-		prepared[capIndex] = loftPartitionPreparedCap{
-			scene: scene, tags: tags, capIndex: capIndex, level: result.capLevels[capIndex],
+		prepared[capIndex] = loftcontact.PreparedCap{
+			Scene: scene, Tags: tags, CapIndex: capIndex, Level: result.CapLevels[capIndex],
 		}
 		scenes[capIndex] = scene
 	}
@@ -345,14 +292,14 @@ func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 		return no, false, err
 	}
 	for i := range prepared {
-		prepared[i].raw = paired[i]
+		prepared[i].Raw = paired[i]
 	}
-	if prepared[0].scene == prepared[1].scene {
+	if prepared[0].Scene == prepared[1].Scene {
 		return no, false, nil
 	}
 	for capIndex := range 2 {
 		loftLines := bottom
-		level := result.capLevels[capIndex]
+		level := result.CapLevels[capIndex]
 		if capIndex == 1 {
 			loftLines = top
 		}
@@ -361,16 +308,16 @@ func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 		}
 		var admitted bool
 		var err error
-		capProof, admitted, err := loftPartitionCap(ctx, budget, prismLines, loftLines,
+		capProof, admitted, err := loftcontact.PartitionCap(ctx, budget, prismLines, loftLines,
 			carrier, crossing, seams, sides, walls, capIndex, level, &prepared[capIndex], arithmetic)
 		if err != nil || !admitted {
 			return no, false, err
 		}
-		if !arithmetic.Valid(capProof.level) || arithmetic.Cmp(capProof.level, level) != 0 || !arithmetic.OK {
+		if !arithmetic.Valid(capProof.Level) || arithmetic.Cmp(capProof.Level, level) != 0 || !arithmetic.OK {
 			return no, false, nil
 		}
-		result.junction[capIndex], result.capOwners[capIndex] = capProof.junction, capProof.owners
-		if capIndex == 0 && capProof.carrierUses != 2 || capIndex == 1 && capProof.carrierUses != 1 {
+		result.Junction[capIndex], result.CapOwners[capIndex] = capProof.Junction, capProof.Owners
+		if capIndex == 0 && capProof.CarrierUses != 2 || capIndex == 1 && capProof.CarrierUses != 1 {
 			return no, false, nil
 		}
 	}
@@ -383,18 +330,18 @@ func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 		if line.End != prismLines[(i+1)%len(prismLines)].Start || line.TStart != 0 || line.TEnd != 1 {
 			return no, false, nil
 		}
-		result.topWallJoins++
+		result.TopWallJoins++
 	}
-	if result.topWallJoins != len(prismLines) ||
-		arithmetic.Cmp(result.capLevels[0], result.capLevels[1]) >= 0 ||
-		arithmetic.Cmp(result.capLevels[1], result.capLevels[2]) >= 0 || !arithmetic.OK {
+	if result.TopWallJoins != len(prismLines) ||
+		arithmetic.Cmp(result.CapLevels[0], result.CapLevels[1]) >= 0 ||
+		arithmetic.Cmp(result.CapLevels[1], result.CapLevels[2]) >= 0 || !arithmetic.OK {
 		return no, false, nil
 	}
 	if err := budget.Err(); err != nil {
 		return no, false, err
 	}
-	result.prepared = prepared
-	result.sourceVisits = sourceSteps
+	result.Prepared = prepared
+	result.SourceVisits = sourceSteps
 	return result, true, nil
 }
 
@@ -430,7 +377,7 @@ func loftPartitionLines(budget *proofbound.WorkBudget, loop sectionrecord.LoopRe
 
 func loftPartitionConvexPrism(budget *proofbound.WorkBudget, lines []sectionrecord.LineSeg,
 	checked ...*loftcontact.Arithmetic) (bool, error) {
-	arithmetic := loftReplayArithmetic(checked)
+	arithmetic := loftcontact.ReplayArithmetic(checked)
 	for i, line := range lines {
 		if err := budget.Step(); err != nil {
 			return false, err
@@ -452,120 +399,4 @@ func loftPartitionConvexPrism(budget *proofbound.WorkBudget, lines []sectionreco
 		}
 	}
 	return true, nil
-}
-
-func loftPartitionSamePoint(a, b loftcontact.Point) bool {
-	arithmetic := &loftcontact.Arithmetic{OK: true}
-	return arithmetic.SamePoint(a, b)
-}
-
-func loftPartitionParameter(line sectionrecord.LineSeg, p loftcontact.Point) (*big.Rat, bool) {
-	arithmetic := &loftcontact.Arithmetic{OK: true}
-	return arithmetic.LineParameter(line, p)
-}
-
-func loftPartitionSpanEqual(budget *proofbound.WorkBudget, got, want []loftPartitionSpan,
-	checked ...*loftcontact.Arithmetic) (bool, error) {
-	arithmetic := loftReplayArithmetic(checked)
-	if len(got) != len(want) {
-		return false, nil
-	}
-	for _, spans := range [][]loftPartitionSpan{got, want} {
-		for i := 1; i < len(spans); i++ {
-			for j := i; j > 0; j-- {
-				if err := budget.Step(); err != nil {
-					return false, err
-				}
-				cmp := arithmetic.Cmp(spans[j-1].lo, spans[j].lo)
-				if !arithmetic.OK {
-					return false, nil
-				}
-				if cmp <= 0 {
-					break
-				}
-				spans[j-1], spans[j] = spans[j], spans[j-1]
-			}
-		}
-	}
-	for i := range got {
-		if err := budget.Step(); err != nil {
-			return false, err
-		}
-		if arithmetic.Cmp(got[i].lo, want[i].lo) != 0 ||
-			arithmetic.Cmp(got[i].hi, want[i].hi) != 0 || !arithmetic.OK {
-			return false, nil
-		}
-	}
-	return true, nil
-}
-
-func loftPartitionSceneOrigins(budget *proofbound.WorkBudget, scene *sketch.Sketch,
-	tags map[sketch.Entity]prismcells.Origin, prismLines, loftLines []sectionrecord.LineSeg,
-	capIndex int, level *big.Rat,
-) (map[sketch.Entity]loftPartitionCapOrigin, bool, error) {
-	if len(tags) != len(prismLines)+len(loftLines) {
-		return nil, false, nil
-	}
-	entities := scene.Entities()
-	if len(entities) != len(tags) {
-		return nil, false, nil
-	}
-	seen := [2][]bool{make([]bool, len(prismLines)), make([]bool, len(loftLines))}
-	mapped := make(map[sketch.Entity]loftPartitionCapOrigin, len(tags))
-	for _, entity := range entities {
-		if err := budget.Step(); err != nil {
-			return nil, false, err
-		}
-		origin, ok := tags[entity]
-		if !ok || origin.Region != 0 || origin.Hole != -1 || origin.AuthoredReversed {
-			return nil, false, nil
-		}
-		op := 0
-		lines := prismLines
-		if origin.IsB {
-			op, lines = 1, loftLines
-		}
-		if origin.Segment < 0 || origin.Segment >= len(lines) || seen[op][origin.Segment] {
-			return nil, false, nil
-		}
-		line, ok := entity.(*sketch.Line)
-		if !ok || line.Start.X() != lines[origin.Segment].Start.U ||
-			line.Start.Y() != lines[origin.Segment].Start.V ||
-			line.End.X() != lines[origin.Segment].End.U ||
-			line.End.Y() != lines[origin.Segment].End.V {
-			return nil, false, nil
-		}
-		seen[op][origin.Segment] = true
-		mapped[entity] = loftPartitionCapOrigin{
-			operand: op, loop: -1, segment: origin.Segment, reversed: origin.AuthoredReversed,
-			cap: capIndex, level: new(big.Rat).Set(level), line: lines[origin.Segment],
-		}
-	}
-	for _, operand := range seen {
-		for _, present := range operand {
-			if err := budget.Step(); err != nil {
-				return nil, false, err
-			}
-			if !present {
-				return nil, false, nil
-			}
-		}
-	}
-	return mapped, true, nil
-}
-
-func loftPartitionFragmentGeometryKey(a, b loftcontact.Point,
-	arithmetic ...*loftcontact.Arithmetic) string {
-	c := loftReplayArithmetic(arithmetic)
-	u := c.Cmp(a.U, b.U)
-	if !c.OK {
-		return ""
-	}
-	if u > 0 || u == 0 && c.Cmp(a.V, b.V) > 0 {
-		a, b = b, a
-	}
-	if !c.OK || !c.Valid(a.U) || !c.Valid(a.V) || !c.Valid(b.U) || !c.Valid(b.V) {
-		return ""
-	}
-	return a.U.RatString() + "," + a.V.RatString() + ":" + b.U.RatString() + "," + b.V.RatString()
 }

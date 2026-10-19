@@ -32,11 +32,11 @@ func CertifyCarrierOccupancy(ctx context.Context, budget *proofbound.WorkBudget,
 	if n < 3 || n > 32 || len(top) != n {
 		return noEdges, noSeams, nil, false, nil
 	}
-	c, ok := lift(carrier[0])
+	c, ok := PointOf(carrier[0])
 	if !ok {
 		return noEdges, noSeams, nil, false, nil
 	}
-	d, ok := lift(carrier[1])
+	d, ok := PointOf(carrier[1])
 	if !ok {
 		return noEdges, noSeams, nil, false, nil
 	}
@@ -55,19 +55,19 @@ func CertifyCarrierOccupancy(ctx context.Context, budget *proofbound.WorkBudget,
 			return noEdges, noSeams, nil, false, nil
 		}
 		var valid bool
-		starts0[i], valid = lift(bottom[i].Start)
+		starts0[i], valid = PointOf(bottom[i].Start)
 		if !valid {
 			return noEdges, noSeams, nil, false, nil
 		}
-		ends0[i], valid = lift(bottom[i].End)
+		ends0[i], valid = PointOf(bottom[i].End)
 		if !valid {
 			return noEdges, noSeams, nil, false, nil
 		}
-		starts1[i], valid = lift(top[i].Start)
+		starts1[i], valid = PointOf(top[i].Start)
 		if !valid {
 			return noEdges, noSeams, nil, false, nil
 		}
-		ends1[i], valid = lift(top[i].End)
+		ends1[i], valid = PointOf(top[i].End)
 		if !valid {
 			return noEdges, noSeams, nil, false, nil
 		}

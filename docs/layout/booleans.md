@@ -21,13 +21,11 @@ The rules for rows live in `docs/layout.md`.
 | `loft_mirror_cylinder_chamfer.go` | Rewrites both exterior cap loops through one audited bored half and a reflected seam, and certifies translated upper source teeth and the reflected cap band. See loft-mirror-boolean design. |
 | `loft_cylinder_union.go` | Dispatches a coaxial cylinder and Loft tooth `Union`, builds each tooth's private proof body and verified mesh, and tags and builds the joined result. Tooth admission, separation and the joined shell's seam and volume proofs live in `internal/loftcylinder`. See loft-cylinder-boolean design. |
 | `loft_prism_union.go` | Reduces authenticated straight-source axial Lofts to prism operands for exact Sketch Union. See general-boolean design §12. |
-| `loft_contact_partition.go` | Certifies a private varying-line Loft/prism source partition and both Sketch cap correspondences. See its proof comments. |
-| `loft_contact_partition_cap.go` | Certifies each partition cap's fragments and cap correspondence. See its proof comments. |
+| `loft_contact_partition.go` | Certifies a private varying-line Loft/prism source partition and both Sketch cap correspondences. `internal/loftcontact` holds the partition record and certifies each cap. See its proof comments. |
 | `loft_contact_source_spans.go` | Reads authenticated line, circle, arc and fit-spline cap spans, ordered Sketch cap cells and Loft wall-cell source roles for the private curved-contact lane; it publishes no output proof. |
 | `loft_contact_quarter.go` | Relates certified quarter-arc cap crossings to original Loft wall sources, pairs witnesses with held seams, and checks a paired wall's source order, under private source and output budgets. |
 | `loft_contact_direct_shell.go` | Builds a bounded public Union shell from certified Loft/prism source and output proofs. See its proof comments. |
-| `loft_contact_output_proof.go` | Builds and audits a transient held shell for planar varying-line Loft/prism contact. See its proof comments. |
-| `loft_contact_output.go` | Reconstructs and tiles exact source cap cells, and holds the local exact/held vertex correspondence and boundary bounds for the transient Loft/prism shell. See its proof comments. |
+| `loft_contact_output_proof.go` | Builds and audits a transient held shell for planar varying-line Loft/prism contact. `internal/loftcontact` tiles its exact caps and holds the shell. See its proof comments. |
 | `loft_contact_volume_embedding.go` | Checks exact embedding and outward volume of the transient Loft/prism shell. See its proof comments. |
 | `loft_contact_volume_proof.go` | Computes a transient source/shell volume proof consumed by the admitted public varying line-only Loft/prism Union route, and checks the authenticated source against the shell. See its proof comments. |
 | `loft_cylinder_placement.go` | Rebuilds a common signed-axis cylinder/Loft join in local coordinates and places its audited shell. See loft-cylinder-boolean design. |

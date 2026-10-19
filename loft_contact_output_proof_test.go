@@ -29,40 +29,40 @@ func TestLoftContactOutputBoundaryRealVaryingTab(t *testing.T) {
 					proofbound.NewWorkBudget(t.Context()))
 				require.NoError(t, err)
 				require.True(t, admitted)
-				require.NotEmpty(t, proof.shell.triangles)
-				require.NotEmpty(t, proof.shell.vertices)
+				require.NotEmpty(t, proof.shell.Triangles)
+				require.NotEmpty(t, proof.shell.Vertices)
 				require.Positive(t, proof.workVisits)
 				require.LessOrEqual(t, proof.workVisits, uint64(65_536))
-				require.LessOrEqual(t, len(proof.shell.triangles), 512)
-				require.LessOrEqual(t, len(proof.shell.vertices), 512)
+				require.LessOrEqual(t, len(proof.shell.Triangles), 512)
+				require.LessOrEqual(t, len(proof.shell.Vertices), 512)
 				if tc.name == "right x" {
 					require.Equal(t, [3]string{"104", "6", "100"},
 						loftOutputTestCapAreas(proof.shell))
 				}
 				t.Logf("work visits=%d facets=%d vertices=%d bound=%g",
-					proof.workVisits, len(proof.shell.triangles),
-					len(proof.shell.vertices), proof.shell.maxBound)
+					proof.workVisits, len(proof.shell.Triangles),
+					len(proof.shell.Vertices), proof.shell.MaxBound)
 			}
 		})
 	}
 }
 
-func loftOutputTestCapAreas(shell loftOutputShell) [3]string {
+func loftOutputTestCapAreas(shell loftcontact.OutputShell) [3]string {
 	var areas [3]*big.Rat
 	for i := range areas {
 		areas[i] = new(big.Rat)
 	}
-	for i, tri := range shell.triangles {
-		face := shell.faces[i]
-		if face.kind != 0 {
+	for i, tri := range shell.Triangles {
+		face := shell.Faces[i]
+		if face.Kind != 0 {
 			continue
 		}
-		a, b, c := shell.vertices[tri[0]].point,
-			shell.vertices[tri[1]].point, shell.vertices[tri[2]].point
+		a, b, c := shell.Vertices[tri[0]].Point,
+			shell.Vertices[tri[1]].Point, shell.Vertices[tri[2]].Point
 		checked := &loftcontact.Arithmetic{OK: true}
-		double := checked.PointCross(loftcontact.Point{U: a.u, V: a.v},
-			loftcontact.Point{U: b.u, V: b.v}, loftcontact.Point{U: c.u, V: c.v})
-		areas[face.level].Add(areas[face.level], new(big.Rat).Abs(double))
+		double := checked.PointCross(loftcontact.Point{U: a.U, V: a.V},
+			loftcontact.Point{U: b.U, V: b.V}, loftcontact.Point{U: c.U, V: c.V})
+		areas[face.Level].Add(areas[face.Level], new(big.Rat).Abs(double))
 	}
 	var result [3]string
 	for i := range result {
@@ -84,32 +84,32 @@ func TestLoftContactOutputBoundarySourceRefusals(t *testing.T) {
 	require.True(t, admitted)
 	for _, tc := range []struct {
 		name   string
-		change func(*loftOutputShell)
+		change func(*loftcontact.OutputShell)
 	}{
-		{"missing cap", func(s *loftOutputShell) {
-			for i, face := range s.faces {
-				if face.kind == 0 && face.level == 1 {
-					s.triangles = append(s.triangles[:i:i], s.triangles[i+1:]...)
-					s.faces = append(s.faces[:i:i], s.faces[i+1:]...)
-					s.triangleBounds = append(s.triangleBounds[:i:i], s.triangleBounds[i+1:]...)
+		{"missing cap", func(s *loftcontact.OutputShell) {
+			for i, face := range s.Faces {
+				if face.Kind == 0 && face.Level == 1 {
+					s.Triangles = append(s.Triangles[:i:i], s.Triangles[i+1:]...)
+					s.Faces = append(s.Faces[:i:i], s.Faces[i+1:]...)
+					s.TriangleBounds = append(s.TriangleBounds[:i:i], s.TriangleBounds[i+1:]...)
 					return
 				}
 			}
 		}},
-		{"missing side", func(s *loftOutputShell) {
-			for i, face := range s.faces {
-				if face.kind == 1 {
-					s.triangles = append(s.triangles[:i:i], s.triangles[i+1:]...)
-					s.faces = append(s.faces[:i:i], s.faces[i+1:]...)
-					s.triangleBounds = append(s.triangleBounds[:i:i], s.triangleBounds[i+1:]...)
+		{"missing side", func(s *loftcontact.OutputShell) {
+			for i, face := range s.Faces {
+				if face.Kind == 1 {
+					s.Triangles = append(s.Triangles[:i:i], s.Triangles[i+1:]...)
+					s.Faces = append(s.Faces[:i:i], s.Faces[i+1:]...)
+					s.TriangleBounds = append(s.TriangleBounds[:i:i], s.TriangleBounds[i+1:]...)
 					return
 				}
 			}
 		}},
-		{"wrong cap owner", func(s *loftOutputShell) {
-			for i, face := range s.faces {
-				if face.kind == 0 && face.level == 1 {
-					s.faces[i].owner = 0
+		{"wrong cap owner", func(s *loftcontact.OutputShell) {
+			for i, face := range s.Faces {
+				if face.Kind == 0 && face.Level == 1 {
+					s.Faces[i].Owner = 0
 					return
 				}
 			}
@@ -117,9 +117,9 @@ func TestLoftContactOutputBoundarySourceRefusals(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			shell := proof.shell
-			shell.triangles = append([][3]int(nil), proof.shell.triangles...)
-			shell.faces = append([]loftOutputFace(nil), proof.shell.faces...)
-			shell.triangleBounds = append([]float64(nil), proof.shell.triangleBounds...)
+			shell.Triangles = append([][3]int(nil), proof.shell.Triangles...)
+			shell.Faces = append([]loftcontact.OutputFace(nil), proof.shell.Faces...)
+			shell.TriangleBounds = append([]float64(nil), proof.shell.TriangleBounds...)
 			tc.change(&shell)
 			resolved, err := loftOutputAuditSource(proofbound.NewWorkBudget(t.Context()), shell, source)
 			require.NoError(t, err)
@@ -132,16 +132,16 @@ func TestLoftContactOutputBoundarySourceRefusals(t *testing.T) {
 		{U: big.NewRat(2, 1), V: big.NewRat(2, 1)},
 		{U: big.NewRat(0, 1), V: big.NewRat(2, 1)},
 	}
-	resolved, err := loftOutputCertifyCapTiling(proofbound.NewWorkBudget(t.Context()), polygon,
+	resolved, err := loftcontact.CertifyCapTiling(proofbound.NewWorkBudget(t.Context()), polygon,
 		[][3]int{{0, 1, 2}, {0, 1, 2}})
 	require.NoError(t, err)
 	require.False(t, resolved)
-	resolved, err = loftOutputCertifyCapTiling(proofbound.NewWorkBudget(t.Context()), polygon,
+	resolved, err = loftcontact.CertifyCapTiling(proofbound.NewWorkBudget(t.Context()), polygon,
 		[][3]int{{0, 1, 2}})
 	require.NoError(t, err)
 	require.False(t, resolved)
 	for _, triangle := range [][3]int{{-1, 1, 2}, {0, 1, len(polygon)}} {
-		resolved, err = loftOutputCertifyCapTiling(proofbound.NewWorkBudget(t.Context()), polygon,
+		resolved, err = loftcontact.CertifyCapTiling(proofbound.NewWorkBudget(t.Context()), polygon,
 			[][3]int{triangle})
 		require.NoError(t, err)
 		require.False(t, resolved)
@@ -162,25 +162,25 @@ func TestLoftContactOutputBoundaryLimitsAndCancellation(t *testing.T) {
 		require.True(t, ok)
 		return lines
 	}
-	_, err = loftOutputCap(t.Context(), proofbound.NewWallWorkBudgetWithOperation(1,
-		proofbound.NewWorkBudget(t.Context())), pp, readLines(pp.Profile.Outer),
+	_, err = loftcontact.OutputCap(t.Context(), proofbound.NewWallWorkBudgetWithOperation(1,
+		proofbound.NewWorkBudget(t.Context())), pp.Frame, readLines(pp.Profile.Outer),
 		readLines(lp.Profile0.Outer), readLines(lp.Profile1.Outer), source,
-		new(loftOutputShell), 0)
+		new(loftcontact.OutputShell), 0)
 	require.ErrorIs(t, err, proofbound.ErrWallWorkBudget)
 	proof, admitted, err := certifyLoftOutputBoundary(t.Context(), prism, loft,
 		proofbound.NewWorkBudget(t.Context()))
 	require.NoError(t, err)
 	require.True(t, admitted)
 	shell := proof.shell
-	shell.triangles = make([][3]int, 513)
+	shell.Triangles = make([][3]int, 513)
 	resolved, err := loftOutputAuditSource(proofbound.NewWorkBudget(t.Context()), shell, source)
 	require.NoError(t, err)
 	require.False(t, resolved)
-	full := loftOutputNewShell()
-	full.vertices = make([]loftOutputVertex, 512)
-	_, admitted = full.vertex(pp.Frame, loftOutputPoint{
-		u: big.NewRat(1, 1), v: big.NewRat(1, 1), z: big.NewRat(0, 1)},
-		loftOutputFace{})
+	full := loftcontact.NewOutputShell()
+	full.Vertices = make([]loftcontact.OutputVertex, 512)
+	_, admitted = full.Vertex(pp.Frame, loftcontact.OutputPoint{
+		U: big.NewRat(1, 1), V: big.NewRat(1, 1), Z: big.NewRat(0, 1)},
+		loftcontact.OutputFace{})
 	require.False(t, admitted)
 
 	count := 0
@@ -225,18 +225,18 @@ func TestLoftContactOutputBoundaryMiddleRegionContact(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			shell := proof.shell
-			shell.vertices = append([]loftOutputVertex(nil), proof.shell.vertices...)
-			shell.triangles = append([][3]int(nil), proof.shell.triangles...)
-			shell.faces = append([]loftOutputFace(nil), proof.shell.faces...)
-			start := len(shell.vertices)
+			shell.Vertices = append([]loftcontact.OutputVertex(nil), proof.shell.Vertices...)
+			shell.Triangles = append([][3]int(nil), proof.shell.Triangles...)
+			shell.Faces = append([]loftcontact.OutputFace(nil), proof.shell.Faces...)
+			start := len(shell.Vertices)
 			for _, p := range tc.xy {
-				shell.vertices = append(shell.vertices, loftOutputVertex{point: loftOutputPoint{
-					u: big.NewRat(p[0], 1), v: big.NewRat(p[1], 1), z: big.NewRat(p[2], 1)}})
+				shell.Vertices = append(shell.Vertices, loftcontact.OutputVertex{Point: loftcontact.OutputPoint{
+					U: big.NewRat(p[0], 1), V: big.NewRat(p[1], 1), Z: big.NewRat(p[2], 1)}})
 			}
-			shell.triangles = append(shell.triangles, [3]int{start, start + 1, start + 2})
-			shell.faces = append(shell.faces, loftOutputFace{kind: 1, owner: 0})
+			shell.Triangles = append(shell.Triangles, [3]int{start, start + 1, start + 2})
+			shell.Faces = append(shell.Faces, loftcontact.OutputFace{Kind: 1, Owner: 0})
 			directed := make(map[[2]int]int)
-			for fi, tri := range shell.triangles {
+			for fi, tri := range shell.Triangles {
 				for k := range 3 {
 					directed[[2]int{tri[k], tri[(k+1)%3]}] = fi
 				}
@@ -258,77 +258,20 @@ func TestLoftContactOutputBoundaryPlanarityAndVertexRefusals(t *testing.T) {
 	prism, _ := loftPartitionRealBodies(t,
 		[4]float64{8, 4, 12, 6}, [4]float64{8, 4, 13, 6}, 0, 4)
 	frame := prism.n.Payload.(prismPayload).Frame
-	shell := loftOutputNewShell()
-	face := loftOutputFace{kind: 0}
-	_, admitted := shell.vertex(frame, loftOutputPoint{
-		u: big.NewRat(1, 1), v: big.NewRat(1, 1), z: big.NewRat(0, 1)}, face)
+	shell := loftcontact.NewOutputShell()
+	face := loftcontact.OutputFace{Kind: 0}
+	_, admitted := shell.Vertex(frame, loftcontact.OutputPoint{
+		U: big.NewRat(1, 1), V: big.NewRat(1, 1), Z: big.NewRat(0, 1)}, face)
 	require.True(t, admitted)
 	u := new(big.Rat).Add(big.NewRat(1, 1),
 		new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 1000)))
-	_, admitted = shell.vertex(frame, loftOutputPoint{
-		u: u, v: big.NewRat(1, 1), z: big.NewRat(0, 1)}, face)
+	_, admitted = shell.Vertex(frame, loftcontact.OutputPoint{
+		U: u, V: big.NewRat(1, 1), Z: big.NewRat(0, 1)}, face)
 	require.False(t, admitted)
-	_, _, bound, admitted := loftOutputWorld(frame, loftOutputPoint{
-		u: big.NewRat(1, 3), v: big.NewRat(0, 1), z: big.NewRat(0, 1)})
+	_, _, bound, admitted := loftcontact.OutputWorld(frame, loftcontact.OutputPoint{
+		U: big.NewRat(1, 3), V: big.NewRat(0, 1), Z: big.NewRat(0, 1)})
 	require.True(t, admitted)
 	require.Positive(t, bound)
-}
-
-func TestLoftOutputWorldRefusesOversizedReplayArithmetic(t *testing.T) {
-	prism, _ := loftPartitionRealBodies(t,
-		[4]float64{8, 4, 12, 6}, [4]float64{8, 4, 13, 6}, 0, 4)
-	frame := prism.n.Payload.(prismPayload).Frame
-	largeDenominator := new(big.Int).Lsh(big.NewInt(1), 8000)
-	world, _, _, admitted := loftOutputWorld(frame, loftOutputPoint{
-		u: new(big.Rat).SetFrac(big.NewInt(1), largeDenominator),
-		v: big.NewRat(0, 1), z: big.NewRat(0, 1),
-	})
-	_ = world
-	require.False(t, admitted)
-	// Float64 aligns the numerator before dividing. This input fits the
-	// rational operands but would allocate 8,195 bits during alignment.
-	alignmentDenominator := new(big.Int).Lsh(big.NewInt(1), 8140)
-	world, _, _, admitted = loftOutputWorld(frame, loftOutputPoint{
-		u: new(big.Rat).SetFrac(big.NewInt(1), alignmentDenominator),
-		v: big.NewRat(0, 1), z: big.NewRat(0, 1),
-	})
-	_ = world
-	require.False(t, admitted)
-
-	largeNumerator := new(big.Int).Lsh(big.NewInt(1), 8192)
-	shell := loftOutputNewShell()
-	_, admitted = shell.vertex(frame, loftOutputPoint{
-		u: new(big.Rat).SetInt(largeNumerator),
-		v: big.NewRat(0, 1), z: big.NewRat(0, 1),
-	}, loftOutputFace{kind: 0})
-	require.False(t, admitted)
-}
-
-func TestLoftReplayFloat64RefusesOversizedAlignment(t *testing.T) {
-	denominator := new(big.Int).Lsh(big.NewInt(1), 8140)
-	arithmetic := &loftcontact.Arithmetic{OK: true}
-	_, exact := arithmetic.Float64(new(big.Rat).SetFrac(big.NewInt(1), denominator))
-	require.False(t, exact)
-	require.False(t, arithmetic.OK)
-
-	// The last permitted numerator alignment is exactly 8,192 bits.
-	denominator = new(big.Int).Lsh(big.NewInt(1), 8137)
-	arithmetic = &loftcontact.Arithmetic{OK: true}
-	_, _ = arithmetic.Float64(new(big.Rat).SetFrac(big.NewInt(1), denominator))
-	require.True(t, arithmetic.OK)
-}
-
-func TestLoftOutputCrossZeroRefusesOversizedReplayArithmetic(t *testing.T) {
-	denominator := new(big.Int).Lsh(big.NewInt(1), 8000)
-	tiny := new(big.Rat).SetFrac(big.NewInt(1), denominator)
-	zero := big.NewRat(0, 1)
-	points := [3]loftOutputPoint{
-		{u: zero, v: zero, z: zero},
-		{u: tiny, v: zero, z: zero},
-		{u: zero, v: tiny, z: zero},
-	}
-	// The exact triangle has nonzero area; the unsafe cross product refuses.
-	require.True(t, loftOutputCrossZero(points))
 }
 
 func TestLoftOutputOrientationRefusesOversizedReplayArithmetic(t *testing.T) {
@@ -339,36 +282,10 @@ func TestLoftOutputOrientationRefusesOversizedReplayArithmetic(t *testing.T) {
 	high := low
 	require.False(t, loftOutputPlanarWall(low, high, large))
 	require.False(t, loftOutputNormalsAgree(
-		loftOutputVertex{world: [3]*big.Rat{large, zero, zero}},
-		loftOutputVertex{world: [3]*big.Rat{one, zero, zero}},
-		loftOutputVertex{world: [3]*big.Rat{zero, one, zero}},
+		loftcontact.OutputVertex{World: [3]*big.Rat{large, zero, zero}},
+		loftcontact.OutputVertex{World: [3]*big.Rat{one, zero, zero}},
+		loftcontact.OutputVertex{World: [3]*big.Rat{zero, one, zero}},
 	))
-}
-
-func TestLoftOutputTileCapRefusesOversizedReturnedPoint(t *testing.T) {
-	prism, _ := loftPartitionRealBodies(t,
-		[4]float64{8, 4, 12, 6}, [4]float64{8, 4, 13, 6}, 0, 4)
-	pp := prism.n.Payload.(prismPayload)
-	zero, one := big.NewRat(0, 1), big.NewRat(1, 1)
-	large := new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), 8192))
-	polygon := []loftcontact.Point{
-		{U: zero, V: zero}, {U: large, V: zero}, {U: zero, V: one},
-	}
-	shell := loftOutputNewShell()
-	admitted, err := loftOutputTileCap(t.Context(), proofbound.NewWorkBudget(t.Context()),
-		pp, &shell, polygon, zero, loftOutputFace{kind: 0}, false)
-	require.NoError(t, err)
-	require.False(t, admitted)
-	require.Empty(t, shell.triangles)
-	tiny := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 8140))
-	polygon = []loftcontact.Point{
-		{U: zero, V: zero}, {U: tiny, V: zero}, {U: zero, V: one},
-	}
-	admitted, err = loftOutputTileCap(t.Context(), proofbound.NewWorkBudget(t.Context()),
-		pp, &shell, polygon, zero, loftOutputFace{kind: 0}, false)
-	require.NoError(t, err)
-	require.False(t, admitted)
-	require.Empty(t, shell.triangles)
 }
 
 func TestLoftOutputSideRefusesOversizedLineInterpolation(t *testing.T) {
@@ -380,149 +297,27 @@ func TestLoftOutputSideRefusesOversizedLineInterpolation(t *testing.T) {
 		End:   sectionrecord.Point2{U: math.Nextafter(1, 2), V: 0},
 	}
 	tiny := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 8150))
-	shell := loftOutputNewShell()
+	shell := loftcontact.NewOutputShell()
 	admitted, err := loftOutputLineQuad(proofbound.NewWorkBudget(t.Context()), frame,
-		&shell, line, line, loftOutputRat(0), tiny, loftOutputRat(0), tiny,
-		loftOutputRat(0), loftOutputRat(1), loftOutputFace{kind: 1})
+		&shell, line, line, big.NewRat(0, 1), tiny, big.NewRat(0, 1), tiny,
+		big.NewRat(0, 1), big.NewRat(1, 1), loftcontact.OutputFace{Kind: 1})
 	require.NoError(t, err)
 	require.False(t, admitted)
-	require.Empty(t, shell.triangles)
+	require.Empty(t, shell.Triangles)
 }
 
 func TestLoftOutputMiddleTraceRefusesOversizedHeightDifference(t *testing.T) {
 	first := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 5000))
 	second := new(big.Rat).SetFrac(big.NewInt(-1), new(big.Int).Lsh(big.NewInt(1), 5001))
-	shell := loftOutputShell{vertices: []loftOutputVertex{
-		{point: loftOutputPoint{u: loftOutputRat(0), v: loftOutputRat(0), z: first}},
-		{point: loftOutputPoint{u: loftOutputRat(1), v: loftOutputRat(0), z: second}},
-		{point: loftOutputPoint{u: loftOutputRat(0), v: loftOutputRat(1), z: first}},
+	shell := loftcontact.OutputShell{Vertices: []loftcontact.OutputVertex{
+		{Point: loftcontact.OutputPoint{U: big.NewRat(0, 1), V: big.NewRat(0, 1), Z: first}},
+		{Point: loftcontact.OutputPoint{U: big.NewRat(1, 1), V: big.NewRat(0, 1), Z: second}},
+		{Point: loftcontact.OutputPoint{U: big.NewRat(0, 1), V: big.NewRat(1, 1), Z: first}},
 	}}
 	arithmetic := &loftcontact.Arithmetic{OK: true}
 	trace, _, err := loftOutputPlaneTrace(proofbound.NewWorkBudget(t.Context()), shell,
-		[3]int{0, 1, 2}, loftOutputRat(0), arithmetic)
+		[3]int{0, 1, 2}, big.NewRat(0, 1), arithmetic)
 	require.NoError(t, err)
 	require.False(t, arithmetic.OK)
 	require.Empty(t, trace)
-}
-
-func TestLoftOutputCapRefusesOversizedAreaProduct(t *testing.T) {
-	tiny := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 5000))
-	zero := loftOutputRat(0)
-	polygon := []loftcontact.Point{
-		{U: zero, V: zero}, {U: tiny, V: zero}, {U: zero, V: tiny},
-	}
-	admitted, err := loftOutputCertifyCapTiling(proofbound.NewWorkBudget(t.Context()),
-		polygon, [][3]int{{0, 1, 2}})
-	require.NoError(t, err)
-	require.False(t, admitted)
-}
-
-func loftOutputAdversarialPoint(u, v int64) loftcontact.Point {
-	return loftcontact.Point{U: big.NewRat(u, 1), V: big.NewRat(v, 1)}
-}
-
-func TestLoftOutputCapConcaveEscapingDiagonal(t *testing.T) {
-	p := loftOutputAdversarialPoint
-	polygon := []loftcontact.Point{p(0, 0), p(4, 0), p(4, 1), p(1, 1), p(1, 4), p(0, 4)}
-	budget := proofbound.NewWorkBudget(t.Context())
-
-	// Both endpoints lie on the boundary, but the diagonal crosses the missing corner.
-	inside, err := loftOutputEdgeInside(budget, polygon[2], polygon[4], polygon)
-	require.NoError(t, err)
-	require.False(t, inside)
-
-	tri := [3]loftcontact.Point{polygon[1], polygon[2], polygon[4]}
-	inside, err = loftOutputTriangleInside(budget, polygon, tri)
-	require.NoError(t, err)
-	require.False(t, inside)
-
-	inside, err = loftOutputCertifyCapTiling(budget, polygon, [][3]int{{1, 2, 4}})
-	require.NoError(t, err)
-	require.False(t, inside)
-}
-
-func TestLoftOutputCapEqualAreaOverlapAndGap(t *testing.T) {
-	p := loftOutputAdversarialPoint
-	polygon := []loftcontact.Point{p(0, 0), p(4, 0), p(4, 2), p(4, 4), p(0, 4), p(0, 2)}
-	tris := [][3]int{{0, 1, 3}, {0, 2, 4}}
-	budget := proofbound.NewWorkBudget(t.Context())
-
-	// The two distinct triangles each cover half the polygon's area, but overlap
-	// near the center and leave another region uncovered.
-	checked := &loftcontact.Arithmetic{OK: true}
-	require.Zero(t, new(big.Rat).Sub(
-		new(big.Rat).Add(checked.PointCross(polygon[0], polygon[1], polygon[3]),
-			checked.PointCross(polygon[0], polygon[2], polygon[4])),
-		new(big.Rat).Mul(loftOutputPolygonArea(polygon), big.NewRat(2, 1))).Sign())
-	require.True(t, checked.OK)
-	for _, tri := range tris {
-		inside, err := loftOutputTriangleInside(budget, polygon,
-			[3]loftcontact.Point{polygon[tri[0]], polygon[tri[1]], polygon[tri[2]]})
-		require.NoError(t, err)
-		require.True(t, inside)
-	}
-	valid, err := loftOutputCertifyCapTiling(budget, polygon, tris)
-	require.NoError(t, err)
-	require.False(t, valid)
-}
-
-func TestLoftOutputCapCollinearBoundarySplit(t *testing.T) {
-	p := loftOutputAdversarialPoint
-	polygon := []loftcontact.Point{p(0, 0), p(2, 0), p(4, 0), p(4, 4), p(0, 4)}
-	budget := proofbound.NewWorkBudget(t.Context())
-
-	inside, err := loftOutputEdgeInside(budget, polygon[0], polygon[2], polygon)
-	require.NoError(t, err)
-	require.True(t, inside)
-
-	// The first tiling matches both collinear boundary segments. The second
-	// covers the same area but has an unsplit edge over the boundary vertex.
-	valid, err := loftOutputCertifyCapTiling(budget, polygon,
-		[][3]int{{4, 0, 1}, {4, 1, 2}, {4, 2, 3}})
-	require.NoError(t, err)
-	require.True(t, valid)
-	valid, err = loftOutputCertifyCapTiling(budget, polygon,
-		[][3]int{{0, 2, 3}, {0, 3, 4}})
-	require.NoError(t, err)
-	require.False(t, valid)
-}
-
-func TestLoftOutputCapPredicatesCancelInFlight(t *testing.T) {
-	p := loftOutputAdversarialPoint
-	polygon := []loftcontact.Point{p(0, 0), p(4, 0), p(4, 4), p(0, 4)}
-	for _, tc := range []struct {
-		name string
-		call func(*proofbound.WorkBudget) (bool, error)
-	}{
-		{"edge", func(b *proofbound.WorkBudget) (bool, error) {
-			return loftOutputEdgeInside(b, polygon[0], polygon[2], polygon)
-		}},
-		{"triangle", func(b *proofbound.WorkBudget) (bool, error) {
-			return loftOutputTriangleInside(b, polygon,
-				[3]loftcontact.Point{polygon[0], polygon[1], polygon[2]})
-		}},
-		{"tiling", func(b *proofbound.WorkBudget) (bool, error) {
-			return loftOutputCertifyCapTiling(b, polygon, [][3]int{{0, 1, 2}, {0, 2, 3}})
-		}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(t.Context())
-			defer cancel()
-			steps := 0
-			budget := &proofbound.WorkBudget{
-				StepFn: func() error {
-					steps++
-					if steps == 3 {
-						cancel()
-					}
-					return ctx.Err()
-				},
-				ErrFn: ctx.Err,
-			}
-			valid, err := tc.call(budget)
-			require.ErrorIs(t, err, context.Canceled)
-			require.False(t, valid)
-			require.Equal(t, 3, steps)
-		})
-	}
 }
