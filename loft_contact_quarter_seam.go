@@ -39,16 +39,16 @@ func quarterRootBracketFits(xlo, xhi, ylo, yhi, square *big.Rat) bool {
 	return quarterRootBracketFitsAtY(xlo, xhi, ylo, yhi, big.NewRat(1, 1), square)
 }
 
-// loftQuarterSourceHeld is an inactive private proof of one selected seam.
-// It does not certify the paired seam, complete shell, volume, or public Union.
-func loftQuarterSourceHeld(ctx context.Context, first, second *Body, carrierY int,
+// loftQuarterSourceHeldSelected is an inactive proof of selected arc seams.
+// It does not certify a complete shell, volume, or public Union.
+func loftQuarterSourceHeldSelected(ctx context.Context, first, second *Body, selectedMask uint8,
 	sourceOperation, outputOperation *proofbound.WorkBudget) (
-	loftcontact.QuarterSourceHeldSeam, bool, error) {
-	var no loftcontact.QuarterSourceHeldSeam
+	loftcontact.QuarterSourceHeldPair, bool, error) {
+	var no loftcontact.QuarterSourceHeldPair
 	if err := ctx.Err(); err != nil {
 		return no, false, err
 	}
-	if (carrierY != 1 && carrierY != 3) || sourceOperation == nil || outputOperation == nil {
+	if (selectedMask == 0 || selectedMask > 3) || sourceOperation == nil || outputOperation == nil {
 		return no, false, nil
 	}
 	withContext := func(operation *proofbound.WorkBudget) *proofbound.WorkBudget {
@@ -92,27 +92,37 @@ func loftQuarterSourceHeld(ctx context.Context, first, second *Body, carrierY in
 			return no, false, nil
 		}
 	}
-	selectedLine := wall.lower
-	wantSquares := [2]*big.Rat{big.NewRat(24, 1), big.NewRat(117, 4)}
-	if carrierY == 3 {
-		selectedLine = wall.upper
-		wantSquares = [2]*big.Rat{big.NewRat(16, 1), big.NewRat(85, 4)}
+	if wall.lower == wall.upper {
+		return no, false, nil
 	}
-	for capIndex, wantQ := range wantSquares {
-		found := false
-		for _, event := range envelope.order.quarter[capIndex] {
+	wantSquares := [2][2]*big.Rat{
+		{big.NewRat(24, 1), big.NewRat(16, 1)},
+		{big.NewRat(117, 4), big.NewRat(85, 4)},
+	}
+	for capIndex, events := range envelope.order.quarter {
+		var found [2]bool
+		for _, event := range events {
 			if err := sourceBudget.Step(); err != nil {
 				return no, false, err
 			}
-			if event.line.segment != selectedLine {
+			index := -1
+			switch event.line.segment {
+			case wall.lower:
+				index = 0
+			case wall.upper:
+				index = 1
+			}
+			if index < 0 || selectedMask&uint8(1<<index) == 0 {
 				continue
 			}
-			if found || event.line.body != wall.prism ||
+			if found[index] || event.line.body != wall.prism ||
 				event.arc.body != wall.loft || event.arc.segment != wall.arcSegment ||
 				event.appearances == 0 {
 				return no, false, nil
 			}
-			found = true
+			found[index] = true
+			carrierY := 1 + 2*index
+			wantQ := wantSquares[capIndex][index]
 			line, isLine := event.line.curve.(sectionrecord.LineSeg)
 			if !isLine || line.Start.V != float64(carrierY) || line.End.V != float64(carrierY) ||
 				!((line.Start.U == 2 && line.End.U == 6) ||
@@ -142,21 +152,17 @@ func loftQuarterSourceHeld(ctx context.Context, first, second *Body, carrierY in
 				return no, false, nil
 			}
 		}
-		if !found {
-			return no, false, nil
+		for index := range found {
+			if selectedMask&uint8(1<<index) != 0 && !found[index] {
+				return no, false, nil
+			}
 		}
 	}
 	if err := sourceBudget.Err(); err != nil {
 		return no, false, err
 	}
-	var result loftcontact.QuarterSourceHeldSeam
-	if carrierY == 1 {
-		result, accepted, err = loftcontact.CertifyQuarterSourceHeldY1(ctx,
-			outputBudget, &wall.prism.n, &wall.loft.n, wall.arcSegment, wall.radius)
-	} else {
-		result, accepted, err = loftcontact.CertifyQuarterSourceHeldY3(ctx,
-			outputBudget, &wall.prism.n, &wall.loft.n, wall.arcSegment, wall.radius)
-	}
+	result, accepted, err := loftcontact.CertifyQuarterSourceHeldSelected(ctx,
+		outputBudget, &wall.prism.n, &wall.loft.n, wall.arcSegment, wall.radius, selectedMask)
 	if err != nil || !accepted {
 		return no, false, err
 	}
@@ -175,11 +181,23 @@ func loftQuarterSourceHeld(ctx context.Context, first, second *Body, carrierY in
 func loftQuarterSourceHeldY1(ctx context.Context, first, second *Body,
 	sourceOperation, outputOperation *proofbound.WorkBudget) (
 	loftcontact.QuarterSourceHeldY1, bool, error) {
-	return loftQuarterSourceHeld(ctx, first, second, 1, sourceOperation, outputOperation)
+	pair, accepted, err := loftQuarterSourceHeldSelected(ctx, first, second, 1,
+		sourceOperation, outputOperation)
+	return pair.Y1, accepted, err
 }
 
 func loftQuarterSourceHeldY3(ctx context.Context, first, second *Body,
 	sourceOperation, outputOperation *proofbound.WorkBudget) (
 	loftcontact.QuarterSourceHeldY3, bool, error) {
-	return loftQuarterSourceHeld(ctx, first, second, 3, sourceOperation, outputOperation)
+	pair, accepted, err := loftQuarterSourceHeldSelected(ctx, first, second, 2,
+		sourceOperation, outputOperation)
+	return pair.Y3, accepted, err
+}
+
+// loftQuarterSourceHeldPair certifies only the two selected arc-wall seams.
+func loftQuarterSourceHeldPair(ctx context.Context, first, second *Body,
+	sourceOperation, outputOperation *proofbound.WorkBudget) (
+	loftcontact.QuarterSourceHeldPair, bool, error) {
+	return loftQuarterSourceHeldSelected(ctx, first, second, 3,
+		sourceOperation, outputOperation)
 }
