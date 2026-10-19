@@ -1408,8 +1408,8 @@ passes through has one.
 
 `contact_sweep_rotation.go`'s `rotationalPairSweep` already carries the general machinery for a rigid
 drift: `prepareRotationalSweepPath` builds the ideal path and travel bound, `refine`
-(`contact_sweep_rotation_depart.go`) is contact-sweep
-§5's left-first dyadic search, `intervalClear` is §4.3's `g_l + g_r > T` certificate, and `roundedAt`
+(`contact_sweep_rotation_depart.go`) is contact-sweep §5's left-first dyadic search, `intervalClear` is
+§4.3's `g_l + g_r > T` certificate, and `planarsweep.BodyPath.RoundedBox` (`internal/planarsweep/`)
 bounds the float-to-ideal pose deviation from the body's exact corners. It is limited to source boxes by
 its eight-corner inputs. `contact_sweep_planar.go` generalizes it to any §9 body: the exact vertex set
 replaces the corners, the per-sample relation and gap come from §9.1 at the rounded pose, and the
@@ -1908,7 +1908,7 @@ translation, such that
 - every vertex of `M` lies on or in front of the plane, the contact and lifted sets being §10.2's and
   §10.5's as today;
 - the COLUMN TEST holds over the horizon: with `B(f)` the coordinate box of every `M` vertex's ideal path
-  over `[0, f]` (`cornerSpan`), less `S`'s own translation, and `P` the projection along `n` onto the
+  over `[0, f]` (`BodyPath.CornerSpan`), less `S`'s own translation, and `P` the projection along `n` onto the
   plane's frame (the axis of `n`'s largest component dropped, §9.4's frame), every triangle of `S` with
   a vertex strictly in front of the plane has `P(triangle)` strictly apart from `P(B(f))`, decided by
   the separating axes of the projected box and the triangle's three edge normals in exact rational
@@ -2998,7 +2998,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 
 ### PR 20f (Phase 3) — the transfer charge
 
-- Delivers §10.4's replay transfer charge `‖R_r − R_i‖_F·δ` in `replayDeviation`.
+- Delivers §10.4's replay transfer charge `‖R_r − R_i‖_F·δ` in `planarsweep.BodyPath.ReplayDeviation`.
 - Files: `contact_sweep_rotation.go`, `contact_sweep_replay.go`.
 - Test (root): `contact_band_internal_test.go` gains `TestReplayTransferChargeIsTheBasisDifference`: PR 18's
   knob pair (`δ` about `4e-4 mm`) resting at a held gap `1.5·δ` on a translating path replays every
@@ -3008,9 +3008,9 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   in the test, and lies below `2⁻⁴⁰·δ`. Leg shown to fail: the charge zeroed, the rotating fixture's
   charge reads zero.
 - Depends on: PR 18.
-- Shipped. `replayDeviation` calls `motionbound.SweepTransferCharge` and returns its charge, so replay
-  (`contact_sweep_replay.go`) and the rotating bracket's
-  narrowing read the same figure. `apitest/contact_band_test.go`'s knob falling onto the floor replays its
+- Shipped. `planarsweep.BodyPath.ReplayDeviation` calls `motionbound.SweepTransferCharge` and returns
+  its charge, so replay (`contact_sweep_replay.go`) and the rotating bracket's narrowing read the same
+  figure. `apitest/contact_band_test.go`'s knob falling onto the floor replays its
   bracket's left edge, whose proven gap is far under `δ`.
 
 ### PR 20g (Phase 3) — the witness torque

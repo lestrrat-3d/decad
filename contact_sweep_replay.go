@@ -96,7 +96,7 @@ func (r *SweepReport) HasAffineReplayProof() bool {
 		}
 	}
 	return r.replay.outcome == SweepPersistentTouch && r.replay.track != nil &&
-		r.replay.rotation[0].path.Drift == nil && r.replay.rotation[1].path.Drift == nil
+		r.replay.rotation[0].Path.Drift == nil && r.replay.rotation[1].Path.Drift == nil
 }
 
 // CertifiedPosesAt evaluates the recorded paths at elapsed time and checks
@@ -111,7 +111,7 @@ func (r *SweepReport) CertifiedPosesAt(elapsed units.Value) (r3.Transform, r3.Tr
 	t, ok := sweeppath.ExactBaseValue(elapsed)
 	duration := r.replay.pa.Duration
 	if r.replay.rotation != nil {
-		duration = r.replay.rotation[0].path.Duration
+		duration = r.replay.rotation[0].Path.Duration
 	}
 	if !ok || t.Sign() < 0 || t.Cmp(duration) > 0 {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: replay time is outside the sweep", ErrDegenerate)
@@ -417,12 +417,13 @@ func (r *SweepReport) certifiedRotationalPosesAtFraction(f *big.Rat) (
 	for i := range paths {
 		path := paths[i]
 		var err error
-		pose[i], err = path.path.RoundedPoseAt(f)
+		pose[i], err = path.Path.RoundedPoseAt(f)
 		if err != nil {
 			return r3.Transform{}, r3.Transform{}, err
 		}
 		var ok bool
-		box[i], deviation[i], ok = path.roundedAt(pose[i], f)
+		box[i].OrientedBox, deviation[i], ok = path.RoundedBox(pose[i], f)
+		box[i].faces = path.startBox.faces
 		if !ok {
 			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rotating replay pose has no finite error bound", ErrUnsupported)
 		}
@@ -466,7 +467,7 @@ func (r *SweepReport) certifiedOrientedTouchAtFraction(f *big.Rat, a, b oriented
 	track := r.replay.track
 	if track == nil || track.orientedA == nil || track.orientedB == nil ||
 		f.Cmp(track.start) < 0 || f.Cmp(track.end) > 0 ||
-		r.replay.rotation[0].path.Drift != nil || r.replay.rotation[1].path.Drift != nil {
+		r.replay.rotation[0].Path.Drift != nil || r.replay.rotation[1].Path.Drift != nil {
 		return false
 	}
 	report := &reportvocab.ContactReport{Request: r.replay.request}
@@ -625,11 +626,11 @@ func (r *SweepReport) certifiedPlanarPosesAtFraction(f *big.Rat) (r3.Transform, 
 	var poses [2]r3.Transform
 	deviation, displacement := new(big.Rat), new(big.Rat)
 	for i, path := range p.rotation {
-		pose, err := path.path.RoundedPoseAt(f)
+		pose, err := path.Path.RoundedPoseAt(f)
 		if err != nil {
 			return r3.Transform{}, r3.Transform{}, err
 		}
-		bound, moved, ok := path.replayDeviation(pose, f)
+		bound, moved, ok := path.ReplayDeviation(pose, f)
 		if !ok {
 			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: planar replay pose has no finite error bound", ErrUnsupported)
 		}

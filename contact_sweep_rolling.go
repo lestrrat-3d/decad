@@ -128,18 +128,18 @@ func (d *Document) sweepRollingPair(ctx context.Context, a, b *Body,
 		return nil, false, nil
 	}
 	preparedM, okM := prepareRollingSweepPath(bodyM, pathM, &start)
-	preparedS, okS := preparePlanarSweepPath(bodyS, pathS, &solid, delta)
+	preparedS, okS := planarsweep.PreparePlanarPath(&bodyS.n, pathS, &solid, delta)
 	if !okM || !okS {
 		report.Outcome, report.Cause = SweepUndecided, SweepMissingBound
 		report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), pa.Duration),
 			To: sweepInstant(big.NewRat(1, 1), pa.Duration)}
 		return report, true, nil
 	}
-	attachSweepMemos(&preparedM, &preparedS)
-	defer closeSweepMemos(&preparedM, &preparedS)
+	planarsweep.AttachMemos(&preparedM.BodyPath, &preparedS)
+	defer planarsweep.CloseMemos(&preparedM.BodyPath, &preparedS)
 	run := &rollingPairSweep{doc: d, m: m, s: 1 - m, cylinder: start, req: req, report: report,
 		resolution: resolution}
-	run.paths[run.m], run.paths[run.s] = preparedM, preparedS
+	run.paths[run.m], run.paths[run.s] = preparedM, rotationalSweepPath{BodyPath: preparedS, body: bodyS}
 	result, err := run.execute(ctx)
 	if err != nil || result == nil {
 		return result, true, err
@@ -156,10 +156,11 @@ func (d *Document) sweepRollingPair(ctx context.Context, a, b *Body,
 // at the path's From as start points.
 func prepareRollingSweepPath(body *Body, path affinePairPath,
 	source *placedCylinder) (rotationalSweepPath, bool) {
-	prepared, ok := prepareSweepMotion(body, path)
+	motion, ok := planarsweep.PrepareBodyPath(&body.n, path)
 	if !ok {
 		return rotationalSweepPath{}, false
 	}
+	prepared := rotationalSweepPath{BodyPath: motion, body: body}
 	for i := range 8 {
 		var corner proofarith.DyV3
 		for k := range 3 {
@@ -168,9 +169,9 @@ func prepareRollingSweepPath(body *Body, path affinePairPath,
 				corner[k] = source.BoxHi[k]
 			}
 		}
-		prepared.sourcePoints = append(prepared.sourcePoints, corner)
+		prepared.SourcePoints = append(prepared.SourcePoints, corner)
 	}
-	prepared.startPoints = append(prepared.startPoints, source.Centers[:]...)
+	prepared.StartPoints = append(prepared.StartPoints, source.Centers[:]...)
 	return prepared, true
 }
 
@@ -230,18 +231,18 @@ func (r *rollingPairSweep) execute(ctx context.Context) (*SweepReport, error) {
 }
 
 // sample reads the start relation through ContactPair at both From poses. At
-// the start both rounded poses are the ideal ones, which pointDeviation
+// the start both rounded poses are the ideal ones, which PointDeviation
 // confirms before the relation transfers whole.
 func (r *rollingPairSweep) sample(ctx context.Context) (*SweepSample, error) {
 	zero := new(big.Rat)
 	var poses [2]r3.Transform
 	exact := true
 	for i := range r.paths {
-		pose, err := r.paths[i].path.RoundedPoseAt(zero)
+		pose, err := r.paths[i].Path.RoundedPoseAt(zero)
 		if err != nil {
 			return nil, err
 		}
-		_, bound, ok, _ := r.paths[i].pointDeviation(pose, zero, noSweepPoll)
+		_, bound, ok, _ := r.paths[i].PointDeviation(pose, zero, planarsweep.NoPoll)
 		exact = exact && ok && bound == 0
 		poses[i] = pose
 	}
@@ -250,7 +251,7 @@ func (r *rollingPairSweep) sample(ctx context.Context) (*SweepSample, error) {
 	if err != nil {
 		return nil, err
 	}
-	at := sweepInstant(zero, r.paths[0].path.Duration)
+	at := sweepInstant(zero, r.paths[0].Path.Duration)
 	event := SweepEvent{At: at, Relation: ContactUndecided, Reason: contact.Reason}
 	if exact {
 		event.Relation, event.Gap, event.Overlap = contact.Relation, contact.Gap, contact.Overlap
@@ -264,7 +265,7 @@ func (r *rollingPairSweep) sample(ctx context.Context) (*SweepSample, error) {
 }
 
 func (r *rollingPairSweep) undecided(from, to *big.Rat, cause SweepCause) *SweepReport {
-	duration := r.paths[0].path.Duration
+	duration := r.paths[0].Path.Duration
 	r.report.Outcome, r.report.Cause = SweepUndecided, cause
 	r.report.Unresolved = &SweepInterval{From: sweepInstant(from, duration), To: sweepInstant(to, duration)}
 	return r.report
@@ -285,14 +286,14 @@ func (r *rollingPairSweep) undecided(from, to *big.Rat, cause SweepCause) *Sweep
 type rollingCoefficients = planarsweep.RollingCoefficients
 
 func (r *rollingPairSweep) coefficients(support placedruling.Plane) (rollingCoefficients, bool) {
-	motionM, okM := planarsweep.MotionOf(planarSupportPathOf(&r.paths[r.m]).Motion)
-	motionS, okS := planarsweep.MotionOf(planarSupportPathOf(&r.paths[r.s]).Motion)
+	motionM, okM := planarsweep.MotionOf(r.paths[r.m].SupportPath().Motion)
+	motionS, okS := planarsweep.MotionOf(r.paths[r.s].SupportPath().Motion)
 	if !okM || !okS || motionS.Rotating || proofarith.DyCmp(r.cylinder.Gram, rulingGramLimit) > 0 {
 		return rollingCoefficients{}, false
 	}
 	return planarsweep.RollingCoefficientsOf(planarsweep.RollingInput{
 		Cylinder: r.cylinder.Cylinder, Moving: motionM, Support: motionS,
-		Points: r.paths[r.m].startPoints, Normal: support.Normal,
+		Points: r.paths[r.m].StartPoints, Normal: support.Normal,
 		Heights: support.Heights, Alpha: support.Alpha,
 	})
 }
@@ -307,7 +308,7 @@ func (r *rollingPairSweep) coefficients(support placedruling.Plane) (rollingCoef
 func (r *rollingPairSweep) band(ctx context.Context, first *SweepSample) (*SweepContactTrack, bool, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	S := &r.paths[r.s]
-	support, ok, err := placedruling.Support(r.cylinder.Cylinder, S.solid, S.startPoints, budget.Step)
+	support, ok, err := placedruling.Support(r.cylinder.Cylinder, S.Solid, S.StartPoints, budget.Step)
 	if err != nil || !ok {
 		return nil, false, err
 	}
@@ -315,7 +316,7 @@ func (r *rollingPairSweep) band(ctx context.Context, first *SweepSample) (*Sweep
 	if !ok {
 		return nil, false, nil
 	}
-	duration := r.paths[r.m].path.Duration
+	duration := r.paths[r.m].Path.Duration
 	box, ok := planarsweep.RollingColumnBoxOf(r.cylinder.Cylinder)
 	if !ok {
 		return nil, false, nil
@@ -367,19 +368,19 @@ func (r *rollingPairSweep) column(support placedruling.Plane, box rollingColumnB
 	}
 	zero := new(big.Rat)
 	path := r.paths[r.m]
-	centers := path.cornerSpan(zero, f)
-	path.startPoints = box.Corners
-	corners := path.cornerSpan(zero, f)
+	centers := path.CornerSpan(zero, f)
+	path.StartPoints = box.Corners
+	corners := path.CornerSpan(zero, f)
 	S := &r.paths[r.s]
-	lo, hi := planarsweep.RollingColumnBounds(centers, corners, box.Reach, S.path.Delta, f)
-	solid := planar.PlanarSolid{Verts: S.startPoints, Tris: S.solid.Tris}
-	return planar.PlanarColumnApart(&solid, support.Normal, S.startPoints[support.Origin], lo, hi, poll)
+	lo, hi := planarsweep.RollingColumnBounds(centers, corners, box.Reach, S.Path.Delta, f)
+	solid := planar.PlanarSolid{Verts: S.StartPoints, Tris: S.Solid.Tris}
+	return planar.PlanarColumnApart(&solid, support.Normal, S.StartPoints[support.Origin], lo, hi, poll)
 }
 
 func (r *rollingPairSweep) footInside(support placedruling.Plane, f, growth *big.Rat) bool {
 	S := &r.paths[r.s]
-	spans := r.paths[r.m].cornerSpan(new(big.Rat), f)
-	lo, hi := planarsweep.RollingFootBounds(spans, S.path.Delta, support.Axis, f, growth)
+	spans := r.paths[r.m].CornerSpan(new(big.Rat), f)
+	lo, hi := planarsweep.RollingFootBounds(spans, S.Path.Delta, support.Axis, f, growth)
 	return support.Face.HoldsBox(lo, hi)
 }
 
@@ -418,7 +419,7 @@ func (r *rollingPairSweep) track(first *SweepSample, support placedruling.Plane,
 	// The ends publish in the exact coordinate order of their start rims, as
 	// ContactPair publishes the ruling; a rigid motion keeps that pairing.
 	ends := r.cylinder.source
-	starts := [2]proofarith.DyV3{M.startPoints[0], M.startPoints[1]}
+	starts := [2]proofarith.DyV3{M.StartPoints[0], M.StartPoints[1]}
 	if ordered := clearance.OrderedRulingEnds(starts); !proofarith.DvEqual(ordered[0], starts[0]) {
 		ends = [2]proofarith.DyV3{ends[1], ends[0]}
 	}
@@ -434,7 +435,7 @@ func (r *rollingPairSweep) track(first *SweepSample, support placedruling.Plane,
 		proof.band = &Measurement{Value: units.Millimeters(value), Bound: units.Millimeters(bound),
 			Exactness: exactnessFromBound(bound)}
 	}
-	track := &SweepContactTrack{start: new(big.Rat), end: new(big.Rat).Set(end), duration: M.path.Duration,
+	track := &SweepContactTrack{start: new(big.Rat), end: new(big.Rat).Set(end), duration: M.Path.Duration,
 		request: r.req.ContactRequest, normal: normal, rolling: proof, pointCount: len(ends)}
 	track.features[r.m], track.features[r.s] = contactFeatureToInternal(featureM), contactFeatureToInternal(featureS)
 	// A track whose start manifold is refused is not published; the refusal
@@ -448,7 +449,7 @@ func (r *rollingPairSweep) track(first *SweepSample, support placedruling.Plane,
 // depthThrough is the band depth over [0, f]: every coefficient's term is
 // nondecreasing in time, so their value at f bounds every earlier instant.
 func (p *rollingTrackProof) depthThrough(f *big.Rat) *big.Rat {
-	depth, _ := p.coefficients.At(new(big.Rat).Mul(f, p.paths[p.m].path.Duration))
+	depth, _ := p.coefficients.At(new(big.Rat).Mul(f, p.paths[p.m].Path.Duration))
 	return depth
 }
 
@@ -460,14 +461,14 @@ func (p *rollingTrackProof) rounded(f *big.Rat) ([2]r3.Transform, [2]*big.Rat, [
 	var eta [2]*big.Rat
 	var vertsS []proofarith.DyV3
 	for i := range p.paths {
-		pose, err := p.paths[i].path.RoundedPoseAt(f)
+		pose, err := p.paths[i].Path.RoundedPoseAt(f)
 		if err != nil {
 			return poses, eta, nil, false
 		}
-		if i == p.s && pose.Basis() != p.paths[i].path.From.Basis() {
+		if i == p.s && pose.Basis() != p.paths[i].Path.From.Basis() {
 			return poses, eta, nil, false
 		}
-		points, bound, ok, _ := p.paths[i].pointDeviation(pose, f, noSweepPoll)
+		points, bound, ok, _ := p.paths[i].PointDeviation(pose, f, planarsweep.NoPoll)
 		if !ok {
 			return poses, eta, nil, false
 		}
@@ -495,7 +496,7 @@ func (p *rollingTrackProof) manifoldAt(f *big.Rat, req reportvocab.ContactReques
 	}
 	n := planarsweep.RatOfDyV3(p.normal)
 	q := planarsweep.RatOfDyV3(vertsS[p.origin])
-	_, lateral := p.coefficients.At(new(big.Rat).Mul(f, p.paths[p.m].path.Duration))
+	_, lateral := p.coefficients.At(new(big.Rat).Mul(f, p.paths[p.m].Path.Duration))
 	separation := Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(p.depthUp),
 		Exactness: exactnessFromBound(p.depthUp)}
 	points := make([]ContactPoint, 0, len(p.ends))
