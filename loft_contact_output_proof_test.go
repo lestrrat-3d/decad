@@ -74,7 +74,7 @@ func TestLoftContactOutputBoundarySourceRefusals(t *testing.T) {
 	prism, loft := loftPartitionRealBodies(t,
 		[4]float64{8, 4, 12, 6}, [4]float64{8, 4, 13, 6}, 0, 4)
 	source, admitted, err := certifyLoftSourcePartition(t.Context(), prism, loft,
-		proofbound.NewWorkBudget(t.Context()))
+		proofbound.NewWorkBudget(t.Context()), false)
 	require.NoError(t, err)
 	require.True(t, admitted)
 	proof, admitted, err := certifyLoftOutputBoundary(t.Context(), prism, loft,
@@ -152,7 +152,7 @@ func TestLoftContactOutputBoundaryLimitsAndCancellation(t *testing.T) {
 		[4]float64{8, 4, 12, 6}, [4]float64{8, 4, 13, 6}, 0, 4)
 	pp, lp := prism.n.Payload.(prismPayload), loft.n.Payload.(loftPayload)
 	source, admitted, err := certifyLoftSourcePartition(t.Context(), prism, loft,
-		proofbound.NewWorkBudget(t.Context()))
+		proofbound.NewWorkBudget(t.Context()), false)
 	require.NoError(t, err)
 	require.True(t, admitted)
 	readLines := func(loop sectionrecord.LoopRecord) []sectionrecord.LineSeg {
@@ -184,7 +184,7 @@ func TestLoftContactOutputBoundaryLimitsAndCancellation(t *testing.T) {
 
 	count := 0
 	probe := &proofbound.WorkBudget{StepFn: func() error { count++; return nil }, ErrFn: func() error { return nil }}
-	_, admitted, err = certifyLoftSourcePartition(t.Context(), prism, loft, probe)
+	_, admitted, err = certifyLoftSourcePartition(t.Context(), prism, loft, probe, false)
 	require.NoError(t, err)
 	require.True(t, admitted)
 	ctx, cancel := context.WithCancel(t.Context())

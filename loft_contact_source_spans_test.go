@@ -219,7 +219,7 @@ func TestLoftCurvedSourceCapsRealIndependentWedgeRefusesWithoutBoundaryProof(t *
 	}{{loftOperandPrismFirst, prism, loft}, {loftOperandLoftFirst, loft, prism}} {
 		t.Run(tc.name, func(t *testing.T) {
 			source, admitted, sourceErr := certifyLoftSourcePartition(t.Context(),
-				tc.first, tc.second, proofbound.NewWorkBudget(t.Context()))
+				tc.first, tc.second, proofbound.NewWorkBudget(t.Context()), false)
 			require.NoError(t, sourceErr)
 			require.False(t, admitted)
 			require.Zero(t, source.SourceVisits)
@@ -315,7 +315,7 @@ func TestLoftCircleSourceCapsRealDiscRefusesWithoutBoundaryProof(t *testing.T) {
 	}
 	for _, pair := range [][2]*Body{{prism, loft}, {loft, prism}} {
 		_, admitted, sourceErr := certifyLoftSourcePartition(t.Context(), pair[0], pair[1],
-			proofbound.NewWorkBudget(t.Context()))
+			proofbound.NewWorkBudget(t.Context()), false)
 		require.NoError(t, sourceErr)
 		require.False(t, admitted)
 
@@ -327,7 +327,7 @@ func TestLoftCircleSourceCapsRealDiscRefusesWithoutBoundaryProof(t *testing.T) {
 			},
 			ErrFn: func() error { return nil },
 		}
-		_, admitted, sourceErr = certifyLoftSourcePartition(t.Context(), pair[0], pair[1], stopAtReader)
+		_, admitted, sourceErr = certifyLoftSourcePartition(t.Context(), pair[0], pair[1], stopAtReader, false)
 		require.ErrorIs(t, sourceErr, proofbound.ErrWallWorkBudget)
 		require.False(t, admitted)
 		require.Equal(t, 1, steps)
@@ -424,7 +424,7 @@ func TestLoftFitSplineSourceCapsRealWedge(t *testing.T) {
 	}
 	for _, order := range [][2]*Body{{prism, loft}, {loft, prism}} {
 		_, admitted, sourceErr := certifyLoftSourcePartition(t.Context(), order[0], order[1],
-			proofbound.NewWorkBudget(t.Context()))
+			proofbound.NewWorkBudget(t.Context()), false)
 		require.NoError(t, sourceErr)
 		require.False(t, admitted)
 		boundary, outputAdmitted, outputErr := certifyLoftOutputBoundaryForDirectShell(t.Context(),

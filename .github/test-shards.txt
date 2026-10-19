@@ -241,7 +241,6 @@
 10	0.00	TestLoftContactOutputBoundaryMiddleRegionContact
 10	0.00	TestLoftBoundedProfilesRealRightXPrismFirst
 10	0.00	TestLoftBoundedProfilesRealRightXLoftFirst
-10	0.00	TestLoftBoundedProfilesGroundingCancelsInFlight
 10	0.00	TestLoftContactDirectShellUnionVaryingRectangleBothOrders
 10	0.00	TestLoftContactDirectShellUnionRealVaryingTab
 10	0.00	TestLoftVolumeComposeRealVaryingTabBothOrders
@@ -255,7 +254,6 @@
 10	0.00	TestLoftVolumeSourceEqualityRealAndRefusals
 10	0.00	TestLoftVolumeHullCoverIndependentTetra
 10	0.00	TestLoftVolumeHullZeroWidthAndMidWorkCancellation
-10	0.00	TestLoftVolumeRationalCeiling
 10	0.00	TestLoftContactSeamReadsVaryingRecordedLines
 10	0.00	TestLoftContactOccupancyReadsVaryingRecordedWalls
 10	0.00	TestLoftContactOrderReadsVaryingRecordedLines

@@ -1,13 +1,14 @@
-package decad
+package loftcontact
 
 import (
 	"context"
 	"errors"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/loftcontact"
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -16,52 +17,28 @@ import (
 	"github.com/lestrrat-3d/sketch/geom"
 )
 
-// certifyLoftSourcePartition authenticates two live producer records and proves
-// one strictly transverse, single-carrier source partition. The result cannot
-// be used as a Union body without a separate output closure and two-way bound.
-func certifyLoftSourcePartition(ctx context.Context, first, second *Body,
-	operation *proofbound.WorkBudget, checked ...*loftcontact.Arithmetic) (loftcontact.SourcePartition, bool, error) {
-	return certifyLoftSourcePartitionMode(ctx, first, second, operation, false, checked...)
-}
+// SourceReader reads the original prism and Loft source spans under budget,
+// the source wall of the refused partition. withOrder also reads the ordered
+// Sketch cap cells once the spans certify. Only its error and its charge to
+// budget reach the partition; it never admits one.
+type SourceReader func(budget *proofbound.WorkBudget, withOrder bool) error
 
-func certifyLoftSourcePartitionForDirectShell(ctx context.Context, first, second *Body,
-	operation *proofbound.WorkBudget, checked ...*loftcontact.Arithmetic) (loftcontact.SourcePartition, bool, error) {
-	return certifyLoftSourcePartitionMode(ctx, first, second, operation, true, checked...)
-}
-
-func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
-	operation *proofbound.WorkBudget, reportSeamSize bool,
-	checked ...*loftcontact.Arithmetic) (loftcontact.SourcePartition, bool, error) {
-	var no loftcontact.SourcePartition
+// CertifySourcePartition authenticates the live prism record pp and Loft
+// record lp and proves one strictly transverse, single-carrier source
+// partition. The result cannot be used as a Union body without a separate
+// output closure and two-way bound. In direct-shell mode an exact seam size
+// refusal returns ErrOrderedSeamSize, and neither readSource nor the cut
+// witness preflight runs; otherwise readSource must not be nil.
+func CertifySourcePartition(ctx context.Context, operation *proofbound.WorkBudget,
+	pp prismrecord.Payload, lp loftrecord.Payload, directShell bool, readSource SourceReader,
+	checked ...*Arithmetic) (SourcePartition, bool, error) {
+	var no SourcePartition
 	var sourceSteps uint64
-	arithmetic := loftcontact.ReplayArithmetic(checked)
+	arithmetic := ReplayArithmetic(checked)
 	if err := ctx.Err(); err != nil {
 		return no, false, err
 	}
-	if first == nil || second == nil || operation == nil {
-		return no, false, nil
-	}
-	var pp prismPayload
-	var lp loftPayload
-	var prismBody, loftBody *Body
-	switch p := first.n.Payload.(type) {
-	case prismPayload:
-		pp = p
-		prismBody, loftBody = first, second
-		var ok bool
-		lp, ok = second.n.Payload.(loftPayload)
-		if !ok {
-			return no, false, nil
-		}
-	case loftPayload:
-		lp = p
-		prismBody, loftBody = second, first
-		var ok bool
-		pp, ok = second.n.Payload.(prismPayload)
-		if !ok {
-			return no, false, nil
-		}
-	default:
+	if operation == nil {
 		return no, false, nil
 	}
 	wall := proofbound.NewWallWorkBudgetWithOperation(4096, operation)
@@ -106,41 +83,34 @@ func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 		axis.Shift.Sign() <= 0 || arithmetic.Cmp(axis.Shift, prismTop) >= 0 || !arithmetic.OK {
 		return no, false, nil
 	}
-	prismLines, ok, err := loftcontact.PartitionLines(budget, pp.Profile.Outer)
+	prismLines, ok, err := PartitionLines(budget, pp.Profile.Outer)
 	if err != nil || !ok {
-		if err == nil && !ok && !reportSeamSize && len(pp.Profile.Outer.Segments) == 1 {
+		if err == nil && !ok && !directShell && len(pp.Profile.Outer.Segments) == 1 {
 			if _, circle := pp.Profile.Outer.Segments[0].(sectionrecord.CircleSeg); circle {
 				// Read the original disc source within this same wall budget. A
 				// circle/Loft cap intersection and output shell remain unproved.
-				_, _, err = certifyLoftSourceSpanCaps(ctx, budget, prismBody, loftBody)
+				err = readSource(budget, false)
 			}
 		}
 		return no, false, err
 	}
-	bottom, ok, err := loftcontact.PartitionLines(budget, lp.Profile0.Outer)
+	bottom, ok, err := PartitionLines(budget, lp.Profile0.Outer)
 	if err != nil {
 		return no, false, err
 	}
 	if !ok {
-		if !reportSeamSize {
+		if !directShell {
 			// Source spans and ordered cap cells do not prove output coverage
 			// or occupied volume. Keep this private lane at a safe refusal.
-			source, certified, sourceErr := certifyLoftSourceSpanCaps(
-				ctx, budget, prismBody, loftBody)
-			if sourceErr != nil {
-				return no, false, sourceErr
-			}
-			if certified {
-				_, _, err = certifyLoftCapSourceOrder(ctx, budget, source)
-			}
+			err = readSource(budget, true)
 		}
 		return no, false, err
 	}
-	top, ok, err := loftcontact.PartitionLines(budget, lp.Profile1.Outer)
+	top, ok, err := PartitionLines(budget, lp.Profile1.Outer)
 	if err != nil || !ok || len(top) != len(bottom) {
 		return no, false, err
 	}
-	if admitted, err := loftPartitionConvexPrism(budget, prismLines, arithmetic); err != nil || !admitted {
+	if admitted, err := convexPrism(budget, prismLines, arithmetic); err != nil || !admitted {
 		return no, false, err
 	}
 
@@ -149,7 +119,7 @@ func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 	// are affine in height, so their strict endpoint signs cover the interior.
 	carrier := -1
 	var crossing [2]int
-	var seams [2]loftcontact.LineSeam
+	var seams [2]LineSeam
 	var sides []int8
 	for i, line := range prismLines {
 		if err := budget.Step(); err != nil {
@@ -177,11 +147,8 @@ func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 		}
 		var admitted bool
 		var err error
-		crossing, seams, sides, admitted, err = loftcontact.CertifyCarrierOccupancy(ctx, budget,
-			bottom, top, [2]sectionrecord.Point2{line.Start, line.End}, reportSeamSize)
-		if errors.Is(err, loftcontact.ErrOrderedSeamSize) {
-			return no, false, errLoftDirectLimit
-		}
+		crossing, seams, sides, admitted, err = CertifyCarrierOccupancy(ctx, budget,
+			bottom, top, [2]sectionrecord.Point2{line.Start, line.End}, directShell)
 		if err != nil || !admitted {
 			return no, false, err
 		}
@@ -221,9 +188,9 @@ func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 		sides[crossing[0]] == sides[crossing[1]] {
 		return no, false, nil
 	}
-	result := loftcontact.SourcePartition{Carrier: carrier, Crossing: crossing, Seams: seams, Walls: walls}
+	result := SourcePartition{Carrier: carrier, Crossing: crossing, Seams: seams, Walls: walls}
 	result.CapLevels = [3]*big.Rat{big.NewRat(0, 1), new(big.Rat).Set(axis.Shift), new(big.Rat).Set(prismTop)}
-	if !reportSeamSize {
+	if !directShell {
 		// Reject cuts Sketch cannot witness before its paired-cap producer runs.
 		for capIndex := range 2 {
 			loftLines := bottom
@@ -252,7 +219,7 @@ func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 			}
 		}
 	}
-	var prepared [2]loftcontact.PreparedCap
+	var prepared [2]PreparedCap
 	var scenes [2]*sketch.Sketch
 	for capIndex := range 2 {
 		loftLines := bottom
@@ -273,10 +240,10 @@ func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 		if err != nil {
 			return no, false, err
 		}
-		if err := groundLoftPartitionScene(budget, scene); err != nil {
+		if err := GroundPartitionScene(budget, scene); err != nil {
 			return no, false, err
 		}
-		prepared[capIndex] = loftcontact.PreparedCap{
+		prepared[capIndex] = PreparedCap{
 			Scene: scene, Tags: tags, CapIndex: capIndex, Level: result.CapLevels[capIndex],
 		}
 		scenes[capIndex] = scene
@@ -308,7 +275,7 @@ func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 		}
 		var admitted bool
 		var err error
-		capProof, admitted, err := loftcontact.PartitionCap(ctx, budget, prismLines, loftLines,
+		capProof, admitted, err := PartitionCap(ctx, budget, prismLines, loftLines,
 			carrier, crossing, seams, sides, walls, capIndex, level, &prepared[capIndex], arithmetic)
 		if err != nil || !admitted {
 			return no, false, err
@@ -345,9 +312,9 @@ func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 	return result, true, nil
 }
 
-// groundLoftPartitionScene pins the private copied source points before the
+// GroundPartitionScene pins the private copied source points before the
 // paired Sketch certificate reads them. It never changes a producer sketch.
-func groundLoftPartitionScene(budget *proofbound.WorkBudget, scene *sketch.Sketch) error {
+func GroundPartitionScene(budget *proofbound.WorkBudget, scene *sketch.Sketch) error {
 	for _, point := range scene.Points() {
 		if err := budget.Step(); err != nil {
 			return err
@@ -357,9 +324,11 @@ func groundLoftPartitionScene(budget *proofbound.WorkBudget, scene *sketch.Sketc
 	return budget.Err()
 }
 
-func loftPartitionConvexPrism(budget *proofbound.WorkBudget, lines []sectionrecord.LineSeg,
-	checked ...*loftcontact.Arithmetic) (bool, error) {
-	arithmetic := loftcontact.ReplayArithmetic(checked)
+// convexPrism reports whether lines close end to start and every vertex other
+// than a line's own endpoints lies strictly left of that line.
+func convexPrism(budget *proofbound.WorkBudget, lines []sectionrecord.LineSeg,
+	checked ...*Arithmetic) (bool, error) {
+	arithmetic := ReplayArithmetic(checked)
 	for i, line := range lines {
 		if err := budget.Step(); err != nil {
 			return false, err

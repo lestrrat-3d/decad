@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/loftcontact"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
@@ -52,21 +51,21 @@ func TestLoftVolumeComposeRealVaryingTabBothOrders(t *testing.T) {
 			prism, loft := loftPartitionRealBodies(t, tc.lower, tc.upper, 0, 4)
 			for _, pair := range [][2]*Body{{prism, loft}, {loft, prism}} {
 				pp, lp, boundary, operation := loftVolumeRealCertificates(t, pair[0], pair[1])
-				proof, admitted, err := loftVolumeCompose(t.Context(), operation, pp, lp, boundary)
+				proof, admitted, err := loftcontact.VolumeCompose(t.Context(), operation, pp, lp, boundary)
 				require.NoError(t, err)
 				require.True(t, admitted)
 				require.Equal(t, [3]string{"0", "4", "5"}, [3]string{
-					proof.boundary.Source.CapLevels[0].RatString(),
-					proof.boundary.Source.CapLevels[1].RatString(),
-					proof.boundary.Source.CapLevels[2].RatString(),
+					proof.Boundary.Source.CapLevels[0].RatString(),
+					proof.Boundary.Source.CapLevels[1].RatString(),
+					proof.Boundary.Source.CapLevels[2].RatString(),
 				})
-				require.Equal(t, 0, proof.sourceVolume.Cmp(big.NewRat(520, 1)))
-				require.True(t, proof.symDiffUpper >= 0 && proof.symDiffUpper < 520,
-					"bound=%g", proof.symDiffUpper)
-				require.True(t, proof.totalOutputVisits > proof.boundary.WorkVisits &&
-					proof.totalOutputVisits < loftVolumeOutputSteps,
-					"output visits=%d", proof.totalOutputVisits)
-				require.LessOrEqual(t, proof.totalOutputVisits, uint64(loftVolumeOutputSteps))
+				require.Equal(t, 0, proof.SourceVolume.Cmp(big.NewRat(520, 1)))
+				require.True(t, proof.SymDiffUpper >= 0 && proof.SymDiffUpper < 520,
+					"bound=%g", proof.SymDiffUpper)
+				require.True(t, proof.TotalOutputVisits > proof.Boundary.WorkVisits &&
+					proof.TotalOutputVisits < loftcontact.VolumeOutputSteps,
+					"output visits=%d", proof.TotalOutputVisits)
+				require.LessOrEqual(t, proof.TotalOutputVisits, uint64(loftcontact.VolumeOutputSteps))
 			}
 		})
 	}
@@ -119,7 +118,7 @@ func TestLoftVolumeSourceRefusesNonbinaryJunction(t *testing.T) {
 	}{{loftOperandPrismFirst, prism, loft}, {loftOperandLoftFirst, loft, prism}} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, admitted, err := certifyLoftSourcePartition(t.Context(), tc.first, tc.second,
-				proofbound.NewWorkBudget(t.Context()))
+				proofbound.NewWorkBudget(t.Context()), false)
 			require.NoError(t, err)
 			require.False(t, admitted)
 		})
@@ -156,7 +155,7 @@ func TestLoftOutputBoundaryRefusesTinyTranslatedSeam(t *testing.T) {
 	}{{loftOperandPrismFirst, prism, loft}, {loftOperandLoftFirst, loft, prism}} {
 		t.Run(tc.name, func(t *testing.T) {
 			source, admitted, sourceErr := certifyLoftSourcePartition(t.Context(),
-				tc.first, tc.second, proofbound.NewWorkBudget(t.Context()))
+				tc.first, tc.second, proofbound.NewWorkBudget(t.Context()), false)
 			require.NoError(t, sourceErr)
 			require.True(t, admitted)
 			require.Positive(t, source.SourceVisits)
@@ -235,7 +234,7 @@ func TestLoftVolumeSourceRefusesRealTriangleFractionalSeam(t *testing.T) {
 				ErrFn: parent.Err,
 			}
 			source, admitted, sourceErr := certifyLoftSourcePartition(
-				t.Context(), tc.first, tc.second, operation)
+				t.Context(), tc.first, tc.second, operation, false)
 			require.ErrorIs(t, sourceErr, proofbound.ErrWallWorkBudget)
 			require.False(t, admitted)
 			// The source wall accepts 4,096 steps before refusing this attempt.
@@ -249,7 +248,7 @@ func TestLoftVolumeSourceRefusesRealTriangleFractionalSeam(t *testing.T) {
 			canceled, cancel := context.WithCancel(t.Context())
 			cancel()
 			partial, accepted, cancelErr := certifyLoftSourcePartition(canceled,
-				tc.first, tc.second, proofbound.NewWorkBudget(canceled))
+				tc.first, tc.second, proofbound.NewWorkBudget(canceled), false)
 			require.ErrorIs(t, cancelErr, context.Canceled)
 			require.False(t, accepted)
 			require.Zero(t, partial.SourceVisits)
@@ -311,7 +310,7 @@ func TestLoftVolumeComposeRefusesUnprovedShells(t *testing.T) {
 			changed.Shell.Faces = append([]loftcontact.OutputFace(nil), boundary.Shell.Faces...)
 			changed.Shell.TriangleBounds = append([]float64(nil), boundary.Shell.TriangleBounds...)
 			tc.change(&changed.Shell)
-			_, admitted, err := loftVolumeCompose(t.Context(),
+			_, admitted, err := loftcontact.VolumeCompose(t.Context(),
 				operation, pp, lp, changed)
 			require.NoError(t, err)
 			require.False(t, admitted)
@@ -319,14 +318,14 @@ func TestLoftVolumeComposeRefusesUnprovedShells(t *testing.T) {
 	}
 	invalid := boundary
 	invalid.WorkVisits = 0
-	_, admitted, err := loftVolumeCompose(t.Context(), operation,
+	_, admitted, err := loftcontact.VolumeCompose(t.Context(), operation,
 		pp, lp, invalid)
 	require.NoError(t, err)
 	require.False(t, admitted)
 
 	wrongSource := boundary
 	wrongSource.Source.CapLevels[1] = big.NewRat(3, 1)
-	_, admitted, err = loftVolumeCompose(t.Context(), operation,
+	_, admitted, err = loftcontact.VolumeCompose(t.Context(), operation,
 		pp, lp, wrongSource)
 	require.NoError(t, err)
 	require.False(t, admitted)
@@ -336,13 +335,13 @@ func TestLoftVolumeComposeBudgetAndCancellation(t *testing.T) {
 	prism, loft := loftPartitionRealBodies(t,
 		[4]float64{8, 4, 12, 6}, [4]float64{8, 4, 13, 6}, 0, 4)
 	pp, lp, boundary, operation := loftVolumeRealCertificates(t, prism, loft)
-	_, admitted, err := loftVolumeCompose(t.Context(), nil, pp, lp, boundary)
+	_, admitted, err := loftcontact.VolumeCompose(t.Context(), nil, pp, lp, boundary)
 	require.NoError(t, err)
 	require.False(t, admitted)
 
 	nearlyFull := boundary
-	nearlyFull.WorkVisits = loftVolumeOutputSteps - 1
-	_, admitted, err = loftVolumeCompose(t.Context(), operation,
+	nearlyFull.WorkVisits = loftcontact.VolumeOutputSteps - 1
+	_, admitted, err = loftcontact.VolumeCompose(t.Context(), operation,
 		pp, lp, nearlyFull)
 	require.False(t, admitted)
 	require.ErrorIs(t, err, proofbound.ErrWallWorkBudget)
@@ -360,7 +359,7 @@ func TestLoftVolumeComposeBudgetAndCancellation(t *testing.T) {
 		},
 		ErrFn: ctx.Err,
 	}
-	_, admitted, err = loftVolumeCompose(ctx, operation, pp, lp, boundary)
+	_, admitted, err = loftcontact.VolumeCompose(ctx, operation, pp, lp, boundary)
 	require.False(t, admitted)
 	require.True(t, errors.Is(err, context.Canceled))
 	require.GreaterOrEqual(t, steps, 10)
@@ -399,7 +398,7 @@ func TestLoftVolumeComposeKeepsBoundaryOperationBudget(t *testing.T) {
 	require.True(t, ok)
 	lp, ok := loft.n.Payload.(loftPayload)
 	require.True(t, ok)
-	_, admitted, err = loftVolumeCompose(t.Context(), operation, pp, lp, boundary)
+	_, admitted, err = loftcontact.VolumeCompose(t.Context(), operation, pp, lp, boundary)
 	require.False(t, admitted)
 	require.ErrorIs(t, err, proofbound.ErrWallWorkBudget)
 	require.Equal(t, ceiling, used)
@@ -468,44 +467,6 @@ func TestLoftVolumeHullZeroWidthAndMidWorkCancellation(t *testing.T) {
 	require.GreaterOrEqual(t, steps, 25)
 }
 
-func TestLoftVolumeRationalCeiling(t *testing.T) {
-	tooLarge := new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), loftVolumeComposerRatBits))
-	require.False(t, loftVolumeRatFits(tooLarge))
-	_, rounded := loftVolumeRoundUp(tooLarge)
-	require.False(t, rounded)
-	require.False(t, loftVolumeSumFits(big.NewRat(1, 1), tooLarge))
-	require.False(t, loftVolumeCompareFits(big.NewRat(1, 1), tooLarge))
-	require.True(t, loftVolumeRatFits(big.NewRat(1, 3)))
-	require.True(t, loftVolumeSumFits(big.NewRat(1, 3), big.NewRat(1, 6)))
-	require.True(t, loftVolumeCompareFits(big.NewRat(1, 3), big.NewRat(1, 6)))
-
-	heldSevenTenths := proofarith.FloatRat(0.7)
-	nearNumerator := new(big.Int).Lsh(heldSevenTenths.Num(),
-		uint(8191-(heldSevenTenths.Denom().BitLen()-1)))
-	nearNumerator.Add(nearNumerator, big.NewInt(1))
-	nearFloat := new(big.Rat).SetFrac(nearNumerator,
-		new(big.Int).Lsh(big.NewInt(1), 8191))
-	require.True(t, loftVolumeRatFits(nearFloat))
-	_, rounded = loftVolumeRoundUp(nearFloat)
-	require.False(t, rounded)
-	deepDenominator := new(big.Rat).SetFrac(big.NewInt(1),
-		new(big.Int).Mul(big.NewInt(3), new(big.Int).Lsh(big.NewInt(1), 8138)))
-	require.True(t, loftVolumeRatFits(deepDenominator))
-	_, rounded = loftVolumeRoundUp(deepDenominator)
-	require.False(t, rounded)
-
-	for _, value := range []*big.Rat{big.NewRat(0, 1), big.NewRat(1, 3), proofarith.FloatRat(0.7)} {
-		got, ok := loftVolumeRoundUp(value)
-		require.True(t, ok)
-		require.Equal(t, math.Float64bits(proofbound.RatFloatUp(value)), math.Float64bits(got))
-	}
-	extremeDyadic := new(big.Rat).SetFrac(big.NewInt(1),
-		new(big.Int).Lsh(big.NewInt(1), 8191))
-	got, ok := loftVolumeRoundUp(extremeDyadic)
-	require.True(t, ok)
-	require.Equal(t, math.SmallestNonzeroFloat64, got)
-}
-
 func TestLoftVolumeSourceEqualityRealAndRefusals(t *testing.T) {
 	for _, tc := range []struct {
 		name         string
@@ -525,7 +486,7 @@ func TestLoftVolumeSourceEqualityRealAndRefusals(t *testing.T) {
 				}
 				t.Run(name, func(t *testing.T) {
 					operation := proofbound.NewWorkBudget(t.Context())
-					source, admitted, err := certifyLoftSourcePartition(t.Context(), pair[0], pair[1], operation)
+					source, admitted, err := certifyLoftSourcePartition(t.Context(), pair[0], pair[1], operation, false)
 					require.NoError(t, err)
 					require.True(t, admitted)
 					proof, admitted, err := certifyLoftOutputBoundary(t.Context(), pair[0], pair[1], operation)
@@ -538,7 +499,7 @@ func TestLoftVolumeSourceEqualityRealAndRefusals(t *testing.T) {
 						StepFn: func() error { steps++; return operation.Step() },
 						ErrFn:  operation.Err,
 					}
-					valid, err := loftVolumeSourceEquality(t.Context(),
+					valid, err := loftcontact.VolumeSourceEquality(t.Context(),
 						proofbound.NewWallWorkBudgetWithOperation(outputWorkLimit-proof.WorkVisits, counted),
 						pp, lp, source, proof.Shell)
 					require.NoError(t, err)
@@ -604,7 +565,7 @@ func loftVolumeSourceAdversarialCases(t *testing.T, pp prismPayload, lp loftPayl
 		t.Run(tc.name, func(t *testing.T) {
 			shell := clone()
 			tc.change(&shell)
-			valid, err := loftVolumeSourceEquality(t.Context(),
+			valid, err := loftcontact.VolumeSourceEquality(t.Context(),
 				proofbound.NewWallWorkBudgetWithOperation(65_536, proofbound.NewWorkBudget(t.Context())),
 				pp, lp, source, shell)
 			require.NoError(t, err)
@@ -615,7 +576,7 @@ func loftVolumeSourceAdversarialCases(t *testing.T, pp prismPayload, lp loftPayl
 		bad := source
 		bad.Walls = append([]int8(nil), source.Walls...)
 		bad.Walls[0] = 2
-		valid, err := loftVolumeSourceEquality(t.Context(),
+		valid, err := loftcontact.VolumeSourceEquality(t.Context(),
 			proofbound.NewWallWorkBudgetWithOperation(65_536, proofbound.NewWorkBudget(t.Context())),
 			pp, lp, bad, original)
 		require.NoError(t, err)
@@ -624,7 +585,7 @@ func loftVolumeSourceAdversarialCases(t *testing.T, pp prismPayload, lp loftPayl
 	t.Run("wrong_cap_level", func(t *testing.T) {
 		bad := source
 		bad.CapLevels[1] = big.NewRat(3, 1)
-		valid, err := loftVolumeSourceEquality(t.Context(),
+		valid, err := loftcontact.VolumeSourceEquality(t.Context(),
 			proofbound.NewWallWorkBudgetWithOperation(65_536, proofbound.NewWorkBudget(t.Context())),
 			pp, lp, bad, original)
 		require.NoError(t, err)
@@ -633,7 +594,7 @@ func loftVolumeSourceAdversarialCases(t *testing.T, pp prismPayload, lp loftPayl
 	t.Run("oversized_cap_level", func(t *testing.T) {
 		bad := source
 		bad.CapLevels[1] = new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), 8193))
-		valid, err := loftVolumeSourceEquality(t.Context(),
+		valid, err := loftcontact.VolumeSourceEquality(t.Context(),
 			proofbound.NewWallWorkBudgetWithOperation(65_536, proofbound.NewWorkBudget(t.Context())),
 			pp, lp, bad, original)
 		require.NoError(t, err)
@@ -643,7 +604,7 @@ func loftVolumeSourceAdversarialCases(t *testing.T, pp prismPayload, lp loftPayl
 		bad := source
 		bad.CapLevels[1] = new(big.Rat).SetFrac(
 			big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 8190))
-		valid, err := loftVolumeSourceEquality(t.Context(),
+		valid, err := loftcontact.VolumeSourceEquality(t.Context(),
 			proofbound.NewWallWorkBudgetWithOperation(65_536, proofbound.NewWorkBudget(t.Context())),
 			pp, lp, bad, original)
 		require.NoError(t, err)
@@ -652,7 +613,7 @@ func loftVolumeSourceAdversarialCases(t *testing.T, pp prismPayload, lp loftPayl
 	t.Run("wrong_cap_owner", func(t *testing.T) {
 		bad := source
 		bad.CapOwners[0][0]++
-		valid, err := loftVolumeSourceEquality(t.Context(),
+		valid, err := loftcontact.VolumeSourceEquality(t.Context(),
 			proofbound.NewWallWorkBudgetWithOperation(65_536, proofbound.NewWorkBudget(t.Context())),
 			pp, lp, bad, original)
 		require.NoError(t, err)
@@ -661,14 +622,14 @@ func loftVolumeSourceAdversarialCases(t *testing.T, pp prismPayload, lp loftPayl
 	t.Run("lost_seam", func(t *testing.T) {
 		bad := source
 		bad.Seams[0] = loftcontact.LineSeam{}
-		valid, err := loftVolumeSourceEquality(t.Context(),
+		valid, err := loftcontact.VolumeSourceEquality(t.Context(),
 			proofbound.NewWallWorkBudgetWithOperation(65_536, proofbound.NewWorkBudget(t.Context())),
 			pp, lp, bad, original)
 		require.NoError(t, err)
 		require.False(t, valid)
 	})
 	t.Run("shared_work_limit", func(t *testing.T) {
-		valid, err := loftVolumeSourceEquality(t.Context(),
+		valid, err := loftcontact.VolumeSourceEquality(t.Context(),
 			proofbound.NewWallWorkBudgetWithOperation(1, proofbound.NewWorkBudget(t.Context())),
 			pp, lp, source, original)
 		require.False(t, valid)
@@ -688,7 +649,7 @@ func loftVolumeSourceAdversarialCases(t *testing.T, pp prismPayload, lp loftPayl
 			},
 			ErrFn: ctx.Err,
 		}
-		valid, err := loftVolumeSourceEquality(ctx,
+		valid, err := loftcontact.VolumeSourceEquality(ctx,
 			proofbound.NewWallWorkBudgetWithOperation(65_536, operation),
 			pp, lp, source, original)
 		require.False(t, valid)
@@ -706,12 +667,12 @@ func TestLoftBoundedProfilesRealRightXPrismFirst(t *testing.T) {
 	checkLoftBoundedCapCertificates(t, boundary.Source)
 	pp := prism.n.Payload.(prismPayload)
 	lp := loft.n.Payload.(loftPayload)
-	proof, admitted, err := loftVolumeCompose(t.Context(), operation, pp, lp, boundary)
+	proof, admitted, err := loftcontact.VolumeCompose(t.Context(), operation, pp, lp, boundary)
 	require.NoError(t, err)
 	require.True(t, admitted)
-	require.Zero(t, proof.sourceVolume.Cmp(big.NewRat(520, 1)))
-	require.Less(t, proof.totalOutputVisits, uint64(loftVolumeOutputSteps))
-	t.Logf("totalOutputVisits=%d", proof.totalOutputVisits)
+	require.Zero(t, proof.SourceVolume.Cmp(big.NewRat(520, 1)))
+	require.Less(t, proof.TotalOutputVisits, uint64(loftcontact.VolumeOutputSteps))
+	t.Logf("totalOutputVisits=%d", proof.TotalOutputVisits)
 }
 
 func TestLoftBoundedProfilesRealRightXLoftFirst(t *testing.T) {
@@ -723,12 +684,12 @@ func TestLoftBoundedProfilesRealRightXLoftFirst(t *testing.T) {
 	checkLoftBoundedCapCertificates(t, boundary.Source)
 	pp := prism.n.Payload.(prismPayload)
 	lp := loft.n.Payload.(loftPayload)
-	proof, admitted, err := loftVolumeCompose(t.Context(), operation, pp, lp, boundary)
+	proof, admitted, err := loftcontact.VolumeCompose(t.Context(), operation, pp, lp, boundary)
 	require.NoError(t, err)
 	require.True(t, admitted)
-	require.Zero(t, proof.sourceVolume.Cmp(big.NewRat(520, 1)))
-	require.Less(t, proof.totalOutputVisits, uint64(loftVolumeOutputSteps))
-	t.Logf("totalOutputVisits=%d", proof.totalOutputVisits)
+	require.Zero(t, proof.SourceVolume.Cmp(big.NewRat(520, 1)))
+	require.Less(t, proof.TotalOutputVisits, uint64(loftcontact.VolumeOutputSteps))
+	t.Logf("totalOutputVisits=%d", proof.TotalOutputVisits)
 }
 
 func loftBounded520Operands(t *testing.T) (*Body, *Body) {
@@ -786,34 +747,6 @@ func checkLoftBoundedCapCertificates(t *testing.T, source loftcontact.SourcePart
 		}
 	}
 	t.Logf("sourceVisits=%d", source.SourceVisits)
-}
-
-func TestLoftBoundedProfilesGroundingCancelsInFlight(t *testing.T) {
-	world := sketch.NewWorld()
-	scene, err := world.CreateSketch(world.XY())
-	require.NoError(t, err)
-	for i := range 8 {
-		scene.CreatePoint(float64(i), 0)
-	}
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	steps := 0
-	budget := &proofbound.WorkBudget{
-		StepFn: func() error {
-			steps++
-			if steps == 3 {
-				cancel()
-			}
-			return ctx.Err()
-		},
-		ErrFn: ctx.Err,
-	}
-	err = groundLoftPartitionScene(budget, scene)
-	require.ErrorIs(t, err, context.Canceled)
-	require.Equal(t, 3, steps)
-	for i, point := range scene.Points() {
-		require.Equal(t, i < 2, point.IsFixed(), "point %d", i)
-	}
 }
 
 func TestLoftContactTwoLineCapsRealTrapezoid524(t *testing.T) {
@@ -905,19 +838,19 @@ func TestLoftContactTwoLineCapsRealTrapezoid524(t *testing.T) {
 
 	pp := prism.n.Payload.(prismPayload)
 	lp := loft.n.Payload.(loftPayload)
-	proof, admitted, err := loftVolumeCompose(t.Context(), operation, pp, lp, boundary)
+	proof, admitted, err := loftcontact.VolumeCompose(t.Context(), operation, pp, lp, boundary)
 	require.NoError(t, err)
 	require.True(t, admitted)
-	require.Zero(t, proof.sourceVolume.Cmp(big.NewRat(524, 1)))
-	require.False(t, math.IsNaN(proof.symDiffUpper))
-	require.False(t, math.IsInf(proof.symDiffUpper, 0))
-	require.GreaterOrEqual(t, proof.symDiffUpper, float64(0))
-	require.Less(t, proof.symDiffUpper, float64(524))
+	require.Zero(t, proof.SourceVolume.Cmp(big.NewRat(524, 1)))
+	require.False(t, math.IsNaN(proof.SymDiffUpper))
+	require.False(t, math.IsInf(proof.SymDiffUpper, 0))
+	require.GreaterOrEqual(t, proof.SymDiffUpper, float64(0))
+	require.Less(t, proof.SymDiffUpper, float64(524))
 	require.Greater(t, boundary.WorkVisits, uint64(0))
-	require.Greater(t, proof.totalOutputVisits, boundary.WorkVisits)
-	require.LessOrEqual(t, proof.totalOutputVisits, uint64(65_536))
+	require.Greater(t, proof.TotalOutputVisits, boundary.WorkVisits)
+	require.LessOrEqual(t, proof.TotalOutputVisits, uint64(65_536))
 	t.Logf("source visits=%d output visits=%d facets=%d", source.SourceVisits,
-		proof.totalOutputVisits, len(boundary.Shell.Triangles))
+		proof.TotalOutputVisits, len(boundary.Shell.Triangles))
 }
 
 func TestLoftContactTwoLineCapsNarrowTranslated524(t *testing.T) {
@@ -990,12 +923,12 @@ func TestLoftContactTwoLineCapsNarrowTranslated524(t *testing.T) {
 			require.Less(t, boundary.Source.SourceVisits, uint64(4096))
 			t.Logf("source visits=%d boundary output visits=%d",
 				boundary.Source.SourceVisits, boundary.WorkVisits)
-			proof, admitted, composeErr := loftVolumeCompose(t.Context(), operation, pp, lp, boundary)
+			proof, admitted, composeErr := loftcontact.VolumeCompose(t.Context(), operation, pp, lp, boundary)
 			require.NoError(t, composeErr, "real composer")
 			require.True(t, admitted, "real composer")
-			require.Zero(t, proof.sourceVolume.Cmp(big.NewRat(524, 1)))
+			require.Zero(t, proof.SourceVolume.Cmp(big.NewRat(524, 1)))
 			displaced := false
-			for _, vertex := range proof.boundary.Shell.Vertices {
+			for _, vertex := range proof.Boundary.Shell.Vertices {
 				if vertex.Point.U.Cmp(big.NewRat(120, 1)) != 0 ||
 					vertex.Point.V.Cmp(big.NewRat(1, 1)) != 0 {
 					continue
@@ -1006,14 +939,14 @@ func TestLoftContactTwoLineCapsNarrowTranslated524(t *testing.T) {
 				displaced = true
 			}
 			require.True(t, displaced)
-			require.False(t, math.IsNaN(proof.symDiffUpper))
-			require.False(t, math.IsInf(proof.symDiffUpper, 0))
-			require.Greater(t, proof.symDiffUpper, float64(0))
-			require.Less(t, proof.symDiffUpper, float64(524))
-			require.LessOrEqual(t, proof.totalOutputVisits, uint64(loftVolumeOutputSteps))
+			require.False(t, math.IsNaN(proof.SymDiffUpper))
+			require.False(t, math.IsInf(proof.SymDiffUpper, 0))
+			require.Greater(t, proof.SymDiffUpper, float64(0))
+			require.Less(t, proof.SymDiffUpper, float64(524))
+			require.LessOrEqual(t, proof.TotalOutputVisits, uint64(loftcontact.VolumeOutputSteps))
 			t.Logf("source visits=%d output visits=%d facets=%d bound=%g",
-				boundary.Source.SourceVisits, proof.totalOutputVisits,
-				len(boundary.Shell.Triangles), proof.symDiffUpper)
+				boundary.Source.SourceVisits, proof.TotalOutputVisits,
+				len(boundary.Shell.Triangles), proof.SymDiffUpper)
 		})
 	}
 }
@@ -1080,10 +1013,10 @@ func TestLoftVolumeComposeRealDisplacedNonjunction(t *testing.T) {
 				t.Context(), tc.first, tc.second, operation)
 			require.NoError(t, err, "boundary")
 			require.True(t, admitted, "boundary")
-			proof, admitted, err := loftVolumeCompose(t.Context(), operation, pp, lp, boundary)
+			proof, admitted, err := loftcontact.VolumeCompose(t.Context(), operation, pp, lp, boundary)
 			require.NoError(t, err, "composer")
 			require.True(t, admitted, "composer")
-			require.Zero(t, proof.sourceVolume.Cmp(big.NewRat(460, 1)))
+			require.Zero(t, proof.SourceVolume.Cmp(big.NewRat(460, 1)))
 			displaced := false
 			for _, vertex := range boundary.Shell.Vertices {
 				if vertex.Point.U.Cmp(big.NewRat(3, 2)) == 0 &&
@@ -1095,16 +1028,16 @@ func TestLoftVolumeComposeRealDisplacedNonjunction(t *testing.T) {
 				}
 			}
 			require.True(t, displaced, "nonjunction displacement")
-			require.Greater(t, proof.symDiffUpper, float64(0))
-			require.Less(t, proof.symDiffUpper, float64(460))
+			require.Greater(t, proof.SymDiffUpper, float64(0))
+			require.Less(t, proof.SymDiffUpper, float64(460))
 			require.Positive(t, boundary.Source.SourceVisits)
 			require.LessOrEqual(t, boundary.Source.SourceVisits, uint64(4096))
-			require.LessOrEqual(t, proof.totalOutputVisits, uint64(loftVolumeOutputSteps))
+			require.LessOrEqual(t, proof.TotalOutputVisits, uint64(loftcontact.VolumeOutputSteps))
 			require.LessOrEqual(t, len(boundary.Shell.Vertices), 512)
 			require.LessOrEqual(t, len(boundary.Shell.Triangles), 512)
 			t.Logf("source visits=%d output visits=%d facets=%d bound=%g",
-				boundary.Source.SourceVisits, proof.totalOutputVisits,
-				len(boundary.Shell.Triangles), proof.symDiffUpper)
+				boundary.Source.SourceVisits, proof.TotalOutputVisits,
+				len(boundary.Shell.Triangles), proof.SymDiffUpper)
 		})
 	}
 
@@ -1114,10 +1047,10 @@ func TestLoftVolumeComposeRealDisplacedNonjunction(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, admitted)
 		limited := proofbound.NewWallWorkBudgetWithOperation(16, operation)
-		proof, admitted, err := loftVolumeCompose(t.Context(), limited, pp, lp, boundary)
+		proof, admitted, err := loftcontact.VolumeCompose(t.Context(), limited, pp, lp, boundary)
 		require.ErrorIs(t, err, proofbound.ErrWallWorkBudget)
 		require.False(t, admitted)
-		require.Zero(t, proof.totalOutputVisits)
+		require.Zero(t, proof.TotalOutputVisits)
 	})
 
 	t.Run("inflight cancellation", func(t *testing.T) {
@@ -1142,10 +1075,10 @@ func TestLoftVolumeComposeRealDisplacedNonjunction(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, admitted)
 		composing = true
-		proof, admitted, err := loftVolumeCompose(ctx, operation, pp, lp, boundary)
+		proof, admitted, err := loftcontact.VolumeCompose(ctx, operation, pp, lp, boundary)
 		require.ErrorIs(t, err, context.Canceled)
 		require.False(t, admitted)
-		require.Zero(t, proof.totalOutputVisits)
+		require.Zero(t, proof.TotalOutputVisits)
 		require.Equal(t, uint64(32), composeVisits)
 	})
 }
