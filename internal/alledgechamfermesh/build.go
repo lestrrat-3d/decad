@@ -1,4 +1,5 @@
-package decad
+// Package alledgechamfermesh builds the all-edge Chamfer mesh over topology nodes.
+package alledgechamfermesh
 
 import (
 	"context"
@@ -6,6 +7,8 @@ import (
 	"math"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/breprecord"
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -21,12 +24,12 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// tessellateAllEdgeChamfer tiles every planar face from its own exact corner
-// vertices and chords the unchanged circular bore once for its two cap holes
-// and wall. The only denoted-to-held volume difference is that bore's chord
-// sliver plus the certified station-position displacement.
-func tessellateAllEdgeChamfer(ctx context.Context, body *Body, p allEdgeChamferPayload,
-	chord float64, verify Verification) (*Mesh, error) {
+// Build tiles every planar face from its own exact corner vertices and chords
+// the unchanged circular bore once for its two cap holes and wall. The only
+// denoted-to-held volume difference is that bore's chord sliver plus the
+// certified station-position displacement. ctx and body must be non-nil.
+func Build(ctx context.Context, body *topo.Body, p breprecord.AllEdgeChamferPayload,
+	chord float64, verifyBoundary, verifyAll bool) (*topo.Mesh, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -35,9 +38,9 @@ func tessellateAllEdgeChamfer(ctx context.Context, body *Body, p allEdgeChamferP
 		return nil, err
 	}
 	p = geometry
-	faces := body.Faces()
+	faces := topobuild.Faces(body)
 	if len(faces) != 19 {
-		return nil, fmt.Errorf(`%w: the all-edge chamfer has no 18 planes and one bore`, ErrUnsupported)
+		return nil, fmt.Errorf(`%w: the all-edge chamfer has no 18 planes and one bore`, decaderr.ErrUnsupported)
 	}
 	loop := sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{sectionrecord.CircleSeg{
 		Center: sectionrecord.Point2{U: p.Center[0], V: p.Center[1]},
@@ -47,14 +50,14 @@ func tessellateAllEdgeChamfer(ctx context.Context, body *Body, p allEdgeChamferP
 		proofbound.ExactScalar(p.Box[1][0]))
 	height := proofbound.AbsSumUpper(heightMeasure.Value, heightMeasure.Bound)
 	samples, err := tessellation.ChordLoop(ctx, loop, chord, height, freeform.NewFreeformWork(), nil, 0,
-		func(_ survey2d.SideWalk) (*Face, error) { return faces[18], nil }, stationbound.ChordStationBound)
+		func(_ survey2d.SideWalk) (*topo.Face, error) { return faces[18], nil }, stationbound.ChordStationBound)
 	if err != nil {
 		return nil, err
 	}
 	if len(samples.Samples) < 3 {
-		return nil, fmt.Errorf(`%w: the bore has too few stations`, ErrUnsupported)
+		return nil, fmt.Errorf(`%w: the bore has too few stations`, decaderr.ErrUnsupported)
 	}
-	mesh := bornMesh(new(Mesh))
+	mesh := new(topo.Mesh)
 	index := map[r3.Vec]int{}
 	var store []float64
 	add := func(v r3.Vec, bound float64) int {
@@ -62,10 +65,10 @@ func tessellateAllEdgeChamfer(ctx context.Context, body *Body, p allEdgeChamferP
 			store[i] = math.Max(store[i], bound)
 			return i
 		}
-		index[v] = len(mesh.n.Vertices)
-		mesh.n.Vertices = append(mesh.n.Vertices, v)
+		index[v] = len(mesh.Vertices)
+		mesh.Vertices = append(mesh.Vertices, v)
 		store = append(store, bound)
-		return len(mesh.n.Vertices) - 1
+		return len(mesh.Vertices) - 1
 	}
 	circle := [2][]int{make([]int, len(samples.Samples)), make([]int, len(samples.Samples))}
 	for side := range 2 {
@@ -78,14 +81,14 @@ func tessellateAllEdgeChamfer(ctx context.Context, body *Body, p allEdgeChamferP
 		}
 	}
 	for fi, face := range faces[:18] {
-		plane, ok := face.n.Surface.(surfacegeom.Plane)
-		if !ok || len(face.n.Loops) == 0 {
-			return nil, fmt.Errorf(`%w: all-edge chamfer face %d is not planar`, ErrUnsupported, fi)
+		plane, ok := face.Surface.(surfacegeom.Plane)
+		if !ok || len(face.Loops) == 0 {
+			return nil, fmt.Errorf(`%w: all-edge chamfer face %d is not planar`, decaderr.ErrUnsupported, fi)
 		}
 		var points []sectionrecord.Point2
 		var meshIndices []int
-		outer := make([]int, 0, len(face.n.Loops[0].CoEdges))
-		for _, ce := range face.n.Loops[0].CoEdges {
+		outer := make([]int, 0, len(face.Loops[0].CoEdges))
+		for _, ce := range face.Loops[0].CoEdges {
 			v := topobuild.CoEdgeStart(ce).Position
 			local := plane.Frame.ToLocal(v)
 			points = append(points, sectionrecord.Point2{U: local.X, V: local.Y})
@@ -97,7 +100,7 @@ func tessellateAllEdgeChamfer(ctx context.Context, body *Body, p allEdgeChamferP
 			side := fi - 2
 			hole := make([]int, 0, len(circle[side]))
 			for _, meshIndex := range circle[side] {
-				v := mesh.n.Vertices[meshIndex]
+				v := mesh.Vertices[meshIndex]
 				local := plane.Frame.ToLocal(v)
 				points = append(points, sectionrecord.Point2{U: local.X, V: local.Y})
 				meshIndices = append(meshIndices, meshIndex)
@@ -113,51 +116,61 @@ func tessellateAllEdgeChamfer(ctx context.Context, body *Body, p allEdgeChamferP
 			return nil, err
 		}
 		for _, tri := range tris {
-			topobuild.AddTriangle(&mesh.n, [3]int{meshIndices[tri[0]], meshIndices[tri[1]], meshIndices[tri[2]]}, faceNode(face))
+			topobuild.AddTriangle(mesh, [3]int{meshIndices[tri[0]], meshIndices[tri[1]], meshIndices[tri[2]]}, face)
 		}
 	}
 	for i := range circle[0] {
 		j := (i + 1) % len(circle[0])
 		lo0, lo1 := circle[0][i], circle[0][j]
 		hi0, hi1 := circle[1][i], circle[1][j]
-		topobuild.AddTriangle(&mesh.n, [3]int{lo0, lo1, hi0}, faceNode(faces[18]))
-		topobuild.AddTriangle(&mesh.n, [3]int{lo1, hi1, hi0}, faceNode(faces[18]))
+		topobuild.AddTriangle(mesh, [3]int{lo0, lo1, hi0}, faces[18])
+		topobuild.AddTriangle(mesh, [3]int{lo1, hi1, hi0}, faces[18])
 	}
-	if err := topobuild.LiftAuditError(tessellation.RequireClosedMesh(mesh.n.Triangles)); err != nil {
+	if err := topobuild.RequireClosedMesh(mesh); err != nil {
 		return nil, err
 	}
-	if err := tessellation.RequireVertexLinks(ctx, len(mesh.n.Vertices), mesh.n.Triangles); err != nil {
+	if err := tessellation.RequireVertexLinks(ctx, len(mesh.Vertices), mesh.Triangles); err != nil {
 		return nil, err
 	}
 	anchor := r3.NewVec(p.Box[0][0], p.Box[1][0], p.Box[2][0])
-	if tessellation.OrientationSign(mesh.n.Vertices, mesh.n.Triangles, anchor) <= 0 {
-		return nil, fmt.Errorf(`%w: the all-edge chamfer mesh has no positive enclosed volume`, ErrUnsupported)
+	if tessellation.OrientationSign(mesh.Vertices, mesh.Triangles, anchor) <= 0 {
+		return nil, fmt.Errorf(`%w: the all-edge chamfer mesh has no positive enclosed volume`, decaderr.ErrUnsupported)
 	}
-	if verify >= VerifyBoundary {
-		if err := loftmesh.LoftCrossingAudit(proofbound.NewWorkBudget(ctx), mesh.n.Vertices, mesh.n.Triangles); err != nil {
+	if verifyBoundary {
+		if err := loftmesh.LoftCrossingAudit(proofbound.NewWorkBudget(ctx), mesh.Vertices, mesh.Triangles); err != nil {
 			return nil, err
 		}
 	}
-	trim := map[*topo.Face]float64{faceNode(faces[2]): samples.MaxSag, faceNode(faces[3]): samples.MaxSag,
-		faceNode(faces[18]): samples.MaxSag}
-	if err := composeFaceBounds(mesh, trim, nil, store); err != nil {
+	trim := map[*topo.Face]float64{faces[2]: samples.MaxSag, faces[3]: samples.MaxSag,
+		faces[18]: samples.MaxSag}
+	bounds, err := tessellation.FaceBounds(mesh.Triangles, mesh.Source, trim, nil, store, 0)
+	if err != nil {
 		return nil, err
 	}
-	mesh.setVertexBounds(store)
-	mesh.n.AreaSlack = proofbound.AbsSumUpper(samples.WallSlack,
+	for face, bound := range bounds {
+		topobuild.SetFaceBound(mesh, face, bound)
+	}
+	mesh.VertexBound = append([]float64(nil), store...)
+	for i, tri := range mesh.Triangles {
+		topobuild.SetFaceBound(mesh, mesh.Source[i], max(store[tri[0]], store[tri[1]], store[tri[2]]))
+	}
+	mesh.AreaSlack = proofbound.AbsSumUpper(samples.WallSlack,
 		proofbound.ProductUpper(2, samples.CapSlack),
-		tessellation.StoreAreaAllow(mesh.n.Vertices, mesh.n.Triangles, store))
-	if verify >= VerifyAll {
+		tessellation.StoreAreaAllow(mesh.Vertices, mesh.Triangles, store))
+	if verifyAll {
 		storeMax, err := tessellation.StoreMax(store)
 		if err != nil {
 			return nil, err
 		}
 		terms := []float64{proofbound.ProductUpper(height, samples.SegmentArea),
 			proofbound.SweptVolumeAllow(storeMax,
-				proofbound.PerturbedAreaUpper(mesh.n.Vertices, mesh.n.Triangles, storeMax))}
-		if err := publishSymDiff(mesh, terms); err != nil {
+				proofbound.PerturbedAreaUpper(mesh.Vertices, mesh.Triangles, storeMax))}
+		total, err := tessellation.SymDiff(terms)
+		if err != nil {
 			return nil, err
 		}
+		mesh.VolSymDiff = total
+		mesh.SymDiffOK = true
 	}
 	return mesh, nil
 }

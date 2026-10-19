@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/lestrrat-3d/decad/internal/alledgechamfermesh"
 	"github.com/lestrrat-3d/decad/internal/cuptess"
 	"github.com/lestrrat-3d/decad/internal/prismtess"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -352,7 +353,12 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value, verify Ver
 // tessellateContext withholds them afterwards.
 func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify Verification) (*Mesh, error) {
 	if p, ok := b.n.Payload.(allEdgeChamferPayload); ok {
-		return tessellateAllEdgeChamfer(ctx, b, p, chord, verify)
+		node, err := alledgechamfermesh.Build(ctx, &b.n, p, chord,
+			verify >= VerifyBoundary, verify >= VerifyAll)
+		if err != nil {
+			return nil, err
+		}
+		return bornMesh(&Mesh{n: *node}), nil
 	}
 	if fp, ok := b.n.Payload.(facetedPayload); ok {
 		return tessellateFaceted(ctx, b, fp, chord)
