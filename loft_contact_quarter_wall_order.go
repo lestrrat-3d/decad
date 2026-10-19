@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/loftcontact"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -89,7 +90,7 @@ func certifyLoftQuarterWallOrder(ctx context.Context, budget *proofbound.WorkBud
 			case sectionrecord.LineSeg:
 				borrowed, same := span.curve.(sectionrecord.LineSeg)
 				if !same || borrowed != segment ||
-					!loftQuarterWallAxisLine(segment, proofarith.FloatRat(loopArcRadius(loop))) {
+					!loftcontact.QuarterWallAxisLine(segment, proofarith.FloatRat(loopArcRadius(loop))) {
 					return no, false, nil
 				}
 				if segment.Start.V == 0 && segment.End.V == 0 {
@@ -182,7 +183,10 @@ func loftQuarterWallRectangle(ctx context.Context, budget *proofbound.WorkBudget
 	source loftSourceSpanCaps, pp prismPayload) ([4]*big.Rat, [2]int, bool, error) {
 	var bounds [4]*big.Rat
 	var horizontal [2]int
-	points := make([]sectionrecord.Point2, 0, 8)
+	if len(pp.Profile.Outer.Segments) != 4 {
+		return bounds, horizontal, false, nil
+	}
+	var lines [4]sectionrecord.LineSeg
 	for i, raw := range pp.Profile.Outer.Segments {
 		if err := ctx.Err(); err != nil {
 			return bounds, horizontal, false, err
@@ -191,9 +195,7 @@ func loftQuarterWallRectangle(ctx context.Context, budget *proofbound.WorkBudget
 			return bounds, horizontal, false, err
 		}
 		line, ok := raw.(sectionrecord.LineSeg)
-		if !ok || line.TStart != 0 || line.TEnd != 1 ||
-			(line.Start.U != line.End.U && line.Start.V != line.End.V) ||
-			line.Start == line.End {
+		if !ok {
 			return bounds, horizontal, false, nil
 		}
 		for cap := range 2 {
@@ -203,59 +205,12 @@ func loftQuarterWallRectangle(ctx context.Context, budget *proofbound.WorkBudget
 				return bounds, horizontal, false, nil
 			}
 		}
-		points = append(points, line.Start, line.End)
+		lines[i] = line
 	}
-	xMin, xMax, yMin, yMax := points[0].U, points[0].U, points[0].V, points[0].V
-	for _, p := range points {
-		if err := budget.Step(); err != nil {
-			return bounds, horizontal, false, err
-		}
-		if proofbound.IsNonFinite(p.U) || proofbound.IsNonFinite(p.V) {
-			return bounds, horizontal, false, nil
-		}
-		xMin, xMax = min(xMin, p.U), max(xMax, p.U)
-		yMin, yMax = min(yMin, p.V), max(yMax, p.V)
+	bounds, horizontal, ok, err := loftcontact.QuarterWallRectangle(budget, lines[:])
+	if err != nil || !ok {
+		return bounds, horizontal, ok, err
 	}
-	if xMin <= 0 || yMin <= 0 || xMin >= xMax || yMin >= yMax {
-		return bounds, horizontal, false, nil
-	}
-	seen := [4]bool{}
-	for i, raw := range pp.Profile.Outer.Segments {
-		if err := budget.Step(); err != nil {
-			return bounds, horizontal, false, err
-		}
-		line := raw.(sectionrecord.LineSeg)
-		a, b := line.Start, line.End
-		kind := -1
-		switch {
-		case a.V == yMin && b.V == yMin &&
-			((a.U == xMin && b.U == xMax) || (a.U == xMax && b.U == xMin)):
-			kind = 0
-		case a.V == yMax && b.V == yMax &&
-			((a.U == xMin && b.U == xMax) || (a.U == xMax && b.U == xMin)):
-			kind = 1
-		case a.U == xMin && b.U == xMin &&
-			((a.V == yMin && b.V == yMax) || (a.V == yMax && b.V == yMin)):
-			kind = 2
-		case a.U == xMax && b.U == xMax &&
-			((a.V == yMin && b.V == yMax) || (a.V == yMax && b.V == yMin)):
-			kind = 3
-		}
-		if kind < 0 || seen[kind] {
-			return bounds, horizontal, false, nil
-		}
-		seen[kind] = true
-		if kind < 2 {
-			horizontal[kind] = i
-		}
-	}
-	for _, found := range seen {
-		if !found {
-			return bounds, horizontal, false, nil
-		}
-	}
-	bounds = [4]*big.Rat{proofarith.FloatRat(xMin), proofarith.FloatRat(xMax),
-		proofarith.FloatRat(yMin), proofarith.FloatRat(yMax)}
 	checked := &loftVolumeArithmetic{ok: true}
 	for _, value := range bounds {
 		checked.valid(value)
@@ -270,20 +225,4 @@ func loopArcRadius(loop sectionrecord.LoopRecord) float64 {
 		}
 	}
 	return 0
-}
-
-func loftQuarterWallAxisLine(line sectionrecord.LineSeg, radius *big.Rat) bool {
-	if radius == nil || radius.Sign() <= 0 || line.TStart != 0 || line.TEnd != 1 {
-		return false
-	}
-	r, exact := radius.Float64()
-	if !exact {
-		return false
-	}
-	a, b := line.Start, line.End
-	if a.U != 0 || a.V != 0 {
-		a, b = b, a
-	}
-	return a.U == 0 && a.V == 0 &&
-		(b.U == r && b.V == 0 || b.U == 0 && b.V == r)
 }
