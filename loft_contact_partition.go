@@ -106,7 +106,7 @@ func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 		axis.Shift.Sign() <= 0 || arithmetic.Cmp(axis.Shift, prismTop) >= 0 || !arithmetic.OK {
 		return no, false, nil
 	}
-	prismLines, ok, err := loftPartitionLines(budget, pp.Profile.Outer)
+	prismLines, ok, err := loftcontact.PartitionLines(budget, pp.Profile.Outer)
 	if err != nil || !ok {
 		if err == nil && !ok && !reportSeamSize && len(pp.Profile.Outer.Segments) == 1 {
 			if _, circle := pp.Profile.Outer.Segments[0].(sectionrecord.CircleSeg); circle {
@@ -117,7 +117,7 @@ func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 		}
 		return no, false, err
 	}
-	bottom, ok, err := loftPartitionLines(budget, lp.Profile0.Outer)
+	bottom, ok, err := loftcontact.PartitionLines(budget, lp.Profile0.Outer)
 	if err != nil {
 		return no, false, err
 	}
@@ -136,7 +136,7 @@ func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 		}
 		return no, false, err
 	}
-	top, ok, err := loftPartitionLines(budget, lp.Profile1.Outer)
+	top, ok, err := loftcontact.PartitionLines(budget, lp.Profile1.Outer)
 	if err != nil || !ok || len(top) != len(bottom) {
 		return no, false, err
 	}
@@ -355,24 +355,6 @@ func groundLoftPartitionScene(budget *proofbound.WorkBudget, scene *sketch.Sketc
 		scene.Fix(point)
 	}
 	return budget.Err()
-}
-
-func loftPartitionLines(budget *proofbound.WorkBudget, loop sectionrecord.LoopRecord) ([]sectionrecord.LineSeg, bool, error) {
-	if len(loop.Segments) < 3 || len(loop.Segments) > 32 {
-		return nil, false, nil
-	}
-	lines := make([]sectionrecord.LineSeg, len(loop.Segments))
-	for i, raw := range loop.Segments {
-		if err := budget.Step(); err != nil {
-			return nil, false, err
-		}
-		line, ok := raw.(sectionrecord.LineSeg)
-		if !ok || line.TStart != 0 || line.TEnd != 1 {
-			return nil, false, nil
-		}
-		lines[i] = line
-	}
-	return lines, true, nil
 }
 
 func loftPartitionConvexPrism(budget *proofbound.WorkBudget, lines []sectionrecord.LineSeg,

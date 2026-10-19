@@ -145,10 +145,10 @@ func TestLoftContactPartitionCapMapRefusesAmbiguousFragments(t *testing.T) {
 	budget := proofbound.NewWallWorkBudgetWithOperation(4096, proofbound.NewWorkBudget(t.Context()))
 	pp := prism.n.Payload.(prismPayload)
 	lp := loft.n.Payload.(loftPayload)
-	prismLines, ok, err := loftPartitionLines(budget, pp.Profile.Outer)
+	prismLines, ok, err := loftcontact.PartitionLines(budget, pp.Profile.Outer)
 	require.NoError(t, err)
 	require.True(t, ok)
-	loftLines, ok, err := loftPartitionLines(budget, lp.Profile1.Outer)
+	loftLines, ok, err := loftcontact.PartitionLines(budget, lp.Profile1.Outer)
 	require.NoError(t, err)
 	require.True(t, ok)
 	scene, tags, _, err := prismcells.BuildSceneRegions(budget,

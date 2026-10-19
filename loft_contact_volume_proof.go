@@ -18,7 +18,7 @@ const loftVolumeOutputSteps = 65_536
 // loftVolumeProof is transient. Its bound is meaningful only for the source
 // partition and boundary proof certified from the same live operands.
 type loftVolumeProof struct {
-	boundary          loftOutputBoundaryProof
+	boundary          loftcontact.OutputBoundary
 	sourceVolume      *big.Rat
 	symDiffUpper      float64
 	totalOutputVisits uint64
@@ -27,20 +27,20 @@ type loftVolumeProof struct {
 // loftVolumeCompose uses the source partition carried by its boundary proof.
 // The payloads must come from the same live records passed to that proof.
 func loftVolumeCompose(ctx context.Context, operation *proofbound.WorkBudget,
-	pp prismPayload, lp loftPayload, boundary loftOutputBoundaryProof,
+	pp prismPayload, lp loftPayload, boundary loftcontact.OutputBoundary,
 ) (loftVolumeProof, bool, error) {
 	var no loftVolumeProof
 	if err := ctx.Err(); err != nil {
 		return no, false, err
 	}
-	if operation == nil || boundary.workVisits == 0 ||
-		boundary.workVisits >= loftVolumeOutputSteps ||
-		len(boundary.shell.Triangles) == 0 || len(boundary.shell.Triangles) > 512 ||
-		len(boundary.shell.Vertices) == 0 || len(boundary.shell.Vertices) > 512 {
+	if operation == nil || boundary.WorkVisits == 0 ||
+		boundary.WorkVisits >= loftVolumeOutputSteps ||
+		len(boundary.Shell.Triangles) == 0 || len(boundary.Shell.Triangles) > 512 ||
+		len(boundary.Shell.Vertices) == 0 || len(boundary.Shell.Vertices) > 512 {
 		return no, false, nil
 	}
 	limit := proofbound.NewWallWorkBudgetWithOperation(
-		loftVolumeOutputSteps-boundary.workVisits, operation)
+		loftVolumeOutputSteps-boundary.WorkVisits, operation)
 	var volumeVisits uint64
 	budget := &proofbound.WorkBudget{
 		StepFn: func() error {
@@ -52,8 +52,8 @@ func loftVolumeCompose(ctx context.Context, operation *proofbound.WorkBudget,
 		},
 		ErrFn: limit.Err,
 	}
-	shell := boundary.shell
-	if admitted, err := loftVolumeSourceEquality(ctx, budget, pp, lp, boundary.source, shell); err != nil || !admitted {
+	shell := boundary.Shell
+	if admitted, err := loftVolumeSourceEquality(ctx, budget, pp, lp, boundary.Source, shell); err != nil || !admitted {
 		return no, false, err
 	}
 	world := make([][3]*big.Rat, len(shell.Vertices))
@@ -137,7 +137,7 @@ func loftVolumeCompose(ctx context.Context, operation *proofbound.WorkBudget,
 	}
 	return loftVolumeProof{
 		boundary: boundary, sourceVolume: new(big.Rat).Set(sourceVolume),
-		symDiffUpper: upper, totalOutputVisits: boundary.workVisits + volumeVisits,
+		symDiffUpper: upper, totalOutputVisits: boundary.WorkVisits + volumeVisits,
 	}, true, nil
 }
 
@@ -303,15 +303,15 @@ func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget
 			}
 		}
 	}
-	prismLines, ok, err := loftPartitionLines(budget, pp.Profile.Outer)
+	prismLines, ok, err := loftcontact.PartitionLines(budget, pp.Profile.Outer)
 	if err != nil || !ok {
 		return false, err
 	}
-	bottom, ok, err := loftPartitionLines(budget, lp.Profile0.Outer)
+	bottom, ok, err := loftcontact.PartitionLines(budget, lp.Profile0.Outer)
 	if err != nil || !ok {
 		return false, err
 	}
-	top, ok, err := loftPartitionLines(budget, lp.Profile1.Outer)
+	top, ok, err := loftcontact.PartitionLines(budget, lp.Profile1.Outer)
 	if err != nil || !ok || len(bottom) != len(top) || len(source.Walls) != len(bottom) ||
 		source.Carrier < 0 || source.Carrier >= len(prismLines) {
 		return false, err
@@ -455,15 +455,15 @@ func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget
 			return false, err
 		}
 	}
-	valid, err := loftOutputSides(budget, pp, prismLines, bottom, top, source, &want, arithmetic)
+	valid, err := loftcontact.OutputSides(budget, pp.Frame, prismLines, bottom, top, source, &want, arithmetic)
 	if err != nil || !valid || !arithmetic.OK {
 		return false, err
 	}
-	valid, err = loftOutputAuditSource(budget, want, source, arithmetic)
+	valid, err = loftcontact.AuditOutputSource(budget, want, source, arithmetic)
 	if err != nil || !valid || !arithmetic.OK {
 		return false, err
 	}
-	valid, err = loftOutputAuditSource(budget, shell, source, arithmetic)
+	valid, err = loftcontact.AuditOutputSource(budget, shell, source, arithmetic)
 	if err != nil || !valid || !arithmetic.OK {
 		return false, err
 	}

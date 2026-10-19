@@ -171,3 +171,23 @@ func fragmentGeometryKey(a, b Point,
 	}
 	return a.U.RatString() + "," + a.V.RatString() + ":" + b.U.RatString() + "," + b.V.RatString()
 }
+
+// PartitionLines reads loop as 3 to 32 whole line segments. It refuses any
+// other segment kind or a trimmed line.
+func PartitionLines(budget *proofbound.WorkBudget, loop sectionrecord.LoopRecord) ([]sectionrecord.LineSeg, bool, error) {
+	if len(loop.Segments) < 3 || len(loop.Segments) > 32 {
+		return nil, false, nil
+	}
+	lines := make([]sectionrecord.LineSeg, len(loop.Segments))
+	for i, raw := range loop.Segments {
+		if err := budget.Step(); err != nil {
+			return nil, false, err
+		}
+		line, ok := raw.(sectionrecord.LineSeg)
+		if !ok || line.TStart != 0 || line.TEnd != 1 {
+			return nil, false, nil
+		}
+		lines[i] = line
+	}
+	return lines, true, nil
+}
