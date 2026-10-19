@@ -56,7 +56,11 @@ func loftVolumeCompose(ctx context.Context, operation *proofbound.WorkBudget,
 	if admitted, err := loftVolumeSourceEquality(ctx, budget, pp, lp, boundary.source, shell); err != nil || !admitted {
 		return no, false, err
 	}
-	sourceVolume, admitted, err := loftVolumeExactShell(budget, shell)
+	world := make([][3]*big.Rat, len(shell.Vertices))
+	for i, vertex := range shell.Vertices {
+		world[i] = vertex.World
+	}
+	sourceVolume, admitted, err := loftcontact.VolumeExactShell(budget, world, shell.Triangles)
 	if err != nil || !admitted {
 		return no, false, err
 	}
@@ -262,7 +266,7 @@ func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget
 		if err := budget.Step(); err != nil {
 			return false, err
 		}
-		if !loftVolumeSourceRatOK(level) {
+		if !arithmetic.Valid(level) {
 			return false, nil
 		}
 	}
@@ -270,21 +274,19 @@ func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget
 		prismplacement.Operand{Frame: pp.Frame, Xform: pp.Xform},
 		prismplacement.Operand{Frame: lp.Frame1, Xform: lp.Xform})
 	prismTop := proofarith.FloatRat(pp.Z1)
-	if !axis.OK || axis.Shift == nil || prismTop == nil ||
-		!loftVolumeSourceRatOK(axis.Shift) || !loftVolumeSourceRatOK(prismTop) ||
+	if !axis.OK || !arithmetic.Valid(axis.Shift) || !arithmetic.Valid(prismTop) ||
 		axis.Shift.Sign() <= 0 {
 		return false, nil
 	}
-	comparison, bounded := loftVolumeSourceCmp(axis.Shift, prismTop)
-	if !bounded || comparison >= 0 || source.CapLevels[0].Sign() != 0 {
+	// A refused Valid or Cmp clears arithmetic.OK for good. Every refusal
+	// below returns at once, so a later check never reads a cleared state.
+	if arithmetic.Cmp(axis.Shift, prismTop) >= 0 || !arithmetic.OK || source.CapLevels[0].Sign() != 0 {
 		return false, nil
 	}
-	comparison, bounded = loftVolumeSourceCmp(source.CapLevels[1], axis.Shift)
-	if !bounded || comparison != 0 {
+	if arithmetic.Cmp(source.CapLevels[1], axis.Shift) != 0 || !arithmetic.OK {
 		return false, nil
 	}
-	comparison, bounded = loftVolumeSourceCmp(source.CapLevels[2], prismTop)
-	if !bounded || comparison != 0 {
+	if arithmetic.Cmp(source.CapLevels[2], prismTop) != 0 || !arithmetic.OK {
 		return false, nil
 	}
 	for _, vertex := range shell.Vertices {
@@ -296,7 +298,7 @@ func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget
 			if err := budget.Step(); err != nil {
 				return false, err
 			}
-			if !loftVolumeSourceRatOK(value) {
+			if !arithmetic.Valid(value) {
 				return false, nil
 			}
 		}
@@ -320,7 +322,7 @@ func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget
 				if err := budget.Step(); err != nil {
 					return false, err
 				}
-				if !loftVolumeSourceRatOK(proofarith.FloatRat(value)) {
+				if !arithmetic.Valid(proofarith.FloatRat(value)) {
 					return false, nil
 				}
 			}
@@ -335,18 +337,17 @@ func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget
 				if err := budget.Step(); err != nil {
 					return false, err
 				}
-				if !loftVolumeSourceRatOK(proofarith.FloatRat(value)) {
+				if !arithmetic.Valid(proofarith.FloatRat(value)) {
 					return false, nil
 				}
 			}
 		}
 	}
-	comparison, bounded = loftVolumeSourceCmp(source.CapLevels[0], source.CapLevels[1])
-	if !bounded || comparison >= 0 {
+	if arithmetic.Cmp(source.CapLevels[0], source.CapLevels[1]) >= 0 || !arithmetic.OK {
 		return false, nil
 	}
-	comparison, bounded = loftVolumeSourceCmp(source.CapLevels[1], source.CapLevels[2])
-	if !bounded || comparison >= 0 || source.TopWallJoins != len(prismLines) {
+	if arithmetic.Cmp(source.CapLevels[1], source.CapLevels[2]) >= 0 || !arithmetic.OK ||
+		source.TopWallJoins != len(prismLines) {
 		return false, nil
 	}
 	convex, err := loftPartitionConvexPrism(budget, prismLines)
@@ -383,16 +384,11 @@ func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget
 			}
 			a, b, validA := seams[k].At(t)
 			c, d, validB := source.Seams[k].At(t)
-			if !validA || !validB || !loftVolumeSourceRatOK(a) || !loftVolumeSourceRatOK(b) ||
-				!loftVolumeSourceRatOK(c) || !loftVolumeSourceRatOK(d) {
+			if !validA || !validB || !arithmetic.Valid(a) || !arithmetic.Valid(b) ||
+				!arithmetic.Valid(c) || !arithmetic.Valid(d) {
 				return false, nil
 			}
-			comparison, bounded = loftVolumeSourceCmp(a, c)
-			if !bounded || comparison != 0 {
-				return false, nil
-			}
-			comparison, bounded = loftVolumeSourceCmp(b, d)
-			if !bounded || comparison != 0 {
+			if arithmetic.Cmp(a, c) != 0 || arithmetic.Cmp(b, d) != 0 || !arithmetic.OK {
 				return false, nil
 			}
 		}
@@ -414,7 +410,7 @@ func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget
 			a, b := arithmetic.LineSide(line, bottom[j].Start),
 				arithmetic.LineSide(line, top[j].Start)
 			if !arithmetic.OK || a.Sign() <= 0 || b.Sign() <= 0 ||
-				!loftVolumeSourceRatOK(a) || !loftVolumeSourceRatOK(b) {
+				!arithmetic.Valid(a) || !arithmetic.Valid(b) {
 				return false, nil
 			}
 		}
@@ -490,8 +486,7 @@ func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget
 			if err := budget.Step(); err != nil {
 				return false, err
 			}
-			comparison, bounded = loftVolumeSourceCmp(pair[0], pair[1])
-			if !bounded || comparison != 0 {
+			if arithmetic.Cmp(pair[0], pair[1]) != 0 || !arithmetic.OK {
 				return false, nil
 			}
 		}
@@ -514,20 +509,4 @@ func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget
 		return false, err
 	}
 	return arithmetic.OK, nil
-}
-
-func loftVolumeSourceRatOK(x *big.Rat) bool {
-	return x != nil && x.Num().BitLen() <= loftcontact.RationalBits &&
-		x.Denom().BitLen() <= loftcontact.RationalBits
-}
-
-// Rat.Cmp cross-multiplies both numerator/denominator pairs. Refuse before
-// either raw product could exceed the private 8192-bit arithmetic ceiling.
-func loftVolumeSourceCmp(a, b *big.Rat) (int, bool) {
-	if !loftVolumeSourceRatOK(a) || !loftVolumeSourceRatOK(b) ||
-		a.Num().BitLen()+b.Denom().BitLen() > loftcontact.RationalBits ||
-		b.Num().BitLen()+a.Denom().BitLen() > loftcontact.RationalBits {
-		return 0, false
-	}
-	return a.Cmp(b), true
 }

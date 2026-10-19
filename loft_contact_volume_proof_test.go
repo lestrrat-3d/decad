@@ -649,38 +649,6 @@ func loftVolumeSourceAdversarialCases(t *testing.T, pp prismPayload, lp loftPayl
 		require.NoError(t, err)
 		require.False(t, valid)
 	})
-	t.Run("pairwise_comparison_bounds", func(t *testing.T) {
-		comparison, bounded := loftVolumeSourceCmp(big.NewRat(3, 2), big.NewRat(6, 4))
-		require.True(t, bounded)
-		require.Zero(t, comparison)
-
-		large := new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), 8190))
-		tiny := new(big.Rat).SetFrac(
-			big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 8190))
-		require.True(t, loftVolumeSourceRatOK(large))
-		require.True(t, loftVolumeSourceRatOK(tiny))
-		_, bounded = loftVolumeSourceCmp(large, big.NewRat(1, 4))
-		require.False(t, bounded)
-		_, bounded = loftVolumeSourceCmp(big.NewRat(4, 1), tiny)
-		require.False(t, bounded)
-		_, bounded = loftVolumeSourceCmp(tiny, big.NewRat(4, 1))
-		require.False(t, bounded)
-
-		atLimit := new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), 8188))
-		comparison, bounded = loftVolumeSourceCmp(atLimit, big.NewRat(1, 4))
-		require.True(t, bounded)
-		require.Positive(t, comparison)
-		comparison, bounded = loftVolumeSourceCmp(big.NewRat(1, 4), atLimit)
-		require.True(t, bounded)
-		require.Negative(t, comparison)
-		atDenominatorLimit := new(big.Rat).SetFrac(
-			big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 8188))
-		comparison, bounded = loftVolumeSourceCmp(big.NewRat(4, 1), atDenominatorLimit)
-		require.True(t, bounded)
-		require.Positive(t, comparison)
-		_, bounded = loftVolumeSourceCmp(nil, big.NewRat(1, 1))
-		require.False(t, bounded)
-	})
 	t.Run("wrong_cap_owner", func(t *testing.T) {
 		bad := source
 		bad.CapOwners[0][0]++

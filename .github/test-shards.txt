@@ -265,15 +265,6 @@
 10	0.00	TestLoftVolumeHullCoverIndependentTetra
 10	0.00	TestLoftVolumeHullZeroWidthAndMidWorkCancellation
 10	0.00	TestLoftVolumeRationalCeiling
-10	0.00	TestLoftVolumeExactShellEmbeddedPositive
-10	0.00	TestLoftVolumeExactShellRealVaryingTab
-10	0.00	TestLoftVolumeExactShellRefusesCrossingAndReversal
-10	0.00	TestLoftVolumeExactShellRefusesSeparateComponents
-10	0.00	TestLoftVolumeExactShellRefusesOversizeAndCancellation
-10	0.00	TestLoftVolumeExactShellRefusesNonadjacentCrossing
-10	0.00	TestLoftVolumeExactShellRefusesCoplanarOverlap
-10	0.00	TestLoftVolumeEmbeddingRefusesNearCoplanarCrossing
-10	0.00	TestLoftVolumeEmbeddingRefusesOneVertexTJunction
 10	0.00	TestLoftContactSeamReadsVaryingRecordedLines
 10	0.00	TestLoftContactOccupancyReadsVaryingRecordedWalls
 10	0.00	TestLoftContactOrderReadsVaryingRecordedLines
