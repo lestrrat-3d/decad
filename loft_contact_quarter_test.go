@@ -1132,7 +1132,7 @@ func TestLoftQuarterJunctionOneRealCase(t *testing.T) {
 		total = 0
 		wall = proofbound.NewWallWorkBudgetWithOperation(4096, operation)
 		_, accepted, e := certifyLoftSourcePartition(ctx,
-			operands[0], operands[1], wall)
+			operands[0], operands[1], wall, false)
 		if e != nil || accepted {
 			t.Fatalf("private source consumer: accepted=%t err=%v steps=%d",
 				accepted, e, total)

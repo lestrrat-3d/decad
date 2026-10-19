@@ -1,46 +1,55 @@
-package decad
+package loftcontact
 
 import (
 	"context"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/loftcontact"
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
 )
 
-const loftVolumeComposerRatBits = 8192
-const loftVolumeOutputSteps = 65_536
+// VolumeComposerRatBits is the size ceiling VolumeRatFits applies to the
+// numerator and denominator of every rational VolumeCompose reads or keeps.
+const VolumeComposerRatBits = 8192
 
-// loftVolumeProof is transient. Its bound is meaningful only for the source
+// VolumeOutputSteps is the output-phase work limit shared by the boundary
+// proof, VolumeCompose and the shell published from them.
+const VolumeOutputSteps = 65_536
+
+// VolumeProof is transient. Its bound is meaningful only for the source
 // partition and boundary proof certified from the same live operands.
-type loftVolumeProof struct {
-	boundary          loftcontact.OutputBoundary
-	sourceVolume      *big.Rat
-	symDiffUpper      float64
-	totalOutputVisits uint64
+// SymDiffUpper bounds the symmetric difference between the exact source
+// shell and the held shell; TotalOutputVisits counts the boundary and
+// composer steps together.
+type VolumeProof struct {
+	Boundary          OutputBoundary
+	SourceVolume      *big.Rat
+	SymDiffUpper      float64
+	TotalOutputVisits uint64
 }
 
-// loftVolumeCompose uses the source partition carried by its boundary proof.
+// VolumeCompose uses the source partition carried by its boundary proof.
 // The payloads must come from the same live records passed to that proof.
-func loftVolumeCompose(ctx context.Context, operation *proofbound.WorkBudget,
-	pp prismPayload, lp loftPayload, boundary loftcontact.OutputBoundary,
-) (loftVolumeProof, bool, error) {
-	var no loftVolumeProof
+func VolumeCompose(ctx context.Context, operation *proofbound.WorkBudget,
+	pp prismrecord.Payload, lp loftrecord.Payload, boundary OutputBoundary,
+) (VolumeProof, bool, error) {
+	var no VolumeProof
 	if err := ctx.Err(); err != nil {
 		return no, false, err
 	}
 	if operation == nil || boundary.WorkVisits == 0 ||
-		boundary.WorkVisits >= loftVolumeOutputSteps ||
+		boundary.WorkVisits >= VolumeOutputSteps ||
 		len(boundary.Shell.Triangles) == 0 || len(boundary.Shell.Triangles) > 512 ||
 		len(boundary.Shell.Vertices) == 0 || len(boundary.Shell.Vertices) > 512 {
 		return no, false, nil
 	}
 	limit := proofbound.NewWallWorkBudgetWithOperation(
-		loftVolumeOutputSteps-boundary.WorkVisits, operation)
+		VolumeOutputSteps-boundary.WorkVisits, operation)
 	var volumeVisits uint64
 	budget := &proofbound.WorkBudget{
 		StepFn: func() error {
@@ -53,18 +62,18 @@ func loftVolumeCompose(ctx context.Context, operation *proofbound.WorkBudget,
 		ErrFn: limit.Err,
 	}
 	shell := boundary.Shell
-	if admitted, err := loftVolumeSourceEquality(ctx, budget, pp, lp, boundary.Source, shell); err != nil || !admitted {
+	if admitted, err := VolumeSourceEquality(ctx, budget, pp, lp, boundary.Source, shell); err != nil || !admitted {
 		return no, false, err
 	}
 	world := make([][3]*big.Rat, len(shell.Vertices))
 	for i, vertex := range shell.Vertices {
 		world[i] = vertex.World
 	}
-	sourceVolume, admitted, err := loftcontact.VolumeExactShell(budget, world, shell.Triangles)
+	sourceVolume, admitted, err := VolumeExactShell(budget, world, shell.Triangles)
 	if err != nil || !admitted {
 		return no, false, err
 	}
-	if !loftVolumeRatFits(sourceVolume) || sourceVolume.Sign() <= 0 {
+	if !VolumeRatFits(sourceVolume) || sourceVolume.Sign() <= 0 {
 		return no, false, nil
 	}
 	bound := new(big.Rat)
@@ -82,7 +91,7 @@ func loftVolumeCompose(ctx context.Context, operation *proofbound.WorkBudget,
 			}
 			vertex := shell.Vertices[index]
 			for axis, coordinate := range vertex.World {
-				if !loftVolumeRatFits(coordinate) {
+				if !VolumeRatFits(coordinate) {
 					return no, false, nil
 				}
 				points[corner][axis] = coordinate
@@ -95,30 +104,30 @@ func loftVolumeCompose(ctx context.Context, operation *proofbound.WorkBudget,
 					return no, false, err
 				}
 				points[corner+3][axis] = proofarith.FloatRat(coordinate)
-				if !loftVolumeRatFits(points[corner+3][axis]) {
+				if !VolumeRatFits(points[corner+3][axis]) {
 					return no, false, nil
 				}
 			}
 		}
-		term, admitted, err := loftcontact.VolumeHullBound(budget, points)
+		term, admitted, err := VolumeHullBound(budget, points)
 		if err != nil || !admitted {
 			return no, false, err
 		}
-		if !loftVolumeRatFits(term) || term.Sign() < 0 || !loftVolumeSumFits(bound, term) {
+		if !VolumeRatFits(term) || term.Sign() < 0 || !VolumeSumFits(bound, term) {
 			return no, false, nil
 		}
 		if err := budget.Step(); err != nil {
 			return no, false, err
 		}
 		bound.Add(bound, term)
-		if !loftVolumeRatFits(bound) {
+		if !VolumeRatFits(bound) {
 			return no, false, nil
 		}
 	}
 	if err := budget.Step(); err != nil {
 		return no, false, err
 	}
-	upper, rounded := loftVolumeRoundUp(bound)
+	upper, rounded := VolumeRoundUp(bound)
 	if !rounded {
 		return no, false, nil
 	}
@@ -126,7 +135,7 @@ func loftVolumeCompose(ctx context.Context, operation *proofbound.WorkBudget,
 		return no, false, nil
 	}
 	upperRat := proofarith.FloatRat(upper)
-	if !loftVolumeCompareFits(sourceVolume, upperRat) || sourceVolume.Cmp(upperRat) <= 0 {
+	if !VolumeCompareFits(sourceVolume, upperRat) || sourceVolume.Cmp(upperRat) <= 0 {
 		return no, false, nil
 	}
 	if err := ctx.Err(); err != nil {
@@ -135,22 +144,24 @@ func loftVolumeCompose(ctx context.Context, operation *proofbound.WorkBudget,
 	if err := budget.Err(); err != nil {
 		return no, false, err
 	}
-	return loftVolumeProof{
-		boundary: boundary, sourceVolume: new(big.Rat).Set(sourceVolume),
-		symDiffUpper: upper, totalOutputVisits: boundary.WorkVisits + volumeVisits,
+	return VolumeProof{
+		Boundary: boundary, SourceVolume: new(big.Rat).Set(sourceVolume),
+		SymDiffUpper: upper, TotalOutputVisits: boundary.WorkVisits + volumeVisits,
 	}, true, nil
 }
 
-func loftVolumeRatFits(value *big.Rat) bool {
+// VolumeRatFits reports whether value is non-nil and its numerator and
+// denominator are within VolumeComposerRatBits.
+func VolumeRatFits(value *big.Rat) bool {
 	return value != nil && value.Denom().Sign() > 0 &&
-		value.Num().BitLen() <= loftVolumeComposerRatBits &&
-		value.Denom().BitLen() <= loftVolumeComposerRatBits
+		value.Num().BitLen() <= VolumeComposerRatBits &&
+		value.Denom().BitLen() <= VolumeComposerRatBits
 }
 
-// loftVolumeRoundUp preflights the integer alignment used by RatFloat64 and
+// VolumeRoundUp preflights the integer alignment used by RatFloat64 and
 // the cross products used by the exact rounding-direction comparison.
-func loftVolumeRoundUp(value *big.Rat) (float64, bool) {
-	if !loftVolumeRatFits(value) || value.Sign() < 0 {
+func VolumeRoundUp(value *big.Rat) (float64, bool) {
+	if !VolumeRatFits(value) || value.Sign() < 0 {
 		return 0, false
 	}
 	if value.Sign() == 0 {
@@ -159,7 +170,7 @@ func loftVolumeRoundUp(value *big.Rat) (float64, bool) {
 	numeratorBits, denominatorBits := value.Num().BitLen(), value.Denom().BitLen()
 	if value.Denom().TrailingZeroBits() != uint(denominatorBits-1) {
 		shift := 54 - (numeratorBits - denominatorBits)
-		if shift > 0 && numeratorBits+shift > loftVolumeComposerRatBits {
+		if shift > 0 && numeratorBits+shift > VolumeComposerRatBits {
 			return 0, false
 		}
 	}
@@ -168,7 +179,7 @@ func loftVolumeRoundUp(value *big.Rat) (float64, bool) {
 		return 0, false
 	}
 	nearestRat := proofarith.FloatRat(nearest)
-	if !loftVolumeCompareFits(nearestRat, value) {
+	if !VolumeCompareFits(nearestRat, value) {
 		return 0, false
 	}
 	if nearestRat.Cmp(value) < 0 {
@@ -179,8 +190,8 @@ func loftVolumeRoundUp(value *big.Rat) (float64, bool) {
 
 // Adding a/b and c/d can need ad+bc over bd before reduction. Refuse before
 // that allocation if either unreduced intermediate could pass the ceiling.
-func loftVolumeSumFits(a, b *big.Rat) bool {
-	if !loftVolumeRatFits(a) || !loftVolumeRatFits(b) {
+func VolumeSumFits(a, b *big.Rat) bool {
+	if !VolumeRatFits(a) || !VolumeRatFits(b) {
 		return false
 	}
 	if a.Sign() == 0 || b.Sign() == 0 {
@@ -188,17 +199,19 @@ func loftVolumeSumFits(a, b *big.Rat) bool {
 	}
 	an, ad := a.Num().BitLen(), a.Denom().BitLen()
 	bn, bd := b.Num().BitLen(), b.Denom().BitLen()
-	return max(an+bd, bn+ad)+1 <= loftVolumeComposerRatBits &&
-		ad+bd <= loftVolumeComposerRatBits
+	return max(an+bd, bn+ad)+1 <= VolumeComposerRatBits &&
+		ad+bd <= VolumeComposerRatBits
 }
 
-func loftVolumeCompareFits(a, b *big.Rat) bool {
-	return loftVolumeRatFits(a) && loftVolumeRatFits(b) &&
-		a.Num().BitLen()+b.Denom().BitLen() <= loftVolumeComposerRatBits &&
-		b.Num().BitLen()+a.Denom().BitLen() <= loftVolumeComposerRatBits
+// VolumeCompareFits reports whether comparing a and b keeps both cross
+// products within VolumeComposerRatBits.
+func VolumeCompareFits(a, b *big.Rat) bool {
+	return VolumeRatFits(a) && VolumeRatFits(b) &&
+		a.Num().BitLen()+b.Denom().BitLen() <= VolumeComposerRatBits &&
+		b.Num().BitLen()+a.Denom().BitLen() <= VolumeComposerRatBits
 }
 
-// loftVolumeSourceEquality proves that the exact triangles in shell tile the
+// VolumeSourceEquality proves that the exact triangles in shell tile the
 // outward boundary of the admitted source union. The caller must pass the
 // partition of these live, authenticated line-only records and the same
 // output-phase budget used to build shell. This is a private, transient source
@@ -214,9 +227,9 @@ func loftVolumeCompareFits(a, b *big.Rat) bool {
 // is P. The exact cap arrangement and side-interval constructors below tile
 // those disjoint patches once. A triangle-by-triangle comparison then proves
 // that shell has neither an omitted nor a doubled or internal patch.
-func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget,
-	pp prismPayload, lp loftPayload, source loftcontact.SourcePartition, shell loftcontact.OutputShell) (bool, error) {
-	arithmetic := &loftcontact.Arithmetic{OK: true}
+func VolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget,
+	pp prismrecord.Payload, lp loftrecord.Payload, source SourcePartition, shell OutputShell) (bool, error) {
+	arithmetic := &Arithmetic{OK: true}
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
@@ -303,15 +316,15 @@ func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget
 			}
 		}
 	}
-	prismLines, ok, err := loftcontact.PartitionLines(budget, pp.Profile.Outer)
+	prismLines, ok, err := PartitionLines(budget, pp.Profile.Outer)
 	if err != nil || !ok {
 		return false, err
 	}
-	bottom, ok, err := loftcontact.PartitionLines(budget, lp.Profile0.Outer)
+	bottom, ok, err := PartitionLines(budget, lp.Profile0.Outer)
 	if err != nil || !ok {
 		return false, err
 	}
-	top, ok, err := loftcontact.PartitionLines(budget, lp.Profile1.Outer)
+	top, ok, err := PartitionLines(budget, lp.Profile1.Outer)
 	if err != nil || !ok || len(bottom) != len(top) || len(source.Walls) != len(bottom) ||
 		source.Carrier < 0 || source.Carrier >= len(prismLines) {
 		return false, err
@@ -350,7 +363,7 @@ func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget
 		source.TopWallJoins != len(prismLines) {
 		return false, nil
 	}
-	convex, err := loftPartitionConvexPrism(budget, prismLines)
+	convex, err := convexPrism(budget, prismLines)
 	if err != nil || !convex {
 		return false, err
 	}
@@ -368,7 +381,7 @@ func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget
 	// A zero seam is refused by At; the four comparisons authenticate the
 	// supplied seam against a freshly certified seam from these source lines.
 	carrier := prismLines[source.Carrier]
-	crossing, seams, sides, admitted, err := loftcontact.CertifyCarrierOccupancy(ctx, budget,
+	crossing, seams, sides, admitted, err := CertifyCarrierOccupancy(ctx, budget,
 		bottom, top, [2]sectionrecord.Point2{carrier.Start, carrier.End})
 	if err != nil || !admitted || crossing != source.Crossing {
 		return false, err
@@ -445,25 +458,25 @@ func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget
 	// exposed boundary. The side constructor uses the same whole-height seam
 	// identities just checked and refuses nonplanar wall patches. Rebuilding
 	// in a separate shell avoids relying on labels supplied by the candidate.
-	want := loftcontact.NewOutputShell()
+	want := NewOutputShell()
 	for capIndex := range 3 {
 		if err := ctx.Err(); err != nil {
 			return false, err
 		}
-		valid, err := loftcontact.OutputCap(ctx, budget, pp.Frame, prismLines, bottom, top, source, &want, capIndex, arithmetic)
+		valid, err := OutputCap(ctx, budget, pp.Frame, prismLines, bottom, top, source, &want, capIndex, arithmetic)
 		if err != nil || !valid || !arithmetic.OK {
 			return false, err
 		}
 	}
-	valid, err := loftcontact.OutputSides(budget, pp.Frame, prismLines, bottom, top, source, &want, arithmetic)
+	valid, err := OutputSides(budget, pp.Frame, prismLines, bottom, top, source, &want, arithmetic)
 	if err != nil || !valid || !arithmetic.OK {
 		return false, err
 	}
-	valid, err = loftcontact.AuditOutputSource(budget, want, source, arithmetic)
+	valid, err = AuditOutputSource(budget, want, source, arithmetic)
 	if err != nil || !valid || !arithmetic.OK {
 		return false, err
 	}
-	valid, err = loftcontact.AuditOutputSource(budget, shell, source, arithmetic)
+	valid, err = AuditOutputSource(budget, shell, source, arithmetic)
 	if err != nil || !valid || !arithmetic.OK {
 		return false, err
 	}

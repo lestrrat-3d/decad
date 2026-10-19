@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/loftcontact"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -86,11 +87,11 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 				require.True(t, boundaryOK)
 				pp := prism.n.Payload.(prismPayload)
 				lp := loft.n.Payload.(loftPayload)
-				proof, proofOK, proofErr := loftVolumeCompose(t.Context(), operation,
+				proof, proofOK, proofErr := loftcontact.VolumeCompose(t.Context(), operation,
 					pp, lp, boundary)
 				require.NoError(t, proofErr)
 				require.True(t, proofOK)
-				require.Less(t, proof.totalOutputVisits, uint64(loftVolumeOutputSteps))
+				require.Less(t, proof.TotalOutputVisits, uint64(loftcontact.VolumeOutputSteps))
 				// A one-step remainder must refuse before conversion can build.
 				refused, accepted, refusalErr := loftContactFacetedBody(t.Context(), d,
 					d.nextProducerID(), first, second, prism, loft, lp, proof,
@@ -431,10 +432,10 @@ func TestLoftContactDirectShellUnionRealVaryingTab(t *testing.T) {
 		Distance{D: units.Millimeters(5), Dir: Along})
 	require.NoError(t, err)
 	pp, lp, boundary, operation := loftVolumeRealCertificates(t, prism, loft)
-	proof, admitted, err := loftVolumeCompose(ctx, operation, pp, lp, boundary)
+	proof, admitted, err := loftcontact.VolumeCompose(ctx, operation, pp, lp, boundary)
 	require.NoError(t, err)
 	require.True(t, admitted)
-	require.Zero(t, proof.sourceVolume.Cmp(big.NewRat(522, 1)))
+	require.Zero(t, proof.SourceVolume.Cmp(big.NewRat(522, 1)))
 	result, err := Union(ctx, prism, loft)
 	require.NoError(t, err)
 	require.True(t, result.IsSolid())

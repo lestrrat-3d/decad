@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftcontact"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -217,8 +218,8 @@ func loftCapSceneRangeFits(start, end float64) bool {
 		start < 0 || end > 1 || start >= end {
 		return false
 	}
-	return loftVolumeRatFits(proofarith.FloatRat(start)) &&
-		loftVolumeRatFits(proofarith.FloatRat(end))
+	return loftcontact.VolumeRatFits(proofarith.FloatRat(start)) &&
+		loftcontact.VolumeRatFits(proofarith.FloatRat(end))
 }
 
 // loftSourceCapSpan borrows one authenticated producer segment for this call.
@@ -294,8 +295,8 @@ func certifyLoftSourceSpanCaps(ctx context.Context, budget *proofbound.WorkBudge
 		prismplacement.Operand{Frame: pp.Frame, Xform: pp.Xform},
 		prismplacement.Operand{Frame: lp.Frame1, Xform: lp.Xform})
 	prismTop := proofarith.FloatRat(pp.Z1)
-	if !axis.OK || !loftVolumeRatFits(axis.Shift) ||
-		!loftVolumeRatFits(prismTop) || axis.Shift.Sign() <= 0 ||
+	if !axis.OK || !loftcontact.VolumeRatFits(axis.Shift) ||
+		!loftcontact.VolumeRatFits(prismTop) || axis.Shift.Sign() <= 0 ||
 		axis.Shift.Cmp(prismTop) >= 0 {
 		return no, false, nil
 	}
@@ -432,7 +433,7 @@ func loftSourceCapSpanOf(body *Body, role string, index int,
 		start, end = c.TStart, c.TEnd
 		radius, err := c.Radius.In(units.Millimeter)
 		if err != nil || proofbound.IsNonFinite(radius) || radius <= 0 ||
-			!loftVolumeRatFits(proofarith.FloatRat(radius)) ||
+			!loftcontact.VolumeRatFits(proofarith.FloatRat(radius)) ||
 			!((start == 0 && end == 1) || (start == 1 && end == 0)) ||
 			c.CCW != (start < end) {
 			return no, false
@@ -456,8 +457,8 @@ func loftSourceCapSpanOf(body *Body, role string, index int,
 	}
 	for _, point := range points {
 		if proofbound.IsNonFinite(point.U) || proofbound.IsNonFinite(point.V) ||
-			!loftVolumeRatFits(proofarith.FloatRat(point.U)) ||
-			!loftVolumeRatFits(proofarith.FloatRat(point.V)) {
+			!loftcontact.VolumeRatFits(proofarith.FloatRat(point.U)) ||
+			!loftcontact.VolumeRatFits(proofarith.FloatRat(point.V)) {
 			return no, false
 		}
 	}

@@ -29,10 +29,10 @@ type loftDirectOutputLimitKey struct{}
 // Only a package-private, lower-only test allowance can reduce this limit.
 func loftDirectOutputLimit(ctx context.Context) uint64 {
 	if limit, ok := ctx.Value(loftDirectOutputLimitKey{}).(uint64); ok &&
-		limit > 0 && limit < loftVolumeOutputSteps {
+		limit > 0 && limit < loftcontact.VolumeOutputSteps {
 		return limit
 	}
-	return loftVolumeOutputSteps
+	return loftcontact.VolumeOutputSteps
 }
 
 // tryLoftContactDirectShellUnion publishes only the shell certified from the
@@ -63,7 +63,7 @@ func tryLoftContactDirectShellUnion(ctx context.Context, op meshbool.OperationKi
 	if !admitted {
 		return nil, false, nil
 	}
-	proof, admitted, err := loftVolumeCompose(ctx, operation, pp, lp, boundary)
+	proof, admitted, err := loftcontact.VolumeCompose(ctx, operation, pp, lp, boundary)
 	if err != nil {
 		return loftContactBoundedResult(ctx, err)
 	}
@@ -73,11 +73,11 @@ func tryLoftContactDirectShellUnion(ctx context.Context, op meshbool.OperationKi
 	if err := ctx.Err(); err != nil {
 		return nil, false, err
 	}
-	if proof.totalOutputVisits >= loftVolumeOutputSteps {
+	if proof.TotalOutputVisits >= loftcontact.VolumeOutputSteps {
 		return loftContactBoundedResult(ctx, errLoftDirectLimit)
 	}
 	budget := proofbound.NewWallWorkBudgetWithOperation(
-		loftVolumeOutputSteps-proof.totalOutputVisits, operation)
+		loftcontact.VolumeOutputSteps-proof.TotalOutputVisits, operation)
 	if err := budget.Err(); err != nil {
 		return loftContactBoundedResult(ctx, err)
 	}
@@ -94,14 +94,14 @@ func tryLoftContactDirectShellUnion(ctx context.Context, op meshbool.OperationKi
 
 func loftContactFacetedBody(ctx context.Context, d *Document, ref producerID,
 	first, second, prism, loft *Body, lp loftPayload,
-	proof loftVolumeProof, budget *proofbound.WorkBudget) (*Body, bool, error) {
-	shell := proof.boundary.Shell
+	proof loftcontact.VolumeProof, budget *proofbound.WorkBudget) (*Body, bool, error) {
+	shell := proof.Boundary.Shell
 	if len(shell.Faces) != len(shell.Triangles) ||
 		len(shell.Vertices) == 0 || len(shell.Vertices) > 512 ||
 		len(shell.Triangles) == 0 || len(shell.Triangles) > 512 ||
-		proof.boundary.HeldAudit == nil ||
-		len(proof.boundary.AuditedVerts) != len(shell.Vertices) ||
-		len(proof.boundary.AuditedTris) != len(shell.Triangles) {
+		proof.Boundary.HeldAudit == nil ||
+		len(proof.Boundary.AuditedVerts) != len(shell.Vertices) ||
+		len(proof.Boundary.AuditedTris) != len(shell.Triangles) {
 		return nil, false, nil
 	}
 	prismFaces, ok, err := loftContactSourceFaces(prism, budget)
@@ -141,9 +141,9 @@ func loftContactFacetedBody(ctx context.Context, d *Document, ref producerID,
 		if err := budget.Step(); err != nil {
 			return loftContactBoundedResult(ctx, err)
 		}
-		if math.Float64bits(vertex.Held.X) != math.Float64bits(proof.boundary.AuditedVerts[i].X) ||
-			math.Float64bits(vertex.Held.Y) != math.Float64bits(proof.boundary.AuditedVerts[i].Y) ||
-			math.Float64bits(vertex.Held.Z) != math.Float64bits(proof.boundary.AuditedVerts[i].Z) {
+		if math.Float64bits(vertex.Held.X) != math.Float64bits(proof.Boundary.AuditedVerts[i].X) ||
+			math.Float64bits(vertex.Held.Y) != math.Float64bits(proof.Boundary.AuditedVerts[i].Y) ||
+			math.Float64bits(vertex.Held.Z) != math.Float64bits(proof.Boundary.AuditedVerts[i].Z) {
 			return nil, false, nil
 		}
 		verts[i], beta[i] = vertex.Held, vertex.Bound
@@ -164,8 +164,8 @@ func loftContactFacetedBody(ctx context.Context, d *Document, ref producerID,
 			return loftContactBoundedResult(ctx, err)
 		}
 		roles, owner, found, err := loftContactSourceRoles(face, shell.Triangles[i], shell,
-			lower, upper, proof.boundary.Source.CapLevels[0],
-			proof.boundary.Source.CapLevels[1], budget)
+			lower, upper, proof.Boundary.Source.CapLevels[0],
+			proof.Boundary.Source.CapLevels[1], budget)
 		if err != nil {
 			return loftContactBoundedResult(ctx, err)
 		}
@@ -229,7 +229,7 @@ func loftContactFacetedBody(ctx context.Context, d *Document, ref producerID,
 		if err := budget.Step(); err != nil {
 			return loftContactBoundedResult(ctx, err)
 		}
-		if triangle != proof.boundary.AuditedTris[i] {
+		if triangle != proof.Boundary.AuditedTris[i] {
 			return nil, false, nil
 		}
 		tris[i] = triangle
@@ -239,10 +239,10 @@ func loftContactFacetedBody(ctx context.Context, d *Document, ref producerID,
 		Tris: tris,
 		Src:  src, Groups: groups,
 		MeshBound:  facetproof.FacetBoundMax(shell.Triangles, beta),
-		VolSymDiff: proof.symDiffUpper, DPair: dPair,
+		VolSymDiff: proof.SymDiffUpper, DPair: dPair,
 		Xform: r3.Identity(),
 	}
-	audit := proof.boundary.HeldAudit
+	audit := proof.Boundary.HeldAudit
 	volF, bound, volumeRat, admitted, err := facetproof.VolumeFromAuditBounded(
 		budget, audit, payload.VolSymDiff)
 	if err != nil || !admitted {
@@ -303,8 +303,8 @@ func loftContactSourceFaces(body *Body, budget *proofbound.WorkBudget) (map[stri
 				if err := budget.Step(); err != nil {
 					return nil, false, err
 				}
-				if len(face.Origins) > loftVolumeOutputSteps ||
-					roles > loftVolumeOutputSteps-len(face.Origins) {
+				if len(face.Origins) > loftcontact.VolumeOutputSteps ||
+					roles > loftcontact.VolumeOutputSteps-len(face.Origins) {
 					return nil, false, nil
 				}
 				roles += len(face.Origins)

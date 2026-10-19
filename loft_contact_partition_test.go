@@ -42,7 +42,7 @@ func TestLoftContactPartitionRealVaryingCapJunctions(t *testing.T) {
 	pp := prism.n.Payload.(prismPayload)
 	for _, operands := range [][2]*Body{{prism, loft}, {loft, prism}} {
 		partition, admitted, err := certifyLoftSourcePartition(t.Context(), operands[0], operands[1],
-			proofbound.NewWorkBudget(t.Context()))
+			proofbound.NewWorkBudget(t.Context()), false)
 		require.NoError(t, err)
 		require.True(t, admitted)
 		require.Equal(t, [2][2]sectionrecord.Point2{
@@ -139,7 +139,7 @@ func TestLoftContactPartitionCapMapRefusesAmbiguousFragments(t *testing.T) {
 	prism, loft := loftPartitionRealBodies(t,
 		[4]float64{8, 4, 12, 6}, [4]float64{8, 4, 13, 6}, 0, 4)
 	partition, admitted, err := certifyLoftSourcePartition(t.Context(), prism, loft,
-		proofbound.NewWorkBudget(t.Context()))
+		proofbound.NewWorkBudget(t.Context()), false)
 	require.NoError(t, err)
 	require.True(t, admitted)
 	budget := proofbound.NewWallWorkBudgetWithOperation(4096, proofbound.NewWorkBudget(t.Context()))
@@ -244,7 +244,7 @@ func TestLoftContactPartitionInteriorCutIsNotCapChord(t *testing.T) {
 	prism, loft := loftPartitionRealBodies(t,
 		[4]float64{8, 4, 12, 6}, [4]float64{8, 4, 13, 6}, 0, 4)
 	partition, admitted, err := certifyLoftSourcePartition(t.Context(), prism, loft,
-		proofbound.NewWorkBudget(t.Context()))
+		proofbound.NewWorkBudget(t.Context()), false)
 	require.NoError(t, err)
 	require.True(t, admitted)
 	loftLines := loft.n.Payload.(loftPayload).Profile0.Outer.Segments
@@ -303,7 +303,7 @@ func TestLoftContactPartitionOtherPrismCarrier(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			prism, loft := loftPartitionRealBodies(t, tc.lower, tc.upper, 0, 4)
 			partition, admitted, err := certifyLoftSourcePartition(t.Context(), prism, loft,
-				proofbound.NewWorkBudget(t.Context()))
+				proofbound.NewWorkBudget(t.Context()), false)
 			require.NoError(t, err)
 			require.True(t, admitted)
 			carrier := prism.n.Payload.(prismPayload).Profile.Outer.Segments[partition.Carrier].(sectionrecord.LineSeg)
@@ -335,7 +335,7 @@ func TestLoftContactPartitionRealProducerRefusals(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			prism, loft := loftPartitionRealBodies(t, tc.lower, tc.upper, tc.z0, tc.z1)
 			_, admitted, err := certifyLoftSourcePartition(t.Context(), prism, loft,
-				proofbound.NewWorkBudget(t.Context()))
+				proofbound.NewWorkBudget(t.Context()), false)
 			require.NoError(t, err)
 			require.False(t, admitted)
 		})
@@ -363,18 +363,18 @@ func TestLoftContactPartitionSourceAndWorkRefusals(t *testing.T) {
 			change.edit(&payload)
 			alteredBody := bornBody(&Body{n: topo.Body{Payload: payload}})
 			_, admitted, err := certifyLoftSourcePartition(t.Context(), prism, alteredBody,
-				proofbound.NewWorkBudget(t.Context()))
+				proofbound.NewWorkBudget(t.Context()), false)
 			require.NoError(t, err)
 			require.False(t, admitted)
 		})
 	}
 	exhausted := &proofbound.WorkBudget{StepFn: func() error { return context.DeadlineExceeded }}
-	_, admitted, err := certifyLoftSourcePartition(t.Context(), prism, loft, exhausted)
+	_, admitted, err := certifyLoftSourcePartition(t.Context(), prism, loft, exhausted, false)
 	require.ErrorIs(t, err, context.DeadlineExceeded)
 	require.False(t, admitted)
 	canceled, cancel := context.WithCancel(t.Context())
 	cancel()
-	_, admitted, err = certifyLoftSourcePartition(canceled, prism, loft, proofbound.NewWorkBudget(canceled))
+	_, admitted, err = certifyLoftSourcePartition(canceled, prism, loft, proofbound.NewWorkBudget(canceled), false)
 	require.ErrorIs(t, err, context.Canceled)
 	require.False(t, admitted)
 }
