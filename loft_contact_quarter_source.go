@@ -197,7 +197,7 @@ func loftQuarterPieceRange(l prismcells.ProfileLineage, loop, edge int) (
 
 func mapLoftQuarterWitnesses(ctx context.Context, budget *proofbound.WorkBudget,
 	raw, split []*sketch.Profile, lineage []prismcells.ProfileLineage,
-	tags map[sketch.Entity]prismcells.Origin, source loftSourceSpanCaps, cap int,
+	tags map[sketch.Entity]prismcells.Origin, source loftSourceSpanCaps, capIndex int,
 	witnesses []sketch.QuarterArcJunction) ([]loftQuarterSourceEvent, bool, error) {
 	if len(raw) != len(split) || len(raw) != len(lineage) {
 		return nil, false, nil
@@ -279,10 +279,10 @@ func mapLoftQuarterWitnesses(ctx context.Context, budget *proofbound.WorkBudget,
 					if !isArc || event.appearances == 0 &&
 						sources[i].Kind != sketch.JunctionArc ||
 						origin.Segment < 0 ||
-						origin.Segment >= len(source.loftCaps[cap]) {
+						origin.Segment >= len(source.loftCaps[capIndex]) {
 						return nil, false, nil
 					}
-					span := source.loftCaps[cap][origin.Segment]
+					span := source.loftCaps[capIndex][origin.Segment]
 					if _, ok := span.curve.(sectionrecord.ArcSeg); !ok {
 						return nil, false, nil
 					}
@@ -295,10 +295,10 @@ func mapLoftQuarterWitnesses(ctx context.Context, budget *proofbound.WorkBudget,
 					if !isLine || event.appearances == 0 &&
 						sources[i].Kind != sketch.JunctionLine ||
 						origin.Segment < 0 ||
-						origin.Segment >= len(source.prismCaps[cap]) {
+						origin.Segment >= len(source.prismCaps[capIndex]) {
 						return nil, false, nil
 					}
-					span := source.prismCaps[cap][origin.Segment]
+					span := source.prismCaps[capIndex][origin.Segment]
 					if _, ok := span.curve.(sectionrecord.LineSeg); !ok {
 						return nil, false, nil
 					}
@@ -318,10 +318,10 @@ func mapLoftQuarterWitnesses(ctx context.Context, budget *proofbound.WorkBudget,
 // quarterSourcePairs adapts authenticated body spans to the plain-data pair
 // classifier. Every original segment retains its source index.
 func quarterSourcePairs(budget *proofbound.WorkBudget, work *loftQuarterWork,
-	source loftSourceSpanCaps, cap int, events []loftQuarterSourceEvent) (bool, error) {
-	prism := make([]sectionrecord.CurveSegment, len(source.prismCaps[cap]))
-	loft := make([]sectionrecord.CurveSegment, len(source.loftCaps[cap]))
-	for i, span := range source.prismCaps[cap] {
+	source loftSourceSpanCaps, capIndex int, events []loftQuarterSourceEvent) (bool, error) {
+	prism := make([]sectionrecord.CurveSegment, len(source.prismCaps[capIndex]))
+	loft := make([]sectionrecord.CurveSegment, len(source.loftCaps[capIndex]))
+	for i, span := range source.prismCaps[capIndex] {
 		if err := budget.Step(); err != nil {
 			return false, err
 		}
@@ -330,7 +330,7 @@ func quarterSourcePairs(budget *proofbound.WorkBudget, work *loftQuarterWork,
 		}
 		prism[i] = span.curve
 	}
-	for i, span := range source.loftCaps[cap] {
+	for i, span := range source.loftCaps[capIndex] {
 		if err := budget.Step(); err != nil {
 			return false, err
 		}
@@ -355,7 +355,7 @@ func quarterSourcePairs(budget *proofbound.WorkBudget, work *loftQuarterWork,
 // quarterSourceIntervals checks that every original cap segment has continuous
 // arranged coverage over its complete natural [0,1] domain.
 func quarterSourceIntervals(budget *proofbound.WorkBudget,
-	source loftSourceSpanCaps, cap int, cells []loftCapSourceCell) (bool, error) {
+	source loftSourceSpanCaps, capIndex int, cells []loftCapSourceCell) (bool, error) {
 	var fragments []loftcontact.QuarterSourceInterval
 	for _, cell := range cells {
 		for _, edge := range cell.edges {
@@ -373,5 +373,5 @@ func quarterSourceIntervals(budget *proofbound.WorkBudget,
 		}
 	}
 	return loftcontact.QuarterSourceIntervals(budget,
-		len(source.prismCaps[cap]), len(source.loftCaps[cap]), fragments)
+		len(source.prismCaps[capIndex]), len(source.loftCaps[capIndex]), fragments)
 }
