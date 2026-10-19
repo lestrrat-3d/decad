@@ -341,7 +341,7 @@ reads its `sectionDelta` through `booloperand.sectionDisplacement`, as it reads 
 | `Verify` undercut and minimum-radius surveys | staged: `DiagUnsupportedSurveyPayload`, `Suspect` (stage 4 adds DX7 face normals and DX8 `radiussurvey.Prism` over each loop) |
 | `Verify` clearance | `newBodyGeomBudget` has no arm, so a pair the boxes do not separate reads `Suspect`; a box-disjoint pair is proven (stage 4 adds the exposed-face model, DX6) |
 | `Verify` interference | `analyticBodiesEqual` answers undecided; the read-only mesh intersection reads §5's proof |
-| `Fillet` / `Chamfer` / `Shell` | through the brep face view (modify-reach RX3); a prism group and a stack enclosing a cavity have none (brep-modify SB2) |
+| `Fillet` / `Chamfer` / `Shell` | through the brep face view (modify-reach RX3); a prism group and a stack enclosing a cavity have none (brep-modify SB2). `internal/stackedshell` reads a two-slab stack with that view for the exact boss, blind-pocket and counterbore shells (`docs/modify-general-design.md` §3.1a-§3.1c, §3.1e) |
 | `Thicken` / `Offset` / `Patch` / `Stitch` | not reachable: the body is a solid |
 
 ## 7. Stages

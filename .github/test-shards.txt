@@ -117,7 +117,6 @@
 5	0.01	TestRevolveLoftFacesSimpleSourceCertifiesWholeCurveLoop
 5	0.00	TestRevolveLoftFacesSlopedRadialInsideNeedsUniqueOuterCrossing
 5	2.29	TestSpiralRootRowsMatchReference
-6	0.00	TestBlindPocketFloorBandHasFourSphereOctants
 6	0.00	TestCICPUClassShard1
 6	0.02	TestCompositeChainSweepAreaSlackEnclosesTheAnalyticSheet
 6	4.63	TestCurvedCallScopeSharesLiveRecords

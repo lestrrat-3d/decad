@@ -2139,3 +2139,4 @@
 10	0.00	TestVerifyCoilClearanceAgainstPrism
 10	0.00	TestVerifyCoilClearanceAgainstUnsupportedRevolveIsSuspect
 10	0.00	TestLoftCylinderChamfersBothOuterCaps
+10	0.00	TestShellStackedWrongCapRefuses

@@ -7,7 +7,6 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
-	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/cupwall"
 	"github.com/lestrrat-3d/decad/internal/draftrecord"
@@ -21,6 +20,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/shellsurvey"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
+	"github.com/lestrrat-3d/decad/internal/stackedshell"
 	"github.com/lestrrat-3d/decad/internal/sweeprecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/units"
@@ -223,33 +223,13 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value, opts .
 			return b.shellClosedPrism(ctx, pp, s, t, tmm, tDelta)
 		}
 		if sp, ok := b.n.Payload.(stackedPrismPayload); ok && sense == Inward {
-			view, _, err := breprecord.OfStackedWithRoles(ctx, sp)
-			if ctxErr := ctx.Err(); ctxErr != nil {
-				return nil, ctxErr
+			n, matched, err := stackedshell.Closed(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), sp,
+				stackedshell.Call{Inward: true, T: tmm, TDelta: tDelta})
+			if err != nil {
+				return nil, err
 			}
-			if err == nil {
-				body, matched, err := shellStackedBoss(ctx, b, sp, view,
-					brepShellCall{sense: sense, t: t, tmm: tmm, tDelta: tDelta})
-				if !matched && err == nil {
-					reversed, eligible, reverseErr := prismshell.ReverseClosedBossStack(ctx, sp)
-					if reverseErr != nil {
-						return nil, reverseErr
-					}
-					if eligible {
-						reversedView, _, viewErr := breprecord.OfStackedWithRoles(ctx, reversed)
-						if viewErr != nil {
-							return nil, viewErr
-						}
-						body, matched, err = shellStackedBoss(ctx, b, reversed, reversedView,
-							brepShellCall{sense: sense, t: t, tmm: tmm, tDelta: tDelta})
-					}
-				}
-				if matched || err != nil {
-					if err != nil {
-						return nil, err
-					}
-					return commitModifyResult(ctx, b, body)
-				}
+			if matched {
+				return commitModifyResult(ctx, b, bodyHandle(n))
 			}
 		}
 		return nil, refuseClosedShell(b.n.Payload)

@@ -155,11 +155,17 @@ face across the first axis holding more than two, else axis 0's reason.
 
 ### 3.1a Exact rectangular-boss shell
 
-Before route S's through-cut reading, `shellStackedBoss` admits one nested,
+Before route S's through-cut reading, `stackedshell.Build` tries the stacked
+shells in this order: the rectangular boss (this section), the circular boss
+(§3.1c), the blind pocket (§3.1b) and the counterbore (§3.1e). Each builder reads only the
+stacked record, its face view and `stackedshell.Call`, in which root states
+the sense, the thickness and whether the one removed face is the receiver's
+cap-end or cap-start face. The rectangular-boss builder admits one nested,
 hole-free pair of axis-aligned rectangular slabs in the same frame. Both
 sections and all levels must have zero displacement. The lower slab is the
 plate, the upper slab is the boss for the top-open call. `WithNoOpenings`
-accepts that order and the reverse order, where the lower slab is narrower.
+(`stackedshell.Closed`) accepts that order and the reverse order, where the
+lower slab is narrower.
 The reverse order negates both slab intervals and each section's V coordinate,
 flips the frame's V axis exactly, and rebuilds the exposed interface. It then
 takes the same closed construction in a right-handed frame. If `r3.NewFrame`
@@ -209,7 +215,7 @@ verified tessellation.
 
 ### 3.1b Exact rectangular blind-pocket shell
 
-Before route S's through-cut reading, `shellBlindPocket` admits two slabs in
+Before route S's through-cut reading, `stackedshell.Build` admits two slabs in
 one frame: a hole-free axis-aligned outer rectangle below an interface, and
 the same outer rectangle with one nested rectangular hole above it. The one
 removed face is the top cap, and the sense is inward. Sections, levels and
@@ -241,7 +247,7 @@ its verified tessellation.
 
 ### 3.1c Exact circular-boss shell
 
-Before route S reads a through-cut, `shellRoundBoss` admits two exact slabs in
+Before route S reads a through-cut, `stackedshell.Build` admits two exact slabs in
 one frame: a hole-free axis-aligned rectangular plate and one whole-circle
 boss strictly inside it. The top boss face must be the only removed face, and
 the shell must be inward. Both sections, all levels, the circle radius and
@@ -296,7 +302,7 @@ radius-3 hole and `t=1`, this is `3688−18π` mm³.
 
 ### 3.1e Exact coaxial counterbore shell
 
-Before the through-cut reader, `shellCounterbore` accepts two stacked Cut
+Before the through-cut reader, `stackedshell.Build` accepts two stacked Cut
 slabs with one common axis-aligned rectangular outer loop and one whole-circle
 hole in each slab. The circles must have exactly the same recorded center.
 The larger circle must lie at the sole removed cap, on either end of the

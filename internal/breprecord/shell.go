@@ -25,7 +25,7 @@ import (
 )
 
 // closedBossShellLumps assigns the inner face component to the one void shell.
-// shellStackedBoss has already proved that the nested cavity stays clear of
+// stackedshell's rectangular-boss builder has already proved that the nested cavity stays clear of
 // every exterior wall, the floor and the kept roof. Every source face must
 // therefore lie in the one outer component, and all derived cavity faces in
 // exactly one other closed component.
