@@ -168,6 +168,67 @@ func (p *DepartureProof) LowerGap(f *big.Rat) *big.Rat {
 	return least
 }
 
+// Replay is the replay certificate of a planar sweep. It never reruns the
+// pair relation: a rounded pose is accepted when its vertex deviation from
+// the ideal path stays below a lower bound on the ideal separation that the
+// sweep already proved, so each replay costs one pass over both vertex sets.
+type Replay struct {
+	Departure *DepartureProof // (0, Until], when the sweep departed
+	Travel    *big.Rat        // both bodies' travel bound per unit fraction
+	spans     []ClearSpan     // the certified clear intervals, in order
+}
+
+// ClearSpan is one interval the search certified clear: by its two ends'
+// lower gaps and the §4.3 travel bound, or by separated vertex hulls.
+type ClearSpan struct {
+	From, To    *big.Rat
+	Left, Right *big.Rat // lower gaps at the two ends, nil when unproved
+	Axis        *big.Rat // hull gap over the span, nil when the hulls meet
+}
+
+// AddSpan records span after the spans already recorded. It reports false,
+// recording nothing, when the span has no hull gap and its two end gaps do
+// not exceed the travel over it.
+func (p *Replay) AddSpan(span ClearSpan) bool {
+	travel := new(big.Rat).Mul(new(big.Rat).Sub(span.To, span.From), p.Travel)
+	if span.Axis == nil && (span.Left == nil || span.Right == nil ||
+		new(big.Rat).Add(span.Left, span.Right).Cmp(travel) <= 0) {
+		return false
+	}
+	p.spans = append(p.spans, span)
+	return true
+}
+
+// LowerGap bounds the ideal separation at f from below, or returns nil when
+// no recorded certificate covers f.
+func (p *Replay) LowerGap(f *big.Rat) *big.Rat {
+	if p.Departure != nil && f.Sign() > 0 && f.Cmp(p.Departure.Until) <= 0 {
+		return p.Departure.LowerGap(f)
+	}
+	for _, span := range p.spans {
+		if f.Cmp(span.From) < 0 || f.Cmp(span.To) > 0 {
+			continue
+		}
+		var best *big.Rat
+		candidates := []*big.Rat{span.Axis}
+		if span.Left != nil {
+			candidates = append(candidates, new(big.Rat).Sub(span.Left,
+				new(big.Rat).Mul(new(big.Rat).Sub(f, span.From), p.Travel)))
+		}
+		if span.Right != nil {
+			candidates = append(candidates, new(big.Rat).Sub(span.Right,
+				new(big.Rat).Mul(new(big.Rat).Sub(span.To, f), p.Travel)))
+		}
+		for _, candidate := range candidates {
+			if candidate != nil && (best == nil || candidate.Cmp(best) > 0) {
+				best = candidate
+			}
+		}
+		return best
+	}
+	return nil
+}
+
 // departureHeight bounds the distance from the guest's vertices to the
 // owner's support plane at elapsed time t. A nonpositive height is returned
 // before division, matching the departure certificate's refusal path.

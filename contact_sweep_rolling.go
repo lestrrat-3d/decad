@@ -127,7 +127,7 @@ func (d *Document) sweepRollingPair(ctx context.Context, a, b *Body,
 	if !ok || delta.Sign() != 0 {
 		return nil, false, nil
 	}
-	preparedM, okM := prepareRollingSweepPath(bodyM, pathM, &start)
+	preparedM, okM := planarsweep.PrepareRollingPath(&bodyM.n, pathM, &start.Cylinder)
 	preparedS, okS := planarsweep.PreparePlanarPath(&bodyS.n, pathS, &solid, delta)
 	if !okM || !okS {
 		report.Outcome, report.Cause = SweepUndecided, SweepMissingBound
@@ -135,11 +135,12 @@ func (d *Document) sweepRollingPair(ctx context.Context, a, b *Body,
 			To: sweepInstant(big.NewRat(1, 1), pa.Duration)}
 		return report, true, nil
 	}
-	planarsweep.AttachMemos(&preparedM.BodyPath, &preparedS)
-	defer planarsweep.CloseMemos(&preparedM.BodyPath, &preparedS)
+	planarsweep.AttachMemos(&preparedM, &preparedS)
+	defer planarsweep.CloseMemos(&preparedM, &preparedS)
 	run := &rollingPairSweep{doc: d, m: m, s: 1 - m, cylinder: start, req: req, report: report,
 		resolution: resolution}
-	run.paths[run.m], run.paths[run.s] = preparedM, rotationalSweepPath{BodyPath: preparedS, body: bodyS}
+	run.paths[run.m] = rotationalSweepPath{BodyPath: preparedM, body: bodyM}
+	run.paths[run.s] = rotationalSweepPath{BodyPath: preparedS, body: bodyS}
 	result, err := run.execute(ctx)
 	if err != nil || result == nil {
 		return result, true, err
@@ -149,30 +150,6 @@ func (d *Document) sweepRollingPair(ctx context.Context, a, b *Body,
 			track: result.ContactTrack, request: req.ContactRequest, outcome: result.Outcome}
 	}
 	return result, true, nil
-}
-
-// prepareRollingSweepPath pairs the cylinder's ideal motion with the eight
-// corners of its identity box as source points and its two end-disk centers
-// at the path's From as start points.
-func prepareRollingSweepPath(body *Body, path affinePairPath,
-	source *placedCylinder) (rotationalSweepPath, bool) {
-	motion, ok := planarsweep.PrepareBodyPath(&body.n, path)
-	if !ok {
-		return rotationalSweepPath{}, false
-	}
-	prepared := rotationalSweepPath{BodyPath: motion, body: body}
-	for i := range 8 {
-		var corner proofarith.DyV3
-		for k := range 3 {
-			corner[k] = source.BoxLo[k]
-			if i&(1<<k) != 0 {
-				corner[k] = source.BoxHi[k]
-			}
-		}
-		prepared.SourcePoints = append(prepared.SourcePoints, corner)
-	}
-	prepared.StartPoints = append(prepared.StartPoints, source.Centers[:]...)
-	return prepared, true
 }
 
 // rollingEnds are the centers of a source cylinder's two end disks.
