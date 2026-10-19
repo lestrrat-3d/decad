@@ -301,7 +301,7 @@ per planar patch):
   planar patches do not overlap.
 - Face bounds: a wall's largest sagitta plus the larger of its column's two
   level displacements; a planar patch's largest bounding-loop sagitta plus its
-  own level's displacement; `composeFaceBounds` adds every vertex's store term
+  own level's displacement; `tessellation.FaceBounds` adds every vertex's store term
   and `sectionDelta`.
 - `areaSlack`: per column `wallSlack + 2 · capSlack` (every column ring bounds
   exactly two planar patches, one at each end); when `sectionDelta > 0`, one

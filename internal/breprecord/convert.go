@@ -26,7 +26,7 @@ import (
 // docs/general-boolean-design.md §4 (§4.1), and the other builders of a
 // Payload from a record or an engine: a side opening, an A1 stack and the P8
 // plate. Payload's audit, the body build with its topology and roles (§4.2)
-// and the measurements (§4.3) live beside it; tessellate_brep.go owns the
+// and the measurements (§4.3) live beside it; internal/brepbandmesh owns the
 // mesh and its occupied-volume proof (§4.4).
 
 // OfPrism is a prism's face view (§4.1): one swept face per recorded

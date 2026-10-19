@@ -1,7 +1,10 @@
-// Package brepbandmesh is the brep tessellator's reading of a route L body's
-// bands (docs/modify-general-design.md Table DG's DG3). Each band is chorded as
-// the cap-loop chamfer chords its own loop (internal/capblend): ONE count per
-// wall walk of the receiver's loop, shared by the cap contour on the loop's
+// Package brepbandmesh is the brep tessellator (docs/general-boolean-design.md
+// §4.4): Tessellate meshes a brep body's walls and planar faces, audits the
+// mesh and sums its occupied-volume proof. The rest of the package reads a
+// route L body's bands (docs/modify-general-design.md Table DG's DG3). Each
+// band is chorded as the cap-loop chamfer chords its own loop
+// (internal/capblend): ONE count per wall walk of the receiver's loop, shared
+// by the cap contour on the loop's
 // face, the band's patch and the side contour — the rim at the side level of
 // the wall beside the loop (docs/tessellation-reach-design.md §7). The count is
 // imposed on that wall as its sample points, so the wall's rim at the side

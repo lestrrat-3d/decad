@@ -10,7 +10,6 @@ The rules for rows live in `docs/layout.md`.
 | Path | Responsibility |
 |---|---|
 | `tessellate.go` | `Mesh`, `Body.Tessellate`, prism mesh handle adapter and dispatch, and the PatchEdges source mesh adapter. See tessellation design, surface §10.1. |
-| `tessellate_brep.go` | Meshes a brep body over its handles: walls, planar faces, closure audits and the occupied-volume sum, with the route L bands from `internal/brepbandmesh/`. See general-boolean §4.4. |
 | `tessellate_verification.go` | `Verification`, `WithVerification` and mesh proof publication. See tessellation §1, §4. |
 | `tessellate_sweep_composite.go` | Builds composite Sweep span handles and runs the body audit around internal station assembly. See sweep Table D. |
 | `tessellate_chain.go` | A chain ribbon's exact-quad mesh. See surface §13.4. |

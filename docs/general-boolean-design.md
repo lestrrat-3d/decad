@@ -831,8 +831,10 @@ cancelling pair of faces widens the bound rather than narrowing it.
 
 ### 4.4 Tessellation and the occupied-volume proof
 
+`internal/brepbandmesh.Tessellate` builds the mesh over the body's topology
+nodes, resolving each record face to the face whose origins carry its role.
 A planar face chords its loops and triangulates them through the cap path
-(`triangulate.go`, tessellation §5), sharing every arc's chord samples with
+(`internal/triangulation`, tessellation §5), sharing every arc's chord samples with
 the swept wall that owns the arc (tessellation §3). A swept wall is the
 prism wall path over its own segment and interval: each interior sample
 holds a vertex at every split level of either side line, and each side

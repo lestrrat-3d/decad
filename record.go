@@ -260,11 +260,3 @@ type (
 	brepSplit = brepgeom.Split
 	brepEmbed = brepgeom.Embed
 )
-
-const (
-	brepLoopSeg = brepgeom.LoopSeg // a planar face's loop segment
-	brepRim0    = brepgeom.Rim0    // a swept face's wall at z0
-	brepRim1    = brepgeom.Rim1    // a swept face's wall at z1
-	brepSide0   = brepgeom.Side0   // a swept face's line at the wall's start
-	brepSide1   = brepgeom.Side1   // a swept face's line at the wall's end
-)
