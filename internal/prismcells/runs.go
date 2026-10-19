@@ -27,6 +27,13 @@ import (
 // unresolved (resolved=false, err nil). A cell whose lines need no split is
 // returned as reported; the slice is a copy only where a cell changed.
 func SplitRuns(budget *proofbound.WorkBudget, profiles []*sketch.Profile) ([]*sketch.Profile, bool, error) {
+	return splitRuns(budget, profiles, false)
+}
+
+// splitRuns charges cut selection and piece construction when the caller
+// needs every part of the split under one shared source-work wall.
+func splitRuns(budget *proofbound.WorkBudget, profiles []*sketch.Profile,
+	chargeCuts bool) ([]*sketch.Profile, bool, error) {
 	type end struct {
 		point [2]float64
 		exact bool
@@ -64,16 +71,26 @@ func SplitRuns(budget *proofbound.WorkBudget, profiles []*sketch.Profile) ([]*sk
 	}
 
 	resolved := true
-	split := func(loop []sketch.BoundaryEdge) ([]sketch.BoundaryEdge, bool) {
+	split := func(loop []sketch.BoundaryEdge) ([]sketch.BoundaryEdge, bool, error) {
 		var out []sketch.BoundaryEdge
 		changed := false
 		for _, e := range loop {
+			if chargeCuts {
+				if err := budget.Step(); err != nil {
+					return nil, false, err
+				}
+			}
 			if len(e.Polyline) < 2 {
 				out = append(out, e)
 				continue
 			}
 			var cuts []float64
 			for t := range ends[e.Entity] {
+				if chargeCuts {
+					if err := budget.Step(); err != nil {
+						return nil, false, err
+					}
+				}
 				if t > e.TStart && t < e.TEnd {
 					cuts = append(cuts, t)
 				}
@@ -88,7 +105,21 @@ func SplitRuns(budget *proofbound.WorkBudget, profiles []*sketch.Profile) ([]*sk
 				continue
 			}
 			changed = true
-			sort.Float64s(cuts)
+			if chargeCuts {
+				// Insertion sort has at most k(k-1)/2 comparisons and swaps.
+				// Charge both plus every output piece before doing that work.
+				k := uint64(len(cuts))
+				if _, err := budget.StepN(k*(k-1) + k + 1); err != nil {
+					return nil, false, err
+				}
+				for i := 1; i < len(cuts); i++ {
+					for j := i; j > 0 && cuts[j] < cuts[j-1]; j-- {
+						cuts[j], cuts[j-1] = cuts[j-1], cuts[j]
+					}
+				}
+			} else {
+				sort.Float64s(cuts)
+			}
 			first, last := e.Polyline[0], e.Polyline[len(e.Polyline)-1]
 			if e.Reversed {
 				first, last = last, first
@@ -121,19 +152,35 @@ func SplitRuns(budget *proofbound.WorkBudget, profiles []*sketch.Profile) ([]*sk
 			}
 			out = append(out, pieces...)
 		}
-		return out, changed
+		return out, changed, nil
 	}
 
+	if chargeCuts {
+		if _, err := budget.StepN(uint64(len(profiles))); err != nil {
+			return nil, false, err
+		}
+	}
 	out := make([]*sketch.Profile, len(profiles))
 	for i, p := range profiles {
 		if err := budget.Step(); err != nil {
 			return nil, false, err
 		}
-		outer, changed := split(p.Outer)
+		outer, changed, err := split(p.Outer)
+		if err != nil {
+			return nil, false, err
+		}
+		if chargeCuts {
+			if _, err := budget.StepN(uint64(len(p.Holes))); err != nil {
+				return nil, false, err
+			}
+		}
 		holes := make([][]sketch.BoundaryEdge, len(p.Holes))
 		for h, loop := range p.Holes {
 			var c bool
-			holes[h], c = split(loop)
+			holes[h], c, err = split(loop)
+			if err != nil {
+				return nil, false, err
+			}
 			changed = changed || c
 		}
 		if !changed {

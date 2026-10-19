@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/sketch"
 )
 
 // loftCapSourceEdge pairs one ordered Sketch fragment with its original
@@ -29,9 +30,10 @@ type loftCapSourceCell struct {
 // loftCapSourceOrder is a transient reading of both exact Sketch cap scenes.
 // It does not certify output patch ownership, boundary coverage, or volume.
 type loftCapSourceOrder struct {
-	source loftSourceSpanCaps
-	caps   [2][]loftCapSourceCell
-	visits uint64
+	source  loftSourceSpanCaps
+	caps    [2][]loftCapSourceCell
+	quarter [2][]loftQuarterSourceEvent
+	visits  uint64
 }
 
 // certifyLoftCapSourceOrder reads each cap scene under the consumer's source
@@ -41,12 +43,14 @@ type loftCapSourceOrder struct {
 // The 4096-segment scene preflight bounds Sketch publication; tag scans and
 // the later profile-record walk are separately charged to the source wall.
 func certifyLoftCapSourceOrder(ctx context.Context, budget *proofbound.WorkBudget,
-	source loftSourceSpanCaps) (loftCapSourceOrder, bool, error) {
+	source loftSourceSpanCaps, quarter ...*loftQuarterWork) (loftCapSourceOrder, bool, error) {
 	var no loftCapSourceOrder
 	if err := ctx.Err(); err != nil {
 		return no, false, err
 	}
-	if budget == nil || source.prism == nil || source.loft == nil {
+	if budget == nil || source.prism == nil || source.loft == nil ||
+		len(quarter) > 1 || len(quarter) == 1 &&
+		(quarter[0] == nil || quarter[0].budget != budget) {
 		return no, false, nil
 	}
 	pp, prismOK := source.prism.n.Payload.(prismPayload)
@@ -87,9 +91,35 @@ func certifyLoftCapSourceOrder(ctx context.Context, budget *proofbound.WorkBudge
 			len(source.loftCaps[cap])) {
 			return no, false, nil
 		}
-		cells, err := prismcells.CellProfiles(ctx, budget, scene)
-		if err != nil {
-			return no, false, err
+		var cells []*sketch.Profile
+		if len(quarter) == 0 {
+			cells, err = prismcells.CellProfiles(ctx, budget, scene)
+			if err != nil {
+				return no, false, err
+			}
+		} else {
+			raw, readErr := prismcells.ProfilesContext(ctx, scene.Profiles)
+			if readErr != nil {
+				return no, false, readErr
+			}
+			quarter[0].cap = cap
+			quarter[0].tags = tags
+			witnesses, ok, certErr := scene.CertifyQuarterArcJunctions(
+				ctx, raw, quarter[0])
+			if certErr != nil || !ok {
+				return no, false, certErr
+			}
+			split, lineage, resolved, splitErr :=
+				prismcells.SplitRunsWithLineage(budget, raw)
+			if splitErr != nil || !resolved {
+				return no, false, splitErr
+			}
+			result.quarter[cap], ok, certErr = mapLoftQuarterWitnesses(
+				ctx, budget, raw, split, lineage, tags, source, cap, witnesses)
+			if certErr != nil || !ok {
+				return no, false, certErr
+			}
+			cells = split
 		}
 		if len(cells) == 0 {
 			return no, false, nil
@@ -154,6 +184,18 @@ func certifyLoftCapSourceOrder(ctx context.Context, budget *proofbound.WorkBudge
 		}
 		if !shared[cap] {
 			return no, false, nil
+		}
+		if len(quarter) == 1 {
+			pairsOK, pairErr := quarterSourcePairs(
+				budget, quarter[0], source, cap, result.quarter[cap])
+			if pairErr != nil || !pairsOK {
+				return no, false, pairErr
+			}
+			intervalsOK, intervalErr := quarterSourceIntervals(
+				budget, source, cap, result.caps[cap])
+			if intervalErr != nil || !intervalsOK {
+				return no, false, intervalErr
+			}
 		}
 	}
 	if err := budget.Err(); err != nil {

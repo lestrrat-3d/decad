@@ -63,6 +63,6 @@ The rules for rows live in `docs/layout.md`.
 | `internal/loftfillet/` | Loft fit/circle root-fillet candidate, tangent-root certificate, connector and carrier departures, section contact audits and circle-bore containment. See loft §17–§18. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping over recorded `Point2`; indexed triangles and chording refusals. |
 | `internal/loftcylinder/` | Cap XY audits, source circle/connector gates, ring occupancy, cap-loop walks, chamfer inset samples and clearance, axial Chamfer bridge proofs, strip/triangle audits, root radius, collar, radial/wedge gates for loft/cylinder Union. See loft-cylinder-boolean design. |
-| `internal/loftcontact/` | Varying Loft/prism carrier, moving-triangle hull, and private original quarter-Loft held-seam proofs. See general-boolean and the proof comments. |
+| `internal/loftcontact/` | Varying Loft/prism carrier, moving-triangle hull, private quarter-Loft seam, and plain-data quarter cap pairs, intervals, and wall geometry. See general-boolean and the proof comments. |
 | `internal/topo/` | Node data held by value in root topology handles (Vertex, Edge, CoEdge, Loop, Face, FaceShell, Lump, Body, Document, Mesh), links, document minting/liveness, and Body's sweep-radius memo; `Payload`, `SimpleProver`, `Env`, builders' `Alloc`; `topotest` allocates bare nodes. See evaluator §3, §8. |
 | `internal/topobuild/` | Topology assembly over nodes: faces, edges, shells, lumps, loft helpers, normals, mesh writes, and solid and sheet audits. See evaluator §3, §5 and surface §2.2. |
