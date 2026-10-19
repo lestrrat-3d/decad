@@ -9,7 +9,6 @@ import (
 
 // The LoftFaces cap-map carriers live in internal/loftface.
 type loftFaceRatVec = loftface.RatVec
-type loftFaceAffine = loftface.Affine
 type loftFaceMap = loftface.Map
 type loftFaceInterval = loftface.Interval
 
