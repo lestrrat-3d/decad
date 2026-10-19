@@ -10,7 +10,7 @@ The rules for rows live in `docs/layout.md`.
 | Path | Responsibility |
 |---|---|
 | `internal/sweeppath/` | Pair paths, validation, rounded poses, motion travel bounds, and the node's checked rotational radius reader. |
-| `internal/planarsweep/` | Prepared sweep body paths (ideal pose, point deviation, rounded box, corner spans and their memo), support-plane records, the §10.2 departure, §10.3 band and track certificates and their replay checks, motion, vertex rates, depth and rolling bounds. See contact-sweep §3, §7 and multibody §10. |
+| `internal/planarsweep/` | Prepared sweep body paths (ideal pose, point deviation, rounded box, corner spans and their memo), support-plane records, motion, vertex rates and depth bounds, and the §10.2–§10.4 departure, band, track and rolling certificates with their replay checks. See contact-sweep §3, §7 and multibody §10. |
 | `internal/sweepdeparture/` | Exact source-box departure proofs. See multibody §10.2. |
 | `internal/sweepmemo/` | Sweep path replay coverage, pose bits, path memo tables and corner-span hull gaps. See contact-sweep §6–§7 and multibody §10.4. |
 | `internal/revolveaxis/` | Axis frames, walks, side/contact gates, snap and section charges, extent readings, the simple-revolution radial proof, and wall and cap denotations. See evaluator §6. |

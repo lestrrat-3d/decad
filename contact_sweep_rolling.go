@@ -2,86 +2,23 @@ package decad
 
 import (
 	"context"
-	"fmt"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/measurement"
-	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
-	"github.com/lestrrat-3d/decad/internal/sweeppath"
-
-	"github.com/lestrrat-3d/decad/internal/clearance"
-	"github.com/lestrrat-3d/decad/internal/pair/planar"
-
-	"github.com/lestrrat-3d/decad/internal/motionbound"
-	"github.com/lestrrat-3d/decad/internal/placedruling"
 	"github.com/lestrrat-3d/decad/internal/planarsweep"
-
-	"github.com/lestrrat-3d/decad/internal/proofbound"
-
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is the rolling band track of docs/multibody-dynamics-design.md
-// §10.4 ("Rolling"): a full source cylinder M lying on
-// its side on an exact planar body S, M drifting at constant ω and S only
-// translating, keeps a §10.3 track whose contact set is the two ends of the
-// contact ruling.
-//
-// A cylinder is no vertex hull, so the proof reads the centers c± of its two
-// end disks, material points on its axis, staged exactly through the start
-// pose's float basis B (placedCylinder). B is orthonormal only to rounding, so
-// the start body's section is the disk's image under B; gram bounds that, and
-// α = n̂·Bâ is the staged axis column's normal component. Over an end disk
-// the least height along the unit normal n̂ is n̂·c − r·|P·Bᵀ(u)n̂|, B(u) =
-// R(u)·B and P removing the identity axis; over the solid it is the lesser of
-// its two disks', since height is affine along the axis. With S's plane at
-// offset d and H(u) = n̂·c(u) − d − r, each rim's least height is g(u) = H(u) +
-// r·(1 − |P·Bᵀ(u)n̂|). With ã = Bâ and β = |ω×ã|:
-//
-//	H'(0) = n̂·(v_M − v_S + ω×(c − c_M))           exact
-//	|H''| <= |ω|·|ω×(c − c_M)|                    c'' = R(u)·(ω×(ω×(c − c_M))); S only translates
-//	|r − r·|P·Bᵀ(u)n̂|| <= r·(gram + α(u)²)        placedruling.Cylinder.SectionDrift
-//	|α(u)| <= |α| + β·u                           |R(u)ã − ã| <= β·u
-//
-// so each end satisfies |g(u)| <= c₀ + (|H'(0)| + 2·r·β·|α|)·u + (K + r·β²)·u²
-// on [0, h], c₀ = |H(0)| + r·(gram + α²) and K half the curvature bound, and
-// the band depth is that bound at h for the larger coefficients of the two
-// ends. The cylinder's lowest point is one of the two rims', so the whole body
-// stays above −depth. Each rim's lowest point lies within
-// r·(3·gram + (3/2)·|α(u)|) of c − r·n̂ while |α(u)| <= 1/4 (placedruling.Cylinder.RimDrift); the
-// foot check and ManifoldAt charge that drift. A signed-axis start with α = 0
-// has gram = c₀ = 0, and its drift r·√(2·(1 − s)) <= (3/2)·r·β·u, s the cosine
-// of the axis tilt, holds with no gate.
-//
-// S's plane may be face-local (§10.6), a tray's floor with walls in front of
-// it: the band search then runs the column test at every grid fraction, so no
-// material of S in front of the plane comes near the cylinder inside the
-// track.
-
-// rollingTrackProof is the private certificate of a rolling band or exact
-// rolling touch track. It owns copies of both prepared paths. M's source
-// points are the eight corners of its identity disk-by-interval box, whose
-// hull holds the whole cylinder, so their deviation bounds every cylinder
-// point's.
-type rollingTrackProof struct {
-	paths        [2]rotationalSweepPath
-	m, s         int
-	ends         [2]proofarith.DyV3 // M's end-disk centers at the identity pose, in published order
-	radius       *big.Rat
-	normal       proofarith.DyV3 // S's exact unit outward normal, a signed axis
-	origin       int             // an S vertex on the plane
-	featureM     ContactFeature
-	featureS     ContactFeature
-	direction    VecMeasurement // the published A-to-B normal
-	angle        units.Value
-	coefficients rollingCoefficients
-	depth        *big.Rat // mm
-	depthUp      float64
-	band         *Measurement
-}
+// This file runs the rolling band track of docs/multibody-dynamics-design.md
+// §10.4 ("Rolling"): it picks the cylinder and planar sides, reads the start
+// relation through ContactPair, and publishes the track that
+// internal/planarsweep proves (planarsweep.ProveRollingBand) and certifies
+// (planarsweep.RollingTrack). It stays in the root because it calls
+// Document.ContactPair and builds the public SweepReport and
+// SweepContactTrack.
 
 // rollingPairSweep continues a source cylinder's ruling touch, or its placed
 // band (classifyPlacedRuling), on an exact planar body. paths are in sweep
@@ -184,7 +121,7 @@ func (r *rollingPairSweep) execute(ctx context.Context) (*SweepReport, error) {
 			r.report.Outcome, r.report.Event = SweepInitiallyTouching, &first.Ideal
 			return r.report, nil
 		case reportvocab.ContinueCertifiedTouch:
-			track, ok, err := r.band(ctx, first)
+			track, ok, err := r.track(ctx, first)
 			if err != nil {
 				return nil, err
 			}
@@ -192,7 +129,7 @@ func (r *rollingPairSweep) execute(ctx context.Context) (*SweepReport, error) {
 				return r.undecided(zero, one, SweepContactTrackUnproved), nil
 			}
 			r.report.ContactTrack, r.report.Outcome = track, SweepPersistentBand
-			if track.rolling.band == nil {
+			if track.rolling.Band == nil {
 				r.report.Outcome = SweepPersistentTouch
 			}
 			return r.report, nil
@@ -248,130 +185,21 @@ func (r *rollingPairSweep) undecided(from, to *big.Rat, cause SweepCause) *Sweep
 	return r.report
 }
 
-// rollingCoefficients are the depth bound's terms, constant + rate·t +
-// quadratic·t², and the rim drift's, lateralBase + lateral·t. With ã the
-// staged axis column, α = n̂·ã, β = |ω×ã| and both ends' H±:
-//
-//	constant  = max|H±(0)| + r·gram + r·α²   (placedruling.Cylinder.SectionDrift)
-//	rate      = max|H±'(0)| + 2·r·β·|α|
-//	quadratic = max K + r·β²
-//
-// since |α(u)| <= |α| + β·u. The drift is r·(3·gram + (3/2)·|α(u)|)
-// (placedruling.Cylinder.RimDrift), which needs gram <= 1/16 and |α(u)| <= 1/4. An exact start, a
-// signed-axis pose with α = 0, has a zero constant and lateralBase, and its
-// drift r·√(2·(1 − s)) <= (3/2)·r·β·u holds with no gate.
-type rollingCoefficients = planarsweep.RollingCoefficients
-
-func (r *rollingPairSweep) coefficients(support placedruling.Plane) (rollingCoefficients, bool) {
-	motionM, okM := planarsweep.MotionOf(r.paths[r.m].SupportPath().Motion)
-	motionS, okS := planarsweep.MotionOf(r.paths[r.s].SupportPath().Motion)
-	if !okM || !okS || motionS.Rotating || proofarith.DyCmp(r.cylinder.Gram, rulingGramLimit) > 0 {
-		return rollingCoefficients{}, false
-	}
-	return planarsweep.RollingCoefficientsOf(planarsweep.RollingInput{
-		Cylinder: r.cylinder.Cylinder, Moving: motionM, Support: motionS,
-		Points: r.paths[r.m].StartPoints, Normal: support.Normal,
-		Heights: support.Heights, Alpha: support.Alpha,
-	})
-}
-
-// band proves the rolling track. Each end's foot must stay inside S's face:
-// the end centers' ideal path boxes over [0, f], less S's translation and
-// grown by the depth and the rim drift, hold every rim point near the plane,
-// and their union holds the ruling between the ends. Projected along the
-// normal's axis, the union must meet no bounding edge of the face and have a
-// corner inside one of its triangles. On a face-local plane the column test
-// (column) must hold through f as well.
-func (r *rollingPairSweep) band(ctx context.Context, first *SweepSample) (*SweepContactTrack, bool, error) {
-	budget := proofbound.NewWorkBudget(ctx)
-	S := &r.paths[r.s]
-	support, ok, err := placedruling.Support(r.cylinder.Cylinder, S.Solid, S.StartPoints, budget.Step)
+// track proves the rolling band (planarsweep.ProveRollingBand) and builds
+// the public track. The start manifold ContactPair published must name the
+// same two faces, and the track's own start manifold must publish.
+func (r *rollingPairSweep) track(ctx context.Context, first *SweepSample) (*SweepContactTrack, bool, error) {
+	paths := [2]planarsweep.BodyPath{r.paths[0].BodyPath, r.paths[1].BodyPath}
+	band, ok, err := planarsweep.ProveRollingBand(paths, r.m, r.cylinder.Cylinder, r.resolution,
+		proofbound.NewWorkBudget(ctx).Step)
 	if err != nil || !ok {
 		return nil, false, err
 	}
-	coefficients, ok := r.coefficients(support)
-	if !ok {
+	faces := r.paths[r.s].body.Faces()
+	if band.Support.Face.ID < 0 || band.Support.Face.ID >= len(faces) {
 		return nil, false, nil
 	}
-	duration := r.paths[r.m].Path.Duration
-	box, ok := planarsweep.RollingColumnBoxOf(r.cylinder.Cylinder)
-	if !ok {
-		return nil, false, nil
-	}
-	holds := func(f *big.Rat) (bool, error) {
-		if err := budget.Step(); err != nil {
-			return false, err
-		}
-		t := new(big.Rat).Mul(f, duration)
-		if !coefficients.DriftAdmitted(t) {
-			return false, nil
-		}
-		depth, lateral := coefficients.At(t)
-		if !r.footInside(support, f, proofbound.RatAdd(depth, lateral)) {
-			return false, nil
-		}
-		return r.column(support, box, f, budget.Step)
-	}
-	end, ok, err := planarsweep.GridHorizon(r.resolution, duration, holds)
-	if err != nil || !ok {
-		return nil, false, err
-	}
-	depth, _ := coefficients.At(new(big.Rat).Mul(end, duration))
-	return r.track(first, support, coefficients, end, depth)
-}
-
-// rollingColumnBox holds what the column test reads of the cylinder: its
-// eight staged corners at the start, whose hull holds it, and reach, an upper
-// bound on r·√(1 + gram), the farthest any cylinder point lies from the point
-// of its axis segment in the same section: that offset is B·w with |w| <= r,
-// and |B·w|² <= (1 + gram)·|w|².
-type rollingColumnBox = planarsweep.RollingColumnBox
-
-// column is §10.6's column test through fraction f on a face-local plane.
-// Two boxes hold the cylinder at every instant of [0, f]: the coordinate box
-// of its staged corners' ideal paths, and the hull of its end centers' ideal
-// path boxes grown by box.reach, since every cylinder point lies within reach
-// of a point between the end centers. Their intersection, less S's own
-// translation over the span, holds the cylinder in S's start frame, and every
-// S triangle with a vertex strictly in front of the plane must project apart
-// from it. The corners' interval enclosure loosens past a quarter turn while
-// the end centers of a cylinder turning about its own axis barely move, so
-// the second box carries a whole turn. Both grow with f, so the test is
-// monotone. A plane with all of S behind it needs no test.
-func (r *rollingPairSweep) column(support placedruling.Plane, box rollingColumnBox, f *big.Rat,
-	poll func() error) (bool, error) {
-	if !support.Local {
-		return true, nil
-	}
-	zero := new(big.Rat)
-	path := r.paths[r.m]
-	centers := path.CornerSpan(zero, f)
-	path.StartPoints = box.Corners
-	corners := path.CornerSpan(zero, f)
-	S := &r.paths[r.s]
-	lo, hi := planarsweep.RollingColumnBounds(centers, corners, box.Reach, S.Path.Delta, f)
-	solid := planar.PlanarSolid{Verts: S.StartPoints, Tris: S.Solid.Tris}
-	return planar.PlanarColumnApart(&solid, support.Normal, S.StartPoints[support.Origin], lo, hi, poll)
-}
-
-func (r *rollingPairSweep) footInside(support placedruling.Plane, f, growth *big.Rat) bool {
-	S := &r.paths[r.s]
-	spans := r.paths[r.m].CornerSpan(new(big.Rat), f)
-	lo, hi := planarsweep.RollingFootBounds(spans, S.Path.Delta, support.Axis, f, growth)
-	return support.Face.HoldsBox(lo, hi)
-}
-
-// track builds the public track. The start manifold ContactPair published
-// must name the same two faces, and the track's own start manifold must
-// publish.
-func (r *rollingPairSweep) track(first *SweepSample, support placedruling.Plane,
-	coefficients rollingCoefficients, end, depth *big.Rat) (*SweepContactTrack, bool, error) {
-	S, M := &r.paths[r.s], &r.paths[r.m]
-	faces := S.body.Faces()
-	if support.Face.ID < 0 || support.Face.ID >= len(faces) {
-		return nil, false, nil
-	}
-	featureS := ContactFeature{Face: faces[support.Face.ID]}
+	featureS := ContactFeature{Face: faces[band.Support.Face.ID]}
 	featureM := ContactFeature{Face: r.cylinder.wall}
 	if first.Ideal.Manifold != nil {
 		for _, point := range first.Ideal.Manifold.Points {
@@ -384,153 +212,19 @@ func (r *rollingPairSweep) track(first *SweepSample, support placedruling.Plane,
 			}
 		}
 	}
-	direction := support.Normal
-	if r.m == 0 {
-		direction = proofarith.DvSub(proofarith.DyV3{}, direction)
-	}
-	reading, angle, ok := pairbox.PlanarNormalMeasurement(direction)
-	if !ok || angle.Base() > r.req.NormalResolution.Base() {
+	proof, ok := band.Track(r.cylinder.source, contactFeatureToInternal(featureM), contactFeatureToInternal(featureS),
+		r.req.NormalResolution)
+	if !ok {
 		return nil, false, nil
 	}
-	normal := vecMeasurementFromInternal(reading)
-	// The ends publish in the exact coordinate order of their start rims, as
-	// ContactPair publishes the ruling; a rigid motion keeps that pairing.
-	ends := r.cylinder.source
-	starts := [2]proofarith.DyV3{M.StartPoints[0], M.StartPoints[1]}
-	if ordered := clearance.OrderedRulingEnds(starts); !proofarith.DvEqual(ordered[0], starts[0]) {
-		ends = [2]proofarith.DyV3{ends[1], ends[0]}
-	}
-	proof := &rollingTrackProof{paths: r.paths, m: r.m, s: r.s, ends: ends, radius: r.cylinder.Radius.Rat(),
-		normal: support.Normal, origin: support.Origin, featureM: featureM, featureS: featureS,
-		direction: normal, angle: angle, coefficients: coefficients, depth: depth, depthUp: proofbound.RatFloatUp(depth)}
-	if !measurement.FiniteValues(proof.depthUp) {
-		return nil, false, nil
-	}
-	if depth.Sign() > 0 || end.Cmp(big.NewRat(1, 1)) < 0 {
-		value := sweeppath.RatFloatNearest(depth)
-		bound := proofarith.RationalFloatError(depth, value)
-		proof.band = &Measurement{Value: units.Millimeters(value), Bound: units.Millimeters(bound),
-			Exactness: exactnessFromBound(bound)}
-	}
-	track := &SweepContactTrack{start: new(big.Rat), end: new(big.Rat).Set(end), duration: M.Path.Duration,
-		request: r.req.ContactRequest, normal: normal, rolling: proof, pointCount: len(ends)}
-	track.features[r.m], track.features[r.s] = contactFeatureToInternal(featureM), contactFeatureToInternal(featureS)
+	track := &SweepContactTrack{start: new(big.Rat), end: new(big.Rat).Set(band.End),
+		duration: r.paths[r.m].Path.Duration, request: r.req.ContactRequest,
+		normal: vecMeasurementFromInternal(proof.Direction), rolling: proof, pointCount: len(r.cylinder.source)}
+	track.features[r.m], track.features[r.s] = proof.FeatureM, proof.FeatureS
 	// A track whose start manifold is refused is not published; the refusal
 	// is the answer.
 	if _, refused := track.ManifoldAt(units.Scalar(0)); refused != nil {
 		return nil, false, nil //nolint:nilerr // a refused manifold withholds the track, it is no failure
 	}
 	return track, true, nil
-}
-
-// depthThrough is the band depth over [0, f]: every coefficient's term is
-// nondecreasing in time, so their value at f bounds every earlier instant.
-func (p *rollingTrackProof) depthThrough(f *big.Rat) *big.Rat {
-	depth, _ := p.coefficients.At(new(big.Rat).Mul(f, p.paths[p.m].Path.Duration))
-	return depth
-}
-
-// rounded stages both bodies through their float poses at f and returns each
-// pose with its deviation and S's staged vertices. S must keep its start
-// basis, so its rounded plane keeps its normal.
-func (p *rollingTrackProof) rounded(f *big.Rat) ([2]r3.Transform, [2]*big.Rat, []proofarith.DyV3, bool) {
-	var poses [2]r3.Transform
-	var eta [2]*big.Rat
-	var vertsS []proofarith.DyV3
-	for i := range p.paths {
-		pose, err := p.paths[i].Path.RoundedPoseAt(f)
-		if err != nil {
-			return poses, eta, nil, false
-		}
-		if i == p.s && pose.Basis() != p.paths[i].Path.From.Basis() {
-			return poses, eta, nil, false
-		}
-		points, bound, ok, _ := p.paths[i].PointDeviation(pose, f, planarsweep.NoPoll)
-		if !ok {
-			return poses, eta, nil, false
-		}
-		if i == p.s {
-			vertsS = points
-		}
-		poses[i], eta[i] = pose, proofarith.FloatRat(bound)
-	}
-	return poses, eta, vertsS, true
-}
-
-// manifoldAt publishes the two ruling ends at an exact fraction. Each end
-// center is staged through M's rounded pose and lowered by r along the
-// normal; the true rim point lies within M's pose deviation plus the lateral
-// drift of it, and its foot on S's rounded plane within S's deviation more.
-// The separation is the band's two-sided bound.
-func (p *rollingTrackProof) manifoldAt(f *big.Rat, req reportvocab.ContactRequest) (*ContactManifold, error) {
-	poses, eta, vertsS, ok := p.rounded(f)
-	if !ok {
-		return nil, fmt.Errorf("%w: rolling contact track pose has no finite bound", ErrUnsupported)
-	}
-	resolution, okResolution := sweeppath.ExactBaseValue(req.PointResolution)
-	if !okResolution {
-		return nil, fmt.Errorf("%w: rolling contact track resolution is invalid", ErrUnsupported)
-	}
-	n := planarsweep.RatOfDyV3(p.normal)
-	q := planarsweep.RatOfDyV3(vertsS[p.origin])
-	_, lateral := p.coefficients.At(new(big.Rat).Mul(f, p.paths[p.m].Path.Duration))
-	separation := Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(p.depthUp),
-		Exactness: exactnessFromBound(p.depthUp)}
-	points := make([]ContactPoint, 0, len(p.ends))
-	for _, end := range p.ends {
-		center := planarsweep.RatOfDyV3(proofarith.DvTransform(poses[p.m], end))
-		var rim, foot [3]*big.Rat
-		for k := range 3 {
-			rim[k] = new(big.Rat).Sub(center[k], new(big.Rat).Mul(p.radius, n[k]))
-		}
-		height := planarsweep.RatDot3(n, planarsweep.RatSub3(motionbound.RatVec(rim), q))
-		for k := range 3 {
-			foot[k] = new(big.Rat).Sub(rim[k], new(big.Rat).Mul(height, n[k]))
-		}
-		onM, okM := planarsweep.PointReading(rim, proofbound.RatAdd(eta[p.m], lateral), resolution)
-		onS, okS := planarsweep.PointReading(foot, proofbound.RatAdd(eta[p.m], eta[p.s], lateral), resolution)
-		if !okM || !okS {
-			return nil, fmt.Errorf("%w: rolling contact track point exceeds point resolution", ErrUnsupported)
-		}
-		point := ContactPoint{Normal: p.direction, NormalAngle: p.angle, Separation: separation}
-		if p.m == 0 {
-			point.OnA, point.OnB = vecMeasurementFromInternal(onM), vecMeasurementFromInternal(onS)
-			point.FeatureA, point.FeatureB = p.featureM, p.featureS
-		} else {
-			point.OnA, point.OnB = vecMeasurementFromInternal(onS), vecMeasurementFromInternal(onM)
-			point.FeatureA, point.FeatureB = p.featureS, p.featureM
-		}
-		point.FaceA, point.FaceB = point.FeatureA.Face, point.FeatureB.Face
-		points = append(points, point)
-	}
-	return &ContactManifold{Points: points}, nil
-}
-
-// certifiedRollingPosesAtFraction replays a rolling track without rerunning
-// the pair relation. Both rounded poses must fit PointResolution of their
-// ideal poses, and each rounded end center's height less r above S's rounded
-// plane must stay within the depth widened by both deviations: the ideal one
-// lies within the depth, and the deviations bound the move to the rounded
-// one. It can only refuse; the producer's certificate covers the ideal path.
-func (r *SweepReport) certifiedRollingPosesAtFraction(f *big.Rat) (r3.Transform, r3.Transform, error) {
-	p := r.replay.track.rolling
-	poses, eta, vertsS, ok := p.rounded(f)
-	if !ok {
-		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rolling replay pose has no finite error bound", ErrUnsupported)
-	}
-	deviation := new(big.Rat).Add(eta[0], eta[1])
-	resolution, ok := sweeppath.ExactBaseValue(r.replay.request.PointResolution)
-	if !ok || deviation.Cmp(resolution) > 0 {
-		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rolling replay pose exceeds point resolution", ErrUnsupported)
-	}
-	limit := new(big.Rat).Add(p.depth, deviation)
-	q := vertsS[p.origin]
-	for _, end := range p.ends {
-		height := proofarith.DvDot(p.normal, proofarith.DvSub(proofarith.DvTransform(poses[p.m], end), q)).Rat()
-		height.Sub(height, p.radius)
-		if height.Abs(height).Cmp(limit) > 0 {
-			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rolling replay pose leaves the certified band", ErrUnsupported)
-		}
-	}
-	return poses[0], poses[1], nil
 }

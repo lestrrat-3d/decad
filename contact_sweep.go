@@ -201,8 +201,8 @@ type SweepContactTrack struct {
 	orientedA     *orientedSourceBox
 	orientedB     *orientedSourceBox
 	orientedDelta [3]proofarith.Dyadic
-	planar        *planarsweep.TrackProof // general planar touch or band (contact_sweep_planar.go)
-	rolling       *rollingTrackProof      // rolling cylinder touch or band (contact_sweep_rolling.go)
+	planar        *planarsweep.TrackProof   // general planar touch or band (contact_sweep_planar.go)
+	rolling       *planarsweep.RollingTrack // rolling cylinder touch or band (contact_sweep_rolling.go)
 }
 
 func (t *SweepContactTrack) Start() SweepInstant { return sweepInstant(t.start, t.duration) }
@@ -225,7 +225,7 @@ func (t *SweepContactTrack) Band() *Measurement {
 	case t.planar != nil:
 		band = measurementPtrFromInternal(t.planar.Band)
 	case t.rolling != nil:
-		band = t.rolling.band
+		band = measurementPtrFromInternal(t.rolling.Band)
 	}
 	if band == nil {
 		return nil
@@ -258,8 +258,8 @@ func (t *SweepContactTrack) BandAt(fraction units.Value) (*Measurement, error) {
 		if depth, ok = t.planar.DepthThrough(f); !ok {
 			return nil, fmt.Errorf("%w: band depth has no finite bound", ErrUnsupported)
 		}
-	case t.rolling != nil && t.rolling.band != nil:
-		depth = t.rolling.depthThrough(f)
+	case t.rolling != nil && t.rolling.Band != nil:
+		depth = t.rolling.DepthThrough(f)
 	default:
 		return nil, nil //nolint:nilnil // an exact touch track has no band, as Band() reports
 	}
@@ -289,7 +289,8 @@ func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, 
 		return planarManifoldAt(t.planar, f, t.request)
 	}
 	if t.rolling != nil {
-		return t.rolling.manifoldAt(f, t.request)
+		manifold, err := t.rolling.ManifoldAt(f, t.request)
+		return contactManifoldFromInternal(manifold), err
 	}
 	if t.cylinder != nil {
 		return t.cylinderTrackManifold(f)

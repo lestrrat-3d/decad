@@ -44,5 +44,5 @@ The rules for rows live in `docs/layout.md`.
 | `contact_sweep_run.go` | The pair sweep run: sampling, ideal contact, manifold transfer and departure proof. See contact-sweep §7. |
 | `contact_sweep_rotation.go` / `contact_sweep_planar.go` | Rotating sweep adapters over `internal/planarsweep/`'s prepared body paths and certificates, and planar sweeps that publish their departures and band tracks. See contact-sweep §4, §7 and multibody §10. |
 | `contact_sweep_rotation_depart.go` | Rotating pair sweep departure search, bracket refinement and interval clearance over the `internal/pair/box/` and `internal/sweepmemo/` separation proofs. See contact-sweep §4. |
-| `contact_sweep_rolling.go` | Rolling pair sweeps and their band tracks. See multibody §10. |
+| `contact_sweep_rolling.go` | Rolling pair sweeps: side selection, the start sample and the public track over `internal/planarsweep/`'s rolling band proof and certificate. See multibody §10. |
 | `swept_box.go` | Whole-path box. See multibody §4.2. |

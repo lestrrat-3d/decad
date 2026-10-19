@@ -289,10 +289,6 @@ func placedCylinderAt(b *Body, pose r3.Transform) (placedCylinder, bool) {
 	return c, true
 }
 
-// The placed-ruling proof requires gram at most 1/16; its support selection
-// checks |α| at most 1/4, under which RimDrift holds.
-var rulingGramLimit = proofarith.MustDyOf(1.0 / 16)
-
 // classifyPlacedRuling is docs/contact-geometry-design.md §4.5 at placed
 // query poses: a full source cylinder M, at any pose with a positive
 // determinant, against an exact planar body S with zero held displacement,
@@ -326,7 +322,7 @@ func classifyPlacedRuling(ctx context.Context, report *reportvocab.ContactReport
 			return false, nil
 		}
 	}
-	if proofarith.DyCmp(cylinder.Gram, rulingGramLimit) > 0 {
+	if proofarith.DyCmp(cylinder.Gram, placedruling.GramLimit) > 0 {
 		return false, nil
 	}
 	budget := proofbound.NewWorkBudget(ctx)
