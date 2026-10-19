@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
+	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -135,4 +136,95 @@ func MirrorChamferUpperShifts(record *facetedrecord.LoftMirrorCylinderBoreRecord
 		return nil, fmt.Errorf("%w: mirrored cap has unmatched pair placements", decaderr.ErrUnsupported)
 	}
 	return shifts, nil
+}
+
+// MirrorLevels reports whether middle lies exactly halfway between the
+// finite blank caps z0 and z2. The exact dyadic comparison ensures the
+// reflected lower cap lands on the blank's upper cap, not merely within a
+// float tolerance.
+func MirrorLevels(z0, middle, z2 float64) bool {
+	if proofbound.IsNonFinite(z0) || proofbound.IsNonFinite(middle) || proofbound.IsNonFinite(z2) {
+		return false
+	}
+	twiceMiddle := new(big.Rat).Mul(big.NewRat(2, 1), proofarith.FloatRat(middle))
+	sumCaps := new(big.Rat).Add(proofarith.FloatRat(z0), proofarith.FloatRat(z2))
+	return twiceMiddle.Cmp(sumCaps) == 0
+}
+
+// MirrorPairChecks is the serial checking pass over a mirrored Union's pairs.
+// Pairs [0, Stop) passed every check; Stop == len(pairs) means all did.
+// Otherwise the pair at Stop ends the Union with (nil, Admit, Err) once the
+// placements below it have succeeded. Motions holds each passed pair's
+// placement of the source lower tooth, and UpperBridges each near-axial
+// pair's axial shift; BridgeBound is their largest shift and BridgeVolume the
+// rounded-up sum of their swept volumes.
+type MirrorPairChecks struct {
+	Motions      []r3.Transform
+	UpperBridges []float64
+	BridgeBound  float64
+	BridgeVolume float64
+	Stop         int
+	Admit        bool
+	Err          error
+}
+
+// CheckMirrorPairs runs, in pair order, every check the mirrored Union makes
+// on a pair except its placement, and stops at the first pair that fails one.
+// A pair outside doc, not faceted or not contact audited is refused without
+// an error; a pair with no authenticated axial placement over record, or a
+// near-axial pair with no upper axial bridge at middle, is admitted with an
+// error.
+func CheckMirrorPairs(doc *topo.Document, pairs []*topo.Body, record *facetedrecord.LoftMirrorJoinRecord,
+	middle float64) MirrorPairChecks {
+	c := MirrorPairChecks{
+		Motions:      make([]r3.Transform, len(pairs)),
+		UpperBridges: make([]float64, len(pairs)),
+		Stop:         len(pairs),
+	}
+	refuse := func(i int, admit bool, err error) MirrorPairChecks {
+		c.Stop, c.Admit, c.Err = i, admit, err
+		return c
+	}
+	for i, pair := range pairs {
+		payload, ok := pair.Payload.(facetedrecord.Payload)
+		if !ok || !payload.ContactAudited || pair.Doc != doc {
+			return refuse(i, false, nil)
+		}
+		motion, ok := MirrorPairMotion(payload, record)
+		if !ok {
+			return refuse(i, true, fmt.Errorf(
+				"%w: mirrored cylinder pair %d has no authenticated axial placement", decaderr.ErrUnsupported, i+1))
+		}
+		if !AxialPlacement(motion) {
+			shift, swept, ok := MirrorUpperBridge(pair, motion, middle)
+			if !ok {
+				return refuse(i, true, fmt.Errorf(
+					"%w: mirrored cylinder pair %d has no upper axial bridge", decaderr.ErrUnsupported, i+1))
+			}
+			c.BridgeBound = max(c.BridgeBound, shift)
+			c.BridgeVolume = proofbound.AbsSumUpper(c.BridgeVolume, swept)
+			c.UpperBridges[i] = shift
+		}
+		c.Motions[i] = motion
+	}
+	return c
+}
+
+// PlaceTeeth runs place(i) for every i in [0, n) on up to workers goroutines
+// and returns the results in index order. On failure it returns the error of
+// the lowest failing index, the one a loop over [0, n) meets first; every
+// lower index has run. place must write nothing another index reads.
+func PlaceTeeth[T any](n, workers int, place func(i int) (T, error)) ([]T, error) {
+	teeth := make([]T, n)
+	if _, err := orderedwork.Each(n, workers, 1, nil, func(i int) error {
+		tooth, err := place(i)
+		if err != nil {
+			return err
+		}
+		teeth[i] = tooth
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return teeth, nil
 }

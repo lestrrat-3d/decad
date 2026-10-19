@@ -1,8 +1,11 @@
 package loftcylinder_test
 
 import (
+	"fmt"
 	"math"
 	"math/big"
+	"slices"
+	"sync/atomic"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -197,4 +200,106 @@ func TestMirrorChamferUpperShifts(t *testing.T) {
 	_, err = loftcylinder.MirrorChamferUpperShifts(record(identity, axial, near),
 		loftcylinder.ChamferSource{OriginalTeeth: []*topo.Body{tooth(near), tooth(axial), tooth(near)}})
 	require.ErrorIs(t, err, decaderr.ErrUnsupported, "a source tooth has no matching placement")
+}
+
+func TestMirrorLevels(t *testing.T) {
+	t.Parallel()
+	require.True(t, loftcylinder.MirrorLevels(0, 1, 2))
+	require.True(t, loftcylinder.MirrorLevels(-3, -1, 1))
+	require.False(t, loftcylinder.MirrorLevels(0, math.Nextafter(1, 2), 2))
+	require.False(t, loftcylinder.MirrorLevels(0, 1, math.Nextafter(2, 3)))
+	require.False(t, loftcylinder.MirrorLevels(0, math.NaN(), 2))
+	require.False(t, loftcylinder.MirrorLevels(math.Inf(-1), 0, math.Inf(1)))
+}
+
+// TestPlaceTeeth drives the helper with placements that fail at chosen teeth:
+// the lowest failing tooth's error comes back, every tooth below it ran, and a
+// clean run keeps index order.
+func TestPlaceTeeth(t *testing.T) {
+	t.Parallel()
+	for _, n := range []int{0, 1, 7} {
+		for _, workers := range []int{1, 2, 4} {
+			bodies := make([]*topo.Body, n)
+			for i := range bodies {
+				bodies[i] = &topo.Body{}
+			}
+			teeth, err := loftcylinder.PlaceTeeth(n, workers, func(i int) (*topo.Body, error) { return bodies[i], nil })
+			require.NoError(t, err)
+			require.Len(t, teeth, n)
+			for i := range teeth {
+				require.Same(t, bodies[i], teeth[i])
+			}
+		}
+	}
+	for _, failing := range [][]int{{0}, {2, 5}, {5, 2}, {6}, {1, 2, 3, 4, 5, 6}} {
+		for _, workers := range []int{1, 2, 4} {
+			ran := make([]atomic.Bool, 7)
+			teeth, err := loftcylinder.PlaceTeeth(7, workers, func(i int) (*topo.Body, error) {
+				ran[i].Store(true)
+				if slices.Contains(failing, i) {
+					return nil, fmt.Errorf("tooth %d", i)
+				}
+				return &topo.Body{}, nil
+			})
+			lowest := slices.Min(failing)
+			require.EqualError(t, err, fmt.Sprintf("tooth %d", lowest), "failing %v, %d workers", failing, workers)
+			require.Nil(t, teeth)
+			for i := range lowest {
+				require.True(t, ran[i].Load(), "tooth %d below the first failure did not run", i)
+			}
+		}
+	}
+}
+
+func TestCheckMirrorPairs(t *testing.T) {
+	t.Parallel()
+	doc := &topo.Document{}
+	record := &facetedrecord.LoftMirrorJoinRecord{}
+	quarter, err := r3.FromBasis(r3.Basis{EX: r3.Vec{Y: 1}, EY: r3.Vec{X: -1}, EZ: r3.Vec{Z: 1}}, r3.Vec{})
+	require.NoError(t, err)
+	source := func() *topo.Body {
+		return &topo.Body{Doc: doc, Payload: facetedrecord.Payload{
+			ContactAudited: true, Xform: r3.Identity(), LoftMirrorJoin: record}}
+	}
+	turned := func() *topo.Body {
+		return &topo.Body{Doc: doc, Payload: facetedrecord.Payload{ContactAudited: true, Xform: quarter,
+			LoftMirrorCopy: &facetedrecord.LoftMirrorPlacementRecord{Source: record, Motion: quarter}}}
+	}
+	t.Run("every pair passes", func(t *testing.T) {
+		c := loftcylinder.CheckMirrorPairs(doc, []*topo.Body{source(), turned()}, record, 1)
+		require.Equal(t, 2, c.Stop)
+		require.NoError(t, c.Err)
+		require.Equal(t, []r3.Transform{r3.Identity(), quarter}, c.Motions)
+		require.Equal(t, []float64{0, 0}, c.UpperBridges)
+		require.Zero(t, c.BridgeBound)
+		require.Zero(t, c.BridgeVolume)
+	})
+	refused := []struct {
+		name string
+		pair *topo.Body
+	}{
+		{name: "another document", pair: &topo.Body{Doc: &topo.Document{}, Payload: facetedrecord.Payload{
+			ContactAudited: true, Xform: r3.Identity(), LoftMirrorJoin: record}}},
+		{name: "not contact audited", pair: &topo.Body{Doc: doc, Payload: facetedrecord.Payload{
+			Xform: r3.Identity(), LoftMirrorJoin: record}}},
+		{name: "not faceted", pair: &topo.Body{Doc: doc, Payload: prismrecord.Payload{}}},
+	}
+	for _, tc := range refused {
+		t.Run(tc.name, func(t *testing.T) {
+			c := loftcylinder.CheckMirrorPairs(doc, []*topo.Body{source(), tc.pair, turned()}, record, 1)
+			require.Equal(t, 1, c.Stop)
+			require.False(t, c.Admit)
+			require.NoError(t, c.Err)
+			require.Equal(t, r3.Identity(), c.Motions[0])
+		})
+	}
+	t.Run("a pair of another source", func(t *testing.T) {
+		other := &topo.Body{Doc: doc, Payload: facetedrecord.Payload{ContactAudited: true, Xform: r3.Identity(),
+			LoftMirrorJoin: &facetedrecord.LoftMirrorJoinRecord{}}}
+		c := loftcylinder.CheckMirrorPairs(doc, []*topo.Body{source(), other}, record, 1)
+		require.Equal(t, 1, c.Stop)
+		require.True(t, c.Admit)
+		require.ErrorIs(t, c.Err, decaderr.ErrUnsupported)
+		require.ErrorContains(t, c.Err, "pair 2 has no authenticated axial placement")
+	})
 }

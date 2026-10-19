@@ -147,7 +147,6 @@
 8	0.00	TestLoftCapBandMotionRequiresReflexVertexIndices
 8	0.01	TestLoftCylinderTriangleMinRadiusMatchesRational
 8	0.63	TestLoftFacesThreeCapConeContinuationKeepsSource
-8	0.00	TestLoftMirrorCylinderLevelsRequireExactMidpoint
 8	0.00	TestMappedFitKnotRootCellRequiresFiniteSourceSliver
 8	1.69	TestPositiveBoundFacetedUnionRetainsExactLowerFace
 8	0.00	TestRevolveLoftFacesCircleMissUsesWholeMappedSourceBox
@@ -184,7 +183,6 @@
 10	0.00	TestLoftMirrorCylinderPairsParallelMatchesSerial
 10	0.00	TestLoftMirrorCylinderPairsRefusalPlacesNothingPastIt
 10	0.00	TestLoftMirrorCylinderPlaceTeethCancelled
-10	0.00	TestLoftMirrorCylinderPlaceTeethFirstError
 10	0.00	TestLoftMirrorCylinderPlaceTeethMatchesSerialPlacement
 10	0.00	TestMappedRadialJointTimePartition
 10	3.69	TestPlacedProxyShellsChargeExactCopies

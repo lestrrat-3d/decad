@@ -71,7 +71,10 @@ rotation commute, so the true union is the reflection of a lower-half union
 against the exact lower half of the blank. A rotation whose axial basis is
 one float step below one uses the bounded bridge below.
 `loftcylinder.MirrorBlank` checks the blank and `loftcylinder.MirrorPairMotion`
-reads each pair's recorded placement.
+reads each pair's recorded placement. `loftcylinder.MirrorLevels` checks that
+the source middle height is exactly halfway between the blank caps, and
+`loftcylinder.CheckMirrorPairs` checks every pair before any lower tooth is
+placed.
 
 For every step, the existing Loft-to-cylinder Join rebuilds that lower-half
 union from the original source Loft and the admitted rotated copies. It proves
@@ -95,7 +98,8 @@ source origins, plus the new Join cap roles. Exact axial placements keep
 both cap planes; a bridged top cap reports a faceted surface with its charged
 bound. `VerifyAll` independently
 checks the final held shell and occupied-volume allowance at the caller's
-chosen tolerance.
+chosen tolerance. `loftcylinder.BuildMirrorJoin` reflects the lower half,
+sews and audits the shell, and gives its exterior caps these origins and tags.
 
 ## One-pass mirrored pattern Join
 
@@ -157,6 +161,7 @@ The final held diameter and departure bound the centroid reading. Both
 exterior annuli must tile the blank's exact end planes. The result keeps the
 blank's cap origins and receives Cut cap roles; `VerifyAll` checks its boundary
 and occupied-volume allowances at the requested tolerance.
+`loftcylinder.BuildMirrorBore` reflects, sews, audits and tags the bored shell.
 
 For a near-axis placed pair, the Join record carries its upper source
 translation bound and swept-volume charge into the Cut. The reflected upper
@@ -207,6 +212,7 @@ half's bound plus the measured cap reach; a bound above 0.1 mm refuses. The
 occupied-volume allowance sums both half allowances and the Join's
 swept-volume charge. The area allowance sums both half allowances and twice
 the larger one for the removed middle annuli. The held diameter and boundary
-bound give the centroid allowance. The root reflects the lower half within its
-document and gives the exterior cap groups the bored Join's cap origins;
-`loftcylinder.TagCaps` tags them with the blank's planar cap surfaces.
+bound give the centroid allowance. `loftcylinder.BuildMirrorCapChamfer`
+reflects the lower half within its document, gives the exterior cap groups the
+bored Join's cap origins, and has `loftcylinder.TagCaps` tag them with the
+blank's planar cap surfaces.

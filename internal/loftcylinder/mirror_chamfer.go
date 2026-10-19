@@ -13,7 +13,9 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -383,4 +385,44 @@ func mirrorChamferUpperCapBridge(ctx context.Context, old, upper facetedrecord.P
 	topSourceLevel := new(big.Rat).Sub(proofarith.FloatRat(blank.Z1), proofarith.FloatRat(shift))
 	return ChamferBridgeCap(ctx, old, mesh, ideal, half.Band,
 		half.Outer[0], setback, blank.Z1, shift, topSourceLevel, outer)
+}
+
+// BuildMirrorCapChamfer reflects the chamfered lower half lowerBody, built by
+// ChamferBottomCap with half, through MirrorChamferFrame in env, has
+// AssembleMirrorChamfer assemble and prove the mirrored shell, then gives its
+// exterior caps the cap origins of old, the bored mirrored Join, and the
+// blank's planar cap tags. env.Ref names the result's cap roles.
+func BuildMirrorCapChamfer(ctx context.Context, env topo.Env, old facetedrecord.Payload,
+	record *facetedrecord.LoftMirrorCylinderBoreRecord, lowerBody *topo.Body,
+	half ChamferHalf, reflectionReserve, bridgeReserve, setback float64) (*topo.Body, error) {
+	lower, ok := lowerBody.Payload.(facetedrecord.Payload)
+	if !ok {
+		return nil, fmt.Errorf("%w: mirrored cap chamfer lost its audited lower half", decaderr.ErrUnsupported)
+	}
+	reflection, _, err := MirrorChamferFrame(record)
+	if err != nil {
+		return nil, err
+	}
+	upperBody, err := lower.Placed(ctx, env, reflection)
+	if err != nil {
+		return nil, err
+	}
+	upper, ok := upperBody.Payload.(facetedrecord.Payload)
+	if !ok {
+		return nil, fmt.Errorf("%w: mirrored cap chamfer halves have no matching held shell", decaderr.ErrUnsupported)
+	}
+	assembled, err := AssembleMirrorChamfer(ctx, old, lower, upper, record, half,
+		reflectionReserve, bridgeReserve, setback)
+	if err != nil {
+		return nil, err
+	}
+	result := assembled.Payload
+	for cap, group := range assembled.CapGroups {
+		result.Groups[group].Origins = append([]provenance.Ref(nil), old.Groups[record.CapGroups[cap]].Origins...)
+	}
+	if err := TagCaps(&result, record.Join.Blank, assembled.CapGroups,
+		assembled.CapLevels, env.Ref); err != nil {
+		return nil, err
+	}
+	return facetedrecord.Build(ctx, env, result)
 }
