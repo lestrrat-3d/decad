@@ -17,21 +17,20 @@ import (
 // Volume, Centroid and Bounds fold every triangle handed to Add; Area's wall
 // contribution folds only the triangles whose wall flag is true, since a
 // cap's own contribution is the exact rational shoelace area of the SAME
-// polygon its triangulation was built from (loft_build.go's
-// CapPolygonAreaRat), never the sum of its triangulation's own float areas.
+// polygon its triangulation was built from (CapPolygonAreaRat), never the sum of its triangulation's own float areas.
 type MassAccumulator struct {
 	anchor  proofarith.Xpt
 	anchorF r3.Vec
 
 	// delta is the placement's own proven displacement of every held vertex
-	// from the exact placed image of the recorded sections (loft_build.go's
-	// loftPayload.Delta, docs/loft-design.md §5/§12 PR 2a) — zero for an
+	// from the exact placed image of the recorded sections (loftrecord.Payload's
+	// Delta, docs/loft-design.md §5/§12 PR 2a) — zero for an
 	// unplaced LineSeg-only body. Every extra term below is gated on
 	// delta > 0, so an unplaced LineSeg-only loft's published measurements
 	// stay bit-identical to PR 1's.
 	delta float64
 
-	// sectionDelta is loft_build.go's loftPayload.SectionDelta: the proven
+	// sectionDelta is loftrecord.Payload's SectionDelta: the proven
 	// upper bound, as a MAX over cells, on how far a BUILT CHORD point sits
 	// from the recorded curve it chords, AS A SET (a10-plan.md Part 3 PR 6) —
 	// zero for a LineSeg-only pairing. It is delta's independent twin
@@ -65,7 +64,7 @@ type MassAccumulator struct {
 	sectionMatchedDelta float64
 
 	// chorded holds the corrections and residuals ComputeLoftChordedAllow derives from the
-	// composed sectionMatchedDelta and the delta above (loft_build.go): every
+	// composed sectionMatchedDelta and the delta above (internal/loftrecord): every
 	// field stays its zero value unless loftrecord.Build calls ComputeLoftChordedAllow,
 	// which it does exactly when the build holds a cell that is not faceted
 	// (a circular or free-form cell) or a positive section term. A degree-1

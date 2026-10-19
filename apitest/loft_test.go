@@ -13,11 +13,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/loft-design.md PR 1b: the public-surface tests over
-// loft_build_internal_test.go's already-covered evaluator (S1-S8, Table P,
-// Table B, §8's mass kernel). Every test here needs a live sketch, the
-// public entry point, or the recorded step — nothing PR 1a's internal tests
-// already assert is repeated.
+// This file is docs/loft-design.md PR 1b: the public-surface tests over the
+// loft evaluator (S1-S8, Table P, Table B, §8's mass kernel). Every test here
+// needs a live sketch, the public entry point, or the recorded step.
 
 // loftSquaresAt builds two sketches on parallel planes at the given world
 // origin, each with a centred square rectangle: bottomHalf on the plane
@@ -581,8 +579,7 @@ func TestLoftCoplanarSectionsRefuse(t *testing.T) {
 func TestLoftCurvedPairRefuses(t *testing.T) {
 	t.Parallel()
 	// A mismatched segment count refuses at S2, before S3's own same-kind
-	// test ever runs (already pinned exactly by loft_build_internal_test.go's
-	// own S1-S8 tests) — unaffected by S3's arc form (a10-plan.md Part 3
+	// test ever runs — unaffected by S3's arc form (a10-plan.md Part 3
 	// PR 6), since a circle (one segment) against a square (four segments)
 	// never reaches a per-segment kind comparison at all.
 	t.Run("CircleAgainstSquare", func(t *testing.T) {
@@ -616,8 +613,7 @@ func TestLoftCurvedPairRefuses(t *testing.T) {
 // stations per side and several seconds to build — too expensive for the
 // default suite (a10-plan.md's own Fixture sizing note: at most three ~2s
 // fixtures ship in go test ./...), so the actual build is opt-in behind an
-// env var, the same shape loft_chord_calibration_internal_test.go's own
-// DECAD_LOFT_CALIBRATION gate uses.
+// env var.
 func TestLoftSameKindCircleAgainstCircleAdmitted(t *testing.T) {
 	t.Parallel()
 	if os.Getenv("DECAD_LOFT_FULL_CIRCLE") == "" {

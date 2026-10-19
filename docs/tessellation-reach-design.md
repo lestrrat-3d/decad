@@ -156,7 +156,7 @@ answering `+Inf` for an underivable enclosure is the same refusal.
 
 ### Where the triangle set lives
 
-`loftPayload` (`loft_build.go`) holds `verts`, `tris`, `walls`. `tris[:walls]` are the wall triangles in
+`loftPayload` (`loftrecord.Payload`) holds `verts`, `tris`, `walls`. `tris[:walls]` are the wall triangles in
 `loftAssembly.cell`/`side` order; `tris[walls:walls+capStartCount]` are `capStart`'s, the rest `capEnd`'s.
 `capStartCount`, `cell` and `side` live on `loftAssembly` only. `matchedDelta` and
 `loftChordedAllow.maxTwistOffsetUpper` are locals of `loftrecord.Build`; the payload's own doc comment says
@@ -188,11 +188,11 @@ re-evaluates, so nothing stored can disagree with the records.
 `loftChordedAllow` gains `twistAreaAllow`, the sum of `cellTwistAreaAllow(vLo, vHi, wLo, wHi)` over the same
 chorded cells `computeLoftChordedAllow` already walks (gated on `p.matchedDelta[j] > 0`, never on kind).
 
-### `tessellateLoft(ctx, b, lp)` and `internal/loftmesh.RestateLoft`
+### `loftrecord.Tessellate` and `internal/loftmesh.RestateLoft`
 
-`tessellateLoft` (`loft_build.go`) is the adapter: it numbers `b.Faces()` in order, maps each provenance
+`loftrecord.Tessellate` is the adapter: it numbers the body's face nodes in order, maps each provenance
 role to its face number, and hands `RestateLoft` the payload's triangle set, split and proof record. It
-maps the returned face numbers back to live faces and calls `topobuild.SetFaceBound`. `RestateLoft` does steps 1-4.
+maps the returned face numbers back to face nodes and calls `topobuild.SetFaceBound`. `RestateLoft` does steps 1-4.
 
 1. Build the role-to-face map from `b.Faces()` as the prism does. For `k < walls`: face of role
    `side(cell[k][0], cell[k][1], side[k])`. For a solid, `capStartCount` triangles → `capStart`,
@@ -777,13 +777,13 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
    `proofbound.CellAllowsWithSideSpansOf` returns. **Tests:**
    `loft_moments_internal_test.go`: zero for a `LineSeg`-only build, positive for an `ArcSeg` pair with a
    twisted cell, exactly the per-cell sum.
-8. **Files:** `loft_build.go`, `internal/loftmesh/mass_proof.go`. **What:** `loftmesh.MeshProof`; `loftPayload` gains `capStartCount`, `cell`, `side`,
+8. **Files:** `internal/loftrecord/payload.go`, `internal/loftmesh/mass_proof.go`. **What:** `loftmesh.MeshProof`; `loftPayload` gains `capStartCount`, `cell`, `side`,
    `proof`; `loftrecord.Build` composes §4's three terms after `mass.chorded` and stores them; rewrite the
    `sectionDelta` doc comment paragraph §8 names. **Depends on:** 7. **Tests:** internal: `proof.FacetDeparture
    == delta` for a placed `LineSeg`-only loft; `== 0` unplaced pinned; `> sectionDelta` for a chorded pair
    with twist.
-9. **Files:** `tessellate.go`, `loft_build.go`, `internal/loftmesh/loft.go`. **What:** `tessellateLoft` per §4; dispatch in
-   `tessellateContext`; update `Body.Tessellate`'s doc comment. **Pattern:** `tessellateFaceted`.
+9. **Files:** `tessellate.go`, `internal/loftrecord/tessellate.go`, `internal/loftmesh/loft.go`. **What:** `loftrecord.Tessellate` per §4;
+   dispatch in `tessellateBodyContext`; update `Body.Tessellate`'s doc comment. **Pattern:** `tessellateFaceted`.
    **Depends on:** 6, 8. **Tests:** §4's list in `apitest/loft_test.go` and `apitest/export_test.go`.
 10. **Files:** `docs/loft-design.md` §9 Table D rows D1/D2 (status cells become current state), `doc.go`'s
     support map. **Depends on:** 9.

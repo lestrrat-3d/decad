@@ -507,7 +507,7 @@ func meshFreeChainsByFace(mesh *decad.Mesh) map[*decad.Face]int {
 // bodyFreeChainsByFace groups a body's own recorded free Edges by their
 // single adjacent face, then counts the connected components (chains) each
 // face's own free Edges form over their own Vertex pointers — an
-// independent reading of surface.go's freeChainCountsByFace, built
+// independent reading of topobuild.FreeChainCountsByFace, built
 // from Body's public accessors alone.
 func bodyFreeChainsByFace(body *decad.Body) map[*decad.Face]int {
 	byFace := map[*decad.Face]map[*decad.Vertex]*decad.Vertex{}

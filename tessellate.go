@@ -8,7 +8,9 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/alledgechamfermesh"
 	"github.com/lestrrat-3d/decad/internal/brepbandmesh"
+	"github.com/lestrrat-3d/decad/internal/chainrecord"
 	"github.com/lestrrat-3d/decad/internal/cuptess"
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/patchchain"
 	"github.com/lestrrat-3d/decad/internal/patchmesh"
 	"github.com/lestrrat-3d/decad/internal/prismtess"
@@ -324,6 +326,7 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value, verify Ver
 // off the payload at no cost and publishes them unconditionally;
 // tessellateContext withholds them afterwards.
 func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify Verification) (*Mesh, error) {
+	formatSurface := func(s surfacegeom.Surface) any { return publicSurface(s) }
 	if p, ok := b.n.Payload.(allEdgeChamferPayload); ok {
 		node, err := alledgechamfermesh.Build(ctx, &b.n, p, chord,
 			verify >= VerifyBoundary, verify >= VerifyAll)
@@ -360,7 +363,11 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		// The loft path exactly restates the payload's complete set for a
 		// solid or its recorded wall range for a sheet, with no chording
 		// (internal/loftmesh.RestateLoft's own doc comment owns why).
-		return tessellateLoft(ctx, b, lp)
+		node, err := loftrecord.Tessellate(ctx, &b.n, lp)
+		if err != nil {
+			return nil, err
+		}
+		return bornMesh(&Mesh{n: *node}), nil
 	}
 	if tp, ok := b.n.Payload.(twistedSweepPayload); ok {
 		if chord < tp.Delta {
@@ -370,18 +377,18 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 			mesh := bornMesh(&Mesh{n: *tp.Mesh})
 			return mesh, nil
 		}
-		mesh, err := tessellateLoft(ctx, b, tp.Held, tp.SourceRoles)
+		node, err := loftrecord.Tessellate(ctx, &b.n, tp.Held, tp.SourceRoles)
 		if err != nil {
 			return nil, err
 		}
-		for _, face := range mesh.n.Source {
-			topobuild.SetFaceBound(&mesh.n, face, tp.Delta)
+		for _, face := range node.Source {
+			topobuild.SetFaceBound(node, face, tp.Delta)
 		}
-		mesh.n.Bound = tp.Delta
-		mesh.n.AreaSlack = tp.AreaSlack
-		mesh.n.VolSymDiff = tp.VolSymDiff
-		mesh.n.SymDiffOK = true
-		return mesh, nil
+		node.Bound = tp.Delta
+		node.AreaSlack = tp.AreaSlack
+		node.VolSymDiff = tp.VolSymDiff
+		node.SymDiffOK = true
+		return bornMesh(&Mesh{n: *node}), nil
 	}
 	if tp, ok := b.n.Payload.(compositeTwistedSweepPayload); ok {
 		if chord < tp.Delta {
@@ -415,7 +422,6 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		return tessellateTwoSidedDraft(ctx, b, dp, chord, verify)
 	}
 	if sp, ok := b.n.Payload.(stitchPayload); ok {
-		formatSurface := func(s surfacegeom.Surface) any { return publicSurface(s) }
 		var node *topo.Mesh
 		var err error
 		if sp.Tris == nil {
@@ -436,8 +442,12 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		// The chain-fed ribbon path takes no chord tolerance either, on the
 		// identical reasoning: every wall is already an exact planar quad,
 		// so there is no chording decision for a tolerance to bind
-		// (tessellate_chain.go's own doc comment owns why).
-		return tessellateChain(ctx, b, cp)
+		// (internal/chainrecord.Tessellate's own doc comment owns why).
+		node, err := chainrecord.Tessellate(ctx, &b.n, cp, formatSurface)
+		if err != nil {
+			return nil, err
+		}
+		return bornMesh(&Mesh{n: *node}), nil
 	}
 	if sp, ok := b.n.Payload.(chainSweepPayload); ok {
 		if len(sp.Spans) != 0 {
@@ -459,7 +469,11 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		// the chainPayload it wraps unchanged (internal/sweeprecord's
 		// FinishChain), so it reuses that same restatement rather
 		// than a second one keyed on the wrapper type.
-		return tessellateChain(ctx, b, sp.Chain)
+		node, err := chainrecord.Tessellate(ctx, &b.n, sp.Chain, formatSurface)
+		if err != nil {
+			return nil, err
+		}
+		return bornMesh(&Mesh{n: *node}), nil
 	}
 	if mp, ok := b.n.Payload.(mitredSweepPayload); ok {
 		// docs/sweep-design.md Table DM row DM2: an exact restatement of the

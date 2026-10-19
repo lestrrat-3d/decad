@@ -16,7 +16,7 @@ import (
 // gap 2 of this PR's report: a chain-fed prism ribbon's mesh, restated
 // straight off the body's own wall topology with no chording (Table G's
 // Plane row). Chain Extrude and SweepChain's one-span straight reduction
-// share the identical restatement (tessellate_chain.go).
+// share the identical restatement (internal/chainrecord/tessellate.go).
 
 // TestExtrudeChainTessellatesOneWallRibbon is T130's ribbon, tessellated: one
 // wall, two triangles, a zero Bound since the wall's four corners sit exactly

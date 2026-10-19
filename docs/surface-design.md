@@ -1961,9 +1961,10 @@ closed — a solid, or a full-turn sheet — and never on an open partial-sweep
 sheet, where that sum is anchor-dependent and decides nothing.
 
 A surface-result **loft** sheet tessellates and exports its recorded wall
-triangles. The payload holds walls before both cap ranges, so `tessellateLoft`
+triangles. The payload holds walls before both cap ranges, so `loftrecord.Tessellate`
 copies only `tris[:walls]` and attributes each triangle to its live
-`side(i,j,k)` face (§4.2). `requireSheetMesh` hands the mesh and the body's recorded free edges to
+`side(i,j,k)` face (§4.2). `internal/loftmesh.RestateLoft` hands the mesh and the per-face chain counts
+of the body's recorded free edges (`topobuild.FreeChainCountsByFace`) to
 `internal/tessellation.RequireSheetBoundary`, which matches the exposed section rims
 to them, and `internal/tessellation.RequireSheetVertexLinks` checks the
 open boundary vertices. The complete held set still supplies the build-time
@@ -2014,7 +2015,7 @@ the one it triangulated to check its own perturbed area sum (§6.4) and, until
 this increment, discarded afterward. It runs
 `docs/tessellation-design.md` §1.2's manifold-with-boundary audit in the
 closed-mesh audit's place, exactly as a surface-result prism or revolve
-sheet's own mesh does above: `requireSheetMesh` has
+sheet's own mesh does above: `topobuild.RequireSheetMesh` has
 `internal/tessellation.RequireSheetBoundary` prove every free directed
 edge attributes, face by face and chain count by chain count, to the body's
 own recorded free `Edge`s, and `internal/tessellation.RequireSheetVertexLinks` is its own
@@ -2090,9 +2091,9 @@ At `VerifyNone`, the source revolve contact audit is skipped and
 `VolumeVerified() == false` at every level.
 
 A closed result runs `internal/tessellation.RequireClosedMesh` and `tessellation.RequireVertexLinks` on the
-reattributed set. An open result runs `requireSheetMesh` and
+reattributed set. An open result runs `topobuild.RequireSheetMesh` and
 `internal/tessellation.RequireSheetVertexLinks` instead. A curved free `Edge` can contribute
-several free directed mesh edges: `requireSheetMesh` compares connected
+several free directed mesh edges: `topobuild.RequireSheetMesh` compares connected
 boundary chains per live face, not edge counts. Both sides use the same
 live `*Face` pointer, and a source rim's consecutive chord segments stay
 one chain. The rejected alternative was matching one mesh segment to one
@@ -2622,7 +2623,7 @@ ANSWER is accepted and reads `Suspect`.
 | 16 | `Thicken` on a profile-fed revolve sheet (§16.5): the exact axis class, the meridian annulus over §16.2's own offsets, the radial gate over the interval scan's own boxes, the re-resolved axis frame, and §15's T158–T161 |
 | 17 | `Thicken` on a chain ribbon (§16.6): the closed-form assembled section, its exact-generation gate and endpoint crossing audit, all three sides, and §15's T162–T164 |
 | 18 | `Thicken` on a chain revolve shell (§16.7): §16.6's assembled section under §16.5's sweep and radial gate, and §15's T165–T169. A free end on the axis stays R43 |
-| 19 | The chain-fed prism ribbon's `Tessellate`/`STL`/`OBJ` mesh over a `LineSeg`-only chain (`tessellate_chain.go`): every wall's exact planar quad read straight off its topology with no chording. A curved or free-form wall, and the chain-fed revolve ribbon's mesh, stay R45 and row 10's own staging respectively |
+| 19 | The chain-fed prism ribbon's `Tessellate`/`STL`/`OBJ` mesh over a `LineSeg`-only chain (`internal/chainrecord/tessellate.go`): every wall's exact planar quad read straight off its topology with no chording. A curved or free-form wall, and the chain-fed revolve ribbon's mesh, stay R45 and row 10's own staging respectively |
 | 20 | `Thicken` on one-span straight and arc sweep sheets (§16.8): reuse the prism or revolve offset proof, then publish the new solid as `sweepPayload` with its path and roles. Composite sweep sheets stay R24. T213 checks both reductions and replay |
 | 21 | Cardinal composite chain `Sweep` `Thicken` (§16.8): exact ribbon section and radial interval; two-span solid sweep sews caps and proves measurements and mesh. Other chain sweeps stay R24 except row 22's one-arc class (T195c) |
 | 22 | One-arc chain `Sweep` `Thicken` (§16.8): §16.7 closes the source walk under its exact-axis gate, and the result uses the solid one-arc Sweep proof and path roles (T214) |

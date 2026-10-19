@@ -329,7 +329,7 @@ func pinArcWalkEnds(w *survey2d.SegmentWalk, seg ArcSeg) {
 // recorded End only where the two recorded radii are equal — an equality
 // nothing in this package certifies. A consumer that publishes a station's
 // displacement from the DENOTED point owes that radial residual on top of this
-// zero; docs/loft-design.md §5.2 names the term and loft_build.go's
+// zero; docs/loft-design.md §5.2 names the term and
 // loftmesh.ArcNaturalEndRadialUpper charges it for the loft.
 func arcWalkEnd(seg ArcSeg, t, heldU, heldV float64) (float64, float64, proofbound.WalkEndBound) {
 	switch t {
