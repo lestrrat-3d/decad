@@ -74,7 +74,7 @@ func revolveLoftFacesCapBoundarySeamVertex(circle revolveLoftFacesToolCapCircle,
 			lfMul(middle[2], middle[2])).Sign() <= 0 {
 		return out, false
 	}
-	point, _, ok := revolveLoftFacesMeridianRayPoint(
+	point, _, ok := revolveloftfaces.MeridianRayPoint(
 		[2]*big.Rat{middle[1], middle[2]}, circle.x, circle.radius)
 	if !ok {
 		return out, false

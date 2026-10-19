@@ -1,6 +1,7 @@
 package revolveloftfaces
 
 import (
+	"math"
 	"math/big"
 	"sort"
 
@@ -41,6 +42,12 @@ type ShellRay struct {
 	SeamIndex int
 	SeamRefs  []ShellRayRef
 	CapIDs    []int
+}
+
+// ShellTriangleCell labels one blank-shell triangle by its Revolve section,
+// adjacent ring band, angular ray interval and triangle half.
+type ShellTriangleCell struct {
+	Section, Band, Ray, Half int
 }
 
 // ShellRays builds one angular grid for all source station runs and cap endpoints.
@@ -240,4 +247,33 @@ func allShellRayOrderBounded(rays []ShellRay, source ShellRaySource) bool {
 		}
 	}
 	return true
+}
+
+// MeridianRayPoint holds the point at exact X on a ray at the given radius
+// from the Revolve axis. Its bound charges the rounded ray length and the
+// held point's rounding.
+func MeridianRayPoint(ray [2]*big.Rat, x, radius *big.Rat) (r3.Vec, float64, bool) {
+	if ray[0] == nil || ray[1] == nil || x == nil || radius == nil || radius.Sign() <= 0 {
+		return r3.Vec{}, 0, false
+	}
+	r2 := lfAdd(lfMul(ray[0], ray[0]), lfMul(ray[1], ray[1]))
+	stored, _ := r2.Float64()
+	if proofbound.IsNonFinite(stored) || stored <= 0 {
+		return r3.Vec{}, 0, false
+	}
+	denominator := math.Sqrt(stored)
+	if proofbound.IsNonFinite(denominator) || denominator <= 0 {
+		return r3.Vec{}, 0, false
+	}
+	scale := lfDiv(radius, lfF(denominator))
+	exact := loftface.RatVec{x, lfMul(ray[0], scale), lfMul(ray[1], scale)}
+	point, round, ok := HeldPoint(exact)
+	if !ok {
+		return r3.Vec{}, 0, false
+	}
+	actual := lfAdd(lfMul(exact[1], exact[1]), lfMul(exact[2], exact[2]))
+	residual := proofbound.RatFloatUp(lfDiv(
+		lfAbs(lfSub(actual, lfMul(radius, radius))), radius))
+	bound := proofbound.AbsSumUpper(residual, round)
+	return point, bound, !proofbound.IsNonFinite(bound)
 }

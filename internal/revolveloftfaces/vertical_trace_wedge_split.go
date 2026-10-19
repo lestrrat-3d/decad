@@ -8,29 +8,17 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 )
 
-// VerticalTraceSplitReaders reads transient root trace records without
-// retaining a second mesh or cell representation.
-type VerticalTraceSplitReaders[N, E, C any] struct {
-	NodeVertex func(N) int
-	NodeRay    func(N) int
-	EdgeEnds   func(E) (int, int)
-	EdgeWedge  func(E) int
-	CellLabels func(C) (int, int, int, int)
-	NewCell    func(int, int, int, int) C
-}
-
-func verticalTraceRadialNodes[N, E, C any](mesh *facetedrecord.JoinedMesh,
-	rayCount int, nodes []N, center int, ring []int,
-	read VerticalTraceSplitReaders[N, E, C],
+func verticalTraceRadialNodes(mesh *facetedrecord.JoinedMesh,
+	rayCount int, nodes []VerticalTraceNode, center int, ring []int,
 ) ([][]int, bool) {
 	byRay := make([][]int, rayCount)
 	centerPoint := VerticalTracePlanarPoint(mesh.Verts, center)
 	for _, node := range nodes {
-		ray := read.NodeRay(node)
+		ray := node.Ray
 		if ray < 0 {
 			continue
 		}
-		vertex := read.NodeVertex(node)
+		vertex := node.Vertex
 		if ray >= rayCount || vertex == center {
 			return nil, false
 		}
@@ -63,11 +51,11 @@ func verticalTraceRadialNodes[N, E, C any](mesh *facetedrecord.JoinedMesh,
 
 // VerticalTraceSplitWedges rewrites one fan band after the caller has bound
 // its live source graph and shell. It returns replacement slices only on success.
-func VerticalTraceSplitWedges[N, E, C any](ctx context.Context,
+func VerticalTraceSplitWedges(ctx context.Context,
 	mesh *facetedrecord.JoinedMesh, sectionRings [][][]int, rayCount int,
-	ring []int, section int, nodes []N, path []E, cells []C,
-	read VerticalTraceSplitReaders[N, E, C],
-) ([][3]int, []int, []C, bool, error) {
+	ring []int, section int, nodes []VerticalTraceNode, path []VerticalTraceEdge,
+	cells []ShellTriangleCell,
+) ([][3]int, []int, []ShellTriangleCell, bool, error) {
 	if section < 0 || section >= len(sectionRings) ||
 		len(ring) != rayCount || len(path)+1 != len(nodes) {
 		return nil, nil, nil, false, nil
@@ -85,34 +73,33 @@ func VerticalTraceSplitWedges[N, E, C any](ctx context.Context,
 		return nil, nil, nil, false, nil
 	}
 	center := sectionRings[section][band][0]
-	byRay, ok := verticalTraceRadialNodes(mesh, rayCount, nodes, center, ring, read)
+	byRay, ok := verticalTraceRadialNodes(mesh, rayCount, nodes, center, ring)
 	if !ok {
 		return nil, nil, nil, false, nil
 	}
 	byWedge := make([][][2]int, rayCount)
 	for _, edge := range path {
-		wedge := read.EdgeWedge(edge)
+		wedge := edge.Wedge
 		if wedge < 0 || wedge >= rayCount {
 			return nil, nil, nil, false, nil
 		}
-		start, end := read.EdgeEnds(edge)
 		byWedge[wedge] = append(byWedge[wedge],
-			[2]int{read.NodeVertex(nodes[start]), read.NodeVertex(nodes[end])})
+			[2]int{nodes[edge.Start].Vertex, nodes[edge.End].Vertex})
 	}
 	nextTris := make([][3]int, 0, len(mesh.Tris)+4*len(nodes))
 	nextSrc := make([]int, 0, cap(nextTris))
-	nextCells := make([]C, 0, cap(nextTris))
+	nextCells := make([]ShellTriangleCell, 0, cap(nextTris))
 	seenRay := make([]bool, rayCount)
 	for i, tri := range mesh.Tris {
 		cell := cells[i]
-		cellSection, cellBand, ray, half := read.CellLabels(cell)
-		if cellSection != section || cellBand != band {
+		ray := cell.Ray
+		if cell.Section != section || cell.Band != band {
 			nextTris = append(nextTris, tri)
 			nextSrc = append(nextSrc, mesh.Src[i])
 			nextCells = append(nextCells, cell)
 			continue
 		}
-		if ray < 0 || ray >= rayCount || seenRay[ray] || half != 0 ||
+		if ray < 0 || ray >= rayCount || seenRay[ray] || cell.Half != 0 ||
 			!slices.Contains(tri[:], center) || !slices.Contains(tri[:], ring[ray]) ||
 			!slices.Contains(tri[:], ring[(ray+1)%rayCount]) {
 			return nil, nil, nil, false, nil
@@ -144,7 +131,8 @@ func VerticalTraceSplitWedges[N, E, C any](ctx context.Context,
 		for clippedHalf, triangle := range clipped {
 			nextTris = append(nextTris, triangle)
 			nextSrc = append(nextSrc, mesh.Src[i])
-			nextCells = append(nextCells, read.NewCell(section, band, ray, clippedHalf))
+			nextCells = append(nextCells, ShellTriangleCell{
+				Section: section, Band: band, Ray: ray, Half: clippedHalf})
 		}
 	}
 	for _, seen := range seenRay {
