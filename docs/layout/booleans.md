@@ -33,8 +33,7 @@ The rules for rows live in `docs/layout.md`.
 | `loft_cylinder_placement.go` | Rebuilds a common signed-axis cylinder/Loft join in local coordinates and places its audited shell. See loft-cylinder-boolean design. |
 | `loft_cylinder_cap.go` | Reads joined meshes into the exact cap disk and annulus audits, tags certified cap faces, and bounds a one-ulp axial placement difference for Union proof copies. See loft-cylinder-boolean design. |
 | `loft_cylinder_bore.go` | Cuts a centered through-bore from an audited loft/cylinder join. See loft-cylinder-boolean design. |
-| `loft_cylinder_chamfer.go` | Admits both outer cap loops of an audited loft/cylinder result, binds live sources, builds cap insets and bands, audits the rational cutter, publishes the rounded result, and preserves the bore wall. See loft-cylinder-boolean design. |
-| `loft_cylinder_chamfer_reach.go` | Reach audits for the cap Chamfer: root slits and inset edges, cap tiling and crossings, band points near a split ring, and middle-side reach. See loft-cylinder-boolean design. |
+| `loft_cylinder_chamfer.go` | Admits both outer cap loops of an audited loft/cylinder result, binds live sources, builds cap insets and bands, keeps the bore wall, audits the rational cutter, and publishes the rounded result. The source record and reach proofs live in `internal/loftcylinder`. See loft-cylinder-boolean design. |
 | `prism_boolean.go` | Root holed-Intersect route, its one-hole nesting admission, body-to-payload adapters for analytic prism booleans, blind and spanning Cut admission, and the exact blind Cut across one through hole. See prism-boolean §3, general-boolean A7. |
 | `prism_group.go` | Prism-group `Cut` tools and disjoint `Union` results. See general-boolean A5. |
 | `stacked_union.go` | Admits A1 `Union` operands and passes their slabs to `internal/stackedunion`. See general-boolean A1. |

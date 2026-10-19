@@ -7,16 +7,20 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
-// ChamferCapRadialRun measures only the part of the inset rim in a radial
+// chamferCapRadialRun measures only the part of the inset rim in a radial
 // uncertainty band around the source root. Complete cap source coverage is
 // checked separately.
-func ChamferCapRadialRun(verts []r3.Vec, ring []int,
+func chamferCapRadialRun(verts []r3.Vec, ring []int,
 	blankRadius, boreRadius, outerRadius float64) (float64, error) {
 	radius := proofarith.FloatRat(blankRadius)
 	r2 := proofarith.MulRat(new(big.Rat), radius, radius)
@@ -220,28 +224,28 @@ func ChamferHeldOutlineGap(ctx context.Context, verts []r3.Vec,
 	return nil
 }
 
-// ChamferCapTooth is one source tooth's exact cap contour and its departure bound.
-type ChamferCapTooth struct {
+// chamferCapTooth is one source tooth's exact cap contour and its departure bound.
+type chamferCapTooth struct {
 	points []XY
 	poly   []meshbool.Xp2
 	bound2 *big.Rat
 }
 
-// ChamferCapToothOf returns one source tooth's exact cap contour and its departure bound.
-func ChamferCapToothOf(verts []r3.Vec, facetDeparture float64, capIndex int, z float64) (ChamferCapTooth, error) {
+// chamferCapContourOf returns one source tooth's exact cap contour and its departure bound.
+func chamferCapContourOf(verts []r3.Vec, facetDeparture float64, capIndex int, z float64) (chamferCapTooth, error) {
 	n := len(verts) / 2
 	if n < 6 || n > 4096 {
-		return ChamferCapTooth{}, fmt.Errorf("%w: cap tooth contour exceeds its work limit", decaderr.ErrUnsupported)
+		return chamferCapTooth{}, fmt.Errorf("%w: cap tooth contour exceeds its work limit", decaderr.ErrUnsupported)
 	}
 	first := capIndex * n
-	result := ChamferCapTooth{
+	result := chamferCapTooth{
 		points: make([]XY, n), poly: make([]meshbool.Xp2, n),
 		bound2: proofarith.MulRat(new(big.Rat), proofarith.FloatRat(facetDeparture),
 			proofarith.FloatRat(facetDeparture)),
 	}
 	for i, p := range verts[first : first+n] {
 		if p.Z != z {
-			return ChamferCapTooth{}, fmt.Errorf("%w: source tooth cap leaves the blank plane", decaderr.ErrUnsupported)
+			return chamferCapTooth{}, fmt.Errorf("%w: source tooth cap leaves the blank plane", decaderr.ErrUnsupported)
 		}
 		result.points[i] = ExactXY(p)
 		result.poly[i] = meshbool.NewXP2(result.points[i].X, result.points[i].Y)
@@ -307,11 +311,11 @@ func chamferExteriorPart(a, b XY, outer2, overlap2 *big.Rat) (
 	return p, b, true, nil
 }
 
-// ChamferExteriorRimInside checks each complete inset edge against the source
+// chamferExteriorRimTeeth checks each complete inset edge against the source
 // tooth contours. Strict chord clearance keeps it away from the moving source
 // curve, and winding at its midpoint fixes which side remains occupied. This
 // checks the inset rim only. The cap interior and root band are separate.
-func ChamferExteriorRimInside(ctx context.Context, teeth []ChamferCapTooth,
+func chamferExteriorRimTeeth(ctx context.Context, teeth []chamferCapTooth,
 	verts []r3.Vec, ring []int, blankRadius, outerRadius float64) error {
 	outer := proofarith.FloatRat(outerRadius)
 	outer2 := proofarith.MulRat(new(big.Rat), outer, outer)
@@ -369,4 +373,140 @@ func ChamferExteriorRimInside(ctx context.Context, teeth []ChamferCapTooth,
 		}
 	}
 	return nil
+}
+
+// ChamferCapRadialReach measures only the part of the inset rim in a radial
+// uncertainty band around the source root. Complete cap source coverage is
+// checked separately.
+func ChamferCapRadialReach(source ChamferSource,
+	verts []r3.Vec, ring []int, capIndex int, outerRadius float64) (float64, error) {
+	if source.BlankRadius <= 0 || proofbound.IsNonFinite(source.BlankRadius) ||
+		proofbound.IsNonFinite(outerRadius) || capIndex < 0 || capIndex > 1 ||
+		outerRadius <= source.BlankRadius {
+		return 0, fmt.Errorf("%w: cap radial band has invalid limits", decaderr.ErrUnsupported)
+	}
+	outer := proofarith.FloatRat(outerRadius)
+	outer2 := new(big.Rat).Mul(outer, outer)
+	for _, tooth := range source.Teeth {
+		if tooth == nil {
+			return 0, fmt.Errorf("%w: cap radial band lacks a source tooth", decaderr.ErrUnsupported)
+		}
+		lp, ok := tooth.Payload.(loftrecord.Payload)
+		if !ok || !lp.AuthenticatedReconstruction {
+			return 0, fmt.Errorf("%w: cap slit lacks an authenticated tooth", decaderr.ErrUnsupported)
+		}
+		profile := lp.Profile0
+		if capIndex == 1 {
+			profile = lp.Profile1
+		}
+		if len(profile.Outer.Segments) <= 5 {
+			return 0, fmt.Errorf("%w: cap slit lacks the source root arc", decaderr.ErrUnsupported)
+		}
+		arc, ok := profile.Outer.Segments[5].(sectionrecord.ArcSeg)
+		if !ok {
+			return 0, fmt.Errorf("%w: cap slit lacks the source root arc", decaderr.ErrUnsupported)
+		}
+		p := SourcePoint(lp.Xform.Basis().EX, arc.Start)
+		if q := SourceDot(p, p); q.Cmp(outer2) > 0 {
+			return 0, fmt.Errorf("%w: cap radial band misses a source root", decaderr.ErrUnsupported)
+		}
+	}
+	return chamferCapRadialRun(verts, ring, source.BlankRadius, source.BoreRadius, outerRadius)
+}
+
+// ChamferExteriorLineage matches every true tooth cap contour outside the
+// centered root arc to a retained held chord. Union copied these chords, in order, into its audited
+// outer cap loop. A later inset whose exact clearance from that whole loop
+// exceeds the Loft departure cannot be crossed by any such source contour.
+func ChamferExteriorLineage(fp facetedrecord.Payload,
+	source ChamferSource, capIndex int) error {
+	if capIndex < 0 || capIndex > 1 || len(source.Outer[capIndex]) < 3 ||
+		fp.MeshBound < 0 || proofbound.IsNonFinite(fp.MeshBound) {
+		return fmt.Errorf("%w: cap has no exterior contour correspondence", decaderr.ErrUnsupported)
+	}
+	outer := source.Outer[capIndex]
+	edges := make(map[[2]r3.Vec]struct{}, len(outer))
+	for i, index := range outer {
+		next := outer[(i+1)%len(outer)]
+		if index < 0 || index >= len(fp.Verts) || next < 0 || next >= len(fp.Verts) {
+			return fmt.Errorf("%w: cap outer loop has invalid indices", decaderr.ErrUnsupported)
+		}
+		edges[[2]r3.Vec{fp.Verts[index], fp.Verts[next]}] = struct{}{}
+	}
+	for _, body := range source.Teeth {
+		if body == nil {
+			return fmt.Errorf("%w: cap lacks an original tooth", decaderr.ErrUnsupported)
+		}
+		lp, ok := body.Payload.(loftrecord.Payload)
+		if !ok || !lp.AuthenticatedReconstruction || lp.Proof.FacetDeparture < 0 ||
+			lp.Proof.FacetDeparture > fp.MeshBound || len(lp.Verts)%2 != 0 ||
+			len(lp.Segment) != 1 {
+			return fmt.Errorf("%w: cap tooth has no bounded source contour", decaderr.ErrUnsupported)
+		}
+		n := len(lp.Verts) / 2
+		if len(lp.Segment[0]) != n {
+			return fmt.Errorf("%w: cap tooth has no station-to-curve map", decaderr.ErrUnsupported)
+		}
+		root := -1
+		for j, segment := range lp.Segment[0] {
+			if segment == 5 {
+				root = j
+				break
+			}
+			if segment < 0 || segment > 4 {
+				return fmt.Errorf("%w: cap tooth exterior has an unexpected source curve", decaderr.ErrUnsupported)
+			}
+		}
+		if root < 5 || root >= n-1 {
+			return fmt.Errorf("%w: cap tooth has no separate root arc", decaderr.ErrUnsupported)
+		}
+		first := capIndex * n
+		for j := range root {
+			if _, ok := edges[[2]r3.Vec{lp.Verts[first+j], lp.Verts[first+j+1]}]; !ok {
+				return fmt.Errorf("%w: a source tooth exterior chord is absent from the held cap", decaderr.ErrUnsupported)
+			}
+		}
+	}
+	return nil
+}
+
+func chamferCapToothOf(body *topo.Body, capIndex int, z float64) (chamferCapTooth, error) {
+	if body == nil {
+		return chamferCapTooth{}, fmt.Errorf("%w: cap lacks a source tooth", decaderr.ErrUnsupported)
+	}
+	lp, ok := body.Payload.(loftrecord.Payload)
+	if !ok || !lp.AuthenticatedReconstruction || len(lp.Verts)%2 != 0 ||
+		lp.Proof.FacetDeparture < 0 || proofbound.IsNonFinite(lp.Proof.FacetDeparture) {
+		return chamferCapTooth{}, fmt.Errorf("%w: cap tooth has no matched Loft contour", decaderr.ErrUnsupported)
+	}
+	return chamferCapContourOf(lp.Verts, lp.Proof.FacetDeparture, capIndex, z)
+}
+
+// ChamferExteriorRimInside checks the inset rim against each source tooth's
+// cap. Each source tooth's held cap chords and exact cap curve have the same
+// authenticated parameters and a two-sided FacetDeparture bound. Strict
+// chord clearance keeps a complete inset edge away from the moving source
+// curve, and winding at its midpoint fixes which side remains occupied.
+// This checks the inset rim only. The cap interior and root band are separate.
+func ChamferExteriorRimInside(ctx context.Context, source ChamferSource,
+	verts []r3.Vec, ring []int, capIndex int, outerRadius float64) error {
+	if len(ring) < 3 || len(ring) > 4096 || capIndex < 0 || capIndex > 1 ||
+		len(source.Teeth) == 0 || len(source.Teeth) > 64 ||
+		source.BlankRadius <= 0 || proofbound.IsNonFinite(source.BlankRadius) ||
+		outerRadius <= source.BlankRadius || proofbound.IsNonFinite(outerRadius) {
+		return fmt.Errorf("%w: cap exterior source has invalid limits", decaderr.ErrUnsupported)
+	}
+	z := source.Z0
+	if capIndex == 1 {
+		z = source.Z1
+	}
+	teeth := make([]chamferCapTooth, len(source.Teeth))
+	for i, body := range source.Teeth {
+		tooth, err := chamferCapToothOf(body, capIndex, z)
+		if err != nil {
+			return err
+		}
+		teeth[i] = tooth
+	}
+	return chamferExteriorRimTeeth(ctx, teeth, verts, ring, source.BlankRadius, outerRadius)
 }

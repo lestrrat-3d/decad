@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -244,4 +245,129 @@ func chamferMiddleToothSource(ctx context.Context, q [3]proofarith.Xpt,
 	// segment x--v stays outside. No source wall meets that part, so its
 	// inside vertex fixes occupancy. The remaining patch is inside the blank.
 	return nil
+}
+
+// chamferMiddleSidePrep is the read-only input of the retained middle-side
+// proof: the validated payload, the tooth faces and the old shell's audit
+// data. The grid is the one mutable part; a worker uses a Fork of it.
+type chamferMiddleSidePrep struct {
+	fp     facetedrecord.Payload
+	middle [2]int
+	grid   *loftmesh.ChamferBoxGrid
+	proof  ChamferMiddleInput
+}
+
+func newChamferMiddleSidePrep(fp facetedrecord.Payload, mesh *facetedrecord.JoinedMesh, source ChamferSource,
+	ideal []proofarith.Xpt, middle [2]int, clipBound float64) (*chamferMiddleSidePrep, error) {
+	if middle[0] < 0 || middle[1] > len(mesh.Tris) || middle[0] >= middle[1] ||
+		len(fp.Src) != len(fp.Tris) || proofbound.IsNonFinite(clipBound) {
+		return nil, fmt.Errorf("%w: cap chamfer has no retained middle side", decaderr.ErrUnsupported)
+	}
+	faces, err := chamferToothFaces(source)
+	if err != nil {
+		return nil, err
+	}
+	old := loftmesh.NewLoftAuditData(fp.Verts, fp.Tris)
+	oldBoxes := make([][2]r3.Vec, len(fp.Tris))
+	for i, tri := range fp.Tris {
+		oldBoxes[i] = meshbool.TriBox(fp.Verts, tri)
+	}
+	oldGrid, err := loftmesh.ChamferBoxGridOf(oldBoxes, source.Z0, source.Z1)
+	if err != nil {
+		return nil, err
+	}
+	// A whole old boundary component cannot hide inside a middle collar:
+	// every old vertex is on a cap plane, outside every strict middle prism.
+	for _, p := range fp.Verts {
+		if p.Z != source.Z0 && p.Z != source.Z1 {
+			return nil, fmt.Errorf("%w: joined source has an interior-height vertex", decaderr.ErrUnsupported)
+		}
+	}
+	prep := &chamferMiddleSidePrep{
+		fp: fp, middle: middle, grid: oldGrid,
+		proof: ChamferMiddleInput{
+			Mesh: mesh, Ideal: ideal, TriCount: len(fp.Tris), ClipBound: clipBound,
+			Faces: faces, Old: old, OldBoxes: oldBoxes,
+			Z0: source.Z0, Z1: source.Z1,
+			BoreRadius: source.BoreRadius, BlankRadius: source.BlankRadius,
+		},
+	}
+	return prep, nil
+}
+
+// A retained middle facet is an exact subset of an old held wall. An inward
+// horizontal collar ending inside the source solid gives every point of that
+// facet a source-cut boundary point within the collar's length.
+func chamferMiddleSideReach(ctx context.Context, fp facetedrecord.Payload,
+	mesh *facetedrecord.JoinedMesh, source ChamferSource, ideal []proofarith.Xpt,
+	middle [2]int, clipBound float64) error {
+	prep, err := newChamferMiddleSidePrep(fp, mesh, source, ideal, middle, clipBound)
+	if err != nil {
+		return err
+	}
+	return prep.serialFrom(ctx, middle[0])
+}
+
+// serialFrom runs the facets first..middle[1] in order on the real grid.
+func (prep *chamferMiddleSidePrep) serialFrom(ctx context.Context, first int) error {
+	st := NewChamferMiddleState(prep.grid,
+		meshbool.NewParityMesh(prep.fp.Verts, prep.fp.Tris))
+	for i := first; i < prep.middle[1]; i++ {
+		if i%32 == 0 && ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if err := ChamferMiddleFacet(ctx, prep.proof, i, st); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Union copied these precise Loft face triangles, and Cut retained their
+// groups. Match by authenticated origin instead of interpreting a role string
+// on a faceted result that may coalesce several public edges.
+func chamferToothFaces(source ChamferSource) (map[provenance.Ref][]ChamferToothFace, error) {
+	if source.Blank == nil || len(source.Teeth) == 0 ||
+		len(source.OriginalTeeth) != len(source.Teeth) || source.BlankRadius <= 0 {
+		return nil, fmt.Errorf("%w: loft/cylinder chamfer lost its source operands", decaderr.ErrUnsupported)
+	}
+	faces := make(map[provenance.Ref][]ChamferToothFace)
+	for toothIndex, tooth := range source.Teeth {
+		if tooth == nil || source.OriginalTeeth[toothIndex] == nil {
+			return nil, fmt.Errorf("%w: loft/cylinder tooth source is absent", decaderr.ErrUnsupported)
+		}
+		lp, ok := tooth.Payload.(loftrecord.Payload)
+		original, originalOK := source.OriginalTeeth[toothIndex].Payload.(loftrecord.Payload)
+		if !ok || !lp.AuthenticatedReconstruction || lp.SourceIdentity == nil ||
+			!originalOK || original.SourceIdentity != lp.SourceIdentity ||
+			lp.Proof.FacetDeparture < 0 || proofbound.IsNonFinite(lp.Proof.FacetDeparture) ||
+			len(lp.Segment) != 1 {
+			return nil, fmt.Errorf("%w: loft/cylinder tooth lost its certified surface", decaderr.ErrUnsupported)
+		}
+		root := -1
+		for i, segment := range lp.Segment[0] {
+			if segment == 5 {
+				root = i
+				break
+			}
+		}
+		toothFaces := topobuild.Faces(tooth)
+		if root < 3 || len(toothFaces) != lp.Walls+2 || lp.Walls < 2*root {
+			return nil, fmt.Errorf("%w: loft/cylinder tooth has no paired exterior faces", decaderr.ErrUnsupported)
+		}
+		for j := range root {
+			for side := range 2 {
+				f := toothFaces[2+2*j+side]
+				if len(f.Origins) == 0 {
+					return nil, fmt.Errorf("%w: loft/cylinder tooth face lost its origin", decaderr.ErrUnsupported)
+				}
+				origin := f.Origins[0]
+				faces[origin] = append(faces[origin], ChamferToothFace{
+					Body: tooth, Loft: lp, Root: root, Cell: j, Bound: lp.Proof.FacetDeparture,
+					Scale: proofarith.FloatRat(original.Xform.Basis().EZ.Z),
+				})
+			}
+		}
+	}
+	return faces, nil
 }

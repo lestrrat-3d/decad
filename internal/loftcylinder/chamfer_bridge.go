@@ -13,36 +13,40 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
-// The original operands remain the exact source of the result. The paired
-// proof teeth have the same XY sections and source identity, with an upward
-// charge for the one-ulp axial placement defect in their Loft proofs.
-type ChamferBridgeSourcesInput struct {
-	ProofTeeth, OriginalTeeth []*topo.Body
-	AxialBridge               []float64
-	Z0, Z1, BridgeBound       float64
+// BindBridge checks every original/proof tooth pair and sets BridgeBound and
+// TopSourceLevel. The original operands remain the exact source of the
+// result. The paired proof teeth have the same XY sections and source
+// identity, with an upward charge for the one-ulp axial placement defect in
+// their Loft proofs. A refused bind leaves s unchanged.
+func (s *ChamferSource) BindBridge() error {
+	bridgeBound, topSourceLevel, err := s.bridgeSources()
+	if err != nil {
+		return err
+	}
+	s.BridgeBound, s.TopSourceLevel = bridgeBound, topSourceLevel
+	return nil
 }
 
-func ChamferBridgeSources(source *ChamferBridgeSourcesInput) (float64, *big.Rat, error) {
-	if source == nil || len(source.ProofTeeth) == 0 || len(source.ProofTeeth) != len(source.OriginalTeeth) ||
-		len(source.ProofTeeth) != len(source.AxialBridge) || source.Z1 <= source.Z0 ||
-		proofbound.IsNonFinite(source.Z0) || proofbound.IsNonFinite(source.Z1) {
+func (s *ChamferSource) bridgeSources() (float64, *big.Rat, error) {
+	if len(s.Teeth) == 0 || len(s.Teeth) != len(s.OriginalTeeth) ||
+		len(s.Teeth) != len(s.AxialBridge) || s.Z1 <= s.Z0 ||
+		proofbound.IsNonFinite(s.Z0) || proofbound.IsNonFinite(s.Z1) {
 		return 0, nil, fmt.Errorf("%w: cap chamfer lost its original and proof teeth", decaderr.ErrUnsupported)
 	}
-	minTop := proofarith.FloatRat(source.Z1)
-	bridgeBound := source.BridgeBound
+	minTop := proofarith.FloatRat(s.Z1)
+	bridgeBound := s.BridgeBound
 	var bridgedTop *big.Rat
-	for i, proofBody := range source.ProofTeeth {
-		originalBody := source.OriginalTeeth[i]
+	for i, proofBody := range s.Teeth {
+		originalBody := s.OriginalTeeth[i]
 		if originalBody == nil || proofBody == nil {
 			return 0, nil, fmt.Errorf("%w: cap chamfer has an absent tooth", decaderr.ErrUnsupported)
 		}
 		original, okOriginal := originalBody.Payload.(loftrecord.Payload)
 		proxy, okProxy := proofBody.Payload.(loftrecord.Payload)
-		shift := source.AxialBridge[i]
+		shift := s.AxialBridge[i]
 		if !okOriginal || !okProxy || !original.AuthenticatedReconstruction ||
 			!proxy.AuthenticatedReconstruction || original.SourceIdentity == nil ||
 			original.SourceIdentity != proxy.SourceIdentity ||
@@ -63,12 +67,12 @@ func ChamferBridgeSources(source *ChamferBridgeSourcesInput) (float64, *big.Rat,
 		for j, p := range original.Verts {
 			q := proxy.Verts[j]
 			if p.X != q.X || p.Y != q.Y ||
-				j < n && (p.Z != source.Z0 || q.Z != source.Z0) ||
-				j >= n && q.Z != source.Z1 {
+				j < n && (p.Z != s.Z0 || q.Z != s.Z0) ||
+				j >= n && q.Z != s.Z1 {
 				return 0, nil, fmt.Errorf("%w: cap chamfer bridge changed a cap station", decaderr.ErrUnsupported)
 			}
 			if j >= n {
-				vertexGap := new(big.Rat).Sub(proofarith.FloatRat(source.Z1), proofarith.FloatRat(p.Z))
+				vertexGap := new(big.Rat).Sub(proofarith.FloatRat(s.Z1), proofarith.FloatRat(p.Z))
 				if vertexGap.Sign() < 0 || vertexGap.Cmp(proofarith.FloatRat(shift)) > 0 {
 					return 0, nil, fmt.Errorf("%w: cap chamfer top station exceeds its bridge", decaderr.ErrUnsupported)
 				}
@@ -85,11 +89,11 @@ func ChamferBridgeSources(source *ChamferBridgeSourcesInput) (float64, *big.Rat,
 			proxy.Xform.Basis().EZ != (r3.Vec{Z: 1}) {
 			return 0, nil, fmt.Errorf("%w: cap chamfer bridge is not one axial scale", decaderr.ErrUnsupported)
 		}
-		if basis.EZ.Z != 1 && source.Z0 != 0 {
+		if basis.EZ.Z != 1 && s.Z0 != 0 {
 			return 0, nil, fmt.Errorf("%w: cap chamfer bridge has a displaced lower cap", decaderr.ErrUnsupported)
 		}
-		analyticTop := new(big.Rat).Mul(proofarith.FloatRat(basis.EZ.Z), proofarith.FloatRat(source.Z1))
-		analyticGap := new(big.Rat).Sub(proofarith.FloatRat(source.Z1), analyticTop)
+		analyticTop := new(big.Rat).Mul(proofarith.FloatRat(basis.EZ.Z), proofarith.FloatRat(s.Z1))
+		analyticGap := new(big.Rat).Sub(proofarith.FloatRat(s.Z1), analyticTop)
 		if analyticGap.Sign() < 0 || analyticGap.Cmp(proofarith.FloatRat(shift)) > 0 {
 			return 0, nil, fmt.Errorf("%w: cap chamfer analytic cap exceeds its bridge", decaderr.ErrUnsupported)
 		}

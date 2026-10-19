@@ -18,88 +18,30 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// loftCylinderChamferSource is the already audited cap and side correspondence
-// of an axial loft joined to an exact circular blank. The cap loops are CCW
-// when viewed from +Z, including the start cap whose public coedges are CW.
-type loftCylinderChamferSource struct {
-	blank          *Body
-	teeth          []*Body
-	originalTeeth  []*Body
-	axialBridge    []float64
-	bridgeBound    float64
-	topSourceLevel *big.Rat
-	// Optional physical-height correction for a reflected, axially bridged
-	// source tooth. The ring's shared held level stays unchanged.
-	ringLevelShift []*big.Rat
-	outer, inner   [2][]int
-	capGroups      [2]int
-	boreGroup      int
-	blankRadius    float64
-	boreRadius     float64
-	boreBound      float64
-	innerInset     float64
-	outerExcess    float64
-	rootCollar     float64
-	z0, z1         float64
-}
-
-func loftCylinderChamferSourceOf(fp facetedPayload) (loftCylinderChamferSource, bool) {
-	if !fp.ContactAudited || fp.Xform != r3.Identity() {
-		return loftCylinderChamferSource{}, false
-	}
-	if r := fp.LoftCylinderBore; r != nil {
-		return loftCylinderChamferSource{
-			blank: bodyHandle(r.Blank), teeth: bodyHandles(r.ProofTeeth),
-			originalTeeth: bodyHandles(r.Teeth), axialBridge: r.AxialBridge,
-			outer: r.Outer, inner: r.Inner, capGroups: r.CapGroups,
-			boreGroup: r.WallGroup, blankRadius: r.BlankRadius,
-			boreRadius: r.BoreRadius, boreBound: r.BoreBound, innerInset: r.InnerInset,
-			outerExcess: r.OuterExcess, rootCollar: r.RootCollar,
-			z0: r.Z0, z1: r.Z1,
-		}, true
-	}
-	if r := fp.LoftCylinderJoin; r != nil {
-		return loftCylinderChamferSource{
-			blank: bodyHandle(r.Blank), teeth: bodyHandles(r.ProofTeeth),
-			originalTeeth: bodyHandles(r.Teeth), axialBridge: r.AxialBridge,
-			outer: r.CapOutlines, capGroups: r.CapGroups,
-			boreGroup: -1, blankRadius: r.Radius,
-			innerInset: r.InnerInset, outerExcess: r.OuterExcess,
-			rootCollar: r.RootCollar, z0: r.Z0, z1: r.Z1,
-		}, true
-	}
-	return loftCylinderChamferSource{}, false
-}
-
 // tryLoftCylinderCapChamfer accepts exactly the two full outer cap loops of
 // an authenticated, unplaced loft/cylinder join or its centered bore result.
 // It never interprets an arbitrary faceted edge as an offset carrier.
 func tryLoftCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPayload,
 	edges []*Edge, d, dDelta float64, asym *asymmetricChamfer) (*Body, bool, error) {
-	source, ok := loftCylinderChamferSourceOf(fp)
+	source, ok := loftcylinder.ChamferSourceOf(fp)
 	if !ok {
 		return nil, false, nil
 	}
 	if asym != nil {
 		return nil, true, fmt.Errorf("%w: asymmetric chamfer is not certified for this loft/cylinder cap", ErrUnsupported)
 	}
-	if dDelta != 0 || d <= 0 || !proofbound.FiniteVec(r3.Vec{X: d, Y: source.z0, Z: source.z1}) {
+	if dDelta != 0 || d <= 0 || !proofbound.FiniteVec(r3.Vec{X: d, Y: source.Z0, Z: source.Z1}) {
 		return nil, true, fmt.Errorf("%w: loft/cylinder cap setback has no exact millimeter magnitude", ErrUnsupported)
 	}
-	startExact := new(big.Rat).Add(proofarith.FloatRat(source.z0), proofarith.FloatRat(d))
-	endExact := new(big.Rat).Sub(proofarith.FloatRat(source.z1), proofarith.FloatRat(d))
-	if startExact.Cmp(endExact) >= 0 || source.z0+d == source.z0 || source.z1-d == source.z1 {
+	startExact := new(big.Rat).Add(proofarith.FloatRat(source.Z0), proofarith.FloatRat(d))
+	endExact := new(big.Rat).Sub(proofarith.FloatRat(source.Z1), proofarith.FloatRat(d))
+	if startExact.Cmp(endExact) >= 0 || source.Z0+d == source.Z0 || source.Z1-d == source.Z1 {
 		return nil, true, fmt.Errorf("%w: loft/cylinder cap bands reach each other or round onto a cap", ErrUnsupported)
 	}
-	bridgeBound, topSourceLevel, err := loftcylinder.ChamferBridgeSources(&loftcylinder.ChamferBridgeSourcesInput{
-		ProofTeeth: bodyNodes(source.teeth), OriginalTeeth: bodyNodes(source.originalTeeth),
-		AxialBridge: source.axialBridge, Z0: source.z0, Z1: source.z1, BridgeBound: source.bridgeBound,
-	})
-	if err != nil {
+	if err := source.BindBridge(); err != nil {
 		return nil, true, err
 	}
-	source.bridgeBound, source.topSourceLevel = bridgeBound, topSourceLevel
-	if source.topSourceLevel.Cmp(endExact) <= 0 {
+	if source.TopSourceLevel.Cmp(endExact) <= 0 {
 		return nil, true, fmt.Errorf("%w: cap chamfer bridge reaches its side level", ErrUnsupported)
 	}
 	var caps [2]*Face
@@ -131,7 +73,7 @@ func tryLoftCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPayload,
 	}
 	for cap, face := range caps {
 		if len(face.n.Loops) == 0 || !loftcylinder.ChamferCapWalk(
-			face.n.Loops[0], fp.Verts, source.outer[cap], cap == 0) {
+			face.n.Loops[0], fp.Verts, source.Outer[cap], cap == 0) {
 			return nil, true, fmt.Errorf("%w: loft/cylinder cap %d has no outer loop", ErrUnsupported, cap)
 		}
 		for _, ce := range face.n.Loops[0].CoEdges {
@@ -147,71 +89,6 @@ func tryLoftCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPayload,
 	}
 	body, err := buildLoftCylinderCapChamfer(ctx, documentHandle(b.n.Doc), b.n.Doc.NextProducer, fp, source, d)
 	return body, true, err
-}
-
-// Cut's authenticated bore wall is kept verbatim. Its same-height radial
-// source correspondence remains valid because the new outer cap bands stay
-// clear of the entire source bore shell and both cap annuli keep their inner
-// loops. The caller audits the rebuilt annuli before publishing the result.
-func loftCylinderChamferBoreInheritance(fp facetedPayload, mesh *joinedMesh,
-	source loftCylinderChamferSource) error {
-	if source.boreGroup < 0 {
-		if fp.LoftCylinderBore != nil || len(source.inner[0]) != 0 || len(source.inner[1]) != 0 {
-			return fmt.Errorf("%w: chamfer has inconsistent no-bore cap records", ErrUnsupported)
-		}
-		return nil
-	}
-	record := fp.LoftCylinderBore
-	if record == nil || source.boreGroup != record.WallGroup ||
-		source.boreRadius != record.BoreRadius || source.boreBound != record.BoreBound ||
-		source.boreBound < 0 || proofbound.IsNonFinite(source.boreBound) ||
-		source.boreBound > fp.MeshBound ||
-		proofbound.AbsSumUpper(source.boreRadius, source.boreBound, source.innerInset) >= source.blankRadius {
-		return fmt.Errorf("%w: chamfer bore lost its source radial bound", ErrUnsupported)
-	}
-	if len(mesh.Verts) < len(fp.Verts) || len(fp.Tris) != len(fp.Src) ||
-		len(mesh.Tris) != len(mesh.Src) {
-		return fmt.Errorf("%w: chamfer bore has incomplete held triangles", ErrUnsupported)
-	}
-	for cap, ring := range source.inner {
-		if len(ring) < 3 || len(ring) != len(record.Inner[cap]) {
-			return fmt.Errorf("%w: chamfer bore lost its inner cap loop", ErrUnsupported)
-		}
-		for i, index := range ring {
-			if index != record.Inner[cap][i] || index < 0 || index >= len(fp.Verts) ||
-				mesh.Verts[index] != fp.Verts[index] {
-				return fmt.Errorf("%w: chamfer bore changed an inner cap station", ErrUnsupported)
-			}
-		}
-	}
-	old := make([][3]int, 0)
-	for i, group := range fp.Src {
-		if group == source.boreGroup {
-			old = append(old, fp.Tris[i])
-		}
-	}
-	if len(old) == 0 {
-		return fmt.Errorf("%w: chamfer bore has no retained wall", ErrUnsupported)
-	}
-	kept := 0
-	for i, group := range mesh.Src {
-		if group != source.boreGroup {
-			continue
-		}
-		if kept >= len(old) || mesh.Tris[i] != old[kept] {
-			return fmt.Errorf("%w: chamfer changed a held bore-wall facet", ErrUnsupported)
-		}
-		for _, index := range mesh.Tris[i] {
-			if index < 0 || index >= len(fp.Verts) || mesh.Verts[index] != fp.Verts[index] {
-				return fmt.Errorf("%w: chamfer changed a held bore-wall vertex", ErrUnsupported)
-			}
-		}
-		kept++
-	}
-	if kept != len(old) {
-		return fmt.Errorf("%w: chamfer dropped a held bore-wall facet", ErrUnsupported)
-	}
-	return nil
 }
 
 type loftCylinderChamferSide struct {
@@ -231,7 +108,7 @@ type loftCylinderOneCapData struct {
 }
 
 func buildLoftCylinderCapChamfer(ctx context.Context, d *Document, ref producerID,
-	fp facetedPayload, source loftCylinderChamferSource, setback float64) (*Body, error) {
+	fp facetedPayload, source loftcylinder.ChamferSource, setback float64) (*Body, error) {
 	return buildLoftCylinderCapChamferCaps(ctx, d, ref, fp, source, setback,
 		[2]bool{true, true}, 0.1, nil, nil)
 }
@@ -240,14 +117,14 @@ func buildLoftCylinderCapChamfer(ctx context.Context, d *Document, ref producerI
 // annulus. The active bottom band uses the same fixed-cutter proof as the
 // public two-cap route. This private result is sewn to its reflection.
 func buildLoftCylinderOneCapChamfer(ctx context.Context, d *Document, ref producerID,
-	fp facetedPayload, source loftCylinderChamferSource, setback, allowance float64,
+	fp facetedPayload, source loftcylinder.ChamferSource, setback, allowance float64,
 	reflectedShift []*big.Rat, data *loftCylinderOneCapData) (*Body, error) {
 	return buildLoftCylinderCapChamferCaps(ctx, d, ref, fp, source, setback,
 		[2]bool{true, false}, allowance, reflectedShift, data)
 }
 
 func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref producerID,
-	fp facetedPayload, source loftCylinderChamferSource, setback float64,
+	fp facetedPayload, source loftcylinder.ChamferSource, setback float64,
 	active [2]bool, allowance float64, reflectedShift []*big.Rat,
 	oneCap *loftCylinderOneCapData) (*Body, error) {
 	// This rewrite has its own fixed work envelope. The source ring and its
@@ -258,7 +135,7 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 		maxInsetVertices = 4_096
 		maxTriangles     = 32_768
 	)
-	if len(source.outer[0]) > maxRimVertices || len(source.outer[1]) > maxRimVertices {
+	if len(source.Outer[0]) > maxRimVertices || len(source.Outer[1]) > maxRimVertices {
 		return nil, fmt.Errorf("%w: loft/cylinder cap outline exceeds the chamfer work ceiling", ErrUnsupported)
 	}
 	if len(fp.VertexBound) != len(fp.Verts) || len(fp.Src) != len(fp.Tris) {
@@ -266,24 +143,24 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 	}
 	old := &joinedMesh{Verts: fp.Verts, Tris: fp.Tris, Src: fp.Src, Groups: fp.Groups}
 	for cap := range 2 {
-		level := source.z0
+		level := source.Z0
 		if cap == 1 {
-			level = source.z1
+			level = source.Z1
 		}
 		valid := false
-		if len(source.inner[cap]) > 0 {
-			valid = loftCylinderAuditAnnulus(ctx, old, source.outer[cap], source.inner[cap],
-				source.capGroups[cap], level, cap == 0)
+		if len(source.Inner[cap]) > 0 {
+			valid = loftCylinderAuditAnnulus(ctx, old, source.Outer[cap], source.Inner[cap],
+				source.CapGroups[cap], level, cap == 0)
 		} else {
-			valid = loftCylinderAuditCap(ctx, old, source.outer[cap], source.capGroups[cap], level, cap == 0)
+			valid = loftCylinderAuditCap(ctx, old, source.Outer[cap], source.CapGroups[cap], level, cap == 0)
 		}
 		if !valid {
 			return nil, fmt.Errorf("%w: loft/cylinder source cap no longer tiles its ring", ErrUnsupported)
 		}
 	}
 	sideSource := loftcylinder.ChamferSideSource{
-		Outer: source.outer, CapGroups: source.capGroups, BoreGroup: source.boreGroup,
-		Z0: source.z0, Z1: source.z1,
+		Outer: source.Outer, CapGroups: source.CapGroups, BoreGroup: source.BoreGroup,
+		Z0: source.Z0, Z1: source.Z1,
 	}
 	groups, err := loftcylinder.ChamferSideGroups(fp, sideSource)
 	if err != nil {
@@ -293,7 +170,7 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 		Groups: append([]facetGroup(nil), fp.Groups...)}
 	bounds := append([]float64(nil), fp.VertexBound...)
 	for i, tri := range fp.Tris {
-		if fp.Src[i] == source.boreGroup {
+		if fp.Src[i] == source.BoreGroup {
 			mesh.Add(tri, fp.Src[i])
 		}
 	}
@@ -326,11 +203,11 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 	maxInset := 0.0
 	for cap := range 2 {
 		if !active[cap] {
-			inset[cap] = source.outer[cap]
+			inset[cap] = source.Outer[cap]
 			bands[cap] = [2]int{len(mesh.Tris), len(mesh.Tris)}
 			continue
 		}
-		samples, err := loftcylinder.ChamferInset(ctx, fp.Verts, source.outer[cap], setback)
+		samples, err := loftcylinder.ChamferInset(ctx, fp.Verts, source.Outer[cap], setback)
 		if err != nil {
 			return nil, fmt.Errorf("loft/cylinder cap %d inset: %w", cap, err)
 		}
@@ -338,9 +215,9 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 			return nil, fmt.Errorf("%w: loft/cylinder inset exceeds the chamfer work ceiling", ErrUnsupported)
 		}
 		maxInset = max(maxInset, samples.Bound)
-		level := source.z0
+		level := source.Z0
 		if cap == 1 {
-			level = source.z1
+			level = source.Z1
 		}
 		inset[cap] = make([]int, len(samples.Points))
 		for i, p := range samples.Points {
@@ -352,7 +229,7 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 		if !loftcylinder.BoreRingSimple(ctx, mesh.Verts, inset[cap]) {
 			return nil, fmt.Errorf("%w: loft/cylinder inset is not one simple outer ring", ErrUnsupported)
 		}
-		inSource, err := loftcylinder.ChamferRingNested(ctx, mesh.Verts, source.outer[cap], inset[cap])
+		inSource, err := loftcylinder.ChamferRingNested(ctx, mesh.Verts, source.Outer[cap], inset[cap])
 		if err != nil {
 			return nil, err
 		}
@@ -369,24 +246,24 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 			}
 		}
 		if err := loftcylinder.ChamferHeldOutlineGap(ctx, mesh.Verts,
-			source.outer[cap], inset[cap], fp.MeshBound); err != nil {
+			source.Outer[cap], inset[cap], fp.MeshBound); err != nil {
 			return nil, err
 		}
-		if err := loftCylinderChamferExteriorLineage(fp, source, cap); err != nil {
+		if err := loftcylinder.ChamferExteriorLineage(fp, source, cap); err != nil {
 			return nil, err
 		}
-		outerRadius := proofbound.AbsSumUpper(source.blankRadius, 0.01)
-		radialReach[cap], err = loftCylinderChamferCapRadialReach(source, mesh.Verts,
+		outerRadius := proofbound.AbsSumUpper(source.BlankRadius, 0.01)
+		radialReach[cap], err = loftcylinder.ChamferCapRadialReach(source, mesh.Verts,
 			inset[cap], cap, outerRadius)
 		if err != nil {
 			return nil, err
 		}
-		if err := loftCylinderChamferExteriorRimInside(ctx, source, mesh.Verts,
+		if err := loftcylinder.ChamferExteriorRimInside(ctx, source, mesh.Verts,
 			inset[cap], cap, outerRadius); err != nil {
 			return nil, err
 		}
-		if len(source.inner[cap]) > 0 {
-			boreReach := proofbound.AbsSumUpper(source.boreRadius, fp.MeshBound, samples.Bound,
+		if len(source.Inner[cap]) > 0 {
+			boreReach := proofbound.AbsSumUpper(source.BoreRadius, fp.MeshBound, samples.Bound,
 				clipped.clipBound)
 			for i, index := range inset[cap] {
 				next := inset[cap][(i+1)%len(inset[cap])]
@@ -395,14 +272,14 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 				}
 			}
 		}
-		capGroup := source.capGroups[cap]
+		capGroup := source.CapGroups[cap]
 		role := provenance.RoleCapStart
 		if cap == 1 {
 			role = provenance.RoleCapEnd
 		}
 		mesh.Groups[capGroup].Origins = append(append([]provenance.Ref(nil), mesh.Groups[capGroup].Origins...),
 			provenance.Ref{Producer: ref, Role: role})
-		capTris, err := loftcylinder.ChamferCapTriangles(ctx, mesh.Verts, inset[cap], source.inner[cap], cap == 0)
+		capTris, err := loftcylinder.ChamferCapTriangles(ctx, mesh.Verts, inset[cap], source.Inner[cap], cap == 0)
 		if err != nil {
 			return nil, fmt.Errorf("loft/cylinder cap %d: %w", cap, err)
 		}
@@ -422,8 +299,8 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 			mesh.Add(t, bandGroup)
 		}
 		bands[cap] = [2]int{bandFirst, len(mesh.Tris)}
-		if len(source.inner[cap]) > 0 {
-			boreReach := proofbound.AbsSumUpper(source.boreRadius, fp.MeshBound, samples.Bound,
+		if len(source.Inner[cap]) > 0 {
+			boreReach := proofbound.AbsSumUpper(source.BoreRadius, fp.MeshBound, samples.Bound,
 				clipped.clipBound)
 			for _, tri := range mesh.Tris[bandFirst:] {
 				if loftcylinder.TriangleMinRadius(mesh.Verts, tri) <= boreReach {
@@ -444,10 +321,10 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 		if !active[cap] {
 			continue
 		}
-		capLevel := proofarith.FloatRat(source.z0)
+		capLevel := proofarith.FloatRat(source.Z0)
 		sideLevel := new(big.Rat).Add(capLevel, proofarith.FloatRat(setback))
 		if cap == 1 {
-			capLevel = proofarith.FloatRat(source.z1)
+			capLevel = proofarith.FloatRat(source.Z1)
 			sideLevel = new(big.Rat).Sub(capLevel, proofarith.FloatRat(setback))
 		}
 		if !loftcylinder.ChamferExactRingSimple(ctx, ideal, clipped.rings[cap]) {
@@ -481,8 +358,8 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 	bridgeReach := 0.0
 	if active[1] {
 		bridgeReach, err = loftcylinder.ChamferBridgeCap(ctx, fp, mesh, ideal,
-			bands[1], inset[1], setback, source.z1, source.bridgeBound,
-			source.topSourceLevel, source.outer[1])
+			bands[1], inset[1], setback, source.Z1, source.BridgeBound,
+			source.TopSourceLevel, source.Outer[1])
 		if err != nil {
 			return nil, err
 		}
@@ -509,10 +386,10 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 	// The near-band and middle-side proofs read only the finished mesh and
 	// source records, so they run side by side. When both fail, the near-band
 	// error is returned, as when they ran in sequence.
-	if err := loftCylinderChamferReach(ctx, &loftCylinderChamferReachInput{
-		fp: fp, mesh: mesh, source: source, ideal: ideal, bands: bands, middle: middle,
-		clipBound: clipped.clipBound, allowance: allowance, multipleRings: !active[1],
-		reflectedShift: reflectedShift,
+	if err := loftcylinder.ChamferReach(ctx, &loftcylinder.ChamferReachInput{
+		FP: fp, Mesh: mesh, Source: source, Ideal: ideal, Bands: bands, Middle: middle,
+		ClipBound: clipped.clipBound, Allowance: allowance, MultipleRings: !active[1],
+		ReflectedShift: reflectedShift,
 	}, orderedwork.EachWorkers(middle[1]-middle[0], 256)); err != nil {
 		return nil, err
 	}
@@ -528,20 +405,20 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 	if len(mesh.Tris) > maxTriangles {
 		return nil, fmt.Errorf("%w: loft/cylinder chamfer exceeds the triangle work ceiling", ErrUnsupported)
 	}
-	if err := loftCylinderChamferCrossingAudit(ctx, mesh, source, inset, maxTriangles); err != nil {
+	if err := loftcylinder.ChamferCrossingAudit(ctx, mesh, source, inset, maxTriangles); err != nil {
 		return nil, err
 	}
 	for cap := range 2 {
-		level := source.z0
+		level := source.Z0
 		if cap == 1 {
-			level = source.z1
+			level = source.Z1
 		}
 		valid := false
-		if len(source.inner[cap]) > 0 {
-			valid = loftCylinderAuditAnnulus(ctx, mesh, inset[cap], source.inner[cap],
-				source.capGroups[cap], level, cap == 0)
+		if len(source.Inner[cap]) > 0 {
+			valid = loftCylinderAuditAnnulus(ctx, mesh, inset[cap], source.Inner[cap],
+				source.CapGroups[cap], level, cap == 0)
 		} else {
-			valid = loftCylinderAuditCap(ctx, mesh, inset[cap], source.capGroups[cap], level, cap == 0)
+			valid = loftCylinderAuditCap(ctx, mesh, inset[cap], source.CapGroups[cap], level, cap == 0)
 		}
 		if !valid {
 			return nil, fmt.Errorf("%w: loft/cylinder inset cap does not tile its ring", ErrUnsupported)
@@ -594,15 +471,15 @@ func buildLoftCylinderCapChamferCaps(ctx context.Context, d *Document, ref produ
 		return nil, err
 	}
 	if oneCap != nil {
-		oneCap.capGroups = source.capGroups
-		oneCap.boreGroup = source.boreGroup
+		oneCap.capGroups = source.CapGroups
+		oneCap.boreGroup = source.BoreGroup
 		for cap := range 2 {
 			oneCap.outer[cap] = make([]int, len(inset[cap]))
 			for i, index := range inset[cap] {
 				oneCap.outer[cap][i] = remap[index]
 			}
-			oneCap.inner[cap] = make([]int, len(source.inner[cap]))
-			for i, index := range source.inner[cap] {
+			oneCap.inner[cap] = make([]int, len(source.Inner[cap]))
+			for i, index := range source.Inner[cap] {
 				oneCap.inner[cap][i] = remap[index]
 			}
 		}
@@ -630,27 +507,27 @@ func loftCylinderChamferIdealVertices(verts []r3.Vec, side loftCylinderChamferSi
 // of the old wall's two-triangle strips, so it has the same classification
 // there; the cap bands cannot reach this level.
 func loftCylinderChamferSolidWitness(ctx context.Context, fp facetedPayload,
-	source loftCylinderChamferSource, setback float64) error {
-	mid := new(big.Rat).Add(proofarith.FloatRat(source.z0), proofarith.FloatRat(source.z1))
+	source loftcylinder.ChamferSource, setback float64) error {
+	mid := new(big.Rat).Add(proofarith.FloatRat(source.Z0), proofarith.FloatRat(source.Z1))
 	mid.Quo(mid, big.NewRat(2, 1))
-	start := new(big.Rat).Add(proofarith.FloatRat(source.z0), proofarith.FloatRat(setback))
-	end := new(big.Rat).Sub(proofarith.FloatRat(source.z1), proofarith.FloatRat(setback))
+	start := new(big.Rat).Add(proofarith.FloatRat(source.Z0), proofarith.FloatRat(setback))
+	end := new(big.Rat).Sub(proofarith.FloatRat(source.Z1), proofarith.FloatRat(setback))
 	if mid.Cmp(start) <= 0 || mid.Cmp(end) >= 0 {
 		return fmt.Errorf("%w: cap bands leave no common interior slice", ErrUnsupported)
 	}
 	r := 0.0
-	if source.boreRadius > 0 {
+	if source.BoreRadius > 0 {
 		r = proofbound.RatFloatUp(new(big.Rat).Quo(new(big.Rat).Add(
-			proofarith.FloatRat(source.boreRadius), proofarith.FloatRat(source.blankRadius)),
+			proofarith.FloatRat(source.BoreRadius), proofarith.FloatRat(source.BlankRadius)),
 			big.NewRat(2, 1)))
 	}
-	if proofbound.AbsSumUpper(r, source.innerInset) >= source.blankRadius ||
-		source.boreRadius > 0 && r <= proofbound.AbsSumUpper(source.boreRadius, fp.MeshBound) {
+	if proofbound.AbsSumUpper(r, source.InnerInset) >= source.BlankRadius ||
+		source.BoreRadius > 0 && r <= proofbound.AbsSumUpper(source.BoreRadius, fp.MeshBound) {
 		return fmt.Errorf("%w: cap chamfer lacks an interior blank witness", ErrUnsupported)
 	}
 	witness := proofarith.Xlerp(
-		proofarith.XptOf(r3.Vec{X: r, Z: source.z0}),
-		proofarith.XptOf(r3.Vec{X: r, Z: source.z1}),
+		proofarith.XptOf(r3.Vec{X: r, Z: source.Z0}),
+		proofarith.XptOf(r3.Vec{X: r, Z: source.Z1}),
 		big.NewInt(1), big.NewInt(2))
 	indices := make([]int, len(fp.Tris))
 	for i := range indices {
@@ -665,53 +542,4 @@ func loftCylinderChamferSolidWitness(ctx context.Context, fp facetedPayload,
 		return fmt.Errorf("%w: cap chamfer shell excludes its blank witness", ErrUnsupported)
 	}
 	return nil
-}
-
-// Union copied these precise Loft face triangles, and Cut retained their
-// groups. Match by authenticated origin instead of interpreting a role string
-// on a faceted result that may coalesce several public edges.
-func loftCylinderChamferToothFaces(source loftCylinderChamferSource) (map[provenance.Ref][]loftcylinder.ChamferToothFace, error) {
-	if source.blank == nil || len(source.teeth) == 0 ||
-		len(source.originalTeeth) != len(source.teeth) || source.blankRadius <= 0 {
-		return nil, fmt.Errorf("%w: loft/cylinder chamfer lost its source operands", ErrUnsupported)
-	}
-	faces := make(map[provenance.Ref][]loftcylinder.ChamferToothFace)
-	for toothIndex, tooth := range source.teeth {
-		if tooth == nil || source.originalTeeth[toothIndex] == nil {
-			return nil, fmt.Errorf("%w: loft/cylinder tooth source is absent", ErrUnsupported)
-		}
-		lp, ok := tooth.n.Payload.(loftPayload)
-		original, originalOK := source.originalTeeth[toothIndex].n.Payload.(loftPayload)
-		if !ok || !lp.AuthenticatedReconstruction || lp.SourceIdentity == nil ||
-			!originalOK || original.SourceIdentity != lp.SourceIdentity ||
-			lp.Proof.FacetDeparture < 0 || proofbound.IsNonFinite(lp.Proof.FacetDeparture) ||
-			len(lp.Segment) != 1 {
-			return nil, fmt.Errorf("%w: loft/cylinder tooth lost its certified surface", ErrUnsupported)
-		}
-		root := -1
-		for i, segment := range lp.Segment[0] {
-			if segment == 5 {
-				root = i
-				break
-			}
-		}
-		toothFaces := tooth.Faces()
-		if root < 3 || len(toothFaces) != lp.Walls+2 || lp.Walls < 2*root {
-			return nil, fmt.Errorf("%w: loft/cylinder tooth has no paired exterior faces", ErrUnsupported)
-		}
-		for j := range root {
-			for side := range 2 {
-				f := toothFaces[2+2*j+side]
-				if len(f.n.Origins) == 0 {
-					return nil, fmt.Errorf("%w: loft/cylinder tooth face lost its origin", ErrUnsupported)
-				}
-				origin := f.n.Origins[0]
-				faces[origin] = append(faces[origin], loftcylinder.ChamferToothFace{
-					Body: &tooth.n, Loft: lp, Root: root, Cell: j, Bound: lp.Proof.FacetDeparture,
-					Scale: proofarith.FloatRat(original.Xform.Basis().EZ.Z),
-				})
-			}
-		}
-	}
-	return faces, nil
 }
