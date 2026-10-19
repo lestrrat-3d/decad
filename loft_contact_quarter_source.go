@@ -2,8 +2,8 @@ package decad
 
 import (
 	"context"
-	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/loftcontact"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -312,191 +312,63 @@ func mapLoftQuarterWitnesses(ctx context.Context, budget *proofbound.WorkBudget,
 	return out, true, nil
 }
 
-// quarterSourcePairs independently classifies each original cross-operand pair.
-// The first class admits disjoint line pairs and a strictly convex quarter arc
-// crossed by a line with one endpoint inside and the other outside its disk.
+// quarterSourcePairs adapts authenticated body spans to the plain-data pair
+// classifier. Every original segment retains its source index.
 func quarterSourcePairs(budget *proofbound.WorkBudget, work *loftQuarterWork,
 	source loftSourceSpanCaps, cap int, events []loftQuarterSourceEvent) (bool, error) {
-	expected := make(map[[2]int]bool)
-	for _, p := range source.prismCaps[cap] {
-		for _, l := range source.loftCaps[cap] {
-			if err := budget.Step(); err != nil {
-				return false, err
-			}
-			work.pairs++
-			pLine, pOK := p.curve.(sectionrecord.LineSeg)
-			if !pOK {
-				return false, nil
-			}
-			switch lc := l.curve.(type) {
-			case sectionrecord.LineSeg:
-				if quarterLineBoxesOverlap(pLine, lc) {
-					return false, nil
-				}
-			case sectionrecord.ArcSeg:
-				if _, err := budget.StepN(16); err != nil {
-					return false, err
-				}
-				root, ok := quarterLineArcPair(pLine, lc)
-				if !ok {
-					return false, nil
-				}
-				if root {
-					expected[[2]int{p.segment, l.segment}] = true
-				}
-			default:
-				return false, nil
-			}
+	prism := make([]sectionrecord.CurveSegment, len(source.prismCaps[cap]))
+	loft := make([]sectionrecord.CurveSegment, len(source.loftCaps[cap]))
+	for i, span := range source.prismCaps[cap] {
+		if err := budget.Step(); err != nil {
+			return false, err
 		}
-	}
-	if len(expected) != len(events) {
-		return false, nil
-	}
-	for _, e := range events {
-		key := [2]int{e.line.segment, e.arc.segment}
-		if !expected[key] {
+		if span.body != source.prism || span.segment != i {
 			return false, nil
 		}
-		delete(expected, key)
+		prism[i] = span.curve
 	}
-	return len(expected) == 0, nil
-}
-
-func quarterLineBox(line sectionrecord.LineSeg) [4]float64 {
-	minU, maxU := line.Start.U, line.End.U
-	if minU > maxU {
-		minU, maxU = maxU, minU
-	}
-	minV, maxV := line.Start.V, line.End.V
-	if minV > maxV {
-		minV, maxV = maxV, minV
-	}
-	return [4]float64{minU, minV, maxU, maxV}
-}
-
-func quarterBoxesOverlap(a, b [4]float64) bool {
-	return !(a[2] < b[0] || b[2] < a[0] || a[3] < b[1] || b[3] < a[1])
-}
-
-func quarterLineBoxesOverlap(a, b sectionrecord.LineSeg) bool {
-	return quarterBoxesOverlap(quarterLineBox(a), quarterLineBox(b))
-}
-
-func quarterLineArcPair(line sectionrecord.LineSeg,
-	arc sectionrecord.ArcSeg) (bool, bool) {
-	coords := [...]float64{line.Start.U, line.Start.V, line.End.U, line.End.V,
-		arc.Center.U, arc.Center.V, arc.Start.U, arc.Start.V,
-		arc.End.U, arc.End.V}
-	var r [10]*big.Rat
-	for i, v := range coords {
-		r[i] = new(big.Rat).SetFloat64(v)
-		if r[i] == nil || r[i].Num().BitLen() > 16 ||
-			r[i].Denom().BitLen() > 16 {
-			return false, false
+	for i, span := range source.loftCaps[cap] {
+		if err := budget.Step(); err != nil {
+			return false, err
 		}
+		if span.body != source.loft || span.segment != i {
+			return false, nil
+		}
+		loft[i] = span.curve
 	}
-	radius := new(big.Rat).Sub(r[6], r[4])
-	if radius.Sign() <= 0 || r[7].Cmp(r[5]) != 0 ||
-		r[8].Cmp(r[4]) != 0 ||
-		radius.Cmp(new(big.Rat).Sub(r[9], r[5])) != 0 {
-		return false, false
+	pairs := make([][2]int, len(events))
+	for i, event := range events {
+		if err := budget.Step(); err != nil {
+			return false, err
+		}
+		pairs[i] = [2]int{event.line.segment, event.arc.segment}
 	}
-	if !quarterBoxesOverlap(quarterLineBox(line),
-		[4]float64{arc.Center.U, arc.Center.V, arc.Start.U, arc.End.V}) {
-		return false, true
-	}
-	r2 := new(big.Rat).Mul(radius, radius)
-	sign := func(x, y *big.Rat) int {
-		dx := new(big.Rat).Sub(x, r[4])
-		dy := new(big.Rat).Sub(y, r[5])
-		d2 := new(big.Rat).Add(new(big.Rat).Mul(dx, dx),
-			new(big.Rat).Mul(dy, dy))
-		return d2.Cmp(r2)
-	}
-	a, b := sign(r[0], r[1]), sign(r[2], r[3])
-	if a == 0 || b == 0 {
-		return false, false
-	}
-	if a < 0 && b < 0 {
-		return false, true
-	}
-	if a*b < 0 {
-		return true, true
-	}
-	return false, false
+	visited, accepted, err := loftcontact.QuarterSourcePairs(
+		budget, prism, loft, pairs)
+	work.pairs += visited
+	return accepted, err
 }
 
 // quarterSourceIntervals checks that every original cap segment has continuous
 // arranged coverage over its complete natural [0,1] domain.
 func quarterSourceIntervals(budget *proofbound.WorkBudget,
 	source loftSourceSpanCaps, cap int, cells []loftCapSourceCell) (bool, error) {
-	type key struct {
-		loft    bool
-		segment int
-	}
-	type span struct{ lo, hi float64 }
-	all := make(map[key][]span)
+	var fragments []loftcontact.QuarterSourceInterval
 	for _, cell := range cells {
 		for _, edge := range cell.edges {
 			if err := budget.Step(); err != nil {
 				return false, err
 			}
-			k := key{loft: edge.span.body == source.loft, segment: edge.span.segment}
-			if edge.span.body != source.loft && edge.span.body != source.prism {
+			isLoft := edge.span.body == source.loft
+			if !isLoft && edge.span.body != source.prism {
 				return false, nil
 			}
-			if len(all[k]) >= 128 {
-				return false, nil
-			}
-			all[k] = append(all[k], span{edge.tStart, edge.tEnd})
+			fragments = append(fragments, loftcontact.QuarterSourceInterval{
+				Loft: isLoft, Segment: edge.span.segment,
+				Start: edge.tStart, End: edge.tEnd,
+			})
 		}
 	}
-	check := func(k key) (bool, error) {
-		intervals := all[k]
-		if len(intervals) == 0 {
-			return false, nil
-		}
-		for i := 1; i < len(intervals); i++ {
-			j := i
-			for j > 0 {
-				if err := budget.Step(); err != nil {
-					return false, err
-				}
-				if intervals[j-1].lo <= intervals[j].lo {
-					break
-				}
-				intervals[j-1], intervals[j] = intervals[j], intervals[j-1]
-				j--
-			}
-		}
-		reach := float64(0)
-		for _, v := range intervals {
-			if err := budget.Step(); err != nil {
-				return false, err
-			}
-			if v.lo > reach || v.hi <= v.lo || v.hi > 1 {
-				return false, nil
-			}
-			if v.hi > reach {
-				reach = v.hi
-			}
-		}
-		return reach == 1, nil
-	}
-	if len(all) != len(source.prismCaps[cap])+len(source.loftCaps[cap]) {
-		return false, nil
-	}
-	for i := range source.prismCaps[cap] {
-		ok, err := check(key{segment: i})
-		if err != nil || !ok {
-			return ok, err
-		}
-	}
-	for i := range source.loftCaps[cap] {
-		ok, err := check(key{loft: true, segment: i})
-		if err != nil || !ok {
-			return ok, err
-		}
-	}
-	return true, nil
+	return loftcontact.QuarterSourceIntervals(budget,
+		len(source.prismCaps[cap]), len(source.loftCaps[cap]), fragments)
 }
