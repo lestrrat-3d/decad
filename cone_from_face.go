@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/pointcone"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -101,7 +102,8 @@ func ConeFromFace(ctx context.Context, body *Body, face FaceSelector, far units.
 		}
 		return nil, fmt.Errorf(`%w: the selected face has no offset cone below far: %s`, ErrUnsupported, err)
 	}
-	// exactPointCone reads only an apex above the origin and a far plane below it.
+	// revolveplan.PointConeSource reads only an apex above the origin and a far
+	// plane below it.
 	if apex <= 0 || farMM >= 0 {
 		return nil, fmt.Errorf(`%w: the cone must span X = 0 between its far plane and its apex`, ErrUnsupported)
 	}
@@ -118,13 +120,13 @@ func ConeFromFace(ctx context.Context, body *Body, face FaceSelector, far units.
 	return cone, nil
 }
 
-// commitExactPointCone registers a built cone in d only when exactPointCone
+// commitExactPointCone registers a built cone in d only when revolveplan.PointConeSource
 // reads it back. The recognizer also needs a face classified Cone, and Revolve
 // calls a generator that shallow a cylinder. The check runs before the body is
 // registered, so a refusal leaves the document and its provenance numbering
 // untouched.
 func commitExactPointCone(ctx context.Context, d *Document, cone *Body) error {
-	if _, ok := exactPointCone(cone); !ok {
+	if _, ok := revolveplan.PointConeSource(&cone.n); !ok {
 		return fmt.Errorf(`%w: the offset cone is not an exact point cone`, ErrUnsupported)
 	}
 	if err := ctx.Err(); err != nil {

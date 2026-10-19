@@ -10,6 +10,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -206,7 +207,7 @@ func LoftFacesToConeTangent(ctx context.Context, end ConeTangentEnd, sections ..
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	cone, ok := exactPointCone(end.Cone)
+	cone, ok := revolveplan.PointConeSource(&end.Cone.n)
 	if !ok {
 		return nil, fmt.Errorf("%w: LoftFacesToConeTangent needs an unplaced full straight-meridian cone about X",
 			ErrUnsupported)

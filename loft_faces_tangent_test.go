@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -114,7 +115,7 @@ func (f tangentLoftFixture) cone(t *testing.T, doc *Document) *Body {
 func TestLoftFacesToConeTangentBuildsExactEnd(t *testing.T) {
 	f := newTangentLoftFixture(t)
 	cone := f.cone(t, f.doc)
-	limit, ok := exactPointCone(cone)
+	limit, ok := revolveplan.PointConeSource(&cone.n)
 	require.True(t, ok)
 	require.Zero(t, limit.Slope.Cmp(big.NewRat(3, 4)))
 
@@ -375,7 +376,7 @@ func tangentGateInputs(t *testing.T, c tangentTrimChain) (final, previous loftFa
 	var err error
 	box, err = revolveloftfaces.LfSourceBox(record.Source)
 	require.NoError(t, err)
-	heel, ok := exactPointCone(c.heelTool)
+	heel, ok := revolveplan.PointConeSource(&c.heelTool.n)
 	require.True(t, ok)
 	return record.Final, record.Maps[len(record.Maps)-2], box, heel
 }
@@ -698,7 +699,7 @@ func TestLoftFacesTangentHeelRefusesOtherCone(t *testing.T) {
 	// and the strict form needs a cap that misses its own apex.
 	c := buildTangentTrimChain(t)
 	other := c.f.coneAt(t, -4, 16, math.Nextafter(8, 9))
-	limit, ok := exactPointCone(other)
+	limit, ok := revolveplan.PointConeSource(&other.n)
 	require.True(t, ok)
 	require.False(t, c.loftRecord.Tangent.MatchesCone(limit.Apex, limit.Slope))
 	box, err := revolveloftfaces.LfSourceBox(c.loftRecord.Source)

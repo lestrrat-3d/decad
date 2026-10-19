@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/decad/internal/spiralsector"
 	"github.com/lestrrat-3d/r3"
@@ -195,7 +196,7 @@ func revolveLoftFacesConeCurrent(tool *Body, recorded *pointConeLimit) bool {
 		recorded.Far == nil || recorded.Slope == nil {
 		return false
 	}
-	live, ok := exactPointCone(tool)
+	live, ok := revolveplan.PointConeSource(&tool.n)
 	return ok && recorded.Apex.Cmp(live.Apex) == 0 &&
 		recorded.Far.Cmp(live.Far) == 0 && recorded.Slope.Cmp(live.Slope) == 0
 }

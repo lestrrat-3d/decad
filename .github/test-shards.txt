@@ -172,6 +172,7 @@
 10	0.00	TestConeFromFaceMoreRefusals
 10	0.00	TestConeFromFaceNonConvexSectionIsAccepted
 10	0.00	TestConeFromFaceRefuses
+10	0.00	TestPointConeSourceGates
 10	0.00	TestConeFromFaceShallowGeneratorKeepsDocument
 10	17.15	TestCurvedContactGraphHeldAnchors
 10	10.81	TestCurvedSourceCapCirclesSplitClosedBlankShell
