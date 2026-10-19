@@ -271,7 +271,7 @@ nonnegative bound per vertex, and a body bound at least as large as each
 vertex bound. A missing local projection can mean an empty clipped slab only
 after those records pass validation. A slab pair with no shared occupied
 interval proves direct separation, but supplies no finite gap for copy
-transfer. `certifyFacetedCopies` checks live source and recorded `Copy` provenance before
+transfer. `facetedrecord.CertifyCopies` checks live source and recorded `Copy` provenance before
 allowing reference-gap transfer. Source-solid transfer also requires every copy to be
 placed directly from the source's own payload, because only then is the recorded motion
 exactly the placement applied to the source's true solid. A copy of a copy, or a moved

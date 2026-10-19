@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/exactrotation"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -202,7 +203,7 @@ func Transform(ctx context.Context, body *Body, t r3.Transform) (*Body, error) {
 		return nil, err
 	}
 	if source, ok := body.n.Payload.(facetedPayload); ok && source.CopyLineage != nil {
-		bindFacetedCopyLineage(placed, bodyHandle(source.CopyLineage.Source), composed, false, nil)
+		facetedrecord.BindCopyLineage(bodyNode(placed), source.CopyLineage.Source, composed, false, nil)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -341,11 +342,11 @@ func (b *Body) copyUnder(ctx context.Context, motion r3.Transform, exact *exactr
 		return nil, err
 	}
 	if isFaceted {
-		source := b
+		source := bodyNode(b)
 		if record := faceted.CopyLineage; record != nil {
-			source = bodyHandle(record.Source)
+			source = record.Source
 		}
-		bindFacetedCopyLineage(copied, source, composed, faceted.CopyLineage == nil, exact)
+		facetedrecord.BindCopyLineage(bodyNode(copied), source, composed, faceted.CopyLineage == nil, exact)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err

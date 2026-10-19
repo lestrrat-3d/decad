@@ -49,7 +49,7 @@ func spiralPrepareCombinedUnion(ctx context.Context, op meshbool.OperationKind,
 	if err != nil || !certified {
 		return nil, nil, err
 	}
-	placedParts, err := placedProxyShells(ctx, meta.Copies, bornMesh(&Mesh{n: *proxy}))
+	placedParts, err := facetedrecord.PlacedProxyShells(ctx, meta.Copies, proxy)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -144,7 +144,7 @@ func spiralCombineInputs(ctx context.Context, blank *Body, tools []*Body) (*spir
 	if !ok {
 		return nil, fmt.Errorf("%w: target and first tool have no spiral source certificate", ErrUnsupported)
 	}
-	copies, err := certifyFacetedCopies(ctx, tools)
+	copies, err := facetedrecord.CertifyCopies(ctx, bodyNodes(tools))
 	if err != nil {
 		return nil, err
 	}
