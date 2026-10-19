@@ -104,7 +104,9 @@ func spiralCombineBody(ctx context.Context, d *Document, ref producerID,
 
 // spiralCombinedToolBody builds the transient, unregistered disjoint union of
 // all input tools that spiralsector.CombinedToolPayload assembles, then binds
-// each composite face to the live tool face it copies.
+// each composite face to the live tool face it copies. It stays in root
+// because it builds the body through envOf and documentNode on the root
+// Document and returns a root Body handle.
 func spiralCombinedToolBody(ctx context.Context, d *Document, ref producerID,
 	source *spiralCombineSource) (*Body, error) {
 	p, err := spiralsector.CombinedToolPayload(ctx, source)
