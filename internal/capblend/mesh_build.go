@@ -23,17 +23,10 @@ import (
 // chamfer band and cap contour reuse that count and its vertex indices, so
 // their shared boundary closes without welding or dropping cells.
 
-// BandEmitter writes one cap band using the shared root emitter retained for
-// BRep bodies. The supplied budget, mesh, faces and bound bump belong to the
-// same mesh build.
-type BandEmitter func(*proofbound.WorkBudget, *LoopMesh, bool,
-	func(string) (*topo.Face, error), map[string]capband.Patch,
-	func(*topo.Face, float64)) error
-
 // TessellateMesh builds and audits the cap-blend mesh node. Its body and mesh
 // arguments must not be nil. Loft occupied-volume proof stays with the root
 // handle and runs after this common build returns.
-func TessellateMesh(ctx context.Context, b *topo.Body, cbp Payload, chord float64, proveVolume bool, mesh *topo.Mesh, emit BandEmitter) ([]LoopMesh, []float64, error) {
+func TessellateMesh(ctx context.Context, b *topo.Body, cbp Payload, chord float64, proveVolume bool, mesh *topo.Mesh) ([]LoopMesh, []float64, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
@@ -42,9 +35,6 @@ func TessellateMesh(ctx context.Context, b *topo.Body, cbp Payload, chord float6
 	}
 	if mesh == nil {
 		return nil, nil, fmt.Errorf("%w: cap-blend mesh output is nil", decaderr.ErrDegenerate)
-	}
-	if emit == nil {
-		return nil, nil, fmt.Errorf("%w: cap-blend band emitter is nil", decaderr.ErrDegenerate)
 	}
 	byRole := map[string]*topo.Face{}
 	for _, f := range topobuild.Faces(b) {
@@ -147,12 +137,12 @@ func TessellateMesh(ctx context.Context, b *topo.Body, cbp Payload, chord float6
 	for li := range lms {
 		lm := &lms[li]
 		if lm.OnStart {
-			if err := emit(budget, lm, true, faceOfRole, geomOfRole, bump); err != nil {
+			if err := EmitBand(budget, mesh, cbp, lm, true, faceOfRole, geomOfRole, bump, nil); err != nil {
 				return nil, nil, err
 			}
 		}
 		if lm.OnEnd {
-			if err := emit(budget, lm, false, faceOfRole, geomOfRole, bump); err != nil {
+			if err := EmitBand(budget, mesh, cbp, lm, false, faceOfRole, geomOfRole, bump, nil); err != nil {
 				return nil, nil, err
 			}
 		}

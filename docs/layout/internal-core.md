@@ -38,6 +38,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/crossbore/` | Builds the held bore-mouth mesh, proves its cells and computes boundary, volume and area bounds from source records. See cross-cylinder-bore-chamfer design. |
 | `internal/brepgeom/` / `internal/stackedbrep/` | BRep geometry, topology and shared endpoint matching. See general-boolean §4–§5. |
 | `internal/brepwallmesh/` | Chords BRep swept walls and checks clearance between their mesh loops. See general-boolean §4.4 and tessellation §5. |
+| `internal/brepbandmesh/` | Chords route L bands and the shell bands, imposes their counts on the walls beside them, places their rings, emits their strips, and states their motion, volume terms and occupied-volume admission. See modify-general DG3/DG4, §4.3a. |
 | `internal/brepfilletmesh/` | Places full and selected BRep fillet rings, emits patch triangles, and computes their area and motion bounds. See loop-fillet §7.1. |
 | `internal/stackedunion/` | Builds A1 stacked Union slabs, private scenes, and BRep faces after root admission. See general-boolean §3 A1. |
 | `internal/throughshell/` | Through-cut record recognition, section and cavity construction, strips, rim assembly, and audits. See modify-general §3. |
@@ -58,7 +59,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/breprecord/` | BRep records, route E gates and rewrite, reference-face identity, all-edge chamfer records and node builders; root payloads alias them. See general-boolean §4, brep-modify §5, modify-general §4, evaluator §8. |
 | `internal/alledgechamfermesh/` | Builds the all-edge Chamfer mesh and its face, area and occupied-volume bounds. See modify-general §4.3b and tessellation §2. |
 | `internal/breploop/` | Route L/V selected-edge matching, loop decisions, asymmetric assignments, record topology, reach, contours and rewrite over one budget. Root binds public selectors and face references. See modify-general §4. |
-| `internal/capblend/` | Chamfer payload/build: setbacks, draft bounds, offsets, patches, cap edges, departure/mass bounds, refusal, admission, witness prisms, mesh-loop chording/motion and audited mesh assembly. Root `capBlendPayload` alias. See modify-reach §8, tessellation-reach §7. |
+| `internal/capblend/` | Chamfer payload/build: setbacks, draft bounds, offsets, patches, cap edges, departure/mass bounds, refusal, admission, witness prisms, mesh-loop chording/motion, the shared band emitter and audited mesh assembly. Root `capBlendPayload` alias. See modify-reach §8, tessellation-reach §7. |
 | `internal/loftmesh/` | Loft and chain mesh assembly, point-plane and LoftFaces cap layouts and proofs, stations, bounds, split and collar grids, triangle clearance, and contact scans. See loft-point and tessellation designs. |
 | `internal/smoothloft/` | Three-section homothety, constant curved-section admission and independent rectangles with exact height curves for Section; varying curves and four-section rounded rectangles. See loft-sections design. |
 | `internal/loftfillet/` | Loft fit/circle root-fillet candidate, tangent-root certificate, connector and carrier departures, section contact audits and circle-bore containment. See loft §17–§18. |
