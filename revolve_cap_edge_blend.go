@@ -7,13 +7,10 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
-	"github.com/lestrrat-3d/decad/internal/facetproof"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
-	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -109,21 +106,9 @@ func revolveRimSourceOf(rp revolvePayload, edges []*Edge, setback, setbackDelta 
 }
 
 func buildRevolveCapRimBlend(ctx context.Context, body *Body, source revolvemesh.RimSource) (*Body, error) {
-	stations, err := revolvemesh.RimStations(source)
+	stations, bound, missing, verts, err := revolvemesh.RimVertices(source)
 	if err != nil {
 		return nil, err
-	}
-	bound, missing, err := revolvemesh.RimBounds(source, stations)
-	if err != nil {
-		return nil, err
-	}
-	n := len(stations)
-	verts := make([]r3.Vec, 0, 4*n-2)
-	for i, s := range stations {
-		verts = append(verts, r3.NewVec(source.XLo, 0, s.Z), r3.NewVec(s.X, 0, s.Z))
-		if i != n-1 {
-			verts = append(verts, r3.NewVec(s.X, s.Y, s.Z), r3.NewVec(source.XLo, s.Y, s.Z))
-		}
 	}
 	roles := facesByRole(body)
 	roleOrder := [5]string{prismWallRole(0, 1), prismWallRole(0, 2), prismWallRole(0, 3),
@@ -144,59 +129,11 @@ func buildRevolveCapRimBlend(ctx context.Context, body *Body, source revolvemesh
 		blendRole = "chamfer(0,1)"
 	}
 	groups[5] = facetGroup{Origins: []provenance.Ref{{Producer: ref, Role: blendRole}}}
-	tris := make([][3]int, 0, 8*n)
-	src := make([]int, 0, 8*n)
-	add := func(group, a, b, c int) {
-		tris = append(tris, [3]int{a, b, c})
-		src = append(src, group)
+	tris, src, vertexBound, areaSlack, dPair, err := revolvemesh.RimFacetsAndBounds(
+		ctx, source, stations, verts, bound)
+	if err != nil {
+		return nil, err
 	}
-	quad := func(group, a, b, c, d int) {
-		add(group, a, b, c)
-		add(group, a, c, d)
-	}
-	quad(3, 0, 3, 2, 1)
-	for i := range n - 1 {
-		if i%256 == 0 {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-		}
-		a, b, c, d := 4*i, 4*i+1, 4*i+2, 4*i+3
-		if i == n-2 {
-			at, bt := 4*(i+1), 4*(i+1)+1
-			quad(4, a, b, bt, at)
-			quad(1, d, at, bt, c)
-			add(2, a, at, d)
-			add(0, b, c, bt)
-			continue
-		}
-		an, bn, cn, dn := 4*(i+1), 4*(i+1)+1, 4*(i+1)+2, 4*(i+1)+3
-		quad(4, a, b, bn, an)
-		quad(1, d, dn, cn, c)
-		quad(2, a, an, dn, d)
-		group := 0
-		if i < revolvemesh.RimBlendStations {
-			group = 5
-		}
-		quad(group, b, c, cn, bn)
-	}
-	if err := tessellation.RequireVertexLinks(ctx, len(verts), tris); err != nil {
-		return nil, fmt.Errorf("%w: cap rim facets do not close at a vertex: %s", ErrUnsupported, err)
-	}
-	vertexBound := make([]float64, len(verts))
-	for i := range vertexBound {
-		vertexBound[i] = bound
-	}
-	length := new(big.Rat).Sub(proofarith.FloatRat(source.XHi), proofarith.FloatRat(source.XLo))
-	radius := proofarith.FloatRat(source.Radius)
-	setback := proofarith.FloatRat(source.Setback)
-	r2 := new(big.Rat).Mul(radius, radius)
-	trueArea := new(big.Rat).Add(new(big.Rat).Mul(big.NewRat(2, 1), r2),
-		new(big.Rat).Add(new(big.Rat).Mul(big.NewRat(4, 1), new(big.Rat).Mul(length, radius)),
-			new(big.Rat).Mul(big.NewRat(2, 1), new(big.Rat).Mul(setback, radius))))
-	areaSlack := math.Max(proofbound.RatFloatUp(trueArea), facetproof.MeshAreaUpper(verts, tris))
-	diameter2 := new(big.Rat).Add(new(big.Rat).Mul(length, length), new(big.Rat).Mul(big.NewRat(2, 1), r2))
-	dPair := proofbound.RatSqrtUp(diameter2)
 	fp := facetedPayload{Verts: verts, Tris: tris, Src: src, Groups: groups,
 		VertexBound: vertexBound, MeshBound: bound, VolSymDiff: missing,
 		AreaSlack: areaSlack, DPair: dPair, Xform: r3.Identity()}
