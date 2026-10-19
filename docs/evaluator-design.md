@@ -467,7 +467,8 @@ has no stated displacement to charge. A through-all
 dependency is ambient at the CALL but never in the RECORD: core §6.2's depends-on rule covers this
 case explicitly — the feature call resolves which live bodies actually bound
 the stops from live bodies without consuming them. (`ToFaceAngular` is the
-revolve analog and lands there, §6/§11.) A `ToFace` stop face must be an
+revolve analog and lands there, §6/§11.) `extent.ToFaceStop` admits the
+selected face and computes the level. A `ToFace` stop face must be an
 analytic Plane whose held normal is exactly parallel to the sweep normal, by a
 rational cross product of zero and not a tolerance, whose face states no
 normal departure (`NormalBound` 0). A cap carries its producer's
