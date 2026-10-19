@@ -11,11 +11,6 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// The structural join has at most 32 separately certified Loft teeth. Its
-// final crossing audit and the matched centered bore may scan twice the
-// generic mesh ceiling; exact pair classifications remain unchanged.
-const loftCylinderAuditMaxScans = loftcylinder.AuditMaxScans
-
 func tryLoftCylinderUnion(ctx context.Context, op meshbool.OperationKind,
 	d *Document, ref producerID, a, b *Body) (*Body, bool, error) {
 	if op != meshbool.OpUnion {

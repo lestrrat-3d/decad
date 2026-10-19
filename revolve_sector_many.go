@@ -236,7 +236,7 @@ func buildRevolveLoftSectorsAtSag(ctx context.Context, d *Document, ref producer
 		}
 		return nil, nil, fmt.Errorf("%w: joined sectors cannot meet the 0.1 mm boundary proof", ErrUnsupported)
 	}
-	if err := orientJoinedMesh(mesh); err != nil {
+	if err := tessellation.OrientJoinedMesh(mesh.Verts, mesh.Tris); err != nil {
 		return nil, nil, err
 	}
 	if err := tessellation.RequireVertexLinks(ctx, len(mesh.Verts), mesh.Tris); err != nil {

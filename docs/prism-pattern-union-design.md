@@ -40,7 +40,7 @@ the blank circle at steps no wider than 0.02 radians. Endpoint angles use
 and `RadSinCosInterval` rounding. The two caps triangulate the same ordered
 exterior and circle-gap outline used by the walls.
 
-`orientJoinedMesh` proves every edge pairs and the result has one orientable
+`tessellation.OrientJoinedMesh` proves every edge pairs and the result has one orientable
 component. The bounded exact triangle crossing audit checks the complete
 shell. Each cap audit proves a simple counterclockwise outline containing
 the axis and an exact tiling by its cap triangles. A separate exact

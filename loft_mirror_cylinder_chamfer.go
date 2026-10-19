@@ -121,7 +121,6 @@ func loftMirrorCylinderChamferReflectionReserve(lower facetedPayload,
 
 func loftMirrorCylinderChamferSelect(ctx context.Context, b *Body, fp facetedPayload,
 	record *loftMirrorCylinderBoreRecord, edges []*Edge) error {
-	mesh := &joinedMesh{Verts: fp.Verts, Tris: fp.Tris, Src: fp.Src, Groups: fp.Groups}
 	var caps [2]*Face
 	for _, face := range b.Faces() {
 		for _, origin := range face.n.Origins {
@@ -156,7 +155,7 @@ func loftMirrorCylinderChamferSelect(ctx context.Context, b *Body, fp facetedPay
 			z = blank.Z1
 		}
 		if record.CapGroups[cap] < 0 || record.WallGroups[cap] < 0 ||
-			!loftCylinderAuditAnnulus(ctx, mesh, record.Outer[cap], record.Inner[cap],
+			!loftcylinder.AuditAnnulus(ctx, fp.Verts, fp.Tris, fp.Src, record.Outer[cap], record.Inner[cap],
 				record.CapGroups[cap], z, cap == 0) || len(face.n.Loops) != 2 ||
 			!loftcylinder.ChamferCapWalk(face.n.Loops[0], fp.Verts, record.Outer[cap], cap == 0) {
 			return fmt.Errorf("%w: mirrored bore cap %d has no audited outer loop", ErrUnsupported, cap)
@@ -317,7 +316,7 @@ func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref pro
 		if cap == 1 {
 			z = blank.Z1
 		}
-		if !loftCylinderAuditAnnulus(ctx, mesh, outer[cap], inner[cap], group, z, cap == 0) {
+		if !loftcylinder.AuditAnnulus(ctx, mesh.Verts, mesh.Tris, mesh.Src, outer[cap], inner[cap], group, z, cap == 0) {
 			return nil, fmt.Errorf("%w: mirrored cap chamfer does not tile exterior annulus %d", ErrUnsupported, cap)
 		}
 	}
@@ -376,9 +375,7 @@ func loftMirrorCylinderChamferSeam(ctx context.Context, lower, upper facetedPayl
 		}
 	}
 	for side, payload := range []facetedPayload{lower, upper} {
-		mesh := &joinedMesh{Verts: payload.Verts, Tris: payload.Tris,
-			Src: payload.Src, Groups: payload.Groups}
-		if !loftCylinderAuditAnnulus(ctx, mesh, half.Outer[1], half.Inner[1],
+		if !loftcylinder.AuditAnnulus(ctx, payload.Verts, payload.Tris, payload.Src, half.Outer[1], half.Inner[1],
 			half.CapGroups[1], middle, side == 1) {
 			return fmt.Errorf("%w: mirrored cap chamfer half %d has no tiled middle annulus",
 				ErrUnsupported, side)

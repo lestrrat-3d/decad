@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -437,7 +438,7 @@ func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
 	if proofbound.IsNonFinite(out.faceBound) {
 		return nil, false, nil
 	}
-	if err := orientJoinedMesh(&out.mesh); err != nil {
+	if err := tessellation.OrientJoinedMesh(out.mesh.Verts, out.mesh.Tris); err != nil {
 		return nil, false, err
 	}
 	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx),
