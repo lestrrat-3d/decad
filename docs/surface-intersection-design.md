@@ -81,8 +81,12 @@ this evaluator cannot build.
 | S6 | **The tool spans the receiver over the sweep parameter.** Prism-family: `z0_tool' <= z0_recv && z1_tool' >= z1_recv` after prism G5's origin shift `z' = z + (originB − originA)·normalA`. Revolve-family: the same relation over `phi0`/`phi1`. | A tool that stops inside the receiver ends its cut at a level the receiver's own record does not state, so the result would carry a face at that level and stop being the sweep of one section over one interval. The comparison is on already-exact endpoint floats and the shift is bookkeeping on an axis S4 certified. |
 | S7 | **Both operands carry a zero section displacement, the re-expression is the identity in the stored floats, and every segment either operand's own record CONSUMES spans its entity's natural domain** (prism's `wholeSegmentRange` reading, taken off the recorded range and never off the walk's closed-ness). `Extend`'s one exception is the segment being extended, whose recorded range must be narrower (§2.2) and whose entity §3.1 recreates over its full domain instead of walking it. | Prism §3.4 reroutes a split boundary to the mesh path under exactly these three causes — a source displacement, a walk charge, a nonidentity re-expression — because each can move a transverse cut by its displacement divided by the crossing sine and no certified crossing-sensitivity bound exists. A trim always splits a boundary, so the condition is never vacuous, and with no mesh path to reroute to the same three causes refuse. Stating the third as a record property rather than as a scene-time charge makes it decidable before the arrangement runs, which is what lets every miss be one refusal at the call. §5 states the cost and what would lift it. |
 
-S1–S7 are the only conditions checked before touching `sketch`. Passing them
-admits the pair to §3's resolution, which has refusals of its own (§6).
+S1–S7, with §2.2's receiver rows, are what the gate checks before touching
+`sketch`. Passing them admits the pair to §3's resolution, which has
+refusals of its own (§6). `internal/surfacetrim` holds the prism-family arm of
+the gate and S1's and S7's readings over all four payload shapes;
+`internal/revolveplan`'s `AdmitTrimPair` and `AdmitExtendPair` hold the revolve
+arm of `Trim` and `Extend`, and `surface_split_revolve.go` holds `Split`'s.
 
 ### 2.2 The receiver, per operation
 
@@ -232,7 +236,7 @@ is available. The widened range replaces the recorded one; every other segment
 of the receiver's walk is copied verbatim. The named edge is one of the two
 sweep edges the ribbon's free ends carry (surface Table G), so which end is
 being lengthened is read off the receiver's own walk rather than stated by the
-caller, and the direction follows from the recorded range order alone:
+caller (`internal/surfacetrim`'s `ExtendPrism` and `ExtendRevolve`), and the direction follows from the recorded range order alone:
 `TStart` is the covered interval's lower bound when the record runs ascending
 and its upper bound when it runs reversed, so widening `TStart` decreases it in
 the first case and increases it in the second, and `TEnd` is the mirror.

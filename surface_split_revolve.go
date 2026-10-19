@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
+	"github.com/lestrrat-3d/decad/internal/surfacetrim"
 )
 
 // This file is Split over the revolve family
@@ -103,7 +104,7 @@ func admitSplitRevolvePair(budget *proofbound.WorkBudget, target, tool *Body) (r
 	default:
 		return fail(`%w: Split's tool has no revolve meridian`, ErrUnsupported)
 	}
-	if trimOperandSectionDelta(target) != 0 || trimOperandSectionDelta(tool) != 0 {
+	if surfacetrim.SectionDelta(&target.n) != 0 || surfacetrim.SectionDelta(&tool.n) != 0 {
 		return fail(`%w: Split does not admit an operand carrying its own section displacement`, ErrUnsupported)
 	}
 
