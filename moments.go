@@ -1,9 +1,5 @@
 package decad
 
-import (
-	"github.com/lestrrat-3d/decad/internal/momentinput"
-)
-
 // This file adapts recorded regions to the mass-property engine of
 // docs/evaluator-design.md §4. sketch decides topology and admissibility;
 // internal/momentregion integrates admitted records by closed-form boundary
@@ -29,6 +25,3 @@ type SecondMoments struct {
 	UV Measurement
 	VV Measurement
 }
-
-// regionIntegrals is the section accumulator shared by root evaluators.
-type regionIntegrals = momentinput.Integrals

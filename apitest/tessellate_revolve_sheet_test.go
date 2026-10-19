@@ -118,6 +118,7 @@ func TestSurfaceRevolvePartialClearOfAxisSheetMeshMatchesSolid(t *testing.T) {
 	require.NoError(t, err)
 	sheetMesh, err := sheet.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
+	require.False(t, sheetMesh.VolumeVerified())
 
 	// The source-face set carries no cap role: every mesh facet's source is
 	// one of the sheet's own 4 live faces, and neither cap role resolves.

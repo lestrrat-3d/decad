@@ -170,14 +170,12 @@ func linkageBoundsError() error {
 type linkStanding int
 
 const (
-	// linkMoving: some joint on the link's path moves.
-	linkMoving linkStanding = iota
 	// linkFixed: every joint on the link's path holds 0, so its ideal pose is
 	// the identity at every s and its bodies stand where they are.
-	linkFixed
+	linkFixed linkStanding = 1
 	// linkConstant: every joint on the link's path holds, one at a nonzero
 	// value, so its pose is the same at every s.
-	linkConstant
+	linkConstant linkStanding = 2
 )
 
 // heldAtZeroJoint reports whether a joint's value is exactly 0 at every s:

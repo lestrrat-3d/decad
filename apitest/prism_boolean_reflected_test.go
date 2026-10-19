@@ -36,6 +36,15 @@ func mirrorAcrossX30(t *testing.T) r3.Transform {
 	return refl
 }
 
+func mirrorAcrossX15(t *testing.T) r3.Transform {
+	t.Helper()
+	frame, err := r3.NewFrame(r3.NewVec(15, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1))
+	require.NoError(t, err)
+	mirror, err := r3.Reflection(frame)
+	require.NoError(t, err)
+	return mirror
+}
+
 // reflectedDiscBody extrudes a circle of radius r centred at (cx, cy).
 func reflectedDiscBody(t *testing.T, doc *decad.Document, cx, cy, r float64) *decad.Body {
 	t.Helper()
@@ -184,6 +193,26 @@ func TestPrismUnionReflectedOperandInsideBox(t *testing.T) {
 	require.Equal(t, decad.Approximate, vol.Exactness)
 	require.Less(t, vol.Bound.Base(), 1e-6)
 	decadtest.Measures(t, "reflected union volume", vol, units.CubicMillimeters(9000))
+}
+
+func TestPrismUnionSharedWallMirroredL(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	l := polyPrismBody(t, doc, reflectedLPts, reflectedHeight)
+	image, err := decad.Copy(t.Context(), l, decad.WithCopyPlacement(mirrorAcrossX15(t)))
+	require.NoError(t, err)
+	union, err := decad.Union(t.Context(), l, image)
+	require.NoError(t, err)
+	require.False(t, anyFaceIsFaceted(union))
+	require.Len(t, union.Lumps(), 1)
+	volume, err := union.Volume()
+	require.NoError(t, err)
+	decadtest.Measures(t, "volume", volume, units.CubicMillimeters(3000))
+
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, report.Status)
+	require.Empty(t, report.Interferences)
 }
 
 // TestVerifyReflectedOperandMeasuresInterference is the interference twin's

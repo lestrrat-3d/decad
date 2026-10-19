@@ -166,9 +166,6 @@ func recognisePrism(ctx context.Context, bp brepPayload, embeds []brepEmbed, k i
 	}, true, nil
 }
 
-// brepLevel is a planar face's level as a reference coordinate.
-func brepLevel(f brepFace, e brepEmbed) float64 { return e.Sign[2]*f.Z0 + 0 }
-
 // requireLateralEdges is Fillet's route P classification (brep-modify §4.2):
 // every selected edge is a lateral edge of pp, the junction at one corner of
 // its section (matchCornerBudget). Any other edge is modify S1's class.

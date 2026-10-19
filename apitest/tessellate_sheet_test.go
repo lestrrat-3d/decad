@@ -68,6 +68,7 @@ func TestSurfaceExtrudeSheetTessellates(t *testing.T) {
 	require.NoError(t, err)
 	sheetMesh, err := sheet.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
+	require.False(t, sheetMesh.VolumeVerified())
 
 	require.Len(t, sheetMesh.Triangles(), 8, `8 wall triangles against the solid's 12 — the two omitted caps' 4`)
 	require.Equal(t, solidMesh.Vertices(), sheetMesh.Vertices(), `the sheet reuses the exact same chording, so the vertex table is identical`)

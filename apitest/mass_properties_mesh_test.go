@@ -346,6 +346,39 @@ func TestMassPropertiesCapChamferFallback(t *testing.T) {
 	requireMomentsReadings(t, got, want, meshMassRho(), r3.Identity(), nil)
 }
 
+func TestMassPropertiesRevolvedSphere(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	start := s.CreatePoint(-8, 0)
+	end := s.CreatePoint(8, 0)
+	center := s.CreatePoint(0, 0)
+	s.Fix(start)
+	s.Fix(end)
+	s.Fix(center)
+	s.CreateLine(start, end)
+	s.CreateArc(center, end, start)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	ball, err := decad.Revolve(t.Context(), decad.New(), s, s.Profiles()[0],
+		decad.SketchLine{End: decad.Point2{U: 1}}, decad.FullRevolution{})
+	require.NoError(t, err)
+	got, err := ball.MassProperties(t.Context(), meshMassDensity)
+	require.NoError(t, err)
+
+	pi, ok := new(big.Rat).SetString("3.14159265358979323846264338327950288419716939937510582097494459230781640628620899")
+	require.True(t, ok)
+	mass := new(big.Rat).Mul(meshMassRho(), new(big.Rat).Mul(pi, big.NewRat(2048, 3)))
+	inertia := new(big.Rat).Mul(mass, big.NewRat(128, 5))
+	requireReadingCovers(t, got.Mass, mass)
+	for _, diagonal := range []decad.Measurement{got.Inertia.XX, got.Inertia.YY, got.Inertia.ZZ} {
+		requireReadingCovers(t, diagonal, inertia)
+	}
+	for _, mixed := range []decad.Measurement{got.Inertia.XY, got.Inertia.XZ, got.Inertia.YZ} {
+		requireReadingCovers(t, mixed, new(big.Rat))
+	}
+}
+
 // chamferFrustumMoments is V, ∫x dV and ∫x_i x_j dV about the origin of the
 // frustum z ∈ [h − c, h] whose slice at z = h − c + s is [s, a − s] × [s, b − s].
 // Every slice integral is a polynomial in s, integrated exactly over [0, c].

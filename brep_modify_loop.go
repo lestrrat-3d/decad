@@ -54,8 +54,6 @@ func (s brepLoopSelection) len() int { return s.view.Len() }
 
 func (s brepLoopSelection) edge(i int) *Edge { return s.read.call.edges[s.view.Ordinals[i]] }
 
-func (s brepLoopSelection) match(i int) int { return s.view.Match(i) }
-
 func (s brepLoopSelection) edges() []*Edge {
 	edges := make([]*Edge, s.len())
 	for i := range edges {

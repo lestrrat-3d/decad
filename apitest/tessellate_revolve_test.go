@@ -110,6 +110,7 @@ func TestRevolveTessellateFullCylinder(t *testing.T) {
 	require.NoError(t, err)
 	requireWatertight(t, mesh)
 	requireSourceFacesLive(t, body, mesh)
+	require.True(t, mesh.VolumeVerified())
 
 	// The chorded cylinder is inscribed, so its volume sits strictly below the
 	// analytic one and within the chording the tolerance bought.

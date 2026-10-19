@@ -23,9 +23,3 @@ func tryPrismBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body)
 func admitPrismPairBudget(budget *proofbound.WorkBudget, op meshbool.OperationKind, a, b *Body) (prismPayload, prismPayload, bool, error) {
 	return prismcells.AdmitPairBudget(budget, op, a.n.Payload, b.n.Payload)
 }
-
-// prismSceneDelta names the internal scene charge carried through boolean paths.
-type prismSceneDelta = prismcells.SceneDelta
-
-// prismReexpression names the internal scene mapper used by boolean paths.
-type prismReexpression = prismcells.Reexpression

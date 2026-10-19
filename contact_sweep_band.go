@@ -42,9 +42,6 @@ import (
 // request's RestSpeed on both sides of the plane (§10.8), and publishes the
 // depth those bounds allow.
 
-// planarMotion is the sweep's exact first-order rigid motion.
-type planarMotion = planarsweep.Motion
-
 func planarSupportPathOf(p *rotationalSweepPath) planarsweep.SupportPath {
 	return planarsweep.SupportPath{
 		Points: p.startPoints, Solid: p.solid,
