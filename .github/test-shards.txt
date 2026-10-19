@@ -59,7 +59,6 @@
 0	6.09	TestCurvedLoftFacesArcSeamPatchesShareCertifiedVertices
 0	4.14	TestCurvedSourcePairCensusRefusesUnownedRetainedFace
 0	0.00	TestDegPointCircleCritsNeverGuessAnAzimuth
-0	0.00	TestDocumentRemoveMintsNoProducer
 0	0.01	TestDraftMeshEmbeddedCheckRefusesACrossing
 0	0.00	TestEvalLoftUnitBoxTopology
 0	0.00	TestFaceIsTetrahedronEligibleRefusesHeldPlanarFaceted
