@@ -68,8 +68,8 @@ func (bc *Band) filletInput() brepfilletmesh.Input {
 // on the face beside it. The result maps a swept face's index to the samples
 // its wall must take. A wall two bands reach must take one count from both,
 // or the body refuses. A fillet band adds its interior ring count
-// (docs/loop-fillet-design.md §7.1). The round boss and pocket shells, when
-// the record holds them, append one band each after the record's own bands.
+// (docs/loop-fillet-design.md §7.1). The boss and pocket shells, when the
+// record holds them, append one band each after the record's own bands.
 func Chord(ctx context.Context, bp breprecord.Payload, btopo *breprecord.Topology, chord float64) ([]Band, map[int]tessellation.ChordSamples[*topo.Face], error) {
 	if len(bp.LoopBands) == 0 && bp.BossShell == nil && bp.PocketShell == nil {
 		return nil, nil, nil
