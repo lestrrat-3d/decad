@@ -36,8 +36,12 @@ type CapShellInput struct {
 	ThicknessDelta float64
 }
 
-// CancelCause maps an error wrapping a context cancellation to the bare
-// context error, as every shell build stage reports it.
+// CancelCause returns context.Canceled or context.DeadlineExceeded unwrapped
+// when err wraps one, and err unchanged otherwise. Shell callers apply it to
+// some stages only: the offset section audit, the offset's displacement
+// bound, the side-opening regions and build, and route S's rim regions and
+// rim audit. Other stages, such as the section inradius survey and the offset
+// construction, return their errors unmapped.
 func CancelCause(err error) error {
 	if errors.Is(err, context.Canceled) {
 		return context.Canceled
