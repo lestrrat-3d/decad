@@ -9,7 +9,7 @@ The rules for rows live in `docs/layout.md`.
 
 | Path | Responsibility |
 |---|---|
-| `fillet.go` | Fillet entry and section rewrite adapter. See modify §6. |
+| `fillet.go` | Fillet entry and section rewrite adapter; `internal/modifyselect` matches its selected edges. See modify §6. |
 | `prism_union_fillet.go` | Authenticates one untouched outer edge of a faceted prism Union and rebuilds its isolated source fillet. See modify-reach §10.1. |
 | `prism_union_chamfer.go` | Reuses an authenticated outer edge and corner separation to rebuild one isolated source chamfer. See modify-reach §10.1. |
 | `draft_circle.go` | Admits the live far rim and commits its fillet or chamfer, or the far cap and inward sense for the cup; `internal/draftrecord/` builds the bounded meridian. See draft §10.4–§10.6. |

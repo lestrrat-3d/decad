@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/breprecord"
+	"github.com/lestrrat-3d/decad/internal/modifyselect"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
@@ -27,7 +28,7 @@ type brepEdgeRoute struct {
 func newBrepEdgeRoute(bp brepPayload, topo *brepTopology,
 	call brepModifyRequest, budget *proofbound.WorkBudget) *brepEdgeRoute {
 	return &brepEdgeRoute{EdgeRoute: breprecord.NewEdgeRoute(bp, topo,
-		call.op, fmt.Sprint(call.sel), selectedEdgesContext(call.edges), call.blend.kind,
+		call.op, fmt.Sprint(call.sel), modifyselect.EdgesContext(edgeNodes(call.edges)), call.blend.kind,
 		budget), call: call}
 }
 
@@ -55,11 +56,11 @@ func brepBlendEdges(ctx context.Context, d *Document, bp brepPayload, call brepM
 			return nil, ctxErr
 		}
 		return nil, fmt.Errorf(`%w; the %s's rewritten brep record (brep-modify §5.3 step 7); selector %s matched [%s]`,
-			err, call.blend.kind, call.sel, selectedEdgesContext(call.edges))
+			err, call.blend.kind, call.sel, modifyselect.EdgesContext(edgeNodes(call.edges)))
 	}
 	if body.n.Volume.Value.Base() <= 0 {
 		return nil, fmt.Errorf(`%w: the %s's rewritten brep record encloses no volume (brep-modify §5.3 step 7); selector %s matched [%s]`,
-			ErrDegenerate, call.blend.kind, call.sel, selectedEdgesContext(call.edges))
+			ErrDegenerate, call.blend.kind, call.sel, modifyselect.EdgesContext(edgeNodes(call.edges)))
 	}
 	return body, nil
 }
@@ -178,7 +179,7 @@ func prepareBrepEdgeBlends(ctx context.Context, bp brepPayload, call brepModifyR
 
 // admitEdge authenticates one public edge against the record at EB1/SB4.
 func (r *brepEdgeRoute) admitEdge(ordinal int, e *Edge) (*brepEdgeBlend, error) {
-	eb := &brepEdgeBlend{Ordinal: ordinal, Context: selectedEdgeContext(ordinal, e)}
+	eb := &brepEdgeBlend{Ordinal: ordinal, Context: modifyselect.EdgeContext(ordinal, edgeNode(e))}
 	switch e.n.Curve.(type) {
 	case surfacegeom.Line3:
 	case surfacegeom.Circle3, surfacegeom.Arc3:

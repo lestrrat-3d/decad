@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/modifyselect"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
@@ -85,20 +86,20 @@ func (b *Body) blendRevolveJunctions(ctx context.Context, sel EdgeSelector, edge
 	for i := range blendAt {
 		blendAt[i] = map[int]*cornerBlend{}
 	}
-	matched := make([]matchedCorner, 0, len(edges))
+	matched := make([]modifyselect.MatchedCorner, 0, len(edges))
 	for ei, e := range edges {
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
 		li, ci, found, err := matchRevolveJunction(rp, junctions, loops, e)
 		if err != nil {
-			return nil, fmt.Errorf(`%w; selector %s, %s`, err, sel, selectedEdgeContext(ei, e))
+			return nil, fmt.Errorf(`%w; selector %s, %s`, err, sel, modifyselect.EdgeContext(ei, edgeNode(e)))
 		}
 		if !found {
 			return nil, fmt.Errorf(`%w: a %s of a revolve edge that is not a swept meridian junction (a cap edge, or an edge on the axis) is not supported; selector %s, %s`,
-				ErrUnsupported, op.kind, sel, selectedEdgeContext(ei, e))
+				ErrUnsupported, op.kind, sel, modifyselect.EdgeContext(ei, edgeNode(e)))
 		}
-		matched = append(matched, newMatchedCorner(ei, e, li, ci, loops[li]))
+		matched = append(matched, modifyselect.NewMatchedCorner(ei, edgeNode(e), li, ci, loops[li]))
 		blendAt[li][ci] = nil // marked; the blend is computed in stage 5
 	}
 
@@ -108,11 +109,11 @@ func (b *Body) blendRevolveJunctions(ctx context.Context, sel EdgeSelector, edge
 		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return nil, err
 		}
-		cb, err := op.corner(loops[corner.loop], corner.loop, corner.corner, corner.edge)
+		cb, err := op.corner(loops[corner.Loop], corner.Loop, corner.Corner, edgeHandle(corner.Edge))
 		if err != nil {
 			return nil, fmt.Errorf(`%w; selector %s, %s`, err, sel, corner)
 		}
-		blendAt[corner.loop][corner.corner] = cb
+		blendAt[corner.Loop][corner.Corner] = cb
 	}
 
 	profile, blendSegs, err := offset2d.RewriteProfileBudget(budget, rp.Profile, loops, blendAt)
@@ -128,7 +129,7 @@ func (b *Body) blendRevolveJunctions(ctx context.Context, sel EdgeSelector, edge
 		if errors.Is(err, context.DeadlineExceeded) {
 			return nil, context.DeadlineExceeded
 		}
-		return nil, wrapModifyAuditError(sel, matched, err)
+		return nil, modifyselect.WrapAuditError(fmt.Sprint(sel), matched, err)
 	}
 
 	// The rewritten meridian is a NEW record: no axis resolution has seen it,
@@ -138,7 +139,7 @@ func (b *Body) blendRevolveJunctions(ctx context.Context, sel EdgeSelector, edge
 	work := freeform.NewFreeformWork()
 	ax, err := revolveBlendAxis(ctx, rp, profile, work)
 	if err != nil {
-		return nil, wrapModifyAuditError(sel, matched, err)
+		return nil, modifyselect.WrapAuditError(fmt.Sprint(sel), matched, err)
 	}
 
 	ref := d.nextProducerID()

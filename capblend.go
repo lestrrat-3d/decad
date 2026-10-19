@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/capblend"
+	"github.com/lestrrat-3d/decad/internal/modifyselect"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -68,7 +69,7 @@ func classifyChamferSelection(ctx context.Context, pp prismPayload, caps prismCa
 	touched := map[capKey]map[*Edge]bool{}
 	var unmatched *Edge
 	for ei, e := range edges {
-		if _, _, found, mErr := matchCornerBudget(budget, pp, cornerLoops, e); mErr != nil {
+		if _, _, found, mErr := modifyselect.MatchCorner(budget, pp, cornerLoops, edgeNode(e)); mErr != nil {
 			return nil, nil, false, mErr
 		} else if found {
 			lateralCount++

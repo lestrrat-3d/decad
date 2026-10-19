@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/modifyselect"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
@@ -165,7 +166,7 @@ func filletPrismUnionSource(ctx context.Context, d *Document, pp prismPayload,
 	if len(loops) != 1 || len(loops[0].Walks) != 4 {
 		return nil, fmt.Errorf("%w: the source rectangle has no four-corner walk", ErrUnsupported)
 	}
-	li, ci, found, err := matchCornerBudget(budget, pp, loops, selected)
+	li, ci, found, err := modifyselect.MatchCorner(budget, pp, loops, edgeNode(selected))
 	if err != nil {
 		return nil, err
 	}

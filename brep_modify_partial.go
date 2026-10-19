@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/breploop"
 	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/clearance"
+	"github.com/lestrrat-3d/decad/internal/modifyselect"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tangentchain"
 )
@@ -91,7 +92,7 @@ func (r *brepLoopRead) buildPartialFillet(ctx context.Context, d *Document, sel 
 			return nil, ctxErr
 		}
 		return nil, fmt.Errorf(`%w; the partial-loop fillet's rewritten brep record; selector %s matched [%s]`,
-			err, r.call.sel, selectedEdgesContext(r.call.edges))
+			err, r.call.sel, modifyselect.EdgesContext(edgeNodes(r.call.edges)))
 	}
 	if body.n.Volume.Value.Base() <= 0 {
 		return nil, fmt.Errorf(`%w: the partial-loop fillet encloses no volume`, ErrDegenerate)

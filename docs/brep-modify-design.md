@@ -154,7 +154,7 @@ it is the op's receiver for the rest of the call.
 
 Axes are tried in order `0, 1, 2`. For each axis that reads as a prism the
 selection is classified against that prism exactly as the prism op classifies
-it today — `matchCornerBudget` for lateral edges, `classifyChamferSelection`
+it today — `modifyselect.MatchCorner` for lateral edges, `classifyChamferSelection`
 for complete cap loops, `classifyRemovedCaps` for a shell's openings — with one
 change: the two helpers that find caps by `capStart`/`capEnd` roles take the
 two cap `*Face`s as arguments instead (for a prism body, the faces those roles
@@ -173,7 +173,7 @@ through-cut record either. When no axis reads as a prism, a Shell takes
 route S, which refuses with SB10 where the record reads as no through-cut
 record.
 
-`matchCornerBudget` compares the selected edge's vertex positions with
+`modifyselect.MatchCorner` compares the selected edge's vertex positions with
 `pp.Point(...)` within `1e-6`; the recognised prism lifts through `F` and
 `bp.xform`, the same placement the brep's vertices were lifted through, so the
 match holds.
@@ -211,7 +211,7 @@ honestly, but late and with the wrong reason.
 
 EB1 reads a selected edge in the record by lifting each recorded line edge's
 two ends through the reference frame and the placement and matching them to
-the selected edge's vertices within `1e-6`, as `matchCornerBudget` does for a
+the selected edge's vertices within `1e-6`, as `modifyselect.MatchCorner` does for a
 prism. The match identifies the edge and admits no geometry; a selected edge
 that matches no recorded edge, or several, is SB6.
 
@@ -278,7 +278,7 @@ faces `G0`, `G1`:
 1. **Corner blend in `G0`.** `G0`'s region is walked into `cornerLoop`s as
    `offset2d.ProfileCornerLoopsBudget` does for a section; the corner at `V0` is the walk
    junction whose point maps to `V0`'s reference coordinates (`brepgeom.BrepCornerAt`,
-   an exact comparison, replacing `matchCornerBudget`'s lifted-point match).
+   an exact comparison, replacing `modifyselect.MatchCorner`'s lifted-point match).
    `computeFillet(loop, corner, r)` or `computeChamfer(loop, corner, dA, dB)` runs
    unchanged: S4 for a smooth or cusped junction, S5 for a fillet whose offsets
    never meet, then the feet and connector. The blend is assigned to carriers,

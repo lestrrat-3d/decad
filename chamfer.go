@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/draftrecord"
 	"github.com/lestrrat-3d/decad/internal/extent"
+	"github.com/lestrrat-3d/decad/internal/modifyselect"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/sweeprecord"
@@ -359,7 +360,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 	}
 	if !ok {
 		return nil, fmt.Errorf(`%w: this evaluator chamfers a straight prism, its one-line Sweep reduction, or a revolve only; selector %s matched [%s]`,
-			ErrUnsupported, sel, selectedEdgesContext(edges))
+			ErrUnsupported, sel, modifyselect.EdgesContext(edgeNodes(edges)))
 	}
 	if sweepStraight && asym != nil {
 		return nil, fmt.Errorf(`%w: an asymmetric chamfer of a Sweep wall has no mapped reference-face role`, ErrUnsupported)
@@ -436,17 +437,17 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 	for i := range blendAt {
 		blendAt[i] = map[int]*cornerBlend{}
 	}
-	matched := make([]matchedCorner, 0, len(edges))
+	matched := make([]modifyselect.MatchedCorner, 0, len(edges))
 	for ei, e := range edges {
-		li, ci, found, err := matchCornerBudget(budget, pp, loops, e)
+		li, ci, found, err := modifyselect.MatchCorner(budget, pp, loops, edgeNode(e))
 		if err != nil {
 			return nil, err
 		}
 		if !found {
 			return nil, fmt.Errorf(`%w: this cap-edge chamfer selection is unsupported; selector %s, %s`,
-				ErrUnsupported, sel, selectedEdgeContext(ei, e))
+				ErrUnsupported, sel, modifyselect.EdgeContext(ei, edgeNode(e)))
 		}
-		matched = append(matched, newMatchedCorner(ei, e, li, ci, loops[li]))
+		matched = append(matched, modifyselect.NewMatchedCorner(ei, edgeNode(e), li, ci, loops[li]))
 		blendAt[li][ci] = nil // marked; the bevel is computed in stage 3
 	}
 
@@ -458,11 +459,11 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
-		cb, err := blend.corner(loops[corner.loop], corner.loop, corner.corner, corner.edge)
+		cb, err := blend.corner(loops[corner.Loop], corner.Loop, corner.Corner, edgeHandle(corner.Edge))
 		if err != nil {
 			return nil, fmt.Errorf(`%w; selector %s, %s`, err, sel, corner)
 		}
-		blendAt[corner.loop][corner.corner] = cb
+		blendAt[corner.Loop][corner.Corner] = cb
 	}
 
 	// Replace marked corners with straight chords. Also remember which new
@@ -483,7 +484,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 		if errors.Is(err, context.DeadlineExceeded) {
 			return nil, context.DeadlineExceeded
 		}
-		return nil, wrapModifyAuditError(sel, matched, err)
+		return nil, modifyselect.WrapAuditError(fmt.Sprint(sel), matched, err)
 	}
 
 	// Build through evalPrism (§2): same frame, interval and placement, only
