@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
+	"github.com/lestrrat-3d/decad/internal/ringmemo"
 	"github.com/lestrrat-3d/decad/internal/spherepath"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
@@ -49,7 +50,7 @@ type sweepReplayProof struct {
 	bracketGap                 *big.Rat // a rotating bracket's proven lower gap at its left edge
 	bracketTravel              *big.Rat // both bodies' travel bound per unit fraction, rotating brackets
 	grazingAt                  *big.Rat
-	poses                      sweepmemo.ReplayPoseMemo // certifiedPosesAtFraction's answers; changes no outcome
+	poses                      ringmemo.Memo[string, sweepmemo.ReplayPoses] // certifiedPosesAtFraction's answers; changes no outcome
 }
 
 func (p *sweepReplayProof) snapshot(r *SweepReport) {
@@ -148,7 +149,7 @@ func (r *SweepReport) certifiedPosesAtFraction(f *big.Rat) (r3.Transform, r3.Tra
 		return value.A, value.B, value.Err
 	}
 	a, b, err := r.replayPosesAtFraction(f)
-	r.replay.poses.Store(key, sweepmemo.ReplayPoses{A: a, B: b, Err: err})
+	r.replay.poses.Store(key, sweepmemo.ReplayPoses{A: a, B: b, Err: err}, sweepmemo.ReplayPoseCap)
 	return a, b, err
 }
 

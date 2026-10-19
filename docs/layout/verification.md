@@ -18,7 +18,7 @@ The rules for rows live in `docs/layout.md`.
 | `verify_publish.go` | Adapts private surveys to `internal/reportvocab` publication. See verification §1, §6. |
 | `clearance.go` | The pair kernel: `clearancePair` and `sheetSolidPair`, plus unplaced axis-aligned box pairs over the `internal/pair/box/` gap proof. See clearance §1-§3/§6. |
 | `clearance_planar.go` | The exact planar pair arm for mitred, faceted and coil bodies: interference §3.2. |
-| `contact_pair.go` | Pair gates, public contact report types, their conversion from the `internal/reportvocab` report, and the bit-exact pair report memo. See contact-geometry §6. |
+| `contact_pair.go` | Pair gates, public contact report types, their conversion from the `internal/reportvocab` report, and the bit-exact pair report memo key and cap. See contact-geometry §6. |
 | `contact_box.go` | Source-box admission and public face/measurement mapping. See contact-geometry §4. |
 | `contact_faceted_pair.go` | Planar admission, snapshots and convexity cache; dispatch to `internal/planarband/`; planar manifold faces and witnesses. See multibody §9–§10. |
 | `contact_faceted_floor.go` | Exact faceted support-face proof, bounded strict separation, and faceted floor sweeps by exact support face or swept-box clearance. See contact-geometry §4 and contact-sweep. |

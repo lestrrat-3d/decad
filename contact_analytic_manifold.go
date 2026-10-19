@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/planarsweep"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
@@ -411,8 +412,8 @@ func publishPlacedRulingManifold(report *reportvocab.ContactReport, c *placedCyl
 	for _, rim := range rims {
 		foot := rim
 		foot[plane.Axis] = plane.Offset
-		onM, okM := planarTrackPoint([3]*big.Rat(ratOfDyV3(rim)), lateral, resolution)
-		onS, okS := planarTrackPoint([3]*big.Rat(ratOfDyV3(foot)), lateral, resolution)
+		onM, okM := planarTrackPoint([3]*big.Rat(planarsweep.RatOfDyV3(rim)), lateral, resolution)
+		onS, okS := planarTrackPoint([3]*big.Rat(planarsweep.RatOfDyV3(foot)), lateral, resolution)
 		if !okM || !okS {
 			report.Reason = reportvocab.ContactPointTooCoarse
 			return
