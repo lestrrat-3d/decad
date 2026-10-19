@@ -44,7 +44,7 @@ func MotionOf(p MotionInput) (Motion, bool) {
 		for k := range 3 {
 			m.Velocity[k] = new(big.Rat).Quo(p.Delta[k].Rat(), p.Duration)
 		}
-		m.Center = ratOfDyV3(p.Points[0])
+		m.Center = RatOfDyV3(p.Points[0])
 	} else {
 		for k := range 3 {
 			if p.Velocity[k] == nil || p.Frame.Axis[k] == nil || p.Frame.Center[k] == nil {
@@ -55,7 +55,7 @@ func MotionOf(p MotionInput) (Motion, bool) {
 			m.Center[k] = new(big.Rat).Set(p.Frame.Center[k])
 		}
 		m.Rotating = true
-		m.OmegaSq = ratDot3(m.Omega, m.Omega)
+		m.OmegaSq = RatDot3(m.Omega, m.Omega)
 		up, ok := ratSqrtUpRat(m.OmegaSq)
 		if !ok {
 			return Motion{}, false
@@ -64,8 +64,8 @@ func MotionOf(p MotionInput) (Motion, bool) {
 	}
 	rhoSq := new(big.Rat)
 	for _, v := range p.Points {
-		d := ratSub3(ratOfDyV3(v), m.Center)
-		if sq := ratDot3(d, d); sq.Cmp(rhoSq) > 0 {
+		d := RatSub3(RatOfDyV3(v), m.Center)
+		if sq := RatDot3(d, d); sq.Cmp(rhoSq) > 0 {
 			rhoSq = sq
 		}
 	}
@@ -89,8 +89,8 @@ func VertexSpins(points []proofarith.DyV3, motion Motion) ([]*big.Rat, bool) {
 			out[i] = new(big.Rat)
 			continue
 		}
-		arm := ratCross3(motion.Omega, ratSub3(ratOfDyV3(v), motion.Center))
-		armUp, ok := ratSqrtUpRat(ratDot3(arm, arm))
+		arm := ratCross3(motion.Omega, RatSub3(RatOfDyV3(v), motion.Center))
+		armUp, ok := ratSqrtUpRat(RatDot3(arm, arm))
 		if !ok {
 			return nil, false
 		}
@@ -102,13 +102,13 @@ func VertexSpins(points []proofarith.DyV3, motion Motion) ([]*big.Rat, bool) {
 // Rates returns each guest vertex's exact initial height rate.
 func Rates(points []proofarith.DyV3, normal proofarith.DyV3, m, o Motion) []*big.Rat {
 	out := make([]*big.Rat, len(points))
-	relative := ratSub3(m.Velocity, o.Velocity)
-	n := ratOfDyV3(normal)
+	relative := RatSub3(m.Velocity, o.Velocity)
+	n := RatOfDyV3(normal)
 	for i, v := range points {
-		p := ratOfDyV3(v)
-		rate := ratAdd3(relative, ratCross3(m.Omega, ratSub3(p, m.Center)))
-		rate = ratSub3(rate, ratCross3(o.Omega, ratSub3(p, o.Center)))
-		out[i] = ratDot3(n, rate)
+		p := RatOfDyV3(v)
+		rate := ratAdd3(relative, ratCross3(m.Omega, RatSub3(p, m.Center)))
+		rate = RatSub3(rate, ratCross3(o.Omega, RatSub3(p, o.Center)))
+		out[i] = RatDot3(n, rate)
 	}
 	return out
 }
@@ -145,10 +145,10 @@ func RestedVertices(lifted []int, rates []*big.Rat, nLow, rest *big.Rat) map[int
 // §10.2's |ω_M|²·ρ_M; the S terms stay global. The terms are nondecreasing
 // in t, so K_p(t) covers [0, t].
 func Curvature(m, o Motion, spin []*big.Rat, nHigh, t *big.Rat) ([]*big.Rat, bool) {
-	relative := ratSub3(m.Velocity, o.Velocity)
-	speed, okSpeed := ratSqrtUpRat(ratDot3(relative, relative))
-	offset := ratSub3(m.Center, o.Center)
-	distance, okDistance := ratSqrtUpRat(ratDot3(offset, offset))
+	relative := RatSub3(m.Velocity, o.Velocity)
+	speed, okSpeed := ratSqrtUpRat(RatDot3(relative, relative))
+	offset := RatSub3(m.Center, o.Center)
+	distance, okDistance := ratSqrtUpRat(RatDot3(offset, offset))
 	if !okSpeed || !okDistance {
 		return nil, false
 	}
@@ -224,7 +224,8 @@ func DepthAt(heights, rates []*big.Rat, contact, lifted []int, rested map[int]st
 	return depth
 }
 
-func ratOfDyV3(v proofarith.DyV3) motionbound.RatVec {
+// RatOfDyV3 converts an exact dyadic vector to rationals.
+func RatOfDyV3(v proofarith.DyV3) motionbound.RatVec {
 	return motionbound.RatVec{v[0].Rat(), v[1].Rat(), v[2].Rat()}
 }
 
@@ -232,11 +233,13 @@ func ratAdd3(a, b motionbound.RatVec) motionbound.RatVec {
 	return motionbound.RatVec{new(big.Rat).Add(a[0], b[0]), new(big.Rat).Add(a[1], b[1]), new(big.Rat).Add(a[2], b[2])}
 }
 
-func ratSub3(a, b motionbound.RatVec) motionbound.RatVec {
+// RatSub3 returns a − b exactly.
+func RatSub3(a, b motionbound.RatVec) motionbound.RatVec {
 	return motionbound.RatVec{new(big.Rat).Sub(a[0], b[0]), new(big.Rat).Sub(a[1], b[1]), new(big.Rat).Sub(a[2], b[2])}
 }
 
-func ratDot3(a, b motionbound.RatVec) *big.Rat {
+// RatDot3 returns the exact dot product a · b.
+func RatDot3(a, b motionbound.RatVec) *big.Rat {
 	return proofbound.RatAdd(new(big.Rat).Mul(a[0], b[0]), new(big.Rat).Mul(a[1], b[1]), new(big.Rat).Mul(a[2], b[2]))
 }
 

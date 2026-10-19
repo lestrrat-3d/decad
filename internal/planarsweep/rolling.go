@@ -33,17 +33,17 @@ type RollingInput struct {
 // drift from the same exact motion and staged cylinder readings.
 func RollingCoefficientsOf(in RollingInput) (RollingCoefficients, bool) {
 	radius := in.Cylinder.Radius.Rat()
-	normal := ratOfDyV3(in.Normal)
-	relative := ratSub3(in.Moving.Velocity, in.Support.Velocity)
+	normal := RatOfDyV3(in.Normal)
+	relative := RatSub3(in.Moving.Velocity, in.Support.Velocity)
 	out := RollingCoefficients{rate: new(big.Rat), quadratic: new(big.Rat), constant: new(big.Rat),
 		alpha: new(big.Rat).Abs(in.Alpha.Rat())}
 	for i, c := range in.Points {
-		lever := ratCross3(in.Moving.Omega, ratSub3(ratOfDyV3(c), in.Moving.Center))
-		rate := ratDot3(normal, ratAdd3(relative, lever))
+		lever := ratCross3(in.Moving.Omega, RatSub3(RatOfDyV3(c), in.Moving.Center))
+		rate := RatDot3(normal, ratAdd3(relative, lever))
 		if rate.Abs(rate).Cmp(out.rate) > 0 {
 			out.rate = rate
 		}
-		curvature, ok := ratSqrtUpRat(proofbound.RatMul(in.Moving.OmegaSq, ratDot3(lever, lever)))
+		curvature, ok := ratSqrtUpRat(proofbound.RatMul(in.Moving.OmegaSq, RatDot3(lever, lever)))
 		if !ok {
 			return RollingCoefficients{}, false
 		}
@@ -55,9 +55,9 @@ func RollingCoefficientsOf(in RollingInput) (RollingCoefficients, bool) {
 		}
 	}
 	// β² = |ω|²·|ã|² − (ω·ã)², exact.
-	axis := ratOfDyV3(in.Cylinder.Columns[in.Cylinder.Axis])
-	along := ratDot3(in.Moving.Omega, axis)
-	tiltSq := new(big.Rat).Sub(proofbound.RatMul(in.Moving.OmegaSq, ratDot3(axis, axis)), proofbound.RatMul(along, along))
+	axis := RatOfDyV3(in.Cylinder.Columns[in.Cylinder.Axis])
+	along := RatDot3(in.Moving.Omega, axis)
+	tiltSq := new(big.Rat).Sub(proofbound.RatMul(in.Moving.OmegaSq, RatDot3(axis, axis)), proofbound.RatMul(along, along))
 	tilt, ok := ratSqrtUpRat(tiltSq)
 	if !ok {
 		return RollingCoefficients{}, false

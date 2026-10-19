@@ -7,7 +7,6 @@ import (
 	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/measurement"
-	"github.com/lestrrat-3d/decad/internal/motionbound"
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	"github.com/lestrrat-3d/decad/internal/planarsweep"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -723,9 +722,9 @@ func (p *planarTrackProof) planarManifoldAt(f *big.Rat, req reportvocab.ContactR
 	if !ok {
 		return nil, fmt.Errorf("%w: planar contact track pose has no finite bound", ErrUnsupported)
 	}
-	n := ratOfDyV3(p.normal)
-	nn := ratDot3(n, n)
-	q := ratOfDyV3(verts[p.s][p.origin])
+	n := planarsweep.RatOfDyV3(p.normal)
+	nn := planarsweep.RatDot3(n, n)
+	q := planarsweep.RatOfDyV3(verts[p.s][p.origin])
 	resolution, okResolution := sweeppath.ExactBaseValue(req.PointResolution)
 	if !okResolution {
 		return nil, fmt.Errorf("%w: planar contact track resolution is invalid", ErrUnsupported)
@@ -734,8 +733,8 @@ func (p *planarTrackProof) planarManifoldAt(f *big.Rat, req reportvocab.ContactR
 		Exactness: exactnessFromBound(p.depthUp)}
 	points := make([]ContactPoint, 0, len(p.contact))
 	for slot, index := range p.contact {
-		vertex := ratOfDyV3(verts[p.m][index])
-		height := new(big.Rat).Quo(ratDot3(n, ratSub3(vertex, q)), nn)
+		vertex := planarsweep.RatOfDyV3(verts[p.m][index])
+		height := new(big.Rat).Quo(planarsweep.RatDot3(n, planarsweep.RatSub3(vertex, q)), nn)
 		var foot [3]*big.Rat
 		for k := range 3 {
 			foot[k] = new(big.Rat).Sub(vertex[k], new(big.Rat).Mul(height, n[k]))
@@ -817,16 +816,4 @@ func (p *planarTrackProof) replayHeights(f *big.Rat) (*big.Rat, bool) {
 		return nil, false
 	}
 	return deviation, true
-}
-
-func ratOfDyV3(v proofarith.DyV3) motionbound.RatVec {
-	return motionbound.RatVec{v[0].Rat(), v[1].Rat(), v[2].Rat()}
-}
-
-func ratSub3(a, b motionbound.RatVec) motionbound.RatVec {
-	return motionbound.RatVec{new(big.Rat).Sub(a[0], b[0]), new(big.Rat).Sub(a[1], b[1]), new(big.Rat).Sub(a[2], b[2])}
-}
-
-func ratDot3(a, b motionbound.RatVec) *big.Rat {
-	return proofbound.RatAdd(new(big.Rat).Mul(a[0], b[0]), new(big.Rat).Mul(a[1], b[1]), new(big.Rat).Mul(a[2], b[2]))
 }

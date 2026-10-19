@@ -59,6 +59,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/sweepdeparture/` | Exact source-box departure proofs. See multibody §10.2. |
 | `internal/sweepmemo/` | Sweep path replay coverage, pose bits, path memo tables and corner-span hull gaps. See contact-sweep §6–§7 and multibody §10.4. |
 | `internal/radiusmemo/` | Body rotational sweep-radius keys and bounded memo readings. See contact-sweep §6–§7. |
+| `internal/ringmemo/` | Bounded first-write memo that evicts its oldest key once full; backs the pair report and sweep replay memos. |
 | `internal/spherepath/` | Sphere path gaps, face corridors, point transfer, track bounds, brackets and pair replay. See contact-sweep §4–§6. |
 | `internal/linkagebound/` | Link bounds and projections. See linkage §5, §15. |
 | `internal/loopscene/` | Closed-loop sketch scenes. See linkage §15.2. |

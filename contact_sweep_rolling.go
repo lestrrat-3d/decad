@@ -491,19 +491,19 @@ func (p *rollingTrackProof) manifoldAt(f *big.Rat, req reportvocab.ContactReques
 	if !okResolution {
 		return nil, fmt.Errorf("%w: rolling contact track resolution is invalid", ErrUnsupported)
 	}
-	n := ratOfDyV3(p.normal)
-	q := ratOfDyV3(vertsS[p.origin])
+	n := planarsweep.RatOfDyV3(p.normal)
+	q := planarsweep.RatOfDyV3(vertsS[p.origin])
 	_, lateral := p.coefficients.At(new(big.Rat).Mul(f, p.paths[p.m].path.Duration))
 	separation := Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(p.depthUp),
 		Exactness: exactnessFromBound(p.depthUp)}
 	points := make([]ContactPoint, 0, len(p.ends))
 	for _, end := range p.ends {
-		center := ratOfDyV3(proofarith.DvTransform(poses[p.m], end))
+		center := planarsweep.RatOfDyV3(proofarith.DvTransform(poses[p.m], end))
 		var rim, foot [3]*big.Rat
 		for k := range 3 {
 			rim[k] = new(big.Rat).Sub(center[k], new(big.Rat).Mul(p.radius, n[k]))
 		}
-		height := ratDot3(n, ratSub3(motionbound.RatVec(rim), q))
+		height := planarsweep.RatDot3(n, planarsweep.RatSub3(motionbound.RatVec(rim), q))
 		for k := range 3 {
 			foot[k] = new(big.Rat).Sub(rim[k], new(big.Rat).Mul(height, n[k]))
 		}

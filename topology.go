@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/ringmemo"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
@@ -535,8 +536,9 @@ type Body struct {
 	n topo.Body
 
 	// pairReports keeps the recent ContactPair reports this body is the
-	// first operand of (internal/reportvocab/contact_memo.go); it changes no outcome either.
-	pairReports pairReportMemo
+	// first operand of; it changes no outcome either. ContactPair stores each
+	// report once and hands out copies.
+	pairReports ringmemo.Memo[pairReportKey, *ContactReport]
 }
 
 // Document returns the document that owns (or owned) this body.

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"slices"
-	"sync"
 
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/pair"
@@ -213,14 +212,14 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 	}
 	key := newPairReportKey(b, poseA, poseB, req)
 	if report, ok := a.pairReports.Load(key); ok {
-		return report, nil
+		return cloneContactReport(report), nil
 	}
 	found, err := classifyContactPair(ctx, a, b, poseA, poseB, req)
 	if err != nil {
 		return nil, err
 	}
 	report := contactReportFromInternal(found)
-	a.pairReports.Store(key, report)
+	a.pairReports.Store(key, report, pairReportMemoCap)
 	return cloneContactReport(report), nil
 }
 
@@ -641,43 +640,6 @@ func newPairReportKey(b *Body, poseA, poseB r3.Transform, req ContactRequest) pa
 		}
 	}
 	return key
-}
-
-// pairReportMemo stores completed reports and returns independent copies.
-type pairReportMemo struct {
-	mu      sync.Mutex
-	entries map[pairReportKey]*ContactReport
-	order   []pairReportKey
-	next    int
-}
-
-func (m *pairReportMemo) Load(key pairReportKey) (*ContactReport, bool) {
-	m.mu.Lock()
-	report, ok := m.entries[key]
-	m.mu.Unlock()
-	if !ok {
-		return nil, false
-	}
-	return cloneContactReport(report), true
-}
-
-func (m *pairReportMemo) Store(key pairReportKey, report *ContactReport) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if _, ok := m.entries[key]; ok {
-		return
-	}
-	if m.entries == nil {
-		m.entries = make(map[pairReportKey]*ContactReport)
-	}
-	if len(m.order) < pairReportMemoCap {
-		m.order = append(m.order, key)
-	} else {
-		delete(m.entries, m.order[m.next])
-		m.order[m.next] = key
-		m.next = (m.next + 1) % pairReportMemoCap
-	}
-	m.entries[key] = report
 }
 
 func cloneContactReport(r *ContactReport) *ContactReport {
