@@ -7,7 +7,7 @@ import (
 )
 
 // IsManifold checks that body's boundary is a closed manifold skin,
-// mirroring decad's own soundness rule (verify.go's auditBoundary) through
+// mirroring decad's own soundness rule (reportvocab.AuditSolidBoundary) through
 // the public API alone: body MUST have at least one face; every face MUST
 // have at least one loop, unless its surface is a full sphere or a full
 // torus, which bounds a solid with no boundary loop at all; every loop MUST

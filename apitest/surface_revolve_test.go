@@ -503,7 +503,7 @@ func TestSurfaceRevolveFullTurnSheetVerifiesValid(t *testing.T) {
 // TestSurfaceRevolveAxisStraddlingProfileNeverReachesTheAudit confirms the
 // premise revolveplan.Payload.ProvesSimple rests on: a profile whose
 // boundary straddles the revolve axis is refused by revolveplan.ResolveAxisSide at
-// build, before a body exists at all, so it never reaches auditSheetBoundary
+// build, before a body exists at all, so it never reaches AuditSheetBoundary
 // with a claim the arm would have to decide.
 func TestSurfaceRevolveAxisStraddlingProfileNeverReachesTheAudit(t *testing.T) {
 	t.Parallel()

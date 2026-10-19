@@ -110,7 +110,7 @@ func InterferenceOutcomeForExpected(expected *meshbool.BooleanExpectedError) Int
 	}
 }
 
-// SheetAuditOutcome is auditSheetBoundary's three-way verdict.
+// SheetAuditOutcome is AuditSheetBoundary's three-way verdict.
 type SheetAuditOutcome int
 
 const (
