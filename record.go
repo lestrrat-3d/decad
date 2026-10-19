@@ -199,7 +199,6 @@ type (
 	pointConeLimit               = facetedrecord.PointConeLimit
 	pointConeTrimRecord          = facetedrecord.PointConeTrimRecord
 	pointPlaneLimit              = facetedrecord.PointPlaneLimit
-	pointPlaneSliceRecord        = facetedrecord.PointPlaneSliceRecord
 	pointSectionRecord           = facetedrecord.PointSectionRecord
 	pointSectionSource           = facetedrecord.PointSectionSource
 	prismPatternJoinRecord       = facetedrecord.PrismPatternJoinRecord
