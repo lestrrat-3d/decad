@@ -245,8 +245,8 @@ func TestCurvedCapRayOrderRequiresSeparatedSourceBoxes(t *testing.T) {
 
 func TestCurvedCapRayRejectsGridCollapse(t *testing.T) {
 	vertex := revolveLoftFacesCapSeamVertex{point: r3.Vec{Y: 1}}
-	require.Nil(t, revolveLoftFacesShellRays(16, nil,
-		[]revolveLoftFacesCapSeamVertex{vertex}))
+	require.Nil(t, revolveloftfaces.ShellRays(16,
+		revolveLoftFacesShellRaySource{caps: []revolveLoftFacesCapSeamVertex{vertex}}))
 }
 
 func TestCurvedSourceCapCirclesSplitClosedBlankShell(t *testing.T) {

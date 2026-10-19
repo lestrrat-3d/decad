@@ -201,7 +201,7 @@ func TestVerticalTraceRefusesChangedSourceAndRayOwners(t *testing.T) {
 		capRays[endpoint] = slices.Index(ring.vertices, ring.endpoints[endpoint])
 		require.GreaterOrEqual(t, capRays[endpoint], 0)
 	}
-	rays := append([]revolveLoftFacesRay(nil), shell.rays...)
+	rays := append([]revolveloftfaces.ShellRay(nil), shell.rays...)
 	arcHits, hitsOK := revolveLoftFacesTraceSourceHits(pieces[1], rays, [2]int{-1, -1})
 	require.True(t, hitsOK)
 	require.Greater(t, len(arcHits), 2)
@@ -228,7 +228,7 @@ func TestVerticalTraceRefusesChangedSourceAndRayOwners(t *testing.T) {
 			lo: pieces[0].cell.upper.Root.Lo, hi: pieces[0].cell.upper.Root.Hi},
 		revolveLoftFacesVerticalTraceHit{piece: 0, ray: -1,
 			lo: pieces[0].To, hi: pieces[0].To},
-		[2]*big.Rat{startRay.y, startRay.z}, direction, moved, join, shell.rays)
+		[2]*big.Rat{startRay.Y, startRay.Z}, direction, moved, join, shell.rays)
 	require.True(t, bounded)
 	require.Greater(t, motionBound, 0.1, "a moved endpoint exceeds the trace fit limit")
 

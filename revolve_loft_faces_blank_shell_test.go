@@ -310,18 +310,20 @@ func TestCurvedMultiRunShellRayOwnersRefuseCollisions(t *testing.T) {
 		point: r3.Vec{Y: 2, Z: 1}, loftBound: 0.001,
 	}
 	seams := [][]revolveLoftFacesSeamVertex{{station}, {station}}
-	rays := revolveLoftFacesShellRaysForRuns(16, seams, nil)
+	source := revolveLoftFacesShellRaySource{seams: seams}
+	rays := revolveloftfaces.ShellRays(16, source)
 	require.NotNil(t, rays)
-	require.True(t, revolveLoftFacesAllRayOrderBounded(rays, seams, nil))
+	require.True(t, revolveloftfaces.ShellRayOrderBounded(rays, source))
 	shared := 0
 	for _, ray := range rays {
-		if len(ray.seamRefs) == 2 {
+		if len(ray.SeamRefs) == 2 {
 			shared++
 		}
 	}
 	require.Equal(t, 1, shared)
-	require.Nil(t, revolveLoftFacesShellRaysForRuns(16,
-		[][]revolveLoftFacesSeamVertex{{station, station}}, nil))
-	require.Nil(t, revolveLoftFacesShellRaysForRuns(16, seams,
-		[]revolveLoftFacesCapSeamVertex{{point: r3.Vec{Y: 2, Z: 1}}}))
+	require.Nil(t, revolveloftfaces.ShellRays(16,
+		revolveLoftFacesShellRaySource{seams: [][]revolveLoftFacesSeamVertex{{station, station}}}))
+	require.Nil(t, revolveloftfaces.ShellRays(16,
+		revolveLoftFacesShellRaySource{seams: seams,
+			caps: []revolveLoftFacesCapSeamVertex{{point: r3.Vec{Y: 2, Z: 1}}}}))
 }
