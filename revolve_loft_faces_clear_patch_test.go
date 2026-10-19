@@ -178,7 +178,7 @@ func TestCurvedClearPatchRefusesUnprovedClaims(t *testing.T) {
 	t.Run("wrong triangle provenance", func(t *testing.T) {
 		changed := *shell
 		changed.triangleCells = slices.Clone(shell.triangleCells)
-		changed.triangleCells[index].section = len(source.section.Spans)
+		changed.triangleCells[index].Section = len(source.section.Spans)
 		modified := *classifier
 		modified.shell = &changed
 		refuses(t, &modified)

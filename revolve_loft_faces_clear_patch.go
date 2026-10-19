@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/pointquery"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -203,16 +204,16 @@ func (c *revolveLoftFacesClearPatchContext) classifyClearPatch(ctx context.Conte
 		return pointquery.Undecided, false, nil
 	}
 	cell := shell.triangleCells[index]
-	if cell.section < 0 || cell.section >= len(source.section.Spans) ||
-		cell.section >= len(shell.sectionRings) ||
-		source.section.Spans[cell.section].Face == nil ||
-		cell.band < 0 || cell.band+1 >= len(shell.sectionRings[cell.section]) ||
-		cell.ray < 0 || cell.ray >= shell.rayCount {
+	if cell.Section < 0 || cell.Section >= len(source.section.Spans) ||
+		cell.Section >= len(shell.sectionRings) ||
+		source.section.Spans[cell.Section].Face == nil ||
+		cell.Band < 0 || cell.Band+1 >= len(shell.sectionRings[cell.Section]) ||
+		cell.Ray < 0 || cell.Ray >= shell.rayCount {
 		return pointquery.Undecided, false, nil
 	}
 	group := shell.mesh.Src[index]
 	if group < 0 || group >= len(shell.mesh.Groups) ||
-		!sameRevolveLoftFacesShellGroup(source, shell, cell.section, group) {
+		!sameRevolveLoftFacesShellGroup(source, shell, cell.Section, group) {
 		return pointquery.Undecided, false, nil
 	}
 	tri := shell.mesh.Tris[index]
@@ -303,31 +304,31 @@ func sameRevolveLoftFacesShellGroup(source *revolveLoftFacesSourceCertificate,
 }
 
 func revolveLoftFacesShellCellTriangle(shell *revolveLoftFacesBlankSeamShell,
-	cell revolveLoftFacesShellTriangleCell) ([3]int, bool) {
+	cell revolveloftfaces.ShellTriangleCell) ([3]int, bool) {
 	var zero [3]int
-	start := shell.sectionRings[cell.section][cell.band]
-	end := shell.sectionRings[cell.section][cell.band+1]
+	start := shell.sectionRings[cell.Section][cell.Band]
+	end := shell.sectionRings[cell.Section][cell.Band+1]
 	if (len(start) != 1 && len(start) != shell.rayCount) ||
 		(len(end) != 1 && len(end) != shell.rayCount) ||
 		len(start) == 1 && len(end) == 1 {
 		return zero, false
 	}
-	next := (cell.ray + 1) % shell.rayCount
+	next := (cell.Ray + 1) % shell.rayCount
 	switch {
 	case len(start) == 1:
-		if cell.half != 0 {
+		if cell.Half != 0 {
 			return zero, false
 		}
-		return [3]int{start[0], end[cell.ray], end[next]}, true
+		return [3]int{start[0], end[cell.Ray], end[next]}, true
 	case len(end) == 1:
-		if cell.half != 0 {
+		if cell.Half != 0 {
 			return zero, false
 		}
-		return [3]int{start[cell.ray], end[0], start[next]}, true
-	case cell.half == 0:
-		return [3]int{start[cell.ray], end[cell.ray], end[next]}, true
-	case cell.half == 1:
-		return [3]int{start[cell.ray], end[next], start[next]}, true
+		return [3]int{start[cell.Ray], end[0], start[next]}, true
+	case cell.Half == 0:
+		return [3]int{start[cell.Ray], end[cell.Ray], end[next]}, true
+	case cell.Half == 1:
+		return [3]int{start[cell.Ray], end[next], start[next]}, true
 	default:
 		return zero, false
 	}

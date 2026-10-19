@@ -54,14 +54,14 @@ func TestCurvedVerticalTraceConsumesLiveGraphAndShell(t *testing.T) {
 	require.Len(t, trace.edgeWedges, len(trace.vertices)-1)
 	require.Len(t, trace.edgeCellIDs, len(trace.edgeWedges))
 	require.Len(t, trace.vertexRays, len(trace.vertices))
-	seenCells := make(map[revolveLoftFacesShellTriangleCell]bool)
-	incident := make(map[[2]int][]revolveLoftFacesShellTriangleCell)
+	seenCells := make(map[revolveloftfaces.ShellTriangleCell]bool)
+	incident := make(map[[2]int][]revolveloftfaces.ShellTriangleCell)
 	for i, tri := range shell.mesh.Tris {
 		cell := shell.triangleCells[i]
 		require.False(t, seenCells[cell])
 		seenCells[cell] = true
-		require.GreaterOrEqual(t, cell.ray, 0)
-		require.Less(t, cell.ray, shell.rayCount)
+		require.GreaterOrEqual(t, cell.Ray, 0)
+		require.Less(t, cell.Ray, shell.rayCount)
 		for side := range 3 {
 			edge := [2]int{tri[side], tri[(side+1)%3]}
 			slices.Sort(edge[:])
@@ -74,8 +74,8 @@ func TestCurvedVerticalTraceConsumesLiveGraphAndShell(t *testing.T) {
 		slices.Sort(edge[:])
 		require.Len(t, incident[edge], 2)
 		for _, cell := range incident[edge] {
-			require.Equal(t, trace.sectionIndex, cell.section)
-			require.Equal(t, wedge, cell.ray)
+			require.Equal(t, trace.sectionIndex, cell.Section)
+			require.Equal(t, wedge, cell.Ray)
 		}
 		require.Contains(t, trace.cellIDs, trace.edgeCellIDs[i])
 		seenRayContacts[wedge]++
@@ -202,32 +202,33 @@ func TestVerticalTraceRefusesChangedSourceAndRayOwners(t *testing.T) {
 		require.GreaterOrEqual(t, capRays[endpoint], 0)
 	}
 	rays := append([]revolveloftfaces.ShellRay(nil), shell.rays...)
-	arcHits, hitsOK := revolveLoftFacesTraceSourceHits(pieces[1], rays, [2]int{-1, -1})
+	arcHits, hitsOK := revolveloftfaces.VerticalTraceSourceHits(sourcePieces[1], rays, [2]int{-1, -1})
 	require.True(t, hitsOK)
 	require.Greater(t, len(arcHits), 2)
-	rays[arcHits[1].ray] = rays[arcHits[0].ray]
-	_, hitsOK = revolveLoftFacesTraceSourceHits(pieces[1], rays, [2]int{-1, -1})
+	rays[arcHits[1].Ray] = rays[arcHits[0].Ray]
+	_, hitsOK = revolveloftfaces.VerticalTraceSourceHits(sourcePieces[1], rays, [2]int{-1, -1})
 	require.False(t, hitsOK, "two ray owners cannot claim the same arc crossing")
 
-	badRing := *ring
-	badRing.endpoints[1] = badRing.endpoints[0]
-	pathNodes, pathEdges, pathBound, built, err := revolveLoftFacesVerticalTracePath(t.Context(),
-		proof, shell, pieces, badRing)
+	badEndpoints := ring.endpoints
+	badEndpoints[1] = badEndpoints[0]
+	path, built, err := revolveloftfaces.VerticalTracePath(t.Context(), proof.trim.Maps,
+		shell.rays, shell.mesh.Verts, shell.vertexBounds, ring.vertices, badEndpoints,
+		ring.arc.circle.radius, sourcePieces)
 	require.NoError(t, err)
 	require.False(t, built, "a repeated cap endpoint cannot start a trace")
-	require.Empty(t, pathNodes)
-	require.Empty(t, pathEdges)
-	require.Zero(t, pathBound)
+	require.Empty(t, path.Nodes)
+	require.Empty(t, path.Edges)
+	require.Zero(t, path.LoftBound)
 	startRay := shell.rays[capRays[0]]
-	join, _, direction, joined := revolveLoftFacesTraceJoin(proof, pieces[0], pieces[0].To)
+	join, _, direction, joined := revolveloftfaces.VerticalTraceJoin(sourcePieces[0], pieces[0].To)
 	require.True(t, joined)
 	moved := shell.mesh.Verts[ring.endpoints[0]]
 	moved.Y++
-	motionBound, bounded := revolveLoftFacesVerticalTraceSegmentBound(proof, pieces[0],
-		revolveLoftFacesVerticalTraceHit{piece: 0, ray: capRays[0],
-			lo: pieces[0].cell.upper.Root.Lo, hi: pieces[0].cell.upper.Root.Hi},
-		revolveLoftFacesVerticalTraceHit{piece: 0, ray: -1,
-			lo: pieces[0].To, hi: pieces[0].To},
+	motionBound, bounded := revolveloftfaces.VerticalTraceSegmentBound(proof.trim.Maps, sourcePieces[0],
+		revolveloftfaces.VerticalTraceHit{Piece: 0, Ray: capRays[0],
+			Lo: pieces[0].cell.upper.Root.Lo, Hi: pieces[0].cell.upper.Root.Hi},
+		revolveloftfaces.VerticalTraceHit{Piece: 0, Ray: -1,
+			Lo: pieces[0].To, Hi: pieces[0].To},
 		[2]*big.Rat{startRay.Y, startRay.Z}, direction, moved, join, shell.rays)
 	require.True(t, bounded)
 	require.Greater(t, motionBound, 0.1, "a moved endpoint exceeds the trace fit limit")

@@ -24,17 +24,13 @@ type revolveLoftFacesBlankSeamShell struct {
 	seamIDs       []int
 	seams         [][]int
 	seamRunIDs    [][]int
-	triangleCells []revolveLoftFacesShellTriangleCell
+	triangleCells []revolveloftfaces.ShellTriangleCell
 	sectionRings  [][][]int
 	rays          []revolveloftfaces.ShellRay
 	rayCount      int
 	capRings      []revolveLoftFacesShellCapRing
 	chordBound    float64
 	faceBound     float64
-}
-
-type revolveLoftFacesShellTriangleCell struct {
-	section, band, ray, half int
 }
 
 type revolveLoftFacesShellSeamSelector struct {
@@ -272,7 +268,7 @@ func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
 					continue
 				}
 			}
-			point, bound, valid := revolveLoftFacesMeridianRayPoint(
+			point, bound, valid := revolveloftfaces.MeridianRayPoint(
 				[2]*big.Rat{ray.Y, ray.Z}, x, radius)
 			if !valid {
 				return nil, false
@@ -407,17 +403,17 @@ func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
 			case len(start) == 1:
 				out.mesh.Add([3]int{start[0], end[j], end[next]}, source)
 				out.triangleCells = append(out.triangleCells,
-					revolveLoftFacesShellTriangleCell{section: section, band: band, ray: j})
+					revolveloftfaces.ShellTriangleCell{Section: section, Band: band, Ray: j})
 			case len(end) == 1:
 				out.mesh.Add([3]int{start[j], end[0], start[next]}, source)
 				out.triangleCells = append(out.triangleCells,
-					revolveLoftFacesShellTriangleCell{section: section, band: band, ray: j})
+					revolveloftfaces.ShellTriangleCell{Section: section, Band: band, Ray: j})
 			default:
 				out.mesh.Add([3]int{start[j], end[j], end[next]}, source)
 				out.mesh.Add([3]int{start[j], end[next], start[next]}, source)
 				out.triangleCells = append(out.triangleCells,
-					revolveLoftFacesShellTriangleCell{section: section, band: band, ray: j},
-					revolveLoftFacesShellTriangleCell{section: section, band: band, ray: j, half: 1})
+					revolveloftfaces.ShellTriangleCell{Section: section, Band: band, Ray: j},
+					revolveloftfaces.ShellTriangleCell{Section: section, Band: band, Ray: j, Half: 1})
 			}
 		}
 		return true
@@ -558,32 +554,6 @@ func revolveLoftFacesShellSideCurrent(ctx context.Context,
 		}
 	}
 	return false, nil
-}
-
-func revolveLoftFacesMeridianRayPoint(ray [2]*big.Rat, x, radius *big.Rat) (r3.Vec, float64, bool) {
-	if ray[0] == nil || ray[1] == nil || x == nil || radius == nil || radius.Sign() <= 0 {
-		return r3.Vec{}, 0, false
-	}
-	r2 := lfAdd(lfMul(ray[0], ray[0]), lfMul(ray[1], ray[1]))
-	stored, _ := r2.Float64()
-	if proofbound.IsNonFinite(stored) || stored <= 0 {
-		return r3.Vec{}, 0, false
-	}
-	denominator := math.Sqrt(stored)
-	if proofbound.IsNonFinite(denominator) || denominator <= 0 {
-		return r3.Vec{}, 0, false
-	}
-	scale := lfDiv(radius, lfF(denominator))
-	exact := loftFaceRatVec{x, lfMul(ray[0], scale), lfMul(ray[1], scale)}
-	point, round, ok := revolveloftfaces.HeldPoint(exact)
-	if !ok {
-		return r3.Vec{}, 0, false
-	}
-	actual := lfAdd(lfMul(exact[1], exact[1]), lfMul(exact[2], exact[2]))
-	residual := proofbound.RatFloatUp(lfDiv(
-		lfAbs(lfSub(actual, lfMul(radius, radius))), radius))
-	bound := proofbound.AbsSumUpper(residual, round)
-	return point, bound, !proofbound.IsNonFinite(bound)
 }
 
 // Each selected source cell must reprove its whole-arc contact before its

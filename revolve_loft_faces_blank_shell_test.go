@@ -271,31 +271,31 @@ func TestCurvedMultiRunShellConsumesLiveGraph(t *testing.T) {
 			group++
 		}
 	}
-	seenCells := make(map[revolveLoftFacesShellTriangleCell]struct{})
+	seenCells := make(map[revolveloftfaces.ShellTriangleCell]struct{})
 	for triIndex, cell := range shell.triangleCells {
-		require.GreaterOrEqual(t, cell.section, 0)
-		require.Less(t, cell.section, len(shell.sectionRings))
-		require.GreaterOrEqual(t, cell.band, 0)
-		require.Less(t, cell.band+1, len(shell.sectionRings[cell.section]))
-		require.GreaterOrEqual(t, cell.ray, 0)
-		require.Less(t, cell.ray, shell.rayCount)
-		require.Equal(t, sectionGroup[cell.section], shell.mesh.Src[triIndex])
+		require.GreaterOrEqual(t, cell.Section, 0)
+		require.Less(t, cell.Section, len(shell.sectionRings))
+		require.GreaterOrEqual(t, cell.Band, 0)
+		require.Less(t, cell.Band+1, len(shell.sectionRings[cell.Section]))
+		require.GreaterOrEqual(t, cell.Ray, 0)
+		require.Less(t, cell.Ray, shell.rayCount)
+		require.Equal(t, sectionGroup[cell.Section], shell.mesh.Src[triIndex])
 		_, duplicate := seenCells[cell]
 		require.False(t, duplicate)
 		seenCells[cell] = struct{}{}
-		start := shell.sectionRings[cell.section][cell.band]
-		end := shell.sectionRings[cell.section][cell.band+1]
-		next := (cell.ray + 1) % shell.rayCount
+		start := shell.sectionRings[cell.Section][cell.Band]
+		end := shell.sectionRings[cell.Section][cell.Band+1]
+		next := (cell.Ray + 1) % shell.rayCount
 		var want [3]int
 		switch {
 		case len(start) == 1:
-			want = [3]int{start[0], end[cell.ray], end[next]}
+			want = [3]int{start[0], end[cell.Ray], end[next]}
 		case len(end) == 1:
-			want = [3]int{start[cell.ray], end[0], start[next]}
-		case cell.half == 0:
-			want = [3]int{start[cell.ray], end[cell.ray], end[next]}
+			want = [3]int{start[cell.Ray], end[0], start[next]}
+		case cell.Half == 0:
+			want = [3]int{start[cell.Ray], end[cell.Ray], end[next]}
 		default:
-			want = [3]int{start[cell.ray], end[next], start[next]}
+			want = [3]int{start[cell.Ray], end[next], start[next]}
 		}
 		got := shell.mesh.Tris[triIndex]
 		slices.Sort(got[:])
