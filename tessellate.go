@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/alledgechamfermesh"
+	"github.com/lestrrat-3d/decad/internal/brepbandmesh"
 	"github.com/lestrrat-3d/decad/internal/cuptess"
 	"github.com/lestrrat-3d/decad/internal/patchchain"
 	"github.com/lestrrat-3d/decad/internal/patchmesh"
@@ -318,8 +319,7 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value, verify Ver
 
 // tessellateBodyContext dispatches one body to its payload's own tessellator.
 // verify reaches only the paths that would otherwise COMPUTE a proof the level
-// withholds — prism, patch, one-span sweep, cup, revolve, cap-loop chamfer, draft and the revolve-backed
-// curved stitch route.
+// withholds, such as prism, brep, cup, revolve, cap-loop chamfer and draft.
 // A restatement path (faceted, loft, all-planar stitch) copies its proof terms
 // off the payload at no cost and publishes them unconditionally;
 // tessellateContext withholds them afterwards.
@@ -350,7 +350,11 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		return bornMesh(&Mesh{n: *node}), nil
 	}
 	if bp, ok := b.n.Payload.(brepPayload); ok {
-		return tessellateBrep(ctx, b, bp, chord, verify)
+		node, err := brepbandmesh.Tessellate(ctx, &b.n, bp, chord, verify >= VerifyAll)
+		if err != nil {
+			return nil, err
+		}
+		return bornMesh(&Mesh{n: *node}), nil
 	}
 	if lp, ok := b.n.Payload.(loftPayload); ok {
 		// The loft path exactly restates the payload's complete set for a
@@ -542,21 +546,6 @@ func requireMeshAudit(ctx context.Context, sheet bool, b *Body, m *Mesh) error {
 		return topobuild.RequireSheetMesh(ctx, &b.n, &m.n)
 	}
 	return topobuild.RequireClosedMesh(&m.n)
-}
-
-// composeFaceBounds publishes docs/tessellation-design.md §2's sourceBound for
-// every face the mesh names, as §3's sum of that face's own trim, store, and
-// axial displacements, and lifts Mesh.bound to their maximum. Every source
-// face is present by construction: the walk is over the mesh's Source itself.
-func composeFaceBounds(m *Mesh, trim, axial map[*topo.Face]float64, store []float64) error {
-	bounds, err := tessellation.FaceBounds(m.n.Triangles, m.n.Source, trim, axial, store, 0)
-	if err != nil {
-		return err
-	}
-	for f, bound := range bounds {
-		topobuild.SetFaceBound(&m.n, f, bound)
-	}
-	return nil
 }
 
 // publishSymDiff sums an analytic payload's occupied-volume terms into the

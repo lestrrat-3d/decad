@@ -38,7 +38,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/crossbore/` | Builds the held bore-mouth mesh, proves its cells and computes boundary, volume and area bounds from source records. See cross-cylinder-bore-chamfer design. |
 | `internal/brepgeom/` / `internal/stackedbrep/` | BRep geometry, topology and shared endpoint matching. See general-boolean §4–§5. |
 | `internal/brepwallmesh/` | Chords BRep swept walls and checks clearance between their mesh loops. See general-boolean §4.4 and tessellation §5. |
-| `internal/brepbandmesh/` | Chords route L bands and the shell bands, imposes their counts on the walls beside them, places their rings, emits their strips, and states their motion, volume terms and occupied-volume admission. See modify-general DG3/DG4, §4.3a. |
+| `internal/brepbandmesh/` | Meshes a brep body: walls, planar faces, closure audits and the occupied-volume sum. Chords route L and shell bands, imposes their counts on the walls beside them, places and emits them, and states their motion, volume terms and admission. See general-boolean §4.4, modify-general DG3/DG4, §4.3a. |
 | `internal/brepfilletmesh/` | Places full and selected BRep fillet rings, emits patch triangles, and computes their area and motion bounds. See loop-fillet §7.1. |
 | `internal/prismboolean/` | Analytic boolean admission over operand payloads: the prism pair with its holed `Intersect` route, axial-Loft and face-patch `Union`, blind, spanning and crossing-blind `Cut`, A5 prism groups and A1 stacked `Union`. See prism-boolean §3, general-boolean §3 A1, A5, A7. |
 | `internal/stackedunion/` | Builds A1 stacked Union slabs, private scenes, and BRep faces after `internal/prismboolean` admits them. See general-boolean §3 A1. |
