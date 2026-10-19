@@ -56,7 +56,7 @@ about its exact source center and its full translation is exactly
 representable. The exact center-distance path of the affine centers decides
 the outcome, and the event manifold bounds the exact ideal pair. It replays
 rounded poses. An off-center pivot returns `SweepUndecided` on this path. The
-[rotating sphere-pair tests](../contact_sphere_pair_sweep_test.go)
+[rotating sphere-pair tests](../apitest/contact_sphere_pair_sweep_test.go)
 check the pair query against the closed-form impact time. A three-dynamic
 world also consumes this proof for the clear outer pair after a coupled
 sphere impact and for a later event-free spinning step. Its [integration test](../dynamics/three_body_dynamic_friction_test.go)
@@ -72,7 +72,7 @@ pass real contact and sweep reports through the step and trace.
 An end disk touching a box face also continues on a persistent track while
 the disk stays inside the face and neither body moves along the face normal
 relative to the other. A world uses it to land a cylinder on its end and
-keep it resting. The [disk track tests](../contact_cylinder_sweep_test.go)
+keep it resting. The [disk track tests](../apitest/contact_cylinder_sweep_test.go)
 and the [cylinder rest test](../dynamics/cylinder_rest_test.go) check the
 track's point and the resting trace.
 
@@ -92,7 +92,7 @@ in front of it, such as a tray's floor below its walls, is read only while
 the walls and rim stay laterally clear of the cylinder's box. A gap there is
 at least that clearance, and a touch or band needs a clearance wider than
 the band. The
-[ruling manifold tests](../contact_analytic_manifold_test.go) check these
+[ruling manifold tests](../apitest/contact_analytic_manifold_test.go) check these
 contacts against the float pose's exact occupied set, and their refusals.
 
 A cylinder lying on a face of an exact planar solid that only translates,
@@ -106,7 +106,7 @@ floor the track ends before the cylinder's path box reaches a wall. The
 track's points, normal and replay follow the planar band track. A scheduled
 world rolls such a cylinder on a fixed floor or tray floor, with
 each kick stopped at the step start, or with the contact set carrying the pair
-when nothing kicks it. [Rolling tests](../contact_sweep_rolling_test.go) check the ruling ends,
+when nothing kicks it. [Rolling tests](../apitest/contact_sweep_rolling_test.go) check the ruling ends,
 the depth and the contact point's speed, and the
 [rolling step test](../dynamics/rolling_test.go) checks one turn's travel,
 velocities and contact-point speed.
@@ -154,12 +154,12 @@ with `ContactAmbiguousFeature` when a corner or edge meets only a face's rim,
 when a hole cuts into the patch, when a convex face rests on an edge of a
 non-convex body, or when an overlap crosses two faces, such as a corner
 driven into a tray's floor and wall at once. The scheduled step's islands use it.
-[Planar manifold tests](../contact_faceted_manifold_test.go) check each case.
+[Planar manifold tests](../apitest/contact_faceted_manifold_test.go) check each case.
 
 `SweepPair` checks two such solids under any path, spinning or not, when no
 narrower path admits them. It proves a clear path, or brackets the first
 impact within `TimeResolution` onto a sample where one body's corner is
-provably inside the other. [Planar sweep tests](../contact_sweep_faceted_test.go)
+provably inside the other. [Planar sweep tests](../apitest/contact_sweep_faceted_test.go)
 check a tumbling wedge's first corner impact against its exact time.
 
 A pair that starts touching continues when one body's face plane holds that
@@ -182,7 +182,7 @@ rerunning the pair test. A rotating impact replays its bracket too, up to
 its right end: the rounded pair lies within `PointResolution` of the left
 end's proven gap less the travel since. A fast body's bracket narrows
 below `TimeResolution` until that holds at its right end. `BandAt` reads a
-band track's depth over any prefix. [Band and departure tests](../contact_sweep_band_test.go)
+band track's depth over any prefix. [Band and departure tests](../apitest/contact_sweep_band_test.go)
 check the depth and the departure time against their closed forms.
 
 A positive-bound faceted Boolean, a placed or certificate-welded closed
@@ -211,7 +211,7 @@ body's δ, then the corners within the band, charged the same way.
 `SweepPair` brackets a first impact onto a band sample; a pair that starts
 in its band never departs, and under `ContinueCertifiedTouch` it carries a
 band track whose `Band()` adds twice the summed δ.
-[Band tests](../contact_band_test.go) check the band, the charges, and
+[Band tests](../apitest/contact_band_test.go) check the band, the charges, and
 each refusal.
 
 A positive `ContactRequest.SupportBand` adds the support set to two exact
@@ -227,9 +227,9 @@ corner is held on both sides of the face within the track's depth. Each
 corner's curvature term reads its own distance from the spin axis, so an
 edge turning about itself is an exact touch. An exact pair whose corners all
 rise departs from a band start.
-[Support set tests](../contact_support_band_test.go) check the published
+[Support set tests](../apitest/contact_support_band_test.go) check the published
 heights, the rim, and a tray's floor and wall, and
-[band and departure tests](../contact_sweep_band_test.go) check the track's
+[band and departure tests](../apitest/contact_sweep_band_test.go) check the track's
 end and depth over the support set, and the departure, band track, wall
 impact and rim refusal on a tray's floor.
 
