@@ -558,7 +558,7 @@ func ExactRigidRound(basis r3.Basis, translation r3.Vec, local proofarith.DyV3, 
 // coefficients, each exact in float64, and `ApplyDir` under Identity changes
 // nothing — so under that exemption every direction `dir` builds is bit-exact,
 // and the CROSS product of two such directions (a plane's own outward normal,
-// `addPrismFaces`/`addRevolveFaces`) is a cross product of standard basis
+// the prism and revolve carrier builders) is a cross product of standard basis
 // vectors, itself exact. Off that exemption, the charge is sound but not
 // claimed tight.
 func DirRoundAllow(frame r3.Frame, xform r3.Transform, maxInputAbs float64) float64 {

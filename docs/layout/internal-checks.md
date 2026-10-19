@@ -49,7 +49,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/thickenaxis/` | Holds certified section pairs, checks offsets, ribbons and interval clearance, and builds the circle and axis offset sections of a prism sheet. See surface §16, §17. |
 | `internal/thickenbuild/` | Computes Thicken amounts and certified sections, then builds revolve and chain solids from admitted sheets. See surface §16. |
 | `internal/revolvesurvey/` | Revolve wall, undercut and concave-radius readers. See verification §6. |
-| `internal/wallsurvey/` | Prism and revolve wall record preparation and bounded readings, and the revolve clearance carrier input. See verification §6, clearance §2. |
+| `internal/wallsurvey/` | Prism and revolve wall record preparation and bounded readings; revolve clearance carrier construction and bounds. See verification §6, clearance §2. |
 | `internal/radiussurvey/` | Prism, revolve, cup and BRep concave-radius readings. See verification §6. |
 | `internal/motionbound/` | Motion variants, exact parameters, poses, box bounds, pair certificates, record radii, overlap transfer and sweeps. |
 | `internal/motionrun/` | Static mover/stationary pair validity, swept-box exclusion and sheet classification over topology nodes. See motion-check §2–§6. |

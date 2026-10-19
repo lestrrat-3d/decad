@@ -51,7 +51,7 @@ func requireGapEncloses(t *testing.T, gap decad.Measurement, truth *big.Rat) {
 // 1.15e-10 off the truth with a bound of about 6e-11, which is only the
 // angular term. A half or full turn's angular term (about 1.3e-10 and
 // 2.6e-10 here) happened to cover the same rounding before the charge, so
-// neither isolates it. Dropping the charge from addRevolveFaces turns both
+// neither isolates it. Dropping the charge from the revolve carrier builder turns both
 // subtests red again.
 func TestClearanceRevolveAxisReexpressionContainsTruth(t *testing.T) {
 	t.Parallel()

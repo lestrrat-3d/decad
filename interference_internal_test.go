@@ -19,6 +19,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
+	"github.com/lestrrat-3d/decad/internal/wallsurvey"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 
@@ -617,7 +618,7 @@ func TestAddRevolveFacesCancellationReachesRevolveLoops(t *testing.T) {
 		},
 		ErrFn: func() error { return nil },
 	}
-	_, err := (&bodyGeom{}).addRevolveFaces(budget, revolvePayload{
+	_, _, err := wallsurvey.BuildRevolveClearanceCarriers(budget, revolvePayload{
 		Profile: profileRecord{Outer: loopRecord{}},
 		Ax:      axisFrame{DU: 1},
 	})
@@ -647,7 +648,7 @@ func TestAddRevolveFacesPreservesMeridianErrorMapping(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			ok, err := (&bodyGeom{}).addRevolveFaces(proofbound.NewWorkBudget(t.Context()), revolvePayload{
+			_, ok, err := wallsurvey.BuildRevolveClearanceCarriers(proofbound.NewWorkBudget(t.Context()), revolvePayload{
 				Profile: profileRecord{Outer: loopRecord{Segments: []curveSegment{tc.seg}}},
 				Ax:      axisFrame{DU: 1},
 			})

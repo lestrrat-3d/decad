@@ -131,8 +131,9 @@ its own builder would otherwise hand back.
 
 **A revolve's carriers are measured against the record they were
 re-expressed from** (`clearance.RevolveCarrierResult`'s `AxisGap`,
-`internal/clearance/revolve_axis_gap.go`). `addRevolveFaces` builds every
-carrier from the walk's float axis coordinates (z, ρ): a float
+`internal/clearance/revolve_axis_gap.go`).
+`wallsurvey.BuildRevolveClearanceCarriers` builds every carrier from the
+walk's float axis coordinates (z, ρ): a float
 re-expression of the recorded plane-local point that rounds, snaps an
 endpoint within the contact tolerance onto the axis, and reads an arc whose
 centre is that close to the axis as a sphere centred on it. Each carrier is
@@ -154,8 +155,8 @@ the exact cosine and sine of the held angle the walk subtracted, plus the
 radius times the exact angle by which the carrier's rounded meridian window
 misses the recorded arc's ends; a whole circle pairs at any phase and takes
 an exactly unit axis direction as its own rotation. A partial sweep's caps are
-compared through their region elements in the same form. `addRevolveFaces`
-adds the largest of these to both `bodyGeom.delta` and its carrier part, and
+compared through their region elements in the same form. The revolve carrier
+builder adds the largest of these to both `bodyGeom.delta` and its carrier part, and
 adds nothing when it is zero, which it is for an integer profile about a
 coordinate axis. The junction vertices and the `Circle3`/`Arc3` edges the
 kernel reads through `newCEdge` are built from the same walk values, so they
@@ -196,10 +197,11 @@ open or closed); a placement's own widened vertex bound (`internal/stitchrecord/
 `RigidRoundAllow`) or a certificate weld's own nonzero class bound no longer
 refuses it. Instead, `newBodyGeomBudget` charges the body's own largest
 proven vertex bound into `bodyGeom.delta` (`stitchweld.MaxBound`,
-`stitch.go`), the same per-body displacement `addPrismFaces` and
-`addRevolveFaces` charge their own frame/placement rounding, axial or angular
-displacement, per-face tilt and, for a revolve, the carriers' axis gap into, and `clearancePair` widens the
-proven interval by it once candidate aggregation completes (§5). A placed or
+`stitch.go`). The prism and revolve carrier builders likewise charge their
+own frame/placement rounding, axial or angular displacement, per-face tilt
+and, for a revolve, the carriers' axis gap into that per-body displacement.
+`clearancePair` widens the proven interval by it once candidate aggregation
+completes (§5). A placed or
 certificate-welded stitched solid therefore reads a real, bounded `Clearance`
 row instead of leaving the pair undecided.
 
