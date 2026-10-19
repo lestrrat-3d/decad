@@ -209,4 +209,14 @@ func TestLoftQuarterJunctionOneRealCase(t *testing.T) {
 	if !errors.Is(err, context.Canceled) || certified {
 		t.Fatalf("canceled source: certified=%t err=%v", certified, err)
 	}
+	if err := Remove(prism); err != nil {
+		t.Fatal(err)
+	}
+	for _, operands := range [][2]*Body{{prism, loft}, {loft, prism}} {
+		_, certified, err := certifyLoftQuarterSourceEnvelope(ctx,
+			operands[0], operands[1], proofbound.NewWorkBudget(ctx))
+		if err != nil || certified {
+			t.Fatalf("retired source: certified=%t err=%v", certified, err)
+		}
+	}
 }

@@ -18,7 +18,7 @@ type ProfileLineage struct {
 // output walk partitions its raw edge ranges with identical entities and ends.
 func SplitRunsWithLineage(budget *proofbound.WorkBudget,
 	raw []*sketch.Profile) ([]*sketch.Profile, []ProfileLineage, bool, error) {
-	split, ok, err := SplitRuns(budget, raw)
+	split, ok, err := splitRuns(budget, raw, true)
 	if err != nil || !ok {
 		return nil, nil, ok, err
 	}

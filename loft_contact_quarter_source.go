@@ -30,6 +30,9 @@ func certifyLoftQuarterSourceEnvelope(ctx context.Context, first, second *Body,
 		first.n.Doc == nil || first.n.Doc != second.n.Doc {
 		return no, false, nil
 	}
+	if !first.n.Doc.IsLive(&first.n) || !first.n.Doc.IsLive(&second.n) {
+		return no, false, nil
+	}
 	prism, loft := first, second
 	if _, ok := prism.n.Payload.(prismPayload); !ok {
 		prism, loft = second, first
