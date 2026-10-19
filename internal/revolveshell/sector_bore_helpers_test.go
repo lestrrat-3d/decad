@@ -1,16 +1,17 @@
-package decad
+package revolveshell_test
 
 import (
 	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/revolveshell"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
 
 func TestRevolveSectorStraightBandCrossIsStrictAtBothRadii(t *testing.T) {
-	outer, capPoint := planePoint{U: 5, V: 2.5}, planePoint{U: 6, V: 1.5}
+	outer, capPoint := sectionrecord.Point2{U: 5, V: 2.5}, sectionrecord.Point2{U: 6, V: 1.5}
 	cross, ok := revolveshell.RevolveSectorStraightBandCross(outer, capPoint, 2)
 	require.True(t, ok)
 	require.Equal(t, 5.5, cross.X)

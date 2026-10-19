@@ -165,7 +165,9 @@ Public serial and variadic `Union` use the same certified section-ring and
 sector-cap builder. The root routes certify the sources and collect the placed
 copies; `internal/revolveshell` traces the exterior loop, builds, refines and
 audits the joined body, and attaches its join record. Public `Cut` uses the
-joined section record for a centered, spanning cylinder. The legacy six-line
-join and bore constructors are absent. A section with unsupported source
-geometry or an unproved contact refuses. Full gear acceptance tests run in
-`decad-gallery`; Decad tests use small Revolve and point-Loft producers.
+joined section record for a centered, spanning cylinder; the Boolean dispatch
+hands both operand nodes to `internal/revolveshell`, which admits the cylinder
+and builds the annular or straight-band result. The legacy six-line join and
+bore constructors are absent. A section with unsupported source geometry or an
+unproved contact refuses. Full gear acceptance tests run in `decad-gallery`;
+Decad tests use small Revolve and point-Loft producers.

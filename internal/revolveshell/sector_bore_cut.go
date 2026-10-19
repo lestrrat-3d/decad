@@ -1,4 +1,4 @@
-package decad
+package revolveshell
 
 import (
 	"context"
@@ -6,37 +6,43 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/circularbounds"
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
-	"github.com/lestrrat-3d/decad/internal/revolveshell"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
+	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
-// tryRevolveSectorCylinderCut handles only a complete coaxial cylinder across
-// an authenticated Revolve/point-Loft join. Other booleans keep their usual
-// dispatch. This route runs before the general faceted contact-tolerance gate.
-func tryRevolveSectorCylinderCut(ctx context.Context, op meshbool.OperationKind,
-	d *Document, ref producerID, target, tool *Body) (*Body, bool, error) {
+// SectorCylinderCut handles only a complete coaxial cylinder across an
+// authenticated Revolve/point-Loft join and builds the result in env. It
+// reports false, with no error, for any other operation or operand pair, so
+// other booleans keep their usual dispatch. This route runs before the
+// general faceted contact-tolerance gate.
+func SectorCylinderCut(ctx context.Context, op meshbool.OperationKind, env topo.Env,
+	target, tool *topo.Body) (*topo.Body, bool, error) {
 	if op != meshbool.OpCut {
 		return nil, false, nil
 	}
-	joined, ok := target.n.Payload.(facetedPayload)
+	joined, ok := target.Payload.(facetedrecord.Payload)
 	if !ok || joined.RevolveLoftJoin == nil {
 		return nil, false, nil
 	}
-	caps, ok := revolveshell.RevolveSectorBoreCapRecord(joined)
+	caps, ok := RevolveSectorBoreCapRecord(joined)
 	if !ok {
-		return nil, true, fmt.Errorf("%w: joined section has no complete planar cap-ring record", ErrUnsupported)
+		return nil, true, fmt.Errorf("%w: joined section has no complete planar cap-ring record", decaderr.ErrUnsupported)
 	}
-	prism, ok := tool.n.Payload.(prismPayload)
+	prism, ok := tool.Payload.(prismrecord.Payload)
 	if !ok || prism.SurfaceResult || prism.Xform != r3.Identity() ||
 		prism.SectionDelta != 0 || prism.Z0Delta != 0 || prism.Z1Delta != 0 ||
 		prism.Frame.U() != (r3.Vec{Y: 1}) || prism.Frame.V() != (r3.Vec{Z: 1}) ||
@@ -45,8 +51,8 @@ func tryRevolveSectorCylinderCut(ctx context.Context, op meshbool.OperationKind,
 		len(prism.Profile.Holes) != 0 || len(prism.Profile.Outer.Segments) != 1 {
 		return nil, false, nil
 	}
-	circle, ok := prism.Profile.Outer.Segments[0].(circleSeg)
-	if !ok || circle.Center != (planePoint{}) ||
+	circle, ok := prism.Profile.Outer.Segments[0].(sectionrecord.CircleSeg)
+	if !ok || circle.Center != (sectionrecord.Point2{}) ||
 		!((circle.TStart == 0 && circle.TEnd == 1) ||
 			(circle.TStart == 1 && circle.TEnd == 0)) {
 		return nil, false, nil
@@ -58,69 +64,78 @@ func tryRevolveSectorCylinderCut(ctx context.Context, op meshbool.OperationKind,
 	origin := prism.Frame.Origin()
 	if !proofbound.FiniteVec(origin) ||
 		!proofbound.FiniteVec(r3.Vec{X: prism.Z0, Y: prism.Z1, Z: radius}) || radius <= 0 {
-		return nil, true, fmt.Errorf("%w: bore has no finite positive radius", ErrUnsupported)
+		return nil, true, fmt.Errorf("%w: bore has no finite positive radius", decaderr.ErrUnsupported)
 	}
 	start := new(big.Rat).Add(proofarith.FloatRat(origin.X), proofarith.FloatRat(prism.Z0))
 	end := new(big.Rat).Add(proofarith.FloatRat(origin.X), proofarith.FloatRat(prism.Z1))
 	if start.Cmp(proofarith.FloatRat(caps.LowX)) >= 0 ||
 		end.Cmp(proofarith.FloatRat(caps.HighX)) <= 0 {
-		return nil, true, fmt.Errorf("%w: cylinder does not span both section caps", ErrUnsupported)
+		return nil, true, fmt.Errorf("%w: cylinder does not span both section caps", decaderr.ErrUnsupported)
 	}
-	var wall *Face
-	for _, face := range tool.Faces() {
-		for _, origin := range face.Origins() {
+	var wall *topo.Face
+	for _, face := range topobuild.Faces(tool) {
+		for _, origin := range face.Origins {
 			if origin.Role != prismrecord.OuterFirstSideRole {
 				continue
 			}
 			if wall != nil {
-				return nil, true, fmt.Errorf("%w: cylinder wall is ambiguous", ErrUnsupported)
+				return nil, true, fmt.Errorf("%w: cylinder wall is ambiguous", decaderr.ErrUnsupported)
 			}
-			if _, ok := face.n.Surface.(surfacegeom.Cylinder); !ok {
-				return nil, true, fmt.Errorf("%w: tool has no cylindrical side", ErrUnsupported)
+			if _, ok := face.Surface.(surfacegeom.Cylinder); !ok {
+				return nil, true, fmt.Errorf("%w: tool has no cylindrical side", decaderr.ErrUnsupported)
 			}
 			wall = face
 		}
 	}
 	if wall == nil {
-		return nil, true, fmt.Errorf("%w: cylinder wall is missing", ErrUnsupported)
+		return nil, true, fmt.Errorf("%w: cylinder wall is missing", decaderr.ErrUnsupported)
 	}
+	wallGroup := facetedrecord.Group{Origins: append([]provenance.Ref(nil), wall.Origins...),
+		Surface: wall.Surface, NormalBound: wall.NormalBound, Reversed: !wall.Reversed}
 	if radius < min(caps.LowRadius, caps.HighRadius) {
-		return buildRevolveSectorAnnularCut(ctx, d, ref, joined, caps, radius, wall)
-	}
-	if radius > caps.LowRadius && radius < caps.HighRadius {
-		wallGroup := facetedrecord.Group{Origins: wall.originRefs(),
-			Surface: wall.n.Surface, NormalBound: wall.n.NormalBound, Reversed: !wall.n.Reversed}
-		result, err := revolveshell.BuildSectorBandCut(ctx, joined, caps, radius, wallGroup)
+		result, err := buildSectorAnnularCut(ctx, joined, caps, radius, wallGroup)
 		if err != nil {
 			return nil, true, err
 		}
-		body, err := bodyResult(facetedrecord.Build(ctx, envOf(documentNode(d), ref), result))
+		body, err := facetedrecord.Build(ctx, env, result)
 		return body, true, err
 	}
-	return nil, true, fmt.Errorf("%w: bore has no certified section crossing", ErrUnsupported)
+	if radius > caps.LowRadius && radius < caps.HighRadius {
+		result, err := BuildSectorBandCut(ctx, joined, caps, radius, wallGroup)
+		if err != nil {
+			return nil, true, err
+		}
+		body, err := facetedrecord.Build(ctx, env, result)
+		return body, true, err
+	}
+	return nil, true, fmt.Errorf("%w: bore has no certified section crossing", decaderr.ErrUnsupported)
 }
 
-func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producerID,
-	joined facetedPayload, caps revolveshell.SectorBoreCaps, radius float64, wall *Face) (*Body, bool, error) {
+// buildSectorAnnularCut replaces both complete axis cap fans of joined with
+// annuli around a bore of radius strictly inside both cap outer radii, and
+// adds the bore's wall as wallGroup.
+func buildSectorAnnularCut(ctx context.Context, joined facetedrecord.Payload, caps SectorBoreCaps,
+	radius float64, wallGroup facetedrecord.Group) (facetedrecord.Payload, error) {
+	var empty facetedrecord.Payload
 	ring := joined.RevolveLoftJoin.CapRing
 	n := len(ring.Angles)
-	if len(joined.Tris) > revolveshell.SectorBoreMaxAuditTriangles-4*n ||
+	if len(joined.Tris) > SectorBoreMaxAuditTriangles-4*n ||
 		radius >= min(caps.LowRadius, caps.HighRadius) {
-		return nil, true, fmt.Errorf("%w: bore does not fit inside both radial caps", ErrUnsupported)
+		return empty, fmt.Errorf("%w: bore does not fit inside both radial caps", decaderr.ErrUnsupported)
 	}
 	maxStep, ok := revolvemesh.SectorRingMaxStep(ring.Angles)
 	if !ok {
-		return nil, true, fmt.Errorf("%w: joined section ring has no bounded station plan", ErrUnsupported)
+		return empty, fmt.Errorf("%w: joined section ring has no bounded station plan", decaderr.ErrUnsupported)
 	}
 	inner, boreBound, err := circularbounds.BoreRingAtStep(ctx, radius, ring.Angles, maxStep)
 	if err != nil {
-		return nil, true, err
+		return empty, err
 	}
 	if proofbound.IsNonFinite(boreBound) || boreBound >= radius ||
 		max(joined.MeshBound, boreBound) > 0.1 ||
 		proofbound.AbsSumUpper(radius, joined.MeshBound, boreBound) >=
 			min(caps.LowRadius, caps.HighRadius) {
-		return nil, true, fmt.Errorf("%w: bore has no separate cap ring", ErrUnsupported)
+		return empty, fmt.Errorf("%w: bore has no separate cap ring", decaderr.ErrUnsupported)
 	}
 	clearance := proofbound.AbsSumUpper(radius, joined.MeshBound, boreBound)
 	section := joined.RevolveLoftJoin.Certificate.Section
@@ -129,7 +144,7 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 			continue
 		}
 		if min(span.Start.V, span.End.V) <= clearance {
-			return nil, true, fmt.Errorf("%w: section meridian may enter the bore", ErrUnsupported)
+			return empty, fmt.Errorf("%w: section meridian may enter the bore", decaderr.ErrUnsupported)
 		}
 	}
 	lowPos, highPos := make(map[int]int, n), make(map[int]int, n)
@@ -137,27 +152,27 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 	for i := range n {
 		for _, v := range [...]int{caps.LowOuter[i], caps.HighOuter[i]} {
 			if v < 0 || v >= len(joined.Verts) || used[v] {
-				return nil, true, fmt.Errorf("%w: cap ring repeats a vertex", ErrUnsupported)
+				return empty, fmt.Errorf("%w: cap ring repeats a vertex", decaderr.ErrUnsupported)
 			}
 			used[v] = true
 		}
 		lowPos[caps.LowOuter[i]], highPos[caps.HighOuter[i]] = i, i
 	}
 	lowSeen, highSeen := make([]bool, n), make([]bool, n)
-	mesh := &joinedMesh{Verts: append([]r3.Vec(nil), joined.Verts...),
-		Groups: append([]facetGroup(nil), joined.Groups...)}
+	mesh := &facetedrecord.JoinedMesh{Verts: append([]r3.Vec(nil), joined.Verts...),
+		Groups: append([]facetedrecord.Group(nil), joined.Groups...)}
 	for i, tri := range joined.Tris {
 		if err := ctx.Err(); err != nil {
-			return nil, true, err
+			return empty, err
 		}
 		cell, fan, err := revolvemesh.SectorCapFan(tri, joined.Src[i], caps.LowAxis,
 			caps.LowGroup, lowPos, n)
 		if err != nil {
-			return nil, true, err
+			return empty, err
 		}
 		if fan {
 			if lowSeen[cell] {
-				return nil, true, fmt.Errorf("%w: low cap repeats a cell", ErrUnsupported)
+				return empty, fmt.Errorf("%w: low cap repeats a cell", decaderr.ErrUnsupported)
 			}
 			lowSeen[cell] = true
 			continue
@@ -165,28 +180,27 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 		cell, fan, err = revolvemesh.SectorCapFan(tri, joined.Src[i], caps.HighAxis,
 			caps.HighGroup, highPos, n)
 		if err != nil {
-			return nil, true, err
+			return empty, err
 		}
 		if fan {
 			if highSeen[cell] {
-				return nil, true, fmt.Errorf("%w: high cap repeats a cell", ErrUnsupported)
+				return empty, fmt.Errorf("%w: high cap repeats a cell", decaderr.ErrUnsupported)
 			}
 			highSeen[cell] = true
 			continue
 		}
-		if !revolveshell.RevolveSectorTriangleClear(tri, joined.Verts, clearance) {
-			return nil, true, fmt.Errorf("%w: untouched face may enter the bore", ErrUnsupported)
+		if !RevolveSectorTriangleClear(tri, joined.Verts, clearance) {
+			return empty, fmt.Errorf("%w: untouched face may enter the bore", decaderr.ErrUnsupported)
 		}
 		mesh.Add(tri, joined.Src[i])
 	}
 	for i := range n {
 		if !lowSeen[i] || !highSeen[i] {
-			return nil, true, fmt.Errorf("%w: cap fan misses an angular cell", ErrUnsupported)
+			return empty, fmt.Errorf("%w: cap fan misses an angular cell", decaderr.ErrUnsupported)
 		}
 	}
-	wallGroup := len(mesh.Groups)
-	mesh.Groups = append(mesh.Groups, facetGroup{Origins: wall.originRefs(),
-		Surface: wall.n.Surface, NormalBound: wall.n.NormalBound, Reversed: !wall.n.Reversed})
+	wallIndex := len(mesh.Groups)
+	mesh.Groups = append(mesh.Groups, wallGroup)
 	vertexBound := append([]float64(nil), joined.VertexBound...)
 	innerLow, innerHigh := make([]int, n), make([]int, n)
 	for i := range n {
@@ -212,28 +226,28 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 		mesh.Add([3]int{caps.LowOuter[i], innerLow[j], caps.LowOuter[j]}, caps.LowGroup)
 		mesh.Add([3]int{innerHigh[i], caps.HighOuter[i], caps.HighOuter[j]}, caps.HighGroup)
 		mesh.Add([3]int{innerHigh[i], caps.HighOuter[j], innerHigh[j]}, caps.HighGroup)
-		mesh.Add([3]int{innerLow[i], innerHigh[i], innerHigh[j]}, wallGroup)
-		mesh.Add([3]int{innerLow[i], innerHigh[j], innerLow[j]}, wallGroup)
+		mesh.Add([3]int{innerLow[i], innerHigh[i], innerHigh[j]}, wallIndex)
+		mesh.Add([3]int{innerLow[i], innerHigh[j], innerLow[j]}, wallIndex)
 	}
 	if err := tessellation.OrientJoinedMesh(mesh.Verts, mesh.Tris); err != nil {
-		return nil, true, err
+		return empty, err
 	}
 	if err := tessellation.RequireVertexLinks(ctx, len(mesh.Verts), mesh.Tris); err != nil {
-		return nil, true, err
+		return empty, err
 	}
 	if len(mesh.Tris) != len(joined.Tris)+4*n {
-		return nil, true, fmt.Errorf("%w: cap and wall triangle census changed", ErrUnsupported)
+		return empty, fmt.Errorf("%w: cap and wall triangle census changed", decaderr.ErrUnsupported)
 	}
-	patches := revolvemesh.SectorBorePatches(mesh.Src, oldCount, n, false, caps.LowGroup, caps.HighGroup, -1, wallGroup)
+	patches := revolvemesh.SectorBorePatches(mesh.Src, oldCount, n, false, caps.LowGroup, caps.HighGroup, -1, wallIndex)
 	if err := loftmesh.LoftCrossingAuditBoundedProjectedPatchesStreaming(proofbound.NewWorkBudget(ctx),
-		mesh.Verts, mesh.Tris, patches, revolveshell.SectorBoreMaxAuditTriangles,
-		revolveshell.SectorBoreMaxAuditScans); err != nil {
-		return nil, true, err
+		mesh.Verts, mesh.Tris, patches, SectorBoreMaxAuditTriangles,
+		SectorBoreMaxAuditScans); err != nil {
+		return empty, err
 	}
 	height := proofbound.RatFloatUp(new(big.Rat).Sub(
 		proofarith.FloatRat(caps.HighX), proofarith.FloatRat(caps.LowX)))
 	if height <= 0 || proofbound.IsNonFinite(height) {
-		return nil, true, fmt.Errorf("%w: bore has no positive axial span", ErrUnsupported)
+		return empty, fmt.Errorf("%w: bore has no positive axial span", decaderr.ErrUnsupported)
 	}
 	shellArea := proofbound.ProductUpper(
 		proofbound.ProductUpper(2, proofbound.TwoPiUpper()),
@@ -243,18 +257,15 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 	bound := max(joined.MeshBound, boreBound)
 	heldArea, err := proofbound.PerturbedAreaUpperContext(ctx, mesh.Verts, mesh.Tris, bound)
 	if err != nil {
-		return nil, true, err
+		return empty, err
 	}
-	oldArea, err := bodyHandle(joined.RevolveLoftJoin.Blank).Area()
-	if err != nil {
-		return nil, true, err
-	}
+	oldArea := joined.RevolveLoftJoin.Blank.Area
 	wallArea := proofbound.ProductUpper(
 		proofbound.ProductUpper(proofbound.TwoPiUpper(), radius), height)
 	areaSlack := proofbound.AbsSumUpper(joined.AreaSlack, heldArea,
 		oldArea.Value.Base(), oldArea.Bound.Base(), wallArea)
 	if proofbound.IsNonFinite(volumeGap) || proofbound.IsNonFinite(areaSlack) {
-		return nil, true, fmt.Errorf("%w: bore has no finite measure proof", ErrUnsupported)
+		return empty, fmt.Errorf("%w: bore has no finite measure proof", decaderr.ErrUnsupported)
 	}
 	result := joined
 	result.Verts, result.Tris, result.Src, result.Groups = mesh.Verts, mesh.Tris, mesh.Src, mesh.Groups
@@ -262,6 +273,5 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 	result.VolSymDiff, result.AreaSlack = volumeGap, areaSlack
 	result.RevolveLoftJoin = nil
 	result.ContactAudited = true
-	body, err := bodyResult(facetedrecord.Build(ctx, envOf(documentNode(d), ref), result))
-	return body, true, err
+	return result, nil
 }

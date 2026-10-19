@@ -14,7 +14,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/sweepdeparture/` | Exact source-box departure proofs. See multibody §10.2. |
 | `internal/sweepmemo/` | Sweep path replay coverage, pose bits, path memo tables and corner-span hull gaps. See contact-sweep §6–§7 and multibody §10.4. |
 | `internal/revolveaxis/` | Axis frames, walks, side/contact gates, snap and section charges, extent readings, the simple-revolution radial proof, and wall and cap denotations. See evaluator §6. |
-| `internal/revolveshell/` | Surveys shell walls; builds, refines and audits joined Revolve/sector bodies from section rings, sector caps, plans, bounds and meshes; checks contacts and bores; builds the straight-band cylinder Cut mesh and proof. See modify-reach §9.3 and revolve-loft-sector design. |
+| `internal/revolveshell/` | Surveys shell walls; builds, refines and audits joined Revolve/sector bodies from section rings, sector caps, plans, bounds and meshes; admits a centered cylinder Cut of a join and builds its annular or straight-band mesh and proof. See modify-reach §9.3 and revolve-loft-sector design. |
 | `internal/revolveloftfaces/` | Certifies LoftFaces source geometry and Revolve contacts; builds seams, strips, the audited blank-shell mesh with its rays and triangle labels, and vertical-trace paths: ray crossings, held vertices, displacement bounds and wedge splits. See loft-face-sections and revolve-loft-contact-graph. |
 | `internal/revolvemass/` | Revolve moments and centroid bounds. |
 | `internal/revolveangle/` | Exact angle denotations and certified sweep extremes. See evaluator §6 and sweep §3. |
