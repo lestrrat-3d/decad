@@ -44,11 +44,11 @@ func TestCurvedVerticalTraceConsumesLiveGraphAndShell(t *testing.T) {
 	require.NotNil(t, boundGraph)
 	require.NotNil(t, trace)
 	require.Contains(t, trace.cellIDs, selected)
-	require.Len(t, shell.seams, len(boundGraph.runs))
+	require.Len(t, shell.Seams, len(boundGraph.runs))
 	require.Len(t, shell.capRings, len(boundGraph.arcs))
-	require.Len(t, shell.triangleCells, len(shell.mesh.Tris))
-	require.True(t, revolveLoftFacesBlankShellEulerTwo(&shell.mesh))
-	require.Less(t, shell.faceBound, 0.1)
+	require.Len(t, shell.TriangleCells, len(shell.Mesh.Tris))
+	require.True(t, shell.EulerTwo())
+	require.Less(t, shell.FaceBound, 0.1)
 	require.Less(t, trace.loftBound, 0.1)
 	require.Greater(t, len(trace.vertices), 2)
 	require.Len(t, trace.edgeWedges, len(trace.vertices)-1)
@@ -56,12 +56,12 @@ func TestCurvedVerticalTraceConsumesLiveGraphAndShell(t *testing.T) {
 	require.Len(t, trace.vertexRays, len(trace.vertices))
 	seenCells := make(map[revolveloftfaces.ShellTriangleCell]bool)
 	incident := make(map[[2]int][]revolveloftfaces.ShellTriangleCell)
-	for i, tri := range shell.mesh.Tris {
-		cell := shell.triangleCells[i]
+	for i, tri := range shell.Mesh.Tris {
+		cell := shell.TriangleCells[i]
 		require.False(t, seenCells[cell])
 		seenCells[cell] = true
 		require.GreaterOrEqual(t, cell.Ray, 0)
-		require.Less(t, cell.Ray, shell.rayCount)
+		require.Less(t, cell.Ray, shell.RayCount)
 		for side := range 3 {
 			edge := [2]int{tri[side], tri[(side+1)%3]}
 			slices.Sort(edge[:])
@@ -84,15 +84,15 @@ func TestCurvedVerticalTraceConsumesLiveGraphAndShell(t *testing.T) {
 	var capRing *revolveLoftFacesShellCapRing
 	for i := range shell.capRings {
 		candidate := &shell.capRings[i]
-		if candidate.sectionIndex == trace.sectionIndex && candidate.endpointGraphIDs == trace.capIDs {
+		if candidate.Section == trace.sectionIndex && candidate.endpointGraphIDs == trace.capIDs {
 			capRing = candidate
 			break
 		}
 	}
 	require.NotNil(t, capRing)
 	require.Len(t, trace.cellIDs, 3)
-	for endpoint, capVertex := range capRing.endpoints {
-		capRay := slices.Index(capRing.vertices, capVertex)
+	for endpoint, capVertex := range capRing.Endpoints {
+		capRay := slices.Index(capRing.Vertices, capVertex)
 		require.GreaterOrEqual(t, capRay, 0)
 		contacts := make([]int, 0, 2)
 		for i, ray := range trace.vertexRays {
@@ -110,7 +110,7 @@ func TestCurvedVerticalTraceConsumesLiveGraphAndShell(t *testing.T) {
 	}
 	t.Logf("vertical trace: %d cells, %d vertices, bound %.9g mm; shell %d vertices, %d triangles",
 		len(trace.cellIDs), len(trace.vertices), trace.loftBound,
-		len(shell.mesh.Verts), len(shell.mesh.Tris))
+		len(shell.Mesh.Verts), len(shell.Mesh.Tris))
 }
 
 func TestVerticalTraceRefusesChangedSourceAndRayOwners(t *testing.T) {
@@ -133,7 +133,7 @@ func TestVerticalTraceRefusesChangedSourceAndRayOwners(t *testing.T) {
 	}
 	require.NotNil(t, arc)
 	for i := range shell.capRings {
-		if shell.capRings[i].sectionIndex == arc.sectionIndex {
+		if shell.capRings[i].Section == arc.sectionIndex {
 			ring = &shell.capRings[i]
 			break
 		}
@@ -198,10 +198,10 @@ func TestVerticalTraceRefusesChangedSourceAndRayOwners(t *testing.T) {
 
 	capRays := [2]int{-1, -1}
 	for endpoint := range capRays {
-		capRays[endpoint] = slices.Index(ring.vertices, ring.endpoints[endpoint])
+		capRays[endpoint] = slices.Index(ring.Vertices, ring.Endpoints[endpoint])
 		require.GreaterOrEqual(t, capRays[endpoint], 0)
 	}
-	rays := append([]revolveloftfaces.ShellRay(nil), shell.rays...)
+	rays := append([]revolveloftfaces.ShellRay(nil), shell.Rays...)
 	arcHits, hitsOK := revolveloftfaces.VerticalTraceSourceHits(sourcePieces[1], rays, [2]int{-1, -1})
 	require.True(t, hitsOK)
 	require.Greater(t, len(arcHits), 2)
@@ -209,27 +209,27 @@ func TestVerticalTraceRefusesChangedSourceAndRayOwners(t *testing.T) {
 	_, hitsOK = revolveloftfaces.VerticalTraceSourceHits(sourcePieces[1], rays, [2]int{-1, -1})
 	require.False(t, hitsOK, "two ray owners cannot claim the same arc crossing")
 
-	badEndpoints := ring.endpoints
+	badEndpoints := ring.Endpoints
 	badEndpoints[1] = badEndpoints[0]
 	path, built, err := revolveloftfaces.VerticalTracePath(t.Context(), proof.trim.Maps,
-		shell.rays, shell.mesh.Verts, shell.vertexBounds, ring.vertices, badEndpoints,
+		shell.Rays, shell.Mesh.Verts, shell.VertexBounds, ring.Vertices, badEndpoints,
 		ring.arc.circle.radius, sourcePieces)
 	require.NoError(t, err)
 	require.False(t, built, "a repeated cap endpoint cannot start a trace")
 	require.Empty(t, path.Nodes)
 	require.Empty(t, path.Edges)
 	require.Zero(t, path.LoftBound)
-	startRay := shell.rays[capRays[0]]
+	startRay := shell.Rays[capRays[0]]
 	join, _, direction, joined := revolveloftfaces.VerticalTraceJoin(sourcePieces[0], pieces[0].To)
 	require.True(t, joined)
-	moved := shell.mesh.Verts[ring.endpoints[0]]
+	moved := shell.Mesh.Verts[ring.Endpoints[0]]
 	moved.Y++
 	motionBound, bounded := revolveloftfaces.VerticalTraceSegmentBound(proof.trim.Maps, sourcePieces[0],
 		revolveloftfaces.VerticalTraceHit{Piece: 0, Ray: capRays[0],
 			Lo: pieces[0].cell.upper.Root.Lo, Hi: pieces[0].cell.upper.Root.Hi},
 		revolveloftfaces.VerticalTraceHit{Piece: 0, Ray: -1,
 			Lo: pieces[0].To, Hi: pieces[0].To},
-		[2]*big.Rat{startRay.Y, startRay.Z}, direction, moved, join, shell.rays)
+		[2]*big.Rat{startRay.Y, startRay.Z}, direction, moved, join, shell.Rays)
 	require.True(t, bounded)
 	require.Greater(t, motionBound, 0.1, "a moved endpoint exceeds the trace fit limit")
 

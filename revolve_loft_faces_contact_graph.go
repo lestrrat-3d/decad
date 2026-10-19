@@ -312,13 +312,13 @@ func (g *revolveLoftFacesContactGraph) bindBlankShell(ctx context.Context,
 	seenStations, seenVertices := make(map[int]bool), make(map[int]bool)
 	for i, stationID := range run.stationIDs {
 		index := shell.seam[i]
-		if index < 0 || index >= len(shell.mesh.Verts) ||
-			index >= len(shell.vertexBounds) || seenStations[stationID] ||
+		if index < 0 || index >= len(shell.Mesh.Verts) ||
+			index >= len(shell.VertexBounds) || seenStations[stationID] ||
 			seenVertices[index] ||
-			shell.mesh.Verts[index] != seam[i].Point ||
-			blankPatch.Vertices[blankPatch.Seam[i]] != shell.mesh.Verts[index] ||
-			loftPatch.Vertices[loftPatch.Seam[i]] != shell.mesh.Verts[index] ||
-			shell.vertexBounds[index] < seam[i].BlankBound {
+			shell.Mesh.Verts[index] != seam[i].Point ||
+			blankPatch.Vertices[blankPatch.Seam[i]] != shell.Mesh.Verts[index] ||
+			loftPatch.Vertices[loftPatch.Seam[i]] != shell.Mesh.Verts[index] ||
+			shell.VertexBounds[index] < seam[i].BlankBound {
 			return false, nil
 		}
 		seenStations[stationID], seenVertices[index] = true, true
@@ -340,19 +340,19 @@ func (g *revolveLoftFacesContactGraph) bindBlankShell(ctx context.Context,
 		}
 		seenArcs[matched] = true
 		ring := &shell.capRings[matched]
-		if ring.sectionIndex != event.sectionIndex || ring.ties == nil ||
+		if ring.Section != event.sectionIndex || ring.ties == nil ||
 			event.endpointIDs[0] == event.endpointIDs[1] ||
 			event.endpointCellIDs[0] == event.endpointCellIDs[1] {
 			return false, nil
 		}
 		for endpoint, cellID := range event.endpointCellIDs {
-			index := ring.endpoints[endpoint]
+			index := ring.Endpoints[endpoint]
 			if cellID < 0 || cellID >= len(g.cells) ||
-				index < 0 || index >= len(shell.mesh.Verts) ||
-				index >= len(shell.vertexBounds) ||
+				index < 0 || index >= len(shell.Mesh.Verts) ||
+				index >= len(shell.VertexBounds) ||
 				seenEndpoints[index] ||
-				shell.mesh.Verts[index] != ring.endpointProof[endpoint].point ||
-				shell.vertexBounds[index] < ring.endpointProof[endpoint].blankBound ||
+				shell.Mesh.Verts[index] != ring.endpointProof[endpoint].point ||
+				shell.VertexBounds[index] < ring.endpointProof[endpoint].blankBound ||
 				!g.endpointCellMatches(event, ring, endpoint, cellID) {
 				return false, nil
 			}

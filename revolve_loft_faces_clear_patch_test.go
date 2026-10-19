@@ -19,10 +19,10 @@ func TestCurvedClearPatchCertifiesRealTrimmedTool(t *testing.T) {
 	classifier, built, err := newRevolveLoftFacesClearPatchContext(t.Context(), source, units.Millimeters(0.1))
 	require.NoError(t, err)
 	require.True(t, built)
-	require.NotEmpty(t, classifier.shell.mesh.Tris)
+	require.NotEmpty(t, classifier.shell.Mesh.Tris)
 	require.NotEmpty(t, classifier.tool.n.Triangles)
 	index := -1
-	for i := range classifier.shell.mesh.Tris {
+	for i := range classifier.shell.Mesh.Tris {
 		location, certified, checkErr := classifier.classify(t.Context(), i)
 		require.NoError(t, checkErr)
 		if certified {
@@ -32,9 +32,9 @@ func TestCurvedClearPatchCertifiesRealTrimmedTool(t *testing.T) {
 		}
 	}
 	require.GreaterOrEqual(t, index, 0)
-	seamVertex := classifier.shell.seams[0][len(classifier.shell.seams[0])/2]
+	seamVertex := classifier.shell.Seams[0][len(classifier.shell.Seams[0])/2]
 	seamTriangle := -1
-	for i, tri := range classifier.shell.mesh.Tris {
+	for i, tri := range classifier.shell.Mesh.Tris {
 		if slices.Contains(tri[:], seamVertex) {
 			seamTriangle = i
 			break
@@ -57,7 +57,7 @@ func TestCurvedClearPatchRefusesUnprovedClaims(t *testing.T) {
 	require.True(t, ok)
 	shell, tool := classifier.shell, classifier.tool
 	index := -1
-	for i := range shell.mesh.Tris {
+	for i := range shell.Mesh.Tris {
 		location, certified, checkErr := classifier.classify(t.Context(), i)
 		require.NoError(t, checkErr)
 		if certified {
@@ -134,17 +134,17 @@ func TestCurvedClearPatchRefusesUnprovedClaims(t *testing.T) {
 		refuses(t, classifier)
 	})
 	t.Run("changed owned shell vertex after context", func(t *testing.T) {
-		vertex := shell.mesh.Tris[index][0]
-		original := shell.mesh.Verts[vertex]
-		shell.mesh.Verts[vertex].X += 1
-		defer func() { shell.mesh.Verts[vertex] = original }()
+		vertex := shell.Mesh.Tris[index][0]
+		original := shell.Mesh.Verts[vertex]
+		shell.Mesh.Verts[vertex].X += 1
+		defer func() { shell.Mesh.Verts[vertex] = original }()
 		refuses(t, classifier)
 	})
 	t.Run("understated owned shell bound after context", func(t *testing.T) {
-		original := shell.faceBound
+		original := shell.FaceBound
 		require.Positive(t, original)
-		shell.faceBound = math.Nextafter(original, 0)
-		defer func() { shell.faceBound = original }()
+		shell.FaceBound = math.Nextafter(original, 0)
+		defer func() { shell.FaceBound = original }()
 		refuses(t, classifier)
 	})
 	t.Run("changed cached facet", func(t *testing.T) {
@@ -170,32 +170,32 @@ func TestCurvedClearPatchRefusesUnprovedClaims(t *testing.T) {
 	})
 	t.Run("small face bound", func(t *testing.T) {
 		changed := *shell
-		changed.faceBound = 0
+		changed.FaceBound = 0
 		modified := *classifier
 		modified.shell = &changed
 		refuses(t, &modified)
 	})
 	t.Run("wrong triangle provenance", func(t *testing.T) {
 		changed := *shell
-		changed.triangleCells = slices.Clone(shell.triangleCells)
-		changed.triangleCells[index].Section = len(source.section.Spans)
+		changed.TriangleCells = slices.Clone(shell.TriangleCells)
+		changed.TriangleCells[index].Section = len(source.section.Spans)
 		modified := *classifier
 		modified.shell = &changed
 		refuses(t, &modified)
 	})
 	t.Run("wrong source group", func(t *testing.T) {
 		changed := *shell
-		changed.mesh = shell.mesh
-		changed.mesh.Src = slices.Clone(shell.mesh.Src)
-		changed.mesh.Src[index] = len(shell.mesh.Groups)
+		changed.Mesh = shell.Mesh
+		changed.Mesh.Src = slices.Clone(shell.Mesh.Src)
+		changed.Mesh.Src[index] = len(shell.Mesh.Groups)
 		modified := *classifier
 		modified.shell = &changed
 		refuses(t, &modified)
 	})
 	t.Run("understated corner bound", func(t *testing.T) {
 		changed := *shell
-		changed.vertexBounds = slices.Clone(shell.vertexBounds)
-		changed.vertexBounds[shell.mesh.Tris[index][0]] = shell.faceBound + 1
+		changed.VertexBounds = slices.Clone(shell.VertexBounds)
+		changed.VertexBounds[shell.Mesh.Tris[index][0]] = shell.FaceBound + 1
 		modified := *classifier
 		modified.shell = &changed
 		refuses(t, &modified)

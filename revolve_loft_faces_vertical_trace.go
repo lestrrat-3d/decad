@@ -5,12 +5,8 @@ import (
 	"math/big"
 	"slices"
 
-	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/loftface"
-	"github.com/lestrrat-3d/decad/internal/loftmesh"
-	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
-	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -247,8 +243,8 @@ func revolveLoftFacesInsertVerticalTrace(ctx context.Context,
 ) (*revolveLoftFacesVerticalTrace, bool, error) {
 	if ctx == nil || proof == nil || shell == nil || graph == nil ||
 		selectedCellID < 0 || selectedCellID >= len(graph.cells) ||
-		len(shell.triangleCells) != len(shell.mesh.Tris) ||
-		len(shell.rays) != shell.rayCount {
+		len(shell.TriangleCells) != len(shell.Mesh.Tris) ||
+		len(shell.Rays) != shell.RayCount {
 		return nil, false, nil
 	}
 	current, err := revolveLoftFacesContactGraphCurrent(ctx, graph)
@@ -283,7 +279,7 @@ func revolveLoftFacesInsertVerticalTrace(ctx context.Context,
 	}
 	for i := range shell.capRings {
 		candidate := &shell.capRings[i]
-		if candidate.sectionIndex == event.sectionIndex &&
+		if candidate.Section == event.sectionIndex &&
 			candidate.endpointGraphIDs == event.endpointIDs {
 			if ring != nil {
 				return nil, false, nil
@@ -317,21 +313,21 @@ func revolveLoftFacesInsertVerticalTrace(ctx context.Context,
 	if !selectedInChain {
 		return nil, false, nil
 	}
-	if proof.trim == nil || len(ring.occupied) < 2 {
+	if proof.trim == nil || len(ring.Occupied) < 2 {
 		return nil, false, nil
 	}
 	working := *shell
-	working.mesh.Tris = slices.Clone(shell.mesh.Tris)
-	working.mesh.Src = slices.Clone(shell.mesh.Src)
-	working.mesh.Groups = slices.Clone(shell.mesh.Groups)
-	working.triangleCells = slices.Clone(shell.triangleCells)
-	path, built, err := revolveloftfaces.VerticalTracePath(ctx, proof.trim.Maps, working.rays,
-		slices.Clone(shell.mesh.Verts), slices.Clone(shell.vertexBounds),
-		ring.vertices, ring.endpoints, ring.arc.circle.radius, sourcePieces)
+	working.Mesh.Tris = slices.Clone(shell.Mesh.Tris)
+	working.Mesh.Src = slices.Clone(shell.Mesh.Src)
+	working.Mesh.Groups = slices.Clone(shell.Mesh.Groups)
+	working.TriangleCells = slices.Clone(shell.TriangleCells)
+	path, built, err := revolveloftfaces.VerticalTracePath(ctx, proof.trim.Maps, working.Rays,
+		slices.Clone(shell.Mesh.Verts), slices.Clone(shell.VertexBounds),
+		ring.Vertices, ring.Endpoints, ring.arc.circle.radius, sourcePieces)
 	if err != nil || !built {
 		return nil, false, err
 	}
-	working.mesh.Verts, working.vertexBounds = path.Verts, path.VertexBounds
+	working.Mesh.Verts, working.VertexBounds = path.Verts, path.VertexBounds
 	trace := &revolveLoftFacesVerticalTrace{
 		sectionIndex: event.sectionIndex, capIDs: event.endpointIDs,
 		vertices: make([]int, len(path.Nodes)), vertexRays: make([]int, len(path.Nodes)),
@@ -350,40 +346,19 @@ func revolveLoftFacesInsertVerticalTrace(ctx context.Context,
 		trace.edgeCellIDs[i] = pieces[edge.Piece].cellID
 	}
 	tris, src, cells, built, err := revolveloftfaces.VerticalTraceSplitWedges(ctx,
-		&working.mesh, working.sectionRings, working.rayCount, ring.vertices,
-		event.sectionIndex, path.Nodes, path.Edges, working.triangleCells)
+		&working.Mesh, working.SectionRings, working.RayCount, ring.Vertices,
+		event.sectionIndex, path.Nodes, path.Edges, working.TriangleCells)
 	if err != nil || !built {
 		return nil, false, err
 	}
-	working.mesh.Tris, working.mesh.Src, working.triangleCells = tris, src, cells
-	if len(working.triangleCells) != len(working.mesh.Tris) ||
-		!revolveLoftFacesBlankShellEulerTwo(&working.mesh) {
+	working.Mesh.Tris, working.Mesh.Src, working.TriangleCells = tris, src, cells
+	if len(working.TriangleCells) != len(working.Mesh.Tris) ||
+		!working.EulerTwo() {
 		return nil, false, err
 	}
-	maxBound := 0.0
-	for _, bound := range working.vertexBounds {
-		if proofbound.IsNonFinite(bound) || bound < 0 {
-			return nil, false, nil
-		}
-		maxBound = max(maxBound, bound)
-	}
-	working.faceBound = proofbound.AbsSumUpper(working.chordBound, maxBound)
-	if proofbound.IsNonFinite(working.faceBound) || working.faceBound >= 0.1 {
-		return nil, false, nil
-	}
-	if err := tessellation.OrientJoinedMesh(working.mesh.Verts, working.mesh.Tris); err != nil {
+	audited, err := working.Audit(ctx, 0.1)
+	if err != nil || !audited {
 		return nil, false, err
-	}
-	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx),
-		working.mesh.Verts, working.mesh.Tris, len(working.mesh.Tris), 1<<20); err != nil {
-		return nil, false, err
-	}
-	audit, err := facetproof.AuditFacetedMesh(ctx, working.mesh.Verts, working.mesh.Tris)
-	if err != nil {
-		return nil, false, err
-	}
-	if audit == nil || len(audit.Members) != 1 || audit.CompVol[0].Sign() <= 0 {
-		return nil, false, nil
 	}
 	*shell = working
 	return trace, true, nil
