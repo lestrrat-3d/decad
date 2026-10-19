@@ -1,4 +1,4 @@
-package decad
+package spiralsector
 
 import (
 	"context"
@@ -7,20 +7,25 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/spiralsector"
+	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 )
 
-func spiralBlankFaceGroup(blank *Body, source *spiralBlankSource, edge int) int {
+// blankFaceGroup returns the index, in blank's face order, of the one face
+// whose origins carry the Revolve role of the source edge, or -1 when no face
+// or more than one face carries it.
+func blankFaceGroup(blank *topo.Body, source *facetedrecord.SpiralBlankSource, edge int) int {
 	if blank == nil || source == nil || edge < 0 || edge >= len(source.EdgeIndex) {
 		return -1
 	}
 	role := fmt.Sprintf("side(0,%d)", source.EdgeIndex[edge])
 	group := -1
-	for i, face := range blank.Faces() {
-		for _, origin := range face.Origins() {
+	for i, face := range topobuild.Faces(blank) {
+		for _, origin := range face.Origins {
 			if origin.Role == role {
 				if group >= 0 {
 					return -1
@@ -32,24 +37,24 @@ func spiralBlankFaceGroup(blank *Body, source *spiralBlankSource, edge int) int 
 	return group
 }
 
-// spiralHeldBlankCellGraph authenticates one finite straight meridian's
+// HeldBlankCellGraph authenticates one finite straight meridian's
 // actual held Revolve mesh as a complete radial graph. The source matcher
 // establishes the world-X six-line profile; this gate checks the emitted
 // rings and fixed cell diagonal rather than assuming float ring homothety.
-func spiralHeldBlankCellGraph(ctx context.Context, blank *Body, held *meshbool.BoolMesh,
-	source *spiralBlankSource, edge int) (bool, error) {
+func HeldBlankCellGraph(ctx context.Context, blank *topo.Body, held *meshbool.BoolMesh,
+	source *facetedrecord.SpiralBlankSource, edge int) (bool, error) {
 	if ctx == nil || blank == nil || held == nil || source == nil ||
 		edge < 0 || edge >= len(source.EdgeIndex) {
 		return false, nil
 	}
-	group := spiralBlankFaceGroup(blank, source, edge)
+	group := blankFaceGroup(blank, source, edge)
 	if group < 0 || len(held.Src) != len(held.Tris) {
 		return false, nil
 	}
 	var ringX [2]float64
 	var rings [2][]int
 	seenX := map[float64]struct{}{}
-	actual := map[spiralsector.GraphTri]int{}
+	actual := map[GraphTri]int{}
 	for i, tri := range held.Tris {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
@@ -59,7 +64,7 @@ func spiralHeldBlankCellGraph(ctx context.Context, blank *Body, held *meshbool.B
 		if held.Src[i] != group {
 			continue
 		}
-		actual[spiralsector.SortedGraphTri(tri[0], tri[1], tri[2])]++
+		actual[SortedGraphTri(tri[0], tri[1], tri[2])]++
 		for _, index := range tri {
 			if index < 0 || index >= len(held.Verts) {
 				return false, nil
@@ -115,14 +120,12 @@ func spiralHeldBlankCellGraph(ctx context.Context, blank *Body, held *meshbool.B
 			if upperA != upperB {
 				return upperA
 			}
-			return spiralsector.GraphCross(spiralsector.GraphLift(a.Y, a.Z),
-				spiralsector.GraphLift(b.Y, b.Z)).Sign() > 0
+			return GraphCross(GraphLift(a.Y, a.Z), GraphLift(b.Y, b.Z)).Sign() > 0
 		})
 		for i := range rings[k] {
 			a, b := held.Verts[rings[k][i]], held.Verts[rings[k][(i+1)%n]]
-			pa, pb := spiralsector.GraphLift(a.Y, a.Z), spiralsector.GraphLift(b.Y, b.Z)
-			if spiralsector.GraphCross(pa, pb).Sign() <= 0 ||
-				spiralsector.GraphDot(pa, pb).Sign() <= 0 {
+			pa, pb := GraphLift(a.Y, a.Z), GraphLift(b.Y, b.Z)
+			if GraphCross(pa, pb).Sign() <= 0 || GraphDot(pa, pb).Sign() <= 0 {
 				return false, nil
 			}
 		}
@@ -131,33 +134,30 @@ func spiralHeldBlankCellGraph(ctx context.Context, blank *Body, held *meshbool.B
 		j := (i + 1) % n
 		a, b := rings[0][i], rings[1][i]
 		c, d := rings[1][j], rings[0][j]
-		ac := actual[spiralsector.SortedGraphTri(a, b, c)] == 1 &&
-			actual[spiralsector.SortedGraphTri(a, c, d)] == 1
-		bd := actual[spiralsector.SortedGraphTri(a, b, d)] == 1 &&
-			actual[spiralsector.SortedGraphTri(b, c, d)] == 1
+		ac := actual[SortedGraphTri(a, b, c)] == 1 && actual[SortedGraphTri(a, c, d)] == 1
+		bd := actual[SortedGraphTri(a, b, d)] == 1 && actual[SortedGraphTri(b, c, d)] == 1
 		if ac == bd {
 			return false, nil
 		}
 		av, bv, cv, dv := held.Verts[a], held.Verts[b], held.Verts[c], held.Verts[d]
-		if !spiralsector.GraphOrder(spiralsector.GraphLift(av.Y, av.Z),
-			spiralsector.GraphLift(bv.Y, bv.Z), spiralsector.GraphLift(cv.Y, cv.Z),
-			spiralsector.GraphLift(dv.Y, dv.Z), ac) {
+		if !GraphOrder(GraphLift(av.Y, av.Z), GraphLift(bv.Y, bv.Z),
+			GraphLift(cv.Y, cv.Z), GraphLift(dv.Y, dv.Z), ac) {
 			return false, nil
 		}
 	}
 	return true, nil
 }
 
-// spiralHeldBlankRadialAllowance bounds the actual held face's radius at
+// HeldBlankRadialAllowance bounds the actual held face's radius at
 // each X against its exact source meridian. The caller separately proves
-// this face is a full radial graph with spiralHeldBlankCellGraph.
-func spiralHeldBlankRadialAllowance(ctx context.Context, blank *Body,
-	held *meshbool.BoolMesh, source *spiralBlankSource, edge int) (float64, bool, error) {
+// this face is a full radial graph with HeldBlankCellGraph.
+func HeldBlankRadialAllowance(ctx context.Context, blank *topo.Body,
+	held *meshbool.BoolMesh, source *facetedrecord.SpiralBlankSource, edge int) (float64, bool, error) {
 	if ctx == nil || blank == nil || held == nil || source == nil ||
 		edge < 0 || edge >= len(source.EdgeIndex) || len(held.Src) != len(held.Tris) {
 		return 0, false, nil
 	}
-	group := spiralBlankFaceGroup(blank, source, edge)
+	group := blankFaceGroup(blank, source, edge)
 	if group < 0 {
 		return 0, false, nil
 	}
@@ -167,8 +167,8 @@ func spiralHeldBlankRadialAllowance(ctx context.Context, blank *Body,
 	if a.U == z.U {
 		return 0, false, nil
 	}
-	m := lfDiv(lfSub(lfF(z.V), lfF(a.V)), lfSub(lfF(z.U), lfF(a.U)))
-	b := lfSub(lfF(a.V), lfMul(m, lfF(a.U)))
+	m := seamRatDiv(seamRatSub(seamRatF(z.V), seamRatF(a.V)), seamRatSub(seamRatF(z.U), seamRatF(a.U)))
+	b := seamRatSub(seamRatF(a.V), seamRatMul(m, seamRatF(a.U)))
 	limit := new(big.Rat)
 	seen := false
 	for i, tri := range held.Tris {
@@ -189,7 +189,7 @@ func spiralHeldBlankRadialAllowance(ctx context.Context, blank *Body,
 			}
 			points[k] = held.Verts[index]
 		}
-		triangleLimit, ok := spiralsector.TriangleMeridianError(points, m, b)
+		triangleLimit, ok := TriangleMeridianError(points, m, b)
 		if !ok {
 			return 0, false, nil
 		}
