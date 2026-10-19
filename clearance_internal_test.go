@@ -913,7 +913,7 @@ func TestAddPrismFacesOmitsCapsForSurfaceResult(t *testing.T) {
 }
 
 // TestNewBodyGeomRefusesSurfaceResultRevolve is docs/surface-design.md §4.2
-// Table W's partial-sweep row for the clearance kernel: addRevolveFaces
+// Table W's partial-sweep row for the clearance kernel: the revolve carrier builder
 // builds the two cap faces of a partial sweep unconditionally, which is a
 // closed model a surface-result revolve's walls do not have. No caller
 // reaches this today (§9.3 stops a sheet on box separation first), so the

@@ -212,7 +212,7 @@ func FaceFootExtent(f *CFace) float64 {
 }
 
 // PlaneTiltAllow bounds the displacement one rounded carrier PLANE commits
-// across its own extent from its foot f.o. addPrismFaces and addRevolveFaces
+// across its own extent from its foot f.o. The prism and revolve carrier builders
 // build a plane carrier's u, v and outward normal n through the payload's own
 // `dir`-style construction in raw float64 (docs/clearance-design.md §2), so n
 // is not exactly perpendicular to the plane it is meant to describe. For a
@@ -236,8 +236,8 @@ func PlaneTiltAllow(f *CFace, frame r3.Frame, xform r3.Transform) float64 {
 }
 
 // BodyFaceTiltDelta is the worst PlaneTiltAllow over every planar face a
-// body's carrier model built — the one per-body term addPrismFaces and
-// addRevolveFaces fold into bodyGeom.delta beside the point and axial/angular
+// body's carrier model built — the one per-body term the prism and revolve
+// carrier builders fold into bodyGeom.delta beside the point and axial/angular
 // terms (bodyGeom's own doc comment).
 func BodyFaceTiltDelta(faces []*CFace, frame r3.Frame, xform r3.Transform) float64 {
 	best := 0.0

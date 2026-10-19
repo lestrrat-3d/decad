@@ -38,7 +38,7 @@ The rules for rows live in `docs/layout.md`.
 | `contact_sweep_replay.go` | Replay adapters. See contact-sweep §6. |
 | `clearance_cells.go` | Pruned cell walk and face-pair adapter. See clearance §3–§5. |
 | `clearance_tiers.go` | Tier adapters; `vertexTier` passes the shared budget to `internal/clearance/tier` and folds its error/refusal state into the pair. See clearance §3/§6. |
-| `clearance_geom.go` | `bodyGeom`: clearance faces, edges and nesting over `internal/clearance/`. See clearance §2–§3. |
+| `clearance_geom.go` | `bodyGeom`: carrier dispatch, live body topology and nesting over `internal/clearance/` and `internal/wallsurvey/`. See clearance §2–§3. |
 | `point_containment.go` | Public point location and body/face distance through verified meshes. See point-containment design. |
 | `survey.go` | Dispatches wall, undercut and radius readers and adapts their readings to public body and face handles. See verification §6. |
 | `survey_undercut.go` | Folds three-valued undercut readings. |

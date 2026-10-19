@@ -30,13 +30,13 @@ import (
 // delta is a proven upper bound on how far every carrier point, direction and
 // axis this model reads may sit from the exact boundary the body's payload
 // denotes (docs/clearance-design.md §2's payload-adapter displacement,
-// docs/payload-verification-design.md §2.3's delta(X)). addPrismFaces and
-// addRevolveFaces fold in the payload's own frame/placement point-rounding
+// docs/payload-verification-design.md §2.3's delta(X)). The prism and revolve
+// carrier builders fold in the payload's own frame/placement point-rounding
 // (the largest clearance.CFace.LiftRound its carriers recorded, each measured
 // exactly per lifted point, the same charge topology.go's Vertex.Position
 // takes), the payload's own proven axial or angular displacement, and the
 // per-face tilt a rounded carrier normal commits across that face's own extent
-// (clearance.BodyFaceTiltDelta, below); addRevolveFaces adds how far its
+// (clearance.BodyFaceTiltDelta, below); the revolve carrier builder adds how far its
 // carriers sit off the recorded meridian swept about the recorded axis
 // (clearance.RevolveCarrierResult's AxisGap). addStitchFaces folds in the
 // body's own largest proven vertex bound instead. It is exactly zero for an unplaced,
@@ -98,16 +98,22 @@ func newBodyGeomBudget(budget *proofbound.WorkBudget, b *Body) (*bodyGeom, bool,
 		if pl.SurfaceResult {
 			// A revolve sheet reaches no pair today (§9.3 stops it on box
 			// separation before clearancePair ever sees one), but
-			// addRevolveFaces still hands back a closed model for a partial
+			// the revolve carrier builder still hands back a closed model for a partial
 			// sweep: it unconditionally builds the two cap faces
 			// Table W says a surface-result revolve omits. Building that
 			// wrong model now would bless a future caller's clearance against
 			// caps the body does not have, so this arm refuses one outright —
 			// the reject-only answer (CLAUDE.md) where building a model is
-			// not. Only a plain, solid revolve reaches addRevolveFaces.
+			// not. Only a plain, solid revolve reaches the builder.
 			return nil, false, nil
 		}
-		ok, err = g.addRevolveFaces(budget, pl)
+		var built wallsurvey.RevolveClearanceCarriers
+		built, ok, err = wallsurvey.BuildRevolveClearanceCarriers(budget, pl)
+		if ok && err == nil {
+			g.faces = append(g.faces, built.Faces...)
+			g.verts = append(g.verts, built.Vertices...)
+			g.delta, g.carrierDelta = built.Delta, built.CarrierDelta
+		}
 	case brepPayload:
 		var built clearance.BodyCarriers
 		built, ok, err = clearance.BuildBrepBodyCarriers(budget, pl)
@@ -187,67 +193,6 @@ func (g *bodyGeom) addTopology(budget *proofbound.WorkBudget, b *Body) (bool, er
 			return false, nil
 		}
 		g.shellWit = append(g.shellWit, w)
-	}
-	return true, nil
-}
-
-// addRevolveFaces builds the revolved body's faces from its own payload. Its
-// cap planes, clearance.AngWindow and witnesses all read rp.Phi0/rp.Phi1 as the held
-// sweep angle rather than the angle the record denotes, and folds
-// rp.AngularDelta() — scaled by the radial envelope every witness can carry
-// it at, verify_gate.go's own reading of the same displacement — into
-// bodyGeom.delta below, beside the payload's own frame/placement point
-// rounding, the per-face tilt term every plane carrier here can commit
-// (bodyGeom's own doc comment) and how far the carriers sit off the recorded
-// meridian swept about the recorded axis (clearance.RevolveCarrierResult's
-// AxisGap).
-func (g *bodyGeom) addRevolveFaces(budget *proofbound.WorkBudget, rp revolvePayload) (bool, error) {
-	if rp.SectionDelta != 0 {
-		// addPrismFaces' own refusal over the meridian: the carriers would be
-		// exact statements about a section the payload only holds within its
-		// displacement of (docs/surface-intersection-design.md §7.2). No model,
-		// so the pair stays undecided.
-		return false, nil
-	}
-	in, ok, err := wallsurvey.RevolveCarrierInput(budget, rp.Profile, rp.Ax, rp.Lift(), rp.AxisBound(),
-		rp.Xform, rp.Full, rp.Phi0, rp.Phi1)
-	if err != nil || !ok {
-		return false, err
-	}
-	built := clearance.BuildRevolveCarriers(in)
-	g.faces = append(g.faces, built.Faces...)
-	g.verts = append(g.verts, built.Vertices...)
-
-	// g.delta mirrors addPrismFaces' own three terms, over this payload's own
-	// axis-symmetric construction: the exact frame/placement point rounding
-	// every anchor, axis point and witness took through the placed basis
-	// (CFace.LiftRound), the angular
-	// displacement scaled by the radial envelope every such point can carry it
-	// at (the same reading verify_gate.go's own bodyGateDiameter arm takes for
-	// the identical displacement), and the worst per-face tilt a rounded
-	// wallPlane/cap carrier normal commits. It is exactly zero for an
-	// axis-aligned, unplaced, full-turn revolve whose lifts are exact for its
-	// own coordinates, which keeps an ordinary revolve's Clearance rows Exact.
-	pointTerm := clearance.CarrierLiftRound(built.Faces)
-	angularTerm := proofbound.ProductUpper(built.AxisRadiusUpper, rp.AngularDelta())
-	tiltTerm := clearance.BodyFaceTiltDelta(g.faces, rp.Frame, rp.Xform)
-	g.delta = proofbound.AbsSumUpper(pointTerm, angularTerm, tiltTerm)
-	g.carrierDelta = g.delta
-	if rp.Full {
-		// A full turn builds no cap faces and gives every carrier the full
-		// angular window, so the end angles the angular term charges place
-		// only seams and witnesses on the complete surface of revolution.
-		g.carrierDelta = proofbound.AbsSumUpper(pointTerm, tiltTerm)
-	}
-	// The carriers read the walk's float axis coordinates, so each sits off
-	// the record by what the re-expression, an axis snap and the axis's own
-	// error put between them (built.AxisGap). That moves the carrier itself,
-	// so it widens both figures. An absent gap folds nothing: AbsSumUpper
-	// up-rounds every term, zero included, and an exact revolve must read as
-	// it did before the charge existed.
-	if built.AxisGap > 0 {
-		g.delta = proofbound.AbsSumUpper(g.delta, built.AxisGap)
-		g.carrierDelta = proofbound.AbsSumUpper(g.carrierDelta, built.AxisGap)
 	}
 	return true, nil
 }
