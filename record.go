@@ -195,7 +195,6 @@ type (
 	loftFacesToeRecord           = facetedrecord.LoftFacesToeRecord
 	loftFacesTrimRecord          = facetedrecord.LoftFacesTrimRecord
 	loftMirrorCylinderBoreRecord = facetedrecord.LoftMirrorCylinderBoreRecord
-	loftMirrorCylinderJoinRecord = facetedrecord.LoftMirrorCylinderJoinRecord
 	loftMirrorJoinRecord         = facetedrecord.LoftMirrorJoinRecord
 	loftMirrorPlacementRecord    = facetedrecord.LoftMirrorPlacementRecord
 	obliqueBossRecord            = facetedrecord.ObliqueBossRecord

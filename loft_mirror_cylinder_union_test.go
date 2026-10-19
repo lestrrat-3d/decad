@@ -19,15 +19,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestLoftMirrorCylinderLevelsRequireExactMidpoint(t *testing.T) {
-	t.Parallel()
-	require.True(t, loftMirrorCylinderLevels(0, 1, 2))
-	require.True(t, loftMirrorCylinderLevels(-3, -1, 1))
-	require.False(t, loftMirrorCylinderLevels(0, math.Nextafter(1, 2), 2))
-	require.False(t, loftMirrorCylinderLevels(0, 1, math.Nextafter(2, 3)))
-	require.False(t, loftMirrorCylinderLevels(0, math.NaN(), 2))
-}
-
 // teethFixture is the mirrored Union's operands as the chamfer apitest builds
 // them: a centered cylinder blank and the lower tooth pair with two copies
 // turned about Z.
@@ -298,14 +289,14 @@ func TestLoftMirrorCylinderPlaceTeethCancelled(t *testing.T) {
 	ref := f.d.nextProducerID()
 	record := f.pairs[0].n.Payload.(facetedPayload).LoftMirrorJoin
 	lower := record.Lower.Payload.(loftPayload)
-	checked := loftMirrorCylinderCheckPairs(f.d, f.pairs, record, lower.Frame1.Origin().Z)
+	checked := loftcylinder.CheckMirrorPairs(documentNode(f.d), bodyNodes(f.pairs), record, lower.Frame1.Origin().Z)
 	run := func(cancelAt int64, workers int) (int64, []*Body, error) {
 		ctx := &pollCancelContext{Context: t.Context(), cancelAt: cancelAt}
-		teeth, err := loftMirrorCylinderPlaceTeeth(checked.stop, workers, func(i int) (*Body, error) {
-			if checked.motions[i] == r3.Identity() {
+		teeth, err := loftcylinder.PlaceTeeth(checked.Stop, workers, func(i int) (*Body, error) {
+			if checked.Motions[i] == r3.Identity() {
 				return bodyHandle(record.Lower), nil
 			}
-			return placePayload(ctx, lower, f.d, ref, checked.motions[i])
+			return placePayload(ctx, lower, f.d, ref, checked.Motions[i])
 		})
 		return ctx.calls.Load(), teeth, err
 	}
@@ -376,8 +367,8 @@ func TestLoftMirrorCylinderPlaceTeethMatchesSerialPlacement(t *testing.T) {
 	ref := f.d.nextProducerID()
 	record := f.pairs[0].n.Payload.(facetedPayload).LoftMirrorJoin
 	lower := record.Lower.Payload.(loftPayload)
-	checked := loftMirrorCylinderCheckPairs(f.d, f.pairs, record, lower.Frame1.Origin().Z)
-	require.Equal(t, len(f.pairs), checked.stop)
+	checked := loftcylinder.CheckMirrorPairs(documentNode(f.d), bodyNodes(f.pairs), record, lower.Frame1.Origin().Z)
+	require.Equal(t, len(f.pairs), checked.Stop)
 	live, stopLive := context.WithCancel(t.Context())
 	defer stopLive()
 	cancelled, cancel := context.WithCancel(t.Context())
@@ -388,20 +379,20 @@ func TestLoftMirrorCylinderPlaceTeethMatchesSerialPlacement(t *testing.T) {
 			if slices.Contains(failing, i) {
 				ctx = cancelled
 			}
-			if checked.motions[i] == r3.Identity() {
+			if checked.Motions[i] == r3.Identity() {
 				return bodyHandle(record.Lower), nil
 			}
-			return placePayload(ctx, lower, f.d, ref, checked.motions[i])
+			return placePayload(ctx, lower, f.d, ref, checked.Motions[i])
 		}
 	}
-	serial, err := loftMirrorCylinderPlaceTeeth(checked.stop, 1, placeWith())
+	serial, err := loftcylinder.PlaceTeeth(checked.Stop, 1, placeWith())
 	require.NoError(t, err)
-	parallel, err := loftMirrorCylinderPlaceTeeth(checked.stop, 4, placeWith())
+	parallel, err := loftcylinder.PlaceTeeth(checked.Stop, 4, placeWith())
 	require.NoError(t, err)
 	require.Len(t, parallel, len(serial))
 	for i := range serial {
 		want, got := serial[i].n.Payload.(loftPayload), parallel[i].n.Payload.(loftPayload)
-		if checked.motions[i] == r3.Identity() {
+		if checked.Motions[i] == r3.Identity() {
 			require.Same(t, serial[i], parallel[i])
 			continue
 		}
@@ -414,48 +405,9 @@ func TestLoftMirrorCylinderPlaceTeethMatchesSerialPlacement(t *testing.T) {
 	}
 	for _, failing := range [][]int{{1}, {2}, {1, 2}} {
 		for _, workers := range []int{1, 4} {
-			teeth, err := loftMirrorCylinderPlaceTeeth(checked.stop, workers, placeWith(failing...))
+			teeth, err := loftcylinder.PlaceTeeth(checked.Stop, workers, placeWith(failing...))
 			require.ErrorIs(t, err, context.Canceled)
 			require.Nil(t, teeth)
-		}
-	}
-}
-
-// TestLoftMirrorCylinderPlaceTeethFirstError drives the helper with placements
-// that fail at chosen teeth: the lowest failing tooth's error comes back, every
-// tooth below it ran, and a clean run keeps index order.
-func TestLoftMirrorCylinderPlaceTeethFirstError(t *testing.T) {
-	t.Parallel()
-	for _, n := range []int{0, 1, 7} {
-		for _, workers := range []int{1, 2, 4} {
-			bodies := make([]*Body, n)
-			for i := range bodies {
-				bodies[i] = bornBody(&Body{})
-			}
-			teeth, err := loftMirrorCylinderPlaceTeeth(n, workers, func(i int) (*Body, error) { return bodies[i], nil })
-			require.NoError(t, err)
-			require.Len(t, teeth, n)
-			for i := range teeth {
-				require.Same(t, bodies[i], teeth[i])
-			}
-		}
-	}
-	for _, failing := range [][]int{{0}, {2, 5}, {5, 2}, {6}, {1, 2, 3, 4, 5, 6}} {
-		for _, workers := range []int{1, 2, 4} {
-			ran := make([]atomic.Bool, 7)
-			teeth, err := loftMirrorCylinderPlaceTeeth(7, workers, func(i int) (*Body, error) {
-				ran[i].Store(true)
-				if slices.Contains(failing, i) {
-					return nil, fmt.Errorf("tooth %d", i)
-				}
-				return bornBody(&Body{}), nil
-			})
-			lowest := slices.Min(failing)
-			require.EqualError(t, err, fmt.Sprintf("tooth %d", lowest), "failing %v, %d workers", failing, workers)
-			require.Nil(t, teeth)
-			for i := range lowest {
-				require.True(t, ran[i].Load(), "tooth %d below the first failure did not run", i)
-			}
 		}
 	}
 }
@@ -497,7 +449,7 @@ func oracleLoftMirrorCylinderPairs(ctx context.Context, d *Document, ref produce
 	}
 	z0, middle, z2 := pp.Z0, lower.Frame1.Origin().Z, pp.Z1
 	if lower.Frame0.Origin().Z != z0 || !(z0 < middle && middle < z2) ||
-		!loftMirrorCylinderLevels(z0, middle, z2) {
+		!loftcylinder.MirrorLevels(z0, middle, z2) {
 		return nil, false, nil
 	}
 	// The first-stage source relation proves upper=reflection(lower). The
@@ -546,7 +498,7 @@ func oracleLoftMirrorCylinderPairs(ctx context.Context, d *Document, ref produce
 	if !admitted {
 		return nil, true, fmt.Errorf("%w: mirrored cylinder's lower slab lacks a certified circular Join", ErrUnsupported)
 	}
-	result, err := buildLoftMirrorCylinderUnion(ctx, d, ref, blank, pairs, record,
-		lowerJoin, reflection, bridgeBound, bridgeVolume)
+	result, err := bodyResult(loftcylinder.BuildMirrorJoin(ctx, envOf(documentNode(d), ref), bodyNode(blank),
+		bodyNodes(pairs), record, bodyNode(lowerJoin), reflection, bridgeBound, bridgeVolume))
 	return result, true, err
 }

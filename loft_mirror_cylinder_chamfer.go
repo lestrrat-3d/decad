@@ -6,12 +6,10 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
@@ -74,13 +72,14 @@ func tryLoftMirrorCylinderCapChamfer(ctx context.Context, b *Body, fp facetedPay
 	if allowance <= 0 || proofbound.AbsSumUpper(allowance, totalReserve) > 0.1 {
 		return nil, true, fmt.Errorf("%w: mirrored cap chamfer has no reflection allowance", ErrUnsupported)
 	}
-	lowerBody, err := bodyResult(loftcylinder.ChamferBottomCap(ctx, envOf(b.n.Doc, ref), lower, source,
-		setback, allowance, shifts, &half))
+	env := envOf(b.n.Doc, ref)
+	lowerBody, err := loftcylinder.ChamferBottomCap(ctx, env, lower, source,
+		setback, allowance, shifts, &half)
 	if err != nil {
 		return nil, true, err
 	}
-	result, err := buildLoftMirrorCylinderCapChamfer(ctx, documentHandle(b.n.Doc), ref, fp, record,
-		lowerBody, half, reserve, bridgeReserve, setback)
+	result, err := bodyResult(loftcylinder.BuildMirrorCapChamfer(ctx, env, fp, record,
+		lowerBody, half, reserve, bridgeReserve, setback))
 	return result, true, err
 }
 
@@ -137,43 +136,4 @@ func loftMirrorCylinderChamferSelect(ctx context.Context, b *Body, fp facetedPay
 		return fmt.Errorf("%w: mirrored chamfer selection includes a bore or side edge", ErrUnsupported)
 	}
 	return nil
-}
-
-// buildLoftMirrorCylinderCapChamfer reflects the chamfered lower half through
-// placePayload, has internal/loftcylinder assemble and prove the mirrored
-// shell, then gives its exterior caps the bored Join's cap origins and has
-// loftcylinder.TagCaps give them the blank's planar cap tags.
-func buildLoftMirrorCylinderCapChamfer(ctx context.Context, d *Document, ref producerID,
-	old facetedPayload, record *loftMirrorCylinderBoreRecord, lowerBody *Body,
-	half loftcylinder.ChamferHalf, reflectionReserve, bridgeReserve, setback float64) (*Body, error) {
-	lower, ok := lowerBody.n.Payload.(facetedPayload)
-	if !ok {
-		return nil, fmt.Errorf("%w: mirrored cap chamfer lost its audited lower half", ErrUnsupported)
-	}
-	reflection, _, err := loftcylinder.MirrorChamferFrame(record)
-	if err != nil {
-		return nil, err
-	}
-	upperBody, err := placePayload(ctx, lower, d, ref, reflection)
-	if err != nil {
-		return nil, err
-	}
-	upper, ok := upperBody.n.Payload.(facetedPayload)
-	if !ok {
-		return nil, fmt.Errorf("%w: mirrored cap chamfer halves have no matching held shell", ErrUnsupported)
-	}
-	assembled, err := loftcylinder.AssembleMirrorChamfer(ctx, old, lower, upper, record, half,
-		reflectionReserve, bridgeReserve, setback)
-	if err != nil {
-		return nil, err
-	}
-	result := assembled.Payload
-	for cap, group := range assembled.CapGroups {
-		result.Groups[group].Origins = append([]provenance.Ref(nil), old.Groups[record.CapGroups[cap]].Origins...)
-	}
-	if err := loftcylinder.TagCaps(&result, record.Join.Blank, assembled.CapGroups,
-		assembled.CapLevels, ref); err != nil {
-		return nil, err
-	}
-	return bodyResult(facetedrecord.Build(ctx, envOf(documentNode(d), ref), result))
 }
