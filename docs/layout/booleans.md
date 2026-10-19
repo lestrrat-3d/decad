@@ -19,7 +19,7 @@ The rules for rows live in `docs/layout.md`.
 | `loft_mirror_union.go` | Joins one authenticated axial Loft to its end-cap reflection. See loft-mirror-boolean design. |
 | `loft_mirror_cylinder_union.go` | Authenticates repeated reflected Loft pairs and a through-bore Cut, places the lower teeth, audits the exact blank, and publishes the joined or bored shell. `internal/loftcylinder` assembles the mirrored halves. See loft-mirror-boolean design. |
 | `loft_mirror_cylinder_chamfer.go` | Rewrites both exterior cap loops through one audited bored half and a reflected seam, and certifies translated upper source teeth and the reflected cap band. See loft-mirror-boolean design. |
-| `loft_cylinder_union.go` | Joins a source Loft tooth pattern to a coaxial cylinder with certified seam and volume bounds, and proves twisted Loft teeth remain separated at every height. See loft-cylinder-boolean design. |
+| `loft_cylinder_union.go` | Dispatches a coaxial cylinder and Loft tooth `Union`, builds each tooth's private proof body and verified mesh, and tags and builds the joined result. Tooth admission, separation and the joined shell's seam and volume proofs live in `internal/loftcylinder`. See loft-cylinder-boolean design. |
 | `loft_prism_union.go` | Reduces authenticated straight-source axial Lofts to prism operands for exact Sketch Union. See general-boolean design §12. |
 | `loft_contact_partition.go` | Certifies a private varying-line Loft/prism source partition and both Sketch cap correspondences. See its proof comments. |
 | `loft_contact_partition_cap.go` | Certifies each partition cap's fragments and cap correspondence. See its proof comments. |

@@ -190,7 +190,6 @@ type (
 	facetedCopySet               = facetedrecord.FacetedCopySet
 	joinedMesh                   = facetedrecord.JoinedMesh
 	loftCylinderBoreRecord       = facetedrecord.LoftCylinderBoreRecord
-	loftCylinderJoinRecord       = facetedrecord.LoftCylinderJoinRecord
 	loftCylinderPlacement        = facetedrecord.LoftCylinderPlacement
 	loftFaceCapBounds            = facetedrecord.LoftFaceCapBounds
 	loftFacesCapRecord           = facetedrecord.LoftFacesCapRecord
