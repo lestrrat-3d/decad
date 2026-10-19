@@ -1815,7 +1815,7 @@ correction, then spends the measure legs alone in its shift form; §8's
 |---|---|---|---|
 | **D1** | `Tessellate` / `STL` / `OBJ` | the payload | A solid restates the complete held triangle set; a surface-result sheet restates `tris[:walls]` and omits both recorded cap ranges. Both copy held vertices and wall winding without chording or motion. The returned `Bound` is the payload's facet departure `absSumUpper(matchedDelta, maxTwistOffsetUpper)` (§5.2); `Bounds.Bound` remains the distinct set-containment reading `absSumUpper(delta, sectionDelta)`. The sheet runs `docs/tessellation-design.md` §1.2's audits and publishes no occupied-volume proof |
 | **D2** | the mesh boolean (`Union`/`Cut`/`Intersect`, evaluator §9) | the tessellation | **Landed** (§12 PR 2b): a first-class operand, with no new boolean code — a solid loft is another all-planar operand. A solid loft whose facet departure is exactly zero is admitted through the existing all-planar zero-bound path (`docs/evaluator-design.md` §2 — "the VOLUME of an all-planar pair whose contact points round exactly"); one whose facet departure is positive hands the boolean that same term as the operand displacement every other nonzero-bound operand already carries (`internal/meshbool`'s `RimBound`), so the result's volume is `Approximate` like any other. It is D1's own two-term reading and never a subset of it, since what a boolean intersects is the FACET. **Exactness follows the published values, not whether the loft is chorded**: an exact degree-1 Tier A `NURBSSeg` can take the zero-bound path where both terms are zero, while a curved `m = 1` pair with pinned end stations still carries its positive `matchedDelta` even at `delta == 0` |
-| **D3** | Interference (`docs/interference-design.md`) | box separation (D6-style) reads `Bounds` directly; the read-only mesh-boolean path reads D2's tessellation | box-disjoint pairs prove only their disjoint-interior interference relation (`Bounds` carries the payload's own two-term `absSumUpper(delta, sectionDelta)`, §5.2, §8). `Verify` is `Sound` only when every other required or requested body and pair check is decided and trusted; a pair needing the mesh boolean works, through D2; a pair needing the analytic containment/pair kernel stays `Suspect` until a loft case is added to `clearance_geom.go`'s payload switch — identical staging to the cup's own D6 row in `docs/modify-design.md` |
+| **D3** | Interference (`docs/interference-design.md`) | box separation (D6-style) reads `Bounds` directly; the read-only mesh-boolean path reads D2's tessellation | box-disjoint pairs prove only their disjoint-interior interference relation (`Bounds` carries the payload's own two-term `absSumUpper(delta, sectionDelta)`, §5.2, §8). `Verify` is `Sound` only when every other required or requested body and pair check is decided and trusted; a pair needing the mesh boolean works, through D2; a pair needing the analytic containment/pair kernel stays `Suspect` until a loft case is added to `internal/clearance/pairkernel/geom.go`'s payload switch — identical staging to the cup's own D6 row in `docs/modify-design.md` |
 | **D4** | Clearance (`WithClearances`, `docs/clearance-design.md`) | the analytic pair kernel's payload switch | `WithClearances` stays `Suspect`, even for a box-disjoint pair: box separation proves disjoint interiors but does not measure the gap. No loft case exists in the kernel yet. |
 | **D5** | `Wall` / `Undercut` / `ConcaveRadius` (verification §6, `internal/survey2d/wall_kernel.go`) | one constant 2D cross-section (a prism's section, a revolve's meridian) | The corresponding requested survey reports the staged refusal (`DiagUnsupportedSurveyPayload`, its matching `Survey`, `Suspect`) until its loft implementation lands — a loft is a payload class `runSurveys`' three type switches do not name, so it falls to their `default` arm rather than a numerically undecided result. In increment 1, a loft's cross-section varies continuously between the two profiles, so the existing spanning-disk / meridian-walk reduction does not reach it; `docs/modify-reach-design.md` DX9 states the identical cap-blend reason: "not one constant section at one height… the existing 2D spanning-disk proof does not decide them" |
 | **D6** | `Verify` — structural audit + tolerance gate | topology + measurements | valid by construction once §6's audit has passed (modify §1's standard; §4's gate-order paragraph owns where that audit sits); the tolerance gate judges `Volume`/`Area`/`Centroid`/`Bounds` on the terms §8 derives, and wherever the payload's `delta` is positive all four carry it. A **surface-result** sheet takes `docs/surface-design.md` §9.1's own validity audit instead: it reads `ValidityValid` whenever `sectionDelta` is exactly zero and the build holds no CHORDED cell, since §6's crossing audit already ran over the complete held triangle set — walls and both omitted caps together — before the body could be returned at all, and non-self-intersection of the walls alone follows from that. A positive `sectionDelta` leaves `ValidityUndecided`: the held chords are only within that displacement of the curved surface the body denotes, so the audit's proof does not transfer. A CHORDED build (§5.2's `maxTwistOffsetUpper` row) at zero `sectionDelta` — a degree-1 free-form pair — leaves it undecided too: each wall cell denotes a bilinear ruled patch, and the audit cleared the triangle pair instead |
@@ -1849,11 +1849,11 @@ global evaluator increment.
 | 1 | `Loft`, structural profile conversion and alignment options, Table P pairing + Table S gates S1–S5/S9–S11, the flat-triangle wall construction (§5), the crossing audit (§6, Table S S6's RECORDED arm, S7's audit arm, S8), `Volume` / `Centroid` (§8's rational accumulator) / `Area` / `Bounds`, `Verify` (D6: the structural audit and the tolerance gate over all four) | same-kind `CircleSeg`/`ArcSeg` correspondence; N-section/guide-rail/centerline loft; `Transform`/`Copy`; reversed correspondence; surveys, clearance, interference beyond box-disjoint |
 | 2a | `Transform` / `Copy` (D7): the payload's own proven displacement term `delta` (§5), composed into every vertex, edge length, face area, and all four body measurements; Table S gains S12 and S13 | D1/D2 (`Tessellate`/`STL`/`OBJ`, mesh-boolean admission); D3/D4's analytic-kernel case; D5 |
 | 2b | `Tessellate` / `STL` / `OBJ` (D1), mesh-boolean admission (D2). **This row is landed.** | D3/D4's analytic-kernel case, D5 |
-| 3 | same-kind `CircleSeg`/`ArcSeg` correspondence (§1): the chord-chain construction and its shared station generator (§5.1), every term §5.2's table lists that a chorded build reaches — the certified per-cell sagitta and the `sectionDelta` it publishes, the `stationRound` term `delta` gains, the `matchedDelta` those two compose, the exact bilinear-patch volume and first-moment corrections with three residual volume terms (§8.1), and the wall's certified bilinear-area reading with two residual area legs beside the two caps' `capAreaAllow` (§8) — composed into `Volume`/`Centroid`/`Area`/`Bounds`, Table S gates S14–S16, S6's COMPUTED arm, and S7's structural walk-sense arm (P5). **This row is landed.** | same-kind Tier A free-form evaluator integration, until PR 4 lands it; mixed-kind correspondence, permanently (§1); N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
-| 4 | same-kind Tier A free-form correspondence (§1): integrate the shared station generator (§5.1), the existing free-form `stationRound`, sagitta, `spanSpeedUpper` length/speed bound, and `spanMatchedDeltaUpper` native-parameter bound plus `delta`, and the exact per-cell `SpanTangentEnergyUpper` energy (§5.2) into `Volume`/`Centroid`/`Area`/`Bounds`, and land Table S row S17. **This row is landed.** | mixed-kind correspondence, permanently (§1); a same-kind Tier A free-form pair whose two curves reduce to different Bézier span counts (S17); N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
+| 3 | same-kind `CircleSeg`/`ArcSeg` correspondence (§1): the chord-chain construction and its shared station generator (§5.1), every term §5.2's table lists that a chorded build reaches — the certified per-cell sagitta and the `sectionDelta` it publishes, the `stationRound` term `delta` gains, the `matchedDelta` those two compose, the exact bilinear-patch volume and first-moment corrections with three residual volume terms (§8.1), and the wall's certified bilinear-area reading with two residual area legs beside the two caps' `capAreaAllow` (§8) — composed into `Volume`/`Centroid`/`Area`/`Bounds`, Table S gates S14–S16, S6's COMPUTED arm, and S7's structural walk-sense arm (P5). **This row is landed.** | same-kind Tier A free-form evaluator integration, until PR 4 lands it; mixed-kind correspondence, permanently (§1); N-section and guide-rail/centerline lofts; a loft case in `internal/clearance/pairkernel/geom.go`; a non-constant-cross-section wall survey kernel |
+| 4 | same-kind Tier A free-form correspondence (§1): integrate the shared station generator (§5.1), the existing free-form `stationRound`, sagitta, `spanSpeedUpper` length/speed bound, and `spanMatchedDeltaUpper` native-parameter bound plus `delta`, and the exact per-cell `SpanTangentEnergyUpper` energy (§5.2) into `Volume`/`Centroid`/`Area`/`Bounds`, and land Table S row S17. **This row is landed.** | mixed-kind correspondence, permanently (§1); a same-kind Tier A free-form pair whose two curves reduce to different Bézier span counts (S17); N-section and guide-rail/centerline lofts; a loft case in `internal/clearance/pairkernel/geom.go`; a non-constant-cross-section wall survey kernel |
 | 4b | `docs/loft-gear-bounds-design.md`'s five increments: the per-cell volume residual with its skirt leg and the per-cell cap tube (§8, §8.1), the centroid shift form (§8), the chord target read from the section's feature size with bisection on the matched departure (§5.1), the sweep-enumerated crossing audit with one proof per cap (§6), and the scaled ceilings — `stationCap(P)` (§5.1), the raised free-form work ceiling (§5.1) and the `1 << 28` reconstruction ceiling — under which full helical gear outlines up to 69 teeth build and verify `Sound`. **This row is landed.** | a profile past 11585 reconstruction chords (the same gear at 70 teeth); every item PR 4's row still lists |
-| 4c | Exact common subdivision admits different Bézier span counts for a same-kind Tier A free-form pair (§5.1) and retires S17. **This row is landed.** | N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
-| 5 (reach, not committed by this document) | N-section and guide-rail/centerline lofts, a loft case in `clearance_geom.go`, a non-constant-cross-section wall survey kernel | — |
+| 4c | Exact common subdivision admits different Bézier span counts for a same-kind Tier A free-form pair (§5.1) and retires S17. **This row is landed.** | N-section and guide-rail/centerline lofts; a loft case in `internal/clearance/pairkernel/geom.go`; a non-constant-cross-section wall survey kernel |
+| 5 (reach, not committed by this document) | N-section and guide-rail/centerline lofts, a loft case in `internal/clearance/pairkernel/geom.go`, a non-constant-cross-section wall survey kernel | — |
 
 The PR 4b row records its original resource gate. An authenticated public Loft
 now uses a private `1 << 32` reconstruction cap for each profile, while
@@ -1868,7 +1868,7 @@ would answer `Volume()` with a proven-exact zero and `Verify` would call it
 to prevent. §8 derives all four in closed form from the same triangle set the
 construction already builds, so there is nothing to stage on the measurements
 themselves. The tolerance gate does need one piece of per-payload wiring
-beside them, though, landed in the same PR: `bodyGateDiameter` (verification
+beside them, though, landed in the same PR: `pairkernel.BodyGateDiameter` (verification
 §3) reads a `loftPayload`'s reference off its own held vertex set, because
 `Area` is always `Approximate` (§8) and a body with no reference diameter can
 never clear the gate's relative tolerance.
@@ -2155,7 +2155,7 @@ against this budget.
   it. An untrimmed `ArcSeg` pair chorded at exactly `m = 1`, over a record whose
   two arc radii are EXACTLY equal so that its two pinned end stations carry a
   zero arc-end radial residual (§5.2), publishes `delta == 0` and
-  `bodyGateDiameter`'s unshrunk reading, with `sectionDelta > 0` (§12); the
+  `pairkernel.BodyGateDiameter`'s unshrunk reading, with `sectionDelta > 0` (§12); the
   fixture states that equality over exact rationals rather than asserting it
   of a float. **Its DRIFTED twin asserts the opposite and is what proves the
   residual is charged**: the same shape with the arc's recorded `End` moved
@@ -2163,14 +2163,14 @@ against this budget.
   residual is proven positive over exact rationals from the record's own
   coordinates — never from a float comparison, which is architecture-dependent
   — publishes a `delta` at or above that proven residual, and therefore takes
-  `bodyGateDiameter`'s `2*delta`-shrunk reading rather than the unshrunk one.
+  `pairkernel.BodyGateDiameter`'s `2*delta`-shrunk reading rather than the unshrunk one.
   **A PARTIAL CIRCLE is the companion fixture and asserts the opposite**: a
   certified `Partial` `CircleSeg` fragment recorded over a non-natural range
   (`recordEdge`, `seam.go`), paired with itself and chorded at `m = 1`,
   publishes the `stationRound` `circularWalkEndBound` proves for its own two
   ends — strictly positive on that fixture's recorded geometry, a value its
   own walk bound states and no station kind grants — and therefore a strictly
-  positive `delta` under `r3.Identity()`, and `bodyGateDiameter` shrinks its
+  positive `delta` under `r3.Identity()`, and `pairkernel.BodyGateDiameter` shrinks its
   reading by `2*delta`. **That fixture is
   run at a QUARTER-TURN range as well, and that run asserts the value the
   walk bound proves rather than a sign.** The quarter-turn run is what pins
@@ -2328,7 +2328,7 @@ against this budget.
   `Transform` returns `ctx.Err()` with the input live and the document
   unchanged. A placed loft is `Sound` at the default tolerance under `Verify`;
   two lofts placed apart read box-disjoint `Sound`; an internal test asserts
-  `bodyGateDiameter` shrinks by `2*delta`, and a second asserts that shrink is
+  `pairkernel.BodyGateDiameter` shrinks by `2*delta`, and a second asserts that shrink is
   rounded OUTWARD — `2*delta` is exact (a power-of-two scaling), so the
   difference is the arm's one rounding, and round-to-nearest lands it above the
   exact `d - 2*delta` at some placement translations and below at others, so the
@@ -2338,7 +2338,7 @@ against this budget.
   encloses the area change over a brute-force sweep of perturbed vertices at
   `delta`, at aspect ratios 1, 1e-3 and 1e-6. With `delta == 0` every
   published measurement is bit-identical to PR 1's, and so is the gate
-  reference: a zero-`delta` loft's `bodyGateDiameter` must equal the shared
+  reference: a zero-`delta` loft's `pairkernel.BodyGateDiameter` must equal the shared
   reader's own answer over its vertex set under `==`, since neither the
   subtraction nor the outward rounding above may run on a zero allowance.
 
@@ -2453,7 +2453,7 @@ triangles — never a `(sectionDelta, areaUpper)` pair. §5.2's own rows give th
   placement term and names §5.2's table as where a loft's terms and their
   conditions live. §3's provenance-role bullet points at §7 for what a loft's
   `i`, `j` and `k` index rather than glossing `j` as a segment index.
-- **`docs/verification-design.md`**: §3's `bodyGateDiameter` prose, which
+- **`docs/verification-design.md`**: §3's `pairkernel.BodyGateDiameter` prose, which
   earns the vertex maximum as the true diameter for a `LineSeg`-only loft at
   `delta` zero, as a lower bound on it where a chorded loft publishes positive
   `sectionDelta` while every station publishes a zero `stationRound`, and as

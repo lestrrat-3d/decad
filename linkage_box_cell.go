@@ -702,7 +702,7 @@ func (c *poseBodyCache) get(key [12]uint64) *Body {
 }
 
 // put returns the body evicted from the cache, if any, so its clearance
-// carriers can be removed from the call's bodyGeomCache too.
+// carriers can be removed from the call's pairkernel.Cache too.
 func (c *poseBodyCache) put(key [12]uint64, body *Body) *Body {
 	if c.bodies == nil {
 		c.bodies = make(map[[12]uint64]*Body, poseBodyCacheSize)

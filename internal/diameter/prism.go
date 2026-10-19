@@ -70,7 +70,7 @@ func PrismGateDiameter(budget *proofbound.WorkBudget, prisms []prismrecord.Paylo
 // plus the widest gap. ok is false, with no error, when any prism's stations
 // cannot be read.
 //
-// The carrier witnesses addPrismFaces places (CFace.Wit) are float samples
+// The carrier witnesses clearance.BuildPrismBodyCarriers places (CFace.Wit) are float samples
 // with no proven gap to the body: a placed prism's held carrier maximum reads
 // above the body's own diameter. This reading never reads them. Each one sits between
 // two stations at its own angle, at a station, or inside the section.
@@ -100,7 +100,7 @@ func PrismGatePointsMemo(budget *proofbound.WorkBudget, prisms []prismrecord.Pay
 	return g, true, nil
 }
 
-// PrismFreeformSection is the root bodyGateDiameter's arm for a free-form-walled
+// PrismFreeformSection is pairkernel.BodyGateDiameter's arm for a free-form-walled
 // prismPayload (docs/verification-design.md §3): the clearance kernel's exact
 // carrier model has no arm for a NURBSSurface side face any more than it has
 // one for a displaced section, and gatewitness.Prism gives this payload none
@@ -167,7 +167,7 @@ func PrismGatePointsMemo(budget *proofbound.WorkBudget, prisms []prismrecord.Pay
 //   - the displacement subtraction collapses the reading to non-positive
 //     (LowerForDisplacement).
 //
-// A withheld answer is not rescued downstream. bodyGateDiameter falls through to
+// A withheld answer is not rescued downstream. pairkernel.BodyGateDiameter falls through to
 // fallbackGateDiameter, whose gatewitness.Prism has no arm for a prismPayload
 // whose sectionDelta is zero, so the body ends with NO gate diameter and its
 // bounded readings read Suspect. That is the sound direction to fail in — an

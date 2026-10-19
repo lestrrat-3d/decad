@@ -948,7 +948,7 @@ func TestFreeformPrismInterferenceDecided(t *testing.T) {
 
 // TestFreeformPrismClearanceUndecided pins WithClearances on a box-disjoint
 // free-form pair: DiagUndecidedClearance, never a fabricated Gap and never a
-// silent Sound pass (clearance.go / verify.go).
+// silent Sound pass (internal/clearance/pairkernel / verify.go).
 func TestFreeformPrismClearanceUndecided(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()

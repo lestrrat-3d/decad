@@ -19,6 +19,14 @@ kernel.
 non-mutating, bounded `Interference` row. Nothing here changes those
 contracts.
 
+The kernel is `internal/clearance/pairkernel/`: `Pair` for a solid pair,
+`SheetSolid` for a sheet against a solid, `AxisBoxes` for two unplaced
+axis-aligned box prisms, and the carrier `Cache` that one `Verify`,
+`VerifyMotion` or linkage run keeps across its pairs. It reads the
+bodies' topology nodes (`internal/topo`), never the root handles. It sits in
+its own package because the cell packages it drives (`facepair`,
+`curvecells`, `tier`) import `internal/clearance` themselves.
+
 ## 1. The proof obligation
 
 A `Clearance` row asserts two claims, and the kernel must prove both
@@ -185,7 +193,8 @@ wall is then the record itself, for a prism's carriers as for its topology,
 surveys and tessellation, and a near-collinear kink keeps its own two walls
 and its vertex.
 
-**A stitched solid's model (`addStitchFaces`, `clearance_geom.go`) is one
+**A stitched solid's model (`newBodyGeomBudget`'s stitch arm,
+`internal/clearance/pairkernel/geom.go`) is one
 exact planar carrier per live face, read straight off the body's own rebuilt
 topology** — the plane frame from the face's own `Plane` tag (negated when the
 face is reversed), the trim region from each loop's own coedge start
@@ -194,18 +203,18 @@ centroids for that face (`docs/surface-design.md` §6.4's `Tris`/`TriFaces`),
 filtered by the region's own `classify` call as a reject-only confirmation.
 It is admitted whenever the recorded triangle set exists (an all-planar body,
 open or closed); a placement's own widened vertex bound (`internal/stitchrecord/build.go`'s
-`RigidRoundAllow`) or a certificate weld's own nonzero class bound no longer
-refuses it. Instead, `newBodyGeomBudget` charges the body's own largest
+`RigidRoundAllow`) or a certificate weld's own nonzero class bound does not
+refuse it. Instead, `newBodyGeomBudget` charges the body's own largest
 proven vertex bound into `bodyGeom.delta` (`stitchweld.MaxBound` over
 `stitchtess.VertexBounds`). The prism and revolve carrier builders likewise charge their
 own frame/placement rounding, axial or angular displacement, per-face tilt
 and, for a revolve, the carriers' axis gap into that per-body displacement.
-`clearancePair` widens the proven interval by it once candidate aggregation
+`pairkernel.Pair` widens the proven interval by it once candidate aggregation
 completes (§5). A placed or
 certificate-welded stitched solid therefore reads a real, bounded `Clearance`
 row instead of leaving the pair undecided.
 
-**A sheet-against-solid pair (`sheetSolidPair`, `clearance.go`) reuses this
+**A sheet-against-solid pair (`pairkernel.SheetSolid`) reuses this
 carrier model and §3's candidate enumeration unchanged, over the sheet's own
 walls-alone or refused-outright model above.** One check does NOT apply: the
 §6 coplanar contact certificate is never run for this pair shape. That
@@ -279,7 +288,7 @@ minimum falls to the edge and vertex tiers (the worked cubes of §7). A
 kept for the lower bound and never counted toward exactness — admission doubt
 may widen the interval, never unsound it.
 
-**`sheetSolidPair` runs this enumeration unchanged over a sheet operand's
+**`pairkernel.SheetSolid` runs this enumeration unchanged over a sheet operand's
 faces against a solid's.** A trim-admitted transversal crossing between a
 sheet face and a solid face proves the sheet crosses the solid's boundary —
 the same `sink.overlap` this enumeration already sets — and every other
@@ -292,10 +301,10 @@ the two-directional nesting relation §2 runs for a solid pair. §2 states why
 one witness suffices: the sheet's boundary misses the solid's boundary
 entirely once the distance is proven positive, and a one-shell sheet has no
 void shells of its own for the outer body's boundary to be cut apart by, so
-the reverse direction has nothing to prove. `sheetSolidPair` also runs — this
+the reverse direction has nothing to prove. `pairkernel.SheetSolid` also runs — this
 same enumeration, still minus the coplanar certificate — when the boxes are
 already proven SEPARATED but `WithClearances` asked for the gap, exactly as
-`clearancePair` runs its own enumeration in that case (§1); there the witness
+`pairkernel.Pair` runs its own enumeration in that case (§1); there the witness
 cast is skipped outright, box separation having already excluded both
 crossing and containment, the same shortcut `nestingExcluded` gives a
 box-proven solid pair. `docs/surface-design.md` §9.3 owns the full procedure.
@@ -739,7 +748,7 @@ trimmed inner face alone and asks the oracle nothing:
   construction: a partial revolve's cap corner through the held cosine and
   sine of its end angle, times a radius that can be the whole distance to a
   far axis. Its proven bound (`Vertex.Position`) can therefore exceed every
-  carrier term. `clearanceDeltaWiden` widens by `bodyGeom.widenDelta`, the
+  carrier term. `pairkernel.DeltaWiden` widens by `bodyGeom.widenDelta`, the
   larger of `delta` and the body's largest vertex bound, which is `delta`
   itself wherever no vertex bound exceeds it. The §6 certificates read
   carriers alone and keep reading `delta`.
@@ -914,7 +923,7 @@ trim would yield a false disjointness certificate, which is worse than an
 undecided pair — `Verify` would report a clearance the geometry does not have.
 
 An all-planar `stitchPayload` (docs/surface-design.md §6.4) with a recorded
-triangle set has §2's carrier model, `addStitchFaces`, whatever its vertex
+triangle set has §2's carrier model, `clearance.BuildStitchBodyCarriers`, whatever its vertex
 bounds: a bounded body charges its largest vertex bound into `bodyGeom.delta`
 (§2). Its mesh publishes a zero occupied-volume proof only when the body is
 CLOSED, every vertex carries a proven bound of exactly zero

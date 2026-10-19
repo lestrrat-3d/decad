@@ -57,7 +57,7 @@ func (pp Payload) ExtentAlongContext(ctx context.Context, g r3.Vec) (float64, fl
 // ExtentAlongWork is ExtentBoundedAlong's refusing wrapper, mirroring
 // revolvePayload.ExtentAlongWork word for word: the reading for a consumer that
 // takes the interval as an exact one and has nowhere to put a displacement.
-// root clearance.go's payloadExtent is that consumer — its separating-plane
+// pairkernel's payloadExtent is that consumer — its separating-plane
 // short-circuit compares two bodies' intervals and simply loses the
 // short-circuit where it cannot get an exact one — so a direction whose extreme
 // only a bracket holds refuses here rather than publish a held coordinate as the

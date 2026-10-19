@@ -1238,7 +1238,7 @@ charges that displacement to the level it resolves, and refuses only where it
 straddles the sketch plane in the travel sense. The wider refusal — ANY nonzero
 bracket bound — survives in `prismrecord.Payload.ExtentAlongWork` and its revolve twin,
 which serve the one consumer that has no bound to widen and falls back rather
-than fails: `clearance.go`'s separating-plane short-circuit. The §4.1
+than fails: `internal/clearance/pairkernel`'s separating-plane short-circuit. The §4.1
 analytic-corner slice's general prism/chamfer audit gate is not implemented yet
 (P10). The matching axial loft fillet of loft §17 uses a narrower audit: the
 original free-form walks stay unchanged, and each new analytic piece must be
@@ -1727,7 +1727,7 @@ completeness for the infimum.
 
 The sound construction is a certified branch-and-bound over pairs of Bézier
 pieces with control-hull distance enclosures, returning an interval on the
-minimum spanning diameter — structurally what `clearance_cells.go` already does
+minimum spanning diameter — structurally what `internal/clearance/pairkernel/cells.go` already does
 for its cone-involved and spindle-torus cells. The verdict rule already consumes
 intervals (verification §6): proven thin → `Violating` at any coarseness, met →
 the gate judges the bound, straddle → `Suspect`.

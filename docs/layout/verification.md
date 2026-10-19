@@ -13,10 +13,9 @@ The rules for rows live in `docs/layout.md`.
 | `verify_pairs.go` | `Verify`'s pair proofs and job list. See interference §2. |
 | `report.go` | Public verdict and diagnostic enums, diagnostic and pair result types, and private report adapters. |
 | `verify_tolerance.go` | Adapts `internal/tolerance/` to `Verify` readings and diagnostics. See verification §2-§3. |
-| `verify_gate.go` | Verify's faceted diameter, carrier boundary, point table and cached pair diameter; `internal/gatediameter/` selects other witnesses. See verification §3. |
 | `verify_result.go` | Public survey outcome enums, reports, requests, bounded readings and survey results. |
 | `verify_publish.go` | Adapts private surveys to `internal/reportvocab` publication. See verification §1, §6. |
-| `clearance.go` | The pair kernel: `clearancePair` and `sheetSolidPair`, plus unplaced axis-aligned box pairs over the `internal/pair/box/` gap proof. See clearance §1-§3/§6. |
+| `internal/clearance/pairkernel/` | The pair kernel over topology nodes: `Pair`, `SheetSolid`, axis-aligned box pairs, the per-call carrier `Cache`, carrier models, the cell walk, and the body and pair gate diameters. See clearance §1–§7 and verification §3. |
 | `clearance_planar.go` | The exact planar pair arm for mitred, faceted and coil bodies: interference §3.2. |
 | `contact_pair.go` | Pair gates, public contact report types, their conversion from the `internal/reportvocab` report, and the bit-exact pair report memo key and cap. See contact-geometry §6. |
 | `contact_box.go` | Source-box admission and public face/measurement mapping. See contact-geometry §4. |
@@ -29,8 +28,6 @@ The rules for rows live in `docs/layout.md`.
 | `contact_analytic_manifold.go` | Ruling contact adapters. See contact-geometry §4.5. |
 | `contact_sphere_pair_sweep.go` | Sphere-pair sweep. See contact-sweep §4–§5. |
 | `contact_sweep_replay.go` | Replay adapters. See contact-sweep §6. |
-| `clearance_cells.go` | Pruned cell walk, face-pair adapter and tier adapters; `vertexTier` passes the shared budget to `internal/clearance/tier` and folds its error/refusal state into the pair. See clearance §3–§6. |
-| `clearance_geom.go` | `bodyGeom`: carrier dispatch, live body topology and nesting over `internal/clearance/` and `internal/wallsurvey/`. See clearance §2–§3. |
 | `point_containment.go` | Public point location and body/face distance through verified meshes. See point-containment design. |
 | `survey.go` | Dispatches wall, undercut and radius readers and adapts their readings to public body and face handles. See verification §6. |
 | `interference.go` | Pairwise overlap behind `Verify`. See interference §4-§8. |

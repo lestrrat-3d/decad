@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/lestrrat-3d/decad/internal/booloperand"
+	"github.com/lestrrat-3d/decad/internal/clearance/pairkernel"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
@@ -67,7 +68,7 @@ func verifyPairJobs(ctx context.Context, bodies []*BodyReport, cfg verifyConfig)
 // procedure; a solid pair takes the analytic pair kernel, then containment,
 // equality and read-only intersection measurement. geomCache is nil unless
 // clearances were asked; it and meshes must be safe for concurrent use.
-func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, geomCache *bodyGeomCache, meshes operandMeshes) (verifyPairOutcome, error) {
+func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, geomCache *pairkernel.Cache, meshes operandMeshes) (verifyPairOutcome, error) {
 	var out verifyPairOutcome
 	a, b, boxProven := job.a, job.b, job.boxProven
 
@@ -77,12 +78,12 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 	// it takes only box separation: separated boxes contribute nothing (the
 	// job list already dropped them), and boxes that meet stay
 	// DiagUnsupportedPairSheet regardless of WithClearances(). A
-	// sheet-against-solid pair is decided by sheetSolidPair (clearance.go)
+	// sheet-against-solid pair is decided by pairkernel.SheetSolid
 	// into a proven crossing, a proven containment or separation with a
 	// measured gap, or the undecided code when the kernel cannot settle it —
 	// run whenever the boxes meet (crossing must always be checked, asked or
 	// not), and also when the boxes are separated but a gap was requested,
-	// exactly as the solid-solid path below runs clearancePair in that same
+	// exactly as the solid-solid path below runs pairkernel.Pair in that same
 	// second case.
 	if a.Kind() == BodySheet || b.Kind() == BodySheet {
 		if a.Kind() == BodySheet && b.Kind() == BodySheet {
@@ -96,7 +97,7 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 		if b.Kind() == BodySheet {
 			sheet, solid = b, a
 		}
-		sres, err := sheetSolidPair(ctx, sheet, solid, boxProven, geomCache)
+		sres, err := pairkernel.SheetSolid(ctx, &sheet.n, &solid.n, boxProven, geomCache)
 		if err != nil {
 			return verifyPairOutcome{}, err
 		}
@@ -111,7 +112,7 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 			})
 		case reportvocab.SheetSolidContained, reportvocab.SheetSolidOutside:
 			if cfg.Clearances {
-				pr := pairResult{lo: sres.Lo, hi: sres.Hi, exact: sres.Exact, diam: sres.Diam}
+				pr := pairkernel.Result{Lo: sres.Lo, Hi: sres.Hi, Exact: sres.Exact, Diam: sres.Diam}
 				out.appendClearance(a, b, pr, cfg.Rel)
 			}
 		case reportvocab.SheetSolidUndecided:
@@ -133,15 +134,15 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 		return out, nil
 	}
 
-	res, fast := clearanceAxisBoxes(a, b)
+	res, fast := pairkernel.AxisBoxes(&a.n, &b.n)
 	if !fast {
 		var err error
-		res, err = clearancePairCached(ctx, a, b, boxProven, geomCache)
+		res, err = pairkernel.Pair(ctx, &a.n, &b.n, boxProven, geomCache)
 		if err != nil {
 			return verifyPairOutcome{}, err
 		}
 	}
-	if res.verdict == reportvocab.PairUndecided {
+	if res.Verdict == reportvocab.PairUndecided {
 		// The exact planar relation (clearance_planar.go) answers what the
 		// analytic kernel left open — a pair an operand has no carrier model
 		// in, or one its enumeration could not settle — and only ever adds a
@@ -163,7 +164,7 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 	// (DiagUndecidedClearance) but never sends a proven-disjoint pair to
 	// intersection.
 	if boxProven {
-		if res.verdict == reportvocab.PairDisjoint || res.verdict == reportvocab.PairTouching {
+		if res.Verdict == reportvocab.PairDisjoint || res.Verdict == reportvocab.PairTouching {
 			out.appendClearance(a, b, res, cfg.Rel)
 			return out, nil
 		}
@@ -174,7 +175,7 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 		return out, nil
 	}
 
-	if res.verdict == reportvocab.PairDisjoint || res.verdict == reportvocab.PairTouching {
+	if res.Verdict == reportvocab.PairDisjoint || res.Verdict == reportvocab.PairTouching {
 		if cfg.Clearances {
 			out.appendClearance(a, b, res, cfg.Rel)
 		}
@@ -186,12 +187,12 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 		return verifyPairOutcome{}, err
 	}
 	if outcome != reportvocab.InterferenceMeasured {
-		out.diagnostics = append(out.diagnostics, undecidedPairDiag(a, b, res.verdict, outcome))
+		out.diagnostics = append(out.diagnostics, undecidedPairDiag(a, b, res.Verdict, outcome))
 		out.undecided = true
 		return out, nil
 	}
 	out.interferences = append(out.interferences, Interference{A: a, B: b, Volume: volume})
-	pairD, err := interferencePairDiameter(ctx, a, b)
+	pairD, err := pairkernel.PairGateDiameter(ctx, &a.n, &b.n, nil)
 	if err != nil {
 		return verifyPairOutcome{}, err
 	}
@@ -225,7 +226,7 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 
 // appendClearance records the pair's Clearance row and, when the gap misses
 // the tolerance gate, its diagnostic (verify.go's appendClearance).
-func (o *verifyPairOutcome) appendClearance(a, b *Body, res pairResult, rel float64) {
+func (o *verifyPairOutcome) appendClearance(a, b *Body, res pairkernel.Result, rel float64) {
 	scratch := Report{}
 	if d := appendClearance(&scratch, a, b, res, rel); d != nil {
 		o.diagnostics = append(o.diagnostics, *d)

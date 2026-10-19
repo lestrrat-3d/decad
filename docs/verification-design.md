@@ -515,11 +515,11 @@ any reference is consulted (`verify_tolerance.go`'s `scalarToleranceRef` and
 `boundedToleranceRef`), and a faceted body
 always forms a usable reference — its `payload.Diameter` is guaranteed at build
 (`internal/facetedrecord/assemble.go`'s `AssembleBody`) and an edge length is
-a finite chord sum (`internal/facetedtopology/build.go`'s chain walk). For the other shipped payloads `bodyGateDiameter`
-(`verify_gate.go`, using `internal/gatediameter/`) forms a body diameter too. A `revolvePayload`, or an
+a finite chord sum (`internal/facetedtopology/build.go`'s chain walk). For the other shipped payloads `pairkernel.BodyGateDiameter`
+(`internal/clearance/pairkernel/gate.go`, using `internal/gatediameter/`) forms a body diameter too. A `revolvePayload`, or an
 analytic-walled `prismPayload` with no section displacement, is a payload the
 clearance kernel's exact carrier model covers
-(`newBodyGeomBudget`/`clearance_geom.go`), and reads its diameter from
+(`newBodyGeomBudget`/`internal/clearance/pairkernel/geom.go`), and reads its diameter from
 stations on its walls. A free-form-walled `prismPayload` has no arm there at
 all, whatever its axial displacements — a `NURBSSurface` side face is not a
 boundary the clearance kernel's exact carrier model can build a certificate
@@ -597,22 +597,24 @@ face is its wall over the whole of its two levels, its side splits adding
 vertices and removing nothing, and a planar face's view holds its region at
 its one level. A face whose stations cannot be read adds none.
 
-**The pair's `D` reads both bodies' points together.** `pairGateDiameterCached`
-(`verify_gate.go`) joins the point sets each body proves lie on it
-(`bodyGatePoints` in root and `internal/gatediameter/body_gate_points.go`:
+**The pair's `D` reads both bodies' points together.** `pairkernel.PairGateDiameter`
+(`internal/clearance/pairkernel/gate.go`) joins the point sets each body proves lie on it
+(`bodyGatePoints` there and `internal/gatediameter/body_gate_points.go`:
 the points its own gate arm reads, or its vertices with
 their published bounds; a coil reads every held station vertex, each within
 its station rounding of a point of its true helix edge) and reads the largest distance among them, pairs
 across the two bodies included, shrunk by twice the larger gap. The
-clearance kernel's pair reading (`pairKernel.pairDiameter`) and
-`interferencePairDiameter` both read it; neither reads the carriers'
-witnesses. Two unit cylinders 1 mm tall, their axes 10 mm apart along
+clearance kernel's pair reading (`pairKernel.pairDiameter`), `Verify`'s
+interference row (`verify_pairs.go`), the motion run's collision gate
+(`motionRun.collisionBeyond`) and the exact planar arm (`planarPairVerdict`)
+all read it. The reading itself never reads the carriers' witnesses
+(`CFace.Wit`). Two unit cylinders 1 mm tall, their axes 10 mm apart along
 `(0.6, 0.8)`, are `√145` across between wall points no carrier witness
 samples; the stations reach within 7.5° of each.
 
 Within one `Verify`, `VerifyMotion`, `VerifyLinkage` or `VerifyJointBox` call, a
 body's points are read once. The clearance kernel reads them through the call's
-`bodyGeomCache` (`bodyGeomCache.gatePoints`), which keeps the reading in the
+`pairkernel.Cache` (`Cache.gatePoints`), which keeps the reading in the
 body's own cache entry, so the reading is dropped with the entry. The cache
 also owns a `diameter.StationMemo`, which keeps a prism's section stations by
 the float bits of its line, circle and arc loops, so the placed copies of one
@@ -648,7 +650,7 @@ rounding mis-orders costs tightness, never soundness.
 (`docs/prism-boolean-design.md` §7's re-expressed or cut section, e.g. the
 analytic `Union` of a placed prism pair, or of any pair whose merge cut a wall)
 reaches neither model: the clearance kernel's carrier model refuses it
-(`clearance_geom.go`'s `addPrismFaces`), because a certificate has to be an
+(`internal/clearance/pairkernel/geom.go`), because a certificate has to be an
 exact statement about a boundary and that payload holds its own only within
 `sectionDelta`. A diameter is not a certificate, so `gatewitness.Prism`
 (`internal/gatewitness/prism.go`) gives it the third arm of
@@ -685,7 +687,7 @@ the frame and placement by `prismrecord.Payload.PointBound` together with the li
 rounding. The maximum is shrunk by twice the widest gap, and the shared
 reader publishes it rounded toward zero, so the reading can only UNDERSTATE
 the body's true diameter and never overstate it — the same construction
-`bodyGateDiameter` already runs over a `loftPayload`'s own held vertex set
+`pairkernel.BodyGateDiameter` already runs over a `loftPayload`'s own held vertex set
 (`internal/gatediameter/body_gate.go`), differing only in what the published displacement values earn
 (loft §12). A `LineSeg`-only loft whose published `delta == 0` has a
 polyhedral boundary, so its vertex maximum IS the true diameter. A chorded

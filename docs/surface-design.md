@@ -1380,7 +1380,8 @@ states for a placed loft.
 admits a stitched body only when the recorded triangle set exists — every
 face tetrahedron-eligible, this section's own closed, all-planar case — AND
 every vertex of the body carries a proven bound of exactly zero**, on
-`addPrismFaces`' own `sectionDelta != 0` reasoning (`clearance_geom.go`): the
+`clearance.BuildPrismBodyCarriers`' own `SectionDelta != 0` reasoning
+(`internal/clearance/body_carriers.go`): the
 kernel's certificates are exact statements about the carriers it reads, so a
 body whose vertices are only within a bound of their true position is a body
 it cannot model. The second condition subsumes a nonzero placement `delta`,
@@ -1654,7 +1655,7 @@ one does not.
 
 Every reading a sheet carries is judged by the tolerance gate exactly as a
 solid's is (`docs/verification-design.md` §2, §5). That gate's reference
-diameter is proven per payload by `verify_gate.go`, and every sheet payload
+diameter is proven per payload by `internal/clearance/pairkernel/gate.go`, and every sheet payload
 supplies one from geometry it already holds: a surface-result body's is its
 solid's, from the same extent readings §4.3 reuses; a patch's is its recorded
 boundary's own two farthest points; a stitched sheet's is its face set's. No
@@ -1803,8 +1804,8 @@ argument, for `Verify`'s switch to read.
 
 ### 9.3 Pairs
 
-**A stitched `BodySolid` takes the solid-solid path (`clearancePair`), never
-this section's own `sheetSolidPair`** — §6.3's Table C already decided it is
+**A stitched `BodySolid` takes the solid-solid path (`pairkernel.Pair`), never
+this section's own `pairkernel.SheetSolid`** — §6.3's Table C already decided it is
 a solid, not a sheet, so none of this section's box rule or its diagnostics
 govern it; `docs/clearance-design.md` §2/§8 own its own carrier-model gate
 and the diagnostics a pair holding one reads.
@@ -1848,7 +1849,7 @@ sheet-sheet pair whose boxes meet goes straight to `DiagUnsupportedPairSheet`,
 
 **The decision procedure, for a sheet operand against a proven solid whose
 boxes meet OR whose separated boxes were asked for a gap
-(`sheetSolidPair`, `clearance.go`):**
+(`pairkernel.SheetSolid`, `internal/clearance/pairkernel/kernel.go`):**
 
 1. Build the clearance kernel's own carrier model (`docs/clearance-design.md`
    §2) for both operands. Either one missing — a revolve sheet is refused a
@@ -1873,12 +1874,12 @@ boxes meet OR whose separated boxes were asked for a gap
    separated, that alone decides outside** — a box that does not meet the
    solid's own box cannot admit containment either, so the witness cast below
    would only confirm a settled answer, and is skipped, exactly as
-   `clearancePair`'s own `nestingExcluded` parameter skips its
+   `pairkernel.Pair`'s own `nestingExcluded` parameter skips its
    two-directional cast for a box-proven solid pair. Otherwise, one
    deterministic sheet vertex — the same witness `docs/clearance-design.md`
    §2's per-shell casts already use — is cast through the solid's existing
    three-outcome containment cast (`bodyGeom.pointInBody`,
-   `clearance_geom.go`): inside proves the sheet **contained**, outside
+   `internal/clearance/pairkernel/geom.go`): inside proves the sheet **contained**, outside
    proves it **outside** with the measured gap, and a failed cast leaves the
    pair undecided.
 
@@ -2184,7 +2185,7 @@ reverses a decision already taken.
 | `docs/verification-design.md` §6 | `aggregateStatus` gains the volume-less `Interfering` rung: a diagnostic whose own `Status` is `Interfering` (`DiagSheetSolidCrossing`) makes the report `Interfering` with no `Interference` row at all (§9.3) |
 | `docs/interference-design.md` §1 | the four-relation table is scoped to a pair of proven solids; a sheet operand takes §9.3's decision procedure instead |
 | `docs/interference-design.md` §2 | the report walk states §9.3's decision procedure for a pair holding a sheet, in place of the box rule alone |
-| `docs/clearance-design.md` §2 | states that `sheetSolidPair` reuses the carrier model and candidate enumeration, skipping the §6 coplanar certificate, which a sheet's missing material could never satisfy |
+| `docs/clearance-design.md` §2 | states that `pairkernel.SheetSolid` reuses the carrier model and candidate enumeration, skipping the §6 coplanar certificate, which a sheet's missing material could never satisfy |
 | `docs/clearance-design.md` §3 | states that a sheet-against-solid pair settles a proven positive lower bound with ONE witness cast, never the two-directional nesting relation a solid pair needs, and why (§9.3) |
 | `docs/api-design.md` §6.2 | `Clearance`'s doc comment states the one consequence: for a sheet-solid pair the row states the distance to the solid's boundary without asserting which side the sheet is on; a solid-solid row's meaning is unchanged |
 | `docs/tessellation-design.md` §1 | the Geometry row and the mandatory closed-mesh audit become kind-conditional (§10) |

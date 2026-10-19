@@ -480,7 +480,7 @@ ordinary `brepPayload`, and general-boolean §4.5 reads it unchanged:
 | **DO3** | `Tessellate`, STL/OBJ/3MF | general-boolean §4.4; a planar face with a hole chords through the cap path's hole bridging |
 | **DO4** | mesh boolean | class B over the face view where it admits (an oblique rim misses B6); else the mesh path |
 | **DO5** | `ThroughAll`/`ToFace` | the per-face extremes; refuses a record with `delta > 0`, as a prism's does |
-| **DO6** | clearance | `addBrepFaces`; no model when `delta > 0` |
+| **DO6** | clearance | `clearance.BuildBrepBodyCarriers`; no model when `delta > 0` |
 | **DO7** | undercut | per face: a planar face's one outward normal, a swept face's walk range |
 | **DO8** | concave radius | the cavity's concave arcs are clockwise arcs with the material on their left and are read; undecided when `delta > 0` |
 | **DO9** | wall survey | staged `Suspect` (`DiagUnsupportedSurveyPayload`), as for every brep |

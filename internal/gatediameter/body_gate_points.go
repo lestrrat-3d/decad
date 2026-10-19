@@ -99,7 +99,7 @@ func chainGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body *t
 	return g, true, nil
 }
 
-// capBlendGateDiameter is bodyGateDiameter's arm for a cap-loop chamfer,
+// capBlendGateDiameter is pairkernel.BodyGateDiameter's arm for a cap-loop chamfer,
 // read over capBlendGatePoints.
 func capBlendGateDiameter(ctx context.Context, budget *proofbound.WorkBudget, body *topo.Body, cbp capblend.Payload) (float64, bool, error) {
 	g, ok, err := capBlendGatePoints(ctx, budget, body, cbp)
@@ -198,7 +198,7 @@ func capArcRim(cbp capblend.Payload, g capband.Patch, contour float64) (prismrec
 	return rim, arc.Allow, true
 }
 
-// brepGateDiameter is bodyGateDiameter's arm for a breprecord.Payload
+// brepGateDiameter is pairkernel.BodyGateDiameter's arm for a breprecord.Payload
 // (docs/general-boolean-design.md §4.5), read over brepGatePoints.
 func brepGateDiameter(ctx context.Context, body *topo.Body, bp breprecord.Payload) (float64, bool, error) {
 	budget := proofbound.NewWorkBudget(ctx)

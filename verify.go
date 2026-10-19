@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/clearance/pairkernel"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
@@ -28,10 +29,10 @@ import (
 // cannot ANSWER is accepted, its parameters validated, and the
 // asked-but-unanswered question reads Suspect, never a silent pass.
 //
-// Three sibling files carry the rest, each with its own doc comment:
-// report.go the vocabulary the report is written in, verify_tolerance.go the
-// gate that decides which readings are trustworthy, and verify_gate.go the
-// proof of the reference diameter that gate is anchored on.
+// Two sibling files carry the rest, each with its own doc comment: report.go
+// the vocabulary the report is written in, and verify_tolerance.go the gate
+// that decides which readings are trustworthy. The proof of the reference
+// diameter that gate is anchored on is internal/clearance/pairkernel/gate.go.
 
 // VerifyOption configures Verify.
 type VerifyOption interface {
@@ -208,9 +209,9 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 	if err != nil {
 		return nil, err
 	}
-	var geomCache *bodyGeomCache
+	var geomCache *pairkernel.Cache
 	if cfg.Clearances {
-		geomCache = &bodyGeomCache{}
+		geomCache = &pairkernel.Cache{}
 	}
 	// Each body is meshed once, at one chord, for every pair that reaches the
 	// read-only mesh intersection (interference design §5.3).
@@ -239,9 +240,9 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 	return publishReport(req, report.Bodies, report.Interferences, report.Clearances, report.Diagnostics, report.Status), nil
 }
 
-func pairGapMeasurement(res pairResult) Measurement {
-	midpoint := proofbound.BoundedMul(proofbound.BoundedAdd(proofbound.ExactScalar(res.lo), proofbound.ExactScalar(res.hi)), proofbound.ExactScalar(0.5))
-	halfWidth := proofbound.BoundedMul(proofbound.BoundedSub(proofbound.ExactScalar(res.hi), proofbound.ExactScalar(res.lo)), proofbound.ExactScalar(0.5))
+func pairGapMeasurement(res pairkernel.Result) Measurement {
+	midpoint := proofbound.BoundedMul(proofbound.BoundedAdd(proofbound.ExactScalar(res.Lo), proofbound.ExactScalar(res.Hi)), proofbound.ExactScalar(0.5))
+	halfWidth := proofbound.BoundedMul(proofbound.BoundedSub(proofbound.ExactScalar(res.Hi), proofbound.ExactScalar(res.Lo)), proofbound.ExactScalar(0.5))
 	// The midpoint error and the half-width's own error both widen the
 	// published interval. The same bound feeds appendClearance's tolerance gate.
 	bound := proofbound.AbsSumUpper(halfWidth.Value, halfWidth.Bound, midpoint.Bound)
@@ -250,7 +251,7 @@ func pairGapMeasurement(res pairResult) Measurement {
 		Exactness: Approximate,
 		Bound:     units.Millimeters(bound),
 	}
-	if res.exact && bound == 0 {
+	if res.Exact && bound == 0 {
 		gap.Exactness = Exact
 	}
 	return gap
@@ -259,10 +260,10 @@ func pairGapMeasurement(res pairResult) Measurement {
 // appendClearance records the proven-disjoint pair's Clearance row and returns
 // a DiagMeasurementBeyondTolerance (Reading ReadingGap) when the gap's Bound
 // exceeds the pair-relative tolerance, else nil (verification §1.1/§6).
-func appendClearance(report *Report, a, b *Body, res pairResult, rel float64) *Diagnostic {
+func appendClearance(report *Report, a, b *Body, res pairkernel.Result, rel float64) *Diagnostic {
 	gap := pairGapMeasurement(res)
 	report.Clearances = append(report.Clearances, Clearance{A: a, B: b, Gap: gap})
-	pairGate := pairToleranceInputs{diameter: res.diam}
+	pairGate := pairToleranceInputs{diameter: res.Diam}
 	pass, ref, haveRef := tolerance.Scalar(gap.Value, gap.Bound, rel, pairGate.lengthReference)
 	if pass {
 		return nil
@@ -301,8 +302,8 @@ func pairDiagNone(a, b *Body, code DiagnosticCode, msg string) Diagnostic {
 // unresolved partition is DiagUndecidedPair. Verify emits only this
 // cause-specific diagnostic. A pair holding a sheet operand never reaches
 // this function: it is resolved earlier,
-// by box separation or the sheet decision procedure (sheetSolidPair,
-// clearance.go), and takes DiagUnsupportedPairSheet or DiagSheetSolidCrossing
+// by box separation or the sheet decision procedure (pairkernel.SheetSolid,
+// internal/clearance/pairkernel/kernel.go), and takes DiagUnsupportedPairSheet or DiagSheetSolidCrossing
 // instead (docs/surface-design.md §9.3).
 func undecidedPairDiag(a, b *Body, verdict reportvocab.PairVerdict, outcome reportvocab.InterferenceOutcome) Diagnostic {
 	switch {

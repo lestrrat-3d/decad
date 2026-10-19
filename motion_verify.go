@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/clearance/pairkernel"
 	"github.com/lestrrat-3d/decad/internal/linkagebound"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 	"github.com/lestrrat-3d/decad/internal/motionoption"
@@ -117,7 +118,7 @@ func (d *Document) VerifyMotion(ctx context.Context, moving []*Body, m Motion, o
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	run := &motionRun{ctx: ctx, d: d, spec: spec, cfg: cfg, cache: &bodyGeomCache{}}
+	run := &motionRun{ctx: ctx, d: d, spec: spec, cfg: cfg, cache: &pairkernel.Cache{}}
 	run.setup(moving)
 	poses, spans, err := run.refine()
 	if err != nil {
@@ -136,7 +137,7 @@ type motionRun struct {
 	transient *Document // per-call identity counters for uncommitted pose bodies
 	dom       motionbound.Domain
 	cfg       motionConfig
-	cache     *bodyGeomCache
+	cache     *pairkernel.Cache
 	drive     motionDriver
 	movers    []motionMover  // every moving body, group by group
 	statics   []motionStatic // every other live body, in Document.Bodies() order
@@ -276,7 +277,7 @@ type motionPair struct {
 // stand, where δ and η are zero: a measured gap, or a proven overlap with its
 // volume measured once and its tolerance finding, nil when it passes.
 type constantOutcome struct {
-	res       pairResult
+	res       pairkernel.Result
 	collision bool
 	volume    Measurement
 	beyond    *Diagnostic
@@ -772,7 +773,7 @@ func (r *motionRun) runPairs(mp *motionPose) error {
 	defer func() {
 		for _, p := range placed {
 			if p != nil && !p.kept {
-				delete(r.cache.entries, p.body)
+				r.cache.Evict(&p.body.n)
 			}
 		}
 	}()

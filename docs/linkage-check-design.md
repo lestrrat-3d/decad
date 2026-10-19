@@ -27,7 +27,7 @@ link anywhere along the drive — or finds where one does.
 `motion.go`, and not in a subpackage like `dynamics/`. The reason is what a pose evaluation needs: the
 transient placement of a payload under a composed transform (`payload.Placed` with the reserved
 `transientProducer`, motion §5.1), the clearance kernel with its per-call carrier cache
-(`clearancePairCached`), the overlap transfer (`motionbound.TransferredOverlap`) and the exact ideal-pose enclosure
+(`pairkernel.Pair`), the overlap transfer (`motionbound.TransferredOverlap`) and the exact ideal-pose enclosure
 `η` is charged against (`internal/motionbound.IdealPose`). `dynamics/` sits above the root because the
 public queries it consumes — `SweepPair`, `ContactPair`, `SweptBox` — already prove what its payload
 families need. A linkage check needs `VerifyMotion`'s whole kernel reach, and the only way to give a
@@ -1067,7 +1067,7 @@ one. A pin in a bore costs the kernel's windowed nested cell (clearance §4), ab
 the folding arm's elbow. A pair the kernel leaves undecided falls to the read-only mesh intersection at
 every pose, the slow path, which tessellates each distinct transient placement; the windowed cell keeps a
 pin pair off it. A constant pair (§5.9) costs one evaluation per call, whatever the pose count. The
-per-call `bodyGeomCache` holds every static body's clearance carriers for the whole run. `VerifyJointBox`
+per-call `pairkernel.Cache` holds every static body's clearance carriers for the whole run. `VerifyJointBox`
 also retains up to 32 completed, bit-identical float placements per mover. A repeated placement reuses
 its transient body, completed clearance carriers and one-entry tessellation cache; eviction drops its
 clearance carriers. Each cell still computes its own ideal-pose deviation and swept-volume allowance.

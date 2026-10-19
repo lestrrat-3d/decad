@@ -24,7 +24,7 @@ const stationMemoEntries = 64
 // reading is stored or a concurrent winner returned, so a cancelled call
 // neither stores nor returns a reading.
 //
-// A memo belongs to one top-level call (the call's bodyGeomCache owns it) and
+// A memo belongs to one top-level call (the call's pairkernel.Cache owns it) and
 // is dropped with it. The returned stations are shared between hits, so a
 // caller must not modify them.
 type StationMemo struct {

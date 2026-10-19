@@ -243,14 +243,6 @@ func faceShellHandle(n *topo.FaceShell) *FaceShell {
 	return n.Owner.(*FaceShell) //nolint:forcetypeassert // every shell node is born in its handle; a bare one must fail loudly
 }
 
-// faceShellNode returns s's node, or nil for a nil s.
-func faceShellNode(s *FaceShell) *topo.FaceShell {
-	if s == nil {
-		return nil
-	}
-	return &s.n
-}
-
 // faceShellHandles returns the handles of ns in order, or nil for an empty ns,
 // as append([]*FaceShell(nil), ...) of the same shells would.
 func faceShellHandles(ns []*topo.FaceShell) []*FaceShell {

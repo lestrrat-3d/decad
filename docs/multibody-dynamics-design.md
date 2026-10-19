@@ -2818,7 +2818,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 
 - Delivers plane/cylinder ruling and cylinder/cylinder manifolds from clearance's certified feet with
   `Face.NormalAt` balls.
-- Files: new `contact_analytic_manifold.go`; `clearance_cells.go`.
+- Files: new `contact_analytic_manifold.go`; `internal/clearance/pairkernel/cells.go`.
 - Test (`apitest`): `apitest/contact_analytic_manifold_test.go`: a cylinder on its side against a floor publishes
   the ruling's two endpoints with the computed normal ball.
 - Depends on: nothing.

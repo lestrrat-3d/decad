@@ -272,7 +272,7 @@ func TestClearanceFarOriginTiltedPlanePairContainsTruth(t *testing.T) {
 	// (1e6, 2e6, 3e6) the frame lift rounds at the scale of ulp(3e6), so the
 	// held gap misses the truth by ~1.7e-10 mm — two orders of magnitude more
 	// than the per-face tilt term alone charges (~3.2e-11 mm). Dropping the
-	// carriers' point term (CFace.LiftRound) from addPrismFaces' own g.delta therefore
+	// carriers' point term (CFace.LiftRound) from clearance.BuildPrismBodyCarriers' own Delta therefore
 	// turns THIS pair red while leaving the flagship above green, which is
 	// why both fixtures exist: at a near origin the tilt term covers for the
 	// point term, and one combined leg would prove neither.
@@ -433,7 +433,7 @@ func TestClearancePlacedStopBuiltStackTouchingIsUndecided(t *testing.T) {
 	// (proofbound.DirRoundAllow, nonzero under any non-identity placement),
 	// which makes the placed box's bodyGeom.delta nonzero, so the §6 coplanar
 	// contact certificate — an exact material-side claim — refuses to fire
-	// (clearancePair's own doc comment). The partition is still proven disjoint through the
+	// (pairkernel.Pair's own doc comment). The partition is still proven disjoint through the
 	// mesh-boolean fallback (verification §1's own "no fabricated rows"
 	// alternative route), but the requested gap stays unmeasured: Suspect,
 	// DiagUndecidedClearance, no Clearance row. This is the honest cost of

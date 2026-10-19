@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/clearance/pairkernel"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/pair"
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
@@ -88,39 +89,39 @@ func planarPairAdmits(a, b *Body) bool {
 //     a vertex proven deeper than δ inside the other solid
 //     (planar.PlanarDeepVertex), which survives any displacement within δ.
 //
-// The pair diameter the §7 gate reads is interferencePairDiameter's, the
+// The pair diameter the §7 gate reads is pairkernel.PairGateDiameter's, the
 // same reading the interference path forms for this pair. The verdict never
 // loosens the analytic kernel's: the caller consults this arm only for a
 // reportvocab.PairUndecided result.
-func planarPairVerdict(ctx context.Context, a, b *Body) (pairResult, bool, error) {
+func planarPairVerdict(ctx context.Context, a, b *Body) (pairkernel.Result, bool, error) {
 	if !planarPairAdmits(a, b) {
-		return pairResult{}, false, nil
+		return pairkernel.Result{}, false, nil
 	}
 	budget := proofbound.NewWorkBudget(ctx)
 	if err := budget.Err(); err != nil {
-		return pairResult{}, false, err
+		return pairkernel.Result{}, false, err
 	}
 	// A zero chord admits no curved body (planarHeldMeshSolid): those keep
 	// the analytic kernel's answer, and this arm reads only an all-planar
 	// held boundary, which that chord reads exactly.
 	sa, deltaA, okA, err := planarSolidAtPose(ctx, budget, a, r3.Identity(), 0)
 	if err != nil || !okA {
-		return pairResult{}, false, err
+		return pairkernel.Result{}, false, err
 	}
 	sb, deltaB, okB, err := planarSolidAtPose(ctx, budget, b, r3.Identity(), 0)
 	if err != nil || !okB {
-		return pairResult{}, false, err
+		return pairkernel.Result{}, false, err
 	}
 	result, err := planar.ClassifyPlanar(&sa, &sb, budget.Step)
 	if err != nil {
-		return pairResult{}, false, err
+		return pairkernel.Result{}, false, err
 	}
-	diam, err := interferencePairDiameter(ctx, a, b)
+	diam, err := pairkernel.PairGateDiameter(ctx, &a.n, &b.n, nil)
 	if err != nil {
-		return pairResult{}, false, err
+		return pairkernel.Result{}, false, err
 	}
 	delta := proofarith.DyAdd(deltaA, deltaB)
-	undecided := pairResult{diam: diam}
+	undecided := pairkernel.Result{Diam: diam}
 	switch result.Relation {
 	case pair.Separated:
 		res, ok := planarDisjointResult(result.Gap, delta.Rat(), diam)
@@ -132,19 +133,19 @@ func planarPairVerdict(ctx context.Context, a, b *Body) (pairResult, bool, error
 		if delta.Sign() != 0 {
 			return undecided, true, nil
 		}
-		return pairResult{verdict: reportvocab.PairTouching, exact: true, diam: diam}, true, nil
+		return pairkernel.Result{Verdict: reportvocab.PairTouching, Exact: true, Diam: diam}, true, nil
 	case pair.Overlapping:
 		if delta.Sign() == 0 {
-			return pairResult{verdict: reportvocab.PairOverlapping, diam: diam}, true, nil
+			return pairkernel.Result{Verdict: reportvocab.PairOverlapping, Diam: diam}, true, nil
 		}
 		deep, err := planar.PlanarDeepVertex(&sa, &sb, delta, budget.Step)
 		if err != nil {
-			return pairResult{}, false, err
+			return pairkernel.Result{}, false, err
 		}
 		if !deep {
 			return undecided, true, nil
 		}
-		return pairResult{verdict: reportvocab.PairOverlapping, diam: diam}, true, nil
+		return pairkernel.Result{Verdict: reportvocab.PairOverlapping, Diam: diam}, true, nil
 	default:
 		return undecided, true, nil
 	}
@@ -154,9 +155,9 @@ func planarPairVerdict(ctx context.Context, a, b *Body) (pairResult, bool, error
 // rationals, and publishes the pair disjoint only where the widened lower
 // end stays positive after rounding down. exact holds only when the held
 // gap is a single float and delta is zero, so the interval is a point.
-func planarDisjointResult(gap *pair.ScalarReading, delta *big.Rat, diam float64) (pairResult, bool) {
+func planarDisjointResult(gap *pair.ScalarReading, delta *big.Rat, diam float64) (pairkernel.Result, bool) {
 	if gap == nil {
-		return pairResult{}, false
+		return pairkernel.Result{}, false
 	}
 	value, bound := proofarith.FloatRat(gap.ValueMM), proofarith.FloatRat(gap.BoundMM)
 	loRat := new(big.Rat).Sub(value, bound)
@@ -165,7 +166,7 @@ func planarDisjointResult(gap *pair.ScalarReading, delta *big.Rat, diam float64)
 	hiRat.Add(hiRat, delta)
 	lo, hi := proofbound.RatFloatDown(loRat), proofbound.RatFloatUp(hiRat)
 	if !(lo > 0) || !measurement.FiniteValues(lo, hi) {
-		return pairResult{}, false
+		return pairkernel.Result{}, false
 	}
-	return pairResult{verdict: reportvocab.PairDisjoint, lo: lo, hi: hi, exact: lo == hi, diam: diam}, true
+	return pairkernel.Result{Verdict: reportvocab.PairDisjoint, Lo: lo, Hi: hi, Exact: lo == hi, Diam: diam}, true
 }
