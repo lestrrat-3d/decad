@@ -16,6 +16,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topo/topotest"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -260,6 +261,12 @@ func draftFixtures() []meshVolumeFixture {
 // PR 2 fixture set on the volume proof: F1–F7, each at three chord
 // tolerances, the held mesh's exact volume within VolSymDiff of the body's
 // closed form.
+//
+// Shown to fail first (go test -overlay over internal/capblend): with the
+// draft band's chord height zeroed (DraftBandHeightUpper's term in
+// ChordVolume), F2, F3 and F7 each meshed a volume outside VolSymDiff; with
+// the vertex-motion term (SweptVolumeAllow) dropped from the proof, F1, F4,
+// F5 and F6 did.
 func TestDraftMeshVolumeProofCoversTheClosedForm(t *testing.T) {
 	t.Parallel()
 	for _, fx := range draftFixtures() {
@@ -276,6 +283,13 @@ func TestDraftMeshVolumeProofCoversTheClosedForm(t *testing.T) {
 // alone, h(300 − 5d); and F7's hole drafted alone, πh(R² − r² − rd − d²/3).
 // Each meshes closed at three tolerances, its proof admitted, and the held
 // mesh's exact volume lies within VolSymDiff of the closed form.
+//
+// Shown to fail first (go test -overlay over internal/capblend): with the
+// draft band's chord height zeroed, the hole-alone mesh volume sat outside
+// VolSymDiff; with the vertex-motion term dropped, the one-wall and
+// notch-wall meshes did; with the chord pass's kept-wall radius arm removed,
+// or the cap motion's per-walk amounts read as the draft's d for every walk,
+// the hole-alone VolSymDiff grew past the tenth-of-volume ceiling.
 func TestDraftSubsetMeshVolumeProofCoversTheClosedForm(t *testing.T) {
 	t.Parallel()
 	d := bfProd(bf(10), taperTan(5))
@@ -326,6 +340,9 @@ func TestDraftSubsetMeshVolumeProofCoversTheClosedForm(t *testing.T) {
 // TestDraftMeshEmbeddedCheckRefusesACrossing keeps the embedded check from
 // passing vacuously: F1's mesh with one far corner pushed through the near
 // cap, so its two walls cross the cap's facets, refuses.
+//
+// Shown to fail first: with revolvemesh.RevolveContactAudit answering nil,
+// the crossing mesh passed.
 func TestDraftMeshEmbeddedCheckRefusesACrossing(t *testing.T) {
 	t.Parallel()
 	profile, frame := sketchSection(t, 0, squareSection)
@@ -353,6 +370,12 @@ func TestDraftMeshEmbeddedCheckRefusesACrossing(t *testing.T) {
 // TestDraftMoverRecordRadiusEnclosesTheBody pins Table DD row DD17's record
 // radius: finite, at least the L1 norm of every vertex of the body's mesh,
 // which samples both sections and every wall, and at most twice the largest.
+//
+// Shown to fail first (go test -overlay over Payload.MoverRecordRadius): with
+// the far section dropped, F5's far vertex lay past the radius; with the
+// axial term dropped, F1, F2, F5, F6 and F7 did; a tripled radius passed
+// twice the largest vertex on every fixture, and an infinite one failed the
+// finiteness check on every fixture.
 func TestDraftMoverRecordRadiusEnclosesTheBody(t *testing.T) {
 	t.Parallel()
 	env := topo.Env{Doc: &topo.Document{}, Ref: 1, Alloc: topotest.Alloc{}}
@@ -368,11 +391,43 @@ func TestDraftMoverRecordRadiusEnclosesTheBody(t *testing.T) {
 			require.NoError(t, err)
 			worst := 0.0
 			for _, v := range m.Vertices {
-				worst = max(worst, math.Abs(v.X)+math.Abs(v.Y)+math.Abs(v.Z))
+				worst = max(worst, proofbound.AbsSumUpper(v.X, v.Y, v.Z))
 			}
 			require.False(t, math.IsInf(radius, 1), "a draft body states a finite record radius")
 			require.LessOrEqualf(t, worst, radius, "record radius %g below a vertex at %g", radius, worst)
 			require.LessOrEqualf(t, radius, 2*worst, "record radius %g past twice the largest vertex at %g", radius, worst)
 		})
+	}
+}
+
+// TestDraftMeshSharesTheNearRing pins the structure that makes a draft mesh
+// watertight with no trimmed wall: the near cap's rim is written once and
+// read by both the near cap and the walls, so F1 holds exactly its eight
+// corners and two triangles on each of its six faces, every one the body's
+// own.
+//
+// Shown to fail first (go test -overlay over internal/capblend): with the
+// start cap's triangles attributed to the first face already in the mesh,
+// the mesh named five faces, that one with four triangles.
+func TestDraftMeshSharesTheNearRing(t *testing.T) {
+	t.Parallel()
+	env := topo.Env{Doc: &topo.Document{}, Ref: 1, Alloc: topotest.Alloc{}}
+	body, err := draftrecord.Build(t.Context(), env, draftFixtures()[0].payload(t))
+	require.NoError(t, err)
+	dp, ok := body.Payload.(draftrecord.Payload)
+	require.True(t, ok)
+	m, err := draftrecord.Tessellate(t.Context(), body, dp, 0.1, true)
+	require.NoError(t, err)
+	require.Len(t, m.Vertices, 8)
+	require.Len(t, m.Triangles, 12)
+	perFace := map[*topo.Face]int{}
+	for _, f := range m.Source {
+		perFace[f]++
+	}
+	faces := topobuild.Faces(body)
+	require.Len(t, faces, 6)
+	require.Len(t, perFace, 6)
+	for _, f := range faces {
+		require.Equal(t, 2, perFace[f], "face %v", f.Origins)
 	}
 }
