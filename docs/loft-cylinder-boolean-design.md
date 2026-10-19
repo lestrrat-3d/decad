@@ -88,8 +88,9 @@ inward reach of the seam. `loftcylinder.WedgeGate` evaluates the quadratic
 cross product of every held triangle against both moving root endpoint rays.
 Its Bernstein coefficients bound the whole facet, including the first tooth's
 cap facets. The Loft source bound is added to any lateral wedge departure.
-Every pair of teeth has a through-axis separator with a margin greater than
-both source bounds. The fixed-plane arm checks each held vertex. If it fails,
+`loftcylinder.Separate` orders the teeth by their bottom sector and proves
+every pair has a through-axis separator with a margin greater than both
+source bounds. The fixed-plane arm checks each held vertex. If it fails,
 the moving-plane arm chooses one normal at each cap and interpolates the
 normal linearly in height. Its dot product with position is quadratic on
 each held triangle. All six exact Bernstein coefficients must lie strictly
@@ -111,8 +112,10 @@ boundary points during the axial bridge.
 
 ## Constructed shell
 
-The join retains each tooth's exterior Loft wall facets, removes its root
-wall facets, and fills the gaps with a ring on the circular blank. Every
+`loftcylinder.Join` builds and proves the joined shell; root keeps the
+private proof teeth, both verified meshes, and the cap tagging. The join
+retains each tooth's exterior Loft wall facets, removes its root wall
+facets, and fills the gaps with a ring on the circular blank. Every
 ring point encloses its true angle with `Atan2Interval` and its trigonometric
 coordinate with `RadSinCosInterval`. A quadratic Bernstein test proves each
 adjacent pair of ring rulings keeps positive angular order at every height.
