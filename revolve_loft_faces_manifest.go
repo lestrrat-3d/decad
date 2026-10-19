@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
+	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
@@ -52,7 +53,7 @@ func revolveLoftFacesNonverticalManifest(ctx context.Context,
 		}
 	}
 	current := false
-	for _, candidate := range revolveRootCandidates(proof.blank) {
+	for _, candidate := range revolveshell.RootCandidates(bodyNode(proof.blank)) {
 		if candidate.RootSpan != proof.section.RootSpan ||
 			len(candidate.Spans) != len(proof.section.Spans) {
 			continue

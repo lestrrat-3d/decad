@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
+	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -531,9 +532,9 @@ func revolveLoftFacesHeelSlopedOccupiedArc(ctx context.Context,
 		span.Face.Body != bodyNode(proof.blank) || len(span.Origins) == 0 {
 		return nil, false, nil
 	}
-	face, live := revolveSpanFace(proof.blank, span)
-	if !live || face != circle.blankFace ||
-		!verticalOriginsMatch(face.originRefs(), span.Origins) {
+	face, live := revolveshell.SpanFace(bodyNode(proof.blank), span)
+	if !live || face != faceNode(circle.blankFace) ||
+		!verticalOriginsMatch(face.Origins, span.Origins) {
 		return nil, false, nil
 	}
 	x, radius, crosses, decided := revolveloftfaces.ToolCircleOnSpan(trim.Heel, span)

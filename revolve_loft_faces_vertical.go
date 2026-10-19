@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
+	"github.com/lestrrat-3d/decad/internal/revolveshell"
 )
 
 // A vertical source crossing is taken from the authenticated LoftFaces map,
@@ -69,8 +70,8 @@ func revolveLoftFacesVerticalSideClassify(ctx context.Context,
 		len(section.Origins) == 0 || !revolveLoftFacesSectionCurrent(proof) {
 		return nil, revolveLoftFacesVerticalRefusal, nil
 	}
-	face, ok := revolveSpanFace(proof.blank, section)
-	if !ok || faceNode(face) != section.Face || !verticalOriginsMatch(face.originRefs(), section.Origins) {
+	face, ok := revolveshell.SpanFace(bodyNode(proof.blank), section)
+	if !ok || face != section.Face || !verticalOriginsMatch(face.Origins, section.Origins) {
 		return nil, revolveLoftFacesVerticalRefusal, nil
 	}
 	payload, ok := proof.tooth.n.Payload.(facetedPayload)
@@ -88,7 +89,7 @@ func revolveLoftFacesVerticalSideClassify(ctx context.Context,
 		return nil, revolveLoftFacesVerticalRefusal, err
 	}
 	return &revolveLoftFacesVerticalSide{
-		revolveLoftFacesConstantXSource: source, face: face,
+		revolveLoftFacesConstantXSource: source, face: faceHandle(face),
 		origins: append([]provenance.Ref(nil), section.Origins...),
 	}, revolveLoftFacesVerticalContact, nil
 }
@@ -100,7 +101,7 @@ func revolveLoftFacesSectionCurrent(proof *revolveLoftFacesSourceCertificate) bo
 		return false
 	}
 	want := proof.section
-	for _, live := range revolveRootCandidates(proof.blank) {
+	for _, live := range revolveshell.RootCandidates(bodyNode(proof.blank)) {
 		if live.Blank != want.Blank || live.RootSpan != want.RootSpan ||
 			live.AxisSpan != want.AxisSpan || live.Frame != want.Frame ||
 			live.RootStart != want.RootStart || live.RootEnd != want.RootEnd ||

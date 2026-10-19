@@ -672,13 +672,3 @@ func axisInPlane(a Axis, frame r3.Frame) (revolveaxis.Line2, error) {
 type axisFrame = revolveaxis.Frame
 
 type regionSnapAllow = revolveaxis.SnapAllow
-
-const (
-	// wallCylinder is a line parallel to the axis.
-	wallCylinder = revolveaxis.WallCylinder
-	// wallPlane is a line perpendicular to the axis: a planar annulus, or a
-	// disk when it reaches the axis.
-	wallPlane = revolveaxis.WallPlane
-	// wallCone is an inclined line; an endpoint on the axis is its apex.
-	wallCone = revolveaxis.WallCone
-)

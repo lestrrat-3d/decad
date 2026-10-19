@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
+	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/decad/internal/spiralsector"
 	"github.com/lestrrat-3d/r3"
 )
@@ -64,7 +65,7 @@ func certifyRevolveLoftFacesSource(ctx context.Context, blank, tooth *Body) (
 	}
 	trim := p.LoftFacesTrim
 	var selected *revolveLoftFacesSourceCertificate
-	for _, section := range revolveRootCandidates(blank) {
+	for _, section := range revolveshell.RootCandidates(bodyNode(blank)) {
 		if err := ctx.Err(); err != nil {
 			return nil, false, err
 		}

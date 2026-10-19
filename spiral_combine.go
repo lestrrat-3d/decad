@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/decad/internal/spiralsector"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
@@ -136,7 +137,7 @@ func spiralCombineInputs(ctx context.Context, blank *Body, tools []*Body) (*spir
 	if len(tools) < 2 || len(tools) > 31 {
 		return nil, fmt.Errorf("%w: this spiral-tooth Union class accepts two to 31 tools", ErrUnsupported)
 	}
-	first, ok, err := spiralsector.CertifyFirstJoin(ctx, revolveRootCandidates(blank), bodyNode(tools[0]))
+	first, ok, err := spiralsector.CertifyFirstJoin(ctx, revolveshell.RootCandidates(bodyNode(blank)), bodyNode(tools[0]))
 	if err != nil {
 		return nil, err
 	}

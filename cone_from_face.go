@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/pointcone"
+	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 )
@@ -67,7 +68,7 @@ func ConeFromFace(ctx context.Context, body *Body, face FaceSelector, far units.
 	if err != nil {
 		return nil, err
 	}
-	spans, _, _, ok := recordedRevolveSection(body)
+	spans, _, _, ok := revolveshell.RecordedSection(bodyNode(body))
 	if !ok {
 		return nil, fmt.Errorf(`%w: ConeFromFace needs an unplaced full Revolve of straight sides about X`,
 			ErrUnsupported)
