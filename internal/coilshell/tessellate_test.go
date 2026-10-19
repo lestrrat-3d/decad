@@ -89,8 +89,12 @@ func TestTessellateRestatesTheHeldShell(t *testing.T) {
 		require.Equal(t, cp.Delta, m.Bound)
 		require.NoError(t, tessellation.RequireClosedMesh(m.Triangles))
 
-		// Every wall facet names the side(0, k) face of its recorded segment,
-		// and the caps' facets their caps, in held order.
+		// Each wall facet pair sweeps one chord cell of the station chain;
+		// the facet names the side(i, k) face of the recorded segment that
+		// chord lies on. The caps' facets follow the walls in held order.
+		rec, err := cp.Record()
+		require.NoError(t, err)
+		stride := len(rec.Pts)
 		roles := map[string]int{}
 		for _, f := range m.Source {
 			require.Len(t, f.Origins, 1)
@@ -107,7 +111,8 @@ func TestTessellateRestatesTheHeldShell(t *testing.T) {
 			role := f.Origins[0].Role
 			switch {
 			case i < walls:
-				require.Contains(t, role, "side(")
+				seg := rec.Profile.Segments[rec.Profile.Chord[(i/2)%stride].Segment]
+				require.Equal(t, fmt.Sprintf("side(%d,%d)", seg.Loop, seg.Index), role, "wall facet %d", i)
 			case i < walls+capCount:
 				require.Equal(t, provenance.RoleCapStart, role)
 			default:
@@ -121,7 +126,13 @@ func TestTessellateRestatesTheHeldShell(t *testing.T) {
 		require.True(t, m.SymDiffOK)
 		require.LessOrEqual(t, volumeGap(m, want), m.VolSymDiff)
 		require.Less(t, m.VolSymDiff, 0.01*1.5*2*math.Pi*6*4, "the volume proof is not vacuous")
-		require.Positive(t, m.AreaSlack)
+		slack, volSymDiff, err := coilshell.MeshProofs(t.Context(), rec, coilshell.MeshInput{
+			Verts: cp.Verts, Tris: cp.Tris, Delta: cp.Delta, MaxRound: cp.MaxRound,
+		}, walls)
+		require.NoError(t, err)
+		require.Positive(t, slack)
+		require.Equal(t, slack, m.AreaSlack)
+		require.Equal(t, volSymDiff, m.VolSymDiff)
 		beta, err := topobuild.VertexBounds(m)
 		require.NoError(t, err)
 		require.Equal(t, cp.VertexBound, beta)
