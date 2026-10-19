@@ -229,16 +229,16 @@ func TestCurvedMultiRunShellConsumesLiveGraph(t *testing.T) {
 			_, duplicate = seenIDs[id]
 			require.False(t, duplicate)
 			seenIDs[id] = struct{}{}
-			require.Equal(t, seam[station].point, shell.mesh.Verts[index])
-			require.Equal(t, seam[station].point,
-				blankPatch.vertices[blankPatch.seam[station]])
-			require.Equal(t, seam[station].point,
-				loftPatch.vertices[loftPatch.seam[station]])
-			require.GreaterOrEqual(t, shell.vertexBounds[index], seam[station].blankBound)
+			require.Equal(t, seam[station].Point, shell.mesh.Verts[index])
+			require.Equal(t, seam[station].Point,
+				blankPatch.Vertices[blankPatch.Seam[station]])
+			require.Equal(t, seam[station].Point,
+				loftPatch.Vertices[loftPatch.Seam[station]])
+			require.GreaterOrEqual(t, shell.vertexBounds[index], seam[station].BlankBound)
 			require.GreaterOrEqual(t,
-				blankPatch.vertexBounds[blankPatch.seam[station]], seam[station].blankBound)
+				blankPatch.VertexBounds[blankPatch.Seam[station]], seam[station].BlankBound)
 			require.GreaterOrEqual(t,
-				loftPatch.vertexBounds[loftPatch.seam[station]], seam[station].loftBound)
+				loftPatch.VertexBounds[loftPatch.Seam[station]], seam[station].LoftBound)
 		}
 	}
 	require.Len(t, seenVertices, 36)
@@ -305,11 +305,11 @@ func TestCurvedMultiRunShellConsumesLiveGraph(t *testing.T) {
 }
 
 func TestCurvedMultiRunShellRayOwnersRefuseCollisions(t *testing.T) {
-	station := revolveLoftFacesSeamVertex{
-		exact: loftFaceRatVec{lfF(0), lfF(2), lfF(1)},
-		point: r3.Vec{Y: 2, Z: 1}, loftBound: 0.001,
+	station := revolveloftfaces.ArcSeamVertex{
+		Exact: loftFaceRatVec{lfF(0), lfF(2), lfF(1)},
+		Point: r3.Vec{Y: 2, Z: 1}, LoftBound: 0.001,
 	}
-	seams := [][]revolveLoftFacesSeamVertex{{station}, {station}}
+	seams := [][]revolveloftfaces.ArcSeamVertex{{station}, {station}}
 	source := revolveLoftFacesShellRaySource{seams: seams}
 	rays := revolveloftfaces.ShellRays(16, source)
 	require.NotNil(t, rays)
@@ -322,7 +322,7 @@ func TestCurvedMultiRunShellRayOwnersRefuseCollisions(t *testing.T) {
 	}
 	require.Equal(t, 1, shared)
 	require.Nil(t, revolveloftfaces.ShellRays(16,
-		revolveLoftFacesShellRaySource{seams: [][]revolveLoftFacesSeamVertex{{station, station}}}))
+		revolveLoftFacesShellRaySource{seams: [][]revolveloftfaces.ArcSeamVertex{{station, station}}}))
 	require.Nil(t, revolveloftfaces.ShellRays(16,
 		revolveLoftFacesShellRaySource{seams: seams,
 			caps: []revolveLoftFacesCapSeamVertex{{point: r3.Vec{Y: 2, Z: 1}}}}))

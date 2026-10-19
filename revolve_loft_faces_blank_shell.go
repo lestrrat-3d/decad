@@ -61,7 +61,7 @@ type revolveLoftFacesShellCut struct {
 }
 
 type revolveLoftFacesShellRaySource struct {
-	seams [][]revolveLoftFacesSeamVertex
+	seams [][]revolveloftfaces.ArcSeamVertex
 	caps  []revolveLoftFacesCapSeamVertex
 }
 
@@ -70,7 +70,7 @@ func (s revolveLoftFacesShellRaySource) StationCount(run int) int { return len(s
 func (s revolveLoftFacesShellRaySource) Station(run, station int) revolveloftfaces.ShellRaySeam {
 	point := s.seams[run][station]
 	return revolveloftfaces.ShellRaySeam{
-		Y: point.exact[1], Z: point.exact[2], Point: point.point, LoftBound: point.loftBound}
+		Y: point.Exact[1], Z: point.Exact[2], Point: point.Point, LoftBound: point.LoftBound}
 }
 func (s revolveLoftFacesShellRaySource) CapCount() int { return len(s.caps) }
 func (s revolveLoftFacesShellRaySource) Cap(id int) revolveloftfaces.ShellRayCap {
@@ -124,7 +124,7 @@ func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
 		return nil, false, nil
 	}
 	manifest = current
-	seams := make([][]revolveLoftFacesSeamVertex, len(selectors))
+	seams := make([][]revolveloftfaces.ArcSeamVertex, len(selectors))
 	seamCuts := make([]revolveLoftFacesShellCut, len(selectors))
 	seenSelectors := make(map[revolveLoftFacesShellSeamSelector]struct{}, len(selectors))
 	stationCount := 0
@@ -246,7 +246,7 @@ func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
 						continue
 					}
 					vertex := seams[ref.Run][ref.Station]
-					ring[j] = appendPoint(vertex.point, vertex.blankBound)
+					ring[j] = appendPoint(vertex.Point, vertex.BlankBound)
 					out.seams[ref.Run][ref.Station] = ring[j]
 					matched = true
 					break
@@ -561,7 +561,7 @@ func revolveLoftFacesShellSideCurrent(ctx context.Context,
 func revolveLoftFacesShellSeamCutOf(ctx context.Context,
 	proof *revolveLoftFacesSourceCertificate, manifest *revolveLoftFacesContactManifest,
 	selector revolveLoftFacesShellSeamSelector,
-) (revolveLoftFacesShellCut, []revolveLoftFacesSeamVertex, bool, error) {
+) (revolveLoftFacesShellCut, []revolveloftfaces.ArcSeamVertex, bool, error) {
 	var empty revolveLoftFacesShellCut
 	sectionIndex, cellIndex := selector.sectionIndex, selector.cellIndex
 	if sectionIndex < 0 || sectionIndex >= len(proof.section.Spans) ||
@@ -628,9 +628,9 @@ func revolveLoftFacesShellSeamCutOf(ctx context.Context,
 	if err != nil || !built {
 		return empty, nil, false, err
 	}
-	x := seam[0].exact[0]
+	x := seam[0].Exact[0]
 	for _, vertex := range seam[1:] {
-		if vertex.exact[0].Cmp(x) != 0 {
+		if vertex.Exact[0].Cmp(x) != 0 {
 			return empty, nil, false, nil
 		}
 	}
