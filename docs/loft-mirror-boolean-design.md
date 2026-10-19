@@ -181,7 +181,8 @@ split rings, and exact full-band distance checks. Its band can cross the
 side-level ring in XY when the three-dimensional contact audit proves the
 band touches the old held wall only on the intended side ring. The source
 cap and retained side audits still prove both directions of boundary reach.
-The reflection uses the placed-mesh rounding envelope, checked against the
+The reflection uses the placed-mesh rounding envelope
+(`loftcylinder.MirrorChamferReflectionReserve`), checked against the
 measured upper-half bound. The final boundary allowance reserves this rounding
 before building the lower half.
 
@@ -197,3 +198,15 @@ reach. The measured vertical and lateral reach is charged to the upper
 vertex and boundary bounds. The Join's swept-volume charge is carried into
 the final occupied-volume allowance. Both charges must fit the caller's
 0.1 mm `VerifyAll` tolerance.
+
+`loftcylinder.AssembleMirrorChamfer` sews the two halves from their payloads
+and the bore record. It runs the seam, vertex-link, exterior annulus and
+bore-wall audits and the upper cap section, then proves the result's bounds.
+The boundary bound is the larger of the lower half's bound and the upper
+half's bound plus the measured cap reach; a bound above 0.1 mm refuses. The
+occupied-volume allowance sums both half allowances and the Join's
+swept-volume charge. The area allowance sums both half allowances and twice
+the larger one for the removed middle annuli. The held diameter and boundary
+bound give the centroid allowance. The root reflects the lower half within its
+document, gives the exterior cap groups the bored Join's cap origins, and tags
+them with the blank's planar cap surfaces.

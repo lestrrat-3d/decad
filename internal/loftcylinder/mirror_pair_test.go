@@ -2,12 +2,20 @@ package loftcylinder_test
 
 import (
 	"math"
+	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
+	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -90,4 +98,103 @@ func TestMirrorPairMotion(t *testing.T) {
 		Xform:          shifted,
 	}, source)
 	require.False(t, ok, "the motion is not axial")
+}
+
+// TestMirrorChamferUpperShifts pins each source tooth's upper shift to its own
+// authenticated placement. The pairs and the sorted source teeth come in
+// different orders, so a missing, reordered or reversed shift list fails.
+func TestMirrorChamferUpperShifts(t *testing.T) {
+	middle, err := r3.NewFrame(r3.Vec{Z: 1}, r3.Vec{X: 1}, r3.Vec{Y: 1})
+	require.NoError(t, err)
+	identity := r3.Identity()
+	// Whether a Z rotation's EZ.Z rounds to one or one step below it depends
+	// on the platform's sine and cosine, so take the first whole degree of
+	// each kind this platform produces instead of pinning one angle.
+	rotation := func(want func(r3.Transform) bool) r3.Transform {
+		for degree := 1; degree < 360; degree++ {
+			motion, err := r3.Rotation(r3.Vec{Z: 1}, units.Degrees(float64(degree)))
+			require.NoError(t, err)
+			if want(motion) {
+				return motion
+			}
+		}
+		require.FailNow(t, "no whole-degree Z rotation of the wanted kind")
+		return r3.Transform{}
+	}
+	near := rotation(loftmesh.NearAxialPlacement)
+	axial := rotation(func(motion r3.Transform) bool {
+		return motion != identity && loftcylinder.AxialPlacement(motion)
+	})
+
+	identityRecord := &loftrecord.SourceIdentity{}
+	join := &facetedrecord.LoftMirrorJoinRecord{Lower: &topo.Body{Payload: loftrecord.Payload{
+		SourceIdentity: identityRecord, Frame1: middle, Xform: identity, AuthenticatedReconstruction: true,
+	}}}
+	area := measurement.Measurement{Value: units.SquareMillimeters(40), Bound: units.SquareMillimeters(1)}
+	pair := func(motion r3.Transform) *topo.Body {
+		fp := facetedrecord.Payload{ContactAudited: true, Xform: motion,
+			LoftMirrorCopy: &facetedrecord.LoftMirrorPlacementRecord{Source: join, Motion: motion}}
+		if motion == identity {
+			fp = facetedrecord.Payload{ContactAudited: true, Xform: identity, LoftMirrorJoin: join}
+		}
+		return &topo.Body{Payload: fp, Area: area}
+	}
+	tooth := func(motion r3.Transform) *topo.Body {
+		return &topo.Body{Payload: loftrecord.Payload{
+			SourceIdentity: identityRecord, Xform: motion, AuthenticatedReconstruction: true,
+		}}
+	}
+	shift, swept, ok := loftcylinder.MirrorUpperBridge(pair(near), near, 1)
+	require.True(t, ok)
+	// The Join accumulates each pair's charge with an upward sum.
+	swept = proofbound.AbsSumUpper(0, swept)
+	record := func(motions ...r3.Transform) *facetedrecord.LoftMirrorCylinderBoreRecord {
+		pairs := make([]*topo.Body, len(motions))
+		for i, motion := range motions {
+			pairs[i] = pair(motion)
+		}
+		return &facetedrecord.LoftMirrorCylinderBoreRecord{Join: &facetedrecord.LoftMirrorCylinderJoinRecord{
+			Source: join, Pairs: pairs, BridgeBound: shift, BridgeVolume: swept,
+		}}
+	}
+	source := loftcylinder.ChamferSource{
+		OriginalTeeth: []*topo.Body{tooth(near), tooth(axial), tooth(identity)},
+	}
+
+	shifts, err := loftcylinder.MirrorChamferUpperShifts(record(identity, axial, near), source)
+	require.NoError(t, err)
+	require.Len(t, shifts, 3)
+	// The exact shift 2m(1-EZ.Z) with m = 1, read from the fixture's own placement.
+	want := new(big.Rat).Mul(big.NewRat(2, 1),
+		new(big.Rat).Sub(big.NewRat(1, 1), proofarith.FloatRat(near.Basis().EZ.Z)))
+	require.Positive(t, want.Sign(), "the near-axial tooth must have a shift")
+	for i, expected := range []*big.Rat{want, new(big.Rat), new(big.Rat)} {
+		require.NotNil(t, shifts[i], "tooth %d", i)
+		require.Zero(t, expected.Cmp(shifts[i]), "tooth %d has shift %s, want %s", i, shifts[i], expected)
+	}
+
+	shifts, err = loftcylinder.MirrorChamferUpperShifts(record(identity, axial),
+		loftcylinder.ChamferSource{OriginalTeeth: []*topo.Body{tooth(axial), tooth(identity)}})
+	require.NoError(t, err)
+	require.Nil(t, shifts, "axial teeth need no reflected check")
+
+	for name, bad := range map[string]func(*facetedrecord.LoftMirrorCylinderBoreRecord){
+		"bridge bound": func(r *facetedrecord.LoftMirrorCylinderBoreRecord) {
+			r.Join.BridgeBound = math.Nextafter(shift, 0)
+		},
+		"bridge volume": func(r *facetedrecord.LoftMirrorCylinderBoreRecord) {
+			r.Join.BridgeVolume = math.Nextafter(swept, 0)
+		},
+		"duplicate placement": func(r *facetedrecord.LoftMirrorCylinderBoreRecord) {
+			r.Join.Pairs[1] = pair(near)
+		},
+	} {
+		r := record(identity, axial, near)
+		bad(r)
+		_, err := loftcylinder.MirrorChamferUpperShifts(r, source)
+		require.ErrorIs(t, err, decaderr.ErrUnsupported, name)
+	}
+	_, err = loftcylinder.MirrorChamferUpperShifts(record(identity, axial, near),
+		loftcylinder.ChamferSource{OriginalTeeth: []*topo.Body{tooth(near), tooth(axial), tooth(near)}})
+	require.ErrorIs(t, err, decaderr.ErrUnsupported, "a source tooth has no matching placement")
 }
