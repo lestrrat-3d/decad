@@ -208,7 +208,6 @@ type (
 	prismPatternPart             = facetedrecord.PrismPatternPart
 	prismPatternSource           = facetedrecord.PrismPatternSource
 	prismUnionFilletRecord       = facetedrecord.PrismUnionFilletRecord
-	revolveLoftSectorCertificate = facetedrecord.RevolveLoftSectorCertificate
 	revolveLoftSectorPlacement   = facetedrecord.RevolveLoftSectorPlacement
 	revolveSectionCertificate    = facetedrecord.RevolveSectionCertificate
 	revolveSectionSpan           = facetedrecord.RevolveSectionSpan

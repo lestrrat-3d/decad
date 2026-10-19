@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
+	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/decad/internal/spiralsector"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/stretchr/testify/require"
@@ -21,7 +22,7 @@ import (
 func TestSpiralFirstJoinDeclinesTangentHeelOutsideFiniteBlankOnly(t *testing.T) {
 	doc := New()
 	blank, tooth, _ := spiralTangentBlankAndTooth(t, doc)
-	section, ok := spiralsector.ExactBlank(revolveRootCandidates(blank))
+	section, ok := spiralsector.ExactBlank(revolveshell.RootCandidates(bodyNode(blank)))
 	require.True(t, ok)
 	trim := tooth.n.Payload.(facetedPayload).LoftFacesTrim
 	require.NotNil(t, trim)
@@ -37,7 +38,7 @@ func TestSpiralFirstJoinDeclinesTangentHeelOutsideFiniteBlankOnly(t *testing.T) 
 	require.False(t, spiralsector.SpiralHeelCapEightOutside(trim.Maps[8],
 		lfAdd(lfF(section.Ded.U), lfF(section.Ded.V))))
 
-	proof, accepted, err := spiralsector.CertifyFirstJoin(t.Context(), revolveRootCandidates(blank), bodyNode(tooth))
+	proof, accepted, err := spiralsector.CertifyFirstJoin(t.Context(), revolveshell.RootCandidates(bodyNode(blank)), bodyNode(tooth))
 	require.NoError(t, err)
 	require.False(t, accepted, "the tangent heel cap cannot certify the whole blank cone")
 	require.Nil(t, proof)
@@ -47,7 +48,7 @@ func TestSpiralFirstJoinDeclinesTangentHeelOutsideFiniteBlankOnly(t *testing.T) 
 // passes. The whole original toe cap must stay before the tool/root circle.
 func TestSpiralFirstJoinDeclinesTangentToeCapPastToeCircle(t *testing.T) {
 	blank, tooth, _ := spiralTangentBlankAndToothWithTools(t, New(), -3.02, false)
-	section, ok := spiralsector.ExactBlank(revolveRootCandidates(blank))
+	section, ok := spiralsector.ExactBlank(revolveshell.RootCandidates(bodyNode(blank)))
 	require.True(t, ok)
 	trim := tooth.n.Payload.(facetedPayload).LoftFacesTrim
 	require.NotNil(t, trim)
@@ -66,7 +67,7 @@ func TestSpiralFirstJoinDeclinesTangentToeCapPastToeCircle(t *testing.T) {
 		m, b, heelX, trim.Maps[7]), "the heel-circle leg still passes")
 	require.False(t, spiralsector.OriginalCapsAvoidToolRootCircles(trim, m, b, toeX, heelX))
 
-	proof, accepted, err := spiralsector.CertifyFirstJoin(t.Context(), revolveRootCandidates(blank), bodyNode(tooth))
+	proof, accepted, err := spiralsector.CertifyFirstJoin(t.Context(), revolveshell.RootCandidates(bodyNode(blank)), bodyNode(tooth))
 	require.NoError(t, err)
 	require.False(t, accepted, "the tangent branch must check the whole toe cap")
 	require.Nil(t, proof)
@@ -363,9 +364,9 @@ func TestSpiralBlankUsesAuthenticatedRevolveSection(t *testing.T) {
 	section := []planePoint{{U: 4.9}, {U: 6}, {U: 6, V: 3.5},
 		{U: 5.7, V: 2.28}, {U: 4.7, V: 1.88}, {U: 4.9, V: 1.5}}
 	blank := spiralTestRevolveBlank(t, section)
-	candidates := revolveRootCandidates(blank)
+	candidates := revolveshell.RootCandidates(bodyNode(blank))
 	require.NotEmpty(t, candidates)
-	source, ok := spiralsector.ExactBlank(revolveRootCandidates(blank))
+	source, ok := spiralsector.ExactBlank(revolveshell.RootCandidates(bodyNode(blank)))
 	require.True(t, ok)
 	require.Same(t, blank, bodyHandle(source.Section.Blank))
 	rootCandidates := 0
@@ -398,12 +399,12 @@ func TestSpiralBlankRefusesSevenSideRevolveSection(t *testing.T) {
 		{U: 5.9, V: 3.4}, {U: 5.7, V: 2.28},
 		{U: 4.7, V: 1.88}, {U: 4.9, V: 1.5}}
 	blank := spiralTestRevolveBlank(t, section)
-	candidates := revolveRootCandidates(blank)
+	candidates := revolveshell.RootCandidates(bodyNode(blank))
 	require.NotEmpty(t, candidates)
 	for _, candidate := range candidates {
 		require.Len(t, candidate.Spans, 7)
 	}
-	_, admitted := spiralsector.ExactBlank(revolveRootCandidates(blank))
+	_, admitted := spiralsector.ExactBlank(revolveshell.RootCandidates(bodyNode(blank)))
 	require.False(t, admitted)
 }
 

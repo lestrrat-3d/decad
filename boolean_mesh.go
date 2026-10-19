@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/decad/internal/spiralsector"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -146,7 +147,7 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 	if err := ctx.Err(); err != nil {
 		return booleanEvaluation{}, err
 	}
-	spiralHeld, spiralJoin, err := spiralsector.PrepareFirstUnion(ctx, op, revolveRootCandidates(a),
+	spiralHeld, spiralJoin, err := spiralsector.PrepareFirstUnion(ctx, op, revolveshell.RootCandidates(bodyNode(a)),
 		bodyNode(a), bodyNode(b), &mb.n, srcB)
 	if err != nil {
 		return booleanEvaluation{}, err

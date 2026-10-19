@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -27,7 +28,7 @@ func TestRevolveLoftFacesVerticalRefusesChangedBlankSection(t *testing.T) {
 			s.CreateLine(points[i], points[(i+1)%len(points)])
 		}
 	}, FullRevolution{})
-	candidates := revolveRootCandidates(blank)
+	candidates := revolveshell.RootCandidates(bodyNode(blank))
 	require.Len(t, candidates, 1)
 	proof := &revolveLoftFacesSourceCertificate{blank: blank, section: candidates[0]}
 	require.True(t, revolveLoftFacesSectionCurrent(proof))

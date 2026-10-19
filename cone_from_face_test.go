@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/decad/internal/spiralsector"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -43,7 +44,7 @@ func coneFromFaceSpiralSection() []planePoint {
 // origin, which is the documented body-relative way to select one face.
 func coneFromFaceSelector(t *testing.T, blank *Body, a, b planePoint) FaceSelector {
 	t.Helper()
-	spans, _, _, ok := recordedRevolveSection(blank)
+	spans, _, _, ok := revolveshell.RecordedSection(bodyNode(blank))
 	require.True(t, ok)
 	for _, span := range spans {
 		if span.Face != nil && (span.Start == a && span.End == b || span.Start == b && span.End == a) {
