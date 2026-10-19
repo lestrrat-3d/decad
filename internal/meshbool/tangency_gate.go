@@ -10,9 +10,11 @@ import (
 )
 
 // NearPairRole is a source certificate's verdict for one held face pair the
-// tangency gate could not otherwise decide. The first curved spiral tooth
-// join supplies the only table today; its caller must still audit the
-// complete held result and refuse any near pair absent from the table.
+// tangency gate could not otherwise decide. The spiral Union admissions
+// build the tables: the first curved tooth join's own table, and the combined
+// spiral tool's table, which copies that first-join table onto every tooth
+// copy. Each caller must still audit the complete held result and refuse any
+// near pair absent from its table.
 type NearPairRole uint8
 
 const (
@@ -64,9 +66,11 @@ const (
 // facet contact it does not cover. A non-nil capFace names a LoftFaces cap of
 // the first operand whose true surface the cone-trim source map proves
 // disjoint from coneFace of the second; that pair is admitted only when no
-// held facet of one touches a held facet of the other. roles is the spiral
-// first-join table (nil for every other boolean): a separated pair gets the
-// same no-contact check, and a crossing pair passes a near-miss.
+// held facet of one touches a held facet of the other. roles is the table of
+// an admitted spiral Union, either the first curved tooth join's or the
+// combined spiral tool's copy table, and nil when neither admission applies:
+// a separated pair gets the same no-contact check, and a crossing pair passes
+// a near-miss.
 //
 // It may refuse a valid model whose operands genuinely pass within a chord
 // tolerance of each other. That is the accepted price; the alternative is a
