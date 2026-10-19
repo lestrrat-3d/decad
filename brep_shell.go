@@ -132,12 +132,12 @@ func shellThroughCut(ctx context.Context, b *Body, bp brepPayload, call brepShel
 	// each Tᵢ ⊕ t, then TC7.
 	if len(rm.Walls) == 0 {
 		if err := offset2d.AuditOffsetSectionBudget(budget, tc.Caps.Section, sec.Eroded); err != nil {
-			return nil, shellCancelCause(err)
+			return nil, prismshell.CancelCause(err)
 		}
 	}
 	for i, tool := range tc.Tools {
 		if err := offset2d.AuditOffsetSectionBudget(budget, tool.Prism.Profile, dilated[i]); err != nil {
-			return nil, shellCancelCause(err)
+			return nil, prismshell.CancelCause(err)
 		}
 	}
 	for i := range tc.Tools {
@@ -151,13 +151,13 @@ func shellThroughCut(ctx context.Context, b *Body, bp brepPayload, call brepShel
 	delta := sec.Delta
 	if len(rm.Walls) == 0 {
 		if delta, err = offset2d.OffsetSectionDelta(budget, tc.Caps.Section, 1, call.tmm, call.tDelta, shellTol); err != nil {
-			return nil, shellCancelCause(err)
+			return nil, prismshell.CancelCause(err)
 		}
 	}
 	for _, tool := range tc.Tools {
 		d, err := offset2d.OffsetSectionDelta(budget, tool.Prism.Profile, -1, call.tmm, call.tDelta, shellTol)
 		if err != nil {
-			return nil, shellCancelCause(err)
+			return nil, prismshell.CancelCause(err)
 		}
 		delta = max(delta, d)
 	}

@@ -2,24 +2,16 @@ package decad
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"math"
 
-	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/cupwall"
 	"github.com/lestrrat-3d/decad/internal/draftrecord"
 	"github.com/lestrrat-3d/decad/internal/extent"
-	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/modifyoption"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
-	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/shellsurvey"
-	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/decad/internal/stackedshell"
 	"github.com/lestrrat-3d/decad/internal/sweeprecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -321,148 +313,53 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value, opts .
 	}
 	bothCaps := removedStart && removedEnd
 
-	holed := len(pp.Profile.Holes) > 0
-	h := pp.Z1 - pp.Z0
+	in := prismshell.CapShellInput{Prism: pp, KeptCaps: 1, Sense: s, Thickness: t, HeldThickness: tmm, ThicknessDelta: tDelta}
+	if bothCaps {
+		in.KeptCaps = 0
+	}
 	offsetBudget := proofbound.NewWorkBudget(ctx)
 	if err := offsetBudget.Err(); err != nil {
 		return nil, err
 	}
-
-	// Stage 3 (§4): the construction's own gates — S18 (the inward section
-	// survey stays within its fixed work budget), S10 (the cavity is non-empty,
-	// inward only), then S11a (no feature the offset drops as it is built).
-	if s > 0 {
-		// The section limit: P ⊖ t is non-empty exactly when t is strictly less
-		// than the section's inradius. A contained disk can certify success;
-		// otherwise internal/survey2d/wall_kernel.go computes the same reading Wall.Minimum answers.
-		inradius, enough, err := shellsurvey.SectionInradius(offsetBudget, boundarywalk.Profile(pp.Profile), tmm, tDelta, shellTol)
-		if err != nil {
-			return nil, err
-		}
-		if err := shellsurvey.RequireSectionCavity(t, tmm, inradius, enough, shellTol); err != nil {
-			return nil, err
-		}
-		// The height limit: where a cap is kept (a cup), the wall behind it is a
-		// floor t thick, so the cavity is swept over an interval of length h − t,
-		// non-empty exactly when t < h. A both-caps shell keeps no cap and has no
-		// floor, so only the section limit reaches it (§8).
-		// The same scale-relative rounding tolerance as the section limit
-		// (shellTol*max(1, h), growing with the part's scale, not a fixed
-		// sub-nanometre margin): the refusal reports the computed accepted
-		// maximum thickness rather than the bare height.
-		if maxT := h - shellTol*math.Max(1, h); !bothCaps && tmm >= maxT {
-			if maxT <= 0 {
-				// The sweep height itself is at or below the rounding tolerance,
-				// so the accepted maximum is non-positive — no positive thickness
-				// leaves a floor cavity. A smaller thickness cannot help; the
-				// sweep height must be increased.
-				return nil, fmt.Errorf(`%w: the sweep height %s is at or below the evaluator's rounding tolerance, so this evaluator accepts no positive shell thickness here (the tolerance-adjusted maximum is non-positive); increase the sweep height`, ErrDegenerate, units.Millimeters(h))
-			}
-			return nil, fmt.Errorf(`%w: the shell thickness %s meets or exceeds the accepted maximum %s (the sweep height %s less the evaluator's rounding tolerance); use a thickness strictly below the accepted maximum`, ErrDegenerate, t, units.Millimeters(maxT), units.Millimeters(h))
-		}
-	}
-
-	// The exact per-feature offset (§7). A dropped feature or a miter that does
-	// not close is caught here — antecedent to the audit (S11a / S11) — before
-	// there is any constructed section to audit.
-	offset, err := offset2d.OffsetProfile(offsetBudget, pp.Profile, s, tmm, shellTol)
+	// Stages 3 and 4 (§4/§5): S18 and S10, the cavity's section and floor
+	// limits (inward only), S11a as the offset is built, then the offset
+	// section's audit.
+	offset, err := in.OffsetSection(offsetBudget)
 	if err != nil {
 		return nil, err
 	}
 
-	// Stage 4 (§4/§5): the audit of the OFFSET section — S8 (orientation), then
-	// the crossing test (a crossing or boundary contact of offset loops is S11b,
-	// §8), then S9 (nesting). The shared §5 audit, run on decad's own synthesized
-	// geometry. A shell mints no cutback, so S6 cannot fire.
-	if err := offset2d.AuditOffsetSectionBudget(offsetBudget, pp.Profile, offset); err != nil {
-		if errors.Is(err, context.Canceled) {
-			return nil, context.Canceled
-		}
-		if errors.Is(err, context.DeadlineExceeded) {
-			return nil, context.DeadlineExceeded
-		}
-		return nil, err
-	}
-
-	ref := d.nextProducerID()
-
+	env := envOf(documentNode(d), d.nextProducerID())
 	var body *Body
-	switch {
-	case bothCaps && !holed:
-		body, err = evalTubeContext(ctx, d, ref, pp, offset, s)
-	case bothCaps:
-		// B4 / reach BX8: the wall is one band around the outer loop plus one
-		// band lining each hole — 1 + k disjoint lumps, one stacked slab with
-		// one region per band.
-		offsetDelta, derr := offset2d.OffsetSectionDelta(offsetBudget, pp.Profile, s, tmm, tDelta, shellTol)
+	if bothCaps && len(pp.Profile.Holes) == 0 {
+		body, err = bodyResult(prismshell.BuildTube(ctx, env, in, offset))
+	} else {
+		offsetDelta, derr := in.SectionDelta(offsetBudget)
 		if derr != nil {
-			return nil, shellCancelCause(derr)
+			return nil, derr
 		}
-		body, err = evalShellBandsContext(ctx, d, ref, pp, offset, s, offsetDelta)
-	default:
-		// A one-cap shell is a cup (B5/B6), for any k ≥ 0: the offset section's
-		// loops are proven simple and correctly nested by the §5 audit above, and
-		// the cup wraps a wall band around each post, all hanging off the one
-		// floor slab (one lump).
-		// The offset section is a float evaluation of P ⊖ t*; the cup records
-		// how far it may sit from that denoted offset beside it (§9).
-		offsetDelta, derr := offset2d.OffsetSectionDelta(offsetBudget, pp.Profile, s, tmm, tDelta, shellTol)
-		if derr != nil {
-			return nil, shellCancelCause(derr)
+		if bothCaps {
+			// B4 / reach BX8: one band around the outer loop plus one band
+			// lining each hole.
+			body, err = bodyResult(prismshell.BuildBands(ctx, env, in, offset, offsetDelta))
+		} else {
+			// A one-cap shell is a cup (B5/B6), for any k ≥ 0: the offset
+			// section's loops are proven simple and correctly nested by the §5
+			// audit, and the cup wraps a wall band around each post, all
+			// hanging off the one floor slab (one lump). It records the offset
+			// section's displacement beside it (§9). internal/cupwall imports
+			// internal/prismshell, so the cup is built here.
+			cup, perr := cupwall.ViewFor(pp, offset, s, tmm, tDelta, offsetDelta, removedEnd).Payload(ctx)
+			if perr != nil {
+				return nil, perr
+			}
+			body, err = bodyResult(cupwall.Build(ctx, env, cup))
 		}
-		cup, perr := cupwall.ViewFor(pp, offset, s, tmm, tDelta, offsetDelta, removedEnd).Payload(ctx)
-		if perr != nil {
-			return nil, perr
-		}
-		body, err = bodyResult(cupwall.Build(ctx, envOf(documentNode(d), ref), cup))
 	}
 	if err != nil {
 		return nil, err
 	}
-	// Keep the consumed input aligned with document liveness at the commit edge.
-	if err := d.requireLive(b); err != nil {
-		return nil, err
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	d.commit(body, b)
-	return body, nil
-}
-
-// shellCancelCause maps an error wrapping a context cancellation to the bare
-// context error, as every shell build stage reports it.
-func shellCancelCause(err error) error {
-	if errors.Is(err, context.Canceled) {
-		return context.Canceled
-	}
-	if errors.Is(err, context.DeadlineExceeded) {
-		return context.DeadlineExceeded
-	}
-	return err
-}
-
-// evalShellBandsContext builds reach BX8: the both-caps shell of a section
-// with k >= 1 holes is 1 + k disjoint bands over the receiver's sweep, one
-// stacked slab holding one region per band (a prism group,
-// docs/stacked-prism-design.md §2.2). Each band is its own lump with its own
-// rim caps, capStart and capEnd, and its walls carry slab(0).region(m).side(i,j)
-// with the outer band first and the hole linings in ProfileRecord order. The
-// offset loops sit within offsetDelta of the offset the thickness denotes, so
-// the payload carries it as its section displacement.
-func evalShellBandsContext(ctx context.Context, d *Document, ref producerID, pp prismPayload, offset profileRecord, s, offsetDelta float64) (*Body, error) {
-	outer, cavity := pp.Profile, offset
-	if s < 0 {
-		outer, cavity = offset, pp.Profile
-	}
-	bands, err := prismshell.ShellWallBands(ctx, outer, cavity)
-	if err != nil {
-		return nil, err
-	}
-	return bodyResult(stackedrecord.Build(ctx, envOf(documentNode(d), ref), stackedPrismPayload{
-		Slabs: []stackedrecord.Slab{{Regions: bands, Z0: pp.Z0, Z1: pp.Z1, Z0Delta: pp.Z0Delta, Z1Delta: pp.Z1Delta}},
-		Frame: pp.Frame, Xform: pp.Xform, SectionDelta: offsetDelta,
-	}, stackedrecord.OwnPlan{}))
+	return commitModifyResult(ctx, b, body)
 }
 
 // refuseClosedShell is Shell's answer to WithNoOpenings on every receiver but
@@ -481,7 +378,7 @@ func refuseClosedShell(payload topo.Payload) error {
 	case brepPayload, stackedPrismPayload:
 		return fmt.Errorf(`%w: this evaluator does not build a closed shell of this brep or stacked receiver; it has no certified void-shell construction (modify-general SG2)`, ErrUnsupported)
 	case prismPayload:
-		// Shell routes a hole-free section to shellClosedPrism, so the prism
+		// Shell routes a hole-free section to prismshell.BuildClosed, so the prism
 		// that arrives here is holed.
 		return fmt.Errorf(`%w: a closed shell of a holed prism section is outside the shell extension (modify-reach SX8)`, ErrUnsupported)
 	case revolvePayload:
@@ -496,105 +393,19 @@ func refuseClosedShell(payload topo.Payload) error {
 	}
 }
 
-// shellClosedPrism is reach BX5 (docs/modify-reach-design.md §9.2): WithNoOpenings
-// on a hole-free straight prism keeps every face and lines it with a wall of
-// thickness t, closing a cavity. The record is three stacked slabs: inward,
-// the section P on [z0, z0 + t], the band between P and its erosion Q on
-// [z0 + t, z1 − t], and P on [z1 − t, z1]; outward, the dilation Q on
-// [z0 − t, z0], the band between Q and P on [z0, z1], and Q on [z1, z1 + t]. The
-// two interfaces expose the cavity region (Q inward, P outward) as the
-// cavity's floor and ceiling, and the cavity walls with them form one void
-// shell inside the outer one (FaceShell.IsVoid).
-//
-// The gates are the cup's with both caps kept: S18 and S10's section limit
-// (inward), then SX11, the axial cavity h − 2t, which must stay positive
-// (inward; ErrDegenerate), then S11a as the offset is built and the §5 audit.
-// The offset loops carry their proven displacement as the stack's section
-// displacement.
+// shellClosedPrism is reach BX5 (docs/modify-reach-design.md §9.2), built by
+// prismshell.BuildClosed: WithNoOpenings on a hole-free straight prism keeps
+// every face and lines it with a wall of thickness t, closing a cavity whose
+// walls form one void shell (FaceShell.IsVoid). It commits the result against
+// b's document.
 func (b *Body) shellClosedPrism(ctx context.Context, pp prismPayload, s float64, t units.Value, tmm, tDelta float64) (*Body, error) {
-	d := documentHandle(b.n.Doc)
-	if err := pp.RequireExactSection("shells"); err != nil {
-		return nil, err
-	}
-	budget := proofbound.NewWorkBudget(ctx)
-	if err := budget.Err(); err != nil {
-		return nil, err
-	}
-	if s > 0 {
-		inradius, enough, err := shellsurvey.SectionInradius(budget, boundarywalk.Profile(pp.Profile), tmm, tDelta, shellTol)
-		if err != nil {
-			return nil, err
-		}
-		if err := shellsurvey.RequireSectionCavity(t, tmm, inradius, enough, shellTol); err != nil {
-			return nil, err
-		}
-		// SX11: the two kept caps each eat t of the sweep, so the cavity's
-		// axial height h − 2t is positive exactly when t < h/2, read with the
-		// section limit's scale-relative rounding tolerance.
-		h := pp.Z1 - pp.Z0
-		if maxT := h/2 - shellTol*math.Max(1, h); tmm >= maxT {
-			return nil, fmt.Errorf(`%w: the shell thickness %s leaves no cavity between the two kept caps of a %s sweep (the accepted maximum is %s, half the sweep less the evaluator's rounding tolerance; modify-reach SX11)`,
-				ErrDegenerate, t, units.Millimeters(h), units.Millimeters(math.Max(maxT, 0)))
-		}
-	}
-	offset, err := offset2d.OffsetProfile(budget, pp.Profile, s, tmm, shellTol)
+	n, err := prismshell.BuildClosed(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), prismshell.CapShellInput{
+		Prism: pp, KeptCaps: 2, Sense: s, Thickness: t, HeldThickness: tmm, ThicknessDelta: tDelta,
+	})
 	if err != nil {
 		return nil, err
 	}
-	if err := offset2d.AuditOffsetSectionBudget(budget, pp.Profile, offset); err != nil {
-		return nil, shellCancelCause(err)
-	}
-	offsetDelta, err := offset2d.OffsetSectionDelta(budget, pp.Profile, s, tmm, tDelta, shellTol)
-	if err != nil {
-		return nil, shellCancelCause(err)
-	}
-	outer, cavity := pp.Profile, offset
-	if s < 0 {
-		outer, cavity = offset, pp.Profile
-	}
-	bands, err := prismshell.ShellWallBands(ctx, outer, cavity)
-	if err != nil {
-		return nil, err
-	}
-	// Each derived level carries its source end's displacement, the thickness
-	// conversion and this float sum's rounding, as a cup's floor level does.
-	step := func(from, delta, by float64) (float64, float64) {
-		to := from + by
-		return to, proofbound.AbsSumUpper(delta, tDelta, proofarith.AddRoundError(from, by, to))
-	}
-	lo, loDelta := step(pp.Z0, pp.Z0Delta, s*tmm)
-	hi, hiDelta := step(pp.Z1, pp.Z1Delta, -s*tmm)
-	caps := stackedrecord.Slab{Regions: []profileRecord{outer}}
-	first, middle, last := caps, stackedrecord.Slab{Regions: bands}, caps
-	if s > 0 {
-		first.Z0, first.Z0Delta, first.Z1, first.Z1Delta = pp.Z0, pp.Z0Delta, lo, loDelta
-		middle.Z0, middle.Z0Delta, middle.Z1, middle.Z1Delta = lo, loDelta, hi, hiDelta
-		last.Z0, last.Z0Delta, last.Z1, last.Z1Delta = hi, hiDelta, pp.Z1, pp.Z1Delta
-	} else {
-		first.Z0, first.Z0Delta, first.Z1, first.Z1Delta = lo, loDelta, pp.Z0, pp.Z0Delta
-		middle.Z0, middle.Z0Delta, middle.Z1, middle.Z1Delta = pp.Z0, pp.Z0Delta, pp.Z1, pp.Z1Delta
-		last.Z0, last.Z0Delta, last.Z1, last.Z1Delta = pp.Z1, pp.Z1Delta, hi, hiDelta
-	}
-	exposed := []profileRecord{cavity}
-	ref := d.nextProducerID()
-	body, err := bodyResult(stackedrecord.Build(ctx, envOf(documentNode(d), ref), stackedPrismPayload{
-		Slabs:        []stackedrecord.Slab{first, middle, last},
-		Interfaces:   []stackedrecord.Interface{{LowerExposed: exposed}, {UpperExposed: exposed}},
-		Frame:        pp.Frame,
-		Xform:        pp.Xform,
-		SectionDelta: offsetDelta,
-	}, stackedrecord.OwnPlan{}))
-	if err != nil {
-		return nil, err
-	}
-	if err := d.requireLive(b); err != nil {
-		return nil, err
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	d.commit(body, b)
-	return body, nil
+	return commitModifyResult(ctx, b, bodyHandle(n))
 }
 
 // shellTol is the closed-form degeneracy tolerance for the shell's own gates
@@ -625,41 +436,4 @@ func classifyRemovedCaps(caps prismCaps, removed []*Face) (bool, bool, error) {
 		}
 	}
 	return start, end, nil
-}
-
-// evalTube builds the both-caps hole-free shell (Table B, B2/B3): a plain prism
-// over the annular section — {Outer: P, Hole: reverse(Q)} inward, {Outer: Q,
-// Hole: reverse(P)} outward — so it IS a prismPayload, admitted as a receiver
-// (R1) and first-class downstream (§12). The inner loop is walked as a hole
-// (reversed sense), which is what makes its wall's material lie outside it.
-func evalTubeContext(ctx context.Context, d *Document, ref producerID, pp prismPayload, offset profileRecord, s float64) (*Body, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	var outer, inner loopRecord
-	if s > 0 { // inward: P is the outside, Q the cavity
-		outer = pp.Profile.Outer
-		inner = offset.Outer
-	} else { // outward: Q is the outside, P the cavity
-		outer = offset.Outer
-		inner = pp.Profile.Outer
-	}
-	holeLoop, err := offset2d.ReverseLoopRecordContext(ctx, inner)
-	if err != nil {
-		return nil, err
-	}
-	section := profileRecord{Outer: outer, Holes: []loopRecord{holeLoop}}
-	// The annular section is a NEW record no preflight has seen, so the build
-	// opens its one counter here (docs/spline-design.md §5.2).
-	// A tube keeps the receiver's sweep, so each end keeps its own axial
-	// displacement too.
-	return bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), ref), prismrecord.Payload{
-		Profile: section,
-		Frame:   pp.Frame,
-		Z0:      pp.Z0,
-		Z1:      pp.Z1,
-		Z0Delta: pp.Z0Delta,
-		Z1Delta: pp.Z1Delta,
-		Xform:   pp.Xform,
-	}, freeform.NewFreeformWork()))
 }

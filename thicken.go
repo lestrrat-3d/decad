@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/prismshell"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
@@ -201,7 +202,8 @@ func thickenPrism(ctx context.Context, d *Document, pp prismPayload, side Thicke
 	}
 	if side != ThickenCentered {
 		negative := side == ThickenNegative
-		return evalTubeContext(ctx, d, d.nextProducerID(), pp, sec.Generated(negative), sec.Sense(negative))
+		return bodyResult(prismshell.BuildTube(ctx, envOf(documentNode(d), d.nextProducerID()),
+			prismshell.CapShellInput{Prism: pp, Sense: sec.Sense(negative)}, sec.Generated(negative)))
 	}
 	annulus, err := sec.Annulus(ctx)
 	if err != nil {
