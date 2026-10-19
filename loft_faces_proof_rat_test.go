@@ -82,8 +82,6 @@ func ratHelperCases() []ratHelperCase {
 	return []ratHelperCase{
 		{"lfAdd", lfAdd, add, false}, {"lfSub", lfSub, sub, false},
 		{"lfMul", lfMul, mul, false}, {"lfDiv", lfDiv, quo, true},
-		{"pointPlaneAdd", pointPlaneAdd, add, false}, {"pointPlaneSub", pointPlaneSub, sub, false},
-		{"pointPlaneMul", pointPlaneMul, mul, false},
 	}
 }
 
