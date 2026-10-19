@@ -1,4 +1,4 @@
-package decad
+package revolveloftfaces
 
 import (
 	"math/big"
@@ -10,11 +10,22 @@ import (
 	"github.com/lestrrat-3d/sketch"
 )
 
-// A signed side applies to the entire true mapped Bezier span in every band.
-// For a crossing, Q_s has a strict sign and the root's X movement has a
-// strict positive Bernstein bound. These are exact rational predicates.
-func revolveLoftFacesFitSide(trim *loftFacesTrimRecord, m, b *big.Rat,
-	segmentIndex int, segment fitSplineSeg) (*revolveLoftFacesCrossing, int, bool) {
+// FitSideCrossing describes the exact source crossing before root binds live faces.
+type FitSideCrossing struct {
+	Segment int
+	Span    freeform.BezierSpan
+	Index   int
+	First   int
+	Last    int
+	Caps    []loftface.RootCrossing
+	X       []loftface.Interval
+}
+
+// FitSide classifies signed sides over the entire true mapped Bezier span in
+// every band. A crossing has a strict Q_s sign and a positive Bernstein bound
+// on the root's X movement.
+func FitSide(trim *loftFacesTrimRecord, m, b *big.Rat,
+	segmentIndex int, segment fitSplineSeg) (*FitSideCrossing, int, bool) {
 	if _, ok := trim.Source.Source.Entities[segmentIndex].(*sketch.FitSpline); !ok ||
 		!((segment.TStart == 0 && segment.TEnd == 1) ||
 			(segment.TStart == 1 && segment.TEnd == 0)) {
@@ -27,7 +38,7 @@ func revolveLoftFacesFitSide(trim *loftFacesTrimRecord, m, b *big.Rat,
 		return nil, 0, false
 	}
 	sides := make([]int, len(spans))
-	var crossing *revolveLoftFacesCrossing
+	var crossing *FitSideCrossing
 	for index, span := range spans {
 		var sign int
 		seenBand := false
@@ -49,9 +60,9 @@ func revolveLoftFacesFitSide(trim *loftFacesTrimRecord, m, b *big.Rat,
 			if crossing != nil {
 				return nil, 0, false
 			}
-			crossing = &revolveLoftFacesCrossing{segment: segmentIndex, span: span,
-				index: index, caps: make([]loftface.RootCrossing, len(trim.Maps)),
-				x: make([]loftFaceInterval, len(trim.Maps))}
+			crossing = &FitSideCrossing{Segment: segmentIndex, Span: span,
+				Index: index, Caps: make([]loftface.RootCrossing, len(trim.Maps)),
+				X: make([]loftface.Interval, len(trim.Maps))}
 		}
 	}
 	if crossing == nil {
@@ -62,42 +73,42 @@ func revolveLoftFacesFitSide(trim *loftFacesTrimRecord, m, b *big.Rat,
 		}
 		return nil, sides[0], true
 	}
-	q := loftface.MeridianQRows(trim.Maps[0], trim.Maps[1], crossing.span, m, b)
+	q := loftface.MeridianQRows(trim.Maps[0], trim.Maps[1], crossing.Span, m, b)
 	before, after := loftface.SideInside, loftface.SideOutside
 	if q[0][0].Sign() > 0 {
 		before, after = after, before
 	}
 	for i, side := range sides {
 		switch {
-		case i < crossing.index && side != before:
+		case i < crossing.Index && side != before:
 			return nil, 0, false
-		case i > crossing.index && side != after:
+		case i > crossing.Index && side != after:
 			return nil, 0, false
 		}
 	}
 	for capIndex, mapped := range trim.Maps {
-		capQ := loftface.MeridianQRows(mapped, mapped, crossing.span, m, b)
+		capQ := loftface.MeridianQRows(mapped, mapped, crossing.Span, m, b)
 		kind, signedCap := loftface.ClassifyRows(capQ)
 		if kind != loftface.SideCrossed {
 			return nil, 0, false
 		}
 		root := loftface.IsolateRoot(signedCap[0])
-		root.Span = crossing.index
-		direction := loftface.CapXDirection(mapped, crossing.span)
+		root.Span = crossing.Index
+		direction := loftface.CapXDirection(mapped, crossing.Span)
 		if direction == 2 {
 			return nil, 0, false
 		}
-		crossing.caps[capIndex] = root
-		crossing.x[capIndex] = loftface.DirectedCapXRange(mapped, crossing.span, root, direction)
+		crossing.Caps[capIndex] = root
+		crossing.X[capIndex] = loftface.DirectedCapXRange(mapped, crossing.Span, root, direction)
 	}
-	for i := 0; i+1 < len(crossing.x); i++ {
-		if crossing.x[i].Hi.Cmp(crossing.x[i+1].Lo) >= 0 {
+	for i := 0; i+1 < len(crossing.X); i++ {
+		if crossing.X[i].Hi.Cmp(crossing.X[i+1].Lo) >= 0 {
 			return nil, 0, false
 		}
 	}
 	if segment.TStart == 1 {
 		before, after = after, before
 	}
-	crossing.first, crossing.last = before, after
+	crossing.First, crossing.Last = before, after
 	return crossing, 0, true
 }

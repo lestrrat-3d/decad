@@ -238,11 +238,16 @@ func certifyRevolveLoftFacesAgainstRoot(ctx context.Context, blank, tooth *Body,
 			return nil, false, err
 		}
 		if fit, isFit := segment.(fitSplineSeg); isFit {
-			crossing, side, ok := revolveLoftFacesFitSide(trim, m, b, i, fit)
+			fitCrossing, side, ok := revolveloftfaces.FitSide(trim, m, b, i, fit)
 			if !ok {
 				return nil, false, nil
 			}
-			if crossing != nil {
+			if fitCrossing != nil {
+				crossing := revolveLoftFacesCrossing{
+					segment: fitCrossing.Segment, span: fitCrossing.Span,
+					index: fitCrossing.Index, first: fitCrossing.First, last: fitCrossing.Last,
+					caps: fitCrossing.Caps, x: fitCrossing.X,
+				}
 				index := 0
 				if proof.crossings[0].span != nil {
 					index = 1
@@ -250,7 +255,7 @@ func certifyRevolveLoftFacesAgainstRoot(ctx context.Context, blank, tooth *Body,
 				if index >= len(proof.crossings) {
 					return nil, false, nil
 				}
-				proof.crossings[index] = *crossing
+				proof.crossings[index] = crossing
 				start[i], end[i] = crossing.first, crossing.last
 				continue
 			}

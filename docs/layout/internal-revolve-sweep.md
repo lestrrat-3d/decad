@@ -12,7 +12,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/sweeppath/` | Pair paths, validation, rounded poses, motion travel bounds, and the node's checked rotational radius reader. |
 | `internal/revolveaxis/` | Axis frames, walks, side/contact gates, snap and section charges, extent readings, the simple-revolution radial proof, and wall and cap denotations. See evaluator §6. |
 | `internal/revolveshell/` | Surveys shell walls and builds section rings, sector caps, sector meshes, bore checks, and the straight-band cylinder Cut mesh and proof. See modify-reach §9.3 and revolve-loft-sector design. |
-| `internal/revolveloftfaces/` | Certifies face-fed loft source walks, maps, embedding, orientation, cap and volume bounds, and contact gates; builds seam, strip and wedge geometry. See loft-face-sections and revolve-loft-contact-graph. |
+| `internal/revolveloftfaces/` | Certifies face-fed loft source walks, fitted sides and crossings, maps, embedding, orientation, cap and volume bounds, and Revolve contact gates; builds seam, strip and wedge geometry. See loft-face-sections and revolve-loft-contact-graph. |
 | `internal/revolvemass/` | Revolve moments and centroid bounds. |
 | `internal/revolveangle/` | Exact angle denotations and certified sweep extremes. See evaluator §6 and sweep §3. |
 | `internal/sweeparc/` | Exact circle carriers, rational vectors, axis lines, plane gates and angle bounds. See sweep §3. |
