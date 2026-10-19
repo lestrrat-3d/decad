@@ -27,7 +27,7 @@ import (
 //
 // This test is the mechanical check that class of loss cannot come back. It
 // reads the workflow as text — the repository has no YAML parser among its
-// approved modules (CLAUDE.md) and gains none for a guard — and asserts five
+// approved modules (docs/modules.md) and gains none for a guard — and asserts five
 // properties, each of which fails loudly rather than degrading quietly:
 //
 //   - no shard command combines a `-run` filter with `./...`;
