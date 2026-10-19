@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
+	"github.com/lestrrat-3d/decad/internal/placedruling"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sweepdeparture"
@@ -62,6 +63,28 @@ func PreparePlanarPath(node *topo.Body, path sweeppath.AffinePath, solid *planar
 	for i, v := range solid.Verts {
 		prepared.StartPoints[i] = proofarith.DvTransform(path.From, v)
 	}
+	return prepared, true
+}
+
+// PrepareRollingPath pairs node's ideal motion with the eight corners of the
+// cylinder's identity box as source points and its two end-disk centers at
+// the path's From as start points.
+func PrepareRollingPath(node *topo.Body, path sweeppath.AffinePath, c *placedruling.Cylinder) (BodyPath, bool) {
+	prepared, ok := PrepareBodyPath(node, path)
+	if !ok {
+		return BodyPath{}, false
+	}
+	for i := range 8 {
+		var corner proofarith.DyV3
+		for k := range 3 {
+			corner[k] = c.BoxLo[k]
+			if i&(1<<k) != 0 {
+				corner[k] = c.BoxHi[k]
+			}
+		}
+		prepared.SourcePoints = append(prepared.SourcePoints, corner)
+	}
+	prepared.StartPoints = append(prepared.StartPoints, c.Centers[:]...)
 	return prepared, true
 }
 

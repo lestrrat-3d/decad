@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
+	"github.com/lestrrat-3d/decad/internal/planarsweep"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
@@ -200,8 +201,8 @@ type SweepContactTrack struct {
 	orientedA     *orientedSourceBox
 	orientedB     *orientedSourceBox
 	orientedDelta [3]proofarith.Dyadic
-	planar        *planarTrackProof  // general planar touch or band (contact_sweep_planar.go)
-	rolling       *rollingTrackProof // rolling cylinder touch or band (contact_sweep_rolling.go)
+	planar        *planarsweep.TrackProof // general planar touch or band (contact_sweep_planar.go)
+	rolling       *rollingTrackProof      // rolling cylinder touch or band (contact_sweep_rolling.go)
 }
 
 func (t *SweepContactTrack) Start() SweepInstant { return sweepInstant(t.start, t.duration) }
@@ -222,7 +223,7 @@ func (t *SweepContactTrack) Band() *Measurement {
 	var band *Measurement
 	switch {
 	case t.planar != nil:
-		band = t.planar.band
+		band = measurementPtrFromInternal(t.planar.Band)
 	case t.rolling != nil:
 		band = t.rolling.band
 	}
@@ -253,8 +254,8 @@ func (t *SweepContactTrack) BandAt(fraction units.Value) (*Measurement, error) {
 	}
 	var depth *big.Rat
 	switch {
-	case t.planar != nil && t.planar.band != nil:
-		if depth, ok = t.planar.depthThrough(f); !ok {
+	case t.planar != nil && t.planar.Band != nil:
+		if depth, ok = t.planar.DepthThrough(f); !ok {
 			return nil, fmt.Errorf("%w: band depth has no finite bound", ErrUnsupported)
 		}
 	case t.rolling != nil && t.rolling.band != nil:
@@ -285,7 +286,7 @@ func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, 
 		return nil, fmt.Errorf("%w: fraction is outside contact track", ErrDegenerate)
 	}
 	if t.planar != nil {
-		return t.planar.planarManifoldAt(f, t.request)
+		return planarManifoldAt(t.planar, f, t.request)
 	}
 	if t.rolling != nil {
 		return t.rolling.manifoldAt(f, t.request)

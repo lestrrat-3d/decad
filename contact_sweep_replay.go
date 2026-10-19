@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
+	"github.com/lestrrat-3d/decad/internal/planarsweep"
 	"github.com/lestrrat-3d/decad/internal/ringmemo"
 	"github.com/lestrrat-3d/decad/internal/spherepath"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
@@ -41,7 +42,7 @@ type sweepReplayProof struct {
 	sphereAxis, sphereSide     int
 	sphereGap, sphereSlope     proofarith.Dyadic
 	rotation                   *[2]rotationalSweepPath
-	planar                     *planarReplay // a general planar sweep (contact_sweep_planar.go)
+	planar                     *planarsweep.Replay // a general planar sweep (contact_sweep_planar.go)
 	track                      *SweepContactTrack
 	request                    reportvocab.ContactRequest
 	outcome                    SweepOutcome
@@ -643,12 +644,12 @@ func (r *SweepReport) certifiedPlanarPosesAtFraction(f *big.Rat) (r3.Transform, 
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded planar replay pose exceeds point resolution", ErrUnsupported)
 	}
 	if p.track != nil {
-		if _, ok := p.track.planar.replayHeights(f); !ok {
+		if _, ok := p.track.planar.ReplayHeights(f); !ok {
 			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded planar replay pose leaves the certified band", ErrUnsupported)
 		}
 		return poses[0], poses[1], nil
 	}
-	if f.Sign() == 0 && p.planar.departure != nil {
+	if f.Sign() == 0 && p.planar.Departure != nil {
 		if deviation.Sign() != 0 {
 			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: planar departure start is not the exact touch", ErrUnsupported)
 		}
@@ -661,7 +662,7 @@ func (r *SweepReport) certifiedPlanarPosesAtFraction(f *big.Rat) (r3.Transform, 
 		}
 		return poses[0], poses[1], nil
 	}
-	lower := p.planar.lowerGap(f)
+	lower := p.planar.LowerGap(f)
 	if lower == nil || lower.Cmp(new(big.Rat).Add(deviation, displacement)) <= 0 {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded planar replay gap does not exceed pose error", ErrUnsupported)
 	}

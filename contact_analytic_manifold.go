@@ -413,8 +413,8 @@ func publishPlacedRulingManifold(report *reportvocab.ContactReport, c *placedCyl
 	for _, rim := range rims {
 		foot := rim
 		foot[plane.Axis] = plane.Offset
-		onM, okM := planarTrackPoint([3]*big.Rat(planarsweep.RatOfDyV3(rim)), lateral, resolution)
-		onS, okS := planarTrackPoint([3]*big.Rat(planarsweep.RatOfDyV3(foot)), lateral, resolution)
+		onM, okM := planarsweep.PointReading([3]*big.Rat(planarsweep.RatOfDyV3(rim)), lateral, resolution)
+		onS, okS := planarsweep.PointReading([3]*big.Rat(planarsweep.RatOfDyV3(foot)), lateral, resolution)
 		if !okM || !okS {
 			report.Reason = reportvocab.ContactPointTooCoarse
 			return
@@ -423,10 +423,10 @@ func publishPlacedRulingManifold(report *reportvocab.ContactReport, c *placedCyl
 			Separation: measurement.Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(bound),
 				Exactness: measurement.ExactnessOf(bound)}}
 		if cylinderFirst {
-			point.OnA, point.OnB = vecMeasurementToInternal(onM), vecMeasurementToInternal(onS)
+			point.OnA, point.OnB = onM, onS
 			point.FeatureA, point.FeatureB = reportvocab.ContactFeature{Face: faceNode(c.wall)}, reportvocab.ContactFeature{Face: faceS}
 		} else {
-			point.OnA, point.OnB = vecMeasurementToInternal(onS), vecMeasurementToInternal(onM)
+			point.OnA, point.OnB = onS, onM
 			point.FeatureA, point.FeatureB = reportvocab.ContactFeature{Face: faceS}, reportvocab.ContactFeature{Face: faceNode(c.wall)}
 		}
 		point.FaceA, point.FaceB = point.FeatureA.Face, point.FeatureB.Face
