@@ -38,6 +38,26 @@ func tryLoftCylinderUnion(ctx context.Context, op meshbool.OperationKind,
 	return tryPlacedLoftCylinderUnion(ctx, d, ref, a, b)
 }
 
+// tryLoftCylinderBoreCut cuts a centered through-bore from an audited
+// loft/cylinder join. A placed join goes to tryPlacedLoftCylinderBoreCut;
+// loftcylinder.BoreCut admits the tool and builds the bore of an identity
+// join.
+func tryLoftCylinderBoreCut(ctx context.Context, op meshbool.OperationKind,
+	d *Document, ref producerID, target, tool *Body) (*Body, bool, error) {
+	if op != meshbool.OpCut {
+		return nil, false, nil
+	}
+	joined, ok := target.n.Payload.(facetedPayload)
+	if !ok || joined.LoftCylinderJoin == nil {
+		return nil, false, nil
+	}
+	if joined.LoftCylinderJoin.Placement != nil {
+		return tryPlacedLoftCylinderBoreCut(ctx, d, ref, target, tool)
+	}
+	body, admitted, err := loftcylinder.BoreCut(ctx, envOf(documentNode(d), ref), joined, bodyNode(tool))
+	return bodyHandle(body), admitted, err
+}
+
 // tryLoftCylinderUnionTeeth certifies one complete circular Join from the
 // blank and all of its Loft teeth in a single certificate.
 func tryLoftCylinderUnionTeeth(ctx context.Context, d *Document, ref producerID,
