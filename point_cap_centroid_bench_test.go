@@ -53,7 +53,7 @@ func BenchmarkPointPlaneCapCentroidRealSplit(b *testing.B) {
 		Two: DistanceSide{D: units.Millimeters(30)},
 	})
 	require.NoError(b, err)
-	plane, ok := exactPointPlaneSheet(sheet, apex)
+	plane, ok := facetedrecord.PointPlaneSheet(&sheet.n, apex)
 	require.True(b, ok)
 	base := tooth.n.Payload.(facetedPayload)
 	require.NoError(b, facetedrecord.ValidatePointPlane(base, plane))

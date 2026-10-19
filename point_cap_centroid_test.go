@@ -36,7 +36,7 @@ func pointPlaneCapCentroidThreeMomentReference(ctx context.Context, base faceted
 		polygon[i] = q
 	}
 	u, v := 0, 2
-	if pointPlaneAbs(plane.Nx).Cmp(pointPlaneAbs(plane.Ny)) > 0 {
+	if new(big.Rat).Abs(plane.Nx).Cmp(new(big.Rat).Abs(plane.Ny)) > 0 {
 		u = 1
 	}
 	twiceArea := new(big.Rat)
@@ -57,24 +57,24 @@ func pointPlaneCapCentroidThreeMomentReference(ctx context.Context, base faceted
 	anchor := polygon[0]
 	for i := 1; i+1 < len(polygon); i++ {
 		a, b := polygon[i], polygon[i+1]
-		cross := pointPlaneSub(
-			pointPlaneMul(pointPlaneSub(a[u], anchor[u]), pointPlaneSub(b[v], anchor[v])),
-			pointPlaneMul(pointPlaneSub(b[u], anchor[u]), pointPlaneSub(a[v], anchor[v])))
+		cross := lfSub(
+			lfMul(lfSub(a[u], anchor[u]), lfSub(b[v], anchor[v])),
+			lfMul(lfSub(b[u], anchor[u]), lfSub(a[v], anchor[v])))
 		twiceArea.Add(twiceArea, cross)
 		for k := range moments {
-			three := pointPlaneAdd(pointPlaneAdd(anchor[k], a[k]), b[k])
-			moments[k].Add(moments[k], pointPlaneMul(three, cross))
+			three := lfAdd(lfAdd(anchor[k], a[k]), b[k])
+			moments[k].Add(moments[k], lfMul(three, cross))
 		}
 	}
 	if twiceArea.Sign() == 0 || proofbound.IsNonFinite(perimeter) {
 		return VecMeasurement{}, [3]*big.Rat{}, false, nil
 	}
-	den := pointPlaneMul(big.NewRat(3, 1), twiceArea)
+	den := lfMul(big.NewRat(3, 1), twiceArea)
 	var center [3]*big.Rat
 	for k := range center {
 		center[k] = new(big.Rat).Quo(moments[k], den)
 	}
-	areaLower := proofbound.RatFloatDown(new(big.Rat).Quo(pointPlaneAbs(twiceArea), big.NewRat(2, 1)))
+	areaLower := proofbound.RatFloatDown(new(big.Rat).Quo(new(big.Rat).Abs(twiceArea), big.NewRat(2, 1)))
 	delta := proofbound.ProductUpper(plane.MapStretch, base.MeshBound)
 	tube := proofbound.SectionDisplacementArea(delta, len(polygon), perimeter)
 	if areaLower <= tube || proofbound.IsNonFinite(delta) || proofbound.IsNonFinite(tube) {
@@ -132,7 +132,7 @@ func requirePointCapThreeMomentMatch(t *testing.T, base facetedPayload, plane *p
 	anchor, err := facetedrecord.PointPlaneMapExact(base.PointSection.Apex, base.Verts[1], plane)
 	require.NoError(t, err)
 	keep := 0
-	if pointPlaneAbs(plane.Nx).Cmp(pointPlaneAbs(plane.Ny)) > 0 {
+	if new(big.Rat).Abs(plane.Nx).Cmp(new(big.Rat).Abs(plane.Ny)) > 0 {
 		keep = 1
 	}
 	recovered := facetedrecord.PointPlaneCapDroppedCoordinate(exact, anchor, plane, keep)
@@ -181,8 +181,8 @@ func TestPointPlaneCapCentroidMatchesThreeMoments(t *testing.T) {
 				}
 			}
 			t.Run(name, func(t *testing.T) {
-				plane := &pointPlaneLimit{Nx: ratOfPointPlane(tc.nx), Ny: ratOfPointPlane(tc.ny),
-					D: ratOfPointPlane(tc.d), MapStretch: 1}
+				plane := &pointPlaneLimit{Nx: lfF(tc.nx), Ny: lfF(tc.ny),
+					D: lfF(tc.d), MapStretch: 1}
 				base := testPointCapBase(tc.apex, far, 0)
 				requirePointCapThreeMomentMatch(t, base, plane, t.Context())
 				if tc.name == "halfway_rounding" {
@@ -191,7 +191,7 @@ func TestPointPlaneCapCentroidMatchesThreeMoments(t *testing.T) {
 					require.True(t, proved)
 					lo := new(big.Rat).SetFloat64(0.5)
 					hi := new(big.Rat).SetFloat64(math.Nextafter(0.5, 1))
-					midpoint := new(big.Rat).Quo(pointPlaneAdd(lo, hi), big.NewRat(2, 1))
+					midpoint := new(big.Rat).Quo(lfAdd(lo, hi), big.NewRat(2, 1))
 					require.Zero(t, exact[1].Cmp(midpoint))
 				}
 			})
@@ -203,8 +203,8 @@ func TestPointPlaneCapCentroidMatchesThreeMoments(t *testing.T) {
 			angle := 2 * math.Pi * float64(i) / float64(len(far))
 			far[i] = r3.NewVec(9+math.Sin(3*angle)/8, 3+math.Cos(angle), math.Sin(angle))
 		}
-		plane := &pointPlaneLimit{Nx: ratOfPointPlane(near(0.7, 1)), Ny: ratOfPointPlane(0.6),
-			D: ratOfPointPlane(2.5), MapStretch: 1}
+		plane := &pointPlaneLimit{Nx: lfF(near(0.7, 1)), Ny: lfF(0.6),
+			D: lfF(2.5), MapStretch: 1}
 		base := testPointCapBase(apex, far, 0)
 		requirePointCapThreeMomentMatch(t, base, plane, t.Context())
 		_, exact, proved, err := pointPlaneCapCentroidThreeMomentReference(t.Context(), base, plane)

@@ -119,9 +119,10 @@ func pointPlaneAbs(q *big.Rat) *big.Rat { return new(big.Rat).Abs(q) }
 // equals the exact value, but is in lowest terms only for reduced operands (a
 // 3/9 operand gives 3/9 where big.Rat gives 1/3). Every operand in this
 // package is reduced: FloatRat through ratOfPointPlane and
-// massmoment.PlacementRotation, the PointPlaneLimit coefficients the root
-// package builds from reduced producers, exact rotation matrices, and results
-// of these helpers and of raw Abs. The guard TestNoRatWritesThroughNumDenom
+// massmoment.PlacementRotation, the PointPlaneLimit coefficients
+// PointPlaneSheet builds with these helpers and negates in place with Neg,
+// exact rotation matrices, and results of these helpers and of raw Abs and
+// Neg. The guard TestNoRatWritesThroughNumDenom
 // (internal/proof) bars in-place Num and Denom writes outside internal/proof.
 func pointPlaneAdd(a, b *big.Rat) *big.Rat { return proofarith.AddRat(new(big.Rat), a, b) }
 
