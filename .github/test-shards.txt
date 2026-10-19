@@ -164,7 +164,6 @@
 9	10.78	TestCurvedCallScopeShellMatchesUnscoped
 9	4.91	TestCurvedHeelArcSideTiesRejectChangedSourceRecord
 9	8.26	TestCurvedVerticalTraceConsumesLiveGraphAndShell
-9	0.00	TestJoinedMeshOrientationChecksClosedConnectedShell
 9	0.00	TestLoftCapConeProofRequiresStrictWholeCapSeparation
 9	0.00	TestLoftMirrorCylinderPairKeepsAuthenticatedSource
 9	0.00	TestMappedRadialJointExactRootBoundary

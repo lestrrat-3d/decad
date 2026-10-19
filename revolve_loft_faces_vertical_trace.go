@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -370,7 +371,7 @@ func revolveLoftFacesInsertVerticalTrace(ctx context.Context,
 	if proofbound.IsNonFinite(working.faceBound) || working.faceBound >= 0.1 {
 		return nil, false, nil
 	}
-	if err := orientJoinedMesh(&working.mesh); err != nil {
+	if err := tessellation.OrientJoinedMesh(working.mesh.Verts, working.mesh.Tris); err != nil {
 		return nil, false, err
 	}
 	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx),

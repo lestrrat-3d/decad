@@ -106,7 +106,7 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 		if cap == 1 {
 			z = record.Z1
 		}
-		if !loftCylinderAuditCap(ctx, source, record.CapOutlines[cap],
+		if !loftcylinder.AuditCap(ctx, source.Verts, source.Tris, source.Src, record.CapOutlines[cap],
 			record.CapGroups[cap], z, cap == 0) {
 			if err := ctx.Err(); err != nil {
 				return nil, err
@@ -206,7 +206,7 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 		mesh.Add([3]int{inner[0][i], inner[1][i], inner[1][j]}, wallGroup)
 		mesh.Add([3]int{inner[0][i], inner[1][j], inner[0][j]}, wallGroup)
 	}
-	if err := orientJoinedMesh(mesh); err != nil {
+	if err := tessellation.OrientJoinedMesh(mesh.Verts, mesh.Tris); err != nil {
 		return nil, err
 	}
 	if err := tessellation.RequireVertexLinks(ctx, len(mesh.Verts), mesh.Tris); err != nil {
@@ -214,7 +214,7 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 	}
 	if err := loftmesh.LoftCrossingAuditBounded(
 		proofbound.NewWorkBudget(ctx), mesh.Verts, mesh.Tris,
-		loftmesh.MaxLoftAuditTriangles, loftCylinderAuditMaxScans); err != nil {
+		loftmesh.MaxLoftAuditTriangles, loftcylinder.AuditMaxScans); err != nil {
 		return nil, err
 	}
 	height := proofbound.RatFloatUp(new(big.Rat).Sub(
@@ -275,7 +275,7 @@ func buildLoftCylinderBore(ctx context.Context, d *Document, ref producerID,
 		if cap == 1 {
 			z = record.Z1
 		}
-		if !loftCylinderAuditAnnulus(ctx, mesh, result.LoftCylinderBore.Outer[cap],
+		if !loftcylinder.AuditAnnulus(ctx, mesh.Verts, mesh.Tris, mesh.Src, result.LoftCylinderBore.Outer[cap],
 			result.LoftCylinderBore.Inner[cap], record.CapGroups[cap], z, cap == 0) {
 			if err := ctx.Err(); err != nil {
 				return nil, err

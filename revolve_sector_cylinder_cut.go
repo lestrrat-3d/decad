@@ -215,7 +215,7 @@ func buildRevolveSectorAnnularCut(ctx context.Context, d *Document, ref producer
 		mesh.Add([3]int{innerLow[i], innerHigh[i], innerHigh[j]}, wallGroup)
 		mesh.Add([3]int{innerLow[i], innerHigh[j], innerLow[j]}, wallGroup)
 	}
-	if err := orientJoinedMesh(mesh); err != nil {
+	if err := tessellation.OrientJoinedMesh(mesh.Verts, mesh.Tris); err != nil {
 		return nil, true, err
 	}
 	if err := tessellation.RequireVertexLinks(ctx, len(mesh.Verts), mesh.Tris); err != nil {

@@ -288,14 +288,12 @@ func buildLoftMirrorCylinderUnion(ctx context.Context, d *Document, ref producer
 	if !ok {
 		return nil, fmt.Errorf("%w: mirrored cylinder lost its circular blank", ErrUnsupported)
 	}
-	mesh := &joinedMesh{Verts: shell.Payload.Verts, Tris: shell.Payload.Tris,
-		Src: shell.Payload.Src, Groups: shell.Payload.Groups}
 	for cap, outline := range shell.CapOutlines {
 		z := fullBlank.Z0
 		if cap == 1 {
 			z = fullBlank.Z1
 		}
-		if !loftCylinderAuditCap(ctx, mesh, outline, shell.CapGroups[cap], z, cap == 0) {
+		if !loftcylinder.AuditCap(ctx, shell.Payload.Verts, shell.Payload.Tris, shell.Payload.Src, outline, shell.CapGroups[cap], z, cap == 0) {
 			return nil, fmt.Errorf("%w: mirrored cylinder cap does not tile its recorded outline", ErrUnsupported)
 		}
 	}
@@ -410,7 +408,7 @@ func tryLoftMirrorCylinderBoreCut(ctx context.Context, op meshbool.OperationKind
 			level = blank.Z1
 		}
 		if group < 0 || group >= len(joined.Groups) ||
-			!loftCylinderAuditCap(ctx, source, record.CapOutlines[cap], group, level, cap == 0) {
+			!loftcylinder.AuditCap(ctx, source.Verts, source.Tris, source.Src, record.CapOutlines[cap], group, level, cap == 0) {
 			return nil, true, fmt.Errorf("%w: mirrored circular Join lost an outer cap disk", ErrUnsupported)
 		}
 	}
@@ -469,7 +467,7 @@ func buildLoftMirrorCylinderBore(ctx context.Context, d *Document, ref producerI
 		if cap == 1 {
 			z = fullBlank.Z1
 		}
-		if !loftCylinderAuditAnnulus(ctx, mesh, shell.Outer[cap], shell.Inner[cap], group, z, cap == 0) {
+		if !loftcylinder.AuditAnnulus(ctx, mesh.Verts, mesh.Tris, mesh.Src, shell.Outer[cap], shell.Inner[cap], group, z, cap == 0) {
 			return nil, fmt.Errorf("%w: reflected circular bore cap does not tile its annulus", ErrUnsupported)
 		}
 	}

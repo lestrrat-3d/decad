@@ -97,22 +97,6 @@ func loftCylinderTagBridgedTop(pp *facetedPayload, topGroup int, axialBridge []f
 	}
 }
 
-// loftCylinderAuditAnnulus checks the exact planar area and directed edge
-// balance of one rebuilt cap. The old disk audit supplies the outer loop; the
-// bore ring and side-clearance gates supply a disjoint inner loop. The whole
-// shell crossing audit excludes overlapping or folded cap facets.
-func loftCylinderAuditAnnulus(ctx context.Context, mesh *joinedMesh,
-	outer, inner []int, group int, z float64, bottom bool) bool {
-	return loftcylinder.AuditAnnulus(ctx, mesh.Verts, mesh.Tris, mesh.Src, outer, inner, group, z, bottom)
-}
-
-// The cap group must tile exactly one simple CCW outline, with the origin
-// strictly inside. A later centered bore may use that outline as its source.
-func loftCylinderAuditCap(ctx context.Context, mesh *joinedMesh,
-	outline []int, group int, z float64, bottom bool) bool {
-	return loftcylinder.AuditCap(ctx, mesh.Verts, mesh.Tris, mesh.Src, outline, group, z, bottom)
-}
-
 // loftCylinderProofTooth uses an axial-level proxy only when the placement's
 // XY map survives r3's normalization bit for bit. The original Body remains
 // the Boolean operand. The private proxy has the same authenticated sections,

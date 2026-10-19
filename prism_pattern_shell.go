@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 )
@@ -164,11 +165,11 @@ func prismPatternShell(ctx context.Context, blank *Body, source *prismPatternSou
 			mesh.Add(mapped, blankGroup[cap+1])
 		}
 	}
-	if err := orientJoinedMesh(mesh); err != nil {
+	if err := tessellation.OrientJoinedMesh(mesh.Verts, mesh.Tris); err != nil {
 		return nil, [2][]int{}, blankGroup, 0, 0, err
 	}
 	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx), mesh.Verts, mesh.Tris,
-		loftmesh.MaxLoftAuditTriangles, loftCylinderAuditMaxScans); err != nil {
+		loftmesh.MaxLoftAuditTriangles, loftcylinder.AuditMaxScans); err != nil {
 		return nil, [2][]int{}, blankGroup, 0, 0, err
 	}
 	for cap, outline := range outlines {
@@ -176,7 +177,7 @@ func prismPatternShell(ctx context.Context, blank *Body, source *prismPatternSou
 		if cap == 1 {
 			z = source.Blank.Z1
 		}
-		if !loftCylinderAuditCap(ctx, mesh, outline, blankGroup[cap+1], z, cap == 0) ||
+		if !loftcylinder.AuditCap(ctx, mesh.Verts, mesh.Tris, mesh.Src, outline, blankGroup[cap+1], z, cap == 0) ||
 			!prismpattern.RootChordsInsideCap(ctx, mesh, outline, parts, cap) {
 			if err := ctx.Err(); err != nil {
 				return nil, [2][]int{}, blankGroup, 0, 0, err

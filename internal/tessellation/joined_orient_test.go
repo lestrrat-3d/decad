@@ -20,6 +20,7 @@ func TestOrientJoinedMesh(t *testing.T) {
 		tris[1] = [3]int{0, 3, 1}
 		require.NoError(t, tessellation.OrientJoinedMesh(verts, tris))
 		require.Equal(t, outward(), tris)
+		require.Equal(t, []r3.Vec{{}, {X: 1}, {Y: 1}, {Z: 1}}, verts)
 	})
 	t.Run("whole mesh inward", func(t *testing.T) {
 		tris := outward()

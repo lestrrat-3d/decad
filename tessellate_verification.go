@@ -3,7 +3,6 @@ package decad
 import (
 	"fmt"
 
-	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-go/option/v3"
 )
@@ -182,7 +181,3 @@ func foldVerification(opts []option.Interface, fallback Verification) (Verificat
 	}
 	return chosen, nil
 }
-
-// orientJoinedMesh proves edge pairing and one connected component before the
-// caller's geometric audit. It makes each pair's directed edge opposite.
-func orientJoinedMesh(m *joinedMesh) error { return tessellation.OrientJoinedMesh(m.Verts, m.Tris) }
