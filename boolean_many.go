@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/prismboolean"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -108,7 +109,7 @@ func tryStraightLoftPrismUnionMany(ctx context.Context, d *Document, ref produce
 			return nil, false, err
 		}
 		converted[i+1] = bornBody(&Body{n: topo.Body{Payload: prism}})
-		_, overlap, err := tryPrismBoolean(ctx, meshbool.OpIntersect, converted[0], converted[i+1])
+		_, overlap, err := prismboolean.Try(ctx, meshbool.OpIntersect, converted[0].n.Payload, prism)
 		if err != nil || !overlap {
 			return nil, false, err
 		}

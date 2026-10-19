@@ -351,7 +351,7 @@ func TestPublicBooleansUnchangedOnMultiRegionPair(t *testing.T) {
 // interleaved comb prisms sized to sit past the consumer's own real-scale
 // gear pair (gearScaleConsumerSegments), proving §4.5's reading answers
 // at that scale and recording what prismcells.MaxArrangementSegments (4096,
-// prism_boolean.go) does to a pair that crosses it. Task 1 and Task 2 already
+// internal/prismcells/work_cap.go) does to a pair that crosses it. Task 1 and Task 2 already
 // shipped the production code this exercises; this file adds no new
 // capability, tests and measurement only.
 //

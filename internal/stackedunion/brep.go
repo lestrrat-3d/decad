@@ -130,7 +130,7 @@ func (st *stackedUnionState) brep(ctx context.Context, levels []stackedrecord.Un
 }
 
 // Cut builds the already-admitted crossing blind cut from its two prism slabs.
-// It returns the builder's original miss or refusal for the root caller to map.
+// It returns the builder's original miss or refusal for prismboolean.TryCrossingBlindCut to map.
 func Cut(ctx context.Context, budget *proofbound.WorkBudget, va, vb Operand,
 	reexpress *prismReexpression, levels []stackedrecord.UnionLevel, reach [][2]int) (breprecord.Payload, error) {
 	state := &stackedUnionState{budget: budget, va: va, vb: vb, reexpress: reexpress}

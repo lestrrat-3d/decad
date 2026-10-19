@@ -15,6 +15,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/obliqueboss"
+	"github.com/lestrrat-3d/decad/internal/prismboolean"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/revolveshell"
@@ -259,7 +260,7 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 	}
 	// Table X (docs/surface-design.md §11): a sheet operand in either position
 	// is a plain ErrUnsupported, never a BooleanError — without this a sheet
-	// falls through to tryPrismBoolean below, which type-asserts prismPayload
+	// falls through to prismboolean.Try below, which type-asserts prismPayload
 	// and a sheet still carries one, producing a confidently-wrong solid.
 	if err := refuseSheetOperand(a, op.String()); err != nil {
 		return nil, err
@@ -267,7 +268,7 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 	if err := refuseSheetOperand(b, op.String()); err != nil {
 		return nil, err
 	}
-	if pp, ok, err := tryAxialLoftPrismUnion(ctx, op, a, b); err != nil {
+	if pp, ok, err := prismboolean.TryAxialLoftUnion(ctx, op, a.n.Payload, b.n.Payload); err != nil {
 		if errors.Is(err, ErrUnsupported) {
 			return nil, asBooleanError(op, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err))
 		}
@@ -286,7 +287,7 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 	// BooleanUnsupportedContact below, preserving errors.Is(err,
 	// ErrUnsupported); ErrDegenerate and ErrUnrecordableProfile pass through
 	// unwrapped, keeping their own documented sentinels.
-	if pp, ok, err := tryPrismBoolean(ctx, op, a, b); err != nil {
+	if pp, ok, err := prismboolean.Try(ctx, op, a.n.Payload, b.n.Payload); err != nil {
 		if errors.Is(err, ErrUnsupported) {
 			return nil, asBooleanError(op, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err))
 		}
@@ -302,7 +303,7 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 		return body, nil
 	}
 	if op == meshbool.OpUnion {
-		if payload, ok, err := tryPrismFacePatchUnion(ctx, a, b); err != nil {
+		if payload, ok, err := prismboolean.TryFacePatchUnion(ctx, a.n.Payload, b.n.Payload); err != nil {
 			if errors.Is(err, ErrUnsupported) {
 				return nil, asBooleanError(op, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err))
 			}
@@ -313,7 +314,7 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 		// docs/general-boolean-design.md §3 A1: unequal sweep intervals that
 		// overlap or touch build a stacked prism, or a brep where an
 		// interface is flush or crossing. Same contract as above.
-		if payload, ok, err := tryStackedUnion(ctx, a, b); err != nil {
+		if payload, ok, err := prismboolean.TryStackedUnion(ctx, a.n.Payload, b.n.Payload); err != nil {
 			if errors.Is(err, ErrUnsupported) {
 				return nil, asBooleanError(op, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err))
 			}
@@ -330,7 +331,7 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 		}
 		// docs/general-boolean-design.md §3 A5: a prism-group operand, or
 		// survivors that close into several disjoint loops.
-		if payload, ok, err := tryPrismGroupUnion(ctx, a, b); err != nil {
+		if payload, ok, err := prismboolean.TryGroupUnion(ctx, a.n.Payload, b.n.Payload); err != nil {
 			if errors.Is(err, ErrUnsupported) {
 				return nil, asBooleanError(op, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err))
 			}
@@ -345,7 +346,7 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 		} else if ok {
 			return body, nil
 		}
-		if sp, ok, err := tryStackedThroughCut(ctx, a, b); err != nil {
+		if sp, ok, err := prismboolean.TryStackedThroughCut(ctx, a.n.Payload, b.n.Payload); err != nil {
 			if errors.Is(err, ErrUnsupported) {
 				return nil, asBooleanError(op, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err))
 			}
@@ -360,7 +361,7 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 			}
 			return body, nil
 		}
-		if sp, ok, err := tryStackedBlindCut(ctx, a, b); err != nil {
+		if sp, ok, err := prismboolean.TryStackedBlindCut(ctx, a.n.Payload, b.n.Payload); err != nil {
 			if errors.Is(err, ErrUnsupported) {
 				return nil, asBooleanError(op, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err))
 			}
@@ -375,12 +376,12 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 			}
 			return body, nil
 		}
-		if bp, ok, err := tryCrossingBlindCut(ctx, a, b); err != nil {
+		if bp, ok, err := prismboolean.TryCrossingBlindCut(ctx, a.n.Payload, b.n.Payload); err != nil {
 			return nil, err
 		} else if ok {
 			return analyticBooleanBody(ctx, d, ref, bp)
 		}
-		if sp, ok, err := tryBlindStackedCut(ctx, a, b); err != nil {
+		if sp, ok, err := prismboolean.TryBlindStackedCut(ctx, a.n.Payload, b.n.Payload); err != nil {
 			if errors.Is(err, ErrUnsupported) {
 				return nil, asBooleanError(op, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err))
 			}
@@ -396,7 +397,7 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 			return body, nil
 		}
 		// docs/general-boolean-design.md §3 A5: a prism-group tool.
-		if pp, ok, err := tryPrismGroupCut(ctx, a, b); err != nil {
+		if pp, ok, err := prismboolean.TryGroupCut(ctx, a.n.Payload, b.n.Payload); err != nil {
 			if errors.Is(err, ErrUnsupported) {
 				return nil, asBooleanError(op, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err))
 			}
@@ -465,7 +466,7 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 // evaluateAnalyticIntersect is measuredInterference's read-only twin of
 // performBoolean's analytic dispatch (docs/prism-boolean-design.md §14 PR4;
 // docs/interference-design.md §5.2, §12): it runs the same admission and
-// resolution an meshbool.OpIntersect performBoolean call would — tryPrismBoolean, then
+// resolution an meshbool.OpIntersect performBoolean call would — prismboolean.Try, then
 // prismrecord.Build over the admitted payload — under a producerID it mints for
 // itself, but it never calls Document.commit, so it writes nothing to the
 // document and consumes neither operand (docs/interference-design.md §5:
@@ -475,11 +476,11 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 // simply never reaching a commit). ok=false (err always nil in that case)
 // means the pair is not admitted by the analytic path (§3.1/§3.4): the
 // caller MUST fall back to evaluateBoolean unchanged, exactly as
-// tryPrismBoolean's own contract requires. A non-nil err is a genuine
+// prismboolean.Try's own contract requires. A non-nil err is a genuine
 // analytic-resolution refusal, returned as a *meshbool.BooleanExpectedError so the
 // caller can share evaluateBoolean's own expected-outcome classification.
 func evaluateAnalyticIntersect(ctx context.Context, a, b *Body) (*Body, bool, error) {
-	pp, ok, err := tryPrismBoolean(ctx, meshbool.OpIntersect, a, b)
+	pp, ok, err := prismboolean.Try(ctx, meshbool.OpIntersect, a.n.Payload, b.n.Payload)
 	if err != nil {
 		if errors.Is(err, ErrUnsupported) {
 			return nil, false, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err)

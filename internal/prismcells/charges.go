@@ -100,7 +100,7 @@ func WholeSegmentRange(tStart, tEnd float64) bool {
 // bounds the centre and radius its cos/sin arithmetic works on, so it IS the
 // source envelope for that kind rather than an answer standing in for one.
 //
-// Only the line arm is reachable through tryPrismBoolean: a trimmed circular
+// Only the line arm is reachable through TryAnalytic: a trimmed circular
 // carrier is refused before the scene is built
 // (ProfileHasTrimmedCircularSource), because a coordinate envelope does
 // not state the movement of its rebuilt radius and sweep, so every ArcSeg or

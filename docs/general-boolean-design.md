@@ -160,7 +160,7 @@ exact rational sum `A_plate·h_plate + A_boss·h_boss`, `Exact` where both are.
 #### A1 as a brep — the flush or crossing interface
 
 `internal/stackedunion/brep.go` takes over when an interface's clean-nesting match
-is unresolved, with the slabs tryStackedUnion built. It admits the pair
+is unresolved, with the slabs `prismboolean.TryStackedUnion` admitted. It admits the pair
 only where every carrier it records is exact: the identity re-expression
 (B's records enter every scene verbatim; a re-expressed B would be recorded
 once per scene, at floats no two scenes share), both operands'
@@ -510,7 +510,7 @@ first union trims the hub circle.
 
 #### A7 — rectangular blind pocket across a through hole
 
-`prism_boolean.go` admits `Cut(target, tool)` when `target` is a
+`prismboolean.TryCrossingBlindCut` admits `Cut(target, tool)` when `target` is a
 prism with exactly one through hole, `tool` is a hole-free prism, and every
 section loop is four axis-aligned lines. The target and tool have zero
 section and level displacement. Their relative section map is the identity;
@@ -1294,7 +1294,7 @@ Each PR ships code and tests; this document ships with PR 1.
 
 ## 12. Straight-source axial Loft Union
 
-`tryAxialLoftPrismUnion` accepts a prism and an authenticated two-section
+`prismboolean.TryAxialLoftUnion` accepts a prism and an authenticated two-section
 Loft whose source records denote a straight prism. The gate reads the Loft's
 recorded geometry, not its source identity, segment count, or radial position.
 Two independently created Lofts can therefore join the same prism in separate

@@ -1,4 +1,4 @@
-package decad
+package prismboolean
 
 import (
 	"context"
@@ -20,7 +20,7 @@ import (
 // operand's region verbatim. A slab both reach takes the select-all merge of
 // prism-boolean §4.2, or the containing operand's region verbatim when the
 // clean-nesting match proves one region holds the other's whole. For
-// a stackedPrismPayload, each differing interface uses that match: the
+// a stackedrecord.Payload, each differing interface uses that match: the
 // narrower outer must come back whole as a hole of the wider region's
 // cell, whose exposed record is that wider region with the hole.
 //
@@ -35,14 +35,12 @@ import (
 // admitted operand slabs and classifies their exposed interfaces. A pair
 // that build does not cover takes the mesh path.
 
-// tryStackedUnion is general-boolean §3 A1. ok=false with a nil error is a
-// silent miss: the caller takes the mesh path. A non-nil error is a genuine
-// refusal the caller propagates (prism-boolean §3.4). The payload is a
-// stackedPrismPayload when brepOnly is false and every interface matches.
-// Direct BRep routing or an interface miss can produce a brepPayload.
-func tryStackedUnion(ctx context.Context, a, b *Body) (topo.Payload, bool, error) {
-	va, aok := stackedunion.OperandFromPayload(a.n.Payload)
-	vb, bok := stackedunion.OperandFromPayload(b.n.Payload)
+// TryStackedUnion is general-boolean §3 A1. The payload is a
+// stackedrecord.Payload when brepOnly is false and every interface matches.
+// Direct BRep routing or an interface miss can produce a breprecord.Payload.
+func TryStackedUnion(ctx context.Context, a, b topo.Payload) (topo.Payload, bool, error) {
+	va, aok := stackedunion.OperandFromPayload(a)
+	vb, bok := stackedunion.OperandFromPayload(b)
 	if !aok || !bok {
 		return nil, false, nil
 	}
@@ -52,8 +50,7 @@ func tryStackedUnion(ctx context.Context, a, b *Body) (topo.Payload, bool, error
 	}
 	// G1-G4 on the outer prisms; G4, G6 and the trimmed-circular refusal on
 	// every region, since a stacked operand's proxy names its first slab only.
-	if _, _, ok, err := admitPrismPairBudget(budget, meshbool.OpUnion,
-		bornBody(&Body{n: topo.Body{Payload: va.Proxy}}), bornBody(&Body{n: topo.Body{Payload: vb.Proxy}})); err != nil || !ok {
+	if _, _, ok, err := prismcells.AdmitPairBudget(budget, meshbool.OpUnion, va.Proxy, vb.Proxy); err != nil || !ok {
 		return nil, false, err
 	}
 	// A brep operand, or a slab holding several regions, is the brep build's

@@ -10,7 +10,7 @@ import (
 
 // This file implements docs/prism-boolean-design.md §4.2's clean sub-case for
 // Cut and Intersect: the structural whole-loop match against BuildScene's
-// own tag map, after prism_boolean.go's G1-G4 admission and work-budget gates.
+// own tag map, after AdmitPairBudget's G1-G4 admission and work-budget gates.
 // The selected profile needs no assembly or §6 build-time audit: it is one s.Profiles() result
 // taken verbatim, so §5's authentication claim 1 (every individual segment is
 // authentic) already covers claim 2 (the assembly is correct) entirely.
@@ -34,9 +34,8 @@ import (
 
 // ResolveAndBuildCut runs Cut's clean-nesting structural match (§4.2)
 // first and, once it finds a unique candidate, authenticates it and builds
-// §7's exactness. There is no §6 audit on this path (§6 is titled "Union's
-// merge only" no longer describes this file alone — see prism_boolean.go's
-// own header; §5 states the clean-nesting claim needs no second proof — the
+// §7's exactness. There is no §6 audit on this path (§6 audits Union's
+// merge; §5 states the clean-nesting claim needs no second proof — the
 // candidate is one s.Profiles() result taken verbatim, so §5's authentication
 // claim 1 already covers claim 2 entirely). When the clean-nesting search
 // comes back unresolved, this tries internal/prismcells/payload_resolve.go's

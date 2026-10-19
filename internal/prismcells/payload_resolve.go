@@ -24,7 +24,7 @@ import (
 // across that operand's own boundary, so membership is unchanged). A cell
 // whose membership this propagation cannot reach for either operand — its
 // whole such-connected component carries no direct edge from that operand —
-// is unresolved, and per the root tryPrismBoolean's own contract that makes the WHOLE
+// is unresolved, and per TryAnalytic's own contract that makes the WHOLE
 // attempt unresolved, never a partial result.
 //
 // This increment does not identify a coincident carrier shared under only
@@ -49,7 +49,7 @@ import (
 
 // ResolveAndBuildUnion runs Union's hole-free select-all/merge/chain
 // resolution (§4.2) and, once it commits, §6's build-time audit and §7's
-// exactness. Split out of the root tryPrismBoolean only so each op's own resolve+build
+// exactness. Split out of TryAnalytic only so each op's own resolve+build
 // sequence reads as one unit.
 func ResolveAndBuildUnion(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismrecord.Payload, reexpress *Reexpression) (prismrecord.Payload, bool, error) {
 	merged, sceneDelta, cutDelta, resolved, err := ResolveUnion(ctx, budget, pa.Profile, pb.Profile,

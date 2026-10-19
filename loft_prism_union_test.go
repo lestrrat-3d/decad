@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/prismboolean"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -128,7 +129,7 @@ func TestAxialLoftPrismUnionTangentDoesNotAdmit(t *testing.T) {
 	doc := New()
 	blank := internalBoxBody(t, doc, 0, 0, 10, 10, 4)
 	tangent := axialLineLoft(t, doc, 10, 4, 12, 6, 4)
-	_, admitted, err := tryAxialLoftPrismUnion(t.Context(), meshbool.OpUnion, blank, tangent)
+	_, admitted, err := prismboolean.TryAxialLoftUnion(t.Context(), meshbool.OpUnion, blank.n.Payload, tangent.n.Payload)
 	require.NoError(t, err)
 	require.False(t, admitted)
 	valid := axialLineLoft(t, doc, 8, 4, 12, 6, 4)
@@ -169,13 +170,13 @@ func TestAxialLoftPrismUnionRefusesUnequalCapsAndCancellation(t *testing.T) {
 	doc := New()
 	blank := internalBoxBody(t, doc, 0, 0, 10, 10, 4)
 	tab := axialLineLoft(t, doc, 8, 4, 12, 6, 5)
-	_, admitted, err := tryAxialLoftPrismUnion(t.Context(), meshbool.OpUnion, blank, tab)
+	_, admitted, err := prismboolean.TryAxialLoftUnion(t.Context(), meshbool.OpUnion, blank.n.Payload, tab.n.Payload)
 	require.NoError(t, err)
 	require.False(t, admitted)
 
 	canceled, cancel := context.WithCancel(t.Context())
 	cancel()
-	_, admitted, err = tryAxialLoftPrismUnion(canceled, meshbool.OpUnion, blank, tab)
+	_, admitted, err = prismboolean.TryAxialLoftUnion(canceled, meshbool.OpUnion, blank.n.Payload, tab.n.Payload)
 	require.ErrorIs(t, err, context.Canceled)
 	require.False(t, admitted)
 }
