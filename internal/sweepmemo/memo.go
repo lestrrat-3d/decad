@@ -201,6 +201,28 @@ func (c CornerSpans) Hull(axis int) (*big.Rat, *big.Rat) {
 	return new(big.Rat).SetFrac(low, c.Den[axis]), new(big.Rat).SetFrac(high, c.Den[axis])
 }
 
+// HullGap is the widest strict gap between a's and b's coordinate hulls on
+// any axis, less displacement, or nil when either span set is empty or no
+// such gap stays positive. Each body lies in the hull of its source points,
+// so a non-nil gap is a lower bound on the pair's separation over the span.
+func HullGap(a, b CornerSpans, displacement *big.Rat) *big.Rat {
+	if a.Len() == 0 || b.Len() == 0 {
+		return nil
+	}
+	var widest *big.Rat
+	for axis := range 3 {
+		aLow, aHigh := a.Hull(axis)
+		bLow, bHigh := b.Hull(axis)
+		for _, gap := range []*big.Rat{new(big.Rat).Sub(bLow, aHigh), new(big.Rat).Sub(aLow, bHigh)} {
+			gap.Sub(gap, displacement)
+			if gap.Sign() > 0 && (widest == nil || gap.Cmp(widest) > 0) {
+				widest = gap
+			}
+		}
+	}
+	return widest
+}
+
 func (c CornerSpans) Span(index, axis int) proofbound.RatInterval {
 	return proofbound.IntervalOwned(new(big.Rat).SetFrac(c.Lo[index][axis], c.Den[axis]),
 		new(big.Rat).SetFrac(c.Hi[index][axis], c.Den[axis]))

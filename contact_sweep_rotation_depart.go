@@ -122,19 +122,6 @@ func (r *rotationalPairSweep) coMovingOrientedTouch(first *SweepSample) bool {
 	return true
 }
 
-func translatedOrientedBox(box orientedSourceBox, delta [3]proofarith.Dyadic, fraction *big.Rat) (orientedSourceBox, bool) {
-	for axis := range 3 {
-		step, ok := proofarith.DyOfRat(new(big.Rat).Mul(delta[axis].Rat(), fraction))
-		if !ok {
-			return orientedSourceBox{}, false
-		}
-		for corner := range box.Corner {
-			box.Corner[corner][axis] = proofarith.DyAdd(box.Corner[corner][axis], step)
-		}
-	}
-	return box, true
-}
-
 // The admitted departure paths each prove an open-at-zero whole-body gap.
 // For a common rotation, Taylor's theorem bounds the support-plane gap below
 // by c*u - K*u²/2, using exact c and outward K over the whole step.
@@ -367,26 +354,24 @@ func (r *rotationalPairSweep) bracketRightReplays(left, right *SweepSample) bool
 		new(big.Rat).Add(r.a.fullTravel, r.b.fullTravel))
 }
 
+// intervalClear proves the pair clear over [lf, rf] between two separated
+// samples. An affine pair of source boxes clears when one of a's face
+// normals separates them at both ends (pairbox.OrientedIntervalSeparated),
+// which also covers an oblique outward translation whose world-axis hulls
+// overlap. Any pair clears when the coordinate hulls stay apart
+// (intervalAxisGap) or when the two proven lower gaps exceed the span's
+// travel.
 func (r *rotationalPairSweep) intervalClear(left, right *SweepSample, lf, rf *big.Rat) bool {
-	if !r.planar && r.obliqueAffineIntervalClear(lf, rf) {
+	if !r.planar && r.a.path.Drift == nil && r.b.path.Drift == nil &&
+		pairbox.OrientedIntervalSeparated(r.a.startBox.OrientedBox, r.b.startBox.OrientedBox,
+			r.a.path.Delta, r.b.path.Delta, lf, rf) {
 		return true
 	}
-	if r.intervalAxisSeparated(lf, rf) {
+	if r.intervalAxisGap(lf, rf) != nil {
 		return true
 	}
-	gapLower := func(sample *SweepSample) *big.Rat {
-		if sample.Ideal.Gap == nil {
-			return nil
-		}
-		value, okValue := sweeppath.ExactBaseValue(sample.Ideal.Gap.Value)
-		bound, okBound := sweeppath.ExactBaseValue(sample.Ideal.Gap.Bound)
-		if !okValue || !okBound {
-			return nil
-		}
-		return new(big.Rat).Sub(value, bound)
-	}
-	a, b := gapLower(left), gapLower(right)
-	if a == nil || b == nil || a.Sign() <= 0 || b.Sign() <= 0 {
+	a, b := sampleLowerGap(left), sampleLowerGap(right)
+	if a == nil || b == nil {
 		return false
 	}
 	travel := new(big.Rat).Mul(new(big.Rat).Sub(rf, lf),
@@ -394,68 +379,14 @@ func (r *rotationalPairSweep) intervalClear(left, right *SweepSample, lf, rf *bi
 	return new(big.Rat).Add(a, b).Cmp(travel) > 0
 }
 
-// An exact positive support gap at both ends of an affine interval is
-// positive throughout it. This also covers an oblique outward drift whose
-// world-axis hulls overlap after the boxes have separated.
-func (r *rotationalPairSweep) obliqueAffineIntervalClear(from, to *big.Rat) bool {
-	if r.a.path.Drift != nil || r.b.path.Drift != nil {
-		return false
-	}
-	a0, okA := translatedOrientedBox(r.a.startBox, r.a.path.Delta, from)
-	b0, okB := translatedOrientedBox(r.b.startBox, r.b.path.Delta, from)
-	a1, okC := translatedOrientedBox(r.a.startBox, r.a.path.Delta, to)
-	b1, okD := translatedOrientedBox(r.b.startBox, r.b.path.Delta, to)
-	if !okA || !okB || !okC || !okD {
-		return false
-	}
-	pa0, pb0, pa1, pb1 := a0.OrientedBox, b0.OrientedBox, a1.OrientedBox, b1.OrientedBox
-	for axis := range 3 {
-		i, j := (axis+1)%3, (axis+2)%3
-		normal := proofarith.DvCross(r.a.startBox.Edge[i], r.a.startBox.Edge[j])
-		if proofarith.DvIsZero(normal) {
-			continue
-		}
-		alo0, ahi0 := pairbox.OrientedProjection(pa0, normal)
-		blo0, bhi0 := pairbox.OrientedProjection(pb0, normal)
-		alo1, ahi1 := pairbox.OrientedProjection(pa1, normal)
-		blo1, bhi1 := pairbox.OrientedProjection(pb1, normal)
-		if proofarith.DyCmp(ahi0, blo0) < 0 && proofarith.DyCmp(ahi1, blo1) < 0 ||
-			proofarith.DyCmp(bhi0, alo0) < 0 && proofarith.DyCmp(bhi1, alo1) < 0 {
-			return true
-		}
-	}
-	return false
-}
-
-// intervalAxisSeparated encloses every ideal source-point path over the whole
-// fraction span. Each body lies in the hull of its source points, so strict
-// separation of the two coordinate hulls proves clear.
-func (r *rotationalPairSweep) intervalAxisSeparated(from, to *big.Rat) bool {
-	return r.intervalAxisGap(from, to) != nil
-}
-
-// intervalAxisGap is the widest strict gap between the two coordinate hulls
-// over the span, less both held displacements (§10.4), a lower bound on the
-// pair's separation throughout it, or nil when no such gap stays positive.
+// intervalAxisGap encloses every ideal source-point path over the fraction
+// span and returns sweepmemo.HullGap of the two hulls less both held
+// displacements (§10.4): a lower bound on the pair's separation throughout
+// the span, or nil when no such gap stays positive. It reads each path's
+// memoized corner spans, so it stays in the root with cornerSpan.
 func (r *rotationalPairSweep) intervalAxisGap(from, to *big.Rat) *big.Rat {
-	a := r.a.cornerSpan(from, to)
-	b := r.b.cornerSpan(from, to)
-	if a.Len() == 0 || b.Len() == 0 {
-		return nil
-	}
-	displacement := proofarith.DyAdd(r.a.delta, r.b.delta).Rat()
-	var widest *big.Rat
-	for axis := range 3 {
-		aLow, aHigh := a.Hull(axis)
-		bLow, bHigh := b.Hull(axis)
-		for _, gap := range []*big.Rat{new(big.Rat).Sub(bLow, aHigh), new(big.Rat).Sub(aLow, bHigh)} {
-			gap.Sub(gap, displacement)
-			if gap.Sign() > 0 && (widest == nil || gap.Cmp(widest) > 0) {
-				widest = gap
-			}
-		}
-	}
-	return widest
+	return sweepmemo.HullGap(r.a.cornerSpan(from, to), r.b.cornerSpan(from, to),
+		proofarith.DyAdd(r.a.delta, r.b.delta).Rat())
 }
 
 // cornerSpan encloses each source point's ideal path over the fraction span

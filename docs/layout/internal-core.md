@@ -12,7 +12,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/proof/` | Exact dyadic arithmetic, rational intervals and float rounding. |
 | `internal/measurement/` | Private bounded reading carriers, exact inflated-box separation, `ExactnessOf` and `FiniteValues`. Public types live in `measurement.go`. See API §5.3, §6. |
 | `internal/pair/` | Shared contact relation and reading types. |
-| `internal/pair/box/` | Exact box paths, contact, oriented, sphere-box and cylinder-box proofs, patches, clips and witnesses. |
+| `internal/pair/box/` | Exact box paths and oriented-box translation, contact, oriented, sphere-box and cylinder-box proofs, interval separation, patches, clips and witnesses. |
 | `internal/pair/sphere/` | Exact sphere-pair relation, gap and bounded response witness. See contact-geometry §4.3. |
 | `internal/pair/planar/` | Planar solid relations, gaps, patches, support faces, and convexity. |
 | `internal/planarsnapshot/` | Planar contact snapshots, cached records and pose gates. See multibody §9.1–§9.2. |

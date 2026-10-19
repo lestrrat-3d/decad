@@ -42,6 +42,53 @@ func TranslatePair(a, b AxisBox, da, db [3]proofarith.Dyadic, f *big.Rat) (AxisB
 	return a, b, true
 }
 
+// TranslateOriented moves an oriented source box by delta·fraction. Each
+// axis step must be an exact dyadic; ok is false when one is not.
+func TranslateOriented(box OrientedBox, delta [3]proofarith.Dyadic, fraction *big.Rat) (OrientedBox, bool) {
+	for axis := range 3 {
+		step, ok := proofarith.DyOfRat(new(big.Rat).Mul(delta[axis].Rat(), fraction))
+		if !ok {
+			return OrientedBox{}, false
+		}
+		for corner := range box.Corner {
+			box.Corner[corner][axis] = proofarith.DyAdd(box.Corner[corner][axis], step)
+		}
+	}
+	return box, true
+}
+
+// OrientedIntervalSeparated reports whether one of a's face normals strictly
+// separates the two oriented boxes at both ends of the fraction span
+// [from, to], each box translated by its delta. Translation keeps both
+// boxes' edges, so each projection moves affinely in the fraction and an
+// exact positive support gap at both ends is positive throughout the span.
+// It reports false when a translation is not an exact dyadic.
+func OrientedIntervalSeparated(a, b OrientedBox, da, db [3]proofarith.Dyadic, from, to *big.Rat) bool {
+	a0, okA := TranslateOriented(a, da, from)
+	b0, okB := TranslateOriented(b, db, from)
+	a1, okC := TranslateOriented(a, da, to)
+	b1, okD := TranslateOriented(b, db, to)
+	if !okA || !okB || !okC || !okD {
+		return false
+	}
+	for axis := range 3 {
+		i, j := (axis+1)%3, (axis+2)%3
+		normal := proofarith.DvCross(a.Edge[i], a.Edge[j])
+		if proofarith.DvIsZero(normal) {
+			continue
+		}
+		alo0, ahi0 := OrientedProjection(a0, normal)
+		blo0, bhi0 := OrientedProjection(b0, normal)
+		alo1, ahi1 := OrientedProjection(a1, normal)
+		blo1, bhi1 := OrientedProjection(b1, normal)
+		if proofarith.DyCmp(ahi0, blo0) < 0 && proofarith.DyCmp(ahi1, blo1) < 0 ||
+			proofarith.DyCmp(bhi0, alo0) < 0 && proofarith.DyCmp(bhi1, alo1) < 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // AffineEqualityRoot finds when two moving support endpoints coincide.
 func AffineEqualityRoot(a, da, b, db proofarith.Dyadic) *big.Rat {
 	delta := proofarith.DySubScalar(da, db)
