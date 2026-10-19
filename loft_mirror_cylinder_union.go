@@ -16,7 +16,6 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
-	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
@@ -278,152 +277,42 @@ func buildLoftMirrorCylinderUnion(ctx context.Context, d *Document, ref producer
 		len(lower.Tris) != len(upper.Tris) || len(lower.Src) != len(upper.Src) {
 		return nil, fmt.Errorf("%w: reflected cylinder slab has no matching held mesh", ErrUnsupported)
 	}
-	lowCaps := lower.LoftCylinderJoin.CapGroups
-	if lowCaps[0] < 0 || lowCaps[1] < 0 || lowCaps[0] == lowCaps[1] {
+	if caps := lower.LoftCylinderJoin.CapGroups; caps[0] < 0 || caps[1] < 0 || caps[0] == caps[1] {
 		return nil, fmt.Errorf("%w: lower circular Join lacks separate cap groups", ErrUnsupported)
 	}
-	// Reflection preserves the upper outline's XY coordinates. Every middle
-	// vertex of the reflected cap must match the original held vertex exactly.
-	middle := lower.LoftCylinderJoin.Z1
-	midVertices := make(map[r3.Vec]int)
-	for i, v := range lower.Verts {
-		if v.Z == middle {
-			if _, exists := midVertices[v]; exists {
-				return nil, fmt.Errorf("%w: lower circular Join duplicates a middle vertex", ErrUnsupported)
-			}
-			midVertices[v] = i
-		}
-	}
-	if len(midVertices) < 3 {
-		return nil, fmt.Errorf("%w: circular Join has no complete middle outline", ErrUnsupported)
-	}
-	vertexMap := make([]int, len(upper.Verts))
-	verts := append([]r3.Vec(nil), lower.Verts...)
-	vertexBound := append([]float64(nil), lower.VertexBound...)
-	for i, v := range upper.Verts {
-		if v.Z == middle {
-			index, exists := midVertices[v]
-			if !exists {
-				return nil, fmt.Errorf("%w: reflected cylinder caps do not match exactly", ErrUnsupported)
-			}
-			vertexMap[i] = index
-			vertexBound[index] = max(vertexBound[index],
-				proofbound.AbsSumUpper(upper.VertexBound[i], bridgeBound))
-			continue
-		}
-		if v.Z <= middle {
-			return nil, fmt.Errorf("%w: reflected cylinder slab crosses its middle plane", ErrUnsupported)
-		}
-		vertexMap[i] = len(verts)
-		verts = append(verts, v)
-		vertexBound = append(vertexBound,
-			proofbound.AbsSumUpper(upper.VertexBound[i], bridgeBound))
-	}
-	if !loftMirrorCylinderCapsOppose(lower, upper, vertexMap, lowCaps[1], lowCaps[1]) {
-		return nil, fmt.Errorf("%w: reflected cylinder middle caps do not tile equally", ErrUnsupported)
-	}
-	var tris [][3]int
-	var src []int
-	var groups []facetGroup
-	capGroups := [2]int{-1, -1}
-	for half, payload := range []facetedPayload{lower, upper} {
-		// Reflection changes cap orientation and height, not its source
-		// group ID. Both copies omit the original top cap group.
-		omit, keep := lowCaps[1], lowCaps[0]
-		groupMap := make(map[int]int)
-		for i, tri := range payload.Tris {
-			if i%256 == 0 {
-				if err := ctx.Err(); err != nil {
-					return nil, err
-				}
-			}
-			oldGroup := payload.Src[i]
-			if oldGroup == omit {
-				continue
-			}
-			group, exists := groupMap[oldGroup]
-			if !exists {
-				if oldGroup < 0 || oldGroup >= len(payload.Groups) {
-					return nil, fmt.Errorf("%w: circular Join facet names no source group", ErrUnsupported)
-				}
-				group = len(groups)
-				groupMap[oldGroup] = group
-				groups = append(groups, payload.Groups[oldGroup])
-				if oldGroup == keep {
-					capGroups[half] = group
-				}
-			}
-			if half == 1 {
-				for corner, index := range tri {
-					tri[corner] = vertexMap[index]
-				}
-			}
-			tris = append(tris, tri)
-			src = append(src, group)
-		}
-	}
-	if capGroups[0] < 0 || capGroups[1] < 0 {
-		return nil, fmt.Errorf("%w: mirrored cylinder has no exterior cap groups", ErrUnsupported)
-	}
-	if err := tessellation.RequireVertexLinks(ctx, len(verts), tris); err != nil {
-		return nil, fmt.Errorf("%w: mirrored cylinder seam has an invalid vertex link: %s", ErrUnsupported, err)
-	}
-	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx), verts, tris,
-		loftmesh.MaxLoftAuditTriangles, loftCylinderAuditMaxScans); err != nil {
+	shell, err := loftcylinder.AssembleMirrorJoin(ctx, lower, upper, bridgeBound, bridgeVolume)
+	if err != nil {
 		return nil, err
-	}
-	bound := max(lower.MeshBound,
-		proofbound.AbsSumUpper(upper.MeshBound, bridgeBound))
-	volumeGap := proofbound.AbsSumUpper(lower.VolSymDiff, upper.VolSymDiff, bridgeVolume)
-	areaSlack := proofbound.AbsSumUpper(lower.AreaSlack, upper.AreaSlack,
-		proofbound.ProductUpper(2, max(lower.AreaSlack, upper.AreaSlack)))
-	diameter := facetedrecord.SourceDiameterUpper(verts, bound)
-	if bound > 0.1 || proofbound.IsNonFinite(bound) || proofbound.IsNonFinite(volumeGap) ||
-		proofbound.IsNonFinite(areaSlack) || proofbound.IsNonFinite(diameter) {
-		return nil, fmt.Errorf("%w: mirrored cylinder has no finite 0.1 mm proof", ErrUnsupported)
-	}
-	lowOutlines := lower.LoftCylinderJoin.CapOutlines
-	capOutlines := [2][]int{
-		append([]int(nil), lowOutlines[0]...),
-		make([]int, len(lowOutlines[0])),
-	}
-	for i, index := range lowOutlines[0] {
-		if index < 0 || index >= len(vertexMap) {
-			return nil, fmt.Errorf("%w: mirrored cylinder lost a cap outline vertex", ErrUnsupported)
-		}
-		capOutlines[1][i] = vertexMap[index]
 	}
 	fullBlank, ok := blank.n.Payload.(prismPayload)
 	if !ok {
 		return nil, fmt.Errorf("%w: mirrored cylinder lost its circular blank", ErrUnsupported)
 	}
-	shell := &joinedMesh{Verts: verts, Tris: tris, Src: src, Groups: groups}
-	for cap, outline := range capOutlines {
+	mesh := &joinedMesh{Verts: shell.Payload.Verts, Tris: shell.Payload.Tris,
+		Src: shell.Payload.Src, Groups: shell.Payload.Groups}
+	for cap, outline := range shell.CapOutlines {
 		z := fullBlank.Z0
 		if cap == 1 {
 			z = fullBlank.Z1
 		}
-		if !loftCylinderAuditCap(ctx, shell, outline, capGroups[cap], z, cap == 0) {
+		if !loftCylinderAuditCap(ctx, mesh, outline, shell.CapGroups[cap], z, cap == 0) {
 			return nil, fmt.Errorf("%w: mirrored cylinder cap does not tile its recorded outline", ErrUnsupported)
 		}
 	}
-	fp := facetedPayload{Verts: verts, Tris: tris, Src: src, Groups: groups,
-		VertexBound: vertexBound, MeshBound: bound, VolSymDiff: volumeGap,
-		AreaSlack: areaSlack, DPair: diameter, ContactAudited: true, Xform: r3.Identity(),
-		LoftMirrorCylinderJoin: &loftMirrorCylinderJoinRecord{
-			Blank: bodyNode(blank), Source: source, Pairs: bodyNodes(pairs),
-			LowerHalf: bodyNode(lowerHalf), CapGroups: capGroups, CapOutlines: capOutlines,
-			BridgeBound: bridgeBound, BridgeVolume: bridgeVolume,
-		},
+	fp := shell.Payload
+	fp.LoftMirrorCylinderJoin = &loftMirrorCylinderJoinRecord{
+		Blank: bodyNode(blank), Source: source, Pairs: bodyNodes(pairs),
+		LowerHalf: bodyNode(lowerHalf), CapGroups: shell.CapGroups, CapOutlines: shell.CapOutlines,
+		BridgeBound: bridgeBound, BridgeVolume: bridgeVolume,
 	}
-	if err := loftMirrorCylinderCapOrigins(&fp, blank, fp.LoftMirrorCylinderJoin.Pairs, capGroups); err != nil {
+	if err := loftMirrorCylinderCapOrigins(&fp, blank, fp.LoftMirrorCylinderJoin.Pairs, shell.CapGroups); err != nil {
 		return nil, err
 	}
-	if err := loftCylinderTagCaps(&fp, blank, capGroups,
+	if err := loftCylinderTagCaps(&fp, blank, shell.CapGroups,
 		[2]float64{fullBlank.Z0, fullBlank.Z1}, ref); err != nil {
 		return nil, err
 	}
-	loftCylinderTagBridgedTop(&fp, capGroups[1], []float64{bridgeBound})
+	loftCylinderTagBridgedTop(&fp, shell.CapGroups[1], []float64{bridgeBound})
 	return bodyResult(facetedrecord.Build(ctx, envOf(documentNode(d), ref), fp))
 }
 
