@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/stackedshell"
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
@@ -120,21 +121,10 @@ func modifyBrepReceiver(ctx context.Context, b *Body, req brepModifyRequest) (br
 // either (SG3), unless one of the bounded stacked routes matches first.
 func brepShellThroughCut(ctx context.Context, b *Body, bp brepPayload, req brepModifyRequest, refusal error) (*Body, error) {
 	if sp, ok := b.n.Payload.(stackedPrismPayload); ok {
-		body, matched, err := shellStackedBoss(ctx, b, sp, bp, req.shellCall)
+		n, matched, err := stackedshell.Build(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), sp, bp,
+			stackedShellCall(b, req.shellCall))
 		if matched || err != nil {
-			return body, err
-		}
-		body, matched, err = shellRoundBoss(ctx, b, sp, bp, req.shellCall)
-		if matched || err != nil {
-			return body, err
-		}
-		body, matched, err = shellBlindPocket(ctx, b, sp, bp, req.shellCall)
-		if matched || err != nil {
-			return body, err
-		}
-		body, matched, err = shellCounterbore(ctx, b, sp, bp, req.shellCall)
-		if matched || err != nil {
-			return body, err
+			return bodyResult(n, err)
 		}
 	}
 	return shellThroughCut(ctx, b, bp, req.shellCall, refusal)

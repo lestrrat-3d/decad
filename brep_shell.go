@@ -9,7 +9,9 @@ import (
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
+	"github.com/lestrrat-3d/decad/internal/stackedshell"
 	"github.com/lestrrat-3d/decad/internal/throughshell"
 	"github.com/lestrrat-3d/units"
 )
@@ -38,6 +40,19 @@ type brepShellCall struct {
 	sense       ShellSense
 	t           units.Value
 	tmm, tDelta float64
+}
+
+// stackedShellCall is call as the plain data internal/stackedshell reads. It
+// stays in root because it matches the live removed face against source's
+// cap-end and cap-start faces (facesByRole).
+func stackedShellCall(source *Body, call brepShellCall) stackedshell.Call {
+	sc := stackedshell.Call{Inward: call.sense == Inward, Removed: len(call.removed), T: call.tmm, TDelta: call.tDelta}
+	if len(call.removed) == 1 {
+		roles := facesByRole(source)
+		sc.CapEnd = call.removed[0] == roles[provenance.RoleCapEnd]
+		sc.CapStart = call.removed[0] == roles[provenance.RoleCapStart]
+	}
+	return sc
 }
 
 // removedFaces maps the selected live faces to record indices before SG4 and

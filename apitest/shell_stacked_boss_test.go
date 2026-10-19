@@ -124,6 +124,49 @@ func TestShellOffsetRectangularBoss(t *testing.T) {
 	require.LessOrEqual(t, math.Abs(cutVolume.Value.Base()-(want-6)), cutVolume.Bound.Base())
 }
 
+// Each stacked shell opens only at the cap its shape names. Removing the
+// other cap must not build that shell: the stack falls through to route S,
+// which reads no through-cut and refuses.
+func TestShellStackedWrongCapRefuses(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name  string
+		build func(t *testing.T, doc *decad.Document) *decad.Body
+	}{
+		{name: "rectangular boss", build: func(t *testing.T, doc *decad.Document) *decad.Body {
+			stack, err := decad.Union(t.Context(), boxBody(t, doc, -10, -10, 10, 10, 5),
+				boxBodyAtZ(t, doc, -5, -5, 5, 5, 5, 5))
+			require.NoError(t, err)
+			return stack
+		}},
+		{name: "round boss", build: func(t *testing.T, doc *decad.Document) *decad.Body {
+			return roundBossFromSketch(t, doc, 10, 10)
+		}},
+		{name: "blind pocket", build: func(t *testing.T, doc *decad.Document) *decad.Body {
+			pocket, err := decad.Cut(t.Context(), boxBodyAtZ(t, doc, 0, 0, 10, 10, 0, 10),
+				boxBodyAtZ(t, doc, 3, 3, 7, 7, 6, 4))
+			require.NoError(t, err)
+			return pocket
+		}},
+		{name: "counterbore", build: func(t *testing.T, doc *decad.Document) *decad.Body {
+			part, err := decad.Cut(t.Context(), boxBody(t, doc, -10, -10, 10, 10, 10), circleBodyAtZ(t, doc, 0, 3, 0, 10))
+			require.NoError(t, err)
+			part, err = decad.Cut(t.Context(), part, circleBodyAtZ(t, doc, 0, 5, 7, 3))
+			require.NoError(t, err)
+			return part
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stack := tc.build(t, decad.New())
+			_, err := decad.Shell(t.Context(), stack, decad.Faces(decad.FaceCreatedBy(decad.CapStart(stack))).Exactly(1),
+				units.Millimeters(1))
+			require.ErrorIs(t, err, decad.ErrUnsupported)
+			_, err = stack.Volume()
+			require.NoError(t, err, "a refused shell leaves its source live")
+		})
+	}
+}
+
 // shellMeshSignedVolume is the divergence sum of the public mesh's facets.
 // The 0.05 mm fixture must approximate the analytic volume closely enough
 // to catch a reversed band-mass formula even if VerifyAll reports success.
