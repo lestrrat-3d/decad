@@ -118,6 +118,12 @@ APIs are design-only.**
 - Go style, testing and file-layout rules: `~/.claude/docs/go.md`. Tests use
   `testify/require` (never `assert`), `t.Context()`. Exported-API-only test →
   `apitest/`.
+- Keep the root package to the public API where practical. Put everything the
+  user does not see — algorithms, geometry kernels, helpers, report and request
+  plumbing — in an `internal/` package. The root keeps the exported types, their
+  methods and thin wrappers that call into `internal/`. Unexported root code
+  that cannot move (e.g. it needs unexported fields of a root type) says why in
+  its doc comment.
 - New unexported root helpers take plain data (`r3.Vec`, floats, slices), NEVER
   `*Document`/`*Body`/`*Face`/`*Edge`/`*Mesh`, to fit `internal/`. Root keeps
   wrappers; topology code stays. Narrow leaf helpers in PRs.
