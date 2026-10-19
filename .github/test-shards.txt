@@ -251,17 +251,9 @@
 10	0.00	TestLoftBoundedProfilesGroundingCancelsInFlight
 10	0.00	TestLoftContactDirectShellUnionVaryingRectangleBothOrders
 10	0.00	TestLoftContactDirectShellUnionRealVaryingTab
-10	0.00	TestLoftOutputWorldRefusesOversizedReplayArithmetic
-10	0.00	TestLoftOutputCrossZeroRefusesOversizedReplayArithmetic
 10	0.00	TestLoftOutputOrientationRefusesOversizedReplayArithmetic
 10	0.00	TestLoftOutputSideRefusesOversizedLineInterpolation
 10	0.00	TestLoftOutputMiddleTraceRefusesOversizedHeightDifference
-10	0.00	TestLoftOutputCapRefusesOversizedAreaProduct
-10	0.00	TestLoftOutputTileCapRefusesOversizedReturnedPoint
-10	0.00	TestLoftOutputCapConcaveEscapingDiagonal
-10	0.00	TestLoftOutputCapEqualAreaOverlapAndGap
-10	0.00	TestLoftOutputCapCollinearBoundarySplit
-10	0.00	TestLoftOutputCapPredicatesCancelInFlight
 10	0.00	TestLoftVolumeComposeRealVaryingTabBothOrders
 10	0.00	TestLoftVolumeComposeRealDisplacedNonjunction
 10	0.00	TestLoftOutputBoundaryRefusesTinyTranslatedSeam
@@ -271,7 +263,6 @@
 10	0.00	TestLoftVolumeComposeBudgetAndCancellation
 10	0.00	TestLoftVolumeComposeKeepsBoundaryOperationBudget
 10	0.00	TestLoftVolumeSourceEqualityRealAndRefusals
-10	0.00	TestLoftReplayFloat64RefusesOversizedAlignment
 10	0.00	TestLoftVolumeHullCoverIndependentTetra
 10	0.00	TestLoftVolumeHullZeroWidthAndMidWorkCancellation
 10	0.00	TestLoftVolumeRationalCeiling
