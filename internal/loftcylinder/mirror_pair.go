@@ -11,26 +11,16 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
 // MirrorBlank reports whether pp is the blank a mirrored Loft/cylinder Join
-// accepts: an unplaced, solid, single-circle prism centered on the world Z
-// axis in the XY frame, with no recorded cap or section deltas and a finite
-// positive radius.
+// accepts: the same unplaced exact circular blank BlankRadius reads for the
+// circular Union.
 func MirrorBlank(pp prismrecord.Payload) bool {
-	if pp.SurfaceResult || pp.Xform != r3.Identity() || pp.Z0Delta != 0 ||
-		pp.Z1Delta != 0 || pp.SectionDelta != 0 || pp.Z1 <= pp.Z0 ||
-		len(pp.Profile.Holes) != 0 || len(pp.Profile.Outer.Segments) != 1 ||
-		pp.Frame.Origin() != (r3.Vec{}) || pp.Frame.U() != (r3.Vec{X: 1}) ||
-		pp.Frame.V() != (r3.Vec{Y: 1}) {
-		return false
-	}
-	circle, ok := pp.Profile.Outer.Segments[0].(sectionrecord.CircleSeg)
-	return ok && circle.CCW && circle.Center == (sectionrecord.Point2{}) &&
-		circle.Radius.Base() > 0 && !proofbound.IsNonFinite(circle.Radius.Base())
+	_, ok := BlankRadius(pp)
+	return ok
 }
 
 // MirrorPairMotion returns the placement of a mirrored pair over source: the
