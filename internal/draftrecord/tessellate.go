@@ -45,8 +45,9 @@ import (
 
 // Tessellate meshes body, whose payload is dp, through its band view. The
 // band view carries no loft source, so the cap-blend build's own proofs are
-// the whole mesh proof. verifyAll decides whether the area-slack and
-// occupied-volume proofs are composed at all.
+// the whole mesh proof. verifyAll decides whether the cap samples' motion,
+// the per-vertex motion and the occupied-volume proof are built; the face
+// bounds and AreaSlack are composed at every level.
 func Tessellate(ctx context.Context, body *topo.Body, dp Payload, chord float64, verifyAll bool) (*topo.Mesh, error) {
 	if len(dp.Patches) == 0 || len(dp.BandDelta) == 0 {
 		return nil, fmt.Errorf(`%w: the tapered extrude's payload states no wall band geometry`, decaderr.ErrDegenerate)
