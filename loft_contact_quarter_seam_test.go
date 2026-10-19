@@ -95,6 +95,134 @@ func TestQuarterSourceHeldY1RealProducerGate(t *testing.T) {
 	t.Logf("real y=1 seam: source=%d output=%d", sourceVisits, outputVisits)
 }
 
+func TestQuarterSourceHeldY3RealProducerGate(t *testing.T) {
+	ctx := t.Context()
+	prism, loft := quarterSeamRealPair(t, [2]float64{5, 5.5})
+	var sourceVisits, outputVisits uint64
+	source := &proofbound.WorkBudget{
+		StepFn: func() error { sourceVisits++; return ctx.Err() }, ErrFn: ctx.Err,
+	}
+	output := &proofbound.WorkBudget{
+		StepFn: func() error { outputVisits++; return ctx.Err() }, ErrFn: ctx.Err,
+	}
+	proof, accepted, err := loftQuarterSourceHeldY3(ctx, prism, loft, source, output)
+	if err != nil || !accepted || proof.Bound == nil ||
+		proof.Bound.Cmp(big.NewRat(1, 4)) != 0 || proof.Pieces != 8 {
+		t.Fatalf("real y=3 seam: accepted=%t reason=%s err=%v bound=%v pieces=%d source=%d output=%d",
+			accepted, proof.Reason, err, proof.Bound, proof.Pieces, sourceVisits, outputVisits)
+	}
+	if sourceVisits >= 4096 || outputVisits >= 65_536 {
+		t.Fatalf("work: source=%d output=%d", sourceVisits, outputVisits)
+	}
+	t.Logf("real y=3 seam: source=%d output=%d pieces=%d", sourceVisits, outputVisits, proof.Pieces)
+}
+
+func TestQuarterSourceHeldY3ReverseOrder(t *testing.T) {
+	ctx := t.Context()
+	prism, loft := quarterSeamRealPair(t, [2]float64{5, 5.5})
+	proof, accepted, err := loftQuarterSourceHeldY3(ctx, loft, prism,
+		proofbound.NewWorkBudget(ctx), proofbound.NewWorkBudget(ctx))
+	if err != nil || !accepted || proof.Bound == nil ||
+		proof.Bound.Cmp(big.NewRat(1, 4)) != 0 || proof.Pieces != 8 {
+		t.Fatalf("reverse y=3 seam: accepted=%t reason=%s err=%v pieces=%d",
+			accepted, proof.Reason, err, proof.Pieces)
+	}
+}
+
+func TestQuarterSourceHeldY3Refusals(t *testing.T) {
+	ctx := t.Context()
+	prism, loft := quarterSeamRealPair(t, [2]float64{5, 5.5})
+	limitErr := errors.New("operation budget exhausted")
+	for _, tc := range []struct {
+		name, stage string
+		limit       uint64
+	}{
+		{name: "source", stage: "source", limit: 3000},
+		{name: "output", stage: "output", limit: 6000},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var sourceVisits, outputVisits uint64
+			source := &proofbound.WorkBudget{StepFn: func() error {
+				if tc.stage == "source" && sourceVisits >= tc.limit {
+					return limitErr
+				}
+				sourceVisits++
+				return nil
+			}, ErrFn: func() error { return nil }}
+			output := &proofbound.WorkBudget{StepFn: func() error {
+				if tc.stage == "output" && outputVisits >= tc.limit {
+					return limitErr
+				}
+				outputVisits++
+				return nil
+			}, ErrFn: func() error { return nil }}
+			got, accepted, err := loftQuarterSourceHeldY3(ctx, prism, loft, source, output)
+			if accepted || !errors.Is(err, limitErr) || got.Bound != nil || got.Pieces != 0 {
+				t.Fatalf("limited %s: accepted=%t err=%v pieces=%d", tc.name, accepted, err, got.Pieces)
+			}
+			if tc.stage == "source" && outputVisits != 0 {
+				t.Fatalf("output started after source refusal: visits=%d", outputVisits)
+			}
+		})
+	}
+	canceled, cancel := context.WithCancel(ctx)
+	var outputVisits uint64
+	source := &proofbound.WorkBudget{
+		StepFn: func() error { return nil }, ErrFn: func() error { return nil },
+	}
+	output := &proofbound.WorkBudget{StepFn: func() error {
+		outputVisits++
+		if outputVisits == 6000 {
+			cancel()
+		}
+		return nil
+	}, ErrFn: func() error { return nil }}
+	got, accepted, err := loftQuarterSourceHeldY3(canceled, prism, loft, source, output)
+	if accepted || !errors.Is(err, context.Canceled) || got.Bound != nil || got.Pieces != 0 ||
+		outputVisits != 6000 {
+		t.Fatalf("in-flight cancellation: accepted=%t err=%v pieces=%d output=%d",
+			accepted, err, got.Pieces, outputVisits)
+	}
+	if err := Remove(prism); err != nil {
+		t.Fatal(err)
+	}
+	got, accepted, err = loftQuarterSourceHeldY3(ctx, prism, loft,
+		proofbound.NewWorkBudget(ctx), proofbound.NewWorkBudget(ctx))
+	if err != nil || accepted || got.Bound != nil || got.Pieces != 0 {
+		t.Fatalf("retired source: accepted=%t err=%v pieces=%d", accepted, err, got.Pieces)
+	}
+}
+
+func TestQuarterSourceHeldY3WrongRealRadius(t *testing.T) {
+	ctx := t.Context()
+	prism, loft := quarterSeamRealPair(t, [2]float64{5, 6})
+	var outputVisits uint64
+	output := &proofbound.WorkBudget{
+		StepFn: func() error { outputVisits++; return nil }, ErrFn: func() error { return nil },
+	}
+	got, accepted, err := loftQuarterSourceHeldY3(ctx, prism, loft,
+		proofbound.NewWorkBudget(ctx), output)
+	if err != nil || accepted || got.Bound != nil || got.Pieces != 0 || outputVisits != 0 {
+		t.Fatalf("wrong real radius: accepted=%t err=%v pieces=%d output=%d",
+			accepted, err, got.Pieces, outputVisits)
+	}
+}
+
+func TestQuarterSourceHeldY3MissingRealJunction(t *testing.T) {
+	ctx := t.Context()
+	prism, loft := quarterSeamRealPair(t, [2]float64{5, 2})
+	var outputVisits uint64
+	output := &proofbound.WorkBudget{
+		StepFn: func() error { outputVisits++; return nil }, ErrFn: func() error { return nil },
+	}
+	got, accepted, err := loftQuarterSourceHeldY3(ctx, prism, loft,
+		proofbound.NewWorkBudget(ctx), output)
+	if err != nil || accepted || got.Bound != nil || got.Pieces != 0 || outputVisits != 0 {
+		t.Fatalf("missing real cap junction: accepted=%t err=%v pieces=%d output=%d",
+			accepted, err, got.Pieces, outputVisits)
+	}
+}
+
 func TestQuarterSourceHeldY1Refusals(t *testing.T) {
 	ctx := t.Context()
 	prism, loft := quarterSeamRealPair(t, [2]float64{5, 5.5})

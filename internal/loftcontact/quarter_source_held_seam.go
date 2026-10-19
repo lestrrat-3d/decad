@@ -11,13 +11,19 @@ import (
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
-// QuarterSourceHeldY1 bounds the selected held y=1 chain against the source
-// quarter arc. It proves no other seam, output shell, or Boolean result.
-type QuarterSourceHeldY1 struct {
+// QuarterSourceHeldSeam bounds one selected held chain against the source
+// quarter arc. It proves no output shell or Boolean result.
+type QuarterSourceHeldSeam struct {
 	Reason string
 	Bound  *big.Rat
 	Pieces int
 }
+
+// QuarterSourceHeldY1 names the selected lower-wall result.
+type QuarterSourceHeldY1 = QuarterSourceHeldSeam
+
+// QuarterSourceHeldY3 names the selected upper-wall result.
+type QuarterSourceHeldY3 = QuarterSourceHeldSeam
 
 func quarterQuadraticValue(m loftHullMath, a, b, c, z *big.Rat) (*big.Rat, error) {
 	az, err := m.mul(a, z)
@@ -81,7 +87,7 @@ func quarterQuadraticNonnegative(m loftHullMath, a, b, c, lo, hi *big.Rat) (bool
 }
 
 func quarterSourceHeldPiece(ctx context.Context, m loftHullMath,
-	piece heldPiece, bound *big.Rat) (bool, error) {
+	piece heldPiece, carrier, sourceConstant, bound *big.Rat) (bool, error) {
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
@@ -93,7 +99,7 @@ func quarterSourceHeldPiece(ctx context.Context, m loftHullMath,
 		if err := m.step(); err != nil {
 			return false, err
 		}
-		if p.y.Cmp(big.NewRat(1, 1)) != 0 || p.z.Cmp(zero) < 0 || p.z.Cmp(ten) > 0 {
+		if p.y.Cmp(carrier) != 0 || p.z.Cmp(zero) < 0 || p.z.Cmp(ten) > 0 {
 			return false, nil
 		}
 		lower, err := m.sub(p.x, bound)
@@ -172,7 +178,7 @@ func quarterSourceHeldPiece(ctx context.Context, m loftHullMath,
 				b, err = m.sub(cross, big.NewRat(1, 2))
 			}
 			if err == nil {
-				c, err = m.sub(constant, big.NewRat(24, 1))
+				c, err = m.sub(constant, sourceConstant)
 			}
 		} else {
 			a, err = m.sub(big.NewRat(1, 400), slopeSquare)
@@ -180,7 +186,7 @@ func quarterSourceHeldPiece(ctx context.Context, m loftHullMath,
 				b, err = m.sub(big.NewRat(1, 2), cross)
 			}
 			if err == nil {
-				c, err = m.sub(big.NewRat(24, 1), constant)
+				c, err = m.sub(sourceConstant, constant)
 			}
 		}
 		if err != nil {
@@ -194,20 +200,21 @@ func quarterSourceHeldPiece(ctx context.Context, m loftHullMath,
 	return true, nil
 }
 
-// CertifyQuarterSourceHeldY1 rereads the live original pair, then compares
-// every selected y=1 held piece with the exact source radius at each height.
+// certifyQuarterSourceHeldSeam rereads the live original pair, then compares
+// every selected held piece with the exact source radius at each height.
 // The caller must separately authenticate the source cap junction witnesses.
-func CertifyQuarterSourceHeldY1(ctx context.Context, budget *proofbound.WorkBudget,
-	prism, loft *topo.Body, arcSegment int, radii [2]*big.Rat) (QuarterSourceHeldY1, bool, error) {
-	report := QuarterSourceHeldY1{}
-	decline := func(reason string) (QuarterSourceHeldY1, bool, error) {
+func certifyQuarterSourceHeldSeam(ctx context.Context, budget *proofbound.WorkBudget,
+	prism, loft *topo.Body, arcSegment, carrierY int, radii [2]*big.Rat) (QuarterSourceHeldSeam, bool, error) {
+	report := QuarterSourceHeldSeam{}
+	decline := func(reason string) (QuarterSourceHeldSeam, bool, error) {
 		report.Reason = reason
 		return report, false, nil
 	}
 	if err := ctx.Err(); err != nil {
 		return report, false, err
 	}
-	if budget == nil || !loftHullFits(radii[0]) || !loftHullFits(radii[1]) ||
+	if (carrierY != 1 && carrierY != 3) || budget == nil ||
+		!loftHullFits(radii[0]) || !loftHullFits(radii[1]) ||
 		radii[0].Cmp(big.NewRat(5, 1)) != 0 || radii[1].Cmp(big.NewRat(11, 2)) != 0 {
 		return decline("source_radius")
 	}
@@ -245,21 +252,28 @@ func CertifyQuarterSourceHeldY1(ctx context.Context, budget *proofbound.WorkBudg
 		}
 	}
 	bound := big.NewRat(1, 4)
-	pieces := selected.Y1.pieces
+	carrier := big.NewRat(int64(carrierY), 1)
+	sourceConstant := big.NewRat(24, 1)
+	seam := selected.Y1
+	if carrierY == 3 {
+		seam = selected.Y3
+		sourceConstant = big.NewRat(16, 1)
+	}
+	pieces := seam.pieces
 	if len(pieces) == 0 || len(pieces) > 512 ||
-		selected.Y1.BottomX == nil || selected.Y1.TopX == nil {
+		seam.BottomX == nil || seam.TopX == nil {
 		return decline("held_chain")
 	}
-	bottom, err := m.cmp(selected.Y1.BottomX, pieces[0].lo.x)
+	bottom, err := m.cmp(seam.BottomX, pieces[0].lo.x)
 	if err != nil {
 		return report, false, err
 	}
-	top, err := m.cmp(selected.Y1.TopX, pieces[len(pieces)-1].hi.x)
+	top, err := m.cmp(seam.TopX, pieces[len(pieces)-1].hi.x)
 	if err != nil || bottom != 0 || top != 0 {
 		return report, false, err
 	}
 	for _, piece := range pieces {
-		ok, checkErr := quarterSourceHeldPiece(ctx, m, piece, bound)
+		ok, checkErr := quarterSourceHeldPiece(ctx, m, piece, carrier, sourceConstant, bound)
 		if checkErr != nil || !ok {
 			if errors.Is(checkErr, errLoftHullSize) {
 				return decline("arithmetic_size")
@@ -276,5 +290,17 @@ func CertifyQuarterSourceHeldY1(ctx context.Context, budget *proofbound.WorkBudg
 	if err := ctx.Err(); err != nil {
 		return report, false, err
 	}
-	return QuarterSourceHeldY1{Bound: bound, Pieces: len(pieces)}, true, nil
+	return QuarterSourceHeldSeam{Bound: bound, Pieces: len(pieces)}, true, nil
+}
+
+// CertifyQuarterSourceHeldY1 bounds the selected y=1 chain.
+func CertifyQuarterSourceHeldY1(ctx context.Context, budget *proofbound.WorkBudget,
+	prism, loft *topo.Body, arcSegment int, radii [2]*big.Rat) (QuarterSourceHeldY1, bool, error) {
+	return certifyQuarterSourceHeldSeam(ctx, budget, prism, loft, arcSegment, 1, radii)
+}
+
+// CertifyQuarterSourceHeldY3 bounds the selected y=3 chain.
+func CertifyQuarterSourceHeldY3(ctx context.Context, budget *proofbound.WorkBudget,
+	prism, loft *topo.Body, arcSegment int, radii [2]*big.Rat) (QuarterSourceHeldY3, bool, error) {
+	return certifyQuarterSourceHeldSeam(ctx, budget, prism, loft, arcSegment, 3, radii)
 }
