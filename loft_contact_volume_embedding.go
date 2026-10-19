@@ -20,7 +20,7 @@ type loftVolumeTriangle struct {
 // The caller must first authenticate source occupancy and patch coverage with
 // certifyLoftOutputBoundary; this function proves the remaining global shell
 // geometry. It uses the caller's shared output budget. Refusal has no witness.
-func loftVolumeExactShell(budget *proofbound.WorkBudget, shell loftOutputShell) (*big.Rat, bool, error) {
+func loftVolumeExactShell(budget *proofbound.WorkBudget, shell loftcontact.OutputShell) (*big.Rat, bool, error) {
 	if budget == nil {
 		return nil, false, nil
 	}
@@ -28,18 +28,18 @@ func loftVolumeExactShell(budget *proofbound.WorkBudget, shell loftOutputShell) 
 		return nil, false, err
 	}
 	refuse := func() (*big.Rat, bool, error) { return nil, false, budget.Err() }
-	if len(shell.vertices) < 4 || len(shell.vertices) > 512 ||
-		len(shell.triangles) < 4 || len(shell.triangles) > 512 {
+	if len(shell.Vertices) < 4 || len(shell.Vertices) > 512 ||
+		len(shell.Triangles) < 4 || len(shell.Triangles) > 512 {
 		return refuse()
 	}
 	c := &loftcontact.Arithmetic{OK: true}
-	points := make([]loftcontact.Vec, len(shell.vertices))
+	points := make([]loftcontact.Vec, len(shell.Vertices))
 	seenPoints := make(map[string]struct{}, len(points))
-	for i, v := range shell.vertices {
+	for i, v := range shell.Vertices {
 		if err := budget.Step(); err != nil {
 			return nil, false, err
 		}
-		points[i] = loftcontact.Vec(v.world)
+		points[i] = loftcontact.Vec(v.World)
 		var key strings.Builder
 		for _, coordinate := range points[i] {
 			if !c.Valid(coordinate) {
@@ -53,10 +53,10 @@ func loftVolumeExactShell(budget *proofbound.WorkBudget, shell loftOutputShell) 
 		}
 		seenPoints[key.String()] = struct{}{}
 	}
-	triangles := make([]loftVolumeTriangle, len(shell.triangles))
+	triangles := make([]loftVolumeTriangle, len(shell.Triangles))
 	directed := make(map[[2]int][2]int, 3*len(triangles))
 	incident := make([][]int, len(points))
-	for i, ids := range shell.triangles {
+	for i, ids := range shell.Triangles {
 		if err := budget.Step(); err != nil {
 			return nil, false, err
 		}
@@ -191,7 +191,7 @@ func loftVolumeExactShell(budget *proofbound.WorkBudget, shell loftOutputShell) 
 	if sixTimes.Sign() <= 0 {
 		return refuse()
 	}
-	volume := c.Quo(sixTimes, loftOutputRat(6))
+	volume := c.Quo(sixTimes, big.NewRat(6, 1))
 	if !c.OK || volume.Sign() <= 0 {
 		return refuse()
 	}
@@ -429,8 +429,8 @@ func loftVolumeCoplanarAllowed(budget *proofbound.WorkBudget, c *loftcontact.Ari
 			}
 			t := c.Quo(loftVolumeCross2(c, qp, s), den)
 			w := c.Quo(loftVolumeCross2(c, qp, r), den)
-			if c.Cmp(t, loftOutputRat(0)) < 0 || c.Cmp(t, loftOutputRat(1)) > 0 ||
-				c.Cmp(w, loftOutputRat(0)) < 0 || c.Cmp(w, loftOutputRat(1)) > 0 {
+			if c.Cmp(t, big.NewRat(0, 1)) < 0 || c.Cmp(t, big.NewRat(1, 1)) > 0 ||
+				c.Cmp(w, big.NewRat(0, 1)) < 0 || c.Cmp(w, big.NewRat(1, 1)) > 0 {
 				continue
 			}
 			intersection := [2]*big.Rat{c.Add(p[0], c.Mul(t, r[0])), c.Add(p[1], c.Mul(t, r[1]))}

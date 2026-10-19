@@ -48,17 +48,17 @@ func TestLoftContactPartitionRealVaryingCapJunctions(t *testing.T) {
 		require.Equal(t, [2][2]sectionrecord.Point2{
 			{{U: 10, V: 4}, {U: 10, V: 6}},
 			{{U: 10, V: 4}, {U: 10, V: 6}},
-		}, partition.junction)
+		}, partition.Junction)
 		require.Equal(t, [3]string{"0", "4", "5"}, [3]string{
-			partition.capLevels[0].RatString(), partition.capLevels[1].RatString(),
-			partition.capLevels[2].RatString()})
-		require.Positive(t, partition.capOwners[0][0])
-		require.Positive(t, partition.capOwners[0][1])
-		require.Positive(t, partition.capOwners[0][2]) // overlap belongs to P once
-		require.Equal(t, 0, partition.capOwners[1][0])
-		require.Positive(t, partition.capOwners[1][1])
-		require.Equal(t, 0, partition.capOwners[1][2])
-		require.Equal(t, 4, partition.topWallJoins)
+			partition.CapLevels[0].RatString(), partition.CapLevels[1].RatString(),
+			partition.CapLevels[2].RatString()})
+		require.Positive(t, partition.CapOwners[0][0])
+		require.Positive(t, partition.CapOwners[0][1])
+		require.Positive(t, partition.CapOwners[0][2]) // overlap belongs to P once
+		require.Equal(t, 0, partition.CapOwners[1][0])
+		require.Positive(t, partition.CapOwners[1][1])
+		require.Equal(t, 0, partition.CapOwners[1][2])
+		require.Equal(t, 4, partition.TopWallJoins)
 	}
 	for capIndex, loftProfile := range []profileRecord{lp.Profile0, lp.Profile1} {
 		budget := proofbound.NewWallWorkBudgetWithOperation(4096, proofbound.NewWorkBudget(t.Context()))
@@ -157,19 +157,19 @@ func TestLoftContactPartitionCapMapRefusesAmbiguousFragments(t *testing.T) {
 		&prismcells.Reexpression{Identity: true})
 	require.NoError(t, err)
 	level := big.NewRat(4, 1)
-	origins, mapped, err := loftPartitionSceneOrigins(budget, scene, tags, prismLines, loftLines, 1, level)
+	origins, mapped, err := loftcontact.SceneOrigins(budget, scene, tags, prismLines, loftLines, 1, level)
 	require.NoError(t, err)
 	require.True(t, mapped)
 	require.Len(t, origins, 8)
 	var cut, carrierCut [2]*big.Rat
-	for k, seam := range partition.seams {
+	for k, seam := range partition.Seams {
 		cut[k], carrierCut[k], ok = seam.At(big.NewRat(1, 1))
 		require.True(t, ok)
 	}
 	cells, err := prismcells.ProfilesContext(t.Context(), scene.Profiles)
 	require.NoError(t, err)
-	complete, err := loftPartitionCertifyFragments(budget, scene, cells, origins,
-		prismLines, loftLines, partition.carrier, partition.crossing, cut, carrierCut, 1, level)
+	complete, err := loftcontact.CertifyCapFragments(budget, scene, cells, origins,
+		prismLines, loftLines, partition.Carrier, partition.Crossing, cut, carrierCut, 1, level)
 	require.NoError(t, err)
 	require.True(t, complete)
 
@@ -180,7 +180,7 @@ func TestLoftContactPartitionCapMapRefusesAmbiguousFragments(t *testing.T) {
 	for ci, cell := range cells {
 		for ei, edge := range cell.Outer {
 			origin, exists := origins[edge.Entity]
-			if !exists || origin.operand != 1 || !edge.Partial {
+			if !exists || origin.Operand != 1 || !edge.Partial {
 				continue
 			}
 			p, valid := loftcontact.PointOf(sectionrecord.Point2{
@@ -193,8 +193,9 @@ func TestLoftContactPartitionCapMapRefusesAmbiguousFragments(t *testing.T) {
 			if !valid {
 				continue
 			}
-			a, okA := loftPartitionParameter(origin.line, p)
-			b, okB := loftPartitionParameter(origin.line, q)
+			checked := &loftcontact.Arithmetic{OK: true}
+			a, okA := checked.LineParameter(origin.Line, p)
+			b, okB := checked.LineParameter(origin.Line, q)
 			if !okA || !okB || a.Cmp(big.NewRat(2, 5)) != 0 && b.Cmp(big.NewRat(2, 5)) != 0 {
 				continue
 			}
@@ -209,19 +210,19 @@ func TestLoftContactPartitionCapMapRefusesAmbiguousFragments(t *testing.T) {
 	copyCell.Outer = append([]sketch.BoundaryEdge(nil), cells[cutCell].Outer...)
 	copyCell.Outer[cutEdge].Partial = false
 	altered[cutCell] = &copyCell
-	complete, err = loftPartitionCertifyFragments(budget, scene, altered, origins,
-		prismLines, loftLines, partition.carrier, partition.crossing, cut, carrierCut, 1, level)
+	complete, err = loftcontact.CertifyCapFragments(budget, scene, altered, origins,
+		prismLines, loftLines, partition.Carrier, partition.Crossing, cut, carrierCut, 1, level)
 	require.NoError(t, err)
 	require.False(t, complete)
-	wrongLevel := make(map[sketch.Entity]loftPartitionCapOrigin, len(origins))
+	wrongLevel := make(map[sketch.Entity]loftcontact.CapOrigin, len(origins))
 	maps.Copy(wrongLevel, origins)
 	for entity, origin := range wrongLevel {
-		origin.level = big.NewRat(5, 1)
+		origin.Level = big.NewRat(5, 1)
 		wrongLevel[entity] = origin
 		break
 	}
-	complete, err = loftPartitionCertifyFragments(budget, scene, cells, wrongLevel,
-		prismLines, loftLines, partition.carrier, partition.crossing, cut, carrierCut, 1, level)
+	complete, err = loftcontact.CertifyCapFragments(budget, scene, cells, wrongLevel,
+		prismLines, loftLines, partition.Carrier, partition.Crossing, cut, carrierCut, 1, level)
 	require.NoError(t, err)
 	require.False(t, complete)
 
@@ -234,7 +235,7 @@ func TestLoftContactPartitionCapMapRefusesAmbiguousFragments(t *testing.T) {
 			break
 		}
 	}
-	_, mapped, err = loftPartitionSceneOrigins(budget, scene, duplicateTag, prismLines, loftLines, 1, level)
+	_, mapped, err = loftcontact.SceneOrigins(budget, scene, duplicateTag, prismLines, loftLines, 1, level)
 	require.NoError(t, err)
 	require.False(t, mapped)
 }
@@ -249,14 +250,14 @@ func TestLoftContactPartitionInteriorCutIsNotCapChord(t *testing.T) {
 	loftLines := loft.n.Payload.(loftPayload).Profile0.Outer.Segments
 	found := false
 	var seamIndex int
-	for k, i := range partition.crossing {
+	for k, i := range partition.Crossing {
 		line := loftLines[i].(sectionrecord.LineSeg)
 		if line.Start.V == 4 && line.End.V == 4 {
 			found, seamIndex = true, k
 		}
 	}
 	require.True(t, found)
-	seam := partition.seams[seamIndex]
+	seam := partition.Seams[seamIndex]
 	start, _, ok := seam.At(big.NewRat(0, 1))
 	require.True(t, ok)
 	middle, _, ok := seam.At(big.NewRat(1, 2))
@@ -305,7 +306,7 @@ func TestLoftContactPartitionOtherPrismCarrier(t *testing.T) {
 				proofbound.NewWorkBudget(t.Context()))
 			require.NoError(t, err)
 			require.True(t, admitted)
-			carrier := prism.n.Payload.(prismPayload).Profile.Outer.Segments[partition.carrier].(sectionrecord.LineSeg)
+			carrier := prism.n.Payload.(prismPayload).Profile.Outer.Segments[partition.Carrier].(sectionrecord.LineSeg)
 			if tc.axis == 'u' {
 				require.Equal(t, 0.0, carrier.Start.U)
 				require.Equal(t, 0.0, carrier.End.U)

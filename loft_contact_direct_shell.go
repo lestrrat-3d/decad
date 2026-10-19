@@ -95,12 +95,12 @@ func loftContactFacetedBody(ctx context.Context, d *Document, ref producerID,
 	first, second, prism, loft *Body, lp loftPayload,
 	proof loftVolumeProof, budget *proofbound.WorkBudget) (*Body, bool, error) {
 	shell := proof.boundary.shell
-	if len(shell.faces) != len(shell.triangles) ||
-		len(shell.vertices) == 0 || len(shell.vertices) > 512 ||
-		len(shell.triangles) == 0 || len(shell.triangles) > 512 ||
+	if len(shell.Faces) != len(shell.Triangles) ||
+		len(shell.Vertices) == 0 || len(shell.Vertices) > 512 ||
+		len(shell.Triangles) == 0 || len(shell.Triangles) > 512 ||
 		proof.boundary.heldAudit == nil ||
-		len(proof.boundary.auditedVerts) != len(shell.vertices) ||
-		len(proof.boundary.auditedTris) != len(shell.triangles) {
+		len(proof.boundary.auditedVerts) != len(shell.Vertices) ||
+		len(proof.boundary.auditedTris) != len(shell.Triangles) {
 		return nil, false, nil
 	}
 	prismFaces, ok, err := loftContactSourceFaces(prism, budget)
@@ -128,43 +128,43 @@ func loftContactFacetedBody(ctx context.Context, d *Document, ref producerID,
 	if err != nil || !ok || len(lower) != len(upper) {
 		return loftContactBoundedResult(ctx, err)
 	}
-	if _, err := budget.StepN(uint64(2 * len(shell.vertices))); err != nil {
+	if _, err := budget.StepN(uint64(2 * len(shell.Vertices))); err != nil {
 		return loftContactBoundedResult(ctx, err)
 	}
 	if err := budget.Err(); err != nil {
 		return loftContactBoundedResult(ctx, err)
 	}
-	verts := make([]r3.Vec, len(shell.vertices))
-	beta := make([]float64, len(shell.vertices))
-	for i, vertex := range shell.vertices {
+	verts := make([]r3.Vec, len(shell.Vertices))
+	beta := make([]float64, len(shell.Vertices))
+	for i, vertex := range shell.Vertices {
 		if err := budget.Step(); err != nil {
 			return loftContactBoundedResult(ctx, err)
 		}
-		if math.Float64bits(vertex.held.X) != math.Float64bits(proof.boundary.auditedVerts[i].X) ||
-			math.Float64bits(vertex.held.Y) != math.Float64bits(proof.boundary.auditedVerts[i].Y) ||
-			math.Float64bits(vertex.held.Z) != math.Float64bits(proof.boundary.auditedVerts[i].Z) {
+		if math.Float64bits(vertex.Held.X) != math.Float64bits(proof.boundary.auditedVerts[i].X) ||
+			math.Float64bits(vertex.Held.Y) != math.Float64bits(proof.boundary.auditedVerts[i].Y) ||
+			math.Float64bits(vertex.Held.Z) != math.Float64bits(proof.boundary.auditedVerts[i].Z) {
 			return nil, false, nil
 		}
-		verts[i], beta[i] = vertex.held, vertex.bound
+		verts[i], beta[i] = vertex.Held, vertex.Bound
 	}
 	// Reserve the conversion's slices and lookup before any allocation.
-	if _, err := budget.StepN(uint64(3 * len(shell.triangles))); err != nil {
+	if _, err := budget.StepN(uint64(3 * len(shell.Triangles))); err != nil {
 		return loftContactBoundedResult(ctx, err)
 	}
 	if err := budget.Err(); err != nil {
 		return loftContactBoundedResult(ctx, err)
 	}
-	groups := make([]facetGroup, 0, len(shell.triangles))
-	groupOf := make(map[[2]*Face]int, len(shell.triangles))
-	src := make([]int, len(shell.triangles))
-	for i, face := range shell.faces {
+	groups := make([]facetGroup, 0, len(shell.Triangles))
+	groupOf := make(map[[2]*Face]int, len(shell.Triangles))
+	src := make([]int, len(shell.Triangles))
+	for i, face := range shell.Faces {
 		// A wall may format two distinct source roles before it looks them up.
 		if _, err := budget.StepN(3); err != nil {
 			return loftContactBoundedResult(ctx, err)
 		}
-		roles, owner, found, err := loftContactSourceRoles(face, shell.triangles[i], shell,
-			lower, upper, proof.boundary.source.capLevels[0],
-			proof.boundary.source.capLevels[1], budget)
+		roles, owner, found, err := loftContactSourceRoles(face, shell.Triangles[i], shell,
+			lower, upper, proof.boundary.source.CapLevels[0],
+			proof.boundary.source.CapLevels[1], budget)
 		if err != nil {
 			return loftContactBoundedResult(ctx, err)
 		}
@@ -217,14 +217,14 @@ func loftContactFacetedBody(ctx context.Context, d *Document, ref producerID,
 	if err != nil {
 		return nil, true, err
 	}
-	if _, err := budget.StepN(uint64(2 * len(shell.triangles))); err != nil {
+	if _, err := budget.StepN(uint64(2 * len(shell.Triangles))); err != nil {
 		return loftContactBoundedResult(ctx, err)
 	}
 	if err := budget.Err(); err != nil {
 		return loftContactBoundedResult(ctx, err)
 	}
-	tris := make([][3]int, len(shell.triangles))
-	for i, triangle := range shell.triangles {
+	tris := make([][3]int, len(shell.Triangles))
+	for i, triangle := range shell.Triangles {
 		if err := budget.Step(); err != nil {
 			return loftContactBoundedResult(ctx, err)
 		}
@@ -237,7 +237,7 @@ func loftContactFacetedBody(ctx context.Context, d *Document, ref producerID,
 		Verts: verts, VertexBound: beta,
 		Tris: tris,
 		Src:  src, Groups: groups,
-		MeshBound:  facetproof.FacetBoundMax(shell.triangles, beta),
+		MeshBound:  facetproof.FacetBoundMax(shell.Triangles, beta),
 		VolSymDiff: proof.symDiffUpper, DPair: dPair,
 		Xform: r3.Identity(),
 	}
@@ -350,36 +350,36 @@ func loftContactSourceFaces(body *Body, budget *proofbound.WorkBudget) (map[stri
 	return faces, true, nil
 }
 
-func loftContactSourceRoles(face loftOutputFace, triangle [3]int,
-	shell loftOutputShell, lower, upper []sectionrecord.LineSeg, z0, z1 *big.Rat,
+func loftContactSourceRoles(face loftcontact.OutputFace, triangle [3]int,
+	shell loftcontact.OutputShell, lower, upper []sectionrecord.LineSeg, z0, z1 *big.Rat,
 	budget *proofbound.WorkBudget) ([2]string, int, bool, error) {
-	if face.kind == 0 {
+	if face.Kind == 0 {
 		switch {
-		case face.owner == 0 && face.level == 0, face.owner == 1 && face.level == 0:
-			return [2]string{provenance.RoleCapStart}, face.owner, true, nil
-		case face.owner == 1 && face.level == 1, face.owner == 0 && face.level == 2:
-			return [2]string{provenance.RoleCapEnd}, face.owner, true, nil
+		case face.Owner == 0 && face.Level == 0, face.Owner == 1 && face.Level == 0:
+			return [2]string{provenance.RoleCapStart}, face.Owner, true, nil
+		case face.Owner == 1 && face.Level == 1, face.Owner == 0 && face.Level == 2:
+			return [2]string{provenance.RoleCapEnd}, face.Owner, true, nil
 		}
 		return [2]string{}, 0, false, nil
 	}
-	if face.kind != 1 || face.segment < 0 {
+	if face.Kind != 1 || face.Segment < 0 {
 		return [2]string{}, 0, false, nil
 	}
-	if face.owner == 0 {
-		return [2]string{fmt.Sprintf("side(0,%d)", face.segment)}, 0, true, nil
+	if face.Owner == 0 {
+		return [2]string{fmt.Sprintf("side(0,%d)", face.Segment)}, 0, true, nil
 	}
-	if face.owner != 1 || face.segment >= len(lower) || face.segment >= len(upper) {
+	if face.Owner != 1 || face.Segment >= len(lower) || face.Segment >= len(upper) {
 		return [2]string{}, 0, false, nil
 	}
-	sides, ok, err := loftContactWallTriangleSides(triangle, shell, lower[face.segment],
-		upper[face.segment], z0, z1, budget)
+	sides, ok, err := loftContactWallTriangleSides(triangle, shell, lower[face.Segment],
+		upper[face.Segment], z0, z1, budget)
 	if !ok {
 		return [2]string{}, 0, false, err
 	}
 	var roles [2]string
 	for side := range 2 {
 		if sides&(1<<side) != 0 {
-			roles[side] = fmt.Sprintf("side(0,%d,%d)", face.segment, side)
+			roles[side] = fmt.Sprintf("side(0,%d,%d)", face.Segment, side)
 		}
 	}
 	if roles[0] == "" {
@@ -390,7 +390,7 @@ func loftContactSourceRoles(face loftOutputFace, triangle [3]int,
 
 // The original Loft gives each wall cell two faces. An output triangle that
 // crosses their exact diagonal carries both contributing source roles.
-func loftContactWallTriangleSides(triangle [3]int, shell loftOutputShell,
+func loftContactWallTriangleSides(triangle [3]int, shell loftcontact.OutputShell,
 	lower, upper sectionrecord.LineSeg, z0, z1 *big.Rat,
 	budget *proofbound.WorkBudget) (uint8, bool, error) {
 	// The height and four source corners create nine rationals before the
@@ -420,36 +420,36 @@ func loftContactWallTriangleSides(triangle [3]int, shell loftOutputShell,
 		if _, err := budget.StepN(46); err != nil {
 			return 0, false, err
 		}
-		if id < 0 || id >= len(shell.vertices) {
+		if id < 0 || id >= len(shell.Vertices) {
 			return 0, false, nil
 		}
-		point := shell.vertices[id].point
-		s := c.Quo(c.Sub(point.z, z0), height)
+		point := shell.Vertices[id].Point
+		s := c.Quo(c.Sub(point.Z, z0), height)
 		start := c.Interpolate(lowStart, highStart, s)
 		end := c.Interpolate(lowEnd, highEnd, s)
 		du, dv := c.Sub(end.U, start.U), c.Sub(end.V, start.V)
 		var t *big.Rat
 		switch {
 		case du.Sign() != 0:
-			t = c.Quo(c.Sub(point.u, start.U), du)
+			t = c.Quo(c.Sub(point.U, start.U), du)
 		case dv.Sign() != 0:
-			t = c.Quo(c.Sub(point.v, start.V), dv)
+			t = c.Quo(c.Sub(point.V, start.V), dv)
 		default:
 			return 0, false, nil
 		}
 		reconstructed := c.Interpolate(start, end, t)
-		if !c.OK || c.Cmp(s, loftOutputRat(0)) < 0 ||
-			c.Cmp(s, loftOutputRat(1)) > 0 || c.Cmp(t, loftOutputRat(0)) < 0 ||
-			c.Cmp(t, loftOutputRat(1)) > 0 ||
-			!c.SamePoint(loftcontact.Point{U: point.u, V: point.v}, reconstructed) {
+		if !c.OK || c.Cmp(s, big.NewRat(0, 1)) < 0 ||
+			c.Cmp(s, big.NewRat(1, 1)) > 0 || c.Cmp(t, big.NewRat(0, 1)) < 0 ||
+			c.Cmp(t, big.NewRat(1, 1)) > 0 ||
+			!c.SamePoint(loftcontact.Point{U: point.U, V: point.V}, reconstructed) {
 			return 0, false, nil
 		}
 		diagonal := c.Interpolate(lowStart, highEnd, s)
 		// The admitted wall is planar and convex. Its horizontal sections
 		// stay parallel, so this sign is the side of the original straight
 		// source diagonal throughout each output triangle.
-		parallel := c.Add(c.Mul(c.Sub(point.u, diagonal.U), du),
-			c.Mul(c.Sub(point.v, diagonal.V), dv))
+		parallel := c.Add(c.Mul(c.Sub(point.U, diagonal.U), du),
+			c.Mul(c.Sub(point.V, diagonal.V), dv))
 		if !c.OK {
 			return 0, false, nil
 		}

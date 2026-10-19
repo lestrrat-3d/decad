@@ -56,9 +56,9 @@ func TestLoftVolumeComposeRealVaryingTabBothOrders(t *testing.T) {
 				require.NoError(t, err)
 				require.True(t, admitted)
 				require.Equal(t, [3]string{"0", "4", "5"}, [3]string{
-					proof.boundary.source.capLevels[0].RatString(),
-					proof.boundary.source.capLevels[1].RatString(),
-					proof.boundary.source.capLevels[2].RatString(),
+					proof.boundary.source.CapLevels[0].RatString(),
+					proof.boundary.source.CapLevels[1].RatString(),
+					proof.boundary.source.CapLevels[2].RatString(),
 				})
 				require.Equal(t, 0, proof.sourceVolume.Cmp(big.NewRat(520, 1)))
 				require.True(t, proof.symDiffUpper >= 0 && proof.symDiffUpper < 520,
@@ -159,10 +159,10 @@ func TestLoftOutputBoundaryRefusesTinyTranslatedSeam(t *testing.T) {
 				tc.first, tc.second, proofbound.NewWorkBudget(t.Context()))
 			require.NoError(t, sourceErr)
 			require.True(t, admitted)
-			require.Positive(t, source.sourceVisits)
-			for _, cap := range source.prepared {
-				require.NotNil(t, cap.scene)
-				require.Positive(t, len(cap.raw))
+			require.Positive(t, source.SourceVisits)
+			for _, cap := range source.Prepared {
+				require.NotNil(t, cap.Scene)
+				require.Positive(t, len(cap.Raw))
 			}
 
 			boundary, accepted, boundaryErr := certifyLoftOutputBoundary(t.Context(),
@@ -171,8 +171,8 @@ func TestLoftOutputBoundaryRefusesTinyTranslatedSeam(t *testing.T) {
 			require.ErrorContains(t, boundaryErr, "private loft crossing vertex exceeds the exact-bit gate")
 			require.False(t, accepted)
 			require.Zero(t, boundary.workVisits)
-			require.Zero(t, len(boundary.shell.vertices))
-			require.Zero(t, len(boundary.shell.triangles))
+			require.Zero(t, len(boundary.shell.Vertices))
+			require.Zero(t, len(boundary.shell.Triangles))
 			require.True(t, boundary.heldAudit == nil)
 		})
 	}
@@ -241,10 +241,10 @@ func TestLoftVolumeSourceRefusesRealTriangleFractionalSeam(t *testing.T) {
 			// The source wall accepts 4,096 steps before refusing this attempt.
 			require.Equal(t, uint64(4097), attempts)
 			t.Logf("source visits=4096 refused attempt=%d", attempts)
-			require.Zero(t, source.sourceVisits)
-			require.Nil(t, source.walls)
-			require.Nil(t, source.prepared[0].scene)
-			require.Nil(t, source.prepared[1].scene)
+			require.Zero(t, source.SourceVisits)
+			require.Nil(t, source.Walls)
+			require.Nil(t, source.Prepared[0].Scene)
+			require.Nil(t, source.Prepared[1].Scene)
 
 			canceled, cancel := context.WithCancel(t.Context())
 			cancel()
@@ -252,8 +252,8 @@ func TestLoftVolumeSourceRefusesRealTriangleFractionalSeam(t *testing.T) {
 				tc.first, tc.second, proofbound.NewWorkBudget(canceled))
 			require.ErrorIs(t, cancelErr, context.Canceled)
 			require.False(t, accepted)
-			require.Zero(t, partial.sourceVisits)
-			require.Nil(t, partial.walls)
+			require.Zero(t, partial.SourceVisits)
+			require.Nil(t, partial.Walls)
 		})
 	}
 }
@@ -264,52 +264,52 @@ func TestLoftVolumeComposeRefusesUnprovedShells(t *testing.T) {
 	pp, lp, boundary, operation := loftVolumeRealCertificates(t, prism, loft)
 	for _, tc := range []struct {
 		name   string
-		change func(*loftOutputShell)
+		change func(*loftcontact.OutputShell)
 	}{
-		{"missing cap", func(s *loftOutputShell) {
-			for i, face := range s.faces {
-				if face.kind == 0 {
-					s.triangles = append(s.triangles[:i:i], s.triangles[i+1:]...)
-					s.faces = append(s.faces[:i:i], s.faces[i+1:]...)
-					s.triangleBounds = append(s.triangleBounds[:i:i], s.triangleBounds[i+1:]...)
+		{"missing cap", func(s *loftcontact.OutputShell) {
+			for i, face := range s.Faces {
+				if face.Kind == 0 {
+					s.Triangles = append(s.Triangles[:i:i], s.Triangles[i+1:]...)
+					s.Faces = append(s.Faces[:i:i], s.Faces[i+1:]...)
+					s.TriangleBounds = append(s.TriangleBounds[:i:i], s.TriangleBounds[i+1:]...)
 					return
 				}
 			}
 		}},
-		{"missing side", func(s *loftOutputShell) {
-			for i, face := range s.faces {
-				if face.kind == 1 {
-					s.triangles = append(s.triangles[:i:i], s.triangles[i+1:]...)
-					s.faces = append(s.faces[:i:i], s.faces[i+1:]...)
-					s.triangleBounds = append(s.triangleBounds[:i:i], s.triangleBounds[i+1:]...)
+		{"missing side", func(s *loftcontact.OutputShell) {
+			for i, face := range s.Faces {
+				if face.Kind == 1 {
+					s.Triangles = append(s.Triangles[:i:i], s.Triangles[i+1:]...)
+					s.Faces = append(s.Faces[:i:i], s.Faces[i+1:]...)
+					s.TriangleBounds = append(s.TriangleBounds[:i:i], s.TriangleBounds[i+1:]...)
 					return
 				}
 			}
 		}},
-		{"wrong cap owner", func(s *loftOutputShell) {
-			for i, face := range s.faces {
-				if face.kind == 0 && face.level == 1 {
-					s.faces[i].owner = 0
+		{"wrong cap owner", func(s *loftcontact.OutputShell) {
+			for i, face := range s.Faces {
+				if face.Kind == 0 && face.Level == 1 {
+					s.Faces[i].Owner = 0
 					return
 				}
 			}
 		}},
-		{"reversed triangle", func(s *loftOutputShell) {
-			s.triangles[0][0], s.triangles[0][1] = s.triangles[0][1], s.triangles[0][0]
+		{"reversed triangle", func(s *loftcontact.OutputShell) {
+			s.Triangles[0][0], s.Triangles[0][1] = s.Triangles[0][1], s.Triangles[0][0]
 		}},
-		{"lost correspondence", func(s *loftOutputShell) {
-			s.vertices[0].world, s.vertices[1].world = s.vertices[1].world, s.vertices[0].world
+		{"lost correspondence", func(s *loftcontact.OutputShell) {
+			s.Vertices[0].World, s.Vertices[1].World = s.Vertices[1].World, s.Vertices[0].World
 		}},
-		{"nonfinite held coordinate", func(s *loftOutputShell) {
-			s.vertices[0].held.X = math.NaN()
+		{"nonfinite held coordinate", func(s *loftcontact.OutputShell) {
+			s.Vertices[0].Held.X = math.NaN()
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			changed := boundary
-			changed.shell.vertices = append([]loftOutputVertex(nil), boundary.shell.vertices...)
-			changed.shell.triangles = append([][3]int(nil), boundary.shell.triangles...)
-			changed.shell.faces = append([]loftOutputFace(nil), boundary.shell.faces...)
-			changed.shell.triangleBounds = append([]float64(nil), boundary.shell.triangleBounds...)
+			changed.shell.Vertices = append([]loftcontact.OutputVertex(nil), boundary.shell.Vertices...)
+			changed.shell.Triangles = append([][3]int(nil), boundary.shell.Triangles...)
+			changed.shell.Faces = append([]loftcontact.OutputFace(nil), boundary.shell.Faces...)
+			changed.shell.TriangleBounds = append([]float64(nil), boundary.shell.TriangleBounds...)
 			tc.change(&changed.shell)
 			_, admitted, err := loftVolumeCompose(t.Context(),
 				operation, pp, lp, changed)
@@ -325,7 +325,7 @@ func TestLoftVolumeComposeRefusesUnprovedShells(t *testing.T) {
 	require.False(t, admitted)
 
 	wrongSource := boundary
-	wrongSource.source.capLevels[1] = big.NewRat(3, 1)
+	wrongSource.source.CapLevels[1] = big.NewRat(3, 1)
 	_, admitted, err = loftVolumeCompose(t.Context(), operation,
 		pp, lp, wrongSource)
 	require.NoError(t, err)
@@ -555,50 +555,50 @@ func TestLoftVolumeSourceEqualityRealAndRefusals(t *testing.T) {
 }
 
 func loftVolumeSourceAdversarialCases(t *testing.T, pp prismPayload, lp loftPayload,
-	source loftSourcePartition, original loftOutputShell) {
+	source loftcontact.SourcePartition, original loftcontact.OutputShell) {
 	t.Helper()
-	clone := func() loftOutputShell {
+	clone := func() loftcontact.OutputShell {
 		s := original
-		s.vertices = append([]loftOutputVertex(nil), original.vertices...)
-		s.triangles = append([][3]int(nil), original.triangles...)
-		s.faces = append([]loftOutputFace(nil), original.faces...)
-		s.triangleBounds = append([]float64(nil), original.triangleBounds...)
+		s.Vertices = append([]loftcontact.OutputVertex(nil), original.Vertices...)
+		s.Triangles = append([][3]int(nil), original.Triangles...)
+		s.Faces = append([]loftcontact.OutputFace(nil), original.Faces...)
+		s.TriangleBounds = append([]float64(nil), original.TriangleBounds...)
 		return s
 	}
-	remove := func(s *loftOutputShell, kind int) {
-		for i, face := range s.faces {
-			if face.kind != kind {
+	remove := func(s *loftcontact.OutputShell, kind int) {
+		for i, face := range s.Faces {
+			if face.Kind != kind {
 				continue
 			}
-			s.triangles = append(s.triangles[:i:i], s.triangles[i+1:]...)
-			s.faces = append(s.faces[:i:i], s.faces[i+1:]...)
-			s.triangleBounds = append(s.triangleBounds[:i:i], s.triangleBounds[i+1:]...)
+			s.Triangles = append(s.Triangles[:i:i], s.Triangles[i+1:]...)
+			s.Faces = append(s.Faces[:i:i], s.Faces[i+1:]...)
+			s.TriangleBounds = append(s.TriangleBounds[:i:i], s.TriangleBounds[i+1:]...)
 			return
 		}
 	}
 	for _, tc := range []struct {
 		name   string
-		change func(*loftOutputShell)
+		change func(*loftcontact.OutputShell)
 	}{
-		{"missing_cap", func(s *loftOutputShell) { remove(s, 0) }},
-		{"missing_side", func(s *loftOutputShell) { remove(s, 1) }},
-		{"doubled_patch", func(s *loftOutputShell) {
-			s.triangles = append(s.triangles, s.triangles[0])
-			s.faces = append(s.faces, s.faces[0])
-			s.triangleBounds = append(s.triangleBounds, s.triangleBounds[0])
+		{"missing_cap", func(s *loftcontact.OutputShell) { remove(s, 0) }},
+		{"missing_side", func(s *loftcontact.OutputShell) { remove(s, 1) }},
+		{"doubled_patch", func(s *loftcontact.OutputShell) {
+			s.Triangles = append(s.Triangles, s.Triangles[0])
+			s.Faces = append(s.Faces, s.Faces[0])
+			s.TriangleBounds = append(s.TriangleBounds, s.TriangleBounds[0])
 		}},
-		{"internal_owner", func(s *loftOutputShell) { s.faces[0].owner = 2 }},
-		{"reversed_orientation", func(s *loftOutputShell) {
-			s.triangles[0][1], s.triangles[0][2] = s.triangles[0][2], s.triangles[0][1]
+		{"internal_owner", func(s *loftcontact.OutputShell) { s.Faces[0].Owner = 2 }},
+		{"reversed_orientation", func(s *loftcontact.OutputShell) {
+			s.Triangles[0][1], s.Triangles[0][2] = s.Triangles[0][2], s.Triangles[0][1]
 		}},
-		{"changed_exact_vertex", func(s *loftOutputShell) {
-			s.vertices[0].point.u = new(big.Rat).Add(s.vertices[0].point.u, big.NewRat(1, 1))
+		{"changed_exact_vertex", func(s *loftcontact.OutputShell) {
+			s.Vertices[0].Point.U = new(big.Rat).Add(s.Vertices[0].Point.U, big.NewRat(1, 1))
 		}},
-		{"changed_world_vertex", func(s *loftOutputShell) {
-			s.vertices[0].world[0] = new(big.Rat).Add(s.vertices[0].world[0], big.NewRat(1, 1))
+		{"changed_world_vertex", func(s *loftcontact.OutputShell) {
+			s.Vertices[0].World[0] = new(big.Rat).Add(s.Vertices[0].World[0], big.NewRat(1, 1))
 		}},
-		{"oversized_rational", func(s *loftOutputShell) {
-			s.vertices[0].world[0] = new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), 8193))
+		{"oversized_rational", func(s *loftcontact.OutputShell) {
+			s.Vertices[0].World[0] = new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), 8193))
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -613,8 +613,8 @@ func loftVolumeSourceAdversarialCases(t *testing.T, pp prismPayload, lp loftPayl
 	}
 	t.Run("wrong_partition_wall", func(t *testing.T) {
 		bad := source
-		bad.walls = append([]int8(nil), source.walls...)
-		bad.walls[0] = 2
+		bad.Walls = append([]int8(nil), source.Walls...)
+		bad.Walls[0] = 2
 		valid, err := loftVolumeSourceEquality(t.Context(),
 			proofbound.NewWallWorkBudgetWithOperation(65_536, proofbound.NewWorkBudget(t.Context())),
 			pp, lp, bad, original)
@@ -623,7 +623,7 @@ func loftVolumeSourceAdversarialCases(t *testing.T, pp prismPayload, lp loftPayl
 	})
 	t.Run("wrong_cap_level", func(t *testing.T) {
 		bad := source
-		bad.capLevels[1] = big.NewRat(3, 1)
+		bad.CapLevels[1] = big.NewRat(3, 1)
 		valid, err := loftVolumeSourceEquality(t.Context(),
 			proofbound.NewWallWorkBudgetWithOperation(65_536, proofbound.NewWorkBudget(t.Context())),
 			pp, lp, bad, original)
@@ -632,7 +632,7 @@ func loftVolumeSourceAdversarialCases(t *testing.T, pp prismPayload, lp loftPayl
 	})
 	t.Run("oversized_cap_level", func(t *testing.T) {
 		bad := source
-		bad.capLevels[1] = new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), 8193))
+		bad.CapLevels[1] = new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), 8193))
 		valid, err := loftVolumeSourceEquality(t.Context(),
 			proofbound.NewWallWorkBudgetWithOperation(65_536, proofbound.NewWorkBudget(t.Context())),
 			pp, lp, bad, original)
@@ -641,7 +641,7 @@ func loftVolumeSourceAdversarialCases(t *testing.T, pp prismPayload, lp loftPayl
 	})
 	t.Run("cap_comparison_product_limit", func(t *testing.T) {
 		bad := source
-		bad.capLevels[1] = new(big.Rat).SetFrac(
+		bad.CapLevels[1] = new(big.Rat).SetFrac(
 			big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 8190))
 		valid, err := loftVolumeSourceEquality(t.Context(),
 			proofbound.NewWallWorkBudgetWithOperation(65_536, proofbound.NewWorkBudget(t.Context())),
@@ -683,7 +683,7 @@ func loftVolumeSourceAdversarialCases(t *testing.T, pp prismPayload, lp loftPayl
 	})
 	t.Run("wrong_cap_owner", func(t *testing.T) {
 		bad := source
-		bad.capOwners[0][0]++
+		bad.CapOwners[0][0]++
 		valid, err := loftVolumeSourceEquality(t.Context(),
 			proofbound.NewWallWorkBudgetWithOperation(65_536, proofbound.NewWorkBudget(t.Context())),
 			pp, lp, bad, original)
@@ -692,7 +692,7 @@ func loftVolumeSourceAdversarialCases(t *testing.T, pp prismPayload, lp loftPayl
 	})
 	t.Run("lost_seam", func(t *testing.T) {
 		bad := source
-		bad.seams[0] = loftcontact.LineSeam{}
+		bad.Seams[0] = loftcontact.LineSeam{}
 		valid, err := loftVolumeSourceEquality(t.Context(),
 			proofbound.NewWallWorkBudgetWithOperation(65_536, proofbound.NewWorkBudget(t.Context())),
 			pp, lp, bad, original)
@@ -801,23 +801,23 @@ func loftBounded520Operands(t *testing.T) (*Body, *Body) {
 	return prism, loft
 }
 
-func checkLoftBoundedCapCertificates(t *testing.T, source loftSourcePartition) {
+func checkLoftBoundedCapCertificates(t *testing.T, source loftcontact.SourcePartition) {
 	t.Helper()
-	require.Greater(t, source.sourceVisits, uint64(0))
-	require.LessOrEqual(t, source.sourceVisits, uint64(4_096))
-	require.True(t, source.prepared[0].scene != source.prepared[1].scene)
-	for capIndex, cap := range source.prepared {
-		require.True(t, cap.scene != nil)
-		require.Equal(t, capIndex, cap.capIndex)
-		require.True(t, cap.level == source.capLevels[capIndex])
-		require.Equal(t, 3, len(cap.raw))
-		for _, cell := range cap.raw {
+	require.Greater(t, source.SourceVisits, uint64(0))
+	require.LessOrEqual(t, source.SourceVisits, uint64(4_096))
+	require.True(t, source.Prepared[0].Scene != source.Prepared[1].Scene)
+	for capIndex, cap := range source.Prepared {
+		require.True(t, cap.Scene != nil)
+		require.Equal(t, capIndex, cap.CapIndex)
+		require.True(t, cap.Level == source.CapLevels[capIndex])
+		require.Equal(t, 3, len(cap.Raw))
+		for _, cell := range cap.Raw {
 			require.True(t, cell != nil)
-			require.True(t, cell.Sketch() == cap.scene)
+			require.True(t, cell.Sketch() == cap.Scene)
 			require.False(t, cell.IsStale())
 		}
 	}
-	t.Logf("sourceVisits=%d", source.sourceVisits)
+	t.Logf("sourceVisits=%d", source.SourceVisits)
 }
 
 func TestLoftBoundedProfilesGroundingCancelsInFlight(t *testing.T) {
@@ -889,40 +889,40 @@ func TestLoftContactTwoLineCapsRealTrapezoid524(t *testing.T) {
 		t.Context(), prism, loft, operation)
 	require.NoError(t, err)
 	require.True(t, admitted)
-	require.Greater(t, len(boundary.shell.vertices), 0)
-	require.Greater(t, len(boundary.shell.triangles), 0)
+	require.Greater(t, len(boundary.shell.Vertices), 0)
+	require.Greater(t, len(boundary.shell.Triangles), 0)
 
 	source := boundary.source
-	require.Greater(t, source.sourceVisits, uint64(0))
-	require.Less(t, source.sourceVisits, uint64(4096))
+	require.Greater(t, source.SourceVisits, uint64(0))
+	require.Less(t, source.SourceVisits, uint64(4096))
 	require.Equal(t, [3]string{"0", "4", "5"}, [3]string{
-		source.capLevels[0].RatString(), source.capLevels[1].RatString(),
-		source.capLevels[2].RatString(),
+		source.CapLevels[0].RatString(), source.CapLevels[1].RatString(),
+		source.CapLevels[2].RatString(),
 	})
-	require.Equal(t, [2][3]int{{2, 1, 1}, {0, 1, 0}}, source.capOwners)
+	require.Equal(t, [2][3]int{{2, 1, 1}, {0, 1, 0}}, source.CapOwners)
 	require.Equal(t, [2][2]sectionrecord.Point2{
 		{{U: 10, V: 4}, {U: 10, V: 6}},
 		{{U: 10, V: 4}, {U: 10, V: 6}},
-	}, source.junction)
-	for cap, prepared := range source.prepared {
-		require.NotNil(t, prepared.scene)
-		require.Equal(t, 8, len(prepared.tags))
-		require.Equal(t, 8, len(prepared.scene.Entities()))
-		require.Equal(t, 3, len(prepared.raw))
+	}, source.Junction)
+	for cap, prepared := range source.Prepared {
+		require.NotNil(t, prepared.Scene)
+		require.Equal(t, 8, len(prepared.Tags))
+		require.Equal(t, 8, len(prepared.Scene.Entities()))
+		require.Equal(t, 3, len(prepared.Raw))
 		junctions := map[[2]float64]struct{}{}
-		for _, cell := range prepared.raw {
-			require.True(t, prepared.scene == cell.Sketch())
+		for _, cell := range prepared.Raw {
+			require.True(t, prepared.Scene == cell.Sketch())
 			require.False(t, cell.IsStale())
 			require.True(t, cell.Valid)
 			require.Zero(t, len(cell.Holes))
 			for i, left := range cell.Outer {
 				right := cell.Outer[(i+1)%len(cell.Outer)]
-				a, okA := prepared.tags[left.Entity]
-				b, okB := prepared.tags[right.Entity]
+				a, okA := prepared.Tags[left.Entity]
+				b, okB := prepared.Tags[right.Entity]
 				if !okA || !okB || a.IsB == b.IsB {
 					continue
 				}
-				point, certified := prepared.scene.CertifyLineLineJunction(left, right)
+				point, certified := prepared.Scene.CertifyLineLineJunction(left, right)
 				if certified {
 					junctions[point] = struct{}{}
 				}
@@ -948,8 +948,8 @@ func TestLoftContactTwoLineCapsRealTrapezoid524(t *testing.T) {
 	require.Greater(t, boundary.workVisits, uint64(0))
 	require.Greater(t, proof.totalOutputVisits, boundary.workVisits)
 	require.LessOrEqual(t, proof.totalOutputVisits, uint64(65_536))
-	t.Logf("source visits=%d output visits=%d facets=%d", source.sourceVisits,
-		proof.totalOutputVisits, len(boundary.shell.triangles))
+	t.Logf("source visits=%d output visits=%d facets=%d", source.SourceVisits,
+		proof.totalOutputVisits, len(boundary.shell.Triangles))
 }
 
 func TestLoftContactTwoLineCapsNarrowTranslated524(t *testing.T) {
@@ -1019,22 +1019,22 @@ func TestLoftContactTwoLineCapsNarrowTranslated524(t *testing.T) {
 				t.Context(), tc.first, tc.second, operation)
 			require.NoError(t, boundaryErr, "real boundary")
 			require.True(t, admitted, "real boundary")
-			require.Less(t, boundary.source.sourceVisits, uint64(4096))
+			require.Less(t, boundary.source.SourceVisits, uint64(4096))
 			t.Logf("source visits=%d boundary output visits=%d",
-				boundary.source.sourceVisits, boundary.workVisits)
+				boundary.source.SourceVisits, boundary.workVisits)
 			proof, admitted, composeErr := loftVolumeCompose(t.Context(), operation, pp, lp, boundary)
 			require.NoError(t, composeErr, "real composer")
 			require.True(t, admitted, "real composer")
 			require.Zero(t, proof.sourceVolume.Cmp(big.NewRat(524, 1)))
 			displaced := false
-			for _, vertex := range proof.boundary.shell.vertices {
-				if vertex.point.u.Cmp(big.NewRat(120, 1)) != 0 ||
-					vertex.point.v.Cmp(big.NewRat(1, 1)) != 0 {
+			for _, vertex := range proof.boundary.shell.Vertices {
+				if vertex.Point.U.Cmp(big.NewRat(120, 1)) != 0 ||
+					vertex.Point.V.Cmp(big.NewRat(1, 1)) != 0 {
 					continue
 				}
-				require.Equal(t, wantWorldY.RatString(), vertex.world[1].RatString())
-				require.Equal(t, float64(2), vertex.held.Y)
-				require.Positive(t, vertex.bound)
+				require.Equal(t, wantWorldY.RatString(), vertex.World[1].RatString())
+				require.Equal(t, float64(2), vertex.Held.Y)
+				require.Positive(t, vertex.Bound)
 				displaced = true
 			}
 			require.True(t, displaced)
@@ -1044,8 +1044,8 @@ func TestLoftContactTwoLineCapsNarrowTranslated524(t *testing.T) {
 			require.Less(t, proof.symDiffUpper, float64(524))
 			require.LessOrEqual(t, proof.totalOutputVisits, uint64(loftVolumeOutputSteps))
 			t.Logf("source visits=%d output visits=%d facets=%d bound=%g",
-				boundary.source.sourceVisits, proof.totalOutputVisits,
-				len(boundary.shell.triangles), proof.symDiffUpper)
+				boundary.source.SourceVisits, proof.totalOutputVisits,
+				len(boundary.shell.Triangles), proof.symDiffUpper)
 		})
 	}
 }
@@ -1117,26 +1117,26 @@ func TestLoftVolumeComposeRealDisplacedNonjunction(t *testing.T) {
 			require.True(t, admitted, "composer")
 			require.Zero(t, proof.sourceVolume.Cmp(big.NewRat(460, 1)))
 			displaced := false
-			for _, vertex := range boundary.shell.vertices {
-				if vertex.point.u.Cmp(big.NewRat(3, 2)) == 0 &&
-					vertex.point.v.Cmp(big.NewRat(6, 1)) == 0 {
-					require.Equal(t, wantDisplaced.RatString(), vertex.world[0].RatString())
-					require.Equal(t, displacedHeld, vertex.held.X)
-					require.Positive(t, vertex.bound)
+			for _, vertex := range boundary.shell.Vertices {
+				if vertex.Point.U.Cmp(big.NewRat(3, 2)) == 0 &&
+					vertex.Point.V.Cmp(big.NewRat(6, 1)) == 0 {
+					require.Equal(t, wantDisplaced.RatString(), vertex.World[0].RatString())
+					require.Equal(t, displacedHeld, vertex.Held.X)
+					require.Positive(t, vertex.Bound)
 					displaced = true
 				}
 			}
 			require.True(t, displaced, "nonjunction displacement")
 			require.Greater(t, proof.symDiffUpper, float64(0))
 			require.Less(t, proof.symDiffUpper, float64(460))
-			require.Positive(t, boundary.source.sourceVisits)
-			require.LessOrEqual(t, boundary.source.sourceVisits, uint64(4096))
+			require.Positive(t, boundary.source.SourceVisits)
+			require.LessOrEqual(t, boundary.source.SourceVisits, uint64(4096))
 			require.LessOrEqual(t, proof.totalOutputVisits, uint64(loftVolumeOutputSteps))
-			require.LessOrEqual(t, len(boundary.shell.vertices), 512)
-			require.LessOrEqual(t, len(boundary.shell.triangles), 512)
+			require.LessOrEqual(t, len(boundary.shell.Vertices), 512)
+			require.LessOrEqual(t, len(boundary.shell.Triangles), 512)
 			t.Logf("source visits=%d output visits=%d facets=%d bound=%g",
-				boundary.source.sourceVisits, proof.totalOutputVisits,
-				len(boundary.shell.triangles), proof.symDiffUpper)
+				boundary.source.SourceVisits, proof.totalOutputVisits,
+				len(boundary.shell.Triangles), proof.symDiffUpper)
 		})
 	}
 
