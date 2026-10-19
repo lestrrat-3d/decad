@@ -15,7 +15,6 @@ The rules for rows live in `docs/layout.md`.
 | `tessellate_brep_band.go` | Adapts route L bands to shared wall samples and delegates fillet rings and strips to `internal/brepfilletmesh/`. See modify-general DG3. |
 | `tessellate_brep_partial_fillet.go` | Selects `internal/partialband/` layouts and places their boundary vertices for `internal/brepfilletmesh/`. |
 | `tessellate_brep_partial_chamfer.go` | Emits two selected planar chamfer strips over their shared contour vertices. See modify-general §4.3a. |
-| `tessellate_all_edge_chamfer.go` | Meshes the box all-edge bevels and shared circular bore with occupied-volume proof. See modify-general §4.3b. |
 | `tessellate_verification.go` | `Verification`, `WithVerification` and mesh proof publication. See tessellation §1. |
 | `tessellate_sweep_composite.go` | Builds composite Sweep span handles and runs the body audit around internal station assembly. See sweep Table D. |
 | `tessellate_body_patch.go` | Adapts PatchEdges source mesh handles and public refusal names to `internal/patchmesh/`. See surface §10.1. |
