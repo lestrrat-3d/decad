@@ -21,7 +21,7 @@ const (
 	BooleanExpectedEmpty BooleanExpectedKind = iota
 	// BooleanExpectedContact is a TRUE contact/proximity refusal of the boolean
 	// geometry itself: an unclassifiable tangent contact (ErrUnclassifiableContact
-	// / MeshBoolean) or an undecidable near-miss (refuseUndecidableProximityWithConeCap). It
+	// / MeshBoolean) or an undecidable near-miss (RefuseUndecidableProximity). It
 	// maps to the public BooleanUnsupportedContact.
 	BooleanExpectedContact
 	// BooleanExpectedUnsupported is an in-pipeline reach of the boolean geometry

@@ -20,7 +20,7 @@ import (
 
 type spiralCombinedAdmission struct {
 	source  *spiralCombineSource
-	roles   map[[2]*Face]spiralNearPairKind
+	roles   map[[2]*topo.Face]meshbool.NearPairRole
 	allowed map[[2]int]bool
 	short   [2][4]spiralsector.ShortCapFamily
 	groups  []map[int]int
@@ -58,7 +58,7 @@ func spiralCombineFaceRoles(ctx context.Context, blank, combined *Body,
 		return nil, fmt.Errorf("%w: combined spiral tool lost its faceted source", ErrUnsupported)
 	}
 	result := &spiralCombinedAdmission{source: source,
-		roles: make(map[[2]*Face]spiralNearPairKind), allowed: make(map[[2]int]bool),
+		roles: make(map[[2]*topo.Face]meshbool.NearPairRole), allowed: make(map[[2]int]bool),
 		short: short, groups: make([]map[int]int, len(source.Tools))}
 	start := 0
 	for copyIndex, tool := range source.Tools {
@@ -106,11 +106,11 @@ func spiralCombineFaceRoles(ctx context.Context, blank, combined *Body,
 			groupMap[global] = local
 		}
 		for pair, role := range roles {
-			copyFace := mapped[pair[1]]
+			copyFace := mapped[faceHandle(pair[1])]
 			if copyFace == nil {
 				return nil, fmt.Errorf("%w: copied tooth lost a near-face role", ErrUnsupported)
 			}
-			result.roles[[2]*Face{pair[0], copyFace}] = role
+			result.roles[[2]*topo.Face{pair[0], faceNode(copyFace)}] = role
 		}
 		for pair := range firstAllowed {
 			original := first.Faces()[pair[1]-len(blank.Faces())]

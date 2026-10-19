@@ -8,10 +8,12 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetedtopology"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
+	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/spiralsector"
 	"github.com/lestrrat-3d/decad/internal/splinebezier"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -251,17 +253,6 @@ func spiralJoinGroups(blank, tooth *Body, proof *spiralFirstJoinSource) (spiralS
 	return g, true
 }
 
-// spiralNearPairKind is the source verdict for one otherwise undecidable
-// held-face pair in the first curved tooth join. A caller must still audit
-// the complete held result and refuse any near pair absent from this table.
-type spiralNearPairKind uint8
-
-const (
-	spiralNearPairUnknown spiralNearPairKind = iota
-	spiralNearPairCrossing
-	spiralNearPairSeparated
-)
-
 func spiralUniqueFaceWithOrigin(body *Body, want provenance.Ref) *Face {
 	if body == nil {
 		return nil
@@ -316,7 +307,7 @@ func spiralCapGroupRef(groups []facetGroup, group int) (provenance.Ref, bool) {
 // curved-tooth join to the live input faces. Geometry certificates for the
 // nine crossings are checked by the caller before this table is used.
 func spiralNearFaceTable(blank, tooth *Body, proof *spiralFirstJoinSource) (
-	map[[2]*Face]spiralNearPairKind, bool,
+	map[[2]*topo.Face]meshbool.NearPairRole, bool,
 ) {
 	if blank == nil || tooth == nil || proof == nil || proof.Blank == nil ||
 		proof.Tooth == nil || proof.Blank.RootFace == nil ||
@@ -346,14 +337,14 @@ func spiralNearFaceTable(blank, tooth *Body, proof *spiralFirstJoinSource) (
 	if toeTool == nil || heelTool == nil || toeTool == heelTool {
 		return nil, false
 	}
-	out := make(map[[2]*Face]spiralNearPairKind, 14)
-	add := func(a, b *Face, kind spiralNearPairKind) bool {
+	out := make(map[[2]*topo.Face]meshbool.NearPairRole, 14)
+	add := func(a, b *Face, kind meshbool.NearPairRole) bool {
 		if a == nil || b == nil || a.n.Body != bodyNode(blank) || b.n.Body != bodyNode(tooth) ||
-			kind == spiralNearPairUnknown {
+			kind == meshbool.NearPairUnknown {
 			return false
 		}
-		pair := [2]*Face{a, b}
-		if out[pair] != spiralNearPairUnknown {
+		pair := [2]*topo.Face{&a.n, &b.n}
+		if out[pair] != meshbool.NearPairUnknown {
 			return false
 		}
 		out[pair] = kind
@@ -366,20 +357,20 @@ func spiralNearFaceTable(blank, tooth *Body, proof *spiralFirstJoinSource) (
 		}{{heel, 7}, {toe, 1}, {root, 1}} {
 			origin, found := spiralOriginalSideRef(proof.Tooth, placement.band, side)
 			if !found || !add(placement.blank,
-				spiralUniqueFaceWithOrigin(tooth, origin), spiralNearPairCrossing) {
+				spiralUniqueFaceWithOrigin(tooth, origin), meshbool.NearPairCrossing) {
 				return nil, false
 			}
 		}
 	}
 	for _, side := range [...]int{3, 4, 5} {
 		origin, found := spiralOriginalSideRef(proof.Tooth, 1, side)
-		if !found || !add(toe, spiralUniqueFaceWithOrigin(tooth, origin), spiralNearPairCrossing) {
+		if !found || !add(toe, spiralUniqueFaceWithOrigin(tooth, origin), meshbool.NearPairCrossing) {
 			return nil, false
 		}
 	}
 	for _, pair := range [...][2]*Face{{heel, heelTool}, {toe, toeTool},
 		{toe, heelTool}, {root, toeTool}, {root, heelTool}} {
-		if !add(pair[0], pair[1], spiralNearPairSeparated) {
+		if !add(pair[0], pair[1], meshbool.NearPairSeparated) {
 			return nil, false
 		}
 	}
@@ -393,7 +384,7 @@ func spiralNearFaceTable(blank, tooth *Body, proof *spiralFirstJoinSource) (
 // separated held face pair has no facet contact.
 func certifySpiralNearFaceRoles(ctx context.Context, blank, tooth *Body,
 	proof *spiralFirstJoinSource) (
-	map[[2]*Face]spiralNearPairKind, [2][4]spiralsector.ShortCapFamily, bool, error,
+	map[[2]*topo.Face]meshbool.NearPairRole, [2][4]spiralsector.ShortCapFamily, bool, error,
 ) {
 	var empty [2][4]spiralsector.ShortCapFamily
 	if ctx == nil || blank == nil || tooth == nil || proof == nil ||

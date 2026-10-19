@@ -55,7 +55,7 @@ func prepBoolMeshContext(ctx context.Context, m *Mesh, src []int) (*meshbool.Boo
 }
 
 func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.OperationKind, a, b *Body,
-	meshes operandMeshes, chordScale float64, capFace, coneFace *Face) (booleanEvaluation, error) {
+	meshes operandMeshes, chordScale float64, capFace, coneFace *topo.Face) (booleanEvaluation, error) {
 	if err := ctx.Err(); err != nil {
 		return booleanEvaluation{}, err
 	}
@@ -210,14 +210,14 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 	// the gate and the mesh pass both walk; it is dropped when the call
 	// returns (boolean_mesh.go, meshbool.ContactMemo).
 	memo := meshbool.NewContactMemo(bmA, bmB)
-	var spiralPairs map[[2]*Face]spiralNearPairKind
+	var spiralPairs map[[2]*topo.Face]meshbool.NearPairRole
 	if spiralJoin != nil {
 		spiralPairs = spiralJoin.roles
 	}
 	if combinedAdmission != nil {
 		spiralPairs = combinedAdmission.roles
 	}
-	if err := refuseUndecidableProximityWithConeCap(ctx, ma, mb, bmA, bmB, memo,
+	if err := meshbool.RefuseUndecidableProximity(ctx, &ma.n, &mb.n, bmA, bmB, memo,
 		capFace, coneFace, spiralPairs); err != nil {
 		err = meshbool.StagingError(op, err)
 		if errors.Is(err, ErrUnsupported) {
@@ -394,112 +394,6 @@ func booleanProofBounds(symA, symB, roundVol, slackA, slackB, dropArea float64) 
 ) {
 	return proofbound.AbsSumUpper(symA, symB, roundVol),
 		proofbound.AbsSumUpper(slackA, slackB, dropArea)
-}
-
-// refuseUndecidableProximityWithConeCap is the tangency gate (docs/evaluator-design.md §9,
-// docs/tessellation-design.md §11 step 4). The mesh boolean decides every
-// contact on the CHORDS, and a chord polygon lies strictly inside the curved
-// surface it approximates — so a true tangency between two operands can vanish
-// from the tessellation entirely, and a spurious meet can appear where the true
-// surfaces stay apart (chording a concave hole wall inward adds held material
-// into the void). Either way the verdict would be decided by where the chord
-// samples happened to fall.
-//
-// The gate is reject-only, and it proves nothing it does not have. If the true
-// surfaces of two faces touch, that point lies within δA of face A's facets and
-// within δB of face B's, so the two facet sets come within b = δA + δB of each
-// other. A face pair whose facets stay FARTHER apart than b hides no touch and
-// is decided. Within b the gate decides the pair by the INTERPENETRATION DEPTH
-// of the two facet sets: a held meet is admitted only when the facets provably
-// cross with a signed depth strictly GREATER than b (meshbool.ProvenDepthExceeds). Then
-// A's true surface (within δA of its facets) and B's (within δB of its) still
-// overlap even after each is pulled back toward its own interior by its own
-// bound, so the true patches provably cross and the contact is real. The chord
-// error alone, bounded by b, cannot open a penetration deeper than b, so a bare
-// touch, a shallow meet at depth ≤ b, or a non-meeting near-miss within b proves
-// nothing and is refused (ErrUnsupported). Deciding such a pair for real is the
-// analytic clearance kernel's job (docs/clearance-design.md), not a chord's;
-// loud beats silently wrong.
-//
-// The question is asked per analytic FACE pair, not per facet pair, and the
-// depth is proven over the whole face's facets: a facet of one face can pass
-// arbitrarily close to a facet of the other while the FACES plainly cross (a
-// cylinder wall threading a cap's own triangulation diagonal), and that is no
-// tangency at all.
-//
-// It may refuse a valid model whose operands genuinely pass within a chord
-// tolerance of each other. That is the accepted price; the alternative is a
-// verdict decided by chord placement.
-func refuseUndecidableProximityWithConeCap(ctx context.Context, ma, mb *Mesh,
-	bmA, bmB *meshbool.BoolMesh, memo *meshbool.ContactMemo, capFace, coneFace *Face,
-	spiralPairs ...map[[2]*Face]spiralNearPairKind) error {
-	if len(spiralPairs) > 1 {
-		return fmt.Errorf("%w: duplicate source-pair certificates", ErrBooleanFailed)
-	}
-	var admitted map[[2]*Face]spiralNearPairKind
-	if len(spiralPairs) == 1 {
-		admitted = spiralPairs[0]
-	}
-	// One counter spans the grouping and the pair scan it feeds: the grouping
-	// walks every facet and every new source face's edges, which is work the
-	// §7.2 interval covers just as the pair scan is.
-	budget := proofbound.NewWorkBudget(ctx)
-	fa, err := facesOfMesh(budget, ma)
-	if err != nil {
-		return err
-	}
-	fb, err := facesOfMesh(budget, mb)
-	if err != nil {
-		return err
-	}
-	for _, ga := range fa {
-		for _, gb := range fb {
-			if err := budget.Step(); err != nil {
-				return err
-			}
-			if capFace != nil && ga.source == capFace && gb.source == coneFace {
-				if err := disjointConeCapFacets(ctx, bmA, bmB, ga.facets, gb.facets, memo); err != nil {
-					return err
-				}
-				continue
-			}
-			role := admitted[[2]*Face{ga.source, gb.source}]
-			if role == spiralNearPairSeparated {
-				// A true source separation cannot admit a held contact, even
-				// when the held penetration is deeper than the near threshold.
-				if err := disjointConeCapFacets(ctx, bmA, bmB, ga.facets, gb.facets, memo); err != nil {
-					return err
-				}
-				continue
-			}
-			slack := ga.delta + gb.delta
-			if slack <= 0 {
-				// Both faces are held exactly (a planar face with straight
-				// edges triangulates exactly; a Faceted face IS its polygons,
-				// core §6.1). A tangency between them is visible to the exact
-				// predicates, so there is nothing here a chord could hide.
-				continue
-			}
-			// The exactly-tangent case sits ON the boundary d = δA + δB, and
-			// both sides of that comparison are float-computed: pad the
-			// threshold so the rounding can only ever ADD a refusal, never
-			// drop one. A relative 1e-9 is nothing against any real clearance.
-			near, err := meshbool.FacesNearMiss(ctx, bmA, ga.facets, bmB, gb.facets, slack*(1+1e-9), memo)
-			if err != nil {
-				return err
-			}
-			if near {
-				// A curved first-join crossing can pass this ambiguity only
-				// when its result will audit the matching complete edge chain.
-				switch role {
-				case spiralNearPairCrossing:
-					continue
-				}
-				return fmt.Errorf(`%w: the operands' held facets come within the chord tolerance without provably interpenetrating deeper than it, so whether their true surfaces touch or cross is decided by where the chords fall — this evaluator refuses the question rather than answer it wrong`, ErrUnsupported)
-			}
-		}
-	}
-	return nil
 }
 
 // meshVolumeMeasurement reads the audited mesh's exact component volumes and

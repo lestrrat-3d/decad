@@ -37,7 +37,7 @@ meridian generator refuses (T5).
 
 | tess §2 proof | Held on `Mesh` | Consumer |
 |---|---|---|
-| `sourceBound(face)` | `faceBound`, one entry per source face | `facesOfMesh` (`boolean.go`), for the hidden-tangency pre-pass |
+| `sourceBound(face)` | `faceBound`, one entry per source face | `facesOfMesh` (`internal/meshbool/tangency_gate.go`), for the hidden-tangency pre-pass |
 | `areaSlack` | yes, the analytic terms plus a per-facet coordinate allowance | boolean area composition |
 | `volSymDiff` + `symDiffOK` | yes; `symDiffOK` is true for solid prism, cup, loft, revolve and faceted paths and for a cap-loop chamfer whose every band §7 admits, and false for a loft sheet and for a cap-loop chamfer carrying a band §7 does not admit | `operandSymDiff` (`boolean.go`), which refuses a mesh carrying no proof |
 | `deltaStore` (tess §5) | charged per vertex into `faceBound`, `areaSlack` and `volSymDiff` | — |
