@@ -312,9 +312,9 @@ apply before publication.
 `MeshBound` stays, redefined as the maximum `δ(t)` over the held facets, so
 every reader that wants one body-wide figure keeps one that is never looser
 than today's: `Verify`'s planar faceted contact kernel
-(`contact_faceted_pair.go`'s `planarFacetedSolid`, `contact_faceted_support.go`,
-`contact_faceted_sweep.go`), the mass-property reader
-(`mass_properties_mesh.go`, which checks `mesh.bound == pp.MeshBound`), and
+(`contact_faceted_pair.go`'s `planarFacetedSolid`, `contact_faceted_floor.go`,
+`contact_faceted_floor.go`), the mass-property reader
+(`mass_properties.go`, which checks `mesh.bound == pp.MeshBound`), and
 the translation-only zero-bound fast path (`facetedTranslationOnly`), whose
 condition becomes "every `VertexBound` entry is zero". A nil `VertexBound`
 on a payload is an invariant failure, never a fallback: the composing boolean

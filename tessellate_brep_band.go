@@ -17,6 +17,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 )
 
 // This file is the brep tessellator's reading of a route L body's bands
@@ -423,4 +424,120 @@ func brepBandChordVolume(bands []brepBandChord) float64 {
 		total = proofbound.AbsSumUpper(total, tessellation.CapBlendChordVolume(height, []tessellation.CapBlendLoopProof{loop}))
 	}
 	return total
+}
+
+// chordPartialChamferBand uses one side/cap column at each end of the two
+// selected straight walks. The recorded patch planes contain every cell.
+func chordPartialChamferBand(ctx context.Context, b brepLoopBand, f brepFace,
+	cbp capBlendPayload, chord float64) (brepBandChord, error) {
+	work := freeform.NewFreeformWork()
+	side, err := capblend.OneLoopCornerLoop(proofbound.NewWorkBudget(ctx), b.Orig, work)
+	if err != nil {
+		return brepBandChord{}, err
+	}
+	partial, err := partialband.PartialFilletLayout(side.Walks, b.Orig.Segments,
+		f.RegionLoop(b.Loop).Segments, b.Selected, b.CapWalk, b.CapArc,
+		b.Setback.Dc, chord, work)
+	if err != nil {
+		return brepBandChord{}, err
+	}
+	for _, walk := range partial.Walks {
+		if walk.Sag != 0 || len(walk.Cols) != 2 {
+			return brepBandChord{}, fmt.Errorf(`%w: a selected chamfer walk is not straight`, ErrUnsupported)
+		}
+	}
+	sideZ, sideDelta := b.SideLevel(f)
+	return brepBandChord{band: b, face: f, cbp: cbp, partial: partial,
+		start: b.MatSign(f) > 0, sideZ: sideZ, sideDelta: sideDelta}, nil
+}
+
+func (bc *brepBandChord) emitPartialChamfer(m *Mesh, faceOfRole func(string) (*Face, error),
+	bump func(*Face, float64)) error {
+	for p := range bc.partial.PatchSag {
+		face, err := faceOfRole(bc.band.PatchRole(p))
+		if err != nil {
+			return err
+		}
+		first := len(m.n.Triangles)
+		for _, cell := range bc.partial.Cells {
+			if cell.Patch != p {
+				continue
+			}
+			a, b := bc.sideV[cell.C0], bc.sideV[cell.C1]
+			A, B := bc.capV[cell.C0], bc.capV[cell.C1]
+			if bc.start {
+				topobuild.AddTriangle(&m.n, [3]int{A, B, b}, faceNode(face))
+				topobuild.AddTriangle(&m.n, [3]int{A, b, a}, faceNode(face))
+			} else {
+				topobuild.AddTriangle(&m.n, [3]int{a, b, B}, faceNode(face))
+				topobuild.AddTriangle(&m.n, [3]int{a, B, A}, faceNode(face))
+			}
+		}
+		// The exact rational coplanarity gate and zero contour/level
+		// displacement make the patch deviation zero. Stored vertices still
+		// contribute to the body's motion and area allowances.
+		bump(face, 0)
+		m.n.AreaSlack = proofbound.AbsSumUpper(m.n.AreaSlack,
+			tessellation.FilletMeshAreaDeficit(m.n.Vertices, m.n.Triangles[first:], face.n.Area, face.n.AreaBound))
+	}
+	return nil
+}
+
+// chordPartialFilletBand adapts the recorded band to its internal sample layout.
+func chordPartialFilletBand(ctx context.Context, b brepLoopBand, f brepFace,
+	cbp capBlendPayload, chord float64) (brepBandChord, error) {
+	budget := proofbound.NewWorkBudget(ctx)
+	work := freeform.NewFreeformWork()
+	side, err := capblend.OneLoopCornerLoop(budget, b.Orig, work)
+	if err != nil {
+		return brepBandChord{}, err
+	}
+	contour := f.RegionLoop(b.Loop)
+	partial, err := partialband.PartialFilletLayout(side.Walks, b.Orig.Segments,
+		contour.Segments, b.Selected, b.CapWalk, b.CapArc, b.Setback.Dc, chord, work)
+	if err != nil {
+		return brepBandChord{}, err
+	}
+	sideZ, sideDelta := b.SideLevel(f)
+	return brepBandChord{band: b, face: f, cbp: cbp, start: b.MatSign(f) > 0,
+		sideZ: sideZ, sideDelta: sideDelta,
+		fillet: &brepfilletmesh.Rings{Count: tessellation.FilletRingCount(b.Setback.AxialUpper(), chord)}, partial: partial}, nil
+}
+
+// placePartial keeps the selected band's boundary vertices in the root mesh adapter.
+func (bc *brepBandChord) placePartial(e brepEmbed, addVertex func([3]float64, proofbound.WalkEndBound) int) {
+	for _, col := range bc.partial.Columns {
+		s, c := col.Side, col.Cap
+		bc.sideV = append(bc.sideV, addVertex(e.Canon(s.U, s.V, bc.sideZ), col.SideBound))
+		bc.capV = append(bc.capV, addVertex(e.Canon(c.U, c.V, bc.face.Z0), col.CapBound))
+	}
+}
+
+func (bc *brepBandChord) partialOpenPolys(btopo *brepTopology, canon [][3]float64) (map[int][]int, error) {
+	ringV := [][]int{bc.sideV, bc.capV}
+	if bc.fillet != nil {
+		ringV = bc.fillet.RingV
+	}
+	return brepfilletmesh.OpenPolys(bc.partial, bc.band, btopo, canon, bc.sideZ, ringV)
+}
+
+func (bc *brepBandChord) emitPartialFillet(m *Mesh,
+	faceOfRole func(string) (*Face, error), bump func(*topo.Face, float64)) error {
+	nodeOfRole := func(role string) (*topo.Face, error) {
+		face, err := faceOfRole(role)
+		if err != nil {
+			return nil, err
+		}
+		return faceNode(face), nil
+	}
+	return bc.fillet.EmitPartialWithLevel(bc.filletInput(), bc.partial, &m.n,
+		bc.sideDelta, nodeOfRole, bump)
+}
+
+func (bc *brepBandChord) partialMotion(motion, store, round []float64) {
+	if bc.fillet != nil {
+		bc.fillet.PartialMotion(bc.filletInput(), bc.sideDelta, motion, store, round)
+		return
+	}
+	brepfilletmesh.PartialBoundaryMotion(bc.filletInput(), bc.sideDelta, motion, store)
 }

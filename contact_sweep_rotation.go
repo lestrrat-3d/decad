@@ -22,7 +22,7 @@ import (
 // rotationalSweepPath is one body's prepared path: its ideal motion and travel
 // bound, and the exact source points whose images bound the float-to-ideal
 // pose deviation. A source box carries its eight corners; an exact planar body
-// (contact_sweep_faceted.go) carries every vertex of its snapshot.
+// (contact_sweep_planar.go) carries every vertex of its snapshot.
 type rotationalSweepPath struct {
 	body         *Body
 	path         affinePairPath
@@ -224,7 +224,7 @@ type rotationalPairSweep struct {
 	req        reportvocab.SweepRequest
 	resolution *big.Rat
 	report     *SweepReport
-	planar     bool                  // both paths carry exact planar vertex sets (contact_sweep_faceted.go)
+	planar     bool                  // both paths carry exact planar vertex sets (contact_sweep_planar.go)
 	departure  *planarDepartureProof // a planar pair's §10.2 departure, when proved
 }
 

@@ -199,7 +199,7 @@ type SweepContactTrack struct {
 	orientedA     *orientedSourceBox
 	orientedB     *orientedSourceBox
 	orientedDelta [3]proofarith.Dyadic
-	planar        *planarTrackProof  // general planar touch or band (contact_sweep_band.go)
+	planar        *planarTrackProof  // general planar touch or band (contact_sweep_planar.go)
 	rolling       *rollingTrackProof // rolling cylinder touch or band (contact_sweep_rolling.go)
 }
 

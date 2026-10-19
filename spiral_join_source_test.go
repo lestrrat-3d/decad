@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"math"
 	"math/big"
 	"math/rand/v2"
 	"testing"
@@ -11,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/decad/internal/spiralsector"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/stretchr/testify/require"
 )
 
@@ -332,4 +334,152 @@ func randomGateMap(rng *rand.Rand) loftFaceMap {
 	vec := func(scale float64) loftFaceRatVec { return loftFaceRatVec{f(scale), f(scale), f(scale)} }
 	return loftFaceMap{Constant: vec(10), Q0: vec(5), QU: vec(2), QV: vec(2),
 		G0: lfF(3 + rng.Float64()), GU: f(0.3), GV: f(0.3), Stretch: 1}
+}
+
+func spiralTestRevolveBlank(t *testing.T, section []planePoint) *Body {
+	t.Helper()
+	doc := New()
+	world := sketch.NewWorld()
+	s, err := world.CreateSketch(world.XY())
+	require.NoError(t, err)
+	points := make([]*sketch.Point, len(section))
+	for i, point := range section {
+		points[i] = s.CreatePoint(point.U, point.V)
+		s.Fix(points[i])
+	}
+	for i := range points {
+		s.CreateLine(points[i], points[(i+1)%len(points)])
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+	blank, err := Revolve(t.Context(), doc, s, s.Profiles()[0],
+		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{})
+	require.NoError(t, err)
+	return blank
+}
+
+func TestSpiralBlankUsesAuthenticatedRevolveSection(t *testing.T) {
+	section := []planePoint{{U: 4.9}, {U: 6}, {U: 6, V: 3.5},
+		{U: 5.7, V: 2.28}, {U: 4.7, V: 1.88}, {U: 4.9, V: 1.5}}
+	blank := spiralTestRevolveBlank(t, section)
+	candidates := revolveRootCandidates(blank)
+	require.NotEmpty(t, candidates)
+	source, ok := exactSpiralBlank(blank)
+	require.True(t, ok)
+	require.Same(t, blank, bodyHandle(source.Section.Blank))
+	rootCandidates := 0
+	for _, candidate := range candidates {
+		if candidate.RootStart != section[4] || candidate.RootEnd != section[3] {
+			continue
+		}
+		rootCandidates++
+		require.Equal(t, candidate.RootSpan, source.Section.RootSpan)
+		require.Same(t, candidate.Spans[candidate.RootSpan].Face, source.RootFace)
+		require.Equal(t, candidate.ConeGap, source.Section.ConeGap)
+	}
+	require.Equal(t, 1, rootCandidates)
+	require.Equal(t, section[4], source.ToeRoot)
+	require.Equal(t, section[3], source.Ded)
+	for edge, index := range source.EdgeIndex {
+		found := false
+		for _, span := range source.Section.Spans {
+			if len(span.SourceEdges) == 1 && span.SourceEdges[0] == index {
+				found = true
+				break
+			}
+		}
+		require.True(t, found, "legacy edge %d is not an authenticated source edge", edge)
+	}
+}
+
+func TestSpiralBlankRefusesSevenSideRevolveSection(t *testing.T) {
+	section := []planePoint{{U: 4.9}, {U: 6}, {U: 6, V: 3.5},
+		{U: 5.9, V: 3.4}, {U: 5.7, V: 2.28},
+		{U: 4.7, V: 1.88}, {U: 4.9, V: 1.5}}
+	blank := spiralTestRevolveBlank(t, section)
+	candidates := revolveRootCandidates(blank)
+	require.NotEmpty(t, candidates)
+	for _, candidate := range candidates {
+		require.Len(t, candidate.Spans, 7)
+	}
+	_, admitted := exactSpiralBlank(blank)
+	require.False(t, admitted)
+}
+
+// TestSpiralTangentRecordCurrent checks the exact record gate on the real
+// rectangle trim record of the cone-tangent chain. Each mutation changes one
+// immutable value by the smallest amount the gate must notice.
+func TestSpiralTangentRecordCurrent(t *testing.T) {
+	c := buildTangentTrimChain(t)
+	trimBody, err := Intersect(t.Context(), c.cut, c.heelTool)
+	require.NoError(t, err)
+	trim := trimBody.n.Payload.(facetedPayload).LoftFacesTrim
+	require.NotNil(t, trim)
+	require.NotNil(t, trim.Tangent)
+	require.True(t, spiralsector.SpiralTangentRecordCurrent(trim), "the real record is current")
+
+	t.Run("no record is not current", func(t *testing.T) {
+		bare := *trim
+		bare.Tangent = nil
+		require.False(t, spiralsector.SpiralTangentRecordCurrent(&bare))
+		require.False(t, spiralsector.SpiralTangentRecordCurrent(nil))
+	})
+
+	t.Run("unequal tangent copy", func(t *testing.T) {
+		other := *trim.Tangent
+		other.T = new(big.Rat).Add(other.T, big.NewRat(1, 1<<40))
+		mutated := *trim
+		mutated.Tangent = &other
+		require.False(t, spiralsector.SpiralTangentRecordCurrent(&mutated))
+	})
+
+	t.Run("equal copy by value is current", func(t *testing.T) {
+		same := *trim.Tangent
+		same.T = new(big.Rat).Set(same.T)
+		same.Rho = new(big.Rat).Set(same.Rho)
+		same.Apex = new(big.Rat).Set(same.Apex)
+		same.Slope = new(big.Rat).Set(same.Slope)
+		copied := *trim
+		copied.Tangent = &same
+		require.True(t, spiralsector.SpiralTangentRecordCurrent(&copied), "equality is by value, not pointer")
+	})
+
+	t.Run("base cap record tangent differs", func(t *testing.T) {
+		other := *trim.Tangent
+		other.Rho = new(big.Rat).Add(other.Rho, big.NewRat(1, 1<<40))
+		capRecord := *trim.Base.LoftFacesCap
+		capRecord.Tangent = &other
+		mutated := *trim
+		mutated.Base.LoftFacesCap = &capRecord
+		require.False(t, spiralsector.SpiralTangentRecordCurrent(&mutated))
+		capRecord.Tangent = nil
+		require.False(t, spiralsector.SpiralTangentRecordCurrent(&mutated), "the base record must carry it too")
+	})
+
+	t.Run("heel slope one float step off", func(t *testing.T) {
+		slope, _ := trim.Heel.Slope.Float64()
+		stepped := new(big.Rat)
+		stepped.SetFloat64(math.Nextafter(slope, math.Inf(1)))
+		require.NotZero(t, stepped.Cmp(trim.Heel.Slope))
+		heel := *trim.Heel
+		heel.Slope = stepped
+		mutated := *trim
+		mutated.Heel = &heel
+		require.False(t, spiralsector.SpiralTangentRecordCurrent(&mutated))
+	})
+
+	t.Run("one changed final-map coefficient", func(t *testing.T) {
+		maps := append([]loftFaceMap(nil), trim.Maps...)
+		last := maps[len(maps)-1]
+		qu := last.QU
+		qu[1] = new(big.Rat).Add(qu[1], big.NewRat(1, 1<<60))
+		last.QU = qu
+		maps[len(maps)-1] = last
+		mutated := *trim
+		mutated.Maps = maps
+		require.False(t, spiralsector.SpiralTangentRecordCurrent(&mutated))
+		require.True(t, loftface.MapEqual(trim.Tangent.Map(), trim.Maps[len(trim.Maps)-1]),
+			"the original map is untouched")
+	})
 }

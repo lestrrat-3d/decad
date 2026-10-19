@@ -11,9 +11,7 @@ The rules for rows live in `docs/layout.md`.
 |---|---|
 | `tessellate.go` | `Mesh`, `Body.Tessellate`, prism mesh handle adapter and dispatch, and the PatchEdges source mesh adapter. See tessellation design, surface §10.1. |
 | `tessellate_brep.go` | Meshes a brep body, proves its occupied volume, and admits each loop band's occupied volume. See general-boolean §4.4. |
-| `tessellate_brep_band.go` | Adapts route L bands to shared wall samples and delegates fillet rings and strips to `internal/brepfilletmesh/`. See modify-general DG3. |
-| `tessellate_brep_partial_fillet.go` | Selects `internal/partialband/` layouts and places their boundary vertices for `internal/brepfilletmesh/`. |
-| `tessellate_brep_partial_chamfer.go` | Emits two selected planar chamfer strips over their shared contour vertices. See modify-general §4.3a. |
+| `tessellate_brep_band.go` | Adapts route L bands to shared wall samples, delegates fillet rings and strips to `internal/brepfilletmesh/`, and places partial fillet layouts and planar chamfer strips. See modify-general DG3, §4.3a. |
 | `tessellate_verification.go` | `Verification`, `WithVerification`, mesh proof publication, and the joined mesh orientation check. See tessellation §1, §4. |
 | `tessellate_sweep_composite.go` | Builds composite Sweep span handles and runs the body audit around internal station assembly. See sweep Table D. |
 | `tessellate_chain.go` | A chain ribbon's exact-quad mesh. See surface §13.4. |

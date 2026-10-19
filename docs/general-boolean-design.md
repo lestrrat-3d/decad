@@ -510,7 +510,7 @@ first union trims the hub circle.
 
 #### A7 — rectangular blind pocket across a through hole
 
-`prism_boolean_crossing_blind.go` admits `Cut(target, tool)` when `target` is a
+`prism_boolean.go` admits `Cut(target, tool)` when `target` is a
 prism with exactly one through hole, `tool` is a hole-free prism, and every
 section loop is four axis-aligned lines. The target and tool have zero
 section and level displacement. Their relative section map is the identity;

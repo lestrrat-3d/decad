@@ -28,7 +28,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Gap | Today | Owner |
 |---|---|---|
 | `ToFace` on a tilted or uncertain face, or one without a cap record or exact planar Revolve wall or angular-cap record; use `Distance` | `ErrUnsupported` (`stops.go`, `resolveToFace`) | `docs/evaluator-design.md` §5 |
-| Draft angle on a free-form wall, a circular corner that is not G1, or a surface result | `ErrUnsupported`, draft SD3/SD4 (`internal/draftrecord`) and SD12 (`draft_build.go`) | `docs/draft-design.md` §14 |
+| Draft angle on a free-form wall, a circular corner that is not G1, or a surface result | `ErrUnsupported`, draft SD3/SD4 (`internal/draftrecord`) and SD12 (`draft.go`) | `docs/draft-design.md` §14 |
 | Boolean, mass and interference readings of a draft body whose circular wall joins a neighbour G1 but not exactly tangent, or whose section holds a trimmed segment | `ErrUnsupported`, "no proof of the volume" (`internal/capblend/admit.go`); `Verify` reads the pair `Suspect`; the mesh exports | `docs/draft-design.md` §9.1 |
 | `Draft` of a wall subset that moves one of two walls meeting at a circular corner, about a `NeutralFrame` or a non-cap face, or of a receiver that is not a straight prism | `ErrUnsupported`, draft SD4/SD20/SD23 (`draft.go`, `internal/draftrecord`) | `docs/draft-design.md` §10.2, §14 |
 | Sweep twist outside centred convex whole-line or admitted symmetric Line/Arc profiles and paths; straight twist beyond one turn or the station work ceiling; line-arc twist beyond one radian | `ErrUnsupported` | `docs/sweep-design.md` §17 |
@@ -71,9 +71,9 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Placement of the dedicated all-edge chamfer result under an oblique transform, one moving its bore off y, or one rounding a required corner | `ErrUnsupported` (`breprecord.AllEdgeChamferPayload.Placed`) | `docs/modify-general-design.md` §4.3b |
 | Cap-loop chamfer at a corner where a circular wall meets a neighbour tangentially but runs back against it (a tangent cusp), or turns past the G1 tolerance too slightly to enclose | `ErrUnsupported` (SX14) (`capblend.go`) | `docs/modify-reach-design.md` Table SX |
 | Asymmetric brep or stacked chamfer selection outside routes E/L | `ErrUnsupported` (SX16); E takes straight edges, L takes full planar loops | `docs/modify-reach-design.md` §6, `docs/modify-general-design.md` §4 |
-| Tangent chain that branches or whose G1 continuity the oracle cannot decide | `ErrUnsupported` (SX2) (`brep_modify_chain.go`, `internal/tangentchain/geometry.go`) | `docs/modify-reach-design.md` §5 |
+| Tangent chain that branches or whose G1 continuity the oracle cannot decide | `ErrUnsupported` (SX2) (`brep_modify_partial.go`, `internal/tangentchain/geometry.go`) | `docs/modify-reach-design.md` §5 |
 | Closed shell (`WithNoOpenings`) outside a full revolve, a hole-free straight prism or a two-slab nested rectangular boss | `ErrUnsupported` (SX8/SX9; modify-general SG2) (`shell.go`) | `docs/modify-reach-design.md` §9, §14; `docs/modify-general-design.md` §3.1a |
-| Reverse-order nested rectangular boss whose frame cannot flip exactly | `ErrUnsupported` (`shell_stacked_boss.go`) | `docs/modify-general-design.md` §3.1a |
+| Reverse-order nested rectangular boss whose frame cannot flip exactly | `ErrUnsupported` (`shell_stacked.go`) | `docs/modify-general-design.md` §3.1a |
 | Modify of a prism whose section carries a displacement bound | `ErrUnsupported` via `prismrecord.Payload.RequireExactSection` | `docs/modify-design.md` |
 | Shell or junction fillet/chamfer of a revolve whose meridian carries a displacement bound — a revolve shell with a slanted cut, such as a cone's | `ErrUnsupported` via `revolveplan.RequireExactSection` | `docs/surface-intersection-design.md` §7.2 |
 | Variable-radius fillet, face-to-face fillet | No entry point exists | none |

@@ -57,7 +57,7 @@ var (
 // pair in each of the two sweep passes, and once per tested pair, and Err at
 // every phase boundary, the end of S7 among them.
 //
-// sweep_mitre_build.go, stitch.go, mass_properties_mesh.go and LoftChain call
+// sweep_mitre_build.go, stitch.go, mass_properties.go and LoftChain call
 // it. A loft calls LoftCrossingAuditStructured instead. Tests that need a
 // shortcut switched off, or the pair loop's own work counts, call
 // LoftCrossingAuditWork. Large candidate lists classify concurrently and

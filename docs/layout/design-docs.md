@@ -90,5 +90,4 @@ The rules for rows live in `docs/layout.md`.
 | Path | Responsibility |
 |---|---|
 | `moments.go` | Public second moments and moment adapters. See evaluator §4. |
-| `mass_properties.go` | Public mass and inertia types, mass dispatch and payload adapters. See `docs/dynamic-mass-design.md` §2–§3. |
-| `mass_properties_mesh.go` | Mass read off verified meshes. See dynamic-mass. |
+| `mass_properties.go` | Public mass and inertia types, mass dispatch and payload adapters, and mass read off verified meshes. See `docs/dynamic-mass-design.md` §2–§3. |
