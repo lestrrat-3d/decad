@@ -21,6 +21,11 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
+// Chamfer turns selected sharp edges into flat bevels. A setback is how far
+// the bevel starts from the original edge; a cap is an end face, while a
+// lateral edge runs along the side. The code picks a construction route for
+// the body's shape, checks the result, then replaces the old body in its document.
+
 // This file is the chamfer of docs/modify-design.md §7: Chamfer bevels the
 // convex or concave lateral edges of a straight prism (Table R, R1). It is the
 // fillet's sibling under the §2 reduction — a lateral edge is a CORNER of the
@@ -158,6 +163,8 @@ type ChamferOption interface{ chamferOption() }
 // reaching a far face end is SX7 (each ErrUnsupported); a setback that
 // empties a loop's offset is SX6 (ErrDegenerate).
 func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error) {
+	// Geometry work can take time, so callers need a context that can cancel it.
+	// The body needs a document because a successful chamfer replaces that body there.
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a chamfer`, ErrDegenerate)
 	}
@@ -179,6 +186,8 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 	if err != nil {
 		return nil, err
 	}
+	// Convert the requested length to millimeters. Keep the conversion's error
+	// bound too, so later geometry checks do not assume the number is exact.
 	dmm, dDelta, err := extent.MagnitudeInBounded(d, units.Length, units.Millimeter, "the chamfer setback")
 	if err != nil {
 		return nil, err
@@ -188,7 +197,8 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 	}
 	// decad owns the selector vocabulary, so only the built-in query can be
 	// resolved and recorded. Reject foreign implementations before invoking
-	// their callback, and treat a typed nil query like an untyped nil.
+	// their callback. An interface can hold a typed nil query even when the
+	// interface itself is not nil, so the switch checks both forms.
 	q, ok := sel.(*EdgeQuery)
 	switch {
 	case sel == nil:
@@ -203,7 +213,8 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 		return nil, err
 	}
 	// Reach stage 2 (docs/modify-reach-design.md §4/§5): the seed query's
-	// cardinality has been enforced above; the tangent chain expands it.
+	// cardinality has been enforced above; the tangent chain expands it. Expand
+	// first so every added edge can also receive an asymmetric reference face.
 	if o.TangentChain {
 		if edges, err = expandTangentChain(ctx, b, sel, edges); err != nil {
 			return nil, err
@@ -226,6 +237,8 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 	if err := capblend.RequireNotReceiver(b.n.Payload, "chamfers"); err != nil {
 		return nil, err
 	}
+	// A tapered circular body's far rim has its own builder. It only supports
+	// equal setbacks, and a matched rim stops us from trying a generic route.
 	if asym == nil {
 		if out, matched, err := tryDraftCircleRimChamfer(ctx, b, edges, dmm, dDelta); matched || err != nil {
 			return out, err
@@ -234,6 +247,9 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 	if err := draftrecord.RequireNotReceiver(b.n.Payload, "chamfers"); err != nil {
 		return nil, err
 	}
+	// Several body routes need the same flat cut at a section corner.
+	// For unequal setbacks, the chosen reference face decides which nearby
+	// section walk receives each distance.
 	blend := revolveBlendOp{
 		kind: "chamfer",
 		corner: func(loop cornerLoop, li, ci int, e *Edge) (*cornerBlend, error) {
@@ -247,8 +263,9 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 			return computeChamfer(loop, ci, dA, dB)
 		},
 	}
-	// A brep or stacked receiver takes the brep route
-	// (docs/brep-modify-design.md §2), ahead of the generic refusal.
+	// Give the boundary-representation (brep) builder the selected edges and
+	// setback rules together. This lets it reuse the same request when the
+	// receiver is a brep or a stack of earlier operations (§2).
 	loopCall := brepModifyRequest{op: "chamfers",
 		admits: func(pp prismPayload, caps prismCaps) error {
 			_, _, _, err := classifyChamferSelection(ctx, pp, caps, sel, edges)
@@ -257,6 +274,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 		sel: sel, edges: edges, blend: &blend, asym: asym,
 		loop: &capSetback{Dc: dmm, DcDelta: dDelta, Ds: dmm, DsDelta: dDelta}, loopKind: breprecord.BandChamfer}
 	if bp, ok := b.n.Payload.(brepPayload); ok {
+		// Some selections need a whole-body chamfer instead of the usual edge route.
 		body, matched, err := tryAllEdgeChamfer(ctx, b, bp, edges, dmm, dDelta, asym)
 		if matched || err != nil {
 			if err != nil {
@@ -272,6 +290,9 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 	if route.body != nil {
 		return commitModifyResult(ctx, b, route.body)
 	}
+	// These recorded shapes have specialized constructions. A recognized shape
+	// returns its result or its specific refusal instead of falling through to
+	// a route that does not understand that shape.
 	if lp, ok := b.n.Payload.(loftPayload); ok {
 		body, recognized, err := tryLoftCapChamfer(ctx, b, lp, edges, dmm, dDelta, asym)
 		if recognized || err != nil {
@@ -325,6 +346,8 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 	}
 	pp, ok := b.n.Payload.(prismPayload)
 	caps := prismCapsOf(b)
+	// A brep route can supply an exact prism view even when the original body
+	// is stored differently. Use that view for the remaining prism cases.
 	if route.prism != nil {
 		pp, ok, caps = *route.prism, true, route.caps
 	}
@@ -341,6 +364,8 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 	if sweepStraight && asym != nil {
 		return nil, fmt.Errorf(`%w: an asymmetric chamfer of a Sweep wall has no mapped reference-face role`, ErrUnsupported)
 	}
+	// The corner rewrite needs the original 2D outline, not an approximate
+	// outline recovered from a rendered or sampled shape.
 	if err := pp.RequireExactSection("chamfers"); err != nil {
 		return nil, err
 	}
@@ -360,6 +385,9 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 		return commitModifyResult(ctx, b, body)
 	}
 
+	// Side edges become corners in the 2D outline. A complete ring of cap edges
+	// instead needs a bevel band around the end face; mixed selections cannot
+	// use either construction.
 	startLoops, endLoops, lateral, err := classifyChamferSelection(ctx, pp, caps, sel, edges)
 	if err != nil {
 		return nil, err
@@ -371,6 +399,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 		// An equal chamfer sets both caps back d across the cap and d down the
 		// side; a two-distance one takes each cap's pair from its reference
 		// face (docs/modify-reach-design.md §8.3.1).
+		// Dc measures across the end face; Ds measures down its side wall.
 		start := capSetback{Dc: dmm, DcDelta: dDelta, Ds: dmm, DsDelta: dDelta}
 		end := start
 		if asym != nil {
@@ -383,6 +412,8 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 		if err != nil {
 			return nil, err
 		}
+		// Check the input again before the final replacement: another operation
+		// could have retired it, or the caller could have canceled the work.
 		if err := doc.requireLive(b); err != nil {
 			return nil, err
 		}
@@ -398,6 +429,9 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 	if err != nil {
 		return nil, err
 	}
+	// Keep one lookup table per outline loop. First map each selected 3D edge
+	// to a 2D corner; a nil value marks the spot until its bevel is computed.
+	// The separate matched list keeps the original edge for useful errors.
 	blendAt := make([]map[int]*cornerBlend, len(loops))
 	for i := range blendAt {
 		blendAt[i] = map[int]*cornerBlend{}
@@ -419,6 +453,8 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 	// Stage 3 (§4): the construction's own gate, per corner — S4 (a corner
 	// exists). There is no S5: a chord exists between any two distinct feet.
 	for _, corner := range matched {
+		// Large selections can visit many corners; check the shared work budget
+		// on each one so cancellation can stop the operation promptly.
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
@@ -429,7 +465,8 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 		blendAt[corner.loop][corner.corner] = cb
 	}
 
-	// The rewritten section, and the bevel chords' (loop, segment) indices.
+	// Replace marked corners with straight chords. Also remember which new
+	// segments are bevels so later views can label their faces correctly.
 	profile, chamferSegs, err := offset2d.RewriteProfileBudget(budget, pp.Profile, loops, blendAt)
 	if err != nil {
 		return nil, err
@@ -437,6 +474,8 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 
 	// Stage 4 (§4/§5): the same audit the fillet runs — S8, S6 (an over-large
 	// setback that reaches or passes a walk's far end), S7, S9.
+	// The audit checks the whole new outline before a body is built. Preserve
+	// cancellation errors directly; add edge details only to geometry errors.
 	if err := offset2d.AuditRewriteBudget(budget, pp.Profile, profile, loops, blendAt); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return nil, context.Canceled
@@ -470,7 +509,8 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 	if err != nil {
 		return nil, err
 	}
-	// Keep the consumed input aligned with document liveness at the commit edge.
+	// Recheck just before replacing the old body: construction can finish after
+	// the caller cancels or after another operation retires the input.
 	if err := doc.requireLive(b); err != nil {
 		return nil, err
 	}
@@ -482,12 +522,16 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 }
 
 func straightPrismCapEdge(caps prismCaps, edges []*Edge) bool {
+	// This special route handles one straight edge on an end face. A curved
+	// edge or a selection of several edges needs another construction.
 	if len(edges) != 1 {
 		return false
 	}
 	if _, straight := edges[0].n.Curve.(surfacegeom.Line3); !straight {
 		return false
 	}
+	// Find the cap by face membership, since an edge's adjacent faces need
+	// not appear in a particular order.
 	for _, face := range edges[0].Faces() {
 		if face == caps.start || face == caps.end {
 			return true
@@ -498,5 +542,7 @@ func straightPrismCapEdge(caps prismCaps, edges []*Edge) bool {
 
 // computeChamfer builds one section corner blend.
 func computeChamfer(loop cornerLoop, ci int, dA, dB float64) (*cornerBlend, error) {
+	// This shared numeric tolerance handles nearly smooth or tiny corners; it
+	// does not change the two setback distances requested by the caller.
 	return offset2d.Chamfer(loop.Walks, ci, dA, dB, filletTol)
 }
