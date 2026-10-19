@@ -95,13 +95,13 @@ func tryLoftContactDirectShellUnion(ctx context.Context, op meshbool.OperationKi
 func loftContactFacetedBody(ctx context.Context, d *Document, ref producerID,
 	first, second, prism, loft *Body, lp loftPayload,
 	proof loftVolumeProof, budget *proofbound.WorkBudget) (*Body, bool, error) {
-	shell := proof.boundary.shell
+	shell := proof.boundary.Shell
 	if len(shell.Faces) != len(shell.Triangles) ||
 		len(shell.Vertices) == 0 || len(shell.Vertices) > 512 ||
 		len(shell.Triangles) == 0 || len(shell.Triangles) > 512 ||
-		proof.boundary.heldAudit == nil ||
-		len(proof.boundary.auditedVerts) != len(shell.Vertices) ||
-		len(proof.boundary.auditedTris) != len(shell.Triangles) {
+		proof.boundary.HeldAudit == nil ||
+		len(proof.boundary.AuditedVerts) != len(shell.Vertices) ||
+		len(proof.boundary.AuditedTris) != len(shell.Triangles) {
 		return nil, false, nil
 	}
 	prismFaces, ok, err := loftContactSourceFaces(prism, budget)
@@ -112,7 +112,7 @@ func loftContactFacetedBody(ctx context.Context, d *Document, ref producerID,
 	if err != nil || !ok {
 		return loftContactBoundedResult(ctx, err)
 	}
-	// loftPartitionLines allocates its result before its own per-line visits.
+	// loftcontact.PartitionLines allocates its result before its own per-line visits.
 	if len(lp.Profile0.Outer.Segments) < 3 || len(lp.Profile0.Outer.Segments) > 32 ||
 		len(lp.Profile1.Outer.Segments) < 3 || len(lp.Profile1.Outer.Segments) > 32 {
 		return nil, false, nil
@@ -121,11 +121,11 @@ func loftContactFacetedBody(ctx context.Context, d *Document, ref producerID,
 		len(lp.Profile1.Outer.Segments))); err != nil {
 		return loftContactBoundedResult(ctx, err)
 	}
-	lower, ok, err := loftPartitionLines(budget, lp.Profile0.Outer)
+	lower, ok, err := loftcontact.PartitionLines(budget, lp.Profile0.Outer)
 	if err != nil || !ok {
 		return loftContactBoundedResult(ctx, err)
 	}
-	upper, ok, err := loftPartitionLines(budget, lp.Profile1.Outer)
+	upper, ok, err := loftcontact.PartitionLines(budget, lp.Profile1.Outer)
 	if err != nil || !ok || len(lower) != len(upper) {
 		return loftContactBoundedResult(ctx, err)
 	}
@@ -141,9 +141,9 @@ func loftContactFacetedBody(ctx context.Context, d *Document, ref producerID,
 		if err := budget.Step(); err != nil {
 			return loftContactBoundedResult(ctx, err)
 		}
-		if math.Float64bits(vertex.Held.X) != math.Float64bits(proof.boundary.auditedVerts[i].X) ||
-			math.Float64bits(vertex.Held.Y) != math.Float64bits(proof.boundary.auditedVerts[i].Y) ||
-			math.Float64bits(vertex.Held.Z) != math.Float64bits(proof.boundary.auditedVerts[i].Z) {
+		if math.Float64bits(vertex.Held.X) != math.Float64bits(proof.boundary.AuditedVerts[i].X) ||
+			math.Float64bits(vertex.Held.Y) != math.Float64bits(proof.boundary.AuditedVerts[i].Y) ||
+			math.Float64bits(vertex.Held.Z) != math.Float64bits(proof.boundary.AuditedVerts[i].Z) {
 			return nil, false, nil
 		}
 		verts[i], beta[i] = vertex.Held, vertex.Bound
@@ -164,8 +164,8 @@ func loftContactFacetedBody(ctx context.Context, d *Document, ref producerID,
 			return loftContactBoundedResult(ctx, err)
 		}
 		roles, owner, found, err := loftContactSourceRoles(face, shell.Triangles[i], shell,
-			lower, upper, proof.boundary.source.CapLevels[0],
-			proof.boundary.source.CapLevels[1], budget)
+			lower, upper, proof.boundary.Source.CapLevels[0],
+			proof.boundary.Source.CapLevels[1], budget)
 		if err != nil {
 			return loftContactBoundedResult(ctx, err)
 		}
@@ -229,7 +229,7 @@ func loftContactFacetedBody(ctx context.Context, d *Document, ref producerID,
 		if err := budget.Step(); err != nil {
 			return loftContactBoundedResult(ctx, err)
 		}
-		if triangle != proof.boundary.auditedTris[i] {
+		if triangle != proof.boundary.AuditedTris[i] {
 			return nil, false, nil
 		}
 		tris[i] = triangle
@@ -242,7 +242,7 @@ func loftContactFacetedBody(ctx context.Context, d *Document, ref producerID,
 		VolSymDiff: proof.symDiffUpper, DPair: dPair,
 		Xform: r3.Identity(),
 	}
-	audit := proof.boundary.heldAudit
+	audit := proof.boundary.HeldAudit
 	volF, bound, volumeRat, admitted, err := facetproof.VolumeFromAuditBounded(
 		budget, audit, payload.VolSymDiff)
 	if err != nil || !admitted {
