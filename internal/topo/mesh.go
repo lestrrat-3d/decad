@@ -21,8 +21,8 @@ type Mesh struct {
 	// record β(v), one entry per vertex in millimetres: a point of the true
 	// boundary lies within VertexBound[v] of Vertices[v], and every facet's
 	// true piece lies within the largest of its three corners' entries of the
-	// facet. nil means the payload publishes no record; vertexBounds then
-	// derives one from the root Mesh's face bounds (§2.1). When present, every face-bound entry
+	// facet. nil means the payload publishes no record; topobuild.VertexBounds
+	// then derives one from the face bounds (§2.1). When present, every face-bound entry
 	// is the corner maximum over that face's own triangles.
 	VertexBound []float64
 	// AreaSlack is a proven bound (mm²) on how far the mesh's total facet

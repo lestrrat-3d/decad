@@ -18,6 +18,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -459,7 +460,7 @@ func extendTangentCap(ctx context.Context, held *Mesh, toe *loftFacesToeRecord,
 	if err != nil {
 		return nil, loftface.Slab{}, err
 	}
-	beta, err := held.vertexBounds()
+	beta, err := topobuild.VertexBounds(&held.n)
 	if err != nil {
 		return nil, loftface.Slab{}, err
 	}

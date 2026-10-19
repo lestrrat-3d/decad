@@ -5,6 +5,7 @@ import (
 	"maps"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/pointquery"
 	"github.com/lestrrat-3d/decad/internal/proof"
@@ -101,8 +102,10 @@ func newRevolveLoftFacesClearPatchContext(ctx context.Context,
 		proofbound.IsNonFinite(tool.n.VolSymDiff) || tool.n.VolSymDiff < 0 {
 		return nil, false, err
 	}
-	fresh, err := tessellateFaceted(ctx, source.tooth, payload, payload.MeshBound)
-	if fresh != nil {
+	freshNode, err := facetedrecord.Restate(ctx, &source.tooth.n, payload, payload.MeshBound)
+	var fresh *Mesh
+	if freshNode != nil {
+		fresh = bornMesh(&Mesh{n: *freshNode})
 		// tessellateContext sets this flag after the payload restatement.
 		fresh.n.BoundaryOK = true
 	}

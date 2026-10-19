@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sweepmitre"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -132,7 +133,7 @@ func tessellateMitredSweep(ctx context.Context, b *Body, mp mitredSweepPayload, 
 			Source:    src,
 		},
 	})
-	mesh.setVertexBounds(mp.VertexBound)
+	topobuild.SetVertexBounds(&mesh.n, mp.VertexBound)
 	mesh.n.Bound = mp.Delta
 	slack := 0.0
 	for _, t := range mp.Tris {

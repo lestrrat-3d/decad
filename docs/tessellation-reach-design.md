@@ -99,7 +99,7 @@ Rules:
   `deltaStore + sectionDelta + deltaAxial(face)`, which is at least `booloperand.sectionDisplacement`).
 - `operandSymDiff` returns `m.n.VolSymDiff` when `m.n.SymDiffOK`, else `ErrUnsupported` (a staging refusal,
   routed through `expectedBooleanForOperand(booleanExpectedStaging, …)` like a tessellation refusal).
-  `tessellateFaceted` sets `volSymDiff = fp.VolSymDiff, symDiffOK = true`.
+  `facetedrecord.Restate` sets `volSymDiff = fp.VolSymDiff, symDiffOK = true`.
 
 ### Prism and cup population
 
@@ -743,10 +743,10 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
 
 ### R0 — proof record
 
-1. **Files:** `tessellate.go`. **What:** add `faceBound`, `volSymDiff`, `symDiffOK` to `Mesh`; make
-   `tessellateFaceted` fill them from `facetedPayload` (`faceBound[f]` the largest facet bound over that face's
-   facets, from the payload's per-vertex record). **Tests:** `tessellate_internal_test.go` asserts the
-   three fields on a faceted restatement.
+1. **Files:** `internal/topo/mesh.go`, `internal/facetedrecord/restate.go`. **What:** add `FaceBound`, `VolSymDiff`,
+   `SymDiffOK` to the mesh node; make `facetedrecord.Restate` fill them from `facetedPayload` (`FaceBound[f]` the
+   largest facet bound over that face's facets, from the payload's per-vertex record). **Tests:**
+   `internal/facetedrecord/restate_test.go` asserts the three fields on a faceted restatement.
 2. **Files:** `tessellate.go`. **What:** split `walkAreaSlack` into `walkWallSlack` and `walkSegmentArea`
    (the exact `Σ a_c`), keep the composed helper. **Depends on:** none. **Tests:** existing `areaSlack`
    assertions unchanged; new internal test pins `walkSegmentArea` on a quarter circle.
@@ -783,7 +783,7 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
    == delta` for a placed `LineSeg`-only loft; `== 0` unplaced pinned; `> sectionDelta` for a chorded pair
    with twist.
 9. **Files:** `tessellate.go`, `internal/loftrecord/tessellate.go`, `internal/loftmesh/loft.go`. **What:** `loftrecord.Tessellate` per §4;
-   dispatch in `tessellateBodyContext`; update `Body.Tessellate`'s doc comment. **Pattern:** `tessellateFaceted`.
+   dispatch in `tessellateBodyContext`; update `Body.Tessellate`'s doc comment. **Pattern:** `facetedrecord.Restate`.
    **Depends on:** 6, 8. **Tests:** §4's list in `apitest/loft_test.go` and `apitest/export_test.go`.
 10. **Files:** `docs/loft-design.md` §9 Table D rows D1/D2 (status cells become current state), `doc.go`'s
     support map. **Depends on:** 9.
