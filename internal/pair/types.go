@@ -1,6 +1,11 @@
 // Package pair holds result types shared by box and planar contact proofs.
 package pair
 
+import (
+	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/units"
+)
+
 // Relation is the proven relation of two admitted occupied sets.
 type Relation uint8
 
@@ -26,4 +31,10 @@ const (
 // ScalarReading encloses a length in millimetres.
 type ScalarReading struct {
 	ValueMM, BoundMM float64
+}
+
+// Measurement publishes the reading as a length, Exact only for a zero bound.
+func (r ScalarReading) Measurement() measurement.Measurement {
+	return measurement.Measurement{Value: units.Millimeters(r.ValueMM),
+		Bound: units.Millimeters(r.BoundMM), Exactness: measurement.ExactnessOf(r.BoundMM)}
 }

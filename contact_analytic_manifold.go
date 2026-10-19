@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/measurement"
+	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/planarsnapshot"
 	"github.com/lestrrat-3d/decad/internal/planarsweep"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
@@ -393,12 +394,11 @@ func publishPlacedRulingManifold(report *reportvocab.ContactReport, c *placedCyl
 	if cylinderFirst {
 		direction = proofarith.DvSub(proofarith.DyV3{}, direction)
 	}
-	published, angle, ok := planarNormal(direction)
+	normal, angle, ok := pairbox.PlanarNormalMeasurement(direction)
 	if !ok || angle.Base() > report.Request.NormalResolution.Base() {
 		report.Reason = reportvocab.ContactNoNormalProof
 		return
 	}
-	normal := vecMeasurementToInternal(published)
 	faces := bodyHandle(report.A).Faces()
 	if cylinderFirst {
 		faces = bodyHandle(report.B).Faces()

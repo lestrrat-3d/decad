@@ -11,8 +11,8 @@ The rules for rows live in `docs/layout.md`.
 |---|---|
 | `internal/proof/` | Exact dyadic arithmetic, rational intervals and float rounding. |
 | `internal/measurement/` | Private bounded reading carriers, exact inflated-box separation, `ExactnessOf` and `FiniteValues`. Public types live in `measurement.go`. See API §5.3, §6. |
-| `internal/pair/` | Shared contact relation and reading types. |
-| `internal/pair/box/` | Exact box paths and oriented-box translation, contact, oriented, sphere-box and cylinder-box proofs, interval separation, patches, clips and witnesses. |
+| `internal/pair/` | Shared contact relation, reason and reading types; a scalar reading publishes as a measurement. |
+| `internal/pair/box/` | Exact box paths and oriented-box translation, contact, oriented, sphere-box and cylinder-box proofs, interval separation, patches, clips, and witness and normal readings with their measurements. |
 | `internal/pair/sphere/` | Exact sphere-pair relation, gap and bounded response witness. See contact-geometry §4.3. |
 | `internal/pair/planar/` | Planar solid relations, gaps, patches, support faces, and convexity. |
 | `internal/planarsnapshot/` | Planar contact snapshots, cached records and pose gates. See multibody §9.1–§9.2. |
@@ -26,7 +26,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/provenance/` | Producer identity, feature-role reference and the `RoleBody`/`RoleCapStart`/`RoleCapEnd` names the topology nodes hold; root `FeatureRef` is the public form. See evaluator §3. |
 | `internal/surfacegeom/` | Private face and edge geometry carriers and Verify's diagnostic plane key. Public variants live in `topology.go`; `Edge.Curve` and `Face.Surface` adapt the nodes. See API §6.1, surface §6. |
 | `internal/surfaceplace/` | Rigid placement of face surfaces and edge curves, and the placed circle bound. See surface §6. |
-| `internal/reportvocab/` | Contact and sweep enums; contact reports and planar feature mapping over topology nodes; the sweep request; Verify reports, motion verification records, survey diagnostics, and pair, interference and sheet outcomes. See contact-geometry §6, contact-sweep §7. |
+| `internal/reportvocab/` | Contact and sweep enums; contact reports, pair-reason mapping and planar feature mapping over topology nodes; the sweep request; Verify reports, motion verification records, survey diagnostics, and pair, interference and sheet outcomes. See contact-geometry §6, contact-sweep §7. |
 | `internal/extent/` | Unit bounds and stop levels for extents. See API §8.1, evaluator §5/§6. |
 | `internal/patchchain/` | Patch payloads and node builders; chain partition, exact and shared-level plane proofs, orientation, segment records, area bounds, Rule P and circular-prism admission. See surface §5.1-§5.2 and §10. |
 | `internal/patchmesh/` | Builds PatchProfile and PatchEdges sheet mesh nodes with face and area bounds. See surface §10. |

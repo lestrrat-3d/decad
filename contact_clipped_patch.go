@@ -138,12 +138,11 @@ func publishClippedHorizontalPatchOrder(report *reportvocab.ContactReport, base 
 	points := make([]reportvocab.ContactPoint, 0, len(polygon))
 	for _, vertex := range polygon {
 		world := [3]*big.Rat{vertex[0], vertex[1], faceZ.Rat()}
-		witness, valid := orientedBoxPoint(world)
-		if !valid || witness.Bound.Base() > report.Request.PointResolution.Base() {
+		onBoth, valid := pairbox.PointMeasurement(world)
+		if !valid || onBoth.Bound.Base() > report.Request.PointResolution.Base() {
 			report.Reason = reportvocab.ContactPointTooCoarse
 			return false
 		}
-		onBoth := vecMeasurementToInternal(witness)
 		point := reportvocab.ContactPoint{OnA: onBoth, OnB: onBoth,
 			Normal:      measurement.VecMeasurement{Value: r3.Vec{Z: normalZ}, Bound: units.Scalar(0), Exactness: measurement.Exact},
 			NormalAngle: units.Radians(0),

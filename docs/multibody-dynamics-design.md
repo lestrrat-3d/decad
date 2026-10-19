@@ -1148,8 +1148,8 @@ sets, prefiltered by per-triangle boxes as `meshBoolean` does and charged to the
 with `ctx` polled every `workPollInterval` operations. The split follows the one `contact_box.go` and
 `internal/pair/box/axis_box.go` already make: `internal/pair/planar/planar.go` takes the two exact vertex and
 triangle snapshots and returns the relation, gap and feature pairs over `proof.Dyadic`; the root
-`contact_faceted_pair.go` admits the bodies, builds the snapshots at the query poses, maps feature
-indices back to live `*Face` values and publishes the typed report. A prism's caps reuse the
+`contact_faceted_pair.go` admits the bodies and builds the snapshots at the query poses, and
+`internal/planarband` maps feature indices back to the bodies' faces and publishes the report. A prism's caps reuse the
 tessellator's cap triangulation of its recorded section, accepted only after an exact check that every
 cap triangle is counterclockwise; with the closed-mesh audit, that proves the triangles tile the section
 exactly. The tests are:
@@ -1261,7 +1261,7 @@ not, and only a pair neither path covers withholds the manifold.
 
 The patch of a coplanar face pair is computed inside decad, in exact rational arithmetic: the clip
 itself in `internal/pair/planar/planar_patch.go` over the two exact loops, the face map and witness publication
-in the root `contact_faceted_pair.go`, the same split §9.1 makes.
+in `internal/planarband`, the same split §9.1 makes.
 This is a decad-side 2D answer under CLAUDE.md's "Ask `sketch` for 2D answers by default" rule,
 which admits one where it clearly wins on performance or correctness and asks the owning design to
 state the reason. Both reasons apply here. Performance: a manifold is asked at every
@@ -1297,7 +1297,7 @@ rational operation is charged through it, and the loop polls `ctx` every `workPo
 
 **Published points.** Each output vertex that is a corner of the patch (a vertex the polygon passes
 straight through is not) is lifted to 3D exactly, then converted once to a float witness with an
-outward ball through `orientedBoxPoint`, exactly as the shipped clips do. A witness whose ball exceeds
+outward ball through `internal/pair/box`'s `PointMeasurement`, exactly as the shipped clips do. A witness whose ball exceeds
 `PointResolution` withholds the manifold with `ContactPointTooCoarse`. The normal is `B`'s exact face
 normal oriented `A` toward `B`, normalized with the ball §9.3 describes; an angle above
 `NormalResolution` withholds the manifold with `ContactNoNormalProof`, and an axis-aligned face has a
@@ -1384,7 +1384,7 @@ plane (the feet of an edge clipped to `h`'s region, each piece reaching the inte
 exact enclosure of `−d`, the normal `h`'s exact outward normal oriented `A` toward `B`, and the features
 the vertex's or edge's faces and `h`. Under a positive `SupportBand` the lifted set of `h` follows
 (§10.5's `Overlapping` row, `PlanarSupportSets` with `overlap` set). Reversal swaps sides as §9.5 states.
-`publishPlanarManifold` runs this path whenever §9.3's convex-convex path publishes nothing, including
+`internal/planarband`'s `publishManifold` runs this path whenever §9.3's convex-convex path publishes nothing, including
 for a pair §9.3 never reads because only one body carries the convexity certificate. Each certified
 body in turn is tried as `M` against the other as `S`; the patch is published when exactly one order
 publishes, and two publishing orders withhold it with `ContactAmbiguousFeature`, so the two query orders
@@ -1766,7 +1766,7 @@ every such face of each body in turn as the host and publishes every one whose c
 §9.4's clipped patch, which would add the crossing points of a face overhanging `S`, needs §9.3's
 certificate and is not attempted; a contact feature off that plane keeps `ContactNonConvex` with no manifold.
 
-**`ContactPair`.** With a positive `SupportBand` the exact planar path (§9.1, `contact_faceted_pair.go`)
+**`ContactPair`.** With a positive `SupportBand` the exact planar path (§9.1, `internal/planarband`)
 publishes:
 
 | Exact relation | Published relation | Manifold |
@@ -1786,7 +1786,7 @@ publish per plane with their own normals, as §9.3's last row does. Two oriented
 for a touch, a shallow overlap or a gap within the band, as §9.4's last paragraph routes their edge and vertex
 touches today: the box patches certify exact touches and know no band. `internal/pair/planar/planar_support_sets.go`
 defines `PlanarSupportSets`, which takes the two snapshots, their support planes and the band and returns the lifted
-points with their exact heights; `contact_faceted_pair.go` maps and publishes them.
+points with their exact heights; `internal/planarband` maps and publishes them.
 
 **`SweepPair`.** A §9 pair whose first sample is `Touching`, or `ContactBand` from this path, continues under
 both policies over the support set (`planarContinuation` in
@@ -2639,7 +2639,7 @@ lines below do not repeat it.
 ### PR 14d (Phase 2) — face-local shallow penetration
 
 - Delivers §9.6 and §9.1's crossing set: `ClassifyPlanar` records `PlanarResult.Crossings`,
-  `PlanarFacePenetration` publishes the patch through one face, and `publishPlanarManifold` runs it
+  `PlanarFacePenetration` publishes the patch through one face, and `internal/planarband`'s `publishManifold` runs it
   when §9.3's convex-convex path publishes nothing.
 - Files: `internal/pair/planar/planar.go`, new `internal/pair/planar/planar_face_penetration.go`,
   `contact_faceted_pair.go`; `docs/collision-v1-support.md`.
@@ -2890,7 +2890,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 
 ### PR 20c (Phase 3) — the displaced pair's support set and penetration manifold
 
-- Delivers §10.4's relation rows for a lifted set and a deep overlap: `internal/planarband.Classify` routes a
+- Delivers §10.4's relation rows for a lifted set and a deep overlap: `internal/planarband.Publish` routes a
   held `Separated` pair within `b = max(SupportBand, δ)` through §10.5's support band over the zero-`δ`
   host's planes alone, charges `g + δ` on the gap, `δ` on each lifted point's `Separation` and each body's
   `δ` on its own witness ball; a held overlap deeper than `δ` publishes §9.3's convex-convex manifold or
@@ -2956,7 +2956,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 - Depends on: PR 20b.
 - Shipped as `TestPlanarManifoldNonConvexGuest`. The tilted cup's band is `2⁻¹⁹ mm` because its far
   corners stand `24·sin θ = 1.5·2⁻²⁰ mm` above its near ones. The rim fixture rests the cup on the tray's
-  wall top at `z = 40`. `contact_faceted_pair.go` sends a touch of two non-convex bodies to the rule, and
+  wall top at `z = 40`. `internal/planarband` sends a touch of two non-convex bodies to the rule, and
   `contact_pair.go`'s reason and entry-point comments follow it. Further legs shown to fail: the
   host-face test on every contact deleted, the wall fixture publishes corners under two normals; the foot
   test deleted, the rim fixture withholds with `ContactAmbiguousFeature`; the guest-in-front test deleted,

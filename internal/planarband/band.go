@@ -10,26 +10,8 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
-	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/units"
 )
-
-// Services are root-owned operations called at the existing decision sites.
-// Classify does not retain this invocation-local record.
-type Services struct {
-	Convexity   func(context.Context, *proofbound.WorkBudget, *topo.Body, reportvocab.ContactRequest) (bool, error)
-	FeatureMap  func(*topo.Body, *topo.Body, *planar.PlanarSolid, *planar.PlanarSolid) (*reportvocab.PlanarFeatureMap, error)
-	Patch       func(reportvocab.ContactRequest, []planar.PatchPoint, *reportvocab.PlanarFeatureMap) (*reportvocab.ContactManifold, reportvocab.ContactReason)
-	Reason      func(pair.Reason) reportvocab.ContactReason
-	SupportBand func(reportvocab.ContactRequest) proofarith.Dyadic
-}
-
-// Classify publishes the positive-displacement contact relation into report.
-func Classify(ctx context.Context, budget *proofbound.WorkBudget, report *reportvocab.ContactReport,
-	result planar.PlanarResult, a, b *planar.PlanarSolid, deltaA, deltaB proofarith.Dyadic, services Services) error {
-	p := bandPair{a: a, b: b, deltaA: deltaA, deltaB: deltaB, services: services}
-	return p.classify(ctx, budget, report, result)
-}
 
 // bandPair is one admitted pair at least one of whose held meshes
 // carries a positive displacement, with both displacements at the query
@@ -37,7 +19,7 @@ func Classify(ctx context.Context, budget *proofbound.WorkBudget, report *report
 type bandPair struct {
 	a, b           *planar.PlanarSolid
 	deltaA, deltaB proofarith.Dyadic
-	services       Services
+	certificates   Convexity
 }
 
 // classify turns the exact held relation into §10.4's published one. With δ
@@ -73,7 +55,7 @@ func (p *bandPair) classify(ctx context.Context, budget *proofbound.WorkBudget, 
 		}
 		report.Reason = reportvocab.ContactNoGapProof
 	case pair.Touching:
-		convexA, convexB, err := p.convexity(ctx, budget, report)
+		convexA, convexB, err := convexities(ctx, budget, report, p.certificates)
 		if err != nil {
 			return err
 		}
@@ -92,7 +74,7 @@ func (p *bandPair) classify(ctx context.Context, budget *proofbound.WorkBudget, 
 			return err
 		}
 		if manifold.Points == nil {
-			report.Reason = p.services.Reason(manifold.Reason)
+			report.Reason = reportvocab.ContactReasonOf(manifold.Reason)
 		}
 	case pair.Overlapping:
 		deep, err := planar.PlanarDeepVertex(p.a, p.b, proofarith.DyAdd(p.deltaA, p.deltaB), budget.Step)
@@ -104,7 +86,7 @@ func (p *bandPair) classify(ctx context.Context, budget *proofbound.WorkBudget, 
 			return p.overlapManifold(ctx, budget, report, result)
 		}
 		report.Reason = reportvocab.ContactNoGapProof
-		convexA, convexB, err := p.convexity(ctx, budget, report)
+		convexA, convexB, err := convexities(ctx, budget, report, p.certificates)
 		if err != nil || !convexA || !convexB {
 			return err
 		}
@@ -164,7 +146,7 @@ func (p *bandPair) liftedBand(budget *proofbound.WorkBudget, report *reportvocab
 
 // liftedWidth is the lifted band b = max(SupportBand, δ) of a displaced pair.
 func (p *bandPair) liftedWidth(req reportvocab.ContactRequest) proofarith.Dyadic {
-	band, delta := p.services.SupportBand(req), proofarith.DyAdd(p.deltaA, p.deltaB)
+	band, delta := SupportBand(req), proofarith.DyAdd(p.deltaA, p.deltaB)
 	if proofarith.DyCmp(band, delta) < 0 {
 		return delta
 	}
@@ -179,7 +161,7 @@ func (p *bandPair) liftedWidth(req reportvocab.ContactRequest) proofarith.Dyadic
 // carries.
 func (p *bandPair) overlapManifold(ctx context.Context, budget *proofbound.WorkBudget, report *reportvocab.ContactReport,
 	result planar.PlanarResult) error {
-	convexA, convexB, err := p.convexity(ctx, budget, report)
+	convexA, convexB, err := convexities(ctx, budget, report, p.certificates)
 	if err != nil {
 		return err
 	}
@@ -194,7 +176,7 @@ func (p *bandPair) overlapManifold(ctx context.Context, budget *proofbound.WorkB
 	}
 	if points == nil {
 		if reason != pair.NoReason {
-			report.Reason = p.services.Reason(reason)
+			report.Reason = reportvocab.ContactReasonOf(reason)
 		}
 		return nil
 	}
@@ -218,16 +200,6 @@ func (p *bandPair) overlapManifold(ctx context.Context, budget *proofbound.WorkB
 	}
 	report.Manifold, report.Reason = manifold, reportvocab.ContactNoReason
 	return nil
-}
-
-func (p *bandPair) convexity(ctx context.Context, budget *proofbound.WorkBudget,
-	report *reportvocab.ContactReport) (bool, bool, error) {
-	convexA, err := p.services.Convexity(ctx, budget, report.A, report.Request)
-	if err != nil {
-		return false, false, err
-	}
-	convexB, err := p.services.Convexity(ctx, budget, report.B, report.Request)
-	return convexA, convexB, err
 }
 
 // publishBand publishes ContactBand with Gap [−2δ, 2δ] and, when points is
@@ -293,11 +265,11 @@ func (p *bandPair) chargedManifold(budget *proofbound.WorkBudget, report *report
 			return nil, reportvocab.ContactNoNormalProof, nil
 		}
 	}
-	features, err := p.services.FeatureMap(report.A, report.B, p.a, p.b)
+	features, err := reportvocab.NewPlanarFeatureMap(report.A, report.B, p.a, p.b)
 	if err != nil {
 		return nil, reportvocab.ContactNoReason, err
 	}
-	manifold, reason := p.services.Patch(report.Request, points, features)
+	manifold, reason := patchManifold(report.Request, points, features)
 	if manifold == nil {
 		return nil, reason, nil
 	}

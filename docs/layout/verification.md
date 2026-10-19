@@ -20,7 +20,7 @@ The rules for rows live in `docs/layout.md`.
 | `clearance_planar.go` | The exact planar pair arm for mitred, faceted and coil bodies: interference §3.2. |
 | `contact_pair.go` | Pair gates, public contact report types, their conversion from the `internal/reportvocab` report, and the bit-exact pair report memo key and cap. See contact-geometry §6. |
 | `contact_box.go` | Source-box admission and public face/measurement mapping. See contact-geometry §4. |
-| `contact_faceted_pair.go` | Planar admission, snapshots and convexity cache; dispatch to `internal/planarband/`; planar manifold faces and witnesses. See multibody §9–§10. |
+| `contact_faceted_pair.go` | Planar admission, snapshots and convexity cache; publication through `internal/planarband/`. See multibody §9–§10. |
 | `contact_faceted_floor.go` | Exact faceted support-face proof, bounded strict separation, and faceted floor sweeps by exact support face or swept-box clearance. See contact-geometry §4 and contact-sweep. |
 | `contact_oriented_box.go` | Source face identity and report adapters over `internal/pair/box/` geometry, and publication of oblique box patches. See contact-geometry §4. |
 | `contact_clipped_patch.go` | Publishes horizontal box patches from exact polygon clips. See contact geometry §4. |
