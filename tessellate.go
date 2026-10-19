@@ -281,13 +281,6 @@ func (c *tessellationCount) note(b *Body) {
 	c.built[b]++
 }
 
-// of returns how many tessellations of b were built.
-func (c *tessellationCount) of(b *Body) int {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.built[b]
-}
-
 // tessellateContext is the read-only evaluator's cancellable tessellation
 // entry. It builds only an unowned Mesh and never touches document state.
 //
@@ -657,8 +650,4 @@ func tessellateFaceted(ctx context.Context, b *Body, fp facetedPayload, chord fl
 
 func requireLoopClearance(ctx context.Context, pts []planePoint, loopIdx [][]int, loopSag []float64) error {
 	return tessellation.RequireLoopClearance(ctx, point2ToRecordSlice(pts), loopIdx, loopSag)
-}
-
-func requireWalkClearance(ctx context.Context, pts []planePoint, loopIdx [][]int, sag [][]float64) error {
-	return tessellation.RequireWalkClearance(ctx, point2ToRecordSlice(pts), loopIdx, sag)
 }

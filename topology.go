@@ -3,7 +3,6 @@ package decad
 import (
 	"fmt"
 
-	"github.com/lestrrat-3d/decad/internal/patchchain"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -17,16 +16,6 @@ import (
 // public surface. Identity is the pointer, scoped to one body — never an
 // index. A Body is immutable after construction, so it is safe to read from
 // many goroutines (core §12).
-
-// The stable role name only the root mints (evaluator §3); the roles every
-// analytic evaluator mints live in internal/provenance.
-const (
-	// rolePatch is a Patch face's own Origin() role (docs/surface-design.md
-	// §5.1). It stays internal this increment: a one-face body is already
-	// selected by Faces(Planar()), and no public FeatureRef helper names it
-	// yet — Stitch is what decides the right shape for one.
-	rolePatch = patchchain.RolePatch
-)
 
 // FeatureRef identifies the stable role that created a body, face, or edge.
 // The producing operation is tracked privately so callers cannot forge or

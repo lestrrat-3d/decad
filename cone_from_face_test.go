@@ -370,7 +370,7 @@ func TestConeFromFaceCancelledDuringConstruction(t *testing.T) {
 		sel := coneFromFaceSelector(t, blank, section[3], section[2])
 		doc := documentHandle(blank.n.Doc)
 		before, producer := doc.Bodies(), doc.nextProducerID()
-		ctx := &cancelAfterContext{Context: t.Context(), cancelAt: cancelAt}
+		ctx := newCancelAfterContext(t.Context(), cancelAt)
 		_, err := ConeFromFace(ctx, blank, sel, units.Millimeters(-5))
 		if err == nil {
 			require.Greater(t, cancelAt, 3, "the build polls the context after the entry check")

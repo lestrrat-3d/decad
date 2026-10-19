@@ -50,7 +50,7 @@ func TestFloatRatMatchesSetFloat64(t *testing.T) {
 		// A dyadic no float holds, with a mantissa wider than 53 bits, reads
 		// back as the test's own independent composition of it.
 		wide := proof.DyAdd(proof.DyMul(d, d), proof.DyShift(proof.MustDyOf(1), -1080))
-		wr, ww := wide.Rat(), ratOfDyadic(t, wide)
+		wr, ww := wide.Rat(), independentDyadicRat(wide)
 		require.Equal(t, ww.Num().String(), wr.Num().String(), "widened numerator %v", f)
 		require.Equal(t, ww.Denom().String(), wr.Denom().String(), "widened denominator %v", f)
 

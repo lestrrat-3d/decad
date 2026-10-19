@@ -106,7 +106,7 @@ func TestSweepPairRealFacetedUnionClearAndImpact(t *testing.T) {
 	require.Equal(t, ContactSeparated, impact.Samples[0].Ideal.Relation)
 	require.Equal(t, ContactTouching, impact.Event.Relation)
 	require.Len(t, impact.Event.Manifold.Points, 4)
-	proof, ok, err := sourceFacetedAxisSupport(t.Context(), union, r3.Identity(), 2, 0)
+	proof, ok, err := sourceFacetedAxisSupport(t.Context(), union, r3.Identity())
 	require.NoError(t, err)
 	require.True(t, ok)
 	for _, point := range impact.Event.Manifold.Points {

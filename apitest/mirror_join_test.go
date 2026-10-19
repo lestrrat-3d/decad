@@ -395,3 +395,24 @@ func joinBulgeBody(t *testing.T, sc *mirrorScene) *decad.Body {
 	require.NoError(t, err)
 	return body
 }
+
+func TestMirrorJoinChargesPublicVolumeBound(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0.1, 0, 5, 4)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	doc := decad.New()
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], mirrorAlong(3))
+	require.NoError(t, err)
+	joined, err := decad.Mirrored(t.Context(), body, decad.MirrorFace{
+		Body: body, Face: decad.Faces(decad.Planar(), decad.Facing(joinMinusX)),
+	}, decad.WithJoin())
+	require.NoError(t, err)
+	volume, err := joined.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(volume.Value.Base()-117.6), volume.Bound.Base())
+}

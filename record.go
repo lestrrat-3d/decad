@@ -38,15 +38,6 @@ type Point2 struct {
 	V float64 `json:"v"`
 }
 
-func point2FromRecordSlice(points []sectionrecord.Point2) []planePoint {
-	if points == nil {
-		return nil
-	}
-	out := make([]planePoint, len(points))
-	copy(out, points)
-	return out
-}
-
 func point2ToRecordSlice(points []planePoint) []sectionrecord.Point2 {
 	if points == nil {
 		return nil
@@ -216,7 +207,6 @@ type (
 	pointConeLimit               = facetedrecord.PointConeLimit
 	pointConeTrimRecord          = facetedrecord.PointConeTrimRecord
 	pointPlaneLimit              = facetedrecord.PointPlaneLimit
-	pointPlaneSimilarityRecord   = facetedrecord.PointPlaneSimilarityRecord
 	pointPlaneSliceRecord        = facetedrecord.PointPlaneSliceRecord
 	pointSectionRecord           = facetedrecord.PointSectionRecord
 	pointSectionSource           = facetedrecord.PointSectionSource

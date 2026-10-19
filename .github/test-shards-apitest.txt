@@ -2125,3 +2125,15 @@
 10	0.00	TestFacetedUnionKeepsUntouchedVertexAndFaceBounds
 10	0.00	TestFacetedPlacementKeepsNearOriginVertexBoundTight
 10	0.00	TestSweepMitredClusteredBranchUnionPlaced
+10	0.00	TestClassBRootedPinBooleanVolumes
+10	0.00	TestCoilFullTurnArcPublishesClosedRims
+10	0.00	TestCoilPublicArcRimFollowsWalkSense
+10	0.00	TestCoilPublicRimsBoundTheirRenderedGeometry
+10	0.00	TestCoilPublishesSpringGeometry
+10	0.00	TestCoilThreadCutAndCoreUnionPreserveVolume
+10	0.00	TestMassPropertiesRevolvedSphere
+10	0.00	TestMirrorJoinChargesPublicVolumeBound
+10	0.00	TestPrismUnionSharedWallMirroredL
+10	0.00	TestTiltedPrismPublishesBoundedVolume
+10	0.00	TestVerifyCoilClearanceAgainstPrism
+10	0.00	TestVerifyCoilClearanceAgainstUnsupportedRevolveIsSuspect

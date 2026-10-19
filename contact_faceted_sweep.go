@@ -23,7 +23,7 @@ func (d *Document) sweepFacetedFloor(ctx context.Context, a, b *Body,
 	if facetedFirst {
 		faceted, pose, facetedDelta, floorDelta = a, pa.From, pa.Delta, pb.Delta
 	}
-	support, ok, err := sourceFacetedAxisSupport(ctx, faceted, pose, 2, 0)
+	support, ok, err := sourceFacetedAxisSupport(ctx, faceted, pose)
 	if err != nil {
 		return nil, err
 	}

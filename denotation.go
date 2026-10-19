@@ -7,6 +7,4 @@ import (
 // The document node owns the counters and mints through them
 // (internal/topo Document.MintLevel, MintCurve); internal/denotation owns the
 // certificates.
-type levelID = denotation.LevelID
 type levelToken = denotation.LevelToken
-type curveToken = denotation.CurveToken

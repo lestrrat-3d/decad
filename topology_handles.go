@@ -202,14 +202,6 @@ func loopHandle(n *topo.Loop) *Loop {
 	return n.Owner.(*Loop) //nolint:forcetypeassert // every loop node is born in its handle; a bare one must fail loudly
 }
 
-// loopNode returns l's node, or nil for a nil l.
-func loopNode(l *Loop) *topo.Loop {
-	if l == nil {
-		return nil
-	}
-	return &l.n
-}
-
 // loopHandles returns the handles of ns in order, or nil for an empty ns,
 // as append([]*Loop(nil), ...) of the same loops would.
 func loopHandles(ns []*topo.Loop) []*Loop {
@@ -288,14 +280,6 @@ func lumpHandle(n *topo.Lump) *Lump {
 		return nil
 	}
 	return n.Owner.(*Lump) //nolint:forcetypeassert // every lump node is born in its handle; a bare one must fail loudly
-}
-
-// lumpNode returns l's node, or nil for a nil l.
-func lumpNode(l *Lump) *topo.Lump {
-	if l == nil {
-		return nil
-	}
-	return &l.n
 }
 
 // lumpHandles returns the handles of ns in order, or nil for an empty ns,

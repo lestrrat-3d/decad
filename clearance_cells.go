@@ -3,7 +3,6 @@ package decad
 import (
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/clearance/facepair"
-	"github.com/lestrrat-3d/decad/internal/clearance/spine"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
@@ -87,15 +86,4 @@ func (k *pairKernel) captureFaceCells(cells *facepair.Kernel) {
 		k.err = err
 	}
 	k.clearanceRefused = k.clearanceRefused || cells.Refused()
-}
-
-func (k *pairKernel) spineEngine() *spine.Engine {
-	return &spine.Engine{Context: k.ctx, Tolerance: k.tol, Slack: k.slack}
-}
-
-func (k *pairKernel) captureSpine(e *spine.Engine) {
-	if e.Err != nil {
-		k.err = e.Err
-	}
-	k.clearanceRefused = k.clearanceRefused || e.Refused
 }

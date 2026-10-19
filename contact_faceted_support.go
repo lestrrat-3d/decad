@@ -44,7 +44,7 @@ func certifyFacetedUnionLowerSupport(ctx context.Context, result, a, b *Body) er
 				FootLo: [2]proofarith.Dyadic{box.lo[0], box.lo[1]},
 				FootHi: [2]proofarith.Dyadic{box.hi[0], box.hi[1]}}
 			result.n.Payload = pp
-			_, proven, err := sourceFacetedAxisSupport(ctx, result, r3.Identity(), 2, 0)
+			_, proven, err := sourceFacetedAxisSupport(ctx, result, r3.Identity())
 			if err != nil {
 				return err
 			}
@@ -150,9 +150,12 @@ type facetedAxisSupport struct {
 // source mesh, after checking that the rebuilt mesh stays within its bound.
 // A positive-bound Union can also use its exact source-box lower face when
 // its other operand is certified strictly above that face.
-func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
-	axis, side int) (facetedAxisSupport, bool, error) {
-	if b == nil || axis < 0 || axis > 2 || (side != 0 && side != 1) ||
+func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform) (facetedAxisSupport, bool, error) {
+	const (
+		axis = 2
+		side = 0
+	)
+	if b == nil ||
 		!b.n.Solid || b.n.Kind != topo.BodySolid || !pairbox.SignedAxisTransform(pose) {
 		return facetedAxisSupport{}, false, nil
 	}
@@ -190,7 +193,7 @@ func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
 func classifyFacetedFloorBox(ctx context.Context, report *reportvocab.ContactReport, faceted *Body,
 	pose r3.Transform, floor sourceBoxContactProof, facetedIsA bool) error {
 	report.Reason = reportvocab.ContactPayloadUnsupported
-	support, ok, err := sourceFacetedAxisSupport(ctx, faceted, pose, 2, 0)
+	support, ok, err := sourceFacetedAxisSupport(ctx, faceted, pose)
 	if err != nil {
 		return err
 	}

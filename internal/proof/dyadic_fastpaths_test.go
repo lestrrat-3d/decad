@@ -118,6 +118,13 @@ func independentDyadicRat(d proof.Dyadic) *big.Rat {
 	return out.Quo(out, new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), uint(-d.Exp()))))
 }
 
+func abs(v int) int {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
+
 // boundaryBitLens are mantissa widths on both sides of every 64-bit word
 // boundary up to and past the inline width (proof.InlineBits), where a carry,
 // a product word or an aligning shift moves a value between the inline words

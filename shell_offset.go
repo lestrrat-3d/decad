@@ -9,9 +9,6 @@ import (
 // shellTol; the construction, its S11a/S11 refusals and the §5 audit live in
 // internal/offset2d/profile_offset.go.
 
-// cornerJoin is the shared section offset join read by the root builders.
-type cornerJoin = offset2d.Join
-
 // offsetProfile binds offset2d.OffsetProfile to shellTol.
 func offsetProfile(budget *proofbound.WorkBudget, profile profileRecord, s, t float64) (profileRecord, error) {
 	return offset2d.OffsetProfile(budget, profile, s, t, shellTol)

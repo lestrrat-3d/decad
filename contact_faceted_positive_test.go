@@ -86,7 +86,7 @@ func TestPositiveBoundFacetedUnionRefusesToolBelowLowerFace(t *testing.T) {
 	pp := union.n.Payload.(facetedPayload)
 	require.Positive(t, pp.MeshBound)
 	require.Nil(t, pp.LowerSupport)
-	_, proven, err := sourceFacetedAxisSupport(t.Context(), union, r3.Identity(), 2, 0)
+	_, proven, err := sourceFacetedAxisSupport(t.Context(), union, r3.Identity())
 	require.NoError(t, err)
 	require.False(t, proven)
 }
