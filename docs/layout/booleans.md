@@ -26,8 +26,8 @@ The rules for rows live in `docs/layout.md`.
 | `joined_mesh.go` | Checks a joined mesh's closed, connected orientation before geometric audits; `facetedrecord.JoinedMesh` collects its facets. See tessellation §4. |
 | `loft_cut.go` | Preserves a matching axial loft through a certified coaxial circle-bore Cut. See loft §18. |
 | `loft_mirror_union.go` | Joins one authenticated axial Loft to its end-cap reflection. See loft-mirror-boolean design. |
-| `loft_mirror_cylinder_union.go` | Joins repeated reflected Loft pairs to a centered cylinder, including one-pass Union and bounded axial placement. See loft-mirror-boolean design. |
-| `loft_mirror_cylinder_bore.go` | Cuts a centered through-bore from a reflected Loft/cylinder join. See loft-mirror-boolean design. |
+| `loft_mirror_cylinder_union.go` | Authenticates repeated reflected Loft pairs, places the lower teeth, audits the exact blank, and publishes their joined shell. `internal/loftcylinder` assembles the mirrored halves. See loft-mirror-boolean design. |
+| `loft_mirror_cylinder_bore.go` | Authenticates a through-bore Cut, audits both exact blank annuli, and publishes the bored shell. `internal/loftcylinder` assembles the mirrored halves. See loft-mirror-boolean design. |
 | `loft_mirror_cylinder_chamfer.go` | Rewrites both exterior cap loops through one audited bored half and a reflected seam. See loft-mirror-boolean design. |
 | `loft_mirror_cylinder_chamfer_bridge.go` | Certifies translated upper source teeth and the reflected cap band. See loft-mirror-boolean design. |
 | `loft_cylinder_union.go` | Joins a source Loft tooth pattern to a coaxial cylinder with certified seam and volume bounds. See loft-cylinder-boolean design. |
