@@ -1511,6 +1511,10 @@
 10	0.00	TestLoftQuarterWallOrderRealSketchPair
 10	0.00	TestQuarterSourceHeldY1RealProducerGate
 10	0.00	TestQuarterSourceHeldY3RealProducerGate
+10	0.00	TestQuarterSourceHeldPairRealProducerGate
+10	0.00	TestQuarterSourceHeldPairReverseOrder
+10	0.00	TestQuarterSourceHeldPairRefusals
+10	0.00	TestQuarterSourceHeldPairWrongSource
 10	0.00	TestQuarterSourceHeldY3ReverseOrder
 10	0.00	TestQuarterSourceHeldY3Refusals
 10	0.00	TestQuarterSourceHeldY3WrongRealRadius
