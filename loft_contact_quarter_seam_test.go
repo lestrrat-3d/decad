@@ -11,6 +11,11 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
+const (
+	quarterSeamSourceStage = "source"
+	quarterSeamOutputStage = "output"
+)
+
 func quarterSeamRealPair(t *testing.T, radii [2]float64) (*Body, *Body) {
 	t.Helper()
 	ctx := t.Context()
@@ -137,20 +142,20 @@ func TestQuarterSourceHeldY3Refusals(t *testing.T) {
 		name, stage string
 		limit       uint64
 	}{
-		{name: "source", stage: "source", limit: 3000},
-		{name: "output", stage: "output", limit: 6000},
+		{name: quarterSeamSourceStage, stage: quarterSeamSourceStage, limit: 3000},
+		{name: quarterSeamOutputStage, stage: quarterSeamOutputStage, limit: 6000},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var sourceVisits, outputVisits uint64
 			source := &proofbound.WorkBudget{StepFn: func() error {
-				if tc.stage == "source" && sourceVisits >= tc.limit {
+				if tc.stage == quarterSeamSourceStage && sourceVisits >= tc.limit {
 					return limitErr
 				}
 				sourceVisits++
 				return nil
 			}, ErrFn: func() error { return nil }}
 			output := &proofbound.WorkBudget{StepFn: func() error {
-				if tc.stage == "output" && outputVisits >= tc.limit {
+				if tc.stage == quarterSeamOutputStage && outputVisits >= tc.limit {
 					return limitErr
 				}
 				outputVisits++
@@ -160,7 +165,7 @@ func TestQuarterSourceHeldY3Refusals(t *testing.T) {
 			if accepted || !errors.Is(err, limitErr) || got.Bound != nil || got.Pieces != 0 {
 				t.Fatalf("limited %s: accepted=%t err=%v pieces=%d", tc.name, accepted, err, got.Pieces)
 			}
-			if tc.stage == "source" && outputVisits != 0 {
+			if tc.stage == quarterSeamSourceStage && outputVisits != 0 {
 				t.Fatalf("output started after source refusal: visits=%d", outputVisits)
 			}
 		})
@@ -232,8 +237,8 @@ func TestQuarterSourceHeldY1Refusals(t *testing.T) {
 		sourceLimit uint64
 		outputLimit uint64
 	}{
-		{name: "source", sourceLimit: 3000, outputLimit: 65_536},
-		{name: "output", sourceLimit: 4096, outputLimit: 6000},
+		{name: quarterSeamSourceStage, sourceLimit: 3000, outputLimit: 65_536},
+		{name: quarterSeamOutputStage, sourceLimit: 4096, outputLimit: 6000},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var sourceVisits, outputVisits uint64
@@ -256,7 +261,7 @@ func TestQuarterSourceHeldY1Refusals(t *testing.T) {
 				t.Fatalf("limited %s: accepted=%t reason=%s err=%v pieces=%d",
 					tc.name, accepted, got.Reason, err, got.Pieces)
 			}
-			if tc.name == "source" && outputVisits != 0 {
+			if tc.name == quarterSeamSourceStage && outputVisits != 0 {
 				t.Fatalf("output started after source refusal: visits=%d", outputVisits)
 			}
 		})
