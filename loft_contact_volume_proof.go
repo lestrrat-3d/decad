@@ -214,7 +214,7 @@ const loftVolumeSourceMaxRatBits = 8192
 // that shell has neither an omitted nor a doubled or internal patch.
 func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget,
 	pp prismPayload, lp loftPayload, source loftSourcePartition, shell loftOutputShell) (bool, error) {
-	arithmetic := &loftVolumeArithmetic{ok: true}
+	arithmetic := &loftcontact.Arithmetic{OK: true}
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
@@ -413,9 +413,9 @@ func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget
 			if err := budget.Step(); err != nil {
 				return false, err
 			}
-			a, b := arithmetic.partitionSide(line, bottom[j].Start),
-				arithmetic.partitionSide(line, top[j].Start)
-			if !arithmetic.ok || a.Sign() <= 0 || b.Sign() <= 0 ||
+			a, b := arithmetic.LineSide(line, bottom[j].Start),
+				arithmetic.LineSide(line, top[j].Start)
+			if !arithmetic.OK || a.Sign() <= 0 || b.Sign() <= 0 ||
 				!loftVolumeSourceRatOK(a) || !loftVolumeSourceRatOK(b) {
 				return false, nil
 			}
@@ -457,20 +457,20 @@ func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget
 			return false, err
 		}
 		valid, err := loftOutputCap(ctx, budget, pp, prismLines, bottom, top, source, &want, capIndex, arithmetic)
-		if err != nil || !valid || !arithmetic.ok {
+		if err != nil || !valid || !arithmetic.OK {
 			return false, err
 		}
 	}
 	valid, err := loftOutputSides(budget, pp, prismLines, bottom, top, source, &want, arithmetic)
-	if err != nil || !valid || !arithmetic.ok {
+	if err != nil || !valid || !arithmetic.OK {
 		return false, err
 	}
 	valid, err = loftOutputAuditSource(budget, want, source, arithmetic)
-	if err != nil || !valid || !arithmetic.ok {
+	if err != nil || !valid || !arithmetic.OK {
 		return false, err
 	}
 	valid, err = loftOutputAuditSource(budget, shell, source, arithmetic)
-	if err != nil || !valid || !arithmetic.ok {
+	if err != nil || !valid || !arithmetic.OK {
 		return false, err
 	}
 	if len(want.vertices) != len(shell.vertices) || len(want.triangles) != len(shell.triangles) {
@@ -515,7 +515,7 @@ func loftVolumeSourceEquality(ctx context.Context, budget *proofbound.WorkBudget
 	if err := budget.Err(); err != nil {
 		return false, err
 	}
-	return arithmetic.ok, nil
+	return arithmetic.OK, nil
 }
 
 func loftVolumeSourceRatOK(x *big.Rat) bool {

@@ -183,12 +183,12 @@ func TestLoftContactPartitionCapMapRefusesAmbiguousFragments(t *testing.T) {
 			if !exists || origin.operand != 1 || !edge.Partial {
 				continue
 			}
-			p, valid := loftPartitionPointOf(sectionrecord.Point2{
+			p, valid := loftcontact.PointOf(sectionrecord.Point2{
 				U: edge.Polyline[0][0], V: edge.Polyline[0][1]})
 			if !valid {
 				continue
 			}
-			q, valid := loftPartitionPointOf(sectionrecord.Point2{
+			q, valid := loftcontact.PointOf(sectionrecord.Point2{
 				U: edge.Polyline[1][0], V: edge.Polyline[1][1]})
 			if !valid {
 				continue

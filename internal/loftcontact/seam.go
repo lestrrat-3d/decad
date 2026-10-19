@@ -11,7 +11,8 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 )
 
-type point struct{ u, v *big.Rat }
+// Point is an exact rational point in a section plane.
+type Point struct{ U, V *big.Rat }
 type linear [2]*big.Rat
 type quadratic [3]*big.Rat
 
@@ -105,17 +106,17 @@ func (s LineSeam) At(t *big.Rat) (*big.Rat, *big.Rat, bool) {
 	return line, carrier, true
 }
 
-func lift(p sectionrecord.Point2) (point, bool) {
+func lift(p sectionrecord.Point2) (Point, bool) {
 	u, v := proofarith.FloatRat(p.U), proofarith.FloatRat(p.V)
-	return point{u, v}, u != nil && v != nil
+	return Point{u, v}, u != nil && v != nil
 }
 
-func sub(a, b point) point {
-	return point{new(big.Rat).Sub(a.u, b.u), new(big.Rat).Sub(a.v, b.v)}
+func sub(a, b Point) Point {
+	return Point{new(big.Rat).Sub(a.U, b.U), new(big.Rat).Sub(a.V, b.V)}
 }
 
-func cross(a, b point) *big.Rat {
-	return new(big.Rat).Sub(new(big.Rat).Mul(a.u, b.v), new(big.Rat).Mul(a.v, b.u))
+func cross(a, b Point) *big.Rat {
+	return new(big.Rat).Sub(new(big.Rat).Mul(a.U, b.V), new(big.Rat).Mul(a.V, b.U))
 }
 
 func add(a, b *big.Rat) *big.Rat { return new(big.Rat).Add(a, b) }

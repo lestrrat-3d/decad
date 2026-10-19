@@ -32,8 +32,6 @@ type loftSourcePartition struct {
 	sourceVisits uint64
 }
 
-type loftPartitionPoint struct{ u, v *big.Rat }
-
 type loftPartitionSpan struct{ lo, hi *big.Rat }
 
 // Each reconstructed entity gets exactly one source, direction, and cap level.
@@ -75,18 +73,18 @@ type loftPartitionPreparedCap struct {
 // one strictly transverse, single-carrier source partition. The result cannot
 // be used as a Union body without a separate output closure and two-way bound.
 func certifyLoftSourcePartition(ctx context.Context, first, second *Body,
-	operation *proofbound.WorkBudget, checked ...*loftVolumeArithmetic) (loftSourcePartition, bool, error) {
+	operation *proofbound.WorkBudget, checked ...*loftcontact.Arithmetic) (loftSourcePartition, bool, error) {
 	return certifyLoftSourcePartitionMode(ctx, first, second, operation, false, checked...)
 }
 
 func certifyLoftSourcePartitionForDirectShell(ctx context.Context, first, second *Body,
-	operation *proofbound.WorkBudget, checked ...*loftVolumeArithmetic) (loftSourcePartition, bool, error) {
+	operation *proofbound.WorkBudget, checked ...*loftcontact.Arithmetic) (loftSourcePartition, bool, error) {
 	return certifyLoftSourcePartitionMode(ctx, first, second, operation, true, checked...)
 }
 
 func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 	operation *proofbound.WorkBudget, reportSeamSize bool,
-	checked ...*loftVolumeArithmetic) (loftSourcePartition, bool, error) {
+	checked ...*loftcontact.Arithmetic) (loftSourcePartition, bool, error) {
 	var no loftSourcePartition
 	var sourceSteps uint64
 	arithmetic := loftReplayArithmetic(checked)
@@ -157,8 +155,8 @@ func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 		prismplacement.Operand{Frame: pp.Frame, Xform: pp.Xform},
 		prismplacement.Operand{Frame: lp.Frame1, Xform: lp.Xform})
 	prismTop := proofarith.FloatRat(pp.Z1)
-	if !axis.OK || !arithmetic.valid(axis.Shift) || !arithmetic.valid(prismTop) ||
-		axis.Shift.Sign() <= 0 || arithmetic.cmp(axis.Shift, prismTop) >= 0 || !arithmetic.ok {
+	if !axis.OK || !arithmetic.Valid(axis.Shift) || !arithmetic.Valid(prismTop) ||
+		axis.Shift.Sign() <= 0 || arithmetic.Cmp(axis.Shift, prismTop) >= 0 || !arithmetic.OK {
 		return no, false, nil
 	}
 	prismLines, ok, err := loftPartitionLines(budget, pp.Profile.Outer)
@@ -215,9 +213,9 @@ func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 			if err := budget.Step(); err != nil {
 				return no, false, err
 			}
-			a := arithmetic.partitionSide(line, bottom[j].Start)
-			b := arithmetic.partitionSide(line, top[j].Start)
-			if !arithmetic.ok || a.Sign() == 0 || b.Sign() != a.Sign() {
+			a := arithmetic.LineSide(line, bottom[j].Start)
+			b := arithmetic.LineSide(line, top[j].Start)
+			if !arithmetic.OK || a.Sign() == 0 || b.Sign() != a.Sign() {
 				return no, false, nil
 			}
 			if a.Sign() < 0 {
@@ -291,17 +289,17 @@ func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 					return no, false, err
 				}
 				lineParam, carrierParam, ok := seams[k].At(height)
-				if !ok || !arithmetic.valid(lineParam) || !arithmetic.valid(carrierParam) {
+				if !ok || !arithmetic.Valid(lineParam) || !arithmetic.Valid(carrierParam) {
 					return no, false, nil
 				}
-				cut := arithmetic.partitionLinePoint(loftLines[i], lineParam)
-				carrierCut := arithmetic.partitionLinePoint(prismLines[carrier], carrierParam)
-				if !arithmetic.partitionSamePoint(cut, carrierCut) || !arithmetic.ok {
+				cut := arithmetic.LinePoint(loftLines[i], lineParam)
+				carrierCut := arithmetic.LinePoint(prismLines[carrier], carrierParam)
+				if !arithmetic.SamePoint(cut, carrierCut) || !arithmetic.OK {
 					return no, false, nil
 				}
-				_, exactX := arithmetic.float64(cut.u)
-				_, exactY := arithmetic.float64(cut.v)
-				if !exactX || !exactY || !arithmetic.ok {
+				_, exactX := arithmetic.Float64(cut.U)
+				_, exactY := arithmetic.Float64(cut.V)
+				if !exactX || !exactY || !arithmetic.OK {
 					return no, false, nil
 				}
 			}
@@ -368,7 +366,7 @@ func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 		if err != nil || !admitted {
 			return no, false, err
 		}
-		if !arithmetic.valid(capProof.level) || arithmetic.cmp(capProof.level, level) != 0 || !arithmetic.ok {
+		if !arithmetic.Valid(capProof.level) || arithmetic.Cmp(capProof.level, level) != 0 || !arithmetic.OK {
 			return no, false, nil
 		}
 		result.junction[capIndex], result.capOwners[capIndex] = capProof.junction, capProof.owners
@@ -388,8 +386,8 @@ func certifyLoftSourcePartitionMode(ctx context.Context, first, second *Body,
 		result.topWallJoins++
 	}
 	if result.topWallJoins != len(prismLines) ||
-		arithmetic.cmp(result.capLevels[0], result.capLevels[1]) >= 0 ||
-		arithmetic.cmp(result.capLevels[1], result.capLevels[2]) >= 0 || !arithmetic.ok {
+		arithmetic.Cmp(result.capLevels[0], result.capLevels[1]) >= 0 ||
+		arithmetic.Cmp(result.capLevels[1], result.capLevels[2]) >= 0 || !arithmetic.OK {
 		return no, false, nil
 	}
 	if err := budget.Err(); err != nil {
@@ -430,86 +428,8 @@ func loftPartitionLines(budget *proofbound.WorkBudget, loop sectionrecord.LoopRe
 	return lines, true, nil
 }
 
-func loftPartitionPointOf(p sectionrecord.Point2) (loftPartitionPoint, bool) {
-	u, v := proofarith.FloatRat(p.U), proofarith.FloatRat(p.V)
-	arithmetic := &loftVolumeArithmetic{ok: true}
-	return loftPartitionPoint{u, v}, arithmetic.valid(u) && arithmetic.valid(v)
-}
-
-// The output replay keeps one arithmetic state through nested geometry checks.
-// A failed operation must not be mistaken for an ordinary geometric miss.
-func (c *loftVolumeArithmetic) partitionCross(a, b, p loftPartitionPoint) *big.Rat {
-	abu, abv := c.sub(b.u, a.u), c.sub(b.v, a.v)
-	apu, apv := c.sub(p.u, a.u), c.sub(p.v, a.v)
-	return c.sub(c.mul(abu, apv), c.mul(abv, apu))
-}
-
-func (c *loftVolumeArithmetic) partitionSamePoint(a, b loftPartitionPoint) bool {
-	same := c.cmp(a.u, b.u) == 0 && c.cmp(a.v, b.v) == 0
-	return c.ok && same
-}
-
-func (c *loftVolumeArithmetic) partitionLinePoint(line sectionrecord.LineSeg, t *big.Rat) loftPartitionPoint {
-	a, okA := loftPartitionPointOf(line.Start)
-	b, okB := loftPartitionPointOf(line.End)
-	if !okA || !okB || !c.valid(t) {
-		c.ok = false
-		return loftPartitionPoint{}
-	}
-	return c.partitionInterpolate(a, b, t)
-}
-
-func (c *loftVolumeArithmetic) partitionInterpolate(a, b loftPartitionPoint, t *big.Rat) loftPartitionPoint {
-	return loftPartitionPoint{
-		u: c.add(a.u, c.mul(t, c.sub(b.u, a.u))),
-		v: c.add(a.v, c.mul(t, c.sub(b.v, a.v))),
-	}
-}
-
-func (c *loftVolumeArithmetic) partitionSide(line sectionrecord.LineSeg, p sectionrecord.Point2) *big.Rat {
-	a, okA := loftPartitionPointOf(line.Start)
-	b, okB := loftPartitionPointOf(line.End)
-	point, okP := loftPartitionPointOf(p)
-	if !okA || !okB || !okP {
-		c.ok = false
-		return new(big.Rat)
-	}
-	return c.partitionCross(a, b, point)
-}
-
-func (c *loftVolumeArithmetic) partitionParameter(line sectionrecord.LineSeg, p loftPartitionPoint) (*big.Rat, bool) {
-	a, okA := loftPartitionPointOf(line.Start)
-	b, okB := loftPartitionPointOf(line.End)
-	if !okA || !okB {
-		c.ok = false
-		return nil, false
-	}
-	du, dv := c.sub(b.u, a.u), c.sub(b.v, a.v)
-	var t *big.Rat
-	if du.Sign() != 0 {
-		t = c.quo(c.sub(p.u, a.u), du)
-	} else if dv.Sign() != 0 {
-		t = c.quo(c.sub(p.v, a.v), dv)
-	} else {
-		return nil, false
-	}
-	if c.cmp(t, loftOutputRat(0)) < 0 || c.cmp(t, loftOutputRat(1)) > 0 {
-		return nil, false
-	}
-	q := c.partitionLinePoint(line, t)
-	return t, c.partitionSamePoint(p, q)
-}
-
-func loftPartitionCross(a, b, c loftPartitionPoint) *big.Rat {
-	abu := new(big.Rat).Sub(b.u, a.u)
-	abv := new(big.Rat).Sub(b.v, a.v)
-	acu := new(big.Rat).Sub(c.u, a.u)
-	acv := new(big.Rat).Sub(c.v, a.v)
-	return new(big.Rat).Sub(new(big.Rat).Mul(abu, acv), new(big.Rat).Mul(abv, acu))
-}
-
 func loftPartitionConvexPrism(budget *proofbound.WorkBudget, lines []sectionrecord.LineSeg,
-	checked ...*loftVolumeArithmetic) (bool, error) {
+	checked ...*loftcontact.Arithmetic) (bool, error) {
 	arithmetic := loftReplayArithmetic(checked)
 	for i, line := range lines {
 		if err := budget.Step(); err != nil {
@@ -525,8 +445,8 @@ func loftPartitionConvexPrism(budget *proofbound.WorkBudget, lines []sectionreco
 			if err := budget.Step(); err != nil {
 				return false, err
 			}
-			side := arithmetic.partitionSide(line, lines[j].Start)
-			if !arithmetic.ok || side.Sign() <= 0 {
+			side := arithmetic.LineSide(line, lines[j].Start)
+			if !arithmetic.OK || side.Sign() <= 0 {
 				return false, nil
 			}
 		}
@@ -534,18 +454,18 @@ func loftPartitionConvexPrism(budget *proofbound.WorkBudget, lines []sectionreco
 	return true, nil
 }
 
-func loftPartitionSamePoint(a, b loftPartitionPoint) bool {
-	arithmetic := &loftVolumeArithmetic{ok: true}
-	return arithmetic.partitionSamePoint(a, b)
+func loftPartitionSamePoint(a, b loftcontact.Point) bool {
+	arithmetic := &loftcontact.Arithmetic{OK: true}
+	return arithmetic.SamePoint(a, b)
 }
 
-func loftPartitionParameter(line sectionrecord.LineSeg, p loftPartitionPoint) (*big.Rat, bool) {
-	arithmetic := &loftVolumeArithmetic{ok: true}
-	return arithmetic.partitionParameter(line, p)
+func loftPartitionParameter(line sectionrecord.LineSeg, p loftcontact.Point) (*big.Rat, bool) {
+	arithmetic := &loftcontact.Arithmetic{OK: true}
+	return arithmetic.LineParameter(line, p)
 }
 
 func loftPartitionSpanEqual(budget *proofbound.WorkBudget, got, want []loftPartitionSpan,
-	checked ...*loftVolumeArithmetic) (bool, error) {
+	checked ...*loftcontact.Arithmetic) (bool, error) {
 	arithmetic := loftReplayArithmetic(checked)
 	if len(got) != len(want) {
 		return false, nil
@@ -556,8 +476,8 @@ func loftPartitionSpanEqual(budget *proofbound.WorkBudget, got, want []loftParti
 				if err := budget.Step(); err != nil {
 					return false, err
 				}
-				cmp := arithmetic.cmp(spans[j-1].lo, spans[j].lo)
-				if !arithmetic.ok {
+				cmp := arithmetic.Cmp(spans[j-1].lo, spans[j].lo)
+				if !arithmetic.OK {
 					return false, nil
 				}
 				if cmp <= 0 {
@@ -571,8 +491,8 @@ func loftPartitionSpanEqual(budget *proofbound.WorkBudget, got, want []loftParti
 		if err := budget.Step(); err != nil {
 			return false, err
 		}
-		if arithmetic.cmp(got[i].lo, want[i].lo) != 0 ||
-			arithmetic.cmp(got[i].hi, want[i].hi) != 0 || !arithmetic.ok {
+		if arithmetic.Cmp(got[i].lo, want[i].lo) != 0 ||
+			arithmetic.Cmp(got[i].hi, want[i].hi) != 0 || !arithmetic.OK {
 			return false, nil
 		}
 	}
@@ -634,18 +554,18 @@ func loftPartitionSceneOrigins(budget *proofbound.WorkBudget, scene *sketch.Sket
 	return mapped, true, nil
 }
 
-func loftPartitionFragmentGeometryKey(a, b loftPartitionPoint,
-	arithmetic ...*loftVolumeArithmetic) string {
+func loftPartitionFragmentGeometryKey(a, b loftcontact.Point,
+	arithmetic ...*loftcontact.Arithmetic) string {
 	c := loftReplayArithmetic(arithmetic)
-	u := c.cmp(a.u, b.u)
-	if !c.ok {
+	u := c.Cmp(a.U, b.U)
+	if !c.OK {
 		return ""
 	}
-	if u > 0 || u == 0 && c.cmp(a.v, b.v) > 0 {
+	if u > 0 || u == 0 && c.Cmp(a.V, b.V) > 0 {
 		a, b = b, a
 	}
-	if !c.ok || !c.valid(a.u) || !c.valid(a.v) || !c.valid(b.u) || !c.valid(b.v) {
+	if !c.OK || !c.Valid(a.U) || !c.Valid(a.V) || !c.Valid(b.U) || !c.Valid(b.V) {
 		return ""
 	}
-	return a.u.RatString() + "," + a.v.RatString() + ":" + b.u.RatString() + "," + b.v.RatString()
+	return a.U.RatString() + "," + a.V.RatString() + ":" + b.U.RatString() + "," + b.V.RatString()
 }

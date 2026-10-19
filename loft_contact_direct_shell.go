@@ -9,6 +9,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
+	"github.com/lestrrat-3d/decad/internal/loftcontact"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -397,15 +398,15 @@ func loftContactWallTriangleSides(triangle [3]int, shell loftOutputShell,
 	if _, err := budget.StepN(9); err != nil {
 		return 0, false, err
 	}
-	c := &loftVolumeArithmetic{ok: true}
-	height := c.sub(z1, z0)
-	if !c.ok || height.Sign() <= 0 {
+	c := &loftcontact.Arithmetic{OK: true}
+	height := c.Sub(z1, z0)
+	if !c.OK || height.Sign() <= 0 {
 		return 0, false, nil
 	}
-	lowStart, ok0 := loftPartitionPointOf(lower.Start)
-	lowEnd, ok1 := loftPartitionPointOf(lower.End)
-	highStart, ok2 := loftPartitionPointOf(upper.Start)
-	highEnd, ok3 := loftPartitionPointOf(upper.End)
+	lowStart, ok0 := loftcontact.PointOf(lower.Start)
+	lowEnd, ok1 := loftcontact.PointOf(lower.End)
+	highStart, ok2 := loftcontact.PointOf(upper.Start)
+	highEnd, ok3 := loftcontact.PointOf(upper.End)
 	if !ok0 || !ok1 || !ok2 || !ok3 {
 		return 0, false, nil
 	}
@@ -423,40 +424,40 @@ func loftContactWallTriangleSides(triangle [3]int, shell loftOutputShell,
 			return 0, false, nil
 		}
 		point := shell.vertices[id].point
-		s := c.quo(c.sub(point.z, z0), height)
-		start := c.partitionInterpolate(lowStart, highStart, s)
-		end := c.partitionInterpolate(lowEnd, highEnd, s)
-		du, dv := c.sub(end.u, start.u), c.sub(end.v, start.v)
+		s := c.Quo(c.Sub(point.z, z0), height)
+		start := c.Interpolate(lowStart, highStart, s)
+		end := c.Interpolate(lowEnd, highEnd, s)
+		du, dv := c.Sub(end.U, start.U), c.Sub(end.V, start.V)
 		var t *big.Rat
 		switch {
 		case du.Sign() != 0:
-			t = c.quo(c.sub(point.u, start.u), du)
+			t = c.Quo(c.Sub(point.u, start.U), du)
 		case dv.Sign() != 0:
-			t = c.quo(c.sub(point.v, start.v), dv)
+			t = c.Quo(c.Sub(point.v, start.V), dv)
 		default:
 			return 0, false, nil
 		}
-		reconstructed := c.partitionInterpolate(start, end, t)
-		if !c.ok || c.cmp(s, loftOutputRat(0)) < 0 ||
-			c.cmp(s, loftOutputRat(1)) > 0 || c.cmp(t, loftOutputRat(0)) < 0 ||
-			c.cmp(t, loftOutputRat(1)) > 0 ||
-			!c.partitionSamePoint(loftPartitionPoint{point.u, point.v}, reconstructed) {
+		reconstructed := c.Interpolate(start, end, t)
+		if !c.OK || c.Cmp(s, loftOutputRat(0)) < 0 ||
+			c.Cmp(s, loftOutputRat(1)) > 0 || c.Cmp(t, loftOutputRat(0)) < 0 ||
+			c.Cmp(t, loftOutputRat(1)) > 0 ||
+			!c.SamePoint(loftcontact.Point{U: point.u, V: point.v}, reconstructed) {
 			return 0, false, nil
 		}
-		diagonal := c.partitionInterpolate(lowStart, highEnd, s)
+		diagonal := c.Interpolate(lowStart, highEnd, s)
 		// The admitted wall is planar and convex. Its horizontal sections
 		// stay parallel, so this sign is the side of the original straight
 		// source diagonal throughout each output triangle.
-		parallel := c.add(c.mul(c.sub(point.u, diagonal.u), du),
-			c.mul(c.sub(point.v, diagonal.v), dv))
-		if !c.ok {
+		parallel := c.Add(c.Mul(c.Sub(point.u, diagonal.U), du),
+			c.Mul(c.Sub(point.v, diagonal.V), dv))
+		if !c.OK {
 			return 0, false, nil
 		}
 		sign := parallel.Sign()
 		positive = positive || sign > 0
 		negative = negative || sign < 0
 	}
-	if !c.ok || !positive && !negative {
+	if !c.OK || !positive && !negative {
 		return 0, false, nil
 	}
 	var sides uint8
