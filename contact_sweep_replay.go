@@ -643,7 +643,7 @@ func (r *SweepReport) certifiedPlanarPosesAtFraction(f *big.Rat) (r3.Transform, 
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded planar replay pose exceeds point resolution", ErrUnsupported)
 	}
 	if p.track != nil {
-		if _, ok := p.track.planar.replayHeights(f); !ok {
+		if _, ok := p.track.planar.ReplayHeights(f); !ok {
 			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded planar replay pose leaves the certified band", ErrUnsupported)
 		}
 		return poses[0], poses[1], nil

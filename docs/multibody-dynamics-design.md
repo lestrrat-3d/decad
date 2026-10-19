@@ -1792,8 +1792,8 @@ points with their exact heights; `internal/planarband` maps and publishes them.
 both policies over the support set (`planarContinuation` in
 `contact_sweep_planar.go` admits a `ContactBand` initial event of two source boxes as it admits a touch):
 
-- `planarSupports` admits a plane whose support set is nonempty and records each lifted vertex's exact start
-  height `h0` and start rate `h'(0)`.
+- `planarsweep.FindPathSupports` admits a plane whose support set is nonempty and records each lifted
+  vertex's exact start height `h0` and start rate `h'(0)`.
 - §10.2's departure needs every CONTACT rate positive; a lifted vertex is a clear vertex there, positive at the
   start and bounded by §10.2's quadratic. A `ContactBand` start of an exact pair can therefore depart under
   `ContinueSeparatingTouch` (its contact set is empty and every vertex is positive), unlike a displaced pair's
@@ -1817,8 +1817,8 @@ both policies over the support set (`planarContinuation` in
   bound; a track with zero depth through the duration is still an exact `SweepPersistentTouch`, which a lifted
   vertex rules out. `SweepPersistentBand`'s claim covers every published point.
 - `ManifoldAt(f)` stages the whole support set through the rounded pose, contact vertices first, each with its
-  exact foot on `S`'s rounded plane and `Separation = [0 ± Depth]`. `replayHeights` and §10.1's replay rules
-  are unchanged: they read every `M` vertex against the held depth.
+  exact foot on `S`'s rounded plane and `Separation = [0 ± Depth]`. `planarsweep.TrackProof.ReplayHeights`
+  and §10.1's replay rules are unchanged: they read every `M` vertex against the held depth.
 
 **Dynamics.**
 
@@ -1899,9 +1899,9 @@ the tray itself is a face-local support plane (§10.6).
 
 §10.2's support plane requires every vertex of its owner `S` on or behind it, which no face of a `Cut`
 tray satisfies: its walls rise above its floor and its rim faces lie above its walls' feet. The
-scene's bodies all rest on, depart from and tip over the tray's floor, so `planarSupportOf`
-(`contact_sweep_planar.go`) admits a FACE-LOCAL support plane instead: the plane of a flat face `h` of
-`S` (one `Face`, every triangle coplanar with one outward normal `n`, as `planarSupportFace` already
+scene's bodies all rest on, depart from and tip over the tray's floor, so `planarsweep.ReadSupportCandidate`
+(`internal/planarsweep/`) admits a FACE-LOCAL support plane instead: the plane of a flat face `h` of
+`S` (one `Face`, every triangle coplanar with one outward normal `n`, as `planar.BuildSupportFace` already
 requires) whose owner only translates, so the column test reads `S`'s start triangles less that
 translation, such that
 
@@ -1925,7 +1925,7 @@ are the largest grid fractions through which every test holds. Soundness: every 
 its vertices' hull, hence in the column over `P(B(f))`; material of `S` behind the plane is at least
 the least vertex height away along `n`; material of `S` in front of the plane projects at least `m(f)`
 away, hence is at least `m(f)` away. The pair's separation on `(0, f]` is therefore at least
-`min(least vertex height bound / |n|_hi, m(f))`, and that minimum is what `planarDepartureProof.lowerGap`
+`min(least vertex height bound / |n|_hi, m(f))`, and that minimum is what `planarsweep.DepartureProof.LowerGap`
 publishes to the replay (§10.1); `departureGap` keeps reading `ContactPair`'s exact gap at the
 departure's end sample. A band track's overlap claim (§10.3) needs
 nothing about what lies behind the plane: material of `S` in front of the plane meets no part of `M`,
@@ -2073,7 +2073,7 @@ horizon test (`clearAt`) skips a rested vertex, so the track no longer ends wher
 zero; it ends where `Depth` leaves the residual (§5 step 4), where a clear or unrested lifted vertex would
 reach the plane, or where a foot leaves the face. §10.2's departure is unchanged and keeps every vertex
 outside the contact set positive, rested or not: a departure claims strict separation. `ManifoldAt` publishes
-a rested vertex as before, with `Separation = [0 ± Depth]`, and `replayHeights` reads the held depth as
+a rested vertex as before, with `Separation = [0 ± Depth]`, and `ReplayHeights` reads the held depth as
 before. A `RestSpeed` that is not a `Velocity`, is negative or is not finite is an input error at
 `SweepPair`, as a bad `SupportBand` is (`ErrUnitKind`, `ErrDegenerate`, `ErrNotFinite`); the field is part of the request, so §5.3's reuse key carries it. `dynamics` fills `RestSpeed`
 with `VelocityResidual` in `sweepRequest` (`dynamics/step.go`): §6.3 leaves a resting point's normal speed
@@ -2088,7 +2088,7 @@ by `|ω_M|·|ω_M×(p − c_M)|`, each factor rounded up by `ratSqrtUp`; the ter
 global. `|p''(u)| = |R(ωu)·(ω×(ω×(p0 − c)))| = |ω|·|ω×(p0 − c)|` for every `u`, so
 `K_p = ½·|n|_hi·(|ω_M|·|ω_M×(p − c_M)| + the S terms)` bounds `|h_p''|` on the whole horizon as `K` did, and
 `K_p <= K` because `|ω×(p − c)| <= |ω|·ρ`. `clearAt`, `depthAt`, the departure's horizon and
-`planarDepartureProof.lowerGap` read `K_p` in place of `K`; the replay still reads the held depth. A body
+`planarsweep.DepartureProof.LowerGap` read `K_p` in place of `K`; the replay still reads the held depth. A body
 whose contact vertices lie on its spin axis with `r = 0` now publishes an exact `SweepPersistentTouch` where
 the global bound published a band of depth `K·h²`: the edge box of `apitest/contact_sweep_band_test.go`, turning
 about its resting edge, is one. The `60°` box, which the global bound ends every `46`–`62 µs` under the rested
@@ -2609,8 +2609,9 @@ lines below do not repeat it.
 
 ### PR 14c (Phase 2) — face-local support planes
 
-- Delivers §10.6: `planarSupportOf` admits a plane whose owner has material in front of it, under the
-  column test and lateral clearance; `planarDepartureProof.lowerGap` and the replay read the clearance;
+- Delivers §10.6: `planarsweep.ReadSupportCandidate` admits a plane whose owner has material in front of
+  it, under the column test and lateral clearance; `planarsweep.DepartureProof.LowerGap` and the replay
+  read the clearance;
   `PlanarColumnClear` in `internal/pair` owns the projected box-triangle test and the gap.
 - Files: `contact_sweep_planar.go`, `contact_sweep_replay.go`, new
   `internal/pair/planar/planar_column.go`.

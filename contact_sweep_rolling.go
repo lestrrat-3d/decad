@@ -510,17 +510,17 @@ func (p *rollingTrackProof) manifoldAt(f *big.Rat, req reportvocab.ContactReques
 		for k := range 3 {
 			foot[k] = new(big.Rat).Sub(rim[k], new(big.Rat).Mul(height, n[k]))
 		}
-		onM, okM := planarTrackPoint(rim, proofbound.RatAdd(eta[p.m], lateral), resolution)
-		onS, okS := planarTrackPoint(foot, proofbound.RatAdd(eta[p.m], eta[p.s], lateral), resolution)
+		onM, okM := planarsweep.PointReading(rim, proofbound.RatAdd(eta[p.m], lateral), resolution)
+		onS, okS := planarsweep.PointReading(foot, proofbound.RatAdd(eta[p.m], eta[p.s], lateral), resolution)
 		if !okM || !okS {
 			return nil, fmt.Errorf("%w: rolling contact track point exceeds point resolution", ErrUnsupported)
 		}
 		point := ContactPoint{Normal: p.direction, NormalAngle: p.angle, Separation: separation}
 		if p.m == 0 {
-			point.OnA, point.OnB = onM, onS
+			point.OnA, point.OnB = vecMeasurementFromInternal(onM), vecMeasurementFromInternal(onS)
 			point.FeatureA, point.FeatureB = p.featureM, p.featureS
 		} else {
-			point.OnA, point.OnB = onS, onM
+			point.OnA, point.OnB = vecMeasurementFromInternal(onS), vecMeasurementFromInternal(onM)
 			point.FeatureA, point.FeatureB = p.featureS, p.featureM
 		}
 		point.FaceA, point.FaceB = point.FeatureA.Face, point.FeatureB.Face

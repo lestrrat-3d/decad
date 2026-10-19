@@ -50,8 +50,8 @@ type rotationalPairSweep struct {
 	req        reportvocab.SweepRequest
 	resolution *big.Rat
 	report     *SweepReport
-	planar     bool                  // both paths carry exact planar vertex sets (contact_sweep_planar.go)
-	departure  *planarDepartureProof // a planar pair's §10.2 departure, when proved
+	planar     bool                        // both paths carry exact planar vertex sets (contact_sweep_planar.go)
+	departure  *planarsweep.DepartureProof // a planar pair's §10.2 departure, when proved
 }
 
 func (d *Document) sweepRotatingPair(ctx context.Context, a, b *Body,
@@ -381,7 +381,7 @@ func (r *rotationalPairSweep) execute(ctx context.Context) (*SweepReport, error)
 			}
 			if ok {
 				r.report.ContactTrack, r.report.Outcome = track, SweepPersistentBand
-				if track.planar.band == nil {
+				if track.planar.Band == nil {
 					r.report.Outcome = SweepPersistentTouch
 				}
 				r.sortSamples()
