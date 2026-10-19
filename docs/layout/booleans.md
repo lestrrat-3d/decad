@@ -11,7 +11,7 @@ The rules for rows live in `docs/layout.md`.
 | `boolean_many.go` | Validates and commits a multi-body Union, including certified straight-source Loft one-scene unions, transient prism pair chains, and identical-interval line prisms arranged in one Sketch scene. See API §8 and prism-boolean §4.6. |
 | `point_cone_trim.go` | Recognizes exact cone tools and routes point-loft Cut/Intersect to facetedrecord. See loft-point design. |
 | `loft_faces_cone_trim.go` | Certifies the one-use LoftFaces toe Cut to heel Intersect cone continuation, including the tangent heel's extended tooth operand. See loft-face-sections design. |
-| `spiral_combine.go` | Builds and validates a multi-tool spiral-bevel join, and admits the first curved join by requiring every copy to carry an exact X-axis rotation (`WithCopyRotation`). See faceted-vertex-bounds §3.7. |
+| `spiral_combine.go` | Builds a multi-tool spiral-bevel join and its cap proxy, and admits the first curved join by requiring every copy to carry an exact X-axis rotation (`WithCopyRotation`). `internal/spiralsector` binds copy roles and validates each copy. See faceted-vertex-bounds §3.7. |
 | `loft_cut.go` | Preserves a matching axial loft through a certified coaxial circle-bore Cut. See loft §18. |
 | `loft_mirror_union.go` | Joins one authenticated axial Loft to its end-cap reflection. See loft-mirror-boolean design. |
 | `loft_mirror_cylinder_union.go` | Dispatches repeated reflected Loft pairs and a through-bore Cut, places the lower teeth, and publishes the joined or bored shell. `internal/loftcylinder` checks the blank and pair placements and assembles the mirrored halves. See loft-mirror-boolean design. |
