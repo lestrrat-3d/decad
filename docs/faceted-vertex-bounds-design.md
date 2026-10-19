@@ -214,9 +214,10 @@ then checks every stitched cross-operand edge against the admitted source
 families. Complete held chains are compared in both directions with their
 exact source curves before `FacetedCurve.Bound` is published. All other
 contacts and the generic mesh Boolean retain their ordinary gates.
-`internal/spiralsector` holds the source gate, the near-face role table and
-the held blank meridian checks. They read topology nodes; the root Union
-passes in the blank's candidate Revolve root sections.
+`internal/spiralsector` holds the source gate, the near-face role table, the
+temporary cap proxy, the held blank meridian checks and the output-curve
+gates. They read topology nodes; the root Union passes in the blank's
+candidate Revolve root sections and gives the proxy node its mesh handle.
 
 The proxy's occupied-volume charge is the largest actual Y move times the
 sum of exact projected XZ areas of every changed facet. Its endpoints must
