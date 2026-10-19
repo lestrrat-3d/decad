@@ -368,7 +368,7 @@ func TestLoftCylinderCommonPlacementDifferentLoftSourceFallsBack(t *testing.T) {
 	loftCylinderCheckPlacedResult(t, joined, blank, tooth, true)
 
 	joinedPayload := joined.n.Payload.(facetedPayload)
-	require.False(t, loftCylinderPlacedSourcesMatch([]*Body{tooth, other}),
+	require.False(t, loftcylinder.SourceIdentitiesMatch(bodyNodes([]*Body{tooth, other})),
 		"different Loft sources must miss continuation before private reconstruction")
 	_, admitted, err := tryPlacedLoftCylinderUnion(ctx, doc, other.originProducer(), joined, other)
 	require.NoError(t, err)

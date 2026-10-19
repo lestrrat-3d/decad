@@ -41,7 +41,10 @@ The source record keeps private local source bodies, not a second joined mesh.
 A later centered bore rebuilds the canonical join from those sources only
 after its cheap source and pose checks pass.
 Nonmatching source shapes and exact-map mismatches leave the generic Boolean
-available before private reconstruction. A reconstruction or fixed work-limit
+available before private reconstruction. `loftcylinder.PlacedToothShape` and
+`SourceIdentitiesMatch` are those cheap source checks, and
+`loftcylinder.LocalBlank` and `LocalTooth` check the exact maps and rebuild
+the local copies. A reconstruction or fixed work-limit
 error after those checks is returned, as in the original certified path;
 context cancellation is returned unchanged.
 

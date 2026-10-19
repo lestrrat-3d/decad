@@ -10,16 +10,19 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// SourceIdentitiesMatch reports whether payloads 0..n-1, read in index order,
-// are authenticated Lofts sharing the first tooth's source identity. n must
-// be at least 1.
-func SourceIdentitiesMatch(n int, payload func(i int) topo.Payload) bool {
-	first, ok := payload(0).(loftrecord.Payload)
+// SourceIdentitiesMatch reports whether teeth, read in order, are Lofts
+// sharing the first tooth's non-nil source identity. teeth must not be empty.
+// A continuation can only reuse the prior local certificate for the same
+// authenticated Loft source; checking this before rebuilding the next tooth
+// leaves an unrelated Loft to the ordinary Boolean's error and admission
+// policy.
+func SourceIdentitiesMatch(teeth []*topo.Body) bool {
+	first, ok := teeth[0].Payload.(loftrecord.Payload)
 	if !ok || first.SourceIdentity == nil {
 		return false
 	}
-	for i := 1; i < n; i++ {
-		next, ok := payload(i).(loftrecord.Payload)
+	for _, tooth := range teeth[1:] {
+		next, ok := tooth.Payload.(loftrecord.Payload)
 		if !ok || next.SourceIdentity != first.SourceIdentity {
 			return false
 		}
