@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	"github.com/lestrrat-3d/decad/internal/loftface"
-	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -257,34 +256,32 @@ func revolveLoftFacesContactGraphOf(ctx context.Context,
 	return g, true, nil
 }
 
-// bindOpenPatches attaches source station IDs only after checking the actual
-// held seam vertices and their separate side bounds.
-func (g *revolveLoftFacesContactGraph) bindOpenPatches(run *revolveLoftFacesGraphRun,
-	seam []revolveLoftFacesSeamVertex, blank, loft *revolveLoftFacesSeamPatch) bool {
+// checkOpenPatches checks the actual held seam vertices of both open patches
+// against the run's stations, distinct station IDs and separate side bounds.
+func (g *revolveLoftFacesContactGraph) checkOpenPatches(run *revolveLoftFacesGraphRun,
+	seam []revolveloftfaces.ArcSeamVertex, blank, loft *revolveloftfaces.ArcSeamPatch) bool {
 	if g == nil || run == nil || blank == nil || loft == nil ||
 		len(run.stationIDs) != len(seam) || len(run.stations) != len(seam) ||
-		len(blank.seam) != len(seam) || len(loft.seam) != len(seam) {
+		len(blank.Seam) != len(seam) || len(loft.Seam) != len(seam) {
 		return false
 	}
 	seen := make(map[int]r3.Vec, len(seam))
 	for i, stationID := range run.stationIDs {
-		bi, li := blank.seam[i], loft.seam[i]
-		if seam[i].station != run.stations[i] ||
-			bi < 0 || bi >= len(blank.vertices) ||
-			li < 0 || li >= len(loft.vertices) ||
-			bi >= len(blank.vertexBounds) || li >= len(loft.vertexBounds) ||
-			blank.vertices[bi] != seam[i].point || loft.vertices[li] != seam[i].point ||
-			blank.vertexBounds[bi] < seam[i].blankBound ||
-			loft.vertexBounds[li] < seam[i].loftBound {
+		bi, li := blank.Seam[i], loft.Seam[i]
+		if seam[i].Station != run.stations[i] ||
+			bi < 0 || bi >= len(blank.Vertices) ||
+			li < 0 || li >= len(loft.Vertices) ||
+			bi >= len(blank.VertexBounds) || li >= len(loft.VertexBounds) ||
+			blank.Vertices[bi] != seam[i].Point || loft.Vertices[li] != seam[i].Point ||
+			blank.VertexBounds[bi] < seam[i].BlankBound ||
+			loft.VertexBounds[li] < seam[i].LoftBound {
 			return false
 		}
 		if _, duplicate := seen[stationID]; duplicate {
 			return false
 		}
-		seen[stationID] = seam[i].point
+		seen[stationID] = seam[i].Point
 	}
-	blank.stationIDs = slices.Clone(run.stationIDs)
-	loft.stationIDs = slices.Clone(run.stationIDs)
 	return true
 }
 
@@ -309,7 +306,7 @@ func (g *revolveLoftFacesContactGraph) bindBlankShell(ctx context.Context,
 		proof.blank, proof.tooth, cell.sectionIndex, mapped.Segment, mapped.Band,
 		loftFaceInterval{Lo: mapped.TLo, Hi: mapped.THi}, run.stations)
 	if err != nil || !ok ||
-		!g.bindOpenPatches(run, seam, &blankPatch, &loftPatch) {
+		!g.checkOpenPatches(run, seam, &blankPatch, &loftPatch) {
 		return false, err
 	}
 	seenStations, seenVertices := make(map[int]bool), make(map[int]bool)
@@ -318,10 +315,10 @@ func (g *revolveLoftFacesContactGraph) bindBlankShell(ctx context.Context,
 		if index < 0 || index >= len(shell.mesh.Verts) ||
 			index >= len(shell.vertexBounds) || seenStations[stationID] ||
 			seenVertices[index] ||
-			shell.mesh.Verts[index] != seam[i].point ||
-			blankPatch.vertices[blankPatch.seam[i]] != shell.mesh.Verts[index] ||
-			loftPatch.vertices[loftPatch.seam[i]] != shell.mesh.Verts[index] ||
-			shell.vertexBounds[index] < seam[i].blankBound {
+			shell.mesh.Verts[index] != seam[i].Point ||
+			blankPatch.Vertices[blankPatch.Seam[i]] != shell.mesh.Verts[index] ||
+			loftPatch.Vertices[loftPatch.Seam[i]] != shell.mesh.Verts[index] ||
+			shell.vertexBounds[index] < seam[i].BlankBound {
 			return false, nil
 		}
 		seenStations[stationID], seenVertices[index] = true, true
@@ -677,9 +674,9 @@ func revolveLoftFacesCensus(ctx context.Context,
 // pieces remain open and cannot be used as a Boolean result by themselves.
 func revolveLoftFacesCertifiedArcPatches(ctx context.Context, blank, tooth *Body,
 	sectionIndex, segment, band int, root loftFaceInterval, stations []int,
-) ([]revolveLoftFacesSeamVertex, revolveLoftFacesSeamPatch,
-	revolveLoftFacesSeamPatch, bool, error) {
-	var empty revolveLoftFacesSeamPatch
+) ([]revolveloftfaces.ArcSeamVertex, revolveloftfaces.ArcSeamPatch,
+	revolveloftfaces.ArcSeamPatch, bool, error) {
+	var empty revolveloftfaces.ArcSeamPatch
 	if ctx == nil || root.Lo == nil || root.Hi == nil ||
 		sectionIndex < 0 || segment < 0 || band < 0 {
 		return nil, empty, empty, false, nil
@@ -715,17 +712,17 @@ func revolveLoftFacesCertifiedArcPatches(ctx context.Context, blank, tooth *Body
 	if selected == nil || !slices.Equal(stations, selected.stations) {
 		return nil, empty, empty, false, nil
 	}
-	seam, ok, err := revolveLoftFacesArcSeamVerticesUnchecked(ctx, proof.trim,
+	seam, ok, err := revolveloftfaces.ArcSeamVerticesUnchecked(ctx, proof.trim,
 		band, selected.stations, root, section)
 	if err != nil || !ok {
 		return nil, empty, empty, false, err
 	}
-	blankPatch, loftPatch, ok, err := revolveLoftFacesArcPatchesUnchecked(ctx, proof.trim,
+	blankPatch, loftPatch, ok, err := revolveloftfaces.ArcPatchesUnchecked(ctx, proof.trim,
 		band, segment, section, seam)
 	if err != nil || !ok {
 		return nil, empty, empty, false, err
 	}
-	if !graph.bindOpenPatches(selected, seam, &blankPatch, &loftPatch) {
+	if !graph.checkOpenPatches(selected, seam, &blankPatch, &loftPatch) {
 		return nil, empty, empty, false, nil
 	}
 	return seam, blankPatch, loftPatch, true, nil
@@ -850,66 +847,4 @@ func revolveLoftFacesCensusIn(ctx context.Context,
 		scope.mu.Unlock()
 	}
 	return census, ok, err
-}
-
-// revolveLoftFacesSeamVertex is one shared held point on a certified radial
-// source arc. The two bounds belong to the finite Revolve and LoftFaces sides.
-type revolveLoftFacesSeamVertex struct {
-	station    int
-	exact      loftFaceRatVec
-	point      r3.Vec
-	blankBound float64
-	loftBound  float64
-}
-
-// revolveLoftFacesArcSeamVerticesUnchecked preserves the root record shape.
-// Its caller first authenticates the complete ordered source-arc station run.
-func revolveLoftFacesArcSeamVerticesUnchecked(ctx context.Context, trim *loftFacesTrimRecord,
-	band int, stations []int, root loftFaceInterval, section revolveSectionSpan,
-) ([]revolveLoftFacesSeamVertex, bool, error) {
-	vertices, ok, err := revolveloftfaces.ArcSeamVerticesUnchecked(ctx, trim, band, stations, root, section)
-	if err != nil || !ok {
-		return nil, false, err
-	}
-	result := make([]revolveLoftFacesSeamVertex, len(vertices))
-	for i, vertex := range vertices {
-		result[i] = revolveLoftFacesSeamVertex{
-			station: vertex.Station, exact: vertex.Exact, point: vertex.Point,
-			blankBound: vertex.BlankBound, loftBound: vertex.LoftBound,
-		}
-	}
-	return result, true, nil
-}
-
-// revolveLoftFacesSeamPatch is one open source-face patch split through a
-// common held seam. Complete face bounds need separate curve and twist proofs.
-type revolveLoftFacesSeamPatch struct {
-	vertices     []r3.Vec
-	triangles    [][3]int
-	vertexBounds []float64
-	origins      []provenance.Ref
-	seam         []int
-	stationIDs   []int
-}
-
-// revolveLoftFacesArcPatchesUnchecked preserves root graph ownership of
-// station IDs. Its caller authenticates the live source pair and arc run.
-func revolveLoftFacesArcPatchesUnchecked(ctx context.Context, trim *loftFacesTrimRecord,
-	band, segment int, section revolveSectionSpan, seam []revolveLoftFacesSeamVertex,
-) (revolveLoftFacesSeamPatch, revolveLoftFacesSeamPatch, bool, error) {
-	entries := make([]revolveloftfaces.ArcSeamVertex, len(seam))
-	for i, entry := range seam {
-		entries[i] = revolveloftfaces.ArcSeamVertex{
-			Station: entry.station, Exact: entry.exact, Point: entry.point,
-			BlankBound: entry.blankBound, LoftBound: entry.loftBound,
-		}
-	}
-	blank, loft, ok, err := revolveloftfaces.ArcPatchesUnchecked(ctx, trim, band, segment, section, entries)
-	return revolveLoftFacesSeamPatch{
-			vertices: blank.Vertices, triangles: blank.Triangles,
-			vertexBounds: blank.VertexBounds, origins: blank.Origins, seam: blank.Seam,
-		}, revolveLoftFacesSeamPatch{
-			vertices: loft.Vertices, triangles: loft.Triangles,
-			vertexBounds: loft.VertexBounds, origins: loft.Origins, seam: loft.Seam,
-		}, ok, err
 }

@@ -93,22 +93,20 @@ func TestCurvedContactGraphHeldAnchors(t *testing.T) {
 		require.NoError(t, shellErr)
 		require.True(t, built)
 		require.Equal(t, run.stationIDs, shell.seamIDs)
-		require.Equal(t, run.stationIDs, blankPatch.stationIDs)
-		require.Equal(t, run.stationIDs, loftPatch.stationIDs)
 		require.Len(t, run.stationIDs, len(run.stations))
 		seenShellVertices := make(map[int]bool)
 		for i, id := range run.stationIDs {
 			require.False(t, seenStationIDs[id])
 			seenStationIDs[id] = true
-			shellIndex, blankIndex, loftIndex := shell.seam[i], blankPatch.seam[i], loftPatch.seam[i]
+			shellIndex, blankIndex, loftIndex := shell.seam[i], blankPatch.Seam[i], loftPatch.Seam[i]
 			require.False(t, seenShellVertices[shellIndex])
 			seenShellVertices[shellIndex] = true
-			require.Equal(t, seam[i].point, shell.mesh.Verts[shellIndex])
-			require.Equal(t, seam[i].point, blankPatch.vertices[blankIndex])
-			require.Equal(t, seam[i].point, loftPatch.vertices[loftIndex])
-			require.GreaterOrEqual(t, shell.vertexBounds[shellIndex], seam[i].blankBound)
-			require.GreaterOrEqual(t, blankPatch.vertexBounds[blankIndex], seam[i].blankBound)
-			require.GreaterOrEqual(t, loftPatch.vertexBounds[loftIndex], seam[i].loftBound)
+			require.Equal(t, seam[i].Point, shell.mesh.Verts[shellIndex])
+			require.Equal(t, seam[i].Point, blankPatch.Vertices[blankIndex])
+			require.Equal(t, seam[i].Point, loftPatch.Vertices[loftIndex])
+			require.GreaterOrEqual(t, shell.vertexBounds[shellIndex], seam[i].BlankBound)
+			require.GreaterOrEqual(t, blankPatch.VertexBounds[blankIndex], seam[i].BlankBound)
+			require.GreaterOrEqual(t, loftPatch.VertexBounds[loftIndex], seam[i].LoftBound)
 		}
 		require.Len(t, shell.capRings, len(graph.arcs))
 		seenEndpointIDs, seenRings := make(map[int]bool), make(map[int]bool)
@@ -701,21 +699,21 @@ func TestCurvedLoftFacesArcSeamPatchesShareCertifiedVertices(t *testing.T) {
 		loftFaceInterval{Lo: contact.TLo, Hi: contact.THi}, stations)
 	require.NoError(t, err)
 	require.True(t, ok)
-	require.Len(t, blankPatch.triangles, 4*(len(stations)-1))
-	require.Equal(t, len(blankPatch.triangles), len(loftPatch.triangles))
+	require.Len(t, blankPatch.Triangles, 4*(len(stations)-1))
+	require.Equal(t, len(blankPatch.Triangles), len(loftPatch.Triangles))
 	maxBlank, maxLoft := 0.0, 0.0
 	for index := range seam {
-		require.Equal(t, blankPatch.vertices[blankPatch.seam[index]],
-			loftPatch.vertices[loftPatch.seam[index]])
-		require.Less(t, seam[index].blankBound, 0.1)
-		require.Less(t, seam[index].loftBound, 0.1)
-		maxBlank = max(maxBlank, seam[index].blankBound)
-		maxLoft = max(maxLoft, seam[index].loftBound)
+		require.Equal(t, blankPatch.Vertices[blankPatch.Seam[index]],
+			loftPatch.Vertices[loftPatch.Seam[index]])
+		require.Less(t, seam[index].BlankBound, 0.1)
+		require.Less(t, seam[index].LoftBound, 0.1)
+		maxBlank = max(maxBlank, seam[index].BlankBound)
+		maxLoft = max(maxLoft, seam[index].LoftBound)
 	}
-	for _, bound := range blankPatch.vertexBounds {
+	for _, bound := range blankPatch.VertexBounds {
 		require.Less(t, bound, 0.1)
 	}
-	for _, bound := range loftPatch.vertexBounds {
+	for _, bound := range loftPatch.VertexBounds {
 		require.Less(t, bound, 0.1)
 	}
 	t.Logf("source-aligned radial seam: %d stations, maximum vertex bounds blank %.9g mm, loft %.9g mm",

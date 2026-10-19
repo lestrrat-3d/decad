@@ -24,9 +24,10 @@ nearby held coordinates.
 ## Held anchors and freshness
 
 The checked open-patch constructor uses the live graph, selects one whole-arc
-run by exact source interval and live face, and binds each station ID to the
-actual seam index in both open patches. It checks the shared held point and
-each side's vertex bound.
+run by exact source interval and live face, and checks each station of the
+run, in order, against the actual seam index in both open patches. It checks
+the shared held point, each side's vertex bound and that the run's station IDs
+are distinct. The patches carry no IDs; the run keeps them.
 
 The cap-ring blank-shell constructor selects a graph run and its occupied cap
 arcs. After building, it binds every station ID to the actual shell seam index
