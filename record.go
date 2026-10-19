@@ -237,8 +237,6 @@ type arcSeg = sectionrecord.ArcSeg
 
 type fitSplineSeg = sectionrecord.FitSplineSeg
 
-func cloneLoopRecord(loop loopRecord) loopRecord { return sectionrecord.CloneLoopRecord(loop) }
-
 // allEdgeChamferPayload is the evaluator's record of the box all-edge chamfer
 // of modify-general §4.3b: the internal/breprecord payload, which
 // breprecord.BuildAllEdgeChamfer evaluates over topology nodes and which
@@ -249,15 +247,14 @@ type allEdgeChamferPayload = breprecord.AllEdgeChamferPayload
 // (docs/general-boolean-design.md §4): the internal/breprecord payload, which
 // breprecord.Build evaluates over topology nodes and which implements
 // topo.Payload (docs/evaluator-design.md §8). The other names are its faces,
-// an A1 result's slabs, a route L band and its terminals and kind, and the
-// shared topology reading.
+// an A1 result's slabs, a route L band and its kind, and the shared topology
+// reading.
 type (
-	brepPayload      = breprecord.Payload
-	brepFace         = breprecord.Face
-	brepLoopBand     = breprecord.LoopBand
-	brepBandTerminal = breprecord.BandTerminal
-	brepBandKind     = breprecord.BandKind
-	brepTopology     = breprecord.Topology
+	brepPayload  = breprecord.Payload
+	brepFace     = breprecord.Face
+	brepLoopBand = breprecord.LoopBand
+	brepBandKind = breprecord.BandKind
+	brepTopology = breprecord.Topology
 )
 
 // brepSplit is one side-line split: a level and its displacement. brepEmbed

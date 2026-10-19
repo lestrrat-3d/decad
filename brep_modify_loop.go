@@ -86,13 +86,13 @@ func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepMo
 		body, err := brepBlendEdges(ctx, d, bp, call)
 		var mismatch *brepMaterialWedgeMismatchError
 		if len(call.edges) == 1 && call.loopKind == breprecord.BandFillet && errors.As(err, &mismatch) {
-			if sel, selected, ok := r.fullSelection().partialSelectedLoop(); ok {
+			if sel, selected, ok := r.fullSelection().view.PartialSelectedLoop(); ok {
 				return brepFilletPartialLoop(ctx, d, bp, call, sel, selected)
 			}
 		}
 		if len(call.edges) == 1 && call.loopKind == breprecord.BandChamfer && call.asym == nil &&
 			errors.As(err, &mismatch) {
-			if sel, selected, ok := r.fullSelection().partialSelectedLoop(); ok {
+			if sel, selected, ok := r.fullSelection().view.PartialSelectedLoop(); ok {
 				return brepChamferPartialLoop(ctx, d, bp, call, sel, selected)
 			}
 		}
@@ -130,7 +130,7 @@ func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepMo
 			}
 			return next.buildSelectedLoops(ctx, d, loops)
 		}
-		if sel, selected, ok := r.fullSelection().partialSelectedLoop(); ok {
+		if sel, selected, ok := r.fullSelection().view.PartialSelectedLoop(); ok {
 			return brepFilletPartialLoop(ctx, d, bp, call, sel, selected)
 		}
 		// A pair of edges can share a swept wall without sharing a planar
@@ -146,25 +146,15 @@ func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepMo
 				if err := next.matchEdges(); err != nil {
 					return nil, err
 				}
-				if sel, selected, ok := next.fullSelection().partialSelectedLoop(); ok {
-					selectedAt := map[[3]float64]int{}
-					for _, eb := range blends {
-						for _, v := range eb.V {
-							selectedAt[v]++
-						}
-					}
-					for _, eb := range blends {
-						for k, v := range eb.V {
-							eb.Terminal[k] = selectedAt[v] == 1
-						}
-					}
+				if sel, selected, ok := next.fullSelection().view.PartialSelectedLoop(); ok {
+					breploop.MarkChainTerminals(blends)
 					return next.buildPartialFillet(ctx, d, sel, selected, blends)
 				}
 			}
 		}
 	}
 	if call.loopKind == breprecord.BandChamfer && len(call.edges) == 2 {
-		if sel, selected, ok := r.fullSelection().partialSelectedLoop(); ok {
+		if sel, selected, ok := r.fullSelection().view.PartialSelectedLoop(); ok {
 			return brepChamferPartialLoop(ctx, d, bp, call, sel, selected)
 		}
 	}
@@ -199,7 +189,7 @@ func (r *brepLoopRead) cornerTriad(ctx context.Context, d *Document) (*Body, boo
 			}
 		}
 		capSelection := r.selection(others[:])
-		capSel, selected, ok := capSelection.partialSelectedLoop()
+		capSel, selected, ok := capSelection.view.PartialSelectedLoop()
 		if !ok {
 			continue
 		}
@@ -295,7 +285,7 @@ func (r *brepLoopRead) cornerTriad(ctx context.Context, d *Document) (*Body, boo
 		if err := next.matchEdges(); err != nil {
 			return nil, true, err
 		}
-		newCap, newSelected, ok := next.fullSelection().partialSelectedLoop()
+		newCap, newSelected, ok := next.fullSelection().view.PartialSelectedLoop()
 		if !ok || newCap.Face != capSel.Face || newCap.Loop != capSel.Loop {
 			return nil, true, next.state.Refuse("SL1", `the rounded corner has no selected cap chain`)
 		}
