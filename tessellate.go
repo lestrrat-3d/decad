@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/brepbandmesh"
 	"github.com/lestrrat-3d/decad/internal/chainrecord"
 	"github.com/lestrrat-3d/decad/internal/cuptess"
+	"github.com/lestrrat-3d/decad/internal/draftrecord"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/patchchain"
@@ -373,10 +374,18 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		return tessellateCapBlend(ctx, b, cbp, chord, verify)
 	}
 	if dp, ok := b.n.Payload.(draftPayload); ok {
-		return tessellateDraft(ctx, b, dp, chord, verify)
+		node, err := draftrecord.Tessellate(ctx, &b.n, dp, chord, verify >= VerifyAll)
+		if err != nil {
+			return nil, err
+		}
+		return bornMesh(&Mesh{n: *node}), nil
 	}
 	if dp, ok := b.n.Payload.(twoSidedDraftPayload); ok {
-		return tessellateTwoSidedDraft(ctx, b, dp, chord, verify)
+		node, err := draftrecord.TessellateTwoSided(ctx, &b.n, envOf(b.n.Doc, b.n.Origin.Producer), dp, chord, verify >= VerifyAll)
+		if err != nil {
+			return nil, err
+		}
+		return bornMesh(&Mesh{n: *node}), nil
 	}
 	if sp, ok := b.n.Payload.(stitchPayload); ok {
 		var node *topo.Mesh
