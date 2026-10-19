@@ -26,7 +26,7 @@ type revolveLoftFacesBlankSeamShell struct {
 	seamRunIDs    [][]int
 	triangleCells []revolveLoftFacesShellTriangleCell
 	sectionRings  [][][]int
-	rays          []revolveLoftFacesRay
+	rays          []revolveloftfaces.ShellRay
 	rayCount      int
 	capRings      []revolveLoftFacesShellCapRing
 	chordBound    float64
@@ -64,15 +64,23 @@ type revolveLoftFacesShellCut struct {
 	ties         *revolveLoftFacesHeelArcSideTies
 }
 
-type revolveLoftFacesRay struct {
-	y, z      *big.Rat
-	seamIndex int
-	seamRefs  []revolveLoftFacesRaySeamRef
-	capIDs    []int
+type revolveLoftFacesShellRaySource struct {
+	seams [][]revolveLoftFacesSeamVertex
+	caps  []revolveLoftFacesCapSeamVertex
 }
 
-type revolveLoftFacesRaySeamRef struct {
-	run, station int
+func (s revolveLoftFacesShellRaySource) RunCount() int            { return len(s.seams) }
+func (s revolveLoftFacesShellRaySource) StationCount(run int) int { return len(s.seams[run]) }
+func (s revolveLoftFacesShellRaySource) Station(run, station int) revolveloftfaces.ShellRaySeam {
+	point := s.seams[run][station]
+	return revolveloftfaces.ShellRaySeam{
+		Y: point.exact[1], Z: point.exact[2], Point: point.point, LoftBound: point.loftBound}
+}
+func (s revolveLoftFacesShellRaySource) CapCount() int { return len(s.caps) }
+func (s revolveLoftFacesShellRaySource) Cap(id int) revolveloftfaces.ShellRayCap {
+	point := s.caps[id]
+	return revolveloftfaces.ShellRayCap{Point: point.point,
+		Box: revolveloftfaces.RayBox{Y: point.boundary.box[1], Z: point.boundary.box[2]}}
 }
 
 // This builds every authenticated Revolve wall and end cap on one angular
@@ -165,47 +173,19 @@ func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
 		capCuts[i].ties = ties
 		capVertices = append(capVertices, vertices[:]...)
 	}
-	rays := revolveLoftFacesShellRaysForRuns(n, seams, capVertices)
-	if len(rays) < 4 || len(rays) > 4*n+stationCount+len(capVertices) ||
-		len(rays)*len(proof.section.Spans) > 1<<16 {
+	source := revolveLoftFacesShellRaySource{seams: seams, caps: capVertices}
+	gridRays := revolveloftfaces.ShellRays(n, source)
+	if len(gridRays) < 4 || len(gridRays) > 4*n+stationCount+len(capVertices) ||
+		len(gridRays)*len(proof.section.Spans) > 1<<16 {
 		return nil, false, nil
 	}
-	if len(seams) == 1 {
-		for i := range rays {
-			if len(rays[i].seamRefs) == 1 {
-				rays[i].seamIndex = rays[i].seamRefs[0].station
-			}
-		}
-		if len(capVertices) != 0 {
-			orderRays := make([]revolveloftfaces.RayOrderRay, len(rays))
-			for i, ray := range rays {
-				orderRays[i] = revolveloftfaces.RayOrderRay{
-					Y: ray.y, Z: ray.z, SeamIndex: ray.seamIndex, CapCount: len(ray.capIDs),
-				}
-				if len(ray.capIDs) != 0 {
-					orderRays[i].CapID = ray.capIDs[0]
-				}
-			}
-			orderSeam := make([]revolveloftfaces.RayOrderSeam, len(seams[0]))
-			for i, point := range seams[0] {
-				orderSeam[i] = revolveloftfaces.RayOrderSeam{Point: point.point, LoftBound: point.loftBound}
-			}
-			capBoxes := make([]revolveloftfaces.RayBox, len(capVertices))
-			for i, point := range capVertices {
-				capBoxes[i] = revolveloftfaces.RayBox{
-					Y: point.boundary.box[1], Z: point.boundary.box[2],
-				}
-			}
-			if !revolveloftfaces.CapRayOrderBounded(orderRays, orderSeam, capBoxes) {
-				return nil, false, nil
-			}
-		}
-	} else if !revolveLoftFacesAllRayOrderBounded(rays, seams, capVertices) {
+	if !revolveloftfaces.ShellRayOrderBounded(gridRays, source) {
 		return nil, false, nil
 	}
+	rays := gridRays
 	positiveYAxis := -1
 	for index, ray := range rays {
-		if ray.y.Sign() > 0 && ray.z.Sign() == 0 {
+		if ray.Y.Sign() > 0 && ray.Z.Sign() == 0 {
 			if positiveYAxis >= 0 {
 				return nil, false, nil
 			}
@@ -265,13 +245,13 @@ func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
 		for j, ray := range rays {
 			if cut != nil && cut.seam {
 				matched := false
-				for _, ref := range ray.seamRefs {
-					if ref.run != cut.seamRun {
+				for _, ref := range ray.SeamRefs {
+					if ref.Run != cut.seamRun {
 						continue
 					}
-					vertex := seams[ref.run][ref.station]
+					vertex := seams[ref.Run][ref.Station]
 					ring[j] = appendPoint(vertex.point, vertex.blankBound)
-					out.seams[ref.run][ref.station] = ring[j]
+					out.seams[ref.Run][ref.Station] = ring[j]
 					matched = true
 					break
 				}
@@ -282,7 +262,7 @@ func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
 			if cut != nil && cut.arc != nil {
 				found := -1
 				for endpoint, id := range cut.endpointIDs {
-					if slices.Contains(ray.capIDs, id) {
+					if slices.Contains(ray.CapIDs, id) {
 						found = endpoint
 					}
 				}
@@ -293,7 +273,7 @@ func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
 				}
 			}
 			point, bound, valid := revolveLoftFacesMeridianRayPoint(
-				[2]*big.Rat{ray.y, ray.z}, x, radius)
+				[2]*big.Rat{ray.Y, ray.Z}, x, radius)
 			if !valid {
 				return nil, false
 			}
@@ -378,7 +358,7 @@ func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
 				endpoints := [2]int{-1, -1}
 				for rayIndex, ray := range rays {
 					for side, id := range cuts[i][j].endpointIDs {
-						if slices.Contains(ray.capIDs, id) {
+						if slices.Contains(ray.CapIDs, id) {
 							if endpoints[side] >= 0 {
 								return nil, false, nil
 							}
@@ -580,70 +560,6 @@ func revolveLoftFacesShellSideCurrent(ctx context.Context,
 	return false, nil
 }
 
-func revolveLoftFacesShellRays(n int, seam []revolveLoftFacesSeamVertex,
-	capVertices []revolveLoftFacesCapSeamVertex) []revolveLoftFacesRay {
-	rays := make([]revolveLoftFacesRay, 0, 4*n+len(seam)+len(capVertices))
-	for quadrant := range 4 {
-		for i := range n {
-			q := big.NewRat(int64(i), int64(n))
-			q2 := lfMul(q, q)
-			denominator := lfAdd(lfOne(), q2)
-			c := lfDiv(lfSub(lfOne(), q2), denominator)
-			s := lfDiv(lfMul(big.NewRat(2, 1), q), denominator)
-			ray := revolveLoftFacesRay{seamIndex: -1}
-			switch quadrant {
-			case 0:
-				ray.y, ray.z = c, s
-			case 1:
-				ray.y, ray.z = lfSub(lfZero(), s), c
-			case 2:
-				ray.y, ray.z = lfSub(lfZero(), c), lfSub(lfZero(), s)
-			case 3:
-				ray.y, ray.z = s, lfSub(lfZero(), c)
-			}
-			rays = append(rays, ray)
-		}
-	}
-	for i, point := range seam {
-		rays = append(rays, revolveLoftFacesRay{y: point.exact[1], z: point.exact[2], seamIndex: i})
-	}
-	for i, point := range capVertices {
-		if point.point.Y == 0 && point.point.Z == 0 {
-			return nil
-		}
-		rays = append(rays, revolveLoftFacesRay{
-			y: lfF(point.point.Y), z: lfF(point.point.Z), seamIndex: -1,
-			capIDs: []int{i}})
-	}
-	sort.Slice(rays, func(i, j int) bool {
-		return revolveloftfaces.RayBefore(rays[i].y, rays[i].z, rays[j].y, rays[j].z)
-	})
-	unique := rays[:0]
-	for _, ray := range rays {
-		if len(unique) == 0 || !revolveLoftFacesSameRay(unique[len(unique)-1], ray) {
-			unique = append(unique, ray)
-			continue
-		}
-		// A cap endpoint needs its own ray. A collision with a grid, seam,
-		// or second cap ray would erase its certified angular interval.
-		if len(ray.capIDs) != 0 || len(unique[len(unique)-1].capIDs) != 0 {
-			return nil
-		}
-		if ray.seamIndex >= 0 {
-			if unique[len(unique)-1].seamIndex >= 0 {
-				return nil
-			}
-			unique[len(unique)-1].seamIndex = ray.seamIndex
-		}
-	}
-	return unique
-}
-
-func revolveLoftFacesSameRay(a, b revolveLoftFacesRay) bool {
-	return lfSub(lfMul(a.y, b.z), lfMul(a.z, b.y)).Sign() == 0 &&
-		lfAdd(lfMul(a.y, b.y), lfMul(a.z, b.z)).Sign() > 0
-}
-
 func revolveLoftFacesMeridianRayPoint(ray [2]*big.Rat, x, radius *big.Rat) (r3.Vec, float64, bool) {
 	if ray[0] == nil || ray[1] == nil || x == nil || radius == nil || radius.Sign() <= 0 {
 		return r3.Vec{}, 0, false
@@ -755,125 +671,6 @@ func revolveLoftFacesShellSeamCutOf(ctx context.Context,
 	}
 	return revolveLoftFacesShellCut{sectionIndex: sectionIndex, x: x,
 		radius: radius, seam: true}, seam, true, nil
-}
-
-// One angular ray may carry station anchors from several different meridian
-// cuts. Their event IDs remain separate even when their exact rays coincide.
-func revolveLoftFacesShellRaysForRuns(n int, seams [][]revolveLoftFacesSeamVertex,
-	capVertices []revolveLoftFacesCapSeamVertex) []revolveLoftFacesRay {
-	rays := revolveLoftFacesShellRays(n, nil, capVertices)
-	if rays == nil {
-		return nil
-	}
-	for run, seam := range seams {
-		for station, point := range seam {
-			rays = append(rays, revolveLoftFacesRay{y: point.exact[1], z: point.exact[2],
-				seamIndex: -1, seamRefs: []revolveLoftFacesRaySeamRef{{run: run, station: station}}})
-		}
-	}
-	sort.Slice(rays, func(i, j int) bool {
-		return revolveloftfaces.RayBefore(rays[i].y, rays[i].z, rays[j].y, rays[j].z)
-	})
-	unique := rays[:0]
-	for _, ray := range rays {
-		if len(unique) == 0 || !revolveLoftFacesSameRay(unique[len(unique)-1], ray) {
-			unique = append(unique, ray)
-			continue
-		}
-		previous := &unique[len(unique)-1]
-		if len(ray.capIDs) != 0 || len(previous.capIDs) != 0 {
-			return nil
-		}
-		for _, ref := range ray.seamRefs {
-			for _, existing := range previous.seamRefs {
-				if existing.run == ref.run {
-					return nil
-				}
-			}
-			previous.seamRefs = append(previous.seamRefs, ref)
-		}
-	}
-	return unique
-}
-
-// Every source anchor must stay in the same cyclic angular order as the
-// shared ring grid. A cap endpoint and a seam station cannot share a ray.
-func revolveLoftFacesAllRayOrderBounded(rays []revolveLoftFacesRay,
-	seams [][]revolveLoftFacesSeamVertex, capVertices []revolveLoftFacesCapSeamVertex) bool {
-	if len(rays) < 4 {
-		return false
-	}
-	boxes := make([][]revolveloftfaces.RayBox, len(rays))
-	seenCaps := make([]bool, len(capVertices))
-	seenStations := make([][]bool, len(seams))
-	for run := range seams {
-		seenStations[run] = make([]bool, len(seams[run]))
-	}
-	for index, ray := range rays {
-		if ray.y == nil || ray.z == nil || len(ray.capIDs) > 1 ||
-			len(ray.capIDs) > 0 && len(ray.seamRefs) > 0 {
-			return false
-		}
-		if len(ray.capIDs) == 0 && len(ray.seamRefs) == 0 {
-			boxes[index] = []revolveloftfaces.RayBox{{
-				Y: loftFaceInterval{Lo: ray.y, Hi: ray.y},
-				Z: loftFaceInterval{Lo: ray.z, Hi: ray.z}}}
-		}
-		for _, id := range ray.capIDs {
-			if id < 0 || id >= len(capVertices) || seenCaps[id] {
-				return false
-			}
-			seenCaps[id] = true
-			boundary := capVertices[id].boundary
-			boxes[index] = append(boxes[index], revolveloftfaces.RayBox{
-				Y: boundary.box[1], Z: boundary.box[2]})
-		}
-		for _, ref := range ray.seamRefs {
-			if ref.run < 0 || ref.run >= len(seams) ||
-				ref.station < 0 || ref.station >= len(seams[ref.run]) ||
-				seenStations[ref.run][ref.station] {
-				return false
-			}
-			seenStations[ref.run][ref.station] = true
-			point := seams[ref.run][ref.station]
-			if proofbound.IsNonFinite(point.loftBound) || point.loftBound < 0 {
-				return false
-			}
-			bound := lfF(point.loftBound)
-			y, z := lfF(point.point.Y), lfF(point.point.Z)
-			boxes[index] = append(boxes[index], revolveloftfaces.RayBox{
-				Y: loftFaceInterval{Lo: lfSub(y, bound), Hi: lfAdd(y, bound)},
-				Z: loftFaceInterval{Lo: lfSub(z, bound), Hi: lfAdd(z, bound)}})
-		}
-		for _, box := range boxes[index] {
-			if !revolveloftfaces.RayBoxValid(box) {
-				return false
-			}
-		}
-	}
-	for _, seen := range seenCaps {
-		if !seen {
-			return false
-		}
-	}
-	for _, run := range seenStations {
-		for _, seen := range run {
-			if !seen {
-				return false
-			}
-		}
-	}
-	for index := range rays {
-		next := (index + 1) % len(rays)
-		for _, first := range boxes[index] {
-			for _, second := range boxes[next] {
-				if revolveloftfaces.RayCrossRange(first, second).Lo.Sign() <= 0 {
-					return false
-				}
-			}
-		}
-	}
-	return true
 }
 
 // This graph consumer places every certified whole-arc run and occupied heel

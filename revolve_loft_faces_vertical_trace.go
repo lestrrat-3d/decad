@@ -255,20 +255,20 @@ func revolveLoftFacesVerticalTraceChain(graph *revolveLoftFacesContactGraph,
 // crossing is returned as a zero-width interval; otherwise 80 dyadic steps
 // bound its full mapped source box before any held point is chosen.
 func revolveLoftFacesVerticalTraceRayHit(piece revolveLoftFacesVerticalTracePiece,
-	ray revolveLoftFacesRay) (revolveLoftFacesVerticalTraceHit, bool) {
-	if ray.y == nil || ray.z == nil {
+	ray revolveloftfaces.ShellRay) (revolveLoftFacesVerticalTraceHit, bool) {
+	if ray.Y == nil || ray.Z == nil {
 		return revolveLoftFacesVerticalTraceHit{}, false
 	}
 	if piece.Arc != nil {
 		start := revolveloftfaces.VerticalTraceSourcePoint(piece.VerticalTraceSourcePiece, lfZero())
 		end := revolveloftfaces.VerticalTraceSourcePoint(piece.VerticalTraceSourcePiece, lfOne())
-		before := lfSub(lfMul(start[0], ray.z), lfMul(start[1], ray.y))
-		after := lfSub(lfMul(ray.y, end[1]), lfMul(ray.z, end[0]))
+		before := lfSub(lfMul(start[0], ray.Z), lfMul(start[1], ray.Y))
+		after := lfSub(lfMul(ray.Y, end[1]), lfMul(ray.Z, end[0]))
 		return revolveLoftFacesVerticalTraceHit{}, before.Sign() > 0 && after.Sign() > 0
 	}
 	cross := make([]*big.Rat, len(piece.Y))
 	for i := range cross {
-		cross[i] = lfSub(lfMul(piece.Y[i], ray.z), lfMul(piece.Z[i], ray.y))
+		cross[i] = lfSub(lfMul(piece.Y[i], ray.Z), lfMul(piece.Z[i], ray.Y))
 	}
 	lo, hi := piece.Piece.Source.Lo, piece.Piece.Source.Hi
 	a, b := polynomial.BernsteinSign(cross, lo), polynomial.BernsteinSign(cross, hi)
@@ -345,7 +345,7 @@ func revolveLoftFacesTraceCross(a, b [2]*big.Rat) *big.Rat {
 	return lfSub(lfMul(a[0], b[1]), lfMul(a[1], b[0]))
 }
 
-func revolveLoftFacesTraceWedge(rays []revolveLoftFacesRay, a, b [2]*big.Rat) (int, bool) {
+func revolveLoftFacesTraceWedge(rays []revolveloftfaces.ShellRay, a, b [2]*big.Rat) (int, bool) {
 	if a[0] == nil || b[0] == nil || a[0].Sign() <= 0 || b[0].Sign() <= 0 {
 		return -1, false
 	}
@@ -353,8 +353,8 @@ func revolveLoftFacesTraceWedge(rays []revolveLoftFacesRay, a, b [2]*big.Rat) (i
 	wedge := -1
 	for i := range rays {
 		j := (i + 1) % len(rays)
-		left := [2]*big.Rat{rays[i].y, rays[i].z}
-		right := [2]*big.Rat{rays[j].y, rays[j].z}
+		left := [2]*big.Rat{rays[i].Y, rays[i].Z}
+		right := [2]*big.Rat{rays[j].Y, rays[j].Z}
 		if revolveLoftFacesTraceCross(left, right).Sign() <= 0 ||
 			revolveLoftFacesTraceCross(left, mid).Sign() <= 0 ||
 			revolveLoftFacesTraceCross(mid, right).Sign() <= 0 {
@@ -387,14 +387,14 @@ func revolveLoftFacesTraceJoin(proof *revolveLoftFacesSourceCertificate,
 }
 
 func revolveLoftFacesTraceSourceHits(piece revolveLoftFacesVerticalTracePiece,
-	rays []revolveLoftFacesRay, endpointRays [2]int,
+	rays []revolveloftfaces.ShellRay, endpointRays [2]int,
 ) ([]revolveLoftFacesVerticalTraceHit, bool) {
 	hits := make([]revolveLoftFacesVerticalTraceHit, 0)
 	for ray := range rays {
 		if ray == endpointRays[0] || ray == endpointRays[1] {
 			continue
 		}
-		if rays[ray].y.Sign() <= 0 {
+		if rays[ray].Y.Sign() <= 0 {
 			continue
 		}
 		hit, found := revolveLoftFacesVerticalTraceRayHit(piece, rays[ray])
@@ -420,8 +420,8 @@ func revolveLoftFacesTraceSourceHits(piece revolveLoftFacesVerticalTracePiece,
 			}
 			return hits[i].lo.Cmp(hits[j].lo) > 0
 		}
-		a := [2]*big.Rat{rays[hits[i].ray].y, rays[hits[i].ray].z}
-		b := [2]*big.Rat{rays[hits[j].ray].y, rays[hits[j].ray].z}
+		a := [2]*big.Rat{rays[hits[i].ray].Y, rays[hits[i].ray].Z}
+		b := [2]*big.Rat{rays[hits[j].ray].Y, rays[hits[j].ray].Z}
 		if piece.From.Cmp(piece.To) < 0 {
 			return revolveLoftFacesTraceCross(a, b).Sign() > 0
 		}
@@ -434,8 +434,8 @@ func revolveLoftFacesTraceSourceHits(piece revolveLoftFacesVerticalTracePiece,
 				return nil, false
 			}
 		} else {
-			a := [2]*big.Rat{rays[hits[i-1].ray].y, rays[hits[i-1].ray].z}
-			b := [2]*big.Rat{rays[hits[i].ray].y, rays[hits[i].ray].z}
+			a := [2]*big.Rat{rays[hits[i-1].ray].Y, rays[hits[i-1].ray].Z}
+			b := [2]*big.Rat{rays[hits[i].ray].Y, rays[hits[i].ray].Z}
 			if revolveLoftFacesTraceCross(a, b).Sign() !=
 				-piece.From.Cmp(piece.To) {
 				return nil, false
@@ -447,7 +447,7 @@ func revolveLoftFacesTraceSourceHits(piece revolveLoftFacesVerticalTracePiece,
 
 func revolveLoftFacesVerticalTraceSegmentBound(proof *revolveLoftFacesSourceCertificate,
 	piece revolveLoftFacesVerticalTracePiece, from, to revolveLoftFacesVerticalTraceHit,
-	fromDir, toDir [2]*big.Rat, held, endHeld r3.Vec, rays []revolveLoftFacesRay,
+	fromDir, toDir [2]*big.Rat, held, endHeld r3.Vec, rays []revolveloftfaces.ShellRay,
 ) (float64, bool) {
 	if piece.Arc != nil {
 		if piece.upper == nil || piece.upper.Sign() <= 0 ||
@@ -573,7 +573,7 @@ func revolveLoftFacesVerticalTracePath(ctx context.Context,
 	}
 	startRay := shell.rays[capRays[0]]
 	nodes := []revolveLoftFacesTraceNode{{vertex: ring.endpoints[0], ray: capRays[0],
-		dir: [2]*big.Rat{startRay.y, startRay.z},
+		dir: [2]*big.Rat{startRay.Y, startRay.Z},
 		hit: revolveLoftFacesVerticalTraceHit{piece: 0, ray: capRays[0],
 			lo: pieces[0].cell.upper.Root.Lo, hi: pieces[0].cell.upper.Root.Hi}}}
 	edges := make([]revolveLoftFacesTraceEdge, 0)
@@ -607,13 +607,13 @@ func revolveLoftFacesVerticalTracePath(ctx context.Context,
 			maxBound = max(maxBound, loftBound)
 			hit.piece = index
 			targets = append(targets, revolveLoftFacesTraceNode{vertex: vertex, ray: hit.ray,
-				dir: [2]*big.Rat{ray.y, ray.z}, hit: hit})
+				dir: [2]*big.Rat{ray.Y, ray.Z}, hit: hit})
 		}
 		if index+1 == len(pieces) {
 			ray := shell.rays[capRays[1]]
 			targets = append(targets, revolveLoftFacesTraceNode{
 				vertex: ring.endpoints[1], ray: capRays[1],
-				dir: [2]*big.Rat{ray.y, ray.z},
+				dir: [2]*big.Rat{ray.Y, ray.Z},
 				hit: revolveLoftFacesVerticalTraceHit{piece: index, ray: capRays[1],
 					lo: piece.cell.upper.Root.Lo, hi: piece.cell.upper.Root.Hi}})
 		} else {
@@ -816,7 +816,7 @@ func revolveLoftFacesInsertVerticalTrace(ctx context.Context,
 
 func revolveLoftFacesVerticalTraceHeldPoint(proof *revolveLoftFacesSourceCertificate,
 	piece revolveLoftFacesVerticalTracePiece, hit revolveLoftFacesVerticalTraceHit,
-	ray revolveLoftFacesRay, radius *big.Rat) (r3.Vec, float64, float64, bool) {
+	ray revolveloftfaces.ShellRay, radius *big.Rat) (r3.Vec, float64, float64, bool) {
 	var empty r3.Vec
 	if radius == nil || radius.Sign() <= 0 ||
 		piece.cell.band < 0 || piece.cell.band+1 >= len(proof.trim.Maps) {
@@ -836,7 +836,7 @@ func revolveLoftFacesVerticalTraceHeldPoint(proof *revolveLoftFacesSourceCertifi
 			return empty, 0, 0, false
 		}
 		point, blankBound, valid := revolveLoftFacesMeridianRayPoint(
-			[2]*big.Rat{ray.y, ray.z}, piece.x, approx)
+			[2]*big.Rat{ray.Y, ray.Z}, piece.x, approx)
 		if !valid {
 			return empty, 0, 0, false
 		}
@@ -857,15 +857,15 @@ func revolveLoftFacesVerticalTraceHeldPoint(proof *revolveLoftFacesSourceCertifi
 	}
 	midY := lfDiv(lfAdd(box[1].Lo, box[1].Hi), big.NewRat(2, 1))
 	midZ := lfDiv(lfAdd(box[2].Lo, box[2].Hi), big.NewRat(2, 1))
-	denom := lfAdd(lfMul(ray.y, ray.y), lfMul(ray.z, ray.z))
+	denom := lfAdd(lfMul(ray.Y, ray.Y), lfMul(ray.Z, ray.Z))
 	if denom.Sign() <= 0 {
 		return empty, 0, 0, false
 	}
-	scale := lfDiv(lfAdd(lfMul(midY, ray.y), lfMul(midZ, ray.z)), denom)
+	scale := lfDiv(lfAdd(lfMul(midY, ray.Y), lfMul(midZ, ray.Z)), denom)
 	if scale.Sign() <= 0 {
 		return empty, 0, 0, false
 	}
-	exact := loftFaceRatVec{piece.x, lfMul(scale, ray.y), lfMul(scale, ray.z)}
+	exact := loftFaceRatVec{piece.x, lfMul(scale, ray.Y), lfMul(scale, ray.Z)}
 	radial2 := lfAdd(lfMul(exact[1], exact[1]), lfMul(exact[2], exact[2]))
 	if radial2.Sign() <= 0 || radial2.Cmp(lfMul(radius, radius)) >= 0 {
 		return empty, 0, 0, false
