@@ -15,10 +15,9 @@ import (
 
 // This file is docs/loft-design.md §12 PR 2a's public-surface placement
 // tests: Transform/Copy over the landed loft payload's own
-// proven displacement term delta (§5, §8). loft_build_internal_test.go and
-// loft_moments_internal_test.go cover the evaluator/accumulator internals;
-// this file needs a live sketch, the public entry points, or the recorded
-// step.
+// proven displacement term delta (§5, §8). internal/loftmesh's own tests
+// cover the mass accumulator; this file needs a live sketch, the public entry
+// points, or the recorded step.
 
 // requireBitIdentical asserts a and b agree bit for bit on every
 // coordinate, never merely to within a tolerance — -0.0 and 0.0 compare

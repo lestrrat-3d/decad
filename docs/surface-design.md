@@ -1963,7 +1963,8 @@ sheet, where that sum is anchor-dependent and decides nothing.
 A surface-result **loft** sheet tessellates and exports its recorded wall
 triangles. The payload holds walls before both cap ranges, so `loftrecord.Tessellate`
 copies only `tris[:walls]` and attributes each triangle to its live
-`side(i,j,k)` face (§4.2). `requireSheetMesh` hands the mesh and the body's recorded free edges to
+`side(i,j,k)` face (§4.2). `internal/loftmesh.RestateLoft` hands the mesh and the per-face chain counts
+of the body's recorded free edges (`topobuild.FreeChainCountsByFace`) to
 `internal/tessellation.RequireSheetBoundary`, which matches the exposed section rims
 to them, and `internal/tessellation.RequireSheetVertexLinks` checks the
 open boundary vertices. The complete held set still supplies the build-time
@@ -2014,7 +2015,7 @@ the one it triangulated to check its own perturbed area sum (§6.4) and, until
 this increment, discarded afterward. It runs
 `docs/tessellation-design.md` §1.2's manifold-with-boundary audit in the
 closed-mesh audit's place, exactly as a surface-result prism or revolve
-sheet's own mesh does above: `requireSheetMesh` has
+sheet's own mesh does above: `topobuild.RequireSheetMesh` has
 `internal/tessellation.RequireSheetBoundary` prove every free directed
 edge attributes, face by face and chain count by chain count, to the body's
 own recorded free `Edge`s, and `internal/tessellation.RequireSheetVertexLinks` is its own
@@ -2090,9 +2091,9 @@ At `VerifyNone`, the source revolve contact audit is skipped and
 `VolumeVerified() == false` at every level.
 
 A closed result runs `internal/tessellation.RequireClosedMesh` and `tessellation.RequireVertexLinks` on the
-reattributed set. An open result runs `requireSheetMesh` and
+reattributed set. An open result runs `topobuild.RequireSheetMesh` and
 `internal/tessellation.RequireSheetVertexLinks` instead. A curved free `Edge` can contribute
-several free directed mesh edges: `requireSheetMesh` compares connected
+several free directed mesh edges: `topobuild.RequireSheetMesh` compares connected
 boundary chains per live face, not edge counts. Both sides use the same
 live `*Face` pointer, and a source rim's consecutive chord segments stay
 one chain. The rejected alternative was matching one mesh segment to one

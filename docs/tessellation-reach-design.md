@@ -777,13 +777,13 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
    `proofbound.CellAllowsWithSideSpansOf` returns. **Tests:**
    `loft_moments_internal_test.go`: zero for a `LineSeg`-only build, positive for an `ArcSeg` pair with a
    twisted cell, exactly the per-cell sum.
-8. **Files:** `loft_build.go`, `internal/loftmesh/mass_proof.go`. **What:** `loftmesh.MeshProof`; `loftPayload` gains `capStartCount`, `cell`, `side`,
+8. **Files:** `internal/loftrecord/payload.go`, `internal/loftmesh/mass_proof.go`. **What:** `loftmesh.MeshProof`; `loftPayload` gains `capStartCount`, `cell`, `side`,
    `proof`; `loftrecord.Build` composes §4's three terms after `mass.chorded` and stores them; rewrite the
    `sectionDelta` doc comment paragraph §8 names. **Depends on:** 7. **Tests:** internal: `proof.FacetDeparture
    == delta` for a placed `LineSeg`-only loft; `== 0` unplaced pinned; `> sectionDelta` for a chorded pair
    with twist.
-9. **Files:** `tessellate.go`, `loft_build.go`, `internal/loftmesh/loft.go`. **What:** `tessellateLoft` per §4; dispatch in
-   `tessellateContext`; update `Body.Tessellate`'s doc comment. **Pattern:** `tessellateFaceted`.
+9. **Files:** `tessellate.go`, `internal/loftrecord/tessellate.go`, `internal/loftmesh/loft.go`. **What:** `loftrecord.Tessellate` per §4;
+   dispatch in `tessellateBodyContext`; update `Body.Tessellate`'s doc comment. **Pattern:** `tessellateFaceted`.
    **Depends on:** 6, 8. **Tests:** §4's list in `apitest/loft_test.go` and `apitest/export_test.go`.
 10. **Files:** `docs/loft-design.md` §9 Table D rows D1/D2 (status cells become current state), `doc.go`'s
     support map. **Depends on:** 9.
