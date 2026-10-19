@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/loftcontact"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/stretchr/testify/require"
 )
@@ -133,7 +134,7 @@ func TestLoftVolumeExactShellRefusesSeparateComponents(t *testing.T) {
 
 func TestLoftVolumeExactShellRefusesOversizeAndCancellation(t *testing.T) {
 	shell := loftVolumeTestTetra()
-	huge := new(big.Int).Lsh(big.NewInt(1), loftVolumeRationalBits)
+	huge := new(big.Int).Lsh(big.NewInt(1), loftcontact.RationalBits)
 	shell.vertices[0].world[0] = new(big.Rat).SetInt(huge)
 	volume, ok, err := loftVolumeExactShell(proofbound.NewWorkBudget(t.Context()), shell)
 	require.NoError(t, err)
@@ -174,7 +175,7 @@ func TestLoftVolumeExactShellRefusesOversizeAndCancellation(t *testing.T) {
 }
 
 func TestLoftVolumeExactShellRefusesNonadjacentCrossing(t *testing.T) {
-	points := []loftVolumeVec{
+	points := []loftcontact.Vec{
 		{loftOutputRat(0), loftOutputRat(0), loftOutputRat(0)},
 		{loftOutputRat(2), loftOutputRat(0), loftOutputRat(0)},
 		{loftOutputRat(0), loftOutputRat(2), loftOutputRat(0)},
@@ -182,17 +183,17 @@ func TestLoftVolumeExactShellRefusesNonadjacentCrossing(t *testing.T) {
 		{big.NewRat(1, 2), big.NewRat(1, 2), loftOutputRat(1)},
 		{big.NewRat(1, 2), loftOutputRat(1), loftOutputRat(0)},
 	}
-	c := &loftVolumeArithmetic{ok: true}
+	c := &loftcontact.Arithmetic{OK: true}
 	makeTriangle := func(ids [3]int) loftVolumeTriangle {
 		a, b, d := points[ids[0]], points[ids[1]], points[ids[2]]
-		tri := loftVolumeTriangle{ids: ids, normal: c.cross(c.diff(b, a), c.diff(d, a))}
+		tri := loftVolumeTriangle{ids: ids, normal: c.Cross(c.Diff(b, a), c.Diff(d, a))}
 		for axis := range 3 {
 			tri.minimum[axis], tri.maximum[axis] = a[axis], a[axis]
-			for _, p := range []loftVolumeVec{b, d} {
-				if c.cmp(p[axis], tri.minimum[axis]) < 0 {
+			for _, p := range []loftcontact.Vec{b, d} {
+				if c.Cmp(p[axis], tri.minimum[axis]) < 0 {
 					tri.minimum[axis] = p[axis]
 				}
-				if c.cmp(p[axis], tri.maximum[axis]) > 0 {
+				if c.Cmp(p[axis], tri.maximum[axis]) > 0 {
 					tri.maximum[axis] = p[axis]
 				}
 			}
@@ -200,22 +201,22 @@ func TestLoftVolumeExactShellRefusesNonadjacentCrossing(t *testing.T) {
 		return tri
 	}
 	a, b := makeTriangle([3]int{0, 1, 2}), makeTriangle([3]int{3, 4, 5})
-	require.True(t, c.ok)
+	require.True(t, c.OK)
 	allowed, err := loftVolumePairAllowed(proofbound.NewWorkBudget(t.Context()), c, points, a, b)
 	require.NoError(t, err)
 	require.False(t, allowed)
 }
 
 func TestLoftVolumeExactShellRefusesCoplanarOverlap(t *testing.T) {
-	points := []loftVolumeVec{
+	points := []loftcontact.Vec{
 		{loftOutputRat(0), loftOutputRat(0), loftOutputRat(0)},
 		{loftOutputRat(2), loftOutputRat(0), loftOutputRat(0)},
 		{loftOutputRat(0), loftOutputRat(2), loftOutputRat(0)},
 		{loftOutputRat(1), big.NewRat(1, 2), loftOutputRat(0)},
 	}
-	c := &loftVolumeArithmetic{ok: true}
+	c := &loftcontact.Arithmetic{OK: true}
 	a := loftVolumeTriangle{ids: [3]int{0, 1, 2},
-		normal: loftVolumeVec{loftOutputRat(0), loftOutputRat(0), loftOutputRat(1)}}
+		normal: loftcontact.Vec{loftOutputRat(0), loftOutputRat(0), loftOutputRat(1)}}
 	b := loftVolumeTriangle{ids: [3]int{0, 1, 3}, normal: a.normal}
 	for axis := range 3 {
 		a.minimum[axis], a.maximum[axis] = loftOutputRat(0), loftOutputRat(2)
@@ -231,7 +232,7 @@ func TestLoftVolumeEmbeddingRefusesNearCoplanarCrossing(t *testing.T) {
 	half := big.NewRat(1, 2)
 	epsilon := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 1000))
 	below := new(big.Rat).Neg(epsilon)
-	points := []loftVolumeVec{
+	points := []loftcontact.Vec{
 		{zero, zero, zero}, {two, zero, zero}, {zero, two, zero},
 		{half, half, below}, {half, half, epsilon}, {half, one, epsilon},
 	}
@@ -248,22 +249,22 @@ func TestLoftVolumeEmbeddingRefusesNearCoplanarCrossing(t *testing.T) {
 	require.Negative(t, new(big.Rat).Add(half, secondY).Cmp(two))
 
 	a := loftVolumeTriangle{ids: [3]int{0, 1, 2},
-		normal:  loftVolumeVec{zero, zero, one},
-		minimum: loftVolumeVec{zero, zero, zero}, maximum: loftVolumeVec{two, two, zero}}
+		normal:  loftcontact.Vec{zero, zero, one},
+		minimum: loftcontact.Vec{zero, zero, zero}, maximum: loftcontact.Vec{two, two, zero}}
 	b := loftVolumeTriangle{ids: [3]int{3, 4, 5},
-		normal:  loftVolumeVec{one, zero, zero},
-		minimum: loftVolumeVec{half, half, below}, maximum: loftVolumeVec{half, one, epsilon}}
-	c := &loftVolumeArithmetic{ok: true}
+		normal:  loftcontact.Vec{one, zero, zero},
+		minimum: loftcontact.Vec{half, half, below}, maximum: loftcontact.Vec{half, one, epsilon}}
+	c := &loftcontact.Arithmetic{OK: true}
 	allowed, err := loftVolumePairAllowed(proofbound.NewWorkBudget(t.Context()), c, points, a, b)
 	require.NoError(t, err)
-	require.True(t, c.ok)
+	require.True(t, c.OK)
 	require.False(t, allowed)
 }
 
 func TestLoftVolumeEmbeddingRefusesOneVertexTJunction(t *testing.T) {
 	zero, one, two := big.NewRat(0, 1), big.NewRat(1, 1), big.NewRat(2, 1)
 	minusOne := big.NewRat(-1, 1)
-	points := []loftVolumeVec{
+	points := []loftcontact.Vec{
 		{zero, zero, zero}, {two, zero, zero}, {zero, two, zero},
 		{one, zero, zero}, {zero, minusOne, zero},
 	}
@@ -276,14 +277,14 @@ func TestLoftVolumeEmbeddingRefusesOneVertexTJunction(t *testing.T) {
 	require.Negative(t, witness.Cmp(two))
 
 	a := loftVolumeTriangle{ids: [3]int{0, 1, 2},
-		normal:  loftVolumeVec{zero, zero, one},
-		minimum: loftVolumeVec{zero, zero, zero}, maximum: loftVolumeVec{two, two, zero}}
+		normal:  loftcontact.Vec{zero, zero, one},
+		minimum: loftcontact.Vec{zero, zero, zero}, maximum: loftcontact.Vec{two, two, zero}}
 	b := loftVolumeTriangle{ids: [3]int{0, 3, 4},
-		normal:  loftVolumeVec{zero, zero, minusOne},
-		minimum: loftVolumeVec{zero, minusOne, zero}, maximum: loftVolumeVec{one, zero, zero}}
-	c := &loftVolumeArithmetic{ok: true}
+		normal:  loftcontact.Vec{zero, zero, minusOne},
+		minimum: loftcontact.Vec{zero, minusOne, zero}, maximum: loftcontact.Vec{one, zero, zero}}
+	c := &loftcontact.Arithmetic{OK: true}
 	allowed, err := loftVolumePairAllowed(proofbound.NewWorkBudget(t.Context()), c, points, a, b)
 	require.NoError(t, err)
-	require.True(t, c.ok)
+	require.True(t, c.OK)
 	require.False(t, allowed)
 }

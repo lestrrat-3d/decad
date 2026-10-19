@@ -610,10 +610,10 @@ func certifyLoftQuarterWallOrder(ctx context.Context, budget *proofbound.WorkBud
 		source.levels[0] == nil || source.levels[1] == nil || source.levels[2] == nil {
 		return no, false, nil
 	}
-	checked := &loftVolumeArithmetic{ok: true}
-	if checked.cmp(source.levels[0], big.NewRat(0, 1)) != 0 ||
-		checked.cmp(source.levels[0], source.levels[1]) >= 0 ||
-		checked.cmp(source.levels[1], source.levels[2]) >= 0 || !checked.ok {
+	checked := &loftcontact.Arithmetic{OK: true}
+	if checked.Cmp(source.levels[0], big.NewRat(0, 1)) != 0 ||
+		checked.Cmp(source.levels[0], source.levels[1]) >= 0 ||
+		checked.Cmp(source.levels[1], source.levels[2]) >= 0 || !checked.OK {
 		return no, false, nil
 	}
 	rect, edges, ok, err := loftQuarterWallRectangle(ctx, budget, source, pp)
@@ -716,19 +716,19 @@ func certifyLoftQuarterWallOrder(ctx context.Context, budget *proofbound.WorkBud
 		return no, false, err
 	}
 	rMin, rMax := proof.radius[0], proof.radius[1]
-	if checked.cmp(rMin, rMax) > 0 {
+	if checked.Cmp(rMin, rMax) > 0 {
 		rMin, rMax = rMax, rMin
 	}
-	minSquare := checked.mul(rMin, rMin)
-	maxSquare := checked.mul(rMax, rMax)
-	xMinSquare := checked.mul(rect[0], rect[0])
-	xMaxSquare := checked.mul(rect[1], rect[1])
-	yMinSquare := checked.mul(rect[2], rect[2])
-	yMaxSquare := checked.mul(rect[3], rect[3])
-	leftUpper := checked.add(xMinSquare, yMaxSquare)
-	rightLower := checked.add(xMaxSquare, yMinSquare)
-	if !checked.ok || checked.cmp(minSquare, leftUpper) <= 0 ||
-		checked.cmp(maxSquare, rightLower) >= 0 || !checked.ok {
+	minSquare := checked.Mul(rMin, rMin)
+	maxSquare := checked.Mul(rMax, rMax)
+	xMinSquare := checked.Mul(rect[0], rect[0])
+	xMaxSquare := checked.Mul(rect[1], rect[1])
+	yMinSquare := checked.Mul(rect[2], rect[2])
+	yMaxSquare := checked.Mul(rect[3], rect[3])
+	leftUpper := checked.Add(xMinSquare, yMaxSquare)
+	rightLower := checked.Add(xMaxSquare, yMinSquare)
+	if !checked.OK || checked.Cmp(minSquare, leftUpper) <= 0 ||
+		checked.Cmp(maxSquare, rightLower) >= 0 || !checked.OK {
 		return no, false, nil
 	}
 	if err := budget.Err(); err != nil {
@@ -772,11 +772,11 @@ func loftQuarterWallRectangle(ctx context.Context, budget *proofbound.WorkBudget
 	if err != nil || !ok {
 		return bounds, horizontal, ok, err
 	}
-	checked := &loftVolumeArithmetic{ok: true}
+	checked := &loftcontact.Arithmetic{OK: true}
 	for _, value := range bounds {
-		checked.valid(value)
+		checked.Valid(value)
 	}
-	return bounds, horizontal, checked.ok, nil
+	return bounds, horizontal, checked.OK, nil
 }
 
 func loopArcRadius(loop sectionrecord.LoopRecord) float64 {

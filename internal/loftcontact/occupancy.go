@@ -41,11 +41,11 @@ func CertifyCarrierOccupancy(ctx context.Context, budget *proofbound.WorkBudget,
 		return noEdges, noSeams, nil, false, nil
 	}
 	v := sub(d, c)
-	if v.u.Sign() == 0 && v.v.Sign() == 0 {
+	if v.U.Sign() == 0 && v.V.Sign() == 0 {
 		return noEdges, noSeams, nil, false, nil
 	}
-	starts0, ends0 := make([]point, n), make([]point, n)
-	starts1, ends1 := make([]point, n), make([]point, n)
+	starts0, ends0 := make([]Point, n), make([]Point, n)
+	starts1, ends1 := make([]Point, n), make([]Point, n)
 	for i := range bottom {
 		if err := budget.Step(); err != nil {
 			return noEdges, noSeams, nil, false, err
@@ -168,9 +168,9 @@ func CertifyCarrierOccupancy(ctx context.Context, budget *proofbound.WorkBudget,
 	return crossing, seams, sides, true, nil
 }
 
-func samePoint(a, b point) bool { return a.u.Cmp(b.u) == 0 && a.v.Cmp(b.v) == 0 }
+func samePoint(a, b Point) bool { return a.U.Cmp(b.U) == 0 && a.V.Cmp(b.V) == 0 }
 
-func crossMoving(a0, a1, b0, b1 point) quadratic {
+func crossMoving(a0, a1, b0, b1 Point) quadratic {
 	return quadratic{
 		cross(a0, b0),
 		add(cross(a0, b1), cross(a1, b0)),

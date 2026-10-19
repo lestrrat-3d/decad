@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/loftcontact"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/stretchr/testify/require"
@@ -58,8 +59,9 @@ func loftOutputTestCapAreas(shell loftOutputShell) [3]string {
 		}
 		a, b, c := shell.vertices[tri[0]].point,
 			shell.vertices[tri[1]].point, shell.vertices[tri[2]].point
-		double := loftPartitionCross(loftPartitionPoint{a.u, a.v},
-			loftPartitionPoint{b.u, b.v}, loftPartitionPoint{c.u, c.v})
+		checked := &loftcontact.Arithmetic{OK: true}
+		double := checked.PointCross(loftcontact.Point{U: a.u, V: a.v},
+			loftcontact.Point{U: b.u, V: b.v}, loftcontact.Point{U: c.u, V: c.v})
 		areas[face.level].Add(areas[face.level], new(big.Rat).Abs(double))
 	}
 	var result [3]string
@@ -124,11 +126,11 @@ func TestLoftContactOutputBoundarySourceRefusals(t *testing.T) {
 			require.False(t, resolved)
 		})
 	}
-	polygon := []loftPartitionPoint{
-		{big.NewRat(0, 1), big.NewRat(0, 1)},
-		{big.NewRat(2, 1), big.NewRat(0, 1)},
-		{big.NewRat(2, 1), big.NewRat(2, 1)},
-		{big.NewRat(0, 1), big.NewRat(2, 1)},
+	polygon := []loftcontact.Point{
+		{U: big.NewRat(0, 1), V: big.NewRat(0, 1)},
+		{U: big.NewRat(2, 1), V: big.NewRat(0, 1)},
+		{U: big.NewRat(2, 1), V: big.NewRat(2, 1)},
+		{U: big.NewRat(0, 1), V: big.NewRat(2, 1)},
 	}
 	resolved, err := loftOutputCertifyCapTiling(proofbound.NewWorkBudget(t.Context()), polygon,
 		[][3]int{{0, 1, 2}, {0, 1, 2}})
@@ -304,16 +306,16 @@ func TestLoftOutputWorldRefusesOversizedReplayArithmetic(t *testing.T) {
 
 func TestLoftReplayFloat64RefusesOversizedAlignment(t *testing.T) {
 	denominator := new(big.Int).Lsh(big.NewInt(1), 8140)
-	arithmetic := &loftVolumeArithmetic{ok: true}
-	_, exact := arithmetic.float64(new(big.Rat).SetFrac(big.NewInt(1), denominator))
+	arithmetic := &loftcontact.Arithmetic{OK: true}
+	_, exact := arithmetic.Float64(new(big.Rat).SetFrac(big.NewInt(1), denominator))
 	require.False(t, exact)
-	require.False(t, arithmetic.ok)
+	require.False(t, arithmetic.OK)
 
 	// The last permitted numerator alignment is exactly 8,192 bits.
 	denominator = new(big.Int).Lsh(big.NewInt(1), 8137)
-	arithmetic = &loftVolumeArithmetic{ok: true}
-	_, _ = arithmetic.float64(new(big.Rat).SetFrac(big.NewInt(1), denominator))
-	require.True(t, arithmetic.ok)
+	arithmetic = &loftcontact.Arithmetic{OK: true}
+	_, _ = arithmetic.Float64(new(big.Rat).SetFrac(big.NewInt(1), denominator))
+	require.True(t, arithmetic.OK)
 }
 
 func TestLoftOutputCrossZeroRefusesOversizedReplayArithmetic(t *testing.T) {
@@ -349,8 +351,8 @@ func TestLoftOutputTileCapRefusesOversizedReturnedPoint(t *testing.T) {
 	pp := prism.n.Payload.(prismPayload)
 	zero, one := big.NewRat(0, 1), big.NewRat(1, 1)
 	large := new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), 8192))
-	polygon := []loftPartitionPoint{
-		{u: zero, v: zero}, {u: large, v: zero}, {u: zero, v: one},
+	polygon := []loftcontact.Point{
+		{U: zero, V: zero}, {U: large, V: zero}, {U: zero, V: one},
 	}
 	shell := loftOutputNewShell()
 	admitted, err := loftOutputTileCap(t.Context(), proofbound.NewWorkBudget(t.Context()),
@@ -359,8 +361,8 @@ func TestLoftOutputTileCapRefusesOversizedReturnedPoint(t *testing.T) {
 	require.False(t, admitted)
 	require.Empty(t, shell.triangles)
 	tiny := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 8140))
-	polygon = []loftPartitionPoint{
-		{u: zero, v: zero}, {u: tiny, v: zero}, {u: zero, v: one},
+	polygon = []loftcontact.Point{
+		{U: zero, V: zero}, {U: tiny, V: zero}, {U: zero, V: one},
 	}
 	admitted, err = loftOutputTileCap(t.Context(), proofbound.NewWorkBudget(t.Context()),
 		pp, &shell, polygon, zero, loftOutputFace{kind: 0}, false)
@@ -395,19 +397,19 @@ func TestLoftOutputMiddleTraceRefusesOversizedHeightDifference(t *testing.T) {
 		{point: loftOutputPoint{u: loftOutputRat(1), v: loftOutputRat(0), z: second}},
 		{point: loftOutputPoint{u: loftOutputRat(0), v: loftOutputRat(1), z: first}},
 	}}
-	arithmetic := &loftVolumeArithmetic{ok: true}
+	arithmetic := &loftcontact.Arithmetic{OK: true}
 	trace, _, err := loftOutputPlaneTrace(proofbound.NewWorkBudget(t.Context()), shell,
 		[3]int{0, 1, 2}, loftOutputRat(0), arithmetic)
 	require.NoError(t, err)
-	require.False(t, arithmetic.ok)
+	require.False(t, arithmetic.OK)
 	require.Empty(t, trace)
 }
 
 func TestLoftOutputCapRefusesOversizedAreaProduct(t *testing.T) {
 	tiny := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 5000))
 	zero := loftOutputRat(0)
-	polygon := []loftPartitionPoint{
-		{u: zero, v: zero}, {u: tiny, v: zero}, {u: zero, v: tiny},
+	polygon := []loftcontact.Point{
+		{U: zero, V: zero}, {U: tiny, V: zero}, {U: zero, V: tiny},
 	}
 	admitted, err := loftOutputCertifyCapTiling(proofbound.NewWorkBudget(t.Context()),
 		polygon, [][3]int{{0, 1, 2}})
@@ -415,13 +417,13 @@ func TestLoftOutputCapRefusesOversizedAreaProduct(t *testing.T) {
 	require.False(t, admitted)
 }
 
-func loftOutputAdversarialPoint(u, v int64) loftPartitionPoint {
-	return loftPartitionPoint{u: big.NewRat(u, 1), v: big.NewRat(v, 1)}
+func loftOutputAdversarialPoint(u, v int64) loftcontact.Point {
+	return loftcontact.Point{U: big.NewRat(u, 1), V: big.NewRat(v, 1)}
 }
 
 func TestLoftOutputCapConcaveEscapingDiagonal(t *testing.T) {
 	p := loftOutputAdversarialPoint
-	polygon := []loftPartitionPoint{p(0, 0), p(4, 0), p(4, 1), p(1, 1), p(1, 4), p(0, 4)}
+	polygon := []loftcontact.Point{p(0, 0), p(4, 0), p(4, 1), p(1, 1), p(1, 4), p(0, 4)}
 	budget := proofbound.NewWorkBudget(t.Context())
 
 	// Both endpoints lie on the boundary, but the diagonal crosses the missing corner.
@@ -429,7 +431,7 @@ func TestLoftOutputCapConcaveEscapingDiagonal(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, inside)
 
-	tri := [3]loftPartitionPoint{polygon[1], polygon[2], polygon[4]}
+	tri := [3]loftcontact.Point{polygon[1], polygon[2], polygon[4]}
 	inside, err = loftOutputTriangleInside(budget, polygon, tri)
 	require.NoError(t, err)
 	require.False(t, inside)
@@ -441,19 +443,21 @@ func TestLoftOutputCapConcaveEscapingDiagonal(t *testing.T) {
 
 func TestLoftOutputCapEqualAreaOverlapAndGap(t *testing.T) {
 	p := loftOutputAdversarialPoint
-	polygon := []loftPartitionPoint{p(0, 0), p(4, 0), p(4, 2), p(4, 4), p(0, 4), p(0, 2)}
+	polygon := []loftcontact.Point{p(0, 0), p(4, 0), p(4, 2), p(4, 4), p(0, 4), p(0, 2)}
 	tris := [][3]int{{0, 1, 3}, {0, 2, 4}}
 	budget := proofbound.NewWorkBudget(t.Context())
 
 	// The two distinct triangles each cover half the polygon's area, but overlap
 	// near the center and leave another region uncovered.
+	checked := &loftcontact.Arithmetic{OK: true}
 	require.Zero(t, new(big.Rat).Sub(
-		new(big.Rat).Add(loftPartitionCross(polygon[0], polygon[1], polygon[3]),
-			loftPartitionCross(polygon[0], polygon[2], polygon[4])),
+		new(big.Rat).Add(checked.PointCross(polygon[0], polygon[1], polygon[3]),
+			checked.PointCross(polygon[0], polygon[2], polygon[4])),
 		new(big.Rat).Mul(loftOutputPolygonArea(polygon), big.NewRat(2, 1))).Sign())
+	require.True(t, checked.OK)
 	for _, tri := range tris {
 		inside, err := loftOutputTriangleInside(budget, polygon,
-			[3]loftPartitionPoint{polygon[tri[0]], polygon[tri[1]], polygon[tri[2]]})
+			[3]loftcontact.Point{polygon[tri[0]], polygon[tri[1]], polygon[tri[2]]})
 		require.NoError(t, err)
 		require.True(t, inside)
 	}
@@ -464,7 +468,7 @@ func TestLoftOutputCapEqualAreaOverlapAndGap(t *testing.T) {
 
 func TestLoftOutputCapCollinearBoundarySplit(t *testing.T) {
 	p := loftOutputAdversarialPoint
-	polygon := []loftPartitionPoint{p(0, 0), p(2, 0), p(4, 0), p(4, 4), p(0, 4)}
+	polygon := []loftcontact.Point{p(0, 0), p(2, 0), p(4, 0), p(4, 4), p(0, 4)}
 	budget := proofbound.NewWorkBudget(t.Context())
 
 	inside, err := loftOutputEdgeInside(budget, polygon[0], polygon[2], polygon)
@@ -485,7 +489,7 @@ func TestLoftOutputCapCollinearBoundarySplit(t *testing.T) {
 
 func TestLoftOutputCapPredicatesCancelInFlight(t *testing.T) {
 	p := loftOutputAdversarialPoint
-	polygon := []loftPartitionPoint{p(0, 0), p(4, 0), p(4, 4), p(0, 4)}
+	polygon := []loftcontact.Point{p(0, 0), p(4, 0), p(4, 4), p(0, 4)}
 	for _, tc := range []struct {
 		name string
 		call func(*proofbound.WorkBudget) (bool, error)
@@ -495,7 +499,7 @@ func TestLoftOutputCapPredicatesCancelInFlight(t *testing.T) {
 		}},
 		{"triangle", func(b *proofbound.WorkBudget) (bool, error) {
 			return loftOutputTriangleInside(b, polygon,
-				[3]loftPartitionPoint{polygon[0], polygon[1], polygon[2]})
+				[3]loftcontact.Point{polygon[0], polygon[1], polygon[2]})
 		}},
 		{"tiling", func(b *proofbound.WorkBudget) (bool, error) {
 			return loftOutputCertifyCapTiling(b, polygon, [][3]int{{0, 1, 2}, {0, 2, 3}})
