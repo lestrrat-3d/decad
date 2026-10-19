@@ -186,7 +186,7 @@ func planarConvexity(ctx context.Context, budget *proofbound.WorkBudget, b *Body
 // read off its VerifyAll tessellation with δ that mesh's Bound
 // (planarHeldMeshSolid), a body with a curved face at chord. The
 // returned displacement is δ at the query pose: the body-frame figure times
-// an upper bound on the pose's stretch (planarPoseScale). It is zero for an
+// an upper bound on the pose's stretch (planarsnapshot.PoseScale). It is zero for an
 // exact body.
 //
 // The snapshot at the identity pose is built once per body and chord and

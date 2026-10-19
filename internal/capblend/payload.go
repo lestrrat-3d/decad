@@ -29,7 +29,7 @@ import (
 //
 // The reduction mirrors modify-design §2's lateral-edge one: the selected
 // cap loop's boundary is offset dc into the material (the "cap contour",
-// still in the cap plane — shell.go's exact per-feature offset, reused
+// still in the cap plane — offset2d's exact per-feature offset, reused
 // unchanged) while the ORIGINAL loop is held at its own (u, v) and moved
 // axially ds into the material (the "side contour"). The band between the
 // two contours is a ruled surface: a Plane for a line wall, a Cone for a
