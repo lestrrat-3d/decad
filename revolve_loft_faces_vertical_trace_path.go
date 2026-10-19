@@ -61,7 +61,7 @@ func revolveLoftFacesTraceWedge(rays []revolveLoftFacesRay, a, b [2]*big.Rat) (i
 func revolveLoftFacesTraceJoin(proof *revolveLoftFacesSourceCertificate,
 	piece revolveLoftFacesVerticalTracePiece, parameter *big.Rat,
 ) (r3.Vec, float64, [2]*big.Rat, bool) {
-	point := revolveLoftFacesVerticalTracePoint(piece, parameter)
+	point := revolveloftfaces.VerticalTraceSourcePoint(piece.VerticalTraceSourcePiece, parameter)
 	if point[0] == nil || point[1] == nil || point[0].Sign() <= 0 ||
 		proof == nil || proof.trim == nil {
 		return r3.Vec{}, 0, [2]*big.Rat{}, false
@@ -86,10 +86,10 @@ func revolveLoftFacesTraceSourceHits(piece revolveLoftFacesVerticalTracePiece,
 			continue
 		}
 		hit.ray = ray
-		if piece.arc == nil {
+		if piece.Arc == nil {
 			if hit.lo == nil || hit.hi == nil ||
-				hit.lo.Cmp(piece.from) <= 0 && hit.hi.Cmp(piece.from) >= 0 ||
-				hit.lo.Cmp(piece.to) <= 0 && hit.hi.Cmp(piece.to) >= 0 {
+				hit.lo.Cmp(piece.From) <= 0 && hit.hi.Cmp(piece.From) >= 0 ||
+				hit.lo.Cmp(piece.To) <= 0 && hit.hi.Cmp(piece.To) >= 0 {
 				return nil, false
 			}
 		} else if hit.lo != nil || hit.hi != nil {
@@ -98,30 +98,30 @@ func revolveLoftFacesTraceSourceHits(piece revolveLoftFacesVerticalTracePiece,
 		hits = append(hits, hit)
 	}
 	sort.Slice(hits, func(i, j int) bool {
-		if piece.arc == nil {
-			if piece.from.Cmp(piece.to) < 0 {
+		if piece.Arc == nil {
+			if piece.From.Cmp(piece.To) < 0 {
 				return hits[i].lo.Cmp(hits[j].lo) < 0
 			}
 			return hits[i].lo.Cmp(hits[j].lo) > 0
 		}
 		a := [2]*big.Rat{rays[hits[i].ray].y, rays[hits[i].ray].z}
 		b := [2]*big.Rat{rays[hits[j].ray].y, rays[hits[j].ray].z}
-		if piece.from.Cmp(piece.to) < 0 {
+		if piece.From.Cmp(piece.To) < 0 {
 			return revolveLoftFacesTraceCross(a, b).Sign() > 0
 		}
 		return revolveLoftFacesTraceCross(a, b).Sign() < 0
 	})
 	for i := 1; i < len(hits); i++ {
-		if piece.arc == nil {
-			if hits[i-1].hi.Cmp(hits[i].lo) >= 0 && piece.from.Cmp(piece.to) < 0 ||
-				hits[i].hi.Cmp(hits[i-1].lo) >= 0 && piece.from.Cmp(piece.to) > 0 {
+		if piece.Arc == nil {
+			if hits[i-1].hi.Cmp(hits[i].lo) >= 0 && piece.From.Cmp(piece.To) < 0 ||
+				hits[i].hi.Cmp(hits[i-1].lo) >= 0 && piece.From.Cmp(piece.To) > 0 {
 				return nil, false
 			}
 		} else {
 			a := [2]*big.Rat{rays[hits[i-1].ray].y, rays[hits[i-1].ray].z}
 			b := [2]*big.Rat{rays[hits[i].ray].y, rays[hits[i].ray].z}
 			if revolveLoftFacesTraceCross(a, b).Sign() !=
-				-piece.from.Cmp(piece.to) {
+				-piece.From.Cmp(piece.To) {
 				return nil, false
 			}
 		}
@@ -133,7 +133,7 @@ func revolveLoftFacesVerticalTraceSegmentBound(proof *revolveLoftFacesSourceCert
 	piece revolveLoftFacesVerticalTracePiece, from, to revolveLoftFacesVerticalTraceHit,
 	fromDir, toDir [2]*big.Rat, held, endHeld r3.Vec, rays []revolveLoftFacesRay,
 ) (float64, bool) {
-	if piece.arc != nil {
+	if piece.Arc != nil {
 		if piece.upper == nil || piece.upper.Sign() <= 0 ||
 			fromDir[0] == nil || toDir[0] == nil {
 			return 0, false
@@ -155,7 +155,7 @@ func revolveLoftFacesVerticalTraceSegmentBound(proof *revolveLoftFacesSourceCert
 			if hit.lo == nil || hit.hi == nil || hit.lo.Cmp(hit.hi) != 0 {
 				return 0, false
 			}
-			point := revolveLoftFacesVerticalTracePoint(piece, hit.lo)
+			point := revolveloftfaces.VerticalTraceSourcePoint(piece.VerticalTraceSourcePiece, hit.lo)
 			if point[0] == nil || point[1] == nil {
 				return 0, false
 			}
@@ -184,10 +184,10 @@ func revolveLoftFacesVerticalTraceSegmentBound(proof *revolveLoftFacesSourceCert
 		to.lo == nil || to.hi == nil {
 		return 0, false
 	}
-	if len(piece.y) == 2 {
+	if len(piece.Y) == 2 {
 		endpointBox := func(hit revolveLoftFacesVerticalTraceHit) ([3]loftface.Interval, bool) {
 			if hit.lo.Cmp(hit.hi) == 0 {
-				point := revolveLoftFacesVerticalTracePoint(piece, hit.lo)
+				point := revolveloftfaces.VerticalTraceSourcePoint(piece.VerticalTraceSourcePiece, hit.lo)
 				return [3]loftface.Interval{{Lo: piece.x, Hi: piece.x},
 						{Lo: point[0], Hi: point[0]}, {Lo: point[1], Hi: point[1]}},
 					point[0] != nil && point[1] != nil
@@ -301,7 +301,7 @@ func revolveLoftFacesVerticalTracePath(ctx context.Context,
 				hit: revolveLoftFacesVerticalTraceHit{piece: index, ray: capRays[1],
 					lo: piece.cell.upper.Root.Lo, hi: piece.cell.upper.Root.Hi}})
 		} else {
-			held, bound, direction, valid := revolveLoftFacesTraceJoin(proof, piece, piece.to)
+			held, bound, direction, valid := revolveLoftFacesTraceJoin(proof, piece, piece.To)
 			if !valid || bound >= 0.1 {
 				return nil, nil, 0, false, nil
 			}
@@ -311,7 +311,7 @@ func revolveLoftFacesVerticalTracePath(ctx context.Context,
 			maxBound = max(maxBound, bound)
 			targets = append(targets, revolveLoftFacesTraceNode{vertex: vertex, ray: -1,
 				dir: direction, hit: revolveLoftFacesVerticalTraceHit{piece: index, ray: -1,
-					lo: piece.to, hi: piece.to}})
+					lo: piece.To, hi: piece.To}})
 		}
 		for _, target := range targets {
 			prior := nodes[len(nodes)-1]
@@ -333,7 +333,7 @@ func revolveLoftFacesVerticalTracePath(ctx context.Context,
 		}
 		if index+1 < len(pieces) {
 			nodes[len(nodes)-1].hit = revolveLoftFacesVerticalTraceHit{piece: index + 1,
-				ray: -1, lo: pieces[index+1].from, hi: pieces[index+1].from}
+				ray: -1, lo: pieces[index+1].From, hi: pieces[index+1].From}
 		}
 	}
 	return nodes, edges, maxBound, true, nil
