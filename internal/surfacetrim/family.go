@@ -1,7 +1,7 @@
 // Package surfacetrim holds the prism-family entry gate of Trim, Extend and
 // Split, S1's sweep-family reading and S7's section-displacement reading over
 // every payload shape, and Extend's free-end widening for both families
-// (docs/surface-intersection-design.md §2.1, §2.2, §3.1). The root keeps the
+// (docs/surface-intersection-design.md §2.1, §2.2, §3.2). The root keeps the
 // public entry points, the result builds and the commits. The revolve arm's
 // S2-S7 live in internal/revolveplan for Trim and Extend, and in root
 // surface_split_revolve.go for Split.

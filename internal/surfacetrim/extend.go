@@ -16,7 +16,7 @@ import (
 )
 
 // ExtendPrism widens, for each of b's edges, the recorded end that edge names
-// until it meets tl (docs/surface-intersection-design.md §3.1), and returns
+// until it meets tl (docs/surface-intersection-design.md §3.2), and returns
 // rcv with a fresh walk set and its SectionDelta set to the largest δ_cut any
 // widening read. rcv is b's own record as AdmitExtendPair returned it; its
 // walk set is copied, never written.
@@ -90,11 +90,13 @@ func widenEnds(ctx context.Context, budget *proofbound.WorkBudget, chains []sect
 //
 // The loop indexes b.Lumps and reads chains at the SAME index, which assumes
 // the body's i-th lump is the record's i-th chain. That holds because every
-// chain record a body carrying zero section displacement can hold is built by
-// chainrecord.Build — for chain Extrude (root extrude.go), root Extend, and a
-// placed copy's re-evaluation (chainrecord.Payload.Placed) — which builds
-// exactly one lump per chain in chain order. Trim's chain record is the only
-// other one, and S7 already refused it for its nonzero SectionDelta. What would
+// chain record a body can hold is built by chainrecord.Build — for chain
+// Extrude (root extrude.go), root Trim and root Extend, and for a placed
+// copy's re-evaluation (chainrecord.Payload.Placed) — which builds exactly one
+// lump per chain in chain order. A trimmed body is therefore read on the same
+// terms whatever SectionDelta it recorded; S7 refuses one whose SectionDelta
+// is nonzero before this reading runs, and admits one whose SectionDelta is
+// zero, as it is when every surviving fragment was whole. What would
 // break it: a producer that emits a lump per connected PIECE rather than per
 // chain (one self-touching walk splitting into two lumps, or two walks meeting
 // at a vertex merging into one), or one that reorders lumps. Either would

@@ -236,7 +236,8 @@ is available. The widened range replaces the recorded one; every other segment
 of the receiver's walk is copied verbatim. The named edge is one of the two
 sweep edges the ribbon's free ends carry (surface Table G), so which end is
 being lengthened is read off the receiver's own walk rather than stated by the
-caller (`internal/surfacetrim`'s `ExtendPrism` and `ExtendRevolve`), and the direction follows from the recorded range order alone:
+caller (`internal/surfacetrim`'s `ExtendPrism` and `ExtendRevolve`), and the
+direction follows from the recorded range order alone:
 `TStart` is the covered interval's lower bound when the record runs ascending
 and its upper bound when it runs reversed, so widening `TStart` decreases it in
 the first case and increases it in the second, and `TEnd` is the mirror.
