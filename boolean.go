@@ -17,6 +17,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/obliqueboss"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
+	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/units"
@@ -215,10 +216,11 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 	} else if ok {
 		return body, nil
 	}
-	if body, ok, err := tryRevolveSectorCylinderCut(ctx, op, d, ref, a, b); err != nil {
+	if n, ok, err := revolveshell.SectorCylinderCut(ctx, op, envOf(documentNode(d), ref),
+		bodyNode(a), bodyNode(b)); err != nil {
 		return nil, err
 	} else if ok {
-		return body, nil
+		return bodyHandle(n), nil
 	}
 	if body, ok, err := tryLoftMirrorCylinderBoreCut(ctx, op, d, ref, a, b); err != nil {
 		return nil, err
