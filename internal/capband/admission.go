@@ -21,7 +21,7 @@ import (
 // residual, so the predicate classifies the denoted geometry and never admits
 // a band because its float readings happen to sit close together.
 //
-// Two consumers read it and must agree: boolean.go's
+// Two consumers read it and must agree: boolean_mesh.go's
 // requireVolumeProvingPayload before any mesh is built, and
 // tessellateCapBlend when it decides whether to publish the proof.
 

@@ -792,7 +792,7 @@ func Sweep[S Section](ctx context.Context, d *Document, s *sketch.Sketch,
     sec S, path *Path, opts ...SweepOption) (*Body, error)
 ```
 
-`Section` (`section_input.go`) is the constraint `*sketch.Profile |
+`Section` (`section.go`) is the constraint `*sketch.Profile |
 *sketch.Chain`. `Sweep` type-switches on the section and calls the profile
 build (§§2–14, §16, §17) or the chain build (this section). The two builds keep
 distinct payloads, `sweepPayload` and `chainSweepPayload`, for §10's reason: a

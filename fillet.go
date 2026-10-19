@@ -53,7 +53,7 @@ import (
 // its stored exact prism reduction for lateral-edge fillets. Other Sweep
 // paths are S3, and its cap-edge selections are S1.
 // A one-sided positive circular draft also admits its one complete far cap
-// rim through the bounded meridian reduction in draft_circle_fillet.go.
+// rim through the bounded meridian reduction in draft_circle.go.
 
 // FilletOption configures Fillet. WithTangentChain is the one option a
 // fillet takes (docs/modify-reach-design.md §2).

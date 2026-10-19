@@ -89,7 +89,7 @@ type thickenRibbonCopy struct {
 
 // thickenRibbonCopyOf builds one copy in closed form. A corner arc appears
 // exactly where the walk turns AWAY from this copy's side, the same
-// sign(cross) == −s rule the closed offset takes (shell_offset.go); the other
+// sign(cross) == −s rule the closed offset takes (shell.go); the other
 // corner miters. A copy with steps == 0 is the recorded walk itself and takes
 // neither.
 func thickenRibbonCopyOf(walks []survey2d.SideWalk, dirs []AxisDir, c thickenRibbonSide) thickenRibbonCopy {

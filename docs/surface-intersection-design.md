@@ -65,7 +65,7 @@ Checked before any `sketch` call, on the two operands' current payloads.
 **Every miss is `ErrUnsupported` at the call, never a fallback** — prism §3.1's
 own gate misses reroute to the mesh boolean, and no mesh path exists here: a
 sheet's mesh carries no proof of the volume it and the body it stands for
-differ by, so `boolean.go`'s `requireVolumeProvingPayload` refuses it, and a
+differ by, so `boolean_mesh.go`'s `requireVolumeProvingPayload` refuses it, and a
 mesh trim would decide which fragment survives from float sign tests on
 chorded triangles, which is core §2.1's own discrete-error failure. Staging
 therefore surfaces as `docs/evaluator-design.md` §11 requires for an intent

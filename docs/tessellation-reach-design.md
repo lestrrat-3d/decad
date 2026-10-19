@@ -584,7 +584,7 @@ payload already publishes per patch; the trimmed walls and caps charge the prism
 ### Occupied volume — `volSymDiff` for an admitted band
 
 **Admission** (`capblend.OccupiedVolumeAdmission`, `internal/capblend/admit.go`) is decided from the record alone and
-read by both consumers that must agree: `requireVolumeProvingPayload` (`boolean.go`) before any mesh is
+read by both consumers that must agree: `requireVolumeProvingPayload` (`boolean_mesh.go`) before any mesh is
 built, and `tessellateCapBlend` when it publishes. Every loop of the payload must be either
 
 - a single closed `CircleSeg` walk (the whole turn), or

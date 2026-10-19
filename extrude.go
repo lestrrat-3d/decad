@@ -32,7 +32,7 @@ import (
 // line/circle/arc boundary segment, and a NURBSSurface
 // (docs/spline-design.md §7) for a Tier A free-form one, with bounded mass
 // measurements throughout. Exactly representable results retain zero bounds.
-// A nonzero taper leaves this file for draft_build.go's extrudeDraft.
+// A nonzero taper leaves this file for draft.go's extrudeDraft.
 
 // ExtrudeOption configures Extrude. A chain section accepts none of them: both
 // WithTaper and WithSurfaceResult return ErrUnsupported on a chain.

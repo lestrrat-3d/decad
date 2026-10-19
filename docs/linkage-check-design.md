@@ -27,7 +27,7 @@ link anywhere along the drive — or finds where one does.
 `motion.go`, and not in a subpackage like `dynamics/`. The reason is what a pose evaluation needs: the
 transient placement of a payload under a composed transform (`payload.Placed` with the reserved
 `transientProducer`, motion §5.1), the clearance kernel with its per-call carrier cache
-(`clearancePairCached`), the overlap transfer (`transferredOverlap`) and the exact ideal-pose enclosure
+(`clearancePairCached`), the overlap transfer (`motionbound.TransferredOverlap`) and the exact ideal-pose enclosure
 `η` is charged against (`internal/motionbound.IdealPose`). `dynamics/` sits above the root because the
 public queries it consumes — `SweepPair`, `ContactPair`, `SweptBox` — already prove what its payload
 families need. A linkage check needs `VerifyMotion`'s whole kernel reach, and the only way to give a
@@ -984,7 +984,7 @@ poses, and the cone its unplaced reading, `5` with a `Bound` of about `4e-15`, a
 **Exactness.** Every admission test is §5.2's and §5.7's, exact rationals with no tolerance; the one
 evaluation is `Verify`'s own pair procedure on live bodies, with its own exactness and its own mesh path
 for an overlap's volume. The rule lives in `linkageDriver.markConstantPairs` (`linkage_verify.go`), the one
-evaluation and its replay in `motion_verify.go` (`settleConstant`, `replayConstant`).
+evaluation and its replay in `motion_verify_pair.go` (`settleConstant`, `replayConstant`).
 
 ## 6. The procedure
 
@@ -1309,7 +1309,7 @@ of radius `r = 5` about `(48, 0)`, `z ∈ [−1, 9]`, on the elbow revolute abou
   constant and every pose carries the `(A, P)` row `Exact` at `0.5` with `Bound` zero; red when the
   symmetry test is dropped.
 - `_gallery`'s folding arm and crank-rocker put their pins back on their bores' centres, and
-  `linkage_clip_test.go` asserts every evaluated pose of each declared pair carries its row.
+  `_gallery/linkage_clip_test.go` asserts every evaluated pose of each declared pair carries its row.
 
 **Agreement with `VerifyMotion`.** A one-link linkage on a revolute joint and the same body under the
 equivalent `Revolute`, on motion §9's fixtures 1, 2 and 4 at the endpoints alone: equal `Status`, equal
@@ -1580,7 +1580,7 @@ finding. A split cell's other centre findings are not published, because its lea
 **Travel over a cell.** For a cell `C = Π [a_i, b_i]` with centre `m`, and a configuration `q` in `C`,
 §5.2's telescoping bound moves one joint at a time from `m` to `q`: a point of link `k` travels at most
 `Σ_i w_i·|q_i − m_i|`, with `w_i = ρ_{ik}` for a revolute joint `i` on the link's path and `1` for a
-prismatic one. `ρ_{ik}` is read over the whole box (`readLinkBounds` with `m_i = max(|Min_i|, |Max_i|)`),
+prismatic one. `ρ_{ik}` is read over the whole box (`linkagebound.ReadReachBounds` with `m_i = max(|Min_i|, |Max_i|)`),
 so one reading serves every cell. Since `|q_i − m_i| ≤ (b_i − a_i)/2`,
 
 ```text
@@ -1913,20 +1913,20 @@ and `go test . ./apitest/ -run '^TestCI'` is run before the push.
 
 | PR | lands | still `Suspect` after it |
 |---|---|---|
-| 1 (`linkage_box.go`; `motion_verify.go`'s `evaluatePose` split into building a pose's groups and running its pairs, `intervalOutcome`'s pair walk and `conclude`'s status fold shared, `VerifyMotion` and `VerifyLinkage` bit-identical) | `JointBox`, `JointRange`, `JointBoxOption` with `MotionOption` embedding it, `WithCellBudget`, `JointConfiguration` and `Linkage.Configuration`; `VerifyJointBox` with the centre certificate, `CellClear`/`CellColliding`/`CellUndecided`, step 5's split rule and order, the floor and the budget, `Diagnostic.Cell`, `DiagJointBoxBudgetExhausted`, the settled pairs, held links and declared contacts over the box, the whole-box reading over the leaves as they stand; scene 6's verdict and tiling assertions at `WithResolution(Scalar(1.0/16))`, since every colliding cell splits to the floor, its example, the budget, one-joint and standing tests | a colliding region's interior: every colliding cell splits to the floor or the budget |
+| 1 (`linkage_box.go`; `motion_verify.go`'s `evaluatePose` split into building a pose's groups and running its pairs, `intervalOutcome`'s pair walk and `conclude`'s status fold (both in `motion_verify_pair.go`) shared, `VerifyMotion` and `VerifyLinkage` bit-identical) | `JointBox`, `JointRange`, `JointBoxOption` with `MotionOption` embedding it, `WithCellBudget`, `JointConfiguration` and `Linkage.Configuration`; `VerifyJointBox` with the centre certificate, `CellClear`/`CellColliding`/`CellUndecided`, step 5's split rule and order, the floor and the budget, `Diagnostic.Cell`, `DiagJointBoxBudgetExhausted`, the settled pairs, held links and declared contacts over the box, the whole-box reading over the leaves as they stand; scene 6's verdict and tiling assertions at `WithResolution(Scalar(1.0/16))`, since every colliding cell splits to the floor, its example, the budget, one-joint and standing tests | a colliding region's interior: every colliding cell splits to the floor or the budget |
 | 2 | the blocked certificate and `CellBlocked`; scene 6's blocked assertions, still at `Scalar(1.0/16)` (§14.7), the blocked box, and the blocked allowance pinned per moving body | a clear box's whole-box reading at the default floor |
 | 3 | step 6: the whole-box reading's refinement, the reading floor and `ReadingResolution`, the margin; the clear box and its reading; the three-joint cost of §14.7 measured and recorded | a stated `WithResolution` too coarse for the reading; a gap constant along an axis, or a flat minimum, whose gate needs more than the budget |
-| P1 (`linkage_bound.go`: the corner velocities, `B_ij`, `Rem` and `L_n` over the six directions, read once per pose; `motion_verify.go`: `motionDriver` gains an optional projection bound per pair and interval, `intervalOutcome` takes the larger of the two bounds, `singleMotion` supplies none so `VerifyMotion` is bit-identical; `linkage_verify.go`: the driver's bound for a tree, nil on a path with a dependent joint) | §5.8's interval form for `VerifyLinkage`; the three-joint drive, scene 13, scene 14 and the internal tests of §5.8; the agreement test restated; §10's measured counts, `TestVerifyLinkageReadingFloor`'s default leg and the benchmark's reported poses re-measured and recorded | the box's flat minimum (§14.7); a disc or a tilted contact still pays the travel bound's linear cost |
+| P1 (`linkage_bound.go`: the corner velocities, `B_ij`, `Rem` and `L_n` over the six directions, read once per pose; `motion_verify.go`: `motionDriver` gains an optional projection bound per pair and interval, `intervalOutcome` (`motion_verify_pair.go`) takes the larger of the two bounds, `singleMotion` supplies none so `VerifyMotion` is bit-identical; `linkage_verify.go`: the driver's bound for a tree, nil on a path with a dependent joint) | §5.8's interval form for `VerifyLinkage`; the three-joint drive, scene 13, scene 14 and the internal tests of §5.8; the agreement test restated; §10's measured counts, `TestVerifyLinkageReadingFloor`'s default leg and the benchmark's reported poses re-measured and recorded | the box's flat minimum (§14.7); a disc or a tilted contact still pays the travel bound's linear cost |
 | P1b (`linkage_bound.go`: `jointStep` and the segment term in `projectionSide`; `linkage_verify.go`: the driver's steps per interval, negated from the far end) | §5.8's segment term on an interval no waypoint bends; the three-joint drive's `rel = 1e-5` leg and the reading floor's leg there; the out-and-back pin; the segment term's internal test; the measured counts re-recorded | as after P1 |
 | S1 (`linkage_bound.go`: `bodySymmetryAxis`, `symmetricAboutJoint`; `linkage_verify.go`: the driver's per-mover symmetry and `pathOf`) | §5.2's symmetry rule in the drive's travel and projection bounds; the symmetric-body tests and the off-axis disc of §11 | the box's cells still charge a symmetric body's own joint, until the cell form takes the rule after P2 |
-| S2 (`linkage_box.go`: `branchTerms` and `cellProjection` read `linkageDriver.pathOf`) | §5.2's symmetry rule in the cell form: `τ_half`, the blocked allowance and the projection bound; the symmetric body in a box (§14.8) | — |
-| D1 (`linkage_loop.go`: `dependentHull`, `dependentAt`; `linkage_verify.go`: a dependent's centre and `h` per end, no segment term over one) | §5.8's expansion over a loop's dependent joint on a drive; the crank-rocker's block under a ceiling (§15.10) | the box's cells over a loop still take the travel bound alone for a dependent, until the cell form takes the expansion after P2 |
-| D2 (`linkage_box.go`: `dependentReach` per cell, the dependent's centre in `cellProjection`, its share charged to its driver) | §5.8's expansion over a dependent in the cell form (§16.3); the block under a ceiling in a loop box (§16.8) | — |
-| H1 (`linkage_bound.go`: `bodyHullPoints`, the point readings, `extentsAlong` and the hull bound over every candidate direction; `linkage_verify.go`: the driver's larger bound) | §5.8's hull points and directions on a drive; the tilted pendulum and the tilted wall | the box's cells still read box corners and coordinate directions, until the cell form takes the hull after P2 |
-| C1 (`linkage_bound.go`: the cylinder beside the ball in `readLinkBounds`) | §5.2's cylinder reading of `ρ_{ik}`, the ball's reach kept for the swept box; its internal test | — |
-| H2 (`linkage_box.go`: `cellProjection` over hull points and face normals, `hullAttained`, `addHullShares`) | §5.8's hull points and directions in the cell form; the tilted box and the slot (§14.8) | — |
+| S2 (`linkage_box_cell.go`: `branchTerms` and `cellProjection` read `linkageDriver.pathOf`) | §5.2's symmetry rule in the cell form: `τ_half`, the blocked allowance and the projection bound; the symmetric body in a box (§14.8) | — |
+| D1 (`linkage_loop_drive.go`: `dependentHull`, `dependentAt`; `linkage_verify.go`: a dependent's centre and `h` per end, no segment term over one) | §5.8's expansion over a loop's dependent joint on a drive; the crank-rocker's block under a ceiling (§15.10) | the box's cells over a loop still take the travel bound alone for a dependent, until the cell form takes the expansion after P2 |
+| D2 (`linkage_box_cell.go`: `linkagebound.DependentCellReach` per cell, the dependent's centre in `cellProjection`, its share charged to its driver) | §5.8's expansion over a dependent in the cell form (§16.3); the block under a ceiling in a loop box (§16.8) | — |
+| H1 (`linkage_verify.go`: `bodyPoints` over `linkagebound.PrismHullPoints`, the point readings, `linkagebound.Side.ExtentsAlong` and the hull bound over every candidate direction, and the driver's larger bound) | §5.8's hull points and directions on a drive; the tilted pendulum and the tilted wall | the box's cells still read box corners and coordinate directions, until the cell form takes the hull after P2 |
+| C1 (`internal/linkagebound/reach.go`: the cylinder beside the ball in `ReadReachBounds`) | §5.2's cylinder reading of `ρ_{ik}`, the ball's reach kept for the swept box; its internal test | — |
+| H2 (`linkage_box_cell.go`: `cellProjection` over hull points and face normals, `linkagebound.AttainedDirection`, `linkagebound.AddHullShares`) | §5.8's hull points and directions in the cell form; the tilted box and the slot (§14.8) | — |
 | M1 (`motion_verify.go`: `singleMotion`'s projection bound, its points per pose and its remainder; motion §5.2) | §5.8's interval form for `VerifyMotion`, the motion read as one joint; motion §9 tests 22–25; the agreement test asserting equal reports; motion §9 tests 2 and 13's default-floor legs restated | — |
-| P2 (`linkage_box.go`: `classify` takes the larger of `lo_m − τ_half` and `L_n(C)`; `readingAxis` and `splitAxis` read the attained bound's own shares, §5.8) | §5.8's cell form for `VerifyJointBox`; scene 12, scene 13's and scene 14's boxes; §14.7's three-joint count and the clear box's `137` re-measured and recorded | a disc or a tilted contact in a box |
+| P2 (`linkage_box_cell.go`: `classify` takes the larger of `lo_m − τ_half` and `L_n(C)`; `splitAxis` here and `readingAxis` in `linkage_box.go` read the attained bound's own shares, §5.8) | §5.8's cell form for `VerifyJointBox`; scene 12, scene 13's and scene 14's boxes; §14.7's three-joint count and the clear box's `137` re-measured and recorded | a disc or a tilted contact in a box |
 
 PR 1 is the end-to-end instance: the real crane, the real kernel, the cell certificate over real cells,
 one report, with scene 6's closed-form region as its acceptance. This section ships in PR 1. P1 is the
@@ -2236,7 +2236,7 @@ up to `2^40` rad, with its claim unchanged, so a revolute driver may run any num
 pose. A cell over many turns needs pieces in proportion: the crank-rocker uses about `1400` a turn, and
 `sketch`'s default budget of `4096` pieces would refuse the decomposition's whole-drive cell past about
 three turns. Each ask whose range spans more than one turn of an angular driver therefore states
-`WithMaxPieces` of `4096` per whole turn it spans, rounded up (`pieceBudget`); every other ask keeps the
+`WithMaxPieces` of `4096` per whole turn it spans, rounded up (`loopchain.PieceBudget`); every other ask keeps the
 default. The budget decides only how far `sketch` works before it refuses, never what it claims.
 
 ### 15.4 What a pose proves
@@ -2349,7 +2349,7 @@ the document's loop. On `E0` it is `ErrUnsupported`, as any `ErrNotCertified` is
 
 decad keeps such an ask refused, and every ask continued from it refused with the same cause, exactly as
 the second row does: the poses past the fold stay unbuildable, and the intervals and cells around them
-undecided. The refusal is restated in the driver's own terms (`loopFoldError`). The scene's driving value
+undecided. The refusal is restated in the driver's own terms (`loopchain.Scene.foldRefusal`). The scene's driving value
 is `offset + |q|` (§15.2), so `|q|` at the fold lies in `[Fold.Lo − offset.Hi, Fold.Hi − offset.Lo]`. It is
 negated on the side where the driver's value is `−|q|`, and is in radians, or millimetres for a slide.
 Every finding, and every `PoseAt` error, that the refusal reaches names the loop, the driver's link and
@@ -2787,13 +2787,13 @@ and `go test . ./apitest/ -run '^TestCI'` is run before the push.
 
 | PR | lands | still refused or `Suspect` after it |
 |---|---|---|
-| L1 (`linkage_loop.go`: `Close`, `LinkageLoop`, the scene, the chain and `Schedule`; `motionbound.MotionFrame.AtRange`; the engine's unbuildable poses and interval gate; `go.mod` and `_gallery/go.mod` pinned to the sketch that adds `WithTargetRange` and `WithFixedBox` (#155); this section) | §15.1's vocabulary and admission with every revolute loop about a coordinate axis, §15.2's scene on either side with the bars as target ranges and the zero-pose falsifier, §15.3's chain with whole-turn counts, §15.4's pose with `LinkagePose.Bounds`, §15.5's travel term, reach and reach guard, §15.6's refusals with unbuildable poses and merged undecided intervals, §15.7's `Schedule` and `PoseAt`, `Configuration` refusing a loop; scene 7 with its pin and turn-back legs, scene 9's fold and flat four-bar, the standing tests, the example; a `docs/layout/` row for `linkage_loop.go` | a prismatic joint on a loop; a loop driver with `Via`, held off `0` or crossing `0`; limits on a dependent; a loop about a tilted axis |
+| L1 (`linkage_loop.go`: `Close`, `LinkageLoop`, the scene and the chain; `linkage_loop_drive.go`: `Schedule`; `motionbound.MotionFrame.AtRange`; the engine's unbuildable poses and interval gate; `go.mod` and `_gallery/go.mod` pinned to the sketch that adds `WithTargetRange` and `WithFixedBox` (#155); this section) | §15.1's vocabulary and admission with every revolute loop about a coordinate axis, §15.2's scene on either side with the bars as target ranges and the zero-pose falsifier, §15.3's chain with whole-turn counts, §15.4's pose with `LinkagePose.Bounds`, §15.5's travel term, reach and reach guard, §15.6's refusals with unbuildable poses and merged undecided intervals, §15.7's `Schedule` and `PoseAt`, `Configuration` refusing a loop; scene 7 with its pin and turn-back legs, scene 9's fold and flat four-bar, the standing tests, the example; a `docs/layout/` row for `linkage_loop.go` | a prismatic joint on a loop; a loop driver with `Via`, held off `0` or crossing `0`; limits on a dependent; a loop about a tilted axis |
 | L2 (`linkage_loop.go`) | the prismatic loop joint: the rail as a fixed line along `u` (`u` the slide's sense of its coordinate axis, `v = n × u`) and `NewPointOnLine(P, rail)`, the driving or driven `NewHorizontalDistance(P₀, P)` from the slide's fixed zero-pose point, the half-turned scene side (`u` and `v` both negated) for a slide driven backward, no bar for the slide or for `Common`; `Close`'s prismatic rows (a second prismatic on the loop, one whose parent is not `Common`, a slide not exactly along a coordinate axis or not exactly perpendicular to the closure axis); scene 8 with its pin leg, the slide as the driver | a loop driver with `Via`, held off `0` or crossing `0`; limits on a dependent; a tilted loop |
-| L3 (`linkage_loop.go`) | `Via` on a loop's driver: sub-segments at waypoints and zero crossings, each with its own chain and scene side, the near-end clamp of §15.3, the pose's sub-segment at a boundary, the cuts of §15.5, held drivers and held stretches; limits on a dependent, checked against its whole-drive hull after the decomposition; scene 9's out-and-back drive and the drives over a loop of §15.10 | a loop driver crossing `0` between waypoints stated in mixed terms; a tilted loop |
-| L5 (`linkage_loop.go`: `probeOffset`, the scene's `offset`, the driver below `Common`) | a revolute driver anywhere on a loop, its zero-pose reference read by a probe scene (§15.1–§15.2); the coupler-driven drive and box | slides anywhere (L6) |
-| L6 (`linkage_loop.go`: anchored rails, `riderAt`, `readKappa`, `anchorsAhead`) | any number of slides on any parents, each slide driven or dependent (§15.1–§15.2); the trammel, the rocking block, the Scotch yoke and the anchor's positivity | — |
+| L3 (`linkage_loop.go`, `linkage_loop_drive.go`) | `Via` on a loop's driver: sub-segments at waypoints and zero crossings, each with its own chain and scene side, the near-end clamp of §15.3, the pose's sub-segment at a boundary, the cuts of §15.5, held drivers and held stretches; limits on a dependent, checked against its whole-drive hull after the decomposition; scene 9's out-and-back drive and the drives over a loop of §15.10 | a loop driver crossing `0` between waypoints stated in mixed terms; a tilted loop |
+| L5 (`linkage_loop_drive.go`: `probeOffset`, the scene's `offset`, the driver below `Common`) | a revolute driver anywhere on a loop, its zero-pose reference read by a probe scene (§15.1–§15.2); the coupler-driven drive and box | slides anywhere (L6) |
+| L6 (`linkage_loop.go`: anchored rails, `riderAt`, `readKappa`; `internal/linkagebound/loopchain/enclosure.go`: `anchorsAhead`) | any number of slides on any parents, each slide driven or dependent (§15.1–§15.2); the trammel, the rocking block, the Scotch yoke and the anchor's positivity | — |
 | L4 (`linkage_loop.go`) | a loop about any axis and a slide along any direction perpendicular to it: §15.2's exact frame with each pin's plane position enclosed, each fixed point stated with `WithFixedBox` where its enclosure is not one float, each free point seeded at `r3.Frame.ToLocal`'s float, the bars' squared lengths off `n`, the falsifier refusing a pin whose enclosure is not proven inside its box; §15.1's coordinate-axis rows gone; a driver crossing `0` between waypoints stated in mixed terms, cut at two rationals around the crossing with the straddle between them (§15.8); scene 10 and the mixed-terms crossing drive | — |
-| T1 (`go.mod` and `_gallery/go.mod` pinned to sketch `5a4d9762` (`certify Enclose past ten turns and through folds (#156)`); `linkage_loop.go`: `pieceBudget`, `loopFoldError`) | a driver over any number of turns, each ask's piece budget scaled by the turns it spans (§15.3); a proven fold stated in the driver's terms in every finding and `PoseAt` error it reaches (§15.6); the many-turn drive, scene 9's fold statements on a drive, a box, a mirrored side, a driver below `Common` and a slide | — |
+| T1 (`go.mod` and `_gallery/go.mod` pinned to sketch `5a4d9762` (`certify Enclose past ten turns and through folds (#156)`); `internal/linkagebound/loopchain/enclosure.go`: `PieceBudget`, `foldRefusal`) | a driver over any number of turns, each ask's piece budget scaled by the turns it spans (§15.3); a proven fold stated in the driver's terms in every finding and `PoseAt` error it reaches (§15.6); the many-turn drive, scene 9's fold statements on a drive, a box, a mirrored side, a driver below `Common` and a slide | — |
 
 L1 is the end-to-end instance: the real four-bar, the real `Enclose`, the real kernel, one report, with
 scene 7's closed-form onset as its acceptance. The `_gallery` module films scene 7's four-bar built as a
@@ -2875,7 +2875,7 @@ approach and the centre's from its cell (§16.2).
 ### 16.2 The loop axis is a drive
 
 The loop axis is the one-segment drive `Min → Max` in the fraction `f ∈ [0, 1]` of the driver's range, and
-§15.2, §15.3 and §15.8 apply to it verbatim, about any axis the loop closes about: `driverSubs` cuts it at
+§15.2, §15.3 and §15.8 apply to it verbatim, about any axis the loop closes about: `linkagebound.DriverSubsegments` cuts it at
 a crossing of `0` into two sub-segments, each read on its own scene side with its own chain from the
 crossing, and at a crossing between ends stated in mixed terms into three, the straddle between two
 rational cuts read from both neighbours' branches; the scene is built per side; `E0` and the zero-pose
@@ -3199,7 +3199,7 @@ and `go test . ./apitest/ -run '^TestCI'` is run before the push.
 
 | PR | lands | still `Suspect` after it |
 |---|---|---|
-| B1 (`linkage_box.go`, `linkage_loop.go`) | §16.1's admission and errors; the loop axis as a drive with `prepareLoops` before the bounds (§16.2); the centre over `AtRange`, `JointConfiguration.Bounds`, `δ_j` in `τ_half` and in the blocked allowance, the loop gate, unbuildable centres and the stuck rule, the driver-axis attribution, the dependents' `Cell` and `Center` entries (§16.3, §16.4); scene 11 and its example, the one-axis loop box, the fold box, the standing and internal tests; this section, and §14.1, §15.6, §15.8 and §15.10 read as this section states | nothing this section refuses: the remaining fixtures pin terms B1 already carries |
+| B1 (`linkage_box.go`, `linkage_loop.go`, `linkage_loop_drive.go`) | §16.1's admission and errors; the loop axis as a drive with `prepareLoops` before the bounds (§16.2); the centre over `AtRange`, `JointConfiguration.Bounds`, `δ_j` in `τ_half` and in the blocked allowance, the loop gate, unbuildable centres and the stuck rule, the driver-axis attribution, the dependents' `Cell` and `Center` entries (§16.3, §16.4); scene 11 and its example, the one-axis loop box, the fold box, the standing and internal tests; this section, and §14.1, §15.6, §15.8 and §15.10 read as this section states | nothing this section refuses: the remaining fixtures pin terms B1 already carries |
 | B2 (tests only) | the clear box and its reading, the turn-back cell, the held loop, the blocked box; the measured counts and times of §16.7 recorded | — |
 
 B1 is the end-to-end instance: the real four-bar, the real `Enclose`, the real kernel, cells over a loop,

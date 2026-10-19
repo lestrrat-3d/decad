@@ -40,7 +40,7 @@ type sweepReplayProof struct {
 	sphereAxis, sphereSide     int
 	sphereGap, sphereSlope     proofarith.Dyadic
 	rotation                   *[2]rotationalSweepPath
-	planar                     *planarReplay // a general planar sweep (contact_sweep_faceted.go)
+	planar                     *planarReplay // a general planar sweep (contact_sweep_planar.go)
 	track                      *SweepContactTrack
 	request                    reportvocab.ContactRequest
 	outcome                    SweepOutcome

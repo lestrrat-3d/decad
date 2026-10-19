@@ -201,7 +201,7 @@ func (s TrimSide) String() string {
 // revolve family (a Revolve/chain Revolve spin about one axis,
 // docs/api-design.md's evaluator §5). A mixed pair, or any condition §2.1's
 // S1-S7 states, is [ErrUnsupported] at the call, never a fallback: a sheet's
-// mesh proves no occupied volume (boolean.go's requireVolumeProvingPayload),
+// mesh proves no occupied volume (boolean_mesh.go's requireVolumeProvingPayload),
 // so there is no mesh path for a miss to reroute to. A tool that separates no
 // fragment of b, or every fragment, is [ErrDegenerate] (R30): no
 // trimmed body exists either way. A nil context or a nil b is ErrDegenerate.

@@ -113,7 +113,7 @@ func WithLeftHand() CoilOption
 
 | Parameter | Kind | Meaning |
 |---|---|---|
-| `axis` | `Axis` | `SketchLine`, `ConstructionAxis` or `EdgeAxis` — `Revolve`'s own sealed vocabulary (`revolve.go`), resolved into the sketch plane by `axisInPlane` (`revolve_axis.go`). The axis direction fixes the advance direction |
+| `axis` | `Axis` | `SketchLine`, `ConstructionAxis` or `EdgeAxis` — `Revolve`'s own sealed vocabulary (`revolve.go`), resolved into the sketch plane by `axisInPlane` (`revolve.go`). The axis direction fixes the advance direction |
 | `pitch` | `units.Length`, finite, `> 0` | the axial advance per full turn |
 | `turns` | `units.Dimensionless` (`units.Scalar`), finite, `> 0` | the number of full turns; the total angle is `Θ = 2π·turns` |
 | `WithLeftHand()` | option, at most once | reverses the rotation sense; the advance direction is unchanged |
@@ -572,7 +572,7 @@ rationals against `math.Log`/`math.Asinh` (enclosure contains, width below
 | **CD6** | `Wall`, `Undercut`, `ConcaveRadius` | `Unavailable` with the unsupported-survey diagnostic |
 | **CD7** | `Transform`, `Copy` | §5.6 |
 | **CD8** | modify operations | `ErrUnsupported`; no receiver row |
-| **CD9** | mass properties (`dynamics`) | landed through the verified-mesh ladder (`mass_properties_mesh.go`): the restated mesh settles at its first step, its occupied volume widened by §8.2's `volSymDiff` |
+| **CD9** | mass properties (`dynamics`) | landed through the verified-mesh ladder (`mass_properties.go`): the restated mesh settles at its first step, its occupied volume widened by §8.2's `volSymDiff` |
 | **CD10** | STEP | the faceted AP214 writer: a `Faceted` wall has no analytic arm, so the whole body writes as held facets, which `docs/step-export-design.md` already states for any body with a non-planar, non-cylindrical face |
 
 ### 8.1 `areaSlack`

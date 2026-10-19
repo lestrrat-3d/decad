@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/exactrotation"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -223,6 +224,7 @@ type copyOption struct{ option.Interface }
 func (copyOption) copyOption() {}
 
 type identCopyPlacement struct{}
+
 type identCopyRotation struct{}
 
 // copyRotation is the value WithCopyRotation stores under identCopyRotation.
@@ -356,3 +358,10 @@ func (b *Body) copyUnder(ctx context.Context, motion r3.Transform, exact *exactr
 
 // originProducer returns the private identity of the operation that produced this body.
 func (b *Body) originProducer() producerID { return b.n.Origin.Producer }
+
+// producerID is the root spelling of provenance.Producer: the document-local
+// identity assigned to one successful model operation. It supports provenance
+// while keeping the model's execution bookkeeping private.
+type producerID = provenance.Producer
+
+func zeroVec(v r3.Vec) bool { return v == (r3.Vec{}) }

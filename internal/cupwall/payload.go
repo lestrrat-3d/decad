@@ -71,7 +71,7 @@ const (
 //
 // OffsetDelta is the OFFSET region's section displacement — the cavity
 // inward, the outer region outward: the proven upper bound offsetSectionDelta
-// (shell_offset.go) states on how far any recorded boundary point of that
+// (shell.go) states on how far any recorded boundary point of that
 // region sits from the boundary of P ⊖ t* or P ⊕ t* the shell denotes, t* the
 // caller's thickness in exact millimetres. It covers the thickness conversion
 // and the offset solve's own rounding together. The other region is the

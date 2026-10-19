@@ -7,14 +7,13 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
+	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
-
-	"github.com/lestrrat-3d/decad/internal/freeform"
-
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -74,9 +73,11 @@ type EdgeAxis struct {
 }
 
 // The sealed set.
-func (SketchLine) axis()       {}
+func (SketchLine) axis() {}
+
 func (ConstructionAxis) axis() {}
-func (EdgeAxis) axis()         {}
+
+func (EdgeAxis) axis() {}
 
 // errNilAxis rejects a nil variant pointer: it names no axis to spin about.
 // It wraps ErrDegenerate so a typed nil pointer is branchable exactly like
@@ -518,7 +519,7 @@ func (d *Document) resolveAngleSide(s SideAngular, st angularStops, travel float
 
 // This section is the chain-fed Revolve of docs/surface-design.md §13: the open
 // sketch chain's own spin into a shell with no cap. It reuses
-// revolve_axis.go's axis resolution and internal/revolveplan's per-kind wall
+// revolve.go's axis resolution and internal/revolveplan's per-kind wall
 // construction and extent readings unchanged — the same
 // evaluator Revolve runs, over an open rather than a closed walk — and reads
 // its recorded walk through recordChain (seam.go) rather than sectioncert.RecordProfile.
@@ -643,3 +644,41 @@ func refuseChainRevolveOptions(opts []RevolveOption) error {
 	}
 	return fmt.Errorf(`%w: the revolve option %T builds a solid from a profile only`, ErrUnsupported, opts[0])
 }
+
+// This file holds axisInPlane, the axisFrame and regionSnapAllow aliases,
+// and the wall constants used by root callers. The profile gates live in
+// revolveplan.ResolveAxisSide
+// (internal/revolveplan/axis_side.go). See docs/evaluator-design.md §6.
+
+// axisInPlane reads the public axis variant and resolves its coordinates
+// through revolveaxis.AxisInPlane.
+func axisInPlane(a Axis, frame r3.Frame) (revolveaxis.Line2, error) {
+	var input revolveaxis.AxisInput
+	switch value := a.(type) {
+	case SketchLine:
+		input = revolveaxis.SketchLine{
+			StartU: value.Start.U, StartV: value.Start.V,
+			EndU: value.End.U, EndV: value.End.V,
+		}
+	case ConstructionAxis:
+		input = revolveaxis.ConstructionAxis{Origin: value.Origin, Dir: value.Dir}
+	default:
+		return revolveaxis.Line2{}, fmt.Errorf(`%w: axis %T is not supported by this evaluator`, ErrUnsupported, a)
+	}
+	return revolveaxis.AxisInPlane(input, frame)
+}
+
+// The payload holds the internal axis frame and its profile proof charges.
+type axisFrame = revolveaxis.Frame
+
+type regionSnapAllow = revolveaxis.SnapAllow
+
+const (
+	// wallCylinder is a line parallel to the axis.
+	wallCylinder = revolveaxis.WallCylinder
+	// wallPlane is a line perpendicular to the axis: a planar annulus, or a
+	// disk when it reaches the axis.
+	wallPlane = revolveaxis.WallPlane
+	// wallCone is an inclined line; an endpoint on the axis is its apex.
+	wallCone = revolveaxis.WallCone
+)

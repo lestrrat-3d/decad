@@ -19,7 +19,7 @@ import (
 // surface of revolution's normal lies in its meridian plane, so a wall of
 // thickness t behind every kept face is the meridian's own offset swept over
 // the receiver's unchanged angular interval. The offset is the same exact
-// line/arc construction a prism shell runs (shell_offset.go), taken on the
+// line/arc construction a prism shell runs (shell.go), taken on the
 // EFFECTIVE meridian: the recorded region where it stays off the axis, and
 // otherwise the region united with its own mirror image across the axis and
 // cut back to the non-negative radial half-plane, so a walk on the axis grows

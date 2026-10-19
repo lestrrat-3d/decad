@@ -40,7 +40,7 @@ func FreeformSpanCost(controls int) uint64 {
 
 // ChargeFreeformSpans preflights the exact integration of a WHOLE converted
 // chain, before any of it runs. It is the SINGLE owner of that charge: the
-// record-level preflight levies it (moments_validate.go) and the moments pass
+// record-level preflight levies it (moments.go) and the moments pass
 // then integrates the chain the preflight already paid for. A record whose
 // integration cannot fit the budget must refuse before anything downstream of
 // the conversion samples or reconstructs the curve, since the ceiling exists

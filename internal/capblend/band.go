@@ -374,7 +374,7 @@ func BuildBand(ctx context.Context, env topo.Env, body *topo.Body, cbp Payload, 
 		th0 := math.Atan2(j.PA.V-j.VertV, j.PA.U-j.VertU)
 		th1 := math.Atan2(j.PB.V-j.VertV, j.PB.U-j.VertU)
 		// The inward offset's reflex connector walks CLOCKWISE from pA to pB
-		// (shell_offset.go's arcSegment with ccw = s < 0, and this band offsets
+		// (shell.go's arcSegment with ccw = s < 0, and this band offsets
 		// with s = +1), so th1 is normalized BELOW th0 and the swept angle is
 		// the corner's own reflex turn — strictly less than a half turn — never
 		// its 2*pi complement. Taking the complement records the arc that runs
@@ -733,7 +733,7 @@ func BuildBand(ctx context.Context, env topo.Env, body *topo.Body, cbp Payload, 
 		geoms = append(geoms, g)
 		capCo = append(capCo, topo.CoEdge{Edge: capEdge, Forward: true})
 		if arc := arcByCorner[nextI]; arc != nil {
-			// shell_offset.go's reflex-corner arc walks pA -> pB in the
+			// shell.go's reflex-corner arc walks pA -> pB in the
 			// SAME sense as the boundary's own travel direction (inward,
 			// s=+1: a clockwise arc whose tangent continues the walk).
 			capCo = append(capCo, topo.CoEdge{Edge: arc, Forward: true})
