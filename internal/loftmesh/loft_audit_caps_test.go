@@ -85,8 +85,8 @@ func capsTestFrustum(n int) capsMesh {
 }
 
 // capsTestBanded is a loft of `rings` rings at z = 0, 1, 2, ... with radii 1, 0.9, ...,
-// the walls band by band as assembleLoftFaces emits them and the start and
-// end caps interleaved. The rings between them are Interior.
+// the walls band by band as revolveloftfaces.BuildLoftFaces emits them and
+// the start and end caps interleaved. The rings between them are Interior.
 func capsTestBanded(n, rings int) capsMesh {
 	var verts []r3.Vec
 	for i := range rings {
