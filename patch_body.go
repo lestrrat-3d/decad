@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/denotation"
 	"github.com/lestrrat-3d/decad/internal/patchchain"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
@@ -197,22 +198,22 @@ func renderCoord3(p r3.Vec) string {
 // (patchchain.ProvePlaneLevel) is tried only when the first refuses on a
 // nonzero bound, and never reads a coordinate, a residual or a bound
 // magnitude (docs/surface-design.md §5.2's own two-arm amendment). Its
-// return states what the level arm admitted: the levelToken and axialBound
+// return states what the level arm admitted: the denotation.LevelToken and axialBound
 // are what patchchain.buildFace reads for the new face's own plane and AxialDelta,
 // mirroring what a prism cap already carries; a chain the exact arm admits
 // instead publishes the zero token and a zero axialBound, unchanged.
-func provePatchChainPlane(edges []*Edge) (levelToken, float64, bool, error) {
+func provePatchChainPlane(edges []*Edge) (denotation.LevelToken, float64, bool, error) {
 	exactErr := provePatchChainPlaneExact(edges)
 	if exactErr == nil {
-		return levelToken{}, 0, false, nil
+		return denotation.LevelToken{}, 0, false, nil
 	}
 	if !errors.Is(exactErr, ErrUnsupported) {
-		return levelToken{}, 0, false, exactErr
+		return denotation.LevelToken{}, 0, false, exactErr
 	}
 	if lvl, bound, ok := patchchain.ProvePlaneLevel(edgeNodes(edges)); ok {
 		return lvl, bound, true, nil
 	}
-	return levelToken{}, 0, false, exactErr
+	return denotation.LevelToken{}, 0, false, exactErr
 }
 
 // provePatchChainPlaneExact is gate 3's first, exact arm: proves one chain's

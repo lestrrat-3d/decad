@@ -33,7 +33,6 @@ The rules for rows live in `docs/layout.md`.
 | `clearance_geom.go` | `bodyGeom`: carrier dispatch, live body topology and nesting over `internal/clearance/` and `internal/wallsurvey/`. See clearance §2–§3. |
 | `point_containment.go` | Public point location and body/face distance through verified meshes. See point-containment design. |
 | `survey.go` | Dispatches wall, undercut and radius readers and adapts their readings to public body and face handles. See verification §6. |
-| `survey_undercut.go` | Folds three-valued undercut readings. |
 | `interference.go` | Pairwise overlap behind `Verify`. See interference §4-§8. |
 | `motion.go` / `motion_verify.go` | Public motion inputs, options, requests and reports; pose checks over `internal/motionbound/` and static pair classification through `internal/motionrun/`. See motion-check §2–§6. |
 | `motion_verify_pair.go` | Per-pose mover and pair evaluation, interval verdicts and report publication for `VerifyMotion`. See motion-check §5–§8. |

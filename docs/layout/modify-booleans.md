@@ -32,5 +32,4 @@ The rules for rows live in `docs/layout.md`.
 | `brep_modify_edge.go` | Route E: public edge and reference-face checks, ordered gate dispatch and result commit. `breprecord` reads and rewrites the record and checks reference-face roles. See brep-modify §5. |
 | `brep_modify_loop.go` | Route L/V public edge and face adapters and result commit; `breploop` selects and rewrites the record, and `breprecord` builds the bands and mass. See modify-general §4. |
 | `brep_modify_partial.go` | Route L partial-loop fillet and chamfer adapters: route E preparation of the selected public edges and the body build; `breploop` gates and rewrites the record. Also `WithTangentChain`'s public handles, selectors and refusals. See modify-reach §5 and modify-general §4.3a. |
-| `brep_loop_fillet.go` | Route L's fillet-band pull survey (DF7). See loop-fillet. |
 | `brep_all_edge_chamfer.go` | Admits an exact cross-drilled box and its twelve selected outer edges, then builds the all-edge chamfer through `breprecord`. See modify-general §4.3b. |

@@ -15,8 +15,7 @@ The rules for rows live in `docs/layout.md`.
 | `tessellate_sweep_composite.go` | Builds composite Sweep span handles and runs the body audit around internal station assembly. See sweep Table D. |
 | `tessellate_chain.go` | A chain ribbon's exact-quad mesh. See surface §13.4. |
 | `tessellate_coil.go` | A coil's held-shell mesh with its area and volume proofs. See helix §8. |
-| `tessellate_capblend.go` | Adapts the cap-blend mesh build to public handles and runs the Loft proof. See tessellation reach §7. |
-| `loft_capband_proof.go` | Adapts a matching loft's cap-band payload and mesh to the numeric occupied-volume proof in `internal/tessellation`. See loft §18. |
+| `tessellate_capblend.go` | Adapts the cap-blend mesh build to public handles and runs the Loft proof, including the cap-band volume bound. See tessellation reach §7. |
 | `tessellate_draft.go` | A draft body's mesh through its band view, and the sewn two-slab draft mesh. See draft §9.1. |
 | `export/` | STL, OBJ, 3MF and AP214 writers. See `docs/step-export-design.md`, `docs/3mf-export-design.md`. |
 

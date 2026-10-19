@@ -21,7 +21,6 @@ The rules for rows live in `docs/layout.md`.
 | `thicken.go` | Public `Thicken` gates, payload dispatch, patch build, prism tube/annulus and chain-sheet publication, and one-span Sweep role restoration; revolve and chain builders live in `internal/thickenbuild/`. See surface §16. |
 | `offset.go` | `Offset`: a second sheet at a normal distance. See surface §17. |
 | `patch_body.go` | `PatchEdges` selection, chain gates 1-2 and exact-plane topology adapter; the level proof and Rule P live in `internal/patchchain/`. See surface §5.2. |
-| `denotation.go` | Level and curve token names and comparisons; the document node mints them. |
 | `stitch.go` | `Stitch`; builds through `internal/stitchrecord/`. See surface §6.4. |
 | `unstitch.go` | `Unstitch` sheet split; builds through `internal/stitchrecord/`. See surface §6.5. |
 | `extrude.go` | Generic `Extrude` over a profile or chain, `WithTaper`, linear-extent resolution, the chain ribbon entry point. See evaluator §5 and surface §13.2. |
