@@ -214,7 +214,6 @@ type (
 	revolveSectionCertificate    = facetedrecord.RevolveSectionCertificate
 	revolveSectionSpan           = facetedrecord.RevolveSectionSpan
 	spiralCombineSource          = facetedrecord.SpiralCombineSource
-	spiralCombinedTools          = facetedrecord.SpiralCombinedTools
 	spiralFirstJoinSource        = facetedrecord.SpiralFirstJoinSource
 )
 

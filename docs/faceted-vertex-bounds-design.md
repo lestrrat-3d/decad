@@ -306,7 +306,9 @@ and the blank's radial allowance is the same gap times the blank radius. The
 helper refuses unless the record fixes the X axis through the origin and the
 float motion has zero translation, and it refuses any non-finite charge.
 Whole-output area allowance and the ordinary Boolean volume proof still
-apply before publication.
+apply before publication. `internal/spiralsector` assembles the transient
+tool payload, binds its face owners and each copy's face roles, and validates
+each copy; the root builds the transient body and runs the Union.
 
 ## 4. Consumers
 

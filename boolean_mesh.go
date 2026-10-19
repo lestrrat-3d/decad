@@ -121,7 +121,6 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 	// Global source-face ids: the operands' faces in order, so the payload
 	// records provenance without holding live pointers.
 	var groups []facetGroup
-	faceID := map[*Face]int{}
 	sourceID := map[*topo.Face]int{}
 	for i, f := range append(a.Faces(), b.Faces()...) {
 		if i%256 == 0 {
@@ -129,7 +128,6 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 				return booleanEvaluation{}, err
 			}
 		}
-		faceID[f] = len(groups)
 		sourceID[&f.n] = len(groups)
 		groups = append(groups, facetGroup{
 			Origins: f.originRefs(),
@@ -167,9 +165,9 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 		}
 		spiralJoin.Allowed = allowed
 	}
-	var combinedAdmission *spiralCombinedAdmission
+	var combinedAdmission *spiralsector.CombinedAdmission
 	if spiralCombine != nil {
-		combinedAdmission, err = spiralCombineFaceRoles(ctx, a, b, spiralCombine, faceID)
+		combinedAdmission, err = spiralsector.CombineFaceRoles(ctx, bodyNode(a), bodyNode(b), spiralCombine, sourceID)
 		if err != nil {
 			return booleanEvaluation{}, err
 		}
@@ -219,7 +217,7 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 		spiralPairs = spiralJoin.Roles
 	}
 	if combinedAdmission != nil {
-		spiralPairs = combinedAdmission.roles
+		spiralPairs = combinedAdmission.Roles
 	}
 	if err := meshbool.RefuseUndecidableProximity(ctx, &ma.n, &mb.n, bmA, bmB, memo,
 		capFace, coneFace, spiralPairs); err != nil {
@@ -242,7 +240,7 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 	}
 	if combinedAdmission != nil {
 		ok, err := spiralsector.ScopeWidenedContacts(ctx, bmA, bmB, memo,
-			combinedAdmission.allowed, tolMM, 24*len(combinedAdmission.source.Tools))
+			combinedAdmission.Allowed, tolMM, 24*len(combinedAdmission.Source.Tools))
 		if err != nil {
 			return booleanEvaluation{}, err
 		}
@@ -361,7 +359,7 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 	}
 	if combinedAdmission != nil {
 		ok, err := spiralsector.ScopeOutputSwitches(ctx, stitched,
-			len(a.Faces()), combinedAdmission.allowed, 24*len(combinedAdmission.source.Tools))
+			len(a.Faces()), combinedAdmission.Allowed, 24*len(combinedAdmission.Source.Tools))
 		if err != nil {
 			return booleanEvaluation{}, err
 		}
@@ -369,7 +367,7 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 			return booleanEvaluation{}, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported,
 				fmt.Errorf("%w: combined spiral join output faces", ErrUnsupported))
 		}
-		ok, err = spiralValidateCombinedUnion(ctx, a, bmA, stitched, combinedAdmission)
+		ok, err = spiralsector.ValidateCombinedUnion(ctx, bodyNode(a), bmA, stitched, combinedAdmission)
 		if err != nil {
 			return booleanEvaluation{}, err
 		}
