@@ -7,7 +7,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/selectorquery"
-	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -398,7 +397,7 @@ func CapEnd(b *Body) FeatureRef {
 // (docs/draft-design.md §10). On a body whose producer mints no side roles it
 // matches nothing, an ordinary ErrNoMatch at resolve. b must not be nil.
 func Walls(b *Body) FacePredicate {
-	return FacePredicate{kind: selectorquery.WallsKind, ref: provenance.Ref{Producer: b.n.Origin.Producer, Role: roleSidePrefix}}
+	return FacePredicate{kind: selectorquery.WallsKind, ref: provenance.Ref{Producer: b.n.Origin.Producer, Role: selectorquery.RoleSidePrefix}}
 }
 
 // validatePredicateRef rejects provenance that cannot name a feature role.
@@ -425,88 +424,11 @@ func (p FacePredicate) clause() selectorquery.FaceClause[provenance.Ref] {
 func (p EdgePredicate) validate() error { return p.clause().Validate(validatePredicateRef) }
 func (p FacePredicate) validate() error { return p.clause().Validate(validatePredicateRef) }
 
-func (p EdgePredicate) matches(e *Edge) bool { return p.clause().Matches(selectorEdge{e}) }
-func (p FacePredicate) matches(f *Face) bool { return p.clause().Matches(selectorFace{f}) }
-
-// selectorEdge exposes only the analytic facts a predicate reads.
-type selectorEdge struct{ *Edge }
-
-func (e selectorEdge) SelectorConvex() bool { return e.n.Convex }
-func (e selectorEdge) SelectorFree() bool   { return e.IsFree() }
-func (e selectorEdge) SelectorLineDirection() (r3.Vec, bool) {
-	if e.n.SelectorDirectionProven {
-		return e.n.SelectorDirection, true
-	}
-	if _, ok := e.n.Curve.(surfacegeom.Line3); !ok {
-		return r3.Vec{}, false
-	}
-	return e.n.End.Position.Sub(e.n.Start.Position), true
+func (p EdgePredicate) matches(e *Edge) bool {
+	return p.clause().Matches(selectorquery.EdgeNode{Edge: edgeNode(e)})
 }
-func (e selectorEdge) SelectorEndpoints() (r3.Vec, r3.Vec) {
-	return e.n.Start.Position, e.n.End.Position
-}
-func (e selectorEdge) SelectorLengthMM() float64 { return e.n.Length }
-func (e selectorEdge) SelectorHasOrigin(ref provenance.Ref) bool {
-	for _, face := range e.n.Faces {
-		if slices.Contains(face.Origins, ref) {
-			return true
-		}
-	}
-	return false
-}
-func (e selectorEdge) SelectorOnOuterLoop(ref provenance.Ref) bool {
-	for _, face := range e.n.Faces {
-		if !slices.Contains(face.Origins, ref) {
-			continue
-		}
-		for _, loop := range face.Loops {
-			if !loop.Outer {
-				continue
-			}
-			for _, ce := range loop.CoEdges {
-				if ce.Edge == edgeNode(e.Edge) {
-					return true
-				}
-			}
-		}
-	}
-	return false
-}
-func (e selectorEdge) SelectorCircular() bool {
-	switch e.n.Curve.(type) {
-	case surfacegeom.Circle3, surfacegeom.Arc3:
-		return true
-	default:
-		return false
-	}
-}
-
-// selectorFace exposes surface identity and the outward planar normal.
-type selectorFace struct{ *Face }
-
-func (f selectorFace) SelectorPlanarNormal() (r3.Vec, bool) {
-	plane, ok := f.n.Surface.(surfacegeom.Plane)
-	if !ok {
-		return r3.Vec{}, false
-	}
-	return plane.Frame.N(), true
-}
-func (f selectorFace) SelectorOutwardPlanarNormal() (r3.Vec, bool) {
-	normal, ok := f.SelectorPlanarNormal()
-	if ok && f.n.Reversed {
-		normal = normal.Scale(-1)
-	}
-	return normal, ok
-}
-func (f selectorFace) SelectorCylindrical() bool {
-	_, ok := f.n.Surface.(surfacegeom.Cylinder)
-	return ok
-}
-func (f selectorFace) SelectorHasOrigin(ref provenance.Ref) bool {
-	return slices.Contains(f.n.Origins, ref)
-}
-func (f selectorFace) SelectorIsWallOf(ref provenance.Ref) bool {
-	return f.isWallOf(ref.Producer)
+func (p FacePredicate) matches(f *Face) bool {
+	return p.clause().Matches(selectorquery.FaceNode{Face: faceNode(f)})
 }
 
 // errNilSelector rejects a nil query.
