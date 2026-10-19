@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -89,7 +90,7 @@ func tessellateCoil(ctx context.Context, b *Body, cp coilPayload, chord float64,
 			Source:    src,
 		},
 	})
-	mesh.setVertexBounds(cp.VertexBound)
+	topobuild.SetVertexBounds(&mesh.n, cp.VertexBound)
 	mesh.n.Bound = cp.Delta
 	if verify < VerifyAll {
 		return mesh, nil

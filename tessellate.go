@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/brepbandmesh"
 	"github.com/lestrrat-3d/decad/internal/chainrecord"
 	"github.com/lestrrat-3d/decad/internal/cuptess"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/patchchain"
 	"github.com/lestrrat-3d/decad/internal/patchmesh"
@@ -24,7 +25,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
 
-	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -45,53 +45,6 @@ type Mesh struct {
 	_ noCopy
 	// n is the node data internal packages read and build (internal/topo).
 	n topo.Mesh
-}
-
-// sourceBound reads docs/tessellation-design.md §2's sourceBound(face) for one
-// of the mesh's own source faces. A face the record does not carry is an
-// evaluator invariant failure — the caller's own sentinel decides how loud —
-// and NEVER a zero, which would claim the face is held exactly.
-func (m *Mesh) sourceBound(f *topo.Face) (float64, bool) {
-	d, ok := m.n.FaceBound[f]
-	return d, ok
-}
-
-// setVertexBounds publishes a per-vertex record (docs/faceted-vertex-bounds-
-// design.md §2.1) and, from it, every source face's bound as the largest
-// corner entry over that face's own triangles, lifting bound to match. The
-// caller's record carries exactly one entry per vertex, and source is
-// already set; the mesh keeps its own copy.
-func (m *Mesh) setVertexBounds(beta []float64) {
-	m.n.VertexBound = append([]float64(nil), beta...)
-	for t, tri := range m.n.Triangles {
-		topobuild.SetFaceBound(&m.n, m.n.Source[t], max(beta[tri[0]], beta[tri[1]], beta[tri[2]]))
-	}
-}
-
-// vertexBounds reads β(v) for every vertex (docs/faceted-vertex-bounds-
-// design.md §2.1): the mesh's own record when its payload publishes one, and
-// otherwise the largest faceBound over the faces whose facets touch v. The
-// derived reading is a claim the mesh already made — v lies on a facet whose
-// face's true patch is within that face's bound of it — and taking the
-// maximum over every incident face keeps each facet's own displacement,
-// chord sagitta included, as its corner maximum. A source face missing from
-// faceBound is a broken evaluator (ErrBooleanFailed, as
-// meshbool.RefuseUndecidableProximity reports it), never a zero. The returned slice is the caller's own.
-func (m *Mesh) vertexBounds() ([]float64, error) {
-	if m.n.VertexBound != nil {
-		return append([]float64(nil), m.n.VertexBound...), nil
-	}
-	beta := make([]float64, len(m.n.Vertices))
-	for t, tri := range m.n.Triangles {
-		d, ok := m.sourceBound(m.n.Source[t])
-		if !ok {
-			return nil, fmt.Errorf(`%w: a mesh facet's source face states no displacement bound`, ErrBooleanFailed)
-		}
-		for _, v := range tri {
-			beta[v] = max(beta[v], d)
-		}
-	}
-	return beta, nil
 }
 
 // Vertices returns the mesh vertex positions in millimetres (core §5.2).
@@ -336,7 +289,11 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		return bornMesh(&Mesh{n: *node}), nil
 	}
 	if fp, ok := b.n.Payload.(facetedPayload); ok {
-		return tessellateFaceted(ctx, b, fp, chord)
+		node, err := facetedrecord.Restate(ctx, &b.n, fp, chord)
+		if err != nil {
+			return nil, err
+		}
+		return bornMesh(&Mesh{n: *node}), nil
 	}
 	if cp, ok := b.n.Payload.(cupPayload); ok {
 		node, err := cuptess.Tessellate(ctx, &b.n, cp.View(), chord, verify >= VerifyAll)
@@ -574,59 +531,6 @@ func publishSymDiff(m *Mesh, terms []float64) error {
 	m.n.VolSymDiff = total
 	m.n.SymDiffOK = true
 	return nil
-}
-
-// facetedBoundError is tessellateFaceted's refusal of a chord tolerance
-// finer than the bound the faceted body holds (docs/tessellation-design.md
-// §7). Only a Tessellate caller, who chose the tolerance, reaches it: the
-// boolean asks a restating operand at its held floor and gates the facets the
-// pair touches instead (booloperand.HeldFloor, meshbool.RefuseCoarseHeldContact).
-type facetedBoundError struct{ requested, held float64 }
-
-func (e *facetedBoundError) Error() string {
-	requested, minimum := units.Millimeters(e.requested), units.Millimeters(e.held)
-	return fmt.Sprintf(`%v: requested tolerance %s is below the faceted body's minimum mesh bound %s; retry with a tolerance of at least %s to restate the held mesh`, ErrUnsupported, requested, minimum, minimum)
-}
-
-func (e *facetedBoundError) Unwrap() error { return ErrUnsupported }
-
-// tessellateFaceted restates a boolean-built body's held mesh: the polygons
-// ARE the boundary this evaluator holds (core §6.1), carrying their own
-// proven bound. It cannot refine them — the analytic identity is gone — so a
-// tolerance finer than the held bound is ErrUnsupported (facetedBoundError),
-// never a mesh whose bound overstates its trust.
-func tessellateFaceted(ctx context.Context, b *Body, fp facetedPayload, chord float64) (*Mesh, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	if chord < fp.MeshBound {
-		return nil, &facetedBoundError{requested: chord, held: fp.MeshBound}
-	}
-	src, err := facetproof.RestateSources(ctx, topobuild.Faces(&b.n), fp.FaceOf,
-		len(fp.Verts), len(fp.VertexBound), len(fp.Tris))
-	if err != nil {
-		return nil, err
-	}
-	m := bornMesh(&Mesh{
-		n: topo.Mesh{
-			Vertices:   fp.Verts,
-			Triangles:  fp.Tris,
-			AreaSlack:  fp.AreaSlack,
-			VolSymDiff: fp.VolSymDiff,
-			SymDiffOK:  true,
-			Source:     src,
-		},
-	})
-	// The payload's own per-vertex record is restated unchanged, and each
-	// face's bound is the largest δ(t) over its own facets
-	// (docs/faceted-vertex-bounds-design.md §4.4), so the next boolean's
-	// pre-pass and rim composition read each face's and each facet's own
-	// figure. Their maximum is the payload's MeshBound by construction.
-	m.setVertexBounds(fp.VertexBound)
-	if m.n.Bound != fp.MeshBound {
-		return nil, fmt.Errorf(`%w: a faceted payload's mesh bound is not the largest of its facet bounds`, ErrBooleanFailed)
-	}
-	return m, nil
 }
 
 // tessellateBodyPatch binds source handles and public refusal names to the

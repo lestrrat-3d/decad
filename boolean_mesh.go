@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/spiralsector"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -46,7 +47,7 @@ func prepBoolMeshContext(ctx context.Context, m *Mesh, src []int) (*meshbool.Boo
 	// Per-vertex bounds and their facet maxima (docs/faceted-vertex-bounds-
 	// design.md §2, §4.5): the mesh's own record, or §2.1's reading derived
 	// from its face bounds.
-	beta, err := m.vertexBounds()
+	beta, err := topobuild.VertexBounds(&m.n)
 	if err != nil {
 		return nil, err
 	}

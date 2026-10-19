@@ -159,7 +159,7 @@ func (f *Face) DistanceToPoint(ctx context.Context, p r3.Vec, tol units.Value) (
 	if len(triangles) == 0 {
 		return Measurement{}, fmt.Errorf(`%w: the face has no mesh triangles`, ErrUnsupported)
 	}
-	bound, ok := mesh.sourceBound(faceNode(f))
+	bound, ok := mesh.n.FaceBound[faceNode(f)]
 	if !ok {
 		return Measurement{}, fmt.Errorf(`%w: the face has no displacement bound`, ErrBooleanFailed)
 	}

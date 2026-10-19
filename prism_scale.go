@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -63,7 +64,7 @@ func certifiedScaleSource(ctx context.Context, b *Body, chord float64) (facetedP
 	if !mesh.n.BoundaryOK || !mesh.n.SymDiffOK || len(mesh.n.Vertices) == 0 || len(mesh.n.Triangles) == 0 {
 		return facetedPayload{}, fmt.Errorf("%w: the source mesh has no complete similarity proof", ErrUnsupported)
 	}
-	vertexBound, err := mesh.vertexBounds()
+	vertexBound, err := topobuild.VertexBounds(&mesh.n)
 	if err != nil {
 		return facetedPayload{}, err
 	}

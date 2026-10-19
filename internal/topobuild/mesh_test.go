@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
+	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
 
@@ -54,4 +55,57 @@ func TestLiftAuditError(t *testing.T) {
 	require.EqualError(t, degenerate, decaderr.ErrDegenerate.Error()+": y")
 	require.ErrorIs(t, topobuild.LiftAuditError(context.Canceled), context.Canceled)
 	require.NoError(t, topobuild.LiftAuditError(nil))
+}
+
+func TestVertexBoundsRecordAndDerived(t *testing.T) {
+	t.Parallel()
+	a, b := &topo.Face{}, &topo.Face{}
+	twoFaces := func() *topo.Mesh {
+		m := &topo.Mesh{Vertices: make([]r3.Vec, 4)}
+		topobuild.AddTriangle(m, [3]int{0, 1, 2}, a)
+		topobuild.AddTriangle(m, [3]int{0, 2, 3}, b)
+		return m
+	}
+
+	t.Run("SetPublishesFaceMaxima", func(t *testing.T) {
+		t.Parallel()
+		m := twoFaces()
+		beta := []float64{0.125, 0.5, 0.25, 0.0625}
+		topobuild.SetVertexBounds(m, beta)
+		beta[1] = 8
+		require.Equal(t, []float64{0.125, 0.5, 0.25, 0.0625}, m.VertexBound, "the mesh keeps its own copy")
+		require.InDelta(t, 0.5, m.FaceBound[a], 0)
+		require.InDelta(t, 0.25, m.FaceBound[b], 0)
+		require.InDelta(t, 0.5, m.Bound, 0)
+	})
+
+	t.Run("RecordIsReadBack", func(t *testing.T) {
+		t.Parallel()
+		m := twoFaces()
+		topobuild.SetVertexBounds(m, []float64{0.125, 0.5, 0.25, 0.0625})
+		got, err := topobuild.VertexBounds(m)
+		require.NoError(t, err)
+		require.Equal(t, []float64{0.125, 0.5, 0.25, 0.0625}, got)
+		got[0] = 8
+		require.InDelta(t, 0.125, m.VertexBound[0], 0, "the returned slice is the caller's own")
+	})
+
+	t.Run("DerivedFromFaceBounds", func(t *testing.T) {
+		t.Parallel()
+		m := twoFaces()
+		topobuild.SetFaceBound(m, a, 0.5)
+		topobuild.SetFaceBound(m, b, 0.25)
+		got, err := topobuild.VertexBounds(m)
+		require.NoError(t, err)
+		require.Equal(t, []float64{0.5, 0.5, 0.5, 0.25}, got)
+		require.Nil(t, m.VertexBound, "a derived reading publishes no record")
+	})
+
+	t.Run("MissingFaceBoundRefuses", func(t *testing.T) {
+		t.Parallel()
+		m := twoFaces()
+		topobuild.SetFaceBound(m, a, 0.5)
+		_, err := topobuild.VertexBounds(m)
+		require.ErrorIs(t, err, decaderr.ErrBooleanFailed)
+	})
 }

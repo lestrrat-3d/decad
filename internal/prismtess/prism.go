@@ -42,7 +42,7 @@ func Build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 	// therefore part of the mesh's deviation before a single chord is chosen, so
 	// docs/tessellation-design.md §5 RESERVES it from the chord budget here, and a
 	// tolerance that cannot pay for it refuses, the same shape as
-	// tessellateFaceted's refusal of a tolerance below a held mesh bound. The
+	// facetedrecord.Restate's refusal of a tolerance below a held mesh bound. The
 	// reservation keeps chording plus this displacement within tol; it covers no
 	// other term, so the per-end axial displacement added at the end of the build
 	// can still lift the complete Bound above tol, which §1's Tolerance row

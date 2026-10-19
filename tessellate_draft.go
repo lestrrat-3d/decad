@@ -83,7 +83,7 @@ func tessellateTwoSidedDraft(ctx context.Context, body *Body, dp twoSidedDraftPa
 		if err != nil {
 			return nil, err
 		}
-		partBounds, err := mesh.vertexBounds()
+		partBounds, err := topobuild.VertexBounds(&mesh.n)
 		if err != nil {
 			return nil, err
 		}
@@ -127,7 +127,7 @@ func tessellateTwoSidedDraft(ctx context.Context, body *Body, dp twoSidedDraftPa
 				return nil, fmt.Errorf(`%w: the two-sided draft has no published face for role %q`, ErrDegenerate, role)
 			}
 			topobuild.AddTriangle(&out.n, [3]int{indices[tri[0]], indices[tri[1]], indices[tri[2]]}, faceNode(published))
-			if bound, ok := mesh.sourceBound(face); ok {
+			if bound, ok := mesh.n.FaceBound[face]; ok {
 				topobuild.SetFaceBound(&out.n, faceNode(published), bound)
 			} else {
 				return nil, fmt.Errorf(`%w: a draft mesh source face has no displacement bound`, ErrDegenerate)
@@ -141,7 +141,7 @@ func tessellateTwoSidedDraft(ctx context.Context, body *Body, dp twoSidedDraftPa
 			out.n.SymDiffOK = out.n.SymDiffOK && mesh.n.SymDiffOK
 		}
 	}
-	out.setVertexBounds(bounds)
+	topobuild.SetVertexBounds(&out.n, bounds)
 	if err := topobuild.LiftAuditError(tessellation.RequireClosedMesh(out.n.Triangles)); err != nil {
 		return nil, fmt.Errorf("two-sided draft middle rim: %w", err)
 	}

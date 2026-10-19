@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/spiralsector"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -80,7 +81,7 @@ func spiralCombinedProxyMesh(original *Mesh, placedParts []facetproof.PlacedMesh
 	}
 	next.n.FaceBound = nil
 	next.n.Bound = 0
-	next.setVertexBounds(next.n.VertexBound)
+	topobuild.SetVertexBounds(&next.n, next.n.VertexBound)
 	next.n.CoordBound = max(next.n.CoordBound, next.n.Bound)
 	return next, nil
 }

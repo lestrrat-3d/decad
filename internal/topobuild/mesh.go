@@ -33,6 +33,45 @@ func SetFaceBound(m *topo.Mesh, f *topo.Face, delta float64) {
 	}
 }
 
+// SetVertexBounds publishes a per-vertex record (docs/faceted-vertex-bounds-
+// design.md §2.1) and, from it, every source face's bound as the largest
+// corner entry over that face's own triangles, lifting Bound to match. The
+// caller's record carries exactly one entry per vertex, and Source is
+// already set; the mesh keeps its own copy.
+func SetVertexBounds(m *topo.Mesh, beta []float64) {
+	m.VertexBound = append([]float64(nil), beta...)
+	for t, tri := range m.Triangles {
+		SetFaceBound(m, m.Source[t], max(beta[tri[0]], beta[tri[1]], beta[tri[2]]))
+	}
+}
+
+// VertexBounds reads β(v) for every vertex (docs/faceted-vertex-bounds-
+// design.md §2.1): the mesh's own record when its payload publishes one, and
+// otherwise the largest FaceBound over the faces whose facets touch v. The
+// derived reading is a claim the mesh already made — v lies on a facet whose
+// face's true patch is within that face's bound of it — and taking the
+// maximum over every incident face keeps each facet's own displacement,
+// chord sagitta included, as its corner maximum. A source face missing from
+// FaceBound is a broken evaluator (ErrBooleanFailed, as
+// meshbool.RefuseUndecidableProximity reports it), never a zero. The returned
+// slice is the caller's own.
+func VertexBounds(m *topo.Mesh) ([]float64, error) {
+	if m.VertexBound != nil {
+		return append([]float64(nil), m.VertexBound...), nil
+	}
+	beta := make([]float64, len(m.Vertices))
+	for t, tri := range m.Triangles {
+		d, ok := m.FaceBound[m.Source[t]]
+		if !ok {
+			return nil, fmt.Errorf(`%w: a mesh facet's source face states no displacement bound`, decaderr.ErrBooleanFailed)
+		}
+		for _, v := range tri {
+			beta[v] = max(beta[v], d)
+		}
+	}
+	return beta, nil
+}
+
 // RequireClosedMesh runs docs/tessellation-design.md §1's closed-mesh audit
 // (tessellation.RequireClosedMesh) over m's facets, its refusal lifted by
 // LiftAuditError.
