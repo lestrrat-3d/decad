@@ -44,6 +44,14 @@ func lineageOf(t *testing.T, b *topo.Body) *facetedrecord.FacetedCopyLineage {
 	return p.CopyLineage
 }
 
+// TestBindCopyLineage pins BindCopyLineage's record and each of its refusals.
+//
+// Shown to fail first (go test -overlay over copy_proof.go): each subtest goes
+// red when its own guard is removed, and the no-inverse subtest when a missing
+// inverse is read as the identity. Three mutants of the motion guards survive
+// because no input reaches them: ignoring Inverse's error leaves a zero
+// transform that Then refuses, and Then validates its own result, so dropping
+// either Then's error check or the IsValid check alone changes nothing.
 func TestBindCopyLineage(t *testing.T) {
 	t.Parallel()
 
@@ -87,6 +95,28 @@ func TestBindCopyLineage(t *testing.T) {
 		t.Parallel()
 		_, source, image, _, targetPlacement := lineageFixture(t)
 		image.Doc = &topo.Document{}
+		facetedrecord.BindCopyLineage(image, source, targetPlacement, true, nil)
+		require.Nil(t, lineageOf(t, image))
+	})
+
+	t.Run("NilImageBindsNothing", func(t *testing.T) {
+		t.Parallel()
+		_, source, _, _, targetPlacement := lineageFixture(t)
+		facetedrecord.BindCopyLineage(nil, source, targetPlacement, true, nil)
+		require.Nil(t, lineageOf(t, source), "the source gains no lineage of its own")
+	})
+
+	t.Run("NilSourceBindsNothing", func(t *testing.T) {
+		t.Parallel()
+		_, _, image, _, targetPlacement := lineageFixture(t)
+		facetedrecord.BindCopyLineage(image, nil, targetPlacement, true, nil)
+		require.Nil(t, lineageOf(t, image))
+	})
+
+	t.Run("SourcePlacementWithoutInverseBindsNothing", func(t *testing.T) {
+		t.Parallel()
+		_, source, image, _, targetPlacement := lineageFixture(t)
+		source.Payload = facetedrecord.Payload{Xform: r3.Transform{}}
 		facetedrecord.BindCopyLineage(image, source, targetPlacement, true, nil)
 		require.Nil(t, lineageOf(t, image))
 	})
