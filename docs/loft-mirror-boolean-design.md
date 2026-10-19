@@ -70,6 +70,8 @@ use an axial rotation with no translation. The reflection and each admitted
 rotation commute, so the true union is the reflection of a lower-half union
 against the exact lower half of the blank. A rotation whose axial basis is
 one float step below one uses the bounded bridge below.
+`loftcylinder.MirrorBlank` checks the blank and `loftcylinder.MirrorPairMotion`
+reads each pair's recorded placement.
 
 For every step, the existing Loft-to-cylinder Join rebuilds that lower-half
 union from the original source Loft and the admitted rotated copies. It proves
@@ -114,7 +116,8 @@ The true upper source `T(F(L))` differs from the reflected true lower source
 `F(T(L))` by the exact constant Z translation `2m(1-T.EZ.Z)`. The evaluator
 computes an upward rational bound for that shift. It adds the shift to all
 reflected upper vertex and boundary bounds and charges the source pair's
-certified area times the shift to occupied-volume difference. The lower
+certified area times the shift to occupied-volume difference
+(`loftcylinder.MirrorUpperBridge`). The lower
 circular Join's moving-plane tooth-separation test also widens each affected
 tooth's margin by the upper shift times its maximum XY radius and the plane's
 normal change per unit height. This keeps upper teeth apart, including the
@@ -186,9 +189,10 @@ For a near-axis placed pair, the actual upper source tooth lies below its
 reflected lower proof tooth by the Join's authenticated axial shift. The
 three lower cap-band split rings are checked again against each tooth at its
 shifted physical source level. The circular Join sorts lower teeth by angle,
-so the shifts match authenticated placed tooth sources instead of pair input
-positions. An exact section through the reflected upper
-band at the lowest possible source cap proves the intervening cap sliver's
+so `loftcylinder.MirrorChamferUpperShifts` matches each shift to its
+authenticated placed tooth source instead of its pair input position. An
+exact section through the reflected upper band at the lowest possible source
+cap proves the intervening cap sliver's
 reach. The measured vertical and lateral reach is charged to the upper
 vertex and boundary bounds. The Join's swept-volume charge is carried into
 the final occupied-volume allowance. Both charges must fit the caller's

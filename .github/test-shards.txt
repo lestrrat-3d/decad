@@ -131,7 +131,6 @@
 7	0.00	TestCICPUClassShard10
 7	16.47	TestCurvedSourceArcSplitsClosedRevolveShell
 7	0.00	TestDyadicSqrtBracketsMatchTheRationalOnes
-7	0.00	TestLoftMirrorCylinderCapsMustTileWithOppositeWinding
 7	0.00	TestMappedEndpointTimeRoots
 7	1.60	TestObliqueBossJunctionFilletDiagonalTiltPublicWorkflow
 7	0.40	TestPositiveBoundFacetedUnionRefusesToolBelowLowerFace
@@ -162,7 +161,6 @@
 9	4.91	TestCurvedHeelArcSideTiesRejectChangedSourceRecord
 9	8.26	TestCurvedVerticalTraceConsumesLiveGraphAndShell
 9	0.00	TestLoftCapConeProofRequiresStrictWholeCapSeparation
-9	0.00	TestLoftMirrorCylinderPairKeepsAuthenticatedSource
 9	0.00	TestMappedRadialJointExactRootBoundary
 9	0.00	TestRevolveLoftFacesConstantXBand
 9	4.17	TestRevolveLoftFacesToolCapArcBindsLiveSourceCells

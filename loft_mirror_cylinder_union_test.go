@@ -28,64 +28,6 @@ func TestLoftMirrorCylinderLevelsRequireExactMidpoint(t *testing.T) {
 	require.False(t, loftMirrorCylinderLevels(0, math.NaN(), 2))
 }
 
-func TestLoftMirrorCylinderCapsMustTileWithOppositeWinding(t *testing.T) {
-	t.Parallel()
-	lower := facetedPayload{
-		Tris: [][3]int{{0, 1, 2}, {0, 2, 3}}, Src: []int{4, 4},
-	}
-	upper := facetedPayload{
-		Tris: [][3]int{{2, 1, 0}, {3, 2, 0}}, Src: []int{4, 4},
-	}
-	require.True(t, loftMirrorCylinderCapsOppose(lower, upper, []int{0, 1, 2, 3}, 4, 4))
-	upper.Tris[1] = [3]int{0, 2, 3}
-	require.False(t, loftMirrorCylinderCapsOppose(lower, upper, []int{0, 1, 2, 3}, 4, 4))
-	upper.Tris[1] = [3]int{3, 2, 0}
-	require.False(t, loftMirrorCylinderCapsOppose(lower, upper, []int{0, 1, 2, 4}, 4, 4))
-	upper.Src[1] = 3
-	require.False(t, loftMirrorCylinderCapsOppose(lower, upper, []int{0, 1, 2, 3}, 4, 4))
-}
-
-func TestLoftMirrorCylinderPairKeepsAuthenticatedSource(t *testing.T) {
-	t.Parallel()
-	source := &loftMirrorJoinRecord{}
-	other := &loftMirrorJoinRecord{}
-	identity := r3.Identity()
-	motion, ok := loftMirrorCylinderPairMotion(facetedPayload{
-		LoftMirrorJoin: source, Xform: identity,
-	}, source)
-	require.True(t, ok)
-	require.Equal(t, identity, motion)
-	_, ok = loftMirrorCylinderPairMotion(facetedPayload{
-		LoftMirrorJoin: other, Xform: identity,
-	}, source)
-	require.False(t, ok)
-
-	rotated, err := r3.Rotation(r3.Vec{Z: 1}, units.Radians(math.Pi/4))
-	require.NoError(t, err)
-	_, ok = loftMirrorCylinderPairMotion(facetedPayload{
-		LoftMirrorCopy: &loftMirrorPlacementRecord{Source: source, Motion: rotated},
-		Xform:          rotated,
-	}, source)
-	require.True(t, ok)
-	_, ok = loftMirrorCylinderPairMotion(facetedPayload{
-		LoftMirrorCopy: &loftMirrorPlacementRecord{Source: other, Motion: rotated},
-		Xform:          rotated,
-	}, source)
-	require.False(t, ok)
-	_, ok = loftMirrorCylinderPairMotion(facetedPayload{
-		LoftMirrorCopy: &loftMirrorPlacementRecord{Source: source, Motion: rotated},
-		Xform:          identity,
-	}, source)
-	require.False(t, ok)
-	shifted, err := r3.Translation(r3.Vec{Z: 1})
-	require.NoError(t, err)
-	_, ok = loftMirrorCylinderPairMotion(facetedPayload{
-		LoftMirrorCopy: &loftMirrorPlacementRecord{Source: source, Motion: shifted},
-		Xform:          shifted,
-	}, source)
-	require.False(t, ok)
-}
-
 // teethFixture is the mirrored Union's operands as the chamfer apitest builds
 // them: a centered cylinder blank and the lower tooth pair with two copies
 // turned about Z.
@@ -525,7 +467,7 @@ func TestLoftMirrorCylinderPlaceTeethFirstError(t *testing.T) {
 func oracleLoftMirrorCylinderPairs(ctx context.Context, d *Document, ref producerID,
 	blank *Body, pairs []*Body, source *loftMirrorJoinRecord) (*Body, bool, error) {
 	pp, blankOK := blank.n.Payload.(prismPayload)
-	if !blankOK || !loftMirrorCylinderBlank(pp) || len(pairs) == 0 || len(pairs) > 32 {
+	if !blankOK || !loftcylinder.MirrorBlank(pp) || len(pairs) == 0 || len(pairs) > 32 {
 		return nil, false, nil
 	}
 	first, firstOK := pairs[0].n.Payload.(facetedPayload)
@@ -574,15 +516,12 @@ func oracleLoftMirrorCylinderPairs(ctx context.Context, d *Document, ref produce
 		if !ok || !payload.ContactAudited || pair.n.Doc != documentNode(d) {
 			return nil, false, nil
 		}
-		motion, ok := loftMirrorCylinderPairMotion(payload, record)
+		motion, ok := loftcylinder.MirrorPairMotion(payload, record)
 		if !ok {
 			return nil, true, fmt.Errorf("%w: mirrored cylinder pair %d has no authenticated axial placement", ErrUnsupported, i+1)
 		}
 		if !loftcylinder.AxialPlacement(motion) {
-			shift, swept, ok, err := loftMirrorCylinderUpperBridge(pair, motion, middle)
-			if err != nil {
-				return nil, true, err
-			}
+			shift, swept, ok := loftcylinder.MirrorUpperBridge(bodyNode(pair), motion, middle)
 			if !ok {
 				return nil, true, fmt.Errorf("%w: mirrored cylinder pair %d has no upper axial bridge", ErrUnsupported, i+1)
 			}

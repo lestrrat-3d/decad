@@ -137,7 +137,7 @@ func SortedTriangle(triangle [3]int) ([3]int, int) {
 
 // CapsOppose reports whether the lowerGroup facets of the lower mesh and the
 // upperGroup facets of the upper mesh, mapped through upperMap, are the same
-// triangles with opposite winding. (From loftMirrorCylinderCapsOppose.)
+// triangles with opposite winding.
 func CapsOppose(lowerTris [][3]int, lowerSrc []int, upperTris [][3]int, upperSrc []int,
 	upperMap []int, lowerGroup, upperGroup int) bool {
 	indices := make(map[[3]int]int)
