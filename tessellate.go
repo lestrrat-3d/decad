@@ -9,6 +9,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/alledgechamfermesh"
 	"github.com/lestrrat-3d/decad/internal/cuptess"
+	"github.com/lestrrat-3d/decad/internal/patchmesh"
 	"github.com/lestrrat-3d/decad/internal/prismtess"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
@@ -416,7 +417,11 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		return mesh, nil
 	}
 	if pp, ok := b.n.Payload.(patchPayload); ok {
-		return tessellatePatch(ctx, b, pp, chord, verify)
+		node, err := patchmesh.Profile(ctx, &b.n, pp, chord, patchmesh.Level(verify))
+		if err != nil {
+			return nil, err
+		}
+		return bornMesh(&Mesh{n: *node}), nil
 	}
 	if rp, ok := b.n.Payload.(revolvePayload); ok {
 		node, err := revolvetess.TessellateRevolve(ctx, &b.n, rp, chord, revolvetess.Level(verify))

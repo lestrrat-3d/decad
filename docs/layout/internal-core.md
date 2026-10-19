@@ -29,7 +29,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/reportvocab/` | Contact and sweep enums; contact reports and planar feature mapping over topology nodes; the sweep request; Verify reports, motion verification records, survey diagnostics, and pair, interference and sheet outcomes. See contact-geometry §6, contact-sweep §7. |
 | `internal/extent/` | Unit bounds and stop levels for extents. See API §8.1, evaluator §5/§6. |
 | `internal/patchchain/` | Patch payloads and node builders; chain partition, exact and shared-level plane proofs, orientation, segment records, area bounds, Rule P and circular-prism admission. See surface §5.1-§5.2 and §10. |
-| `internal/patchmesh/` | Builds planar and circular-prism PatchEdges mesh nodes, source-face bounds and area allowances. See surface §10.1. |
+| `internal/patchmesh/` | Builds PatchProfile and PatchEdges sheet mesh nodes with face and area bounds. See surface §10. |
 | `internal/sectionaudit/` | Rewrite audit order, signed area, cutback, crossing, contact, nesting and detailed error rendering. See modify §5. |
 | `internal/sketchrecord/` | Sketch snapshot authentication, edge conversion, and join checks. See sketch-seam §2. |
 | `internal/splinebezier/` | Exact Bézier conversion of recorded splines. See `docs/spline-design.md` §5.1. |

@@ -10,7 +10,6 @@ The rules for rows live in `docs/layout.md`.
 | Path | Responsibility |
 |---|---|
 | `tessellate.go` | `Mesh`, `Body.Tessellate`, prism mesh handle adapter and dispatch. See tessellation design. |
-| `tessellate_patch.go` | Chords and triangulates a recorded `PatchProfile` sheet. See tessellation §5.1. |
 | `tessellate_brep.go` | Meshes a brep body and proves its occupied volume. See general-boolean §4.4. |
 | `tessellate_brep_band.go` | Adapts route L bands to shared wall samples and delegates fillet rings and strips to `internal/brepfilletmesh/`. See modify-general DG3. |
 | `tessellate_brep_partial_fillet.go` | Selects `internal/partialband/` layouts and places their boundary vertices for `internal/brepfilletmesh/`. |
