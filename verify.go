@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
@@ -701,14 +700,6 @@ func auditSheetBoundary(ctx context.Context, b *Body) reportvocab.SheetAuditOutc
 		return reportvocab.SheetAuditProven
 	}
 	return reportvocab.SheetAuditUndecided
-}
-
-// boxesDisjoint reports whether the two bounds-inflated boxes have disjoint
-// interiors. A body's interior lies within its box's interior, so disjoint
-// box interiors prove the bodies cannot share volume — touching boxes
-// included (evaluator §10).
-func boxesDisjoint(a, b Box) bool {
-	return measurement.BoxesDisjoint(boxToInternal(a), boxToInternal(b))
 }
 
 // aggregateStatus is the worst-wins precedence of verification §6.

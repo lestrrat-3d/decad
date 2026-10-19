@@ -144,7 +144,7 @@ func OffsetOpenChain(budget *proofbound.WorkBudget, chain []survey2d.SideWalk, a
 // ChainSectionDelta is the section displacement of an open chain's offset
 // (docs/modify-reach-design.md §9.3.1, docs/shell-opening-design.md §4.4):
 // three times ChainReach's largest reach over K's interior joins and
-// its two ends, on offsetSectionDelta's own argument. line is the mirror line
+// its two ends, on OffsetSectionDelta's own argument. line is the mirror line
 // an axis end meets; a chain with two opening ends never reads it. K and its
 // end vertices are the receiver's own record and move by nothing, so the
 // figure is exactly zero wherever every join and cut encloses to the float the

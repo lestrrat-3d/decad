@@ -347,8 +347,8 @@ func TestCurvedSourceCapCirclesSplitClosedBlankShell(t *testing.T) {
 		len(shell.capRings), len(shell.mesh.Verts), len(shell.mesh.Tris))
 	stale := *shell.capRings[0].arc
 	stale.time = new(big.Rat).Add(stale.time, big.NewRat(1, 1000))
-	_, accepted, err := revolveLoftFacesBlankShellAtArcWithCuts(t.Context(), proof, manifest,
-		sectionIndex, cellIndex, []revolveLoftFacesShellCut{{
+	_, accepted, err := revolveLoftFacesBlankShellAtRunsWithCuts(t.Context(), proof, manifest,
+		[]revolveLoftFacesShellSeamSelector{{sectionIndex: sectionIndex, cellIndex: cellIndex}}, []revolveLoftFacesShellCut{{
 			sectionIndex: stale.circle.span,
 			x:            stale.circle.x, radius: stale.circle.radius, arc: &stale,
 		}})

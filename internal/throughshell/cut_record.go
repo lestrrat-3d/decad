@@ -175,7 +175,7 @@ type Section struct {
 
 // ErodeSection is stage 3 on S with caps alone removed (§3.3 step 1):
 // S18 and S10's section limit, S10's height limit for a kept cap, then S11a
-// as offsetProfile(S, +1, t) is built. The caller audits the offset and
+// as offset2d.OffsetProfile(S, +1, t) is built. The caller audits the offset and
 // proves its displacement.
 func (tc Cut) ErodeSection(budget *proofbound.WorkBudget, rm Removal, call ShellInput) (Section, error) {
 	section := tc.Caps.Section

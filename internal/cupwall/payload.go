@@ -70,7 +70,7 @@ const (
 // held in, not the theorem itself (docs/payload-verification-design.md §4.1).
 //
 // OffsetDelta is the OFFSET region's section displacement — the cavity
-// inward, the outer region outward: the proven upper bound offsetSectionDelta
+// inward, the outer region outward: the proven upper bound offset2d.OffsetSectionDelta
 // (shell.go) states on how far any recorded boundary point of that
 // region sits from the boundary of P ⊖ t* or P ⊕ t* the shell denotes, t* the
 // caller's thickness in exact millimetres. It covers the thickness conversion

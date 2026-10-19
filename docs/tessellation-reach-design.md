@@ -245,7 +245,7 @@ tess §14's loft bullet in full, plus:
 
 Give `chordLoop` a `walkFreeform` arm so an extruded Tier A free-form wall chords, with a proven sagitta,
 station displacement and area slack, on the existing prism path. Nothing else in `tessellateContext`
-changes: `requireLoopClearance`, `triangulate2DContext`, `earClip` and the wall/cap emission already consume
+changes: `tessellation.RequireLoopClearance`, `triangulate2DContext`, `earClip` and the wall/cap emission already consume
 2D samples.
 
 ### Machinery
@@ -310,7 +310,7 @@ parameter either.
 | exact-rational work exceeds the record-level counter | `ErrUnsupported` (spline R7) | `freeformWork.step` inside each primitive |
 | a cell's sagitta or speed enclosure is non-finite | `ErrUnsupported` | `chargedRatSqrtUp` / `spanSpeedUpper` |
 | a station's `Point2` rounding gap is non-finite | `ErrUnsupported` | the arm, before emission |
-| the chorded loop self-intersects or pinches | `ErrDegenerate` via `tessellation.ExpectedError` | `triangulation.EarClip`, `requireLoopClearance` |
+| the chorded loop self-intersects or pinches | `ErrDegenerate` via `tessellation.ExpectedError` | `triangulation.EarClip`, `tessellation.RequireLoopClearance` |
 
 A rational (Tier B/C) walk never reaches the arm: spline R10 refuses it at `Extrude`.
 
@@ -371,7 +371,7 @@ composes both in one expression.
 | §8 budget order | `revolveConstructionPrior` + `RigidRoundAllow` before the count, the measured pair after | §8 splits the tolerance BEFORE the counts, and the count decides how many angles there are, so the split spends count-INDEPENDENT ceilings: the meridian gap (per sample, not per angle), the stored trig's own ceiling, and the evaluation's ulps at `coordMax`. The measured `deltaC`/`deltaR` are checked against them and refuse on a violation, so the a-priori figure is held to account rather than trusted |
 | §8 tolerance split | `revolveBudget(tol, deltaC, deltaR)` | `available = downRound(downRound(tol − deltaC − deltaR))`; `<= 0` refuses; meridian gets `available/2`; angular gets `available − deltaM` |
 | §3/§8 counts | `chordCount` for each circular meridian walk (R4) and for the global angular sequence with `radius = rhoMax`, `sweep = |φ1−φ0|` or `2π`, `closed = full` | the downward-then-upward correction and the cap are `chordCount`'s own; R3 sections have no circular meridian walk, so `deltaM == 0` |
-| §9 section proof | `revolvesampling.SectionPoints` + `requireLoopClearance` over the `(z, ρ)` samples, run for a full and a partial sweep alike before any cell is formed (line-only sections: the homotopy is the identity, so the endpoint checks are the proof) | R4 adds the intra-loop tube check |
+| §9 section proof | `revolvesampling.SectionPoints` + `tessellation.RequireLoopClearance` over the `(z, ρ)` samples, run for a full and a partial sweep alike before any cell is formed (line-only sections: the homotopy is the identity, so the endpoint checks are the proof) | R4 adds the intra-loop tube check |
 | §9 rings + poles | `tessellateRevolve`'s ring loop, read back through `revMeridian.at` | `ρ > 0` → `nPhi` (full) or `nPhi+1` (partial) vertices; `ρ == 0` → ONE vertex, answered for every angle and for both caps, so the interning is structural rather than a lookup |
 | §9 cells | `revolvemesh.EmitCellTriangles` | both off axis → planar quad, fixed `(m_k, φ_l) → (m_{k+1}, φ_{l+1})` diagonal; one on axis → fan; both on axis → nothing only for `wallAxis`, else refuse "erased generator" |
 | §9 partial caps | `revolvemesh.EmitCapTriangles`: `triangulation.Triangulate` over the `(z, ρ)` samples | the `(u, v) → (z, ρ)` map is a ROTATION for either axis side, so the recorded loop's own sense survives it and no index order is reversed; the `(z, ρ)` frame's normal is the sweep-velocity direction, so the END cap takes the triangulation as it stands and the start cap reverses it. Pole vertices are ordinary 2D samples mapping to the interned vertex, so the on-axis line's edge is shared by both caps |
@@ -407,7 +407,7 @@ case, and `doc.go`'s support map with them.
   else). A circular walk with positive interior `ρ` that chords to an axis-only polyline refines, then
   refuses.
 - Intra-loop tube clearance: `requireWalkClearance(ctx, pts, loopIdx, walkSag)` — every non-adjacent walk
-  pair within one loop clears `sag_i + sag_j + floor`, the same gate `requireLoopClearance` runs across loops,
+  pair within one loop clears `sag_i + sag_j + floor`, the same gate `tessellation.RequireLoopClearance` runs across loops,
   with the same `tessellation.ExpectedError`. This plus the endpoint checks is tess §9's `Hm` proof.
 - Refinement: first failing meridian walk in payload order, rebuild, re-audit; angular failures increment
   the one global count.
@@ -439,7 +439,7 @@ its derivation, and is the authority on both.
 | inverse underflow / unrepresentable ceiling / cap | `chordCount` (unchanged) |
 | on-axis incidence malformed | `revolvesampling.RequireAxisIncidence` (`ErrDegenerate`) |
 | positive-radius ring collapse; erased generator | `revolvesampling.MeridianSamples`, `tessellateRevolve`'s own cell loop |
-| meridian simplicity/nesting/clearance | `requireLoopClearance`, `requireWalkClearance` after refinement exhausts |
+| meridian simplicity/nesting/clearance | `tessellation.RequireLoopClearance`, `requireWalkClearance` after refinement exhausts |
 | non-adjacent facets intersect; homotopy sign not fixed | `revolveContactAudit` |
 | directed-edge / link / zero area | `tessellation.RequireClosedMesh`, `tessellation.RequireVertexLinks` |
 | a payload class with no occupied-volume proof in a boolean | `requireVolumeProvingPayload` before the mesh, `operandSymDiff` (R0) after it |
@@ -524,7 +524,7 @@ azimuths.
 Rings: side ring per loop per level (shared with the trimmed side wall exactly as the cup shares its rings);
 cap contour ring per chamfered `(loop, cap)` at `capZ`, built from the cap arcs' samples joined at the miter
 feet (`capblend.WallFoot`) and apex arcs. The cap face at `capZ` triangulates through `triangulate2DContext` over
-the contour rings of chamfered loops and the original rings of unchamfered ones, after `requireLoopClearance`
+the contour rings of chamfered loops and the original rings of unchamfered ones, after `tessellation.RequireLoopClearance`
 over all of them.
 
 ### Cells
@@ -680,7 +680,7 @@ refuses reflex corners in other receivers.
 | Condition | Result |
 |---|---|
 | any term above non-finite (`miterLocusSpeedUpper` answering `false`, `capblend.PatchWindowSkew` non-finite) | `ErrUnsupported` |
-| a chamfered loop's contour ring and its original ring at the other cap cannot clear each other's sagitta tubes | `ErrDegenerate` via `tessellation.ExpectedError` (`requireLoopClearance`) |
+| a chamfered loop's contour ring and its original ring at the other cap cannot clear each other's sagitta tubes | `ErrDegenerate` via `tessellation.ExpectedError` (`tessellation.RequireLoopClearance`) |
 | `n(w)` exceeds `maxChordsPerWalk` | `ErrUnsupported` (`errTooManyChords`) |
 | directed-edge, link, or zero-area audit fails | `ErrUnsupported` |
 | a `chamferCap(...)` role or a `side(i,j)` role resolves to no face | `ErrDegenerate` |

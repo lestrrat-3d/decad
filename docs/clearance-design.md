@@ -666,7 +666,7 @@ trimmed inner face alone and asks the oracle nothing:
   float box, read a coarse lower end that far above the gap.
   The P4/P8 brackets already carry the kernel's slack in their half-width.
 - **Pruning reads the bounds it just proved.** Body boxes prune first (the
-  shipped `boxesDisjoint` machinery), then cells. The enumeration (§3) keeps
+  shipped `measurement.BoxesDisjoint` machinery), then cells. The enumeration (§3) keeps
   `H`, the least `hi` among the contributions so far, and skips a vertex ×
   face, vertex × edge, face × face, face × edge or edge × edge cell when
   `b − m > H` STRICTLY. Here `b` is the distance between the two features'

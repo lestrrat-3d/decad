@@ -117,7 +117,9 @@ func facesByRole(b *Body) map[string]*Face {
 }
 
 var cupWallOperations = cupwall.Operations{
-	Offset:  offsetProfile,
+	Offset: func(budget *proofbound.WorkBudget, profile momentinput.Profile, s, t float64) (momentinput.Profile, error) {
+		return offset2d.OffsetProfile(budget, profile, s, t, shellTol)
+	},
 	Equal:   momentinput.ExactProfileEqual,
 	Audit:   offset2d.AuditOffsetSectionBudget,
 	Reverse: offset2d.ReverseLoopRecordBudget,

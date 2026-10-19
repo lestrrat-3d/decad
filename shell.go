@@ -385,7 +385,7 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value, opts .
 	// The exact per-feature offset (§7). A dropped feature or a miter that does
 	// not close is caught here — antecedent to the audit (S11a / S11) — before
 	// there is any constructed section to audit.
-	offset, err := offsetProfile(offsetBudget, pp.Profile, s, tmm)
+	offset, err := offset2d.OffsetProfile(offsetBudget, pp.Profile, s, tmm, shellTol)
 	if err != nil {
 		return nil, err
 	}
@@ -414,7 +414,7 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value, opts .
 		// B4 / reach BX8: the wall is one band around the outer loop plus one
 		// band lining each hole — 1 + k disjoint lumps, one stacked slab with
 		// one region per band.
-		offsetDelta, derr := offsetSectionDelta(offsetBudget, pp.Profile, s, tmm, tDelta)
+		offsetDelta, derr := offset2d.OffsetSectionDelta(offsetBudget, pp.Profile, s, tmm, tDelta, shellTol)
 		if derr != nil {
 			return nil, shellCancelCause(derr)
 		}
@@ -426,7 +426,7 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value, opts .
 		// floor slab (one lump).
 		// The offset section is a float evaluation of P ⊖ t*; the cup records
 		// how far it may sit from that denoted offset beside it (§9).
-		offsetDelta, derr := offsetSectionDelta(offsetBudget, pp.Profile, s, tmm, tDelta)
+		offsetDelta, derr := offset2d.OffsetSectionDelta(offsetBudget, pp.Profile, s, tmm, tDelta, shellTol)
 		if derr != nil {
 			return nil, shellCancelCause(derr)
 		}
@@ -557,14 +557,14 @@ func (b *Body) shellClosedPrism(ctx context.Context, pp prismPayload, s float64,
 				ErrDegenerate, t, units.Millimeters(h), units.Millimeters(math.Max(maxT, 0)))
 		}
 	}
-	offset, err := offsetProfile(budget, pp.Profile, s, tmm)
+	offset, err := offset2d.OffsetProfile(budget, pp.Profile, s, tmm, shellTol)
 	if err != nil {
 		return nil, err
 	}
 	if err := offset2d.AuditOffsetSectionBudget(budget, pp.Profile, offset); err != nil {
 		return nil, shellCancelCause(err)
 	}
-	offsetDelta, err := offsetSectionDelta(budget, pp.Profile, s, tmm, tDelta)
+	offsetDelta, err := offset2d.OffsetSectionDelta(budget, pp.Profile, s, tmm, tDelta, shellTol)
 	if err != nil {
 		return nil, shellCancelCause(err)
 	}
@@ -617,8 +617,11 @@ func (b *Body) shellClosedPrism(ctx context.Context, pp prismPayload, s float64,
 	return body, nil
 }
 
-// shellTol is the closed-form degeneracy tolerance for the shell's own gates:
-// offset2d.ShellTol, the value the cap-band builder reads too.
+// shellTol is the closed-form degeneracy tolerance for the shell's own gates
+// and for the exact section offset of docs/modify-design.md §7
+// (offset2d.OffsetProfile and offset2d.OffsetSectionDelta, which hold the
+// construction, its S11a/S11 refusals and the §5 audit): offset2d.ShellTol,
+// the value the cap-band builder reads too.
 const shellTol = offset2d.ShellTol
 
 // classifyRemovedCaps decides which caps a removed-face set names on a brep
@@ -679,18 +682,4 @@ func evalTubeContext(ctx context.Context, d *Document, ref producerID, pp prismP
 		Z1Delta: pp.Z1Delta,
 		Xform:   pp.Xform,
 	}, freeform.NewFreeformWork()))
-}
-
-// This file binds the exact section offset of docs/modify-design.md §7 to
-// shellTol; the construction, its S11a/S11 refusals and the §5 audit live in
-// internal/offset2d/profile_offset.go.
-
-// offsetProfile binds offset2d.OffsetProfile to shellTol.
-func offsetProfile(budget *proofbound.WorkBudget, profile profileRecord, s, t float64) (profileRecord, error) {
-	return offset2d.OffsetProfile(budget, profile, s, t, shellTol)
-}
-
-// offsetSectionDelta binds offset2d.OffsetSectionDelta to shellTol.
-func offsetSectionDelta(budget *proofbound.WorkBudget, profile profileRecord, s, t, tDelta float64) (float64, error) {
-	return offset2d.OffsetSectionDelta(budget, profile, s, t, tDelta, shellTol)
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/units"
@@ -17,9 +18,9 @@ func TestBlindPocketFloorBandHasFourSphereOctants(t *testing.T) {
 	t.Parallel()
 	budget := proofbound.NewWorkBudget(t.Context())
 	pocket := prismshell.BossRect{U0: 3, V0: 3, U1: 7, V1: 7}.Profile()
-	rounded, err := offsetProfile(budget, pocket, -1, 1)
+	rounded, err := offset2d.OffsetProfile(budget, pocket, -1, 1, shellTol)
 	require.NoError(t, err)
-	delta, err := offsetSectionDelta(budget, pocket, -1, 1, 0)
+	delta, err := offset2d.OffsetSectionDelta(budget, pocket, -1, 1, 0, shellTol)
 	require.NoError(t, err)
 	require.Zero(t, delta)
 	read, err := breprecord.FilletLoopOf(budget, rounded.Outer, 1, "pocket floor", freeform.NewFreeformWork())

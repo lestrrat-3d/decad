@@ -68,11 +68,11 @@ func shellBlindPocket(ctx context.Context, source *Body, sp stackedPrismPayload,
 		return refuse("needs exactly represented offset coordinates")
 	}
 	budget := proofbound.NewWorkBudget(ctx)
-	rounded, err := offsetProfile(budget, pocket.Profile(), -1, t)
+	rounded, err := offset2d.OffsetProfile(budget, pocket.Profile(), -1, t, shellTol)
 	if err != nil {
 		return nil, true, err
 	}
-	delta, err := offsetSectionDelta(budget, pocket.Profile(), -1, t, 0)
+	delta, err := offset2d.OffsetSectionDelta(budget, pocket.Profile(), -1, t, 0, shellTol)
 	if err != nil {
 		return nil, true, err
 	}

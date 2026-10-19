@@ -72,7 +72,7 @@ func (r *motionRun) settleConstant(i, k int) error {
 	pair := &r.pairs[i][k]
 	pair.constant = false
 	mover, partner := r.movers[i].body, r.partner(i, k)
-	boxProven := boxesDisjoint(boxFromInternal(mover.n.Bounds), boxFromInternal(partner.n.Bounds))
+	boxProven := measurement.BoxesDisjoint(mover.n.Bounds, partner.n.Bounds)
 	res, fast := clearanceAxisBoxes(mover, partner)
 	if !fast {
 		var err error
@@ -226,7 +226,7 @@ func (r *motionRun) evaluatePair(mp *motionPose, i, k int, a, b *motionPlaced) e
 	if b != nil {
 		target, etaB, allowance = b.body, b.eta, proofbound.AbsSumUpper(a.allowance, b.allowance)
 	}
-	boxProven := boxesDisjoint(boxFromInternal(a.body.n.Bounds), boxFromInternal(target.n.Bounds))
+	boxProven := measurement.BoxesDisjoint(a.body.n.Bounds, target.n.Bounds)
 	res, fast := clearanceAxisBoxes(a.body, target)
 	if !fast {
 		var err error

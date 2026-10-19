@@ -568,7 +568,7 @@ within `δ` of the recorded one, which the band, the mesh's `+δ` and
 `SectionExtentAllow` read. Each recorded segment also pairs with a denoted
 segment of the same kind whose two ends, and an arc's centre, each sit within
 `δ`, with the arc's sweep taken without a 2π wrap, which the per-walk terms
-below read. `offsetSectionDelta`'s figure meets both. Under it:
+below read. `offset2d.OffsetSectionDelta`'s figure meets both. Under it:
 
 - every walk takes §7.1's fold at BOTH ends with `(δ, δ)`, so a straight
   wall's area, every junction latitude and arc length, and every cap edge's
