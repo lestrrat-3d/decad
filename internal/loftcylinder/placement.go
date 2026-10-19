@@ -36,8 +36,9 @@ func placedBlankShape(pp prismrecord.Payload) bool {
 }
 
 // PlacedToothShape reports whether tooth is an authenticated, solid,
-// hole-free six-curve Loft with one segment, an even held vertex count of at
-// least 16, and the circular Union's section curve kinds.
+// hole-free six-curve Loft with a non-nil source identity, one segment, an
+// even held vertex count of at least 16, and the circular Union's section
+// curve kinds.
 // It is the cheap check a common-placement Union runs before rebuilding the
 // tooth.
 func PlacedToothShape(tooth *topo.Body) bool {
