@@ -257,7 +257,7 @@ func (r *pairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*Sweep
 			r.report.Outcome, r.report.Event = SweepInitiallyTouching, &first.Ideal
 			return r.report, nil
 		}
-		if !r.provesDeparture() {
+		if !box.ProvesDeparture(r.boxA.axisBox(), r.boxB.axisBox(), r.pa.Delta, r.pb.Delta) {
 			if r.req.StartPolicy == reportvocab.ContinueCertifiedTouch {
 				if track := r.fullSourceBoxTrack(first, one); track != nil {
 					last, err := r.sample(ctx, one)
@@ -329,7 +329,7 @@ func (r *pairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*Sweep
 	default:
 		return r.undecided(zero, zero, SweepPoseRelation), nil
 	}
-	entry, exit, intersects := r.contactSpan()
+	entry, exit, intersects := box.ContactSpan(r.boxA.axisBox(), r.boxB.axisBox(), r.pa.Delta, r.pb.Delta)
 	if !intersects || entry.Cmp(one) > 0 || exit.Sign() < 0 || entry.Cmp(exit) > 0 {
 		_, err := r.sample(ctx, one)
 		if errors.Is(err, errSweepPoseBudget) {
@@ -426,49 +426,4 @@ func (r *pairSweepRun) undecided(from, to *big.Rat, cause SweepCause) *SweepRepo
 	r.report.Unresolved = &SweepInterval{From: sweepInstant(from, r.pa.Duration), To: sweepInstant(to, r.pa.Duration)}
 	r.sortSamples()
 	return r.report
-}
-
-func (r *pairSweepRun) provesDeparture() bool {
-	for axis := range 3 {
-		if proofarith.DyCmp(r.boxA.hi[axis], r.boxB.lo[axis]) == 0 {
-			if proofarith.DySubScalar(r.pb.Delta[axis], r.pa.Delta[axis]).Sign() > 0 {
-				return true
-			}
-		}
-		if proofarith.DyCmp(r.boxB.hi[axis], r.boxA.lo[axis]) == 0 {
-			if proofarith.DySubScalar(r.pa.Delta[axis], r.pb.Delta[axis]).Sign() > 0 {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// meshbool.ContactSpan intersects six exact linear support inequalities. It returns
-// the first and last fractions where the closed source boxes can meet.
-func (r *pairSweepRun) contactSpan() (*big.Rat, *big.Rat, bool) {
-	entry, exit := new(big.Rat), big.NewRat(1, 1)
-	for axis := range 3 {
-		constraints := [2][2]proofarith.Dyadic{
-			{proofarith.DySubScalar(r.boxA.hi[axis], r.boxB.lo[axis]), proofarith.DySubScalar(r.pa.Delta[axis], r.pb.Delta[axis])},
-			{proofarith.DySubScalar(r.boxB.hi[axis], r.boxA.lo[axis]), proofarith.DySubScalar(r.pb.Delta[axis], r.pa.Delta[axis])},
-		}
-		for _, c := range constraints {
-			start, slope := c[0], c[1]
-			if slope.IsZero() {
-				if start.Sign() < 0 {
-					return entry, exit, false
-				}
-				continue
-			}
-			root := new(big.Rat).Quo(proofarith.DyNeg(start).Rat(), slope.Rat())
-			if slope.Sign() > 0 && root.Cmp(entry) > 0 {
-				entry = root
-			}
-			if slope.Sign() < 0 && root.Cmp(exit) < 0 {
-				exit = root
-			}
-		}
-	}
-	return entry, exit, entry.Cmp(exit) <= 0
 }
