@@ -161,7 +161,7 @@ func TestLoftCopyIdentityIsMeasurementIdentical(t *testing.T) {
 	require.Equal(t, decad.Exact, dupBounds.Exactness)
 
 	// Area is the fourth measurement a loft payload publishes beside Volume,
-	// Centroid and Bounds (loft_build.go), so the bit-identical claim this
+	// Centroid and Bounds (internal/loftrecord), so the bit-identical claim this
 	// test's own name makes covers it too. It is the one of the four that is
 	// NOT Exact — a loft's area sums held triangles under a proven allowance
 	// — which is exactly why the comparison is the whole Measurement: value,

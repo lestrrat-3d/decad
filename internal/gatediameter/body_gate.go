@@ -96,7 +96,7 @@ import (
 // false Sound.
 //
 // This arm's zero-subtraction fast path reads payload.Delta == 0 exactly
-// (loft_build.go's exact identity-transform-and-no-computed-station
+// (internal/loftrecord's exact identity-transform-and-no-computed-station
 // comparison, never a tolerance) and then reports the shared reader's
 // answer UNCHANGED: no subtraction and no rounding of its own. What that
 // answer is, is the reader's to state — the largest float64 at or below the

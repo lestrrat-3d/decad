@@ -156,7 +156,7 @@ answering `+Inf` for an underivable enclosure is the same refusal.
 
 ### Where the triangle set lives
 
-`loftPayload` (`loft_build.go`) holds `verts`, `tris`, `walls`. `tris[:walls]` are the wall triangles in
+`loftPayload` (`loftrecord.Payload`) holds `verts`, `tris`, `walls`. `tris[:walls]` are the wall triangles in
 `loftAssembly.cell`/`side` order; `tris[walls:walls+capStartCount]` are `capStart`'s, the rest `capEnd`'s.
 `capStartCount`, `cell` and `side` live on `loftAssembly` only. `matchedDelta` and
 `loftChordedAllow.maxTwistOffsetUpper` are locals of `loftrecord.Build`; the payload's own doc comment says
@@ -188,11 +188,11 @@ re-evaluates, so nothing stored can disagree with the records.
 `loftChordedAllow` gains `twistAreaAllow`, the sum of `cellTwistAreaAllow(vLo, vHi, wLo, wHi)` over the same
 chorded cells `computeLoftChordedAllow` already walks (gated on `p.matchedDelta[j] > 0`, never on kind).
 
-### `tessellateLoft(ctx, b, lp)` and `internal/loftmesh.RestateLoft`
+### `loftrecord.Tessellate` and `internal/loftmesh.RestateLoft`
 
-`tessellateLoft` (`loft_build.go`) is the adapter: it numbers `b.Faces()` in order, maps each provenance
+`loftrecord.Tessellate` is the adapter: it numbers the body's face nodes in order, maps each provenance
 role to its face number, and hands `RestateLoft` the payload's triangle set, split and proof record. It
-maps the returned face numbers back to live faces and calls `topobuild.SetFaceBound`. `RestateLoft` does steps 1-4.
+maps the returned face numbers back to face nodes and calls `topobuild.SetFaceBound`. `RestateLoft` does steps 1-4.
 
 1. Build the role-to-face map from `b.Faces()` as the prism does. For `k < walls`: face of role
    `side(cell[k][0], cell[k][1], side[k])`. For a solid, `capStartCount` triangles → `capStart`,

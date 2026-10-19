@@ -961,8 +961,8 @@ func SweptVolumeAllow(delta, areaUpper float64) float64 {
 //     (docs/loft-gear-bounds-design.md §2).
 //
 // matchedDeltaUpper is a DIFFERENT, STRONGER quantity than the loft
-// evaluator's own sectionDelta field (loftPayload.SectionDelta,
-// loft_build.go) and the two are never interchangeable. sectionDelta is a
+// evaluator's own sectionDelta field (loftrecord.Payload.SectionDelta)
+// and the two are never interchangeable. sectionDelta is a
 // SET-distance sagitta: every curve point sits within it of SOME chord
 // point. matchedDeltaUpper must be a PROVEN bound on |curve(s) − chord(s)|
 // at the SAME s under the caller's OWN shared parametrization (above) — a
