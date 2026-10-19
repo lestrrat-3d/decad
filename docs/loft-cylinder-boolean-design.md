@@ -429,6 +429,11 @@ again tile exactly one disk or annulus each. The side must still be the
 recorded paired two-triangle strips. All selected public edges must cover
 the two recorded outer walks and no inner bore edge.
 
+The setback and loop admission (`ChamferSource.BindCapSetback`,
+`ChamferSelectsOuterLoops`) and the build (`ChamferBothCaps`) live in
+`internal/loftcylinder` over topology nodes. Root reads the receiver's cap
+refs and maps the result node to its handle.
+
 This narrow route extends Loft §18's held-polygon cap semantics. It constructs
 one rational polyhedral retained solid `C` from the certified held outer
 loops and source-ordered offset samples. The exact modified source is
