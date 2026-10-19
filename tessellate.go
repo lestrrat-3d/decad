@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/alledgechamfermesh"
 	"github.com/lestrrat-3d/decad/internal/brepbandmesh"
 	"github.com/lestrrat-3d/decad/internal/chainrecord"
+	"github.com/lestrrat-3d/decad/internal/coilshell"
 	"github.com/lestrrat-3d/decad/internal/cuptess"
 	"github.com/lestrrat-3d/decad/internal/draftrecord"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
@@ -449,7 +450,11 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 	if cp, ok := b.n.Payload.(coilPayload); ok {
 		// docs/helix-design.md Table CD row CD2: an exact restatement of the
 		// held triangles, refused below the payload's own delta.
-		return tessellateCoil(ctx, b, cp, chord, verify)
+		node, err := coilshell.Tessellate(ctx, &b.n, cp, chord, verify >= VerifyAll)
+		if err != nil {
+			return nil, err
+		}
+		return bornMesh(&Mesh{n: *node}), nil
 	}
 	if sp, ok := b.n.Payload.(sweepPayload); ok {
 		// One-span sweeps reuse the prism or revolve mesh of their exact

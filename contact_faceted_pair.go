@@ -6,6 +6,7 @@ import (
 	"math"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/coilshell"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	"github.com/lestrrat-3d/decad/internal/planarband"
@@ -322,7 +323,7 @@ func planarStitchSolid(budget *proofbound.WorkBudget, b *Body, sp stitchPayload)
 // CD row CD5). The shell is a closed all-triangle restatement of the body
 // whose every vertex lies within its own β of the true boundary, so its
 // displacement is the payload's delta, the same bound its mesh publishes. The
-// restatement does not depend on a chord, so tessellateCoil is asked at delta
+// restatement does not depend on a chord, so coilshell.Tessellate is asked at delta
 // itself, the finest tolerance it serves, and the snapshot serves every
 // chord. The wall's Faceted face is not planar, which is why this path does
 // not go through planarHeldMeshSolid: that arm refuses a curved body at the
@@ -333,7 +334,7 @@ func planarCoilSolid(ctx context.Context, budget *proofbound.WorkBudget, b *Body
 	if !measurement.FiniteValues(cp.Delta) || cp.Delta < 0 {
 		return planar.PlanarSolid{}, none, false, nil
 	}
-	mesh, err := tessellateCoil(ctx, b, cp, cp.Delta, VerifyNone)
+	mesh, err := coilshell.Tessellate(ctx, &b.n, cp, cp.Delta, false)
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return planar.PlanarSolid{}, none, false, ctxErr
@@ -345,15 +346,15 @@ func planarCoilSolid(ctx context.Context, budget *proofbound.WorkBudget, b *Body
 	for i, face := range faces {
 		faceAt[faceNode(face)] = i
 	}
-	faceOf := make([]int, len(mesh.n.Triangles))
-	for t, face := range mesh.n.Source {
+	faceOf := make([]int, len(mesh.Triangles))
+	for t, face := range mesh.Source {
 		at, ok := faceAt[face]
 		if !ok {
 			return planar.PlanarSolid{}, none, false, nil
 		}
 		faceOf[t] = at
 	}
-	solid, ok, err := planarsnapshot.HeldSolid(budget, mesh.n.Vertices, mesh.n.Triangles, faceOf)
+	solid, ok, err := planarsnapshot.HeldSolid(budget, mesh.Vertices, mesh.Triangles, faceOf)
 	if err != nil || !ok {
 		return planar.PlanarSolid{}, none, false, err
 	}
