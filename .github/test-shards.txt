@@ -975,7 +975,6 @@
 7	0.01	TestPrismBooleanNearWholeCircleSourceFallsBack
 7	18.39	TestPrismCrossingDiscPairsMatchMeshAnswer
 7	0.00	TestPrismIntersectShiftedEndpointChargesItsRounding
-7	0.03	TestPrismMoverRecordRadiusReadsArcsTightly
 7	0.01	TestPrismSharedWallChargesTheGap
 7	0.00	TestPrismSplitLeftCellFixtureWalksHostIndependently
 7	0.16	TestProximityGateWalkAdmitsNoGraze
