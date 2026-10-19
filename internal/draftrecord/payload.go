@@ -63,7 +63,7 @@ type Payload struct {
 	// geometry capblend.BuildBand built it from, in loop order then walk order, and
 	// BandDelta each loop's own far contour displacement keyed as the band view
 	// keys it. Both are filled once by the build and handed to the band view
-	// (Band), so the tessellator (tessellate_draft.go) charges the same patch
+	// (Band), so the tessellator (Tessellate) charges the same patch
 	// geometry and contour displacement every reading of the body charged.
 	// Both are plane-local and placement-invariant.
 	Patches   []capblend.Patch

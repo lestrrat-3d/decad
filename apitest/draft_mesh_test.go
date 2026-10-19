@@ -19,9 +19,7 @@ import (
 // tessellation (Table DD row DD1) and the readings it opens — booleans (DD2),
 // export (DD3, DD4), interference (DD10), mass properties (DD11) and Patterned
 // (DD13). Closed forms reuse extrude_taper_test.go's 256-bit helpers, with
-// d = h·tan α from the exact angle the stated taper denotes. The occupied-volume
-// proof itself, volSymDiff against each closed form, is pinned on the
-// production path in tessellate_draft_internal_test.go.
+// d = h·tan α from the exact angle the stated taper denotes.
 
 // draftMeshTolerances are the three chord tolerances every fixture meshes at.
 var draftMeshTolerances = []float64{0.25, 0.05, 0.01}
