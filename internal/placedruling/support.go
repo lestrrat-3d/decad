@@ -18,6 +18,10 @@ type Plane struct {
 	Clearance     *big.Rat
 }
 
+// GramLimit is the largest gram the placed-ruling proof admits; Support
+// checks |α| at most 1/4 (alphaLimit), under which RimDrift holds.
+var GramLimit = proofarith.MustDyOf(1.0 / 16)
+
 var alphaLimit = proofarith.MustDyOf(1.0 / 4)
 
 type triedPlane struct{ normal, origin proofarith.DyV3 }

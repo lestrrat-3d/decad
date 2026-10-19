@@ -409,7 +409,7 @@ func (r *SweepReport) certifiedRotationalPosesAtFraction(f *big.Rat) (
 		return r.certifiedPlanarPosesAtFraction(f)
 	}
 	if r.replay.track != nil && r.replay.track.rolling != nil {
-		return r.certifiedRollingPosesAtFraction(f)
+		return r.replay.track.rolling.ReplayPoses(f, r.replay.request.PointResolution)
 	}
 	paths := r.replay.rotation
 	var pose [2]r3.Transform

@@ -1661,10 +1661,12 @@ poses (§13 PR 19), and against a signed-axis face of an exact planar body at an
 (§13 PRs 20 and 20e).
 
 **Rolling.** A cylinder rolling on a floor takes §10.3's track with the ruling's two ends as the
-contact set (`contact_sweep_rolling.go`). `SweepPair` admits a full source cylinder `M` at any start
-pose with a positive determinant whose path rotates, against an exact planar body `S` with zero `δ`
-whose path only translates; `ContactPair` must prove the start a ruling touch or the placed band of
-contact-geometry §4.5. The support plane is the plane that section picks: a face plane of `S` whose
+contact set. `contact_sweep_rolling.go` picks the sides, reads the start through `ContactPair` and
+publishes the track; `internal/planarsweep/rolling.go` proves the band (`planarsweep.ProveRollingBand`)
+and certifies it (`planarsweep.RollingTrack`: depth, manifold and replay check). `SweepPair` admits a
+full source cylinder `M` at any start pose with a positive determinant whose path rotates, against an
+exact planar body `S` with zero `δ` whose path only translates; `ContactPair` must prove the start a
+ruling touch or the placed band of contact-geometry §4.5. The support plane is the plane that section picks: a face plane of `S` whose
 normal `n̂` is a signed axis, with every vertex of `S` on or behind it and the cylinder's axis nearly
 across it. A cylinder has no vertices, so the proof reads the centers `c±` of its end disks, material
 points on its axis, staged exactly through the start pose's float basis `B`. That basis is orthonormal
@@ -2836,7 +2838,8 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 - Test: `dynamics/rolling_test.go`: the cylinder rolls `π·20 mm` in one turn at `ω = 2π rad/s` with
   contact-point speed within `VelocityResidual` of zero.
 - Depends on: PRs 13, 19.
-- Shipped. The rolling track, its manifold, `BandAt` and replay live in `contact_sweep_rolling.go`,
+- Shipped. The rolling band proof, its certificate, manifold, `BandAt` depth and replay check live in
+  `internal/planarsweep/rolling.go`; `contact_sweep_rolling.go` runs the sweep and publishes the track,
   dispatched from `contact_sweep_planar.go` and read through `contact_sweep.go` and
   `contact_sweep_replay.go`; the placed-pose ruling that lets a turned cylinder start a track lives in
   `contact_analytic_manifold.go`, dispatched from `contact_pair.go`. Root tests:
