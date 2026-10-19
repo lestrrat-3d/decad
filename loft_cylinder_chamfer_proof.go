@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -69,24 +70,15 @@ func loftCylinderChamferSolidWitness(ctx context.Context, fp facetedPayload,
 	return nil
 }
 
-type loftCylinderChamferToothFace struct {
-	body  *Body
-	loft  loftPayload
-	root  int
-	cell  int
-	bound float64
-	scale *big.Rat
-}
-
 // Union copied these precise Loft face triangles, and Cut retained their
 // groups. Match by authenticated origin instead of interpreting a role string
 // on a faceted result that may coalesce several public edges.
-func loftCylinderChamferToothFaces(source loftCylinderChamferSource) (map[provenance.Ref][]loftCylinderChamferToothFace, error) {
+func loftCylinderChamferToothFaces(source loftCylinderChamferSource) (map[provenance.Ref][]loftcylinder.ChamferToothFace, error) {
 	if source.blank == nil || len(source.teeth) == 0 ||
 		len(source.originalTeeth) != len(source.teeth) || source.blankRadius <= 0 {
 		return nil, fmt.Errorf("%w: loft/cylinder chamfer lost its source operands", ErrUnsupported)
 	}
-	faces := make(map[provenance.Ref][]loftCylinderChamferToothFace)
+	faces := make(map[provenance.Ref][]loftcylinder.ChamferToothFace)
 	for toothIndex, tooth := range source.teeth {
 		if tooth == nil || source.originalTeeth[toothIndex] == nil {
 			return nil, fmt.Errorf("%w: loft/cylinder tooth source is absent", ErrUnsupported)
@@ -117,9 +109,9 @@ func loftCylinderChamferToothFaces(source loftCylinderChamferSource) (map[proven
 					return nil, fmt.Errorf("%w: loft/cylinder tooth face lost its origin", ErrUnsupported)
 				}
 				origin := f.n.Origins[0]
-				faces[origin] = append(faces[origin], loftCylinderChamferToothFace{
-					body: tooth, loft: lp, root: root, cell: j, bound: lp.Proof.FacetDeparture,
-					scale: proofarith.FloatRat(original.Xform.Basis().EZ.Z),
+				faces[origin] = append(faces[origin], loftcylinder.ChamferToothFace{
+					Body: &tooth.n, Loft: lp, Root: root, Cell: j, Bound: lp.Proof.FacetDeparture,
+					Scale: proofarith.FloatRat(original.Xform.Basis().EZ.Z),
 				})
 			}
 		}
