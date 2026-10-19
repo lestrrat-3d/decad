@@ -218,6 +218,74 @@ func TestRootCandidates(t *testing.T) {
 		require.Positive(t, residual)
 		require.GreaterOrEqual(t, c.ConeGap, residual)
 	})
+	for _, tc := range []struct {
+		name           string
+		u1, v1, dz, dr float64
+	}{
+		{"skips an apex that rounds onto a far station", 1e9, 10, 2 * (math.Nextafter(1e9, 2e9) - 1e9), 100},
+		{"skips an apex that rounds onto a near station", 100, 2e-6, 1.5e-8, 10},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// The steep side's exact apex lies below u1 by less than half an
+			// ulp of u1, so the recorded float apex is not below the station.
+			hub := revolveFixture(t, steepCone(tc.u1, tc.v1, tc.dz, tc.dr))
+			cone, span := onlyCone(t, hub)
+			require.Equal(t, r3.Vec{X: 1}, cone.Axis)
+			require.GreaterOrEqual(t, cone.Origin.X, min(span.Start.U, span.End.U))
+			require.Empty(t, revolveshell.RootCandidates(hub))
+		})
+	}
+	t.Run("skips a right-angle cone", func(t *testing.T) {
+		// The builder records this side as a plane, so the record is crafted:
+		// the shared corner moves two ulps off the station and both sides take
+		// the walls the record now sweeps.
+		hub := revolveFixture(t, steepCone(2, 2, 1e-3, 10))
+		lines := lineSegments(t, hub)
+		require.Equal(t, sectionrecord.Point2{U: 2.001, V: 12}, lines[2].End)
+		moved := sectionrecord.Point2{U: math.Nextafter(math.Nextafter(2, 3), 3), V: 12}
+		lines[2].End, lines[3].Start = moved, moved
+		withLines(hub, lines)
+		for _, side := range []struct {
+			role string
+			a, b sectionrecord.Point2
+		}{{"side(0,2)", lines[2].Start, moved}, {"side(0,3)", moved, lines[3].End}} {
+			face := faceWithRole(t, hub, side.role)
+			face.Surface, face.Reversed = wallFor(t, hub, side.a, side.b)
+		}
+		cone, span := onlyCone(t, hub)
+		angle, err := cone.HalfAngle.In(units.Radian)
+		require.NoError(t, err)
+		require.GreaterOrEqual(t, angle, math.Pi/2)
+		require.Less(t, cone.Origin.X, min(span.Start.U, span.End.U))
+		require.Empty(t, revolveshell.RootCandidates(hub))
+	})
+}
+
+// steepCone is a stepped section whose one cone side runs from (u1+dz,
+// v1+dr) down to (u1, v1).
+func steepCone(u1, v1, dz, dr float64) []sectionrecord.Point2 {
+	u2 := u1 + dz
+	return []sectionrecord.Point2{{U: u1 - 1}, {U: u1 + 5}, {U: u1 + 5, V: v1 + dr}, {U: u2, V: v1 + dr},
+		{U: u1, V: v1}, {U: u1 - 1, V: v1}}
+}
+
+// onlyCone returns the one recorded span of hub whose face is a cone.
+func onlyCone(t *testing.T, hub *topo.Body) (surfacegeom.Cone, facetedrecord.RevolveSectionSpan) {
+	t.Helper()
+	spans, _, _, ok := revolveshell.RecordedSection(hub)
+	require.True(t, ok)
+	var found []int
+	for i, span := range spans {
+		if span.Face == nil {
+			continue
+		}
+		if _, isCone := span.Face.Surface.(surfacegeom.Cone); isCone {
+			found = append(found, i)
+		}
+	}
+	require.Len(t, found, 1)
+	span := spans[found[0]]
+	return span.Face.Surface.(surfacegeom.Cone), span
 }
 
 func TestCertifySector(t *testing.T) {
