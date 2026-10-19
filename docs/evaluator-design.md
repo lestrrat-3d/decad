@@ -1121,7 +1121,10 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   bound, source faces, and area slack. A boolean-admissible mesh additionally
   carries a proven occupied-volume symmetric-difference allowance. Export
   needs the boundary proof; a boolean rejects an operand that does not carry
-  the occupied-volume proof.
+  the occupied-volume proof. `internal/booloperand/` reads these per-operand
+  answers from the operand's own record: its share of the pair tolerance, its
+  held floor, and the payload-class precheck that refuses an operand with no
+  occupied-volume proof before it is meshed.
 - **Robust mesh boolean in-repo, stdlib-only.** The curated-dependency rule
   stands: no third-party mesh kernel. The algorithm is the exact-predicate
   route: triangle/triangle intersection and point classification decided by

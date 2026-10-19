@@ -3,7 +3,6 @@ package decad
 import (
 	"context"
 	"fmt"
-	"iter"
 
 	"github.com/lestrrat-3d/decad/internal/stitchrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -157,26 +156,6 @@ func assertPlacedStitchOwners(faces []*topo.Face, xform r3.Transform) {
 					return
 				}
 				vertexHandle(ce.Edge.End)
-			}
-		}
-	}
-}
-
-// stitchVertexBounds yields the proven bound magnitude of each of b's own
-// vertices, in b.Vertices() order. clearance_geom.go's addStitchFaces dispatch
-// gate (docs/clearance-design.md §2) and internal/stitchtess/stitch.go's occupied-volume
-// admission (docs/tessellation-design.md §2's stitchPayload row) both reduce
-// it through stitchweld.ZeroBound, and clearance_geom.go reads the largest
-// through stitchweld.MaxBound as the body's own bodyGeom.delta once a bounded
-// stitched body earns a model rather than a refusal: every vertex this carrier
-// model reads comes straight off the body's own topology, so the worst vertex
-// bound is a sound charge against the whole model, exactly as a placed prism's
-// frame/placement rounding is (bodyGeom's own doc comment).
-func stitchVertexBounds(b *Body) iter.Seq[float64] {
-	return func(yield func(float64) bool) {
-		for _, v := range b.Vertices() {
-			if !yield(v.Position().Bound.Mag()) {
-				return
 			}
 		}
 	}

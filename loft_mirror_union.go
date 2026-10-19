@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/booloperand"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetedtopology"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
@@ -108,7 +109,7 @@ func buildLoftMirrorUnion(ctx context.Context, d *Document, ref producerID,
 		!lowerMesh.VolumeVerified() || !upperMesh.VolumeVerified() {
 		return nil, fmt.Errorf("%w: reflected loft source mesh has no matching boundary and volume proof", ErrUnsupported)
 	}
-	_, pairDiameter, err := pairChordTolerance(ctx, lowerBody, upperBody)
+	_, pairDiameter, err := booloperand.PairChord(ctx, &lowerBody.n, &upperBody.n)
 	if err != nil {
 		return nil, err
 	}

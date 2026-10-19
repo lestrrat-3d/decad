@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/booloperand"
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -524,7 +525,7 @@ func TestTangentCapExtensionOnRealChain(t *testing.T) {
 	toe := c.cut.n.Payload.(facetedPayload).LoftFacesToe
 	var held *Mesh
 	for scale := 4.0; scale <= 32 && held == nil; scale *= 2 {
-		tolMM, _, err := pairChordTolerance(t.Context(), c.cut, c.heelTool)
+		tolMM, _, err := booloperand.PairChord(t.Context(), &c.cut.n, &c.heelTool.n)
 		require.NoError(t, err)
 		mesh, _, err := tessellateBooleanOperand(t.Context(), c.cut, tolMM*scale)
 		if err == nil {

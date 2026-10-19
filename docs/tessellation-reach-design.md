@@ -96,7 +96,7 @@ Rules:
   invariant failure (`ErrBooleanFailed` in the boolean, `ErrDegenerate` from `Tessellate`), never a zero.
 - `facesOfMesh` reads `m.faceBound[f]` and `faceChordDelta` is deleted. For prism/cup the published value
   is never below what `faceChordDelta` returns today (a planar face with straight edges publishes
-  `deltaStore + sectionDelta + deltaAxial(face)`, which is at least `sectionDisplacementOf`).
+  `deltaStore + sectionDelta + deltaAxial(face)`, which is at least `booloperand.sectionDisplacement`).
 - `operandSymDiff` returns `m.n.VolSymDiff` when `m.n.SymDiffOK`, else `ErrUnsupported` (a staging refusal,
   routed through `expectedBooleanForOperand(booleanExpectedStaging, …)` like a tessellation refusal).
   `tessellateFaceted` sets `volSymDiff = fp.VolSymDiff, symDiffOK = true`.
@@ -394,7 +394,7 @@ gap uses `proofbound.IntervalFloatError` and the three-dimensional radius.
 R3 refuses a section carrying any circular walk with `ErrUnsupported` ("circular meridian generators are
 T3"); R4 retires that refusal. Its mesh carries `symDiffOK == false`, so the boolean refuses a revolve
 operand through R0's `operandSymDiff` and asks the same question of the payload class first
-(`requireVolumeProvingPayload`) rather than paying for a mesh no boolean may consume; R5 retires both arms
+(`booloperand.RequireVolumeProof`) rather than paying for a mesh no boolean may consume; R5 retires both arms
 together, leaving the cap-loop chamfer as the only payload class on that list.
 `export.go`'s two doc comments that name a revolve as un-exportable are narrowed to the circular-generator
 case, and `doc.go`'s support map with them.
@@ -427,8 +427,8 @@ its derivation, and is the authority on both.
   factor that depends on `dφ` alone, proven ONCE per mesh by certified subdivision (tess §15).
 - `Mconstruct`, `Mround` via `sweptVolumeAllow` over `perturbedAreaUpper` at the composed displacement, which
   covers every surface on both stages' paths.
-- `symDiffOK = true`; `pairChordTolerance` raises the pair's tolerance above `deltaC + deltaR` of either
-  revolve operand (`coordDisplacementOf` over `resolveRevolve`) the way it raises it above a section
+- `symDiffOK = true`; `booloperand.PairChord` raises the pair's tolerance above `deltaC + deltaR` of either
+  revolve operand (`booloperand.coordDisplacement` over `resolveRevolve`) the way it raises it above a section
   displacement today.
 
 ### Refusal mapping (tess §12)
@@ -442,7 +442,7 @@ its derivation, and is the authority on both.
 | meridian simplicity/nesting/clearance | `tessellation.RequireLoopClearance`, `requireWalkClearance` after refinement exhausts |
 | non-adjacent facets intersect; homotopy sign not fixed | `revolveContactAudit` |
 | directed-edge / link / zero area | `tessellation.RequireClosedMesh`, `tessellation.RequireVertexLinks` |
-| a payload class with no occupied-volume proof in a boolean | `requireVolumeProvingPayload` before the mesh, `operandSymDiff` (R0) after it |
+| a payload class with no occupied-volume proof in a boolean | `booloperand.RequireVolumeProof` before the mesh, `operandSymDiff` (R0) after it |
 
 ### Tests
 
@@ -584,7 +584,7 @@ payload already publishes per patch; the trimmed walls and caps charge the prism
 ### Occupied volume — `volSymDiff` for an admitted band
 
 **Admission** (`capblend.OccupiedVolumeAdmission`, `internal/capblend/admit.go`) is decided from the record alone and
-read by both consumers that must agree: `requireVolumeProvingPayload` (`boolean_mesh.go`) before any mesh is
+read by both consumers that must agree: `booloperand.RequireVolumeProof` before any mesh is
 built, and `tessellateCapBlend` when it publishes. Every loop of the payload must be either
 
 - a single closed `CircleSeg` walk (the whole turn), or
@@ -684,7 +684,7 @@ refuses reflex corners in other receivers.
 | `n(w)` exceeds `maxChordsPerWalk` | `ErrUnsupported` (`errTooManyChords`) |
 | directed-edge, link, or zero-area audit fails | `ErrUnsupported` |
 | a `chamferCap(...)` role or a `side(i,j)` role resolves to no face | `ErrDegenerate` |
-| a band the occupied-volume admission above does not prove, in a boolean or in `Verify`'s read-only intersection | `ErrUnsupported` naming the loop and corner, through `requireVolumeProvingPayload` before the mesh and R0's `operandSymDiff` after it; `Verify` reads the pair `Suspect` (`DiagUnsupportedPairPayload`) |
+| a band the occupied-volume admission above does not prove, in a boolean or in `Verify`'s read-only intersection | `ErrUnsupported` naming the loop and corner, through `booloperand.RequireVolumeProof` before the mesh and R0's `operandSymDiff` after it; `Verify` reads the pair `Suspect` (`DiagUnsupportedPairPayload`) |
 
 ### Tests (R6)
 
@@ -838,7 +838,7 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
     facet-pair audit the most expensive thing in the suite, and the geometry it would add is already covered
     by the export tests.
 21. **Files:** `boolean.go`, `tessellate_revolve.go`. **What:** extract `resolveRevolve` — the
-    count-independent half of `planRevolve` — so `pairChordTolerance` can read `deltaC + deltaR` for a
+    count-independent half of `planRevolve` — so `booloperand.PairChord` can read `deltaC + deltaR` for a
     revolve operand without a tolerance to plan against, and raise above it. **Depends on:** 20.
     **Tests:** a small revolve at a large coordinate is meshed at the raised tolerance and refused at the
     diameter-derived one.

@@ -919,7 +919,7 @@ proven bound of exactly zero — the identical gate (`stitchweld.ZeroBound`)
 that lets its mesh publish a zero occupied-volume proof
 (`docs/tessellation-design.md` §2's `stitchPayload` row), so a pair the
 kernel proves `reportvocab.PairOverlapping` for such a body now reaches a real
-`Interference` row through the ordinary mesh boolean: `requireVolumeProvingPayload`
+`Interference` row through the ordinary mesh boolean: `booloperand.RequireVolumeProof`
 (`boolean.go`) no longer refuses the operand once its own carrier model
 exists. A placed stitched solid, or one closed by the CURVE weld certificate
 at a nonzero class bound, still gets no model and publishes no occupied-volume

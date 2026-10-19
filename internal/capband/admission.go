@@ -22,7 +22,7 @@ import (
 // a band because its float readings happen to sit close together.
 //
 // Two consumers read it and must agree: boolean_mesh.go's
-// requireVolumeProvingPayload before any mesh is built, and
+// booloperand.RequireVolumeProof before any mesh is built, and
 // tessellateCapBlend when it decides whether to publish the proof.
 
 // OccupiedVolumeAdmission decides whether docs/tessellation-reach-design.md §7's

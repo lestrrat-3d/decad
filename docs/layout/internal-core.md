@@ -48,7 +48,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/gatewitness/` | Selects payload witness prisms and their displacement for Verify's fallback diameter; root reads their stations. See verification §3. |
 | `internal/prismtess/` | Builds a prism payload's chorded mesh node and its face, area and occupied-volume bounds. See tessellation §5. |
 | `internal/cuptess/` | Builds a cup payload's chorded mesh node and its face, area and occupied-volume bounds. See tessellation §6. |
-| `internal/stitchtess/` | Restates Stitch's held planar triangles and admitted Revolve-backed curved sheets as mesh nodes. See tessellation §2 and surface §10. |
+| `internal/stitchtess/` | Restates Stitch's held planar triangles and admitted Revolve-backed curved sheets as mesh nodes, and yields a stitched body's vertex bounds. See tessellation §2 and surface §10. |
 | `internal/momentinput/` | Profile records, exact comparison, area falsifiers, rectangle bounds, moments, walk cache and coordinate envelopes. See evaluator §1/§4 and spline §5.2. |
 | `internal/momentline/` | Computes line moments. See evaluator §4. |
 | `internal/momentregion/` | Accumulates record moments. See evaluator §4. |

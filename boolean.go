@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/booloperand"
 	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/classbgeom"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
@@ -17,10 +18,8 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
-	"github.com/lestrrat-3d/decad/internal/revolvetess"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
-	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -137,33 +136,14 @@ func Intersect(ctx context.Context, a, b *Body) (*Body, error) {
 	return performBoolean(ctx, meshbool.OpIntersect, a, b)
 }
 
-// heldFloorOf is the bound below which a RESTATING operand cannot give a mesh
-// (docs/faceted-vertex-bounds-design.md §5): a boolean result's MeshBound, or
-// a mitred sweep's or a coil's delta (docs/helix-design.md Table CD row CD3). Its restatement returns the same vertices at any
-// tolerance at or above the floor. restating is false for every other
-// payload, whose request stays the pair tolerance and whose facets the local
-// gate does not read.
-func heldFloorOf(b *Body) (floor float64, restating bool) {
-	switch p := b.n.Payload.(type) {
-	case facetedPayload:
-		return p.MeshBound, true
-	case mitredSweepPayload:
-		return p.Delta, true
-	case coilPayload:
-		return p.Delta, true
-	case twistedSweepPayload:
-		return p.Delta, true
-	default:
-		return 0, false
-	}
-}
-
 // tessellateBooleanOperand meshes one boolean operand at its own request
 // tolerance: the pair tolerance, raised to a restating operand's held floor
-// so that the restatement never refuses (docs/faceted-vertex-bounds-design.md
-// §5). It reports whether the operand restates, which arms the local gate.
+// (booloperand.HeldFloor) so that the restatement never refuses
+// (docs/faceted-vertex-bounds-design.md §5). It reports whether the operand
+// restates, which arms the local gate. It stays in the root because it
+// returns a root *Mesh built by the root's tessellateContext.
 func tessellateBooleanOperand(ctx context.Context, b *Body, tolMM float64) (*Mesh, bool, error) {
-	floor, restating := heldFloorOf(b)
+	floor, restating := booloperand.HeldFloor(&b.n)
 	m, err := tessellateContext(ctx, b, units.Millimeters(max(tolMM, floor)), VerifyAll)
 	return m, restating, err
 }
@@ -574,9 +554,9 @@ func evaluateBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body)
 }
 
 // operandMeshes supplies the VerifyAll mesh evaluateBooleanMeshes composes for
-// one operand, and whether the operand restates a held mesh (heldFloorOf),
+// one operand, and whether the operand restates a held mesh (booloperand.HeldFloor),
 // which arms the local chain-depth gate at the pair tolerance. pairTol is the
-// pair's own chord tolerance (pairChordTolerance). Every implementation
+// pair's own chord tolerance (booloperand.PairChord). Every implementation
 // returns a mesh tessellateContext built at VerifyAll, so the mesh carries its
 // own proven bounds whatever tolerance it was asked for; the composition below
 // reads only those bounds, never the request.
@@ -650,135 +630,6 @@ func facesOfMesh(budget *proofbound.WorkBudget, m *Mesh) ([]faceFacets, error) {
 		out[k].facets = append(out[k].facets, i)
 	}
 	return out, nil
-}
-
-// sectionDisplacementOf is the proven displacement between a body's recorded
-// boundary and the boundary its construction denotes: the analytic prism
-// boolean's re-expression rounding and its surviving fragments' own cut
-// parameters, and zero for every other body (docs/prism-boolean-design.md §7).
-func sectionDisplacementOf(b *Body) float64 {
-	if b == nil {
-		return 0
-	}
-	switch p := b.n.Payload.(type) {
-	case prismPayload:
-		return p.SectionDelta
-	case stackedPrismPayload:
-		return p.SectionDelta
-	case brepPayload:
-		return p.SectionDelta()
-	default:
-		return 0
-	}
-}
-
-// pairChordTolerance derives the evaluator-internal chord tolerance and the
-// pair diameter from the operands' own bounds boxes (inflated by their
-// proven bounds). All-planar operands chord nothing regardless, so the
-// tolerance only shapes curved boundaries.
-func pairChordTolerance(ctx context.Context, a, b *Body) (float64, float64, error) {
-	ca, err := chordOperandOf(ctx, a)
-	if err != nil {
-		return 0, 0, err
-	}
-	cb, err := chordOperandOf(ctx, b)
-	if err != nil {
-		return 0, 0, err
-	}
-	tol, diameter, ok := meshbool.PairChordFrom(ca, cb)
-	if !ok {
-		return 0, 0, fmt.Errorf(`%w: the operand pair has no extent to derive a chord tolerance from`, ErrDegenerate)
-	}
-	return tol, diameter, nil
-}
-
-// chordOperandOf reads b's share of pairChordTolerance.
-//
-// The floor raises the pair's tolerance past the operand's own reservations.
-// An operand holding its section within a displacement of the one it denotes
-// cannot be meshed within that displacement — tessellation reserves it from
-// the requested tolerance (docs/tessellation-design.md §5) — and this mesh
-// path is the designated fallback for exactly those operands
-// (docs/prism-boolean-design.md §3.4). A diameter-derived tolerance under the
-// displacement would refuse them. A revolve likewise reserves both of its
-// coordinate stages out of the tolerance before it chords anything
-// (docs/tessellation-design.md §8), so a diameter-derived tolerance under
-// that reservation refuses a body whose own geometry is perfectly ordinary —
-// a small part modelled at a large coordinate is the case that reaches it.
-// Nothing is lost by the coarser chording: each mesh reports the sagitta it
-// actually took, and the reserved figure already dominates the bound it
-// publishes.
-func chordOperandOf(ctx context.Context, b *Body) (meshbool.ChordOperand, error) {
-	box, err := b.Bounds()
-	if err != nil {
-		return meshbool.ChordOperand{}, err
-	}
-	inf := box.Bound.Base()
-	pad := r3.NewVec(inf, inf, inf)
-	return meshbool.ChordOperand{
-		Lo: box.Min.Sub(pad),
-		Hi: box.Max.Add(pad),
-		Floor: max(
-			proofbound.ProductUpper(2, sectionDisplacementOf(b)),
-			proofbound.ProductUpper(2, coordDisplacementOf(ctx, b)),
-			heldPrimitiveFloorOf(b),
-		),
-	}, nil
-}
-
-// heldPrimitiveFloorOf is the proven held bound of an operand built as a
-// fixed held mesh in one construction — a LoftFaces MeshBound, or a coil's,
-// mitred sweep's, or twisted sweep's delta
-// (docs/faceted-vertex-bounds-design.md §5). Its restatement cannot be
-// meshed closer than that, and every facet it touches the partner with holds
-// at most that bound, so raising the pair tolerance to it is what lets the
-// chain-depth gate admit the pair. A boolean result's MeshBound is not one:
-// it grows with the chain, which is what the gate exists to refuse. Every
-// other payload answers zero.
-func heldPrimitiveFloorOf(b *Body) float64 {
-	switch p := b.n.Payload.(type) {
-	case facetedPayload:
-		if p.LoftFacesPrimitive {
-			return p.MeshBound
-		}
-		return 0
-	case coilPayload:
-		return p.Delta
-	case mitredSweepPayload:
-		return p.Delta
-	case twistedSweepPayload:
-		return p.Delta
-	default:
-		return 0
-	}
-}
-
-// coordDisplacementOf is the count-INDEPENDENT coordinate reservation an
-// operand's own tessellation spends before it chords anything: for a revolve,
-// docs/tessellation-design.md §8's deltaC and deltaR ceilings composed
-// (revolvetess.ResolveRevolve). Every other payload class answers zero, and so does a
-// revolve whose resolution fails — the tessellation that follows refuses it
-// with its own sentinel, and inventing a tolerance here would only hide which
-// one.
-func coordDisplacementOf(ctx context.Context, b *Body) float64 {
-	if b == nil {
-		return 0
-	}
-	rp, ok := b.n.Payload.(revolvePayload)
-	if !ok {
-		return 0
-	}
-	res, err := revolvetess.ResolveRevolve(ctx, rp)
-	if err != nil {
-		return 0
-	}
-	if rp.SectionDelta > 0 {
-		// The revolve tessellator reserves its section displacement beside the
-		// two coordinate stages (planRevolveWithRoles), so all three come out of one
-		// tolerance.
-		return proofbound.AbsSumUpper(res.DeltaCPrior, res.DeltaRPrior, rp.SectionDelta)
-	}
-	return proofbound.AbsSumUpper(res.DeltaCPrior, res.DeltaRPrior)
 }
 
 // analyticBooleanBody evaluates an analytic boolean's result payload under

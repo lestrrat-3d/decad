@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/booloperand"
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
@@ -96,7 +97,7 @@ func TestLoftCapBandReflexVolumeProofAndSharpBore(t *testing.T) {
 	require.True(t, mesh.BoundaryVerified())
 	require.True(t, mesh.VolumeVerified())
 	require.Greater(t, mesh.n.VolSymDiff, source.Proof.VolSymDiff)
-	require.NoError(t, requireVolumeProvingPayload(t.Context(), out, 0))
+	require.NoError(t, booloperand.RequireVolumeProof(t.Context(), &out.n, 0))
 	for _, cap := range []provenance.Ref{refOf(CapStart(out)), refOf(CapEnd(out))} {
 		faces, err := Faces(FaceCreatedBy(featureRefOf(cap))).Exactly(1).SelectFaces(out)
 		require.NoError(t, err)
@@ -151,5 +152,5 @@ func TestLoftCapBandNoBoreChamfersBothOuterLoops(t *testing.T) {
 	require.True(t, mesh.BoundaryVerified())
 	require.True(t, mesh.VolumeVerified())
 	require.Greater(t, mesh.n.VolSymDiff, body.n.Payload.(loftPayload).Proof.VolSymDiff)
-	require.NoError(t, requireVolumeProvingPayload(t.Context(), out, 0))
+	require.NoError(t, booloperand.RequireVolumeProof(t.Context(), &out.n, 0))
 }
