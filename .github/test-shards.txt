@@ -285,3 +285,4 @@
 10	0.00	TestQuarterSourceHeldY1WrongRealRadius
 10	0.00	TestQuarterRootBracketPreflight
 10	0.00	TestRunSurveysReportsUndecidedCupWall
+10	0.00	TestLoftThroughBoreCutGates
