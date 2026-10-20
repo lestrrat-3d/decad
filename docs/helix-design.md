@@ -572,7 +572,7 @@ rationals against `math.Log`/`math.Asinh` (enclosure contains, width below
 | **CD6** | `Wall`, `Undercut`, `ConcaveRadius` | `Unavailable` with the unsupported-survey diagnostic |
 | **CD7** | `Transform`, `Copy` | §5.6 |
 | **CD8** | modify operations | `ErrUnsupported`; no receiver row |
-| **CD9** | mass properties (`dynamics`) | landed through the verified-mesh ladder (`mass_properties.go`): the restated mesh settles at its first step, its occupied volume widened by §8.2's `volSymDiff` |
+| **CD9** | mass properties (`dynamics`) | landed through the verified-mesh ladder (`internal/massdispatch/dispatch.go`): the restated mesh settles at its first step, its occupied volume widened by §8.2's `volSymDiff` |
 | **CD10** | STEP | the faceted AP214 writer: a `Faceted` wall has no analytic arm, so the whole body writes as held facets, which `docs/step-export-design.md` already states for any body with a non-planar, non-cylindrical face |
 
 ### 8.1 `areaSlack`
