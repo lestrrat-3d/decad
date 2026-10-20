@@ -139,6 +139,10 @@ func (fp Payload) PlacedWith(ctx context.Context, env topo.Env, composed r3.Tran
 				}
 				next.Groups[i].Surface = moved
 				next.Groups[i].NormalBound = 2
+				next.Groups[i].CapRecord = next.Groups[i].CapRecord.Under(delta)
+				if next.Groups[i].CapRecord == nil {
+					next.Groups[i].AxialDelta, next.Groups[i].HasAxialDelta = 0, false
+				}
 				// Only a Plane normal is U x V, which a reflection negates.
 				if _, planar := tag.(surfacegeom.Plane); planar && delta.IsReflection() {
 					next.Groups[i].Reversed = !next.Groups[i].Reversed

@@ -191,15 +191,32 @@ func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.E
 	if err != nil {
 		return nil, nil, 0, err
 	}
+	coneAxial := coneAxialMin(in.Groups, faceGroup, verts, tris, facetFace)
 	for f, delta := range faceDelta {
 		group := in.Groups[faceGroup[f]]
 		if group.Retained {
-			if bound, ok := RetainedNormalBound(group.Surface, group.NormalBound, delta); ok {
+			rho := 0.0
+			if cone, isCone := group.Surface.(surfacegeom.Cone); isCone {
+				rho = ConeRhoLower(cone, coneAxial[f], delta)
+			}
+			if term, ok := HeldNormalTerm(group.Surface, delta, rho); ok {
 				f.Surface = group.Surface
-				f.RetainedTag, f.TagDeparture, f.NormalBound = true, group.NormalBound, bound
+				f.RetainedTag = true
+				f.CapRecord, f.AxialDelta, f.HasAxialDelta = group.CapRecord, group.AxialDelta, group.HasAxialDelta
+				if group.Denoted != nil {
+					// The denoted proof replaces the tag's departure; the held
+					// displacement adds on top of it (topobuild.NormalAt).
+					f.NormalBound, f.HeldNormalBound = group.NormalBound, term
+				} else {
+					f.TagDeparture = group.NormalBound
+					f.NormalBound = math.Nextafter(group.NormalBound+term, math.Inf(1))
+					if term == 0 {
+						f.NormalBound = group.NormalBound
+					}
+				}
 				continue
 			}
-			f.NormalBound, f.Reversed = 0, false
+			f.NormalBound, f.Reversed, f.Denoted = 0, false, nil
 			f.Surface = surfacegeom.Faceted{Bound: units.Millimeters(delta)}
 			continue
 		}
@@ -219,7 +236,9 @@ func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.E
 	for f := range faceDelta {
 		if f.RetainedTag && len(f.Loops) == 0 {
 			f.Surface = surfacegeom.Faceted{Bound: units.Millimeters(faceDelta[f])}
-			f.RetainedTag, f.TagDeparture, f.NormalBound, f.Reversed = false, 0, 0, false
+			f.RetainedTag, f.TagDeparture, f.NormalBound, f.HeldNormalBound, f.Reversed = false, 0, 0, 0, false
+			f.Denoted = nil
+			f.CapRecord, f.AxialDelta, f.HasAxialDelta = nil, 0, false
 		}
 	}
 

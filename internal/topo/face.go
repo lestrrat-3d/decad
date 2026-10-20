@@ -85,6 +85,11 @@ type Face struct {
 	// §2). The tag is a bounded stand-in: NormalBound covers both the tag's
 	// own departure (TagDeparture) and the held displacement of this face.
 	RetainedTag bool
+	// HeldNormalBound is the normal bound a retained denoted face adds, on top
+	// of its denoted proof, for facets that sit up to the face's displacement
+	// from the true patch. A retained face without a denoted patch folds the
+	// same term into NormalBound instead. Zero for every other face.
+	HeldNormalBound float64
 	// TagDeparture is the part of NormalBound that states how far the
 	// retained tag itself tilts from the true surface, as a placement or
 	// similarity leaves it; zero for a tag that is its operand's own

@@ -389,7 +389,7 @@ func TestMirrorFaceResolvesAPlane(t *testing.T) {
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.Equal(t, []*decad.Body{pin}, sc.doc.Bodies())
 	})
-	t.Run("flat faceted face is ErrUnsupported", func(t *testing.T) {
+	t.Run("retained plane mirrors until placed", func(t *testing.T) {
 		t.Parallel()
 		sc := newMirrorScene()
 		plate := sc.box(t, sc.w.XY(), 0, 0, 20, 20, mirrorAlong(20))
@@ -407,14 +407,24 @@ func TestMirrorFaceResolvesAPlane(t *testing.T) {
 		drilled, err := decad.Cut(t.Context(), plate, drill)
 		require.NoError(t, err)
 		// The mesh path keeps the plate's wall role on the flat face that
-		// descends from it, and its retained Plane is a stand-in for the
-		// operand's plane, not an exact mirror plane.
+		// descends from it, and while the body is unplaced its retained Plane
+		// is the operand's exact plane.
 		sel := decad.Faces(decad.FaceCreatedBy(walls[0].Origins()[0]))
 		faces, err := sel.SelectFaces(drilled)
 		require.NoError(t, err)
 		require.Len(t, faces, 1)
 		require.IsType(t, decad.Plane{}, faces[0].Surface(), "the premise: a retained Plane tag")
-		_, err = decad.MirroredCopy(t.Context(), drilled, decad.MirrorFace{Body: drilled, Face: sel})
+		mirrored, err := decad.MirroredCopy(t.Context(), drilled, decad.MirrorFace{Body: drilled, Face: sel})
+		require.NoError(t, err)
+		require.NotNil(t, mirrored)
+
+		// A rotated copy moves the tag to its float image, so the plane it
+		// names is no longer exact and the mirror refuses.
+		turn, err := r3.Rotation(r3.Vec{Z: 1}, units.Degrees(20))
+		require.NoError(t, err)
+		turned, err := decad.Transform(t.Context(), drilled, turn)
+		require.NoError(t, err)
+		_, err = decad.MirroredCopy(t.Context(), turned, decad.MirrorFace{Body: turned, Face: sel})
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 	t.Run("body gates", func(t *testing.T) {
