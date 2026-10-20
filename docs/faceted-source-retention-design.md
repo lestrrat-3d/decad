@@ -210,7 +210,7 @@ does with a retained tag; the audit in §7 keeps the table complete.
 | `internal/extent/to_face.go`, `angular_stop.go` | `Plane`, `NormalBound == 0`, `CapRecord`, `HasAxialDelta` | admits a retained `Plane` whose group carried `CapRecord` and `NormalBound == 0`; a placed or scaled body drops the record, so it refuses as before |
 | `mirror.go` `resolveMirrorFace` | `Plane` | mirrors across a retained `Plane` with `NormalBound == 0`; a placed body's tag is a float image and keeps refusing |
 | `Face.isPlanar` | `Plane` or `HeldPlanar` | unchanged; both stay true |
-| `contact_faceted_floor.go` `sourceFacetedAxisSupport` | `HeldPlanar && Kind == Faceted` | **must change.** The predicate drops every retained plane from the support proof. It becomes `HeldPlanar && face is held geometry`, where a new `topo.Face.RetainedTag` flag marks a tag on a faceted payload (§5) |
+| `internal/contactfaceted/floor.go` `AxisSupportAtPose` | `HeldPlanar && Kind == Faceted` | **must change.** The predicate drops every retained plane from the support proof. It becomes `HeldPlanar && face is held geometry`, where a new `topo.Face.RetainedTag` flag marks a tag on a faceted payload (§5) |
 | `internal/contactbox/`, `internal/contactround/`, `internal/contactruling/` | `Surface.(Plane/Cylinder/Sphere)` | gated by payload class (`prismPayload`, source cylinder) before they read a face; a faceted payload never reaches them. §7 pins this |
 | `internal/clearance/stitch_carriers.go`, `internal/stackedrecord/mesh.go` | `Plane` | gated by `stitchPayload` / `stackedPrismPayload`; unreachable from a faceted payload |
 | `export/step_analytic.go` `supportsAnalyticSTEP` | `Plane`/`Cylinder` plus each loop's edge curves | a retained face's edges are `FacetedCurve`, which the loop check refuses, so the whole body takes the faceted writer as now |
@@ -271,7 +271,7 @@ the clause named.
 | Second generation | a Boolean of P3's result keeps its untouched planes and blends | read the operand's `Surface` through `Faceted` only: the chain loses the tags |
 | A4 refusal of the tag | a patch with `δ_f ≥ R/2` reads `Faceted`; its siblings keep the tag | drop A4: `NormalAt` reports a bound of 2 on a face that claims an analytic cylinder |
 | A3 | a Boolean that leaves one loop-less sphere face reads `Faceted` | drop A3: `AuditSolidBoundary` accepts a body whose only face is a retained loop-less sphere |
-| `contact_faceted_floor.go` predicate | the support proof still finds the floor face of a retained-plane body | keep the old `Kind == Faceted` test: the proof finds no valid face and the contact returns `ContactPayloadUnsupported` |
+| `internal/contactfaceted/floor.go` predicate | the support proof still finds the floor face of a retained-plane body | keep the old `Kind == Faceted` test: the proof finds no valid face and the contact returns `ContactPayloadUnsupported` |
 | `ToFace` on a retained plane | the stop level equals the plane's exact coordinate; `AxialDelta` is the operand's | clear `CapRecord` on the group: `ToFace` refuses |
 | Placement | a translated and a 20°-rotated copy of P3 report `NormalAt` bounds within 1e-9 of the unplaced copy's, and the rotated normal lies within the two bounds of the rotated reading; a rotated plane never reads as an exact mirror plane | keep the old constant 2: the placed `NormalAt` bound is 2 |
 | Reader audit | a test lists every non-test file under the module that matches `Surface\.\(surfacegeom\.` or `Surface\(\)\.\(`, and fails on a file this document's §4 does not name | add a reader without a §4 row: the audit fails |
@@ -290,7 +290,7 @@ expression) and not a printed number.
 | `internal/facetedrecord/assemble.go` | compute `NormalBound_f` per built face, apply A4, set `RetainedTag` |
 | `internal/facetedrecord/place_tag.go`, `placed.go` | placement rule of §3.4 |
 | `internal/topo/face.go` | `RetainedTag` |
-| `contact_faceted_floor.go` | predicate of §4 |
+| `internal/contactfaceted/floor.go` | predicate of §4 |
 | `internal/facetedrecord/edge_curve.go`, `topology.go`, `internal/topo/edge.go` | edge curves and their witness flag (§10, increment 3) |
 | `internal/meshbool/plane_slab.go`, `internal/booleaneval/retained_plane.go` | slab bound of a retained plane facet (§11, increment 5) |
 | `mirror.go`, `internal/extent` | admit a retained `Plane` per §4 |
@@ -304,7 +304,7 @@ Increments 1 to 6 are in. Nothing in 1–4 depends on 5 or 6.
 
 | # | Lands | Gate to start the next |
 |---|---|---|
-| 1 | §3.1–§3.3 for `Plane`, `Cylinder`, `Sphere`; `RetainedTag`; the `contact_faceted_floor.go` predicate; `NormalAt`, selector and `Surface()` readers; the reader audit; test updates | the P3 fixture and the generation-two fixture pass; `go test ./...` on CI |
+| 1 | §3.1–§3.3 for `Plane`, `Cylinder`, `Sphere`; `RetainedTag`; the `internal/contactfaceted/floor.go` predicate; `NormalAt`, selector and `Surface()` readers; the reader audit; test updates | the P3 fixture and the generation-two fixture pass; `go test ./...` on CI |
 | 2 | `Cone` and `Torus`, faces with a denoted patch (revolved walls and caps), and `ToFace` / `MirrorFace` on a retained plane | a revolved shaft keeps its cone, cylinder and caps through a cut |
 | 3 | §10: `Line3`, `Circle3` and `Arc3` on an edge between two retained faces, the `Curve` reader audit and the Boolean-rim witness flag | the P3 fixture's edges publish their curves and the STEP test passes |
 | 4 | Placement rule of §3.4 | a rotated copy of P3 reports a finite `NormalAt` bound below 2 |

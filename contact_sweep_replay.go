@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/contactbox"
+	"github.com/lestrrat-3d/decad/internal/contactfaceted"
 	"github.com/lestrrat-3d/decad/internal/contactround"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
@@ -30,7 +31,7 @@ type sweepReplayProof struct {
 	boxA, boxB                 contactbox.SourceBox
 	sphere                     *contactround.SphereProof
 	spherePair                 *[2]contactround.SphereProof
-	facetedClear               *boundedFacetedExtent
+	facetedClear               *contactfaceted.BoundedExtent
 	facetedFirst               bool
 	cylinder                   *contactround.CylinderProof
 	cylinderFirst              bool
@@ -231,10 +232,10 @@ func (r *SweepReport) certifiedBoundedFacetedPosesAtFraction(f *big.Rat,
 		floor, *p.facetedClear, p.pa, p.pb, poseA, poseB, f, p.facetedFirst)
 	resolution, valid := sweeppath.ExactBaseValue(p.request.PointResolution)
 	if !ok || !valid || deviation.Cmp(resolution) > 0 ||
-		!boundedFacetedInsideFloor(observedExtent, observedFloor) {
+		!contactfaceted.InsideFloor(observedExtent, observedFloor) {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: bounded faceted replay leaves its clear corridor", ErrUnsupported)
 	}
-	if _, proved := boundedFacetedFloorGap(observedExtent, observedFloor); !proved {
+	if _, proved := contactfaceted.FloorGap(observedExtent, observedFloor); !proved {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded bounded faceted replay loses its clear gap", ErrUnsupported)
 	}
 	return poseA, poseB, nil

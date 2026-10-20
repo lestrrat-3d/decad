@@ -318,8 +318,8 @@ each copy; the root builds the transient body and runs the Union.
 `MeshBound` stays, redefined as the maximum `δ(t)` over the held facets, so
 every reader that wants one body-wide figure keeps one that is never looser
 than today's: `Verify`'s planar faceted contact kernel
-(`internal/planarpose/pose.go`'s `planarFacetedSolid`, `contact_faceted_floor.go`,
-`contact_faceted_floor.go`), the mass-property reader
+(`internal/planarpose/pose.go`'s `planarFacetedSolid`, `internal/contactfaceted/floor.go`,
+`internal/contactfaceted/floor.go`), the mass-property reader
 (`mass_properties.go`, which checks `mesh.n.Bound == pp.MeshBound`), and
 the translation-only zero-bound fast path (`facetedTranslationOnly`), whose
 condition becomes "every `VertexBound` entry is zero". A nil `VertexBound`
