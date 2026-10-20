@@ -62,6 +62,7 @@ func ExactGroupPlaced(g *Group, q *exactrotation.Rotation) error {
 		g.Centroid = reading
 	}
 	g.Surface, g.Denoted, g.NormalBound = nil, nil, 0
+	g.CapRecord, g.AxialDelta, g.HasAxialDelta = nil, 0, false
 	return nil
 }
 

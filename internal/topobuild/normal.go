@@ -105,7 +105,8 @@ func NormalAt(f *topo.Face, p r3.Vec) (measurement.VecMeasurement, error) {
 // with it by triangle inequality. A face carrying its denoted surface is
 // proven against that instead: the comparison is with the surface the face
 // carries, so it covers the departure NormalBound states, and neither
-// tagAllow nor NormalBound enters. The sign is exact, so it never changes the
+// tagAllow nor NormalBound enters. A retained face adds its HeldNormalBound
+// on top, for the facets' displacement from the true patch. The sign is exact, so it never changes the
 // bound.
 func normalMeasurement(f *topo.Face, p, dir r3.Vec, tagAllow func() (float64, surfacenormal.Status), degenerate string) (measurement.VecMeasurement, error) {
 	if f.Reversed {
@@ -116,6 +117,7 @@ func normalMeasurement(f *topo.Face, p, dir r3.Vec, tagAllow func() (float64, su
 	departure := 0.0
 	if f.Denoted != nil {
 		allow, st = f.Denoted.Allow(p, dir, f.Reversed)
+		departure = f.HeldNormalBound
 	} else {
 		allow, st = tagAllow()
 		departure = f.NormalBound

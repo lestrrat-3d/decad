@@ -33,7 +33,7 @@ func ScaleImage(ctx context.Context, body *topo.Body, fp Payload, anchor r3.Vec,
 		return Payload{}, fmt.Errorf("%w: the slab similarity source does not match its Split source", decaderr.ErrUnsupported)
 	}
 	for _, group := range fp.Groups {
-		if group.Denoted != nil {
+		if group.Denoted != nil && !group.Retained {
 			return Payload{}, fmt.Errorf("%w: a denoted surface has no similarity proof", decaderr.ErrUnsupported)
 		}
 		if _, ok := group.Surface.(surfacegeom.Plane); group.Surface != nil && !ok && !group.Retained {
@@ -94,10 +94,10 @@ func ScaleImage(ctx context.Context, body *topo.Body, fp Payload, anchor r3.Vec,
 				return Payload{}, err
 			}
 		}
-		if _, ok := group.Surface.(surfacegeom.Plane); !ok && group.Retained {
-			// A scaled retained cylinder or sphere reads Faceted: its tag has
-			// no similarity image here.
-			group.Surface, group.Retained, group.NormalBound = nil, false, 0
+		if _, plane := group.Surface.(surfacegeom.Plane); group.Retained && (!plane || group.Denoted != nil) {
+			// A scaled retained curved or denoted face reads Faceted: its tag
+			// has no similarity image here.
+			group.Surface, group.Denoted, group.Retained, group.NormalBound = nil, nil, false, 0
 		}
 		if plane, ok := group.Surface.(surfacegeom.Plane); ok {
 			origin := anchor.Add(plane.Frame.Origin().Sub(anchor).Scale(s))
@@ -109,6 +109,7 @@ func ScaleImage(ctx context.Context, body *topo.Body, fp Payload, anchor r3.Vec,
 			// NewFrame may round the held axes again. The exact similar plane
 			// keeps its old normal; two unit normals differ by at most 2.
 			group.NormalBound = 2
+			group.CapRecord, group.AxialDelta, group.HasAxialDelta = nil, 0, false
 		}
 	}
 	if pointSlab {

@@ -215,4 +215,103 @@ func TestFacetedSourceRetention(t *testing.T) {
 		require.Equal(t, 6, kinds["plane"], "kinds %v", kinds)
 		require.Equal(t, 5, kinds["faceted"], "kinds %v", kinds)
 	})
+
+	t.Run("ToFace stops at a retained cap", func(t *testing.T) {
+		t.Parallel()
+		sc := newRetentionScene()
+		drilled, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+		require.NoError(t, err)
+		top := decad.Faces(decad.Planar(), decad.Facing(r3.NewVec(0, 0, 1)))
+		faces, err := top.SelectFaces(drilled)
+		require.NoError(t, err)
+		require.Len(t, faces, 1)
+		require.IsType(t, decad.Plane{}, faces[0].Surface())
+
+		s, err := sc.w.CreateSketch(sc.w.XY())
+		require.NoError(t, err)
+		r := s.CreateRectangle(-30, -30, 5, 5)
+		s.Fix(r.A)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		pin, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
+			decad.ToFace{Body: drilled, Face: top})
+		require.NoError(t, err)
+		box, err := pin.Bounds()
+		require.NoError(t, err)
+		require.InDelta(t, 20, box.Max.Z, 1e-9, "the pin ends on the cap's plane z=20")
+		require.InDelta(t, 0, box.Min.Z, 1e-9)
+	})
+
+	t.Run("MirrorFace mirrors across a retained wall", func(t *testing.T) {
+		t.Parallel()
+		sc := newRetentionScene()
+		drilled, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+		require.NoError(t, err)
+		wall := decad.Faces(decad.Planar(), decad.Facing(r3.NewVec(1, 0, 0)))
+		mirrored, err := decad.MirroredCopy(t.Context(), drilled, decad.MirrorFace{Body: drilled, Face: wall})
+		require.NoError(t, err)
+		box, err := mirrored.Bounds()
+		require.NoError(t, err)
+		require.InDelta(t, 40, box.Min.X, 1e-6, "the copy starts at the wall x=40")
+		require.InDelta(t, 80, box.Max.X, 1e-6)
+	})
+
+	t.Run("a revolved shaft keeps its cone, cylinder and caps", func(t *testing.T) {
+		t.Parallel()
+		sc := newRetentionScene()
+		s, err := sc.w.CreateSketch(sc.w.XY())
+		require.NoError(t, err)
+		corners := [][2]float64{{0, 0}, {20, 0}, {20, 5}, {10, 8}, {10, 10}, {0, 10}}
+		pts := make([]*sketch.Point, len(corners))
+		for i, c := range corners {
+			pts[i] = s.CreatePoint(c[0], c[1])
+			s.Fix(pts[i])
+		}
+		for i := range pts {
+			s.CreateLine(pts[i], pts[(i+1)%len(pts)])
+		}
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
+		shaft, err := decad.Revolve(t.Context(), sc.doc, s, s.Profiles()[0], axis, decad.FullRevolution{})
+		require.NoError(t, err)
+
+		ts, err := sc.w.CreateSketch(sc.w.XY())
+		require.NoError(t, err)
+		c := ts.CreatePoint(5, 0)
+		ts.Fix(c)
+		ts.CreateCircle(c, 2)
+		_, err = ts.Solve(t.Context())
+		require.NoError(t, err)
+		pin, err := decad.Extrude(t.Context(), sc.doc, ts, ts.Profiles()[0], decad.Symmetric{D: units.Millimeters(30)})
+		require.NoError(t, err)
+		move, err := r3.Translation(r3.Vec{Z: 0.001})
+		require.NoError(t, err)
+		tool, err := decad.Transform(t.Context(), pin, move)
+		require.NoError(t, err)
+		cut, err := decad.Cut(t.Context(), shaft, tool)
+		require.NoError(t, err)
+
+		kinds := map[string]int{}
+		for _, f := range cut.Faces() {
+			p := firstVertex(t, f)
+			n, err := f.NormalAt(p)
+			require.NoError(t, err, "face %T", f.Surface())
+			require.Less(t, n.Bound.Base(), 1.0)
+			switch f.Surface().(type) {
+			case decad.Plane:
+				kinds["plane"]++
+			case decad.Cone:
+				kinds["cone"]++
+				// The cone narrows toward +x: outward leans away from the axis
+				// and toward +x.
+				require.Positive(t, n.Value.Y*p.Y+n.Value.Z*p.Z, "cone normal at %v", p)
+			case decad.Cylinder:
+				kinds["cylinder"]++
+			default:
+				kinds["other"]++
+			}
+		}
+		require.Equal(t, map[string]int{"plane": 3, "cone": 1, "cylinder": 2}, kinds)
+	})
 }

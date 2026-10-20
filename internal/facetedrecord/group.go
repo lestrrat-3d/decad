@@ -23,6 +23,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/surfacenormal"
+	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
 // Group is one source face's provenance, carried into the payload so a
@@ -44,7 +45,14 @@ type Group struct {
 	// bound from NormalBound (the tag's own departure) plus the held
 	// displacement.
 	Retained bool
-	Denoted  *surfacenormal.Revolved
+	// CapRecord, AxialDelta and HasAxialDelta carry the operand plane's exact
+	// record onto a retained Plane group. A Boolean never moves a plane, so
+	// the record transfers verbatim; every placement and similarity drops it
+	// (topo.CapRecord.Under) because the image is no longer that record.
+	CapRecord     *topo.CapRecord
+	AxialDelta    float64
+	HasAxialDelta bool
+	Denoted       *surfacenormal.Revolved
 	// NormalBound covers the tag's normal departure from its denoted patch.
 	// A placed planar tag conservatively uses the maximum distance of two
 	// unit normals when its rounded frame has no tighter certificate.

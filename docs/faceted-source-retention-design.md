@@ -99,11 +99,9 @@ recorded it, not because the polygons happen to sit near it.
 | `Surface` | the operand face's surface when §3.2 admits it, else nil |
 | `Retained` | true when `Surface` came from an operand face; a structural builder's authenticated tag leaves it false |
 | `Reversed` | the operand face's `Reversed`, flipped for the faces of the subtracted operand of a `Cut` |
-| `NormalBound` | the tag's own departure `ε_F`: zero for a built operand face, the operand's `TagDeparture` for a retained one (§3.3) |
-
-Increment 2 adds `CapRecord`, `AxialDelta` and `HasAxialDelta` for a `Plane`
-group. A Boolean never moves a plane, so the exact-plane record transfers
-verbatim.
+| `NormalBound` | the tag's own departure `ε_F`: zero for a built operand face, the operand's `TagDeparture` for a retained one, the operand's own `NormalBound` for a denoted face (§3.3) |
+| `Denoted` | the operand face's denoted patch, when it has one |
+| `CapRecord`, `AxialDelta`, `HasAxialDelta` | for a `Plane` group, the operand face's. A Boolean never moves a plane, so the exact-plane record transfers verbatim; every placement and similarity drops it |
 
 `Union` and `Intersect` keep both operands' orientations; `Cut` keeps the
 target's and flips the tool's, because the tool's natural normal points into
@@ -117,8 +115,8 @@ A group takes the tag only when all of these hold; a group that fails stays
 
 | # | Condition | Why |
 |---|---|---|
-| A1 | The operand face's surface is `Plane`, `Cylinder` or `Sphere` (§9 increment 2 adds `Cone` and `Torus`) | These have a normal Lipschitz constant read from one radius (§3.3) |
-| A2 | `Denoted == nil` on the operand face, and `NormalBound == 0` unless the face is itself a retained tag | A denoted patch proves its normal against a record the generic Boolean does not carry. A built face with a stated tilt (a ruled chamfer band, a tilted-frame cylinder) departs from its tag by more than the tilt, so its tag is not its geometry |
+| A1 | The operand face's surface is `Plane`, `Cylinder`, `Cone`, `Sphere` or `Torus` | Each has a normal whose sensitivity to a displaced point reads from its radii and, for a cone, its axial range (§3.3) |
+| A2 | A built operand face with no denoted patch has `NormalBound == 0`; a retained face or a face with a denoted patch is admitted | A built face with a stated tilt (a ruled chamfer band, a tilted-frame cylinder) departs from its tag by more than the tilt, so its tag is not its geometry. A denoted patch proves the normal against the surface it denotes, which the result's patch still lies on, so the group carries the patch and `NormalAt` keeps judging against it |
 | A3 | A `Sphere` group's patches all have a loop | A loop-less `Sphere` face is a closed analytic surface to `AuditSolidBoundary` (`internal/reportvocab/boundary_audit.go`) |
 | A4 | After assembly, `2·δ_f / R < 1` for a curved group (§3.3) | Past that the normal bound is the trivial 2 and the tag says nothing a reader can use |
 | A5 | The operand face is not already `Faceted` with no retained tag | Nothing to carry |
@@ -133,9 +131,25 @@ patches keep their tag.
 face (`facetproof.FaceProofs`). For a retained face it sets
 
 ```
-NormalBound_f = ε_F + L_T(δ_f)
-L_plane = 0          L_cylinder = L_sphere = min(2, 2·δ_f / R)
+NormalBound_f = ε_F + L_T(δ_f)      (no denoted patch)
+HeldNormalBound_f = L_T(δ_f)        (denoted patch; NormalAt adds it to the denoted proof)
+
+L_plane    = 0
+L_cylinder = L_sphere = 2·δ_f / R
+L_cone     = cos(α) · 2·δ_f / ρ_min
+L_torus    = 2·δ_f · (1 + 2M / (M − m)) / m
 ```
+
+`ρ_min` is a lower bound on the distance from the cone's axis of every true
+point of the patch. A cone's radius grows linearly along its axis, so it is
+the radius at the lowest axial coordinate a true point can have: the lowest
+held vertex coordinate less `δ_f`, less the rounding of the arithmetic. A
+patch that may reach the apex has no bound and reads `Faceted`. The torus
+uses `ρ ≥ M − m` for every true point, with `M` the major and `m` the minor
+radius, and a torus with `M ≤ m` reads `Faceted`. The tube centre of a torus
+point moves with its radial direction, which is where the factor
+`1 + 2M / (M − m)` comes from. Every term is capped at 2 and rounds upward,
+and A4 declines the face once the term reaches 1.
 
 `ε_F` is zero for a built operand face and `TagDeparture` for a retained one,
 so a second-generation Boolean recomputes the held term against its own `δ_f`
@@ -169,8 +183,8 @@ does with a retained tag; the audit in §7 keeps the table complete.
 | `Face.Surface()`, `reportvocab.SurfaceTypeName`, `decadtest` formatting | the tag | reports `Plane`/`Cylinder`/`Sphere` instead of `Faceted`; examples and tests that print `faceted` for these faces change (§8) |
 | `Face.NormalAt` | tag + `NormalBound` | answers with the bound of §3.3 instead of `ErrUnsupported` |
 | `internal/selectorquery/topo_views.go` planar and cylindrical views | the tag | a flat retained face matches `Facing`/`ParallelTo` by its plane normal, signed by `Reversed` |
-| `internal/extent/to_face.go`, `angular_stop.go` | `Plane`, `NormalBound == 0`, `CapRecord`, `HasAxialDelta` | admits a retained `Plane` whose group carried `CapRecord` and `NormalBound == 0` |
-| `mirror.go` `resolveMirrorFace` | `Plane` | keeps refusing a retained `Plane` until increment 2: the tag is a stand-in, not an exact mirror plane |
+| `internal/extent/to_face.go`, `angular_stop.go` | `Plane`, `NormalBound == 0`, `CapRecord`, `HasAxialDelta` | admits a retained `Plane` whose group carried `CapRecord` and `NormalBound == 0`; a placed or scaled body drops the record and `NormalBound` is 2, so it refuses as before |
+| `mirror.go` `resolveMirrorFace` | `Plane` | mirrors across a retained `Plane` with `NormalBound == 0`; a placed body's tag is a float image and keeps refusing |
 | `Face.isPlanar` | `Plane` or `HeldPlanar` | unchanged; both stay true |
 | `contact_faceted_floor.go` `sourceFacetedAxisSupport` | `HeldPlanar && Kind == Faceted` | **must change.** The predicate drops every retained plane from the support proof. It becomes `HeldPlanar && face is held geometry`, where a new `topo.Face.RetainedTag` flag marks a tag on a faceted payload (§5) |
 | `contact_box.go`, `contact_oriented_box.go`, `contact_analytic_manifold.go`, `contact_sphere.go` | `Surface.(Plane/Cylinder/Sphere)` | gated by payload class (`prismPayload`, source cylinder) before they read a face; a faceted payload never reaches them. §7 pins this |
@@ -254,7 +268,7 @@ expression) and not a printed number.
 | `internal/topo/face.go` | `RetainedTag` |
 | `contact_faceted_floor.go` | predicate of §4 |
 | `internal/facetedrecord/topology.go`, `export/step_analytic.go` | edge curves and the STEP bound gate of §10 (increment 3) |
-| `mirror.go`, `internal/extent` | increment 1 keeps refusing a retained `Plane`; increment 2 admits it per §4 |
+| `mirror.go`, `internal/extent` | admit a retained `Plane` per §4 |
 | `internal/selectorquery/topo_views.go` | no code change expected; the existing views read the tag |
 | Tests | the `Faceted` assertions of §7's last row |
 | Docs | `docs/evaluator-design.md` §9 (group fields), `docs/api-design.md` §6.1 (the tagged-stand-in paragraph), `docs/faceted-vertex-bounds-design.md` §4.3 (placement), `docs/payload-verification-design.md` §5.2 and §13 (the source identity half of the faceted certificate), `docs/missing-features.md` (the row for `NormalAt` on a faceted face, if present), and this document's row in `docs/layout/design-docs.md` |
@@ -267,7 +281,7 @@ planned; nothing in 1–3 depends on them.
 | # | Lands | Gate to start the next |
 |---|---|---|
 | 1 | §3.1–§3.3 for `Plane`, `Cylinder`, `Sphere`; `RetainedTag`; the `contact_faceted_floor.go` predicate; `NormalAt`, selector and `Surface()` readers; the reader audit; test updates | the P3 fixture and the generation-two fixture pass; `go test ./...` on CI |
-| 2 | `Cone` and `Torus` (needs a lower bound on a patch's distance from the axis for `L_T`) and `ToFace` / `MirrorFace` on a retained plane | a cone-capped part keeps its cone through a cut |
+| 2 | `Cone` and `Torus`, faces with a denoted patch (revolved walls and caps), and `ToFace` / `MirrorFace` on a retained plane | a revolved shaft keeps its cone, cylinder and caps through a cut |
 | 3 | §10: `Line3`, `Circle3` and `Arc3` on an edge between two retained faces, the `Curve` reader audit, and the STEP bound gate | the P3 fixture's edges publish their curves and the STEP test passes |
 | 4 | Placement rule of §3.4 | a rotated copy of P3 reports a finite `NormalAt` bound below 2 |
 | 5 | A later mesh Boolean charges a retained `Plane` group's out-of-plane displacement by its measured distance from `T` instead of `δ_f` (§11) | measured: a second cut near the first cut's rim, previously refused as hidden tangency, builds |
