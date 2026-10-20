@@ -96,9 +96,10 @@ func TestTwistShellOffsetSourceFromRoundedSketch(t *testing.T) {
 	t.Logf("held shell: vertices=%d triangles=%d vertexError=%g outerBound=%g innerBound=%g volumeBound=%g areaSlack=%g",
 		len(held.Verts), len(held.Tris), held.VertexError, held.OuterBound,
 		held.InnerBound, held.VolumeBound, held.AreaSlack)
-	inner, err := twistShellFacetedBody(t.Context(), body.Document(), 1, held,
+	innerNode, err := twistsweep.ShellFacetedBody(t.Context(), envOf(documentNode(body.Document()), 1), held,
 		poly.AreaInterval, proof.Area, 5, 1)
 	require.NoError(t, err)
+	inner := bodyHandle(innerNode)
 	volume, err := inner.Volume()
 	require.NoError(t, err)
 	t.Logf("cup body: faces=%d lumps=%d volume=%g ±%g", len(inner.Faces()),

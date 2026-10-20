@@ -5,11 +5,10 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/breprecord"
-	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
-	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -128,7 +127,9 @@ func (b *Body) shellSideOpening(ctx context.Context, pp prismPayload, removedSta
 	ref := d.nextProducerID()
 	var body *Body
 	if keptCaps == 0 {
-		body, err = evalSideOpeningPrism(ctx, d, ref, pp, sec)
+		var node *topo.Body
+		node, err = prismshell.SideOpeningPrism(ctx, envOf(documentNode(d), ref), pp, sec)
+		body = bodyHandle(node)
 	} else {
 		var bp brepPayload
 		bp, err = breprecord.SideOpening(ctx, budget, pp, sec, removedStart, removedEnd, s, tmm, tDelta)
@@ -150,27 +151,3 @@ func (b *Body) shellSideOpening(ctx context.Context, pp prismPayload, removedSta
 // merged into one planar face, the removed face's own plane holding the
 // opening as its hole. Every loop is decad's own record, so no sketch scene
 // is built; a topology the engine does not cover is SO5, never a fallback.
-
-// evalSideOpeningPrism is BO1: W over the receiver's interval, frame and
-// placement, carrying the offset's section displacement and, where a rim on
-// a removed arc names its cut at a float parameter, three times that cut's
-// gap on top (§4.4).
-func evalSideOpeningPrism(ctx context.Context, d *Document, ref producerID, pp prismPayload, sec prismshell.Section) (*Body, error) {
-	delta := sec.Delta
-	if sec.CutGap > 0 {
-		delta = proofbound.AbsSumUpper(delta, proofbound.ProductUpper(3, sec.CutGap))
-		if proofbound.IsNonFinite(delta) {
-			return nil, offset2d.ErrUnbounded
-		}
-	}
-	return bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), ref), prismrecord.Payload{
-		Profile:      sec.Wall,
-		Frame:        pp.Frame,
-		Z0:           pp.Z0,
-		Z1:           pp.Z1,
-		Z0Delta:      pp.Z0Delta,
-		Z1Delta:      pp.Z1Delta,
-		Xform:        pp.Xform,
-		SectionDelta: delta,
-	}, freeform.NewFreeformWork()))
-}

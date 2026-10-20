@@ -75,9 +75,6 @@ type (
 	cupView    = cupwall.View
 )
 
-// roleShellCap names a cup's pocket floor.
-const roleShellCap = cupwall.RoleShellCap
-
 // patchPayload and bodyPatchPayload are the evaluator's own records of a
 // PatchProfile body and a PatchEdges body: the internal/patchchain payloads,
 // which patchchain.Build and patchchain.BuildBody evaluate over topology nodes
