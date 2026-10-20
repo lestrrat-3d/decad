@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/loftcontact"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -92,10 +93,10 @@ func tryLoftCapChamfer(ctx context.Context, b *Body, pl loftPayload, edges []*Ed
 	pp := prismrecord.Payload{Profile: profile, Frame: pl.Frame0, Z0: 0, Z1: end.Z, Xform: r3.Identity()}
 	setback := capSetback{Dc: d, DcDelta: dDelta, Ds: d, DsDelta: dDelta}
 	source := &loftCapBandSource{Profile: pl.Profile0, Proof: pl.Proof}
-	result, err := buildCapBlendWithLoftSource(ctx, documentHandle(b.n.Doc), b.n.Doc.NextProducer, pp, setback, setback,
+	result, err := capblend.BuildChecked(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), pp, setback, setback,
 		map[int]bool{0: true}, map[int]bool{0: true}, source)
 	if err != nil {
 		return nil, true, fmt.Errorf("loft cap chamfer: %w", err)
 	}
-	return result, true, nil
+	return bodyHandle(result), true, nil
 }

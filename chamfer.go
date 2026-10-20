@@ -416,11 +416,12 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 				return nil, err
 			}
 		}
-		ref := doc.nextProducerID()
-		body, err := buildCapBlend(ctx, doc, ref, pp, start, end, startLoops, endLoops)
+		node, err := capblend.BuildChecked(ctx, envOf(documentNode(doc), doc.nextProducerID()), pp, start, end,
+			startLoops, endLoops, nil)
 		if err != nil {
 			return nil, err
 		}
+		body := bodyHandle(node)
 		// Check the input again before the final replacement: another operation
 		// could have retired it, or the caller could have canceled the work.
 		if err := doc.requireLive(b); err != nil {
