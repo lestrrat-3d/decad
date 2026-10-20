@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/draftrecord"
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/modifyselect"
+	"github.com/lestrrat-3d/decad/internal/obliqueboss"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sweeprecord"
@@ -258,7 +259,12 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 		return b.filletStraightLoft(ctx, sel, edges, lp, rmm)
 	}
 	if fp, ok := b.n.Payload.(facetedPayload); ok && fp.ObliqueBoss != nil {
-		return b.filletObliqueBoss(ctx, edges, fp.ObliqueBoss, rmm, rDelta)
+		node, err := obliqueboss.FilletBoss(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), edgeNodes(edges),
+			fp.ObliqueBoss, rmm, rDelta)
+		if err != nil {
+			return nil, err
+		}
+		return commitModifyResult(ctx, b, bodyHandle(node))
 	}
 	if fp, ok := b.n.Payload.(facetedPayload); ok && fp.PrismUnionFillet != nil {
 		// A retained source pair alone does not authenticate this selection.

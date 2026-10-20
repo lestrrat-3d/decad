@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/capblend"
+	"github.com/lestrrat-3d/decad/internal/crossbore"
 	"github.com/lestrrat-3d/decad/internal/draftrecord"
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
@@ -310,14 +311,16 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 				return body, err
 			}
 		}
-		body, recognized, err := tryCrossCylinderBoreMouthChamfer(ctx, b, fp, edges, dmm, dDelta, asym)
+		node, recognized, err := crossbore.MouthChamfer(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), &b.n, fp,
+			edgeNodes(edges), dmm, dDelta, asym != nil)
+		body := bodyHandle(node)
 		if recognized || err != nil {
 			if err != nil {
 				return nil, err
 			}
 			return commitModifyResult(ctx, b, body)
 		}
-		node, recognized, err := loftcylinder.MirrorCapChamfer(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer),
+		node, recognized, err = loftcylinder.MirrorCapChamfer(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer),
 			&b.n, fp, edgeNodes(edges), dmm, dDelta, asym != nil)
 		body = bodyHandle(node)
 		if recognized || err != nil {
