@@ -166,7 +166,7 @@ func classifySourceCylinderBox(report *reportvocab.ContactReport, cylinder sourc
 	if signedGap.Sign() > 0 {
 		var gaps [3]proofarith.Dyadic
 		gaps[axis] = signedGap
-		gap, ok := sourceBoxGap(gaps)
+		gap, ok := pairbox.GapMeasurement(gaps)
 		if !ok {
 			report.Reason = reportvocab.ContactNoGapProof
 			return

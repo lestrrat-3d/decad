@@ -59,7 +59,7 @@ func publishRulingManifold(report *reportvocab.ContactReport, ruling *clearance.
 	}
 	var witnesses [2]measurement.VecMeasurement
 	for i := range ends {
-		witness, ok := sourceBoxPointAt(&ends[i])
+		witness, ok := pairbox.DyadicPointMeasurement(&ends[i])
 		if !ok || witness.Bound.Base() > report.Request.PointResolution.Base() {
 			report.Reason = reportvocab.ContactPointTooCoarse
 			return
@@ -175,8 +175,8 @@ func rulingContactSet(a, b rulingSide) ([2]proofarith.DyV3, bool) {
 	case a.curved && b.curved:
 		var lo, hi proofarith.DyV3
 		for i := range 3 {
-			lo[i] = dyMax(dyMin(a.ends[0][i], a.ends[1][i]), dyMin(b.ends[0][i], b.ends[1][i]))
-			hi[i] = dyMin(dyMax(a.ends[0][i], a.ends[1][i]), dyMax(b.ends[0][i], b.ends[1][i]))
+			lo[i] = proofarith.DyMax(proofarith.DyMin(a.ends[0][i], a.ends[1][i]), proofarith.DyMin(b.ends[0][i], b.ends[1][i]))
+			hi[i] = proofarith.DyMin(proofarith.DyMax(a.ends[0][i], a.ends[1][i]), proofarith.DyMax(b.ends[0][i], b.ends[1][i]))
 			if proofarith.DyCmp(lo[i], hi[i]) > 0 {
 				return [2]proofarith.DyV3{}, false
 			}

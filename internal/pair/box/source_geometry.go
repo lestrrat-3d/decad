@@ -79,8 +79,8 @@ func SourceRevolvedCylinderBox(frame r3.Frame, placement, pose r3.Transform,
 		if i == 0 {
 			zlo, zhi, rhoLo, rhoHi = z, z, rho, rho
 		} else {
-			zlo, zhi = dyMin(zlo, z), dyMax(zhi, z)
-			rhoLo, rhoHi = dyMin(rhoLo, rho), dyMax(rhoHi, rho)
+			zlo, zhi = proof.DyMin(zlo, z), proof.DyMax(zhi, z)
+			rhoLo, rhoHi = proof.DyMin(rhoLo, rho), proof.DyMax(rhoHi, rho)
 		}
 	}
 	if !rhoLo.IsZero() || rhoHi.Sign() <= 0 || proof.DyCmp(zlo, zhi) >= 0 {
@@ -99,7 +99,7 @@ func SourceRevolvedCylinderBox(frame r3.Frame, placement, pose r3.Transform,
 func cylinderOuterBox(low, high proof.DyV3, radius proof.Dyadic, axis int) AxisBox {
 	var out AxisBox
 	for i := range 3 {
-		out.Lo[i], out.Hi[i] = dyMin(low[i], high[i]), dyMax(low[i], high[i])
+		out.Lo[i], out.Hi[i] = proof.DyMin(low[i], high[i]), proof.DyMax(low[i], high[i])
 		if i != axis {
 			out.Lo[i] = proof.DySubScalar(out.Lo[i], radius)
 			out.Hi[i] = proof.DyAdd(out.Hi[i], radius)

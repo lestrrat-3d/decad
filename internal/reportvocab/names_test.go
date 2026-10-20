@@ -3,6 +3,7 @@ package reportvocab_test
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/pair"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/stretchr/testify/require"
@@ -43,5 +44,19 @@ func TestCurveTypeName(t *testing.T) {
 		{surfacegeom.FacetedCurve{}, "decad.FacetedCurve"},
 	} {
 		require.Equal(t, tc.want, reportvocab.CurveTypeName(tc.curve))
+	}
+}
+
+func TestContactRelationPairRelation(t *testing.T) {
+	t.Parallel()
+
+	for relation, want := range map[reportvocab.ContactRelation]pair.Relation{
+		reportvocab.ContactSeparated:   pair.Separated,
+		reportvocab.ContactTouching:    pair.Touching,
+		reportvocab.ContactOverlapping: pair.Overlapping,
+		reportvocab.ContactUndecided:   pair.Undecided,
+		reportvocab.ContactBand:        pair.Undecided,
+	} {
+		require.Equal(t, want, relation.PairRelation(), relation)
 	}
 }

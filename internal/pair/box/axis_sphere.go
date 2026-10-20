@@ -38,7 +38,7 @@ func ClassifyAxisSphere(sphere AxisSphere, box AxisBox, pointResolutionMM float6
 	distance2 := proof.DyZero()
 	outsideAxis, outsideSide, outsideCount := 0, 0, 0
 	for i := range 3 {
-		nearest[i] = dyMax(box.Lo[i], dyMin(sphere.Center[i], box.Hi[i]))
+		nearest[i] = proof.DyMax(box.Lo[i], proof.DyMin(sphere.Center[i], box.Hi[i]))
 		d := proof.DySubScalar(sphere.Center[i], nearest[i])
 		distance2 = proof.DyAdd(distance2, proof.DyMul(d, d))
 		if d.Sign() != 0 {

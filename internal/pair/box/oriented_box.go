@@ -70,7 +70,7 @@ func OrientedProjection(box OrientedBox, axis proofarith.DyV3) (proofarith.Dyadi
 	lo, hi := proofarith.DvDot(box.Corner[0], axis), proofarith.DvDot(box.Corner[0], axis)
 	for _, point := range box.Corner[1:] {
 		value := proofarith.DvDot(point, axis)
-		lo, hi = dyMin(lo, value), dyMax(hi, value)
+		lo, hi = proofarith.DyMin(lo, value), proofarith.DyMax(hi, value)
 	}
 	return lo, hi
 }

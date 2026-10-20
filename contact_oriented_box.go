@@ -89,19 +89,6 @@ func orientedBoxRelation(a, b orientedSourceBox) (reportvocab.ContactRelation, p
 	}
 }
 
-func pairRelationOf(relation reportvocab.ContactRelation) pair.Relation {
-	switch relation {
-	case reportvocab.ContactSeparated:
-		return pair.Separated
-	case reportvocab.ContactTouching:
-		return pair.Touching
-	case reportvocab.ContactOverlapping:
-		return pair.Overlapping
-	default:
-		return pair.Undecided
-	}
-}
-
 func classifyOrientedSourceBoxes(report *reportvocab.ContactReport, a, b orientedSourceBox) {
 	relation, gap, normSquared := orientedBoxRelation(a, b)
 	switch relation {
@@ -158,11 +145,11 @@ func publishHorizontalPatchOrder(report *reportvocab.ContactReport, base sourceB
 	if !ok {
 		return false
 	}
-	patch, ok := pairbox.ContainedHorizontalPatch(base.axisBox(), rotated.OrientedBox, pairRelationOf(report.Relation))
+	patch, ok := pairbox.ContainedHorizontalPatch(base.axisBox(), rotated.OrientedBox, report.Relation.PairRelation())
 	if !ok {
 		return false
 	}
-	reading, ok := sourceBoxSignedReading(patch.Separation)
+	reading, ok := pairbox.SignedMeasurement(patch.Separation)
 	if !ok {
 		return false
 	}
@@ -178,8 +165,8 @@ func publishHorizontalPatchOrder(report *reportvocab.ContactReport, base sourceB
 	for _, corner := range patch.Corners {
 		basePoint := corner
 		basePoint[2] = patch.SupportZ
-		baseReading, okBase := sourceBoxPoint(basePoint)
-		rotatedReading, okRotated := sourceBoxPoint(corner)
+		baseReading, okBase := pairbox.DyadicPointMeasurement(&basePoint)
+		rotatedReading, okRotated := pairbox.DyadicPointMeasurement(&corner)
 		if !okBase || !okRotated ||
 			baseReading.Bound.Base() > report.Request.PointResolution.Base() ||
 			rotatedReading.Bound.Base() > report.Request.PointResolution.Base() {
@@ -211,7 +198,7 @@ func publishOrientedAxisPatch(report *reportvocab.ContactReport, a, b *orientedS
 	best := proofarith.DyZero()
 	_, alignedA := sourceBoxAtPose(bodyHandle(report.A), report.PoseA)
 	_, alignedB := sourceBoxAtPose(bodyHandle(report.B), report.PoseB)
-	for _, candidate := range pairbox.AxisFaceWitnesses(a.OrientedBox, b.OrientedBox, pairRelationOf(report.Relation)) {
+	for _, candidate := range pairbox.AxisFaceWitnesses(a.OrientedBox, b.OrientedBox, report.Relation.PairRelation()) {
 		// A horizontal patch against a signed-axis box needs the complete
 		// contained four-point proof above; one interior point cannot replace it.
 		if candidate.Axis == 2 && (alignedA || alignedB) {
@@ -220,12 +207,12 @@ func publishOrientedAxisPatch(report *reportvocab.ContactReport, a, b *orientedS
 		if chosen != nil && proofarith.DyCmp(proofarith.DyAbs(candidate.Separation), proofarith.DyAbs(best)) >= 0 {
 			continue
 		}
-		reading, ok := sourceBoxSignedReading(candidate.Separation)
+		reading, ok := pairbox.SignedMeasurement(candidate.Separation)
 		if !ok || reading.Bound.Base() > report.Request.PointResolution.Base() {
 			continue
 		}
-		onA, readA := sourceBoxPointAt(&candidate.PointA)
-		onB, readB := sourceBoxPointAt(&candidate.PointB)
+		onA, readA := pairbox.DyadicPointMeasurement(&candidate.PointA)
+		onB, readB := pairbox.DyadicPointMeasurement(&candidate.PointB)
 		if !readA || !readB || onA.Bound.Base() > report.Request.PointResolution.Base() ||
 			onB.Bound.Base() > report.Request.PointResolution.Base() {
 			continue
@@ -307,7 +294,7 @@ func publishOrientedBoxPatch(report *reportvocab.ContactReport, a, b orientedSou
 		report.Reason = reportvocab.ContactNoNormalProof
 		return
 	}
-	normal, angle, ok := orientedBoxNormal(geometry.Normal)
+	normal, angle, ok := pairbox.DyadicNormalMeasurement(geometry.Normal)
 	if !ok || angle.Base() > report.Request.NormalResolution.Base() {
 		report.Reason = reportvocab.ContactNoNormalProof
 		return
@@ -327,13 +314,4 @@ func publishOrientedBoxPatch(report *reportvocab.ContactReport, a, b orientedSou
 	}
 	report.Manifold = &reportvocab.ContactManifold{Points: points}
 	report.Reason = reportvocab.ContactNoReason
-}
-
-func orientedBoxNormal(axis proofarith.DyV3) (measurement.VecMeasurement, units.Value, bool) {
-	reading, ok := pairbox.DyadicNormalReading(axis)
-	if !ok {
-		return measurement.VecMeasurement{}, units.Value{}, false
-	}
-	normal, angle := reading.Measurement()
-	return normal, angle, true
 }

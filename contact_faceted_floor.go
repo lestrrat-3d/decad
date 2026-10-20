@@ -117,7 +117,7 @@ func boundedFacetedFloorGap(extent boundedFacetedExtent,
 	if proofarith.DyCmp(held, extent.bound) <= 0 {
 		return measurement.Measurement{}, false
 	}
-	reading, ok := sourceBoxSignedReading(held)
+	reading, ok := pairbox.SignedMeasurement(held)
 	if !ok {
 		return measurement.Measurement{}, false
 	}
@@ -226,7 +226,7 @@ func classifyFacetedFloorBox(ctx context.Context, report *reportvocab.ContactRep
 	if gap.Sign() > 0 {
 		var gaps [3]proofarith.Dyadic
 		gaps[2] = gap
-		m, measured := sourceBoxGap(gaps)
+		m, measured := pairbox.GapMeasurement(gaps)
 		if !measured {
 			report.Reason = reportvocab.ContactNoGapProof
 			return nil

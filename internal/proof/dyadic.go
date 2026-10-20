@@ -990,3 +990,19 @@ func dySqrtSeedInline(d Dyadic) float64 {
 	}
 	return math.Sqrt(m) * dyPow2[half+dyPow2Bias]
 }
+
+// DyMax is the larger of a and b; a on a tie.
+func DyMax(a, b Dyadic) Dyadic {
+	if DyCmp(a, b) >= 0 {
+		return a
+	}
+	return b
+}
+
+// DyMin is the smaller of a and b; a on a tie.
+func DyMin(a, b Dyadic) Dyadic {
+	if DyCmp(a, b) <= 0 {
+		return a
+	}
+	return b
+}

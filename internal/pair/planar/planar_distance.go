@@ -6,20 +6,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proof"
 )
 
-func dyMax(a, b proof.Dyadic) proof.Dyadic {
-	if proof.DyCmp(a, b) >= 0 {
-		return a
-	}
-	return b
-}
-
-func dyMin(a, b proof.Dyadic) proof.Dyadic {
-	if proof.DyCmp(a, b) <= 0 {
-		return a
-	}
-	return b
-}
-
 func (k *planarKernel) addSite(site contactSite) {
 	if k.seen == nil {
 		k.seen = make(map[PlanarContact]struct{})
@@ -229,7 +215,7 @@ func (k *planarKernel) edgeEdge(edgeA, edgeB [2]int) {
 		}
 		t0 := proof.DvDot(proof.DvSub(q0, p0), d1)
 		t1 := proof.DvDot(proof.DvSub(q1, p0), d1)
-		lo, hi := dyMax(proof.DyZero(), dyMin(t0, t1)), dyMin(a, dyMax(t0, t1))
+		lo, hi := proof.DyMax(proof.DyZero(), proof.DyMin(t0, t1)), proof.DyMin(a, proof.DyMax(t0, t1))
 		if proof.DyCmp(lo, hi) >= 0 {
 			return
 		}
