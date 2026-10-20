@@ -126,9 +126,9 @@ type SweepReplay interface {
 }
 
 // SweepReportOf states the first certified event or the earliest unresolved
-// span. B, F, E and V are the body, face, edge and vertex reference types;
-// T is the contact track type and R the replay proof type.
-type SweepReportOf[B, F, E, V, T any, R SweepReplay] struct {
+// span. B, F, E and V are the body, face, edge and vertex reference types and
+// R is the replay proof type.
+type SweepReportOf[B, F, E, V any, R SweepReplay] struct {
 	A, B            B
 	PathA, PathB    PairPath
 	Request         SweepRequest
@@ -138,7 +138,7 @@ type SweepReportOf[B, F, E, V, T any, R SweepReplay] struct {
 	InitialEvent    *SweepEventOf[F, E, V]
 	Event           *SweepEventOf[F, E, V]
 	Departure       *SweepDeparture
-	ContactTrack    *T
+	ContactTrack    *SweepContactTrackOf[F, E, V]
 	Cause           SweepCause
 	Samples         []SweepSampleOf[B, F, E, V]
 	BoxExcluded     bool
@@ -148,20 +148,20 @@ type SweepReportOf[B, F, E, V, T any, R SweepReplay] struct {
 }
 
 // Replay returns the report's replay proof.
-func (r *SweepReportOf[B, F, E, V, T, R]) Replay(seal.Key) R { return r.replay }
+func (r *SweepReportOf[B, F, E, V, R]) Replay(seal.Key) R { return r.replay }
 
 // SetReplay records the report's replay proof.
-func (r *SweepReportOf[B, F, E, V, T, R]) SetReplay(_ seal.Key, p R) { r.replay = p }
+func (r *SweepReportOf[B, F, E, V, R]) SetReplay(_ seal.Key, p R) { r.replay = p }
 
 // BracketRight returns the exact right end of the bracket, or nil.
-func (r *SweepReportOf[B, F, E, V, T, R]) BracketRight(seal.Key) *big.Rat { return r.bracketRight }
+func (r *SweepReportOf[B, F, E, V, R]) BracketRight(seal.Key) *big.Rat { return r.bracketRight }
 
 // SetBracketRight records the exact right end of the bracket.
-func (r *SweepReportOf[B, F, E, V, T, R]) SetBracketRight(_ seal.Key, f *big.Rat) { r.bracketRight = f }
+func (r *SweepReportOf[B, F, E, V, R]) SetBracketRight(_ seal.Key, f *big.Rat) { r.bracketRight = f }
 
 // BracketEndsAtDuration reports whether the sweep producer proved its bracket
 // right endpoint is the exact final fraction of the requested duration.
-func (r *SweepReportOf[B, F, E, V, T, R]) BracketEndsAtDuration() bool {
+func (r *SweepReportOf[B, F, E, V, R]) BracketEndsAtDuration() bool {
 	return r != nil && r.Bracket != nil && r.bracketRight != nil &&
 		r.bracketRight.Cmp(big.NewRat(1, 1)) == 0
 }
@@ -169,7 +169,7 @@ func (r *SweepReportOf[B, F, E, V, T, R]) BracketEndsAtDuration() bool {
 // HasAffineReplayProof reports whether this sweep can certify rounded poses
 // along an affine source-box, source-sphere, faceted clear, extruded or
 // revolved source-cylinder, or oriented face-track path.
-func (r *SweepReportOf[B, F, E, V, T, R]) HasAffineReplayProof() bool {
+func (r *SweepReportOf[B, F, E, V, R]) HasAffineReplayProof() bool {
 	return r != nil && r.replay.Present() && r.replay.HasAffineProof()
 }
 
@@ -177,7 +177,7 @@ func (r *SweepReportOf[B, F, E, V, T, R]) HasAffineReplayProof() bool {
 // their rounded placements against the sweep's exact source proof.
 // It reads no Document geometry and performs no new contact query. A pose whose
 // rounding can change the reported relation beyond PointResolution is refused.
-func (r *SweepReportOf[B, F, E, V, T, R]) CertifiedPosesAt(elapsed units.Value) (r3.Transform, r3.Transform, error) {
+func (r *SweepReportOf[B, F, E, V, R]) CertifiedPosesAt(elapsed units.Value) (r3.Transform, r3.Transform, error) {
 	if r == nil || !r.replay.Present() {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: sweep has no replay proof", decaderr.ErrUnsupported)
 	}
@@ -187,9 +187,115 @@ func (r *SweepReportOf[B, F, E, V, T, R]) CertifiedPosesAt(elapsed units.Value) 
 // CertifiedPosesAtInterval maps an exact held time from [start, end] onto the
 // certified spatial path. It permits a caller to replay a slice whose global
 // clock endpoints differ slightly from the rounded sweep duration.
-func (r *SweepReportOf[B, F, E, V, T, R]) CertifiedPosesAtInterval(time, start, end units.Value) (r3.Transform, r3.Transform, error) {
+func (r *SweepReportOf[B, F, E, V, R]) CertifiedPosesAtInterval(time, start, end units.Value) (r3.Transform, r3.Transform, error) {
 	if r == nil || !r.replay.Present() {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: sweep has no replay proof", decaderr.ErrUnsupported)
 	}
 	return r.replay.PosesAtInterval(time, start, end)
+}
+
+// SweepTrack is what a sweep contact track asks of its exact proof. The decad
+// package supplies the proof; it is not part of the track's public surface.
+type SweepTrack[F, E, V any] interface {
+	Start() SweepInstant
+	End() SweepInstant
+	Features() (ContactFeatureOf[F, E, V], ContactFeatureOf[F, E, V])
+	Normal() VecMeasurement
+	Band() *Measurement
+	BandAt(fraction units.Value) (*Measurement, error)
+	ManifoldAt(fraction units.Value) (*ContactManifoldOf[F, E, V], error)
+}
+
+// SweepContactTrackOf owns the exact source geometry and affine motion of a
+// certified touching prefix. Its source face references are the original
+// faces.
+type SweepContactTrackOf[F, E, V any] struct {
+	proof  SweepTrack[F, E, V]
+	source any
+}
+
+// NewSweepContactTrack wraps a producer's exact track proof. source is the
+// producer's own record of it, which Source returns.
+func NewSweepContactTrack[F, E, V any](_ seal.Key, proof SweepTrack[F, E, V], source any) *SweepContactTrackOf[F, E, V] {
+	return &SweepContactTrackOf[F, E, V]{proof: proof, source: source}
+}
+
+// Source returns the producer record the track was made from.
+func (t *SweepContactTrackOf[F, E, V]) Source(seal.Key) any { return t.source }
+
+// Start is the first instant of the certified interval.
+func (t *SweepContactTrackOf[F, E, V]) Start() SweepInstant { return t.proof.Start() }
+
+// End is the last instant of the certified interval.
+func (t *SweepContactTrackOf[F, E, V]) End() SweepInstant { return t.proof.End() }
+
+// Features names the two source features that stay in contact over the track.
+func (t *SweepContactTrackOf[F, E, V]) Features() (ContactFeatureOf[F, E, V], ContactFeatureOf[F, E, V]) {
+	return t.proof.Features()
+}
+
+// Normal is the contact normal, pointing from the first body to the second.
+func (t *SweepContactTrackOf[F, E, V]) Normal() VecMeasurement { return t.proof.Normal() }
+
+// Band returns the depth of a band track (docs/multibody-dynamics-design.md
+// §10.3), a Length Measurement whose Value plus Bound bounds every contact
+// point's separation in both directions and the interiors' overlap along
+// Normal(). It is nil for an exact touch track.
+func (t *SweepContactTrackOf[F, E, V]) Band() *Measurement { return t.proof.Band() }
+
+// BandAt returns the depth of a band track over its prefix through fraction
+// (docs/multibody-dynamics-design.md §10.3): a Length Measurement whose Value
+// plus Bound bounds every contact point's separation in both directions and
+// the interiors' overlap along Normal() at every instant from the track's
+// start through fraction. At the track's end it is at most Band(); it grows
+// with fraction, so a caller can end a slice where the band reaches its own
+// residual. It is nil for an exact touch track.
+func (t *SweepContactTrackOf[F, E, V]) BandAt(fraction units.Value) (*Measurement, error) {
+	return t.proof.BandAt(fraction)
+}
+
+// ManifoldAt returns a fresh reduction of the complete exact touching set at
+// a fraction in this track's certified interval.
+func (t *SweepContactTrackOf[F, E, V]) ManifoldAt(fraction units.Value) (*ContactManifoldOf[F, E, V], error) {
+	return t.proof.ManifoldAt(fraction)
+}
+
+// liftedTrack answers a track's questions in another reference instantiation.
+type liftedTrack[B1, F1, E1, V1, B2, F2, E2, V2 any] struct {
+	inner SweepTrack[F1, E1, V1]
+	lift  Lift[B1, F1, E1, V1, B2, F2, E2, V2]
+}
+
+func (t liftedTrack[B1, F1, E1, V1, B2, F2, E2, V2]) Start() SweepInstant { return t.inner.Start() }
+func (t liftedTrack[B1, F1, E1, V1, B2, F2, E2, V2]) End() SweepInstant   { return t.inner.End() }
+func (t liftedTrack[B1, F1, E1, V1, B2, F2, E2, V2]) Normal() VecMeasurement {
+	return t.inner.Normal()
+}
+func (t liftedTrack[B1, F1, E1, V1, B2, F2, E2, V2]) Band() *Measurement { return t.inner.Band() }
+
+func (t liftedTrack[B1, F1, E1, V1, B2, F2, E2, V2]) BandAt(fraction units.Value) (*Measurement, error) {
+	return t.inner.BandAt(fraction)
+}
+
+func (t liftedTrack[B1, F1, E1, V1, B2, F2, E2, V2]) Features() (ContactFeatureOf[F2, E2, V2], ContactFeatureOf[F2, E2, V2]) {
+	a, b := t.inner.Features()
+	return t.lift.Feature(a), t.lift.Feature(b)
+}
+
+func (t liftedTrack[B1, F1, E1, V1, B2, F2, E2, V2]) ManifoldAt(fraction units.Value) (*ContactManifoldOf[F2, E2, V2], error) {
+	manifold, err := t.inner.ManifoldAt(fraction)
+	return t.lift.Manifold(manifold), err
+}
+
+// LiftSweepContactTrack returns t with its features and manifolds mapped by l.
+// It keeps t's source record; a nil track stays nil.
+func LiftSweepContactTrack[B1, F1, E1, V1, B2, F2, E2, V2 any](_ seal.Key, t *SweepContactTrackOf[F1, E1, V1],
+	l Lift[B1, F1, E1, V1, B2, F2, E2, V2]) *SweepContactTrackOf[F2, E2, V2] {
+	if t == nil {
+		return nil
+	}
+	return &SweepContactTrackOf[F2, E2, V2]{
+		proof:  liftedTrack[B1, F1, E1, V1, B2, F2, E2, V2]{inner: t.proof, lift: l},
+		source: t.source,
+	}
 }

@@ -3,8 +3,10 @@ package decad
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math/big"
+
+	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/sweepproof"
 
 	"github.com/lestrrat-3d/decad/internal/seal"
 
@@ -93,27 +95,27 @@ func (d *Document) sourceCylinderFaceSweep(ctx context.Context, a, b *Body,
 			return cylinderSweepUndecided(report, pa.Duration), nil
 		}
 		fraction := big.NewRat(int64(index), 1)
-		observedA, okA := translatedReplayBox(firstBox, pa.From, poses[0])
-		observedB, okB := translatedReplayBox(secondBox, pb.From, poses[1])
+		observedA, okA := sweepproof.TranslatedReplayBox(firstBox, pa.From, poses[0])
+		observedB, okB := sweepproof.TranslatedReplayBox(secondBox, pb.From, poses[1])
 		if !okA || !okB {
 			return cylinderSweepUndecided(report, pa.Duration), nil
 		}
-		deviation := boxPoseDeviation(firstBox, observedA, pa.Delta, fraction)
-		deviation.Add(deviation, boxPoseDeviation(secondBox, observedB, pb.Delta, fraction))
-		if deviation.Cmp(resolution) > 0 || !outerBoxGapExceeds(observedA, observedB, axis, sign, deviation) {
+		deviation := sweepproof.BoxPoseDeviation(firstBox, observedA, pa.Delta, fraction)
+		deviation.Add(deviation, sweepproof.BoxPoseDeviation(secondBox, observedB, pb.Delta, fraction))
+		if deviation.Cmp(resolution) > 0 || !sweepproof.OuterBoxGapExceeds(observedA, observedB, axis, sign, deviation) {
 			return cylinderSweepUndecided(report, pa.Duration), nil
 		}
-		at := sweepInstant(fraction, pa.Duration)
+		at := sweeppath.Instant(fraction, pa.Duration)
 		ideal := SweepEvent{At: at, Relation: ContactSeparated, Gap: contact.Gap}
 		report.Samples = append(report.Samples, sampleWith(SweepSample{At: at, PoseA: poses[0], PoseB: poses[1],
 			FloatContact: contact, Ideal: ideal}, fraction))
 		report.PoseEvaluations++
 	}
 	report.Outcome, report.BoxExcluded = SweepClear, true
-	report.SetReplay(seal.Key{}, &sweepReplayProof{pa: pa, pb: pb, request: req.ContactRequest,
-		cylinder: &cylinder, cylinderFirst: cylinderFirst, boxA: firstBox, boxB: secondBox,
-		clearAxis: axis, clearSign: sign, clearGap: gap})
-	report.Replay(seal.Key{}).snapshot(report)
+	report.SetReplay(seal.Key{}, &sweepproof.Proof{PA: pa, PB: pb, Request: req.ContactRequest,
+		Cylinder: &cylinder, CylinderFirst: cylinderFirst, BoxA: firstBox, BoxB: secondBox,
+		ClearAxis: axis, ClearSign: sign, ClearGap: gap})
+	report.Replay(seal.Key{}).Snapshot(report.Outcome)
 	return report, nil
 }
 
@@ -136,8 +138,8 @@ func (r *sourceCylinderImpactRun) boxesAt(f *big.Rat) (contactround.CylinderProo
 	if r.cylinderFirst {
 		cylinderDelta, boxDelta = r.pa.Delta, r.pb.Delta
 	}
-	cylinderBox, okCylinder := translatedContactBox(r.cylinder.Box, cylinderDelta, f)
-	box, okBox := translatedContactBox(r.box, boxDelta, f)
+	cylinderBox, okCylinder := sweepproof.TranslatedContactBox(r.cylinder.Box, cylinderDelta, f)
+	box, okBox := sweepproof.TranslatedContactBox(r.box, boxDelta, f)
 	cylinder := r.cylinder
 	cylinder.Box = cylinderBox
 	return cylinder, box, okCylinder && okBox
@@ -162,7 +164,7 @@ func (r *sourceCylinderImpactRun) sample(ctx context.Context, f *big.Rat) (*Swee
 	if err != nil {
 		return nil, err
 	}
-	at := sweepInstant(f, r.pa.Duration)
+	at := sweeppath.Instant(f, r.pa.Duration)
 	cylinder, box, ok := r.boxesAt(f)
 	ideal := SweepEvent{At: at, Relation: ContactUndecided, Reason: ContactPayloadUnsupported}
 	if ok {
@@ -207,8 +209,8 @@ func (r *sourceCylinderImpactRun) transferManifold(f *big.Rat, poseA, poseB r3.T
 	if r.cylinderFirst {
 		observedA, observedB = observedCylinder.Box, observedBox
 	}
-	deviation := boxPoseDeviation(firstBox, observedA, r.pa.Delta, f)
-	deviation.Add(deviation, boxPoseDeviation(secondBox, observedB, r.pb.Delta, f))
+	deviation := sweepproof.BoxPoseDeviation(firstBox, observedA, r.pa.Delta, f)
+	deviation.Add(deviation, sweepproof.BoxPoseDeviation(secondBox, observedB, r.pb.Delta, f))
 	resolution, ok := sweeppath.ExactBaseValue(r.req.PointResolution)
 	if !ok || deviation.Cmp(resolution) > 0 {
 		ideal.Manifold = nil
@@ -224,11 +226,11 @@ func (r *sourceCylinderImpactRun) transferManifold(f *big.Rat, poseA, poseB r3.T
 			return
 		}
 		witness.Bound = units.Millimeters(proofbound.RatFloatUp(bound))
-		witness.Exactness = exactnessFromBound(witness.Bound.Base())
+		witness.Exactness = measurement.ExactnessOf(witness.Bound.Base())
 	}
 	separationBound := new(big.Rat).Add(proofarith.FloatRat(point.Separation.Bound.Base()), deviation)
 	point.Separation.Bound = units.Millimeters(proofbound.RatFloatUp(separationBound))
-	point.Separation.Exactness = exactnessFromBound(point.Separation.Bound.Base())
+	point.Separation.Exactness = measurement.ExactnessOf(point.Separation.Bound.Base())
 	ideal.Manifold = &ContactManifold{Points: []ContactPoint{point}}
 	ideal.Reason = ContactNoReason
 }
@@ -295,10 +297,10 @@ func (r *sourceCylinderImpactRun) execute(ctx context.Context) (*SweepReport, er
 	if r.cylinderFirst {
 		firstBox, secondBox = r.cylinder.Box, r.box
 	}
-	r.report.SetReplay(seal.Key{}, &sweepReplayProof{pa: r.pa, pb: r.pb, request: r.req.ContactRequest,
-		cylinder: &r.cylinder, cylinderFirst: r.cylinderFirst,
-		boxA: firstBox, boxB: secondBox, clearAxis: r.axis,
-		cylinderSide: r.side, cylinderGap: r.gap, cylinderSlope: r.slope})
+	r.report.SetReplay(seal.Key{}, &sweepproof.Proof{PA: r.pa, PB: r.pb, Request: r.req.ContactRequest,
+		Cylinder: &r.cylinder, CylinderFirst: r.cylinderFirst,
+		BoxA: firstBox, BoxB: secondBox, ClearAxis: r.axis,
+		CylinderSide: r.side, CylinderGap: r.gap, CylinderSlope: r.slope})
 	if first.Ideal.Relation == ContactTouching {
 		if first.Ideal.Manifold == nil {
 			return cylinderSweepUndecided(r.report, r.pa.Duration), nil
@@ -315,7 +317,7 @@ func (r *sourceCylinderImpactRun) execute(ctx context.Context) (*SweepReport, er
 		}
 		r.report.Outcome = SweepDepartedClear
 		r.report.Departure = &SweepDeparture{Until: last.At, GapAtUntil: *last.Ideal.Gap}
-		r.report.Replay(seal.Key{}).snapshot(r.report)
+		r.report.Replay(seal.Key{}).Snapshot(r.report.Outcome)
 		return r.report, nil
 	}
 	if r.gap.Sign() <= 0 || r.slope.Sign() >= 0 ||
@@ -355,8 +357,8 @@ func (r *sourceCylinderImpactRun) execute(ctx context.Context) (*SweepReport, er
 	r.report.Outcome, r.report.Event = SweepImpactBracket, &right.Ideal
 	r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
 	r.report.SetBracketRight(seal.Key{}, new(big.Rat).Set(rightF))
-	r.report.Replay(seal.Key{}).setBracket(leftF, rightF)
-	r.report.Replay(seal.Key{}).snapshot(r.report)
+	r.report.Replay(seal.Key{}).SetBracket(leftF, rightF)
+	r.report.Replay(seal.Key{}).Snapshot(r.report.Outcome)
 	return r.report, nil
 }
 
@@ -394,42 +396,16 @@ func (r *sourceCylinderImpactRun) persistentTrack(ctx context.Context, first *Sw
 		return cylinderSweepCause(r.report, r.pa.Duration, SweepContactTrackUnproved), nil
 	}
 	cylinder := r.cylinder
-	track := &SweepContactTrack{a: firstBox, b: secondBox, deltaA: r.pa.Delta, deltaB: r.pb.Delta,
-		cylinder: &cylinder, cylinderFirst: r.cylinderFirst,
-		start: new(big.Rat), end: big.NewRat(1, 1), duration: new(big.Rat).Set(r.pa.Duration),
-		request:  r.req.ContactRequest,
-		features: [2]nodeContactFeature{contactFeatureToInternal(point.FeatureA), contactFeatureToInternal(point.FeatureB)},
-		normal:   point.Normal, pointCount: 1}
-	r.report.Outcome, r.report.ContactTrack = SweepPersistentTouch, track
-	r.report.Replay(seal.Key{}).track = track
-	r.report.Replay(seal.Key{}).snapshot(r.report)
+	track := &sweepproof.Track{A: firstBox, B: secondBox, DeltaA: r.pa.Delta, DeltaB: r.pb.Delta,
+		Cylinder: &cylinder, CylinderFirst: r.cylinderFirst,
+		From: new(big.Rat), To: big.NewRat(1, 1), Duration: new(big.Rat).Set(r.pa.Duration),
+		Request:    r.req.ContactRequest,
+		Sources:    [2]nodeContactFeature{contactFeatureToInternal(point.FeatureA), contactFeatureToInternal(point.FeatureB)},
+		NormalRead: point.Normal, PointCount: 1}
+	r.report.Outcome, r.report.ContactTrack = SweepPersistentTouch, publishTrack(track)
+	r.report.Replay(seal.Key{}).Track = track
+	r.report.Replay(seal.Key{}).Snapshot(r.report.Outcome)
 	return r.report, nil
-}
-
-// cylinderTrackManifold reduces the track's exact cylinder and box at one
-// fraction and requires the track's single disk-face point.
-func (t *SweepContactTrack) cylinderTrackManifold(f *big.Rat) (*ContactManifold, error) {
-	cylinderBox, box := t.b, t.a
-	cylinderDelta, boxDelta := t.deltaB, t.deltaA
-	if t.cylinderFirst {
-		cylinderBox, box = t.a, t.b
-		cylinderDelta, boxDelta = t.deltaA, t.deltaB
-	}
-	movedCylinder, okCylinder := translatedContactBox(cylinderBox, cylinderDelta, f)
-	movedBox, okBox := translatedContactBox(box, boxDelta, f)
-	if !okCylinder || !okBox {
-		return nil, fmt.Errorf("%w: cylinder contact-track fraction cannot be represented", ErrUnsupported)
-	}
-	cylinder := *t.cylinder
-	cylinder.Box = movedCylinder
-	report := &nodeContactReport{Request: t.request}
-	contactround.ClassifyCylinderBox(report, cylinder, movedBox, t.cylinderFirst)
-	if report.Relation != ContactTouching || report.Manifold == nil || len(report.Manifold.Points) != 1 ||
-		report.Manifold.Points[0].FeatureA != t.features[0] ||
-		report.Manifold.Points[0].FeatureB != t.features[1] {
-		return nil, fmt.Errorf("%w: cylinder contact track lost its disk point", ErrUnsupported)
-	}
-	return contactManifoldFromInternal(report.Manifold), nil
 }
 
 func cylinderSweepCause(report *SweepReport, duration *big.Rat, cause SweepCause) *SweepReport {
@@ -440,14 +416,14 @@ func cylinderSweepCause(report *SweepReport, duration *big.Rat, cause SweepCause
 
 func cylinderSweepBudget(report *SweepReport, duration, from, to *big.Rat) *SweepReport {
 	report.Outcome, report.Cause = SweepUndecided, SweepPoseBudget
-	report.Unresolved = &SweepInterval{From: sweepInstant(from, duration), To: sweepInstant(to, duration)}
+	report.Unresolved = &SweepInterval{From: sweeppath.Instant(from, duration), To: sweeppath.Instant(to, duration)}
 	return report
 }
 
 func cylinderSweepUndecided(report *SweepReport, duration *big.Rat) *SweepReport {
 	report.Outcome, report.Cause = SweepUndecided, SweepContactUnsupported
-	report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), duration),
-		To: sweepInstant(big.NewRat(1, 1), duration)}
+	report.Unresolved = &SweepInterval{From: sweeppath.Instant(new(big.Rat), duration),
+		To: sweeppath.Instant(big.NewRat(1, 1), duration)}
 	return report
 }
 
@@ -457,11 +433,4 @@ func translatedAffineBox(start contactbox.SourceBox, delta [3]proofarith.Dyadic)
 		start.Hi[axis] = proofarith.DyAdd(start.Hi[axis], delta[axis])
 	}
 	return start
-}
-
-func outerBoxGapExceeds(a, b contactbox.SourceBox, axis, sign int, minimum *big.Rat) bool {
-	if sign > 0 {
-		return new(big.Rat).Sub(b.Lo[axis].Rat(), a.Hi[axis].Rat()).Cmp(minimum) > 0
-	}
-	return new(big.Rat).Sub(a.Lo[axis].Rat(), b.Hi[axis].Rat()).Cmp(minimum) > 0
 }

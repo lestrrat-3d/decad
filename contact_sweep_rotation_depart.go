@@ -220,7 +220,7 @@ func (r *rotationalPairSweep) axisFaceDepartureFraction(first *SweepSample) (*bi
 	if side == 0 {
 		sideA, sideB = 0, 1
 	}
-	boxA, boxB := r.a.startBox.OrientedBox, r.b.startBox.OrientedBox
+	boxA, boxB := r.a.StartBox.OrientedBox, r.b.StartBox.OrientedBox
 	var faceA, faceB pairbox.OrientedFace
 	if !pairbox.OrientedAxisFace(&boxA, axis, sideA, &faceA) ||
 		!pairbox.OrientedAxisFace(&boxB, axis, sideB, &faceB) ||
@@ -361,7 +361,7 @@ func (r *rotationalPairSweep) bracketRightReplays(left, right *SweepSample) bool
 // travel.
 func (r *rotationalPairSweep) intervalClear(left, right *SweepSample, lf, rf *big.Rat) bool {
 	if !r.planar && r.a.Path.Drift == nil && r.b.Path.Drift == nil &&
-		pairbox.OrientedIntervalSeparated(r.a.startBox.OrientedBox, r.b.startBox.OrientedBox,
+		pairbox.OrientedIntervalSeparated(r.a.StartBox.OrientedBox, r.b.StartBox.OrientedBox,
 			r.a.Path.Delta, r.b.Path.Delta, lf, rf) {
 		return true
 	}
@@ -389,7 +389,7 @@ func (r *rotationalPairSweep) intervalAxisGap(from, to *big.Rat) *big.Rat {
 // departurePaths is the pair's view for internal/sweepdeparture's proofs,
 // each path with its start box.
 func (r *rotationalPairSweep) departurePaths() [2]sweepdeparture.Path {
-	return [2]sweepdeparture.Path{r.a.Departure(r.a.startBox.OrientedBox), r.b.Departure(r.b.startBox.OrientedBox)}
+	return [2]sweepdeparture.Path{r.a.Departure(r.a.StartBox.OrientedBox), r.b.Departure(r.b.StartBox.OrientedBox)}
 }
 
 func (r *rotationalPairSweep) sortSamples() {
@@ -400,8 +400,8 @@ func (r *rotationalPairSweep) sortSamples() {
 
 func (r *rotationalPairSweep) undecided(from, to *big.Rat, cause SweepCause) *SweepReport {
 	r.report.Outcome, r.report.Cause = SweepUndecided, cause
-	r.report.Unresolved = &SweepInterval{From: sweepInstant(from, r.a.Path.Duration),
-		To: sweepInstant(to, r.a.Path.Duration)}
+	r.report.Unresolved = &SweepInterval{From: sweeppath.Instant(from, r.a.Path.Duration),
+		To: sweeppath.Instant(to, r.a.Path.Duration)}
 	r.sortSamples()
 	return r.report
 }

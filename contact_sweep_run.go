@@ -6,6 +6,9 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/sweepproof"
+
 	"github.com/lestrrat-3d/decad/internal/seal"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
@@ -47,7 +50,7 @@ func (r *pairSweepRun) sample(ctx context.Context, f *big.Rat) (*SweepSample, er
 	if err != nil {
 		return nil, err
 	}
-	at := sweepInstant(f, r.pa.Duration)
+	at := sweeppath.Instant(f, r.pa.Duration)
 	event := r.idealContact(f, at)
 	r.transferManifold(f, poseA, poseB, contact, &event)
 	sample := sampleWith(SweepSample{At: at, PoseA: poseA, PoseB: poseB, FloatContact: contact, Ideal: event}, new(big.Rat).Set(f))
@@ -124,8 +127,8 @@ func (r *pairSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.Transform,
 		useIdeal()
 		return
 	}
-	deviation := boxPoseDeviation(r.boxA, observedA, r.pa.Delta, f)
-	deviation.Add(deviation, boxPoseDeviation(r.boxB, observedB, r.pb.Delta, f))
+	deviation := sweepproof.BoxPoseDeviation(r.boxA, observedA, r.pa.Delta, f)
+	deviation.Add(deviation, sweepproof.BoxPoseDeviation(r.boxB, observedB, r.pb.Delta, f))
 	resolution, ok := sweeppath.ExactBaseValue(r.req.PointResolution)
 	if !ok {
 		useIdeal()
@@ -146,37 +149,20 @@ func (r *pairSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.Transform,
 				return
 			}
 			witness.Bound = units.Millimeters(publishedBound)
-			witness.Exactness = exactnessFromBound(witness.Bound.Base())
+			witness.Exactness = measurement.ExactnessOf(witness.Bound.Base())
 		}
 		separationBound := new(big.Rat).Add(proofarith.FloatRat(point.Separation.Bound.Base()), deviation)
 		point.Separation.Bound = units.Millimeters(proofbound.RatFloatUp(separationBound))
-		point.Separation.Exactness = exactnessFromBound(point.Separation.Bound.Base())
+		point.Separation.Exactness = measurement.ExactnessOf(point.Separation.Bound.Base())
 	}
 	event.Manifold = &ContactManifold{Points: points}
 	event.Reason = ContactNoReason
 }
 
-// boxPoseDeviation bounds the L1 distance between a float-pose source box and
-// the ideal affine box. Each support endpoint is compared as an exact rational.
-func boxPoseDeviation(start, observed contactbox.SourceBox, delta [3]proofarith.Dyadic, f *big.Rat) *big.Rat {
-	return box.PoseDeviation(start.AxisBox(), observed.AxisBox(), delta, f)
-}
-
-func translatedSourceBoxes(a, b contactbox.SourceBox, da, db [3]proofarith.Dyadic,
-	f *big.Rat) (contactbox.SourceBox, contactbox.SourceBox, bool) {
-	translatedA, translatedB, ok := box.TranslatePair(a.AxisBox(), b.AxisBox(), da, db, f)
-	if !ok {
-		return contactbox.SourceBox{}, contactbox.SourceBox{}, false
-	}
-	a.Lo, a.Hi = translatedA.Lo, translatedA.Hi
-	b.Lo, b.Hi = translatedB.Lo, translatedB.Hi
-	return a, b, true
-}
-
 // fullSourceBoxTrack admits an entire affine face-contact span only when the
 // same source faces and clipped-patch corner owners hold on its open interval.
 // Endpoint ties at zero use their right-sided order.
-func (r *pairSweepRun) fullSourceBoxTrack(first *SweepSample, end *big.Rat) *SweepContactTrack {
+func (r *pairSweepRun) fullSourceBoxTrack(first *SweepSample, end *big.Rat) *sweepproof.Track {
 	if first.Ideal.Manifold == nil || len(first.Ideal.Manifold.Points) != 4 {
 		return nil
 	}
@@ -198,7 +184,7 @@ func (r *pairSweepRun) fullSourceBoxTrack(first *SweepSample, end *big.Rat) *Swe
 		// Both projected overlap inequalities are affine, so strict endpoint
 		// tests prove positive overlap for every intervening time.
 		for _, f := range []*big.Rat{new(big.Rat), end} {
-			a, b, _ := translatedSourceBoxes(r.boxA, r.boxB, r.pa.Delta, r.pb.Delta, f)
+			a, b, _ := sweepproof.TranslatedSourceBoxes(r.boxA, r.boxB, r.pa.Delta, r.pb.Delta, f)
 			if proofarith.DyCmp(a.Lo[i], b.Hi[i]) >= 0 || proofarith.DyCmp(b.Lo[i], a.Hi[i]) >= 0 {
 				return nil
 			}
@@ -215,12 +201,12 @@ func (r *pairSweepRun) fullSourceBoxTrack(first *SweepSample, end *big.Rat) *Swe
 		return nil
 	}
 	point := first.Ideal.Manifold.Points[0]
-	return &SweepContactTrack{
-		a: r.boxA, b: r.boxB, deltaA: r.pa.Delta, deltaB: r.pb.Delta,
-		start: new(big.Rat), end: new(big.Rat).Set(end), duration: new(big.Rat).Set(r.pa.Duration),
-		request:  r.req.ContactRequest,
-		features: [2]nodeContactFeature{contactFeatureToInternal(point.FeatureA), contactFeatureToInternal(point.FeatureB)},
-		normal:   normal,
+	return &sweepproof.Track{
+		A: r.boxA, B: r.boxB, DeltaA: r.pa.Delta, DeltaB: r.pb.Delta,
+		From: new(big.Rat), To: new(big.Rat).Set(end), Duration: new(big.Rat).Set(r.pa.Duration),
+		Request:    r.req.ContactRequest,
+		Sources:    [2]nodeContactFeature{contactFeatureToInternal(point.FeatureA), contactFeatureToInternal(point.FeatureB)},
+		NormalRead: normal,
 	}
 }
 
@@ -269,7 +255,7 @@ func (r *pairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*Sweep
 						return nil, err
 					}
 					if last.Ideal.Relation == ContactTouching && last.Ideal.Manifold != nil {
-						r.report.Outcome, r.report.ContactTrack = SweepPersistentTouch, track
+						r.report.Outcome, r.report.ContactTrack = SweepPersistentTouch, publishTrack(track)
 						return r.report, nil
 					}
 				}
@@ -295,10 +281,10 @@ func (r *pairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*Sweep
 						}
 						if left.Ideal.Relation == ContactTouching &&
 							(right.Ideal.Relation == ContactTouching || right.Ideal.Relation == ContactSeparated) {
-							r.report.Outcome, r.report.ContactTrack = SweepContactTransitionBracket, track
+							r.report.Outcome, r.report.ContactTrack = SweepContactTransitionBracket, publishTrack(track)
 							r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
 							r.report.SetBracketRight(seal.Key{}, new(big.Rat).Set(rightF))
-							r.report.Replay(seal.Key{}).setBracket(leftF, rightF)
+							r.report.Replay(seal.Key{}).SetBracket(leftF, rightF)
 							r.report.Event = &right.Ideal
 							r.sortSamples()
 							return r.report, nil
@@ -407,7 +393,7 @@ func (r *pairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*Sweep
 	r.report.Outcome, r.report.Event = SweepImpactBracket, &right.Ideal
 	r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
 	r.report.SetBracketRight(seal.Key{}, new(big.Rat).Set(rightF))
-	r.report.Replay(seal.Key{}).setBracket(leftF, rightF)
+	r.report.Replay(seal.Key{}).SetBracket(leftF, rightF)
 	r.sortSamples()
 	return r.report, nil
 }
@@ -424,7 +410,7 @@ func (r *pairSweepRun) sortSamples() {
 
 func (r *pairSweepRun) undecided(from, to *big.Rat, cause SweepCause) *SweepReport {
 	r.report.Outcome, r.report.Cause = SweepUndecided, cause
-	r.report.Unresolved = &SweepInterval{From: sweepInstant(from, r.pa.Duration), To: sweepInstant(to, r.pa.Duration)}
+	r.report.Unresolved = &SweepInterval{From: sweeppath.Instant(from, r.pa.Duration), To: sweeppath.Instant(to, r.pa.Duration)}
 	r.sortSamples()
 	return r.report
 }

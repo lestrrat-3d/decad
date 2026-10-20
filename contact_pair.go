@@ -202,9 +202,6 @@ var nodeLift = report.Lift[*Body, *Face, *Edge, *Vertex, *topo.Body, *topo.Face,
 	Body: bodyNode, Face: faceNode, Edge: edgeNode, Vertex: vertexNode,
 }
 
-func contactFeatureFromInternal(f nodeContactFeature) ContactFeature {
-	return handleLift.Feature(f)
-}
 func contactFeatureToInternal(f ContactFeature) nodeContactFeature {
 	return nodeLift.Feature(f)
 }

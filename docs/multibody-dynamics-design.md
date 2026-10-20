@@ -2506,7 +2506,7 @@ lines below do not repeat it.
 - Delivers §10.2, `SweepPersistentBand`, `Band()` and `BandAt()` (§10.3); `dynamics` consumes band
   tracks and advances through a rotating pair's impact (§5 steps 4, 6 and 7).
 - Files: `contact_sweep_planar.go`, `contact_sweep.go`,
-  `contact_sweep_replay.go`, `contact_sweep_rotation.go`, `contact_pair.go`,
+  `internal/sweepproof/replay.go`, `contact_sweep_rotation.go`, `contact_pair.go`,
   `internal/pair/planar/planar_manifold.go`, `dynamics/schedule.go`, new `dynamics/schedule_band.go`,
   `dynamics/schedule_event.go`, `dynamics/island.go`.
 - Test (`apitest`): `apitest/contact_sweep_band_test.go`: a box resting on an edge with `ω = (0,1,0) rad/s`
@@ -2615,7 +2615,7 @@ lines below do not repeat it.
   it, under the column test and lateral clearance; `planarsweep.DepartureProof.LowerGap` and the replay
   read the clearance;
   `PlanarColumnClear` in `internal/pair` owns the projected box-triangle test and the gap.
-- Files: `contact_sweep_planar.go`, `contact_sweep_replay.go`, new
+- Files: `contact_sweep_planar.go`, `internal/sweepproof/replay.go`, new
   `internal/pair/planar/planar_column.go`.
 - Test (`apitest`): `apitest/contact_sweep_band_test.go` gains three tests over the §2 `Cut` tray and the `8 mm` cube
   of `apitest/contact_support_band_test.go`, each in both body orders: `TestSweepPairDepartsFromTrayFloor`, the
@@ -2804,7 +2804,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 
 - Delivers §10.4.
 - Files: `internal/planarpose/pose.go`, `contact_sweep_planar.go`, `contact_sweep_rotation.go`,
-  `contact_sweep_replay.go`, `dynamics/schedule.go`, `dynamics/schedule_band.go`,
+  `internal/sweepproof/replay.go`, `dynamics/schedule.go`, `dynamics/schedule_band.go`,
   `dynamics/schedule_event.go`, `dynamics/island.go`.
 - Test (`apitest`): `apitest/contact_band_test.go` and `contact_band_internal_test.go`: the band, its charges and
   each refusal over a cap-loop chamfered block, whose `δ` read through `Tessellate` is its contour's
@@ -2841,7 +2841,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 - Shipped. The rolling band proof, its certificate, manifold, `BandAt` depth and replay check live in
   `internal/planarsweep/rolling.go`; `contact_sweep_rolling.go` runs the sweep and publishes the track,
   dispatched from `contact_sweep_planar.go` and read through `contact_sweep.go` and
-  `contact_sweep_replay.go`; the placed-pose ruling that lets a turned cylinder start a track lives in
+  `internal/sweepproof/replay.go`; the placed-pose ruling that lets a turned cylinder start a track lives in
   `internal/contactruling/ruling.go`, dispatched from `contact_pair.go`. Root tests:
   `apitest/contact_sweep_rolling_test.go` rolls a `Ø20` cylinder `π·20 mm` in one turn at `2π rad/s` as an
   exact touch track whose contact point is at rest within its published ball, publishes the computed
@@ -3003,7 +3003,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 ### PR 20f (Phase 3) — the transfer charge
 
 - Delivers §10.4's replay transfer charge `‖R_r − R_i‖_F·δ` in `planarsweep.BodyPath.ReplayDeviation`.
-- Files: `contact_sweep_rotation.go`, `contact_sweep_replay.go`.
+- Files: `contact_sweep_rotation.go`, `internal/sweepproof/replay.go`.
 - Test (root): `contact_band_internal_test.go` gains `TestReplayTransferChargeIsTheBasisDifference`: PR 18's
   knob pair (`δ` about `4e-4 mm`) resting at a held gap `1.5·δ` on a translating path replays every
   fraction, where the `(s + 1)·δ` form refuses each (recorded in the test); on a rotating path the charge
@@ -3013,7 +3013,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   charge reads zero.
 - Depends on: PR 18.
 - Shipped. `planarsweep.BodyPath.ReplayDeviation` calls `motionbound.SweepTransferCharge` and returns
-  its charge, so replay (`contact_sweep_replay.go`) and the rotating bracket's narrowing read the same
+  its charge, so replay (`internal/sweepproof/replay.go`) and the rotating bracket's narrowing read the same
   figure. `apitest/contact_band_test.go`'s knob falling onto the floor replays its
   bracket's left edge, whose proven gap is far under `δ`.
 

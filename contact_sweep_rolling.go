@@ -4,6 +4,9 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/sweeppath"
+	"github.com/lestrrat-3d/decad/internal/sweepproof"
+
 	"github.com/lestrrat-3d/decad/internal/seal"
 
 	"github.com/lestrrat-3d/decad/internal/contactruling"
@@ -70,23 +73,23 @@ func (d *Document) sweepRollingPair(ctx context.Context, a, b *Body,
 	preparedS, okS := planarsweep.PreparePlanarPath(&bodyS.n, pathS, &solid, delta)
 	if !okM || !okS {
 		report.Outcome, report.Cause = SweepUndecided, SweepMissingBound
-		report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), pa.Duration),
-			To: sweepInstant(big.NewRat(1, 1), pa.Duration)}
+		report.Unresolved = &SweepInterval{From: sweeppath.Instant(new(big.Rat), pa.Duration),
+			To: sweeppath.Instant(big.NewRat(1, 1), pa.Duration)}
 		return report, true, nil
 	}
 	planarsweep.AttachMemos(&preparedM, &preparedS)
 	defer planarsweep.CloseMemos(&preparedM, &preparedS)
 	run := &rollingPairSweep{doc: d, m: m, s: 1 - m, cylinder: start, req: req, report: report,
 		resolution: resolution}
-	run.paths[run.m] = rotationalSweepPath{BodyPath: preparedM, body: bodyM}
-	run.paths[run.s] = rotationalSweepPath{BodyPath: preparedS, body: bodyS}
+	run.paths[run.m] = rotationalSweepPath{RotationalPath: sweepproof.RotationalPath{BodyPath: preparedM}, body: bodyM}
+	run.paths[run.s] = rotationalSweepPath{RotationalPath: sweepproof.RotationalPath{BodyPath: preparedS}, body: bodyS}
 	result, err := run.execute(ctx)
 	if err != nil || result == nil {
 		return result, true, err
 	}
 	if result.ContactTrack != nil {
-		result.SetReplay(seal.Key{}, &sweepReplayProof{rotation: &[2]rotationalSweepPath{run.paths[0], run.paths[1]},
-			track: result.ContactTrack, request: req.ContactRequest, outcome: result.Outcome})
+		result.SetReplay(seal.Key{}, &sweepproof.Proof{Rotation: &[2]sweepproof.RotationalPath{run.paths[0].RotationalPath, run.paths[1].RotationalPath},
+			Track: sweepTrackOf(result.ContactTrack), Request: req.ContactRequest, Outcome: result.Outcome})
 	}
 	return result, true, nil
 }
@@ -118,8 +121,8 @@ func (r *rollingPairSweep) execute(ctx context.Context) (*SweepReport, error) {
 			if !ok {
 				return r.undecided(zero, one, SweepContactTrackUnproved), nil
 			}
-			r.report.ContactTrack, r.report.Outcome = track, SweepPersistentBand
-			if track.rolling.Band == nil {
+			r.report.ContactTrack, r.report.Outcome = publishTrack(track), SweepPersistentBand
+			if track.Rolling.Band == nil {
 				r.report.Outcome = SweepPersistentTouch
 			}
 			return r.report, nil
@@ -155,7 +158,7 @@ func (r *rollingPairSweep) sample(ctx context.Context) (*SweepSample, error) {
 	if err != nil {
 		return nil, err
 	}
-	at := sweepInstant(zero, r.paths[0].Path.Duration)
+	at := sweeppath.Instant(zero, r.paths[0].Path.Duration)
 	event := SweepEvent{At: at, Relation: ContactUndecided, Reason: contact.Reason}
 	if exact {
 		event.Relation, event.Gap, event.Overlap = contact.Relation, contact.Gap, contact.Overlap
@@ -171,14 +174,14 @@ func (r *rollingPairSweep) sample(ctx context.Context) (*SweepSample, error) {
 func (r *rollingPairSweep) undecided(from, to *big.Rat, cause SweepCause) *SweepReport {
 	duration := r.paths[0].Path.Duration
 	r.report.Outcome, r.report.Cause = SweepUndecided, cause
-	r.report.Unresolved = &SweepInterval{From: sweepInstant(from, duration), To: sweepInstant(to, duration)}
+	r.report.Unresolved = &SweepInterval{From: sweeppath.Instant(from, duration), To: sweeppath.Instant(to, duration)}
 	return r.report
 }
 
 // track proves the rolling band (planarsweep.ProveRollingBand) and builds
 // the public track. The start manifold ContactPair published must name the
 // same two faces, and the track's own start manifold must publish.
-func (r *rollingPairSweep) track(ctx context.Context, first *SweepSample) (*SweepContactTrack, bool, error) {
+func (r *rollingPairSweep) track(ctx context.Context, first *SweepSample) (*sweepproof.Track, bool, error) {
 	paths := [2]planarsweep.BodyPath{r.paths[0].BodyPath, r.paths[1].BodyPath}
 	band, ok, err := planarsweep.ProveRollingBand(paths, r.m, r.cylinder.Cylinder, r.resolution,
 		proofbound.NewWorkBudget(ctx).Step)
@@ -207,10 +210,10 @@ func (r *rollingPairSweep) track(ctx context.Context, first *SweepSample) (*Swee
 	if !ok {
 		return nil, false, nil
 	}
-	track := &SweepContactTrack{start: new(big.Rat), end: new(big.Rat).Set(band.End),
-		duration: r.paths[r.m].Path.Duration, request: r.req.ContactRequest,
-		normal: proof.Direction, rolling: proof, pointCount: len(r.cylinder.Source)}
-	track.features[r.m], track.features[r.s] = proof.FeatureM, proof.FeatureS
+	track := &sweepproof.Track{From: new(big.Rat), To: new(big.Rat).Set(band.End),
+		Duration: r.paths[r.m].Path.Duration, Request: r.req.ContactRequest,
+		NormalRead: proof.Direction, Rolling: proof, PointCount: len(r.cylinder.Source)}
+	track.Sources[r.m], track.Sources[r.s] = proof.FeatureM, proof.FeatureS
 	// A track whose start manifold is refused is not published; the refusal
 	// is the answer.
 	if _, refused := track.ManifoldAt(units.Scalar(0)); refused != nil {

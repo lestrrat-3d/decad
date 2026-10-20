@@ -2,9 +2,10 @@ package decad
 
 import (
 	"context"
-	"fmt"
 	"math/big"
 	"sort"
+
+	"github.com/lestrrat-3d/decad/internal/sweepproof"
 
 	"github.com/lestrrat-3d/decad/internal/seal"
 
@@ -56,11 +57,11 @@ func (d *Document) sweepPlanarPair(ctx context.Context, a, b *Body,
 	planarB, okB := planarsweep.PreparePlanarPath(&b.n, pb, &solidB, deltaB)
 	if !okA || !okB {
 		report.Outcome, report.Cause = SweepUndecided, SweepMissingBound
-		report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), pa.Duration),
-			To: sweepInstant(big.NewRat(1, 1), pa.Duration)}
+		report.Unresolved = &SweepInterval{From: sweeppath.Instant(new(big.Rat), pa.Duration),
+			To: sweeppath.Instant(big.NewRat(1, 1), pa.Duration)}
 		return report, true, nil
 	}
-	aPath, bPath := rotationalSweepPath{BodyPath: planarA, body: a}, rotationalSweepPath{BodyPath: planarB, body: b}
+	aPath, bPath := rotationalSweepPath{RotationalPath: sweepproof.RotationalPath{BodyPath: planarA}, body: a}, rotationalSweepPath{RotationalPath: sweepproof.RotationalPath{BodyPath: planarB}, body: b}
 	planarsweep.AttachMemos(&aPath.BodyPath, &bPath.BodyPath)
 	defer planarsweep.CloseMemos(&aPath.BodyPath, &bPath.BodyPath)
 	run := rotationalPairSweep{doc: d, a: aPath, b: bPath, req: req,
@@ -100,19 +101,19 @@ func (d *Document) planarContinuation(ctx context.Context, boxes *SweepReport,
 // planarReplayProof records what replay needs from a finished planar run:
 // the track, or the departure and every certified clear interval up to the
 // end of the clear prefix. It returns nil when the outcome has no replay.
-func (r *rotationalPairSweep) planarReplayProof(result *SweepReport) *sweepReplayProof {
-	proof := &sweepReplayProof{rotation: &[2]rotationalSweepPath{r.a, r.b},
-		request: r.req.ContactRequest, outcome: result.Outcome}
+func (r *rotationalPairSweep) planarReplayProof(result *SweepReport) *sweepproof.Proof {
+	proof := &sweepproof.Proof{Rotation: &[2]sweepproof.RotationalPath{r.a.RotationalPath, r.b.RotationalPath},
+		Request: r.req.ContactRequest, Outcome: result.Outcome}
 	planar := &planarsweep.Replay{Departure: r.departure,
 		Travel: new(big.Rat).Add(r.a.FullTravel, r.b.FullTravel)}
-	proof.planar = planar
+	proof.Planar = planar
 	start, end := new(big.Rat), big.NewRat(1, 1)
 	switch result.Outcome {
 	case SweepPersistentTouch, SweepPersistentBand:
-		if result.ContactTrack == nil || result.ContactTrack.planar == nil {
+		if result.ContactTrack == nil || sweepTrackOf(result.ContactTrack).Planar == nil {
 			return nil
 		}
-		proof.track = result.ContactTrack
+		proof.Track = sweepTrackOf(result.ContactTrack)
 		return proof
 	case SweepImpactBracket:
 		if result.Bracket == nil {
@@ -123,8 +124,8 @@ func (r *rotationalPairSweep) planarReplayProof(result *SweepReport) *sweepRepla
 		if !leftOK || !rightOK || left.Cmp(right) >= 0 {
 			return nil
 		}
-		proof.setBracket(left, right)
-		proof.bracketTravel = planar.Travel
+		proof.SetBracket(left, right)
+		proof.BracketTravel = planar.Travel
 		end = left
 	case SweepClear, SweepDepartedClear:
 	default:
@@ -156,8 +157,8 @@ func (r *rotationalPairSweep) planarReplayProof(result *SweepReport) *sweepRepla
 	if covered.Cmp(end) != 0 {
 		return nil
 	}
-	if proof.bracketLo != nil {
-		proof.bracketGap = planar.LowerGap(proof.bracketLo)
+	if proof.BracketLo != nil {
+		proof.BracketGap = planar.LowerGap(proof.BracketLo)
 	}
 	return proof
 }
@@ -254,7 +255,7 @@ func widenedBand(contact *ContactReport, etaA, etaB float64) (*Measurement, bool
 		return nil, false
 	}
 	return &Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(published),
-		Exactness: exactnessFromBound(published)}, true
+		Exactness: measurement.ExactnessOf(published)}, true
 }
 
 // The §10.2 departure and §10.3 band certificates live in
@@ -296,7 +297,7 @@ func (r *rotationalPairSweep) planarDepartureFraction(ctx context.Context) (*big
 
 // planarBand publishes §10.3's band track on the first support plane, in
 // order, that admits one (planarsweep.ProveBand) and whose track publishes.
-func (r *rotationalPairSweep) planarBand(ctx context.Context) (*SweepContactTrack, bool, error) {
+func (r *rotationalPairSweep) planarBand(ctx context.Context) (*sweepproof.Track, bool, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	supports, err := r.planarSupports(budget.Step)
 	if err != nil {
@@ -324,7 +325,7 @@ func (r *rotationalPairSweep) planarBand(ctx context.Context) (*SweepContactTrac
 // planarTrack builds the public track of a proven band and checks that its
 // manifold publishes at the start. It stays in the root because the feature
 // map reads both public bodies and the track is a public type.
-func (r *rotationalPairSweep) planarTrack(band *planarsweep.BandHorizon) (*SweepContactTrack, bool, error) {
+func (r *rotationalPairSweep) planarTrack(band *planarsweep.BandHorizon) (*sweepproof.Track, bool, error) {
 	features, err := planarfeaturemap.NewPlanarFeatureMap(bodyNode(r.a.body), bodyNode(r.b.body), r.a.Solid, r.b.Solid)
 	if err != nil {
 		return nil, false, err
@@ -334,51 +335,14 @@ func (r *rotationalPairSweep) planarTrack(band *planarsweep.BandHorizon) (*Sweep
 	if !ok {
 		return nil, false, nil
 	}
-	track := &SweepContactTrack{start: new(big.Rat), end: new(big.Rat).Set(band.End), duration: r.a.Path.Duration,
-		request: r.req.ContactRequest, normal: proof.Direction, planar: proof}
+	track := &sweepproof.Track{From: new(big.Rat), To: new(big.Rat).Set(band.End), Duration: r.a.Path.Duration,
+		Request: r.req.ContactRequest, NormalRead: proof.Direction, Planar: proof}
 	// A track whose start manifold is refused (a point ball over
 	// PointResolution) is not published; the refusal is the answer.
 	if _, refused := track.ManifoldAt(units.Scalar(0)); refused != nil {
 		return nil, false, nil //nolint:nilerr // a refused manifold withholds the track, it is no failure
 	}
-	track.features[proof.M], track.features[proof.S] = proof.FeatureM[0], proof.FeatureS
-	track.pointCount = len(proof.Contact)
+	track.Sources[proof.M], track.Sources[proof.S] = proof.FeatureM[0], proof.FeatureS
+	track.PointCount = len(proof.Contact)
 	return track, true, nil
-}
-
-// planarManifoldAt publishes a planar track's manifold at an exact fraction
-// (planarsweep.TrackProof.Points). The separation is the band's two-sided
-// bound.
-func planarManifoldAt(p *planarsweep.TrackProof, f *big.Rat, req ContactRequest) (*ContactManifold, error) {
-	verts, eta, ok := p.RoundedVertices(f)
-	if !ok {
-		return nil, fmt.Errorf("%w: planar contact track pose has no finite bound", ErrUnsupported)
-	}
-	resolution, okResolution := sweeppath.ExactBaseValue(req.PointResolution)
-	if !okResolution {
-		return nil, fmt.Errorf("%w: planar contact track resolution is invalid", ErrUnsupported)
-	}
-	readings, ok := p.Points(verts, eta, resolution)
-	if !ok {
-		return nil, fmt.Errorf("%w: planar contact track point exceeds point resolution", ErrUnsupported)
-	}
-	separation := Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(p.DepthUp),
-		Exactness: exactnessFromBound(p.DepthUp)}
-	points := make([]ContactPoint, 0, len(readings))
-	for slot, reading := range readings {
-		onM, onS := reading.OnM, reading.OnS
-		point := ContactPoint{Normal: p.Direction, NormalAngle: p.Angle,
-			Separation: separation}
-		featureM, featureS := contactFeatureFromInternal(p.FeatureM[slot]), contactFeatureFromInternal(p.FeatureS)
-		if p.M == 0 {
-			point.OnA, point.OnB = onM, onS
-			point.FeatureA, point.FeatureB = featureM, featureS
-		} else {
-			point.OnA, point.OnB = onS, onM
-			point.FeatureA, point.FeatureB = featureS, featureM
-		}
-		point.FaceA, point.FaceB = point.FeatureA.Face, point.FeatureB.Face
-		points = append(points, point)
-	}
-	return &ContactManifold{Points: points}, nil
 }

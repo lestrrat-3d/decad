@@ -729,7 +729,7 @@ type SweepDeparture struct {
 
 // SweepContactTrack holds an immutable private continuous certificate.
 // Accessors return copies; no exported field can change that certificate.
-type SweepContactTrack struct { /* private source snapshot and proof */ }
+type SweepContactTrack struct { /* private source snapshot and proof */ } // report.SweepContactTrackOf, handle instantiation
 
 func (t *SweepContactTrack) Start() SweepInstant
 func (t *SweepContactTrack) End() SweepInstant

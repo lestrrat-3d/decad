@@ -5,6 +5,8 @@ import (
 	"errors"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/sweepproof"
+
 	"github.com/lestrrat-3d/decad/internal/seal"
 
 	"github.com/lestrrat-3d/decad/internal/contactbox"
@@ -23,9 +25,8 @@ import (
 // with the source face identities. It stays in the root because both are
 // public handles.
 type rotationalSweepPath struct {
-	planarsweep.BodyPath
-	body     *Body
-	startBox contactbox.OrientedSourceBox
+	sweepproof.RotationalPath
+	body *Body
 }
 
 func prepareRotationalSweepPath(body *Body, path affinePairPath) (rotationalSweepPath, bool) {
@@ -43,7 +44,7 @@ func prepareRotationalSweepPath(body *Body, path affinePairPath) (rotationalSwee
 	}
 	prepared.StartPoints = append([]proofarith.DyV3(nil), startBox.Corner[:]...)
 	prepared.SourcePoints = append([]proofarith.DyV3(nil), sourceBox.Corner[:]...)
-	return rotationalSweepPath{BodyPath: prepared, body: body, startBox: startBox}, true
+	return rotationalSweepPath{RotationalPath: sweepproof.RotationalPath{BodyPath: prepared, StartBox: startBox}, body: body}, true
 }
 
 type rotationalPairSweep struct {
@@ -66,8 +67,8 @@ func (d *Document) sweepRotatingPair(ctx context.Context, a, b *Body,
 			return result, err
 		}
 		report.Outcome, report.Cause = SweepUndecided, SweepMissingBound
-		report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), pa.Duration),
-			To: sweepInstant(big.NewRat(1, 1), pa.Duration)}
+		report.Unresolved = &SweepInterval{From: sweeppath.Instant(new(big.Rat), pa.Duration),
+			To: sweeppath.Instant(big.NewRat(1, 1), pa.Duration)}
 		return report, nil
 	}
 	planarsweep.AttachMemos(&aPath.BodyPath, &bPath.BodyPath)
@@ -84,19 +85,19 @@ func (d *Document) sweepRotatingPair(ctx context.Context, a, b *Body,
 	if result.Outcome == SweepClear || result.Outcome == SweepDepartedClear ||
 		result.Outcome == SweepImpactBracket && result.Bracket != nil ||
 		result.Outcome == SweepPersistentTouch &&
-			result.ContactTrack != nil && result.ContactTrack.orientedA != nil &&
-			result.ContactTrack.orientedB != nil && aPath.Path.Drift == nil && bPath.Path.Drift == nil {
-		result.SetReplay(seal.Key{}, &sweepReplayProof{rotation: &[2]rotationalSweepPath{aPath, bPath},
-			track: result.ContactTrack, request: req.ContactRequest})
-		result.Replay(seal.Key{}).snapshot(result)
+			result.ContactTrack != nil && sweepTrackOf(result.ContactTrack).OrientedA != nil &&
+			sweepTrackOf(result.ContactTrack).OrientedB != nil && aPath.Path.Drift == nil && bPath.Path.Drift == nil {
+		result.SetReplay(seal.Key{}, &sweepproof.Proof{Rotation: &[2]sweepproof.RotationalPath{aPath.RotationalPath, bPath.RotationalPath},
+			Track: sweepTrackOf(result.ContactTrack), Request: req.ContactRequest})
+		result.Replay(seal.Key{}).Snapshot(result.Outcome)
 		if result.Outcome == SweepImpactBracket {
 			left, leftOK := sweeppath.ExactBaseValue(result.Bracket.From.Fraction)
 			right, rightOK := sweeppath.ExactBaseValue(result.Bracket.To.Fraction)
 			if !leftOK || !rightOK || left.Cmp(right) >= 0 {
 				result.SetReplay(seal.Key{}, nil)
 			} else {
-				result.Replay(seal.Key{}).setBracket(left, right)
-				result.Replay(seal.Key{}).setRotatingBracketGap(result, new(big.Rat).Add(aPath.FullTravel, bPath.FullTravel))
+				result.Replay(seal.Key{}).SetBracket(left, right)
+				sweepproof.SetRotatingBracketGap(result.Replay(seal.Key{}), result.Samples, new(big.Rat).Add(aPath.FullTravel, bPath.FullTravel))
 			}
 		}
 	}
@@ -122,7 +123,7 @@ func (r *rotationalPairSweep) sample(ctx context.Context, f *big.Rat) (*SweepSam
 	if err != nil {
 		return nil, err
 	}
-	at := sweepInstant(f, r.a.Path.Duration)
+	at := sweeppath.Instant(f, r.a.Path.Duration)
 	var event SweepEvent
 	if r.planar {
 		event, err = r.planarIdealEvent(ctx, f, at, poseA, poseB, contact)
@@ -161,7 +162,7 @@ func separatedIdealGap(contact *ContactReport, etaA, etaB float64) (*Measurement
 	}
 	gap := *contact.Gap
 	gap.Bound = units.Millimeters(published)
-	gap.Exactness = exactnessFromBound(published)
+	gap.Exactness = measurement.ExactnessOf(published)
 	return &gap, true
 }
 
@@ -308,13 +309,13 @@ func (r *rotationalPairSweep) horizontalSpinContact(f *big.Rat, poseA, poseB r3.
 				return SweepEvent{}, false
 			}
 			position.Bound = units.Millimeters(published)
-			position.Exactness = exactnessFromBound(position.Bound.Base())
+			position.Exactness = measurement.ExactnessOf(position.Bound.Base())
 		}
 		point.Separation = Measurement{Value: units.Millimeters(value), Bound: units.Millimeters(bound),
-			Exactness: exactnessFromBound(bound)}
+			Exactness: measurement.ExactnessOf(bound)}
 	}
 	zero := Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(0), Exactness: Exact}
-	event := SweepEvent{At: sweepInstant(f, r.a.Path.Duration), Manifold: &ContactManifold{Points: points}}
+	event := SweepEvent{At: sweeppath.Instant(f, r.a.Path.Duration), Manifold: &ContactManifold{Points: points}}
 	if gap.Sign() == 0 {
 		event.Relation, event.Gap = ContactTouching, &zero
 	} else {
@@ -351,14 +352,14 @@ func (r *rotationalPairSweep) execute(ctx context.Context) (*SweepReport, error)
 			if last.Ideal.Relation != ContactTouching || last.Ideal.Manifold == nil {
 				return r.undecided(zero, one, SweepContactTrackUnproved), nil
 			}
-			r.report.ContactTrack = &SweepContactTrack{orientedA: &r.a.startBox,
-				orientedB: &r.b.startBox, orientedDelta: r.a.Path.Delta,
-				start: zero, end: one,
-				duration: r.a.Path.Duration, request: r.req.ContactRequest,
-				pointCount: len(first.Ideal.Manifold.Points),
-				features: [2]nodeContactFeature{contactFeatureToInternal(first.Ideal.Manifold.Points[0].FeatureA),
+			r.report.ContactTrack = publishTrack(&sweepproof.Track{OrientedA: &r.a.StartBox,
+				OrientedB: &r.b.StartBox, OrientedDelta: r.a.Path.Delta,
+				From: zero, To: one,
+				Duration: r.a.Path.Duration, Request: r.req.ContactRequest,
+				PointCount: len(first.Ideal.Manifold.Points),
+				Sources: [2]nodeContactFeature{contactFeatureToInternal(first.Ideal.Manifold.Points[0].FeatureA),
 					contactFeatureToInternal(first.Ideal.Manifold.Points[0].FeatureB)},
-				normal: first.Ideal.Manifold.Points[0].Normal}
+				NormalRead: first.Ideal.Manifold.Points[0].Normal})
 			r.report.Outcome = SweepPersistentTouch
 			r.sortSamples()
 			return r.report, nil
@@ -382,8 +383,8 @@ func (r *rotationalPairSweep) execute(ctx context.Context) (*SweepReport, error)
 				return nil, bandErr
 			}
 			if ok {
-				r.report.ContactTrack, r.report.Outcome = track, SweepPersistentBand
-				if track.planar.Band == nil {
+				r.report.ContactTrack, r.report.Outcome = publishTrack(track), SweepPersistentBand
+				if track.Planar.Band == nil {
 					r.report.Outcome = SweepPersistentTouch
 				}
 				r.sortSamples()
@@ -419,7 +420,7 @@ func (r *rotationalPairSweep) execute(ctx context.Context) (*SweepReport, error)
 				return nil, bandErr
 			}
 			if ok {
-				r.report.ContactTrack, r.report.Outcome = track, SweepPersistentBand
+				r.report.ContactTrack, r.report.Outcome = publishTrack(track), SweepPersistentBand
 				r.sortSamples()
 				return r.report, nil
 			}
