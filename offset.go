@@ -5,14 +5,8 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/extent"
-	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/thickenbuild"
 
-	"github.com/lestrrat-3d/decad/internal/freeform"
-
-	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/thickenaxis"
-
-	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -115,18 +109,11 @@ func Offset(ctx context.Context, b *Body, distance units.Value, opts ...OffsetOp
 	if b.Kind() != BodySheet {
 		return nil, fmt.Errorf(`%w: Offset requires a sheet body`, ErrUnsupported)
 	}
-	var result *Body
-	switch payload := b.n.Payload.(type) {
-	case patchPayload:
-		result, err = offsetPatch(ctx, d, payload, side, dmm, dDelta)
-	case prismPayload:
-		result, err = offsetPrism(ctx, d, payload, side, dmm, dDelta)
-	default:
-		return nil, fmt.Errorf(`%w: this sheet has no admitted Offset generator`, ErrUnsupported)
-	}
+	node, err := thickenbuild.Offset(ctx, envOf(documentNode(d), d.nextProducerID()), bodyNode(b), side == OffsetNegative, dmm, dDelta)
 	if err != nil {
 		return nil, err
 	}
+	result := bodyHandle(node)
 	if err := d.requireLive(b); err != nil {
 		return nil, err
 	}
@@ -138,81 +125,4 @@ func Offset(ctx context.Context, b *Body, distance units.Value, opts ...OffsetOp
 	// beside its offset (docs/surface-design.md §17.1).
 	d.commit(result)
 	return result, nil
-}
-
-// offsetPatch is §17.2's patch arm: the receiver's own payload rebuilt under
-// the composed motion that translates it by ±d·N, N the placed frame normal the
-// sheet's one face already publishes. It mints no geometry — a planar region
-// carried along its own normal is congruent to itself — so the recorded
-// profile, its frame axes and every plane-local coordinate travel unchanged and
-// the rebuild is the identical one Copy performs, charging the identical
-// placement rounding.
-//
-// A millimetre conversion that displaces the distance is R39. patchPayload
-// carries no displacement term — no sectionDelta, no z0Delta/z1Delta — so a
-// translation built from a rescaled float would move every published
-// coordinate off the translation the call denotes with nothing to charge it
-// against, and a zero bound is a positive claim of exactness. A distance stated
-// in millimetres converts by a factor of one and reports zero.
-func offsetPatch(ctx context.Context, d *Document, pp patchPayload, side OffsetSide, dmm, dDelta float64) (*Body, error) {
-	if dDelta != 0 {
-		return nil, fmt.Errorf(
-			`%w: the offset distance's millimetre conversion displaces the translation, and a patch payload carries no term for it`,
-			ErrUnsupported)
-	}
-	signed := dmm
-	if side == OffsetNegative {
-		signed = -dmm
-	}
-	motion, err := r3.Translation(pp.Prism().Dir(0, 0, 1).Scale(signed))
-	if err != nil {
-		return nil, fmt.Errorf(`%w: the offset translation is not a placement: %s`, ErrUnsupported, err)
-	}
-	composed, err := pp.Transform().Then(motion)
-	if err != nil {
-		return nil, fmt.Errorf(`%w: composing the offset placement failed: %s`, ErrUnsupported, err)
-	}
-	return placePayload(ctx, pp, d, d.nextProducerID(), composed)
-}
-
-// offsetPrism is §17.2's prism arm: the source's own sweep over the offset
-// section. The frame, both levels and their displacements, the accumulated
-// placement and surfaceResult all travel unchanged; only the section is
-// replaced, and the exact-generation gate below is what keeps the payload's
-// sectionDelta == 0 truthful, so prismrecord.Build's existing moment and extent
-// proofs apply to the offset section as they do to a recorded one.
-func offsetPrism(ctx context.Context, d *Document, pp prismPayload, side OffsetSide, dmm, dDelta float64) (*Body, error) {
-	if !pp.SurfaceResult || pp.SectionDelta != 0 || len(pp.Profile.Holes) != 0 {
-		return nil, fmt.Errorf(`%w: this prism sheet has no admitted Offset section`, ErrUnsupported)
-	}
-	if proofbound.AdmitAbove(proofbound.BoundedSub(pp.Z1Scalar(), pp.Z0Scalar()), 0) != proofbound.SurvAdmit {
-		return nil, fmt.Errorf(`%w: the prism sheet has no proven positive sweep height`, ErrUnsupported)
-	}
-	if dDelta != 0 {
-		return nil, fmt.Errorf(`%w: the offset distance cannot be generated exactly in millimetres`, ErrUnsupported)
-	}
-	// sense is offset2d.OffsetProfile's own: −1 grows the section (P ⊕ d) and +1 erodes
-	// it (P ⊖ d), so the positive side of a profile-fed prism sheet — the
-	// profile region's exterior on every loop wall (§17.1) — grows.
-	sense := -1
-	if side == OffsetNegative {
-		sense = +1
-	}
-	budget := proofbound.NewWorkBudget(ctx)
-	if err := budget.Err(); err != nil {
-		return nil, err
-	}
-	section, err := thickenaxis.OffsetSection(ctx, pp.Profile, sense, dmm, shellTol, budget)
-	if err != nil {
-		return nil, err
-	}
-	pp.Profile = section
-	// The walk cache resolves THIS payload's old profile; the new section
-	// resolves afresh (internal/prismrecord's walks doc comment).
-	pp.Walks = nil
-	// No source face role is inherited (§17.3): a blend descriptor names (loop,
-	// segment) indices of the SOURCE record, and the offset mints its own
-	// segment list, so carrying them over would name arbitrary result walls.
-	pp.BlendSegs, pp.BlendKind = nil, ""
-	return bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), d.nextProducerID()), pp, freeform.NewFreeformWork()))
 }
