@@ -256,10 +256,10 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 	} else if ok {
 		return nil, ErrUnsupported
 	}
-	if body, ok, err := tryPointConeBoolean(ctx, op, d, ref, a, b); err != nil {
+	if n, ok, err := revolveplan.PointConeBoolean(ctx, op, envOf(documentNode(d), ref), bodyNode(a), bodyNode(b)); err != nil {
 		return nil, err
 	} else if ok {
-		return body, nil
+		return bodyHandle(n), nil
 	}
 	if body, ok, err := tryLoftFacesConeHeel(ctx, op, d, ref, a, b); err != nil {
 		return nil, err

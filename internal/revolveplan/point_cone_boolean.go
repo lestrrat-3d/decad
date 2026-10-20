@@ -1,4 +1,4 @@
-package decad
+package revolveplan
 
 import (
 	"context"
@@ -6,26 +6,26 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/pointcone"
-	"github.com/lestrrat-3d/decad/internal/revolveplan"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
-// tryPointConeBoolean is an accept-only structural arm. It does not change
+// PointConeBoolean is an accept-only structural arm. It does not change
 // the mesh Boolean fallback for any pair outside this exact source class.
-func tryPointConeBoolean(ctx context.Context, op meshbool.OperationKind, d *Document,
-	ref producerID, target, tool *Body) (*Body, bool, error) {
+func PointConeBoolean(ctx context.Context, op meshbool.OperationKind, env topo.Env,
+	target, tool *topo.Body) (*topo.Body, bool, error) {
 	if op != meshbool.OpCut && op != meshbool.OpIntersect {
 		return nil, false, nil
 	}
-	cone, ok := revolveplan.PointConeSource(&tool.n)
+	cone, ok := PointConeSource(tool)
 	if !ok {
 		return nil, false, nil
 	}
-	fp, ok := target.n.Payload.(facetedPayload)
+	fp, ok := target.Payload.(facetedrecord.Payload)
 	if !ok || fp.Xform != r3.Identity() {
 		return nil, false, nil
 	}
-	record := pointConeTrimRecord{Base: fp}
+	record := facetedrecord.PointConeTrimRecord{Base: fp}
 	if fp.PointCone != nil {
 		record = *fp.PointCone
 	} else if fp.PointSection == nil || fp.PointSection.Apex != (r3.Vec{}) {
@@ -49,7 +49,6 @@ func tryPointConeBoolean(ctx context.Context, op meshbool.OperationKind, d *Docu
 		!facetedrecord.PointConeLimitOrdered(record.Lower, record.Upper, record.Base) {
 		return nil, false, nil
 	}
-	body, err := bodyResult(facetedrecord.BuildPointConeTrim(ctx,
-		envOf(documentNode(d), ref), record))
+	body, err := facetedrecord.BuildPointConeTrim(ctx, env, record)
 	return body, true, err
 }
