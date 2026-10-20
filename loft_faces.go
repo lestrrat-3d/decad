@@ -162,8 +162,6 @@ func lfMul(a, b *big.Rat) *big.Rat { return proofarith.MulRat(new(big.Rat), a, b
 
 func lfDiv(a, b *big.Rat) *big.Rat { return proofarith.QuoRat(new(big.Rat), a, b) }
 
-func lfAbs(a *big.Rat) *big.Rat { return new(big.Rat).Abs(a) }
-
 // ConeTangentEnd names the cone that the last, constructed LoftFacesToConeTangent
 // section touches along one ruling.
 type ConeTangentEnd struct {

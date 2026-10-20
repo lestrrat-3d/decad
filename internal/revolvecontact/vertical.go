@@ -1,74 +1,78 @@
-package decad
+package revolvecontact
 
 import (
 	"context"
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/decad/internal/revolveshell"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 )
 
 // A vertical source crossing is taken from the authenticated LoftFaces map,
 // never from a held mesh vertex. The two radial roots bracket any places
 // where the retained boundary enters or leaves the finite Revolve face.
-type revolveLoftFacesVerticalCell struct {
-	segment, span, band int
-	source              freeform.BezierSpan // nil for a whole live Sketch arc
-	ref                 provenance.Ref
-	face                *Face
-	lower, upper        loftface.VerticalLimit
-	retained            []loftface.VerticalPiece
+type VerticalCell struct {
+	Segment, Span, Band int
+	Source              freeform.BezierSpan // nil for a whole live Sketch arc
+	Ref                 provenance.Ref
+	Face                *topo.Face
+	Lower, Upper        loftface.VerticalLimit
+	Retained            []loftface.VerticalPiece
 }
 
-type revolveLoftFacesVerticalSide struct {
-	*revolveLoftFacesConstantXSource
-	face    *Face
-	origins []provenance.Ref
+type VerticalSide struct {
+	*ConstantXSource
+	Face    *topo.Face
+	Origins []provenance.Ref
 }
 
 // The caller supplies exact X and radial limits from authenticated surfaces.
 // This record only classifies the LoftFaces source at that cross section.
-type revolveLoftFacesConstantXSource struct {
-	band         int
-	time, x      *big.Rat
-	lower, upper *big.Rat
-	yzAffine     *loftface.VerticalAffine
-	cells        []revolveLoftFacesVerticalCell
-	hasRetained  bool
+type ConstantXSource struct {
+	Band         int
+	Time, X      *big.Rat
+	Lower, Upper *big.Rat
+	YzAffine     *loftface.VerticalAffine
+	Cells        []VerticalCell
+	HasRetained  bool
 }
 
 // A strict gap between the authenticated radial intervals proves the entire
 // blank side misses the trimmed source. Equality remains undecided.
-func revolveLoftFacesVerticalSideClassify(ctx context.Context,
-	proof *revolveLoftFacesSourceCertificate, sectionIndex int) (
-	*revolveLoftFacesVerticalSide, revolveloftfaces.VerticalOutcome, error,
+func VerticalSideClassify(ctx context.Context,
+	proof *SourceCertificate, sectionIndex int) (
+	*VerticalSide, revolveloftfaces.VerticalOutcome, error,
 ) {
-	if ctx == nil || proof == nil || proof.trim == nil || proof.blank == nil ||
-		proof.tooth == nil || sectionIndex < 0 || sectionIndex >= len(proof.section.Spans) {
+	if ctx == nil || proof == nil || proof.Trim == nil || proof.Blank == nil ||
+		proof.Tooth == nil || sectionIndex < 0 || sectionIndex >= len(proof.Section.Spans) {
 		return nil, revolveloftfaces.VerticalRefusal, nil
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, revolveloftfaces.VerticalRefusal, err
 	}
-	trim := proof.trim
-	section := proof.section.Spans[sectionIndex]
+	trim := proof.Trim
+	section := proof.Section.Spans[sectionIndex]
 	if section.Start.U != section.End.U || section.Start.V == section.End.V ||
 		section.Start.V < 0 || section.End.V < 0 || section.Face == nil ||
-		len(section.Origins) == 0 || !revolveLoftFacesSectionCurrent(proof) {
+		len(section.Origins) == 0 || !SectionCurrent(proof) {
 		return nil, revolveloftfaces.VerticalRefusal, nil
 	}
-	face, ok := revolveshell.SpanFace(bodyNode(proof.blank), section)
+	face, ok := revolveshell.SpanFace(proof.Blank, section)
 	if !ok || face != section.Face || !revolveloftfaces.OriginsMatch(face.Origins, section.Origins) {
 		return nil, revolveloftfaces.VerticalRefusal, nil
 	}
-	payload, ok := proof.tooth.n.Payload.(facetedPayload)
-	if !ok || payload.LoftFacesTrim != trim || !revolveLoftFacesTrimCurrent(proof.tooth, trim) ||
-		!revolveLoftFacesSourceRefsCurrent(trim, proof.tooth, proof.sourceRefs) {
+	payload, ok := proof.Tooth.Payload.(facetedrecord.Payload)
+	if !ok || payload.LoftFacesTrim != trim || !TrimCurrent(proof.Tooth, trim) ||
+		!SourceRefsCurrent(trim, proof.Tooth, proof.SourceRefs) {
 		return nil, revolveloftfaces.VerticalRefusal, nil
 	}
 	x := lfF(section.Start.U)
@@ -76,24 +80,24 @@ func revolveLoftFacesVerticalSideClassify(ctx context.Context,
 	if limitOutcome != revolveloftfaces.VerticalContact {
 		return nil, limitOutcome, nil
 	}
-	source, ok, err := revolveLoftFacesConstantXSourceCells(ctx, proof, x, lower, upper)
-	if err != nil || !ok || !source.hasRetained {
+	source, ok, err := ConstantXSourceCells(ctx, proof, x, lower, upper)
+	if err != nil || !ok || !source.HasRetained {
 		return nil, revolveloftfaces.VerticalRefusal, err
 	}
-	return &revolveLoftFacesVerticalSide{
-		revolveLoftFacesConstantXSource: source, face: faceHandle(face),
-		origins: append([]provenance.Ref(nil), section.Origins...),
+	return &VerticalSide{
+		ConstantXSource: source, Face: face,
+		Origins: append([]provenance.Ref(nil), section.Origins...),
 	}, revolveloftfaces.VerticalContact, nil
 }
 
 // A retained face origin alone does not bind the section coordinates.
 // Rebuild the Revolve source walk before using its radial extent as a miss.
-func revolveLoftFacesSectionCurrent(proof *revolveLoftFacesSourceCertificate) bool {
-	if proof == nil || proof.blank == nil {
+func SectionCurrent(proof *SourceCertificate) bool {
+	if proof == nil || proof.Blank == nil {
 		return false
 	}
-	want := proof.section
-	for _, live := range revolveshell.RootCandidates(bodyNode(proof.blank)) {
+	want := proof.Section
+	for _, live := range revolveshell.RootCandidates(proof.Blank) {
 		if live.Blank != want.Blank || live.RootSpan != want.RootSpan ||
 			live.AxisSpan != want.AxisSpan || live.Frame != want.Frame ||
 			live.RootStart != want.RootStart || live.RootEnd != want.RootEnd ||
@@ -119,16 +123,16 @@ func revolveLoftFacesSectionCurrent(proof *revolveLoftFacesSourceCertificate) bo
 	return false
 }
 
-// revolveLoftFacesConstantXSourceCells classifies every live source segment
+// ConstantXSourceCells classifies every live source segment
 // at an exact constant-X section between caller-supplied radial limits. The
 // caller must authenticate those limits and any face contact independently.
 // A successful result with hasRetained=false proves the source contour misses
 // the open radial interval; it does not prove the denoted solid misses it.
-func revolveLoftFacesConstantXSourceCells(ctx context.Context,
-	proof *revolveLoftFacesSourceCertificate, x, lower, upper *big.Rat) (
-	*revolveLoftFacesConstantXSource, bool, error,
+func ConstantXSourceCells(ctx context.Context,
+	proof *SourceCertificate, x, lower, upper *big.Rat) (
+	*ConstantXSource, bool, error,
 ) {
-	if ctx == nil || proof == nil || proof.trim == nil || proof.tooth == nil ||
+	if ctx == nil || proof == nil || proof.Trim == nil || proof.Tooth == nil ||
 		x == nil || lower == nil || upper == nil || lower.Sign() < 0 ||
 		lower.Cmp(upper) >= 0 {
 		return nil, false, nil
@@ -136,10 +140,10 @@ func revolveLoftFacesConstantXSourceCells(ctx context.Context,
 	if err := ctx.Err(); err != nil {
 		return nil, false, err
 	}
-	trim := proof.trim
-	payload, ok := proof.tooth.n.Payload.(facetedPayload)
-	if !ok || payload.LoftFacesTrim != trim || !revolveLoftFacesTrimCurrent(proof.tooth, trim) ||
-		!revolveLoftFacesSourceRefsCurrent(trim, proof.tooth, proof.sourceRefs) {
+	trim := proof.Trim
+	payload, ok := proof.Tooth.Payload.(facetedrecord.Payload)
+	if !ok || payload.LoftFacesTrim != trim || !TrimCurrent(proof.Tooth, trim) ||
+		!SourceRefsCurrent(trim, proof.Tooth, proof.SourceRefs) {
 		return nil, false, nil
 	}
 	box, err := revolveloftfaces.LfSourceBox(trim.Source)
@@ -147,52 +151,52 @@ func revolveLoftFacesConstantXSourceCells(ctx context.Context,
 		return nil, false, err
 	}
 	band, time, ok := loftface.ConstantXBand(trim.Maps, box, x)
-	if !ok || len(proof.sourceRefs[band]) != len(trim.Source.Profile.Outer.Segments) {
+	if !ok || len(proof.SourceRefs[band]) != len(trim.Source.Profile.Outer.Segments) {
 		return nil, false, nil
 	}
-	result := &revolveLoftFacesConstantXSource{band: band,
-		time: time, x: x, lower: lower, upper: upper}
-	result.yzAffine, _ = loftface.VerticalAffineMap(trim.Maps[band],
+	result := &ConstantXSource{Band: band,
+		Time: time, X: x, Lower: lower, Upper: upper}
+	result.YzAffine, _ = loftface.VerticalAffineMap(trim.Maps[band],
 		trim.Maps[band+1], time)
 	for segment, source := range trim.Source.Profile.Outer.Segments {
 		if err := ctx.Err(); err != nil {
 			return nil, false, err
 		}
-		ref := proof.sourceRefs[band][segment]
+		ref := proof.SourceRefs[band][segment]
 		spans, ok := revolveloftfaces.RevolveLoftFacesStraightOrFitSpans(trim, segment, source)
 		if !ok {
-			if _, arc := source.(arcSeg); !arc {
+			if _, arc := source.(sectionrecord.ArcSeg); !arc {
 				return nil, false, nil
 			}
-			cell, certified := revolveLoftFacesVerticalArc(ctx, trim, x, segment,
+			cell, certified := VerticalArc(ctx, trim, x, segment,
 				band, time, lower, upper, ref)
 			if !certified {
 				return nil, false, nil
 			}
-			if len(cell.retained) > 0 {
-				cell.face = revolveLoftFacesVerticalLiveFace(proof.tooth, ref)
-				if cell.face == nil {
+			if len(cell.Retained) > 0 {
+				cell.Face = VerticalLiveFace(proof.Tooth, ref)
+				if cell.Face == nil {
 					return nil, false, nil
 				}
 			}
-			result.cells = append(result.cells, cell)
-			result.hasRetained = result.hasRetained || len(cell.retained) > 0
+			result.Cells = append(result.Cells, cell)
+			result.HasRetained = result.HasRetained || len(cell.Retained) > 0
 			continue
 		}
 		for spanIndex, span := range spans {
-			cell, certified := revolveLoftFacesVerticalBezierWith(revolveloftfaces.RevolveLoftFacesMeridianMemoOf(ctx), trim, segment, spanIndex,
+			cell, certified := VerticalBezierWith(revolveloftfaces.RevolveLoftFacesMeridianMemoOf(ctx), trim, segment, spanIndex,
 				band, time, lower, upper, ref, span)
 			if !certified {
 				return nil, false, nil
 			}
-			if len(cell.retained) > 0 {
-				cell.face = revolveLoftFacesVerticalLiveFace(proof.tooth, ref)
-				if cell.face == nil {
+			if len(cell.Retained) > 0 {
+				cell.Face = VerticalLiveFace(proof.Tooth, ref)
+				if cell.Face == nil {
 					return nil, false, nil
 				}
 			}
-			result.cells = append(result.cells, cell)
-			result.hasRetained = result.hasRetained || len(cell.retained) > 0
+			result.Cells = append(result.Cells, cell)
+			result.HasRetained = result.HasRetained || len(cell.Retained) > 0
 		}
 	}
 	return result, true, nil
@@ -200,12 +204,12 @@ func revolveLoftFacesConstantXSourceCells(ctx context.Context,
 
 // A proof's cached refs can only name the live source segment for their
 // band. Rebuild from the producer groups before exporting any contact cell.
-func revolveLoftFacesSourceRefsCurrent(trim *loftFacesTrimRecord, tooth *Body,
+func SourceRefsCurrent(trim *facetedrecord.LoftFacesTrimRecord, tooth *topo.Body,
 	bound [][]provenance.Ref) bool {
 	if trim == nil || tooth == nil {
 		return false
 	}
-	current, ok := revolveLoftFacesSourceRefs(trim, tooth)
+	current, ok := SourceRefs(trim, tooth)
 	if !ok || len(current) != len(bound) {
 		return false
 	}
@@ -222,48 +226,48 @@ func revolveLoftFacesSourceRefsCurrent(trim *loftFacesTrimRecord, tooth *Body,
 	return true
 }
 
-func revolveLoftFacesVerticalLiveFace(tooth *Body, ref provenance.Ref) *Face {
+func VerticalLiveFace(tooth *topo.Body, ref provenance.Ref) *topo.Face {
 	if tooth == nil {
 		return nil
 	}
-	payload, ok := tooth.n.Payload.(facetedPayload)
+	payload, ok := tooth.Payload.(facetedrecord.Payload)
 	if !ok {
 		return nil
 	}
-	faces := tooth.Faces()
+	faces := topobuild.Faces(tooth)
 	index, valid := revolveloftfaces.RefFaceIndex(payload, ref, len(faces))
-	face, originValid := revolveLoftFacesUniqueOriginFace(tooth, ref)
+	face, originValid := UniqueOriginFace(tooth, ref)
 	if !valid || !originValid || index < 0 || face == nil || faces[index] != face {
 		return nil
 	}
 	return face
 }
 
-func revolveLoftFacesVerticalBezier(trim *loftFacesTrimRecord,
+func VerticalBezier(trim *facetedrecord.LoftFacesTrimRecord,
 	segment, spanIndex, band int, time, lower, upper *big.Rat,
-	ref provenance.Ref, span freeform.BezierSpan) (revolveLoftFacesVerticalCell, bool) {
-	return revolveLoftFacesVerticalBezierWith(nil, trim, segment, spanIndex, band,
+	ref provenance.Ref, span freeform.BezierSpan) (VerticalCell, bool) {
+	return VerticalBezierWith(nil, trim, segment, spanIndex, band,
 		time, lower, upper, ref, span)
 }
 
-func revolveLoftFacesVerticalBezierWith(memo *loftface.MeridianMemo, trim *loftFacesTrimRecord,
+func VerticalBezierWith(memo *loftface.MeridianMemo, trim *facetedrecord.LoftFacesTrimRecord,
 	segment, spanIndex, band int, time, lower, upper *big.Rat,
-	ref provenance.Ref, span freeform.BezierSpan) (revolveLoftFacesVerticalCell, bool) {
-	cell := revolveLoftFacesVerticalCell{segment: segment, span: spanIndex,
-		band: band, source: span, ref: ref}
+	ref provenance.Ref, span freeform.BezierSpan) (VerticalCell, bool) {
+	cell := VerticalCell{Segment: segment, Span: spanIndex,
+		Band: band, Source: span, Ref: ref}
 	first, last := trim.Maps[band], trim.Maps[band+1]
 	loQ := polynomial.BernsteinRowsAt(memo.QRows(first, last, span, lfZero(), lower), time)
 	hiQ := polynomial.BernsteinRowsAt(memo.QRows(first, last, span, lfZero(), upper), time)
 	var ok bool
-	cell.lower, ok = loftface.VerticalClassify(loQ)
+	cell.Lower, ok = loftface.VerticalClassify(loQ)
 	if !ok {
 		return cell, false
 	}
-	cell.upper, ok = loftface.VerticalClassify(hiQ)
+	cell.Upper, ok = loftface.VerticalClassify(hiQ)
 	if !ok {
 		return cell, false
 	}
-	for _, limit := range []*loftface.VerticalLimit{&cell.lower, &cell.upper} {
+	for _, limit := range []*loftface.VerticalLimit{&cell.Lower, &cell.Upper} {
 		if limit.Root.Lo == nil {
 			continue
 		}
@@ -273,18 +277,18 @@ func revolveLoftFacesVerticalBezierWith(memo *loftface.MeridianMemo, trim *loftF
 			return cell, false
 		}
 	}
-	cell.retained, ok = loftface.VerticalPieces(first, last, span,
-		time, loQ, hiQ, cell.lower.Root, cell.upper.Root)
+	cell.Retained, ok = loftface.VerticalPieces(first, last, span,
+		time, loQ, hiQ, cell.Lower.Root, cell.Upper.Root)
 	return cell, ok
 }
 
 // A live whole arc may only be used when its authenticated map gives one
 // exact squared radius across all of its source parameters at this time.
-func revolveLoftFacesVerticalArc(ctx context.Context, trim *loftFacesTrimRecord,
+func VerticalArc(ctx context.Context, trim *facetedrecord.LoftFacesTrimRecord,
 	x *big.Rat, segment, band int, time, lower, upper *big.Rat,
-	ref provenance.Ref) (revolveLoftFacesVerticalCell, bool) {
-	cell := revolveLoftFacesVerticalCell{segment: segment, band: band, ref: ref}
-	unit := revolveSectionSpan{Start: planePoint{V: 1}, End: planePoint{U: 1, V: 1}}
+	ref provenance.Ref) (VerticalCell, bool) {
+	cell := VerticalCell{Segment: segment, Band: band, Ref: ref}
+	unit := facetedrecord.RevolveSectionSpan{Start: sectionrecord.Point2{V: 1}, End: sectionrecord.Point2{U: 1, V: 1}}
 	radial, ok := revolveloftfaces.MappedArcRadialTimeBand(ctx, trim, segment, band, unit)
 	if !ok || radial.Arc == nil {
 		return cell, false
@@ -298,14 +302,14 @@ func revolveLoftFacesVerticalArc(ctx context.Context, trim *loftFacesTrimRecord,
 	if loSign == 0 || hiSign == 0 {
 		return cell, false
 	}
-	cell.lower.Side, cell.upper.Side = loSign, hiSign
+	cell.Lower.Side, cell.Upper.Side = loSign, hiSign
 	if loSign > 0 && hiSign < 0 {
 		box, valid := revolveloftfaces.VerticalArcBox(radial.Arc, trim, band, time)
 		if !valid || box[0].Lo.Cmp(x) != 0 || box[0].Hi.Cmp(x) != 0 {
 			return cell, false
 		}
-		cell.retained = []loftface.VerticalPiece{{
-			Source: loftFaceInterval{Lo: lfZero(), Hi: lfOne()}, Box: box}}
+		cell.Retained = []loftface.VerticalPiece{{
+			Source: loftface.Interval{Lo: lfZero(), Hi: lfOne()}, Box: box}}
 	}
 	return cell, true
 }

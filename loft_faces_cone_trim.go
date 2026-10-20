@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/pointcone"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolvecontact"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -51,21 +52,6 @@ func indexOfFace(faces []*Face, want *Face) int {
 	return -1
 }
 
-// A source group can split into multiple result patches. The cap proof uses
-// one connected cap only, so retain the record only for one surviving face.
-func uniqueResultSourceFace(body *Body, source int) *Face {
-	p, ok := body.n.Payload.(facetedPayload)
-	if !ok {
-		return nil
-	}
-	faces := body.Faces()
-	index, ok := facetedtopology.UniqueGroupFace(p.Src, p.FaceOf, len(faces), source)
-	if !ok {
-		return nil
-	}
-	return faces[index]
-}
-
 func recordLoftFacesConeToe(ctx context.Context, source, tool, result *Body) error {
 	base, ok := source.n.Payload.(facetedPayload)
 	if !ok || !base.LoftFacesPrimitive || !loftFacesCapRecordReady(base.LoftFacesCap) ||
@@ -97,7 +83,7 @@ func recordLoftFacesConeToe(ctx context.Context, source, tool, result *Body) err
 	if !ok {
 		return nil
 	}
-	toeCapFace := uniqueResultSourceFace(result, len(source.Faces())+indexOfFace(tool.Faces(), coneFace))
+	toeCapFace := resultSourceFace(result, len(source.Faces())+indexOfFace(tool.Faces(), coneFace))
 	if toeCapFace == nil {
 		return nil
 	}
@@ -238,8 +224,8 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 	if !ok {
 		return body, true, nil
 	}
-	if uniqueResultSourceFace(body, toeCapSource) == nil ||
-		uniqueResultSourceFace(body, heelCapSource) == nil {
+	if resultSourceFace(body, toeCapSource) == nil ||
+		resultSourceFace(body, heelCapSource) == nil {
 		return body, true, nil
 	}
 	result.LoftFacesTrim = &loftFacesTrimRecord{
@@ -325,4 +311,11 @@ func (m *tangentHeelMeshes) clearsResult(ctx context.Context, result []r3.Vec) e
 		return fmt.Errorf("%w: the tangent heel result has a vertex beyond the end-cap slab", ErrUnsupported)
 	}
 	return nil
+}
+
+// resultSourceFace returns the one surviving face of a source group. A source
+// group can split into multiple result patches, and the cap proof uses one
+// connected cap only.
+func resultSourceFace(body *Body, source int) *Face {
+	return faceHandle(revolvecontact.UniqueResultSourceFace(bodyNode(body), source))
 }

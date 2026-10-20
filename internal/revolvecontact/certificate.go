@@ -1,4 +1,4 @@
-package decad
+package revolvecontact
 
 import (
 	"context"
@@ -7,70 +7,75 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetedtopology"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/pointcone"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/revolveshell"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/spiralsector"
+	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 )
 
-// revolveLoftFacesCrossing binds one source fitted curve to the unique span
+// Crossing binds one source fitted curve to the unique span
 // that crosses the candidate conical Revolve face in every mapped band.
-type revolveLoftFacesCrossing struct {
-	segment int
-	span    freeform.BezierSpan
-	index   int
-	first   int // signed implicit side before the crossing in profile walk order
-	last    int
-	caps    []loftface.RootCrossing
-	x       []loftFaceInterval
-	faces   []*Face
+type Crossing struct {
+	Segment int
+	Span    freeform.BezierSpan
+	Index   int
+	First   int // signed implicit side before the crossing in profile walk order
+	Last    int
+	Caps    []loftface.RootCrossing
+	X       []loftface.Interval
+	Faces   []*topo.Face
 }
 
-// revolveLoftFacesSourceCertificate describes a certified curved contact
+// SourceCertificate describes a certified curved contact
 // before any held seam is built. Source faces are bound by their producer
 // origins; the certificate never promotes a faceted edge to a Sketch curve.
-type revolveLoftFacesSourceCertificate struct {
-	blank      *Body
-	tooth      *Body
-	toolProof  *revolveLoftFacesToolPayloadSnapshot
-	section    revolveSectionCertificate
-	trim       *loftFacesTrimRecord
-	rootM      *big.Rat
-	rootB      *big.Rat
-	toeX       *big.Rat
-	heelX      *big.Rat
-	crossings  [2]revolveLoftFacesCrossing
-	sides      []int
-	sourceRefs [][]provenance.Ref
-	toeFace    *Face
-	heelFace   *Face
+type SourceCertificate struct {
+	Blank      *topo.Body
+	Tooth      *topo.Body
+	ToolProof  *ToolPayloadSnapshot
+	Section    facetedrecord.RevolveSectionCertificate
+	Trim       *facetedrecord.LoftFacesTrimRecord
+	RootM      *big.Rat
+	RootB      *big.Rat
+	ToeX       *big.Rat
+	HeelX      *big.Rat
+	Crossings  [2]Crossing
+	Sides      []int
+	SourceRefs [][]provenance.Ref
+	ToeFace    *topo.Face
+	HeelFace   *topo.Face
 }
 
-func certifyRevolveLoftFacesSource(ctx context.Context, blank, tooth *Body) (
-	*revolveLoftFacesSourceCertificate, bool, error,
+func CertifySource(ctx context.Context, blank, tooth *topo.Body) (
+	*SourceCertificate, bool, error,
 ) {
 	if ctx == nil || blank == nil || tooth == nil {
 		return nil, false, nil
 	}
-	p, ok := tooth.n.Payload.(facetedPayload)
+	p, ok := tooth.Payload.(facetedrecord.Payload)
 	if !ok || p.Xform != r3.Identity() || p.LoftFacesTrim == nil ||
-		!revolveLoftFacesTrimCurrent(tooth, p.LoftFacesTrim) {
+		!TrimCurrent(tooth, p.LoftFacesTrim) {
 		return nil, false, nil
 	}
 	trim := p.LoftFacesTrim
-	var selected *revolveLoftFacesSourceCertificate
-	for _, section := range revolveshell.RootCandidates(bodyNode(blank)) {
+	var selected *SourceCertificate
+	for _, section := range revolveshell.RootCandidates(blank) {
 		if err := ctx.Err(); err != nil {
 			return nil, false, err
 		}
-		proof, ok, err := certifyRevolveLoftFacesAgainstRoot(ctx, blank, tooth, trim, section)
+		proof, ok, err := CertifyAgainstRoot(ctx, blank, tooth, trim, section)
 		if err != nil {
 			return nil, false, err
 		}
@@ -83,42 +88,42 @@ func certifyRevolveLoftFacesSource(ctx context.Context, blank, tooth *Body) (
 		selected = proof
 	}
 	if selected != nil {
-		selected.toolProof = newRevolveLoftFacesToolPayloadSnapshot(tooth, p)
+		selected.ToolProof = NewToolPayloadSnapshot(tooth, p)
 	}
 	return selected, selected != nil, nil
 }
 
 // The source gate precedes a separate held-seam construction. An unfinished
 // source proof cannot veto the ordinary mesh Boolean's independent gates.
-func tryRevolveLoftFacesUnion(ctx context.Context, op meshbool.OperationKind,
-	a, b *Body) (bool, error) {
+func TryUnion(ctx context.Context, op meshbool.OperationKind,
+	a, b *topo.Body) (bool, error) {
 	if op != meshbool.OpUnion {
 		return false, nil
 	}
-	proof, ok, err := certifyRevolveLoftFacesSource(ctx, a, b)
+	proof, ok, err := CertifySource(ctx, a, b)
 	if err != nil {
-		return revolveLoftFacesSourceProofError(ctx, err)
+		return SourceProofError(ctx, err)
 	}
 	if !ok {
-		proof, ok, err = certifyRevolveLoftFacesSource(ctx, b, a)
+		proof, ok, err = CertifySource(ctx, b, a)
 		if err != nil {
-			return revolveLoftFacesSourceProofError(ctx, err)
+			return SourceProofError(ctx, err)
 		}
 	}
 	if !ok || proof == nil {
 		return false, nil
 	}
-	_, certified, manifestErr := revolveLoftFacesCensus(ctx, proof)
+	_, certified, manifestErr := Census(ctx, proof)
 	if manifestErr != nil {
-		return revolveLoftFacesSourceProofError(ctx, manifestErr)
+		return SourceProofError(ctx, manifestErr)
 	}
 	if !certified {
 		return false, nil
 	}
-	return true, fmt.Errorf("%w: certified curved LoftFaces contact needs a held-seam builder", ErrUnsupported)
+	return true, fmt.Errorf("%w: certified curved LoftFaces contact needs a held-seam builder", decaderr.ErrUnsupported)
 }
 
-func revolveLoftFacesSourceProofError(ctx context.Context, err error) (bool, error) {
+func SourceProofError(ctx context.Context, err error) (bool, error) {
 	if ctx.Err() != nil || errors.Is(err, context.Canceled) ||
 		errors.Is(err, context.DeadlineExceeded) {
 		return true, err
@@ -126,11 +131,11 @@ func revolveLoftFacesSourceProofError(ctx context.Context, err error) (bool, err
 	return false, nil
 }
 
-func revolveLoftFacesTrimCurrent(tooth *Body, trim *loftFacesTrimRecord) bool {
+func TrimCurrent(tooth *topo.Body, trim *facetedrecord.LoftFacesTrimRecord) bool {
 	if tooth == nil {
 		return false
 	}
-	p, ok := tooth.n.Payload.(facetedPayload)
+	p, ok := tooth.Payload.(facetedrecord.Payload)
 	if !ok || p.LoftFacesTrim != trim {
 		return false
 	}
@@ -142,11 +147,11 @@ func revolveLoftFacesTrimCurrent(tooth *Body, trim *loftFacesTrimRecord) bool {
 	}
 	if p.Xform != r3.Identity() || trim == nil || trim.Source == nil ||
 		!facetedrecord.PointSourceCurrent(trim.Source) ||
-		!revolveLoftFacesConeCurrent(bodyHandle(trim.ToeTool), trim.Toe) ||
-		!revolveLoftFacesConeCurrent(bodyHandle(trim.HeelTool), trim.Heel) ||
+		!ConeCurrent(trim.ToeTool, trim.Toe) ||
+		!ConeCurrent(trim.HeelTool, trim.Heel) ||
 		len(trim.Maps) < 3 || len(trim.Maps) > 64 ||
 		len(trim.Bounds) != len(trim.Maps) ||
-		!orderedLoftFacesConeLimits(trim.Toe, trim.Heel, trim.Base) ||
+		!orderedConeLimits(trim.Toe, trim.Heel, trim.Base) ||
 		!trim.Base.LoftFacesPrimitive || trim.Base.LoftFacesCap == nil ||
 		trim.Base.LoftFacesCap.Source != trim.Source ||
 		trim.Source.SourceBoxIssued != trim.Source.SourceBox ||
@@ -159,7 +164,7 @@ func revolveLoftFacesTrimCurrent(tooth *Body, trim *loftFacesTrimRecord) bool {
 		len(trim.Source.Profile.Outer.Segments) > 128 ||
 		len(trim.Source.Profile.Outer.Segments) != len(trim.Source.Source.Entities) ||
 		!facetedtopology.CapGroupsPresent(p.Src, p.FaceOf, len(p.Groups), trim.ToeCapGroup, trim.HeelCapGroup) ||
-		!facetedtopology.CapGroupsPure(p.Src, p.FaceOf, len(p.Tris), len(tooth.Faces()),
+		!facetedtopology.CapGroupsPure(p.Src, p.FaceOf, len(p.Tris), len(topobuild.Faces(tooth)),
 			trim.ToeCapGroup, trim.HeelCapGroup) {
 		return false
 	}
@@ -167,7 +172,7 @@ func revolveLoftFacesTrimCurrent(tooth *Body, trim *loftFacesTrimRecord) bool {
 		return false
 	}
 	for i, bound := range trim.Bounds {
-		if !revolveLoftFacesSameCapBound(bound, trim.Base.LoftFacesCap.Bounds[i]) {
+		if !SameCapBound(bound, trim.Base.LoftFacesCap.Bounds[i]) {
 			return false
 		}
 	}
@@ -191,17 +196,17 @@ func revolveLoftFacesTrimCurrent(tooth *Body, trim *loftFacesTrimRecord) bool {
 
 // Boolean source proofs read exact cone parameters from the live tool
 // meridians. The retained trim scalars alone are mutable cached data.
-func revolveLoftFacesConeCurrent(tool *Body, recorded *pointConeLimit) bool {
+func ConeCurrent(tool *topo.Body, recorded *facetedrecord.PointConeLimit) bool {
 	if tool == nil || recorded == nil || recorded.Apex == nil ||
 		recorded.Far == nil || recorded.Slope == nil {
 		return false
 	}
-	live, ok := revolveplan.PointConeSource(&tool.n)
+	live, ok := revolveplan.PointConeSource(tool)
 	return ok && recorded.Apex.Cmp(live.Apex) == 0 &&
 		recorded.Far.Cmp(live.Far) == 0 && recorded.Slope.Cmp(live.Slope) == 0
 }
 
-func revolveLoftFacesSameCapBound(a, b loftFaceCapBounds) bool {
+func SameCapBound(a, b facetedrecord.LoftFaceCapBounds) bool {
 	return a.StationRound == b.StationRound &&
 		slices.Equal(a.ProjectiveDeparture, b.ProjectiveDeparture) &&
 		slices.Equal(a.PolygonSpeed, b.PolygonSpeed) &&
@@ -209,9 +214,9 @@ func revolveLoftFacesSameCapBound(a, b loftFaceCapBounds) bool {
 		slices.Equal(a.SourceDeparture, b.SourceDeparture)
 }
 
-func certifyRevolveLoftFacesAgainstRoot(ctx context.Context, blank, tooth *Body,
-	trim *loftFacesTrimRecord, section revolveSectionCertificate) (
-	*revolveLoftFacesSourceCertificate, bool, error,
+func CertifyAgainstRoot(ctx context.Context, blank, tooth *topo.Body,
+	trim *facetedrecord.LoftFacesTrimRecord, section facetedrecord.RevolveSectionCertificate) (
+	*SourceCertificate, bool, error,
 ) {
 	m, b := section.MeridianEquation()
 	if !spiralsector.SourcePhysicalSector(trim, m, b) {
@@ -231,37 +236,37 @@ func certifyRevolveLoftFacesAgainstRoot(ctx context.Context, blank, tooth *Body,
 		return nil, false, nil
 	}
 	segments := trim.Source.Profile.Outer.Segments
-	proof := &revolveLoftFacesSourceCertificate{blank: blank, tooth: tooth,
-		section: section, trim: trim, rootM: m, rootB: b, toeX: toeX, heelX: heelX,
-		sides: make([]int, len(segments))}
+	proof := &SourceCertificate{Blank: blank, Tooth: tooth,
+		Section: section, Trim: trim, RootM: m, RootB: b, ToeX: toeX, HeelX: heelX,
+		Sides: make([]int, len(segments))}
 	start, end := make([]int, len(segments)), make([]int, len(segments))
 	for i, segment := range segments {
 		if err := ctx.Err(); err != nil {
 			return nil, false, err
 		}
-		if fit, isFit := segment.(fitSplineSeg); isFit {
+		if fit, isFit := segment.(sectionrecord.FitSplineSeg); isFit {
 			fitCrossing, side, ok := revolveloftfaces.FitSide(trim, m, b, i, fit)
 			if !ok {
 				return nil, false, nil
 			}
 			if fitCrossing != nil {
-				crossing := revolveLoftFacesCrossing{
-					segment: fitCrossing.Segment, span: fitCrossing.Span,
-					index: fitCrossing.Index, first: fitCrossing.First, last: fitCrossing.Last,
-					caps: fitCrossing.Caps, x: fitCrossing.X,
+				crossing := Crossing{
+					Segment: fitCrossing.Segment, Span: fitCrossing.Span,
+					Index: fitCrossing.Index, First: fitCrossing.First, Last: fitCrossing.Last,
+					Caps: fitCrossing.Caps, X: fitCrossing.X,
 				}
 				index := 0
-				if proof.crossings[0].span != nil {
+				if proof.Crossings[0].Span != nil {
 					index = 1
 				}
-				if index >= len(proof.crossings) {
+				if index >= len(proof.Crossings) {
 					return nil, false, nil
 				}
-				proof.crossings[index] = crossing
-				start[i], end[i] = crossing.first, crossing.last
+				proof.Crossings[index] = crossing
+				start[i], end[i] = crossing.First, crossing.Last
 				continue
 			}
-			start[i], end[i], proof.sides[i] = side, side, side
+			start[i], end[i], proof.Sides[i] = side, side, side
 			continue
 		}
 		if !revolveloftfaces.SegmentKind(trim, i) {
@@ -271,16 +276,16 @@ func certifyRevolveLoftFacesAgainstRoot(ctx context.Context, blank, tooth *Body,
 		if side == 0 {
 			return nil, false, nil
 		}
-		if _, arc := segment.(arcSeg); arc {
+		if _, arc := segment.(sectionrecord.ArcSeg); arc {
 			finiteSide, certified := revolveloftfaces.MappedArcFiniteSide(ctx, trim, i,
 				section.Spans[section.RootSpan])
 			if !certified || finiteSide != loftface.ArcMiss && finiteSide != side {
 				return nil, false, nil
 			}
 		}
-		start[i], end[i], proof.sides[i] = side, side, side
+		start[i], end[i], proof.Sides[i] = side, side, side
 	}
-	if proof.crossings[0].span == nil || proof.crossings[1].span == nil {
+	if proof.Crossings[0].Span == nil || proof.Crossings[1].Span == nil {
 		return nil, false, nil
 	}
 	for i := range segments {
@@ -288,53 +293,53 @@ func certifyRevolveLoftFacesAgainstRoot(ctx context.Context, blank, tooth *Body,
 			return nil, false, nil
 		}
 	}
-	for _, crossing := range proof.crossings {
-		if crossing.x[0].Hi.Cmp(toeX) >= 0 ||
-			crossing.x[len(crossing.x)-1].Lo.Cmp(heelX) <= 0 {
+	for _, crossing := range proof.Crossings {
+		if crossing.X[0].Hi.Cmp(toeX) >= 0 ||
+			crossing.X[len(crossing.X)-1].Lo.Cmp(heelX) <= 0 {
 			return nil, false, nil
 		}
 	}
-	refs, ok := revolveLoftFacesSourceRefs(trim, tooth)
+	refs, ok := SourceRefs(trim, tooth)
 	if !ok {
 		return nil, false, nil
 	}
-	proof.sourceRefs = refs
-	p, _ := tooth.n.Payload.(facetedPayload)
-	faces := tooth.Faces()
-	for i := range proof.crossings {
-		crossing := &proof.crossings[i]
-		crossing.faces = make([]*Face, len(refs))
+	proof.SourceRefs = refs
+	p, _ := tooth.Payload.(facetedrecord.Payload)
+	faces := topobuild.Faces(tooth)
+	for i := range proof.Crossings {
+		crossing := &proof.Crossings[i]
+		crossing.Faces = make([]*topo.Face, len(refs))
 		retained := false
 		for band := range refs {
-			ref := refs[band][crossing.segment]
+			ref := refs[band][crossing.Segment]
 			index, valid := revolveloftfaces.RefFaceIndex(p, ref, len(faces))
-			face, originValid := revolveLoftFacesUniqueOriginFace(tooth, ref)
+			face, originValid := UniqueOriginFace(tooth, ref)
 			if !valid || !originValid || (index >= 0) != (face != nil) ||
 				index >= 0 && faces[index] != face {
 				return nil, false, nil
 			}
-			crossing.faces[band] = face
+			crossing.Faces[band] = face
 			retained = retained || index >= 0
 		}
 		if !retained {
 			return nil, false, nil
 		}
 	}
-	proof.toeFace = uniqueResultSourceFace(tooth, p.LoftFacesTrim.ToeCapGroup)
-	proof.heelFace = uniqueResultSourceFace(tooth, p.LoftFacesTrim.HeelCapGroup)
-	if proof.toeFace == nil || proof.heelFace == nil || proof.toeFace == proof.heelFace {
+	proof.ToeFace = UniqueResultSourceFace(tooth, p.LoftFacesTrim.ToeCapGroup)
+	proof.HeelFace = UniqueResultSourceFace(tooth, p.LoftFacesTrim.HeelCapGroup)
+	if proof.ToeFace == nil || proof.HeelFace == nil || proof.ToeFace == proof.HeelFace {
 		return nil, false, nil
 	}
 	return proof, true, nil
 }
 
-func revolveLoftFacesSourceRefs(trim *loftFacesTrimRecord, tooth *Body) ([][]provenance.Ref, bool) {
+func SourceRefs(trim *facetedrecord.LoftFacesTrimRecord, tooth *topo.Body) ([][]provenance.Ref, bool) {
 	n := len(trim.Source.Profile.Outer.Segments)
 	if len(trim.Base.Groups) != (len(trim.Maps)-1)*n+2 {
 		return nil, false
 	}
 	refs := make([][]provenance.Ref, len(trim.Maps)-1)
-	var producer producerID
+	var producer provenance.Producer
 	for band := range refs {
 		refs[band] = make([]provenance.Ref, n)
 		for segment := range n {
@@ -352,8 +357,8 @@ func revolveLoftFacesSourceRefs(trim *loftFacesTrimRecord, tooth *Body) ([][]pro
 			refs[band][segment] = ref
 		}
 	}
-	for _, face := range tooth.Faces() {
-		for _, origin := range face.originRefs() {
+	for _, face := range topobuild.Faces(tooth) {
+		for _, origin := range face.Origins {
 			if origin.Producer != producer {
 				continue
 			}
@@ -371,18 +376,38 @@ func revolveLoftFacesSourceRefs(trim *loftFacesTrimRecord, tooth *Body) ([][]pro
 	return refs, true
 }
 
-func revolveLoftFacesUniqueOriginFace(body *Body, want provenance.Ref) (*Face, bool) {
-	var result *Face
-	for _, face := range body.Faces() {
-		for _, origin := range face.originRefs() {
+func UniqueOriginFace(body *topo.Body, want provenance.Ref) (*topo.Face, bool) {
+	var result *topo.Face
+	for _, face := range topobuild.Faces(body) {
+		for _, origin := range face.Origins {
 			if origin != want {
 				continue
 			}
-			if face.n.Body != bodyNode(body) || result != nil {
+			if face.Body != body || result != nil {
 				return nil, false
 			}
 			result = face
 		}
 	}
 	return result, true
+}
+
+// UniqueResultSourceFace returns the one live face of body that source group
+// names, or nil when the group is not a single face.
+func UniqueResultSourceFace(body *topo.Body, source int) *topo.Face {
+	p, ok := body.Payload.(facetedrecord.Payload)
+	if !ok {
+		return nil
+	}
+	faces := topobuild.Faces(body)
+	index, ok := facetedtopology.UniqueGroupFace(p.Src, p.FaceOf, len(faces), source)
+	if !ok {
+		return nil
+	}
+	return faces[index]
+}
+
+func orderedConeLimits(toe, heel *facetedrecord.PointConeLimit, base facetedrecord.Payload) bool {
+	return pointcone.ToeHeelOrdered(toe.Apex, toe.Slope, heel.Apex, heel.Slope,
+		base.Verts, base.MeshBound)
 }

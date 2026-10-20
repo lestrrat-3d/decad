@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/revolvecontact"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/stretchr/testify/require"
@@ -13,18 +14,18 @@ import (
 
 func TestCurvedSourceArcSplitsClosedRevolveShell(t *testing.T) {
 	blank, trimmed, _ := neutralArcSeamSource(t)
-	proof, ok, err := certifyRevolveLoftFacesSource(t.Context(), blank, trimmed)
+	proof, ok, err := revolvecontact.CertifySource(t.Context(), bodyNode(blank), bodyNode(trimmed))
 	require.NoError(t, err)
 	require.True(t, ok)
-	manifest, ok, err := revolveLoftFacesAllSideManifest(t.Context(), proof)
+	manifest, ok, err := revolvecontact.AllSideManifest(t.Context(), proof)
 	require.NoError(t, err)
 	require.True(t, ok)
 	sectionIndex, cellIndex := -1, -1
-	for _, side := range manifest.nonvertical {
-		for index, cell := range side.cells {
-			if cell.mapped.Side == revolveloftfaces.RevolveLoftFacesJointContact &&
-				cell.mapped.JointKind == revolveloftfaces.RevolveLoftFacesWholeArcContact {
-				sectionIndex, cellIndex = side.sectionIndex, index
+	for _, side := range manifest.Nonvertical {
+		for index, cell := range side.Cells {
+			if cell.Mapped.Side == revolveloftfaces.RevolveLoftFacesJointContact &&
+				cell.Mapped.JointKind == revolveloftfaces.RevolveLoftFacesWholeArcContact {
+				sectionIndex, cellIndex = side.SectionIndex, index
 				break
 			}
 		}
@@ -33,14 +34,14 @@ func TestCurvedSourceArcSplitsClosedRevolveShell(t *testing.T) {
 		}
 	}
 	require.GreaterOrEqual(t, sectionIndex, 0)
-	shell, ok, err := revolveLoftFacesBlankShellAtRunsWithCuts(t.Context(), proof, manifest,
-		[]revolveLoftFacesShellSeamSelector{{sectionIndex: sectionIndex, cellIndex: cellIndex}}, nil)
+	shell, ok, err := revolvecontact.BlankShellAtRunsWithCuts(t.Context(), proof, manifest,
+		[]revolvecontact.ShellSeamSelector{{SectionIndex: sectionIndex, CellIndex: cellIndex}}, nil)
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.NotEmpty(t, shell.Mesh.Tris)
 	require.Len(t, shell.Mesh.Src, len(shell.Mesh.Tris))
 	require.Len(t, shell.VertexBounds, len(shell.Mesh.Verts))
-	require.Len(t, shell.seam, 18)
+	require.Len(t, shell.Seam, 18)
 	require.Less(t, shell.ChordBound, 0.1)
 	require.GreaterOrEqual(t, shell.FaceBound, shell.ChordBound)
 	require.Less(t, shell.FaceBound, 0.1)
@@ -48,8 +49,8 @@ func TestCurvedSourceArcSplitsClosedRevolveShell(t *testing.T) {
 	for _, bound := range shell.VertexBounds {
 		require.Less(t, bound, 0.1)
 	}
-	seenSeam := make(map[int]struct{}, len(shell.seam))
-	for _, index := range shell.seam {
+	seenSeam := make(map[int]struct{}, len(shell.Seam))
+	for _, index := range shell.Seam {
 		_, duplicate := seenSeam[index]
 		require.False(t, duplicate, "each source station needs its own mesh vertex")
 		seenSeam[index] = struct{}{}
@@ -65,24 +66,24 @@ func TestCurvedSourceArcSplitsClosedRevolveShell(t *testing.T) {
 		}
 		require.True(t, lower && upper, "both meridian halves must use shared seam vertex %d", index)
 	}
-	var selected *revolveLoftFacesSourceCell
-	for i := range manifest.nonvertical {
-		if manifest.nonvertical[i].sectionIndex == sectionIndex {
-			selected = &manifest.nonvertical[i].cells[cellIndex]
+	var selected *revolvecontact.SourceCell
+	for i := range manifest.Nonvertical {
+		if manifest.Nonvertical[i].SectionIndex == sectionIndex {
+			selected = &manifest.Nonvertical[i].Cells[cellIndex]
 			break
 		}
 	}
 	require.NotNil(t, selected)
 	original := *selected
 	changedRef := false
-	for _, side := range manifest.nonvertical {
-		for _, other := range side.cells {
-			if other.ref == original.ref || other.face == nil {
+	for _, side := range manifest.Nonvertical {
+		for _, other := range side.Cells {
+			if other.Ref == original.Ref || other.Face == nil {
 				continue
 			}
-			selected.ref, selected.face = other.ref, other.face
-			_, admitted, err := revolveLoftFacesBlankShellAtRunsWithCuts(t.Context(), proof, manifest,
-				[]revolveLoftFacesShellSeamSelector{{sectionIndex: sectionIndex, cellIndex: cellIndex}}, nil)
+			selected.Ref, selected.Face = other.Ref, other.Face
+			_, admitted, err := revolvecontact.BlankShellAtRunsWithCuts(t.Context(), proof, manifest,
+				[]revolvecontact.ShellSeamSelector{{SectionIndex: sectionIndex, CellIndex: cellIndex}}, nil)
 			require.NoError(t, err)
 			require.False(t, admitted)
 			*selected = original
@@ -94,79 +95,79 @@ func TestCurvedSourceArcSplitsClosedRevolveShell(t *testing.T) {
 		}
 	}
 	require.True(t, changedRef)
-	require.Less(t, original.mapped.TLo.Cmp(original.mapped.THi), 0)
-	selected.mapped.TLo = lfDiv(lfAdd(original.mapped.TLo, original.mapped.THi),
+	require.Less(t, original.Mapped.TLo.Cmp(original.Mapped.THi), 0)
+	selected.Mapped.TLo = lfDiv(lfAdd(original.Mapped.TLo, original.Mapped.THi),
 		big.NewRat(2, 1))
-	_, admitted, err := revolveLoftFacesBlankShellAtRunsWithCuts(t.Context(), proof, manifest,
-		[]revolveLoftFacesShellSeamSelector{{sectionIndex: sectionIndex, cellIndex: cellIndex}}, nil)
+	_, admitted, err := revolvecontact.BlankShellAtRunsWithCuts(t.Context(), proof, manifest,
+		[]revolvecontact.ShellSeamSelector{{SectionIndex: sectionIndex, CellIndex: cellIndex}}, nil)
 	require.NoError(t, err)
 	require.False(t, admitted)
 	*selected = original
 	changedVertical := false
-	for i := range manifest.vertical {
-		entry := &manifest.vertical[i]
-		if entry.outcome != revolveloftfaces.VerticalContact {
+	for i := range manifest.Vertical {
+		entry := &manifest.Vertical[i]
+		if entry.Outcome != revolveloftfaces.VerticalContact {
 			continue
 		}
 		before := *entry
-		entry.outcome, entry.side = revolveloftfaces.VerticalMiss, nil
-		manifest.sideOutcome[entry.sectionIndex] = revolveLoftFacesSideMiss
-		_, admitted, err := revolveLoftFacesBlankShellAtRunsWithCuts(t.Context(), proof, manifest,
-			[]revolveLoftFacesShellSeamSelector{{sectionIndex: sectionIndex, cellIndex: cellIndex}}, nil)
+		entry.Outcome, entry.Side = revolveloftfaces.VerticalMiss, nil
+		manifest.SideOutcome[entry.SectionIndex] = revolvecontact.SideMiss
+		_, admitted, err := revolvecontact.BlankShellAtRunsWithCuts(t.Context(), proof, manifest,
+			[]revolvecontact.ShellSeamSelector{{SectionIndex: sectionIndex, CellIndex: cellIndex}}, nil)
 		require.NoError(t, err)
 		require.False(t, admitted)
-		manifest.sideOutcome[entry.sectionIndex] = revolveLoftFacesSideSourceCandidate
+		manifest.SideOutcome[entry.SectionIndex] = revolvecontact.SideSourceCandidate
 		*entry = before
 		changedVertical = true
 		break
 	}
 	require.True(t, changedVertical)
 	changedVerticalCell := false
-	for i := range manifest.vertical {
-		entry := &manifest.vertical[i]
-		if entry.outcome != revolveloftfaces.VerticalContact ||
-			entry.side == nil || len(entry.side.cells) == 0 {
+	for i := range manifest.Vertical {
+		entry := &manifest.Vertical[i]
+		if entry.Outcome != revolveloftfaces.VerticalContact ||
+			entry.Side == nil || len(entry.Side.Cells) == 0 {
 			continue
 		}
-		before := entry.side.cells[0]
-		entry.side.cells[0].span++
-		_, admitted, err := revolveLoftFacesBlankShellAtRunsWithCuts(t.Context(), proof, manifest,
-			[]revolveLoftFacesShellSeamSelector{{sectionIndex: sectionIndex, cellIndex: cellIndex}}, nil)
+		before := entry.Side.Cells[0]
+		entry.Side.Cells[0].Span++
+		_, admitted, err := revolvecontact.BlankShellAtRunsWithCuts(t.Context(), proof, manifest,
+			[]revolvecontact.ShellSeamSelector{{SectionIndex: sectionIndex, CellIndex: cellIndex}}, nil)
 		require.NoError(t, err)
 		require.False(t, admitted)
-		entry.side.cells[0] = before
+		entry.Side.Cells[0] = before
 		changedVerticalCell = true
 		break
 	}
 	require.True(t, changedVerticalCell)
 	checkedEmptyOtherSide := false
-	for i := range manifest.nonvertical {
-		if manifest.nonvertical[i].sectionIndex == sectionIndex {
+	for i := range manifest.Nonvertical {
+		if manifest.Nonvertical[i].SectionIndex == sectionIndex {
 			continue
 		}
-		cells := manifest.nonvertical[i].cells
-		manifest.nonvertical[i].cells = nil
-		_, admitted, err := revolveLoftFacesBlankShellAtRunsWithCuts(t.Context(), proof, manifest,
-			[]revolveLoftFacesShellSeamSelector{{sectionIndex: sectionIndex, cellIndex: cellIndex}}, nil)
+		cells := manifest.Nonvertical[i].Cells
+		manifest.Nonvertical[i].Cells = nil
+		_, admitted, err := revolvecontact.BlankShellAtRunsWithCuts(t.Context(), proof, manifest,
+			[]revolvecontact.ShellSeamSelector{{SectionIndex: sectionIndex, CellIndex: cellIndex}}, nil)
 		require.NoError(t, err)
 		require.False(t, admitted)
-		manifest.nonvertical[i].cells = cells
+		manifest.Nonvertical[i].Cells = cells
 		checkedEmptyOtherSide = true
 		break
 	}
 	require.True(t, checkedEmptyOtherSide)
 	checkedReplacedOtherSide := false
-	for i := range manifest.nonvertical {
-		if manifest.nonvertical[i].sectionIndex == sectionIndex {
+	for i := range manifest.Nonvertical {
+		if manifest.Nonvertical[i].SectionIndex == sectionIndex {
 			continue
 		}
-		cells := manifest.nonvertical[i].cells
-		manifest.nonvertical[i].cells = []revolveLoftFacesSourceCell{original}
-		_, admitted, err := revolveLoftFacesBlankShellAtRunsWithCuts(t.Context(), proof, manifest,
-			[]revolveLoftFacesShellSeamSelector{{sectionIndex: sectionIndex, cellIndex: cellIndex}}, nil)
+		cells := manifest.Nonvertical[i].Cells
+		manifest.Nonvertical[i].Cells = []revolvecontact.SourceCell{original}
+		_, admitted, err := revolvecontact.BlankShellAtRunsWithCuts(t.Context(), proof, manifest,
+			[]revolvecontact.ShellSeamSelector{{SectionIndex: sectionIndex, CellIndex: cellIndex}}, nil)
 		require.NoError(t, err)
 		require.False(t, admitted)
-		manifest.nonvertical[i].cells = cells
+		manifest.Nonvertical[i].Cells = cells
 		checkedReplacedOtherSide = true
 		break
 	}
@@ -175,47 +176,47 @@ func TestCurvedSourceArcSplitsClosedRevolveShell(t *testing.T) {
 	originalFaces := liveShell.n.Faces
 	t.Cleanup(func() { liveShell.n.Faces = originalFaces })
 	liveShell.n.Faces = append(slices.Clone(originalFaces), faceNode(bornFace(&Face{n: topo.Face{Origins: []provenance.Ref{{Role: "unowned retained face"}}, Body: bodyNode(trimmed)}})))
-	_, admitted, err = revolveLoftFacesBlankShellAtRunsWithCuts(t.Context(), proof, manifest,
-		[]revolveLoftFacesShellSeamSelector{{sectionIndex: sectionIndex, cellIndex: cellIndex}}, nil)
+	_, admitted, err = revolvecontact.BlankShellAtRunsWithCuts(t.Context(), proof, manifest,
+		[]revolvecontact.ShellSeamSelector{{SectionIndex: sectionIndex, CellIndex: cellIndex}}, nil)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.False(t, admitted)
 	liveShell.n.Faces = originalFaces
-	t.Logf("source-aligned Revolve shell: %d vertices, %d triangles, chord bound %.6g mm",
+	t.Logf("source-aligned Revolve Shell: %d vertices, %d triangles, chord bound %.6g mm",
 		len(shell.Mesh.Verts), len(shell.Mesh.Tris), shell.ChordBound)
 }
 
 func TestCurvedMultiRunShellConsumesLiveGraph(t *testing.T) {
 	blank, trimmed, _ := neutralArcSeamSource(t)
-	proof, certified, err := certifyRevolveLoftFacesSource(t.Context(), blank, trimmed)
+	proof, certified, err := revolvecontact.CertifySource(t.Context(), bodyNode(blank), bodyNode(trimmed))
 	require.NoError(t, err)
 	require.True(t, certified)
-	shell, graph, built, err := revolveLoftFacesBlankShellWithAllRuns(t.Context(), proof)
+	shell, graph, built, err := revolvecontact.BlankShellWithAllRuns(t.Context(), proof)
 	require.NoError(t, err)
 	require.True(t, built)
-	require.Len(t, graph.runs, 2)
-	require.Len(t, graph.arcs, 2)
-	require.Len(t, shell.Seams, len(graph.runs))
-	require.Len(t, shell.capRings, len(graph.arcs))
+	require.Len(t, graph.Runs, 2)
+	require.Len(t, graph.Arcs, 2)
+	require.Len(t, shell.Seams, len(graph.Runs))
+	require.Len(t, shell.CapRings, len(graph.Arcs))
 	require.Len(t, shell.TriangleCells, len(shell.Mesh.Tris))
 	require.Less(t, shell.FaceBound, 0.1)
 	require.True(t, shell.EulerTwo())
 	seenIDs := make(map[int]struct{})
 	seenVertices := make(map[int]struct{})
-	for _, arc := range graph.arcs {
-		for _, id := range arc.endpointIDs {
+	for _, arc := range graph.Arcs {
+		for _, id := range arc.EndpointIDs {
 			_, duplicate := seenIDs[id]
 			require.False(t, duplicate)
 			seenIDs[id] = struct{}{}
 		}
 	}
-	for i, run := range graph.runs {
-		require.Equal(t, run.stationIDs, shell.seamRunIDs[i])
-		require.Len(t, shell.Seams[i], len(run.stations))
-		cell := graph.cells[run.cellID]
-		mapped := cell.source.mapped
-		seam, blankPatch, loftPatch, patched, patchErr := revolveLoftFacesCertifiedArcPatches(t.Context(),
-			blank, trimmed, cell.sectionIndex, mapped.Segment, mapped.Band,
-			loftFaceInterval{Lo: mapped.TLo, Hi: mapped.THi}, run.stations)
+	for i, run := range graph.Runs {
+		require.Equal(t, run.StationIDs, shell.SeamRunIDs[i])
+		require.Len(t, shell.Seams[i], len(run.Stations))
+		cell := graph.Cells[run.CellID]
+		mapped := cell.Source.Mapped
+		seam, blankPatch, loftPatch, patched, patchErr := revolvecontact.CertifiedArcPatches(t.Context(),
+			bodyNode(blank), bodyNode(trimmed), cell.SectionIndex, mapped.Segment, mapped.Band,
+			loftFaceInterval{Lo: mapped.TLo, Hi: mapped.THi}, run.Stations)
 		require.NoError(t, patchErr)
 		require.True(t, patched)
 		for station, index := range shell.Seams[i] {
@@ -224,7 +225,7 @@ func TestCurvedMultiRunShellConsumesLiveGraph(t *testing.T) {
 			_, duplicate := seenVertices[index]
 			require.False(t, duplicate)
 			seenVertices[index] = struct{}{}
-			id := run.stationIDs[station]
+			id := run.StationIDs[station]
 			_, duplicate = seenIDs[id]
 			require.False(t, duplicate)
 			seenIDs[id] = struct{}{}
@@ -241,29 +242,29 @@ func TestCurvedMultiRunShellConsumesLiveGraph(t *testing.T) {
 		}
 	}
 	require.Len(t, seenVertices, 36)
-	require.Len(t, seenIDs, 36+2*len(graph.arcs))
-	for _, arc := range graph.arcs {
+	require.Len(t, seenIDs, 36+2*len(graph.Arcs))
+	for _, arc := range graph.Arcs {
 		matched := -1
-		for i, ring := range shell.capRings {
-			if revolveLoftFacesToolCapOccupiedArcEqual(arc.arc, ring.arc) {
+		for i, ring := range shell.CapRings {
+			if revolvecontact.ToolCapOccupiedArcEqual(arc.Arc, ring.Arc) {
 				require.Equal(t, -1, matched)
 				matched = i
 			}
 		}
 		require.GreaterOrEqual(t, matched, 0)
-		ring := shell.capRings[matched]
-		require.Equal(t, arc.endpointIDs, ring.endpointGraphIDs)
-		require.Equal(t, arc.endpointCellIDs, ring.endpointCellIDs)
-		for endpoint, cellID := range arc.endpointCellIDs {
+		ring := shell.CapRings[matched]
+		require.Equal(t, arc.EndpointIDs, ring.EndpointGraphIDs)
+		require.Equal(t, arc.EndpointCellIDs, ring.EndpointCellIDs)
+		for endpoint, cellID := range arc.EndpointCellIDs {
 			index := ring.Endpoints[endpoint]
-			require.Equal(t, ring.endpointProof[endpoint].point, shell.Mesh.Verts[index])
-			require.GreaterOrEqual(t, shell.VertexBounds[index], ring.endpointProof[endpoint].blankBound)
-			require.True(t, graph.endpointCellMatches(arc, &ring, endpoint, cellID))
+			require.Equal(t, ring.EndpointProof[endpoint].Point, shell.Mesh.Verts[index])
+			require.GreaterOrEqual(t, shell.VertexBounds[index], ring.EndpointProof[endpoint].BlankBound)
+			require.True(t, graph.EndpointCellMatches(arc, &ring, endpoint, cellID))
 		}
 	}
-	sectionGroup := make([]int, len(proof.section.Spans))
+	sectionGroup := make([]int, len(proof.Section.Spans))
 	group := 0
-	for i, span := range proof.section.Spans {
+	for i, span := range proof.Section.Spans {
 		sectionGroup[i] = -1
 		if span.Face != nil {
 			sectionGroup[i] = group
