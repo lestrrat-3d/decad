@@ -154,7 +154,7 @@ func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*F
 	// offset itself reaches across, which is the meridian's offset meeting its
 	// own mirror image — a merge this offset does not build.
 	work := freeform.NewFreeformWork()
-	ax, err := revolveBlendAxis(ctx, rp, wall, work)
+	ax, err := rp.BlendAxis(ctx, wall, work)
 	if err != nil {
 		if errors.Is(err, ErrDegenerate) {
 			return nil, fmt.Errorf(`%w: the shell's offset meridian reaches the revolve axis, where it would meet its own mirror image; a trimmed-offset kernel is not available (modify-reach SX8): %v`, ErrUnsupported, err)

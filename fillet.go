@@ -230,9 +230,11 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 	// A loop's fillet radius is both of route L's setbacks
 	// (docs/loop-fillet-design.md §4).
 	loopCall := brepModifyRequest{
-		op:     "fillets",
-		admits: func(pp prismPayload, _ prismCaps) error { return requireLateralEdges(ctx, pp, edges) },
-		sel:    sel, edges: edges, blend: &blend,
+		op: "fillets",
+		admits: func(pp prismPayload, _ prismCaps) error {
+			return modifyselect.RequireLateral(ctx, pp, edgeNodes(edges))
+		},
+		sel: sel, edges: edges, blend: &blend,
 		loop:     &capSetback{Dc: rmm, DcDelta: rDelta, Ds: rmm, DsDelta: rDelta},
 		loopKind: breprecord.BandFillet,
 	}

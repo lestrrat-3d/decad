@@ -40,7 +40,7 @@ func (d *Document) splitRevolve(ctx context.Context, budget *proofbound.WorkBudg
 			return nil, err
 		}
 		work := freeform.NewFreeformWork()
-		ax, err := revolveBlendAxis(ctx, rcv, cell.Profile, work)
+		ax, err := rcv.BlendAxis(ctx, cell.Profile, work)
 		if err != nil {
 			return nil, err
 		}

@@ -21,16 +21,6 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-func recognizePrismUnionFillet(a, b *Body) *prismUnionFilletRecord {
-	if _, ok := a.n.Payload.(prismPayload); !ok {
-		return nil
-	}
-	if _, ok := b.n.Payload.(prismPayload); !ok {
-		return nil
-	}
-	return &prismUnionFilletRecord{First: bodyNode(a), Second: bodyNode(b)}
-}
-
 func (b *Body) filletPrismUnion(ctx context.Context, edges []*Edge,
 	rec *prismUnionFilletRecord, radius, radiusDelta float64) (*Body, bool, error) {
 	if len(edges) != 1 || radiusDelta != 0 || !(radius > 0) || proofbound.IsNonFinite(radius) {

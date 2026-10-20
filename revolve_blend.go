@@ -137,7 +137,7 @@ func (b *Body) blendRevolveJunctions(ctx context.Context, sel EdgeSelector, edge
 	// here, and the build below continues the same free-form work counter
 	// (docs/spline-design.md §5.2).
 	work := freeform.NewFreeformWork()
-	ax, err := revolveBlendAxis(ctx, rp, profile, work)
+	ax, err := rp.BlendAxis(ctx, profile, work)
 	if err != nil {
 		return nil, modifyselect.WrapAuditError(fmt.Sprint(sel), matched, err)
 	}
@@ -167,28 +167,6 @@ func (b *Body) blendRevolveJunctions(ctx context.Context, sel EdgeSelector, edge
 	}
 	d.commit(body, b)
 	return body, nil
-}
-
-// revolveBlendAxis reruns the revolve axis gates (docs/evaluator-design.md §6)
-// on a rewritten meridian about the receiver's own oriented axis: the side
-// gate, the axis-contact audit and the snap allowances, each with the sentinel
-// the base Revolve call gives it — a new interior axis contact is
-// ErrDegenerate, a blend arc centred across the axis (a spindle torus) is
-// ErrUnsupported. The receiver's axis already has the region on its
-// non-negative side, so a rewrite whose region the gate puts on the far side
-// has crossed the axis and is ErrDegenerate.
-func revolveBlendAxis(ctx context.Context, rp revolvePayload, profile profileRecord, work *freeform.FreeformWork) (axisFrame, error) {
-	ax, side, err := revolveplan.ResolveAxisSide(ctx, profile, revolveaxis.Line2{
-		AU: rp.Ax.AU, AV: rp.Ax.AV, AUBound: rp.Ax.AUBound, AVBound: rp.Ax.AVBound,
-		DU: rp.Ax.DU, DV: rp.Ax.DV, DUBound: rp.Ax.DUBound, DVBound: rp.Ax.DVBound,
-	}, work)
-	if err != nil {
-		return axisFrame{}, err
-	}
-	if side < 0 {
-		return axisFrame{}, fmt.Errorf(`%w: the rewritten meridian lies across the revolve axis from the receiver's`, ErrDegenerate)
-	}
-	return ax, nil
 }
 
 // revolveJunctionsOf lists every off-axis junction of the receiver, per loop,
