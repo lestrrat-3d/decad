@@ -198,7 +198,7 @@ enclosures cannot place or order, or a reach the enclosure cannot bound, is
 
 ## 3. The three regions
 
-`offsetOpenChain` (`shell_revolve.go`, moved to `shell_chain.go`) already
+`offset2d.OffsetOpenChain` (`internal/offset2d/open_chain.go`) already
 offsets an open chain with per-end joins. Its end kinds become an enumeration:
 an **axis end** (`MirrorCornerJoin`, the revolve's), and an **opening end**
 (`OpeningJoin` with the removed neighbour walk). It returns `K'` in `K`'s own

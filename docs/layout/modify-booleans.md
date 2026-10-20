@@ -20,7 +20,6 @@ The rules for rows live in `docs/layout.md`.
 | `modify_options.go` | Public reach option tiers, codec adapters and asymmetric reference resolution (SX3). See modify-reach §2, §6. |
 | `shell.go` | Public `ShellOption`, `ShellSense` and `Shell`: prism, Sweep and Revolve dispatch, the cap-shell stages over `internal/cupwall/`, and `shellTol`, the tolerance its section offsets pass to `internal/offset2d/`. Prism cap-shell records are `internal/prismshell/`'s. See modify §7–§9 and Table R. |
 | `shell_twist.go` | Admits and commits the inward top-cap Shell of a straight twisted rounded Sweep, and builds its five-face faceted cup from the proven mesh. See shell-twisted-sweep design. |
-| `shell_revolve.go` | `Shell` of a revolve. See modify-reach §9.3. |
 | `shell_opening.go` | Prism and straight Sweep side openings: classify removed faces, dispatch the audited region build and record the cap-removed prism case. See shell-opening §3–§5. |
 | `brep_modify.go` | Brep and stacked modify receivers: dispatch, SB1/SB2, route P. See brep-modify. |
 | `brep_shell.go` | Route S: live face selection, stage order, result commit, the removed-face cap roles handed to `internal/stackedshell/`, and one circular tool-wall opening. `internal/throughshell/` owns its record geometry. See modify-general §3. |

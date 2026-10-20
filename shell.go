@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/modifyoption"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
+	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/decad/internal/stackedshell"
 	"github.com/lestrrat-3d/decad/internal/sweeprecord"
 	"github.com/lestrrat-3d/units"
@@ -374,4 +375,16 @@ func classifyRemovedCaps(caps prismCaps, removed []*Face) (bool, bool, error) {
 		}
 	}
 	return start, end, nil
+}
+
+// shellRevolve shells a revolve receiver through the faces in removed (nil for a
+// WithNoOpenings full turn) and commits the result. s is +1 inward, -1 outward.
+func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*Face, s float64, t units.Value, tmm, tDelta float64) (*Body, error) {
+	caps := prismCapsOf(b)
+	node, err := revolveshell.Shell(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), &b.n, rp,
+		faceNode(caps.start), faceNode(caps.end), faceNodes(removed), s, t, tmm, tDelta, shellTol)
+	if err != nil {
+		return nil, err
+	}
+	return commitModifyResult(ctx, b, bodyHandle(node))
 }
