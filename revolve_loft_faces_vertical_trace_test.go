@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/loftface"
+	"github.com/lestrrat-3d/decad/internal/revolvecontact"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/stretchr/testify/require"
@@ -13,20 +14,20 @@ import (
 
 func TestCurvedVerticalTraceConsumesLiveGraphAndShell(t *testing.T) {
 	blank, tooth, _ := neutralArcSeamSource(t)
-	proof, ok, err := certifyRevolveLoftFacesSource(t.Context(), blank, tooth)
+	proof, ok, err := revolvecontact.CertifySource(t.Context(), bodyNode(blank), bodyNode(tooth))
 	require.NoError(t, err)
 	require.True(t, ok)
-	graph, ok, err := revolveLoftFacesContactGraphOf(t.Context(), proof)
+	graph, ok, err := revolvecontact.ContactGraphOf(t.Context(), proof)
 	require.NoError(t, err)
 	require.True(t, ok)
 	selected := -1
-	for id, cell := range graph.cells {
-		if cell.vertical == nil || len(cell.vertical.retained) == 0 || cell.pairID < 0 {
+	for id, cell := range graph.Cells {
+		if cell.Vertical == nil || len(cell.Vertical.Retained) == 0 || cell.PairID < 0 {
 			continue
 		}
-		for _, arc := range graph.arcs {
-			if arc.sectionIndex == cell.sectionIndex &&
-				id != arc.endpointCellIDs[0] && id != arc.endpointCellIDs[1] {
+		for _, arc := range graph.Arcs {
+			if arc.SectionIndex == cell.SectionIndex &&
+				id != arc.EndpointCellIDs[0] && id != arc.EndpointCellIDs[1] {
 				selected = id
 				break
 			}
@@ -36,24 +37,24 @@ func TestCurvedVerticalTraceConsumesLiveGraphAndShell(t *testing.T) {
 		}
 	}
 	require.GreaterOrEqual(t, selected, 0)
-	shell, boundGraph, trace, built, err := revolveLoftFacesBlankShellWithVerticalTrace(
+	shell, boundGraph, trace, built, err := revolvecontact.BlankShellWithVerticalTrace(
 		t.Context(), proof, selected)
 	require.NoError(t, err)
 	require.True(t, built)
 	require.NotNil(t, shell)
 	require.NotNil(t, boundGraph)
 	require.NotNil(t, trace)
-	require.Contains(t, trace.cellIDs, selected)
-	require.Len(t, shell.Seams, len(boundGraph.runs))
-	require.Len(t, shell.capRings, len(boundGraph.arcs))
+	require.Contains(t, trace.CellIDs, selected)
+	require.Len(t, shell.Seams, len(boundGraph.Runs))
+	require.Len(t, shell.CapRings, len(boundGraph.Arcs))
 	require.Len(t, shell.TriangleCells, len(shell.Mesh.Tris))
 	require.True(t, shell.EulerTwo())
 	require.Less(t, shell.FaceBound, 0.1)
-	require.Less(t, trace.loftBound, 0.1)
-	require.Greater(t, len(trace.vertices), 2)
-	require.Len(t, trace.edgeWedges, len(trace.vertices)-1)
-	require.Len(t, trace.edgeCellIDs, len(trace.edgeWedges))
-	require.Len(t, trace.vertexRays, len(trace.vertices))
+	require.Less(t, trace.LoftBound, 0.1)
+	require.Greater(t, len(trace.Vertices), 2)
+	require.Len(t, trace.EdgeWedges, len(trace.Vertices)-1)
+	require.Len(t, trace.EdgeCellIDs, len(trace.EdgeWedges))
+	require.Len(t, trace.VertexRays, len(trace.Vertices))
 	seenCells := make(map[revolveloftfaces.ShellTriangleCell]bool)
 	incident := make(map[[2]int][]revolveloftfaces.ShellTriangleCell)
 	for i, tri := range shell.Mesh.Tris {
@@ -69,33 +70,33 @@ func TestCurvedVerticalTraceConsumesLiveGraphAndShell(t *testing.T) {
 		}
 	}
 	seenRayContacts := make(map[int]int)
-	for i, wedge := range trace.edgeWedges {
-		edge := [2]int{trace.vertices[i], trace.vertices[i+1]}
+	for i, wedge := range trace.EdgeWedges {
+		edge := [2]int{trace.Vertices[i], trace.Vertices[i+1]}
 		slices.Sort(edge[:])
 		require.Len(t, incident[edge], 2)
 		for _, cell := range incident[edge] {
-			require.Equal(t, trace.sectionIndex, cell.Section)
+			require.Equal(t, trace.SectionIndex, cell.Section)
 			require.Equal(t, wedge, cell.Ray)
 		}
-		require.Contains(t, trace.cellIDs, trace.edgeCellIDs[i])
+		require.Contains(t, trace.CellIDs, trace.EdgeCellIDs[i])
 		seenRayContacts[wedge]++
 	}
-	require.Greater(t, seenRayContacts[trace.edgeWedges[0]], 1)
-	var capRing *revolveLoftFacesShellCapRing
-	for i := range shell.capRings {
-		candidate := &shell.capRings[i]
-		if candidate.Section == trace.sectionIndex && candidate.endpointGraphIDs == trace.capIDs {
+	require.Greater(t, seenRayContacts[trace.EdgeWedges[0]], 1)
+	var capRing *revolvecontact.ShellCapRing
+	for i := range shell.CapRings {
+		candidate := &shell.CapRings[i]
+		if candidate.Section == trace.SectionIndex && candidate.EndpointGraphIDs == trace.CapIDs {
 			capRing = candidate
 			break
 		}
 	}
 	require.NotNil(t, capRing)
-	require.Len(t, trace.cellIDs, 3)
+	require.Len(t, trace.CellIDs, 3)
 	for endpoint, capVertex := range capRing.Endpoints {
 		capRay := slices.Index(capRing.Vertices, capVertex)
 		require.GreaterOrEqual(t, capRay, 0)
 		contacts := make([]int, 0, 2)
-		for i, ray := range trace.vertexRays {
+		for i, ray := range trace.VertexRays {
 			if ray == capRay {
 				contacts = append(contacts, i)
 			}
@@ -103,78 +104,78 @@ func TestCurvedVerticalTraceConsumesLiveGraphAndShell(t *testing.T) {
 		require.Len(t, contacts, 2, "each cap ray must retain its inner arc contact")
 		inner := contacts[1-endpoint]
 		require.Greater(t, inner, 0)
-		require.Less(t, inner, len(trace.vertices)-1)
-		require.Equal(t, trace.cellIDs[1], trace.edgeCellIDs[inner-1])
-		require.Equal(t, trace.cellIDs[1], trace.edgeCellIDs[inner])
-		require.NotEqual(t, trace.edgeWedges[inner-1], trace.edgeWedges[inner])
+		require.Less(t, inner, len(trace.Vertices)-1)
+		require.Equal(t, trace.CellIDs[1], trace.EdgeCellIDs[inner-1])
+		require.Equal(t, trace.CellIDs[1], trace.EdgeCellIDs[inner])
+		require.NotEqual(t, trace.EdgeWedges[inner-1], trace.EdgeWedges[inner])
 	}
 	t.Logf("vertical trace: %d cells, %d vertices, bound %.9g mm; shell %d vertices, %d triangles",
-		len(trace.cellIDs), len(trace.vertices), trace.loftBound,
+		len(trace.CellIDs), len(trace.Vertices), trace.LoftBound,
 		len(shell.Mesh.Verts), len(shell.Mesh.Tris))
 }
 
 func TestVerticalTraceRefusesChangedSourceAndRayOwners(t *testing.T) {
 	blank, tooth, _ := neutralArcSeamSource(t)
-	proof, ok, err := certifyRevolveLoftFacesSource(t.Context(), blank, tooth)
+	proof, ok, err := revolvecontact.CertifySource(t.Context(), bodyNode(blank), bodyNode(tooth))
 	require.NoError(t, err)
 	require.True(t, ok)
-	shell, graph, ok, err := revolveLoftFacesBlankShellWithAllRuns(t.Context(), proof)
+	shell, graph, ok, err := revolvecontact.BlankShellWithAllRuns(t.Context(), proof)
 	require.NoError(t, err)
 	require.True(t, ok)
-	var arc *revolveLoftFacesGraphArc
-	var ring *revolveLoftFacesShellCapRing
-	for i := range graph.arcs {
-		candidate := &graph.arcs[i]
-		if proof.section.Spans[candidate.sectionIndex].Start.U ==
-			proof.section.Spans[candidate.sectionIndex].End.U {
+	var arc *revolvecontact.GraphArc
+	var ring *revolvecontact.ShellCapRing
+	for i := range graph.Arcs {
+		candidate := &graph.Arcs[i]
+		if proof.Section.Spans[candidate.SectionIndex].Start.U ==
+			proof.Section.Spans[candidate.SectionIndex].End.U {
 			arc = candidate
 			break
 		}
 	}
 	require.NotNil(t, arc)
-	for i := range shell.capRings {
-		if shell.capRings[i].Section == arc.sectionIndex {
-			ring = &shell.capRings[i]
+	for i := range shell.CapRings {
+		if shell.CapRings[i].Section == arc.SectionIndex {
+			ring = &shell.CapRings[i]
 			break
 		}
 	}
 	require.NotNil(t, ring)
-	pieces, chained := revolveLoftFacesVerticalTraceChain(graph, arc)
+	pieces, chained := revolvecontact.VerticalTraceChain(graph, arc)
 	require.True(t, chained)
 	sourcePieces := make([]revolveloftfaces.VerticalTraceSourcePiece, len(pieces))
 	for i := range pieces {
 		sourcePieces[i] = pieces[i].VerticalTraceSourcePiece
 	}
-	require.True(t, revolveloftfaces.VerticalTraceSourceProof(sourcePieces, arc.arc.circle.radius))
+	require.True(t, revolveloftfaces.VerticalTraceSourceProof(sourcePieces, arc.Arc.Circle.Radius))
 
-	copyGraph := func() *revolveLoftFacesContactGraph {
+	copyGraph := func() *revolvecontact.ContactGraph {
 		clone := *graph
-		clone.cells = append([]revolveLoftFacesGraphCell(nil), graph.cells...)
+		clone.Cells = append([]revolvecontact.GraphCell(nil), graph.Cells...)
 		return &clone
 	}
 	bad := copyGraph()
-	owner := arc.endpointCellIDs[0]
-	vertical := *bad.cells[owner].vertical
-	vertical.retained = append([]loftface.VerticalPiece(nil), vertical.retained...)
-	vertical.retained[0].LoOpen = true
-	bad.cells[owner].vertical = &vertical
-	_, chained = revolveLoftFacesVerticalTraceChain(bad, arc)
+	owner := arc.EndpointCellIDs[0]
+	vertical := *bad.Cells[owner].Vertical
+	vertical.Retained = append([]loftface.VerticalPiece(nil), vertical.Retained...)
+	vertical.Retained[0].LoOpen = true
+	bad.Cells[owner].Vertical = &vertical
+	_, chained = revolvecontact.VerticalTraceChain(bad, arc)
 	require.False(t, chained, "an open retained root cannot own a cap endpoint")
 
 	bad = copyGraph()
-	vertical = *bad.cells[owner].vertical
-	vertical.upper.Root.Lo = lfZero()
-	bad.cells[owner].vertical = &vertical
-	_, chained = revolveLoftFacesVerticalTraceChain(bad, arc)
+	vertical = *bad.Cells[owner].Vertical
+	vertical.Upper.Root.Lo = lfZero()
+	bad.Cells[owner].Vertical = &vertical
+	_, chained = revolvecontact.VerticalTraceChain(bad, arc)
 	require.False(t, chained, "a changed root interval loses its graph-owned cap tie")
 
 	duplicate := *arc
-	duplicate.endpointCellIDs[1] = duplicate.endpointCellIDs[0]
-	_, chained = revolveLoftFacesVerticalTraceChain(graph, &duplicate)
+	duplicate.EndpointCellIDs[1] = duplicate.EndpointCellIDs[0]
+	_, chained = revolvecontact.VerticalTraceChain(graph, &duplicate)
 	require.False(t, chained)
 	missing := *arc
-	missing.endpointCellIDs[0] = -1
-	_, chained = revolveLoftFacesVerticalTraceChain(graph, &missing)
+	missing.EndpointCellIDs[0] = -1
+	_, chained = revolvecontact.VerticalTraceChain(graph, &missing)
 	require.False(t, chained)
 
 	wrongCenter := *pieces[1].Affine
@@ -186,14 +187,14 @@ func TestVerticalTraceRefusesChangedSourceAndRayOwners(t *testing.T) {
 	source := *trim.Source
 	live := *source.Source
 	live.Entities = slices.Clone(live.Entities)
-	live.Entities[pieces[1].cell.segment] = nil
+	live.Entities[pieces[1].Cell.Segment] = nil
 	source.Source = &live
 	trim.Source = &source
 	payload.LoftFacesTrim = &trim
 	partialTooth := bornBody(&Body{n: topo.Body{Payload: payload}})
 	partialGraph := *graph
-	partialGraph.tooth = partialTooth
-	_, chained = revolveLoftFacesVerticalTraceChain(&partialGraph, arc)
+	partialGraph.Tooth = bodyNode(partialTooth)
+	_, chained = revolvecontact.VerticalTraceChain(&partialGraph, arc)
 	require.False(t, chained, "a partial live Sketch cannot supply the arc contact")
 
 	capRays := [2]int{-1, -1}
@@ -211,9 +212,9 @@ func TestVerticalTraceRefusesChangedSourceAndRayOwners(t *testing.T) {
 
 	badEndpoints := ring.Endpoints
 	badEndpoints[1] = badEndpoints[0]
-	path, built, err := revolveloftfaces.VerticalTracePath(t.Context(), proof.trim.Maps,
+	path, built, err := revolveloftfaces.VerticalTracePath(t.Context(), proof.Trim.Maps,
 		shell.Rays, shell.Mesh.Verts, shell.VertexBounds, ring.Vertices, badEndpoints,
-		ring.arc.circle.radius, sourcePieces)
+		ring.Arc.Circle.Radius, sourcePieces)
 	require.NoError(t, err)
 	require.False(t, built, "a repeated cap endpoint cannot start a trace")
 	require.Empty(t, path.Nodes)
@@ -224,9 +225,9 @@ func TestVerticalTraceRefusesChangedSourceAndRayOwners(t *testing.T) {
 	require.True(t, joined)
 	moved := shell.Mesh.Verts[ring.Endpoints[0]]
 	moved.Y++
-	motionBound, bounded := revolveloftfaces.VerticalTraceSegmentBound(proof.trim.Maps, sourcePieces[0],
+	motionBound, bounded := revolveloftfaces.VerticalTraceSegmentBound(proof.Trim.Maps, sourcePieces[0],
 		revolveloftfaces.VerticalTraceHit{Piece: 0, Ray: capRays[0],
-			Lo: pieces[0].cell.upper.Root.Lo, Hi: pieces[0].cell.upper.Root.Hi},
+			Lo: pieces[0].Cell.Upper.Root.Lo, Hi: pieces[0].Cell.Upper.Root.Hi},
 		revolveloftfaces.VerticalTraceHit{Piece: 0, Ray: -1,
 			Lo: pieces[0].To, Hi: pieces[0].To},
 		[2]*big.Rat{startRay.Y, startRay.Z}, direction, moved, join, shell.Rays)
@@ -234,14 +235,14 @@ func TestVerticalTraceRefusesChangedSourceAndRayOwners(t *testing.T) {
 	require.Greater(t, motionBound, 0.1, "a moved endpoint exceeds the trace fit limit")
 
 	badProof := *proof
-	badProof.tooth = nil
-	_, built, err = revolveLoftFacesInsertVerticalTrace(t.Context(), &badProof,
-		shell, graph, arc.endpointCellIDs[0])
+	badProof.Tooth = nil
+	_, built, err = revolvecontact.InsertVerticalTrace(t.Context(), &badProof,
+		shell, graph, arc.EndpointCellIDs[0])
 	require.NoError(t, err)
 	require.False(t, built, "a stale source certificate cannot move the shell")
 	bad = copyGraph()
-	bad.cells[owner].sideIndex = -1
-	_, built, err = revolveLoftFacesInsertVerticalTrace(t.Context(), proof,
+	bad.Cells[owner].SideIndex = -1
+	_, built, err = revolvecontact.InsertVerticalTrace(t.Context(), proof,
 		shell, bad, owner)
 	require.NoError(t, err)
 	require.False(t, built, "a stale graph cannot move the shell")

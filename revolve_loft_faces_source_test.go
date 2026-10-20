@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/revolvecontact"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -141,26 +142,26 @@ func neutralArcSeamSource(t *testing.T) (*Body, *Body, *loftFacesTrimRecord) {
 
 func TestCurvedLoftFacesSourceCertifiesLiveProducer(t *testing.T) {
 	blank, tooth, trim := neutralArcSeamSource(t)
-	proof, ok, err := certifyRevolveLoftFacesSource(t.Context(), blank, tooth)
+	proof, ok, err := revolvecontact.CertifySource(t.Context(), bodyNode(blank), bodyNode(tooth))
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.NotNil(t, proof)
-	require.Same(t, blank, proof.blank)
-	require.Same(t, tooth, proof.tooth)
-	require.Same(t, trim, proof.trim)
-	require.Len(t, proof.sourceRefs, len(trim.Maps)-1)
-	require.NotNil(t, proof.toeFace)
-	require.NotNil(t, proof.heelFace)
-	require.NotNil(t, proof.crossings[0].span)
-	require.NotNil(t, proof.crossings[1].span)
-	require.NotEqual(t, proof.crossings[0].segment, proof.crossings[1].segment)
+	require.Same(t, bodyNode(blank), proof.Blank)
+	require.Same(t, bodyNode(tooth), proof.Tooth)
+	require.Same(t, trim, proof.Trim)
+	require.Len(t, proof.SourceRefs, len(trim.Maps)-1)
+	require.NotNil(t, proof.ToeFace)
+	require.NotNil(t, proof.HeelFace)
+	require.NotNil(t, proof.Crossings[0].Span)
+	require.NotNil(t, proof.Crossings[1].Span)
+	require.NotEqual(t, proof.Crossings[0].Segment, proof.Crossings[1].Segment)
 	t.Run("changed retained Revolve side surface", func(t *testing.T) {
-		_, complete, err := revolveLoftFacesAllSideManifest(t.Context(), proof)
+		_, complete, err := revolvecontact.AllSideManifest(t.Context(), proof)
 		require.NoError(t, err)
 		require.True(t, complete)
 		var face *Face
-		for index, span := range proof.section.Spans {
-			if index == proof.section.RootSpan || span.Face == nil {
+		for index, span := range proof.Section.Spans {
+			if index == proof.Section.RootSpan || span.Face == nil {
 				continue
 			}
 			if _, ok := span.Face.Surface.(surfacegeom.Cone); ok {
@@ -174,11 +175,11 @@ func TestCurvedLoftFacesSourceCertifiesLiveProducer(t *testing.T) {
 		changed := original.(surfacegeom.Cone)
 		changed.Origin.X += 0.125
 		face.n.Surface = changed
-		require.False(t, revolveLoftFacesSectionCurrent(proof))
-		_, certified, err := certifyRevolveLoftFacesSource(t.Context(), blank, tooth)
+		require.False(t, revolvecontact.SectionCurrent(proof))
+		_, certified, err := revolvecontact.CertifySource(t.Context(), bodyNode(blank), bodyNode(tooth))
 		require.NoError(t, err)
 		require.False(t, certified)
-		_, complete, err = revolveLoftFacesAllSideManifest(t.Context(), proof)
+		_, complete, err = revolvecontact.AllSideManifest(t.Context(), proof)
 		require.NoError(t, err)
 		require.False(t, complete)
 	})
@@ -191,7 +192,7 @@ func TestCurvedLoftFacesSourceCertifiesLiveProducer(t *testing.T) {
 		require.NotEmpty(t, changed.SourceDeparture)
 		changed.SourceDeparture[0]++
 		trim.Bounds[0] = changed
-		_, certified, err := certifyRevolveLoftFacesSource(t.Context(), blank, tooth)
+		_, certified, err := revolvecontact.CertifySource(t.Context(), bodyNode(blank), bodyNode(tooth))
 		require.NoError(t, err)
 		require.False(t, certified)
 	})
@@ -199,17 +200,17 @@ func TestCurvedLoftFacesSourceCertifiesLiveProducer(t *testing.T) {
 		original := trim.StationGroup[0]
 		defer func() { trim.StationGroup[0] = original }()
 		trim.StationGroup[0] = original + 1
-		_, certified, err := certifyRevolveLoftFacesSource(t.Context(), blank, tooth)
+		_, certified, err := revolvecontact.CertifySource(t.Context(), bodyNode(blank), bodyNode(tooth))
 		require.NoError(t, err)
 		require.False(t, certified)
 	})
 
 	var owner *Face
 	var ref provenance.Ref
-	for band, face := range proof.crossings[0].faces {
+	for band, face := range proof.Crossings[0].Faces {
 		if face != nil {
-			owner = face
-			ref = proof.sourceRefs[band][proof.crossings[0].segment]
+			owner = faceHandle(face)
+			ref = proof.SourceRefs[band][proof.Crossings[0].Segment]
 			break
 		}
 	}
@@ -219,7 +220,7 @@ func TestCurvedLoftFacesSourceCertifiesLiveProducer(t *testing.T) {
 		defer func() { owner.n.Origins = original }()
 		owner.n.Origins = slices.DeleteFunc(slices.Clone(original),
 			func(got provenance.Ref) bool { return got == ref })
-		_, certified, err := certifyRevolveLoftFacesSource(t.Context(), blank, tooth)
+		_, certified, err := revolvecontact.CertifySource(t.Context(), bodyNode(blank), bodyNode(tooth))
 		require.NoError(t, err)
 		require.False(t, certified)
 	})
@@ -235,7 +236,7 @@ func TestCurvedLoftFacesSourceCertifiesLiveProducer(t *testing.T) {
 		original := other.n.Origins
 		defer func() { other.n.Origins = original }()
 		other.n.Origins = append(slices.Clone(original), ref)
-		_, certified, err := certifyRevolveLoftFacesSource(t.Context(), blank, tooth)
+		_, certified, err := revolvecontact.CertifySource(t.Context(), bodyNode(blank), bodyNode(tooth))
 		require.NoError(t, err)
 		require.False(t, certified)
 	})

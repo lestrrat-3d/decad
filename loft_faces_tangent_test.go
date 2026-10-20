@@ -494,8 +494,8 @@ func TestLoftFacesTangentHeelIntersectKeepsTrimRecord(t *testing.T) {
 	require.Len(t, trimRecord.Maps, 3)
 
 	// The end cap does not survive; the heel cone is one face.
-	require.NotNil(t, uniqueResultSourceFace(trim, trimRecord.HeelCapGroup))
-	require.NotNil(t, uniqueResultSourceFace(trim, trimRecord.ToeCapGroup))
+	require.NotNil(t, resultSourceFace(trim, trimRecord.HeelCapGroup))
+	require.NotNil(t, resultSourceFace(trim, trimRecord.ToeCapGroup))
 	_, err = Faces(FaceCreatedBy(CapEnd(c.loft))).SelectFaces(trim)
 	require.ErrorIs(t, err, ErrNoMatch, "no result face descends from the planar end cap")
 

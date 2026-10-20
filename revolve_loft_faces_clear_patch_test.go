@@ -6,24 +6,24 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/pointquery"
+	"github.com/lestrrat-3d/decad/internal/revolvecontact"
 	"github.com/lestrrat-3d/decad/internal/topo"
-	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
 
 func TestCurvedClearPatchCertifiesRealTrimmedTool(t *testing.T) {
 	blank, trimmed, _ := neutralArcSeamSource(t)
-	source, ok, err := certifyRevolveLoftFacesSource(t.Context(), blank, trimmed)
+	source, ok, err := revolvecontact.CertifySource(t.Context(), bodyNode(blank), bodyNode(trimmed))
 	require.NoError(t, err)
 	require.True(t, ok)
-	classifier, built, err := newRevolveLoftFacesClearPatchContext(t.Context(), source, units.Millimeters(0.1))
+	classifier, built, err := revolvecontact.NewClearPatchContext(t.Context(), verifyAllMesher{}, source, 0.1)
 	require.NoError(t, err)
 	require.True(t, built)
-	require.NotEmpty(t, classifier.shell.Mesh.Tris)
-	require.NotEmpty(t, classifier.tool.n.Triangles)
+	require.NotEmpty(t, classifier.Shell.Mesh.Tris)
+	require.NotEmpty(t, classifier.Tool.Triangles)
 	index := -1
-	for i := range classifier.shell.Mesh.Tris {
-		location, certified, checkErr := classifier.classify(t.Context(), i)
+	for i := range classifier.Shell.Mesh.Tris {
+		location, certified, checkErr := classifier.Classify(t.Context(), i)
 		require.NoError(t, checkErr)
 		if certified {
 			require.Equal(t, pointquery.Outside, location)
@@ -32,16 +32,16 @@ func TestCurvedClearPatchCertifiesRealTrimmedTool(t *testing.T) {
 		}
 	}
 	require.GreaterOrEqual(t, index, 0)
-	seamVertex := classifier.shell.Seams[0][len(classifier.shell.Seams[0])/2]
+	seamVertex := classifier.Shell.Seams[0][len(classifier.Shell.Seams[0])/2]
 	seamTriangle := -1
-	for i, tri := range classifier.shell.Mesh.Tris {
+	for i, tri := range classifier.Shell.Mesh.Tris {
 		if slices.Contains(tri[:], seamVertex) {
 			seamTriangle = i
 			break
 		}
 	}
 	require.GreaterOrEqual(t, seamTriangle, 0)
-	location, certified, err := classifier.classify(t.Context(), seamTriangle)
+	location, certified, err := classifier.Classify(t.Context(), seamTriangle)
 	require.NoError(t, err)
 	require.False(t, certified)
 	require.Equal(t, pointquery.Undecided, location)
@@ -49,16 +49,16 @@ func TestCurvedClearPatchCertifiesRealTrimmedTool(t *testing.T) {
 
 func TestCurvedClearPatchRefusesUnprovedClaims(t *testing.T) {
 	blank, trimmed, trim := neutralArcSeamSource(t)
-	source, ok, err := certifyRevolveLoftFacesSource(t.Context(), blank, trimmed)
+	source, ok, err := revolvecontact.CertifySource(t.Context(), bodyNode(blank), bodyNode(trimmed))
 	require.NoError(t, err)
 	require.True(t, ok)
-	classifier, ok, err := newRevolveLoftFacesClearPatchContext(t.Context(), source, units.Millimeters(0.1))
+	classifier, ok, err := revolvecontact.NewClearPatchContext(t.Context(), verifyAllMesher{}, source, 0.1)
 	require.NoError(t, err)
 	require.True(t, ok)
-	shell, tool := classifier.shell, classifier.tool
+	shell, tool := classifier.Shell, classifier.Tool
 	index := -1
 	for i := range shell.Mesh.Tris {
-		location, certified, checkErr := classifier.classify(t.Context(), i)
+		location, certified, checkErr := classifier.Classify(t.Context(), i)
 		require.NoError(t, checkErr)
 		if certified {
 			require.Equal(t, pointquery.Outside, location)
@@ -67,16 +67,16 @@ func TestCurvedClearPatchRefusesUnprovedClaims(t *testing.T) {
 		}
 	}
 	require.GreaterOrEqual(t, index, 0)
-	refuses := func(t *testing.T, classifier *revolveLoftFacesClearPatchContext) {
+	refuses := func(t *testing.T, classifier *revolvecontact.ClearPatchContext) {
 		t.Helper()
-		location, certified, checkErr := classifier.classify(t.Context(), index)
+		location, certified, checkErr := classifier.Classify(t.Context(), index)
 		require.NoError(t, checkErr)
 		require.False(t, certified)
 		require.Equal(t, pointquery.Undecided, location)
 	}
 	refusesEntry := func(t *testing.T) {
 		t.Helper()
-		_, built, buildErr := newRevolveLoftFacesClearPatchContext(t.Context(), source, units.Millimeters(0.1))
+		_, built, buildErr := revolvecontact.NewClearPatchContext(t.Context(), verifyAllMesher{}, source, 0.1)
 		require.NoError(t, buildErr)
 		require.False(t, built)
 	}
@@ -121,16 +121,16 @@ func TestCurvedClearPatchRefusesUnprovedClaims(t *testing.T) {
 		refuses(t, classifier)
 	})
 	t.Run("changed owned tool facet after context", func(t *testing.T) {
-		original := classifier.tool.n.Vertices[0]
-		classifier.tool.n.Vertices[0].X += 1
-		defer func() { classifier.tool.n.Vertices[0] = original }()
+		original := classifier.Tool.Vertices[0]
+		classifier.Tool.Vertices[0].X += 1
+		defer func() { classifier.Tool.Vertices[0] = original }()
 		refuses(t, classifier)
 	})
 	t.Run("understated owned tool bound after context", func(t *testing.T) {
-		original := classifier.tool.n.Bound
+		original := classifier.Tool.Bound
 		require.Positive(t, original)
-		classifier.tool.n.Bound = math.Nextafter(original, 0)
-		defer func() { classifier.tool.n.Bound = original }()
+		classifier.Tool.Bound = math.Nextafter(original, 0)
+		defer func() { classifier.Tool.Bound = original }()
 		refuses(t, classifier)
 	})
 	t.Run("changed owned shell vertex after context", func(t *testing.T) {
@@ -149,8 +149,8 @@ func TestCurvedClearPatchRefusesUnprovedClaims(t *testing.T) {
 	})
 	t.Run("changed cached facet", func(t *testing.T) {
 		original := trimmed.n.Tess.Load()
-		changed := bornMesh(&Mesh{n: tool.n})
-		changed.n.Vertices = slices.Clone(tool.n.Vertices)
+		changed := bornMesh(&Mesh{n: *tool})
+		changed.n.Vertices = slices.Clone(tool.Vertices)
 		changed.n.Vertices[0].X += 1
 		trimmed.n.Tess.Store(&topo.TessEntry{
 			ChordBits: math.Float64bits(0.1), Verify: int(VerifyAll), Mesh: meshNode(changed)})
@@ -158,10 +158,10 @@ func TestCurvedClearPatchRefusesUnprovedClaims(t *testing.T) {
 		refusesEntry(t)
 	})
 	t.Run("understated positive cached bound", func(t *testing.T) {
-		require.Positive(t, tool.n.Bound)
+		require.Positive(t, tool.Bound)
 		original := trimmed.n.Tess.Load()
-		changed := bornMesh(&Mesh{n: tool.n})
-		changed.n.Bound = math.Nextafter(tool.n.Bound, 0)
+		changed := bornMesh(&Mesh{n: *tool})
+		changed.n.Bound = math.Nextafter(tool.Bound, 0)
 		require.Positive(t, changed.n.Bound)
 		trimmed.n.Tess.Store(&topo.TessEntry{
 			ChordBits: math.Float64bits(0.1), Verify: int(VerifyAll), Mesh: meshNode(changed)})
@@ -172,15 +172,15 @@ func TestCurvedClearPatchRefusesUnprovedClaims(t *testing.T) {
 		changed := *shell
 		changed.FaceBound = 0
 		modified := *classifier
-		modified.shell = &changed
+		modified.Shell = &changed
 		refuses(t, &modified)
 	})
 	t.Run("wrong triangle provenance", func(t *testing.T) {
 		changed := *shell
 		changed.TriangleCells = slices.Clone(shell.TriangleCells)
-		changed.TriangleCells[index].Section = len(source.section.Spans)
+		changed.TriangleCells[index].Section = len(source.Section.Spans)
 		modified := *classifier
-		modified.shell = &changed
+		modified.Shell = &changed
 		refuses(t, &modified)
 	})
 	t.Run("wrong source group", func(t *testing.T) {
@@ -189,7 +189,7 @@ func TestCurvedClearPatchRefusesUnprovedClaims(t *testing.T) {
 		changed.Mesh.Src = slices.Clone(shell.Mesh.Src)
 		changed.Mesh.Src[index] = len(shell.Mesh.Groups)
 		modified := *classifier
-		modified.shell = &changed
+		modified.Shell = &changed
 		refuses(t, &modified)
 	})
 	t.Run("understated corner bound", func(t *testing.T) {
@@ -197,28 +197,31 @@ func TestCurvedClearPatchRefusesUnprovedClaims(t *testing.T) {
 		changed.VertexBounds = slices.Clone(shell.VertexBounds)
 		changed.VertexBounds[shell.Mesh.Tris[index][0]] = shell.FaceBound + 1
 		modified := *classifier
-		modified.shell = &changed
+		modified.Shell = &changed
 		refuses(t, &modified)
 	})
 	t.Run("insufficient separation", func(t *testing.T) {
-		changed := bornMesh(&Mesh{n: tool.n})
-		changed.n.Bound = 1000
+		copied := *tool
+		changed := &copied
+		changed.Bound = 1000
 		modified := *classifier
-		modified.tool = changed
+		modified.Tool = changed
 		refuses(t, &modified)
 	})
 	t.Run("undecided point location", func(t *testing.T) {
-		changed := bornMesh(&Mesh{n: tool.n})
-		changed.n.VolSymDiff = math.MaxFloat64
+		copied := *tool
+		changed := &copied
+		changed.VolSymDiff = math.MaxFloat64
 		modified := *classifier
-		modified.tool = changed
+		modified.Tool = changed
 		refuses(t, &modified)
 	})
 	t.Run("unverified tool", func(t *testing.T) {
-		changed := bornMesh(&Mesh{n: tool.n})
-		changed.n.SymDiffOK = false
+		copied := *tool
+		changed := &copied
+		changed.SymDiffOK = false
 		modified := *classifier
-		modified.tool = changed
+		modified.Tool = changed
 		refuses(t, &modified)
 	})
 }

@@ -5,53 +5,54 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/revolvecontact"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/stretchr/testify/require"
 )
 
 func TestCurvedHeelCapEndpointsHaveSourceBounds(t *testing.T) {
 	blank, trimmed, _ := neutralArcSeamSource(t)
-	proof, ok, err := certifyRevolveLoftFacesSource(t.Context(), blank, trimmed)
+	proof, ok, err := revolvecontact.CertifySource(t.Context(), bodyNode(blank), bodyNode(trimmed))
 	require.NoError(t, err)
 	require.True(t, ok)
-	census, ok, err := revolveLoftFacesCensus(t.Context(), proof)
+	census, ok, err := revolvecontact.Census(t.Context(), proof)
 	require.NoError(t, err)
 	require.True(t, ok)
 	arcs, endpoints := 0, 0
 	checkedMutation := false
-	for _, pair := range census.pairs {
-		if pair.verdict != revolveLoftFacesPairToolArc {
+	for _, pair := range census.Pairs {
+		if pair.Verdict != revolvecontact.PairToolArc {
 			continue
 		}
 		arcs++
-		vertices, built, buildErr := revolveLoftFacesCapArcSeamVertices(
-			t.Context(), proof, pair.toolArc)
+		vertices, built, buildErr := revolvecontact.CapArcSeamVertices(
+			t.Context(), proof, pair.ToolArc)
 		require.NoError(t, buildErr)
 		require.True(t, built)
 		for i, vertex := range vertices {
 			endpoints++
-			require.Less(t, vertex.blankBound, 0.1)
-			require.Less(t, vertex.loftBound, 0.1)
-			require.Greater(t, vertex.point.Y, 0.0)
+			require.Less(t, vertex.BlankBound, 0.1)
+			require.Less(t, vertex.LoftBound, 0.1)
+			require.Greater(t, vertex.Point.Y, 0.0)
 			if i == 0 {
-				require.Less(t, vertex.point.Z, 0.0)
+				require.Less(t, vertex.Point.Z, 0.0)
 			} else {
-				require.Greater(t, vertex.point.Z, 0.0)
+				require.Greater(t, vertex.Point.Z, 0.0)
 			}
 			t.Logf("heel endpoint section=%d side=%d bound=%.9g mm",
-				pair.sectionIndex, i, vertex.blankBound)
+				pair.SectionIndex, i, vertex.BlankBound)
 		}
 		if !checkedMutation {
-			changedTime := *pair.toolArc
-			changedTime.time = lfAdd(changedTime.time, big.NewRat(1, 1<<20))
-			_, accepted, mutationErr := revolveLoftFacesCapArcSeamVertices(
+			changedTime := *pair.ToolArc
+			changedTime.Time = lfAdd(changedTime.Time, big.NewRat(1, 1<<20))
+			_, accepted, mutationErr := revolvecontact.CapArcSeamVertices(
 				t.Context(), proof, &changedTime)
 			require.NoError(t, mutationErr)
 			require.False(t, accepted)
-			changedBox := *pair.toolArc
-			changedBox.negativeZ.box[1].Lo = lfAdd(
-				changedBox.negativeZ.box[1].Lo, big.NewRat(1, 1<<20))
-			_, accepted, mutationErr = revolveLoftFacesCapArcSeamVertices(
+			changedBox := *pair.ToolArc
+			changedBox.NegativeZ.Box[1].Lo = lfAdd(
+				changedBox.NegativeZ.Box[1].Lo, big.NewRat(1, 1<<20))
+			_, accepted, mutationErr = revolvecontact.CapArcSeamVertices(
 				t.Context(), proof, &changedBox)
 			require.NoError(t, mutationErr)
 			require.False(t, accepted)
@@ -65,29 +66,29 @@ func TestCurvedHeelCapEndpointsHaveSourceBounds(t *testing.T) {
 
 func TestCurvedHeelArcEndpointsBindToLiveSideCells(t *testing.T) {
 	blank, trimmed, _ := neutralArcSeamSource(t)
-	proof, ok, err := certifyRevolveLoftFacesSource(t.Context(), blank, trimmed)
+	proof, ok, err := revolvecontact.CertifySource(t.Context(), bodyNode(blank), bodyNode(trimmed))
 	require.NoError(t, err)
 	require.True(t, ok)
-	census, ok, err := revolveLoftFacesCensus(t.Context(), proof)
+	census, ok, err := revolvecontact.Census(t.Context(), proof)
 	require.NoError(t, err)
 	require.True(t, ok)
 	count := 0
 	verticalCount := 0
 	slopedCount := 0
-	for _, pair := range census.pairs {
-		if pair.verdict != revolveLoftFacesPairToolArc {
+	for _, pair := range census.Pairs {
+		if pair.Verdict != revolvecontact.PairToolArc {
 			continue
 		}
-		ties, certified, err := revolveLoftFacesHeelArcSideTiesOf(t.Context(), proof, pair.toolArc)
+		ties, certified, err := revolvecontact.HeelArcSideTiesOf(t.Context(), proof, pair.ToolArc)
 		require.NoError(t, err)
-		require.True(t, certified, "blank section %d", pair.sectionIndex)
-		require.Equal(t, pair.toolArc.negativeZ.ref, ties.negativeZ.boundary.ref)
-		require.Equal(t, pair.toolArc.positiveZ.ref, ties.positiveZ.boundary.ref)
-		for _, tie := range [...]revolveLoftFacesCapSideTie{ties.negativeZ, ties.positiveZ} {
-			require.NotNil(t, tie.boundary.face)
-			require.True(t, tie.sourceCell != nil || tie.verticalCell != nil)
-			require.False(t, tie.sourceCell != nil && tie.verticalCell != nil)
-			if tie.verticalCell != nil {
+		require.True(t, certified, "blank section %d", pair.SectionIndex)
+		require.Equal(t, pair.ToolArc.NegativeZ.Ref, ties.NegativeZ.Boundary.Ref)
+		require.Equal(t, pair.ToolArc.PositiveZ.Ref, ties.PositiveZ.Boundary.Ref)
+		for _, tie := range [...]revolvecontact.CapSideTie{ties.NegativeZ, ties.PositiveZ} {
+			require.NotNil(t, tie.Boundary.Face)
+			require.True(t, tie.SourceCell != nil || tie.VerticalCell != nil)
+			require.False(t, tie.SourceCell != nil && tie.VerticalCell != nil)
+			if tie.VerticalCell != nil {
 				verticalCount++
 			} else {
 				slopedCount++
@@ -102,27 +103,27 @@ func TestCurvedHeelArcEndpointsBindToLiveSideCells(t *testing.T) {
 
 func TestCurvedHeelArcSideTiesRejectChangedSourceRecord(t *testing.T) {
 	blank, trimmed, _ := neutralArcSeamSource(t)
-	proof, ok, err := certifyRevolveLoftFacesSource(t.Context(), blank, trimmed)
+	proof, ok, err := revolvecontact.CertifySource(t.Context(), bodyNode(blank), bodyNode(trimmed))
 	require.NoError(t, err)
 	require.True(t, ok)
-	census, ok, err := revolveLoftFacesCensus(t.Context(), proof)
+	census, ok, err := revolvecontact.Census(t.Context(), proof)
 	require.NoError(t, err)
 	require.True(t, ok)
-	for _, pair := range census.pairs {
-		if pair.verdict != revolveLoftFacesPairToolArc {
+	for _, pair := range census.Pairs {
+		if pair.Verdict != revolvecontact.PairToolArc {
 			continue
 		}
-		arc := *pair.toolArc
-		arc.time = new(big.Rat).Add(arc.time, big.NewRat(1, 1<<20))
-		ties, certified, err := revolveLoftFacesHeelArcSideTiesOf(t.Context(), proof, &arc)
+		arc := *pair.ToolArc
+		arc.Time = new(big.Rat).Add(arc.Time, big.NewRat(1, 1<<20))
+		ties, certified, err := revolvecontact.HeelArcSideTiesOf(t.Context(), proof, &arc)
 		require.NoError(t, err)
 		require.False(t, certified)
 		require.Nil(t, ties)
 
-		arc = *pair.toolArc
-		arc.negativeZ.parameter.Lo = new(big.Rat).Add(
-			arc.negativeZ.parameter.Lo, big.NewRat(1, 1<<60))
-		ties, certified, err = revolveLoftFacesHeelArcSideTiesOf(t.Context(), proof, &arc)
+		arc = *pair.ToolArc
+		arc.NegativeZ.Parameter.Lo = new(big.Rat).Add(
+			arc.NegativeZ.Parameter.Lo, big.NewRat(1, 1<<60))
+		ties, certified, err = revolvecontact.HeelArcSideTiesOf(t.Context(), proof, &arc)
 		require.NoError(t, err)
 		require.False(t, certified)
 		require.Nil(t, ties)
@@ -142,71 +143,71 @@ func TestCurvedHeelArcSideTieTimeEndpointOwnership(t *testing.T) {
 
 func TestCurvedHeelArcSideTiesUseCallerCensus(t *testing.T) {
 	blank, trimmed, _ := neutralArcSeamSource(t)
-	proof, ok, err := certifyRevolveLoftFacesSource(t.Context(), blank, trimmed)
+	proof, ok, err := revolvecontact.CertifySource(t.Context(), bodyNode(blank), bodyNode(trimmed))
 	require.NoError(t, err)
 	require.True(t, ok)
-	graph, ok, err := revolveLoftFacesContactGraphOf(t.Context(), proof)
+	graph, ok, err := revolvecontact.ContactGraphOf(t.Context(), proof)
 	require.NoError(t, err)
 	require.True(t, ok)
-	require.Len(t, graph.arcs, 2)
+	require.Len(t, graph.Arcs, 2)
 
-	fresh := make([]*revolveLoftFacesHeelArcSideTies, len(graph.arcs))
-	for i := range graph.arcs {
-		arc := &graph.arcs[i]
-		ties, tied, err := revolveLoftFacesHeelArcSideTiesOf(t.Context(), proof, arc.arc)
+	fresh := make([]*revolvecontact.HeelArcSideTies, len(graph.Arcs))
+	for i := range graph.Arcs {
+		arc := &graph.Arcs[i]
+		ties, tied, err := revolvecontact.HeelArcSideTiesOf(t.Context(), proof, arc.Arc)
 		require.NoError(t, err)
 		require.True(t, tied)
 		fresh[i] = ties
-		for endpoint, tie := range [...]revolveLoftFacesCapSideTie{ties.negativeZ, ties.positiveZ} {
+		for endpoint, tie := range [...]revolvecontact.CapSideTie{ties.NegativeZ, ties.PositiveZ} {
 			id, found := -1, false
-			if tie.sourceCell != nil {
-				id, found = graph.sourceCellID(arc.sectionIndex, arc.arc.circle.blankFace, *tie.sourceCell)
-			} else if tie.verticalCell != nil {
-				id, found = graph.verticalCellID(arc.sectionIndex, arc.arc.circle.blankFace, *tie.verticalCell)
+			if tie.SourceCell != nil {
+				id, found = graph.SourceCellID(arc.SectionIndex, arc.Arc.Circle.BlankFace, *tie.SourceCell)
+			} else if tie.VerticalCell != nil {
+				id, found = graph.VerticalCellID(arc.SectionIndex, arc.Arc.Circle.BlankFace, *tie.VerticalCell)
 			}
 			require.True(t, found)
-			require.Equal(t, arc.endpointCellIDs[endpoint], id, "arc %d endpoint %d", i, endpoint)
+			require.Equal(t, arc.EndpointCellIDs[endpoint], id, "arc %d endpoint %d", i, endpoint)
 		}
 	}
 
-	census, ok, err := revolveLoftFacesCensus(t.Context(), proof)
+	census, ok, err := revolvecontact.Census(t.Context(), proof)
 	require.NoError(t, err)
 	require.True(t, ok)
-	for i := range graph.arcs {
-		arc := graph.arcs[i].arc
-		ties, tied, err := revolveLoftFacesHeelArcSideTiesIn(t.Context(), proof, census, arc)
+	for i := range graph.Arcs {
+		arc := graph.Arcs[i].Arc
+		ties, tied, err := revolvecontact.HeelArcSideTiesIn(t.Context(), proof, census, arc)
 		require.NoError(t, err)
 		require.True(t, tied)
-		want := [...]revolveLoftFacesCapSideTie{fresh[i].negativeZ, fresh[i].positiveZ}
-		for endpoint, got := range [...]revolveLoftFacesCapSideTie{ties.negativeZ, ties.positiveZ} {
-			require.True(t, revolveLoftFacesToolCapBoundaryEqual(want[endpoint].boundary, got.boundary))
-			require.True(t, (got.sourceCell != nil) != (got.verticalCell != nil))
-			require.Equal(t, want[endpoint].sourceCell != nil, got.sourceCell != nil)
-			if got.sourceCell != nil {
-				require.True(t, revolveloftfaces.SameMappedCell(want[endpoint].sourceCell.mapped, got.sourceCell.mapped))
-				require.Equal(t, want[endpoint].sourceCell.ref, got.sourceCell.ref)
+		want := [...]revolvecontact.CapSideTie{fresh[i].NegativeZ, fresh[i].PositiveZ}
+		for endpoint, got := range [...]revolvecontact.CapSideTie{ties.NegativeZ, ties.PositiveZ} {
+			require.True(t, revolvecontact.ToolCapBoundaryEqual(want[endpoint].Boundary, got.Boundary))
+			require.True(t, (got.SourceCell != nil) != (got.VerticalCell != nil))
+			require.Equal(t, want[endpoint].SourceCell != nil, got.SourceCell != nil)
+			if got.SourceCell != nil {
+				require.True(t, revolveloftfaces.SameMappedCell(want[endpoint].SourceCell.Mapped, got.SourceCell.Mapped))
+				require.Equal(t, want[endpoint].SourceCell.Ref, got.SourceCell.Ref)
 			} else {
-				require.True(t, revolveLoftFacesGraphSameVerticalCell(*want[endpoint].verticalCell, *got.verticalCell))
+				require.True(t, revolvecontact.GraphSameVerticalCell(*want[endpoint].VerticalCell, *got.VerticalCell))
 			}
 		}
 
-		ties, tied, err = revolveLoftFacesHeelArcSideTiesIn(t.Context(), proof,
-			&revolveLoftFacesPairCensus{}, arc)
+		ties, tied, err = revolvecontact.HeelArcSideTiesIn(t.Context(), proof,
+			&revolvecontact.PairCensus{}, arc)
 		require.NoError(t, err)
 		require.False(t, tied)
 		require.Nil(t, ties)
 
 		// The verdicts come from the census passed in, not from a fresh one.
 		noPairs := *census
-		noPairs.pairs = nil
-		ties, tied, err = revolveLoftFacesHeelArcSideTiesIn(t.Context(), proof, &noPairs, arc)
+		noPairs.Pairs = nil
+		ties, tied, err = revolvecontact.HeelArcSideTiesIn(t.Context(), proof, &noPairs, arc)
 		require.NoError(t, err)
 		require.False(t, tied)
 		require.Nil(t, ties)
 
 		moved := *arc
-		moved.time = new(big.Rat).Add(arc.time, big.NewRat(1, 1<<20))
-		ties, tied, err = revolveLoftFacesHeelArcSideTiesIn(t.Context(), proof, census, &moved)
+		moved.Time = new(big.Rat).Add(arc.Time, big.NewRat(1, 1<<20))
+		ties, tied, err = revolvecontact.HeelArcSideTiesIn(t.Context(), proof, census, &moved)
 		require.NoError(t, err)
 		require.False(t, tied)
 		require.Nil(t, ties)
@@ -244,18 +245,18 @@ func TestCurvedCapRayOrderRequiresSeparatedSourceBoxes(t *testing.T) {
 
 func TestCurvedSourceCapCirclesSplitClosedBlankShell(t *testing.T) {
 	blank, trimmed, _ := neutralArcSeamSource(t)
-	proof, ok, err := certifyRevolveLoftFacesSource(t.Context(), blank, trimmed)
+	proof, ok, err := revolvecontact.CertifySource(t.Context(), bodyNode(blank), bodyNode(trimmed))
 	require.NoError(t, err)
 	require.True(t, ok)
-	manifest, ok, err := revolveLoftFacesAllSideManifest(t.Context(), proof)
+	manifest, ok, err := revolvecontact.AllSideManifest(t.Context(), proof)
 	require.NoError(t, err)
 	require.True(t, ok)
 	sectionIndex, cellIndex := -1, -1
-	for _, side := range manifest.nonvertical {
-		for index, cell := range side.cells {
-			if cell.mapped.Side == revolveloftfaces.RevolveLoftFacesJointContact &&
-				cell.mapped.JointKind == revolveloftfaces.RevolveLoftFacesWholeArcContact {
-				sectionIndex, cellIndex = side.sectionIndex, index
+	for _, side := range manifest.Nonvertical {
+		for index, cell := range side.Cells {
+			if cell.Mapped.Side == revolveloftfaces.RevolveLoftFacesJointContact &&
+				cell.Mapped.JointKind == revolveloftfaces.RevolveLoftFacesWholeArcContact {
+				sectionIndex, cellIndex = side.SectionIndex, index
 				break
 			}
 		}
@@ -264,11 +265,11 @@ func TestCurvedSourceCapCirclesSplitClosedBlankShell(t *testing.T) {
 		}
 	}
 	require.GreaterOrEqual(t, cellIndex, 0)
-	shell, ok, err := revolveLoftFacesBlankShellWithCapRings(t.Context(), proof,
+	shell, ok, err := revolvecontact.BlankShellWithCapRings(t.Context(), proof,
 		sectionIndex, cellIndex)
 	require.NoError(t, err)
 	require.True(t, ok)
-	require.Len(t, shell.capRings, 2)
+	require.Len(t, shell.CapRings, 2)
 	require.Len(t, shell.VertexBounds, len(shell.Mesh.Verts))
 	require.Less(t, shell.FaceBound, 0.1)
 	require.True(t, shell.EulerTwo())
@@ -281,10 +282,10 @@ func TestCurvedSourceCapCirclesSplitClosedBlankShell(t *testing.T) {
 	}
 	require.Equal(t, 2, len(shell.Mesh.Verts)-len(edges)+len(shell.Mesh.Tris))
 	vertical, sloped := 0, 0
-	for _, ring := range shell.capRings {
-		require.Len(t, ring.Vertices, len(shell.capRings[0].Vertices))
-		require.Equal(t, ring.Section, ring.arc.circle.span)
-		require.NotNil(t, ring.ties)
+	for _, ring := range shell.CapRings {
+		require.Len(t, ring.Vertices, len(shell.CapRings[0].Vertices))
+		require.Equal(t, ring.Section, ring.Arc.Circle.Span)
+		require.NotNil(t, ring.Ties)
 		require.NotEqual(t, ring.Endpoints[0], ring.Endpoints[1])
 		require.GreaterOrEqual(t, len(ring.Occupied), 2)
 		require.Equal(t, ring.Endpoints[0], ring.Occupied[0])
@@ -294,23 +295,23 @@ func TestCurvedSourceCapCirclesSplitClosedBlankShell(t *testing.T) {
 			point := shell.Mesh.Verts[vertex]
 			throughAxis = throughAxis || point.Y > 0 && point.Z == 0
 		}
-		require.Equal(t, ring.arc.throughPositiveY, throughAxis)
+		require.Equal(t, ring.Arc.ThroughPositiveY, throughAxis)
 		for side, endpoint := range ring.Endpoints {
 			require.True(t, slices.Contains(ring.Vertices, endpoint))
 			require.Less(t, shell.VertexBounds[endpoint], 0.1)
-			require.Equal(t, ring.endpointProof[side].point, shell.Mesh.Verts[endpoint])
-			require.Equal(t, ring.endpointProof[side].blankBound,
+			require.Equal(t, ring.EndpointProof[side].Point, shell.Mesh.Verts[endpoint])
+			require.Equal(t, ring.EndpointProof[side].BlankBound,
 				shell.VertexBounds[endpoint])
-			require.Less(t, ring.endpointProof[side].loftBound, 0.1)
+			require.Less(t, ring.EndpointProof[side].LoftBound, 0.1)
 		}
-		require.True(t, ring.ties.negativeZ.sourceCell != nil ||
-			ring.ties.negativeZ.verticalCell != nil)
-		require.True(t, ring.ties.positiveZ.sourceCell != nil ||
-			ring.ties.positiveZ.verticalCell != nil)
-		x, radius := ring.arc.circle.x, ring.arc.circle.radius
+		require.True(t, ring.Ties.NegativeZ.SourceCell != nil ||
+			ring.Ties.NegativeZ.VerticalCell != nil)
+		require.True(t, ring.Ties.PositiveZ.SourceCell != nil ||
+			ring.Ties.PositiveZ.VerticalCell != nil)
+		x, radius := ring.Arc.Circle.X, ring.Arc.Circle.Radius
 		xf, _ := x.Float64()
 		rf, _ := radius.Float64()
-		span := proof.section.Spans[ring.Section]
+		span := proof.Section.Spans[ring.Section]
 		if span.Start.U == span.End.U {
 			vertical++
 		} else {
@@ -336,15 +337,15 @@ func TestCurvedSourceCapCirclesSplitClosedBlankShell(t *testing.T) {
 	}
 	require.Equal(t, 1, vertical)
 	require.Equal(t, 1, sloped)
-	t.Logf("source-aligned blank shell with %d heel circles: %d vertices, %d triangles",
-		len(shell.capRings), len(shell.Mesh.Verts), len(shell.Mesh.Tris))
-	stale := *shell.capRings[0].arc
-	stale.time = new(big.Rat).Add(stale.time, big.NewRat(1, 1000))
-	_, accepted, err := revolveLoftFacesBlankShellAtRunsWithCuts(t.Context(), proof, manifest,
-		[]revolveLoftFacesShellSeamSelector{{sectionIndex: sectionIndex, cellIndex: cellIndex}}, []revolveLoftFacesShellCut{{
-			ShellCut: revolveloftfaces.ShellCut{Section: stale.circle.span,
-				X: stale.circle.x, Radius: stale.circle.radius},
-			arc: &stale,
+	t.Logf("source-aligned blank shell with %d heel Circles: %d vertices, %d triangles",
+		len(shell.CapRings), len(shell.Mesh.Verts), len(shell.Mesh.Tris))
+	stale := *shell.CapRings[0].Arc
+	stale.Time = new(big.Rat).Add(stale.Time, big.NewRat(1, 1000))
+	_, accepted, err := revolvecontact.BlankShellAtRunsWithCuts(t.Context(), proof, manifest,
+		[]revolvecontact.ShellSeamSelector{{SectionIndex: sectionIndex, CellIndex: cellIndex}}, []revolvecontact.ShellCut{{
+			ShellCut: revolveloftfaces.ShellCut{Section: stale.Circle.Span,
+				X: stale.Circle.X, Radius: stale.Circle.Radius},
+			Arc: &stale,
 		}})
 	require.NoError(t, err)
 	require.False(t, accepted)

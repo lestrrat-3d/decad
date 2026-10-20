@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/revolvecontact"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -97,7 +98,7 @@ func TestMappedEndpointTimeRoots(t *testing.T) {
 	}
 	for _, root := range roots {
 		if polynomial.BernsteinValue(two, root.Time.Lo).Sign()*polynomial.BernsteinValue(two, root.Time.Hi).Sign() >= 0 {
-			t.Fatalf("root bracket does not change side: %+v", root)
+			t.Fatalf("root bracket does not change Side: %+v", root)
 		}
 	}
 
@@ -716,11 +717,11 @@ func TestRevolveLoftFacesOwnedTimeRootsRemainDisjoint(t *testing.T) {
 
 func TestCurvedMappedSourceConsumesLiveProducer(t *testing.T) {
 	blank, tooth, trim := neutralArcSeamSource(t)
-	proof, ok, err := certifyRevolveLoftFacesSource(t.Context(), blank, tooth)
+	proof, ok, err := revolvecontact.CertifySource(t.Context(), bodyNode(blank), bodyNode(tooth))
 	if err != nil || !ok {
 		t.Fatalf("live source was not admitted: %v, %t", err, ok)
 	}
-	section := proof.section.Spans[proof.section.RootSpan]
+	section := proof.Section.Spans[proof.Section.RootSpan]
 	cells, ok, err := revolveloftfaces.RevolveLoftFacesFiniteSpanCells(t.Context(), trim, section)
 	if err != nil || !ok {
 		t.Fatalf("live source did not reach mapped finite-span consumer: %v, %t", err, ok)
@@ -729,15 +730,15 @@ func TestCurvedMappedSourceConsumesLiveProducer(t *testing.T) {
 		t.Fatal("mapped finite-span consumer returned no cells")
 	}
 	t.Run("exact rows of live mapped span", func(t *testing.T) {
-		crossing := proof.crossings[0]
+		crossing := proof.Crossings[0]
 		first, last := trim.Maps[0], trim.Maps[1]
-		wantQ := spiralRootPolynomialRef(first, last, crossing.span, proof.rootM, proof.rootB)
-		gotQ := loftface.MeridianQRows(first, last, crossing.span, proof.rootM, proof.rootB)
+		wantQ := spiralRootPolynomialRef(first, last, crossing.Span, proof.RootM, proof.RootB)
+		gotQ := loftface.MeridianQRows(first, last, crossing.Span, proof.RootM, proof.RootB)
 		for i := range gotQ {
 			requireSameRows(t, wantQ[i], gotQ[i])
 		}
-		wantJ := spiralRootXOrderRef(first, last, crossing.span, wantQ)
-		gotJ := loftface.MeridianJRows(first, last, crossing.span, gotQ)
+		wantJ := spiralRootXOrderRef(first, last, crossing.Span, wantQ)
+		gotJ := loftface.MeridianJRows(first, last, crossing.Span, gotQ)
 		for i := range gotJ {
 			requireSameRows(t, wantJ[i], gotJ[i])
 		}
@@ -750,7 +751,7 @@ func TestCurvedMappedSourceConsumesLiveProducer(t *testing.T) {
 			}
 		}
 	})
-	t.Logf("root section %d mapped %d source cells", proof.section.RootSpan, len(cells))
+	t.Logf("root section %d mapped %d source cells", proof.Section.RootSpan, len(cells))
 	radial := 0
 	for segment, entity := range trim.Source.Source.Entities {
 		if _, isArc := entity.(*sketch.Arc); !isArc {
@@ -766,20 +767,20 @@ func TestCurvedMappedSourceConsumesLiveProducer(t *testing.T) {
 		t.Fatal("no live mapped arc reached the radial source consumer")
 	}
 	t.Logf("mapped %d whole-arc bands", radial)
-	manifest, complete, manifestErr := revolveLoftFacesNonverticalManifest(t.Context(), proof)
+	manifest, complete, manifestErr := revolvecontact.NonverticalManifest(t.Context(), proof)
 	if manifestErr != nil || !complete || len(manifest) == 0 {
 		t.Fatalf("live nonvertical source was not certified: %v, %t", manifestErr, complete)
 	}
 	var ref provenance.Ref
 	var owner *Face
 	for _, side := range manifest {
-		if len(side.cells) == 0 {
-			t.Fatalf("nonvertical section %d has no retained source cells", side.sectionIndex)
+		if len(side.Cells) == 0 {
+			t.Fatalf("nonvertical section %d has no retained source cells", side.SectionIndex)
 		}
-		for _, cell := range side.cells {
-			if cell.mapped.Segment != proof.crossings[0].segment &&
-				cell.mapped.Segment != proof.crossings[1].segment && owner == nil {
-				ref, owner = cell.ref, cell.face
+		for _, cell := range side.Cells {
+			if cell.Mapped.Segment != proof.Crossings[0].Segment &&
+				cell.Mapped.Segment != proof.Crossings[1].Segment && owner == nil {
+				ref, owner = cell.Ref, faceHandle(cell.Face)
 			}
 		}
 	}
@@ -791,7 +792,7 @@ func TestCurvedMappedSourceConsumesLiveProducer(t *testing.T) {
 		defer func() { owner.n.Origins = original }()
 		owner.n.Origins = slices.DeleteFunc(slices.Clone(original),
 			func(got provenance.Ref) bool { return got == ref })
-		_, certified, err := revolveLoftFacesNonverticalManifest(t.Context(), proof)
+		_, certified, err := revolvecontact.NonverticalManifest(t.Context(), proof)
 		if err != nil || certified {
 			t.Fatalf("missing live origin was admitted: %v, %t", err, certified)
 		}
@@ -823,7 +824,7 @@ func TestCurvedMappedSourceConsumesLiveProducer(t *testing.T) {
 			t.Fatal("the retained wall has no source triangle")
 		}
 		tooth.n.Payload = payload
-		_, certified, err := revolveLoftFacesNonverticalManifest(t.Context(), proof)
+		_, certified, err := revolvecontact.NonverticalManifest(t.Context(), proof)
 		if err != nil || certified {
 			t.Fatalf("wrong live face was admitted: %v, %t", err, certified)
 		}
@@ -838,10 +839,10 @@ func TestCurvedMappedSourceConsumesLiveProducer(t *testing.T) {
 		}
 		payload.Xform = shift
 		tooth.n.Payload = payload
-		if revolveLoftFacesTrimCurrent(tooth, proof.trim) {
+		if revolvecontact.TrimCurrent(bodyNode(tooth), proof.Trim) {
 			t.Fatal("changed tooth transform retained a current source record")
 		}
-		_, certified, err := revolveLoftFacesNonverticalManifest(t.Context(), proof)
+		_, certified, err := revolvecontact.NonverticalManifest(t.Context(), proof)
 		if err != nil || certified {
 			t.Fatalf("changed tooth transform was admitted: %v, %t", err, certified)
 		}
@@ -853,21 +854,21 @@ func TestCurvedMappedSourceConsumesLiveProducer(t *testing.T) {
 // the same endpoint roots as a direct call.
 func TestCurvedCensusMeridianMemoMatchesDirect(t *testing.T) {
 	blank, trimmed, _ := neutralArcSeamSource(t)
-	proof, ok, err := certifyRevolveLoftFacesSource(t.Context(), blank, trimmed)
+	proof, ok, err := revolvecontact.CertifySource(t.Context(), bodyNode(blank), bodyNode(trimmed))
 	require.NoError(t, err)
 	require.True(t, ok)
-	census, ok, err := revolveLoftFacesCensus(t.Context(), proof)
+	census, ok, err := revolvecontact.Census(t.Context(), proof)
 	require.NoError(t, err)
 	require.True(t, ok)
-	manifest, ok, err := revolveLoftFacesAllSideManifest(t.Context(), proof)
+	manifest, ok, err := revolvecontact.AllSideManifest(t.Context(), proof)
 	require.NoError(t, err)
 	require.True(t, ok)
-	require.True(t, revolveLoftFacesSameShellManifest(census.manifest, manifest))
+	require.True(t, revolvecontact.SameShellManifest(census.Manifest, manifest))
 
-	trim := proof.trim
+	trim := proof.Trim
 	memo := loftface.NewMeridianMemo()
 	compared := 0
-	for _, section := range proof.section.Spans {
+	for _, section := range proof.Section.Spans {
 		if section.Face == nil || section.Start.U == section.End.U {
 			continue
 		}

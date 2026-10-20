@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/revolvecontact"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -18,26 +19,26 @@ import (
 
 func TestRevolveLoftFacesToolCirclesConsumeLiveNeutralSource(t *testing.T) {
 	blank, tooth, _ := neutralArcSeamSource(t)
-	proof, ok, err := certifyRevolveLoftFacesSource(t.Context(), blank, tooth)
+	proof, ok, err := revolvecontact.CertifySource(t.Context(), bodyNode(blank), bodyNode(tooth))
 	require.NoError(t, err)
 	require.True(t, ok)
-	sides, ok := revolveLoftFacesToolCapSidesOf(proof)
+	sides, ok := revolvecontact.ToolCapSidesOf(proof)
 	require.True(t, ok)
-	require.NotEmpty(t, sides.circles)
-	for _, circle := range sides.circles {
-		require.Same(t, blank, bodyHandle(circle.blankFace.n.Body))
-		require.Same(t, tooth, bodyHandle(circle.capFace.n.Body))
-		require.Positive(t, circle.radius.Sign())
-		tool := proof.trim.Toe
-		if circle.tool == 1 {
-			tool = proof.trim.Heel
+	require.NotEmpty(t, sides.Circles)
+	for _, circle := range sides.Circles {
+		require.Same(t, bodyNode(blank), circle.BlankFace.Body)
+		require.Same(t, bodyNode(tooth), circle.CapFace.Body)
+		require.Positive(t, circle.Radius.Sign())
+		tool := proof.Trim.Toe
+		if circle.Tool == 1 {
+			tool = proof.Trim.Heel
 		}
-		require.Zero(t, lfSub(lfAdd(circle.x,
-			lfMul(tool.Slope, circle.radius)), tool.Apex).Sign())
+		require.Zero(t, lfSub(lfAdd(circle.X,
+			lfMul(tool.Slope, circle.Radius)), tool.Apex).Sign())
 	}
 	t.Run("changed non-root Revolve surface", func(t *testing.T) {
-		for index, span := range proof.section.Spans {
-			if index == proof.section.RootSpan || span.Face == nil {
+		for index, span := range proof.Section.Spans {
+			if index == proof.Section.RootSpan || span.Face == nil {
 				continue
 			}
 			cone, ok := span.Face.Surface.(surfacegeom.Cone)
@@ -48,37 +49,37 @@ func TestRevolveLoftFacesToolCirclesConsumeLiveNeutralSource(t *testing.T) {
 			defer func() { span.Face.Surface = original }()
 			cone.Origin.X += 0.125
 			span.Face.Surface = cone
-			_, accepted := revolveLoftFacesToolCapSidesOf(proof)
+			_, accepted := revolvecontact.ToolCapSidesOf(proof)
 			require.False(t, accepted)
 			return
 		}
 		t.Fatal("missing non-root cone face")
 	})
 	changed := *proof
-	changed.section = proof.section
-	changed.section.Spans = append([]revolveSectionSpan(nil), proof.section.Spans...)
-	changed.section.Spans[proof.section.RootSpan].End.V += 0.125
-	_, accepted := revolveLoftFacesToolCapSidesOf(&changed)
+	changed.Section = proof.Section
+	changed.Section.Spans = append([]revolveSectionSpan(nil), proof.Section.Spans...)
+	changed.Section.Spans[proof.Section.RootSpan].End.V += 0.125
+	_, accepted := revolvecontact.ToolCapSidesOf(&changed)
 	require.False(t, accepted)
 	changed = *proof
-	changed.toeFace = proof.heelFace
-	_, accepted = revolveLoftFacesToolCapSidesOf(&changed)
+	changed.ToeFace = proof.HeelFace
+	_, accepted = revolvecontact.ToolCapSidesOf(&changed)
 	require.False(t, accepted)
-	toeSlope := proof.trim.Toe.Slope
-	proof.trim.Toe.Slope = lfAdd(toeSlope, big.NewRat(1, 32))
-	_, accepted = revolveLoftFacesToolCapSidesOf(proof)
+	toeSlope := proof.Trim.Toe.Slope
+	proof.Trim.Toe.Slope = lfAdd(toeSlope, big.NewRat(1, 32))
+	_, accepted = revolvecontact.ToolCapSidesOf(proof)
 	require.False(t, accepted)
-	proof.trim.Toe.Slope = toeSlope
+	proof.Trim.Toe.Slope = toeSlope
 	originalPayload := tooth.n.Payload
 	t.Cleanup(func() { tooth.n.Payload = originalPayload })
 	payload := originalPayload.(facetedPayload)
 	payload.FaceOf = slices.Clone(payload.FaceOf)
-	toeFaceIndex := indexOfFace(tooth.Faces(), proof.toeFace)
+	toeFaceIndex := indexOfFace(tooth.Faces(), faceHandle(proof.ToeFace))
 	require.GreaterOrEqual(t, toeFaceIndex, 0)
 	changedTriangle := -1
 	for index, group := range payload.Src {
-		if group != proof.trim.ToeCapGroup &&
-			group != proof.trim.HeelCapGroup && payload.FaceOf[index] != toeFaceIndex {
+		if group != proof.Trim.ToeCapGroup &&
+			group != proof.Trim.HeelCapGroup && payload.FaceOf[index] != toeFaceIndex {
 			changedTriangle = index
 			break
 		}
@@ -86,17 +87,17 @@ func TestRevolveLoftFacesToolCirclesConsumeLiveNeutralSource(t *testing.T) {
 	require.GreaterOrEqual(t, changedTriangle, 0)
 	payload.FaceOf[changedTriangle] = toeFaceIndex
 	tooth.n.Payload = payload
-	require.False(t, revolveLoftFacesTrimCurrent(tooth, proof.trim))
-	require.Same(t, proof.toeFace,
-		uniqueResultSourceFace(tooth, proof.trim.ToeCapGroup))
-	_, accepted = revolveLoftFacesToolCapSidesOf(proof)
+	require.False(t, revolvecontact.TrimCurrent(bodyNode(tooth), proof.Trim))
+	require.Same(t, proof.ToeFace,
+		revolvecontact.UniqueResultSourceFace(bodyNode(tooth), proof.Trim.ToeCapGroup))
+	_, accepted = revolvecontact.ToolCapSidesOf(proof)
 	require.False(t, accepted)
 	tooth.n.Payload = originalPayload
 	payload = originalPayload.(facetedPayload)
 	payload.FaceOf = slices.Clone(payload.FaceOf)
 	capTriangle := -1
 	for index, group := range payload.Src {
-		if group == proof.trim.ToeCapGroup {
+		if group == proof.Trim.ToeCapGroup {
 			capTriangle = index
 			break
 		}
@@ -104,14 +105,14 @@ func TestRevolveLoftFacesToolCirclesConsumeLiveNeutralSource(t *testing.T) {
 	require.GreaterOrEqual(t, capTriangle, 0)
 	payload.FaceOf[capTriangle] = len(tooth.Faces())
 	tooth.n.Payload = payload
-	_, accepted = revolveLoftFacesToolCapSidesOf(proof)
+	_, accepted = revolvecontact.ToolCapSidesOf(proof)
 	require.False(t, accepted)
 	tooth.n.Payload = originalPayload
 	shell := blank.Shells()[0]
 	originalFaces := shell.n.Faces
 	t.Cleanup(func() { shell.n.Faces = originalFaces })
 	shell.n.Faces = append(slices.Clone(originalFaces), faceNode(bornFace(&Face{n: topo.Face{Origins: []provenance.Ref{{Role: "unmatched side"}}, Body: bodyNode(blank)}})))
-	_, accepted = revolveLoftFacesToolCapSidesOf(proof)
+	_, accepted = revolvecontact.ToolCapSidesOf(proof)
 	require.False(t, accepted)
 }
 
@@ -185,114 +186,114 @@ func TestRevolveLoftFacesCircleMissUsesWholeMappedSourceBox(t *testing.T) {
 
 func TestRevolveLoftFacesCircleMissConsumesLiveNeutralSource(t *testing.T) {
 	blank, tooth, _ := neutralArcSeamSource(t)
-	proof, ok, err := certifyRevolveLoftFacesSource(t.Context(), blank, tooth)
+	proof, ok, err := revolvecontact.CertifySource(t.Context(), bodyNode(blank), bodyNode(tooth))
 	require.NoError(t, err)
 	require.True(t, ok)
-	sides, ok := revolveLoftFacesToolCapSidesOf(proof)
+	sides, ok := revolvecontact.ToolCapSidesOf(proof)
 	require.True(t, ok)
-	require.NotEmpty(t, sides.circles)
+	require.NotEmpty(t, sides.Circles)
 	misses := 0
-	for _, circle := range sides.circles {
+	for _, circle := range sides.Circles {
 		require.Equal(t, revolveloftfaces.ToolCircleOutsideSource(
-			proof.trim, circle.x, circle.radius), circle.sourceMiss)
-		if circle.sourceMiss {
+			proof.Trim, circle.X, circle.Radius), circle.SourceMiss)
+		if circle.SourceMiss {
 			misses++
 		}
 	}
-	require.Len(t, sides.circles, 4)
+	require.Len(t, sides.Circles, 4)
 	require.Equal(t, 2, misses)
-	map0 := proof.trim.Maps[0]
-	proof.trim.Maps[0] = proof.trim.Maps[1]
-	_, accepted := revolveLoftFacesToolCapSidesOf(proof)
+	map0 := proof.Trim.Maps[0]
+	proof.Trim.Maps[0] = proof.Trim.Maps[1]
+	_, accepted := revolvecontact.ToolCapSidesOf(proof)
 	require.False(t, accepted, "the source-miss flag needs the current live maps")
-	proof.trim.Maps[0] = map0
-	sourceBox := proof.trim.Source.SourceBox
-	require.True(t, facetedrecord.PointSourceCurrent(proof.trim.Source))
-	proof.trim.Source.SourceBox[1] = (sourceBox[0] + sourceBox[1]) / 2
-	require.False(t, facetedrecord.PointSourceCurrent(proof.trim.Source))
-	_, accepted = revolveLoftFacesToolCapSidesOf(proof)
+	proof.Trim.Maps[0] = map0
+	sourceBox := proof.Trim.Source.SourceBox
+	require.True(t, facetedrecord.PointSourceCurrent(proof.Trim.Source))
+	proof.Trim.Source.SourceBox[1] = (sourceBox[0] + sourceBox[1]) / 2
+	require.False(t, facetedrecord.PointSourceCurrent(proof.Trim.Source))
+	_, accepted = revolvecontact.ToolCapSidesOf(proof)
 	require.False(t, accepted, "a narrowed stored source box cannot prove a whole-circle miss")
-	proof.trim.Source.SourceBox = sourceBox
+	proof.Trim.Source.SourceBox = sourceBox
 }
 
 func TestRevolveLoftFacesToolCapArcBindsLiveSourceCells(t *testing.T) {
 	blank, tooth, _ := neutralArcSeamSource(t)
-	proof, ok, err := certifyRevolveLoftFacesSource(t.Context(), blank, tooth)
+	proof, ok, err := revolvecontact.CertifySource(t.Context(), bodyNode(blank), bodyNode(tooth))
 	require.NoError(t, err)
 	require.True(t, ok)
-	sides, ok := revolveLoftFacesToolCapSidesOf(proof)
+	sides, ok := revolvecontact.ToolCapSidesOf(proof)
 	require.True(t, ok)
-	box, err := revolveloftfaces.LfSourceBox(proof.trim.Source)
+	box, err := revolveloftfaces.LfSourceBox(proof.Trim.Source)
 	require.NoError(t, err)
 	checked := 0
-	for _, circle := range sides.circles {
-		if circle.tool != 1 || circle.sourceMiss {
+	for _, circle := range sides.Circles {
+		if circle.Tool != 1 || circle.SourceMiss {
 			continue
 		}
-		span := proof.section.Spans[circle.span]
-		var arc *revolveLoftFacesToolCapOccupiedArc
+		span := proof.Section.Spans[circle.Span]
+		var arc *revolvecontact.ToolCapOccupiedArc
 		var certified bool
 		if span.Start.U == span.End.U {
-			arc, certified, err = revolveLoftFacesHeelVerticalOccupiedArc(t.Context(), proof, circle)
+			arc, certified, err = revolvecontact.HeelVerticalOccupiedArc(t.Context(), proof, circle)
 		} else {
-			arc, certified, err = revolveLoftFacesHeelSlopedOccupiedArc(t.Context(), proof, circle)
+			arc, certified, err = revolvecontact.HeelSlopedOccupiedArc(t.Context(), proof, circle)
 		}
 		require.NoError(t, err)
 		require.True(t, certified)
-		band, time, unique := loftface.ConstantXBand(proof.trim.Maps, box, circle.x)
+		band, time, unique := loftface.ConstantXBand(proof.Trim.Maps, box, circle.X)
 		require.True(t, unique)
-		require.Equal(t, band, arc.band)
-		require.Zero(t, time.Cmp(arc.time))
-		current, currentErr := revolveLoftFacesToolCapOccupiedArcCurrent(t.Context(), proof, arc)
+		require.Equal(t, band, arc.Band)
+		require.Zero(t, time.Cmp(arc.Time))
+		current, currentErr := revolvecontact.ToolCapOccupiedArcCurrent(t.Context(), proof, arc)
 		require.NoError(t, currentErr)
 		require.True(t, current)
 		if span.Start.U != span.End.U {
 			lower := lfZero()
-			if circle.x.Cmp(proof.trim.Toe.Apex) < 0 {
-				lower = lfDiv(lfSub(proof.trim.Toe.Apex, circle.x), proof.trim.Toe.Slope)
+			if circle.X.Cmp(proof.Trim.Toe.Apex) < 0 {
+				lower = lfDiv(lfSub(proof.Trim.Toe.Apex, circle.X), proof.Trim.Toe.Slope)
 			}
-			section, sourceOK, sourceErr := revolveLoftFacesConstantXSourceCells(t.Context(), proof,
-				circle.x, lower, circle.radius)
+			section, sourceOK, sourceErr := revolvecontact.ConstantXSourceCells(t.Context(), proof,
+				circle.X, lower, circle.Radius)
 			require.NoError(t, sourceErr)
 			require.True(t, sourceOK)
 			changedSection := *section
-			changedSection.cells = slices.Clone(section.cells)
+			changedSection.Cells = slices.Clone(section.Cells)
 			changedArcCell := false
-			for i := range changedSection.cells {
-				if changedSection.cells[i].source != nil {
+			for i := range changedSection.Cells {
+				if changedSection.Cells[i].Source != nil {
 					continue
 				}
-				changedSection.cells[i].source = make(freeform.BezierSpan, 0)
+				changedSection.Cells[i].Source = make(freeform.BezierSpan, 0)
 				changedArcCell = true
 				break
 			}
 			require.True(t, changedArcCell)
-			_, certified, sourceErr = revolveLoftFacesHeelOccupiedFromSource(t.Context(), proof,
+			_, certified, sourceErr = revolvecontact.HeelOccupiedFromSource(t.Context(), proof,
 				circle, &changedSection)
 			require.NoError(t, sourceErr)
 			require.False(t, certified, "an empty spline record cannot replace the live whole Arc")
 		}
 
 		changed := *arc
-		changed.band++
-		current, currentErr = revolveLoftFacesToolCapOccupiedArcCurrent(t.Context(), proof, &changed)
+		changed.Band++
+		current, currentErr = revolvecontact.ToolCapOccupiedArcCurrent(t.Context(), proof, &changed)
 		require.NoError(t, currentErr)
 		require.False(t, current, "another cap band cannot own the same arc")
 		changed = *arc
-		changed.time = new(big.Rat).Add(arc.time, big.NewRat(1, 1<<20))
-		current, currentErr = revolveLoftFacesToolCapOccupiedArcCurrent(t.Context(), proof, &changed)
+		changed.Time = new(big.Rat).Add(arc.Time, big.NewRat(1, 1<<20))
+		current, currentErr = revolvecontact.ToolCapOccupiedArcCurrent(t.Context(), proof, &changed)
 		require.NoError(t, currentErr)
 		require.False(t, current, "another time cannot own the same source cells")
 		changed = *arc
-		changed.negativeZ.parameter.Lo = new(big.Rat).Add(
-			arc.negativeZ.parameter.Lo, arc.negativeZ.parameter.Hi)
-		changed.negativeZ.parameter.Lo.Quo(changed.negativeZ.parameter.Lo, big.NewRat(2, 1))
-		current, currentErr = revolveLoftFacesToolCapOccupiedArcCurrent(t.Context(), proof, &changed)
+		changed.NegativeZ.Parameter.Lo = new(big.Rat).Add(
+			arc.NegativeZ.Parameter.Lo, arc.NegativeZ.Parameter.Hi)
+		changed.NegativeZ.Parameter.Lo.Quo(changed.NegativeZ.Parameter.Lo, big.NewRat(2, 1))
+		current, currentErr = revolvecontact.ToolCapOccupiedArcCurrent(t.Context(), proof, &changed)
 		require.NoError(t, currentErr)
 		require.False(t, current, "a narrowed root bracket is not the certified source bracket")
 		changed = *arc
-		changed.positiveZ.face = bornFace(&Face{})
-		current, currentErr = revolveLoftFacesToolCapOccupiedArcCurrent(t.Context(), proof, &changed)
+		changed.PositiveZ.Face = faceNode(bornFace(&Face{}))
+		current, currentErr = revolvecontact.ToolCapOccupiedArcCurrent(t.Context(), proof, &changed)
 		require.NoError(t, currentErr)
 		require.False(t, current, "another retained face cannot own the source crossing")
 		checked++
@@ -301,20 +302,20 @@ func TestRevolveLoftFacesToolCapArcBindsLiveSourceCells(t *testing.T) {
 }
 
 func TestRevolveLoftFacesToolCapSourceCellsPreserveSlicePresence(t *testing.T) {
-	original := &revolveLoftFacesConstantXSource{}
+	original := &revolvecontact.ConstantXSource{}
 	changed := *original
-	changed.cells = []revolveLoftFacesVerticalCell{}
-	require.False(t, revolveLoftFacesToolCapSourceCellsEqual(original, &changed))
+	changed.Cells = []revolvecontact.VerticalCell{}
+	require.False(t, revolvecontact.ToolCapSourceCellsEqual(original, &changed))
 
-	original.cells = []revolveLoftFacesVerticalCell{{}}
+	original.Cells = []revolvecontact.VerticalCell{{}}
 	changed = *original
-	changed.cells = slices.Clone(original.cells)
-	changed.cells[0].source = make(freeform.BezierSpan, 0)
-	require.False(t, revolveLoftFacesToolCapSourceCellsEqual(original, &changed))
+	changed.Cells = slices.Clone(original.Cells)
+	changed.Cells[0].Source = make(freeform.BezierSpan, 0)
+	require.False(t, revolvecontact.ToolCapSourceCellsEqual(original, &changed))
 
-	changed.cells[0] = original.cells[0]
-	changed.cells[0].retained = []loftface.VerticalPiece{}
-	require.False(t, revolveLoftFacesToolCapSourceCellsEqual(original, &changed))
+	changed.Cells[0] = original.Cells[0]
+	changed.Cells[0].Retained = []loftface.VerticalPiece{}
+	require.False(t, revolvecontact.ToolCapSourceCellsEqual(original, &changed))
 }
 
 func TestRevolveLoftFacesToolBoundaryUsesSketchWalkDirection(t *testing.T) {
@@ -343,54 +344,54 @@ func TestRevolveLoftFacesToolBoundaryUsesSketchWalkDirection(t *testing.T) {
 
 func TestRevolveLoftFacesHeelVerticalArcConsumesLiveNeutralSource(t *testing.T) {
 	blank, tooth, _ := neutralArcSeamSource(t)
-	proof, ok, err := certifyRevolveLoftFacesSource(t.Context(), blank, tooth)
+	proof, ok, err := revolvecontact.CertifySource(t.Context(), bodyNode(blank), bodyNode(tooth))
 	require.NoError(t, err)
 	require.True(t, ok)
-	loop, simple, err := revolveloftfaces.SimpleSourceLoop(t.Context(), proof.trim)
+	loop, simple, err := revolveloftfaces.SimpleSourceLoop(t.Context(), proof.Trim)
 	require.NoError(t, err)
 	require.True(t, simple)
 	require.Len(t, loop.Cells, 8)
-	sides, ok := revolveLoftFacesToolCapSidesOf(proof)
+	sides, ok := revolvecontact.ToolCapSidesOf(proof)
 	require.True(t, ok)
-	for _, circle := range sides.circles {
-		if circle.tool != 1 || circle.x.Cmp(big.NewRat(6, 1)) != 0 {
+	for _, circle := range sides.Circles {
+		if circle.Tool != 1 || circle.X.Cmp(big.NewRat(6, 1)) != 0 {
 			continue
 		}
-		arc, certified, arcErr := revolveLoftFacesHeelVerticalOccupiedArc(t.Context(), proof, circle)
+		arc, certified, arcErr := revolvecontact.HeelVerticalOccupiedArc(t.Context(), proof, circle)
 		require.NoError(t, arcErr)
 		require.True(t, certified)
 		require.NotNil(t, arc)
-		require.False(t, circle.sourceMiss)
-		require.Negative(t, arc.negativeZ.box[2].Hi.Sign())
-		require.Positive(t, arc.positiveZ.box[2].Lo.Sign())
-		require.NotEqual(t, arc.negativeZ.outward, arc.positiveZ.outward)
+		require.False(t, circle.SourceMiss)
+		require.Negative(t, arc.NegativeZ.Box[2].Hi.Sign())
+		require.Positive(t, arc.PositiveZ.Box[2].Lo.Sign())
+		require.NotEqual(t, arc.NegativeZ.Outward, arc.PositiveZ.Outward)
 		changed := circle
-		changed.x = new(big.Rat).Add(circle.x, big.NewRat(1, 16))
-		_, certified, arcErr = revolveLoftFacesHeelVerticalOccupiedArc(t.Context(), proof, changed)
+		changed.X = new(big.Rat).Add(circle.X, big.NewRat(1, 16))
+		_, certified, arcErr = revolvecontact.HeelVerticalOccupiedArc(t.Context(), proof, changed)
 		require.NoError(t, arcErr)
 		require.False(t, certified, "the circle must use its live blank section")
 		changed = circle
-		changed.sourceMiss = true
-		_, certified, arcErr = revolveLoftFacesHeelVerticalOccupiedArc(t.Context(), proof, changed)
+		changed.SourceMiss = true
+		_, certified, arcErr = revolvecontact.HeelVerticalOccupiedArc(t.Context(), proof, changed)
 		require.NoError(t, arcErr)
 		require.False(t, certified, "a certified source miss has no occupied arc")
 		changed = circle
-		changed.capOrigin = provenance.Ref{}
-		_, certified, arcErr = revolveLoftFacesHeelVerticalOccupiedArc(t.Context(), proof, changed)
+		changed.CapOrigin = provenance.Ref{}
+		_, certified, arcErr = revolvecontact.HeelVerticalOccupiedArc(t.Context(), proof, changed)
 		require.NoError(t, arcErr)
 		require.False(t, certified, "the occupied arc must name its live cap origin")
-		originalOrigins := circle.capFace.n.Origins
-		t.Cleanup(func() { circle.capFace.n.Origins = originalOrigins })
-		circle.capFace.n.Origins = []provenance.Ref{{Role: "unrelated cap"}}
-		_, certified, arcErr = revolveLoftFacesHeelVerticalOccupiedArc(t.Context(), proof, circle)
+		originalOrigins := circle.CapFace.Origins
+		t.Cleanup(func() { circle.CapFace.Origins = originalOrigins })
+		circle.CapFace.Origins = []provenance.Ref{{Role: "unrelated cap"}}
+		_, certified, arcErr = revolvecontact.HeelVerticalOccupiedArc(t.Context(), proof, circle)
 		require.NoError(t, arcErr)
 		require.False(t, certified, "a replaced live cap-face origin cannot own the arc")
-		circle.capFace.n.Origins = originalOrigins
+		circle.CapFace.Origins = originalOrigins
 		shell := blank.Shells()[0]
 		originalFaces := shell.n.Faces
 		t.Cleanup(func() { shell.n.Faces = originalFaces })
 		shell.n.Faces = append(slices.Clone(originalFaces), faceNode(bornFace(&Face{n: topo.Face{Origins: []provenance.Ref{{Role: "unmatched side"}}, Body: bodyNode(blank)}})))
-		_, certified, arcErr = revolveLoftFacesHeelVerticalOccupiedArc(t.Context(), proof, circle)
+		_, certified, arcErr = revolvecontact.HeelVerticalOccupiedArc(t.Context(), proof, circle)
 		require.NoError(t, arcErr)
 		require.False(t, certified, "an unclassified live blank face cannot own the occupied arc")
 		return
@@ -433,40 +434,40 @@ func TestRevolveLoftFacesSlopedRadialInsideRequiresAxisWalkDirection(t *testing.
 
 func TestRevolveLoftFacesHeelSlopedArcConsumesLiveNeutralSource(t *testing.T) {
 	blank, tooth, _ := neutralArcSeamSource(t)
-	proof, ok, err := certifyRevolveLoftFacesSource(t.Context(), blank, tooth)
+	proof, ok, err := revolvecontact.CertifySource(t.Context(), bodyNode(blank), bodyNode(tooth))
 	require.NoError(t, err)
 	require.True(t, ok)
-	loop, simple, err := revolveloftfaces.SimpleSourceLoop(t.Context(), proof.trim)
+	loop, simple, err := revolveloftfaces.SimpleSourceLoop(t.Context(), proof.Trim)
 	require.NoError(t, err)
 	require.True(t, simple)
 	require.Len(t, loop.Cells, 8)
-	sides, ok := revolveLoftFacesToolCapSidesOf(proof)
+	sides, ok := revolvecontact.ToolCapSidesOf(proof)
 	require.True(t, ok)
 	found := 0
-	for _, circle := range sides.circles {
-		span := proof.section.Spans[circle.span]
-		if circle.tool != 1 || circle.sourceMiss || span.Start.U == span.End.U {
+	for _, circle := range sides.Circles {
+		span := proof.Section.Spans[circle.Span]
+		if circle.Tool != 1 || circle.SourceMiss || span.Start.U == span.End.U {
 			continue
 		}
-		arc, certified, arcErr := revolveLoftFacesHeelSlopedOccupiedArc(t.Context(), proof, circle)
+		arc, certified, arcErr := revolvecontact.HeelSlopedOccupiedArc(t.Context(), proof, circle)
 		require.NoError(t, arcErr)
-		require.True(t, certified, "sloped heel circle at X=%s", circle.x.RatString())
+		require.True(t, certified, "sloped heel circle at X=%s", circle.X.RatString())
 		require.NotNil(t, arc)
-		require.Negative(t, arc.negativeZ.box[2].Hi.Sign())
-		require.Positive(t, arc.positiveZ.box[2].Lo.Sign())
+		require.Negative(t, arc.NegativeZ.Box[2].Hi.Sign())
+		require.Positive(t, arc.PositiveZ.Box[2].Lo.Sign())
 		lower := lfZero()
-		if circle.x.Cmp(proof.trim.Toe.Apex) < 0 {
-			lower = lfDiv(lfSub(proof.trim.Toe.Apex, circle.x), proof.trim.Toe.Slope)
+		if circle.X.Cmp(proof.Trim.Toe.Apex) < 0 {
+			lower = lfDiv(lfSub(proof.Trim.Toe.Apex, circle.X), proof.Trim.Toe.Slope)
 		}
-		section, sourceOK, sourceErr := revolveLoftFacesConstantXSourceCells(t.Context(), proof,
-			circle.x, lower, circle.radius)
+		section, sourceOK, sourceErr := revolvecontact.ConstantXSourceCells(t.Context(), proof,
+			circle.X, lower, circle.Radius)
 		require.NoError(t, sourceErr)
 		require.True(t, sourceOK)
 		changedSection := *section
-		changedSection.cells = slices.Clone(section.cells)
+		changedSection.Cells = slices.Clone(section.Cells)
 		changedRoots := 0
-		for i := range changedSection.cells {
-			limit := &changedSection.cells[i].upper
+		for i := range changedSection.Cells {
+			limit := &changedSection.Cells[i].Upper
 			if limit.Root.Lo == nil {
 				continue
 			}
@@ -474,32 +475,32 @@ func TestRevolveLoftFacesHeelSlopedArcConsumesLiveNeutralSource(t *testing.T) {
 			changedRoots++
 		}
 		require.Equal(t, 2, changedRoots)
-		_, certified, arcErr = revolveLoftFacesHeelOccupiedFromSource(t.Context(), proof,
+		_, certified, arcErr = revolvecontact.HeelOccupiedFromSource(t.Context(), proof,
 			circle, &changedSection)
 		require.NoError(t, arcErr)
 		require.False(t, certified, "changed crossing signs cannot select another arc")
 		changed := circle
-		changed.x = new(big.Rat).Add(circle.x, big.NewRat(1, 16))
-		_, certified, arcErr = revolveLoftFacesHeelSlopedOccupiedArc(t.Context(), proof, changed)
+		changed.X = new(big.Rat).Add(circle.X, big.NewRat(1, 16))
+		_, certified, arcErr = revolvecontact.HeelSlopedOccupiedArc(t.Context(), proof, changed)
 		require.NoError(t, arcErr)
 		require.False(t, certified, "the occupied arc must use the live sloped circle")
 		changed = circle
-		changed.capOrigin = provenance.Ref{}
-		_, certified, arcErr = revolveLoftFacesHeelSlopedOccupiedArc(t.Context(), proof, changed)
+		changed.CapOrigin = provenance.Ref{}
+		_, certified, arcErr = revolvecontact.HeelSlopedOccupiedArc(t.Context(), proof, changed)
 		require.NoError(t, arcErr)
 		require.False(t, certified, "the occupied arc must name its live cap origin")
-		originalOrigins := circle.capFace.n.Origins
-		t.Cleanup(func() { circle.capFace.n.Origins = originalOrigins })
-		circle.capFace.n.Origins = []provenance.Ref{{Role: "unrelated cap"}}
-		_, certified, arcErr = revolveLoftFacesHeelSlopedOccupiedArc(t.Context(), proof, circle)
+		originalOrigins := circle.CapFace.Origins
+		t.Cleanup(func() { circle.CapFace.Origins = originalOrigins })
+		circle.CapFace.Origins = []provenance.Ref{{Role: "unrelated cap"}}
+		_, certified, arcErr = revolvecontact.HeelSlopedOccupiedArc(t.Context(), proof, circle)
 		require.NoError(t, arcErr)
 		require.False(t, certified, "a replaced live cap-face origin cannot own the arc")
-		circle.capFace.n.Origins = originalOrigins
+		circle.CapFace.Origins = originalOrigins
 		shell := blank.Shells()[0]
 		originalFaces := shell.n.Faces
 		t.Cleanup(func() { shell.n.Faces = originalFaces })
 		shell.n.Faces = append(slices.Clone(originalFaces), faceNode(bornFace(&Face{n: topo.Face{Origins: []provenance.Ref{{Role: "unmatched side"}}, Body: bodyNode(blank)}})))
-		_, certified, arcErr = revolveLoftFacesHeelSlopedOccupiedArc(t.Context(), proof, circle)
+		_, certified, arcErr = revolvecontact.HeelSlopedOccupiedArc(t.Context(), proof, circle)
 		require.NoError(t, arcErr)
 		require.False(t, certified, "an unclassified live blank face cannot own the arc")
 		shell.n.Faces = originalFaces

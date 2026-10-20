@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/revolvecontact"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -31,20 +32,20 @@ func TestRevolveLoftFacesVerticalRefusesChangedBlankSection(t *testing.T) {
 	}, FullRevolution{})
 	candidates := revolveshell.RootCandidates(bodyNode(blank))
 	require.Len(t, candidates, 1)
-	proof := &revolveLoftFacesSourceCertificate{blank: blank, section: candidates[0]}
-	require.True(t, revolveLoftFacesSectionCurrent(proof))
+	proof := &revolvecontact.SourceCertificate{Blank: bodyNode(blank), Section: candidates[0]}
+	require.True(t, revolvecontact.SectionCurrent(proof))
 	index := -1
-	for i, span := range proof.section.Spans {
+	for i, span := range proof.Section.Spans {
 		if span.Start.U == 5 && span.End.U == 5 {
 			index = i
 			break
 		}
 	}
 	require.NotEqual(t, -1, index)
-	proof.section.Spans[index].Start.U = 2
-	proof.section.Spans[index].End.U = 2
-	proof.section.Spans[index].End.V = 2
-	require.False(t, revolveLoftFacesSectionCurrent(proof),
+	proof.Section.Spans[index].Start.U = 2
+	proof.Section.Spans[index].End.U = 2
+	proof.Section.Spans[index].End.V = 2
+	require.False(t, revolvecontact.SectionCurrent(proof),
 		"the retained face cannot authenticate changed section endpoints")
 }
 
@@ -67,9 +68,9 @@ func TestRevolveLoftFacesConstantXRejectsSubstitutedSourceRef(t *testing.T) {
 		}
 	}
 	tooth := bornBody(&Body{})
-	require.True(t, revolveLoftFacesSourceRefsCurrent(trim, tooth, bound))
+	require.True(t, revolvecontact.SourceRefsCurrent(trim, bodyNode(tooth), bound))
 	bound[0][0] = bound[0][1]
-	require.False(t, revolveLoftFacesSourceRefsCurrent(trim, tooth, bound),
+	require.False(t, revolvecontact.SourceRefsCurrent(trim, bodyNode(tooth), bound),
 		"a retained cell cannot name the neighboring source segment")
 }
 
@@ -165,28 +166,28 @@ func TestRevolveLoftFacesVerticalClipsLiveSourceSpan(t *testing.T) {
 	}
 	span := freeform.BezierSpan{{U: one, V: zero}, {U: big.NewRat(3, 1), V: zero}}
 	trim := &loftFacesTrimRecord{Maps: []loftFaceMap{makeMap(big.NewRat(5, 1)), makeMap(big.NewRat(6, 1))}}
-	cell, ok := revolveLoftFacesVerticalBezier(trim, 3, 0, 0,
+	cell, ok := revolvecontact.VerticalBezier(trim, 3, 0, 0,
 		big.NewRat(1, 2), big.NewRat(3, 2), big.NewRat(5, 2), provenance.Ref{}, span)
 	require.True(t, ok)
-	require.Zero(t, cell.lower.Side)
-	require.Equal(t, -1, cell.lower.Before)
-	require.Equal(t, 1, cell.lower.After)
-	require.Zero(t, cell.upper.Side)
-	require.Equal(t, -1, cell.upper.Before)
-	require.Equal(t, 1, cell.upper.After)
-	require.Less(t, cell.lower.Root.Hi.Cmp(cell.upper.Root.Lo), 0)
-	require.Len(t, cell.retained, 1)
-	require.Equal(t, "1/4", cell.lower.Root.Hi.RatString())
-	rootPoint := loftface.BezierPoint(span, cell.retained[0].Source.Lo)
+	require.Zero(t, cell.Lower.Side)
+	require.Equal(t, -1, cell.Lower.Before)
+	require.Equal(t, 1, cell.Lower.After)
+	require.Zero(t, cell.Upper.Side)
+	require.Equal(t, -1, cell.Upper.Before)
+	require.Equal(t, 1, cell.Upper.After)
+	require.Less(t, cell.Lower.Root.Hi.Cmp(cell.Upper.Root.Lo), 0)
+	require.Len(t, cell.Retained, 1)
+	require.Equal(t, "1/4", cell.Lower.Root.Hi.RatString())
+	rootPoint := loftface.BezierPoint(span, cell.Retained[0].Source.Lo)
 	require.Equal(t, "3/2", rootPoint[0].RatString())
-	require.Equal(t, 0, cell.retained[0].Source.Lo.Cmp(cell.lower.Root.Hi))
-	require.Equal(t, 0, cell.retained[0].Source.Hi.Cmp(cell.upper.Root.Lo))
-	require.True(t, cell.retained[0].LoOpen,
+	require.Equal(t, 0, cell.Retained[0].Source.Lo.Cmp(cell.Lower.Root.Hi))
+	require.Equal(t, 0, cell.Retained[0].Source.Hi.Cmp(cell.Upper.Root.Lo))
+	require.True(t, cell.Retained[0].LoOpen,
 		"an exact radial clip root is not inside the strict retained interval")
-	require.False(t, cell.retained[0].HiOpen)
-	require.Equal(t, "11/2", cell.retained[0].Box[0].Lo.RatString())
-	require.Equal(t, "11/2", cell.retained[0].Box[0].Hi.RatString())
-	for _, limit := range [...]loftface.VerticalLimit{cell.lower, cell.upper} {
+	require.False(t, cell.Retained[0].HiOpen)
+	require.Equal(t, "11/2", cell.Retained[0].Box[0].Lo.RatString())
+	require.Equal(t, "11/2", cell.Retained[0].Box[0].Hi.RatString())
+	for _, limit := range [...]loftface.VerticalLimit{cell.Lower, cell.Upper} {
 		require.Less(t, limit.Root.Lo.Cmp(limit.Root.Hi), 0)
 		require.Equal(t, "11/2", limit.Box[0].Lo.RatString())
 	}
@@ -222,25 +223,25 @@ func TestRevolveLoftFacesVerticalAffineOrientation(t *testing.T) {
 
 func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
 	blank, tooth, _ := neutralArcSeamSource(t)
-	proof, certified, err := certifyRevolveLoftFacesSource(t.Context(), blank, tooth)
+	proof, certified, err := revolvecontact.CertifySource(t.Context(), bodyNode(blank), bodyNode(tooth))
 	if err != nil || !certified {
 		t.Fatalf("live source was not admitted: %v, %t", err, certified)
 	}
-	manifest, complete, err := revolveLoftFacesAllSideManifest(t.Context(), proof)
+	manifest, complete, err := revolvecontact.AllSideManifest(t.Context(), proof)
 	if err != nil || !complete || manifest == nil {
 		t.Fatalf("live source did not reach all-side consumer: %v, %t", err, complete)
 	}
-	if len(manifest.sideOutcome) != len(proof.section.Spans) {
+	if len(manifest.SideOutcome) != len(proof.Section.Spans) {
 		t.Fatal("all-side record does not cover the live Revolve section")
 	}
 	contacts, misses := 0, 0
-	for _, entry := range manifest.vertical {
-		if entry.sectionIndex < 0 || entry.sectionIndex >= len(proof.section.Spans) ||
-			entry.outcome == revolveloftfaces.VerticalContact && entry.side == nil ||
-			entry.outcome == revolveloftfaces.VerticalMiss && entry.side != nil {
+	for _, entry := range manifest.Vertical {
+		if entry.SectionIndex < 0 || entry.SectionIndex >= len(proof.Section.Spans) ||
+			entry.Outcome == revolveloftfaces.VerticalContact && entry.Side == nil ||
+			entry.Outcome == revolveloftfaces.VerticalMiss && entry.Side != nil {
 			t.Fatal("vertical answer lacks its live side record")
 		}
-		switch entry.outcome {
+		switch entry.Outcome {
 		case revolveloftfaces.VerticalContact:
 			contacts++
 		case revolveloftfaces.VerticalMiss:
@@ -253,21 +254,21 @@ func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
 		t.Fatalf("real source did not exercise both vertical answers: contacts=%d misses=%d", contacts, misses)
 	}
 	t.Run("changed toe cone slope", func(t *testing.T) {
-		original := proof.trim.Toe.Slope
-		defer func() { proof.trim.Toe.Slope = original }()
-		proof.trim.Toe.Slope = lfAdd(original, lfF(0.001))
+		original := proof.Trim.Toe.Slope
+		defer func() { proof.Trim.Toe.Slope = original }()
+		proof.Trim.Toe.Slope = lfAdd(original, lfF(0.001))
 		assertChangedCurvedTrimRefuses(t, tooth, proof)
 	})
 	t.Run("changed heel cone apex", func(t *testing.T) {
-		original := proof.trim.Heel.Apex
-		defer func() { proof.trim.Heel.Apex = original }()
-		proof.trim.Heel.Apex = lfAdd(original, lfF(0.001))
+		original := proof.Trim.Heel.Apex
+		defer func() { proof.Trim.Heel.Apex = original }()
+		proof.Trim.Heel.Apex = lfAdd(original, lfF(0.001))
 		assertChangedCurvedTrimRefuses(t, tooth, proof)
 	})
 	t.Run("changed toe tool", func(t *testing.T) {
-		original := proof.trim.ToeTool
-		defer func() { proof.trim.ToeTool = original }()
-		proof.trim.ToeTool = proof.trim.HeelTool
+		original := proof.Trim.ToeTool
+		defer func() { proof.Trim.ToeTool = original }()
+		proof.Trim.ToeTool = proof.Trim.HeelTool
 		assertChangedCurvedTrimRefuses(t, tooth, proof)
 	})
 	t.Run("cap triangle on source face", func(t *testing.T) {
@@ -283,7 +284,7 @@ func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
 		payload.FaceOf = slices.Clone(payload.FaceOf)
 		changed := false
 		for i, group := range payload.Src {
-			if group == proof.trim.ToeCapGroup {
+			if group == proof.Trim.ToeCapGroup {
 				payload.FaceOf[i] = len(tooth.Faces()) + 1
 				changed = true
 			}
@@ -299,25 +300,25 @@ func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
 		original := shell.n.Faces
 		defer func() { shell.n.Faces = original }()
 		shell.n.Faces = append(slices.Clone(original), faceNode(bornFace(&Face{n: topo.Face{Origins: []provenance.Ref{{Role: "unmatched side"}}, Body: bodyNode(blank)}})))
-		_, complete, err := revolveLoftFacesAllSideManifest(t.Context(), proof)
+		_, complete, err := revolvecontact.AllSideManifest(t.Context(), proof)
 		if err != nil || complete {
 			t.Fatalf("an unclassified live blank face was admitted: %v, %t", err, complete)
 		}
 	})
 	t.Run("changed root section", func(t *testing.T) {
-		original := proof.section.RootStart
-		defer func() { proof.section.RootStart = original }()
-		proof.section.RootStart.U += 0.125
-		_, complete, err := revolveLoftFacesAllSideManifest(t.Context(), proof)
+		original := proof.Section.RootStart
+		defer func() { proof.Section.RootStart = original }()
+		proof.Section.RootStart.U += 0.125
+		_, complete, err := revolvecontact.AllSideManifest(t.Context(), proof)
 		if err != nil || complete {
 			t.Fatalf("changed live root section was admitted: %v, %t", err, complete)
 		}
 	})
 	t.Run("changed root cone", func(t *testing.T) {
-		original := proof.section.RootCone
-		defer func() { proof.section.RootCone = original }()
-		proof.section.RootCone.Origin.X += 0.125
-		_, complete, err := revolveLoftFacesAllSideManifest(t.Context(), proof)
+		original := proof.Section.RootCone
+		defer func() { proof.Section.RootCone = original }()
+		proof.Section.RootCone.Origin.X += 0.125
+		_, complete, err := revolvecontact.AllSideManifest(t.Context(), proof)
 		if err != nil || complete {
 			t.Fatalf("changed live root cone was admitted: %v, %t", err, complete)
 		}
@@ -332,10 +333,10 @@ func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
 		}
 		payload.Xform = shift
 		tooth.n.Payload = payload
-		if revolveLoftFacesTrimCurrent(tooth, proof.trim) {
+		if revolvecontact.TrimCurrent(bodyNode(tooth), proof.Trim) {
 			t.Fatal("changed tooth transform retained a current source record")
 		}
-		_, complete, err := revolveLoftFacesAllSideManifest(t.Context(), proof)
+		_, complete, err := revolvecontact.AllSideManifest(t.Context(), proof)
 		if err != nil || complete {
 			t.Fatalf("changed tooth transform was admitted: %v, %t", err, complete)
 		}
@@ -344,13 +345,13 @@ func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
 		contactIndex := -1
 		var ref provenance.Ref
 		var owner *Face
-		for _, entry := range manifest.vertical {
-			if entry.outcome != revolveloftfaces.VerticalContact {
+		for _, entry := range manifest.Vertical {
+			if entry.Outcome != revolveloftfaces.VerticalContact {
 				continue
 			}
-			for _, cell := range entry.side.cells {
-				if len(cell.retained) > 0 {
-					contactIndex, ref, owner = entry.sectionIndex, cell.ref, cell.face
+			for _, cell := range entry.Side.Cells {
+				if len(cell.Retained) > 0 {
+					contactIndex, ref, owner = entry.SectionIndex, cell.Ref, faceHandle(cell.Face)
 					break
 				}
 			}
@@ -362,18 +363,18 @@ func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
 			t.Fatal("the live vertical contact has no retained source face")
 		}
 		rejectChangedCurvedSourceOwner(t, tooth, ref, owner, func() bool {
-			side, outcome, err := revolveLoftFacesVerticalSideClassify(t.Context(), proof, contactIndex)
+			side, outcome, err := revolvecontact.VerticalSideClassify(t.Context(), proof, contactIndex)
 			return err == nil && side != nil && outcome == revolveloftfaces.VerticalContact
 		})
 	})
 	t.Run("wrong nonvertical triangle owner", func(t *testing.T) {
 		var ref provenance.Ref
 		var owner *Face
-		for _, entry := range manifest.nonvertical {
-			for _, cell := range entry.cells {
-				if cell.mapped.Segment != proof.crossings[0].segment &&
-					cell.mapped.Segment != proof.crossings[1].segment {
-					ref, owner = cell.ref, cell.face
+		for _, entry := range manifest.Nonvertical {
+			for _, cell := range entry.Cells {
+				if cell.Mapped.Segment != proof.Crossings[0].Segment &&
+					cell.Mapped.Segment != proof.Crossings[1].Segment {
+					ref, owner = cell.Ref, faceHandle(cell.Face)
 					break
 				}
 			}
@@ -385,42 +386,42 @@ func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
 			t.Fatal("the live nonvertical side has no retained noncrossing source face")
 		}
 		rejectChangedCurvedSourceOwner(t, tooth, ref, owner, func() bool {
-			_, complete, err := revolveLoftFacesAllSideManifest(t.Context(), proof)
+			_, complete, err := revolvecontact.AllSideManifest(t.Context(), proof)
 			return err == nil && complete
 		})
 	})
 }
 
 func assertChangedCurvedTrimRefuses(t *testing.T, tooth *Body,
-	proof *revolveLoftFacesSourceCertificate) {
+	proof *revolvecontact.SourceCertificate) {
 	t.Helper()
-	if revolveLoftFacesTrimCurrent(tooth, proof.trim) {
+	if revolvecontact.TrimCurrent(bodyNode(tooth), proof.Trim) {
 		t.Fatal("changed trim retained a current source record")
 	}
-	_, certified, err := certifyRevolveLoftFacesSource(t.Context(), proof.blank, tooth)
+	_, certified, err := revolvecontact.CertifySource(t.Context(), proof.Blank, bodyNode(tooth))
 	if err != nil || certified {
 		t.Fatalf("changed trim reached source admission: %v, %t", err, certified)
 	}
-	_, complete, err := revolveLoftFacesAllSideManifest(t.Context(), proof)
+	_, complete, err := revolvecontact.AllSideManifest(t.Context(), proof)
 	if err != nil || complete {
 		t.Fatalf("changed trim reached all-side consumer: %v, %t", err, complete)
 	}
 }
 
 func mutateCurvedCapFaceOwner(t *testing.T, tooth *Body,
-	proof *revolveLoftFacesSourceCertificate, capToSource bool) {
+	proof *revolvecontact.SourceCertificate, capToSource bool) {
 	t.Helper()
 	original := tooth.n.Payload
 	defer func() { tooth.n.Payload = original }()
 	payload := original.(facetedPayload)
 	payload.FaceOf = slices.Clone(payload.FaceOf)
-	capGroup := proof.trim.ToeCapGroup
+	capGroup := proof.Trim.ToeCapGroup
 	capTriangle, sourceTriangle := -1, -1
 	for i, group := range payload.Src {
 		if group == capGroup && capTriangle < 0 {
 			capTriangle = i
 		}
-		if group != proof.trim.ToeCapGroup && group != proof.trim.HeelCapGroup && sourceTriangle < 0 {
+		if group != proof.Trim.ToeCapGroup && group != proof.Trim.HeelCapGroup && sourceTriangle < 0 {
 			sourceTriangle = i
 		}
 	}

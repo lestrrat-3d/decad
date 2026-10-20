@@ -20,6 +20,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/obliqueboss"
 	"github.com/lestrrat-3d/decad/internal/prismboolean"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/revolvecontact"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
@@ -251,7 +252,7 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 	} else if ok {
 		return bodyHandle(n), nil
 	}
-	if ok, err := tryRevolveLoftFacesUnion(ctx, op, a, b); err != nil {
+	if ok, err := revolvecontact.TryUnion(ctx, op, bodyNode(a), bodyNode(b)); err != nil {
 		return nil, err
 	} else if ok {
 		return nil, ErrUnsupported
