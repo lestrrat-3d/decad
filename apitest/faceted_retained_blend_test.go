@@ -555,30 +555,94 @@ func TestFacetedRetainedBlendStraight(t *testing.T) {
 		require.True(t, mesh.VolumeVerified())
 	})
 
-	t.Run("a concave edge whose face turns reflex at its end is refused", func(t *testing.T) {
+	t.Run("concave edges at a wall's foot", func(t *testing.T) {
 		t.Parallel()
-		sc := newRetentionScene()
-		plate := blendPlate(t, sc)
-		ws, err := sc.w.CreateSketch(sc.w.XY())
-		require.NoError(t, err)
-		wr := ws.CreateRectangle(10, 5, 30, 15)
-		ws.Fix(wr.A)
-		_, err = ws.Solve(t.Context())
-		require.NoError(t, err)
-		wall, err := decad.Extrude(t.Context(), sc.doc, ws, ws.Profiles()[0],
-			decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
-		require.NoError(t, err)
-		lift, err := r3.Translation(r3.Vec{Z: 15})
-		require.NoError(t, err)
-		wall, err = decad.Transform(t.Context(), wall, lift)
-		require.NoError(t, err)
-		joined, err := decad.Union(t.Context(), plate, wall)
-		require.NoError(t, err)
 		// The plate's top face wraps the wall's footprint, so it is reflex at
-		// each foot corner.
-		_, err = decad.Fillet(t.Context(), joined, straightEdge(t, joined, r3.NewVec(10, 5, 20), r3.NewVec(1, 0, 0)),
-			units.Millimeters(1))
-		require.ErrorIs(t, err, decad.ErrUnsupported)
+		// each foot corner; the blend's end caps extend the wall's end faces.
+		build := func(t *testing.T) *decad.Body {
+			t.Helper()
+			sc := newRetentionScene()
+			plate := blendPlate(t, sc)
+			ws, err := sc.w.CreateSketch(sc.w.XY())
+			require.NoError(t, err)
+			wr := ws.CreateRectangle(10, 5, 30, 15)
+			ws.Fix(wr.A)
+			_, err = ws.Solve(t.Context())
+			require.NoError(t, err)
+			wall, err := decad.Extrude(t.Context(), sc.doc, ws, ws.Profiles()[0],
+				decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+			require.NoError(t, err)
+			lift, err := r3.Translation(r3.Vec{Z: 15})
+			require.NoError(t, err)
+			wall, err = decad.Transform(t.Context(), wall, lift)
+			require.NoError(t, err)
+			joined, err := decad.Union(t.Context(), plate, wall)
+			require.NoError(t, err)
+			return joined
+		}
+		const r = 1.0
+		fill := r * r * (1 - math.Pi/4)
+
+		joined := build(t)
+		before, err := joined.Volume()
+		require.NoError(t, err)
+		filleted, err := decad.Fillet(t.Context(), joined, straightEdge(t, joined, r3.NewVec(10, 5, 20), r3.NewVec(1, 0, 0)),
+			units.Millimeters(r))
+		require.NoError(t, err)
+		after, err := filleted.Volume()
+		require.NoError(t, err)
+		requireVolumeChange(t, before, after, -20*fill)
+		cylinders := 0
+		for _, f := range filleted.Faces() {
+			if c, ok := f.Surface().(decad.Cylinder); ok && math.Abs(c.Radius.Base()-r) < 1e-12 {
+				cylinders++
+				// The fill is concave: the blend's normal points into the void,
+				// toward the axis.
+				p := firstVertex(t, f)
+				n, err := f.NormalAt(p)
+				require.NoError(t, err)
+				require.Positive(t, n.Value.Dot(c.Origin.Sub(p)))
+			}
+		}
+		require.Equal(t, 1, cylinders)
+		mesh, err := filleted.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+		require.NoError(t, err)
+		require.True(t, mesh.BoundaryVerified())
+		require.True(t, mesh.VolumeVerified())
+
+		// The wall's two end faces grew by the end caps.
+		endFaces := 0
+		for _, f := range filleted.Faces() {
+			pl, ok := f.Surface().(decad.Plane)
+			if !ok || math.Abs(math.Abs(pl.Frame.N().X)-1) > 1e-9 {
+				continue
+			}
+			if x := pl.Frame.Origin().X; math.Abs(x-10) < 1e-9 || math.Abs(x-30) < 1e-9 {
+				endFaces++
+			}
+		}
+		require.Equal(t, 2, endFaces)
+
+		// The two long foot edges together, and a chamfer, build as well.
+		joined = build(t)
+		before, err = joined.Volume()
+		require.NoError(t, err)
+		both, err := decad.Fillet(t.Context(), joined,
+			decad.Edges(decad.Concave(), decad.ParallelTo(r3.NewVec(1, 0, 0))).Exactly(2), units.Millimeters(r))
+		require.NoError(t, err)
+		afterBoth, err := both.Volume()
+		require.NoError(t, err)
+		requireVolumeChange(t, before, afterBoth, -2*20*fill)
+
+		joined = build(t)
+		before, err = joined.Volume()
+		require.NoError(t, err)
+		chamfered, err := decad.Chamfer(t.Context(), joined, straightEdge(t, joined, r3.NewVec(10, 5, 20), r3.NewVec(1, 0, 0)),
+			units.Millimeters(r))
+		require.NoError(t, err)
+		afterChamfer, err := chamfered.Volume()
+		require.NoError(t, err)
+		requireVolumeChange(t, before, afterChamfer, -20*r*r/2)
 	})
 
 	t.Run("refusals and the result as an ordinary body", func(t *testing.T) {

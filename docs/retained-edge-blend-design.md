@@ -213,6 +213,19 @@ again over the new loops. Let `e` run from `V₀` to `V₁`, with `d̂` its dire
    of `A` and `B` and the end curves of `G₀` and `G₁`, which are the vertices
    the four faces share with it.
 
+**A face that is reflex at an end.** A concave edge can end where one of its two
+faces wraps the corner, as a plate's top face does at the foot of a wall. That
+face leaves the edge on the far side of its line: the setback line meets the
+line of `A ∩ G` behind the corner, not along the chain. The face is not trimmed.
+Its boundary runs on from the corner `V` to the setback point and along the
+setback edge, so `V` stays in its loop. The end face `G` is convex at `V`, and the
+blend's end cap lies in `G`'s plane beside it. `G` gains the cap: its loop keeps
+`V`, takes the arc and the setback points next to it, and loses the removed part
+of the other face's chain. A convex edge refuses a reflex face, and so does an end
+where both faces are reflex. Which way a face leaves the edge comes from the
+loop: a face lies to the left of its own boundary, so the way into `A` is
+`n_A × δ`, with `δ` the direction the loop runs along the edge.
+
 **Exact areas.** The removed region of `A` is the quadrilateral
 `V₀ V₁ P_A,₁ P_A,₀`, and `B`'s likewise. The removed region of `G_i` is the
 projection along `d̂` of the corner region of the cross-section, area
@@ -256,7 +269,7 @@ of that computation.
 | **SR2** | two selected edges share a vertex, or a selected edge continues tangentially into a neighbour | no transition built | `ErrUnsupported` |
 | **SR3** | no blend of that size exists: `R − r ≤ 0` for an inside ball (§4.2), `φ` within 10⁻⁹ of 0 or π, or a chamfer distance of zero or below | no regular blend | `ErrDegenerate` |
 | **SR4** | the setback does not fit (§6.2) and the held bounds prove it does not | the blend consumes the face | `ErrDegenerate` |
-| **SR5** | the setback might not fit and the held bounds cannot decide it, or an end vertex of an R1 edge is not a three-face corner with a retained planar `G`, or `G`'s corner at the vertex does not match the edge (a convex edge needs a convex corner of `G`, a concave edge a reflex one), or `A` or `B` turns reflex at the vertex, or another part of `G` comes within the blend's reach of the vertex | body exists; the evaluator cannot prove its construction | `ErrUnsupported` |
+| **SR5** | the setback might not fit and the held bounds cannot decide it, or an end vertex of an R1 edge is not a three-face corner with a retained planar `G`, or `G`'s corner at the vertex does not match the edge (a convex edge needs a convex corner of `G`, a concave edge a reflex one), or both `A` and `B` turn reflex at the vertex, or a convex edge meets a reflex face, or another part of `G` comes within the blend's reach of the vertex | body exists; the evaluator cannot prove its construction | `ErrUnsupported` |
 | **SR6** | the held mesh disagrees with the exact vertex of its three tags by more than the vertex bound plus slack (§6.3) | the record and the mesh do not describe one solid | `ErrUnsupported` |
 | **SR7** | the rewritten mesh fails the held audit (watertight, no remote self-intersection, shells positive) | the result is invalid | `ErrDegenerate` when the audit proves a face inside out (modify S8), else `ErrUnsupported` |
 
@@ -356,7 +369,7 @@ published bound, never with a pinned literal.
 | Straight 90° edge (R1 fillet and chamfer) | `Cylinder`, axis along the edge, removed volume `L·r²(1 − π/4)`; the chamfer removes `L·d²/2` | |
 | 45° edge (R1 fillet) | setback `r·tan(φ/2)`; removed area per unit length `r²(tan(φ/2) − φ/2)` | use `r` for the setback at `φ ≠ π/2`: the 45° test fails |
 | Concave edge in an L section | the fill adds `L·r²(1 − π/4)`, the blend's normal points into the void, `VerifyAll` passes | build the convex blend: the normal points into the material |
-| Concave edge at a wall's foot | refuses with `ErrUnsupported`: the plate face wraps the foot and turns reflex at the corner | |
+| Concave edge at a wall's foot | the plate face is reflex at each foot corner; the fill adds `L·r²(1 − π/4)`, the wall's end faces grow by the caps, `VerifyAll` passes; two foot edges together and a chamfer build as well | keep `V` out of the extended end face's loop: the mesh fails its audit |
 | Oblique end face | the end arc is an `Ellipse3` with `SemiMinor = r` and `SemiMajor = r / |d̂ · nG|`; removed volume equals the section area times the length between the end planes measured through the section's centroid | treat `G` as normal to the edge: the volume is off by the centroid offset |
 | Clearance | a radius past the face width refuses `ErrDegenerate`; a radius within `b` of it refuses `ErrUnsupported` | drop the `− b_v` term of §6.2: the near case builds an invalid solid |
 | Shared vertex / tangent chain | refuse SR2 | |

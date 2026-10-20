@@ -118,38 +118,46 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 		return nil, err
 	}
 
-	// The directions into the faces, and the corner's kind.
+	// A face lies to the left of its own boundary, so the way into it from
+	// the edge is the face normal crossed with the way the loop runs along the
+	// edge. That holds whether the face is convex or reflex at the ends.
 	e0 := l.ends[0].exact
-	into := func(run edgeRun, pl plane) (r3.Vec, error) {
-		across := pl.n.Cross(l.d)
-		far := w.verts[run.chain[0][len(run.chain[0])-1]]
-		side := far.Sub(e0).Dot(across)
-		if math.Abs(side) <= margin {
-			return r3.Vec{}, fmt.Errorf("%w: the held bounds cannot tell which side of the edge a face lies", decaderr.ErrUnsupported)
+	along := func(run edgeRun) r3.Vec {
+		if run.step > 0 {
+			return l.d
 		}
-		return across.Scale(math.Copysign(1, side)), nil
+		return l.d.Scale(-1)
 	}
-	wA, err := into(runA, l.a)
-	if err != nil {
-		return nil, err
-	}
-	wB, err := into(runB, l.b)
-	if err != nil {
-		return nil, err
-	}
+	wA, wB := l.a.n.Cross(along(runA)), l.b.n.Cross(along(runB))
 	convex := l.b.n.Dot(wA) < 0
 	if (l.a.n.Dot(wB) < 0) != convex || l.edgeConvex != convex {
 		return nil, fmt.Errorf("%w: the edge's convexity disagrees with its two tags", decaderr.ErrUnsupported)
 	}
+	// At each end a face either leaves the edge on its own side (convex at the
+	// corner: the blend trims it) or turns back past the edge's line (reflex
+	// there: only a concave edge's fill, which extends the end face, can end
+	// there).
+	var kind [2][2]sideKind
 	for i := range 2 {
-		for _, c := range []struct {
+		for f, c := range []struct {
 			run edgeRun
 			w   r3.Vec
 		}{{runA, wA}, {runB, wB}} {
-			far := w.verts[c.run.chain[i][len(c.run.chain[i])-1]]
-			if far.Sub(l.ends[i].exact).Dot(c.w) <= margin {
-				return nil, fmt.Errorf("%w: a face turns back at an edge end", decaderr.ErrUnsupported)
+			s := c.run.dir[i].Dot(c.w)
+			switch {
+			case s > minSine:
+				kind[i][f] = trims
+			case s < -minSine:
+				kind[i][f] = extends
+			default:
+				return nil, fmt.Errorf("%w: a face leaves an edge end along the edge's own line", decaderr.ErrUnsupported)
 			}
+		}
+		if (kind[i][0] == extends || kind[i][1] == extends) && convex {
+			return nil, fmt.Errorf("%w: a convex edge ends where a face is reflex", decaderr.ErrUnsupported)
+		}
+		if kind[i][0] == extends && kind[i][1] == extends {
+			return nil, fmt.Errorf("%w: both faces are reflex at an edge end", decaderr.ErrUnsupported)
 		}
 	}
 
@@ -199,7 +207,7 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 		for j, p := range rowsAt {
 			rowIdx[i][j] = w.vertex(setbackPoint(p, l.d, end.g), w.tau+slack)
 		}
-		for _, side := range []struct {
+		for f, side := range []struct {
 			run  edgeRun
 			rows int
 			rem  *[2][]int
@@ -207,6 +215,14 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 			p := w.verts[rowIdx[i][side.rows]]
 			tp := tau(p, end.exact, side.run.dir[i])
 			chain := side.run.chain[i]
+			if kind[i][f] == extends {
+				// The setback point lies beyond the corner, on the line the
+				// chain leaves along, where the face carries on.
+				if tp >= -margin {
+					return nil, fmt.Errorf("%w: a setback point lies on the wrong side of an edge end", decaderr.ErrUnsupported)
+				}
+				continue
+			}
 			last := tau(w.verts[chain[len(chain)-1]], end.exact, side.run.dir[i])
 			if tp <= margin {
 				return nil, fmt.Errorf("%w: a setback point lies behind an edge end", decaderr.ErrUnsupported)
@@ -226,13 +242,14 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 		}
 	}
 
-	// The faces beside the edge keep clear of the strip.
+	// The faces beside the edge keep clear of the strip: no boundary segment of
+	// a face comes within the held bounds of the region the blend rewrites.
 	for _, side := range []struct {
-		f    faceLoops
-		run  edgeRun
-		w    r3.Vec
-		size float64
-	}{{fA, runA, wA, tA}, {fB, runB, wB, tB}} {
+		f   faceLoops
+		run edgeRun
+		pl  plane
+		row int
+	}{{fA, runA, l.a, 0}, {fB, runB, l.b, m}} {
 		exempt := map[int]bool{l.ends[0].v: true, l.ends[1].v: true}
 		for _, v := range side.run.inner {
 			exempt[v] = true
@@ -242,12 +259,15 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 				exempt[v] = true
 			}
 		}
+		zone := []r3.Vec{l.ends[0].exact, l.ends[1].exact,
+			w.verts[rowIdx[1][side.row]], w.verts[rowIdx[0][side.row]]}
 		for _, loop := range side.f.loops {
-			for _, v := range loop {
-				if exempt[v] {
+			for k, v := range loop {
+				q := loop[(k+1)%len(loop)]
+				if exempt[v] && exempt[q] {
 					continue
 				}
-				if w.verts[v].Sub(e0).Dot(side.w) < side.size+w.beta[v]+margin {
+				if w.nearZone(w.verts[v], w.verts[q], zone, side.pl.n, max(w.beta[v], w.beta[q])+margin) {
 					return nil, fmt.Errorf("%w: a face boundary comes within the blend's reach of the edge", decaderr.ErrUnsupported)
 				}
 			}
@@ -258,7 +278,7 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 	// the faces beside the edge about the chains.
 	var gLoops [2][][]int
 	for i := range 2 {
-		loops, err := w.endFace(l, i, fG[i], [2]edgeRun{runA, runB}, remA[i], remB[i], rowIdx[i], rowsAt, margin, convex)
+		loops, err := w.endFace(l, i, fG[i], [2]edgeRun{runA, runB}, kind[i], remA[i], remB[i], rowIdx[i], rowsAt, margin, convex)
 		if err != nil {
 			return nil, err
 		}
@@ -266,11 +286,11 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 	}
 
 	// The faces beside the edge swap the edge for its setback edge.
-	aLoops, err := w.replaceEdge(fA, runA, l, remA, [2]int{rowIdx[0][0], rowIdx[1][0]})
+	aLoops, err := w.replaceEdge(fA, runA, l, remA, kindsOf(kind, 0), [2]int{rowIdx[0][0], rowIdx[1][0]})
 	if err != nil {
 		return nil, err
 	}
-	bLoops, err := w.replaceEdge(fB, runB, l, remB, [2]int{rowIdx[0][m], rowIdx[1][m]})
+	bLoops, err := w.replaceEdge(fB, runB, l, remB, kindsOf(kind, 1), [2]int{rowIdx[0][m], rowIdx[1][m]})
 	if err != nil {
 		return nil, err
 	}
@@ -323,8 +343,8 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 
 // endFace builds end face G_i's new loops: the corner and the removed parts of
 // the two chains give way to the end curve of the blend.
-func (w *work) endFace(l line, i int, g faceLoops, runs [2]edgeRun, remA, remB, rows []int, rowsAt []r3.Vec,
-	margin float64, convex bool) ([][]int, error) {
+func (w *work) endFace(l line, i int, g faceLoops, runs [2]edgeRun, kinds [2]sideKind, remA, remB, rows []int,
+	rowsAt []r3.Vec, margin float64, convex bool) ([][]int, error) {
 	end := l.ends[i]
 	li, ok := g.loopWith(end.v)
 	if !ok {
@@ -346,10 +366,13 @@ func (w *work) endFace(l line, i int, g faceLoops, runs [2]edgeRun, remA, remB, 
 	}
 	// A convex edge ends on a face that is convex at the corner (the blend
 	// removes the corner from it), a concave edge on one that is reflex there
-	// (the blend fills the notch). Nothing else of the face may come near.
+	// (the blend fills the notch), or, when a face beside the edge is reflex
+	// there, on one that is convex (the blend's end cap extends it). Nothing
+	// else of the face may come near.
+	extended := kinds[0] == extends || kinds[1] == extends
 	in, out := w.verts[end.v].Sub(w.verts[prev]), w.verts[next].Sub(w.verts[end.v])
 	turn := in.Cross(out).Dot(end.g.n)
-	if math.Abs(turn) <= margin*in.Len() || (turn > 0) != convex {
+	if math.Abs(turn) <= margin*in.Len() || (turn > 0) != (convex || extended) {
 		return nil, fmt.Errorf("%w: an end face's corner does not match the edge's convexity", decaderr.ErrUnsupported)
 	}
 	reach := 0.0
@@ -382,22 +405,25 @@ func (w *work) endFace(l line, i int, g faceLoops, runs [2]edgeRun, remA, remB, 
 	for _, v := range remB {
 		run[v] = true
 	}
-	outside, inOrder, err := splice(loop, run)
+	outside, _, err := splice(loop, run)
 	if err != nil {
 		return nil, err
 	}
-	if len(inOrder) != len(run) {
-		return nil, fmt.Errorf("%w: an end face's corner is not one run", decaderr.ErrUnsupported)
+	// The corner vertex stays beside the end curve when a face beside the edge
+	// extends past it.
+	seq := append([]int(nil), rows...)
+	switch {
+	case kinds[0] == extends:
+		seq = append([]int{end.v}, seq...)
+	case kinds[1] == extends:
+		seq = append(seq, end.v)
 	}
-	repl := append([]int(nil), rows...)
+	repl := seq
 	if !aFirst {
-		for a, b := 0, len(repl)-1; a < b; a, b = a+1, b-1 {
-			repl[a], repl[b] = repl[b], repl[a]
+		repl = make([]int, len(seq))
+		for k, v := range seq {
+			repl[len(seq)-1-k] = v
 		}
-	}
-	// Each chain's removed part must be on the side the loop says.
-	if aFirst && len(remA) > 0 && inOrder[0] != remA[len(remA)-1] {
-		return nil, fmt.Errorf("%w: an end face's chain runs the other way", decaderr.ErrUnsupported)
 	}
 	out2 := make([][]int, 0, len(g.loops))
 	for k, lp := range g.loops {
@@ -411,8 +437,9 @@ func (w *work) endFace(l line, i int, g faceLoops, runs [2]edgeRun, remA, remB, 
 }
 
 // replaceEdge swaps the edge's run in face f's loops for the setback edge,
-// dropping the removed parts of the two chains.
-func (w *work) replaceEdge(f faceLoops, run edgeRun, l line, rem [2][]int, p [2]int) ([][]int, error) {
+// dropping the removed parts of the two chains. A corner vertex stays at an
+// end where the face extends past it.
+func (w *work) replaceEdge(f faceLoops, run edgeRun, l line, rem [2][]int, kinds [2]sideKind, p [2]int) ([][]int, error) {
 	set := map[int]bool{l.ends[0].v: true, l.ends[1].v: true}
 	for _, v := range run.inner {
 		set[v] = true
@@ -426,9 +453,18 @@ func (w *work) replaceEdge(f faceLoops, run edgeRun, l line, rem [2][]int, p [2]
 	if err != nil {
 		return nil, err
 	}
-	repl := []int{p[0], p[1]}
+	repl := make([]int, 0, 4)
+	if kinds[0] == extends {
+		repl = append(repl, l.ends[0].v)
+	}
+	repl = append(repl, p[0], p[1])
+	if kinds[1] == extends {
+		repl = append(repl, l.ends[1].v)
+	}
 	if indexIn(inOrder, l.ends[0].v) > indexIn(inOrder, l.ends[1].v) {
-		repl = []int{p[1], p[0]}
+		for a, b := 0, len(repl)-1; a < b; a, b = a+1, b-1 {
+			repl[a], repl[b] = repl[b], repl[a]
+		}
 	}
 	out := make([][]int, 0, len(f.loops))
 	for k, lp := range f.loops {
@@ -439,6 +475,69 @@ func (w *work) replaceEdge(f faceLoops, run edgeRun, l line, rem [2][]int, p [2]
 		out = append(out, lp)
 	}
 	return out, nil
+}
+
+// sideKind says how a face beside the edge meets an end of the edge.
+type sideKind int
+
+const (
+	// trims is a face that is convex at the corner: the blend cuts the corner
+	// out of it.
+	trims sideKind = iota
+	// extends is a face that is reflex at the corner: the blend's setback edge
+	// runs on past the corner along the line the face's own boundary leaves
+	// along.
+	extends
+)
+
+// kindsOf is face f's kind at the two ends.
+func kindsOf(kind [2][2]sideKind, f int) [2]sideKind { return [2]sideKind{kind[0][f], kind[1][f]} }
+
+// nearZone reports whether the segment ab comes within margin of the planar
+// polygon zone, with normal n, or lies inside it.
+func (w *work) nearZone(a, b r3.Vec, zone []r3.Vec, n r3.Vec, margin float64) bool {
+	u, ok := perpendicular(n)
+	if !ok {
+		return true
+	}
+	v := n.Cross(u)
+	project := func(p r3.Vec) pt2 {
+		q := p.Sub(zone[0])
+		return pt2{q.Dot(u), q.Dot(v)}
+	}
+	ps := make([]pt2, len(zone))
+	loop := make([]int, len(zone))
+	for i, p := range zone {
+		ps[i] = project(p)
+		loop[i] = i
+	}
+	if insidePolygon(ps, loop, project(a)) || insidePolygon(ps, loop, project(b)) {
+		return true
+	}
+	for i := range zone {
+		if segmentDistance(a, b, zone[i], zone[(i+1)%len(zone)]) <= margin {
+			return true
+		}
+	}
+	return false
+}
+
+// segmentDistance is the distance between the segments ab and cd.
+func segmentDistance(a, b, c, d r3.Vec) float64 {
+	best := math.Min(math.Min(distToSegment(a, c, d), distToSegment(b, c, d)),
+		math.Min(distToSegment(c, a, b), distToSegment(d, a, b)))
+	u, v, w := b.Sub(a), d.Sub(c), a.Sub(c)
+	uu, uv, vv, uw, vw := u.Dot(u), u.Dot(v), v.Dot(v), u.Dot(w), v.Dot(w)
+	den := uu*vv - uv*uv
+	if den <= 0 {
+		return best
+	}
+	s := (uv*vw - vv*uw) / den
+	t := (uu*vw - uv*uw) / den
+	if s < 0 || s > 1 || t < 0 || t > 1 {
+		return best
+	}
+	return math.Min(best, a.Add(u.Scale(s)).Sub(c.Add(v.Scale(t))).Len())
 }
 
 // lineTag is the exact surface of the blend face.
@@ -489,12 +588,16 @@ func (w *work) lineAreas(l line, spec blendSpec, convex bool, center, baseA, bas
 	removed = polyArea(v0, v1, pt(1, 0), pt(0, 0)) + polyArea(v0, v1, pt(1, m), pt(0, m))
 	for i := range 2 {
 		g := l.ends[i].g
+		// A convex edge takes the corner out of its end face; a concave edge
+		// adds the notch's fill to it.
+		corner := polyArea(l.ends[i].exact, pt(i, 0), pt(i, m))
 		if spec.fillet {
-			corner := spec.r * spec.r * (math.Tan(l.phi/2) - l.phi/2)
-			removed += corner / math.Abs(l.d.Dot(g.n))
-		} else {
-			removed += polyArea(l.ends[i].exact, pt(i, 0), pt(i, m))
+			corner = spec.r * spec.r * (math.Tan(l.phi/2) - l.phi/2) / math.Abs(l.d.Dot(g.n))
 		}
+		if !convex {
+			corner = -corner
+		}
+		removed += corner
 	}
 	if !spec.fillet {
 		chord := baseB.Sub(baseA).Len()
