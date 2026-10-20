@@ -372,7 +372,7 @@ func (r *motionRun) recordGap(mp *motionPose, i, k int, res pairkernel.Result, e
 	}
 	lo, hi, exact := pairkernel.DeltaWiden(res.Lo, res.Hi, res.Exact, etaA, etaB)
 	mp.pairs[i][k] = motionPairPose{hasGap: true, lo: lo, hi: hi, diam: res.Diam}
-	gap := pairGapMeasurement(pairkernel.Result{Lo: lo, Hi: hi, Exact: exact})
+	gap := measurementFromInternal(pairkernel.GapMeasurement(pairkernel.Result{Lo: lo, Hi: hi, Exact: exact}))
 	mp.result.Clearances = append(mp.result.Clearances, Clearance{A: mover, B: partner, Gap: gap})
 	if r.cfg.MinimumMM != nil && proofarith.FloatRat(hi).Cmp(r.cfg.MinimumMM) < 0 {
 		// The proven upper end of the ideal pose's gap lies below the spec:
@@ -419,7 +419,7 @@ func (r *motionRun) recordDeclaredGap(mp *motionPose, mover, partner *Body, res 
 		return
 	}
 	lo, hi, exact := pairkernel.DeltaWiden(res.Lo, res.Hi, res.Exact, etaA, etaB)
-	gap := pairGapMeasurement(pairkernel.Result{Lo: lo, Hi: hi, Exact: exact})
+	gap := measurementFromInternal(pairkernel.GapMeasurement(pairkernel.Result{Lo: lo, Hi: hi, Exact: exact}))
 	mp.result.Clearances = append(mp.result.Clearances, Clearance{A: mover, B: partner, Gap: gap})
 }
 
@@ -575,7 +575,7 @@ func (r *motionRun) pathClearance(poses []*motionPose, lowest *Measurement, scop
 	// upper end — which sound bounds never produce — is clamped rather than
 	// published inverted.
 	lower := math.Min(lowest.Value.Base(), upper)
-	gap := pairGapMeasurement(pairkernel.Result{Lo: lower, Hi: upper})
+	gap := measurementFromInternal(pairkernel.GapMeasurement(pairkernel.Result{Lo: lower, Hi: upper}))
 	gap.Exactness = Approximate
 	pass, ref, haveRef := tolerance.Scalar(gap.Value, gap.Bound, r.cfg.Rel,
 		pairToleranceInputs{diameter: diam}.lengthReference)
