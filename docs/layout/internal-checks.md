@@ -11,7 +11,6 @@ The rules for rows live in `docs/layout.md`.
 |---|---|
 | `internal/chainrecord/` | The chain ribbon record and its builder over nodes (`Build`, `Placed`, `Prism` view, walk capture and bounds walks); builds one wall face per recorded segment of every walk and restates the walls as a mesh. Root `chainPayload` aliases it. See surface §13.4, evaluator §8. |
 | `internal/draftrecord/` | Draft and two-sided draft records and their builder over nodes (`Build`, `BuildTwoSided`, `Placed`, band view, mesh, offset span, measurements, gate/motion readings, bounded fillet/chamfer/shell meridians). Root `draftPayload` and `twoSidedDraftPayload` alias it. See draft §5–§10.6, evaluator §8. |
-| `internal/stackedrecord/` | Stacked record and node builder (`Build`, `Placed`, `Plan`, extents, runs, bounds); builds blind-cut slabs through `prismcells`; derives and audits interfaces, wall columns, exposed patches and the stacked mesh. Root `stackedPrismPayload` aliases it. See stacked-prism §2.2–§5, evaluator §8. |
 | `internal/twistsweep/` | The twisted sweep payloads and their builder over nodes, with polygon admission, stations, Loft cell sewing, wall areas, offset source and cup mesh. Root `twistedSweepPayload` and `compositeTwistedSweepPayload` alias it. See sweep §17, evaluator §8. |
 | `internal/sectionclip/` | Exact section records for prism, stack slab and Loft (parallel, smooth rectangle, homothetic); oblique clips, cap polygons and circle-line trim; cardinal sphere and cone sections; rational plane arithmetic. See section design. |
 | `internal/sectioncert/` | Private bounded-section Sketch provenance, guarded Extrude recording, and `RecordProfile`, the Sketch-profile recording seam. See section design, sketch-seam §1–§2. |
@@ -27,12 +26,8 @@ The rules for rows live in `docs/layout.md`.
 | `internal/modifyoption/` | Fillet, Chamfer and Shell option codecs and side-role segment reading. See modify-reach §2. |
 | `internal/tangentchain/` | Ordered tangent-chain walk and analytic continuation decisions over topology nodes. See modify-reach §5. |
 | `internal/orderedwork/` | Runs independent jobs and returns results in input order. |
-| `internal/prismextent/` | Prism and profile boundary extremes, bounds and extent readings. See evaluator §5. |
-| `internal/prismplacement/` | Exact prism axis shifts, sweep spans, relative placement and exact rectangular boxes in a reference frame. See prism-boolean §3. |
 | `internal/circularbounds/` | Circular endpoints, lengths, area, moment and arc-box bounds over neutral records, and certified circular bore rings. |
-| `internal/prismcells/` | Analytic prism entry and shared pair admission, scene construction, §4.2 union, cut, intersect and crossing resolution, merge audits, cells, charges, trim walks, the placed-axis rectangle gate, overlap volume. See prism-boolean §4, §6, G3. |
 | `internal/surfacetrim/` | Prism-family `Trim`, `Extend` and `Split` pair gates, the S1 family and S7 section-displacement readings, and `Extend`'s free-end widening for both families. See surface-intersection §2.1, §3.2. |
-| `internal/prismpattern/` | Prism-pattern Union blank and copy authentication, radial source gaps, wall certificates, fillet contacts, ring cuts, polar sectors, clearance, rounded shell and caps, wall mesh, root chords and section separation. See prism-pattern-union design. |
 | `internal/mirrorjoin/` | Exact line admission, reflection, prism and stacked record rewrites, splice and joined-section audit. See mirror-pattern §5. |
 | `internal/patternrecord/` | Pattern spec gates, instance motion and record mapping. See mirror-pattern §4.3, §6.2. |
 | `internal/patternassembly/` | Pattern frame-keeping instances and disjoint group planning over recorded payloads. See mirror-pattern §4.3, §6. |
@@ -44,8 +39,6 @@ The rules for rows live in `docs/layout.md`.
 | `internal/analyticundercut/` | Maps prism, revolve and cup records to their own-step faces and decides their undercut surveys. See verification §6. |
 | `internal/filletband/` | Loop-fillet closed forms and reference-frame band mass. See loop-fillet §5. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
-| `internal/cupwall/` | The cup record and view, its node builder (`Build`, `Placed`, cup roles and face order), the `PlanCapShell` offset stage and the cup wall theorem and morphology recheck. Root `cupPayload` and `cupView` alias it. See modify-reach §9.1, payload verification §4, evaluator §8. |
-| `internal/shellsurvey/` | Shell inradius, section cavity limit, work budget and contained-disk witness. See modify §8. |
 | `internal/survey2d/` | 2D disks, prism readers, walks, corner loops, Bézier carriers. See verification §6. |
 | `internal/thickenaxis/` | Holds certified section pairs, checks offsets, ribbons and interval clearance, and builds the circle and axis offset sections of a prism sheet. See surface §16, §17. |
 | `internal/thickenbuild/` | Computes Thicken amounts and certified sections, then builds revolve and chain solids from admitted sheets. See surface §16. |
@@ -80,5 +73,4 @@ The rules for rows live in `docs/layout.md`.
 | `internal/denotation/` | Level and curve identity certificates. See surface §5.2, §6.2. |
 | `internal/surfacenormal/` | Exact enclosures and error bounds for analytic face normals. See `normal_bound.go`. |
 | `internal/spiralsector/` | First-join source gates, face roles, cap proxy, heel/toe/root-flank proofs, held switches, short caps, blank meridian, contact/output gates; combined-tool payload assembly, owner/role binding, per-copy validation; copy/inverse maps. See faceted-vertex-bounds §3.6–§3.7, loft-face-sections design. |
-| `internal/shellseparation/` | Bounded source-shell and held-copy separation, exact slab projections, and placement error. See faceted-vertex-bounds §3.7. |
 | `internal/obliqueboss/` | Recognizes a complete oblique boss junction and builds its fillet mesh and boundary, volume and area proofs. See oblique-boss-fillet design. |

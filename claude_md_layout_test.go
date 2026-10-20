@@ -186,6 +186,8 @@ var (
 		layoutPartSpec("internal-core.md"),
 		layoutPartSpec("internal-revolve-sweep.md"),
 		layoutPartSpec("internal-checks.md"),
+		layoutPartSpec("internal-loft.md"),
+		layoutPartSpec("internal-prism.md"),
 	}
 )
 
