@@ -1,4 +1,4 @@
-package decad
+package prismpattern
 
 import (
 	"context"
@@ -6,31 +6,33 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
-	"github.com/lestrrat-3d/decad/internal/prismpattern"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 )
 
-// prismPatternShell replaces only the inward root walls with exposed pieces
+// Shell replaces only the inward root walls with exposed pieces
 // of the source blank's circular wall. Every retained side comes from a
 // verified source mesh; both caps share exactly the side boundary vertices.
-func prismPatternShell(ctx context.Context, blank *Body, source *prismPatternSource,
-	parts []prismPatternPart) (*joinedMesh, [2][]int, [3]int, float64, float64, error) {
-	mesh := &joinedMesh{}
+func Shell(ctx context.Context, blank *topo.Body, source *facetedrecord.PrismPatternSource,
+	parts []facetedrecord.PrismPatternPart) (*facetedrecord.JoinedMesh, [2][]int, [3]int, float64, float64, error) {
+	mesh := &facetedrecord.JoinedMesh{}
 	blankGroup := [3]int{-1, -1, -1}
-	for _, face := range blank.Faces() {
-		if len(face.Origins()) == 0 {
+	for _, face := range topobuild.Faces(blank) {
+		if len(face.Origins) == 0 {
 			return nil, [2][]int{}, blankGroup, 0, 0,
-				fmt.Errorf("%w: circular blank lost a source role", ErrUnsupported)
+				fmt.Errorf("%w: circular blank lost a source role", decaderr.ErrUnsupported)
 		}
 		group := -1
-		switch face.Origins()[0].Role {
+		switch face.Origins[0].Role {
 		case prismrecord.OuterFirstSideRole:
 			group = 0
 		case provenance.RoleCapStart:
@@ -40,15 +42,15 @@ func prismPatternShell(ctx context.Context, blank *Body, source *prismPatternSou
 		}
 		if group < 0 || blankGroup[group] >= 0 {
 			return nil, [2][]int{}, blankGroup, 0, 0,
-				fmt.Errorf("%w: circular blank changed its three source faces", ErrUnsupported)
+				fmt.Errorf("%w: circular blank changed its three source faces", decaderr.ErrUnsupported)
 		}
 		blankGroup[group] = len(mesh.Groups)
-		mesh.Groups = append(mesh.Groups, facetGroup{Origins: face.originRefs(), Planar: group != 0})
+		mesh.Groups = append(mesh.Groups, facetedrecord.Group{Origins: append([]provenance.Ref(nil), face.Origins...), Planar: group != 0})
 	}
 	for _, group := range blankGroup {
 		if group < 0 {
 			return nil, [2][]int{}, blankGroup, 0, 0,
-				fmt.Errorf("%w: circular blank lost a source face", ErrUnsupported)
+				fmt.Errorf("%w: circular blank lost a source face", decaderr.ErrUnsupported)
 		}
 	}
 	var outlines [2][]int
@@ -71,7 +73,7 @@ func prismPatternShell(ctx context.Context, blank *Body, source *prismPatternSou
 				if !ok {
 					group = len(mesh.Groups)
 					groups[face] = group
-					mesh.Groups = append(mesh.Groups, facetGroup{Origins: append([]provenance.Ref(nil), face.Origins...)})
+					mesh.Groups = append(mesh.Groups, facetedrecord.Group{Origins: append([]provenance.Ref(nil), face.Origins...)})
 				}
 				old := part.Mesh.Triangles[k]
 				var mapped [3]int
@@ -79,7 +81,7 @@ func prismPatternShell(ctx context.Context, blank *Body, source *prismPatternSou
 					station, capIndex := index/2, index%2
 					if station > part.RootStart {
 						return nil, [2][]int{}, blankGroup, 0, 0,
-							fmt.Errorf("%w: retained prism wall enters its root arc", ErrUnsupported)
+							fmt.Errorf("%w: retained prism wall enters its root arc", decaderr.ErrUnsupported)
 					}
 					mapped[corner] = part.Vertex[capIndex][station]
 				}
@@ -104,7 +106,7 @@ func prismPatternShell(ctx context.Context, blank *Body, source *prismPatternSou
 		steps := int(math.Ceil(width / 0.02))
 		if steps < 1 || steps > 512 {
 			return nil, [2][]int{}, blankGroup, 0, 0,
-				fmt.Errorf("%w: circular blank gap exceeds its chord budget", ErrUnsupported)
+				fmt.Errorf("%w: circular blank gap exceeds its chord budget", decaderr.ErrUnsupported)
 		}
 		maxStep = max(maxStep, width/float64(steps))
 		var rings [2][]int
@@ -123,7 +125,7 @@ func prismPatternShell(ctx context.Context, blank *Body, source *prismPatternSou
 				if cap == 1 {
 					z = source.Blank.Z1
 				}
-				point, round, err := prismpattern.RingPoint(radius, z, angle, angleIV)
+				point, round, err := RingPoint(radius, z, angle, angleIV)
 				if err != nil {
 					return nil, [2][]int{}, blankGroup, 0, 0, err
 				}
@@ -139,7 +141,7 @@ func prismPatternShell(ctx context.Context, blank *Body, source *prismPatternSou
 			if !loftcylinder.RingOrder(mesh.Verts[b0], mesh.Verts[b1],
 				mesh.Verts[t0], mesh.Verts[t1]) {
 				return nil, [2][]int{}, blankGroup, 0, 0,
-					fmt.Errorf("%w: circular prism ring loses angular order", ErrUnsupported)
+					fmt.Errorf("%w: circular prism ring loses angular order", decaderr.ErrUnsupported)
 			}
 			mesh.Add([3]int{b0, b1, t1}, blankGroup[0])
 			mesh.Add([3]int{b0, t1, t0}, blankGroup[0])
@@ -178,12 +180,12 @@ func prismPatternShell(ctx context.Context, blank *Body, source *prismPatternSou
 			z = source.Blank.Z1
 		}
 		if !loftcylinder.AuditCap(ctx, mesh.Verts, mesh.Tris, mesh.Src, outline, blankGroup[cap+1], z, cap == 0) ||
-			!prismpattern.RootChordsInsideCap(ctx, mesh, outline, parts, cap) {
+			!RootChordsInsideCap(ctx, mesh, outline, parts, cap) {
 			if err := ctx.Err(); err != nil {
 				return nil, [2][]int{}, blankGroup, 0, 0, err
 			}
 			return nil, [2][]int{}, blankGroup, 0, 0,
-				fmt.Errorf("%w: circular prism cap does not enclose its source roots", ErrUnsupported)
+				fmt.Errorf("%w: circular prism cap does not enclose its source roots", decaderr.ErrUnsupported)
 		}
 	}
 	return mesh, outlines, blankGroup, maxStep, ringRound, nil

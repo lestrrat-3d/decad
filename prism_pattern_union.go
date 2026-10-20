@@ -96,7 +96,7 @@ func tryPrismPatternUnionMany(ctx context.Context, d *Document, ref producerID,
 			return nil, true, fmt.Errorf("%w: copied-prism root sectors have no ordered circular gap", ErrUnsupported)
 		}
 	}
-	mesh, outlines, groups, step, round, err := prismPatternShell(ctx, operands[0], source, parts)
+	mesh, outlines, groups, step, round, err := prismpattern.Shell(ctx, bodyNode(operands[0]), source, parts)
 	if err != nil {
 		return nil, true, err
 	}
