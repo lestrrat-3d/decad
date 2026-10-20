@@ -9,6 +9,7 @@ The rules for rows live in `docs/layout.md`.
 
 | Path | Responsibility |
 |---|---|
+| `internal/payloadclass/` | The hook through which `decadtest.PayloadClass` reads a body's payload class. See faceted-source-retention §10. |
 | `internal/proof/` | Exact dyadic arithmetic, rational intervals and float rounding. |
 | `internal/measurement/` | Private bounded reading carriers, exact inflated-box separation, `ExactnessOf` and `FiniteValues`. Public types live in `measurement.go`. See API §5.3, §6. |
 | `internal/pair/` | Shared contact relation, reason and reading types; a scalar reading publishes as a measurement. |

@@ -77,23 +77,12 @@ func verticalConvexEdge() *decad.EdgeQuery {
 	return decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Convex()).AtLeast(1)
 }
 
-// tookMeshPath reports whether b came from the mesh boolean: some face reads
-// Faceted, or some edge is a chain of held chords. The analytic reductions
-// never produce either. A mesh result's faces may keep their operands'
-// analytic surfaces (docs/faceted-source-retention-design.md), so the face
-// kind alone no longer tells the two apart.
+// tookMeshPath reports whether b came from the mesh boolean. A mesh result
+// keeps its operands' surfaces and curves (docs/faceted-source-retention-design.md),
+// so no public reading of its faces or edges tells it from an analytic
+// reduction; the payload class does.
 func tookMeshPath(b *decad.Body) bool {
-	for _, f := range b.Faces() {
-		if f.Surface().Kind() == decad.KindFaceted {
-			return true
-		}
-	}
-	for _, e := range b.Edges() {
-		if _, ok := e.Curve().(decad.FacetedCurve); ok {
-			return true
-		}
-	}
-	return false
+	return decadtest.PayloadClass(b) == "decad.facetedPayload"
 }
 
 // overshootQuadBody draws a quadrilateral as four OVERSHOOTING lines, so

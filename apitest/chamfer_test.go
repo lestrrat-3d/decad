@@ -532,22 +532,19 @@ func TestChamferRefusals(t *testing.T) {
 func TestChamferNonPrismReceiverBooleanBuilt(t *testing.T) {
 	t.Parallel()
 	// A boolean union is not a prismPayload either, and its closed rim edges
-	// carry FacetedCurve rather than Circle3, so the centre-and-radius form
-	// above never fires for them. Closure still comes from the edge's own
-	// shared start/end vertex, so each untouched rim renders "closed through
-	// (p)" rather than the from/to form a genuinely collapsed edge would.
+	// between a plane and a cylinder are Circle3, so the centre-and-radius
+	// form fires for them rather than the from/to form a genuinely collapsed
+	// edge would use.
 	// booleanRimBody's bar crosses the disc strictly between its caps, so both
 	// cap rims survive the boolean untouched.
 	sel := decad.Edges()
 	_, err := decad.Chamfer(t.Context(), booleanRimBody(t, decad.New()), sel, units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported, `this evaluator chamfers a straight prism or a revolve only`)
-	require.NotContains(t, err.Error(), `closed circle`,
-		`every rim of a boolean-built body is a FacetedCurve, so the Circle3 branch never fires`)
-	require.ErrorContains(t, err, `selected edge[0] closed through (10,0,0)`,
-		`an untouched boolean rim renders closed from shared vertex identity, not a Circle3 check`)
+	require.ErrorContains(t, err, `selected edge[0] closed circle through (10,0,0), centre (0,0,0), radius 10 mm`,
+		`an untouched boolean rim between a plane and a cylinder renders as the circle it is`)
 	require.NotContains(t, err.Error(), `from (10,0,0) to (10,0,0)`,
 		`the closed rim never renders as a zero-length edge`)
-	require.ErrorContains(t, err, `selected edge[5] closed through (9.996425888107836,0.2673377331530885,20)`,
+	require.ErrorContains(t, err, `selected edge[5] closed circle through (9.996425888107836,0.2673377331530885,20), centre (0,0,20), radius 10 mm`,
 		`every untouched rim in the selection renders closed, not just the first`)
 	require.NotContains(t, err.Error(), `from (9.996425888107836,0.2673377331530885,20) to (9.996425888107836,0.2673377331530885,20)`,
 		`no untouched boolean rim renders as a zero-length edge`)

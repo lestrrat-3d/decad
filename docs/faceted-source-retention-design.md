@@ -231,9 +231,9 @@ tag has no similarity proof here.
 
 What does not change: the held polygons, `Volume`, `Area`, `Centroid`,
 `Box`, every vertex and edge bound, `Verify` results, and the tessellation.
-An edge between two retained planes still reports `FacetedCurve` (its chord
-length is already exact for planar sources, `topo.Face.HeldPlanar`);
-publishing a `Line3` there is increment 3 (§10).
+An edge between two retained faces publishes the analytic curve of §10
+(`Line3`, `Circle3` or `Arc3`) where an admission rule holds, and its length
+reading is unchanged.
 
 ## 7. Tests and the red leg each must show
 
@@ -267,7 +267,7 @@ expression) and not a printed number.
 | `internal/facetedrecord/place.go`, `placed.go` | placement rule of §3.4 |
 | `internal/topo/face.go` | `RetainedTag` |
 | `contact_faceted_floor.go` | predicate of §4 |
-| `internal/facetedrecord/topology.go`, `export/step_analytic.go` | edge curves and the STEP bound gate of §10 (increment 3) |
+| `internal/facetedrecord/edge_curve.go`, `topology.go`, `internal/topo/edge.go` | edge curves and their witness flag (§10, increment 3) |
 | `mirror.go`, `internal/extent` | admit a retained `Plane` per §4 |
 | `internal/selectorquery/topo_views.go` | no code change expected; the existing views read the tag |
 | Tests | the `Faceted` assertions of §7's last row |
@@ -282,7 +282,7 @@ planned; nothing in 1–3 depends on them.
 |---|---|---|
 | 1 | §3.1–§3.3 for `Plane`, `Cylinder`, `Sphere`; `RetainedTag`; the `contact_faceted_floor.go` predicate; `NormalAt`, selector and `Surface()` readers; the reader audit; test updates | the P3 fixture and the generation-two fixture pass; `go test ./...` on CI |
 | 2 | `Cone` and `Torus`, faces with a denoted patch (revolved walls and caps), and `ToFace` / `MirrorFace` on a retained plane | a revolved shaft keeps its cone, cylinder and caps through a cut |
-| 3 | §10: `Line3`, `Circle3` and `Arc3` on an edge between two retained faces, the `Curve` reader audit, and the STEP bound gate | the P3 fixture's edges publish their curves and the STEP test passes |
+| 3 | §10: `Line3`, `Circle3` and `Arc3` on an edge between two retained faces, the `Curve` reader audit and the Boolean-rim witness flag | the P3 fixture's edges publish their curves and the STEP test passes |
 | 4 | Placement rule of §3.4 | a rotated copy of P3 reports a finite `NormalAt` bound below 2 |
 | 5 | A later mesh Boolean charges a retained `Plane` group's out-of-plane displacement by its measured distance from `T` instead of `δ_f` (§11) | measured: a second cut near the first cut's rim, previously refused as hidden tangency, builds |
 
@@ -295,76 +295,86 @@ written in this document before it lands.
 An edge of a Boolean result is a chain of held chords between two faces and
 publishes `FacetedCurve` (`internal/facetedrecord/topology.go`). When both
 faces carry a retained tag, the true edge lies on the intersection of the two
-tags, and the tags are exact recorded surfaces. The edge can publish that
+tags, and the tags are exact recorded surfaces. The edge then publishes that
 curve instead.
 
 **Claim E.** Let an edge's two faces be distinct retained faces with tags
-`T1` and `T2`, and let `C` be a connected component of `T1 ∩ T2`. If the
-edge's chain follows `C`, the true edge is a connected piece of `C`, because
-a rim between two faces lies on both of their true surfaces (Claim R) and a
-chain is one connected rim between two face patches.
+`T1` and `T2`. The true edge is a connected piece of `T1 ∩ T2`, because a rim
+between two faces lies on both of their true surfaces (Claim R) and a chain is
+one connected rim between two face patches. When `T1 ∩ T2` has several
+components (two generators of a cylinder cut by a plane), the chain follows
+one of them.
 
 ### 10.1 Admission
 
-An edge publishes an analytic curve only when all of these hold; otherwise it
-keeps `FacetedCurve` and nothing refuses.
+`facetedrecord.RetainedEdgeCurve` decides it from the two faces and the
+chain's held vertices with their bounds. An edge that no rule admits keeps its
+chord chain; nothing refuses.
 
 | # | Condition | Curve |
 |---|---|---|
-| E1 | Both faces are distinct and `RetainedTag` | |
-| E2 | `Plane` and `Plane`, normals not parallel (`n1 × n2` not zero in exact arithmetic over the stored floats) | `Line3`, direction `n1 × n2` |
-| E3 | `Plane` and `Cylinder` with the axis normal to the plane (`axis × n` zero) | `Circle3` or `Arc3`: centre the axis-plane crossing, radius `R`, axis `±n` |
-| E4 | `Plane` and `Cylinder` with the axis in the plane (`axis · n` zero) and the plane at distance `d < R` from the axis | `Line3` along the axis, at the generator nearer the chain's vertices; two generators exist, so the nearer must beat the other by more than `2·max β` over the chain, else decline |
-| E5 | `Plane` and `Sphere`, distance `d` from the centre to the plane with `R − |d|` above `2·max β` over the chain | `Circle3` or `Arc3`: centre the foot of the sphere centre, radius `√(R² − d²)`, axis `±n` |
-| E6 | A falsifier: every chain vertex lies within `β(v)` plus the arithmetic allowance of the curve | |
-| E7 | For an `Arc3`, the sweep sense about the axis is the same at every interior chain vertex and decided beyond `β` | |
+| E1 | The faces are distinct and both `RetainedTag` | |
+| E2 | `Plane` and `Plane` with normals not parallel (`|n1 × n2| > 10⁻⁹`) | `Line3` |
+| E3 | `Plane` and `Cylinder` with the axis normal to the plane (`|axis × n| ≤ 10⁻¹²`) | `Circle3` for a closed rim, `Arc3` for an open one: centre the axis-plane crossing, radius `R`, axis `±n` |
+| E4 | `Plane` and `Cylinder` with the axis in the plane (`|axis · n| ≤ 10⁻¹²`) and the plane at distance `s` from the axis with `R² − s²` not below `−slack·R` | `Line3`. Two generators exist at `±√(R² − s²)` from the axis's foot, and a tangent plane gives one; either passes if the falsifier accepts it |
+| E5 | `Plane` and `Sphere` with `R² > d²` for `d` the centre's distance from the plane | `Circle3` or `Arc3`: centre the foot of the sphere's centre, radius `√(R² − d²)` |
+| E6 | The falsifier: every chain vertex lies within `bound(v) + slack` of the curve, `slack = 64·2⁻⁵²·max(1, |coordinate|)` | |
+| E7 | For an `Arc3`, the chain has an interior vertex, every angular step about the axis clears `4(max bound + slack)/R`, stays below `π`, has one sign, and the steps sum below `2π` | the sign picks `Axis = ±n` so the run is counter-clockwise |
 
-E6 can only reject. A vertex that sits far from the curve disproves the
-pairing (a bug, or a chain that does not follow `C`), so the edge stays
-`FacetedCurve`. A vertex that sits near the curve proves nothing; the curve
-is trusted because Claim R holds for both faces. This is the direction
-CLAUDE.md allows for a residual.
+A `Line3` carries no parameters, so E2 and E4 assert only that the edge is
+straight between its vertices. The other pairs (`Cylinder`/`Cylinder`, an
+oblique `Plane`/`Cylinder`, `Cone`, `Torus`) keep `FacetedCurve`; an oblique
+`Plane`/`Cylinder` pair would publish `Ellipse3` and is not in this increment.
 
-E3 and E4 handle the faces a filleted box and a drilled plate produce:
-a blend cylinder meets an untouched flat face along a generator, and a
-perpendicular hole meets a flat face along a circle. Other pairs
-(`Cylinder`/`Cylinder`, oblique `Plane`/`Cylinder`, `Cone`, `Torus`) keep
-`FacetedCurve`; an oblique `Plane`/`Cylinder` pair would publish `Ellipse3`
-and is not in this increment.
+E6 can only reject. A vertex far from the curve disproves the pairing (a bug,
+or a chain that does not follow the intersection), and the edge stays a chord
+chain. A vertex near the curve proves nothing; the curve is trusted because
+Claim R holds for both faces. This is the direction CLAUDE.md allows for a
+residual.
 
 ### 10.2 What the curve says and does not say
 
-The curve parameters (`Center`, `Axis`, `Radius`, the line's direction) are
-the exact intersection of two recorded surfaces, floats rounded once.
-Vertex positions stay the held positions with their `Bound`. A `Line3` edge
-therefore runs between two vertices that may sit up to `β` off the exact line,
-and a reader that wants the line reads the curve, not the endpoints. The
-edge's `Length`, `LengthBound` and `LengthUnbounded` keep their chain values:
-the chain length remains a proven bound for the true length, and tightening
-it to `R·θ` for an arc is a separate step.
+The curve parameters (`Center`, `Axis`, `Radius`) are the exact intersection of
+two recorded surfaces, floats rounded once. Vertex positions stay the held
+positions with their `Bound`. An edge therefore runs between two vertices that
+may sit up to their bound off the curve, and a reader that wants the curve
+reads the curve, not the endpoints. `topo.Edge.CurveBounded` stays false: the
+edge states no `CurveBound`, so a reader that needs one refuses as before.
+`Length`, `LengthBound` and `LengthUnbounded` keep their chain values, and a
+rim on a curved source still refuses `Length`.
+
+`topo.Edge.RetainedCurve` marks the edge and `ChainBound` keeps the chord
+bound the curve replaced. Three modify routes take a `FacetedCurve` as the
+witness that an edge is a Boolean rim (`prism_union_fillet.go`,
+`oblique_boss_fillet.go`, `cross_cylinder_bore.go`); each accepts a retained
+curve in its place.
 
 ### 10.3 Readers
 
-The curve readers (44 sites outside the payload builders) split the same way
-the surface readers did in §4.
+The curve readers split the same way the surface readers did in §4.
 
 | Reader | With a retained edge curve |
 |---|---|
-| `internal/selectorquery/topo_views.go` | `ParallelTo`, `Circular` and `EndpointAt` match a retained edge by its curve; a bounded endpoint match still uses the vertex bound |
-| `export/step_analytic.go`, `step_analytic_torus.go` | `supportsAnalyticSTEP` would admit a face set whose edges are all analytic. A vertex off its curve by `β` is a STEP vertex-on-curve mismatch, so the writer admits a retained body only when every vertex bound is below the writer's coordinate tolerance, and otherwise takes the faceted writer as now |
-| `internal/modifyselect`, `brep_modify_*`, `chamfer.go`, `cap_edge_cutter.go`, `cross_cylinder_bore.go`, `oblique_boss_fillet.go`, `prism_union_fillet.go` | read the curve after a payload-class gate. A `facetedPayload` stays `ErrUnsupported` at modify S3/SX9, so the new curve opens no modify route by itself |
-| `internal/extent/angular_stop.go`, `patch_body.go`, `internal/clearance/edge_topology.go`, `internal/gatediameter/body_gate.go` | each is gated by its own payload class; §7's reader audit extends to `Curve` readers and lists them |
+| `internal/selectorquery/topo_views.go` | `ParallelTo`, `Circular` and `EndpointAt` match a retained edge by its curve |
+| `internal/modifyselect/edge_context.go` | a refusal message renders a retained closed rim as `closed circle through (p), centre (c), radius r mm` |
+| `export/step_analytic.go` | `supportsAnalyticSTEP` requires the circle seams of a cylinder wall to align exactly. Held rim vertices do not, so a retained body still writes one planar face per triangle |
+| `prism_union_fillet.go`, `oblique_boss_fillet.go`, `cross_cylinder_bore.go` | accept `RetainedCurve` as the Boolean-rim witness (§10.2) |
+| `brep_modify_*`, `chamfer.go`, `cap_edge_cutter.go`, `internal/modifyselect` | read the curve after a payload-class gate. A `facetedPayload` stays `ErrUnsupported` at modify S3/SX9, so the new curve opens no modify route by itself |
+| `internal/extent/angular_stop.go`, `patch_body.go`, `internal/clearance/edge_topology.go`, `internal/gatediameter/body_gate.go` | each is gated by its own payload class |
 | `Edge.Length`, `LengthBound` | unchanged (§10.2) |
+
+Tests that must tell a mesh result from an analytic one cannot use a face or
+edge kind any more. `decadtest.PayloadClass` names the payload class through a
+hook (`internal/payloadclass`) that the root package installs; it adds no
+public API.
 
 ### 10.4 Tests
 
 | Test | Asserts | Red leg |
 |---|---|---|
-| P3 fixture edges | the box's untouched x-edges are `Line3` along the exact `n1 × n2`; the drill's rim on a flat face is `Circle3` with the tool's radius and centre | return `FacetedCurve` unconditionally: the type assertion fails |
-| E4 two-generator case | a blend cylinder against the flat face resolves to the near generator | pick the first candidate: a fixture that lists the far generator first publishes the wrong line |
-| E6 falsifier | a deliberately mispaired chain (a vertex 10·`β` off the curve) keeps `FacetedCurve` | drop E6: the mispaired edge publishes a line |
-| E7 sense | an arc over 200° reports the right sweep sign | decide the sense from the endpoints alone: a 200° arc sweeps the wrong way |
-| STEP | a retained body with tight vertex bounds writes analytic faces; one with `β` above the tolerance writes faceted | drop the bound gate: the second body writes analytic faces with vertices off their curves |
+| Drilled filleted box | 16 `Line3`, 8 `Arc3` of radius 3 about z, 2 `Circle3` of radius 4 about y through (20, ·, 10) | return the chord chain unconditionally: no edge is a line, arc or circle |
+| `RetainedEdgeCurve` unit tests | plane-plane and plane-cylinder (tangent generator, bore circle) accept; a mispaired chain, a face meeting itself, an untagged face and parallel planes decline; a counter-clockwise run sweeps about +z and a clockwise one about −z; two vertices or a doubled-back chain decline | drop E6: the 0.5 mm-off bore chain publishes a circle |
+| STEP | a retained drilled plate still writes planar triangles and no analytic entity | none; the test pins that the analytic writer stays off |
 
 ## 11. Why the hint helps a later Boolean, and its limit
 

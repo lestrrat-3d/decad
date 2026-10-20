@@ -28,7 +28,7 @@ func FilletBoss(ctx context.Context, env topo.Env, edges []*topo.Edge,
 	if len(edges) != 1 || edges[0].Start != edges[0].End {
 		return nil, fmt.Errorf("%w: an oblique boss fillet needs its one complete junction edge", decaderr.ErrUnsupported)
 	}
-	if _, ok := edges[0].Curve.(surfacegeom.FacetedCurve); !ok {
+	if _, faceted := edges[0].Curve.(surfacegeom.FacetedCurve); !faceted && !edges[0].RetainedCurve {
 		return nil, fmt.Errorf("%w: the selected oblique junction has no faceted edge witness", decaderr.ErrUnsupported)
 	}
 	plateTop, topOK := FaceGroup(rec.Plate, provenance.RoleCapEnd)

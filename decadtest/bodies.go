@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/internal/payloadclass"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -121,3 +122,10 @@ func HasSurfaceKinds(tb testing.TB, body *decad.Body, want map[decad.SurfaceKind
 
 	tb.Fatalf("%s: surface kind counts are %s, want %s", bodyName(body), kindCountsText(got), kindCountsText(want))
 }
+
+// PayloadClass names the payload class that built body, as "decad." followed by
+// the class (for example "decad.facetedPayload" for a mesh Boolean result).
+// It exists for tests that must tell which evaluation path produced a body: a
+// mesh result keeps its operands' surfaces and curves, so no public reading
+// distinguishes it.
+func PayloadClass(body *decad.Body) string { return payloadclass.Of(body) }

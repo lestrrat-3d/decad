@@ -74,8 +74,8 @@ func prismUnionFilletCorner(source *Body, pp prismPayload, result *Edge, radius 
 	if !ok || pp.Z0 == pp.Z1 || !momentinput.PrismUnionFilletRadiusFits(rect, radius) {
 		return sectionrecord.Point2{}, compositesweep.AuditBox{}, nil, false
 	}
-	curve, ok := result.n.Curve.(surfacegeom.FacetedCurve)
-	if !ok || curve.Bound.Mag() != 0 || result.n.Start.Bound.Mag() != 0 || result.n.End.Bound.Mag() != 0 ||
+	chainBound, ok := boundaryChainBound(result)
+	if !ok || chainBound != 0 || result.n.Start.Bound.Mag() != 0 || result.n.End.Bound.Mag() != 0 ||
 		len(result.n.Faces) != 2 {
 		return sectionrecord.Point2{}, compositesweep.AuditBox{}, nil, false
 	}
@@ -186,4 +186,17 @@ func filletPrismUnionSource(ctx context.Context, d *Document, pp prismPayload,
 		Profile: profile, Frame: pp.Frame, Z0: pp.Z0, Z1: pp.Z1,
 		Xform: pp.Xform, BlendSegs: arcs, BlendKind: string(breprecord.BandFillet),
 	}, freeform.NewFreeformWork()))
+}
+
+// boundaryChainBound returns the chord-chain bound of a Boolean rim: a
+// FacetedCurve's own, or the one a retained curve replaced. ok is false for
+// any other edge.
+func boundaryChainBound(e *Edge) (float64, bool) {
+	if curve, faceted := e.n.Curve.(surfacegeom.FacetedCurve); faceted {
+		return curve.Bound.Mag(), true
+	}
+	if e.n.RetainedCurve {
+		return e.n.ChainBound, true
+	}
+	return 0, false
 }

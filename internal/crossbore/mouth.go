@@ -129,7 +129,7 @@ func MouthChamfer(ctx context.Context, env topo.Env, body *topo.Body,
 		edges[0].Start != edges[0].End || len(topobuild.Edges(body)) != 4 {
 		return nil, true, fmt.Errorf("%w: the cross-bore chamfer needs one complete unplaced mouth loop", decaderr.ErrUnsupported)
 	}
-	if _, ok := edges[0].Curve.(surfacegeom.FacetedCurve); !ok {
+	if _, faceted := edges[0].Curve.(surfacegeom.FacetedCurve); !faceted && !edges[0].RetainedCurve {
 		return nil, true, fmt.Errorf("%w: the selected cross-bore mouth has no faceted edge witness", decaderr.ErrUnsupported)
 	}
 	outer, outerOK := FaceGroup(rec.Target, prismrecord.OuterFirstSideRole)

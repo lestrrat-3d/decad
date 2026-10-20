@@ -314,4 +314,35 @@ func TestFacetedSourceRetention(t *testing.T) {
 		}
 		require.Equal(t, map[string]int{"plane": 3, "cone": 1, "cylinder": 2}, kinds)
 	})
+
+	t.Run("rims between retained faces publish their curves", func(t *testing.T) {
+		t.Parallel()
+		sc := newRetentionScene()
+		drilled, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+		require.NoError(t, err)
+		lines, arcs, circles := 0, 0, 0
+		for _, e := range drilled.Edges() {
+			switch c := e.Curve().(type) {
+			case decad.Line3:
+				lines++
+			case decad.Arc3:
+				arcs++
+				// A corner blend meets the top or bottom plane.
+				require.InDelta(t, 3, c.Radius.Base(), 1e-9)
+				require.InDelta(t, 1, math.Abs(c.Axis.Z), 1e-12)
+			case decad.Circle3:
+				circles++
+				// The drill's rim on the front or back face.
+				require.InDelta(t, 4, c.Radius.Base(), 1e-9)
+				require.InDelta(t, 20, c.Center.X, 1e-9)
+				require.InDelta(t, 10, c.Center.Z, 1e-9)
+				require.InDelta(t, 1, math.Abs(c.Axis.Y), 1e-12)
+			default:
+				require.Failf(t, "unexpected curve", "%T", c)
+			}
+		}
+		require.Equal(t, 16, lines)
+		require.Equal(t, 8, arcs)
+		require.Equal(t, 2, circles)
+	})
 }
