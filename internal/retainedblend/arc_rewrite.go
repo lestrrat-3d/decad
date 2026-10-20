@@ -126,7 +126,7 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 	rhoA := a.radius + a.kappa*ta
 	ref := [2]float64{a.theta0, a.theta0 + a.span}
 	rows := []arcRow{}
-	m := 2
+	var m int
 	if isFillet {
 		step := 2 * math.Acos(1-math.Min(w.tau/spec.r, 1))
 		m = max(2, int(math.Ceil(math.Pi/2/step)))
@@ -186,7 +186,7 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 	}
 
 	// The plane's row, the wall's row, and the rows between them.
-	colsA := w.arcRow(a, rows[0], 0, rhoA, margin)
+	colsA := w.arcRow(a, rows[0], 0, rhoA)
 	bound := w.tau + slack
 	rowCols := make([][]colPt, m+1)
 	rowCols[0] = colsA
@@ -335,7 +335,7 @@ func (a arcRim) chamferRows(p arcProfile, tau float64) int {
 
 // arcRow builds the plane's row: the setback points and the points between
 // them along the circle of radius rho.
-func (w *work) arcRow(a arcRim, row arcRow, z, rho, margin float64) []colPt {
+func (w *work) arcRow(a arcRim, row arcRow, z, rho float64) []colPt {
 	bound := w.tau + a.slack()
 	t0, t1 := row.theta[0], row.theta[1]
 	step := 2 * math.Acos(1-math.Min(w.tau/math.Max(rho, w.tau), 1))

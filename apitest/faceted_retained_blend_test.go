@@ -960,4 +960,76 @@ func TestFacetedRetainedBlendArc(t *testing.T) {
 		require.True(t, mesh.BoundaryVerified())
 		require.True(t, mesh.VolumeVerified())
 	})
+
+	t.Run("chamfer of an arc that breaks out of the side", func(t *testing.T) {
+		t.Parallel()
+		bored := broken(t)
+		before, err := bored.Volume()
+		require.NoError(t, err)
+		const d = 1.0
+		chamfered, err := decad.Chamfer(t.Context(), bored, topRim(t, bored), units.Millimeters(d))
+		require.NoError(t, err)
+		after, err := chamfered.Volume()
+		require.NoError(t, err)
+		const n = 1500
+		want := 0.0
+		for i := range n {
+			rho := 4 + d*(float64(i)+0.5)/n
+			span := 2*math.Pi - 2*math.Acos(2/rho)
+			for j := range n {
+				z := -d + d*(float64(j)+0.5)/n
+				if z >= rho-4-d {
+					want += span * rho * (d / n) * (d / n)
+				}
+			}
+		}
+		requireVolumeChange(t, before, after, want)
+		cones := 0
+		for _, f := range chamfered.Faces() {
+			if _, ok := f.Surface().(decad.Cone); ok {
+				cones++
+			}
+		}
+		require.Equal(t, 1, cones)
+	})
+
+	t.Run("refuses an arc whose ends meet one face", func(t *testing.T) {
+		t.Parallel()
+		// A Ø12 rod along z whose side beyond x = 25 is cut flat: its top rim is
+		// an arc from one end on the flat to the other, with the material inside.
+		sc := newRetentionScene()
+		rs, err := sc.w.CreateSketch(sc.w.XY())
+		require.NoError(t, err)
+		rc := rs.CreatePoint(20, 10)
+		rs.Fix(rc)
+		rs.CreateCircle(rc, 6)
+		_, err = rs.Solve(t.Context())
+		require.NoError(t, err)
+		rod, err := decad.Extrude(t.Context(), sc.doc, rs, rs.Profiles()[0],
+			decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+		require.NoError(t, err)
+		fs, err := sc.w.CreateSketch(sc.w.XY())
+		require.NoError(t, err)
+		fr := fs.CreateRectangle(25, -20, 60, 40)
+		fs.Fix(fr.A)
+		_, err = fs.Solve(t.Context())
+		require.NoError(t, err)
+		slab, err := decad.Extrude(t.Context(), sc.doc, fs, fs.Profiles()[0], decad.Symmetric{D: units.Millimeters(30)})
+		require.NoError(t, err)
+		lift, err := r3.Translation(r3.Vec{Z: 0.001})
+		require.NoError(t, err)
+		slab, err = decad.Transform(t.Context(), slab, lift)
+		require.NoError(t, err)
+		flat, err := decad.Cut(t.Context(), rod, slab)
+		require.NoError(t, err)
+		var sel decad.EdgeSelector
+		for _, e := range flat.Edges() {
+			if arc, ok := e.Curve().(decad.Arc3); ok && math.Abs(arc.Center.Z-20) < 1e-3 {
+				sel = decad.Edges(decad.Circular(), decad.EndpointAt(e.Start().Position().Value)).Exactly(1)
+			}
+		}
+		require.NotNil(t, sel)
+		_, err = decad.Fillet(t.Context(), flat, sel, units.Millimeters(1))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+	})
 }

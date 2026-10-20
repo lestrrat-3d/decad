@@ -58,7 +58,7 @@ Table RR lists the edges a blend can be built on. The others are refused.
 | **R1** | `Line3`, convex or concave | two retained `Plane`s, not parallel, ending at three-face corners whose third face is a retained `Plane` | `Cylinder` / `Plane` | increment B2; equal-distance chamfer only |
 | **R2** | `Circle3`, closed, centre on the axis | retained `Plane` and coaxial retained `Cylinder` | `Torus` / `Cone` | increment B1; equal-distance chamfer only |
 | **R3** | `Line3` of retention E4 | retained `Plane` and a `Cylinder` whose axis lies in the plane, ending on retained planes normal to the axis | `Cylinder` / `Plane` | increment B3; equal-distance chamfer only |
-| **R4** | `Arc3` | as R2, open, ending on planes parallel to the axis | as R2 | increment B4; equal-distance chamfer only |
+| **R4** | `Arc3` | as R2, open, ending on planes parallel to the axis | as R2 | ends on two distinct retained planes; equal-distance chamfer only; an arc whose ends meet one face is refused |
 
 Refused, with the reason a caller can act on:
 
