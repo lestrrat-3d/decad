@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismboolean"
 	"github.com/lestrrat-3d/decad/internal/prismpattern"
+	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
@@ -56,7 +57,9 @@ func performUnionMany(ctx context.Context, operands []*Body) (*Body, error) {
 		bodyNode(a), bodyNodes(tools), nil)
 	body := bodyHandle(node)
 	if !matched && err == nil {
-		body, matched, err = tryRevolveLoftSectorUnionMany(ctx, d, ref, operands)
+		var node *topo.Body
+		node, matched, err = revolveshell.SectorUnionMany(ctx, envOf(documentNode(d), ref), bodyNodes(operands))
+		body = bodyHandle(node)
 	}
 	if !matched && err == nil {
 		var node *topo.Body
