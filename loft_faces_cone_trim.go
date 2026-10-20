@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"maps"
-	"math/big"
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
@@ -17,8 +15,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
-	"github.com/lestrrat-3d/decad/internal/topo"
-	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -264,12 +260,6 @@ func orderedLoftFacesConeLimits(toe, heel *pointConeLimit, base facetedPayload) 
 		base.Verts, base.MeshBound)
 }
 
-// tangentCapExtensionLength is the length in millimetres of the prism that
-// tangentHeelMeshes glues to a tangent end cap. The exact equality
-// (T ∪ E) ∩ K = T ∩ K does not depend on it, and Gate E5 decides the held
-// clearance for whatever length is used.
-const tangentCapExtensionLength = 1
-
 // tangentHeelMeshes supplies the heel Intersect of a cone-tangent tooth with
 // the tooth's mesh extended by an exact prism glued to its end cap
 // (loftface.CapExtension). The cone is meshed as usual. Because the proxy is
@@ -303,10 +293,11 @@ func (m *tangentHeelMeshes) operandMesh(ctx context.Context, b *Body, pairTol fl
 		m.coneVerts, m.coneTris, m.cone = verts, tris, mesh
 		return mesh, restating, nil
 	}
-	proxy, slab, err := extendTangentCap(ctx, mesh, m.toe, m.plane)
+	proxyNode, slab, err := revolveloftfaces.ExtendTangentCap(ctx, &mesh.n, m.toe, m.plane)
 	if err != nil {
 		return nil, false, err
 	}
+	proxy := bornMesh(&Mesh{n: *proxyNode})
 	m.slab, m.hasSlab, m.pairTol, m.proxy = slab, true, pairTol, proxy
 	return proxy, restating, nil
 }
@@ -333,74 +324,4 @@ func (m *tangentHeelMeshes) clearsResult(ctx context.Context, result []r3.Vec) e
 		return fmt.Errorf("%w: the tangent heel result has a vertex beyond the end-cap slab", ErrUnsupported)
 	}
 	return nil
-}
-
-// extendTangentCap returns a copy of held with the prism glued to the end
-// cap, with the prism's clearance data. It refuses with ErrUnsupported when
-// held is not a verified mesh, a ring vertex is not a station vertex of the
-// toe record's last cap, or the extension fails its audit.
-//
-// The proxy carries the unextended operand's VolSymDiff and AreaSlack. That is
-// valid only for the heel Boolean under Gate E5, which proves the prism
-// changes no held contact and no retained piece, so every result facet is a
-// piece of a non-extension facet of the operands. The proxy is never published.
-func extendTangentCap(ctx context.Context, held *Mesh, toe *loftFacesToeRecord,
-	plane loftface.TangentPlane) (*Mesh, loftface.Slab, error) {
-	refuse := func(why string) (*Mesh, loftface.Slab, error) {
-		return nil, loftface.Slab{}, fmt.Errorf("%w: the tangent tooth %s", ErrUnsupported, why)
-	}
-	vertices, triangles, sources, capFace := held.n.Vertices, held.n.Triangles, held.n.Source, toe.CapFace
-	if !held.n.BoundaryOK || !held.n.SymDiffOK {
-		return refuse("mesh is not verified")
-	}
-	link, err := revolveloftfaces.TangentToeStationLink(vertices, toe)
-	if err != nil {
-		return nil, loftface.Slab{}, err
-	}
-	beta, err := topobuild.VertexBounds(&held.n)
-	if err != nil {
-		return nil, loftface.Slab{}, err
-	}
-	var faces []*topo.Face
-	ids := map[*topo.Face]int{}
-	face := make([]int, len(sources))
-	for i, f := range sources {
-		id, ok := ids[f]
-		if !ok {
-			id = len(faces)
-			ids[f] = id
-			faces = append(faces, f)
-		}
-		face[i] = id
-	}
-	capID, ok := ids[capFace]
-	if !ok {
-		return refuse("mesh has no end cap facet")
-	}
-	ext, err := loftface.CapExtension(ctx, loftface.HeldMesh{Vertices: vertices, Triangles: triangles,
-		Face: face, VertexBound: beta}, capID, plane, big.NewRat(tangentCapExtensionLength, 1), link)
-	if err != nil {
-		return nil, loftface.Slab{}, err
-	}
-	next := bornMesh(&Mesh{n: held.n})
-	next.n.Vertices = ext.Vertices
-	next.n.Triangles = ext.Triangles
-	next.n.VertexBound = ext.VertexBound
-	next.n.Source = make([]*topo.Face, len(ext.Face))
-	for i, id := range ext.Face {
-		next.n.Source[i] = faces[id]
-	}
-	next.n.FaceBound = maps.Clone(held.n.FaceBound)
-	for id, bound := range ext.FaceBound {
-		next.n.FaceBound[faces[id]] = bound
-	}
-	next.n.Bound = 0
-	for _, bound := range next.n.FaceBound {
-		next.n.Bound = max(next.n.Bound, bound)
-	}
-	next.n.CoordBound = proofbound.AbsSumUpper(held.n.CoordBound, ext.CoordCharge)
-	if proofbound.IsNonFinite(next.n.Bound) || proofbound.IsNonFinite(next.n.CoordBound) {
-		return refuse("cap extension has an unbounded bound")
-	}
-	return next, ext.Slab, nil
 }
