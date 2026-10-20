@@ -17,7 +17,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/decad/internal/stitchrecord"
-	"github.com/lestrrat-3d/decad/internal/sweepmitre"
 	"github.com/lestrrat-3d/decad/internal/sweeprecord"
 	"github.com/lestrrat-3d/decad/internal/twistsweep"
 )
@@ -95,12 +94,6 @@ type (
 	chainRevolvePayload = revolveplan.ChainPayload
 )
 
-// mitredSweepPayload is the evaluator's record of a mitred polyline sweep: the
-// internal/sweepmitre payload, which sweepmitre.Build evaluates over topology
-// nodes and which implements topo.Payload (docs/sweep-design.md §16,
-// docs/evaluator-design.md §8).
-type mitredSweepPayload = sweepmitre.Payload
-
 // coilPayload is the evaluator's record of a coil: the internal/coilshell
 // payload, which coilshell.BuildBody evaluates over topology nodes and which
 // implements topo.Payload (docs/helix-design.md, docs/evaluator-design.md §8).
@@ -129,8 +122,7 @@ type (
 // builders evaluate over topology nodes and whose body records implement
 // topo.Payload (docs/sweep-design.md, docs/evaluator-design.md §8).
 type (
-	sweepPayload      = sweeprecord.Payload
-	chainSweepPayload = sweeprecord.ChainPayload
+	sweepPayload = sweeprecord.Payload
 )
 
 // stitchPayload and unstitchPayload are the evaluator's records of a Stitch

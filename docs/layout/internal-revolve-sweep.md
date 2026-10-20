@@ -22,8 +22,9 @@ The rules for rows live in `docs/layout.md`.
 | `internal/revolveangle/` | Exact angle denotations and certified sweep extremes. See evaluator §6 and sweep §3. |
 | `internal/sweeparc/` | Exact circle carriers, rational vectors, axis lines, plane gates and angle bounds. See sweep §3. |
 | `internal/sweepinput/` | Recorded Sweep `Path`, exact path records, tangent gates, path validation, recorded section gates and closed-path class gates. See sweep §3, §5, §15.4. |
-| `internal/sweepmitre/` | The mitred sweep payload and its builder over nodes: profile gates, exact sections, placement, rounding, triangle assembly, Table BM topology and measurements. Root `mitredSweepPayload` aliases it. See sweep §16, evaluator §8. |
-| `internal/sweeprecord/` | The sweep and chain sweep records, their span payloads, builders over nodes (`BuildComposite`, `BuildArc`, `BuildClosedCyclic`, `ReplayChainWork`, `Placed`, finishing roles) and chain reductions. Root `sweepPayload` and `chainSweepPayload` alias it. See sweep §3, §15, evaluator §8. |
+| `internal/sweepmitre/` | The mitred sweep payload and its builder over nodes: profile gates, exact sections, placement, rounding, triangle assembly, Table BM topology and measurements. See sweep §16, evaluator §8. |
+| `internal/sweeprecord/` | The sweep and chain sweep records, their span payloads, builders over nodes (`BuildComposite`, `BuildArc`, `BuildClosedCyclic`, `ReplayChainWork`, `Placed`, finishing roles) and chain reductions. Root `sweepPayload` aliases it. See sweep §3, §15, evaluator §8. |
+| `internal/sweepbuild/` | The profile-fed and chain-fed Sweep builds over nodes: twisted, mitred, closed, composite, arc and straight paths. See sweep §3–§17. |
 | `internal/coil/` | Coil magnitude, profile side and pitch gates, preflight gates, stations, axis coordinates, moments and closed forms. See helix §4, §5, §7. |
 | `internal/coilshell/` | The coil payload and its builder over nodes: the held shell, Table CB topology, Table CM readings, the held-shell mesh, its proofs and wall-area enclosures. Root `coilPayload` aliases it. See helix §5, §7, §8, evaluator §8. |
 | `internal/sweeptransport/` | Bounded rotation-minimizing endpoint frames over recorded line and arc spans, and frames along a recorded path. See sweep §3.2. |
