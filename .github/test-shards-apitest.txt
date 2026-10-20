@@ -2141,6 +2141,7 @@
 10	0.00	TestVerifyCoilClearanceAgainstUnsupportedRevolveIsSuspect
 10	0.00	TestLoftCylinderChamfersBothOuterCaps
 10	0.00	TestShellStackedWrongCapRefuses
+10	0.00	TestFacetedSourcePlacement
 6	0.13	TestBrepLoopFilletUndercutReadsEachPipePatch
 6	0.13	TestBrepLoopFilletUndercutReflexCornerAndBottomLoop
 6	0.13	TestPointLoftSplitPieceRefusesPlanesOutsideItsSlab

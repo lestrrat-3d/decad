@@ -373,8 +373,10 @@ restore it. An exact rotation copy drops the record regardless of angle.
 Placement carries every analytic group tag (`Plane`, `Cylinder`, `Cone`,
 `Sphere`, `Torus`) to its float image under the delta
 (`surfaceplace.TransformSurface`) unless the delta is exactly the identity.
-The moved tag is a bounded stand-in (`docs/api-design.md` §6.1) and its
-group's `normalBound` is 2, the largest distance of two unit normals. A denoted
+The moved tag is a bounded stand-in (`docs/api-design.md` §6.1). A retained
+group adds the departure of `docs/faceted-source-retention-design.md` §3.4 to
+its `normalBound`; any other group's `normalBound` is 2, the largest distance
+of two unit normals. A denoted
 group proves `NormalAt` against the denoted patch's exact image and does not
 read `normalBound`. A reflection flips only a `Plane` group's orientation. A
 `NURBSSurface` tag is a marker with no geometry and does not move.

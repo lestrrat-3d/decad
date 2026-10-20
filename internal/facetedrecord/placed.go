@@ -110,6 +110,11 @@ func (fp Payload) PlacedWith(ctx context.Context, env topo.Env, composed r3.Tran
 			next.Groups[group].Origins = append(origins, provenance.Ref{Producer: env.Ref, Role: role})
 		}
 	}
+	reach := fp.MeshBound
+	for _, beta := range fp.VertexBound {
+		reach = max(reach, beta)
+	}
+	reach = proofbound.AbsSumUpper(reach, fp.MeshBound)
 	for i := range next.Groups {
 		if exact != nil {
 			if err := ExactGroupPlaced(&next.Groups[i], exact); err != nil {
@@ -128,8 +133,10 @@ func (fp Payload) PlacedWith(ctx context.Context, env topo.Env, composed r3.Tran
 		// public surface identity still moves with this faceted restatement.
 		// The moved tag is the float image of the source tag, a bounded
 		// stand-in. NormalAt proves a denoted group against the denoted
-		// patch's exact image and never reads NormalBound. Any other group is
-		// charged the largest distance of two unit normals.
+		// patch's exact image and never reads NormalBound. A retained group adds
+		// the departure of PlacedTagDeparture to its own, or the largest distance
+		// of two unit normals where that states none. Any other group is charged
+		// that distance.
 		if tag := next.Groups[i].Surface; tag != nil && delta != r3.Identity() {
 			switch tag.(type) {
 			case surfacegeom.Plane, surfacegeom.Cylinder, surfacegeom.Cone, surfacegeom.Sphere, surfacegeom.Torus:
@@ -139,6 +146,12 @@ func (fp Payload) PlacedWith(ctx context.Context, env topo.Env, composed r3.Tran
 				}
 				next.Groups[i].Surface = moved
 				next.Groups[i].NormalBound = 2
+				if next.Groups[i].Retained {
+					add, stated := PlacedTagDeparture(tag, moved, delta, fp.Verts, reach)
+					if stated {
+						next.Groups[i].NormalBound = min(2, proofbound.AbsSumUpper(fp.Groups[i].NormalBound, add))
+					}
+				}
 				next.Groups[i].CapRecord = next.Groups[i].CapRecord.Under(delta)
 				if next.Groups[i].CapRecord == nil {
 					next.Groups[i].AxialDelta, next.Groups[i].HasAxialDelta = 0, false
