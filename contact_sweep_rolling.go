@@ -94,10 +94,10 @@ func rollingEnds(c sourceCylinderContactProof) [2]proofarith.DyV3 {
 	half := proofarith.MustDyOf(.5)
 	var center proofarith.DyV3
 	for k := range 3 {
-		center[k] = proofarith.DyMul(proofarith.DyAdd(c.box.lo[k], c.box.hi[k]), half)
+		center[k] = proofarith.DyMul(proofarith.DyAdd(c.box.Lo[k], c.box.Hi[k]), half)
 	}
 	ends := [2]proofarith.DyV3{center, center}
-	ends[0][c.axis], ends[1][c.axis] = c.box.lo[c.axis], c.box.hi[c.axis]
+	ends[0][c.axis], ends[1][c.axis] = c.box.Lo[c.axis], c.box.Hi[c.axis]
 	return ends
 }
 

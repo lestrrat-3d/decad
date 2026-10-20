@@ -62,6 +62,16 @@ func TestContactPairRotatedBoxContainedHorizontalFace(t *testing.T) {
 		require.LessOrEqual(t, math.Abs(point.OnA.Value.X), 5+point.OnA.Bound.Base())
 		require.LessOrEqual(t, math.Abs(point.OnA.Value.Y), 5+point.OnA.Bound.Base())
 	}
+	reversedClip, err := doc.ContactPair(t.Context(), box, narrow, turn, r3.Identity(), contactRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, reversedClip.Relation)
+	require.Len(t, reversedClip.Manifold.Points, 8)
+	for i, point := range reversedClip.Manifold.Points {
+		require.Equal(t, r3.Vec{Z: -1}, point.Normal.Value)
+		require.Equal(t, clipped.Manifold.Points[i].FaceA, point.FaceB)
+		require.Equal(t, clipped.Manifold.Points[i].FaceB, point.FaceA)
+		require.InDelta(t, 0, point.OnB.Value.Z, point.OnB.Bound.Base())
+	}
 }
 
 func TestContactPairOrientedSourceBoxes(t *testing.T) {
@@ -359,4 +369,41 @@ func TestSweepPairFixedFloorTangentialSpinDeparts(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, decad.SweepUndecided, badPivot.Outcome)
 	require.Equal(t, decad.SweepDepartureUnproved, badPivot.Cause)
+}
+
+func TestContactPairRotatedBoxRefusesAManifoldFinerThanItsReadings(t *testing.T) {
+	doc := decad.New()
+	floor := boxBodyAtZ(t, doc, -20, -20, 20, 20, -10, 10)
+	narrow := boxBodyAtZ(t, doc, -5, -5, 5, 5, -10, 10)
+	box := boxBodyAtZ(t, doc, -5, -5, 5, 5, 0, 10)
+	turn, err := r3.RotationAround(r3.Vec{Z: 5}, r3.Vec{Z: 1}, units.Degrees(30))
+	require.NoError(t, err)
+
+	coarse := decad.ContactRequest{PointResolution: units.Millimeters(1e-30), NormalResolution: units.Degrees(1)}
+	for _, pair := range []struct {
+		name string
+		a, b *decad.Body
+		pa   r3.Transform
+		pb   r3.Transform
+	}{
+		{"contained face", floor, box, r3.Identity(), turn},
+		{"contained face reversed", box, floor, turn, r3.Identity()},
+		{"clipped face", narrow, box, r3.Identity(), turn},
+		{"clipped face reversed", box, narrow, turn, r3.Identity()},
+	} {
+		report, err := doc.ContactPair(t.Context(), pair.a, pair.b, pair.pa, pair.pb, coarse)
+		require.NoError(t, err, pair.name)
+		require.Equal(t, decad.ContactTouching, report.Relation, pair.name)
+		require.Nil(t, report.Manifold, pair.name)
+		require.Equal(t, decad.ContactPointTooCoarse, report.Reason, pair.name)
+	}
+
+	a := boxBody(t, doc, 0, 0, 10, 10, 10)
+	b := boxBody(t, doc, 12, 0, 22, 10, 10)
+	pose, err := r3.RotationAround(r3.Vec{X: 5, Y: 5, Z: 5}, r3.Vec{Z: 1}, units.Degrees(45))
+	require.NoError(t, err)
+	report, err := doc.ContactPair(t.Context(), a, b, pose, r3.Identity(), coarse)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactOverlapping, report.Relation)
+	require.Nil(t, report.Manifold)
 }

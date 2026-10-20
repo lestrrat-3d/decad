@@ -7,9 +7,8 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/clearance/pairkernel"
+	"github.com/lestrrat-3d/decad/internal/contactbox"
 	"github.com/lestrrat-3d/decad/internal/measurement"
-	"github.com/lestrrat-3d/decad/internal/pair"
-	"github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/planarband"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -312,8 +311,8 @@ func classifyContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.Transf
 	req ContactRequest) (*reportvocab.ContactReport, error) {
 	report := &reportvocab.ContactReport{A: bodyNode(a), B: bodyNode(b), PoseA: poseA, PoseB: poseB,
 		Request: contactRequestToInternal(req)}
-	boxA, okA := sourceBoxAtPose(a, poseA)
-	boxB, okB := sourceBoxAtPose(b, poseB)
+	boxA, okA := contactbox.SourceBoxAtPose(bodyNode(a), poseA)
+	boxB, okB := contactbox.SourceBoxAtPose(bodyNode(b), poseB)
 	if !okA && !okB {
 		sphereA, sphereOKA := sourceSphereAtPose(a, poseA)
 		sphereB, sphereOKB := sourceSphereAtPose(b, poseB)
@@ -367,8 +366,8 @@ func classifyContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.Transf
 		}
 	}
 	if !okA || !okB {
-		orientedA, orientedOKA := sourceOrientedBoxAtPose(a, poseA)
-		orientedB, orientedOKB := sourceOrientedBoxAtPose(b, poseB)
+		orientedA, orientedOKA := contactbox.SourceOrientedBoxAtPose(bodyNode(a), poseA)
+		orientedB, orientedOKB := contactbox.SourceOrientedBoxAtPose(bodyNode(b), poseB)
 		if orientedOKA && !orientedOKB {
 			if sphere, ok := sourceSphereAtPose(b, poseB); ok {
 				classifySourceSphereOrientedBox(report, sphere, orientedA, false)
@@ -382,7 +381,7 @@ func classifyContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.Transf
 			}
 		}
 		if orientedOKA && orientedOKB {
-			classifyOrientedSourceBoxes(report, orientedA, orientedB)
+			contactbox.ClassifyOriented(report, orientedA, orientedB)
 			if err := classifyPlanarManifold(ctx, report); err != nil {
 				return nil, err
 			}
@@ -423,7 +422,7 @@ func classifyContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.Transf
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	classifySourceBoxes(report, boxA, boxB)
+	contactbox.ClassifySourceBoxes(report, boxA, boxB)
 	return report, nil
 }
 
@@ -544,62 +543,6 @@ func classifyAnalyticContact(ctx context.Context, report *reportvocab.ContactRep
 		report.Reason = reportvocab.ContactNoGapProof
 	}
 	return nil
-}
-
-func classifySourceBoxes(report *reportvocab.ContactReport, a, b sourceBoxContactProof) {
-	result := box.ClassifyAxisBoxes(
-		box.AxisBox{Lo: a.lo, Hi: a.hi},
-		box.AxisBox{Lo: b.lo, Hi: b.hi},
-		box.AxisBoxRequest{PointResolutionMM: report.Request.PointResolution.Base()},
-	)
-	switch result.Relation {
-	case pair.Separated:
-		report.Relation = reportvocab.ContactSeparated
-	case pair.Touching:
-		report.Relation = reportvocab.ContactTouching
-	case pair.Overlapping:
-		report.Relation = reportvocab.ContactOverlapping
-	default:
-		report.Relation = reportvocab.ContactUndecided
-	}
-	report.Reason = reportvocab.ContactReasonOf(result.Reason)
-	if result.Gap != nil {
-		gap := result.Gap.Measurement()
-		report.Gap = &gap
-	}
-	if result.Patch == nil {
-		return
-	}
-	publishAxisBoxPatch(report, a, b, result.Patch)
-}
-
-func publishAxisBoxPatch(report *reportvocab.ContactReport, a, b sourceBoxContactProof, patch *box.AxisBoxPatch) {
-	faceA := faceNode(a.faces[patch.FaceA.Axis][patch.FaceA.Side])
-	faceB := faceNode(b.faces[patch.FaceB.Axis][patch.FaceB.Side])
-	var normal r3.Vec
-	switch patch.NormalAxis {
-	case 0:
-		normal.X = float64(patch.NormalSign)
-	case 1:
-		normal.Y = float64(patch.NormalSign)
-	case 2:
-		normal.Z = float64(patch.NormalSign)
-	}
-	separation := patch.Separation.Measurement()
-	points := make([]reportvocab.ContactPoint, 0, len(patch.Points))
-	for _, point := range patch.Points {
-		points = append(points, reportvocab.ContactPoint{
-			OnA:         point.OnA.Measurement(),
-			OnB:         point.OnB.Measurement(),
-			Normal:      measurement.VecMeasurement{Value: normal, Exactness: measurement.Exact, Bound: units.Scalar(0)},
-			NormalAngle: units.Radians(0),
-			Separation:  separation,
-			FaceA:       faceA, FaceB: faceB,
-			FeatureA: reportvocab.ContactFeature{Face: faceA},
-			FeatureB: reportvocab.ContactFeature{Face: faceB},
-		})
-	}
-	report.Manifold = &reportvocab.ContactManifold{Points: points}
 }
 
 // pairReportMemoCap bounds one body's completed contact reports.

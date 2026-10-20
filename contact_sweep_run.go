@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
+	"github.com/lestrrat-3d/decad/internal/contactbox"
 	"github.com/lestrrat-3d/decad/internal/pair/box"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -22,7 +23,7 @@ type pairSweepRun struct {
 	pa, pb       affinePairPath
 	req          reportvocab.SweepRequest
 	report       *SweepReport
-	boxA, boxB   sourceBoxContactProof
+	boxA, boxB   contactbox.SourceBox
 	facetedFloor bool // box for faceted body is its exact lower support patch
 }
 
@@ -66,8 +67,8 @@ func (r *pairSweepRun) idealContact(f *big.Rat, at SweepInstant) SweepEvent {
 	a, b := r.boxA, r.boxB
 	for i := range 3 {
 		moveA, moveB := proofarith.DyMul(r.pa.Delta[i], fraction), proofarith.DyMul(r.pb.Delta[i], fraction)
-		a.lo[i], a.hi[i] = proofarith.DyAdd(a.lo[i], moveA), proofarith.DyAdd(a.hi[i], moveA)
-		b.lo[i], b.hi[i] = proofarith.DyAdd(b.lo[i], moveB), proofarith.DyAdd(b.hi[i], moveB)
+		a.Lo[i], a.Hi[i] = proofarith.DyAdd(a.Lo[i], moveA), proofarith.DyAdd(a.Hi[i], moveA)
+		b.Lo[i], b.Hi[i] = proofarith.DyAdd(b.Lo[i], moveB), proofarith.DyAdd(b.Hi[i], moveB)
 	}
 	report := &reportvocab.ContactReport{A: bodyNode(r.a), B: bodyNode(r.b),
 		Request: r.req.ContactRequest}
@@ -76,11 +77,11 @@ func (r *pairSweepRun) idealContact(f *big.Rat, at SweepInstant) SweepEvent {
 		if _, ok := r.a.n.Payload.(facetedPayload); ok {
 			floor, faceted = b, a
 		}
-		if proofarith.DyCmp(faceted.lo[2], floor.hi[2]) < 0 {
+		if proofarith.DyCmp(faceted.Lo[2], floor.Hi[2]) < 0 {
 			return SweepEvent{At: at, Relation: ContactUndecided, Reason: ContactPayloadUnsupported}
 		}
 	}
-	classifySourceBoxes(report, a, b)
+	contactbox.ClassifySourceBoxes(report, a, b)
 	return sweepEventOf(at, report)
 }
 
@@ -117,8 +118,8 @@ func (r *pairSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.Transform,
 			return
 		}
 	}
-	observedA, okA := sourceBoxAtPose(r.a, poseA)
-	observedB, okB := sourceBoxAtPose(r.b, poseB)
+	observedA, okA := contactbox.SourceBoxAtPose(bodyNode(r.a), poseA)
+	observedB, okB := contactbox.SourceBoxAtPose(bodyNode(r.b), poseB)
 	if !okA || !okB {
 		useIdeal()
 		return
@@ -157,18 +158,18 @@ func (r *pairSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.Transform,
 
 // boxPoseDeviation bounds the L1 distance between a float-pose source box and
 // the ideal affine box. Each support endpoint is compared as an exact rational.
-func boxPoseDeviation(start, observed sourceBoxContactProof, delta [3]proofarith.Dyadic, f *big.Rat) *big.Rat {
-	return box.PoseDeviation(start.axisBox(), observed.axisBox(), delta, f)
+func boxPoseDeviation(start, observed contactbox.SourceBox, delta [3]proofarith.Dyadic, f *big.Rat) *big.Rat {
+	return box.PoseDeviation(start.AxisBox(), observed.AxisBox(), delta, f)
 }
 
-func translatedSourceBoxes(a, b sourceBoxContactProof, da, db [3]proofarith.Dyadic,
-	f *big.Rat) (sourceBoxContactProof, sourceBoxContactProof, bool) {
-	translatedA, translatedB, ok := box.TranslatePair(a.axisBox(), b.axisBox(), da, db, f)
+func translatedSourceBoxes(a, b contactbox.SourceBox, da, db [3]proofarith.Dyadic,
+	f *big.Rat) (contactbox.SourceBox, contactbox.SourceBox, bool) {
+	translatedA, translatedB, ok := box.TranslatePair(a.AxisBox(), b.AxisBox(), da, db, f)
 	if !ok {
-		return sourceBoxContactProof{}, sourceBoxContactProof{}, false
+		return contactbox.SourceBox{}, contactbox.SourceBox{}, false
 	}
-	a.lo, a.hi = translatedA.Lo, translatedA.Hi
-	b.lo, b.hi = translatedB.Lo, translatedB.Hi
+	a.Lo, a.Hi = translatedA.Lo, translatedA.Hi
+	b.Lo, b.Hi = translatedB.Lo, translatedB.Hi
 	return a, b, true
 }
 
@@ -186,8 +187,8 @@ func (r *pairSweepRun) fullSourceBoxTrack(first *SweepSample, end *big.Rat) *Swe
 		proofarith.DyCmp(r.pa.Delta[axis], r.pb.Delta[axis]) != 0 {
 		return nil
 	}
-	if side == 1 && proofarith.DyCmp(r.boxA.hi[axis], r.boxB.lo[axis]) != 0 ||
-		side == 0 && proofarith.DyCmp(r.boxB.hi[axis], r.boxA.lo[axis]) != 0 {
+	if side == 1 && proofarith.DyCmp(r.boxA.Hi[axis], r.boxB.Lo[axis]) != 0 ||
+		side == 0 && proofarith.DyCmp(r.boxB.Hi[axis], r.boxA.Lo[axis]) != 0 {
 		return nil
 	}
 	for i := range 3 {
@@ -198,18 +199,18 @@ func (r *pairSweepRun) fullSourceBoxTrack(first *SweepSample, end *big.Rat) *Swe
 		// tests prove positive overlap for every intervening time.
 		for _, f := range []*big.Rat{new(big.Rat), end} {
 			a, b, _ := translatedSourceBoxes(r.boxA, r.boxB, r.pa.Delta, r.pb.Delta, f)
-			if proofarith.DyCmp(a.lo[i], b.hi[i]) >= 0 || proofarith.DyCmp(b.lo[i], a.hi[i]) >= 0 {
+			if proofarith.DyCmp(a.Lo[i], b.Hi[i]) >= 0 || proofarith.DyCmp(b.Lo[i], a.Hi[i]) >= 0 {
 				return nil
 			}
 		}
 		// A change of the lower or upper corner owner changes the patch
 		// structure. The first full-span increment refuses those transitions.
-		if box.AffineEqualityRootWithin(r.boxA.lo[i], r.pa.Delta[i], r.boxB.lo[i], r.pb.Delta[i], end) ||
-			box.AffineEqualityRootWithin(r.boxA.hi[i], r.pa.Delta[i], r.boxB.hi[i], r.pb.Delta[i], end) {
+		if box.AffineEqualityRootWithin(r.boxA.Lo[i], r.pa.Delta[i], r.boxB.Lo[i], r.pb.Delta[i], end) ||
+			box.AffineEqualityRootWithin(r.boxA.Hi[i], r.pa.Delta[i], r.boxB.Hi[i], r.pb.Delta[i], end) {
 			return nil
 		}
 	}
-	if !box.TrackPointsWithin(r.boxA.axisBox(), r.boxB.axisBox(), r.pa.Delta, r.pb.Delta,
+	if !box.TrackPointsWithin(r.boxA.AxisBox(), r.boxB.AxisBox(), r.pa.Delta, r.pb.Delta,
 		r.req.PointResolution.Base()) {
 		return nil
 	}
@@ -234,7 +235,7 @@ func (r *pairSweepRun) sourceBoxTransitionRoot(first *SweepSample) *big.Rat {
 	if !ok {
 		return nil
 	}
-	return box.TransitionRoot(r.boxA.axisBox(), r.boxB.axisBox(), r.pa.Delta, r.pb.Delta, axis)
+	return box.TransitionRoot(r.boxA.AxisBox(), r.boxB.AxisBox(), r.pa.Delta, r.pb.Delta, axis)
 }
 
 func (r *pairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*SweepReport, error) {
@@ -257,7 +258,7 @@ func (r *pairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*Sweep
 			r.report.Outcome, r.report.Event = SweepInitiallyTouching, &first.Ideal
 			return r.report, nil
 		}
-		if !box.ProvesDeparture(r.boxA.axisBox(), r.boxB.axisBox(), r.pa.Delta, r.pb.Delta) {
+		if !box.ProvesDeparture(r.boxA.AxisBox(), r.boxB.AxisBox(), r.pa.Delta, r.pb.Delta) {
 			if r.req.StartPolicy == reportvocab.ContinueCertifiedTouch {
 				if track := r.fullSourceBoxTrack(first, one); track != nil {
 					last, err := r.sample(ctx, one)
@@ -329,7 +330,7 @@ func (r *pairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*Sweep
 	default:
 		return r.undecided(zero, zero, SweepPoseRelation), nil
 	}
-	entry, exit, intersects := box.ContactSpan(r.boxA.axisBox(), r.boxB.axisBox(), r.pa.Delta, r.pb.Delta)
+	entry, exit, intersects := box.ContactSpan(r.boxA.AxisBox(), r.boxB.AxisBox(), r.pa.Delta, r.pb.Delta)
 	if !intersects || entry.Cmp(one) > 0 || exit.Sign() < 0 || entry.Cmp(exit) > 0 {
 		_, err := r.sample(ctx, one)
 		if errors.Is(err, errSweepPoseBudget) {

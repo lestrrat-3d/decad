@@ -3,6 +3,7 @@ package decad
 import (
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/contactbox"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/pair"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
@@ -111,10 +112,10 @@ func sourceSphereRecord(b *Body) (sourceSphereContactProof, bool) {
 // classifySourceSphereBox binds the neutral complete-ball result to the
 // source faces and the contact report.
 func classifySourceSphereBox(report *reportvocab.ContactReport, sphere sourceSphereContactProof,
-	boxProof sourceBoxContactProof, sphereFirst bool) {
+	boxProof contactbox.SourceBox, sphereFirst bool) {
 	result := pairbox.ClassifyAxisSphere(
 		pairbox.AxisSphere{Center: sphere.center, Radius: sphere.radius},
-		boxProof.axisBox(), report.Request.PointResolution.Base(),
+		boxProof.AxisBox(), report.Request.PointResolution.Base(),
 	)
 	switch result.Relation {
 	case pair.Separated:
@@ -133,7 +134,7 @@ func classifySourceSphereBox(report *reportvocab.ContactReport, sphere sourceSph
 		return
 	}
 	witness := result.Witness
-	face := boxProof.faces[witness.Face.Axis][witness.Face.Side]
+	face := boxProof.Faces[witness.Face.Axis][witness.Face.Side]
 	if face == nil {
 		report.Reason = reportvocab.ContactNoNormalProof
 		return
@@ -153,7 +154,7 @@ func classifySourceSphereBox(report *reportvocab.ContactReport, sphere sourceSph
 	}
 	onSphere := witness.SpherePoint.Measurement()
 	onBox := witness.BoxPoint.Measurement()
-	featureSphere, featureBox := reportvocab.ContactFeature{Face: faceNode(sphere.face)}, reportvocab.ContactFeature{Face: faceNode(face)}
+	featureSphere, featureBox := reportvocab.ContactFeature{Face: faceNode(sphere.face)}, reportvocab.ContactFeature{Face: face}
 	onA, onB := onBox, onSphere
 	featureA, featureB := featureBox, featureSphere
 	if sphereFirst {
@@ -226,7 +227,7 @@ func classifySourceSpherePair(report *reportvocab.ContactReport, a, b sourceSphe
 // classifySourceSphereOrientedBox maps the box kernel's bounded response to
 // the original source faces and the contact report's measurements.
 func classifySourceSphereOrientedBox(report *reportvocab.ContactReport, sphere sourceSphereContactProof,
-	box orientedSourceBox, sphereFirst bool) {
+	box contactbox.OrientedSourceBox, sphereFirst bool) {
 	result := pairbox.ClassifyOrientedSphere(
 		pairbox.AxisSphere{Center: sphere.center, Radius: sphere.radius}, box.OrientedBox, sphereFirst,
 		report.Request.PointResolution.Base(), report.Request.NormalResolution.Base(),
@@ -248,7 +249,7 @@ func classifySourceSphereOrientedBox(report *reportvocab.ContactReport, sphere s
 		return
 	}
 	witness := result.Witness
-	face := box.faces[witness.Face.Axis][witness.Face.Side]
+	face := box.Faces[witness.Face.Axis][witness.Face.Side]
 	if face == nil {
 		report.Reason = reportvocab.ContactNoNormalProof
 		return
@@ -261,10 +262,10 @@ func classifySourceSphereOrientedBox(report *reportvocab.ContactReport, sphere s
 	spherePoint := witness.SpherePoint.Measurement()
 	if sphereFirst {
 		point.OnA, point.OnB = spherePoint, boxPoint
-		point.FeatureA, point.FeatureB = reportvocab.ContactFeature{Face: faceNode(sphere.face)}, reportvocab.ContactFeature{Face: faceNode(face)}
+		point.FeatureA, point.FeatureB = reportvocab.ContactFeature{Face: faceNode(sphere.face)}, reportvocab.ContactFeature{Face: face}
 	} else {
 		point.OnA, point.OnB = boxPoint, spherePoint
-		point.FeatureA, point.FeatureB = reportvocab.ContactFeature{Face: faceNode(face)}, reportvocab.ContactFeature{Face: faceNode(sphere.face)}
+		point.FeatureA, point.FeatureB = reportvocab.ContactFeature{Face: face}, reportvocab.ContactFeature{Face: faceNode(sphere.face)}
 	}
 	point.FaceA, point.FaceB = point.FeatureA.Face, point.FeatureB.Face
 	report.Manifold = &reportvocab.ContactManifold{Points: []reportvocab.ContactPoint{point}}

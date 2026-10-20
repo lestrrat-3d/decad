@@ -296,7 +296,7 @@ func bodySymmetryAxis(b *Body) (point, dir motionbound.RatVec, ok bool) {
 	}
 	half := big.NewRat(1, 2)
 	for i := range 3 {
-		point[i] = new(big.Rat).Add(cylinder.box.lo[i].Rat(), cylinder.box.hi[i].Rat())
+		point[i] = new(big.Rat).Add(cylinder.box.Lo[i].Rat(), cylinder.box.Hi[i].Rat())
 		point[i].Mul(point[i], half)
 		dir[i] = new(big.Rat)
 	}

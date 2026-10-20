@@ -1145,7 +1145,7 @@ the identity, every vertex bound zero, every face planar (`contact_faceted_pair.
 
 The relation of two such bodies at exact poses is decided by exact rational tests over their triangle
 sets, prefiltered by per-triangle boxes as `meshBoolean` does and charged to the shared `workBudget`
-with `ctx` polled every `workPollInterval` operations. The split follows the one `contact_box.go` and
+with `ctx` polled every `workPollInterval` operations. The split follows the one `internal/contactbox/box.go` and
 `internal/pair/box/axis_box.go` already make: `internal/pair/planar/planar.go` takes the two exact vertex and
 triangle snapshots and returns the relation, gap and feature pairs over `proof.Dyadic`; the root
 `contact_faceted_pair.go` admits the bodies and builds the snapshots at the query poses, and
@@ -1303,9 +1303,9 @@ normal oriented `A` toward `B`, normalized with the ball §9.3 describes; an ang
 `NormalResolution` withholds the manifold with `ContactNoNormalProof`, and an axis-aligned face has a
 zero ball and a zero `NormalAngle`. `Separation` is an exact zero interval.
 
-**The shipped clips as special cases.** `contact_clipped_patch.go`'s `clipHorizontalPolygon` is this
+**The shipped clips as special cases.** `internal/contactbox/clipped.go`'s `clipHorizontalPolygon` is this
 algorithm with the clip polygon an axis-aligned rectangle (four axis-parallel half-planes) in the world
-`XY` plane, and `contact_oriented_box.go` is the case of two rectangles with parallel edges, clipped
+`XY` plane, and `internal/contactbox/oriented.go` is the case of two rectangles with parallel edges, clipped
 in `A`'s rational dual basis. Both stay as they are and keep their dispatch for source boxes; PR 11's
 parity test runs their fixtures through the general clip and requires point-for-point identical output.
 A touch or overlap of two oriented source boxes that their patches leave without a manifold takes this

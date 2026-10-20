@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/clearance"
+	"github.com/lestrrat-3d/decad/internal/contactbox"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
@@ -146,11 +147,11 @@ func (r *rotationalPairSweep) rotationalDepartureFraction(first *SweepSample) (*
 	if !ok || point.Normal.Bound.Base() != 0 || point.NormalAngle.Base() != 0 {
 		return nil, false
 	}
-	boxA, okA := sourceBoxAtPose(r.a.body, r.a.Path.From)
-	boxB, okB := sourceBoxAtPose(r.b.body, r.b.Path.From)
+	boxA, okA := contactbox.SourceBoxAtPose(bodyNode(r.a.body), r.a.Path.From)
+	boxB, okB := contactbox.SourceBoxAtPose(bodyNode(r.b.body), r.b.Path.From)
 	if !okA || !okB ||
-		(side == 1 && proofarith.DyCmp(boxA.hi[axis], boxB.lo[axis]) != 0) ||
-		(side == 0 && proofarith.DyCmp(boxB.hi[axis], boxA.lo[axis]) != 0) {
+		(side == 1 && proofarith.DyCmp(boxA.Hi[axis], boxB.Lo[axis]) != 0) ||
+		(side == 0 && proofarith.DyCmp(boxB.Hi[axis], boxA.Lo[axis]) != 0) {
 		return nil, false
 	}
 	return sweepdeparture.CommonSpin(r.departurePaths(), axis, side)
@@ -176,7 +177,7 @@ func (r *rotationalPairSweep) horizontalSpinDepartureFraction(first *SweepSample
 	paths := [2]rotationalSweepPath{r.a, r.b}
 	return sweepdeparture.HorizontalSpin(r.departurePaths(), first.Ideal.Manifold.Points[0].Normal.Value,
 		func(i int) (pairbox.OrientedBox, bool) {
-			box, ok := sourceOrientedBoxAtPose(paths[i].body, paths[i].Path.From)
+			box, ok := contactbox.SourceOrientedBoxAtPose(bodyNode(paths[i].body), paths[i].Path.From)
 			return box.OrientedBox, ok
 		},
 	)

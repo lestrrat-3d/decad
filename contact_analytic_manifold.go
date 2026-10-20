@@ -124,20 +124,20 @@ func rulingSideOf(b *Body, carrier *clearance.CFace, outward proofarith.DyV3,
 		case cylinder.axis:
 			continue
 		case normalAxis:
-			radius = proofarith.DyMul(proofarith.DySubScalar(box.hi[i], box.lo[i]), half)
-			point[i] = box.lo[i]
+			radius = proofarith.DyMul(proofarith.DySubScalar(box.Hi[i], box.Lo[i]), half)
+			point[i] = box.Lo[i]
 			if side == 1 {
-				point[i] = box.hi[i]
+				point[i] = box.Hi[i]
 			}
 		default:
-			point[i] = proofarith.DyMul(proofarith.DyAdd(box.lo[i], box.hi[i]), half)
+			point[i] = proofarith.DyMul(proofarith.DyAdd(box.Lo[i], box.Hi[i]), half)
 		}
 	}
 	if proofarith.DyCmp(proofarith.DvDot(outward, point), offset) != 0 {
 		return rulingSide{}, reportvocab.ContactAmbiguousFeature
 	}
 	ends := [2]proofarith.DyV3{point, point}
-	ends[0][cylinder.axis], ends[1][cylinder.axis] = box.lo[cylinder.axis], box.hi[cylinder.axis]
+	ends[0][cylinder.axis], ends[1][cylinder.axis] = box.Lo[cylinder.axis], box.Hi[cylinder.axis]
 	return rulingSide{face: wall, ends: ends, radius: radius, curved: true}, reportvocab.ContactNoReason
 }
 
@@ -284,7 +284,7 @@ func placedCylinderAt(b *Body, pose r3.Transform) (placedCylinder, bool) {
 		return placedCylinder{}, false
 	}
 	ends := rollingEnds(source)
-	staged := placedruling.Stage(source.axis, source.box.lo, source.box.hi, ends, pose)
+	staged := placedruling.Stage(source.axis, source.box.Lo, source.box.Hi, ends, pose)
 	c := placedCylinder{Cylinder: staged, wall: wall, source: ends}
 	return c, true
 }
