@@ -55,7 +55,7 @@ Table RR lists the edges a blend can be built on. The others are refused.
 
 | RR | Edge | Faces | Blend surface (fillet / chamfer) | Staged |
 |---|---|---|---|---|
-| **R1** | `Line3`, convex or concave | two retained `Plane`s, not parallel | `Cylinder` / `Plane` | increment B2 |
+| **R1** | `Line3`, convex or concave | two retained `Plane`s, not parallel, ending at three-face corners whose third face is a retained `Plane` | `Cylinder` / `Plane` | increment B2; equal-distance chamfer only |
 | **R2** | `Circle3`, closed, centre on the axis | retained `Plane` and coaxial retained `Cylinder` | `Torus` / `Cone` | increment B1; equal-distance chamfer only |
 | **R3** | `Line3` of retention E4 | retained `Plane` and a `Cylinder` whose axis lies in the plane | `Cylinder` / `Plane` | increment B3 |
 | **R4** | `Arc3` | as R2, open | as R2 | increment B4 |
@@ -182,6 +182,46 @@ faces `G₀` and `G₁`. Everything else in the held mesh is copied unchanged.
 5. **Build.** The new vertex and triangle lists, the new groups and the new
    bounds go through `facetedrecord.Build`, which derives the topology, the
    measurements and the held audit the way `Placed` does.
+
+### 5.0 R1, a straight edge
+
+All four faces an R1 blend touches are planes, so each is rewritten the way the
+plane face of R2 is: its boundary loops change, and the face is triangulated
+again over the new loops. Let `e` run from `V₀` to `V₁`, with `d̂` its direction,
+`G_i` the end face at `V_i`, `eA_i = A ∩ G_i` and `eB_i = B ∩ G_i`.
+
+1. **Exact points.** `V_i` is the meeting of the planes `A`, `B` and `G_i`.
+   The setback line `LA` on `A` is the line parallel to `d̂` at in-plane distance
+   `tA` from `e`, and `LB` likewise. `P_A,i = LA ∩ G_i` and `P_B,i = LB ∩ G_i`.
+   For a fillet, the arc rows `α_j = jφ/m` of the exact cylinder meet `G_i` at
+   `q_j,i = p_j + s·d̂`, with `p_j` the point of the cross-section arc and `s`
+   the offset along `d̂` that reaches `G_i`. Row 0 is `P_A` and row `m` is `P_B`;
+   a chamfer has rows 0 and 1 only.
+2. **Chains.** In `A`'s loop, `e` is the run of vertices from `V₀` to `V₁` that lie
+   on the line of `e` within their bounds. `eA_i` is the run that leaves `V_i`
+   on the line of `eA_i`. The setback point `P_A,i` falls between two vertices of
+   that run, or between `V_i` and its first vertex. The run's vertices nearer
+   `V_i` than `P_A,i` go; `P_A,i` takes their place.
+3. **Loops.** `A`'s loop loses `V₀`, `V₁`, the run of `e` and the removed parts of
+   `eA₀` and `eA₁`, and gains `P_A,₀` and `P_A,₁` joined by one straight edge.
+   `B`'s loop changes the same way. `G_i`'s loop loses `V_i` and the removed parts
+   of `eA_i` and `eB_i`, and gains `P_A,i`, the intermediate `q_j,i` and `P_B,i`,
+   in the loop's own direction. Each face is then triangulated again.
+4. **Strip.** Rows `j = 0 … m` each hold the two vertices `q_j,₀` and `q_j,₁`.
+   Neighbouring rows join in one quadrilateral of two triangles, wound to face
+   the blend's outward normal. The strip's boundary edges are the setback edges
+   of `A` and `B` and the end curves of `G₀` and `G₁`, which are the vertices
+   the four faces share with it.
+
+**Exact areas.** The removed region of `A` is the quadrilateral
+`V₀ V₁ P_A,₁ P_A,₀`, and `B`'s likewise. The removed region of `G_i` is the
+projection along `d̂` of the corner region of the cross-section, area
+`r²(tan(φ/2) − φ/2)`, so its area is that over `|d̂ · n_G|`. A chamfer removes
+the triangle `V_i P_A,i P_B,i` from `G_i`. The cylinder patch has area
+`r·ℓ_c·φ + r²·tan(φ/2)·μ·(a₀ + a₁)`, with `ℓ(x) = ℓ_c + μ·(x − c)` the length of
+the generator through `x` between the two end planes, `c` the axis point and
+`a₀`, `a₁` the unit vectors from `c` to the two tangent lines. The chamfer plane
+is a trapezoid of area `½(|P_A,₀P_A,₁| + |P_B,₀P_B,₁|)·|T_B − T_A|`.
 
 ### 5.1 Groups and tags
 
