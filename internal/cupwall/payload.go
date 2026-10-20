@@ -377,3 +377,23 @@ func (cp View) MassRecords() (massmoment.PrismRecord, massmoment.PrismRecord) {
 	cavity.Profile = cp.Cavity
 	return outer.MassRecord(), cavity.MassRecord()
 }
+
+// SameSet is the exact set-identity test of two cup views: equal frame, levels
+// and placement, no offset displacement on either, and equal outer and cavity
+// profiles walked loop by loop under the budget. An offset region recorded
+// only within OffsetDelta of the one it denotes makes two equal records say
+// nothing about the two sets, so such a pair stays undecided.
+func (cp View) SameSet(budget *proofbound.WorkBudget, other View) (bool, error) {
+	if cp.Frame != other.Frame || cp.ZOpen != other.ZOpen || cp.ZOuter != other.ZOuter ||
+		cp.ZCav != other.ZCav || cp.Xform != other.Xform {
+		return false, nil
+	}
+	if cp.OffsetDelta != 0 || other.OffsetDelta != 0 {
+		return false, nil
+	}
+	same, err := momentinput.ExactProfileEqual(budget, cp.Outer, other.Outer)
+	if err != nil || !same {
+		return false, err
+	}
+	return momentinput.ExactProfileEqual(budget, cp.Cavity, other.Cavity)
+}

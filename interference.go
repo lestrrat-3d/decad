@@ -6,7 +6,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/clearance/pairkernel"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
-	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
@@ -28,60 +27,19 @@ import (
 func analyticBodiesEqual(budget *proofbound.WorkBudget, a, b *Body) (bool, error) {
 	switch pa := a.n.Payload.(type) {
 	case prismPayload:
-		pb, ok := b.n.Payload.(prismPayload)
-		if !ok || pa.Frame != pb.Frame || pa.Z0 != pb.Z0 || pa.Z1 != pb.Z1 || pa.Xform != pb.Xform {
-			return false, nil
+		if pb, ok := b.n.Payload.(prismPayload); ok {
+			return pa.SameSet(budget, pb)
 		}
-		if pa.SectionDelta != 0 || pb.SectionDelta != 0 {
-			// Equal records are a certificate of equal SETS only while each
-			// record IS the set it denotes. A payload carrying a section
-			// displacement (docs/prism-boolean-design.md §7) denotes a set its
-			// record is only within that displacement of, and two such records
-			// being equal says nothing about the two sets. Undecided.
-			return false, nil
-		}
-		return momentinput.ExactProfileEqual(budget, pa.Profile, pb.Profile)
 	case cupPayload:
-		other, ok := b.n.Payload.(cupPayload)
-		if !ok {
-			return false, nil
+		if other, ok := b.n.Payload.(cupPayload); ok {
+			return pa.View().SameSet(budget, other.View())
 		}
-		return cupViewsEqual(budget, pa.View(), other.View())
 	case revolvePayload:
-		pb, ok := b.n.Payload.(revolvePayload)
-		if !ok || pa.Frame != pb.Frame || pa.Ax != pb.Ax || pa.Phi0 != pb.Phi0 ||
-			pa.Phi1 != pb.Phi1 || pa.Full != pb.Full || pa.Xform != pb.Xform {
-			return false, nil
+		if pb, ok := b.n.Payload.(revolvePayload); ok {
+			return pa.SameSet(budget, pb)
 		}
-		if pa.SectionDelta != 0 || pb.SectionDelta != 0 {
-			// The prism arm's own reasoning: equal records certify equal sets
-			// only while each record is the set it denotes.
-			return false, nil
-		}
-		return momentinput.ExactProfileEqual(budget, pa.Profile, pb.Profile)
-	default:
-		return false, nil
 	}
-}
-
-// cupViewsEqual is analyticBodiesEqual's cup arm over two cup views: one
-// frame, one placement, the same three levels and the same two regions.
-func cupViewsEqual(budget *proofbound.WorkBudget, pa, pb cupView) (bool, error) {
-	if pa.Frame != pb.Frame || pa.ZOpen != pb.ZOpen || pa.ZOuter != pb.ZOuter ||
-		pa.ZCav != pb.ZCav || pa.Xform != pb.Xform {
-		return false, nil
-	}
-	if pa.OffsetDelta != 0 || pb.OffsetDelta != 0 {
-		// The prism arm's rule for a displaced section: an offset region
-		// recorded only within offsetDelta of the one it denotes makes two
-		// equal records say nothing about the two sets. Undecided.
-		return false, nil
-	}
-	same, err := momentinput.ExactProfileEqual(budget, pa.Outer, pb.Outer)
-	if err != nil || !same {
-		return false, err
-	}
-	return momentinput.ExactProfileEqual(budget, pa.Cavity, pb.Cavity)
+	return false, nil
 }
 
 // measuredInterference returns the pair's bounded overlap volume. Strict
