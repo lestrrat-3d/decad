@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/brepmodify"
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/cupwall"
 	"github.com/lestrrat-3d/decad/internal/draftrecord"
@@ -14,6 +15,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/decad/internal/stackedshell"
 	"github.com/lestrrat-3d/decad/internal/sweeprecord"
+	"github.com/lestrrat-3d/decad/internal/throughshell"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -267,17 +269,18 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value, opts .
 	}
 	// A brep or stacked receiver takes the brep route
 	// (docs/brep-modify-design.md §2), ahead of the generic refusal.
-	route, err := modifyBrepReceiver(ctx, b, brepModifyRequest{op: "shells", shell: true,
-		admits: func(_ prismPayload, caps prismCaps) error {
-			_, _, err := classifyRemovedCaps(caps, removed)
+	route, err := brepmodify.Receiver(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), &b.n, brepmodify.Request{Op: "shells", Shell: true,
+		Admits: func(_ prismPayload, caps brepmodify.PrismCaps) error {
+			_, _, err := classifyRemovedCaps(prismCapsOfNodes(caps), removed)
 			return err
 		},
-		shellCall: brepShellCall{removed: removed, sense: sense, t: t, tmm: tmm, tDelta: tDelta}})
+		ShellCall: throughshell.Call{Removed: faceNodes(removed), Inward: sense == Inward, T: t, Tmm: tmm, TDelta: tDelta, Tol: shellTol},
+		CurveName: publicCurveName})
 	if err != nil {
 		return nil, err
 	}
-	if route.body != nil {
-		return commitModifyResult(ctx, b, route.body)
+	if route.Body != nil {
+		return commitModifyResult(ctx, b, bodyHandle(route.Body))
 	}
 
 	// Stage 2 (§4): the receiver's payload class (S3), then the removed faces:
@@ -287,8 +290,8 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value, opts .
 	pp, ok := b.n.Payload.(prismPayload)
 	caps := prismCapsOf(b)
 	var sweepStraight bool
-	if route.prism != nil {
-		pp, ok, caps = *route.prism, true, route.caps
+	if route.Prism != nil {
+		pp, ok, caps = *route.Prism, true, prismCapsOfNodes(route.Caps)
 	} else if sweepPrism, admitted := sweeprecord.StraightPrismReduction(b.n.Payload); admitted {
 		pp, ok, sweepStraight = sweepPrism, true, true
 	}
@@ -301,7 +304,7 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value, opts .
 	var removedStart, removedEnd bool
 	var sides map[int]struct{}
 	switch {
-	case route.prism != nil:
+	case route.Prism != nil:
 		removedStart, removedEnd, err = classifyRemovedCaps(caps, removed)
 	case sweepStraight:
 		removedStart, removedEnd, sides, err = classifyRemovedSweepFaces(b, caps, pp, removed)

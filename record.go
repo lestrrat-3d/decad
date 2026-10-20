@@ -218,9 +218,7 @@ type fitSplineSeg = sectionrecord.FitSplineSeg
 // an A1 result's slabs, a route L band and its kind, and the shared topology
 // reading.
 type (
-	brepPayload  = breprecord.Payload
-	brepBandKind = breprecord.BandKind
-	brepTopology = breprecord.Topology
+	brepPayload = breprecord.Payload
 )
 
 // brepSplit is one side-line split: a level and its displacement. brepEmbed
@@ -228,5 +226,4 @@ type (
 // permutation.
 type (
 	brepSplit = brepgeom.Split
-	brepEmbed = brepgeom.Embed
 )

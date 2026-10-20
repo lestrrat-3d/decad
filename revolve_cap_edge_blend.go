@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/brepmodify"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
@@ -32,7 +33,7 @@ func tryRevolveCapRimFillet(ctx context.Context, body *Body, rp revolvePayload,
 // tryRevolveCapRimChamfer uses the same source class and one-edge selector as
 // the fillet. An asymmetric setback changes the trimming plane and is staged.
 func tryRevolveCapRimChamfer(ctx context.Context, body *Body, rp revolvePayload,
-	edges []*Edge, setback, setbackDelta float64, asym *asymmetricChamfer) (*Body, bool, error) {
+	edges []*Edge, setback, setbackDelta float64, asym *brepmodify.Asymmetric) (*Body, bool, error) {
 	if asym != nil {
 		return nil, false, nil
 	}

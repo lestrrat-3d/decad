@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/brepmodify"
 	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/draftrecord"
@@ -17,6 +18,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sweeprecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
@@ -221,9 +223,9 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 			return out, nil
 		}
 	}
-	blend := revolveBlendOp{
-		kind: "fillet",
-		corner: func(loop cornerLoop, _, ci int, _ *Edge) (*cornerBlend, error) {
+	blend := brepmodify.BlendOp{
+		Kind: "fillet",
+		Corner: func(loop cornerLoop, _, ci int, _ *topo.Edge) (*cornerBlend, error) {
 			return computeFillet(loop, ci, rmm)
 		},
 	}
@@ -232,21 +234,21 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 	// Other brep and stacked receivers take docs/brep-modify-design.md §2.
 	// A loop's fillet radius is both of route L's setbacks
 	// (docs/loop-fillet-design.md §4).
-	loopCall := brepModifyRequest{
-		op: "fillets",
-		admits: func(pp prismPayload, _ prismCaps) error {
+	loopCall := brepmodify.Request{
+		Op: "fillets",
+		Admits: func(pp prismPayload, _ brepmodify.PrismCaps) error {
 			return modifyselect.RequireLateral(ctx, pp, edgeNodes(edges))
 		},
-		sel: sel, edges: edges, blend: &blend,
-		loop:     &capSetback{Dc: rmm, DcDelta: rDelta, Ds: rmm, DsDelta: rDelta},
-		loopKind: breprecord.BandFillet,
+		Sel: fmt.Sprint(sel), Edges: edgeNodes(edges), Blend: &blend, CurveName: publicCurveName,
+		Loop:     &capSetback{Dc: rmm, DcDelta: rDelta, Ds: rmm, DsDelta: rDelta},
+		LoopKind: breprecord.BandFillet,
 	}
-	route, err := modifyBrepReceiver(ctx, b, loopCall)
+	route, err := brepmodify.Receiver(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), &b.n, loopCall)
 	if err != nil {
 		return nil, err
 	}
-	if route.body != nil {
-		return commitModifyResult(ctx, b, route.body)
+	if route.Body != nil {
+		return commitModifyResult(ctx, b, bodyHandle(route.Body))
 	}
 
 	// Reach RX2 (docs/modify-reach-design.md §7): a quarter-turn rectangular
@@ -300,8 +302,8 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 		pp, ok = reduction, true
 		sweepReduction = true
 	}
-	if route.prism != nil {
-		pp, ok = *route.prism, true
+	if route.Prism != nil {
+		pp, ok = *route.Prism, true
 	}
 	if !ok {
 		return nil, fmt.Errorf(`%w: this evaluator fillets a straight prism, its one-line Sweep reduction, a revolve, or a matching-section axial loft only; selector %s matched [%s]`,
@@ -344,14 +346,14 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 				if err != nil {
 					return nil, err
 				}
-				if err := breprecord.RequireExactSection(bp, loopCall.op); err != nil {
+				if err := breprecord.RequireExactSection(bp, loopCall.Op); err != nil {
 					return nil, err
 				}
-				body, err := brepBlendEdges(ctx, d, bp, loopCall)
+				node, err := brepmodify.BlendEdges(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), bp, loopCall)
 				if err != nil {
 					return nil, err
 				}
-				return commitModifyResult(ctx, b, body)
+				return commitModifyResult(ctx, b, bodyHandle(node))
 			}
 			// RF3 (docs/loop-fillet-design.md §3): a cap edge sends the
 			// prism through its brep face view. Route E, L or V then reads the
@@ -361,11 +363,11 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 					return out, err
 				}
 			}
-			body, err := prismFaceViewBlend(ctx, d, pp, loopCall)
+			node, err := brepmodify.PrismFaceViewBlend(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), pp, loopCall)
 			if err != nil {
 				return nil, err
 			}
-			return commitModifyResult(ctx, b, body)
+			return commitModifyResult(ctx, b, bodyHandle(node))
 		}
 		matched = append(matched, modifyselect.NewMatchedCorner(ei, edgeNode(e), li, ci, loops[li]))
 		blendAt[li][ci] = nil // marked; the blend is computed in stage 3

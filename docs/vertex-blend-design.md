@@ -113,7 +113,7 @@ unselected planar wall and the cap and side samples with their faces. The
 terminal arc is pinned to the cap contour's endpoint, including at a hole
 mouth where the cap contour moves away from the hole.
 
-The straight-edge set runs through route E (`brepBlendEdges`). A prism is
+The straight-edge set runs through route E (`brepmodify.BlendEdges`). A prism is
 read through `breprecord.OfPrism` first; a single straight prism cap edge also
 uses route E for a chamfer. Its two end-face corners take straight chords,
 the cap and side faces end at the chords' feet, and a planar bevel closes

@@ -68,8 +68,8 @@ single edges uses route L (`docs/loop-fillet-design.md`).
 
 Each op keeps modify §4's stage 1 (S17, the sheet refusal, options, S15, S13 or
 S14, S16) and reach SX10 for a `capBlendPayload`. Where the ops today cast to
-`prismPayload` and refuse a brep with SX16, they call `modifyBrepReceiver`
-(`brep_modify.go`):
+`prismPayload` and refuse a brep with SX16, they call `brepmodify.Receiver`
+(`internal/brepmodify/prism_route.go`):
 
 ```
 receiver payload           → record handed to the brep route

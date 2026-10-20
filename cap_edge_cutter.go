@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/brepmodify"
 	"github.com/lestrrat-3d/decad/internal/capedge"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -29,17 +30,17 @@ func tryObliqueCapEdgeFillet(ctx context.Context, body *Body, pp prismPayload, e
 // boolean cutter route as a fillet. The caller has already identified one
 // selected straight edge of a prism cap.
 func tryObliqueCapEdgeChamfer(ctx context.Context, body *Body, pp prismPayload, edges []*Edge,
-	d, dDelta float64, asym *asymmetricChamfer) (*Body, bool, error) {
+	d, dDelta float64, asym *brepmodify.Asymmetric) (*Body, bool, error) {
 	dc, ds, delta := d, d, dDelta
 	if asym != nil {
-		ref := asym.refs[edges[0]]
+		ref := asym.Refs[edgeNode(edges[0])]
 		caps := prismCapsOf(body)
-		if ref == caps.start || ref == caps.end {
-			dc, ds = asym.d, asym.other
+		if ref == faceNode(caps.start) || ref == faceNode(caps.end) {
+			dc, ds = asym.D, asym.Other
 		} else {
-			dc, ds = asym.other, asym.d
+			dc, ds = asym.Other, asym.D
 		}
-		delta = max(asym.dDelta, asym.otherDelta)
+		delta = max(asym.DDelta, asym.OtherDelta)
 	}
 	reach := max(dc, ds)
 	return tryObliqueCapEdgeCut(ctx, body, pp, edges, reach, delta, capedge.ChamferCutter(dc, ds))

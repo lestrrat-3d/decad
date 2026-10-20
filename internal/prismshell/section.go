@@ -82,7 +82,7 @@ func sideOpeningHeight(height float64, keptCaps int, s float64, t units.Value, t
 // where a C with no area is SO3, S11b and S9 — and the exact area identity,
 // whose failure is SO5.
 // KeptCaps is the number of caps the shell keeps. Profile and Height are
-// read; route S (brep_shell.go) hands it a through-cut record's prism A and
+// read; route S (internal/throughshell) hands it a through-cut record's prism A and
 // takes C as A ⊖ t's section (docs/modify-general-design.md §3.2).
 // audit runs the caller's shared modify section audit on W and the offset region.
 func SideOpeningRegions(budget *proofbound.WorkBudget, in SideOpeningInput,

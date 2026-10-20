@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/brepmodify"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/modifyselect"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
@@ -34,19 +35,6 @@ import (
 // partial turn, or the shared on-axis edge of a wedge — is SX5
 // (ErrUnsupported).
 
-// revolveBlendOp names one modify op's part in the shared rewrite: the role
-// kind its blend wall carries ("fillet" or "chamfer", also the noun its
-// refusals use), and the per-corner construction (computeFillet or
-// computeChamfer, bound to its magnitudes). corner reads corner ci of loop,
-// whose index in the recorded section is li, and the selected edge e that
-// mapped to it; an asymmetric chamfer reads li and e to assign its two
-// setbacks (docs/modify-reach-design.md §6), and every other construction
-// ignores them.
-type revolveBlendOp struct {
-	kind   string
-	corner func(loop cornerLoop, li, ci int, e *Edge) (*cornerBlend, error)
-}
-
 // revolveJunction is one off-axis junction of the receiver's axis-local
 // coalesced meridian walk: the placed circle it sweeps, and the recorded
 // segment whose start it sits at (the leaving walk's first segment), which is
@@ -61,12 +49,12 @@ type revolveJunction struct {
 // revolvePayload receiver, from the receiver/target stage on
 // (docs/modify-reach-design.md §4 stages 4 to 6, §7). Stage 1 — the live
 // receiver, the magnitude and the selector — has already run in the caller.
-func (b *Body) blendRevolveJunctions(ctx context.Context, sel EdgeSelector, edges []*Edge, rp revolvePayload, op revolveBlendOp) (*Body, error) {
+func (b *Body) blendRevolveJunctions(ctx context.Context, sel EdgeSelector, edges []*Edge, rp revolvePayload, op brepmodify.BlendOp) (*Body, error) {
 	d := documentHandle(b.n.Doc)
 	// The section-displacement guard, read as a modify refusal: the rewrite
 	// is of the recorded meridian, and a meridian displaced from the one it
 	// denotes has no proven rewrite (prismrecord.Payload.RequireExactSection's prism reading).
-	if err := revolveplan.RequireExactSection(rp, "this evaluator's junction "+op.kind); err != nil {
+	if err := revolveplan.RequireExactSection(rp, "this evaluator's junction "+op.Kind); err != nil {
 		return nil, err
 	}
 
@@ -97,7 +85,7 @@ func (b *Body) blendRevolveJunctions(ctx context.Context, sel EdgeSelector, edge
 		}
 		if !found {
 			return nil, fmt.Errorf(`%w: a %s of a revolve edge that is not a swept meridian junction (a cap edge, or an edge on the axis) is not supported; selector %s, %s`,
-				ErrUnsupported, op.kind, sel, modifyselect.EdgeContext(ei, edgeNode(e)))
+				ErrUnsupported, op.Kind, sel, modifyselect.EdgeContext(ei, edgeNode(e)))
 		}
 		matched = append(matched, modifyselect.NewMatchedCorner(ei, edgeNode(e), li, ci, loops[li]))
 		blendAt[li][ci] = nil // marked; the blend is computed in stage 5
@@ -109,7 +97,7 @@ func (b *Body) blendRevolveJunctions(ctx context.Context, sel EdgeSelector, edge
 		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return nil, err
 		}
-		cb, err := op.corner(loops[corner.Loop], corner.Loop, corner.Corner, edgeHandle(corner.Edge))
+		cb, err := op.Corner(loops[corner.Loop], corner.Loop, corner.Corner, corner.Edge)
 		if err != nil {
 			return nil, fmt.Errorf(`%w; selector %s, %s`, err, sel, corner)
 		}
@@ -154,7 +142,7 @@ func (b *Body) blendRevolveJunctions(ctx context.Context, sel EdgeSelector, edge
 		Xform:       rp.Xform,
 		RadialProof: ax.RadialProof,
 		BlendSegs:   blendSegs,
-		BlendKind:   op.kind,
+		BlendKind:   op.Kind,
 	}, work))
 	if err != nil {
 		return nil, err
