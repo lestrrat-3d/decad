@@ -1452,7 +1452,7 @@ or topology-changing offsets remain SX8.
 
 #### 9.3.1 Construction
 
-`shell_revolve.go` builds the partial turn without a side opening and the
+`revolveshell.Shell` (`internal/revolveshell/shell.go`) builds the partial turn without a side opening and the
 full turn under `WithNoOpenings`, from one wall region. It never materialises
 the mirror half. The effective offset cut back to `ρ ≥ 0` is the
 offset of the kept chain `K` alone, the recorded meridian less its on-axis walk
@@ -1540,7 +1540,7 @@ not one proper connected run of whole walks or that leaves two kept chains
 
 #### 9.3.2 Side opening
 
-`revolveShellSideWall` (`shell_revolve.go`) builds the side opening of a full
+`revolveshell.SideWall` (`internal/revolveshell/wall.go`) builds the side opening of a full
 turn, and of a partial turn beside both removed angular caps. The removed
 faces name the recorded segments they sweep through their `side(0,j)` roles,
 and they must cover whole plane-local walks. The removed walks form one

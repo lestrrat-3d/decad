@@ -1,17 +1,20 @@
-package decad
+package revolveshell
 
 import (
 	"context"
 	"errors"
 	"fmt"
 
+	"github.com/lestrrat-3d/units"
+
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
-	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/decad/internal/shellsurvey"
-	"github.com/lestrrat-3d/units"
+	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
 // This file is the revolve shell of docs/modify-reach-design.md §9.3 (Table RX
@@ -32,7 +35,7 @@ import (
 // (internal/revolveplan/build.go's fullRevolveShellsContext). A side opening — a connected
 // run of generated side faces removed, on a full turn or beside both removed
 // angular caps — sweeps the open-chain wall region closed at each opening by
-// docs/shell-opening-design.md's Table RO rim instead (revolveshell.SideWall).
+// docs/shell-opening-design.md's Table RO rim instead (SideWall).
 // Every other selection refuses before a face is made: a kept angular cap and
 // a holed meridian are SX8, and so is an effective meridian whose mirror union
 // would hold a hole or whose offset reaches across the axis, a removed run that
@@ -40,12 +43,12 @@ import (
 // opening end at a smooth corner is that document's SO1, and a rim running past
 // the removed walk's far end its SO2.
 
-// shellRevolve is Shell's revolve receiver, from reach §4's stage 4 on.
+// Shell is Shell's revolve receiver, from reach §4's stage 4 on.
 // Stage 1 — the live receiver, the options, the magnitude and the selector —
 // has already run in Shell. removed is nil for a WithNoOpenings full turn. s
 // is +1 inward, −1 outward.
-func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*Face, s float64, t units.Value, tmm, tDelta float64) (*Body, error) {
-	d := documentHandle(b.n.Doc)
+func Shell(ctx context.Context, env topo.Env, b *topo.Body, rp revolveplan.Payload,
+	startCap, endCap *topo.Face, removed []*topo.Face, s float64, t units.Value, tmm, tDelta, tol float64) (*topo.Body, error) {
 	// The section-displacement guard, read as a modify refusal: the offset
 	// is of the recorded meridian, and a meridian displaced from the one it
 	// denotes has no proven offset (prismrecord.Payload.RequireExactSection's prism reading).
@@ -55,21 +58,20 @@ func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*F
 
 	// Stage 4 (reach §4): the receiver and its targets.
 	if len(rp.Profile.Holes) > 0 {
-		return nil, fmt.Errorf(`%w: a shell of a revolve whose meridian holds %d hole(s) is not supported; its offset would carry a hole-lining wall (modify-reach SX8)`, ErrUnsupported, len(rp.Profile.Holes))
+		return nil, fmt.Errorf(`%w: a shell of a revolve whose meridian holds %d hole(s) is not supported; its offset would carry a hole-lining wall (modify-reach SX8)`, decaderr.ErrUnsupported, len(rp.Profile.Holes))
 	}
-	caps := prismCapsOf(b)
 	var start, end bool
 	sides := 0
 	removedSegs := map[int]struct{}{}
 	for _, f := range removed {
 		switch {
-		case caps.start != nil && f == caps.start:
+		case startCap != nil && f == startCap:
 			start = true
-		case caps.end != nil && f == caps.end:
+		case endCap != nil && f == endCap:
 			end = true
 		default:
 			sides++
-			if err := revolveSideFaceSegments(b, f, removedSegs); err != nil {
+			if err := sideFaceSegments(b, f, removedSegs); err != nil {
 				return nil, err
 			}
 		}
@@ -78,7 +80,7 @@ func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*F
 		// A kept angular cap needs a wall at constant distance behind a plane
 		// through the axis; that offset plane is no constant-angle cap, so no
 		// change of the angular interval builds it (reach §9.3).
-		return nil, fmt.Errorf(`%w: a partial-revolve shell must remove both angular caps; a kept cap's wall is a plane at constant distance from it, which no revolve holds (modify-reach SX8)`, ErrUnsupported)
+		return nil, fmt.Errorf(`%w: a partial-revolve shell must remove both angular caps; a kept cap's wall is a plane at constant distance from it, which no revolve holds (modify-reach SX8)`, decaderr.ErrUnsupported)
 	}
 
 	budget := proofbound.NewWorkBudget(ctx)
@@ -98,13 +100,13 @@ func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*F
 		if axisAt >= 0 {
 			// Two separate on-axis walks: the meridian united with its mirror
 			// image encloses the axis span between them, a hole.
-			return nil, fmt.Errorf(`%w: the revolve meridian meets the axis along more than one walk, so its mirror union holds a hole (modify-reach SX8)`, ErrUnsupported)
+			return nil, fmt.Errorf(`%w: the revolve meridian meets the axis along more than one walk, so its mirror union holds a hole (modify-reach SX8)`, decaderr.ErrUnsupported)
 		}
 		axisAt = i
 	}
 	var removedWalks map[int]struct{}
 	if sides > 0 {
-		removedWalks, err = revolveshell.RemovedWalks(walks, axisAt, removedSegs)
+		removedWalks, err = RemovedWalks(walks, axisAt, removedSegs)
 		if err != nil {
 			return nil, err
 		}
@@ -117,26 +119,26 @@ func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*F
 	// no section limit applies: the open chain's own offset, its S11a drop
 	// gate and the §5 audit of its wall section decide it.
 	if s > 0 && sides == 0 {
-		inradius, enough, err := revolveshell.Inradius(budget, rp.Profile, rp.Ax, axisAt >= 0, tmm, tDelta, shellTol)
+		inradius, enough, err := Inradius(budget, rp.Profile, rp.Ax, axisAt >= 0, tmm, tDelta, tol)
 		if err != nil {
 			return nil, err
 		}
-		if err := shellsurvey.RequireSectionCavity(t, tmm, inradius, enough, shellTol); err != nil {
+		if err := shellsurvey.RequireSectionCavity(t, tmm, inradius, enough, tol); err != nil {
 			return nil, err
 		}
 	}
 
-	var wall profileRecord
+	var wall momentinput.Profile
 	var delta float64
 	switch {
 	case sides > 0:
-		wall, delta, err = revolveshell.SideWall(budget, rp.Profile, rp.Ax, walks, axisAt, removedWalks,
-			s, tmm, tDelta, shellTol, offset2d.AuditOffsetSectionBudget)
+		wall, delta, err = SideWall(budget, rp.Profile, rp.Ax, walks, axisAt, removedWalks,
+			s, tmm, tDelta, tol, offset2d.AuditOffsetSectionBudget)
 	case axisAt < 0:
-		wall, delta, err = revolveshell.OffAxisWall(budget, rp.Profile, s, tmm, tDelta, shellTol)
+		wall, delta, err = OffAxisWall(budget, rp.Profile, s, tmm, tDelta, tol)
 	default:
-		wall, delta, err = revolveshell.AxisWall(budget, rp.Profile, rp.Ax, walks, axisAt,
-			s, tmm, tDelta, shellTol, offset2d.AuditOffsetSectionBudget)
+		wall, delta, err = AxisWall(budget, rp.Profile, rp.Ax, walks, axisAt,
+			s, tmm, tDelta, tol, offset2d.AuditOffsetSectionBudget)
 	}
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
@@ -156,14 +158,13 @@ func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*F
 	work := freeform.NewFreeformWork()
 	ax, err := rp.BlendAxis(ctx, wall, work)
 	if err != nil {
-		if errors.Is(err, ErrDegenerate) {
-			return nil, fmt.Errorf(`%w: the shell's offset meridian reaches the revolve axis, where it would meet its own mirror image; a trimmed-offset kernel is not available (modify-reach SX8): %v`, ErrUnsupported, err)
+		if errors.Is(err, decaderr.ErrDegenerate) {
+			return nil, fmt.Errorf(`%w: the shell's offset meridian reaches the revolve axis, where it would meet its own mirror image; a trimmed-offset kernel is not available (modify-reach SX8): %v`, decaderr.ErrUnsupported, err)
 		}
 		return nil, err
 	}
 
-	ref := d.nextProducerID()
-	body, err := bodyResult(revolveplan.Build(ctx, envOf(documentNode(d), ref), revolvePayload{
+	return revolveplan.Build(ctx, env, revolveplan.Payload{
 		Profile:      wall,
 		Frame:        rp.Frame,
 		Ax:           ax,
@@ -175,33 +176,22 @@ func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*F
 		RadialProof:  ax.RadialProof,
 		SectionDelta: delta,
 		SectionWhole: delta > 0,
-	}, work))
-	if err != nil {
-		return nil, err
-	}
-	if err := d.requireLive(b); err != nil {
-		return nil, err
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	d.commit(body, b)
-	return body, nil
+	}, work)
 }
 
-// revolveSideFaceSegments adds the recorded meridian segments a removed
+// sideFaceSegments adds the recorded meridian segments a removed
 // generated side face sweeps — the j of its own side(0,j) roles — to segs. A
 // face naming no such role is not a side face of this revolve.
-func revolveSideFaceSegments(b *Body, f *Face, segs map[int]struct{}) error {
+func sideFaceSegments(b *topo.Body, f *topo.Face, segs map[int]struct{}) error {
 	var roles []string
-	for _, o := range f.n.Origins {
-		if o.Producer == b.n.Origin.Producer {
+	for _, o := range f.Origins {
+		if o.Producer == b.Origin.Producer {
 			roles = append(roles, o.Role)
 		}
 	}
-	named, ok := revolveshell.SideSegments(roles)
+	named, ok := SideSegments(roles)
 	if !ok {
-		return fmt.Errorf(`%w: a removed face is neither an angular cap nor a generated side face of this revolve`, ErrUnsupported)
+		return fmt.Errorf(`%w: a removed face is neither an angular cap nor a generated side face of this revolve`, decaderr.ErrUnsupported)
 	}
 	for _, j := range named {
 		segs[j] = struct{}{}

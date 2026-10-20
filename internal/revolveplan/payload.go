@@ -86,7 +86,7 @@ type Payload struct {
 	SectionDelta float64
 	// SectionWhole says SectionDelta reaches every recorded coordinate — each
 	// segment's two ends and an arc's centre — as an offset construction's does
-	// (shell_revolve.go), rather than only the cut ends a trim records, and
+	// (internal/revolveshell/shell.go), rather than only the cut ends a trim records, and
 	// that the segment-wise pairing above holds. The per-walk readings then
 	// charge every end, every vertex and every wall's denoted normal (§7.2); a
 	// cut construction leaves it false and charges its own cut ends through
