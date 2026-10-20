@@ -786,6 +786,14 @@ producer's replay proof and exact bracket right fraction, and a sample its
 exact fraction, behind accessors that take an `internal/seal.Key`, so only
 decad's own producers can read or set them.
 
+`SweepPair` validates the bodies, paths and request, builds the report over
+the bodies' topology nodes, and hands it to `internal/sweeprun`, which selects
+the producer and fills it. The run takes two hooks from the document:
+`ContactPair` in node form, with its recent-report memo, and the verified
+mesher the held-body paths use. `report.LiftSweepReport` then maps the finished
+node report to the root handles, keeping an event that is also the initial
+event as one event.
+
 `BracketEndsAtDuration` compares the producer's private exact bracket right
 fraction with one. The public `Fraction` may be rounded.
 

@@ -1,9 +1,12 @@
-package decad
+package sweeprun
 
 import (
 	"context"
 	"math/big"
 	"sort"
+
+	"github.com/lestrrat-3d/decad/internal/topo"
+	vocab "github.com/lestrrat-3d/decad/report"
 
 	"github.com/lestrrat-3d/decad/internal/sweepproof"
 
@@ -34,37 +37,37 @@ import (
 
 // sweepPlanarPair runs the general sweep when both bodies are admitted §9
 // planar solids. When either is not, a source cylinder rolling on a planar
-// body takes sweepRollingPair (contact_sweep_rolling.go); any other pair
+// body takes sweepRollingPair (internal/sweeprun/rolling.go); any other pair
 // reports false, leaving report untouched. A path whose ideal motion or
 // travel bound cannot be formed is SweepUndecided with SweepMissingBound.
-func (d *Document) sweepPlanarPair(ctx context.Context, a, b *Body,
-	pa, pb affinePairPath, req SweepRequest, resolution *big.Rat,
-	report *SweepReport) (*SweepReport, bool, error) {
+func sweepPlanarPair(ctx context.Context, h Hooks, a, b *topo.Body,
+	pa, pb affinePairPath, req vocab.SweepRequest, resolution *big.Rat,
+	report *sweepReport) (*sweepReport, bool, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	chord := req.HeldChord.Base()
-	solidA, deltaA, okA, err := planarpose.SolidAtPose(ctx, budget, verifyAllMesher{}, bodyNode(a), r3.Identity(), chord)
+	solidA, deltaA, okA, err := planarpose.SolidAtPose(ctx, budget, h.Mesher, a, r3.Identity(), chord)
 	if err != nil {
 		return nil, true, err
 	}
-	solidB, deltaB, okB, err := planarpose.SolidAtPose(ctx, budget, verifyAllMesher{}, bodyNode(b), r3.Identity(), chord)
+	solidB, deltaB, okB, err := planarpose.SolidAtPose(ctx, budget, h.Mesher, b, r3.Identity(), chord)
 	if err != nil {
 		return nil, true, err
 	}
 	if !okA || !okB {
-		return d.sweepRollingPair(ctx, a, b, pa, pb, req, resolution, report)
+		return sweepRollingPair(ctx, h, a, b, pa, pb, req, resolution, report)
 	}
-	planarA, okA := planarsweep.PreparePlanarPath(&a.n, pa, &solidA, deltaA)
-	planarB, okB := planarsweep.PreparePlanarPath(&b.n, pb, &solidB, deltaB)
+	planarA, okA := planarsweep.PreparePlanarPath(a, pa, &solidA, deltaA)
+	planarB, okB := planarsweep.PreparePlanarPath(b, pb, &solidB, deltaB)
 	if !okA || !okB {
-		report.Outcome, report.Cause = SweepUndecided, SweepMissingBound
-		report.Unresolved = &SweepInterval{From: sweeppath.Instant(new(big.Rat), pa.Duration),
+		report.Outcome, report.Cause = vocab.SweepUndecided, vocab.SweepMissingBound
+		report.Unresolved = &vocab.SweepInterval{From: sweeppath.Instant(new(big.Rat), pa.Duration),
 			To: sweeppath.Instant(big.NewRat(1, 1), pa.Duration)}
 		return report, true, nil
 	}
 	aPath, bPath := rotationalSweepPath{RotationalPath: sweepproof.RotationalPath{BodyPath: planarA}, body: a}, rotationalSweepPath{RotationalPath: sweepproof.RotationalPath{BodyPath: planarB}, body: b}
 	planarsweep.AttachMemos(&aPath.BodyPath, &bPath.BodyPath)
 	defer planarsweep.CloseMemos(&aPath.BodyPath, &bPath.BodyPath)
-	run := rotationalPairSweep{doc: d, a: aPath, b: bPath, req: req,
+	run := rotationalPairSweep{hooks: h, a: aPath, b: bPath, req: req,
 		resolution: resolution, report: report, planar: true}
 	result, err := run.execute(ctx)
 	if err != nil || result == nil {
@@ -79,20 +82,20 @@ func (d *Document) sweepPlanarPair(ctx context.Context, a, b *Body,
 // exact planar bodies, whose §10.2 and §10.3 proofs read every vertex. It
 // reports false, and the box report stands, when the planar run is not
 // admitted or settles nothing either.
-func (d *Document) planarContinuation(ctx context.Context, boxes *SweepReport,
-	pa, pb affinePairPath, resolution *big.Rat) (*SweepReport, bool, error) {
-	if boxes.Outcome != SweepUndecided || boxes.InitialEvent == nil ||
-		boxes.InitialEvent.Relation != ContactTouching && boxes.InitialEvent.Relation != ContactBand ||
-		boxes.Cause != SweepDepartureUnproved && boxes.Cause != SweepContactTrackUnproved {
+func planarContinuation(ctx context.Context, h Hooks, boxes *sweepReport,
+	pa, pb affinePairPath, resolution *big.Rat) (*sweepReport, bool, error) {
+	if boxes.Outcome != vocab.SweepUndecided || boxes.InitialEvent == nil ||
+		boxes.InitialEvent.Relation != vocab.ContactTouching && boxes.InitialEvent.Relation != vocab.ContactBand ||
+		boxes.Cause != vocab.SweepDepartureUnproved && boxes.Cause != vocab.SweepContactTrackUnproved {
 		return nil, false, nil
 	}
-	fresh := &SweepReport{A: boxes.A, B: boxes.B, PathA: boxes.PathA, PathB: boxes.PathB, Request: boxes.Request}
-	result, admitted, err := d.sweepPlanarPair(ctx, boxes.A, boxes.B, pa, pb, boxes.Request,
+	fresh := &sweepReport{A: boxes.A, B: boxes.B, PathA: boxes.PathA, PathB: boxes.PathB, Request: boxes.Request}
+	result, admitted, err := sweepPlanarPair(ctx, h, boxes.A, boxes.B, pa, pb, boxes.Request,
 		resolution, fresh)
 	if err != nil {
 		return nil, true, err
 	}
-	if !admitted || result == nil || result.Outcome == SweepUndecided {
+	if !admitted || result == nil || result.Outcome == vocab.SweepUndecided {
 		return nil, false, nil
 	}
 	return result, true, nil
@@ -101,7 +104,7 @@ func (d *Document) planarContinuation(ctx context.Context, boxes *SweepReport,
 // planarReplayProof records what replay needs from a finished planar run:
 // the track, or the departure and every certified clear interval up to the
 // end of the clear prefix. It returns nil when the outcome has no replay.
-func (r *rotationalPairSweep) planarReplayProof(result *SweepReport) *sweepproof.Proof {
+func (r *rotationalPairSweep) planarReplayProof(result *sweepReport) *sweepproof.Proof {
 	proof := &sweepproof.Proof{Rotation: &[2]sweepproof.RotationalPath{r.a.RotationalPath, r.b.RotationalPath},
 		Request: r.req.ContactRequest, Outcome: result.Outcome}
 	planar := &planarsweep.Replay{Departure: r.departure,
@@ -109,13 +112,13 @@ func (r *rotationalPairSweep) planarReplayProof(result *SweepReport) *sweepproof
 	proof.Planar = planar
 	start, end := new(big.Rat), big.NewRat(1, 1)
 	switch result.Outcome {
-	case SweepPersistentTouch, SweepPersistentBand:
-		if result.ContactTrack == nil || sweepTrackOf(result.ContactTrack).Planar == nil {
+	case vocab.SweepPersistentTouch, vocab.SweepPersistentBand:
+		if result.ContactTrack == nil || trackOf(result.ContactTrack).Planar == nil {
 			return nil
 		}
-		proof.Track = sweepTrackOf(result.ContactTrack)
+		proof.Track = trackOf(result.ContactTrack)
 		return proof
-	case SweepImpactBracket:
+	case vocab.SweepImpactBracket:
 		if result.Bracket == nil {
 			return nil
 		}
@@ -127,14 +130,14 @@ func (r *rotationalPairSweep) planarReplayProof(result *SweepReport) *sweepproof
 		proof.SetBracket(left, right)
 		proof.BracketTravel = planar.Travel
 		end = left
-	case SweepClear, SweepDepartedClear:
+	case vocab.SweepClear, vocab.SweepDepartedClear:
 	default:
 		return nil
 	}
 	if r.departure != nil {
 		start = r.departure.Until
 	}
-	samples := append([]SweepSample(nil), result.Samples...)
+	samples := append([]sweepSample(nil), result.Samples...)
 	sort.Slice(samples, func(i, j int) bool {
 		return samples[i].ExactFraction(seal.Key{}).Cmp(samples[j].ExactFraction(seal.Key{})) < 0
 	})
@@ -164,8 +167,8 @@ func (r *rotationalPairSweep) planarReplayProof(result *SweepReport) *sweepproof
 }
 
 // sampleLowerGap is a separated sample's proven positive lower gap, or nil.
-func sampleLowerGap(sample *SweepSample) *big.Rat {
-	if sample.Ideal.Relation != ContactSeparated || sample.Ideal.Gap == nil {
+func sampleLowerGap(sample *sweepSample) *big.Rat {
+	if sample.Ideal.Relation != vocab.ContactSeparated || sample.Ideal.Gap == nil {
 		return nil
 	}
 	value, okValue := sweeppath.ExactBaseValue(sample.Ideal.Gap.Value)
@@ -192,33 +195,33 @@ func sampleLowerGap(sample *SweepSample) *big.Rat {
 // rigid motion, so it moves each true body within its δ of its held one; the
 // rounded pose's ContactPair report already charged δ, stretched by that
 // pose's own scale, which is at least one.
-func (r *rotationalPairSweep) planarIdealEvent(ctx context.Context, f *big.Rat, at SweepInstant,
-	poseA, poseB r3.Transform, contact *ContactReport) (SweepEvent, error) {
-	event := SweepEvent{At: at, Relation: ContactUndecided, Reason: contact.Reason}
+func (r *rotationalPairSweep) planarIdealEvent(ctx context.Context, f *big.Rat, at vocab.SweepInstant,
+	poseA, poseB r3.Transform, contact *contactReport) (sweepEvent, error) {
+	event := sweepEvent{At: at, Relation: vocab.ContactUndecided, Reason: contact.Reason}
 	budget := proofbound.NewWorkBudget(ctx)
 	vertsA, etaA, okA, err := r.a.PointDeviation(poseA, f, budget.Step)
 	if err != nil {
-		return SweepEvent{}, err
+		return sweepEvent{}, err
 	}
 	vertsB, etaB, okB, err := r.b.PointDeviation(poseB, f, budget.Step)
 	if err != nil {
-		return SweepEvent{}, err
+		return sweepEvent{}, err
 	}
 	if !okA || !okB {
 		return event, nil
 	}
-	if etaA == 0 && etaB == 0 && (contact.Relation == ContactTouching ||
-		contact.Relation == ContactOverlapping || contact.Relation == ContactBand) {
+	if etaA == 0 && etaB == 0 && (contact.Relation == vocab.ContactTouching ||
+		contact.Relation == vocab.ContactOverlapping || contact.Relation == vocab.ContactBand) {
 		event.Relation, event.Gap, event.Overlap = contact.Relation, contact.Gap, contact.Overlap
 		event.Manifold = contact.Manifold
 		return event, nil
 	}
 	switch contact.Relation {
-	case ContactSeparated:
+	case vocab.ContactSeparated:
 		if gap, ok := separatedIdealGap(contact, etaA, etaB); ok {
-			event.Relation, event.Gap, event.Reason = ContactSeparated, gap, ContactNoReason
+			event.Relation, event.Gap, event.Reason = vocab.ContactSeparated, gap, vocab.ContactNoReason
 		}
-	case ContactOverlapping:
+	case vocab.ContactOverlapping:
 		if !planarsnapshot.PositiveAffine(poseA) || !planarsnapshot.PositiveAffine(poseB) {
 			return event, nil
 		}
@@ -229,14 +232,14 @@ func (r *rotationalPairSweep) planarIdealEvent(ctx context.Context, f *big.Rat, 
 		b := planar.PlanarSolid{Verts: vertsB, Tris: r.b.Solid.Tris}
 		deep, err := planar.PlanarDeepVertex(&a, &b, margin, budget.Step)
 		if err != nil {
-			return SweepEvent{}, err
+			return sweepEvent{}, err
 		}
 		if deep {
-			event.Relation = ContactOverlapping
+			event.Relation = vocab.ContactOverlapping
 		}
-	case ContactBand:
+	case vocab.ContactBand:
 		if gap, ok := widenedBand(contact, etaA, etaB); ok {
-			event.Relation, event.Gap, event.Reason = ContactBand, gap, ContactNoNormalProof
+			event.Relation, event.Gap, event.Reason = vocab.ContactBand, gap, vocab.ContactNoNormalProof
 		}
 	}
 	return event, nil
@@ -244,7 +247,7 @@ func (r *rotationalPairSweep) planarIdealEvent(ctx context.Context, f *big.Rat, 
 
 // widenedBand transfers a ContactBand gap to the ideal path: its width grows
 // by both pose deviations.
-func widenedBand(contact *ContactReport, etaA, etaB float64) (*Measurement, bool) {
+func widenedBand(contact *contactReport, etaA, etaB float64) (*vocab.Measurement, bool) {
 	if contact.Gap == nil {
 		return nil, false
 	}
@@ -254,7 +257,7 @@ func widenedBand(contact *ContactReport, etaA, etaB float64) (*Measurement, bool
 	if !measurement.FiniteValues(published) {
 		return nil, false
 	}
-	return &Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(published),
+	return &vocab.Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(published),
 		Exactness: measurement.ExactnessOf(published)}, true
 }
 
@@ -326,7 +329,7 @@ func (r *rotationalPairSweep) planarBand(ctx context.Context) (*sweepproof.Track
 // manifold publishes at the start. It stays in the root because the feature
 // map reads both public bodies and the track is a public type.
 func (r *rotationalPairSweep) planarTrack(band *planarsweep.BandHorizon) (*sweepproof.Track, bool, error) {
-	features, err := planarfeaturemap.NewPlanarFeatureMap(bodyNode(r.a.body), bodyNode(r.b.body), r.a.Solid, r.b.Solid)
+	features, err := planarfeaturemap.NewPlanarFeatureMap(r.a.body, r.b.body, r.a.Solid, r.b.Solid)
 	if err != nil {
 		return nil, false, err
 	}

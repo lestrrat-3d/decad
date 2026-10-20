@@ -1,10 +1,12 @@
-package decad
+package sweeprun
 
 import (
 	"context"
 	"errors"
 	"math/big"
 	"sort"
+
+	vocab "github.com/lestrrat-3d/decad/report"
 
 	"github.com/lestrrat-3d/decad/internal/seal"
 
@@ -20,11 +22,11 @@ import (
 
 // depart publishes a proven departure through the given fraction, then
 // continues the clear search from there to the end of the sweep.
-func (r *rotationalPairSweep) depart(ctx context.Context, departure *big.Rat) (*SweepReport, error) {
+func (r *rotationalPairSweep) depart(ctx context.Context, departure *big.Rat) (*sweepReport, error) {
 	zero, one := new(big.Rat), big.NewRat(1, 1)
 	left, err := r.sample(ctx, departure)
 	if errors.Is(err, errSweepPoseBudget) {
-		return r.undecided(zero, departure, SweepPoseBudget), nil
+		return r.undecided(zero, departure, vocab.SweepPoseBudget), nil
 	}
 	if err != nil {
 		return nil, err
@@ -34,17 +36,17 @@ func (r *rotationalPairSweep) depart(ctx context.Context, departure *big.Rat) (*
 		return nil, err
 	}
 	if !ok {
-		return r.undecided(zero, departure, SweepDepartureUnproved), nil
+		return r.undecided(zero, departure, vocab.SweepDepartureUnproved), nil
 	}
-	r.report.Departure = &SweepDeparture{Until: left.At, GapAtUntil: *gap}
+	r.report.Departure = &vocab.SweepDeparture{Until: left.At, GapAtUntil: *gap}
 	if departure.Cmp(one) == 0 {
-		r.report.Outcome = SweepDepartedClear
+		r.report.Outcome = vocab.SweepDepartedClear
 		r.sortSamples()
 		return r.report, nil
 	}
 	last, err := r.sample(ctx, one)
 	if errors.Is(err, errSweepPoseBudget) {
-		return r.undecided(departure, one, SweepPoseBudget), nil
+		return r.undecided(departure, one, vocab.SweepPoseBudget), nil
 	}
 	if err != nil {
 		return nil, err
@@ -54,7 +56,7 @@ func (r *rotationalPairSweep) depart(ctx context.Context, departure *big.Rat) (*
 		return nil, err
 	}
 	if !done {
-		r.report.Outcome = SweepDepartedClear
+		r.report.Outcome = vocab.SweepDepartedClear
 	}
 	r.sortSamples()
 	return r.report, nil
@@ -66,20 +68,20 @@ func (r *rotationalPairSweep) depart(ctx context.Context, departure *big.Rat) (*
 // zero band, which publishes the exact relation's gap, and transferred to
 // the ideal path as a separated sample's is. ok is false when no positive
 // gap is proven.
-func (r *rotationalPairSweep) departureGap(ctx context.Context, f *big.Rat, sample *SweepSample) (*Measurement, bool, error) {
+func (r *rotationalPairSweep) departureGap(ctx context.Context, f *big.Rat, sample *sweepSample) (*vocab.Measurement, bool, error) {
 	switch {
-	case sample.Ideal.Relation == ContactSeparated && sample.Ideal.Gap != nil:
+	case sample.Ideal.Relation == vocab.ContactSeparated && sample.Ideal.Gap != nil:
 		return sample.Ideal.Gap, true, nil
-	case sample.Ideal.Relation != ContactBand:
+	case sample.Ideal.Relation != vocab.ContactBand:
 		return nil, false, nil
 	}
 	req := r.req.ContactRequest
 	req.SupportBand = units.Value{}
-	contact, err := r.doc.ContactPair(ctx, r.a.body, r.b.body, sample.PoseA, sample.PoseB, req)
+	contact, err := r.hooks.Contact(ctx, sample.PoseA, sample.PoseB, req)
 	if err != nil {
 		return nil, false, err
 	}
-	var event SweepEvent
+	var event sweepEvent
 	if r.planar {
 		event, err = r.planarIdealEvent(ctx, f, sample.At, sample.PoseA, sample.PoseB, contact)
 		if err != nil {
@@ -88,25 +90,25 @@ func (r *rotationalPairSweep) departureGap(ctx context.Context, f *big.Rat, samp
 	} else {
 		event = r.orientedIdealEvent(f, sample.At, sample.PoseA, sample.PoseB, contact)
 	}
-	if event.Relation != ContactSeparated || event.Gap == nil {
+	if event.Relation != vocab.ContactSeparated || event.Gap == nil {
 		return nil, false, nil
 	}
 	return event.Gap, true, nil
 }
 
 // continuationCause names the missing proof after an initial touch.
-func (r *rotationalPairSweep) continuationCause() SweepCause {
-	if r.req.StartPolicy == ContinueCertifiedTouch {
-		return SweepContactTrackUnproved
+func (r *rotationalPairSweep) continuationCause() vocab.SweepCause {
+	if r.req.StartPolicy == vocab.ContinueCertifiedTouch {
+		return vocab.SweepContactTrackUnproved
 	}
-	return SweepDepartureUnproved
+	return vocab.SweepDepartureUnproved
 }
 
 // coMovingOrientedTouch admits a touch of two co-translating source boxes
 // whose manifold is a box face patch. A manifold the exact planar path
 // completed (an edge or vertex on a face, or a support set) is left to the
 // planar continuation, since the oriented track rereads face patches only.
-func (r *rotationalPairSweep) coMovingOrientedTouch(first *SweepSample) bool {
+func (r *rotationalPairSweep) coMovingOrientedTouch(first *sweepSample) bool {
 	if r.a.Path.Drift != nil || r.b.Path.Drift != nil || first.Ideal.Manifold == nil {
 		return false
 	}
@@ -126,7 +128,7 @@ func (r *rotationalPairSweep) coMovingOrientedTouch(first *SweepSample) bool {
 // The admitted departure paths each prove an open-at-zero whole-body gap.
 // For a common rotation, Taylor's theorem bounds the support-plane gap below
 // by c*u - K*u²/2, using exact c and outward K over the whole step.
-func (r *rotationalPairSweep) rotationalDepartureFraction(first *SweepSample) (*big.Rat, bool) {
+func (r *rotationalPairSweep) rotationalDepartureFraction(first *sweepSample) (*big.Rat, bool) {
 	if fraction, ok := r.obliqueAffineDepartureFraction(first); ok {
 		return fraction, true
 	}
@@ -148,8 +150,8 @@ func (r *rotationalPairSweep) rotationalDepartureFraction(first *SweepSample) (*
 	if !ok || point.Normal.Bound.Base() != 0 || point.NormalAngle.Base() != 0 {
 		return nil, false
 	}
-	boxA, okA := contactbox.SourceBoxAtPose(bodyNode(r.a.body), r.a.Path.From)
-	boxB, okB := contactbox.SourceBoxAtPose(bodyNode(r.b.body), r.b.Path.From)
+	boxA, okA := contactbox.SourceBoxAtPose(r.a.body, r.a.Path.From)
+	boxB, okB := contactbox.SourceBoxAtPose(r.b.body, r.b.Path.From)
 	if !okA || !okB ||
 		(side == 1 && proofarith.DyCmp(boxA.Hi[axis], boxB.Lo[axis]) != 0) ||
 		(side == 0 && proofarith.DyCmp(boxB.Hi[axis], boxA.Lo[axis]) != 0) {
@@ -162,7 +164,7 @@ func (r *rotationalPairSweep) rotationalDepartureFraction(first *SweepSample) (*
 // complete source boxes. Their common support plane is exact even though its
 // published unit normal is rounded. Translation makes the signed plane gap
 // affine, so a positive slope keeps the entire pair clear after time zero.
-func (r *rotationalPairSweep) obliqueAffineDepartureFraction(first *SweepSample) (*big.Rat, bool) {
+func (r *rotationalPairSweep) obliqueAffineDepartureFraction(first *sweepSample) (*big.Rat, bool) {
 	if first.Ideal.Manifold == nil {
 		return nil, false
 	}
@@ -171,14 +173,14 @@ func (r *rotationalPairSweep) obliqueAffineDepartureFraction(first *SweepSample)
 
 // A spin around the contact normal leaves both bodies' Z supports unchanged.
 // Positive relative Z travel therefore opens a whole-body gap from exact touch.
-func (r *rotationalPairSweep) horizontalSpinDepartureFraction(first *SweepSample) (*big.Rat, bool) {
+func (r *rotationalPairSweep) horizontalSpinDepartureFraction(first *sweepSample) (*big.Rat, bool) {
 	if first.Ideal.Manifold == nil || len(first.Ideal.Manifold.Points) == 0 {
 		return nil, false
 	}
 	paths := [2]rotationalSweepPath{r.a, r.b}
 	return sweepdeparture.HorizontalSpin(r.departurePaths(), first.Ideal.Manifold.Points[0].Normal.Value,
 		func(i int) (pairbox.OrientedBox, bool) {
-			box, ok := contactbox.SourceOrientedBoxAtPose(bodyNode(paths[i].body), paths[i].Path.From)
+			box, ok := contactbox.SourceOrientedBoxAtPose(paths[i].body, paths[i].Path.From)
 			return box.OrientedBox, ok
 		},
 	)
@@ -190,7 +192,7 @@ func (r *rotationalPairSweep) horizontalSpinDepartureFraction(first *SweepSample
 // omega²*(|corner.X-center.X|+|corner.Z-center.Z|). Taylor's theorem then
 // proves one positive support gap for the complete bodies through the chosen
 // duration, including every time immediately after zero.
-func (r *rotationalPairSweep) tangentAxisSpinDepartureFraction(first *SweepSample) (*big.Rat, bool) {
+func (r *rotationalPairSweep) tangentAxisSpinDepartureFraction(first *sweepSample) (*big.Rat, bool) {
 	if first.Ideal.Manifold == nil || len(first.Ideal.Manifold.Points) != 4 {
 		return nil, false
 	}
@@ -207,7 +209,7 @@ func (r *rotationalPairSweep) tangentAxisSpinDepartureFraction(first *SweepSampl
 // A rotation about an axis-normal contact face does not move either support
 // plane along that axis. A strictly increasing relative plane gap certifies
 // immediate departure even when only one body rotates.
-func (r *rotationalPairSweep) axisFaceDepartureFraction(first *SweepSample) (*big.Rat, bool) {
+func (r *rotationalPairSweep) axisFaceDepartureFraction(first *sweepSample) (*big.Rat, bool) {
 	if first.Ideal.Manifold == nil || len(first.Ideal.Manifold.Points) == 0 {
 		return nil, false
 	}
@@ -230,41 +232,41 @@ func (r *rotationalPairSweep) axisFaceDepartureFraction(first *SweepSample) (*bi
 	return sweepdeparture.AxisFace(r.departurePaths(), axis, side)
 }
 
-func (r *rotationalPairSweep) refine(ctx context.Context, left, right *SweepSample,
+func (r *rotationalPairSweep) refine(ctx context.Context, left, right *sweepSample,
 	depth int) (bool, error) {
 	lf, rf := proofarith.FloatRat(left.At.Fraction.Base()), proofarith.FloatRat(right.At.Fraction.Base())
-	if left.Ideal.Relation == ContactSeparated && right.Ideal.Relation == ContactSeparated &&
+	if left.Ideal.Relation == vocab.ContactSeparated && right.Ideal.Relation == vocab.ContactSeparated &&
 		r.intervalClear(left, right, lf, rf) {
 		return false, nil
 	}
 	width := new(big.Rat).Mul(new(big.Rat).Sub(rf, lf), r.a.Path.Duration)
 	if width.Cmp(r.resolution) <= 0 {
-		if left.Ideal.Relation == ContactSeparated && meetingRelation(right.Ideal.Relation) {
+		if left.Ideal.Relation == vocab.ContactSeparated && meetingRelation(right.Ideal.Relation) {
 			left, right, err := r.narrowBracket(ctx, left, right)
 			if err != nil {
 				return false, err
 			}
-			r.report.Outcome, r.report.Event = SweepImpactBracket, &right.Ideal
-			r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
+			r.report.Outcome, r.report.Event = vocab.SweepImpactBracket, &right.Ideal
+			r.report.Bracket = &vocab.SweepInterval{From: left.At, To: right.At}
 			r.report.SetBracketRight(seal.Key{}, new(big.Rat).Set(right.ExactFraction(seal.Key{})))
 			return true, nil
 		}
-		r.undecided(lf, rf, SweepTimeFloor)
+		r.undecided(lf, rf, vocab.SweepTimeFloor)
 		return true, nil
 	}
 	if depth >= 60 {
-		r.undecided(lf, rf, SweepFractionFloor)
+		r.undecided(lf, rf, vocab.SweepFractionFloor)
 		return true, nil
 	}
 	middle := new(big.Rat).Quo(new(big.Rat).Add(lf, rf), big.NewRat(2, 1))
 	if sweeppath.RatFloatNearest(middle) == left.At.Fraction.Base() ||
 		sweeppath.RatFloatNearest(middle) == right.At.Fraction.Base() {
-		r.undecided(lf, rf, SweepFractionFloor)
+		r.undecided(lf, rf, vocab.SweepFractionFloor)
 		return true, nil
 	}
 	sample, err := r.sample(ctx, middle)
 	if errors.Is(err, errSweepPoseBudget) {
-		r.undecided(lf, rf, SweepPoseBudget)
+		r.undecided(lf, rf, vocab.SweepPoseBudget)
 		return true, nil
 	}
 	if err != nil {
@@ -279,8 +281,8 @@ func (r *rotationalPairSweep) refine(ctx context.Context, left, right *SweepSamp
 
 // meetingRelation reports whether a sample's ideal relation closes an impact
 // bracket on its right.
-func meetingRelation(relation ContactRelation) bool {
-	return relation == ContactTouching || relation == ContactOverlapping || relation == ContactBand
+func meetingRelation(relation vocab.ContactRelation) bool {
+	return relation == vocab.ContactTouching || relation == vocab.ContactOverlapping || relation == vocab.ContactBand
 }
 
 // narrowBracket halves an impact bracket already within TimeResolution while
@@ -293,8 +295,8 @@ func meetingRelation(relation ContactRelation) bool {
 // current bracket stands at the float floor, at the pose budget, and at a
 // midpoint that settles neither, so narrowing never turns a bracket into an
 // undecided report.
-func (r *rotationalPairSweep) narrowBracket(ctx context.Context, left, right *SweepSample) (
-	*SweepSample, *SweepSample, error) {
+func (r *rotationalPairSweep) narrowBracket(ctx context.Context, left, right *sweepSample) (
+	*sweepSample, *sweepSample, error) {
 	for !r.bracketRightReplays(left, right) {
 		lf, rf := proofarith.FloatRat(left.At.Fraction.Base()), proofarith.FloatRat(right.At.Fraction.Base())
 		middle := new(big.Rat).Quo(new(big.Rat).Add(lf, rf), big.NewRat(2, 1))
@@ -312,7 +314,7 @@ func (r *rotationalPairSweep) narrowBracket(ctx context.Context, left, right *Sw
 		switch {
 		case meetingRelation(sample.Ideal.Relation):
 			right = sample
-		case sample.Ideal.Relation == ContactSeparated && r.intervalClear(left, sample, lf, middle):
+		case sample.Ideal.Relation == vocab.ContactSeparated && r.intervalClear(left, sample, lf, middle):
 			left = sample
 		default:
 			return left, right, nil
@@ -328,7 +330,7 @@ func (r *rotationalPairSweep) narrowBracket(ctx context.Context, left, right *Sw
 // deviation is the one replay charges, read at the same rounded poses. A left
 // sample without a positive gap, or a right edge whose deviation has no finite
 // bound, has nothing narrowing can settle and reports true.
-func (r *rotationalPairSweep) bracketRightReplays(left, right *SweepSample) bool {
+func (r *rotationalPairSweep) bracketRightReplays(left, right *sweepSample) bool {
 	gap := sampleLowerGap(left)
 	resolution, ok := sweeppath.ExactBaseValue(r.req.PointResolution)
 	if gap == nil || !ok {
@@ -359,7 +361,7 @@ func (r *rotationalPairSweep) bracketRightReplays(left, right *SweepSample) bool
 // overlap. Any pair clears when the coordinate hulls stay apart
 // (intervalAxisGap) or when the two proven lower gaps exceed the span's
 // travel.
-func (r *rotationalPairSweep) intervalClear(left, right *SweepSample, lf, rf *big.Rat) bool {
+func (r *rotationalPairSweep) intervalClear(left, right *sweepSample, lf, rf *big.Rat) bool {
 	if !r.planar && r.a.Path.Drift == nil && r.b.Path.Drift == nil &&
 		pairbox.OrientedIntervalSeparated(r.a.StartBox.OrientedBox, r.b.StartBox.OrientedBox,
 			r.a.Path.Delta, r.b.Path.Delta, lf, rf) {
@@ -398,9 +400,9 @@ func (r *rotationalPairSweep) sortSamples() {
 	})
 }
 
-func (r *rotationalPairSweep) undecided(from, to *big.Rat, cause SweepCause) *SweepReport {
-	r.report.Outcome, r.report.Cause = SweepUndecided, cause
-	r.report.Unresolved = &SweepInterval{From: sweeppath.Instant(from, r.a.Path.Duration),
+func (r *rotationalPairSweep) undecided(from, to *big.Rat, cause vocab.SweepCause) *sweepReport {
+	r.report.Outcome, r.report.Cause = vocab.SweepUndecided, cause
+	r.report.Unresolved = &vocab.SweepInterval{From: sweeppath.Instant(from, r.a.Path.Duration),
 		To: sweeppath.Instant(to, r.a.Path.Duration)}
 	r.sortSamples()
 	return r.report

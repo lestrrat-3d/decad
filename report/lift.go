@@ -52,3 +52,12 @@ func copyMeasurement(m *Measurement) *Measurement {
 	c := *m
 	return &c
 }
+
+// SweepEvent maps a sweep event; the event's Gap and Overlap are copied.
+func (l Lift[B1, F1, E1, V1, B2, F2, E2, V2]) SweepEvent(e *SweepEventOf[F1, E1, V1]) *SweepEventOf[F2, E2, V2] {
+	if e == nil {
+		return nil
+	}
+	return &SweepEventOf[F2, E2, V2]{At: e.At, Relation: e.Relation, Gap: copyMeasurement(e.Gap),
+		Overlap: copyMeasurement(e.Overlap), Manifold: l.Manifold(e.Manifold), Reason: e.Reason}
+}

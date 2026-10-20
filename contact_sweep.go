@@ -2,25 +2,21 @@ package decad
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"math/big"
+
+	"github.com/lestrrat-3d/decad/internal/sweeprun"
+	"github.com/lestrrat-3d/r3"
 
 	"github.com/lestrrat-3d/decad/internal/sweepproof"
-	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/seal"
 
 	"github.com/lestrrat-3d/decad/report"
 
-	"github.com/lestrrat-3d/decad/internal/contactbox"
-	"github.com/lestrrat-3d/decad/internal/contactround"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 	"github.com/lestrrat-3d/units"
 )
-
-var errSweepPoseBudget = errors.New("decad: sweep pose budget exhausted")
 
 type (
 	// PairPath names one body's motion during a two-body sweep.
@@ -120,14 +116,6 @@ type (
 	SweepReport = report.SweepReportOf[*Body, *Face, *Edge, *Vertex, *sweepproof.Proof]
 )
 
-// sweepEventOf publishes a contact producer's finished report as the ideal
-// event at at, converting it to its public form.
-func sweepEventOf(at SweepInstant, contact *nodeContactReport) SweepEvent {
-	return SweepEvent{At: at, Relation: contact.Relation,
-		Gap: contact.Gap, Overlap: contact.Overlap,
-		Manifold: contactManifoldFromInternal(contact.Manifold), Reason: contact.Reason}
-}
-
 type affinePairPath = sweeppath.AffinePath
 
 // SweepPair certifies the first encounter of two live solids under one shared
@@ -203,127 +191,13 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 	if err := validateRestSpeed(req.RestSpeed); err != nil {
 		return nil, err
 	}
-	report := &SweepReport{A: a, B: b, PathA: pathA, PathB: pathB, Request: req}
-	request := req
-	if !pa.Supported || !pb.Supported {
-		report.Outcome, report.Cause = SweepUndecided, SweepContactUnsupported
-		report.Unresolved = &SweepInterval{From: sweeppath.Instant(new(big.Rat), pa.Duration),
-			To: sweeppath.Instant(big.NewRat(1, 1), pa.Duration)}
-		return report, nil
+	hooks := sweeprun.Hooks{
+		Contact: func(ctx context.Context, poseA, poseB r3.Transform, request ContactRequest) (*nodeContactReport, error) {
+			return d.contactNodes(ctx, a, b, poseA, poseB, request)
+		},
+		Mesher: verifyAllMesher{},
 	}
-	if pa.Drift != nil || pb.Drift != nil || pa.Screw != nil || pb.Screw != nil {
-		if pa.Screw == nil && pb.Screw == nil {
-			if result, admitted, err := d.sweepRotatingSpherePair(ctx, a, b, pa, pb, request, resolution, report); admitted {
-				return result, err
-			}
-			if result, admitted, err := d.sweepRotatingSphereBox(ctx, a, b, pa, pb, request, resolution, report); admitted {
-				return result, err
-			}
-		}
-		return d.sweepRotatingPair(ctx, a, b, pa, pb, request, resolution, report)
-	}
-	boxA, okA := contactbox.SourceBoxAtPose(bodyNode(a), pa.From)
-	boxB, okB := contactbox.SourceBoxAtPose(bodyNode(b), pb.From)
-	if !okA || !okB {
-		if okA {
-			if _, faceted := b.n.Payload.(facetedPayload); faceted {
-				return d.sweepFacetedFloor(ctx, a, b, pa, pb, request, report, boxA, false)
-			}
-		}
-		if okB {
-			if _, faceted := a.n.Payload.(facetedPayload); faceted {
-				return d.sweepFacetedFloor(ctx, a, b, pa, pb, request, report, boxB, true)
-			}
-		}
-		if !okA && !okB {
-			sphereA, sphereOKA := contactround.SphereAtPose(bodyNode(a), pa.From)
-			sphereB, sphereOKB := contactround.SphereAtPose(bodyNode(b), pb.From)
-			if sphereOKA && sphereOKB {
-				pair := [2]contactround.SphereProof{sphereA, sphereB}
-				report.SetReplay(seal.Key{}, &sweepproof.Proof{PA: pa, PB: pb, SpherePair: &pair,
-					Request: request.ContactRequest})
-				return (&sourceSpherePairSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
-					req: request, report: report, sphereA: sphereA, sphereB: sphereB}).execute(ctx, resolution)
-			}
-		}
-		if okA && !okB {
-			if sphere, ok := contactround.SphereAtPose(bodyNode(b), pb.From); ok {
-				return (&sourceSphereSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
-					req: request, report: report, sphere: sphere, box: boxA}).execute(ctx, resolution)
-			}
-			if cylinder, ok := contactround.CylinderAtPose(bodyNode(b), pb.From); ok {
-				return d.sourceCylinderFaceSweep(ctx, a, b, pa, pb, request, report, cylinder, boxA, false)
-			}
-		}
-		if okB && !okA {
-			if sphere, ok := contactround.SphereAtPose(bodyNode(a), pa.From); ok {
-				return (&sourceSphereSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
-					req: request, report: report, sphere: sphere, box: boxB, sphereFirst: true}).execute(ctx, resolution)
-			}
-			if cylinder, ok := contactround.CylinderAtPose(bodyNode(a), pa.From); ok {
-				return d.sourceCylinderFaceSweep(ctx, a, b, pa, pb, request, report, cylinder, boxB, true)
-			}
-		}
-		if sphere, sphereOK := contactround.SphereAtPose(bodyNode(a), pa.From); sphereOK {
-			if box, boxOK := contactbox.SourceOrientedBoxAtPose(bodyNode(b), pb.From); boxOK {
-				return (&orientedSphereSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
-					req: request, report: report, sphere: sphere, box: box, sphereFirst: true}).execute(ctx, resolution)
-			}
-		}
-		if sphere, sphereOK := contactround.SphereAtPose(bodyNode(b), pb.From); sphereOK {
-			if box, boxOK := contactbox.SourceOrientedBoxAtPose(bodyNode(a), pa.From); boxOK {
-				return (&orientedSphereSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
-					req: request, report: report, sphere: sphere, box: box}).execute(ctx, resolution)
-			}
-		}
-		if _, orientedA := contactbox.SourceOrientedBoxAtPose(bodyNode(a), pa.From); orientedA {
-			if _, orientedB := contactbox.SourceOrientedBoxAtPose(bodyNode(b), pb.From); orientedB {
-				return d.sweepRotatingPair(ctx, a, b, pa, pb, request, resolution, report)
-			}
-		}
-		if result, admitted, err := d.sweepPlanarPair(ctx, a, b, pa, pb, request, resolution, report); admitted {
-			return result, err
-		}
-		report.Outcome, report.Cause = SweepUndecided, SweepContactUnsupported
-		report.Unresolved = &SweepInterval{From: sweeppath.Instant(new(big.Rat), pa.Duration),
-			To: sweeppath.Instant(big.NewRat(1, 1), pa.Duration)}
-		return report, nil
-	}
-	report.SetReplay(seal.Key{}, &sweepproof.Proof{PA: pa, PB: pb, BoxA: boxA, BoxB: boxB,
-		Request: request.ContactRequest})
-	run := pairSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb, req: request, report: report,
-		boxA: boxA, boxB: boxB}
-	result, err := run.execute(ctx, resolution)
-	if err != nil || result == nil {
-		return result, err
-	}
-	result.Replay(seal.Key{}).Snapshot(result.Outcome)
-	return result, nil
-}
-
-// sampleWith records a sample's exact fraction of the duration.
-func sampleWith(s SweepSample, f *big.Rat) SweepSample {
-	s.SetExactFraction(seal.Key{}, f)
-	return s
-}
-
-// sampleWithPtr is sampleWith for a sample kept by pointer.
-func sampleWithPtr(s SweepSample, f *big.Rat) *SweepSample {
-	s.SetExactFraction(seal.Key{}, f)
-	return &s
-}
-
-// publishTrack gives a producer's exact track its public handle form, keeping
-// the producer's own record for the replay proof.
-func publishTrack(track *sweepproof.Track) *SweepContactTrack {
-	return report.LiftSweepContactTrack(seal.Key{}, report.NewSweepContactTrack[*topo.Face, *topo.Edge, *topo.Vertex](seal.Key{}, track, track), handleLift)
-}
-
-// sweepTrackOf returns the producer's exact track behind a published one.
-func sweepTrackOf(track *SweepContactTrack) *sweepproof.Track {
-	if track == nil {
-		return nil
-	}
-	exact, _ := track.Source(seal.Key{}).(*sweepproof.Track)
-	return exact
+	found := sweeprun.NewReport(bodyNode(a), bodyNode(b), pathA, pathB, req)
+	result, err := sweeprun.Pair(ctx, hooks, bodyNode(a), bodyNode(b), pa, pb, req, resolution, found)
+	return report.LiftSweepReport(seal.Key{}, result, &handleLift), err
 }

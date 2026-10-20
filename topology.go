@@ -539,7 +539,7 @@ type Body struct {
 	// pairReports keeps the recent ContactPair reports this body is the
 	// first operand of; it changes no outcome either. ContactPair stores each
 	// report once and hands out copies.
-	pairReports ringmemo.Memo[pairReportKey, *ContactReport]
+	pairReports ringmemo.Memo[pairReportKey, *nodeContactReport]
 }
 
 // Document returns the document that owns (or owned) this body.

@@ -137,6 +137,18 @@ type (
 // Both bodies must be non-nil, distinct, live members of d.
 func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.Transform,
 	req ContactRequest) (*ContactReport, error) {
+	found, err := d.contactNodes(ctx, a, b, poseA, poseB, req)
+	if err != nil {
+		return nil, err
+	}
+	return handleLift.Report(found), nil
+}
+
+// contactNodes is ContactPair's answer in node form: the sweeps read it
+// directly, and ContactPair lifts it to the public handles. It keeps the
+// recent reports a is the first operand of, and returns a copy of each.
+func (d *Document) contactNodes(ctx context.Context, a, b *Body, poseA, poseB r3.Transform,
+	req ContactRequest) (*nodeContactReport, error) {
 	if a == b && a != nil {
 		return nil, fmt.Errorf("%w: contact requires distinct bodies", ErrDegenerate)
 	}
@@ -172,21 +184,19 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 	}
 	key := newPairReportKey(b, poseA, poseB, req)
 	if report, ok := a.pairReports.Load(key); ok {
-		return cloneContactReport(report), nil
+		return cloneNodeContactReport(report), nil
 	}
 	found, err := contactpair.Classify(ctx, verifyAllMesher{}, bodyNode(a), bodyNode(b), poseA, poseB, req)
 	if err != nil {
 		return nil, err
 	}
-	report := contactReportFromInternal(found)
-	a.pairReports.Store(key, report, pairReportMemoCap)
-	return cloneContactReport(report), nil
+	a.pairReports.Store(key, found, pairReportMemoCap)
+	return cloneNodeContactReport(found), nil
 }
 
 // The contact vocabulary with topology nodes as the face, edge, vertex and
 // body references, as the internal kernels produce it.
 type (
-	nodeContactFeature  = report.ContactFeatureOf[*topo.Face, *topo.Edge, *topo.Vertex]
 	nodeContactManifold = report.ContactManifoldOf[*topo.Face, *topo.Edge, *topo.Vertex]
 	nodeContactReport   = report.ContactReportOf[*topo.Body, *topo.Face, *topo.Edge, *topo.Vertex]
 )
@@ -195,21 +205,6 @@ type (
 // nil handle.
 var handleLift = report.Lift[*topo.Body, *topo.Face, *topo.Edge, *topo.Vertex, *Body, *Face, *Edge, *Vertex]{
 	Body: bodyHandle, Face: faceHandle, Edge: edgeHandle, Vertex: vertexHandle,
-}
-
-// nodeLift is handleLift's inverse.
-var nodeLift = report.Lift[*Body, *Face, *Edge, *Vertex, *topo.Body, *topo.Face, *topo.Edge, *topo.Vertex]{
-	Body: bodyNode, Face: faceNode, Edge: edgeNode, Vertex: vertexNode,
-}
-
-func contactFeatureToInternal(f ContactFeature) nodeContactFeature {
-	return nodeLift.Feature(f)
-}
-func contactManifoldFromInternal(m *nodeContactManifold) *ContactManifold {
-	return handleLift.Manifold(m)
-}
-func contactReportFromInternal(r *nodeContactReport) *ContactReport {
-	return handleLift.Report(r)
 }
 
 // pairReportMemoCap bounds one body's completed contact reports.
@@ -237,7 +232,7 @@ func newPairReportKey(b *Body, poseA, poseB r3.Transform, req ContactRequest) pa
 	return key
 }
 
-func cloneContactReport(r *ContactReport) *ContactReport {
+func cloneNodeContactReport(r *nodeContactReport) *nodeContactReport {
 	out := *r
 	if r.Gap != nil {
 		gap := *r.Gap
@@ -248,7 +243,7 @@ func cloneContactReport(r *ContactReport) *ContactReport {
 		out.Overlap = &overlap
 	}
 	if r.Manifold != nil {
-		out.Manifold = &ContactManifold{Points: slices.Clone(r.Manifold.Points)}
+		out.Manifold = &nodeContactManifold{Points: slices.Clone(r.Manifold.Points)}
 	}
 	return &out
 }

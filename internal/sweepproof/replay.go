@@ -56,7 +56,7 @@ type Proof struct {
 	SphereAxis, SphereSide     int
 	SphereGap, SphereSlope     proofarith.Dyadic
 	Rotation                   *[2]RotationalPath
-	Planar                     *planarsweep.Replay // a general planar sweep (contact_sweep_planar.go)
+	Planar                     *planarsweep.Replay // a general planar sweep (internal/sweeprun/planar.go)
 	Track                      *Track
 	Request                    vocab.ContactRequest
 	Outcome                    vocab.SweepOutcome

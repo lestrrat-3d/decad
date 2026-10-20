@@ -1,8 +1,12 @@
-package decad
+package sweeprun
 
 import (
 	"context"
 	"math/big"
+
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
+	vocab "github.com/lestrrat-3d/decad/report"
 
 	"github.com/lestrrat-3d/decad/internal/sweepproof"
 
@@ -19,20 +23,20 @@ import (
 // the source-box floor; only the affine vertical support gap can then change
 // the pair relation. A sampled negative gap is left undecided because
 // ContactPair does not yet certify overlap for this payload.
-func (d *Document) sweepFacetedFloor(ctx context.Context, a, b *Body,
-	pa, pb affinePairPath, req SweepRequest, report *SweepReport,
-	floor contactbox.SourceBox, facetedFirst bool) (*SweepReport, error) {
+func sweepFacetedFloor(ctx context.Context, h Hooks, a, b *topo.Body,
+	pa, pb affinePairPath, req vocab.SweepRequest, report *sweepReport,
+	floor contactbox.SourceBox, facetedFirst bool) (*sweepReport, error) {
 	faceted, pose, facetedDelta, floorDelta := b, pb.From, pb.Delta, pa.Delta
 	if facetedFirst {
 		faceted, pose, facetedDelta, floorDelta = a, pa.From, pa.Delta, pb.Delta
 	}
-	support, ok, err := contactfaceted.AxisSupportAtPose(ctx, bodyNode(faceted), pose)
+	support, ok, err := contactfaceted.AxisSupportAtPose(ctx, faceted, pose)
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
-		if pp, facetedPayloadOK := faceted.n.Payload.(facetedPayload); facetedPayloadOK && pp.MeshBound > 0 {
-			return d.sweepBoundedFacetedFloorClear(ctx, a, b, pa, pb, req, report, floor, facetedFirst)
+		if pp, facetedPayloadOK := faceted.Payload.(facetedrecord.Payload); facetedPayloadOK && pp.MeshBound > 0 {
+			return sweepBoundedFacetedFloorClear(ctx, h, a, b, pa, pb, req, report, floor, facetedFirst)
 		}
 		return facetedSweepUndecided(report, pa.Duration), nil
 	}
@@ -59,22 +63,22 @@ func (d *Document) sweepFacetedFloor(ctx context.Context, a, b *Body,
 	}
 	report.SetReplay(seal.Key{}, &sweepproof.Proof{PA: pa, PB: pb, BoxA: boxA, BoxB: boxB,
 		Request: req.ContactRequest})
-	run := pairSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb, req: req,
+	run := pairSweepRun{hooks: h, a: a, b: b, pa: pa, pb: pb, req: req,
 		report: report, boxA: boxA, boxB: boxB, facetedFloor: true}
 	resolution, _ := sweeppath.ExactBaseValue(req.TimeResolution)
 	result, err := run.execute(ctx, resolution)
 	if err != nil || result == nil {
 		return result, err
 	}
-	if result.Outcome == SweepUndecided || result.Outcome == SweepInitiallyOverlapping ||
-		result.Outcome == SweepImpactBracket &&
-			(result.Event == nil || result.Event.Relation != ContactTouching) {
+	if result.Outcome == vocab.SweepUndecided || result.Outcome == vocab.SweepInitiallyOverlapping ||
+		result.Outcome == vocab.SweepImpactBracket &&
+			(result.Event == nil || result.Event.Relation != vocab.ContactTouching) {
 		result.SetReplay(seal.Key{}, nil)
 		return result, nil
 	}
 	// An impact bracket may end only on exact touch. Generic source-box
 	// overlap is not a faceted-body overlap proof.
-	if result.Outcome == SweepImpactBracket {
+	if result.Outcome == vocab.SweepImpactBracket {
 		floorDelta, facetedDelta := pa.Delta, pb.Delta
 		if facetedFirst {
 			floorDelta, facetedDelta = pb.Delta, pa.Delta
@@ -84,7 +88,7 @@ func (d *Document) sweepFacetedFloor(ctx context.Context, a, b *Body,
 		endGap := new(big.Rat).Add(startGap.Rat(),
 			new(big.Rat).Mul(slope.Rat(), result.BracketRight(seal.Key{})))
 		if endGap.Sign() != 0 {
-			result.Outcome, result.Cause = SweepUndecided, SweepContactUnsupported
+			result.Outcome, result.Cause = vocab.SweepUndecided, vocab.SweepContactUnsupported
 			result.Unresolved = result.Bracket
 			result.Bracket, result.Event = nil, nil
 			result.SetBracketRight(seal.Key{}, nil)
@@ -98,9 +102,9 @@ func (d *Document) sweepFacetedFloor(ctx context.Context, a, b *Body,
 
 // sweepBoundedFacetedFloorClear uses only the Boolean boundary displacement
 // when no exact source support-face proof survives placement.
-func (d *Document) sweepBoundedFacetedFloorClear(ctx context.Context, a, b *Body,
-	pa, pb affinePairPath, req SweepRequest, report *SweepReport,
-	floor contactbox.SourceBox, facetedFirst bool) (*SweepReport, error) {
+func sweepBoundedFacetedFloorClear(ctx context.Context, h Hooks, a, b *topo.Body,
+	pa, pb affinePairPath, req vocab.SweepRequest, report *sweepReport,
+	floor contactbox.SourceBox, facetedFirst bool) (*sweepReport, error) {
 	faceted, pose, facetedDelta, floorDelta := b, pb.From, pb.Delta, pa.Delta
 	if facetedFirst {
 		faceted, pose, facetedDelta, floorDelta = a, pa.From, pa.Delta, pb.Delta
@@ -110,7 +114,7 @@ func (d *Document) sweepBoundedFacetedFloorClear(ctx context.Context, a, b *Body
 			return facetedSweepUndecided(report, pa.Duration), nil
 		}
 	}
-	extent, ok, err := contactfaceted.BoundedExtentAtPose(ctx, bodyNode(faceted), pose)
+	extent, ok, err := contactfaceted.BoundedExtentAtPose(ctx, faceted, pose)
 	if err != nil {
 		return nil, err
 	}
@@ -120,8 +124,8 @@ func (d *Document) sweepBoundedFacetedFloorClear(ctx context.Context, a, b *Body
 	// The swept boxes enclose both bodies over the whole path, so their
 	// strict separation is the clear certificate; the endpoint gaps below are
 	// the published readings.
-	sweptA, okA := sweptBoxOf(a, pa)
-	sweptB, okB := sweptBoxOf(b, pb)
+	sweptA, okA := sweptBoundsOf(a, pa)
+	sweptB, okB := sweptBoundsOf(b, pb)
 	if !okA || !okB || !sweptA.StrictlyDisjoint(sweptB) {
 		return facetedSweepUndecided(report, pa.Duration), nil
 	}
@@ -140,11 +144,11 @@ func (d *Document) sweepBoundedFacetedFloorClear(ctx context.Context, a, b *Body
 		if err != nil {
 			return nil, err
 		}
-		contact, err := d.ContactPair(ctx, a, b, poseA, poseB, req.ContactRequest)
+		contact, err := h.Contact(ctx, poseA, poseB, req.ContactRequest)
 		if err != nil {
 			return nil, err
 		}
-		if contact.Relation != ContactSeparated {
+		if contact.Relation != vocab.ContactSeparated {
 			return facetedSweepUndecided(report, pa.Duration), nil
 		}
 		observedFloor, observedExtent, deviation, ok := sweepproof.BoundedFacetedReplayBoxes(
@@ -167,11 +171,11 @@ func (d *Document) sweepBoundedFacetedFloorClear(ctx context.Context, a, b *Body
 		}
 		gap := held
 		at := sweeppath.Instant(fraction, pa.Duration)
-		report.Samples = append(report.Samples, sampleWith(SweepSample{At: at, PoseA: poseA, PoseB: poseB,
-			FloatContact: contact, Ideal: SweepEvent{At: at, Relation: ContactSeparated, Gap: &gap}}, fraction))
+		report.Samples = append(report.Samples, sampleWith(sweepSample{At: at, PoseA: poseA, PoseB: poseB,
+			FloatContact: contact, Ideal: sweepEvent{At: at, Relation: vocab.ContactSeparated, Gap: &gap}}, fraction))
 		report.PoseEvaluations++
 	}
-	report.Outcome, report.BoxExcluded = SweepClear, true
+	report.Outcome, report.BoxExcluded = vocab.SweepClear, true
 	report.SetReplay(seal.Key{}, &sweepproof.Proof{PA: pa, PB: pb, Request: req.ContactRequest,
 		BoxA: floor, BoxB: extent.Box, FacetedClear: &extent, FacetedFirst: facetedFirst})
 	if facetedFirst {
@@ -181,9 +185,9 @@ func (d *Document) sweepBoundedFacetedFloorClear(ctx context.Context, a, b *Body
 	return report, nil
 }
 
-func facetedSweepUndecided(report *SweepReport, duration *big.Rat) *SweepReport {
-	report.Outcome, report.Cause = SweepUndecided, SweepContactUnsupported
-	report.Unresolved = &SweepInterval{From: sweeppath.Instant(new(big.Rat), duration),
+func facetedSweepUndecided(report *sweepReport, duration *big.Rat) *sweepReport {
+	report.Outcome, report.Cause = vocab.SweepUndecided, vocab.SweepContactUnsupported
+	report.Unresolved = &vocab.SweepInterval{From: sweeppath.Instant(new(big.Rat), duration),
 		To: sweeppath.Instant(big.NewRat(1, 1), duration)}
 	return report
 }

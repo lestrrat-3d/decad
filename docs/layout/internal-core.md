@@ -9,6 +9,7 @@ The rules for rows live in `docs/layout.md`.
 
 | Path | Responsibility |
 |---|---|
+| `internal/sweeprun/` | The pair sweeps over topology nodes: producer selection, sampling, ideal contact, manifold transfer, departure and track proofs for boxes, spheres, cylinders, faceted floors and rotating or planar pairs. See contact-sweep §4–§7. |
 | `internal/sweepproof/` | The exact sweep proofs: the contact track behind `report.SweepContactTrackOf`, the replay proof behind `SweepReport`, and the box and track helpers they share. See contact-sweep §6–§7. |
 | `internal/seal/` | The key that opens the sealed accessors on `report/` sweep records, so only decad's own producers set a report's replay proof or a sample's exact fraction. See contact-sweep §7. |
 | `internal/payloadclass/` | The hook through which `decadtest.PayloadClass` reads a body's payload class, and the payload type name an error prints. See faceted-source-retention §10. |

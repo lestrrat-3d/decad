@@ -3,13 +3,10 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/measurement"
 
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
-
-	"github.com/lestrrat-3d/decad/internal/motionbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -94,14 +91,7 @@ func (s SweptBox) Box() Box {
 // sweeps that certify clearance by a box gap all read it. It reports false
 // when b's bounds or the path's travel bound are not finite.
 func sweptBoxOf(b *Body, p affinePairPath) (SweptBox, bool) {
-	corners, ok := sweeppath.NodeBoundsCorners(&b.n)
-	if !ok {
-		return SweptBox{}, false
-	}
-	bounds, ok := sweeppath.SweepBounds(corners, p, proofarith.DvTransform,
-		func(from r3.Transform, center r3.Vec, axis motionbound.RatVec) (*big.Rat, bool) {
-			return sweeppath.RotationalSweepRadius(&b.n, from, center, axis)
-		})
+	bounds, ok := sweeppath.NodeSweptBounds(&b.n, p)
 	if !ok {
 		return SweptBox{}, false
 	}
