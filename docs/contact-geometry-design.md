@@ -582,7 +582,7 @@ faces and reverses the normal; the ends keep their order.
 **Transformed poses.** Elsewhere, a full source cylinder `M` at any pose with a
 positive determinant against an exact planar body `S` with zero held
 displacement (multibody §9, §10.4), at its own pose, reads the plane/cylinder
-ruling directly (`classifyPlacedRuling`). `M`'s identity record gives its
+ruling directly (`contactruling.ClassifyPlacedRuling`). `M`'s identity record gives its
 axis `â`, radius `r`, length `L` and end-disk centers; the query pose maps
 the centers exactly to `c±`. The pose's float basis `B` is orthonormal only
 to rounding, so the occupied set is the identity cylinder's image under the
