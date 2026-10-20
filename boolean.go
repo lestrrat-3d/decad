@@ -553,18 +553,7 @@ func newBooleanError(op meshbool.OperationKind, code BooleanErrorCode, sentinel,
 // public wrapper owns those actions, while Verify already walks live bodies.
 // Both operands are meshed at the pair's own chord tolerance (pairMeshes).
 func evaluateBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body) (booleanEvaluation, error) {
-	return evaluateBooleanMeshes(ctx, op, a, b, pairMeshes{})
-}
-
-// operandMeshes supplies the VerifyAll mesh evaluateBooleanMeshes composes for
-// one operand, and whether the operand restates a held mesh (booloperand.HeldFloor),
-// which arms the local chain-depth gate at the pair tolerance. pairTol is the
-// pair's own chord tolerance (booloperand.PairChord). Every implementation
-// returns a mesh tessellateContext built at VerifyAll, so the mesh carries its
-// own proven bounds whatever tolerance it was asked for; the composition below
-// reads only those bounds, never the request.
-type operandMeshes interface {
-	operandMesh(ctx context.Context, b *Body, pairTol float64) (*Mesh, bool, error)
+	return evaluateBooleanMeshesWithConeCap(ctx, op, a, b, pairMeshes{}, 1, nil, nil)
 }
 
 // pairMeshes meshes each operand at the pair's own chord tolerance, raised to
@@ -572,25 +561,12 @@ type operandMeshes interface {
 // (docs/evaluator-design.md §9, tessellateBooleanOperand).
 type pairMeshes struct{}
 
-func (pairMeshes) operandMesh(ctx context.Context, b *Body, pairTol float64) (*Mesh, bool, error) {
-	return tessellateBooleanOperand(ctx, b, pairTol)
-}
-
-// evaluateBooleanMeshes is evaluateBoolean with the operand meshes drawn from
-// meshes. Verify passes its per-call cache (verifyMeshCache,
-// verify_pairs.go), which meshes each body once at one chord for every pair
-// it takes part in (docs/interference-design.md §5.3).
-func evaluateBooleanMeshes(ctx context.Context, op meshbool.OperationKind, a, b *Body, meshes operandMeshes) (booleanEvaluation, error) {
-	return evaluateBooleanMeshesAtScale(ctx, op, a, b, meshes, 1)
-}
-
-// evaluateBooleanMeshesAtScale lets one source-certified modify route ask
-// the same audited mesh Boolean for finer operand chords. A power-of-two
-// scale preserves the pair tolerance's represented value exactly, while
-// every operand still reports its own chord and occupied-volume bounds.
-func evaluateBooleanMeshesAtScale(ctx context.Context, op meshbool.OperationKind, a, b *Body,
-	meshes operandMeshes, chordScale float64) (booleanEvaluation, error) {
-	return evaluateBooleanMeshesWithConeCap(ctx, op, a, b, meshes, chordScale, nil, nil)
+func (pairMeshes) TessellateOperand(ctx context.Context, b *topo.Body, pairTol float64) (*topo.Mesh, bool, error) {
+	m, restating, err := tessellateBooleanOperand(ctx, bodyHandle(b), pairTol)
+	if err != nil {
+		return nil, false, err
+	}
+	return &m.n, restating, nil
 }
 
 // analyticBooleanBody evaluates an analytic boolean's result payload under

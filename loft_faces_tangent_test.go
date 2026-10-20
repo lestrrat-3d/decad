@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/booleaneval"
 	"github.com/lestrrat-3d/decad/internal/booloperand"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftface"
@@ -466,9 +467,9 @@ func TestLoftFacesTangentHeelIntersectKeepsTrimRecord(t *testing.T) {
 	require.NoError(t, err)
 	srcB, err := meshbool.SourceIDs(t.Context(), meshes.cone.n.Source, faceID)
 	require.NoError(t, err)
-	bmA, err := prepBoolMeshContext(t.Context(), meshes.proxy, srcA)
+	bmA, err := booleaneval.PrepBoolMesh(t.Context(), &meshes.proxy.n, srcA)
 	require.NoError(t, err)
-	bmB, err := prepBoolMeshContext(t.Context(), meshes.cone, srcB)
+	bmB, err := booleaneval.PrepBoolMesh(t.Context(), &meshes.cone.n, srcB)
 	require.NoError(t, err)
 	kept, _, err := meshbool.MeshBoolean(t.Context(), meshbool.OpIntersect, bmA, bmB, meshbool.NewContactMemo(bmA, bmB))
 	require.NoError(t, err)

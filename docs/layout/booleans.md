@@ -30,4 +30,4 @@ The rules for rows live in `docs/layout.md`.
 | `prism_scale.go` | Admits prism and full-Revolve certified similarity sources and transfers their face roles. See evaluator §8. |
 | `stack_brep_scale.go` | Admits exact line-only stacks and stack-backed BReps for certified similarity. See evaluator §8. |
 | `point_cap_extremes.go` | Resolves Split cap faces and selects the ends using facetedrecord's centroid-order proof. See loft-point design. |
-| `boolean_mesh.go` | Prepares an operand's mesh for `internal/meshbool/`, runs the cone-cap mesh boolean with the `internal/spiralsector` first curved-tooth join gates, and reads an audited mesh's volume into a measurement. See evaluator §9. |
+| `boolean_mesh.go` | Runs `internal/booleaneval`'s mesh boolean over two bodies and states the audited mesh's occupied volume as a public measurement, with the exactness the bound implies. See evaluator §9. |

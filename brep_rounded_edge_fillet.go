@@ -54,7 +54,7 @@ func tryRoundedBrepCapEdgeFillet(ctx context.Context, body *Body, bp brepPayload
 	// coarser than Verify's default limit. The exact P8 source has no
 	// restating operand, so 1/64 chords both analytic operands more finely.
 	// The same contact, stitch, and occupied-volume proofs decide the result.
-	eval, err := evaluateBooleanMeshesAtScale(ctx, meshbool.OpCut, body, tool, pairMeshes{}, 1.0/64)
+	eval, err := evaluateBooleanMeshesWithConeCap(ctx, meshbool.OpCut, body, tool, pairMeshes{}, 1.0/64, nil, nil)
 	if err != nil {
 		return nil, true, asBooleanError(meshbool.OpCut, err)
 	}

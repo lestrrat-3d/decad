@@ -6,12 +6,14 @@ import (
 	"math"
 	"sync"
 
+	"github.com/lestrrat-3d/decad/internal/booleaneval"
 	"github.com/lestrrat-3d/decad/internal/booloperand"
 	"github.com/lestrrat-3d/decad/internal/clearance/pairkernel"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -68,7 +70,7 @@ func verifyPairJobs(ctx context.Context, bodies []*BodyReport, cfg verifyConfig)
 // procedure; a solid pair takes the analytic pair kernel, then containment,
 // equality and read-only intersection measurement. geomCache is nil unless
 // clearances were asked; it and meshes must be safe for concurrent use.
-func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, geomCache *pairkernel.Cache, meshes operandMeshes) (verifyPairOutcome, error) {
+func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, geomCache *pairkernel.Cache, meshes booleaneval.OperandMesher) (verifyPairOutcome, error) {
 	var out verifyPairOutcome
 	a, b, boxProven := job.a, job.b, job.boxProven
 
@@ -311,13 +313,17 @@ func newVerifyMeshCache(ctx context.Context, jobs []verifyPairJob) (*verifyMeshC
 // restates no held mesh, so its pairs never gate it. A failed build is kept
 // like a mesh: the build is deterministic, so every pair would fail the same
 // way, and each pair maps the error to its own operand index.
-func (c *verifyMeshCache) operandMesh(ctx context.Context, b *Body, pairTol float64) (*Mesh, bool, error) {
+func (c *verifyMeshCache) TessellateOperand(ctx context.Context, node *topo.Body, pairTol float64) (*topo.Mesh, bool, error) {
+	b := bodyHandle(node)
 	e, ok := c.entries[b]
 	if !ok {
-		return pairMeshes{}.operandMesh(ctx, b, pairTol)
+		return pairMeshes{}.TessellateOperand(ctx, node, pairTol)
 	}
 	e.once.Do(func() {
 		e.mesh, e.err = tessellateContext(ctx, b, units.Millimeters(e.chord), VerifyAll)
 	})
-	return e.mesh, false, e.err
+	if e.err != nil {
+		return nil, false, e.err
+	}
+	return &e.mesh.n, false, nil
 }

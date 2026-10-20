@@ -15,6 +15,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -283,15 +284,15 @@ type tangentHeelMeshes struct {
 	proxy, cone *Mesh
 }
 
-func (m *tangentHeelMeshes) operandMesh(ctx context.Context, b *Body, pairTol float64) (*Mesh, bool, error) {
-	mesh, restating, err := tessellateBooleanOperand(ctx, b, pairTol)
+func (m *tangentHeelMeshes) TessellateOperand(ctx context.Context, node *topo.Body, pairTol float64) (*topo.Mesh, bool, error) {
+	mesh, restating, err := tessellateBooleanOperand(ctx, bodyHandle(node), pairTol)
 	if err != nil {
-		return mesh, restating, err
+		return nil, restating, err
 	}
-	if b != m.target {
+	if node != bodyNode(m.target) {
 		verts, tris := mesh.n.Vertices, mesh.n.Triangles
 		m.coneVerts, m.coneTris, m.cone = verts, tris, mesh
-		return mesh, restating, nil
+		return &mesh.n, restating, nil
 	}
 	proxyNode, slab, err := revolveloftfaces.ExtendTangentCap(ctx, &mesh.n, m.toe, m.plane)
 	if err != nil {
@@ -299,7 +300,7 @@ func (m *tangentHeelMeshes) operandMesh(ctx context.Context, b *Body, pairTol fl
 	}
 	proxy := bornMesh(&Mesh{n: *proxyNode})
 	m.slab, m.hasSlab, m.pairTol, m.proxy = slab, true, pairTol, proxy
-	return proxy, restating, nil
+	return &proxy.n, restating, nil
 }
 
 // clearsResult runs the held-only part of Gate E5 on the meshes the last
