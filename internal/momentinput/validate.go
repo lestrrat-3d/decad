@@ -516,3 +516,19 @@ func shiftPoints(points []Point2, shift func(Point2) Point2) []Point2 {
 	}
 	return out
 }
+
+// AllLines reports whether every loop of the profile is a non-empty chain of
+// straight segments.
+func (profile Profile) AllLines() bool {
+	for _, loop := range append([]sectionrecord.LoopRecord{profile.Outer}, profile.Holes...) {
+		if len(loop.Segments) == 0 {
+			return false
+		}
+		for _, segment := range loop.Segments {
+			if _, ok := segment.(sectionrecord.LineSeg); !ok {
+				return false
+			}
+		}
+	}
+	return true
+}

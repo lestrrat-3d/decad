@@ -26,7 +26,7 @@ import (
 // occupied volume, and closure before the caller's body is retired.
 func tryRoundedBrepCapEdgeFillet(ctx context.Context, body *Body, bp brepPayload,
 	edges []*Edge, radius, radiusDelta float64) (*Body, bool, error) {
-	if !p8QuarterRadius(radius) || radiusDelta != 0 || len(edges) != 1 || !breprecord.IsP8Rounded(bp) {
+	if !breprecord.P8QuarterRadius(radius) || radiusDelta != 0 || len(edges) != 1 || !breprecord.IsP8Rounded(bp) {
 		return nil, false, nil
 	}
 	edge := edges[0]
@@ -67,16 +67,4 @@ func tryRoundedBrepCapEdgeFillet(ctx context.Context, body *Body, bp brepPayload
 	}
 	d.commitSpan(out, 2, body)
 	return out, true, nil
-}
-
-// These quarter-millimeter radii are represented exactly in binary. The
-// quarter-cylinder cutter and its P8 clearance were checked at each value;
-// a wider radius interval needs its own contact and Verify bound.
-func p8QuarterRadius(radius float64) bool {
-	switch radius {
-	case 0.25, 0.5, 0.75, 1:
-		return true
-	default:
-		return false
-	}
 }

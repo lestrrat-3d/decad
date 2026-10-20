@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/featureoption"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
 
 	"github.com/lestrrat-3d/decad/internal/chainrecord"
@@ -304,7 +305,7 @@ func (d *Document) resolveLinearExtent(e Extent, frame r3.Frame) (linearSweep, e
 			return linearSweep{}, fmt.Errorf(`%w: a zero-distance extent sweeps no solid`, ErrDegenerate)
 		}
 		named := append(append([]producerID(nil), one.named...), two.named...)
-		refs := dedupRefs(append(append(named, one.through...), two.through...))
+		refs := provenance.DedupProducers(append(append(named, one.through...), two.through...))
 		return linearSweep{z0: two.z, z1: one.z, z0Delta: two.delta, z1Delta: one.delta, inputs: refs}, nil
 	case ThroughAll:
 		// An unknown Direction is malformed input, never silently Along.

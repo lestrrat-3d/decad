@@ -437,7 +437,7 @@ func oracleLoftMirrorCylinderPairs(ctx context.Context, d *Document, ref produce
 	if !lowOK || !upOK || !lower.AuthenticatedReconstruction ||
 		!upper.AuthenticatedReconstruction || lower.SourceIdentity == nil ||
 		lower.SourceIdentity != upper.SourceIdentity ||
-		lower.Xform != r3.Identity() || !loftMirrorAxialSource(lower) {
+		lower.Xform != r3.Identity() || !lower.MirrorAxialSource() {
 		return nil, false, nil
 	}
 	reflection, err := r3.Reflection(lower.Frame1)

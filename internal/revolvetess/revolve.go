@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -685,4 +686,23 @@ func publishRevolveProof(m *topo.Mesh, faceCells map[*topo.Face]revFaceExtent, p
 	m.VolSymDiff = sym
 	m.SymDiffOK = true
 	return nil
+}
+
+// ArcRole maps the revolve reduction's source roles to those minted by
+// sweeprecord.FinishArc. A reversed axis exchanges only the two cap names.
+func ArcRole(reverseCaps bool) func(string) string {
+	return func(role string) string {
+		if suffix, ok := strings.CutPrefix(role, "side("); ok {
+			return "side(0," + suffix
+		}
+		if reverseCaps {
+			switch role {
+			case provenance.RoleCapStart:
+				return provenance.RoleCapEnd
+			case provenance.RoleCapEnd:
+				return provenance.RoleCapStart
+			}
+		}
+		return role
+	}
 }

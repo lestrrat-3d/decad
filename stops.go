@@ -200,25 +200,6 @@ func (d *Document) resolveThroughAll(frame r3.Frame, travel float64) (float64, f
 	return stops.Finish()
 }
 
-// dedupRefs deduplicates recorded stop refs preserving first occurrence
-// returning nil when there are no dependencies
-// no Inputs at all.
-func dedupRefs(refs []producerID) []producerID {
-	if len(refs) == 0 {
-		return nil
-	}
-	seen := make(map[producerID]struct{}, len(refs))
-	out := make([]producerID, 0, len(refs))
-	for _, r := range refs {
-		if _, ok := seen[r]; ok {
-			continue
-		}
-		seen[r] = struct{}{}
-		out = append(out, r)
-	}
-	return out
-}
-
 // angularStops is what a ToFaceAngular resolution needs of the revolve's
 // resolved axis: a point on the axis, the CALLER's unit axis direction (the
 // sense Along is right-handed about — the sweep interval is resolved in the

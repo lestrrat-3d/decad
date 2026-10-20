@@ -86,24 +86,6 @@ func (d *Document) sweepRotatingSphereBox(ctx context.Context, a, b *Body,
 	return result, true, err
 }
 
-func sourceSpherePathPoseAt(path affinePairPath, f *big.Rat) (r3.Transform, error) {
-	if path.Drift != nil {
-		pose, err := path.RoundedPoseAt(f)
-		if err != nil {
-			return r3.Transform{}, err
-		}
-		if f.Sign() == 0 {
-			return pose, nil
-		}
-		start := path.From.Translation()
-		center := r3.Vec{X: start.X + sweeppath.RatFloatNearest(new(big.Rat).Mul(path.Delta[0].Rat(), f)),
-			Y: start.Y + sweeppath.RatFloatNearest(new(big.Rat).Mul(path.Delta[1].Rat(), f)),
-			Z: start.Z + sweeppath.RatFloatNearest(new(big.Rat).Mul(path.Delta[2].Rat(), f))}
-		return r3.FromBasis(pose.Basis(), center)
-	}
-	return path.PoseAt(f)
-}
-
 func translatedContactBox(box sourceBoxContactProof, delta [3]proofarith.Dyadic,
 	f *big.Rat) (sourceBoxContactProof, bool) {
 	fraction, ok := proofarith.DyOfRat(f)
@@ -143,11 +125,11 @@ func (r *sourceSphereSweepRun) sample(ctx context.Context, f *big.Rat) (*SweepSa
 	if r.report.PoseEvaluations >= r.req.MaxPoseEvaluations {
 		return nil, errSweepPoseBudget
 	}
-	poseA, err := sourceSpherePathPoseAt(r.pa, f)
+	poseA, err := r.pa.SpherePoseAt(f)
 	if err != nil {
 		return nil, err
 	}
-	poseB, err := sourceSpherePathPoseAt(r.pb, f)
+	poseB, err := r.pb.SpherePoseAt(f)
 	if err != nil {
 		return nil, err
 	}

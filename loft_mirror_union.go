@@ -7,7 +7,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/booloperand"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
-	"github.com/lestrrat-3d/decad/internal/facetedtopology"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
@@ -36,7 +35,7 @@ func tryLoftMirrorUnion(ctx context.Context, op meshbool.OperationKind,
 		lower.SourceIdentity != upper.SourceIdentity {
 		return nil, false, nil
 	}
-	if !loftMirrorAxialSource(lower) || lower.Frame0 != upper.Frame0 ||
+	if !lower.MirrorAxialSource() || lower.Frame0 != upper.Frame0 ||
 		lower.Frame1 != upper.Frame1 || lower.Plane0 != upper.Plane0 ||
 		lower.Plane1 != upper.Plane1 || !slices.Equal(lower.Alignment, upper.Alignment) {
 		return nil, false, nil
@@ -67,16 +66,6 @@ func tryLoftMirrorUnion(ctx context.Context, op meshbool.OperationKind,
 	return body, true, err
 }
 
-func loftMirrorAxialSource(lp loftPayload) bool {
-	for _, f := range []r3.Frame{lp.Frame0, lp.Frame1} {
-		if f.U() != (r3.Vec{X: 1}) || f.V() != (r3.Vec{Y: 1}) ||
-			f.Origin().X != 0 || f.Origin().Y != 0 {
-			return false
-		}
-	}
-	return lp.Frame0.Origin().Z < lp.Frame1.Origin().Z
-}
-
 func buildLoftMirrorUnion(ctx context.Context, d *Document, ref producerID,
 	lowerBody, upperBody *Body, lower, upper loftPayload) (*Body, error) {
 	n := len(lower.Verts) / 2
@@ -92,7 +81,7 @@ func buildLoftMirrorUnion(ctx context.Context, d *Document, ref producerID,
 			return nil, fmt.Errorf("%w: reflected loft cap stations differ", ErrUnsupported)
 		}
 	}
-	if !loftMirrorCapTrianglesMatch(lower, upper) {
+	if !lower.MirrorCapTrianglesMatch(upper) {
 		return nil, fmt.Errorf("%w: reflected loft cap triangles do not oppose", ErrUnsupported)
 	}
 	lowerMesh, err := lowerBody.Tessellate(ctx, units.Millimeters(0.1), WithVerification(VerifyAll))
@@ -214,24 +203,4 @@ func buildLoftMirrorUnion(ctx context.Context, d *Document, ref producerID,
 func loftMirrorMeshMatchesPayload(mesh *Mesh, lp loftPayload) bool {
 	return slices.Equal(mesh.n.Vertices, lp.Verts) && slices.Equal(mesh.n.Triangles, lp.Tris) &&
 		len(mesh.n.Source) == len(lp.Tris)
-}
-
-func loftMirrorCapTrianglesMatch(lower, upper loftPayload) bool {
-	start := lower.Walls + lower.CapStartCount
-	indices := make(map[[3]int]int, len(lower.Tris)-start)
-	for _, triangle := range lower.Tris[start:] {
-		key, sign := facetedtopology.SortedTriangle(triangle)
-		if indices[key] != 0 {
-			return false
-		}
-		indices[key] = sign
-	}
-	for _, triangle := range upper.Tris[start:] {
-		key, sign := facetedtopology.SortedTriangle(triangle)
-		if indices[key] != -sign {
-			return false
-		}
-		delete(indices, key)
-	}
-	return len(indices) == 0
 }
