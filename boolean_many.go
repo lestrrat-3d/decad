@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismboolean"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
+	"github.com/lestrrat-3d/decad/internal/prismpattern"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
@@ -61,7 +62,10 @@ func performUnionMany(ctx context.Context, operands []*Body) (*Body, error) {
 		body, matched, err = tryRevolveLoftSectorUnionMany(ctx, d, ref, operands)
 	}
 	if !matched && err == nil {
-		body, matched, err = tryPrismPatternUnionMany(ctx, d, ref, operands)
+		var node *topo.Body
+		node, matched, err = prismpattern.UnionMany(ctx, envOf(documentNode(d), ref), verifyAllMesher{},
+			bodyNodes(operands))
+		body = bodyHandle(node)
 	}
 	if !matched && err == nil {
 		body, matched, err = tryStraightLoftPrismUnionMany(ctx, d, ref, operands)

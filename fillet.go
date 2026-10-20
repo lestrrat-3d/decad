@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/modifyselect"
 	"github.com/lestrrat-3d/decad/internal/obliqueboss"
+	"github.com/lestrrat-3d/decad/internal/prismpattern"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sweeprecord"
@@ -274,11 +275,12 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 		}
 	}
 	if fp, ok := b.n.Payload.(facetedPayload); ok && fp.PrismPatternJoin != nil {
-		out, err := prismPatternFilletBody(ctx, b, edges, rmm, rDelta)
+		out, err := prismpattern.FilletBody(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), verifyAllMesher{},
+			&b.n, edgeNodes(edges), rmm, rDelta)
 		if err != nil {
 			return nil, err
 		}
-		return commitModifyResult(ctx, b, out)
+		return commitModifyResult(ctx, b, bodyHandle(out))
 	}
 
 	// Stage 2 (§4): the receiver's payload class (S3), then every selected
