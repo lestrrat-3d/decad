@@ -6,6 +6,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -39,7 +40,7 @@ func DraftUndercuts(b *topo.Body, dp draftrecord.Payload, pull r3.Vec) reportvoc
 	if !okM {
 		return undercutOutcome{}
 	}
-	roles := facesByRole(b)
+	roles := topobuild.FacesByRole(b)
 	faces := []*topo.Face{}
 	undecided := false
 	if !PatchUndercuts(roles, pl, dp.Patches, p, &faces, &undecided) {

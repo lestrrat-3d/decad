@@ -228,7 +228,6 @@ type allEdgeChamferPayload = breprecord.AllEdgeChamferPayload
 // reading.
 type (
 	brepPayload  = breprecord.Payload
-	brepFace     = breprecord.Face
 	brepBandKind = breprecord.BandKind
 	brepTopology = breprecord.Topology
 )

@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/stackedshell"
+	"github.com/lestrrat-3d/decad/internal/throughshell"
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
@@ -115,7 +116,7 @@ func modifyBrepReceiver(ctx context.Context, b *Body, req brepModifyRequest) (br
 // shell of a brep or stacked receiver that reads as no prism whose caps are
 // the removed faces. refusal is route P's classification refusal where some
 // axis read as a prism (brep-modify SB3), and nil where none did (SB10);
-// shellThroughCut names it when the record reads as no through-cut record
+// throughshell.ShellCut names it when the record reads as no through-cut record
 // either (SG3), unless one of the bounded stacked routes matches first.
 func brepShellThroughCut(ctx context.Context, b *Body, bp brepPayload, req brepModifyRequest, refusal error) (*Body, error) {
 	if sp, ok := b.n.Payload.(stackedPrismPayload); ok {
@@ -125,7 +126,10 @@ func brepShellThroughCut(ctx context.Context, b *Body, bp brepPayload, req brepM
 			return bodyResult(n, err)
 		}
 	}
-	return shellThroughCut(ctx, b, bp, req.shellCall, refusal)
+	call := req.shellCall
+	return bodyResult(throughshell.ShellCut(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), &b.n, bp, throughshell.Call{
+		Removed: faceNodes(call.removed), Inward: call.sense == Inward, T: call.t,
+		Tmm: call.tmm, TDelta: call.tDelta, Tol: shellTol}, refusal))
 }
 
 // commitModifyResult commits a modify op's result in place of its receiver,
@@ -282,27 +286,11 @@ func (r brepPrismRead) caps(b *Body, bp brepPayload) prismCaps {
 	}
 }
 
-func prismFaceRecord(f brepFace) brepgeom.PrismRectFace {
-	return brepgeom.PrismRectFace{
-		Frame: f.Frame, Region: f.Region, Wall: f.Wall, Z0: f.Z0, Z1: f.Z1,
-		Z0Delta: f.Z0Delta, Z1Delta: f.Z1Delta, Split0: len(f.Side0) != 0,
-		Split1: len(f.Side1) != 0, Outward: f.Outward, Role: f.Role,
-	}
-}
-
-func prismFaceRecords(bp brepPayload) []brepgeom.PrismRectFace {
-	faces := make([]brepgeom.PrismRectFace, len(bp.Faces))
-	for i, f := range bp.Faces {
-		faces[i] = prismFaceRecord(f)
-	}
-	return faces
-}
-
 // recognisePrism reads the record as a prism along reference axis k, or
 // reports false (brep-modify §4.1, P1–P5): brepgeom.ReadPrismCaps for P1, P3 and P4,
 // then brepgeom.ClassifyPrismWalls for P2 and P5. The error is a context error only.
 func recognisePrism(ctx context.Context, bp brepPayload, embeds []brepEmbed, k int) (brepPrismRead, bool, error) {
-	faces := prismFaceRecords(bp)
+	faces := bp.PrismFaceRecords()
 	caps, ok := brepgeom.ReadPrismCaps(faces, embeds, k)
 	if !ok {
 		return brepPrismRead{}, false, nil

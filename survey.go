@@ -8,7 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/radiussurvey"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
-	"github.com/lestrrat-3d/decad/internal/selectorquery"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -99,19 +99,10 @@ type radiusOutcome struct {
 
 // facesByRole indexes a body's faces by their own-step feature role.
 func facesByRole(b *Body) map[string]*Face {
-	step := b.n.Origin.Producer
-	faces := b.Faces()
-	faceRoles := make([][]string, len(faces))
-	for i, f := range faces {
-		for _, o := range f.n.Origins {
-			if o.Producer == step {
-				faceRoles[i] = append(faceRoles[i], o.Role)
-			}
-		}
-	}
-	m := make(map[string]*Face)
-	for role, i := range selectorquery.RoleIndex(faceRoles) {
-		m[role] = faces[i]
+	nodes := topobuild.FacesByRole(&b.n)
+	m := make(map[string]*Face, len(nodes))
+	for role, f := range nodes {
+		m[role] = faceHandle(f)
 	}
 	return m
 }

@@ -15,7 +15,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/revolvesurvey"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
-	"github.com/lestrrat-3d/decad/internal/selectorquery"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
@@ -24,24 +23,6 @@ import (
 )
 
 type outcome = reportvocab.UndercutSurvey[*topo.Face]
-
-// facesByRole selects the last face carrying each role from this body's step.
-func facesByRole(b *topo.Body) map[string]*topo.Face {
-	faces := topobuild.Faces(b)
-	faceRoles := make([][]string, len(faces))
-	for i, f := range faces {
-		for _, o := range f.Origins {
-			if o.Producer == b.Origin.Producer {
-				faceRoles[i] = append(faceRoles[i], o.Role)
-			}
-		}
-	}
-	roles := make(map[string]*topo.Face)
-	for role, i := range selectorquery.RoleIndex(faceRoles) {
-		roles[role] = faces[i]
-	}
-	return roles
-}
 
 func listVerdict(faces *[]*topo.Face, undecided *bool, f *topo.Face, verdict survey2d.PullVerdict, ok bool) bool {
 	if !ok {
@@ -83,7 +64,7 @@ func Prism(b *topo.Body, pp prismrecord.Payload, pull r3.Vec) reportvocab.Underc
 	if !okM {
 		return outcome{}
 	}
-	roles := facesByRole(b)
+	roles := topobuild.FacesByRole(b)
 	loops, err := boundarywalk.SurveyLoops(nil, boundarywalk.Profile(pp.Profile))
 	if err != nil {
 		return outcome{}
@@ -144,7 +125,7 @@ func Revolve(b *topo.Body, rp revolveplan.Payload, pull r3.Vec) reportvocab.Unde
 	pw := rp.Xform.ApplyDir(bas.W).Dot(p)
 	c0 := rp.Xform.ApplyDir(bas.E0).Dot(p)
 	c1 := rp.Xform.ApplyDir(bas.E1).Dot(p)
-	roles := facesByRole(b)
+	roles := topobuild.FacesByRole(b)
 	loops, err := wallsurvey.RevolveLoops(nil, rp.Profile, rp.Ax)
 	if err != nil {
 		return outcome{}
@@ -196,7 +177,7 @@ func Cup(b *topo.Body, cp cupwall.View, pull r3.Vec) reportvocab.UndercutSurvey[
 	if !okM {
 		return outcome{}
 	}
-	roles := facesByRole(b)
+	roles := topobuild.FacesByRole(b)
 
 	faces := []*topo.Face{}
 	undecided := false
