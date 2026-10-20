@@ -4,61 +4,11 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
-
-func TestLoftCapConeProofRequiresStrictWholeCapSeparation(t *testing.T) {
-	zero, one := lfZero(), lfOne()
-	near := big.NewRat(10000000000000001, 10000000000000000)
-	m := loftFaceMap{
-		Constant: loftFaceRatVec{zero, zero, zero},
-		Q0:       loftFaceRatVec{big.NewRat(10, 1), zero, zero},
-		QU:       loftFaceRatVec{one, near, zero},
-		QV:       loftFaceRatVec{zero, zero, big.NewRat(3, 1)},
-		G0:       one, GU: zero, GV: zero,
-	}
-	box := [4]*big.Rat{big.NewRat(-3, 1), big.NewRat(-1, 1), big.NewRat(-1, 1), one}
-	cone := &pointConeLimit{Apex: big.NewRat(10, 1), Far: zero, Slope: one}
-	if !loftCapOutsideHeelCone(m, box, cone) {
-		t.Fatal("the exact positive quadratic with a small radial margin was refused")
-	}
-	changed := m
-	changed.QU[1] = one
-	if loftCapOutsideHeelCone(changed, box, cone) {
-		t.Fatal("a cap that touches the cone at v=0 was admitted")
-	}
-	changed = m
-	changed.QV[1] = one
-	if loftCapOutsideHeelCone(changed, box, cone) {
-		t.Fatal("an uncertified cross term was admitted")
-	}
-	box[1] = one
-	if loftCapOutsideHeelCone(m, box, cone) {
-		t.Fatal("a source rectangle containing the quadratic zero was admitted")
-	}
-}
-
-func TestLoftCapToeConeProofUsesWholeSourceBox(t *testing.T) {
-	zero, one := lfZero(), lfOne()
-	m := loftFaceMap{
-		Constant: loftFaceRatVec{zero, zero, zero},
-		Q0:       loftFaceRatVec{big.NewRat(5, 1), big.NewRat(10, 1), zero},
-		QU:       loftFaceRatVec{zero, zero, zero},
-		QV:       loftFaceRatVec{zero, zero, zero},
-		G0:       one, GU: zero, GV: zero,
-	}
-	box := [4]*big.Rat{big.NewRat(-3, 1), big.NewRat(-1, 1), big.NewRat(-1, 1), one}
-	cone := &pointConeLimit{Apex: big.NewRat(8, 1), Far: zero, Slope: one}
-	if !loftCapOutsideToeCone(m, box, cone) {
-		t.Fatal("the cap strictly outside the toe cone was refused")
-	}
-	m.Q0[1] = big.NewRat(2, 1)
-	if loftCapOutsideToeCone(m, box, cone) {
-		t.Fatal("the cap inside the toe cone was admitted")
-	}
-}
 
 func TestLoftFacesCapRecordChecksVariableSourceShape(t *testing.T) {
 	source := &pointSectionRecord{SourceStation: make([]planePoint, 4)}
@@ -126,7 +76,7 @@ func TestLoftCapTangentToHeelCone(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, plane)
 	require.Equal(t, 1, plane.Side)
-	require.False(t, loftCapOutsideHeelCone(final, box, cone), "the tangent cap is not on the strict path")
+	require.False(t, facetedrecord.CapOutsideHeelCone(final, box, cone), "the tangent cap is not on the strict path")
 
 	plain := record()
 	plain.Tangent = nil

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/booloperand"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -704,7 +705,7 @@ func TestLoftFacesTangentHeelRefusesOtherCone(t *testing.T) {
 	require.False(t, c.loftRecord.Tangent.MatchesCone(limit.Apex, limit.Slope))
 	box, err := revolveloftfaces.LfSourceBox(c.loftRecord.Source)
 	require.NoError(t, err)
-	require.False(t, loftCapOutsideHeelCone(c.loftRecord.Final, box, limit))
+	require.False(t, facetedrecord.CapOutsideHeelCone(c.loftRecord.Final, box, limit))
 	plane, err := loftCapTangentToHeelCone(c.loftRecord, box, limit)
 	require.NoError(t, err)
 	require.Nil(t, plane, "the record gate fails")
