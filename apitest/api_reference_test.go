@@ -15,7 +15,7 @@ import (
 // exportedNames returns the exported top-level identifiers of the package in
 // dir and, per receiver type, its exported method names. Test files are
 // skipped: the reference documents the library, not its tests.
-func exportedNames(t *testing.T, dir string) (map[string]bool, map[string]map[string]bool) {
+func exportedNames(t *testing.T, dir string) (map[string]bool, map[string]map[string]bool, []string) {
 	t.Helper()
 	fset := token.NewFileSet()
 	pkgs, err := parser.ParseDir(fset, dir, func(fi os.FileInfo) bool {
@@ -24,6 +24,7 @@ func exportedNames(t *testing.T, dir string) (map[string]bool, map[string]map[st
 	require.NoError(t, err)
 	names := map[string]bool{}
 	methods := map[string]map[string]bool{}
+	var types []string
 	for _, pkg := range pkgs {
 		for _, f := range pkg.Files {
 			for _, decl := range f.Decls {
@@ -54,6 +55,21 @@ func exportedNames(t *testing.T, dir string) (map[string]bool, map[string]map[st
 						switch s := spec.(type) {
 						case *ast.TypeSpec:
 							names[s.Name.Name] = true
+							if s.Name.IsExported() {
+								types = append(types, s.Name.Name)
+							}
+							if st, ok := s.Type.(*ast.StructType); ok {
+								for _, fld := range st.Fields.List {
+									for _, n := range fld.Names {
+										if n.IsExported() {
+											if methods[s.Name.Name] == nil {
+												methods[s.Name.Name] = map[string]bool{}
+											}
+											methods[s.Name.Name][n.Name] = true
+										}
+									}
+								}
+							}
 						case *ast.ValueSpec:
 							for _, n := range s.Names {
 								names[n.Name] = true
@@ -64,7 +80,7 @@ func exportedNames(t *testing.T, dir string) (map[string]bool, map[string]map[st
 			}
 		}
 	}
-	return names, methods
+	return names, methods, types
 }
 
 // TestAPIReferenceNamesExist fails when docs/api.md names a root or export
@@ -76,8 +92,8 @@ func TestAPIReferenceNamesExist(t *testing.T) {
 	require.NoError(t, err)
 	doc := string(raw)
 
-	rootNames, rootMethods := exportedNames(t, "..")
-	exportNames, _ := exportedNames(t, "../export")
+	rootNames, rootMethods, rootTypes := exportedNames(t, "..")
+	exportNames, _, _ := exportedNames(t, "../export")
 
 	var missing []string
 	for _, m := range regexp.MustCompile(`\bdecad\.([A-Z]\w*)`).FindAllStringSubmatch(doc, -1) {
@@ -99,4 +115,12 @@ func TestAPIReferenceNamesExist(t *testing.T) {
 		}
 	}
 	require.Empty(t, missing, "docs/api.md names identifiers that do not exist")
+
+	var unlisted []string
+	for _, name := range rootTypes {
+		if !strings.Contains(doc, "`decad."+name+"`") {
+			unlisted = append(unlisted, name)
+		}
+	}
+	require.Empty(t, unlisted, "docs/api.md Type index omits exported types")
 }
