@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/booloperand"
-	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/classbgeom"
 	"github.com/lestrrat-3d/decad/internal/crossbore"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
@@ -283,7 +282,7 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 		}
 		return nil, err
 	} else if ok {
-		return analyticBooleanBody(ctx, d, ref, pp)
+		return bodyResult(prismboolean.AnalyticBody(ctx, envOf(documentNode(d), ref), pp))
 	}
 	// docs/prism-boolean-design.md: a reject-only analytic reduction for a
 	// co-directional coplanar prism pair, dispatched ahead of the mesh path
@@ -318,7 +317,7 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 			}
 			return nil, err
 		} else if ok {
-			return analyticBooleanBody(ctx, d, ref, payload)
+			return bodyResult(prismboolean.AnalyticBody(ctx, envOf(documentNode(d), ref), payload))
 		}
 		// docs/general-boolean-design.md §3 A1: unequal sweep intervals that
 		// overlap or touch build a stacked prism, or a brep where an
@@ -329,7 +328,7 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 			}
 			return nil, err
 		} else if ok {
-			body, err := analyticBooleanBody(ctx, d, ref, payload)
+			body, err := bodyResult(prismboolean.AnalyticBody(ctx, envOf(documentNode(d), ref), payload))
 			if err != nil {
 				return nil, err
 			}
@@ -346,7 +345,7 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 			}
 			return nil, err
 		} else if ok {
-			return analyticBooleanBody(ctx, d, ref, payload)
+			return bodyResult(prismboolean.AnalyticBody(ctx, envOf(documentNode(d), ref), payload))
 		}
 	}
 	if op == meshbool.OpCut {
@@ -388,7 +387,7 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 		if bp, ok, err := prismboolean.TryCrossingBlindCut(ctx, a.n.Payload, b.n.Payload); err != nil {
 			return nil, err
 		} else if ok {
-			return analyticBooleanBody(ctx, d, ref, bp)
+			return bodyResult(prismboolean.AnalyticBody(ctx, envOf(documentNode(d), ref), bp))
 		}
 		if sp, ok, err := prismboolean.TryBlindStackedCut(ctx, a.n.Payload, b.n.Payload); err != nil {
 			if errors.Is(err, ErrUnsupported) {
@@ -412,7 +411,7 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 			}
 			return nil, err
 		} else if ok {
-			return analyticBooleanBody(ctx, d, ref, pp)
+			return bodyResult(prismboolean.AnalyticBody(ctx, envOf(documentNode(d), ref), pp))
 		}
 	}
 	// docs/general-boolean-design.md §3 class B: a perpendicular pair with a
@@ -424,7 +423,7 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 		}
 		return nil, err
 	} else if ok {
-		return analyticBooleanBody(ctx, d, ref, payload)
+		return bodyResult(prismboolean.AnalyticBody(ctx, envOf(documentNode(d), ref), payload))
 	}
 	if body, ok, err := tryCommonAxisRevolveBoolean(ctx, op, d, ref, a, b); err != nil {
 		if errors.Is(err, ErrUnsupported) {
@@ -575,21 +574,6 @@ func (pairMeshes) TessellateOperand(ctx context.Context, b *topo.Body, pairTol f
 		return nil, false, err
 	}
 	return &m.n, restating, nil
-}
-
-// analyticBooleanBody evaluates an analytic boolean's result payload under
-// producer identity ref, without committing it.
-func analyticBooleanBody(ctx context.Context, d *Document, ref producerID, payload topo.Payload) (*Body, error) {
-	switch p := payload.(type) {
-	case prismPayload:
-		return bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), ref), p, freeform.NewFreeformWork()))
-	case stackedPrismPayload:
-		return bodyResult(stackedrecord.Build(ctx, envOf(documentNode(d), ref), p, stackedrecord.OwnPlan{}))
-	case brepPayload:
-		return bodyResult(breprecord.Build(ctx, envOf(documentNode(d), ref), p))
-	default:
-		return nil, fmt.Errorf(`%w: an analytic boolean produced a %T payload`, ErrUnsupported, payload)
-	}
 }
 
 // tryClassB attempts op over the pair of bodies. ok=false (err nil) is a
