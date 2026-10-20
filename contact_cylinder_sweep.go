@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/seal"
+
 	"github.com/lestrrat-3d/decad/internal/contactbox"
 	"github.com/lestrrat-3d/decad/internal/contactround"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
@@ -103,15 +105,15 @@ func (d *Document) sourceCylinderFaceSweep(ctx context.Context, a, b *Body,
 		}
 		at := sweepInstant(fraction, pa.Duration)
 		ideal := SweepEvent{At: at, Relation: ContactSeparated, Gap: contact.Gap}
-		report.Samples = append(report.Samples, SweepSample{At: at, PoseA: poses[0], PoseB: poses[1],
-			FloatContact: contact, Ideal: ideal, exactFraction: fraction})
+		report.Samples = append(report.Samples, sampleWith(SweepSample{At: at, PoseA: poses[0], PoseB: poses[1],
+			FloatContact: contact, Ideal: ideal}, fraction))
 		report.PoseEvaluations++
 	}
 	report.Outcome, report.BoxExcluded = SweepClear, true
-	report.replay = &sweepReplayProof{pa: pa, pb: pb, request: req.ContactRequest,
+	report.SetReplay(seal.Key{}, &sweepReplayProof{pa: pa, pb: pb, request: req.ContactRequest,
 		cylinder: &cylinder, cylinderFirst: cylinderFirst, boxA: firstBox, boxB: secondBox,
-		clearAxis: axis, clearSign: sign, clearGap: gap}
-	report.replay.snapshot(report)
+		clearAxis: axis, clearSign: sign, clearGap: gap})
+	report.Replay(seal.Key{}).snapshot(report)
 	return report, nil
 }
 
@@ -169,8 +171,8 @@ func (r *sourceCylinderImpactRun) sample(ctx context.Context, f *big.Rat) (*Swee
 		ideal = sweepEventOf(at, contact)
 	}
 	r.transferManifold(f, poseA, poseB, actual, &ideal)
-	sample := SweepSample{At: at, PoseA: poseA, PoseB: poseB,
-		FloatContact: actual, Ideal: ideal, exactFraction: new(big.Rat).Set(f)}
+	sample := sampleWith(SweepSample{At: at, PoseA: poseA, PoseB: poseB,
+		FloatContact: actual, Ideal: ideal}, new(big.Rat).Set(f))
 	r.report.Samples = append(r.report.Samples, sample)
 	r.report.PoseEvaluations++
 	return &sample, nil
@@ -293,10 +295,10 @@ func (r *sourceCylinderImpactRun) execute(ctx context.Context) (*SweepReport, er
 	if r.cylinderFirst {
 		firstBox, secondBox = r.cylinder.Box, r.box
 	}
-	r.report.replay = &sweepReplayProof{pa: r.pa, pb: r.pb, request: r.req.ContactRequest,
+	r.report.SetReplay(seal.Key{}, &sweepReplayProof{pa: r.pa, pb: r.pb, request: r.req.ContactRequest,
 		cylinder: &r.cylinder, cylinderFirst: r.cylinderFirst,
 		boxA: firstBox, boxB: secondBox, clearAxis: r.axis,
-		cylinderSide: r.side, cylinderGap: r.gap, cylinderSlope: r.slope}
+		cylinderSide: r.side, cylinderGap: r.gap, cylinderSlope: r.slope})
 	if first.Ideal.Relation == ContactTouching {
 		if first.Ideal.Manifold == nil {
 			return cylinderSweepUndecided(r.report, r.pa.Duration), nil
@@ -313,7 +315,7 @@ func (r *sourceCylinderImpactRun) execute(ctx context.Context) (*SweepReport, er
 		}
 		r.report.Outcome = SweepDepartedClear
 		r.report.Departure = &SweepDeparture{Until: last.At, GapAtUntil: *last.Ideal.Gap}
-		r.report.replay.snapshot(r.report)
+		r.report.Replay(seal.Key{}).snapshot(r.report)
 		return r.report, nil
 	}
 	if r.gap.Sign() <= 0 || r.slope.Sign() >= 0 ||
@@ -352,9 +354,9 @@ func (r *sourceCylinderImpactRun) execute(ctx context.Context) (*SweepReport, er
 	}
 	r.report.Outcome, r.report.Event = SweepImpactBracket, &right.Ideal
 	r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
-	r.report.bracketRight = new(big.Rat).Set(rightF)
-	r.report.replay.setBracket(leftF, rightF)
-	r.report.replay.snapshot(r.report)
+	r.report.SetBracketRight(seal.Key{}, new(big.Rat).Set(rightF))
+	r.report.Replay(seal.Key{}).setBracket(leftF, rightF)
+	r.report.Replay(seal.Key{}).snapshot(r.report)
 	return r.report, nil
 }
 
@@ -399,8 +401,8 @@ func (r *sourceCylinderImpactRun) persistentTrack(ctx context.Context, first *Sw
 		features: [2]nodeContactFeature{contactFeatureToInternal(point.FeatureA), contactFeatureToInternal(point.FeatureB)},
 		normal:   point.Normal, pointCount: 1}
 	r.report.Outcome, r.report.ContactTrack = SweepPersistentTouch, track
-	r.report.replay.track = track
-	r.report.replay.snapshot(r.report)
+	r.report.Replay(seal.Key{}).track = track
+	r.report.Replay(seal.Key{}).snapshot(r.report)
 	return r.report, nil
 }
 

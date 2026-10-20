@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/seal"
+
 	"github.com/lestrrat-3d/decad/internal/contactround"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
@@ -57,33 +59,33 @@ func (d *Document) sweepRotatingSpherePair(ctx context.Context, a, b *Body,
 		for axis, pair := range [3][2]float64{{start.X, pivot.X}, {start.Y, pivot.Y}, {start.Z, pivot.Z}} {
 			if proofarith.DyCmp(moving.sphere.Center[axis], proofarith.MustDyOf(pair[0])) != 0 ||
 				proofarith.DyCmp(moving.sphere.Center[axis], proofarith.MustDyOf(pair[1])) != 0 {
-				return report.undecidedRotatingSpherePair(pa.Duration), true, nil
+				return undecidedRotatingSpherePair(report, pa.Duration), true, nil
 			}
 		}
 		for axis, velocity := range [3]units.Value{moving.path.Drift.LinearVelocity.X,
 			moving.path.Drift.LinearVelocity.Y, moving.path.Drift.LinearVelocity.Z} {
 			speed, ok := sweeppath.ExactBaseValue(velocity)
 			if !ok {
-				return report.undecidedRotatingSpherePair(pa.Duration), true, nil
+				return undecidedRotatingSpherePair(report, pa.Duration), true, nil
 			}
 			full := new(big.Rat).Mul(speed, moving.path.Duration)
 			component, ok := proofarith.DyOfRat(full)
 			if !ok {
-				return report.undecidedRotatingSpherePair(pa.Duration), true, nil
+				return undecidedRotatingSpherePair(report, pa.Duration), true, nil
 			}
 			moving.path.Delta[axis] = component
 		}
 	}
 	pair := [2]contactround.SphereProof{sphereA, sphereB}
-	report.replay = &sweepReplayProof{pa: pa, pb: pb, spherePair: &pair,
-		request: req.ContactRequest}
+	report.SetReplay(seal.Key{}, &sweepReplayProof{pa: pa, pb: pb, spherePair: &pair,
+		request: req.ContactRequest})
 	run := &sourceSpherePairSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
 		req: req, report: report, sphereA: sphereA, sphereB: sphereB, rotating: true}
 	result, err := run.execute(ctx, resolution)
 	return result, true, err
 }
 
-func (r *SweepReport) undecidedRotatingSpherePair(duration *big.Rat) *SweepReport {
+func undecidedRotatingSpherePair(r *SweepReport, duration *big.Rat) *SweepReport {
 	r.Outcome, r.Cause = SweepUndecided, SweepContactUnsupported
 	r.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), duration),
 		To: sweepInstant(big.NewRat(1, 1), duration)}
@@ -254,7 +256,7 @@ func (r *sourceSpherePairSweepRun) grazingTouch(ctx context.Context, first *Swee
 		return r.undecided(vertex, one, SweepPoseRelation), nil
 	}
 	r.report.Outcome, r.report.Event = SweepGrazingTouch, &touch.Ideal
-	r.report.replay.grazingAt = new(big.Rat).Set(vertex)
+	r.report.Replay(seal.Key{}).grazingAt = new(big.Rat).Set(vertex)
 	r.sortSamples()
 	return r.report, nil
 }
@@ -341,8 +343,8 @@ func (r *sourceSpherePairSweepRun) transverse(ctx context.Context, first *SweepS
 	}
 	r.report.Outcome, r.report.Event = SweepImpactBracket, &right.Ideal
 	r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
-	r.report.bracketRight = new(big.Rat).Set(rightF)
-	r.report.replay.setBracket(leftF, rightF)
+	r.report.SetBracketRight(seal.Key{}, new(big.Rat).Set(rightF))
+	r.report.Replay(seal.Key{}).setBracket(leftF, rightF)
 	r.sortSamples()
 	return r.report, nil
 }
@@ -376,7 +378,7 @@ func (r *sourceSpherePairSweepRun) persistentTrack(first *SweepSample) *SweepCon
 }
 
 func (r *sourceSpherePairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*SweepReport, error) {
-	defer r.report.replay.snapshot(r.report)
+	defer r.report.Replay(seal.Key{}).snapshot(r.report)
 	zero, one := new(big.Rat), big.NewRat(1, 1)
 	first, err := r.sample(ctx, zero)
 	if errors.Is(err, errSweepPoseBudget) {
@@ -419,7 +421,7 @@ func (r *sourceSpherePairSweepRun) execute(ctx context.Context, resolution *big.
 					contactFeatureToInternal(last.Ideal.Manifold.Points[0].FeatureA) == track.features[0] &&
 					contactFeatureToInternal(last.Ideal.Manifold.Points[0].FeatureB) == track.features[1] {
 					r.report.Outcome, r.report.ContactTrack = SweepPersistentTouch, track
-					r.report.replay.track = track
+					r.report.Replay(seal.Key{}).track = track
 					return r.report, nil
 				}
 			}
@@ -491,8 +493,8 @@ func (r *sourceSpherePairSweepRun) execute(ctx context.Context, resolution *big.
 	}
 	r.report.Outcome, r.report.Event = SweepImpactBracket, &right.Ideal
 	r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
-	r.report.bracketRight = new(big.Rat).Set(rightF)
-	r.report.replay.setBracket(leftF, rightF)
+	r.report.SetBracketRight(seal.Key{}, new(big.Rat).Set(rightF))
+	r.report.Replay(seal.Key{}).setBracket(leftF, rightF)
 	r.sortSamples()
 	return r.report, nil
 }

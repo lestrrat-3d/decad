@@ -5,6 +5,8 @@ import (
 	"errors"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/seal"
+
 	"github.com/lestrrat-3d/decad/internal/contactbox"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
@@ -84,17 +86,17 @@ func (d *Document) sweepRotatingPair(ctx context.Context, a, b *Body,
 		result.Outcome == SweepPersistentTouch &&
 			result.ContactTrack != nil && result.ContactTrack.orientedA != nil &&
 			result.ContactTrack.orientedB != nil && aPath.Path.Drift == nil && bPath.Path.Drift == nil {
-		result.replay = &sweepReplayProof{rotation: &[2]rotationalSweepPath{aPath, bPath},
-			track: result.ContactTrack, request: req.ContactRequest}
-		result.replay.snapshot(result)
+		result.SetReplay(seal.Key{}, &sweepReplayProof{rotation: &[2]rotationalSweepPath{aPath, bPath},
+			track: result.ContactTrack, request: req.ContactRequest})
+		result.Replay(seal.Key{}).snapshot(result)
 		if result.Outcome == SweepImpactBracket {
 			left, leftOK := sweeppath.ExactBaseValue(result.Bracket.From.Fraction)
 			right, rightOK := sweeppath.ExactBaseValue(result.Bracket.To.Fraction)
 			if !leftOK || !rightOK || left.Cmp(right) >= 0 {
-				result.replay = nil
+				result.SetReplay(seal.Key{}, nil)
 			} else {
-				result.replay.setBracket(left, right)
-				result.replay.setRotatingBracketGap(result, new(big.Rat).Add(aPath.FullTravel, bPath.FullTravel))
+				result.Replay(seal.Key{}).setBracket(left, right)
+				result.Replay(seal.Key{}).setRotatingBracketGap(result, new(big.Rat).Add(aPath.FullTravel, bPath.FullTravel))
 			}
 		}
 	}
@@ -130,8 +132,8 @@ func (r *rotationalPairSweep) sample(ctx context.Context, f *big.Rat) (*SweepSam
 	} else {
 		event = r.orientedIdealEvent(f, at, poseA, poseB, contact)
 	}
-	sample := &SweepSample{At: at, PoseA: poseA, PoseB: poseB,
-		FloatContact: contact, Ideal: event, exactFraction: new(big.Rat).Set(f)}
+	sample := sampleWithPtr(SweepSample{At: at, PoseA: poseA, PoseB: poseB,
+		FloatContact: contact, Ideal: event}, new(big.Rat).Set(f))
 	r.report.Samples = append(r.report.Samples, *sample)
 	r.report.PoseEvaluations++
 	return sample, nil

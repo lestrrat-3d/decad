@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/seal"
+
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/contactbox"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
@@ -244,7 +246,7 @@ func (r *rotationalPairSweep) refine(ctx context.Context, left, right *SweepSamp
 			}
 			r.report.Outcome, r.report.Event = SweepImpactBracket, &right.Ideal
 			r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
-			r.report.bracketRight = new(big.Rat).Set(right.exactFraction)
+			r.report.SetBracketRight(seal.Key{}, new(big.Rat).Set(right.ExactFraction(seal.Key{})))
 			return true, nil
 		}
 		r.undecided(lf, rf, SweepTimeFloor)
