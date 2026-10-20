@@ -108,7 +108,7 @@ func measuredInterference(ctx context.Context, a, b *Body, res pairkernel.Result
 		return overlap, reportvocab.InterferenceMeasured, nil
 	}
 
-	eval, err := evaluateBooleanMeshesWithConeCap(ctx, meshbool.OpIntersect, a, b, meshes, 1, nil, nil)
+	eval, err := evaluateBooleanMeshes(ctx, meshbool.OpIntersect, a, b, meshes, 1)
 	if err != nil {
 		if expected, ok := asExpectedBoolean(err); ok {
 			return Measurement{}, reportvocab.InterferenceOutcomeForExpected(expected), nil

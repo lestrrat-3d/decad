@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftface"
+	"github.com/lestrrat-3d/decad/internal/loftfacestrim"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
@@ -14,7 +15,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-const maxLoftFacesSections = 32
+const maxLoftFacesSections = loftfacestrim.MaxSections
 
 // LoftFaces builds one solid through ordered complete caps of the same
 // authenticated point-loft Split source (docs/loft-face-sections-design.md).

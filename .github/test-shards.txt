@@ -289,3 +289,6 @@
 10	0.00	TestPointConeBooleanGates
 10	0.00	TestTryAllEdgeChamferGates
 10	0.00	TestPrismUnionBossShellGates
+10	0.00	TestConeHeelBooleanGates
+10	0.00	TestRecordConeToeGates
+10	0.00	TestTangentHeelMeshesClearsResult
