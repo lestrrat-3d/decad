@@ -58,7 +58,7 @@ Table RR lists the edges a blend can be built on. The others are refused.
 | **R1** | `Line3`, convex or concave | two retained `Plane`s, not parallel, ending at three-face corners whose third face is a retained `Plane` | `Cylinder` / `Plane` | increment B2; equal-distance chamfer only |
 | **R2** | `Circle3`, closed, centre on the axis | retained `Plane` and coaxial retained `Cylinder` | `Torus` / `Cone` | increment B1; equal-distance chamfer only |
 | **R3** | `Line3` of retention E4 | retained `Plane` and a `Cylinder` whose axis lies in the plane, ending on retained planes normal to the axis | `Cylinder` / `Plane` | increment B3; equal-distance chamfer only |
-| **R4** | `Arc3` | as R2, open | as R2 | increment B4 |
+| **R4** | `Arc3` | as R2, open, ending on planes parallel to the axis | as R2 | increment B4; equal-distance chamfer only |
 
 Refused, with the reason a caller can act on:
 
@@ -166,6 +166,28 @@ The wall's setback line is the generator of the cylinder at `T_B`. Cutting the
 held wall there is a cut by the half-plane that holds the axis and that
 generator, applied to the facets whose angle about the axis, measured from `K`
 into the wall, is below the angle of `T_B`.
+
+### 4.4 R4, an open arc
+
+The surfaces are R2's: the same four rims, the same `κ`, torus or cone, with the
+rim an arc of the circle from `V₀` to `V₁` and the faces ending on planes `G_i`
+that are parallel to the axis. Each `G_i` meets the wall in a generator line and
+the plane in a straight line, and the three meet at the end vertex.
+
+The plane's setback curve is the arc of the circle of radius `ρ_A = R + κ·t`
+between its points on the two end faces. A point `P_A,i` is where that circle
+meets the line `A ∩ G_i`, taken on the side of the corner the chain leaves along
+(a quadratic in the distance along the line). The wall's setback curve is the arc
+at height `t_B` below the rim, and `P_B,i` is where it meets the generator
+`B ∩ G_i`. The rows between them are the circles of the torus (or the straight
+generators of the cone) at the tube angle `α_j`; row `j` runs from the azimuth
+where its circle meets `G₀` to the one where it meets `G₁`, a solution of
+`n_G · x = h_G` in the azimuth. The blend meets `G_i` in the curve those end
+points trace, a section of a torus by a plane that is not a conic, so it stays a
+chain of exact points.
+
+The faces are rewritten as in R2 for the plane (a polygon on the setback arc)
+and the wall (the cut at the setback height), and as in R1 for the ends.
 
 ## 5. Construction
 
