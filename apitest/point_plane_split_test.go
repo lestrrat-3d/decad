@@ -338,3 +338,38 @@ func TestPointLoftParallelSheetRefusesShortToolAtomically(t *testing.T) {
 	require.Empty(t, pieces)
 	require.Equal(t, before, doc.Bodies())
 }
+
+// TestPointLoftSplitPieceRefusesPlanesOutsideItsSlab splits the two pieces of
+// a point-loft fan again. A plane that meets the piece's existing cap is
+// ErrUnsupported, and a plane wholly beyond the piece is ErrDegenerate.
+func TestPointLoftSplitPieceRefusesPlanesOutsideItsSlab(t *testing.T) {
+	t.Parallel()
+	span := pointLoftSliceSpan()
+	for _, tc := range []struct {
+		name     string
+		piece    int
+		offset   float64
+		sentinel error
+		message  string
+	}{
+		{"inner piece, plane on its upper cap", 0, 1.0 / 6, decad.ErrUnsupported, "slab's upper plane"},
+		{"inner piece, plane short of its slab", 0, 1.0 / 12, decad.ErrDegenerate, "misses this point-loft slab"},
+		{"outer piece, plane on its lower cap", 1, 1.0 / 6, decad.ErrUnsupported, "slab's lower plane"},
+		{"outer piece, plane past its slab", 1, 1.0 / 3, decad.ErrDegenerate, "misses this point-loft slab"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			tooth := pointLoftRadialTab(t, doc)
+			pieces, err := decad.Split(t.Context(), tooth, pointLoftSliceSheetDirected(t, doc, span/6, 30, false))
+			require.NoError(t, err)
+			sheet := pointLoftSliceSheetDirected(t, doc, span*tc.offset, 30, true)
+			before := doc.Bodies()
+			parts, err := decad.Split(t.Context(), pieces[tc.piece], sheet)
+			require.Nil(t, parts)
+			require.ErrorIs(t, err, tc.sentinel)
+			require.ErrorContains(t, err, tc.message)
+			require.Equal(t, before, doc.Bodies())
+		})
+	}
+}

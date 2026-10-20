@@ -2143,3 +2143,4 @@
 10	0.00	TestShellStackedWrongCapRefuses
 6	0.13	TestBrepLoopFilletUndercutReadsEachPipePatch
 6	0.13	TestBrepLoopFilletUndercutReflexCornerAndBottomLoop
+6	0.13	TestPointLoftSplitPieceRefusesPlanesOutsideItsSlab
