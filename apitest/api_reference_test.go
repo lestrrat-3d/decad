@@ -83,14 +83,23 @@ func exportedNames(t *testing.T, dir string) (map[string]bool, map[string]map[st
 	return names, methods, types
 }
 
-// TestAPIReferenceNamesExist fails when docs/api.md names a root or export
+// TestAPIReferenceNamesExist fails when docs/api.md or docs/data-structures.md name a root or export
 // identifier that no longer exists, so the user-facing reference cannot drift
 // from the code. It checks `decad.X`, `export.X` and `Type.Method` tokens.
 func TestAPIReferenceNamesExist(t *testing.T) {
 	t.Parallel()
-	raw, err := os.ReadFile("../docs/api.md")
-	require.NoError(t, err)
-	doc := string(raw)
+	var sb strings.Builder
+	var dataStructures string
+	for _, name := range []string{"api.md", "data-structures.md"} {
+		raw, err := os.ReadFile("../docs/" + name)
+		require.NoError(t, err)
+		sb.Write(raw)
+		if name == "data-structures.md" {
+			dataStructures = string(raw)
+		}
+		sb.WriteByte('\n')
+	}
+	doc := sb.String()
 
 	rootNames, rootMethods, rootTypes := exportedNames(t, "..")
 	exportNames, _, _ := exportedNames(t, "../export")
@@ -114,13 +123,13 @@ func TestAPIReferenceNamesExist(t *testing.T) {
 			missing = append(missing, m[1]+"."+m[2])
 		}
 	}
-	require.Empty(t, missing, "docs/api.md names identifiers that do not exist")
+	require.Empty(t, missing, "docs name identifiers that do not exist")
 
 	var unlisted []string
 	for _, name := range rootTypes {
-		if !strings.Contains(doc, "`decad."+name+"`") {
+		if !strings.Contains(dataStructures, "`decad."+name+"`") {
 			unlisted = append(unlisted, name)
 		}
 	}
-	require.Empty(t, unlisted, "docs/api.md Type index omits exported types")
+	require.Empty(t, unlisted, "docs/data-structures.md Type index omits exported types")
 }

@@ -10,7 +10,8 @@ A **headless CAD system** for Go: the 3D modeling layer above the
 
 > **Work in progress.** The API and supported capabilities may change.
 
-See the [API reference](docs/api.md) for what the library offers.
+See the [API reference](docs/api.md) for the functions the library offers and
+[Data structures](docs/data-structures.md) for the types they take and return.
 
 ## Why this exists
 

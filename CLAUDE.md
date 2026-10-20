@@ -19,7 +19,7 @@ APIs are design-only.**
 
 ## Documentation split
 
-- `docs/` holds user-facing documentation. `docs/api.md` is the API reference; update it with any public API change.
+- `docs/` holds user-facing documentation. `docs/api.md` is the API reference and `docs/data-structures.md` the type guide; update both with any public API change.
 - `agent-docs/` holds design decisions and maintenance instructions for agents.
 
 ## Read before you write

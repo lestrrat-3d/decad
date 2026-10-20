@@ -14,7 +14,7 @@ User-facing documentation, including the API reference, lives in [`docs/`](../do
 
 ## What does not belong here
 
-- API reference for library users → `docs/api.md`.
+- API reference for library users → `docs/api.md` and `docs/data-structures.md`.
 - Usage guidance → executable examples in `examples/`.
 - Images used by the README → `docs/images/`.
 

@@ -11,6 +11,7 @@ The rules for rows live in `agent-docs/layout.md`.
 |---|---|
 | `agent-docs/api-design.md` | Public API contract for modeling, features, selectors, and verification. |
 | `docs/api.md` | User-facing API reference by task; `apitest/api_reference_test.go` checks its names exist. |
+| `docs/data-structures.md` | User-facing type index and structure guide; `apitest/api_reference_test.go` checks it lists every exported type. |
 | `agent-docs/sketch-seam-design.md` | `sketch` recording: `TExact`, `CurveSegment`, and `ErrUnrecordableProfile`. |
 | `agent-docs/verification-design.md` | `Verify` reports, statuses, interference costs, deadlines, `WithTolerance`, and noise floor. |
 | `agent-docs/payload-verification-design.md` | Per-payload proofs, certificates, bounded validity/clearance/survey algorithms. |
