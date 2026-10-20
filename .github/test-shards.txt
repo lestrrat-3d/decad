@@ -285,3 +285,4 @@
 10	0.00	TestTangentCapExtensionGatesAndCharges
 10	0.00	TestPrismPatternUnionManyGates
 10	0.00	TestPrismPatternFilletBodyGates
+10	0.00	TestStraightLoftPrismUnionManyGates

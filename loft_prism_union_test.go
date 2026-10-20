@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismboolean"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -111,7 +112,8 @@ func TestAxialLoftPrismUnionManyIndependentTabs(t *testing.T) {
 				left, right = right, left
 			}
 			operands := []*Body{blank, left, right}
-			_, admitted, err := tryStraightLoftPrismUnionMany(t.Context(), doc, doc.nextProducerID(), operands)
+			_, admitted, err := prismboolean.StraightLoftUnionMany(t.Context(), envOf(documentNode(doc), doc.nextProducerID()),
+				bodyNodes(operands))
 			require.NoError(t, err)
 			require.True(t, admitted, "the independent tabs should use one prism scene")
 			joined, err := Union(t.Context(), operands[0], operands[1:]...)
@@ -133,8 +135,8 @@ func TestAxialLoftPrismUnionTangentDoesNotAdmit(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, admitted)
 	valid := axialLineLoft(t, doc, 8, 4, 12, 6, 4)
-	_, admitted, err = tryStraightLoftPrismUnionMany(t.Context(), doc, doc.nextProducerID(),
-		[]*Body{blank, valid, tangent})
+	_, admitted, err = prismboolean.StraightLoftUnionMany(t.Context(), envOf(documentNode(doc), doc.nextProducerID()),
+		bodyNodes([]*Body{blank, valid, tangent}))
 	require.NoError(t, err)
 	require.False(t, admitted)
 }
@@ -179,4 +181,43 @@ func TestAxialLoftPrismUnionRefusesUnequalCapsAndCancellation(t *testing.T) {
 	_, admitted, err = prismboolean.TryAxialLoftUnion(canceled, meshbool.OpUnion, blank.n.Payload, tab.n.Payload)
 	require.ErrorIs(t, err, context.Canceled)
 	require.False(t, admitted)
+}
+
+// The straight-source Loft route answers false, with no error, unless the
+// first operand is a prism, every other operand is a prism or an exact axial
+// Loft, at least one is a Loft, and each Loft overlaps the first prism.
+func TestStraightLoftPrismUnionManyGates(t *testing.T) {
+	doc := New()
+	blank := internalBoxBody(t, doc, 0, 0, 10, 10, 4)
+	other := internalBoxBody(t, doc, 20, 0, 30, 10, 4)
+	loft := axialLineLoft(t, doc, 8, 4, 12, 6, 4)
+	far := axialLineLoft(t, doc, 40, 4, 44, 6, 4)
+	run := func(operands ...*Body) (bool, error) {
+		t.Helper()
+		_, ok, err := prismboolean.StraightLoftUnionMany(t.Context(), envOf(documentNode(doc), doc.nextProducerID()),
+			bodyNodes(operands))
+		return ok, err
+	}
+	for name, operands := range map[string][]*Body{
+		"first operand is a loft":      {loft, blank},
+		"another operand is neither":   {blank, {n: topo.Body{}}},
+		"no loft among the operands":   {blank, other},
+		"the loft misses the prism":    {blank, far},
+		"one loft overlaps, one not":   {blank, loft, far},
+		"the far loft comes first now": {blank, far, loft},
+	} {
+		ok, err := run(operands...)
+		require.NoError(t, err, name)
+		require.False(t, ok, name)
+	}
+	ok, err := run(blank, loft)
+	require.NoError(t, err)
+	require.True(t, ok, "an overlapping straight loft with a prism is the class")
+
+	cancelled, cancel := context.WithCancel(t.Context())
+	cancel()
+	_, ok, err = prismboolean.StraightLoftUnionMany(cancelled, envOf(documentNode(doc), doc.nextProducerID()),
+		bodyNodes([]*Body{blank, loft}))
+	require.True(t, ok)
+	require.ErrorIs(t, err, context.Canceled)
 }
