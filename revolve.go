@@ -645,7 +645,7 @@ func refuseChainRevolveOptions(opts []RevolveOption) error {
 	return fmt.Errorf(`%w: the revolve option %T builds a solid from a profile only`, ErrUnsupported, opts[0])
 }
 
-// This file holds axisInPlane, the axisFrame and regionSnapAllow aliases,
+// This file holds axisInPlane, the axisFrame alias,
 // and the wall constants used by root callers. The profile gates live in
 // revolveplan.ResolveAxisSide
 // (internal/revolveplan/axis_side.go). See docs/evaluator-design.md §6.
@@ -670,5 +670,3 @@ func axisInPlane(a Axis, frame r3.Frame) (revolveaxis.Line2, error) {
 
 // The payload holds the internal axis frame and its profile proof charges.
 type axisFrame = revolveaxis.Frame
-
-type regionSnapAllow = revolveaxis.SnapAllow

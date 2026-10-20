@@ -99,7 +99,7 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 	}
 	if revolve, ok := b.n.Payload.(revolvePayload); ok {
 		result, err := massPropertiesFromReadings(
-			massmoment.RevolveProperties(ctx, massRevolveRecord(revolve), b.n.Centroid, density))
+			massmoment.RevolveProperties(ctx, revolve.MassRecord(), b.n.Centroid, density))
 		if err == nil || !errors.Is(err, ErrUnsupported) || ctx.Err() != nil {
 			return result, err
 		}
@@ -111,11 +111,11 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 		return facetedMassProperties(ctx, b, faceted, density)
 	}
 	if sweep, ok := b.n.Payload.(sweepPayload); ok {
-		result, err := massPropertiesFromReadings(massmoment.SweepProperties(ctx, massSweepRecord(sweep), b.n.Centroid, density))
+		result, err := massPropertiesFromReadings(massmoment.SweepProperties(ctx, sweep.MassRecord(), b.n.Centroid, density))
 		return analyticOrMeshMassProperties(ctx, b, density, result, err)
 	}
 	if cup, ok := b.n.Payload.(cupPayload); ok {
-		outer, cavity := massCupRecords(cup.View())
+		outer, cavity := cup.View().MassRecords()
 		result, err := massPropertiesFromReadings(massmoment.CupProperties(ctx, outer, cavity, b.n.Centroid, density))
 		return analyticOrMeshMassProperties(ctx, b, density, result, err)
 	}
@@ -143,51 +143,6 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 	// not change its centroidal inertia, and a signed-permutation basis only
 	// reorders its three dimensions. Work in exact dyadics until division by 12.
 	return massPropertiesFromReadings(massmoment.CardinalBoxProperties(ctx, pp.MassRecord(), b.n.Centroid, density))
-}
-
-// massCupRecords reads the two prism records whose difference forms a cup.
-func massCupRecords(cp cupView) (massmoment.PrismRecord, massmoment.PrismRecord) {
-	outer := cp.OuterPrism()
-	outer.Profile = cp.Outer
-	cavity := cp.CavityPrism()
-	cavity.Profile = cp.Cavity
-	return outer.MassRecord(), cavity.MassRecord()
-}
-
-// massRevolveRecord presents a root revolve payload to the mass integrator.
-func massRevolveRecord(rp revolvePayload) massmoment.RevolveRecord {
-	return massmoment.RevolveRecord{
-		Profile: rp.Profile, Frame: rp.Frame, Transform: rp.Xform,
-		Den: rp.Den, Phi0: rp.Phi0, Phi1: rp.Phi1,
-		AU: rp.Ax.AU, AV: rp.Ax.AV, DU: rp.Ax.DU, DV: rp.Ax.DV,
-		AUBound: rp.Ax.AUBound, AVBound: rp.Ax.AVBound,
-		DUBound: rp.Ax.DUBound, DVBound: rp.Ax.DVBound,
-		SectionDelta: rp.SectionDelta, RadialAdmitAllow: rp.Ax.RadialAdmitAllow,
-		AxisSnap: rp.Ax.Snap != (regionSnapAllow{}),
-	}
-}
-
-// massSweepRecord presents the sweep's certified span reductions to the mass integrator.
-func massSweepRecord(sp sweepPayload) massmoment.SweepRecord {
-	record := massmoment.SweepRecord{Arc: sp.Arc}
-	if len(sp.Spans) == 0 {
-		if sp.Arc {
-			record.Revolve = massRevolveRecord(sp.Revolve)
-		} else {
-			record.Prism = sp.Prism.MassRecord()
-		}
-		return record
-	}
-	record.Spans = make([]massmoment.SweepSpanRecord, len(sp.Spans))
-	for i, span := range sp.Spans {
-		record.Spans[i] = massmoment.SweepSpanRecord{Arc: span.Arc}
-		if span.Arc {
-			record.Spans[i].Revolve = massRevolveRecord(span.Revolve)
-		} else {
-			record.Spans[i].Prism = span.Prism.MassRecord()
-		}
-	}
-	return record
 }
 
 // analyticOrMeshMassProperties keeps an analytic arm's result unless that arm
