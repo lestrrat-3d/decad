@@ -2150,3 +2150,4 @@
 6	0.13	TestPointLoftSplitPieceRefusesPlanesOutsideItsSlab
 6	0.13	TestLoftFacesRefusesUnauthenticatedSections
 6	0.13	TestContactPairRotatedBoxRefusesAManifoldFinerThanItsReadings
+10	0.05	TestAPIReferenceNamesExist
