@@ -17,7 +17,7 @@ import (
 // — the operation is rejected, never a wrong mesh. The input names a real solid
 // and the refusal is the evaluator's reach, so it carries the BooleanExpectedContact
 // signal and wraps ErrUnsupported (never ErrDegenerate); the public boundary remaps
-// it to BooleanUnsupportedContact (boolean.go, asBooleanError; docs/api-design.md
+// it to BooleanUnsupportedContact (boolean.go, asBooleanError; agent-docs/api-design.md
 // §8 / H2, agent-docs/evaluator-design.md §9).
 func ErrUnclassifiableContact(what string) error {
 	return ExpectedBoolean(BooleanExpectedContact,

@@ -73,7 +73,7 @@ func Measures(tb testing.TB, what string, got decad.Measurement, want units.Valu
 // the reading: |V - W|2 <= B + s. got.Bound.Kind() is Length for a position
 // and Dimensionless for a direction; the helper READS it and never assumes.
 // want carries no Kind of its own — it is an r3.Vec, the
-// docs/api-design.md §5.2 coordinate carve-out — so a wrong-Kind Within or
+// agent-docs/api-design.md §5.2 coordinate carve-out — so a wrong-Kind Within or
 // WithinRel is instead caught against got.Bound.Kind().
 func MeasuresVec(tb testing.TB, what string, got decad.VecMeasurement, want r3.Vec, opts ...Option) {
 	tb.Helper()

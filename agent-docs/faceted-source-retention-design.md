@@ -10,7 +10,7 @@ an exact plane or a bounded normal use it. Companion to
 `agent-docs/faceted-vertex-bounds-design.md` ("vertex bounds §N": per-vertex
 displacement) and `agent-docs/payload-verification-design.md` §5 ("payload §N": the
 faceted boundary certificate this design supplies the source identity for).
-"core §N" is `docs/api-design.md`.
+"core §N" is `agent-docs/api-design.md`.
 
 No public type changes. `Face.Surface()`, `Face.NormalAt`, selectors and the
 body-relative stops report a different, tighter answer on faces they read
@@ -296,7 +296,7 @@ expression) and not a printed number.
 | `mirror.go`, `internal/extent` | admit a retained `Plane` per §4 |
 | `internal/selectorquery/topo_views.go` | no code change expected; the existing views read the tag |
 | Tests | the `Faceted` assertions of §7's last row |
-| Docs | `agent-docs/evaluator-design.md` §9 (group fields), `docs/api-design.md` §6.1 (the tagged-stand-in paragraph), `agent-docs/faceted-vertex-bounds-design.md` §4.3 (placement), `agent-docs/payload-verification-design.md` §5.2 and §13 (the source identity half of the faceted certificate), `agent-docs/missing-features.md` (the row for `NormalAt` on a faceted face, if present), and this document's row in `agent-docs/layout/design-docs.md` |
+| Docs | `agent-docs/evaluator-design.md` §9 (group fields), `agent-docs/api-design.md` §6.1 (the tagged-stand-in paragraph), `agent-docs/faceted-vertex-bounds-design.md` §4.3 (placement), `agent-docs/payload-verification-design.md` §5.2 and §13 (the source identity half of the faceted certificate), `agent-docs/missing-features.md` (the row for `NormalAt` on a faceted face, if present), and this document's row in `agent-docs/layout/design-docs.md` |
 
 ## 9. Increments
 
@@ -448,7 +448,7 @@ one. The edge runs from its start vertex to its end vertex counter-clockwise abo
 
 **Closed rims.** A closed rim publishes one whole ellipse, and the edge's start
 vertex equals its end vertex. For `Ellipse3`, start equal to end means one full
-turn from that vertex, the way a `Circle3` edge reads. `docs/api-design.md` §4
+turn from that vertex, the way a `Circle3` edge reads. `agent-docs/api-design.md` §4
 states the convention in `Ellipse3`'s comment.
 
 `supportsAnalyticSTEP` returns false for a face whose loop holds a whole-turn

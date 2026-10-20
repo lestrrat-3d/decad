@@ -4,7 +4,7 @@ How `Document.VerifyMotion` answers "does this body hit anything while it moves 
 changing the document: where the capability sits (§1), how the caller states the motion (§2), the entry point
 and its options (§3), the report (§4), what a pose proves and what an interval between two poses proves (§5),
 the refinement procedure (§6), evaluator coverage (§7), errors (§8), required tests (§9), increments (§10),
-and the dependencies and settled points (§11). Companion to `docs/api-design.md` (the core contract,
+and the dependencies and settled points (§11). Companion to `agent-docs/api-design.md` (the core contract,
 referenced as "core §N"), `agent-docs/verification-design.md` ("verification §N", which owns `Status`,
 `Diagnostic`, the tolerance gate and the result vocabulary this report reuses), `agent-docs/clearance-design.md`
 ("clearance §N", which owns the pair kernel every pose runs), `agent-docs/interference-design.md` ("interference

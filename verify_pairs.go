@@ -250,7 +250,7 @@ func (o *verifyPairOutcome) appendClearance(a, b *Body, res pairkernel.Result, r
 // a mitred sweep; booloperand.HeldFloor) chords nothing, so there is nothing to share:
 // it has no entry, and every pair meshes it as the public booleans do, at the
 // pair's own tolerance raised to its held floor, and gates the facets that
-// pair touches at the pair's own tolerance (docs/api-design.md §8 "The chain
+// pair touches at the pair's own tolerance (agent-docs/api-design.md §8 "The chain
 // depth", agent-docs/faceted-vertex-bounds-design.md §5).
 type verifyMeshCache struct {
 	entries map[*Body]*verifyMeshEntry

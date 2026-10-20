@@ -19,7 +19,7 @@ import (
 // nothing — the two are the pair a caller stitches, thickens or measures a
 // clearance between — so the result registers on the non-consuming terms
 // Copy already takes (document.go's copyUnder,
-// docs/api-design.md §6). Nothing sums the pair: Volume and Centroid are
+// agent-docs/api-design.md §6). Nothing sums the pair: Volume and Centroid are
 // ErrNotSolid on a sheet by kind (§8), and Union/Cut/Intersect refuse a sheet
 // permanently (Table X), so the two live bodies can never be combined into a
 // reading that counts the same material twice.

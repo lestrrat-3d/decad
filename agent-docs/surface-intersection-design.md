@@ -10,7 +10,7 @@ parameter, or a side of its own. Companion to
 classifier and displacement bounds this design reuses rather than restates,
 and to `agent-docs/surface-design.md`, which owns the sheet body every one of these
 operations produces or consumes. References of the form "core §N" are to
-`docs/api-design.md`; "surface §N" to `agent-docs/surface-design.md`; "prism §N" to
+`agent-docs/api-design.md`; "surface §N" to `agent-docs/surface-design.md`; "prism §N" to
 `agent-docs/prism-boolean-design.md`; "seam §N" to `agent-docs/sketch-seam-design.md`.
 
 ## 1. Problem

@@ -19,7 +19,7 @@ const (
 	selKindFaces = "faces"
 )
 
-// This file is the selector vocabulary of docs/api-design.md §9: intent, not
+// This file is the selector vocabulary of agent-docs/api-design.md §9: intent, not
 // identity. A feature is given a query, never a pointer — handles do not
 // survive an edit and index order is not stable, so an edge or face is named
 // by geometric predicate and provenance instead. Features accept the

@@ -15,11 +15,11 @@ CAD software code (e.g. an Autodesk Fusion add-in). Be wrong in the cheap place.
 
 **The public API lands incrementally against approved designs; unshipped
 APIs are design-only.**
-`docs/api-design.md` is the core contract for the whole surface.
+`agent-docs/api-design.md` is the core contract for the whole surface.
 
 ## Documentation split
 
-- `docs/` holds user-facing documentation, including the canonical API reference.
+- `docs/` holds user-facing documentation. `docs/api.md` is the API reference; update it with any public API change.
 - `agent-docs/` holds design decisions and maintenance instructions for agents.
 
 ## Read before you write
@@ -27,7 +27,7 @@ APIs are design-only.**
 | Before writing | Read |
 |---|---|
 | Any file, to find what owns what | `agent-docs/layout.md` — one row per root `.go` file and design doc |
-| Any public type | `docs/api-design.md`, and every companion design listed in `agent-docs/layout/` |
+| Any public type | `agent-docs/api-design.md`, and every companion design listed in `agent-docs/layout/` |
 | Collision geometry or rigid-body dynamics | `agent-docs/collision-dynamics-design.md`, `agent-docs/multibody-dynamics-design.md` |
 | Linkages and joints | `agent-docs/linkage-check-design.md` |
 | Evaluator, topology or feature code | `agent-docs/evaluator-design.md` |
@@ -80,14 +80,14 @@ APIs are design-only.**
 - **Shapes belong HERE.** `r3` excludes them by charter; solids/surfaces/meshes/
   topology are this module's job.
 - **NEVER add a public API that contradicts the design docs** —
-  `docs/api-design.md` and every design document listed in the Layout table.
+  `agent-docs/api-design.md` and every design document listed in the Layout table.
   Extending them is fine; changing a decision means changing the doc first.
 - **NEVER expose triangles as the representation, indices as selectors, or a bare
   `float64` measurement. NEVER give a boolean a target-out parameter or let it
   mutate an operand.** These are the forward-compatibility invariants that keep
-  an exact-kernel future reachable (`docs/api-design.md` §3). Scalar quantities —
+  an exact-kernel future reachable (`agent-docs/api-design.md` §3). Scalar quantities —
   values and their error bounds alike — are `units.Value`. Exactly two things are
-  not scalar quantities and so fall outside the rule (`docs/api-design.md` §5.2):
+  not scalar quantities and so fall outside the rule (`agent-docs/api-design.md` §5.2):
   the **coordinate** — an `r3.Vec`, or a plane-local `Point2` — which is a length in
   millimetres by convention; and the **curve parameter** — a spline's degree, knots
   and weights, a recorded segment's parameter range (`TStart`/`TEnd`), a conic's

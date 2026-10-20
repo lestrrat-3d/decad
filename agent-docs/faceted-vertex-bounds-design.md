@@ -6,7 +6,7 @@ the bound of the geometry each new pair touches rather than by one global
 held-mesh bound per body. Companion to `agent-docs/tessellation-design.md`, whose
 §2 proof record, §7 faceted restatement and §11 boolean composition this
 design refines, and to `agent-docs/evaluator-design.md` §9, which owns the mesh
-boolean. References of the form "core §N" are to `docs/api-design.md`;
+boolean. References of the form "core §N" are to `agent-docs/api-design.md`;
 "tessellation §N" to `agent-docs/tessellation-design.md`; "evaluator §N" to
 `agent-docs/evaluator-design.md`; "sweep §N" to `agent-docs/sweep-design.md`.
 
@@ -373,7 +373,7 @@ restore it. An exact rotation copy drops the record regardless of angle.
 Placement carries every analytic group tag (`Plane`, `Cylinder`, `Cone`,
 `Sphere`, `Torus`) to its float image under the delta
 (`surfaceplace.TransformSurface`) unless the delta is exactly the identity.
-The moved tag is a bounded stand-in (`docs/api-design.md` §6.1). A retained
+The moved tag is a bounded stand-in (`agent-docs/api-design.md` §6.1). A retained
 group adds the departure of `agent-docs/faceted-source-retention-design.md` §3.4 to
 its `normalBound`; any other group's `normalBound` is 2, the largest distance
 of two unit normals. A denoted

@@ -3,7 +3,7 @@
 The recording contract at the seam between decad and `sketch`: what `sketch`
 certifies about a profile's boundary (§1), the structural profile records (§2),
 and the one rejection the seam returns,
-`ErrUnrecordableProfile` (§3). Companion to `docs/api-design.md` — the core
+`ErrUnrecordableProfile` (§3). Companion to `agent-docs/api-design.md` — the core
 design, which owns the immediate-mode evaluator and the feature calls that
 consume a profile. References of the form "core §N"
 are to that document.

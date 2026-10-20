@@ -306,7 +306,7 @@ func Copy(ctx context.Context, source *Body, opts ...CopyOption) (*Body, error) 
 }
 
 // copyUnder leaves its source live while re-evaluating at a new identity.
-// It mirrors Transform's gate order and commit (core §8, docs/api-design.md H4).
+// It mirrors Transform's gate order and commit (core §8, agent-docs/api-design.md H4).
 // A non-nil exact record asks a faceted payload for the exact-rotation
 // placement; every other payload places by motion alone.
 func (b *Body) copyUnder(ctx context.Context, motion r3.Transform, exact *exactrotation.Rotation) (*Body, error) {

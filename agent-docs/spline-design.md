@@ -5,7 +5,7 @@ How the evaluator supports the free-form recorded segment kinds — `SplineSeg`,
 `FitSplineSeg`.
 
 `agent-docs/sketch-seam-design.md` owns the recording contract and already records
-every one of them. `docs/api-design.md` owns the public surface. This document
+every one of them. `agent-docs/api-design.md` owns the public surface. This document
 owns what happens BETWEEN them: which free-form questions the evaluator can
 answer, at what exactness, by what construction, and which stay refused for
 cause.

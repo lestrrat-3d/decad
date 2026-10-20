@@ -9,7 +9,7 @@ deliberately does not admit.
 
 Companion contracts stay authoritative for their own areas:
 
-- `docs/api-design.md` owns the public model, the forward-compatibility
+- `agent-docs/api-design.md` owns the public model, the forward-compatibility
   invariants, and the sketch-profile seam;
 - `agent-docs/evaluator-design.md` owns topology construction, atomic commits, and
   payload dispatch;
@@ -78,7 +78,7 @@ one is queued.
 | Command | What builds | What is still staged |
 |---|---|---|
 | `Thicken` | §16.1's admitted sheet families build | Other composite sweeps, chain sweeps outside §16.8's classes, loft, stitched, `PatchEdges` and `Unstitch` sheets refuse under R24; §16.8 names their missing proofs |
-| `Trim`, `Extend` | `Trim` over a receiver whose section is one closed loop and `Extend` over a chain ribbon, in the prism family and the revolve family alike (`agent-docs/surface-intersection-design.md` §2.2) | `Extend` over a PARTIALLY revolved ribbon, RS14. A partial revolution gathers the wall's swept free edge into one loop with its two cap edges, and no recorded fact separates them; lifting it is a recorded free-end map from the chain-revolve build, not a bound and not a gate (that document's §2.2). That document's §4 states every other shape outside the admitted class, and `docs/api-design.md` §2.1's reasoning is what keeps a pair sharing no generator refused |
+| `Trim`, `Extend` | `Trim` over a receiver whose section is one closed loop and `Extend` over a chain ribbon, in the prism family and the revolve family alike (`agent-docs/surface-intersection-design.md` §2.2) | `Extend` over a PARTIALLY revolved ribbon, RS14. A partial revolution gathers the wall's swept free edge into one loop with its two cap edges, and no recorded fact separates them; lifting it is a recorded free-end map from the chain-revolve build, not a bound and not a gate (that document's §2.2). That document's §4 states every other shape outside the admitted class, and `agent-docs/api-design.md` §2.1's reasoning is what keeps a pair sharing no generator refused |
 | `Split` | the prism family and the revolve family alike: one solid target, a sheet tool, and one solid body per arranged piece out (`agent-docs/surface-intersection-design.md` §8). A revolve piece charges its cut ends through that document's §7.2 | nothing is staged. That document's §4 states every shape outside the admitted class |
 | `Sweep` over a chain | one straight span, one arc through the chain Revolve gates, or §15.8's exact cardinal line/arc path over one radial source line | Other composite paths refuse R34. A single-arc sheet from more than one straight off-axis source segment has no mesh. `agent-docs/sweep-design.md` §15 states the reductions. Table D row 13 |
 | `LoftChain` | a `LineSeg`-only correspondence between two exactly-parallel walks whose to-plane origin lies strictly on the from-plane's positive side (`agent-docs/loft-design.md` §16.6's PR L1) | a curved correspondence, R36, until §5.1's station generator there states each COMPUTED station's own side against the from-plane (that document's §16.2, §16.6's PR L2). A non-parallel plane pair refuses at R35, which §7 reads as a reach boundary rather than a queued build: the ribbon between two non-parallel open walks exists, and what this evaluator lacks is a stated positive side for it |
@@ -87,7 +87,7 @@ one is queued.
 
 **A tolerant stitch.** Fusion stitches surfaces within a tolerance and produces
 tolerant topology — `BRepEdge.isTolerant` is that kernel admitting in public
-that its geometry does not meet (`docs/api-design.md` §2.1). decad joins two
+that its geometry does not meet (`agent-docs/api-design.md` §2.1). decad joins two
 free edges only where coincidence is **proven** (Table J), and leaves every
 other edge free. A caller reads the residual free edges to see what did not
 join. There is no gap parameter to widen, in this design or a later one.
@@ -96,7 +96,7 @@ join. There is no gap parameter to widen, in this design or a later one.
 Both name a face whose interior no recorded entity generates. A boundary states
 where a face ends and says nothing about what lies between, so the surface
 through it is a choice of blending function — a fit — and
-`docs/api-design.md` §2.1 is why that is refused rather than staged: every
+`agent-docs/api-design.md` §2.1 is why that is refused rather than staged: every
 topology decision over a fitted surface is a floating-point sign test on an
 approximation, and a flipped sign gives a nonsensical answer rather than a
 slightly wrong one.
@@ -212,7 +212,7 @@ func (b *Body) Kind() BodyKind
 ```
 
 `Kind()` is a **decided** answer, so it is a bare enum and carries no
-`Exactness`: `docs/api-design.md` §6 exempts exactly the predicates the
+`Exactness`: `agent-docs/api-design.md` §6 exempts exactly the predicates the
 evaluator decides — `IsSolid`, `IsConvex`, `IsOuter`, `IsVoid`, and §2.2's
 `IsOpen` and `IsFree` — and this joins them. It is not a measurement of
 anything.
@@ -243,7 +243,7 @@ run on, or that it refused to promote (R8), keeps its kind.
 
 ### 2.2 Topology
 
-A sheet body uses `docs/api-design.md` §6.1's chain unchanged —
+A sheet body uses `agent-docs/api-design.md` §6.1's chain unchanged —
 `Body` → `Lump` → `FaceShell` → `Face` → `Loop` → `CoEdge` → `Edge` → `Vertex`.
 Three things it holds differently, and nothing else changes:
 
@@ -257,7 +257,7 @@ Three things it holds differently, and nothing else changes:
   disconnected, on a sheet exactly as on a solid. The alternative — hanging a
   sheet's shells off the body directly — would give `Body.Shells()` two
   traversal paths and break the 1:1 map onto Fusion's own `BRepBody.lumps`
-  that `docs/api-design.md` §4 keeps deliberately.
+  that `agent-docs/api-design.md` §4 keeps deliberately.
 - **A shell may be open**, and says so:
 
   ```go
@@ -359,13 +359,13 @@ func Free() EdgePredicate
 Every one of these that takes a context bounds cancellation in its own
 construction and audit paths, returns `ctx.Err()` unchanged before commit, and
 leaves the document and every operand unchanged, exactly as
-`docs/api-design.md` §8 states for every other operation. `Extrude` and
+`agent-docs/api-design.md` §8 states for every other operation. `Extrude` and
 `Revolve` over a chain take a `ctx` on the same terms: each checks it at entry,
 between the record, extent and build steps, and inside the chain evaluator, and
 a canceled call returns `ctx.Err()` before commit (§13.2).
 
 `Stitch` and `Unstitch` consume their operands and register their results, on
-`docs/api-design.md` §6's uniform terms: `Stitch` retires every body handed
+`agent-docs/api-design.md` §6's uniform terms: `Stitch` retires every body handed
 to it, `Unstitch` retires its operand, and a retired body stays readable. No
 `*Document` appears in `Stitch`'s signature because a `*Body` carries its
 owning document, which is what lets `Union` take the same shape.
@@ -410,7 +410,7 @@ computed and carries a bound (§6.2).
 `Edges(Free()).Exactly(8)` asserts the count a surface extrude of a rectangle
 produces. It matches exactly the edges `Edge.IsFree()` reports.
 
-It renders `free` in `docs/api-design.md` §9's stable query rendering, so
+It renders `free` in `agent-docs/api-design.md` §9's stable query rendering, so
 `Edges(Free()).Exactly(8)` reads `edges(free).exactly(8)`, and a
 `SelectionError` or a verification `Diagnostic` naming that query prints it
 the same way.
@@ -459,14 +459,14 @@ body is how a caller reaches it.
 
 A surface-result body's payload is the feature's own payload plus the flag
 that its closing faces are omitted. `Transform` and `Copy`
-re-evaluate it exactly as they re-evaluate the solid's (`docs/api-design.md`
+re-evaluate it exactly as they re-evaluate the solid's (`agent-docs/api-design.md`
 §8), and a copy carries the source's roles under its own producer identity by
 the same copy-provenance rule.
 
 `CapStart(b)` and `CapEnd(b)` on a surface-result body return well-formed
 `FeatureRef` values that match nothing — the producer mints the roles, and the
 faces that carried them are gone. That is the ordinary "the helper matches
-nothing" outcome `docs/api-design.md` §9 already describes for a full
+nothing" outcome `agent-docs/api-design.md` §9 already describes for a full
 revolution, and it needs no new rule.
 
 ### 4.3 What the option does NOT change
@@ -493,7 +493,7 @@ normal, area, edge lengths, vertex positions and every bound on them.
 
 `PatchProfile(ctx, doc, s, p)` records `p` through the seam exactly as `Extrude` does
 — the same authentication, staleness, foreign-entity and `TExact` admission
-gates of `docs/api-design.md` §7 and `agent-docs/sketch-seam-design.md`, with no
+gates of `agent-docs/api-design.md` §7 and `agent-docs/sketch-seam-design.md`, with no
 relaxation — and builds a **single planar face** on `s.Plane().Frame()`,
 carrying the profile's outer loop and every hole loop.
 
@@ -504,7 +504,7 @@ collinear halves yields four edges, matching what `Extrude` already does for
 its rims.
 
 Its positive side is the sketch plane's normal, which is the sense
-`Direction.Along` names for that plane (`docs/api-design.md` §7). The outer
+`Direction.Along` names for that plane (`agent-docs/api-design.md` §7). The outer
 loop walks counter-clockwise in the plane frame and every hole clockwise, so a
 patch's walk is the profile's own, and `Edge.IsConvex` reads it by
 `agent-docs/evaluator-design.md` §3's rim rule: a hole's edges are concave.
@@ -1513,7 +1513,7 @@ surprise.
 
 Every refusal is at the call, before any commit; the document and every
 operand are unchanged. No new sentinel is introduced: each row lands on one
-of `docs/api-design.md` §12's existing vocabulary, and the distinction the
+of `agent-docs/api-design.md` §12's existing vocabulary, and the distinction the
 caller acts on is the one that vocabulary already draws — `ErrDegenerate` is
 input with no usable geometry, `ErrUnsupported` is this evaluator's reach.
 
@@ -1522,7 +1522,7 @@ input with no usable geometry, `ErrUnsupported` is this evaluator's reach.
 | # | Condition | Sentinel |
 |---|---|---|
 | R1 | `WithSurfaceResult()` on a feature this evaluator cannot yet build as a surface (Table D), and on a chain `Extrude`, `Sweep` or `Revolve`, whose result is always a sheet (§13.2) | `ErrUnsupported` |
-| R2 | `PatchProfile` handed a profile that fails `docs/api-design.md` §7's seam gates | as the seam states: `ErrForeignProfile` / `ErrStaleProfile` / `ErrInvalidProfile` / `ErrUnrecordableProfile` |
+| R2 | `PatchProfile` handed a profile that fails `agent-docs/api-design.md` §7's seam gates | as the seam states: `ErrForeignProfile` / `ErrStaleProfile` / `ErrInvalidProfile` / `ErrUnrecordableProfile` |
 | R3 | `PatchProfile` handed a profile whose recorded boundary carries a free-form segment this evaluator cannot integrate | `ErrUnsupported` |
 | R4 | `PatchEdges` selection holds an edge that is not free | `ErrDegenerate` |
 | R5 | `PatchEdges` selection does not partition into closed chains, or a chain's plane-local walk crosses or touches itself | `ErrDegenerate` |
@@ -1567,7 +1567,7 @@ input with no usable geometry, `ErrUnsupported` is this evaluator's reach.
 | R46 | `PatchEdges` chain holding a circular edge whose curve bound could not be proven (a cap copy at a sweep end with no denotation, a bound not below half the radius), so the new face has no proven area (§5.2) | `ErrUnsupported` |
 
 R6, R8, R10 and R20 are `ErrUnsupported` rather than `ErrDegenerate` on
-`docs/api-design.md` §8's own distinction: the input names real geometry and
+`agent-docs/api-design.md` §8's own distinction: the input names real geometry and
 the refusal is this evaluator's reach, not a zero or self-crossing region. R5,
 R7 and R9 are `ErrDegenerate` because the geometry itself is the problem and
 no later evaluator admits it. R11, R15 and R17 are `ErrUnsupported` for
@@ -1643,7 +1643,7 @@ same way.
 **`Volume` and `Centroid` refuse a sheet by kind, not by soundness.** On a
 solid, `ErrNotSolid` reports a defect (`IsSolid()` false on a `BodySolid`
 body); on a sheet it reports a category. `Kind()` is what distinguishes them,
-which is §2.1's whole argument, and `docs/api-design.md` §6's rule that
+which is §2.1's whole argument, and `agent-docs/api-design.md` §6's rule that
 `volume == 0` must never mean both "empty" and "not a solid" is what makes
 the error the right shape in both cases.
 
@@ -1908,7 +1908,7 @@ skipped as an optimization: it has nothing left to prove.
   of a sheet pair report, crossing or not.
 - **Contained**, or **outside** → the pair reads `Sound`, no diagnostic.
   Under `WithClearances()` it carries a `Clearance` row with the SAME proven
-  gap interval either way: `docs/api-design.md` §6.2 states the consequence
+  gap interval either way: `agent-docs/api-design.md` §6.2 states the consequence
   that follows.
 - **Undecided** (missing model, unsure candidate, or a failed witness cast)
   while the boxes MEET → the pair keeps `DiagUnsupportedPairSheet`,
@@ -2145,14 +2145,14 @@ audits of §10.1 apply unchanged. This route publishes
 | `Tessellate` / `STL` / `OBJ` | a `PatchProfile`, all-planar `PatchEdges`, prism, revolve, loft, all-planar stitched or §10.1–§10.2 revolve-backed stitched sheet tessellates and exports; other curved stitched sheets are R32 | each supported sheet path runs the manifold-with-boundary audit §10 describes |
 | `ToFace` / `ToFaceAngular` naming a **planar** face of a live sheet | admitted | the stop reads the face's plane and nothing about material, so `stops.go`'s resolution is unchanged |
 | `ToFace` naming a curved face of a sheet | as for a solid | this design changes no curved-stop reach |
-| `EdgeAxis` naming a linear edge of a live sheet | admitted | the axis reads the edge's line; `docs/api-design.md` §6.2's exactly-one and liveness rules apply unchanged |
+| `EdgeAxis` naming a linear edge of a live sheet | admitted | the axis reads the edge's line; `agent-docs/api-design.md` §6.2's exactly-one and liveness rules apply unchanged |
 | `ThroughAll` / `ThroughAllSide` resolving its stops over a document holding a sheet | the sheet is skipped, not refused | a sheet encloses no material to stop against, and refusing would stop any document holding one sheet from using `ThroughAll` at all |
 | `Body.Faces` / `Edges` / `Vertices` / `Lumps` / `Shells` | admitted, unchanged | traversal and inspection, as on every body |
 | every selector predicate | admitted, unchanged | a sheet's faces and edges answer `Planar()`, `Convex()`, `CreatedBy()` and the rest on the same terms |
 
 A sheet is a first-class body everywhere it is admitted: it is registered in
 the document, it appears in `Document.Bodies()`, `Verify` reports on it, and
-it retires and copies on `docs/api-design.md` §6's uniform terms.
+it retires and copies on `agent-docs/api-design.md` §6's uniform terms.
 
 A stitched body that closes to a `BodySolid` is not a sheet at all, so no row
 above governs its mesh or its boolean reach: §10's own stitched-solid
@@ -2171,13 +2171,13 @@ reverses a decision already taken.
 
 | Document | What changes |
 |---|---|
-| `docs/api-design.md` §6 | `Body` gains `Kind()`; `Volume`/`Centroid`'s `ErrNotSolid` gains the by-kind reading (§8); `Lump`'s gloss becomes "a connected piece of a body"; `FaceShell` gains `IsOpen`; `Edge` gains `IsFree` |
-| `docs/api-design.md` §6.1 | `Edge.Faces()`'s `len != 2` gloss gains the per-kind reading (§2.2) |
-| `docs/api-design.md` §8 | the v1 feature vocabulary gains `Patch`, `Stitch`, `Unstitch` and `WithSurfaceResult`; the signatures land beside the existing ones |
-| `docs/api-design.md` §8 | `Thicken`, `ThickenSide` and `WithThickenSide` add §16's sheet-to-solid path under §6's consuming-body rule |
-| `docs/api-design.md` §8 | `Offset`, `OffsetSide` and `WithOffsetSide` add §17's sheet-to-sheet path under §6's NON-consuming rule, the one `Copy` already takes |
-| `docs/api-design.md` §9 | the predicate list gains `Free()`, and the rendering table gains its `free` token |
-| `docs/api-design.md` §13 | the v1 non-goal list keeps sheet-metal, and names §1.2's staged commands, §1.3's permanent refusals and §1.4's unstaged one, so the list stays the whole of what is out |
+| `agent-docs/api-design.md` §6 | `Body` gains `Kind()`; `Volume`/`Centroid`'s `ErrNotSolid` gains the by-kind reading (§8); `Lump`'s gloss becomes "a connected piece of a body"; `FaceShell` gains `IsOpen`; `Edge` gains `IsFree` |
+| `agent-docs/api-design.md` §6.1 | `Edge.Faces()`'s `len != 2` gloss gains the per-kind reading (§2.2) |
+| `agent-docs/api-design.md` §8 | the v1 feature vocabulary gains `Patch`, `Stitch`, `Unstitch` and `WithSurfaceResult`; the signatures land beside the existing ones |
+| `agent-docs/api-design.md` §8 | `Thicken`, `ThickenSide` and `WithThickenSide` add §16's sheet-to-solid path under §6's consuming-body rule |
+| `agent-docs/api-design.md` §8 | `Offset`, `OffsetSide` and `WithOffsetSide` add §17's sheet-to-sheet path under §6's NON-consuming rule, the one `Copy` already takes |
+| `agent-docs/api-design.md` §9 | the predicate list gains `Free()`, and the rendering table gains its `free` token |
+| `agent-docs/api-design.md` §13 | the v1 non-goal list keeps sheet-metal, and names §1.2's staged commands, §1.3's permanent refusals and §1.4's unstaged one, so the list stays the whole of what is out |
 | `agent-docs/evaluator-design.md` §3 | the `Lump` row states "connected piece"; the topology-model rules gain the free-edge reading |
 | `agent-docs/evaluator-design.md` §11 | the increment table gains Table D's rows |
 | `agent-docs/verification-design.md` §1 | `Region`'s biconditional becomes validity **and** `Kind() == BodySolid` (§9.1) |
@@ -2188,14 +2188,14 @@ reverses a decision already taken.
 | `agent-docs/interference-design.md` §2 | the report walk states §9.3's decision procedure for a pair holding a sheet, in place of the box rule alone |
 | `agent-docs/clearance-design.md` §2 | states that `pairkernel.SheetSolid` reuses the carrier model and candidate enumeration, skipping the §6 coplanar certificate, which a sheet's missing material could never satisfy |
 | `agent-docs/clearance-design.md` §3 | states that a sheet-against-solid pair settles a proven positive lower bound with ONE witness cast, never the two-directional nesting relation a solid pair needs, and why (§9.3) |
-| `docs/api-design.md` §6.2 | `Clearance`'s doc comment states the one consequence: for a sheet-solid pair the row states the distance to the solid's boundary without asserting which side the sheet is on; a solid-solid row's meaning is unchanged |
+| `agent-docs/api-design.md` §6.2 | `Clearance`'s doc comment states the one consequence: for a sheet-solid pair the row states the distance to the solid's boundary without asserting which side the sheet is on; a solid-solid row's meaning is unchanged |
 | `agent-docs/tessellation-design.md` §1 | the Geometry row and the mandatory closed-mesh audit become kind-conditional (§10) |
-| `docs/api-design.md` §7 | the internal seam records an open chain through `sketchrecord.RecordChain` beside `momentinput.RecordProfile`, under the foreign, stale, snapshot-match and `TExact` gates (§13.3) |
-| `docs/api-design.md` §8 | the v1 feature vocabulary gains `LoftChain`, and `Extrude`, `Sweep` and `Revolve` take a `Section`; the signatures land beside the existing surface block |
-| `docs/api-design.md` §12 | `ErrForeignProfile`, `ErrStaleProfile`, `ErrInvalidProfile` and `ErrUnrecordableProfile` each state that their cause is a profile OR an open chain (§7 there, §13.3 here) |
+| `agent-docs/api-design.md` §7 | the internal seam records an open chain through `sketchrecord.RecordChain` beside `momentinput.RecordProfile`, under the foreign, stale, snapshot-match and `TExact` gates (§13.3) |
+| `agent-docs/api-design.md` §8 | the v1 feature vocabulary gains `LoftChain`, and `Extrude`, `Sweep` and `Revolve` take a `Section`; the signatures land beside the existing surface block |
+| `agent-docs/api-design.md` §12 | `ErrForeignProfile`, `ErrStaleProfile`, `ErrInvalidProfile` and `ErrUnrecordableProfile` each state that their cause is a profile OR an open chain (§7 there, §13.3 here) |
 | `agent-docs/sketch-seam-design.md` §2 | the recording IR gains `ChainRecord` and `RecordChain`, over the same ten `CurveSegment` variants; §2.1's admission list gains the chain's own interior-junction reading (§13.3) |
-| `docs/api-design.md` §2.1 | the admitted-class sentence names the shared-generator predicate and both owning documents, in place of the one class it named before |
-| `docs/api-design.md` §8 | the v1 feature vocabulary gains `Trim`, `Extend` and `Split`, with `TrimSide`; the signatures land beside the existing surface block (`agent-docs/surface-intersection-design.md` §8) |
+| `agent-docs/api-design.md` §2.1 | the admitted-class sentence names the shared-generator predicate and both owning documents, in place of the one class it named before |
+| `agent-docs/api-design.md` §8 | the v1 feature vocabulary gains `Trim`, `Extend` and `Split`, with `TrimSide`; the signatures land beside the existing surface block (`agent-docs/surface-intersection-design.md` §8) |
 | `agent-docs/prism-boolean-design.md` §3.4 | states that the same three displacement causes REFUSE rather than reroute wherever no mesh path exists, which is every sheet-involving pair (`agent-docs/surface-intersection-design.md` §2.1 S7, §5) |
 | `agent-docs/layout/` | a row for this document and one for `agent-docs/surface-intersection-design.md`, and one per `.go` file each increment adds; the chain increment adds no file, so `record.go`'s and `seam.go`'s own rows name the chain instead |
 | `CLAUDE.md` | a "Read before you write" row pointing here for sheet-body, surface-feature, patch and stitch code, and one pointing at `agent-docs/surface-intersection-design.md` for trim, extend and split code |
@@ -2284,7 +2284,7 @@ compile time, and a typed-nil section of either kind returns `ErrDegenerate`.
 
 Every entry point takes the sketch beside the section, for the reason `Extrude`
 does: a section's geometry is plane-local and the plane is the sketch's
-(`docs/api-design.md` §7). A chain `Extrude` resolves its extent through the
+(`agent-docs/api-design.md` §7). A chain `Extrude` resolves its extent through the
 same vocabulary a profile `Extrude` uses, and each entry point takes a
 context.
 
@@ -2423,7 +2423,7 @@ follows from a rule already stated rather than adding one.
 §13.1's renaming case is why: a held chain can be fresh and correct while
 sitting at a different index, so an index comparison would reject a chain
 nothing is wrong with. Matching every exported field against some fresh member
-is what `docs/api-design.md` §7 already prescribes for a profile, which is
+is what `agent-docs/api-design.md` §7 already prescribes for a profile, which is
 freshly allocated on every call for the same reason.
 
 **Only the walk's INTERIOR junctions are checked.** A `LoopRecord`'s closure
@@ -2438,7 +2438,7 @@ published whatever `TExact` reports, and exact only for a `*Line`, `*Arc` or
 UNDERESTIMATE, the chord sum of the entity's own curve over the reported range,
 with no bound stated for the gap. A measurement decad published from it would be
 confidently short by an unstated amount, which is the failure this engine exists
-to prevent, and `docs/api-design.md` §5.1's rule that a scalar quantity is a
+to prevent, and `agent-docs/api-design.md` §5.1's rule that a scalar quantity is a
 `units.Value` refuses the bare float besides. So the field enters the snapshot
 comparison as an integrity check — equality against the fresh chain's own value,
 the use `Profile.Area` already gets at the same seam — and nothing else reads
@@ -3568,7 +3568,7 @@ the offset sheet and the sheet it came from are the pair a caller measures a
 clearance between, stitches into a closed boundary, or thickens separately, and
 retiring the source would put a `Copy` in front of each of those. The
 result registers under a new producer identity on the non-consuming terms
-`Copy` already takes (`docs/api-design.md` §6). That is
+`Copy` already takes (`agent-docs/api-design.md` §6). That is
 the one contract difference from `Thicken`, which consumes.
 
 The source sheet's positive side is §2.3's built orientation, read exactly as

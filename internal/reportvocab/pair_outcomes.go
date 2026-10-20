@@ -45,7 +45,7 @@ const (
 // SheetSolidResult is one sheet-against-solid pair's decision. Lo, Hi, Exact
 // and Diam are populated only for SheetSolidContained and SheetSolidOutside,
 // and they carry the SAME boundary-distance interval regardless of which side
-// the witness landed on (docs/api-design.md §6.2): the interval is proven
+// the witness landed on (agent-docs/api-design.md §6.2): the interval is proven
 // before the witness cast ever runs, so containment and separation share one
 // Clearance row that states the distance to the solid's boundary without
 // asserting which side the sheet is on.

@@ -34,7 +34,7 @@ const defaultRelativeSlack = 1e-12
 // oracle, never of decad's reading. Its Kind must be the reading's Kind — a
 // millimetre slack handed to a volume reading never silently compares mm
 // against mm^3, which is why the parameter is a units.Value and not a
-// float64 (docs/api-design.md §5.1). A wrong-Kind Within is a test bug the
+// float64 (agent-docs/api-design.md §5.1). A wrong-Kind Within is a test bug the
 // helper reports before it compares any number.
 //
 // A later Within or WithinRel replaces an earlier one in the same call: they

@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file covers the query union of docs/api-design.md §9: EdgeQuery.Or and
+// This file covers the query union of agent-docs/api-design.md §9: EdgeQuery.Or and
 // FaceQuery.Or add branches, an entity matches when every clause of one branch
 // holds, and the cardinality assertion counts the union's distinct entities.
 //

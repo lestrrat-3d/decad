@@ -292,7 +292,7 @@
 // this package exports today is the leading edge of that surface, and
 // whatever it does not yet export — ultimately the document, features,
 // evaluator and verification surface — remains design-only. The
-// contract for the whole surface is docs/api-design.md — the core design.
+// contract for the whole surface is agent-docs/api-design.md — the core design.
 // Companion designs carry its deep ends; the agent-docs/layout/ part files list every
 // design document. Every
 // capability it consumes from sketch, r3 and units exists today — no open

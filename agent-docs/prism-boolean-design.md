@@ -10,7 +10,7 @@ membership of its own. Companion to `agent-docs/evaluator-design.md` §9 (the
 existing mesh boolean, unchanged, and still the fallback for everything this
 design does not admit) and `agent-docs/modify-design.md` §2 (the section-rewrite
 reduction this design reuses and extends from one operand to two). References
-of the form "core §N" are to `docs/api-design.md`; "modify §N" to
+of the form "core §N" are to `agent-docs/api-design.md`; "modify §N" to
 `agent-docs/modify-design.md`; "seam §N" to `agent-docs/sketch-seam-design.md`.
 
 ## 1. Problem

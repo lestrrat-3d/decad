@@ -25,7 +25,7 @@ func exactnessOf(bound float64) measurement.Exactness {
 
 // Area returns the recorded region's net area — the outer loop minus its
 // holes — as a [measurement.Measurement] of Kind Area (mm²): a computed quantity carries
-// its Exactness and Bound (docs/api-design.md §6). Each boundary segment
+// its Exactness and Bound (agent-docs/api-design.md §6). Each boundary segment
 // contributes its Green's-theorem integral in walk order, so a hole's clockwise
 // walk subtracts without a special case.
 //
@@ -65,7 +65,7 @@ func (r Profile) Area() (measurement.Measurement, error) {
 
 // Centroid returns the recorded region's centroid from its bounded first
 // moments, as a [measurement.VecMeasurement] — a computed coordinate is a measurement
-// (docs/api-design.md §6). The Value is PLANE-LOCAL: (u, v, 0) in the
+// (agent-docs/api-design.md §6). The Value is PLANE-LOCAL: (u, v, 0) in the
 // region's own plane coordinates, millimetres (§5.2), not a world position —
 // lift it through the profile's PlaneRecord to place it in space.
 //

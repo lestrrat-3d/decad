@@ -2,7 +2,7 @@
 
 The increment-1 `Loft` feature: a solid between two recorded planar profiles on
 distinct geometric planes, built by straight rules between corresponding boundary
-points, with no guide rail and no centerline. Companion to `docs/api-design.md` (public surface,
+points, with no guide rail and no centerline. Companion to `agent-docs/api-design.md` (public surface,
 "core §N"), `agent-docs/sketch-seam-design.md` (the recording IR both profiles are
 authenticated into, "seam §N"), `agent-docs/evaluator-design.md` ("evaluator §N"),
 `agent-docs/modify-design.md` (the receiver/refusal/result/downstream table
@@ -13,7 +13,7 @@ document's Table W follows, "spline §N"), `agent-docs/tessellation-design.md`
 `agent-docs/evaluator-design.md` ("replay §N"), and `agent-docs/interference-design.md`
 / `agent-docs/clearance-design.md` (the staged-consumer precedent Table D follows).
 
-`docs/api-design.md` §8 includes Loft in the feature vocabulary and points here
+`agent-docs/api-design.md` §8 includes Loft in the feature vocabulary and points here
 for its scope. §15 records the companion contracts that keep the tree
 consistent.
 
@@ -172,7 +172,7 @@ introduces no body-relative stop, so a loft consumes and depends on no body.
 
 **The correspondence is fixed entirely from recorded structural data — never
 by sampling a curve, fitting a transform, or a nearest-point search between
-the two boundaries.** `docs/api-design.md`'s hard rule against re-deriving a
+the two boundaries.** `agent-docs/api-design.md`'s hard rule against re-deriving a
 2D answer, and the sibling rule that a decad-side check may only falsify an
 upstream claim, both forbid inferring a correspondence sketch never stated:
 decad reads the two `ProfileRecord`s' own segment order, and nothing else.
@@ -2389,9 +2389,9 @@ this design.
 
 The following sites point to this design:
 
-- **`docs/api-design.md` §8** lists `Loft` in the feature vocabulary and
+- **`agent-docs/api-design.md` §8** lists `Loft` in the feature vocabulary and
   delegates its correspondence and staged reach here.
-- **`docs/api-design.md` §13** does not list Loft as a non-goal.
+- **`agent-docs/api-design.md` §13** does not list Loft as a non-goal.
 - **`agent-docs/layout/design-docs.md`'s Layout table** lists this document.
 - **`agent-docs/surface-design.md` §1.2, §13.5, Table R and Table D** name §16 as
   the owner of `LoftChain`'s pairing rule, and its §15 carries §16.7's test
@@ -2623,7 +2623,7 @@ construction, `IsSolid()` is `false`, and `Volume()`/`Centroid()` answer
 
 ### 16.4 Table SL — what refuses a chain loft
 
-Every row lands on `docs/api-design.md` §12's existing vocabulary. Gate order
+Every row lands on `agent-docs/api-design.md` §12's existing vocabulary. Gate order
 is §4's, with its seam step reading two chains through `RecordChain`.
 
 | SL | Condition | Sentinel |

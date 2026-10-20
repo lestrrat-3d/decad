@@ -245,7 +245,7 @@ func TestVerifyNonePublishesOnlyPositiveAreaFacets(t *testing.T) {
 }
 
 // STL and OBJ default to VerifyNone, so they can write a dense mesh that the
-// facet-pair audit refuses at VerifyAll (docs/api-design.md §11).
+// facet-pair audit refuses at VerifyAll (agent-docs/api-design.md §11).
 func TestExportWritesABodyTheProvenPathRefuses(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()

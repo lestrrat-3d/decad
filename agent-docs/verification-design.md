@@ -4,7 +4,7 @@ How `Document.Verify` judges what decad measures: the report it returns (§1),
 the caller's tolerance and the relative gate (§2), the reference every bounded
 result is judged against (§3), the noise floor that keeps the gate meaningful
 at zero (§4), the three rules that fall out (§5), and the statuses the verdicts
-aggregate into (§6). Companion to `docs/api-design.md` — the core design, which
+aggregate into (§6). Companion to `agent-docs/api-design.md` — the core design, which
 owns `Verify`'s place in the API, the three bounded result shapes
 (`Measurement`, `VecMeasurement`, `Box`), and the error vocabulary. References
 of the form "core §N" are to that document.

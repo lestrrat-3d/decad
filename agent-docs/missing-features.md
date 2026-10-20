@@ -82,8 +82,8 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 
 | Gap | Today | Owner |
 |---|---|---|
-| Multi-body Union outside certified prism and straight-source axial Loft pair chains, equal-interval one-scene prisms, and specialized copied-source joins; the patterned spiral-tooth join refuses any copy made without `WithCopyRotation` about the X axis through the origin | `ErrUnsupported` (`boolean_many.go`); each chained pair may also refuse on its own geometry | `docs/api-design.md` §8, `agent-docs/prism-boolean-design.md` §4.6, `agent-docs/general-boolean-design.md` §12, `agent-docs/revolve-loft-sector-design.md`, `agent-docs/prism-pattern-union-design.md` |
-| Analytic readings of a faceted copy made with `WithCopyRotation`: face normals, `ToFace` stops, `MirrorFace`, point-loft cone trims, loft mirror cylinder joins, the other copied-source proofs and motion verification of the copy | `ErrUnsupported`: every face reads `Faceted` (`Face.NormalAt` refuses; `ToFace` and `MirrorFace` need a plane), and the copy is not a source for the structural trims that read the float placement. `VerifyMotion` and `VerifyLinkage` also refuse to re-place the copy or any `Copy`, `Transform` or `ScaledAt` descendant of it. `WithCopyPlacement` of a source with no preceding exact placement keeps them | `docs/api-design.md` §8, `agent-docs/evaluator-design.md` §8, `agent-docs/mirror-pattern-design.md` §4.4 |
+| Multi-body Union outside certified prism and straight-source axial Loft pair chains, equal-interval one-scene prisms, and specialized copied-source joins; the patterned spiral-tooth join refuses any copy made without `WithCopyRotation` about the X axis through the origin | `ErrUnsupported` (`boolean_many.go`); each chained pair may also refuse on its own geometry | `agent-docs/api-design.md` §8, `agent-docs/prism-boolean-design.md` §4.6, `agent-docs/general-boolean-design.md` §12, `agent-docs/revolve-loft-sector-design.md`, `agent-docs/prism-pattern-union-design.md` |
+| Analytic readings of a faceted copy made with `WithCopyRotation`: face normals, `ToFace` stops, `MirrorFace`, point-loft cone trims, loft mirror cylinder joins, the other copied-source proofs and motion verification of the copy | `ErrUnsupported`: every face reads `Faceted` (`Face.NormalAt` refuses; `ToFace` and `MirrorFace` need a plane), and the copy is not a source for the structural trims that read the float placement. `VerifyMotion` and `VerifyLinkage` also refuse to re-place the copy or any `Copy`, `Transform` or `ScaledAt` descendant of it. `WithCopyPlacement` of a source with no preceding exact placement keeps them | `agent-docs/api-design.md` §8, `agent-docs/evaluator-design.md` §8, `agent-docs/mirror-pattern-design.md` §4.4 |
 | Exact result outside the admitted analytic classes | Mesh boolean gives `Faceted` faces with a volume bound | `agent-docs/general-boolean-design.md` §3, `agent-docs/loft-point-design.md` "Coaxial finite cone trims" |
 | Blind cuts with displaced levels, opposed-hole contact, or other crossing holes | Mesh path, possibly coplanar refusal. A7 builds one exact rectangular crossing | `agent-docs/stacked-prism-design.md` §7; `agent-docs/general-boolean-design.md` §3 A7 |
 | Touching, coplanar or face-on-face contact on the mesh path | `BooleanError` code `BooleanUnsupportedContact` | `agent-docs/general-boolean-design.md` §2, `agent-docs/interference-design.md` |
@@ -120,7 +120,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 
 | Gap | Today | Owner |
 |---|---|---|
-| Import of STEP, IGES, STL, OBJ or 3MF | No import entry point exists; mesh import is a v1 non-goal | `docs/api-design.md` §13 |
+| Import of STEP, IGES, STL, OBJ or 3MF | No import entry point exists; mesh import is a v1 non-goal | `agent-docs/api-design.md` §13 |
 | Analytic STEP for cones, spheres, horn tori, free-form walls | Whole body falls back to faceted STEP; planes, cylinders and tori with circle, arc, line and ellipse edges write analytic (`export/step_analytic.go`, `export/step_analytic_torus.go`) | `agent-docs/step-export-design.md` |
 | STEP of a body with a cavity: a `WithNoOpenings` closed shell, a full revolve of a cavity meridian or a holed meridian | `ErrUnsupported`: "only a single non-void shell is supported" (`export/step.go`) | `agent-docs/step-export-design.md` |
 
@@ -137,7 +137,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 
 ## Model structure — v1 non-goals
 
-`docs/api-design.md` §13 owns this list. Lifting any of them changes that section first.
+`agent-docs/api-design.md` §13 owns this list. Lifting any of them changes that section first.
 
 | Gap | Today |
 |---|---|
@@ -168,4 +168,4 @@ moves its row to the matching section above, with that doc as owner.
 | Text profiles from a font, for engraved or embossed lettering | No entry point exists |
 | 2D drawings: projected views, silhouette and hidden lines, DXF output | No entry point exists |
 | PMI or GD&T, as data or in STEP AP242 | No entry point exists; `export.STEP` writes AP214 geometry only |
-| IGES, glTF or Parasolid export | `export` writes STL, OBJ, 3MF and STEP only (`docs/api-design.md` §11) |
+| IGES, glTF or Parasolid export | `export` writes STL, OBJ, 3MF and STEP only (`agent-docs/api-design.md` §11) |

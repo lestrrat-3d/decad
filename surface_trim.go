@@ -86,7 +86,7 @@ func (s TrimSide) String() string {
 // consumes neither. It admits a pair whose two sweeps share ONE generator —
 // both the prism family (a straight Extrude/chain Extrude sweep) or both the
 // revolve family (a Revolve/chain Revolve spin about one axis,
-// docs/api-design.md's evaluator §5). A mixed pair, or any condition §2.1's
+// agent-docs/api-design.md's evaluator §5). A mixed pair, or any condition §2.1's
 // S1-S7 states, is [ErrUnsupported] at the call, never a fallback: a sheet's
 // mesh proves no occupied volume (booloperand.RequireVolumeProof),
 // so there is no mesh path for a miss to reroute to. A tool that separates no

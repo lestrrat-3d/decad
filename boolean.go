@@ -78,7 +78,7 @@ import (
 // clear it — not a BooleanError.
 //
 // The held-mesh half of that limit is what bounds how far booleans CHAIN, and
-// it binds LOCALLY (docs/api-design.md §8 "The chain depth"): a result's bound
+// it binds LOCALLY (agent-docs/api-design.md §8 "The chain depth"): a result's bound
 // is composed per vertex from the operation that made it, and feeding that
 // result back in as an operand refuses exactly when a facet the new pair
 // meets, or comes within the tangency gate's slack of, carries a bound above
@@ -210,7 +210,7 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 }
 
 // asBooleanError maps an evaluateBoolean or facetedrecord.BuildWithProof error to the
-// public typed BooleanError (docs/api-design.md §8 / H2). The private
+// public typed BooleanError (agent-docs/api-design.md §8 / H2). The private
 // expected-outcome kinds decide the Code and the wrapped sentinel: an empty
 // result is BooleanEmpty; a valid but unclassifiable coplanar / tangent /
 // grazing / isolated-point contact, and an in-pipeline reach of the boolean

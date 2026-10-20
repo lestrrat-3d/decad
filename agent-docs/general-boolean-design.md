@@ -11,7 +11,7 @@ fallback), `agent-docs/prism-boolean-design.md` ("prism-boolean §N": the gates,
 scene, cell classification and displacement bounds this design reuses),
 `agent-docs/stacked-prism-design.md` ("stacked §N") and
 `agent-docs/mirror-pattern-design.md` ("mirror §N"). Core §N is
-`docs/api-design.md`; seam §N is `agent-docs/sketch-seam-design.md`. Every row of §2
+`agent-docs/api-design.md`; seam §N is `agent-docs/sketch-seam-design.md`. Every row of §2
 was measured with the probe under `.tmp/probe/` at `8cc06f90`.
 
 ## 1. Problem

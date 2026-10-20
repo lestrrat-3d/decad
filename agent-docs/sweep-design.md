@@ -7,7 +7,7 @@ measurements, downstream coverage, and staged implementation.
 
 Companion contracts remain authoritative for their existing areas:
 
-- `docs/api-design.md` owns the public model and sketch-profile seam;
+- `agent-docs/api-design.md` owns the public model and sketch-profile seam;
 - `agent-docs/sketch-seam-design.md` owns profile authentication and recording;
 - `agent-docs/evaluator-design.md` owns topology, commits, and payload dispatch;
 - `agent-docs/tessellation-design.md` owns public mesh proofs and boolean admission;
@@ -671,9 +671,9 @@ Every test asserts computed geometry or a proof bound.
 
 Landing this design makes these contract edits:
 
-- `docs/api-design.md` §8 adds `Sweep` and points here for its signature and
+- `agent-docs/api-design.md` §8 adds `Sweep` and points here for its signature and
   path contract;
-- `docs/api-design.md` §13 removes Sweep from the non-goals list;
+- `agent-docs/api-design.md` §13 removes Sweep from the non-goals list;
 - `agent-docs/layout/design-docs.md` lists this document;
 - `agent-docs/evaluator-design.md` §11 points to this document's staged delivery;
 - the implementation increment that adds `sweepPayload` adds its row to
@@ -821,7 +821,7 @@ even when its path would also fail SC3. A malformed option, such as
 point. A refused call commits nothing and leaves `Document.Bodies()` unchanged.
 
 The call takes the sketch beside the chain because a chain's geometry is
-plane-local and the plane is the sketch's (`docs/api-design.md` §7).
+plane-local and the plane is the sketch's (`agent-docs/api-design.md` §7).
 
 **A chain-fed result is always a sheet**, which is `agent-docs/surface-design.md`
 §13.2's answer for a chain `Extrude` and a chain `Revolve` restated with no change:
@@ -830,7 +830,7 @@ plane-local and the plane is the sketch's (`docs/api-design.md` §7).
 
 ### 15.4 Table SC — what refuses a chain sweep
 
-Every row lands on `docs/api-design.md` §12's existing vocabulary, and no row
+Every row lands on `agent-docs/api-design.md` §12's existing vocabulary, and no row
 mints a sentinel of its own. Gate order is §5's, with its step 2 reading a
 chain through `RecordChain` instead of a profile through `RecordProfile`.
 
@@ -1114,7 +1114,7 @@ reverses every triangle. Never orient a wall or a cap on its own.
 
 ### 16.4 Table SM — what refuses a mitred polyline sweep
 
-Every row lands on `docs/api-design.md` §12's vocabulary. Gate order is
+Every row lands on `agent-docs/api-design.md` §12's vocabulary. Gate order is
 §5's, with step 5 running SM5 through SM7 per span in path order and step 7
 running SM8 in place of §7's separation audit.
 
@@ -1199,7 +1199,7 @@ twice `delta`, rounded down.
 |---|---|---|
 | **DM1** | structural `Verify` + tolerance gate | lands with M1. The construction, SM6/SM7 per span and SM8's audit prove validity, and all four readings are judged |
 | **DM2** | `Tessellate` / STL / OBJ / 3MF / faceted STEP | lands with M1 as an exact restatement: the held triangles of Table BM at any tolerance at or above `delta` (below it, `ErrUnsupported`, `agent-docs/tessellation-design.md` §7's rule), each vertex's own rounding gap as its `vertexBound` and `sourceBound(face)` the largest of them over that face's triangles (`agent-docs/faceted-vertex-bounds-design.md` §2.1), with `Bound` `delta`, `areaSlack` the per-triangle perturbation at `delta` (`perturbedTriangleAreaAllow`, the `stitchPayload` row's term), `volSymDiff = sweptVolumeAllow(delta, area upper)` with `symDiffOK == true`, and the boundary proof the build's own SM8 certificate. The implementing PR adds this payload's row to `agent-docs/tessellation-design.md` §2's table |
-| **DM3** | mesh booleans | lands with M2: an operand on `agent-docs/tessellation-design.md` §11's terms. Two branches that cross carry `delta > 0` on both sides, so the hidden-tangency gate runs with slack `2·delta` and admits the pair only through a proven deep witness, which `boolean.go`'s witness search finds by sampling along each contact segment. Walls that are coplanar with the other operand's, as two branches sharing a span are, stay refused by that gate. A `Cut` whose tool is a mitred sweep wholly inside the target, such as a thinner bore through a trunk's corners that stops short of both caps, publishes the bore as a separate void shell (`docs/api-design.md` §6), and a later `Union` whose operand stays clear of the bore keeps that shell whole. A holed profile's passage cannot be capped into a void by a `Union` with end plugs, because a plug flush with the tube's cap is a coplanar contact this gate refuses |
+| **DM3** | mesh booleans | lands with M2: an operand on `agent-docs/tessellation-design.md` §11's terms. Two branches that cross carry `delta > 0` on both sides, so the hidden-tangency gate runs with slack `2·delta` and admits the pair only through a proven deep witness, which `boolean.go`'s witness search finds by sampling along each contact segment. Walls that are coplanar with the other operand's, as two branches sharing a span are, stay refused by that gate. A `Cut` whose tool is a mitred sweep wholly inside the target, such as a thinner bore through a trunk's corners that stops short of both caps, publishes the bore as a separate void shell (`agent-docs/api-design.md` §6), and a later `Union` whose operand stays clear of the bore keeps that shell whole. A holed profile's passage cannot be capped into a void by a `Union` with end plugs, because a plug flush with the tube's cap is a coplanar contact this gate refuses |
 | **DM4** | interference | lands with M2: the partition through the exact planar arm of `agent-docs/interference-design.md` §3.2 against a prism, a stitched solid, a faceted result or another mitred sweep, the overlap volume through DM3's mesh path |
 | **DM5** | clearance | box separation at once; `WithClearances` reads the exact planar arm's gap, the held gap widened by `delta`, against the partners DM4 names, and stays `Suspect` against every other payload |
 | **DM6** | `Wall`, `Undercut`, `ConcaveRadius` | `Unavailable` with `DiagUnsupportedSurveyPayload`, as D6 |
@@ -1270,7 +1270,7 @@ deleted once and watched fail before it is trusted.
 - The implementing PR adds the payload's row to `agent-docs/tessellation-design.md`
   §2's table and to `agent-docs/payload-verification-design.md`, and changes
   `doc.go`'s support map.
-- `docs/api-design.md` needs no edit: `Sweep`'s signature is unchanged and §8
+- `agent-docs/api-design.md` needs no edit: `Sweep`'s signature is unchanged and §8
   already names this document as the owner of its options and reach.
 
 ## 17. Bounded twist

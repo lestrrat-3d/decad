@@ -21,7 +21,7 @@ import (
 )
 
 // This file is the revolve of agent-docs/evaluator-design.md §6: the
-// sealed Axis vocabulary of docs/api-design.md §6.2, the §6 axis-contact
+// sealed Axis vocabulary of agent-docs/api-design.md §6.2, the §6 axis-contact
 // gates, angular-extent resolution to a sweep interval (the body-relative
 // ToFaceAngular stop resolves through stops.go and leaves its body live), and the analytic revolve
 // evaluator — Cylinder, Cone, planar-annulus, Sphere and Torus side faces
@@ -34,7 +34,7 @@ import (
 // handles the profile and axis, internal/revolveplan/build.go builds the body, and internal/revolveplan/extent.go
 // answers the extent questions asked of the result.
 
-// Axis is what a revolve may spin about (docs/api-design.md §6.2). Sealed:
+// Axis is what a revolve may spin about (agent-docs/api-design.md §6.2). Sealed:
 // the variants are SketchLine, ConstructionAxis and EdgeAxis.
 type Axis interface{ axis() }
 

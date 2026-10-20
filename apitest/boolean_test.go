@@ -676,7 +676,7 @@ func TestBooleanChainsWithinHeldBound(t *testing.T) {
 	requireBodyWatertight(t, twice)
 }
 
-// TestBooleanChainDepthGateReadsOnlyTheTouchedRims is docs/api-design.md
+// TestBooleanChainDepthGateReadsOnlyTheTouchedRims is agent-docs/api-design.md
 // §8's "The chain depth" rule (agent-docs/faceted-vertex-bounds-design.md §5): two
 // hole tools Placed 16 mm down and 0.125 mm sideways stay on the mesh path
 // (the exact shared-axis arm excludes an in-plane shift), and the second hole's

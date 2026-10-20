@@ -11,7 +11,7 @@ payload itself (its record,
 its invariants, how its body is built and measured, how it tessellates, and
 what every consumer does with it), and `agent-docs/prism-boolean-design.md` owns the
 boolean admission that produces one. References of the form "core §N" are to
-`docs/api-design.md`, "prism-boolean §N" to `agent-docs/prism-boolean-design.md`,
+`agent-docs/api-design.md`, "prism-boolean §N" to `agent-docs/prism-boolean-design.md`,
 "modify-reach §N" to `agent-docs/modify-reach-design.md`, "tessellation §N" to
 `agent-docs/tessellation-design.md`.
 

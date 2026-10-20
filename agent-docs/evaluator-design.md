@@ -3,7 +3,7 @@
 How the v1 evaluator turns validated feature inputs into a `Body` — the
 topology it builds, the measurements it computes and the bounds it proves, how
 selectors resolve against it, how the tessellation-backed boolean works, and
-how `Verify`'s checks are implemented. Companion to `docs/api-design.md` (the
+how `Verify`'s checks are implemented. Companion to `agent-docs/api-design.md` (the
 core contract this evaluator implements — references of the form "core §N"),
 `agent-docs/sketch-seam-design.md` (the profile records it consumes),
 `agent-docs/verification-design.md` (how its answers are judged). Nothing here
@@ -1156,7 +1156,7 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   segment is a rim. When the operands name valid solids, an unlanded 2-D
   region and an unowned point are contacts this evaluator refuses, so the
   boolean surfaces them as
-  `BooleanUnsupportedContact` (wrapping `ErrUnsupported`; `docs/api-design.md`
+  `BooleanUnsupportedContact` (wrapping `ErrUnsupported`; `agent-docs/api-design.md`
   §8 / H2), never `ErrDegenerate` — which stays reserved for a genuinely
   malformed region, a zero-area or self-crossing one. The classifier still
   DETECTS the region-or-point shape; only the public error a valid such contact
@@ -1168,7 +1168,7 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   segment runs ALONG a facet edge, the pair cannot tell whether the operand's
   boundary touches the other's plane and comes back (a graze — a tangency no
   side classification can be proven for, which surfaces on a valid model as
-  `BooleanUnsupportedContact` / `ErrUnsupported`, `docs/api-design.md` §8 / H2,
+  `BooleanUnsupportedContact` / `ErrUnsupported`, `agent-docs/api-design.md` §8 / H2,
   never `ErrDegenerate`) or genuinely passes
   through it (an ordinary crossing, and a real rim). Only the edge's TWO
   adjacent facets can: their apex vertices strictly on one side is a graze,

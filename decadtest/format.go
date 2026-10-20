@@ -169,7 +169,7 @@ var surfaceKindNames = map[decad.SurfaceKind]string{
 
 // surfaceKindName names a decad.SurfaceKind for a message. It carries a
 // default branch rather than panicking on an unrecognized kind:
-// docs/api-design.md §3 states that vN's surface set is a superset of v1's,
+// agent-docs/api-design.md §3 states that vN's surface set is a superset of v1's,
 // so a switch (or lookup) over Surface always needs one.
 func surfaceKindName(k decad.SurfaceKind) string {
 	if name, ok := surfaceKindNames[k]; ok {

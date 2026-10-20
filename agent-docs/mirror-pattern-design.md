@@ -2,7 +2,7 @@
 
 Mirroring a body across a plane, joining a body with its own mirror image, and
 repeating a body in a linear or circular pattern. Companion to
-`docs/api-design.md` (core §N below), `agent-docs/evaluator-design.md` §8 (placement
+`agent-docs/api-design.md` (core §N below), `agent-docs/evaluator-design.md` §8 (placement
 and copies), `agent-docs/prism-boolean-design.md` (the analytic boolean a pattern
 tool feeds), `agent-docs/stacked-prism-design.md` (the payload a prism pattern
 builds) and `agent-docs/general-boolean-design.md` (the boolean classes a mirror or

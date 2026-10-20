@@ -184,7 +184,7 @@ func (cache *Cache) get(budget *proofbound.WorkBudget, body *topo.Body) (*bodyGe
 // between closed sets is 1-Lipschitz in each operand, so the TRUE interval
 // lies in [max(0, down(lo−widen)), up(hi+widen)]. exact collapses to false
 // whenever either delta is nonzero — a widened interval can never carry an
-// Exact label (docs/api-design.md §5.3: Exact is a claim the number IS the
+// Exact label (agent-docs/api-design.md §5.3: Exact is a claim the number IS the
 // truth). A zero widen (both deltas zero, the common feature-built, unplaced,
 // axis-aligned case) returns its inputs unchanged, so it costs no extra
 // rounding there.

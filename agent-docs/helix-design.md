@@ -11,7 +11,7 @@ delivery.
 
 Companion contracts stay authoritative for their own areas:
 
-- `docs/api-design.md` owns the public model and the sketch-profile seam;
+- `agent-docs/api-design.md` owns the public model and the sketch-profile seam;
 - `agent-docs/evaluator-design.md` §6 owns `Revolve`, whose axis vocabulary,
   in-plane axis resolution and side gate this build reuses;
 - `agent-docs/sweep-design.md` owns `Path` and `Sweep`, which this build does NOT
@@ -706,7 +706,7 @@ the test computes independently.
 |---|---|
 | `Volume` | `Approximate`: the mesh boolean composes the cylinder operand's own chord `volSymDiff` at the pair tolerance, the coil's §8.2 term, and the rim terms of `agent-docs/faceted-vertex-bounds-design.md` §3. The published interval encloses the closed form above; that enclosure is §13's assertion |
 | `Area`, `Centroid`, `Bounds` | `Approximate`, composed the same way |
-| faces | `Faceted` throughout: a boolean result loses analytic identity (`docs/api-design.md` §6.1) |
+| faces | `Faceted` throughout: a boolean result loses analytic identity (`agent-docs/api-design.md` §6.1) |
 | `Verify` | validity by the faceted verdict (`agent-docs/payload-verification-design.md` §6.4): the held audit is clean and the feature scale — the crest-to-crest gap, a fraction of the pitch — clears `2·δ`, so validity is proven; `Status` is then the tolerance gate's answer over the composed bounds. The one-turn §13 fixtures read `Sound`. The eight-turn end-reaching V-groove in `_gallery/thread.go` reads `Suspect` on `Area`, `Volume` and `Centroid` |
 
 The §13 fixtures read (`examples/decad_thread_external_example_test.go`,
@@ -1004,7 +1004,7 @@ PR 4:
 Landing this design makes these contract edits, each in the PR that lands
 the behaviour:
 
-- `docs/api-design.md` §8 adds `Coil` and points here for its signature,
+- `agent-docs/api-design.md` §8 adds `Coil` and points here for its signature,
   axis and extent contract; §13's non-goals need no change;
 - `agent-docs/layout/` lists this document (with the design) and every file of
   §11.2 (with PR 1 and PR 2);

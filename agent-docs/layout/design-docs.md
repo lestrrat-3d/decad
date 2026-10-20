@@ -9,7 +9,8 @@ The rules for rows live in `agent-docs/layout.md`.
 
 | Path | Responsibility |
 |---|---|
-| `docs/api-design.md` | Public API contract for modeling, features, selectors, and verification. |
+| `agent-docs/api-design.md` | Public API contract for modeling, features, selectors, and verification. |
+| `docs/api.md` | User-facing API reference by task; `apitest/api_reference_test.go` checks its names exist. |
 | `agent-docs/sketch-seam-design.md` | `sketch` recording: `TExact`, `CurveSegment`, and `ErrUnrecordableProfile`. |
 | `agent-docs/verification-design.md` | `Verify` reports, statuses, interference costs, deadlines, `WithTolerance`, and noise floor. |
 | `agent-docs/payload-verification-design.md` | Per-payload proofs, certificates, bounded validity/clearance/survey algorithms. |

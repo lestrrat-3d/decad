@@ -4,7 +4,7 @@ Normative design for `Body.Tessellate`: the public
 mesh contract, the shared chording rules for prism and cup payloads, exact loft
 restatement, faceted-body restatement, revolve tessellation, and the private
 proofs the mesh boolean consumes. Companion to
-`docs/api-design.md` (public surface, "core §N"),
+`agent-docs/api-design.md` (public surface, "core §N"),
 `agent-docs/evaluator-design.md` (analytic evaluator + boolean, "evaluator §N"), and
 `agent-docs/verification-design.md` (how bounded results are judged,
 "verification §N"). `agent-docs/modify-design.md` owns the cup payload; this document

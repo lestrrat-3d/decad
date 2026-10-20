@@ -21,7 +21,7 @@ import (
 
 // PatchProfile records p through the seam exactly as Extrude does — the same
 // authentication, staleness, foreign-entity and TExact admission gates of
-// docs/api-design.md §7 and agent-docs/sketch-seam-design.md, with no relaxation —
+// agent-docs/api-design.md §7 and agent-docs/sketch-seam-design.md, with no relaxation —
 // and builds a single planar face on s.Plane().Frame(), carrying the
 // profile's outer loop and every hole loop (agent-docs/surface-design.md §5.1). The
 // result is a one-face sheet body: Kind() == BodySheet, one lump, one open

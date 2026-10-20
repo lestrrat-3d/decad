@@ -487,7 +487,7 @@ sweep — has nothing to share: it returns the same held facets at any tolerance
 at or above its held floor. Such a body is meshed per pair exactly as a public
 boolean meshes it, at the pair's tolerance raised to its held floor, and each
 pair gates the held facets it touches against that pair's own tolerance
-(`docs/api-design.md` §8 "The chain depth",
+(`agent-docs/api-design.md` §8 "The chain depth",
 `agent-docs/faceted-vertex-bounds-design.md` §5). A shared body is never gated: it
 restates nothing.
 

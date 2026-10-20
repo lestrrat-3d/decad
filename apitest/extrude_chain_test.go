@@ -489,7 +489,7 @@ func TestExtrudeChainRibbonsWeldAtAProvenCoincidentPair(t *testing.T) {
 }
 
 // TestChainFedRefusalsStillRunTheSeamGates confirms SweepChain and LoftChain
-// run RecordChain's own gates before the staged refusal (docs/api-design.md
+// run RecordChain's own gates before the staged refusal (agent-docs/api-design.md
 // §8: "All four run §7's four gates over RecordChain"), so a stale chain is
 // reported as stale rather than masked by ErrUnsupported.
 func TestChainFedRefusalsStillRunTheSeamGates(t *testing.T) {

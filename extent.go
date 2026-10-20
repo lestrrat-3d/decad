@@ -6,7 +6,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is the extent vocabulary of docs/api-design.md §8.1 — the linear
+// This file is the extent vocabulary of agent-docs/api-design.md §8.1 — the linear
 // set Extrude takes and the angular set Revolve takes, two deliberately
 // disjoint sealed tiers: illegal states are unrepresentable structurally, not
 // rejected at runtime. A magnitude is non-negative and sense is carried ONLY

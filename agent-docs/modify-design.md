@@ -26,7 +26,7 @@ allowed to live (§5), the fillet (§6), the chamfer (§7), the shell (§8), the
 commit and provenance rules (§11), the increment plan (§13) and the
 reach decisions (§14).
 
-Companion to `docs/api-design.md`, which owns the three operation signatures
+Companion to `agent-docs/api-design.md`, which owns the three operation signatures
 and their context-aware forms, the selector contract and the retire rule
 ("core §N"), and to
 `agent-docs/evaluator-design.md`, whose §11 row 5 this document is ("evaluator §N").

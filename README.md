@@ -10,6 +10,8 @@ A **headless CAD system** for Go: the 3D modeling layer above the
 
 > **Work in progress.** The API and supported capabilities may change.
 
+See the [API reference](docs/api.md) for what the library offers.
+
 ## Why this exists
 
 When a designer wanted a parametric part, they worked in a CAD app. They drew

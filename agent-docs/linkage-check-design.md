@@ -10,7 +10,7 @@ slider-crank — whose dependent joints are read from `sketch`'s certified enclo
 box over such a loop (§16). Companion to
 `agent-docs/motion-check-design.md` ("motion §N"),
 which owns the one-mover check this design generalises and every proof piece it reuses; to
-`docs/api-design.md` ("core §N"); to `agent-docs/verification-design.md` ("verification §N"), which owns `Status`,
+`agent-docs/api-design.md` ("core §N"); to `agent-docs/verification-design.md` ("verification §N"), which owns `Status`,
 `Diagnostic` and the result vocabulary; and to `agent-docs/clearance-design.md` ("clearance §N") and
 `agent-docs/interference-design.md` ("interference §N"), which own the pair kernels every pose runs. Nothing here
 changes those contracts.

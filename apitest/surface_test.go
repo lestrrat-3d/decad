@@ -718,7 +718,7 @@ func TestSheetSolidPairOutsideProvenSound(t *testing.T) {
 // witness casts inside the solid, proving containment: Sound, with the SAME
 // shape of gap row under WithClearances() as the outside case — one
 // consequence of the decision procedure is that this row never asserts which
-// side the sheet is on (docs/api-design.md §6.2) — and no diagnostic.
+// side the sheet is on (agent-docs/api-design.md §6.2) — and no diagnostic.
 func TestSheetSolidPairContainedProvenSound(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
