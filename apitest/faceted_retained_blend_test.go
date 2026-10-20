@@ -328,3 +328,21 @@ func TestFacetedRetainedBlend(t *testing.T) {
 		require.Error(t, err)
 	})
 }
+
+func TestFacetedRetainedBlendStraight(t *testing.T) {
+	t.Parallel()
+
+	t.Run("plate edge fillet", func(t *testing.T) {
+		t.Parallel()
+		_, bored := boredPlate(t)
+		before, err := bored.Volume()
+		require.NoError(t, err)
+		filleted, err := decad.Fillet(t.Context(), bored,
+			decad.Edges(decad.EndpointAt(r3.NewVec(0, 0, 0)), decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(1),
+			units.Millimeters(2))
+		require.NoError(t, err)
+		after, err := filleted.Volume()
+		require.NoError(t, err)
+		requireVolumeChange(t, before, after, 20*4*(1-math.Pi/4))
+	})
+}
