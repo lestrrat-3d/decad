@@ -23,7 +23,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/pointloft/` | Builds the point-section Loft apex fan and proves its source stations, boundary, area and volume. See loft-point design. |
 | `internal/sectionrecord/` | Curve records and validation. |
 | `internal/selectorquery/` | Selector matching on node views, query rendering, residual counts, face-role indexes. See API §9. |
-| `internal/modifyselect/` | Selected-edge context, corner matching and audit context for modify. See modify §6. |
+| `internal/modifyselect/` | Modify's selected-edge context and corner match. See modify §6. |
 | `internal/provenance/` | Producer identity, feature-role reference and the `RoleBody`/`RoleCapStart`/`RoleCapEnd` names the topology nodes hold; root `FeatureRef` is the public form. See evaluator §3. |
 | `internal/surfacegeom/` | Private face and edge geometry carriers and Verify's diagnostic plane key. Public variants live in `topology.go`; `Edge.Curve` and `Face.Surface` adapt the nodes. See API §6.1, surface §6. |
 | `internal/surfaceplace/` | Rigid placement of face surfaces and edge curves, and the placed circle bound. See surface §6. |
@@ -44,7 +44,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/prismboolean/` | Analytic boolean admission over operand payloads: the prism pair with its holed `Intersect` route, axial-Loft and face-patch `Union`, blind, spanning and crossing-blind `Cut`, A5 prism groups and A1 stacked `Union`. See prism-boolean §3, general-boolean §3 A1, A5, A7. |
 | `internal/stackedunion/` | Builds A1 stacked Union slabs, private scenes, and BRep faces after `internal/prismboolean` admits them. See general-boolean §3 A1. |
 | `internal/throughshell/` | Through-cut record recognition, section and cavity construction, strips, rim assembly, and audits. See modify-general §3. |
-| `internal/stackedshell/` | Admits and records the exact stacked shells (nested rectangular boss, circular boss, rectangular blind pocket, coaxial counterbore) from a two-slab record and its face view; `breprecord` builds the result. See modify-general §3.1a-§3.1c, §3.1e. |
+| `internal/stackedshell/` | Admits and records the exact stacked shells (nested rectangular boss, circular boss, rectangular blind pocket, coaxial counterbore) from a two-slab record and its face view, and `RefuseClosed`; `breprecord` builds the result. See modify-general §3.1a-§3.1c, §3.1e. |
 | `internal/capedge/` | Convex cap-edge cutter admission, quarter-cylinder profile, chamfer wedge and the P8 top front edge test. See vertex-blend §2. |
 | `internal/prismshell/` | Prism cap-shell gates with tube, band and closed-shell records; side sections, wall bands, nested boss mesh and proof, closed stack reversal, slab levels and stack faces. See modify §8, shell-opening §3–§5, shell-faceted-boss design. |
 | `internal/prismrecord/` | The prism record and its builder over nodes (`Build`, `Placed`, extents, map charge); plane-local lifts, point bounds, lift factor, centroid envelope, placement operand, cap frames, mass record, exact box, section-plane test, exact-section gate. Root `prismPayload` aliases it. See evaluator §5, §8. |
