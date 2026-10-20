@@ -96,7 +96,9 @@ func testObliqueBossJunctionFilletPublicWorkflow(t *testing.T, tiltAxis r3.Vec) 
 		if edge.Start() != edge.End() || math.Abs(edge.Start().Position().Value.Z-5) > 1e-9 {
 			continue
 		}
-		if _, ok := edge.n.Curve.(surfacegeom.FacetedCurve); !ok {
+		// The junction is a Boolean rim: a chord chain, or the ellipse a
+		// retained plane and cylinder publish (retention §10.5).
+		if _, ok := edge.n.Curve.(surfacegeom.FacetedCurve); !ok && !edge.n.RetainedCurve {
 			continue
 		}
 		if junction != nil {

@@ -15,6 +15,10 @@ const (
 	// the edge-curve rules read as parallel. The tags are stored floats, so a
 	// direction that is exactly axis-aligned in the model is exact here.
 	edgeParallel = 1e-12
+	// edgeOblique is the smallest |axis · normal| for which a plane and a
+	// cylinder meet in an ellipse the rules publish (§10.5). The ellipse's
+	// centre amplifies the rounding of its inputs by its reciprocal.
+	edgeOblique = 1e-3
 )
 
 // RetainedEdgeCurve returns the analytic curve of the rim between two faces
@@ -132,8 +136,50 @@ func planeCylinderRim(n, o r3.Vec, cyl surfacegeom.Cylinder, chain []r3.Vec, bou
 		return acceptLine([]rimLine{
 			{foot.Add(side.Scale(w)), axis}, {foot.Sub(side.Scale(w)), axis},
 		}, chain, bounds, slack)
+	case math.Abs(axis.Dot(n)) >= edgeOblique:
+		return ellipseRim(n, o, cyl.Origin, axis, radius, chain, bounds, closed, slack)
 	}
 	return nil, false
+}
+
+// ellipseRim returns the ellipse in which the plane (unit normal n through o)
+// meets the cylinder (axis a, origin c, radius R) when the axis is oblique to
+// the plane (§10.5, E8, E9). A vertex farther than its bound plus slack from
+// the plane or from the cylinder disproves the pairing; a vertex that passes
+// both proves nothing.
+func ellipseRim(n, o, c, a r3.Vec, radius float64, chain []r3.Vec, bounds []float64, closed bool,
+	slack float64) (surfacegeom.Curve, bool) {
+	k := math.Abs(a.Dot(n))
+	centre := c.Add(a.Scale(n.Dot(o.Sub(c)) / n.Dot(a)))
+	major, ok := a.Sub(n.Scale(a.Dot(n))).Normalize()
+	if !ok {
+		return nil, false
+	}
+	w := n.Cross(major)
+	theta := make([]float64, len(chain))
+	maxBound := 0.0
+	for i, v := range chain {
+		rel := v.Sub(c)
+		radial := rel.Sub(a.Scale(rel.Dot(a))).Len()
+		if math.Abs(n.Dot(v.Sub(o))) > bounds[i]+slack || math.Abs(radial-radius) > bounds[i]+slack {
+			return nil, false
+		}
+		maxBound = max(maxBound, bounds[i])
+		q := v.Sub(centre)
+		theta[i] = math.Atan2(w.Dot(q), k*major.Dot(q))
+	}
+	ellipse := func(axis r3.Vec) surfacegeom.Curve {
+		return surfacegeom.Ellipse3{Center: centre, Axis: axis, Major: major,
+			SemiMajor: units.Millimeters(radius / k), SemiMinor: units.Millimeters(radius)}
+	}
+	if closed {
+		return ellipse(n), true
+	}
+	sign, ok := sweepSign(theta, maxBound, radius, slack)
+	if !ok {
+		return nil, false
+	}
+	return ellipse(n.Scale(sign)), true
 }
 
 // circleRim returns the circle of radius r about centre in the plane with
@@ -162,10 +208,22 @@ func circleRim(centre, n r3.Vec, r float64, chain []r3.Vec, bounds []float64, cl
 	if closed {
 		return surfacegeom.Circle3{Center: centre, Axis: n, Radius: radius}, true
 	}
-	// An open rim needs an interior vertex to fix which way round it runs, and
-	// every step must clear what the vertex bounds can move it.
-	if len(chain) < 3 {
+	sign, ok := sweepSign(theta, maxBound, r, slack)
+	if !ok {
 		return nil, false
+	}
+	return surfacegeom.Arc3{Center: centre, Axis: n.Scale(sign), Radius: radius}, true
+}
+
+// sweepSign reads which way round an open rim runs from the angles of its chain
+// vertices about the rim's axis (E7, E9). It returns +1 for a counter-clockwise
+// run and −1 for a clockwise one. The rim needs an interior vertex, every
+// step must clear what the bounds can move an angle (4·(max bound + slack)/r,
+// with r the smallest radius of curvature the angle is measured on), stay below
+// π, share one sign, and the steps must sum below 2π.
+func sweepSign(theta []float64, maxBound, r, slack float64) (float64, bool) {
+	if len(theta) < 3 {
+		return 0, false
 	}
 	floor := 4*(maxBound+slack)/r + 1e-9
 	sum, sign := 0.0, 0.0
@@ -178,23 +236,19 @@ func circleRim(centre, n r3.Vec, r float64, chain []r3.Vec, bounds []float64, cl
 			step += 2 * math.Pi
 		}
 		if math.Abs(step) < floor || math.Abs(step) > math.Pi-floor {
-			return nil, false
+			return 0, false
 		}
 		if sign == 0 {
 			sign = math.Copysign(1, step)
 		} else if math.Copysign(1, step) != sign {
-			return nil, false
+			return 0, false
 		}
 		sum += math.Abs(step)
 	}
 	if sum > 2*math.Pi-floor {
-		return nil, false
+		return 0, false
 	}
-	axis := n
-	if sign < 0 {
-		axis = n.Scale(-1)
-	}
-	return surfacegeom.Arc3{Center: centre, Axis: axis, Radius: radius}, true
+	return sign, true
 }
 
 func perpendicular(n r3.Vec) (r3.Vec, bool) {
