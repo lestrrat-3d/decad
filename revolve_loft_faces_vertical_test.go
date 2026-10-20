@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -93,26 +94,26 @@ func TestRevolveLoftFacesVerticalConstantXAndTrimLimits(t *testing.T) {
 		Heel: &pointConeLimit{Apex: big.NewRat(8, 1), Far: big.NewRat(-2, 1), Slope: one},
 	}
 	section := revolveSectionSpan{Start: planePoint{U: 6}, End: planePoint{U: 6, V: 3.5}}
-	lower, upper, outcome := revolveLoftFacesVerticalLimits(trim, section, big.NewRat(6, 1))
-	require.Equal(t, revolveLoftFacesVerticalContact, outcome)
+	lower, upper, outcome := revolveloftfaces.VerticalLimits(trim, section, big.NewRat(6, 1))
+	require.Equal(t, revolveloftfaces.VerticalContact, outcome)
 	require.Equal(t, "1/2", lower.RatString())
 	require.Equal(t, "2", upper.RatString())
 	section.Start.U, section.End.U = 3.2, 3.2
-	lower, upper, outcome = revolveLoftFacesVerticalLimits(trim, section, big.NewRat(16, 5))
-	require.Equal(t, revolveLoftFacesVerticalContact, outcome)
+	lower, upper, outcome = revolveloftfaces.VerticalLimits(trim, section, big.NewRat(16, 5))
+	require.Equal(t, revolveloftfaces.VerticalContact, outcome)
 	require.Equal(t, 0, lower.Cmp(big.NewRat(33, 10)))
 	require.Equal(t, "7/2", upper.RatString())
 	section.End.V = 3.2
-	lower, upper, outcome = revolveLoftFacesVerticalLimits(trim, section, lfF(3.2))
-	require.Equal(t, revolveLoftFacesVerticalMiss, outcome)
+	lower, upper, outcome = revolveloftfaces.VerticalLimits(trim, section, lfF(3.2))
+	require.Equal(t, revolveloftfaces.VerticalMiss, outcome)
 	require.Greater(t, lower.Cmp(upper), 0, "the toe tool leaves a strict whole-side gap")
 	section.Start.U, section.End.U, section.End.V = 3.25, 3.25, 3.25
-	_, _, outcome = revolveLoftFacesVerticalLimits(trim, section, big.NewRat(13, 4))
-	require.Equal(t, revolveLoftFacesVerticalRefusal, outcome,
+	_, _, outcome = revolveloftfaces.VerticalLimits(trim, section, big.NewRat(13, 4))
+	require.Equal(t, revolveloftfaces.VerticalRefusal, outcome,
 		"a touching radial boundary does not prove a miss")
 	section.Start.U, section.End.U = 8, 8
-	_, _, outcome = revolveLoftFacesVerticalLimits(trim, section, big.NewRat(8, 1))
-	require.Equal(t, revolveLoftFacesVerticalRefusal, outcome)
+	_, _, outcome = revolveloftfaces.VerticalLimits(trim, section, big.NewRat(8, 1))
+	require.Equal(t, revolveloftfaces.VerticalRefusal, outcome)
 }
 
 func TestRevolveLoftFacesConstantXBand(t *testing.T) {
@@ -235,14 +236,14 @@ func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
 	contacts, misses := 0, 0
 	for _, entry := range manifest.vertical {
 		if entry.sectionIndex < 0 || entry.sectionIndex >= len(proof.section.Spans) ||
-			entry.outcome == revolveLoftFacesVerticalContact && entry.side == nil ||
-			entry.outcome == revolveLoftFacesVerticalMiss && entry.side != nil {
+			entry.outcome == revolveloftfaces.VerticalContact && entry.side == nil ||
+			entry.outcome == revolveloftfaces.VerticalMiss && entry.side != nil {
 			t.Fatal("vertical answer lacks its live side record")
 		}
 		switch entry.outcome {
-		case revolveLoftFacesVerticalContact:
+		case revolveloftfaces.VerticalContact:
 			contacts++
-		case revolveLoftFacesVerticalMiss:
+		case revolveloftfaces.VerticalMiss:
 			misses++
 		default:
 			t.Fatal("undecidable vertical side was admitted")
@@ -344,7 +345,7 @@ func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
 		var ref provenance.Ref
 		var owner *Face
 		for _, entry := range manifest.vertical {
-			if entry.outcome != revolveLoftFacesVerticalContact {
+			if entry.outcome != revolveloftfaces.VerticalContact {
 				continue
 			}
 			for _, cell := range entry.side.cells {
@@ -362,7 +363,7 @@ func TestCurvedVerticalSourceConsumesLiveProducer(t *testing.T) {
 		}
 		rejectChangedCurvedSourceOwner(t, tooth, ref, owner, func() bool {
 			side, outcome, err := revolveLoftFacesVerticalSideClassify(t.Context(), proof, contactIndex)
-			return err == nil && side != nil && outcome == revolveLoftFacesVerticalContact
+			return err == nil && side != nil && outcome == revolveloftfaces.VerticalContact
 		})
 	})
 	t.Run("wrong nonvertical triangle owner", func(t *testing.T) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
@@ -21,9 +22,17 @@ type SimpleLoop struct {
 // cells have strict coordinate separation, and neighboring cells meet only
 // at their common exact endpoint. A unique axis extremum fixes orientation.
 // This intentionally refuses geometry whose elementary bounds cannot decide.
-// SimpleSourceLoop requires the caller to check the live point source first.
+// A nil context or trim, a point source that is no longer current, and a
+// source profile that is invalid or holed certify nothing.
 func SimpleSourceLoop(ctx context.Context,
 	trim *loftFacesTrimRecord) (*SimpleLoop, bool, error) {
+	if ctx == nil || trim == nil || trim.Source == nil ||
+		!facetedrecord.PointSourceCurrent(trim.Source) ||
+		trim.Source.Source.Profile == nil ||
+		!trim.Source.Source.Profile.Valid ||
+		len(trim.Source.Source.Profile.Holes) != 0 {
+		return nil, false, nil
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, false, err
 	}

@@ -290,7 +290,7 @@ func neutralSimpleSourceRecord(t *testing.T, s *sketch.Sketch,
 
 func TestRevolveLoftFacesSimpleSourceCertifiesWholeCurveLoop(t *testing.T) {
 	s, profile := neutralSimpleSourceSketch(t, false)
-	loop, certified, err := revolveLoftFacesSimpleSourceLoop(t.Context(),
+	loop, certified, err := revolveloftfaces.SimpleSourceLoop(t.Context(),
 		neutralSimpleSourceRecord(t, s, profile))
 	require.NoError(t, err)
 	require.True(t, certified)
@@ -304,7 +304,7 @@ func TestRevolveLoftFacesSimpleSourceCertifiesWholeCurveLoop(t *testing.T) {
 
 func TestRevolveLoftFacesSimpleSourceRefusesExtraSketchEntity(t *testing.T) {
 	s, profile := neutralSimpleSourceSketch(t, true)
-	_, certified, err := revolveLoftFacesSimpleSourceLoop(t.Context(),
+	_, certified, err := revolveloftfaces.SimpleSourceLoop(t.Context(),
 		neutralSimpleSourceRecord(t, s, profile))
 	require.NoError(t, err)
 	require.False(t, certified, "an extra entity may change the true region")
@@ -318,9 +318,51 @@ func TestRevolveLoftFacesSimpleSourceRefusesChangedRecordedArc(t *testing.T) {
 	trim.Source.Profile.Outer.Segments[1] = arc
 	require.True(t, facetedrecord.PointSourceCurrent(trim.Source),
 		"the existing revision gate does not compare stored curve geometry")
-	_, certified, err := revolveLoftFacesSimpleSourceLoop(t.Context(), trim)
+	_, certified, err := revolveloftfaces.SimpleSourceLoop(t.Context(), trim)
 	require.NoError(t, err)
 	require.False(t, certified, "the live Sketch arc still has its original center")
+}
+
+// The invalid-profile and holed-profile cases below are refused by the
+// currency gate first (it re-records the live profile), so the later checks in
+// SimpleSourceLoop repeat what that gate already decided.
+func TestRevolveLoftFacesSimpleSourceRefusesAnUncertifiedSource(t *testing.T) {
+	s, profile := neutralSimpleSourceSketch(t, false)
+	tests := map[string]func(*loftFacesTrimRecord){
+		"a source that is not current": func(trim *loftFacesTrimRecord) { trim.Source.SourceBox[0]++ },
+		"no source":                    func(trim *loftFacesTrimRecord) { trim.Source = nil },
+	}
+	for name, edit := range tests {
+		trim := neutralSimpleSourceRecord(t, s, profile)
+		edit(trim)
+		loop, certified, err := revolveloftfaces.SimpleSourceLoop(t.Context(), trim)
+		require.NoError(t, err, name)
+		require.False(t, certified, name)
+		require.Nil(t, loop, name)
+	}
+	loop, certified, err := revolveloftfaces.SimpleSourceLoop(t.Context(), nil)
+	require.NoError(t, err)
+	require.False(t, certified)
+	require.Nil(t, loop)
+
+	//nolint:staticcheck // a nil context is a documented refusal, not a call to make.
+	loop, certified, err = revolveloftfaces.SimpleSourceLoop(nil, neutralSimpleSourceRecord(t, s, profile))
+	require.NoError(t, err)
+	require.False(t, certified)
+	require.Nil(t, loop)
+
+	for name, edit := range map[string]func(*sketch.Profile){
+		"an invalid profile": func(p *sketch.Profile) { p.Valid = false },
+		"a holed profile":    func(p *sketch.Profile) { p.Holes = append(p.Holes, p.Outer) },
+	} {
+		s, profile := neutralSimpleSourceSketch(t, false)
+		trim := neutralSimpleSourceRecord(t, s, profile)
+		edit(trim.Source.Source.Profile)
+		loop, certified, err := revolveloftfaces.SimpleSourceLoop(t.Context(), trim)
+		require.NoError(t, err, name)
+		require.False(t, certified, name)
+		require.Nil(t, loop, name)
+	}
 }
 
 func TestRevolveLoftFacesSimpleNeighborsRequireOppositeInteriorSides(t *testing.T) {

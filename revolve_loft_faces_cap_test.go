@@ -183,7 +183,7 @@ func TestCurvedHeelArcSideTiesUseCallerCensus(t *testing.T) {
 			require.True(t, (got.sourceCell != nil) != (got.verticalCell != nil))
 			require.Equal(t, want[endpoint].sourceCell != nil, got.sourceCell != nil)
 			if got.sourceCell != nil {
-				require.True(t, revolveLoftFacesSameMappedCell(want[endpoint].sourceCell.mapped, got.sourceCell.mapped))
+				require.True(t, revolveloftfaces.SameMappedCell(want[endpoint].sourceCell.mapped, got.sourceCell.mapped))
 				require.Equal(t, want[endpoint].sourceCell.ref, got.sourceCell.ref)
 			} else {
 				require.True(t, revolveLoftFacesGraphSameVerticalCell(*want[endpoint].verticalCell, *got.verticalCell))

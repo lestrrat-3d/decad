@@ -9,7 +9,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/decad/internal/revolveshell"
-	"github.com/lestrrat-3d/sketch"
 )
 
 // A tool-cap circle is the exact intersection of one authenticated finite
@@ -327,7 +326,7 @@ func revolveLoftFacesHeelVerticalOccupiedArc(ctx context.Context,
 		return nil, false, nil
 	}
 	vertical, outcome, err := revolveLoftFacesVerticalSideClassify(ctx, proof, circle.span)
-	if err != nil || outcome != revolveLoftFacesVerticalContact || vertical == nil {
+	if err != nil || outcome != revolveloftfaces.VerticalContact || vertical == nil {
 		return nil, false, err
 	}
 	if vertical.face != circle.blankFace || vertical.x.Cmp(circle.x) != 0 ||
@@ -362,7 +361,7 @@ func revolveLoftFacesHeelOccupiedFromSource(ctx context.Context,
 	if err != nil || !current {
 		return nil, false, err
 	}
-	loop, simple, err := revolveLoftFacesSimpleSourceLoop(ctx, proof.trim)
+	loop, simple, err := revolveloftfaces.SimpleSourceLoop(ctx, proof.trim)
 	if err != nil || !simple || loop == nil || !loop.CCW {
 		return nil, false, err
 	}
@@ -393,7 +392,7 @@ func revolveLoftFacesHeelOccupiedFromSource(ctx context.Context,
 		if proof.sourceRefs[section.band][cell.segment] != cell.ref {
 			return nil, false, nil
 		}
-		outward, oriented := revolveLoftFacesToolBoundaryOutward(edge, cell.upper)
+		outward, oriented := revolveloftfaces.ToolBoundaryOutward(edge, cell.upper)
 		if !oriented {
 			return nil, false, nil
 		}
@@ -451,7 +450,7 @@ func revolveLoftFacesToolCapSourceCurrent(ctx context.Context,
 	var fresh *revolveLoftFacesConstantXSource
 	if span.Start.U == span.End.U {
 		vertical, outcome, err := revolveLoftFacesVerticalSideClassify(ctx, proof, circle.span)
-		if err != nil || outcome != revolveLoftFacesVerticalContact || vertical == nil ||
+		if err != nil || outcome != revolveloftfaces.VerticalContact || vertical == nil ||
 			vertical.face != circle.blankFace || vertical.x.Cmp(circle.x) != 0 ||
 			vertical.upper.Cmp(circle.radius) != 0 {
 			return false, err
@@ -480,18 +479,6 @@ func revolveLoftFacesToolCapSourceCurrent(ctx context.Context,
 
 func revolveLoftFacesToolCapFaceOriginCurrent(circle revolveLoftFacesToolCapCircle) bool {
 	return circle.capFace != nil && slices.Contains(circle.capFace.originRefs(), circle.capOrigin)
-}
-
-func revolveLoftFacesToolBoundaryOutward(edge sketch.BoundaryEdge,
-	limit loftface.VerticalLimit) (bool, bool) {
-	if edge.Partial || limit.Before*limit.After != -1 {
-		return false, false
-	}
-	before, after := limit.Before, limit.After
-	if edge.Reversed {
-		before, after = after, before
-	}
-	return before < 0 && after > 0, true
 }
 
 // A sloped finite Revolve generator intersects the heel tool cone at one
@@ -534,7 +521,7 @@ func revolveLoftFacesHeelSlopedOccupiedArc(ctx context.Context,
 	}
 	face, live := revolveshell.SpanFace(bodyNode(proof.blank), span)
 	if !live || face != faceNode(circle.blankFace) ||
-		!verticalOriginsMatch(face.Origins, span.Origins) {
+		!revolveloftfaces.OriginsMatch(face.Origins, span.Origins) {
 		return nil, false, nil
 	}
 	x, radius, crosses, decided := revolveloftfaces.ToolCircleOnSpan(trim.Heel, span)
