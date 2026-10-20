@@ -459,13 +459,3 @@ func TestLoftFitSplineSourceCapsRealWedge(t *testing.T) {
 	require.True(t, partial.prism == nil && partial.loft == nil)
 	require.Equal(t, 16, steps)
 }
-
-func TestLoftFitSplineSourcePreflightRefusesOversizedInput(t *testing.T) {
-	fit := sectionrecord.FitSplineSeg{Fit: make([]sectionrecord.Point2, 65), TStart: 0, TEnd: 1}
-	budget := proofbound.NewWallWorkBudgetWithOperation(4096, proofbound.NewWorkBudget(t.Context()))
-	visits, accepted, err := loftSourceFitPreflight(budget, nil,
-		[]sectionrecord.CurveSegment{fit}, nil)
-	require.ErrorIs(t, err, proofbound.ErrWallWorkBudget)
-	require.False(t, accepted)
-	require.Zero(t, visits)
-}

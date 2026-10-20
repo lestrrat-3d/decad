@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftcontact"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
@@ -157,7 +156,7 @@ func certifyLoftCapSourceOrder(ctx context.Context, budget *proofbound.WorkBudge
 				}
 				origin, ok := tags[edge.Entity]
 				if !ok || origin.Region != 0 || origin.Hole != -1 ||
-					!loftCapSceneRangeFits(edge.TStart, edge.TEnd) ||
+					!loftcontact.SceneRangeFits(edge.TStart, edge.TEnd) ||
 					(edge.Partial && !edge.TExact) {
 					return no, false, nil
 				}
@@ -211,15 +210,6 @@ func certifyLoftCapSourceOrder(ctx context.Context, budget *proofbound.WorkBudge
 		return no, false, err
 	}
 	return result, true, nil
-}
-
-func loftCapSceneRangeFits(start, end float64) bool {
-	if proofbound.IsNonFinite(start) || proofbound.IsNonFinite(end) ||
-		start < 0 || end > 1 || start >= end {
-		return false
-	}
-	return loftcontact.VolumeRatFits(proofarith.FloatRat(start)) &&
-		loftcontact.VolumeRatFits(proofarith.FloatRat(end))
 }
 
 // loftSourceCapSpan borrows one authenticated producer segment for this call.
@@ -310,7 +300,7 @@ func certifyLoftSourceSpanCaps(ctx context.Context, budget *proofbound.WorkBudge
 		lp.Walls > len(lp.Tris) || len(lp.Tris) > 512 || len(lp.Verts) > 512 {
 		return no, false, nil
 	}
-	fitVisits, fitOK, err := loftSourceFitPreflight(budget, prismSegments, lower, upper)
+	fitVisits, fitOK, err := loftcontact.FitPreflight(budget, prismSegments, lower, upper)
 	if err != nil || !fitOK {
 		return no, false, err
 	}
@@ -344,7 +334,7 @@ func certifyLoftSourceSpanCaps(ctx context.Context, budget *proofbound.WorkBudge
 			if err := budget.Step(); err != nil {
 				return no, false, err
 			}
-			if !loftSourceSameKind(lower[i], upper[i]) {
+			if !loftcontact.SameKind(lower[i], upper[i]) {
 				return no, false, nil
 			}
 			span, ok := loftSourceCapSpanOf(loft, loftRole, i, curve)
@@ -388,36 +378,6 @@ func certifyLoftSourceSpanCaps(ctx context.Context, budget *proofbound.WorkBudge
 		return no, false, err
 	}
 	return result, true, nil
-}
-
-// loftSourceFitPreflight charges the fit-point scan and the established
-// interpolant cost before the source reader allocates per-cap span arrays.
-// This source-only stage does not solve the interpolant; a later consumer
-// must still charge and validate any conversion it actually performs.
-func loftSourceFitPreflight(budget *proofbound.WorkBudget,
-	prism, lower, upper []sectionrecord.CurveSegment) (uint64, bool, error) {
-	var visits uint64
-	for _, loop := range [4][]sectionrecord.CurveSegment{prism, lower, upper, prism} {
-		for _, segment := range loop {
-			fit, ok := segment.(sectionrecord.FitSplineSeg)
-			if !ok {
-				continue
-			}
-			if len(fit.Fit) < 2 {
-				return 0, false, nil
-			}
-			cost, valid := proofbound.WallCheckedAdd(
-				freeform.FitInterpolantCost(len(fit.Fit)), uint64(len(fit.Fit)))
-			if !valid {
-				return 0, false, proofbound.ErrWallWorkBudget
-			}
-			if _, err := budget.StepN(cost); err != nil {
-				return 0, false, err
-			}
-			visits += cost
-		}
-	}
-	return visits, true, nil
 }
 
 func loftSourceCapSpanOf(body *Body, role string, index int,
@@ -466,23 +426,4 @@ func loftSourceCapSpanOf(body *Body, role string, index int,
 		capFace: provenance.Ref{Producer: body.n.Origin.Producer, Role: role},
 		segment: index, curve: curve, tStart: start, tEnd: end,
 		reversed: start > end}, true
-}
-
-func loftSourceSameKind(first, second sectionrecord.CurveSegment) bool {
-	switch first.(type) {
-	case sectionrecord.LineSeg:
-		_, ok := second.(sectionrecord.LineSeg)
-		return ok
-	case sectionrecord.CircleSeg:
-		_, ok := second.(sectionrecord.CircleSeg)
-		return ok
-	case sectionrecord.ArcSeg:
-		_, ok := second.(sectionrecord.ArcSeg)
-		return ok
-	case sectionrecord.FitSplineSeg:
-		_, ok := second.(sectionrecord.FitSplineSeg)
-		return ok
-	default:
-		return false
-	}
 }
