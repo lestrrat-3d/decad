@@ -256,7 +256,7 @@ of that computation.
 | **SR2** | two selected edges share a vertex, or a selected edge continues tangentially into a neighbour | no transition built | `ErrUnsupported` |
 | **SR3** | no blend of that size exists: `R − r ≤ 0` for an inside ball (§4.2), `φ` within 10⁻⁹ of 0 or π, or a chamfer distance of zero or below | no regular blend | `ErrDegenerate` |
 | **SR4** | the setback does not fit (§6.2) and the held bounds prove it does not | the blend consumes the face | `ErrDegenerate` |
-| **SR5** | the setback might not fit and the held bounds cannot decide it, or an end vertex of an R1 edge is not a three-face corner with a convex planar retained `G`, or the polygon `V, P_A, arc, P_B` contains another boundary vertex of `G` within its bound | body exists; the evaluator cannot prove its construction | `ErrUnsupported` |
+| **SR5** | the setback might not fit and the held bounds cannot decide it, or an end vertex of an R1 edge is not a three-face corner with a retained planar `G`, or `G`'s corner at the vertex does not match the edge (a convex edge needs a convex corner of `G`, a concave edge a reflex one), or `A` or `B` turns reflex at the vertex, or another part of `G` comes within the blend's reach of the vertex | body exists; the evaluator cannot prove its construction | `ErrUnsupported` |
 | **SR6** | the held mesh disagrees with the exact vertex of its three tags by more than the vertex bound plus slack (§6.3) | the record and the mesh do not describe one solid | `ErrUnsupported` |
 | **SR7** | the rewritten mesh fails the held audit (watertight, no remote self-intersection, shells positive) | the result is invalid | `ErrDegenerate` when the audit proves a face inside out (modify S8), else `ErrUnsupported` |
 
@@ -353,8 +353,10 @@ published bound, never with a pinned literal.
 | Hole mouth in a placed-tool plate (R2 fillet, convex) | blend face is a `Torus` with `Major = R + r`, `Minor = r`; removed volume equals `π·r·(2Rr + r²) − 2π·((R + r) − 4r/(3π))·(π·r²/4)` within the bound; both setback edges are `Circle3` | build the cone for a fillet: the surface kind is wrong |
 | Boss root fillet (R2 concave) | the volume grows by the same expression with the tangent circles at `R + r`; the blend face has `Reversed = true` | use the convex sign: the blend removes material |
 | Shaft end fillet and chamfer (R2) | `Major = R − r`; `R − r ≤ 0` refuses with `ErrDegenerate` | drop SR3: the torus has a negative major radius |
-| Straight 90° edge (R1 fillet) | `Cylinder`, axis along the edge, removed volume `L·r²(1 − π/4)` | use `r` for the setback at `φ ≠ π/2`: the 60° test fails |
-| 60° edge (R1 fillet) and chamfer | setback `r·tan(φ/2)`; removed area per unit length `r²(tan(φ/2) − φ/2)` for the fillet, `dA·dB·sin φ / 2` for the chamfer | |
+| Straight 90° edge (R1 fillet and chamfer) | `Cylinder`, axis along the edge, removed volume `L·r²(1 − π/4)`; the chamfer removes `L·d²/2` | |
+| 45° edge (R1 fillet) | setback `r·tan(φ/2)`; removed area per unit length `r²(tan(φ/2) − φ/2)` | use `r` for the setback at `φ ≠ π/2`: the 45° test fails |
+| Concave edge in an L section | the fill adds `L·r²(1 − π/4)`, the blend's normal points into the void, `VerifyAll` passes | build the convex blend: the normal points into the material |
+| Concave edge at a wall's foot | refuses with `ErrUnsupported`: the plate face wraps the foot and turns reflex at the corner | |
 | Oblique end face | the end arc is an `Ellipse3` with `SemiMinor = r` and `SemiMajor = r / |d̂ · nG|`; removed volume equals the section area times the length between the end planes measured through the section's centroid | treat `G` as normal to the edge: the volume is off by the centroid offset |
 | Clearance | a radius past the face width refuses `ErrDegenerate`; a radius within `b` of it refuses `ErrUnsupported` | drop the `− b_v` term of §6.2: the near case builds an invalid solid |
 | Shared vertex / tangent chain | refuse SR2 | |
@@ -381,7 +383,7 @@ published bound, never with a pinned literal.
 | # | Lands | Gate to start the next |
 |---|---|---|
 | B1 | R2 fillet and chamfer: classification, the four rims of §4.2, clip and strip, bounds, gates SR1–SR4 and SR6–SR7 | the hole-mouth, boss-root and shaft-end rows of §9 pass; `go test ./...` on CI |
-| B2 | R1 fillet and chamfer with planar end faces, SR5 | the 90° and 60° edge rows and the oblique-end row pass |
+| B2 | R1 fillet and equal-distance chamfer with planar end faces, SR5 | the 90° and 45° edge rows, the oblique-end row and the L-section concave row pass |
 | B3 | R3, a line between a plane and a parallel cylinder | its row of §9 is added and passes |
 | B4 | R4, an open arc | as B1 for an arc with end faces |
 

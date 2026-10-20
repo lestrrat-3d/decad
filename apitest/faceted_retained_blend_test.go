@@ -321,9 +321,10 @@ func TestFacetedRetainedBlend(t *testing.T) {
 		_, err = decad.Fillet(t.Context(), bored, rimAt(t, bored, 20), units.Millimeters(6))
 		require.ErrorIs(t, err, decad.ErrUnsupported, "the held bounds cannot show it fits")
 		_, bored = boredPlate(t)
-		_, err = decad.Fillet(t.Context(), bored, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4),
+		// Three plate edges meet at one corner.
+		_, err = decad.Fillet(t.Context(), bored, decad.Edges(decad.EndpointAt(r3.NewVec(0, 0, 0))).Exactly(3),
 			units.Millimeters(1))
-		require.ErrorIs(t, err, decad.ErrUnsupported, "a plate edge is not a rim")
+		require.ErrorIs(t, err, decad.ErrUnsupported, "edges that share a corner")
 		_, bored = boredPlate(t)
 		_, err = decad.Fillet(t.Context(), bored, rimAt(t, bored, 20), units.Millimeters(-1))
 		require.Error(t, err)
@@ -339,7 +340,7 @@ func cornerCentroid(r float64) float64 {
 // slicedPlate is the plate with a box tool cut away after the tool took each
 // of the placements in turn.
 func slicedPlate(t *testing.T, sketchPlane func(*retentionScene) *sketch.Plane, rect [4]float64, depth float64,
-	placements ...r3.Transform) (*retentionScene, *decad.Body) {
+	placements ...r3.Transform) *decad.Body {
 	t.Helper()
 	sc := newRetentionScene()
 	plate := blendPlate(t, sc)
@@ -357,7 +358,7 @@ func slicedPlate(t *testing.T, sketchPlane func(*retentionScene) *sketch.Plane, 
 	}
 	cut, err := decad.Cut(t.Context(), plate, tool)
 	require.NoError(t, err)
-	return sc, cut
+	return cut
 }
 
 func rotation(t *testing.T, about, axis r3.Vec, angle float64) r3.Transform {
@@ -443,7 +444,7 @@ func TestFacetedRetainedBlendStraight(t *testing.T) {
 		t.Parallel()
 		// A bevel from (y=0, z=18) to (y=2, z=20) leaves a 45 degree edge
 		// along the top at y=2.
-		_, beveled := slicedPlate(t, func(sc *retentionScene) *sketch.Plane { return sc.w.YZ() },
+		beveled := slicedPlate(t, func(sc *retentionScene) *sketch.Plane { return sc.w.YZ() },
 			[4]float64{-50, -50, 2, 50}, 100, rotation(t, r3.NewVec(0, 2, 20), r3.NewVec(1, 0, 0), -math.Pi/4))
 		before, err := beveled.Volume()
 		require.NoError(t, err)
@@ -473,7 +474,7 @@ func TestFacetedRetainedBlendStraight(t *testing.T) {
 		about := r3.NewVec(5, 0, 10)
 		first := rotation(t, about, r3.NewVec(0, 0, 1), math.Pi/6)
 		second := rotation(t, about, r3.NewVec(0, 1, 0), math.Pi/18)
-		_, cut := slicedPlate(t, func(sc *retentionScene) *sketch.Plane { return sc.w.XY() },
+		cut := slicedPlate(t, func(sc *retentionScene) *sketch.Plane { return sc.w.XY() },
 			[4]float64{-60, -50, 5, 50}, 80, first, second)
 		before, err := cut.Volume()
 		require.NoError(t, err)
@@ -498,5 +499,128 @@ func TestFacetedRetainedBlendStraight(t *testing.T) {
 			}
 		}
 		t.Logf("%d edges with the blend's ellipse", ellipses)
+	})
+
+	t.Run("a concave edge in an L section", func(t *testing.T) {
+		t.Parallel()
+		sc := newRetentionScene()
+		// An L: a 40 mm plate 10 mm thick with a 10 mm wall rising from its
+		// left end, 20 mm deep in y and bored through the plate.
+		s, err := sc.w.CreateSketch(sc.w.XZ())
+		require.NoError(t, err)
+		corners := [][2]float64{{0, 0}, {40, 0}, {40, 10}, {10, 10}, {10, 30}, {0, 30}}
+		pts := make([]*sketch.Point, len(corners))
+		for i, c := range corners {
+			pts[i] = s.CreatePoint(c[0], c[1])
+			s.Fix(pts[i])
+		}
+		for i := range pts {
+			s.CreateLine(pts[i], pts[(i+1)%len(pts)])
+		}
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		prism, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(10)})
+		require.NoError(t, err)
+		shift, err := r3.Translation(r3.Vec{Y: 10})
+		require.NoError(t, err)
+		prism, err = decad.Transform(t.Context(), prism, shift)
+		require.NoError(t, err)
+		bored, err := decad.Cut(t.Context(), prism, zCylinder(t, sc, -30, 30))
+		require.NoError(t, err)
+		before, err := bored.Volume()
+		require.NoError(t, err)
+		const r = 2.0
+		filleted, err := decad.Fillet(t.Context(), bored, straightEdge(t, bored, r3.NewVec(10, 0, 10), r3.NewVec(0, 1, 0)),
+			units.Millimeters(r))
+		require.NoError(t, err)
+		after, err := filleted.Volume()
+		require.NoError(t, err)
+		requireVolumeChange(t, before, after, -20*r*r*(1-math.Pi/4))
+		cylinders := 0
+		for _, f := range filleted.Faces() {
+			if c, ok := f.Surface().(decad.Cylinder); ok && math.Abs(c.Radius.Base()-r) < 1e-12 {
+				cylinders++
+				// The blend fills a concave corner: its normal points into the
+				// void, toward the axis.
+				p := firstVertex(t, f)
+				n, err := f.NormalAt(p)
+				require.NoError(t, err)
+				require.Positive(t, n.Value.Dot(c.Origin.Sub(p)))
+			}
+		}
+		require.Equal(t, 1, cylinders)
+		mesh, err := filleted.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+		require.NoError(t, err)
+		require.True(t, mesh.BoundaryVerified())
+		require.True(t, mesh.VolumeVerified())
+	})
+
+	t.Run("a concave edge whose face turns reflex at its end is refused", func(t *testing.T) {
+		t.Parallel()
+		sc := newRetentionScene()
+		plate := blendPlate(t, sc)
+		ws, err := sc.w.CreateSketch(sc.w.XY())
+		require.NoError(t, err)
+		wr := ws.CreateRectangle(10, 5, 30, 15)
+		ws.Fix(wr.A)
+		_, err = ws.Solve(t.Context())
+		require.NoError(t, err)
+		wall, err := decad.Extrude(t.Context(), sc.doc, ws, ws.Profiles()[0],
+			decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+		require.NoError(t, err)
+		lift, err := r3.Translation(r3.Vec{Z: 15})
+		require.NoError(t, err)
+		wall, err = decad.Transform(t.Context(), wall, lift)
+		require.NoError(t, err)
+		joined, err := decad.Union(t.Context(), plate, wall)
+		require.NoError(t, err)
+		// The plate's top face wraps the wall's footprint, so it is reflex at
+		// each foot corner.
+		_, err = decad.Fillet(t.Context(), joined, straightEdge(t, joined, r3.NewVec(10, 5, 20), r3.NewVec(1, 0, 0)),
+			units.Millimeters(1))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+	})
+
+	t.Run("refusals and the result as an ordinary body", func(t *testing.T) {
+		t.Parallel()
+		// The left face is 20 mm wide.
+		_, bored := boredPlate(t)
+		_, err := decad.Fillet(t.Context(), bored, straightEdge(t, bored, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1)),
+			units.Millimeters(21))
+		require.ErrorIs(t, err, decad.ErrDegenerate, "the blend consumes the face")
+		_, bored = boredPlate(t)
+		_, err = decad.Fillet(t.Context(), bored, straightEdge(t, bored, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1)),
+			units.Millimeters(20))
+		require.ErrorIs(t, err, decad.ErrUnsupported, "the held bounds cannot show it fits")
+		// Two edges that share a corner.
+		_, bored = boredPlate(t)
+		_, err = decad.Fillet(t.Context(), bored, decad.Edges(decad.EndpointAt(r3.NewVec(0, 0, 0))).Exactly(3),
+			units.Millimeters(1))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+
+		// A second blend, a Boolean and a placement all take the result.
+		sc, bored := boredPlate(t)
+		first, err := decad.Fillet(t.Context(), bored, straightEdge(t, bored, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1)),
+			units.Millimeters(2))
+		require.NoError(t, err)
+		second, err := decad.Fillet(t.Context(), first, straightEdge(t, first, r3.NewVec(40, 20, 0), r3.NewVec(0, 0, 1)),
+			units.Millimeters(2))
+		require.NoError(t, err)
+		cut, err := decad.Cut(t.Context(), second, sc.tool(t, 33))
+		require.NoError(t, err)
+		move, err := r3.Translation(r3.Vec{X: 5, Y: -2, Z: 7})
+		require.NoError(t, err)
+		moved, err := decad.Transform(t.Context(), cut, move)
+		require.NoError(t, err)
+		cylinders := 0
+		for _, f := range moved.Faces() {
+			if c, ok := f.Surface().(decad.Cylinder); ok && math.Abs(c.Radius.Base()-2) < 1e-12 {
+				cylinders++
+				n, err := f.NormalAt(firstVertex(t, f))
+				require.NoError(t, err)
+				require.Less(t, n.Bound.Base(), 1.0)
+			}
+		}
+		require.Equal(t, 2, cylinders)
 	})
 }

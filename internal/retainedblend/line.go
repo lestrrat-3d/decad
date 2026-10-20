@@ -3,6 +3,7 @@ package retainedblend
 import (
 	"fmt"
 	"math"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
@@ -235,7 +236,7 @@ func (f faceLoops) loopWith(vs ...int) (int, bool) {
 	for li, loop := range f.loops {
 		found := 0
 		for _, v := range loop {
-			if slicesContain(vs, v) {
+			if slices.Contains(vs, v) {
 				found++
 			}
 		}
@@ -244,15 +245,6 @@ func (f faceLoops) loopWith(vs ...int) (int, bool) {
 		}
 	}
 	return 0, false
-}
-
-func slicesContain(vs []int, v int) bool {
-	for _, x := range vs {
-		if x == v {
-			return true
-		}
-	}
-	return false
 }
 
 // indexIn is the position of v in loop, or -1.

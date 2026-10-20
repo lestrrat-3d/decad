@@ -120,7 +120,7 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 
 	// The directions into the faces, and the corner's kind.
 	e0 := l.ends[0].exact
-	into := func(run edgeRun, pl plane, loop []int) (r3.Vec, error) {
+	into := func(run edgeRun, pl plane) (r3.Vec, error) {
 		across := pl.n.Cross(l.d)
 		far := w.verts[run.chain[0][len(run.chain[0])-1]]
 		side := far.Sub(e0).Dot(across)
@@ -129,11 +129,11 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 		}
 		return across.Scale(math.Copysign(1, side)), nil
 	}
-	wA, err := into(runA, l.a, fA.loops[runA.loop])
+	wA, err := into(runA, l.a)
 	if err != nil {
 		return nil, err
 	}
-	wB, err := into(runB, l.b, fB.loops[runB.loop])
+	wB, err := into(runB, l.b)
 	if err != nil {
 		return nil, err
 	}
@@ -258,7 +258,7 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 	// the faces beside the edge about the chains.
 	var gLoops [2][][]int
 	for i := range 2 {
-		loops, err := w.endFace(l, i, fG[i], [2]edgeRun{runA, runB}, remA[i], remB[i], rowIdx[i], rowsAt, margin)
+		loops, err := w.endFace(l, i, fG[i], [2]edgeRun{runA, runB}, remA[i], remB[i], rowIdx[i], rowsAt, margin, convex)
 		if err != nil {
 			return nil, err
 		}
@@ -304,7 +304,7 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 			w.emit(t, blendGroup)
 		}
 	}
-	w.removedTrue, tag.trueArea = w.lineAreas(l, spec, convex, center, baseA, baseB, rowIdx, tA, tB)
+	w.removedTrue, tag.trueArea = w.lineAreas(l, spec, convex, center, baseA, baseB, rowIdx)
 
 	groups := append([]facetedrecord.Group(nil), fp.Groups...)
 	groups = append(groups, facetedrecord.Group{
@@ -324,7 +324,7 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 // endFace builds end face G_i's new loops: the corner and the removed parts of
 // the two chains give way to the end curve of the blend.
 func (w *work) endFace(l line, i int, g faceLoops, runs [2]edgeRun, remA, remB, rows []int, rowsAt []r3.Vec,
-	margin float64) ([][]int, error) {
+	margin float64, convex bool) ([][]int, error) {
 	end := l.ends[i]
 	li, ok := g.loopWith(end.v)
 	if !ok {
@@ -344,11 +344,13 @@ func (w *work) endFace(l line, i int, g faceLoops, runs [2]edgeRun, remA, remB, 
 	default:
 		return nil, fmt.Errorf("%w: an end face's chains disagree with the faces beside the edge", decaderr.ErrUnsupported)
 	}
-	// The corner must turn toward the face's inside, and nothing else of the
-	// face may come near it.
+	// A convex edge ends on a face that is convex at the corner (the blend
+	// removes the corner from it), a concave edge on one that is reflex there
+	// (the blend fills the notch). Nothing else of the face may come near.
 	in, out := w.verts[end.v].Sub(w.verts[prev]), w.verts[next].Sub(w.verts[end.v])
-	if in.Cross(out).Dot(end.g.n) <= 0 {
-		return nil, fmt.Errorf("%w: an end face is not convex at the edge's corner", decaderr.ErrUnsupported)
+	turn := in.Cross(out).Dot(end.g.n)
+	if math.Abs(turn) <= margin*in.Len() || (turn > 0) != convex {
+		return nil, fmt.Errorf("%w: an end face's corner does not match the edge's convexity", decaderr.ErrUnsupported)
 	}
 	reach := 0.0
 	for _, p := range rowsAt {
@@ -479,8 +481,8 @@ func polyArea(ps ...r3.Vec) float64 {
 
 // lineAreas returns the exact area the blend removes from the four faces and
 // the exact area of the blend face (design §5.0).
-func (w *work) lineAreas(l line, spec blendSpec, convex bool, center, baseA, baseB r3.Vec, rows [2][]int,
-	tA, tB float64) (removed, blend float64) {
+func (w *work) lineAreas(l line, spec blendSpec, convex bool, center, baseA, baseB r3.Vec,
+	rows [2][]int) (removed, blend float64) {
 	m := len(rows[0]) - 1
 	pt := func(i, j int) r3.Vec { return w.verts[rows[i][j]] }
 	v0, v1 := l.ends[0].exact, l.ends[1].exact

@@ -291,7 +291,9 @@ func findLine(body *topo.Body, key lineKey, slack float64) (*topo.Edge, bool) {
 		}
 		p, q := e.Start.Position, e.End.Position
 		near := func(a, b r3.Vec) bool { return a.Sub(b).Len() <= slack+e.Start.Bound.Base() }
-		if !(near(p, key.p0) && near(q, key.p1)) && !(near(p, key.p1) && near(q, key.p0)) {
+		forward := near(p, key.p0) && near(q, key.p1)
+		backward := near(p, key.p1) && near(q, key.p0)
+		if !forward && !backward {
 			continue
 		}
 		if found != nil {
