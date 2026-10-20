@@ -40,7 +40,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/brepwallmesh/` | Chords BRep swept walls and checks clearance between their mesh loops. See general-boolean §4.4 and tessellation §5. |
 | `internal/brepbandmesh/` | Meshes a brep body: walls, planar faces, closure audits and the occupied-volume sum. Chords route L and shell bands, imposes their counts on the walls beside them, places and emits them, and states their motion, volume terms and admission. See general-boolean §4.4, modify-general DG3/DG4, §4.3a. |
 | `internal/brepfilletmesh/` | Places full and selected BRep fillet rings, emits patch triangles, and computes their area and motion bounds. See loop-fillet §7.1. |
-| `internal/throughshell/` | Through-cut record recognition, section and cavity construction, strips, rim assembly, and audits. See modify-general §3. |
+| `internal/throughshell/` | Through-cut record recognition, section and cavity construction, strips, rim assembly, audits, and the shell route over them. See modify-general §3. |
 | `internal/capedge/` | Convex cap-edge cutter admission, quarter-cylinder profile, chamfer wedge and the P8 top front edge test. See vertex-blend §2. |
 | `internal/gatewitness/` | Selects payload witness prisms and their displacement for Verify's fallback diameter; root reads their stations. See verification §3. |
 | `internal/cuptess/` | Builds a cup payload's chorded mesh node and its face, area and occupied-volume bounds. See tessellation §6. |
@@ -59,4 +59,4 @@ The rules for rows live in `docs/layout.md`.
 | `internal/capblend/` | Chamfer payload/build: setbacks, draft bounds, offsets, patches, cap edges, departure/mass bounds, refusal, admission, witness prisms, mesh-loop chording/motion, the shared band emitter and audited mesh assembly. Root `capBlendPayload` alias. See modify-reach §8, tessellation-reach §7. |
 | `internal/triangulation/` | Cap hole bridging and ear clipping over recorded `Point2`; indexed triangles and chording refusals. |
 | `internal/topo/` | Node data held by value in root topology handles (Vertex, Edge, CoEdge, Loop, Face, FaceShell, Lump, Body, Document, Mesh), links, document minting/liveness, and Body's sweep-radius memo; `Payload`, `SimpleProver`, `Env`, builders' `Alloc`; `topotest` allocates bare nodes. See evaluator §3, §8. |
-| `internal/topobuild/` | Topology assembly over nodes: faces, edges, shells, lumps, loft helpers, normals, mesh writes and vertex bounds, and solid and sheet audits. See evaluator §3, §5 and surface §2.2. |
+| `internal/topobuild/` | Topology assembly over nodes: faces and their roles, edges, shells, lumps, loft helpers, normals, mesh writes and vertex bounds, and solid and sheet audits. See evaluator §3, §5 and surface §2.2. |

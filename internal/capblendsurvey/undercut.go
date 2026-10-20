@@ -89,7 +89,7 @@ func CapBlendUndercuts(b *topo.Body, cbp capblend.Payload, pull r3.Vec) reportvo
 	if !ok {
 		return undercutOutcome{}
 	}
-	roles := facesByRole(b)
+	roles := topobuild.FacesByRole(b)
 
 	// The ordinary side walls and caps: the same exact three-valued read
 	// analyticundercut.Prism runs, over the RECEIVER's own recorded profile — a
@@ -301,7 +301,7 @@ func PatchNormalRange(f *topo.Face, pl prismPayload, g capPatchGeom, p r3.Vec) (
 // concave principal radius" and the whole survey reduces to radiussurvey.Prism on
 // the receiver's own untouched profile.
 func CapBlendMinRadius(b *topo.Body, cbp capblend.Payload) reportvocab.ScalarSurvey {
-	roles := facesByRole(b)
+	roles := topobuild.FacesByRole(b)
 	for _, patch := range cbp.Patches {
 		f := roles[patch.Role]
 		if f == nil {

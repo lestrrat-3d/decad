@@ -218,3 +218,21 @@ func Falsify(ctx context.Context, bp Payload) error {
 func (bp Payload) RefView() prismrecord.Payload {
 	return prismrecord.Payload{Frame: bp.Faces[0].Frame, Xform: bp.Xform}
 }
+
+// PrismFaceRecord is the face as the prism-read geometry takes it.
+func PrismFaceRecord(f Face) brepgeom.PrismRectFace {
+	return brepgeom.PrismRectFace{
+		Frame: f.Frame, Region: f.Region, Wall: f.Wall, Z0: f.Z0, Z1: f.Z1,
+		Z0Delta: f.Z0Delta, Z1Delta: f.Z1Delta, Split0: len(f.Side0) != 0,
+		Split1: len(f.Side1) != 0, Outward: f.Outward, Role: f.Role,
+	}
+}
+
+// PrismFaceRecords is every face of bp as the prism-read geometry takes it.
+func (bp Payload) PrismFaceRecords() []brepgeom.PrismRectFace {
+	faces := make([]brepgeom.PrismRectFace, len(bp.Faces))
+	for i, f := range bp.Faces {
+		faces[i] = PrismFaceRecord(f)
+	}
+	return faces
+}

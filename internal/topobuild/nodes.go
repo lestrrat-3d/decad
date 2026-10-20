@@ -1,6 +1,9 @@
 package topobuild
 
-import "github.com/lestrrat-3d/decad/internal/topo"
+import (
+	"github.com/lestrrat-3d/decad/internal/selectorquery"
+	"github.com/lestrrat-3d/decad/internal/topo"
+)
 
 // The New helpers allocate a node through alloc and fill it from v, keeping
 // the Owner the allocator set: a builder writes a node literal the way root
@@ -136,4 +139,23 @@ func CoEdgeEnd(n topo.CoEdge) *topo.Vertex {
 		return n.Edge.End
 	}
 	return n.Edge.Start
+}
+
+// FacesByRole selects the last face carrying each role from b's own step,
+// walking the faces in Faces order.
+func FacesByRole(b *topo.Body) map[string]*topo.Face {
+	faces := Faces(b)
+	faceRoles := make([][]string, len(faces))
+	for i, f := range faces {
+		for _, o := range f.Origins {
+			if o.Producer == b.Origin.Producer {
+				faceRoles[i] = append(faceRoles[i], o.Role)
+			}
+		}
+	}
+	roles := make(map[string]*topo.Face)
+	for role, i := range selectorquery.RoleIndex(faceRoles) {
+		roles[role] = faces[i]
+	}
+	return roles
 }
