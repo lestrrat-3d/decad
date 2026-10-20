@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"math"
-	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/coilshell"
 	"github.com/lestrrat-3d/decad/internal/measurement"
@@ -13,11 +12,9 @@ import (
 	"github.com/lestrrat-3d/decad/internal/planarsnapshot"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/selectorquery"
 	"github.com/lestrrat-3d/decad/internal/topo"
-	"github.com/lestrrat-3d/decad/internal/triangulation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -105,7 +102,7 @@ func (chord heldChord) Convex(ctx context.Context, budget *proofbound.WorkBudget
 	if err != nil || !snapshot.OK {
 		return false, err
 	}
-	solid, ok, err := placePlanarSnapshot(budget, snapshot, r3.Identity())
+	solid, ok, err := planarsnapshot.Place(budget, snapshot, r3.Identity())
 	if err != nil || !ok {
 		return false, err
 	}
@@ -151,7 +148,7 @@ func planarSolidAtPose(ctx context.Context, budget *proofbound.WorkBudget, b *Bo
 	if err != nil || !snapshot.OK {
 		return planar.PlanarSolid{}, none, false, err
 	}
-	solid, ok, err := placePlanarSnapshot(budget, snapshot, pose)
+	solid, ok, err := planarsnapshot.Place(budget, snapshot, pose)
 	if err != nil || !ok {
 		return planar.PlanarSolid{}, none, false, err
 	}
@@ -160,30 +157,6 @@ func planarSolidAtPose(ctx context.Context, budget *proofbound.WorkBudget, b *Bo
 		delta = proofarith.DyMul(delta, planarsnapshot.PoseScale(pose))
 	}
 	return solid, delta, true, nil
-}
-
-// placePlanarSnapshot maps a cached snapshot's vertices through pose into a
-// fresh vertex slice and audits the result: the snapshot's topology already
-// passed the combinatorial half of planar.CheckPlanarSolid, and
-// planar.CheckPlanarPose runs the coordinate half and attaches the pose's
-// derived data. The triangle and face slices are shared with the cache,
-// clipped so no append can reach its storage.
-func placePlanarSnapshot(budget *proofbound.WorkBudget, snapshot *planarsnapshot.SnapshotEntry,
-	pose r3.Transform) (planar.PlanarSolid, bool, error) {
-	solid := planar.PlanarSolid{Verts: make([]proofarith.DyV3, len(snapshot.Solid.Verts)),
-		Tris: slices.Clip(snapshot.Solid.Tris), Faces: slices.Clip(snapshot.Solid.Faces)}
-	place := proofarith.NewDyadicMap(pose)
-	for i, v := range snapshot.Solid.Verts {
-		if err := budget.Step(); err != nil {
-			return planar.PlanarSolid{}, false, err
-		}
-		solid.Verts[i] = place.Apply(v)
-	}
-	audited, err := planar.CheckPlanarPose(&solid, snapshot.Topology, budget.Step)
-	if err != nil || !audited {
-		return planar.PlanarSolid{}, false, err
-	}
-	return solid, true, nil
 }
 
 // planarSnapshotOf returns the body's exact snapshot at the identity query
@@ -199,9 +172,9 @@ func planarSnapshotOf(ctx context.Context, budget *proofbound.WorkBudget, b *Bod
 	var err error
 	switch payload := b.n.Payload.(type) {
 	case prismPayload:
-		entry.Solid, entry.OK, err = planarPrismSolid(ctx, budget, payload, prismFaceIndex(b))
+		entry.Solid, entry.OK, err = planarband.PrismSolid(ctx, budget, payload, prismFaceIndex(b))
 	case facetedPayload:
-		entry.Solid, entry.Delta, entry.OK, err = planarFacetedSolid(budget, payload)
+		entry.Solid, entry.Delta, entry.OK, err = planarband.FacetedSolid(budget, payload)
 	case stitchPayload:
 		entry.Solid, entry.Delta, entry.OK, err = planarStitchSolid(budget, b, payload)
 	case coilPayload:
@@ -236,37 +209,6 @@ func prismFaceIndex(b *Body) map[string]int {
 		}
 	}
 	return selectorquery.RoleIndex(faceRoles)
-}
-
-// planarPrismSolid lifts an all-LineSeg section through its frame and sweep
-// levels. The caps reuse the tessellator's triangulation, which this function
-// then proves: every cap triangle is exactly counterclockwise and, through the
-// closed-mesh audit, the caps' boundary chain is the section loops, so the
-// triangles tile the section exactly. Each triangle records its face from
-// the roles in faceIndex: the start cap at z0, the end cap at z1, and
-// side(loop, segment) for a wall; a missing role leaves Faces unset.
-func planarPrismSolid(ctx context.Context, budget *proofbound.WorkBudget,
-	pp prismPayload, faceIndex map[string]int) (planar.PlanarSolid, bool, error) {
-	return planarsnapshot.PrismSolid(ctx, budget, planarsnapshot.PrismInput{
-		Outer: pp.Profile.Outer, Holes: pp.Profile.Holes,
-		Frame: pp.Frame, Transform: pp.Xform, Z0: pp.Z0, Z1: pp.Z1,
-		SectionDelta: pp.SectionDelta, Z0Delta: pp.Z0Delta, Z1Delta: pp.Z1Delta,
-		SurfaceResult: pp.SurfaceResult, CapStartRole: provenance.RoleCapStart, CapEndRole: provenance.RoleCapEnd,
-	}, faceIndex, triangulation.Triangulate)
-}
-
-// planarFacetedSolid reads a Boolean's held mesh. A zero-bound mesh is its
-// exact boundary. A translation-only placement reads the saved exact source
-// mesh moved by the exact placement translation, after a reject-only check
-// that every rebuilt vertex lies within the published bound of it. Any other
-// positive-bound mesh is read as held, with its mesh bound returned as the
-// displacement δ of §10.4.
-func planarFacetedSolid(budget *proofbound.WorkBudget, pp facetedPayload) (planar.PlanarSolid, proofarith.Dyadic, bool, error) {
-	return planarsnapshot.FacetedSolid(budget, planarsnapshot.FacetedInput{
-		Verts: pp.Verts, Tris: pp.Tris, FaceOf: pp.FaceOf,
-		ExactSourceVerts: pp.ExactSourceVerts, ExactSourceTris: pp.ExactSourceTris,
-		MeshBound: pp.MeshBound, VolSymDiff: pp.VolSymDiff, Transform: pp.Xform,
-	})
 }
 
 // planarStitchSolid reads a closed all-planar stitched solid off its own

@@ -48,7 +48,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/motionbound/` | Motion variants, exact parameters, poses, box bounds, pair certificates, record radii, overlap transfer and sweeps. |
 | `internal/motionrun/` | Static mover/stationary pair validity, swept-box exclusion and sheet classification over topology nodes. See motion-check §2–§6. |
 | `internal/motionoption/` | Motion options. See motion-check §3. |
-| `internal/planarband/` | Planar contact report from the exact relation: manifold witnesses and order, support band, and the positive-displacement relation with its charged manifold. See multibody §9.3–§9.6, §10.4–§10.5. |
+| `internal/planarband/` | Planar contact report from the exact relation: manifold witnesses and order, support band, the positive-displacement relation with its charged manifold, and planar solids of prism and faceted payloads. See multibody §9.3–§9.6, §10.4–§10.5. |
 | `internal/radiusmemo/` | Body rotational sweep-radius keys and bounded memo readings. See contact-sweep §6–§7. |
 | `internal/ringmemo/` | Bounded first-write memo that evicts its oldest key once full; backs the pair report and sweep replay memos. |
 | `internal/spherepath/` | Sphere path gaps, face corridors, point transfer, track bounds, brackets and pair replay. See contact-sweep §4–§6. |
