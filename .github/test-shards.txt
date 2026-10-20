@@ -294,3 +294,4 @@
 10	0.00	TestTangentHeelMeshesClearsResult
 10	0.00	TestShellCutGates
 10	0.00	TestBlendEdgesGates
+10	0.00	TestThickenAdmissionGates

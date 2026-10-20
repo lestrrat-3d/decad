@@ -8,6 +8,8 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/thickenbuild"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/thickenaxis"
@@ -45,7 +47,8 @@ func TestThickenPrismUnrepresentableOffset(t *testing.T) {
 	require.True(t, strings.Contains(err.Error(), "rounded"), err.Error())
 
 	doc := New()
-	result, err := thickenPrism(t.Context(), doc, pp, ThickenNegative, 1, 0)
+	node, err := thickenbuild.Thicken(t.Context(), envOf(documentNode(doc), doc.nextProducerID()), &topo.Body{Payload: pp}, thickenbuild.Negative, 1, 0)
+	result := node
 	require.Nil(t, result)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.True(t, strings.Contains(err.Error(), "rounded"), err.Error())
