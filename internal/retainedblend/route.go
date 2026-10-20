@@ -93,7 +93,9 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 		case looksLikeArc(e):
 			a, err := readArc(e, fp, faceIndex)
 			if err != nil {
-				return nil, true, err
+				// An arc this route cannot read is left to the generic refusal, which
+				// names the whole selection.
+				return nil, false, nil
 			}
 			if err := a.checkSize(spec); err != nil {
 				return nil, true, err
