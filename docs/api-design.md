@@ -544,9 +544,10 @@ type Arc3 struct    { /* ... */ }
 // the start vertex to the end vertex as Arc3 is: the point at angle φ from the
 // unit semi-major direction Major is
 // Center + SemiMajor·cos φ·Major + SemiMinor·sin φ·(Axis × Major)
-// (docs/loop-fillet-design.md §2). A placement maps Center and Major as
-// points and directions; a reflection also negates Axis, so the arc keeps its
-// sense between its mapped vertices.
+// (docs/loop-fillet-design.md §2). An edge whose start and end vertex are one
+// vertex is the whole ellipse, one turn from that vertex, as a Circle3 edge is. A
+// placement maps Center and Major as points and directions; a reflection also
+// negates Axis, so the arc keeps its sense between its mapped vertices.
 type Ellipse3 struct {
 	Center, Axis, Major  r3.Vec
 	SemiMajor, SemiMinor units.Value

@@ -345,4 +345,60 @@ func TestFacetedSourceRetention(t *testing.T) {
 		require.Equal(t, 8, arcs)
 		require.Equal(t, 2, circles)
 	})
+
+	t.Run("an oblique bore's mouths publish whole ellipses", func(t *testing.T) {
+		t.Parallel()
+		sc := newRetentionScene()
+		// A 20 mm plate, bored by a Ø8 tool that leans 30° from the plate's
+		// normal about the y axis through (20, 10, 10).
+		s, err := sc.w.CreateSketch(sc.w.XY())
+		require.NoError(t, err)
+		r := s.CreateRectangle(0, 0, 40, 20)
+		s.Fix(r.A)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		plate, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+		require.NoError(t, err)
+		ts, err := sc.w.CreateSketch(sc.w.XY())
+		require.NoError(t, err)
+		c := ts.CreatePoint(20, 10)
+		ts.Fix(c)
+		ts.CreateCircle(c, 4)
+		_, err = ts.Solve(t.Context())
+		require.NoError(t, err)
+		pin, err := decad.Extrude(t.Context(), sc.doc, ts, ts.Profiles()[0], decad.Symmetric{D: units.Millimeters(60)})
+		require.NoError(t, err)
+		tilt := 30 * math.Pi / 180
+		turn, err := r3.RotationAround(r3.NewVec(20, 10, 10), r3.NewVec(0, 1, 0), units.Radians(tilt))
+		require.NoError(t, err)
+		tool, err := decad.Transform(t.Context(), pin, turn)
+		require.NoError(t, err)
+		bored, err := decad.Cut(t.Context(), plate, tool)
+		require.NoError(t, err)
+
+		axis := turn.ApplyDir(r3.NewVec(0, 0, 1))
+		ellipses, lines := 0, 0
+		for _, e := range bored.Edges() {
+			ellipse, ok := e.Curve().(decad.Ellipse3)
+			if !ok {
+				require.IsType(t, decad.Line3{}, e.Curve(), "a rim of the bored plate is an ellipse or a line")
+				lines++
+				continue
+			}
+			ellipses++
+			require.InDelta(t, 4, ellipse.SemiMinor.Base(), 1e-9)
+			require.InDelta(t, 4/math.Cos(tilt), ellipse.SemiMajor.Base(), 1e-9)
+			// The centre is where the tool axis crosses the plate face.
+			require.True(t, math.Abs(ellipse.Center.Z) < 1e-9 || math.Abs(ellipse.Center.Z-20) < 1e-9, "centre %v", ellipse.Center)
+			along := (ellipse.Center.Z - 10) / axis.Z
+			want := r3.NewVec(20, 10, 10).Add(axis.Scale(along))
+			require.InDelta(t, 0, ellipse.Center.Sub(want).Len(), 1e-9)
+			require.InDelta(t, 1, math.Abs(ellipse.Major.Dot(r3.NewVec(1, 0, 0))), 1e-9, "the major axis lies along the tilt")
+			require.InDelta(t, 1, math.Abs(ellipse.Axis.Z), 1e-12)
+			require.Same(t, e.Start(), e.End(), "a whole-turn rim starts and ends at one vertex")
+		}
+		require.Equal(t, 2, ellipses)
+		require.Equal(t, 12, lines, "the plate's own edges")
+	})
 }

@@ -37,6 +37,11 @@ func EdgeContext(ordinal int, edge *topo.Edge) string {
 		return fmt.Sprintf(`selected edge[%d] closed circle through (%s), centre (%s), radius %s`,
 			ordinal, selectorquery.RenderVec(edge.Start.Position), selectorquery.RenderVec(c.Center), c.Radius)
 	}
+	if c, ok := edge.Curve.(surfacegeom.Ellipse3); ok && edge.Start == edge.End {
+		return fmt.Sprintf(`selected edge[%d] closed ellipse through (%s), centre (%s), semi-axes %s and %s`,
+			ordinal, selectorquery.RenderVec(edge.Start.Position), selectorquery.RenderVec(c.Center),
+			c.SemiMajor, c.SemiMinor)
+	}
 	if c, ok := edge.Curve.(surfacegeom.Ellipse3); ok {
 		return fmt.Sprintf(`selected edge[%d] ellipse arc from (%s) to (%s), centre (%s), semi-axes %s and %s`,
 			ordinal, selectorquery.RenderVec(edge.Start.Position), selectorquery.RenderVec(edge.End.Position),

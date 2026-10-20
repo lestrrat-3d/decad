@@ -188,7 +188,8 @@ type Arc3 struct {
 }
 
 // Ellipse3 is an elliptical arc edge. Major is the unit direction of its
-// semi-major axis in the plane normal to Axis.
+// semi-major axis in the plane normal to Axis. An edge whose start and end
+// vertex are one vertex is the whole ellipse.
 type Ellipse3 struct {
 	Center, Axis, Major  r3.Vec
 	SemiMajor, SemiMinor units.Value

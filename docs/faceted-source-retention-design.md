@@ -300,7 +300,7 @@ expression) and not a printed number.
 
 ## 9. Increments
 
-Increments 1 to 5 are in. Nothing in 1–4 depends on 5.
+Increments 1 to 6 are in. Nothing in 1–4 depends on 5 or 6.
 
 | # | Lands | Gate to start the next |
 |---|---|---|
@@ -309,6 +309,8 @@ Increments 1 to 5 are in. Nothing in 1–4 depends on 5.
 | 3 | §10: `Line3`, `Circle3` and `Arc3` on an edge between two retained faces, the `Curve` reader audit and the Boolean-rim witness flag | the P3 fixture's edges publish their curves and the STEP test passes |
 | 4 | Placement rule of §3.4 | a rotated copy of P3 reports a finite `NormalAt` bound below 2 |
 | 5 | A later mesh Boolean charges a retained `Plane` facet's slab half-width by its measured distance from `T` instead of `β` (§11) | a second cut beside the first hole, previously refused by the held-mesh gate, builds with rim bounds below the first cut's |
+
+| 6 | §10.5–§10.6: `Ellipse3` on an oblique `Plane`/`Cylinder` rim, with its sweep rule and the whole-turn convention | the oblique plate fixture publishes its two mouth ellipses |
 
 Increments 1–4 only publish what Claim R and Claim E already prove (increment 4 adds the placement charge of §3.4).
 Increment 5 uses the tag to tighten later arithmetic; its proof is Claim S in §11.
@@ -343,11 +345,11 @@ chord chain; nothing refuses.
 | E5 | `Plane` and `Sphere` with `R² > d²` for `d` the centre's distance from the plane | `Circle3` or `Arc3`: centre the foot of the sphere's centre, radius `√(R² − d²)` |
 | E6 | The falsifier: every chain vertex lies within `bound(v) + slack` of the curve, `slack = 64·2⁻⁵²·max(1, |coordinate|)` | |
 | E7 | For an `Arc3`, the chain has an interior vertex, every angular step about the axis clears `4(max bound + slack)/R`, stays below `π`, has one sign, and the steps sum below `2π` | the sign picks `Axis = ±n` so the run is counter-clockwise |
+| E8 | `Plane` and `Cylinder` with the axis oblique to the plane: `|axis × n| > 10⁻¹²` and `|axis · n| ≥ 10⁻³` | `Ellipse3`, §10.5 |
 
 A `Line3` carries no parameters, so E2 and E4 assert only that the edge is
-straight between its vertices. The other pairs (`Cylinder`/`Cylinder`, an
-oblique `Plane`/`Cylinder`, `Cone`, `Torus`) keep `FacetedCurve`; an oblique
-`Plane`/`Cylinder` pair would publish `Ellipse3` and is not in this increment.
+straight between its vertices. The other pairs (`Cylinder`/`Cylinder`, `Cone`,
+`Torus`, and a `Plane`/`Cylinder` pair E8 declines) keep `FacetedCurve`.
 
 E6 can only reject. A vertex far from the curve disproves the pairing (a bug,
 or a chain that does not follow the intersection), and the edge stays a chord
@@ -385,6 +387,7 @@ The curve readers split the same way the surface readers did in §4.
 | `internal/brepmodify`, `internal/modifyselect` | read the curve after a payload-class gate. A `facetedPayload` stays `ErrUnsupported` at modify S3/SX9, so the new curve opens no modify route by itself |
 | `internal/extent/angular_stop.go`, `patch_body.go`, `internal/clearance/edge_topology.go`, `internal/gatediameter/body_gate.go` | each is gated by its own payload class |
 | `Edge.Length`, `LengthBound` | unchanged (§10.2) |
+| `internal/selectorquery/topo_views.go` (`Circular`), `internal/modifyselect/edge_context.go`, `export/step_analytic.go` for an `Ellipse3` rim | `Circular` does not match an ellipse; the refusal message keeps its existing ellipse text for an open arc and gains `closed ellipse through (p), centre (c), semi-axes a and b` for a whole turn; the STEP loop check refuses a retained body's edges as for any `FacetedCurve` |
 
 Tests that must tell a mesh result from an analytic one cannot use a face or
 edge kind any more. `decadtest.PayloadClass` names the payload class through a
@@ -398,6 +401,67 @@ public API.
 | Drilled filleted box | 16 `Line3`, 8 `Arc3` of radius 3 about z, 2 `Circle3` of radius 4 about y through (20, ·, 10) | return the chord chain unconditionally: no edge is a line, arc or circle |
 | `RetainedEdgeCurve` unit tests | plane-plane and plane-cylinder (tangent generator, bore circle) accept; a mispaired chain, a face meeting itself, an untagged face and parallel planes decline; a counter-clockwise run sweeps about +z and a clockwise one about −z; two vertices or a doubled-back chain decline | drop E6: the 0.5 mm-off bore chain publishes a circle |
 | STEP | a retained drilled plate still writes planar triangles and no analytic entity | none; the test pins that the analytic writer stays off |
+
+### 10.5 The oblique plane and cylinder
+
+A plane with unit normal `n` through `o` meets a cylinder with unit axis `a`,
+origin `c` and radius `R` in one closed ellipse when `a · n ≠ 0`. Write
+`k = |a · n|` and let `m` be the unit vector along `a − (a · n)·n`, the axis
+projected into the plane. The ellipse is
+
+| Field of `Ellipse3` | Value |
+|---|---|
+| `Center` | `c + t·a` with `t = n · (o − c) / (n · a)`, the axis-plane crossing |
+| `Major` | `m` |
+| `SemiMajor` | `R / k` |
+| `SemiMinor` | `R` |
+| `Axis` | `±n`, chosen as in E9 |
+
+*Check.* Take `p = Center + x·m + y·(n × m)` in the plane. The part of `p − Center`
+along `a` is `x·√(1 − k²)`, so the squared distance of `p` from the axis is
+`x² + y² − x²(1 − k²) = x²k² + y²`. Setting it equal to `R²` gives
+`(x / (R/k))² + (y / R)² = 1`. ∎
+
+E8 stops at `k ≥ 10⁻³`. Below that the centre's `1/k` amplification of the
+rounding in `o`, `c` and `a` exceeds what E6's slack covers, and the pair keeps its
+chord chain. The pair has no second component, so there is no choice of branch as
+in E4.
+
+**E6 for an ellipse.** The distance from a point to an ellipse has no closed form.
+The falsifier uses two necessary conditions instead: a vertex within
+`bound + slack` of the ellipse is within that distance of the plane,
+`|n · (v − o)| ≤ bound + slack`, and of the cylinder,
+`| |radial(v)| − R | ≤ bound + slack`. Either one failing disproves the pairing. A
+vertex that passes both may still be farther from the ellipse than its bound (the
+distance to the curve is at most `bound / sin γ` for `γ` the angle between the two
+surfaces there), so the test rejects less than the circle's. It admits nothing
+(§10.1, E6): the curve is trusted because Claim R holds for both faces.
+
+**E9 sweep sense.** Let `w = n × m`. A chain vertex `v` has the eccentric angle
+`φ = atan2(w · (v − Center), k·(m · (v − Center)))`, the angle `Ellipse3` measures. A
+vertex displaced by `b` moves `φ` by at most `b / R`, because the curve's speed per
+unit of `φ` is at least `SemiMinor = R`. E7 then holds with these angles: every
+step clears `4(max bound + slack) / R`, stays below `π`, has one sign, and the steps
+sum below `2π`. The sign picks `Axis = n` for a positive run and `−n` for a negative
+one. The edge runs from its start vertex to its end vertex counter-clockwise about
+`Axis`, as `Arc3` does.
+
+**Closed rims.** A closed rim publishes one whole ellipse, and the edge's start
+vertex equals its end vertex. For `Ellipse3`, start equal to end means one full
+turn from that vertex, the way a `Circle3` edge reads. `docs/api-design.md` §4
+states the convention in `Ellipse3`'s comment.
+
+`supportsAnalyticSTEP` returns false for a face whose loop holds a whole-turn
+`Ellipse3`: a planar loop admits `Line3`, `Arc3` and a closed `Circle3` only, and
+a cylinder wall with two loops needs closed circles. The faceted writer then
+takes the body.
+
+### 10.6 Tests for E8 and E9
+
+| Test | Asserts | Red leg |
+|---|---|---|
+| Plate drilled 30° off the normal by a placed tool | both mouths publish `Ellipse3` with `SemiMinor = R`, `SemiMajor = R / cos 30°`, `Center` on the tool axis, `Major` along the tilt, to the bit of the closed-form value; the closed rims are whole turns | return `FacetedCurve` for every oblique pair: no edge is an ellipse |
+| `RetainedEdgeCurve` unit tests | an open chain sweeping counter-clockwise publishes `Axis = +n` and a clockwise one `−n`; a chain 0.5 mm off the cylinder declines; a chain 0.5 mm off the plane declines; `k = 5·10⁻⁴` declines; a doubled-back chain declines | drop the cylinder half of E6: the off-cylinder chain publishes an ellipse; negate the sweep sign: the clockwise chain reads counter-clockwise |
 
 ## 11. Why the hint helps a later Boolean, and its limit
 
@@ -473,5 +537,5 @@ worst facet was a cylinder stay refused.
 | `Cone` and `Torus` | increment 2 | in increment 1; blocked only by the axis-distance lower bound |
 | `ToFace` on a retained plane | increment 2, with the carried `CapRecord` | increment 1; needs a `CapRecord` for every operand plane first |
 | `Line3`/`Circle3` on edges | increment 3, after 1 and 2 | never; keeps `FacetedCurve` everywhere |
-| Fillet and chamfer of an edge between two retained planes | out of scope here; needs its own route in `docs/modify-reach-design.md` (SX9) | include as increment 6 |
-| Oblique `Plane`/`Cylinder` edges as `Ellipse3` | not in increment 3 | add to increment 3; needs an ellipse sweep-sense proof like E7 |
+| Fillet and chamfer of an edge between two retained planes | out of scope here; needs its own route in `docs/modify-reach-design.md` (SX9) | include as increment 7 |
+| Oblique `Plane`/`Cylinder` edges as `Ellipse3` | increment 6, with the whole-turn convention for a closed rim (§10.5) | keep `FacetedCurve`, or add a separate whole-ellipse curve type |

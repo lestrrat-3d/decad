@@ -125,3 +125,95 @@ func TestRetainedEdgeCurveArcSense(t *testing.T) {
 	_, ok = facetedrecord.RetainedEdgeCurve(floor, bore, wobble, bounds, false)
 	require.False(t, ok, "a chain that doubles back has no single sense")
 }
+
+// obliqueScene is the floor z=0 and a Ø8 bore whose axis leans 30° from z
+// toward +x and crosses the floor at the origin.
+func obliqueScene(t *testing.T) (floor, bore *topo.Face, tilt float64, ellipsePoint func(phi float64) r3.Vec) {
+	t.Helper()
+	tilt = 30 * math.Pi / 180
+	floor = retained(planeAt(t, r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)))
+	axis := r3.NewVec(math.Sin(tilt), 0, math.Cos(tilt))
+	bore = retained(surfacegeom.Cylinder{Origin: r3.Vec{}, Axis: axis, Radius: units.Millimeters(4)})
+	ellipsePoint = func(phi float64) r3.Vec {
+		return r3.NewVec(4/math.Cos(tilt)*math.Cos(phi), 4*math.Sin(phi), 0)
+	}
+	return floor, bore, tilt, ellipsePoint
+}
+
+func ellipseChain(point func(float64) r3.Vec, from, to float64, steps int) ([]r3.Vec, []float64) {
+	var chain []r3.Vec
+	var bounds []float64
+	for i := 0; i <= steps; i++ {
+		chain = append(chain, point(from+(to-from)*float64(i)/float64(steps)))
+		bounds = append(bounds, 1e-6)
+	}
+	return chain, bounds
+}
+
+func TestRetainedEdgeCurveObliqueEllipse(t *testing.T) {
+	t.Parallel()
+	floor, bore, tilt, point := obliqueScene(t)
+
+	t.Run("a closed rim is one whole ellipse", func(t *testing.T) {
+		t.Parallel()
+		ring, bounds := ellipseChain(point, 0, 2*math.Pi, 12)
+		ring[len(ring)-1] = ring[0]
+		curve, ok := facetedrecord.RetainedEdgeCurve(floor, bore, ring, bounds, true)
+		require.True(t, ok)
+		e, isEllipse := curve.(surfacegeom.Ellipse3)
+		require.True(t, isEllipse)
+		require.InDelta(t, 4, e.SemiMinor.Base(), 1e-12)
+		require.InDelta(t, 4/math.Cos(tilt), e.SemiMajor.Base(), 1e-12)
+		require.InDelta(t, 0, e.Center.Len(), 1e-12)
+		require.InDelta(t, 1, e.Major.X, 1e-12, "the major axis lies along the tilt")
+		require.Equal(t, 1.0, e.Axis.Z)
+		// The same curve from the other face order.
+		_, ok = facetedrecord.RetainedEdgeCurve(bore, floor, ring, bounds, true)
+		require.True(t, ok)
+	})
+
+	t.Run("an open rim runs the way its vertices do", func(t *testing.T) {
+		t.Parallel()
+		ccw, bounds := ellipseChain(point, 0.3, 2.6, 6)
+		curve, ok := facetedrecord.RetainedEdgeCurve(floor, bore, ccw, bounds, false)
+		require.True(t, ok)
+		require.Equal(t, 1.0, curve.(surfacegeom.Ellipse3).Axis.Z)
+		cw, bounds := ellipseChain(point, 2.6, 0.3, 6)
+		curve, ok = facetedrecord.RetainedEdgeCurve(floor, bore, cw, bounds, false)
+		require.True(t, ok)
+		require.Equal(t, -1.0, curve.(surfacegeom.Ellipse3).Axis.Z)
+	})
+
+	t.Run("a vertex off the plane or off the cylinder declines", func(t *testing.T) {
+		t.Parallel()
+		ring, bounds := ellipseChain(point, 0, 2*math.Pi, 12)
+		ring[len(ring)-1] = ring[0]
+		offPlane := append([]r3.Vec(nil), ring...)
+		offPlane[3] = offPlane[3].Add(r3.NewVec(0, 0, 0.5))
+		_, ok := facetedrecord.RetainedEdgeCurve(floor, bore, offPlane, bounds, true)
+		require.False(t, ok, "0.5 mm off the plane, bound 10⁻⁶")
+		offCylinder := append([]r3.Vec(nil), ring...)
+		offCylinder[3] = offCylinder[3].Add(r3.NewVec(0.5, 0, 0))
+		_, ok = facetedrecord.RetainedEdgeCurve(floor, bore, offCylinder, bounds, true)
+		require.False(t, ok, "0.5 mm off the cylinder, bound 10⁻⁶")
+	})
+
+	t.Run("an axis nearly in the plane declines", func(t *testing.T) {
+		t.Parallel()
+		k := 5e-4
+		flat := retained(surfacegeom.Cylinder{Origin: r3.Vec{}, Axis: r3.NewVec(math.Sqrt(1-k*k), 0, k),
+			Radius: units.Millimeters(4)})
+		ring, bounds := ellipseChain(point, 0, 2*math.Pi, 12)
+		ring[len(ring)-1] = ring[0]
+		_, ok := facetedrecord.RetainedEdgeCurve(floor, flat, ring, bounds, true)
+		require.False(t, ok)
+	})
+
+	t.Run("a chain that doubles back declines", func(t *testing.T) {
+		t.Parallel()
+		ccw, bounds := ellipseChain(point, 0.3, 2.6, 6)
+		ccw[3], ccw[2] = ccw[2], ccw[3]
+		_, ok := facetedrecord.RetainedEdgeCurve(floor, bore, ccw, bounds, false)
+		require.False(t, ok)
+	})
+}
