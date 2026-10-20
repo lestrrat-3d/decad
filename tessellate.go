@@ -537,3 +537,15 @@ func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload,
 	}
 	return bornMesh(&Mesh{n: *node}), nil
 }
+
+// verifyAllMesher gives the internal builders a body's mesh at VerifyAll
+// (internal/verifiedmesh), tessellated as Body.Tessellate would.
+type verifyAllMesher struct{}
+
+func (verifyAllMesher) VerifyAll(ctx context.Context, b *topo.Body, tolMM float64) (*topo.Mesh, error) {
+	m, err := tessellateContext(ctx, bodyHandle(b), units.Millimeters(tolMM), VerifyAll)
+	if err != nil {
+		return nil, err
+	}
+	return &m.n, nil
+}

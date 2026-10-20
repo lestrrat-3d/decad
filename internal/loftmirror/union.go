@@ -1,34 +1,40 @@
-package decad
+package loftmirror
 
 import (
 	"context"
 	"fmt"
 	"slices"
 
+	"github.com/lestrrat-3d/r3"
+
 	"github.com/lestrrat-3d/decad/internal/booloperand"
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
-	"github.com/lestrrat-3d/r3"
-	"github.com/lestrrat-3d/units"
+	"github.com/lestrrat-3d/decad/internal/verifiedmesh"
 )
 
-func tryLoftMirrorUnion(ctx context.Context, op meshbool.OperationKind,
-	d *Document, ref producerID, a, b *Body) (*Body, bool, error) {
-	if op != meshbool.OpUnion || !a.IsSolid() || !b.IsSolid() {
+// Union joins two mirrored Lofts that share one authenticated source into one
+// faceted body, recording the join for the later cylinder routes. It reports
+// false, with no error, when the pair is not that class.
+func Union(ctx context.Context, op meshbool.OperationKind, env topo.Env, mesher verifiedmesh.Mesher,
+	a, b *topo.Body) (*topo.Body, bool, error) {
+	if op != meshbool.OpUnion || !a.Solid || !b.Solid {
 		return nil, false, nil
 	}
-	lower, ok := a.n.Payload.(loftPayload)
+	lower, ok := a.Payload.(loftrecord.Payload)
 	if !ok || lower.Xform != r3.Identity() {
 		a, b = b, a
-		lower, ok = a.n.Payload.(loftPayload)
+		lower, ok = a.Payload.(loftrecord.Payload)
 	}
-	upper, upperOK := b.n.Payload.(loftPayload)
+	upper, upperOK := b.Payload.(loftrecord.Payload)
 	if !ok || !upperOK || lower.Xform != r3.Identity() ||
 		!lower.AuthenticatedReconstruction || !upper.AuthenticatedReconstruction ||
 		lower.SurfaceResult || upper.SurfaceResult || lower.SourceIdentity == nil ||
@@ -42,13 +48,13 @@ func tryLoftMirrorUnion(ctx context.Context, op meshbool.OperationKind,
 	}
 	reflection, err := r3.Reflection(lower.Frame1)
 	if err != nil {
-		return nil, true, fmt.Errorf("%w: loft end section has no reflection: %s", ErrUnsupported, err)
+		return nil, true, fmt.Errorf("%w: loft end section has no reflection: %s", decaderr.ErrUnsupported, err)
 	}
 	if upper.Xform != reflection {
 		return nil, false, nil
 	}
 	budget := proofbound.NewWorkBudget(ctx)
-	for _, pair := range [][2]profileRecord{{lower.Profile0, upper.Profile0},
+	for _, pair := range [][2]momentinput.Profile{{lower.Profile0, upper.Profile0},
 		{lower.Profile1, upper.Profile1}} {
 		same, err := momentinput.ExactProfileEqual(budget, pair[0], pair[1])
 		if err != nil {
@@ -62,60 +68,60 @@ func tryLoftMirrorUnion(ctx context.Context, op meshbool.OperationKind,
 	// rules have z between the two section planes. The exact reflection fixes
 	// the upper cap and maps the lower slab to the opposite side of it, so the
 	// true interiors are disjoint and the ideal caps are identical.
-	body, err := buildLoftMirrorUnion(ctx, d, ref, a, b, lower, upper)
+	body, err := buildUnion(ctx, env, mesher, a, b, lower, upper)
 	return body, true, err
 }
 
-func buildLoftMirrorUnion(ctx context.Context, d *Document, ref producerID,
-	lowerBody, upperBody *Body, lower, upper loftPayload) (*Body, error) {
+func buildUnion(ctx context.Context, env topo.Env, mesher verifiedmesh.Mesher,
+	lowerBody, upperBody *topo.Body, lower, upper loftrecord.Payload) (*topo.Body, error) {
 	n := len(lower.Verts) / 2
 	if len(lower.Verts)%2 != 0 || n < 3 || len(upper.Verts) != len(lower.Verts) ||
 		lower.Walls != 2*n || upper.Walls != lower.Walls ||
 		lower.CapStartCount <= 0 || upper.CapStartCount != lower.CapStartCount ||
 		len(lower.Tris) != len(upper.Tris) ||
 		lower.Walls+lower.CapStartCount >= len(lower.Tris) {
-		return nil, fmt.Errorf("%w: reflected lofts lack matching cap and wall stations", ErrUnsupported)
+		return nil, fmt.Errorf("%w: reflected lofts lack matching cap and wall stations", decaderr.ErrUnsupported)
 	}
 	for i := range n {
 		if lower.Verts[n+i] != upper.Verts[n+i] {
-			return nil, fmt.Errorf("%w: reflected loft cap stations differ", ErrUnsupported)
+			return nil, fmt.Errorf("%w: reflected loft cap stations differ", decaderr.ErrUnsupported)
 		}
 	}
 	if !lower.MirrorCapTrianglesMatch(upper) {
-		return nil, fmt.Errorf("%w: reflected loft cap triangles do not oppose", ErrUnsupported)
+		return nil, fmt.Errorf("%w: reflected loft cap triangles do not oppose", decaderr.ErrUnsupported)
 	}
-	lowerMesh, err := lowerBody.Tessellate(ctx, units.Millimeters(0.1), WithVerification(VerifyAll))
+	lowerMesh, err := mesher.VerifyAll(ctx, lowerBody, 0.1)
 	if err != nil {
 		return nil, err
 	}
-	upperMesh, err := upperBody.Tessellate(ctx, units.Millimeters(0.1), WithVerification(VerifyAll))
+	upperMesh, err := mesher.VerifyAll(ctx, upperBody, 0.1)
 	if err != nil {
 		return nil, err
 	}
-	if !loftMirrorMeshMatchesPayload(lowerMesh, lower) ||
-		!loftMirrorMeshMatchesPayload(upperMesh, upper) ||
-		!lowerMesh.BoundaryVerified() || !upperMesh.BoundaryVerified() ||
-		!lowerMesh.VolumeVerified() || !upperMesh.VolumeVerified() {
-		return nil, fmt.Errorf("%w: reflected loft source mesh has no matching boundary and volume proof", ErrUnsupported)
+	if !meshMatchesPayload(lowerMesh, lower) ||
+		!meshMatchesPayload(upperMesh, upper) ||
+		!lowerMesh.BoundaryOK || !upperMesh.BoundaryOK ||
+		!lowerMesh.SymDiffOK || !upperMesh.SymDiffOK {
+		return nil, fmt.Errorf("%w: reflected loft source mesh has no matching boundary and volume proof", decaderr.ErrUnsupported)
 	}
-	_, pairDiameter, err := booloperand.PairChord(ctx, &lowerBody.n, &upperBody.n)
+	_, pairDiameter, err := booloperand.PairChord(ctx, lowerBody, upperBody)
 	if err != nil {
 		return nil, err
 	}
-	lowerBound, upperBound := lowerMesh.Bound().Base(), upperMesh.Bound().Base()
+	lowerBound, upperBound := lowerMesh.Bound, upperMesh.Bound
 	bound := max(lowerBound, upperBound)
-	volumeGap := proofbound.AbsSumUpper(lowerMesh.n.VolSymDiff, upperMesh.n.VolSymDiff)
+	volumeGap := proofbound.AbsSumUpper(lowerMesh.VolSymDiff, upperMesh.VolSymDiff)
 	// Each Loft area slack contains the nonnegative error of BOTH of its caps.
 	// Removing two copies of the same true and held cap therefore adds at most
 	// twice either source's entire area slack to the two wall-area errors.
-	areaSlack := proofbound.AbsSumUpper(lowerMesh.n.AreaSlack, upperMesh.n.AreaSlack,
-		proofbound.ProductUpper(2, max(lowerMesh.n.AreaSlack, upperMesh.n.AreaSlack)))
+	areaSlack := proofbound.AbsSumUpper(lowerMesh.AreaSlack, upperMesh.AreaSlack,
+		proofbound.ProductUpper(2, max(lowerMesh.AreaSlack, upperMesh.AreaSlack)))
 	if proofbound.IsNonFinite(bound) || proofbound.IsNonFinite(volumeGap) ||
 		proofbound.IsNonFinite(areaSlack) || bound < 0 || volumeGap < 0 || areaSlack < 0 {
-		return nil, fmt.Errorf("%w: reflected loft proof is not finite", ErrUnsupported)
+		return nil, fmt.Errorf("%w: reflected loft proof is not finite", decaderr.ErrUnsupported)
 	}
 
-	record := &loftMirrorJoinRecord{Lower: bodyNode(lowerBody), Upper: bodyNode(upperBody), StationCount: n}
+	record := &facetedrecord.LoftMirrorJoinRecord{Lower: lowerBody, Upper: upperBody, StationCount: n}
 	verts := append(append([]r3.Vec(nil), lower.Verts...), upper.Verts[:n]...)
 	vertexBound := make([]float64, len(verts))
 	for i := range vertexBound {
@@ -129,16 +135,16 @@ func buildLoftMirrorUnion(ctx context.Context, d *Document, ref producerID,
 	}
 	var tris [][3]int
 	var src []int
-	var groups []facetGroup
+	var groups []facetedrecord.Group
 	groupOf := map[*topo.Face]int{}
 	add := func(triangle [3]int, face *topo.Face, capRole string, half, wallIndex int) {
 		group, exists := groupOf[face]
 		if !exists {
 			group = len(groups)
 			groupOf[face] = group
-			g := facetGroup{Origins: append([]provenance.Ref(nil), face.Origins...)}
+			g := facetedrecord.Group{Origins: append([]provenance.Ref(nil), face.Origins...)}
 			if capRole != "" {
-				g.Origins = append(g.Origins, provenance.Ref{Producer: ref, Role: capRole})
+				g.Origins = append(g.Origins, provenance.Ref{Producer: env.Ref, Role: capRole})
 				g.Surface = face.Surface
 				g.Planar = true
 				g.NormalBound = face.NormalBound
@@ -157,8 +163,8 @@ func buildLoftMirrorUnion(ctx context.Context, d *Document, ref producerID,
 		}
 	}
 	for half, item := range []struct {
-		payload loftPayload
-		mesh    *Mesh
+		payload loftrecord.Payload
+		mesh    *topo.Mesh
 	}{
 		{lower, lowerMesh}, {upper, upperMesh},
 	} {
@@ -183,24 +189,24 @@ func buildLoftMirrorUnion(ctx context.Context, d *Document, ref producerID,
 					role = provenance.RoleCapEnd
 				}
 			}
-			add(triangle, item.mesh.n.Source[i], role, half, wallIndex)
+			add(triangle, item.mesh.Source[i], role, half, wallIndex)
 		}
 	}
 	if err := tessellation.RequireVertexLinks(ctx, len(verts), tris); err != nil {
-		return nil, fmt.Errorf("%w: reflected loft seam has an invalid vertex link: %s", ErrUnsupported, err)
+		return nil, fmt.Errorf("%w: reflected loft seam has an invalid vertex link: %s", decaderr.ErrUnsupported, err)
 	}
 	if err := loftmesh.LoftCrossingAudit(proofbound.NewWorkBudget(ctx), verts, tris); err != nil {
 		return nil, err
 	}
 	capGroups := record.CapGroups
-	fp := facetedPayload{Verts: verts, Tris: tris, Src: src, Groups: groups,
+	fp := facetedrecord.Payload{Verts: verts, Tris: tris, Src: src, Groups: groups,
 		VertexBound: vertexBound, MeshBound: bound, VolSymDiff: volumeGap,
 		AreaSlack: areaSlack, DPair: pairDiameter, ContactAudited: true,
 		LoftMirrorJoin: record, MirrorCapGroups: &capGroups, Xform: r3.Identity()}
-	return bodyResult(facetedrecord.Build(ctx, envOf(documentNode(d), ref), fp))
+	return facetedrecord.Build(ctx, env, fp)
 }
 
-func loftMirrorMeshMatchesPayload(mesh *Mesh, lp loftPayload) bool {
-	return slices.Equal(mesh.n.Vertices, lp.Verts) && slices.Equal(mesh.n.Triangles, lp.Tris) &&
-		len(mesh.n.Source) == len(lp.Tris)
+func meshMatchesPayload(mesh *topo.Mesh, lp loftrecord.Payload) bool {
+	return slices.Equal(mesh.Vertices, lp.Verts) && slices.Equal(mesh.Triangles, lp.Tris) &&
+		len(mesh.Source) == len(lp.Tris)
 }
