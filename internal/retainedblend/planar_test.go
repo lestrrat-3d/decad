@@ -61,3 +61,23 @@ func TestZipperJoinsRingsOfDifferentCounts(t *testing.T) {
 		require.Equal(t, 1, edges[[2]int{min(b[i].idx, b[(i+1)%8].idx), max(b[i].idx, b[(i+1)%8].idx)}])
 	}
 }
+
+func TestTriangulateRegionLeavesNoSliverOnACollinearRun(t *testing.T) {
+	t.Parallel()
+	// A triangle whose base holds six vertices that are collinear to within a
+	// few ulps, the shape a Boolean rim leaves along a straight edge.
+	const e = 3e-15
+	ps := []pt2{
+		{0, 0}, {2, e}, {4, -e}, {6, e}, {8, -e}, {10, 0}, {5, 8},
+	}
+	tris, err := triangulateRegion(ps, []int{2, 3, 4, 5, 6, 0, 1}, nil)
+	require.NoError(t, err)
+	used := map[int]bool{}
+	for _, tri := range tris {
+		for _, v := range tri {
+			used[v] = true
+		}
+		require.GreaterOrEqual(t, earQuality(ps[tri[0]], ps[tri[1]], ps[tri[2]]), sliverQuality, "triangle %v", tri)
+	}
+	require.Len(t, used, len(ps), "every vertex appears")
+}
