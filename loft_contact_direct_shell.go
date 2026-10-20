@@ -101,11 +101,11 @@ func loftContactFacetedBody(ctx context.Context, d *Document, ref producerID,
 		len(proof.Boundary.AuditedTris) != len(shell.Triangles) {
 		return nil, false, nil
 	}
-	prismFaces, ok, err := loftContactSourceFaces(prism, budget)
+	prismFaces, ok, err := loftcontact.SourceFaces(bodyNode(prism), budget)
 	if err != nil || !ok {
 		return loftContactBoundedResult(ctx, err)
 	}
-	loftFaces, ok, err := loftContactSourceFaces(loft, budget)
+	loftFaces, ok, err := loftcontact.SourceFaces(bodyNode(loft), budget)
 	if err != nil || !ok {
 		return loftContactBoundedResult(ctx, err)
 	}
@@ -175,9 +175,9 @@ func loftContactFacetedBody(ctx context.Context, d *Document, ref producerID,
 				continue
 			}
 			if owner == 0 {
-				sources[index] = prismFaces[role]
+				sources[index] = faceHandle(prismFaces[role])
 			} else {
-				sources[index] = loftFaces[role]
+				sources[index] = faceHandle(loftFaces[role])
 			}
 			if sources[index] == nil {
 				return nil, false, nil
@@ -284,66 +284,4 @@ func loftContactBoundedResult(ctx context.Context, err error) (*Body, bool, erro
 		return nil, false, fmt.Errorf("%w: direct Loft/prism proof refused after source certification", ErrUnsupported)
 	}
 	return nil, false, err
-}
-
-func loftContactSourceFaces(body *Body, budget *proofbound.WorkBudget) (map[string]*Face, bool, error) {
-	var roles int
-	for _, lump := range body.n.Lumps {
-		if err := budget.Step(); err != nil {
-			return nil, false, err
-		}
-		for _, shell := range lump.Shells {
-			if err := budget.Step(); err != nil {
-				return nil, false, err
-			}
-			for _, face := range shell.Faces {
-				if err := budget.Step(); err != nil {
-					return nil, false, err
-				}
-				if len(face.Origins) > loftcontact.VolumeOutputSteps ||
-					roles > loftcontact.VolumeOutputSteps-len(face.Origins) {
-					return nil, false, nil
-				}
-				roles += len(face.Origins)
-				if _, err := budget.StepN(uint64(len(face.Origins))); err != nil {
-					return nil, false, err
-				}
-			}
-		}
-	}
-	// body.Faces and Face.originRefs both copy data. Walk the born nodes
-	// directly after charging for the map and its source-role entries.
-	if err := budget.Err(); err != nil {
-		return nil, false, err
-	}
-	if err := budget.Step(); err != nil {
-		return nil, false, err
-	}
-	faces := make(map[string]*Face, roles)
-	for _, lump := range body.n.Lumps {
-		if err := budget.Step(); err != nil {
-			return nil, false, err
-		}
-		for _, shell := range lump.Shells {
-			if err := budget.Step(); err != nil {
-				return nil, false, err
-			}
-			for _, node := range shell.Faces {
-				face := faceHandle(node)
-				for _, origin := range node.Origins {
-					if err := budget.Step(); err != nil {
-						return nil, false, err
-					}
-					if origin.Producer != body.n.Origin.Producer {
-						continue
-					}
-					if previous := faces[origin.Role]; previous != nil && previous != face {
-						return nil, false, nil
-					}
-					faces[origin.Role] = face
-				}
-			}
-		}
-	}
-	return faces, true, nil
 }
