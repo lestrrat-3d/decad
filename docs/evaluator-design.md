@@ -1072,7 +1072,7 @@ co-directional prism pairs on one plane or on shared-axis offset planes:
 `Union`'s select-all/merge/chain path and
 `Cut`/`Intersect`'s clean-nesting structural match. `Verify`'s own interference
 evaluation (below) dispatches that same reduction for intersection through
-`evaluateAnalyticIntersect`, a read-only twin that builds the admitted payload
+`booleandispatch.AnalyticIntersect`, a read-only twin that builds the admitted payload
 and never commits, so it consumes neither operand. `evaluateBoolean` remains
 this section's mesh path: a pair neither dispatch admits falls back to it
 unchanged, as does every other operation.

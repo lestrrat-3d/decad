@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/booleandispatch"
 	"github.com/lestrrat-3d/decad/internal/booleaneval"
 	"github.com/lestrrat-3d/decad/internal/clearance/pairkernel"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -47,7 +48,7 @@ func analyticBodiesEqual(budget *proofbound.WorkBudget, a, b *Body) (bool, error
 // containment and exact analytic equality prove the set identity directly.
 // An admitted coplanar, co-directional prism pair next resolves through the
 // same read-only analytic meshbool.OpIntersect dispatch performBoolean uses
-// (evaluateAnalyticIntersect, docs/prism-boolean-design.md §14 PR4;
+// (booleandispatch.AnalyticIntersect, docs/prism-boolean-design.md §14 PR4;
 // docs/interference-design.md §5.2) — never consuming either operand. That
 // path publishes the resolved intersection payload's OWN volume measurement,
 // so the row reads Exact with a zero bound only where neither operand's
@@ -80,7 +81,7 @@ func measuredInterference(ctx context.Context, a, b *Body, res pairkernel.Result
 		return measurementFromInternal(a.n.Volume), reportvocab.InterferenceMeasured, nil
 	}
 
-	analytic, ok, err := evaluateAnalyticIntersect(ctx, a, b)
+	analyticNode, ok, err := booleandispatch.AnalyticIntersect(ctx, envOf(a.n.Doc, a.n.Doc.NextProducer), &a.n, &b.n)
 	if err != nil {
 		if expected, ok := asExpectedBoolean(err); ok {
 			return Measurement{}, reportvocab.InterferenceOutcomeForExpected(expected), nil
@@ -88,10 +89,10 @@ func measuredInterference(ctx context.Context, a, b *Body, res pairkernel.Result
 		return Measurement{}, reportvocab.InterferenceUndecided, err
 	}
 	if ok {
-		if !positiveVolume(measurementFromInternal(analytic.n.Volume)) {
+		if !positiveVolume(measurementFromInternal(analyticNode.Volume)) {
 			return Measurement{}, reportvocab.InterferenceUndecided, nil
 		}
-		return measurementFromInternal(analytic.n.Volume), reportvocab.InterferenceMeasured, nil
+		return measurementFromInternal(analyticNode.Volume), reportvocab.InterferenceMeasured, nil
 	}
 
 	overlap, ok, err := prismOverlapVolume(ctx, a, b)

@@ -340,7 +340,7 @@ The public booleans keep consuming behavior:
 Cancellation before step 4 returns
 `ctx.Err()` unchanged and leaves the document and operands unchanged.
 
-`Verify` calls `evaluateAnalyticIntersect(ctx, a, b)` — §5.2's read-only
+`Verify` calls `booleandispatch.AnalyticIntersect` — §5.2's read-only
 analytic twin of the same `OpIntersect` dispatch `performBoolean` runs — then
 `docs/prism-boolean-design.md` §4.5's overlap-area reading for a pair that
 twin does not admit, then `evaluateBoolean(ctx, OpIntersect, a, b)` for a pair
@@ -394,7 +394,7 @@ intersection. That refusal stays correct until this complete replacement
 lands; it must not be weakened one pair at a time.
 `docs/prism-boolean-design.md` §14 PR4 wires `measuredInterference` to the
 same read-only analytic `OpIntersect` dispatch `performBoolean` uses
-(`evaluateAnalyticIntersect`, `boolean.go`), so an admitted coplanar,
+(`booleandispatch.AnalyticIntersect`), so an admitted coplanar,
 co-directional prism pair — `Union`'s select-all path, `Cut`/`Intersect`'s
 clean-nesting sub-case, or (since PR3) `Cut`/`Intersect`'s crossing sub-case,
 §4.2 — is superseded here and no longer reaches the mesh path at all. PR5
@@ -791,7 +791,7 @@ Each row is a PR-sized stage. An unanswered verification question reads
   witness, selector, or modeling operation.
 - Keep public booleans consuming. Share only their read-only geometry
   evaluation — the mesh `evaluateBoolean` and the analytic intersection twin
-  `evaluateAnalyticIntersect` (§5, §5.2) — never their commit.
+  `booleandispatch.AnalyticIntersect` (§5, §5.2) — never their commit.
 - Let a proof path answer with a volume alone where a body is not needed.
   `docs/prism-boolean-design.md` §4.5's overlap-area reading measures a
   multi-region overlap `Intersect` itself still cannot build, and that
