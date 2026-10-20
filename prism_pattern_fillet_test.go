@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/prismpattern"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -37,8 +38,13 @@ func TestPrismPatternFilletAcrossCircularWallStations(t *testing.T) {
 	selection := prismPatternRootSelection(t, joined)
 	edges, err := selection.SelectEdges(joined)
 	require.NoError(t, err)
-	contacts, err := prismPatternFilletContactsOf(t.Context(), joined, edges, 0.14)
+	contacts, err := prismpattern.FilletContacts(t.Context(), joined.n.Payload.(facetedPayload), edgeNodes(edges), 0.14)
 	require.NoError(t, err)
+	// Selecting one root twice is refused rather than rounded twice.
+	_, err = prismpattern.FilletContacts(t.Context(), joined.n.Payload.(facetedPayload),
+		edgeNodes(append([]*Edge{edges[0]}, edges...)), 0.14)
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.ErrorContains(t, err, "selects one root twice")
 	multiStation := false
 	for _, contact := range contacts {
 		multiStation = multiStation || len(contact.RingCut.Positions) > 2
