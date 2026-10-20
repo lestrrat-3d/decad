@@ -16,7 +16,7 @@ import (
 // This file is docs/prism-boolean-design.md PR2's black-box test suite
 // (§14, §15): the clean-nesting structural match for Cut and Intersect.
 // discBody (prism_boolean_bounds_test.go), boxBody (clearance_test.go) and
-// anyFaceIsFaceted (prism_boolean_test.go) are the shared helpers.
+// tookMeshPath (prism_boolean_test.go) are the shared helpers.
 //
 // The two tests of the resolved analytic path draw circular sections, because
 // what they assert is that the tool's own recorded CircleSeg carries through
@@ -120,7 +120,7 @@ func TestPrismCutCleanNestingBoreThroughHub(t *testing.T) {
 
 	got, err := decad.Cut(t.Context(), target, tool)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(got), `the clean-nesting cut must build analytically`)
+	require.False(t, tookMeshPath(got), `the clean-nesting cut must build analytically`)
 
 	walls, err := decad.Faces(decad.Cylindrical()).Exactly(2).SelectFaces(got)
 	require.NoError(t, err)
@@ -180,7 +180,7 @@ func TestPrismCutCleanNestingKeepsAToolVertexTheFormulaMisses(t *testing.T) {
 
 	got, err := decad.Cut(t.Context(), plate, tool)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(got), `the clean-nesting cut must build analytically`)
+	require.False(t, tookMeshPath(got), `the clean-nesting cut must build analytically`)
 
 	// The result states the tool's own recorded coordinate at both cap levels,
 	// bit for bit — not a coordinate re-derived from its parameterization.
@@ -253,7 +253,7 @@ func TestPrismCutCleanNestingKeepsAToolArcEndTheAnglesMiss(t *testing.T) {
 
 	got, err := decad.Cut(t.Context(), plate, tool)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(got), `the clean-nesting cut must build analytically`)
+	require.False(t, tookMeshPath(got), `the clean-nesting cut must build analytically`)
 
 	corners := bodyVertexPositions(got)
 	require.Contains(t, corners, r3.NewVec(cu+r*math.Cos(th1), cv+r*math.Sin(th1), plateHeight),
@@ -300,13 +300,13 @@ func TestPrismIntersectFullyNestedPairReturnsInnerOperand(t *testing.T) {
 	smallCyl := cylinderWall(t, small1)
 	gotBigFirst, err := decad.Intersect(t.Context(), big1, small1)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(gotBigFirst))
+	require.False(t, tookMeshPath(gotBigFirst))
 
 	big2 := discBody(t, doc, 0, R, h)
 	small2 := discBody(t, doc, 0, r, h)
 	gotSmallFirst, err := decad.Intersect(t.Context(), small2, big2)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(gotSmallFirst))
+	require.False(t, tookMeshPath(gotSmallFirst))
 
 	want := r * r * math.Pi * h
 	for _, got := range []*decad.Body{gotBigFirst, gotSmallFirst} {
@@ -345,7 +345,7 @@ func TestPrismIntersectDiscAndNestedWasherKeepsAnnularSection(t *testing.T) {
 				got, err = decad.Intersect(t.Context(), disc, washer)
 			}
 			require.NoError(t, err)
-			require.False(t, anyFaceIsFaceted(got))
+			require.False(t, tookMeshPath(got))
 			require.Len(t, got.Lumps(), 1)
 			walls, err := decad.Faces(decad.Cylindrical()).Exactly(2).SelectFaces(got)
 			require.NoError(t, err)
@@ -376,7 +376,7 @@ func TestPrismIntersectHoledCrossingFallsBack(t *testing.T) {
 	washer := holedBoxSymmetric(t, doc, 8, 3, 11)
 	got, err := decad.Intersect(t.Context(), plate, washer)
 	require.NoError(t, err)
-	require.True(t, anyFaceIsFaceted(got), `the split boundary stays on the mesh path`)
+	require.True(t, tookMeshPath(got), `the split boundary stays on the mesh path`)
 	vol, err := got.Volume()
 	require.NoError(t, err)
 	const want = (13*16 - 6*6) * 10.0
@@ -419,7 +419,7 @@ func TestPrismCutDisjointFootprintFallsBack(t *testing.T) {
 
 	got, err := decad.Cut(t.Context(), target, tool)
 	require.NoError(t, err)
-	require.True(t, anyFaceIsFaceted(got), `an unresolved topology falls back to the mesh path`)
+	require.True(t, tookMeshPath(got), `an unresolved topology falls back to the mesh path`)
 	vol, err := got.Volume()
 	require.NoError(t, err)
 	require.Equal(t, 1000.0, volumeMM(t, vol), `the disjoint tool removes nothing`)
@@ -438,7 +438,7 @@ func TestPrismCutG5BuildsAnalyticBlindPocket(t *testing.T) {
 
 	got, err := decad.Cut(t.Context(), target, tool)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(got))
+	require.False(t, tookMeshPath(got))
 
 	vol, err := got.Volume()
 	require.NoError(t, err)
@@ -491,7 +491,7 @@ func TestPrismCutG6HoledToolFallsBackKeepingTheStandingPost(t *testing.T) {
 
 	got, err := decad.Cut(t.Context(), target, tool)
 	require.NoError(t, err)
-	require.True(t, anyFaceIsFaceted(got), `a holed tool is not the clean-nesting shape (G6)`)
+	require.True(t, tookMeshPath(got), `a holed tool is not the clean-nesting shape (G6)`)
 
 	// The annulus's own hole leaves a standing post: a second, disconnected
 	// lump inside the cavity the annulus cut.
@@ -524,7 +524,7 @@ func TestPrismCutCrossingToolResolvesAnalytically(t *testing.T) {
 
 	got, err := decad.Cut(t.Context(), target, tool)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(got), `the crossing sub-case must build analytically`)
+	require.False(t, tookMeshPath(got), `the crossing sub-case must build analytically`)
 
 	overlap := (half - x0) * 2 * y // only the part of the tool inside the target removes material
 	want := 4*half*half*h - overlap*h

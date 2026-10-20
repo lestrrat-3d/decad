@@ -78,7 +78,7 @@ func TestPointLocationOnFacetedAndPlacedBodies(t *testing.T) {
 	tool := translated(t, diskBody(t, doc, 10, 10, 2), 0, 0, -6)
 	part, err := decad.Cut(t.Context(), plate, tool)
 	require.NoError(t, err)
-	require.True(t, anyFaceIsFaceted(part))
+	require.True(t, tookMeshPath(part))
 	for _, tc := range []struct {
 		at   r3.Vec
 		want decad.PointLocation

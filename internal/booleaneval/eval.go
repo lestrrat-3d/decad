@@ -142,6 +142,7 @@ func Evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	// records provenance without holding live pointers.
 	var groups []facetedrecord.Group
 	sourceID := map[*topo.Face]int{}
+	targetFaces := len(topobuild.Faces(a))
 	for i, f := range append(topobuild.Faces(a), topobuild.Faces(b)...) {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
@@ -149,10 +150,12 @@ func Evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 			}
 		}
 		sourceID[f] = len(groups)
-		groups = append(groups, facetedrecord.Group{
-			Origins: append([]provenance.Ref(nil), f.Origins...),
-			Planar:  f.Surface.Kind() == surfacegeom.KindPlane || f.HeldPlanar,
-		})
+		// The tool of a Cut (every face of b) leaves its natural normal
+		// pointing into the result (docs/faceted-source-retention-design.md §3.1).
+		group, _ := facetedrecord.SourceTag(f, op == meshbool.OpCut && i >= targetFaces)
+		group.Origins = append([]provenance.Ref(nil), f.Origins...)
+		group.Planar = f.Surface.Kind() == surfacegeom.KindPlane || f.HeldPlanar
+		groups = append(groups, group)
 	}
 	srcA, err := meshbool.SourceIDs(ctx, ma.Source, sourceID)
 	if err != nil {

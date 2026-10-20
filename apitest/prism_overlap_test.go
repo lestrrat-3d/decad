@@ -286,8 +286,8 @@ func TestVerifyFacetedMultiRegionPairStaysAsBefore(t *testing.T) {
 	require.NoError(t, err)
 	barBored, err := decad.Cut(t.Context(), bar, notch2)
 	require.NoError(t, err)
-	require.True(t, anyFaceIsFaceted(uBored), "the bore must force the mesh path")
-	require.True(t, anyFaceIsFaceted(barBored), "the bore must force the mesh path")
+	require.True(t, tookMeshPath(uBored), "the bore must force the mesh path")
+	require.True(t, tookMeshPath(barBored), "the bore must force the mesh path")
 
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)

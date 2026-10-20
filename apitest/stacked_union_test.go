@@ -39,7 +39,7 @@ func TestStackedUnionBossOnPlate(t *testing.T) {
 
 	got, err := decad.Union(t.Context(), plate, boss)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(got))
+	require.False(t, tookMeshPath(got))
 	require.Len(t, got.Lumps(), 1)
 	// Four plate walls, the boss wall, the plate's bottom cap, the boss's
 	// top cap, and one floor: the plate's top with the boss as its hole.
@@ -101,7 +101,7 @@ func TestStackedUnionRootedBoss(t *testing.T) {
 
 	got, err := decad.Union(t.Context(), plate, boss)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(got))
+	require.False(t, tookMeshPath(got))
 	// The boss's buried wall from z = 5 to 10 is interior and makes no face.
 	require.Len(t, got.Faces(), 8)
 	requireCapsSelectOneFace(t, got)
@@ -121,7 +121,7 @@ func TestStackedUnionEqualBoxesStacked(t *testing.T) {
 
 	got, err := decad.Union(t.Context(), lower, upper)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(got))
+	require.False(t, tookMeshPath(got))
 	// One wall per side runs the whole 20 mm, and the shared plane makes no
 	// face: the body is a 10×10×20 box.
 	require.Len(t, got.Faces(), 6)
@@ -144,7 +144,7 @@ func TestStackedUnionFlangeOnShaft(t *testing.T) {
 
 	got, err := decad.Union(t.Context(), shaft, flange)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(got))
+	require.False(t, tookMeshPath(got))
 	// Shaft wall, flange wall, bottom cap, top cap, and the flange's
 	// underside as a ceiling around the shaft.
 	require.Len(t, got.Faces(), 5)
@@ -166,7 +166,7 @@ func TestStackedUnionFlangeOnShaft(t *testing.T) {
 	top := circleBodyAtZ(t, doc, 0, 3, 45, 2)
 	chained, err := decad.Union(t.Context(), got, top)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(chained))
+	require.False(t, tookMeshPath(chained))
 	volume, err = chained.Volume()
 	require.NoError(t, err)
 	want += math.Pi * 9 * 2
@@ -186,7 +186,7 @@ func TestStackedUnionRootedCrossingBoss(t *testing.T) {
 
 	got, err := decad.Union(t.Context(), plate, boss)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(got))
+	require.False(t, tookMeshPath(got))
 	require.Len(t, got.Faces(), 10)
 	requireEveryEdgeOnTwoFaces(t, got)
 	cylinders, err := decad.Faces(decad.Cylindrical()).Exactly(2).SelectFaces(got)
@@ -217,7 +217,7 @@ func TestStackedUnionPatchRingsMustClear(t *testing.T) {
 	boss := boxBodyAtZ(t, doc, -half, -half, half, half, 10, 5)
 	got, err := decad.Union(t.Context(), plate, boss)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(got))
+	require.False(t, tookMeshPath(got))
 	_, err = got.Tessellate(t.Context(), units.Millimeters(0.05))
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Contains(t, err.Error(), "clearance")
@@ -235,7 +235,7 @@ func TestStackedUnionKnifeEdgeNestedWedge(t *testing.T) {
 	b := wedgePrism(t, doc, w, w.XY(), [3][2]float64{{0, 0}, {8, -1}, {8, 2}}, 3)
 	got, err := decad.Union(t.Context(), a, b)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(got))
+	require.False(t, tookMeshPath(got))
 	require.Len(t, got.Faces(), 5)
 	volume, err := got.Volume()
 	require.NoError(t, err)

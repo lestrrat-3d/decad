@@ -37,7 +37,14 @@ type Group struct {
 	// including structural trims and the smooth three-section loft. Ordinary
 	// mesh booleans leave it nil.
 	Surface surfacegeom.Surface
-	Denoted *surfacenormal.Revolved
+	// Retained marks a Surface that the generic mesh Boolean copied from its
+	// operand face (SourceTag), as opposed to one a structural builder
+	// authenticated. A retained curved tag is dropped by a similarity scale
+	// instead of refusing it, and AssembleBody derives the face's normal
+	// bound from NormalBound (the tag's own departure) plus the held
+	// displacement.
+	Retained bool
+	Denoted  *surfacenormal.Revolved
 	// NormalBound covers the tag's normal departure from its denoted patch.
 	// A placed planar tag conservatively uses the maximum distance of two
 	// unit normals when its rounded frame has no tighter certificate.

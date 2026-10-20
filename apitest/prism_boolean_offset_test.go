@@ -56,7 +56,7 @@ var offsetCutTools = []struct{ cx, r float64 }{{0, 18}, {-36, 7}, {36, 7}}
 // sketched on CreateOffsetPlane(XY, -16): every step stays analytic and
 // matches its closed-form volume, and every chain's result still fillets. Shown to
 // fail: with prismcells.AdmitPairBudget's prismplacement.SharedAxisOf arm deleted, the first
-// cut took the mesh path and the first anyFaceIsFaceted assertion went red.
+// cut took the mesh path and the first tookMeshPath assertion went red.
 func TestPrismCutOffsetPlaneToolsChainAnalytically(t *testing.T) {
 	t.Parallel()
 
@@ -74,7 +74,7 @@ func TestPrismCutOffsetPlaneToolsChainAnalytically(t *testing.T) {
 			var err error
 			got, err = decad.Cut(t.Context(), got, body)
 			require.NoError(t, err, "cut %d", i+1)
-			require.False(t, anyFaceIsFaceted(got), "cut %d must stay on the analytic path", i+1)
+			require.False(t, tookMeshPath(got), "cut %d must stay on the analytic path", i+1)
 			vol, err := got.Volume()
 			require.NoError(t, err)
 			want -= math.Pi * tool.r * tool.r * 16
@@ -142,7 +142,7 @@ func TestPrismCutOffsetPlaneExclusionsTakeMeshPath(t *testing.T) {
 		t.Helper()
 		got, err := decad.Cut(t.Context(), target, tool)
 		require.NoError(t, err)
-		require.True(t, anyFaceIsFaceted(got), "the pair must take the mesh path")
+		require.True(t, tookMeshPath(got), "the pair must take the mesh path")
 	}
 
 	t.Run("in-plane origin component", func(t *testing.T) {
@@ -210,7 +210,7 @@ func TestPrismCutOffsetPlaneExclusionsTakeMeshPath(t *testing.T) {
 // the plate's frame bits and G3's shared-axis arm admits it with shift 32: the
 // same z -16..32 solid as a tool sketched below and extruded Along. Shown to
 // fail: with prismcells.AdmitPairBudget's prismplacement.SharedAxisOf arm deleted, the pair
-// took the mesh path and the anyFaceIsFaceted assertion went red.
+// took the mesh path and the tookMeshPath assertion went red.
 func TestPrismCutAgainstToolOnOffsetPlaneIsAnalytic(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
@@ -230,7 +230,7 @@ func TestPrismCutAgainstToolOnOffsetPlaneIsAnalytic(t *testing.T) {
 
 	got, err := decad.Cut(t.Context(), plate, tool)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(got), "the Against tool takes the analytic path")
+	require.False(t, tookMeshPath(got), "the Against tool takes the analytic path")
 	vol, err := got.Volume()
 	require.NoError(t, err)
 	require.InDelta(t, 96.0*68*16-math.Pi*18*18*16, volumeMM(t, vol), 1e-6)

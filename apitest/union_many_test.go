@@ -21,7 +21,7 @@ func TestUnionManyArrangesThreePrismsOnce(t *testing.T) {
 	joined, err := decad.Union(t.Context(), a, tools...)
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{joined}, doc.Bodies())
-	require.False(t, anyFaceIsFaceted(joined))
+	require.False(t, tookMeshPath(joined))
 	volume, err := joined.Volume()
 	require.NoError(t, err)
 	require.LessOrEqual(t, math.Abs(volumeMM(t, volume)-86), boundMM3(t, volume))

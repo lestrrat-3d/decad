@@ -510,7 +510,7 @@ func TestTessellateReservesSectionDisplacementFromTolerance(t *testing.T) {
 			b := placedFar(t, boxBody(t, doc, 2-tc.shift, 2, 8-tc.shift, 8, 10), tc.shift)
 			got, err := decad.Union(t.Context(), a, b)
 			require.NoError(t, err)
-			require.False(t, anyFaceIsFaceted(got), "the analytic reduction must own this pair")
+			require.False(t, tookMeshPath(got), "the analytic reduction must own this pair")
 
 			// Every reading of the merged section carries the same displacement,
 			// so the body's own Box bound names the figure the mesh must pay.
@@ -629,7 +629,7 @@ func TestTessellateUnreservedAxialDisplacementCanExceedTolerance(t *testing.T) {
 		b := placedFar(t, inchPrismBody(t, doc, 2-shift, 2, 8-shift, 8, 1e6), shift)
 		got, err := decad.Union(t.Context(), a, b)
 		require.NoError(t, err)
-		require.False(t, anyFaceIsFaceted(got), "the analytic reduction must own this pair")
+		require.False(t, tookMeshPath(got), "the analytic reduction must own this pair")
 
 		// The tolerance clears the merged section's displacement, so the mesh
 		// builds instead of refusing, and it is the axial term riding on top

@@ -79,6 +79,18 @@ type Face struct {
 	// displacement (capband.DenotedNormalAllow). NormalAt separately composes
 	// its arithmetic proof (root normal_bound.go).
 	NormalBound float64
+	// RetainedTag marks a face of a mesh Boolean result whose Surface is the
+	// recorded surface of the operand face it descends from, while its loops
+	// and area stay the held polygons (docs/faceted-source-retention-design.md
+	// §2). The tag is a bounded stand-in: NormalBound covers both the tag's
+	// own departure (TagDeparture) and the held displacement of this face.
+	RetainedTag bool
+	// TagDeparture is the part of NormalBound that states how far the
+	// retained tag itself tilts from the true surface, as a placement or
+	// similarity leaves it; zero for a tag that is its operand's own
+	// geometry. A later Boolean reads it back so the held-displacement term is
+	// recomputed against the new face, not accumulated.
+	TagDeparture float64
 	// Denoted is the surface a revolve wall or cap DENOTES — a wall's
 	// recorded meridian segment swept about its recorded axis, or a cap's
 	// plane through that axis at its end's recorded angle, enclosed exactly

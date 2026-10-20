@@ -103,9 +103,9 @@ func TestFacetedUnionKeepsUntouchedVertexAndFaceBounds(t *testing.T) {
 		if !reading.allTrunk {
 			continue
 		}
-		faceted, ok := face.Surface().(decad.Faceted)
-		require.True(t, ok)
-		require.Equal(t, reading.bound, faceted.Bound, "untouched trunk face")
+		// An untouched trunk face keeps its operand's surface, so its
+		// displacement reads through its vertices, not Faceted.Bound.
+		require.NotEqual(t, decad.KindFaceted, face.Surface().Kind())
 		untouchedFaces++
 		if reading.bound.Mag() < mesh.Bound().Mag() {
 			tighterFaces++

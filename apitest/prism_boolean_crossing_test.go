@@ -14,7 +14,7 @@ import (
 // test suite for Cut and Intersect (internal/prismcells/payload_resolve.go): two coplanar
 // prisms whose 2D outlines genuinely cross, neither nested inside the other.
 // boxBody/discBody (clearance_test.go, prism_boolean_bounds_test.go) and
-// anyFaceIsFaceted/boundMM3/volumeMM (prism_boolean_test.go, boolean_test.go)
+// tookMeshPath/boundMM3/volumeMM (prism_boolean_test.go, boolean_test.go)
 // are the shared helpers. The randomized analytic/mesh property test lives in
 // prism_boolean_crossing_internal_test.go, which needs the internal
 // evaluateBoolean entry point to force the mesh path for comparison.
@@ -32,7 +32,7 @@ func TestPrismIntersectCrossingBoxesResolvesAnalytically(t *testing.T) {
 
 	got, err := decad.Intersect(t.Context(), a, b)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(got), `the crossing sub-case must build analytically`)
+	require.False(t, tookMeshPath(got), `the crossing sub-case must build analytically`)
 
 	vol, err := got.Volume()
 	require.NoError(t, err)
@@ -54,7 +54,7 @@ func TestPrismCutCrossingBoxesResolvesAnalytically(t *testing.T) {
 
 	got, err := decad.Cut(t.Context(), target, tool)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(got), `the crossing sub-case must build analytically`)
+	require.False(t, tookMeshPath(got), `the crossing sub-case must build analytically`)
 
 	vol, err := got.Volume()
 	require.NoError(t, err)
@@ -78,7 +78,7 @@ func TestPrismIntersectCrossingCylindersMatchesClosedFormLens(t *testing.T) {
 
 	got, err := decad.Intersect(t.Context(), a, b)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(got), `the crossing sub-case must build analytically`)
+	require.False(t, tookMeshPath(got), `the crossing sub-case must build analytically`)
 
 	// The half-angle at each center subtended by the chord through the two
 	// crossing points: cos(theta) = (d/2)/r = 0.4, and the lens area is twice
@@ -138,7 +138,7 @@ func TestPrismCutIntersectNonCoplanarPairStillTakesMeshPath(t *testing.T) {
 
 	gotCut, err := decad.Cut(t.Context(), target, tool)
 	require.NoError(t, err)
-	require.True(t, anyFaceIsFaceted(gotCut), `a non-coplanar pair must still take the mesh path`)
+	require.True(t, tookMeshPath(gotCut), `a non-coplanar pair must still take the mesh path`)
 
 	doc2 := decad.New()
 	a := boxBody(t, doc2, 0, 0, 10, 10, 10)
@@ -147,7 +147,7 @@ func TestPrismCutIntersectNonCoplanarPairStillTakesMeshPath(t *testing.T) {
 	require.NoError(t, err)
 	gotIntersect, err := decad.Intersect(t.Context(), a, b)
 	require.NoError(t, err)
-	require.True(t, anyFaceIsFaceted(gotIntersect), `a non-coplanar pair must still take the mesh path`)
+	require.True(t, tookMeshPath(gotIntersect), `a non-coplanar pair must still take the mesh path`)
 }
 
 // TestPrismCutIntersectRotatedSectionStillTakesMeshPath is the crossing

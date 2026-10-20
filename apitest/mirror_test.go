@@ -406,13 +406,14 @@ func TestMirrorFaceResolvesAPlane(t *testing.T) {
 		drill := sc.cylinder(t, plane, 0, 0, 3, decad.Symmetric{D: units.Millimeters(30)})
 		drilled, err := decad.Cut(t.Context(), plate, drill)
 		require.NoError(t, err)
-		// The mesh path keeps the plate's wall role on the flat faceted face
-		// that descends from it.
+		// The mesh path keeps the plate's wall role on the flat face that
+		// descends from it, and its retained Plane is a stand-in for the
+		// operand's plane, not an exact mirror plane.
 		sel := decad.Faces(decad.FaceCreatedBy(walls[0].Origins()[0]))
 		faces, err := sel.SelectFaces(drilled)
 		require.NoError(t, err)
 		require.Len(t, faces, 1)
-		require.IsType(t, decad.Faceted{}, faces[0].Surface(), "the premise: the wall carries no analytic Plane")
+		require.IsType(t, decad.Plane{}, faces[0].Surface(), "the premise: a retained Plane tag")
 		_, err = decad.MirroredCopy(t.Context(), drilled, decad.MirrorFace{Body: drilled, Face: sel})
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})

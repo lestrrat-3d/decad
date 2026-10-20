@@ -50,7 +50,7 @@ func TestStackedUnionEnclosedVoidTakesMeshPath(t *testing.T) {
 	block := boxBodyAtZ(t, doc, 0.5, 4, 2.5, 6, 10, 5)
 	stack, err := decad.Union(t.Context(), plate, block)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(stack))
+	require.False(t, tookMeshPath(stack))
 	other := polyPrismBody(t, doc, voidCShapeB, 10)
 	got, err := decad.Union(t.Context(), stack, other)
 	if err == nil {

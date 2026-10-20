@@ -1120,7 +1120,7 @@ func TestVerifyDiagnosticsSectionDeltaPrismReadsItsOwnGateDiameter(t *testing.T)
 
 	got, err := decad.Union(t.Context(), a, b)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(got), "the analytic reduction must own this pair")
+	require.False(t, tookMeshPath(got), "the analytic reduction must own this pair")
 
 	vol, err := got.Volume()
 	require.NoError(t, err)

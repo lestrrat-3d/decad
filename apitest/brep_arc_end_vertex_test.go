@@ -106,7 +106,7 @@ func drilledTombstone(t *testing.T, doc *decad.Document) (*decad.Body, sectionre
 	require.NoError(t, err)
 	cut, err := decad.Cut(t.Context(), tomb, drill)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(cut), `the cut builds a brep body`)
+	require.False(t, tookMeshPath(cut), `the cut builds a brep body`)
 	return cut, arc
 }
 
@@ -163,7 +163,7 @@ func TestBrepVertexReachesArcNaturalEnd(t *testing.T) {
 		boss := boxBodyAtZ(t, doc, 0, 0, 5, 5, 10, 5)
 		got, err := decad.Union(t.Context(), pie, boss)
 		require.NoError(t, err)
-		require.False(t, anyFaceIsFaceted(got), `the union builds a brep body`)
+		require.False(t, tookMeshPath(got), `the union builds a brep body`)
 		gap := requireArcEndsReached(t, got, arc, true)
 		require.Greater(t, gap, 1e-12, `End sits well off the denoted point`)
 	})
@@ -179,7 +179,7 @@ func TestBrepVertexReachesArcNaturalEnd(t *testing.T) {
 		corner := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(r3.NewVec(20, -30, 0)))
 		filleted, err := decad.Fillet(t.Context(), cut, corner, units.Millimeters(2))
 		require.NoError(t, err)
-		require.False(t, anyFaceIsFaceted(filleted))
+		require.False(t, tookMeshPath(filleted))
 		require.Len(t, filleted.Faces(), len(cut.Faces())+1, `the corner gains one fillet face`)
 		gap := requireArcEndsReached(t, filleted, arc, true)
 		require.Greater(t, gap, 1e-12)
@@ -196,7 +196,7 @@ func TestBrepVertexReachesArcNaturalEnd(t *testing.T) {
 		})
 		shelled, err := decad.Shell(t.Context(), d, sideFaceAt(t, d, r3.NewVec(-1, 0, 0), 0), units.Millimeters(1))
 		require.NoError(t, err)
-		require.False(t, anyFaceIsFaceted(shelled))
+		require.False(t, tookMeshPath(shelled))
 		gap := requireArcEndsReached(t, shelled, arc, false)
 		require.Greater(t, gap, 1e-13)
 	})

@@ -167,7 +167,7 @@ func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform) (
 	faces := b.Faces()
 	valid := make([]bool, len(faces))
 	for i, face := range faces {
-		valid[i] = face.n.HeldPlanar && face.n.Surface.Kind() == surfacegeom.KindFaceted
+		valid[i] = face.n.HeldPlanar && (face.n.Surface.Kind() == surfacegeom.KindFaceted || face.n.RetainedTag)
 	}
 	result, proven, err := facetproof.ProveAxisSupport(ctx, facetproof.AxisSupportInput{
 		Verts: pp.Verts, ExactSourceVerts: pp.ExactSourceVerts,

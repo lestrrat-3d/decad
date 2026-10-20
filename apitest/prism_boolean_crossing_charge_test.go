@@ -120,7 +120,7 @@ func TestPrismIntersectRotatedBoxBuildsAnalyticOctagon(t *testing.T) {
 
 	got, err := decad.Intersect(t.Context(), a, b)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(got))
+	require.False(t, tookMeshPath(got))
 	require.Len(t, got.Faces(), 10, "an octagonal prism: 8 walls and 2 caps")
 
 	vol, err := got.Volume()
@@ -156,7 +156,7 @@ func TestPrismUnionRotatedToothBuildsAnalytic(t *testing.T) {
 
 	got, err := decad.Union(t.Context(), hub, tooth)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(got))
+	require.False(t, tookMeshPath(got))
 	vol, err := got.Volume()
 	require.NoError(t, err)
 	require.Equal(t, decad.Approximate, vol.Exactness)

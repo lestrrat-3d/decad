@@ -40,7 +40,7 @@ func TestCounterboreCutBuildsAnalyticShoulderInEitherOrder(t *testing.T) {
 					part, err = decad.Cut(t.Context(), part, hole)
 				}
 				require.NoError(t, err)
-				require.False(t, anyFaceIsFaceted(part))
+				require.False(t, tookMeshPath(part))
 				require.Len(t, part.Faces(), 9)
 				volume, err := part.Volume()
 				require.NoError(t, err)
@@ -79,7 +79,7 @@ func TestCounterboreCutKeepsAnOutsideThroughHole(t *testing.T) {
 	counterbore := circleBodyAtZ(t, doc, 0, 4, 7, 3)
 	part, err = decad.Cut(t.Context(), part, counterbore)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(part))
+	require.False(t, tookMeshPath(part))
 	require.Len(t, part.Faces(), 10)
 	volume, err := part.Volume()
 	require.NoError(t, err)

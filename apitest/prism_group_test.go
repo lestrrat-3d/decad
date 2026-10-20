@@ -25,7 +25,7 @@ func sixHoleGroup(t *testing.T, doc *decad.Document, h float64) *decad.Body {
 		var err error
 		group, err = decad.Union(t.Context(), group, discBody(t, doc, 5+10*float64(i), 2, h))
 		require.NoError(t, err)
-		require.False(t, anyFaceIsFaceted(group))
+		require.False(t, tookMeshPath(group))
 		require.Len(t, group.Lumps(), i+1)
 	}
 	return group
@@ -39,7 +39,7 @@ func TestPrismGroupDisjointUnion(t *testing.T) {
 
 	got, err := decad.Union(t.Context(), a, b)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(got))
+	require.False(t, tookMeshPath(got))
 	require.Len(t, got.Lumps(), 2)
 	require.Len(t, got.Faces(), 12)
 	volume, err := got.Volume()
@@ -91,7 +91,7 @@ func TestPrismGroupSixHoleCut(t *testing.T) {
 
 	got, err := decad.Cut(t.Context(), plate, tool)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(got))
+	require.False(t, tookMeshPath(got))
 	require.Len(t, got.Lumps(), 1)
 	// Four plate walls, six hole walls, two caps.
 	require.Len(t, got.Faces(), 12)
@@ -128,7 +128,7 @@ func TestPrismGroupCutNotchesTheEdge(t *testing.T) {
 
 	got, err := decad.Cut(t.Context(), plate, tool)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(got))
+	require.False(t, tookMeshPath(got))
 	require.Len(t, got.Lumps(), 1)
 	volume, err := got.Volume()
 	require.NoError(t, err)
@@ -147,7 +147,7 @@ func TestPrismGroupUnionMergesOneLump(t *testing.T) {
 	require.NoError(t, err)
 	got, err := decad.Union(t.Context(), group, boxBody(t, doc, 5, 5, 15, 15, 5))
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(got))
+	require.False(t, tookMeshPath(got))
 	require.Len(t, got.Lumps(), 2)
 	volume, err := got.Volume()
 	require.NoError(t, err)
@@ -162,7 +162,7 @@ func TestPrismGroupUnionMergesOneLump(t *testing.T) {
 	require.NoError(t, err)
 	bridged, err := decad.Union(t.Context(), group, boxBody(t, doc, 5, 2, 25, 4, 5))
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(bridged))
+	require.False(t, tookMeshPath(bridged))
 	require.Len(t, bridged.Lumps(), 1)
 	volume, err = bridged.Volume()
 	require.NoError(t, err)

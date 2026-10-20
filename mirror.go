@@ -171,6 +171,9 @@ func (d *Document) resolveMirrorFace(mf MirrorFace) (r3.Frame, error) {
 		return r3.Frame{}, err
 	}
 	pl, ok := face.n.Surface.(surfacegeom.Plane)
+	// A retained tag is a stand-in for the operand's plane, not an exact
+	// mirror plane (docs/faceted-source-retention-design.md §4).
+	ok = ok && !face.n.RetainedTag
 	switch {
 	case ok:
 		return pl.Frame, nil
