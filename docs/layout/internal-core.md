@@ -19,6 +19,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/planarpose/` | Planar admission of a body at a query pose: snapshots by payload, the held-mesh arm through a mesher, the convexity cache and the exact pair classification published through `internal/planarband/`. See multibody §9–§10. |
 | `internal/contactruling/` | Placed ruling contact of a source cylinder against an exact planar body: side faces, the ruling set, normals and the manifolds published into a contact report. See contact-geometry §4.5. |
 | `internal/contactfaceted/` | Exact faceted support-face proof, bounded strict separation from a source-box floor, and the floor contact classification. See contact-geometry §4. |
+| `internal/massdispatch/` | Mass properties by body payload: source sphere and cylinder, revolve, sweep, cup, prism and faceted readings, and the verified-mesh ladder. See dynamic-mass §2–§3. |
 | `internal/pair/sphere/` | Exact sphere-pair relation, gap and bounded response witness. See contact-geometry §4.3. |
 | `internal/pair/planar/` | Planar solid relations, gaps, patches, support faces, and convexity. |
 | `internal/planarsnapshot/` | Planar contact snapshots, cached records, pose gates and placement. See multibody §9.1–§9.2. |

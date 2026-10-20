@@ -1024,7 +1024,7 @@ as exact rationals, is the map the prism's volume, areas and vertices denote thr
 image (`massmoment.AffineInertia`, as 8.6): mass `ρ·|det M|·V`, and the inertia of the second moment
 `|det M|·M·S·Mᵀ`, so no defect widening enters. Positivity is proved by the leading principal minors of
 the published tensor. Cardinal, undisplaced prisms keep the signed-permutation path in
-`mass_properties.go`: an exact signed permutation has `|det M| = 1` and `MᵀM = I` exactly, so its image is
+`internal/massdispatch/dispatch.go`: an exact signed permutation has `|det M| = 1` and `MᵀM = I` exactly, so its image is
 the rigid one.
 
 ### 8.2 Prism with positive `z0Delta`, `z1Delta` or `sectionDelta`
@@ -1041,8 +1041,8 @@ deltas.
 
 A solid loft's mesh is the exact restatement of its held triangles
 (`docs/tessellation-design.md` §2's `loftPayload` row), so its mass takes §8.5's path and settles at
-the ladder's first step: `mass_properties.go` integrates the held triangles through the
-`tetraMoments` sums (the `/120` form) it shares with `mass_properties.go`, widened by the
+the ladder's first step: `internal/massdispatch/dispatch.go` integrates the held triangles through the
+`tetraMoments` sums (the `/120` form) it shares with `internal/massdispatch/dispatch.go`, widened by the
 mesh proof's `volSymDiff` as dynamic-mass §2.2 states. `loftmesh.MassAccumulator` is not
 reused: its Volume and Centroid apply the exact twist corrections of chorded cells, which have no
 second-moment counterpart, while the restated triangles are uncorrected and their four-leg
@@ -1050,7 +1050,7 @@ second-moment counterpart, while the restated triangles are uncorrected and thei
 
 ### 8.4 Stitched planar solid, zero-bound Boolean, translation-placed Boolean
 
-The Boolean path is `mass_properties.go`'s, over the payload's own held triangle set and
+The Boolean path is `internal/massdispatch/dispatch.go`'s, over the payload's own held triangle set and
 bound. A stitched solid takes §8.5's path over its restated triangles. Its mesh carries an
 occupied-volume proof only when it is closed, all-planar and zero-bound at every vertex
 (tessellation §2's `stitchPayload` row), so a placed or certificate-welded stitched solid returns
@@ -2435,7 +2435,7 @@ lines below do not repeat it.
 ### PR 7 (Phase 1) — rotated and displaced prism mass
 
 - Delivers §8.1 and §8.2.
-- Files: `mass_properties.go`, `internal/massmoment/prism_properties.go`.
+- Files: `internal/massdispatch/dispatch.go`, `internal/massmoment/prism_properties.go`.
 - Test (`apitest`): `apitest/mass_properties_rotated_test.go`: a box rotated `30°` about `(1,1,1)` encloses
   `R I Rᵀ` in every component; the orthonormality-defect leg is shown to fail.
 - Depends on: nothing.
@@ -2532,7 +2532,7 @@ lines below do not repeat it.
 ### PR 14 (Phase 2) — loft, stitched and fallback mass
 
 - Delivers §8.3, §8.4 and §8.5.
-- Files: `mass_properties.go`.
+- Files: `internal/massdispatch/dispatch.go`.
 - Test (`apitest`): `apitest/mass_properties_mesh_test.go`: the stitched tetrahedron's tensor against the closed
   form; a loft between two exact octagons, one a square with its edge midpoints pushed out (a loft
   pairs equal segment counts and its cap triangulator refuses collinear corners); a cup against its

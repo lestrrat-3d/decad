@@ -17,7 +17,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/decad/internal/stitchrecord"
-	"github.com/lestrrat-3d/decad/internal/sweeprecord"
 	"github.com/lestrrat-3d/decad/internal/twistsweep"
 )
 
@@ -109,15 +108,6 @@ type (
 // docs/evaluator-design.md §8).
 type (
 	twistedSweepPayload = twistsweep.Payload
-)
-
-// sweepPayload and chainSweepPayload are the evaluator's records of a profile
-// Sweep and a chain Sweep, and chainSweepSpanPayload is one chain span:
-// the internal/sweeprecord payloads, which sweeprecord's
-// builders evaluate over topology nodes and whose body records implement
-// topo.Payload (docs/sweep-design.md, docs/evaluator-design.md §8).
-type (
-	sweepPayload = sweeprecord.Payload
 )
 
 // stitchPayload and unstitchPayload are the evaluator's records of a Stitch
