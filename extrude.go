@@ -318,7 +318,7 @@ func (d *Document) resolveLinearExtent(e Extent, frame r3.Frame) (linearSweep, e
 		default:
 			return linearSweep{}, fmt.Errorf(`%w: unknown direction %d`, ErrDegenerate, int(e.Dir))
 		}
-		stop, delta, refs, err := d.resolveThroughAll(frame, travel)
+		stop, delta, refs, err := extent.ThroughAll(frame, travel, d.n.Live())
 		if err != nil {
 			return linearSweep{}, err
 		}
@@ -370,7 +370,7 @@ func (d *Document) resolveLinearSide(s SideExtent, frame r3.Frame, travel float6
 		// displacement carries across unchanged.
 		return linearSide{z: travel * m, delta: delta}, nil
 	case ThroughAllSide:
-		stop, delta, refs, err := d.resolveThroughAll(frame, travel)
+		stop, delta, refs, err := extent.ThroughAll(frame, travel, d.n.Live())
 		if err != nil {
 			return linearSide{}, err
 		}

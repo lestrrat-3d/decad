@@ -27,7 +27,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/surfacegeom/` | Private face and edge geometry carriers and Verify's diagnostic plane key. Public variants live in `topology.go`; `Edge.Curve` and `Face.Surface` adapt the nodes. See API §6.1, surface §6. |
 | `internal/surfaceplace/` | Rigid placement of face surfaces and edge curves, and the placed circle bound. See surface §6. |
 | `internal/reportvocab/` | Contact and sweep enums; contact reports, pair-reason mapping and planar feature mapping over topology nodes; the sweep request; Verify reports, boundary audits, motion records, survey diagnostics, and pair, interference and sheet outcomes. See contact-geometry §6, contact-sweep §7. |
-| `internal/extent/` | Unit bounds, `ToFace` and `ToFaceAngular` face admission and stops for extents. See API §8.1, evaluator §5/§6. |
+| `internal/extent/` | Unit bounds, `ToFace`, `ToFaceAngular` and through-all stops for extents. See API §8.1, evaluator §5/§6. |
 | `internal/patchchain/` | Patch payloads and node builders; `ChainsFromEdges`, chain partition, exact and shared-level plane proofs, orientation, segment records, area bounds, Rule P and circular-prism admission. See surface §5.1-§5.2 and §10. |
 | `internal/patchmesh/` | Builds PatchProfile and PatchEdges sheet mesh nodes with face and area bounds. See surface §10. |
 | `internal/sectionaudit/` | Rewrite audit order, signed area, cutback, crossing, contact, nesting and detailed error rendering. See modify §5. |
