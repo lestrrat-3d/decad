@@ -25,6 +25,9 @@ type work struct {
 	outSrc []int
 	// removed are the old facets the rewrite replaces.
 	removed []int
+	// removedTrue is the exact area of the surface the blend removes from the
+	// faces it shrinks.
+	removedTrue float64
 	// tau is the chord tolerance of the blend's grid.
 	tau float64
 	// dir is +1 when the rim loop runs counter-clockwise about the plane's
@@ -37,6 +40,8 @@ type ringPt struct {
 	ang float64
 }
 
+// newWork starts a rewrite. A straight-edge rewrite has no rim and passes a
+// rim that holds only the scale.
 func newWork(fp facetedrecord.Payload, r rim, spec blendSpec) *work {
 	w := &work{fp: fp, r: r, spec: spec}
 	w.verts = append([]r3.Vec(nil), fp.Verts...)
@@ -188,58 +193,21 @@ func (w *work) rewritePlane(fi int) ([]ringPt, int, error) {
 		ring[k] = ringPt{idx: w.vertex(r.at(rhoA, w.dir*ang, 0), ringBound), ang: ang}
 	}
 
-	var global []int
-	local := map[int]int{}
-	var ps []pt2
-	use := func(v int) int {
-		if li, ok := local[v]; ok {
-			return li
-		}
-		local[v] = len(global)
-		global = append(global, v)
-		ps = append(ps, w.plane2(w.verts[v]))
-		return local[v]
-	}
-	var polys [][]int
-	for li, loop := range loops {
-		if li == rimAt {
-			continue
-		}
-		poly := make([]int, len(loop))
-		for i, v := range loop {
-			poly[i] = use(v)
-		}
-		polys = append(polys, poly)
-	}
 	cpoly := make([]int, n)
 	for k := range n {
-		cpoly[k] = use(ring[k].idx)
+		cpoly[k] = ring[k].idx
 	}
-	polys = append(polys, cpoly)
-
-	var outer []int
-	var holes [][]int
-	for _, poly := range polys {
-		if signedArea2(ps, poly) > 0 {
-			if outer != nil {
-				return nil, 0, fmt.Errorf("%w: the plane face has two outer loops", decaderr.ErrUnsupported)
-			}
-			outer = poly
-			continue
+	var kept [][]int
+	for li, loop := range loops {
+		if li != rimAt {
+			kept = append(kept, loop)
 		}
-		holes = append(holes, poly)
 	}
-	if outer == nil {
-		return nil, 0, fmt.Errorf("%w: the plane face has no outer loop", decaderr.ErrUnsupported)
-	}
-	tris, err := triangulateRegion(ps, outer, holes)
-	if err != nil {
+	if err := w.retriangulate(r.n, r.center, append(kept, cpoly), group); err != nil {
 		return nil, 0, err
 	}
-	for _, t := range tris {
-		w.emit([3]int{global[t[0]], global[t[1]], global[t[2]]}, group)
-	}
 	w.removed = append(w.removed, facets...)
+	w.removedTrue += math.Pi * math.Abs(rhoA*rhoA-r.radius*r.radius)
 	return ring, group, nil
 }
 
@@ -247,6 +215,58 @@ func (w *work) rewritePlane(fi int) ([]ringPt, int, error) {
 func (w *work) plane2(p r3.Vec) pt2 {
 	q := p.Sub(w.r.center)
 	return pt2{q.Dot(w.r.u), q.Dot(w.r.w)}
+}
+
+// retriangulate emits the triangulation of the planar face with outward
+// normal n through origin over its boundary loops, which wind outward: the
+// outer loop counter-clockwise seen from outside and the holes clockwise. Every
+// loop vertex appears in the output.
+func (w *work) retriangulate(n, origin r3.Vec, loops [][]int, group int) error {
+	u, ok := perpendicular(n)
+	if !ok {
+		return fmt.Errorf("%w: a face has no plane frame", decaderr.ErrUnsupported)
+	}
+	v := n.Cross(u)
+	var global []int
+	local := map[int]int{}
+	var ps []pt2
+	use := func(vi int) int {
+		if li, ok := local[vi]; ok {
+			return li
+		}
+		local[vi] = len(global)
+		global = append(global, vi)
+		q := w.verts[vi].Sub(origin)
+		ps = append(ps, pt2{q.Dot(u), q.Dot(v)})
+		return local[vi]
+	}
+	var outer []int
+	var holes [][]int
+	for _, loop := range loops {
+		poly := make([]int, len(loop))
+		for i, vi := range loop {
+			poly[i] = use(vi)
+		}
+		if signedArea2(ps, poly) > 0 {
+			if outer != nil {
+				return fmt.Errorf("%w: a face has two outer loops", decaderr.ErrUnsupported)
+			}
+			outer = poly
+			continue
+		}
+		holes = append(holes, poly)
+	}
+	if outer == nil {
+		return fmt.Errorf("%w: a face has no outer loop", decaderr.ErrUnsupported)
+	}
+	tris, err := triangulateRegion(ps, outer, holes)
+	if err != nil {
+		return err
+	}
+	for _, t := range tris {
+		w.emit([3]int{global[t[0]], global[t[1]], global[t[2]]}, group)
+	}
+	return nil
 }
 
 // segmentRadialRange returns the smallest and largest distance from the rim
@@ -340,6 +360,7 @@ func (w *work) rewriteWall(fi int) ([]ringPt, int, error) {
 		}
 	}
 	w.removed = append(w.removed, facets...)
+	w.removedTrue += 2 * math.Pi * r.radius * tb
 
 	ring := make([]ringPt, 0, len(cuts))
 	seen := map[int]bool{}

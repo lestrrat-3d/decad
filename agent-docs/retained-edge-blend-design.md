@@ -55,7 +55,7 @@ Table RR lists the edges a blend can be built on. The others are refused.
 
 | RR | Edge | Faces | Blend surface (fillet / chamfer) | Staged |
 |---|---|---|---|---|
-| **R1** | `Line3`, convex or concave | two retained `Plane`s, not parallel | `Cylinder` / `Plane` | increment B2 |
+| **R1** | `Line3`, convex or concave | two retained `Plane`s, not parallel, ending at three-face corners whose third face is a retained `Plane` | `Cylinder` / `Plane` | increment B2; equal-distance chamfer only |
 | **R2** | `Circle3`, closed, centre on the axis | retained `Plane` and coaxial retained `Cylinder` | `Torus` / `Cone` | increment B1; equal-distance chamfer only |
 | **R3** | `Line3` of retention E4 | retained `Plane` and a `Cylinder` whose axis lies in the plane | `Cylinder` / `Plane` | increment B3 |
 | **R4** | `Arc3` | as R2, open | as R2 | increment B4 |
@@ -183,6 +183,46 @@ faces `G₀` and `G₁`. Everything else in the held mesh is copied unchanged.
    bounds go through `facetedrecord.Build`, which derives the topology, the
    measurements and the held audit the way `Placed` does.
 
+### 5.0 R1, a straight edge
+
+All four faces an R1 blend touches are planes, so each is rewritten the way the
+plane face of R2 is: its boundary loops change, and the face is triangulated
+again over the new loops. Let `e` run from `V₀` to `V₁`, with `d̂` its direction,
+`G_i` the end face at `V_i`, `eA_i = A ∩ G_i` and `eB_i = B ∩ G_i`.
+
+1. **Exact points.** `V_i` is the meeting of the planes `A`, `B` and `G_i`.
+   The setback line `LA` on `A` is the line parallel to `d̂` at in-plane distance
+   `tA` from `e`, and `LB` likewise. `P_A,i = LA ∩ G_i` and `P_B,i = LB ∩ G_i`.
+   For a fillet, the arc rows `α_j = jφ/m` of the exact cylinder meet `G_i` at
+   `q_j,i = p_j + s·d̂`, with `p_j` the point of the cross-section arc and `s`
+   the offset along `d̂` that reaches `G_i`. Row 0 is `P_A` and row `m` is `P_B`;
+   a chamfer has rows 0 and 1 only.
+2. **Chains.** In `A`'s loop, `e` is the run of vertices from `V₀` to `V₁` that lie
+   on the line of `e` within their bounds. `eA_i` is the run that leaves `V_i`
+   on the line of `eA_i`. The setback point `P_A,i` falls between two vertices of
+   that run, or between `V_i` and its first vertex. The run's vertices nearer
+   `V_i` than `P_A,i` go; `P_A,i` takes their place.
+3. **Loops.** `A`'s loop loses `V₀`, `V₁`, the run of `e` and the removed parts of
+   `eA₀` and `eA₁`, and gains `P_A,₀` and `P_A,₁` joined by one straight edge.
+   `B`'s loop changes the same way. `G_i`'s loop loses `V_i` and the removed parts
+   of `eA_i` and `eB_i`, and gains `P_A,i`, the intermediate `q_j,i` and `P_B,i`,
+   in the loop's own direction. Each face is then triangulated again.
+4. **Strip.** Rows `j = 0 … m` each hold the two vertices `q_j,₀` and `q_j,₁`.
+   Neighbouring rows join in one quadrilateral of two triangles, wound to face
+   the blend's outward normal. The strip's boundary edges are the setback edges
+   of `A` and `B` and the end curves of `G₀` and `G₁`, which are the vertices
+   the four faces share with it.
+
+**Exact areas.** The removed region of `A` is the quadrilateral
+`V₀ V₁ P_A,₁ P_A,₀`, and `B`'s likewise. The removed region of `G_i` is the
+projection along `d̂` of the corner region of the cross-section, area
+`r²(tan(φ/2) − φ/2)`, so its area is that over `|d̂ · n_G|`. A chamfer removes
+the triangle `V_i P_A,i P_B,i` from `G_i`. The cylinder patch has area
+`r·ℓ_c·φ + r²·tan(φ/2)·μ·(a₀ + a₁)`, with `ℓ(x) = ℓ_c + μ·(x − c)` the length of
+the generator through `x` between the two end planes, `c` the axis point and
+`a₀`, `a₁` the unit vectors from `c` to the two tangent lines. The chamfer plane
+is a trapezoid of area `½(|P_A,₀P_A,₁| + |P_B,₀P_B,₁|)·|T_B − T_A|`.
+
 ### 5.1 Groups and tags
 
 | Face | Group fields |
@@ -216,7 +256,7 @@ of that computation.
 | **SR2** | two selected edges share a vertex, or a selected edge continues tangentially into a neighbour | no transition built | `ErrUnsupported` |
 | **SR3** | no blend of that size exists: `R − r ≤ 0` for an inside ball (§4.2), `φ` within 10⁻⁹ of 0 or π, or a chamfer distance of zero or below | no regular blend | `ErrDegenerate` |
 | **SR4** | the setback does not fit (§6.2) and the held bounds prove it does not | the blend consumes the face | `ErrDegenerate` |
-| **SR5** | the setback might not fit and the held bounds cannot decide it, or an end vertex of an R1 edge is not a three-face corner with a convex planar retained `G`, or the polygon `V, P_A, arc, P_B` contains another boundary vertex of `G` within its bound | body exists; the evaluator cannot prove its construction | `ErrUnsupported` |
+| **SR5** | the setback might not fit and the held bounds cannot decide it, or an end vertex of an R1 edge is not a three-face corner with a retained planar `G`, or `G`'s corner at the vertex does not match the edge (a convex edge needs a convex corner of `G`, a concave edge a reflex one), or `A` or `B` turns reflex at the vertex, or another part of `G` comes within the blend's reach of the vertex | body exists; the evaluator cannot prove its construction | `ErrUnsupported` |
 | **SR6** | the held mesh disagrees with the exact vertex of its three tags by more than the vertex bound plus slack (§6.3) | the record and the mesh do not describe one solid | `ErrUnsupported` |
 | **SR7** | the rewritten mesh fails the held audit (watertight, no remote self-intersection, shells positive) | the result is invalid | `ErrDegenerate` when the audit proves a face inside out (modify S8), else `ErrUnsupported` |
 
@@ -313,8 +353,10 @@ published bound, never with a pinned literal.
 | Hole mouth in a placed-tool plate (R2 fillet, convex) | blend face is a `Torus` with `Major = R + r`, `Minor = r`; removed volume equals `π·r·(2Rr + r²) − 2π·((R + r) − 4r/(3π))·(π·r²/4)` within the bound; both setback edges are `Circle3` | build the cone for a fillet: the surface kind is wrong |
 | Boss root fillet (R2 concave) | the volume grows by the same expression with the tangent circles at `R + r`; the blend face has `Reversed = true` | use the convex sign: the blend removes material |
 | Shaft end fillet and chamfer (R2) | `Major = R − r`; `R − r ≤ 0` refuses with `ErrDegenerate` | drop SR3: the torus has a negative major radius |
-| Straight 90° edge (R1 fillet) | `Cylinder`, axis along the edge, removed volume `L·r²(1 − π/4)` | use `r` for the setback at `φ ≠ π/2`: the 60° test fails |
-| 60° edge (R1 fillet) and chamfer | setback `r·tan(φ/2)`; removed area per unit length `r²(tan(φ/2) − φ/2)` for the fillet, `dA·dB·sin φ / 2` for the chamfer | |
+| Straight 90° edge (R1 fillet and chamfer) | `Cylinder`, axis along the edge, removed volume `L·r²(1 − π/4)`; the chamfer removes `L·d²/2` | |
+| 45° edge (R1 fillet) | setback `r·tan(φ/2)`; removed area per unit length `r²(tan(φ/2) − φ/2)` | use `r` for the setback at `φ ≠ π/2`: the 45° test fails |
+| Concave edge in an L section | the fill adds `L·r²(1 − π/4)`, the blend's normal points into the void, `VerifyAll` passes | build the convex blend: the normal points into the material |
+| Concave edge at a wall's foot | refuses with `ErrUnsupported`: the plate face wraps the foot and turns reflex at the corner | |
 | Oblique end face | the end arc is an `Ellipse3` with `SemiMinor = r` and `SemiMajor = r / |d̂ · nG|`; removed volume equals the section area times the length between the end planes measured through the section's centroid | treat `G` as normal to the edge: the volume is off by the centroid offset |
 | Clearance | a radius past the face width refuses `ErrDegenerate`; a radius within `b` of it refuses `ErrUnsupported` | drop the `− b_v` term of §6.2: the near case builds an invalid solid |
 | Shared vertex / tangent chain | refuse SR2 | |
@@ -341,7 +383,7 @@ published bound, never with a pinned literal.
 | # | Lands | Gate to start the next |
 |---|---|---|
 | B1 | R2 fillet and chamfer: classification, the four rims of §4.2, clip and strip, bounds, gates SR1–SR4 and SR6–SR7 | the hole-mouth, boss-root and shaft-end rows of §9 pass; `go test ./...` on CI |
-| B2 | R1 fillet and chamfer with planar end faces, SR5 | the 90° and 60° edge rows and the oblique-end row pass |
+| B2 | R1 fillet and equal-distance chamfer with planar end faces, SR5 | the 90° and 45° edge rows, the oblique-end row and the L-section concave row pass |
 | B3 | R3, a line between a plane and a parallel cylinder | its row of §9 is added and passes |
 | B4 | R4, an open arc | as B1 for an arc with end faces |
 

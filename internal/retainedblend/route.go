@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
@@ -41,19 +40,41 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 		return nil, false, nil
 	}
 	for _, e := range edges {
-		if !looksLikeRim(e) {
+		if !looksLikeRim(e) && !looksLikeLine(e) {
 			return nil, false, nil
 		}
 	}
 	if delta != 0 {
-		return nil, true, fmt.Errorf("%w: a retained rim blend needs a size that converts exactly to millimetres", decaderr.ErrUnsupported)
+		return nil, true, fmt.Errorf("%w: a retained edge blend needs a size that converts exactly to millimetres", decaderr.ErrUnsupported)
 	}
 	if err := checkFinite(spec.r, spec.dA, spec.dB); err != nil {
 		return nil, true, err
 	}
 	faceIndex := faceIndexOf(b)
-	keys := make([]rimKey, len(edges))
+	type target struct {
+		rimKey  rimKey
+		lineKey lineKey
+		isLine  bool
+	}
+	targets := make([]target, len(edges))
+	var corners []r3.Vec
 	for i, e := range edges {
+		if looksLikeLine(e) {
+			l, err := readLine(e, fp, faceIndex)
+			if err != nil {
+				return nil, true, err
+			}
+			targets[i] = target{lineKey: l.key(), isLine: true}
+			for _, end := range l.ends {
+				for _, c := range corners {
+					if c.Sub(end.exact).Len() <= 1e-9*l.scale {
+						return nil, true, fmt.Errorf("%w: two selected edges share a corner", decaderr.ErrUnsupported)
+					}
+				}
+				corners = append(corners, end.exact)
+			}
+			continue
+		}
 		r, err := readRim(e, fp, faceIndex)
 		if err != nil {
 			return nil, true, err
@@ -61,26 +82,41 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 		if err := r.checkSize(spec); err != nil {
 			return nil, true, err
 		}
-		keys[i] = r.key()
-		if slices.Contains(keys[:i], keys[i]) {
-			return nil, true, fmt.Errorf("%w: the selection names one rim twice", decaderr.ErrDegenerate)
+		targets[i] = target{rimKey: r.key()}
+		for _, earlier := range targets[:i] {
+			if !earlier.isLine && earlier.rimKey == targets[i].rimKey {
+				return nil, true, fmt.Errorf("%w: the selection names one rim twice", decaderr.ErrDegenerate)
+			}
 		}
 	}
 	cur, curFP := b, fp
 	for i, e := range edges {
 		if i > 0 {
 			var ok bool
-			e, ok = findRim(cur, keys[i], 64*ulp*math.Max(1, math.Abs(keys[i].radius)))
+			if targets[i].isLine {
+				e, ok = findLine(cur, targets[i].lineKey, 64*ulp*math.Max(1, math.Abs(targets[i].lineKey.p0.X)))
+			} else {
+				e, ok = findRim(cur, targets[i].rimKey, 64*ulp*math.Max(1, math.Abs(targets[i].rimKey.radius)))
+			}
 			if !ok {
-				return nil, true, fmt.Errorf("%w: a selected rim is no longer a rim of the partly blended body", decaderr.ErrUnsupported)
+				return nil, true, fmt.Errorf("%w: a selected edge is no longer an edge of the partly blended body", decaderr.ErrUnsupported)
 			}
 		}
 		faceIndex = faceIndexOf(cur)
-		r, err := readRim(e, curFP, faceIndex)
-		if err != nil {
-			return nil, true, err
+		role := fmt.Sprintf("%s(%d)", op, i)
+		var next *topo.Body
+		var err error
+		if targets[i].isLine {
+			var l line
+			if l, err = readLine(e, curFP, faceIndex); err == nil {
+				next, err = rewriteLineEdge(ctx, env, curFP, l, spec, role, faceIndex)
+			}
+		} else {
+			var r rim
+			if r, err = readRim(e, curFP, faceIndex); err == nil {
+				next, err = rewriteRim(ctx, env, curFP, r, spec, role, faceIndex)
+			}
 		}
-		next, err := rewriteRim(ctx, env, curFP, r, spec, fmt.Sprintf("%s(%d)", op, i), faceIndex)
 		if err != nil {
 			return nil, true, err
 		}
@@ -205,18 +241,14 @@ func heldArea(verts []r3.Vec, facets [][3]int) (float64, float64) {
 // held mesh is compared with the exact change: the annulus and band removed
 // and the blend face added.
 func (w *work) measureChange(tag blendTag, stripFrom int) (areaSlack, volSymDiff float64) {
-	r := w.r
 	oldArea, oldSlop := heldArea(w.fp.Verts, pick(w.fp.Tris, w.removed))
 	newArea, newSlop := heldArea(w.verts, w.out)
 	stripArea, _ := heldArea(w.verts, w.out[stripFrom:])
 
-	rhoA := r.radius + r.kappa*w.spec.planeSetback()
-	annulus := math.Pi * math.Abs(rhoA*rhoA-r.radius*r.radius)
-	band := 2 * math.Pi * r.radius * w.spec.wallSetback()
 	deltaHeld := newArea - oldArea
-	deltaTrue := tag.trueArea - annulus - band
+	deltaTrue := tag.trueArea - w.removedTrue
 	// Every term is a float evaluation; charge the areas' own rounding.
-	scale := math.Max(math.Abs(deltaHeld), math.Abs(deltaTrue)) + oldArea + newArea + annulus + band
+	scale := math.Max(math.Abs(deltaHeld), math.Abs(deltaTrue)) + oldArea + newArea + w.removedTrue
 	areaSlack = proofbound.AbsSumUpper(math.Abs(deltaHeld-deltaTrue), oldSlop, newSlop, 64*0x1p-52*scale)
 
 	eps := 0.0

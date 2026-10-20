@@ -81,7 +81,7 @@ func TestFacetedPrismUnionFilletRefusesToolInCornerBand(t *testing.T) {
 	require.True(t, errors.Is(err, decad.ErrUnsupported), "fillet returned %v", err)
 }
 
-func TestFacetedPrismUnionFilletRefusesPlacedSourceRelation(t *testing.T) {
+func TestFacetedPrismUnionFilletOfPlacedUnionTakesTheRetainedRoute(t *testing.T) {
 	doc := decad.New()
 	base := boxBodyAtZ(t, doc, -10, -10, 10, 10, 0, 10)
 	lug := boxBodyAtZ(t, doc, 8, -2, 14, 2, 2, 6)
@@ -99,6 +99,16 @@ func TestFacetedPrismUnionFilletRefusesPlacedSourceRelation(t *testing.T) {
 		decad.EndpointAt(r3.Vec{X: -10, Y: -10, Z: 1}),
 		decad.EndpointAt(r3.Vec{X: -10, Y: -10, Z: 11}),
 	).Exactly(1)
-	_, err = decad.Fillet(t.Context(), joined, selector, units.Millimeters(1))
-	require.True(t, errors.Is(err, decad.ErrUnsupported), "fillet returned %v", err)
+	before, err := joined.Volume()
+	require.NoError(t, err)
+	// The placed Union keeps no source relation, so the prism route declines;
+	// the edge is a straight edge between two retained planes, which
+	// agent-docs/retained-edge-blend-design.md blends from the tags.
+	filleted, err := decad.Fillet(t.Context(), joined, selector, units.Millimeters(1))
+	require.NoError(t, err)
+	after, err := filleted.Volume()
+	require.NoError(t, err)
+	removed := before.Value.Mag() - after.Value.Mag()
+	growth := after.Bound.Mag() - before.Bound.Mag()
+	require.InDelta(t, 10*(1-math.Pi/4), removed, math.Max(growth, 1e-6))
 }

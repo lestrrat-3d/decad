@@ -92,7 +92,7 @@ func TestFacetedPrismUnionChamferRefusesToolInCornerBand(t *testing.T) {
 	require.Equal(t, []*decad.Body{joined}, doc.Bodies())
 }
 
-func TestFacetedPrismUnionChamferRefusesPlacedUnion(t *testing.T) {
+func TestFacetedPrismUnionChamferOfPlacedUnionTakesTheRetainedRoute(t *testing.T) {
 	doc := decad.New()
 	base := boxBodyAtZ(t, doc, -10, -10, 10, 10, 0, 10)
 	lug := boxBodyAtZ(t, doc, 8, -2, 14, 2, 2, 4)
@@ -110,10 +110,19 @@ func TestFacetedPrismUnionChamferRefusesPlacedUnion(t *testing.T) {
 		decad.EndpointAt(r3.Vec{X: -10, Y: -10, Z: 1}),
 		decad.EndpointAt(r3.Vec{X: -10, Y: -10, Z: 11}),
 	).Exactly(1)
+	before, err := placed.Volume()
+	require.NoError(t, err)
+	// The placed Union keeps no source relation, so the prism route declines;
+	// the edge is a straight edge between two retained planes, which
+	// agent-docs/retained-edge-blend-design.md blends from the tags.
 	chamfered, err := decad.Chamfer(t.Context(), placed, selector, units.Millimeters(1))
-	require.True(t, errors.Is(err, decad.ErrUnsupported), "chamfer returned %v", err)
-	require.Nil(t, chamfered)
-	require.Equal(t, []*decad.Body{placed}, doc.Bodies())
+	require.NoError(t, err)
+	after, err := chamfered.Volume()
+	require.NoError(t, err)
+	removed := before.Value.Mag() - after.Value.Mag()
+	growth := after.Bound.Mag() - before.Bound.Mag()
+	require.InDelta(t, 5, removed, math.Max(growth, 1e-6), "a 1 mm bevel along a 10 mm edge removes 5 mm³")
+	require.Equal(t, []*decad.Body{chamfered}, doc.Bodies())
 }
 
 func TestFacetedPrismUnionChamferRefusesInexactFoot(t *testing.T) {
