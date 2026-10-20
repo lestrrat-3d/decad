@@ -208,8 +208,12 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 	if err := capblend.RequireNotReceiver(b.n.Payload, "fillets"); err != nil {
 		return nil, err
 	}
-	if out, matched, err := tryDraftCircleRimFillet(ctx, b, edges, rmm, rDelta); matched || err != nil {
-		return out, err
+	if node, matched, err := brepmodify.DraftCircleRimFillet(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), &b.n,
+		edgeNodes(edges), rmm, rDelta); matched || err != nil {
+		if err != nil {
+			return nil, err
+		}
+		return commitModifyResult(ctx, b, bodyHandle(node))
 	}
 	if err := draftrecord.RequireNotReceiver(b.n.Payload, "fillets"); err != nil {
 		return nil, err

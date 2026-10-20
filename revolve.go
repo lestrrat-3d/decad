@@ -417,8 +417,7 @@ func (d *Document) resolveAngularExtent(a AngularExtent, st angularStops) (float
 			return 0, 0, false, revolveangle.Sweep{}, nil, fmt.Errorf(`%w: unknown direction %d`, ErrDegenerate, int(a.Dir))
 		}
 	case FullRevolution:
-		fullDen := revolveangle.Sweep{Phi0: revolveangle.Zero(), Phi1: revolveangle.Angle{Rad: new(big.Rat), Turn: big.NewRat(1, 1)}}
-		return 0, 2 * math.Pi, true, fullDen, nil, nil
+		return 0, 2 * math.Pi, true, revolveangle.FullTurn(), nil, nil
 	case SymmetricAngle:
 		m, err := sectionrecord.MagnitudeIn(a.A, units.Angle, units.Radian, "the symmetric angle")
 		if err != nil {
