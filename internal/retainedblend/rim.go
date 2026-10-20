@@ -106,8 +106,12 @@ func readRim(edge *topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo.Face
 			r.wallFace = f
 		}
 	}
-	plane := r.planeFace.Surface.(surfacegeom.Plane)
-	cyl := r.wallFace.Surface.(surfacegeom.Cylinder)
+	plane, planeOK := r.planeFace.Surface.(surfacegeom.Plane)
+	cyl, cylOK := r.wallFace.Surface.(surfacegeom.Cylinder)
+	circle, circleOK := edge.Curve.(surfacegeom.Circle3)
+	if !planeOK || !cylOK || !circleOK {
+		return rim{}, fmt.Errorf("%w: the rim's faces or curve changed kind", decaderr.ErrUnsupported)
+	}
 	radius, err := cyl.Radius.In(units.Millimeter)
 	if err != nil || !(radius > 0) || math.IsInf(radius, 0) {
 		return rim{}, fmt.Errorf("%w: the rim's cylinder has no finite radius", decaderr.ErrUnsupported)
@@ -129,7 +133,6 @@ func readRim(edge *topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo.Face
 	}
 	o := plane.Frame.Origin()
 	center := cyl.Origin.Add(axis.Scale(n.Dot(o.Sub(cyl.Origin)) / n.Dot(axis)))
-	circle := edge.Curve.(surfacegeom.Circle3)
 	circleRadius, err := circle.Radius.In(units.Millimeter)
 	if err != nil {
 		return rim{}, fmt.Errorf("%w: the rim's circle has no radius", decaderr.ErrUnsupported)

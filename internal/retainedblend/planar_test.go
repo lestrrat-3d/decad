@@ -1,0 +1,63 @@
+package retainedblend
+
+import (
+	"math"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+)
+
+func TestTriangulateRegionKeepsEveryLoopVertex(t *testing.T) {
+	t.Parallel()
+	// A 10x10 square with a collinear vertex on each side, and a square hole.
+	ps := []pt2{
+		{0, 0}, {5, 0}, {10, 0}, {10, 5}, {10, 10}, {5, 10}, {0, 10}, {0, 5}, // outer, counter-clockwise
+		{3, 3}, {3, 7}, {7, 7}, {7, 3}, // hole, clockwise
+	}
+	outer := []int{0, 1, 2, 3, 4, 5, 6, 7}
+	hole := []int{8, 9, 10, 11}
+	tris, err := triangulateRegion(ps, outer, [][]int{hole})
+	require.NoError(t, err)
+
+	used := map[int]bool{}
+	area := 0.0
+	for _, tri := range tris {
+		for _, v := range tri {
+			used[v] = true
+		}
+		require.Positive(t, orient(ps[tri[0]], ps[tri[1]], ps[tri[2]]), "triangle %v is counter-clockwise", tri)
+		a, b, c := ps[tri[0]], ps[tri[1]], ps[tri[2]]
+		area += math.Abs((b.u-a.u)*(c.w-a.w)-(b.w-a.w)*(c.u-a.u)) / 2
+	}
+	for v := range ps {
+		require.True(t, used[v], "vertex %d appears in a triangle", v)
+	}
+	require.InDelta(t, 100-16, area, 1e-12)
+}
+
+func TestZipperJoinsRingsOfDifferentCounts(t *testing.T) {
+	t.Parallel()
+	ring := func(base, n int, offset float64) []ringPt {
+		out := make([]ringPt, n)
+		for k := range n {
+			out[k] = ringPt{idx: base + k, ang: offset + 2*math.Pi*float64(k)/float64(n)}
+		}
+		return out
+	}
+	a, b := ring(0, 5, 0), ring(100, 8, 0.1)
+	tris := zipper(a, b)
+	require.Len(t, tris, 13, "one triangle per ring vertex")
+	edges := map[[2]int]int{}
+	for _, tri := range tris {
+		for k := range 3 {
+			edges[[2]int{min(tri[k], tri[(k+1)%3]), max(tri[k], tri[(k+1)%3])}]++
+		}
+	}
+	// Every ring edge borders exactly one triangle; every other edge two.
+	for i := range a {
+		require.Equal(t, 1, edges[[2]int{min(a[i].idx, a[(i+1)%5].idx), max(a[i].idx, a[(i+1)%5].idx)}])
+	}
+	for i := range b {
+		require.Equal(t, 1, edges[[2]int{min(b[i].idx, b[(i+1)%8].idx), max(b[i].idx, b[(i+1)%8].idx)}])
+	}
+}

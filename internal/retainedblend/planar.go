@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"slices"
 	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -158,15 +159,7 @@ func bridgeClear(ps []pt2, merged []int, holes [][]int, hole, m, h int) bool {
 		}
 		return false
 	}
-	if blocked(merged) {
-		return false
-	}
-	for _, loop := range holes {
-		if blocked(loop) {
-			return false
-		}
-	}
-	return true
+	return !blocked(merged) && !slices.ContainsFunc(holes, blocked)
 }
 
 // collinearOverlap reports whether segment ab and the edge end→other, which

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
@@ -61,10 +62,8 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 			return nil, true, err
 		}
 		keys[i] = r.key()
-		for _, earlier := range keys[:i] {
-			if earlier == keys[i] {
-				return nil, true, fmt.Errorf("%w: the selection names one rim twice", decaderr.ErrDegenerate)
-			}
+		if slices.Contains(keys[:i], keys[i]) {
+			return nil, true, fmt.Errorf("%w: the selection names one rim twice", decaderr.ErrDegenerate)
 		}
 	}
 	cur, curFP := b, fp

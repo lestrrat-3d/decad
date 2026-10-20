@@ -56,7 +56,7 @@ Table RR lists the edges a blend can be built on. The others are refused.
 | RR | Edge | Faces | Blend surface (fillet / chamfer) | Staged |
 |---|---|---|---|---|
 | **R1** | `Line3`, convex or concave | two retained `Plane`s, not parallel | `Cylinder` / `Plane` | increment B2 |
-| **R2** | `Circle3`, closed, centre on the axis | retained `Plane` and coaxial retained `Cylinder` | `Torus` / `Cone` | increment B1 |
+| **R2** | `Circle3`, closed, centre on the axis | retained `Plane` and coaxial retained `Cylinder` | `Torus` / `Cone` | increment B1; equal-distance chamfer only |
 | **R3** | `Line3` of retention E4 | retained `Plane` and a `Cylinder` whose axis lies in the plane | `Cylinder` / `Plane` | increment B3 |
 | **R4** | `Arc3` | as R2, open | as R2 | increment B4 |
 
@@ -153,23 +153,32 @@ faces `G₀` and `G₁`. Everything else in the held mesh is copied unchanged.
    planes of `G₀` and `G₁`; for R2 the annular wedge between the rim, the two
    setback circles and the blend torus or cone. §6's gates prove that nothing
    but `A`, `B`, and the end faces `G` meets `K`.
-2. **Clip.** Every held facet of `A` and `B` is cut by its setback line. The
-   part nearer the edge goes; the part farther stays. A facet entirely on one
-   side is kept or dropped whole. A cut point lies on the setback line and on
-   a held facet edge, so it takes the rounding of its exact computation plus the
-   facet's distance from the tag plane (retention §11's `h`).
-3. **Strip.** The blend face is a grid. Its columns are the cut points of both
-   setback lines taken in order along the edge (the union of the two lists), plus
-   the end points. Its rows divide the blend arc into `m` equal angles with
-   `m` the smallest count whose chord sagitta `r·(1 − cos(Δφ/2))` is at most
-   `τ = 2⁻¹⁰·r` (not below `64·2⁻⁵²·scale`). Each grid cell is two triangles. A
-   chamfer has one row.
+2. **Rewrite the faces.** The plane face's facets are replaced. Its boundary
+   loops other than the rim are kept with their vertices, the rim loop gives way
+   to a polygon of `N` vertices on the setback circle (R2) or a cut line (R1), and
+   the region is triangulated again by ear clipping over those loops, with one
+   bridge from each hole to the outer loop. The ear clipping uses every loop
+   vertex, collinear ones included, so the face keeps the vertices its
+   neighbours share. A plane face with a vertex off its boundary loops refuses
+   (SR5). The wall's facets are cut by the setback plane: a facet wholly beyond
+   it stays, one wholly before it goes, and a crossing facet is clipped, with one
+   new vertex per cut mesh edge shared by the facets on either side. A new wall
+   vertex lies on a held facet edge, so it takes that edge's larger vertex bound,
+   plus `τ` and the rounding of the cut.
+3. **Strip.** The blend face is a grid of rings. The first ring is the plane
+   face's new polygon and the last is the wall's cut vertices, sorted by angle
+   about the axis. A fillet has `m − 1` rings between them on the exact torus,
+   with `m` the smallest count whose arc sagitta `r·(1 − cos(Δα/2))` is at most
+   `τ = 2⁻¹⁰·r` (not below `64·2⁻⁵²·scale`). A chamfer has none. Neighbouring
+   rings join by walking both in angle and advancing the ring whose next vertex
+   comes first, which gives the band of triangles whatever the two rings' vertex
+   counts. Each triangle is wound to face the blend's analytic outward normal.
 4. **Ends (R1).** At each end vertex `V`, the end face `G` meets the blend
    cylinder in an arc: a circle arc when `G` is normal to `d̂`, an `Ellipse3`
    arc otherwise, running from `P_A` (the setback line of `A` on `A ∩ G`)
    to `P_B`. For a chamfer it is the segment `P_A P_B`. The region of `G`
    inside the polygon `V, P_A, arc, P_B` is removed from `G`'s facets by
-   exact polygon clipping; the arc enters as the chords of the strip's rows.
+   the same ear clipping; the arc enters as the chords of the strip's rows.
 5. **Build.** The new vertex and triangle lists, the new groups and the new
    bounds go through `facetedrecord.Build`, which derives the topology, the
    measurements and the held audit the way `Placed` does.
@@ -238,11 +247,12 @@ nothing fitted.
 
 ### 6.3 Bounds of the result
 
-A new vertex is an exact function of the tags, so its bound is the rounding of
-that function (`facetedrecord.PointPlaneRound`'s pattern) and nothing else. A cut
-point on a setback line lies on the true boundary of the new `A` patch, and on a
-held facet that sits within `h` of the tag plane, so it takes the rounding plus `h`. A vertex of the blend grid lies on a chord of the exact
-surface, so its bound is `τ` plus rounding. An old vertex keeps its bound.
+A ring vertex on the plane face lies at the exact setback circle, so it is an
+exact function of the tags; every strip vertex takes the bound `τ` plus the
+rounding of its computation, because the chords between ring vertices leave the
+exact surface by at most `τ` and a vertex bound is the only place a facet can
+state that. A wall cut vertex takes the larger bound of its edge's two ends, plus
+`τ` and the rounding (§5 step 2). An old vertex keeps its bound.
 
 **Claim K.** Let `H` be the held solid with `VolSymDiff = v`, `H'` the rewritten
 held solid, and `S'` the true blended solid. Then
@@ -255,8 +265,21 @@ outside `K` lies inside `H △ S`. Inside `K`, `S'` is the exact blended region 
 `H'` is the polyhedron on the strip's chords; they differ by at most the sagitta
 `τ` times the blend face's area, plus the rounding of the grid's vertices. ∎
 
-The area slack composes the same way. The `Verify` and `VerifyAll` results
-come from the faceted audit of the rebuilt body, not from this claim.
+**Area.** Write `Δ_held` for the held area of the new facets less that of the
+old facets the rewrite replaced, and `Δ_true` for the exact area of the blend
+face less the exact area of the annulus and the wall band it removes. Both
+bodies have the same area elsewhere, so the held total differs from the true one
+by the old difference plus `Δ_held − Δ_true`. The new `AreaSlack` is the old one
+plus `|Δ_held − Δ_true|` and the rounding of the two area sums
+(`proofbound.FacetAreaTermSlop` per facet).
+
+**Volume.** The new `VolSymDiff` is the old one plus `ε·(A_strip + A_true)`, with
+`ε` the largest vertex bound of the strip and `A_strip`, `A_true` the held and
+exact areas of the blend face. Two surfaces within `ε` of each other enclose at
+most `ε` times the larger area between them.
+
+The `Verify` and `VerifyAll` results come from the faceted audit of the rebuilt
+body, not from these terms.
 
 ## 7. Receiver and dispatch
 
@@ -346,5 +369,5 @@ published bound, never with a pinned literal.
 | Edge classes in the first increment | R2 (closed circular rims) first, because they have no end vertices | R1 first: more common, but needs the end-face construction and SR5 |
 | A blend whose clearance is undecided within bounds | refuse (`ErrUnsupported`) | build with a bound that charges the undecided margin: smaller refusal set, larger proof |
 | Chord tolerance `τ = 2⁻¹⁰·r` for the blend grid | fixed ratio of the radius | follow the body's `MeshBound`: finer blend, many more facets |
-| Several selected edges | one at a time on the evolving mesh, vertex-disjoint | require disjoint regions `K` and build them together |
+| Several selected edges | one at a time on the evolving mesh; each later rim is found again by its circle | require disjoint regions `K` and build them together |
 | `Shell` of a retained body | stays SX9 | a separate design |
