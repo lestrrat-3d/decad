@@ -5,15 +5,8 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/featureoption"
-	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
-	"github.com/lestrrat-3d/decad/internal/sectioncert"
 
-	"github.com/lestrrat-3d/decad/internal/freeform"
-
-	"github.com/lestrrat-3d/decad/internal/proofbound"
-
-	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-go/option/v3"
 )
@@ -108,79 +101,12 @@ func Loft(ctx context.Context, d *Document, s0 *sketch.Sketch, p0 *sketch.Profil
 	if err != nil {
 		return nil, err
 	}
-	alignment, surfaceResult := cfg.Alignment, cfg.SurfaceResult
-
 	// S9: both profiles through the unmodified seam gates, in argument order.
-	profile0, plane0, area0, err := sectioncert.RecordProfile(s0, p0)
+	node, err := loftrecord.FromProfiles(ctx, envOf(documentNode(d), d.nextProducerID()), s0, p0, s1, p1, cfg)
 	if err != nil {
 		return nil, err
 	}
-	profile1, plane1, area1, err := sectioncert.RecordProfile(s1, p1)
-	if err != nil {
-		return nil, err
-	}
-
-	// evaluator §1's one live-profile read, reject-only (not a new gate —
-	// docs/loft-design.md §2 states no new gate here; both Extrude and
-	// Revolve run the identical falsifier on their own recorded profile). One
-	// counter per profile, threaded through to loftrecord.Build so a single loft
-	// operation opens exactly two R7 ceilings — one per record — rather than
-	// four (docs/spline-design.md §5.2).
-	// The two integrals the falsifier computes are also the records' own
-	// areas the chord target reads (docs/loft-gear-bounds-design.md §5), so
-	// they ride on the payload rather than being integrated again in loftrecord.Build.
-	work0 := freeform.NewFreeformWork()
-	work1 := freeform.NewFreeformWork()
-	// The profile area falsifier spends the same record-wide counter as the
-	// later station walk. A many-flank profile can exhaust the default R7
-	// ceiling during that first integral, before ValidateLoftRecords raises it.
-	// Give both authenticated records their existing station-scaled ceiling
-	// here; the later gate keeps that ceiling and the already spent work.
-	p := uint64(len(profile0.Outer.Segments))
-	for _, hole := range profile0.Holes {
-		p += uint64(len(hole.Segments))
-	}
-	limit := loftmesh.StationWorkLimit(0, p)
-	work0.RaiseLimit(limit)
-	work1.RaiseLimit(limit)
-	work0.RaiseReconstructionLimit(freeform.LoftReconstructionWorkLimit)
-	work1.RaiseReconstructionLimit(freeform.LoftReconstructionWorkLimit)
-	recordArea0, err := profile0.FalsifyLoftRecordedArea(area0, work0)
-	if err != nil {
-		return nil, err
-	}
-	recordArea1, err := profile1.FalsifyLoftRecordedArea(area1, work1)
-	if err != nil {
-		return nil, err
-	}
-
-	frame0, err := r3.NewFrame(plane0.Origin, plane0.U, plane0.V)
-	if err != nil {
-		return nil, fmt.Errorf(`%w: the first recorded plane is degenerate: %s`, ErrDegenerate, err)
-	}
-	frame1, err := r3.NewFrame(plane1.Origin, plane1.U, plane1.V)
-	if err != nil {
-		return nil, fmt.Errorf(`%w: the second recorded plane is degenerate: %s`, ErrDegenerate, err)
-	}
-
-	ref := d.nextProducerID()
-
-	body, err := bodyResult(loftrecord.Build(ctx, envOf(documentNode(d), ref), loftPayload{
-		Profile0: profile0, Profile1: profile1,
-		Plane0: plane0, Plane1: plane1,
-		Frame0: frame0, Frame1: frame1,
-		Alignment:                   alignment,
-		Xform:                       r3.Identity(),
-		AuthenticatedReconstruction: true,
-		SurfaceResult:               surfaceResult,
-		RecordArea:                  [2]float64{recordArea0, recordArea1},
-	}, proofbound.NewWorkBudget(ctx), work0, work1))
-	if err != nil {
-		return nil, err
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
+	body := bodyHandle(node)
 	d.commit(body)
 	return body, nil
 }
@@ -263,28 +189,11 @@ func LoftChain(ctx context.Context, d *Document, s0 *sketch.Sketch, c0 *sketch.C
 		return nil, err
 	}
 
-	frame0, err := r3.NewFrame(plane0.Origin, plane0.U, plane0.V)
-	if err != nil {
-		return nil, fmt.Errorf(`%w: the first recorded plane is degenerate: %s`, ErrDegenerate, err)
-	}
-	frame1, err := r3.NewFrame(plane1.Origin, plane1.U, plane1.V)
-	if err != nil {
-		return nil, fmt.Errorf(`%w: the second recorded plane is degenerate: %s`, ErrDegenerate, err)
-	}
-
-	ref := d.nextProducerID()
-	body, err := bodyResult(loftrecord.BuildChain(ctx, envOf(documentNode(d), ref), chainLoftPayload{
-		Chain0: chain0, Chain1: chain1,
-		Plane0: plane0, Plane1: plane1,
-		Frame0: frame0, Frame1: frame1,
-		Xform: r3.Identity(),
-	}, proofbound.NewWorkBudget(ctx), freeform.NewFreeformWork(), freeform.NewFreeformWork()))
+	node, err := loftrecord.FromChains(ctx, envOf(documentNode(d), d.nextProducerID()), chain0, plane0, chain1, plane1)
 	if err != nil {
 		return nil, err
 	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
+	body := bodyHandle(node)
 	d.commit(body)
 	return body, nil
 }

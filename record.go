@@ -104,8 +104,7 @@ type coilPayload = coilshell.Payload
 // and loftrecord.BuildChain evaluate over topology nodes and which implement
 // topo.Payload (docs/loft-design.md, docs/evaluator-design.md §8).
 type (
-	loftPayload      = loftrecord.Payload
-	chainLoftPayload = loftrecord.ChainPayload
+	loftPayload = loftrecord.Payload
 )
 
 // twistedSweepPayload is the evaluator's record of a twisted Sweep along one
