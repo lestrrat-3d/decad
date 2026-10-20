@@ -23,7 +23,6 @@ The rules for rows live in `docs/layout.md`.
 | `contact_sphere_sweep.go` | Sphere-box sweeps over `internal/contactround/` proofs. See contact-sweep §4–§5. |
 | `contact_cylinder_sweep.go` | Cylinder sweep adapters over `internal/contactround/` proofs and `internal/pair/box/`. See contact-sweep §4–§5. |
 | `contact_sphere_pair_sweep.go` | Sphere-pair sweep. See contact-sweep §4–§5. |
-| `contact_sweep_replay.go` | Replay adapters. See contact-sweep §6. |
 | `point_containment.go` | Public point location and body/face distance through verified meshes. See point-containment design. |
 | `survey.go` | Dispatches wall, undercut and radius readers and adapts their readings to public body and face handles. See verification §6. |
 | `interference.go` | Pairwise overlap behind `Verify`. See interference §4-§8. |
@@ -36,7 +35,7 @@ The rules for rows live in `docs/layout.md`.
 | `linkage_loop.go` | Closed loops and their bar geometry. See `docs/linkage-check-design.md` §15. |
 | `linkage_loop_drive.go` | Loop private-scene drive, loop poses and `Schedule`. See `docs/linkage-check-design.md` §15. |
 | `linkage_bound.go` | Linkage reach and projection adapters. See linkage §5.2, §5.8. |
-| `contact_sweep.go` | Sweeps, public report and time types, the request and outcome aliases of `report/`, and tracks. See contact-sweep §7. |
+| `contact_sweep.go` | Sweeps, public report and time types, the request, outcome, track and report aliases of `report/`, and the track publication. See contact-sweep §7. |
 | `contact_sweep_run.go` | The pair sweep run: sampling, ideal contact, manifold transfer and departure proof. See contact-sweep §7. |
 | `contact_sweep_rotation.go` / `contact_sweep_planar.go` | Rotating sweep adapters over `internal/planarsweep/`'s prepared body paths and certificates, and planar sweeps that publish their departures and band tracks. See contact-sweep §4, §7 and multibody §10. |
 | `contact_sweep_rotation_depart.go` | Rotating pair sweep departure search, bracket refinement and interval clearance over the `internal/pair/box/` and `internal/sweepmemo/` separation proofs. See contact-sweep §4. |

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/measurement"
+
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
 	"github.com/lestrrat-3d/decad/internal/motionbound"
@@ -85,7 +87,7 @@ func (s SweptBox) Box() Box {
 			proofarith.DyadicFloatError(s.hi[axis], hi[axis]))
 	}
 	return Box{Min: r3.Vec{X: lo[0], Y: lo[1], Z: lo[2]}, Max: r3.Vec{X: hi[0], Y: hi[1], Z: hi[2]},
-		Exactness: exactnessFromBound(bound), Bound: units.Millimeters(bound)}
+		Exactness: measurement.ExactnessOf(bound), Bound: units.Millimeters(bound)}
 }
 
 // sweptBoxOf is the one swept-box implementation: Document.SweptBox and the

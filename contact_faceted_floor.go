@@ -4,13 +4,14 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/sweepproof"
+
 	"github.com/lestrrat-3d/decad/internal/seal"
 
 	"github.com/lestrrat-3d/decad/internal/contactbox"
 	"github.com/lestrrat-3d/decad/internal/contactfaceted"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
-	"github.com/lestrrat-3d/r3"
 )
 
 // sweepFacetedFloor uses the complete lower support face of one verified
@@ -56,8 +57,8 @@ func (d *Document) sweepFacetedFloor(ctx context.Context, a, b *Body,
 	if facetedFirst {
 		boxA, boxB = patch, floor
 	}
-	report.SetReplay(seal.Key{}, &sweepReplayProof{pa: pa, pb: pb, boxA: boxA, boxB: boxB,
-		request: req.ContactRequest})
+	report.SetReplay(seal.Key{}, &sweepproof.Proof{PA: pa, PB: pb, BoxA: boxA, BoxB: boxB,
+		Request: req.ContactRequest})
 	run := pairSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb, req: req,
 		report: report, boxA: boxA, boxB: boxB, facetedFloor: true}
 	resolution, _ := sweeppath.ExactBaseValue(req.TimeResolution)
@@ -91,7 +92,7 @@ func (d *Document) sweepFacetedFloor(ctx context.Context, a, b *Body,
 			return result, nil
 		}
 	}
-	result.Replay(seal.Key{}).snapshot(result)
+	result.Replay(seal.Key{}).Snapshot(result.Outcome)
 	return result, nil
 }
 
@@ -146,7 +147,7 @@ func (d *Document) sweepBoundedFacetedFloorClear(ctx context.Context, a, b *Body
 		if contact.Relation != ContactSeparated {
 			return facetedSweepUndecided(report, pa.Duration), nil
 		}
-		observedFloor, observedExtent, deviation, ok := boundedFacetedReplayBoxes(
+		observedFloor, observedExtent, deviation, ok := sweepproof.BoundedFacetedReplayBoxes(
 			floor, extent, pa, pb, poseA, poseB, fraction, facetedFirst)
 		resolution, _ := sweeppath.ExactBaseValue(req.PointResolution)
 		if !ok || deviation.Cmp(resolution) > 0 ||
@@ -165,43 +166,24 @@ func (d *Document) sweepBoundedFacetedFloorClear(ctx context.Context, a, b *Body
 			return facetedSweepUndecided(report, pa.Duration), nil
 		}
 		gap := held
-		at := sweepInstant(fraction, pa.Duration)
+		at := sweeppath.Instant(fraction, pa.Duration)
 		report.Samples = append(report.Samples, sampleWith(SweepSample{At: at, PoseA: poseA, PoseB: poseB,
 			FloatContact: contact, Ideal: SweepEvent{At: at, Relation: ContactSeparated, Gap: &gap}}, fraction))
 		report.PoseEvaluations++
 	}
 	report.Outcome, report.BoxExcluded = SweepClear, true
-	report.SetReplay(seal.Key{}, &sweepReplayProof{pa: pa, pb: pb, request: req.ContactRequest,
-		boxA: floor, boxB: extent.Box, facetedClear: &extent, facetedFirst: facetedFirst})
+	report.SetReplay(seal.Key{}, &sweepproof.Proof{PA: pa, PB: pb, Request: req.ContactRequest,
+		BoxA: floor, BoxB: extent.Box, FacetedClear: &extent, FacetedFirst: facetedFirst})
 	if facetedFirst {
-		report.Replay(seal.Key{}).boxA, report.Replay(seal.Key{}).boxB = extent.Box, floor
+		report.Replay(seal.Key{}).BoxA, report.Replay(seal.Key{}).BoxB = extent.Box, floor
 	}
-	report.Replay(seal.Key{}).snapshot(report)
+	report.Replay(seal.Key{}).Snapshot(report.Outcome)
 	return report, nil
-}
-
-func boundedFacetedReplayBoxes(floor contactbox.SourceBox, extent contactfaceted.BoundedExtent,
-	pa, pb affinePairPath, poseA, poseB r3.Transform, f *big.Rat,
-	facetedFirst bool) (contactbox.SourceBox, contactfaceted.BoundedExtent, *big.Rat, bool) {
-	facetedPath, floorPath := pb, pa
-	facetedPose, floorPose := poseB, poseA
-	if facetedFirst {
-		facetedPath, floorPath, facetedPose, floorPose = pa, pb, poseA, poseB
-	}
-	observedFloor, okFloor := translatedReplayBox(floor, floorPath.From, floorPose)
-	observedFacet, okFacet := translatedReplayBox(extent.Box, facetedPath.From, facetedPose)
-	if !okFloor || !okFacet {
-		return contactbox.SourceBox{}, contactfaceted.BoundedExtent{}, nil, false
-	}
-	deviation := boxPoseDeviation(floor, observedFloor, floorPath.Delta, f)
-	deviation.Add(deviation, boxPoseDeviation(extent.Box, observedFacet, facetedPath.Delta, f))
-	extent.Box = observedFacet
-	return observedFloor, extent, deviation, true
 }
 
 func facetedSweepUndecided(report *SweepReport, duration *big.Rat) *SweepReport {
 	report.Outcome, report.Cause = SweepUndecided, SweepContactUnsupported
-	report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), duration),
-		To: sweepInstant(big.NewRat(1, 1), duration)}
+	report.Unresolved = &SweepInterval{From: sweeppath.Instant(new(big.Rat), duration),
+		To: sweeppath.Instant(big.NewRat(1, 1), duration)}
 	return report
 }

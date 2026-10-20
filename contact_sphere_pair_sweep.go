@@ -6,6 +6,9 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/sweepproof"
+
 	"github.com/lestrrat-3d/decad/internal/seal"
 
 	"github.com/lestrrat-3d/decad/internal/contactround"
@@ -77,8 +80,8 @@ func (d *Document) sweepRotatingSpherePair(ctx context.Context, a, b *Body,
 		}
 	}
 	pair := [2]contactround.SphereProof{sphereA, sphereB}
-	report.SetReplay(seal.Key{}, &sweepReplayProof{pa: pa, pb: pb, spherePair: &pair,
-		request: req.ContactRequest})
+	report.SetReplay(seal.Key{}, &sweepproof.Proof{PA: pa, PB: pb, SpherePair: &pair,
+		Request: req.ContactRequest})
 	run := &sourceSpherePairSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
 		req: req, report: report, sphereA: sphereA, sphereB: sphereB, rotating: true}
 	result, err := run.execute(ctx, resolution)
@@ -87,8 +90,8 @@ func (d *Document) sweepRotatingSpherePair(ctx context.Context, a, b *Body,
 
 func undecidedRotatingSpherePair(r *SweepReport, duration *big.Rat) *SweepReport {
 	r.Outcome, r.Cause = SweepUndecided, SweepContactUnsupported
-	r.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), duration),
-		To: sweepInstant(big.NewRat(1, 1), duration)}
+	r.Unresolved = &SweepInterval{From: sweeppath.Instant(new(big.Rat), duration),
+		To: sweeppath.Instant(big.NewRat(1, 1), duration)}
 	return r
 }
 
@@ -122,7 +125,7 @@ func (r *sourceSpherePairSweepRun) sample(ctx context.Context, f *big.Rat) (*Swe
 	if err != nil {
 		return nil, err
 	}
-	at := sweepInstant(f, r.pa.Duration)
+	at := sweeppath.Instant(f, r.pa.Duration)
 	ideal := r.idealAt(f, at)
 	r.transferManifold(f, poseA, poseB, contact, &ideal)
 	sample := SweepSample{At: at, PoseA: poseA, PoseB: poseB, FloatContact: contact, Ideal: ideal}
@@ -180,23 +183,23 @@ func (r *sourceSpherePairSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.
 	}
 	if bounds.NormalChanged {
 		actual.Normal.Bound = units.Scalar(bounds.NormalBound)
-		actual.Normal.Exactness = exactnessFromBound(bounds.NormalBound)
+		actual.Normal.Exactness = measurement.ExactnessOf(bounds.NormalBound)
 		actual.NormalAngle = units.Radians(bounds.NormalAngle)
 	}
 	for i, witness := range []*VecMeasurement{&actual.OnA, &actual.OnB} {
 		witness.Bound = units.Millimeters(bounds.WitnessBounds[i])
-		witness.Exactness = exactnessFromBound(bounds.WitnessBounds[i])
+		witness.Exactness = measurement.ExactnessOf(bounds.WitnessBounds[i])
 	}
 	actual.Separation.Bound = units.Millimeters(bounds.SeparationBound)
-	actual.Separation.Exactness = exactnessFromBound(actual.Separation.Bound.Base())
+	actual.Separation.Exactness = measurement.ExactnessOf(actual.Separation.Bound.Base())
 	ideal.Manifold = &ContactManifold{Points: []ContactPoint{actual}}
 	ideal.Reason = ContactNoReason
 }
 
 func (r *sourceSpherePairSweepRun) undecided(from, to *big.Rat, cause SweepCause) *SweepReport {
 	r.report.Outcome, r.report.Cause = SweepUndecided, cause
-	r.report.Unresolved = &SweepInterval{From: sweepInstant(from, r.pa.Duration),
-		To: sweepInstant(to, r.pa.Duration)}
+	r.report.Unresolved = &SweepInterval{From: sweeppath.Instant(from, r.pa.Duration),
+		To: sweeppath.Instant(to, r.pa.Duration)}
 	r.sortSamples()
 	return r.report
 }
@@ -256,7 +259,7 @@ func (r *sourceSpherePairSweepRun) grazingTouch(ctx context.Context, first *Swee
 		return r.undecided(vertex, one, SweepPoseRelation), nil
 	}
 	r.report.Outcome, r.report.Event = SweepGrazingTouch, &touch.Ideal
-	r.report.Replay(seal.Key{}).grazingAt = new(big.Rat).Set(vertex)
+	r.report.Replay(seal.Key{}).GrazingAt = new(big.Rat).Set(vertex)
 	r.sortSamples()
 	return r.report, nil
 }
@@ -344,14 +347,14 @@ func (r *sourceSpherePairSweepRun) transverse(ctx context.Context, first *SweepS
 	r.report.Outcome, r.report.Event = SweepImpactBracket, &right.Ideal
 	r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
 	r.report.SetBracketRight(seal.Key{}, new(big.Rat).Set(rightF))
-	r.report.Replay(seal.Key{}).setBracket(leftF, rightF)
+	r.report.Replay(seal.Key{}).SetBracket(leftF, rightF)
 	r.sortSamples()
 	return r.report, nil
 }
 
 // Equal source-sphere displacements keep the exact center-distance polynomial
 // constant. The initial point and source faces then describe every fraction.
-func (r *sourceSpherePairSweepRun) persistentTrack(first *SweepSample) *SweepContactTrack {
+func (r *sourceSpherePairSweepRun) persistentTrack(first *SweepSample) *sweepproof.Track {
 	if first.Ideal.Relation != ContactTouching || first.Ideal.Manifold == nil ||
 		len(first.Ideal.Manifold.Points) != 1 {
 		return nil
@@ -367,18 +370,19 @@ func (r *sourceSpherePairSweepRun) persistentTrack(first *SweepSample) *SweepCon
 	}
 	point := first.Ideal.Manifold.Points[0]
 	pair := [2]contactround.SphereProof{r.sphereA, r.sphereB}
-	return &SweepContactTrack{
-		start: new(big.Rat), end: big.NewRat(1, 1), duration: new(big.Rat).Set(r.pa.Duration),
-		request: r.req.ContactRequest, spherePair: &pair,
-		deltaA: r.pa.Delta, deltaB: r.pb.Delta,
-		features:   [2]nodeContactFeature{contactFeatureToInternal(point.FeatureA), contactFeatureToInternal(point.FeatureB)},
-		normal:     point.Normal,
-		pointCount: 1,
+	return &sweepproof.Track{
+		From: new(big.Rat), To: big.NewRat(1, 1), Duration: new(big.Rat).Set(r.pa.Duration),
+		Request: r.req.ContactRequest, SpherePair: &pair,
+		DeltaA: r.pa.Delta, DeltaB: r.pb.Delta,
+		Sources:    [2]nodeContactFeature{contactFeatureToInternal(point.FeatureA), contactFeatureToInternal(point.FeatureB)},
+		NormalRead: point.Normal,
+		PointCount: 1,
 	}
 }
 
 func (r *sourceSpherePairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*SweepReport, error) {
-	defer r.report.Replay(seal.Key{}).snapshot(r.report)
+	proof := r.report.Replay(seal.Key{})
+	defer func() { proof.Snapshot(r.report.Outcome) }()
 	zero, one := new(big.Rat), big.NewRat(1, 1)
 	first, err := r.sample(ctx, zero)
 	if errors.Is(err, errSweepPoseBudget) {
@@ -418,10 +422,10 @@ func (r *sourceSpherePairSweepRun) execute(ctx context.Context, resolution *big.
 				}
 				if last.Ideal.Relation == ContactTouching && last.Ideal.Manifold != nil &&
 					len(last.Ideal.Manifold.Points) == 1 &&
-					contactFeatureToInternal(last.Ideal.Manifold.Points[0].FeatureA) == track.features[0] &&
-					contactFeatureToInternal(last.Ideal.Manifold.Points[0].FeatureB) == track.features[1] {
-					r.report.Outcome, r.report.ContactTrack = SweepPersistentTouch, track
-					r.report.Replay(seal.Key{}).track = track
+					contactFeatureToInternal(last.Ideal.Manifold.Points[0].FeatureA) == track.Sources[0] &&
+					contactFeatureToInternal(last.Ideal.Manifold.Points[0].FeatureB) == track.Sources[1] {
+					r.report.Outcome, r.report.ContactTrack = SweepPersistentTouch, publishTrack(track)
+					r.report.Replay(seal.Key{}).Track = track
 					return r.report, nil
 				}
 			}
@@ -494,7 +498,7 @@ func (r *sourceSpherePairSweepRun) execute(ctx context.Context, resolution *big.
 	r.report.Outcome, r.report.Event = SweepImpactBracket, &right.Ideal
 	r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
 	r.report.SetBracketRight(seal.Key{}, new(big.Rat).Set(rightF))
-	r.report.Replay(seal.Key{}).setBracket(leftF, rightF)
+	r.report.Replay(seal.Key{}).SetBracket(leftF, rightF)
 	r.sortSamples()
 	return r.report, nil
 }

@@ -6,6 +6,9 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/sweepproof"
+
 	"github.com/lestrrat-3d/decad/internal/seal"
 
 	"github.com/lestrrat-3d/decad/internal/contactbox"
@@ -58,8 +61,8 @@ func (d *Document) sweepRotatingSphereBox(ctx context.Context, a, b *Body,
 	for axis, value := range [3]float64{from.X, from.Y, from.Z} {
 		if proofarith.DyCmp(sphere.Center[axis], proofarith.MustDyOf(value)) != 0 {
 			report.Outcome, report.Cause = SweepUndecided, SweepContactUnsupported
-			report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), pa.Duration),
-				To: sweepInstant(big.NewRat(1, 1), pa.Duration)}
+			report.Unresolved = &SweepInterval{From: sweeppath.Instant(new(big.Rat), pa.Duration),
+				To: sweeppath.Instant(big.NewRat(1, 1), pa.Duration)}
 			return report, true, nil
 		}
 	}
@@ -89,19 +92,6 @@ func (d *Document) sweepRotatingSphereBox(ctx context.Context, a, b *Body,
 	return result, true, err
 }
 
-func translatedContactBox(box contactbox.SourceBox, delta [3]proofarith.Dyadic,
-	f *big.Rat) (contactbox.SourceBox, bool) {
-	fraction, ok := proofarith.DyOfRat(f)
-	if !ok {
-		return contactbox.SourceBox{}, false
-	}
-	for i := range 3 {
-		move := proofarith.DyMul(delta[i], fraction)
-		box.Lo[i], box.Hi[i] = proofarith.DyAdd(box.Lo[i], move), proofarith.DyAdd(box.Hi[i], move)
-	}
-	return box, true
-}
-
 func (r *sourceSphereSweepRun) deltas() ([3]proofarith.Dyadic, [3]proofarith.Dyadic) {
 	if r.sphereFirst {
 		return r.pa.Delta, r.pb.Delta
@@ -112,7 +102,7 @@ func (r *sourceSphereSweepRun) deltas() ([3]proofarith.Dyadic, [3]proofarith.Dya
 func (r *sourceSphereSweepRun) idealAt(f *big.Rat, at SweepInstant) SweepEvent {
 	sphereDelta, boxDelta := r.deltas()
 	sphere, okSphere := contactround.TranslatedSphere(r.sphere, sphereDelta, f)
-	box, okBox := translatedContactBox(r.box, boxDelta, f)
+	box, okBox := sweepproof.TranslatedContactBox(r.box, boxDelta, f)
 	if !okSphere || !okBox {
 		return SweepEvent{At: at, Relation: ContactUndecided, Reason: ContactPayloadUnsupported}
 	}
@@ -140,7 +130,7 @@ func (r *sourceSphereSweepRun) sample(ctx context.Context, f *big.Rat) (*SweepSa
 	if err != nil {
 		return nil, err
 	}
-	at := sweepInstant(f, r.pa.Duration)
+	at := sweeppath.Instant(f, r.pa.Duration)
 	ideal := r.idealAt(f, at)
 	r.transferManifold(f, poseA, poseB, contact, &ideal)
 	sample := sampleWith(SweepSample{At: at, PoseA: poseA, PoseB: poseB, FloatContact: contact, Ideal: ideal}, new(big.Rat).Set(f))
@@ -200,11 +190,11 @@ func (r *sourceSphereSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.Tran
 			return
 		}
 		witness.Bound = units.Millimeters(proofbound.RatFloatUp(bound))
-		witness.Exactness = exactnessFromBound(witness.Bound.Base())
+		witness.Exactness = measurement.ExactnessOf(witness.Bound.Base())
 	}
 	sepBound := new(big.Rat).Add(proofarith.FloatRat(actual.Separation.Bound.Base()), deviation)
 	actual.Separation.Bound = units.Millimeters(proofbound.RatFloatUp(sepBound))
-	actual.Separation.Exactness = exactnessFromBound(actual.Separation.Bound.Base())
+	actual.Separation.Exactness = measurement.ExactnessOf(actual.Separation.Bound.Base())
 	ideal.Manifold = &ContactManifold{Points: []ContactPoint{actual}}
 	ideal.Reason = ContactNoReason
 }
@@ -225,8 +215,8 @@ func (r *sourceSphereSweepRun) boxBody() *Body {
 
 func (r *sourceSphereSweepRun) undecided(from, to *big.Rat, cause SweepCause) *SweepReport {
 	r.report.Outcome, r.report.Cause = SweepUndecided, cause
-	r.report.Unresolved = &SweepInterval{From: sweepInstant(from, r.pa.Duration),
-		To: sweepInstant(to, r.pa.Duration)}
+	r.report.Unresolved = &SweepInterval{From: sweeppath.Instant(from, r.pa.Duration),
+		To: sweeppath.Instant(to, r.pa.Duration)}
 	r.sortSamples()
 	return r.report
 }
@@ -237,7 +227,7 @@ func (r *sourceSphereSweepRun) sortSamples() {
 	})
 }
 
-func (r *sourceSphereSweepRun) track(first *SweepSample) *SweepContactTrack {
+func (r *sourceSphereSweepRun) track(first *SweepSample) *sweepproof.Track {
 	if first.Ideal.Manifold == nil || len(first.Ideal.Manifold.Points) != 1 {
 		return nil
 	}
@@ -248,17 +238,17 @@ func (r *sourceSphereSweepRun) track(first *SweepSample) *SweepContactTrack {
 		return nil
 	}
 	point := first.Ideal.Manifold.Points[0]
-	track := &SweepContactTrack{
-		start: new(big.Rat), end: big.NewRat(1, 1), duration: new(big.Rat).Set(r.pa.Duration),
-		request: r.req.ContactRequest, sphere: &r.sphere, sphereFirst: r.sphereFirst,
-		features: [2]nodeContactFeature{contactFeatureToInternal(point.FeatureA), contactFeatureToInternal(point.FeatureB)},
-		normal:   point.Normal,
-		deltaA:   r.pa.Delta, deltaB: r.pb.Delta,
+	track := &sweepproof.Track{
+		From: new(big.Rat), To: big.NewRat(1, 1), Duration: new(big.Rat).Set(r.pa.Duration),
+		Request: r.req.ContactRequest, Sphere: &r.sphere, SphereFirst: r.sphereFirst,
+		Sources:    [2]nodeContactFeature{contactFeatureToInternal(point.FeatureA), contactFeatureToInternal(point.FeatureB)},
+		NormalRead: point.Normal,
+		DeltaA:     r.pa.Delta, DeltaB: r.pb.Delta,
 	}
 	if r.sphereFirst {
-		track.b = r.box
+		track.B = r.box
 	} else {
-		track.a = r.box
+		track.A = r.box
 	}
 	return track
 }
@@ -294,13 +284,13 @@ func (r *sourceSphereSweepRun) execute(ctx context.Context, resolution *big.Rat)
 	if !ok {
 		return r.undecided(zero, one, SweepContactUnsupported), nil
 	}
-	r.report.SetReplay(seal.Key{}, &sweepReplayProof{pa: r.pa, pb: r.pb, request: r.req.ContactRequest,
-		sphere: &r.sphere, sphereFirst: r.sphereFirst, sphereAxis: axis, sphereSide: side,
-		sphereGap: gap, sphereSlope: slope})
+	r.report.SetReplay(seal.Key{}, &sweepproof.Proof{PA: r.pa, PB: r.pb, Request: r.req.ContactRequest,
+		Sphere: &r.sphere, SphereFirst: r.sphereFirst, SphereAxis: axis, SphereSide: side,
+		SphereGap: gap, SphereSlope: slope})
 	if r.sphereFirst {
-		r.report.Replay(seal.Key{}).boxB = r.box
+		r.report.Replay(seal.Key{}).BoxB = r.box
 	} else {
-		r.report.Replay(seal.Key{}).boxA = r.box
+		r.report.Replay(seal.Key{}).BoxA = r.box
 	}
 	if first.Ideal.Relation == ContactTouching {
 		if slope.Sign() > 0 {
@@ -316,7 +306,7 @@ func (r *sourceSphereSweepRun) execute(ctx context.Context, resolution *big.Rat)
 			}
 			r.report.Outcome = SweepDepartedClear
 			r.report.Departure = &SweepDeparture{Until: last.At, GapAtUntil: *last.Ideal.Gap}
-			r.report.Replay(seal.Key{}).snapshot(r.report)
+			r.report.Replay(seal.Key{}).Snapshot(r.report.Outcome)
 			return r.report, nil
 		}
 		if slope.IsZero() && r.req.StartPolicy == ContinueCertifiedTouch {
@@ -330,8 +320,8 @@ func (r *sourceSphereSweepRun) execute(ctx context.Context, resolution *big.Rat)
 					return nil, err
 				}
 				if last.Ideal.Relation == ContactTouching && last.Ideal.Manifold != nil {
-					r.report.Outcome, r.report.ContactTrack = SweepPersistentTouch, track
-					r.report.Replay(seal.Key{}).snapshot(r.report)
+					r.report.Outcome, r.report.ContactTrack = SweepPersistentTouch, publishTrack(track)
+					r.report.Replay(seal.Key{}).Snapshot(r.report.Outcome)
 					return r.report, nil
 				}
 			}
@@ -353,7 +343,7 @@ func (r *sourceSphereSweepRun) execute(ctx context.Context, resolution *big.Rat)
 			return r.undecided(zero, one, SweepPoseRelation), nil
 		}
 		r.report.Outcome = SweepClear
-		r.report.Replay(seal.Key{}).snapshot(r.report)
+		r.report.Replay(seal.Key{}).Snapshot(r.report.Outcome)
 		return r.report, nil
 	}
 	root := new(big.Rat).Quo(proofarith.DyNeg(gap).Rat(), slope.Rat())
@@ -383,8 +373,8 @@ func (r *sourceSphereSweepRun) execute(ctx context.Context, resolution *big.Rat)
 	r.report.Outcome, r.report.Event = SweepImpactBracket, &right.Ideal
 	r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
 	r.report.SetBracketRight(seal.Key{}, new(big.Rat).Set(rightF))
-	r.report.Replay(seal.Key{}).setBracket(leftF, rightF)
-	r.report.Replay(seal.Key{}).snapshot(r.report)
+	r.report.Replay(seal.Key{}).SetBracket(leftF, rightF)
+	r.report.Replay(seal.Key{}).Snapshot(r.report.Outcome)
 	r.sortSamples()
 	return r.report, nil
 }
@@ -443,7 +433,7 @@ func (r *orientedSphereSweepRun) sample(ctx context.Context, f *big.Rat) (*Sweep
 	if err != nil {
 		return nil, err
 	}
-	at := sweepInstant(f, r.pa.Duration)
+	at := sweeppath.Instant(f, r.pa.Duration)
 	ideal := r.idealAt(f, at)
 	if ideal.Manifold != nil {
 		if contact.Manifold == nil || ideal.Relation != contact.Relation ||
@@ -463,12 +453,12 @@ func (r *orientedSphereSweepRun) sample(ctx context.Context, f *big.Rat) (*Sweep
 					break
 				}
 				witness.Bound = units.Millimeters(proofbound.RatFloatUp(bound))
-				witness.Exactness = exactnessFromBound(witness.Bound.Base())
+				witness.Exactness = measurement.ExactnessOf(witness.Bound.Base())
 			}
 			if ideal.Manifold != nil {
 				bound := new(big.Rat).Add(proofarith.FloatRat(point.Separation.Bound.Base()), deviation)
 				point.Separation.Bound = units.Millimeters(proofbound.RatFloatUp(bound))
-				point.Separation.Exactness = exactnessFromBound(point.Separation.Bound.Base())
+				point.Separation.Exactness = measurement.ExactnessOf(point.Separation.Bound.Base())
 				ideal.Manifold = &ContactManifold{Points: []ContactPoint{point}}
 			}
 		}
@@ -489,7 +479,7 @@ func (r *orientedSphereSweepRun) poseDeviation(f *big.Rat, poseA, poseB r3.Trans
 		sphereFrom, boxFrom = r.pa.From, r.pb.From
 		sphereDelta, boxDelta = r.pa.Delta, r.pb.Delta
 	}
-	observedSphere, okSphere := translatedReplaySphere(r.sphere, sphereFrom, spherePose)
+	observedSphere, okSphere := sweepproof.TranslatedReplaySphere(r.sphere, sphereFrom, spherePose)
 	observedBox, okBox := spherepath.TranslateObservedBox(r.box.OrientedBox, boxFrom, boxPose)
 	if !okSphere || !okBox {
 		return new(big.Rat).SetInt64(1 << 30)
@@ -500,8 +490,8 @@ func (r *orientedSphereSweepRun) poseDeviation(f *big.Rat, poseA, poseB r3.Trans
 
 func (r *orientedSphereSweepRun) undecided(from, to *big.Rat, cause SweepCause) *SweepReport {
 	r.report.Outcome, r.report.Cause = SweepUndecided, cause
-	r.report.Unresolved = &SweepInterval{From: sweepInstant(from, r.pa.Duration),
-		To: sweepInstant(to, r.pa.Duration)}
+	r.report.Unresolved = &SweepInterval{From: sweeppath.Instant(from, r.pa.Duration),
+		To: sweeppath.Instant(to, r.pa.Duration)}
 	sort.Slice(r.report.Samples, func(i, j int) bool {
 		return r.report.Samples[i].At.Fraction.Base() < r.report.Samples[j].At.Fraction.Base()
 	})
@@ -545,9 +535,9 @@ func (r *orientedSphereSweepRun) execute(ctx context.Context, resolution *big.Ra
 	if !ok {
 		return r.undecided(zero, one, SweepContactUnsupported), nil
 	}
-	r.report.SetReplay(seal.Key{}, &sweepReplayProof{pa: r.pa, pb: r.pb, request: r.req.ContactRequest,
-		orientedSphere: &r.sphere, orientedSphereBox: &r.box, sphereFirst: r.sphereFirst,
-		sphereAxis: r.axis, sphereSide: r.side, sphereGap: r.start, sphereSlope: r.slope})
+	r.report.SetReplay(seal.Key{}, &sweepproof.Proof{PA: r.pa, PB: r.pb, Request: r.req.ContactRequest,
+		OrientedSphere: &r.sphere, OrientedSphereBox: &r.box, SphereFirst: r.sphereFirst,
+		SphereAxis: r.axis, SphereSide: r.side, SphereGap: r.start, SphereSlope: r.slope})
 	if first.Ideal.Relation == ContactTouching {
 		if r.slope.Sign() <= 0 {
 			return r.undecided(zero, one, SweepDepartureUnproved), nil
@@ -564,7 +554,7 @@ func (r *orientedSphereSweepRun) execute(ctx context.Context, resolution *big.Ra
 		}
 		r.report.Outcome = SweepDepartedClear
 		r.report.Departure = &SweepDeparture{Until: last.At, GapAtUntil: *last.Ideal.Gap}
-		r.report.Replay(seal.Key{}).snapshot(r.report)
+		r.report.Replay(seal.Key{}).Snapshot(r.report.Outcome)
 		return r.report, nil
 	}
 	if spherepath.OrientedFaceSign(r.start, r.slope, r.sphere.Radius, r.outward, one) > 0 {
@@ -579,7 +569,7 @@ func (r *orientedSphereSweepRun) execute(ctx context.Context, resolution *big.Ra
 			return r.undecided(zero, one, SweepPoseRelation), nil
 		}
 		r.report.Outcome = SweepClear
-		r.report.Replay(seal.Key{}).snapshot(r.report)
+		r.report.Replay(seal.Key{}).Snapshot(r.report.Outcome)
 		return r.report, nil
 	}
 	leftF, rightF, ok := spherepath.OrientedFaceBracket(
@@ -609,8 +599,8 @@ func (r *orientedSphereSweepRun) execute(ctx context.Context, resolution *big.Ra
 	r.report.Outcome, r.report.Event = SweepImpactBracket, &right.Ideal
 	r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
 	r.report.SetBracketRight(seal.Key{}, new(big.Rat).Set(rightF))
-	r.report.Replay(seal.Key{}).setBracket(leftF, rightF)
-	r.report.Replay(seal.Key{}).snapshot(r.report)
+	r.report.Replay(seal.Key{}).SetBracket(leftF, rightF)
+	r.report.Replay(seal.Key{}).Snapshot(r.report.Outcome)
 	sort.Slice(r.report.Samples, func(i, j int) bool {
 		return r.report.Samples[i].At.Fraction.Base() < r.report.Samples[j].At.Fraction.Base()
 	})

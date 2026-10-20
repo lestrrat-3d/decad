@@ -41,7 +41,7 @@ func (s *stubReplay) PosesAtInterval(time, _, _ units.Value) (r3.Transform, r3.T
 	return shift(r3.Vec{Y: 1}), shift(r3.Vec{Y: 2}), nil
 }
 
-type sweepReport = report.SweepReportOf[int, int, int, int, struct{}, *stubReplay]
+type sweepReport = report.SweepReportOf[int, int, int, int, *stubReplay]
 
 func TestSweepReportWithoutReplayProof(t *testing.T) {
 	t.Parallel()
@@ -109,4 +109,78 @@ func TestSweepSampleExactFraction(t *testing.T) {
 	require.Nil(t, s.ExactFraction(seal.Key{}))
 	s.SetExactFraction(seal.Key{}, big.NewRat(3, 4))
 	require.Equal(t, big.NewRat(3, 4), s.ExactFraction(seal.Key{}))
+}
+
+// stubTrack answers each track question with a fixed value, in the integer
+// reference instantiation.
+type stubTrack struct{}
+
+func (stubTrack) Start() report.SweepInstant {
+	return report.SweepInstant{Fraction: units.Scalar(0.25)}
+}
+func (stubTrack) End() report.SweepInstant { return report.SweepInstant{Fraction: units.Scalar(0.75)} }
+
+func (stubTrack) Features() (report.ContactFeatureOf[int, int, int], report.ContactFeatureOf[int, int, int]) {
+	return report.ContactFeatureOf[int, int, int]{Face: 1, Edge: 2}, report.ContactFeatureOf[int, int, int]{Face: 3, Vertex: 4}
+}
+
+func (stubTrack) Normal() report.VecMeasurement {
+	return report.VecMeasurement{Value: r3.Vec{Z: 1}}
+}
+
+func (stubTrack) Band() *report.Measurement {
+	return &report.Measurement{Value: units.Millimeters(0.5)}
+}
+
+func (stubTrack) BandAt(fraction units.Value) (*report.Measurement, error) {
+	return &report.Measurement{Value: units.Millimeters(fraction.Base())}, nil
+}
+
+func (stubTrack) ManifoldAt(units.Value) (*report.ContactManifoldOf[int, int, int], error) {
+	return &report.ContactManifoldOf[int, int, int]{Points: []report.ContactPointOf[int, int, int]{{FaceA: 1, FaceB: 3}}}, nil
+}
+
+func TestSweepContactTrackDelegates(t *testing.T) {
+	t.Parallel()
+	track := report.NewSweepContactTrack[int, int, int](seal.Key{}, stubTrack{}, "producer record")
+	require.Equal(t, "producer record", track.Source(seal.Key{}))
+	require.InDelta(t, 0.25, track.Start().Fraction.Base(), 0)
+	require.InDelta(t, 0.75, track.End().Fraction.Base(), 0)
+	a, b := track.Features()
+	require.Equal(t, 1, a.Face)
+	require.Equal(t, 4, b.Vertex)
+	require.InDelta(t, 1, track.Normal().Value.Z, 0)
+	require.InDelta(t, 0.5, track.Band().Value.Base(), 0)
+	band, err := track.BandAt(units.Scalar(0.4))
+	require.NoError(t, err)
+	require.InDelta(t, 0.4, band.Value.Base(), 0)
+	manifold, err := track.ManifoldAt(units.Scalar(0.5))
+	require.NoError(t, err)
+	require.Len(t, manifold.Points, 1)
+}
+
+func TestLiftSweepContactTrack(t *testing.T) {
+	t.Parallel()
+	lift := refLift()
+	var none *report.SweepContactTrackOf[int, int, int]
+	require.Nil(t, report.LiftSweepContactTrack(seal.Key{}, none, lift), "a nil track stays nil")
+
+	track := report.NewSweepContactTrack[int, int, int](seal.Key{}, stubTrack{}, "producer record")
+	lifted := report.LiftSweepContactTrack(seal.Key{}, track, lift)
+	require.Equal(t, "producer record", lifted.Source(seal.Key{}), "the producer record survives the lift")
+
+	a, b := lifted.Features()
+	require.Equal(t, report.ContactFeatureOf[string, string, string]{Face: "1", Edge: "2"}, a)
+	require.Equal(t, report.ContactFeatureOf[string, string, string]{Face: "3", Vertex: "4"}, b)
+	manifold, err := lifted.ManifoldAt(units.Scalar(0.5))
+	require.NoError(t, err)
+	require.Equal(t, "1", manifold.Points[0].FaceA)
+	require.Equal(t, "3", manifold.Points[0].FaceB)
+	require.InDelta(t, 0.25, lifted.Start().Fraction.Base(), 0)
+	require.InDelta(t, 0.75, lifted.End().Fraction.Base(), 0)
+	require.InDelta(t, 1, lifted.Normal().Value.Z, 0)
+	require.InDelta(t, 0.5, lifted.Band().Value.Base(), 0)
+	band, err := lifted.BandAt(units.Scalar(0.4))
+	require.NoError(t, err)
+	require.InDelta(t, 0.4, band.Value.Base(), 0)
 }

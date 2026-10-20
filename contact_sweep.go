@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/sweepproof"
+	"github.com/lestrrat-3d/decad/internal/topo"
+
 	"github.com/lestrrat-3d/decad/internal/seal"
 
 	"github.com/lestrrat-3d/decad/report"
@@ -13,9 +16,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/contactbox"
 	"github.com/lestrrat-3d/decad/internal/contactround"
 	"github.com/lestrrat-3d/decad/internal/measurement"
-	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
-	"github.com/lestrrat-3d/decad/internal/planarsweep"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 	"github.com/lestrrat-3d/units"
 )
@@ -113,192 +113,12 @@ type (
 	SweepEvent = report.SweepEventOf[*Face, *Edge, *Vertex]
 	// SweepSample keeps the query pose and the transferred pair finding.
 	SweepSample = report.SweepSampleOf[*Body, *Face, *Edge, *Vertex]
+	// SweepContactTrack owns the exact source geometry and affine motion of a
+	// certified touching prefix. Its source face pointers are the original faces.
+	SweepContactTrack = report.SweepContactTrackOf[*Face, *Edge, *Vertex]
 	// SweepReport states the first certified event or the earliest unresolved span.
-	SweepReport = report.SweepReportOf[*Body, *Face, *Edge, *Vertex, SweepContactTrack, *sweepReplayProof]
+	SweepReport = report.SweepReportOf[*Body, *Face, *Edge, *Vertex, *sweepproof.Proof]
 )
-
-// SweepContactTrack owns the exact source geometry and affine motion of a
-// certified touching prefix. Its source face pointers are the original faces.
-type SweepContactTrack struct {
-	a, b          contactbox.SourceBox
-	deltaA        [3]proofarith.Dyadic
-	deltaB        [3]proofarith.Dyadic
-	sphere        *contactround.SphereProof
-	spherePair    *[2]contactround.SphereProof
-	sphereFirst   bool
-	cylinder      *contactround.CylinderProof // disk-on-face track (contact_cylinder_sweep.go)
-	cylinderFirst bool
-	start, end    *big.Rat
-	duration      *big.Rat
-	request       ContactRequest
-	features      [2]nodeContactFeature
-	normal        VecMeasurement
-	pointCount    int
-	orientedA     *contactbox.OrientedSourceBox
-	orientedB     *contactbox.OrientedSourceBox
-	orientedDelta [3]proofarith.Dyadic
-	planar        *planarsweep.TrackProof   // general planar touch or band (contact_sweep_planar.go)
-	rolling       *planarsweep.RollingTrack // rolling cylinder touch or band (contact_sweep_rolling.go)
-}
-
-func (t *SweepContactTrack) Start() SweepInstant { return sweepInstant(t.start, t.duration) }
-
-func (t *SweepContactTrack) End() SweepInstant { return sweepInstant(t.end, t.duration) }
-
-func (t *SweepContactTrack) Features() (ContactFeature, ContactFeature) {
-	return contactFeatureFromInternal(t.features[0]), contactFeatureFromInternal(t.features[1])
-}
-
-func (t *SweepContactTrack) Normal() VecMeasurement { return t.normal }
-
-// Band returns the depth of a band track (docs/multibody-dynamics-design.md
-// §10.3), a Length Measurement whose Value plus Bound bounds every contact
-// point's separation in both directions and the interiors' overlap along
-// Normal(). It is nil for an exact touch track.
-func (t *SweepContactTrack) Band() *Measurement {
-	var band *Measurement
-	switch {
-	case t.planar != nil:
-		band = t.planar.Band
-	case t.rolling != nil:
-		band = t.rolling.Band
-	}
-	if band == nil {
-		return nil
-	}
-	out := *band
-	return &out
-}
-
-// BandAt returns the depth of a band track over its prefix through fraction
-// (docs/multibody-dynamics-design.md §10.3): a Length Measurement whose Value
-// plus Bound bounds every contact point's separation in both directions and
-// the interiors' overlap along Normal() at every instant from the track's
-// start through fraction. At the track's end it is at most Band(); it grows
-// with fraction, so a caller can end a slice where the band reaches its own
-// residual. It is nil for an exact touch track.
-func (t *SweepContactTrack) BandAt(fraction units.Value) (*Measurement, error) {
-	if fraction.Kind() != units.Dimensionless {
-		return nil, fmt.Errorf("%w: contact-track fraction must be dimensionless", ErrUnitKind)
-	}
-	f, ok := sweeppath.ExactBaseValue(fraction)
-	if !ok || !measurement.FiniteValues(fraction.Base()) {
-		return nil, fmt.Errorf("%w: nonfinite contact-track fraction", ErrNotFinite)
-	}
-	if f.Cmp(t.start) < 0 || f.Cmp(t.end) > 0 {
-		return nil, fmt.Errorf("%w: fraction is outside contact track", ErrDegenerate)
-	}
-	var depth *big.Rat
-	switch {
-	case t.planar != nil && t.planar.Band != nil:
-		if depth, ok = t.planar.DepthThrough(f); !ok {
-			return nil, fmt.Errorf("%w: band depth has no finite bound", ErrUnsupported)
-		}
-	case t.rolling != nil && t.rolling.Band != nil:
-		depth = t.rolling.DepthThrough(f)
-	default:
-		return nil, nil //nolint:nilnil // an exact touch track has no band, as Band() reports
-	}
-	value := sweeppath.RatFloatNearest(depth)
-	bound := proofarith.RationalFloatError(depth, value)
-	if !measurement.FiniteValues(value, bound) {
-		return nil, fmt.Errorf("%w: band depth has no finite bound", ErrUnsupported)
-	}
-	return &Measurement{Value: units.Millimeters(value), Bound: units.Millimeters(bound),
-		Exactness: exactnessFromBound(bound)}, nil
-}
-
-// ManifoldAt returns a fresh reduction of the complete exact touching set at
-// a fraction in this track's certified interval.
-func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, error) {
-	if fraction.Kind() != units.Dimensionless {
-		return nil, fmt.Errorf("%w: contact-track fraction must be dimensionless", ErrUnitKind)
-	}
-	f, ok := sweeppath.ExactBaseValue(fraction)
-	if !ok || !measurement.FiniteValues(fraction.Base()) {
-		return nil, fmt.Errorf("%w: nonfinite contact-track fraction", ErrNotFinite)
-	}
-	if f.Cmp(t.start) < 0 || f.Cmp(t.end) > 0 {
-		return nil, fmt.Errorf("%w: fraction is outside contact track", ErrDegenerate)
-	}
-	if t.planar != nil {
-		return planarManifoldAt(t.planar, f, t.request)
-	}
-	if t.rolling != nil {
-		manifold, err := t.rolling.ManifoldAt(f, t.request)
-		return contactManifoldFromInternal(manifold), err
-	}
-	if t.cylinder != nil {
-		return t.cylinderTrackManifold(f)
-	}
-	if t.orientedA != nil && t.orientedB != nil {
-		// Translation keeps both boxes' source face identities.
-		a, b := *t.orientedA, *t.orientedB
-		var okA, okB bool
-		a.OrientedBox, okA = pairbox.TranslateOriented(a.OrientedBox, t.orientedDelta, f)
-		b.OrientedBox, okB = pairbox.TranslateOriented(b.OrientedBox, t.orientedDelta, f)
-		if !okA || !okB {
-			return nil, fmt.Errorf("%w: oriented contact-track fraction cannot be represented", ErrUnsupported)
-		}
-		report := &nodeContactReport{Request: t.request}
-		report.Relation, _, _ = contactbox.OrientedBoxRelation(a, b)
-		if report.Relation == ContactTouching {
-			contactbox.PublishOrientedBoxPatch(report, a, b)
-			if report.Manifold == nil {
-				contactbox.PublishClippedHorizontalPatch(report, a, b)
-			}
-		}
-		if report.Relation != ContactTouching || report.Manifold == nil ||
-			len(report.Manifold.Points) != t.pointCount {
-			return nil, fmt.Errorf("%w: oriented contact track lost its face patch", ErrUnsupported)
-		}
-		return contactManifoldFromInternal(report.Manifold), nil
-	}
-	if t.sphere != nil {
-		sphereDelta, boxDelta := t.deltaB, t.deltaA
-		box := t.a
-		if t.sphereFirst {
-			sphereDelta, boxDelta, box = t.deltaA, t.deltaB, t.b
-		}
-		sphere, okSphere := contactround.TranslatedSphere(*t.sphere, sphereDelta, f)
-		box, okBox := translatedContactBox(box, boxDelta, f)
-		if !okSphere || !okBox {
-			return nil, fmt.Errorf("%w: contact-track fraction cannot be represented", ErrUnsupported)
-		}
-		report := &nodeContactReport{Request: t.request}
-		contactround.ClassifySphereBox(report, sphere, box, t.sphereFirst)
-		if report.Relation != ContactTouching || report.Manifold == nil {
-			return nil, fmt.Errorf("%w: contact track has no bounded sphere point", ErrUnsupported)
-		}
-		return contactManifoldFromInternal(report.Manifold), nil
-	}
-	if t.spherePair != nil {
-		a, okA := contactround.TranslatedSphere(t.spherePair[0], t.deltaA, f)
-		b, okB := contactround.TranslatedSphere(t.spherePair[1], t.deltaB, f)
-		if !okA || !okB {
-			return nil, fmt.Errorf("%w: sphere-pair contact-track fraction cannot be represented", ErrUnsupported)
-		}
-		report := &nodeContactReport{Request: t.request}
-		contactround.ClassifySpherePair(report, a, b)
-		if report.Relation != ContactTouching || report.Manifold == nil ||
-			len(report.Manifold.Points) != 1 ||
-			report.Manifold.Points[0].FeatureA != t.features[0] ||
-			report.Manifold.Points[0].FeatureB != t.features[1] {
-			return nil, fmt.Errorf("%w: sphere-pair contact track lost its point", ErrUnsupported)
-		}
-		return contactManifoldFromInternal(report.Manifold), nil
-	}
-	a, b, ok := translatedSourceBoxes(t.a, t.b, t.deltaA, t.deltaB, f)
-	if !ok {
-		return nil, fmt.Errorf("%w: fraction is not representable as a source-box translation", ErrUnsupported)
-	}
-	report := &nodeContactReport{Request: t.request}
-	contactbox.ClassifySourceBoxes(report, a, b)
-	if report.Relation != ContactTouching || report.Manifold == nil {
-		return nil, fmt.Errorf("%w: contact track has no bounded face patch", ErrUnsupported)
-	}
-	return contactManifoldFromInternal(report.Manifold), nil
-}
 
 // sweepEventOf publishes a contact producer's finished report as the ideal
 // event at at, converting it to its public form.
@@ -309,23 +129,6 @@ func sweepEventOf(at SweepInstant, contact *nodeContactReport) SweepEvent {
 }
 
 type affinePairPath = sweeppath.AffinePath
-
-func sweepInstant(f, duration *big.Rat) SweepInstant {
-	t := new(big.Rat).Mul(f, duration)
-	value := sweeppath.RatFloatNearest(t)
-	bound := proofarith.RationalFloatError(t, value)
-	return SweepInstant{
-		Fraction: units.Scalar(sweeppath.RatFloatNearest(f)),
-		Elapsed:  Measurement{Value: units.Seconds(value), Bound: units.Seconds(bound), Exactness: exactnessFromBound(bound)},
-	}
-}
-
-func exactnessFromBound(bound float64) Exactness {
-	if bound == 0 {
-		return Exact
-	}
-	return Approximate
-}
 
 // SweepPair certifies the first encounter of two live solids under one shared
 // duration. Continuous proofs cover affine source-box paths, exact faceted
@@ -404,8 +207,8 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 	request := req
 	if !pa.Supported || !pb.Supported {
 		report.Outcome, report.Cause = SweepUndecided, SweepContactUnsupported
-		report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), pa.Duration),
-			To: sweepInstant(big.NewRat(1, 1), pa.Duration)}
+		report.Unresolved = &SweepInterval{From: sweeppath.Instant(new(big.Rat), pa.Duration),
+			To: sweeppath.Instant(big.NewRat(1, 1), pa.Duration)}
 		return report, nil
 	}
 	if pa.Drift != nil || pb.Drift != nil || pa.Screw != nil || pb.Screw != nil {
@@ -437,8 +240,8 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 			sphereB, sphereOKB := contactround.SphereAtPose(bodyNode(b), pb.From)
 			if sphereOKA && sphereOKB {
 				pair := [2]contactround.SphereProof{sphereA, sphereB}
-				report.SetReplay(seal.Key{}, &sweepReplayProof{pa: pa, pb: pb, spherePair: &pair,
-					request: request.ContactRequest})
+				report.SetReplay(seal.Key{}, &sweepproof.Proof{PA: pa, PB: pb, SpherePair: &pair,
+					Request: request.ContactRequest})
 				return (&sourceSpherePairSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
 					req: request, report: report, sphereA: sphereA, sphereB: sphereB}).execute(ctx, resolution)
 			}
@@ -482,19 +285,19 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 			return result, err
 		}
 		report.Outcome, report.Cause = SweepUndecided, SweepContactUnsupported
-		report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), pa.Duration),
-			To: sweepInstant(big.NewRat(1, 1), pa.Duration)}
+		report.Unresolved = &SweepInterval{From: sweeppath.Instant(new(big.Rat), pa.Duration),
+			To: sweeppath.Instant(big.NewRat(1, 1), pa.Duration)}
 		return report, nil
 	}
-	report.SetReplay(seal.Key{}, &sweepReplayProof{pa: pa, pb: pb, boxA: boxA, boxB: boxB,
-		request: request.ContactRequest})
+	report.SetReplay(seal.Key{}, &sweepproof.Proof{PA: pa, PB: pb, BoxA: boxA, BoxB: boxB,
+		Request: request.ContactRequest})
 	run := pairSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb, req: request, report: report,
 		boxA: boxA, boxB: boxB}
 	result, err := run.execute(ctx, resolution)
 	if err != nil || result == nil {
 		return result, err
 	}
-	result.Replay(seal.Key{}).snapshot(result)
+	result.Replay(seal.Key{}).Snapshot(result.Outcome)
 	return result, nil
 }
 
@@ -508,4 +311,19 @@ func sampleWith(s SweepSample, f *big.Rat) SweepSample {
 func sampleWithPtr(s SweepSample, f *big.Rat) *SweepSample {
 	s.SetExactFraction(seal.Key{}, f)
 	return &s
+}
+
+// publishTrack gives a producer's exact track its public handle form, keeping
+// the producer's own record for the replay proof.
+func publishTrack(track *sweepproof.Track) *SweepContactTrack {
+	return report.LiftSweepContactTrack(seal.Key{}, report.NewSweepContactTrack[*topo.Face, *topo.Edge, *topo.Vertex](seal.Key{}, track, track), handleLift)
+}
+
+// sweepTrackOf returns the producer's exact track behind a published one.
+func sweepTrackOf(track *SweepContactTrack) *sweepproof.Track {
+	if track == nil {
+		return nil
+	}
+	exact, _ := track.Source(seal.Key{}).(*sweepproof.Track)
+	return exact
 }
