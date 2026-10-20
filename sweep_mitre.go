@@ -1,14 +1,7 @@
 package decad
 
 import (
-	"context"
-	"fmt"
-
-	"github.com/lestrrat-3d/decad/internal/compositesweep"
 	"github.com/lestrrat-3d/decad/internal/featureoption"
-	"github.com/lestrrat-3d/decad/internal/sweepinput"
-	"github.com/lestrrat-3d/decad/internal/sweepmitre"
-	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -35,51 +28,4 @@ func WithMitredJoins() SweepOption {
 // spans it requires [WithMitredJoins] (docs/sweep-design.md §16.2).
 func WithSectionScale(factors ...units.Value) SweepOption {
 	return sweepOptionValue{featureoption.WithSectionScale(factors...)}
-}
-
-// mitredSweepPreflight applies SM10's span and facet-pair ceilings.
-func mitredSweepPreflight(loopIdx [][]int, spans int) error {
-	return sweepmitre.Preflight(loopIdx, spans, compositesweep.MaxSpansPerCall)
-}
-
-// sweepMitred runs Table SM's gates in §5's order and builds the body. The
-// options were validated by the caller (SM3, SM9's surface-result arm), and
-// the profile is already authenticated.
-func sweepMitred(ctx context.Context, d *Document, profile profileRecord, plane planeRecord, path *sweepinput.Path, cfg featureoption.SweepConfig) (*Body, error) {
-	segments := pathSegments(path)
-	for k, segment := range segments {
-		if _, ok := segment.(LineTo); !ok {
-			return nil, fmt.Errorf(`%w: a mitred or scaled sweep follows LineTo segments only; path segment %d is %T`, ErrUnsupported, k, segment)
-		}
-	}
-	if cfg.Scaled && !cfg.Mitred && len(segments) > 1 {
-		return nil, fmt.Errorf(`%w: WithSectionScale on a path of %d spans requires WithMitredJoins`, ErrUnsupported, len(segments))
-	}
-	if err := sweepinput.ValidateSweepPathStart(path, plane); err != nil {
-		return nil, err
-	}
-	if sweepinput.SamePathPoint(path.Start, path.End) {
-		return nil, fmt.Errorf(`%w: closed sweep paths are not implemented`, ErrUnsupported)
-	}
-	_, loopIdx, err := sweepmitre.Loops(profile.Outer, profile.Holes)
-	if err != nil {
-		return nil, err
-	}
-	if err := mitredSweepPreflight(loopIdx, len(segments)); err != nil {
-		return nil, err
-	}
-	factors := cfg.Factors
-	if factors == nil {
-		factors = make([]float64, len(segments))
-		for k := range factors {
-			factors[k] = 1
-		}
-	}
-	return bodyResult(sweepmitre.Build(ctx, envOf(documentNode(d), d.nextProducerID()), mitredSweepPayload{
-		Profile: profile,
-		Plane:   plane,
-		Path:    path,
-		Factors: factors,
-		Xform:   r3.Identity(),
-	}))
 }

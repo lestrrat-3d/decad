@@ -25,7 +25,7 @@ The rules for rows live in `docs/layout.md`.
 | `unstitch.go` | `Unstitch` sheet split; builds through `internal/stitchrecord/`. See surface §6.5. |
 | `extrude.go` | Generic `Extrude` over a profile or chain, `WithTaper`, linear-extent resolution, the chain ribbon entry point. See evaluator §5 and surface §13.2. |
 | `draft.go` | `Draft`, `NeutralPlane`, `Walls` gates, plus the tapered extrude angle and surface-result gates, extent resolution and slab dispatch. See draft §5, §7, §10. |
-| `sweep.go` | Generic `Sweep` over a profile or chain and path admission adapters, including the cardinal line/arc chain and the full-circle path reduction; builds through `internal/sweeprecord/`. See sweep §3.3, §15.8–§15.9. |
+| `sweep.go` | Generic `Sweep` over a profile or chain: nil, option and seam gates, then `internal/sweepbuild/` builds and root commits. See sweep §3.3, §15.8–§15.9. |
 | `sweep_mitre.go` | Mitred options and entry adapters; builds through `sweepmitre.Build`. See sweep §16. |
 | `coil.go` | `Coil`, `CoilOption`, Table CS gates. Root `coilPayload` aliases `coilshell.Payload`. See helix §2, §4, §5.6. |
 | `revolve.go` | Generic `Revolve` over a profile or chain: `Axis` variants, options, angular extents, and the public axis adapter to `internal/revolveaxis/`. See evaluator §6 and surface §13.2. |

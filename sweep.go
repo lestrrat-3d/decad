@@ -4,17 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/lestrrat-3d/decad/internal/chainrecord"
 	"github.com/lestrrat-3d/decad/internal/featureoption"
-	"github.com/lestrrat-3d/decad/internal/freeform"
-	"github.com/lestrrat-3d/decad/internal/prismrecord"
-	"github.com/lestrrat-3d/decad/internal/revolveplan"
-	"github.com/lestrrat-3d/decad/internal/sectioncert"
-	"github.com/lestrrat-3d/decad/internal/sweeparc"
+	"github.com/lestrrat-3d/decad/internal/sweepbuild"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
-	"github.com/lestrrat-3d/decad/internal/sweeprecord"
-	"github.com/lestrrat-3d/decad/internal/twistsweep"
-	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/lestrrat-go/option/v3"
@@ -113,133 +105,11 @@ func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 	if err != nil {
 		return nil, err
 	}
-	surfaceResult := cfg.SurfaceResult
-
-	profile, plane, profileArea, err := sectioncert.RecordProfile(s, p)
+	node, err := sweepbuild.Profile(ctx, envOf(documentNode(d), d.nextProducerID()), s, p, path, cfg)
 	if err != nil {
 		return nil, err
 	}
-	work := freeform.NewFreeformWork()
-	if len(path.Records) > 1 && !cfg.Mitred && !cfg.Scaled {
-		work = sweeprecord.NewCompositeWork(profile)
-	}
-	recordArea, err := profile.FalsifyRecordedArea(profileArea, work)
-	if err != nil {
-		return nil, err
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	if len(path.Records) == 0 || len(path.Segments) == 0 {
-		return nil, fmt.Errorf(`%w: a sweep path must contain at least one span`, ErrDegenerate)
-	}
-
-	frame, err := r3.NewFrame(plane.Origin, plane.U, plane.V)
-	if err != nil {
-		return nil, fmt.Errorf(`%w: the recorded plane is degenerate: %s`, ErrDegenerate, err)
-	}
-	if cfg.Twisted {
-		if sweepinput.SamePathPoint(path.Start, path.End) {
-			return nil, fmt.Errorf(`%w: a closed sweep path cannot carry nonzero twist`, ErrUnsupported)
-		}
-		if err := sweepinput.ValidateSweepPathGeometry(path, plane); err != nil {
-			return nil, err
-		}
-		body, err := bodyResult(twistsweep.Eval(ctx, envOf(documentNode(d), d.nextProducerID()), profile, plane,
-			path, cfg.Twist, recordArea, r3.Identity()))
-		if err != nil {
-			return nil, err
-		}
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		d.commit(body)
-		return body, nil
-	}
-	if cfg.Mitred || cfg.Scaled {
-		// docs/sweep-design.md §16: either option selects the mitred
-		// polyline builder, whose Table SM gates replace S6 and S10.
-		body, err := sweepMitred(ctx, d, profile, plane, path, cfg)
-		if err != nil {
-			return nil, err
-		}
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		d.commit(body)
-		return body, nil
-	}
-	if err := sweepinput.ValidateSweepPathGeometry(path, plane); err != nil {
-		return nil, err
-	}
-	if err := sweepinput.ValidateAnalyticProfile(profile); err != nil {
-		return nil, err
-	}
-
-	ref := d.nextProducerID()
-	if sweepinput.SamePathPoint(path.Start, path.End) {
-		if surfaceResult {
-			return nil, fmt.Errorf(`%w: a closed sweep surface result is not implemented`, ErrUnsupported)
-		}
-		var body *Body
-		if _, circle := sweepinput.ClosedCircle(path.Records); circle {
-			body, err = evalClosedCircleSweep(ctx, d, ref, profile, plane, frame, path, work)
-		} else {
-			body, err = bodyResult(sweeprecord.BuildClosedCyclic(ctx, envOf(documentNode(d), ref), profile, plane,
-				frame, path, work))
-		}
-		if err != nil {
-			return nil, err
-		}
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		d.commit(body)
-		return body, nil
-	}
-	segments := pathSegments(path)
-
-	var body *Body
-	if len(segments) > 1 {
-		body, err = bodyResult(sweeprecord.BuildComposite(ctx, envOf(documentNode(d), ref), profile, plane, frame,
-			path, work, surfaceResult))
-	} else {
-		switch segment := segments[0].(type) {
-		case LineTo:
-			height, heightBound, lineErr := sweepinput.ValidateStraightSweepPath(path, frame)
-			if lineErr != nil {
-				return nil, lineErr
-			}
-			// The flag rides the REDUCED prismPayload, not just the finishing
-			// sweepPayload literal below: internal/prismrecord/build.go's prismrecord.Build reads
-			// pp.SurfaceResult to decide Kind()/solid, cap omission, topobuild.SheetLumps and
-			// the area subtraction, which is what gives the line reduction the
-			// whole sheet behaviour for free (docs/surface-design.md §4).
-			prism := prismrecord.Payload{
-				Profile:       profile,
-				Frame:         frame,
-				Z1:            height,
-				Z1Delta:       heightBound,
-				Xform:         r3.Identity(),
-				SurfaceResult: surfaceResult,
-			}
-			body, err = bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), ref), prism, work))
-			if err == nil {
-				sweeprecord.FinishStraight(bodyNode(body), sweepPayload{Prism: prism, Path: path, SurfaceResult: surfaceResult})
-			}
-		case ArcThrough:
-			body, err = bodyResult(sweeprecord.BuildArc(ctx, envOf(documentNode(d), ref), profile, plane, frame,
-				path, path.Records[0], work, surfaceResult))
-		default:
-			err = fmt.Errorf(`%w: sweep path span %T is not supported`, ErrUnsupported, segment)
-		}
-	}
-	if err != nil {
-		return nil, err
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
+	body := bodyHandle(node)
 	d.commit(body)
 	return body, nil
 }
@@ -286,64 +156,11 @@ func sweepChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch.C
 	if err := refuseChainSweepOptions(opts, len(path.Segments)); err != nil {
 		return nil, err
 	}
-	if len(path.Records) == 0 || len(path.Segments) == 0 {
-		return nil, fmt.Errorf(`%w: a sweep path must contain at least one span`, ErrDegenerate)
-	}
-
-	frame, err := r3.NewFrame(plane.Origin, plane.U, plane.V)
-	if err != nil {
-		return nil, fmt.Errorf(`%w: the recorded plane is degenerate: %s`, ErrDegenerate, err)
-	}
-	if err := sweepinput.ValidateSweepPathGeometry(path, plane); err != nil {
-		return nil, err
-	}
-	if err := sweepinput.ValidateAnalyticSegments(chain.Segments, "chain"); err != nil {
-		return nil, err
-	}
-	if sweepinput.SamePathPoint(path.Start, path.End) {
-		return nil, fmt.Errorf(`%w: closed sweep paths are not implemented`, ErrUnsupported)
-	}
-
-	segments := pathSegments(path)
-	if len(segments) > 1 {
-		return d.sweepCompositeChain(ctx, chain, plane, path)
-	}
-	if _, ok := segments[0].(ArcThrough); ok {
-		return d.sweepArcChain(ctx, chain, plane, frame, path)
-	}
-	if _, ok := segments[0].(LineTo); !ok {
-		return nil, fmt.Errorf(`%w: this chain Sweep path span is not admitted`, ErrUnsupported)
-	}
-	height, heightBound, err := sweepinput.ValidateStraightSweepPath(path, frame)
+	node, err := sweepbuild.Chain(ctx, envOf(documentNode(d), d.nextProducerID()), chain, plane, path)
 	if err != nil {
 		return nil, err
 	}
-
-	// ONE free-form work counter for the whole call, exactly as chain Extrude
-	// opens for its own build (docs/spline-design.md §5.2).
-	work := freeform.NewFreeformWork()
-	ref := d.nextProducerID()
-	// z0 is exactly zero and carries no bound: the recorded walk sits in the
-	// sketch plane by construction and the path starts there (S5's own gate
-	// above). Only the far level is derived, and z1Delta is where the path's
-	// composed length bound lands — the term §15.2 names as the one thing a
-	// chain sweep carries that the same walk's chain Extrude reading may not.
-	reduction := chainPayload{
-		Chains:  []chainRecord{chain},
-		Frame:   frame,
-		Z0:      0,
-		Z1:      height,
-		Z1Delta: heightBound,
-		Xform:   r3.Identity(),
-	}
-	body, err := bodyResult(chainrecord.Build(ctx, envOf(documentNode(d), ref), reduction, work))
-	if err != nil {
-		return nil, err
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	sweeprecord.FinishChain(bodyNode(body), chainSweepPayload{Chain: reduction, Path: path})
+	body := bodyHandle(node)
 	d.commit(body)
 	return body, nil
 }
@@ -369,98 +186,4 @@ func refuseChainSweepOptions(opts []SweepOption, segments int) error {
 		return fmt.Errorf(`%w: WithMitredJoins and WithSectionScale build a solid from a profile only`, ErrUnsupported)
 	}
 	return nil
-}
-
-func (d *Document) sweepCompositeChain(ctx context.Context, chain chainRecord, plane planeRecord,
-	path *sweepinput.Path) (*Body, error) {
-	payload, work, err := sweeprecord.CompositeChainPayload(ctx, chain, plane, path)
-	if err != nil {
-		return nil, err
-	}
-	ref := d.nextProducerID()
-	body, err := bodyResult(sweeprecord.ReplayChainWork(ctx, envOf(documentNode(d), ref), payload, work))
-	if err != nil {
-		return nil, err
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	d.commit(body)
-	return body, nil
-}
-
-// sweepArcChain builds sweeprecord.ArcChainReduction's chain Revolve wall and
-// records it as an arc Sweep of the path.
-func (d *Document) sweepArcChain(ctx context.Context, chain chainRecord,
-	plane planeRecord, frame r3.Frame, path *sweepinput.Path) (*Body, error) {
-	reduction, work, err := sweeprecord.ArcChainReduction(ctx, chain, plane, frame, path)
-	if err != nil {
-		return nil, err
-	}
-	ref := d.nextProducerID()
-	body, err := bodyResult(revolveplan.BuildChain(ctx, envOf(documentNode(d), ref), reduction, work))
-	if err != nil {
-		return nil, err
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	sweeprecord.FinishChain(bodyNode(body), chainSweepPayload{Revolve: reduction, Arc: true, Path: path})
-	d.commit(body)
-	return body, nil
-}
-
-// evalClosedCircleSweep reduces the structurally proven full turn to the
-// existing full Revolve evaluator. That evaluator supplies axis-incidence,
-// topology, four bounded readings, and an occupied-volume mesh proof.
-func evalClosedCircleSweep(ctx context.Context, d *Document, ref producerID,
-	profile profileRecord, plane planeRecord, frame r3.Frame, path *sweepinput.Path,
-	work *freeform.FreeformWork,
-) (*Body, error) {
-	carrier, ok := sweepinput.ClosedCircle(path.Records)
-	if !ok {
-		return nil, fmt.Errorf(`%w: the closed sweep path is outside the exact two-arc full-circle class`, ErrUnsupported)
-	}
-	first := path.Records[0]
-	geometry, err := sweeparc.Derive(first.Start, carrier, first.ArcPhi, first.ArcAngle, plane)
-	if err != nil {
-		return nil, err
-	}
-	ax, side, err := revolveplan.ResolveAxisSide(ctx, profile, geometry.Line, work)
-	if err != nil {
-		return nil, err
-	}
-	phi0, phi1, full, den, _, err := d.resolveAngularExtent(
-		FullRevolution{}, d.angularStopCtx(frame, geometry.Line, ax))
-	if err != nil {
-		return nil, err
-	}
-	if side < 0 {
-		phi0, phi1 = -phi1, -phi0
-		den.Phi0, den.Phi1 = den.Phi1.Neg(), den.Phi0.Neg()
-	}
-	revolve := revolvePayload{
-		Profile:     profile,
-		Frame:       frame,
-		Ax:          ax,
-		Phi0:        phi0,
-		Phi1:        phi1,
-		Full:        full,
-		Den:         den,
-		Xform:       r3.Identity(),
-		RadialProof: ax.RadialProof,
-	}
-	body, err := bodyResult(revolveplan.Build(ctx, envOf(documentNode(d), ref), revolve, work))
-	if err != nil {
-		return nil, err
-	}
-	witness := prismrecord.Payload{Profile: profile, Frame: frame, Xform: r3.Identity()}
-	sweeprecord.FinishArc(bodyNode(body), sweepPayload{
-		Prism:        witness,
-		Revolve:      revolve,
-		Arc:          true,
-		ClosedCircle: true,
-		Path:         path,
-	})
-	return body, nil
 }
