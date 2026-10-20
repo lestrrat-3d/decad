@@ -41,7 +41,7 @@ func revolveLoftFacesVerticalTraceChain(graph *revolveLoftFacesContactGraph,
 	}
 	var side *revolveLoftFacesVerticalSide
 	for _, entry := range graph.manifest.vertical {
-		if entry.sectionIndex == arc.sectionIndex && entry.outcome == revolveLoftFacesVerticalContact {
+		if entry.sectionIndex == arc.sectionIndex && entry.outcome == revolveloftfaces.VerticalContact {
 			if side != nil {
 				return nil, false
 			}

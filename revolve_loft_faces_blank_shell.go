@@ -170,18 +170,6 @@ func revolveLoftFacesBlankShellAtRunsWithCuts(ctx context.Context,
 	return out, true, nil
 }
 
-func revolveLoftFacesSameArcContact(a, b revolveloftfaces.RevolveLoftFacesMappedCell) bool {
-	return a.Segment == b.Segment && a.Span == b.Span && a.Band == b.Band &&
-		a.Side == revolveloftfaces.RevolveLoftFacesJointContact && b.Side == a.Side &&
-		a.JointKind == revolveloftfaces.RevolveLoftFacesWholeArcContact && b.JointKind == a.JointKind &&
-		a.JointArc == b.JointArc && a.JointPoint == b.JointPoint &&
-		a.SLo != nil && b.SLo != nil && a.SLo.Cmp(b.SLo) == 0 &&
-		a.SHi != nil && b.SHi != nil && a.SHi.Cmp(b.SHi) == 0 &&
-		a.TLo != nil && b.TLo != nil && a.TLo.Cmp(b.TLo) == 0 &&
-		a.THi != nil && b.THi != nil && a.THi.Cmp(b.THi) == 0 &&
-		a.TLoOpen == b.TLoOpen && a.THiOpen == b.THiOpen
-}
-
 // A candidate must carry its retained source cells; a marked outcome alone
 // cannot turn an empty nonvertical face into certified contact.
 func revolveLoftFacesShellSideCurrent(ctx context.Context,
@@ -200,13 +188,13 @@ func revolveLoftFacesShellSideCurrent(ctx context.Context,
 			return false, nil
 		}
 		side, outcome, err := revolveLoftFacesVerticalSideClassify(ctx, proof, index)
-		if err != nil || outcome != revolveLoftFacesVerticalContact ||
+		if err != nil || outcome != revolveloftfaces.VerticalContact ||
 			side == nil || faceNode(side.face) != span.Face || len(side.cells) == 0 {
 			return false, err
 		}
 		for _, entry := range manifest.vertical {
 			if entry.sectionIndex == index {
-				return entry.outcome == revolveLoftFacesVerticalContact &&
+				return entry.outcome == revolveloftfaces.VerticalContact &&
 					entry.side != nil && faceNode(entry.side.face) == span.Face &&
 					len(entry.side.cells) > 0, nil
 			}
@@ -216,12 +204,12 @@ func revolveLoftFacesShellSideCurrent(ctx context.Context,
 			return false, nil
 		}
 		side, outcome, err := revolveLoftFacesVerticalSideClassify(ctx, proof, index)
-		if err != nil || outcome != revolveLoftFacesVerticalMiss || side != nil {
+		if err != nil || outcome != revolveloftfaces.VerticalMiss || side != nil {
 			return false, err
 		}
 		for _, entry := range manifest.vertical {
 			if entry.sectionIndex == index {
-				return entry.outcome == revolveLoftFacesVerticalMiss && entry.side == nil, nil
+				return entry.outcome == revolveloftfaces.VerticalMiss && entry.side == nil, nil
 			}
 		}
 	}
@@ -285,12 +273,12 @@ func revolveLoftFacesShellSeamCutOf(ctx context.Context,
 	}
 	matched := false
 	for _, source := range arcCells {
-		matched = matched || revolveLoftFacesSameArcContact(source, mapped)
+		matched = matched || revolveloftfaces.SameArcContact(source, mapped)
 	}
 	if !matched {
 		return empty, nil, false, nil
 	}
-	stations, complete := revolveLoftFacesCompleteArcRun(proof.trim, mapped.Segment)
+	stations, complete := revolveloftfaces.CompleteArcRun(proof.trim, mapped.Segment)
 	if !complete {
 		return empty, nil, false, nil
 	}

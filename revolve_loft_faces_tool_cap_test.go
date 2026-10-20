@@ -322,22 +322,22 @@ func TestRevolveLoftFacesToolBoundaryUsesSketchWalkDirection(t *testing.T) {
 	// the loop walk without changing those parameters or the radial root.
 	edge := sketch.BoundaryEdge{TStart: 0, TEnd: 1}
 	insideToOutside := loftface.VerticalLimit{Before: -1, After: 1}
-	outward, ok := revolveLoftFacesToolBoundaryOutward(edge, insideToOutside)
+	outward, ok := revolveloftfaces.ToolBoundaryOutward(edge, insideToOutside)
 	require.True(t, ok)
 	require.True(t, outward)
 
 	edge.Reversed = true
-	outward, ok = revolveLoftFacesToolBoundaryOutward(edge, insideToOutside)
+	outward, ok = revolveloftfaces.ToolBoundaryOutward(edge, insideToOutside)
 	require.True(t, ok)
 	require.False(t, outward)
 
-	outward, ok = revolveLoftFacesToolBoundaryOutward(edge,
+	outward, ok = revolveloftfaces.ToolBoundaryOutward(edge,
 		loftface.VerticalLimit{Before: 1, After: -1})
 	require.True(t, ok)
 	require.True(t, outward)
 
 	edge.Partial = true
-	_, ok = revolveLoftFacesToolBoundaryOutward(edge, insideToOutside)
+	_, ok = revolveloftfaces.ToolBoundaryOutward(edge, insideToOutside)
 	require.False(t, ok)
 }
 
@@ -346,7 +346,7 @@ func TestRevolveLoftFacesHeelVerticalArcConsumesLiveNeutralSource(t *testing.T) 
 	proof, ok, err := certifyRevolveLoftFacesSource(t.Context(), blank, tooth)
 	require.NoError(t, err)
 	require.True(t, ok)
-	loop, simple, err := revolveLoftFacesSimpleSourceLoop(t.Context(), proof.trim)
+	loop, simple, err := revolveloftfaces.SimpleSourceLoop(t.Context(), proof.trim)
 	require.NoError(t, err)
 	require.True(t, simple)
 	require.Len(t, loop.Cells, 8)
@@ -436,7 +436,7 @@ func TestRevolveLoftFacesHeelSlopedArcConsumesLiveNeutralSource(t *testing.T) {
 	proof, ok, err := certifyRevolveLoftFacesSource(t.Context(), blank, tooth)
 	require.NoError(t, err)
 	require.True(t, ok)
-	loop, simple, err := revolveLoftFacesSimpleSourceLoop(t.Context(), proof.trim)
+	loop, simple, err := revolveloftfaces.SimpleSourceLoop(t.Context(), proof.trim)
 	require.NoError(t, err)
 	require.True(t, simple)
 	require.Len(t, loop.Cells, 8)

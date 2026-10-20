@@ -57,16 +57,16 @@ func revolveLoftFacesGraphSameVerticalCell(a, b revolveLoftFacesVerticalCell) bo
 	if a.segment != b.segment || a.span != b.span || a.band != b.band ||
 		a.ref != b.ref || a.face != b.face ||
 		!revolveloftfaces.RevolveLoftFacesSameBezier(a.source, b.source) ||
-		!revolveLoftFacesSameVerticalLimit(a.lower, b.lower) ||
-		!revolveLoftFacesSameVerticalLimit(a.upper, b.upper) ||
+		!loftface.LimitEqual(a.lower, b.lower) ||
+		!loftface.LimitEqual(a.upper, b.upper) ||
 		len(a.retained) != len(b.retained) {
 		return false
 	}
 	for i := range a.retained {
-		if !revolveLoftFacesSameInterval(a.retained[i].Source, b.retained[i].Source) ||
+		if !loftface.IntervalEqual(a.retained[i].Source, b.retained[i].Source) ||
 			a.retained[i].LoOpen != b.retained[i].LoOpen ||
 			a.retained[i].HiOpen != b.retained[i].HiOpen ||
-			!revolveLoftFacesSameBox(a.retained[i].Box, b.retained[i].Box) {
+			!revolveloftfaces.CapBoundaryBoxEqual(a.retained[i].Box, b.retained[i].Box) {
 			return false
 		}
 	}
@@ -81,7 +81,7 @@ func (g *revolveLoftFacesContactGraph) sourceCellID(section int, blank *Face,
 		if entry.source == nil || entry.sectionIndex != section ||
 			entry.blankFace != blank || entry.trimmedFace != cell.face ||
 			entry.source.ref != cell.ref || entry.source.face != cell.face ||
-			!revolveLoftFacesSameMappedCell(entry.source.mapped, cell.mapped) {
+			!revolveloftfaces.SameMappedCell(entry.source.mapped, cell.mapped) {
 			continue
 		}
 		if id >= 0 {
@@ -219,7 +219,7 @@ func revolveLoftFacesContactGraphOf(ctx context.Context,
 			cell.source.mapped.JointKind != revolveloftfaces.RevolveLoftFacesWholeArcContact {
 			continue
 		}
-		stations, complete := revolveLoftFacesCompleteArcRun(proof.trim, cell.source.mapped.Segment)
+		stations, complete := revolveloftfaces.CompleteArcRun(proof.trim, cell.source.mapped.Segment)
 		if !complete {
 			return nil, false, nil
 		}
@@ -383,7 +383,7 @@ func (g *revolveLoftFacesContactGraph) endpointCellMatches(event revolveLoftFace
 	if tie.sourceCell != nil {
 		return cell.source != nil && cell.source.ref == tie.sourceCell.ref &&
 			cell.source.face == tie.sourceCell.face &&
-			revolveLoftFacesSameMappedCell(cell.source.mapped, tie.sourceCell.mapped)
+			revolveloftfaces.SameMappedCell(cell.source.mapped, tie.sourceCell.mapped)
 	}
 	return tie.verticalCell != nil && cell.vertical != nil &&
 		revolveLoftFacesGraphSameVerticalCell(*cell.vertical, *tie.verticalCell)
@@ -423,7 +423,7 @@ func revolveLoftFacesContactGraphCurrent(ctx context.Context,
 		}
 		if cell.source != nil && (cell.source.ref != other.source.ref ||
 			cell.source.face != other.source.face ||
-			!revolveLoftFacesSameMappedCell(cell.source.mapped, other.source.mapped)) ||
+			!revolveloftfaces.SameMappedCell(cell.source.mapped, other.source.mapped)) ||
 			cell.vertical != nil && !revolveLoftFacesGraphSameVerticalCell(*cell.vertical, *other.vertical) {
 			return false, nil
 		}
@@ -511,7 +511,7 @@ func revolveLoftFacesCensus(ctx context.Context,
 	wallFaces := make(map[*Face]struct{})
 	for _, band := range proof.sourceRefs {
 		for _, ref := range band {
-			index, valid := revolveLoftFacesRefFaceIndex(payload, ref, len(trimmedFaces))
+			index, valid := revolveloftfaces.RefFaceIndex(payload, ref, len(trimmedFaces))
 			face, unique := revolveLoftFacesUniqueOriginFace(proof.tooth, ref)
 			if !valid || !unique || (index >= 0) != (face != nil) ||
 				index >= 0 && trimmedFaces[index] != face {
@@ -726,35 +726,6 @@ func revolveLoftFacesCertifiedArcPatches(ctx context.Context, blank, tooth *Body
 		return nil, empty, empty, false, nil
 	}
 	return seam, blankPatch, loftPatch, true, nil
-}
-
-// The station group labels identify source chords. A complete cyclic run
-// contains every chord of this Sketch arc and its next shared endpoint.
-func revolveLoftFacesCompleteArcRun(trim *loftFacesTrimRecord, segment int) ([]int, bool) {
-	if trim == nil || trim.Source == nil || segment < 0 ||
-		segment >= len(trim.Source.Profile.Outer.Segments) ||
-		len(trim.StationGroup) != len(trim.Source.SourceStation) ||
-		len(trim.StationGroup) < 3 {
-		return nil, false
-	}
-	groups := trim.StationGroup
-	start, runs := -1, 0
-	for index, group := range groups {
-		if group == segment && groups[(index+len(groups)-1)%len(groups)] != segment {
-			start, runs = index, runs+1
-		}
-	}
-	if runs != 1 {
-		return nil, false
-	}
-	stations := make([]int, 0, len(groups)+1)
-	for index := start; groups[index] == segment; index = (index + 1) % len(groups) {
-		stations = append(stations, index)
-		if len(stations) >= len(groups) {
-			return nil, false
-		}
-	}
-	return append(stations, (stations[len(stations)-1]+1)%len(groups)), true
 }
 
 type revolveLoftFacesCallScopeKey struct{}

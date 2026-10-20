@@ -31,14 +31,6 @@ type revolveLoftFacesVerticalSide struct {
 	origins []provenance.Ref
 }
 
-type revolveLoftFacesVerticalOutcome uint8
-
-const (
-	revolveLoftFacesVerticalRefusal revolveLoftFacesVerticalOutcome = iota
-	revolveLoftFacesVerticalMiss
-	revolveLoftFacesVerticalContact
-)
-
 // The caller supplies exact X and radial limits from authenticated surfaces.
 // This record only classifies the LoftFaces source at that cross section.
 type revolveLoftFacesConstantXSource struct {
@@ -54,44 +46,44 @@ type revolveLoftFacesConstantXSource struct {
 // blank side misses the trimmed source. Equality remains undecided.
 func revolveLoftFacesVerticalSideClassify(ctx context.Context,
 	proof *revolveLoftFacesSourceCertificate, sectionIndex int) (
-	*revolveLoftFacesVerticalSide, revolveLoftFacesVerticalOutcome, error,
+	*revolveLoftFacesVerticalSide, revolveloftfaces.VerticalOutcome, error,
 ) {
 	if ctx == nil || proof == nil || proof.trim == nil || proof.blank == nil ||
 		proof.tooth == nil || sectionIndex < 0 || sectionIndex >= len(proof.section.Spans) {
-		return nil, revolveLoftFacesVerticalRefusal, nil
+		return nil, revolveloftfaces.VerticalRefusal, nil
 	}
 	if err := ctx.Err(); err != nil {
-		return nil, revolveLoftFacesVerticalRefusal, err
+		return nil, revolveloftfaces.VerticalRefusal, err
 	}
 	trim := proof.trim
 	section := proof.section.Spans[sectionIndex]
 	if section.Start.U != section.End.U || section.Start.V == section.End.V ||
 		section.Start.V < 0 || section.End.V < 0 || section.Face == nil ||
 		len(section.Origins) == 0 || !revolveLoftFacesSectionCurrent(proof) {
-		return nil, revolveLoftFacesVerticalRefusal, nil
+		return nil, revolveloftfaces.VerticalRefusal, nil
 	}
 	face, ok := revolveshell.SpanFace(bodyNode(proof.blank), section)
-	if !ok || face != section.Face || !verticalOriginsMatch(face.Origins, section.Origins) {
-		return nil, revolveLoftFacesVerticalRefusal, nil
+	if !ok || face != section.Face || !revolveloftfaces.OriginsMatch(face.Origins, section.Origins) {
+		return nil, revolveloftfaces.VerticalRefusal, nil
 	}
 	payload, ok := proof.tooth.n.Payload.(facetedPayload)
 	if !ok || payload.LoftFacesTrim != trim || !revolveLoftFacesTrimCurrent(proof.tooth, trim) ||
 		!revolveLoftFacesSourceRefsCurrent(trim, proof.tooth, proof.sourceRefs) {
-		return nil, revolveLoftFacesVerticalRefusal, nil
+		return nil, revolveloftfaces.VerticalRefusal, nil
 	}
 	x := lfF(section.Start.U)
-	lower, upper, limitOutcome := revolveLoftFacesVerticalLimits(trim, section, x)
-	if limitOutcome != revolveLoftFacesVerticalContact {
+	lower, upper, limitOutcome := revolveloftfaces.VerticalLimits(trim, section, x)
+	if limitOutcome != revolveloftfaces.VerticalContact {
 		return nil, limitOutcome, nil
 	}
 	source, ok, err := revolveLoftFacesConstantXSourceCells(ctx, proof, x, lower, upper)
 	if err != nil || !ok || !source.hasRetained {
-		return nil, revolveLoftFacesVerticalRefusal, err
+		return nil, revolveloftfaces.VerticalRefusal, err
 	}
 	return &revolveLoftFacesVerticalSide{
 		revolveLoftFacesConstantXSource: source, face: faceHandle(face),
 		origins: append([]provenance.Ref(nil), section.Origins...),
-	}, revolveLoftFacesVerticalContact, nil
+	}, revolveloftfaces.VerticalContact, nil
 }
 
 // A retained face origin alone does not bind the section coordinates.
@@ -239,60 +231,12 @@ func revolveLoftFacesVerticalLiveFace(tooth *Body, ref provenance.Ref) *Face {
 		return nil
 	}
 	faces := tooth.Faces()
-	index, valid := revolveLoftFacesRefFaceIndex(payload, ref, len(faces))
+	index, valid := revolveloftfaces.RefFaceIndex(payload, ref, len(faces))
 	face, originValid := revolveLoftFacesUniqueOriginFace(tooth, ref)
 	if !valid || !originValid || index < 0 || face == nil || faces[index] != face {
 		return nil
 	}
 	return face
-}
-
-func verticalOriginsMatch(actual, recorded []provenance.Ref) bool {
-	if len(actual) != len(recorded) {
-		return false
-	}
-	for i := range actual {
-		if actual[i] != recorded[i] {
-			return false
-		}
-	}
-	return true
-}
-
-// The Cut keeps the strict outside of its cone. Intersect keeps the strict
-// inside of its cone. On an X-constant plane these become radial limits.
-func revolveLoftFacesVerticalLimits(trim *loftFacesTrimRecord,
-	section revolveSectionSpan, x *big.Rat) (*big.Rat, *big.Rat, revolveLoftFacesVerticalOutcome) {
-	if trim == nil || trim.Toe == nil || trim.Heel == nil || x == nil ||
-		trim.Toe.Apex == nil || trim.Heel.Apex == nil ||
-		trim.Toe.Far == nil || trim.Heel.Far == nil ||
-		trim.Toe.Slope == nil || trim.Heel.Slope == nil ||
-		trim.Toe.Slope.Sign() <= 0 || trim.Heel.Slope.Sign() <= 0 ||
-		x.Cmp(trim.Toe.Far) <= 0 || x.Cmp(trim.Heel.Far) <= 0 ||
-		x.Cmp(trim.Heel.Apex) >= 0 {
-		return nil, nil, revolveLoftFacesVerticalRefusal
-	}
-	lower, upper := lfF(section.Start.V), lfF(section.End.V)
-	if lower.Cmp(upper) > 0 {
-		lower, upper = upper, lower
-	}
-	if x.Cmp(trim.Toe.Apex) < 0 {
-		toe := lfDiv(lfSub(trim.Toe.Apex, x), trim.Toe.Slope)
-		if lower.Cmp(toe) < 0 {
-			lower = toe
-		}
-	}
-	heel := lfDiv(lfSub(trim.Heel.Apex, x), trim.Heel.Slope)
-	if upper.Cmp(heel) > 0 {
-		upper = heel
-	}
-	if lower.Sign() < 0 || upper.Sign() < 0 || lower.Cmp(upper) == 0 {
-		return lower, upper, revolveLoftFacesVerticalRefusal
-	}
-	if lower.Cmp(upper) > 0 {
-		return lower, upper, revolveLoftFacesVerticalMiss
-	}
-	return lower, upper, revolveLoftFacesVerticalContact
 }
 
 func revolveLoftFacesVerticalBezier(trim *loftFacesTrimRecord,

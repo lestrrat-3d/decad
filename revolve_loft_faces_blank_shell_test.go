@@ -105,11 +105,11 @@ func TestCurvedSourceArcSplitsClosedRevolveShell(t *testing.T) {
 	changedVertical := false
 	for i := range manifest.vertical {
 		entry := &manifest.vertical[i]
-		if entry.outcome != revolveLoftFacesVerticalContact {
+		if entry.outcome != revolveloftfaces.VerticalContact {
 			continue
 		}
 		before := *entry
-		entry.outcome, entry.side = revolveLoftFacesVerticalMiss, nil
+		entry.outcome, entry.side = revolveloftfaces.VerticalMiss, nil
 		manifest.sideOutcome[entry.sectionIndex] = revolveLoftFacesSideMiss
 		_, admitted, err := revolveLoftFacesBlankShellAtRunsWithCuts(t.Context(), proof, manifest,
 			[]revolveLoftFacesShellSeamSelector{{sectionIndex: sectionIndex, cellIndex: cellIndex}}, nil)
@@ -124,7 +124,7 @@ func TestCurvedSourceArcSplitsClosedRevolveShell(t *testing.T) {
 	changedVerticalCell := false
 	for i := range manifest.vertical {
 		entry := &manifest.vertical[i]
-		if entry.outcome != revolveLoftFacesVerticalContact ||
+		if entry.outcome != revolveloftfaces.VerticalContact ||
 			entry.side == nil || len(entry.side.cells) == 0 {
 			continue
 		}

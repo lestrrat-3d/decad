@@ -105,7 +105,7 @@ func revolveLoftFacesNonverticalManifest(ctx context.Context,
 				return nil, false, nil
 			}
 			ref := liveRefs[cell.Band][cell.Segment]
-			index, valid := revolveLoftFacesRefFaceIndex(p, ref, len(faces))
+			index, valid := revolveloftfaces.RefFaceIndex(p, ref, len(faces))
 			face, originValid := revolveLoftFacesUniqueOriginFace(proof.tooth, ref)
 			if !valid || !originValid || (index >= 0) != (face != nil) ||
 				index >= 0 && faces[index] != face {
@@ -143,7 +143,7 @@ const (
 
 type revolveLoftFacesVerticalEntry struct {
 	sectionIndex int
-	outcome      revolveLoftFacesVerticalOutcome
+	outcome      revolveloftfaces.VerticalOutcome
 	side         *revolveLoftFacesVerticalSide // present only for a contact
 }
 
@@ -192,15 +192,15 @@ func revolveLoftFacesAllSideManifest(ctx context.Context,
 		if err != nil {
 			return nil, false, err
 		}
-		if outcome == revolveLoftFacesVerticalRefusal ||
-			outcome == revolveLoftFacesVerticalContact && side == nil ||
-			outcome == revolveLoftFacesVerticalMiss && side != nil {
+		if outcome == revolveloftfaces.VerticalRefusal ||
+			outcome == revolveloftfaces.VerticalContact && side == nil ||
+			outcome == revolveloftfaces.VerticalMiss && side != nil {
 			return nil, false, fmt.Errorf("%w: vertical Revolve side %d is undecidable",
 				ErrUnsupported, index)
 		}
 		manifest.vertical = append(manifest.vertical, revolveLoftFacesVerticalEntry{
 			sectionIndex: index, outcome: outcome, side: side})
-		if outcome == revolveLoftFacesVerticalMiss {
+		if outcome == revolveloftfaces.VerticalMiss {
 			manifest.sideOutcome[index] = revolveLoftFacesSideMiss
 		} else {
 			manifest.sideOutcome[index] = revolveLoftFacesSideSourceCandidate
@@ -256,7 +256,7 @@ func revolveLoftFacesSameShellManifest(a, b *revolveLoftFacesContactManifest) bo
 		for j, cell := range side.cells {
 			match := other.cells[j]
 			if cell.ref != match.ref || cell.face != match.face ||
-				!revolveLoftFacesSameMappedCell(cell.mapped, match.mapped) {
+				!revolveloftfaces.SameMappedCell(cell.mapped, match.mapped) {
 				return false
 			}
 		}
@@ -269,63 +269,6 @@ func revolveLoftFacesSameShellManifest(a, b *revolveLoftFacesContactManifest) bo
 		}
 	}
 	return true
-}
-
-func revolveLoftFacesSameInterval(a, b loftFaceInterval) bool {
-	return revolveloftfaces.RevolveLoftFacesSameRat(a.Lo, b.Lo) && revolveloftfaces.RevolveLoftFacesSameRat(a.Hi, b.Hi)
-}
-
-func revolveLoftFacesSameBox(a, b [3]loftFaceInterval) bool {
-	for axis := range a {
-		if !revolveLoftFacesSameInterval(a[axis], b[axis]) {
-			return false
-		}
-	}
-	return true
-}
-
-func revolveLoftFacesSameCrossing(a, b loftface.RootCrossing) bool {
-	return a.Span == b.Span && revolveloftfaces.RevolveLoftFacesSameRat(a.Lo, b.Lo) &&
-		revolveloftfaces.RevolveLoftFacesSameRat(a.Hi, b.Hi)
-}
-
-func revolveLoftFacesSameMappedCell(a, b revolveloftfaces.RevolveLoftFacesMappedCell) bool {
-	return a.Segment == b.Segment && a.Span == b.Span && a.Band == b.Band &&
-		a.Side == b.Side && a.JointKind == b.JointKind &&
-		a.JointPoint == b.JointPoint && a.JointArc == b.JointArc &&
-		revolveLoftFacesSameCrossing(a.First, b.First) &&
-		revolveLoftFacesSameCrossing(a.Last, b.Last) &&
-		revolveLoftFacesSameInterval(a.XFirst, b.XFirst) &&
-		revolveLoftFacesSameInterval(a.XLast, b.XLast) &&
-		a.XDirection == b.XDirection &&
-		revolveloftfaces.RevolveLoftFacesSameRat(a.SLo, b.SLo) &&
-		revolveloftfaces.RevolveLoftFacesSameRat(a.SHi, b.SHi) &&
-		revolveloftfaces.RevolveLoftFacesSameRat(a.TLo, b.TLo) &&
-		revolveloftfaces.RevolveLoftFacesSameRat(a.THi, b.THi) &&
-		a.TLoOpen == b.TLoOpen && a.THiOpen == b.THiOpen
-}
-
-func revolveLoftFacesSameVerticalLimit(a, b loftface.VerticalLimit) bool {
-	return a.Side == b.Side && a.Before == b.Before && a.After == b.After &&
-		revolveLoftFacesSameInterval(a.Root, b.Root) &&
-		revolveLoftFacesSameBox(a.Box, b.Box)
-}
-
-func revolveLoftFacesSameVerticalAffine(a, b *loftface.VerticalAffine) bool {
-	if a == nil || b == nil {
-		return a == nil && b == nil
-	}
-	for i := range a.Offset {
-		if !revolveloftfaces.RevolveLoftFacesSameRat(a.Offset[i], b.Offset[i]) {
-			return false
-		}
-		for j := range a.Column[i] {
-			if !revolveloftfaces.RevolveLoftFacesSameRat(a.Column[i][j], b.Column[i][j]) {
-				return false
-			}
-		}
-	}
-	return revolveloftfaces.RevolveLoftFacesSameRat(a.Det, b.Det)
 }
 
 func revolveLoftFacesSameVerticalSide(a, b *revolveLoftFacesVerticalSide) bool {
@@ -341,7 +284,7 @@ func revolveLoftFacesSameVerticalSide(a, b *revolveLoftFacesVerticalSide) bool {
 		!revolveloftfaces.RevolveLoftFacesSameRat(a.x, b.x) ||
 		!revolveloftfaces.RevolveLoftFacesSameRat(a.lower, b.lower) ||
 		!revolveloftfaces.RevolveLoftFacesSameRat(a.upper, b.upper) ||
-		!revolveLoftFacesSameVerticalAffine(a.yzAffine, b.yzAffine) ||
+		!loftface.AffineEqual(a.yzAffine, b.yzAffine) ||
 		len(a.cells) != len(b.cells) {
 		return false
 	}
@@ -350,16 +293,16 @@ func revolveLoftFacesSameVerticalSide(a, b *revolveLoftFacesVerticalSide) bool {
 		if cell.segment != other.segment || cell.span != other.span ||
 			cell.band != other.band || cell.ref != other.ref || cell.face != other.face ||
 			!revolveloftfaces.RevolveLoftFacesSameBezier(cell.source, other.source) ||
-			!revolveLoftFacesSameVerticalLimit(cell.lower, other.lower) ||
-			!revolveLoftFacesSameVerticalLimit(cell.upper, other.upper) ||
+			!loftface.LimitEqual(cell.lower, other.lower) ||
+			!loftface.LimitEqual(cell.upper, other.upper) ||
 			len(cell.retained) != len(other.retained) {
 			return false
 		}
 		for j, piece := range cell.retained {
 			match := other.retained[j]
-			if !revolveLoftFacesSameInterval(piece.Source, match.Source) ||
+			if !loftface.IntervalEqual(piece.Source, match.Source) ||
 				piece.LoOpen != match.LoOpen || piece.HiOpen != match.HiOpen ||
-				!revolveLoftFacesSameBox(piece.Box, match.Box) {
+				!revolveloftfaces.CapBoundaryBoxEqual(piece.Box, match.Box) {
 				return false
 			}
 		}

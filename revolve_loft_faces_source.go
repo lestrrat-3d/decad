@@ -307,7 +307,7 @@ func certifyRevolveLoftFacesAgainstRoot(ctx context.Context, blank, tooth *Body,
 		retained := false
 		for band := range refs {
 			ref := refs[band][crossing.segment]
-			index, valid := revolveLoftFacesRefFaceIndex(p, ref, len(faces))
+			index, valid := revolveloftfaces.RefFaceIndex(p, ref, len(faces))
 			face, originValid := revolveLoftFacesUniqueOriginFace(tooth, ref)
 			if !valid || !originValid || (index >= 0) != (face != nil) ||
 				index >= 0 && faces[index] != face {
@@ -385,38 +385,4 @@ func revolveLoftFacesUniqueOriginFace(body *Body, want provenance.Ref) (*Face, b
 		}
 	}
 	return result, true
-}
-
-func revolveLoftFacesRefFaceIndex(p facetedPayload, want provenance.Ref, faceCount int) (int, bool) {
-	if len(p.Src) != len(p.Tris) || len(p.FaceOf) != len(p.Tris) {
-		return -1, false
-	}
-	index := -1
-	for i, group := range p.Src {
-		if group < 0 || group >= len(p.Groups) {
-			return -1, false
-		}
-		if slices.Contains(p.Groups[group].Origins, want) {
-			if p.FaceOf[i] < 0 || p.FaceOf[i] >= faceCount ||
-				index >= 0 && index != p.FaceOf[i] {
-				return -1, false
-			}
-			index = p.FaceOf[i]
-		}
-	}
-	return index, true
-}
-
-// The current point source and profile admission run before the moved
-// whole-cell walk. A stale source cannot reach a simple-loop certificate.
-func revolveLoftFacesSimpleSourceLoop(ctx context.Context,
-	trim *loftFacesTrimRecord) (*revolveloftfaces.SimpleLoop, bool, error) {
-	if ctx == nil || trim == nil || trim.Source == nil ||
-		!facetedrecord.PointSourceCurrent(trim.Source) ||
-		trim.Source.Source.Profile == nil ||
-		!trim.Source.Source.Profile.Valid ||
-		len(trim.Source.Source.Profile.Holes) != 0 {
-		return nil, false, nil
-	}
-	return revolveloftfaces.SimpleSourceLoop(ctx, trim)
 }
