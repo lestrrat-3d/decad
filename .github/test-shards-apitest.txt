@@ -2146,3 +2146,4 @@
 6	0.13	TestBrepLoopFilletUndercutReadsEachPipePatch
 6	0.13	TestBrepLoopFilletUndercutReflexCornerAndBottomLoop
 6	0.13	TestPointLoftSplitPieceRefusesPlanesOutsideItsSlab
+6	0.13	TestLoftFacesRefusesUnauthenticatedSections

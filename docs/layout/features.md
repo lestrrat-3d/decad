@@ -34,7 +34,7 @@ The rules for rows live in `docs/layout.md`.
 | `loft.go` | Loft and LoftChain entry points and options. Builds through `loftrecord.FromProfiles` and `FromChains`. See loft §2/§4/§10/§16. |
 | `loft_sections.go` | Public smooth-section loft entry point and source-face assembly. See loft-sections design. |
 | `cone_from_face.go` | `ConeFromFace`: the full tool cone one float step off a Revolve blank's selected conical face. See loft-face-sections design. |
-| `loft_faces.go` | Bounded source-cap selection checks, the commit of the loft `internal/revolveloftfaces` assembles and proves, shared rational helpers and map aliases, and `LoftFacesToConeTangent` with `ConeTangentEnd`. See loft-face-sections design. |
+| `loft_faces.go` | The commit of the loft `internal/revolveloftfaces` assembles and proves, shared rational helpers and map aliases, and `LoftFacesToConeTangent` with `ConeTangentEnd`. See loft-face-sections design. |
 | `loft_point.go` | Admits a point-section Loft from Sketch and publishes the `internal/pointloft/` payload. See loft-point design. |
 
 ### Cap-loop chamfer

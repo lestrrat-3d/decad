@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/loftfacestrim"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -50,88 +50,10 @@ func buildLoftFaces(ctx context.Context, d *Document, sections []revolveloftface
 	return body, nil
 }
 
-// collectLoftFaces checks every selected face against the document and its
-// Split slab, which reads root Face and Body handles, and returns the
-// sections revolveloftfaces.BuildLoftFaces lofts through.
+// collectLoftFaces authenticates the section faces through
+// revolveloftfaces.Collect, gating each section's body on d.
 func collectLoftFaces(d *Document, faces []*Face) ([]revolveloftfaces.LoftFacesSection, *pointSectionRecord, error) {
-	sections := make([]revolveloftfaces.LoftFacesSection, len(faces))
-	var source *pointSectionRecord
-	seen := make(map[*Body]bool, len(faces)-1)
-	for i, face := range faces {
-		if face == nil || face.n.Body == nil {
-			return nil, nil, fmt.Errorf("%w: LoftFaces section %d is not a body face", ErrDegenerate, i)
-		}
-		body := bodyHandle(face.n.Body)
-		if err := d.requireLive(body); err != nil {
-			return nil, nil, err
-		}
-		fp, ok := body.n.Payload.(facetedPayload)
-		if !ok || fp.PointPlane == nil || fp.PointPlane.Base.PointSection == nil ||
-			len(fp.Verts) == 0 || len(fp.FaceOf) != len(fp.Tris) {
-			return nil, nil, fmt.Errorf("%w: LoftFaces section %d has no authenticated Split cap", ErrUnsupported, i)
-		}
-		record := fp.PointPlane.Base.PointSection
-		if !facetedrecord.PointSourceCurrent(record) {
-			return nil, nil, fmt.Errorf("%w: LoftFaces section %d has a stale source profile", ErrStaleProfile, i)
-		}
-		if source == nil {
-			source = record
-		} else if source != record {
-			return nil, nil, fmt.Errorf("%w: LoftFaces sections have different point-loft sources", ErrUnsupported)
-		}
-		if fp.PointSimilarity != nil && fp.PointSimilarity.Slice != fp.PointPlane {
-			return nil, nil, fmt.Errorf("%w: LoftFaces section %d has broken similarity provenance", ErrUnsupported, i)
-		}
-		faceIndex := -1
-		for j, candidate := range body.Faces() {
-			if candidate == face {
-				faceIndex = j
-				break
-			}
-		}
-		if faceIndex < 0 {
-			return nil, nil, fmt.Errorf("%w: LoftFaces section %d is not in its body", ErrUnsupported, i)
-		}
-		group := -1
-		for j, owner := range fp.FaceOf {
-			if owner == faceIndex {
-				group = fp.Src[j]
-				break
-			}
-		}
-		want := len(fp.Groups) - 1
-		if i == 0 {
-			want--
-		}
-		if group != want || (i == 0 && fp.PointPlane.Lower == nil) {
-			return nil, nil, fmt.Errorf("%w: LoftFaces section %d is not the required Split cap", ErrUnsupported, i)
-		}
-		if complete, ok := pointCapGroupFace(body, fp, want); !ok || complete != face {
-			return nil, nil, fmt.Errorf("%w: LoftFaces section %d is not one complete cap patch", ErrUnsupported, i)
-		}
-		if i == 1 && body != bodyHandle(faces[0].n.Body) {
-			return nil, nil, fmt.Errorf("%w: LoftFaces first toe and heel must share one slab", ErrUnsupported)
-		}
-		if i >= 1 {
-			if seen[body] {
-				return nil, nil, fmt.Errorf("%w: LoftFaces repeats a heel slab", ErrUnsupported)
-			}
-			seen[body] = true
-		}
-		n := len(fp.PointPlane.Base.Verts) - 1
-		if n < 3 || len(fp.Verts) != 2*n || len(fp.PointPlane.Base.Tris) <= n {
-			return nil, nil, fmt.Errorf("%w: LoftFaces section %d has no complete station ring", ErrUnsupported, i)
-		}
-		ring := fp.Verts[n:]
-		limit := fp.PointPlane.Upper
-		if i == 0 {
-			ring = fp.Verts[:n]
-			limit = fp.PointPlane.Lower
-		}
-		sections[i] = revolveloftfaces.LoftFacesSection{Mesh: fp, Slice: fp.PointPlane, Limit: limit,
-			Group: group, Ring: ring, Surface: face.n.Surface}
-	}
-	return sections, source, nil
+	return revolveloftfaces.Collect(faceNodes(faces), func(b *topo.Body) error { return d.requireLive(bodyHandle(b)) })
 }
 
 // The LoftFaces cap-map carriers live in internal/loftface.
