@@ -308,7 +308,7 @@ per planar patch):
   `sectionDisplacementArea` term per planar patch over that patch's own loops
   and one `sectionDisplacementLength · height` term per column; then
   `tessellation.StoreAreaAllow`.
-- Occupied volume (`publishSymDiff`): `Σ_k h_k · E_k`, with `E_k` the summed
+- Occupied volume (`tessellation.SymDiff`): `Σ_k h_k · E_k`, with `E_k` the summed
   circular-segment area of the columns slab `k` carries; `Σ_k h_k ·
   sectionDisplacementArea(sectionDelta, walks_k, perimeter_k)`; each planar
   patch's level displacement times `tessellation.FaceAreaUpper` of that patch; and
