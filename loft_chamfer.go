@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/brepmodify"
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/loftcontact"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
@@ -16,7 +17,7 @@ import (
 // tryLoftCapChamfer is the matching axial loft's complete outer-cap loop
 // route. Its cap contour follows the loft's certified held station polygon.
 func tryLoftCapChamfer(ctx context.Context, b *Body, pl loftPayload, edges []*Edge,
-	d, dDelta float64, asym *asymmetricChamfer) (*Body, bool, error) {
+	d, dDelta float64, asym *brepmodify.Asymmetric) (*Body, bool, error) {
 	if asym != nil || pl.SurfaceResult || pl.Xform != r3.Identity() ||
 		!sectionrecord.IdenticalRecord(pl.Profile0, pl.Profile1) ||
 		len(pl.Profile0.Holes) > 1 ||

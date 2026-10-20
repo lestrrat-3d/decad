@@ -21,8 +21,5 @@ The rules for rows live in `docs/layout.md`.
 | `shell.go` | Public `ShellOption`, `ShellSense` and `Shell`: prism, Sweep and Revolve dispatch, the cap-shell stages over `internal/cupwall/`, and `shellTol`, the tolerance its section offsets pass to `internal/offset2d/`. Prism cap-shell records are `internal/prismshell/`'s. See modify §7–§9 and Table R. |
 | `shell_twist.go` | Admits and commits the inward top-cap Shell of a straight twisted rounded Sweep, and builds its five-face faceted cup from the proven mesh. See shell-twisted-sweep design. |
 | `shell_opening.go` | Prism and straight Sweep side openings: classify removed faces, dispatch the audited region build and record the cap-removed prism case. See shell-opening §3–§5. |
-| `brep_modify.go` | Brep and stacked modify receivers: dispatch, SB1/SB2, route P. See brep-modify. |
-| `brep_shell.go` | Route S's request and the removed-face cap roles handed to `internal/stackedshell/`. `internal/throughshell/` owns the route: record geometry, stages and the circular tool-wall opening. See modify-general §3. |
-| `brep_modify_edge.go` | Route E: public edge and reference-face checks, ordered gate dispatch and result commit. `breprecord` reads and rewrites the record and checks reference-face roles. See brep-modify §5. |
-| `brep_modify_loop.go` | Route L/V public edge and face adapters and result commit; `breploop` selects and rewrites the record, and `breprecord` builds the bands and mass. See modify-general §4. |
-| `brep_modify_partial.go` | Route L partial-loop fillet and chamfer adapters: route E preparation of the selected public edges and the body build; `breploop` gates and rewrites the record. Also `WithTangentChain`'s public handles, selectors and refusals. See modify-reach §5 and modify-general §4.3a. |
+| `brep_modify.go` | The prism cap faces a modify op classifies against, the modify commit, and the conversions to `internal/brepmodify/`, which owns the brep and stacked receiver routes. See brep-modify. |
+| `brep_modify_partial.go` | `WithTangentChain`'s public handles, selectors and refusals over `internal/tangentchain/`. See modify-reach §5. |

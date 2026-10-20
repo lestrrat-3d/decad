@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/modifyoption"
 	"github.com/lestrrat-3d/decad/internal/modifyselect"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -138,7 +139,7 @@ func WithNoOpenings() ShellOption {
 // the selector errors the seed query takes. An edge with no adjacent face in
 // the resolved set, or with both, and a resolved face adjacent to no
 // expanded edge, are ErrCardinality.
-func resolveAsymmetricReference(b *Body, a *asymmetricChamferOpts, edges []*Edge) (map[*Edge]*Face, error) {
+func resolveAsymmetricReference(b *Body, a *asymmetricChamferOpts, edges []*Edge) (map[*topo.Edge]*topo.Face, error) {
 	if a.Foreign != "" {
 		return nil, fmt.Errorf(`%w: the asymmetric chamfer's reference is not a decad face query (%s)`, ErrDegenerate, a.Foreign)
 	}
@@ -154,7 +155,7 @@ func resolveAsymmetricReference(b *Body, a *asymmetricChamferOpts, edges []*Edge
 		resolved[f] = struct{}{}
 	}
 	touched := make(map[*Face]struct{}, len(faces))
-	refs := make(map[*Edge]*Face, len(edges))
+	refs := make(map[*topo.Edge]*topo.Face, len(edges))
 	for ei, e := range edges {
 		var ref *Face
 		count := 0
@@ -168,7 +169,7 @@ func resolveAsymmetricReference(b *Body, a *asymmetricChamferOpts, edges []*Edge
 			return nil, fmt.Errorf(`%w: the asymmetric chamfer's reference %s names %d of the faces adjacent to %s; it must name exactly one (modify-reach SX3)`,
 				ErrCardinality, a.Reference, count, modifyselect.EdgeContext(ei, edgeNode(e)))
 		}
-		refs[e] = ref
+		refs[edgeNode(e)] = faceNode(ref)
 		touched[ref] = struct{}{}
 	}
 	if len(touched) != len(resolved) {
@@ -176,107 +177,4 @@ func resolveAsymmetricReference(b *Body, a *asymmetricChamferOpts, edges []*Edge
 			ErrCardinality, a.Reference, len(resolved), len(touched))
 	}
 	return refs, nil
-}
-
-// asymmetricChamfer is a resolved WithAsymmetricChamfer: the receiver whose
-// face roles map a reference face to a walk of the recorded section, each
-// chamfered edge's reference face, and the two distances in millimetres —
-// d, the positional distance, across the reference face, and other across
-// the face beside it — each beside the rounding its own unit conversion
-// committed.
-type asymmetricChamfer struct {
-	body               *Body
-	refs               map[*Edge]*Face
-	recordRoles        []string
-	d, other           float64
-	dDelta, otherDelta float64
-}
-
-// setbacks returns the arc lengths a chamfer of corner ci of loop li sets
-// back along the arriving and the leaving walk (docs/modify-reach-design.md
-// §6): the walk whose wall is e's reference face takes d and the other walk
-// takes other. A side wall's side(i,j) roles name the recorded segments it
-// is built from, and the reference face's roles decide which walk it is; a
-// face whose roles name segments of both walks or of neither is
-// ErrUnsupported, since this evaluator cannot tell which setback it takes.
-func (a *asymmetricChamfer) setbacks(loop cornerLoop, li, ci int, e *Edge) (float64, float64, error) {
-	ref := a.refs[e]
-	if ref == nil {
-		return 0, 0, fmt.Errorf(`%w: the asymmetric chamfer has no reference face for this edge`, ErrUnsupported)
-	}
-	segs := faceSideSegments(a.body, ref, li)
-	n := len(loop.Walks)
-	arriving := modifyoption.WalkHoldsAny(loop.Walks[(ci+n-1)%n].Segs, segs)
-	leaving := modifyoption.WalkHoldsAny(loop.Walks[ci].Segs, segs)
-	switch {
-	case arriving && !leaving:
-		return a.d, a.other, nil
-	case leaving && !arriving:
-		return a.other, a.d, nil
-	default:
-		return 0, 0, fmt.Errorf(`%w: the asymmetric chamfer's reference face is not the wall of exactly one of the two walks meeting at loop %d corner %d`, ErrUnsupported, li, ci)
-	}
-}
-
-// capSetbacks returns the start and the end cap's own two setbacks for a
-// two-distance chamfer of complete cap loops (docs/modify-reach-design.md
-// §8.3.1). Every edge of a cap loop borders its cap face and one side wall, and
-// its reference face picks between them: the cap face gives the cap dc = d and
-// ds = other, a side wall gives dc = other and ds = d. The pick is made per
-// cap. A cap whose edges pick differently, and a loop chamfered on both caps
-// whose caps pick differently, give one loop's patches two in-plane offsets,
-// and both are SX4 (ErrUnsupported). SX3 has already refused both shapes — a
-// cap face borders every edge of its loops, and a side wall borders that
-// loop's edges on both caps, so a mixed pick names some edge's two faces or
-// neither — and these arms are a second check over the resolved pairs. An
-// edge on neither cap face is ErrUnsupported; classifyChamferSelection has
-// already put every selected edge on one. A cap with no selected edge reads
-// the side-wall pick, which no band reads.
-func (a *asymmetricChamfer) capSetbacks(caps prismCaps, edges []*Edge, startLoops, endLoops map[int]bool) (capSetback, capSetback, error) {
-	var seen, capRef [2]bool
-	for ei, e := range edges {
-		c, capFace := -1, (*Face)(nil)
-		for _, f := range e.n.Faces {
-			switch {
-			case f == faceNode(caps.start) && f != nil:
-				c, capFace = 0, faceHandle(f)
-			case f == faceNode(caps.end) && f != nil:
-				c, capFace = 1, faceHandle(f)
-			}
-		}
-		if c < 0 {
-			return capSetback{}, capSetback{}, fmt.Errorf(`%w: the asymmetric chamfer's %s borders neither cap face`, ErrUnsupported, modifyselect.EdgeContext(ei, edgeNode(e)))
-		}
-		ref := a.refs[e] == capFace
-		if seen[c] && capRef[c] != ref {
-			return capSetback{}, capSetback{}, fmt.Errorf(`%w: the asymmetric chamfer's reference names the cap face for some edges of one cap and a side wall for others; one cap takes one assignment (modify-reach SX4)`, ErrUnsupported)
-		}
-		seen[c], capRef[c] = true, ref
-	}
-	if seen[0] && seen[1] && capRef[0] != capRef[1] {
-		for li, on := range startLoops {
-			if on && endLoops[li] {
-				return capSetback{}, capSetback{}, fmt.Errorf(`%w: the asymmetric chamfer's reference names the cap face on one cap of loop %d and its side walls on the other; one loop takes one assignment (modify-reach SX4)`, ErrUnsupported, li)
-			}
-		}
-	}
-	pick := func(capReferenced bool) capSetback {
-		if capReferenced {
-			return capSetback{Dc: a.d, DcDelta: a.dDelta, Ds: a.other, DsDelta: a.otherDelta}
-		}
-		return capSetback{Dc: a.other, DcDelta: a.otherDelta, Ds: a.d, DsDelta: a.dDelta}
-	}
-	return pick(capRef[0]), pick(capRef[1]), nil
-}
-
-// faceSideSegments returns the recorded segments of loop li that face f is
-// built from, read from its side(i,j) roles under b's own producer.
-func faceSideSegments(b *Body, f *Face, li int) map[int]struct{} {
-	var roles []string
-	for _, o := range f.n.Origins {
-		if o.Producer == b.n.Origin.Producer {
-			roles = append(roles, o.Role)
-		}
-	}
-	return modifyoption.SideSegments(roles, li)
 }

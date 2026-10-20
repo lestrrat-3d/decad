@@ -1,15 +1,19 @@
-package decad
+package brepmodify
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/breploop"
 	"github.com/lestrrat-3d/decad/internal/breprecord"
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/modifyselect"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 )
 
 // This file is route L of docs/modify-general-design.md ("modify-general §N"
@@ -31,7 +35,7 @@ import (
 // brepLoopRead joins the private route L record proof to the public call.
 type brepLoopRead struct {
 	state *breploop.State
-	call  brepModifyRequest
+	call  Request
 	input breploop.SelectionInput
 }
 
@@ -53,21 +57,20 @@ func (r *brepLoopRead) selection(ordinals []int) brepLoopSelection {
 
 func (s brepLoopSelection) len() int { return s.view.Len() }
 
-func (s brepLoopSelection) edge(i int) *Edge { return s.read.call.edges[s.view.Ordinals[i]] }
+func (s brepLoopSelection) edge(i int) *topo.Edge { return s.read.call.Edges[s.view.Ordinals[i]] }
 
-func (s brepLoopSelection) edges() []*Edge {
-	edges := make([]*Edge, s.len())
+func (s brepLoopSelection) edges() []*topo.Edge {
+	edges := make([]*topo.Edge, s.len())
 	for i := range edges {
 		edges[i] = s.edge(i)
 	}
 	return edges
 }
 
-// brepLoopSel is one touched loop of Table LB: the loop of index loop on the
+// breploop.Sel is one touched loop of Table LB: the loop of index loop on the
 // planar face of index face, what lies beside each of its segments (LB3),
 // and the band's sense (LB6), −1 for walls descending into the body and +1
 // for walls rising off it.
-type brepLoopSel = breploop.Sel
 
 // brepLoopRoute is the brep route of a Fillet or Chamfer that route P does not
 // take (modify-general §4.4's stage 2c, loop-fillet §6). Independent straight
@@ -75,7 +78,7 @@ type brepLoopSel = breploop.Sel
 // planar loops takes route V, which runs E then L. Shared straight edges on
 // a swept wall restate that wall before route L's partial-loop construction.
 // Other selections take L or its SL1 refusal.
-func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepModifyRequest) (*Body, error) {
+func brepLoopRoute(ctx context.Context, env topo.Env, bp breprecord.Payload, call Request) (*topo.Body, error) {
 	r, err := newBrepLoopRead(ctx, bp, call)
 	if err != nil {
 		return nil, err
@@ -84,30 +87,30 @@ func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepMo
 		return nil, err
 	}
 	if r.fullSelection().singleStraightEdges() {
-		body, err := brepBlendEdges(ctx, d, bp, call)
-		var mismatch *brepMaterialWedgeMismatchError
-		if len(call.edges) == 1 && call.loopKind == breprecord.BandFillet && errors.As(err, &mismatch) {
+		body, err := BlendEdges(ctx, env, bp, call)
+		var mismatch *breprecord.MaterialWedgeMismatchError
+		if len(call.Edges) == 1 && call.LoopKind == breprecord.BandFillet && errors.As(err, &mismatch) {
 			if sel, selected, ok := r.fullSelection().view.PartialSelectedLoop(); ok {
-				return brepFilletPartialLoop(ctx, d, bp, call, sel, selected)
+				return brepFilletPartialLoop(ctx, env, bp, call, sel, selected)
 			}
 		}
-		if len(call.edges) == 1 && call.loopKind == breprecord.BandChamfer && call.asym == nil &&
+		if len(call.Edges) == 1 && call.LoopKind == breprecord.BandChamfer && call.Asym == nil &&
 			errors.As(err, &mismatch) {
 			if sel, selected, ok := r.fullSelection().view.PartialSelectedLoop(); ok {
-				return brepChamferPartialLoop(ctx, d, bp, call, sel, selected)
+				return brepChamferPartialLoop(ctx, env, bp, call, sel, selected)
 			}
 		}
 		return body, err
 	}
-	if call.asym != nil {
+	if call.Asym != nil {
 		loops, err := r.fullSelection().admitLoops()
 		if err != nil {
-			return nil, fmt.Errorf(`%w: an asymmetric chamfer on a brep requires independent straight edges or complete planar-face loops (modify-reach SX16): %v`, ErrUnsupported, err)
+			return nil, fmt.Errorf(`%w: an asymmetric chamfer on a brep requires independent straight edges or complete planar-face loops (modify-reach SX16): %v`, decaderr.ErrUnsupported, err)
 		}
-		return r.buildSelectedLoops(ctx, d, loops)
+		return r.buildSelectedLoops(ctx, env, loops)
 	}
-	if call.loopKind == breprecord.BandFillet {
-		if body, recognized, err := r.cornerTriad(ctx, d); recognized {
+	if call.LoopKind == breprecord.BandFillet {
+		if body, recognized, err := r.cornerTriad(ctx, env); recognized {
 			return body, err
 		}
 		loops, singles, mixed, err := r.splitVertexBlend()
@@ -116,28 +119,28 @@ func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepMo
 		}
 		if mixed {
 			stepCall := call
-			stepCall.edges = singles
-			step, err := brepBlendEdges(ctx, d, bp, stepCall)
+			stepCall.Edges = singles
+			step, err := BlendEdges(ctx, env, bp, stepCall)
 			if err != nil {
 				return nil, err
 			}
-			rewritten, ok := step.n.Payload.(brepPayload)
+			rewritten, ok := step.Payload.(breprecord.Payload)
 			if !ok {
-				return nil, fmt.Errorf(`%w: the straight-edge fillet produced no brep record`, ErrUnsupported)
+				return nil, fmt.Errorf(`%w: the straight-edge fillet produced no brep record`, decaderr.ErrUnsupported)
 			}
 			next, err := newBrepLoopRead(ctx, rewritten, call)
 			if err != nil {
 				return nil, err
 			}
-			return next.buildSelectedLoops(ctx, d, loops)
+			return next.buildSelectedLoops(ctx, env, loops)
 		}
 		if sel, selected, ok := r.fullSelection().view.PartialSelectedLoop(); ok {
-			return brepFilletPartialLoop(ctx, d, bp, call, sel, selected)
+			return brepFilletPartialLoop(ctx, env, bp, call, sel, selected)
 		}
 		// A pair of edges can share a swept wall without sharing a planar
 		// loop in the input record. Route E's preparation restates that wall;
 		// the same partial-loop builder can then close their common corner.
-		if selectedStraightEdgesShareVertex(call.edges) {
+		if selectedStraightEdgesShareVertex(call.Edges) {
 			er, blends, err := prepareBrepEdgeBlends(ctx, bp, call, true, nil)
 			if err == nil {
 				next, err := newBrepLoopRead(ctx, er.BP, call)
@@ -149,30 +152,30 @@ func brepLoopRoute(ctx context.Context, d *Document, bp brepPayload, call brepMo
 				}
 				if sel, selected, ok := next.fullSelection().view.PartialSelectedLoop(); ok {
 					breploop.MarkChainTerminals(blends)
-					return next.buildPartialFillet(ctx, d, sel, selected, blends)
+					return next.buildPartialFillet(ctx, env, sel, selected, blends)
 				}
 			}
 		}
 	}
-	if call.loopKind == breprecord.BandChamfer && len(call.edges) == 2 {
+	if call.LoopKind == breprecord.BandChamfer && len(call.Edges) == 2 {
 		if sel, selected, ok := r.fullSelection().view.PartialSelectedLoop(); ok {
-			return brepChamferPartialLoop(ctx, d, bp, call, sel, selected)
+			return brepChamferPartialLoop(ctx, env, bp, call, sel, selected)
 		}
 	}
-	return r.buildLoops(ctx, d)
+	return r.buildLoops(ctx, env)
 }
 
 // cornerTriad rounds three edges at one vertex by rounding the edge across
 // a planar cap first. The cap's two shortened lines and the new tangent arc
 // then form one partial fillet chain with a sphere at that arc.
-func (r *brepLoopRead) cornerTriad(ctx context.Context, d *Document) (*Body, bool, error) {
-	if len(r.call.edges) != 3 {
+func (r *brepLoopRead) cornerTriad(ctx context.Context, env topo.Env) (*topo.Body, bool, error) {
+	if len(r.call.Edges) != 3 {
 		return nil, false, nil
 	}
-	var corner *Vertex
-	for _, v := range [2]*Vertex{vertexHandle(r.call.edges[0].n.Start), vertexHandle(r.call.edges[0].n.End)} {
-		if v != nil && (vertexHandle(r.call.edges[1].n.Start) == v || vertexHandle(r.call.edges[1].n.End) == v) &&
-			(vertexHandle(r.call.edges[2].n.Start) == v || vertexHandle(r.call.edges[2].n.End) == v) {
+	var corner *topo.Vertex
+	for _, v := range [2]*topo.Vertex{r.call.Edges[0].Start, r.call.Edges[0].End} {
+		if v != nil && (r.call.Edges[1].Start == v || r.call.Edges[1].End == v) &&
+			(r.call.Edges[2].Start == v || r.call.Edges[2].End == v) {
 			corner = v
 			break
 		}
@@ -196,7 +199,7 @@ func (r *brepLoopRead) cornerTriad(ctx context.Context, d *Document) (*Body, boo
 		}
 		singleSelection := r.selection([]int{single})
 		singleCall := r.call
-		singleCall.edges = singleSelection.edges()
+		singleCall.Edges = singleSelection.edges()
 		if !singleSelection.singleStraightEdges() {
 			continue
 		}
@@ -211,48 +214,48 @@ func (r *brepLoopRead) cornerTriad(ctx context.Context, d *Document) (*Body, boo
 		if !adjacent {
 			continue
 		}
-		step, err := brepBlendEdges(ctx, d, r.state.Payload, singleCall)
+		step, err := BlendEdges(ctx, env, r.state.Payload, singleCall)
 		if err != nil {
 			return nil, true, err
 		}
-		bp, ok := step.n.Payload.(brepPayload)
+		bp, ok := step.Payload.(breprecord.Payload)
 		if !ok {
-			return nil, true, fmt.Errorf(`%w: the first corner blend produced no brep record`, ErrUnsupported)
+			return nil, true, fmt.Errorf(`%w: the first corner blend produced no brep record`, decaderr.ErrUnsupported)
 		}
-		var face *Face
-		for _, candidate := range step.Faces() {
-			for _, origin := range candidate.n.Origins {
+		var face *topo.Face
+		for _, candidate := range topobuild.Faces(step) {
+			for _, origin := range candidate.Origins {
 				if origin.Role == bp.Faces[capSel.Face].Role {
 					face = candidate
 				}
 			}
 		}
-		if face == nil || capSel.Loop >= len(face.n.Loops) {
-			return nil, true, fmt.Errorf(`%w: the rounded corner lost its cap face`, ErrUnsupported)
+		if face == nil || capSel.Loop >= len(face.Loops) {
+			return nil, true, fmt.Errorf(`%w: the rounded corner lost its cap face`, decaderr.ErrUnsupported)
 		}
-		loopEdges := loopEdges(face.n.Loops[capSel.Loop])
-		var shortened [2]*Edge
-		var near [2]*Vertex
+		loopEdges := topobuild.LoopEdges(face.Loops[capSel.Loop])
+		var shortened [2]*topo.Edge
+		var near [2]*topo.Vertex
 		for j, originalIndex := range others {
-			original := r.call.edges[originalIndex]
-			far := vertexHandle(original.n.Start)
+			original := r.call.Edges[originalIndex]
+			far := original.Start
 			if far == corner {
-				far = vertexHandle(original.n.End)
+				far = original.End
 			}
-			oldDir := original.n.End.Position.Sub(original.n.Start.Position)
+			oldDir := original.End.Position.Sub(original.Start.Position)
 			for _, edge := range loopEdges {
-				if _, ok := edge.n.Curve.(surfacegeom.Line3); !ok {
+				if _, ok := edge.Curve.(surfacegeom.Line3); !ok {
 					continue
 				}
-				other := vertexHandle(edge.n.Start)
+				other := edge.Start
 				switch {
-				case edge.n.Start.Position.Sub(far.n.Position).Len() <= 1e-6:
-					other = vertexHandle(edge.n.End)
-				case edge.n.End.Position.Sub(far.n.Position).Len() <= 1e-6:
+				case edge.Start.Position.Sub(far.Position).Len() <= 1e-6:
+					other = edge.End
+				case edge.End.Position.Sub(far.Position).Len() <= 1e-6:
 				default:
 					continue
 				}
-				newDir := edge.n.End.Position.Sub(edge.n.Start.Position)
+				newDir := edge.End.Position.Sub(edge.Start.Position)
 				if oldDir.Cross(newDir).Len() > 1e-6*oldDir.Len()*newDir.Len() {
 					continue
 				}
@@ -260,25 +263,25 @@ func (r *brepLoopRead) cornerTriad(ctx context.Context, d *Document) (*Body, boo
 				break
 			}
 			if shortened[j] == nil {
-				return nil, true, fmt.Errorf(`%w: a corner cap edge has no shortened successor`, ErrUnsupported)
+				return nil, true, fmt.Errorf(`%w: a corner cap edge has no shortened successor`, decaderr.ErrUnsupported)
 			}
 		}
-		var arc *Edge
+		var arc *topo.Edge
 		for _, edge := range loopEdges {
-			if _, ok := edge.n.Curve.(surfacegeom.Arc3); !ok {
+			if _, ok := edge.Curve.(surfacegeom.Arc3); !ok {
 				continue
 			}
-			if (vertexHandle(edge.n.Start) == near[0] && vertexHandle(edge.n.End) == near[1]) ||
-				(vertexHandle(edge.n.Start) == near[1] && vertexHandle(edge.n.End) == near[0]) {
+			if (edge.Start == near[0] && edge.End == near[1]) ||
+				(edge.Start == near[1] && edge.End == near[0]) {
 				arc = edge
 				break
 			}
 		}
 		if arc == nil {
-			return nil, true, fmt.Errorf(`%w: the rounded corner has no joining cap arc`, ErrUnsupported)
+			return nil, true, fmt.Errorf(`%w: the rounded corner has no joining cap arc`, decaderr.ErrUnsupported)
 		}
 		nextCall := r.call
-		nextCall.edges = []*Edge{shortened[0], shortened[1], arc}
+		nextCall.Edges = []*topo.Edge{shortened[0], shortened[1], arc}
 		next, err := newBrepLoopRead(ctx, bp, nextCall)
 		if err != nil {
 			return nil, true, err
@@ -290,7 +293,7 @@ func (r *brepLoopRead) cornerTriad(ctx context.Context, d *Document) (*Body, boo
 		if !ok || newCap.Face != capSel.Face || newCap.Loop != capSel.Loop {
 			return nil, true, next.state.Refuse("SL1", `the rounded corner has no selected cap chain`)
 		}
-		body, err := brepFilletPartialLoop(ctx, d, bp, nextCall, newCap, newSelected)
+		body, err := brepFilletPartialLoop(ctx, env, bp, nextCall, newCap, newSelected)
 		return body, true, err
 	}
 	return nil, false, nil
@@ -298,14 +301,14 @@ func (r *brepLoopRead) cornerTriad(ctx context.Context, d *Document) (*Body, boo
 
 // splitVertexBlend finds complete selected planar loops and the remaining
 // independent straight edges. Face and loop indices survive route E's rewrite.
-func (r *brepLoopRead) splitVertexBlend() ([]brepLoopSel, []*Edge, bool, error) {
+func (r *brepLoopRead) splitVertexBlend() ([]breploop.Sel, []*topo.Edge, bool, error) {
 	result, err := r.fullSelection().view.SplitVertexBlend()
 	if err != nil {
 		return nil, nil, false, err
 	}
-	straight := make([]*Edge, len(result.StraightOrdinals))
+	straight := make([]*topo.Edge, len(result.StraightOrdinals))
 	for i, ordinal := range result.StraightOrdinals {
-		straight[i] = r.call.edges[ordinal]
+		straight[i] = r.call.Edges[ordinal]
 	}
 	return result.Loops, straight, result.Mixed, nil
 }
@@ -313,19 +316,19 @@ func (r *brepLoopRead) splitVertexBlend() ([]brepLoopSel, []*Edge, bool, error) 
 // buildLoops is route L over the matched selection: Table LB admits the
 // loops, the record is rewritten with one band of the call's kind per loop,
 // and the rewritten record is built.
-func (r *brepLoopRead) buildLoops(ctx context.Context, d *Document) (*Body, error) {
+func (r *brepLoopRead) buildLoops(ctx context.Context, env topo.Env) (*topo.Body, error) {
 	call := r.call
-	if call.loop == nil {
-		return nil, fmt.Errorf(`%w: route L reads a %s request with no setback`, ErrUnsupported, call.op)
+	if call.Loop == nil {
+		return nil, fmt.Errorf(`%w: route L reads a %s request with no setback`, decaderr.ErrUnsupported, call.Op)
 	}
 	loops, err := r.fullSelection().admitLoops()
 	if err != nil {
 		return nil, err
 	}
-	return r.buildSelectedLoops(ctx, d, loops)
+	return r.buildSelectedLoops(ctx, env, loops)
 }
 
-func (r *brepLoopRead) buildSelectedLoops(ctx context.Context, d *Document, loops []brepLoopSel) (*Body, error) {
+func (r *brepLoopRead) buildSelectedLoops(ctx context.Context, env topo.Env, loops []breploop.Sel) (*topo.Body, error) {
 	call := r.call
 	for i := range loops {
 		if err := r.state.ClassifyLoop(&loops[i]); err != nil {
@@ -342,17 +345,17 @@ func (r *brepLoopRead) buildSelectedLoops(ctx context.Context, d *Document, loop
 	if err != nil {
 		return nil, err
 	}
-	body, err := bodyResult(breprecord.Build(ctx, envOf(documentNode(d), d.nextProducerID()), out))
+	body, err := breprecord.Build(ctx, env, out)
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, ctxErr
 		}
 		return nil, fmt.Errorf(`%w; the %s's rewritten brep record (modify-general §4.2 step 6); selector %s matched [%s]`,
-			err, call.loopKind, call.sel, modifyselect.EdgesContext(edgeNodes(call.edges)))
+			err, call.LoopKind, call.Sel, modifyselect.EdgesContext(call.Edges))
 	}
-	if body.n.Volume.Value.Base() <= 0 {
+	if body.Volume.Value.Base() <= 0 {
 		return nil, fmt.Errorf(`%w: the %s's rewritten brep record encloses no volume (modify-general §4.2 step 6); selector %s matched [%s]`,
-			ErrDegenerate, call.loopKind, call.sel, modifyselect.EdgesContext(edgeNodes(call.edges)))
+			decaderr.ErrDegenerate, call.LoopKind, call.Sel, modifyselect.EdgesContext(call.Edges))
 	}
 	return body, nil
 }
@@ -360,33 +363,30 @@ func (r *brepLoopRead) buildSelectedLoops(ctx context.Context, d *Document, loop
 // newBrepLoopRead reads the receiver record bp for one route L call: its
 // topology and each planar loop segment's use. Matching the selected edges is
 // matchEdges's.
-func newBrepLoopRead(ctx context.Context, bp brepPayload, call brepModifyRequest) (*brepLoopRead, error) {
-	state, err := breploop.New(ctx, bp, call.op, call.loopKind, call.loop)
+func newBrepLoopRead(ctx context.Context, bp breprecord.Payload, call Request) (*brepLoopRead, error) {
+	state, err := breploop.New(ctx, bp, call.Op, call.LoopKind, call.Loop)
 	if err != nil {
 		return nil, err
 	}
-	state.Selector = fmt.Sprintf("%s", call.sel)
-	state.SelectedText = modifyselect.EdgesContext(edgeNodes(call.edges))
+	state.Selector = call.Sel
+	state.SelectedText = modifyselect.EdgesContext(call.Edges)
 	input := breploop.SelectionInput{
-		Edges: make([]*topo.Edge, len(call.edges)),
+		Edges: slices.Clone(call.Edges),
 		Describe: func(local, original int) string {
-			return modifyselect.EdgeContext(local, edgeNode(call.edges[original]))
+			return modifyselect.EdgeContext(local, call.Edges[original])
 		},
 	}
-	for i, edge := range call.edges {
-		input.Edges[i] = &edge.n
-	}
-	if call.asym != nil {
+	if call.Asym != nil {
 		asym := &breploop.AsymmetricInput{
-			Receiver: &call.asym.body.n, RecordRoles: call.asym.recordRoles,
-			D: call.asym.d, DDelta: call.asym.dDelta,
-			Other: call.asym.other, OtherDelta: call.asym.otherDelta,
-			References: make([]*topo.Face, len(call.edges)),
+			Receiver: call.Asym.Body, RecordRoles: call.Asym.RecordRoles,
+			D: call.Asym.D, DDelta: call.Asym.DDelta,
+			Other: call.Asym.Other, OtherDelta: call.Asym.OtherDelta,
+			References: make([]*topo.Face, len(call.Edges)),
 		}
-		for i, edge := range call.edges {
-			ref := call.asym.refs[edge]
+		for i, edge := range call.Edges {
+			ref := call.Asym.Refs[edge]
 			if ref != nil {
-				asym.References[i] = &ref.n
+				asym.References[i] = ref
 			}
 		}
 		input.Asym = asym
@@ -394,21 +394,21 @@ func newBrepLoopRead(ctx context.Context, bp brepPayload, call brepModifyRequest
 	return &brepLoopRead{state: state, call: call, input: input}, nil
 }
 
-// prismFaceViewBlend reads a prism through its brep face view for a Fillet
+// PrismFaceViewBlend reads a prism through its brep face view for a Fillet
 // of cap edges (RF3) or a Chamfer of one straight cap edge. Route E, L or V
 // builds the selection or returns its specific refusal.
-func prismFaceViewBlend(ctx context.Context, d *Document, pp prismPayload, call brepModifyRequest) (*Body, error) {
+func PrismFaceViewBlend(ctx context.Context, env topo.Env, pp prismrecord.Payload, call Request) (*topo.Body, error) {
 	bp, sourceRoles, err := breprecord.OfPrismWithRoles(pp)
 	if err != nil {
 		return nil, err
 	}
-	if err := breprecord.RequireExactSection(bp, call.op); err != nil {
+	if err := breprecord.RequireExactSection(bp, call.Op); err != nil {
 		return nil, err
 	}
-	if call.asym != nil {
-		call.asym.recordRoles = sourceRoles
+	if call.Asym != nil {
+		call.Asym.RecordRoles = sourceRoles
 	}
-	return brepLoopRoute(ctx, d, bp, call)
+	return brepLoopRoute(ctx, env, bp, call)
 }
 
 // matchEdges matches each selected edge to the one record edge whose ends,
@@ -436,13 +436,13 @@ func (s brepLoopSelection) singleStraightEdges() bool {
 // The loops are returned in the order the selection first reaches them. A
 // loop on a face with a section displacement is SB1, which the brep route
 // already refused for the whole record.
-func (s brepLoopSelection) admitLoops() ([]brepLoopSel, error) {
+func (s brepLoopSelection) admitLoops() ([]breploop.Sel, error) {
 	return s.view.AdmitLoops()
 }
 
 // assignLoopSetbacks maps the public reference face of each selected edge to
 // its loop face or its neighbouring record face. Each loop and each material
 // side of one face must use one cap/side pair for the shared cap-blend view.
-func (r *brepLoopRead) assignLoopSetbacks(sels []brepLoopSel) error {
+func (r *brepLoopRead) assignLoopSetbacks(sels []breploop.Sel) error {
 	return r.fullSelection().view.AssignLoopSetbacks(sels)
 }

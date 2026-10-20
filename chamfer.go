@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/brepmodify"
 	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/crossbore"
@@ -15,6 +16,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/sweeprecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
@@ -225,14 +227,14 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 	}
 	// Reach stage 3 (§6, SX3): the asymmetric reference resolves against the
 	// receiver, after expansion, to one adjacent face per chamfered edge.
-	var asym *asymmetricChamfer
+	var asym *brepmodify.Asymmetric
 	if o.Asymmetric != nil {
 		refs, err := resolveAsymmetricReference(b, o.Asymmetric, edges)
 		if err != nil {
 			return nil, err
 		}
-		asym = &asymmetricChamfer{body: b, refs: refs, d: dmm, other: o.Asymmetric.OtherMM,
-			dDelta: dDelta, otherDelta: o.Asymmetric.OtherDelta}
+		asym = &brepmodify.Asymmetric{Body: &b.n, Refs: refs, D: dmm, Other: o.Asymmetric.OtherMM,
+			DDelta: dDelta, OtherDelta: o.Asymmetric.OtherDelta}
 	}
 
 	// SX10: a capBlendPayload receiver is staged before the generic
@@ -253,13 +255,13 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 	// Several body routes need the same flat cut at a section corner.
 	// For unequal setbacks, the chosen reference face decides which nearby
 	// section walk receives each distance.
-	blend := revolveBlendOp{
-		kind: "chamfer",
-		corner: func(loop cornerLoop, li, ci int, e *Edge) (*cornerBlend, error) {
+	blend := brepmodify.BlendOp{
+		Kind: "chamfer",
+		Corner: func(loop cornerLoop, li, ci int, e *topo.Edge) (*cornerBlend, error) {
 			if asym == nil {
 				return computeChamfer(loop, ci, dmm, dmm)
 			}
-			dA, dB, err := asym.setbacks(loop, li, ci, e)
+			dA, dB, err := asym.Setbacks(loop, li, ci, e)
 			if err != nil {
 				return nil, err
 			}
@@ -269,13 +271,13 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 	// Give the boundary-representation (brep) builder the selected edges and
 	// setback rules together. This lets it reuse the same request when the
 	// receiver is a brep or a stack of earlier operations (§2).
-	loopCall := brepModifyRequest{op: "chamfers",
-		admits: func(pp prismPayload, caps prismCaps) error {
-			_, _, _, err := classifyChamferSelection(ctx, pp, caps, sel, edges)
+	loopCall := brepmodify.Request{Op: "chamfers",
+		Admits: func(pp prismPayload, caps brepmodify.PrismCaps) error {
+			_, _, _, err := classifyChamferSelection(ctx, pp, prismCapsOfNodes(caps), sel, edges)
 			return err
 		},
-		sel: sel, edges: edges, blend: &blend, asym: asym,
-		loop: &capSetback{Dc: dmm, DcDelta: dDelta, Ds: dmm, DsDelta: dDelta}, loopKind: breprecord.BandChamfer}
+		Sel: fmt.Sprint(sel), Edges: edgeNodes(edges), Blend: &blend, Asym: asym, CurveName: publicCurveName,
+		Loop: &capSetback{Dc: dmm, DcDelta: dDelta, Ds: dmm, DsDelta: dDelta}, LoopKind: breprecord.BandChamfer}
 	if bp, ok := b.n.Payload.(brepPayload); ok {
 		// Some selections need a whole-body chamfer instead of the usual edge route.
 		node, matched, err := breprecord.TryAllEdgeChamfer(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), &b.n, bp,
@@ -288,12 +290,12 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 			return commitModifyResult(ctx, b, body)
 		}
 	}
-	route, err := modifyBrepReceiver(ctx, b, loopCall)
+	route, err := brepmodify.Receiver(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), &b.n, loopCall)
 	if err != nil {
 		return nil, err
 	}
-	if route.body != nil {
-		return commitModifyResult(ctx, b, route.body)
+	if route.Body != nil {
+		return commitModifyResult(ctx, b, bodyHandle(route.Body))
 	}
 	// These recorded shapes have specialized constructions. A recognized shape
 	// returns its result or its specific refusal instead of falling through to
@@ -359,8 +361,8 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 	caps := prismCapsOf(b)
 	// A brep route can supply an exact prism view even when the original body
 	// is stored differently. Use that view for the remaining prism cases.
-	if route.prism != nil {
-		pp, ok, caps = *route.prism, true, route.caps
+	if route.Prism != nil {
+		pp, ok, caps = *route.Prism, true, prismCapsOfNodes(route.Caps)
 	}
 	// The selector has already resolved on the published Sweep. Only the
 	// certified one-line solid reads through its stored exact prism.
@@ -389,11 +391,11 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 				return out, err
 			}
 		}
-		body, err := prismFaceViewBlend(ctx, doc, pp, loopCall)
+		node, err := brepmodify.PrismFaceViewBlend(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), pp, loopCall)
 		if err != nil {
 			return nil, err
 		}
-		return commitModifyResult(ctx, b, body)
+		return commitModifyResult(ctx, b, bodyHandle(node))
 	}
 
 	// Side edges become corners in the 2D outline. A complete ring of cap edges
@@ -414,7 +416,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 		start := capSetback{Dc: dmm, DcDelta: dDelta, Ds: dmm, DsDelta: dDelta}
 		end := start
 		if asym != nil {
-			if start, end, err = asym.capSetbacks(caps, edges, startLoops, endLoops); err != nil {
+			if start, end, err = asym.CapSetbacks(caps.nodes(), edgeNodes(edges), startLoops, endLoops); err != nil {
 				return nil, err
 			}
 		}
@@ -470,7 +472,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
-		cb, err := blend.corner(loops[corner.Loop], corner.Loop, corner.Corner, edgeHandle(corner.Edge))
+		cb, err := blend.Corner(loops[corner.Loop], corner.Loop, corner.Corner, corner.Edge)
 		if err != nil {
 			return nil, fmt.Errorf(`%w; selector %s, %s`, err, sel, corner)
 		}

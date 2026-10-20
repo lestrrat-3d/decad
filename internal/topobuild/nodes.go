@@ -159,3 +159,12 @@ func FacesByRole(b *topo.Body) map[string]*topo.Face {
 	}
 	return roles
 }
+
+// LoopEdges is the edge of every coedge of l, in order.
+func LoopEdges(l *topo.Loop) []*topo.Edge {
+	out := make([]*topo.Edge, len(l.CoEdges))
+	for i, ce := range l.CoEdges {
+		out[i] = ce.Edge
+	}
+	return out
+}
