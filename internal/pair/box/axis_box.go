@@ -167,7 +167,7 @@ func FacePatch(a, b AxisBox, axis, sign int, separation proof.Dyadic,
 	}
 	var low, high [2]proof.Dyadic
 	for i, ax := range projected {
-		low[i], high[i] = dyMax(a.Lo[ax], b.Lo[ax]), dyMin(a.Hi[ax], b.Hi[ax])
+		low[i], high[i] = proof.DyMax(a.Lo[ax], b.Lo[ax]), proof.DyMin(a.Hi[ax], b.Hi[ax])
 		if proof.DyCmp(low[i], high[i]) >= 0 {
 			return nil, pair.AmbiguousFeature
 		}
@@ -262,20 +262,6 @@ func SignedReading(value proof.Dyadic) (pair.ScalarReading, bool) {
 	}
 	bound := proof.DyadicFloatError(value, held)
 	return pair.ScalarReading{ValueMM: held, BoundMM: bound}, finite(bound)
-}
-
-func dyMax(a, b proof.Dyadic) proof.Dyadic {
-	if proof.DyCmp(a, b) >= 0 {
-		return a
-	}
-	return b
-}
-
-func dyMin(a, b proof.Dyadic) proof.Dyadic {
-	if proof.DyCmp(a, b) <= 0 {
-		return a
-	}
-	return b
 }
 
 func finite(value float64) bool { return !math.IsNaN(value) && !math.IsInf(value, 0) }

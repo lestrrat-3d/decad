@@ -317,7 +317,7 @@ func projectSpan(verts []proof.DyV3, u proof.DyV3) (proof.Dyadic, proof.Dyadic) 
 	hi := lo
 	for _, v := range verts[1:] {
 		value := proof.DvDot(v, u)
-		lo, hi = dyMin(lo, value), dyMax(hi, value)
+		lo, hi = proof.DyMin(lo, value), proof.DyMax(hi, value)
 	}
 	return lo, hi
 }

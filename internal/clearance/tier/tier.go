@@ -268,7 +268,7 @@ func (k *Kernel) CylinderPairRuling(ca, cb *clearance.CFace, aExtent, bExtent Ex
 	if proofarith.DvDot(axisA, axisB).Sign() < 0 {
 		bLo, bHi = proofarith.DySubScalar(along, hiB), proofarith.DySubScalar(along, loB)
 	}
-	lo, hi := dyMax(loA, bLo), dyMin(hiA, bHi)
+	lo, hi := proofarith.DyMax(loA, bLo), proofarith.DyMin(hiA, bHi)
 	if proofarith.DyCmp(lo, hi) >= 0 {
 		return nil
 	}
@@ -321,18 +321,4 @@ func (k *Kernel) rulingInsidePlaneTrim(plane *clearance.CFace, ends [2]proofarit
 		}
 	}
 	return true
-}
-
-func dyMax(a, b proofarith.Dyadic) proofarith.Dyadic {
-	if proofarith.DyCmp(a, b) >= 0 {
-		return a
-	}
-	return b
-}
-
-func dyMin(a, b proofarith.Dyadic) proofarith.Dyadic {
-	if proofarith.DyCmp(a, b) <= 0 {
-		return a
-	}
-	return b
 }

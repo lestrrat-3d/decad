@@ -1,6 +1,9 @@
 package reportvocab
 
-import "github.com/lestrrat-3d/units"
+import (
+	"github.com/lestrrat-3d/decad/internal/pair"
+	"github.com/lestrrat-3d/units"
+)
 
 // ContactRelation is the proven relation of two complete occupied sets.
 type ContactRelation int
@@ -12,6 +15,21 @@ const (
 	ContactOverlapping
 	ContactBand
 )
+
+// PairRelation is the relation the exact pair kernels read r as: a band or an
+// undecided relation reads as undecided.
+func (r ContactRelation) PairRelation() pair.Relation {
+	switch r {
+	case ContactSeparated:
+		return pair.Separated
+	case ContactTouching:
+		return pair.Touching
+	case ContactOverlapping:
+		return pair.Overlapping
+	default:
+		return pair.Undecided
+	}
+}
 
 // SweepOutcome states the certified relation over a requested path.
 type SweepOutcome int

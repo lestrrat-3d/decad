@@ -52,10 +52,10 @@ func TangentAxisSpin(paths [2]Path, normals []ContactNormal) (*big.Rat, bool) {
 	staticLow, staticHigh := static.Corner[0][2], static.Corner[0][2]
 	movingLow, movingHigh := moving.Corner[0][2], moving.Corner[0][2]
 	for i := 1; i < len(static.Corner); i++ {
-		staticLow = dyMin(staticLow, static.Corner[i][2])
-		staticHigh = dyMax(staticHigh, static.Corner[i][2])
-		movingLow = dyMin(movingLow, moving.Corner[i][2])
-		movingHigh = dyMax(movingHigh, moving.Corner[i][2])
+		staticLow = proofarith.DyMin(staticLow, static.Corner[i][2])
+		staticHigh = proofarith.DyMax(staticHigh, static.Corner[i][2])
+		movingLow = proofarith.DyMin(movingLow, moving.Corner[i][2])
+		movingHigh = proofarith.DyMax(movingHigh, moving.Corner[i][2])
 	}
 	sign := int64(0)
 	if proofarith.DyCmp(staticHigh, movingLow) == 0 {
@@ -106,18 +106,4 @@ func TangentAxisSpin(paths [2]Path, normals []ContactNormal) (*big.Rat, bool) {
 		fraction.Quo(fraction, big.NewRat(2, 1))
 	}
 	return nil, false
-}
-
-func dyMax(a, b proofarith.Dyadic) proofarith.Dyadic {
-	if proofarith.DyCmp(a, b) >= 0 {
-		return a
-	}
-	return b
-}
-
-func dyMin(a, b proofarith.Dyadic) proofarith.Dyadic {
-	if proofarith.DyCmp(a, b) <= 0 {
-		return a
-	}
-	return b
 }
