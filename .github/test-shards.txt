@@ -265,7 +265,6 @@
 10	0.00	TestLoftCircleSourceCapsRealDiscRefusesWithoutBoundaryProof
 10	0.00	TestLoftCircleSourceSpanRefusesInvalidRecord
 10	0.00	TestLoftFitSplineSourceCapsRealWedge
-10	0.00	TestLoftFitSplineSourcePreflightRefusesOversizedInput
 10	0.00	TestLoftQuarterJunctionOneRealCase
 10	0.00	TestLoftQuarterWallOrderRealSketchPair
 10	0.00	TestQuarterSourceHeldY1RealProducerGate
