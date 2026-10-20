@@ -51,21 +51,44 @@ The full loop is the executable example in [`example_quickstart_test.go`](../exa
 
 ## Conventions
 
-- **Immutable bodies.** A `*decad.Body` never changes. A feature returns a new body and retires its inputs from the
-  document. `decad.Offset`, `decad.Copy`, `decad.MirroredCopy` and `decad.PatternCopies` leave their input live.
-- **Free functions build, methods ask.** Features are package functions that take a context and return `(*Body, error)`.
-  Methods on bodies, faces and edges only read.
-- **Typed quantities.** Lengths, angles and tolerances are `units.Value`, for example `units.Millimeters(10)`.
-  A bare `float64` is never a measurement. Coordinates are `r3.Vec` in millimetres.
-- **Measurements carry their error.** `decad.Measurement` holds a value, an `decad.Exactness`
-  (`decad.Exact` or `decad.Approximate`) and an absolute error bound.
-- **Selectors, not indices.** Features take queries such as `decad.Edges(decad.Convex())`, never an edge index.
-- **Sealed option sets.** `decad.Extent`, `decad.AngularExtent`, `decad.Axis`, `decad.PatternSpec` and
-  `decad.MirrorPlane` list every legal variant, so an illegal combination does not compile.
-- **Loud failure.** An unsupported or unprovable request returns an error wrapping a sentinel. It never returns a
-  guessed body. See [Errors](#errors).
-- **Concurrency.** A `decad.Document` is not safe for concurrent mutation. Bodies are immutable and safe to read
-  from any goroutine. `Document.Bodies`, `decad.Remove` and `Document.Verify` may run concurrently with each other.
+### Immutable bodies
+
+A `*decad.Body` never changes. A feature returns a new body and retires its inputs from the document.
+`decad.Offset`, `decad.Copy`, `decad.MirroredCopy` and `decad.PatternCopies` leave their input live.
+
+### Features build and methods ask
+
+Features are package functions that take a context and return `(*Body, error)`. Methods on bodies, faces and edges
+only read.
+
+### Typed quantities
+
+Lengths, angles and tolerances are `units.Value`, for example `units.Millimeters(10)`. A bare `float64` is never a
+measurement. Coordinates are `r3.Vec` in millimetres.
+
+### Measurements carry their error
+
+A `decad.Measurement` holds a value, a `decad.Exactness` (`decad.Exact` or `decad.Approximate`) and an absolute
+error bound.
+
+### Selectors, not indices
+
+Features take queries such as `decad.Edges(decad.Convex())`, never an edge index.
+
+### Sealed option sets
+
+`decad.Extent`, `decad.AngularExtent`, `decad.Axis`, `decad.PatternSpec` and `decad.MirrorPlane` list every legal
+variant, so an illegal combination does not compile.
+
+### Loud failure
+
+An unsupported or unprovable request returns an error wrapping a sentinel. It never returns a guessed body.
+See [Errors](#errors).
+
+### Concurrency
+
+A `decad.Document` is not safe for concurrent mutation. Bodies are immutable and safe to read from any goroutine.
+`Document.Bodies`, `decad.Remove` and `Document.Verify` may run concurrently with each other.
 
 ## Documents and bodies
 
