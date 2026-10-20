@@ -25,7 +25,7 @@ func TestPlacedAxisPrismBooleans(t *testing.T) {
 	}
 	verify := func(t *testing.T, body *decad.Body, wantVolume float64) {
 		t.Helper()
-		require.False(t, anyFaceIsFaceted(body))
+		require.False(t, tookMeshPath(body))
 		volume, err := body.Volume()
 		require.NoError(t, err)
 		require.Equal(t, decad.Exact, volume.Exactness)

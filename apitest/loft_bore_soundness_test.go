@@ -75,9 +75,7 @@ func TestLoftCutExactToolCenterRefusesRewrite(t *testing.T) {
 	tool := loftBoreSoundnessTool(t, doc, toolFrame, .427, 0, 4, decad.Along)
 	cut, err := decad.Cut(t.Context(), blank, tool)
 	require.NoError(t, err)
-	cylinders, err := decad.Faces(decad.Cylindrical()).SelectFaces(cut)
-	require.ErrorIs(t, err, decad.ErrNoMatch)
-	require.Empty(t, cylinders)
+	requireRetainedBoreWall(t, cut)
 }
 
 func TestLoftCutRoundedYToolCenterKeepsFacetedTopology(t *testing.T) {
@@ -111,14 +109,37 @@ func TestLoftCutTiltedFrameMapKeepsFacetedTopology(t *testing.T) {
 	tool := loftBoreSoundnessTool(t, doc, frame, 0, 0, 4, decad.Along)
 	cut, err := decad.Cut(t.Context(), blank, tool)
 	require.NoError(t, err)
-	requireLoftCutFacetedVolume(t, cut)
+	// The tilted tool's wall states a tilt from its tag, so A2 declines it
+	// (docs/faceted-source-retention-design.md §3.2) and the bore stays
+	// Faceted.
+	cylinders, err := decad.Faces(decad.Cylindrical()).SelectFaces(cut)
+	require.ErrorIs(t, err, decad.ErrNoMatch)
+	require.Empty(t, cylinders)
+	volume, err := cut.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(volume.Value.Base()-2*(100-math.Pi)), volume.Bound.Base())
+}
+
+// requireRetainedBoreWall pins what the Cut publishes for a bore whose held
+// center rounds: the wall keeps the tool's Cylinder tag as a stand-in, so its
+// normal is never an Exact reading
+// (docs/faceted-source-retention-design.md §3.3).
+func requireRetainedBoreWall(t *testing.T, cut *decad.Body) {
+	t.Helper()
+	cylinders, err := decad.Faces(decad.Cylindrical()).SelectFaces(cut)
+	require.NoError(t, err)
+	require.NotEmpty(t, cylinders)
+	for _, wall := range cylinders {
+		at := wall.Loops()[0].CoEdges()[0].Start().Position().Value
+		n, err := wall.NormalAt(at)
+		require.NoError(t, err)
+		require.Positive(t, n.Bound.Base())
+	}
 }
 
 func requireLoftCutFacetedVolume(t *testing.T, cut *decad.Body) {
 	t.Helper()
-	cylinders, err := decad.Faces(decad.Cylindrical()).SelectFaces(cut)
-	require.ErrorIs(t, err, decad.ErrNoMatch)
-	require.Empty(t, cylinders)
+	requireRetainedBoreWall(t, cut)
 	volume, err := cut.Volume()
 	require.NoError(t, err)
 	require.LessOrEqual(t, math.Abs(volume.Value.Base()-2*(100-math.Pi)), volume.Bound.Base())

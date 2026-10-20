@@ -275,7 +275,7 @@ func TestUnstitchTableR(t *testing.T) {
 		tool := translated(t, diskBody(t, doc, 14, 6, 2), 0, 0, -6)
 		cut, err := decad.Cut(t.Context(), plate, tool)
 		require.NoError(t, err)
-		require.Equal(t, decad.KindFaceted, cut.Faces()[0].Surface().Kind())
+		require.True(t, tookMeshPath(cut))
 
 		before := doc.Bodies()
 		_, err = decad.Unstitch(t.Context(), cut)

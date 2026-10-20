@@ -26,9 +26,7 @@ func facetedBooleanScaleSource(t *testing.T) (*decad.Document, *decad.Body, [2]d
 	joined, err := decad.Union(t.Context(), first, second)
 	require.NoError(t, err)
 	require.Len(t, joined.Lumps(), 1)
-	for _, face := range joined.Faces() {
-		require.IsType(t, decad.Faceted{}, face.Surface())
-	}
+	require.True(t, tookMeshPath(joined))
 	return doc, joined, roles
 }
 

@@ -33,7 +33,7 @@ func TestCrossingBlindPocketOnThroughHole(t *testing.T) {
 			pocket := boxBodyAtZ(t, doc, -1, tc.pocketY0, 3, tc.pocketY1, 6, 4)
 			part, err = decad.Cut(t.Context(), part, pocket)
 			require.NoError(t, err)
-			require.False(t, anyFaceIsFaceted(part))
+			require.False(t, tookMeshPath(part))
 			requireEveryEdgeOnTwoFaces(t, part)
 			volume, err := part.Volume()
 			require.NoError(t, err)

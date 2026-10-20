@@ -105,7 +105,7 @@ func TestPrismCutReflectedTargetByCylinder(t *testing.T) {
 
 	got, err := decad.Cut(t.Context(), image, tool)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(got), "the analytic reduction must own a reflected target")
+	require.False(t, tookMeshPath(got), "the analytic reduction must own a reflected target")
 	cyl, err := decad.Faces(decad.Cylindrical()).Exactly(1).SelectFaces(got)
 	require.NoError(t, err)
 	require.Len(t, cyl, 1)
@@ -137,7 +137,7 @@ func TestPrismCutReflectedTargetByArcTool(t *testing.T) {
 
 	got, err := decad.Cut(t.Context(), image, tool)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(got))
+	require.False(t, tookMeshPath(got))
 	vol, err := got.Volume()
 	require.NoError(t, err)
 	require.Less(t, vol.Bound.Base(), 1e-6)
@@ -163,7 +163,7 @@ func TestPrismCutBothReflectedSharedAxis(t *testing.T) {
 
 	got, err := decad.Cut(t.Context(), ml, md)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(got))
+	require.False(t, tookMeshPath(got))
 	vol, err := got.Volume()
 	require.NoError(t, err)
 	require.Less(t, vol.Bound.Base(), 1e-9)
@@ -186,7 +186,7 @@ func TestPrismUnionReflectedOperandInsideBox(t *testing.T) {
 
 	got, err := decad.Union(t.Context(), box, image)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(got))
+	require.False(t, tookMeshPath(got))
 	require.Len(t, got.Faces(), 6)
 	vol, err := got.Volume()
 	require.NoError(t, err)
@@ -203,7 +203,7 @@ func TestPrismUnionSharedWallMirroredL(t *testing.T) {
 	require.NoError(t, err)
 	union, err := decad.Union(t.Context(), l, image)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(union))
+	require.False(t, tookMeshPath(union))
 	require.Len(t, union.Lumps(), 1)
 	volume, err := union.Volume()
 	require.NoError(t, err)

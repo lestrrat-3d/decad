@@ -122,7 +122,7 @@ func TestPrismUnionFarPlacementReturnsTheTrueUnion(t *testing.T) {
 
 			got, err := decad.Union(t.Context(), a, b)
 			require.NoError(t, err)
-			require.False(t, anyFaceIsFaceted(got), "the analytic reduction must own this pair")
+			require.False(t, tookMeshPath(got), "the analytic reduction must own this pair")
 
 			vol, err := got.Volume()
 			require.NoError(t, err)
@@ -185,7 +185,7 @@ func TestPrismUnionCutDisplacementBoundEnclosesTheError(t *testing.T) {
 
 			got, err := decad.Union(t.Context(), a, b)
 			require.NoError(t, err)
-			require.False(t, anyFaceIsFaceted(got), "the analytic reduction must own this pair")
+			require.False(t, tookMeshPath(got), "the analytic reduction must own this pair")
 
 			vol, err := got.Volume()
 			require.NoError(t, err)
@@ -238,7 +238,7 @@ func TestPrismUnionWholeEdgeMergeStaysExact(t *testing.T) {
 
 	got, err := decad.Union(t.Context(), a, b)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(got), "the analytic reduction must own this pair")
+	require.False(t, tookMeshPath(got), "the analytic reduction must own this pair")
 
 	vol, err := got.Volume()
 	require.NoError(t, err)
@@ -273,7 +273,7 @@ func TestPrismUnionReExpressionDisplacementBoundEnclosesTheError(t *testing.T) {
 
 			got, err := decad.Union(t.Context(), a, b)
 			require.NoError(t, err)
-			require.False(t, anyFaceIsFaceted(got), "the analytic reduction must own this pair")
+			require.False(t, tookMeshPath(got), "the analytic reduction must own this pair")
 
 			vol, err := got.Volume()
 			require.NoError(t, err)
@@ -330,7 +330,7 @@ func TestPrismUnionRoundedReExpressionStaysWithinItsBound(t *testing.T) {
 
 	got, err := decad.Union(t.Context(), a, b)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(got), "the analytic reduction must own this pair")
+	require.False(t, tookMeshPath(got), "the analytic reduction must own this pair")
 
 	vol, err := got.Volume()
 	require.NoError(t, err)
@@ -359,7 +359,7 @@ func TestPrismUnionChainedSecondOperandReexpressionAccumulatesDisplacement(t *te
 	outer := placedFar(t, boxBody(t, doc, -firstShift, 0, 10-firstShift, 10, 10), firstShift)
 	first, err := decad.Union(t.Context(), inside, outer)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(first), "the analytic reduction must own the first union")
+	require.False(t, tookMeshPath(first), "the analytic reduction must own the first union")
 	firstVolume, err := first.Volume()
 	require.NoError(t, err)
 	require.Equal(t, decad.Approximate, firstVolume.Exactness)
@@ -369,7 +369,7 @@ func TestPrismUnionChainedSecondOperandReexpressionAccumulatesDisplacement(t *te
 	insideAgain := placedFar(t, boxBody(t, doc, 2-secondShift, 2, 8-secondShift, 8, 10), secondShift)
 	chained, err := decad.Union(t.Context(), insideAgain, first)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(chained), "the analytic reduction must own the chained union")
+	require.False(t, tookMeshPath(chained), "the analytic reduction must own the chained union")
 	volume, err := chained.Volume()
 	require.NoError(t, err)
 	require.Equal(t, decad.Approximate, volume.Exactness)

@@ -132,7 +132,7 @@ func TestVerifyAdmittedDisplacedPrismPairCarriesItsOwnBound(t *testing.T) {
 		placedFar(t, boxBody(t, doc, lo, 2, hi, 8, 10), shift),
 	)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(merged), "the analytic reduction must own the union")
+	require.False(t, tookMeshPath(merged), "the analytic reduction must own the union")
 	own, err := merged.Volume()
 	require.NoError(t, err)
 	require.Equal(t, decad.Approximate, own.Exactness)

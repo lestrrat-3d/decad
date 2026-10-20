@@ -458,7 +458,8 @@ func TestCutDrillsHole(t *testing.T) {
 	require.Len(t, got.Faces(), 7)
 	twoLoops := 0
 	for _, f := range got.Faces() {
-		require.Equal(t, decad.KindFaceted, f.Surface().Kind())
+		// Every face keeps the surface of the operand face it descends from.
+		require.NotEqual(t, decad.KindFaceted, f.Surface().Kind())
 		if len(f.Loops()) == 2 {
 			twoLoops++
 		}
@@ -701,7 +702,7 @@ func TestBooleanChainDepthGateReadsOnlyTheTouchedRims(t *testing.T) {
 			var err error
 			plate, err = decad.Cut(t.Context(), plate, translated(t, discBody(t, doc, tool.cx, tool.r, 48), 0.125, 0, -16))
 			require.NoError(t, err, "cut %d", i+1)
-			require.True(t, anyFaceIsFaceted(plate), "cut %d takes the mesh path", i+1)
+			require.True(t, tookMeshPath(plate), "cut %d takes the mesh path", i+1)
 		}
 		return plate
 	}
@@ -1708,7 +1709,7 @@ func TestBooleanCutWasherThroughDiscKeepsStandingPost(t *testing.T) {
 
 	got, err := decad.Cut(t.Context(), target, tool)
 	require.NoError(t, err)
-	require.True(t, anyFaceIsFaceted(got), `mismatched cap planes force the pair onto the mesh path`)
+	require.True(t, tookMeshPath(got), `mismatched cap planes force the pair onto the mesh path`)
 
 	// The tool's own hole leaves a standing post: a second, disconnected lump
 	// inside the cavity the ring cut.
@@ -1761,7 +1762,7 @@ func BenchmarkUnionCircularMeshPath(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		if !anyFaceIsFaceted(got) {
+		if !tookMeshPath(got) {
 			b.Fatal(`the fixture must reach the mesh path, not the analytic reduction`)
 		}
 	}

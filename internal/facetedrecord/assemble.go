@@ -193,6 +193,16 @@ func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.E
 	}
 	for f, delta := range faceDelta {
 		group := in.Groups[faceGroup[f]]
+		if group.Retained {
+			if bound, ok := RetainedNormalBound(group.Surface, group.NormalBound, delta); ok {
+				f.Surface = group.Surface
+				f.RetainedTag, f.TagDeparture, f.NormalBound = true, group.NormalBound, bound
+				continue
+			}
+			f.NormalBound, f.Reversed = 0, false
+			f.Surface = surfacegeom.Faceted{Bound: units.Millimeters(delta)}
+			continue
+		}
 		if group.Surface != nil {
 			f.Surface = group.Surface
 		} else {
@@ -203,6 +213,14 @@ func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.E
 	if err := buildTopologyWithBudget(ctx, shared, env.Alloc, verts, tris, facetFace, facePlanar,
 		in.VertexBound, in.AxialSectionJoin); err != nil {
 		return nil, nil, 0, err
+	}
+	// A retained tag on a face with no loop would read as a closed analytic
+	// surface to the boundary audit (A3).
+	for f := range faceDelta {
+		if f.RetainedTag && len(f.Loops) == 0 {
+			f.Surface = surfacegeom.Faceted{Bound: units.Millimeters(faceDelta[f])}
+			f.RetainedTag, f.TagDeparture, f.NormalBound, f.Reversed = false, 0, 0, false
+		}
 	}
 
 	// Per-face area bounds: the smaller of two proven geometric terms — the

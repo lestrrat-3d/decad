@@ -358,7 +358,7 @@ func TestPatternCopiesUnionStack(t *testing.T) {
 			boss := boxBodyAtZ(t, doc, 3, 3, 7, 7, 5, 5)
 			part, err := decad.Union(t.Context(), plate, boss)
 			require.NoError(t, err)
-			require.False(t, anyFaceIsFaceted(part), "the premise: the union is a stacked prism")
+			require.False(t, tookMeshPath(part), "the premise: the union is a stacked prism")
 			src, err := part.Centroid()
 			require.NoError(t, err)
 			sb, err := src.Bound.In(units.Millimeter)

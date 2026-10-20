@@ -451,7 +451,8 @@
 2	0.00	TestMeasurement
 2	0.03	TestMinRadiusDonutWaist
 2	0.02	TestMirrorJoinKeepsHolesAndTheirImages
-2	0.47	TestNormalAtRefusesEveryUntaggedSurface
+2	0.00	TestNormalAtAnswersRetainedSurfaces
+2	0.00	TestFacetedSourceRetention
 2	0.00	TestOffsetPatchConversionIsRefused
 2	0.01	TestOffsetPrismRectangle
 2	0.00	TestPatchReproducesThroughPlacement

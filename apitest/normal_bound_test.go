@@ -932,14 +932,12 @@ func TestNormalAtArmBoundCoversItsOwnDefect(t *testing.T) {
 	}
 }
 
-// TestNormalAtRefusesEveryUntaggedSurface pins the SET the arms answer for.
-// The five analytic variants above are the whole of it: a `Faceted` face — the
-// tag every boolean-produced face carries — has no closed form to evaluate, so
-// its answer waits on the faceted certificate stage and every reading refuses
-// today (docs/spline-design.md §7, docs/payload-verification-design.md §5.4,
-// §13). A refusal is the honest answer; a direction read off one held facet
-// would be exact for the facet and wrong for the part it stands for.
-func TestNormalAtRefusesEveryUntaggedSurface(t *testing.T) {
+// TestNormalAtAnswersRetainedSurfaces pins the faces of a mesh Boolean result:
+// each descends from one operand face and keeps that face's surface
+// (docs/faceted-source-retention-design.md §2), so NormalAt answers with the
+// tag's own formula. A plane adds no displacement term; the hole wall's bound
+// carries 2·δ/R and is therefore never Exact.
+func TestNormalAtAnswersRetainedSurfaces(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
@@ -947,16 +945,25 @@ func TestNormalAtRefusesEveryUntaggedSurface(t *testing.T) {
 	got, err := decad.Cut(t.Context(), plate, tool)
 	require.NoError(t, err)
 
-	refused := 0
+	planes, walls := 0, 0
 	for _, f := range got.Faces() {
-		require.Equal(t, decad.KindFaceted, f.Surface().Kind())
 		at := f.Loops()[0].CoEdges()[0].Start().Position().Value
-		_, err := f.NormalAt(at)
-		require.ErrorIs(t, err, decad.ErrUnsupported,
-			`a faceted face has no closed-form normal to publish a bound for`)
-		refused++
+		n, err := f.NormalAt(at)
+		require.NoError(t, err)
+		switch f.Surface().(type) {
+		case decad.Plane:
+			require.Less(t, n.Bound.Base(), 1e-9)
+			planes++
+		case decad.Cylinder:
+			require.Positive(t, n.Bound.Base(), `the hole wall states its held displacement`)
+			require.Less(t, n.Bound.Base(), 1.0)
+			walls++
+		default:
+			require.Failf(t, `unexpected surface`, `%T`, f.Surface())
+		}
 	}
-	require.Equal(t, 7, refused, `4 plate sides + 2 drilled caps + the hole wall`)
+	require.Equal(t, 6, planes, `4 plate sides + 2 drilled caps`)
+	require.Equal(t, 1, walls, `the hole wall`)
 }
 
 // TestNormalAtArmDegeneraciesRefuse pins the other end of each arm: a point

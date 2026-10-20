@@ -77,11 +77,19 @@ func verticalConvexEdge() *decad.EdgeQuery {
 	return decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Convex()).AtLeast(1)
 }
 
-// anyFaceIsFaceted reports whether any face of b is a Faceted surface — the
-// mesh boolean's own output kind, never produced by the analytic reduction.
-func anyFaceIsFaceted(b *decad.Body) bool {
+// tookMeshPath reports whether b came from the mesh boolean: some face reads
+// Faceted, or some edge is a chain of held chords. The analytic reductions
+// never produce either. A mesh result's faces may keep their operands'
+// analytic surfaces (docs/faceted-source-retention-design.md), so the face
+// kind alone no longer tells the two apart.
+func tookMeshPath(b *decad.Body) bool {
 	for _, f := range b.Faces() {
 		if f.Surface().Kind() == decad.KindFaceted {
+			return true
+		}
+	}
+	for _, e := range b.Edges() {
+		if _, ok := e.Curve().(decad.FacetedCurve); ok {
 			return true
 		}
 	}
@@ -450,7 +458,7 @@ func TestPrismUnionChainedBooleanCarriesNoAccumulatedBound(t *testing.T) {
 	c := boxBody(t, doc, 8, 4, 18, 14, 10)
 	second, err := decad.Union(t.Context(), first, c)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(second), "the chained union must stay analytic")
+	require.False(t, tookMeshPath(second), "the chained union must stay analytic")
 	secondVol, err := second.Volume()
 	require.NoError(t, err)
 	decadtest.Measures(t, "chained union volume", secondVol, units.CubicMillimeters(1880.0))
@@ -467,7 +475,7 @@ func TestPrismUnionChainedBooleanCarriesNoAccumulatedBound(t *testing.T) {
 	cutC := boxBody(t, cutDoc, 8, 4, 18, 14, 10)
 	cutSecond, err := decad.Union(t.Context(), cutFirst, cutC)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(cutSecond), "A6 keeps a chain through a prior cut analytic")
+	require.False(t, tookMeshPath(cutSecond), "A6 keeps a chain through a prior cut analytic")
 	cutVol, err := cutSecond.Volume()
 	require.NoError(t, err)
 	require.Less(t, boundMM3(t, cutVol), 1e-9)
@@ -511,7 +519,7 @@ func TestPrismUnionDownstreamFilletAndWallSurvey(t *testing.T) {
 	cutB := boxBody(t, cutDoc, 5, 5, 15, 15, 10)
 	cutGot, err := decad.Union(t.Context(), cutA, cutB)
 	require.NoError(t, err)
-	require.False(t, anyFaceIsFaceted(cutGot), "the analytic reduction must still own this pair")
+	require.False(t, tookMeshPath(cutGot), "the analytic reduction must still own this pair")
 
 	_, err = decad.Fillet(t.Context(), cutGot, verticalConvexEdge(), units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -535,7 +543,7 @@ func TestPrismUnionDownstreamFilletAndWallSurvey(t *testing.T) {
 	require.NoError(t, err)
 	meshGot, err := decad.Union(t.Context(), meshA, meshB)
 	require.NoError(t, err)
-	require.True(t, anyFaceIsFaceted(meshGot), "expected the mesh path to run and produce a Faceted body")
+	require.True(t, tookMeshPath(meshGot), "expected the mesh path to run and produce a Faceted body")
 
 	_, err = decad.Fillet(t.Context(), meshGot, decad.Edges().AtLeast(1), units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)

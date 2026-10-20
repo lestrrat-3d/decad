@@ -36,7 +36,7 @@ func ScaleImage(ctx context.Context, body *topo.Body, fp Payload, anchor r3.Vec,
 		if group.Denoted != nil {
 			return Payload{}, fmt.Errorf("%w: a denoted surface has no similarity proof", decaderr.ErrUnsupported)
 		}
-		if _, ok := group.Surface.(surfacegeom.Plane); group.Surface != nil && !ok {
+		if _, ok := group.Surface.(surfacegeom.Plane); group.Surface != nil && !ok && !group.Retained {
 			return Payload{}, fmt.Errorf("%w: a retained curved surface has no similarity proof", decaderr.ErrUnsupported)
 		}
 	}
@@ -93,6 +93,11 @@ func ScaleImage(ctx context.Context, body *topo.Body, fp Payload, anchor r3.Vec,
 			if err != nil {
 				return Payload{}, err
 			}
+		}
+		if _, ok := group.Surface.(surfacegeom.Plane); !ok && group.Retained {
+			// A scaled retained cylinder or sphere reads Faceted: its tag has
+			// no similarity image here.
+			group.Surface, group.Retained, group.NormalBound = nil, false, 0
 		}
 		if plane, ok := group.Surface.(surfacegeom.Plane); ok {
 			origin := anchor.Add(plane.Frame.Origin().Sub(anchor).Scale(s))
