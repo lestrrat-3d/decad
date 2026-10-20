@@ -42,6 +42,14 @@ type Edge struct {
 	// leaves CurveBounded false, and a reading that needs the bound refuses.
 	CurveBound   float64
 	CurveBounded bool
+	// RetainedCurve marks an edge of a mesh Boolean result whose Curve is the
+	// exact intersection of its two faces' retained surfaces rather than the
+	// FacetedCurve chord chain (docs/faceted-source-retention-design.md §10).
+	// The held vertices still sit up to their own bounds off that curve, and
+	// ChainBound is the chord chain's bound the curve replaced. A reader that
+	// takes a FacetedCurve as the witness of a Boolean rim takes this too.
+	RetainedCurve bool
+	ChainBound    float64
 	// Level is the LEVEL half of the shared-denotation certificate
 	// (internal/denotation): non-zero only for a rim edge a builder stamped at one
 	// denoted sweep level, and zero ("no certificate") for every edge no

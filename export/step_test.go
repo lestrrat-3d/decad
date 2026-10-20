@@ -788,3 +788,53 @@ func TestNewSTEPFileRootedCrossingBossAnalytic(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, string(data), "analytic decad solid")
 }
+
+// A Boolean result that keeps its operands' surfaces and curves still writes
+// one planar face per triangle. Its rims run between held vertices, so the
+// circle seams the analytic writer needs to align do not line up exactly, and
+// supportsAnalyticSTEP declines the body (docs/faceted-source-retention-design.md
+// §10.3).
+func TestNewSTEPFileMeshBooleanStaysFaceted(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	doc := decad.New()
+	plateSketch, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := plateSketch.CreateRectangle(0, 0, 30, 40)
+	plateSketch.Fix(rect.A)
+	_, err = plateSketch.Solve(t.Context())
+	require.NoError(t, err)
+	plate, err := decad.Extrude(t.Context(), doc, plateSketch, plateSketch.Profiles()[0],
+		decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	require.NoError(t, err)
+
+	toolSketch, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	centre := toolSketch.CreatePoint(20, 15)
+	toolSketch.Fix(centre)
+	toolSketch.CreateCircle(centre, 5)
+	_, err = toolSketch.Solve(t.Context())
+	require.NoError(t, err)
+	pin, err := decad.Extrude(t.Context(), doc, toolSketch, toolSketch.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	require.NoError(t, err)
+	// A placed tool takes the mesh path, not the same-placement analytic one.
+	down, err := r3.Translation(r3.Vec{Z: -6})
+	require.NoError(t, err)
+	tool, err := decad.Transform(t.Context(), pin, down)
+	require.NoError(t, err)
+	body, err := decad.Cut(t.Context(), plate, tool)
+	require.NoError(t, err)
+
+	f, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
+	require.NoError(t, err)
+	counts := map[string]int{}
+	for _, entity := range f.Entities {
+		counts[entity.Name]++
+	}
+	require.Greater(t, counts["ADVANCED_FACE"], 7, "one planar face per triangle")
+	require.Zero(t, counts["CYLINDRICAL_SURFACE"])
+	require.Zero(t, counts["CIRCLE"])
+	_, err = f.Marshal()
+	require.NoError(t, err)
+}

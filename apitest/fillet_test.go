@@ -799,15 +799,15 @@ func revolvedRing(t *testing.T) *decad.Body {
 func TestFilletNonPrismReceiver(t *testing.T) {
 	t.Parallel()
 	// A boolean union is neither a prism, revolve nor loft payload, so a
-	// fillet of it is staged: S3. Its closed rims are FacetedCurve edges, which
-	// render closed from their shared vertex.
+	// fillet of it is staged: S3. Its closed rims keep the circle of the two
+	// faces that meet there, which renders with its centre and radius.
 	sel := decad.Edges()
 	_, err := decad.Fillet(t.Context(), booleanRimBody(t, decad.New()), sel, units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, `this evaluator fillets a straight prism, its one-line Sweep reduction, a revolve, or a matching-section axial loft only`,
 		`the refusal states its own reason`)
 	require.ErrorContains(t, err, `selector `+sel.String())
-	require.ErrorContains(t, err, `selected edge[0] closed through (10,0,0)`)
+	require.ErrorContains(t, err, `selected edge[0] closed circle through (10,0,0), centre (0,0,0), radius 10 mm`)
 }
 
 // requireReasonLeads asserts that reason appears in err's message and that the
@@ -889,20 +889,17 @@ func TestModifyRefusalRendersAClosedCircleAsClosed(t *testing.T) {
 	require.NotContains(t, err.Error(), `closed circle`,
 		`a straight edge is never described as a circle`)
 
-	// A boolean-built body's closed rim edges carry FacetedCurve, not Circle3,
-	// so the Circle3 branch above never fires for them; closure still comes
-	// from the edge's own shared start/end vertex, not from its curve type.
+	// A boolean-built body's closed rim edges between a plane and a cylinder
+	// are Circle3, so the Circle3 branch above fires for them.
 	// booleanRimBody's bar crosses the disc strictly between its caps, so both
 	// cap rims survive the boolean untouched.
 	_, err = decad.Fillet(t.Context(), booleanRimBody(t, decad.New()), decad.Edges(), units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.NotContains(t, err.Error(), `closed circle`,
-		`every rim of a boolean-built body is a FacetedCurve, so the Circle3 branch never fires`)
-	require.ErrorContains(t, err, `selected edge[0] closed through (10,0,0)`,
-		`an untouched boolean rim renders closed from shared vertex identity, not a Circle3 check`)
+	require.ErrorContains(t, err, `selected edge[0] closed circle through (10,0,0), centre (0,0,0), radius 10 mm`,
+		`an untouched boolean rim between a plane and a cylinder renders as the circle it is`)
 	require.NotContains(t, err.Error(), `from (10,0,0) to (10,0,0)`,
 		`the closed rim never renders as a zero-length edge`)
-	require.ErrorContains(t, err, `selected edge[5] closed through (9.996425888107836,0.2673377331530885,20)`,
+	require.ErrorContains(t, err, `selected edge[5] closed circle through (9.996425888107836,0.2673377331530885,20), centre (0,0,20), radius 10 mm`,
 		`every untouched rim in the selection renders closed, not just the first`)
 	require.NotContains(t, err.Error(), `from (9.996425888107836,0.2673377331530885,20) to (9.996425888107836,0.2673377331530885,20)`,
 		`no untouched boolean rim renders as a zero-length edge`)

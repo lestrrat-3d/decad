@@ -974,9 +974,6 @@ func TestCurvedRimLengthRefuses(t *testing.T) {
 
 	var curvedRefused, straightAnswered int
 	for _, e := range got.Edges() {
-		if _, ok := e.Curve().(decad.FacetedCurve); !ok {
-			continue
-		}
 		m, err := e.Length()
 		if err != nil {
 			require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -1385,9 +1382,6 @@ func facetedEdgeLengths(t *testing.T, model string) {
 
 	answered := 0
 	for _, e := range got.Edges() {
-		if _, ok := e.Curve().(decad.FacetedCurve); !ok {
-			continue
-		}
 		m, err := e.Length()
 		if err != nil {
 			continue // a rim on a curved source refuses outright

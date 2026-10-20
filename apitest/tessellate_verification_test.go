@@ -113,8 +113,7 @@ func TestVerifyNoneWithholdsTheVolumeProofOnARestatedMesh(t *testing.T) {
 	b := framedBoxBody(t, doc, 5, 5, 15, 15, 4, 8)
 	fused, err := decad.Union(t.Context(), a, b)
 	require.NoError(t, err)
-	_, faceted := fused.Edges()[0].Curve().(decad.FacetedCurve)
-	require.True(t, faceted, `this fixture must produce a faceted result, not an analytic prism`)
+	require.True(t, tookMeshPath(fused), `this fixture must produce a faceted result, not an analytic prism`)
 
 	tol := units.Millimeters(1)
 	proven, err := fused.Tessellate(t.Context(), tol, decad.WithVerification(decad.VerifyAll))
