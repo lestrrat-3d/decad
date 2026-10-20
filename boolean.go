@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/obliqueboss"
 	"github.com/lestrrat-3d/decad/internal/prismboolean"
@@ -341,10 +342,10 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 		}
 	}
 	if op == meshbool.OpCut {
-		if body, ok, err := tryLoftThroughBoreCut(ctx, d, ref, a, b); err != nil {
+		if node, ok, err := loftrecord.ThroughBoreCut(ctx, envOf(documentNode(d), ref), a.n.Payload, b.n.Payload); err != nil {
 			return nil, err
 		} else if ok {
-			return body, nil
+			return bodyHandle(node), nil
 		}
 		if sp, ok, err := prismboolean.TryStackedThroughCut(ctx, a.n.Payload, b.n.Payload); err != nil {
 			if errors.Is(err, ErrUnsupported) {
