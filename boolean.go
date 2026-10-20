@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/booloperand"
 	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/classbgeom"
+	"github.com/lestrrat-3d/decad/internal/crossbore"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -448,7 +449,7 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 		eval.payload.PrismUnionFillet = facetedrecord.RecognizePrismUnionFillet(bodyNode(a), bodyNode(b))
 	}
 	if op == meshbool.OpCut {
-		eval.payload.CrossCylinderBore = recognizeCrossCylinderBore(a, b)
+		eval.payload.CrossCylinderBore = crossbore.RecognizeBore(bodyNode(a), bodyNode(b))
 	}
 
 	body, err := bodyResult(facetedrecord.BuildWithProof(ctx, envOf(documentNode(d), ref), eval.payload, eval.audit, measurementToInternal(eval.volume), eval.volumeRat))

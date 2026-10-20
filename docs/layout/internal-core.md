@@ -34,7 +34,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/splinebezier/` | Exact Bézier conversion of recorded splines. See `docs/spline-design.md` §5.1. |
 | `internal/boundarywalk/` | Bounded walks, coalescing, junction vertices, rim convexity, and analytic survey and modify loops over recorded segments. |
 | `internal/classbgeom/` | Class B: the entry over two payloads (gates B1-B8, through reach, result record), the crossing reach, face geometry and shifted tool records. See general-boolean §3 B, §5. |
-| `internal/crossbore/` | Builds the held bore-mouth mesh, proves its cells and computes boundary, volume and area bounds from source records. See cross-cylinder-bore-chamfer design. |
+| `internal/crossbore/` | Recognizes the perpendicular cylinder Cut, admits the bore-mouth chamfer, builds the held mesh, proves its cells and computes boundary, volume and area bounds. See cross-cylinder-bore-chamfer design. |
 | `internal/brepgeom/` / `internal/stackedbrep/` | BRep geometry, topology and shared endpoint matching. See general-boolean §4–§5. |
 | `internal/brepwallmesh/` | Chords BRep swept walls and checks clearance between their mesh loops. See general-boolean §4.4 and tessellation §5. |
 | `internal/brepbandmesh/` | Meshes a brep body: walls, planar faces, closure audits and the occupied-volume sum. Chords route L and shell bands, imposes their counts on the walls beside them, places and emits them, and states their motion, volume terms and admission. See general-boolean §4.4, modify-general DG3/DG4, §4.3a. |

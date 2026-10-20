@@ -2,10 +2,8 @@ package decad
 
 import (
 	"context"
-	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/booleaneval"
-	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/units"
@@ -27,16 +25,6 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 	}
 	return booleanEvaluation{payload: ev.Payload, volume: volumeMeasurement(ev.Volume, ev.VolumeBound),
 		volumeRat: ev.VolumeRat, audit: ev.Audit}, nil
-}
-
-// meshVolumeMeasurement reads the audited mesh's exact component volumes and
-// composes the symmetric-difference allowance with final float rounding.
-func meshVolumeMeasurement(ctx context.Context, audit *facetproof.MeshAudit, volSymDiff float64) (Measurement, *big.Rat, error) {
-	volF, bound, volRat, err := booleaneval.VolumeReading(ctx, audit, volSymDiff)
-	if err != nil {
-		return Measurement{}, nil, err
-	}
-	return volumeMeasurement(volF, bound), volRat, nil
 }
 
 func volumeMeasurement(value, bound float64) Measurement {

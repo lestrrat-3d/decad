@@ -184,7 +184,6 @@ type (
 // The faceted payload's source records and the support types they hold are
 // internal/facetedrecord types; these aliases keep the evaluator's local names.
 type (
-	crossCylinderBoreRecord    = facetedrecord.CrossCylinderBoreRecord
 	joinedMesh                 = facetedrecord.JoinedMesh
 	loftFaceCapBounds          = facetedrecord.LoftFaceCapBounds
 	loftFacesCapRecord         = facetedrecord.LoftFacesCapRecord
@@ -192,7 +191,6 @@ type (
 	loftFacesTrimRecord        = facetedrecord.LoftFacesTrimRecord
 	loftMirrorJoinRecord       = facetedrecord.LoftMirrorJoinRecord
 	loftMirrorPlacementRecord  = facetedrecord.LoftMirrorPlacementRecord
-	obliqueBossRecord          = facetedrecord.ObliqueBossRecord
 	pointConeLimit             = facetedrecord.PointConeLimit
 	pointConeTrimRecord        = facetedrecord.PointConeTrimRecord
 	pointPlaneLimit            = facetedrecord.PointPlaneLimit
