@@ -95,7 +95,7 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 		if err := ctx.Err(); err != nil {
 			return MassProperties{}, err
 		}
-		return massPropertiesFromReadings(massmoment.SourceCylinder(ctx, cylinder.axis, cylinder.box.lo, cylinder.box.hi,
+		return massPropertiesFromReadings(massmoment.SourceCylinder(ctx, cylinder.axis, cylinder.box.Lo, cylinder.box.Hi,
 			b.n.Centroid, density))
 	}
 	if revolve, ok := b.n.Payload.(revolvePayload); ok {

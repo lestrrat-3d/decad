@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/contactbox"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/planarsweep"
@@ -23,15 +24,15 @@ import (
 type rotationalSweepPath struct {
 	planarsweep.BodyPath
 	body     *Body
-	startBox orientedSourceBox
+	startBox contactbox.OrientedSourceBox
 }
 
 func prepareRotationalSweepPath(body *Body, path affinePairPath) (rotationalSweepPath, bool) {
-	startBox, ok := sourceOrientedBoxAtPose(body, path.From)
+	startBox, ok := contactbox.SourceOrientedBoxAtPose(bodyNode(body), path.From)
 	if !ok {
 		return rotationalSweepPath{}, false
 	}
-	sourceBox, ok := sourceOrientedBoxAtPose(body, r3.Identity())
+	sourceBox, ok := contactbox.SourceOrientedBoxAtPose(bodyNode(body), r3.Identity())
 	if !ok {
 		return rotationalSweepPath{}, false
 	}
@@ -233,9 +234,9 @@ func (r *rotationalPairSweep) horizontalSpinContact(f *big.Rat, poseA, poseB r3.
 		return SweepEvent{}, false
 	}
 	poses := [2]r3.Transform{poseA, poseB}
-	base, okBase := sourceBoxAtPose(paths[stationary].body, poses[stationary])
-	startA, okA := sourceBoxAtPose(r.a.body, r.a.Path.From)
-	startB, okB := sourceBoxAtPose(r.b.body, r.b.Path.From)
+	base, okBase := contactbox.SourceBoxAtPose(bodyNode(paths[stationary].body), poses[stationary])
+	startA, okA := contactbox.SourceBoxAtPose(bodyNode(r.a.body), r.a.Path.From)
+	startB, okB := contactbox.SourceBoxAtPose(bodyNode(r.b.body), r.b.Path.From)
 	if !okBase || !okA || !okB {
 		return SweepEvent{}, false
 	}
@@ -245,8 +246,8 @@ func (r *rotationalPairSweep) horizontalSpinContact(f *big.Rat, poseA, poseB r3.
 	}
 	elapsed := new(big.Rat).Mul(r.a.Path.Duration, f)
 	travel := new(big.Rat).Mul(paths[spinning].Velocity[2], elapsed)
-	loA, hiA := startA.lo[2].Rat(), startA.hi[2].Rat()
-	loB, hiB := startB.lo[2].Rat(), startB.hi[2].Rat()
+	loA, hiA := startA.Lo[2].Rat(), startA.Hi[2].Rat()
+	loB, hiB := startB.Lo[2].Rat(), startB.Hi[2].Rat()
 	if spinning == 0 {
 		loA.Add(loA, travel)
 		hiA.Add(hiA, travel)
@@ -291,8 +292,8 @@ func (r *rotationalPairSweep) horizontalSpinContact(f *big.Rat, poseA, poseB r3.
 		coordinates := [2]float64{witness.Value.X, witness.Value.Y}
 		for axis := range 2 {
 			value := proofarith.FloatRat(coordinates[axis])
-			if value.Cmp(new(big.Rat).Add(base.lo[axis].Rat(), margin)) <= 0 ||
-				value.Cmp(new(big.Rat).Sub(base.hi[axis].Rat(), margin)) >= 0 {
+			if value.Cmp(new(big.Rat).Add(base.Lo[axis].Rat(), margin)) <= 0 ||
+				value.Cmp(new(big.Rat).Sub(base.Hi[axis].Rat(), margin)) >= 0 {
 				return SweepEvent{}, false
 			}
 		}

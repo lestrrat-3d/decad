@@ -1,4 +1,4 @@
-package decad
+package contactbox
 
 import (
 	"math/big"
@@ -11,9 +11,9 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// publishClippedHorizontalPatch certifies the complete intersection of two
+// PublishClippedHorizontalPatch certifies the complete intersection of two
 // horizontal source faces when one box is rotated in the world XY plane.
-func publishClippedHorizontalPatch(report *reportvocab.ContactReport, a, b orientedSourceBox) {
+func PublishClippedHorizontalPatch(report *reportvocab.ContactReport, a, b OrientedSourceBox) {
 	if base, ok := axisAlignedOrientedBox(a); ok &&
 		publishClippedHorizontalPatchOrder(report, base, b, true) {
 		return
@@ -31,8 +31,8 @@ func publishClippedHorizontalPatch(report *reportvocab.ContactReport, a, b orien
 // to 1.26.5's stack-slot merging gave such a range copy the slot of an
 // inlined dyMax argument while the indexed read still needed it, and the
 // box's hi corner came back as its lo one.
-func axisAlignedOrientedBox(box orientedSourceBox) (sourceBoxContactProof, bool) {
-	var aligned sourceBoxContactProof
+func axisAlignedOrientedBox(box OrientedSourceBox) (SourceBox, bool) {
+	var aligned SourceBox
 	var used [3]bool
 	for sourceAxis := range box.Edge {
 		e0, e1, e2 := box.Edge[sourceAxis][0], box.Edge[sourceAxis][1], box.Edge[sourceAxis][2]
@@ -41,13 +41,13 @@ func axisAlignedOrientedBox(box orientedSourceBox) (sourceBoxContactProof, bool)
 		for axis, sign := range signs {
 			if sign != 0 {
 				if worldAxis >= 0 {
-					return sourceBoxContactProof{}, false
+					return SourceBox{}, false
 				}
 				worldAxis = axis
 			}
 		}
 		if worldAxis < 0 || used[worldAxis] {
-			return sourceBoxContactProof{}, false
+			return SourceBox{}, false
 		}
 		used[worldAxis] = true
 		for side := range 2 {
@@ -55,7 +55,7 @@ func axisAlignedOrientedBox(box orientedSourceBox) (sourceBoxContactProof, bool)
 			if signs[worldAxis] < 0 {
 				worldSide = 1 - side
 			}
-			aligned.faces[worldAxis][worldSide] = box.faces[sourceAxis][side]
+			aligned.Faces[worldAxis][worldSide] = box.Faces[sourceAxis][side]
 		}
 	}
 	for axis := range 3 {
@@ -69,13 +69,13 @@ func axisAlignedOrientedBox(box orientedSourceBox) (sourceBoxContactProof, bool)
 				hi = v
 			}
 		}
-		aligned.lo[axis], aligned.hi[axis] = lo, hi
+		aligned.Lo[axis], aligned.Hi[axis] = lo, hi
 	}
 	return aligned, true
 }
 
-func publishClippedHorizontalPatchOrder(report *reportvocab.ContactReport, base sourceBoxContactProof,
-	rotated orientedSourceBox, baseIsA bool) bool {
+func publishClippedHorizontalPatchOrder(report *reportvocab.ContactReport, base SourceBox,
+	rotated OrientedSourceBox, baseIsA bool) bool {
 	if report.Relation != reportvocab.ContactTouching {
 		return false
 	}
@@ -97,9 +97,9 @@ func publishClippedHorizontalPatchOrder(report *reportvocab.ContactReport, base 
 	baseSide := 0
 	normalZ := -1.0
 	switch {
-	case proofarith.DyCmp(base.hi[2], minZ) == 0 && proofarith.DyCmp(base.lo[2], minZ) < 0:
+	case proofarith.DyCmp(base.Hi[2], minZ) == 0 && proofarith.DyCmp(base.Lo[2], minZ) < 0:
 		faceZ, baseSide, normalZ = minZ, 1, 1
-	case proofarith.DyCmp(maxZ, base.lo[2]) == 0 && proofarith.DyCmp(base.hi[2], maxZ) > 0:
+	case proofarith.DyCmp(maxZ, base.Lo[2]) == 0 && proofarith.DyCmp(base.Hi[2], maxZ) > 0:
 		faceZ, baseSide = maxZ, 0
 	default:
 		return false
@@ -121,8 +121,8 @@ func publishClippedHorizontalPatchOrder(report *reportvocab.ContactReport, base 
 		polygon = append(polygon, [2]*big.Rat{corner[0].Rat(), corner[1].Rat()})
 	}
 	for axis := range 2 {
-		polygon = pairbox.ClipHorizontalPolygon(polygon, axis, base.lo[axis].Rat(), false)
-		polygon = pairbox.ClipHorizontalPolygon(polygon, axis, base.hi[axis].Rat(), true)
+		polygon = pairbox.ClipHorizontalPolygon(polygon, axis, base.Lo[axis].Rat(), false)
+		polygon = pairbox.ClipHorizontalPolygon(polygon, axis, base.Hi[axis].Rat(), true)
 	}
 	polygon = pairbox.DeduplicateHorizontalPolygon(polygon)
 	if len(polygon) < 3 || pairbox.HorizontalPolygonDoubleArea(polygon).Sign() == 0 {
@@ -131,7 +131,7 @@ func publishClippedHorizontalPatchOrder(report *reportvocab.ContactReport, base 
 	if !baseIsA {
 		normalZ = -normalZ
 	}
-	faceBase, faceRotated := base.faces[2][baseSide], rotated.faces[vertical][rotatedSide]
+	faceBase, faceRotated := base.Faces[2][baseSide], rotated.Faces[vertical][rotatedSide]
 	if faceBase == nil || faceRotated == nil {
 		return false
 	}
@@ -148,9 +148,9 @@ func publishClippedHorizontalPatchOrder(report *reportvocab.ContactReport, base 
 			NormalAngle: units.Radians(0),
 			Separation:  measurement.Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(0), Exactness: measurement.Exact}}
 		if baseIsA {
-			point.FaceA, point.FaceB = faceNode(faceBase), faceNode(faceRotated)
+			point.FaceA, point.FaceB = faceBase, faceRotated
 		} else {
-			point.FaceA, point.FaceB = faceNode(faceRotated), faceNode(faceBase)
+			point.FaceA, point.FaceB = faceRotated, faceBase
 		}
 		point.FeatureA, point.FeatureB = reportvocab.ContactFeature{Face: point.FaceA}, reportvocab.ContactFeature{Face: point.FaceB}
 		points = append(points, point)

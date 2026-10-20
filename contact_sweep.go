@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/contactbox"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/planarsweep"
@@ -184,7 +185,7 @@ type SweepDeparture struct {
 // SweepContactTrack owns the exact source geometry and affine motion of a
 // certified touching prefix. Its source face pointers are the original faces.
 type SweepContactTrack struct {
-	a, b          sourceBoxContactProof
+	a, b          contactbox.SourceBox
 	deltaA        [3]proofarith.Dyadic
 	deltaB        [3]proofarith.Dyadic
 	sphere        *sourceSphereContactProof
@@ -198,8 +199,8 @@ type SweepContactTrack struct {
 	features      [2]reportvocab.ContactFeature
 	normal        VecMeasurement
 	pointCount    int
-	orientedA     *orientedSourceBox
-	orientedB     *orientedSourceBox
+	orientedA     *contactbox.OrientedSourceBox
+	orientedB     *contactbox.OrientedSourceBox
 	orientedDelta [3]proofarith.Dyadic
 	planar        *planarsweep.TrackProof   // general planar touch or band (contact_sweep_planar.go)
 	rolling       *planarsweep.RollingTrack // rolling cylinder touch or band (contact_sweep_rolling.go)
@@ -305,11 +306,11 @@ func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, 
 			return nil, fmt.Errorf("%w: oriented contact-track fraction cannot be represented", ErrUnsupported)
 		}
 		report := &reportvocab.ContactReport{Request: t.request}
-		report.Relation, _, _ = orientedBoxRelation(a, b)
+		report.Relation, _, _ = contactbox.OrientedBoxRelation(a, b)
 		if report.Relation == reportvocab.ContactTouching {
-			publishOrientedBoxPatch(report, a, b)
+			contactbox.PublishOrientedBoxPatch(report, a, b)
 			if report.Manifold == nil {
-				publishClippedHorizontalPatch(report, a, b)
+				contactbox.PublishClippedHorizontalPatch(report, a, b)
 			}
 		}
 		if report.Relation != reportvocab.ContactTouching || report.Manifold == nil ||
@@ -357,7 +358,7 @@ func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, 
 		return nil, fmt.Errorf("%w: fraction is not representable as a source-box translation", ErrUnsupported)
 	}
 	report := &reportvocab.ContactReport{Request: t.request}
-	classifySourceBoxes(report, a, b)
+	contactbox.ClassifySourceBoxes(report, a, b)
 	if report.Relation != reportvocab.ContactTouching || report.Manifold == nil {
 		return nil, fmt.Errorf("%w: contact track has no bounded face patch", ErrUnsupported)
 	}
@@ -529,8 +530,8 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 		}
 		return d.sweepRotatingPair(ctx, a, b, pa, pb, request, resolution, report)
 	}
-	boxA, okA := sourceBoxAtPose(a, pa.From)
-	boxB, okB := sourceBoxAtPose(b, pb.From)
+	boxA, okA := contactbox.SourceBoxAtPose(bodyNode(a), pa.From)
+	boxB, okB := contactbox.SourceBoxAtPose(bodyNode(b), pb.From)
 	if !okA || !okB {
 		if okA {
 			if _, faceted := b.n.Payload.(facetedPayload); faceted {
@@ -572,19 +573,19 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 			}
 		}
 		if sphere, sphereOK := sourceSphereAtPose(a, pa.From); sphereOK {
-			if box, boxOK := sourceOrientedBoxAtPose(b, pb.From); boxOK {
+			if box, boxOK := contactbox.SourceOrientedBoxAtPose(bodyNode(b), pb.From); boxOK {
 				return (&orientedSphereSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
 					req: request, report: report, sphere: sphere, box: box, sphereFirst: true}).execute(ctx, resolution)
 			}
 		}
 		if sphere, sphereOK := sourceSphereAtPose(b, pb.From); sphereOK {
-			if box, boxOK := sourceOrientedBoxAtPose(a, pa.From); boxOK {
+			if box, boxOK := contactbox.SourceOrientedBoxAtPose(bodyNode(a), pa.From); boxOK {
 				return (&orientedSphereSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
 					req: request, report: report, sphere: sphere, box: box}).execute(ctx, resolution)
 			}
 		}
-		if _, orientedA := sourceOrientedBoxAtPose(a, pa.From); orientedA {
-			if _, orientedB := sourceOrientedBoxAtPose(b, pb.From); orientedB {
+		if _, orientedA := contactbox.SourceOrientedBoxAtPose(bodyNode(a), pa.From); orientedA {
+			if _, orientedB := contactbox.SourceOrientedBoxAtPose(bodyNode(b), pb.From); orientedB {
 				return d.sweepRotatingPair(ctx, a, b, pa, pb, request, resolution, report)
 			}
 		}

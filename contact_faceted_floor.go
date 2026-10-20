@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/contactbox"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
@@ -24,7 +25,7 @@ func certifyFacetedUnionLowerSupport(ctx context.Context, result, a, b *Body) er
 	}
 	for candidate, operands := range [][2]*Body{{a, b}, {b, a}} {
 		base, upper := operands[0], operands[1]
-		box, exact := sourceBoxAtPose(base, r3.Identity())
+		box, exact := contactbox.SourceBoxAtPose(bodyNode(base), r3.Identity())
 		if !exact {
 			continue
 		}
@@ -32,18 +33,18 @@ func certifyFacetedUnionLowerSupport(ctx context.Context, result, a, b *Body) er
 		if err != nil || bounds.Bound.Kind() != units.Length ||
 			!measurement.FiniteValues(bounds.Min.Z, bounds.Bound.Base()) || bounds.Bound.Base() < 0 ||
 			proofarith.DyCmp(proofarith.DySubScalar(proofarith.MustDyOf(bounds.Min.Z),
-				proofarith.MustDyOf(bounds.Bound.Base())), box.lo[2]) <= 0 {
+				proofarith.MustDyOf(bounds.Bound.Base())), box.Lo[2]) <= 0 {
 			continue
 		}
 		faces := base.Faces()
 		for i, face := range faces {
-			if face != box.faces[2][0] {
+			if faceNode(face) != box.Faces[2][0] {
 				continue
 			}
 			sourceGroup := i + candidate*len(a.Faces())
-			pp.LowerSupport = &facetproof.LowerSupport{Plane: box.lo[2], SourceGroup: sourceGroup,
-				FootLo: [2]proofarith.Dyadic{box.lo[0], box.lo[1]},
-				FootHi: [2]proofarith.Dyadic{box.hi[0], box.hi[1]}}
+			pp.LowerSupport = &facetproof.LowerSupport{Plane: box.Lo[2], SourceGroup: sourceGroup,
+				FootLo: [2]proofarith.Dyadic{box.Lo[0], box.Lo[1]},
+				FootHi: [2]proofarith.Dyadic{box.Hi[0], box.Hi[1]}}
 			result.n.Payload = pp
 			_, proven, err := sourceFacetedAxisSupport(ctx, result, r3.Identity())
 			if err != nil {
@@ -64,7 +65,7 @@ func certifyFacetedUnionLowerSupport(ctx context.Context, result, a, b *Body) er
 // and the payload's two-sided boundary displacement. It does not identify a
 // support face, so callers may use it only for strict separation.
 type boundedFacetedExtent struct {
-	box   sourceBoxContactProof
+	box   contactbox.SourceBox
 	bound proofarith.Dyadic
 }
 
@@ -90,21 +91,21 @@ func sourceBoundedFacetedExtent(ctx context.Context, b *Body,
 		}
 		placed := proofarith.DvTransform(pose, proofarith.DyVec(v))
 		for axis := range 3 {
-			if i == 0 || proofarith.DyCmp(placed[axis], proof.box.lo[axis]) < 0 {
-				proof.box.lo[axis] = placed[axis]
+			if i == 0 || proofarith.DyCmp(placed[axis], proof.box.Lo[axis]) < 0 {
+				proof.box.Lo[axis] = placed[axis]
 			}
-			if i == 0 || proofarith.DyCmp(placed[axis], proof.box.hi[axis]) > 0 {
-				proof.box.hi[axis] = placed[axis]
+			if i == 0 || proofarith.DyCmp(placed[axis], proof.box.Hi[axis]) > 0 {
+				proof.box.Hi[axis] = placed[axis]
 			}
 		}
 	}
 	return proof, true, budget.Err()
 }
 
-func boundedFacetedInsideFloor(extent boundedFacetedExtent, floor sourceBoxContactProof) bool {
+func boundedFacetedInsideFloor(extent boundedFacetedExtent, floor contactbox.SourceBox) bool {
 	for axis := range 2 {
-		if proofarith.DyCmp(proofarith.DySubScalar(extent.box.lo[axis], extent.bound), floor.lo[axis]) <= 0 ||
-			proofarith.DyCmp(proofarith.DyAdd(extent.box.hi[axis], extent.bound), floor.hi[axis]) >= 0 {
+		if proofarith.DyCmp(proofarith.DySubScalar(extent.box.Lo[axis], extent.bound), floor.Lo[axis]) <= 0 ||
+			proofarith.DyCmp(proofarith.DyAdd(extent.box.Hi[axis], extent.bound), floor.Hi[axis]) >= 0 {
 			return false
 		}
 	}
@@ -112,8 +113,8 @@ func boundedFacetedInsideFloor(extent boundedFacetedExtent, floor sourceBoxConta
 }
 
 func boundedFacetedFloorGap(extent boundedFacetedExtent,
-	floor sourceBoxContactProof) (measurement.Measurement, bool) {
-	held := proofarith.DySubScalar(extent.box.lo[2], floor.hi[2])
+	floor contactbox.SourceBox) (measurement.Measurement, bool) {
+	held := proofarith.DySubScalar(extent.box.Lo[2], floor.Hi[2])
 	if proofarith.DyCmp(held, extent.bound) <= 0 {
 		return measurement.Measurement{}, false
 	}
@@ -192,7 +193,7 @@ func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform) (
 // support patch lies strictly inside a source-box floor's upper face. The
 // certified support plane separates the whole occupied sets at and above it.
 func classifyFacetedFloorBox(ctx context.Context, report *reportvocab.ContactReport, faceted *Body,
-	pose r3.Transform, floor sourceBoxContactProof, facetedIsA bool) error {
+	pose r3.Transform, floor contactbox.SourceBox, facetedIsA bool) error {
 	report.Reason = reportvocab.ContactPayloadUnsupported
 	support, ok, err := sourceFacetedAxisSupport(ctx, faceted, pose)
 	if err != nil {
@@ -214,12 +215,12 @@ func classifyFacetedFloorBox(ctx context.Context, report *reportvocab.ContactRep
 		return nil
 	}
 	for j := range 2 {
-		if proofarith.DyCmp(floor.lo[j], support.footLo[j]) >= 0 ||
-			proofarith.DyCmp(support.footHi[j], floor.hi[j]) >= 0 {
+		if proofarith.DyCmp(floor.Lo[j], support.footLo[j]) >= 0 ||
+			proofarith.DyCmp(support.footHi[j], floor.Hi[j]) >= 0 {
 			return nil
 		}
 	}
-	gap := proofarith.DySubScalar(support.plane, floor.hi[2])
+	gap := proofarith.DySubScalar(support.plane, floor.Hi[2])
 	if gap.Sign() < 0 {
 		return nil
 	}
@@ -237,16 +238,16 @@ func classifyFacetedFloorBox(ctx context.Context, report *reportvocab.ContactRep
 	report.Relation = reportvocab.ContactTouching
 	exactZero := measurement.Measurement{Value: units.Millimeters(0), Exactness: measurement.Exact, Bound: units.Millimeters(0)}
 	report.Gap = &exactZero
-	patch := sourceBoxContactProof{}
-	patch.lo[2], patch.hi[2] = support.plane, support.outerHi[2]
-	patch.faces[2][0] = support.face
+	patch := contactbox.SourceBox{}
+	patch.Lo[2], patch.Hi[2] = support.plane, support.outerHi[2]
+	patch.Faces[2][0] = faceNode(support.face)
 	for j := range 2 {
-		patch.lo[j], patch.hi[j] = support.footLo[j], support.footHi[j]
+		patch.Lo[j], patch.Hi[j] = support.footLo[j], support.footHi[j]
 	}
 	if facetedIsA {
-		publishSourceBoxPatch(report, patch, floor, 2, -1, proofarith.DyZero())
+		contactbox.PublishSourceBoxPatch(report, patch, floor, 2, -1, proofarith.DyZero())
 	} else {
-		publishSourceBoxPatch(report, floor, patch, 2, 1, proofarith.DyZero())
+		contactbox.PublishSourceBoxPatch(report, floor, patch, 2, 1, proofarith.DyZero())
 	}
 	if report.Manifold != nil {
 		report.Reason = reportvocab.ContactNoReason
@@ -261,7 +262,7 @@ func classifyFacetedFloorBox(ctx context.Context, report *reportvocab.ContactRep
 // ContactPair does not yet certify overlap for this payload.
 func (d *Document) sweepFacetedFloor(ctx context.Context, a, b *Body,
 	pa, pb affinePairPath, req reportvocab.SweepRequest, report *SweepReport,
-	floor sourceBoxContactProof, facetedFirst bool) (*SweepReport, error) {
+	floor contactbox.SourceBox, facetedFirst bool) (*SweepReport, error) {
 	faceted, pose, facetedDelta, floorDelta := b, pb.From, pb.Delta, pa.Delta
 	if facetedFirst {
 		faceted, pose, facetedDelta, floorDelta = a, pa.From, pa.Delta, pb.Delta
@@ -282,17 +283,17 @@ func (d *Document) sweepFacetedFloor(ctx context.Context, a, b *Body,
 		return facetedSweepUndecided(report, pa.Duration), nil
 	}
 	for i := range 2 {
-		if proofarith.DyCmp(floor.lo[i], support.footLo[i]) >= 0 ||
-			proofarith.DyCmp(support.footHi[i], floor.hi[i]) >= 0 {
+		if proofarith.DyCmp(floor.Lo[i], support.footLo[i]) >= 0 ||
+			proofarith.DyCmp(support.footHi[i], floor.Hi[i]) >= 0 {
 			return facetedSweepUndecided(report, pa.Duration), nil
 		}
 	}
-	patch := sourceBoxContactProof{}
+	patch := contactbox.SourceBox{}
 	for i := range 2 {
-		patch.lo[i], patch.hi[i] = support.footLo[i], support.footHi[i]
+		patch.Lo[i], patch.Hi[i] = support.footLo[i], support.footHi[i]
 	}
-	patch.lo[2], patch.hi[2] = support.plane, support.outerHi[2]
-	patch.faces[2][0] = support.face
+	patch.Lo[2], patch.Hi[2] = support.plane, support.outerHi[2]
+	patch.Faces[2][0] = faceNode(support.face)
 	boxA, boxB := floor, patch
 	if facetedFirst {
 		boxA, boxB = patch, floor
@@ -319,7 +320,7 @@ func (d *Document) sweepFacetedFloor(ctx context.Context, a, b *Body,
 		if facetedFirst {
 			floorDelta, facetedDelta = pb.Delta, pa.Delta
 		}
-		startGap := proofarith.DySubScalar(patch.lo[2], floor.hi[2])
+		startGap := proofarith.DySubScalar(patch.Lo[2], floor.Hi[2])
 		slope := proofarith.DySubScalar(facetedDelta[2], floorDelta[2])
 		endGap := new(big.Rat).Add(startGap.Rat(),
 			new(big.Rat).Mul(slope.Rat(), result.bracketRight))
@@ -339,7 +340,7 @@ func (d *Document) sweepFacetedFloor(ctx context.Context, a, b *Body,
 // when no exact source support-face proof survives placement.
 func (d *Document) sweepBoundedFacetedFloorClear(ctx context.Context, a, b *Body,
 	pa, pb affinePairPath, req reportvocab.SweepRequest, report *SweepReport,
-	floor sourceBoxContactProof, facetedFirst bool) (*SweepReport, error) {
+	floor contactbox.SourceBox, facetedFirst bool) (*SweepReport, error) {
 	faceted, pose, facetedDelta, floorDelta := b, pb.From, pb.Delta, pa.Delta
 	if facetedFirst {
 		faceted, pose, facetedDelta, floorDelta = a, pa.From, pa.Delta, pb.Delta
@@ -421,9 +422,9 @@ func (d *Document) sweepBoundedFacetedFloorClear(ctx context.Context, a, b *Body
 	return report, nil
 }
 
-func boundedFacetedReplayBoxes(floor sourceBoxContactProof, extent boundedFacetedExtent,
+func boundedFacetedReplayBoxes(floor contactbox.SourceBox, extent boundedFacetedExtent,
 	pa, pb affinePairPath, poseA, poseB r3.Transform, f *big.Rat,
-	facetedFirst bool) (sourceBoxContactProof, boundedFacetedExtent, *big.Rat, bool) {
+	facetedFirst bool) (contactbox.SourceBox, boundedFacetedExtent, *big.Rat, bool) {
 	facetedPath, floorPath := pb, pa
 	facetedPose, floorPose := poseB, poseA
 	if facetedFirst {
@@ -432,7 +433,7 @@ func boundedFacetedReplayBoxes(floor sourceBoxContactProof, extent boundedFacete
 	observedFloor, okFloor := translatedReplayBox(floor, floorPath.From, floorPose)
 	observedFacet, okFacet := translatedReplayBox(extent.box, facetedPath.From, facetedPose)
 	if !okFloor || !okFacet {
-		return sourceBoxContactProof{}, boundedFacetedExtent{}, nil, false
+		return contactbox.SourceBox{}, boundedFacetedExtent{}, nil, false
 	}
 	deviation := boxPoseDeviation(floor, observedFloor, floorPath.Delta, f)
 	deviation.Add(deviation, boxPoseDeviation(extent.box, observedFacet, facetedPath.Delta, f))

@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/contactbox"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -23,7 +24,7 @@ type sourceSphereSweepRun struct {
 	req         reportvocab.SweepRequest
 	report      *SweepReport
 	sphere      sourceSphereContactProof
-	box         sourceBoxContactProof
+	box         contactbox.SourceBox
 	sphereFirst bool
 }
 
@@ -44,7 +45,7 @@ func (d *Document) sweepRotatingSphereBox(ctx context.Context, a, b *Body,
 		return nil, false, nil
 	}
 	sphere, sphereOK := sourceSphereAtPose(sphereBody, spherePath.From)
-	box, boxOK := sourceBoxAtPose(boxBody, boxPath.From)
+	box, boxOK := contactbox.SourceBoxAtPose(bodyNode(boxBody), boxPath.From)
 	if !sphereOK || !boxOK {
 		return nil, false, nil
 	}
@@ -86,15 +87,15 @@ func (d *Document) sweepRotatingSphereBox(ctx context.Context, a, b *Body,
 	return result, true, err
 }
 
-func translatedContactBox(box sourceBoxContactProof, delta [3]proofarith.Dyadic,
-	f *big.Rat) (sourceBoxContactProof, bool) {
+func translatedContactBox(box contactbox.SourceBox, delta [3]proofarith.Dyadic,
+	f *big.Rat) (contactbox.SourceBox, bool) {
 	fraction, ok := proofarith.DyOfRat(f)
 	if !ok {
-		return sourceBoxContactProof{}, false
+		return contactbox.SourceBox{}, false
 	}
 	for i := range 3 {
 		move := proofarith.DyMul(delta[i], fraction)
-		box.lo[i], box.hi[i] = proofarith.DyAdd(box.lo[i], move), proofarith.DyAdd(box.hi[i], move)
+		box.Lo[i], box.Hi[i] = proofarith.DyAdd(box.Lo[i], move), proofarith.DyAdd(box.Hi[i], move)
 	}
 	return box, true
 }
@@ -174,7 +175,7 @@ func (r *sourceSphereSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.Tran
 		spherePose, boxPose = poseA, poseB
 	}
 	observedSphere, okSphere := sourceSphereAtPose(r.sphereBody(), spherePose)
-	observedBox, okBox := sourceBoxAtPose(r.boxBody(), boxPose)
+	observedBox, okBox := contactbox.SourceBoxAtPose(bodyNode(r.boxBody()), boxPose)
 	if !okSphere || !okBox {
 		ideal.Manifold = nil
 		ideal.Reason = ContactPayloadUnsupported
@@ -183,7 +184,7 @@ func (r *sourceSphereSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.Tran
 	sphereDelta, boxDelta := r.deltas()
 	deviation := spherepath.AxisSpherePoseDeviation(
 		pairbox.AxisSphere{Center: r.sphere.center, Radius: r.sphere.radius}, observedSphere.center,
-		r.box.axisBox(), observedBox.axisBox(), sphereDelta, boxDelta, f)
+		r.box.AxisBox(), observedBox.AxisBox(), sphereDelta, boxDelta, f)
 	resolution, ok := sweeppath.ExactBaseValue(r.req.PointResolution)
 	if !ok {
 		ideal.Manifold = nil
@@ -241,7 +242,7 @@ func (r *sourceSphereSweepRun) track(first *SweepSample) *SweepContactTrack {
 	}
 	sphereDelta, boxDelta := r.deltas()
 	if !spherepath.AxisTrackPointsWithin(
-		pairbox.AxisSphere{Center: r.sphere.center, Radius: r.sphere.radius}, r.box.axisBox(),
+		pairbox.AxisSphere{Center: r.sphere.center, Radius: r.sphere.radius}, r.box.AxisBox(),
 		sphereDelta, boxDelta, r.req.PointResolution.Base()) {
 		return nil
 	}
@@ -287,7 +288,7 @@ func (r *sourceSphereSweepRun) execute(ctx context.Context, resolution *big.Rat)
 	}
 	sphereDelta, boxDelta := r.deltas()
 	axis, side, gap, slope, ok := spherepath.AxisFaceCorridor(
-		pairbox.AxisSphere{Center: r.sphere.center, Radius: r.sphere.radius}, r.box.axisBox(),
+		pairbox.AxisSphere{Center: r.sphere.center, Radius: r.sphere.radius}, r.box.AxisBox(),
 		sphereDelta, boxDelta)
 	if !ok {
 		return r.undecided(zero, one, SweepContactUnsupported), nil
@@ -394,7 +395,7 @@ type orientedSphereSweepRun struct {
 	req          reportvocab.SweepRequest
 	report       *SweepReport
 	sphere       sourceSphereContactProof
-	box          orientedSourceBox
+	box          contactbox.OrientedSourceBox
 	sphereFirst  bool
 	axis, side   int
 	outward      proofarith.DyV3

@@ -2,6 +2,7 @@ package decad
 
 import (
 	"github.com/lestrrat-3d/decad/internal/clearance"
+	"github.com/lestrrat-3d/decad/internal/contactbox"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -17,7 +18,7 @@ import (
 // a full-circle prism or a full revolve of an axis-incident rectangle. Its
 // box is an outer bound; the strict face corridor makes axial support exact.
 type sourceCylinderContactProof struct {
-	box   sourceBoxContactProof
+	box   contactbox.SourceBox
 	axis  int
 	faces [2]*Face
 	wall  *Face
@@ -83,7 +84,7 @@ func sourceCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProo
 	}
 	numeric := pairbox.SourcePrismCylinderBox(pp.Frame, pp.Xform, pose, circle.Center,
 		pp.Z0, pp.Z1, circle.Radius.Base(), axis)
-	box := sourceBoxContactProof{lo: numeric.Lo, hi: numeric.Hi}
+	box := contactbox.SourceBox{Lo: numeric.Lo, Hi: numeric.Hi}
 	return sourceCylinderContactProof{box: box, axis: axis, faces: endFaces, wall: wallFace}, true
 }
 
@@ -117,7 +118,7 @@ func sourceRevolvedCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderCon
 	if !ok {
 		return sourceCylinderContactProof{}, false
 	}
-	box := sourceBoxContactProof{lo: numeric.Lo, hi: numeric.Hi}
+	box := contactbox.SourceBox{Lo: numeric.Lo, Hi: numeric.Hi}
 	faces := b.Faces()
 	if len(faces) != 3 || len(b.Edges()) != 2 {
 		return sourceCylinderContactProof{}, false
@@ -156,9 +157,9 @@ func sourceRevolvedCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderCon
 // Its axial disks or full circular sidewall supply exact support at the
 // selected face; a sidewall touch has a complete axial line contact set.
 func classifySourceCylinderBox(report *reportvocab.ContactReport, cylinder sourceCylinderContactProof,
-	box sourceBoxContactProof, cylinderFirst bool) {
+	box contactbox.SourceBox, cylinderFirst bool) {
 	axis, side, signedGap, ok := pairbox.CylinderFaceCorridor(
-		cylinder.box.axisBox(), box.axisBox(), cylinder.axis, cylinder.wall != nil)
+		cylinder.box.AxisBox(), box.AxisBox(), cylinder.axis, cylinder.wall != nil)
 	if !ok {
 		report.Reason = reportvocab.ContactNoGapProof
 		return
@@ -185,7 +186,7 @@ func classifySourceCylinderBox(report *reportvocab.ContactReport, cylinder sourc
 	} else {
 		report.Relation = reportvocab.ContactOverlapping
 	}
-	boxFace, cylinderFace := box.faces[axis][side], cylinder.faces[1-side]
+	boxFace, cylinderFace := box.Faces[axis][side], cylinder.faces[1-side]
 	if axis != cylinder.axis {
 		cylinderFace = cylinder.wall
 	}
@@ -194,7 +195,7 @@ func classifySourceCylinderBox(report *reportvocab.ContactReport, cylinder sourc
 		return
 	}
 	boxReading, cylinderReading, signedReading, ok := pairbox.CylinderFacePoint(
-		cylinder.box.axisBox(), box.axisBox(), axis, side, signedGap,
+		cylinder.box.AxisBox(), box.AxisBox(), axis, side, signedGap,
 		report.Request.PointResolution.Base())
 	if !ok {
 		report.Reason = reportvocab.ContactPointTooCoarse
@@ -203,8 +204,8 @@ func classifySourceCylinderBox(report *reportvocab.ContactReport, cylinder sourc
 	sign := signIfBoxSide(side)
 	boxWitness, cylinderWitness := boxReading.Measurement(), cylinderReading.Measurement()
 	point := reportvocab.ContactPoint{OnA: boxWitness, OnB: cylinderWitness,
-		FaceA: faceNode(boxFace), FaceB: faceNode(cylinderFace),
-		FeatureA: reportvocab.ContactFeature{Face: faceNode(boxFace)}, FeatureB: reportvocab.ContactFeature{Face: faceNode(cylinderFace)},
+		FaceA: boxFace, FaceB: faceNode(cylinderFace),
+		FeatureA: reportvocab.ContactFeature{Face: boxFace}, FeatureB: reportvocab.ContactFeature{Face: faceNode(cylinderFace)},
 		NormalAngle: units.Radians(0), Separation: signedReading.Measurement()}
 	if cylinderFirst {
 		point.OnA, point.OnB = point.OnB, point.OnA
