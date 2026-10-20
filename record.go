@@ -135,9 +135,8 @@ type (
 // builders evaluate over topology nodes and whose body records implement
 // topo.Payload (docs/sweep-design.md, docs/evaluator-design.md §8).
 type (
-	sweepPayload          = sweeprecord.Payload
-	chainSweepPayload     = sweeprecord.ChainPayload
-	chainSweepSpanPayload = sweeprecord.ChainSpanPayload
+	sweepPayload      = sweeprecord.Payload
+	chainSweepPayload = sweeprecord.ChainPayload
 )
 
 // stitchPayload and unstitchPayload are the evaluator's records of a Stitch
