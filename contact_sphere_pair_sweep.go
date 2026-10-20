@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/contactround"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
@@ -22,8 +23,8 @@ type sourceSpherePairSweepRun struct {
 	pa, pb  affinePairPath
 	req     reportvocab.SweepRequest
 	report  *SweepReport
-	sphereA sourceSphereContactProof
-	sphereB sourceSphereContactProof
+	sphereA contactround.SphereProof
+	sphereB contactround.SphereProof
 	// rotating marks a centered spinning drift. Its real start pose must
 	// report the ideal relation and a clear path's real end pose separation;
 	// ContinueSeparatingTouch needs a touching start.
@@ -40,14 +41,14 @@ func (d *Document) sweepRotatingSpherePair(ctx context.Context, a, b *Body,
 		(req.StartPolicy != reportvocab.ContinueSeparatingTouch && req.StartPolicy != reportvocab.StopAtInitialContact) {
 		return nil, false, nil
 	}
-	sphereA, okA := sourceSphereAtPose(a, pa.From)
-	sphereB, okB := sourceSphereAtPose(b, pb.From)
+	sphereA, okA := contactround.SphereAtPose(bodyNode(a), pa.From)
+	sphereB, okB := contactround.SphereAtPose(bodyNode(b), pb.From)
 	if !okA || !okB {
 		return nil, false, nil
 	}
 	for _, moving := range []struct {
 		path   *affinePairPath
-		sphere sourceSphereContactProof
+		sphere contactround.SphereProof
 	}{{&pa, sphereA}, {&pb, sphereB}} {
 		if moving.path.Drift == nil {
 			continue
@@ -55,8 +56,8 @@ func (d *Document) sweepRotatingSpherePair(ctx context.Context, a, b *Body,
 		start := moving.path.From.Translation()
 		pivot := moving.path.Drift.Center
 		for axis, pair := range [3][2]float64{{start.X, pivot.X}, {start.Y, pivot.Y}, {start.Z, pivot.Z}} {
-			if proofarith.DyCmp(moving.sphere.center[axis], proofarith.MustDyOf(pair[0])) != 0 ||
-				proofarith.DyCmp(moving.sphere.center[axis], proofarith.MustDyOf(pair[1])) != 0 {
+			if proofarith.DyCmp(moving.sphere.Center[axis], proofarith.MustDyOf(pair[0])) != 0 ||
+				proofarith.DyCmp(moving.sphere.Center[axis], proofarith.MustDyOf(pair[1])) != 0 {
 				return report.undecidedRotatingSpherePair(pa.Duration), true, nil
 			}
 		}
@@ -74,7 +75,7 @@ func (d *Document) sweepRotatingSpherePair(ctx context.Context, a, b *Body,
 			moving.path.Delta[axis] = component
 		}
 	}
-	pair := [2]sourceSphereContactProof{sphereA, sphereB}
+	pair := [2]contactround.SphereProof{sphereA, sphereB}
 	report.replay = &sweepReplayProof{pa: pa, pb: pb, spherePair: &pair,
 		request: req.ContactRequest}
 	run := &sourceSpherePairSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
@@ -91,13 +92,13 @@ func (r *SweepReport) undecidedRotatingSpherePair(duration *big.Rat) *SweepRepor
 }
 
 func (r *sourceSpherePairSweepRun) idealAt(f *big.Rat, at SweepInstant) SweepEvent {
-	a, okA := translatedSphere(r.sphereA, r.pa.Delta, f)
-	b, okB := translatedSphere(r.sphereB, r.pb.Delta, f)
+	a, okA := contactround.TranslatedSphere(r.sphereA, r.pa.Delta, f)
+	b, okB := contactround.TranslatedSphere(r.sphereB, r.pb.Delta, f)
 	if !okA || !okB {
 		return SweepEvent{At: at, Relation: ContactUndecided, Reason: ContactPayloadUnsupported}
 	}
 	contact := &reportvocab.ContactReport{Request: r.req.ContactRequest}
-	classifySourceSpherePair(contact, a, b)
+	contactround.ClassifySpherePair(contact, a, b)
 	return sweepEventOf(at, contact)
 }
 
@@ -144,8 +145,8 @@ func (r *sourceSpherePairSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.
 		ideal.Manifold, ideal.Reason = nil, ContactNoNormalProof
 		return
 	}
-	observedA, okA := sourceSphereAtPose(r.a, poseA)
-	observedB, okB := sourceSphereAtPose(r.b, poseB)
+	observedA, okA := contactround.SphereAtPose(bodyNode(r.a), poseA)
+	observedB, okB := contactround.SphereAtPose(bodyNode(r.b), poseB)
 	if !okA || !okB {
 		ideal.Manifold, ideal.Reason = nil, ContactPayloadUnsupported
 		return
@@ -156,7 +157,7 @@ func (r *sourceSpherePairSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.
 		return
 	}
 	bounds, status := spherepath.TransferPairBounds(spherepath.PairTransferInput{
-		Motion: r.pairMotion(), ObservedA: observedA.center, ObservedB: observedB.center, Fraction: f,
+		Motion: r.pairMotion(), ObservedA: observedA.Center, ObservedB: observedB.Center, Fraction: f,
 		IdealNormal: want.Normal.Value, ObservedNormal: actual.Normal.Value,
 		IdealNormalBound: want.Normal.Bound.Base(), ObservedNormalBound: actual.Normal.Bound.Base(),
 		ObservedNormalAngle: actual.NormalAngle.Base(),
@@ -207,8 +208,8 @@ func (r *sourceSpherePairSweepRun) sortSamples() {
 
 func (r *sourceSpherePairSweepRun) pairMotion() spherepath.PairMotion {
 	return spherepath.PairMotion{
-		CenterA: r.sphereA.center, CenterB: r.sphereB.center,
-		RadiusA: r.sphereA.radius, RadiusB: r.sphereB.radius,
+		CenterA: r.sphereA.Center, CenterB: r.sphereB.Center,
+		RadiusA: r.sphereA.Radius, RadiusB: r.sphereB.Radius,
 		DeltaA: r.pa.Delta, DeltaB: r.pb.Delta,
 	}
 }
@@ -364,7 +365,7 @@ func (r *sourceSpherePairSweepRun) persistentTrack(first *SweepSample) *SweepCon
 		return nil
 	}
 	point := first.Ideal.Manifold.Points[0]
-	pair := [2]sourceSphereContactProof{r.sphereA, r.sphereB}
+	pair := [2]contactround.SphereProof{r.sphereA, r.sphereB}
 	return &SweepContactTrack{
 		start: new(big.Rat), end: big.NewRat(1, 1), duration: new(big.Rat).Set(r.pa.Duration),
 		request: r.req.ContactRequest, spherePair: &pair,

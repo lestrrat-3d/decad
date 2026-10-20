@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/clearance/pairkernel"
 	"github.com/lestrrat-3d/decad/internal/contactbox"
+	"github.com/lestrrat-3d/decad/internal/contactround"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/planarband"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
@@ -314,10 +315,10 @@ func classifyContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.Transf
 	boxA, okA := contactbox.SourceBoxAtPose(bodyNode(a), poseA)
 	boxB, okB := contactbox.SourceBoxAtPose(bodyNode(b), poseB)
 	if !okA && !okB {
-		sphereA, sphereOKA := sourceSphereAtPose(a, poseA)
-		sphereB, sphereOKB := sourceSphereAtPose(b, poseB)
+		sphereA, sphereOKA := contactround.SphereAtPose(bodyNode(a), poseA)
+		sphereB, sphereOKB := contactround.SphereAtPose(bodyNode(b), poseB)
 		if sphereOKA && sphereOKB {
-			classifySourceSpherePair(report, sphereA, sphereB)
+			contactround.ClassifySpherePair(report, sphereA, sphereB)
 			return report, nil
 		}
 	}
@@ -331,12 +332,12 @@ func classifyContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.Transf
 			}
 			return report, nil
 		}
-		if sphere, ok := sourceSphereAtPose(b, poseB); ok {
-			classifySourceSphereBox(report, sphere, boxA, false)
+		if sphere, ok := contactround.SphereAtPose(bodyNode(b), poseB); ok {
+			contactround.ClassifySphereBox(report, sphere, boxA, false)
 			return report, nil
 		}
-		if cylinder, ok := sourceCylinderAtPose(b, poseB); ok {
-			classifySourceCylinderBox(report, cylinder, boxA, false)
+		if cylinder, ok := contactround.CylinderAtPose(bodyNode(b), poseB); ok {
+			contactround.ClassifyCylinderBox(report, cylinder, boxA, false)
 			if err := classifyUndecidedCylinder(ctx, report); err != nil {
 				return nil, err
 			}
@@ -353,12 +354,12 @@ func classifyContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.Transf
 			}
 			return report, nil
 		}
-		if sphere, ok := sourceSphereAtPose(a, poseA); ok {
-			classifySourceSphereBox(report, sphere, boxB, true)
+		if sphere, ok := contactround.SphereAtPose(bodyNode(a), poseA); ok {
+			contactround.ClassifySphereBox(report, sphere, boxB, true)
 			return report, nil
 		}
-		if cylinder, ok := sourceCylinderAtPose(a, poseA); ok {
-			classifySourceCylinderBox(report, cylinder, boxB, true)
+		if cylinder, ok := contactround.CylinderAtPose(bodyNode(a), poseA); ok {
+			contactround.ClassifyCylinderBox(report, cylinder, boxB, true)
 			if err := classifyUndecidedCylinder(ctx, report); err != nil {
 				return nil, err
 			}
@@ -369,14 +370,14 @@ func classifyContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.Transf
 		orientedA, orientedOKA := contactbox.SourceOrientedBoxAtPose(bodyNode(a), poseA)
 		orientedB, orientedOKB := contactbox.SourceOrientedBoxAtPose(bodyNode(b), poseB)
 		if orientedOKA && !orientedOKB {
-			if sphere, ok := sourceSphereAtPose(b, poseB); ok {
-				classifySourceSphereOrientedBox(report, sphere, orientedA, false)
+			if sphere, ok := contactround.SphereAtPose(bodyNode(b), poseB); ok {
+				contactround.ClassifySphereOrientedBox(report, sphere, orientedA, false)
 				return report, nil
 			}
 		}
 		if orientedOKB && !orientedOKA {
-			if sphere, ok := sourceSphereAtPose(a, poseA); ok {
-				classifySourceSphereOrientedBox(report, sphere, orientedB, true)
+			if sphere, ok := contactround.SphereAtPose(bodyNode(a), poseA); ok {
+				contactround.ClassifySphereOrientedBox(report, sphere, orientedB, true)
 				return report, nil
 			}
 		}

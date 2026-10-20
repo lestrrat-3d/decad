@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/contactbox"
+	"github.com/lestrrat-3d/decad/internal/contactround"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -23,7 +24,7 @@ type sourceSphereSweepRun struct {
 	pa, pb      affinePairPath
 	req         reportvocab.SweepRequest
 	report      *SweepReport
-	sphere      sourceSphereContactProof
+	sphere      contactround.SphereProof
 	box         contactbox.SourceBox
 	sphereFirst bool
 }
@@ -44,7 +45,7 @@ func (d *Document) sweepRotatingSphereBox(ctx context.Context, a, b *Body,
 	if boxPath.Drift != nil || boxPath.Screw != nil {
 		return nil, false, nil
 	}
-	sphere, sphereOK := sourceSphereAtPose(sphereBody, spherePath.From)
+	sphere, sphereOK := contactround.SphereAtPose(bodyNode(sphereBody), spherePath.From)
 	box, boxOK := contactbox.SourceBoxAtPose(bodyNode(boxBody), boxPath.From)
 	if !sphereOK || !boxOK {
 		return nil, false, nil
@@ -54,7 +55,7 @@ func (d *Document) sweepRotatingSphereBox(ctx context.Context, a, b *Body,
 	// exactly at the query origin before rotation.
 	from := spherePath.From.Translation()
 	for axis, value := range [3]float64{from.X, from.Y, from.Z} {
-		if proofarith.DyCmp(sphere.center[axis], proofarith.MustDyOf(value)) != 0 {
+		if proofarith.DyCmp(sphere.Center[axis], proofarith.MustDyOf(value)) != 0 {
 			report.Outcome, report.Cause = SweepUndecided, SweepContactUnsupported
 			report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), pa.Duration),
 				To: sweepInstant(big.NewRat(1, 1), pa.Duration)}
@@ -63,7 +64,7 @@ func (d *Document) sweepRotatingSphereBox(ctx context.Context, a, b *Body,
 	}
 	center := spherePath.Drift.Center
 	for axis, value := range [3]float64{center.X, center.Y, center.Z} {
-		if proofarith.DyCmp(sphere.center[axis], proofarith.MustDyOf(value)) != 0 {
+		if proofarith.DyCmp(sphere.Center[axis], proofarith.MustDyOf(value)) != 0 {
 			return nil, false, nil
 		}
 	}
@@ -109,13 +110,13 @@ func (r *sourceSphereSweepRun) deltas() ([3]proofarith.Dyadic, [3]proofarith.Dya
 
 func (r *sourceSphereSweepRun) idealAt(f *big.Rat, at SweepInstant) SweepEvent {
 	sphereDelta, boxDelta := r.deltas()
-	sphere, okSphere := translatedSphere(r.sphere, sphereDelta, f)
+	sphere, okSphere := contactround.TranslatedSphere(r.sphere, sphereDelta, f)
 	box, okBox := translatedContactBox(r.box, boxDelta, f)
 	if !okSphere || !okBox {
 		return SweepEvent{At: at, Relation: ContactUndecided, Reason: ContactPayloadUnsupported}
 	}
 	contact := &reportvocab.ContactReport{Request: r.req.ContactRequest}
-	classifySourceSphereBox(contact, sphere, box, r.sphereFirst)
+	contactround.ClassifySphereBox(contact, sphere, box, r.sphereFirst)
 	return sweepEventOf(at, contact)
 }
 
@@ -174,7 +175,7 @@ func (r *sourceSphereSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.Tran
 	if r.sphereFirst {
 		spherePose, boxPose = poseA, poseB
 	}
-	observedSphere, okSphere := sourceSphereAtPose(r.sphereBody(), spherePose)
+	observedSphere, okSphere := contactround.SphereAtPose(bodyNode(r.sphereBody()), spherePose)
 	observedBox, okBox := contactbox.SourceBoxAtPose(bodyNode(r.boxBody()), boxPose)
 	if !okSphere || !okBox {
 		ideal.Manifold = nil
@@ -183,7 +184,7 @@ func (r *sourceSphereSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.Tran
 	}
 	sphereDelta, boxDelta := r.deltas()
 	deviation := spherepath.AxisSpherePoseDeviation(
-		pairbox.AxisSphere{Center: r.sphere.center, Radius: r.sphere.radius}, observedSphere.center,
+		pairbox.AxisSphere{Center: r.sphere.Center, Radius: r.sphere.Radius}, observedSphere.Center,
 		r.box.AxisBox(), observedBox.AxisBox(), sphereDelta, boxDelta, f)
 	resolution, ok := sweeppath.ExactBaseValue(r.req.PointResolution)
 	if !ok {
@@ -242,7 +243,7 @@ func (r *sourceSphereSweepRun) track(first *SweepSample) *SweepContactTrack {
 	}
 	sphereDelta, boxDelta := r.deltas()
 	if !spherepath.AxisTrackPointsWithin(
-		pairbox.AxisSphere{Center: r.sphere.center, Radius: r.sphere.radius}, r.box.AxisBox(),
+		pairbox.AxisSphere{Center: r.sphere.Center, Radius: r.sphere.Radius}, r.box.AxisBox(),
 		sphereDelta, boxDelta, r.req.PointResolution.Base()) {
 		return nil
 	}
@@ -288,7 +289,7 @@ func (r *sourceSphereSweepRun) execute(ctx context.Context, resolution *big.Rat)
 	}
 	sphereDelta, boxDelta := r.deltas()
 	axis, side, gap, slope, ok := spherepath.AxisFaceCorridor(
-		pairbox.AxisSphere{Center: r.sphere.center, Radius: r.sphere.radius}, r.box.AxisBox(),
+		pairbox.AxisSphere{Center: r.sphere.Center, Radius: r.sphere.Radius}, r.box.AxisBox(),
 		sphereDelta, boxDelta)
 	if !ok {
 		return r.undecided(zero, one, SweepContactUnsupported), nil
@@ -394,7 +395,7 @@ type orientedSphereSweepRun struct {
 	pa, pb       affinePairPath
 	req          reportvocab.SweepRequest
 	report       *SweepReport
-	sphere       sourceSphereContactProof
+	sphere       contactround.SphereProof
 	box          contactbox.OrientedSourceBox
 	sphereFirst  bool
 	axis, side   int
@@ -411,7 +412,7 @@ func (r *orientedSphereSweepRun) deltas() ([3]proofarith.Dyadic, [3]proofarith.D
 
 func (r *orientedSphereSweepRun) idealAt(f *big.Rat, at SweepInstant) SweepEvent {
 	sphereDelta, boxDelta := r.deltas()
-	sphere, okSphere := translatedSphere(r.sphere, sphereDelta, f)
+	sphere, okSphere := contactround.TranslatedSphere(r.sphere, sphereDelta, f)
 	box := r.box // the translated box keeps its source face identities
 	geometry, okBox := pairbox.TranslateOriented(box.OrientedBox, boxDelta, f)
 	box.OrientedBox = geometry
@@ -419,7 +420,7 @@ func (r *orientedSphereSweepRun) idealAt(f *big.Rat, at SweepInstant) SweepEvent
 		return SweepEvent{At: at, Relation: ContactUndecided, Reason: ContactPayloadUnsupported}
 	}
 	contact := &reportvocab.ContactReport{Request: r.req.ContactRequest}
-	classifySourceSphereOrientedBox(contact, sphere, box, r.sphereFirst)
+	contactround.ClassifySphereOrientedBox(contact, sphere, box, r.sphereFirst)
 	return sweepEventOf(at, contact)
 }
 
@@ -494,7 +495,7 @@ func (r *orientedSphereSweepRun) poseDeviation(f *big.Rat, poseA, poseB r3.Trans
 		return new(big.Rat).SetInt64(1 << 30)
 	}
 	return spherepath.OrientedSpherePoseDeviation(r.box.OrientedBox, observedBox,
-		boxDelta, r.sphere.center, observedSphere.center, sphereDelta, f)
+		boxDelta, r.sphere.Center, observedSphere.Center, sphereDelta, f)
 }
 
 func (r *orientedSphereSweepRun) undecided(from, to *big.Rat, cause SweepCause) *SweepReport {
@@ -513,7 +514,7 @@ func (r *orientedSphereSweepRun) execute(ctx context.Context, resolution *big.Ra
 		return r.undecided(zero, one, SweepContactUnsupported), nil
 	}
 	axis, side, outward, _, _, ok := pairbox.OrientedSphereFace(
-		r.sphere.center, r.sphere.radius, r.box.OrientedBox)
+		r.sphere.Center, r.sphere.Radius, r.box.OrientedBox)
 	if !ok {
 		return r.undecided(zero, one, SweepContactUnsupported), nil
 	}
@@ -539,7 +540,7 @@ func (r *orientedSphereSweepRun) execute(ctx context.Context, resolution *big.Ra
 	}
 	sphereDelta, boxDelta := r.deltas()
 	r.start, r.slope, ok = spherepath.OrientedFaceCorridor(
-		r.sphere.center, r.sphere.radius, r.box.OrientedBox, sphereDelta, boxDelta,
+		r.sphere.Center, r.sphere.Radius, r.box.OrientedBox, sphereDelta, boxDelta,
 		r.axis, r.side, r.outward)
 	if !ok {
 		return r.undecided(zero, one, SweepContactUnsupported), nil
@@ -566,7 +567,7 @@ func (r *orientedSphereSweepRun) execute(ctx context.Context, resolution *big.Ra
 		r.report.replay.snapshot(r.report)
 		return r.report, nil
 	}
-	if spherepath.OrientedFaceSign(r.start, r.slope, r.sphere.radius, r.outward, one) > 0 {
+	if spherepath.OrientedFaceSign(r.start, r.slope, r.sphere.Radius, r.outward, one) > 0 {
 		last, sampleErr := r.sample(ctx, one)
 		if errors.Is(sampleErr, errSweepPoseBudget) {
 			return r.undecided(zero, one, SweepPoseBudget), nil
@@ -582,7 +583,7 @@ func (r *orientedSphereSweepRun) execute(ctx context.Context, resolution *big.Ra
 		return r.report, nil
 	}
 	leftF, rightF, ok := spherepath.OrientedFaceBracket(
-		r.start, r.slope, r.sphere.radius, r.outward, r.pa.Duration, resolution)
+		r.start, r.slope, r.sphere.Radius, r.outward, r.pa.Duration, resolution)
 	if !ok {
 		return r.undecided(zero, one, SweepTimeFloor), nil
 	}

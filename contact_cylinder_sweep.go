@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/contactbox"
+	"github.com/lestrrat-3d/decad/internal/contactround"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
@@ -23,10 +24,10 @@ import (
 // box-face corridor for clear motion, first impact, and one-sided departure.
 func (d *Document) sourceCylinderFaceSweep(ctx context.Context, a, b *Body,
 	pa, pb affinePairPath, req reportvocab.SweepRequest, report *SweepReport,
-	cylinder sourceCylinderContactProof, box contactbox.SourceBox, cylinderFirst bool) (*SweepReport, error) {
-	firstBox, secondBox := box, cylinder.box
+	cylinder contactround.CylinderProof, box contactbox.SourceBox, cylinderFirst bool) (*SweepReport, error) {
+	firstBox, secondBox := box, cylinder.Box
 	if cylinderFirst {
-		firstBox, secondBox = cylinder.box, box
+		firstBox, secondBox = cylinder.Box, box
 	}
 	fullA, okA := sweptBoxOf(a, pa)
 	fullB, okB := sweptBoxOf(b, pb)
@@ -35,7 +36,7 @@ func (d *Document) sourceCylinderFaceSweep(ctx context.Context, a, b *Body,
 	}
 	resolution, _ := sweeppath.ExactBaseValue(req.PointResolution)
 	axis, _, signedGap, selected := pairbox.CylinderFaceCorridor(
-		cylinder.box.AxisBox(), box.AxisBox(), cylinder.axis, cylinder.wall != nil)
+		cylinder.Box.AxisBox(), box.AxisBox(), cylinder.Axis, cylinder.Wall != nil)
 	if !selected || signedGap.Sign() < 0 {
 		return cylinderSweepUndecided(report, pa.Duration), nil
 	}
@@ -57,7 +58,7 @@ func (d *Document) sourceCylinderFaceSweep(ctx context.Context, a, b *Body,
 		startCylinder, startBox = firstBox, secondBox
 		cylinderDelta, boxDelta = pa.Delta, pb.Delta
 	}
-	if axis != cylinder.axis && proofarith.DyCmp(cylinderDelta[2], boxDelta[2]) != 0 {
+	if axis != cylinder.Axis && proofarith.DyCmp(cylinderDelta[2], boxDelta[2]) != 0 {
 		return cylinderSweepUndecided(report, pa.Duration), nil
 	}
 	endCylinder := translatedAffineBox(startCylinder, cylinderDelta)
@@ -121,23 +122,23 @@ type sourceCylinderImpactRun struct {
 	pa, pb        affinePairPath
 	req           reportvocab.SweepRequest
 	report        *SweepReport
-	cylinder      sourceCylinderContactProof
+	cylinder      contactround.CylinderProof
 	box           contactbox.SourceBox
 	cylinderFirst bool
 	side, axis    int
 	gap, slope    proofarith.Dyadic
 }
 
-func (r *sourceCylinderImpactRun) boxesAt(f *big.Rat) (sourceCylinderContactProof,
+func (r *sourceCylinderImpactRun) boxesAt(f *big.Rat) (contactround.CylinderProof,
 	contactbox.SourceBox, bool) {
 	cylinderDelta, boxDelta := r.pb.Delta, r.pa.Delta
 	if r.cylinderFirst {
 		cylinderDelta, boxDelta = r.pa.Delta, r.pb.Delta
 	}
-	cylinderBox, okCylinder := translatedContactBox(r.cylinder.box, cylinderDelta, f)
+	cylinderBox, okCylinder := translatedContactBox(r.cylinder.Box, cylinderDelta, f)
 	box, okBox := translatedContactBox(r.box, boxDelta, f)
 	cylinder := r.cylinder
-	cylinder.box = cylinderBox
+	cylinder.Box = cylinderBox
 	return cylinder, box, okCylinder && okBox
 }
 
@@ -165,7 +166,7 @@ func (r *sourceCylinderImpactRun) sample(ctx context.Context, f *big.Rat) (*Swee
 	ideal := SweepEvent{At: at, Relation: ContactUndecided, Reason: ContactPayloadUnsupported}
 	if ok {
 		contact := &reportvocab.ContactReport{Request: r.req.ContactRequest}
-		classifySourceCylinderBox(contact, cylinder, box, r.cylinderFirst)
+		contactround.ClassifyCylinderBox(contact, cylinder, box, r.cylinderFirst)
 		ideal = sweepEventOf(at, contact)
 	}
 	r.transferManifold(f, poseA, poseB, actual, &ideal)
@@ -190,20 +191,20 @@ func (r *sourceCylinderImpactRun) transferManifold(f *big.Rat, poseA, poseB r3.T
 	if r.cylinderFirst {
 		cylinderPose, boxPose = poseA, poseB
 	}
-	observedCylinder, okCylinder := sourceCylinderAtPose(r.cylinderBody(), cylinderPose)
+	observedCylinder, okCylinder := contactround.CylinderAtPose(bodyNode(r.cylinderBody()), cylinderPose)
 	observedBox, okBox := contactbox.SourceBoxAtPose(bodyNode(r.boxBody()), boxPose)
 	if !okCylinder || !okBox {
 		ideal.Manifold = nil
 		ideal.Reason = ContactPayloadUnsupported
 		return
 	}
-	firstBox, secondBox := r.box, r.cylinder.box
+	firstBox, secondBox := r.box, r.cylinder.Box
 	if r.cylinderFirst {
-		firstBox, secondBox = r.cylinder.box, r.box
+		firstBox, secondBox = r.cylinder.Box, r.box
 	}
-	observedA, observedB := observedBox, observedCylinder.box
+	observedA, observedB := observedBox, observedCylinder.Box
 	if r.cylinderFirst {
-		observedA, observedB = observedCylinder.box, observedBox
+		observedA, observedB = observedCylinder.Box, observedBox
 	}
 	deviation := boxPoseDeviation(firstBox, observedA, r.pa.Delta, f)
 	deviation.Add(deviation, boxPoseDeviation(secondBox, observedB, r.pb.Delta, f))
@@ -261,13 +262,13 @@ func (r *sourceCylinderImpactRun) execute(ctx context.Context) (*SweepReport, er
 		cylinderDelta, boxDelta = r.pa.Delta, r.pb.Delta
 	}
 	switch {
-	case proofarith.DyCmp(r.cylinder.box.Lo[r.axis], r.box.Hi[r.axis]) >= 0:
+	case proofarith.DyCmp(r.cylinder.Box.Lo[r.axis], r.box.Hi[r.axis]) >= 0:
 		r.side = 1
-		r.gap = proofarith.DySubScalar(r.cylinder.box.Lo[r.axis], r.box.Hi[r.axis])
+		r.gap = proofarith.DySubScalar(r.cylinder.Box.Lo[r.axis], r.box.Hi[r.axis])
 		r.slope = proofarith.DySubScalar(cylinderDelta[r.axis], boxDelta[r.axis])
-	case proofarith.DyCmp(r.cylinder.box.Hi[r.axis], r.box.Lo[r.axis]) <= 0:
+	case proofarith.DyCmp(r.cylinder.Box.Hi[r.axis], r.box.Lo[r.axis]) <= 0:
 		r.side = 0
-		r.gap = proofarith.DySubScalar(r.box.Lo[r.axis], r.cylinder.box.Hi[r.axis])
+		r.gap = proofarith.DySubScalar(r.box.Lo[r.axis], r.cylinder.Box.Hi[r.axis])
 		r.slope = proofarith.DySubScalar(boxDelta[r.axis], cylinderDelta[r.axis])
 	default:
 		return cylinderSweepUndecided(r.report, r.pa.Duration), nil
@@ -289,9 +290,9 @@ func (r *sourceCylinderImpactRun) execute(ctx context.Context) (*SweepReport, er
 			return r.report, nil
 		}
 	}
-	firstBox, secondBox := r.box, r.cylinder.box
+	firstBox, secondBox := r.box, r.cylinder.Box
 	if r.cylinderFirst {
-		firstBox, secondBox = r.cylinder.box, r.box
+		firstBox, secondBox = r.cylinder.Box, r.box
 	}
 	r.report.replay = &sweepReplayProof{pa: r.pa, pb: r.pb, request: r.req.ContactRequest,
 		cylinder: &r.cylinder, cylinderFirst: r.cylinderFirst,
@@ -369,11 +370,11 @@ func (r *sourceCylinderImpactRun) persistentTrack(ctx context.Context, first *Sw
 	if r.req.StartPolicy != reportvocab.ContinueCertifiedTouch {
 		return cylinderSweepCause(r.report, r.pa.Duration, SweepDepartureUnproved), nil
 	}
-	firstBox, secondBox := r.box, r.cylinder.box
+	firstBox, secondBox := r.box, r.cylinder.Box
 	if r.cylinderFirst {
-		firstBox, secondBox = r.cylinder.box, r.box
+		firstBox, secondBox = r.cylinder.Box, r.box
 	}
-	if !r.slope.IsZero() || r.axis != r.cylinder.axis || len(first.Ideal.Manifold.Points) != 1 ||
+	if !r.slope.IsZero() || r.axis != r.cylinder.Axis || len(first.Ideal.Manifold.Points) != 1 ||
 		!pairbox.TrackPointsWithin(firstBox.AxisBox(), secondBox.AxisBox(), r.pa.Delta, r.pb.Delta,
 			r.req.PointResolution.Base()) {
 		return cylinderSweepCause(r.report, r.pa.Duration, SweepContactTrackUnproved), nil
@@ -419,9 +420,9 @@ func (t *SweepContactTrack) cylinderTrackManifold(f *big.Rat) (*ContactManifold,
 		return nil, fmt.Errorf("%w: cylinder contact-track fraction cannot be represented", ErrUnsupported)
 	}
 	cylinder := *t.cylinder
-	cylinder.box = movedCylinder
+	cylinder.Box = movedCylinder
 	report := &reportvocab.ContactReport{Request: t.request}
-	classifySourceCylinderBox(report, cylinder, movedBox, t.cylinderFirst)
+	contactround.ClassifyCylinderBox(report, cylinder, movedBox, t.cylinderFirst)
 	if report.Relation != reportvocab.ContactTouching || report.Manifold == nil || len(report.Manifold.Points) != 1 ||
 		report.Manifold.Points[0].FeatureA != t.features[0] ||
 		report.Manifold.Points[0].FeatureB != t.features[1] {

@@ -1,165 +1,169 @@
-package decad
+package contactround
 
 import (
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/contactbox"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
-// sourceCylinderContactProof encloses a complete source cylinder from either
+// CylinderProof encloses a complete source cylinder from either
 // a full-circle prism or a full revolve of an axis-incident rectangle. Its
 // box is an outer bound; the strict face corridor makes axial support exact.
-type sourceCylinderContactProof struct {
-	box   contactbox.SourceBox
-	axis  int
-	faces [2]*Face
-	wall  *Face
+type CylinderProof struct {
+	Box   contactbox.SourceBox
+	Axis  int
+	Faces [2]*topo.Face
+	Wall  *topo.Face
 }
 
-func sourceCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProof, bool) {
-	if cylinder, ok := sourceRevolvedCylinderAtPose(b, pose); ok {
+func CylinderAtPose(b *topo.Body, pose r3.Transform) (CylinderProof, bool) {
+	if cylinder, ok := RevolvedCylinderAtPose(b, pose); ok {
 		return cylinder, true
 	}
-	pp, ok := b.n.Payload.(prismPayload)
-	if !ok || !b.n.Solid || b.n.Kind != topo.BodySolid || pp.SurfaceResult ||
+	pp, ok := b.Payload.(prismrecord.Payload)
+	if !ok || !b.Solid || b.Kind != topo.BodySolid || pp.SurfaceResult ||
 		pp.SectionDelta != 0 || pp.Z0Delta != 0 || pp.Z1Delta != 0 ||
 		len(pp.Profile.Holes) != 0 || len(pp.Profile.Outer.Segments) != 1 ||
 		!pairbox.CardinalBasis(pp.Frame.U(), pp.Frame.V(), pp.Frame.N()) ||
 		!pairbox.SignedAxisTransform(pp.Xform) || !pairbox.SignedAxisTransform(pose) ||
 		!proofbound.FiniteVec(pp.Frame.Origin()) || !measurement.FiniteValues(pp.Z0, pp.Z1) ||
 		pp.Z0 >= pp.Z1 {
-		return sourceCylinderContactProof{}, false
+		return CylinderProof{}, false
 	}
-	circle, ok := pp.Profile.Outer.Segments[0].(circleSeg)
+	circle, ok := pp.Profile.Outer.Segments[0].(sectionrecord.CircleSeg)
 	if !ok || !circle.CCW || circle.TStart != 0 || circle.TEnd != 1 ||
 		circle.Radius.Kind() != units.Length ||
 		!measurement.FiniteValues(circle.Center.U, circle.Center.V, circle.Radius.Base()) ||
 		circle.Radius.Base() <= 0 {
-		return sourceCylinderContactProof{}, false
+		return CylinderProof{}, false
 	}
 	axis, _, ok := clearance.SignedAxis(pose.ApplyDir(pp.Xform.ApplyDir(pp.Frame.N())))
 	if !ok {
-		return sourceCylinderContactProof{}, false
+		return CylinderProof{}, false
 	}
-	faces := b.Faces()
-	if len(faces) != 3 || len(b.Edges()) != 2 {
-		return sourceCylinderContactProof{}, false
+	faces := topobuild.Faces(b)
+	if len(faces) != 3 || len(topobuild.Edges(b)) != 2 {
+		return CylinderProof{}, false
 	}
 	planes, walls := 0, 0
-	var endFaces [2]*Face
-	var wallFace *Face
+	var endFaces [2]*topo.Face
+	var wallFace *topo.Face
 	for _, face := range faces {
-		if face.n.NormalBound != 0 {
-			return sourceCylinderContactProof{}, false
+		if face.NormalBound != 0 {
+			return CylinderProof{}, false
 		}
-		switch surface := face.n.Surface.(type) {
+		switch surface := face.Surface.(type) {
 		case surfacegeom.Plane:
 			planes++
 			normal := surface.Frame.N()
-			if face.n.Reversed {
+			if face.Reversed {
 				normal = normal.Scale(-1)
 			}
 			faceAxis, side, valid := clearance.SignedAxis(pose.ApplyDir(normal))
 			if !valid || endFaces[side] != nil || faceAxis != axis {
-				return sourceCylinderContactProof{}, false
+				return CylinderProof{}, false
 			}
 			endFaces[side] = face
 		case surfacegeom.Cylinder:
 			walls++
 			wallFace = face
 		default:
-			return sourceCylinderContactProof{}, false
+			return CylinderProof{}, false
 		}
 	}
 	if planes != 2 || walls != 1 || endFaces[0] == nil || endFaces[1] == nil {
-		return sourceCylinderContactProof{}, false
+		return CylinderProof{}, false
 	}
 	numeric := pairbox.SourcePrismCylinderBox(pp.Frame, pp.Xform, pose, circle.Center,
 		pp.Z0, pp.Z1, circle.Radius.Base(), axis)
 	box := contactbox.SourceBox{Lo: numeric.Lo, Hi: numeric.Hi}
-	return sourceCylinderContactProof{box: box, axis: axis, faces: endFaces, wall: wallFace}, true
+	return CylinderProof{Box: box, Axis: axis, Faces: endFaces, Wall: wallFace}, true
 }
 
-// sourceRevolvedCylinderAtPose reads the full recorded meridian, not the
+// RevolvedCylinderAtPose reads the full recorded meridian, not the
 // body's outer bounds. A rectangle with one edge exactly on a cardinal axis
 // sweeps one complete disk at every level of its axial interval.
-func sourceRevolvedCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProof, bool) {
-	rp, ok := b.n.Payload.(revolvePayload)
-	if !ok || !b.n.Solid || b.n.Kind != topo.BodySolid || rp.SurfaceResult || !rp.Full ||
+func RevolvedCylinderAtPose(b *topo.Body, pose r3.Transform) (CylinderProof, bool) {
+	rp, ok := b.Payload.(revolveplan.Payload)
+	if !ok || !b.Solid || b.Kind != topo.BodySolid || rp.SurfaceResult || !rp.Full ||
 		rp.SectionDelta != 0 || !pairbox.RectangularProfile(rp.Profile) ||
 		!pairbox.CardinalBasis(rp.Frame.U(), rp.Frame.V(), rp.Frame.N()) ||
 		!pairbox.SignedAxisTransform(rp.Xform) || !pairbox.SignedAxisTransform(pose) ||
 		!proofbound.FiniteVec(rp.Frame.Origin()) ||
 		rp.Ax.AUBound != 0 || rp.Ax.AVBound != 0 ||
 		rp.Ax.DUBound != 0 || rp.Ax.DVBound != 0 {
-		return sourceCylinderContactProof{}, false
+		return CylinderProof{}, false
 	}
 	if _, _, ok := clearance.SignedAxis(r3.Vec{X: rp.Ax.DU, Y: rp.Ax.DV}); !ok {
-		return sourceCylinderContactProof{}, false
+		return CylinderProof{}, false
 	}
 	if !measurement.FiniteValues(rp.Ax.AU, rp.Ax.AV) {
-		return sourceCylinderContactProof{}, false
+		return CylinderProof{}, false
 	}
 	axis, _, ok := clearance.SignedAxis(pose.ApplyDir(rp.Xform.ApplyDir(rp.Basis().W)))
 	if !ok {
-		return sourceCylinderContactProof{}, false
+		return CylinderProof{}, false
 	}
 	numeric, ok := pairbox.SourceRevolvedCylinderBox(rp.Frame, rp.Xform, pose,
-		planePoint{U: rp.Ax.AU, V: rp.Ax.AV}, planePoint{U: rp.Ax.DU, V: rp.Ax.DV},
+		sectionrecord.Point2{U: rp.Ax.AU, V: rp.Ax.AV}, sectionrecord.Point2{U: rp.Ax.DU, V: rp.Ax.DV},
 		rp.Profile.Outer.Segments, axis)
 	if !ok {
-		return sourceCylinderContactProof{}, false
+		return CylinderProof{}, false
 	}
 	box := contactbox.SourceBox{Lo: numeric.Lo, Hi: numeric.Hi}
-	faces := b.Faces()
-	if len(faces) != 3 || len(b.Edges()) != 2 {
-		return sourceCylinderContactProof{}, false
+	faces := topobuild.Faces(b)
+	if len(faces) != 3 || len(topobuild.Edges(b)) != 2 {
+		return CylinderProof{}, false
 	}
 	planes, walls := 0, 0
-	var endFaces [2]*Face
+	var endFaces [2]*topo.Face
 	for _, face := range faces {
-		if face.n.NormalBound != 0 {
-			return sourceCylinderContactProof{}, false
+		if face.NormalBound != 0 {
+			return CylinderProof{}, false
 		}
-		switch surface := face.n.Surface.(type) {
+		switch surface := face.Surface.(type) {
 		case surfacegeom.Plane:
 			planes++
 			normal := surface.Frame.N()
-			if face.n.Reversed {
+			if face.Reversed {
 				normal = normal.Scale(-1)
 			}
 			faceAxis, side, valid := clearance.SignedAxis(pose.ApplyDir(normal))
 			if !valid || faceAxis != axis || endFaces[side] != nil {
-				return sourceCylinderContactProof{}, false
+				return CylinderProof{}, false
 			}
 			endFaces[side] = face
 		case surfacegeom.Cylinder:
 			walls++
 		default:
-			return sourceCylinderContactProof{}, false
+			return CylinderProof{}, false
 		}
 	}
 	if planes != 2 || walls != 1 || endFaces[0] == nil || endFaces[1] == nil {
-		return sourceCylinderContactProof{}, false
+		return CylinderProof{}, false
 	}
-	return sourceCylinderContactProof{box: box, axis: axis, faces: endFaces}, true
+	return CylinderProof{Box: box, Axis: axis, Faces: endFaces}, true
 }
 
 // The complete cylinder lies inside the two projected box-face intervals.
 // Its axial disks or full circular sidewall supply exact support at the
 // selected face; a sidewall touch has a complete axial line contact set.
-func classifySourceCylinderBox(report *reportvocab.ContactReport, cylinder sourceCylinderContactProof,
+func ClassifyCylinderBox(report *reportvocab.ContactReport, cylinder CylinderProof,
 	box contactbox.SourceBox, cylinderFirst bool) {
 	axis, side, signedGap, ok := pairbox.CylinderFaceCorridor(
-		cylinder.box.AxisBox(), box.AxisBox(), cylinder.axis, cylinder.wall != nil)
+		cylinder.Box.AxisBox(), box.AxisBox(), cylinder.Axis, cylinder.Wall != nil)
 	if !ok {
 		report.Reason = reportvocab.ContactNoGapProof
 		return
@@ -175,7 +179,7 @@ func classifySourceCylinderBox(report *reportvocab.ContactReport, cylinder sourc
 		report.Relation, report.Gap = reportvocab.ContactSeparated, &gap
 		return
 	}
-	if cylinder.faces[0] == nil || cylinder.faces[1] == nil {
+	if cylinder.Faces[0] == nil || cylinder.Faces[1] == nil {
 		report.Reason = reportvocab.ContactNoGapProof
 		return
 	}
@@ -186,16 +190,16 @@ func classifySourceCylinderBox(report *reportvocab.ContactReport, cylinder sourc
 	} else {
 		report.Relation = reportvocab.ContactOverlapping
 	}
-	boxFace, cylinderFace := box.Faces[axis][side], cylinder.faces[1-side]
-	if axis != cylinder.axis {
-		cylinderFace = cylinder.wall
+	boxFace, cylinderFace := box.Faces[axis][side], cylinder.Faces[1-side]
+	if axis != cylinder.Axis {
+		cylinderFace = cylinder.Wall
 	}
 	if boxFace == nil || cylinderFace == nil {
 		report.Reason = reportvocab.ContactNoNormalProof
 		return
 	}
 	boxReading, cylinderReading, signedReading, ok := pairbox.CylinderFacePoint(
-		cylinder.box.AxisBox(), box.AxisBox(), axis, side, signedGap,
+		cylinder.Box.AxisBox(), box.AxisBox(), axis, side, signedGap,
 		report.Request.PointResolution.Base())
 	if !ok {
 		report.Reason = reportvocab.ContactPointTooCoarse
@@ -204,8 +208,8 @@ func classifySourceCylinderBox(report *reportvocab.ContactReport, cylinder sourc
 	sign := signIfBoxSide(side)
 	boxWitness, cylinderWitness := boxReading.Measurement(), cylinderReading.Measurement()
 	point := reportvocab.ContactPoint{OnA: boxWitness, OnB: cylinderWitness,
-		FaceA: boxFace, FaceB: faceNode(cylinderFace),
-		FeatureA: reportvocab.ContactFeature{Face: boxFace}, FeatureB: reportvocab.ContactFeature{Face: faceNode(cylinderFace)},
+		FaceA: boxFace, FaceB: cylinderFace,
+		FeatureA: reportvocab.ContactFeature{Face: boxFace}, FeatureB: reportvocab.ContactFeature{Face: cylinderFace},
 		NormalAngle: units.Radians(0), Separation: signedReading.Measurement()}
 	if cylinderFirst {
 		point.OnA, point.OnB = point.OnB, point.OnA

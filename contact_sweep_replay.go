@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/contactbox"
+	"github.com/lestrrat-3d/decad/internal/contactround"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/planarsweep"
@@ -27,17 +28,17 @@ import (
 type sweepReplayProof struct {
 	pa, pb                     affinePairPath
 	boxA, boxB                 contactbox.SourceBox
-	sphere                     *sourceSphereContactProof
-	spherePair                 *[2]sourceSphereContactProof
+	sphere                     *contactround.SphereProof
+	spherePair                 *[2]contactround.SphereProof
 	facetedClear               *boundedFacetedExtent
 	facetedFirst               bool
-	cylinder                   *sourceCylinderContactProof
+	cylinder                   *contactround.CylinderProof
 	cylinderFirst              bool
 	clearAxis, clearSign       int
 	clearGap                   *big.Rat
 	cylinderGap, cylinderSlope proofarith.Dyadic
 	cylinderSide               int
-	orientedSphere             *sourceSphereContactProof
+	orientedSphere             *contactround.SphereProof
 	orientedSphereBox          *contactbox.OrientedSourceBox
 	sphereFirst                bool
 	sphereAxis, sphereSide     int
@@ -330,18 +331,18 @@ func (r *SweepReport) certifiedSpherePairPosesAtFraction(f *big.Rat, poseA, pose
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: sphere-pair replay resolution is invalid", ErrUnsupported)
 	}
 	motion := spherepath.PairMotion{
-		CenterA: start[0].center, CenterB: start[1].center,
-		RadiusA: start[0].radius, RadiusB: start[1].radius,
+		CenterA: start[0].Center, CenterB: start[1].Center,
+		RadiusA: start[0].Radius, RadiusB: start[1].Radius,
 		DeltaA: p.pa.Delta, DeltaB: p.pb.Delta,
 	}
-	if detail := spherepath.PairReplay(motion, actualA.center, actualB.center,
+	if detail := spherepath.PairReplay(motion, actualA.Center, actualB.Center,
 		reportvocab.SweepOutcome(p.outcome), f, resolution, p.bracketLo, p.bracketHi,
 		p.grazingAt, p.track != nil); detail != "" {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: %s", ErrUnsupported, detail)
 	}
 	if p.outcome == SweepPersistentTouch {
 		contact := &reportvocab.ContactReport{Request: p.request}
-		classifySourceSpherePair(contact, actualA, actualB)
+		contactround.ClassifySpherePair(contact, actualA, actualB)
 		if contact.Manifold == nil || len(contact.Manifold.Points) != 1 ||
 			contact.Manifold.Points[0].FeatureA != p.track.features[0] ||
 			contact.Manifold.Points[0].FeatureB != p.track.features[1] {
@@ -369,13 +370,13 @@ func (r *SweepReport) certifiedOrientedSpherePosesAtFraction(f *big.Rat,
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rotated sphere replay is not affine", ErrUnsupported)
 	}
 	deviation := spherepath.OrientedSpherePoseDeviation(p.orientedSphereBox.OrientedBox, box,
-		boxPath.Delta, p.orientedSphere.center, sphere.center, spherePath.Delta, f)
+		boxPath.Delta, p.orientedSphere.Center, sphere.Center, spherePath.Delta, f)
 	resolution, ok := sweeppath.ExactBaseValue(p.request.PointResolution)
 	if !ok || deviation.Cmp(resolution) > 0 {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rotated sphere pose exceeds point resolution", ErrUnsupported)
 	}
 	axis, side, outward, _, observed2, faceOK := pairbox.OrientedSphereFace(
-		sphere.center, sphere.radius, box)
+		sphere.Center, sphere.Radius, box)
 	if !faceOK || axis != p.sphereAxis || side != p.sphereSide || observed2 == nil {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rotated sphere leaves the face corridor", ErrUnsupported)
 	}
@@ -390,7 +391,7 @@ func (r *SweepReport) certifiedOrientedSpherePosesAtFraction(f *big.Rat,
 	}
 	ideal := new(big.Rat).Add(p.sphereGap.Rat(), new(big.Rat).Mul(p.sphereSlope.Rat(), f))
 	ideal2 := new(big.Rat).Mul(ideal, ideal)
-	radius2 := proofarith.DyMul(p.orientedSphere.radius, p.orientedSphere.radius).Rat()
+	radius2 := proofarith.DyMul(p.orientedSphere.Radius, p.orientedSphere.Radius).Rat()
 	threshold := new(big.Rat).Mul(radius2, proofarith.DvDot(outward, outward).Rat())
 	idealSign := ideal2.Cmp(threshold)
 	observedSign := observed2.Cmp(radius2)
@@ -513,38 +514,38 @@ func translatedReplayBox(box contactbox.SourceBox, from, at r3.Transform) (conta
 	return box, true
 }
 
-func translatedReplaySphere(sphere sourceSphereContactProof, from, at r3.Transform) (sourceSphereContactProof, bool) {
+func translatedReplaySphere(sphere contactround.SphereProof, from, at r3.Transform) (contactround.SphereProof, bool) {
 	if !at.IsValid() || at.Basis() != from.Basis() {
-		return sourceSphereContactProof{}, false
+		return contactround.SphereProof{}, false
 	}
 	start, end := from.Translation(), at.Translation()
 	before := [3]float64{start.X, start.Y, start.Z}
 	after := [3]float64{end.X, end.Y, end.Z}
 	for i := range 3 {
 		if !measurement.FiniteValues(before[i], after[i]) {
-			return sourceSphereContactProof{}, false
+			return contactround.SphereProof{}, false
 		}
 		move := proofarith.DySubScalar(proofarith.MustDyOf(after[i]), proofarith.MustDyOf(before[i]))
-		sphere.center[i] = proofarith.DyAdd(sphere.center[i], move)
+		sphere.Center[i] = proofarith.DyAdd(sphere.Center[i], move)
 	}
 	return sphere, true
 }
 
-func rotatingReplaySphere(sphere sourceSphereContactProof, path affinePairPath,
-	at r3.Transform) (sourceSphereContactProof, bool) {
+func rotatingReplaySphere(sphere contactround.SphereProof, path affinePairPath,
+	at r3.Transform) (contactround.SphereProof, bool) {
 	if path.Drift == nil {
 		return translatedReplaySphere(sphere, path.From, at)
 	}
 	if !at.IsValid() || at.IsReflection() || !path.From.IsValid() {
-		return sourceSphereContactProof{}, false
+		return contactround.SphereProof{}, false
 	}
 	from := path.From.Translation()
-	if proofarith.DyCmp(sphere.center[0], proofarith.MustDyOf(from.X)) != 0 ||
-		proofarith.DyCmp(sphere.center[1], proofarith.MustDyOf(from.Y)) != 0 ||
-		proofarith.DyCmp(sphere.center[2], proofarith.MustDyOf(from.Z)) != 0 {
-		return sourceSphereContactProof{}, false
+	if proofarith.DyCmp(sphere.Center[0], proofarith.MustDyOf(from.X)) != 0 ||
+		proofarith.DyCmp(sphere.Center[1], proofarith.MustDyOf(from.Y)) != 0 ||
+		proofarith.DyCmp(sphere.Center[2], proofarith.MustDyOf(from.Z)) != 0 {
+		return contactround.SphereProof{}, false
 	}
-	sphere.center = proofarith.DyVec(at.Translation())
+	sphere.Center = proofarith.DyVec(at.Translation())
 	return sphere, true
 }
 
@@ -573,14 +574,14 @@ func (r *SweepReport) certifiedSpherePosesAtFraction(f *big.Rat, poseA, poseB r3
 	}
 	deviation := boxPoseDeviation(box, observedBox, boxPath.Delta, f)
 	for i := range 3 {
-		ideal := new(big.Rat).Add(p.sphere.center[i].Rat(), new(big.Rat).Mul(spherePath.Delta[i].Rat(), f))
-		difference := new(big.Rat).Sub(sphere.center[i].Rat(), ideal)
+		ideal := new(big.Rat).Add(p.sphere.Center[i].Rat(), new(big.Rat).Mul(spherePath.Delta[i].Rat(), f))
+		difference := new(big.Rat).Sub(sphere.Center[i].Rat(), ideal)
 		deviation.Add(deviation, difference.Abs(difference))
 		if i == p.sphereAxis {
 			continue
 		}
-		if proofarith.DyCmp(proofarith.DySubScalar(sphere.center[i], sphere.radius), observedBox.Lo[i]) <= 0 ||
-			proofarith.DyCmp(proofarith.DyAdd(sphere.center[i], sphere.radius), observedBox.Hi[i]) >= 0 {
+		if proofarith.DyCmp(proofarith.DySubScalar(sphere.Center[i], sphere.Radius), observedBox.Lo[i]) <= 0 ||
+			proofarith.DyCmp(proofarith.DyAdd(sphere.Center[i], sphere.Radius), observedBox.Hi[i]) >= 0 {
 			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded sphere leaves the certified face corridor", ErrUnsupported)
 		}
 	}
@@ -589,16 +590,16 @@ func (r *SweepReport) certifiedSpherePosesAtFraction(f *big.Rat, poseA, poseB r3
 	}
 	var faceDistance, oppositeDistance proofarith.Dyadic
 	if p.sphereSide == 1 {
-		faceDistance = proofarith.DySubScalar(sphere.center[p.sphereAxis], observedBox.Hi[p.sphereAxis])
-		oppositeDistance = proofarith.DySubScalar(sphere.center[p.sphereAxis], observedBox.Lo[p.sphereAxis])
+		faceDistance = proofarith.DySubScalar(sphere.Center[p.sphereAxis], observedBox.Hi[p.sphereAxis])
+		oppositeDistance = proofarith.DySubScalar(sphere.Center[p.sphereAxis], observedBox.Lo[p.sphereAxis])
 	} else {
-		faceDistance = proofarith.DySubScalar(observedBox.Lo[p.sphereAxis], sphere.center[p.sphereAxis])
-		oppositeDistance = proofarith.DySubScalar(observedBox.Hi[p.sphereAxis], sphere.center[p.sphereAxis])
+		faceDistance = proofarith.DySubScalar(observedBox.Lo[p.sphereAxis], sphere.Center[p.sphereAxis])
+		oppositeDistance = proofarith.DySubScalar(observedBox.Hi[p.sphereAxis], sphere.Center[p.sphereAxis])
 	}
-	if faceDistance.Sign() <= 0 || proofarith.DyCmp(oppositeDistance, sphere.radius) <= 0 {
+	if faceDistance.Sign() <= 0 || proofarith.DyCmp(oppositeDistance, sphere.Radius) <= 0 {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded sphere changes the certified face", ErrUnsupported)
 	}
-	observedGap := proofarith.DySubScalar(faceDistance, sphere.radius).Rat()
+	observedGap := proofarith.DySubScalar(faceDistance, sphere.Radius).Rat()
 	idealGap := new(big.Rat).Add(p.sphereGap.Rat(), new(big.Rat).Mul(p.sphereSlope.Rat(), f))
 	difference := new(big.Rat).Sub(observedGap, idealGap)
 	if difference.Abs(difference).Cmp(resolution) > 0 || !sweepmemo.SphereRelationCovered(reportvocab.SweepOutcome(p.outcome),

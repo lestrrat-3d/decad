@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/contactround"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/planarsnapshot"
@@ -96,12 +97,12 @@ func rulingSideOf(b *Body, carrier *clearance.CFace, outward proofarith.DyV3,
 		}
 		return rulingSide{face: face}, reportvocab.ContactNoReason
 	}
-	cylinder, ok := sourceCylinderAtPose(b, r3.Identity())
+	cylinder, ok := contactround.CylinderAtPose(bodyNode(b), r3.Identity())
 	if !ok {
 		return rulingSide{}, reportvocab.ContactPayloadUnsupported
 	}
 	normalAxis, side, ok := clearance.SignedAxis(clearance.DyAxisVec(outward))
-	if !ok || normalAxis == cylinder.axis {
+	if !ok || normalAxis == cylinder.Axis {
 		return rulingSide{}, reportvocab.ContactAmbiguousFeature
 	}
 	var wall *Face
@@ -115,13 +116,13 @@ func rulingSideOf(b *Body, carrier *clearance.CFace, outward proofarith.DyV3,
 	}
 	// The source box is the exact disk-by-interval box: its transverse
 	// extents are the axis coordinate plus or minus the radius.
-	box := cylinder.box
+	box := cylinder.Box
 	half := proofarith.MustDyOf(.5)
 	var point proofarith.DyV3
 	var radius proofarith.Dyadic
 	for i := range 3 {
 		switch i {
-		case cylinder.axis:
+		case cylinder.Axis:
 			continue
 		case normalAxis:
 			radius = proofarith.DyMul(proofarith.DySubScalar(box.Hi[i], box.Lo[i]), half)
@@ -137,7 +138,7 @@ func rulingSideOf(b *Body, carrier *clearance.CFace, outward proofarith.DyV3,
 		return rulingSide{}, reportvocab.ContactAmbiguousFeature
 	}
 	ends := [2]proofarith.DyV3{point, point}
-	ends[0][cylinder.axis], ends[1][cylinder.axis] = box.Lo[cylinder.axis], box.Hi[cylinder.axis]
+	ends[0][cylinder.Axis], ends[1][cylinder.Axis] = box.Lo[cylinder.Axis], box.Hi[cylinder.Axis]
 	return rulingSide{face: wall, ends: ends, radius: radius, curved: true}, reportvocab.ContactNoReason
 }
 
@@ -270,7 +271,7 @@ type placedCylinder struct {
 // placedCylinderAt reads a full source cylinder at its identity pose and
 // stages it through any pose with a positive determinant.
 func placedCylinderAt(b *Body, pose r3.Transform) (placedCylinder, bool) {
-	source, ok := sourceCylinderAtPose(b, r3.Identity())
+	source, ok := contactround.CylinderAtPose(bodyNode(b), r3.Identity())
 	if !ok || !planarsnapshot.PositiveAffine(pose) {
 		return placedCylinder{}, false
 	}
@@ -284,7 +285,7 @@ func placedCylinderAt(b *Body, pose r3.Transform) (placedCylinder, bool) {
 		return placedCylinder{}, false
 	}
 	ends := rollingEnds(source)
-	staged := placedruling.Stage(source.axis, source.box.Lo, source.box.Hi, ends, pose)
+	staged := placedruling.Stage(source.Axis, source.Box.Lo, source.Box.Hi, ends, pose)
 	c := placedCylinder{Cylinder: staged, wall: wall, source: ends}
 	return c, true
 }

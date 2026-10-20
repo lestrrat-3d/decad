@@ -1,4 +1,4 @@
-package decad
+package contactround
 
 import (
 	"math/big"
@@ -11,51 +11,54 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
-// sourceSphereContactProof records the exact ball made by a full revolution
+// SphereProof records the exact ball made by a full revolution
 // of one semicircle and its on-axis diameter. A tagged spherical face alone
 // cannot establish the occupied set: the axis resolver admits small snaps.
-type sourceSphereContactProof struct {
-	center proofarith.DyV3
-	radius proofarith.Dyadic
-	face   *Face
+type SphereProof struct {
+	Center proofarith.DyV3
+	Radius proofarith.Dyadic
+	Face   *topo.Face
 }
 
-func sourceSphereAtPose(b *Body, pose r3.Transform) (sourceSphereContactProof, bool) {
-	proof, ok := sourceSphereRecord(b)
+func SphereAtPose(b *topo.Body, pose r3.Transform) (SphereProof, bool) {
+	proof, ok := SphereRecord(b)
 	if !ok {
-		return sourceSphereContactProof{}, false
+		return SphereProof{}, false
 	}
-	rp, ok := b.n.Payload.(revolvePayload)
+	rp, ok := b.Payload.(revolveplan.Payload)
 	if !ok || !pairbox.SignedAxisTransform(rp.Xform) || !pose.IsValid() || pose.IsReflection() {
-		return sourceSphereContactProof{}, false
+		return SphereProof{}, false
 	}
-	center := proofarith.DvTransform(rp.Xform, proof.center)
+	center := proofarith.DvTransform(rp.Xform, proof.Center)
 	if !pairbox.SignedAxisTransform(pose) {
 		// A read rotation cannot move a ball centered at the query origin.
 		// Other centers need an exact rotation of their offset before admission.
 		for _, component := range center {
 			if component.Sign() != 0 {
-				return sourceSphereContactProof{}, false
+				return SphereProof{}, false
 			}
 		}
-		proof.center = proofarith.DyVec(pose.Translation())
+		proof.Center = proofarith.DyVec(pose.Translation())
 		return proof, true
 	}
-	proof.center = proofarith.DvTransform(pose, center)
+	proof.Center = proofarith.DvTransform(pose, center)
 	return proof, true
 }
 
-// sourceSphereRecord proves the unplaced occupied solid is one complete ball.
+// SphereRecord proves the unplaced occupied solid is one complete ball.
 // A rigid placement cannot change its radius or isotropic centroidal inertia.
-func sourceSphereRecord(b *Body) (sourceSphereContactProof, bool) {
-	rp, ok := b.n.Payload.(revolvePayload)
-	if !ok || !b.n.Solid || b.n.Kind != topo.BodySolid || rp.SurfaceResult || !rp.Full ||
+func SphereRecord(b *topo.Body) (SphereProof, bool) {
+	rp, ok := b.Payload.(revolveplan.Payload)
+	if !ok || !b.Solid || b.Kind != topo.BodySolid || rp.SurfaceResult || !rp.Full ||
 		rp.SectionDelta != 0 || len(rp.Profile.Holes) != 0 ||
 		len(rp.Profile.Outer.Segments) != 2 ||
 		!proofbound.FiniteVec(rp.Frame.Origin()) ||
@@ -63,19 +66,19 @@ func sourceSphereRecord(b *Body) (sourceSphereContactProof, bool) {
 		rp.Ax.DU != 1 || rp.Ax.DV != 0 ||
 		rp.Ax.AUBound != 0 || rp.Ax.AVBound != 0 ||
 		rp.Ax.DUBound != 0 || rp.Ax.DVBound != 0 {
-		return sourceSphereContactProof{}, false
+		return SphereProof{}, false
 	}
-	var arc arcSeg
-	var line lineSeg
+	var arc sectionrecord.ArcSeg
+	var line sectionrecord.LineSeg
 	arcSeen, lineSeen := false, false
 	for _, segment := range rp.Profile.Outer.Segments {
 		switch s := segment.(type) {
-		case arcSeg:
+		case sectionrecord.ArcSeg:
 			arc, arcSeen = s, true
-		case lineSeg:
+		case sectionrecord.LineSeg:
 			line, lineSeen = s, true
 		default:
-			return sourceSphereContactProof{}, false
+			return SphereProof{}, false
 		}
 	}
 	sameEnds := line.Start == arc.Start && line.End == arc.End ||
@@ -86,35 +89,35 @@ func sourceSphereRecord(b *Body) (sourceSphereContactProof, bool) {
 		arc.Start.U <= arc.Center.U || arc.End.U >= arc.Center.U ||
 		!sameEnds ||
 		!measurement.FiniteValues(arc.Center.U, arc.Center.V, arc.Start.U, arc.End.U) {
-		return sourceSphereContactProof{}, false
+		return SphereProof{}, false
 	}
 	radius := proofarith.DySubScalar(proofarith.MustDyOf(arc.Start.U), proofarith.MustDyOf(arc.Center.U))
 	if proofarith.DyCmp(radius, proofarith.DySubScalar(proofarith.MustDyOf(arc.Center.U), proofarith.MustDyOf(arc.End.U))) != 0 {
-		return sourceSphereContactProof{}, false
+		return SphereProof{}, false
 	}
-	faces := b.Faces()
-	if len(faces) != 1 || faces[0].n.NormalBound != 0 || faces[0].n.Reversed ||
-		len(faces[0].n.Loops) != 0 || len(b.Edges()) != 0 {
-		return sourceSphereContactProof{}, false
+	faces := topobuild.Faces(b)
+	if len(faces) != 1 || faces[0].NormalBound != 0 || faces[0].Reversed ||
+		len(faces[0].Loops) != 0 || len(topobuild.Edges(b)) != 0 {
+		return SphereProof{}, false
 	}
-	if _, ok := faces[0].n.Surface.(surfacegeom.Sphere); !ok {
-		return sourceSphereContactProof{}, false
+	if _, ok := faces[0].Surface.(surfacegeom.Sphere); !ok {
+		return SphereProof{}, false
 	}
 	local := proofarith.DvAdd(proofarith.DyVec(rp.Frame.Origin()),
 		proofarith.DvAdd(proofarith.DvScale(proofarith.DyVec(rp.Frame.U()), proofarith.MustDyOf(arc.Center.U)),
 			proofarith.DvScale(proofarith.DyVec(rp.Frame.V()), proofarith.MustDyOf(arc.Center.V))))
-	return sourceSphereContactProof{
-		center: local,
-		radius: radius, face: faces[0],
+	return SphereProof{
+		Center: local,
+		Radius: radius, Face: faces[0],
 	}, true
 }
 
-// classifySourceSphereBox binds the neutral complete-ball result to the
+// ClassifySphereBox binds the neutral complete-ball result to the
 // source faces and the contact report.
-func classifySourceSphereBox(report *reportvocab.ContactReport, sphere sourceSphereContactProof,
+func ClassifySphereBox(report *reportvocab.ContactReport, sphere SphereProof,
 	boxProof contactbox.SourceBox, sphereFirst bool) {
 	result := pairbox.ClassifyAxisSphere(
-		pairbox.AxisSphere{Center: sphere.center, Radius: sphere.radius},
+		pairbox.AxisSphere{Center: sphere.Center, Radius: sphere.Radius},
 		boxProof.AxisBox(), report.Request.PointResolution.Base(),
 	)
 	switch result.Relation {
@@ -154,7 +157,7 @@ func classifySourceSphereBox(report *reportvocab.ContactReport, sphere sourceSph
 	}
 	onSphere := witness.SpherePoint.Measurement()
 	onBox := witness.BoxPoint.Measurement()
-	featureSphere, featureBox := reportvocab.ContactFeature{Face: faceNode(sphere.face)}, reportvocab.ContactFeature{Face: face}
+	featureSphere, featureBox := reportvocab.ContactFeature{Face: sphere.Face}, reportvocab.ContactFeature{Face: face}
 	onA, onB := onBox, onSphere
 	featureA, featureB := featureBox, featureSphere
 	if sphereFirst {
@@ -176,23 +179,23 @@ func signIfBoxSide(side int) float64 {
 	return -1
 }
 
-func translatedSphere(s sourceSphereContactProof, delta [3]proofarith.Dyadic, f *big.Rat) (sourceSphereContactProof, bool) {
+func TranslatedSphere(s SphereProof, delta [3]proofarith.Dyadic, f *big.Rat) (SphereProof, bool) {
 	fraction, ok := proofarith.DyOfRat(f)
 	if !ok {
-		return sourceSphereContactProof{}, false
+		return SphereProof{}, false
 	}
 	for i := range 3 {
-		s.center[i] = proofarith.DyAdd(s.center[i], proofarith.DyMul(delta[i], fraction))
+		s.Center[i] = proofarith.DyAdd(s.Center[i], proofarith.DyMul(delta[i], fraction))
 	}
 	return s, true
 }
 
-// classifySourceSpherePair binds the neutral complete-ball result to the
+// ClassifySpherePair binds the neutral complete-ball result to the
 // original source faces and the contact report.
-func classifySourceSpherePair(report *reportvocab.ContactReport, a, b sourceSphereContactProof) {
+func ClassifySpherePair(report *reportvocab.ContactReport, a, b SphereProof) {
 	result := sphere.Classify(
-		sphere.Ball{Center: a.center, Radius: a.radius},
-		sphere.Ball{Center: b.center, Radius: b.radius},
+		sphere.Ball{Center: a.Center, Radius: a.Radius},
+		sphere.Ball{Center: b.Center, Radius: b.Radius},
 		report.Request.PointResolution.Base(), report.Request.NormalResolution.Base(),
 	)
 	switch result.Relation {
@@ -219,17 +222,17 @@ func classifySourceSpherePair(report *reportvocab.ContactReport, a, b sourceSphe
 		OnA: witness.OnA.Measurement(), OnB: witness.OnB.Measurement(),
 		Normal: normal, NormalAngle: units.Radians(witness.Normal.Angle),
 		Separation: witness.Separation.Measurement(),
-		FaceA:      faceNode(a.face), FaceB: faceNode(b.face),
-		FeatureA: reportvocab.ContactFeature{Face: faceNode(a.face)}, FeatureB: reportvocab.ContactFeature{Face: faceNode(b.face)},
+		FaceA:      a.Face, FaceB: b.Face,
+		FeatureA: reportvocab.ContactFeature{Face: a.Face}, FeatureB: reportvocab.ContactFeature{Face: b.Face},
 	}}}
 }
 
-// classifySourceSphereOrientedBox maps the box kernel's bounded response to
+// ClassifySphereOrientedBox maps the box kernel's bounded response to
 // the original source faces and the contact report's measurements.
-func classifySourceSphereOrientedBox(report *reportvocab.ContactReport, sphere sourceSphereContactProof,
+func ClassifySphereOrientedBox(report *reportvocab.ContactReport, sphere SphereProof,
 	box contactbox.OrientedSourceBox, sphereFirst bool) {
 	result := pairbox.ClassifyOrientedSphere(
-		pairbox.AxisSphere{Center: sphere.center, Radius: sphere.radius}, box.OrientedBox, sphereFirst,
+		pairbox.AxisSphere{Center: sphere.Center, Radius: sphere.Radius}, box.OrientedBox, sphereFirst,
 		report.Request.PointResolution.Base(), report.Request.NormalResolution.Base(),
 	)
 	switch result.Relation {
@@ -262,10 +265,10 @@ func classifySourceSphereOrientedBox(report *reportvocab.ContactReport, sphere s
 	spherePoint := witness.SpherePoint.Measurement()
 	if sphereFirst {
 		point.OnA, point.OnB = spherePoint, boxPoint
-		point.FeatureA, point.FeatureB = reportvocab.ContactFeature{Face: faceNode(sphere.face)}, reportvocab.ContactFeature{Face: face}
+		point.FeatureA, point.FeatureB = reportvocab.ContactFeature{Face: sphere.Face}, reportvocab.ContactFeature{Face: face}
 	} else {
 		point.OnA, point.OnB = boxPoint, spherePoint
-		point.FeatureA, point.FeatureB = reportvocab.ContactFeature{Face: face}, reportvocab.ContactFeature{Face: faceNode(sphere.face)}
+		point.FeatureA, point.FeatureB = reportvocab.ContactFeature{Face: face}, reportvocab.ContactFeature{Face: sphere.Face}
 	}
 	point.FaceA, point.FaceB = point.FeatureA.Face, point.FeatureB.Face
 	report.Manifold = &reportvocab.ContactManifold{Points: []reportvocab.ContactPoint{point}}

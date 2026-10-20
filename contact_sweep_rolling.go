@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/contactround"
 	"github.com/lestrrat-3d/decad/internal/planarsweep"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -90,14 +91,14 @@ func (d *Document) sweepRollingPair(ctx context.Context, a, b *Body,
 }
 
 // rollingEnds are the centers of a source cylinder's two end disks.
-func rollingEnds(c sourceCylinderContactProof) [2]proofarith.DyV3 {
+func rollingEnds(c contactround.CylinderProof) [2]proofarith.DyV3 {
 	half := proofarith.MustDyOf(.5)
 	var center proofarith.DyV3
 	for k := range 3 {
-		center[k] = proofarith.DyMul(proofarith.DyAdd(c.box.Lo[k], c.box.Hi[k]), half)
+		center[k] = proofarith.DyMul(proofarith.DyAdd(c.Box.Lo[k], c.Box.Hi[k]), half)
 	}
 	ends := [2]proofarith.DyV3{center, center}
-	ends[0][c.axis], ends[1][c.axis] = c.box.Lo[c.axis], c.box.Hi[c.axis]
+	ends[0][c.Axis], ends[1][c.Axis] = c.Box.Lo[c.Axis], c.Box.Hi[c.Axis]
 	return ends
 }
 
