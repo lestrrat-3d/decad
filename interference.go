@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/booleaneval"
 	"github.com/lestrrat-3d/decad/internal/clearance/pairkernel"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -66,7 +67,7 @@ func analyticBodiesEqual(budget *proofbound.WorkBudget, a, b *Body) (bool, error
 //
 // meshes supplies the mesh path's operand meshes: Verify's per-call cache,
 // or pairMeshes{} where a caller measures one pair on its own.
-func measuredInterference(ctx context.Context, a, b *Body, res pairkernel.Result, meshes operandMeshes) (Measurement, reportvocab.InterferenceOutcome, error) {
+func measuredInterference(ctx context.Context, a, b *Body, res pairkernel.Result, meshes booleaneval.OperandMesher) (Measurement, reportvocab.InterferenceOutcome, error) {
 	if res.Contained != nil {
 		return measurementFromInternal(res.Contained.Volume), reportvocab.InterferenceMeasured, nil
 	}
@@ -107,7 +108,7 @@ func measuredInterference(ctx context.Context, a, b *Body, res pairkernel.Result
 		return overlap, reportvocab.InterferenceMeasured, nil
 	}
 
-	eval, err := evaluateBooleanMeshes(ctx, meshbool.OpIntersect, a, b, meshes)
+	eval, err := evaluateBooleanMeshesWithConeCap(ctx, meshbool.OpIntersect, a, b, meshes, 1, nil, nil)
 	if err != nil {
 		if expected, ok := asExpectedBoolean(err); ok {
 			return Measurement{}, reportvocab.InterferenceOutcomeForExpected(expected), nil
