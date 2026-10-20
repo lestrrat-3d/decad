@@ -60,6 +60,19 @@ func splitRevolveSheetAxis(t *testing.T, doc *decad.Document, u0, v0, u1, v1 flo
 	return body
 }
 
+// splitRevolveReflect places the body through a reflection across the plane
+// x = 0, which leaves the revolve axis (world y) in place.
+func splitRevolveReflect(t *testing.T, body *decad.Body) *decad.Body {
+	t.Helper()
+	mirror, err := r3.FromBasis(r3.Basis{
+		EX: r3.NewVec(-1, 0, 0), EY: r3.NewVec(0, 1, 0), EZ: r3.NewVec(0, 0, 1),
+	}, r3.Vec{})
+	require.NoError(t, err)
+	placed, err := decad.Transform(t.Context(), body, mirror)
+	require.NoError(t, err)
+	return placed
+}
+
 // splitRevolveCylinder is the rectangle r ∈ [0, 4], v ∈ [0, 10]: a solid
 // cylinder whose meridian runs along the axis.
 func splitRevolveCylinder(s *sketch.Sketch) {
@@ -463,6 +476,22 @@ func TestSurfaceSplitRevolveRefusals(t *testing.T) {
 					splitRevolveSheet(t, doc, 0, 20, 8, 20, decad.FullRevolution{})
 			},
 			sentinel: decad.ErrDegenerate, message: "tool separates no part of the target",
+		},
+		{
+			name: "S2 refuses a reflected target",
+			operands: func(t *testing.T, doc *decad.Document) (*decad.Body, *decad.Body) {
+				return splitRevolveReflect(t, splitRevolveSolid(t, doc, splitRevolveCylinder, decad.FullRevolution{})),
+					splitRevolveSheet(t, doc, 0, 6, 8, 6, decad.FullRevolution{})
+			},
+			sentinel: decad.ErrUnsupported, message: "does not admit a reflected operand",
+		},
+		{
+			name: "S2 refuses a reflected tool",
+			operands: func(t *testing.T, doc *decad.Document) (*decad.Body, *decad.Body) {
+				return splitRevolveSolid(t, doc, splitRevolveCylinder, decad.FullRevolution{}),
+					splitRevolveReflect(t, splitRevolveSheet(t, doc, 0, 6, 8, 6, decad.FullRevolution{}))
+			},
+			sentinel: decad.ErrUnsupported, message: "does not admit a reflected operand",
 		},
 		{
 			name: "a sheet target refuses",

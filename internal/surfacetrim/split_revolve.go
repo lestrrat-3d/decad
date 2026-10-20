@@ -1,14 +1,17 @@
-package decad
+package surfacetrim
 
 import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
-	"github.com/lestrrat-3d/decad/internal/surfacetrim"
+	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
 // This file is Split over the revolve family
@@ -20,11 +23,11 @@ import (
 // cut ends a cell records moved, and the solid build charges them through
 // prismcells.TrimRevolveSegmentCharges (§7.2).
 
-// splitRevolve is Split over a pair S1 has already routed to the revolve
+// SplitRevolve is Split over a pair S1 has already routed to the revolve
 // family. Each piece's axis gates rerun over the piece's own meridian about
 // the target's oriented axis (revolveBlendAxis), so the snap allowances and
 // the radial proof each piece's build reads belong to that piece.
-func (d *Document) splitRevolve(ctx context.Context, budget *proofbound.WorkBudget, target, tool *Body) ([]*Body, error) {
+func SplitRevolve(ctx context.Context, budget *proofbound.WorkBudget, env topo.Env, target, tool *topo.Body) ([]*topo.Body, error) {
 	rcv, rcvView, tlView, err := admitSplitRevolvePair(budget, target, tool)
 	if err != nil {
 		return nil, err
@@ -33,8 +36,7 @@ func (d *Document) splitRevolve(ctx context.Context, budget *proofbound.WorkBudg
 	if err != nil {
 		return nil, err
 	}
-	ref := d.nextProducerID()
-	bodies := make([]*Body, len(cells))
+	bodies := make([]*topo.Body, len(cells))
 	for i, cell := range cells {
 		if err := budget.Step(); err != nil {
 			return nil, err
@@ -44,7 +46,7 @@ func (d *Document) splitRevolve(ctx context.Context, budget *proofbound.WorkBudg
 		if err != nil {
 			return nil, err
 		}
-		bodies[i], err = bodyResult(revolveplan.Build(ctx, envOf(documentNode(d), ref+producerID(i)), revolvePayload{
+		bodies[i], err = revolveplan.Build(ctx, topo.Env{Doc: env.Doc, Ref: env.Ref + provenance.Producer(i), Alloc: env.Alloc}, revolveplan.Payload{
 			Profile:     cell.Profile,
 			Frame:       rcv.Frame,
 			Ax:          ax,
@@ -58,7 +60,7 @@ func (d *Document) splitRevolve(ctx context.Context, budget *proofbound.WorkBudg
 			// and S7 zero every other term prism §7 derives, and a cell's
 			// uncut edges record their entity's own data verbatim.
 			SectionDelta: cell.SectionDelta,
-		}, work))
+		}, work)
 		if err != nil {
 			return nil, err
 		}
@@ -66,7 +68,6 @@ func (d *Document) splitRevolve(ctx context.Context, budget *proofbound.WorkBudg
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	d.commitMany(bodies, target, tool)
 	return bodies, nil
 }
 
@@ -80,39 +81,39 @@ func (d *Document) splitRevolve(ctx context.Context, budget *proofbound.WorkBudg
 // axis; Split's pieces are solids, and the solid build places a pole for a
 // meridian meeting the axis exactly as Revolve does, after revolveBlendAxis
 // reruns the axis-contact audit over each piece.
-func admitSplitRevolvePair(budget *proofbound.WorkBudget, target, tool *Body) (revolvePayload, prismPayload, prismPayload, error) {
-	fail := func(format string, args ...any) (revolvePayload, prismPayload, prismPayload, error) {
-		return revolvePayload{}, prismPayload{}, prismPayload{}, fmt.Errorf(format, args...)
+func admitSplitRevolvePair(budget *proofbound.WorkBudget, target, tool *topo.Body) (revolveplan.Payload, prismrecord.Payload, prismrecord.Payload, error) {
+	fail := func(format string, args ...any) (revolveplan.Payload, prismrecord.Payload, prismrecord.Payload, error) {
+		return revolveplan.Payload{}, prismrecord.Payload{}, prismrecord.Payload{}, fmt.Errorf(format, args...)
 	}
-	pass := func(err error) (revolvePayload, prismPayload, prismPayload, error) {
-		return revolvePayload{}, prismPayload{}, prismPayload{}, err
+	pass := func(err error) (revolveplan.Payload, prismrecord.Payload, prismrecord.Payload, error) {
+		return revolveplan.Payload{}, prismrecord.Payload{}, prismrecord.Payload{}, err
 	}
 
-	rcv, ok := target.n.Payload.(revolvePayload)
-	if !ok || target.Kind() != BodySolid || !target.IsSolid() {
-		return fail(`%w: Split's target must be a solid revolve`, ErrUnsupported)
+	rcv, ok := target.Payload.(revolveplan.Payload)
+	if !ok || target.Kind != topo.BodySolid || !target.Solid {
+		return fail(`%w: Split's target must be a solid revolve`, decaderr.ErrUnsupported)
 	}
-	if tool.Kind() != BodySheet {
-		return fail(`%w: Split's tool must be a sheet`, ErrUnsupported)
+	if tool.Kind != topo.BodySheet {
+		return fail(`%w: Split's tool must be a sheet`, decaderr.ErrUnsupported)
 	}
-	var tl revolvePayload
-	switch p := tool.n.Payload.(type) {
-	case revolvePayload:
+	var tl revolveplan.Payload
+	switch p := tool.Payload.(type) {
+	case revolveplan.Payload:
 		tl = p
-	case chainRevolvePayload:
+	case revolveplan.ChainPayload:
 		tl = p.Revolve()
 	default:
-		return fail(`%w: Split's tool has no revolve meridian`, ErrUnsupported)
+		return fail(`%w: Split's tool has no revolve meridian`, decaderr.ErrUnsupported)
 	}
-	if surfacetrim.SectionDelta(&target.n) != 0 || surfacetrim.SectionDelta(&tool.n) != 0 {
-		return fail(`%w: Split does not admit an operand carrying its own section displacement`, ErrUnsupported)
+	if SectionDelta(target) != 0 || SectionDelta(tool) != 0 {
+		return fail(`%w: Split does not admit an operand carrying its own section displacement`, decaderr.ErrUnsupported)
 	}
 
 	rcvView, tlView := rcv.Meridian(), tl.Meridian()
 
 	// S2: neither operand's accumulated placement is a reflection.
 	if rcvView.Reflected() || tlView.Reflected() {
-		return fail(`%w: Split does not admit a reflected operand`, ErrUnsupported)
+		return fail(`%w: Split does not admit a reflected operand`, decaderr.ErrUnsupported)
 	}
 
 	// S3: every segment of both meridians is a LineSeg, CircleSeg or ArcSeg.
@@ -125,23 +126,23 @@ func admitSplitRevolvePair(budget *proofbound.WorkBudget, target, tool *Body) (r
 		return pass(err)
 	}
 	if !rcvAnalytic || !tlAnalytic {
-		return fail(`%w: Split admits only line, circle and arc segments`, ErrUnsupported)
+		return fail(`%w: Split admits only line, circle and arc segments`, decaderr.ErrUnsupported)
 	}
 
 	// S4's revolve arm: the plane frames and the resolved axis agree on the
 	// stored floats, the eight-field comparison Trim's own takes.
 	if rcv.Frame != tl.Frame {
-		return fail(`%w: the target and tool do not spin about the same frame, exactly`, ErrUnsupported)
+		return fail(`%w: the target and tool do not spin about the same frame, exactly`, decaderr.ErrUnsupported)
 	}
 	if !revolveplan.AxisIdentical(rcv.Ax, tl.Ax) {
-		return fail(`%w: the target and tool do not spin about the same axis, exactly`, ErrUnsupported)
+		return fail(`%w: the target and tool do not spin about the same axis, exactly`, decaderr.ErrUnsupported)
 	}
 
 	// S6's revolve arm, on the stored endpoint floats: S4 has proven the two
 	// axes identical, so no origin shift applies.
 	if tl.Phi0 > rcv.Phi0 || tl.Phi1 < rcv.Phi1 {
 		return fail(`%w: the tool's angular span [%v, %v] does not cover the target's [%v, %v]`,
-			ErrUnsupported, tl.Phi0, tl.Phi1, rcv.Phi0, rcv.Phi1)
+			decaderr.ErrUnsupported, tl.Phi0, tl.Phi1, rcv.Phi0, rcv.Phi1)
 	}
 
 	// S7's remaining two clauses.
@@ -150,7 +151,7 @@ func admitSplitRevolvePair(budget *proofbound.WorkBudget, target, tool *Body) (r
 		return pass(err)
 	}
 	if !reexpress.Identity {
-		return fail(`%w: the target and tool do not share one frame and placement, so their re-expression is not the identity`, ErrUnsupported)
+		return fail(`%w: the target and tool do not share one frame and placement, so their re-expression is not the identity`, decaderr.ErrUnsupported)
 	}
 	rcvWhole, err := prismcells.TrimProfileFullyWhole(budget, rcv.Profile.Outer, rcv.Profile.Holes)
 	if err != nil {
@@ -161,7 +162,7 @@ func admitSplitRevolvePair(budget *proofbound.WorkBudget, target, tool *Body) (r
 		return pass(err)
 	}
 	if !rcvWhole || !tlWhole {
-		return fail(`%w: every segment the target or tool consumes must span its entity's own natural domain`, ErrUnsupported)
+		return fail(`%w: every segment the target or tool consumes must span its entity's own natural domain`, decaderr.ErrUnsupported)
 	}
 	return rcv, rcvView, tlView, nil
 }

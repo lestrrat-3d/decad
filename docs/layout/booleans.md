@@ -16,7 +16,7 @@ The rules for rows live in `docs/layout.md`.
 | `loft_contact_output_proof.go` | Reads the payloads of two live Loft/prism bodies in either order and runs the source partition and output shell in `internal/loftcontact`, which certifies the partition and both Sketch caps, then builds, tiles and audits the transient held shell. |
 | `prism_overlap.go` | Wraps `prismcells.OverlapVolume`, prism-boolean §4.5's overlap-area reading, as a `Verify` measurement. See its doc comment. |
 | `brep_measure.go` | The brep surveys, including fillet-band pull readings and the undercut verdict fold; `internal/breprecord` states prisms and stacked prisms as face views, then builds and measures the record. See general-boolean §4. |
-| `surface_trim.go` / `surface_split_revolve.go` | Public `Trim`, `Extend` and `Split` entry checks, result builds and commits, and revolve `Split`; gates in `internal/surfacetrim/`. See surface-intersection §2–§3. |
+| `surface_trim.go` | Public `Trim`, `Extend` and `Split` entry checks, result builds and commits; gates and revolve `Split` in `internal/surfacetrim/`. See surface-intersection §2–§3. |
 | `point_plane_split.go` | Routes a point-loft Split through facetedrecord's source and sheet gates and plane order, and commits its two slabs. See loft-point design. |
 | `point_plane_scale.go` | ScaledAt: resolves the similarity source by payload kind and commits the image; facetedrecord.ScaleImage admits and scales it. See loft-point design and evaluator §8. |
 | `prism_scale.go` | Admits prism and full-Revolve certified similarity sources and transfers their face roles. See evaluator §8. |

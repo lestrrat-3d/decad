@@ -27,7 +27,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/tangentchain/` | Ordered tangent-chain walk and analytic continuation decisions over topology nodes. See modify-reach §5. |
 | `internal/orderedwork/` | Runs independent jobs and returns results in input order. |
 | `internal/circularbounds/` | Circular endpoints, lengths, area, moment and arc-box bounds over neutral records, and certified circular bore rings. |
-| `internal/surfacetrim/` | Prism-family `Trim`, `Extend` and `Split` pair gates, the S1 family and S7 section-displacement readings, and `Extend`'s free-end widening for both families. See surface-intersection §2.1, §3.2. |
+| `internal/surfacetrim/` | Prism-family `Trim`, `Extend` and `Split` pair gates, the S1 family and S7 section-displacement readings, `Extend`'s free-end widening for both families, and revolve `Split`. See surface-intersection §2.1, §3.2. |
 | `internal/mirrorjoin/` | Exact line admission, reflection, prism and stacked record rewrites, splice and joined-section audit. See mirror-pattern §5. |
 | `internal/patternrecord/` | Pattern spec gates, instance motion and record mapping. See mirror-pattern §4.3, §6.2. |
 | `internal/patternassembly/` | Pattern frame-keeping instances and disjoint group planning over recorded payloads. See mirror-pattern §4.3, §6. |
