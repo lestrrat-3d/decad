@@ -406,7 +406,7 @@ func rewriteCylLine(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 		rowIdx[j] = make([]int, len(cols))
 	}
 	for k := range cols {
-		for j := 0; j < m; j++ {
+		for j := range m {
 			rowIdx[j][k] = w.vertex(sec.rows[j].Add(axis.Scale(sigma[k])), bound)
 		}
 		rowIdx[m][k] = cols[k]
@@ -508,7 +508,7 @@ func rewriteCylLine(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 	tag := c.tag(spec, sec, convex)
 	blendGroup := len(fp.Groups)
 	stripFrom := len(w.out)
-	for j := 0; j < m; j++ {
+	for j := range m {
 		for k := 0; k+1 < len(cols); k++ {
 			a, b, cc, d := rowIdx[j][k], rowIdx[j][k+1], rowIdx[j+1][k+1], rowIdx[j+1][k]
 			for _, t := range [][3]int{{a, b, cc}, {a, cc, d}} {
