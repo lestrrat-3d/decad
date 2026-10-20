@@ -278,7 +278,9 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 		loop: &capSetback{Dc: dmm, DcDelta: dDelta, Ds: dmm, DsDelta: dDelta}, loopKind: breprecord.BandChamfer}
 	if bp, ok := b.n.Payload.(brepPayload); ok {
 		// Some selections need a whole-body chamfer instead of the usual edge route.
-		body, matched, err := tryAllEdgeChamfer(ctx, b, bp, edges, dmm, dDelta, asym)
+		node, matched, err := breprecord.TryAllEdgeChamfer(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), &b.n, bp,
+			edgeNodes(edges), dmm, dDelta, asym != nil)
+		body := bodyHandle(node)
 		if matched || err != nil {
 			if err != nil {
 				return nil, err

@@ -256,8 +256,12 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value, opts .
 		return b.shellTwistedSweep(ctx, tp, removed, sense, tmm, tDelta)
 	}
 	if fp, ok := b.n.Payload.(facetedPayload); ok && fp.PrismUnionFillet != nil {
-		if out, matched, err := b.shellPrismUnionBoss(ctx, fp, removed, sense, tmm, tDelta); matched || err != nil {
-			return out, err
+		if node, matched, err := prismshell.PrismUnionBossShell(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), &b.n, fp,
+			faceNodes(removed), sense == Inward, tmm, tDelta); matched || err != nil {
+			if err != nil {
+				return nil, err
+			}
+			return commitModifyResult(ctx, b, bodyHandle(node))
 		}
 	}
 	// A brep or stacked receiver takes the brep route

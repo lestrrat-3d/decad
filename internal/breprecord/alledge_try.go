@@ -1,60 +1,62 @@
-package decad
+package breprecord
 
 import (
 	"context"
 	"fmt"
 
-	"github.com/lestrrat-3d/decad/internal/breprecord"
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 )
 
-// tryAllEdgeChamfer accepts only the complete straight-edge set of an exact
+// TryAllEdgeChamfer accepts only the complete straight-edge set of an exact
 // axis-aligned box with one through-y circular bore. Other breps keep their
 // existing route L result or refusal.
-func tryAllEdgeChamfer(ctx context.Context, source *Body, bp brepPayload,
-	edges []*Edge, distance, distanceDelta float64, asym *asymmetricChamfer) (*Body, bool, error) {
-	if len(edges) != 12 || asym != nil || len(bp.Faces) != 7 || bp.Xform != r3.Identity() ||
+func TryAllEdgeChamfer(ctx context.Context, env topo.Env, source *topo.Body, bp Payload,
+	edges []*topo.Edge, distance, distanceDelta float64, asymmetric bool) (*topo.Body, bool, error) {
+	if len(edges) != 12 || asymmetric || len(bp.Faces) != 7 || bp.Xform != r3.Identity() ||
 		bp.SectionDelta() != 0 || bp.AxialDelta() != 0 || len(bp.LoopBands) != 0 ||
 		bp.BossShell != nil || bp.PocketShell != nil {
 		return nil, false, nil
 	}
 	if distanceDelta != 0 {
-		return nil, true, fmt.Errorf(`%w: the all-edge chamfer needs an exact millimetre setback`, ErrUnsupported)
+		return nil, true, fmt.Errorf(`%w: the all-edge chamfer needs an exact millimetre setback`, decaderr.ErrUnsupported)
 	}
-	var p allEdgeChamferPayload
+	var p AllEdgeChamferPayload
 	p.Xform = r3.Identity()
 	p.D = distance
-	p.Box = [3][2]float64{{source.n.Bounds.Min.X, source.n.Bounds.Max.X},
-		{source.n.Bounds.Min.Y, source.n.Bounds.Max.Y}, {source.n.Bounds.Min.Z, source.n.Bounds.Max.Z}}
-	if source.n.Bounds.Bound.Base() != 0 || !p.AdmitBox() {
+	p.Box = [3][2]float64{{source.Bounds.Min.X, source.Bounds.Max.X},
+		{source.Bounds.Min.Y, source.Bounds.Max.Y}, {source.Bounds.Min.Z, source.Bounds.Max.Z}}
+	if source.Bounds.Bound.Base() != 0 || !p.AdmitBox() {
 		return nil, false, nil
 	}
-	selected := map[*Edge]struct{}{}
+	selected := map[*topo.Edge]struct{}{}
 	for _, e := range edges {
-		if _, dup := selected[e]; dup || !p.OuterBoxEdge(edgeNode(e)) {
+		if _, dup := selected[e]; dup || !p.OuterBoxEdge(e) {
 			return nil, false, nil
 		}
 		selected[e] = struct{}{}
 	}
 	planes := 0
-	var boreFace *Face
+	var boreFace *topo.Face
 	var boreSurface surfacegeom.Cylinder
 	var seen [3][2]bool
-	for _, f := range source.Faces() {
-		switch surface := f.n.Surface.(type) {
+	for _, f := range topobuild.Faces(source) {
+		switch surface := f.Surface.(type) {
 		case surfacegeom.Plane:
-			axis, side, ok := p.BoxPlane(faceNode(f), surface)
+			axis, side, ok := p.BoxPlane(f, surface)
 			if !ok || seen[axis][side] {
 				return nil, false, nil
 			}
 			seen[axis][side] = true
 			planes++
 			if axis == 1 {
-				if len(f.n.Loops) != 2 || len(f.n.Loops[1].CoEdges) != 1 {
+				if len(f.Loops) != 2 || len(f.Loops[1].CoEdges) != 1 {
 					return nil, false, nil
 				}
-				circle, ok := f.n.Loops[1].CoEdges[0].Edge.Curve.(surfacegeom.Circle3)
+				circle, ok := f.Loops[1].CoEdges[0].Edge.Curve.(surfacegeom.Circle3)
 				if !ok || circle.Center.Y != p.Box[1][side] ||
 					circle.Axis != (r3.Vec{Y: 1}) && circle.Axis != (r3.Vec{Y: -1}) {
 					return nil, false, nil
@@ -64,7 +66,7 @@ func tryAllEdgeChamfer(ctx context.Context, source *Body, bp brepPayload,
 				} else if p.Center != [2]float64{circle.Center.X, circle.Center.Z} || p.Radius != circle.Radius.Base() {
 					return nil, false, nil
 				}
-			} else if len(f.n.Loops) != 1 {
+			} else if len(f.Loops) != 1 {
 				return nil, false, nil
 			}
 		case surfacegeom.Cylinder:
@@ -79,11 +81,11 @@ func tryAllEdgeChamfer(ctx context.Context, source *Body, bp brepPayload,
 	if planes != 6 || boreFace == nil || p.Radius <= 0 ||
 		boreSurface.Axis != (r3.Vec{Y: 1}) && boreSurface.Axis != (r3.Vec{Y: -1}) ||
 		boreSurface.Origin.X != p.Center[0] || boreSurface.Origin.Z != p.Center[1] ||
-		boreSurface.Radius.Base() != p.Radius || !boreFace.n.Reversed || len(boreFace.n.Loops) != 2 {
+		boreSurface.Radius.Base() != p.Radius || !boreFace.Reversed || len(boreFace.Loops) != 2 {
 		return nil, false, nil
 	}
 	var rims [2]bool
-	for _, loop := range boreFace.n.Loops {
+	for _, loop := range boreFace.Loops {
 		if len(loop.CoEdges) != 1 {
 			return nil, false, nil
 		}
@@ -110,14 +112,14 @@ func tryAllEdgeChamfer(ctx context.Context, source *Body, bp brepPayload,
 		}
 	}
 	if !p.ExactCoordinates() {
-		return nil, true, fmt.Errorf(`%w: an all-edge chamfer corner is not exactly representable`, ErrUnsupported)
+		return nil, true, fmt.Errorf(`%w: an all-edge chamfer corner is not exactly representable`, decaderr.ErrUnsupported)
 	}
 	if p.Center[0]-p.Radius <= p.Box[0][0]+distance ||
 		p.Center[0]+p.Radius >= p.Box[0][1]-distance ||
 		p.Center[1]-p.Radius <= p.Box[2][0]+distance ||
 		p.Center[1]+p.Radius >= p.Box[2][1]-distance {
-		return nil, true, fmt.Errorf(`%w: the bore reaches the all-edge chamfer`, ErrUnsupported)
+		return nil, true, fmt.Errorf(`%w: the bore reaches the all-edge chamfer`, decaderr.ErrUnsupported)
 	}
-	body, err := bodyResult(breprecord.BuildAllEdgeChamfer(ctx, envOf(source.n.Doc, source.n.Doc.NextProducer), p))
+	body, err := BuildAllEdgeChamfer(ctx, env, p)
 	return body, true, err
 }
