@@ -2,12 +2,8 @@ package decad
 
 import (
 	"fmt"
-	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/measurement"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
-	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/sweeppath"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -53,24 +49,6 @@ type Box struct {
 	Min, Max  r3.Vec
 	Exactness Exactness
 	Bound     units.Value
-}
-
-// ratIntervalMeasurement publishes an exact length interval [lo, hi] as its
-// nearest midpoint float and an outward bound covering both ends.
-func ratIntervalMeasurement(lo, hi *big.Rat) (Measurement, bool) {
-	mid := new(big.Rat).Quo(new(big.Rat).Add(lo, hi), big.NewRat(2, 1))
-	value := sweeppath.RatFloatNearest(mid)
-	if !measurement.FiniteValues(value) {
-		return Measurement{}, false
-	}
-	held := proofarith.FloatRat(value)
-	spread := proofbound.RatMax(new(big.Rat).Abs(new(big.Rat).Sub(lo, held)), new(big.Rat).Abs(new(big.Rat).Sub(hi, held)))
-	bound := proofbound.RatFloatUp(spread)
-	if !measurement.FiniteValues(value, bound) {
-		return Measurement{}, false
-	}
-	return Measurement{Value: units.Millimeters(value), Bound: units.Millimeters(bound),
-		Exactness: exactnessFromBound(bound)}, true
 }
 
 func measurementFromInternal(m measurement.Measurement) Measurement {

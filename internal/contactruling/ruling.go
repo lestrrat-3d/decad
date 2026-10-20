@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/planarpose"
 	"github.com/lestrrat-3d/decad/internal/planarsnapshot"
 	"github.com/lestrrat-3d/decad/internal/planarsweep"
+	"github.com/lestrrat-3d/decad/internal/pointquery"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
@@ -347,7 +348,7 @@ func ClassifyPlacedRuling(ctx context.Context, mesher verifiedmesh.Mesher, repor
 		Request: report.Request}
 	switch classification.Relation {
 	case placedruling.Separated:
-		gap, ok := ratIntervalMeasurement(classification.GapLo, classification.GapHi)
+		gap, ok := pointquery.RatIntervalMeasurement(classification.GapLo, classification.GapHi)
 		if !ok {
 			return false, nil
 		}
@@ -446,22 +447,4 @@ func ends(c contactround.CylinderProof) [2]proofarith.DyV3 {
 	pair := [2]proofarith.DyV3{center, center}
 	pair[0][c.Axis], pair[1][c.Axis] = c.Box.Lo[c.Axis], c.Box.Hi[c.Axis]
 	return pair
-}
-
-// ratIntervalMeasurement publishes an exact length interval [lo, hi] as its
-// nearest midpoint float and an outward bound covering both ends.
-func ratIntervalMeasurement(lo, hi *big.Rat) (measurement.Measurement, bool) {
-	mid := new(big.Rat).Quo(new(big.Rat).Add(lo, hi), big.NewRat(2, 1))
-	value := sweeppath.RatFloatNearest(mid)
-	if !measurement.FiniteValues(value) {
-		return measurement.Measurement{}, false
-	}
-	held := proofarith.FloatRat(value)
-	spread := proofbound.RatMax(new(big.Rat).Abs(new(big.Rat).Sub(lo, held)), new(big.Rat).Abs(new(big.Rat).Sub(hi, held)))
-	bound := proofbound.RatFloatUp(spread)
-	if !measurement.FiniteValues(value, bound) {
-		return measurement.Measurement{}, false
-	}
-	return measurement.Measurement{Value: units.Millimeters(value), Bound: units.Millimeters(bound),
-		Exactness: measurement.ExactnessOf(bound)}, true
 }

@@ -130,7 +130,7 @@ returns `ErrUnsupported`; a missing source bound returns `ErrBooleanFailed`;
 a non-finite bound returns `ErrUnsupported`. Let `D²` be the exact minimum squared
 distance to those triangles and `B` the face's two-sided source bound. The
 true distance lies in `[max(0, sqrt(D²) − B), sqrt(D²) + B]`. Use directed
-square-root endpoints and `ratIntervalMeasurement` to return a finite
+square-root endpoints and `pointquery.RatIntervalMeasurement` to return a finite
 `Measurement`. This query needs no occupied-volume proof or point-membership
 classification.
 
