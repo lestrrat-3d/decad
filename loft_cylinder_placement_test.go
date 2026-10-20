@@ -370,7 +370,7 @@ func TestLoftCylinderCommonPlacementDifferentLoftSourceFallsBack(t *testing.T) {
 	joinedPayload := joined.n.Payload.(facetedPayload)
 	require.False(t, loftcylinder.SourceIdentitiesMatch(bodyNodes([]*Body{tooth, other})),
 		"different Loft sources must miss continuation before private reconstruction")
-	_, admitted, err := tryPlacedLoftCylinderUnion(ctx, doc, other.originProducer(), joined, other)
+	admitted, err := tryPlacedLoftCylinderUnion(ctx, doc, other.originProducer(), joined, other)
 	require.NoError(t, err)
 	require.False(t, admitted, "different Loft sources must use the generic Union")
 	require.NotNil(t, joinedPayload.LoftCylinderJoin.Placement,
@@ -433,14 +433,14 @@ func TestLoftCylinderCommonPlacementBoreEligibilityPrecedesRebuild(t *testing.T)
 		tool *Body
 	}{{"radius", wide}, {"axial span", short}, {"center", offCenter}} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, admitted, err := tryPlacedLoftCylinderBoreCut(cancelled, doc,
+			admitted, err := tryPlacedLoftCylinderBoreCut(cancelled, doc,
 				tc.tool.originProducer(), joined, tc.tool)
 			require.NoError(t, err)
 			require.False(t, admitted,
 				"ineligible %s tool must return to generic Cut before rebuilding", tc.name)
 		})
 	}
-	_, admitted, err := tryPlacedLoftCylinderBoreCut(cancelled, doc,
+	admitted, err := tryPlacedLoftCylinderBoreCut(cancelled, doc,
 		valid.originProducer(), joined, valid)
 	require.False(t, admitted)
 	require.ErrorIs(t, err, context.Canceled,
@@ -515,7 +515,7 @@ func TestLoftCylinderCommonPlacementRefusesUnequalPoses(t *testing.T) {
 	require.NoError(t, err)
 	tooth, err = Transform(t.Context(), tooth, loftCylinderTestTranslation(t, 7.001))
 	require.NoError(t, err)
-	_, admitted, err := tryPlacedLoftCylinderUnion(t.Context(), documentHandle(blank.n.Doc),
+	admitted, err := tryPlacedLoftCylinderUnion(t.Context(), documentHandle(blank.n.Doc),
 		blank.originProducer(), blank, tooth)
 	require.NoError(t, err)
 	require.False(t, admitted, "unequal source poses must miss the structural certificate")
@@ -534,7 +534,7 @@ func TestLoftCylinderCommonPlacementLeavesArbitraryAngleGeneric(t *testing.T) {
 	require.NoError(t, err)
 	tooth, err = Transform(t.Context(), tooth, pose)
 	require.NoError(t, err)
-	_, admitted, err := tryPlacedLoftCylinderUnion(t.Context(), documentHandle(blank.n.Doc),
+	admitted, err := tryPlacedLoftCylinderUnion(t.Context(), documentHandle(blank.n.Doc),
 		blank.originProducer(), blank, tooth)
 	require.NoError(t, err)
 	require.False(t, admitted, "an arbitrary-angle pose needs its own source-map proof")
@@ -572,7 +572,7 @@ func TestLoftCylinderCommonPlacementRejectsRoundedComposition(t *testing.T) {
 	require.NoError(t, err)
 	tooth, err = Transform(t.Context(), tooth, second)
 	require.NoError(t, err)
-	_, admitted, err := tryPlacedLoftCylinderUnion(t.Context(), doc,
+	admitted, err := tryPlacedLoftCylinderUnion(t.Context(), doc,
 		blank.originProducer(), blank, tooth)
 	require.NoError(t, err)
 	require.False(t, admitted, "rounded source-map composition must miss the structural path")
@@ -593,7 +593,7 @@ func TestLoftCylinderCommonPlacementLeavesOtherPrismsGeneric(t *testing.T) {
 	doc, blank, _ := loftCylinderPlacedTabPair(t, lower, upper)
 	other, err := Copy(t.Context(), blank)
 	require.NoError(t, err)
-	_, admitted, err := tryPlacedLoftCylinderUnion(t.Context(), doc,
+	admitted, err := tryPlacedLoftCylinderUnion(t.Context(), doc,
 		blank.originProducer(), blank, other)
 	require.NoError(t, err)
 	require.False(t, admitted, "a prism pair must miss the cylinder/Loft path")

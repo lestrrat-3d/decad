@@ -184,31 +184,29 @@ type (
 // The faceted payload's source records and the support types they hold are
 // internal/facetedrecord types; these aliases keep the evaluator's local names.
 type (
-	crossCylinderBoreRecord      = facetedrecord.CrossCylinderBoreRecord
-	joinedMesh                   = facetedrecord.JoinedMesh
-	loftCylinderPlacement        = facetedrecord.LoftCylinderPlacement
-	loftFaceCapBounds            = facetedrecord.LoftFaceCapBounds
-	loftFacesCapRecord           = facetedrecord.LoftFacesCapRecord
-	loftFacesToeRecord           = facetedrecord.LoftFacesToeRecord
-	loftFacesTrimRecord          = facetedrecord.LoftFacesTrimRecord
-	loftMirrorCylinderBoreRecord = facetedrecord.LoftMirrorCylinderBoreRecord
-	loftMirrorJoinRecord         = facetedrecord.LoftMirrorJoinRecord
-	loftMirrorPlacementRecord    = facetedrecord.LoftMirrorPlacementRecord
-	obliqueBossRecord            = facetedrecord.ObliqueBossRecord
-	pointConeLimit               = facetedrecord.PointConeLimit
-	pointConeTrimRecord          = facetedrecord.PointConeTrimRecord
-	pointPlaneLimit              = facetedrecord.PointPlaneLimit
-	pointSectionRecord           = facetedrecord.PointSectionRecord
-	pointSectionSource           = facetedrecord.PointSectionSource
-	prismPatternJoinRecord       = facetedrecord.PrismPatternJoinRecord
-	prismPatternPart             = facetedrecord.PrismPatternPart
-	prismPatternSource           = facetedrecord.PrismPatternSource
-	prismUnionFilletRecord       = facetedrecord.PrismUnionFilletRecord
-	revolveLoftSectorPlacement   = facetedrecord.RevolveLoftSectorPlacement
-	revolveSectionCertificate    = facetedrecord.RevolveSectionCertificate
-	revolveSectionSpan           = facetedrecord.RevolveSectionSpan
-	spiralCombineSource          = facetedrecord.SpiralCombineSource
-	spiralFirstJoinSource        = facetedrecord.SpiralFirstJoinSource
+	crossCylinderBoreRecord    = facetedrecord.CrossCylinderBoreRecord
+	joinedMesh                 = facetedrecord.JoinedMesh
+	loftFaceCapBounds          = facetedrecord.LoftFaceCapBounds
+	loftFacesCapRecord         = facetedrecord.LoftFacesCapRecord
+	loftFacesToeRecord         = facetedrecord.LoftFacesToeRecord
+	loftFacesTrimRecord        = facetedrecord.LoftFacesTrimRecord
+	loftMirrorJoinRecord       = facetedrecord.LoftMirrorJoinRecord
+	loftMirrorPlacementRecord  = facetedrecord.LoftMirrorPlacementRecord
+	obliqueBossRecord          = facetedrecord.ObliqueBossRecord
+	pointConeLimit             = facetedrecord.PointConeLimit
+	pointConeTrimRecord        = facetedrecord.PointConeTrimRecord
+	pointPlaneLimit            = facetedrecord.PointPlaneLimit
+	pointSectionRecord         = facetedrecord.PointSectionRecord
+	pointSectionSource         = facetedrecord.PointSectionSource
+	prismPatternJoinRecord     = facetedrecord.PrismPatternJoinRecord
+	prismPatternPart           = facetedrecord.PrismPatternPart
+	prismPatternSource         = facetedrecord.PrismPatternSource
+	prismUnionFilletRecord     = facetedrecord.PrismUnionFilletRecord
+	revolveLoftSectorPlacement = facetedrecord.RevolveLoftSectorPlacement
+	revolveSectionCertificate  = facetedrecord.RevolveSectionCertificate
+	revolveSectionSpan         = facetedrecord.RevolveSectionSpan
+	spiralCombineSource        = facetedrecord.SpiralCombineSource
+	spiralFirstJoinSource      = facetedrecord.SpiralFirstJoinSource
 )
 
 type loopRecord = sectionrecord.LoopRecord
