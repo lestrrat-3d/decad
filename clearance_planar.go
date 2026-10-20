@@ -2,10 +2,8 @@ package decad
 
 import (
 	"context"
-	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/clearance/pairkernel"
-	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/pair"
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -124,7 +122,7 @@ func planarPairVerdict(ctx context.Context, a, b *Body) (pairkernel.Result, bool
 	undecided := pairkernel.Result{Diam: diam}
 	switch result.Relation {
 	case pair.Separated:
-		res, ok := planarDisjointResult(result.Gap, delta.Rat(), diam)
+		res, ok := pairkernel.DisjointResult(result.Gap, delta.Rat(), diam)
 		if !ok {
 			return undecided, true, nil
 		}
@@ -149,24 +147,4 @@ func planarPairVerdict(ctx context.Context, a, b *Body) (pairkernel.Result, bool
 	default:
 		return undecided, true, nil
 	}
-}
-
-// planarDisjointResult widens the held gap's enclosure by delta, in exact
-// rationals, and publishes the pair disjoint only where the widened lower
-// end stays positive after rounding down. exact holds only when the held
-// gap is a single float and delta is zero, so the interval is a point.
-func planarDisjointResult(gap *pair.ScalarReading, delta *big.Rat, diam float64) (pairkernel.Result, bool) {
-	if gap == nil {
-		return pairkernel.Result{}, false
-	}
-	value, bound := proofarith.FloatRat(gap.ValueMM), proofarith.FloatRat(gap.BoundMM)
-	loRat := new(big.Rat).Sub(value, bound)
-	loRat.Sub(loRat, delta)
-	hiRat := new(big.Rat).Add(value, bound)
-	hiRat.Add(hiRat, delta)
-	lo, hi := proofbound.RatFloatDown(loRat), proofbound.RatFloatUp(hiRat)
-	if !(lo > 0) || !measurement.FiniteValues(lo, hi) {
-		return pairkernel.Result{}, false
-	}
-	return pairkernel.Result{Verdict: reportvocab.PairDisjoint, Lo: lo, Hi: hi, Exact: lo == hi, Diam: diam}, true
 }
