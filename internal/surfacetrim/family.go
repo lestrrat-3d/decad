@@ -3,8 +3,8 @@
 // every payload shape, and Extend's free-end widening for both families
 // (docs/surface-intersection-design.md §2.1, §2.2, §3.2). The root keeps the
 // public entry points, the result builds and the commits. The revolve arm's
-// S2-S7 live in internal/revolveplan for Trim and Extend, and in root
-// surface_split_revolve.go for Split.
+// S2-S7 live in internal/revolveplan for Trim and Extend, and in
+// SplitRevolve for Split.
 package surfacetrim
 
 import (

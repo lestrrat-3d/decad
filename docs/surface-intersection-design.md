@@ -86,7 +86,7 @@ S1–S7, with §2.2's receiver rows, are what the gate checks before touching
 refusals of its own (§6). `internal/surfacetrim` holds the prism-family arm of
 the gate and S1's and S7's readings over all four payload shapes;
 `internal/revolveplan`'s `AdmitTrimPair` and `AdmitExtendPair` hold the revolve
-arm of `Trim` and `Extend`, and `surface_split_revolve.go` holds `Split`'s.
+arm of `Trim` and `Extend`, and `surfacetrim.SplitRevolve` holds `Split`'s.
 
 ### 2.2 The receiver, per operation
 
@@ -737,7 +737,7 @@ predicate, exactly as it must after a mesh boolean produces several lumps.
    increment 4, exactly as a profile-fed revolve sheet's does.
 5. **PR5 — `Split` over the revolve family** (landed).
    `revolvePayload.SectionDelta` reaches the Pappus volume, the centroid and
-   every other solid reading (§7.2). `surface_split_revolve.go` runs PR2's
+   every other solid reading (§7.2). `surfacetrim.SplitRevolve` runs PR2's
    `prismcells.SplitPieces` over the two meridian views, reruns the axis gates per piece
    (§2.2) and builds one `revolvePayload` per cell; the deterministic order is
    PR2's. Tests: T184–T186.

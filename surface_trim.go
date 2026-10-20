@@ -220,7 +220,13 @@ func Split(ctx context.Context, target, tool *Body) ([]*Body, error) {
 	// mixed pair falls through to surfacetrim.AdmitSplitPair, whose S1 names
 	// both generators.
 	if surfacetrim.RevolvePair(&target.n, &tool.n) {
-		return d.splitRevolve(ctx, budget, target, tool)
+		nodes, err := surfacetrim.SplitRevolve(ctx, budget, envOf(documentNode(d), d.nextProducerID()), &target.n, &tool.n)
+		if err != nil {
+			return nil, err
+		}
+		bodies := bodyHandles(nodes)
+		d.commitMany(bodies, target, tool)
+		return bodies, nil
 	}
 	rcv, tl, err := surfacetrim.AdmitSplitPair(budget, &target.n, &tool.n)
 	if err != nil {
