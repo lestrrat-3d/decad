@@ -1,4 +1,4 @@
-package decad
+package planarpose
 
 import (
 	"context"
@@ -7,17 +7,22 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/coilshell"
 	"github.com/lestrrat-3d/decad/internal/contactround"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	"github.com/lestrrat-3d/decad/internal/planarband"
 	"github.com/lestrrat-3d/decad/internal/planarsnapshot"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/selectorquery"
+	"github.com/lestrrat-3d/decad/internal/stitchrecord"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
+	"github.com/lestrrat-3d/decad/internal/verifiedmesh"
 	"github.com/lestrrat-3d/r3"
-	"github.com/lestrrat-3d/units"
 )
 
 // This file admits exact planar solids to the general pair relation of
@@ -29,37 +34,29 @@ import (
 // positive displacement δ is admitted too; internal/planarband applies
 // §10.4's band rule to the held relation.
 
-// planarHeldChord is the chord tolerance an all-planar held-mesh body is
+// heldMeshChord is the chord tolerance an all-planar held-mesh body is
 // tessellated at. Nothing on an all-planar body is chorded, so the value only
 // keys the body's tessellation cache.
-const planarHeldChord = 1.0
+const heldMeshChord = 1.0
 
-// heldChordOf is the chord, in millimetres, a held mesh with a curved face is
-// read at under req: the caller's HeldChord, zero when unset, which admits no
-// curved body (docs/multibody-dynamics-design.md §10.4). Every reader of the
-// chord goes through here, so the chord's source is chosen in one place.
-func heldChordOf(req reportvocab.ContactRequest) float64 {
-	return req.HeldChord.Base()
-}
-
-// classifyExactPlanarPair decides the pair through the exact planar kernel
+// ClassifyExactPair decides the pair through the exact planar kernel
 // when both bodies are admitted. It reports false, leaving report untouched,
 // when either body is not.
-func classifyExactPlanarPair(ctx context.Context, report *reportvocab.ContactReport) (bool, error) {
+func ClassifyExactPair(ctx context.Context, mesher verifiedmesh.Mesher, report *reportvocab.ContactReport) (bool, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	if err := budget.Err(); err != nil {
 		return false, err
 	}
-	chord := heldChordOf(report.Request)
-	a, deltaA, okA, err := planarSolidAtPose(ctx, budget, bodyHandle(report.A), report.PoseA, chord)
+	chord := report.Request.HeldChord.Base()
+	a, deltaA, okA, err := SolidAtPose(ctx, budget, mesher, report.A, report.PoseA, chord)
 	if err != nil || !okA {
 		return false, err
 	}
-	b, deltaB, okB, err := planarSolidAtPose(ctx, budget, bodyHandle(report.B), report.PoseB, chord)
+	b, deltaB, okB, err := SolidAtPose(ctx, budget, mesher, report.B, report.PoseB, chord)
 	if err != nil || !okB {
 		return false, err
 	}
-	hint := planarHintOf(report.A, report.B)
+	hint := hintOf(report.A, report.B)
 	result, err := planar.ClassifyPlanarHinted(&a, &b, hint, budget.Step)
 	if err != nil {
 		return false, err
@@ -67,39 +64,42 @@ func classifyExactPlanarPair(ctx context.Context, report *reportvocab.ContactRep
 	if result.Nearest != (planar.PlanarHint{}) && result.Nearest != hint {
 		report.A.PlanarHints.Store(report.B, result.Nearest)
 	}
-	if err := planarband.Publish(ctx, budget, report, result, &a, &b, deltaA, deltaB, heldChord(chord)); err != nil {
+	if err := planarband.Publish(ctx, budget, report, result, &a, &b, deltaA, deltaB, Convexity{Chord: chord, Mesher: mesher}); err != nil {
 		return false, err
 	}
 	return true, budget.Err()
 }
 
-// planarHintOf returns the nearest candidate pair the last exact planar
+// hintOf returns the nearest candidate pair the last exact planar
 // relation of a, as the first solid, against b found, or the zero hint. A
 // hint never changes a relation (planar.ClassifyPlanarHinted), so one left by a
 // pose far from this one, or by a snapshot at another chord, only costs time.
-func planarHintOf(a, b *topo.Body) planar.PlanarHint {
+func hintOf(a, b *topo.Body) planar.PlanarHint {
 	stored, _ := a.PlanarHints.Load(b)
 	hint, _ := stored.(planar.PlanarHint)
 	return hint
 }
 
-// heldChord is the chord, in millimetres, a held mesh with a curved face is
-// read at (heldChordOf). It reads §9.2 certificates for internal/planarband.
-type heldChord float64
+// Convexity reads §9.2 certificates for internal/planarband: Chord is the chord,
+// in millimetres, a held mesh with a curved face is read at, and Mesher
+// supplies the held mesh.
+type Convexity struct {
+	Chord  float64
+	Mesher verifiedmesh.Mesher
+}
 
 // Convex returns the body's cached §9.2 certificate, computing it at the
 // identity pose on first use. A canceled computation caches nothing. A
 // positive-displacement body's certificate is its held mesh's, read at the
 // chord when that mesh has a curved face. It stays in the root package
-// because its snapshot (planarSnapshotOf) dispatches on the root payload
+// because its snapshot (snapshotOf) dispatches on the root payload
 // types and tessellates the body.
-func (chord heldChord) Convex(ctx context.Context, budget *proofbound.WorkBudget, n *topo.Body) (bool, error) {
-	b := bodyHandle(n)
-	bits := math.Float64bits(float64(chord))
-	if entry := b.n.PlanarConvexity.Load(); entry != nil && (entry.ChordFree || entry.ChordBits == bits) {
+func (c Convexity) Convex(ctx context.Context, budget *proofbound.WorkBudget, b *topo.Body) (bool, error) {
+	bits := math.Float64bits(c.Chord)
+	if entry := b.PlanarConvexity.Load(); entry != nil && (entry.ChordFree || entry.ChordBits == bits) {
 		return entry.Convex, nil
 	}
-	snapshot, err := planarSnapshotOf(ctx, budget, b, float64(chord))
+	snapshot, err := snapshotOf(ctx, budget, c.Mesher, b, c.Chord)
 	if err != nil || !snapshot.OK {
 		return false, err
 	}
@@ -111,11 +111,11 @@ func (chord heldChord) Convex(ctx context.Context, budget *proofbound.WorkBudget
 	if err != nil {
 		return false, err
 	}
-	b.n.PlanarConvexity.Store(&planarsnapshot.ConvexityEntry{ChordBits: bits, ChordFree: snapshot.ChordFree, Convex: convex})
+	b.PlanarConvexity.Store(&planarsnapshot.ConvexityEntry{ChordBits: bits, ChordFree: snapshot.ChordFree, Convex: convex})
 	return convex, nil
 }
 
-// planarSolidAtPose builds the exact held boundary of an admitted planar
+// SolidAtPose builds the exact held boundary of an admitted planar
 // solid under a query pose (§9): a prism whose section is all whole LineSeg
 // edges with zero deltas, a zero-bound faceted Boolean, either directly or
 // through its saved exact mesh and a translation-only placement, or a closed
@@ -130,22 +130,22 @@ func (chord heldChord) Convex(ctx context.Context, budget *proofbound.WorkBudget
 // stitched solid, read off its triangle set with δ its largest vertex bound,
 // and every other solid payload without an exact contact family of its own,
 // read off its VerifyAll tessellation with δ that mesh's Bound
-// (planarHeldMeshSolid), a body with a curved face at chord. The
+// (heldMeshSolid), a body with a curved face at chord. The
 // returned displacement is δ at the query pose: the body-frame figure times
 // an upper bound on the pose's stretch (planarsnapshot.PoseScale). It is zero for an
 // exact body.
 //
 // The snapshot at the identity pose is built once per body and chord and
 // cached on the body with its triangles' combinatorial audit
-// (planarSnapshotOf); each call maps its vertices through the pose and audits
+// (snapshotOf); each call maps its vertices through the pose and audits
 // the coordinate half (placePlanarSnapshot), so the cache changes no outcome.
-func planarSolidAtPose(ctx context.Context, budget *proofbound.WorkBudget, b *Body,
+func SolidAtPose(ctx context.Context, budget *proofbound.WorkBudget, mesher verifiedmesh.Mesher, b *topo.Body,
 	pose r3.Transform, chord float64) (planar.PlanarSolid, proofarith.Dyadic, bool, error) {
 	none := proofarith.DyZero()
-	if b == nil || !b.n.Solid || b.n.Kind != topo.BodySolid || !planarsnapshot.PositiveAffine(pose) {
+	if b == nil || !b.Solid || b.Kind != topo.BodySolid || !planarsnapshot.PositiveAffine(pose) {
 		return planar.PlanarSolid{}, none, false, nil
 	}
-	snapshot, err := planarSnapshotOf(ctx, budget, b, chord)
+	snapshot, err := snapshotOf(ctx, budget, mesher, b, chord)
 	if err != nil || !snapshot.OK {
 		return planar.PlanarSolid{}, none, false, err
 	}
@@ -160,28 +160,28 @@ func planarSolidAtPose(ctx context.Context, budget *proofbound.WorkBudget, b *Bo
 	return solid, delta, true, nil
 }
 
-// planarSnapshotOf returns the body's exact snapshot at the identity query
+// snapshotOf returns the body's exact snapshot at the identity query
 // pose for chord, building and caching it on a miss. An error (cancellation,
 // an exhausted budget) caches nothing; a refusal is cached like a snapshot,
 // since it reads nothing but the body and the chord.
-func planarSnapshotOf(ctx context.Context, budget *proofbound.WorkBudget, b *Body, chord float64) (*planarsnapshot.SnapshotEntry, error) {
+func snapshotOf(ctx context.Context, budget *proofbound.WorkBudget, mesher verifiedmesh.Mesher, b *topo.Body, chord float64) (*planarsnapshot.SnapshotEntry, error) {
 	bits := math.Float64bits(chord)
-	if entry := b.n.PlanarSnapshot.Load(); entry != nil && entry.ServesChord(bits) {
+	if entry := b.PlanarSnapshot.Load(); entry != nil && entry.ServesChord(bits) {
 		return entry, nil
 	}
 	entry := &planarsnapshot.SnapshotEntry{ChordBits: bits, ChordFree: true, Delta: proofarith.DyZero()}
 	var err error
-	switch payload := b.n.Payload.(type) {
-	case prismPayload:
+	switch payload := b.Payload.(type) {
+	case prismrecord.Payload:
 		entry.Solid, entry.OK, err = planarband.PrismSolid(ctx, budget, payload, prismFaceIndex(b))
-	case facetedPayload:
+	case facetedrecord.Payload:
 		entry.Solid, entry.Delta, entry.OK, err = planarband.FacetedSolid(budget, payload)
-	case stitchPayload:
-		entry.Solid, entry.Delta, entry.OK, err = planarStitchSolid(budget, b, payload)
-	case coilPayload:
-		entry.Solid, entry.Delta, entry.OK, err = planarCoilSolid(ctx, budget, b, payload)
+	case stitchrecord.Payload:
+		entry.Solid, entry.Delta, entry.OK, err = stitchSolid(budget, b, payload)
+	case coilshell.Payload:
+		entry.Solid, entry.Delta, entry.OK, err = coilSolid(ctx, budget, b, payload)
 	default:
-		entry.Solid, entry.Delta, entry.OK, entry.ChordFree, err = planarHeldMeshSolid(ctx, budget, b, chord)
+		entry.Solid, entry.Delta, entry.OK, entry.ChordFree, err = heldMeshSolid(ctx, budget, mesher, b, chord)
 	}
 	if err != nil {
 		return nil, err
@@ -195,31 +195,31 @@ func planarSnapshotOf(ctx context.Context, budget *proofbound.WorkBudget, b *Bod
 	if !entry.OK {
 		entry.Solid, entry.Delta = planar.PlanarSolid{}, proofarith.DyZero()
 	}
-	b.n.PlanarSnapshot.Store(entry)
+	b.PlanarSnapshot.Store(entry)
 	return entry, nil
 }
 
 // prismFaceIndex maps a prism face's provenance role to its index in the
 // body's Faces order, the roles evalPrism gives its caps and side walls.
-func prismFaceIndex(b *Body) map[string]int {
-	faces := b.Faces()
+func prismFaceIndex(b *topo.Body) map[string]int {
+	faces := topobuild.Faces(b)
 	faceRoles := make([][]string, len(faces))
 	for i, face := range faces {
-		for _, origin := range face.Origins() {
+		for _, origin := range face.Origins {
 			faceRoles[i] = append(faceRoles[i], origin.Role)
 		}
 	}
 	return selectorquery.RoleIndex(faceRoles)
 }
 
-// planarStitchSolid reads a closed all-planar stitched solid off its own
+// stitchSolid reads a closed all-planar stitched solid off its own
 // audited triangle set (§9). Stitch records Tris, TriFaces and VertBound only
 // for an all-planar weld, and AuditClean only when the crossing audit ran and
 // passed, so a curved or mixed stitch (nil Tris) and a failed audit are not
-// admitted; planarSolidAtPose has already refused an open sheet, which is
+// admitted; SolidAtPose has already refused an open sheet, which is
 // not a solid. The vertices are the welded table's floats at the stitch's
 // placement, TriFaces names each triangle's live face, and a face missing
-// from b.Faces() leaves the snapshot's face map unset.
+// from topobuild.Faces(b) leaves the snapshot's face map unset.
 //
 // The displacement is the largest per-vertex weld bound, and at least the
 // placement rounding Delta. Each VertBound entry is the bound vertexForClass
@@ -228,7 +228,7 @@ func prismFaceIndex(b *Body) map[string]int {
 // no true boundary point lies farther than that bound from the held mesh. It
 // is zero for a weld built at the identity whose every class is zero-bound,
 // which is then an exact §9 body.
-func planarStitchSolid(budget *proofbound.WorkBudget, b *Body, sp stitchPayload) (planar.PlanarSolid, proofarith.Dyadic, bool, error) {
+func stitchSolid(budget *proofbound.WorkBudget, b *topo.Body, sp stitchrecord.Payload) (planar.PlanarSolid, proofarith.Dyadic, bool, error) {
 	none := proofarith.DyZero()
 	if !sp.AuditClean || len(sp.Tris) == 0 || len(sp.TriFaces) != len(sp.Tris) ||
 		len(sp.VertBound) != len(sp.Verts) || !measurement.FiniteValues(sp.Delta) || sp.Delta < 0 {
@@ -241,10 +241,10 @@ func planarStitchSolid(budget *proofbound.WorkBudget, b *Body, sp stitchPayload)
 		}
 		displacement = max(displacement, bound)
 	}
-	faces := b.Faces()
+	faces := topobuild.Faces(b)
 	faceAt := make(map[*topo.Face]int, len(faces))
 	for i, face := range faces {
-		faceAt[faceNode(face)] = i
+		faceAt[face] = i
 	}
 	faceOf := make([]int, len(sp.Tris))
 	for t, face := range sp.TriFaces {
@@ -262,32 +262,32 @@ func planarStitchSolid(budget *proofbound.WorkBudget, b *Body, sp stitchPayload)
 	return solid, proofarith.MustDyOf(displacement), true, nil
 }
 
-// planarCoilSolid reads a coil off its held shell (docs/helix-design.md Table
+// coilSolid reads a coil off its held shell (docs/helix-design.md Table
 // CD row CD5). The shell is a closed all-triangle restatement of the body
 // whose every vertex lies within its own β of the true boundary, so its
 // displacement is the payload's delta, the same bound its mesh publishes. The
 // restatement does not depend on a chord, so coilshell.Tessellate is asked at delta
 // itself, the finest tolerance it serves, and the snapshot serves every
 // chord. The wall's Faceted face is not planar, which is why this path does
-// not go through planarHeldMeshSolid: that arm refuses a curved body at the
+// not go through heldMeshSolid: that arm refuses a curved body at the
 // zero chord the planar arm reads.
-func planarCoilSolid(ctx context.Context, budget *proofbound.WorkBudget, b *Body,
-	cp coilPayload) (planar.PlanarSolid, proofarith.Dyadic, bool, error) {
+func coilSolid(ctx context.Context, budget *proofbound.WorkBudget, b *topo.Body,
+	cp coilshell.Payload) (planar.PlanarSolid, proofarith.Dyadic, bool, error) {
 	none := proofarith.DyZero()
 	if !measurement.FiniteValues(cp.Delta) || cp.Delta < 0 {
 		return planar.PlanarSolid{}, none, false, nil
 	}
-	mesh, err := coilshell.Tessellate(ctx, &b.n, cp, cp.Delta, false)
+	mesh, err := coilshell.Tessellate(ctx, b, cp, cp.Delta, false)
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return planar.PlanarSolid{}, none, false, ctxErr
 		}
 		return planar.PlanarSolid{}, none, false, nil
 	}
-	faces := b.Faces()
+	faces := topobuild.Faces(b)
 	faceAt := make(map[*topo.Face]int, len(faces))
 	for i, face := range faces {
-		faceAt[faceNode(face)] = i
+		faceAt[face] = i
 	}
 	faceOf := make([]int, len(mesh.Triangles))
 	for t, face := range mesh.Source {
@@ -304,39 +304,39 @@ func planarCoilSolid(ctx context.Context, budget *proofbound.WorkBudget, b *Body
 	return solid, proofarith.MustDyOf(cp.Delta), true, nil
 }
 
-// planarHeldMeshSolid reads a solid payload without an exact contact family
+// heldMeshSolid reads a solid payload without an exact contact family
 // of its own (a cap-loop chamfer, a cup, a loft, a sweep, a general revolve)
 // off its VerifyAll tessellation, the body's own held mesh at its placement,
 // and returns that mesh's Bound as its displacement δ, the two-sided
 // displacement between the mesh and the true boundary
 // (docs/multibody-dynamics-design.md §10.4). A body whose every face is
-// planar is read at planarHeldChord, which chords nothing, and its snapshot
+// planar is read at heldMeshChord, which chords nothing, and its snapshot
 // serves every chord (chordFree); a body with a curved face is read at chord,
 // and a zero chord admits none. A source sphere or cylinder keeps its exact
 // path and is not admitted here, nor is a body the tessellator refuses or
 // whose mesh names a face the body does not carry.
-func planarHeldMeshSolid(ctx context.Context, budget *proofbound.WorkBudget, b *Body,
+func heldMeshSolid(ctx context.Context, budget *proofbound.WorkBudget, mesher verifiedmesh.Mesher, b *topo.Body,
 	chord float64) (planar.PlanarSolid, proofarith.Dyadic, bool, bool, error) {
 	none := proofarith.DyZero()
-	if _, ok := contactround.SphereRecord(bodyNode(b)); ok {
+	if _, ok := contactround.SphereRecord(b); ok {
 		return planar.PlanarSolid{}, none, false, true, nil
 	}
-	if _, ok := contactround.CylinderAtPose(bodyNode(b), r3.Identity()); ok {
+	if _, ok := contactround.CylinderAtPose(b, r3.Identity()); ok {
 		return planar.PlanarSolid{}, none, false, true, nil
 	}
-	faces := b.Faces()
+	faces := topobuild.Faces(b)
 	faceAt := make(map[*topo.Face]int, len(faces))
-	tolerance, chordFree := planarHeldChord, true
+	tolerance, chordFree := heldMeshChord, true
 	for i, face := range faces {
-		if !face.isPlanar() {
+		if face.Surface.Kind() != surfacegeom.KindPlane && !face.HeldPlanar {
 			tolerance, chordFree = chord, false
 		}
-		faceAt[faceNode(face)] = i
+		faceAt[face] = i
 	}
 	if !chordFree && tolerance <= 0 {
 		return planar.PlanarSolid{}, none, false, false, nil
 	}
-	mesh, err := tessellateContext(ctx, b, units.Millimeters(tolerance), VerifyAll)
+	mesh, err := mesher.VerifyAll(ctx, b, tolerance)
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return planar.PlanarSolid{}, none, false, chordFree, ctxErr
@@ -346,21 +346,21 @@ func planarHeldMeshSolid(ctx context.Context, budget *proofbound.WorkBudget, b *
 		}
 		return planar.PlanarSolid{}, none, false, chordFree, nil
 	}
-	if !mesh.n.BoundaryOK || !measurement.FiniteValues(mesh.n.Bound) || mesh.n.Bound < 0 ||
-		len(mesh.n.Source) != len(mesh.n.Triangles) {
+	if !mesh.BoundaryOK || !measurement.FiniteValues(mesh.Bound) || mesh.Bound < 0 ||
+		len(mesh.Source) != len(mesh.Triangles) {
 		return planar.PlanarSolid{}, none, false, chordFree, nil
 	}
-	faceOf := make([]int, len(mesh.n.Triangles))
-	for t, face := range mesh.n.Source {
+	faceOf := make([]int, len(mesh.Triangles))
+	for t, face := range mesh.Source {
 		at, ok := faceAt[face]
 		if !ok {
 			return planar.PlanarSolid{}, none, false, chordFree, nil
 		}
 		faceOf[t] = at
 	}
-	solid, ok, err := planarsnapshot.HeldSolid(budget, mesh.n.Vertices, mesh.n.Triangles, faceOf)
+	solid, ok, err := planarsnapshot.HeldSolid(budget, mesh.Vertices, mesh.Triangles, faceOf)
 	if err != nil || !ok {
 		return planar.PlanarSolid{}, none, false, chordFree, err
 	}
-	return solid, proofarith.MustDyOf(mesh.n.Bound), true, chordFree, nil
+	return solid, proofarith.MustDyOf(mesh.Bound), true, chordFree, nil
 }

@@ -16,7 +16,7 @@ import (
 // (docs/helix-design.md Table CD row CD5) — each read off its own held
 // triangle set with that set's displacement, and it admits a prism or a
 // stitched solid only as their partner, read exactly off its own record
-// (contact_faceted_pair.go's planarPrismSolid and planarStitchSolid). A coil
+// (internal/planarpose/pose.go's planarPrismSolid and planarpose.stitchSolid). A coil
 // is served only against a prism or a stitched solid: a coil against a
 // mitred sweep, a faceted result or another coil stays undecided. A pair of
 // prisms or stitched solids keeps the analytic kernel's answer, and every

@@ -151,8 +151,8 @@ no carrier model for and the exact planar relation can read: a
 its own held triangle set with that set's displacement `δ`, against a prism,
 a stitched solid, or (a mitred sweep or a faceted result only) another of
 the two; a coil is served against a prism or a stitched solid alone, read exactly off its own record — the same
-admission `Document.ContactPair` uses (`planarSolidAtPose`,
-`contact_faceted_pair.go`; `docs/multibody-dynamics-design.md` §9.1, §10.4).
+admission `Document.ContactPair` uses (`planarpose.SolidAtPose`,
+`internal/planarpose/pose.go`; `docs/multibody-dynamics-design.md` §9.1, §10.4).
 Every predicate there is an exact sign over dyadic coordinates, and the band
 rule of §10.4 turns the held relation into the partition's: a held gap whose
 lower end clears the summed `δ` is `reportvocab.PairDisjoint` with the interval widened

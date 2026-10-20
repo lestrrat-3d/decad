@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/contactround"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/planarband"
+	"github.com/lestrrat-3d/decad/internal/planarpose"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -391,7 +392,7 @@ func classifyContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.Transf
 			}
 			return report, nil
 		}
-		planar, err := classifyExactPlanarPair(ctx, report)
+		planar, err := planarpose.ClassifyExactPair(ctx, verifyAllMesher{}, report)
 		if err != nil {
 			return nil, err
 		}
@@ -435,7 +436,7 @@ func classifyPlanarFallback(ctx context.Context, report *reportvocab.ContactRepo
 	}
 	trial := reportvocab.ContactReport{A: report.A, B: report.B, PoseA: report.PoseA, PoseB: report.PoseB,
 		Request: report.Request}
-	planar, err := classifyExactPlanarPair(ctx, &trial)
+	planar, err := planarpose.ClassifyExactPair(ctx, verifyAllMesher{}, &trial)
 	if err != nil {
 		return err
 	}
@@ -459,7 +460,7 @@ func classifyPlanarManifold(ctx context.Context, report *reportvocab.ContactRepo
 	}
 	trial := reportvocab.ContactReport{A: report.A, B: report.B, PoseA: report.PoseA, PoseB: report.PoseB,
 		Request: report.Request}
-	planar, err := classifyExactPlanarPair(ctx, &trial)
+	planar, err := planarpose.ClassifyExactPair(ctx, verifyAllMesher{}, &trial)
 	if err != nil {
 		return err
 	}
@@ -501,7 +502,7 @@ func classifyPlanarSupportBand(ctx context.Context, report *reportvocab.ContactR
 	}
 	trial := reportvocab.ContactReport{A: report.A, B: report.B, PoseA: report.PoseA, PoseB: report.PoseB,
 		Request: report.Request}
-	planar, err := classifyExactPlanarPair(ctx, &trial)
+	planar, err := planarpose.ClassifyExactPair(ctx, verifyAllMesher{}, &trial)
 	if err != nil {
 		return err
 	}

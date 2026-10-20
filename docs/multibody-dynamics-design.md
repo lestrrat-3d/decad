@@ -1139,7 +1139,7 @@ rounding `delta` already added), and at least `delta`: zero for a weld built at 
 class is zero-bound, which is then a §9
 body, and positive for a placed or certificate-welded stitch, which is a §10.4 held mesh with that δ. The
 scene's tetrahedron is the former: four patches on the `XY`, `XZ`, slanted and diagonal planes, welded at
-the identity, every vertex bound zero, every face planar (`contact_faceted_pair.go`, §13 PR 14b).
+the identity, every vertex bound zero, every face planar (`internal/planarpose/pose.go`, §13 PR 14b).
 
 ### 9.1 Relation for two exact planar bodies
 
@@ -1148,7 +1148,7 @@ sets, prefiltered by per-triangle boxes as `meshBoolean` does and charged to the
 with `ctx` polled every `workPollInterval` operations. The split follows the one `internal/contactbox/box.go` and
 `internal/pair/box/axis_box.go` already make: `internal/pair/planar/planar.go` takes the two exact vertex and
 triangle snapshots and returns the relation, gap and feature pairs over `proof.Dyadic`; the root
-`contact_faceted_pair.go` admits the bodies and builds the snapshots at the query poses, and
+`internal/planarpose/pose.go` admits the bodies and builds the snapshots at the query poses, and
 `internal/planarband` maps feature indices back to the bodies' faces and publishes the report. A prism's caps reuse the
 tessellator's cap triangulation of its recorded section, accepted only after an exact check that every
 cap triangle is counterclockwise; with the closed-mesh audit, that proves the triangles tile the section
@@ -2473,7 +2473,7 @@ lines below do not repeat it.
 ### PR 10 (Phase 2) — exact planar pair relation and convexity
 
 - Delivers §9.1 and §9.2.
-- Files: new `internal/pair/planar/planar.go` and `contact_faceted_pair.go`; `contact_pair.go`.
+- Files: new `internal/pair/planar/planar.go` and `internal/planarpose/pose.go`; `contact_pair.go`.
 - Test (`apitest`): `apitest/contact_faceted_pair_test.go`, with the snapshot-level cases in
   `internal/pair/planar/planar_test.go`: a hexagonal prism at a `37°` pose against a tray reads a
   `3 mm` gap enclosed, a vertex touch and a shallow crossing; a small box nested in a hollow Boolean's
@@ -2485,7 +2485,7 @@ lines below do not repeat it.
 
 - Delivers §9.3, §9.4 and the shallow-penetration patch.
 - Files: new `internal/pair/planar/planar_patch.go`, `internal/pair/planar/planar_manifold.go`,
-  `contact_faceted_pair.go`.
+  `internal/planarpose/pose.go`.
 - Test (`apitest`): `apitest/contact_faceted_manifold_test.go`: a rotated box on a face publishes one point at a
   vertex touch, two at an edge touch, and the clipped hexagon's seven extremal vertices at a face
   touch, each at its exact coordinate; §9.4's parity, wall, reversed-loop, hole and
@@ -2544,7 +2544,7 @@ lines below do not repeat it.
 
 - Delivers §10.5: `ContactRequest.SupportBand`, the support-set manifold of `ContactPair`, the band track over
   the support set, the exact pair's band start and departure, and the flat rest of a tipped box.
-- Files: `contact_pair.go`, `contact_faceted_pair.go`,
+- Files: `contact_pair.go`, `internal/planarpose/pose.go`,
   `internal/pair/planar/planar_manifold.go`, `contact_sweep.go`, `contact_sweep_planar.go`,
   `contact_sweep_rotation.go`, `dynamics/world.go`, `dynamics/schedule_event.go`.
 - Test (`apitest`): new `apitest/contact_support_band_test.go`, over the `8 mm` cube on a floor turned about `Y` by
@@ -2586,11 +2586,11 @@ lines below do not repeat it.
 
 ### PR 14b (Phase 2) — stitched planar solids in the exact pair
 
-- Delivers §9's admission of a closed all-planar stitched solid: `planarSolidAtPose` reads
+- Delivers §9's admission of a closed all-planar stitched solid: `planarpose.SolidAtPose` reads
   `stitchPayload.Tris`, `Verts` and `TriFaces` (the face map through `Body.Faces()`), refuses a nil
   triangle set, an open sheet or a failed crossing audit, and returns the largest `VertBound`, at least
   `delta`, as the displacement, zero for the scene's tetrahedron.
-- Files: `contact_faceted_pair.go`; `docs/collision-v1-support.md`.
+- Files: `internal/planarpose/pose.go`; `docs/collision-v1-support.md`.
 - Test (`apitest`): `apitest/contact_faceted_pair_test.go` gains `TestExactPlanarPairAdmitsStitchedSolid`: the §2
   tetrahedron (four patches welded at the identity) `5 mm` above a source-box floor reads
   `Separated` with `Gap` exactly `5 mm`; resting on its `XY` face it reads `Touching`, and the pair's
@@ -2645,7 +2645,7 @@ lines below do not repeat it.
   `PlanarFacePenetration` publishes the patch through one face, and `internal/planarband`'s `publishManifold` runs it
   when §9.3's convex-convex path publishes nothing.
 - Files: `internal/pair/planar/planar.go`, new `internal/pair/planar/planar_face_penetration.go`,
-  `contact_faceted_pair.go`; `docs/collision-v1-support.md`.
+  `internal/planarpose/pose.go`; `docs/collision-v1-support.md`.
 - Test (`apitest`): `apitest/contact_faceted_manifold_test.go` gains, each in both body orders, over the §2 tray:
   `TestPlanarManifoldCornerThroughTrayFloor`, the `8 mm` cube turned `30°` about `(1, −1, 0)` and sunk so
   one corner stands exactly `2⁻²⁰ mm` below the floor, publishing one point whose `OnB` is the corner's
@@ -2803,7 +2803,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 ### PR 18 (Phase 3) — `ContactBand` for positive-displacement bodies
 
 - Delivers §10.4.
-- Files: `contact_faceted_pair.go`, `contact_sweep_planar.go`, `contact_sweep_rotation.go`,
+- Files: `internal/planarpose/pose.go`, `contact_sweep_planar.go`, `contact_sweep_rotation.go`,
   `contact_sweep_replay.go`, `dynamics/schedule.go`, `dynamics/schedule_band.go`,
   `dynamics/schedule_event.go`, `dynamics/island.go`.
 - Test (`apitest`): `apitest/contact_band_test.go` and `contact_band_internal_test.go`: the band, its charges and
@@ -2867,11 +2867,11 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 ### PR 20b (Phase 3) — `HeldChord` and the held-mesh admission of every solid payload
 
 - Delivers §10.4's admission: `ContactRequest.HeldChord` with `SupportBand`'s validation at both entry
-  points and in `validateStepConfig`; `planarSolidAtPose`'s default arm reads any solid payload without
+  points and in `validateStepConfig`; `planarpose.SolidAtPose`'s default arm reads any solid payload without
   an exact contact family off its `VerifyAll` tessellation (all-planar at `1 mm`, a curved face at
   `HeldChord`, a zero chord refusing it), `δ` the mesh's `Bound`, the face map from the mesh's source
   faces; the snapshot cached per body and chord beside the §9.2 certificate.
-- Files: `contact_faceted_pair.go`, `contact_pair.go`, `contact_sweep.go`, `dynamics/world.go`.
+- Files: `internal/planarpose/pose.go`, `contact_pair.go`, `contact_sweep.go`, `dynamics/world.go`.
 - Test (`apitest`): `apitest/contact_band_test.go` gains `TestHeldMeshAdmitsEveryPayload`: the §2 bottle `5 mm` above a
   source-box floor at `HeldChord = 0.03 mm` reads `Separated` with `5 mm` inside its gap interval and a
   bound at least the `Bound()` of `Tessellate` at that chord and at most `0.05 mm`; at a zero chord it is
@@ -2884,8 +2884,8 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   in 512-bit arithmetic as `apitest/contact_analytic_manifold_test.go` evaluates a cylinder, lies below the held
   bottom by more than that gap. `.github/test-shards-apitest.txt` lists it.
 - Depends on: PR 18; PR 20a for the scene's sweep only.
-- Shipped. Every reader of the chord goes through `heldChordOf` (`contact_faceted_pair.go`). The
-  snapshot at the identity pose is cached on the body (`planarSnapshotOf`, `topology.go`), keyed by the
+- Shipped. Every reader of the chord goes through `ContactRequest.HeldChord` (`internal/planarpose/pose.go`). The
+  snapshot at the identity pose is cached on the body (`planarpose.snapshotOf`, `topology.go`), keyed by the
   chord only for a curved held mesh, and the §9.2 certificate shares that key; each query still maps the
   snapshot through its pose and audits it. `TestHeldMeshAdmitsEveryPayload` also reads the bottle at a
   coarser chord between two fine ones (leg shown to fail: the chord key deleted, the coarse query
@@ -2899,7 +2899,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   host's planes alone, charges `g + δ` on the gap, `δ` on each lifted point's `Separation` and each body's
   `δ` on its own witness ball; a held overlap deeper than `δ` publishes §9.3's convex-convex manifold or
   §9.6's face-local one, read over `M`'s held vertices grown by `M`'s `δ`, charged the same way.
-- Files: `contact_faceted_pair.go`, `internal/pair/planar/planar_face_penetration.go`.
+- Files: `internal/planarpose/pose.go`, `internal/pair/planar/planar_face_penetration.go`.
 - Test (`apitest`): `apitest/contact_band_test.go` gains, each in both body orders over the §2 tray: the `2.1 mm`
   chamfered block turned about `Y` by `sin θ = 2⁻²⁴` and lifted `2⁻³⁰ mm` at `SupportBand = 2⁻²⁰ mm`,
   `ContactBand` with `Gap.Bound` the lowest corner's height plus `δ`, four points whose `M` balls and
@@ -2948,7 +2948,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 
 - Delivers §10.5's hull rule: `PlanarSupportSets` reads every guest, and a `Touching` non-convex guest whose
   §9.1 contacts all lie on one support plane publishes that plane's contact set then its lifted set.
-- Files: `contact_faceted_pair.go`, `internal/pair/planar/planar_manifold.go`.
+- Files: `internal/planarpose/pose.go`, `internal/pair/planar/planar_manifold.go`.
 - Test (`apitest`): `apitest/contact_faceted_manifold_test.go` gains, in both orders over the §2 tray: the §2 cup on the
   floor at a translation pose, `Touching` with its four bottom corners at their exact coordinates,
   `Normal` `(0, 0, 1)` and the cup's live vertices as features; the cup turned about `Y` by

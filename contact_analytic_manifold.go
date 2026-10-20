@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/contactround"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
+	"github.com/lestrrat-3d/decad/internal/planarpose"
 	"github.com/lestrrat-3d/decad/internal/planarsnapshot"
 	"github.com/lestrrat-3d/decad/internal/planarsweep"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
@@ -327,7 +328,7 @@ func classifyPlacedRuling(ctx context.Context, report *reportvocab.ContactReport
 		return false, nil
 	}
 	budget := proofbound.NewWorkBudget(ctx)
-	solid, delta, ok, err := planarSolidAtPose(ctx, budget, bodyS, poseS, heldChordOf(report.Request))
+	solid, delta, ok, err := planarpose.SolidAtPose(ctx, budget, verifyAllMesher{}, bodyNode(bodyS), poseS, report.Request.HeldChord.Base())
 	if err != nil || !ok || delta.Sign() != 0 {
 		return false, err
 	}

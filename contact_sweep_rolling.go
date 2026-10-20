@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/contactround"
+	"github.com/lestrrat-3d/decad/internal/planarpose"
 	"github.com/lestrrat-3d/decad/internal/planarsweep"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -58,7 +59,7 @@ func (d *Document) sweepRollingPair(ctx context.Context, a, b *Body,
 	if pathM.Drift == nil || pathM.Screw != nil || pathS.Drift != nil || pathS.Screw != nil {
 		return nil, false, nil
 	}
-	solid, delta, ok, err := planarSolidAtPose(ctx, proofbound.NewWorkBudget(ctx), bodyS, r3.Identity(), heldChordOf(req.ContactRequest))
+	solid, delta, ok, err := planarpose.SolidAtPose(ctx, proofbound.NewWorkBudget(ctx), verifyAllMesher{}, bodyNode(bodyS), r3.Identity(), req.HeldChord.Base())
 	if err != nil {
 		return nil, true, err
 	}

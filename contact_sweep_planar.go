@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	"github.com/lestrrat-3d/decad/internal/planarband"
+	"github.com/lestrrat-3d/decad/internal/planarpose"
 	"github.com/lestrrat-3d/decad/internal/planarsnapshot"
 	"github.com/lestrrat-3d/decad/internal/planarsweep"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -36,12 +37,12 @@ func (d *Document) sweepPlanarPair(ctx context.Context, a, b *Body,
 	pa, pb affinePairPath, req reportvocab.SweepRequest, resolution *big.Rat,
 	report *SweepReport) (*SweepReport, bool, error) {
 	budget := proofbound.NewWorkBudget(ctx)
-	chord := heldChordOf(req.ContactRequest)
-	solidA, deltaA, okA, err := planarSolidAtPose(ctx, budget, a, r3.Identity(), chord)
+	chord := req.HeldChord.Base()
+	solidA, deltaA, okA, err := planarpose.SolidAtPose(ctx, budget, verifyAllMesher{}, bodyNode(a), r3.Identity(), chord)
 	if err != nil {
 		return nil, true, err
 	}
-	solidB, deltaB, okB, err := planarSolidAtPose(ctx, budget, b, r3.Identity(), chord)
+	solidB, deltaB, okB, err := planarpose.SolidAtPose(ctx, budget, verifyAllMesher{}, bodyNode(b), r3.Identity(), chord)
 	if err != nil {
 		return nil, true, err
 	}
