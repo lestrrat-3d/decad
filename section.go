@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/contactround"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/sectionclip"
 	"github.com/lestrrat-3d/decad/internal/stackedunion"
@@ -61,7 +62,7 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 		return sectionclip.ReconstructExactSection(ctx, profile, plane)
 	}
 	if rp, ok := b.n.Payload.(revolvePayload); ok {
-		sphere, authenticated := sourceSphereAtPose(b, r3.Identity())
+		sphere, authenticated := contactround.SphereAtPose(bodyNode(b), r3.Identity())
 		var (
 			profile  profileRecord
 			polygon  []planePoint
@@ -69,7 +70,7 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 			admitted bool
 		)
 		if authenticated {
-			profile, polygon, delta, admitted = sectionclip.CardinalSphereSection(sphere.center, sphere.radius, plane)
+			profile, polygon, delta, admitted = sectionclip.CardinalSphereSection(sphere.Center, sphere.Radius, plane)
 		}
 		if !admitted {
 			faces := b.Faces()
@@ -90,7 +91,7 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 		}
 		if !admitted {
 			if authenticated {
-				polygon, delta, admitted = sectionclip.ObliqueSpherePolygon(sphere.center, sphere.radius, plane)
+				polygon, delta, admitted = sectionclip.ObliqueSpherePolygon(sphere.Center, sphere.Radius, plane)
 			}
 		}
 		if !admitted {

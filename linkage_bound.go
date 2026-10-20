@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/contactround"
 	"github.com/lestrrat-3d/decad/internal/linkagebound"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
@@ -290,17 +291,17 @@ func bodySymmetryAxis(b *Body) (point, dir motionbound.RatVec, ok bool) {
 		}
 		return toRat(anchor), d, true
 	}
-	cylinder, isCylinder := sourceCylinderAtPose(b, r3.Identity())
+	cylinder, isCylinder := contactround.CylinderAtPose(bodyNode(b), r3.Identity())
 	if !isCylinder {
 		return motionbound.RatVec{}, motionbound.RatVec{}, false
 	}
 	half := big.NewRat(1, 2)
 	for i := range 3 {
-		point[i] = new(big.Rat).Add(cylinder.box.Lo[i].Rat(), cylinder.box.Hi[i].Rat())
+		point[i] = new(big.Rat).Add(cylinder.Box.Lo[i].Rat(), cylinder.Box.Hi[i].Rat())
 		point[i].Mul(point[i], half)
 		dir[i] = new(big.Rat)
 	}
-	dir[cylinder.axis].SetInt64(1)
+	dir[cylinder.Axis].SetInt64(1)
 	return point, dir, true
 }
 

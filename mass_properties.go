@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/contactround"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -85,17 +86,17 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 	if b.n.Payload == nil {
 		return MassProperties{}, fmt.Errorf("%w: body has no evaluator payload", ErrUnsupported)
 	}
-	if sphere, ok := sourceSphereRecord(b); ok {
+	if sphere, ok := contactround.SphereRecord(bodyNode(b)); ok {
 		if err := ctx.Err(); err != nil {
 			return MassProperties{}, err
 		}
-		return massPropertiesFromReadings(massmoment.SourceSphere(ctx, sphere.radius, b.n.Centroid, density))
+		return massPropertiesFromReadings(massmoment.SourceSphere(ctx, sphere.Radius, b.n.Centroid, density))
 	}
-	if cylinder, ok := sourceRevolvedCylinderAtPose(b, r3.Identity()); ok {
+	if cylinder, ok := contactround.RevolvedCylinderAtPose(bodyNode(b), r3.Identity()); ok {
 		if err := ctx.Err(); err != nil {
 			return MassProperties{}, err
 		}
-		return massPropertiesFromReadings(massmoment.SourceCylinder(ctx, cylinder.axis, cylinder.box.Lo, cylinder.box.Hi,
+		return massPropertiesFromReadings(massmoment.SourceCylinder(ctx, cylinder.Axis, cylinder.Box.Lo, cylinder.Box.Hi,
 			b.n.Centroid, density))
 	}
 	if revolve, ok := b.n.Payload.(revolvePayload); ok {

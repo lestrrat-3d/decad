@@ -211,7 +211,7 @@ does with a retained tag; the audit in §7 keeps the table complete.
 | `mirror.go` `resolveMirrorFace` | `Plane` | mirrors across a retained `Plane` with `NormalBound == 0`; a placed body's tag is a float image and keeps refusing |
 | `Face.isPlanar` | `Plane` or `HeldPlanar` | unchanged; both stay true |
 | `contact_faceted_floor.go` `sourceFacetedAxisSupport` | `HeldPlanar && Kind == Faceted` | **must change.** The predicate drops every retained plane from the support proof. It becomes `HeldPlanar && face is held geometry`, where a new `topo.Face.RetainedTag` flag marks a tag on a faceted payload (§5) |
-| `internal/contactbox/`, `contact_analytic_manifold.go`, `contact_sphere.go` | `Surface.(Plane/Cylinder/Sphere)` | gated by payload class (`prismPayload`, source cylinder) before they read a face; a faceted payload never reaches them. §7 pins this |
+| `internal/contactbox/`, `internal/contactround/`, `contact_analytic_manifold.go` | `Surface.(Plane/Cylinder/Sphere)` | gated by payload class (`prismPayload`, source cylinder) before they read a face; a faceted payload never reaches them. §7 pins this |
 | `internal/clearance/stitch_carriers.go`, `internal/stackedrecord/mesh.go` | `Plane` | gated by `stitchPayload` / `stackedPrismPayload`; unreachable from a faceted payload |
 | `export/step_analytic.go` `supportsAnalyticSTEP` | `Plane`/`Cylinder` plus each loop's edge curves | a retained face's edges are `FacetedCurve`, which the loop check refuses, so the whole body takes the faceted writer as now |
 | `section.go` cardinal cone section | two faces, one `Cone`, one `Plane` | also requires the revolve payload record; a faceted payload never matches |

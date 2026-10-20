@@ -297,3 +297,5 @@
 10	0.00	TestThickenAdmissionGates
 10	0.00	TestOffsetAdmissionGates
 10	0.00	TestContactBoxAdmissionGates
+10	0.00	TestContactSphereAdmissionGates
+10	0.00	TestContactCylinderAdmissionGates

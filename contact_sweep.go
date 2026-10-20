@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/contactbox"
+	"github.com/lestrrat-3d/decad/internal/contactround"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/planarsweep"
@@ -188,10 +189,10 @@ type SweepContactTrack struct {
 	a, b          contactbox.SourceBox
 	deltaA        [3]proofarith.Dyadic
 	deltaB        [3]proofarith.Dyadic
-	sphere        *sourceSphereContactProof
-	spherePair    *[2]sourceSphereContactProof
+	sphere        *contactround.SphereProof
+	spherePair    *[2]contactround.SphereProof
 	sphereFirst   bool
-	cylinder      *sourceCylinderContactProof // disk-on-face track (contact_cylinder_sweep.go)
+	cylinder      *contactround.CylinderProof // disk-on-face track (contact_cylinder_sweep.go)
 	cylinderFirst bool
 	start, end    *big.Rat
 	duration      *big.Rat
@@ -325,26 +326,26 @@ func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, 
 		if t.sphereFirst {
 			sphereDelta, boxDelta, box = t.deltaA, t.deltaB, t.b
 		}
-		sphere, okSphere := translatedSphere(*t.sphere, sphereDelta, f)
+		sphere, okSphere := contactround.TranslatedSphere(*t.sphere, sphereDelta, f)
 		box, okBox := translatedContactBox(box, boxDelta, f)
 		if !okSphere || !okBox {
 			return nil, fmt.Errorf("%w: contact-track fraction cannot be represented", ErrUnsupported)
 		}
 		report := &reportvocab.ContactReport{Request: t.request}
-		classifySourceSphereBox(report, sphere, box, t.sphereFirst)
+		contactround.ClassifySphereBox(report, sphere, box, t.sphereFirst)
 		if report.Relation != reportvocab.ContactTouching || report.Manifold == nil {
 			return nil, fmt.Errorf("%w: contact track has no bounded sphere point", ErrUnsupported)
 		}
 		return contactManifoldFromInternal(report.Manifold), nil
 	}
 	if t.spherePair != nil {
-		a, okA := translatedSphere(t.spherePair[0], t.deltaA, f)
-		b, okB := translatedSphere(t.spherePair[1], t.deltaB, f)
+		a, okA := contactround.TranslatedSphere(t.spherePair[0], t.deltaA, f)
+		b, okB := contactround.TranslatedSphere(t.spherePair[1], t.deltaB, f)
 		if !okA || !okB {
 			return nil, fmt.Errorf("%w: sphere-pair contact-track fraction cannot be represented", ErrUnsupported)
 		}
 		report := &reportvocab.ContactReport{Request: t.request}
-		classifySourceSpherePair(report, a, b)
+		contactround.ClassifySpherePair(report, a, b)
 		if report.Relation != reportvocab.ContactTouching || report.Manifold == nil ||
 			len(report.Manifold.Points) != 1 ||
 			report.Manifold.Points[0].FeatureA != t.features[0] ||
@@ -544,10 +545,10 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 			}
 		}
 		if !okA && !okB {
-			sphereA, sphereOKA := sourceSphereAtPose(a, pa.From)
-			sphereB, sphereOKB := sourceSphereAtPose(b, pb.From)
+			sphereA, sphereOKA := contactround.SphereAtPose(bodyNode(a), pa.From)
+			sphereB, sphereOKB := contactround.SphereAtPose(bodyNode(b), pb.From)
 			if sphereOKA && sphereOKB {
-				pair := [2]sourceSphereContactProof{sphereA, sphereB}
+				pair := [2]contactround.SphereProof{sphereA, sphereB}
 				report.replay = &sweepReplayProof{pa: pa, pb: pb, spherePair: &pair,
 					request: request.ContactRequest}
 				return (&sourceSpherePairSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
@@ -555,30 +556,30 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 			}
 		}
 		if okA && !okB {
-			if sphere, ok := sourceSphereAtPose(b, pb.From); ok {
+			if sphere, ok := contactround.SphereAtPose(bodyNode(b), pb.From); ok {
 				return (&sourceSphereSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
 					req: request, report: report, sphere: sphere, box: boxA}).execute(ctx, resolution)
 			}
-			if cylinder, ok := sourceCylinderAtPose(b, pb.From); ok {
+			if cylinder, ok := contactround.CylinderAtPose(bodyNode(b), pb.From); ok {
 				return d.sourceCylinderFaceSweep(ctx, a, b, pa, pb, request, report, cylinder, boxA, false)
 			}
 		}
 		if okB && !okA {
-			if sphere, ok := sourceSphereAtPose(a, pa.From); ok {
+			if sphere, ok := contactround.SphereAtPose(bodyNode(a), pa.From); ok {
 				return (&sourceSphereSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
 					req: request, report: report, sphere: sphere, box: boxB, sphereFirst: true}).execute(ctx, resolution)
 			}
-			if cylinder, ok := sourceCylinderAtPose(a, pa.From); ok {
+			if cylinder, ok := contactround.CylinderAtPose(bodyNode(a), pa.From); ok {
 				return d.sourceCylinderFaceSweep(ctx, a, b, pa, pb, request, report, cylinder, boxB, true)
 			}
 		}
-		if sphere, sphereOK := sourceSphereAtPose(a, pa.From); sphereOK {
+		if sphere, sphereOK := contactround.SphereAtPose(bodyNode(a), pa.From); sphereOK {
 			if box, boxOK := contactbox.SourceOrientedBoxAtPose(bodyNode(b), pb.From); boxOK {
 				return (&orientedSphereSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
 					req: request, report: report, sphere: sphere, box: box, sphereFirst: true}).execute(ctx, resolution)
 			}
 		}
-		if sphere, sphereOK := sourceSphereAtPose(b, pb.From); sphereOK {
+		if sphere, sphereOK := contactround.SphereAtPose(bodyNode(b), pb.From); sphereOK {
 			if box, boxOK := contactbox.SourceOrientedBoxAtPose(bodyNode(a), pa.From); boxOK {
 				return (&orientedSphereSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
 					req: request, report: report, sphere: sphere, box: box}).execute(ctx, resolution)

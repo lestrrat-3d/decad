@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/coilshell"
+	"github.com/lestrrat-3d/decad/internal/contactround"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	"github.com/lestrrat-3d/decad/internal/planarband"
@@ -317,10 +318,10 @@ func planarCoilSolid(ctx context.Context, budget *proofbound.WorkBudget, b *Body
 func planarHeldMeshSolid(ctx context.Context, budget *proofbound.WorkBudget, b *Body,
 	chord float64) (planar.PlanarSolid, proofarith.Dyadic, bool, bool, error) {
 	none := proofarith.DyZero()
-	if _, ok := sourceSphereRecord(b); ok {
+	if _, ok := contactround.SphereRecord(bodyNode(b)); ok {
 		return planar.PlanarSolid{}, none, false, true, nil
 	}
-	if _, ok := sourceCylinderAtPose(b, r3.Identity()); ok {
+	if _, ok := contactround.CylinderAtPose(bodyNode(b), r3.Identity()); ok {
 		return planar.PlanarSolid{}, none, false, true, nil
 	}
 	faces := b.Faces()
