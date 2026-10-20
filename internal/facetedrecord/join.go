@@ -95,3 +95,15 @@ type PrismPatternJoinRecord struct {
 // may be retired, so every use authenticates the selected result edge and
 // works through booleanBody without committing an intermediate body.
 type PrismUnionFilletRecord struct{ First, Second *topo.Body }
+
+// RecognizePrismUnionFillet records a Union of two prism bodies, the only class
+// the joined-prism fillet reads, and returns nil for any other pair.
+func RecognizePrismUnionFillet(a, b *topo.Body) *PrismUnionFilletRecord {
+	if _, ok := a.Payload.(prismrecord.Payload); !ok {
+		return nil
+	}
+	if _, ok := b.Payload.(prismrecord.Payload); !ok {
+		return nil
+	}
+	return &PrismUnionFilletRecord{First: a, Second: b}
+}
