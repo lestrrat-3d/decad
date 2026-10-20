@@ -11,10 +11,8 @@ import (
 	"github.com/lestrrat-3d/decad/internal/modifyoption"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
-	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedshell"
 	"github.com/lestrrat-3d/decad/internal/sweeprecord"
-	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -224,7 +222,7 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value, opts .
 				return commitModifyResult(ctx, b, bodyHandle(n))
 			}
 		}
-		return nil, refuseClosedShell(b.n.Payload)
+		return nil, stackedshell.RefuseClosed(b.n.Payload)
 	}
 	// Reject foreign implementations before invoking their callback.
 	switch {
@@ -317,80 +315,16 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value, opts .
 	if bothCaps {
 		in.KeptCaps = 0
 	}
-	offsetBudget := proofbound.NewWorkBudget(ctx)
-	if err := offsetBudget.Err(); err != nil {
-		return nil, err
-	}
-	// Stages 3 and 4 (§4/§5): S18 and S10, the cavity's section and floor
-	// limits (inward only), S11a as the offset is built, then the offset
-	// section's audit.
-	offset, err := in.OffsetSection(offsetBudget)
+	capShell, err := cupwall.PlanCapShell(ctx, in, removedEnd)
 	if err != nil {
 		return nil, err
 	}
-
 	env := envOf(documentNode(d), d.nextProducerID())
-	var body *Body
-	if bothCaps && len(pp.Profile.Holes) == 0 {
-		body, err = bodyResult(prismshell.BuildTube(ctx, env, in, offset))
-	} else {
-		offsetDelta, derr := in.SectionDelta(offsetBudget)
-		if derr != nil {
-			return nil, derr
-		}
-		if bothCaps {
-			// B4 / reach BX8: one band around the outer loop plus one band
-			// lining each hole.
-			body, err = bodyResult(prismshell.BuildBands(ctx, env, in, offset, offsetDelta))
-		} else {
-			// A one-cap shell is a cup (B5/B6), for any k ≥ 0: the offset
-			// section's loops are proven simple and correctly nested by the §5
-			// audit, and the cup wraps a wall band around each post, all
-			// hanging off the one floor slab (one lump). It records the offset
-			// section's displacement beside it (§9). internal/cupwall imports
-			// internal/prismshell, so the cup is built here.
-			cup, perr := cupwall.ViewFor(pp, offset, s, tmm, tDelta, offsetDelta, removedEnd).Payload(ctx)
-			if perr != nil {
-				return nil, perr
-			}
-			body, err = bodyResult(cupwall.Build(ctx, env, cup))
-		}
-	}
+	body, err := bodyResult(capShell.Build(ctx, env))
 	if err != nil {
 		return nil, err
 	}
 	return commitModifyResult(ctx, b, body)
-}
-
-// refuseClosedShell is Shell's answer to WithNoOpenings on every receiver but
-// a full-turn revolve over a hole-free meridian, a hole-free straight prism,
-// and an admitted two-slab rectangular boss. Their own builders run first
-// (docs/modify-reach-design.md Tables RX/SX, §14). Each receiver gets the row
-// that stages it: a faceted boolean result SX9, a brep or stacked receiver
-// docs/modify-general-design.md's SG2, a holed prism section or revolve
-// meridian SX8, a partial revolve SX8 (it keeps both angular caps), and any
-// other receiver base S3. Every one is
-// ErrUnsupported: the closed body exists, and this evaluator does not build it.
-func refuseClosedShell(payload topo.Payload) error {
-	switch p := payload.(type) {
-	case facetedPayload:
-		return fmt.Errorf(`%w: this evaluator modifies no faceted boolean result (modify-reach SX9)`, ErrUnsupported)
-	case brepPayload, stackedPrismPayload:
-		return fmt.Errorf(`%w: this evaluator does not build a closed shell of this brep or stacked receiver; it has no certified void-shell construction (modify-general SG2)`, ErrUnsupported)
-	case prismPayload:
-		// Shell routes a hole-free section to prismshell.BuildClosed, so the prism
-		// that arrives here is holed.
-		return fmt.Errorf(`%w: a closed shell of a holed prism section is outside the shell extension (modify-reach SX8)`, ErrUnsupported)
-	case revolvePayload:
-		if len(p.Profile.Holes) > 0 {
-			return fmt.Errorf(`%w: a closed shell of a revolve whose meridian holds a hole is outside the shell extension (modify-reach SX8)`, ErrUnsupported)
-		}
-		// Shell routes a full turn over a hole-free meridian to shellRevolve,
-		// so the revolve that arrives here is a partial turn.
-		return fmt.Errorf(`%w: a closed shell of a partial revolve keeps both angular caps, whose walls are planes at constant distance that no revolve holds (modify-reach SX8)`, ErrUnsupported)
-	default:
-		return fmt.Errorf(`%w: this evaluator shells a straight prism only`, ErrUnsupported)
-	}
 }
 
 // shellClosedPrism is reach BX5 (docs/modify-reach-design.md §9.2), built by

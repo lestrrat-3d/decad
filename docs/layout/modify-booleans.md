@@ -21,7 +21,7 @@ The rules for rows live in `docs/layout.md`.
 | `brep_rounded_edge_fillet.go` | Rounds P8's one front top edge after matching its exact rounded, cross-drilled BRep record. See modify-general §4.3c. |
 | `chamfer.go` | `Chamfer`; cap loops route to `capblend.go`. See modify §7. |
 | `modify_options.go` | Public reach option tiers, codec adapters and asymmetric reference resolution (SX3). See modify-reach §2, §6. |
-| `shell.go` | Public `ShellOption`, `ShellSense` and `Shell`: prism, Sweep and Revolve dispatch, the cup build, and `shellTol`, the tolerance its section offsets pass to `internal/offset2d/`. Prism cap-shell records are `internal/prismshell/`'s. See modify §7–§9 and Table R. |
+| `shell.go` | Public `ShellOption`, `ShellSense` and `Shell`: prism, Sweep and Revolve dispatch, the cap-shell stages over `internal/cupwall/`, and `shellTol`, the tolerance its section offsets pass to `internal/offset2d/`. Prism cap-shell records are `internal/prismshell/`'s. See modify §7–§9 and Table R. |
 | `shell_twist.go` | Admits and commits the inward top-cap Shell of a straight twisted rounded Sweep, and builds its five-face faceted cup from the proven mesh. See shell-twisted-sweep design. |
 | `shell_revolve.go` | `Shell` of a revolve. See modify-reach §9.3. |
 | `shell_opening.go` | Prism and straight Sweep side openings: classify removed faces, dispatch the audited region build and record the cap-removed prism case. See shell-opening §3–§5. |
