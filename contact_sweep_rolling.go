@@ -8,7 +8,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/planarpose"
 	"github.com/lestrrat-3d/decad/internal/planarsweep"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -29,7 +28,7 @@ type rollingPairSweep struct {
 	paths      [2]rotationalSweepPath
 	m, s       int
 	cylinder   contactruling.PlacedCylinder // M staged through its start pose
-	req        reportvocab.SweepRequest
+	req        SweepRequest
 	report     *SweepReport
 	resolution *big.Rat
 }
@@ -45,7 +44,7 @@ type rollingPairSweep struct {
 // itself was neither live nor a stack object, so the collector freed a
 // path's duration that nothing else held.
 func (d *Document) sweepRollingPair(ctx context.Context, a, b *Body,
-	pa, pb affinePairPath, req reportvocab.SweepRequest, resolution *big.Rat,
+	pa, pb affinePairPath, req SweepRequest, resolution *big.Rat,
 	report *SweepReport) (*SweepReport, bool, error) {
 	m, bodyM, bodyS, pathM, pathS := 0, a, b, pa, pb
 	start, ok := contactruling.PlacedCylinderAt(bodyNode(a), pa.From)
@@ -106,10 +105,10 @@ func (r *rollingPairSweep) execute(ctx context.Context) (*SweepReport, error) {
 		// its section (contactruling.ClassifyPlacedRuling); the track charges that band.
 		r.report.InitialEvent = &first.Ideal
 		switch r.req.StartPolicy {
-		case reportvocab.StopAtInitialContact:
+		case StopAtInitialContact:
 			r.report.Outcome, r.report.Event = SweepInitiallyTouching, &first.Ideal
 			return r.report, nil
-		case reportvocab.ContinueCertifiedTouch:
+		case ContinueCertifiedTouch:
 			track, ok, err := r.track(ctx, first)
 			if err != nil {
 				return nil, err
@@ -150,7 +149,7 @@ func (r *rollingPairSweep) sample(ctx context.Context) (*SweepSample, error) {
 		poses[i] = pose
 	}
 	contact, err := r.doc.ContactPair(ctx, r.paths[0].body, r.paths[1].body, poses[0], poses[1],
-		contactRequestFromInternal(r.req.ContactRequest))
+		r.req.ContactRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -208,7 +207,7 @@ func (r *rollingPairSweep) track(ctx context.Context, first *SweepSample) (*Swee
 	}
 	track := &SweepContactTrack{start: new(big.Rat), end: new(big.Rat).Set(band.End),
 		duration: r.paths[r.m].Path.Duration, request: r.req.ContactRequest,
-		normal: vecMeasurementFromInternal(proof.Direction), rolling: proof, pointCount: len(r.cylinder.Source)}
+		normal: proof.Direction, rolling: proof, pointCount: len(r.cylinder.Source)}
 	track.features[r.m], track.features[r.s] = proof.FeatureM, proof.FeatureS
 	// A track whose start manifold is refused is not published; the refusal
 	// is the answer.

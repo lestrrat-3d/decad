@@ -15,7 +15,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/selectorquery"
 	"github.com/lestrrat-3d/decad/internal/stitchrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -42,7 +41,7 @@ const heldMeshChord = 1.0
 // ClassifyExactPair decides the pair through the exact planar kernel
 // when both bodies are admitted. It reports false, leaving report untouched,
 // when either body is not.
-func ClassifyExactPair(ctx context.Context, mesher verifiedmesh.Mesher, report *reportvocab.ContactReport) (bool, error) {
+func ClassifyExactPair(ctx context.Context, mesher verifiedmesh.Mesher, report *contactReport) (bool, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	if err := budget.Err(); err != nil {
 		return false, err

@@ -638,10 +638,10 @@ func publishLinkage(r *motionRun, l *Linkage, drive Drive, poses []*motionPose, 
 		Against:           c.Against,
 		Intervals:         rootMotionIntervals(c.Intervals),
 		Collisions:        []LinkCollision{},
-		Clearance:         scalarReadingPtrFromInternal(c.Clearance),
-		Assessment:        Assessment(c.Assessment),
-		Diagnostics:       diagnosticsFromInternal(c.Diagnostics),
-		Status:            Status(c.Status),
+		Clearance:         c.Clearance,
+		Assessment:        c.Assessment,
+		Diagnostics:       c.Diagnostics,
+		Status:            c.Status,
 	}
 	for _, pose := range poses {
 		if pose.unbuildable != nil {

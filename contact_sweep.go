@@ -6,13 +6,14 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/report"
+
 	"github.com/lestrrat-3d/decad/internal/contactbox"
 	"github.com/lestrrat-3d/decad/internal/contactround"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/planarsweep"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -66,12 +67,38 @@ func encodedPairPath(path PairPath) sweeppath.PairPath {
 }
 
 // SweepStartPolicy selects what to prove when the bodies initially touch.
-type SweepStartPolicy int
+type SweepStartPolicy = report.SweepStartPolicy
 
 const (
-	StopAtInitialContact SweepStartPolicy = iota
-	ContinueSeparatingTouch
-	ContinueCertifiedTouch
+	StopAtInitialContact    = report.StopAtInitialContact
+	ContinueSeparatingTouch = report.ContinueSeparatingTouch
+	ContinueCertifiedTouch  = report.ContinueCertifiedTouch
+)
+
+const (
+	SweepClear                    = report.SweepClear
+	SweepDepartedClear            = report.SweepDepartedClear
+	SweepPersistentTouch          = report.SweepPersistentTouch
+	SweepContactTransitionBracket = report.SweepContactTransitionBracket
+	SweepImpactBracket            = report.SweepImpactBracket
+	SweepInitiallyTouching        = report.SweepInitiallyTouching
+	SweepInitiallyOverlapping     = report.SweepInitiallyOverlapping
+	SweepUndecided                = report.SweepUndecided
+	SweepGrazingTouch             = report.SweepGrazingTouch
+	SweepPersistentBand           = report.SweepPersistentBand
+)
+
+const (
+	SweepNoCause              = report.SweepNoCause
+	SweepPoseRelation         = report.SweepPoseRelation
+	SweepMissingBound         = report.SweepMissingBound
+	SweepTimeFloor            = report.SweepTimeFloor
+	SweepFractionFloor        = report.SweepFractionFloor
+	SweepPoseBudget           = report.SweepPoseBudget
+	SweepContactUnsupported   = report.SweepContactUnsupported
+	SweepDepartureUnproved    = report.SweepDepartureUnproved
+	SweepContactTrackUnproved = report.SweepContactTrackUnproved
+	SweepEventUnrepresentable = report.SweepEventUnrepresentable
 )
 
 // SweepRequest bounds the time search and the contact geometry resolution.
@@ -82,13 +109,7 @@ const (
 // rises, on both sides of the plane, as it holds a contact vertex (§10.8), so
 // the track does not end where that vertex's lower height bound reaches the
 // plane. A departure rests nothing.
-type SweepRequest struct {
-	ContactRequest
-	TimeResolution     units.Value
-	MaxPoseEvaluations uint64
-	StartPolicy        SweepStartPolicy
-	RestSpeed          units.Value
-}
+type SweepRequest = report.SweepRequest
 
 // validateRestSpeed checks SweepRequest.RestSpeed as validateSupportBand
 // checks the band: the zero Value, or a finite, nonnegative Velocity.
@@ -108,65 +129,11 @@ func validateRestSpeed(v units.Value) error {
 	return nil
 }
 
-// The public start policy holds the same constants, in the same order, as its
-// reportvocab twin; a constant that drifts fails to compile here.
-var (
-	_ = [1]struct{}{}[int(StopAtInitialContact)-int(reportvocab.StopAtInitialContact)]
-	_ = [1]struct{}{}[int(ContinueSeparatingTouch)-int(reportvocab.ContinueSeparatingTouch)]
-	_ = [1]struct{}{}[int(ContinueCertifiedTouch)-int(reportvocab.ContinueCertifiedTouch)]
-)
-
-// sweepRequestToInternal gives a public request its reportvocab form, field
-// for field.
-func sweepRequestToInternal(req SweepRequest) reportvocab.SweepRequest {
-	return reportvocab.SweepRequest{
-		ContactRequest:     contactRequestToInternal(req.ContactRequest),
-		TimeResolution:     req.TimeResolution,
-		MaxPoseEvaluations: req.MaxPoseEvaluations,
-		StartPolicy:        reportvocab.SweepStartPolicy(req.StartPolicy),
-		RestSpeed:          req.RestSpeed,
-	}
-}
-
 // SweepOutcome states the certified relation over the requested path.
-type SweepOutcome int
-
-const (
-	SweepClear                    SweepOutcome = SweepOutcome(reportvocab.SweepClear)
-	SweepDepartedClear            SweepOutcome = SweepOutcome(reportvocab.SweepDepartedClear)
-	SweepPersistentTouch          SweepOutcome = SweepOutcome(reportvocab.SweepPersistentTouch)
-	SweepContactTransitionBracket SweepOutcome = SweepOutcome(reportvocab.SweepContactTransitionBracket)
-	SweepImpactBracket            SweepOutcome = SweepOutcome(reportvocab.SweepImpactBracket)
-	SweepInitiallyTouching        SweepOutcome = SweepOutcome(reportvocab.SweepInitiallyTouching)
-	SweepInitiallyOverlapping     SweepOutcome = SweepOutcome(reportvocab.SweepInitiallyOverlapping)
-	SweepUndecided                SweepOutcome = SweepOutcome(reportvocab.SweepUndecided)
-	SweepGrazingTouch             SweepOutcome = SweepOutcome(reportvocab.SweepGrazingTouch)
-	// SweepPersistentBand: the pair stays within a certified band of one
-	// normal through its contact track. At every instant of the track the
-	// signed separation along Normal() of every point the track publishes
-	// lies in [−Depth, Depth], the interiors overlap by at most Depth along
-	// that normal, every vertex of the touching body the track does not
-	// publish stays strictly in front of the support plane, and the source
-	// features are stable. Depth
-	// is the track's Band(). The track may end before the duration.
-	SweepPersistentBand SweepOutcome = SweepOutcome(reportvocab.SweepPersistentBand)
-)
+type SweepOutcome = report.SweepOutcome
 
 // SweepCause explains why a continuous claim was not proved.
-type SweepCause int
-
-const (
-	SweepNoCause SweepCause = iota
-	SweepPoseRelation
-	SweepMissingBound
-	SweepTimeFloor
-	SweepFractionFloor
-	SweepPoseBudget
-	SweepContactUnsupported
-	SweepDepartureUnproved
-	SweepContactTrackUnproved
-	SweepEventUnrepresentable
-)
+type SweepCause = report.SweepCause
 
 // SweepInstant identifies a dyadic fraction of the requested duration.
 type SweepInstant struct {
@@ -196,8 +163,8 @@ type SweepContactTrack struct {
 	cylinderFirst bool
 	start, end    *big.Rat
 	duration      *big.Rat
-	request       reportvocab.ContactRequest
-	features      [2]reportvocab.ContactFeature
+	request       ContactRequest
+	features      [2]nodeContactFeature
 	normal        VecMeasurement
 	pointCount    int
 	orientedA     *contactbox.OrientedSourceBox
@@ -225,9 +192,9 @@ func (t *SweepContactTrack) Band() *Measurement {
 	var band *Measurement
 	switch {
 	case t.planar != nil:
-		band = measurementPtrFromInternal(t.planar.Band)
+		band = t.planar.Band
 	case t.rolling != nil:
-		band = measurementPtrFromInternal(t.rolling.Band)
+		band = t.rolling.Band
 	}
 	if band == nil {
 		return nil
@@ -306,15 +273,15 @@ func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, 
 		if !okA || !okB {
 			return nil, fmt.Errorf("%w: oriented contact-track fraction cannot be represented", ErrUnsupported)
 		}
-		report := &reportvocab.ContactReport{Request: t.request}
+		report := &nodeContactReport{Request: t.request}
 		report.Relation, _, _ = contactbox.OrientedBoxRelation(a, b)
-		if report.Relation == reportvocab.ContactTouching {
+		if report.Relation == ContactTouching {
 			contactbox.PublishOrientedBoxPatch(report, a, b)
 			if report.Manifold == nil {
 				contactbox.PublishClippedHorizontalPatch(report, a, b)
 			}
 		}
-		if report.Relation != reportvocab.ContactTouching || report.Manifold == nil ||
+		if report.Relation != ContactTouching || report.Manifold == nil ||
 			len(report.Manifold.Points) != t.pointCount {
 			return nil, fmt.Errorf("%w: oriented contact track lost its face patch", ErrUnsupported)
 		}
@@ -331,9 +298,9 @@ func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, 
 		if !okSphere || !okBox {
 			return nil, fmt.Errorf("%w: contact-track fraction cannot be represented", ErrUnsupported)
 		}
-		report := &reportvocab.ContactReport{Request: t.request}
+		report := &nodeContactReport{Request: t.request}
 		contactround.ClassifySphereBox(report, sphere, box, t.sphereFirst)
-		if report.Relation != reportvocab.ContactTouching || report.Manifold == nil {
+		if report.Relation != ContactTouching || report.Manifold == nil {
 			return nil, fmt.Errorf("%w: contact track has no bounded sphere point", ErrUnsupported)
 		}
 		return contactManifoldFromInternal(report.Manifold), nil
@@ -344,9 +311,9 @@ func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, 
 		if !okA || !okB {
 			return nil, fmt.Errorf("%w: sphere-pair contact-track fraction cannot be represented", ErrUnsupported)
 		}
-		report := &reportvocab.ContactReport{Request: t.request}
+		report := &nodeContactReport{Request: t.request}
 		contactround.ClassifySpherePair(report, a, b)
-		if report.Relation != reportvocab.ContactTouching || report.Manifold == nil ||
+		if report.Relation != ContactTouching || report.Manifold == nil ||
 			len(report.Manifold.Points) != 1 ||
 			report.Manifold.Points[0].FeatureA != t.features[0] ||
 			report.Manifold.Points[0].FeatureB != t.features[1] {
@@ -358,9 +325,9 @@ func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, 
 	if !ok {
 		return nil, fmt.Errorf("%w: fraction is not representable as a source-box translation", ErrUnsupported)
 	}
-	report := &reportvocab.ContactReport{Request: t.request}
+	report := &nodeContactReport{Request: t.request}
 	contactbox.ClassifySourceBoxes(report, a, b)
-	if report.Relation != reportvocab.ContactTouching || report.Manifold == nil {
+	if report.Relation != ContactTouching || report.Manifold == nil {
 		return nil, fmt.Errorf("%w: contact track has no bounded face patch", ErrUnsupported)
 	}
 	return contactManifoldFromInternal(report.Manifold), nil
@@ -378,10 +345,10 @@ type SweepEvent struct {
 
 // sweepEventOf publishes a contact producer's finished report as the ideal
 // event at at, converting it to its public form.
-func sweepEventOf(at SweepInstant, contact *reportvocab.ContactReport) SweepEvent {
-	return SweepEvent{At: at, Relation: ContactRelation(contact.Relation),
-		Gap: measurementPtrFromInternal(contact.Gap), Overlap: measurementPtrFromInternal(contact.Overlap),
-		Manifold: contactManifoldFromInternal(contact.Manifold), Reason: ContactReason(contact.Reason)}
+func sweepEventOf(at SweepInstant, contact *nodeContactReport) SweepEvent {
+	return SweepEvent{At: at, Relation: contact.Relation,
+		Gap: contact.Gap, Overlap: contact.Overlap,
+		Manifold: contactManifoldFromInternal(contact.Manifold), Reason: contact.Reason}
 }
 
 // SweepSample keeps the query pose and the transferred pair finding.
@@ -513,7 +480,7 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 		return nil, err
 	}
 	report := &SweepReport{A: a, B: b, PathA: pathA, PathB: pathB, Request: req}
-	request := sweepRequestToInternal(req)
+	request := req
 	if !pa.Supported || !pb.Supported {
 		report.Outcome, report.Cause = SweepUndecided, SweepContactUnsupported
 		report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), pa.Duration),

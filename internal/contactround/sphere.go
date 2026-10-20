@@ -3,6 +3,8 @@ package contactround
 import (
 	"math/big"
 
+	vocab "github.com/lestrrat-3d/decad/report"
+
 	"github.com/lestrrat-3d/decad/internal/contactbox"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/pair"
@@ -10,7 +12,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/pair/sphere"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -114,7 +115,7 @@ func SphereRecord(b *topo.Body) (SphereProof, bool) {
 
 // ClassifySphereBox binds the neutral complete-ball result to the
 // source faces and the contact report.
-func ClassifySphereBox(report *reportvocab.ContactReport, sphere SphereProof,
+func ClassifySphereBox(report *contactReport, sphere SphereProof,
 	boxProof contactbox.SourceBox, sphereFirst bool) {
 	result := pairbox.ClassifyAxisSphere(
 		pairbox.AxisSphere{Center: sphere.Center, Radius: sphere.Radius},
@@ -122,13 +123,13 @@ func ClassifySphereBox(report *reportvocab.ContactReport, sphere SphereProof,
 	)
 	switch result.Relation {
 	case pair.Separated:
-		report.Relation = reportvocab.ContactSeparated
+		report.Relation = vocab.ContactSeparated
 	case pair.Touching:
-		report.Relation = reportvocab.ContactTouching
+		report.Relation = vocab.ContactTouching
 	case pair.Overlapping:
-		report.Relation = reportvocab.ContactOverlapping
+		report.Relation = vocab.ContactOverlapping
 	}
-	report.Reason = reportvocab.ContactReasonOf(result.Reason)
+	report.Reason = pair.ContactReasonOf(result.Reason)
 	if result.Gap != nil {
 		gap := result.Gap.Measurement()
 		report.Gap = &gap
@@ -139,7 +140,7 @@ func ClassifySphereBox(report *reportvocab.ContactReport, sphere SphereProof,
 	witness := result.Witness
 	face := boxProof.Faces[witness.Face.Axis][witness.Face.Side]
 	if face == nil {
-		report.Reason = reportvocab.ContactNoNormalProof
+		report.Reason = vocab.ContactNoNormalProof
 		return
 	}
 	sign := witness.NormalSign
@@ -157,14 +158,14 @@ func ClassifySphereBox(report *reportvocab.ContactReport, sphere SphereProof,
 	}
 	onSphere := witness.SpherePoint.Measurement()
 	onBox := witness.BoxPoint.Measurement()
-	featureSphere, featureBox := reportvocab.ContactFeature{Face: sphere.Face}, reportvocab.ContactFeature{Face: face}
+	featureSphere, featureBox := contactFeature{Face: sphere.Face}, contactFeature{Face: face}
 	onA, onB := onBox, onSphere
 	featureA, featureB := featureBox, featureSphere
 	if sphereFirst {
 		onA, onB = onSphere, onBox
 		featureA, featureB = featureSphere, featureBox
 	}
-	report.Manifold = &reportvocab.ContactManifold{Points: []reportvocab.ContactPoint{{
+	report.Manifold = &contactManifold{Points: []contactPoint{{
 		OnA: onA, OnB: onB, Normal: measurement.VecMeasurement{
 			Value: normal, Bound: units.Scalar(0), Exactness: measurement.Exact},
 		NormalAngle: units.Radians(0), Separation: witness.Separation.Measurement(),
@@ -192,7 +193,7 @@ func TranslatedSphere(s SphereProof, delta [3]proofarith.Dyadic, f *big.Rat) (Sp
 
 // ClassifySpherePair binds the neutral complete-ball result to the
 // original source faces and the contact report.
-func ClassifySpherePair(report *reportvocab.ContactReport, a, b SphereProof) {
+func ClassifySpherePair(report *contactReport, a, b SphereProof) {
 	result := sphere.Classify(
 		sphere.Ball{Center: a.Center, Radius: a.Radius},
 		sphere.Ball{Center: b.Center, Radius: b.Radius},
@@ -200,13 +201,13 @@ func ClassifySpherePair(report *reportvocab.ContactReport, a, b SphereProof) {
 	)
 	switch result.Relation {
 	case pair.Separated:
-		report.Relation = reportvocab.ContactSeparated
+		report.Relation = vocab.ContactSeparated
 	case pair.Touching:
-		report.Relation = reportvocab.ContactTouching
+		report.Relation = vocab.ContactTouching
 	case pair.Overlapping:
-		report.Relation = reportvocab.ContactOverlapping
+		report.Relation = vocab.ContactOverlapping
 	}
-	report.Reason = reportvocab.ContactReasonOf(result.Reason)
+	report.Reason = pair.ContactReasonOf(result.Reason)
 	if result.Gap != nil {
 		gap := result.Gap.Measurement()
 		report.Gap = &gap
@@ -218,18 +219,18 @@ func ClassifySpherePair(report *reportvocab.ContactReport, a, b SphereProof) {
 	normal := measurement.VecMeasurement{Value: witness.Normal.Value,
 		Bound:     units.Scalar(witness.Normal.Bound),
 		Exactness: measurement.ExactnessOf(witness.Normal.Bound)}
-	report.Manifold = &reportvocab.ContactManifold{Points: []reportvocab.ContactPoint{{
+	report.Manifold = &contactManifold{Points: []contactPoint{{
 		OnA: witness.OnA.Measurement(), OnB: witness.OnB.Measurement(),
 		Normal: normal, NormalAngle: units.Radians(witness.Normal.Angle),
 		Separation: witness.Separation.Measurement(),
 		FaceA:      a.Face, FaceB: b.Face,
-		FeatureA: reportvocab.ContactFeature{Face: a.Face}, FeatureB: reportvocab.ContactFeature{Face: b.Face},
+		FeatureA: contactFeature{Face: a.Face}, FeatureB: contactFeature{Face: b.Face},
 	}}}
 }
 
 // ClassifySphereOrientedBox maps the box kernel's bounded response to
 // the original source faces and the contact report's measurements.
-func ClassifySphereOrientedBox(report *reportvocab.ContactReport, sphere SphereProof,
+func ClassifySphereOrientedBox(report *contactReport, sphere SphereProof,
 	box contactbox.OrientedSourceBox, sphereFirst bool) {
 	result := pairbox.ClassifyOrientedSphere(
 		pairbox.AxisSphere{Center: sphere.Center, Radius: sphere.Radius}, box.OrientedBox, sphereFirst,
@@ -237,13 +238,13 @@ func ClassifySphereOrientedBox(report *reportvocab.ContactReport, sphere SphereP
 	)
 	switch result.Relation {
 	case pair.Separated:
-		report.Relation = reportvocab.ContactSeparated
+		report.Relation = vocab.ContactSeparated
 	case pair.Touching:
-		report.Relation = reportvocab.ContactTouching
+		report.Relation = vocab.ContactTouching
 	case pair.Overlapping:
-		report.Relation = reportvocab.ContactOverlapping
+		report.Relation = vocab.ContactOverlapping
 	}
-	report.Reason = reportvocab.ContactReasonOf(result.Reason)
+	report.Reason = pair.ContactReasonOf(result.Reason)
 	if result.Gap != nil {
 		gap := result.Gap.Measurement()
 		report.Gap = &gap
@@ -254,22 +255,22 @@ func ClassifySphereOrientedBox(report *reportvocab.ContactReport, sphere SphereP
 	witness := result.Witness
 	face := box.Faces[witness.Face.Axis][witness.Face.Side]
 	if face == nil {
-		report.Reason = reportvocab.ContactNoNormalProof
+		report.Reason = vocab.ContactNoNormalProof
 		return
 	}
 	normal := measurement.VecMeasurement{Value: witness.Normal.Value,
 		Bound: units.Scalar(witness.Normal.Bound), Exactness: measurement.ExactnessOf(witness.Normal.Bound)}
-	point := reportvocab.ContactPoint{Normal: normal, NormalAngle: units.Radians(witness.Normal.Angle),
+	point := contactPoint{Normal: normal, NormalAngle: units.Radians(witness.Normal.Angle),
 		Separation: witness.Separation.Measurement()}
 	boxPoint := witness.BoxPoint.Measurement()
 	spherePoint := witness.SpherePoint.Measurement()
 	if sphereFirst {
 		point.OnA, point.OnB = spherePoint, boxPoint
-		point.FeatureA, point.FeatureB = reportvocab.ContactFeature{Face: sphere.Face}, reportvocab.ContactFeature{Face: face}
+		point.FeatureA, point.FeatureB = contactFeature{Face: sphere.Face}, contactFeature{Face: face}
 	} else {
 		point.OnA, point.OnB = boxPoint, spherePoint
-		point.FeatureA, point.FeatureB = reportvocab.ContactFeature{Face: face}, reportvocab.ContactFeature{Face: sphere.Face}
+		point.FeatureA, point.FeatureB = contactFeature{Face: face}, contactFeature{Face: sphere.Face}
 	}
 	point.FaceA, point.FaceB = point.FeatureA.Face, point.FeatureB.Face
-	report.Manifold = &reportvocab.ContactManifold{Points: []reportvocab.ContactPoint{point}}
+	report.Manifold = &contactManifold{Points: []contactPoint{point}}
 }

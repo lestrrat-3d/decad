@@ -6,9 +6,10 @@ import (
 	"math"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/report"
+
 	"github.com/lestrrat-3d/decad/internal/contactpair"
 	"github.com/lestrrat-3d/decad/internal/measurement"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -17,12 +18,7 @@ import (
 // ContactRequest states the maximum position and normal error a manifold may publish.
 // SupportBand and HeldChord are nonnegative lengths; zero disables their
 // respective approximate contact paths.
-type ContactRequest struct {
-	PointResolution  units.Value
-	NormalResolution units.Value
-	SupportBand      units.Value
-	HeldChord        units.Value
-}
+type ContactRequest = report.ContactRequest
 
 // validateSupportBand admits the zero Value or a finite nonnegative Length.
 func validateSupportBand(v units.Value) error {
@@ -53,74 +49,39 @@ func validateNonnegativeLength(v units.Value, name string) error {
 }
 
 // ContactRelation is the proven relation of the two complete occupied sets.
-type ContactRelation int
+type ContactRelation = report.ContactRelation
 
 const (
-	ContactUndecided ContactRelation = iota
-	ContactSeparated
-	ContactTouching
-	ContactOverlapping
-	// ContactBand is published for a body whose held boundary carries a
-	// positive displacement (docs/multibody-dynamics-design.md §10.4), or for
-	// an exact planar pair apart by at most the request's SupportBand
-	// (§10.5): the interiors are disjoint except possibly within a band of
-	// width Gap.Bound around Gap.Value, which is zero. A displaced pair's
-	// manifold Separation intervals carry the same band; an exact pair's
-	// manifold is its support set, each point at its exact height.
-	ContactBand
+	ContactUndecided   = report.ContactUndecided
+	ContactSeparated   = report.ContactSeparated
+	ContactTouching    = report.ContactTouching
+	ContactOverlapping = report.ContactOverlapping
+	ContactBand        = report.ContactBand
+)
+
+const (
+	ContactNoReason           = report.ContactNoReason
+	ContactPayloadUnsupported = report.ContactPayloadUnsupported
+	ContactNoGapProof         = report.ContactNoGapProof
+	ContactNoNormalProof      = report.ContactNoNormalProof
+	ContactAmbiguousFeature   = report.ContactAmbiguousFeature
+	ContactPointTooCoarse     = report.ContactPointTooCoarse
+	ContactNonConvex          = report.ContactNonConvex
 )
 
 // ContactReason explains an undecided relation or an absent manifold.
-type ContactReason int
+type ContactReason = report.ContactReason
 
-const (
-	ContactNoReason ContactReason = iota
-	ContactPayloadUnsupported
-	ContactNoGapProof
-	ContactNoNormalProof
-	ContactAmbiguousFeature
-	ContactPointTooCoarse
-	// ContactNonConvex withholds a manifold because neither body carries the
-	// convexity certificate of docs/multibody-dynamics-design.md §9.2: an
-	// overlap, or a touch whose contacts no single face of one body holds
-	// with the other body's corners inside it (§10.5).
-	ContactNonConvex
+type (
+	// ContactFeature names an original topological feature.
+	ContactFeature = report.ContactFeatureOf[*Face, *Edge, *Vertex]
+	// ContactPoint bounds two boundary witnesses and their A-to-B normal.
+	ContactPoint = report.ContactPointOf[*Face, *Edge, *Vertex]
+	// ContactManifold is a deterministic reduction of the complete certified contact patch.
+	ContactManifold = report.ContactManifoldOf[*Face, *Edge, *Vertex]
+	// ContactReport is a read-only pair result at the two caller-supplied poses.
+	ContactReport = report.ContactReportOf[*Body, *Face, *Edge, *Vertex]
 )
-
-// ContactFeature names an original topological feature.
-type ContactFeature struct {
-	Face   *Face
-	Edge   *Edge
-	Vertex *Vertex
-}
-
-// ContactPoint bounds two boundary witnesses and their A-to-B normal.
-type ContactPoint struct {
-	OnA, OnB           VecMeasurement
-	Normal             VecMeasurement
-	NormalAngle        units.Value
-	Separation         Measurement
-	FaceA, FaceB       *Face
-	FeatureA, FeatureB ContactFeature
-}
-
-// ContactManifold is a deterministic reduction of the complete certified contact patch.
-type ContactManifold struct {
-	Points []ContactPoint
-}
-
-// ContactReport is a read-only pair result at the two caller-supplied poses.
-type ContactReport struct {
-	A, B     *Body
-	PoseA    r3.Transform
-	PoseB    r3.Transform
-	Request  ContactRequest
-	Relation ContactRelation
-	Gap      *Measurement
-	Overlap  *Measurement
-	Manifold *ContactManifold
-	Reason   ContactReason
-}
 
 // ContactPair proves the relation of two live solids at poses applied after
 // their recorded placements. Bodies and the document are not changed.
@@ -213,7 +174,7 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 	if report, ok := a.pairReports.Load(key); ok {
 		return cloneContactReport(report), nil
 	}
-	found, err := contactpair.Classify(ctx, verifyAllMesher{}, bodyNode(a), bodyNode(b), poseA, poseB, contactRequestToInternal(req))
+	found, err := contactpair.Classify(ctx, verifyAllMesher{}, bodyNode(a), bodyNode(b), poseA, poseB, req)
 	if err != nil {
 		return nil, err
 	}
@@ -222,85 +183,36 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 	return cloneContactReport(report), nil
 }
 
-// Each public contact enum holds the same constants, in the same order, as
-// its reportvocab twin; a constant that drifts fails to compile here.
-var (
-	_ = [1]struct{}{}[int(ContactUndecided)-int(reportvocab.ContactUndecided)]
-	_ = [1]struct{}{}[int(ContactSeparated)-int(reportvocab.ContactSeparated)]
-	_ = [1]struct{}{}[int(ContactTouching)-int(reportvocab.ContactTouching)]
-	_ = [1]struct{}{}[int(ContactOverlapping)-int(reportvocab.ContactOverlapping)]
-	_ = [1]struct{}{}[int(ContactBand)-int(reportvocab.ContactBand)]
-	_ = [1]struct{}{}[int(ContactNoReason)-int(reportvocab.ContactNoReason)]
-	_ = [1]struct{}{}[int(ContactPayloadUnsupported)-int(reportvocab.ContactPayloadUnsupported)]
-	_ = [1]struct{}{}[int(ContactNoGapProof)-int(reportvocab.ContactNoGapProof)]
-	_ = [1]struct{}{}[int(ContactNoNormalProof)-int(reportvocab.ContactNoNormalProof)]
-	_ = [1]struct{}{}[int(ContactAmbiguousFeature)-int(reportvocab.ContactAmbiguousFeature)]
-	_ = [1]struct{}{}[int(ContactPointTooCoarse)-int(reportvocab.ContactPointTooCoarse)]
-	_ = [1]struct{}{}[int(ContactNonConvex)-int(reportvocab.ContactNonConvex)]
+// The contact vocabulary with topology nodes as the face, edge, vertex and
+// body references, as the internal kernels produce it.
+type (
+	nodeContactFeature  = report.ContactFeatureOf[*topo.Face, *topo.Edge, *topo.Vertex]
+	nodeContactManifold = report.ContactManifoldOf[*topo.Face, *topo.Edge, *topo.Vertex]
+	nodeContactReport   = report.ContactReportOf[*topo.Body, *topo.Face, *topo.Edge, *topo.Vertex]
 )
 
-// contactRequestToInternal gives a public request its reportvocab form.
-func contactRequestToInternal(req ContactRequest) reportvocab.ContactRequest {
-	return reportvocab.ContactRequest(req)
+// handleLift maps topology nodes to their root handles; a nil node stays a
+// nil handle.
+var handleLift = report.Lift[*topo.Body, *topo.Face, *topo.Edge, *topo.Vertex, *Body, *Face, *Edge, *Vertex]{
+	Body: bodyHandle, Face: faceHandle, Edge: edgeHandle, Vertex: vertexHandle,
 }
 
-// contactRequestFromInternal gives an internal request its public form.
-func contactRequestFromInternal(req reportvocab.ContactRequest) ContactRequest {
-	return ContactRequest(req)
+// nodeLift is handleLift's inverse.
+var nodeLift = report.Lift[*Body, *Face, *Edge, *Vertex, *topo.Body, *topo.Face, *topo.Edge, *topo.Vertex]{
+	Body: bodyNode, Face: faceNode, Edge: edgeNode, Vertex: vertexNode,
 }
 
-// contactFeatureFromInternal maps a feature's nodes to their handles; a nil
-// node stays a nil handle.
-func contactFeatureFromInternal(f reportvocab.ContactFeature) ContactFeature {
-	return ContactFeature{Face: faceHandle(f.Face), Edge: edgeHandle(f.Edge), Vertex: vertexHandle(f.Vertex)}
+func contactFeatureFromInternal(f nodeContactFeature) ContactFeature {
+	return handleLift.Feature(f)
 }
-
-// contactFeatureToInternal maps a feature's handles to their nodes; a nil
-// handle stays a nil node.
-func contactFeatureToInternal(f ContactFeature) reportvocab.ContactFeature {
-	return reportvocab.ContactFeature{Face: faceNode(f.Face), Edge: edgeNode(f.Edge), Vertex: vertexNode(f.Vertex)}
+func contactFeatureToInternal(f ContactFeature) nodeContactFeature {
+	return nodeLift.Feature(f)
 }
-
-// contactPointFromInternal gives an internal point its public form.
-func contactPointFromInternal(p reportvocab.ContactPoint) ContactPoint {
-	return ContactPoint{
-		OnA: vecMeasurementFromInternal(p.OnA), OnB: vecMeasurementFromInternal(p.OnB),
-		Normal: vecMeasurementFromInternal(p.Normal), NormalAngle: p.NormalAngle,
-		Separation: measurementFromInternal(p.Separation),
-		FaceA:      faceHandle(p.FaceA), FaceB: faceHandle(p.FaceB),
-		FeatureA: contactFeatureFromInternal(p.FeatureA), FeatureB: contactFeatureFromInternal(p.FeatureB),
-	}
+func contactManifoldFromInternal(m *nodeContactManifold) *ContactManifold {
+	return handleLift.Manifold(m)
 }
-
-// contactManifoldFromInternal gives an internal manifold a fresh public
-// form: a nil manifold stays nil, and nil Points stay nil while empty
-// non-nil Points stay empty and non-nil.
-func contactManifoldFromInternal(m *reportvocab.ContactManifold) *ContactManifold {
-	if m == nil {
-		return nil
-	}
-	if m.Points == nil {
-		return &ContactManifold{}
-	}
-	points := make([]ContactPoint, len(m.Points))
-	for i := range m.Points {
-		points[i] = contactPointFromInternal(m.Points[i])
-	}
-	return &ContactManifold{Points: points}
-}
-
-// contactReportFromInternal gives a finished internal report a fresh public
-// form. Topology nodes map to their handles, and Gap, Overlap and Manifold
-// keep their nil or non-nil state.
-func contactReportFromInternal(r *reportvocab.ContactReport) *ContactReport {
-	return &ContactReport{
-		A: bodyHandle(r.A), B: bodyHandle(r.B), PoseA: r.PoseA, PoseB: r.PoseB,
-		Request:  contactRequestFromInternal(r.Request),
-		Relation: ContactRelation(r.Relation),
-		Gap:      measurementPtrFromInternal(r.Gap), Overlap: measurementPtrFromInternal(r.Overlap),
-		Manifold: contactManifoldFromInternal(r.Manifold),
-		Reason:   ContactReason(r.Reason),
-	}
+func contactReportFromInternal(r *nodeContactReport) *ContactReport {
+	return handleLift.Report(r)
 }
 
 // pairReportMemoCap bounds one body's completed contact reports.

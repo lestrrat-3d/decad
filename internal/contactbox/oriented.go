@@ -7,10 +7,10 @@ import (
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
+	vocab "github.com/lestrrat-3d/decad/report"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -77,47 +77,47 @@ func SourceOrientedBoxAtPose(body *topo.Body, pose r3.Transform) (OrientedSource
 }
 
 // OrientedBoxRelation maps the box kernel's relation to the contact report's.
-func OrientedBoxRelation(a, b OrientedSourceBox) (reportvocab.ContactRelation, proofarith.Dyadic, proofarith.Dyadic) {
+func OrientedBoxRelation(a, b OrientedSourceBox) (vocab.ContactRelation, proofarith.Dyadic, proofarith.Dyadic) {
 	relation, gap, normSquared := pairbox.OrientedBoxRelation(a.OrientedBox, b.OrientedBox)
 	switch relation {
 	case pair.Separated:
-		return reportvocab.ContactSeparated, gap, normSquared
+		return vocab.ContactSeparated, gap, normSquared
 	case pair.Touching:
-		return reportvocab.ContactTouching, gap, normSquared
+		return vocab.ContactTouching, gap, normSquared
 	case pair.Overlapping:
-		return reportvocab.ContactOverlapping, gap, normSquared
+		return vocab.ContactOverlapping, gap, normSquared
 	default:
-		return reportvocab.ContactUndecided, gap, normSquared
+		return vocab.ContactUndecided, gap, normSquared
 	}
 }
 
-func ClassifyOriented(report *reportvocab.ContactReport, a, b OrientedSourceBox) {
+func ClassifyOriented(report *contactReport, a, b OrientedSourceBox) {
 	relation, gap, normSquared := OrientedBoxRelation(a, b)
 	switch relation {
-	case reportvocab.ContactTouching:
+	case vocab.ContactTouching:
 		report.Relation = relation
 		report.Gap = &measurement.Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(0), Exactness: measurement.Exact}
-		report.Reason = reportvocab.ContactNoNormalProof
+		report.Reason = vocab.ContactNoNormalProof
 		publishContainedHorizontalPatch(report, a, b)
 		if report.Manifold == nil {
 			PublishClippedHorizontalPatch(report, a, b)
 		}
-		if report.Manifold == nil && report.Reason != reportvocab.ContactPointTooCoarse {
+		if report.Manifold == nil && report.Reason != vocab.ContactPointTooCoarse {
 			PublishOrientedBoxPatch(report, a, b)
 		}
-		if report.Manifold == nil && report.Reason != reportvocab.ContactPointTooCoarse {
+		if report.Manifold == nil && report.Reason != vocab.ContactPointTooCoarse {
 			publishOrientedAxisPatch(report, &a, &b)
 		}
-	case reportvocab.ContactOverlapping:
-		report.Relation, report.Reason = relation, reportvocab.ContactNoNormalProof
+	case vocab.ContactOverlapping:
+		report.Relation, report.Reason = relation, vocab.ContactNoNormalProof
 		publishContainedHorizontalPatch(report, a, b)
 		if report.Manifold == nil {
 			publishOrientedAxisPatch(report, &a, &b)
 		}
-	case reportvocab.ContactSeparated:
+	case vocab.ContactSeparated:
 		reading, ok := orientedBoxGap(a, b, gap, normSquared)
 		if !ok {
-			report.Reason = reportvocab.ContactNoGapProof
+			report.Reason = vocab.ContactNoGapProof
 			return
 		}
 		report.Relation, report.Gap = relation, &reading
@@ -127,7 +127,7 @@ func ClassifyOriented(report *reportvocab.ContactReport, a, b OrientedSourceBox)
 // publishContainedHorizontalPatch handles a complete rotating box face
 // inside an axis-aligned box face. Exact corner and side-plane comparisons
 // certify the four-point patch, including a uniquely shallow penetration.
-func publishContainedHorizontalPatch(report *reportvocab.ContactReport, a, b OrientedSourceBox) {
+func publishContainedHorizontalPatch(report *contactReport, a, b OrientedSourceBox) {
 	if base, ok := SourceBoxAtPose(report.A, report.PoseA); ok &&
 		publishHorizontalPatchOrder(report, base, b, report.B, report.PoseB, true) {
 		return
@@ -137,7 +137,7 @@ func publishContainedHorizontalPatch(report *reportvocab.ContactReport, a, b Ori
 	}
 }
 
-func publishHorizontalPatchOrder(report *reportvocab.ContactReport, base SourceBox,
+func publishHorizontalPatchOrder(report *contactReport, base SourceBox,
 	rotated OrientedSourceBox, body *topo.Body, pose r3.Transform, baseIsA bool) bool {
 	basis := pose.Basis()
 	if basis.EX.Z != 0 || basis.EY.Z != 0 || basis.EZ != (r3.Vec{Z: 1}) {
@@ -147,7 +147,7 @@ func publishHorizontalPatchOrder(report *reportvocab.ContactReport, base SourceB
 	if !ok {
 		return false
 	}
-	patch, ok := pairbox.ContainedHorizontalPatch(base.AxisBox(), rotated.OrientedBox, report.Relation.PairRelation())
+	patch, ok := pairbox.ContainedHorizontalPatch(base.AxisBox(), rotated.OrientedBox, pair.RelationOfContact(report.Relation))
 	if !ok {
 		return false
 	}
@@ -163,7 +163,7 @@ func publishHorizontalPatchOrder(report *reportvocab.ContactReport, base SourceB
 		normalZ = -normalZ
 	}
 	faceBase, faceRotated := base.Faces[2][patch.BaseSide], source.Faces[2][patch.RotatedSide]
-	points := make([]reportvocab.ContactPoint, 0, len(patch.Corners))
+	points := make([]contactPoint, 0, len(patch.Corners))
 	for _, corner := range patch.Corners {
 		basePoint := corner
 		basePoint[2] = patch.SupportZ
@@ -174,7 +174,7 @@ func publishHorizontalPatchOrder(report *reportvocab.ContactReport, base SourceB
 			rotatedReading.Bound.Base() > report.Request.PointResolution.Base() {
 			return false
 		}
-		point := reportvocab.ContactPoint{Normal: measurement.VecMeasurement{Value: r3.Vec{Z: normalZ},
+		point := contactPoint{Normal: measurement.VecMeasurement{Value: r3.Vec{Z: normalZ},
 			Exactness: measurement.Exact, Bound: units.Scalar(0)}, NormalAngle: units.Radians(0),
 			Separation: reading}
 		if baseIsA {
@@ -184,23 +184,23 @@ func publishHorizontalPatchOrder(report *reportvocab.ContactReport, base SourceB
 			point.OnA, point.OnB = rotatedReading, baseReading
 			point.FaceA, point.FaceB = faceRotated, faceBase
 		}
-		point.FeatureA, point.FeatureB = reportvocab.ContactFeature{Face: point.FaceA}, reportvocab.ContactFeature{Face: point.FaceB}
+		point.FeatureA, point.FeatureB = contactFeature{Face: point.FaceA}, contactFeature{Face: point.FaceB}
 		points = append(points, point)
 	}
-	report.Manifold = &reportvocab.ContactManifold{Points: points}
-	report.Reason = reportvocab.ContactNoReason
+	report.Manifold = &contactManifold{Points: points}
+	report.Reason = vocab.ContactNoReason
 	return true
 }
 
 // publishOrientedAxisPatch reduces two opposed axis-normal faces to one
 // certified interior witness. It leaves other oriented contacts without a
 // manifold, including edge and corner contacts.
-func publishOrientedAxisPatch(report *reportvocab.ContactReport, a, b *OrientedSourceBox) {
-	var chosen *reportvocab.ContactPoint
+func publishOrientedAxisPatch(report *contactReport, a, b *OrientedSourceBox) {
+	var chosen *contactPoint
 	best := proofarith.DyZero()
 	_, alignedA := SourceBoxAtPose(report.A, report.PoseA)
 	_, alignedB := SourceBoxAtPose(report.B, report.PoseB)
-	for _, candidate := range pairbox.AxisFaceWitnesses(a.OrientedBox, b.OrientedBox, report.Relation.PairRelation()) {
+	for _, candidate := range pairbox.AxisFaceWitnesses(a.OrientedBox, b.OrientedBox, pair.RelationOfContact(report.Relation)) {
 		// A horizontal patch against a signed-axis box needs the complete
 		// contained four-point proof above; one interior point cannot replace it.
 		if candidate.Axis == 2 && (alignedA || alignedB) {
@@ -233,18 +233,18 @@ func publishOrientedAxisPatch(report *reportvocab.ContactReport, a, b *OrientedS
 		if fa == nil || fb == nil {
 			continue
 		}
-		point := reportvocab.ContactPoint{
+		point := contactPoint{
 			OnA: onA, OnB: onB,
 			Normal:      measurement.VecMeasurement{Value: normal, Exactness: measurement.Exact, Bound: units.Scalar(0)},
 			NormalAngle: units.Radians(0), Separation: reading,
 			FaceA: fa, FaceB: fb,
-			FeatureA: reportvocab.ContactFeature{Face: fa}, FeatureB: reportvocab.ContactFeature{Face: fb},
+			FeatureA: contactFeature{Face: fa}, FeatureB: contactFeature{Face: fb},
 		}
 		chosen, best = &point, candidate.Separation
 	}
 	if chosen != nil {
-		report.Manifold = &reportvocab.ContactManifold{Points: []reportvocab.ContactPoint{*chosen}}
-		report.Reason = reportvocab.ContactNoReason
+		report.Manifold = &contactManifold{Points: []contactPoint{*chosen}}
+		report.Reason = vocab.ContactNoReason
 	}
 }
 
@@ -280,40 +280,40 @@ func orientedBoxGap(a, b OrientedSourceBox, gap, normSquared proofarith.Dyadic) 
 // PublishOrientedBoxPatch handles opposed faces of boxes with parallel source
 // edge directions. Their complete contact set is a rectangle in A's exact
 // dual basis, even when the read rotation's dyadic entries are slightly skew.
-func PublishOrientedBoxPatch(report *reportvocab.ContactReport, a, b OrientedSourceBox) {
+func PublishOrientedBoxPatch(report *contactReport, a, b OrientedSourceBox) {
 	geometry, failure := pairbox.OrientedFacePatch(a.OrientedBox, b.OrientedBox)
 	switch failure {
 	case pairbox.OrientedPatchNoNormal:
-		report.Reason = reportvocab.ContactNoNormalProof
+		report.Reason = vocab.ContactNoNormalProof
 		return
 	case pairbox.OrientedPatchAmbiguous:
-		report.Reason = reportvocab.ContactAmbiguousFeature
+		report.Reason = vocab.ContactAmbiguousFeature
 		return
 	}
 	faceA := a.Faces[geometry.FaceA.Axis][geometry.FaceA.Side]
 	faceB := b.Faces[geometry.FaceB.Axis][geometry.FaceB.Side]
 	if faceA == nil || faceB == nil {
-		report.Reason = reportvocab.ContactNoNormalProof
+		report.Reason = vocab.ContactNoNormalProof
 		return
 	}
 	normal, angle, ok := pairbox.DyadicNormalMeasurement(geometry.Normal)
 	if !ok || angle.Base() > report.Request.NormalResolution.Base() {
-		report.Reason = reportvocab.ContactNoNormalProof
+		report.Reason = vocab.ContactNoNormalProof
 		return
 	}
-	points := make([]reportvocab.ContactPoint, 0, 4)
+	points := make([]contactPoint, 0, 4)
 	for _, corner := range [][2]int{{0, 0}, {1, 0}, {1, 1}, {0, 1}} {
 		point := geometry.Point(a.OrientedBox, corner)
 		onBoth, valid := pairbox.PointMeasurement(point)
 		if !valid || onBoth.Bound.Base() > report.Request.PointResolution.Base() {
-			report.Reason = reportvocab.ContactPointTooCoarse
+			report.Reason = vocab.ContactPointTooCoarse
 			return
 		}
-		points = append(points, reportvocab.ContactPoint{OnA: onBoth, OnB: onBoth, Normal: normal,
+		points = append(points, contactPoint{OnA: onBoth, OnB: onBoth, Normal: normal,
 			NormalAngle: angle, Separation: measurement.Measurement{Value: units.Millimeters(0),
 				Bound: units.Millimeters(0), Exactness: measurement.Exact}, FaceA: faceA, FaceB: faceB,
-			FeatureA: reportvocab.ContactFeature{Face: faceA}, FeatureB: reportvocab.ContactFeature{Face: faceB}})
+			FeatureA: contactFeature{Face: faceA}, FeatureB: contactFeature{Face: faceB}})
 	}
-	report.Manifold = &reportvocab.ContactManifold{Points: points}
-	report.Reason = reportvocab.ContactNoReason
+	report.Manifold = &contactManifold{Points: points}
+	report.Reason = vocab.ContactNoReason
 }

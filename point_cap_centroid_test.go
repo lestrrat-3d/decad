@@ -123,7 +123,7 @@ func requirePointCapThreeMomentMatch(t *testing.T, base facetedPayload, plane *p
 	if !wantOK {
 		return
 	}
-	got := vecMeasurementFromInternal(gotInternal)
+	got := gotInternal
 	require.Equal(t, want.Exactness, got.Exactness)
 	require.Equal(t, math.Float64bits(want.Value.X), math.Float64bits(got.Value.X))
 	require.Equal(t, math.Float64bits(want.Value.Y), math.Float64bits(got.Value.Y))

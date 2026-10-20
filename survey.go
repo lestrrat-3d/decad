@@ -7,8 +7,8 @@ import (
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/radiussurvey"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
+	"github.com/lestrrat-3d/decad/internal/verifypublish"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -36,12 +36,12 @@ import (
 // body's wall and concave-radius surveys, draft DD8) — before
 // runSurveys maps either into DiagUnsupportedSurveyPayload rather than a
 // generic undecided result (proposal §16).
-type surveyReason = reportvocab.SurveyReason
+type surveyReason = verifypublish.SurveyReason
 
 const (
-	surveyUndecided          = reportvocab.SurveyUndecided
-	surveyFacetedUnsupported = reportvocab.SurveyFacetedUnsupported
-	surveyPayloadStaged      = reportvocab.SurveyPayloadStaged
+	surveyUndecided          = verifypublish.SurveyUndecided
+	surveyFacetedUnsupported = verifypublish.SurveyFacetedUnsupported
+	surveyPayloadStaged      = verifypublish.SurveyPayloadStaged
 )
 
 // wallOutcome is one body's wall reading: ok=false is an undecided survey;
@@ -71,7 +71,7 @@ type undercutOutcome struct {
 
 // undercutFromNodes preserves face identity and the distinction between an
 // empty proven all-clear and a nil undecided listing.
-func undercutFromNodes(in reportvocab.UndercutSurvey[*topo.Face]) undercutOutcome {
+func undercutFromNodes(in verifypublish.UndercutSurvey[*topo.Face]) undercutOutcome {
 	var faces []*Face
 	if in.Faces != nil {
 		faces = make([]*Face, len(in.Faces))
@@ -155,7 +155,7 @@ type surveyResults struct {
 // sheet (docs/surface-design.md §2.3, §9.1): the wall and concave-radius
 // blocks below run only on a BodySolid, so a sheet leaves WallAsked and
 // RadiusAsked false and their own prerequisite refusal to
-// reportvocab.PublishWall/PublishRadius. It returns the raw private
+// verifypublish.PublishWall/PublishRadius. It returns the raw private
 // outcome for each survey and one diagnostic per
 // non-Sound outcome: DiagWallTooThin / DiagUndercut (Violating) when a stated
 // spec is proven to fail, and the per-survey DiagUndecided* (Suspect) when an
@@ -214,10 +214,10 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 			return surveyResults{}, nil, err
 		}
 		results.Wall = out
-		wallDiags := reportvocab.WallDiagnostics[*Body, JointCell](b, b.n.Payload,
-			reportvocab.ScalarSurvey{Reading: out.reading, Bound: out.bound, OK: out.ok, Reason: out.reason},
+		wallDiags := verifypublish.WallDiagnostics[*Body, JointCell](b, b.n.Payload,
+			verifypublish.ScalarSurvey{Reading: out.reading, Bound: out.bound, OK: out.ok, Reason: out.reason},
 			cfg.Wall.Tool, cfg.ToolMM)
-		results.WallDiagnostics = diagnosticsFromInternal(wallDiags)
+		results.WallDiagnostics = wallDiags
 		diags = append(diags, results.WallDiagnostics...)
 		if err := survey2d.WallBudgetErr(budget); err != nil {
 			return surveyResults{}, nil, err
@@ -246,10 +246,10 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 			out.reason = surveyPayloadStaged
 		}
 		results.Undercut = out
-		undercutDiags := reportvocab.UndercutDiagnostics[*Body, *Face, JointCell](b, b.n.Payload,
-			reportvocab.UndercutSurvey[*Face]{Faces: out.faces, OK: out.ok,
+		undercutDiags := verifypublish.UndercutDiagnostics[*Body, *Face, JointCell](b, b.n.Payload,
+			verifypublish.UndercutSurvey[*Face]{Faces: out.faces, OK: out.ok,
 				Undecided: out.undecided, Reason: out.reason})
-		results.UndercutDiagnostics = diagnosticsFromInternal(undercutDiags)
+		results.UndercutDiagnostics = undercutDiags
 		diags = append(diags, results.UndercutDiagnostics...)
 		if err := survey2d.WallBudgetErr(budget); err != nil {
 			return surveyResults{}, nil, err
@@ -282,9 +282,9 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 			out.reason = surveyPayloadStaged
 		}
 		results.Radius = out
-		radiusDiags := reportvocab.RadiusDiagnostics[*Body, JointCell](b, b.n.Payload,
-			reportvocab.ScalarSurvey{Reading: out.reading, Bound: out.bound, OK: out.ok, Reason: out.reason}, ok)
-		results.RadiusDiagnostics = diagnosticsFromInternal(radiusDiags)
+		radiusDiags := verifypublish.RadiusDiagnostics[*Body, JointCell](b, b.n.Payload,
+			verifypublish.ScalarSurvey{Reading: out.reading, Bound: out.bound, OK: out.ok, Reason: out.reason}, ok)
+		results.RadiusDiagnostics = radiusDiags
 		diags = append(diags, results.RadiusDiagnostics...)
 		if err := survey2d.WallBudgetErr(budget); err != nil {
 			return surveyResults{}, nil, err

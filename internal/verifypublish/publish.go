@@ -1,7 +1,8 @@
-package reportvocab
+package verifypublish
 
 import (
 	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/report"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -33,11 +34,11 @@ type UndercutSurvey[FaceT comparable] struct {
 // SurveyPublication carries the three survey results and their local diagnostics.
 type SurveyPublication[BodyT comparable, FaceT comparable, CellT any] struct {
 	Wall                ScalarSurvey
-	WallDiagnostics     []Diagnostic[BodyT, CellT]
+	WallDiagnostics     []report.DiagnosticOf[BodyT, CellT]
 	Undercut            UndercutSurvey[FaceT]
-	UndercutDiagnostics []Diagnostic[BodyT, CellT]
+	UndercutDiagnostics []report.DiagnosticOf[BodyT, CellT]
 	Radius              ScalarSurvey
-	RadiusDiagnostics   []Diagnostic[BodyT, CellT]
+	RadiusDiagnostics   []report.DiagnosticOf[BodyT, CellT]
 }
 
 // BodyPublication contains the already decided readings of one body.
@@ -46,40 +47,40 @@ type BodyPublication[BodyT comparable, FaceT comparable, CellT any] struct {
 	Solid               bool
 	Sheet               bool
 	Faces               []FaceT
-	Status              Status
-	Validity            ValidityResult[BodyT, CellT]
-	Topology            HeldTopology
-	Area                ScalarReading
-	Bounds              BoundsReading
-	Region              *RegionReadings
-	Request             VerifyRequest
+	Status              report.Status
+	Validity            report.ValidityResultOf[BodyT, CellT]
+	Topology            report.HeldTopology
+	Area                report.ScalarReading
+	Bounds              report.BoundsReading
+	Region              *report.RegionReadings
+	Request             report.VerifyRequest
 	Surveys             SurveyPublication[BodyT, FaceT, CellT]
-	WallTolerance       ToleranceResult
-	WallToleranceDiag   *Diagnostic[BodyT, CellT]
-	RadiusTolerance     ToleranceResult
-	RadiusToleranceDiag *Diagnostic[BodyT, CellT]
-	CoreDiagnostics     []Diagnostic[BodyT, CellT]
+	WallTolerance       report.ToleranceResult
+	WallToleranceDiag   *report.DiagnosticOf[BodyT, CellT]
+	RadiusTolerance     report.ToleranceResult
+	RadiusToleranceDiag *report.DiagnosticOf[BodyT, CellT]
+	CoreDiagnostics     []report.DiagnosticOf[BodyT, CellT]
 }
 
 // PublishBody flattens diagnostics in validity, core, wall, undercut, radius order.
-func PublishBody[BodyT comparable, FaceT comparable, CellT any](in BodyPublication[BodyT, FaceT, CellT]) *BodyReport[BodyT, FaceT, CellT] {
+func PublishBody[BodyT comparable, FaceT comparable, CellT any](in BodyPublication[BodyT, FaceT, CellT]) *report.BodyReportOf[BodyT, FaceT, CellT] {
 	wall := PublishWall(in.Body, in.Solid, in.Sheet, in.Surveys.Wall, in.Surveys.WallDiagnostics,
 		in.Request, in.Validity.Outcome, in.WallTolerance, in.WallToleranceDiag)
 	undercut := PublishUndercut(in.Body, in.Solid, in.Sheet, in.Faces, in.Surveys.Undercut,
 		in.Surveys.UndercutDiagnostics, in.Request, in.Validity.Outcome)
 	radius := PublishRadius(in.Body, in.Solid, in.Sheet, in.Surveys.Radius, in.Surveys.RadiusDiagnostics,
 		in.Request, in.Validity.Outcome, in.RadiusTolerance, in.RadiusToleranceDiag)
-	var region *RegionReadings
-	if in.Validity.Outcome == ValidityValid && in.Solid {
+	var region *report.RegionReadings
+	if in.Validity.Outcome == report.ValidityValid && in.Solid {
 		region = in.Region
 	}
-	var diags []Diagnostic[BodyT, CellT]
+	var diags []report.DiagnosticOf[BodyT, CellT]
 	diags = append(diags, in.Validity.Diagnostics...)
 	diags = append(diags, in.CoreDiagnostics...)
 	diags = append(diags, wall.Diagnostics...)
 	diags = append(diags, undercut.Diagnostics...)
 	diags = append(diags, radius.Diagnostics...)
-	return &BodyReport[BodyT, FaceT, CellT]{
+	return &report.BodyReportOf[BodyT, FaceT, CellT]{
 		Body: in.Body, Status: in.Status, Validity: in.Validity, Topology: in.Topology,
 		Area: in.Area, Bounds: in.Bounds, Region: region, Wall: wall,
 		Undercut: undercut, ConcaveRadius: radius, Diagnostics: diags,
@@ -87,11 +88,11 @@ func PublishBody[BodyT comparable, FaceT comparable, CellT any](in BodyPublicati
 }
 
 // PublishReport assembles an already decided document report.
-func PublishReport[BodyT comparable, FaceT any, CellT any](req VerifyRequest,
-	bodies []*BodyReport[BodyT, FaceT, CellT], interferences []Interference[BodyT],
-	clearances []Clearance[BodyT], diagnostics []Diagnostic[BodyT, CellT], status Status,
-) *Report[BodyT, FaceT, CellT] {
-	return &Report[BodyT, FaceT, CellT]{
+func PublishReport[BodyT comparable, FaceT any, CellT any](req report.VerifyRequest,
+	bodies []*report.BodyReportOf[BodyT, FaceT, CellT], interferences []report.InterferenceOf[BodyT],
+	clearances []report.ClearanceOf[BodyT], diagnostics []report.DiagnosticOf[BodyT, CellT], status report.Status,
+) *report.ReportOf[BodyT, FaceT, CellT] {
+	return &report.ReportOf[BodyT, FaceT, CellT]{
 		Request: req, Bodies: bodies, Interferences: interferences,
 		Clearances: clearances, Diagnostics: diagnostics, Status: status,
 	}
@@ -108,22 +109,22 @@ type ValidityEvidence struct {
 }
 
 // PublishValidity maps the appropriate body's audit onto one verdict.
-func PublishValidity[BodyT comparable, CellT any](body BodyT, ev ValidityEvidence) ValidityResult[BodyT, CellT] {
-	undecided := ValidityResult[BodyT, CellT]{
-		Outcome: ValidityUndecided,
-		Diagnostics: []Diagnostic[BodyT, CellT]{{
-			Code: DiagUndecidedValidity, Status: Suspect, Body: body, Reading: ReadingNone,
+func PublishValidity[BodyT comparable, CellT any](body BodyT, ev ValidityEvidence) report.ValidityResultOf[BodyT, CellT] {
+	undecided := report.ValidityResultOf[BodyT, CellT]{
+		Outcome: report.ValidityUndecided,
+		Diagnostics: []report.DiagnosticOf[BodyT, CellT]{{
+			Code: report.DiagUndecidedValidity, Status: report.Suspect, Body: body, Reading: report.ReadingNone,
 			Message: "the held boundary's validity is not decisive beyond its own proven bound",
 		}},
 	}
 	if ev.Sheet {
 		switch {
 		case ev.SheetProven:
-			return ValidityResult[BodyT, CellT]{Outcome: ValidityValid}
+			return report.ValidityResultOf[BodyT, CellT]{Outcome: report.ValidityValid}
 		case ev.SheetViolated:
-			return ValidityResult[BodyT, CellT]{Outcome: ValidityInvalid,
-				Diagnostics: []Diagnostic[BodyT, CellT]{{
-					Code: DiagInvalidBody, Status: Unsound, Body: body, Reading: ReadingNone,
+			return report.ValidityResultOf[BodyT, CellT]{Outcome: report.ValidityInvalid,
+				Diagnostics: []report.DiagnosticOf[BodyT, CellT]{{
+					Code: report.DiagInvalidBody, Status: report.Unsound, Body: body, Reading: report.ReadingNone,
 					Message: "the held boundary is proven not a valid sheet",
 				}}}
 		default:
@@ -132,13 +133,13 @@ func PublishValidity[BodyT comparable, CellT any](body BodyT, ev ValidityEvidenc
 	}
 	switch {
 	case !ev.Clean:
-		return ValidityResult[BodyT, CellT]{Outcome: ValidityInvalid,
-			Diagnostics: []Diagnostic[BodyT, CellT]{{
-				Code: DiagInvalidBody, Status: Unsound, Body: body, Reading: ReadingNone,
+		return report.ValidityResultOf[BodyT, CellT]{Outcome: report.ValidityInvalid,
+			Diagnostics: []report.DiagnosticOf[BodyT, CellT]{{
+				Code: report.DiagInvalidBody, Status: report.Unsound, Body: body, Reading: report.ReadingNone,
 				Message: "the held boundary is proven not a valid solid",
 			}}}
 	case ev.Built && ev.Solid:
-		return ValidityResult[BodyT, CellT]{Outcome: ValidityValid}
+		return report.ValidityResultOf[BodyT, CellT]{Outcome: report.ValidityValid}
 	default:
 		return undecided
 	}
@@ -146,75 +147,75 @@ func PublishValidity[BodyT comparable, CellT any](body BodyT, ev ValidityEvidenc
 
 // SurveyPrerequisiteDiagnostic identifies a requested survey blocked by validity or body kind.
 func SurveyPrerequisiteDiagnostic[BodyT comparable, CellT any](body BodyT, sheet bool,
-	survey SurveyKind) Diagnostic[BodyT, CellT] {
+	survey report.SurveyKind) report.DiagnosticOf[BodyT, CellT] {
 	msg := "the requested survey needs a proven solid, and this body's validity is not valid"
 	switch {
-	case survey == SurveyWall && sheet:
+	case survey == report.SurveyWall && sheet:
 		msg = "the requested survey needs a proven solid, and this body is a sheet with no material for a wall question"
-	case survey == SurveyConcaveRadius && sheet:
+	case survey == report.SurveyConcaveRadius && sheet:
 		msg = "the requested survey needs a proven solid, and this body is a sheet with no material for a concave question"
 	}
-	return Diagnostic[BodyT, CellT]{
-		Code: DiagSurveyPrerequisite, Status: Suspect, Body: body,
-		Survey: survey, Reading: ReadingNone, Message: msg,
+	return report.DiagnosticOf[BodyT, CellT]{
+		Code: report.DiagSurveyPrerequisite, Status: report.Suspect, Body: body,
+		Survey: survey, Reading: report.ReadingNone, Message: msg,
 	}
 }
 
 // PublishWall maps the wall survey and its tolerance verdict onto one result.
 func PublishWall[BodyT comparable, CellT any](body BodyT, solid, sheet bool, out ScalarSurvey,
-	diagnostics []Diagnostic[BodyT, CellT], req VerifyRequest, validity ValidityOutcome,
-	tolerance ToleranceResult, toleranceDiag *Diagnostic[BodyT, CellT],
-) WallResult[BodyT, CellT] {
+	diagnostics []report.DiagnosticOf[BodyT, CellT], req report.VerifyRequest, validity report.ValidityOutcome,
+	tolerance report.ToleranceResult, toleranceDiag *report.DiagnosticOf[BodyT, CellT],
+) report.WallResultOf[BodyT, CellT] {
 	if req.Wall == nil {
-		return WallResult[BodyT, CellT]{Outcome: ScalarNotRequested, Assessment: AssessmentNotEvaluated}
+		return report.WallResultOf[BodyT, CellT]{Outcome: report.ScalarNotRequested, Assessment: report.AssessmentNotEvaluated}
 	}
-	if validity != ValidityValid || !solid {
-		return WallResult[BodyT, CellT]{
-			Request: req.Wall, Outcome: ScalarUnavailable, Assessment: AssessmentUndecided,
-			Diagnostics: []Diagnostic[BodyT, CellT]{SurveyPrerequisiteDiagnostic[BodyT, CellT](body, sheet, SurveyWall)},
+	if validity != report.ValidityValid || !solid {
+		return report.WallResultOf[BodyT, CellT]{
+			Request: req.Wall, Outcome: report.ScalarUnavailable, Assessment: report.AssessmentUndecided,
+			Diagnostics: []report.DiagnosticOf[BodyT, CellT]{SurveyPrerequisiteDiagnostic[BodyT, CellT](body, sheet, report.SurveyWall)},
 		}
 	}
-	res := WallResult[BodyT, CellT]{Request: req.Wall}
+	res := report.WallResultOf[BodyT, CellT]{Request: req.Wall}
 	switch {
 	case !out.OK:
-		res.Assessment = AssessmentUndecided
+		res.Assessment = report.AssessmentUndecided
 		res.Outcome = unavailableOrUndecided(out.Reason)
 	case out.Reading == nil:
-		res.Outcome = ScalarAbsent
-		res.Assessment = AssessmentMet
+		res.Outcome = report.ScalarAbsent
+		res.Assessment = report.AssessmentMet
 	default:
-		res.Outcome = ScalarMeasured
-		res.Minimum = &ScalarReading{Measurement: LengthMeasurement(*out.Reading, out.Bound), Tolerance: tolerance}
+		res.Outcome = report.ScalarMeasured
+		res.Minimum = &report.ScalarReading{Measurement: LengthMeasurement(*out.Reading, out.Bound), Tolerance: tolerance}
 		switch IntervalVerdict(*out.Reading, out.Bound, req.Wall.Minimum.Base()) {
 		case -1:
-			res.Assessment = AssessmentViolated
+			res.Assessment = report.AssessmentViolated
 		case 1:
-			res.Assessment = AssessmentMet
+			res.Assessment = report.AssessmentMet
 		default:
-			res.Assessment = AssessmentUndecided
+			res.Assessment = report.AssessmentUndecided
 		}
 	}
 	res.Diagnostics = appendToleranceDiag(diagnostics, toleranceDiag)
 	return res
 }
 
-func unavailableOrUndecided(reason SurveyReason) ScalarOutcome {
+func unavailableOrUndecided(reason SurveyReason) report.ScalarOutcome {
 	if reason == SurveyFacetedUnsupported || reason == SurveyPayloadStaged {
-		return ScalarUnavailable
+		return report.ScalarUnavailable
 	}
-	return ScalarUndecided
+	return report.ScalarUndecided
 }
 
-func unavailableOrUndecidedCoverage(reason SurveyReason) Coverage {
+func unavailableOrUndecidedCoverage(reason SurveyReason) report.Coverage {
 	if reason == SurveyFacetedUnsupported || reason == SurveyPayloadStaged {
-		return CoverageUnavailable
+		return report.CoverageUnavailable
 	}
-	return CoverageUndecided
+	return report.CoverageUndecided
 }
 
-func appendToleranceDiag[BodyT comparable, CellT any](survey []Diagnostic[BodyT, CellT],
-	toleranceDiag *Diagnostic[BodyT, CellT]) []Diagnostic[BodyT, CellT] {
-	var diags []Diagnostic[BodyT, CellT]
+func appendToleranceDiag[BodyT comparable, CellT any](survey []report.DiagnosticOf[BodyT, CellT],
+	toleranceDiag *report.DiagnosticOf[BodyT, CellT]) []report.DiagnosticOf[BodyT, CellT] {
+	var diags []report.DiagnosticOf[BodyT, CellT]
 	diags = append(diags, survey...)
 	if toleranceDiag != nil {
 		diags = append(diags, *toleranceDiag)
@@ -242,38 +243,38 @@ func OrderedFaces[FaceT comparable](all, confirmed []FaceT) []FaceT {
 
 // PublishUndercut maps proven opposing faces and survey coverage onto one result.
 func PublishUndercut[BodyT comparable, FaceT comparable, CellT any](body BodyT, solid, sheet bool,
-	all []FaceT, out UndercutSurvey[FaceT], diagnostics []Diagnostic[BodyT, CellT],
-	req VerifyRequest, validity ValidityOutcome,
-) UndercutResult[BodyT, FaceT, CellT] {
+	all []FaceT, out UndercutSurvey[FaceT], diagnostics []report.DiagnosticOf[BodyT, CellT],
+	req report.VerifyRequest, validity report.ValidityOutcome,
+) report.UndercutResultOf[BodyT, FaceT, CellT] {
 	if req.Undercut == nil {
-		return UndercutResult[BodyT, FaceT, CellT]{Coverage: CoverageNotRequested, Assessment: AssessmentNotEvaluated}
+		return report.UndercutResultOf[BodyT, FaceT, CellT]{Coverage: report.CoverageNotRequested, Assessment: report.AssessmentNotEvaluated}
 	}
-	if validity != ValidityValid || (!solid && !sheet) {
-		return UndercutResult[BodyT, FaceT, CellT]{
-			Request: req.Undercut, Coverage: CoverageUnavailable, Assessment: AssessmentUndecided,
-			Diagnostics: []Diagnostic[BodyT, CellT]{SurveyPrerequisiteDiagnostic[BodyT, CellT](body, sheet, SurveyUndercut)},
+	if validity != report.ValidityValid || (!solid && !sheet) {
+		return report.UndercutResultOf[BodyT, FaceT, CellT]{
+			Request: req.Undercut, Coverage: report.CoverageUnavailable, Assessment: report.AssessmentUndecided,
+			Diagnostics: []report.DiagnosticOf[BodyT, CellT]{SurveyPrerequisiteDiagnostic[BodyT, CellT](body, sheet, report.SurveyUndercut)},
 		}
 	}
-	res := UndercutResult[BodyT, FaceT, CellT]{
+	res := report.UndercutResultOf[BodyT, FaceT, CellT]{
 		Request: req.Undercut, Faces: OrderedFaces(all, out.Faces), Diagnostics: diagnostics,
 	}
 	switch {
 	case !out.OK:
-		res.Assessment = AssessmentUndecided
+		res.Assessment = report.AssessmentUndecided
 		res.Coverage = unavailableOrUndecidedCoverage(out.Reason)
 	case out.Undecided:
 		if len(out.Faces) > 0 {
-			res.Coverage = CoveragePartial
-			res.Assessment = AssessmentViolated
+			res.Coverage = report.CoveragePartial
+			res.Assessment = report.AssessmentViolated
 		} else {
-			res.Coverage = CoverageUndecided
-			res.Assessment = AssessmentUndecided
+			res.Coverage = report.CoverageUndecided
+			res.Assessment = report.AssessmentUndecided
 		}
 	default:
-		res.Coverage = CoverageComplete
-		res.Assessment = AssessmentMet
+		res.Coverage = report.CoverageComplete
+		res.Assessment = report.AssessmentMet
 		if len(out.Faces) > 0 {
-			res.Assessment = AssessmentViolated
+			res.Assessment = report.AssessmentViolated
 		}
 	}
 	return res
@@ -281,27 +282,27 @@ func PublishUndercut[BodyT comparable, FaceT comparable, CellT any](body BodyT, 
 
 // PublishRadius maps the concave-radius survey and its tolerance verdict onto one result.
 func PublishRadius[BodyT comparable, CellT any](body BodyT, solid, sheet bool, out ScalarSurvey,
-	diagnostics []Diagnostic[BodyT, CellT], req VerifyRequest, validity ValidityOutcome,
-	tolerance ToleranceResult, toleranceDiag *Diagnostic[BodyT, CellT],
-) ConcaveRadiusResult[BodyT, CellT] {
+	diagnostics []report.DiagnosticOf[BodyT, CellT], req report.VerifyRequest, validity report.ValidityOutcome,
+	tolerance report.ToleranceResult, toleranceDiag *report.DiagnosticOf[BodyT, CellT],
+) report.ConcaveRadiusResultOf[BodyT, CellT] {
 	if !req.ConcaveRadius {
-		return ConcaveRadiusResult[BodyT, CellT]{Outcome: ScalarNotRequested}
+		return report.ConcaveRadiusResultOf[BodyT, CellT]{Outcome: report.ScalarNotRequested}
 	}
-	if validity != ValidityValid || !solid {
-		return ConcaveRadiusResult[BodyT, CellT]{
-			Outcome:     ScalarUnavailable,
-			Diagnostics: []Diagnostic[BodyT, CellT]{SurveyPrerequisiteDiagnostic[BodyT, CellT](body, sheet, SurveyConcaveRadius)},
+	if validity != report.ValidityValid || !solid {
+		return report.ConcaveRadiusResultOf[BodyT, CellT]{
+			Outcome:     report.ScalarUnavailable,
+			Diagnostics: []report.DiagnosticOf[BodyT, CellT]{SurveyPrerequisiteDiagnostic[BodyT, CellT](body, sheet, report.SurveyConcaveRadius)},
 		}
 	}
-	res := ConcaveRadiusResult[BodyT, CellT]{}
+	res := report.ConcaveRadiusResultOf[BodyT, CellT]{}
 	switch {
 	case !out.OK:
 		res.Outcome = unavailableOrUndecided(out.Reason)
 	case out.Reading == nil:
-		res.Outcome = ScalarAbsent
+		res.Outcome = report.ScalarAbsent
 	default:
-		res.Outcome = ScalarMeasured
-		res.Minimum = &ScalarReading{Measurement: LengthMeasurement(*out.Reading, out.Bound), Tolerance: tolerance}
+		res.Outcome = report.ScalarMeasured
+		res.Minimum = &report.ScalarReading{Measurement: LengthMeasurement(*out.Reading, out.Bound), Tolerance: tolerance}
 	}
 	res.Diagnostics = appendToleranceDiag(diagnostics, toleranceDiag)
 	return res

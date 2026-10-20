@@ -9,12 +9,13 @@ package planarband
 import (
 	"context"
 
+	vocab "github.com/lestrrat-3d/decad/report"
+
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/pair"
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/units"
 )
@@ -34,11 +35,11 @@ type Convexity interface {
 // rule; an exact pair publishes the kernel's relation, with §10.5's support
 // band on a separated pair and §9.3's manifold on a touch or an overlap.
 // Publish does not retain certificates.
-func Publish(ctx context.Context, budget *proofbound.WorkBudget, report *reportvocab.ContactReport,
+func Publish(ctx context.Context, budget *proofbound.WorkBudget, report *contactReport,
 	result planar.PlanarResult, a, b *planar.PlanarSolid, deltaA, deltaB proofarith.Dyadic,
 	certificates Convexity) error {
-	report.Relation, report.Gap, report.Overlap, report.Manifold = reportvocab.ContactUndecided, nil, nil, nil
-	report.Reason = reportvocab.ContactReasonOf(result.Reason)
+	report.Relation, report.Gap, report.Overlap, report.Manifold = vocab.ContactUndecided, nil, nil, nil
+	report.Reason = pair.ContactReasonOf(result.Reason)
 	if deltaA.Sign() > 0 || deltaB.Sign() > 0 {
 		p := bandPair{a: a, b: b, deltaA: deltaA, deltaB: deltaB, certificates: certificates}
 		return p.classify(ctx, budget, report, result)
@@ -46,14 +47,14 @@ func Publish(ctx context.Context, budget *proofbound.WorkBudget, report *reportv
 	band := SupportBand(report.Request)
 	switch result.Relation {
 	case pair.Separated:
-		report.Relation = reportvocab.ContactSeparated
+		report.Relation = vocab.ContactSeparated
 		gap := result.Gap.Measurement()
 		report.Gap = &gap
 		return publishSupportBand(budget, report, a, b, result, band)
 	case pair.Touching, pair.Overlapping:
-		report.Relation = reportvocab.ContactOverlapping
+		report.Relation = vocab.ContactOverlapping
 		if result.Relation == pair.Touching {
-			report.Relation = reportvocab.ContactTouching
+			report.Relation = vocab.ContactTouching
 			gap := measurement.Measurement{Value: units.Millimeters(0), Exactness: measurement.Exact, Bound: units.Millimeters(0)}
 			report.Gap = &gap
 		}
@@ -65,14 +66,14 @@ func Publish(ctx context.Context, budget *proofbound.WorkBudget, report *reportv
 			return err
 		}
 		if !convexA && !convexB && result.Relation == pair.Overlapping {
-			report.Reason = reportvocab.ContactNonConvex
+			report.Reason = vocab.ContactNonConvex
 			return nil
 		}
-		report.Reason = reportvocab.ContactNoNormalProof
+		report.Reason = vocab.ContactNoNormalProof
 		return publishManifold(budget, report, a, b, result, convexA, convexB, band)
 	default:
-		if report.Reason == reportvocab.ContactNoReason {
-			report.Reason = reportvocab.ContactAmbiguousFeature
+		if report.Reason == vocab.ContactNoReason {
+			report.Reason = vocab.ContactAmbiguousFeature
 		}
 		return nil
 	}
@@ -80,7 +81,7 @@ func Publish(ctx context.Context, budget *proofbound.WorkBudget, report *reportv
 
 // SupportBand is the request's SupportBand as an exact dyadic, zero for the
 // zero Value.
-func SupportBand(req reportvocab.ContactRequest) proofarith.Dyadic {
+func SupportBand(req vocab.ContactRequest) proofarith.Dyadic {
 	band, ok := proofarith.DyOf(req.SupportBand.Base())
 	if !ok || band.Sign() < 0 {
 		return proofarith.DyZero()
@@ -89,7 +90,7 @@ func SupportBand(req reportvocab.ContactRequest) proofarith.Dyadic {
 }
 
 // convexities reads both bodies' certificates, A's first.
-func convexities(ctx context.Context, budget *proofbound.WorkBudget, report *reportvocab.ContactReport,
+func convexities(ctx context.Context, budget *proofbound.WorkBudget, report *contactReport,
 	certificates Convexity) (bool, bool, error) {
 	convexA, err := certificates.Convex(ctx, budget, report.A)
 	if err != nil {

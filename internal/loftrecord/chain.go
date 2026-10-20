@@ -30,7 +30,7 @@ type ChainPayload struct {
 }
 
 // SurveyClass names the payload class a staged survey diagnostic reports
-// (internal/reportvocab), the name the evaluator has always published for it.
+// (internal/verifypublish), the name the evaluator has always published for it.
 func (ChainPayload) SurveyClass() string { return "chainLoftPayload" }
 
 // Transform is the accumulated rigid placement.

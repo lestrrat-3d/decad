@@ -14,10 +14,10 @@ The rules for rows live in `docs/layout.md`.
 | `report.go` | Public verdict and diagnostic enums, diagnostic and pair result types, and private report adapters. |
 | `verify_tolerance.go` | Adapts `internal/tolerance/` to `Verify` readings and diagnostics. See verification §2-§3. |
 | `verify_result.go` | Public survey outcome enums, reports, requests, bounded readings and survey results. |
-| `verify_publish.go` | Adapts private surveys to `internal/reportvocab` publication. See verification §1, §6. |
+| `verify_publish.go` | Adapts private surveys to `internal/verifypublish` publication. See verification §1, §6. |
 | `internal/clearance/pairkernel/` | The pair kernel over topology nodes: `Pair`, `SheetSolid`, axis-aligned box pairs, the per-call carrier `Cache`, carrier models, the cell walk, the body and pair gate diameters, and the planar disjoint enclosure. See clearance §1–§7 and verification §3. |
 | `clearance_planar.go` | The exact planar pair arm for mitred, faceted and coil bodies: interference §3.2. |
-| `contact_pair.go` | Pair gates, public contact report types, their conversion from the `internal/reportvocab` report, the bit-exact pair report memo key and cap, and the `internal/contactpair/` call. See contact-geometry §6. |
+| `contact_pair.go` | Pair gates, public contact report aliases of `report/`, the lift from the node report to the handle report, the bit-exact pair report memo key and cap, and the `internal/contactpair/` call. See contact-geometry §6. |
 | `internal/planarpose/pose.go` | Planar admission, snapshots and convexity cache; publication through `internal/planarband/`. See multibody §9–§10. |
 | `contact_faceted_floor.go` | Faceted floor sweeps by exact support face or swept-box clearance, over `internal/contactfaceted/`. See contact-sweep. |
 | `contact_sphere_sweep.go` | Sphere-box sweeps over `internal/contactround/` proofs. See contact-sweep §4–§5. |
@@ -36,7 +36,7 @@ The rules for rows live in `docs/layout.md`.
 | `linkage_loop.go` | Closed loops and their bar geometry. See `docs/linkage-check-design.md` §15. |
 | `linkage_loop_drive.go` | Loop private-scene drive, loop poses and `Schedule`. See `docs/linkage-check-design.md` §15. |
 | `linkage_bound.go` | Linkage reach and projection adapters. See linkage §5.2, §5.8. |
-| `contact_sweep.go` | Sweeps, public report, request and time types, the request's conversion to the `internal/reportvocab` form, and tracks. See contact-sweep §7. |
+| `contact_sweep.go` | Sweeps, public report and time types, the request and outcome aliases of `report/`, and tracks. See contact-sweep §7. |
 | `contact_sweep_run.go` | The pair sweep run: sampling, ideal contact, manifold transfer and departure proof. See contact-sweep §7. |
 | `contact_sweep_rotation.go` / `contact_sweep_planar.go` | Rotating sweep adapters over `internal/planarsweep/`'s prepared body paths and certificates, and planar sweeps that publish their departures and band tracks. See contact-sweep §4, §7 and multibody §10. |
 | `contact_sweep_rotation_depart.go` | Rotating pair sweep departure search, bracket refinement and interval clearance over the `internal/pair/box/` and `internal/sweepmemo/` separation proofs. See contact-sweep §4. |

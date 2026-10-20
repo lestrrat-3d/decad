@@ -3,9 +3,10 @@ package decad
 import (
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/motionconclude"
+
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 	"github.com/lestrrat-3d/decad/internal/motionoption"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -236,7 +237,7 @@ func motionRequest(cfg motionConfig) MotionRequest {
 	}
 }
 
-func rootMotionIntervals(intervals []reportvocab.ConcludedMotionSpan) []MotionInterval {
+func rootMotionIntervals(intervals []motionconclude.ConcludedMotionSpan) []MotionInterval {
 	if intervals == nil {
 		return nil
 	}
@@ -246,39 +247,39 @@ func rootMotionIntervals(intervals []reportvocab.ConcludedMotionSpan) []MotionIn
 			From:      interval.From,
 			To:        interval.To,
 			Outcome:   rootIntervalOutcome(interval.Outcome),
-			Clearance: measurementPtrFromInternal(interval.Clearance),
+			Clearance: interval.Clearance,
 		}
 	}
 	return result
 }
 
-func rootIntervalOutcome(outcome reportvocab.MotionSpanOutcome) IntervalOutcome {
+func rootIntervalOutcome(outcome motionconclude.MotionSpanOutcome) IntervalOutcome {
 	switch outcome {
-	case reportvocab.SpanNotEvaluated:
+	case motionconclude.SpanNotEvaluated:
 		return IntervalNotEvaluated
-	case reportvocab.SpanClear:
+	case motionconclude.SpanClear:
 		return IntervalClear
-	case reportvocab.SpanColliding:
+	case motionconclude.SpanColliding:
 		return IntervalColliding
-	case reportvocab.SpanUndecided:
+	case motionconclude.SpanUndecided:
 		return IntervalUndecided
 	default:
 		return IntervalOutcome(outcome)
 	}
 }
 
-func reportSpanOutcome(outcome IntervalOutcome) reportvocab.MotionSpanOutcome {
+func reportSpanOutcome(outcome IntervalOutcome) motionconclude.MotionSpanOutcome {
 	switch outcome {
 	case IntervalNotEvaluated:
-		return reportvocab.SpanNotEvaluated
+		return motionconclude.SpanNotEvaluated
 	case IntervalClear:
-		return reportvocab.SpanClear
+		return motionconclude.SpanClear
 	case IntervalColliding:
-		return reportvocab.SpanColliding
+		return motionconclude.SpanColliding
 	case IntervalUndecided:
-		return reportvocab.SpanUndecided
+		return motionconclude.SpanUndecided
 	default:
-		return reportvocab.MotionSpanOutcome(outcome)
+		return motionconclude.MotionSpanOutcome(outcome)
 	}
 }
 

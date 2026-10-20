@@ -28,10 +28,10 @@ where that procedure sits in the report walk.
 | **overlapping** | interiors share a non-empty open region | emit `Interference` only when overlap volume is also bounded; otherwise `Suspect` |
 | **undecided** | none of the three claims is proven | no pair row; `Suspect` |
 
-`reportvocab.PairOverlapping` MUST be distinct from `reportvocab.PairUndecided`. A nesting witness,
+`boundaryaudit.PairOverlapping` MUST be distinct from `boundaryaudit.PairUndecided`. A nesting witness,
 an admitted transversal boundary crossing, or a certified same-side contact
 proves overlap even when the evaluator cannot yet measure it. Losing that fact
-inside `reportvocab.PairUndecided` prevents the next proof stage from using it and makes
+inside `boundaryaudit.PairUndecided` prevents the next proof stage from using it and makes
 diagnostics lie about what remains unknown.
 
 The relations concern **interiors**. Boundaries may touch while the pair stays
@@ -43,7 +43,7 @@ The pair result also records the strongest certificate already obtained:
 ```go
 // internal/clearance/pairkernel
 type Result struct {
-    Verdict reportvocab.PairVerdict // undecided / disjoint / touching / overlapping
+    Verdict boundaryaudit.PairVerdict // undecided / disjoint / touching / overlapping
     // gap interval + exactness + pair diameter when disjoint or touching
     // containment classification when a strict nesting proof ran
 }
@@ -77,11 +77,11 @@ For each pair:
    clearances were not requested, finish the pair.
 3. Run the analytic pair kernel when a gap is requested or box separation did
    not settle the partition.
-4. Finish immediately on `reportvocab.PairDisjoint` or `reportvocab.PairTouching`; append a clearance
+4. Finish immediately on `boundaryaudit.PairDisjoint` or `boundaryaudit.PairTouching`; append a clearance
    row only when `WithClearances()` asked and the gap was measured.
-5. On `reportvocab.PairOverlapping`, try its containment-volume certificate first, then
+5. On `boundaryaudit.PairOverlapping`, try its containment-volume certificate first, then
    read-only intersection measurement when needed.
-6. On `reportvocab.PairUndecided`, try read-only intersection measurement. A positive
+6. On `boundaryaudit.PairUndecided`, try read-only intersection measurement. A positive
    volume may prove overlap even when the analytic kernel could not classify
    the contact arrangement.
 7. If neither volume path proves and bounds the overlap, mark the pair
@@ -133,19 +133,19 @@ analytic clearance kernel still runs.
 The clearance kernel owns boundary distance, certified contact, boundary
 crossing, and nesting classification. It returns all four §1 relations:
 
-- positive boundary clearance plus nesting excluded → `reportvocab.PairDisjoint`;
+- positive boundary clearance plus nesting excluded → `boundaryaudit.PairDisjoint`;
 - a certified opposite-material contact with no other crossing →
-  `reportvocab.PairTouching`;
+  `boundaryaudit.PairTouching`;
 - an admitted transversal crossing, certified same-side contact, or nesting
-  witness → `reportvocab.PairOverlapping`;
-- insufficient trim, contact, or containment proof → `reportvocab.PairUndecided`.
+  witness → `boundaryaudit.PairOverlapping`;
+- insufficient trim, contact, or containment proof → `boundaryaudit.PairUndecided`.
 
 Boundary distance alone MUST NOT turn nesting into disjointness. A nesting cast
 must preserve three outcomes — outside, inside, undecided — instead of returning
 one `bool` that merges inside with failed classification.
 
 **The exact planar arm** (`clearance_planar.go`) answers a pair the analytic
-kernel leaves `reportvocab.PairUndecided` when one operand is a payload that kernel has
+kernel leaves `boundaryaudit.PairUndecided` when one operand is a payload that kernel has
 no carrier model for and the exact planar relation can read: a
 `mitredSweepPayload`, a `facetedPayload` or a `coilPayload`, each read off
 its own held triangle set with that set's displacement `δ`, against a prism,
@@ -155,10 +155,10 @@ admission `Document.ContactPair` uses (`planarpose.SolidAtPose`,
 `internal/planarpose/pose.go`; `docs/multibody-dynamics-design.md` §9.1, §10.4).
 Every predicate there is an exact sign over dyadic coordinates, and the band
 rule of §10.4 turns the held relation into the partition's: a held gap whose
-lower end clears the summed `δ` is `reportvocab.PairDisjoint` with the interval widened
-by `δ` outward; a held touch is `reportvocab.PairTouching` only at `δ = 0`; a held
-overlap is `reportvocab.PairOverlapping` at `δ = 0` or through a vertex proven deeper
-than `δ` (`pair.PlanarDeepVertex`); anything else stays `reportvocab.PairUndecided`. The
+lower end clears the summed `δ` is `boundaryaudit.PairDisjoint` with the interval widened
+by `δ` outward; a held touch is `boundaryaudit.PairTouching` only at `δ = 0`; a held
+overlap is `boundaryaudit.PairOverlapping` at `δ = 0` or through a vertex proven deeper
+than `δ` (`pair.PlanarDeepVertex`); anything else stays `boundaryaudit.PairUndecided`. The
 arm only ever adds a verdict: it never replaces one the analytic kernel
 reached. A pair of prisms or stitched solids keeps the analytic kernel's
 answer, a cup is never tessellated for verification
@@ -455,7 +455,7 @@ no positive-area cell to classify at all. The cells carry no outline allowance
 of their own that would cover that gap.
 
 The patch relation does not decide the whole pair by itself. Opposing cells are
-`reportvocab.PairTouching` only when the analytic/contact pass proves no overlap elsewhere.
+`boundaryaudit.PairTouching` only when the analytic/contact pass proves no overlap elsewhere.
 Matching cells may bound a positive-volume intersection only after the complete
 stitched result passes §5 and its volume clears §6.
 

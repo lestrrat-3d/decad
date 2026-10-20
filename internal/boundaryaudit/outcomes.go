@@ -1,4 +1,4 @@
-package reportvocab
+package boundaryaudit
 
 import "github.com/lestrrat-3d/decad/internal/meshbool"
 

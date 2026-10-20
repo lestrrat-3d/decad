@@ -819,6 +819,25 @@ reads. The code in the root package carries the method form of every row in the
 table; each migrates to its free function in the change that updates that operation's
 companion design.
 
+### 6.4 The report package
+
+`report/` holds the result vocabulary that `Verify`, `ContactPair` and
+`SweepPair` publish: `Measurement`, `VecMeasurement`, `Box` and `Exactness`;
+the outcome, reading, survey and diagnostic enums; the contact and sweep
+requests and enums; and the contact, diagnostic, interference, clearance and
+Verify report records. A record that names bodies, faces, edges or vertices is
+generic over those reference types, and its name ends in `Of`
+(`ContactReportOf[B, F, E, V]`, `DiagnosticOf[B, C]`, `ReportOf[B, F, C]`).
+
+`decad` instantiates each generic record with its own handles and exports the
+instantiation as an alias, so `decad.ContactReport` and
+`report.ContactReportOf[*decad.Body, *decad.Face, *decad.Edge, *decad.Vertex]`
+are one type, and the enums, constants and requests are the same types under
+both spellings. Callers name the types through `decad`; the field and method
+documentation lives in `report`. The package imports no `decad` type, so the
+internal kernels instantiate the same records with topology nodes and
+`report.Lift` maps a finished node record to its handle form.
+
 ## 7. The sketch seam
 
 `sketch` answers every 2D question; decad consumes the answer and NEVER

@@ -5,7 +5,6 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -64,7 +63,7 @@ func ToFaceAngularStop(face *topo.Face, stop AngularStop, travel float64) (float
 		// carry a Faceted surface, and this evaluator cannot use it as a stop.
 		// The message names the actual public surface type so the caller sees
 		// why.
-		return 0, fmt.Errorf(`%w: ToFaceAngular requires a stop face with an analytic Plane surface whose plane contains the revolve axis, not merely a flat face; this face's surface is %s, which this evaluator cannot use as a stop even when flat — choose any analytic planar face whose plane contains the axis, or use an angle extent (AngleExtent, or AngleSide inside a TwoSidedAngle extent)`, decaderr.ErrUnsupported, reportvocab.SurfaceTypeName(face.Surface))
+		return 0, fmt.Errorf(`%w: ToFaceAngular requires a stop face with an analytic Plane surface whose plane contains the revolve axis, not merely a flat face; this face's surface is %s, which this evaluator cannot use as a stop even when flat — choose any analytic planar face whose plane contains the axis, or use an angle extent (AngleExtent, or AngleSide inside a TwoSidedAngle extent)`, decaderr.ErrUnsupported, surfacegeom.SurfaceTypeName(face.Surface))
 	}
 	nf := pl.Frame.N()
 	if math.Abs(nf.Dot(stop.W)) > stopTol {
@@ -101,7 +100,7 @@ func ToFaceAngularStop(face *topo.Face, stop AngularStop, travel float64) (float
 
 // angularEdgeOf reads the held geometry the half-plane audit needs from e.
 func angularEdgeOf(e *topo.Edge) AngularEdge {
-	record := AngularEdge{CurveType: reportvocab.CurveTypeName(e.Curve)}
+	record := AngularEdge{CurveType: surfacegeom.CurveTypeName(e.Curve)}
 	if e.Start != nil {
 		record.Start = &e.Start.Position
 	}

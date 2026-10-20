@@ -1,4 +1,4 @@
-package reportvocab
+package planarfeaturemap
 
 import (
 	"fmt"
@@ -55,10 +55,10 @@ func NewPlanarFeatureMap(a, b *topo.Body, sa, sb *planar.PlanarSolid) (*PlanarFe
 // Feature resolves one side's kernel feature. A facet is its face; an edge is
 // the one live edge both faces share; a vertex is the one live vertex every
 // face holds. Anything else has no single source identity.
-func (m *PlanarFeatureMap) Feature(side int, f planar.PatchFeature) (ContactFeature, bool) {
+func (m *PlanarFeatureMap) Feature(side int, f planar.PatchFeature) (contactFeature, bool) {
 	topology := &m.sides[side]
 	if len(f.Faces) == 0 {
-		return ContactFeature{}, false
+		return contactFeature{}, false
 	}
 	faces := make([]*topo.Face, len(f.Faces))
 	for i, id := range f.Faces {
@@ -67,12 +67,12 @@ func (m *PlanarFeatureMap) Feature(side int, f planar.PatchFeature) (ContactFeat
 	switch f.Kind {
 	case planar.FeatureFacet:
 		if len(faces) != 1 {
-			return ContactFeature{}, false
+			return contactFeature{}, false
 		}
-		return ContactFeature{Face: faces[0]}, true
+		return contactFeature{Face: faces[0]}, true
 	case planar.FeatureEdge:
 		if len(faces) != 2 {
-			return ContactFeature{}, false
+			return contactFeature{}, false
 		}
 		var found *topo.Edge
 		for _, edge := range planarFaceEdges(faces[0]) {
@@ -80,11 +80,11 @@ func (m *PlanarFeatureMap) Feature(side int, f planar.PatchFeature) (ContactFeat
 				continue
 			}
 			if found != nil {
-				return ContactFeature{}, false
+				return contactFeature{}, false
 			}
 			found = edge
 		}
-		return ContactFeature{Edge: found}, found != nil
+		return contactFeature{Edge: found}, found != nil
 	case planar.FeatureVertex:
 		var found *topo.Vertex
 		for _, edge := range planarFaceEdges(faces[0]) {
@@ -93,18 +93,18 @@ func (m *PlanarFeatureMap) Feature(side int, f planar.PatchFeature) (ContactFeat
 					continue
 				}
 				if found != nil {
-					return ContactFeature{}, false
+					return contactFeature{}, false
 				}
 				found = vertex
 			}
 		}
-		return ContactFeature{Vertex: found}, found != nil
+		return contactFeature{Vertex: found}, found != nil
 	}
-	return ContactFeature{}, false
+	return contactFeature{}, false
 }
 
 // Order ranks faces, edges, then vertices in their body's topology order.
-func (m *PlanarFeatureMap) Order(side int, f ContactFeature) [2]int {
+func (m *PlanarFeatureMap) Order(side int, f contactFeature) [2]int {
 	topology := &m.sides[side]
 	switch {
 	case f.Face != nil:

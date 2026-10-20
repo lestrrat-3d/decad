@@ -5,36 +5,36 @@ import (
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolvesurvey"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/decad/internal/verifypublish"
 	"github.com/lestrrat-3d/decad/internal/wallsurvey"
 )
 
 // Resolve returns the bounded minimum over every admitted concave radius.
 // An empty aggregate proves the body has no concave principal radius.
-func Resolve(agg survey2d.ExtremeAggregate) reportvocab.ScalarSurvey {
+func Resolve(agg survey2d.ExtremeAggregate) verifypublish.ScalarSurvey {
 	if agg.Empty() && !agg.Unbounded {
-		return reportvocab.ScalarSurvey{OK: true}
+		return verifypublish.ScalarSurvey{OK: true}
 	}
 	mid, bound, ok := agg.Resolve()
 	if !ok {
-		return reportvocab.ScalarSurvey{}
+		return verifypublish.ScalarSurvey{}
 	}
-	return reportvocab.ScalarSurvey{Reading: &mid, Bound: bound, OK: true}
+	return verifypublish.ScalarSurvey{Reading: &mid, Bound: bound, OK: true}
 }
 
 // Prism reads concave circular walls from a recorded prism section. A
 // displaced section cannot prove its denoted section's radius.
-func Prism(profile momentinput.Profile, sectionDelta float64) reportvocab.ScalarSurvey {
+func Prism(profile momentinput.Profile, sectionDelta float64) verifypublish.ScalarSurvey {
 	if sectionDelta != 0 {
-		return reportvocab.ScalarSurvey{}
+		return verifypublish.ScalarSurvey{}
 	}
 	loops, err := boundarywalk.SurveyLoops(nil, boundarywalk.Profile(profile))
 	if err != nil {
-		return reportvocab.ScalarSurvey{}
+		return verifypublish.ScalarSurvey{}
 	}
 	agg := survey2d.MinAggregate()
 	for _, loop := range loops {
@@ -48,27 +48,27 @@ func Prism(profile momentinput.Profile, sectionDelta float64) reportvocab.Scalar
 }
 
 // Revolve reads the meridian's bounded curvature after axis resolution.
-func Revolve(profile momentinput.Profile, axis revolveaxis.Frame, sectionDelta float64) reportvocab.ScalarSurvey {
+func Revolve(profile momentinput.Profile, axis revolveaxis.Frame, sectionDelta float64) verifypublish.ScalarSurvey {
 	if sectionDelta != 0 {
-		return reportvocab.ScalarSurvey{}
+		return verifypublish.ScalarSurvey{}
 	}
 	loops, err := wallsurvey.RevolveLoops(nil, profile, axis)
 	if err != nil {
-		return reportvocab.ScalarSurvey{}
+		return verifypublish.ScalarSurvey{}
 	}
 	return Resolve(revolvesurvey.RadiusAggregate(loops, axis))
 }
 
 // Cup reads the outer region and the reversed cavity region. The cavity's
 // offset displacement widens every finite recorded radius reading.
-func Cup(outer, cavity momentinput.Profile, offsetDelta float64) reportvocab.ScalarSurvey {
+func Cup(outer, cavity momentinput.Profile, offsetDelta float64) verifypublish.ScalarSurvey {
 	profile := momentinput.Profile{Outer: outer.Outer}
 	profile.Holes = append(profile.Holes, outer.Holes...)
 	loops := append([]sectionrecord.LoopRecord{cavity.Outer}, cavity.Holes...)
 	for _, loop := range loops {
 		reversed, err := offset2d.ReverseLoopRecord(loop)
 		if err != nil {
-			return reportvocab.ScalarSurvey{}
+			return verifypublish.ScalarSurvey{}
 		}
 		profile.Holes = append(profile.Holes, reversed)
 	}

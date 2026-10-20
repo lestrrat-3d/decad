@@ -9,10 +9,10 @@ The rules for rows live in `docs/layout.md`.
 
 | Path | Responsibility |
 |---|---|
-| `internal/payloadclass/` | The hook through which `decadtest.PayloadClass` reads a body's payload class. See faceted-source-retention §10. |
+| `internal/payloadclass/` | The hook through which `decadtest.PayloadClass` reads a body's payload class, and the payload type name an error prints. See faceted-source-retention §10. |
 | `internal/proof/` | Exact dyadic arithmetic, rational intervals and float rounding. |
-| `internal/measurement/` | Private bounded reading carriers, exact inflated-box separation, `ExactnessOf` and `FiniteValues`. Public types live in `measurement.go`. See API §5.3, §6. |
-| `internal/pair/` | Shared contact relation, reason and reading types; a scalar reading publishes as a measurement. |
+| `internal/measurement/` | Private bounded reading carriers, exact inflated-box separation, `ExactnessOf` and `FiniteValues`. The public types live in `report/`. See API §5.3, §6. |
+| `internal/pair/` | Shared contact relation, reason and reading types; a scalar reading publishes as a measurement; maps a pair reason and relation to and from the `report/` contact enums. |
 | `internal/pair/box/` | Exact box paths and oriented-box translation, contact, oriented, sphere-box and cylinder-box proofs, interval separation, patches, clips, and witness and normal readings with their measurements. |
 | `internal/contactbox/` | Source-box and oriented-box admission over body nodes, with their exact classification and the face, point and normal manifolds they publish into a contact report: axis, contained, clipped and oblique patches. See contact-geometry §4. |
 | `internal/contactround/` | Source sphere and cylinder admission over body nodes and their contact classification against boxes, spheres and oriented boxes. See contact-sweep §4–§5. |
@@ -31,9 +31,12 @@ The rules for rows live in `docs/layout.md`.
 | `internal/selectorquery/` | Selector matching on node views, query rendering, residual counts, face-role indexes. See API §9. |
 | `internal/modifyselect/` | Modify's selected-edge context and corner match. See modify §6. |
 | `internal/provenance/` | Producer identity, feature-role reference and the `RoleBody`/`RoleCapStart`/`RoleCapEnd` names the topology nodes hold; root `FeatureRef` is the public form. See evaluator §3. |
-| `internal/surfacegeom/` | Private face and edge geometry carriers and Verify's diagnostic plane key. Public variants live in `topology.go`; `Edge.Curve` and `Face.Surface` adapt the nodes. See API §6.1, surface §6. |
+| `internal/surfacegeom/` | Private face and edge geometry carriers, the public type names that errors print, and Verify's diagnostic plane key. Public variants live in `topology.go`; `Edge.Curve` and `Face.Surface` adapt the nodes. See API §6.1, surface §6. |
 | `internal/surfaceplace/` | Rigid placement of face surfaces and edge curves, and the placed circle bound. See surface §6. |
-| `internal/reportvocab/` | Contact and sweep enums; contact reports, pair-reason mapping and planar feature mapping over topology nodes; the sweep request; Verify reports, boundary audits, motion records, survey diagnostics, and pair, interference and sheet outcomes. See contact-geometry §6, contact-sweep §7. |
+| `internal/verifypublish/` | Verify report publication: body, validity, wall, undercut and radius rows, survey diagnostics, and the survey reading helpers. See verification §1, §6. |
+| `internal/motionconclude/` | The motion conclusion: a pose's findings folded into span outcomes and one worst-wins status. See motion-check §4. |
+| `internal/boundaryaudit/` | Solid and sheet boundary audits, and the pair, interference and sheet-solid outcomes that name an undecided pair's reason. See interference §2, verification §3. |
+| `internal/planarfeaturemap/` | The map from a planar patch feature to the face, edge and vertex it names on a body, and its ordering. See contact-geometry §6. |
 | `internal/extent/` | Unit bounds, `ToFace`, `ToFaceAngular` and through-all stops for extents. See API §8.1, evaluator §5/§6. |
 | `internal/patchchain/` | Patch payloads and node builders; `ChainsFromEdges`, chain partition, exact and shared-level plane proofs, orientation, segment records, area bounds, Rule P and circular-prism admission. See surface §5.1-§5.2 and §10. |
 | `internal/patchmesh/` | Builds PatchProfile and PatchEdges sheet mesh nodes with face and area bounds. See surface §10. |

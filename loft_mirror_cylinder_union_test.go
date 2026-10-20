@@ -130,10 +130,10 @@ func (o pairsOutcome) requireSame(t *testing.T, want pairsOutcome) {
 	require.True(t, ok)
 	require.Equal(t, wantPayload.Verts, gotPayload.Verts)
 	require.Equal(t, wantPayload.Tris, gotPayload.Tris)
-	require.Equal(t, measurementFromInternal(want.body.n.Volume), measurementFromInternal(o.body.n.Volume))
-	require.Equal(t, measurementFromInternal(want.body.n.Area), measurementFromInternal(o.body.n.Area))
-	require.Equal(t, vecMeasurementFromInternal(want.body.n.Centroid), vecMeasurementFromInternal(o.body.n.Centroid))
-	require.Equal(t, boxFromInternal(want.body.n.Bounds), boxFromInternal(o.body.n.Bounds))
+	require.Equal(t, want.body.n.Volume, o.body.n.Volume)
+	require.Equal(t, want.body.n.Area, o.body.n.Area)
+	require.Equal(t, want.body.n.Centroid, o.body.n.Centroid)
+	require.Equal(t, want.body.n.Bounds, o.body.n.Bounds)
 	require.Equal(t, wantPayload.VertexBound, gotPayload.VertexBound)
 	require.Equal(t, wantPayload.MeshBound, gotPayload.MeshBound)
 	// Every other payload field the old loop's result carries (provenance
@@ -164,8 +164,8 @@ func (o pairsOutcome) requireSame(t *testing.T, want pairsOutcome) {
 	// change computes on goroutines: every tooth body and its proof witness.
 	// The half blank is evaluated afresh by each call.
 	require.Equal(t, wantJoin.Blank.Payload, gotJoin.Blank.Payload)
-	require.Equal(t, measurementFromInternal(wantJoin.Blank.Volume), measurementFromInternal(gotJoin.Blank.Volume))
-	require.Equal(t, boxFromInternal(wantJoin.Blank.Bounds), boxFromInternal(gotJoin.Blank.Bounds))
+	require.Equal(t, wantJoin.Blank.Volume, gotJoin.Blank.Volume)
+	require.Equal(t, wantJoin.Blank.Bounds, gotJoin.Blank.Bounds)
 	require.Equal(t, wantJoin.AxialBridge, gotJoin.AxialBridge)
 	require.Equal(t, wantJoin.CapOutlines, gotJoin.CapOutlines)
 	require.Equal(t, wantJoin.CapGroups, gotJoin.CapGroups)
@@ -177,12 +177,12 @@ func (o pairsOutcome) requireSame(t *testing.T, want pairsOutcome) {
 		require.Len(t, pair[1], len(pair[0]))
 		for i := range pair[0] {
 			require.Equal(t, pair[0][i].n.Payload, pair[1][i].n.Payload, "tooth %d payload", i)
-			require.Equal(t, measurementFromInternal(pair[0][i].n.Volume), measurementFromInternal(pair[1][i].n.Volume), "tooth %d volume", i)
-			require.Equal(t, boxFromInternal(pair[0][i].n.Bounds), boxFromInternal(pair[1][i].n.Bounds), "tooth %d bounds", i)
+			require.Equal(t, pair[0][i].n.Volume, pair[1][i].n.Volume, "tooth %d volume", i)
+			require.Equal(t, pair[0][i].n.Bounds, pair[1][i].n.Bounds, "tooth %d bounds", i)
 		}
 	}
-	require.Equal(t, measurementFromInternal(wantRecord.LowerHalf.Volume), measurementFromInternal(gotRecord.LowerHalf.Volume))
-	require.Equal(t, boxFromInternal(wantRecord.LowerHalf.Bounds), boxFromInternal(gotRecord.LowerHalf.Bounds))
+	require.Equal(t, wantRecord.LowerHalf.Volume, gotRecord.LowerHalf.Volume)
+	require.Equal(t, wantRecord.LowerHalf.Bounds, gotRecord.LowerHalf.Bounds)
 	// The topology: every face's origins, area and surface kind, in order.
 	wantFaces, gotFaces := want.body.Faces(), o.body.Faces()
 	require.Len(t, gotFaces, len(wantFaces))
@@ -400,8 +400,8 @@ func TestLoftMirrorCylinderPlaceTeethMatchesSerialPlacement(t *testing.T) {
 		require.Equal(t, want.Verts, got.Verts)
 		require.Equal(t, want.Tris, got.Tris)
 		require.Equal(t, want.Proof, got.Proof)
-		require.Equal(t, measurementFromInternal(serial[i].n.Volume), measurementFromInternal(parallel[i].n.Volume))
-		require.Equal(t, boxFromInternal(serial[i].n.Bounds), boxFromInternal(parallel[i].n.Bounds))
+		require.Equal(t, serial[i].n.Volume, parallel[i].n.Volume)
+		require.Equal(t, serial[i].n.Bounds, parallel[i].n.Bounds)
 	}
 	for _, failing := range [][]int{{1}, {2}, {1, 2}} {
 		for _, workers := range []int{1, 4} {

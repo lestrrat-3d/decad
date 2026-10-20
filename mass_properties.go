@@ -32,11 +32,11 @@ func massPropertiesFromReadings(readings massmoment.MassReadings, err error) (Ma
 	}
 	tensor := readings.Tensor
 	return MassProperties{
-		Mass: measurementFromInternal(readings.Mass), Center: vecMeasurementFromInternal(readings.Center),
+		Mass: readings.Mass, Center: readings.Center,
 		Inertia: InertiaReading{
-			XX: measurementFromInternal(tensor[0]), YY: measurementFromInternal(tensor[1]),
-			ZZ: measurementFromInternal(tensor[2]), XY: measurementFromInternal(tensor[3]),
-			XZ: measurementFromInternal(tensor[4]), YZ: measurementFromInternal(tensor[5]),
+			XX: tensor[0], YY: tensor[1],
+			ZZ: tensor[2], XY: tensor[3],
+			XZ: tensor[4], YZ: tensor[5],
 		},
 	}, nil
 }

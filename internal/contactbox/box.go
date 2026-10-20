@@ -3,12 +3,13 @@ package contactbox
 import (
 	"math"
 
+	vocab "github.com/lestrrat-3d/decad/report"
+
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/pair"
 	"github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -100,20 +101,20 @@ func SourceBoxAtPose(b *topo.Body, pose r3.Transform) (SourceBox, bool) {
 }
 
 // The root package maps neutral pair readings to report units and topology.
-func PublishSourceBoxPatch(report *reportvocab.ContactReport, a, b SourceBox, axis, sign int,
+func PublishSourceBoxPatch(report *contactReport, a, b SourceBox, axis, sign int,
 	separation proofarith.Dyadic) {
 	patch, reason := box.FacePatch(
 		box.AxisBox{Lo: a.Lo, Hi: a.Hi}, box.AxisBox{Lo: b.Lo, Hi: b.Hi},
 		axis, sign, separation,
 		box.AxisBoxRequest{PointResolutionMM: report.Request.PointResolution.Base()},
 	)
-	report.Reason = reportvocab.ContactReasonOf(reason)
+	report.Reason = pair.ContactReasonOf(reason)
 	if patch != nil {
 		publishAxisBoxPatch(report, a, b, patch)
 	}
 }
 
-func ClassifySourceBoxes(report *reportvocab.ContactReport, a, b SourceBox) {
+func ClassifySourceBoxes(report *contactReport, a, b SourceBox) {
 	result := box.ClassifyAxisBoxes(
 		box.AxisBox{Lo: a.Lo, Hi: a.Hi},
 		box.AxisBox{Lo: b.Lo, Hi: b.Hi},
@@ -121,15 +122,15 @@ func ClassifySourceBoxes(report *reportvocab.ContactReport, a, b SourceBox) {
 	)
 	switch result.Relation {
 	case pair.Separated:
-		report.Relation = reportvocab.ContactSeparated
+		report.Relation = vocab.ContactSeparated
 	case pair.Touching:
-		report.Relation = reportvocab.ContactTouching
+		report.Relation = vocab.ContactTouching
 	case pair.Overlapping:
-		report.Relation = reportvocab.ContactOverlapping
+		report.Relation = vocab.ContactOverlapping
 	default:
-		report.Relation = reportvocab.ContactUndecided
+		report.Relation = vocab.ContactUndecided
 	}
-	report.Reason = reportvocab.ContactReasonOf(result.Reason)
+	report.Reason = pair.ContactReasonOf(result.Reason)
 	if result.Gap != nil {
 		gap := result.Gap.Measurement()
 		report.Gap = &gap
@@ -140,7 +141,7 @@ func ClassifySourceBoxes(report *reportvocab.ContactReport, a, b SourceBox) {
 	publishAxisBoxPatch(report, a, b, result.Patch)
 }
 
-func publishAxisBoxPatch(report *reportvocab.ContactReport, a, b SourceBox, patch *box.AxisBoxPatch) {
+func publishAxisBoxPatch(report *contactReport, a, b SourceBox, patch *box.AxisBoxPatch) {
 	faceA := a.Faces[patch.FaceA.Axis][patch.FaceA.Side]
 	faceB := b.Faces[patch.FaceB.Axis][patch.FaceB.Side]
 	var normal r3.Vec
@@ -153,18 +154,18 @@ func publishAxisBoxPatch(report *reportvocab.ContactReport, a, b SourceBox, patc
 		normal.Z = float64(patch.NormalSign)
 	}
 	separation := patch.Separation.Measurement()
-	points := make([]reportvocab.ContactPoint, 0, len(patch.Points))
+	points := make([]contactPoint, 0, len(patch.Points))
 	for _, point := range patch.Points {
-		points = append(points, reportvocab.ContactPoint{
+		points = append(points, contactPoint{
 			OnA:         point.OnA.Measurement(),
 			OnB:         point.OnB.Measurement(),
 			Normal:      measurement.VecMeasurement{Value: normal, Exactness: measurement.Exact, Bound: units.Scalar(0)},
 			NormalAngle: units.Radians(0),
 			Separation:  separation,
 			FaceA:       faceA, FaceB: faceB,
-			FeatureA: reportvocab.ContactFeature{Face: faceA},
-			FeatureB: reportvocab.ContactFeature{Face: faceB},
+			FeatureA: contactFeature{Face: faceA},
+			FeatureB: contactFeature{Face: faceB},
 		})
 	}
-	report.Manifold = &reportvocab.ContactManifold{Points: points}
+	report.Manifold = &contactManifold{Points: points}
 }

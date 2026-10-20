@@ -3,17 +3,18 @@ package contactbox
 import (
 	"math/big"
 
+	vocab "github.com/lestrrat-3d/decad/report"
+
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
 // PublishClippedHorizontalPatch certifies the complete intersection of two
 // horizontal source faces when one box is rotated in the world XY plane.
-func PublishClippedHorizontalPatch(report *reportvocab.ContactReport, a, b OrientedSourceBox) {
+func PublishClippedHorizontalPatch(report *contactReport, a, b OrientedSourceBox) {
 	if base, ok := axisAlignedOrientedBox(a); ok &&
 		publishClippedHorizontalPatchOrder(report, base, b, true) {
 		return
@@ -74,9 +75,9 @@ func axisAlignedOrientedBox(box OrientedSourceBox) (SourceBox, bool) {
 	return aligned, true
 }
 
-func publishClippedHorizontalPatchOrder(report *reportvocab.ContactReport, base SourceBox,
+func publishClippedHorizontalPatchOrder(report *contactReport, base SourceBox,
 	rotated OrientedSourceBox, baseIsA bool) bool {
-	if report.Relation != reportvocab.ContactTouching {
+	if report.Relation != vocab.ContactTouching {
 		return false
 	}
 	vertical := -1
@@ -135,15 +136,15 @@ func publishClippedHorizontalPatchOrder(report *reportvocab.ContactReport, base 
 	if faceBase == nil || faceRotated == nil {
 		return false
 	}
-	points := make([]reportvocab.ContactPoint, 0, len(polygon))
+	points := make([]contactPoint, 0, len(polygon))
 	for _, vertex := range polygon {
 		world := [3]*big.Rat{vertex[0], vertex[1], faceZ.Rat()}
 		onBoth, valid := pairbox.PointMeasurement(world)
 		if !valid || onBoth.Bound.Base() > report.Request.PointResolution.Base() {
-			report.Reason = reportvocab.ContactPointTooCoarse
+			report.Reason = vocab.ContactPointTooCoarse
 			return false
 		}
-		point := reportvocab.ContactPoint{OnA: onBoth, OnB: onBoth,
+		point := contactPoint{OnA: onBoth, OnB: onBoth,
 			Normal:      measurement.VecMeasurement{Value: r3.Vec{Z: normalZ}, Bound: units.Scalar(0), Exactness: measurement.Exact},
 			NormalAngle: units.Radians(0),
 			Separation:  measurement.Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(0), Exactness: measurement.Exact}}
@@ -152,10 +153,10 @@ func publishClippedHorizontalPatchOrder(report *reportvocab.ContactReport, base 
 		} else {
 			point.FaceA, point.FaceB = faceRotated, faceBase
 		}
-		point.FeatureA, point.FeatureB = reportvocab.ContactFeature{Face: point.FaceA}, reportvocab.ContactFeature{Face: point.FaceB}
+		point.FeatureA, point.FeatureB = contactFeature{Face: point.FaceA}, contactFeature{Face: point.FaceB}
 		points = append(points, point)
 	}
-	report.Manifold = &reportvocab.ContactManifold{Points: points}
-	report.Reason = reportvocab.ContactNoReason
+	report.Manifold = &contactManifold{Points: points}
+	report.Reason = vocab.ContactNoReason
 	return true
 }

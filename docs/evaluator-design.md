@@ -1432,7 +1432,7 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
 - **Pairs**: use the four-way relation and proof order of
   `docs/interference-design.md`. Bounds separation or the analytic clearance
   kernel proves disjoint/touching; nesting and admitted crossings remain
-  explicitly `reportvocab.PairOverlapping`, never folded into undecided. A strict
+  explicitly `boundaryaudit.PairOverlapping`, never folded into undecided. A strict
   full-containment or analytic equality certificate reuses an operand's
   volume. Every other candidate overlap runs the read-only `OpIntersect`
   evaluator and emits a row

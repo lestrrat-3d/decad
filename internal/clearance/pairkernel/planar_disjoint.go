@@ -3,11 +3,12 @@ package pairkernel
 import (
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/boundaryaudit"
+
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/pair"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 )
 
 // DisjointResult widens the held gap's enclosure by delta, in exact
@@ -27,5 +28,5 @@ func DisjointResult(gap *pair.ScalarReading, delta *big.Rat, diam float64) (Resu
 	if !(lo > 0) || !measurement.FiniteValues(lo, hi) {
 		return Result{}, false
 	}
-	return Result{Verdict: reportvocab.PairDisjoint, Lo: lo, Hi: hi, Exact: lo == hi, Diam: diam}, true
+	return Result{Verdict: boundaryaudit.PairDisjoint, Lo: lo, Hi: hi, Exact: lo == hi, Diam: diam}, true
 }

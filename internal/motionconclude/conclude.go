@@ -1,8 +1,10 @@
-package reportvocab
+package motionconclude
 
 import (
 	"fmt"
 	"math/big"
+
+	"github.com/lestrrat-3d/decad/report"
 
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -14,7 +16,7 @@ type MotionPoseFinding[BodyT comparable, CellT any] struct {
 	At          units.Value
 	Unbuildable bool
 	Violated    bool
-	Diagnostics []Diagnostic[BodyT, CellT]
+	Diagnostics []report.DiagnosticOf[BodyT, CellT]
 }
 
 // MotionSpanOutcome is the internal verdict consumed while concluding a path.
@@ -45,10 +47,10 @@ type ConcludedMotionSpan struct {
 type MotionConclusion[BodyT comparable, CellT any] struct {
 	Against     []BodyT
 	Intervals   []ConcludedMotionSpan
-	Clearance   *ScalarReading
-	Assessment  Assessment
-	Diagnostics []Diagnostic[BodyT, CellT]
-	Status      Status
+	Clearance   *report.ScalarReading
+	Assessment  report.Assessment
+	Diagnostics []report.DiagnosticOf[BodyT, CellT]
+	Status      report.Status
 }
 
 // ConcludeMotion assembles interval findings before pose findings, merges
@@ -56,11 +58,11 @@ type MotionConclusion[BodyT comparable, CellT any] struct {
 // when every interval is certified clear. Poses must hold one more entry than spans.
 func ConcludeMotion[BodyT comparable, CellT any](minimumRequested *units.Value, against []BodyT,
 	poses []MotionPoseFinding[BodyT, CellT], spans []MotionSpanFinding, minimum *big.Rat,
-	pathClearance func(*measurement.Measurement) (*ScalarReading, *Diagnostic[BodyT, CellT]),
+	pathClearance func(*measurement.Measurement) (*report.ScalarReading, *report.DiagnosticOf[BodyT, CellT]),
 ) MotionConclusion[BodyT, CellT] {
 	c := MotionConclusion[BodyT, CellT]{
 		Against:     against,
-		Diagnostics: []Diagnostic[BodyT, CellT]{},
+		Diagnostics: []report.DiagnosticOf[BodyT, CellT]{},
 	}
 	violated := false
 	for _, pose := range poses {
@@ -93,10 +95,10 @@ func ConcludeMotion[BodyT comparable, CellT any](minimumRequested *units.Value, 
 				msg += ": " + span.Note
 			}
 			at := a.At
-			c.Diagnostics = append(c.Diagnostics, Diagnostic[BodyT, CellT]{
-				Code:    DiagMotionUndecidedInterval,
-				Status:  Suspect,
-				Reading: ReadingNone,
+			c.Diagnostics = append(c.Diagnostics, report.DiagnosticOf[BodyT, CellT]{
+				Code:    report.DiagMotionUndecidedInterval,
+				Status:  report.Suspect,
+				Reading: report.ReadingNone,
 				Message: msg,
 				At:      &at,
 			})
@@ -107,10 +109,10 @@ func ConcludeMotion[BodyT comparable, CellT any](minimumRequested *units.Value, 
 				break
 			}
 			obs, at := *span.Clearance, a.At
-			c.Diagnostics = append(c.Diagnostics, Diagnostic[BodyT, CellT]{
-				Code:     DiagMotionUndecidedClearance,
-				Status:   Suspect,
-				Reading:  ReadingGap,
+			c.Diagnostics = append(c.Diagnostics, report.DiagnosticOf[BodyT, CellT]{
+				Code:     report.DiagMotionUndecidedClearance,
+				Status:   report.Suspect,
+				Reading:  report.ReadingGap,
 				Observed: &obs,
 				Required: minimumRequested,
 				Message:  fmt.Sprintf("the motion from %s to %s is certified clear, but its proven lower bound does not reach the required minimum", a.At, b.At),
@@ -120,13 +122,13 @@ func ConcludeMotion[BodyT comparable, CellT any](minimumRequested *units.Value, 
 	}
 	switch {
 	case minimum == nil:
-		c.Assessment = AssessmentNotEvaluated
+		c.Assessment = report.AssessmentNotEvaluated
 	case violated:
-		c.Assessment = AssessmentViolated
+		c.Assessment = report.AssessmentViolated
 	case met:
-		c.Assessment = AssessmentMet
+		c.Assessment = report.AssessmentMet
 	default:
-		c.Assessment = AssessmentUndecided
+		c.Assessment = report.AssessmentUndecided
 	}
 	for _, pose := range poses {
 		c.Diagnostics = append(c.Diagnostics, pose.Diagnostics...)
@@ -153,8 +155,8 @@ func firstMotionNote(notes ...string) string {
 }
 
 // WorstStatus reports the highest status of the findings, or Sound when empty.
-func WorstStatus[BodyT comparable, CellT any](diagnostics []Diagnostic[BodyT, CellT]) Status {
-	status := Sound
+func WorstStatus[BodyT comparable, CellT any](diagnostics []report.DiagnosticOf[BodyT, CellT]) report.Status {
+	status := report.Sound
 	for _, diagnostic := range diagnostics {
 		status = max(status, diagnostic.Status)
 	}

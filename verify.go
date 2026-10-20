@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/boundaryaudit"
+	"github.com/lestrrat-3d/decad/internal/verifypublish"
+
 	"github.com/lestrrat-3d/decad/internal/clearance/pairkernel"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/orderedwork"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
 	"github.com/lestrrat-3d/decad/internal/verifyoption"
 
@@ -242,7 +244,7 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 // a DiagMeasurementBeyondTolerance (Reading ReadingGap) when the gap's Bound
 // exceeds the pair-relative tolerance, else nil (verification §1.1/§6).
 func appendClearance(report *Report, a, b *Body, res pairkernel.Result, rel float64) *Diagnostic {
-	gap := measurementFromInternal(pairkernel.GapMeasurement(res))
+	gap := pairkernel.GapMeasurement(res)
 	report.Clearances = append(report.Clearances, Clearance{A: a, B: b, Gap: gap})
 	pairGate := pairToleranceInputs{diameter: res.Diam}
 	pass, ref, haveRef := tolerance.Scalar(gap.Value, gap.Bound, rel, pairGate.lengthReference)
@@ -276,12 +278,12 @@ func pairDiagNone(a, b *Body, code DiagnosticCode, msg string) Diagnostic {
 	}
 }
 
-// undecidedPairDiag converts reportvocab.UndecidedPairReason's code and
+// undecidedPairDiag converts boundaryaudit.UndecidedPairReason's code and
 // message for a pair whose overlap volume the evaluator could not measure into
 // the public pair diagnostic.
-func undecidedPairDiag(a, b *Body, verdict reportvocab.PairVerdict, outcome reportvocab.InterferenceOutcome) Diagnostic {
-	code, msg := reportvocab.UndecidedPairReason(&a.n, &b.n, verdict, outcome)
-	return pairDiagNone(a, b, DiagnosticCode(code), msg)
+func undecidedPairDiag(a, b *Body, verdict boundaryaudit.PairVerdict, outcome boundaryaudit.InterferenceOutcome) Diagnostic {
+	code, msg := boundaryaudit.UndecidedPairReason(&a.n, &b.n, verdict, outcome)
+	return pairDiagNone(a, b, code, msg)
 }
 
 // verifyBody audits one body and assembles its BodyReport through
@@ -306,7 +308,7 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 	}
 
 	// The held boundary's structural audit. A BodySolid runs
-	// reportvocab.AuditSolidBoundary: every edge bounds exactly two faces,
+	// boundaryaudit.AuditSolidBoundary: every edge bounds exactly two faces,
 	// every face carries at least one loop of at least one edge. A BodySheet
 	// runs AuditSheetBoundary instead (docs/surface-design.md §9.1). This evaluator's boundary is exact, so a
 	// defect is proven — Unsound — and a clean audit on a feature-built body
@@ -323,8 +325,8 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 	case ValidityInvalid:
 		status = Unsound
 	case ValidityValid:
-		vol = measurementFromInternal(b.n.Volume)
-		cen = vecMeasurementFromInternal(b.n.Centroid)
+		vol = b.n.Volume
+		cen = b.n.Centroid
 	default:
 		// A body this evaluator did not build (unreachable through the
 		// public API) has a validity the audit alone cannot prove:
@@ -352,8 +354,8 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 			Status:   status,
 			Validity: validity,
 			Topology: topology,
-			Area:     ScalarReading{Measurement: measurementFromInternal(area)},
-			Bounds:   BoundsReading{Box: boxFromInternal(bounds)},
+			Area:     ScalarReading{Measurement: area},
+			Bounds:   BoundsReading{Box: bounds},
 			Request:  req,
 		}), nil
 	}
@@ -394,7 +396,7 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 			}
 		}
 		// The wall and concave-radius prerequisite refusals are emitted by
-		// reportvocab.PublishWall/PublishRadius, not by runSurveys, so
+		// verifypublish.PublishWall/PublishRadius, not by runSurveys, so
 		// they never appear in surveyDiags above; a sheet that asked either
 		// one still owes this body a Suspect for it.
 		if b.Kind() == BodySheet && (cfg.Wall != nil || cfg.ConcaveRadius) {
@@ -404,7 +406,7 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 		// surveysRunnable is false here only because the body is a proven
 		// sheet that asked no pull — a wall and/or concave-radius question
 		// with no material to be about (docs/surface-design.md §9.1).
-		// runSurveys never runs; reportvocab.PublishWall and
+		// runSurveys never runs; verifypublish.PublishWall and
 		// PublishRadius each publish Unavailable plus their own
 		// DiagSurveyPrerequisite from validity and kind alone, so this
 		// body's Status must already carry that Suspect verdict.
@@ -413,12 +415,12 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 
 	var wallReading, radiusReading *Measurement
 	if surveys.Wall.reading != nil {
-		m := reportvocab.LengthMeasurement(*surveys.Wall.reading, surveys.Wall.bound)
-		wallReading = measurementPtrFromInternal(&m)
+		m := verifypublish.LengthMeasurement(*surveys.Wall.reading, surveys.Wall.bound)
+		wallReading = &m
 	}
 	if surveys.Radius.reading != nil {
-		m := reportvocab.LengthMeasurement(*surveys.Radius.reading, surveys.Radius.bound)
-		radiusReading = measurementPtrFromInternal(&m)
+		m := verifypublish.LengthMeasurement(*surveys.Radius.reading, surveys.Radius.bound)
+		radiusReading = &m
 	}
 
 	var volPtr *Measurement
@@ -429,10 +431,10 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 	readings := bodyReadingSet{
 		Area:     area,
 		Bounds:   bounds,
-		Volume:   measurementPtrToInternal(volPtr),
-		Centroid: vecMeasurementPtrToInternal(cenPtr),
-		Wall:     measurementPtrToInternal(wallReading),
-		Radius:   measurementPtrToInternal(radiusReading),
+		Volume:   volPtr,
+		Centroid: cenPtr,
+		Wall:     wallReading,
+		Radius:   radiusReading,
 	}
 	verdicts, diagSet, err := bodyReadingDiagnostics(ctx, b, readings, cfg.Rel)
 	if err != nil {
@@ -458,8 +460,8 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 	var region *RegionReadings
 	if haveRegion {
 		region = &RegionReadings{
-			Volume:   ScalarReading{Measurement: vol, Tolerance: toleranceResultFromInternal(verdicts.Volume)},
-			Centroid: VectorReading{VecMeasurement: cen, Tolerance: toleranceResultFromInternal(verdicts.Centroid)},
+			Volume:   ScalarReading{Measurement: vol, Tolerance: verdicts.Volume},
+			Centroid: VectorReading{VecMeasurement: cen, Tolerance: verdicts.Centroid},
 		}
 	}
 
@@ -468,16 +470,16 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 		Status:              status,
 		Validity:            validity,
 		Topology:            topology,
-		Area:                ScalarReading{Measurement: measurementFromInternal(area), Tolerance: toleranceResultFromInternal(verdicts.Area)},
-		Bounds:              BoundsReading{Box: boxFromInternal(bounds), Tolerance: toleranceResultFromInternal(verdicts.Bounds)},
+		Area:                ScalarReading{Measurement: area, Tolerance: verdicts.Area},
+		Bounds:              BoundsReading{Box: bounds, Tolerance: verdicts.Bounds},
 		Region:              region,
 		Request:             req,
 		Surveys:             surveys,
-		WallTolerance:       toleranceResultFromInternal(verdicts.Wall),
-		WallToleranceDiag:   diagnosticPtrFromInternal(diagSet.Wall),
-		RadiusTolerance:     toleranceResultFromInternal(verdicts.Radius),
-		RadiusToleranceDiag: diagnosticPtrFromInternal(diagSet.Radius),
-		CoreDiagnostics:     diagnosticsFromInternal(diagSet.Core),
+		WallTolerance:       verdicts.Wall,
+		WallToleranceDiag:   diagSet.Wall,
+		RadiusTolerance:     verdicts.Radius,
+		RadiusToleranceDiag: diagSet.Radius,
+		CoreDiagnostics:     diagSet.Core,
 	}), nil
 }
 
@@ -486,15 +488,15 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 // plus the build and solidity facts otherwise. Verify and VerifyMotion share
 // it so the two never judge one body two different ways. It reads the faceted
 // image's audit facts itself because internal/facetedrecord imports
-// internal/reportvocab.
+// internal/boundaryaudit.
 func bodyValidityEvidence(ctx context.Context, b *Body) validityEvidence {
 	evidence := validityEvidence{Kind: b.Kind()}
 	switch b.Kind() {
 	case BodySheet:
-		evidence.Sheet = reportvocab.AuditSheetBoundary(ctx, &b.n)
+		evidence.Sheet = boundaryaudit.AuditSheetBoundary(ctx, &b.n)
 	default:
 		fp, faceted := b.n.Payload.(facetedPayload)
-		evidence.Clean = reportvocab.AuditSolidBoundary(&b.n, faceted && fp.ContactAudited && len(fp.Tris) > 0)
+		evidence.Clean = boundaryaudit.AuditSolidBoundary(&b.n, faceted && fp.ContactAudited && len(fp.Tris) > 0)
 		evidence.Built = b.n.Payload != nil
 		evidence.Solid = b.n.Solid
 	}

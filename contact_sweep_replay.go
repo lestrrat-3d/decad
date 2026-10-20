@@ -15,7 +15,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/sweepmemo"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -47,7 +46,7 @@ type sweepReplayProof struct {
 	rotation                   *[2]rotationalSweepPath
 	planar                     *planarsweep.Replay // a general planar sweep (contact_sweep_planar.go)
 	track                      *SweepContactTrack
-	request                    reportvocab.ContactRequest
+	request                    ContactRequest
 	outcome                    SweepOutcome
 	bracketLo                  *big.Rat
 	bracketHi                  *big.Rat
@@ -162,7 +161,7 @@ func (r *SweepReport) replayPosesAtFraction(f *big.Rat) (r3.Transform, r3.Transf
 	if r.replay.track != nil && (r.replay.track.planar != nil || r.replay.track.rolling != nil) {
 		trackEnd = r.replay.track.end
 	}
-	if !sweepmemo.FractionCovered(reportvocab.SweepOutcome(r.replay.outcome), f, trackEnd, r.replay.bracketLo,
+	if !sweepmemo.FractionCovered(r.replay.outcome, f, trackEnd, r.replay.bracketLo,
 		r.replay.bracketHi, r.replay.bracketGap, r.replay.rotation != nil) {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: replay time is outside the certified sweep prefix", ErrUnsupported)
 	}
@@ -212,9 +211,9 @@ func (r *SweepReport) replayPosesAtFraction(f *big.Rat) (r3.Transform, r3.Transf
 	if !ok || deviation.Cmp(resolution) > 0 {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded replay pose exceeds point resolution", ErrUnsupported)
 	}
-	contact := &reportvocab.ContactReport{Request: r.replay.request}
+	contact := &nodeContactReport{Request: r.replay.request}
 	contactbox.ClassifySourceBoxes(contact, actualA, actualB)
-	if !sweepmemo.RelationCovered(reportvocab.SweepOutcome(r.replay.outcome), f, r.replay.bracketLo,
+	if !sweepmemo.RelationCovered(r.replay.outcome, f, r.replay.bracketLo,
 		resolution, contact.Relation, actualA.AxisBox(), actualB.AxisBox()) {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded replay pose changes the certified relation", ErrUnsupported)
 	}
@@ -337,12 +336,12 @@ func (r *SweepReport) certifiedSpherePairPosesAtFraction(f *big.Rat, poseA, pose
 		DeltaA: p.pa.Delta, DeltaB: p.pb.Delta,
 	}
 	if detail := spherepath.PairReplay(motion, actualA.Center, actualB.Center,
-		reportvocab.SweepOutcome(p.outcome), f, resolution, p.bracketLo, p.bracketHi,
+		p.outcome, f, resolution, p.bracketLo, p.bracketHi,
 		p.grazingAt, p.track != nil); detail != "" {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: %s", ErrUnsupported, detail)
 	}
 	if p.outcome == SweepPersistentTouch {
-		contact := &reportvocab.ContactReport{Request: p.request}
+		contact := &nodeContactReport{Request: p.request}
 		contactround.ClassifySpherePair(contact, actualA, actualB)
 		if contact.Manifold == nil || len(contact.Manifold.Points) != 1 ||
 			contact.Manifold.Points[0].FeatureA != p.track.features[0] ||
@@ -396,7 +395,7 @@ func (r *SweepReport) certifiedOrientedSpherePosesAtFraction(f *big.Rat,
 	threshold := new(big.Rat).Mul(radius2, proofarith.DvDot(outward, outward).Rat())
 	idealSign := ideal2.Cmp(threshold)
 	observedSign := observed2.Cmp(radius2)
-	if ideal.Sign() <= 0 || !sweepmemo.OrientedSphereRelationCovered(reportvocab.SweepOutcome(p.outcome), f,
+	if ideal.Sign() <= 0 || !sweepmemo.OrientedSphereRelationCovered(p.outcome, f,
 		p.bracketLo, p.bracketHi, idealSign, observedSign) {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rotated sphere changes the certified relation", ErrUnsupported)
 	}
@@ -451,7 +450,7 @@ func (r *SweepReport) certifiedRotationalPosesAtFraction(f *big.Rat) (
 		return pose[0], pose[1], nil
 	}
 	relation, gap, normSquared := contactbox.OrientedBoxRelation(box[0], box[1])
-	if relation != reportvocab.ContactSeparated {
+	if relation != ContactSeparated {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rotating replay pose is not separated", ErrUnsupported)
 	}
 	norm := proofbound.RatSqrtUp(normSquared.Rat())
@@ -474,15 +473,15 @@ func (r *SweepReport) certifiedOrientedTouchAtFraction(f *big.Rat, a, b contactb
 		r.replay.rotation[0].Path.Drift != nil || r.replay.rotation[1].Path.Drift != nil {
 		return false
 	}
-	report := &reportvocab.ContactReport{Request: r.replay.request}
+	report := &nodeContactReport{Request: r.replay.request}
 	report.Relation, _, _ = contactbox.OrientedBoxRelation(a, b)
-	if report.Relation == reportvocab.ContactTouching {
+	if report.Relation == ContactTouching {
 		contactbox.PublishOrientedBoxPatch(report, a, b)
 		if report.Manifold == nil {
 			contactbox.PublishClippedHorizontalPatch(report, a, b)
 		}
 	}
-	if report.Relation != reportvocab.ContactTouching || report.Manifold == nil ||
+	if report.Relation != ContactTouching || report.Manifold == nil ||
 		len(report.Manifold.Points) != track.pointCount {
 		return false
 	}
@@ -603,7 +602,7 @@ func (r *SweepReport) certifiedSpherePosesAtFraction(f *big.Rat, poseA, poseB r3
 	observedGap := proofarith.DySubScalar(faceDistance, sphere.Radius).Rat()
 	idealGap := new(big.Rat).Add(p.sphereGap.Rat(), new(big.Rat).Mul(p.sphereSlope.Rat(), f))
 	difference := new(big.Rat).Sub(observedGap, idealGap)
-	if difference.Abs(difference).Cmp(resolution) > 0 || !sweepmemo.SphereRelationCovered(reportvocab.SweepOutcome(p.outcome),
+	if difference.Abs(difference).Cmp(resolution) > 0 || !sweepmemo.SphereRelationCovered(p.outcome,
 		f, p.bracketLo, p.bracketHi, idealGap, observedGap, resolution) {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded sphere changes the certified relation", ErrUnsupported)
 	}

@@ -429,7 +429,7 @@ func TestSheetWallAndConcaveRadiusKeepTheSurveyPrerequisiteRefusal(t *testing.T)
 	require.NoError(t, err)
 
 	// The tool (50 mm) exceeds the plate's own 10 mm spanning wall on
-	// purpose: reportvocab.PublishWall's kind gate must refuse before that
+	// purpose: verifypublish.PublishWall's kind gate must refuse before that
 	// reading is ever consulted, so an unguarded wall survey run on the
 	// sheet would otherwise surface a DiagWallTooThin the published result
 	// must never carry.
@@ -755,7 +755,7 @@ func TestSheetSolidPairContainedProvenSound(t *testing.T) {
 // surface-extruded fit-spline arch is ValidityValid — the sheet audit's
 // fourth leg is proven by construction for ANY surface-result prism with no
 // section displacement, regardless of wall kind
-// (reportvocab.AuditSheetBoundary) — but its one free-form wall has no analytic carrier
+// (boundaryaudit.AuditSheetBoundary) — but its one free-form wall has no analytic carrier
 // face the clearance kernel can build (survey2d.WalkElem, pairkernel/geom.go), the same
 // gap extrude_freeform_test.go already pins for the wall/undercut/
 // concave-radius surveys on the solid built from the same profile. With no

@@ -7,7 +7,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/contactbox"
 	"github.com/lestrrat-3d/decad/internal/contactfaceted"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 	"github.com/lestrrat-3d/r3"
 )
@@ -18,7 +17,7 @@ import (
 // the pair relation. A sampled negative gap is left undecided because
 // ContactPair does not yet certify overlap for this payload.
 func (d *Document) sweepFacetedFloor(ctx context.Context, a, b *Body,
-	pa, pb affinePairPath, req reportvocab.SweepRequest, report *SweepReport,
+	pa, pb affinePairPath, req SweepRequest, report *SweepReport,
 	floor contactbox.SourceBox, facetedFirst bool) (*SweepReport, error) {
 	faceted, pose, facetedDelta, floorDelta := b, pb.From, pb.Delta, pa.Delta
 	if facetedFirst {
@@ -96,7 +95,7 @@ func (d *Document) sweepFacetedFloor(ctx context.Context, a, b *Body,
 // sweepBoundedFacetedFloorClear uses only the Boolean boundary displacement
 // when no exact source support-face proof survives placement.
 func (d *Document) sweepBoundedFacetedFloorClear(ctx context.Context, a, b *Body,
-	pa, pb affinePairPath, req reportvocab.SweepRequest, report *SweepReport,
+	pa, pb affinePairPath, req SweepRequest, report *SweepReport,
 	floor contactbox.SourceBox, facetedFirst bool) (*SweepReport, error) {
 	faceted, pose, facetedDelta, floorDelta := b, pb.From, pb.Delta, pa.Delta
 	if facetedFirst {
@@ -137,7 +136,7 @@ func (d *Document) sweepBoundedFacetedFloorClear(ctx context.Context, a, b *Body
 		if err != nil {
 			return nil, err
 		}
-		contact, err := d.ContactPair(ctx, a, b, poseA, poseB, contactRequestFromInternal(req.ContactRequest))
+		contact, err := d.ContactPair(ctx, a, b, poseA, poseB, req.ContactRequest)
 		if err != nil {
 			return nil, err
 		}
@@ -162,7 +161,7 @@ func (d *Document) sweepBoundedFacetedFloorClear(ctx context.Context, a, b *Body
 		if !ok {
 			return facetedSweepUndecided(report, pa.Duration), nil
 		}
-		gap := measurementFromInternal(held)
+		gap := held
 		at := sweepInstant(fraction, pa.Duration)
 		report.Samples = append(report.Samples, SweepSample{At: at, PoseA: poseA, PoseB: poseB,
 			FloatContact: contact, Ideal: SweepEvent{At: at, Relation: ContactSeparated, Gap: &gap},
