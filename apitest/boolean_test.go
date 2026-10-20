@@ -2,11 +2,8 @@ package apitest_test
 
 import (
 	"context"
-	"errors"
 	"math"
 	"math/big"
-	"regexp"
-	"strconv"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -721,27 +718,24 @@ func TestBooleanChainDepthGateReadsOnlyTheTouchedRims(t *testing.T) {
 		requireBodyWatertight(t, got)
 	})
 
-	t.Run("a contact on a coarse rim refuses", func(t *testing.T) {
+	t.Run("a contact on a coarse planar rim cuts", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
-		plate := drilled(t, doc)
-		held, err := mustTessellate(t, plate, units.Millimeters(1)).Bound().In(units.Millimeter)
+		got, err := decad.Cut(t.Context(), drilled(t, doc), translated(t, discBody(t, doc, -29, 1, 48), 0.125, 0, -16))
+		require.NoError(t, err, "the plate's planar faces state a slab thinner than the pair's chord tolerance")
+		vol, err := got.Volume()
 		require.NoError(t, err)
-		_, err = decad.Cut(t.Context(), plate, translated(t, discBody(t, doc, -29, 1, 48), 0.125, 0, -16))
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		var be *decad.BooleanError
-		require.False(t, errors.As(err, &be), "the chain-depth refusal is a plain ErrUnsupported, not a BooleanError")
-		require.NotContains(t, err.Error(), "retry with a tolerance")
-		require.ErrorContains(t, err, "a boolean takes no tolerance")
-		require.ErrorContains(t, err, "cut's target")
-		m := regexp.MustCompile(`within a bound of (\S+) mm, coarser than this pair's chord tolerance (\S+) mm`).FindStringSubmatch(err.Error())
-		require.Len(t, m, 3, "the refusal quotes the touched bound and the pair's chord tolerance")
-		touched, err := strconv.ParseFloat(m[1], 64)
+		bound, err := vol.Bound.In(units.CubicMillimeter)
 		require.NoError(t, err)
-		tol, err := strconv.ParseFloat(m[2], 64)
-		require.NoError(t, err)
-		require.Greater(t, touched, tol)
-		require.LessOrEqual(t, touched, held, "a touched facet's bound is one of the target's own")
+		// The pin sits on the second hole's rim, so it removes the part of its
+		// disc outside the hole: its area less the lens it shares with the hole.
+		const rPin, rHole, d = 1.0, 7.0, 7.0
+		lens := rPin*rPin*math.Acos((d*d+rPin*rPin-rHole*rHole)/(2*d*rPin)) +
+			rHole*rHole*math.Acos((d*d+rHole*rHole-rPin*rPin)/(2*d*rHole)) -
+			0.5*math.Sqrt((-d+rPin+rHole)*(d+rPin-rHole)*(d-rPin+rHole)*(d+rPin+rHole))
+		exact := 96.0*68*16 - math.Pi*16*(18*18+7*7) - 16*(math.Pi*rPin*rPin-lens)
+		require.LessOrEqual(t, math.Abs(volumeMM(t, vol)-exact), bound, "the volume holds within its published bound")
+		requireBodyWatertight(t, got)
 	})
 }
 

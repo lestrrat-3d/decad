@@ -292,6 +292,7 @@ expression) and not a printed number.
 | `internal/topo/face.go` | `RetainedTag` |
 | `contact_faceted_floor.go` | predicate of §4 |
 | `internal/facetedrecord/edge_curve.go`, `topology.go`, `internal/topo/edge.go` | edge curves and their witness flag (§10, increment 3) |
+| `internal/meshbool/plane_slab.go`, `internal/booleaneval/retained_plane.go` | slab bound of a retained plane facet (§11, increment 5) |
 | `mirror.go`, `internal/extent` | admit a retained `Plane` per §4 |
 | `internal/selectorquery/topo_views.go` | no code change expected; the existing views read the tag |
 | Tests | the `Faceted` assertions of §7's last row |
@@ -299,8 +300,7 @@ expression) and not a printed number.
 
 ## 9. Increments
 
-Increments 1 to 4 are in. Increment 5 stays planned; nothing in 1–4 depends
-on it.
+Increments 1 to 5 are in. Nothing in 1–4 depends on 5.
 
 | # | Lands | Gate to start the next |
 |---|---|---|
@@ -308,11 +308,10 @@ on it.
 | 2 | `Cone` and `Torus`, faces with a denoted patch (revolved walls and caps), and `ToFace` / `MirrorFace` on a retained plane | a revolved shaft keeps its cone, cylinder and caps through a cut |
 | 3 | §10: `Line3`, `Circle3` and `Arc3` on an edge between two retained faces, the `Curve` reader audit and the Boolean-rim witness flag | the P3 fixture's edges publish their curves and the STEP test passes |
 | 4 | Placement rule of §3.4 | a rotated copy of P3 reports a finite `NormalAt` bound below 2 |
-| 5 | A later mesh Boolean charges a retained `Plane` group's out-of-plane displacement by its measured distance from `T` instead of `δ_f` (§11) | measured: a second cut near the first cut's rim, previously refused as hidden tangency, builds |
+| 5 | A later mesh Boolean charges a retained `Plane` facet's slab half-width by its measured distance from `T` instead of `β` (§11) | a second cut beside the first hole, previously refused by the held-mesh gate, builds with rim bounds below the first cut's |
 
 Increments 1–4 only publish what Claim R and Claim E already prove (increment 4 adds the placement charge of §3.4).
-Increment 5 uses the tag to tighten later arithmetic and needs its own proof,
-written in this document before it lands.
+Increment 5 uses the tag to tighten later arithmetic; its proof is Claim S in §11.
 
 ## 10. Edge curves
 
@@ -402,19 +401,48 @@ public API.
 
 ## 11. Why the hint helps a later Boolean, and its limit
 
-For a retained `Plane` group, the true patch lies exactly in `T`. A held
-vertex's distance from `T` is the part of its displacement that tangency
-checks care about for a facet pair across that face; the in-plane part moves
-the contact along the face and cannot make two surfaces touch that were not
-touching. Increment 5 replaces `sourceBound` (payload §5.3) for such a facet
-by its computed out-of-plane distance plus the rounding of the computation.
-A curved retained group has no such split, so a cylinder or sphere keeps
-`δ_f`.
+A later Boolean refuses where its new contact lands on a facet of the earlier
+result whose published bound `FacetBound` exceeds the pair's chord tolerance
+(`docs/faceted-vertex-bounds-design.md` §5), and composes each rim vertex it
+creates from the two contacting facets' bounds (`meshbool.RimBound`). A planar
+facet next to an earlier cut's rim has a corner on that rim, so it carries the
+rim's bound, though its three corners lie in the plane. The probe of
+2026-10-20 ran 374 second cuts after the P3 drill. The held-mesh gate refused
+319 of them, and 287 of those refusals were on facets of a retained `Plane`.
+The hidden-tangency pre-pass (`RefuseUndecidableProximity`) refused none.
 
-The gain depends on how often the refusals come from rim vertices of planar
-groups. That is unmeasured. Increment 5 starts with a probe that counts
-hidden-tangency refusals on a chain of cuts, and it is dropped if the count
-is zero.
+**What RimBound reads.** Its proof (`docs/faceted-vertex-bounds-design.md`
+§3.2) needs only that the true piece of each facet lies within a slab about the
+facet's own plane. `FacetBound` is a sufficient half-width. For a facet of a
+retained `Plane` a thinner one holds.
+
+**Claim S.** Let a facet have its true piece in the plane `T` (Claim R), within
+`β = FacetBound` of the facet. Let `h` be the largest distance of the facet's
+corners from `T`, and `φ` the angle between the facet's plane `P` and `T`.
+Then the true piece lies within `h + β·sin φ` of `P`.
+
+*Proof.* The distance to a plane is convex, so every point `y` of the facet
+lies within `h` of `T`. Take `x` in the true piece and `y` in the facet with
+`|x − y| ≤ β`, and let `y_T` be the projection of `y` onto `T`. The projection
+does not lengthen distances, so `|x − y_T| ≤ β`. The distance to `P` is affine
+on `T` with slope `sin φ`, and `dist(y_T, P) ≤ |y_T − y| ≤ h`. So
+`dist(x, P) ≤ h + β·sin φ`. ∎
+
+`h` and `sin φ` are computed in exact rational arithmetic from the held
+floats and the tag's frame, and rounded up (`meshbool.SetSlabBounds`). The
+slab bound is `min(β, h + β·sin φ)`. In-plane displacement of the facet's
+boundary stays in `β`: the slope term charges it, so the claim needs no
+statement about where the true patch ends.
+
+**Where it applies.** A facet takes the slab bound only when its source face is
+a `RetainedTag` `Plane` with `NormalBound == 0` and no denoted patch. A placed
+tag with a stated departure (§3.4) is a float image whose plane may differ from
+the true one by an offset, so it keeps `β`. The slab bound replaces `β` in the
+held-mesh gate (`RefuseCoarseHeldContact`) and in `RimBound`. A vertex the
+cutter places on a facet's interior keeps `β`, because its true boundary point
+may sit anywhere in the plane within `β`. A curved retained group has no such
+split, so a cylinder or sphere keeps `β`. In the probe, the 32 refusals whose
+worst facet was a cylinder stay refused.
 
 ## 12. Rejected shortcuts
 

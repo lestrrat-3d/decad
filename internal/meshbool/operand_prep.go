@@ -72,6 +72,7 @@ func (bm *BoolMesh) SetVertexBounds(beta []float64) {
 	for i, tri := range bm.Tris {
 		bm.FacetBound[i] = max(beta[tri[0]], beta[tri[1]], beta[tri[2]])
 	}
+	bm.SlabBound = append([]float64(nil), bm.FacetBound...)
 	bm.Parity = NewParityMesh(bm.Verts, bm.Tris)
 }
 
