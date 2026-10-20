@@ -16,6 +16,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/pair/box/` | Exact box paths and oriented-box translation, contact, oriented, sphere-box and cylinder-box proofs, interval separation, patches, clips, and witness and normal readings with their measurements. |
 | `internal/contactbox/` | Source-box and oriented-box admission over body nodes, with their exact classification and the face, point and normal manifolds they publish into a contact report: axis, contained, clipped and oblique patches. See contact-geometry §4. |
 | `internal/contactround/` | Source sphere and cylinder admission over body nodes and their contact classification against boxes, spheres and oriented boxes. See contact-sweep §4–§5. |
+| `internal/planarpose/` | Planar admission of a body at a query pose: snapshots by payload, the held-mesh arm through a mesher, the convexity cache and the exact pair classification published through `internal/planarband/`. See multibody §9–§10. |
 | `internal/pair/sphere/` | Exact sphere-pair relation, gap and bounded response witness. See contact-geometry §4.3. |
 | `internal/pair/planar/` | Planar solid relations, gaps, patches, support faces, and convexity. |
 | `internal/planarsnapshot/` | Planar contact snapshots, cached records, pose gates and placement. See multibody §9.1–§9.2. |

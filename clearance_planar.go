@@ -6,6 +6,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/clearance/pairkernel"
 	"github.com/lestrrat-3d/decad/internal/pair"
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
+	"github.com/lestrrat-3d/decad/internal/planarpose"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
@@ -18,8 +19,8 @@ import (
 // carrier model there (a mitred sweep, a faceted Boolean result), or because
 // its enumeration could not settle the pair — is handed to the exact planar
 // relation of docs/multibody-dynamics-design.md §9, over the same admitted
-// snapshots Document.ContactPair reads (planarSolidAtPose,
-// contact_faceted_pair.go). Every predicate there is an exact sign over
+// snapshots Document.ContactPair reads (planarpose.SolidAtPose,
+// internal/planarpose/pose.go). Every predicate there is an exact sign over
 // dyadic coordinates, so a verdict it returns is a certificate, never a
 // float estimate, and the one rounding — a positive gap's square root — is
 // enclosed outward.
@@ -57,14 +58,14 @@ func planarPairVerdict(ctx context.Context, a, b *Body) (pairkernel.Result, bool
 	if err := budget.Err(); err != nil {
 		return pairkernel.Result{}, false, err
 	}
-	// A zero chord admits no curved body (planarHeldMeshSolid): those keep
+	// A zero chord admits no curved body (planarpose.heldMeshSolid): those keep
 	// the analytic kernel's answer, and this arm reads only an all-planar
 	// held boundary, which that chord reads exactly.
-	sa, deltaA, okA, err := planarSolidAtPose(ctx, budget, a, r3.Identity(), 0)
+	sa, deltaA, okA, err := planarpose.SolidAtPose(ctx, budget, verifyAllMesher{}, bodyNode(a), r3.Identity(), 0)
 	if err != nil || !okA {
 		return pairkernel.Result{}, false, err
 	}
-	sb, deltaB, okB, err := planarSolidAtPose(ctx, budget, b, r3.Identity(), 0)
+	sb, deltaB, okB, err := planarpose.SolidAtPose(ctx, budget, verifyAllMesher{}, bodyNode(b), r3.Identity(), 0)
 	if err != nil || !okB {
 		return pairkernel.Result{}, false, err
 	}

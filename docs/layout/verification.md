@@ -18,7 +18,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/clearance/pairkernel/` | The pair kernel over topology nodes: `Pair`, `SheetSolid`, axis-aligned box pairs, the per-call carrier `Cache`, carrier models, the cell walk, the body and pair gate diameters, and the planar disjoint enclosure. See clearance §1–§7 and verification §3. |
 | `clearance_planar.go` | The exact planar pair arm for mitred, faceted and coil bodies: interference §3.2. |
 | `contact_pair.go` | Pair gates, public contact report types, their conversion from the `internal/reportvocab` report, and the bit-exact pair report memo key and cap. See contact-geometry §6. |
-| `contact_faceted_pair.go` | Planar admission, snapshots and convexity cache; publication through `internal/planarband/`. See multibody §9–§10. |
+| `internal/planarpose/pose.go` | Planar admission, snapshots and convexity cache; publication through `internal/planarband/`. See multibody §9–§10. |
 | `contact_faceted_floor.go` | Exact faceted support-face proof, bounded strict separation, and faceted floor sweeps by exact support face or swept-box clearance. See contact-geometry §4 and contact-sweep. |
 | `contact_sphere_sweep.go` | Sphere-box sweeps over `internal/contactround/` proofs. See contact-sweep §4–§5. |
 | `contact_cylinder_sweep.go` | Cylinder sweep adapters over `internal/contactround/` proofs and `internal/pair/box/`. See contact-sweep §4–§5. |

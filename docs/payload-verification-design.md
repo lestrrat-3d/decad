@@ -469,7 +469,7 @@ Approximate does NOT imply `Suspect`; only failed bound gate does.
 `docs/interference-design.md` §3.2), not as a `bodyGeom` carrier model: a
 `facetedPayload`, or a `mitredSweepPayload`, is read off its own held
 triangle set as an exact dyadic snapshot with its displacement `δ`
-(`planarFacetedSolid` and `planarHeldMeshSolid`, `contact_faceted_pair.go`),
+(`planarFacetedSolid` and `planarpose.heldMeshSolid`, `internal/planarpose/pose.go`),
 its partner — a prism, a stitched solid, or another of the two — the same
 way, and the pair is decided by the exact planar relation of
 `docs/multibody-dynamics-design.md` §9.1, over which §7.2's rules below hold
