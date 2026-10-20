@@ -245,8 +245,13 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 	// A tapered circular body's far rim has its own builder. It only supports
 	// equal setbacks, and a matched rim stops us from trying a generic route.
 	if asym == nil {
-		if out, matched, err := tryDraftCircleRimChamfer(ctx, b, edges, dmm, dDelta); matched || err != nil {
-			return out, err
+		node, matched, err := brepmodify.DraftCircleRimChamfer(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), &b.n,
+			edgeNodes(edges), dmm, dDelta)
+		if matched || err != nil {
+			if err != nil {
+				return nil, err
+			}
+			return commitModifyResult(ctx, b, bodyHandle(node))
 		}
 	}
 	if err := draftrecord.RequireNotReceiver(b.n.Payload, "chamfers"); err != nil {

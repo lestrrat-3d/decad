@@ -253,3 +253,8 @@ func EndSinCos(d Angle, held float64) (sin, cos proofbound.BoundedScalar) {
 	}
 	return proofbound.MeasuredScalar(sinValue, sinBound), proofbound.MeasuredScalar(cosValue, cosBound)
 }
+
+// FullTurn is the sweep of one whole turn from angle zero.
+func FullTurn() Sweep {
+	return Sweep{Phi0: Zero(), Phi1: Angle{Rad: new(big.Rat), Turn: big.NewRat(1, 1)}}
+}

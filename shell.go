@@ -5,17 +5,9 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/brepmodify"
-	"github.com/lestrrat-3d/decad/internal/capblend"
-	"github.com/lestrrat-3d/decad/internal/cupwall"
-	"github.com/lestrrat-3d/decad/internal/draftrecord"
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/modifyoption"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
-	"github.com/lestrrat-3d/decad/internal/prismshell"
-	"github.com/lestrrat-3d/decad/internal/revolveshell"
-	"github.com/lestrrat-3d/decad/internal/stackedshell"
-	"github.com/lestrrat-3d/decad/internal/sweeprecord"
-	"github.com/lestrrat-3d/decad/internal/throughshell"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -192,162 +184,27 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value, opts .
 		// solid at all.
 		return nil, fmt.Errorf(`%w: a zero-thickness shell leaves no wall`, ErrDegenerate)
 	}
-	s := 1.0 // inward: erode
-	if sense == Outward {
-		s = -1.0 // outward: dilate
-	}
-	if o.NoOpenings {
-		// The one nil-selector shell: no face is removed, so there is no
-		// selection to resolve. SX10 still leads for a cap-blend receiver.
-		if err := capblend.RequireNotReceiver(b.n.Payload, "shells"); err != nil {
+	call := brepmodify.ShellCall{NoOpenings: o.NoOpenings, Inward: sense == Inward, T: t, Tmm: tmm, TDelta: tDelta,
+		CurveName: publicCurveName}
+	if !o.NoOpenings {
+		// Reject foreign implementations before invoking their callback.
+		switch {
+		case nilSel:
+			return nil, errNilSelector
+		case !isQuery:
+			return nil, fmt.Errorf(`%w: the shell's face selector is not a decad face query (%T)`, ErrDegenerate, sel)
+		}
+		removed, err := q.SelectFaces(b)
+		if err != nil {
 			return nil, err
 		}
-		// Reach §9.3: a full turn over a hole-free meridian keeps every face
-		// and sweeps its closed wall region over the whole turn.
-		if rp, ok := b.n.Payload.(revolvePayload); ok && rp.Full && len(rp.Profile.Holes) == 0 {
-			return b.shellRevolve(ctx, rp, nil, s, t, tmm, tDelta)
-		}
-		// Reach BX5: a hole-free straight prism keeps both caps and lines
-		// them with a wall, closing a cavity.
-		if pp, ok := b.n.Payload.(prismPayload); ok && len(pp.Profile.Holes) == 0 {
-			return b.shellClosedPrism(ctx, pp, s, t, tmm, tDelta)
-		}
-		if pp, ok := sweeprecord.StraightPrismReduction(b.n.Payload); ok && len(pp.Profile.Holes) == 0 {
-			return b.shellClosedPrism(ctx, pp, s, t, tmm, tDelta)
-		}
-		if sp, ok := b.n.Payload.(stackedPrismPayload); ok && sense == Inward {
-			n, matched, err := stackedshell.Closed(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), sp,
-				stackedshell.Call{Inward: true, T: tmm, TDelta: tDelta})
-			if err != nil {
-				return nil, err
-			}
-			if matched {
-				return commitModifyResult(ctx, b, bodyHandle(n))
-			}
-		}
-		return nil, stackedshell.RefuseClosed(b.n.Payload)
+		call.Removed = faceNodes(removed)
 	}
-	// Reject foreign implementations before invoking their callback.
-	switch {
-	case nilSel:
-		return nil, errNilSelector
-	case !isQuery:
-		return nil, fmt.Errorf(`%w: the shell's face selector is not a decad face query (%T)`, ErrDegenerate, sel)
-	}
-	removed, err := q.SelectFaces(b)
+	node, err := brepmodify.Shell(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), &b.n, call)
 	if err != nil {
 		return nil, err
 	}
-
-	// SX10: a capBlendPayload receiver is staged before the generic "not a
-	// prism" refusal, so the more specific reason leads.
-	if err := capblend.RequireNotReceiver(b.n.Payload, "shells"); err != nil {
-		return nil, err
-	}
-	if out, taken, err := tryDraftCircleShell(ctx, b, removed, sense, tmm, tDelta); taken {
-		return out, err
-	}
-	if err := draftrecord.RequireNotReceiver(b.n.Payload, "shells"); err != nil {
-		return nil, err
-	}
-	// Reach RX2 (docs/modify-reach-design.md §9.3): a revolve receiver shells
-	// its meridian and sweeps the wall over its own angular interval.
-	if rp, ok := b.n.Payload.(revolvePayload); ok {
-		return b.shellRevolve(ctx, rp, removed, s, t, tmm, tDelta)
-	}
-	if tp, ok := b.n.Payload.(twistedSweepPayload); ok {
-		return b.shellTwistedSweep(ctx, tp, removed, sense, tmm, tDelta)
-	}
-	if fp, ok := b.n.Payload.(facetedPayload); ok && fp.PrismUnionFillet != nil {
-		if node, matched, err := prismshell.PrismUnionBossShell(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), &b.n, fp,
-			faceNodes(removed), sense == Inward, tmm, tDelta); matched || err != nil {
-			if err != nil {
-				return nil, err
-			}
-			return commitModifyResult(ctx, b, bodyHandle(node))
-		}
-	}
-	// A brep or stacked receiver takes the brep route
-	// (docs/brep-modify-design.md §2), ahead of the generic refusal.
-	route, err := brepmodify.Receiver(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), &b.n, brepmodify.Request{Op: "shells", Shell: true,
-		Admits: func(_ prismPayload, caps brepmodify.PrismCaps) error {
-			_, _, err := classifyRemovedCaps(prismCapsOfNodes(caps), removed)
-			return err
-		},
-		ShellCall: throughshell.Call{Removed: faceNodes(removed), Inward: sense == Inward, T: t, Tmm: tmm, TDelta: tDelta, Tol: shellTol},
-		CurveName: publicCurveName})
-	if err != nil {
-		return nil, err
-	}
-	if route.Body != nil {
-		return commitModifyResult(ctx, b, bodyHandle(route.Body))
-	}
-
-	// Stage 2 (§4): the receiver's payload class (S3), then the removed faces:
-	// caps by role, and side faces by the receiver's exact prism segment,
-	// which routes the call to the side opening (shell-opening §5). A brep
-	// receiver's route P takes caps only (SB3).
-	pp, ok := b.n.Payload.(prismPayload)
-	caps := prismCapsOf(b)
-	var sweepStraight bool
-	if route.Prism != nil {
-		pp, ok, caps = *route.Prism, true, prismCapsOfNodes(route.Caps)
-	} else if sweepPrism, admitted := sweeprecord.StraightPrismReduction(b.n.Payload); admitted {
-		pp, ok, sweepStraight = sweepPrism, true, true
-	}
-	if !ok {
-		return nil, fmt.Errorf(`%w: this evaluator shells a straight prism or its one-line Sweep reduction only`, ErrUnsupported)
-	}
-	if err := pp.RequireExactSection("shells"); err != nil {
-		return nil, err
-	}
-	var removedStart, removedEnd bool
-	var sides map[int]struct{}
-	switch {
-	case route.Prism != nil:
-		removedStart, removedEnd, err = classifyRemovedCaps(caps, removed)
-	case sweepStraight:
-		removedStart, removedEnd, sides, err = classifyRemovedSweepFaces(b, caps, pp, removed)
-	default:
-		removedStart, removedEnd, sides, err = classifyRemovedFaces(b, caps, removed)
-	}
-	if err == nil && len(sides) > 0 {
-		return b.shellSideOpening(ctx, pp, removedStart, removedEnd, sides, s, t, tmm, tDelta)
-	}
-	if err != nil {
-		return nil, err
-	}
-	bothCaps := removedStart && removedEnd
-
-	in := prismshell.CapShellInput{Prism: pp, KeptCaps: 1, Sense: s, Thickness: t, HeldThickness: tmm, ThicknessDelta: tDelta}
-	if bothCaps {
-		in.KeptCaps = 0
-	}
-	capShell, err := cupwall.PlanCapShell(ctx, in, removedEnd)
-	if err != nil {
-		return nil, err
-	}
-	env := envOf(documentNode(d), d.nextProducerID())
-	body, err := bodyResult(capShell.Build(ctx, env))
-	if err != nil {
-		return nil, err
-	}
-	return commitModifyResult(ctx, b, body)
-}
-
-// shellClosedPrism is reach BX5 (docs/modify-reach-design.md §9.2), built by
-// prismshell.BuildClosed: WithNoOpenings on a hole-free straight prism keeps
-// every face and lines it with a wall of thickness t, closing a cavity whose
-// walls form one void shell (FaceShell.IsVoid). It commits the result against
-// b's document.
-func (b *Body) shellClosedPrism(ctx context.Context, pp prismPayload, s float64, t units.Value, tmm, tDelta float64) (*Body, error) {
-	n, err := prismshell.BuildClosed(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), prismshell.CapShellInput{
-		Prism: pp, KeptCaps: 2, Sense: s, Thickness: t, HeldThickness: tmm, ThicknessDelta: tDelta,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return commitModifyResult(ctx, b, bodyHandle(n))
+	return commitModifyResult(ctx, b, bodyHandle(node))
 }
 
 // shellTol is the closed-form degeneracy tolerance for the shell's own gates
@@ -356,38 +213,3 @@ func (b *Body) shellClosedPrism(ctx context.Context, pp prismPayload, s float64,
 // construction, its S11a/S11 refusals and the §5 audit): offset2d.ShellTol,
 // the value the cap-band builder reads too.
 const shellTol = offset2d.ShellTol
-
-// classifyRemovedCaps decides which caps a removed-face set names on a brep
-// receiver's route P (docs/brep-modify-design.md §4.2): every face must be one
-// of the recognised prism's two cap faces, else ErrUnsupported, which the
-// route reports as SB3. It reports whether the start cap, the end cap, or
-// both were removed. A prism receiver classifies its removed faces with
-// classifyRemovedFaces instead, which routes side faces to the side opening.
-func classifyRemovedCaps(caps prismCaps, removed []*Face) (bool, bool, error) {
-	var start, end bool
-	for _, f := range removed {
-		switch {
-		case caps.start != nil && f == caps.start:
-			start = true
-		case caps.end != nil && f == caps.end:
-			end = true
-		default:
-			// Route P maps removed faces to the recognised prism's caps only
-			// (shell-opening SO7).
-			return false, false, fmt.Errorf(`%w: a shell that removes a side wall is not supported by this evaluator`, ErrUnsupported)
-		}
-	}
-	return start, end, nil
-}
-
-// shellRevolve shells a revolve receiver through the faces in removed (nil for a
-// WithNoOpenings full turn) and commits the result. s is +1 inward, -1 outward.
-func (b *Body) shellRevolve(ctx context.Context, rp revolvePayload, removed []*Face, s float64, t units.Value, tmm, tDelta float64) (*Body, error) {
-	caps := prismCapsOf(b)
-	node, err := revolveshell.Shell(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), &b.n, rp,
-		faceNode(caps.start), faceNode(caps.end), faceNodes(removed), s, t, tmm, tDelta, shellTol)
-	if err != nil {
-		return nil, err
-	}
-	return commitModifyResult(ctx, b, bodyHandle(node))
-}

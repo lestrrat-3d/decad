@@ -1395,7 +1395,7 @@ stack column carries as one face (its §1). That document owns the rim at
 every corner kind (Table RO), the three regions, the `brepPayload` the result
 is recorded on through `internal/stackedbrep`, its refusals (Table SO), its
 consumers (Table DO) and its PR split. A prism side opening builds where
-every section walk is a line or a circular arc (`shell_opening.go`), and
+every section walk is a line or a circular arc (`internal/brepmodify/shell.go`), and
 its increment table lists what still refuses. A revolve side opening (§9.3.2)
 builds with that document's rim at every line and arc corner (its §8).
 
