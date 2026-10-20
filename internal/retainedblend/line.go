@@ -86,6 +86,38 @@ func looksLikeLine(edge *topo.Edge) bool {
 	return true
 }
 
+// cornerOf finds the held vertex at an edge's end and the third face there,
+// refusing an end that is not a corner of exactly the two faces beside the
+// edge and one more.
+func cornerOf(vertex *topo.Vertex, fp facetedrecord.Payload, faceIndex map[*topo.Face]int,
+	fa, fb int) (int, *topo.Face, error) {
+	v := -1
+	for i, p := range fp.Verts {
+		if p == vertex.Position {
+			v = i
+			break
+		}
+	}
+	if v < 0 {
+		return 0, nil, fmt.Errorf("%w: an edge end is not a vertex of the held mesh", decaderr.ErrUnsupported)
+	}
+	faces := map[int]bool{}
+	for i, t := range fp.Tris {
+		if t[0] == v || t[1] == v || t[2] == v {
+			faces[fp.FaceOf[i]] = true
+		}
+	}
+	if len(faces) != 3 || !faces[fa] || !faces[fb] {
+		return 0, nil, fmt.Errorf("%w: an edge end is not a corner of exactly three faces", decaderr.ErrUnsupported)
+	}
+	for face, idx := range faceIndex {
+		if faces[idx] && idx != fa && idx != fb {
+			return v, face, nil
+		}
+	}
+	return 0, nil, fmt.Errorf("%w: an edge end has no third face", decaderr.ErrUnsupported)
+}
+
 // intersect3 is the point common to three planes, and false when their normals
 // are nearly dependent.
 func intersect3(p, q, s plane) (r3.Vec, bool) {
@@ -138,29 +170,9 @@ func readLine(edge *topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo.Fac
 func (l *line) readEnd(vertex *topo.Vertex, fp facetedrecord.Payload, faceIndex map[*topo.Face]int,
 	fa, fb int) (lineEnd, error) {
 	var end lineEnd
-	end.v = -1
-	for i, p := range fp.Verts {
-		if p == vertex.Position {
-			end.v = i
-			break
-		}
-	}
-	if end.v < 0 {
-		return lineEnd{}, fmt.Errorf("%w: an edge end is not a vertex of the held mesh", decaderr.ErrUnsupported)
-	}
-	faces := map[int]bool{}
-	for i, t := range fp.Tris {
-		if t[0] == end.v || t[1] == end.v || t[2] == end.v {
-			faces[fp.FaceOf[i]] = true
-		}
-	}
-	if len(faces) != 3 || !faces[fa] || !faces[fb] {
-		return lineEnd{}, fmt.Errorf("%w: an edge end is not a corner of exactly three faces", decaderr.ErrUnsupported)
-	}
-	for face, idx := range faceIndex {
-		if faces[idx] && idx != fa && idx != fb {
-			end.face = face
-		}
+	var err error
+	if end.v, end.face, err = cornerOf(vertex, fp, faceIndex, fa, fb); err != nil {
+		return lineEnd{}, err
 	}
 	g, ok := retainedPlane(end.face)
 	if !ok {

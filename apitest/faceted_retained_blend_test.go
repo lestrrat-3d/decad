@@ -88,6 +88,17 @@ func requireVolumeChange(t *testing.T, before, after decad.Measurement, want flo
 	require.InDelta(t, want, got, growth)
 }
 
+// requireAreaChange is requireVolumeChange for the surface area: the held area
+// moves from the exact area by at most what the published bound grew.
+func requireAreaChange(t *testing.T, before, after decad.Measurement, want float64) {
+	t.Helper()
+	got := after.Value.Mag() - before.Value.Mag()
+	growth := after.Bound.Mag() - before.Bound.Mag()
+	t.Logf("area change %.9f, want %.9f, bound growth %.3g", got, want, growth)
+	require.Positive(t, growth)
+	require.InDelta(t, want, got, growth)
+}
+
 func TestFacetedRetainedBlend(t *testing.T) {
 	t.Parallel()
 
@@ -377,7 +388,7 @@ func straightEdge(t *testing.T, b *decad.Body, p, dir r3.Vec) decad.EdgeSelector
 			continue
 		}
 		for _, v := range []*decad.Vertex{e.Start(), e.End()} {
-			if v.Position().Value.Sub(p).Len() < 1e-3 {
+			if v.Position().Value.Sub(p).Len() < 5e-3 {
 				run := e.End().Position().Value.Sub(e.Start().Position().Value)
 				if run.Cross(dir).Len() < 1e-6*run.Len() {
 					return decad.Edges(decad.EndpointAt(v.Position().Value), decad.ParallelTo(dir)).Exactly(1)
@@ -686,5 +697,197 @@ func TestFacetedRetainedBlendStraight(t *testing.T) {
 			}
 		}
 		require.Equal(t, 2, cylinders)
+	})
+}
+
+// groovedPlate is the plate with a groove along x cut by a Ø8 tool whose axis
+// sits at (y, z) = (10, 22): the groove meets the top face in two lines at
+// y = 10 ± √12, z = 20.
+func groovedPlate(t *testing.T) *decad.Body {
+	t.Helper()
+	sc := newRetentionScene()
+	plate := blendPlate(t, sc)
+	s, err := sc.w.CreateSketch(sc.w.YZ())
+	require.NoError(t, err)
+	c := s.CreatePoint(10, 22)
+	s.Fix(c)
+	s.CreateCircle(c, 4)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	tool, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(30)})
+	require.NoError(t, err)
+	shift, err := r3.Translation(r3.Vec{X: 20})
+	require.NoError(t, err)
+	tool, err = decad.Transform(t.Context(), tool, shift)
+	require.NoError(t, err)
+	grooved, err := decad.Cut(t.Context(), plate, tool)
+	require.NoError(t, err)
+	return grooved
+}
+
+// shoelaceArea is the area of the polygon through pts, which wind either way.
+func shoelaceArea(pts [][2]float64) float64 {
+	sum := 0.0
+	for i, p := range pts {
+		q := pts[(i+1)%len(pts)]
+		sum += p[0]*q[1] - q[0]*p[1]
+	}
+	return math.Abs(sum) / 2
+}
+
+func TestFacetedRetainedBlendCylinderLine(t *testing.T) {
+	t.Parallel()
+	// The groove's edge on the near side of the top face, in (y, z).
+	const rad = 4.0
+	k := [2]float64{10 - math.Sqrt(rad*rad-4), 20}
+	o := [2]float64{10, 22}
+	arcPoints := func(from, to [2]float64, n int) [][2]float64 {
+		a0 := math.Atan2(from[1]-o[1], from[0]-o[0])
+		a1 := math.Atan2(to[1]-o[1], to[0]-o[0])
+		sweep := a1 - a0
+		for sweep > math.Pi {
+			sweep -= 2 * math.Pi
+		}
+		for sweep < -math.Pi {
+			sweep += 2 * math.Pi
+		}
+		out := make([][2]float64, 0, n+1)
+		for i := 0; i <= n; i++ {
+			a := a0 + sweep*float64(i)/float64(n)
+			out = append(out, [2]float64{o[0] + rad*math.Cos(a), o[1] + rad*math.Sin(a)})
+		}
+		return out
+	}
+
+	t.Run("fillet of the groove's edge", func(t *testing.T) {
+		t.Parallel()
+		grooved := groovedPlate(t)
+		before, err := grooved.Volume()
+		require.NoError(t, err)
+		beforeArea, err := grooved.Area()
+		require.NoError(t, err)
+		const r = 1.0
+		filleted, err := decad.Fillet(t.Context(), grooved, straightEdge(t, grooved, r3.NewVec(0, k[0], 20), r3.NewVec(1, 0, 0)),
+			units.Millimeters(r))
+		require.NoError(t, err)
+		after, err := filleted.Volume()
+		require.NoError(t, err)
+		afterArea, err := filleted.Area()
+		require.NoError(t, err)
+		// The ball rolls inside the material, 1 mm under the top face and 5 mm
+		// from the groove's axis: centre (6, 19). It touches the top face at
+		// (6, 20) and the groove at (6.8, 19.6).
+		centre := [2]float64{6, 19}
+		ta, tb := [2]float64{6, 20}, [2]float64{6.8, 19.6}
+		region := [][2]float64{k, ta}
+		a0 := math.Atan2(ta[1]-centre[1], ta[0]-centre[0])
+		a1 := math.Atan2(tb[1]-centre[1], tb[0]-centre[0])
+		for i := 1; i < 2000; i++ {
+			a := a0 + (a1-a0)*float64(i)/2000
+			region = append(region, [2]float64{centre[0] + r*math.Cos(a), centre[1] + r*math.Sin(a)})
+		}
+		region = append(region, tb)
+		region = append(region, arcPoints(tb, k, 2000)...)
+		requireVolumeChange(t, before, after, 40*shoelaceArea(region))
+		// The surface loses the top face's strip, the groove wall's band and a
+		// corner of each end face, and gains the blend's cylinder.
+		kq := shoelaceArea(region)
+		q := math.Atan2(tb[1]-o[1], tb[0]-o[0]) - math.Atan2(k[1]-o[1], k[0]-o[0])
+		phi := math.Acos(0.6)
+		requireAreaChange(t, beforeArea, afterArea, 40*(r*phi-(k[0]-ta[0])-rad*q)-2*kq)
+		require.Less(t, afterArea.Bound.Mag()-beforeArea.Bound.Mag(), 1.0, "the area bound grows by the rewrite's error only")
+		cylinders := 0
+		for _, f := range filleted.Faces() {
+			if c, ok := f.Surface().(decad.Cylinder); ok && math.Abs(c.Radius.Base()-r) < 1e-12 {
+				cylinders++
+				require.InDelta(t, 6, c.Origin.Y, 1e-9)
+				require.InDelta(t, 19, c.Origin.Z, 1e-9)
+			}
+		}
+		require.Equal(t, 1, cylinders)
+		mesh, err := filleted.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+		require.NoError(t, err)
+		require.True(t, mesh.BoundaryVerified())
+		require.True(t, mesh.VolumeVerified())
+	})
+
+	t.Run("chamfer of the groove's edge", func(t *testing.T) {
+		t.Parallel()
+		grooved := groovedPlate(t)
+		before, err := grooved.Volume()
+		require.NoError(t, err)
+		const d = 1.0
+		chamfered, err := decad.Chamfer(t.Context(), grooved, straightEdge(t, grooved, r3.NewVec(0, k[0], 20), r3.NewVec(1, 0, 0)),
+			units.Millimeters(d))
+		require.NoError(t, err)
+		after, err := chamfered.Volume()
+		require.NoError(t, err)
+		// The bevel runs from 1 mm along the top face to 1 mm of arc down the wall.
+		ta := [2]float64{k[0] - d, 20}
+		a := math.Atan2(k[1]-o[1], k[0]-o[0]) + d/rad
+		tb := [2]float64{o[0] + rad*math.Cos(a), o[1] + rad*math.Sin(a)}
+		region := [][2]float64{k, ta, tb}
+		region = append(region, arcPoints(tb, k, 2000)...)
+		requireVolumeChange(t, before, after, 40*shoelaceArea(region))
+	})
+
+	t.Run("fillet at the foot of a boss lying on the plate", func(t *testing.T) {
+		t.Parallel()
+		// A Ø8 rod along x from 10 to 30 whose axis sits 2 mm above the plate's
+		// top face: it rises out of the plate along two lines. The plate's top
+		// face wraps the rod's footprint, so it is reflex at each end.
+		sc := newRetentionScene()
+		plate := blendPlate(t, sc)
+		s, err := sc.w.CreateSketch(sc.w.YZ())
+		require.NoError(t, err)
+		c := s.CreatePoint(10, 22)
+		s.Fix(c)
+		s.CreateCircle(c, rad)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		rod, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+		require.NoError(t, err)
+		shift, err := r3.Translation(r3.Vec{X: 10})
+		require.NoError(t, err)
+		rod, err = decad.Transform(t.Context(), rod, shift)
+		require.NoError(t, err)
+		joined, err := decad.Union(t.Context(), plate, rod)
+		require.NoError(t, err)
+		before, err := joined.Volume()
+		require.NoError(t, err)
+		const r = 1.0
+		filleted, err := decad.Fillet(t.Context(), joined, straightEdge(t, joined, r3.NewVec(10, k[0], 20), r3.NewVec(1, 0, 0)),
+			units.Millimeters(r))
+		require.NoError(t, err)
+		after, err := filleted.Volume()
+		require.NoError(t, err)
+		// The ball sits in the void, 1 mm above the plate and 5 mm from the
+		// rod's axis: centre (10 - sqrt(24), 21).
+		centre := [2]float64{10 - math.Sqrt(24), 21}
+		ta := [2]float64{centre[0], 20}
+		dx, dz := centre[0]-o[0], centre[1]-o[1]
+		scale := rad / math.Hypot(dx, dz)
+		tb := [2]float64{o[0] + dx*scale, o[1] + dz*scale}
+		region := [][2]float64{k, ta}
+		a0 := math.Atan2(ta[1]-centre[1], ta[0]-centre[0])
+		a1 := math.Atan2(tb[1]-centre[1], tb[0]-centre[0])
+		sweep := a1 - a0
+		for sweep > math.Pi {
+			sweep -= 2 * math.Pi
+		}
+		for sweep < -math.Pi {
+			sweep += 2 * math.Pi
+		}
+		for i := 1; i < 2000; i++ {
+			a := a0 + sweep*float64(i)/2000
+			region = append(region, [2]float64{centre[0] + r*math.Cos(a), centre[1] + r*math.Sin(a)})
+		}
+		region = append(region, tb)
+		region = append(region, arcPoints(tb, k, 2000)...)
+		requireVolumeChange(t, before, after, -20*shoelaceArea(region))
+		mesh, err := filleted.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+		require.NoError(t, err)
+		require.True(t, mesh.BoundaryVerified())
+		require.True(t, mesh.VolumeVerified())
 	})
 }

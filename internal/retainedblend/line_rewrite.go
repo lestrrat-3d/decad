@@ -31,7 +31,38 @@ type edgeRun struct {
 // locate finds the straight edge in face f's loops.
 func (w *work) locate(f faceLoops, l line, pl plane) (edgeRun, error) {
 	slack := l.slack()
-	v0, v1 := l.ends[0].v, l.ends[1].v
+	var dirs [2]r3.Vec
+	var onChain [2]func(int) bool
+	for i := range 2 {
+		end := l.ends[i]
+		dir, ok := pl.n.Cross(end.g.n).Normalize()
+		if !ok {
+			return edgeRun{}, fmt.Errorf("%w: a face is parallel to an end face", decaderr.ErrUnsupported)
+		}
+		dirs[i] = dir
+		onChain[i] = func(v int) bool { return distToLine(w.verts[v], end.exact, dir) <= w.beta[v]+slack }
+	}
+	onE := func(v int) bool { return distToLine(w.verts[v], l.ends[0].exact, l.d) <= w.beta[v]+slack }
+	run, err := w.locateBy(f, l.ends[0].v, l.ends[1].v, onE, onChain)
+	if err != nil {
+		return edgeRun{}, err
+	}
+	for i := range 2 {
+		last := w.verts[run.chain[i][len(run.chain[i])-1]]
+		dir := dirs[i]
+		if last.Sub(l.ends[i].exact).Dot(dir) < 0 {
+			dir = dir.Scale(-1)
+		}
+		run.dir[i] = dir
+	}
+	return run, nil
+}
+
+// locateBy finds the edge between the held vertices v0 and v1 in face f's
+// loops: the loop, the direction along it, the vertices between the ends that
+// satisfy onE, and at each end the vertices leaving the corner that satisfy
+// onChain. The chain directions are left for the caller.
+func (w *work) locateBy(f faceLoops, v0, v1 int, onE func(int) bool, onChain [2]func(int) bool) (edgeRun, error) {
 	li, ok := f.loopWith(v0, v1)
 	if !ok {
 		return edgeRun{}, fmt.Errorf("%w: the edge's ends lie on no one loop of its face", decaderr.ErrUnsupported)
@@ -39,7 +70,6 @@ func (w *work) locate(f faceLoops, l line, pl plane) (edgeRun, error) {
 	loop := f.loops[li]
 	n := len(loop)
 	i0, i1 := indexIn(loop, v0), indexIn(loop, v1)
-	onE := func(v int) bool { return distToLine(w.verts[v], l.ends[0].exact, l.d) <= w.beta[v]+slack }
 	run := edgeRun{loop: li, i0: i0}
 	found := 0
 	for _, step := range []int{1, -1} {
@@ -61,25 +91,14 @@ func (w *work) locate(f faceLoops, l line, pl plane) (edgeRun, error) {
 		return edgeRun{}, fmt.Errorf("%w: the edge is not one run of its face's boundary", decaderr.ErrUnsupported)
 	}
 	for i := range 2 {
-		end := l.ends[i]
-		dir, ok := pl.n.Cross(end.g.n).Normalize()
-		if !ok {
-			return edgeRun{}, fmt.Errorf("%w: a face is parallel to an end face", decaderr.ErrUnsupported)
-		}
-		onLine := func(v int) bool { return distToLine(w.verts[v], end.exact, dir) <= w.beta[v]+slack }
 		at, step := i0, -run.step
 		if i == 1 {
 			at, step = i1, run.step
 		}
-		run.chain[i] = walk(loop, at, step, onLine)
+		run.chain[i] = walk(loop, at, step, onChain[i])
 		if len(run.chain[i]) == 0 {
 			return edgeRun{}, fmt.Errorf("%w: a face leaves an edge end along no straight run", decaderr.ErrUnsupported)
 		}
-		last := w.verts[run.chain[i][len(run.chain[i])-1]]
-		if last.Sub(end.exact).Dot(dir) < 0 {
-			dir = dir.Scale(-1)
-		}
-		run.dir[i] = dir
 	}
 	return run, nil
 }
@@ -278,7 +297,7 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 	// the faces beside the edge about the chains.
 	var gLoops [2][][]int
 	for i := range 2 {
-		loops, err := w.endFace(l, i, fG[i], [2]edgeRun{runA, runB}, kind[i], remA[i], remB[i], rowIdx[i], rowsAt, margin, convex)
+		loops, err := w.endFace(l.ends[i], fG[i], runA.chain[i], runB.chain[i], kind[i], remA[i], remB[i], rowIdx[i], endPoints(rowsAt, l.d, l.ends[i].g), margin, convex)
 		if err != nil {
 			return nil, err
 		}
@@ -343,9 +362,8 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 
 // endFace builds end face G_i's new loops: the corner and the removed parts of
 // the two chains give way to the end curve of the blend.
-func (w *work) endFace(l line, i int, g faceLoops, runs [2]edgeRun, kinds [2]sideKind, remA, remB, rows []int,
-	rowsAt []r3.Vec, margin float64, convex bool) ([][]int, error) {
-	end := l.ends[i]
+func (w *work) endFace(end lineEnd, g faceLoops, chainA, chainB []int, kinds [2]sideKind, remA, remB, rows []int,
+	reachPts []r3.Vec, margin float64, convex bool) ([][]int, error) {
 	li, ok := g.loopWith(end.v)
 	if !ok {
 		return nil, fmt.Errorf("%w: an end face does not hold the edge's corner", decaderr.ErrUnsupported)
@@ -354,7 +372,6 @@ func (w *work) endFace(l line, i int, g faceLoops, runs [2]edgeRun, kinds [2]sid
 	n := len(loop)
 	at := indexIn(loop, end.v)
 	prev, next := loop[(at+n-1)%n], loop[(at+1)%n]
-	chainA, chainB := runs[0].chain[i], runs[1].chain[i]
 	var aFirst bool
 	switch {
 	case next == chainA[0] && prev == chainB[0]:
@@ -376,8 +393,8 @@ func (w *work) endFace(l line, i int, g faceLoops, runs [2]edgeRun, kinds [2]sid
 		return nil, fmt.Errorf("%w: an end face's corner does not match the edge's convexity", decaderr.ErrUnsupported)
 	}
 	reach := 0.0
-	for _, p := range rowsAt {
-		reach = max(reach, setbackPoint(p, l.d, end.g).Sub(end.exact).Len())
+	for _, p := range reachPts {
+		reach = max(reach, p.Sub(end.exact).Len())
 	}
 	reach += margin
 	skip := map[int]bool{end.v: true}
@@ -440,28 +457,36 @@ func (w *work) endFace(l line, i int, g faceLoops, runs [2]edgeRun, kinds [2]sid
 // dropping the removed parts of the two chains. A corner vertex stays at an
 // end where the face extends past it.
 func (w *work) replaceEdge(f faceLoops, run edgeRun, l line, rem [2][]int, kinds [2]sideKind, p [2]int) ([][]int, error) {
-	set := map[int]bool{l.ends[0].v: true, l.ends[1].v: true}
-	for _, v := range run.inner {
-		set[v] = true
+	return replaceRun(f, run, [2]int{l.ends[0].v, l.ends[1].v}, rem, kinds, []int{p[0], p[1]})
+}
+
+// replaceRun swaps the edge's run in face f's loops, from v[0] to v[1], for
+// the vertices seq (listed from end 0 to end 1), dropping the removed parts of
+// the two chains. A corner vertex stays at an end where the face extends past
+// it.
+func replaceRun(f faceLoops, run edgeRun, v [2]int, rem [2][]int, kinds [2]sideKind, seq []int) ([][]int, error) {
+	set := map[int]bool{v[0]: true, v[1]: true}
+	for _, x := range run.inner {
+		set[x] = true
 	}
 	for i := range 2 {
-		for _, v := range rem[i] {
-			set[v] = true
+		for _, x := range rem[i] {
+			set[x] = true
 		}
 	}
 	outside, inOrder, err := splice(f.loops[run.loop], set)
 	if err != nil {
 		return nil, err
 	}
-	repl := make([]int, 0, 4)
+	repl := make([]int, 0, len(seq)+2)
 	if kinds[0] == extends {
-		repl = append(repl, l.ends[0].v)
+		repl = append(repl, v[0])
 	}
-	repl = append(repl, p[0], p[1])
+	repl = append(repl, seq...)
 	if kinds[1] == extends {
-		repl = append(repl, l.ends[1].v)
+		repl = append(repl, v[1])
 	}
-	if indexIn(inOrder, l.ends[0].v) > indexIn(inOrder, l.ends[1].v) {
+	if indexIn(inOrder, v[0]) > indexIn(inOrder, v[1]) {
 		for a, b := 0, len(repl)-1; a < b; a, b = a+1, b-1 {
 			repl[a], repl[b] = repl[b], repl[a]
 		}
@@ -489,6 +514,15 @@ const (
 	// along.
 	extends
 )
+
+// endPoints are the points a blend's rows reach on the end face g.
+func endPoints(rowsAt []r3.Vec, d r3.Vec, g plane) []r3.Vec {
+	out := make([]r3.Vec, len(rowsAt))
+	for j, p := range rowsAt {
+		out[j] = setbackPoint(p, d, g)
+	}
+	return out
+}
 
 // kindsOf is face f's kind at the two ends.
 func kindsOf(kind [2][2]sideKind, f int) [2]sideKind { return [2]sideKind{kind[0][f], kind[1][f]} }
