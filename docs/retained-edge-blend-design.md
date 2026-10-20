@@ -57,7 +57,7 @@ Table RR lists the edges a blend can be built on. The others are refused.
 |---|---|---|---|---|
 | **R1** | `Line3`, convex or concave | two retained `Plane`s, not parallel, ending at three-face corners whose third face is a retained `Plane` | `Cylinder` / `Plane` | increment B2; equal-distance chamfer only |
 | **R2** | `Circle3`, closed, centre on the axis | retained `Plane` and coaxial retained `Cylinder` | `Torus` / `Cone` | increment B1; equal-distance chamfer only |
-| **R3** | `Line3` of retention E4 | retained `Plane` and a `Cylinder` whose axis lies in the plane | `Cylinder` / `Plane` | increment B3 |
+| **R3** | `Line3` of retention E4 | retained `Plane` and a `Cylinder` whose axis lies in the plane, ending on retained planes normal to the axis | `Cylinder` / `Plane` | increment B3; equal-distance chamfer only |
 | **R4** | `Arc3` | as R2, open | as R2 | increment B4 |
 
 Refused, with the reason a caller can act on:
@@ -138,10 +138,34 @@ cylinder) is SR3.
 
 ### 4.3 R3, a line between a plane and a parallel cylinder
 
-The rolling ball between a plane and a cylinder whose axis lies in the plane
-is a cylinder parallel to the axis. The construction is R1's with the
-cylinder's own tangent line in place of the second plane's setback line; it is
-specified when increment B3 starts.
+Take the cross-section normal to the common direction `d̂` of the edge and the
+cylinder's axis. The plane is a line `L` with outward normal `nA`; the
+cylinder is a circle `C` of radius `R` about `o`, with outward normal `nB(x)`
+radial (negated for a `Reversed` wall); the edge is their meeting `K`. The
+corner is convex when the wall's material lies on the same side of `L` as the
+plane's. The angle between the tangent of `C` at `K` and `L` must clear
+`minSine`; a tangent meeting is not an edge.
+
+**Fillet.** The ball touches `L` from the side `ball` (`−1` convex, `+1` concave)
+along `nA`, so its centre lies on the line `L'` at distance `r` from `L`. It
+touches `C` from the outside (`|c − o| = R + r`) when `κ = +1` and from the
+inside (`|c − o| = R − r`) when `κ = −1`, where `κ = +1` exactly when the edge is
+convex and the material lies outside `C`, or the edge is concave and the
+material lies inside `C`. The centre is the point of `L' ∩ circle(o, R + κ·r)`
+nearest `K`. The tangent points are `T_A = c − ball·r·nA` and the radial
+projection `T_B` of `c` onto `C`. The unit vectors from the centre to them are
+`a₀ = −ball·nA` and `a₁ = −κ·(c − o)/|c − o|`, `φ` is the angle between them, and
+the blend arc runs between them through `φ`, as in R1. The surface is a
+`Cylinder` of radius `r` and axis `d̂` through `c`.
+
+**Chamfer.** The setback is `d` along `L` from `K` into the plane's face and arc
+length `d` along `C` from `K` into the wall's face. The blend is the `Plane`
+through the two generator lines.
+
+The wall's setback line is the generator of the cylinder at `T_B`. Cutting the
+held wall there is a cut by the half-plane that holds the axis and that
+generator, applied to the facets whose angle about the axis, measured from `K`
+into the wall, is below the angle of `T_B`.
 
 ## 5. Construction
 
