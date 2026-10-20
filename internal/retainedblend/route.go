@@ -95,7 +95,7 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 			if err != nil {
 				// An arc this route cannot read is left to the generic refusal, which
 				// names the whole selection.
-				return nil, false, nil
+				return nil, false, nil //nolint:nilerr // declining is the generic refusal's cue, not a swallowed failure
 			}
 			if err := a.checkSize(spec); err != nil {
 				return nil, true, err
