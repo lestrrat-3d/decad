@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/draftrecord"
 	"github.com/lestrrat-3d/decad/internal/extent"
+	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/modifyselect"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -316,14 +317,18 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 			}
 			return commitModifyResult(ctx, b, body)
 		}
-		body, recognized, err = tryLoftMirrorCylinderCapChamfer(ctx, b, fp, edges, dmm, dDelta, asym)
+		node, recognized, err := loftcylinder.MirrorCapChamfer(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer),
+			&b.n, fp, edgeNodes(edges), dmm, dDelta, asym != nil)
+		body = bodyHandle(node)
 		if recognized || err != nil {
 			if err != nil {
 				return nil, err
 			}
 			return commitModifyResult(ctx, b, body)
 		}
-		body, recognized, err = tryLoftCylinderCapChamfer(ctx, b, fp, edges, dmm, dDelta, asym)
+		node, recognized, err = loftcylinder.CapChamfer(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer),
+			&b.n, fp, edgeNodes(edges), dmm, dDelta, asym != nil)
+		body = bodyHandle(node)
 		if recognized || err != nil {
 			if err != nil {
 				return nil, err

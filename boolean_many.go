@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismboolean"
@@ -53,7 +54,9 @@ func performUnionMany(ctx context.Context, operands []*Body) (*Body, error) {
 		return body, nil
 	}
 	tools := operands[1:]
-	body, matched, err := tryLoftMirrorCylinderPairs(ctx, d, ref, a, tools, nil)
+	node, matched, err := loftcylinder.MirrorPairs(ctx, envOf(documentNode(d), ref), verifyAllMesher{},
+		bodyNode(a), bodyNodes(tools), nil)
+	body := bodyHandle(node)
 	if !matched && err == nil {
 		body, matched, err = tryRevolveLoftSectorUnionMany(ctx, d, ref, operands)
 	}

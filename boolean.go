@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftmirror"
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -210,15 +211,17 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 	} else if ok {
 		return bodyHandle(n), nil
 	}
-	if body, ok, err := tryLoftMirrorCylinderUnion(ctx, op, d, ref, a, b); err != nil {
+	if n, ok, err := loftcylinder.MirrorUnion(ctx, op, envOf(documentNode(d), ref), verifyAllMesher{},
+		bodyNode(a), bodyNode(b)); err != nil {
 		return nil, err
 	} else if ok {
-		return body, nil
+		return bodyHandle(n), nil
 	}
-	if body, ok, err := tryLoftCylinderUnion(ctx, op, d, ref, a, b); err != nil {
+	if n, ok, err := loftcylinder.JoinUnion(ctx, op, envOf(documentNode(d), ref), verifyAllMesher{},
+		bodyNode(a), bodyNode(b)); err != nil {
 		return nil, err
 	} else if ok {
-		return body, nil
+		return bodyHandle(n), nil
 	}
 	if n, ok, err := revolveshell.SectorCylinderCut(ctx, op, envOf(documentNode(d), ref),
 		bodyNode(a), bodyNode(b)); err != nil {
@@ -226,15 +229,17 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 	} else if ok {
 		return bodyHandle(n), nil
 	}
-	if body, ok, err := tryLoftMirrorCylinderBoreCut(ctx, op, d, ref, a, b); err != nil {
+	if n, ok, err := loftcylinder.MirrorBoreCut(ctx, op, envOf(documentNode(d), ref), verifyAllMesher{},
+		bodyNode(a), bodyNode(b)); err != nil {
 		return nil, err
 	} else if ok {
-		return body, nil
+		return bodyHandle(n), nil
 	}
-	if body, ok, err := tryLoftCylinderBoreCut(ctx, op, d, ref, a, b); err != nil {
+	if n, ok, err := loftcylinder.JoinBoreCut(ctx, op, envOf(documentNode(d), ref), verifyAllMesher{},
+		bodyNode(a), bodyNode(b)); err != nil {
 		return nil, err
 	} else if ok {
-		return body, nil
+		return bodyHandle(n), nil
 	}
 	if body, ok, err := tryRevolveLoftNextSectorUnion(ctx, op, d, ref, a, b); err != nil {
 		return nil, err
