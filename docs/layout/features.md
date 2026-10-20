@@ -29,7 +29,7 @@ The rules for rows live in `docs/layout.md`.
 | `sweep_mitre.go` | Mitred options and entry adapters; builds through `sweepmitre.Build`. See sweep §16. |
 | `coil.go` | `Coil`, `CoilOption`, Table CS gates. Root `coilPayload` aliases `coilshell.Payload`. See helix §2, §4, §5.6. |
 | `revolve.go` | Generic `Revolve` over a profile or chain: `Axis` variants, options, angular extents, and the public axis adapter to `internal/revolveaxis/`. See evaluator §6 and surface §13.2. |
-| `stops.go` | Body-relative stop resolution: live stop bodies, face selection, through-all and angular stops; `internal/extent` admits a `ToFace` or `ToFaceAngular` face and computes its stop. See evaluator §5/§6/§11. |
+| `stops.go` | Body-relative stop resolution: live stop bodies, face selection and angular stops; `internal/extent` admits a `ToFace` or `ToFaceAngular` face and computes its stop, and resolves through-all stops. See evaluator §5/§6/§11. |
 | `internal/extent/stop_revolve.go` | Exact `ToFace` level for a planar Revolve wall or angular cap. See evaluator §5. |
 | `loft.go` | Loft and LoftChain entry points and options. Builds through `loftrecord.FromProfiles` and `FromChains`. See loft §2/§4/§10/§16. |
 | `loft_sections.go` | Public smooth-section loft entry point and source-face assembly. See loft-sections design. |

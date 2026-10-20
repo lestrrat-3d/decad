@@ -19,41 +19,6 @@ import (
 // named extents first, through-all bodies in stop order, and the axis last,
 // deduplicated. A stop body is depended on, never consumed or retired.
 
-// directionalExtent is what a through-all stop needs from a body's payload:
-// the body's extent interval along an arbitrary world direction — the
-// closed-form intersection of the sweep direction with the body's analytic
-// surfaces (docs/evaluator-design.md §5) — BESIDE the proven displacement its
-// two endpoints carry. An all-analytic body whose every extreme is exactly
-// representable publishes a zero displacement and reads exactly, as it always
-// did; a body whose own construction holds an extreme only to a bracket
-// publishes that bracket's width and the stop charges it (docs/spline-design.md
-// §6.2/§6.4). A payload that cannot state the interval at all, or that holds a
-// displacement this reading does not carry, returns ErrUnsupported.
-type directionalExtent interface {
-	ExtentAlong(g r3.Vec) (float64, float64, float64, error)
-}
-
-// axialDisplacement is what a body-relative stop reads of a stop body's
-// payload: a proven displacement covering its analytic planar stop faces. A
-// level derived from such a face inherits it, so a stop cannot launder a held
-// coordinate back into an exact one.
-type axialDisplacement interface {
-	AxialDelta() float64
-}
-
-// payloadAxialDelta returns the payload's stop-face displacement. The figure a
-// linear stop publishes composes this term with its own arithmetic.
-func payloadAxialDelta(b *Body) float64 {
-	if b == nil {
-		return 0
-	}
-	ad, ok := b.n.Payload.(axialDisplacement)
-	if !ok {
-		return 0
-	}
-	return ad.AxialDelta()
-}
-
 // resolveStopBody runs the body gates every body-relative stop shares with
 // EdgeAxis (core §8.1): the named body must be live in this document.
 func (d *Document) resolveStopBody(b *Body, what string) (*Body, error) {
@@ -156,48 +121,6 @@ func (d *Document) resolveToFace(tf ToFace, frame r3.Frame, travel float64, what
 		return 0, 0, 0, err
 	}
 	return stop, delta, body.originProducer(), nil
-}
-
-// resolveThroughAll resolves a through-all stop: the sweep runs from the
-// sketch plane in the travel sense through the far side of every live body
-// it meets, so the stop is the farthest far side among them
-// (docs/evaluator-design.md §5). A body is met when it has material strictly
-// beyond the sketch plane in the travel sense, judged on the body's own
-// recorded payload — its directional extent along the sweep direction, beside
-// the displacement that reading publishes; the sweep's lateral footprint is
-// not consulted (an exact region-versus-projection overlap is boolean-grade
-// machinery this evaluator does not have, and a conservative guess would
-// fabricate or drop a recorded dependency). The in-path test is decided
-// OUTSIDE that displacement — beyond the plane by more than it, or short of
-// the plane by more than it — and an interval that straddles the plane in the
-// travel sense refuses ErrUnsupported (docs/spline-design.md §6.4) rather than
-// guess a dependency. It returns the signed stop coordinate along the plane
-// normal, that coordinate's own proven axial displacement — which carries the
-// winning body's extent displacement, so a level held to a bracket never
-// publishes itself as the level it denotes — and the met bodies' private producer identities in
-// stop order along the sweep, nearest far side first. No live body in the path
-// is ErrDegenerate: the sweep has no stop at all.
-func (d *Document) resolveThroughAll(frame r3.Frame, travel float64) (float64, float64, []producerID, error) {
-	dir := frame.N().Scale(travel)
-	stops := extent.NewThroughStops[producerID](frame.Origin(), dir, travel)
-	for _, b := range d.liveBodies() {
-		// A sheet encloses no material to stop a sweep.
-		if b.Kind() == BodySheet {
-			continue
-		}
-		ext, ok := b.n.Payload.(directionalExtent)
-		if !ok {
-			return 0, 0, nil, fmt.Errorf(`%w: a through-all stop needs every live body's directional extent, and this evaluator did not build one of them`, ErrUnsupported)
-		}
-		_, hi, bound, err := ext.ExtentAlong(dir)
-		if err != nil {
-			return 0, 0, nil, err
-		}
-		if err := stops.Add(hi, bound, payloadAxialDelta(b), b.originProducer()); err != nil {
-			return 0, 0, nil, err
-		}
-	}
-	return stops.Finish()
 }
 
 // angularStops is what a ToFaceAngular resolution needs of the revolve's
