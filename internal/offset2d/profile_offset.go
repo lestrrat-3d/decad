@@ -34,7 +34,7 @@ import (
 // ProfileCornerLoopsBudget resolves every loop of a recorded section into its
 // coalesced corner walk in the section's own plane-local coordinates. A prism
 // reads its section through it, and a revolve its meridian
-// (revolve_blend.go): the corner rewrite is the same 2D construction for both.
+// (internal/brepmodify/revolve_blend.go): the corner rewrite is the same 2D construction for both.
 func ProfileCornerLoopsBudget(budget *proofbound.WorkBudget, profile momentinput.Profile) ([]survey2d.CornerLoop, error) {
 	walks, err := boundarywalk.ModifyLoopsBudget(budget, boundarywalk.Profile(profile))
 	if err != nil {

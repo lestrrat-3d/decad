@@ -345,7 +345,7 @@ rim on a curved source still refuses `Length`.
 
 `topo.Edge.RetainedCurve` marks the edge and `ChainBound` keeps the chord
 bound the curve replaced. Three modify routes take a `FacetedCurve` as the
-witness that an edge is a Boolean rim (`prism_union_fillet.go`,
+witness that an edge is a Boolean rim (`internal/brepmodify/prism_union.go`,
 `oblique_boss_fillet.go`, `cross_cylinder_bore.go`); each accepts a retained
 curve in its place.
 
@@ -358,8 +358,8 @@ The curve readers split the same way the surface readers did in §4.
 | `internal/selectorquery/topo_views.go` | `ParallelTo`, `Circular` and `EndpointAt` match a retained edge by its curve |
 | `internal/modifyselect/edge_context.go` | a refusal message renders a retained closed rim as `closed circle through (p), centre (c), radius r mm` |
 | `export/step_analytic.go` | `supportsAnalyticSTEP` requires the circle seams of a cylinder wall to align exactly. Held rim vertices do not, so a retained body still writes one planar face per triangle |
-| `prism_union_fillet.go`, `oblique_boss_fillet.go`, `cross_cylinder_bore.go` | accept `RetainedCurve` as the Boolean-rim witness (§10.2) |
-| `brep_modify_*`, `chamfer.go`, `cap_edge_cutter.go`, `internal/modifyselect` | read the curve after a payload-class gate. A `facetedPayload` stays `ErrUnsupported` at modify S3/SX9, so the new curve opens no modify route by itself |
+| `internal/brepmodify/prism_union.go`, `oblique_boss_fillet.go`, `cross_cylinder_bore.go` | accept `RetainedCurve` as the Boolean-rim witness (§10.2) |
+| `internal/brepmodify`, `internal/modifyselect` | read the curve after a payload-class gate. A `facetedPayload` stays `ErrUnsupported` at modify S3/SX9, so the new curve opens no modify route by itself |
 | `internal/extent/angular_stop.go`, `patch_body.go`, `internal/clearance/edge_topology.go`, `internal/gatediameter/body_gate.go` | each is gated by its own payload class |
 | `Edge.Length`, `LengthBound` | unchanged (§10.2) |
 

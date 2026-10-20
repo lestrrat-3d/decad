@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/brepmodify"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
+	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
@@ -22,7 +24,7 @@ func TestBlendEdgesGates(t *testing.T) {
 		req := brepmodify.Request{
 			Op: "chamfers", Sel: "test selector", Edges: pick(boxEdges, body), CurveName: publicCurveName,
 			Blend: &brepmodify.BlendOp{Kind: "chamfer", Corner: func(loop cornerLoop, _, ci int, _ *topo.Edge) (*cornerBlend, error) {
-				return computeChamfer(loop, ci, 1, 1)
+				return offset2d.Chamfer(loop.Walks, ci, 1, 1, sectionaudit.Tolerance)
 			}},
 		}
 		return brepmodify.BlendEdges(t.Context(), envOf(body.Doc, body.Doc.NextProducer), bp, req)

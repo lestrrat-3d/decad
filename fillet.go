@@ -2,31 +2,14 @@ package decad
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/brepmodify"
-	"github.com/lestrrat-3d/decad/internal/breprecord"
-	"github.com/lestrrat-3d/decad/internal/capblend"
-	"github.com/lestrrat-3d/decad/internal/draftrecord"
 	"github.com/lestrrat-3d/decad/internal/extent"
-	"github.com/lestrrat-3d/decad/internal/loftrecord"
-	"github.com/lestrrat-3d/decad/internal/modifyselect"
-	"github.com/lestrrat-3d/decad/internal/obliqueboss"
-	"github.com/lestrrat-3d/decad/internal/prismpattern"
-	"github.com/lestrrat-3d/decad/internal/prismrecord"
-	"github.com/lestrrat-3d/decad/internal/provenance"
-	"github.com/lestrrat-3d/decad/internal/sweeprecord"
-	"github.com/lestrrat-3d/decad/internal/topo"
 
-	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
-	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
-
-	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/units"
 )
@@ -62,13 +45,6 @@ import (
 // FilletOption configures Fillet. WithTangentChain is the one option a
 // fillet takes (docs/modify-reach-design.md §2).
 type FilletOption interface{ filletOption() }
-
-// filletTol is the closed-form degeneracy tolerance for the section rewrite:
-// two directions parallel within it are a smooth or cusped corner (S4), and an
-// offset intersection is rejected below it (S5). The section is decad's own
-// exact geometry, so this only absorbs float noise, never an admission on a
-// residual.
-const filletTol = sectionaudit.Tolerance
 
 // Fillet rounds selected section corners of a straight prism, its admitted
 // one-line Sweep reduction, or a matching-section axial loft with a tangent
@@ -203,264 +179,13 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 		}
 	}
 
-	// SX10: a capBlendPayload receiver is staged before the generic "not a
-	// prism" refusal, so the more specific reason leads.
-	if err := capblend.RequireNotReceiver(b.n.Payload, "fillets"); err != nil {
-		return nil, err
-	}
-	if node, matched, err := brepmodify.DraftCircleRimFillet(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), &b.n,
-		edgeNodes(edges), rmm, rDelta); matched || err != nil {
-		if err != nil {
-			return nil, err
-		}
-		return commitModifyResult(ctx, b, bodyHandle(node))
-	}
-	if err := draftrecord.RequireNotReceiver(b.n.Payload, "fillets"); err != nil {
-		return nil, err
-	}
-	if bp, ok := b.n.Payload.(brepPayload); ok {
-		out, matched, err := tryRoundedBrepCapEdgeFillet(ctx, b, bp, edges, rmm, rDelta)
-		if err != nil {
-			return nil, err
-		}
-		if matched {
-			return out, nil
-		}
-	}
-	blend := brepmodify.BlendOp{
-		Kind: "fillet",
-		Corner: func(loop cornerLoop, _, ci int, _ *topo.Edge) (*cornerBlend, error) {
-			return computeFillet(loop, ci, rmm)
-		},
-	}
-	// The exact P8 front top edge takes a bounded cutter before the brep
-	// receiver's SB7 curved-third-face refusal (modify-general §4.3c).
-	// Other brep and stacked receivers take docs/brep-modify-design.md §2.
-	// A loop's fillet radius is both of route L's setbacks
-	// (docs/loop-fillet-design.md §4).
-	loopCall := brepmodify.Request{
-		Op: "fillets",
-		Admits: func(pp prismPayload, _ brepmodify.PrismCaps) error {
-			return modifyselect.RequireLateral(ctx, pp, edgeNodes(edges))
-		},
-		Sel: fmt.Sprint(sel), Edges: edgeNodes(edges), Blend: &blend, CurveName: publicCurveName,
-		Loop:     &capSetback{Dc: rmm, DcDelta: rDelta, Ds: rmm, DsDelta: rDelta},
-		LoopKind: breprecord.BandFillet,
-	}
-	route, err := brepmodify.Receiver(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), &b.n, loopCall)
+	res, err := brepmodify.Fillet(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), &b.n, brepmodify.FilletCall{
+		Sel: fmt.Sprint(sel), Edges: edgeNodes(edges), R: rmm, RDelta: rDelta, Hooks: modifyHooks(),
+	})
 	if err != nil {
 		return nil, err
 	}
-	if route.Body != nil {
-		return commitModifyResult(ctx, b, bodyHandle(route.Body))
-	}
-
-	// Reach RX2 (docs/modify-reach-design.md §7): a quarter-turn rectangular
-	// revolve also admits its one outer angular-cap radial rim.
-	if rp, ok := b.n.Payload.(revolvePayload); ok {
-		if out, matched, err := tryRevolveCapRimFillet(ctx, b, rp, edges, rmm, rDelta); matched || err != nil {
-			return out, err
-		}
-		return b.blendRevolveJunctions(ctx, sel, edges, rp, blend)
-	}
-	if lp, ok := b.n.Payload.(loftPayload); ok {
-		node, err := loftrecord.FilletStraight(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), fmt.Sprint(sel),
-			edgeNodes(edges), lp, rmm)
-		if err != nil {
-			return nil, err
-		}
-		return commitModifyResult(ctx, b, bodyHandle(node))
-	}
-	if fp, ok := b.n.Payload.(facetedPayload); ok && fp.ObliqueBoss != nil {
-		node, err := obliqueboss.FilletBoss(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), edgeNodes(edges),
-			fp.ObliqueBoss, rmm, rDelta)
-		if err != nil {
-			return nil, err
-		}
-		return commitModifyResult(ctx, b, bodyHandle(node))
-	}
-	if fp, ok := b.n.Payload.(facetedPayload); ok && fp.PrismUnionFillet != nil {
-		// A retained source pair alone does not authenticate this selection.
-		// Keep the ordinary S3 refusal and its complete edge context on a miss.
-		if out, matched, err := b.filletPrismUnion(ctx, edges, fp.PrismUnionFillet, rmm, rDelta); matched || err != nil {
-			return out, err
-		}
-	}
-	if fp, ok := b.n.Payload.(facetedPayload); ok && fp.PrismPatternJoin != nil {
-		out, err := prismpattern.FilletBody(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), verifyAllMesher{},
-			&b.n, edgeNodes(edges), rmm, rDelta)
-		if err != nil {
-			return nil, err
-		}
-		return commitModifyResult(ctx, b, bodyHandle(out))
-	}
-
-	// Stage 2 (§4): the receiver's payload class (S3), then every selected
-	// edge is a lateral edge mapped to a section corner (S1).
-	pp, ok := b.n.Payload.(prismPayload)
-	// A one-span straight solid Sweep builds through prismrecord.Build and keeps
-	// that exact reduction beside its path. Its original edges can be matched
-	// against the reduction's corners without replacing the public selector.
-	sweepReduction := false
-	if reduction, admitted := sweeprecord.StraightPrismReduction(b.n.Payload); admitted {
-		pp, ok = reduction, true
-		sweepReduction = true
-	}
-	if route.Prism != nil {
-		pp, ok = *route.Prism, true
-	}
-	if !ok {
-		return nil, fmt.Errorf(`%w: this evaluator fillets a straight prism, its one-line Sweep reduction, a revolve, or a matching-section axial loft only; selector %s matched [%s]`,
-			ErrUnsupported, sel, modifyselect.EdgesContext(edgeNodes(edges)))
-	}
-	if err := pp.RequireExactSection("fillets"); err != nil {
-		return nil, err
-	}
-
-	budget := proofbound.NewWorkBudget(ctx)
-	loops, err := offset2d.ProfileCornerLoopsBudget(budget, pp.Profile)
-	if err != nil {
-		return nil, err
-	}
-	// Which corners each loop gets a fillet at, and the fillet's blend data.
-	blendAt := make([]map[int]*cornerBlend, len(loops))
-	for i := range blendAt {
-		blendAt[i] = map[int]*cornerBlend{}
-	}
-	matched := make([]modifyselect.MatchedCorner, 0, len(edges))
-	for ei, e := range edges {
-		li, ci, found, err := modifyselect.MatchCorner(budget, pp, loops, edgeNode(e))
-		if err != nil {
-			return nil, err
-		}
-		if !found {
-			if sweepReduction {
-				if len(edges) != 1 {
-					return nil, fmt.Errorf(`%w: a straight Sweep fillets one cap edge at a time; selector %s matched [%s]`,
-						ErrUnsupported, sel, modifyselect.EdgesContext(edgeNodes(edges)))
-				}
-				if !straightSweepCapEdge(e) {
-					return nil, fmt.Errorf(`%w: %s is not a cap edge of the straight Sweep`,
-						ErrUnsupported, modifyselect.EdgeContext(ei, edgeNode(e)))
-				}
-				// The one-line Sweep was built from pp. Route E matches this
-				// published edge to that exact prism's face view, then checks the
-				// material wedge before rewriting either end face.
-				bp, err := breprecord.OfPrism(pp)
-				if err != nil {
-					return nil, err
-				}
-				if err := breprecord.RequireExactSection(bp, loopCall.Op); err != nil {
-					return nil, err
-				}
-				node, err := brepmodify.BlendEdges(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), bp, loopCall)
-				if err != nil {
-					return nil, err
-				}
-				return commitModifyResult(ctx, b, bodyHandle(node))
-			}
-			// RF3 (docs/loop-fillet-design.md §3): a cap edge sends the
-			// prism through its brep face view. Route E, L or V then reads the
-			// whole selection (docs/vertex-blend-design.md §2).
-			if original, ok := b.n.Payload.(prismPayload); ok {
-				if out, recognized, err := tryObliqueCapEdgeFillet(ctx, b, original, edges, rmm, rDelta); recognized {
-					return out, err
-				}
-			}
-			node, err := brepmodify.PrismFaceViewBlend(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), pp, loopCall)
-			if err != nil {
-				return nil, err
-			}
-			return commitModifyResult(ctx, b, bodyHandle(node))
-		}
-		matched = append(matched, modifyselect.NewMatchedCorner(ei, edgeNode(e), li, ci, loops[li]))
-		blendAt[li][ci] = nil // marked; the blend is computed in stage 3
-	}
-
-	// Stage 3 (§4): the construction's own gates, per corner — S4 (a corner
-	// exists) then S5 (a blend of that radius exists).
-	for _, corner := range matched {
-		if err := survey2d.WallBudgetStep(budget); err != nil {
-			return nil, err
-		}
-		cb, err := computeFillet(loops[corner.Loop], corner.Corner, rmm)
-		if err != nil {
-			return nil, fmt.Errorf(`%w; selector %s, %s`, err, sel, corner)
-		}
-		blendAt[corner.Loop][corner.Corner] = cb
-	}
-
-	// The rewritten section, and the fillet arcs' (loop, segment) indices.
-	profile, filletArcs, err := offset2d.RewriteProfileBudget(budget, pp.Profile, loops, blendAt)
-	if err != nil {
-		return nil, err
-	}
-
-	// Stage 4 (§4/§5): the audit of the rewritten profile — S8, S6, S7, S9.
-	if err := offset2d.AuditRewriteBudget(budget, pp.Profile, profile, loops, blendAt); err != nil {
-		if errors.Is(err, context.Canceled) {
-			return nil, context.Canceled
-		}
-		if errors.Is(err, context.DeadlineExceeded) {
-			return nil, context.DeadlineExceeded
-		}
-		return nil, modifyselect.WrapAuditError(fmt.Sprint(sel), matched, err)
-	}
-
-	// Build through evalPrism (§2): same frame, interval and placement, only
-	// the section changed.
-	ref := d.nextProducerID()
-	// The blend descriptors ride on the payload so a re-evaluation (a copy or a
-	// placement) re-mints its own fillet(i,j) roles; evalPrism applies them.
-	// The rewritten section is a NEW record no preflight has seen, so the build
-	// opens its one counter here (docs/spline-design.md §5.2).
-	// A section rewrite is a change of the SECTION: both sweep levels come
-	// through unchanged, and so does each one's own axial displacement.
-	body, err := bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), ref), prismrecord.Payload{
-		Profile:   profile,
-		Frame:     pp.Frame,
-		Z0:        pp.Z0,
-		Z1:        pp.Z1,
-		Z0Delta:   pp.Z0Delta,
-		Z1Delta:   pp.Z1Delta,
-		Xform:     pp.Xform,
-		BlendSegs: filletArcs,
-		BlendKind: "fillet",
-	}, freeform.NewFreeformWork()))
-	if err != nil {
-		return nil, err
-	}
-	// Keep the consumed input aligned with document liveness at the commit edge.
-	if err := d.requireLive(b); err != nil {
-		return nil, err
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	d.commit(body, b)
-	return body, nil
-}
-
-// straightSweepCapEdge checks the public role pair before the stored prism's
-// face view matches the selected geometry. A one-line Sweep renames only its
-// swept walls to side(0,loop,segment); its two cap roles are unchanged.
-func straightSweepCapEdge(edge *Edge) bool {
-	facing := edge.Faces()
-	if len(facing) != 2 {
-		return false
-	}
-	capRole, wallRole := false, false
-	for _, face := range facing {
-		for _, origin := range face.n.Origins {
-			switch {
-			case origin.Role == provenance.RoleCapStart || origin.Role == provenance.RoleCapEnd:
-				capRole = true
-			case strings.HasPrefix(origin.Role, "side(0,"):
-				wallRole = true
-			}
-		}
-	}
-	return capRole && wallRole
+	return commitResult(ctx, b, res)
 }
 
 // cornerLoop is survey2d.CornerLoop: one boundary loop resolved into its
@@ -469,8 +194,3 @@ type cornerLoop = survey2d.CornerLoop
 
 // cornerBlend is the shared fillet and chamfer section rewrite.
 type cornerBlend = offset2d.Blend
-
-// computeFillet builds one section corner blend.
-func computeFillet(loop cornerLoop, ci int, r float64) (*cornerBlend, error) {
-	return offset2d.Fillet(loop.Walks, ci, r, filletTol)
-}

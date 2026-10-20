@@ -154,7 +154,7 @@ it is the op's receiver for the rest of the call.
 
 Axes are tried in order `0, 1, 2`. For each axis that reads as a prism the
 selection is classified against that prism exactly as the prism op classifies
-it today — `modifyselect.MatchCorner` for lateral edges, `classifyChamferSelection`
+it today — `modifyselect.MatchCorner` for lateral edges, `brepmodify.ClassifyChamferSelection`
 for complete cap loops, `classifyRemovedCaps` for a shell's openings — with one
 change: the two helpers that find caps by `capStart`/`capEnd` roles take the
 two cap `*Face`s as arguments instead (for a prism body, the faces those roles

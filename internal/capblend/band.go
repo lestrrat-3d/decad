@@ -1095,7 +1095,7 @@ func CapNameOf(matSign float64) string {
 // decaderr.ErrUnsupported rather than leaving face.Reversed at whatever the caller
 // constructed it with. NormalAt's own refusal there is decaderr.ErrDegenerate, but
 // that sentinel and decaderr.ErrUnsupported are opposite existence claims a caller
-// branches on (root capblend.go's capband.ChamferAuditError), so the underlying error
+// branches on (capblend.BuildChecked's capband.ChamferAuditError), so the underlying error
 // is folded in with %v, never %w.
 func FixPatchOrientation(f *topo.Face, pl prismrecord.Payload, samplePoint r3.Vec, refU, refV, refZ float64) error {
 	n, err := topobuild.NormalAt(f, samplePoint)

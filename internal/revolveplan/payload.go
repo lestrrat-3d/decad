@@ -97,7 +97,7 @@ type Payload struct {
 	RadialProof bool
 	// BlendSegs and BlendKind are prismrecord.Payload's own blend-role descriptors,
 	// read over the MERIDIAN: a revolve junction fillet or chamfer
-	// (revolve_blend.go) records, per loop, the segment indices of its
+	// (internal/brepmodify/revolve_blend.go) records, per loop, the segment indices of its
 	// rewritten record that are blend connectors, and BlendKind is "fillet" or
 	// "chamfer". The build gives each such wall a second kind(i,j) role beside
 	// its side(i,j) one. They ride on the payload so Transform and Copy
@@ -305,7 +305,7 @@ func (rp Payload) Reflected() bool { return rp.Xform.IsReflection() }
 // sweeps: its centre on the axis at z, its axis the placed sweep axis (negated
 // under a reflected placement, so the circle's sense stays the sweep's), and
 // its radius ρ. buildRevolveLoop stamps every junction edge from it, and
-// revolve_blend.go matches a selected edge against it, so the two read the
+// internal/brepmodify/revolve_blend.go matches a selected edge against it, so the two read the
 // same numbers from the same arithmetic.
 func (rp Payload) JunctionCircle(b revolvemesh.RevolveBasis, z, rho float64) (r3.Vec, r3.Vec, units.Value) {
 	sweepSign := 1.0
