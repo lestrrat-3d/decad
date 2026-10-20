@@ -82,7 +82,7 @@ The rules for rows live in `docs/layout.md`.
 | `section.go` | Public planar section query over certified prism, stack-backed BRep, direct and smooth Loft, sphere and cone records; exact builders and clips live in `internal/sectionclip/`; also the `Section` profile-or-chain constraint. See section design, surface §13.2. |
 | `path.go` | The immutable spatial `Path`, sealed segments and its recorded `internal/sweepinput.Path`. See sweep §2–§3. |
 | `extent.go` | Public linear and angular extent variants and normalization. See API §8.1. |
-| `selector.go` | `EdgeQuery`/`FaceQuery` and live-topology adapters for `internal/selectorquery`. See API §9. |
+| `selector.go` | `EdgeQuery`/`FaceQuery`, which resolve against live bodies through `internal/selectorquery` node views. See API §9. |
 | `selection_error.go` | Public selector error types and query rendering adapters. See API §9. |
 
 ### Mass properties and free-form curves

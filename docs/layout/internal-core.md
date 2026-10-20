@@ -22,8 +22,8 @@ The rules for rows live in `docs/layout.md`.
 | `internal/pointcone/` | Point-loft cone crossing samples, far-cap subdivision and contact split, cap and triangle crossing bounds, and sector cap paths, subdivision, merged angles and root-edge order, and the strict-side offset of a cone meridian (`offset.go`). See loft-point and loft-face-sections designs. |
 | `internal/pointloft/` | Builds the point-section Loft apex fan and proves its source stations, boundary, area and volume. See loft-point design. |
 | `internal/sectionrecord/` | Curve records and validation. |
-| `internal/selectorquery/` | Selector matching, query rendering, residual counts, and face-role indexes. See API §9. |
-| `internal/modifyselect/` | Selected-edge context, corner matching and audit-failure context for modify. See modify §6. |
+| `internal/selectorquery/` | Selector matching on node views, query rendering, residual counts, face-role indexes. See API §9. |
+| `internal/modifyselect/` | Selected-edge context, corner matching and audit context for modify. See modify §6. |
 | `internal/provenance/` | Producer identity, feature-role reference and the `RoleBody`/`RoleCapStart`/`RoleCapEnd` names the topology nodes hold; root `FeatureRef` is the public form. See evaluator §3. |
 | `internal/surfacegeom/` | Private face and edge geometry carriers and Verify's diagnostic plane key. Public variants live in `topology.go`; `Edge.Curve` and `Face.Surface` adapt the nodes. See API §6.1, surface §6. |
 | `internal/surfaceplace/` | Rigid placement of face surfaces and edge curves, and the placed circle bound. See surface §6. |

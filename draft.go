@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"math"
 	"slices"
-	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/draftrecord"
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/selectorquery"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -21,20 +21,6 @@ import (
 // existing prism. It resolves the neutral cap and the wall selection against
 // b, then builds the same draftPayload a tapered Extrude builds
 // (internal/draftrecord) over b's recorded section.
-
-// roleSidePrefix opens every wall role a sweep mints, side(i, j). Walls(b)
-// and the complete-wall-set test of Draft read it.
-const roleSidePrefix = "side("
-
-// isWallOf reports whether f carries a side(i, j) role minted by producer.
-func (f *Face) isWallOf(producer producerID) bool {
-	for _, o := range f.n.Origins {
-		if o.Producer == producer && strings.HasPrefix(o.Role, roleSidePrefix) {
-			return true
-		}
-	}
-	return false
-}
 
 // NeutralPlane is the plane a draft tilts faces about. The set is sealed
 // (docs/draft-design.md §10).
@@ -322,13 +308,13 @@ func draftKeptWalls(b *Body, producer producerID, selected []*Face) (map[offset2
 		}
 	}
 	for _, f := range selected {
-		if !f.isWallOf(producer) {
+		if !selectorquery.IsWallOf(faceNode(f), producer) {
 			return nil, fmt.Errorf(`%w: the selection contains a face that is no wall of the receiver (it carries no side(i, j) role of the receiver's own), so it names no wall to tilt (draft SD21)`, ErrUnsupported)
 		}
 	}
 	kept := map[offset2d.DraftWall]struct{}{}
 	for _, f := range b.Faces() {
-		if !f.isWallOf(producer) || slices.Contains(selected, f) {
+		if !selectorquery.IsWallOf(faceNode(f), producer) || slices.Contains(selected, f) {
 			continue
 		}
 		for _, o := range f.n.Origins {
