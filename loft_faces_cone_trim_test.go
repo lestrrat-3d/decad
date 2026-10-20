@@ -3,6 +3,7 @@ package decad
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/loftfacestrim"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -13,17 +14,17 @@ func TestLoftFacesCapRecordChecksVariableSourceShape(t *testing.T) {
 	for _, count := range []int{2, 3, 9, maxLoftFacesSections} {
 		record.Maps = make([]loftFaceMap, count)
 		record.Bounds = make([]loftFaceCapBounds, count)
-		require.True(t, loftFacesCapRecordReady(record), "cap count %d", count)
+		require.True(t, loftfacestrim.CapRecordReady(record), "cap count %d", count)
 	}
 	record.Bounds = record.Bounds[:len(record.Bounds)-1]
-	require.False(t, loftFacesCapRecordReady(record))
+	require.False(t, loftfacestrim.CapRecordReady(record))
 	record.Maps = make([]loftFaceMap, maxLoftFacesSections+1)
 	record.Bounds = make([]loftFaceCapBounds, len(record.Maps))
-	require.False(t, loftFacesCapRecordReady(record))
+	require.False(t, loftfacestrim.CapRecordReady(record))
 	record.Maps = make([]loftFaceMap, 3)
 	record.Bounds = make([]loftFaceCapBounds, 3)
 	record.StationGroup = record.StationGroup[:3]
-	require.False(t, loftFacesCapRecordReady(record))
+	require.False(t, loftfacestrim.CapRecordReady(record))
 }
 
 func TestLoftCapConeRecordDoesNotSurviveRoundTripPlacement(t *testing.T) {

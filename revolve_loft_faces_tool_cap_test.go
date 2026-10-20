@@ -8,11 +8,13 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftface"
+	"github.com/lestrrat-3d/decad/internal/loftfacestrim"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolvecontact"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/stretchr/testify/require"
 )
@@ -74,7 +76,7 @@ func TestRevolveLoftFacesToolCirclesConsumeLiveNeutralSource(t *testing.T) {
 	t.Cleanup(func() { tooth.n.Payload = originalPayload })
 	payload := originalPayload.(facetedPayload)
 	payload.FaceOf = slices.Clone(payload.FaceOf)
-	toeFaceIndex := indexOfFace(tooth.Faces(), faceHandle(proof.ToeFace))
+	toeFaceIndex := loftfacestrim.IndexOfFace(topobuild.Faces(bodyNode(tooth)), proof.ToeFace)
 	require.GreaterOrEqual(t, toeFaceIndex, 0)
 	changedTriangle := -1
 	for index, group := range payload.Src {

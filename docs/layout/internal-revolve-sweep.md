@@ -17,6 +17,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/revolveshell/` | Surveys shell walls; certifies Revolve sections, conical roots and trimmed sectors; routes the Revolve/point-Loft sector Unions; builds and audits their joins from rings, caps, plans, bounds and meshes; admits a centered cylinder Cut of a join. See modify-reach §9.3, revolve-loft-sector design. |
 | `internal/revolveloftfaces/` | Builds LoftFaces bodies; certifies their sources and Revolve contacts; builds seams, strips, the audited blank-shell mesh, its rays and triangle labels, and vertical-trace paths: ray crossings, held vertices, displacement bounds, wedge splits. See loft-face-sections and revolve-loft-contact-graph. |
 | `internal/revolvecontact/` | Certifies a LoftFaces tooth against a Revolve blank: source and root, cell manifest, tool-cap circles, contact graph and census, cap seams, blank shell, vertical trace and clear-patch occupancy. See loft-face-sections and revolve-loft-contact-graph. |
+| `internal/loftfacestrim/` | Certifies the one-use LoftFaces toe Cut to heel Intersect cone continuation: toe record, heel Boolean and the tangent heel's extended tooth operand. See loft-face-sections design. |
 | `internal/revolvemass/` | Revolve moments and centroid bounds. |
 | `internal/revolveangle/` | Exact angle denotations and certified sweep extremes. See evaluator §6 and sweep §3. |
 | `internal/sweeparc/` | Exact circle carriers, rational vectors, axis lines, plane gates and angle bounds. See sweep §3. |

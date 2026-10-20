@@ -12,9 +12,11 @@ import (
 	"github.com/lestrrat-3d/decad/internal/booloperand"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftface"
+	"github.com/lestrrat-3d/decad/internal/loftfacestrim"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/revolvecontact"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -408,8 +410,8 @@ func TestLoftFacesTangentHeelIntersectKeepsTrimRecord(t *testing.T) {
 		"G2 admits the real chain")
 	decided := false
 	for scale := 4.0; scale <= 32 && !decided; scale *= 2 {
-		_, err := evaluateBooleanMeshesWithConeCap(t.Context(), meshbool.OpIntersect, c.cut, c.heelTool,
-			pairMeshes{}, scale, nil, nil)
+		_, err := evaluateBooleanMeshes(t.Context(), meshbool.OpIntersect, c.cut, c.heelTool,
+			pairMeshes{}, scale)
 		var expected *meshbool.BooleanExpectedError
 		require.Error(t, err, "the unextended tooth is never admitted without an exemption")
 		require.True(t, errors.As(err, &expected))
@@ -427,13 +429,13 @@ func TestLoftFacesTangentHeelIntersectKeepsTrimRecord(t *testing.T) {
 	plane, ok := loftface.NewTangentPlane(final, side)
 	require.True(t, ok)
 	toe := c.cut.n.Payload.(facetedPayload).LoftFacesToe
-	var meshes *tangentHeelMeshes
+	var meshes *loftfacestrim.TangentHeelMeshes
 	var eval booleanEvaluation
 	for scale := 4.0; scale <= 32; scale *= 2 {
 		var err error
-		meshes = &tangentHeelMeshes{target: c.cut, toe: toe, plane: plane}
-		eval, err = evaluateBooleanMeshesWithConeCap(t.Context(), meshbool.OpIntersect, c.cut, c.heelTool,
-			meshes, scale, nil, nil)
+		meshes = &loftfacestrim.TangentHeelMeshes{Base: pairMeshes{}, Target: bodyNode(c.cut), Toe: toe, Plane: plane}
+		eval, err = evaluateBooleanMeshes(t.Context(), meshbool.OpIntersect, c.cut, c.heelTool,
+			meshes, scale)
 		if err == nil {
 			break
 		}
@@ -441,15 +443,15 @@ func TestLoftFacesTangentHeelIntersectKeepsTrimRecord(t *testing.T) {
 		require.True(t, errors.As(err, &expected))
 		require.Equal(t, meshbool.BooleanExpectedStaging, expected.Kind, "only staging retries: %v", err)
 	}
-	require.NotNil(t, meshes.coneTris, "the extended Boolean succeeded within the ladder")
-	require.NoError(t, loftface.ExtensionClearsCone(meshes.slab, meshes.coneVerts, meshes.coneTris, plane,
+	require.NotNil(t, meshes.ConeTris, "the extended Boolean succeeded within the ladder")
+	require.NoError(t, loftface.ExtensionClearsCone(meshes.Slab, meshes.ConeVerts, meshes.ConeTris, plane,
 		proofbound.NewWorkBudget(t.Context())), "E5 passes on the recorded meshes")
-	require.NoError(t, meshes.clearsResult(t.Context(), eval.payload.Verts))
-	depth, ok := loftface.ConeDepth(meshes.coneVerts, plane)
+	require.NoError(t, meshes.ClearsResult(t.Context(), eval.payload.Verts))
+	depth, ok := loftface.ConeDepth(meshes.ConeVerts, plane)
 	require.True(t, ok)
 	floor := depth
-	if floor.Cmp(meshes.slab.Eps) < 0 {
-		floor = meshes.slab.Eps
+	if floor.Cmp(meshes.Slab.Eps) < 0 {
+		floor = meshes.Slab.Eps
 	}
 	require.False(t, loftface.ResultBeyondSlab(eval.payload.Verts, plane, floor),
 		"no result vertex lies beyond the slab")
@@ -457,28 +459,28 @@ func TestLoftFacesTangentHeelIntersectKeepsTrimRecord(t *testing.T) {
 	// The result's volume allowance is the composition of the UNEXTENDED
 	// operand's allowance, the cone's and the final stitch's swept-volume
 	// charge. The stitch is rebuilt from the meshes the Boolean read.
-	held, _, err := tessellateBooleanOperand(t.Context(), c.cut, meshes.pairTol)
+	held, _, err := tessellateBooleanOperand(t.Context(), c.cut, meshes.PairTol)
 	require.NoError(t, err)
 	faceID := map[*topo.Face]int{}
 	for i, f := range append(c.cut.Faces(), c.heelTool.Faces()...) {
 		faceID[faceNode(f)] = i
 	}
-	srcA, err := meshbool.SourceIDs(t.Context(), meshes.proxy.n.Source, faceID)
+	srcA, err := meshbool.SourceIDs(t.Context(), meshes.Proxy.Source, faceID)
 	require.NoError(t, err)
-	srcB, err := meshbool.SourceIDs(t.Context(), meshes.cone.n.Source, faceID)
+	srcB, err := meshbool.SourceIDs(t.Context(), meshes.Cone.Source, faceID)
 	require.NoError(t, err)
-	bmA, err := booleaneval.PrepBoolMesh(t.Context(), &meshes.proxy.n, srcA)
+	bmA, err := booleaneval.PrepBoolMesh(t.Context(), meshes.Proxy, srcA)
 	require.NoError(t, err)
-	bmB, err := booleaneval.PrepBoolMesh(t.Context(), &meshes.cone.n, srcB)
+	bmB, err := booleaneval.PrepBoolMesh(t.Context(), meshes.Cone, srcB)
 	require.NoError(t, err)
 	kept, _, err := meshbool.MeshBoolean(t.Context(), meshbool.OpIntersect, bmA, bmB, meshbool.NewContactMemo(bmA, bmB))
 	require.NoError(t, err)
 	stitched, err := meshbool.StitchFacetsContext(t.Context(), kept)
 	require.NoError(t, err)
 	require.Positive(t, held.n.VolSymDiff)
-	require.Positive(t, meshes.cone.n.VolSymDiff)
+	require.Positive(t, meshes.Cone.VolSymDiff)
 	roundVol := proofbound.SweptVolumeAllow(stitched.Round, stitched.PreArea)
-	require.Equal(t, proofbound.AbsSumUpper(held.n.VolSymDiff, meshes.cone.n.VolSymDiff, roundVol),
+	require.Equal(t, proofbound.AbsSumUpper(held.n.VolSymDiff, meshes.Cone.VolSymDiff, roundVol),
 		eval.payload.VolSymDiff, "the result volume allowance composes the unextended operand's")
 
 	trim, err := Intersect(t.Context(), c.cut, c.heelTool)
@@ -494,8 +496,8 @@ func TestLoftFacesTangentHeelIntersectKeepsTrimRecord(t *testing.T) {
 	require.Len(t, trimRecord.Maps, 3)
 
 	// The end cap does not survive; the heel cone is one face.
-	require.NotNil(t, resultSourceFace(trim, trimRecord.HeelCapGroup))
-	require.NotNil(t, resultSourceFace(trim, trimRecord.ToeCapGroup))
+	require.NotNil(t, revolvecontact.UniqueResultSourceFace(bodyNode(trim), trimRecord.HeelCapGroup))
+	require.NotNil(t, revolvecontact.UniqueResultSourceFace(bodyNode(trim), trimRecord.ToeCapGroup))
 	_, err = Faces(FaceCreatedBy(CapEnd(c.loft))).SelectFaces(trim)
 	require.ErrorIs(t, err, ErrNoMatch, "no result face descends from the planar end cap")
 

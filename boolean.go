@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
+	"github.com/lestrrat-3d/decad/internal/loftfacestrim"
 	"github.com/lestrrat-3d/decad/internal/loftmirror"
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -262,10 +263,11 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 	} else if ok {
 		return bodyHandle(n), nil
 	}
-	if body, ok, err := tryLoftFacesConeHeel(ctx, op, d, ref, a, b); err != nil {
-		return nil, err
+	if n, ok, err := loftfacestrim.ConeHeelBoolean(ctx, op, envOf(documentNode(d), ref), pairMeshes{},
+		bodyNode(a), bodyNode(b)); err != nil {
+		return nil, asBooleanError(op, err)
 	} else if ok {
-		return body, nil
+		return bodyHandle(n), nil
 	}
 	// Table X (docs/surface-design.md §11): a sheet operand in either position
 	// is a plain ErrUnsupported, never a BooleanError — without this a sheet
@@ -457,7 +459,7 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 		return nil, asBooleanError(op, err)
 	}
 	if op == meshbool.OpCut {
-		if err := recordLoftFacesConeToe(ctx, a, b, body); err != nil {
+		if err := loftfacestrim.RecordConeToe(ctx, bodyNode(a), bodyNode(b), bodyNode(body)); err != nil {
 			return nil, err
 		}
 	}
@@ -561,7 +563,7 @@ func newBooleanError(op meshbool.OperationKind, code BooleanErrorCode, sentinel,
 // public wrapper owns those actions, while Verify already walks live bodies.
 // Both operands are meshed at the pair's own chord tolerance (pairMeshes).
 func evaluateBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body) (booleanEvaluation, error) {
-	return evaluateBooleanMeshesWithConeCap(ctx, op, a, b, pairMeshes{}, 1, nil, nil)
+	return evaluateBooleanMeshes(ctx, op, a, b, pairMeshes{}, 1)
 }
 
 // pairMeshes meshes each operand at the pair's own chord tolerance, raised to
