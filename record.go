@@ -76,13 +76,9 @@ type (
 
 // patchPayload is the evaluator's own record of a PatchProfile body: the
 // internal/patchchain payload, which patchchain.Build evaluates over topology
-// nodes and which implements topo.Payload. bodyPatchChain is one proven chain
-// of a PatchEdges body's record (docs/surface-design.md §5,
+// nodes and which implements topo.Payload (docs/surface-design.md §5,
 // docs/evaluator-design.md §8).
-type (
-	patchPayload   = patchchain.Payload
-	bodyPatchChain = patchchain.Chain
-)
+type patchPayload = patchchain.Payload
 
 // revolvePayload is the evaluator's own record of a revolved body, and
 // chainRevolvePayload chain Revolve's record of a shell: the

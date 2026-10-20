@@ -149,8 +149,7 @@ func renderQuery(kind string, branches [][]string, card selectorquery.Cardinalit
 func (p EdgePredicate) render() string { return p.clause().Render(renderRef) }
 func (p FacePredicate) render() string { return p.clause().Render(renderRef) }
 
-func renderVec(v r3.Vec) string    { return selectorquery.RenderVec(v) }
-func renderCoord(c float64) string { return selectorquery.RenderCoord(c) }
+func renderVec(v r3.Vec) string { return selectorquery.RenderVec(v) }
 
 // renderRef renders a FeatureRef as <producer>:<role> — the private ID in decimal and
 // the role quoted, so a role that itself holds parentheses or commas stays
