@@ -210,7 +210,6 @@
 10	0.00	TestPointPlaneCapDroppedCoordinateMatchesRawRat
 10	0.00	TestLoftFaceRatHelpersAcceptNonReducedOperandsByValue
 10	0.00	TestPointPlaneCapDroppedCoordinateAcceptsNonReducedByValue
-10	0.00	TestSpiralCombinedBoundsDetachSourceMap
 10	0.00	TestLoftCylinderUnionCommonPlacement
 10	0.00	TestLoftCylinderCommonPlacementConsumers
 10	0.00	TestLoftCylinderCommonPlacementDifferentLoftSourceFallsBack

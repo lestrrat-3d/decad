@@ -155,9 +155,13 @@ func evaluateBooleanMeshesWithConeCap(ctx context.Context, op meshbool.Operation
 	if spiralHeld != nil {
 		mb = bornMesh(&Mesh{n: *spiralHeld})
 	}
-	mb, spiralCombine, err := spiralPrepareCombinedUnion(ctx, op, a, b, mb, tolMM)
+	preparedB, spiralCombine, err := spiralsector.PrepareCombinedUnion(ctx, op, booleanOperandMesher{},
+		bodyNode(a), bodyNode(b), &mb.n, tolMM)
 	if err != nil {
 		return booleanEvaluation{}, err
+	}
+	if preparedB != &mb.n {
+		mb = bornMesh(&Mesh{n: *preparedB})
 	}
 	if spiralJoin != nil {
 		allowed, ok := spiralsector.FirstUnionPairs(bodyNode(a), bodyNode(b), spiralJoin, sourceID)
@@ -435,4 +439,16 @@ func exactnessOf(bound float64) Exactness {
 		return Exact
 	}
 	return Approximate
+}
+
+// booleanOperandMesher gives the internal Boolean preparations the root
+// tessellation of one operand (tessellateBooleanOperand).
+type booleanOperandMesher struct{}
+
+func (booleanOperandMesher) TessellateOperand(ctx context.Context, b *topo.Body, tolMM float64) (*topo.Mesh, bool, error) {
+	m, restating, err := tessellateBooleanOperand(ctx, bodyHandle(b), tolMM)
+	if err != nil {
+		return nil, false, err
+	}
+	return &m.n, restating, nil
 }
