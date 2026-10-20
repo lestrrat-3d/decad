@@ -4,13 +4,9 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/draftrecord"
 	"github.com/lestrrat-3d/decad/internal/extent"
-	"github.com/lestrrat-3d/decad/internal/offset2d"
-	"github.com/lestrrat-3d/decad/internal/provenance"
-	"github.com/lestrrat-3d/decad/internal/selectorquery"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -152,7 +148,7 @@ func Draft(ctx context.Context, b *Body, sel FaceSelector, neutral NeutralPlane,
 	}
 
 	// Stage 2: SD23, SD20, SD19's kind rules, SD22, SD21.
-	pp, err := draftReceiver(b)
+	pp, err := draftrecord.Receiver(bodyNode(b))
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +159,7 @@ func Draft(ctx context.Context, b *Body, sel FaceSelector, neutral NeutralPlane,
 		return nil, err
 	}
 	producer := b.n.Origin.Producer
-	nearStart, err := neutralCap(neutralFace, b)
+	nearStart, err := draftrecord.NeutralCap(faceNode(neutralFace), bodyNode(b))
 	if err != nil {
 		return nil, err
 	}
@@ -171,26 +167,14 @@ func Draft(ctx context.Context, b *Body, sel FaceSelector, neutral NeutralPlane,
 	if err != nil {
 		return nil, err
 	}
-	kept, err := draftKeptWalls(b, producer, faces)
+	kept, err := draftrecord.KeptWalls(bodyNode(b), producer, faceNodes(faces))
 	if err != nil {
 		return nil, err
 	}
 
 	// Stages 3 to 7 are the tapered extrude's, over b's section.
 	ref := d.nextProducerID()
-	body, err := bodyResult(draftrecord.Build(ctx, envOf(documentNode(d), ref), draftPayload{
-		Profile:    pp.Profile,
-		Frame:      pp.Frame,
-		Z0:         pp.Z0,
-		Z1:         pp.Z1,
-		Z0Delta:    pp.Z0Delta,
-		Z1Delta:    pp.Z1Delta,
-		NearStart:  nearStart,
-		Taper:      alpha,
-		TaperDelta: alphaDelta,
-		Xform:      pp.Xform,
-		Kept:       kept,
-	}))
+	body, err := bodyResult(draftrecord.FromPrism(ctx, envOf(documentNode(d), ref), pp, nearStart, alpha, alphaDelta, kept))
 	if err != nil {
 		return nil, err
 	}
@@ -244,23 +228,6 @@ func (d *Document) resolveNeutralFace(nf NeutralFace) (*Face, error) {
 	return selectImpliedOneFace(nf.Body, nf.Face, "the neutral face")
 }
 
-// draftReceiver is SD23: b's payload must be a straight prism whose
-// recorded section is the section it denotes. A draft body is refused by name,
-// since a second draft is SX10's composition rule.
-func draftReceiver(b *Body) (prismPayload, error) {
-	if _, ok := b.n.Payload.(draftPayload); ok {
-		return prismPayload{}, fmt.Errorf(`%w: this evaluator drafts a straight prism once; the receiver is already a draft body (draft SD23)`, ErrUnsupported)
-	}
-	pp, ok := b.n.Payload.(prismPayload)
-	if !ok {
-		return prismPayload{}, fmt.Errorf(`%w: this evaluator drafts a straight prism only (an extrude, its filleted or chamfered result, a tube, or any of these placed) (draft SD23)`, ErrUnsupported)
-	}
-	if err := pp.RequireExactSection("drafts"); err != nil {
-		return prismPayload{}, err
-	}
-	return pp, nil
-}
-
 // requireFlatAnalyticNeutral is SD19's kind rules, MirrorFace's own: a curved
 // neutral face is ErrDegenerate and a flat one without an analytic Plane
 // surface is ErrUnsupported.
@@ -272,63 +239,6 @@ func requireFlatAnalyticNeutral(f *Face) error {
 		return fmt.Errorf(`%w: the neutral face is flat but its surface is %T, which states no exact plane to tilt about (draft SD19)`, ErrUnsupported, f.Surface())
 	}
 	return fmt.Errorf(`%w: the neutral face is not planar (its surface is %T) (draft SD19)`, ErrDegenerate, f.Surface())
-}
-
-// neutralCap is SD20 for a NeutralFace: the face must be a cap of the
-// b itself. It reports whether the neutral cap is the start cap, which
-// is the end of the sweep the draft's near section sits at.
-func neutralCap(f *Face, b *Body) (bool, error) {
-	if f.n.Body != bodyNode(b) {
-		return false, fmt.Errorf(`%w: the neutral face must be a cap of the receiver, and it belongs to another body (draft SD20)`, ErrUnsupported)
-	}
-	switch {
-	case f.hasRole(b.n.Origin.Producer, provenance.RoleCapStart):
-		return true, nil
-	case f.hasRole(b.n.Origin.Producer, provenance.RoleCapEnd):
-		return false, nil
-	}
-	return false, fmt.Errorf(`%w: the neutral face must be the receiver's capStart or capEnd; a wall or any other face is staged (draft SD20)`, ErrUnsupported)
-}
-
-func (f *Face) hasRole(producer producerID, role string) bool {
-	return slices.Contains(f.n.Origins, provenance.Ref{Producer: producer, Role: role})
-}
-
-// draftKeptWalls is SD22 then SD21 (docs/draft-design.md §10.2): a selected
-// cap has no trace on the neutral plane to tilt about (ErrDegenerate), and a
-// selected face that is no wall of b names nothing to tilt
-// (ErrUnsupported). It returns the recorded segments of every wall the
-// selection leaves out, read from their side(i, j) roles under producer,
-// empty when the selection is b's complete wall set. Whether a
-// subset's corners admit the draft is stage 3's question (SD4).
-func draftKeptWalls(b *Body, producer producerID, selected []*Face) (map[offset2d.DraftWall]struct{}, error) {
-	for _, f := range selected {
-		if f.hasRole(producer, provenance.RoleCapStart) || f.hasRole(producer, provenance.RoleCapEnd) {
-			return nil, fmt.Errorf(`%w: the selection contains a cap of the receiver, which has no trace on the neutral plane to tilt about (draft SD22)`, ErrDegenerate)
-		}
-	}
-	for _, f := range selected {
-		if !selectorquery.IsWallOf(faceNode(f), producer) {
-			return nil, fmt.Errorf(`%w: the selection contains a face that is no wall of the receiver (it carries no side(i, j) role of the receiver's own), so it names no wall to tilt (draft SD21)`, ErrUnsupported)
-		}
-	}
-	kept := map[offset2d.DraftWall]struct{}{}
-	for _, f := range b.Faces() {
-		if !selectorquery.IsWallOf(faceNode(f), producer) || slices.Contains(selected, f) {
-			continue
-		}
-		for _, o := range f.n.Origins {
-			if o.Producer != producer {
-				continue
-			}
-			var li, j int
-			if n, err := fmt.Sscanf(o.Role, "side(%d,%d)", &li, &j); err != nil || n != 2 || o.Role != fmt.Sprintf("side(%d,%d)", li, j) {
-				continue
-			}
-			kept[offset2d.DraftWall{Loop: li, Seg: j}] = struct{}{}
-		}
-	}
-	return kept, nil
 }
 
 // This file is the tapered Extrude's entry (docs/draft-design.md §7): the
@@ -388,17 +298,7 @@ func (d *Document) extrudeDraft(ctx context.Context, profile profileRecord, fram
 		TaperDelta: alphaDelta,
 		Xform:      r3.Identity(),
 	}
-	var body *Body
-	if sweep.z0 < 0 && sweep.z1 > 0 {
-		negative, positive := base, base
-		negative.Z1, negative.Z1Delta, negative.NearStart = 0, 0, false
-		positive.Z0, positive.Z0Delta, positive.NearStart = 0, 0, true
-		body, err = bodyResult(draftrecord.BuildTwoSided(ctx, envOf(documentNode(d), ref), twoSidedDraftPayload{
-			Negative: negative, Positive: positive,
-		}))
-	} else {
-		body, err = bodyResult(draftrecord.Build(ctx, envOf(documentNode(d), ref), base))
-	}
+	body, err := bodyResult(draftrecord.Extrude(ctx, envOf(documentNode(d), ref), base))
 	if err != nil {
 		return nil, err
 	}
