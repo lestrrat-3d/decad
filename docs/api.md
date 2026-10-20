@@ -12,6 +12,7 @@ Root-package identifiers carry the `decad.` prefix. `apitest/api_reference_test.
 - [Packages](#packages)
 - [The modeling loop](#the-modeling-loop)
 - [Conventions](#conventions)
+- [Data structures](#data-structures)
 - [Documents and bodies](#documents-and-bodies)
 - [Building bodies](#building-bodies)
 - [Modifying bodies](#modifying-bodies)
@@ -89,6 +90,93 @@ See [Errors](#errors).
 
 A `decad.Document` is not safe for concurrent mutation. Bodies are immutable and safe to read from any goroutine.
 `Document.Bodies`, `decad.Remove` and `Document.Verify` may run concurrently with each other.
+
+## Data structures
+
+### Document and body
+
+A `decad.Document` owns the live set of bodies. A `decad.Body` is an immutable boundary representation. It holds
+topology, the geometry attached to that topology, and the error bounds of its readings. A body is never a triangle
+mesh and never exposes indices; faces, edges and vertices are pointers you read from the body.
+
+### Topology
+
+Topology is a tree from the body down to its vertices.
+
+```
+Body -> Lump -> FaceShell -> Face -> Loop -> CoEdge -> Edge -> Vertex
+```
+
+`Body.Lumps` returns the connected solid pieces of a body. `Lump.Shells` returns its `decad.FaceShell` values, and
+`FaceShell.Faces` returns the faces of one shell. `FaceShell.IsOpen` is true when the shell has a free edge, and
+`FaceShell.IsVoid` is true when the shell bounds an internal cavity. The two questions are independent.
+
+`Face.Loops` returns the boundary loops of a face. `Loop.IsOuter` marks the outer loop, and any other loop is a hole.
+`Loop.CoEdges` returns the directed uses of edges in walk order. A `decad.CoEdge` is one use of an edge by a loop. Its
+`CoEdge.Start` and `CoEdge.End` follow the loop walk, and `CoEdge.IsForward` says whether that walk agrees with the
+edge's own `Edge.Start` to `Edge.End` direction. An edge shared by two faces appears as one `decad.Edge` with two
+co-edges, so `Edge.Faces` returns the faces on either side. `Edge.IsFree` marks an edge with only one face, which
+is how a sheet's rim shows.
+
+`Body.Faces`, `Body.Edges` and `Body.Vertices` return the same elements as flat lists. `Face.Origins` returns the
+`decad.FeatureRef` values that name the feature role that made a face, such as `capStart` or a side wall. Selectors
+such as `decad.FaceCreatedBy` match on that role.
+
+### Surfaces and curves
+
+`Face.Surface` returns a `decad.Surface` and `Edge.Curve` returns a `decad.Curve`. Both are sealed sets, so a type
+switch needs a default case.
+
+| Surface | Fields |
+|---|---|
+| `decad.Plane` | `Frame`, an `r3.Frame` whose U and V axes span the plane. |
+| `decad.Cylinder` | `Origin` on the axis, unit `Axis` and `Radius`. |
+| `decad.Cone` | `Origin`, `Axis` toward growing radius, `Radius` at the origin and `HalfAngle`. |
+| `decad.Sphere` | `Center` and `Radius`. |
+| `decad.Torus` | `Center`, `Axis`, `Major` radius and `Minor` tube radius. |
+| `decad.NURBSSurface` | A free-form face. Its control net is private. |
+| `decad.Faceted` | A polygonal face. `Bound` limits how far its polygons sit from the surface they stand for. |
+
+`Surface.Kind` returns the matching `decad.SurfaceKind`, such as `decad.KindPlane` or `decad.KindFaceted`.
+Edge curves are `decad.Line3`, `decad.Circle3`, `decad.Arc3`, `decad.Ellipse3`, `decad.NURBSCurve` and
+`decad.FacetedCurve`.
+
+### Measurements
+
+A `decad.Measurement` is a `units.Value`, a `decad.Exactness` and an absolute error bound. `decad.VecMeasurement` does
+the same for a point or direction, and `decad.Box` does it for an axis-aligned bound. A `decad.Approximate` reading is
+correct to within its bound.
+
+`decad.MassProperties` holds a mass, a centre and an inertia, each with its bound. `decad.QuantityVec` holds three
+components of one physical kind. `decad.Point2` is a plane-local coordinate in millimetres, and `r3.Vec` is a world
+coordinate in millimetres.
+
+### Meshes
+
+`Body.Tessellate` returns a `*decad.Mesh`, which is an output. `Mesh.Vertices` and `Mesh.Triangles` hold the triangles
+as positions and index triples. `Mesh.Bound` limits how far the mesh can sit from the body's boundary.
+`Mesh.BoundaryVerified` and `Mesh.VolumeVerified` say which proofs the mesh carries, and `Mesh.SourceFaces` lists the
+faces the triangles come from.
+
+### Reports
+
+`Document.Verify` returns a `*decad.Report`. The report holds the effective `Request`, one `decad.BodyReport` per body,
+the `Interferences` and `Clearances` between bodies, the `Diagnostics` that explain any verdict, and an overall
+`decad.Status`. A `decad.BodyReport` holds that body's `Status`, `Validity`, `Topology` (lump and void counts), area,
+bounds and the optional wall, undercut and concave-radius results. A `decad.Diagnostic` names a
+`decad.DiagnosticCode`, the body or pair it concerns, the observed and required values, and a message.
+
+### Paths and profiles
+
+A `*decad.Path` is an immutable curve built by `decad.NewPath` from a start point and `decad.PathSegment` values, such
+as `decad.LineTo` and `decad.ArcThrough`. Section-fed features read their 2D input from the `sketch` module: a closed
+`*sketch.Profile` or an open `*sketch.Chain`. `decad.MeasureProfile` returns a `decad.MeasuredProfile` for 2D area,
+centroid and second moments without building a body.
+
+### Linkages
+
+A `*decad.Linkage` is a tree of `*decad.Link` values rooted at `Linkage.Ground`. Joints join a link to its parent, and
+`Linkage.Close` adds a loop-closing joint. A `decad.Drive` lists the `decad.JointSweep` values that move the joints.
 
 ## Documents and bodies
 
