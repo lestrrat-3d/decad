@@ -117,7 +117,7 @@ func PatchEdges(ctx context.Context, b *Body, sel EdgeSelector) (*Body, error) {
 	if err != nil {
 		return nil, err
 	}
-	chains, err := buildPatchChains(edges)
+	chains, err := patchchain.ChainsFromEdges(edgeNodes(edges))
 	if err != nil {
 		return nil, err
 	}
@@ -134,57 +134,4 @@ func PatchEdges(ctx context.Context, b *Body, sel EdgeSelector) (*Body, error) {
 	}
 	d.commit(body, b)
 	return body, nil
-}
-
-// buildPatchChains runs gates 1-3 against the selector's resolved edges: gate
-// 1 (every edge free), gate 2 (partition into closed chains), and gate 3
-// (each chain's exact plane proof). Gate 4 (simplicity) and the orientation
-// derivation are NOT run here — they run inside patchchain.BuildBody, every
-// time, including the very first build, since building the actual face
-// needs the SAME per-placement machinery a later Transform call replays
-// (docs/surface-design.md's "re-run the combinatorial and in-plane gates on
-// re-evaluation, but not the plane proof" decision).
-func buildPatchChains(edges []*Edge) ([]bodyPatchChain, error) {
-	for _, e := range edges {
-		if !e.IsFree() {
-			return nil, fmt.Errorf(`%w: PatchEdges selection holds an edge that is not free (docs/surface-design.md Table R row R4)`, ErrDegenerate)
-		}
-	}
-	groups, err := partitionPatchChains(edges)
-	if err != nil {
-		return nil, err
-	}
-	chains := make([]bodyPatchChain, len(groups))
-	for i, g := range groups {
-		lvl, axialBound, hasAxialBound, err := patchchain.ProveChainPlane(edgeNodes(g))
-		if err != nil {
-			return nil, err
-		}
-		chains[i] = bodyPatchChain{Edges: edgeNodes(g), AxialBound: axialBound, HasAxialBound: hasAxialBound, Level: lvl}
-	}
-	return chains, nil
-}
-
-// partitionPatchChains is gate 2: the selection partitions into one or more
-// closed chains when, and only when, every vertex reached by the selection
-// has degree exactly 2 counted over EVERY selected use — a full-circle edge
-// (Circle3, start == end) contributes 2 uses to its own single vertex and is
-// a complete chain on its own; a two-edge chain of two arcs over one vertex
-// pair gives each vertex one OTHER edge, which is degree 2 read this way,
-// not the "two other edges" §5.2's original wording asked for. A 2-regular
-// (multi)graph is a disjoint union of cycles, so the degree check alone is
-// what proves the partition exists; the walk below only recovers WHICH edges
-// share a chain, never re-decides that they do.
-func partitionPatchChains(edges []*Edge) ([][]*Edge, error) {
-	refs := make([]patchchain.EdgeRef[*Edge, *Vertex], len(edges))
-	for i, e := range edges {
-		refs[i] = patchchain.EdgeRef[*Edge, *Vertex]{Edge: e, Start: vertexHandle(e.n.Start), End: vertexHandle(e.n.End)}
-	}
-	return patchchain.Partition(refs, func(v *Vertex) string { return renderCoord3(v.n.Position) })
-}
-
-// renderCoord3 formats a world position for a Table R diagnostic, the 3D
-// analog of renderCoord's plane-local rendering.
-func renderCoord3(p r3.Vec) string {
-	return fmt.Sprintf(`(%s, %s, %s)`, renderCoord(p.X), renderCoord(p.Y), renderCoord(p.Z))
 }
