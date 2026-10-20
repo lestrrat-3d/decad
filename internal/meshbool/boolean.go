@@ -105,7 +105,7 @@ func RefuseCoarseHeldContact(m *BoolMesh, operand int, facets []int) error {
 	}
 	worst := 0.0
 	for _, f := range facets {
-		worst = max(worst, m.FacetBound[f])
+		worst = max(worst, m.SlabBound[f])
 	}
 	if worst <= m.Gate {
 		return nil

@@ -455,7 +455,8 @@ and before any facet is cut, the gate walks every operand facet the
 classification reports as meeting the other operand (`ContactPoint`,
 `ContactSegment`, or within the pre-pass slack) and refuses with
 `ErrUnsupported`, through `meshbool.BooleanExpectedStaging`, when any such
-facet of a RESTATING operand has `δ(t) > tol` — which a held primitive's
+facet of a RESTATING operand has `δ(t) > tol`, where a facet of a retained `Plane` states
+the slab half-width of `docs/faceted-source-retention-design.md` §11 in place of `δ(t)` — which a held primitive's
 facets never do (`meshbool.RefuseCoarseHeldContact`,
 called from `MeshBoolean` on the classified contacts and from the root's
 hidden-tangency pre-pass on the facets within its slack;

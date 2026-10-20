@@ -34,6 +34,11 @@ type BoolMesh struct {
 	// (§3).
 	VertexBound []float64
 	FacetBound  []float64
+	// SlabBound is how far facet t's true piece lies from the facet's own
+	// plane, the half-width RimBound and the held-mesh gate read. It equals
+	// FacetBound except for a facet of a retained plane, whose true piece lies
+	// in that exact plane (SetSlabBounds).
+	SlabBound []float64
 	// Gate is the pair's chord tolerance when this operand restates a held
 	// mesh (a boolean result or a mitred sweep), and zero for every other
 	// operand. A gated operand's facets that meet the other operand, or come
@@ -194,7 +199,7 @@ func meshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 			return nil
 		}
 		segEnds = append(segEnds, c.P0, c.P1)
-		rim := RimBound(ma.FacetBound[i], mb.FacetBound[j], c.Sin2)
+		rim := RimBound(ma.SlabBound[i], mb.SlabBound[j], c.Sin2)
 		maxRim = max(maxRim, rim)
 		for _, p := range []proof.Xpt{c.P0, c.P1} {
 			k := p.Key()

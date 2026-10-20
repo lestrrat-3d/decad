@@ -437,6 +437,7 @@ func PrepBoolMesh(ctx context.Context, m *topo.Mesh, src []int) (*meshbool.BoolM
 		return nil, err
 	}
 	bm.SetVertexBounds(beta)
+	bm.SetSlabBounds(retainedPlaneOf(m))
 	return bm, nil
 }
 
