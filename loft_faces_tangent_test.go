@@ -512,12 +512,10 @@ func TestLoftFacesTangentHeelIntersectKeepsTrimRecord(t *testing.T) {
 	require.True(t, mesh.VolumeVerified())
 }
 
-// TestTangentCapExtensionOnRealChain extends the real toe-cut tooth and checks
-// the proxy against the held mesh: the cap triangles move off the plane to the
-// far side, every ring vertex is a station vertex, every extension wall covers
-// its chord's certified bound, and the proxy carries the unextended operand's
-// volume and area allowances.
-func TestTangentCapExtensionOnRealChain(t *testing.T) {
+// tangentCapFixture builds the real toe-cut tooth and returns its held mesh,
+// toe record, tangent plane and the plane's loft side.
+func tangentCapFixture(t *testing.T) (*Mesh, *loftFacesToeRecord, loftface.TangentPlane, int) {
+	t.Helper()
 	c := buildTangentTrimChain(t)
 	final, previous, box, heel := tangentGateInputs(t, c)
 	side, ok := loftface.ConeOnLoftSide(final, previous, box, heel.Apex, heel.Slope, heel.Far)
@@ -535,6 +533,16 @@ func TestTangentCapExtensionOnRealChain(t *testing.T) {
 		}
 	}
 	require.NotNil(t, held, "the held cut meshes within the ladder")
+	return held, toe, plane, side
+}
+
+// TestTangentCapExtensionOnRealChain extends the real toe-cut tooth and checks
+// the proxy against the held mesh: the cap triangles move off the plane to the
+// far side, every ring vertex is a station vertex, every extension wall covers
+// its chord's certified bound, and the proxy carries the unextended operand's
+// volume and area allowances.
+func TestTangentCapExtensionOnRealChain(t *testing.T) {
+	held, toe, plane, side := tangentCapFixture(t)
 	// Hand the adapter face bounds far above any facet bound. The proxy's face
 	// bounds are recomputed from its final facets, never maxed with the old ones.
 	oversized := bornMesh(&Mesh{n: held.n})
@@ -542,8 +550,9 @@ func TestTangentCapExtensionOnRealChain(t *testing.T) {
 	for f := range oversized.n.FaceBound {
 		oversized.n.FaceBound[f] = 1e6
 	}
-	proxy, slab, err := extendTangentCap(t.Context(), oversized, toe, plane)
+	proxyNode, slab, err := revolveloftfaces.ExtendTangentCap(t.Context(), &oversized.n, toe, plane)
 	require.NoError(t, err)
+	proxy := bornMesh(&Mesh{n: *proxyNode})
 	require.NotNil(t, slab.Eps)
 	changed := map[*Face]bool{faceHandle(toe.CapFace): true}
 	for _, f := range proxy.n.Source[len(proxy.n.Source)-2*len(toe.Cap.Source.SourceStation):] {
@@ -630,7 +639,7 @@ func TestTangentCapExtensionOnRealChain(t *testing.T) {
 	swapped.Base.Verts = append([]r3.Vec(nil), toe.Base.Verts...)
 	ring := swapped.Base.Verts[last*n : (last+1)*n]
 	ring[0], ring[1] = ring[1], ring[0]
-	_, _, err = extendTangentCap(t.Context(), held, &swapped, plane)
+	_, _, err = revolveloftfaces.ExtendTangentCap(t.Context(), &held.n, &swapped, plane)
 	require.ErrorIs(t, err, ErrUnsupported)
 }
 
@@ -716,4 +725,88 @@ func TestLoftFacesTangentHeelRefusesOtherCone(t *testing.T) {
 		return
 	}
 	require.ErrorIs(t, err, ErrUnsupported)
+}
+
+// The extension refuses a mesh that is not verified or that has no end cap
+// facet, charges the held coordinate bound into the proxy, and refuses a bound
+// it cannot state.
+func TestTangentCapExtensionGatesAndCharges(t *testing.T) {
+	held, toe, plane, side := tangentCapFixture(t)
+	extend := func(edit func(*Mesh), toeRecord *loftFacesToeRecord) (*Mesh, error) {
+		mesh := bornMesh(&Mesh{n: held.n})
+		mesh.n.FaceBound = maps.Clone(held.n.FaceBound)
+		if edit != nil {
+			edit(mesh)
+		}
+		proxy, _, err := revolveloftfaces.ExtendTangentCap(t.Context(), &mesh.n, toeRecord, plane)
+		if err != nil {
+			return nil, err
+		}
+		return bornMesh(&Mesh{n: *proxy}), nil
+	}
+
+	for name, edit := range map[string]func(*Mesh){
+		"boundary not verified": func(m *Mesh) { m.n.BoundaryOK = false },
+		"volume not verified":   func(m *Mesh) { m.n.SymDiffOK = false },
+	} {
+		_, err := extend(edit, toe)
+		require.ErrorIs(t, err, ErrUnsupported, name)
+		require.ErrorContains(t, err, "mesh is not verified", name)
+	}
+
+	elsewhere := *toe
+	elsewhere.CapFace = new(topo.Face)
+	_, err := extend(nil, &elsewhere)
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.ErrorContains(t, err, "mesh has no end cap facet")
+
+	proxy, err := extend(nil, toe)
+	require.NoError(t, err)
+	faceMax := 0.0
+	for _, bound := range proxy.n.FaceBound {
+		faceMax = max(faceMax, bound)
+	}
+	require.Equal(t, faceMax, proxy.n.Bound, "the global bound is the largest face bound")
+	require.Greater(t, proxy.n.Bound, 0.0)
+
+	loose, err := extend(func(m *Mesh) { m.n.Bound = 1e9 }, toe)
+	require.NoError(t, err)
+	require.Equal(t, faceMax, loose.n.Bound, "the held global bound does not carry over")
+
+	charged, err := extend(func(m *Mesh) { m.n.CoordBound = 7 }, toe)
+	require.NoError(t, err)
+	require.Greater(t, charged.n.CoordBound, 7.0, "the held coordinate bound is charged and rounded up")
+	require.Less(t, charged.n.CoordBound, 7.5)
+	require.Greater(t, charged.n.CoordBound, proxy.n.CoordBound)
+
+	_, err = extend(func(m *Mesh) { m.n.CoordBound = math.Inf(1) }, toe)
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.ErrorContains(t, err, "unbounded bound")
+	_, err = extend(func(m *Mesh) {
+		for f := range m.n.FaceBound {
+			m.n.FaceBound[f] = math.Inf(1)
+		}
+	}, toe)
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.ErrorContains(t, err, "unbounded bound")
+
+	// The prism is one millimetre long along the plane normal.
+	norm := 0.0
+	var unit [3]float64
+	for i, c := range plane.N {
+		f, _ := c.Float64()
+		unit[i] = f
+		norm += f * f
+	}
+	norm = math.Sqrt(norm)
+	far := 0.0
+	for _, v := range proxy.n.Vertices[len(held.n.Vertices):] {
+		far = max(far, math.Abs((v.X*unit[0]+v.Y*unit[1]+v.Z*unit[2])/norm-planeOffset(plane, norm)))
+	}
+	require.InDelta(t, 1.0, far, 1e-9, "side %d", side)
+}
+
+func planeOffset(plane loftface.TangentPlane, norm float64) float64 {
+	d, _ := plane.D.Float64()
+	return d / norm
 }

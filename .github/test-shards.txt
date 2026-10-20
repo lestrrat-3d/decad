@@ -282,3 +282,4 @@
 10	0.00	TestRunSurveysReportsUndecidedCupWall
 10	0.00	TestLoftThroughBoreCutGates
 10	0.00	TestRevolveLoftFacesSimpleSourceRefusesAnUncertifiedSource
+10	0.00	TestTangentCapExtensionGatesAndCharges
