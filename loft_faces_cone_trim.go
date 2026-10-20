@@ -10,7 +10,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetedtopology"
-	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/pointcone"
@@ -70,37 +69,6 @@ func uniqueResultSourceFace(body *Body, source int) *Face {
 	return faces[index]
 }
 
-// uniquePayloadSourcePatches reports whether each named source group has facets
-// in the payload and all of them lie in one edge-connected patch, which is the
-// condition under which the built body gets exactly one face for the group
-// (see uniqueResultSourceFace). It reads the audit's adjacency, so it needs no
-// built body.
-func uniquePayloadSourcePatches(ctx context.Context, p facetedPayload, adj [][]int, groups ...int) (bool, error) {
-	if len(adj) != len(p.Tris) || len(p.Src) != len(p.Tris) {
-		return false, nil
-	}
-	patch, err := facetproof.SourcePatches(proofbound.NewWorkBudget(ctx), len(p.Tris), p.Src, adj)
-	if err != nil {
-		return false, err
-	}
-	for _, group := range groups {
-		found := -1
-		for i, source := range p.Src {
-			if source != group {
-				continue
-			}
-			if found >= 0 && found != patch[i] {
-				return false, nil
-			}
-			found = patch[i]
-		}
-		if found < 0 {
-			return false, nil
-		}
-	}
-	return true, nil
-}
-
 func recordLoftFacesConeToe(ctx context.Context, source, tool, result *Body) error {
 	base, ok := source.n.Payload.(facetedPayload)
 	if !ok || !base.LoftFacesPrimitive || !loftFacesCapRecordReady(base.LoftFacesCap) ||
@@ -118,7 +86,7 @@ func recordLoftFacesConeToe(ctx context.Context, source, tool, result *Body) err
 	if err := loftface.PositiveDenominator(base.LoftFacesCap.Final, box); err != nil {
 		return err
 	}
-	if !loftCapOutsideToeCone(base.LoftFacesCap.Final, box, cone) {
+	if !facetedrecord.CapOutsideToeCone(base.LoftFacesCap.Final, box, cone) {
 		return nil
 	}
 	capFace, matched, err := unchangedLoftCap(ctx, source, result, base, base.LoftFacesCap.Group)
@@ -144,22 +112,6 @@ func recordLoftFacesConeToe(ctx context.Context, source, tool, result *Body) err
 		CapFace: faceNode(capFace), ToeCapFace: faceNode(toeCapFace), Toe: cone, ToeTool: bodyNode(tool)}
 	result.n.Payload = p
 	return nil
-}
-
-// The source cap lies outside the toe cone on its whole certified rectangle.
-// Linear-fractional coordinate extrema occur at its corners because g > 0.
-func loftCapOutsideToeCone(m loftFaceMap, box [4]*big.Rat, cone *pointConeLimit) bool {
-	corners := loftface.BoxCorners(box)
-	x := loftface.ScalarRange(m, loftFaceRatVec{lfOne(), lfZero(), lfZero()}, corners)
-	y := loftface.ScalarRange(m, loftFaceRatVec{lfZero(), lfOne(), lfZero()}, corners)
-	z := loftface.ScalarRange(m, loftFaceRatVec{lfZero(), lfZero(), lfOne()}, corners)
-	if x.Lo.Cmp(cone.Far) <= 0 {
-		return false
-	}
-	d := loftface.IntervalSub(loftFaceInterval{Lo: cone.Apex, Hi: cone.Apex}, x)
-	radial := lfAdd(loftface.IntervalSquareMin(y), loftface.IntervalSquareMin(z))
-	margin := lfSub(lfMul(lfMul(cone.Slope, cone.Slope), radial), loftface.IntervalSquareMax(d))
-	return margin.Sign() > 0
 }
 
 // A Cut may keep only part of a cap. Require the exact held triangle multiset
@@ -204,7 +156,7 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 		return nil, true, asBooleanError(op, err)
 	}
 	var plane *loftface.TangentPlane
-	if !loftCapOutsideHeelCone(p.LoftFacesToe.Cap.Final, box, cone) {
+	if !facetedrecord.CapOutsideHeelCone(p.LoftFacesToe.Cap.Final, box, cone) {
 		tangent, err := loftCapTangentToHeelCone(p.LoftFacesToe.Cap, box, cone)
 		if err != nil {
 			return nil, true, asBooleanError(op, err)
@@ -272,7 +224,7 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 	if plane != nil {
 		// The tangent trim record needs both tool faces as single result
 		// patches. Refuse before the body is built, not after.
-		unique, err := uniquePayloadSourcePatches(ctx, eval.payload, eval.audit.Adj, toeCapSource, heelCapSource)
+		unique, err := facetedrecord.UniqueSourcePatches(ctx, eval.payload, eval.audit.Adj, toeCapSource, heelCapSource)
 		if err != nil {
 			return nil, true, asBooleanError(op, err)
 		}
@@ -310,16 +262,6 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 func orderedLoftFacesConeLimits(toe, heel *pointConeLimit, base facetedPayload) bool {
 	return pointcone.ToeHeelOrdered(toe.Apex, toe.Slope, heel.Apex, heel.Slope,
 		base.Verts, base.MeshBound)
-}
-
-// Q is the exact cone pullback after multiplying through the positive map
-// denominator. This narrow arm requires Q=A*u²+C*v² with A,C>0 and u
-// strictly one-sided throughout the authenticated source rectangle.
-func loftCapOutsideHeelCone(m loftFaceMap, box [4]*big.Rat, cone *pointConeLimit) bool {
-	if box[1].Sign() >= 0 && box[0].Sign() <= 0 {
-		return false
-	}
-	return loftface.ConeStrictOutsideForm(loftface.ConePullback(m, cone.Apex, cone.Slope))
 }
 
 // loftCapTangentToHeelCone admits the cap of a cone-tangent LoftFaces end
