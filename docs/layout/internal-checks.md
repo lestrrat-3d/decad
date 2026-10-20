@@ -41,7 +41,7 @@ The rules for rows live in `docs/layout.md`.
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
 | `internal/survey2d/` | 2D disks, prism readers, walks, corner loops, Bézier carriers. See verification §6. |
 | `internal/thickenaxis/` | Holds certified section pairs, checks offsets, ribbons and interval clearance, and builds the circle and axis offset sections of a prism sheet. See surface §16, §17. |
-| `internal/thickenbuild/` | Dispatches Thicken by sheet payload, computes its amounts and certified sections, and builds the solids from admitted sheets. See surface §16. |
+| `internal/thickenbuild/` | Dispatches Thicken and Offset by sheet payload, computes its amounts and certified sections, and builds the solids from admitted sheets. See surface §16. |
 | `internal/revolvesurvey/` | Revolve wall, undercut and concave-radius readers. See verification §6. |
 | `internal/wallsurvey/` | Prism and revolve wall record preparation and bounded readings; revolve clearance carrier construction and bounds. See verification §6, clearance §2. |
 | `internal/radiussurvey/` | Prism, revolve, cup and BRep concave-radius readings. See verification §6. |
