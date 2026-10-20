@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/tessellation-design.md §13's increment T4
-// (docs/tessellation-reach-design.md §6, R5): the revolve as a MESH BOOLEAN
+// This file is agent-docs/tessellation-design.md §13's increment T4
+// (agent-docs/tessellation-reach-design.md §6, R5): the revolve as a MESH BOOLEAN
 // OPERAND, admitted by §11's occupied-volume proof.
 //
 // Every fixture sweeps a QUARTER or a HALF turn rather than a whole one. The

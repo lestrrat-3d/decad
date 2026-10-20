@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is the subset draft's fixture set (docs/draft-design.md §10.2,
+// This file is the subset draft's fixture set (agent-docs/draft-design.md §10.2,
 // Table RD row RD3, §14 PR 5): a selection naming some walls moves only their
 // carriers, and the kept walls stay vertical. Each closed form integrates the
 // section area A(z) over the sweep, with d = h·tan α evaluated in the test.
@@ -271,7 +271,7 @@ func TestDraftSubsetVerify(t *testing.T) {
 	}
 }
 
-// TestDraftSubsetRefusals is the mixed-corner rule (docs/draft-design.md
+// TestDraftSubsetRefusals is the mixed-corner rule (agent-docs/draft-design.md
 // §10.2): a straight wall of F3's slot drafted alone meets both semicircles at
 // G1 joins whose two walls would move differently, which is SD4; and a wall
 // selection that matches nothing is the selector's ErrNoMatch. Each leaves the
@@ -322,7 +322,7 @@ func TestDraftSubsetRefusals(t *testing.T) {
 }
 
 // TestDraftSubsetMesh meshes the subset fixtures (Table DD row DD1 over
-// docs/draft-design.md §10.2) at three chord tolerances: each mesh is closed,
+// agent-docs/draft-design.md §10.2) at three chord tolerances: each mesh is closed,
 // proves its volume, attributes every facet to a face of the body, and
 // publishes a positive Bound no larger than the tapered extrude of the same
 // section publishes (F1 for the box, F7 for the ring), since a kept wall only

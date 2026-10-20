@@ -739,7 +739,7 @@ func BenchmarkExtrudePlate(b *testing.B) {
 
 // This file proves end to end the pair of fixes this branch and its parent
 // carry: a fit-spline chain's interior joints no longer fold a
-// rounding-noise cross product (docs/spline-design.md §6.5), and a prism
+// rounding-noise cross product (agent-docs/spline-design.md §6.5), and a prism
 // evaluation now resolves each boundary segment's walk once rather than
 // eight times. Together they let a real involute gear-tooth flank, drawn as
 // a CreateFitSpline profile, extrude and verify through the public API —

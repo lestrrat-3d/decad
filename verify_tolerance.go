@@ -14,7 +14,7 @@ import (
 // supplies — its gate diameter, an edge length, an area or a volume — which
 // is what keeps the gate scale-free. bodyToleranceInputs owns the choice of
 // reference per reading kind; pairkernel.BodyGateDiameter owns how the
-// diameter that anchors it is proven. See docs/verification-design.md §2-§3.
+// diameter that anchors it is proven. See agent-docs/verification-design.md §2-§3.
 
 // bodyToleranceInputs lazily reads one body's intrinsic reference data. The
 // laziness is part of the contract: a zero Bound passes even when no usable D

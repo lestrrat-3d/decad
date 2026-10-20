@@ -6,21 +6,21 @@ add-in). This document is the contract. No public API lands that contradicts it.
 
 Companion designs carry the deep ends of this contract: the recording
 contract at the sketch seam — the trim contract, the recording IR, and
-`ErrUnrecordableProfile` — is specified in `docs/sketch-seam-design.md`; feature
+`ErrUnrecordableProfile` — is specified in `agent-docs/sketch-seam-design.md`; feature
 evaluation, topology construction, and atomic commits are specified in
-`docs/evaluator-design.md`; how verification judges every
+`agent-docs/evaluator-design.md`; how verification judges every
 bounded result — the report, the tolerance gate, and the noise floor — is
-specified in `docs/verification-design.md`; the mesh contract, per-payload
+specified in `agent-docs/verification-design.md`; the mesh contract, per-payload
 chording, proof bounds, and boolean handoff are specified in
-`docs/tessellation-design.md`; exact cup plus certificate-backed faceted
-proofs are specified in `docs/payload-verification-design.md`; and how
+`agent-docs/tessellation-design.md`; exact cup plus certificate-backed faceted
+proofs are specified in `agent-docs/payload-verification-design.md`; and how
 verification proves overlap and bounds its volume without consuming either body
-is specified in `docs/interference-design.md`. `docs/layout/design-docs.md`
+is specified in `agent-docs/interference-design.md`. `agent-docs/layout/design-docs.md`
 lists every current design document and its owner. Spatial-path recording,
 rotation-minimizing frame transport, and the staged `Sweep` evaluator are
-specified in `docs/sweep-design.md`. The sheet body — a body that encloses no
+specified in `agent-docs/sweep-design.md`. The sheet body — a body that encloses no
 material region — and the operations that build, fill and close one are
-specified in `docs/surface-design.md`.
+specified in `agent-docs/surface-design.md`.
 
 ## 1. What decad is answerable for
 
@@ -82,8 +82,8 @@ computes and certifies — a straight line for two co-directional prisms, a
 latitude circle for two co-axial revolves — so no space curve arises and every
 topology decision is a comparison of flags rather than a floating-point sign
 test on a fit. Two documents own that class between them:
-`docs/prism-boolean-design.md` for `Union`/`Cut`/`Intersect` over two solids,
-and `docs/surface-intersection-design.md` for `Trim`/`Extend`/`Split` where one
+`agent-docs/prism-boolean-design.md` for `Union`/`Cut`/`Intersect` over two solids,
+and `agent-docs/surface-intersection-design.md` for `Trim`/`Extend`/`Split` where one
 operand encloses no material. Every pair outside it takes the tessellated path,
 or — where an operand is a sheet, whose mesh proves no occupied volume —
 refuses at the call.
@@ -197,7 +197,7 @@ unusable and pushes callers back to hand-rolling. (An `r3.Vec` used as a *direct
 — `Cylinder.Axis`, `NormalTo(v)` — is dimensionless, and carries no unit at all.)
 
 The carve-out is about **coordinates**, not about the vector type: a plane-local
-2D coordinate — `Point2` (`docs/sketch-seam-design.md`), the `(u, v)` of a
+2D coordinate — `Point2` (`agent-docs/sketch-seam-design.md`), the `(u, v)` of a
 recorded profile — is a length in millimetres on exactly the same terms, and for
 exactly the same reason.
 
@@ -207,7 +207,7 @@ quantity is still forbidden anywhere in the API. A *curve parameter* is not a
 scalar quantity: a spline's knots and weights, a recorded segment's parameter
 range (`TStart`/`TEnd`), and a conic's fullness `Rho` — from which a rational
 quadratic's apex weight derives as `w = Rho/(1−Rho)` (all
-`docs/sketch-seam-design.md`) — are dimensionless indices into a
+`agent-docs/sketch-seam-design.md`) — are dimensionless indices into a
 parameterisation, not measurements of anything, and §5.1 does not reach them.
 
 ### 5.3 Exactness — the load-bearing type
@@ -249,7 +249,7 @@ is the deviation of a unit vector from the true unit vector, and a direction is
 dimensionless (§5.2) — so the bound is `Dimensionless` (`units.Scalar`), and typing
 it as a length would be exactly the wrong-`Kind` coercion §5.1 forbids: it would
 hand a millimetre tolerance a quantity that is not a length. The verification
-gate (`docs/verification-design.md`) is stated over both, and needs no exponent
+gate (`agent-docs/verification-design.md`) is stated over both, and needs no exponent
 to be.
 
 Every measurement returns one:
@@ -262,14 +262,14 @@ vol, err := body.Volume()  // v1 after a boolean: {12.9997mm³, Approximate, 1e-
 A mesh's proof level is a property of the MESH, not of a scalar, so it is its
 own vocabulary beside `Exactness`: `Verification` says how much proof
 `Tessellate` was asked to run, and `Mesh.BoundaryVerified`/`Mesh.VolumeVerified`
-say which proofs the returned mesh carries (`docs/tessellation-design.md` §1).
+say which proofs the returned mesh carries (`agent-docs/tessellation-design.md` §1).
 `Mesh.Bound` remains a `units.Value` at every level and is never withheld, so
 nothing here weakens invariant #2.
 
 `Measurement`, `VecMeasurement` and `Box` (§6) are the **three and only three**
 bounded results the API returns. Every one of them carries a `Bound`; how
 verification judges each against the caller's tolerance is specified in
-`docs/verification-design.md`, and every one of them is judged — the gate is
+`agent-docs/verification-design.md`, and every one of them is judged — the gate is
 total because this set is.
 
 ## 6. The document and bodies
@@ -346,7 +346,7 @@ func (b *Body) Faces() []*Face
 func (b *Body) Edges() []*Edge
 func (b *Body) Vertices() []*Vertex
 
-func (b *Body) Kind() BodyKind  // BodySolid or BodySheet — what the body IS (docs/surface-design.md §2.1)
+func (b *Body) Kind() BodyKind  // BodySolid or BodySheet — what the body IS (agent-docs/surface-design.md §2.1)
 func (b *Body) IsSolid() bool
 func (b *Body) Bounds() (Box, error)
 func (b *Body) Volume() (Measurement, error)   // error when not a solid — never 0
@@ -364,11 +364,11 @@ func (b *Body) Origin() FeatureRef  // which feature created this body
 Split slabs, their rigidly transformed copies, and positive uniform `ScaledAt` images.
 It returns `ErrUnsupported` when
 the cap centroid intervals do not strictly separate every side-face centroid.
-See `docs/loft-point-design.md` for the source proof.
+See `agent-docs/loft-point-design.md` for the source proof.
 
 `LocatePoint` returns `PointInside`, `PointOutside`, `PointOnBoundary` or
 `PointUndecided`. It uses the body's verified mesh and returns only classifications
-proved for the body, including retired bodies. `docs/point-containment-design.md`
+proved for the body, including retired bodies. `agent-docs/point-containment-design.md`
 owns its proof and refusal rules.
 
 `DistanceToPoint` measures the minimum distance from `p` to the solid, so a
@@ -380,7 +380,7 @@ query design owns its proof and refusal rules.
 `Section` returns Sketch profiles on the requested plane for admitted exact
 prisms, exact cardinal cylinder chords, cardinal or central oblique source-sphere
 cuts, exact or bounded cardinal right-cone cuts, and bounded rectangular-prism or
-full-cylinder cuts. `docs/section-design.md` owns the gates and reconstruction
+full-cylinder cuts. `agent-docs/section-design.md` owns the gates and reconstruction
 proof. An exact profile uses the ordinary Sketch seam. A bounded profile
 carries a private source certificate and currently enters only straight solid `Extrude`
 with an independent `Distance` extent. Other Decad profile consumers refuse it.
@@ -420,7 +420,7 @@ that refusal reports a CATEGORY. The same error on a `BodySolid` body reports a
 DEFECT: a body built as a solid whose boundary did not prove closed. Without
 `Kind`, `IsSolid() == false` would mean both, which is exactly the
 "`volume == 0` means both empty and not-a-solid" sloppiness §4 rejects in
-Fusion. `docs/surface-design.md` §2.1 owns the kind, and §2 there owns what a
+Fusion. `agent-docs/surface-design.md` §2.1 owns the kind, and §2 there owns what a
 sheet holds; a sheet body uses every accessor above unchanged.
 
 The §5.2 carve-out is a carve-out from the **units** rule (§5.1) only: it says an
@@ -479,7 +479,7 @@ one adjacent face is non-manifold, as the gloss above says. On a `BodySheet`,
 one adjacent face is a **free edge** — the boundary of the sheet, and the
 expected shape — which `Edge.IsFree` reports and the `Free()` predicate (§9)
 selects. Two is an interior edge on either kind; three or more is non-manifold
-on either. `docs/surface-design.md` §2.2 owns the reading.
+on either. `agent-docs/surface-design.md` §2.2 owns the reading.
 
 **A `CoEdge` is one directed use of a shared `Edge` by one `Loop`.**
 `CoEdge.Start()` and `End()` follow the loop walk. `CoEdge.IsForward()` is true
@@ -520,7 +520,7 @@ type Cylinder struct { Origin, Axis r3.Vec; Radius units.Value }
 type Cone struct     { Origin, Axis r3.Vec; Radius, HalfAngle units.Value }
 type Sphere struct   { Center r3.Vec; Radius units.Value }
 type Torus struct    { Center, Axis r3.Vec; Major, Minor units.Value }
-// NURBSSurface is a free-form face's geometry. `docs/spline-design.md` §7 owns
+// NURBSSurface is a free-form face's geometry. `agent-docs/spline-design.md` §7 owns
 // its construction, its exactness and its v1 shape.
 type NURBSSurface struct { /* private */ }
 
@@ -544,7 +544,7 @@ type Arc3 struct    { /* ... */ }
 // the start vertex to the end vertex as Arc3 is: the point at angle φ from the
 // unit semi-major direction Major is
 // Center + SemiMajor·cos φ·Major + SemiMinor·sin φ·(Axis × Major)
-// (docs/loop-fillet-design.md §2). An edge whose start and end vertex are one
+// (agent-docs/loop-fillet-design.md §2). An edge whose start and end vertex are one
 // vertex is the whole ellipse, one turn from that vertex, as a Circle3 edge is. A
 // placement maps Center and Major as points and directions; a reflection also
 // negates Axis, so the arc keeps its sense between its mapped vertices.
@@ -559,7 +559,7 @@ type Ellipse3 struct {
 // a chain of chords.
 type FilletMiter3 struct{ /* private */ }
 // NURBSCurve is a free-form edge's geometry, NURBSSurface's 1-D analog
-// (docs/spline-design.md §7).
+// (agent-docs/spline-design.md §7).
 type NURBSCurve struct{ /* private */ }
 // FacetedCurve is a boolean-built edge's chord chain, Faceted's 1-D analog.
 type FacetedCurve struct{ Bound units.Value }
@@ -569,25 +569,25 @@ type FacetedCurve struct{ Bound units.Value }
 invariant #2.** An analytic `Surface` variant's parameters are exact for the
 surface it names. A face whose built geometry is that surface is exact; a tagged
 analytic variant may instead be a bounded stand-in and carry its departure in
-computed measurements (`docs/modify-reach-design.md` §8.3). A face whose held
+computed measurements (`agent-docs/modify-reach-design.md` §8.3). A face whose held
 geometry is faceted is `Faceted`, and `Faceted` is the flag; the one exception
 is a tagged analytic variant on a faceted face, a float-image stand-in whose
 departure is carried in `NormalAt`, never in `Surface()`'s parameters.
 `Transform` and `Copy` carry such a tag to the float image of the source tag,
 and unless the placement is exactly the identity, `NormalAt` charges a placed
 group that has no denoted patch the tag's own departure plus the float image's
-(`docs/faceted-source-retention-design.md` §3.4) where the tag is a retained
+(`agent-docs/faceted-source-retention-design.md` §3.4) where the tag is a retained
 `Plane`, `Cylinder`, `Sphere` or `Torus`, and a direction bound of 2 otherwise
-(`docs/faceted-vertex-bounds-design.md` §4.3). So a `Cylinder.Axis`
+(`agent-docs/faceted-vertex-bounds-design.md` §4.3). So a `Cylinder.Axis`
 or a `Sphere.Center` is an exact parameter of its named surface, while
 `Face.NormalAt(p)` — a quantity the evaluator *computes*, on a face that may be
 a bounded analytic stand-in — is a measurement and reports its `Exactness` like
 every other. It answers for the five analytic variants, and `NormalAt` on a
-`NURBSSurface` or on a `Faceted` face is `ErrUnsupported` (`docs/spline-design.md`
+`NURBSSurface` or on a `Faceted` face is `ErrUnsupported` (`agent-docs/spline-design.md`
 §7); the faceted reading lands with the faceted certificate stage, whose internal
 source certificate is what bounds the true patch normals
-(`docs/payload-verification-design.md` §5.4, §13). A positional `Faceted.Bound`
-alone does not imply a normal bound (`docs/payload-verification-design.md`
+(`agent-docs/payload-verification-design.md` §5.4, §13). A positional `Faceted.Bound`
+alone does not imply a normal bound (`agent-docs/payload-verification-design.md`
 §5/§8), and no certificate details enter the public API.
 
 <!-- The NormalAt sentence is claim + pointer, which the authoring rule in
@@ -643,8 +643,8 @@ edge is `ErrDegenerate`. `Body` MUST be a live body of the same `Document` passe
 
 **`Interference` / `Clearance`** — the pairwise results of §10. Both name the two
 bodies and carry their quantity as a `Measurement`, so both report their own
-exactness like everything else. `docs/interference-design.md` owns the
-read-only overlap proof; `docs/clearance-design.md` owns the disjointness and
+exactness like everything else. `agent-docs/interference-design.md` owns the
+read-only overlap proof; `agent-docs/clearance-design.md` owns the disjointness and
 minimum-gap proof.
 
 ```go
@@ -662,7 +662,7 @@ type Clearance struct {
 ```
 
 For a pair holding a sheet operand, `Clearance` carries a narrower claim
-(`docs/surface-design.md` §9.3): a sheet has no volume to be disjoint FROM, so
+(`agent-docs/surface-design.md` §9.3): a sheet has no volume to be disjoint FROM, so
 `Gap` states the proven distance between the sheet and the solid's boundary,
 whether the sheet lies wholly inside or wholly outside it, WITHOUT asserting
 which side. A solid-solid row's meaning — the two bodies do not overlap, and
@@ -696,7 +696,7 @@ const (
 ```
 
 **`BodyKind`** — what a `Body` is. §6 draws the line between it and `IsSolid`,
-and `docs/surface-design.md` §2.1 owns it in full. Its constants are
+and `agent-docs/surface-design.md` §2.1 owns it in full. Its constants are
 `Body`-prefixed, in the style of `BooleanErrorCode`'s `Boolean*`, because a bare
 `Solid` or `Sheet` at package scope names no type it belongs to:
 
@@ -718,7 +718,7 @@ carries its weight:
 ```go
 // Lump is a connected piece of a body — solid or sheet. Body.Lumps() returning
 // more than one means the body is disconnected. A sheet lump holds exactly one
-// shell (docs/surface-design.md §2.2).
+// shell (agent-docs/surface-design.md §2.2).
 type Lump struct{ /* ... */ }
 
 // FaceShell is a connected set of faces.
@@ -743,10 +743,10 @@ open-path `Sweep` does the same. A partial `Revolve` opens its groove at the
 angular caps. Those bodies have one connected, non-void shell. The `Shell`
 operation that removes a face leaves an opening, so its inner and outer skins
 connect. `Shell` accepts the closed `WithNoOpenings()` form of
-`docs/modify-reach-design.md` §9.2 and returns `ErrUnsupported` for it on every
+`agent-docs/modify-reach-design.md` §9.2 and returns `ErrUnsupported` for it on every
 receiver until reach §14 rows C and D build it. Sheet shells
 always report `IsVoid() == false`, even when closed
-(`docs/surface-design.md` §2.2). `Stitch` refuses a closed assembly whose
+(`agent-docs/surface-design.md` §2.2). `Stitch` refuses a closed assembly whose
 components are not proven separate, rather than publish an unrecorded cavity.
 
 ### 6.3 Operation form: free functions, and methods for queries
@@ -800,7 +800,7 @@ body, and inside the build evaluators. A canceled `ctx` returns `ctx.Err()`
 unchanged before commit and leaves `Document.Bodies()` and every other body as
 it found them. A nil `ctx` is `ErrDegenerate`, on §8's rule for every operation
 that takes one. The build can run long: a free-form wall proves its curvature
-sign over a bounded work budget (`docs/spline-design.md` §5.2), and a nonzero
+sign over a bounded work budget (`agent-docs/spline-design.md` §5.2), and a nonzero
 `WithTaper` builds through the draft evaluator.
 
 `Union`, `Cut`, `Intersect`, `CombineJoin`, `Stitch`, `Transform` and `Copy`
@@ -825,7 +825,7 @@ companion design.
 re-derives it. The recording contract at this seam — the trim contract
 (`TStart`/`TEnd`/`TExact`), the recording IR a `Step` carries, and
 `ErrUnrecordableProfile`'s full semantics — is specified in
-`docs/sketch-seam-design.md`; this section states the feature-call rules built
+`agent-docs/sketch-seam-design.md`; this section states the feature-call rules built
 on it.
 
 ```go
@@ -906,7 +906,7 @@ decad neither re-derives the trim nor infers it, and a fragment it cannot
 record it **rejects** — it never repairs, projects or fits a point `sketch`
 handed over, and it never solves for one. What decad reads of a
 `BoundaryEdge`, why a residual test cannot be an admission gate, and the
-whole-edge rules are specified in `docs/sketch-seam-design.md`.
+whole-edge rules are specified in `agent-docs/sketch-seam-design.md`.
 
 **An OPEN sketch curve reaches the same internal recording path.** A
 `sketch.Chain` is `Profile`'s open counterpart — an ordered run of the same
@@ -914,7 +914,7 @@ whole-edge rules are specified in `docs/sketch-seam-design.md`.
 and the same `Sketch()`/`Revision()`/`IsStale()` handles — so every rule above
 governs it unchanged: the foreign, stale, snapshot-match, validity and `TExact`
 gates, and the four sentinels they return. Two things read differently, and
-`docs/surface-design.md` §13 owns both: the snapshot match runs against the
+`agent-docs/surface-design.md` §13 owns both: the snapshot match runs against the
 whole fresh `s.Chains()` result rather than at one index, because that slice's
 ORDER consults entity names and `Sketch.Revision()` hashes none of them; and
 `Chain.Length` is compared for equality and never read as a measurement,
@@ -934,24 +934,24 @@ PatchProfile, PatchEdges, Stitch, Unstitch, Thicken**, plus the sweeps of an OPE
 **LoftChain**, and **Extrude**, **Sweep** and **Revolve** given a
 `*sketch.Chain` — which take a `*sketch.Chain` where their siblings take a
 `*sketch.Profile` and always build a sheet.
-`docs/loft-design.md` owns `Loft`'s signature, its two-profile correspondence
-rule, and its increment-1 scope. `docs/loft-sections-design.md` owns the
+`agent-docs/loft-design.md` owns `Loft`'s signature, its two-profile correspondence
+rule, and its increment-1 scope. `agent-docs/loft-sections-design.md` owns the
 separate `LoftSections`: three quadratic homothetic line sections or
 three to thirty-two independently varying axis-aligned rectangles,
 exactly identical curved sections, linearly varying four-arc circles, and the
 bounded varying fitted-flank class with fixed arcs; or four rounded-rectangle
 sections with cubic width and fixed height and corner radius.
-`docs/loft-point-design.md` owns the separate
+`agent-docs/loft-point-design.md` owns the separate
 `LoftFromPoint(ctx, doc, apex, sketch, profile)` solid construction from
-an exact world point to one recorded Sketch profile. `docs/sweep-design.md` owns `Sweep`'s
+an exact world point to one recorded Sketch profile. `agent-docs/sweep-design.md` owns `Sweep`'s
 signature, spatial `Path`, frame transport, refusals, and staged reach.
-`docs/helix-design.md` owns `Coil`'s signature, its axis and its extent in
+`agent-docs/helix-design.md` owns `Coil`'s signature, its axis and its extent in
 turns.
-`docs/surface-design.md` owns `PatchProfile`, `PatchEdges`, `Stitch`, `Unstitch` and `Thicken`,
+`agent-docs/surface-design.md` owns `PatchProfile`, `PatchEdges`, `Stitch`, `Unstitch` and `Thicken`,
 together with `WithSurfaceResult()`, the option that
 makes `Extrude`, `Revolve`, `Sweep` and `Loft` return their wall set as a
 sheet instead of closing it into a solid, and the chain-fed forms that
-sweep an open curve (§13 there). `docs/draft-design.md` owns `WithTaper`'s
+sweep an open curve (§13 there). `agent-docs/draft-design.md` owns `WithTaper`'s
 build and `Draft`, the face draft of an existing prism, with its
 `NeutralFace`/`NeutralFrame` planes and the `Walls(b)` selector.
 
@@ -973,29 +973,29 @@ nonzero `WithTaper` builds a draft body. A chain section builds a sheet with no
 draft build, so `Extrude` returns `ErrUnsupported` for `WithSurfaceResult()` and
 for `WithTaper` of any angle, zero included, on a chain. That refusal follows
 the chain's seam gates and nil-option check and precedes extent resolution and
-any commit (`docs/surface-design.md` §13.2).
+any commit (`agent-docs/surface-design.md` §13.2).
 
 `Sweep` infers `S` from `sec`, so no call site names the type argument. A
 profile section builds a solid, or a sheet under `WithSurfaceResult()`. A
 chain section builds a sheet, so `Sweep` returns `ErrUnsupported` for
 `WithSurfaceResult()` and `WithSweepTwist` on a chain, before any commit
-(`docs/surface-design.md` §13.2, `docs/sweep-design.md` §15.3).
+(`agent-docs/surface-design.md` §13.2, `agent-docs/sweep-design.md` §15.3).
 
 `Revolve` infers `S` the same way. A profile section builds a solid, or a
 sheet under `WithSurfaceResult()`. A chain section builds a sheet, so `Revolve`
 returns `ErrUnsupported` for `WithSurfaceResult()` on a chain, after the
 chain's seam gates and before the axis gates and any commit
-(`docs/surface-design.md` §13.2).
+(`agent-docs/surface-design.md` §13.2).
 
 `LoftSections(ctx, doc, sections ...LoftSection)` carries each `Sketch` and
 `Profile` together. It admits the bounded classes in
-`docs/loft-sections-design.md`.
+`agent-docs/loft-sections-design.md`.
 
 `LoftFaces(ctx, doc, sections ...*Face)` consumes two to thirty-two ordered planar caps from
 authenticated point-loft Split slabs. It retains their original Sketch
 profile and exact cut-plane maps through rigid placement and positive
 uniform scale. Its bounded source class and proof are in
-`docs/loft-face-sections-design.md`.
+`agent-docs/loft-face-sections-design.md`.
 
 ```go
 // ConeTangentEnd names the cone that the last, constructed section touches.
@@ -1018,7 +1018,7 @@ cap-end role of the new loft and a rounded `Plane` tag, and `Cut` and
 exact point cone, a placed or retired cone, a `Radial` with a nonzero `X` or
 without a finite nonzero `(Y, Z)`, and a section count outside 1 to 31 are
 refused with `ErrUnsupported`, `ErrRetiredBody` or `ErrDegenerate`. The
-construction is in `docs/loft-face-sections-design.md`.
+construction is in `agent-docs/loft-face-sections-design.md`.
 
 `ConeFromFace(ctx, body, face, far)` is a free function that returns the full
 cone about the world X axis of a Revolve `body` whose meridian extends the
@@ -1037,7 +1037,7 @@ is not negative is `ErrUnsupported`, as is a cone Revolve would classify as
 a cylinder. A `nil` ctx, a `nil` body or a body of no document is
 `ErrDegenerate`. Every refusal precedes registration, so the document and
 provenance numbering are unchanged. The rule is in
-`docs/loft-face-sections-design.md`.
+`agent-docs/loft-face-sections-design.md`.
 
 Each takes the **sketch** as well as the profile, because a `sketch.Profile`'s
 geometry is plane-local and the plane is the sketch's (§7). `p` MUST be a
@@ -1086,7 +1086,7 @@ section, one cone-trimmed point-Loft sector, and rigid copies of that sector.
 Serial and variadic `Union` rebuild one section ring and its certified sector
 caps. A centered cylinder spanning both axial caps can `Cut` the joined body.
 The source, clearance, boundary and volume proofs are in
-`docs/revolve-loft-sector-design.md`.
+`agent-docs/revolve-loft-sector-design.md`.
 
 The bounded spiral-bevel class accepts an exact finite revolve blank and
 separate rigid copies of one authenticated, cone-trimmed nine-section tooth.
@@ -1182,14 +1182,14 @@ work, not this contract's.
 This is one taxonomy with `Verify` FOR A CONTACT THAT REACHES `Verify`'s
 read-only boolean: an unsupported-contact pair the boolean gives its
 unsupported-contact outcome leaves that pair `Suspect` with a
-`DiagUnsupportedPairContact` diagnostic (`docs/verification-design.md` §1.1), so it
+`DiagUnsupportedPairContact` diagnostic (`agent-docs/verification-design.md` §1.1), so it
 reads the same way whether a caller ran the boolean directly or reached it
 through interference. A pair `Verify` resolves EARLIER never reaches that
 outcome, and two resolvers run before the mesh boolean does. The coplanar
-`Plane`×`Plane` contact certificate (`docs/clearance-design.md`) makes a
+`Plane`×`Plane` contact certificate (`agent-docs/clearance-design.md`) makes a
 certified coplanar touch read as a touching/clearance result — an `Exact`-zero
 gap, no interference. The read-only analytic `OpIntersect` dispatch
-(`docs/prism-boolean-design.md`; `docs/interference-design.md` §3.4) measures an
+(`agent-docs/prism-boolean-design.md`; `agent-docs/interference-design.md` §3.4) measures an
 admitted coplanar prism pair's overlap outright. Neither emits a
 `DiagUnsupportedPairContact`.
 
@@ -1199,7 +1199,7 @@ without naming the move, so the two refusals a modelling caller actually meets
 are stated here concretely.
 
 **The coplanar contact.** The analytic reduction
-(`docs/prism-boolean-design.md`) admits co-directional straight prisms
+(`agent-docs/prism-boolean-design.md`) admits co-directional straight prisms
 sketched on one plane, or on a datum plane and its `CreateOffsetPlane`, to
 `Union`, `Cut` and `Intersect`, so their overlapping caps build rather than
 refuse. Every pair outside that admitted class stays on the mesh path. There, two bodies
@@ -1228,7 +1228,7 @@ not free.
 
 **The chain depth.** A boolean's result is a `Faceted` body whose held bound
 is composed per vertex from the operation that made it
-(`docs/faceted-vertex-bounds-design.md` §3): a surviving operand vertex keeps
+(`agent-docs/faceted-vertex-bounds-design.md` §3): a surviving operand vertex keeps
 its operand's bound, a vertex the boolean creates carries its own facet pair's
 trim amplification, and each adds its own final rounding displacement. §9's
 chord tolerance for the next pair is a fixed fraction of that pair's diameter,
@@ -1236,7 +1236,7 @@ raised to a coil's, mitred sweep's, or certified `LoftFaces` result's held
 bound when that is larger, since those operands hold one fixed mesh: their partner is then meshed more
 coarsely, with its bounds still proven.
 The next boolean compares the two only where the new pair meets the operand
-(`docs/faceted-vertex-bounds-design.md` §5): every facet of an operand that
+(`agent-docs/faceted-vertex-bounds-design.md` §5): every facet of an operand that
 restates a held mesh (a boolean result or a mitred sweep) that the contact
 classification reports as meeting the other operand, or as coming within the
 tangency gate's slack of it, must carry a bound no coarser than the pair's
@@ -1296,12 +1296,12 @@ func WithNoOpenings() ShellOption
 continuations. `WithAsymmetricChamfer` applies positional `d` on `reference`
 and `otherDistance` on the other adjacent face. `WithNoOpenings` is the only
 shell form that accepts `sel == nil`; it conflicts with a non-nil selector.
-`docs/modify-reach-design.md` owns exact receiver/target limits, refusal order,
+`agent-docs/modify-reach-design.md` owns exact receiver/target limits, refusal order,
 payloads, and validation.
 
 Surface operations build, close and thicken a **sheet body** — a body that
 encloses no material region (§6, `BodyKind`). `Thicken` returns a solid;
-`docs/surface-design.md` is normative for all these operations:
+`agent-docs/surface-design.md` is normative for all these operations:
 
 ```go
 type SurfaceResultOption interface {
@@ -1329,7 +1329,7 @@ func LoftChain(ctx context.Context, d *Document, s0 *sketch.Sketch, c0 *sketch.C
 ```
 
 `ThickenSide` is `ThickenPositive` (default), `ThickenNegative` or
-`ThickenCentered`; `docs/surface-design.md` §16 owns the receiver and proof
+`ThickenCentered`; `agent-docs/surface-design.md` §16 owns the receiver and proof
 limits. `WithSurfaceResult()` omits the faces that exist only to close the
 solid and changes nothing else — a wall keeps its surface, its role and every bound.
 `PatchProfile` builds a planar face from a recorded profile and consumes
@@ -1345,7 +1345,7 @@ the caller reads `Edges(Free())` to see what did not close.
 
 **A chain-fed form takes the sketch beside the chain, on §7's terms, and
 consumes nothing.** All four (`Extrude`, `Sweep` and `Revolve` over a chain included) build the part of
-their reach `docs/surface-design.md` §1.2 states: a chain `Sweep` sweeps one
+their reach `agent-docs/surface-design.md` §1.2 states: a chain `Sweep` sweeps one
 straight path span and `LoftChain` rules a `LineSeg`-only correspondence between
 two exactly-parallel walks, and each refuses the rest at the call with
 `ErrUnsupported`. All four run §7's four gates over
@@ -1858,7 +1858,7 @@ and either way the agent repairs the query the same way whether it drove
 `SelectFaces` directly or reached it through a stop or an axis.
 
 **A query renders stably**, and the same rendering is what `SelectionError.Query`
-and a verification `Diagnostic.Message` (`docs/verification-design.md` §1.1)
+and a verification `Diagnostic.Message` (`agent-docs/verification-design.md` §1.1)
 reuse:
 
 ```go
@@ -1953,10 +1953,10 @@ The report vocabulary — `Report`, `BodyReport`, the per-survey result records
 `RegionReadings`), `Status` and its severity precedence, and the
 `VerifyOption` set including `WithTolerance` — and the tolerance gate that
 judges every `Exactness` and `Bound` the report carries are specified in
-`docs/verification-design.md`. Its §1.2 also owns `Verify`'s public cost
+`agent-docs/verification-design.md`. Its §1.2 also owns `Verify`'s public cost
 warning and caller-deadline guidance. The non-mutating proof and bounded
 volume behind every `Interference` row are specified in
-`docs/interference-design.md`. `Status` reserves zero as `Unverified`, so a
+`agent-docs/interference-design.md`. `Status` reserves zero as `Unverified`, so a
 zero-value `Report` fails `Passed`; every report and body report returned
 by `Verify` is explicitly initialized to a decided status. What the core
 contract pins down:
@@ -1988,9 +1988,9 @@ contract pins down:
   slice is empty exactly when the report is `Sound`, and the same equivalence
   holds per body for `BodyReport.Diagnostics`, so an agent reads the reasons
   instead of reconstructing them.
-  `docs/verification-design.md` §1.1 owns its shape.
+  `agent-docs/verification-design.md` §1.1 owns its shape.
 
-`docs/collision-dynamics-design.md` specifies pair-contact and two-body sweep
+`agent-docs/collision-dynamics-design.md` specifies pair-contact and two-body sweep
 queries and the separate dynamics subpackage. Their source-box and vertical
 rebound slices are available; other cases remain staged.
 
@@ -2016,7 +2016,7 @@ func WithSTEPOrganization(organization string) STEPOption
 func WithSTEPHeader(header step.Header) STEPOption
 ```
 
-`docs/tessellation-design.md` is normative for the mesh these calls consume and
+`agent-docs/tessellation-design.md` is normative for the mesh these calls consume and
 return: shared boundary samples, two-sided `Mesh.Bound`, source-face mapping,
 area slack, the symmetric-difference proof a boolean requires, the
 `Verification` level each proof is gated on, and explicit
@@ -2031,7 +2031,7 @@ indices but no proof term. All accept `WithVerification` to demand a stronger
 proof and accept its refusals. An STL file from a sheet is not a solid; at
 `VerifyNone`, a solid mesh is closed but not proven free of self-intersection.
 `ThreeMF` writes a sheet as a 3MF `surface` object and a solid as a `model`
-object. See `docs/3mf-export-design.md`.
+object. See `agent-docs/3mf-export-design.md`.
 
 `Tessellate` and every writer pass `ctx` through chording, loop-clearance
 scans, cap triangulation, mesh audits, and faceted restatement. Cancellation
@@ -2048,7 +2048,7 @@ calls that combine it with field options; it does not fill missing header fields
 `export.NewSTEPFile` returns the underlying `step.File`.
 The root package does not import STEP. STEP export preserves supported analytic
 surfaces but does not preserve the caller's feature program. See
-`docs/step-export-design.md`.
+`agent-docs/step-export-design.md`.
 
 **Fusion codegen is out of scope for v1.** Callers model in ordinary Go and use
 the resulting bodies, measurements, and verification reports directly.
@@ -2068,7 +2068,7 @@ the resulting bodies, measurements, and verification reports directly.
   operation, or an extent, was handed a body the document has retired, §6),
   `ErrBodyReportNotFound`
   (`Report.ForBody` found no entry for the requested body, including a body
-  foreign to the report's own document; `docs/verification-design.md`),
+  foreign to the report's own document; `agent-docs/verification-design.md`),
   `ErrNegativeMagnitude` (a magnitude was
   given as a negative value; magnitudes are non-negative and sense is enumerated,
   §8.1), `ErrUnrecordableProfile` (a feature was handed a profile whose boundary
@@ -2077,7 +2077,7 @@ the resulting bodies, measurements, and verification reports directly.
   certified range the seam's falsifier disproves.
   A `Partial` fragment `sketch` certifies exact records as its entity's own
   variant with the certified range, and a whole edge of every kind records;
-  full semantics in `docs/sketch-seam-design.md`),
+  full semantics in `agent-docs/sketch-seam-design.md`),
   `ErrNotSolid`, `ErrDegenerate`, `ErrBooleanFailed`, `ErrInvalidProfile` (the
   profile is invalid, contains a nil boundary entity, or no longer exactly
   matches a fresh current profile from its source sketch),
@@ -2086,10 +2086,10 @@ the resulting bodies, measurements, and verification reports directly.
   validating a Revolve axis whose input is otherwise finite, or a non-finite
   measurement or bound derived by an analytic evaluator — `units` construction
   admits a non-finite value and only its operations reject one, so the call
-  must; option semantics in `docs/verification-design.md`),
+  must; option semantics in `agent-docs/verification-design.md`),
   `ErrUnsupported` (the current evaluator cannot yet build the requested intent;
   staging is explicit and rejected at the call, never silently approximated or
-  narrowed; `docs/evaluator-design.md` §2). `BooleanError` carries a `Code`
+  narrowed; `agent-docs/evaluator-design.md` §2). `BooleanError` carries a `Code`
   (empty / unsupported-contact / evaluator-failure), wrapping `ErrBooleanFailed`
   (empty, evaluator-failure) or `ErrUnsupported` (unsupported-contact); a valid
   tangent or coplanar contact this evaluator cannot classify is
@@ -2101,23 +2101,23 @@ the resulting bodies, measurements, and verification reports directly.
   — a foreign source, a stale snapshot, a failed authentication, a range this
   seam cannot record exactly — and the caller's repair is the same whether a
   `sketch.Profile` or a `sketch.Chain` carried it, so there is no parallel
-  `*Chain` set to branch on (§7; `docs/surface-design.md` §7, §13.3).
+  `*Chain` set to branch on (§7; `agent-docs/surface-design.md` §7, §13.3).
 - **`ErrUnitKind` covers exactly the wrong-`Kind` values.** A `units.Value` whose
   `Kind` is not the one the parameter takes: an angle where a length is wanted, and
   a `WithTolerance` value that is not `Dimensionless`
-  (`docs/verification-design.md`). It is never a coercion (§5.1).
+  (`agent-docs/verification-design.md`). It is never a coercion (§5.1).
 - **`ErrNegativeMagnitude` covers exactly the magnitudes.** Those are `Distance.D`,
   `DistanceSide.D`, `Symmetric.D`, `AngleExtent.A`, `AngleSide.A`,
   `SymmetricAngle.A`, every fillet and chamfer radius or distance, every shell
   thickness, the `LongerThan(l)` edge-predicate length (§9), the `WithTolerance`
   relative tolerance, the `WithMinWallThickness` tool size and its
-  `WithDraftAllowance` draft allowance (§10, `docs/verification-design.md`), and
+  `WithDraftAllowance` draft allowance (§10, `agent-docs/verification-design.md`), and
   the `Tessellate` tolerance (§11). Three `units.Value` parameters are **signed
   displacements, not magnitudes**, and are outside it: `ToFace.Offset`, which
   displaces along the target face's normal and whose sign says which side of that
   face the sweep stops on (§8.1); `ExtrudeOpts.Taper` (`WithTaper`, §8.1),
   whose sign says which way the wall leans; and `Draft`'s angle
-  (`docs/draft-design.md` §10), read the same way about its neutral plane. Neither carries a `Direction` to reverse,
+  (`agent-docs/draft-design.md` §10), read the same way about its neutral plane. Neither carries a `Direction` to reverse,
   so a negative value there is a legal intent, not an error.
 - **`ErrCardinality` takes precedence at zero matches.** A failed cardinality
   assertion is `ErrCardinality` **even when the selector matched nothing** — and
@@ -2138,18 +2138,18 @@ Assemblies (`Component`/`Occurrence` instancing and the DAG that comes with it),
 feature tree / timeline / rollback, native analytic STEP export, sheet metal, mesh import,
 GUI or view state of any kind, and Fusion code generation.
 
-Sheet bodies themselves are **not** a non-goal — `docs/surface-design.md` owns
+Sheet bodies themselves are **not** a non-goal — `agent-docs/surface-design.md` owns
 them. `Thicken` admits the sheet families §16.1 names and `Offset` the two
 §17.1 names; every other sheet family refuses at its call with
 `ErrUnsupported`. `Trim`, `Extend` and `Split` build over a pair whose two
 sweeps share one generator and refuse every other pair
-(`docs/surface-design.md` §1.1, §1.2); a sheet operand in any boolean refuses
+(`agent-docs/surface-design.md` §1.1, §1.2); a sheet operand in any boolean refuses
 permanently, and `Split` carries that intent instead
-(`docs/surface-design.md` Table X).
+(`agent-docs/surface-design.md` Table X).
 Ruled and Boundary Fill refuse permanently, because the surface each
-needs is a fit through a boundary nothing generated (`docs/surface-design.md`
+needs is a fit through a boundary nothing generated (`agent-docs/surface-design.md`
 §1.3). Reverse Normal takes no increment either: no shipped operation's result
-turns on a side its caller cannot already name (`docs/surface-design.md` §1.4).
+turns on a side its caller cannot already name (`agent-docs/surface-design.md` §1.4).
 
 The assemblies non-goal rests on a capability in hand, not on an instancing
 graph: interference and clearance (§10) are computed between

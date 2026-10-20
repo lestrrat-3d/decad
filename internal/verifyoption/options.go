@@ -98,7 +98,7 @@ func WithDraftAllowance(a units.Value) WallToken {
 // its range by its own proven departure before this comparison. It also
 // answers on a proven-valid surface-extruded prism sheet, reading each
 // wall's positive side in place of a solid's outward normal
-// (docs/surface-design.md §2.3, §9.1); every other sheet family reads
+// (agent-docs/surface-design.md §2.3, §9.1); every other sheet family reads
 // CoverageUnavailable.
 func WithPullDirection(v r3.Vec) Token {
 	return verifyOption{option.New(identPullDirection{}, v)}
@@ -118,7 +118,7 @@ func WithConcaveRadius() Token {
 // measurement, not a verdict (verification §2): the clearance spec lives
 // with the caller, and the gate judges only the measurement's own figures.
 // Each proven-disjoint pair gets a row whose Gap the clearance kernel proves
-// (docs/clearance-design.md); a gap the kernel cannot prove yields no row
+// (agent-docs/clearance-design.md); a gap the kernel cannot prove yields no row
 // and reads Suspect — asked and unanswered, never a fabricated number.
 func WithClearances() Token {
 	return verifyOption{option.New(identClearances{}, true)}

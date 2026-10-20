@@ -348,7 +348,7 @@ func TestSweepPairFixedFloorTangentialSpinDeparts(t *testing.T) {
 
 	// At 5 mm/s the corners over x = 15 hold their height, so the box proof
 	// against the floor face fails. The general planar proof
-	// (docs/multibody-dynamics-design.md §10.2) takes the box's lower face as
+	// (agent-docs/multibody-dynamics-design.md §10.2) takes the box's lower face as
 	// the support plane instead, and every floor vertex falls away from it.
 	path.LinearVelocity.Z = units.MillimetersPerSecond(5)
 	tooSlow, err := doc.SweepPair(t.Context(), floor, box, sweepDrift(r3.Vec{}, .1), path, req)

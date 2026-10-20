@@ -13,7 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
-// OverlapVolume is docs/prism-boolean-design.md §4.5's overlap-area reading:
+// OverlapVolume is agent-docs/prism-boolean-design.md §4.5's overlap-area reading:
 // a volume, never a body. Verify's interference path needs a proven overlap
 // volume and the proven-overlap verdict for a coplanar, co-directional prism
 // pair whose 2D outlines overlap in two or more disjoint regions — a pair of

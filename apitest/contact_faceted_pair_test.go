@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The fixtures of docs/multibody-dynamics-design.md §13 PR 10. Every
+// The fixtures of agent-docs/multibody-dynamics-design.md §13 PR 10. Every
 // coordinate is dyadic, and every pose is a float transform whose entries
 // are read as exact dyadics, so each relation below is decided exactly.
 //
@@ -194,7 +194,7 @@ func TestContactPairExactPlanarNonConvex(t *testing.T) {
 
 // TestExactPlanarPairAdmitsStitchedSolid reads mass_properties_mesh_test.go's
 // stitched tetrahedron, four patches welded at the identity with every corner
-// exact, through the exact pair (docs/multibody-dynamics-design.md §13 PR
+// exact, through the exact pair (agent-docs/multibody-dynamics-design.md §13 PR
 // 14b), against a source-box floor whose top face is z = 0.
 //
 // Legs shown to fail (each deleted in turn, fixture red, then restored):
@@ -204,7 +204,7 @@ func TestContactPairExactPlanarNonConvex(t *testing.T) {
 //   - the face map (TestPlanarManifoldStitchedVertexTouch).
 //
 // The VertBound widening has no identity-placed fixture: only a
-// certificate-welded stitch (docs/surface-design.md §6.2) carries a positive
+// certificate-welded stitch (agent-docs/surface-design.md §6.2) carries a positive
 // class bound at the identity. The term is the per-vertex bound Stitch
 // stamps on each live Vertex, the one internal/stitchtess/stitch.go publishes per
 // face, read back rather than proved twice; the placed copy's band below is

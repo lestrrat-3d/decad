@@ -13,7 +13,7 @@ import (
 )
 
 // These tests drive events inside a slice of the step of a world of four or
-// more bodies (docs/multibody-dynamics-design.md §5, §6.6, §7.1, §13 PR 6)
+// more bodies (agent-docs/multibody-dynamics-design.md §5, §6.6, §7.1, §13 PR 6)
 // through the real producers: SweepPair brackets every impact, the island
 // solver certifies every response, and Trace.Sample replays every slice.
 //

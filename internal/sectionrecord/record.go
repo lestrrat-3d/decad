@@ -46,7 +46,7 @@ type LoopRecord struct {
 // first segment's walk start and last segment's walk end are FREE — they
 // meet nothing, and nothing closes onto them. It carries no Holes and no
 // walk-level winding, because an open walk bounds no region and so has no
-// inside. See docs/sketch-seam-design.md §2.2 and docs/surface-design.md §13.
+// inside. See agent-docs/sketch-seam-design.md §2.2 and agent-docs/surface-design.md §13.
 type ChainRecord struct {
 	Segments []CurveSegment
 }

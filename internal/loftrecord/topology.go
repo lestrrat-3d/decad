@@ -23,7 +23,7 @@ import (
 // BECAUSE the triangles are the thing actually built: the curved solid the
 // paired sections denote is reached through the payload's proven
 // displacement, never by publishing a ruled patch nothing constructed. See
-// docs/loft-design.md §5.1 and §7.
+// agent-docs/loft-design.md §5.1 and §7.
 
 // buildWallFace builds one wall triangle's Face (§7's lower/upper wall
 // triangle row): its own Plane, its own proven area bracket
@@ -58,7 +58,7 @@ func buildWallFace(env topo.Env, body *topo.Body, verts []r3.Vec, tri [3]int, i,
 }
 
 // BuildTopology builds the B-rep topology from the assembled, globally
-// oriented triangle set (docs/loft-design.md §5/§7): real Vertex/Edge/Loop/
+// oriented triangle set (agent-docs/loft-design.md §5/§7): real Vertex/Edge/Loop/
 // Face objects sharing indices with the assembly's own vertex table. Every
 // edge bounds exactly two faces by construction (§5's four edge families:
 // bottom rim, top rim, diagonal, rung), and every cap-boundary edge opposes

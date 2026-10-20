@@ -34,12 +34,12 @@ import (
 // full), and the accumulated rigid placement. Every measurement and the
 // whole topology derive from it, which is what makes Transform exact: it
 // re-evaluates the same payload under the composed motion
-// (docs/evaluator-design.md §8).
+// (agent-docs/evaluator-design.md §8).
 //
 // Den is the ANGULAR twin of prismrecord.Payload's Z0Delta/Z1Delta: the exact angle
 // each end of Phi0/Phi1 denotes (phi0Delta and phi1Delta read it). Phi0/Phi1 are
 // what the resolver HELD — a float64 the extent's own resolution rounded to
-// (docs/evaluator-design.md §6's "held sweep angle") — and Den is what the
+// (agent-docs/evaluator-design.md §6's "held sweep angle") — and Den is what the
 // recorded AngularExtent itself DENOTES, exactly, wherever this evaluator can
 // state it. A reading that folds Phi0 or Phi1 into a published measurement
 // takes the per-end displacement Den proves (phi0Delta/phi1Delta,
@@ -50,7 +50,7 @@ import (
 // this field existed. Being a payload field it re-evaluates with the
 // payload, so Transform and Copy carry it unchanged.
 //
-// SurfaceResult is WithSurfaceResult's own flag (docs/surface-design.md §4):
+// SurfaceResult is WithSurfaceResult's own flag (agent-docs/surface-design.md §4):
 // true when the build must publish a sheet instead of a solid. A full
 // revolution mints no closing face at all, so the flag changes the face set
 // only when Full is false — a partial sweep omits its two caps — while it
@@ -76,7 +76,7 @@ type Payload struct {
 	// each recorded segment pairs with a denoted one of its kind whose ends
 	// (and an arc's centre) sit within it, the arc's sweep taken without a 2π
 	// wrap. The wall areas take it through
-	// docs/surface-intersection-design.md §7.1's fold into the axis-coordinate
+	// agent-docs/surface-intersection-design.md §7.1's fold into the axis-coordinate
 	// walk, the box through ExtentBoundedAlong's fifth mechanism, and the
 	// solid's region readings — the Pappus volume, the centroid and a cap's
 	// area — through §7.2's band (internal/revolveaxis/section_charge.go).
@@ -133,7 +133,7 @@ func RequireExactSection(rp Payload, what string) error {
 
 // Meridian is a *view* of rp as a prismrecord.Payload carrying the recorded MERIDIAN
 // and the frame and placement it is expressed in — never a body this evaluator
-// builds from. It is what docs/surface-intersection-design.md §3.1 hands
+// builds from. It is what agent-docs/surface-intersection-design.md §3.1 hands
 // prismcells.BuildScene, prismcells.NewReexpression, prismcells.Classify and the rest of
 // §3's resolution, every one of which reads a profile, a frame and a placement
 // and nothing else. The sweep fields are deliberately absent: the revolve's own
@@ -220,7 +220,7 @@ func walkEnd(seg sectionrecord.CurveSegment, w survey2d.SegmentWalk) sweptPoint 
 // revolveJunctionStart reads the junction where axis walk prev ends and next starts
 // as a plane-local point bounded against the points BOTH neighbours' recorded
 // segments denote there (boundarywalk.JunctionVertex): at a cut junction the
-// two differ (docs/evaluator-design.md §4).
+// two differ (agent-docs/evaluator-design.md §4).
 func revolveJunctionStart(rw revolveaxis.ResolvedWalks, prev, next survey2d.SideWalk) sweptPoint {
 	pi, ni := prev.Segs[len(prev.Segs)-1], next.Segs[0]
 	u, v, bound := boundarywalk.JunctionVertex(rw.Segs[pi], rw.Plane[pi], rw.Segs[ni], rw.Plane[ni])
@@ -442,8 +442,8 @@ func (rp Payload) Sweep() proofbound.BoundedScalar {
 // recorded open walk SET, the plane frame, the oriented plane-local axis, the
 // sweep interval, and the accumulated rigid placement — ChainPayload
 // is to chain Revolve what chainrecord.Payload is to chain Extrude, and what
-// Payload is to Revolve (docs/surface-design.md §13.4). A plain
-// chain Revolve builds the one-walk case; docs/surface-intersection-design.md
+// Payload is to Revolve (agent-docs/surface-design.md §13.4). A plain
+// chain Revolve builds the one-walk case; agent-docs/surface-intersection-design.md
 // §3.4 is what first builds more than one, one lump per surviving walk, and
 // sets SectionDelta beside them.
 type ChainPayload struct {
@@ -454,11 +454,11 @@ type ChainPayload struct {
 	Full       bool
 	Den        revolveangle.Sweep
 	Xform      r3.Transform
-	// SectionDelta is prismrecord.Payload's own §7 term (docs/prism-boolean-design.md),
+	// SectionDelta is prismrecord.Payload's own §7 term (agent-docs/prism-boolean-design.md),
 	// carried here on the identical terms: the proven upper bound on how far
 	// any recorded meridian coordinate sits from the meridian its construction
 	// denotes. It is zero for every walk a caller draws through chain Revolve,
-	// and docs/surface-intersection-design.md §7.1 derives how a nonzero one
+	// and agent-docs/surface-intersection-design.md §7.1 derives how a nonzero one
 	// reaches this body's published Area and Bounds.
 	SectionDelta float64
 }
@@ -467,7 +467,7 @@ type ChainPayload struct {
 // segment list as an unclosed "outer loop" with no holes — never a body this
 // evaluator builds from directly — used only to feed the axis, sweep and
 // extent readings Payload already proves generically over rp.Profile:
-// none of them assumes the loop closes (docs/surface-design.md §13.4).
+// none of them assumes the loop closes (agent-docs/surface-design.md §13.4).
 // SurfaceResult stays false and is read nowhere below: chain Revolve never
 // runs Payload's own solid/cap topology, only its own open-walk build
 // (buildChainRevolveWalls).
@@ -509,7 +509,7 @@ func (rp ChainPayload) Transform() r3.Transform { return rp.Xform }
 // on the identical full-turn argument, re-read over the chain's own open walk
 // through the SAME generic reading Payload.ProvesSimple already takes off
 // Profile and Ax — neither of which assumes the walk closes
-// (docs/surface-design.md §13.4).
+// (agent-docs/surface-design.md §13.4).
 func (rp ChainPayload) ProvesSimple(ctx context.Context) bool {
 	return rp.Revolve().ProvesSimple(ctx)
 }
@@ -517,7 +517,7 @@ func (rp ChainPayload) ProvesSimple(ctx context.Context) bool {
 // Placed re-evaluates the same record under the composed motion (core §8). A
 // re-evaluation path: no preflight has run on this record within the call, so
 // the build opens the record's one free-form work counter itself
-// (docs/spline-design.md §5.2), exactly as Payload.Placed does.
+// (agent-docs/spline-design.md §5.2), exactly as Payload.Placed does.
 func (rp ChainPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
 	rp.Xform = composed
 	return BuildChain(ctx, env, rp, freeform.NewFreeformWork())

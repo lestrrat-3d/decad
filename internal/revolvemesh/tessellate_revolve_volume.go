@@ -23,7 +23,7 @@ import (
 const RevolveAngularIntegralSteps = 64
 
 // RevolveAngularHomotopyFactor proves the ANGULAR factor of
-// docs/tessellation-design.md §11's per-cell triple integral: the part of
+// agent-docs/tessellation-design.md §11's per-cell triple integral: the part of
 //
 //	Icell ≥ ∫_[0,1]³ |∂H/∂λ · (∂H/∂t × ∂H/∂u)| d(λ, t, u)
 //
@@ -66,7 +66,7 @@ const RevolveAngularIntegralSteps = 64
 //
 // so the whole reading is (∫|P| + ∫|Q|)/2. Neither of those two has a closed
 // form — the zeros are arcsines — so each takes
-// docs/tessellation-design.md §15's other admissible path, CERTIFIED INTERVAL
+// agent-docs/tessellation-design.md §15's other admissible path, CERTIFIED INTERVAL
 // SUBDIVISION: [0, 1] is cut into RevolveAngularIntegralSteps equal pieces, both
 // functions are enclosed at every NODE of that cut, and one piece is charged the
 // larger of its two nodes' magnitudes plus the proven second-order allowance
@@ -241,7 +241,7 @@ func AngularHomotopyBulges(d proofbound.RatInterval, n int64) (*big.Rat, *big.Ra
 
 var ErrRevolveAngularHomotopy = fmt.Errorf(`%w: a revolve cell's angular homotopy states no enclosure of the volume it sweeps, so this mesh can prove no occupied-volume bound`, decaderr.ErrUnsupported)
 
-// RevolveCellSweptVolume is docs/tessellation-design.md §11's Icell for ONE
+// RevolveCellSweptVolume is agent-docs/tessellation-design.md §11's Icell for ONE
 // meridian cell at ONE angular interval: the meridian factor of the triple
 // integral RevolveAngularHomotopyFactor separated out, times that shared
 // angular factor.

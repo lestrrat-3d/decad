@@ -11,7 +11,7 @@ import (
 )
 
 // This file is the revolve's angular twin of the axial displacement
-// docs/evaluator-design.md §5 states for extrude's z0Delta/z1Delta: the
+// agent-docs/evaluator-design.md §5 states for extrude's z0Delta/z1Delta: the
 // proven per-end gap between the sweep angle the evaluator HOLDS as a
 // float64 and the sweep angle the recorded AngularExtent DENOTES.
 //
@@ -21,7 +21,7 @@ import (
 // computed to hold it. Every reading that folds a held sweep angle into a
 // published measurement must charge the gap between the two, exactly as
 // revolvePayload.z0Delta/z1Delta already does for extrude's axial extent
-// (docs/evaluator-design.md §6).
+// (agent-docs/evaluator-design.md §6).
 //
 // Angle carries a stated angle as rad + 2π·turn, both exact
 // big.Rat. A radian-stated extent uses rad with turn zero. A degree-stated one
@@ -240,7 +240,7 @@ func (sd Sweep) HalfTurnExcessFor(phi0, phi1 float64) (proofbound.RatInterval, b
 // (ExtremeBounds, bounds.go) that already trusted the held
 // float as the truth, but is a tighter claim than the centroid may take: a
 // ToFaceAngular endpoint's true angle carries no proven relation to the held
-// float here, so its trig keeps the envelope, per docs/evaluator-design.md
+// float here, so its trig keeps the envelope, per agent-docs/evaluator-design.md
 // §6's "every reading it feeds keeps the magnitude envelope it always has".
 func EndSinCos(d Angle, held float64) (sin, cos proofbound.BoundedScalar) {
 	sinValue, cosValue := math.Sincos(held)

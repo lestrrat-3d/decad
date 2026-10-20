@@ -139,8 +139,8 @@ func Chamfer(ctx context.Context, env topo.Env, b *topo.Body, call ChamferCall) 
 	// Stage 2 (§4): the receiver's payload class (S3), then every selected
 	// edge is a lateral edge mapped to a section corner (S1) OR — reach RX1's
 	// second class — every geometric edge of one or more complete prism cap
-	// loops (SX4 otherwise; docs/modify-reach-design.md §4/§8.3).
-	// Reach RX2 (docs/modify-reach-design.md §7): a revolve receiver bevels its
+	// loops (SX4 otherwise; agent-docs/modify-reach-design.md §4/§8.3).
+	// Reach RX2 (agent-docs/modify-reach-design.md §7): a revolve receiver bevels its
 	// swept meridian junctions through the same corner rewrite. One certified
 	// quarter-turn radial cap rim takes the source-backed §7.2 route first.
 	if rp, ok := b.Payload.(revolveplan.Payload); ok {
@@ -204,7 +204,7 @@ func Chamfer(ctx context.Context, env topo.Env, b *topo.Body, call ChamferCall) 
 	if !lateral {
 		// An equal chamfer sets both caps back d across the cap and d down the
 		// side; a two-distance one takes each cap's pair from its reference
-		// face (docs/modify-reach-design.md §8.3.1).
+		// face (agent-docs/modify-reach-design.md §8.3.1).
 		// Dc measures across the end face; Ds measures down its side wall.
 		start := capblend.Setback{Dc: dmm, DcDelta: dDelta, Ds: dmm, DsDelta: dDelta}
 		end := start
@@ -288,7 +288,7 @@ func Chamfer(ctx context.Context, env topo.Env, b *topo.Body, call ChamferCall) 
 	// The blend descriptors ride on the payload so a re-evaluation (a copy or a
 	// placement) re-mints its own chamfer(i,j) roles; evalPrism applies them.
 	// The rewritten section is a NEW record no preflight has seen, so the build
-	// opens its one counter here (docs/spline-design.md §5.2).
+	// opens its one counter here (agent-docs/spline-design.md §5.2).
 	// A section rewrite is a change of the SECTION: both sweep levels come
 	// through unchanged, and so does each one's own axial displacement.
 	body, err := prismrecord.Build(ctx, env, prismrecord.Payload{

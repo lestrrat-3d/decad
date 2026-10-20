@@ -15,7 +15,7 @@ import (
 
 // Receiver is the straight prism a Draft tapers: the body's payload must be a
 // prism that is not already a draft and whose section is exact
-// (docs/draft-design.md SD23).
+// (agent-docs/draft-design.md SD23).
 func Receiver(b *topo.Body) (prismrecord.Payload, error) {
 	if _, ok := b.Payload.(Payload); ok {
 		return prismrecord.Payload{}, fmt.Errorf(`%w: this evaluator drafts a straight prism once; the receiver is already a draft body (draft SD23)`, decaderr.ErrUnsupported)

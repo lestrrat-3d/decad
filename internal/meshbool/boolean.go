@@ -43,7 +43,7 @@ const (
 	// BooleanExpectedVolumeProof is BooleanExpectedStaging's sibling for the one
 	// staging cause that is NOT a tessellation limit: the operand meshes, but its
 	// mesh carries no proof of the volume it and the body it stands for differ by
-	// (docs/tessellation-design.md §11), so no boolean may compose it. It maps to
+	// (agent-docs/tessellation-design.md §11), so no boolean may compose it. It maps to
 	// the same public error as BooleanExpectedStaging; it exists so Verify can say
 	// which of the two happened.
 	BooleanExpectedVolumeProof
@@ -93,7 +93,7 @@ func (e *CoarseHeldContactError) Error() string {
 
 func (e *CoarseHeldContactError) Unwrap() error { return decaderr.ErrUnsupported }
 
-// RefuseCoarseHeldContact is docs/faceted-vertex-bounds-design.md §5's local
+// RefuseCoarseHeldContact is agent-docs/faceted-vertex-bounds-design.md §5's local
 // chain-depth gate: it refuses when any of the listed facets of a gated
 // operand (m.Gate > 0) carries a facet bound above m.Gate, the pair's chord
 // tolerance, and quotes the largest such bound. An ungated operand passes.

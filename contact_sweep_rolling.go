@@ -12,7 +12,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file runs the rolling band track of docs/multibody-dynamics-design.md
+// This file runs the rolling band track of agent-docs/multibody-dynamics-design.md
 // §10.4 ("Rolling"): it picks the cylinder and planar sides, reads the start
 // relation through ContactPair, and publishes the track that
 // internal/planarsweep proves (planarsweep.ProveRollingBand) and certifies

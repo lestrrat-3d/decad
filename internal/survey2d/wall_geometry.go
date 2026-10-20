@@ -20,7 +20,7 @@ const SurvAngTol = 1e-9
 // float64 math.Pi constant (the draft allowance's own aStar = π − α, or a
 // literal ±π/2 wedge-tangent angle) can sit from the same expression
 // evaluated at the TRUE mathematical π: at most the constant's own half-ulp
-// rounding (docs/verification-design.md §6 never assumes better), well under
+// rounding (agent-docs/verification-design.md §6 never assumes better), well under
 // a nanometre once composed through any reading the kernel publishes. It is
 // folded once into RadianTrigBounds rather than re-derived at every call
 // site that composes an angle through math.Pi.

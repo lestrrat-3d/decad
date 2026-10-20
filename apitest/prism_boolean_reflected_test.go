@@ -12,10 +12,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/general-boolean-design.md §3 A4's public-API suite: the
+// This file is agent-docs/general-boolean-design.md §3 A4's public-API suite: the
 // analytic booleans and Verify's interference reading with a reflected
 // operand. Reflected bodies are built with Copy/Transform under
-// r3.Reflection. The L is docs/mirror-pattern-design.md §2's: the union of
+// r3.Reflection. The L is agent-docs/mirror-pattern-design.md §2's: the union of
 // [0, 20]×[0, 5] and [0, 5]×[5, 20], 175 mm², swept 10 mm. The re-wound
 // record's mechanics are prism_boolean_reflected_internal_test.go's.
 

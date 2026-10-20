@@ -110,7 +110,7 @@ func TestLoftCutTiltedFrameMapKeepsFacetedTopology(t *testing.T) {
 	cut, err := decad.Cut(t.Context(), blank, tool)
 	require.NoError(t, err)
 	// The tilted tool's wall states a tilt from its tag, so A2 declines it
-	// (docs/faceted-source-retention-design.md §3.2) and the bore stays
+	// (agent-docs/faceted-source-retention-design.md §3.2) and the bore stays
 	// Faceted.
 	cylinders, err := decad.Faces(decad.Cylindrical()).SelectFaces(cut)
 	require.ErrorIs(t, err, decad.ErrNoMatch)
@@ -123,7 +123,7 @@ func TestLoftCutTiltedFrameMapKeepsFacetedTopology(t *testing.T) {
 // requireRetainedBoreWall pins what the Cut publishes for a bore whose held
 // center rounds: the wall keeps the tool's Cylinder tag as a stand-in, so its
 // normal is never an Exact reading
-// (docs/faceted-source-retention-design.md §3.3).
+// (agent-docs/faceted-source-retention-design.md §3.3).
 func requireRetainedBoreWall(t *testing.T, cut *decad.Body) {
 	t.Helper()
 	cylinders, err := decad.Faces(decad.Cylindrical()).SelectFaces(cut)

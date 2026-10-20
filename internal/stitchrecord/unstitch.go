@@ -21,7 +21,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is Unstitch's evaluator (docs/surface-design.md §6.5). It reuses
+// This file is Unstitch's evaluator (agent-docs/surface-design.md §6.5). It reuses
 // internal/surfacegeom's placement transforms and proofbound.FiniteVec
 // machinery unchanged — a placed unstitched face is transformed the same way
 // a placed stitched one is — and adds the one new mechanism §6.5 calls for: a
@@ -100,7 +100,7 @@ func BuildUnstitchFace(ctx context.Context, env topo.Env, srcFace *topo.Face, sr
 
 // copyFaceUnder deep-copies srcFace's surface, loops, edges and
 // vertices under xform, minting fresh vertex, edge and face nodes that
-// share no pointer with the retired receiver (docs/surface-design.md §6.5):
+// share no pointer with the retired receiver (agent-docs/surface-design.md §6.5):
 // a retired body stays readable, and a caller may still hold it, so mutating
 // its topology through a shared pointer would corrupt what they read. It
 // mirrors build.go's rebuildTopology per-face walk with no weld plan:
@@ -267,7 +267,7 @@ func copyFaceUnder(ctx context.Context, alloc topo.Alloc, srcFace *topo.Face, xf
 // whenever xform is the identity and the receiver's own box was, because no
 // further numerical rounding was introduced beyond the published numbers —
 // not because the box is the tightest one this face could in principle earn.
-// docs/surface-design.md §6.5 records that limit.
+// agent-docs/surface-design.md §6.5 records that limit.
 func faceBounds(srcFace, nf *topo.Face, srcBounds measurement.Box, xform r3.Transform, delta float64) (measurement.Box, error) {
 	if (srcFace.Surface.Kind() == surfacegeom.KindPlane || srcFace.HeldPlanar) && faceIsStraightEdged(srcFace) {
 		return facePolygonBounds(nf)

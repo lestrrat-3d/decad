@@ -9,13 +9,13 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// StationsPerTurn is docs/helix-design.md §5.2's station density: 256
+// StationsPerTurn is agent-docs/helix-design.md §5.2's station density: 256
 // stations per turn, a power of two, keeps the chord departure
 // ρ·(π/256)²/2 ≈ 7.5e-5·ρ two decades below the default Verify tolerance.
 const StationsPerTurn = 256
 
 // ArcChordsPerTurn is the number of chords a full turn of a circular profile
-// segment is cut into (docs/helix-design.md §5.4, §11 PR 3): an arc of sweep
+// segment is cut into (agent-docs/helix-design.md §5.4, §11 PR 3): an arc of sweep
 // Δ takes ⌈ArcChordsPerTurn·Δ/2π⌉. Every chord cell enters the crossing audit
 // beside the helix stations, so the count is held where a round-wire spring of
 // a few turns stays inside the audit's pair budget.
@@ -25,13 +25,13 @@ const ArcChordsPerTurn = 16
 // StationsPerTurn.
 const MaxStations = 1 << 15
 
-// Payload is the evaluator's record of a coil (docs/helix-design.md): the
+// Payload is the evaluator's record of a coil (agent-docs/helix-design.md): the
 // authenticated profile and its plane frame, the axis resolved into the plane
 // with the side that puts the profile on its positive side, the pitch, the
 // turn count, the hand and the accumulated placement — what a placement
 // re-runs §5 from — plus the build that record produced. Build evaluates it
 // over topology nodes and it implements topo.Payload
-// (docs/evaluator-design.md §8).
+// (agent-docs/evaluator-design.md §8).
 //
 // Verts is the held vertex table, station-major (§5.3); VertexBound is each
 // vertex's β of §5.4 and Delta the largest of them; MaxRound is the largest
@@ -59,7 +59,7 @@ func (cp Payload) Transform() r3.Transform { return cp.Xform }
 
 // ProvesSimple implements topo.SimpleProver. CP5 proves the true coil simple
 // from CS5 and CS6, and the build's crossing audit proves its held shell
-// embedded (docs/helix-design.md Table CD row CD1). A coil is always a solid,
+// embedded (agent-docs/helix-design.md Table CD row CD1). A coil is always a solid,
 // so the sheet audit never reaches this method; it states the answer for any
 // caller that asks.
 func (cp Payload) ProvesSimple(context.Context) bool { return true }

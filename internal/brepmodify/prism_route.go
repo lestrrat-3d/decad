@@ -21,13 +21,13 @@ import (
 	"github.com/lestrrat-3d/decad/internal/topobuild"
 )
 
-// This file is the receiver dispatch of docs/brep-modify-design.md
+// This file is the receiver dispatch of agent-docs/brep-modify-design.md
 // ("brep-modify §N" below): which record Fillet, Chamfer and Shell hand to the
 // brep route (§2, Table RB), the gates every brep or stacked receiver passes
 // before any route runs (Table SB's SB1 and SB2), and the order of the
 // routes: route P (prism_route.go), then, for a Fillet or Chamfer,
 // route E (edge_route.go) or route L
-// (docs/modify-general-design.md §4, loop_route.go), which
+// (agent-docs/modify-general-design.md §4, loop_route.go), which
 // brepLoopRoute picks.
 
 // Request is what one modify op hands the brep route
@@ -41,8 +41,8 @@ import (
 // E (§5) reads; a Shell leaves them nil. shellCall is a Shell's removed faces,
 // sense and thickness, which route S (internal/throughshell) reads. loop is a
 // Chamfer's setbacks, or a Fillet's radius stated as both setbacks, which
-// route L bands each complete loop with (docs/modify-general-design.md §4,
-// docs/loop-fillet-design.md §4), and loopKind the band's kind; a Shell
+// route L bands each complete loop with (agent-docs/modify-general-design.md §4,
+// agent-docs/loop-fillet-design.md §4), and loopKind the band's kind; a Shell
 // leaves them unset.
 type Request struct {
 	Op        string
@@ -65,7 +65,7 @@ type Request struct {
 // and the per-corner construction, bound to the op's magnitudes. Corner reads
 // corner ci of loop, whose index in the recorded section is li, and the
 // selected edge e that mapped to it; an asymmetric chamfer reads li and e to
-// assign its two setbacks (docs/modify-reach-design.md §6), and every other
+// assign its two setbacks (agent-docs/modify-reach-design.md §6), and every other
 // construction ignores them.
 type BlendOp struct {
 	Kind   string
@@ -91,9 +91,9 @@ type Route struct {
 // stacked receiver's face view (SB2), then the whole-record displacement
 // rule (SB1) — and then route P (§4): the first reference axis along which
 // the record reads as a prism the op's classification admits. When none
-// admits, a Shell takes route S (docs/modify-general-design.md §3), which
+// admits, a Shell takes route S (agent-docs/modify-general-design.md §3), which
 // builds the result or refuses, and a Fillet or Chamfer takes route E (§5) or
-// route L (docs/modify-general-design.md §4), as brepLoopRoute picks, which
+// route L (agent-docs/modify-general-design.md §4), as brepLoopRoute picks, which
 // builds the result or refuses with a Table SB or Table SL row.
 func Receiver(ctx context.Context, env topo.Env, b *topo.Body, req Request) (Route, error) {
 	bp, sourceRoles, ok, err := brepModifyRecord(ctx, b.Payload, req.Op)
@@ -134,7 +134,7 @@ func Receiver(ctx context.Context, env topo.Env, b *topo.Body, req Request) (Rou
 	}
 }
 
-// shellThroughCut is route S's arm (docs/modify-general-design.md §3): the
+// shellThroughCut is route S's arm (agent-docs/modify-general-design.md §3): the
 // shell of a brep or stacked receiver that reads as no prism whose caps are
 // the removed faces. refusal is route P's classification refusal where some
 // axis read as a prism (brep-modify SB3), and nil where none did (SB10);
@@ -177,7 +177,7 @@ func brepModifyRecord(ctx context.Context, payload topo.Payload, op string) (bre
 	}
 }
 
-// This file is route P of docs/brep-modify-design.md ("brep-modify §N"): a
+// This file is route P of agent-docs/brep-modify-design.md ("brep-modify §N"): a
 // brep or stacked receiver that reads as a prism along a reference axis
 // (§4.1, P1–P5) is handed to the op's own prism path as that prism (§4.2).
 // Every test below is an exact comparison of recorded floats and records,
@@ -219,7 +219,7 @@ func (c PrismCaps) SectionLoop(start bool, li int) int {
 // nil when no axis reads as a prism at all. err is a context error, or the
 // refusal of a Shell of a record carrying route L chamfer bands.
 //
-// A record carrying route L bands (docs/modify-general-design.md §4) reads as
+// A record carrying route L bands (agent-docs/modify-general-design.md §4) reads as
 // no prism: a prism reading would read its faces alone and drop the band
 // patches the body also holds, so a Fillet or Chamfer goes on to route E or
 // route L over the record. A Shell of it refuses, since its erosion meets the

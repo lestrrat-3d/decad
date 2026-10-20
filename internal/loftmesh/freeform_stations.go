@@ -15,7 +15,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
-// StationCapError is docs/loft-design.md Table S row S15's refusal: a chorded
+// StationCapError is agent-docs/loft-design.md Table S row S15's refusal: a chorded
 // pair whose station count passes the cells remaining in the shared cap.
 // It names the pair that exhausted that remainder. errors.Is answers for
 // freeform.ErrTooManyChords, the sentinel §5.1
@@ -45,7 +45,7 @@ func (e *StationCapError) Error() string {
 func (e *StationCapError) Unwrap() error { return freeform.ErrTooManyChords }
 
 // FreeformCell is one same-kind Tier A free-form pair's chord chain
-// (docs/loft-design.md §5.1's free-form arm), in the shape PairRecords appends
+// (agent-docs/loft-design.md §5.1's free-form arm), in the shape PairRecords appends
 // to a loop.
 //
 // Stations0/Stations1 carry this segment's own stations in walk order, the
@@ -69,7 +69,7 @@ type FreeformCell struct {
 }
 
 // FreeformCellPoints chords one same-kind Tier A free-form pair
-// (docs/loft-design.md §5.1's free-form arm).
+// (agent-docs/loft-design.md §5.1's free-form arm).
 //
 // Each side's converted chain is put in WALK order first: a forward side keeps
 // its natural spans, and a reversed side takes its spans last to first with

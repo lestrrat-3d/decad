@@ -71,7 +71,7 @@ func AngleOf(e *CEdge, dir r3.Vec) float64 {
 // normal separates the two bodies, and the ruling segment between ends lies
 // on both trimmed faces. The kernel keeps the faces and the exact
 // feet so the contact layer can publish the manifold of
-// docs/contact-geometry-design.md §4.5; Verify reads only the verdict.
+// agent-docs/contact-geometry-design.md §4.5; Verify reads only the verdict.
 type RulingContact struct {
 	FaceA, FaceB *CFace
 	// normal is the exact unit A-to-B normal of the separating plane. An

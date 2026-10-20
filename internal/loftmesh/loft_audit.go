@@ -18,7 +18,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// This file is the build-time crossing audit of docs/loft-design.md §6: the
+// This file is the build-time crossing audit of agent-docs/loft-design.md §6: the
 // gate that proves a loft's assembled wall-and-cap triangle set is manifold
 // and watertight by construction rather than merely by convention. It reuses
 // internal/proof/orientation.go's adaptive exact predicates and boolean_mesh.go's
@@ -49,7 +49,7 @@ import (
 
 // TriangleCollapsed reports whether a triangle's three recorded vertices are
 // exactly collinear (or coincident) — an exact zero cross product over the
-// rational lift, never a tolerance. This is S6 (docs/loft-design.md §4): the
+// rational lift, never a tolerance. This is S6 (agent-docs/loft-design.md §4): the
 // triangle has no interior, so the shell it would contribute to does not
 // exist.
 func TriangleCollapsed(verts []r3.Vec, tri [3]int) bool {
@@ -354,7 +354,7 @@ func (d *LoftAuditData) projectionTriple(i int) [3]meshbool.Xp2 {
 	return [3]meshbool.Xp2{d.projection(i, 0), d.projection(i, 1), d.projection(i, 2)}
 }
 
-// ErrLoftContact is S7 (docs/loft-design.md §4/§6): the pair's exact contact
+// ErrLoftContact is S7 (agent-docs/loft-design.md §4/§6): the pair's exact contact
 // is not the one its recorded adjacency expects, so the assembled shell
 // self-touches or self-crosses away from — or instead of — its recorded
 // vertex or edge. No such solid exists.
@@ -384,7 +384,7 @@ func (e *LoftContactError) Error() string {
 
 func (e *LoftContactError) Unwrap() error { return decaderr.ErrDegenerate }
 
-// TriTriCoplanarSharedEdge is docs/loft-design.md §6's audit-only helper for
+// TriTriCoplanarSharedEdge is agent-docs/loft-design.md §6's audit-only helper for
 // an edge-adjacent coplanar pair that meshbool.TriTriClassify reports as
 // meshbool.ContactRegion. It reads the two exact triangles' opposite vertices and
 // admits the pair only when the recorded edge (edgeA, edgeB) is an edge of
@@ -393,7 +393,7 @@ func (e *LoftContactError) Unwrap() error { return decaderr.ErrDegenerate }
 // which the two triangles' closed intersection is precisely the recorded
 // segment, never a shared area. It never writes to meshbool.TriTriClassify or any
 // shared classification state, so it cannot change mesh-boolean contact
-// classification (docs/loft-design.md §6, required test).
+// classification (agent-docs/loft-design.md §6, required test).
 func TriTriCoplanarSharedEdge(xta, xtb [3]proof.Xpt, n proof.Xpt, edgeA, edgeB proof.Xpt) bool {
 	edgeAKey, edgeBKey := edgeA.Key(), edgeB.Key()
 	var apexA, apexB proof.Xpt
@@ -585,7 +585,7 @@ func loftPlaneSeparatedSigns(data *LoftAuditData, i, j int) (bool, [3]int, [3]in
 }
 
 // AuditLoftPair classifies one triangle pair against its recorded adjacency
-// (docs/loft-design.md §6) and returns S7 (ErrDegenerate) when the exact
+// (agent-docs/loft-design.md §6) and returns S7 (ErrDegenerate) when the exact
 // contact is not the one that adjacency expects. It is the tests' reference
 // entry point: it runs AuditLoftPairData's zero-shortcut path, so every pair
 // it decides reaches the exact classification.
@@ -973,7 +973,7 @@ func CoplanarIsolatedSharedVertex(data *LoftAuditData, a, b [3]int, i, j, shared
 	return false
 }
 
-// IsolatedSharedVertex is certificate B's own reading (docs/loft-design.md
+// IsolatedSharedVertex is certificate B's own reading (agent-docs/loft-design.md
 // §6): it reports whether the triangle tri meets a plane at sharedIndex's
 // vertex ALONE, given signs — the exact signs of tri's three vertices against
 // that plane, in tri's own index order, as TrianglePlaneSigns returns them.

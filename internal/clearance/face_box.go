@@ -11,7 +11,7 @@ import (
 )
 
 // This file builds the boxes the kernel reads a face's or an edge's extent
-// from (docs/clearance-design.md §5). Every box encloses the feature exactly
+// from (agent-docs/clearance-design.md §5). Every box encloses the feature exactly
 // as the cells read it, from the carrier's own floats: each coordinate is
 // computed over exact rationals and rounded outward, and every square root is
 // rounded up. A box is never read off float sums or products of those

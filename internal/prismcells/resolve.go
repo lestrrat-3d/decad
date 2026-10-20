@@ -111,7 +111,7 @@ func ResolveUnion(ctx context.Context, budget *proofbound.WorkBudget, pa, pb mom
 	if len(profiles) == 0 {
 		return momentinput.Profile{}, SceneDelta{}, 0, false, nil // §4.4: the scene holds no bounded cell at all
 	}
-	// docs/general-boolean-design.md §3 A6: every crossing the arrangement
+	// agent-docs/general-boolean-design.md §3 A6: every crossing the arrangement
 	// cut is charged the input displacement it amplifies; a crossing too
 	// close to tangent for that charge sends the pair to the mesh path.
 	if ok, err := sceneDelta.ChargeCrossings(budget, tags, profiles, deltaA, deltaB, reexpress.Delta); err != nil || !ok {
@@ -177,7 +177,7 @@ func ResolveCrossing(ctx context.Context, budget *proofbound.WorkBudget, pa, pb 
 // move (A6, SceneDelta.ChargeCrossings) — stopping short of Merge's
 // assembly tail, which requires the selected cells to chain into one closed
 // loop and so cannot answer a multi-region selection at all
-// (docs/prism-boolean-design.md §4.4). ResolveCrossing above is this
+// (agent-docs/prism-boolean-design.md §4.4). ResolveCrossing above is this
 // task's own caller; §4.5's overlap-area reading
 // (prismcells.OverlapVolume) is the second, sharing this exact
 // selection so it never re-derives §4.2's classification.
@@ -214,7 +214,7 @@ func ResolveCrossingCells(ctx context.Context, budget *proofbound.WorkBudget, pa
 	if err != nil {
 		return nil, SceneDelta{}, false, err
 	}
-	// docs/general-boolean-design.md §3 A6, Union's own charge: every cut the
+	// agent-docs/general-boolean-design.md §3 A6, Union's own charge: every cut the
 	// operands' incoming displacement can move is charged, and a crossing too
 	// close to tangent for that charge sends the pair to the mesh path.
 	if ok, err := sceneDelta.ChargeCrossings(budget, tags, profiles, deltaA, deltaB, reexpress.Delta); err != nil || !ok {

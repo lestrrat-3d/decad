@@ -155,13 +155,13 @@ func WallCandidateWork(elementCount, vertexCount int, wedge bool) (uint64, bool)
 }
 
 // WorkPollInterval is how many candidate operations may pass between context
-// polls (docs/interference-design.md §7.2).
+// polls (agent-docs/interference-design.md §7.2).
 const WorkPollInterval = 256
 
 // MaxFacetPairTestsPerCall is the fixed ceiling on exact triangle-pair
-// predicate invocations for one call (docs/tessellation-design.md §3): the
+// predicate invocations for one call (agent-docs/tessellation-design.md §3): the
 // tessellation boolean pre-pass and the loft crossing audit
-// (docs/loft-design.md §6) both charge every pair test against this one
+// (agent-docs/loft-design.md §6) both charge every pair test against this one
 // constant rather than minting a second ceiling for the identical quantity.
 // The crossing audit compares it, before testing any pair, against the pairs
 // its sweep scans and the candidate pairs it will test: the pairs whose
@@ -170,7 +170,7 @@ const MaxFacetPairTestsPerCall = 8_000_000
 
 // WorkBudget shares one bounded cancellation counter across every nested loop
 // of one read-only or pre-commit audit phase. Leaf exact predicates stay
-// context-free (docs/interference-design.md §7.2); their callers step this
+// context-free (agent-docs/interference-design.md §7.2); their callers step this
 // counter, which polls the context at least once per WorkPollInterval candidate
 // operations. Phase boundaries call err instead, which polls unconditionally.
 //

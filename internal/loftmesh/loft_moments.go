@@ -26,7 +26,7 @@ type WallArea struct{ Lo, Hi float64 }
 // float area carries an error larger than the held sum's own summation slop by
 // roughly one over the triangle's aspect ratio — and a bound read off that
 // held sum would not enclose it. The wall of a short loft over long recorded
-// LineSegs is exactly that shape (docs/loft-design.md Table B splits every
+// LineSegs is exactly that shape (agent-docs/loft-design.md Table B splits every
 // wall quad along a diagonal), so this is the ordinary case, not an edge one.
 func WallTriangleArea(u, v proof.Xpt) (float64, float64) {
 	w := proof.Xcross(u, v)
@@ -38,7 +38,7 @@ func WallTriangleArea(u, v proof.Xpt) (float64, float64) {
 // LoftChordedAllow bundles the exact volume and first-moment corrections,
 // the unsigned twist measure retained for tessellation's occupied-volume
 // proof, the per-cell wall and skirt volume legs, and the wall's two-leg area
-// residual (docs/loft-design.md §5.2/§8, docs/loft-gear-bounds-design.md §2).
+// residual (agent-docs/loft-design.md §5.2/§8, agent-docs/loft-gear-bounds-design.md §2).
 // Every field of the zero value is 0, the correct standing for a LineSeg-only
 // loft that never calls ComputeLoftChordedAllow at all.
 type LoftChordedAllow struct {
@@ -47,7 +47,7 @@ type LoftChordedAllow struct {
 	// its own departure, and the tests compare it with the build-wide
 	// matchedDelta × WallAreaUpper form.
 	WallAreaUpper float64
-	// WallLeg is docs/loft-gear-bounds-design.md §2's per-cell wall leg:
+	// WallLeg is agent-docs/loft-gear-bounds-design.md §2's per-cell wall leg:
 	// Σ proofbound.ProductUpper(cellMatched_k, cellWallUpper_k) over the charged
 	// cells, each charged at its own matched departure rather than the
 	// build-wide maximum. It bounds the measure the charged cells sweep as
@@ -75,23 +75,23 @@ type LoftChordedAllow struct {
 	// twistAreaAllow is that SAME held-to-bilinear step read as a BOUND
 	// rather than as a correction: proofbound.CellTwistAreaAllow summed over the same
 	// chorded cells the loop below walks
-	// (docs/tessellation-reach-design.md §4). area() never reads it, because
+	// (agent-docs/tessellation-reach-design.md §4). area() never reads it, because
 	// areaCorrection has already MOVED Area.Value onto the bilinear patches
 	// and charging the gap again there would double-count it. The
 	// tessellation does read it: the mesh holds the UNCORRECTED held
 	// triangles, so the step areaCorrection performs is, for that triangle
 	// set, an outstanding area gap and the mesh's own areaSlack must carry it
-	// (docs/tessellation-design.md §2's loftPayload row). It stays exactly 0
+	// (agent-docs/tessellation-design.md §2's loftPayload row). It stays exactly 0
 	// on a build with no chorded cell, the zero value's own standing.
 	TwistAreaAllow float64
 	// CapAreaExcess is the per-cell cap tube over both caps
-	// (docs/loft-gear-bounds-design.md §4): how far each cap's held chord
+	// (agent-docs/loft-gear-bounds-design.md §4): how far each cap's held chord
 	// polygon can differ in AREA from the region its recorded boundary
 	// denotes, Area()'s own cap term.
 	CapAreaExcess float64
 }
 
-// ChordCellDeltaUpper is docs/loft-design.md §5.2's matchedDelta row: it
+// ChordCellDeltaUpper is agent-docs/loft-design.md §5.2's matchedDelta row: it
 // composes a chord's own departure from the curve it chords (the certified
 // sagitta, that table's sectionDelta row, read per cell or build-wide) with the
 // displacement of the two held stations that chord actually joins (that table's

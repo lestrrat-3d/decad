@@ -12,7 +12,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// This file is the candidate enumeration of docs/clearance-design.md §3 and
+// This file is the candidate enumeration of agent-docs/clearance-design.md §3 and
 // the face-pair table of §4: six stationarity tiers over unordered boundary
 // pairs, candidates computed on the unbounded carriers and admitted only when
 // both feet lie within their faces' trims. Three of the five surfaces are

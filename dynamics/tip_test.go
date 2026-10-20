@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The dynamics fixtures of docs/multibody-dynamics-design.md §13 PR 13 and
+// The dynamics fixtures of agent-docs/multibody-dynamics-design.md §13 PR 13 and
 // PR 14a: an 8 mm source cube stands on one edge on a fixed floor, turned
 // 30° about Y, with its center of mass beyond the edge, so gravity tips it
 // over. Every step kicks it, solves the edge's impact, carries the touch on a

@@ -158,7 +158,7 @@ func TestSegmentAreaAndLengths(t *testing.T) {
 
 // shiftedDisplacement is the largest distance, over a dense (λ, s) grid of
 // one wall cell, between the point of the two triangles on the cell's TRUE
-// corners and the true helicoid point docs/helix-design.md §5.4's shifted
+// corners and the true helicoid point agent-docs/helix-design.md §5.4's shifted
 // correspondence assigns it: S(λ, θ(s) + ε) with
 // ε = c·min(s(1−λ), λ(1−s))·2Δρ·sin h/ρ(λ). The cell spans θ ∈ [θ0, θ0 + 2h]
 // with the diagonal from (0, 0) to (1, 1), the split coil_build.go emits.

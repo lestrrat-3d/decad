@@ -9,7 +9,7 @@ import (
 )
 
 // Heights holds the height integrals of the circular height map
-// t(h) = r − √(r² − h²) over h ∈ [0, r] (docs/loop-fillet-design.md §5.2):
+// t(h) = r − √(r² − h²) over h ∈ [0, r] (agent-docs/loop-fillet-design.md §5.2):
 // J_k = ∫ t(h)^k dh and H_k = ∫ h·t(h)^k dh.
 type Heights struct {
 	J1, J2, J3, H1, H2 Interval

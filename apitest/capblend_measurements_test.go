@@ -15,7 +15,7 @@ import (
 )
 
 // This file is the area-bound regression suite for patchAreaOf's Cone arm
-// (docs/modify-reach-design.md §8.4): before this fix, that arm bounded its
+// (agent-docs/modify-reach-design.md §8.4): before this fix, that arm bounded its
 // own closed form with conservativeValueError's unconditional |held|+envelope
 // fallback — the documented last resort for a reading no certified bracket
 // admits — even though a bracket exists for every factor of the frustum-
@@ -324,7 +324,7 @@ func TestCapBlendCircularRimVerifyArea(t *testing.T) {
 }
 
 // This file is the A8 regression suite for the cap-loop chamfer's CENTROID
-// (docs/modify-reach-design.md §8.4's closed-form first moments): before this
+// (agent-docs/modify-reach-design.md §8.4's closed-form first moments): before this
 // fix, capblend.Build never computed a first moment at all — it
 // published an area-weighted average of each face's own first-loop-start
 // VERTEX, bounded only by the body's own bounding box. On the ask's own
@@ -436,7 +436,7 @@ func TestCapBlendHoleLoopCentroid(t *testing.T) {
 // TestCapBlendStartCapVolumeMatchesEndCap: chamfering the START cap must give
 // the same Z-symmetric result as chamfering the END cap (measured from the
 // opposite end), catching the -matSign half of capBandMoment's own sign pair
-// — the half no single-cap fixture can see (docs/modify-reach-design.md
+// — the half no single-cap fixture can see (agent-docs/modify-reach-design.md
 // §8.4's "Signs").
 func TestCapBlendStartCapCentroidMirrorsEndCap(t *testing.T) {
 	t.Parallel()
@@ -532,7 +532,7 @@ func TestCapBlendReflexCornerCentroidBoundIsTight(t *testing.T) {
 }
 
 // This file is the PLACEMENT half of a band patch's surface-departure bound
-// (docs/modify-reach-design.md §8.3). The other half — a non-tangential miter
+// (agent-docs/modify-reach-design.md §8.3). The other half — a non-tangential miter
 // corner, which leaves the two directrices sweeping different windows — is
 // covered in capblend_survey_test.go. This one covers the half that has nothing
 // to do with the windows at all: every world coordinate the build emits is a
@@ -928,7 +928,7 @@ func TestCapBlendPlacedTangentBandDepartureGrowsWithPlacement(t *testing.T) {
 }
 
 // This file is the STRAIGHT-SLANT RULED PATCH defect's own test suite
-// (docs/modify-reach-design.md §8.3): a circular cap-loop-chamfer wall that
+// (agent-docs/modify-reach-design.md §8.3): a circular cap-loop-chamfer wall that
 // meets a neighbour at a non-tangential miter corner has a CAP-level
 // directrix (the offset arc, trimmed at the mitered corner feet) whose
 // angular window differs from its SIDE-level directrix (the wall's own
@@ -1138,7 +1138,7 @@ func circularSectorBodyAt(t *testing.T, cx, cy, r, phi float64, ext decad.Extent
 }
 
 // TestCapBlendErosionFamilyVolumeBoundEncloses is defect-1's own value check
-// (docs/modify-reach-design.md §8.3): the published volume judged against the
+// (agent-docs/modify-reach-design.md §8.3): the published volume judged against the
 // erosion-family integral A(0)*(H-d) + integral[0,d] of A(t) dt, an
 // INDEPENDENT reference derived from the section alone (never from the
 // evaluator's own construction) for shapes whose circular wall meets a
@@ -1149,7 +1149,7 @@ func circularSectorBodyAt(t *testing.T, cx, cy, r, phi float64, ext decad.Extent
 // against the side one — internal/capband/flux.go's chordLocusResidualAllow judges
 // exactly this residual). Every residual is the gap between the BUILT
 // (straight-ruled-patch) solid and the exact miter-locus solid the erosion
-// family denotes (docs/modify-reach-design.md §8.3's own scope note,
+// family denotes (agent-docs/modify-reach-design.md §8.3's own scope note,
 // internal/capblend/build.go); the published Bound must enclose it.
 func TestCapBlendErosionFamilyVolumeBoundEncloses(t *testing.T) {
 	t.Parallel()
@@ -1253,7 +1253,7 @@ func TestCapBlendChordLocusBoundIgnoresPlacement(t *testing.T) {
 
 // TestCapBlendSectorCentroidBoundEnclosesChordLocus judges the published
 // centroid of a chamfered circular sector against the erosion-family
-// reference (docs/modify-reach-design.md §8.4's first-moment paragraph). The
+// reference (agent-docs/modify-reach-design.md §8.4's first-moment paragraph). The
 // sector (R=10, full angle 3.0) is extruded 200 mm symmetrically about the
 // sketch plane, with its apex placed so the chamfered body's centroid sits
 // near the origin in plane, and its end cap is chamfered by 1% of the
@@ -1385,7 +1385,7 @@ func roundedRectHoleErosionVolume(plateL, side, rho, h, d float64) float64 {
 }
 
 // TestCapBlendTangentJunctionVolumeUnaffected is the fix's own negative
-// space: docs/modify-reach-design.md §8.3 states the defect is affected
+// space: agent-docs/modify-reach-design.md §8.3 states the defect is affected
 // exactly when a circular wall meets a neighbour at a NON-tangential miter
 // corner, and unaffected at a tangent junction — the cap-level and side-level
 // directrices coincide there in the real numbers, so a fix that narrowed or

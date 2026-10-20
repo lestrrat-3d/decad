@@ -12,7 +12,7 @@ import (
 // (internal/denotation) — an identity comparison alone, never a coordinate, a
 // residual or a bound magnitude. A shared level proves the chain's true
 // vertices lie on one plane by shared construction
-// (docs/surface-design.md §5.2), so nothing here reads a position or a
+// (agent-docs/surface-design.md §5.2), so nothing here reads a position or a
 // bound to decide admission; the returned token and bound are read back off
 // the chain's own vertices only to state what the new face's own plane and
 // AxialDelta must publish, never to decide whether this arm admits. ok is

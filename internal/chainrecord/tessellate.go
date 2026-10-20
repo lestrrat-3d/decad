@@ -13,9 +13,9 @@ import (
 	"github.com/lestrrat-3d/decad/internal/topobuild"
 )
 
-// This file is docs/surface-design.md §13.4's chain-fed tessellation
+// This file is agent-docs/surface-design.md §13.4's chain-fed tessellation
 // increment: a chain-fed prism ribbon's own mesh, and
-// docs/tessellation-design.md §1.2's manifold-with-boundary audit, which this
+// agent-docs/tessellation-design.md §1.2's manifold-with-boundary audit, which this
 // sheet runs in the closed-mesh audit's place. A chain-fed feature mints no
 // cap at all — §13's own decision, "no face to close anything" — so there is
 // nothing this restatement drops the way internal/loftmesh.RestateLoft's
@@ -131,6 +131,6 @@ func Tessellate(ctx context.Context, body *topo.Body, pp Payload,
 	// A sheet encloses no region, so there is no occupied volume to prove:
 	// VolSymDiff and SymDiffOK stay at their zero value, the identical
 	// omission the prism mesher's sheet branch states
-	// (docs/surface-design.md §10).
+	// (agent-docs/surface-design.md §10).
 	return mesh, nil
 }

@@ -17,7 +17,7 @@ import (
 const falsifyTol = 1e-9
 
 // falsifyRange is the seam's one check, and it can only reject
-// (docs/sketch-seam-design.md §1). TExact's checkable meaning is that
+// (agent-docs/sketch-seam-design.md §1). TExact's checkable meaning is that
 // evaluating the source entity at the certified range reproduces the
 // fragment's Polyline endpoints; a large residual therefore disproves the
 // flag — the fragment is rejected and the discrepancy is a sketch bug to

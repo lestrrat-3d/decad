@@ -47,7 +47,7 @@ func windowedRim(centre r3.Vec, r float64) *clearance.CEdge {
 	}
 }
 
-// TestWindowedCircleEdge pins the edge tier's twin of docs/clearance-design.md
+// TestWindowedCircleEdge pins the edge tier's twin of agent-docs/clearance-design.md
 // §4's windowed nested cell: a circular edge against a sphere or cylinder face
 // whose coaxiality the oracle cannot decide. A bore's rim of radius 5.5 sits
 // 1e-14 off a pin's axis outside a pin of radius 5; a pin's rim of radius 5

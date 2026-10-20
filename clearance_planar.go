@@ -13,11 +13,11 @@ import (
 )
 
 // This file is the exact planar arm of Verify's pair partition
-// (docs/interference-design.md §3.2, docs/clearance-design.md §7): a pair the
+// (agent-docs/interference-design.md §3.2, agent-docs/clearance-design.md §7): a pair the
 // analytic clearance kernel leaves undecided — because an operand has no
 // carrier model there (a mitred sweep, a faceted Boolean result), or because
 // its enumeration could not settle the pair — is handed to the exact planar
-// relation of docs/multibody-dynamics-design.md §9, over the same admitted
+// relation of agent-docs/multibody-dynamics-design.md §9, over the same admitted
 // snapshots Document.ContactPair reads (planarSolidAtPose,
 // contact_faceted_pair.go). Every predicate there is an exact sign over
 // dyadic coordinates, so a verdict it returns is a certificate, never a
@@ -32,7 +32,7 @@ import (
 // With δ the summed displacement of the two held boundaries, every true
 // boundary point lies within δ of the held pair's, and a point off the held
 // boundary by more than its body's displacement keeps its side of it
-// (docs/payload-verification-design.md §2.3's 1-Lipschitz rule). So:
+// (agent-docs/payload-verification-design.md §2.3's 1-Lipschitz rule). So:
 //
 //   - a held gap g, enclosed in [gLo, gHi], proves the true solids disjoint
 //     only where gLo − δ > 0, and the true gap then lies in

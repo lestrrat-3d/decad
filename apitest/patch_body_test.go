@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/surface-design.md's public-surface tests for PatchEdges
+// This file is agent-docs/surface-design.md's public-surface tests for PatchEdges
 // (§5.2), amended by this PR from a one-chain rule to "one or more chains,
 // each proven independently": a planar fill of one or more closed chains of
 // a body's own free edges.
@@ -39,7 +39,7 @@ func circleSheet(t *testing.T, doc *decad.Document, r float64) *decad.Body {
 
 // surfaceTube builds a 100x60 mm rectangle surface-extruded 10 mm Along, with
 // WithSurfaceResult: a sheet with no caps and 8 free edges, two congruent
-// four-edge rims — docs/surface-design.md's own motivating case for the
+// four-edge rims — agent-docs/surface-design.md's own motivating case for the
 // one-or-more-chains amendment, since no edge predicate tells the two rims
 // apart.
 func surfaceTube(t *testing.T, doc *decad.Document) *decad.Body {
@@ -214,7 +214,7 @@ func TestBodyPatchCapsBothRimsOfATubeInOneCall(t *testing.T) {
 }
 
 // TestBodyPatchClosesASheetsLastFreeEdgeStaysASheet is
-// docs/surface-design.md's own decision: a patch that closes a sheet's last
+// agent-docs/surface-design.md's own decision: a patch that closes a sheet's last
 // free edge leaves a CLOSED sheet reporting BodySheet with IsSolid() false —
 // Stitch alone makes the material claim.
 func TestBodyPatchClosesASheetsLastFreeEdgeStaysASheet(t *testing.T) {
@@ -288,7 +288,7 @@ func TestBodyPatchReproducesThroughPlacement(t *testing.T) {
 }
 
 // TestBodyPatchAdmitsASingleBoundedRimAlongsideAnExactOne is
-// docs/surface-design.md §15's T30: the LEVEL certificate's single-bounded-
+// agent-docs/surface-design.md §15's T30: the LEVEL certificate's single-bounded-
 // end shape. This fixture reuses T14's own shape (a 5-inch extrude's rim
 // carries the unit conversion's rounding), selecting BOTH rims of the tube
 // in one call: the bottom rim's vertices are recorded directly and carry a
@@ -304,7 +304,7 @@ func TestBodyPatchAdmitsASingleBoundedRimAlongsideAnExactOne(t *testing.T) {
 	tube, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Inches(5), Dir: decad.Along}, decad.WithSurfaceResult())
 	require.NoError(t, err)
 
-	// No predicate tells the two congruent rims apart (docs/surface-design.md
+	// No predicate tells the two congruent rims apart (agent-docs/surface-design.md
 	// §5.2), so the premise is proved over the whole free-edge set: one rim's
 	// vertices read Exact (recorded directly), the other's read Approximate
 	// (computed through the inch conversion).
@@ -332,9 +332,9 @@ func TestBodyPatchAdmitsASingleBoundedRimAlongsideAnExactOne(t *testing.T) {
 }
 
 // TestBodyPatchCapsBothBoundedRimsOfASymmetricSurfaceExtrudedWall is
-// docs/surface-design.md §15's T26 — the LEVEL certificate's own flagship:
+// agent-docs/surface-design.md §15's T26 — the LEVEL certificate's own flagship:
 // BOTH rims of a Symmetric extrude are computed through the same inch
-// conversion (docs/evaluator-design.md's own resolveLinearExtent), so both
+// conversion (agent-docs/evaluator-design.md's own resolveLinearExtent), so both
 // carry a nonzero bound and neither reaches gate 3's exact arm at all. Each
 // rim still shares its own one level token across its four vertices and
 // edges, so both chains close through the second (LEVEL) arm in one call.
@@ -441,11 +441,11 @@ func TestBodyPatchCapsBothBoundedRimsOnARotatedSketchPlane(t *testing.T) {
 	require.True(t, sawCap, "at least one new cap face was found")
 }
 
-// TestBodyPatchTableR is docs/surface-design.md's T13-shaped test for
+// TestBodyPatchTableR is agent-docs/surface-design.md's T13-shaped test for
 // PatchEdges: every reachable Table R row through the public seam, with
 // errors.Is and the document left unchanged. R6 (non-planar/bounded chain)
 // and R18 (orientation disagreement) reach no shape decad's public seam can
-// author directly (docs/surface-design.md §2.3: every builder leaves one
+// author directly (agent-docs/surface-design.md §2.3: every builder leaves one
 // shell consistently oriented) and are pinned in patch_body_internal_test.go
 // instead, alongside R19's own no-payload receiver.
 func TestBodyPatchTableR(t *testing.T) {
@@ -579,7 +579,7 @@ func TestBodyPatchCopyKeepsBandNormalBound(t *testing.T) {
 // bottom rim. The inch depth's conversion into millimetres rounds, so the
 // cap's level carries a proven displacement (topo.Face.AxialDelta), and a stop
 // read off the patched body's copy of the cap must carry it exactly as the
-// same stop read off the unstitched cap does (docs/surface-design.md's T81
+// same stop read off the unstitched cap does (agent-docs/surface-design.md's T81
 // for Unstitch).
 //
 // Shown to fail: copying the cap without its axialDelta (patchchain.copyFacesUnder)
@@ -628,7 +628,7 @@ func TestBodyPatchCopyKeepsCapAxialDelta(t *testing.T) {
 // TestBodyPatchFillsARevolvedDiskRim revolves a chain perpendicular to its
 // axis into a disk sheet whose one free edge is the revolve's latitude
 // circle, and patches it. The revolve proves that circle's own curve bound
-// (docs/surface-design.md §5.2), so the patch face's area is bounded and
+// (agent-docs/surface-design.md §5.2), so the patch face's area is bounded and
 // encloses the disk's 9π.
 func TestBodyPatchFillsARevolvedDiskRim(t *testing.T) {
 	t.Parallel()

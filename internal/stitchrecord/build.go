@@ -23,7 +23,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is Stitch's evaluator (docs/surface-design.md §6). plan.go owns
+// This file is Stitch's evaluator (agent-docs/surface-design.md §6). plan.go owns
 // Table J's admission (which free edges join); this file owns the fresh
 // topology rebuild over the weld plan, the derived orientation, the closure
 // and manifold leg, Table C's outcome, and the measurements a stitched body
@@ -33,7 +33,7 @@ import (
 // initial build and by every later Transform/Copy
 // re-evaluation: the payload records the operand faces and the weld plan,
 // never a built topology, and Placed() replays this same function under a
-// composed transform (docs/surface-design.md's "recorded weld" decision).
+// composed transform (agent-docs/surface-design.md's "recorded weld" decision).
 // Table J's admission is never re-run on a placed (rounded) coordinate; the
 // crossing audit IS re-run, because a rigid motion can make two placed
 // triangles meet that the unplaced ones did not.
@@ -49,7 +49,7 @@ func Build(ctx context.Context, env topo.Env, srcFaces []*topo.Face, plan *Plan,
 	}
 
 	// The single held vertex table, placed under the composed motion ONCE —
-	// never per operand (docs/surface-design.md's "recorded weld" decision).
+	// never per operand (agent-docs/surface-design.md's "recorded weld" decision).
 	maxInputAbs := 0.0
 	for _, p := range plan.Table.Vertices {
 		maxInputAbs = max(maxInputAbs, proofbound.VecMaxAbs(p))
@@ -68,7 +68,7 @@ func Build(ctx context.Context, env topo.Env, srcFaces []*topo.Face, plan *Plan,
 	}
 	// massDelta is what the mass accumulator charges instead of delta alone:
 	// a welded vertex the shared-denotation certificate admitted (J5's
-	// bounded-pair lift, docs/surface-design.md §6.2's amendment) is no
+	// bounded-pair lift, agent-docs/surface-design.md §6.2's amendment) is no
 	// longer zero-bound, so the triangle set the tetrahedron sum runs over is
 	// no longer the body's own true vertices — it is only within
 	// maxClassBound of them. proofbound.SweptVolumeAllow already bounds exactly this
@@ -112,7 +112,7 @@ func Build(ctx context.Context, env topo.Env, srcFaces []*topo.Face, plan *Plan,
 	}
 	// The vertex-link audit runs unconditionally, on every build arm below —
 	// all-planar or curved, open or closed alike — never the curved-closed
-	// arm alone (docs/surface-design.md §6.4's vertex-link paragraph): a
+	// arm alone (agent-docs/surface-design.md §6.4's vertex-link paragraph): a
 	// pinch at a shared-vertex-table entry with no connecting edge is
 	// reachable through the all-planar path exactly as it is through a
 	// curved one, and CheckClosure's own directed-edge parity leg does
@@ -152,7 +152,7 @@ func Build(ctx context.Context, env topo.Env, srcFaces []*topo.Face, plan *Plan,
 	// until this evaluator can decide the case on its own terms.
 	if !open {
 		if components := topobuild.SplitConnectedFaces(newFaces); len(components) > 1 && !FaceLumpsProvenSeparate(components) {
-			return nil, fmt.Errorf(`%w: Stitch refuses a multi-lump assembly whose lumps are not proven mutually separate (docs/surface-design.md Table R row R20)`, decaderr.ErrUnsupported)
+			return nil, fmt.Errorf(`%w: Stitch refuses a multi-lump assembly whose lumps are not proven mutually separate (agent-docs/surface-design.md Table R row R20)`, decaderr.ErrUnsupported)
 		}
 	}
 
@@ -180,7 +180,7 @@ func Build(ctx context.Context, env topo.Env, srcFaces []*topo.Face, plan *Plan,
 		switch {
 		case auditErr != nil && !open:
 			// Closed plus a refusing audit surfaces R9/R10 unchanged — the
-			// decision at docs/surface-design.md §6.3/§6.4.
+			// decision at agent-docs/surface-design.md §6.3/§6.4.
 			return nil, auditErr
 		case auditErr == nil:
 			auditClean = true
@@ -219,7 +219,7 @@ func Build(ctx context.Context, env topo.Env, srcFaces []*topo.Face, plan *Plan,
 			// (open means solid stays false, so body.Volume/Centroid never
 			// read it): Area needs no massDelta charge of its own — each
 			// face's own areaBound already covers a bounded weld
-			// (docs/surface-design.md §6.4's amendment) — so this stays the
+			// (agent-docs/surface-design.md §6.4's amendment) — so this stays the
 			// placement's own delta, unwidened.
 			acc = loftmesh.NewMassAccumulator(verts[0], delta, 0, 0)
 			for _, t := range tris {
@@ -236,7 +236,7 @@ func Build(ctx context.Context, env topo.Env, srcFaces []*topo.Face, plan *Plan,
 		fixWeldedEdgeConvexity(welded)
 
 	case !open:
-		// Table C's curved-closure arm (docs/surface-design.md §6.4): every
+		// Table C's curved-closure arm (agent-docs/surface-design.md §6.4): every
 		// edge is welded and at least one face is not tetrahedron-eligible,
 		// so the volume needs flux.go's per-surface flux integral
 		// rather than the exact triangle sum. Rule S gates admission on the
@@ -244,14 +244,14 @@ func Build(ctx context.Context, env topo.Env, srcFaces []*topo.Face, plan *Plan,
 		// vertex is already proven above, unconditionally, since the reused
 		// crossing audit consumes triangles this set has none of.
 		if !RuleSAdmits(ctx, srcFaces) {
-			return nil, fmt.Errorf(`%w: Stitch closes a boundary this evaluator cannot prove simple by construction (docs/surface-design.md Table R row R8)`, decaderr.ErrUnsupported)
+			return nil, fmt.Errorf(`%w: Stitch closes a boundary this evaluator cannot prove simple by construction (agent-docs/surface-design.md Table R row R8)`, decaderr.ErrUnsupported)
 		}
 		// The flux arms integrate each face's tag, so a revolve face is
 		// admitted only where its tag is exactly the surface its record
 		// denotes. srcFaces are the unplaced operand faces; this stitch's own
 		// placement rounding is delta, charged below.
 		if !fluxTagsDenoted(srcFaces) {
-			return nil, fmt.Errorf(`%w: Stitch's flux path integrates each face's tag, and a revolve face's tag here is not proven to be the surface its record denotes (docs/surface-design.md Table R row R8)`, decaderr.ErrUnsupported)
+			return nil, fmt.Errorf(`%w: Stitch's flux path integrates each face's tag, and a revolve face's tag here is not proven to be the surface its record denotes (agent-docs/surface-design.md Table R row R8)`, decaderr.ErrUnsupported)
 		}
 		// verts[0] anchors the flux sum exactly as loftmesh.NewMassAccumulator
 		// anchors the tetrahedron sum — but a fully boundary-less analytic
@@ -275,7 +275,7 @@ func Build(ctx context.Context, env topo.Env, srcFaces []*topo.Face, plan *Plan,
 
 	// open && !allTetra: an open curved (or mixed) sheet earns no volume
 	// attempt at all — Table C's first row, a residual free edge, and
-	// never an error (docs/surface-design.md §6.3).
+	// never an error (agent-docs/surface-design.md §6.3).
 	default:
 	}
 
@@ -290,7 +290,7 @@ func Build(ctx context.Context, env topo.Env, srcFaces []*topo.Face, plan *Plan,
 	body.Lumps = topobuild.SheetLumps(env.Alloc, newFaces)
 
 	// Area is the sum of the constituent faces' own area/areaBound through
-	// proofbound.BoundedAdd (correction 2, docs/surface-design.md §6.4/§8): never a
+	// proofbound.BoundedAdd (correction 2, agent-docs/surface-design.md §6.4/§8): never a
 	// triangle-sum reading, since a general planar triangle's area is a
 	// square root of a rational and so is never Exact the way a face's own
 	// analytically integrated area already is.
@@ -339,7 +339,7 @@ func Build(ctx context.Context, env topo.Env, srcFaces []*topo.Face, plan *Plan,
 	}
 
 	// internal/stitchtess/stitch.go's exact restatement is scoped to the all-planar
-	// case, CLOSED or OPEN (docs/surface-design.md §14 Table D row 5): the
+	// case, CLOSED or OPEN (agent-docs/surface-design.md §14 Table D row 5): the
 	// curved-closure arm's own faces have no triangle set to restate, but an
 	// OPEN all-planar sheet's own triangle set is exactly the one this arm
 	// already built (and audited via its own perturbed area sum) above, so
@@ -369,7 +369,7 @@ func Build(ctx context.Context, env topo.Env, srcFaces []*topo.Face, plan *Plan,
 // shares ONE new edge across both faces, and every other edge gets its own,
 // shared across whichever coedges of the SAME operand already pointed at
 // it. Reusing an operand face outright would corrupt the retired operand
-// through its body back-pointer and populated edge list (docs/surface-design.md
+// through its body back-pointer and populated edge list (agent-docs/surface-design.md
 // §6, correction 1's construction note), so nothing here aliases an operand's
 // own Face, Loop, CoEdge, Edge or Vertex.
 //
@@ -574,7 +574,7 @@ func topology(faces []*topo.Face) stitchweld.Topology[*topo.Face, *topo.Edge] {
 func DeriveOrientation(faces []*topo.Face) error {
 	flip, ok := topology(faces).Orientation()
 	if !ok {
-		return fmt.Errorf(`%w: Stitch's welded set cannot be consistently oriented (docs/surface-design.md Table R row R7)`, decaderr.ErrDegenerate)
+		return fmt.Errorf(`%w: Stitch's welded set cannot be consistently oriented (agent-docs/surface-design.md Table R row R7)`, decaderr.ErrDegenerate)
 	}
 	for f, fl := range flip {
 		if fl {
@@ -584,7 +584,7 @@ func DeriveOrientation(faces []*topo.Face) error {
 	return nil
 }
 
-// CheckClosure is docs/surface-design.md §6.4's closure and manifold
+// CheckClosure is agent-docs/surface-design.md §6.4's closure and manifold
 // leg, the explicit directed-edge parity leg the reused loftmesh.LoftCrossingAudit
 // alone does not run (correction 1): every edge must be adjacent to one or
 // two faces, and a two-face edge must be traversed by exactly one forward
@@ -597,11 +597,11 @@ func DeriveOrientation(faces []*topo.Face) error {
 func CheckClosure(faces []*topo.Face) error {
 	switch topology(faces).CheckClosure() {
 	case stitchweld.ClosureOneFaceUses:
-		return fmt.Errorf(`%w: a stitched edge's coedge-use count disagrees with its one adjacent face (docs/surface-design.md Table R row R7)`, decaderr.ErrDegenerate)
+		return fmt.Errorf(`%w: a stitched edge's coedge-use count disagrees with its one adjacent face (agent-docs/surface-design.md Table R row R7)`, decaderr.ErrDegenerate)
 	case stitchweld.ClosureTwoFaceParity:
-		return fmt.Errorf(`%w: a stitched edge is not traversed by exactly one forward and one backward coedge (docs/surface-design.md Table R row R7)`, decaderr.ErrDegenerate)
+		return fmt.Errorf(`%w: a stitched edge is not traversed by exactly one forward and one backward coedge (agent-docs/surface-design.md Table R row R7)`, decaderr.ErrDegenerate)
 	case stitchweld.ClosureTooManyFaces:
-		return fmt.Errorf(`%w: a stitched edge is adjacent to more than two faces (docs/surface-design.md Table R row R7)`, decaderr.ErrDegenerate)
+		return fmt.Errorf(`%w: a stitched edge is adjacent to more than two faces (agent-docs/surface-design.md Table R row R7)`, decaderr.ErrDegenerate)
 	}
 	return nil
 }
@@ -621,7 +621,7 @@ func hasFreeEdge(faces []*topo.Face) bool {
 
 // FaceLumpsProvenSeparate compares connected-face components using each
 // distinct vertex's held position and proven bound. A touching or nested pair
-// cannot prove separation (docs/surface-design.md Table C/R20).
+// cannot prove separation (agent-docs/surface-design.md Table C/R20).
 func FaceLumpsProvenSeparate(components [][]*topo.Face) bool {
 	return stitchweld.LumpsProvenSeparate(components,
 		func(f *topo.Face, visit func(*topo.Vertex)) {
@@ -642,7 +642,7 @@ func FaceLumpsProvenSeparate(components [][]*topo.Face) bool {
 
 // TriangulateFaces triangulates each planar face in its own plane
 // frame through triangulate.go's existing cap triangulator and maps every
-// resulting index back through the shared vertex table (docs/surface-design.md
+// resulting index back through the shared vertex table (agent-docs/surface-design.md
 // §6.4): ear clipping mints no new point, so no coordinate enters that the
 // body does not already hold, and the plane-local projection may round the
 // CHOICE of triangulation but the crossing audit that follows runs on the
@@ -654,7 +654,7 @@ func FaceLumpsProvenSeparate(components [][]*topo.Face) bool {
 // (internal/stitchtess/stitch.go) reads it back directly rather than reconstructing
 // the mapping afterward — Payload.Faces holds only the retired
 // operand faces, and a stitched body's faces carry no per-body-unique role
-// to recover it from either (docs/tessellation-design.md §4).
+// to recover it from either (agent-docs/tessellation-design.md §4).
 func TriangulateFaces(ctx context.Context, faces []*topo.Face, classOf map[*topo.Vertex]int) ([][3]int, []*topo.Face, error) {
 	var tris [][3]int
 	var triFaces []*topo.Face

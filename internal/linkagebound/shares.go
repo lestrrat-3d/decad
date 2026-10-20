@@ -7,7 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
-// DerivativeBound is B_ij of docs/linkage-check-design.md §5.8 for
+// DerivativeBound is B_ij of agent-docs/linkage-check-design.md §5.8 for
 // the joints at positions m ≤ n of the path, m the shallower: a proven upper
 // bound on |∂²x_c/∂q_i∂q_j| for every corner c of the link at every
 // configuration the drive reaches. The shallower joint turns the deeper
@@ -26,7 +26,7 @@ func DerivativeBound(rho []*big.Rat, m, n int) *big.Rat {
 }
 
 // Remainder is Rem(h) = ½·Σ_{i,j} B_ij·h_i·h_j of
-// docs/linkage-check-design.md §5.8 over the relative path. h holds each
+// agent-docs/linkage-check-design.md §5.8 over the relative path. h holds each
 // joint's travel bound in path order. Taylor's theorem along the straight
 // segment in joint space bounds how
 // far a corner's position departs from its first-order expansion.
@@ -122,7 +122,7 @@ func AttainedDirection(a, p Side, bound *big.Rat) (int, int) {
 }
 
 // AddAxisShares adds one body's shares of a projection bound's defect
-// along sense·e_axis (docs/linkage-check-design.md §5.8, the split axis): at
+// along sense·e_axis (agent-docs/linkage-check-design.md §5.8, the split axis): at
 // the corner attaining the body's extent along that direction, each joint i
 // on its relative path takes |n·v_{i,c}|·h_i + Σ_j B_ij·h_i·h_j, the part of
 // the first-order term and the remainder that halving h_i removes, charged

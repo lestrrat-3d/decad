@@ -225,7 +225,7 @@ func TestSpherePairInteriorOffAxisFrictionReplaysBothSides(t *testing.T) {
 	require.InDelta(t, .125, impact.Base(), cfg.TimeResolution.Base())
 	require.GreaterOrEqual(t, impact.Base(), .125)
 	// Read at the bracket's right sample, the impulse agrees with the exact
-	// 33 within ImpulseResidual (docs/multibody-dynamics-design.md §14).
+	// 33 within ImpulseResidual (agent-docs/multibody-dynamics-design.md §14).
 	require.InDelta(t, 33, report.Events[0].NormalImpulse.Base(), cfg.ImpulseResidual.Base())
 	for _, elapsed := range []units.Value{units.Seconds(.0625), impact, units.Seconds(.1875), duration} {
 		sample, sampleErr := report.Trace.Sample(elapsed)

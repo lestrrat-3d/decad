@@ -14,7 +14,7 @@ import (
 // These tests run closed-form fixtures of the two- and three-body steps
 // through the island solver of a world of four or more bodies, each with
 // extra fixed boxes far away that the broad phase excludes, and assert
-// the closed forms' numbers (docs/multibody-dynamics-design.md §6.2, §6.5):
+// the closed forms' numbers (agent-docs/multibody-dynamics-design.md §6.2, §6.5):
 //   - TestIslandDirectStartRestsAStack: the direct start lets eight sweeps
 //     certify a two-box stack. Removing the direct start (directStart
 //     reporting false) refuses it with the non-penetration gate after eight

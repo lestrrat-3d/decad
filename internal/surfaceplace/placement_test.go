@@ -12,7 +12,7 @@ import (
 )
 
 // TestTransformCurveEllipse3 places and mirrors the quarter ellipse of a
-// 90-degree convex loop corner at r = 2 (docs/loop-fillet-design.md LF4): a
+// 90-degree convex loop corner at r = 2 (agent-docs/loop-fillet-design.md LF4): a
 // semi-major axis 2·sqrt(2) along the bisector and a semi-minor axis 2, swept
 // counter-clockwise about +z. The arc runs from Center + a·Major (angle 0) to
 // Center + b·(Axis × Major) (angle pi/2), so a placed curve is right exactly

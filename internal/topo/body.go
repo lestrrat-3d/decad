@@ -68,7 +68,7 @@ type Body struct {
 	Owner any
 	// Payload is the evaluator's own record of how this body was built —
 	// what Transform re-evaluates under a composed motion
-	// (docs/evaluator-design.md §8). Nil for a body this evaluator did not
+	// (agent-docs/evaluator-design.md §8). Nil for a body this evaluator did not
 	// build.
 	Payload Payload
 }

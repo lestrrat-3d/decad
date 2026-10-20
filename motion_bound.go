@@ -13,9 +13,9 @@ import (
 
 // This file reads a mover's payload-specific record radius. internal/motionbound
 // builds motion frames, box corners, axis radii, swept boxes and interval
-// calculations described in docs/motion-check-design.md §5–§6.
+// calculations described in agent-docs/motion-check-design.md §5–§6.
 
-// moverRecordRadius is R0 of docs/motion-check-design.md §5.1: a proven upper
+// moverRecordRadius is R0 of agent-docs/motion-check-design.md §5.1: a proven upper
 // bound on |p| for every point p of the mover's record before its own
 // placement applies, read off the payload's own envelopes. It is an L1 bound,
 // which dominates the Euclidean one. A prism reads its profile coordinate

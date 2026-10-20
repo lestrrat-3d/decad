@@ -48,7 +48,7 @@ type Spec struct {
 	Frame   MotionFrame
 }
 
-// ResolveMotion validates m (docs/motion-check-design.md §2, §8): the
+// ResolveMotion validates m (agent-docs/motion-check-design.md §2, §8): the
 // variant's own field refusals, From == To, and both endpoint poses building
 // under r3. A nil motion is ErrDegenerate.
 func ResolveMotion(m Motion) (Spec, error) {
@@ -127,7 +127,7 @@ func (s Domain) Label(f *big.Rat) units.Value {
 	return DomainLabel(s.From, s.To, f)
 }
 
-// resolveBetween validates a Between for VerifyMotion (docs/motion-check-design.md
+// resolveBetween validates a Between for VerifyMotion (agent-docs/motion-check-design.md
 // §2, §8): its own field refusals, then From == To, then the screw r3 reads
 // off the relative motion, which must be representable and must not be the
 // zero screw — a relative motion with neither angle nor slide names no path,

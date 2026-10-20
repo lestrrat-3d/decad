@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/prism-boolean-design.md §4.2's crossing sub-case black-box
+// This file is agent-docs/prism-boolean-design.md §4.2's crossing sub-case black-box
 // test suite for Cut and Intersect (internal/prismcells/payload_resolve.go): two coplanar
 // prisms whose 2D outlines genuinely cross, neither nested inside the other.
 // boxBody/discBody (clearance_test.go, prism_boolean_bounds_test.go) and
@@ -19,7 +19,7 @@ import (
 // prism_boolean_crossing_internal_test.go, which needs the internal
 // evaluateBoolean entry point to force the mesh path for comparison.
 
-// TestPrismIntersectCrossingBoxesResolvesAnalytically is docs/prism-boolean-design.md
+// TestPrismIntersectCrossingBoxesResolvesAnalytically is agent-docs/prism-boolean-design.md
 // §14 PR3's own required test: two coplanar boxes offset diagonally so their
 // footprints genuinely cross (neither is nested) build analytically, not
 // through the mesh path, and their overlap is the exact 5x5 square the two

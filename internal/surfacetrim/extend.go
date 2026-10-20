@@ -16,7 +16,7 @@ import (
 )
 
 // ExtendPrism widens, for each of b's edges, the recorded end that edge names
-// until it meets tl (docs/surface-intersection-design.md §3.2), and returns
+// until it meets tl (agent-docs/surface-intersection-design.md §3.2), and returns
 // rcv with a fresh walk set and its SectionDelta set to the largest δ_cut any
 // widening read. rcv is b's own record as AdmitExtendPair returned it; its
 // walk set is copied, never written.

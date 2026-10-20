@@ -17,7 +17,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is Verify's pair partition (docs/interference-design.md §2):
+// This file is Verify's pair partition (agent-docs/interference-design.md §2):
 // the per-pair proof walk. Every pair's proof reads only its two operands
 // and caches each body fills the same way whoever asks first, so a pair's
 // outcome does not depend on which other pairs ran before it or beside it.
@@ -65,8 +65,8 @@ func verifyPairJobs(ctx context.Context, bodies []*BodyReport, cfg verifyConfig)
 	return jobs, nil
 }
 
-// proveVerifyPair runs docs/interference-design.md §2's walk over one pair:
-// a pair holding a sheet operand takes docs/surface-design.md §9.3's
+// proveVerifyPair runs agent-docs/interference-design.md §2's walk over one pair:
+// a pair holding a sheet operand takes agent-docs/surface-design.md §9.3's
 // procedure; a solid pair takes the analytic pair kernel, then containment,
 // equality and read-only intersection measurement. geomCache is nil unless
 // clearances were asked; it and meshes must be safe for concurrent use.
@@ -75,7 +75,7 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 	a, b, boxProven := job.a, job.b, job.boxProven
 
 	// A sheet operand encloses no region, so the interference relation §1
-	// decides is not the question for this pair (docs/surface-design.md
+	// decides is not the question for this pair (agent-docs/surface-design.md
 	// §9.3). A sheet-sheet pair offers no closed boundary to cast against, so
 	// it takes only box separation: separated boxes contribute nothing (the
 	// job list already dropped them), and boxes that meet stay
@@ -238,7 +238,7 @@ func (o *verifyPairOutcome) appendClearance(a, b *Body, res pairkernel.Result, r
 }
 
 // verifyMeshCache meshes each body once per Verify call, at one chord for
-// every pair it takes part in (docs/interference-design.md §5.3). The chord is
+// every pair it takes part in (agent-docs/interference-design.md §5.3). The chord is
 // the tightest one any of the body's candidate pairs would have asked for:
 // the least booloperand.PairChord over the solid pairs whose boxes meet, which
 // are the only pairs that can reach the mesh path. The entries are fixed
@@ -251,7 +251,7 @@ func (o *verifyPairOutcome) appendClearance(a, b *Body, res pairkernel.Result, r
 // it has no entry, and every pair meshes it as the public booleans do, at the
 // pair's own tolerance raised to its held floor, and gates the facets that
 // pair touches at the pair's own tolerance (docs/api-design.md §8 "The chain
-// depth", docs/faceted-vertex-bounds-design.md §5).
+// depth", agent-docs/faceted-vertex-bounds-design.md §5).
 type verifyMeshCache struct {
 	entries map[*Body]*verifyMeshEntry
 }

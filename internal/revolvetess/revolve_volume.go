@@ -7,8 +7,8 @@ import (
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
-// This file adapts docs/tessellation-design.md §13's increment T4
-// (docs/tessellation-reach-design.md §6, R5): the OCCUPIED-VOLUME proof a
+// This file adapts agent-docs/tessellation-design.md §13's increment T4
+// (agent-docs/tessellation-reach-design.md §6, R5): the OCCUPIED-VOLUME proof a
 // revolve mesh must carry before any boolean may consume it. §§8-10 prove the
 // mesh's facets and area; internal/revolveproof bounds the VOLUME difference
 // between that mesh and the body it represents.

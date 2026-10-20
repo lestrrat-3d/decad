@@ -8,7 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
-// This file implements docs/prism-boolean-design.md §4.2's clean sub-case for
+// This file implements agent-docs/prism-boolean-design.md §4.2's clean sub-case for
 // Cut and Intersect: the structural whole-loop match against BuildScene's
 // own tag map, after AdmitPairBudget's G1-G4 admission and work-budget gates.
 // The selected profile needs no assembly or §6 build-time audit: it is one s.Profiles() result

@@ -11,7 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
-// This file is the sharp offset family of docs/draft-design.md §2: every wall
+// This file is the sharp offset family of agent-docs/draft-design.md §2: every wall
 // carrier moves its own amount into the material (the draft's offset t for a
 // drafted wall, zero for a wall a subset draft keeps, §10.2), and every corner
 // is the intersection of its two moved carriers. It differs from BuildLoop's
@@ -23,7 +23,7 @@ import (
 // ErrCircularMiter reports a corner at a circular walk that the held-tangent
 // rule does not classify as a G1 join. The sharp corner of such a pair moves
 // along a conic as t grows, so no line-and-arc record states the family at
-// every t (docs/draft-design.md SD4).
+// every t (agent-docs/draft-design.md SD4).
 var ErrCircularMiter = errors.New("a corner at a circular walk is not a G1 join")
 
 // ErrLoopConsumed reports a loop every walk of which the sharp offset
@@ -32,7 +32,7 @@ var ErrCircularMiter = errors.New("a corner at a circular walk is not a G1 join"
 var ErrLoopConsumed = errors.New("the offset consumes every walk of the loop")
 
 // ErrMixedCircularCorner reports a corner at a circular walk whose two walks
-// move by different amounts (docs/draft-design.md §10.2): the moved carrier
+// move by different amounts (agent-docs/draft-design.md §10.2): the moved carrier
 // and the other one are no longer tangent, so their junction moves along a
 // conic, as a non-G1 circular corner's does. It wraps ErrCircularMiter.
 var ErrMixedCircularCorner = fmt.Errorf(`%w: its two walks move by different amounts`, ErrCircularMiter)
@@ -55,7 +55,7 @@ func UniformAmounts(n int, t float64) []float64 {
 // at a circular walk that is not G1 returns ErrCircularMiter before any
 // intersection is solved. Two zero amounts leave the corner at the recorded
 // corner itself, after the same classification. With unequal amounts
-// (docs/draft-design.md §10.2), a corner at a circular walk returns
+// (agent-docs/draft-design.md §10.2), a corner at a circular walk returns
 // ErrMixedCircularCorner whatever its tangents, and two lines miter even
 // inside the G1 dead zone. Two moved lines that do not meet (a cusp) return
 // ErrNoIntersection.

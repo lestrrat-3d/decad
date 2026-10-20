@@ -444,7 +444,7 @@ func newCone(rng *rand.Rand) setup {
 // arithmetic (planeDotDecompositionRoundAllow, the same mechanism
 // revolveaxis.axisExtreme already uses for the structurally identical scan,
 // closing the gap a real-geometry end-to-end test found — T95,
-// docs/surface-design.md), every one of these 60 draws' computed radial
+// agent-docs/surface-design.md), every one of these 60 draws' computed radial
 // extremes provably straddles zero rather than reading as proven negative:
 // the strict arm is unreachable for a random tilted axis at this scale, and
 // none of the earlier 7 refusals (annularRect draws 4, 7, 8; cone draws 3, 4,
@@ -629,7 +629,7 @@ func checkRevolveBody(t *testing.T, body *decad.Body, su setup, ap axisPlacement
 	// invariant that ACCEPTS a refusal cannot tell "meshed" from "refused every
 	// time", and the systematic refusal this file used to hide was exactly that
 	// silence. A refusal is still checked to be typed — never a cracked mesh
-	// (docs/tessellation-design.md §14) — before the fixture fails.
+	// (agent-docs/tessellation-design.md §14) — before the fixture fails.
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(su.scale/5))
 	if err != nil {
 		require.True(t,

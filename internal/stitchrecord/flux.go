@@ -20,7 +20,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is docs/surface-design.md §6.4's per-surface flux integral: the
+// This file is agent-docs/surface-design.md §6.4's per-surface flux integral: the
 // closed-form volume and first-moment reading that lets Stitch close a
 // boundary holding a curved face, for the Plane, Cylinder, Cone, Sphere and
 // Torus variants. Table R row R8 is a per-face dispatch: a face this
@@ -103,7 +103,7 @@ import (
 //
 // THE FIRST MOMENT. Every reading needs the volume's own first-moment
 // sibling too — Body.Centroid has no ErrUnsupported arm for a solid, so a
-// curved solid's centroid is not optional (docs/surface-design.md §8) — via
+// curved solid's centroid is not optional (agent-docs/surface-design.md §8) — via
 // the identical divergence-theorem shape with F_i = ((x_i−a_i)²/2)·ê_i,
 // div F_i = x_i−a_i: ∫_Ω(x_i−a_i)dV = Σ_F ∫_F ((p_i−a_i)²/2)·n_i dA. The
 // Plane arm uses the standard disk/annulus second-moment identity when
@@ -220,7 +220,7 @@ import (
 // RULE S — the construction-proof gate. Before this file's dispatch ever
 // runs, Build requires every operand face to descend from ONE
 // source body whose payload passes topo.ProvesSimple —
-// RuleSAdmits below. The reused crossing audit (docs/loft-design.md
+// RuleSAdmits below. The reused crossing audit (agent-docs/loft-design.md
 // §6) consumes triangles, and a curved face has none to chord into it
 // without admitting a self-intersection question on an approximation
 // (verify.go's own reject-only rule for exactly this). So a curved closed
@@ -229,7 +229,7 @@ import (
 // surface-result prism or loft's own — and Rule S is what makes sure this
 // file never publishes Volume/Centroid without it. A stitch of curved sheets
 // from two different features, or a stitch downstream of PatchEdges (whose
-// own payload carries no such proof — docs/surface-design.md §5.2), stays
+// own payload carries no such proof — agent-docs/surface-design.md §5.2), stays
 // refused on this gate alone.
 
 // RuleSAdmits is Rule S: every operand face must descend from exactly
@@ -248,7 +248,7 @@ func RuleSAdmits(ctx context.Context, srcFaces []*topo.Face) bool {
 
 // AllTetrahedronEligible reports whether every face qualifies for
 // loftmesh.MassAccumulator's exact-rational tetrahedron sum: a Plane face
-// (docs/surface-design.md's "planar and straight-edged", never "planar")
+// (agent-docs/surface-design.md's "planar and straight-edged", never "planar")
 // bounded entirely by Line3 edges, with a zero normalBound. Checking only
 // the surface tag (Kind() == KindPlane) is not enough on its own:
 // TriangulateFaces builds its polygon from coedge START vertices
@@ -306,9 +306,9 @@ func FaceIsTetrahedronEligible(f *topo.Face) bool {
 // a curved profile that touches its own revolve axis at more than one
 // isolated point could open, or two otherwise-unconnected stitched bodies
 // sharing exactly one welded vertex-table entry with no edge joining them
-// (docs/surface-design.md's own record of both shapes). This is a
+// (agent-docs/surface-design.md's own record of both shapes). This is a
 // reject-only gate, called unconditionally on every build arm
-// (docs/surface-design.md §6.4): it can only narrow what Build
+// (agent-docs/surface-design.md §6.4): it can only narrow what Build
 // admits, never bless anything CheckClosure did not already allow
 // through.
 //
@@ -317,7 +317,7 @@ func FaceIsTetrahedronEligible(f *topo.Face) bool {
 // here rather than reworded in place, so the composite sweep's own wording
 // and sentinel stay exactly as that caller states them: a pinch this
 // evaluator proves is disproven input for Stitch, never unsupported reach
-// (docs/surface-design.md Table R row R7), so this wrapper re-reports it as
+// (agent-docs/surface-design.md Table R row R7), so this wrapper re-reports it as
 // [decaderr.ErrDegenerate] with Stitch's own wording. A bare context cancellation —
 // compositesweep.AuditVertexLinks' own budget-polling return, never wrapped in
 // [decaderr.ErrUnsupported] — passes through unchanged.
@@ -336,7 +336,7 @@ func AuditVertexLinks(ctx context.Context, faces []*topo.Face) error {
 	}
 	if err := compositesweep.AuditVertexLinks(budget, uses); err != nil {
 		if errors.Is(err, decaderr.ErrUnsupported) {
-			return fmt.Errorf(`%w: Stitch's welded set has a vertex whose meeting faces are not one connected fan or path (docs/surface-design.md Table R row R7): %s`, decaderr.ErrDegenerate, err)
+			return fmt.Errorf(`%w: Stitch's welded set has a vertex whose meeting faces are not one connected fan or path (agent-docs/surface-design.md Table R row R7): %s`, decaderr.ErrDegenerate, err)
 		}
 		return err
 	}
@@ -347,7 +347,7 @@ func AuditVertexLinks(ctx context.Context, faces []*topo.Face) error {
 // returning its flux_F (this face's own contribution to 3·Volume, before
 // the sum is divided by three) and its three first-moment contributions
 // mx, my, mz. Every admitting arm requires a zero normalBound
-// (docs/surface-design.md's own rule: a nonzero normalBound means the
+// (agent-docs/surface-design.md's own rule: a nonzero normalBound means the
 // published tag only approximates the ruled surface a cap-blend band patch
 // actually built, and integrating a closed form over the tag would be
 // unsound for such a face). The sealed switch's default is Table R row R8,
@@ -355,7 +355,7 @@ func AuditVertexLinks(ctx context.Context, faces []*topo.Face) error {
 func FaceFluxAndMoment(f *topo.Face, anchor r3.Vec) (flux, mx, my, mz proofbound.BoundedScalar, err error) {
 	if f.NormalBound != 0 {
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
-			`%w: Stitch closes a boundary holding a face whose published surface only approximates the geometry actually built (docs/surface-design.md Table R row R8)`,
+			`%w: Stitch closes a boundary holding a face whose published surface only approximates the geometry actually built (agent-docs/surface-design.md Table R row R8)`,
 			decaderr.ErrUnsupported,
 		)
 	}
@@ -377,7 +377,7 @@ func FaceFluxAndMoment(f *topo.Face, anchor r3.Vec) (flux, mx, my, mz proofbound
 		return stitchflux.TorusFaceFluxAndMoment(fluxFaceInput(f), input, anchor, sign)
 	default:
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
-			`%w: Stitch closes a boundary holding a %s face this evaluator has no closed-form flux integral for (docs/surface-design.md Table R row R8)`,
+			`%w: Stitch closes a boundary holding a %s face this evaluator has no closed-form flux integral for (agent-docs/surface-design.md Table R row R8)`,
 			decaderr.ErrUnsupported, reportvocab.SurfaceTypeName(s),
 		)
 	}
@@ -419,7 +419,7 @@ func ConeFaceFluxAndMoment(f *topo.Face, cone surfacegeom.Cone, anchor r3.Vec, s
 	apexBound, ok := stitchflux.ConeApexDeparture(f.Denoted, cone)
 	if !ok {
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
-			`%w: Stitch's flux path cannot state how far this cone's apex sits from the apex its record denotes (docs/surface-design.md Table R row R8)`,
+			`%w: Stitch's flux path cannot state how far this cone's apex sits from the apex its record denotes (agent-docs/surface-design.md Table R row R8)`,
 			decaderr.ErrUnsupported,
 		)
 	}
@@ -434,7 +434,7 @@ func ConeFaceFluxAndMoment(f *topo.Face, cone surfacegeom.Cone, anchor r3.Vec, s
 // charges the placement allowance (proofbound.SweptVolumeAllow/proofbound.SweptMomentAllow) on
 // the same terms capband.BandVolume does for a placed curved solid: a
 // placed curved stitched solid is Approximate on both readings, per
-// docs/surface-design.md §6.4's placed-body paragraph.
+// agent-docs/surface-design.md §6.4's placed-body paragraph.
 func CurvedMass(ctx context.Context, faces []*topo.Face, anchor r3.Vec, delta float64) (measurement.Measurement, measurement.VecMeasurement, error) {
 	if err := ctx.Err(); err != nil {
 		return measurement.Measurement{}, measurement.VecMeasurement{}, err
@@ -515,7 +515,7 @@ func sumFlux(faces []*topo.Face, anchor r3.Vec) (flux, momX, momY, momZ proofbou
 	return flux, momX, momY, momZ, nil
 }
 
-// fluxTagsDenoted is the gate docs/surface-design.md §6.4 puts in front
+// fluxTagsDenoted is the gate agent-docs/surface-design.md §6.4 puts in front
 // of the flux arms for a revolve face. Every arm integrates the face's TAG —
 // a Cylinder's rims and area, a Plane's origin and normal, a Cone's apex and
 // axis, a Sphere's or Torus's centre — while a revolve face's tag is only a

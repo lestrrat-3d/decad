@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/surface-design.md's T184-T186:
-// docs/surface-intersection-design.md's PR5, Split over the revolve
+// This file is agent-docs/surface-design.md's T184-T186:
+// agent-docs/surface-intersection-design.md's PR5, Split over the revolve
 // family. Every fixture spins about the sketch plane's own v axis
 // (trimRevolveAxis), which is world y, so the meridian's u is the radius ρ
 // and its v the axial level.
@@ -349,7 +349,7 @@ func splitRevolveOrigins(b *decad.Body) map[decad.FeatureRef]struct{} {
 // TestSurfaceSplitRevolveRolesAndSelectors is T185: each piece is a fresh
 // feature whose faces a caller re-selects by geometric predicate or by the
 // piece's own cap roles, never by a role the target carried
-// (docs/surface-intersection-design.md §9), and the piece order is
+// (agent-docs/surface-intersection-design.md §9), and the piece order is
 // reproduced across a replay.
 func TestSurfaceSplitRevolveRolesAndSelectors(t *testing.T) {
 	t.Parallel()

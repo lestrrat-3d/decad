@@ -15,7 +15,7 @@ type Oracle struct{ Tol float64 }
 // This file is the clearance kernel's degeneracy oracle — the one place every
 // cell asks whether a configuration is degenerate. Every answer is a
 // DegState, whose doc comment states the discipline that keeps a
-// certificate honest (docs/clearance-design.md §4/§5).
+// certificate honest (agent-docs/clearance-design.md §4/§5).
 
 // ParallelExact decides a ∥ b from the vectors taken exactly (ra, rb) with their
 // float forms (fa, fb) supplying the disproof threshold: an exactly zero cross

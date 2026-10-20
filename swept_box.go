@@ -17,10 +17,10 @@ import (
 // SweptBox encloses every point a body occupies at any time of one pair path:
 // the body's Bounds() at its current placement, inflated by its Bound and
 // mapped exactly through the path's From, then expanded on every axis by the
-// path's whole-duration travel bound (docs/contact-sweep-design.md §4.1). A
+// path's whole-duration travel bound (agent-docs/contact-sweep-design.md §4.1). A
 // path that only translates takes the exact hull of its start and end boxes,
 // which holds every intermediate translate and lies inside that expansion.
-// Its extremes are exact dyadic rationals; docs/multibody-dynamics-design.md
+// Its extremes are exact dyadic rationals; agent-docs/multibody-dynamics-design.md
 // §4.2 owns it.
 //
 // The zero value encloses nothing proven: it is never StrictlyDisjoint from

@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestVerifyJointBoxLoopProjection pins docs/linkage-check-design.md §5.8's
+// TestVerifyJointBoxLoopProjection pins agent-docs/linkage-check-design.md §5.8's
 // expansion over a loop's dependent joint in the cell form (§16.3). Scene 7's
 // crank-rocker carries a block x ∈ [96, 104], y ∈ [60, 66], z ∈ [40, 48] on
 // its follower, in a layer of its own, under a ceiling x ∈ [50, 150],

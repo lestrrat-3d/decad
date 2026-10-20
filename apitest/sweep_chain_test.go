@@ -25,7 +25,7 @@ func straightSweepPath(tb testing.TB, h float64) *decad.Path {
 	return path
 }
 
-// TestSweepChainOneLineRibbonMatchesExtrudeChain is docs/surface-design.md's
+// TestSweepChainOneLineRibbonMatchesExtrudeChain is agent-docs/surface-design.md's
 // T190: the same 40 mm line chain T130 extrudes, swept instead along a
 // one-span LineTo path 10 mm up the sketch plane's positive normal. Every
 // structural reading is T130's, and the Area comparison against the
@@ -84,7 +84,7 @@ func TestSweepChainOneLineRibbonMatchesExtrudeChain(t *testing.T) {
 	decadtest.MeasuresBounds(t, placed, r3.NewVec(100, 0, 0), r3.NewVec(140, 0, 10), decadtest.Exactly())
 }
 
-// TestSweepChainRibbonReadsValid is docs/surface-design.md §9.1's fourth
+// TestSweepChainRibbonReadsValid is agent-docs/surface-design.md §9.1's fourth
 // validity leg, restated for a chain-fed sweep: the one-span straight
 // reduction builds through the identical chainrecord.Build a plain
 // chain Extrude does, so it earns the same construction proof
@@ -107,7 +107,7 @@ func TestSweepChainRibbonReadsValid(t *testing.T) {
 	require.Empty(t, br.Validity.Diagnostics)
 }
 
-// TestSweepChainMultiSegmentWallSet is docs/surface-design.md's T191: T131's
+// TestSweepChainMultiSegmentWallSet is agent-docs/surface-design.md's T191: T131's
 // open line/arc/line walk swept along the same one-span path mints one wall
 // per recorded segment, the two junction sweep edges are shared rather than
 // free, and the body's own area is the three walls' own areas folded through
@@ -202,9 +202,9 @@ func tiltedLineChainSketch(tb testing.TB) (*sketch.Sketch, *sketch.Chain) {
 }
 
 // TestSweepChainTiltedPathAreaBoundEnclosesAnalyticValue is
-// docs/surface-design.md's T192: the one term a chain sweep carries that the
+// agent-docs/surface-design.md's T192: the one term a chain sweep carries that the
 // same walk's chain Extrude reading does not is the path's own composed height
-// bound (docs/sweep-design.md §15.2). On an axis-aligned frame every term of
+// bound (agent-docs/sweep-design.md §15.2). On an axis-aligned frame every term of
 // that bound is exactly zero, which is why T190 asserts an Exact reading
 // instead; here the path runs 7*sqrt(2) mm up a tilted normal, so the bound is
 // genuinely positive and the published area must enclose the analytic value
@@ -260,10 +260,10 @@ func TestSweepChainTiltedPathAreaBoundEnclosesAnalyticValue(t *testing.T) {
 	require.Equal(t, 2, sweepEdges, "the walk's two free ends each carry one sweep edge")
 }
 
-// TestSweepChainRefusesAnOffNormalPath is docs/surface-design.md's T193: a
+// TestSweepChainRefusesAnOffNormalPath is agent-docs/surface-design.md's T193: a
 // path that does not start in the sketch plane, and one whose initial tangent
 // does not follow that plane's positive normal, are each ErrDegenerate
-// (docs/sweep-design.md Table SC row SC3). Each message is read, not only its
+// (agent-docs/sweep-design.md Table SC row SC3). Each message is read, not only its
 // sentinel, so the two refusals are known to fire for their own reasons.
 func TestSweepChainRefusesAnOffNormalPath(t *testing.T) {
 	t.Parallel()
@@ -285,7 +285,7 @@ func TestSweepChainRefusesAnOffNormalPath(t *testing.T) {
 	require.Empty(t, doc.Bodies())
 }
 
-// TestSweepChainRefusesCompositeOutsideCardinalClass is docs/surface-design.md's
+// TestSweepChainRefusesCompositeOutsideCardinalClass is agent-docs/surface-design.md's
 // T194: a source extending beyond the half-circle radius refuses at SC7.
 func TestSweepChainRefusesCompositeOutsideCardinalClass(t *testing.T) {
 	t.Parallel()
@@ -305,10 +305,10 @@ func TestSweepChainRefusesCompositeOutsideCardinalClass(t *testing.T) {
 	require.Empty(t, doc.Bodies())
 }
 
-// TestSweepChainSeamGatesPrecedeThePathGates is docs/surface-design.md's T195:
+// TestSweepChainSeamGatesPrecedeThePathGates is agent-docs/surface-design.md's T195:
 // a stale chain and an invalid one are reported as such even when the path
 // handed beside them would refuse at SC3, because the seam gate runs first
-// (docs/sweep-design.md Table SC). A seam refusal names a repair the caller
+// (agent-docs/sweep-design.md Table SC). A seam refusal names a repair the caller
 // makes in the sketch, and a path refusal reported first would hide it.
 func TestSweepChainSeamGatesPrecedeThePathGates(t *testing.T) {
 	t.Parallel()

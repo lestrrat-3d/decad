@@ -12,7 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
-// This file decides whether docs/tessellation-reach-design.md §7's slice-wise
+// This file decides whether agent-docs/tessellation-reach-design.md §7's slice-wise
 // occupied-volume proof covers a cap-blend payload. The proof holds where every
 // band section of the ideal polyhedron B1 is the chord polygon of the true
 // offset section at the same azimuths: a whole turn, a line-line miter, and a
@@ -25,7 +25,7 @@ import (
 // (internal/booloperand/volume_proof.go) before any mesh is built, and
 // tessellateCapBlend when it decides whether to publish the proof.
 
-// OccupiedVolumeAdmission decides whether docs/tessellation-reach-design.md §7's
+// OccupiedVolumeAdmission decides whether agent-docs/tessellation-reach-design.md §7's
 // slice-wise occupied-volume proof covers every band of these loops. refusal is the
 // staging ErrUnsupported naming the body (noun: "cap-loop chamfer", or
 // "tapered extrude" for a draft body's wall band), the loop and the corner it
@@ -109,7 +109,7 @@ func OccupiedVolumeAdmission(
 				// here too when the recorded floats do not make it exactly
 				// tangent: the true corner then turns by a sliver, its foot
 				// locus is a conic, and no term here bounds the volume between
-				// that locus and the ruled cells (docs/draft-design.md §9.1).
+				// that locus and the ruled cells (agent-docs/draft-design.md §9.1).
 				return admissionRefusal(noun, li, cornerAt(prev, cur), `a corner this evaluator cannot prove a line-line miter or an exactly tangent join`,
 					`; the two recorded segments' exact tangents there are not parallel or their recorded ends differ, and a join recorded exactly tangent, its arc's centre on the line's normal through the shared end, is admitted`), nil
 			}

@@ -413,7 +413,7 @@ func TestNewSTEPFileClassBCutAnalytic(t *testing.T) {
 }
 
 // TestNewSTEPFileFilletedClassBCutAnalytic writes S1 after a Fillet of its
-// edge along z at the origin (docs/brep-modify-design.md §5, Table DB's DB10)
+// edge along z at the origin (agent-docs/brep-modify-design.md §5, Table DB's DB10)
 // through the analytic arm: 8 faces, 6 planes, and two cylinders, the hole's
 // whole wall and the fillet's partial wall of two arcs and two lines, each
 // EDGE_CURVE used once in each sense. Shown to fail with the brep route's
@@ -600,7 +600,7 @@ func TestNewSTEPFileRefusals(t *testing.T) {
 	require.True(t, errors.Is(err, context.Canceled))
 }
 
-// TestNewSTEPFileShellSideOpeningAnalytic writes docs/shell-opening-design.md
+// TestNewSTEPFileShellSideOpeningAnalytic writes agent-docs/shell-opening-design.md
 // §9's U-channel — the 40×20×10 box shelled 2 mm inward with its x = 0 face
 // removed, both caps kept — through the analytic arm: 11 planar faces, the
 // x = 0 plane one face whose inner bound is the opening, and every
@@ -634,7 +634,7 @@ func TestNewSTEPFileShellSideOpeningAnalytic(t *testing.T) {
 }
 
 // TestNewSTEPFileShellObliqueOpeningAnalytic writes
-// docs/shell-opening-design.md §9's oblique removed face — the triangle
+// agent-docs/shell-opening-design.md §9's oblique removed face — the triangle
 // (0,0) (12,0) (0,9) extruded 10 and shelled 3 mm inward with its hypotenuse
 // removed — through the analytic arm (Table DO's DO10): 12 planar faces, the
 // hypotenuse plane's four coplanar pieces among them, and every EDGE_CURVE
@@ -792,7 +792,7 @@ func TestNewSTEPFileRootedCrossingBossAnalytic(t *testing.T) {
 // A Boolean result that keeps its operands' surfaces and curves still writes
 // one planar face per triangle. Its rims run between held vertices, so the
 // circle seams the analytic writer needs to align do not line up exactly, and
-// supportsAnalyticSTEP declines the body (docs/faceted-source-retention-design.md
+// supportsAnalyticSTEP declines the body (agent-docs/faceted-source-retention-design.md
 // §10.3).
 func TestNewSTEPFileMeshBooleanStaysFaceted(t *testing.T) {
 	t.Parallel()

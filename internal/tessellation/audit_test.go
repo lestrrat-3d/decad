@@ -108,7 +108,7 @@ func TestSheetBoundaryComparesChainCountsPerFace(t *testing.T) {
 }
 
 // TestSheetBoundaryAdmitsAClosedSetWithNoFreeBoundary is
-// docs/tessellation-design.md §1.2's closed-sheet sentence: with no free
+// agent-docs/tessellation-design.md §1.2's closed-sheet sentence: with no free
 // edge, every directed edge has its reverse and the audit passes.
 func TestSheetBoundaryAdmitsAClosedSetWithNoFreeBoundary(t *testing.T) {
 	t.Parallel()

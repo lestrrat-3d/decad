@@ -14,11 +14,11 @@ import (
 )
 
 // This file holds the undercut and minimum-radius surveys over a brepPayload's
-// faces (docs/general-boolean-design.md §4.5). internal/breprecord's
+// faces (agent-docs/general-boolean-design.md §4.5). internal/breprecord's
 // measure.go measures the body (§4.3).
 
 // brepUndercuts surveys a brep body's faces against the pull
-// (docs/general-boolean-design.md §4.5's undercut row, DX7's reading): a
+// (agent-docs/general-boolean-design.md §4.5's undercut row, DX7's reading): a
 // planar face carries one normal, its frame's N turned outward, and a swept
 // face sweeps its wall walk's normal range exactly as a prism's side does.
 // Both readings go through the exact three-valued decisions analyticundercut.Prism
@@ -28,7 +28,7 @@ import (
 // through the placement's linear part, which a reflection maps correctly. A
 // fillet band's pipe patches are read by brepFilletUndercuts (Table DF's DF7).
 // The reading is a normal-direction membership, unaffected by a face's
-// displacements, as a prism's is (docs/prism-boolean-design.md §12).
+// displacements, as a prism's is (agent-docs/prism-boolean-design.md §12).
 func brepUndercuts(budget *proofbound.WorkBudget, b *Body, bp brepPayload, pull r3.Vec) undercutOutcome {
 	if bp.BossShell != nil || bp.PocketShell != nil {
 		return undercutOutcome{reason: surveyPayloadStaged}
@@ -149,7 +149,7 @@ func brepMinRadius(b *Body, bp brepPayload) (radiusOutcome, bool) {
 }
 
 // The undercut readers below fold a root body's own face handles into an
-// undercut result (docs/verification-design.md §6). Analytic prism, cup, and
+// undercut result (agent-docs/verification-design.md §6). Analytic prism, cup, and
 // cap-blend surveys read the exact three-valued wall and cap decisions in
 // internal/survey2d/survey_undercut.go.
 //

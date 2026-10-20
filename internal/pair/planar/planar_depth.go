@@ -9,7 +9,7 @@ import "github.com/lestrrat-3d/decad/internal/proof"
 // the ball of radius margin around the vertex lies in the other solid, so its
 // moved image still holds the moved vertex in that solid's interior, and every
 // neighbourhood of a boundary vertex meets its own solid's interior. The
-// rotating sweep (docs/multibody-dynamics-design.md §10.1) uses it to carry a
+// rotating sweep (agent-docs/multibody-dynamics-design.md §10.1) uses it to carry a
 // float-pose overlap to the ideal path. margin must be nonnegative; poll is
 // charged once per exact predicate group.
 func PlanarDeepVertex(a, b *PlanarSolid, margin proof.Dyadic, poll func() error) (bool, error) {

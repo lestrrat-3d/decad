@@ -21,7 +21,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is the revolve junction rewrite of docs/modify-reach-design.md §7
+// This file is the revolve junction rewrite of agent-docs/modify-reach-design.md §7
 // (Table RX row RX2): Fillet and Chamfer on a revolveplan.Payload
 // receiver. A revolve's meridian has the same corner-to-edge mapping a prism's
 // section has — an off-axis corner between two consecutive walks sweeps a
@@ -49,7 +49,7 @@ type revolveJunction struct {
 
 // BlendRevolveJunctions is the shared body of Fillet and Chamfer on a
 // revolveplan.Payload receiver, from the receiver/target stage on
-// (docs/modify-reach-design.md §4 stages 4 to 6, §7). Stage 1 — the live
+// (agent-docs/modify-reach-design.md §4 stages 4 to 6, §7). Stage 1 — the live
 // receiver, the magnitude and the selector — has already run in the caller.
 func BlendRevolveJunctions(ctx context.Context, env topo.Env, sel string, edges []*topo.Edge, rp revolveplan.Payload, op BlendOp) (*topo.Body, error) {
 	// The section-displacement guard, read as a modify refusal: the rewrite
@@ -124,7 +124,7 @@ func BlendRevolveJunctions(ctx context.Context, env topo.Env, sel string, edges 
 	// The rewritten meridian is a NEW record: no axis resolution has seen it,
 	// so its own side gate, axis-contact audit and snap allowances are proven
 	// here, and the build below continues the same free-form work counter
-	// (docs/spline-design.md §5.2).
+	// (agent-docs/spline-design.md §5.2).
 	work := freeform.NewFreeformWork()
 	ax, err := rp.BlendAxis(ctx, profile, work)
 	if err != nil {

@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestMapSegment pins docs/brep-modify-design.md §5.4's plane-local map
+// TestMapSegment pins agent-docs/brep-modify-design.md §5.4's plane-local map
 // between two faces across one reference axis: the XY frame (identity
 // embed) and a frame across the same axis whose u runs along reference y and
 // whose v runs along reference x, a swap that reflects the plane. A line

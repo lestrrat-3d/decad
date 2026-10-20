@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file pins docs/clearance-design.md §5's closed-form readings: every
+// This file pins agent-docs/clearance-design.md §5's closed-form readings: every
 // cell reads its distance as a proven enclosure of the truth, never as a
 // single float its own products, square roots and differences rounded. Each
 // fixture is built from exact integer (or float-exact) coordinates and

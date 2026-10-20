@@ -108,7 +108,7 @@ func RatL1Upper(values ...*big.Rat) float64 { return ratL1Upper(values...) }
 
 // walkOf resolves one recorded segment into its walk geometry.
 //
-// work is the RECORD's free-form work counter (docs/spline-design.md §5.2), and
+// work is the RECORD's free-form work counter (agent-docs/spline-design.md §5.2), and
 // walkOf NEVER mints one: the R7 ceiling bounds one record's total free-form
 // work, so a counter minted per call would hand every segment — and every later
 // phase of the same operation — a fresh full ceiling. Callers that already hold
@@ -210,7 +210,7 @@ func walkOf(seg CurveSegment, work *freeform.FreeformWork) (survey2d.SegmentWalk
 }
 
 // freeformWalk resolves a Tier A free-form segment into its walk geometry
-// (docs/spline-design.md Table F). Every field it fills is a proof:
+// (agent-docs/spline-design.md Table F). Every field it fills is a proof:
 //
 //   - the endpoints are the converted chain's own first and last control
 //     points, which a Bézier interpolates exactly, each under the bound of the
@@ -329,7 +329,7 @@ func pinArcWalkEnds(w *survey2d.SegmentWalk, seg ArcSeg) {
 // recorded End only where the two recorded radii are equal — an equality
 // nothing in this package certifies. A consumer that publishes a station's
 // displacement from the DENOTED point owes that radial residual on top of this
-// zero; docs/loft-design.md §5.2 names the term and
+// zero; agent-docs/loft-design.md §5.2 names the term and
 // loftmesh.ArcNaturalEndRadialUpper charges it for the loft.
 func arcWalkEnd(seg ArcSeg, t, heldU, heldV float64) (float64, float64, proofbound.WalkEndBound) {
 	switch t {

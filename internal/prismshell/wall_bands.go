@@ -16,7 +16,7 @@ import (
 // band between C's hole i (reversed, an outer) and O's hole i. Inward O is the
 // receiver's section P and C its erosion; outward O is the dilation and C is
 // P. The §5 audit has proven C's loops simple and nested in O's, so the bands
-// are regular and pairwise disjoint (docs/modify-reach-design.md §9.2).
+// are regular and pairwise disjoint (agent-docs/modify-reach-design.md §9.2).
 func ShellWallBands(ctx context.Context, outer, cavity momentinput.Profile) ([]momentinput.Profile, error) {
 	if len(outer.Holes) != len(cavity.Holes) {
 		return nil, fmt.Errorf(`%w: the shell's outer and cavity regions have different loop counts`, decaderr.ErrDegenerate)

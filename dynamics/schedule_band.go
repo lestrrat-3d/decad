@@ -9,7 +9,7 @@ import (
 )
 
 // This file is the scheduled step's reading of a band
-// (docs/multibody-dynamics-design.md §10.3 and §10.4): a band track, whose
+// (agent-docs/multibody-dynamics-design.md §10.3 and §10.4): a band track, whose
 // depth grows while a pair rests or rolls at constant ω, and the ContactBand
 // relation of a body whose held boundary carries a positive displacement.
 // Both are touching relations whose penetration bound must lie within

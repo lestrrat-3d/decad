@@ -86,7 +86,7 @@ func (subs DriverSegments) Sides() [2]bool {
 }
 
 // DriverSubsegments cuts a loop driver's schedule into sub-segments
-// (docs/linkage-check-design.md §15.8): each segment once, or twice at the
+// (agent-docs/linkage-check-design.md §15.8): each segment once, or twice at the
 // fraction where its driver value crosses 0. That fraction is exact when both
 // of the segment's waypoints are whole turns, or both radians or lengths.
 // Between waypoints stated in mixed terms it depends on π, and the segment is

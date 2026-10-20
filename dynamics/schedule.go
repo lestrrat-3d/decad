@@ -14,7 +14,7 @@ import (
 )
 
 // This file is the event schedule of the step
-// (docs/multibody-dynamics-design.md §5): one full-step kick, then slices of
+// (agent-docs/multibody-dynamics-design.md §5): one full-step kick, then slices of
 // drift from event to event. Each slice sweeps the broad phase's candidate
 // pairs from its start to the end of the step; the earliest event cuts it,
 // every body advances to that event on its certified path, the event's
@@ -60,7 +60,7 @@ type scheduleRun struct {
 }
 
 // stepScheduled is the step of every world
-// (docs/multibody-dynamics-design.md §5).
+// (agent-docs/multibody-dynamics-design.md §5).
 func (w *World) stepScheduled(ctx context.Context, from State, input StepInput,
 	dt units.Value) (*StepReport, error) {
 	if err := validateQuantityVec(input.Gravity, units.Acceleration); err != nil {

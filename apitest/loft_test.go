@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/loft-design.md PR 1b: the public-surface tests over the
+// This file is agent-docs/loft-design.md PR 1b: the public-surface tests over the
 // loft evaluator (S1-S8, Table P, Table B, §8's mass kernel). Every test here
 // needs a live sketch, the public entry point, or the recorded step.
 

@@ -161,7 +161,7 @@ func TestRecordProfileCertifiedFragments(t *testing.T) {
 func TestRecordProfileRejectsSampledCuts(t *testing.T) {
 	t.Parallel()
 	// A spline crossing a circle: free-form intersection has no closed form
-	// upstream (docs/spline-design.md §9 ask 3), so sketch reports the cut
+	// upstream (agent-docs/spline-design.md §9 ask 3), so sketch reports the cut
 	// sampled (TExact false) and decad refuses to record the fragment — never
 	// approximately, never as the whole curve.
 	w := sketch.NewWorld()
@@ -499,7 +499,7 @@ func TestRecordProfileRejectsUnclosedLoop(t *testing.T) {
 	// there is nothing for an Exact, zero-bound area to be exact ABOUT. sketch
 	// snapped the gap away and reports one valid region; decad records each
 	// entity's own points verbatim, which is where the gap is visible, and
-	// refuses (docs/sketch-seam-design.md §3).
+	// refuses (agent-docs/sketch-seam-design.md §3).
 	for _, tc := range []struct {
 		name   string
 		du, dv float64

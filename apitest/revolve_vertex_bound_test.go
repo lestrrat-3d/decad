@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file pins docs/evaluator-design.md §6's swept-vertex bound: every
+// This file pins agent-docs/evaluator-design.md §6's swept-vertex bound: every
 // junction, seam and cap vertex a revolve publishes sits within its own bound
 // of the point the record denotes — the RECORDED plane point, rotated about the
 // axis the record names by the angle it states. The axis coordinates (z, ρ) a

@@ -9,7 +9,7 @@ import (
 )
 
 // TrimProfileWalks resolves profile's Outer-then-Holes walks for a trimmed
-// ribbon's own Bounds reading (docs/surface-intersection-design.md §7),
+// ribbon's own Bounds reading (agent-docs/surface-intersection-design.md §7),
 // charging TrimCutChargeUV into exactly the endpoint bound whose OWN
 // recorded parameter is not a natural bound (0 or 1, per field — never per
 // segment, since a segment cut on only one side keeps its natural end exact)
@@ -18,7 +18,7 @@ import (
 // charge, whether or not the segment's OTHER end was cut, which is what lets
 // an extreme won by an untouched vertex stay exactly as tight as the
 // untrimmed sheet's own (T170) while an extreme won by a genuine cut point
-// carries the bound its own construction owes (docs/surface-design.md's
+// carries the bound its own construction owes (agent-docs/surface-design.md's
 // end-cut fixture). The decision reads only the two recorded floats — never a
 // coordinate comparison, never whether a value "looks like" it moved.
 //

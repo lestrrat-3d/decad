@@ -7,7 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proof"
 )
 
-// PlanarColumnClear is the column test of docs/multibody-dynamics-design.md
+// PlanarColumnClear is the column test of agent-docs/multibody-dynamics-design.md
 // §10.6. The plane is n·(x − q) = 0 with n a nonzero normal of s, and the box
 // [lo, hi] is an axis-aligned 3D box. P projects along n onto the plane's
 // frame by dropping the axis of n's largest component (§9.4's frame), which

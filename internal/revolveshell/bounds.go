@@ -19,7 +19,7 @@ func AxisCurve(ax revolveaxis.Frame) offset2d.Curve {
 }
 
 // ChainSectionDelta is offset2d.OffsetSectionDelta for the open offset chain of a
-// revolve shell's wall (docs/modify-reach-design.md §9.3.1): a proven upper
+// revolve shell's wall (agent-docs/modify-reach-design.md §9.3.1): a proven upper
 // bound on how far any boundary point of the recorded wall sits from the wall
 // the shell denotes, three times offset2d.ChainReach's largest reach on
 // offset2d.OffsetSectionDelta's own argument. The denoted axis is the receiver's axis

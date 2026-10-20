@@ -11,7 +11,7 @@ import (
 	"github.com/lestrrat-go/option/v3"
 )
 
-// JointBoxOption configures VerifyJointBox (docs/linkage-check-design.md
+// JointBoxOption configures VerifyJointBox (agent-docs/linkage-check-design.md
 // §14.1). Every MotionOption is one, so WithMotionTolerance, WithResolution
 // and WithMinClearance pass to VerifyJointBox unchanged; WithCellBudget is the
 // box's own.
@@ -39,7 +39,7 @@ type identResolution struct{}
 type identMinClearance struct{}
 
 // WithMotionTolerance is verification §2's relative tolerance under a name of
-// its own (docs/motion-check-design.md §3): it governs every bounded reading
+// its own (agent-docs/motion-check-design.md §3): it governs every bounded reading
 // a MotionReport carries, with the pair diameter as the reference.
 // Dimensionless; the default is units.Scalar(1e-3). A wrong Kind is
 // ErrUnitKind, a negative value decaderr.ErrNegativeMagnitude, a non-finite one
@@ -49,7 +49,7 @@ func WithMotionTolerance(rel units.Value) MotionOption {
 }
 
 // WithResolution states the finest parameter step the check refines to, for
-// the verdict and for the readings alike (docs/motion-check-design.md §3,
+// the verdict and for the readings alike (agent-docs/motion-check-design.md §3,
 // §6): an interval at or below it that the certificate still cannot settle
 // reads IntervalUndecided, and a path reading or margin the floor leaves
 // coarse is published coarse. It is a magnitude of the motion's own Kind —
@@ -69,7 +69,7 @@ func WithResolution(step units.Value) MotionOption {
 }
 
 // WithMinClearance states the spec that the moving set stays at least minimum
-// from every static body over the whole path (docs/motion-check-design.md §3),
+// from every static body over the whole path (agent-docs/motion-check-design.md §3),
 // and, for VerifyLinkage, that every evaluated pair stays that far apart,
 // deciding the report's Assessment: met when every interval certifies the
 // margin, violated when some pose proves a gap below it, undecided otherwise.
@@ -91,7 +91,7 @@ type Config struct {
 	// default.
 	Stated bool
 	// ReadingP is the floor of the whole-path reading's refinement when it
-	// differs from ResolutionP (docs/linkage-check-design.md §3); nil means
+	// differs from ResolutionP (agent-docs/linkage-check-design.md §3); nil means
 	// the one floor governs both, as for every VerifyMotion call.
 	ReadingP  *motionbound.MotionParam
 	Minimum   *units.Value

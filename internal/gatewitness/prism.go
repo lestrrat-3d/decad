@@ -47,7 +47,7 @@ import (
 // that displacement beside the axial one, composed the way the displaced-prism
 // arm below composes its own.
 //
-// A prism payload whose own sectionDelta is nonzero (docs/prism-boolean-design.md
+// A prism payload whose own sectionDelta is nonzero (agent-docs/prism-boolean-design.md
 // §7's re-expressed or cut section — every analytic Union whose merge cut a
 // wall, plus any placed prism pair) reads its OWN recorded section, and is not
 // a containing shape at all: the denoted section may sit either side of the

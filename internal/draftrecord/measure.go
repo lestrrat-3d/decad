@@ -16,7 +16,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file measures a draft body (docs/draft-design.md §8). The body is one
+// This file measures a draft body (agent-docs/draft-design.md §8). The body is one
 // closed sub-solid per loop — the near disk, the far disk and the wall band
 // between them — signed positive for the outer loop and negative for each
 // hole, so every reading is the cap-loop band's own closed form

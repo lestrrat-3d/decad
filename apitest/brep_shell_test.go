@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// crossDrilledBar is docs/modify-general-design.md §1's P1 through the
+// crossDrilledBar is agent-docs/modify-general-design.md §1's P1 through the
 // public API: the 40×20×20 box cut by a Ø6 hole along y through
 // (20, ·, 10).
 func crossDrilledBar(t *testing.T) (*decad.Document, *decad.Body) {

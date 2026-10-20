@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file holds the box tests of docs/linkage-check-design.md §5.8's cell
+// This file holds the box tests of agent-docs/linkage-check-design.md §5.8's cell
 // form (§14.3, §14.8): scene 12, the three-joint box's flat minimum, and the
 // boxes of scene 13's pendulum under a slide and scene 14's two arms. Each
 // scene states its minimum in closed form, and every CellClear leaf's bound
@@ -35,7 +35,7 @@ func radiansOf(t *testing.T, v units.Value) float64 {
 }
 
 // TestVerifyJointBoxThreeJointFlatMinimum is scene 12 of
-// docs/linkage-check-design.md §14.8, the projection certificate's
+// agent-docs/linkage-check-design.md §14.8, the projection certificate's
 // acceptance on a box: §10's three-joint arm with each joint over [0°, 90°],
 // at the defaults. The wrist's leading corner (150, −10) sits at
 // X = 50·(cos θ₁ + cos(θ₁+θ₂) + cos(θ₁+θ₂+θ₃)) + 10·sin(θ₁+θ₂+θ₃), whose
@@ -114,7 +114,7 @@ func TestVerifyJointBoxThreeJointFlatMinimum(t *testing.T) {
 }
 
 // TestVerifyJointBoxPendulumUnderSlide is scene 13's box of
-// docs/linkage-check-design.md §14.8, the prismatic-ancestor rule: the
+// agent-docs/linkage-check-design.md §14.8, the prismatic-ancestor rule: the
 // pendulum of §5.8 hung from a carriage, x ∈ [−5, 5], y ∈ [−8, −2],
 // z ∈ [120, 130], on a prismatic joint along X under the ground, the box
 // d ∈ [0, 30] mm × θ ∈ [0°, 90°]. The wall is wide, so the gap
@@ -220,7 +220,7 @@ func rectGap(p, q [4][2]float64) float64 {
 	return best
 }
 
-// TestVerifyJointBoxTwoArms is scene 14's box of docs/linkage-check-design.md
+// TestVerifyJointBoxTwoArms is scene 14's box of agent-docs/linkage-check-design.md
 // §14.8, both bodies moving: §5.8's two arms, each turning over
 // [−30°, 30°] about Z, A through the origin and B through (110, 0, 0). The
 // gap has four flat minima of 110 − 10·√101 ≈ 9.501 mm at (±θ*, ±θ*) with

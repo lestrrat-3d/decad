@@ -28,11 +28,11 @@ import (
 // It is meshbool.OperandSymDiff's question asked one step earlier. That
 // function reads the volume of the symmetric difference between the operand's
 // held tessellation and the body it stands for from the MESH's own proof
-// record (docs/tessellation-design.md §2's volSymDiff), and it has no
+// record (agent-docs/tessellation-design.md §2's volSymDiff), and it has no
 // fallback: `Mesh.Bound × held area` is NOT an occupied-volume proof — a
 // two-sided Hausdorff bound alone does not bound it, because a doubly-curved
 // cell can gain material where another loses it and the signed error cancels
-// while the symmetric difference does not — and docs/tessellation-design.md
+// while the symmetric difference does not — and agent-docs/tessellation-design.md
 // §11 forbids the substitution outright. A payload whose occupied-volume proof
 // has not landed publishes symDiffOK false, and its mesh serves export only.
 //
@@ -40,7 +40,7 @@ import (
 // than refuses outright: both arms read the SAME predicate,
 // capblend.OccupiedVolumeAdmission — this one before the mesh is built, and
 // the cap-blend tessellation through symDiffOK after it — so a payload whose
-// every band docs/tessellation-reach-design.md §7 admits (whole turns,
+// every band agent-docs/tessellation-reach-design.md §7 admits (whole turns,
 // line-line miters, exactly G1 joins) passes here and publishes its proof
 // there, and every other one refuses here with the loop and corner it fails
 // on. Meshing a refused operand for a boolean only to refuse it afterwards
@@ -53,7 +53,7 @@ import (
 // marked payload, so it passes this precheck too (loft §18).
 //
 // A sheet operand refuses HERE too, ahead of the payload-class switch:
-// docs/surface-design.md §10 states that a sheet mesh carries no
+// agent-docs/surface-design.md §10 states that a sheet mesh carries no
 // occupied-volume proof, on the same terms as a refused cap-loop chamfer's.
 // In the ordinary public boolean path the root's sheet-operand refusal fires
 // first (Table X); this arm keeps the invariant that it and

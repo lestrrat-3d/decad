@@ -5,7 +5,7 @@
 // quarter-turn base cells, and the map from the 4,096 whole-turn cells onto
 // them. The package also assembles the held mesh and computes its boundary,
 // volume and area bounds. Root reads the source bodies and admits the pose.
-// See docs/cross-cylinder-bore-chamfer-design.md.
+// See agent-docs/cross-cylinder-bore-chamfer-design.md.
 package crossbore
 
 import (

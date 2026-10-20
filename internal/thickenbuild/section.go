@@ -19,7 +19,7 @@ import (
 // Amount is the per-side offset magnitude: the whole thickness for a
 // one-sided call, half of it for a centered one. A thickness no millimetre
 // conversion can state exactly, and a half-thickness that is not itself
-// representable, are both R27 (docs/surface-design.md §16.2).
+// representable, are both R27 (agent-docs/surface-design.md §16.2).
 func Amount(tmm, tDelta float64, side Side) (float64, error) {
 	if tDelta != 0 {
 		return 0, fmt.Errorf(`%w: the thickness cannot be generated exactly in millimetres`, decaderr.ErrUnsupported)

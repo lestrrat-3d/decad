@@ -12,7 +12,7 @@ import (
 )
 
 // This file is the body-relative stop resolution
-// (docs/evaluator-design.md §5/§6/§11, core §8.1): ToFace and
+// (agent-docs/evaluator-design.md §5/§6/§11, core §8.1): ToFace and
 // ToFaceAngular stops at a selected face of a named body, and the
 // ThroughAll/ThroughAllSide stops at the far side of every live body the
 // sweep meets. Every stop is resolved at the feature call. The evaluator tracks

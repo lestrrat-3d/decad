@@ -13,7 +13,7 @@ import (
 
 // WithSurfaceResult builds the feature's wall set and omits every face that
 // exists only to close the solid, publishing a sheet body — Kind() ==
-// BodySheet — instead of a solid (docs/surface-design.md §4). Volume and
+// BodySheet — instead of a solid (agent-docs/surface-design.md §4). Volume and
 // Centroid answer ErrNotSolid for a sheet, proven sound or not; Area and
 // Bounds still answer, over the walls alone.
 func Example_decad_surfaceExtrude() {
@@ -55,7 +55,7 @@ func Example_decad_surfaceExtrude() {
 	_, volErr := sheet.Volume()
 
 	// A sheet's own boundary can be proven sound even though it encloses no
-	// region: Verify's sheet validity audit (docs/surface-design.md §9.1)
+	// region: Verify's sheet validity audit (agent-docs/surface-design.md §9.1)
 	// decides this from the recorded topology, not from a triangulated
 	// chord mesh.
 	report, err2 := doc.Verify(context.Background())
@@ -65,7 +65,7 @@ func Example_decad_surfaceExtrude() {
 	}
 
 	// A sheet tessellates its walls alone, at the manifold-with-boundary
-	// audit docs/tessellation-design.md §1.2 runs in the closed-mesh audit's
+	// audit agent-docs/tessellation-design.md §1.2 runs in the closed-mesh audit's
 	// place: 8 triangles against the 12 a solid extrude of the same plate
 	// would carry, since the two caps are never chorded.
 	mesh, err := sheet.Tessellate(context.Background(), units.Millimeters(0.1))

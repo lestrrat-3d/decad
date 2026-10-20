@@ -65,7 +65,7 @@ type Distance struct {
 // body with material beyond the sketch plane in the travel sense — the lateral
 // footprint is not consulted, so a body off to the side still counts. Extent
 // only; each such body is resolved at the call and remains live
-// (docs/evaluator-design.md §5).
+// (agent-docs/evaluator-design.md §5).
 type ThroughAll struct {
 	Dir Direction `json:"dir"`
 }

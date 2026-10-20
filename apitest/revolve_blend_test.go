@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file covers docs/modify-reach-design.md §7 (Table RX row RX2):
+// This file covers agent-docs/modify-reach-design.md §7 (Table RX row RX2):
 // Fillet and Chamfer on a revolve's swept meridian junctions. Every fixture is
 // drawn on the XY plane and revolved about the sketch's u axis, so a meridian
 // point (u, v) is the axis coordinate z = u and the radius ρ = v, and the

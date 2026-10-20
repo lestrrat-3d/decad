@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// slideLoop is a closed loop with slides anywhere (docs/linkage-check-design.md
+// slideLoop is a closed loop with slides anywhere (agent-docs/linkage-check-design.md
 // §15.1-§15.2): its linkage, its links in Links() order, which of them slide,
 // and the closed form of every joint value in Links() order — radians for a
 // revolute, millimetres for a slide — given the listed link's value q.
@@ -212,7 +212,7 @@ func requireSlideLoopDrives(t *testing.T, build func(t *testing.T) slideLoop, to
 	}
 }
 
-// TestVerifyLinkageLoopTrammel pins docs/linkage-check-design.md §15.2's
+// TestVerifyLinkageLoopTrammel pins agent-docs/linkage-check-design.md §15.2's
 // anchored rail on Common: the elliptic trammel, two slides on Common, the
 // second anchored on fixed points, driven at each slide and at the bar, a
 // revolute driver below the primary slide, both ways. Every pose matches the
@@ -264,7 +264,7 @@ func TestVerifyLinkageLoopScotchYoke(t *testing.T) {
 }
 
 // TestVerifyJointBoxLoopSlides is the joint box over an anchored slide
-// (docs/linkage-check-design.md §16): the Scotch yoke's block over
+// (agent-docs/linkage-check-design.md §16): the Scotch yoke's block over
 // [−4, 4] mm, its parent the yoke. Every leaf's centre reads the yoke and the
 // crank at the closed forms of the block's value there, within 1e-9, and
 // the box reads Sound.

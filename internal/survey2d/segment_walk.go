@@ -9,7 +9,7 @@ import (
 // line-versus-circular boolean because a free-form walk is neither: a two-state
 // flag left every "not circular" branch silently building a straight line out of
 // a spline, which is exactly the confidently-wrong answer decad exists to
-// prevent (docs/spline-design.md §6.2).
+// prevent (agent-docs/spline-design.md §6.2).
 //
 // A switch on WalkKind MUST be total. A consumer that cannot yet handle
 // WalkFreeform refuses before building an analytic face: where it needs a walk
@@ -145,7 +145,7 @@ type SegmentWalk struct {
 	// joint interior to that conversion's chain is verdict 0 BY CONSTRUCTION,
 	// never by freeform.JointConvexitySign's cross product, because that cross carries
 	// sketch's own rounded SecondDerivs solve rather than a turn of the
-	// recorded curve (docs/spline-design.md §6.5, §5.1.2). It is false for
+	// recorded curve (agent-docs/spline-design.md §6.5, §5.1.2). It is false for
 	// every other Tier A kind, whose joints are genuine C⁰ corners the cross
 	// product must still fold.
 	FitInterpolated bool

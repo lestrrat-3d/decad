@@ -20,7 +20,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// Tessellate meshes body, whose payload is bp (docs/general-boolean-design.md
+// Tessellate meshes body, whose payload is bp (agent-docs/general-boolean-design.md
 // §4.4). Every swept face chords its own wall once with tessellation.SampleLoop,
 // the sampler a prism's walls use, and emits its rim polylines at both levels.
 // Every planar face triangulates its loops with triangulation.Triangulate, as a
@@ -31,7 +31,7 @@ import (
 // Each record face resolves to the body's face whose origins carry its role.
 // verifyAll decides whether the area-slack and occupied-volume proofs at the
 // end of the build are composed at all; every audit and every face bound runs
-// at each level (docs/tessellation-design.md §1).
+// at each level (agent-docs/tessellation-design.md §1).
 func Tessellate(ctx context.Context, body *topo.Body, bp breprecord.Payload, chord float64, verifyAll bool) (*topo.Mesh, error) {
 	btopo, err := breprecord.TopologyContext(ctx, bp)
 	if err != nil {
@@ -321,7 +321,7 @@ func Tessellate(ctx context.Context, body *topo.Body, bp breprecord.Payload, cho
 		tessellation.StoreAreaAllow(mesh.Vertices, mesh.Triangles, store))
 	if len(bands) > 0 {
 		// A band the cap-loop chamfer's occupied-volume proof does not admit
-		// leaves the mesh export-only (docs/tessellation-reach-design.md §7),
+		// leaves the mesh export-only (agent-docs/tessellation-reach-design.md §7),
 		// and the mesh boolean refuses it with the same reason.
 		refusal, err := OccupiedVolumeAdmission(proofbound.NewWorkBudget(ctx), bp)
 		if err != nil {

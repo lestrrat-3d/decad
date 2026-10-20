@@ -32,7 +32,7 @@ func rockerFromCoupler(qc float64) (float64, float64) {
 	return th2, th4
 }
 
-// TestVerifyLinkageLoopDrivenAtTheCoupler pins docs/linkage-check-design.md
+// TestVerifyLinkageLoopDrivenAtTheCoupler pins agent-docs/linkage-check-design.md
 // §15.1-§15.2's driver below Common on scene 7's crank-rocker, driven at the
 // coupler's joint, whose parent is the crank: the driving angle runs from the
 // crank's line, offset by its zero-pose reading r₀, which a probe scene
@@ -83,7 +83,7 @@ func TestVerifyLinkageLoopDrivenAtTheCoupler(t *testing.T) {
 }
 
 // TestVerifyJointBoxLoopOverTheCoupler is the joint box over the same loop
-// axis (docs/linkage-check-design.md §16.1): the coupler over [0°, 30°], its
+// axis (agent-docs/linkage-check-design.md §16.1): the coupler over [0°, 30°], its
 // parent the crank. Every leaf's centre reads the crank and the follower at
 // the closed forms of the coupler's value there, within 1e-9 rad, and the box
 // reads Sound.

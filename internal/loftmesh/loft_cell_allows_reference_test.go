@@ -49,7 +49,7 @@ func referenceComputeLoftChordedAllow(
 				continue
 			}
 
-			// docs/loft-design.md §5.2's matchedDelta row, at THIS cell:
+			// agent-docs/loft-design.md §5.2's matchedDelta row, at THIS cell:
 			// the cell's own chord-to-curve half composed with the held
 			// vertex displacement delta, which is what makes the bound a
 			// claim about the chord the build actually DREW rather than the

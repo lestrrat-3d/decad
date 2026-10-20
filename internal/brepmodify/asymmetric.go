@@ -26,7 +26,7 @@ type Asymmetric struct {
 }
 
 // Setbacks returns the arc lengths a chamfer of corner ci of loop li sets
-// back along the arriving and the leaving walk (docs/modify-reach-design.md
+// back along the arriving and the leaving walk (agent-docs/modify-reach-design.md
 // §6): the walk whose wall is e's reference face takes d and the other walk
 // takes other. A side wall's side(i,j) roles name the recorded segments it
 // is built from, and the reference face's roles decide which walk it is; a
@@ -52,7 +52,7 @@ func (a *Asymmetric) Setbacks(loop survey2d.CornerLoop, li, ci int, e *topo.Edge
 }
 
 // CapSetbacks returns the start and the end cap's own two setbacks for a
-// two-distance chamfer of complete cap loops (docs/modify-reach-design.md
+// two-distance chamfer of complete cap loops (agent-docs/modify-reach-design.md
 // §8.3.1). Every edge of a cap loop borders its cap face and one side wall, and
 // its reference face picks between them: the cap face gives the cap dc = d and
 // ds = other, a side wall gives dc = other and ds = d. The pick is made per

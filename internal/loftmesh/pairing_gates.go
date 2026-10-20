@@ -13,14 +13,14 @@ import (
 )
 
 // ValidateLoftRecords keeps the station cap after the record-only pairing
-// gates, preserving the refusal order in docs/loft-design.md §4. It also
+// gates, preserving the refusal order in agent-docs/loft-design.md §4. It also
 // returns the build's one chord target, which the station cap gate reads once
 // from recordArea and the walks resolved here (StationCapGate), so the
 // station generators chord at the target the gate decided S15 against.
 //
 // Before it resolves a single walk it raises each default-limit record's
 // free-form work ceiling to StationWorkLimit over P, the first profile's segment
-// count (docs/loft-gear-bounds-design.md §7). Public Loft already raised its
+// count (agent-docs/loft-gear-bounds-design.md §7). Public Loft already raised its
 // counters before area integration; this gate preserves them. Placement and
 // other re-evaluations arrive with fresh counters and raise here. The raise
 // covers the walks' length brackets and the station walk that follows.
@@ -45,7 +45,7 @@ func ValidateLoftRecords(p0, p1 momentinput.Profile, pl0, pl1 sectionrecord.Plan
 	return offsets, walks0, walks1, target, nil
 }
 
-// ValidateRecordWalks applies docs/loft-design.md Table S rows S1, S2, S4, S3,
+// ValidateRecordWalks applies agent-docs/loft-design.md Table S rows S1, S2, S4, S3,
 // S7's STRUCTURAL arm and S5, in §4's stated gate order, from the two
 // authenticated records alone — no triangle is built. It returns the
 // normalized per-loop alignment
@@ -70,7 +70,7 @@ func ValidateLoftRecords(p0, p1 momentinput.Profile, pl0, pl1 sectionrecord.Plan
 // evaluator can.
 //
 // S3's admission test is a SAME-KIND test over the two RECORDED SEGMENT
-// TYPES, the enumeration docs/loft-design.md §1 and Table P row P5 spell —
+// TYPES, the enumeration agent-docs/loft-design.md §1 and Table P row P5 spell —
 // both LineSeg, both ArcSeg, both CircleSeg, or both the same Tier A
 // free-form type — never merely because one side is a LineSeg. A mixed-kind
 // pair refuses with SameKindGate's sentinel. Testing after BOTH sides are
@@ -142,7 +142,7 @@ func ValidateRecordWalks(p0, p1 momentinput.Profile, pl0, pl1 sectionrecord.Plan
 	return offsets, walks0, walks1, nil
 }
 
-// SameKindGate is docs/loft-design.md Table S row S3 and Table P row P5: a
+// SameKindGate is agent-docs/loft-design.md Table S row S3 and Table P row P5: a
 // pairing is admitted only when the two RECORDED SEGMENT TYPES are the same
 // one of those §1 and P5 enumerate — both LineSeg, both ArcSeg, both
 // CircleSeg, or both the same Tier A free-form type (PairType) — so a
@@ -158,7 +158,7 @@ func ValidateRecordWalks(p0, p1 momentinput.Profile, pl0, pl1 sectionrecord.Plan
 // cyclic stations and states no rule for one of each. Admitting by concrete
 // type is what keeps the code inside the contract the document carries.
 //
-// Beside S3 sits S7's STRUCTURAL arm (docs/loft-design.md Table S row S7,
+// Beside S3 sits S7's STRUCTURAL arm (agent-docs/loft-design.md Table S row S7,
 // Table P row P5, and §4's gate-order paragraph, which places both arms):
 // two paired circular segments whose own EFFECTIVE walk directions disagree
 // walk in opposite directions, and that correspondence walls each side
@@ -199,7 +199,7 @@ func SameKindGate(seg0, seg1 sectionrecord.CurveSegment, loop, j, k int) error {
 	return nil
 }
 
-// PairType is the enumeration docs/loft-design.md §1 and Table P row P5
+// PairType is the enumeration agent-docs/loft-design.md §1 and Table P row P5
 // admit a loft pairing over, plus PairUnadmitted for every other recorded
 // type. It reads the CONCRETE recorded segment type — the walk kind
 // resolved from it is coarser (survey2d.WalkCircular covers a circle and an arc alike,
@@ -216,7 +216,7 @@ const (
 	PairArc
 	PairCircle
 	// PairSpline, PairClosedSpline, PairNURBS and PairFitSpline are the four
-	// recorded types docs/spline-design.md Table F can place in Tier A. A
+	// recorded types agent-docs/spline-design.md Table F can place in Tier A. A
 	// NURBSSeg with unequal weights and every Tier B kind never reach this
 	// gate as a pair: resolving either side's walk refuses first (spline
 	// design R10), which is why the type alone decides admission here.

@@ -82,7 +82,7 @@ func Remove(b *Body) error {
 
 // commit registers the produced body, advances its private producer identity,
 // and retires the consumed inputs — the atomic tail of every feature call
-// (docs/evaluator-design.md §8): a failed evaluation never reaches here, so
+// (agent-docs/evaluator-design.md §8): a failed evaluation never reaches here, so
 // a rejected operation leaves the document untouched.
 func (d *Document) commit(produced *Body, consumed ...*Body) {
 	d.n.NextProducer++
@@ -94,7 +94,7 @@ func (d *Document) commit(produced *Body, consumed ...*Body) {
 	d.n.LiveSet = append(d.n.LiveSet, bodyNode(produced))
 }
 
-// commitMany is commit's N-producer variant (docs/surface-design.md §6.5):
+// commitMany is commit's N-producer variant (agent-docs/surface-design.md §6.5):
 // Unstitch produces many bodies from one receiver, and registering them one
 // commit at a time would leave the document in a partial state — the
 // receiver retired but fewer than len(produced) results live — if a later
@@ -170,7 +170,7 @@ func (d *Document) requireLive(b *Body) error {
 // booleans and interference reading compare against a coplanar partner's:
 // where the two differ, the partner's coordinates are re-expressed and every
 // crossing they cut is charged that rounding over the crossing angle
-// (docs/prism-boolean-design.md §3.4), while motions composing back to the
+// (agent-docs/prism-boolean-design.md §3.4), while motions composing back to the
 // partner's own placement leave the re-expression the identity.
 func Transform(ctx context.Context, body *Body, t r3.Transform) (*Body, error) {
 	if ctx == nil {

@@ -19,11 +19,11 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// This file is the record of a draft body (docs/draft-design.md Table BD row
+// This file is the record of a draft body (agent-docs/draft-design.md Table BD row
 // BD1), the offset amount its far section is built at (§8.1), and the
 // readings of the record alone that other code needs. The build itself is
 // build.go and the measurements measure.go. Payload implements topo.Payload
-// (docs/evaluator-design.md §8).
+// (agent-docs/evaluator-design.md §8).
 
 // Payload is the evaluator's own record of a tapered extrude: the near
 // section P as recorded, the frame it lifts through, the sweep interval with
@@ -31,7 +31,7 @@ import (
 // radians beside its conversion rounding, and the accumulated placement. The
 // build fills in the rest from those: the offset amount d with its proven
 // span, and the far section Q = P offset sharply by d with the displacement
-// its built contour carries (docs/draft-design.md §2, §8.1).
+// its built contour carries (agent-docs/draft-design.md §2, §8.1).
 type Payload struct {
 	Profile momentinput.Profile
 	Frame   r3.Frame
@@ -47,7 +47,7 @@ type Payload struct {
 	Taper, TaperDelta float64
 	Xform             r3.Transform
 	// Kept names the recorded segments of the walls a subset draft leaves
-	// vertical (docs/draft-design.md §10.2), keyed by loop and segment; empty
+	// vertical (agent-docs/draft-design.md §10.2), keyed by loop and segment; empty
 	// for a tapered extrude or a draft of every wall, which moves them all.
 	Kept map[offset2d.DraftWall]struct{}
 
@@ -75,14 +75,14 @@ func (dp Payload) Transform() r3.Transform { return dp.Xform }
 
 // Placed re-evaluates the same record under the composed motion: every gate
 // the build runs is a fact of the record, so a placed body re-derives the
-// identical far section and walls (docs/draft-design.md Table DD row DD12).
+// identical far section and walls (agent-docs/draft-design.md Table DD row DD12).
 func (dp Payload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
 	dp.Xform = composed
 	return Build(ctx, env, dp)
 }
 
 // SurveyClass names the payload class a staged survey diagnostic reports
-// (docs/evaluator-design.md §8): the root type this payload replaced.
+// (agent-docs/evaluator-design.md §8): the root type this payload replaced.
 func (Payload) SurveyClass() string { return "draftPayload" }
 
 // Band is the capblend.Payload view the draft's walls are built through: every
@@ -90,7 +90,7 @@ func (Payload) SurveyClass() string { return "draftPayload" }
 // and the side setback ds = h down the whole sweep, so the band's side level
 // is the sketch plane and no straight slab remains. The view's draft flag
 // selects the sharp corner rule and the prism's roles and convexity, and its
-// draftKept the walls a subset draft leaves in place (docs/draft-design.md §1,
+// draftKept the walls a subset draft leaves in place (agent-docs/draft-design.md §1,
 // §7, §10.2).
 func (dp Payload) Band() capblend.Payload {
 	setback := capblend.Setback{Dc: dp.D, DcDelta: dp.DDelta, Ds: dp.Z1 - dp.Z0}
@@ -180,7 +180,7 @@ func (dp Payload) CapPrisms() ([]prismrecord.Payload, float64) {
 }
 
 // RequireNotReceiver is modify S3 for a draft body
-// (docs/draft-design.md Table DD row DD14) outside its bounded rim routes.
+// (agent-docs/draft-design.md Table DD row DD14) outside its bounded rim routes.
 // It runs beside the cap-blend receiver check, so the refusal names the draft
 // body rather than the generic class.
 func RequireNotReceiver(payload topo.Payload, op string) error {

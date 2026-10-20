@@ -76,7 +76,7 @@ const (
 // SweepRequest bounds the time search and the contact geometry resolution.
 //
 // RestSpeed is a nonnegative Velocity; the zero Value rests no vertex. A band
-// track over a support set (docs/multibody-dynamics-design.md §10.5) holds a
+// track over a support set (agent-docs/multibody-dynamics-design.md §10.5) holds a
 // lifted vertex that closes on the support plane no faster than RestSpeed, or
 // rises, on both sides of the plane, as it holds a contact vertex (§10.8), so
 // the track does not end where that vertex's lower height bound reaches the
@@ -216,7 +216,7 @@ func (t *SweepContactTrack) Features() (ContactFeature, ContactFeature) {
 
 func (t *SweepContactTrack) Normal() VecMeasurement { return t.normal }
 
-// Band returns the depth of a band track (docs/multibody-dynamics-design.md
+// Band returns the depth of a band track (agent-docs/multibody-dynamics-design.md
 // §10.3), a Length Measurement whose Value plus Bound bounds every contact
 // point's separation in both directions and the interiors' overlap along
 // Normal(). It is nil for an exact touch track.
@@ -236,7 +236,7 @@ func (t *SweepContactTrack) Band() *Measurement {
 }
 
 // BandAt returns the depth of a band track over its prefix through fraction
-// (docs/multibody-dynamics-design.md §10.3): a Length Measurement whose Value
+// (agent-docs/multibody-dynamics-design.md §10.3): a Length Measurement whose Value
 // plus Bound bounds every contact point's separation in both directions and
 // the interiors' overlap along Normal() at every instant from the track's
 // start through fraction. At the track's end it is at most Band(); it grows
@@ -448,7 +448,7 @@ func exactnessFromBound(bound float64) Exactness {
 // whole LineSeg sections and zero-bound faceted Booleans — that no narrower
 // path admits receive a clear path or a first-impact bracket under any rotating
 // or affine path, and from an initial touch a departure or a persistent touch
-// or band track (docs/multibody-dynamics-design.md §10.2, §10.3). A
+// or band track (agent-docs/multibody-dynamics-design.md §10.2, §10.3). A
 // positive-bound faceted Boolean or all-planar cap-loop chamfer takes the
 // same run through its held mesh under §10.4: a first impact brackets onto a
 // ContactBand sample, and a band start never departs but may carry a band

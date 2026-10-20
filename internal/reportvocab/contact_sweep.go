@@ -58,7 +58,7 @@ const (
 )
 
 // SweepRequest is the internal form of the root package's SweepRequest
-// (docs/contact-sweep-design.md §2, §7): the contact request, the time
+// (agent-docs/contact-sweep-design.md §2, §7): the contact request, the time
 // resolution, the pose evaluation budget, the start policy and the rest speed
 // of a band track. The sweep producers read it. The root package's SweepPair
 // converts the caller's request to it after validation, and planarContinuation

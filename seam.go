@@ -9,7 +9,7 @@ import (
 	"github.com/lestrrat-3d/sketch"
 )
 
-// This file is the seam conversion of docs/sketch-seam-design.md: the one
+// This file is the seam conversion of agent-docs/sketch-seam-design.md: the one
 // place a live sketch profile becomes the structural records the evaluator
 // carries. sketch answers every 2D question and decad consumes the answers —
 // nothing here re-derives a trim, projects a point, or fits a curve.
@@ -62,7 +62,7 @@ func (p MeasuredProfile) SecondMoments() (SecondMoments, error) {
 // chain Extrude and chain Revolve run this conversion.
 //
 // Every profile admission gate also applies to chains
-// (docs/sketch-seam-design.md §2.2, docs/surface-design.md §13.3): ch must
+// (agent-docs/sketch-seam-design.md §2.2, agent-docs/surface-design.md §13.3): ch must
 // name s (Chain.Sketch, else [ErrForeignProfile]), be current (Chain.IsStale,
 // else [ErrStaleProfile]), and its exported fields — Entities, Edges, Length,
 // Valid, SelfIntersecting — must exactly match one member of a fresh
@@ -80,7 +80,7 @@ func (p MeasuredProfile) SecondMoments() (SecondMoments, error) {
 // none. Chain.Length enters only the snapshot equality comparison above and
 // is never recorded or read as a measurement: it is exact only for a *Line,
 // *Arc or *Circle fragment and a sampling-convergent underestimate otherwise,
-// with no bound stated for the gap (docs/surface-design.md §13.3).
+// with no bound stated for the gap (agent-docs/surface-design.md §13.3).
 func recordChain(s *sketch.Sketch, ch *sketch.Chain) (chainRecord, planeRecord, error) {
 	if sectioncert.BoundedSectionSketch(s) {
 		return chainRecord{}, planeRecord{},
@@ -93,10 +93,10 @@ func recordChain(s *sketch.Sketch, ch *sketch.Chain) (chainRecord, planeRecord, 
 // origin. Each reading has Kind SecondMomentOfArea (mm⁴). Re-reference them to
 // another axis with the region's Area and Centroid.
 //
-// The readings come from the mass-property engine of docs/evaluator-design.md
+// The readings come from the mass-property engine of agent-docs/evaluator-design.md
 // §4. sketch decides topology and admissibility; internal/momentregion
 // integrates admitted records by closed-form boundary integrals (Green's
-// theorem). Line and Tier A free-form walks (docs/spline-design.md Table F)
+// theorem). Line and Tier A free-form walks (agent-docs/spline-design.md Table F)
 // integrate to exact rationals, so a region built only from them is published
 // as its own rational rounded ONCE and retains a zero bound wherever that
 // rational is representable; circular evaluations have no exact rational and

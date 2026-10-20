@@ -10,7 +10,7 @@ import (
 )
 
 // TestFreeformWorkRaisedLimitBinds pins the raised exact-rational ceiling
-// docs/loft-gear-bounds-design.md §7 gives a loft's record counters: a fresh
+// agent-docs/loft-gear-bounds-design.md §7 gives a loft's record counters: a fresh
 // counter reads the default, RaiseLimit only ever raises it, charges then run
 // past the default up to the raised limit and refuse one unit beyond it, and
 // the refusal names the raised limit.

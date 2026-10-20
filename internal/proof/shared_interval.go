@@ -7,7 +7,7 @@ import (
 
 // This file is the shared-denominator form of RatInterval's arithmetic, for a
 // computation that reads all of its rational inputs before it computes: the
-// island certificate (docs/multibody-dynamics-design.md §6.3).
+// island certificate (agent-docs/multibody-dynamics-design.md §6.3).
 //
 // Every input is written once over one positive odd denominator D shared by
 // the whole computation, as an integer numerator over a power of two (a

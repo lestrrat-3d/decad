@@ -15,9 +15,9 @@ import (
 // RefuseClosed is Shell's answer to WithNoOpenings on every receiver but a
 // full-turn revolve over a hole-free meridian, a hole-free straight prism,
 // and an admitted two-slab rectangular boss. Their own builders run first
-// (docs/modify-reach-design.md Tables RX/SX, §14). Each receiver gets the row
+// (agent-docs/modify-reach-design.md Tables RX/SX, §14). Each receiver gets the row
 // that stages it: a faceted boolean result SX9, a brep or stacked receiver
-// docs/modify-general-design.md's SG2, a holed prism section or revolve
+// agent-docs/modify-general-design.md's SG2, a holed prism section or revolve
 // meridian SX8, a partial revolve SX8 (it keeps both angular caps), and any
 // other receiver base S3. Every one is
 // ErrUnsupported: the closed body exists, and this evaluator does not build it.

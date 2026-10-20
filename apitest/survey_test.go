@@ -17,7 +17,7 @@ import (
 )
 
 // The increment-5 analytic surveys, tested against the worked tables of
-// docs/verification-design.md §6: the wall rule's spanning balls, the
+// agent-docs/verification-design.md §6: the wall rule's spanning balls, the
 // undercut membership rule, and the MinRadius measurement — all Exact on
 // this evaluator's prism and revolve bodies.
 
@@ -293,7 +293,7 @@ func TestUndercutNearAntiparallelPull(t *testing.T) {
 }
 
 // TestUndercutExactlyPerpendicularWallIsNotOpposed is fu155's own repro
-// (docs/verification-design.md §6): a square whose edge tangents are exactly
+// (agent-docs/verification-design.md §6): a square whose edge tangents are exactly
 // (3,9), (-9,3), (-3,-9), (9,-3), extruded and pulled along (3,9,0), carries
 // one wall EXACTLY perpendicular to the pull (its outward normal dotted with
 // the unit pull is exactly 0) and one wall EXACTLY antiparallel to it
@@ -1053,7 +1053,7 @@ func TestWallReadingExactHeightArm(t *testing.T) {
 func TestWallHeightCarriesAxialDelta(t *testing.T) {
 	t.Parallel()
 	// A 10×10 mm plate extruded units.Inches(0.1): the sweep level's own unit
-	// conversion carries a nonzero displacement (docs/evaluator-design.md §5),
+	// conversion carries a nonzero displacement (agent-docs/evaluator-design.md §5),
 	// which wallsurvey.PrismWall's height arm composes into the reading instead of
 	// dropping. Without that composition the reported height with an
 	// ulp-scale bound fails this by construction.
@@ -1553,7 +1553,7 @@ func TestRevolveMinRadiusSweepEnclosesConeBoreTruths(t *testing.T) {
 	}
 }
 
-// The rival-candidate fixtures below pin docs/payload-verification-design.md
+// The rival-candidate fixtures below pin agent-docs/payload-verification-design.md
 // §9.2's aggregate: an arc whose TRUE radius is rivalArcU/rivalArcV's
 // hypotenuse, beside a circle whose radius is a recorded millimetre number one
 // ulp below the arc's held math.Hypot. The circle holds the smaller value, so a

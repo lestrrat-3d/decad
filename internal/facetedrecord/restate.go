@@ -12,7 +12,7 @@ import (
 )
 
 // boundError is Restate's refusal of a chord tolerance finer than the bound
-// the faceted body holds (docs/tessellation-design.md §7). Only a Tessellate
+// the faceted body holds (agent-docs/tessellation-design.md §7). Only a Tessellate
 // caller, who chose the tolerance, reaches it: the boolean asks a restating
 // operand at its held floor and gates the facets the pair touches instead
 // (booloperand.HeldFloor, meshbool.RefuseCoarseHeldContact).
@@ -52,7 +52,7 @@ func Restate(ctx context.Context, body *topo.Body, fp Payload, chord float64) (*
 	}
 	// The payload's own per-vertex record is restated unchanged, and each
 	// face's bound is the largest δ(t) over its own facets
-	// (docs/faceted-vertex-bounds-design.md §4.4), so the next boolean's
+	// (agent-docs/faceted-vertex-bounds-design.md §4.4), so the next boolean's
 	// pre-pass and rim composition read each face's and each facet's own
 	// figure. Their maximum is the payload's MeshBound by construction.
 	topobuild.SetVertexBounds(m, fp.VertexBound)

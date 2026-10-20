@@ -23,7 +23,7 @@ import (
 
 // This file is the face view that states a prism or a stacked prism as a
 // Payload, the analytically trimmed face record of
-// docs/general-boolean-design.md §4 (§4.1), and the other builders of a
+// agent-docs/general-boolean-design.md §4 (§4.1), and the other builders of a
 // Payload from a record or an engine: a side opening, an A1 stack and the P8
 // plate. Payload's audit, the body build with its topology and roles (§4.2)
 // and the measurements (§4.3) live beside it; internal/brepbandmesh owns the
@@ -75,7 +75,7 @@ func OfPrismWithRoles(pp prismrecord.Payload) (Payload, []string, error) {
 }
 
 // OfStacked is a stacked prism's face view (§4.1): one swept face per
-// segment of every loop column (docs/stacked-prism-design.md §2.3), then the
+// segment of every loop column (agent-docs/stacked-prism-design.md §2.3), then the
 // two caps and every interface's exposed floors and ceilings. The record is
 // audited first, so a stack its own build refuses has no face view either. A
 // prism group (one slab of several disjoint regions) has no face view and is

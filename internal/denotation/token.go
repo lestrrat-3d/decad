@@ -3,7 +3,7 @@ package denotation
 import "github.com/lestrrat-3d/r3"
 
 // This package holds both halves of the shared-denotation certificate
-// docs/surface-design.md §5.2, §6.2 and §14 Table D row 3 name: two minted
+// agent-docs/surface-design.md §5.2, §6.2 and §14 Table D row 3 name: two minted
 // identities, never a coordinate or a bound, proving two different things
 // over two different code paths — coplanarity and coincidence do not follow
 // from one another, so admitting one never discharges the other.
@@ -107,7 +107,7 @@ func SameLevel(a, b LevelToken) bool {
 }
 
 // CurveID is the CURVE half of the shared-denotation certificate
-// (docs/surface-design.md §6.2 Table J's amendment, §14 Table D row 3): a
+// (agent-docs/surface-design.md §6.2 Table J's amendment, §14 Table D row 3): a
 // document-local identity minted once per denoted curve or point by the
 // evaluator that FIRST builds it, and propagated unchanged — never re-minted
 // — by every copier that reproduces the same geometry: stitchrecord's rebuildTopology
@@ -184,7 +184,7 @@ func (t CurveToken) Compose(applied r3.Transform) CurveToken {
 // certificate" and always declines), equal ids, and equal xform. It is one
 // of the comparisons this certificate ever makes to decide admission — the
 // other being internal/stitchrecord/plan.go's own bit-identical guard layered on top,
-// which this comparison never substitutes for (docs/surface-design.md §6.2:
+// which this comparison never substitutes for (agent-docs/surface-design.md §6.2:
 // "the certificate admits; bit-identity further narrows; bit-identity alone
 // never admits").
 func SameCurve(a, b CurveToken) bool {

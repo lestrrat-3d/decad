@@ -431,7 +431,7 @@ func TestShellCupInwardBox(t *testing.T) {
 	require.Contains(t, roles, "shellSide(0,0)")
 
 	// A shelled body has no void — the opening joins inner and outer into one
-	// shell (docs/modify-design.md §8).
+	// shell (agent-docs/modify-design.md §8).
 	require.False(t, body.IsSolid() && anyVoid(body), `a cup has no void shell`)
 	for _, sh := range body.Shells() {
 		require.False(t, sh.IsVoid())
@@ -912,7 +912,7 @@ func TestShellRefusals(t *testing.T) {
 
 	t.Run("removing a side wall opens the box", func(t *testing.T) {
 		_, box := shellBox(t)
-		// docs/shell-opening-design.md: the y = 0 wall removed leaves the
+		// agent-docs/shell-opening-design.md: the y = 0 wall removed leaves the
 		// cavity (5,95)×(0,55) over (5,15).
 		wall := decad.Faces(decad.Facing(r3.NewVec(0, -1, 0)))
 		body, err := decad.Shell(t.Context(), box, wall, units.Millimeters(5))
@@ -1751,7 +1751,7 @@ func TestShellCupWallThicknessCarriesConversionDelta(t *testing.T) {
 	// A cup whose shell thickness is stated in a non-millimetre unit: the
 	// wall reading is exactly the shell theorem's own t, but that t's own
 	// unit conversion (extent.MagnitudeInBounded, shell.go) carries a displacement
-	// cupWall now composes (docs/payload-verification-design.md §4.1)
+	// cupWall now composes (agent-docs/payload-verification-design.md §4.1)
 	// instead of asserting Exact. A millimetre thickness stays Exact — see
 	// TestShellCupWallThickness and this file's other cylinderCup cases, all
 	// stated in millimetres.

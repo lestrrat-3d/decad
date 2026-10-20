@@ -13,9 +13,9 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// This file is the loft payload docs/loft-design.md PR 1a states: the record
+// This file is the loft payload agent-docs/loft-design.md PR 1a states: the record
 // Build evaluates over topology nodes and a placement re-evaluates. It
-// implements topo.Payload (docs/evaluator-design.md §8).
+// implements topo.Payload (agent-docs/evaluator-design.md §8).
 
 // TwistAreaCellClaims comes from the same authenticated Loft pairing that
 // emitted a private Sweep cell's two wall triangles. The circular arm has a
@@ -33,7 +33,7 @@ type SourceIdentity struct{ Origin provenance.Producer }
 // Payload is the evaluator's own record of a lofted body: the two
 // authenticated sections, their planes and frames, the per-loop alignment,
 // the accumulated rigid placement, and the assembled triangle set the
-// construction produced (docs/loft-design.md §5/§7). Verts/Tris/Walls are the
+// construction produced (agent-docs/loft-design.md §5/§7). Verts/Tris/Walls are the
 // same globally oriented triangle set §6's audit classified and §8's
 // accumulator integrated — Tris[:Walls] the wall triangles (side(i,j,k)), the
 // rest the two caps' own triangulations — kept on the payload so a later
@@ -73,7 +73,7 @@ type Payload struct {
 	// public topology uses one cylindrical wall for the new hole.
 	AnalyticBore bool
 
-	// SurfaceResult is WithSurfaceResult's own flag (docs/surface-design.md
+	// SurfaceResult is WithSurfaceResult's own flag (agent-docs/surface-design.md
 	// §4): true when the build must omit both section caps and publish a
 	// sheet instead of a solid. It is part of the re-evaluable record for the
 	// same reason prismPayload's and revolvePayload's own copies are
@@ -85,13 +85,13 @@ type Payload struct {
 	// RecordArea holds each record's own exact region integral, the value
 	// Profile.FalsifyLoftRecordedArea computed and compared against sketch's area in
 	// Loft. The chord target reads it (loftmesh.ChordTarget,
-	// docs/loft-gear-bounds-design.md §5), so no evaluation integrates a
+	// agent-docs/loft-gear-bounds-design.md §5), so no evaluation integrates a
 	// record a second time to size its chords. A rigid placement moves
 	// neither record, so placed carries it over unchanged.
 	RecordArea [2]float64
 
 	// Delta is the proven displacement of every held vertex from the exact
-	// point the record denotes for it (docs/loft-design.md §5, §12 PR 2a,
+	// point the record denotes for it (agent-docs/loft-design.md §5, §12 PR 2a,
 	// a10-plan.md Part 3 PR 6): stationRound, liftAllow and placeAllow summed
 	// through proofbound.AbsSumUpper (loftmesh.Assemble). liftAllow is the
 	// rounding each station's lift through its own section frame commits
@@ -108,7 +108,7 @@ type Payload struct {
 	// (loftmesh.ArcNaturalEndRadialUpper) at an untrimmed ArcSeg's t == 1 end, whose
 	// recorded coordinate the record states while denoting another point
 	// there. It is zero exactly where every station publishes a zero
-	// (docs/loft-design.md §5.2's guaranteed-zero list), which no segment KIND
+	// (agent-docs/loft-design.md §5.2's guaranteed-zero list), which no segment KIND
 	// grants on its own beyond an untrimmed LineSeg: a trimmed LineSeg
 	// pairing does not reach that zero, and a curved pairing is positive
 	// whenever a cell has an interior station or an arc end off its own
@@ -120,7 +120,7 @@ type Payload struct {
 	// SectionDelta is the proven upper bound on how far any BUILT CHORD point
 	// of a wall cell sits from the recorded curve it chords, AS A SET — the
 	// curve's own sagitta, taken as a MAXIMUM over cells rather than a sum
-	// (docs/loft-design.md §5, a10-plan.md Part 3 PR 5/PR 6). It is zero for
+	// (agent-docs/loft-design.md §5, a10-plan.md Part 3 PR 5/PR 6). It is zero for
 	// a LineSeg pairing — a straight wall's own chord IS the recorded
 	// segment, so there is no curve for it to depart from — and positive for
 	// a same-kind circular pairing, to the sagitta its station chording
@@ -155,7 +155,7 @@ type Payload struct {
 	// The raw matched quantity itself is a PER-BUILD LOCAL of Build and is
 	// never a field here. What the payload stores instead is the proof
 	// COMPOSED from it — the three terms of the proof field below, which the
-	// tessellation restates (docs/tessellation-design.md §2's Payload
+	// tessellation restates (agent-docs/tessellation-design.md §2's Payload
 	// row). That keeps the property the local was protecting: a stored term
 	// can disagree with the records only if it can outlive them, and none
 	// here can, because placed nils the triangle fields and re-runs Build,
@@ -200,9 +200,9 @@ type Payload struct {
 	TwistAreaCells       [][]TwistAreaCellClaims
 	RetainTwistAreaCells bool
 
-	// Proof is the mesh proof record docs/tessellation-design.md §2 states for
+	// Proof is the mesh proof record agent-docs/tessellation-design.md §2 states for
 	// this payload, composed by Build from the same build the triangle set
-	// above came out of (docs/tessellation-reach-design.md §4).
+	// above came out of (agent-docs/tessellation-reach-design.md §4).
 	Proof loftmesh.MeshProof
 }
 
@@ -238,7 +238,7 @@ func (pl Payload) Transform() r3.Transform { return pl.Xform }
 
 // ProvesSimple implements topo.SimpleProver. A payload with SurfaceResult true
 // and SectionDelta zero admits leg 4 on an argument STRONGER than the prism's:
-// the evaluator cannot return a loft body at ALL unless docs/loft-design.md
+// the evaluator cannot return a loft body at ALL unless agent-docs/loft-design.md
 // §6's crossing audit already passed over the complete held triangle set —
 // walls and both caps together — and non-self-intersection of a SUBSET (the
 // walls alone, once the caps are omitted) follows from non-self-intersection
@@ -262,7 +262,7 @@ func (pl Payload) ProvesSimple(context.Context) bool {
 func (pl Payload) AxialDelta() float64 { return pl.Delta }
 
 // Placed re-evaluates the same two records under the composed motion
-// (docs/loft-design.md §7, §12 PR 2a): it re-lifts every vertex from the
+// (agent-docs/loft-design.md §7, §12 PR 2a): it re-lifts every vertex from the
 // record under the FULL composed transform rather than moving the held mesh
 // incrementally, so delta does not accumulate across repeated placements —
 // one rounding, not one per placement, an advantage over
@@ -275,7 +275,7 @@ func (pl Payload) AxialDelta() float64 { return pl.Delta }
 // needed here. next := pl carries surfaceResult over unchanged — only the
 // triangle set and the proof composed from it are cleared below — so a
 // placed, duplicated or placed-copied sheet reproduces the sheet with no
-// further code (docs/surface-design.md §4.2).
+// further code (agent-docs/surface-design.md §4.2).
 func (pl Payload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
 	next := pl
 	next.Xform = composed

@@ -16,12 +16,12 @@ import (
 	"github.com/lestrrat-3d/decad/internal/topobuild"
 )
 
-// This file is route L of docs/modify-general-design.md ("modify-general §N"
-// below) and route V of docs/vertex-blend-design.md: a Chamfer or Fillet of
+// This file is route L of agent-docs/modify-general-design.md ("modify-general §N"
+// below) and route V of agent-docs/vertex-blend-design.md: a Chamfer or Fillet of
 // complete planar-face loops on a brep or stacked receiver (§4;
-// docs/loop-fillet-design.md, "loop-fillet
+// agent-docs/loop-fillet-design.md, "loop-fillet
 // §N", for the fillet arm). It also decides, for a Fillet or Chamfer that
-// route P does not take, which of route E (docs/brep-modify-design.md §5) and
+// route P does not take, which of route E (agent-docs/brep-modify-design.md §5) and
 // route L reads the selection: route E takes single straight edges along
 // reference axes, no two sharing a vertex. Route V takes a Fillet of those
 // edges with complete loops, and route L reads the remaining selections,

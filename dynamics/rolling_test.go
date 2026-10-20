@@ -31,7 +31,7 @@ func sideCylinder(t *testing.T, doc *decad.Document) *decad.Body {
 
 // TestScheduledStepCylinderRolls rolls a Ø20 cylinder on its side across a
 // fixed floor for one turn at ω = 2π rad/s in a four-body world, through the
-// scheduled step and the rolling track of docs/multibody-dynamics-design.md
+// scheduled step and the rolling track of agent-docs/multibody-dynamics-design.md
 // §10.4. Sixteen steps of 1/16 s move it π·20 mm along −y with its contact
 // point at rest within VelocityResidual.
 //
@@ -44,7 +44,7 @@ func sideCylinder(t *testing.T, doc *decad.Document) *decad.Body {
 // whose friction rows keep the contact point at rest. Without gravity the
 // contact set carries the pair from step to step with no event.
 //
-// On §2's tray the floor is a face-local plane (docs/multibody-dynamics-design.md
+// On §2's tray the floor is a face-local plane (agent-docs/multibody-dynamics-design.md
 // §10.6): the walls and rim stand in front of it, so every placed ruling and
 // rolling track also runs the column test against them. The cylinder starts
 // at y = 30 so its whole turn keeps clear of the walls, and it rolls under

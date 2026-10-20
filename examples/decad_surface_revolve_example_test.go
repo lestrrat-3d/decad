@@ -10,7 +10,7 @@ import (
 
 // WithSurfaceResult on Revolve omits the two caps a partial sweep would
 // otherwise close with, publishing a sheet instead of a solid
-// (docs/surface-design.md §4). A full revolution mints no closing face to
+// (agent-docs/surface-design.md §4). A full revolution mints no closing face to
 // omit in the first place, so there the option changes no face at all: the
 // result is a CLOSED sheet — no free edge — rather than a refusal.
 func Example_decad_surfaceRevolve() {

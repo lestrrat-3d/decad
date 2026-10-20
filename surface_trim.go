@@ -16,7 +16,7 @@ import (
 // Trim reads prismcells.Classify unchanged, while Split reads only the target
 // label. Every miss is a typed refusal at the call: a sheet's mesh proves no
 // occupied volume, and a mesh trim would decide topology from float signs on
-// chorded triangles (docs/surface-intersection-design.md §2.1).
+// chorded triangles (agent-docs/surface-intersection-design.md §2.1).
 //
 // Trim and Extend take the REVOLVE family too, over the two operands' meridian
 // views: §11's PR4, this file's own last section. Split's revolve arm is §11's
@@ -58,7 +58,7 @@ func Extend(ctx context.Context, b *Body, edges *EdgeQuery, tool *Body) (*Body, 
 }
 
 // TrimSide names which pieces of the receiver a Trim keeps
-// (docs/surface-intersection-design.md §8).
+// (agent-docs/surface-intersection-design.md §8).
 type TrimSide int
 
 const (
@@ -81,7 +81,7 @@ func (s TrimSide) String() string {
 }
 
 // Trim cuts b where it meets tool and returns the kept pieces as
-// one sheet body (docs/surface-intersection-design.md §8). b and
+// one sheet body (agent-docs/surface-intersection-design.md §8). b and
 // tool are consumed on the document's uniform terms (core §6); a refusal
 // consumes neither. It admits a pair whose two sweeps share ONE generator —
 // both the prism family (a straight Extrude/chain Extrude sweep) or both the
@@ -125,7 +125,7 @@ func Trim(ctx context.Context, b *Body, tool *Body, side TrimSide) (*Body, error
 // Split cuts target with tool and returns one solid per arranged target cell
 // in sketch's cell order. The target is a solid and the tool a sheet sharing
 // its generator: both straight sweeps, or both revolves about one axis
-// (docs/surface-intersection-design.md §2.1). Any other pair, or a miss on
+// (agent-docs/surface-intersection-design.md §2.1). Any other pair, or a miss on
 // that section's gate, is ErrUnsupported. Both operands are consumed only
 // after every piece has been built. A tool that separates no target cell is
 // ErrDegenerate, as is a nil context or a nil target. The document is the

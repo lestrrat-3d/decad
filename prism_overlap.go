@@ -8,7 +8,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// prismOverlapVolume is docs/prism-boolean-design.md §4.5's overlap-area
+// prismOverlapVolume is agent-docs/prism-boolean-design.md §4.5's overlap-area
 // reading (prismcells.OverlapVolume) as a Measurement. Each cell's scratch body
 // takes a fresh producer identity from a's document.
 func prismOverlapVolume(ctx context.Context, a, b *Body) (Measurement, bool, error) {

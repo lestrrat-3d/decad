@@ -24,7 +24,7 @@ type CoedgeUse struct {
 // two-face edge in opposite directions, and left every vertex's face fan a
 // single cycle (a closed solid) or a single path (a surface result's two
 // outer rims) — the same manifold-with-boundary invariant
-// docs/surface-design.md §9.1 states for the sheet validity audit, restated
+// agent-docs/surface-design.md §9.1 states for the sheet validity audit, restated
 // here because this audit runs on the ASSEMBLED composite body rather than
 // its recorded topology. The common audit admits free edges for sheets.
 // A closed composite solid checks exactly two faces per edge after this audit.

@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/general-boolean-design.md §3 A6's public-API suite: a
+// This file is agent-docs/general-boolean-design.md §3 A6's public-API suite: a
 // pair whose re-expression or prior displacement meets a split boundary
 // (prism-boolean §3.4) builds analytically, its crossings charged the
 // displacement they can amplify, and a tangent crossing falls back to the

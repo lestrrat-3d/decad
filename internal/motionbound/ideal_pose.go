@@ -21,7 +21,7 @@ type IdealPose struct {
 
 // Then is the ideal pose that applies p first and q after it, x ↦ q(p(x)),
 // in x ↦ rot·x + shift form with a zero pivot
-// (docs/linkage-check-design.md §5.1): p carries x to B_p·x + t_p, with
+// (agent-docs/linkage-check-design.md §5.1): p carries x to B_p·x + t_p, with
 // t_p = B_p·(−c_p) + c_p + s_p its image of the origin, so q(p(x)) is
 // B_q·B_p·x + B_q·(t_p − c_q) + c_q + s_q. Every term is an interval product
 // or sum, so the result encloses q'∘p' for every member p' of p's enclosure
@@ -155,7 +155,7 @@ func (mf MotionFrame) ScaledRotation(sin, cos proofbound.RatInterval) ScaledIvMa
 // at builds the ideal pose for the exact parameter p.
 //
 // A between's parameter is the fraction s = p.base, and its ideal path is
-// docs/motion-check-design.md §5.1's T*(s) = S*(s) ∘ From: the exact screw of
+// agent-docs/motion-check-design.md §5.1's T*(s) = S*(s) ∘ From: the exact screw of
 // the read parameters, rotating by s·θ about the line through c = Point along
 // n = Axis/|Axis| and sliding s·d along n, applied after the exact From. In
 // x ↦ rot·x + shift form that is rot = R(s·θ, n)·B(From) and
@@ -197,7 +197,7 @@ func (mf MotionFrame) At(p MotionParam) IdealPose {
 }
 
 // AtRange is the ideal pose for every parameter between lo and hi at once
-// (docs/linkage-check-design.md §15.4): a revolute's Rodrigues matrix built
+// (agent-docs/linkage-check-design.md §15.4): a revolute's Rodrigues matrix built
 // from ParamSinCos(lo) widened on both sides by lo.SpanUpper(hi) — sine and
 // cosine are 1-Lipschitz in the angle — and a prismatic's translation by the
 // interval [lo, hi] of base millimetres along its unit direction. Every member
@@ -234,7 +234,7 @@ func (mf MotionFrame) AtRange(lo, hi MotionParam) IdealPose {
 }
 
 // StatedEnd is the ideal pose of a between's stated To, x ↦ B(To)·x + t(To)
-// read exactly: what η_To of docs/motion-check-design.md §5.1 charges the
+// read exactly: what η_To of agent-docs/motion-check-design.md §5.1 charges the
 // s = 1 pose against, beside the ideal end T*(1).
 func (mf MotionFrame) StatedEnd() IdealPose {
 	zero := proofbound.PointInterval(new(big.Rat))

@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/surface-design.md §15's T31-T36, T46-T47 and T50-T52
+// This file is agent-docs/surface-design.md §15's T31-T36, T46-T47 and T50-T52
 // public coverage for internal/stitchrecord/flux.go's per-surface flux integral: the
 // `Plane`, `Cylinder`, `Cone` and `Sphere` arms that let `Stitch` close a
 // boundary holding a curved face. T37, T38, T48 and T49 are internal-only
@@ -238,7 +238,7 @@ func TestStitchPatchCappedTubeClosesToASolid(t *testing.T) {
 }
 
 // T35 (two curved sheets from different features, refused by Rule S's
-// single-source restriction) is internal-only: docs/surface-design.md §6.2's
+// single-source restriction) is internal-only: agent-docs/surface-design.md §6.2's
 // Table J admits a free Line3 edge alone (J5 is undecidable for Circle3,
 // Arc3, NURBSCurve and FacetedCurve, since none of them carries a bound
 // field to ask "zero bound" of — internal/stitchrecord/plan.go's own doc comment). So no
@@ -796,7 +796,7 @@ func requireStitchedMassEncloses(t *testing.T, solid *decad.Body, vol *big.Float
 // whose wall tags are not the surfaces their records denote: a side climbing
 // 5e-10 over a unit run, tagged a Cylinder, and a side leaning 5e-10 off
 // perpendicular, tagged a Plane. The flux arms integrate the tag, so Stitch
-// refuses rather than publish the tag's volume (docs/surface-design.md §6.4,
+// refuses rather than publish the tag's volume (agent-docs/surface-design.md §6.4,
 // internal/stitchrecord/flux.go's fluxTagsDenoted).
 //
 // Shown to fail: without that gate Stitch published volumes 2.1e-9 and

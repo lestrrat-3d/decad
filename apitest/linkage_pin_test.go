@@ -11,13 +11,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file holds scene 8 of docs/linkage-check-design.md §11: a pin on one
+// This file holds scene 8 of agent-docs/linkage-check-design.md §11: a pin on one
 // moving link in a bore on another, coaxial in the ideal poses and a few ulps
 // off concentric in the float ones, which the clearance kernel's windowed
-// nested cell (docs/clearance-design.md §4) measures at every pose.
+// nested cell (agent-docs/clearance-design.md §4) measures at every pose.
 //
 // The pin turns about its own joint, so the pair is a constant pair
-// (docs/linkage-check-design.md §5.9): it is evaluated once, on the two
+// (agent-docs/linkage-check-design.md §5.9): it is evaluated once, on the two
 // bodies as they stand, and every pose reads that one outcome.
 //
 // Legs seen red, each by breaking what it guards: dropping the symmetry test

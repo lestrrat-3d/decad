@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file holds scene 5 of docs/linkage-check-design.md §11: drives that
+// This file holds scene 5 of agent-docs/linkage-check-design.md §11: drives that
 // pass through waypoints (§2.3). A drive whose sweeps carry n − 1 Via values
 // has n segments of equal share, segment j covering s ∈ [j/n, (j+1)/n], and
 // each joint runs linearly between consecutive waypoints. The internal test
@@ -74,7 +74,7 @@ func liftSwingLowerValues(s float64) (float64, float64) {
 	return 90, 60 * (1 - s)
 }
 
-// TestVerifyLinkageWaypoints is scene 5 of docs/linkage-check-design.md §11.
+// TestVerifyLinkageWaypoints is scene 5 of agent-docs/linkage-check-design.md §11.
 //
 // Lift, swing, lower: the lowering arm's underside stands at z = 60·(1 − s)
 // over the landing block's top face z = 5, which it reaches at s* = 11/12;

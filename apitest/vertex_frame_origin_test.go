@@ -14,7 +14,7 @@ import (
 )
 
 // This file pins the frame-ORIGIN half of every analytic builder's vertex
-// lift (docs/evaluator-design.md §8): a sketch plane whose U and V are the
+// lift (agent-docs/evaluator-design.md §8): a sketch plane whose U and V are the
 // world X and Y axes still rounds every vertex it lifts when its origin is
 // not a number the plane-local coordinate adds to exactly. Each vertex must
 // sit within its published bound of the exact rational lift of the point it

@@ -54,7 +54,7 @@ func TestThreeBodySimultaneousCornerImpact(t *testing.T) {
 	require.Equal(t, dynamics.BodyPair{A: floor, B: box}, report.Events[0].Pair)
 	require.Equal(t, dynamics.BodyPair{A: box, B: wall}, report.Events[1].Pair)
 	// Both initial touches take restitution 0.5 like any contact
-	// (docs/multibody-dynamics-design.md §6.5): each face delivers
+	// (agent-docs/multibody-dynamics-design.md §6.5): each face delivers
 	// 1.5·100 kg·mm/s and the box leaves the corner at (−50, 0, 50) mm/s.
 	for _, event := range report.Events {
 		require.InDelta(t, 150, event.NormalImpulse.Base(), 1e-6)

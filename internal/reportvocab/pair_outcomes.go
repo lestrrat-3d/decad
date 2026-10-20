@@ -21,7 +21,7 @@ const (
 	PairOverlapping
 )
 
-// SheetSolidVerdict is docs/surface-design.md §9.3's pair decision procedure's
+// SheetSolidVerdict is agent-docs/surface-design.md §9.3's pair decision procedure's
 // answer for a pair holding exactly one sheet operand against a proven solid.
 // A sheet encloses no region, so §1's four interior relations do not apply to
 // this pair shape at all; these four answers replace them.

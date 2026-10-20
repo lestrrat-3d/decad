@@ -272,7 +272,7 @@ func TestUnionDisjointCubes(t *testing.T) {
 // pair's two routes. Disjoint footprints stay on the mesh path because the
 // PR1 analytic result has two lumps. Overlapping and contained analytic prisms
 // reach the analytic union and build one prism instead of a coplanar mesh-path
-// refusal (docs/prism-boolean-design.md §4.4). Only the CONTAINED pair leaves
+// refusal (agent-docs/prism-boolean-design.md §4.4). Only the CONTAINED pair leaves
 // every boundary whole, so only it reaches §7's Exact arm; a partial overlap
 // merges cut fragments and carries their cut-parameter displacement.
 func TestUnionCoplanarCapsBuildAnalyticPrismUnion(t *testing.T) {
@@ -630,7 +630,7 @@ func TestBooleanBoundComposition(t *testing.T) {
 	require.Positive(t, secondMesh.Bound().Mag())
 
 	// Both operands carry a held bound, and the union keeps each one where
-	// that operand's vertices are (docs/faceted-vertex-bounds-design.md §3.1).
+	// that operand's vertices are (agent-docs/faceted-vertex-bounds-design.md §3.1).
 	// The operands are disjoint, so no rim forms and no vertex moves: the
 	// result's bound is the larger operand bound exactly, never one operand's
 	// alone and never their sum.
@@ -677,7 +677,7 @@ func TestBooleanChainsWithinHeldBound(t *testing.T) {
 }
 
 // TestBooleanChainDepthGateReadsOnlyTheTouchedRims is docs/api-design.md
-// §8's "The chain depth" rule (docs/faceted-vertex-bounds-design.md §5): two
+// §8's "The chain depth" rule (agent-docs/faceted-vertex-bounds-design.md §5): two
 // hole tools Placed 16 mm down and 0.125 mm sideways stay on the mesh path
 // (the exact shared-axis arm excludes an in-plane shift), and the second hole's
 // rims hold bounds coarser than
@@ -764,7 +764,7 @@ func coneSegment(t *testing.T, doc *decad.Document, a, b r3.Vec, ra, rb float64)
 }
 
 // TestBooleanChainOfConesContinuesPastEachJoint is the mtilt hand-off's
-// request 1 shape (docs/faceted-vertex-bounds-design.md §6, "Curved operands"):
+// request 1 shape (agent-docs/faceted-vertex-bounds-design.md §6, "Curved operands"):
 // three cone frustums, each reaching back into the previous one by its own
 // root radius. Each joint's rims carry several times the pair's chord
 // tolerance, but the next segment meets the previous one only at its far end,
@@ -844,7 +844,7 @@ func TestBooleanChainOfConesContinuesPastEachJoint(t *testing.T) {
 // TestUnionCupOperand pins the operand admission set: booleans tessellate their
 // operands, and tessellation accepts the prism, cup and faceted payload
 // classes, so a Shell-built cup is a first-class operand
-// (docs/modify-reach-design.md §11).
+// (agent-docs/modify-reach-design.md §11).
 func TestUnionCupOperand(t *testing.T) {
 	t.Parallel()
 	doc, box := shellBox(t)
@@ -1732,7 +1732,7 @@ func BenchmarkCutCircularWasher(b *testing.B) {
 
 // BenchmarkUnionCircularMeshPath is the benchmark the naive circular Union
 // does NOT exercise: two co-directional coplanar discs resolve through the
-// analytic prism reduction (docs/prism-boolean-design.md) in milliseconds and
+// analytic prism reduction (agent-docs/prism-boolean-design.md) in milliseconds and
 // never reach the mesh path at all. Here the tool disc is swept symmetrically
 // about z = 0 while the base disc spans z = 0..20, so neither cap plane
 // matches and the analytic reduction refuses the pair — forcing the same

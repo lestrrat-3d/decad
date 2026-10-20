@@ -9,7 +9,7 @@ import (
 // retainedPlaneOf names the exact plane of each facet's source face when that
 // face is a retained Plane whose tag is the plane itself: no stated normal
 // departure, so no placement or similarity left the tag a float image
-// (docs/faceted-source-retention-design.md §11).
+// (agent-docs/faceted-source-retention-design.md §11).
 func retainedPlaneOf(m *topo.Mesh) func(facet int) (r3.Frame, bool) {
 	return func(facet int) (r3.Frame, bool) {
 		if facet >= len(m.Source) {

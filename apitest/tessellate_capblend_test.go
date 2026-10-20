@@ -47,7 +47,7 @@ func chamferedPlate(t *testing.T) *decad.Body {
 // every held coordinate is a recorded integer. Nothing is chorded, no contour
 // displacement arises from an inexact offset, and both sweep levels are exact,
 // so every face's published displacement is zero — the one configuration
-// docs/tessellation-design.md §2 lets a mesh claim exactness in.
+// agent-docs/tessellation-design.md §2 lets a mesh claim exactness in.
 func TestTessellateCapBlendPlateIsExact(t *testing.T) {
 	t.Parallel()
 	const d = chamferedPlateSetback
@@ -71,7 +71,7 @@ func TestTessellateCapBlendPlateIsExact(t *testing.T) {
 
 // TestTessellateCapBlendPlateExportsDeterministically pins the export writers
 // over the new payload class: repeated STL and OBJ output is byte identical
-// (docs/tessellation-design.md §14).
+// (agent-docs/tessellation-design.md §14).
 func TestTessellateCapBlendPlateExportsDeterministically(t *testing.T) {
 	t.Parallel()
 	chamfered := chamferedPlate(t)
@@ -228,7 +228,7 @@ func TestTessellateCapBlendRoundedRectMiters(t *testing.T) {
 		`a mitered band bound must exceed the side ring's own sagitta alone`)
 }
 
-// chordSagittaOfRoundedCorner restates docs/tessellation-design.md §3's
+// chordSagittaOfRoundedCorner restates agent-docs/tessellation-design.md §3's
 // published sagitta for a quarter-turn corner arc chorded at the smallest count
 // that fits tol — the figure a coincident-window band would have published on
 // its own.
@@ -368,7 +368,7 @@ func TestTessellateCapBlendPlacedStaysWatertight(t *testing.T) {
 		`placement rounding is charged into the occupied-volume proof, not a reason to withhold it`)
 }
 
-// Cap-loop chamfer bodies as boolean operands (docs/tessellation-reach-design.md
+// Cap-loop chamfer bodies as boolean operands (agent-docs/tessellation-reach-design.md
 // §7). The mesh publishes the slice-wise occupied-volume proof for a band of
 // whole turns, line-line miters and exactly G1 joins, and every boolean then
 // takes the body as an operand; any other band stays export-only.

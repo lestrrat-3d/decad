@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The fixtures of docs/multibody-dynamics-design.md §13 PR 13: §10.2's
+// The fixtures of agent-docs/multibody-dynamics-design.md §13 PR 13: §10.2's
 // departure from touch under rotation, §10.3's band track, and the replay
 // proof of the general planar sweep. Every input is dyadic; the edge-box scene
 // sits tumbleOffset from the origin, so its rounded poses deviate from the
@@ -443,7 +443,7 @@ func TestSweepPairPlanarClearReplay(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
 
-// The sweep fixtures of docs/multibody-dynamics-design.md §13 PR 14a: §10.5's
+// The sweep fixtures of agent-docs/multibody-dynamics-design.md §13 PR 14a: §10.5's
 // band track over the support set. The tilted cube of
 // contact_support_band_test.go rests on its near edge, which lies on the Y
 // axis, and turns about that axis at 1 rad/s, lowering its far edge from
@@ -602,7 +602,7 @@ func TestSweepPairSupportSetArrivalEndsTrack(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
 
-// The sweep fixtures of docs/multibody-dynamics-design.md §13 PR 14f: §10.8's
+// The sweep fixtures of agent-docs/multibody-dynamics-design.md §13 PR 14f: §10.8's
 // rested vertex, held on both sides of the support plane, and the per-vertex
 // curvature K_p.
 //
@@ -762,7 +762,7 @@ func TestSweepPairPerVertexCurvature(t *testing.T) {
 	}
 }
 
-// The sweep fixtures of docs/multibody-dynamics-design.md §13 PR 14c: §10.6's
+// The sweep fixtures of agent-docs/multibody-dynamics-design.md §13 PR 14c: §10.6's
 // face-local support plane. The §2 tray's walls rise above its floor, so no
 // face of the tray holds the whole tray behind it; its floor carries the
 // departure and the band track through the column test, which keeps every

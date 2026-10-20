@@ -15,7 +15,7 @@ import (
 )
 
 // This file subdivides one facet along its exact contact segments
-// (docs/evaluator-design.md §9). The segments assemble into chains — the
+// (agent-docs/evaluator-design.md §9). The segments assemble into chains — the
 // intersection curve's trace across the facet — every chain endpoint lies on
 // the facet's own boundary (an interior endpoint would mean the curve stops
 // mid-surface, impossible between closed solids), and a closed chain (the

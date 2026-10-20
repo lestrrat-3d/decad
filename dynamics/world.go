@@ -67,7 +67,7 @@ type StepConfig struct {
 	MaxIterations           int
 	MaxEvents               int
 	// MaxPairSweeps bounds the SweptBox and SweepPair calls one step makes, across every slice
-	// (docs/multibody-dynamics-design.md §3.3, §12). A certificate the step
+	// (agent-docs/multibody-dynamics-design.md §3.3, §12). A certificate the step
 	// reuses costs nothing. It must be positive.
 	MaxPairSweeps uint64
 }
@@ -235,7 +235,7 @@ func validateStepConfig(cfg StepConfig) error {
 			return fmt.Errorf("%w: invalid %s", ErrInvalidInput, check.name)
 		}
 	}
-	// docs/multibody-dynamics-design.md §10.5: every band the SupportBand
+	// agent-docs/multibody-dynamics-design.md §10.5: every band the SupportBand
 	// publishes must pass the penetration residual.
 	if cfg.Contact.SupportBand != (units.Value{}) && (!validQuantity(cfg.Contact.SupportBand, units.Length, false) ||
 		cfg.Contact.SupportBand.Base() > cfg.PenetrationResidual.Base()) {
@@ -394,7 +394,7 @@ type BodyState struct {
 // State by changing an entry starts from clone.
 //
 // A State that a step published also carries that step's contact set and its reuse cache
-// (docs/multibody-dynamics-design.md §3.2). Both are immutable and describe
+// (agent-docs/multibody-dynamics-design.md §3.2). Both are immutable and describe
 // exactly these entries; a State derived from it by clone drops them.
 type State struct {
 	world    *World

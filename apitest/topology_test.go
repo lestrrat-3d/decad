@@ -90,7 +90,7 @@ func TestLoopCoEdgesReturnImmutableView(t *testing.T) {
 	require.Same(t, wantEdge, loop.Edges()[0])
 }
 
-// TestNURBSSurfaceReportsKindNURBS pins docs/spline-design.md §7: a
+// TestNURBSSurfaceReportsKindNURBS pins agent-docs/spline-design.md §7: a
 // NURBSSurface is a tagged, opaque Surface variant reporting the existing
 // KindNURBS discriminant, carrying no exported geometry of its own.
 func TestNURBSSurfaceReportsKindNURBS(t *testing.T) {
@@ -99,7 +99,7 @@ func TestNURBSSurfaceReportsKindNURBS(t *testing.T) {
 	require.Equal(t, decad.KindNURBS, s.Kind())
 }
 
-// TestNURBSCurveSealsIntoCurve pins docs/spline-design.md §7: a NURBSCurve is
+// TestNURBSCurveSealsIntoCurve pins agent-docs/spline-design.md §7: a NURBSCurve is
 // NURBSSurface's one-dimensional analog. Curve is sealed by its marker method
 // alone and declares no Kind, so assigning a NURBSCurve to a Curve variable
 // is the whole of what the variant publishes.
@@ -110,7 +110,7 @@ func TestNURBSCurveSealsIntoCurve(t *testing.T) {
 }
 
 // requireSolidTopologyBaseline asserts the sheet-body-vocabulary readings
-// that hold on every solid this evaluator builds today (docs/surface-design.md
+// that hold on every solid this evaluator builds today (agent-docs/surface-design.md
 // §2.1, §2.2): the body reports BodySolid without any builder ever writing
 // `kind: BodySolid` — the seven &Body{...} literals rely on BodySolid being
 // the iota zero — every edge bounds exactly two faces and none is free, and
@@ -133,7 +133,7 @@ func requireSolidTopologyBaseline(t *testing.T, body *decad.Body, wantFaces, wan
 	require.False(t, shells[0].IsVoid(), `an outer shell bounds no internal cavity`)
 }
 
-// TestSolidBodiesReportSolidKindAndNoFreeBoundary pins docs/surface-design.md
+// TestSolidBodiesReportSolidKindAndNoFreeBoundary pins agent-docs/surface-design.md
 // §2.1's Table K first row and §2.2's Edge.IsFree/Shell.IsOpen readings
 // against three solids the evaluator already builds: a box extrude, a holed
 // extrude and a full-revolution annulus. None of today's builders produces a

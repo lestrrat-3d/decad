@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestVerifyJointBoxTiltedPendulum pins docs/linkage-check-design.md §5.8's
+// TestVerifyJointBoxTiltedPendulum pins agent-docs/linkage-check-design.md §5.8's
 // hull points and directions in the cell form (§14.3): scene 13's box — the
 // pendulum under a slide — carried by tiltToDiagonal. The carriage,
 // x, y ∈ [−5, 5]·[−8, −2], z ∈ [120, 130], slides over [0, 30] mm along the
@@ -60,7 +60,7 @@ func TestVerifyJointBoxTiltedPendulum(t *testing.T) {
 }
 
 // TestVerifyJointBoxSlotKeepsItsBox pins the line-segment test of
-// docs/linkage-check-design.md §5.8's hull points in the cell form: a slot,
+// agent-docs/linkage-check-design.md §5.8's hull points in the cell form: a slot,
 // cap centres (0, 45) and (0, 85) with radius 5, z ∈ [0, 10], rocks over
 // [−20°, 20°] about Z through the origin under a wall x ∈ [−100, 100],
 // y ∈ [95, 105], z ∈ [−10, 20]. Its top cap reaches y = 85·cos θ + 5, so the

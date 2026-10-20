@@ -63,7 +63,7 @@ const (
 	ContactTouching
 	ContactOverlapping
 	// ContactBand is published for a body whose held boundary carries a
-	// positive displacement (docs/multibody-dynamics-design.md §10.4), or for
+	// positive displacement (agent-docs/multibody-dynamics-design.md §10.4), or for
 	// an exact planar pair apart by at most the request's SupportBand
 	// (§10.5): the interiors are disjoint except possibly within a band of
 	// width Gap.Bound around Gap.Value, which is zero. A displaced pair's
@@ -83,7 +83,7 @@ const (
 	ContactAmbiguousFeature
 	ContactPointTooCoarse
 	// ContactNonConvex withholds a manifold because neither body carries the
-	// convexity certificate of docs/multibody-dynamics-design.md §9.2: an
+	// convexity certificate of agent-docs/multibody-dynamics-design.md §9.2: an
 	// overlap, or a touch whose contacts no single face of one body holds
 	// with the other body's corners inside it (§10.5).
 	ContactNonConvex
@@ -167,7 +167,7 @@ type ContactReport struct {
 // plane of the other, its foot strictly inside that face, at its exact
 // height; and an exact planar pair apart by at most the band is ContactBand
 // with Gap [0 ± g], g its gap's upper end, publishing that set
-// (docs/multibody-dynamics-design.md §10.5).
+// (agent-docs/multibody-dynamics-design.md §10.5).
 // At identity query poses, the analytic clearance kernel can prove relations
 // for other solids. Only its ruling touches publish a manifold: the two ends
 // of a full source cylinder's ruling on a planar face or another cylinder.
@@ -446,7 +446,7 @@ func classifyPlanarFallback(ctx context.Context, report *reportvocab.ContactRepo
 
 // classifyPlanarManifold completes an oriented source-box report whose box
 // patches publish no manifold for a touching or overlapping pair: both boxes
-// are exact planar bodies (docs/multibody-dynamics-design.md §9), so §9.3's
+// are exact planar bodies (agent-docs/multibody-dynamics-design.md §9), so §9.3's
 // manifold replaces the report when the exact planar relation agrees and
 // every published point is an edge or vertex of one box on, in or crossing
 // the other, the rows the box patches do not cover. Face pairs stay with the

@@ -13,7 +13,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// Profile is a coil profile's held station chain (docs/helix-design.md §5.3
+// Profile is a coil profile's held station chain (agent-docs/helix-design.md §5.3
 // and §11 PR 3): every station once, loop-major (outer loop first, then each
 // hole), and per loop the station indices in walk order. A LineSeg
 // contributes its walk start. An ArcSeg or a whole CircleSeg contributes its
@@ -105,7 +105,7 @@ func (s Segment) IsArc() bool {
 }
 
 // Loops returns the held station chain of a coil profile whose segments
-// are whole LineSegs, whole ArcSegs and whole CircleSegs (docs/helix-design.md
+// are whole LineSegs, whole ArcSegs and whole CircleSegs (agent-docs/helix-design.md
 // Table CS row CS7). chordsPerTurn is the number of chords a full turn of an
 // arc is cut into; an arc of sweep Δ takes ⌈chordsPerTurn·Δ/2π⌉ of them, at
 // least one, and a whole circle takes chordsPerTurn, at least three. Any

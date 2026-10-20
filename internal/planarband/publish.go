@@ -1,6 +1,6 @@
 // Package planarband publishes the contact report of two admitted planar
 // solids from the exact planar kernel's relation over their held meshes
-// (docs/multibody-dynamics-design.md §9.3–§9.6, §10.4, §10.5). The root
+// (agent-docs/multibody-dynamics-design.md §9.3–§9.6, §10.4, §10.5). The root
 // package admits the bodies, builds their snapshots at the query poses and
 // caches their §9.2 certificates; this package turns the kernel's answer into
 // the relation, gap, manifold and reason.

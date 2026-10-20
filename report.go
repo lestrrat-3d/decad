@@ -8,9 +8,9 @@ import (
 )
 
 // This file owns the public verification diagnostic and pair rows.
-// The verdict rules are in docs/verification-design.md §1-§3.
+// The verdict rules are in agent-docs/verification-design.md §1-§3.
 
-// Status is a verification verdict. See docs/verification-design.md §6.
+// Status is a verification verdict. See agent-docs/verification-design.md §6.
 type Status int
 
 // String renders the verdict name.

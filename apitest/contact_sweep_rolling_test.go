@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The root fixtures of docs/multibody-dynamics-design.md §13 PR 20: a full
+// The root fixtures of agent-docs/multibody-dynamics-design.md §13 PR 20: a full
 // source cylinder lying on a floor under a constant-ω drift keeps §10.4's
 // rolling band track. Every length is dyadic; the cylinder's
 // axis sits at y = rollingAxisY, so a rotation about it rounds the heights of
@@ -411,7 +411,7 @@ func placedRoll(t *testing.T, from r3.Transform) decad.RigidDriftSegment {
 	return path
 }
 
-// The placed starts of docs/multibody-dynamics-design.md §10.4 ("Rolling"):
+// The placed starts of agent-docs/multibody-dynamics-design.md §10.4 ("Rolling"):
 // a start pose other than the identity. A signed-axis start is an exact
 // touch, as at the identity. Any other start is ContactPair's band of the
 // pose basis's rounding (contact_analytic_manifold_test.go), and the track
@@ -597,7 +597,7 @@ func TestSweepPairRollingPlacedStart(t *testing.T) {
 func pathDurationOf(path decad.RigidDriftSegment) float64 { return path.Duration.Base() }
 
 // The rolling track on the §2 tray's floor, a face-local plane
-// (docs/multibody-dynamics-design.md §10.6): the track runs the column test
+// (agent-docs/multibody-dynamics-design.md §10.6): the track runs the column test
 // over the coordinate box of the cylinder's eight staged corners' ideal paths
 // at every grid fraction of its band search. The tray is posed so its floor's
 // top face is z = −10, the plain floor's of rollingScene.

@@ -188,7 +188,7 @@ var documentWriteFields = map[string]struct{}{
 // composite literal that sets one of them; a call of X.LiveMu.Lock or
 // X.LiveMu.Unlock. Reads, RLock and RUnlock, and calls of MintLevel,
 // MintCurve, IsLive and Live pass. Root is the writer and is not scanned
-// (docs/evaluator-design.md §8).
+// (agent-docs/evaluator-design.md §8).
 func TestTopoDocumentWriteGuard(t *testing.T) {
 	t.Parallel()
 	var bad []string

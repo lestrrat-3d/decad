@@ -62,7 +62,7 @@ func MergeWithChain(budget *proofbound.WorkBudget, selected []*sketch.Profile,
 }
 
 // MergeLoops is Merge for a selection whose survivors close into several
-// loops (docs/general-boolean-design.md §3 A5's disjoint Union): the same
+// loops (agent-docs/general-boolean-design.md §3 A5's disjoint Union): the same
 // edge counting, then ChainClosedLoops partitions the survivors into closed
 // cycles, and each cycle is recorded and closure-falsified as Merge records
 // its one loop. The loops are the candidate boundaries only: whether they

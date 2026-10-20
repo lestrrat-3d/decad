@@ -21,11 +21,11 @@ import (
 )
 
 // This file holds the cap-loop chamfer's constructed-geometry gates
-// (docs/modify-reach-design.md Table SX) and the mixed offset section they
+// (agent-docs/modify-reach-design.md Table SX) and the mixed offset section they
 // audit.
 
 // RequireCornerLoci is SX14's corner-locus half
-// (docs/modify-reach-design.md §4 stage 6). At a miter corner where a circular
+// (agent-docs/modify-reach-design.md §4 stage 6). At a miter corner where a circular
 // wall meets its neighbour, the cap-level foot rides a conic locus as the
 // offset grows, and the band's slant ruling and its circular patch's
 // chord-locus term both read a proven bound on that locus
@@ -84,7 +84,7 @@ func RequireCornerLoci(budget *proofbound.WorkBudget, cbp Payload) error {
 }
 
 // RequireLevelsSeparate is SX13's AXIAL half (Table SX,
-// docs/modify-reach-design.md §4 stage 6 and §8.3), the sibling of
+// agent-docs/modify-reach-design.md §4 stage 6 and §8.3), the sibling of
 // capband.BandRadius. The band has two directrices and the
 // setback displaces both: `d` in the plane, which capband.BandRadius proves survived
 // float64 at each circular wall's own radius, and `d` along the sweep, which
@@ -124,7 +124,7 @@ func RequireLevelsSeparate(cbp Payload) error {
 }
 
 // AuditSetbackSpan runs SX6 and the stage-6 offset audit again at the
-// top of each cap's setback span (docs/modify-reach-design.md §8.3.1). A
+// top of each cap's setback span (agent-docs/modify-reach-design.md §8.3.1). A
 // setback stated in a unit other than millimetres is held as a float dc some
 // dcDelta away from the value the caller stated, so the stated value is any
 // point of [dc − dcDelta, dc + dcDelta]. The audit at dc certifies every

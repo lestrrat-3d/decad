@@ -77,7 +77,7 @@ var ErrNegativeMagnitude = decaderr.ErrNegativeMagnitude
 // caller drew a piece of it, or an
 // uncertified range as an exact trim, would misstate the input geometry, so
 // decad rejects — it never repairs, projects, fits or solves for a point.
-// Full semantics in docs/sketch-seam-design.md.
+// Full semantics in agent-docs/sketch-seam-design.md.
 var ErrUnrecordableProfile = decaderr.ErrUnrecordableProfile
 
 // ErrNotSolid is returned by a region quantity of a body that is not a valid
@@ -129,7 +129,7 @@ var ErrNotFinite = decaderr.ErrNotFinite
 // requested intent. Evaluator staging is explicit and rejected at the call —
 // never silently approximated or narrowed — and a rejected operation leaves
 // the document untouched. See
-// docs/evaluator-design.md §2. A public Union, Cut or Intersect wraps a valid
+// agent-docs/evaluator-design.md §2. A public Union, Cut or Intersect wraps a valid
 // but unclassifiable contact or analytic prism-arrangement refusal in a
 // [BooleanError] carrying [BooleanUnsupportedContact], but an operand no
 // boolean may consume (a cap-loop chamfer body whose band has a mitered

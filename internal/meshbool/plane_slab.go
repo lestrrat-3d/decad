@@ -9,7 +9,7 @@ import (
 )
 
 // SetSlabBounds sets SlabBound for the facets whose true piece lies in an
-// exact plane (docs/faceted-source-retention-design.md §11). planeOf returns
+// exact plane (agent-docs/faceted-source-retention-design.md §11). planeOf returns
 // the frame of facet i's plane and true for such a facet. Every other facet
 // keeps FacetBound. SetVertexBounds must have run.
 func (bm *BoolMesh) SetSlabBounds(planeOf func(facet int) (r3.Frame, bool)) {

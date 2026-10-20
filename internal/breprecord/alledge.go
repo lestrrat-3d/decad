@@ -1,6 +1,6 @@
 // Package breprecord holds the BRep family's payload records and their
 // builders over topology nodes. It implements topo.Payload
-// (docs/evaluator-design.md §8) and links nodes only; root maps them to
+// (agent-docs/evaluator-design.md §8) and links nodes only; root maps them to
 // handles through the allocator it passes in the builder environment.
 package breprecord
 

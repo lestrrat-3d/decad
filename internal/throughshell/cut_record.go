@@ -190,7 +190,7 @@ func (tc Cut) ErodeSection(budget *proofbound.WorkBudget, rm Removal, call Shell
 // OpeningSection is stage 3 on S with a removed wall run (§3.2's
 // second row): A ⊖ t's section is the side opening's cavity section C over
 // the kept chain, cut at each end by the rim rule of
-// docs/shell-opening-design.md Table RO, built and audited by
+// agent-docs/shell-opening-design.md Table RO, built and audited by
 // prismshell.SideOpeningRegions in that document's gate order (SO6, SO3's height half,
 // S11a and SO1, SO2, SO4 per end, modify §5's audit of W and C, the exact area
 // identity), whose refusals keep their codes. No section limit runs: the
@@ -313,7 +313,7 @@ func (tc Cut) Cavity(ctx context.Context, bp breprecord.Payload, eroded momentin
 	return cavity, nil
 }
 
-// This file is route S's rim assembly (docs/modify-general-design.md §3.3
+// This file is route S's rim assembly (agent-docs/modify-general-design.md §3.3
 // steps 5 and 6, "modify-general §N" below). Each removed face R is stated as
 // a planar face, and its rim is R's region less the cavity's trace in R's
 // plane: R's outer loop holding every cavity face there as a hole, and one

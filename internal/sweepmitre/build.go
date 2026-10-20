@@ -18,7 +18,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file builds docs/sweep-design.md §16's mitred polyline sweep: the
+// This file builds agent-docs/sweep-design.md §16's mitred polyline sweep: the
 // §16.3 construction over exact rationals, Table SM rows SM5 through SM8, the
 // single rounding into the held vertex table, Table BM's topology, and
 // §16.6's four readings, all taken over the rational vertices.

@@ -8,14 +8,14 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
-// PairStations generates docs/spline-design.md §6.2.1's shared dyadic chord
+// PairStations generates agent-docs/spline-design.md §6.2.1's shared dyadic chord
 // station chain for two paired Tier A free-form span chains — the primitive a
 // same-kind free-form loft pairing (a10-plan.md Part 3 PR 9) composes per
 // paired segment, and the one place DyadicSpanSagittaUpper's bound is turned into an
 // actual chord chain rather than a single span's own reading.
 //
 // Equal span counts are this generator's input contract. A loft first
-// refines unequal chains to a common count (docs/loft-design.md §5.1).
+// refines unequal chains to a common count (agent-docs/loft-design.md §5.1).
 // This function checks the contract defensively before indexing both chains.
 //
 // THE STATION SET IS SHARED BY CONSTRUCTION, stated here as the reason the two
@@ -29,7 +29,7 @@ import (
 // boundaries, and the two station lists this function returns are the same
 // length by that construction, not by a count taken afterward.
 //
-// MEASURE THEN BISECT, NEVER SIZE A DEPTH FROM A RATE — docs/spline-design.md
+// MEASURE THEN BISECT, NEVER SIZE A DEPTH FROM A RATE — agent-docs/spline-design.md
 // §6.1's rule, restated for a loop that (unlike §6.1's own fixed-depth
 // bracket) DOES have a target to stop on. Starting at one cell per span, each
 // cell's sagitta is measured on BOTH sides (DyadicSpanSagittaUpper); a
@@ -67,7 +67,7 @@ import (
 // The HARD CAP bounds the number of CHORD CELLS the finished chain carries —
 // the accepted leaves this call returns stations for — and never the number of
 // cells its recursion happens to visit on the way to them. It reuses
-// MaxChordsPerWalk and ErrTooManyChords (tessellate.go; docs/spline-design.md
+// MaxChordsPerWalk and ErrTooManyChords (tessellate.go; agent-docs/spline-design.md
 // Table R row R8) rather than minting a new ceiling, and it binds at exactly
 // the count that cap's own message states ("more than N chords on one curve"):
 // a walk refuses when, and only when, the chain it is building would carry
@@ -95,7 +95,7 @@ import (
 // it refuses.
 //
 // work0/work1 are the two records' OWN free-form work counters
-// (docs/spline-design.md §5.2) — this function mints no counter of its own.
+// (agent-docs/spline-design.md §5.2) — this function mints no counter of its own.
 // Side 0's work charges work0 and side 1's charges work1, independently,
 // because the two sides' spans can carry different control counts even on a
 // same-kind pairing. NOTHING HERE STATES A COST: every unit spent is spent
@@ -153,7 +153,7 @@ type PairChain struct {
 
 // PairChainStations is PairStations under a caller's own limits, returning the
 // per-cell speed bounds and tangent energies a same-kind free-form loft cell
-// needs beside the matched-departure bounds (docs/loft-design.md §5.2's
+// needs beside the matched-departure bounds (agent-docs/loft-design.md §5.2's
 // arcLenUpper_k and tangentEnergy_k rows). The
 // walk, its sharing of one dyadic cell set between the two sides, its
 // determinism and its charging are PairStations' own. It differs in what
@@ -269,10 +269,10 @@ func pairWalk(spans0, spans1 []BezierSpan, gen *SagittaStationWalk) ([]RatPoint,
 	return gen.Stations[0], gen.Stations[1], nil
 }
 
-// FreeformChain is ChainStations' answer: docs/spline-design.md §6.2.1's dyadic
+// FreeformChain is ChainStations' answer: agent-docs/spline-design.md §6.2.1's dyadic
 // station chain over ONE Tier A span chain, beside the per-cell readings an
 // extruded free-form wall's own area and occupied-volume proofs need
-// (docs/tessellation-reach-design.md §5).
+// (agent-docs/tessellation-reach-design.md §5).
 type FreeformChain struct {
 	// stations are exact rational points ON the curve, one per cell boundary in
 	// chain order, the chain's START included and its END excluded. The end is
@@ -302,9 +302,9 @@ type FreeformChain struct {
 
 // ChainStations chords ONE Tier A span chain at a target sagitta: measure each
 // dyadic cell's sagitta, bisect what misses, accept what fits
-// (docs/spline-design.md §6.2.1). It is PairStations' single-chain twin —
+// (agent-docs/spline-design.md §6.2.1). It is PairStations' single-chain twin —
 // same walk, same cap, same charge discipline, same termination argument — and
-// the primitive docs/tessellation-reach-design.md §5 gives tessellation.ChordLoop's
+// the primitive agent-docs/tessellation-reach-design.md §5 gives tessellation.ChordLoop's
 // free-form arm. It decides each cell on the sagitta alone: no consumer of a
 // single chain reads a parameter-matched departure, so the walk does not
 // measure one (SagittaStationWalk.Matched).
@@ -386,7 +386,7 @@ type SagittaStationWalk struct {
 	// target, and hand the accepted cell's matched value (the larger of the
 	// sides') to the reader. PairChainStations sets it, so every accepted
 	// cell's parameter-matched departure is at or below the target as a
-	// property of the walk (docs/loft-gear-bounds-design.md §5). PairStations
+	// property of the walk (agent-docs/loft-gear-bounds-design.md §5). PairStations
 	// and ChainStations leave it false: they decide on the sagitta alone and
 	// hand the reader 0.
 	Matched      bool
@@ -492,7 +492,7 @@ func (r *PairCellReader) AcceptCell(spans []BezierSpan, matched float64, works [
 
 // ChainArcChordReader is ChainStations' reading: each accepted cell's own
 // arc-length upper bound and chord-length lower bound, the pair
-// docs/tessellation-reach-design.md §5 turns into a chorded wall's area slack.
+// agent-docs/tessellation-reach-design.md §5 turns into a chorded wall's area slack.
 // Both are proven in their own direction, so their difference never
 // understates the deficit the chord actually takes.
 //

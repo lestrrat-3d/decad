@@ -213,7 +213,7 @@ func TestTessellatePlateWithHole(t *testing.T) {
 	// taken: positive, within tol, and at or above the true chord-to-arc
 	// deviation. Both figures below are derived here rather than read back
 	// from the implementation — the proven bound is
-	// docs/tessellation-design.md Sec 3's r*theta^2/(8n^2), the sin(x)<=x
+	// agent-docs/tessellation-design.md Sec 3's r*theta^2/(8n^2), the sin(x)<=x
 	// reduction of the true sagitta r*(1-cos(theta/2n)) beside it.
 	n := 10.0
 	sweep := 2 * math.Pi
@@ -480,11 +480,11 @@ func TestTessellateRejectsImpossiblyFineTolerance(t *testing.T) {
 }
 
 // TestTessellateReservesSectionDisplacementFromTolerance pins
-// docs/tessellation-design.md §5's reservation on an assembled prism. Each
+// agent-docs/tessellation-design.md §5's reservation on an assembled prism. Each
 // case is the far-placed union PR 111's audit measured: a 10×10 box unioned
 // with a 6×6 box drawn at -shift and placed by +shift, whose merged section
 // sits a proven displacement from the section the pair denotes
-// (docs/prism-boolean-design.md §7). That displacement is part of the mesh's
+// (agent-docs/prism-boolean-design.md §7). That displacement is part of the mesh's
 // deviation, so it is reserved from the requested tolerance before chording,
 // and a tolerance it exhausts refuses rather than chording against a budget it
 // has not got. Both operands are swept by a stated millimetre distance, so
@@ -561,7 +561,7 @@ func TestTessellateUndisplacedPrismSpendsTheWholeTolerance(t *testing.T) {
 
 	// r = 10 at tol = 0.5 still buys 10 chords around the hole: a reservation
 	// taken from an undisplaced prism would buy fewer. The comparison is
-	// against docs/tessellation-design.md Sec 3's published sagitta
+	// against agent-docs/tessellation-design.md Sec 3's published sagitta
 	// r*theta^2/(8n^2), derived here, and is checked to enclose the true
 	// chord-to-arc deviation — see TestTessellatePlateWithHole.
 	require.Len(t, mesh.Vertices(), 28)
@@ -582,7 +582,7 @@ func TestTessellateUndisplacedPrismSpendsTheWholeTolerance(t *testing.T) {
 // inchPrismBody extrudes an axis-aligned rectangle by a distance stated in
 // inches. The millimetre level that distance denotes is one the conversion
 // COMPUTED, so the swept end carries that conversion's rounding as its own
-// axial displacement (docs/evaluator-design.md §5).
+// axial displacement (agent-docs/evaluator-design.md §5).
 func inchPrismBody(t *testing.T, doc *decad.Document, x0, y0, x1, y1, inches float64) *decad.Body {
 	t.Helper()
 	w := sketch.NewWorld()
@@ -598,7 +598,7 @@ func inchPrismBody(t *testing.T, doc *decad.Document, x0, y0, x1, y1, inches flo
 }
 
 // TestTessellateUnreservedAxialDisplacementCanExceedTolerance pins the other
-// side of docs/tessellation-design.md §1's Tolerance row. The reservation of §5
+// side of agent-docs/tessellation-design.md §1's Tolerance row. The reservation of §5
 // covers chording and the section displacement and nothing else, so a prism
 // whose sweep level a non-base-unit conversion computed still publishes a Bound
 // above the tolerance the caller asked for. Every section here is straight, so

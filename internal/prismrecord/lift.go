@@ -19,7 +19,7 @@ import (
 // its own proven displacement from what the construction denotes
 // (SectionDelta, Z0Delta/Z1Delta). Every reader here composes the displacement
 // its own answer depends on rather than reading the record as exact. See
-// docs/evaluator-design.md §5 and docs/prism-boolean-design.md §7.
+// agent-docs/evaluator-design.md §5 and agent-docs/prism-boolean-design.md §7.
 
 // Z0Scalar and Z1Scalar are the sweep levels as bounded readings — the recorded
 // float beside its own axial displacement. Every measurement derived from a
@@ -130,7 +130,7 @@ func (pp Payload) CircleCurveBound(cu, cv, z, zDelta, centerDelta, radius, radiu
 // takes its frame and placement charge from here, one vertex at a time, so
 // a lift that is exact for the coordinates at hand charges nothing and a lift
 // that rounds — a far sketch-plane origin, a tilted frame, a placement —
-// charges exactly what it rounded (docs/evaluator-design.md §8).
+// charges exactly what it rounded (agent-docs/evaluator-design.md §8).
 func (pp Payload) LiftedVertex(u, v, z float64) (r3.Vec, float64) {
 	held := pp.Point(u, v, z)
 	return held, pp.PointRound(u, v, z, held)

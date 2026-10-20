@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// These fixtures pin route L's fillet arm of docs/loop-fillet-design.md
+// These fixtures pin route L's fillet arm of agent-docs/loop-fillet-design.md
 // through the public API: Fillet of a complete loop of a planar face
 // builds a brep body whose pipe patches are faces of the body, measured by
 // the strip model (§5.3), and tessellate, export and take part in booleans.

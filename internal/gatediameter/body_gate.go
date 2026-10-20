@@ -33,7 +33,7 @@ import (
 // is the last resort over the body's own vertices. A payload with no
 // provable diameter returns false rather than a guess, which withholds the
 // gate instead of anchoring it on a number nothing proved. See
-// docs/verification-design.md §3.
+// agent-docs/verification-design.md §3.
 
 // pairkernel.BodyGateDiameter returns the body's own diameter, never a document scale or
 // a bounds-box diagonal — and returns it as a value proven to be at or below
@@ -82,10 +82,10 @@ import (
 // body's true diameter — the strongest arm in this function, ahead of the
 // exact carrier model that does not yet cover this payload class. For an
 // unplaced LineSeg-only loft the claim is the stronger one, IS the true
-// diameter, because every held vertex is then exact (docs/loft-design.md
+// diameter, because every held vertex is then exact (agent-docs/loft-design.md
 // §5) — which is a claim about that payload's own published delta, never
 // about a station's KIND, since a station can be a recorded coordinate and
-// still sit off the point the record denotes (docs/loft-design.md §5.2's
+// still sit off the point the record denotes (agent-docs/loft-design.md §5.2's
 // arc-end radial residual); a same-kind circular pairing's own interior stations are held on the
 // true recorded curve but are themselves COMPUTED (a10-plan.md Part 3 PR 6),
 // so the held maximum is still a chorded (equal-or-fewer, never additional)
@@ -108,7 +108,7 @@ import (
 // capblend.Payload.extentBoundedAlong's own `outward` helper (capblend.go)
 // keeps a zero-displacement candidate untouched too. delta == 0 no longer
 // implies the body is unplaced (a10-plan.md Part 3 PR 6): a curved pair
-// chorded at ONE station (m = 1, docs/loft-design.md §12's m = 1 case) has
+// chorded at ONE station (m = 1, agent-docs/loft-design.md §12's m = 1 case) has
 // no interior computed station either, so an UNPLACED body with such a pair
 // can reach this same fast path with delta == 0 and an unshrunk reference.
 // What makes that sound is the published ZERO and nothing else: at delta == 0
@@ -117,7 +117,7 @@ import (
 // true diameter. Being a RECORDED coordinate is not that premise and never
 // stands in for it — an untrimmed ArcSeg's t == 1 end is recorded verbatim
 // and still sits its own arc-end radial residual off the denoted curve,
-// outward as easily as inward (docs/loft-design.md §5.2). Such a build
+// outward as easily as inward (agent-docs/loft-design.md §5.2). Such a build
 // publishes a positive delta and takes the shrink below, which is exactly how
 // this arm sees the difference.
 //
@@ -176,7 +176,7 @@ func DirectBodyGateDiameter(ctx context.Context, body *topo.Body) (float64, bool
 	if payload, ok := body.Payload.(sweepmitre.Payload); ok {
 		// A mitred sweep's boundary is a polyhedron over its held vertex
 		// table, each vertex within delta of the exact one, so the loft arm's
-		// reading and shrink apply unchanged (docs/sweep-design.md §16.6).
+		// reading and shrink apply unchanged (agent-docs/sweep-design.md §16.6).
 		d, ok, err := diameter.PointsContext(ctx, payload.Verts)
 		if err != nil || !ok {
 			return handledGate(d, ok, err)
@@ -187,7 +187,7 @@ func DirectBodyGateDiameter(ctx context.Context, body *topo.Body) (float64, bool
 	if payload, ok := body.Payload.(coilshell.Payload); ok {
 		// A coil's held shell is a polyhedron over its vertex table, each
 		// vertex within delta of a true point, so the mitred arm's reading
-		// and shrink apply unchanged (docs/helix-design.md §7).
+		// and shrink apply unchanged (agent-docs/helix-design.md §7).
 		d, ok, err := diameter.PointsContext(ctx, payload.Verts)
 		if err != nil || !ok {
 			return handledGate(d, ok, err)
@@ -252,7 +252,7 @@ func DirectBodyGateDiameter(ctx context.Context, body *topo.Body) (float64, bool
 		// distance, whose spread along at least one axis cannot exceed that
 		// axis's own box extent), and LowerForDisplacement shrinks it
 		// by the box's own proven Bound so the box's uncertainty can only
-		// tighten the gate, never loosen it (docs/surface-design.md §5.1,
+		// tighten the gate, never loosen it (agent-docs/surface-design.md §5.1,
 		// verification §3).
 		box := body.Bounds
 		d := math.Max(box.Max.X-box.Min.X, math.Max(box.Max.Y-box.Min.Y, box.Max.Z-box.Min.Z))
@@ -262,7 +262,7 @@ func DirectBodyGateDiameter(ctx context.Context, body *topo.Body) (float64, bool
 	if _, ok := body.Payload.(patchchain.BodyPayload); ok {
 		// PatchEdges's own payload reuses the patchchain.Payload arm immediately
 		// above verbatim: its Bounds is the rebuilt receiver's own box
-		// (docs/surface-design.md §5.2), so the same box-based lower bound
+		// (agent-docs/surface-design.md §5.2), so the same box-based lower bound
 		// applies for the same reason.
 		box := body.Bounds
 		d := math.Max(box.Max.X-box.Min.X, math.Max(box.Max.Y-box.Min.Y, box.Max.Z-box.Min.Z))
@@ -408,7 +408,7 @@ func FallbackGateDiameter(budget *proofbound.WorkBudget, body *topo.Body) (float
 }
 
 // draftGateDiameter is pairkernel.BodyGateDiameter's arm for a draft body
-// (docs/draft-design.md Table DD row DD6). The body has no exact carrier
+// (agent-docs/draft-design.md Table DD row DD6). The body has no exact carrier
 // model here and no single witness prism: its far section is not the near
 // one. It reads the stations SectionStations places on the near section P at
 // the near level and on the far section Q, read from the payload's own

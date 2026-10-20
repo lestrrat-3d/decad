@@ -32,7 +32,7 @@ type LoftSection struct {
 // with a common radius and height use a cubic-width wall. Three to thirty-two
 // centered rectangles may vary width and height independently. All routes require
 // ascending, equally spaced world-XY planes and interpolate every section exactly
-// (docs/loft-sections-design.md). Other shapes refuse.
+// (agent-docs/loft-sections-design.md). Other shapes refuse.
 func LoftSections(ctx context.Context, d *Document, sections ...LoftSection) (*Body, error) {
 	if ctx == nil || d == nil || len(sections) < 3 {
 		return nil, fmt.Errorf("%w: LoftSections needs a context, document and at least three sections", ErrDegenerate)

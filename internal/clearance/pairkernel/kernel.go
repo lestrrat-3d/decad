@@ -1,5 +1,5 @@
-// Package pairkernel is the clearance pair kernel of docs/clearance-design.md
-// §1/§2/§5/§6/§7 and docs/surface-design.md §9.3's sheet-against-solid
+// Package pairkernel is the clearance pair kernel of agent-docs/clearance-design.md
+// §1/§2/§5/§6/§7 and agent-docs/surface-design.md §9.3's sheet-against-solid
 // decision procedure (SheetSolid). It reads the bodies' topology nodes, never
 // the root handles. It sits below internal/clearance because the cell packages
 // it drives (facepair, curvecells, tier) import internal/clearance themselves.
@@ -473,7 +473,7 @@ func (k *pairKernel) pairDiameter() (float64, error) {
 	return PairGateDiameter(k.ctx, k.a.body, k.b.body, k.cache)
 }
 
-// SheetSolid decides docs/surface-design.md §9.3's pair procedure for a
+// SheetSolid decides agent-docs/surface-design.md §9.3's pair procedure for a
 // sheet operand against a proven solid: run when their bounds-inflated boxes
 // meet, and also when they are separated but a gap was requested — the same
 // two occasions Pair itself runs for a solid pair. boxDisjoint is true in that
@@ -498,7 +498,7 @@ func (k *pairKernel) pairDiameter() (float64, error) {
 // WHY ONE WITNESS DECIDES THE WHOLE SHEET: once the boundary distance is
 // proven positive, the sheet's boundary misses the solid's boundary entirely.
 // The sheet is one connected shell — asserted below, not merely assumed, from
-// docs/surface-design.md §2.2's rule that a sheet lump holds exactly one
+// agent-docs/surface-design.md §2.2's rule that a sheet lump holds exactly one
 // shell, together with newBodyGeomBudget's existing single-lump gate — so it
 // lies wholly within one connected component of space minus the solid's
 // boundary, and one point's membership answers for the whole shell. The
@@ -526,7 +526,7 @@ func SheetSolid(ctx context.Context, sheet, solid *topo.Body, boxDisjoint bool, 
 	if !oks || !okb {
 		// Either operand's carrier model is missing — a revolve sheet is
 		// refused a model outright, and a multi-lump or faceted operand
-		// bypasses this analytic kernel entirely (docs/clearance-design.md
+		// bypasses this analytic kernel entirely (agent-docs/clearance-design.md
 		// §2). The pair stays undecided rather than guessing a side.
 		return reportvocab.SheetSolidResult{Verdict: reportvocab.SheetSolidUndecided}, nil
 	}
@@ -559,7 +559,7 @@ func SheetSolid(ctx context.Context, sheet, solid *topo.Body, boxDisjoint bool, 
 
 	if boxDisjoint {
 		// Box separation already proves the sheet lies wholly outside the
-		// solid (docs/surface-design.md §9.3): the witness cast below would
+		// solid (agent-docs/surface-design.md §9.3): the witness cast below would
 		// only confirm what a non-overlapping bounding box already decided,
 		// the same shortcut Pair takes via nestingExcluded.
 		return reportvocab.SheetSolidResult{Verdict: reportvocab.SheetSolidOutside, Lo: lo, Hi: hi, Exact: exact, Diam: diam}, nil
@@ -568,7 +568,7 @@ func SheetSolid(ctx context.Context, sheet, solid *topo.Body, boxDisjoint bool, 
 	// The one-shell premise the doc comment above states, asserted rather
 	// than assumed: newBodyGeomBudget already refuses any body with more
 	// than one lump, and a sheet lump holds exactly one shell
-	// (docs/surface-design.md §2.2), so gs.shellWit carries exactly one
+	// (agent-docs/surface-design.md §2.2), so gs.shellWit carries exactly one
 	// witness here. A future sheet construction that broke that premise
 	// would land here undecided rather than pick a witness arbitrarily.
 	if len(gs.shellWit) != 1 {

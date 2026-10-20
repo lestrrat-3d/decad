@@ -16,10 +16,10 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
-// This file is the cup of docs/modify-design.md §9 (Table B, B5/B6). A cup
+// This file is the cup of agent-docs/modify-design.md §9 (Table B, B5/B6). A cup
 // is the outer region O on its interval less the cavity region C on its own,
 // sharing a rim at the open end and a floor at the closed one. Its record is a
-// two-slab stackedrecord.Payload (docs/modify-reach-design.md §9.1): a floor
+// two-slab stackedrecord.Payload (agent-docs/modify-reach-design.md §9.1): a floor
 // slab over O and a wall slab over the bands between O's loops and C's, with C
 // exposed between them as the pocket floor. The stacked build makes its body,
 // and every cup survey, mesh and mass reading reads the View the record
@@ -51,7 +51,7 @@ const (
 // shell-morphology certificate and the accumulated rigid placement. The open
 // end (the removed cap, where the rim is) is ZOpen; the outer prism's floor is
 // at ZOuter, the cavity's floor (shellCap) at ZCav, which lies between the two
-// so the floor slab is [ZOuter, ZCav] (docs/modify-design.md §9).
+// so the floor slab is [ZOuter, ZCav] (agent-docs/modify-design.md §9).
 //
 // ZOpenDelta, ZOuterDelta and ZCavDelta are the axial displacement of their
 // matching levels. ZOpen and the unstepped floor level retain the displacement
@@ -68,7 +68,7 @@ const (
 // (which already folds ThicknessDelta in — ViewFor's step closure), and
 // this one is the reading Evaluate publishes when the shell-wall theorem holds
 // exactly on the payload's own morphology — the number the theorem's t is
-// held in, not the theorem itself (docs/payload-verification-design.md §4.1).
+// held in, not the theorem itself (agent-docs/payload-verification-design.md §4.1).
 //
 // OffsetDelta is the OFFSET region's section displacement — the cavity
 // inward, the outer region outward: the proven upper bound
@@ -80,7 +80,7 @@ const (
 // to the offset region's prism as its SectionDelta, so every view reading
 // built on that region — Bounds, the mass path, the mesh — charges it there,
 // and plan charges it to the offset region's columns of the stacked build
-// (docs/modify-design.md §9, §10).
+// (agent-docs/modify-design.md §9, §10).
 type View struct {
 	Outer          momentinput.Profile
 	Cavity         momentinput.Profile
@@ -167,7 +167,7 @@ func (cp View) CavityPrism() prismrecord.Payload {
 
 // ExtentAlong is the cup's extent interval along an arbitrary world direction
 // g, beside the displacement its ends carry — the OUTER prism's reading
-// (docs/modify-design.md §10, Table D, D5). The cavity is interior and reaches
+// (agent-docs/modify-design.md §10, Table D, D5). The cavity is interior and reaches
 // no farther than the outer region, so the outward extent is the solid outer
 // prism's, read by the same prismrecord.Payload.ExtentAlong the outer prism's
 // bounds already use. This is what a through-all stop consults when a cup is a
@@ -189,7 +189,7 @@ func (cp View) ExtentAlong(g r3.Vec) (float64, float64, float64, error) {
 
 // ViewFor assembles the cup record from the receiver prism, its offset
 // section with that section's proven displacement, and the shell
-// sense/opening (docs/modify-design.md §9). removedEnd
+// sense/opening (agent-docs/modify-design.md §9). removedEnd
 // opens the cup at the top (z1); a removed start opens it at the bottom (z0),
 // its mirror. Inward, O is the original section P and C the erosion Q; outward,
 // O is the dilation Q and C the original P.
@@ -244,9 +244,9 @@ func ViewFor(pp prismrecord.Payload, offset momentinput.Profile, s, t, tDelta, o
 	return cp
 }
 
-// Payload is the cup's stored record (docs/modify-reach-design.md §9.1): a
+// Payload is the cup's stored record (agent-docs/modify-reach-design.md §9.1): a
 // two-slab stackedrecord.Payload plus the shell morphology certificate the
-// cup's own surveys read (docs/payload-verification-design.md §4.1). The floor
+// cup's own surveys read (agent-docs/payload-verification-design.md §4.1). The floor
 // slab holds the outer region O over the floor interval; the wall slab holds
 // the band between O's outer loop and the cavity's, then one band lining each
 // hole, over the cavity interval; their interface exposes the cavity region C

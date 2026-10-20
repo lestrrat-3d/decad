@@ -337,7 +337,7 @@ func Build(ctx context.Context, rec Record) (Shell, error) {
 
 	// Walls, ring by ring, in the prism's lateral order; then the caps from
 	// one triangulation of the recorded region, capStart reversed and capEnd
-	// retained (docs/loft-design.md §5's cap seeding).
+	// retained (agent-docs/loft-design.md §5's cap seeding).
 	for j := range n {
 		for _, idx := range rec.LoopIdx {
 			m := len(idx)

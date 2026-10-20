@@ -27,7 +27,7 @@ type BoolMesh struct {
 	Boxes       [][2]r3.Vec
 	Src         []int
 	// VertexBound is β(v) per vertex and FacetBound δ(t) per facet, the
-	// largest of its three corners' β (docs/faceted-vertex-bounds-design.md
+	// largest of its three corners' β (agent-docs/faceted-vertex-bounds-design.md
 	// §2): a true boundary point lies within VertexBound[v] of vertex v, and
 	// facet t's true piece within FacetBound[t] of the facet. The rim, the
 	// cutter and the stitch compose every result vertex's own bound from them
@@ -43,13 +43,13 @@ type BoolMesh struct {
 	// mesh (a boolean result or a mitred sweep), and zero for every other
 	// operand. A gated operand's facets that meet the other operand, or come
 	// within the pre-pass slack of it, must carry a FacetBound no larger than
-	// Gate (docs/faceted-vertex-bounds-design.md §5, RefuseCoarseHeldContact).
+	// Gate (agent-docs/faceted-vertex-bounds-design.md §5, RefuseCoarseHeldContact).
 	Gate float64
 	// owner maps each directed mesh edge to the facet that walks it, so the
 	// twin across a facet edge is one lookup. The graze-or-crossing call
 	// needs it: whether an in-plane edge grazes the other operand or crosses
 	// it is a property of the edge's TWO adjacent facets, which no facet pair
-	// can see (docs/evaluator-design.md §9).
+	// can see (agent-docs/evaluator-design.md §9).
 	Owner map[[2]int]int
 	// parity caches this operand's vertex projections for the exact ray-parity
 	// kernel, which every uncut-component seed, unanchored region probe and
@@ -101,7 +101,7 @@ func BoxesOverlap(a, b [2]r3.Vec) bool {
 type KeptFacet struct {
 	V   [3]proof.Xpt
 	Src int
-	// Beta is each corner's pre-weld bound (docs/faceted-vertex-bounds-
+	// Beta is each corner's pre-weld bound (agent-docs/faceted-vertex-bounds-
 	// design.md §3.1–§3.3): an operand vertex's own β, a rim vertex's
 	// RimBound, or, for a point the cutter placed on the operand facet, that
 	// facet's δ. Each is a two-sided claim the corner carries into the stitch.
@@ -132,7 +132,7 @@ type PairContact struct {
 	C      TriContact
 }
 
-// RimBound is docs/faceted-vertex-bounds-design.md §3.2's pre-weld bound of
+// RimBound is agent-docs/faceted-vertex-bounds-design.md §3.2's pre-weld bound of
 // a rim vertex one facet pair creates: the true pieces of the two facets lie
 // within deltaA and deltaB of their planes, the two slabs meet in a tube of
 // half-width (deltaA + deltaB)/sin θ about the exact crossing line, and the
@@ -155,7 +155,7 @@ func RimBound(deltaA, deltaB float64, sin2 *big.Rat) float64 {
 // tessellations. It returns the kept, still-exact facets, each corner carrying
 // its pre-weld bound, and the largest RimBound any contact segment it used
 // gives a rim vertex — the figure the caller refuses at the pair diameter
-// (docs/faceted-vertex-bounds-design.md §3.2).
+// (agent-docs/faceted-vertex-bounds-design.md §3.2).
 func MeshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *ContactMemo) ([]KeptFacet, float64, error) {
 	return meshBoolean(ctx, op, ma, mb, memo, newKeyMemo)
 }
@@ -245,7 +245,7 @@ func meshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 		return nil, 0, err
 	}
 	// The held-mesh gate runs on the classification's own answer and before
-	// any facet is cut (docs/faceted-vertex-bounds-design.md §5).
+	// any facet is cut (agent-docs/faceted-vertex-bounds-design.md §5).
 	if err := RefuseCoarseHeldContact(ma, 0, touchedA); err != nil {
 		return nil, 0, err
 	}
@@ -554,7 +554,7 @@ func keepSide(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, bloc
 }
 
 // CutCornerBound is the pre-weld bound of one corner of a piece CutTriangle
-// cut from facet i (docs/faceted-vertex-bounds-design.md §3.1–§3.3), the
+// cut from facet i (agent-docs/faceted-vertex-bounds-design.md §3.1–§3.3), the
 // corner named by its exact key: one of the facet's own corners keeps that
 // vertex's β, a rim vertex takes the largest RimBound recorded for it, a
 // point that is both takes the larger, and any other point — a split-line or

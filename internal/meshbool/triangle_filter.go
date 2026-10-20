@@ -258,7 +258,7 @@ func triSpanOnLineWithNormal(t [3]FivVec, origin FivVec, signs [3]int, dir, plan
 }
 
 // TriTriMissesFilter is the reject-only float pre-filter in front of
-// TriTriClassify's non-coplanar rational arm (docs/evaluator-design.md §9),
+// TriTriClassify's non-coplanar rational arm (agent-docs/evaluator-design.md §9),
 // dispatched ahead of PlaneCrossings for exactly the reason SegFilter sits
 // ahead of OnSegmentInterior3: the circular fixture that motivated it enumerates
 // 66,008 facet pairs into that arm, and only 1,860 of them (fu158) have any

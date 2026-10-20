@@ -12,12 +12,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// sweepHexagonCorners is docs/multibody-dynamics-design.md §2's parts-bin
+// sweepHexagonCorners is agent-docs/multibody-dynamics-design.md §2's parts-bin
 // hexagon: 20 mm across flats on dyadic corners, so every mesh coordinate is
 // exact.
 var sweepHexagonCorners = [][2]float64{{-11.5, 0}, {-5.75, -10}, {5.75, -10}, {11.5, 0}, {5.75, 10}, {-5.75, 10}}
 
-// TestSweepStraightTessellatesAsItsPrism is docs/sweep-design.md Table D row
+// TestSweepStraightTessellatesAsItsPrism is agent-docs/sweep-design.md Table D row
 // D2's one exception: §2's straight 14 mm hexagon sweep meshes as the prism it
 // reduced to. The same profile's Extrude is the reference, so the comparison
 // is against the real prism tessellator's own output rather than hand-written

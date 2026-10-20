@@ -7,12 +7,12 @@ import (
 )
 
 // This file owns how much proof a tessellation runs and what the mesh it
-// returns says about its own: docs/tessellation-design.md §1's three
+// returns says about its own: agent-docs/tessellation-design.md §1's three
 // verification levels, the option that chooses one, and the two readings a
 // [Mesh] publishes about the proofs it carries. tessellate.go applies the
 // choice; the payload tessellators read it to decide which proof to compute.
 
-// Verification is how much of docs/tessellation-design.md §1's proof
+// Verification is how much of agent-docs/tessellation-design.md §1's proof
 // [Body.Tessellate] runs. It is an ORDERED level, because choosing how much
 // work to do is a total order: each level adds to the one below it.
 //
@@ -40,7 +40,7 @@ const (
 	// same indices, same order.
 	VerifyNone Verification = iota
 	// VerifyBoundary adds the facet-contact audit
-	// (docs/tessellation-design.md §9): no non-adjacent facet pair touches,
+	// (agent-docs/tessellation-design.md §9): no non-adjacent facet pair touches,
 	// and an adjacent pair meets only along the vertex or edge its indices
 	// share. That is what proves the facet set EMBEDDED, and so what makes
 	// "outside the body" a geometric statement rather than the construction's
@@ -83,7 +83,7 @@ func WithVerification(v Verification) TessellateOption {
 // BoundaryVerified reports whether every boundary audit this body's payload
 // supports ran and passed — including, on a payload that carries one, the
 // facet-contact audit that proves the facet set embedded and free of
-// non-adjacent contact (docs/tessellation-design.md §1's Embedding row).
+// non-adjacent contact (agent-docs/tessellation-design.md §1's Embedding row).
 //
 // It is false exactly when [VerifyNone] was asked of a payload whose boundary
 // proof includes that audit. Every other boundary audit — directed-edge
@@ -93,7 +93,7 @@ func WithVerification(v Verification) TessellateOption {
 func (m *Mesh) BoundaryVerified() bool { return m.n.BoundaryOK }
 
 // VolumeVerified reports whether this mesh carries the proof of the volume it
-// and the body it stands for differ by (docs/tessellation-design.md §2's
+// and the body it stands for differ by (agent-docs/tessellation-design.md §2's
 // volSymDiff). It is what admits the mesh to [Union], [Cut] and [Intersect].
 //
 // It is false below [VerifyAll], where that proof never ran, and false at
@@ -106,7 +106,7 @@ func (m *Mesh) BoundaryVerified() bool { return m.n.BoundaryOK }
 func (m *Mesh) VolumeVerified() bool { return m.n.SymDiffOK }
 
 // withholdProofs drops the two proofs a level below [VerifyAll] never ran
-// (docs/tessellation-design.md §2). Dropping them is mandatory rather than
+// (agent-docs/tessellation-design.md §2). Dropping them is mandatory rather than
 // tidy: a path that skipped some of their terms would otherwise publish a
 // partly composed figure, and areaSlack carries no flag of its own to say so.
 // The mesh's own Bound and per-face displacements are untouched — they rest on
@@ -120,7 +120,7 @@ func (m *Mesh) withholdProofs() {
 
 // payloadAuditsFacetContact reports whether this payload's own tessellation
 // runs the facet-contact audit that proves its facet set embedded
-// (docs/tessellation-design.md §9). Revolves, Patch sheets, one-span arc
+// (agent-docs/tessellation-design.md §9). Revolves, Patch sheets, one-span arc
 // sweeps and revolve-backed stitched bodies use RevolveContactAudit; an
 // all-planar PatchEdges result uses LoftCrossingAudit. A class that gains such an
 // audit MUST be added here in the same change — a class missing from this list

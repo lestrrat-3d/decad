@@ -934,7 +934,7 @@ func TestNormalAtArmBoundCoversItsOwnDefect(t *testing.T) {
 
 // TestNormalAtAnswersRetainedSurfaces pins the faces of a mesh Boolean result:
 // each descends from one operand face and keeps that face's surface
-// (docs/faceted-source-retention-design.md §2), so NormalAt answers with the
+// (agent-docs/faceted-source-retention-design.md §2), so NormalAt answers with the
 // tag's own formula. A plane adds no displacement term; the hole wall's bound
 // carries 2·δ/R and is therefore never Exact.
 func TestNormalAtAnswersRetainedSurfaces(t *testing.T) {

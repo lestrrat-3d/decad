@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// These fixtures pin route L of docs/modify-general-design.md (§4, §9)
+// These fixtures pin route L of agent-docs/modify-general-design.md (§4, §9)
 // through the public API: Chamfer of a complete loop of a planar face
 // of a stacked or brep boolean result builds a brep body whose band patches
 // are faces of the body, and the mesh, STEP and boolean consumers read them.
@@ -179,7 +179,7 @@ func TestBrepLoopChamferPublicBossRoot(t *testing.T) {
 	require.GreaterOrEqual(t, new(big.Rat).Add(held, bound).Cmp(at(piHi)), 0)
 }
 
-// roundedDrilledPlate is docs/modify-general-design.md §1's P8 through the
+// roundedDrilledPlate is agent-docs/modify-general-design.md §1's P8 through the
 // public API: the 40×20×20 box with its four vertical edges filleted r = 3,
 // then cut by a Ø6 hole along y through (20, ·, 10).
 func roundedDrilledPlate(t *testing.T) *decad.Body {

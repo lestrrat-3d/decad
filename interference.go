@@ -48,19 +48,19 @@ func analyticBodiesEqual(budget *proofbound.WorkBudget, a, b *Body) (bool, error
 // containment and exact analytic equality prove the set identity directly.
 // An admitted coplanar, co-directional prism pair next resolves through the
 // same read-only analytic meshbool.OpIntersect dispatch performBoolean uses
-// (booleandispatch.AnalyticIntersect, docs/prism-boolean-design.md §14 PR4;
-// docs/interference-design.md §5.2) — never consuming either operand. That
+// (booleandispatch.AnalyticIntersect, agent-docs/prism-boolean-design.md §14 PR4;
+// agent-docs/interference-design.md §5.2) — never consuming either operand. That
 // path publishes the resolved intersection payload's OWN volume measurement,
 // so the row reads Exact with a zero bound only where neither operand's
 // section carries a displacement; an operand whose section does
-// (docs/prism-boolean-design.md §7) makes the row Approximate over the
+// (agent-docs/prism-boolean-design.md §7) makes the row Approximate over the
 // composed displacement the payload publishes (§8), which the report's
 // tolerance gate then judges like any other reading. A pair that twin does
 // not admit next reaches §4.5's overlap-area reading (prismOverlapVolume,
 // prism_overlap.go), which measures a selection covering any number of
 // disjoint regions and publishes a volume with no body at all — the
 // two-step order is what keeps every pair the twin already answers
-// byte-identical (docs/prism-boolean-design.md §12's Interference row).
+// byte-identical (agent-docs/prism-boolean-design.md §12's Interference row).
 // Every pair neither analytic path admits falls back to the read-only mesh
 // intersection unchanged. All three paths share §6's positive lower-volume
 // gate (positiveVolume). The outcome names why an unmeasured result is

@@ -14,7 +14,7 @@ import (
 // W = ∫₀^dc (P(t) − Q(t)) dt. P is the corner foot's denoted locus (the two
 // offset carriers' intersection at offset amount t) and Q is the chord from
 // P(0) = v to P(dc), ridden at the same rate t. A Cone patch's chord-locus
-// volume term charges this moment (docs/modify-reach-design.md §8.3).
+// volume term charges this moment (agent-docs/modify-reach-design.md §8.3).
 //
 // The derivation reads LineCircleLocusSpeedUpper's frame. The foot is
 // P(t) = anchor + t·n + s(t)·e with s(t) = −β ± √Δ(t), and Δ(t) = Δ0 + Δ1·t

@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/spline-design.md §11's fit-spline test obligations: a
+// This file is agent-docs/spline-design.md §11's fit-spline test obligations: a
 // FitSplineSeg is a Tier A kind for the moments path, so
 // ProfileRecord.Area/Centroid/SecondMoments must answer for it — matching a
 // closed form or a dense sample, never merely "it ran" (CLAUDE.md's hard
@@ -433,7 +433,7 @@ func TestFitSplineNonFiniteFitPointIsErrNotFinite(t *testing.T) {
 }
 
 // A fit-spline profile's moments now answer AND its side face now builds
-// (docs/spline-design.md §10 P4b, Table R row R6 retired): Extrude reaches the
+// (agent-docs/spline-design.md §10 P4b, Table R row R6 retired): Extrude reaches the
 // walk-kind discriminant's free-form arm instead of refusing there. This is
 // the headline case the increment exists for: the resulting solid's Volume is
 // exactly the height times the Tier A rational ProfileRecord.Area already

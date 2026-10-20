@@ -44,7 +44,7 @@ func FiniteAxisValues(values ...float64) bool {
 
 // AxisInPlane resolves an axis variant into plane-local coordinates,
 // validating it non-degenerate and coplanar with the profile plane
-// (docs/evaluator-design.md §6).
+// (agent-docs/evaluator-design.md §6).
 func AxisInPlane(a AxisInput, frame r3.Frame) (Line2, error) {
 	switch a := a.(type) {
 	case SketchLine:

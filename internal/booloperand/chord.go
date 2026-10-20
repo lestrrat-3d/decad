@@ -1,4 +1,4 @@
-// Package booloperand reads what the mesh boolean (docs/evaluator-design.md
+// Package booloperand reads what the mesh boolean (agent-docs/evaluator-design.md
 // §9) needs from one operand's own record before it meshes it: the operand's
 // share of the pair chord tolerance, the held floor a restating operand cannot
 // be meshed below, and whether the operand's payload class can prove the
@@ -27,9 +27,9 @@ import (
 )
 
 // HeldFloor returns the bound below which a RESTATING operand cannot give a
-// mesh (docs/faceted-vertex-bounds-design.md §5), and whether b restates one:
+// mesh (agent-docs/faceted-vertex-bounds-design.md §5), and whether b restates one:
 // a boolean result's MeshBound, or a mitred sweep's, a twisted sweep's or a
-// coil's delta (docs/helix-design.md Table CD row CD3). Its restatement
+// coil's delta (agent-docs/helix-design.md Table CD row CD3). Its restatement
 // returns the same vertices at any tolerance at or above the floor. Every
 // other payload reports false, and its request stays the pair tolerance and
 // the local gate does not read its facets.
@@ -68,12 +68,12 @@ func PairChord(ctx context.Context, a, b *topo.Body) (float64, float64, error) {
 // The floor raises the pair's tolerance past the operand's own reservations.
 // An operand holding its section within a displacement of the one it denotes
 // cannot be meshed within that displacement — tessellation reserves it from
-// the requested tolerance (docs/tessellation-design.md §5) — and this mesh
+// the requested tolerance (agent-docs/tessellation-design.md §5) — and this mesh
 // path is the designated fallback for exactly those operands
-// (docs/prism-boolean-design.md §3.4). A diameter-derived tolerance under the
+// (agent-docs/prism-boolean-design.md §3.4). A diameter-derived tolerance under the
 // displacement would refuse them. A revolve likewise reserves both of its
 // coordinate stages out of the tolerance before it chords anything
-// (docs/tessellation-design.md §8), so a diameter-derived tolerance under
+// (agent-docs/tessellation-design.md §8), so a diameter-derived tolerance under
 // that reservation refuses a body whose own geometry is perfectly ordinary —
 // a small part modelled at a large coordinate is the case that reaches it.
 // Nothing is lost by the coarser chording: each mesh reports the sagitta it
@@ -97,7 +97,7 @@ func ChordShare(ctx context.Context, b *topo.Body) meshbool.ChordOperand {
 // sectionDisplacement is the proven displacement between a body's recorded
 // boundary and the boundary its construction denotes: the analytic prism
 // boolean's re-expression rounding and its surviving fragments' own cut
-// parameters, and zero for every other body (docs/prism-boolean-design.md §7).
+// parameters, and zero for every other body (agent-docs/prism-boolean-design.md §7).
 func sectionDisplacement(payload topo.Payload) float64 {
 	switch p := payload.(type) {
 	case prismrecord.Payload:
@@ -113,7 +113,7 @@ func sectionDisplacement(payload topo.Payload) float64 {
 
 // heldPrimitiveFloor is the proven held bound of an operand built as a fixed
 // held mesh in one construction — a LoftFaces MeshBound, or a coil's, mitred
-// sweep's, or twisted sweep's delta (docs/faceted-vertex-bounds-design.md §5).
+// sweep's, or twisted sweep's delta (agent-docs/faceted-vertex-bounds-design.md §5).
 // Its restatement cannot be meshed closer than that, and every facet it
 // touches the partner with holds at most that bound, so raising the pair
 // tolerance to it is what lets the chain-depth gate admit the pair. A boolean
@@ -139,7 +139,7 @@ func heldPrimitiveFloor(payload topo.Payload) float64 {
 
 // coordDisplacement is the count-INDEPENDENT coordinate reservation an
 // operand's own tessellation spends before it chords anything: for a revolve,
-// docs/tessellation-design.md §8's deltaC and deltaR ceilings composed
+// agent-docs/tessellation-design.md §8's deltaC and deltaR ceilings composed
 // (revolvetess.ResolveRevolve). Every other payload class answers zero, and so
 // does a revolve whose resolution fails — the tessellation that follows
 // refuses it with its own sentinel, and inventing a tolerance here would only

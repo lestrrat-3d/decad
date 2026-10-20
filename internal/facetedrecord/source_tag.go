@@ -10,7 +10,7 @@ import (
 )
 
 // SourceTag reads the group fields a mesh Boolean copies from the operand face
-// f (docs/faceted-source-retention-design.md §3). flip is true for the faces
+// f (agent-docs/faceted-source-retention-design.md §3). flip is true for the faces
 // of the tool of a Cut, whose natural normal points into the result. The
 // second result is false when A1–A2 decline the face, and the group then
 // carries no surface. f must not be nil.
@@ -46,7 +46,7 @@ func SourceTag(f *topo.Face, flip bool) (Group, bool) {
 }
 
 // HeldNormalTerm returns the normal bound a retained tag adds for facets that
-// sit within delta of the true patch (docs/faceted-source-retention-design.md
+// sit within delta of the true patch (agent-docs/faceted-source-retention-design.md
 // §3.3), and whether the tag is admitted (A4). rhoLower is a lower bound on the
 // distance from the axis of every true point of a Cone patch; the other
 // surfaces ignore it. The term is zero for a plane. For the others it is

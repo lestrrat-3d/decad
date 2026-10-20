@@ -16,7 +16,7 @@ import (
 var errBodyNotInTimeline = errors.New("body is not in the timeline's world")
 
 // timelineTrack shows one body of a dynamics.Timeline on a kinetograph driven
-// node (docs/multibody-dynamics-design.md §11.2). Its At samples the
+// node (agent-docs/multibody-dynamics-design.md §11.2). Its At samples the
 // timeline's certified state at the frame time and returns the body's pose
 // there. A dynamics pose maps the body as modeled, placement included, to
 // world, which is the frame of the part kinetograph tessellates; with the

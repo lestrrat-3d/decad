@@ -299,7 +299,7 @@ func (k lineCircleCorner) deltaAt(t *big.Rat) proofbound.RatInterval {
 }
 
 // MiterLocusSpeedUpper bounds |dP/dt| — the in-plane speed of the corner
-// foot's own denoted locus (docs/modify-reach-design.md §8.3's exact offset
+// foot's own denoted locus (agent-docs/modify-reach-design.md §8.3's exact offset
 // family) — over the offset range [t0, t1], for the corner where prev's own
 // offset carrier meets cur's, dispatching to the exact closed form
 // (LineCircleLocusSpeedUpper) where one carrier is straight and the other

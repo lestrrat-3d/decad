@@ -52,7 +52,7 @@ func AuditSolidBoundary(b *topo.Body, auditedFacetedImage bool) bool {
 }
 
 // AuditSheetBoundary decides Table V's sheet validity audit
-// (docs/surface-design.md §9.1): three structural legs read off the recorded
+// (agent-docs/surface-design.md §9.1): three structural legs read off the recorded
 // topology, plus non-self-intersection admitted BY CONSTRUCTION alone. It is
 // deliberately NOT §6.4's closure audit (`loftmesh.LoftCrossingAudit`) with closure
 // dropped: that audit runs over a triangulated, all-planar face set sharing
@@ -67,7 +67,7 @@ func AuditSolidBoundary(b *topo.Body, auditedFacetedImage bool) bool {
 // coedge. Unlike AuditSolidBoundary's closed-solid audit, there is NO
 // sphere/torus exemption: that allowance is a fact about a closed surface of
 // revolution bounding a solid, and does not carry to a sheet, whose free edges
-// are already the expected shape (docs/surface-design.md §2.2).
+// are already the expected shape (agent-docs/surface-design.md §2.2).
 //
 // Leg 2 — every edge is adjacent to one or two faces. Three or more is
 // non-manifold, a defect on either body kind.
@@ -144,7 +144,7 @@ func AuditSheetBoundary(ctx context.Context, b *topo.Body) SheetAuditOutcome {
 // separation or the sheet decision procedure (pairkernel.SheetSolid,
 // internal/clearance/pairkernel/kernel.go), and takes
 // DiagUnsupportedPairSheet or DiagSheetSolidCrossing instead
-// (docs/surface-design.md §9.3).
+// (agent-docs/surface-design.md §9.3).
 func UndecidedPairReason(a, b *topo.Body, verdict PairVerdict, outcome InterferenceOutcome) (DiagnosticCode, string) {
 	switch {
 	case outcome == InterferenceUnsupportedPayloadFirst:

@@ -16,7 +16,7 @@ const placedTagMaxDefect = 1e-3
 
 // PlacedTagDeparture returns the normal departure a retained tag gains when
 // the body is placed by delta, and whether the tag keeps a stated bound at all
-// (docs/faceted-source-retention-design.md §3.4). tag is the tag before the
+// (agent-docs/faceted-source-retention-design.md §3.4). tag is the tag before the
 // placement, moved its float image (surfaceplace.TransformSurface), and verts
 // and reach the held mesh before the placement with the distance of any true
 // boundary point from a held vertex. A Cone declines: its bound needs a lower

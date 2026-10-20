@@ -1,6 +1,6 @@
 // Package twistsweep holds the twisted-sweep shell proofs: the twist polygon
 // admission, the twisted-wall offset source and stations, the placed-shell
-// proof and the sampled cup mesh. docs/shell-twisted-sweep-design.md owns the
+// proof and the sampled cup mesh. agent-docs/shell-twisted-sweep-design.md owns the
 // design.
 package twistsweep
 

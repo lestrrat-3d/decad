@@ -12,12 +12,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/surface-design.md §15's T96-T100: the vertex-bound
+// This file is agent-docs/surface-design.md §15's T96-T100: the vertex-bound
 // repair for internal/prismrecord/build.go, internal/revolveplan/build.go and internal/capblend/band.go, the
 // three analytic builders that published Vertex.Position() Exact with a
 // zero bound for a placed body or a body on a tilted sketch plane, although
 // pp.point/rp.point's own frame lift and accumulated placement rounds under
-// exactly those conditions (docs/evaluator-design.md §8; topology.go's
+// exactly those conditions (agent-docs/evaluator-design.md §8; topology.go's
 // Vertex.Position contract).
 
 // ratVecOf lifts a world point to the exact rational vector it is.

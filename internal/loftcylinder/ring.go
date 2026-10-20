@@ -1,6 +1,6 @@
 // Package loftcylinder holds the loft/cylinder Union's exact ring-to-wall
 // distances, split-ring cycles, projected triangle radii and radial and wedge
-// gates. See docs/loft-cylinder-boolean-design.md.
+// gates. See agent-docs/loft-cylinder-boolean-design.md.
 package loftcylinder
 
 import (

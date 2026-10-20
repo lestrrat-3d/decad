@@ -62,7 +62,7 @@ func PrepContext(ctx context.Context, verts []r3.Vec, tris [][3]int, src []int) 
 }
 
 // SetVertexBounds attaches the per-vertex bounds beta and their facet maxima
-// (docs/faceted-vertex-bounds-design.md §2, §4.5), then the shared parity
+// (agent-docs/faceted-vertex-bounds-design.md §2, §4.5), then the shared parity
 // holder. The operand is proven liftable by then, so its parity queries may
 // share one projection cache; the holder allocates nothing per vertex until a
 // query sweeps an axis.

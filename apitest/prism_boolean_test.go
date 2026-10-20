@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/prism-boolean-design.md PR1's black-box test suite
+// This file is agent-docs/prism-boolean-design.md PR1's black-box test suite
 // (§14, §15): the analytic reduction for Union over co-directional coplanar
 // straight prisms. boxBody/ballBody (clearance_test.go) are the shared
 // helpers. Per-gate (G1-G6) isolation lives in
@@ -78,7 +78,7 @@ func verticalConvexEdge() *decad.EdgeQuery {
 }
 
 // tookMeshPath reports whether b came from the mesh boolean. A mesh result
-// keeps its operands' surfaces and curves (docs/faceted-source-retention-design.md),
+// keeps its operands' surfaces and curves (agent-docs/faceted-source-retention-design.md),
 // so no public reading of its faces or edges tells it from an analytic
 // reduction; the payload class does.
 func tookMeshPath(b *decad.Body) bool {
@@ -122,7 +122,7 @@ func overshootQuadBody(t *testing.T, doc *decad.Document, corners [][2]float64, 
 }
 
 // TestPrismUnionCutFragmentOperandRefusesNonClosingMerge is fu141's own
-// reproduction (docs/prism-boolean-design.md §9's RB9), through the public
+// reproduction (agent-docs/prism-boolean-design.md §9's RB9), through the public
 // API: a quadrilateral prism drawn as four overshooting lines — so every
 // recorded boundary segment is a Partial fragment — unioned with a box
 // strictly inside it. The merge cuts nothing, so every surviving segment is
@@ -281,7 +281,7 @@ func TestPrismUnionG1FallsBackWithUnchangedBehavior(t *testing.T) {
 //
 // A hand-built r3.FromBasis placement (literal-zero z components) stays
 // exactly planar for the same n, k and clears G3, and A6
-// (docs/general-boolean-design.md §3) charges the crossings its
+// (agent-docs/general-boolean-design.md §3) charges the crossings its
 // re-expression can move. The tooth's root arc lies on the hub's own circle,
 // though, so where the arc meets the hub circle the two carriers are
 // tangent: no positive sine bound exists, the crossing has no charge, and
@@ -432,7 +432,7 @@ func TestPrismUnionCancellationLeavesDocumentUnchanged(t *testing.T) {
 //
 // A chain whose FIRST result already cut carries that cut's displacement into
 // the second, and the second arm pins it: the next cut can amplify it by
-// 1/sin θ, which docs/general-boolean-design.md §3 A6 charges, so the chain
+// 1/sin θ, which agent-docs/general-boolean-design.md §3 A6 charges, so the chain
 // still builds analytically — 210 mm² over 10 mm, within its bound.
 func TestPrismUnionChainedBooleanCarriesNoAccumulatedBound(t *testing.T) {
 	t.Parallel()
@@ -545,7 +545,7 @@ func TestPrismUnionDownstreamFilletAndWallSurvey(t *testing.T) {
 }
 
 // This file is design A7's own acceptance fixture: the analytic prism
-// Union of two circles (docs/prism-boolean-design.md PR1) merges both
+// Union of two circles (agent-docs/prism-boolean-design.md PR1) merges both
 // operands' recorded sections through a private sketch scene, which is what
 // turns each operand's WHOLE circle into a TRIMMED CircleSeg in the merged
 // result — the fragment internal/momentregion's certified brackets used to refuse.

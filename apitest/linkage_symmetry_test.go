@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestVerifyLinkageSymmetricBody pins docs/linkage-check-design.md §5.2's
+// TestVerifyLinkageSymmetricBody pins agent-docs/linkage-check-design.md §5.2's
 // rule for a body its own joint does not move. A disc of radius 5,
 // z ∈ [−5, 5], turns a quarter turn beside a wall x ∈ [12, 22],
 // y ∈ [−20, 20], z ∈ [−10, 10], 7 mm away.

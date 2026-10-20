@@ -9,7 +9,7 @@ import (
 )
 
 // StagingError restates the local chain-depth gate's refusal
-// (CoarseHeldContactError; docs/faceted-vertex-bounds-design.md §5)
+// (CoarseHeldContactError; agent-docs/faceted-vertex-bounds-design.md §5)
 // in the boolean's own terms (docs/api-design.md §8, "The chain depth"): it
 // names the operand, quotes the bound of the held facets the pair touches and
 // the pair's chord tolerance, and says that a boolean takes no tolerance.

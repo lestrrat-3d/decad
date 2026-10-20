@@ -15,7 +15,7 @@ import (
 // (loft, chain loft, circle-bore loft, coil, twisted sweep, mitred sweep)
 // shares: the vertex and edge a table index names, a face's Plane read from
 // its own triangle, the whole-shell walk reversal, and the finiteness gate on
-// the body's four measurements. See docs/loft-design.md §5.1 and §7.
+// the body's four measurements. See agent-docs/loft-design.md §5.1 and §7.
 
 // LoftVertex builds a vertex at a recorded (or lifted-from-recorded)
 // coordinate: every loft vertex position comes from Plane.Origin + p.U*Plane.U

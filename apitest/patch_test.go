@@ -13,12 +13,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/surface-design.md's T2-shaped public-surface tests for
+// This file is agent-docs/surface-design.md's T2-shaped public-surface tests for
 // PatchProfile: a single planar face built directly from a recorded
 // profile, on the sketch plane's own frame (§5.1). Every fixture reuses
 // plateSketch (extrude_test.go) and rectWithHoleSketch (surface_test.go).
 
-// TestPatchIsAPlanarSheet is docs/surface-design.md's T2 in full: a 100x60 mm
+// TestPatchIsAPlanarSheet is agent-docs/surface-design.md's T2 in full: a 100x60 mm
 // rectangle patched directly from its sketch.
 func TestPatchIsAPlanarSheet(t *testing.T) {
 	t.Parallel()
@@ -135,7 +135,7 @@ func TestPatchReproducesThroughPlacement(t *testing.T) {
 	decadtest.MeasuresBounds(t, copied, r3.NewVec(50, 50, 0), r3.NewVec(150, 110, 0), decadtest.Exactly())
 }
 
-// TestPatchVerifiesUndecided is docs/surface-design.md §9.1's holding fix,
+// TestPatchVerifiesUndecided is agent-docs/surface-design.md §9.1's holding fix,
 // modelled on TestSurfaceExtrudeSheetVerifiesUndecided (surface_test.go): the
 // manifold-with-boundary audit lands later, so a patch reads ValidityUndecided
 // rather than proven invalid, and carries no Region and no DiagInvalidBody.
@@ -158,7 +158,7 @@ func TestPatchVerifiesUndecided(t *testing.T) {
 	}
 }
 
-// TestPatchRejections is docs/surface-design.md Table R rows R2 and R3: a
+// TestPatchRejections is agent-docs/surface-design.md Table R rows R2 and R3: a
 // foreign, stale or nil profile, and a profile whose recorded boundary
 // carries a free-form segment this evaluator cannot integrate. Every
 // rejection leaves the document untouched.

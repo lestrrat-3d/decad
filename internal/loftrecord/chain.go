@@ -45,7 +45,7 @@ func (lp ChainPayload) ProvesSimple(context.Context) bool { return true }
 
 // Placed re-evaluates the same two records under the composed motion (core
 // §8), re-running every gate decided from the records and rebuilding from
-// scratch, exactly as docs/loft-design.md §4 states a loft placement does.
+// scratch, exactly as agent-docs/loft-design.md §4 states a loft placement does.
 func (lp ChainPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
 	lp.Xform = composed
 	return BuildChain(ctx, env, lp, proofbound.NewWorkBudget(ctx), freeform.NewFreeformWork(), freeform.NewFreeformWork())
@@ -54,7 +54,7 @@ func (lp ChainPayload) Placed(ctx context.Context, env topo.Env, composed r3.Tra
 // BuildChain builds the ribbon body: the two station chains, the two
 // wall triangles per chord cell, the crossing audit over that set, the B-rep
 // topology with no cap, and the two readings a sheet publishes
-// (docs/loft-design.md §16.5).
+// (agent-docs/loft-design.md §16.5).
 //
 // It never runs §5's whole-shell orientation step. That step reads the signed
 // tetrahedron sum over a CLOSED triangle set, which this build does not
@@ -155,7 +155,7 @@ func BuildChain(ctx context.Context, env topo.Env, lp ChainPayload, budget *proo
 	}
 	// No cap rational is passed: this build mints no cap, so the reading is
 	// the wall sum alone rather than a sum with the two caps subtracted back
-	// off it the way a surface-result Loft's is (docs/loft-design.md §16.5).
+	// off it the way a surface-result Loft's is (agent-docs/loft-design.md §16.5).
 	body.Area = massArea(mass)
 	bounds, ok := massBounds(mass)
 	if !ok {
@@ -179,7 +179,7 @@ func BuildChain(ctx context.Context, env topo.Env, lp ChainPayload, budget *proo
 // An n-cell walk carries n bottom rims, n top rims, n diagonals and n+1 rungs.
 // Every diagonal and every INTERIOR rung bounds two triangles; the n rims of
 // each walk and the two END rungs bound one each, which is the 2n+2 free edges
-// docs/loft-design.md §16.5 states. No loop is closed back to its first
+// agent-docs/loft-design.md §16.5 states. No loop is closed back to its first
 // station and no cap loop is built, so nothing here reads a wrap index.
 //
 // A free end rung takes the concave default rather than a measured sense: only
@@ -187,7 +187,7 @@ func BuildChain(ctx context.Context, env topo.Env, lp ChainPayload, budget *proo
 // no turn of its own — the identical rule chainrecord's buildSides applies to a chain
 // prism's own free-end sweep edges. Each walk's rims take the outer-loop
 // convexity convention, since a chain walk is loop 0 throughout
-// (docs/surface-design.md §13.4).
+// (agent-docs/surface-design.md §13.4).
 func buildChainTopology(ctx context.Context, env topo.Env, body *topo.Body, verts []r3.Vec, tris [][3]int, vIdx, wIdx []int, delta float64) ([]*topo.Face, error) {
 	n := len(vIdx) - 1
 	vertexObjs := make([]*topo.Vertex, len(verts))

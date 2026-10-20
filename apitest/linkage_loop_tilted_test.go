@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file holds the tilted-loop tests of docs/linkage-check-design.md
+// This file holds the tilted-loop tests of agent-docs/linkage-check-design.md
 // §15.10: scenes 7 and 8 with every body, pin and axis carried by one
 // rotation that takes Z to (1, 1, 1)/√3, so the loop's plane lies along no
 // coordinate plane and every pin's plane position is irrational. Each scene's

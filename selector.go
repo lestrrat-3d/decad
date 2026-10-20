@@ -29,7 +29,7 @@ const (
 // selector variants that features do not understand.
 //
 // Resolution is a filter pipeline over the body's live topology
-// (docs/evaluator-design.md §7): gather (Body.Edges()/Faces()), apply each
+// (agent-docs/evaluator-design.md §7): gather (Body.Edges()/Faces()), apply each
 // predicate as a pure function of the analytic data, keep an entity when
 // every predicate of at least one branch holds, then enforce the cardinality
 // assertion on the kept set. Matching is decided on what an entity IS — a
@@ -124,7 +124,7 @@ func (q *FaceQuery) Or(preds ...FacePredicate) *FaceQuery {
 // SelectEdges resolves the query against the body's topology: gather
 // (Body.Edges(), whose order the result keeps), keep each edge that satisfies
 // every predicate of at least one branch, then enforce the cardinality
-// assertion on that set (docs/evaluator-design.md §7). A
+// assertion on that set (agent-docs/evaluator-design.md §7). A
 // nil body has no topology to select from and is ErrDegenerate; zero matches
 // is ErrCardinality when asserted, else ErrNoMatch (core §12 precedence).
 func (q *EdgeQuery) SelectEdges(body *Body) ([]*Edge, error) {
@@ -175,7 +175,7 @@ func (q *EdgeQuery) enrich(body *Body, matched int, err error) error {
 // SelectFaces resolves the query against the body's topology: gather
 // (Body.Faces(), whose order the result keeps), keep each face that satisfies
 // every predicate of at least one branch, then enforce the cardinality
-// assertion on that set (docs/evaluator-design.md §7). A
+// assertion on that set (agent-docs/evaluator-design.md §7). A
 // nil body has no topology to select from and is ErrDegenerate; zero matches
 // is ErrCardinality when asserted, else ErrNoMatch (core §12 precedence).
 func (q *FaceQuery) SelectFaces(body *Body) ([]*Face, error) {
@@ -312,7 +312,7 @@ func LongerThan(l units.Value) EdgePredicate {
 
 // CreatedBy matches edges by provenance: edges created by the feature role f
 // names. Provenance is structural, so it survives body rebuilds
-// (docs/evaluator-design.md §3). A negative producer identity or empty role is rejected at
+// (agent-docs/evaluator-design.md §3). A negative producer identity or empty role is rejected at
 // resolve as ErrDegenerate.
 func CreatedBy(f FeatureRef) EdgePredicate {
 	return EdgePredicate{kind: selectorquery.CreatedByKind, ref: refOf(f)}
@@ -328,7 +328,7 @@ func OuterLoopOf(f FeatureRef) EdgePredicate {
 func Circular() EdgePredicate { return EdgePredicate{kind: selectorquery.CircularKind} }
 
 // Free matches edges Edge.IsFree reports free — exactly one adjacent face, a
-// sheet's boundary (docs/surface-design.md §2.2, §3.1). It composes with
+// sheet's boundary (agent-docs/surface-design.md §2.2, §3.1). It composes with
 // every other clause: Edges(Free(), Circular()) picks the circular free
 // edges, Edges(Free()).Exactly(8) asserts a surface extrude's rim count. On a
 // body with no free edge — every solid, and a closed sheet — it matches
@@ -341,7 +341,7 @@ func Planar() FacePredicate { return FacePredicate{kind: selectorquery.PlanarKin
 
 // Cylindrical matches faces whose surface is a cylinder. On a Faceted body
 // the analytic identity is gone, so it matches nothing there — matching is
-// decided on what the face IS (docs/evaluator-design.md §7).
+// decided on what the face IS (agent-docs/evaluator-design.md §7).
 func Cylindrical() FacePredicate { return FacePredicate{kind: selectorquery.CylindricalKind} }
 
 // NormalTo matches planar faces whose normal is parallel to v. The vector is
@@ -364,7 +364,7 @@ func Facing(v r3.Vec) FacePredicate {
 // FaceCreatedBy matches faces by provenance — the face analog of CreatedBy.
 // A canonicalization merge unions the merged faces' roles and this matches
 // on any of them, so provenance survives the merge
-// (docs/evaluator-design.md §3). A negative producer identity or empty role is rejected at
+// (agent-docs/evaluator-design.md §3). A negative producer identity or empty role is rejected at
 // resolve as ErrDegenerate.
 func FaceCreatedBy(f FeatureRef) FacePredicate {
 	return FacePredicate{kind: selectorquery.FaceCreatedByKind, ref: refOf(f)}
@@ -394,7 +394,7 @@ func CapEnd(b *Body) FeatureRef {
 // Walls matches every face a sweep made: the faces carrying a side(i, j) role
 // of b's own producing feature. It is the sibling of CapStart and CapEnd, and
 // it is what Draft takes as the complete wall set of an extrude
-// (docs/draft-design.md §10). On a body whose producer mints no side roles it
+// (agent-docs/draft-design.md §10). On a body whose producer mints no side roles it
 // matches nothing, an ordinary ErrNoMatch at resolve. b must not be nil.
 func Walls(b *Body) FacePredicate {
 	return FacePredicate{kind: selectorquery.WallsKind, ref: provenance.Ref{Producer: b.n.Origin.Producer, Role: selectorquery.RoleSidePrefix}}

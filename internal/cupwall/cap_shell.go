@@ -11,7 +11,7 @@ import (
 
 // CapShell is the offset stage of a cap-removing shell of a straight prism:
 // the cavity's section and floor limits, S11a as the offset is built, then
-// the offset section's audit (docs/modify-design.md §4/§5). It exists so a
+// the offset section's audit (agent-docs/modify-design.md §4/§5). It exists so a
 // caller can mint the result's producer identity only after that stage has
 // passed, and spend it in Build.
 type CapShell struct {

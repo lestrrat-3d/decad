@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/multibody-dynamics-design.md §13 PR 14's public half:
+// This file is agent-docs/multibody-dynamics-design.md §13 PR 14's public half:
 // a stitched tetrahedron against its closed form, a loft between two exact
 // octagons against independent integrals, and a cap-chamfered box against its
 // closed form.
@@ -139,7 +139,7 @@ func TestMassPropertiesStitchedTetrahedron(t *testing.T) {
 	requireReadingCovers(t, volume, new(big.Rat).Quo(cube, big.NewRat(6, 1)))
 
 	// A placed stitched solid's mesh carries no occupied-volume proof
-	// (docs/tessellation-design.md §2's stitchPayload row), so its mass is
+	// (agent-docs/tessellation-design.md §2's stitchPayload row), so its mass is
 	// refused rather than read off a mesh that proves only signed volume.
 	shift, err := r3.Translation(r3.NewVec(.1, 0, 0))
 	require.NoError(t, err)
@@ -330,7 +330,7 @@ func divergenceMoments(mesh *decad.Mesh) (*big.Rat, [3]*big.Rat, [3][3]*big.Rat)
 // TestMassPropertiesCapChamferFallback reads a cap-chamfered box — the 16×8×10
 // plate with a 2 mm chamfer around its top loop — off its verified mesh. A
 // cap blend has no analytic mass path, so it is the payload that reaches the
-// tolerance ladder (docs/multibody-dynamics-design.md §8.5). The solid is the
+// tolerance ladder (agent-docs/multibody-dynamics-design.md §8.5). The solid is the
 // plate below the chamfer level plus the frustum above it, whose slice at
 // height s into the chamfer is the rectangle [s, 16 − s] × [s, 8 − s]; both
 // are integrated exactly here.

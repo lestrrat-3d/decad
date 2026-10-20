@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file holds the closed-loop tests of docs/linkage-check-design.md
+// This file holds the closed-loop tests of agent-docs/linkage-check-design.md
 // §15.10: scene 7 (the crank-rocker against a wall) with its pin and
 // turn-back legs, scene 9 (the fold), and the loop's standing tests. Every
 // closed form is the four-bar's two-circle construction in float64; an angle
@@ -93,7 +93,7 @@ func requireNoLinkRows(t *testing.T, fb fourBar, report *decad.LinkageReport) {
 	}
 }
 
-// TestVerifyLinkageLoopCrankRocker is scene 7 of docs/linkage-check-design.md
+// TestVerifyLinkageLoopCrankRocker is scene 7 of agent-docs/linkage-check-design.md
 // §15.10, the closed loop's acceptance target.
 //
 // Legs seen to fail when deleted: subtracting the zero-pose reading (the
@@ -371,7 +371,7 @@ func TestVerifyLinkageLoopMirroredAxes(t *testing.T) {
 // configuration exists.
 const foldCrank, foldCoupler, foldFollower = 50.0, 60.0, 50.0
 
-// TestVerifyLinkageLoopFold is scene 9 of docs/linkage-check-design.md §15.10.
+// TestVerifyLinkageLoopFold is scene 9 of agent-docs/linkage-check-design.md §15.10.
 // No static body stands in the document and the layer exclusion settles every
 // pair, so every interval's outcome is the loop's own.
 //
@@ -503,7 +503,7 @@ func TestVerifyLinkageLoopFold(t *testing.T) {
 }
 
 // TestLinkageLoopRefusals is one subtest per row of
-// docs/linkage-check-design.md §15.1's and §15.6's tables.
+// agent-docs/linkage-check-design.md §15.1's and §15.6's tables.
 func TestLinkageLoopRefusals(t *testing.T) {
 	t.Parallel()
 	z := r3.NewVec(0, 0, 1)

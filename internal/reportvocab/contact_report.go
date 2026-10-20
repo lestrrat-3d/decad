@@ -10,7 +10,7 @@ import (
 
 // The contact report vocabulary below is the internal form of the root
 // package's ContactRequest, ContactReason, ContactFeature, ContactPoint,
-// ContactManifold and ContactReport (docs/multibody-dynamics-design.md §9,
+// ContactManifold and ContactReport (agent-docs/multibody-dynamics-design.md §9,
 // §10). Contact producers fill it with topology nodes and internal
 // measurements; the root package converts a finished report to its public
 // type once, at the public boundary.

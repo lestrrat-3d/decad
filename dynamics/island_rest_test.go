@@ -11,7 +11,7 @@ import (
 )
 
 // Legs of the correction of a resting pair and of the anchored push
-// (docs/multibody-dynamics-design.md §6.6), each shown to fail by deleting
+// (agent-docs/multibody-dynamics-design.md §6.6), each shown to fail by deleting
 // it in island.go, watching the named tests go red, and restoring it:
 //   - the push moves only a body with a correction allowance:
 //     TestIslandSphereLandsOnRestingSphere (step 41) and

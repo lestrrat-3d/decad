@@ -10,7 +10,7 @@ import (
 )
 
 // PatchProfile builds a single planar face directly from a recorded
-// profile, on the sketch plane's own frame (docs/surface-design.md §5.1). The
+// profile, on the sketch plane's own frame (agent-docs/surface-design.md §5.1). The
 // result is a one-face sheet body: Volume and Centroid answer ErrNotSolid,
 // while Area and Bounds answer over the one face.
 func Example_decad_patch() {

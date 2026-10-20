@@ -21,7 +21,7 @@ import (
 //
 //   - the chord displacement δ of a point on an OPERAND's surface → carried in
 //     the payload per vertex, composed by the mesh boolean
-//     (docs/faceted-vertex-bounds-design.md §3);
+//     (agent-docs/faceted-vertex-bounds-design.md §3);
 //   - the TRIM AMPLIFICATION of a point on the boolean's OWN rim: a rim vertex
 //     is the crossing of two chord PLANES, so it is displaced not by δ but by
 //     (δA + δB)/sin θ of its own facet pair, θ that pair's crossing angle —
@@ -42,7 +42,7 @@ import (
 //     between its four chord corners through to the ruled surface between
 //     the two TRUE curves it denotes → CellChordCurveAreaUpper, the area the
 //     loft's per-cell wall volume leg multiplies by that cell's own matched
-//     departure (docs/loft-gear-bounds-design.md §2) — never a
+//     departure (agent-docs/loft-gear-bounds-design.md §2) — never a
 //     held-facet-area-plus-excess reading, which does not bound a family
 //     whose area is not sign-definite relative to any one held facet, and
 //     never fed the loft evaluator's own sagitta sectionDelta in place of its
@@ -81,7 +81,7 @@ import (
 //     tolerance-gate diameter arm) so a later reading over the same bound can
 //     share it;
 //   - the AREA of ONE RULED QUAD whose cap-level chord alone is displaced (the
-//     cap-loop chamfer's own band patches, docs/modify-reach-design.md §8.4) →
+//     cap-loop chamfer's own band patches, agent-docs/modify-reach-design.md §8.4) →
 //     BandPatchAreaAllow, the same two-factor product one patch at a time
 //     rather than one whole section;
 //   - the AREA of that SAME patch under a displacement of its OTHER directrix
@@ -452,14 +452,14 @@ const MaxFiniteUlp = 0x1p971
 // supposed to widen. So a saturated scale falls back to MaxFiniteUlp, which
 // is a PROVEN charge rather than a substitute for one: this helper answers for
 // a point whose placed coordinates the caller has already proven finite (a
-// non-finite coordinate is that caller's own refusal — docs/loft-design.md
+// non-finite coordinate is that caller's own refusal — agent-docs/loft-design.md
 // Table S row S13 for a loft), an operation with a finite result rounds by at
 // most half the spacing at that result, and 16·MaxFiniteUlp dominates the six
 // products and sums one placed coordinate commits (three products, two sums
 // joining them, and the translation's own).
 //
 // A second call site is the plane-frame lift of a COMPUTED chord station (a
-// loft's own curved-pairing reach, docs/loft-design.md §5 — the chord-chain
+// loft's own curved-pairing reach, agent-docs/loft-design.md §5 — the chord-chain
 // subsection lands with the arc design change): the mechanism
 // is identical, an orthonormal map (Plane.ToWorldUV, in effect r3's own
 // Frame) composed with a translation, so the rounding it commits is bounded
@@ -585,7 +585,7 @@ func DirRoundAllow(frame r3.Frame, xform r3.Transform, maxInputAbs float64) floa
 // exact dyadic arithmetic and roots them through DySqrtUp, so a thin facet's
 // float cross-product error, which scales with the products rather than the
 // result, never enters. The loft's volume residual depends on it
-// (docs/loft-gear-bounds-design.md §2), so it may not be a float estimate.
+// (agent-docs/loft-gear-bounds-design.md §2), so it may not be a float estimate.
 // The summation slop of those held terms is SumSlop's. A non-finite vertex
 // answers +Inf: no term can be stated for it.
 func PerturbedAreaUpper(verts []r3.Vec, tris [][3]int, delta float64) float64 {
@@ -597,7 +597,7 @@ func PerturbedAreaUpper(verts []r3.Vec, tris [][3]int, delta float64) float64 {
 // each of its three vertices sits within delta of the held ones: delta·(|u| +
 // |v|) + 2·delta², u and v the triangle's own edge vectors b-a and c-a — the
 // per-facet correction term PerturbedAreaUpper's own doc comment derives,
-// pulled out as its single owner (docs/loft-design.md PR 2a) so a caller that
+// pulled out as its single owner (agent-docs/loft-design.md PR 2a) so a caller that
 // needs one triangle's own allowance, rather than a whole mesh's held area
 // plus the same correction summed over every facet, does not recompute it
 // inline.
@@ -897,7 +897,7 @@ func SweptVolumeAllow(delta, areaUpper float64) float64 {
 // the cell's four chord corners at homotopy-time t=0 through to the RULED
 // surface between the two TRUE recorded curves the cell's two sides denote
 // at t=1, and every intermediate surface between them
-// (docs/loft-design.md §5 — the chord-chain subsection lands with the arc
+// (agent-docs/loft-design.md §5 — the chord-chain subsection lands with the arc
 // design change).
 //
 // This is an ABSOLUTE bound, never a held-facet-area-plus-excess reading:
@@ -958,7 +958,7 @@ func SweptVolumeAllow(delta, areaUpper float64) float64 {
 //     Area(X_t) <= eA·eB for every t in [0,1] (the (s,r) domain is the unit
 //     square, area 1) — the published bound, ready for the loft's
 //     per-cell wall volume leg, matchedDelta · sup_t A(t) at that cell
-//     (docs/loft-gear-bounds-design.md §2).
+//     (agent-docs/loft-gear-bounds-design.md §2).
 //
 // matchedDeltaUpper is a DIFFERENT, STRONGER quantity than the loft
 // evaluator's own sectionDelta field (loftrecord.Payload.SectionDelta)
@@ -988,7 +988,7 @@ func SweptVolumeAllow(delta, areaUpper float64) float64 {
 // SET-distance may never be silently upgraded into a parameter-matched
 // one) — every caller reaching this helper today either proves the bound or
 // has none to pass. The loft evaluator proves it in two composed legs
-// (docs/loft-design.md §5.2's matchedDelta row): the arm's own matched
+// (agent-docs/loft-design.md §5.2's matchedDelta row): the arm's own matched
 // departure for the IDEAL chord — the circular arm's sagitta, or the
 // free-form arm's freeform.SpanMatchedDeltaUpper — plus the displacement of the two
 // HELD stations the chord this helper reads actually joins, which is what
@@ -2238,7 +2238,7 @@ func CellStationShiftAreaAllow(
 // SectionDisplacementArea bounds the AREA a recorded 2D section can differ from
 // the section its construction denotes, given that every recorded boundary
 // coordinate sits within delta of that denoted boundary
-// (docs/prism-boolean-design.md §7).
+// (agent-docs/prism-boolean-design.md §7).
 //
 // The two regions' symmetric difference lies inside the delta-neighbourhood of
 // the recorded boundary: a point in one region and not the other has the two
@@ -2264,7 +2264,7 @@ func SectionDisplacementArea(delta float64, walks int, perimeterUpper float64) f
 
 // SectionDisplacementLength bounds how far the total LENGTH of a recorded
 // section's boundary — walks lines and circular arcs, the class
-// docs/prism-boolean-design.md §3.1's G4 admits — can differ from the length of
+// agent-docs/prism-boolean-design.md §3.1's G4 admits — can differ from the length of
 // the boundary it denotes, given that every recorded coordinate sits within
 // delta of that denoted boundary. It is the perimeter's own reading of the same
 // displacement SectionDisplacementArea reads as an area.
@@ -2289,11 +2289,11 @@ func SectionDisplacementLength(delta float64, walks int) float64 {
 
 // CutParamUlps is the allowance, in ulps of the parameter domain [0, 1], that
 // a sketch-certified cut parameter is charged against the true parameter of the
-// crossing it names (docs/prism-boolean-design.md §7).
+// crossing it names (agent-docs/prism-boolean-design.md §7).
 //
 // It is the ONE number the analytic path's displacement rests on beyond what
 // sketch itself certifies, so it is stated here once rather than derived at a
-// call site. TExact's own claim (docs/sketch-seam-design.md §1) is that the
+// call site. TExact's own claim (agent-docs/sketch-seam-design.md §1) is that the
 // range reproduces the fragment's endpoints "to machine precision", and the
 // range comes from one closed-form crossing solve over the two entities' own
 // defining data — a short expression whose accumulated relative rounding is a
@@ -2308,7 +2308,7 @@ const CutParamUlps = 8
 // |dP/dt| bounded above by tangentUpper.
 //
 // A cut fragment records the entity's UNCHANGED defining data and a narrowed
-// t range (docs/sketch-seam-design.md §1), so the carrier is exactly the
+// t range (agent-docs/sketch-seam-design.md §1), so the carrier is exactly the
 // carrier the construction denotes and the whole displacement sits in the
 // parameter: the endpoint slides ALONG that carrier by at most |t − t*| ·
 // sup|dP/dt|, which CutParamUlps · ulp(1) · tangentUpper covers. Sliding along
@@ -2333,7 +2333,7 @@ func CutDisplacementAllow(tangentUpper float64) float64 {
 // WalkEndpointAllow bounds the rounding a source segment's own WALKED
 // endpoint commits when the record's parameterisation is evaluated at a
 // narrowed t rather than read off the segment's own natural bound
-// (docs/prism-boolean-design.md §7's δ_walk — the analytic boolean's private
+// (agent-docs/prism-boolean-design.md §7's δ_walk — the analytic boolean's private
 // scene is built from walkOf's own walked geometry, prismcells.BuildScene).
 //
 // operandUpper must be a PROVEN upper bound on the magnitude of every operand
@@ -2412,9 +2412,9 @@ func WalkEndBoundAllow(bound WalkEndBound) float64 {
 }
 
 // BandPatchAreaAllow bounds how far ONE chamfer band patch's own area
-// (docs/modify-reach-design.md §8.4) can differ from the area of the ruled
+// (agent-docs/modify-reach-design.md §8.4) can differ from the area of the ruled
 // quad the construction DENOTES, given that its cap-level directrix sits
-// within delta of the point it denotes (docs/prism-boolean-design.md §7's
+// within delta of the point it denotes (agent-docs/prism-boolean-design.md §7's
 // identity, one ruled patch at a time rather than one whole section). The
 // side-level directrix is NOT exact either, but its displacement is a
 // different mechanism and has its own helper: BandLevelAreaAllow below, which
@@ -2481,7 +2481,7 @@ func BandLevelAreaAllow(levelDelta, directrixSumUpper float64) float64 {
 // residual: the flux gap between a cap-loop chamfer's regular-wall Cone patch
 // B, the straight-ruled surface the topology builds between its two
 // directrices, and the denoted miter-locus surface T
-// (docs/modify-reach-design.md §8.3: "at axial fraction s, the denoted miter
+// (agent-docs/modify-reach-design.md §8.3: "at axial fraction s, the denoted miter
 // locus is the parallel section offset by s*dc"). B meets T only at s=0 and
 // s=1 and chords it in between wherever the cap-level directrix
 // (capTh0, capTh1) sweeps a narrower window than the side-level one
@@ -2762,7 +2762,7 @@ func ChordLocusCornerFlux(axialUpper, dcLower, momentUpper float64) float64 {
 }
 
 // ChordLocusLengthAllow bounds a cap-blend miter ruling's own chord-versus-
-// locus excess (docs/modify-reach-design.md §8.3's boundary bullet): how far
+// locus excess (agent-docs/modify-reach-design.md §8.3's boundary bullet): how far
 // the denoted corner-foot locus's true length can exceed the built chord it
 // is tagged `Line3` as, given a proven upper bound speedUpper on the locus's
 // own in-plane speed |dP/dt| over the offset range [0, dc] and the locus's
@@ -2803,7 +2803,7 @@ func ChordLocusLengthAllow(speedUpper, dc, axialSpan, chordUpper float64) float6
 
 // SweptMomentAllow bounds the FIRST MOMENT a cap contour's own displacement
 // can move — SweptVolumeAllow's own sibling one power higher
-// (docs/modify-reach-design.md §8.4's fourth reading, beside the band
+// (agent-docs/modify-reach-design.md §8.4's fourth reading, beside the band
 // volume, the chamfered cap face area, and each band patch's own area). The
 // symmetric difference between the band the build holds and the one the
 // offset denotes has volume at most SweptVolumeAllow(delta, areaUpper) — that

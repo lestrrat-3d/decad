@@ -1,6 +1,6 @@
 // Package provenance holds the evaluator's provenance values: the
 // document-local identity of one successful operation and the stable role it
-// minted (docs/evaluator-design.md §3). The root FeatureRef is their public
+// minted (agent-docs/evaluator-design.md §3). The root FeatureRef is their public
 // form; the topology nodes hold these.
 package provenance
 

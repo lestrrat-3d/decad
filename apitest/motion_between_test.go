@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file holds the Between tests of docs/motion-check-design.md §9,
+// This file holds the Between tests of agent-docs/motion-check-design.md §9,
 // numbered 12-20 as §9 numbers them; test 21 is examples/'s
 // Example_decad_motionBetween, and the internal tests sit in
 // motion_internal_test.go. Bounds are asserted against geometric truths or as

@@ -12,8 +12,8 @@ import (
 )
 
 // Tessellate restates body's held triangle set, whose payload is lp, as a mesh
-// node (docs/tessellation-design.md §2's "loftPayload exact restatement", §4's
-// source-face table; docs/tessellation-reach-design.md §4).
+// node (agent-docs/tessellation-design.md §2's "loftPayload exact restatement", §4's
+// source-face table; agent-docs/tessellation-reach-design.md §4).
 // internal/loftmesh.RestateLoft copies the set, names each triangle's
 // face by its provenance role, publishes the payload's own proof record and
 // audits the result; this adapter numbers the body's faces for it and maps the
@@ -25,7 +25,7 @@ import (
 // than an omission: the path adds no chording of its own, so the whole
 // published Bound is inherited payload displacement, which §1's Tolerance row
 // lets ride above tol exactly as a prism's per-end axial displacement does.
-// Orientation needs no work either: docs/loft-design.md §5's whole-shell step
+// Orientation needs no work either: agent-docs/loft-design.md §5's whole-shell step
 // already turned every triangle outward, and placed re-runs that step, so
 // repeating it would reverse a mirrored shell twice. A solid runs closure and
 // signed-volume audits; a sheet runs the manifold-with-boundary and
@@ -70,7 +70,7 @@ func Tessellate(ctx context.Context, body *topo.Body, lp Payload, privateRoles .
 			in.FreeChainCounts[number[f]] = n
 		}
 	} else {
-		// The same anchor Build used (docs/loft-design.md §5's whole-shell
+		// The same anchor Build used (agent-docs/loft-design.md §5's whole-shell
 		// orientation rule).
 		in.Anchor = lp.Xform.Apply(lp.Plane0.Origin)
 	}

@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file pins the face build of PatchEdges (docs/surface-design.md §5.2)
+// This file pins the face build of PatchEdges (agent-docs/surface-design.md §5.2)
 // over hand-built node fixtures: the root package's public seam admits no way
 // to author a chain whose adjacent faces disagree, a chain the level arm
 // admitted over a perturbed vertex, or a bowtie chain.
@@ -46,7 +46,7 @@ func squareChain(id denotation.LevelID, bound units.Value) ([]*topo.Edge, denota
 }
 
 // TestBuildFaceCarriesTheLevelBoundOntoTheNewFacesAxialDelta is
-// docs/surface-design.md §15's T29: buildFace over a chain gate 3's level arm
+// agent-docs/surface-design.md §15's T29: buildFace over a chain gate 3's level arm
 // admitted sets the new face's own AxialDelta/HasAxialDelta from the chain's
 // proven bound — the same fields a prism cap already carries
 // (internal/prismrecord/build.go) — rather than leaving them at their zero
@@ -166,7 +166,7 @@ func TestOrientChainRejectsDisagreeingAdjacentFaces(t *testing.T) {
 // derivation succeeds (every builder here agrees, by construction: a single
 // adjacent face per edge, each walked forward), so this reaches gate 4, whose
 // ErrUnsupported crossing refusal (sectionaudit.Crossing) is remapped to
-// ErrDegenerate at PatchEdges's own boundary (docs/surface-design.md Table R
+// ErrDegenerate at PatchEdges's own boundary (agent-docs/surface-design.md Table R
 // row R5).
 func TestBuildFaceRemapsACrossingChainToErrDegenerate(t *testing.T) {
 	t.Parallel()

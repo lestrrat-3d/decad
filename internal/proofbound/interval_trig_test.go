@@ -119,7 +119,7 @@ func seriesTan(x *big.Rat) *big.Rat {
 }
 
 // TestRadTanSpanEnclosesSeriesReference pins the draft's certified tangent
-// (docs/draft-design.md §8.1): over every span, the enclosure holds the series
+// (agent-docs/draft-design.md §8.1): over every span, the enclosure holds the series
 // reference at both ends of the span, and over a one-point span it is a box
 // far narrower than one float ulp of the tangent wherever the angle is a degree
 // or more; the turn grid's fixed absolute width dominates a tinier angle's

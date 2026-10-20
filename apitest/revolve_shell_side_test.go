@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file covers docs/modify-reach-design.md §9.3.2's side opening and
-// docs/shell-opening-design.md §8's rim: a revolve shell that removes a
+// This file covers agent-docs/modify-reach-design.md §9.3.2's side opening and
+// agent-docs/shell-opening-design.md §8's rim: a revolve shell that removes a
 // connected run of generated side faces offsets the kept chain, closes it at
 // each opening end with the removed walk's own carrier cut by the offset
 // (Table RO), and sweeps that wall region. Fixtures are revolve_shell_test.go's:
@@ -143,7 +143,7 @@ func TestRevolveShellSideOpening(t *testing.T) {
 		// walk is slanted: its offset foot at the opening is
 		// (24 − 1/√5, 8 − 2/√5), which the float build rounds. The wall's
 		// record carries a nonzero section displacement
-		// (docs/modify-reach-design.md §9.3.1), so the foot's swept vertex
+		// (agent-docs/modify-reach-design.md §9.3.1), so the foot's swept vertex
 		// encloses the irrational point. Leg shown to fail before this
 		// fixture was accepted: publishing a zero displacement leaves the foot
 		// vertex Exact at a float that is not the foot.
@@ -273,7 +273,7 @@ func TestRevolveShellSideOpeningRefusals(t *testing.T) {
 	})
 }
 
-// slantedMeridian is docs/shell-opening-design.md §9's revolve fixture in
+// slantedMeridian is agent-docs/shell-opening-design.md §9's revolve fixture in
 // (z, ρ): a cylinder ρ ≤ 8 over z ∈ [0, 2] under a frustum narrowing to ρ = 5
 // at z = 6, closed by the top disc and the axis. Its ∫ρ dA is 150.
 var slantedMeridian = [][2]float64{{0, 0}, {6, 0}, {6, 5}, {2, 8}, {0, 8}}
@@ -313,7 +313,7 @@ func exactCut(x float64) *big.Float { return new(big.Float).SetPrec(cutPrec).Set
 // requireCutEnclosed finds the seam vertex the wall's cut at meridian point
 // (z, ρ) sweeps, and requires its position to carry a nonzero bound that
 // encloses the closed-form point: the wall's section displacement charges the
-// float cut (docs/shell-opening-design.md §8). The seam sits at φ = 0, so the
+// float cut (agent-docs/shell-opening-design.md §8). The seam sits at φ = 0, so the
 // cut's world point is (z, ρ, 0).
 func requireCutEnclosed(t *testing.T, b *decad.Body, z, rho *big.Float) {
 	t.Helper()

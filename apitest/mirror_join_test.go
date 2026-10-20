@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The join tests of docs/mirror-pattern-design.md §8: Mirrored with WithJoin
+// The join tests of agent-docs/mirror-pattern-design.md §8: Mirrored with WithJoin
 // rewrites a prism's or a stacked prism's own section into the union of the
 // receiver and its image, and refuses every receiver §5.1 does not admit.
 

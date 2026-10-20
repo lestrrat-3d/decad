@@ -15,7 +15,7 @@ const (
 // (contact_sweep.go). It also holds Verify's report vocabulary: outcome enums,
 // effective-request records, bounded readings, survey result records, and
 // Report/BodyReport
-// (docs/verification-design.md §1-§9). Verify publication builds a Report
+// (agent-docs/verification-design.md §1-§9). Verify publication builds a Report
 // from survey outcomes and certified readings in verify_publish.go.
 
 // ScalarOutcome is a whole-body scalar survey's primary outcome (Wall or
@@ -432,7 +432,7 @@ const (
 	// Contributes Suspect.
 	DiagUnsupportedPairPipeline
 	// DiagUnsupportedPairSheet — a pair holding a sheet operand that the
-	// sheet decision procedure could not settle (docs/surface-design.md
+	// sheet decision procedure could not settle (agent-docs/surface-design.md
 	// §9.3): a sheet-sheet pair, since neither operand offers a closed
 	// boundary to cast the other against, or a sheet-against-solid pair
 	// whose body model is missing, whose candidate enumeration could not
@@ -444,7 +444,7 @@ const (
 	DiagUnsupportedPairSheet
 	// DiagSheetSolidCrossing — a sheet operand proven to cross a solid
 	// operand's boundary, by an admitted transversal crossing between a
-	// sheet face and a solid face (docs/surface-design.md §9.3). A sheet
+	// sheet face and a solid face (agent-docs/surface-design.md §9.3). A sheet
 	// encloses no region, so no Interference row is emitted for it — that
 	// absence is NOT a proven non-overlap here, only the fact that a sheet
 	// has no overlap volume to report. Reading ReadingNone, every Observed*,
@@ -457,7 +457,7 @@ const (
 	// this body does not supply one: its validity is invalid or undecided, OR
 	// it is a sheet body asking a wall or concave-radius question, neither of
 	// which has any material on a sheet to be about
-	// (docs/surface-design.md §9.1). An undercut question is not blocked this
+	// (agent-docs/surface-design.md §9.1). An undercut question is not blocked this
 	// way on a proven-valid surface-extruded prism sheet, which answers it
 	// over the sheet's own positive side; every other sheet family still
 	// reads DiagUnsupportedSurveyPayload for it instead. Survey names the
@@ -468,7 +468,7 @@ const (
 	// names the quantity, Required nil. Contributes Suspect.
 	DiagToleranceReferenceUnavailable
 	// DiagMotionCollision — a motion pose proves a (mover, static) pair
-	// overlaps (docs/motion-check-design.md §4.1). Pair and At set; Reading
+	// overlaps (agent-docs/motion-check-design.md §4.1). Pair and At set; Reading
 	// ReadingOverlapVolume with Observed the volume when it was bounded, else
 	// ReadingNone. Contributes Interfering.
 	DiagMotionCollision
@@ -486,7 +486,7 @@ const (
 	// interval's lower bound, Required the minimum. Contributes Suspect.
 	DiagMotionUndecidedClearance
 	// DiagJointBoxBudgetExhausted — WithCellBudget stopped a joint-box split
-	// the resolution would have allowed (docs/linkage-check-design.md §14.2).
+	// the resolution would have allowed (agent-docs/linkage-check-design.md §14.2).
 	// Raised at most once per report; Pair, Body and Cell nil, Reading
 	// ReadingNone; Message names the budget and the cells it held.
 	// Contributes Suspect.

@@ -8,7 +8,7 @@ import (
 )
 
 // The 2D kernel evaluates the analytic wall survey
-// (docs/verification-design.md §6, docs/evaluator-design.md §10): the
+// (agent-docs/verification-design.md §6, agent-docs/evaluator-design.md §10): the
 // spanning-ball reading of a prism or revolved body reduces exactly to
 // empty-disk analysis in a 2D section — the profile plane for a prism, the
 // meridian plane through the ball's center for a solid of revolution — so the

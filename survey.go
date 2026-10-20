@@ -18,13 +18,13 @@ import (
 )
 
 // This file dispatches the wall, undercut, and minimum-radius questions of
-// docs/evaluator-design.md §10 and docs/verification-design.md §6. It adapts
+// agent-docs/evaluator-design.md §10 and agent-docs/verification-design.md §6. It adapts
 // private survey readings to public body and face handles. The analytic
 // prism, revolve, and cup undercut decisions are in internal/analyticundercut;
 // the cap-blend and draft decisions are in internal/capblendsurvey. The wall
 // and concave-radius surveys require a proven solid. A proven-valid
 // surface-extruded prism sheet can answer the undercut question about each
-// wall's positive side (docs/surface-design.md §2.3, §9.1). A payload this
+// wall's positive side (agent-docs/surface-design.md §2.3, §9.1). A payload this
 // dispatch cannot decide leaves the requested question undecided.
 
 // surveyReason retains why a survey was not decided. The zero reason is a
@@ -152,7 +152,7 @@ type surveyResults struct {
 
 // runSurveys answers the asked opt-in questions on one proven-solid body, or
 // the undercut question alone on a proven-valid surface-extruded prism
-// sheet (docs/surface-design.md §2.3, §9.1): the wall and concave-radius
+// sheet (agent-docs/surface-design.md §2.3, §9.1): the wall and concave-radius
 // blocks below run only on a BodySolid, so a sheet leaves WallAsked and
 // RadiusAsked false and their own prerequisite refusal to
 // reportvocab.PublishWall/PublishRadius. It returns the raw private
@@ -197,7 +197,7 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 			wall, wallErr := cupwall.Evaluate(budget, cupWallInput(pl.View()), cfg.AllowRad, cupWallOperations)
 			out, err = wallOutcome{reading: wall.Reading, bound: wall.Bound, ok: wall.OK}, wallErr
 		case capBlendPayload:
-			// DX9 (docs/modify-reach-design.md Table DX): a cap blend is not
+			// DX9 (agent-docs/modify-reach-design.md Table DX): a cap blend is not
 			// one constant section at one height, so the existing 2D
 			// spanning-disk proof does not decide it. A deliberate evaluator
 			// limit, published as an explicit unsupported-payload dispatch

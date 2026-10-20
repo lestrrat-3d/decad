@@ -17,7 +17,7 @@ type WalkLoops interface {
 	Walks(i int) []survey2d.SideWalk
 }
 
-// Extents is docs/tessellation-design.md §8's ρ and |z| envelope over
+// Extents is agent-docs/tessellation-design.md §8's ρ and |z| envelope over
 // every loop, read from the WALKS rather than from a chording of them: a
 // straight generator attains both at its endpoints, and a circular one at its
 // endpoints plus every cardinal point its own parameter interval contains. A

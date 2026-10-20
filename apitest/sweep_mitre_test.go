@@ -440,7 +440,7 @@ func TestSweepMitredTessellationTolerance(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrUnsupported, `a tolerance finer than the held vertices is refused`)
 }
 
-// TestSweepMitredRefusals covers every row of docs/sweep-design.md Table SM
+// TestSweepMitredRefusals covers every row of agent-docs/sweep-design.md Table SM
 // a public call can reach, plus S12's repeated options. Each refusal leaves
 // the document's live set and next producer identity unchanged.
 func TestSweepMitredRefusals(t *testing.T) {

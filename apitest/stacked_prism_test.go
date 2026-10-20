@@ -79,7 +79,7 @@ func TestBlindPocketPlacedAndVerified(t *testing.T) {
 	require.Len(t, placed.Faces(), len(pocket.Faces()))
 	// The placed pocket keeps the value 936; the rotation's held basis is
 	// orthonormal only to rounding, so the bound charges its determinant's
-	// departure from 1 (docs/evaluator-design.md §5.1).
+	// departure from 1 (agent-docs/evaluator-design.md §5.1).
 	volume, err := placed.Volume()
 	require.NoError(t, err)
 	require.Equal(t, 936.0, volumeMM(t, volume))
@@ -100,7 +100,7 @@ func TestBlindPocketPlacedAndVerified(t *testing.T) {
 }
 
 // TestBlindPocketFilletsItsOuterEdges rounds a blind pocket's four convex
-// vertical edges, r = 1, through docs/brep-modify-design.md's route E: each
+// vertical edges, r = 1, through agent-docs/brep-modify-design.md's route E: each
 // corner loses (1 − π/4)·10, so the volume 936 becomes 896 + 10π, and the
 // result is watertight. π lies in [3.14159265358979, 3.14159265358980], and
 // the reading covers both ends.

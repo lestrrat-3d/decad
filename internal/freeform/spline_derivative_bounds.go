@@ -71,7 +71,7 @@ func SpanChordSquared(w *FreeformWork, span BezierSpan) (*big.Rat, error) {
 // gap of a Tier A span of degree p with chord Δ = P_p − P_0, and never rounds.
 //
 // The velocity C'(t) is itself a Bézier — the HODOGRAPH, degree p−1, with
-// Bernstein control points p·(P_{i+1} − P_i) (docs/spline-design.md §6.2's
+// Bernstein control points p·(P_{i+1} − P_i) (agent-docs/spline-design.md §6.2's
 // direction-cone row already reuses this same hull for a different question) —
 // so C'(t) − Δ is the Bézier with control points p·(P_{i+1} − P_i) − Δ, and the
 // convex-hull property bounds its norm at every t by the largest control
@@ -447,7 +447,7 @@ func BernsteinSquaredNormIntegral(w *FreeformWork, g []RatPoint) (*big.Rat, erro
 	return new(big.Rat).SetFrac(sum, resultDen), nil
 }
 
-// SpanTangentEnergyUpper is docs/loft-design.md §5.2's free-form
+// SpanTangentEnergyUpper is agent-docs/loft-design.md §5.2's free-form
 // tangentEnergy_k: a proven upper bound on
 //
 //	J = ∫₀¹ |C'(t) − Δ|² dt

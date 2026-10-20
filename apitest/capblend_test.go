@@ -167,7 +167,7 @@ func TestCapBlendBothCapsBuildsWhenClear(t *testing.T) {
 }
 
 // TestCapBlendCarrierCollapseRefused pins SX6's sentinel
-// (docs/modify-reach-design.md Table SX): eroding a radius-R circle by R or
+// (agent-docs/modify-reach-design.md Table SX): eroding a radius-R circle by R or
 // more leaves the empty set, so the cap contour the caller asked for does not
 // exist and the refusal is ErrDegenerate — the same existence test §4 puts in
 // stage 5. The shared offset raises this as Shell's own S11a ErrUnsupported,

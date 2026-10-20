@@ -2,8 +2,8 @@
 // share, over internal/topo nodes: registering faces on their edges, splitting
 // a face set into lumps and shells, the node walkers a builder reads its own
 // body back through, re-minting blend roles, and the last finiteness gate on a
-// built body's measurements (docs/evaluator-design.md §3, §5;
-// docs/surface-design.md §2.2). It allocates every node through the caller's
+// built body's measurements (agent-docs/evaluator-design.md §3, §5;
+// agent-docs/surface-design.md §2.2). It allocates every node through the caller's
 // topo.Alloc.
 package topobuild
 
@@ -40,7 +40,7 @@ func AttachFaceLoops(ctx context.Context, faces []*topo.Face) error {
 }
 
 // ShellIsOpen reports whether faces holds at least one free edge: an edge
-// with exactly one adjacent face (docs/surface-design.md §2.2). It is
+// with exactly one adjacent face (agent-docs/surface-design.md §2.2). It is
 // derived from an edge that actually exists and never from the option that
 // built the shell, so it reads the same on a hand-built fixture as it does
 // on a feature's own output. Every caller MUST run it AFTER
@@ -62,7 +62,7 @@ func ShellIsOpen(faces []*topo.Face) bool {
 
 // SplitConnectedFaces partitions faces into its connected pieces, two faces
 // joined whenever a loop of one shares an Edge with a loop of the other
-// (docs/surface-design.md §2.2: a lump is a connected piece of a body, not a
+// (agent-docs/surface-design.md §2.2: a lump is a connected piece of a body, not a
 // connected SOLID piece — a sheet's wall groups that touch nowhere, once
 // their closing caps are omitted, are separate pieces even though a solid
 // built from the same record is one). Each returned slice keeps faces' own
@@ -82,7 +82,7 @@ func SplitConnectedFaces(faces []*topo.Face) [][]*topo.Face {
 
 // SheetLumps builds one Lump per connected piece of faces, each holding one
 // FaceShell whose Open is ShellIsOpen's own reading and whose Void stays
-// false — a sheet bounds no cavity (docs/surface-design.md §2.2), so nothing
+// false — a sheet bounds no cavity (agent-docs/surface-design.md §2.2), so nothing
 // here plays the void role a solid's own nested shell does. It must run
 // AFTER every face in faces has been registered on its edges
 // (ShellIsOpen's own contract): the prism and revolve surface-result builds

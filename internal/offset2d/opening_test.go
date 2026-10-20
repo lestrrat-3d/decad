@@ -39,7 +39,7 @@ func arc(c [2]float64, r, th0, th1 float64) survey2d.SideWalk {
 
 const openingTol = 1e-9
 
-// TestOpeningJoinCorners reads docs/shell-opening-design.md §2.3's corner
+// TestOpeningJoinCorners reads agent-docs/shell-opening-design.md §2.3's corner
 // rows against the cuts §9 derives by hand. Each row names the kept walk k,
 // the removed walk r beside it, the end of k the corner is, and the sense.
 //

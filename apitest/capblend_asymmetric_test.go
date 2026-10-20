@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file covers docs/modify-reach-design.md §8.3.1: a two-distance chamfer
+// This file covers agent-docs/modify-reach-design.md §8.3.1: a two-distance chamfer
 // of complete prism cap loops. The reference face picks, per cap, whether the
 // positional distance runs across the cap (dc) or down the side wall (ds).
 

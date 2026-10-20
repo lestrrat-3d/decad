@@ -244,7 +244,7 @@ func TestMassPropertiesRevolvedCylinder(t *testing.T) {
 	require.NoError(t, err)
 	// An oblique placement leaves the source-cylinder path for the general
 	// revolve path, which reads the image of the cylinder under the held
-	// basis M read exactly (docs/multibody-dynamics-design.md §8.6): the
+	// basis M read exactly (agent-docs/multibody-dynamics-design.md §8.6): the
 	// mass ρ·|det M|·V and the image's inertia.
 	reading, err = oblique.MassProperties(t.Context(), density)
 	require.NoError(t, err)

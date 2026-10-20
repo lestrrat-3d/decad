@@ -35,7 +35,7 @@ type StitchedMesh struct {
 	// the held mesh no longer carries. The reported surface area is short by
 	// exactly this much, so the area bound must cover it.
 	DropArea float64
-	// VertexBound is β(v) per held vertex (docs/faceted-vertex-bounds-design.md
+	// VertexBound is β(v) per held vertex (agent-docs/faceted-vertex-bounds-design.md
 	// §3.4): the largest, over the exact vertices the held one stands for, of
 	// that exact vertex's pre-weld bound plus its own rounding distance to the
 	// held float, rounded up. An exact vertex held at its own float adds
@@ -252,7 +252,7 @@ func maxGap(ctx context.Context, gaps []*big.Rat) (*big.Rat, error) {
 	return worst, nil
 }
 
-// HeldVertexBounds is docs/faceted-vertex-bounds-design.md §3.4's weld, per
+// HeldVertexBounds is agent-docs/faceted-vertex-bounds-design.md §3.4's weld, per
 // vertex: each exact vertex's own rounding distance to the held float that
 // stands for it, read exactly and widened to a 3D radius, is added to that
 // exact vertex's pre-weld bound, and a held vertex takes the largest sum over

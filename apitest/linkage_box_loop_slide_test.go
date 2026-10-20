@@ -10,7 +10,7 @@ import (
 )
 
 // TestVerifyJointBoxLoopDependentSlide pins a dependent slide's travel in the
-// cell certificate (docs/linkage-check-design.md §16.3): its δ_j in τ_half and
+// cell certificate (agent-docs/linkage-check-design.md §16.3): its δ_j in τ_half and
 // its half-span in the projection bound. The Scotch yoke of §15.10 — the
 // block, listed, over [−4, 4] mm on the yoke, the yoke a dependent slide along
 // X — stands beside a wall x ∈ [25.5, 60], y ∈ [−50, 50], z ∈ [1, 3] in the

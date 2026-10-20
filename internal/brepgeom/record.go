@@ -246,7 +246,7 @@ type Topology struct {
 // Every face's walks must already have passed the caller's record audit.
 // open names edge keys the record bounds on one side only, because a face
 // outside the record closes them (a route L band,
-// docs/modify-general-design.md §4.2); nil names none.
+// agent-docs/modify-general-design.md §4.2); nil names none.
 func Build(faces []FaceWalks, open map[EdgeKey]struct{}, unsupported error) (*Topology, error) {
 	topo := &Topology{
 		Walls:    map[int]survey2d.SegmentWalk{},
@@ -394,7 +394,7 @@ func ownerRank(p Part) int {
 }
 
 // Convex reads an edge's walked-boundary convexity from its owner and mate
-// (docs/general-boolean-design.md §4.2).
+// (agent-docs/general-boolean-design.md §4.2).
 //
 // A rim reads the wall it runs along: a circular wall by its own turn, a
 // straight wall by its loop's role, which the planar face sharing the rim

@@ -57,7 +57,7 @@ func BuildArc(
 	// reads rp.SurfaceResult to decide Kind()/solid, cap omission, topobuild.SheetLumps
 	// and the area subtraction — including Table W's profile-meets-axis row —
 	// which is what gives the arc reduction the whole sheet behaviour for free
-	// (docs/surface-design.md §4).
+	// (agent-docs/surface-design.md §4).
 	revolve := revolveplan.Payload{
 		Profile:       profile,
 		Frame:         frame,

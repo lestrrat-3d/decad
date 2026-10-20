@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/surface-design.md's T3/T5-shaped public tests for
+// This file is agent-docs/surface-design.md's T3/T5-shaped public tests for
 // Unstitch, the reach-limit round trip §6.5 names, Table R's R11/R12/R14
 // rows, and Unstitch's own multi-produce atomicity. stitchBoxSheets
 // (stitch_test.go), annularSketch/uAxis (revolve_test.go),
@@ -23,7 +23,7 @@ import (
 // against each other's document, Unstitch takes one receiver and no second
 // document to be foreign to, so it is not tested here.
 
-// unstitchBox builds docs/surface-design.md's T3 box (stitchBoxSheets'
+// unstitchBox builds agent-docs/surface-design.md's T3 box (stitchBoxSheets'
 // worked example) and stitches it, returning the live BodySolid ready to
 // hand to Unstitch.
 func unstitchBox(t *testing.T, doc *decad.Document) *decad.Body {
@@ -34,7 +34,7 @@ func unstitchBox(t *testing.T, doc *decad.Document) *decad.Body {
 	return box
 }
 
-// TestUnstitchBoxYieldsSixFreeSheets is docs/surface-design.md's T3-shaped
+// TestUnstitchBoxYieldsSixFreeSheets is agent-docs/surface-design.md's T3-shaped
 // coverage of Unstitch: the design's box (100x60x10, 15200 mm^2, 60000
 // mm^3), unstitched into one single-face sheet per face, in Faces() order.
 func TestUnstitchBoxYieldsSixFreeSheets(t *testing.T) {
@@ -121,7 +121,7 @@ func TestUnstitchVoidRevolveMakesNonVoidSheets(t *testing.T) {
 	require.True(t, foundVoidFace, `the source void face becomes a sheet face`)
 }
 
-// TestUnstitchRestitchRoundTripMatchesOriginal is docs/surface-design.md's
+// TestUnstitchRestitchRoundTripMatchesOriginal is agent-docs/surface-design.md's
 // T5: the T3 box, unstitched then re-stitched, reproduces it bit for bit —
 // every edge Unstitch freed was welded from a proven-coincident pair, so
 // Table J re-admits every one of them.
@@ -162,14 +162,14 @@ func TestUnstitchRestitchRoundTripMatchesOriginal(t *testing.T) {
 	require.Same(t, restitched, doc.Bodies()[0])
 }
 
-// TestUnstitchRestitchRoundTripClosesABoundedBox is docs/surface-design.md
+// TestUnstitchRestitchRoundTripClosesABoundedBox is agent-docs/surface-design.md
 // §15's T42's own copy-path leg: the CURVE half of the shared-denotation
 // certificate must survive Unstitch's own copy (stitchrecord's copyFaceUnder) for a
 // BOUNDED body, not only an exact one — TestUnstitchRestitchRoundTripMatchesOriginal
 // already covers the exact case. A Symmetric surface-extruded wall on an
 // off-axis, non-origin plane (offAxisPlateSketch) has both rims bounded;
 // PatchEdges caps both, and a single-operand Stitch closes the result to a
-// BodySolid (docs/surface-design.md §15's T42, stitch_test.go). Unstitching
+// BodySolid (agent-docs/surface-design.md §15's T42, stitch_test.go). Unstitching
 // that solid frees every edge, INCLUDING the bounded rim edges Table J's J5
 // could never admit on bit-identity alone — the round trip closes again only
 // because each unstitched copy still carries the ORIGINAL curveID PatchEdges's
@@ -208,7 +208,7 @@ func TestUnstitchRestitchRoundTripClosesABoundedBox(t *testing.T) {
 }
 
 // TestUnstitchRevolveRoundTripStaysASheet is the reach-limit round trip
-// docs/surface-design.md §6.5 names: unstitching a surface-result Revolve
+// agent-docs/surface-design.md §6.5 names: unstitching a surface-result Revolve
 // body and re-stitching it stays a SHEET, because the profile's own seam —
 // its boundary copy at phi0 and phi1, a partial revolve's own free rim —
 // never had a partner to weld against, before or after the round trip. The
@@ -356,7 +356,7 @@ func TestUnstitchAtomicCommitLeavesDocumentUnchanged(t *testing.T) {
 	require.True(t, doc.Bodies()[0].IsSolid())
 }
 
-// TestUnstitchBoxFacesReportOwnTightBounds is docs/surface-design.md's T3 box
+// TestUnstitchBoxFacesReportOwnTightBounds is agent-docs/surface-design.md's T3 box
 // again, this time asserting each of the six straight-edged, planar result
 // sheets reports its OWN tight box rather than the whole receiver's: a wall
 // is a flat slab across the two axes its rectangle spans and zero-thick
@@ -439,7 +439,7 @@ func TestUnstitchBoxFacesBoundsUnionSpansOriginal(t *testing.T) {
 // contains both the seam vertices AND the wall's true radius extent, and it
 // is Exact with a zero bound because the unplaced receiver's own box already
 // was — not because any of these three boxes is proven the tightest one its
-// own face could in principle earn (docs/surface-design.md §6.5).
+// own face could in principle earn (agent-docs/surface-design.md §6.5).
 func TestUnstitchCylinderWallBoundsAreSoundButWholeReceiver(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
@@ -484,7 +484,7 @@ func TestUnstitchCylinderWallBoundsAreSoundButWholeReceiver(t *testing.T) {
 }
 
 // TestUnstitchedCapToFaceStopMatchesUnUnstitchedCap is
-// docs/surface-design.md's T81: a ToFace stop resolved against an
+// agent-docs/surface-design.md's T81: a ToFace stop resolved against an
 // unstitched cap must publish the identical Exactness and Bound as the same
 // stop resolved against the un-unstitched plate — Unstitch changes
 // representation, never the proof a body-relative stop reads off the cap it

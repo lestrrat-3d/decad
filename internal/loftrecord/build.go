@@ -19,10 +19,10 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is docs/loft-design.md PR 1a: the evaluator half of Loft — the
+// This file is agent-docs/loft-design.md PR 1a: the evaluator half of Loft — the
 // Payload, Table S gates S1-S5, S7's STRUCTURAL arm and S13's
 // coordinate-range gate (S9-S11 are the public entry point's job,
-// docs/loft-design.md §2/§4), the wiring of the already-landed §6 audit
+// agent-docs/loft-design.md §2/§4), the wiring of the already-landed §6 audit
 // (internal/loftmesh/loft_audit.go) and §8 mass kernel (internal/loftmesh/mass_accumulator.go), and the four
 // measurements. Document.Loft is PR 1b.
 //
@@ -41,7 +41,7 @@ import (
 // measurement §8 already derives.
 
 // Build builds the lofted body from the payload's own records
-// (docs/loft-design.md §5-§8): pairing, assembly, the §6 audit, topology, and
+// (agent-docs/loft-design.md §5-§8): pairing, assembly, the §6 audit, topology, and
 // the four measurements — all four published at build, never staged (§12).
 // budget is shared with the rest of the pre-commit cancellation path exactly
 // as modify §5's audits already share one; the caller (Loft, PR 1b)
@@ -53,7 +53,7 @@ import (
 // is called, so those counters — not two fresh ones minted here — must be
 // the ones every walkOf call site in this build spends against, and the ones
 // a same-kind free-form pair's station generator charges
-// (docs/loft-design.md §5.1), so a build never opens a second ceiling per
+// (agent-docs/loft-design.md §5.1), so a build never opens a second ceiling per
 // record.
 func Build(ctx context.Context, env topo.Env, pl Payload, budget *proofbound.WorkBudget, work0, work1 *freeform.FreeformWork) (*topo.Body, error) {
 	if err := ctx.Err(); err != nil {
@@ -158,7 +158,7 @@ func Build(ctx context.Context, env topo.Env, pl Payload, budget *proofbound.Wor
 	// A surface result publishes a sheet, never a solid: solid false is what
 	// makes Volume() and Centroid() answer ErrNotSolid through their existing
 	// guards, and kind BodySheet is what Kind() reports
-	// (docs/surface-design.md §4.3), the same rule prismPayload's and
+	// (agent-docs/surface-design.md §4.3), the same rule prismPayload's and
 	// revolvePayload's own builds already follow (internal/prismrecord/build.go,
 	// internal/revolveplan/build.go).
 	kind := topo.BodySolid
@@ -211,7 +211,7 @@ func Build(ctx context.Context, env topo.Env, pl Payload, budget *proofbound.Wor
 	}
 
 	// A surface result omits both caps from the shell (Table W,
-	// docs/surface-design.md §4.1-§4.2): capStart/capEnd stay constructed above
+	// agent-docs/surface-design.md §4.1-§4.2): capStart/capEnd stay constructed above
 	// so the area accumulation below can still read their area fields, but
 	// neither joins the attached or published face set, which is what leaves
 	// each section-plane rim edge with only its wall face free. topobuild.SheetLumps
@@ -368,7 +368,7 @@ func Build(ctx context.Context, env topo.Env, pl Payload, budget *proofbound.Wor
 // the same accumulator at a chord target of their choosing. A nil wallAreas
 // reads every wall triangle afresh.
 //
-// docs/loft-design.md §5.2's matchedDelta row is composed here and nowhere
+// agent-docs/loft-design.md §5.2's matchedDelta row is composed here and nowhere
 // else: proofbound.AbsSumUpper of the build's own MAX-over-cells chord-to-curve
 // departure (loftmesh.PairRecords' sectionMatchedDelta) and the held vertex
 // displacement a.Delta. The two halves are accumulated apart — a chord's

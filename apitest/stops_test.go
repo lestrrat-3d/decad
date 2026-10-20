@@ -423,7 +423,7 @@ func TestExtrudeThroughAllArcSectionCarriesRadiusBound(t *testing.T) {
 
 // TestExtrudeThroughAllRevolveStopChargesSweepExtreme proves the revolved
 // solid's directional extent charges BOTH mechanisms that can move its ends
-// before a stop reads it (docs/evaluator-design.md §6). A partial sweep's own
+// before a stop reads it (agent-docs/evaluator-design.md §6). A partial sweep's own
 // extreme is reached through math.Sin/Cos and is held only to the bracket the
 // payload's sweep-extreme proof derives, so the stop that reads it sweeps to
 // the level the host HOLDS and publishes that bracket as the level's own axial
@@ -634,7 +634,7 @@ func TestRevolveToFaceAngularGates(t *testing.T) {
 	require.Len(t, doc.Bodies(), liveBodies+1)
 }
 
-// TestExtrudeThroughAllCupStop proves docs/modify-design.md Table D, D5: a
+// TestExtrudeThroughAllCupStop proves agent-docs/modify-design.md Table D, D5: a
 // ThroughAll stop reads a live cup's OUTER prism extent via cupPayload's own
 // ExtentAlong (the cavity being interior), rather than refusing with
 // ErrUnsupported because the cup lacks a directional extent.

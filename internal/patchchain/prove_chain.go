@@ -15,7 +15,7 @@ import (
 // is the whole of what earlier increments proved; a second, LEVEL arm
 // (ProvePlaneLevel) is tried only when the first refuses on a
 // nonzero bound, and never reads a coordinate, a residual or a bound
-// magnitude (docs/surface-design.md §5.2's own two-arm amendment). Its
+// magnitude (agent-docs/surface-design.md §5.2's own two-arm amendment). Its
 // return states what the level arm admitted: the denotation.LevelToken and axialBound
 // are what buildFace reads for the new face's own plane and AxialDelta,
 // mirroring what a prism cap already carries; a chain the exact arm admits
@@ -37,7 +37,7 @@ func ProveChainPlane(edges []*topo.Edge) (denotation.LevelToken, float64, bool, 
 // proveChainPlaneExact is gate 3's first, exact arm: proves one chain's
 // edges lie in a single plane, decided over dyadic.go's exact rational lift
 // as a zero determinant, never a residual against a fitted plane
-// (docs/surface-design.md §5.2).
+// (agent-docs/surface-design.md §5.2).
 //
 // Every chain vertex must carry a zero bound, and every chain edge's own
 // geometry must be exact (edgeGeometryExact) — a bounded vertex or edge
@@ -87,7 +87,7 @@ func proveChainPlaneExact(edges []*topo.Edge) error {
 // and is zero whenever they are exact.
 //
 // Circle3 and Arc3 carry Center, Axis and Radius with no bound field of
-// their own (docs/surface-design.md §6.2's Table J amendment) — those ARE
+// their own (agent-docs/surface-design.md §6.2's Table J amendment) — those ARE
 // the held values, with nothing further to widen — so lengthBound is NOT
 // this reading for them: a circular arc's length is never an exact
 // rational (internal/momentregion), so lengthBound is nonzero for essentially every
@@ -109,7 +109,7 @@ func edgeGeometryExact(e *topo.Edge) bool {
 // curveCarrier returns a curved edge's own carrier plane — Center and
 // Axis — and reports true for Circle3 and Arc3. Every other Curve variant
 // (Line3, and the free-form kinds no free rim edge of a body carries as a
-// whole edge, docs/surface-design.md §6.2's Table J amendment) reports false:
+// whole edge, agent-docs/surface-design.md §6.2's Table J amendment) reports false:
 // it has no carrier plane narrower than the chain's own.
 func curveCarrier(e *topo.Edge) (center, axis r3.Vec, curved bool) {
 	switch c := e.Curve.(type) {

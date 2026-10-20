@@ -75,7 +75,7 @@ func Centroid(in CentroidInput) (r3.Vec, float64) {
 // rotates about the resolved axis, then passes through a rigid placement.
 // The L1 envelopes use three times an input L1 norm for any orthogonal map.
 // SectionCoordUpper includes the denoted section's displacement from the
-// recorded boundary (docs/surface-intersection-design.md §7.2).
+// recorded boundary (agent-docs/surface-intersection-design.md §7.2).
 func centroidGeometryBound(in CentroidInput, held r3.Vec) float64 {
 	coordUpper := revolveaxis.SectionCoordUpper(in.CoordUpper, in.SectionDelta)
 	originUpper := centroidVecL1(in.Frame.Origin())

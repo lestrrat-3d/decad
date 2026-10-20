@@ -38,11 +38,11 @@ import (
 // between consecutive levels.
 //
 // delta is the face's own section displacement and z0Delta/z1Delta its levels'
-// displacements (docs/prism-boolean-design.md §7); role is the face's role,
+// displacements (agent-docs/prism-boolean-design.md §7); role is the face's role,
 // face(k) or wall(k) for its index k in the record.
 //
 // blend is "fillet" or "chamfer" on a swept face a modify op's route E built
-// (docs/brep-modify-design.md §5.3, Table BB's BB4), and empty on every other
+// (agent-docs/brep-modify-design.md §5.3, Table BB's BB4), and empty on every other
 // face. The body build gives such a face a second role, fillet(k) or
 // chamfer(k) for its index k, so a placement re-mints it with the record.
 type Face struct {
@@ -60,7 +60,7 @@ type Face struct {
 }
 
 // Stack is the slabs an A1 result was built from
-// (docs/general-boolean-design.md §3 "A1 as a brep", §4.1): each slab's
+// (agent-docs/general-boolean-design.md §3 "A1 as a brep", §4.1): each slab's
 // hole-free regions in the reference frame, and the section displacement
 // every region carries. A further co-directional Union reads it as its
 // operand's slabs (stackedunion.OperandFromPayload), and Section reads it to
@@ -75,7 +75,7 @@ type Stack struct {
 // face frame is stated in the payload's unplaced coordinates and xform places
 // the whole body, as every payload does. stack is nil for every record but
 // an A1 result's. loopBands holds a route L chamfer's or fillet's bands
-// (docs/modify-general-design.md §4.2 step 5, docs/loop-fillet-design.md §4):
+// (agent-docs/modify-general-design.md §4.2 step 5, agent-docs/loop-fillet-design.md §4):
 // each band's patches are faces of the body and no face of the record, and
 // the body build attaches them (band.go, fillet.go). It
 // is nil for every record route L did not build.
@@ -103,7 +103,7 @@ func (Payload) SurveyClass() string { return "brepPayload" }
 func (f Face) Planar() bool { return f.Region != nil }
 
 // reversed is the face with its outward side exchanged, the rule a record
-// applies to a face of a cavity (docs/modify-general-design.md §3.3 step 5):
+// applies to a face of a cavity (agent-docs/modify-general-design.md §3.3 step 5):
 // a planar face flips outward, and a swept face walks its wall the other way
 // and exchanges its start-line and end-line splits. Levels, frame and
 // displacements are unchanged.

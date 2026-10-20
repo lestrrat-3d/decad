@@ -214,7 +214,7 @@ func FaceFootExtent(f *CFace) float64 {
 // PlaneTiltAllow bounds the displacement one rounded carrier PLANE commits
 // across its own extent from its foot f.o. The prism and revolve carrier builders
 // build a plane carrier's u, v and outward normal n through the payload's own
-// `dir`-style construction in raw float64 (docs/clearance-design.md §2), so n
+// `dir`-style construction in raw float64 (agent-docs/clearance-design.md §2), so n
 // is not exactly perpendicular to the plane it is meant to describe. For a
 // point p genuinely on the TRUE
 // plane through o with the TRUE normal n_true, the rounded plane's own

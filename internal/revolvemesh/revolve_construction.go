@@ -43,7 +43,7 @@ const RevolveEvalRoundUlps = 256
 
 // RevolveStationRoundUlps is the a-priori ulp allowance, at the meridian's own
 // coordinate magnitude, for one CHORDED meridian station's stored (z, ρ) pair
-// (docs/tessellation-reach-design.md §6, R4). A station is stored as the float
+// (agent-docs/tessellation-reach-design.md §6, R4). A station is stored as the float
 // NEAREST the certified enclosure of the point its record denotes
 // (revolvesampling.ArcStation), so its gap is half an ulp plus that enclosure's own
 // width; eight ulps covers both with room to spare while staying far below any
@@ -57,7 +57,7 @@ const RevolveEvalRoundUlps = 256
 // to account rather than trusted.
 const RevolveStationRoundUlps = 8
 
-// RevolveAngular is the global angular sequence docs/tessellation-design.md §8
+// RevolveAngular is the global angular sequence agent-docs/tessellation-design.md §8
 // makes load-bearing: ONE chord count for the whole mesh, so adjacent generator
 // faces share their complete latitude edge, a full turn closes without a
 // tolerance seam, and one cell proof applies at every radius.
@@ -114,7 +114,7 @@ func RevolveMeridianEnclosure(axU, axV, dirU, dirV, u, v float64, bound proofbou
 // whole map is two products and one sum per coordinate.
 //
 // The frame's own four numbers are read as exact leaves, which is what
-// axisFrame.toAxis itself denotes — the IDEAL sample docs/tessellation-design.md
+// axisFrame.toAxis itself denotes — the IDEAL sample agent-docs/tessellation-design.md
 // §8 measures a stored vertex against is the exact evaluation on the payload's
 // held floats, not on the axis a longer derivation would call true. The
 // difference between those two axes is the frame's own recorded uncertainty
@@ -134,7 +134,7 @@ func AxisCoordInterval(axU, axV, dirU, dirV float64, u, v proofbound.RatInterval
 }
 
 // RevolveIdealPoint encloses X(z, ρ, φ) exactly: the ideal unplaced sample
-// docs/tessellation-design.md §8 measures every stored vertex against.
+// agent-docs/tessellation-design.md §8 measures every stored vertex against.
 func RevolveIdealPoint(b RevolveBasis3Iv, z, rho, cos, sin proofbound.RatInterval) proofbound.IvVec3 {
 	radial := proofbound.IvVec3Add(proofbound.IvVec3Mul(b.E0, cos), proofbound.IvVec3Mul(b.E1, sin))
 	return proofbound.IvVec3Add(b.A3, proofbound.IvVec3Add(proofbound.IvVec3Mul(b.W, z), proofbound.IvVec3Mul(radial, rho)))
@@ -184,7 +184,7 @@ func RevolveConstructionPrior(b RevolveBasis, meridianGap, rhoMax, coordMax floa
 	return proofbound.Radius3D(perCoord)
 }
 
-// RevolveBudget is docs/tessellation-design.md §8's tolerance split: both
+// RevolveBudget is agent-docs/tessellation-design.md §8's tolerance split: both
 // coordinate stages are reserved from the requested tolerance BEFORE any chord
 // count is chosen, and a tolerance they exhaust refuses rather than returning a
 // mesh whose bound it cannot honour. Both subtractions round downward, which is
@@ -199,7 +199,7 @@ func RevolveBudget(tol, deltaC, deltaR float64) (float64, error) {
 	return available, nil
 }
 
-// ExactRigidPointRound measures the displacement docs/tessellation-design.md §8
+// ExactRigidPointRound measures the displacement agent-docs/tessellation-design.md §8
 // calls deltaR for ONE vertex: the gap between the EXACT rigid image of the
 // stored unplaced point and the binary64 vertex the placement wrote for it. It
 // is prismrecord.Payload.PointRound's second half, applied to a point this build already

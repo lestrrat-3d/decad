@@ -146,7 +146,7 @@ func buildCompositeWithClosure(
 	// roles, and sewing pairs cap loops face to face. The flag is consumed by
 	// compositesweep.Assemble alone, which omits only the outer two caps
 	// from the published face set after every span has built solid
-	// (docs/surface-design.md §4).
+	// (agent-docs/surface-design.md §4).
 	payload := Payload{
 		Prism: prismrecord.Payload{
 			Profile: profile,

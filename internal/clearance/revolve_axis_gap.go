@@ -222,7 +222,7 @@ func (m *revolveGapMeter) wall(wall RevolveWall, f *CFace) {
 // angle, so it holds at both caps at once.
 //
 // How far the float V the cap was built from sits off that rotation is not
-// charged, and it was not seen to matter (docs/clearance-design.md §2): it
+// charged, and it was not seen to matter (agent-docs/clearance-design.md §2): it
 // tilts the cap plane by about 1e-16 radians, so it moves a point at radius ρ
 // across the plane by about ρ·1e-16, the size of the rounding every cell
 // commits evaluating the plane's equation from its origin on the axis, ρ

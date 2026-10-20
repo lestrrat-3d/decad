@@ -11,7 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
-// This file is docs/spline-design.md §6.2's directional-extreme row, Tier A
+// This file is agent-docs/spline-design.md §6.2's directional-extreme row, Tier A
 // (polynomial Bézier) column only: a proven bracket on the min and max of the
 // linear functional g(u, v) = gu·u + gv·v over one converted free-form span.
 // It reduces to internal/polynomial's certified root engine exactly as the row
@@ -134,7 +134,7 @@ func FreeformExtremeCost(controls int) uint64 {
 	return CostMul(FreeformSpanCost(controls), 8)
 }
 
-// ErrFreeformExtremeUnrepresentable is docs/spline-design.md §6.2's own
+// ErrFreeformExtremeUnrepresentable is agent-docs/spline-design.md §6.2's own
 // counterpart to §6.1's R15 (spline_length.go's
 // ErrFreeformLengthUnrepresentable): the enclosure is still PROVEN, but no
 // float64 interval holds it, so there is nothing to fold and nothing to
@@ -174,7 +174,7 @@ func FreeformExtremeFloats(iv polynomial.RatIv) (float64, float64, error) {
 // RequireFiniteDirection refuses a non-finite direction component, reading the
 // two floats themselves so nothing allocates: it is the ONE owner of both
 // messages, and it is what lets every caller gate a direction ahead of the R7
-// preflight that must precede the work (docs/spline-design.md §5.2).
+// preflight that must precede the work (agent-docs/spline-design.md §5.2).
 func RequireFiniteDirection(gu, gv float64) error {
 	if proofbound.IsNonFinite(gu) {
 		return fmt.Errorf(`%w: a directional extreme's gu component must be finite`, decaderr.ErrNotFinite)
@@ -204,7 +204,7 @@ func DirectionRats(gu, gv float64) (*big.Rat, *big.Rat, error) {
 // SpanExtremeEnclosureContext is one span's own reading: a proven enclosure
 // of its minimum value and a proven enclosure of its maximum value, over the
 // linear functional gu·u + gv·v. work is the record's free-form work counter
-// (docs/spline-design.md §5.2); the charge is levied first — before the
+// (agent-docs/spline-design.md §5.2); the charge is levied first — before the
 // direction is lifted into rationals and before the Bernstein coefficients
 // that name P are built — so an unaffordable span refuses (R7) before any
 // rational allocates. It therefore takes the direction as the two FLOATS its

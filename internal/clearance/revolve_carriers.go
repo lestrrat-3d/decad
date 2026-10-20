@@ -47,7 +47,7 @@ type RevolveCarrierInput struct {
 // AxisGap is a proven upper bound on how far any point of any carrier sits
 // from the recorded meridian swept about the recorded axis
 // (revolvemesh.RevolveLift.MeridianGap, measured at every carrier's own
-// recorded samples; docs/clearance-design.md §2). It covers what the walk's
+// recorded samples; agent-docs/clearance-design.md §2). It covers what the walk's
 // float axis coordinates leave out: their re-expression rounding, an endpoint
 // snapped onto the axis, a sphere centre read as on the axis, a junction a
 // coalesced wall dropped, and the axis's own anchor and direction error, and

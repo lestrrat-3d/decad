@@ -23,7 +23,7 @@ import (
 
 // This file builds a chain Extrude's ribbon body from its Payload: one wall
 // face per recorded segment of every walk, both rims and the sweep edges, and
-// the measurements the finished body publishes (docs/surface-design.md §13).
+// the measurements the finished body publishes (agent-docs/surface-design.md §13).
 // It builds a chain of any segment count and kind Table G's per-kind
 // construction admits through prismrecord.BuildWallGeometry, shared with the
 // profile-fed prism build — the same evaluator over an open rather than a
@@ -31,14 +31,14 @@ import (
 
 // Build builds the ribbon body: one wall face per recorded
 // segment of every walk in pp.Chains, both rims of each walk and the one
-// sweep edge at each of its two free ends (docs/surface-design.md §13.4,
+// sweep edge at each of its two free ends (agent-docs/surface-design.md §13.4,
 // Table G row 1), and the measurements the finished body publishes. It
 // mirrors prismrecord.Build's own order (internal/prismrecord/build.go) without ever
 // building a solid or a closing cap: an open chain mints neither. Each walk
 // is its own lump — surface §2.2's one-lump-per-connected-boundary rule,
-// which docs/surface-intersection-design.md §3.4 is the first construction
+// which agent-docs/surface-intersection-design.md §3.4 is the first construction
 // to exercise with more than one. work is the record's ONE free-form work
-// counter (docs/spline-design.md §5.2): the caller opens it once and every
+// counter (agent-docs/spline-design.md §5.2): the caller opens it once and every
 // walk's build and the final bounds reading all spend from it.
 func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.FreeformWork) (*topo.Body, error) {
 	if err := ctx.Err(); err != nil {
@@ -86,11 +86,11 @@ func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.Freefor
 	// volume and centroid stay at their zero value: finite, so
 	// topobuild.ValidateAnalyticMeasurements below passes, and neither is
 	// reachable through Body.Volume/Body.Centroid while solid is false
-	// (docs/surface-design.md §8), exactly as patchchain.Build
+	// (agent-docs/surface-design.md §8), exactly as patchchain.Build
 	// leaves them.
 	//
 	// A ribbon this design's Trim assembled (pp.SectionDelta != 0 — the only
-	// construction that ever sets it, docs/surface-intersection-design.md
+	// construction that ever sets it, agent-docs/surface-intersection-design.md
 	// §3.4) reads its extent through walks that charge §7's δ_cut into
 	// exactly the endpoint a cut produced, never into one the record states
 	// verbatim (prismcells.TrimProfileWalks). A plain chain Extrude
@@ -158,7 +158,7 @@ func BoundsWalks(profile momentinput.Profile, captures []WalkCapture) *momentinp
 // resolves them (Edge.IsFree, topology.go) — while every INTERIOR post
 // (1..n-1) shares its sweep edge between the two walls it joins, exactly as
 // prismrecord.BuildLoopSidesAs's own junction verticals do for a closed loop
-// (docs/surface-design.md §13.4). It returns the faces and the walk's own
+// (agent-docs/surface-design.md §13.4). It returns the faces and the walk's own
 // total wall area, folded through proofbound.BoundedAdd rather than summed as raw
 // floats.
 func buildSides(ctx context.Context, env topo.Env, body *topo.Body, pp Payload, chainIdx int, chain sectionrecord.ChainRecord, work *freeform.FreeformWork, capture *WalkCapture) ([]*topo.Face, proofbound.BoundedScalar, error) {
@@ -266,7 +266,7 @@ func buildSides(ctx context.Context, env topo.Env, body *topo.Body, pp Payload, 
 			return nil, proofbound.BoundedScalar{}, err
 		}
 		// holeLoop is always false: a chain has no hole, and the whole walk
-		// takes the loop-0 (outer) convention (docs/surface-design.md §13.4).
+		// takes the loop-0 (outer) convention (agent-docs/surface-design.md §13.4).
 		convex, err := boundarywalk.RimConvexity(ctx, w, false, work)
 		if err != nil {
 			return nil, proofbound.BoundedScalar{}, err

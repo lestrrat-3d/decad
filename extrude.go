@@ -19,7 +19,7 @@ import (
 	"github.com/lestrrat-go/option/v3"
 )
 
-// This file is the extrude of docs/evaluator-design.md §5: the feature call
+// This file is the extrude of agent-docs/evaluator-design.md §5: the feature call
 // gates its live inputs, converts the profile to structural records, evaluates
 // from those records, and commits atomically. The body-relative stops
 // (ThroughAll/ThroughAllSide/ToFace) resolve through stops.go: the stop
@@ -31,7 +31,7 @@ import (
 // internal/prismrecord/extent.go answers the extent questions asked of the result. The
 // prism they produce is analytic — Plane and Cylinder faces — for every
 // line/circle/arc boundary segment, and a NURBSSurface
-// (docs/spline-design.md §7) for a Tier A free-form one, with bounded mass
+// (agent-docs/spline-design.md §7) for a Tier A free-form one, with bounded mass
 // measurements throughout. Exactly representable results retain zero bounds.
 // A nonzero taper leaves this file for draft.go's extrudeDraft.
 
@@ -45,7 +45,7 @@ type ExtrudeOption interface {
 // WithTaper sets the extrude taper: a SIGNED displacement angle — which way
 // the wall leans. A positive taper leans every wall into the material as it
 // leaves the sketch plane, so the body narrows toward the far end; a negative
-// one widens it (docs/draft-design.md §2). An angle at or past a right angle
+// one widens it (agent-docs/draft-design.md §2). An angle at or past a right angle
 // is [ErrDegenerate]. A nonzero taper builds over Distance, ToFace,
 // ThroughAll, Symmetric or TwoSided. WithSurfaceResult is [ErrUnsupported],
 // returned before commit. A zero taper builds the straight prism. A chain
@@ -71,23 +71,23 @@ func WithTaper(a units.Value) ExtrudeOption {
 // Otherwise this evaluator builds a
 // straight prism from a profile of line, circle, arc and Tier A free-form
 // segments (a spline, a closed spline, a fit spline, or a unit-weight NURBS
-// curve — docs/spline-design.md Table F); a Tier B or Tier C free-form
+// curve — agent-docs/spline-design.md Table F); a Tier B or Tier C free-form
 // segment (a conic, a whole ellipse, or a NURBS curve with unequal weights) is
 // [ErrUnsupported]. A Tier A kind is admitted but not thereby built: each
 // free-form wall edge must also prove ONE curvature sign across every span and
-// joint of its chain (docs/spline-design.md §6.5), and the whole profile's
+// joint of its chain (agent-docs/spline-design.md §6.5), and the whole profile's
 // free-form work must fit the fixed budget. A chain whose curvature genuinely
 // changes sign, or whose certificate the fixed subdivision depth does not
 // close, is [ErrUnsupported] (Table R row R19), as is a profile past the
 // budget (row R7). A free-form curve must meet its neighbours at shared
 // endpoints unless sketch certifies a fit-spline/circle trim
-// (docs/spline-design.md §2.1). Other crossing fragments are rejected as
+// (agent-docs/spline-design.md §2.1). Other crossing fragments are rejected as
 // ErrUnrecordableProfile before this runs. WithSurfaceResult() omits the two
-// caps and publishes a sheet body instead of a solid (docs/surface-design.md
+// caps and publishes a sheet body instead of a solid (agent-docs/surface-design.md
 // §4).
 //
 // A nonzero [WithTaper] on a profile builds a draft body instead
-// (docs/draft-design.md): the far cap is the profile offset by h·tan α with
+// (agent-docs/draft-design.md): the far cap is the profile offset by h·tan α with
 // every straight corner mitered, each straight wall a Plane leaning by the
 // taper and each circular wall a Cone. Its profile must hold line, arc and
 // circle segments only, and a circular wall must meet each neighbour
@@ -99,18 +99,18 @@ func WithTaper(a units.Value) ExtrudeOption {
 // A chain section MUST be a chain of s and a current, unaltered snapshot,
 // with the same sentinels (ErrForeignProfile, ErrStaleProfile,
 // ErrInvalidProfile, ErrUnrecordableProfile; an invalid or self-intersecting
-// chain is also ErrInvalidProfile; docs/sketch-seam-design.md §2.2). The
+// chain is also ErrInvalidProfile; agent-docs/sketch-seam-design.md §2.2). The
 // result is always a sheet — Kind() == BodySheet — one wall face per recorded
-// segment (docs/surface-design.md §13.4, Table G), with no cap and no closing
+// segment (agent-docs/surface-design.md §13.4, Table G), with no cap and no closing
 // face. A chain of any segment count and kind builds — a line wall Exact, an
 // arc or circle fragment wall carrying rθ's own bound, a Tier A free-form
 // wall carrying internal/freeform/spline_length.go's proven bracket
-// (docs/spline-design.md); a Tier B or Tier C free-form segment is
+// (agent-docs/spline-design.md); a Tier B or Tier C free-form segment is
 // ErrUnsupported, exactly as a profile's own wall refuses it. A chain section
 // returns ErrUnsupported for [WithSurfaceResult], which has no solid to
 // toggle, and for [WithTaper] of any angle, zero included, since a chain
 // extrude has no draft build. Both refusals follow the chain's seam gate and
-// precede extent resolution (docs/surface-design.md §13.2).
+// precede extent resolution (agent-docs/surface-design.md §13.2).
 //
 // A nil context, document, sketch or section returns ErrDegenerate. The
 // context is checked at entry, between recording the section, resolving the
@@ -129,7 +129,7 @@ func Extrude[S Section](ctx context.Context, d *Document, s *sketch.Sketch, sec 
 	}
 }
 
-// extrudeProfile is the profile-fed Extrude body (docs/evaluator-design.md
+// extrudeProfile is the profile-fed Extrude body (agent-docs/evaluator-design.md
 // §5). Its refusals run in this order: the record, the recorded-area
 // falsifier, the options, the taper checks, then the extent.
 func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile, e Extent,
@@ -153,7 +153,7 @@ func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 	// ONE free-form work counter for this whole operation over this record: the
 	// area falsifier's preflight opens it, the prism build's own preflight
 	// continues it, and every walkOf under that build spends what is left
-	// (docs/spline-design.md §5.2). A counter per phase would give the same
+	// (agent-docs/spline-design.md §5.2). A counter per phase would give the same
 	// record a fresh full ceiling in each.
 	work := freeform.NewFreeformWork()
 	if _, err := profile.FalsifyRecordedAreaContext(ctx, profileArea, work); err != nil {
@@ -199,7 +199,7 @@ func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 		return nil, err
 	}
 	if taper.Mag() != 0 {
-		// A nonzero taper builds a draft body (docs/draft-design.md), never a
+		// A nonzero taper builds a draft body (agent-docs/draft-design.md), never a
 		// straight prism.
 		return d.extrudeDraft(ctx, profile, frame, e, alpha, alphaDelta, surfaceResult)
 	}
@@ -251,7 +251,7 @@ type linearSweep struct {
 }
 
 // resolveLinearExtent turns a linear extent into that sweep
-// (docs/evaluator-design.md §5). The refs are ordered named-extent refs in
+// (agent-docs/evaluator-design.md §5). The refs are ordered named-extent refs in
 // extent order first, through-all stop bodies after them in stop order along
 // the sweep, deduplicated. Magnitudes are validated per core
 // §8.1/§12; a zero-thickness sweep is ErrDegenerate.
@@ -388,7 +388,7 @@ func (d *Document) resolveLinearSide(s SideExtent, frame r3.Frame, travel float6
 	}
 }
 
-// This section is the chain-fed Extrude of docs/surface-design.md §13: the open sketch
+// This section is the chain-fed Extrude of agent-docs/surface-design.md §13: the open sketch
 // chain's own sweep into a ribbon. It reuses resolveLinearExtent unchanged —
 // the extent vocabulary and the frame it resolves against are identical to
 // Extrude's — and reads its recorded walk through recordChain (seam.go)
@@ -397,7 +397,7 @@ func (d *Document) resolveLinearSide(s SideExtent, frame r3.Frame, travel float6
 // (internal/chainrecord/build.go, which calls prismrecord.BuildWallGeometry, shared with the profile-fed prism
 // build) — the same evaluator, over an open rather than a closed walk.
 
-// extrudeChain is the chain-fed Extrude body (docs/surface-design.md §13).
+// extrudeChain is the chain-fed Extrude body (agent-docs/surface-design.md §13).
 // Its refusals run in this order: the nil-option check, the seam gates, the
 // option refusal, then the extent.
 func extrudeChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch.Chain, e Extent,
@@ -451,7 +451,7 @@ func extrudeChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch
 	}
 
 	// ONE free-form work counter for this whole call, exactly as the profile
-	// form opens for its own build (docs/spline-design.md §5.2):
+	// form opens for its own build (agent-docs/spline-design.md §5.2):
 	// buildSides' own walkOf calls and the final bounds reading below
 	// spend from the same ceiling rather than each opening a fresh one.
 	work := freeform.NewFreeformWork()

@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// These tests cover docs/modify-reach-design.md §13's "Options", "Tangent
+// These tests cover agent-docs/modify-reach-design.md §13's "Options", "Tangent
 // chain" and "Asymmetric chamfer" lists through the public API.
 //
 // Legs shown to fail before these fixtures were accepted: dropping the

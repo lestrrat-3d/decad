@@ -17,8 +17,8 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is the Verify of docs/evaluator-design.md §10/§11 and
-// docs/verification-design.md: one non-mutating call returning a rich report
+// This file is the Verify of agent-docs/evaluator-design.md §10/§11 and
+// agent-docs/verification-design.md: one non-mutating call returning a rich report
 // with a Status at both levels, aggregated by a fixed severity precedence,
 // and one bit — Passed() — an agent gates on. The wall, undercut and
 // concave-radius questions are answered outright by the analytic surveys of
@@ -127,12 +127,12 @@ func effectiveVerifyRequest(cfg verifyConfig) VerifyRequest {
 // checks every pair of operand facet boxes before pruning exact predicates. A
 // pair holding a sheet operand never reaches that fallback: it is decided by
 // box separation, or, when the boxes meet, the sheet decision procedure of
-// docs/surface-design.md §9.3. One pair's
+// agent-docs/surface-design.md §9.3. One pair's
 // work can therefore grow with the two facet counts multiplied together, and
 // total work also grows with the number of unresolved body pairs. Verify
 // proves those pairs on up to GOMAXPROCS goroutines (at most 12) and builds
 // the report in pair order, so the report and any returned error match a
-// one-pair-at-a-time walk (docs/interference-design.md §2). Large-model
+// one-pair-at-a-time walk (agent-docs/interference-design.md §2). Large-model
 // callers should pass a context with a deadline chosen from representative
 // inputs. For a document with live bodies, after document and option
 // validation, cancellation returns ctx.Err() and a nil report; validation
@@ -200,7 +200,7 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 	// Interference row. Expected empty, contact, staging, or coarse outcomes
 	// stay Suspect and name themselves in the slice; invariant failures
 	// return from Verify. A pair holding a sheet operand takes none of this —
-	// see proveVerifyPair (verify_pairs.go) and docs/surface-design.md §9.3.
+	// see proveVerifyPair (verify_pairs.go) and agent-docs/surface-design.md §9.3.
 	// The pairs box separation does not finish are proven on a bounded
 	// worker pool and folded back in pair order.
 	jobs, err := verifyPairJobs(ctx, pairBodies, cfg)
@@ -325,7 +325,7 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 	// The held boundary's structural audit. A BodySolid runs
 	// reportvocab.AuditSolidBoundary: every edge bounds exactly two faces,
 	// every face carries at least one loop of at least one edge. A BodySheet
-	// runs AuditSheetBoundary instead (docs/surface-design.md §9.1). This evaluator's boundary is exact, so a
+	// runs AuditSheetBoundary instead (agent-docs/surface-design.md §9.1). This evaluator's boundary is exact, so a
 	// defect is proven — Unsound — and a clean audit on a feature-built body
 	// is proven validity. publishValidityResult (verify_publish.go) maps the
 	// evidence onto ValidityResult and carries the one diagnostic that
@@ -387,7 +387,7 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 	surveysAsked := cfg.Wall != nil || cfg.Pull != nil || cfg.ConcaveRadius
 	// surveysRunnable widens haveRegion by exactly one case: a proven sheet
 	// with a pull requested. The undercut survey answers over a sheet's own
-	// walls (docs/surface-design.md §2.3, §9.1), and runSurveys itself
+	// walls (agent-docs/surface-design.md §2.3, §9.1), and runSurveys itself
 	// gates the wall and concave-radius blocks back down to a solid, so
 	// admitting a sheet here never lets those two surveys run on one.
 	surveysRunnable := haveRegion ||
@@ -420,7 +420,7 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 	case validity.Outcome == ValidityValid && surveysAsked:
 		// surveysRunnable is false here only because the body is a proven
 		// sheet that asked no pull — a wall and/or concave-radius question
-		// with no material to be about (docs/surface-design.md §9.1).
+		// with no material to be about (agent-docs/surface-design.md §9.1).
 		// runSurveys never runs; reportvocab.PublishWall and
 		// PublishRadius each publish Unavailable plus their own
 		// DiagSurveyPrerequisite from validity and kind alone, so this
@@ -529,7 +529,7 @@ func aggregateStatus(r *Report, undecided bool) Status {
 		return Interfering
 	}
 	// A sheet proven to cross a solid's boundary (DiagSheetSolidCrossing,
-	// docs/surface-design.md §9.3) contributes the Interfering rung with no
+	// agent-docs/surface-design.md §9.3) contributes the Interfering rung with no
 	// Interference row at all: a sheet encloses no region, so there is no
 	// overlap volume to report. The scan keeps the invariant that the
 	// report's Status is the worst Diagnostic.Status in the slice even for

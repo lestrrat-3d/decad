@@ -10,7 +10,7 @@ import (
 )
 
 // PatchEdges fills one or more closed chains of a body's own free edges
-// (docs/surface-design.md §5.2). A surface-extruded tube has no caps and two
+// (agent-docs/surface-design.md §5.2). A surface-extruded tube has no caps and two
 // congruent free-edge rims, and no edge predicate can tell them apart —
 // Edges(Free()) always resolves to both — so the contract fills every
 // closed chain the selection partitions into, proving each independently,

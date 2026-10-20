@@ -17,14 +17,14 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is Document.VerifyLinkage (docs/linkage-check-design.md §3, §6,
+// This file is Document.VerifyLinkage (agent-docs/linkage-check-design.md §3, §6,
 // §8): validation, the driver that hands motion_verify.go's engine one
 // moving group per link, and the report assembly. linkage.go owns the
 // vocabulary and linkage_bound.go the bounds.
 
 // VerifyLinkage checks whether any link of l, moved along drive, meets a
 // static body or a body of another link anywhere on the drive
-// (docs/linkage-check-design.md). It never changes the document: each pose
+// (agent-docs/linkage-check-design.md). It never changes the document: each pose
 // re-evaluates every link body's payload under its link's pose as a
 // transient body that is never committed, so Document.Bodies(), every body's
 // live state and the next producer identity are what they were before the
@@ -87,7 +87,7 @@ func (d *Document) VerifyLinkage(ctx context.Context, l *Linkage, drive Drive, o
 		return nil, err
 	}
 	if !cfg.Stated {
-		// docs/linkage-check-design.md §3: unstated, the reading refines
+		// agent-docs/linkage-check-design.md §3: unstated, the reading refines
 		// past the verdict floor to its own.
 		reading := motionbound.MotionParam{Turn: new(big.Rat), Base: new(big.Rat).SetFrac64(1, linkageReadingFloor)}
 		cfg.ReadingP = &reading
@@ -98,7 +98,7 @@ func (d *Document) VerifyLinkage(ctx context.Context, l *Linkage, drive Drive, o
 			return nil, linkageBoundsError()
 		}
 	} else if err := spec.prepareLoops(ctx, cfg.ResolutionP.Base); err != nil {
-		// docs/linkage-check-design.md §15.7: a driven loop's scene, its zero
+		// agent-docs/linkage-check-design.md §15.7: a driven loop's scene, its zero
 		// pose and its certifiable set, down to the verdict floor, before
 		// any pose; a dependent's reach enters the bounds.
 		return nil, err
@@ -118,7 +118,7 @@ func (d *Document) VerifyLinkage(ctx context.Context, l *Linkage, drive Drive, o
 }
 
 // linkageReadingFloor is the denominator of the default reading floor,
-// units.Scalar(1.0/16384) (docs/linkage-check-design.md §3).
+// units.Scalar(1.0/16384) (agent-docs/linkage-check-design.md §3).
 const linkageReadingFloor = 16384
 
 // readingResolution is the reading floor a run used: the stated resolution,
@@ -167,7 +167,7 @@ func newLinkageRun(ctx context.Context, d *Document, spec *linkageSpec, frames [
 }
 
 // markConstantPairs marks every evaluated pair whose relation is the same at
-// every configuration (docs/linkage-check-design.md §5.9): its relative path —
+// every configuration (agent-docs/linkage-check-design.md §5.9): its relative path —
 // every joint on the mover's path against a static body, the joints strictly
 // below the two links' lowest common ancestor against another link's body —
 // holds exactly one joint that does not hold 0, a revolute, and one of the
@@ -210,7 +210,7 @@ func (dr *linkageDriver) markConstantPairs() {
 }
 
 // settlePairs applies the linkage's own pair standings on top of the
-// engine's (docs/linkage-check-design.md §6 steps 2 and 4): a held link's
+// engine's (agent-docs/linkage-check-design.md §6 steps 2 and 4): a held link's
 // pair against a static body, or two held links' pair, is not formed; a
 // link-link pair whose swept boxes separate is excluded; and any pair the
 // layer exclusion (§5.7) settles is excluded. A pair settled both ways keeps
@@ -278,11 +278,11 @@ type linkageDriver struct {
 	frames   []motionbound.MotionFrame
 	bounds   []linkBound
 	// symmetric marks, per mover, a body its own link's joint does not move
-	// (docs/linkage-check-design.md §5.2): that joint leaves the body's
+	// (agent-docs/linkage-check-design.md §5.2): that joint leaves the body's
 	// relative path in travel and projection.
 	symmetric []bool
 	// corners holds every corner reading the projection bound has read
-	// (docs/linkage-check-design.md §5.8), once per pose, body and relative
+	// (agent-docs/linkage-check-design.md §5.8), once per pose, body and relative
 	// path, so a pose's reading serves both intervals it ends.
 	corners map[cornerKey]cornerBounds
 	// statics holds each static body's hull point reading, by its position.
@@ -306,7 +306,7 @@ type cornerKey struct {
 //
 // A drive that moves a loop builds each dependent at its certified
 // enclosure's midpoint and its ideal pose over the whole enclosure
-// (docs/linkage-check-design.md §15.4); a pose its loop cannot be enclosed at
+// (agent-docs/linkage-check-design.md §15.4); a pose its loop cannot be enclosed at
 // is unbuildable.
 func (dr *linkageDriver) posesAt(f *big.Rat, _ units.Value, param motionbound.MotionParam) ([]motionGroupPose, error) {
 	var (
@@ -335,7 +335,7 @@ func (dr *linkageDriver) posesAt(f *big.Rat, _ units.Value, param motionbound.Mo
 }
 
 // intervalGate reads every driven loop's dependents over the interval
-// between two poses, for travel to consume (docs/linkage-check-design.md
+// between two poses, for travel to consume (agent-docs/linkage-check-design.md
 // §15.5); an interval a loop cannot be enclosed over is refused with sketch's
 // cause.
 func (dr *linkageDriver) intervalGate(a, b *motionPose) string {
@@ -347,7 +347,7 @@ func (dr *linkageDriver) intervalGate(a, b *motionPose) string {
 	return ""
 }
 
-// travel is the chain travel bound of docs/linkage-check-design.md §5.2 for
+// travel is the chain travel bound of agent-docs/linkage-check-design.md §5.2 for
 // pair k of mover i: against a static body, every joint on the mover's path;
 // against a body of another link, the joints strictly below the two links'
 // lowest common ancestor on each branch, since the joints at and above it
@@ -380,7 +380,7 @@ func (dr *linkageDriver) pairDepth(i, other int) int {
 
 // pathOf is mover m's link reading for a pair whose relative path starts at
 // position below: the link's own, or, for a body its own joint does not move
-// (docs/linkage-check-design.md §5.2), the same without that joint when the
+// (agent-docs/linkage-check-design.md §5.2), the same without that joint when the
 // joint lies on the relative path.
 func (dr *linkageDriver) pathOf(m, below int) linkBound {
 	b := dr.bounds[dr.run.movers[m].group]
@@ -391,7 +391,7 @@ func (dr *linkageDriver) pathOf(m, below int) linkBound {
 	return b
 }
 
-// projection is the projection bound of docs/linkage-check-design.md §5.8
+// projection is the projection bound of agent-docs/linkage-check-design.md §5.8
 // for pair k of mover i over the interval between poses a and b: each body's
 // inflated box expanded from each end to second order in its joints' travel
 // over the interval — along the drive's own segment when no waypoint lies
@@ -481,7 +481,7 @@ func (dr *linkageDriver) projection(i, k int, a, b *motionPose) *big.Rat {
 	return best
 }
 
-// projectionSpans is h of docs/linkage-check-design.md §5.8's interval form
+// projectionSpans is h of agent-docs/linkage-check-design.md §5.8's interval form
 // for each joint on b's path from position below on, read from the pose end:
 // a stated joint's jointSpan, the total variation over [sa, sb], which bounds
 // its change from either end to any parameter of the interval; a loop's
@@ -523,7 +523,7 @@ func (dr *linkageDriver) projectionSpans(b linkBound, below int, sa, sb *big.Rat
 }
 
 // projectionSteps is each joint's segment step Δq_i over [sa, sb] on b's path
-// from position below on (jointStep), for docs/linkage-check-design.md §5.8's
+// from position below on (jointStep), for agent-docs/linkage-check-design.md §5.8's
 // segment term; nil when a waypoint lies inside the interval, or a step
 // cannot be read, and the box form serves.
 func (dr *linkageDriver) projectionSteps(b linkBound, below int, sa, sb *big.Rat) []proofbound.RatInterval {
@@ -561,7 +561,7 @@ func (dr *linkageDriver) cornersAt(pose *motionPose, m int, b linkBound, below i
 			continue
 		}
 		// A dependent is read at its centre, the midpoint of its enclosure
-		// at the pose (docs/linkage-check-design.md §5.8).
+		// at the pose (agent-docs/linkage-check-design.md §5.8).
 		at, ok := jt.dep.dependentAt(dr.run.ctx, i, pose.f)
 		if !ok {
 			return cornerBounds{}, false
@@ -625,7 +625,7 @@ func bodyPoints(b *Body, hull bool) (cornerReading, bool) {
 }
 
 // publishLinkage assembles VerifyLinkage's report
-// (docs/linkage-check-design.md §4).
+// (agent-docs/linkage-check-design.md §4).
 func publishLinkage(r *motionRun, l *Linkage, drive Drive, poses []*motionPose, spans []motionSpan) *LinkageReport {
 	c := r.conclude(poses, spans)
 	report := &LinkageReport{
@@ -645,7 +645,7 @@ func publishLinkage(r *motionRun, l *Linkage, drive Drive, poses []*motionPose, 
 	}
 	for _, pose := range poses {
 		if pose.unbuildable != nil {
-			// docs/linkage-check-design.md §15.6: a pose the loop could not
+			// agent-docs/linkage-check-design.md §15.6: a pose the loop could not
 			// be enclosed at is not evaluated and not published.
 			continue
 		}

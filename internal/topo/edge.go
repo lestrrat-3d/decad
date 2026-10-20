@@ -27,7 +27,7 @@ type Edge struct {
 	// curved source, whose chord chain understates the true curve's length
 	// by an amount no chord bound can cover, or a cap-blend miter ruling
 	// adjacent to a circular wall whose corner-foot locus this evaluator
-	// cannot enclose (docs/modify-reach-design.md §8.3).
+	// cannot enclose (agent-docs/modify-reach-design.md §8.3).
 	LengthUnbounded bool
 	// CurveBound, valid only where CurveBounded is set, bounds how far the
 	// curve a Circle3 or Arc3 edge denotes lies from its held circle — the
@@ -44,7 +44,7 @@ type Edge struct {
 	CurveBounded bool
 	// RetainedCurve marks an edge of a mesh Boolean result whose Curve is the
 	// exact intersection of its two faces' retained surfaces rather than the
-	// FacetedCurve chord chain (docs/faceted-source-retention-design.md §10).
+	// FacetedCurve chord chain (agent-docs/faceted-source-retention-design.md §10).
 	// The held vertices still sit up to their own bounds off that curve, and
 	// ChainBound is the chord chain's bound the curve replaced. A reader that
 	// takes a FacetedCurve as the witness of a Boolean rim takes this too.

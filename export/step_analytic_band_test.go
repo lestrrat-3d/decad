@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// These fixtures write docs/loop-fillet-design.md's §8 bodies through the
+// These fixtures write agent-docs/loop-fillet-design.md's §8 bodies through the
 // analytic arm: P3's root and rim, P8's top loop and P1's top loop. Body
 // .Tessellate refuses a fillet-banded body until the design's PR F-2, and
 // NewSTEPFile tessellates first as the shared admission check, so the tests

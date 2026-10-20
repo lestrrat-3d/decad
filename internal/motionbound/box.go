@@ -53,7 +53,7 @@ func startCorners(box measurement.Box, mf MotionFrame) ([8]RatVec, bool) {
 	return out, true
 }
 
-// MoverAxisRadius is ρ_max of docs/motion-check-design.md §5.2: a proven
+// MoverAxisRadius is ρ_max of agent-docs/motion-check-design.md §5.2: a proven
 // upper bound on the distance from the rotation axis of every point of the
 // mover, read ONCE off its Bounds box at its current placement. The box is
 // inflated by its own Bound, its eight corners are mapped to the path's start

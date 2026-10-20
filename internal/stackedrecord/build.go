@@ -22,7 +22,7 @@ import (
 
 // This file builds a stacked prism's body from its Payload: one wall column
 // per recorded loop run, the caps and interface patches, and the
-// measurements the finished body publishes (docs/stacked-prism-design.md).
+// measurements the finished body publishes (agent-docs/stacked-prism-design.md).
 
 // WallColumn is a recorded wall column together with what its build produced:
 // the bottom and top coedges of the column's rim and the column's proven
@@ -383,7 +383,7 @@ func Build(ctx context.Context, env topo.Env, sp Payload, plan Plan) (*topo.Body
 	}
 	// One bottom cap per region of the first slab and one top cap per region
 	// of the last, so CapStart(group) selects every lump's bottom face
-	// (docs/mirror-pattern-design.md §6.3).
+	// (agent-docs/mirror-pattern-design.md §6.3).
 	first, last := sp.Slabs[0], sp.Slabs[len(sp.Slabs)-1]
 	var planar []*topo.Face
 	capArea := proofbound.BoundedScalar{}

@@ -9,7 +9,7 @@ import (
 // levels and placements, no section displacement on either, and equal
 // profiles walked loop by loop under the budget. Equal records are a
 // certificate of equal SETS only while each record IS the set it denotes; a
-// payload carrying a section displacement (docs/prism-boolean-design.md §7)
+// payload carrying a section displacement (agent-docs/prism-boolean-design.md §7)
 // denotes a set its record is only within that displacement of, so such a pair
 // stays undecided.
 func (pp Payload) SameSet(budget *proofbound.WorkBudget, other Payload) (bool, error) {

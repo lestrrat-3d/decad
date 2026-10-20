@@ -286,7 +286,7 @@ func TestStitchCurvedMeshRefusesUnsharedChording(t *testing.T) {
 	require.ErrorContains(t, err, "Cylinder")
 }
 
-// This file is docs/surface-design.md §14 Table D row 5's own test list
+// This file is agent-docs/surface-design.md §14 Table D row 5's own test list
 // (§15 T58-T61, T63, T64): an all-planar stitched body's mesh, CLOSED or
 // OPEN, is an exact restatement of the triangle set Stitch's own build
 // already assembled and audited, over T3's stitched-box fixture (CLOSED) and
@@ -341,7 +341,7 @@ func TestStitchSolidTessellateRecordsThePostSignFixTriangleSet(t *testing.T) {
 		"the recorded triangle set must be the one AFTER the global sign fix, never the stale pre-fix one")
 }
 
-// TestStitchSolidTessellatesItsOwnTriangleSet is docs/surface-design.md's
+// TestStitchSolidTessellatesItsOwnTriangleSet is agent-docs/surface-design.md's
 // T58: T3's stitched box, the flagship all-planar closed case, restates
 // exactly the triangle set Stitch's own build assembled — no chording, so
 // every vertex is bit-equal to one of the box's own 8 corners and the
@@ -380,7 +380,7 @@ func TestStitchSolidTessellatesItsOwnTriangleSet(t *testing.T) {
 	require.InDelta(t, 60000.0, meshVolume(mesh), 1e-9, "the exact tetrahedron sum over the mesh equals the box's own volume to the bit")
 }
 
-// TestStitchPlacedSolidTessellateBoundReadsVertexBound is docs/surface-design.md's
+// TestStitchPlacedSolidTessellateBoundReadsVertexBound is agent-docs/surface-design.md's
 // T59: T58's box, Placed by a translation far from the origin and then a
 // rotation, is the placement-delta route to a nonzero per-face bound — the
 // leg TestStitchTessellateClassBoundIsIndependentOfPlacement (T60,
@@ -427,15 +427,15 @@ func TestStitchPlacedSolidTessellateBoundReadsVertexBound(t *testing.T) {
 }
 
 // TestStitchDisplacedPatchSheetTessellatesItsOwnTriangleSet is
-// docs/surface-design.md's T61: T4's displaced-patch stitched sheet — open,
+// agent-docs/surface-design.md's T61: T4's displaced-patch stitched sheet — open,
 // every face planar — restates its own triangle set exactly as a closed
 // stitched solid's mesh does (TestStitchSolidTessellatesItsOwnTriangleSet,
-// above), running docs/tessellation-design.md §1.2's manifold-with-boundary
+// above), running agent-docs/tessellation-design.md §1.2's manifold-with-boundary
 // audit (topobuild.RequireSheetMesh) in the closed-mesh
 // audit's place. The free-boundary attribution needs no role at all: the
 // mesh side and the body side agree by the identical live face pointer
 // stitchPayload records and Body.Edges() reads back
-// (docs/tessellation-design.md §1.2), which meshFreeChainsByFace and
+// (agent-docs/tessellation-design.md §1.2), which meshFreeChainsByFace and
 // bodyFreeChainsByFace below check independently of internal/tessellation's
 // own audit, over the SAME connected-component-by-chain reading that audit
 // uses.
@@ -592,7 +592,7 @@ func findVertexPointer(parent map[*decad.Vertex]*decad.Vertex, v *decad.Vertex) 
 	return v
 }
 
-// TestStitchSolidTessellateIsDeterministic is docs/surface-design.md's T63:
+// TestStitchSolidTessellateIsDeterministic is agent-docs/surface-design.md's T63:
 // the same body tessellated at two different tolerances (the restatement
 // takes no chord tolerance) publishes byte-for-byte identical output, and
 // the returned slices never alias the held mesh.
@@ -630,7 +630,7 @@ func TestStitchSolidTessellateIsDeterministic(t *testing.T) {
 	require.Equal(t, m2.Triangles(), m3.Triangles())
 }
 
-// TestStitchSolidUnionComposesTheCorrectVolume is docs/surface-design.md's
+// TestStitchSolidUnionComposesTheCorrectVolume is agent-docs/surface-design.md's
 // T71: a CLOSED, all-planar, zero-vertex-bound stitched solid now publishes
 // an occupied-volume proof of exactly zero, so booloperand.RequireVolumeProof's
 // stitchPayload arm no longer refuses it and Union composes the two disjoint
@@ -665,7 +665,7 @@ func TestStitchSolidUnionComposesTheCorrectVolume(t *testing.T) {
 }
 
 // TestStitchPlacedSolidUnionStillRefusesOnTheVolumeProof is
-// docs/surface-design.md's T73: T58's own zero-bound box, Placed under a
+// agent-docs/surface-design.md's T73: T58's own zero-bound box, Placed under a
 // non-identity rigid motion, still refuses a boolean — the placement's own
 // RigidRoundAllow widens every vertex bound (internal/stitchrecord/build.go), so
 // stitchweld.ZeroBound no longer holds and booloperand.RequireVolumeProof
@@ -693,7 +693,7 @@ func TestStitchPlacedSolidUnionStillRefusesOnTheVolumeProof(t *testing.T) {
 }
 
 // TestStitchCertificateWeldedSolidUnionStillRefusesOnTheVolumeProof is
-// docs/surface-design.md's T74: T42's own certificate-welded stitched
+// agent-docs/surface-design.md's T74: T42's own certificate-welded stitched
 // solid — every vertex bound nonzero even at identity, no placement in
 // play — still refuses a boolean by the CERTIFICATE-WELD route rather than
 // the placement route T73 exercises.

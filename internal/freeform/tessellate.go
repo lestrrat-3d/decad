@@ -19,7 +19,7 @@ var ErrTooManyChords = fmt.Errorf(`%w: the chord tolerance asks for more than %d
 // curves. It bounds what ONE curve can ask of the quadratic cap triangulator,
 // which is why ErrTooManyChords reports "more than %d chords on one curve". A
 // profile with many loops is proportionally more work because the caller
-// modelled proportionally more geometry, and docs/interference-design.md §7
+// modelled proportionally more geometry, and agent-docs/interference-design.md §7
 // answers large work with cancellation rather than a work cap: the read-only
 // path polls its context at least once per proofbound.WorkPollInterval candidate
 // operations, so tessellation.ChordLoop, triangulation.BridgeHole and triangulation.EarClip all abandon a large profile

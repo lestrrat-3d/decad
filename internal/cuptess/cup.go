@@ -22,7 +22,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// Tessellate meshes a cup (docs/modify-design.md §9, D4): the outer region O
+// Tessellate meshes a cup (agent-docs/modify-design.md §9, D4): the outer region O
 // and the cavity region C, each with k ≥ 0 holes, sharing one rim per region
 // loop at the open end. Every region loop is chorded ONCE — the same chording
 // feeds its walls, its floor cap and its half of the rim band — so every ring
@@ -33,7 +33,7 @@ import (
 // loop) triangulate through the shipped cap triangulator.
 // verifyAll decides whether the area-slack and occupied-volume proofs at the end
 // of the build are composed at all; every audit and every face bound above
-// them runs at each level (docs/tessellation-design.md §1).
+// them runs at each level (agent-docs/tessellation-design.md §1).
 func Tessellate(ctx context.Context, body *topo.Body, cp cupwall.View, chord float64, verifyAll bool) (*topo.Mesh, error) {
 	byRole := map[string]*topo.Face{}
 	for _, f := range topobuild.Faces(body) {
@@ -73,7 +73,7 @@ func Tessellate(ctx context.Context, body *topo.Body, cp cupwall.View, chord flo
 	mesh := new(topo.Mesh)
 	base := cp.BasePrism()
 	var verts []r3.Vec
-	// vertexStore is docs/tessellation-reach-design.md §3's deltaStore, parallel
+	// vertexStore is agent-docs/tessellation-reach-design.md §3's deltaStore, parallel
 	// to verts: the sample's plane-local enclosure gap carried through the frame
 	// plus the rounding the frame/placement write commits.
 	var vertexStore []float64
@@ -228,7 +228,7 @@ func Tessellate(ctx context.Context, body *topo.Body, cp cupwall.View, chord flo
 	// recorded within offsetDelta of the region the cup denotes, so every face
 	// it bounds carries that displacement beside its own trim, store and level
 	// terms: its walls, its own planar cap and every rim. The receiver's own
-	// region carries none (docs/tessellation-design.md §6).
+	// region carries none (agent-docs/tessellation-design.md §6).
 	displacedRings, displacedCap, displacedHeight := cRings, shellCap, cHi-cLo
 	if cp.Sense == cupwall.Outward {
 		displacedRings, displacedCap, displacedHeight = oRings, capStart, oHi-oLo
@@ -282,7 +282,7 @@ func Tessellate(ctx context.Context, body *topo.Body, cp cupwall.View, chord flo
 		mesh.AreaSlack = proofbound.AbsSumUpper(mesh.AreaSlack, displacedArea, displacedArea, wallMove)
 	}
 
-	// Occupied volume (docs/tessellation-reach-design.md §3): each region's own
+	// Occupied volume (agent-docs/tessellation-reach-design.md §3): each region's own
 	// chorded-section deficit over its own sweep height, the displaced region's
 	// section displacement over its height, each planar level's displacement
 	// over the patch it caps, and the computed coordinates' swept volume.

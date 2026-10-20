@@ -114,7 +114,7 @@ func CapBlendRingSegmentArea(lm CapBlendLoopProof, contour bool, d float64) floa
 // D is the loop's in-plane setback and DDelta the rounding its unit
 // conversion committed, zero for a setback stated in millimetres. Amounts,
 // when non-nil, is each walk's own setback in place of D: a subset draft's
-// kept wall reads zero (docs/draft-design.md §10.2), exactly, with no DDelta.
+// kept wall reads zero (agent-docs/draft-design.md §10.2), exactly, with no DDelta.
 type CapBlendMotionInput struct {
 	CapBlendLoopProof
 	Loop         int
@@ -252,7 +252,7 @@ func CapBlendTwiceAreaSq(a, b, c r3.Vec) *big.Rat {
 	return out
 }
 
-// ComposeCapBlendBounds returns docs/tessellation-design.md §2's sourceBound
+// ComposeCapBlendBounds returns agent-docs/tessellation-design.md §2's sourceBound
 // for every face the mesh names: the face's own accumulated trim, band and
 // axial terms in extra plus the largest store displacement its own vertices
 // carry. Every source face is present by construction — the walk is over
@@ -279,7 +279,7 @@ func ComposeCapBlendBounds[F comparable](
 }
 
 // RequireCapBlendFacetAreas refuses a mesh carrying a zero-area triangle
-// (docs/tessellation-design.md §12) with ErrUnsupported. The test is the exact
+// (agent-docs/tessellation-design.md §12) with ErrUnsupported. The test is the exact
 // rational squared cross product, so a sliver is judged by what its own
 // coordinates say rather than by a tolerance.
 func RequireCapBlendFacetAreas(verts []r3.Vec, tris [][3]int, noun string) error {

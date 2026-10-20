@@ -101,7 +101,7 @@ func PrismGatePointsMemo(budget *proofbound.WorkBudget, prisms []prismrecord.Pay
 }
 
 // PrismFreeformSection is pairkernel.BodyGateDiameter's arm for a free-form-walled
-// prismPayload (docs/verification-design.md §3): the clearance kernel's exact
+// prismPayload (agent-docs/verification-design.md §3): the clearance kernel's exact
 // carrier model has no arm for a NURBSSurface side face any more than it has
 // one for a displaced section, and gatewitness.Prism gives this payload none
 // either, because its own sectionDelta reads zero — the one value that arm
@@ -112,7 +112,7 @@ func PrismGatePointsMemo(budget *proofbound.WorkBudget, prisms []prismrecord.Pay
 // It reports a certified LOWER bound on the body's own diameter: the maximum
 // distance over a finite set of points KNOWN TO LIE ON the body — every
 // analytic walk's own two endpoints, and every free-form span's own two
-// endpoints (docs/spline-design.md §5.1's exact-rational Bézier conversion,
+// endpoints (agent-docs/spline-design.md §5.1's exact-rational Bézier conversion,
 // never the recorded control net, and for a FitSplineSeg never the raw
 // recorded Fit points, which are neither the converted chain's own ends nor a
 // hull the curve stays inside) — at both cap heights. A Bézier interpolates
@@ -133,7 +133,7 @@ func PrismGatePointsMemo(budget *proofbound.WorkBudget, prisms []prismrecord.Pay
 // The displacement subtracted from that maximum composes three terms, none of
 // them a certificate claim: the section's own sectionDelta (zero for a
 // free-form wall in practice, since the analytic prism-boolean reduction
-// never admits one — docs/prism-boolean-design.md's G4 — but read here rather
+// never admits one — agent-docs/prism-boolean-design.md's G4 — but read here rather
 // than assumed), the payload's own axialDelta, and the widest per-witness
 // gap: the endpoint bound of whichever walk produced it — an analytic walk's
 // recorded-coordinate bound (zero for a whole segment, nonzero for a trimmed
@@ -148,7 +148,7 @@ func PrismGatePointsMemo(budget *proofbound.WorkBudget, prisms []prismrecord.Pay
 // This arm PUBLISHES only when its own witness conversion and the shared reader
 // both succeed; otherwise it withholds the diameter outright and never
 // substitutes a weaker one. This comment owns the complete list of the paths it
-// withholds on — docs/verification-design.md §3 states the contract and points
+// withholds on — agent-docs/verification-design.md §3 states the contract and points
 // here rather than keeping a second copy:
 //
 //   - the profile carries no free-form segment at all, so this arm has nothing

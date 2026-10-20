@@ -25,7 +25,7 @@ type capPatchGeom = capband.Patch
 type undercutOutcome = reportvocab.UndercutSurvey[*topo.Face]
 
 // This file is the cap-blend payload's DX7/DX8 surveys
-// (docs/modify-reach-design.md Table DX): per-patch normal ranges against a
+// (agent-docs/modify-reach-design.md Table DX): per-patch normal ranges against a
 // pull (undercut) and the minimum concave principal radius over the patch set
 // (Table DX row DX8).
 //
@@ -187,7 +187,7 @@ func PatchUndercuts(roles map[string]*topo.Face, pl prismPayload, patches []capP
 		// its own normal component sits within allow of the reading at that
 		// azimuth: a CIRCULAR patch because the surface it publishes is its own
 		// only to within its departure (internal/capblend/departure.go,
-		// docs/modify-reach-design.md §8.3), and any patch at all because the
+		// agent-docs/modify-reach-design.md §8.3), and any patch at all because the
 		// reading was assembled from bounded readings. A point proven to oppose
 		// lists this patch; only an all-clear needs every point to clear. A
 		// remaining straddle makes this patch undecided without discarding
@@ -258,7 +258,7 @@ func PatchNormalRange(f *topo.Face, pl prismPayload, g capPatchGeom, p r3.Vec) (
 // question about the patch's own kind, whether the build rules it between two
 // congruent windows at all. A MITERED circular patch fails even that: the
 // build rules it between two differently-swept directrices
-// (docs/modify-reach-design.md §8.3), and a straight-ruled surface between two
+// (agent-docs/modify-reach-design.md §8.3), and a straight-ruled surface between two
 // skewed arcs is not developable at all — it carries curvature in both
 // principal directions, tightening as the corner's own rulings converge, and
 // neither the Cone argument below nor the receiver's own section says

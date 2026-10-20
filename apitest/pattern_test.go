@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The pattern tests of docs/mirror-pattern-design.md §8 for PatternCopies.
+// The pattern tests of agent-docs/mirror-pattern-design.md §8 for PatternCopies.
 
 var (
 	patternX = r3.NewVec(1, 0, 0)

@@ -11,7 +11,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// MassAccumulator is docs/loft-design.md §8's tetrahedron-sum kernel. It
+// MassAccumulator is agent-docs/loft-design.md §8's tetrahedron-sum kernel. It
 // streams one outward-oriented triangle of T at a time — a wall or a cap
 // triangulation triangle — anchored at anchor (p0's own PlaneRecord.Origin).
 // Volume, Centroid and Bounds fold every triangle handed to Add; Area's wall
@@ -24,7 +24,7 @@ type MassAccumulator struct {
 
 	// delta is the placement's own proven displacement of every held vertex
 	// from the exact placed image of the recorded sections (loftrecord.Payload's
-	// Delta, docs/loft-design.md §5/§12 PR 2a) — zero for an
+	// Delta, agent-docs/loft-design.md §5/§12 PR 2a) — zero for an
 	// unplaced LineSeg-only body. Every extra term below is gated on
 	// delta > 0, so an unplaced LineSeg-only loft's published measurements
 	// stay bit-identical to PR 1's.
@@ -46,7 +46,7 @@ type MassAccumulator struct {
 	// exactly as the delta-driven terms are gated on delta > 0.
 	sectionDelta float64
 
-	// sectionMatchedDelta is docs/loft-design.md §5.2's own matchedDelta term,
+	// sectionMatchedDelta is agent-docs/loft-design.md §5.2's own matchedDelta term,
 	// composed by loftrecord.Build as proofbound.AbsSumUpper(sectionDelta, delta) over that
 	// table's sectionDelta and delta rows: how far one point of a HELD chord
 	// sits from the point the recorded curve denotes at the SAME arc-length
@@ -73,7 +73,7 @@ type MassAccumulator struct {
 	Chorded LoftChordedAllow
 
 	// vol6 is Σ (A-anchor)·((B-anchor)×(C-anchor)) over every triangle of T:
-	// six times the signed volume (docs/loft-design.md §8).
+	// six times the signed volume (agent-docs/loft-design.md §8).
 	Vol6 *big.Rat
 	// momX/momY/momZ are Σ vol6_tri · Σ(A-anchor, B-anchor, C-anchor), the
 	// first-moment accumulator the centroid divides by 4·vol6.
@@ -114,7 +114,7 @@ type MassAccumulator struct {
 }
 
 // NewMassAccumulator opens a fresh accumulator anchored at the loft's
-// first profile plane origin (docs/loft-design.md §8), carrying the
+// first profile plane origin (agent-docs/loft-design.md §8), carrying the
 // payload's own proven placement displacement delta (§12 PR 2a), the
 // SET-distance sagitta sectionDelta, and §5.2's own composed PARAMETER-MATCHED
 // term sectionMatchedDelta (a10-plan.md Part 3 PR 6/PR 9) — all three zero for
@@ -233,7 +233,7 @@ func (m *MassAccumulator) addPreparedArea(a, b, c massVertex, wall bool, area *W
 // foldBounds extends the componentwise extreme box over one held vertex.
 // Comparing held coordinates introduces no rounding of its own, so the box is
 // exactly as good as the vertex set it is taken over: exact on an unplaced
-// body (docs/loft-design.md §5) and within delta of the true extreme on a
+// body (agent-docs/loft-design.md §5) and within delta of the true extreme on a
 // placed one, which is what bounds() publishes.
 func (m *MassAccumulator) foldBounds(p r3.Vec) {
 	if !m.haveBounds {
@@ -258,7 +258,7 @@ func (m *MassAccumulator) PerturbedAreaUpper(verts []r3.Vec, tris [][3]int) floa
 }
 
 // SweptVolumeAllow is proofbound.SweptVolumeAllow(delta, PerturbedAreaUpper),
-// docs/loft-gear-bounds-design.md §2's sweptLeg: exactly 0 at delta == 0.
+// agent-docs/loft-gear-bounds-design.md §2's sweptLeg: exactly 0 at delta == 0.
 func (m *MassAccumulator) SweptVolumeAllow(verts []r3.Vec, tris [][3]int) float64 {
 	if m.delta <= 0 {
 		return 0
@@ -269,10 +269,10 @@ func (m *MassAccumulator) SweptVolumeAllow(verts []r3.Vec, tris [][3]int) float6
 // Volume returns Σvol6/6 plus the exact bilinear-patch correction, rounded
 // to float64 exactly once. Its caller derives Exactness from the single rounding's
 // proven error — Exact exactly when the published rational is representable
-// in cubic millimetres, never unconditionally (docs/loft-design.md §8,
+// in cubic millimetres, never unconditionally (agent-docs/loft-design.md §8,
 // spline design §3's Tier A rule).
 //
-// The bound adds docs/loft-gear-bounds-design.md §2's residual to that
+// The bound adds agent-docs/loft-gear-bounds-design.md §2's residual to that
 // rounding:
 //
 //	sweptLeg + wallLeg + skirtLeg
@@ -359,7 +359,7 @@ func CentroidClearance(vol *big.Rat, allow float64) float64 {
 //
 // A placement (delta > 0) or a curved pairing (sectionDelta > 0 or
 // sectionMatchedDelta > 0) widens that bound by one SHIFT of the held
-// centroid, docs/loft-gear-bounds-design.md §3's
+// centroid, agent-docs/loft-gear-bounds-design.md §3's
 //
 //	shift = epsV · R_c / clearance
 //
@@ -431,7 +431,7 @@ func (m *MassAccumulator) Centroid(verts []r3.Vec, tris [][3]int) (r3.Vec, float
 	return published, proofbound.AbsSumUpper(rounding, shift), nil
 }
 
-// CentroidMeasureAllow is Centroid's epsV (docs/loft-gear-bounds-design.md
+// CentroidMeasureAllow is Centroid's epsV (agent-docs/loft-gear-bounds-design.md
 // §3): a proven upper bound on the measure of the region where the true solid
 // and the corrected held body differ. One homotopy sweeps it, every cell
 // moving at once so the surface stays closed at the rungs cells share, and
@@ -458,7 +458,7 @@ func (m *MassAccumulator) CentroidMeasureAllow(verts []r3.Vec, tris [][3]int) fl
 	return proofbound.AbsSumUpper(epsV, m.Chorded.WallLeg, m.Chorded.SkirtLeg)
 }
 
-// CentroidRadius is Centroid's R_c (docs/loft-gear-bounds-design.md §3): a
+// CentroidRadius is Centroid's R_c (agent-docs/loft-gear-bounds-design.md §3): a
 // proven upper bound on the distance from the published centroid to any point
 // of the region CentroidMeasureAllow measures. A wall-sweep point lies within
 // its cell's matched departure of a bilinear patch, which lies in the convex
@@ -517,7 +517,7 @@ func (m *MassAccumulator) Bounds() (r3.Vec, r3.Vec, float64, bool) {
 // reading: held triangle areas for LineSeg cells and certified bilinear-patch
 // midpoints for chorded cells.
 //
-// The Exactness is the CONSTANT Approximate — docs/loft-design.md §8's
+// The Exactness is the CONSTANT Approximate — agent-docs/loft-design.md §8's
 // "Area is never Exact", spline design §3's arc-length asymmetry — and is
 // never derived from the published bound. A triangle's own area is a square
 // root of a rational and is generically irrational, so no arithmetic on the
@@ -573,7 +573,7 @@ func (m *MassAccumulator) Area(capAreas ...*big.Rat) (float64, float64) {
 	// The per-triangle allowance covers both directions at once: the base wall
 	// accumulator is over held triangles and the cap term is the denoted region's
 	// exact rational, and the two differ by at most this sum
-	// (docs/loft-design.md §12 PR 2a). That TRIANGLE-level role is the whole
+	// (agent-docs/loft-design.md §12 PR 2a). That TRIANGLE-level role is the whole
 	// of what it is proven for. The wall's own SURFACE step from the held
 	// corners to the stations they denote is a different quantity of the same
 	// shape, charged by proofbound.CellStationShiftAreaAllow inside areaExcess below;
@@ -591,7 +591,7 @@ func (m *MassAccumulator) Area(capAreas ...*big.Rat) (float64, float64) {
 	// above is CapPolygonAreaRat, the built polygon's own exact rational, and
 	// the region the loft's construction actually denotes is the CURVED
 	// region the per-cell cap tube bounds the gap to on EITHER cap
-	// (capAreaExcess, docs/loft-gear-bounds-design.md §4). Both are gated on sectionDelta > 0 OR
+	// (capAreaExcess, agent-docs/loft-gear-bounds-design.md §4). Both are gated on sectionDelta > 0 OR
 	// sectionMatchedDelta > 0 — never sectionDelta alone — so a free-form
 	// cell whose matchedDelta is positive at an exactly-zero sagitta
 	// (internal/freeform/spline_sagitta.go's own counterexample) still has its wall and cap
@@ -619,7 +619,7 @@ func (m *MassAccumulator) Area(capAreas ...*big.Rat) (float64, float64) {
 // A saturated term is not a small bound, it is the absence of a proven scale,
 // and the error it stands for here runs past MaxFloat64 — so the honest answer
 // is +Inf. Any finite substitute would be a guess, which is what this kernel's
-// proven-bound discipline exists to prevent (docs/loft-design.md §8).
+// proven-bound discipline exists to prevent (agent-docs/loft-design.md §8).
 func (m *MassAccumulator) wallBound() float64 {
 	if proofbound.IsNonFinite(m.WallAreaAbs) || proofbound.IsNonFinite(m.WallAreaSlack) {
 		return math.Inf(1)

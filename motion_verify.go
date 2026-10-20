@@ -20,9 +20,9 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is Document.VerifyMotion (docs/motion-check-design.md §3, §5-§8)
+// This file is Document.VerifyMotion (agent-docs/motion-check-design.md §3, §5-§8)
 // and the engine it shares with Document.VerifyLinkage
-// (docs/linkage-check-design.md §6): validation, the swept-box exclusion, the
+// (agent-docs/linkage-check-design.md §6): validation, the swept-box exclusion, the
 // per-pose pair proof over transient placements, the two-sided interval
 // certificate, and the report assembly. motion.go owns the vocabulary and
 // internal/motionbound and internal/linkagebound the bounds; linkage_verify.go
@@ -53,7 +53,7 @@ import (
 // never committed, never published, and its provenance is never read back.
 const transientProducer producerID = -1
 
-// resolveMovers validates the moving set (docs/motion-check-design.md §3, §8).
+// resolveMovers validates the moving set (agent-docs/motion-check-design.md §3, §8).
 func (d *Document) resolveMovers(moving []*Body) error {
 	if len(moving) == 0 {
 		return fmt.Errorf(`%w: an empty moving set moves nothing`, ErrDegenerate)
@@ -75,7 +75,7 @@ func (d *Document) resolveMovers(moving []*Body) error {
 }
 
 // VerifyMotion checks whether the rigid set moving, carried along m, meets
-// any other live body of d anywhere on the path (docs/motion-check-design.md).
+// any other live body of d anywhere on the path (agent-docs/motion-check-design.md).
 // It never changes the document: each pose re-evaluates a mover's payload
 // under the composed motion as a transient body that is never committed, so
 // Document.Bodies(), every body's live state and the next producer identity
@@ -176,7 +176,7 @@ type motionDriver interface {
 	// projection is a second proven lower bound, as an exact rational, on
 	// the distance between the two bodies of pair k of mover i at every
 	// parameter between the poses a and b, which certifies the pair alone
-	// when it is positive (docs/linkage-check-design.md §5.8); nil when the
+	// when it is positive (agent-docs/linkage-check-design.md §5.8); nil when the
 	// driver supplies none.
 	projection(i, k int, a, b *motionPose) *big.Rat
 }
@@ -190,7 +190,7 @@ type motionDriver interface {
 // its bodies are measured as they stand, with no transient placement and no
 // η. constant marks a group whose pose is the same at every parameter: its
 // transient placements are built once and reused
-// (docs/linkage-check-design.md §6 step 2).
+// (agent-docs/linkage-check-design.md §6 step 2).
 type motionGroupPose struct {
 	pose     r3.Transform
 	ideals   []motionbound.IdealPose
@@ -203,7 +203,7 @@ type motionGroupPose struct {
 
 // motionIntervalGate is a driver that can refuse an interval before any pair
 // is read: a linkage drive whose loop cannot be enclosed over it
-// (docs/linkage-check-design.md §15.6). intervalGate returns the refusal's
+// (agent-docs/linkage-check-design.md §15.6). intervalGate returns the refusal's
 // message, empty when the interval may be certified; a refused interval is
 // IntervalUndecided whatever its pairs prove.
 type motionIntervalGate interface {
@@ -212,7 +212,7 @@ type motionIntervalGate interface {
 
 // errPoseUnbuildable is what a driver's posesAt returns, wrapped, for a pose
 // it cannot build because a loop cannot be enclosed there
-// (docs/linkage-check-design.md §15.6): the pose is not evaluated, and every
+// (agent-docs/linkage-check-design.md §15.6): the pose is not evaluated, and every
 // interval ending at it is IntervalUndecided.
 type errPoseUnbuildable interface {
 	error
@@ -252,17 +252,17 @@ type motionPair struct {
 	sheet bool
 	// unformed: the pair is not a question this check asks — a held link's
 	// body against a static body, or two held links' bodies, whose relation
-	// is Verify's (docs/linkage-check-design.md §6 step 2). It is never
+	// is Verify's (agent-docs/linkage-check-design.md §6 step 2). It is never
 	// evaluated, raises nothing, and enters no interval.
 	unformed bool
 	// declared: a linkage's declared joint contact
-	// (docs/linkage-check-design.md §5.4). It is evaluated at every pose and
+	// (agent-docs/linkage-check-design.md §5.4). It is evaluated at every pose and
 	// publishes a transferred collision and a measured gap row, but no
 	// undecided, touching or tolerance finding, and it enters no interval
 	// certificate and no whole-path reading.
 	declared bool
 	// constant: the pair's relation is the same at every configuration
-	// (docs/linkage-check-design.md §5.9) — its relative path is one revolute
+	// (agent-docs/linkage-check-design.md §5.9) — its relative path is one revolute
 	// joint and one of its bodies is symmetric about that joint's axis. Its
 	// first evaluation reads the two bodies as they stand; once holds the
 	// outcome, which every pose replays with no placement, and the pair
@@ -310,7 +310,7 @@ type motionPairPose struct {
 // A path's pose sits at the fraction f, whose exact parameter is param, and
 // its findings carry At. A joint box's centre has neither: cell is the cell
 // whose centre it is, and its findings carry Cell instead
-// (docs/linkage-check-design.md §14.2). where is what a finding's message
+// (agent-docs/linkage-check-design.md §14.2). where is what a finding's message
 // names the pose by: the parameter on a path, the configuration in a box.
 type motionPose struct {
 	f          *big.Rat
@@ -503,16 +503,16 @@ func (m *singleMotion) posesAt(f *big.Rat, at units.Value, param motionbound.Mot
 	return []motionGroupPose{{pose: pose, ideals: ideals, stretch: stretch}}, nil
 }
 
-// travel is τ of docs/motion-check-design.md §5.2 for mover i: every pair of
+// travel is τ of agent-docs/motion-check-design.md §5.2 for mover i: every pair of
 // one group's mover has a static partner, which does not move.
 func (m *singleMotion) travel(i, _ int, a, b motionbound.MotionParam) *big.Rat {
 	return motionbound.MoverTravel(m.r.spec.Frame, m.r.movers[i].rho, a, b)
 }
 
-// projection is the projection bound of docs/linkage-check-design.md §5.8
+// projection is the projection bound of agent-docs/linkage-check-design.md §5.8
 // for pair k of mover i over the interval between poses a and b, the motion
 // read as one joint whose value is the motion's parameter
-// (docs/motion-check-design.md §5.2): the mover's points — its box corners,
+// (agent-docs/motion-check-design.md §5.2): the mover's points — its box corners,
 // then its hull points — posed at each end and expanded to second order in
 // the parameter along the interval's own step, the static partner's points
 // as they stand. The parameter is affine in the fraction over the whole path,
@@ -787,7 +787,7 @@ func (r *motionRun) runPairs(mp *motionPose) error {
 }
 
 // validityFindings carries a not-proven-valid body's own validity diagnostic
-// into the pose (docs/motion-check-design.md §7), stamped with where it was
+// into the pose (agent-docs/motion-check-design.md §7), stamped with where it was
 // found.
 func (r *motionRun) validityFindings(mp *motionPose, validity ValidityResult) {
 	if validity.Outcome == ValidityValid {

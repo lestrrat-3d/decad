@@ -11,7 +11,7 @@ import (
 )
 
 // Chamfer also bevels a COMPLETE prism cap loop, not just lateral edges
-// (docs/modify-reach-design.md §8.3): the selected loop's boundary offsets
+// (agent-docs/modify-reach-design.md §8.3): the selected loop's boundary offsets
 // into the material at the cap, the original loop holds its shape one
 // setback further in, and the band between them is a ruled patch per wall —
 // a Plane for a straight one. The rewrite is exact and bounded, never a

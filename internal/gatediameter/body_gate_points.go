@@ -28,7 +28,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file lists the points a gate diameter reads (docs/verification-design.md
+// This file lists the points a gate diameter reads (agent-docs/verification-design.md
 // §3): station witnesses along a prism's walls and a revolve's meridian, a
 // brep's vertices and wall stations. Root joins the point sets to read the
 // pair diameter. Every point is held within a gap a proof states
@@ -199,7 +199,7 @@ func capArcRim(cbp capblend.Payload, g capband.Patch, contour float64) (prismrec
 }
 
 // brepGateDiameter is pairkernel.BodyGateDiameter's arm for a breprecord.Payload
-// (docs/general-boolean-design.md §4.5), read over brepGatePoints.
+// (agent-docs/general-boolean-design.md §4.5), read over brepGatePoints.
 func brepGateDiameter(ctx context.Context, body *topo.Body, bp breprecord.Payload) (float64, bool, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	g, ok, err := brepGatePoints(budget, body, bp)
@@ -266,7 +266,7 @@ func BodyGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body *to
 	case coilshell.Payload:
 		// Every held station vertex lies within its own station rounding of
 		// the point X(v, j) it denotes, a point of the coil's true helix edge
-		// (docs/helix-design.md §5.3), so the largest rounding is the gap.
+		// (agent-docs/helix-design.md §5.3), so the largest rounding is the gap.
 		return diameter.GatePoints{Points: pl.Verts, Allow: pl.MaxRound}, true, nil
 	case stitchrecord.Payload:
 		return diameter.GatePoints{Points: pl.Verts, Allow: pl.Delta}, true, nil

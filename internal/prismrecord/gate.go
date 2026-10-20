@@ -7,7 +7,7 @@ import (
 )
 
 // RequireExactSection refuses a modify receiver whose payload carries a section
-// displacement (docs/prism-boolean-design.md §7). Every modify op is a rewrite
+// displacement (agent-docs/prism-boolean-design.md §7). Every modify op is a rewrite
 // of the receiver's recorded section (modify §2), and a rewrite of a record that
 // is only within a displacement of the section it denotes has no proven
 // displacement of its own — an offset miter or a blend centre amplifies it by

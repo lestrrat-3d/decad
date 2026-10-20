@@ -15,7 +15,7 @@ import (
 )
 
 // This file proves the revolve angular-denotation rule PR 1 adopts
-// (docs/evaluator-design.md §6): every reading built on a held sweep angle
+// (agent-docs/evaluator-design.md §6): every reading built on a held sweep angle
 // must contain the angle the recorded AngularExtent denotes, not merely the
 // float the resolver rounded to. Every assertion below is a RELATION — a
 // containment, a ratio, or a zero/nonzero split — never a bound literal,

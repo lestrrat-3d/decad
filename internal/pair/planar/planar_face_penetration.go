@@ -10,7 +10,7 @@ import (
 )
 
 // This file is the face-local shallow-penetration patch of
-// docs/multibody-dynamics-design.md §9.6: a convex solid M whose corner or
+// agent-docs/multibody-dynamics-design.md §9.6: a convex solid M whose corner or
 // edge pokes through one flat face h of any planar solid S, convex or not.
 // The patch is published only under four exact tests, each sound on its own
 // terms:
@@ -35,7 +35,7 @@ import (
 // moving M along h's normal by the depth d of its deepest feature clears it.
 //
 // A held M that stands for its true boundary within a displacement δ
-// (docs/multibody-dynamics-design.md §10.4) reads conditions 3 and 4 over its
+// (agent-docs/multibody-dynamics-design.md §10.4) reads conditions 3 and 4 over its
 // held vertices grown by δ (PlanarFacePenetrationGrown): the true M lies
 // within δ of the held one, so its part behind the plane lies within δ of the
 // held part at most δ in front of it, and its column within δ of the held

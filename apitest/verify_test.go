@@ -969,7 +969,7 @@ func TestVerifyUnsupportedPairEmitsOneCause(t *testing.T) {
 // TestVerifyAdmittedCoplanarPrismPairResolvesAnalytically's fixture
 // (interference_test.go): a container box and a taller, footprint-nested box
 // sharing the container's own coplanar base plane. Before
-// docs/prism-boolean-design.md §14 PR4 this exact pair staged a boolean
+// agent-docs/prism-boolean-design.md §14 PR4 this exact pair staged a boolean
 // contact (DiagUnsupportedPairContact, Suspect) because
 // measuredInterference never reached the analytic meshbool.OpIntersect dispatch. Now
 // it resolves analytically, so neither contact diagnostic fires and the
@@ -1096,7 +1096,7 @@ func TestVerifyDiagnosticsUndecidedClearance(t *testing.T) {
 
 // TestVerifyDiagnosticsSectionDeltaPrismReadsItsOwnGateDiameter pins
 // verification design §3's arm for a prismPayload whose own sectionDelta is
-// nonzero (docs/prism-boolean-design.md §7's re-expressed section — here the
+// nonzero (agent-docs/prism-boolean-design.md §7's re-expressed section — here the
 // analytic Union of a placed prism pair). The clearance kernel's exact carrier
 // model refuses that payload (internal/clearance/pairkernel/geom.go), so the
 // reference comes from fallbackGateDiameter reading the body's OWN recorded
@@ -1413,7 +1413,7 @@ func TestVerifyCupWithinToleranceIsSound(t *testing.T) {
 
 // TestVerifyCapBlendChamferAreaVolumeCentroidAllPass is the cap-blend
 // coverage the tolerance gate was missing, on the exact body
-// docs/modify-reach-design.md's own example builds (a 100x60x20 plate with a
+// agent-docs/modify-reach-design.md's own example builds (a 100x60x20 plate with a
 // complete end-cap chamfer at d=5mm): pairkernel.BodyGateDiameter had no fallback for
 // capBlendPayload either, so its area, volume AND centroid readings all
 // failed the gate closed with no reference, regardless of how each reading's
@@ -1421,7 +1421,7 @@ func TestVerifyCupWithinToleranceIsSound(t *testing.T) {
 // fallback in place, area and volume pass with bounds many decades below any
 // reasonable gate. The centroid used to be a known separate defect (an
 // area-weighted face-vertex estimate, no real first moment behind it,
-// capblend_moments.go) that kept this same body Suspect; docs/modify-reach-design.md
+// capblend_moments.go) that kept this same body Suspect; agent-docs/modify-reach-design.md
 // §8.4's closed-form first moments (capblend_centroid.go) fixed it — an
 // all-Plane band's centroid is exact rational end to end here — so all three
 // readings now pass and the body reads Sound.

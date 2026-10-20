@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestStackedWallRegions pins docs/shell-opening-design.md §4.3's grouping of
+// TestStackedWallRegions pins agent-docs/shell-opening-design.md §4.3's grouping of
 // one wall key's chained loops on the XY embed: counter-clockwise loops are a
 // face each, one counter-clockwise loop with a clockwise one is one face whose
 // hole is the clockwise loop, and two counter-clockwise loops beside a

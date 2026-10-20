@@ -12,7 +12,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is the topology model of docs/evaluator-design.md §3: concrete
+// This file is the topology model of agent-docs/evaluator-design.md §3: concrete
 // structs with unexported fields; the accessors of core §6/§6.1 are the whole
 // public surface. Identity is the pointer, scoped to one body — never an
 // index. A Body is immutable after construction, so it is safe to read from
@@ -50,7 +50,7 @@ const (
 
 // BodyKind states what a body IS: whether its boundary encloses a material
 // region. It is decided by the operation that built the body, never inferred
-// from the boundary afterwards (docs/surface-design.md §2.1, core §6).
+// from the boundary afterwards (agent-docs/surface-design.md §2.1, core §6).
 type BodyKind int
 
 const (
@@ -254,25 +254,25 @@ type Vertex struct {
 // carries that computation's own proven displacement wherever the payload
 // tracks one: a boolean-built vertex carries the tessellation's chord bound;
 // a cap-loop chamfer's cap-level feet, which a float offset solve places
-// (docs/modify-reach-design.md §8.4), carry that solve's own displacement; and
+// (agent-docs/modify-reach-design.md §8.4), carry that solve's own displacement; and
 // a PLACED loft's vertex, re-lifted from the record under a rigid motion,
-// carries that motion's own rounding (docs/loft-design.md §5) — a recorded
+// carries that motion's own rounding (agent-docs/loft-design.md §5) — a recorded
 // coordinate the identity transform leaves alone is the zero-bound case of
 // that same rule, not an exception to it. An analytic prism's, revolve's,
 // cap-loop chamfer's, brep's or patch's own rim/junction/cap vertex carries
 // the rounding its own lift through the payload's frame and accumulated
 // placement committed, measured exactly for that vertex
 // (proofbound.ExactFrameLiftRound, revolvemesh.RevolveLift.SweptPointGap;
-// docs/evaluator-design.md §8). A rim vertex where two recorded walks meet
+// agent-docs/evaluator-design.md §8). A rim vertex where two recorded walks meet
 // also carries the bound that reaches the points BOTH walks denote there —
 // each walk's own end bound plus the gap between their held ends
-// (boundarywalk.JunctionVertex; docs/evaluator-design.md §3) — so a cut
+// (boundarywalk.JunctionVertex; agent-docs/evaluator-design.md §3) — so a cut
 // junction, a trimmed line end and a circle seam whose centre plus radius
 // rounds are never Exact. A revolve's vertex is measured against its
 // recorded plane point rotated about the recorded axis by the angle the
 // record states, so the same bound also covers the float axis coordinates it
 // was placed from, a radius snapped onto the axis, and the axis's own anchor
-// and direction error (docs/evaluator-design.md §6). The frame origin is
+// and direction error (agent-docs/evaluator-design.md §6). The frame origin is
 // part of that lift: a sketch plane whose axes are the world's own still
 // rounds origin.X + u whenever the sum is not representable, and a body built
 // far away and placed back keeps the far lift's rounding. A lift that is exact
@@ -334,7 +334,7 @@ func (e *Edge) Start() *Vertex { return vertexHandle(e.n.Start) }
 func (e *Edge) End() *Vertex { return vertexHandle(e.n.End) }
 
 // Faces returns the faces adjacent to this edge. What len(Faces()) means is
-// read per body kind (docs/surface-design.md §2.2, core §6.1): on a
+// read per body kind (agent-docs/surface-design.md §2.2, core §6.1): on a
 // BodySolid, one adjacent face is non-manifold; on a BodySheet, one adjacent
 // face is a FREE edge — the boundary of the sheet, and the expected shape —
 // which IsFree reports and the Free() predicate selects. Two is an interior
@@ -371,7 +371,7 @@ func (e *Edge) Faces() []*Face { return faceHandles(e.n.Faces) }
 func (e *Edge) IsConvex() bool { return e.n.Convex }
 
 // IsFree reports whether exactly one face is adjacent to this edge — a
-// sheet's boundary, and the expected shape there (docs/surface-design.md
+// sheet's boundary, and the expected shape there (agent-docs/surface-design.md
 // §2.2). On a BodySolid the same count of one is non-manifold rather than
 // free; IsFree only names the count Faces reports, and Faces's own doc comment
 // states the per-kind reading in full.
@@ -386,7 +386,7 @@ func (e *Edge) IsFree() bool { return len(e.n.Faces) == 1 }
 // cap-loop chamfer's miter ruling is the same refusal one construction over:
 // where either carrier meeting at the corner is circular, the ruling's tagged
 // chord understates the curved locus the exact offset family denotes
-// (docs/modify-reach-design.md §8.3), and a corner whose locus enclosure this
+// (agent-docs/modify-reach-design.md §8.3), and a corner whose locus enclosure this
 // evaluator cannot build refuses the same way rather than publish an
 // understated Bound.
 func (e *Edge) Length() (Measurement, error) {
@@ -438,10 +438,10 @@ type Face struct {
 //
 // The five analytic variants — Plane, Cylinder, Cone, Sphere and Torus — are
 // the whole set this answers for. Any other tagged surface is ErrUnsupported:
-// a NURBSSurface for the reason docs/spline-design.md §7 owns, and a Faceted
+// a NURBSSurface for the reason agent-docs/spline-design.md §7 owns, and a Faceted
 // face — the tag every boolean-produced face carries — because its answer
 // waits on the faceted certificate stage
-// (docs/payload-verification-design.md §5.4, §13).
+// (agent-docs/payload-verification-design.md §5.4, §13).
 func (f *Face) NormalAt(p r3.Vec) (VecMeasurement, error) {
 	m, err := topobuild.NormalAt(&f.n, p)
 	return vecMeasurementFromInternal(m), err
@@ -504,17 +504,17 @@ type FaceShell struct {
 
 // IsVoid reports whether the shell bounds an internal cavity. IsVoid and
 // IsOpen are independent questions and neither implies the other
-// (docs/surface-design.md §2.2): a void solid shell and an open sheet shell
+// (agent-docs/surface-design.md §2.2): a void solid shell and an open sheet shell
 // are both ordinary states, and nothing rules out either combination.
 func (s *FaceShell) IsVoid() bool { return s.n.Void }
 
 // IsOpen reports whether the shell has at least one free edge
-// (docs/surface-design.md §2.2). IsOpen and IsVoid are independent questions
+// (agent-docs/surface-design.md §2.2). IsOpen and IsVoid are independent questions
 // and neither implies the other. A solid's shell is never open; a
 // surface-result feature's sheet shell reports true wherever its build
 // omitted a closing face and left a rim with no second face to pair it with
 // (extrude.go, internal/revolveplan/build.go), and false for a closed sheet that mints no
-// such rim — a full revolution (docs/surface-design.md Table W).
+// such rim — a full revolution (agent-docs/surface-design.md Table W).
 func (s *FaceShell) IsOpen() bool { return s.n.Open }
 
 // Faces returns the shell's faces.
@@ -603,7 +603,7 @@ func (b *Body) Vertices() []*Vertex {
 }
 
 // Kind reports what the body IS: BodySolid or BodySheet
-// (docs/surface-design.md §2.1). Kind says what the body is; IsSolid says
+// (agent-docs/surface-design.md §2.1). Kind says what the body is; IsSolid says
 // whether it is sound. A BodySheet with IsSolid() == true is never produced —
 // a sheet encloses no material region, so no evaluator may prove one a solid.
 func (b *Body) Kind() BodyKind { return BodyKind(b.n.Kind) }

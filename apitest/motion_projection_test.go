@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file holds the tests of docs/motion-check-design.md §5.2's projection
+// This file holds the tests of agent-docs/motion-check-design.md §5.2's projection
 // bound: VerifyMotion reads its motion as one joint and takes the larger of
 // the travel bound and the projection bound over every interval.
 
@@ -62,7 +62,7 @@ func TestVerifyMotionProjectionAlongAWall(t *testing.T) {
 	require.GreaterOrEqual(t, report.Clearance.Value.Mag()+report.Clearance.Bound.Mag(), 10.0)
 }
 
-// pendulumScene is docs/linkage-check-design.md §5.8's scene 13 under
+// pendulumScene is agent-docs/linkage-check-design.md §5.8's scene 13 under
 // VerifyMotion: a block x ∈ [−5, 5], y ∈ [−50, −40], z ∈ [0, 10] swinging
 // about Z through the origin toward a wall y ∈ [20, 40] above the pivot.
 func pendulumScene(t *testing.T) (*decad.Document, *decad.Body) {

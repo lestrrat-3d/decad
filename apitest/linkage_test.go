@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file holds the PR 1 tests of docs/linkage-check-design.md §11: scene 1
+// This file holds the PR 1 tests of agent-docs/linkage-check-design.md §11: scene 1
 // (the folding arm), the agreement of a one-link linkage with VerifyMotion,
 // PoseAt's composition, and the standing tests. Bounds are asserted against
 // geometric truths or as small, never pinned to a measured literal: FMA
@@ -80,7 +80,7 @@ func requirePosesArePoseAt(t *testing.T, report *decad.LinkageReport) {
 	}
 }
 
-// TestVerifyLinkageFoldingArm is scene 1 of docs/linkage-check-design.md §11.
+// TestVerifyLinkageFoldingArm is scene 1 of agent-docs/linkage-check-design.md §11.
 //
 // The forearm's top face y = 48·sin θ + 14 reaches the wall's face y = 38 at
 // sin θ = 1/2: θ* = 30°, s* = 1/3. The upper arm's far corner (48, 14), at
@@ -325,7 +325,7 @@ func TestLinkagePoseAt(t *testing.T) {
 }
 
 // TestLinkageConstructorRefusals is one subtest per refusal of
-// docs/linkage-check-design.md §2.1, in the order the constructors check them.
+// agent-docs/linkage-check-design.md §2.1, in the order the constructors check them.
 func TestLinkageConstructorRefusals(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
@@ -377,7 +377,7 @@ func TestLinkageConstructorRefusals(t *testing.T) {
 // MotionFrame.At, so at the endpoints alone, where no bound certifies the one
 // interval, the two reports agree in every reading. Bisected, both take the
 // larger of the travel bound and the projection bound
-// (docs/linkage-check-design.md §5.8, docs/motion-check-design.md §5.2) over
+// (agent-docs/linkage-check-design.md §5.8, agent-docs/motion-check-design.md §5.2) over
 // the same corner and hull readings, so they agree there too: the same
 // collisions and Status, the same poses, the same interval outcomes, each
 // interval's Clearance within 1e-9 — ρ_11 and ρ_max are read by two routes
@@ -636,7 +636,7 @@ func TestVerifyLinkagePoseDeviationIsCharged(t *testing.T) {
 }
 
 // TestVerifyLinkageErrors is one subtest per row of
-// docs/linkage-check-design.md §8's table that PR 1's public API can reach,
+// agent-docs/linkage-check-design.md §8's table that PR 1's public API can reach,
 // each asserting the sentinel, no report, and an unchanged document. The row
 // for a body this evaluator did not build lives in linkage_internal_test.go.
 func TestVerifyLinkageErrors(t *testing.T) {
@@ -829,7 +829,7 @@ func TestVerifyLinkageSweptBoxCoversAncestorTravel(t *testing.T) {
 	require.Equal(t, units.Scalar(1), report.Collisions[1].At)
 }
 
-// TestLinkageJointLimits covers WithJointLimits (docs/linkage-check-design.md
+// TestLinkageJointLimits covers WithJointLimits (agent-docs/linkage-check-design.md
 // §2.1, §2.4): a joint reports its limits, the constructor refuses
 // ill-formed ones, and a drive that takes a joint outside them — at either
 // end of its sweep, or holding an unlisted joint at a 0 the limits exclude —
@@ -914,7 +914,7 @@ func TestLinkageJointLimits(t *testing.T) {
 }
 
 // TestLinkageDeclareJointContactRefusals is one subtest per refusal of
-// docs/linkage-check-design.md §2.2, and the declaration order JointContacts
+// agent-docs/linkage-check-design.md §2.2, and the declaration order JointContacts
 // keeps.
 func TestLinkageDeclareJointContactRefusals(t *testing.T) {
 	t.Parallel()

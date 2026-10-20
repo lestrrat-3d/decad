@@ -19,7 +19,7 @@ import (
 // slab volume bounds every unpaired reflex cell and cap sliver at once.
 // This deliberately coarse term never substitutes zero motion for an apex
 // sample without charging the slab that contains it. A term this build cannot
-// state refuses (docs/tessellation-design.md §12) rather than publishing a
+// state refuses (agent-docs/tessellation-design.md §12) rather than publishing a
 // symmetric-difference bound a Boolean would then compose into a result.
 func ProveLoftBandVolume(ctx context.Context, mesh *topo.Mesh, body *topo.Body,
 	cbp Payload, lms []LoopMesh, motion []float64) error {

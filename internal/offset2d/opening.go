@@ -13,19 +13,19 @@ import (
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
-// ErrOpeningCorner is docs/shell-opening-design.md's SO1: a side opening's end
+// ErrOpeningCorner is agent-docs/shell-opening-design.md's SO1: a side opening's end
 // corner is smooth or cusped, or the removed walk's carrier, walked from the
 // corner in the direction that enters the kept wall's band, never meets the
 // kept walk's offset carrier before it leaves the band again.
 var ErrOpeningCorner = fmt.Errorf(`%w: a side opening's end corner is smooth or cusped, or the removed face's carrier never reaches the kept wall's offset from that corner, so no rim closes the wall there (shell-opening SO1)`, decaderr.ErrUnsupported)
 
-// ErrOpeningSpan is docs/shell-opening-design.md's SO2: a side opening's rim
+// ErrOpeningSpan is agent-docs/shell-opening-design.md's SO2: a side opening's rim
 // cut lies at or past the far end of the removed walk, where the cavity would
 // continue on the next walk's carrier.
 var ErrOpeningSpan = fmt.Errorf(`%w: a side opening's rim would run past the far end of the removed walk, where the cavity turns onto the next face; a trimmed-offset construction is not available (shell-opening SO2)`, decaderr.ErrUnsupported)
 
 // opening is one end of a side opening's kept chain, read from the kept walk k
-// and its removed neighbour r (docs/shell-opening-design.md §2.1).
+// and its removed neighbour r (agent-docs/shell-opening-design.md §2.1).
 type opening struct {
 	vU, vV float64
 	// kU, kV is k's unit tangent at v in k's own walk sense; nU, nV is s
@@ -95,7 +95,7 @@ func OpeningForward(k, r survey2d.SideWalk, atEnd bool, s, tol float64) (bool, e
 }
 
 // OpeningJoin is the rim cut at one end of a side opening's kept chain
-// (docs/shell-opening-design.md §2.4): k is the kept walk and r the removed
+// (agent-docs/shell-opening-design.md §2.4): k is the kept walk and r the removed
 // walk beside it; atEnd says the corner v is k's end, where r starts, and
 // otherwise k's start, where r ends. The cut q is the first point at which
 // r's own carrier, walked from v in the direction that enters the band between
@@ -286,7 +286,7 @@ func requireCutInSpan(r survey2d.SideWalk, o opening, q Point, tol float64) erro
 }
 
 // OpeningReach is how far OpeningJoin's held cut j sits from the cut it
-// denotes, over every signed offset in amount (docs/shell-opening-design.md
+// denotes, over every signed offset in amount (agent-docs/shell-opening-design.md
 // §2.4): k's offset carrier and r's own carrier are enclosed exactly as
 // LoopReach encloses a miter's, every root of the pair is enclosed, and the
 // denoted cut is the root the entering direction reaches first. A root on a

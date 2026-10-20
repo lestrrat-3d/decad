@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/prism-boolean-design.md PR2's black-box test suite
+// This file is agent-docs/prism-boolean-design.md PR2's black-box test suite
 // (§14, §15): the clean-nesting structural match for Cut and Intersect.
 // discBody (prism_boolean_bounds_test.go), boxBody (clearance_test.go) and
 // tookMeshPath (prism_boolean_test.go) are the shared helpers.
@@ -504,7 +504,7 @@ func TestPrismCutG6HoledToolFallsBackKeepingTheStandingPost(t *testing.T) {
 		`the standing post's volume must not be dropped from the result`)
 }
 
-// TestPrismCutCrossingToolResolvesAnalytically is docs/prism-boolean-design.md
+// TestPrismCutCrossingToolResolvesAnalytically is agent-docs/prism-boolean-design.md
 // §4.2's crossing sub-case: a tool that pokes outside the target cuts the
 // target's own boundary, so the clean-nesting structural match fails — but
 // internal/prismcells/payload_resolve.go's edge-orientation propagation resolves it

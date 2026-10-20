@@ -13,7 +13,7 @@ import (
 // TestScheduledStepCylinderLandsAndRests drops a source cylinder on its end
 // disk onto a fixed floor in a four-body world, through SweepPair's disk
 // impact bracket and its disk-on-face persistent track
-// (docs/contact-sweep-design.md §4.6). Every step kicks the cylinder by
+// (agent-docs/contact-sweep-design.md §4.6). Every step kicks the cylinder by
 // g·dt = −9810/256 = −38.3203125 mm/s, below ImpactSpeed 64 mm/s, so each
 // impact targets zero: the first lands the cylinder from 1/16 mm at
 // (1/16)/38.3203125 s, and every later step starts in touch, stops the kick

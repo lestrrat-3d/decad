@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The sweep mass path (docs/multibody-dynamics-design.md §8.7) is checked
+// The sweep mass path (agent-docs/multibody-dynamics-design.md §8.7) is checked
 // against the sum of its spans: each span's V, P and Q about the world origin
 // is integrated in this file in exact rationals (a box in closed form, a
 // quarter-turn sector from its separable ρ, y and θ integrals with a
@@ -164,7 +164,7 @@ func (m massMoments) inertia(rho *big.Rat) [3][3]*big.Rat {
 // requireMomentsReadings checks the mass, the center and all six inertia
 // components of got against the exact moments carried into world axes as
 // their exact image under the held map q (nil for the identity) about the
-// placed center (docs/multibody-dynamics-design.md §8.1): mass ρ·|det q|·V
+// placed center (agent-docs/multibody-dynamics-design.md §8.1): mass ρ·|det q|·V
 // and the image's inertia (affineInertia).
 func requireMomentsReadings(t *testing.T, got decad.MassProperties, m massMoments, rho *big.Rat, pose r3.Transform, q *[3][3]*big.Float) {
 	t.Helper()

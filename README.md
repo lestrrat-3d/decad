@@ -43,7 +43,7 @@ primary goal. The agent checks the part in the app too, because it may
 interpret the steps differently.
 
 For certified shape and motion paths, decad can detect a collision and compute
-the resulting rigid-body motion. The [current support guide](docs/collision-v1-support.md)
+the resulting rigid-body motion. The [current support guide](agent-docs/collision-v1-support.md)
 names those paths, and the [box collision example](examples/dynamics_box_collision_example_test.go)
 runs an impact and reports the rebound.
 

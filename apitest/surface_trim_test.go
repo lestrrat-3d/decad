@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/surface-design.md's T170-T174 and T181:
-// docs/surface-intersection-design.md's PR1, Trim over the prism
+// This file is agent-docs/surface-design.md's T170-T174 and T181:
+// agent-docs/surface-intersection-design.md's PR1, Trim over the prism
 // family. Every fixture reuses plateSketch (extrude_test.go) for T1's own
 // 100x60 rectangle sheet.
 
@@ -163,7 +163,7 @@ func TestSurfaceTrimKeepInsideKeepsTheCutStrips(t *testing.T) {
 // tool that removes one END of the sheet's own footprint, rather than a
 // middle band, leaves a single surviving run whose own extreme along the cut
 // axis IS the cut point, not an untouched corner — the case
-// docs/surface-intersection-design.md §7's δ_cut must still reach even
+// agent-docs/surface-intersection-design.md §7's δ_cut must still reach even
 // though T170's own fixture (both surviving runs touch every extreme through
 // an untouched vertex) never exercises it. The tool spans the sheet axially
 // and covers x in [60, 120]: only its own left edge at x = 60 crosses the
@@ -298,7 +298,7 @@ func TestSurfaceTrimS4IsExactFloatEquality(t *testing.T) {
 		doc := decad.New()
 		sheet := trimRectSheet(t, doc)
 		tool := trimSpanningTool(t, doc, 40, -10, 60, 70)
-		// docs/prism-boolean-design.md §3.3's own probe swept RotationAround
+		// agent-docs/prism-boolean-design.md §3.3's own probe swept RotationAround
 		// about the exact sweep axis and found specific step counts whose
 		// composed normal misses (0,0,1) by an ulp through the Rodrigues
 		// evaluation. The currently pinned r3 keeps that axis-aligned case
@@ -364,7 +364,7 @@ func TestSurfaceTrimS4IsExactFloatEquality(t *testing.T) {
 // trimRevolveCylinderSheet builds a revolve-family cylindrical sheet — a
 // single meridian line, radius 5, spun a full turn about the sketch's own V
 // axis — through chain Revolve, since a bare line forms no closed profile
-// (docs/surface-design.md §13, revolve_chain_test.go's own pattern).
+// (agent-docs/surface-design.md §13, revolve_chain_test.go's own pattern).
 func trimRevolveCylinderSheet(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	w := sketch.NewWorld()

@@ -11,7 +11,7 @@ import (
 )
 
 // This file certifies an island proposal in exact rational interval
-// arithmetic (docs/multibody-dynamics-design.md §6.3).
+// arithmetic (agent-docs/multibody-dynamics-design.md §6.3).
 // Every comparison runs over the whole interval: mass, inertia, mass-center,
 // contact-point and normal uncertainty all enter as intervals, and the
 // published velocities and impulses enter as the exact rationals their

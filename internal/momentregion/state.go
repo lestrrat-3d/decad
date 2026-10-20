@@ -118,7 +118,7 @@ type ExactChord struct{ From, To freeform.RatPoint }
 
 // ChargeJunction accounts for one straight closing chord, where two
 // consecutive walks of a loop end and start at denoted points that need not
-// coincide (docs/evaluator-design.md §4). gap is a proven upper bound on the
+// coincide (agent-docs/evaluator-design.md §4). gap is a proven upper bound on the
 // chord's length. anchorReach bounds the distance of every chord point from
 // the walk anchor the six held fields are taken about, and originReach the
 // same about the plane origin the third-order sum is kept about.

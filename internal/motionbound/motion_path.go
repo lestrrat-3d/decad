@@ -60,7 +60,7 @@ func revolutePose(center, axis r3.Vec, at units.Value) (r3.Transform, error) {
 	return pose, nil
 }
 
-// validate applies the Revolute's own field refusals in docs/motion-check-design.md
+// validate applies the Revolute's own field refusals in agent-docs/motion-check-design.md
 // §2's order: every Kind first, then finiteness, then the axis direction.
 func (m Revolute) validate() error {
 	if err := motionKinds(units.Angle, m.From, m.To); err != nil {
@@ -122,7 +122,7 @@ func prismaticPose(dir r3.Vec, at units.Value) (r3.Transform, error) {
 	return pose, nil
 }
 
-// validate applies the Prismatic's own field refusals in docs/motion-check-design.md
+// validate applies the Prismatic's own field refusals in agent-docs/motion-check-design.md
 // §2's order: every Kind first, then finiteness, then the direction.
 func (m Prismatic) validate() error {
 	if err := motionKinds(units.Length, m.From, m.To); err != nil {
@@ -160,7 +160,7 @@ func (Between) motion() {}
 // Dimensionless fraction; an angle or a length is ErrUnitKind, a non-finite
 // one ErrNotFinite.
 //
-// From and To are refused in docs/motion-check-design.md §2's order: a
+// From and To are refused in agent-docs/motion-check-design.md §2's order: a
 // non-finite component is ErrNotFinite; a transform that is not a rigid motion
 // (Transform.IsValid false, the zero r3.Transform{} included) is
 // ErrDegenerate; a reflection joined to a proper motion, which no rigid path
@@ -199,7 +199,7 @@ func (m Between) PoseAt(at units.Value) (r3.Transform, error) {
 }
 
 // validate applies the Between's own field refusals in
-// docs/motion-check-design.md §2's order: finiteness, then rigidity, then
+// agent-docs/motion-check-design.md §2's order: finiteness, then rigidity, then
 // handedness. Degeneracy — From == To, or a zero screw — is VerifyMotion's.
 func (m Between) validate() error {
 	ends := [2]r3.Transform{m.From, m.To}

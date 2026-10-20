@@ -123,7 +123,7 @@ func (s Side) Extents() (up, down [3]*big.Rat) {
 	return up, down
 }
 
-// Lower is the largest L_n of docs/linkage-check-design.md §5.8
+// Lower is the largest L_n of agent-docs/linkage-check-design.md §5.8
 // over the six coordinate directions n = ±e_axis: the partner's least extent
 // along n less the body's greatest. Along +e_axis that is −b.down − a.up,
 // along −e_axis −b.up − a.down. The distance between two sets is at least
@@ -146,7 +146,7 @@ func Lower(a, b Side) *big.Rat {
 	return best
 }
 
-// FaceNormals is docs/linkage-check-design.md §5.8's candidate directions
+// FaceNormals is agent-docs/linkage-check-design.md §5.8's candidate directions
 // read off a point reading: for a prism's hull points, its extrusion
 // direction and each side face's normal, the cross product of the side's
 // bottom edge with that direction; for box corners, the three edge
@@ -273,7 +273,7 @@ func (s Side) ExtentsAlong(n motionbound.RatVec, norm *big.Rat) (up, down *big.R
 	return up, down
 }
 
-// LowerHull is docs/linkage-check-design.md §5.8's hull bound for
+// LowerHull is agent-docs/linkage-check-design.md §5.8's hull bound for
 // a pair whose two sides read hull points: the largest L_n over the six
 // coordinate directions and every face normal of either side, each
 // numerator divided by |n| rounded up when positive and down otherwise, less

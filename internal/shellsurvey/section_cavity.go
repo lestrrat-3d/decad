@@ -8,7 +8,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// RequireSectionCavity is S10's section limit (docs/modify-design.md §8): P ⊖ t
+// RequireSectionCavity is S10's section limit (agent-docs/modify-design.md §8): P ⊖ t
 // is non-empty exactly when t is strictly less than the section's inradius.
 // enough reports that a contained disk already proved the thickness fits.
 // The accept boundary sits tol*max(1, inradius) below the limit — a

@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The fixtures of docs/multibody-dynamics-design.md §13 PR 12. Every input is
+// The fixtures of agent-docs/multibody-dynamics-design.md §13 PR 12. Every input is
 // dyadic. The tumbling scene sits 2^20 mm from the origin, so composing a
 // rotation onto the far placement rounds each float pose by up to an ULP of
 // 2^20 (about 2e-10 mm), far above the gap reading's own sqrt enclosure.
@@ -201,7 +201,7 @@ func TestSweepPairPlanarWedgeStops(t *testing.T) {
 // TestSweepPairPlanarTumblingTetrahedronReplaysImpact drops
 // mass_properties_mesh_test.go's stitched tetrahedron into the tray while it
 // turns, the tumble scene's first impact in minimal form
-// (docs/multibody-dynamics-design.md §10.1). The tetrahedron starts 10 mm
+// (agent-docs/multibody-dynamics-design.md §10.1). The tetrahedron starts 10 mm
 // above the tray floor, z = 0, falling at 20 mm/s and turning at 2 rad/s
 // about Y through (3, 1, 11). Its travel bound T is above 20 mm per unit
 // fraction, so a bracket TimeResolution wide carries more than 2e-5 mm of

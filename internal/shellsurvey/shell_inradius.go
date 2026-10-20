@@ -22,7 +22,7 @@ const shellInradiusWorkLimit uint64 = 1 << 20
 
 // SectionInradius proves the requested thickness fits, or returns the largest
 // inscribed disk of a recorded section from internal/survey2d/wall_kernel.go
-// (docs/modify-design.md §8, the reading that answers Wall.Minimum). S18
+// (agent-docs/modify-design.md §8, the reading that answers Wall.Minimum). S18
 // checks the candidate-family count before entering the kernel and shares one
 // fixed work budget across its streamed generation and validation. An
 // undecided or over-budget build-time gate is ErrUnsupported: it has no

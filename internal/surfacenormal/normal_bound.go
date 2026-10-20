@@ -17,7 +17,7 @@ import (
 // record denotes: a placement re-evaluates the record and stores its own
 // coordinates, so the record IS what it denotes — the same rule
 // prismPayload's sectionDelta states for a section
-// (docs/prism-boolean-design.md §7). A revolve wall is the exception: its tag
+// (agent-docs/prism-boolean-design.md §7). A revolve wall is the exception: its tag
 // is a float re-expression of its recorded meridian, so its reading is
 // judged against the surface the record denotes instead (revolved.go).
 //

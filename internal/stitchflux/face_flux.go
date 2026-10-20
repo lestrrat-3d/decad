@@ -79,14 +79,14 @@ func PlaneFaceFluxAndMoment(f FaceInput, frame r3.Frame, anchor r3.Vec, sign flo
 	for _, l := range f.Loops {
 		if l.EdgeCount() != 1 {
 			return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
-				`%w: Stitch's flux path needs a Plane loop bounded by a single full circle (docs/surface-design.md Table R row R8)`,
+				`%w: Stitch's flux path needs a Plane loop bounded by a single full circle (agent-docs/surface-design.md Table R row R8)`,
 				decaderr.ErrUnsupported,
 			)
 		}
 		rim, ok, curveType := l.Circle()
 		if !ok {
 			return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
-				`%w: Stitch's flux path needs a Plane loop bounded by a full circle, not %s (docs/surface-design.md Table R row R8)`,
+				`%w: Stitch's flux path needs a Plane loop bounded by a full circle, not %s (agent-docs/surface-design.md Table R row R8)`,
 				decaderr.ErrUnsupported, curveType,
 			)
 		}
@@ -96,7 +96,7 @@ func PlaneFaceFluxAndMoment(f FaceInput, frame r3.Frame, anchor r3.Vec, sign flo
 		}
 		if !(rB.Value > 0) {
 			return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
-				`%w: Stitch's flux path needs a positive circle radius (docs/surface-design.md Table R row R8)`,
+				`%w: Stitch's flux path needs a positive circle radius (agent-docs/surface-design.md Table R row R8)`,
 				decaderr.ErrUnsupported,
 			)
 		}
@@ -172,7 +172,7 @@ func PlaneFaceFluxAndMoment(f FaceInput, frame r3.Frame, anchor r3.Vec, sign flo
 // CylinderFaceFluxAndMoment is the Cylinder arm, scoped to a full-circumference
 // tube segment: exactly two loops, each a single full Circle3 edge, at two
 // distinct axial positions. K_F = σ·Radius·f.Area reuses the face's own
-// already-proven area/areaBound (docs/surface-design.md's own reuse rule);
+// already-proven area/areaBound (agent-docs/surface-design.md's own reuse rule);
 // the vector area S_F is exactly the ZERO vector for a full-circumference
 // wall, proved below, so the (A_F − anchor)·S_F cross term vanishes and
 // flux_F is exactly K_F.
@@ -211,7 +211,7 @@ func CylinderFaceFluxAndMoment(f FaceInput, origin, axis r3.Vec, anchor r3.Vec, 
 	var flux, mx, my, mz proofbound.BoundedScalar
 	if len(f.Loops) != 2 {
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
-			`%w: Stitch's flux path needs a Cylinder face bounded by exactly two full circles (docs/surface-design.md Table R row R8)`,
+			`%w: Stitch's flux path needs a Cylinder face bounded by exactly two full circles (agent-docs/surface-design.md Table R row R8)`,
 			decaderr.ErrUnsupported,
 		)
 	}
@@ -220,14 +220,14 @@ func CylinderFaceFluxAndMoment(f FaceInput, origin, axis r3.Vec, anchor r3.Vec, 
 	for i, l := range f.Loops {
 		if l.EdgeCount() != 1 {
 			return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
-				`%w: Stitch's flux path needs a Cylinder rim bounded by a single full circle (docs/surface-design.md Table R row R8)`,
+				`%w: Stitch's flux path needs a Cylinder rim bounded by a single full circle (agent-docs/surface-design.md Table R row R8)`,
 				decaderr.ErrUnsupported,
 			)
 		}
 		rim, ok, curveType := l.Circle()
 		if !ok {
 			return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
-				`%w: Stitch's flux path needs a Cylinder rim bounded by a full circle, not %s (docs/surface-design.md Table R row R8)`,
+				`%w: Stitch's flux path needs a Cylinder rim bounded by a full circle, not %s (agent-docs/surface-design.md Table R row R8)`,
 				decaderr.ErrUnsupported, curveType,
 			)
 		}
@@ -245,7 +245,7 @@ func CylinderFaceFluxAndMoment(f FaceInput, origin, axis r3.Vec, anchor r3.Vec, 
 	}
 	if !(rB.Value > 0) {
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
-			`%w: Stitch's flux path needs a positive cylinder radius (docs/surface-design.md Table R row R8)`,
+			`%w: Stitch's flux path needs a positive cylinder radius (agent-docs/surface-design.md Table R row R8)`,
 			decaderr.ErrUnsupported,
 		)
 	}
@@ -255,7 +255,7 @@ func CylinderFaceFluxAndMoment(f FaceInput, origin, axis r3.Vec, anchor r3.Vec, 
 	dz := proofbound.BoundedAbs(proofbound.BoundedSub(z1, z0))
 	if !(dz.Value > 0) {
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
-			`%w: Stitch's flux path needs a Cylinder face whose two rims sit at different axial positions (docs/surface-design.md Table R row R8)`,
+			`%w: Stitch's flux path needs a Cylinder face whose two rims sit at different axial positions (agent-docs/surface-design.md Table R row R8)`,
 			decaderr.ErrUnsupported,
 		)
 	}
@@ -336,7 +336,7 @@ func ConeFaceFluxAndMoment(f FaceInput, cone ConeInput, anchor r3.Vec, sign floa
 	var flux, mx, my, mz proofbound.BoundedScalar
 	if len(f.Loops) != 2 {
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
-			`%w: Stitch's flux path needs a Cone face bounded by exactly two full circles (docs/surface-design.md Table R row R8)`,
+			`%w: Stitch's flux path needs a Cone face bounded by exactly two full circles (agent-docs/surface-design.md Table R row R8)`,
 			decaderr.ErrUnsupported,
 		)
 	}
@@ -345,14 +345,14 @@ func ConeFaceFluxAndMoment(f FaceInput, cone ConeInput, anchor r3.Vec, sign floa
 	for i, l := range f.Loops {
 		if l.EdgeCount() != 1 {
 			return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
-				`%w: Stitch's flux path needs a Cone rim bounded by a single full circle (docs/surface-design.md Table R row R8)`,
+				`%w: Stitch's flux path needs a Cone rim bounded by a single full circle (agent-docs/surface-design.md Table R row R8)`,
 				decaderr.ErrUnsupported,
 			)
 		}
 		rim, ok, curveType := l.Circle()
 		if !ok {
 			return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
-				`%w: Stitch's flux path needs a Cone rim bounded by a full circle, not %s (docs/surface-design.md Table R row R8)`,
+				`%w: Stitch's flux path needs a Cone rim bounded by a full circle, not %s (agent-docs/surface-design.md Table R row R8)`,
 				decaderr.ErrUnsupported, curveType,
 			)
 		}
@@ -378,7 +378,7 @@ func ConeFaceFluxAndMoment(f FaceInput, cone ConeInput, anchor r3.Vec, sign floa
 		}
 		if !(rB.Value > 0) {
 			return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
-				`%w: Stitch's flux path needs a positive cone rim radius (docs/surface-design.md Table R row R8)`,
+				`%w: Stitch's flux path needs a positive cone rim radius (agent-docs/surface-design.md Table R row R8)`,
 				decaderr.ErrUnsupported,
 			)
 		}
@@ -397,14 +397,14 @@ func ConeFaceFluxAndMoment(f FaceInput, cone ConeInput, anchor r3.Vec, sign floa
 	rLo, rHi := radii[loIdx], radii[hiIdx]
 	if !(zLo.Value > 0) {
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
-			`%w: Stitch's flux path needs a Cone face whose rims sit beyond the apex along its own axis (docs/surface-design.md Table R row R8)`,
+			`%w: Stitch's flux path needs a Cone face whose rims sit beyond the apex along its own axis (agent-docs/surface-design.md Table R row R8)`,
 			decaderr.ErrUnsupported,
 		)
 	}
 	dz := proofbound.BoundedSub(zHi, zLo)
 	if !(dz.Value > 0) {
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
-			`%w: Stitch's flux path needs a Cone face whose two rims sit at different positions along its own axis (docs/surface-design.md Table R row R8)`,
+			`%w: Stitch's flux path needs a Cone face whose two rims sit at different positions along its own axis (agent-docs/surface-design.md Table R row R8)`,
 			decaderr.ErrUnsupported,
 		)
 	}
@@ -467,7 +467,7 @@ func ConeFaceFluxAndMoment(f FaceInput, cone ConeInput, anchor r3.Vec, sign floa
 // SphereFaceFluxAndMoment is the Sphere arm, scoped to a face with NO
 // boundary loop at all: a complete, closed spherical shell — the only shape
 // this evaluator's reachable fixtures ever present (a semicircle revolved a
-// full turn about its own diameter, docs/surface-design.md's own T50:
+// full turn about its own diameter, agent-docs/surface-design.md's own T50:
 // fullRevLoops mints a latitude circle only for a junction OFF the revolve
 // axis, and both of a diameter-revolved semicircle's own junctions are
 // poles ON it, so neither junction contributes an edge and the face carries
@@ -525,7 +525,7 @@ func SphereFaceFluxAndMoment(f FaceInput, center r3.Vec, anchor r3.Vec, sign flo
 	var flux, mx, my, mz proofbound.BoundedScalar
 	if len(f.Loops) != 0 {
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
-			`%w: Stitch's flux path needs a Sphere face with no boundary at all (docs/surface-design.md Table R row R8)`,
+			`%w: Stitch's flux path needs a Sphere face with no boundary at all (agent-docs/surface-design.md Table R row R8)`,
 			decaderr.ErrUnsupported,
 		)
 	}
@@ -554,7 +554,7 @@ func SphereFaceFluxAndMoment(f FaceInput, center r3.Vec, anchor r3.Vec, sign flo
 // (φ = 0 there: the tube's own outermost point, ρ = Major+Minor, at
 // Center's own axial position) — bounded by exactly two full Circle3
 // rims, one Minor above Center's own axial position and one Minor below
-// it. offAxisSemicircleSketch (docs/surface-design.md's own T53) is exactly
+// it. offAxisSemicircleSketch (agent-docs/surface-design.md's own T53) is exactly
 // this shape: a straight wall at ρ = Major (the chord, closing the tube's
 // own equatorial diameter, revolved into the face's own Cylinder sibling)
 // and a semicircular arc bulging OUTWARD from ρ = Major to ρ = Major+Minor
@@ -635,7 +635,7 @@ func TorusFaceFluxAndMoment(f FaceInput, t TorusInput, anchor r3.Vec, sign float
 	var flux, mx, my, mz proofbound.BoundedScalar
 	refuse := func(msg string) (proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar, error) {
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
-			`%w: %s (docs/surface-design.md Table R row R8)`, decaderr.ErrUnsupported, msg,
+			`%w: %s (agent-docs/surface-design.md Table R row R8)`, decaderr.ErrUnsupported, msg,
 		)
 	}
 	if len(f.Loops) != 2 {
@@ -664,7 +664,7 @@ func TorusFaceFluxAndMoment(f FaceInput, t TorusInput, anchor r3.Vec, sign float
 		rim, ok, curveType := l.Circle()
 		if !ok {
 			return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
-				`%w: Stitch's flux path needs a Torus rim bounded by a full circle, not %s (docs/surface-design.md Table R row R8)`,
+				`%w: Stitch's flux path needs a Torus rim bounded by a full circle, not %s (agent-docs/surface-design.md Table R row R8)`,
 				decaderr.ErrUnsupported, curveType,
 			)
 		}

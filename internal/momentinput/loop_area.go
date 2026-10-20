@@ -40,7 +40,7 @@ func loopRegionIntegrals(ctx context.Context, l LoopRecord, order freeform.Momen
 }
 
 // LoopEnclosedMoments is a signed first-moment sibling of
-// LoopEnclosedArea (docs/modify-reach-design.md §8.4's slab term): the
+// LoopEnclosedArea (agent-docs/modify-reach-design.md §8.4's slab term): the
 // SAME Integrals accumulator over the loop's own segments about the
 // plane origin, returning the loop's own area together with its first
 // moments (∫u dA, ∫v dA) — each canonicalized the SAME way

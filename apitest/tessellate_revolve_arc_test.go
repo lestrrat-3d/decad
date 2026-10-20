@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The docs/tessellation-design.md §14 fixtures a CIRCULAR revolve generator
-// owns (increment T3, docs/tessellation-reach-design.md §6 R4): a full sphere,
+// The agent-docs/tessellation-design.md §14 fixtures a CIRCULAR revolve generator
+// owns (increment T3, agent-docs/tessellation-reach-design.md §6 R4): a full sphere,
 // a spherical band, a ring torus, a concave torus wall, poles at one end and at
 // both, and a hole in a narrow outer-loop bulge below and above the summed
 // sagitta tubes.
@@ -178,7 +178,7 @@ func TestRevolveTessellateRingTorus(t *testing.T) {
 func TestRevolveTessellateConcaveTorusWall(t *testing.T) {
 	t.Parallel()
 	// An arc bulging TOWARD the axis: the swept wall is concave, the case
-	// docs/tessellation-design.md §11 names when it says a torus's inner and
+	// agent-docs/tessellation-design.md §11 names when it says a torus's inner and
 	// outer walls move in opposite material senses.
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
@@ -265,7 +265,7 @@ func TestRevolveTessellateHemispherePoleAtOneEnd(t *testing.T) {
 
 func TestRevolveTessellateNarrowBulgeHoleClearance(t *testing.T) {
 	t.Parallel()
-	// docs/tessellation-design.md §14: a hole inside an outer loop, with the
+	// agent-docs/tessellation-design.md §14: a hole inside an outer loop, with the
 	// clearance set below and above the summed sagitta tubes. Above them the
 	// mesh is built; below them no bounded refinement can prove the section
 	// simple, and the call refuses before any mesh or proof is returned.
@@ -324,7 +324,7 @@ func TestRevolveTessellateNarrowBulgeHoleClearance(t *testing.T) {
 
 func TestRevolveTessellateTangentDiskIsRefusedBeforeTessellation(t *testing.T) {
 	t.Parallel()
-	// docs/tessellation-design.md §14: a disk tangent to the axis encoded as
+	// agent-docs/tessellation-design.md §14: a disk tangent to the axis encoded as
 	// TWO semicircular arcs sharing the tangent endpoint. Splitting the circle
 	// does not turn that shared point into an admissible pole, and Revolve
 	// itself refuses the two-sector horn before any mesh is asked for.

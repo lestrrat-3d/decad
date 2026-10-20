@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Increment 4 of docs/faceted-source-retention-design.md §3.4: a placed
+// Increment 4 of agent-docs/faceted-source-retention-design.md §3.4: a placed
 // Boolean result keeps a usable normal bound on every retained face.
 
 func TestFacetedSourcePlacement(t *testing.T) {

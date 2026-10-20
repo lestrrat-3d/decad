@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The ContactPair fixtures of docs/multibody-dynamics-design.md §13 PR 14a:
+// The ContactPair fixtures of agent-docs/multibody-dynamics-design.md §13 PR 14a:
 // §10.5's support set. An 8 mm source cube rests on a floor whose top face is
 // z = 0, its edge x = z = 0 on the floor and its body turned about Y by
 // sin θ = 2⁻²⁴, so its far bottom edge stands exactly 8·2⁻²⁴ = 2⁻²¹ mm up.

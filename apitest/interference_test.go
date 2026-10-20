@@ -72,7 +72,7 @@ func TestVerifyOffsetBoxesReportBoundedInterference(t *testing.T) {
 }
 
 // TestVerifyAdmittedCoplanarPrismPairResolvesAnalytically confirms
-// docs/prism-boolean-design.md §14 PR4: an admitted coplanar, co-directional
+// agent-docs/prism-boolean-design.md §14 PR4: an admitted coplanar, co-directional
 // prism pair now resolves its interference volume through the same
 // read-only analytic meshbool.OpIntersect dispatch performBoolean uses
 // (evaluateAnalyticIntersect), rather than always falling to the read-only
@@ -110,8 +110,8 @@ func TestVerifyAdmittedCoplanarPrismPairResolvesAnalytically(t *testing.T) {
 // TestVerifyAdmittedDisplacedPrismPairCarriesItsOwnBound pins the analytic
 // row's other arm: the row publishes the resolved intersection payload's own
 // measurement, so an operand whose section carries a displacement
-// (docs/prism-boolean-design.md §7) makes the row Approximate rather than
-// Exact, and docs/interference-design.md §8's composed displacement is the
+// (agent-docs/prism-boolean-design.md §7) makes the row Approximate rather than
+// Exact, and agent-docs/interference-design.md §8's composed displacement is the
 // bound it reports.
 //
 // Operand A is the analytic Union of a [0,10]² prism with a [2,8]² prism
@@ -149,7 +149,7 @@ func TestVerifyAdmittedDisplacedPrismPairCarriesItsOwnBound(t *testing.T) {
 	require.Same(t, merged, row.A)
 	require.Same(t, outer, row.B)
 	// The row is the resolved intersection payload's own measurement
-	// (docs/interference-design.md §6: "Copy the measurement unchanged into
+	// (agent-docs/interference-design.md §6: "Copy the measurement unchanged into
 	// the row"), not a republication of an operand's — only §4 containment
 	// and §4.1 equality reuse an operand's measurement verbatim, and §4.1
 	// withholds for a record carrying exactly this displacement. Here the
@@ -484,7 +484,7 @@ func TestVerifyCancellationInsideReadOnlyIntersection(t *testing.T) {
 	requireDocumentUnchanged(t, doc, before)
 }
 
-// This file pins docs/prism-boolean-design.md §3.4's crossing charge as it
+// This file pins agent-docs/prism-boolean-design.md §3.4's crossing charge as it
 // reaches Verify's interference reading (§4.5, shared with the crossing
 // sub-case's own selection, internal/prismcells/payload_resolve.go's
 // prismcells.ResolveCrossingCells): a coplanar pair whose 2D outlines genuinely
@@ -597,7 +597,7 @@ func TestVerifyCrossingPairSeatedAndPlacedResolve(t *testing.T) {
 		requireDocumentUnchanged(t, doc, before)
 	})
 
-	// A6 (docs/general-boolean-design.md §3) charges the crossings a
+	// A6 (agent-docs/general-boolean-design.md §3) charges the crossings a
 	// nonidentity re-expression can move, so a placed section is measured
 	// as the seated one is. Shown to fail with the §3.4 split-boundary
 	// reroute restored in prismcells.ResolveCrossingCells.
@@ -655,7 +655,7 @@ func TestVerifyCrossingPairSeatedAndPlacedResolve(t *testing.T) {
 // the identity and no placement is ever applied, but operand A's section was
 // trimmed out of a larger sketch arrangement and its consumed walls carry a
 // walk charge (§7's delta_walk), which the crossings with B can amplify.
-// docs/general-boolean-design.md §3 A6 charges that, so the pair is measured
+// agent-docs/general-boolean-design.md §3 A6 charges that, so the pair is measured
 // like the control arm, which draws the IDENTICAL footprint as a plain
 // rectangle. That this fixture yields a positive delta_walk under an identity
 // re-expression is pinned white-box by

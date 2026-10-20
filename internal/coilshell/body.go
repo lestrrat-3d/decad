@@ -19,7 +19,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file publishes docs/helix-design.md Table CB's topology over the held
+// This file publishes agent-docs/helix-design.md Table CB's topology over the held
 // shell internal/coilshell builds, and Table CM's four readings from the record's
 // closed forms. Interior stations are mesh vertices, never topology: a wall
 // is ONE Faceted face per profile segment spanning every turn, bounded by two

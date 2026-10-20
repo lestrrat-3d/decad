@@ -10,7 +10,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// This file is a draft body's undercut survey (docs/draft-design.md Table DD
+// This file is a draft body's undercut survey (agent-docs/draft-design.md Table DD
 // row DD7). Every wall of a draft body is a patch of its band view
 // (draftPayload.Band), so the survey reads each wall the way DX7 reads a
 // chamfer patch (PatchUndercuts, undercut.go): the wall's own
@@ -29,7 +29,7 @@ import (
 // DraftUndercuts surveys a draft body's walls and caps against the pull. A
 // straddling wall sets undecided without discarding a face already proven to
 // oppose, and an entirely undecided survey keeps a nil listing, distinct from
-// the empty proven all-clear (docs/verification-design.md §6).
+// the empty proven all-clear (agent-docs/verification-design.md §6).
 func DraftUndercuts(b *topo.Body, dp draftrecord.Payload, pull r3.Vec) reportvocab.UndercutSurvey[*topo.Face] {
 	p, ok := pull.Normalize()
 	if !ok {

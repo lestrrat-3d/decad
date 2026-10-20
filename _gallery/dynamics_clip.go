@@ -23,7 +23,7 @@ import (
 	"github.com/lestrrat-3d/kinetograph/render"
 )
 
-// dynamicsScene is one exit scene of docs/multibody-dynamics-design.md §2:
+// dynamicsScene is one exit scene of agent-docs/multibody-dynamics-design.md §2:
 // the world and its start state, the per-step input and step length, the
 // clip length, and how each body is drawn.
 type dynamicsScene struct {
@@ -303,7 +303,7 @@ type dynamicsOptions struct {
 	smoke         bool
 }
 
-// runDynamics renders one exit scene of docs/multibody-dynamics-design.md §2
+// runDynamics renders one exit scene of agent-docs/multibody-dynamics-design.md §2
 // as a PNG sequence (§11.2): it advances the scene's dynamics.Timeline to the
 // clip length, then films it with one kinetograph driven node per body, so
 // every frame shows the certified pose at its time and none is interpolated.

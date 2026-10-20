@@ -34,8 +34,8 @@ type revolveWalks = revolveaxis.ResolvedWalks
 
 const wallAxis = revolveaxis.WallAxis
 
-// This file is docs/tessellation-design.md §13's increments T2 and T3
-// (docs/tessellation-reach-design.md §6, R3 and R4): revolve tessellation. It
+// This file is agent-docs/tessellation-design.md §13's increments T2 and T3
+// (agent-docs/tessellation-reach-design.md §6, R3 and R4): revolve tessellation. It
 // assembles the meridian samples, global angular sequence, rings, cells, poles
 // and caps. internal/revolveproof computes envelopes, budgets, cell area slack
 // and volume bounds. internal/revolvemesh/revolve_proof.go checks the angular
@@ -47,7 +47,7 @@ const wallAxis = revolveaxis.WallAxis
 // volume allowances; a station chain that reaches the axis is refused.
 //
 // Three structural facts shape everything below, and all three are
-// docs/tessellation-design.md §8's and §9's:
+// agent-docs/tessellation-design.md §8's and §9's:
 //
 //   - The angular sequence is GLOBAL. Every off-axis ring in every loop uses
 //     the same angles, so adjacent generator faces share their whole latitude
@@ -64,7 +64,7 @@ const wallAxis = revolveaxis.WallAxis
 //     a facet, or rounds a near-axis ring onto the axis (§12).
 
 // maxRevolveRefinements caps how many times one call may refine a count and
-// rebuild (docs/tessellation-design.md §3: refinement is deterministic and
+// rebuild (agent-docs/tessellation-design.md §3: refinement is deterministic and
 // bounded, and exhausting it refuses). The cumulative facet-work and pair-test
 // counters do NOT reset across those attempts, so this is the second of two
 // independent ceilings and whichever binds first ends the call.
@@ -77,7 +77,7 @@ type revLoopMesh struct {
 	samples  []revolvemesh.RevMeridian
 }
 
-// revolveWork is the pair of cumulative ceilings docs/tessellation-design.md §3
+// revolveWork is the pair of cumulative ceilings agent-docs/tessellation-design.md §3
 // forbids a refinement retry from resetting: every facet assembled across every
 // attempt, and every exact facet-pair predicate charged across all of them.
 type revolveWork struct {
@@ -125,7 +125,7 @@ type revolvePlan struct {
 	// the distance from it to the meridian the record denotes. Zero for every
 	// payload no construction displaced.
 	section revolveaxis.SectionCharge
-	// verify is how much of docs/tessellation-design.md §1's proof this build
+	// verify is how much of agent-docs/tessellation-design.md §1's proof this build
 	// runs: below VerifyBoundary the facet-contact audit is skipped and §3's
 	// pair-test ceiling is charged nothing, and below VerifyAll the per-cell
 	// area slack and occupied-volume terms are never composed. Every other
@@ -133,7 +133,7 @@ type revolvePlan struct {
 	verify Level
 }
 
-// TessellateRevolve meshes a revolved body (docs/tessellation-design.md §§8-10).
+// TessellateRevolve meshes a revolved body (agent-docs/tessellation-design.md §§8-10).
 func TessellateRevolve(ctx context.Context, b *topo.Body, rp revolvePayload, chord float64, verify Level) (*topo.Mesh, error) {
 	return TessellateRevolveWithRoles(ctx, b, rp, chord, verify, nil)
 }
@@ -198,7 +198,7 @@ func ResolveRevolveWithLimit(ctx context.Context, rp revolvePayload, workLimit u
 	})
 }
 
-// planRevolveWithRoles resolves the payload once and spends docs/tessellation-design.md
+// planRevolveWithRoles resolves the payload once and spends agent-docs/tessellation-design.md
 // §8's tolerance split in its stated order: both coordinate stages are reserved
 // against count-independent ceilings, the meridian takes half of what is left
 // and chords every circular walk, and the angular sequence takes the remainder.
@@ -270,7 +270,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*topo.Mesh, error) {
 		return nil, err
 	}
 	rp := p.rp
-	// sheet is docs/surface-design.md §4.1's own flag, read once: a surface
+	// sheet is agent-docs/surface-design.md §4.1's own flag, read once: a surface
 	// result omits both caps from a partial sweep's wall build
 	// (internal/revolveplan/build.go), and every arm below that would otherwise emit a
 	// cap, charge a cap-only facet or a cap-only slack term, publish an
@@ -306,7 +306,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*topo.Mesh, error) {
 		}
 	}
 
-	// docs/tessellation-design.md §9's meridian section proof, run for a full
+	// agent-docs/tessellation-design.md §9's meridian section proof, run for a full
 	// and a partial sweep alike and BEFORE any three-dimensional cell is
 	// formed: every loop simple and correctly nested, and every non-adjacent
 	// chord pair — across loops and WITHIN one loop — clear of the two sagitta
@@ -347,11 +347,11 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*topo.Mesh, error) {
 
 	// Walls, cell by cell. Both rings off the axis give a planar quad on the
 	// fixed diagonal; exactly one on the axis gives a fan; both on the axis is
-	// a wall only an axis line may erase (docs/tessellation-design.md §9).
-	// docs/tessellation-design.md §11's angular homotopy factor, proven ONCE:
+	// a wall only an axis line may erase (agent-docs/tessellation-design.md §9).
+	// agent-docs/tessellation-design.md §11's angular homotopy factor, proven ONCE:
 	// rotating a cell about the axis is an isometry, so the same reading
 	// answers for every cell and every angular interval of it. A sheet
-	// publishes no occupied-volume proof at all (docs/surface-design.md §10),
+	// publishes no occupied-volume proof at all (agent-docs/surface-design.md §10),
 	// so it skips this factor and the per-cell swept volume below rather than
 	// prove a figure publishRevolveProof will never read. A level below
 	// VerifyAll skips both for the same reason: it publishes neither the area
@@ -417,7 +417,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*topo.Mesh, error) {
 	// (z, ρ) plane, mapped onto the wall vertices at φ0 and φ1. Pole vertices
 	// are ordinary samples there, so an on-axis line's edge is shared by both.
 	// Their curved trim omits one circular segment per meridian chord, per
-	// cap. A surface-result sheet omits both caps (docs/surface-design.md
+	// cap. A surface-result sheet omits both caps (agent-docs/surface-design.md
 	// Table W) and so drops this whole term rather than triangulating one:
 	// every per-cell wall term above survives, and this cap-only addition is
 	// the only term a sheet's area slack drops — the mirror of the prism
@@ -476,12 +476,12 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*topo.Mesh, error) {
 
 	// A BodySolid keeps the closed-mesh audit plus its own pole-vertex safety
 	// net (tessellation.RequireVertexLinks, §9); a BodySheet runs
-	// docs/tessellation-design.md §1.2's manifold-with-boundary audit plus
+	// agent-docs/tessellation-design.md §1.2's manifold-with-boundary audit plus
 	// its own cycle-or-path vertex-link safety net in their place
 	// (requireMeshAudit, tessellate.go — the same dispatch the prism sheet
 	// path already reaches). A full revolution's sheet carries no free edge
 	// at all, so topobuild.RequireSheetMesh agrees with tessellation.RequireClosedMesh with no arm
-	// of its own (docs/surface-design.md §14).
+	// of its own (agent-docs/surface-design.md §14).
 	if sheet {
 		if err := topobuild.RequireSheetMesh(ctx, p.body, mesh); err != nil {
 			return nil, err
@@ -495,7 +495,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*topo.Mesh, error) {
 		}
 	}
 	// Every facet keeps a positive area under the displacement this mesh
-	// carries, at every verification level (docs/tessellation-design.md §1's
+	// carries, at every verification level (agent-docs/tessellation-design.md §1's
 	// Geometry row, §9's own paragraph): a zero-area facet has no normal, so a
 	// renderer and the boolean both need the check, and it is linear in the
 	// facets. It also builds the audit triangles the facet-pair audit below
@@ -519,7 +519,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*topo.Mesh, error) {
 	}
 	// The signed-volume orientation check decides nothing on an open mesh:
 	// the sum is anchor-dependent when nothing pins where the missing
-	// material would have been (docs/tessellation-design.md §1.2). A
+	// material would have been (agent-docs/tessellation-design.md §1.2). A
 	// partial-sweep sheet is open and skips it; a solid, or a full-turn
 	// sheet — which carries no free edge at all — is closed and keeps it.
 	if !sheet || rp.Full {
@@ -543,7 +543,7 @@ type revFaceExtent struct {
 }
 
 // revolveSectionRetry turns a section-proof refusal into the deterministic
-// refinement docs/tessellation-design.md §3 names: the FIRST FAILING meridian
+// refinement agent-docs/tessellation-design.md §3 names: the FIRST FAILING meridian
 // walk in payload order.
 //
 // A within-loop gate names the two chords it refused, so the walk one of them
@@ -604,7 +604,7 @@ func (loops revolveFacetLoops) AxisWalk(i, walk int) bool {
 	return loops[i].resolved.Kinds[walk] == wallAxis
 }
 
-// publishRevolveProof writes docs/tessellation-design.md §2's proof record for
+// publishRevolveProof writes agent-docs/tessellation-design.md §2's proof record for
 // the assembled mesh: §10.1's per-face two-sided displacement, §10.2's area
 // slack, and §11's occupied-volume bound.
 //
@@ -617,7 +617,7 @@ func (loops revolveFacetLoops) AxisWalk(i, walk int) bool {
 // forbids outright, and only that composition sets symDiffOK.
 //
 // A [BodySheet] encloses no region, so there is no occupied volume to prove
-// (docs/surface-design.md §10): it publishes the face bounds and area slack
+// (agent-docs/surface-design.md §10): it publishes the face bounds and area slack
 // above, unchanged, and then returns before touching volSymDiff or
 // symDiffOK at all, leaving both their permanent zero/false values — the
 // same permanent absence the prism sheet path documents (tessellate.go).
@@ -638,7 +638,7 @@ func publishRevolveProof(m *topo.Mesh, faceCells map[*topo.Face]revFaceExtent, p
 		// revolvemesh.RevolveBudget already reserved both coordinate stages out of it
 		// before the counts were chosen. Reaching here would mean the
 		// reservation did not hold, which is a proof failure rather than a
-		// coarser mesh (docs/tessellation-design.md §8).
+		// coarser mesh (agent-docs/tessellation-design.md §8).
 		return fmt.Errorf(`%w: this revolve mesh's chording exceeds the tolerance its own budget reserved for it`, decaderr.ErrUnsupported)
 	}
 	for f, ext := range faceCells {

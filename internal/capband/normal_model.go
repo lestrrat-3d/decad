@@ -11,7 +11,7 @@ import (
 )
 
 // This file owns the two certified pieces behind DX7's circular-patch reading
-// (docs/modify-reach-design.md §8.3 and §12 Table DX): the EXACT
+// (agent-docs/modify-reach-design.md §8.3 and §12 Table DX): the EXACT
 // normal-component model a cap-blend band patch's own published `Cone` carries,
 // enclosed in rational interval arithmetic, and the EXACT range of the harmonic
 // form the survey reports over that patch's own azimuth window.

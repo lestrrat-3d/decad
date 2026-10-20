@@ -18,7 +18,7 @@ import (
 //
 // It returns the record's own area integral it compared, never sketch's
 // answer, so a caller that needs the record's area (Loft's chord target,
-// docs/loft-gear-bounds-design.md §5) reads it here instead of integrating
+// agent-docs/loft-gear-bounds-design.md §5) reads it here instead of integrating
 // the record a second time.
 func (profile Profile) FalsifyRecordedArea(sketchArea float64, work *freeform.FreeformWork) (float64, error) {
 	ig, err := profile.EvaluatorIntegrals(freeform.MomentAreaOrder, work)

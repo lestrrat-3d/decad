@@ -124,7 +124,7 @@ func FullExtendSegment(seg CurveSegment) (CurveSegment, error) {
 // ExtendCarrierDomain names the carrier a refusal is about — its kind, its own
 // defining coordinates and its natural parameter range — so RS4's message
 // states the domain the tool missed rather than only that it missed one
-// (docs/surface-design.md §15's T179).
+// (agent-docs/surface-design.md §15's T179).
 func ExtendCarrierDomain(seg CurveSegment) string {
 	switch s := seg.(type) {
 	case LineSeg:
@@ -174,7 +174,7 @@ func ExtendSetBound(seg CurveSegment, atStart bool, bound float64) CurveSegment 
 // reading (charges.go), and never off any walk's closed-ness. Stating
 // it this way is a record property, decidable before the arrangement runs,
 // which is what lets every miss here be one refusal at the call
-// (docs/surface-intersection-design.md §2.1 S7).
+// (agent-docs/surface-intersection-design.md §2.1 S7).
 func TrimProfileFullyWhole(budget *proofbound.WorkBudget, outer LoopRecord, holes []LoopRecord) (bool, error) {
 	for _, loop := range append([]LoopRecord{outer}, holes...) {
 		for _, seg := range loop.Segments {
@@ -260,7 +260,7 @@ func TrimCutChargeUV(seg CurveSegment) (chargeU, chargeV float64, err error) {
 }
 
 // TrimRevolveSegmentCharges is TrimProfileWalks's own per-endpoint rule, read
-// for the revolve family (docs/surface-intersection-design.md §7.1): the
+// for the revolve family (agent-docs/surface-intersection-design.md §7.1): the
 // per-component charge TrimCutChargeUV states lands at exactly the endpoint
 // whose OWN recorded parameter is not a natural bound (0 or 1, per field —
 // never per segment, since a segment cut on only one side keeps its natural

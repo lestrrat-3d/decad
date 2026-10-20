@@ -35,7 +35,7 @@ func EmitRings(loops [][]RevMeridian, angular RevolveAngular, basis RevolveBasis
 			}
 			s.Ring = make([]int, count)
 			axial := proofbound.IvVec3Mul(idealBasis.W, s.ZIv)
-			// docs/tessellation-design.md §9's ring-collapse detection, run
+			// agent-docs/tessellation-design.md §9's ring-collapse detection, run
 			// BEFORE and AFTER placement: a sample with ρ > 0 whose angular
 			// vertices coincide is not an axis sample, and §12 forbids merging
 			// it into a pole. Both stages are compared because either can
@@ -92,4 +92,4 @@ func EmitRings(loops [][]RevMeridian, angular RevolveAngular, basis RevolveBasis
 func oneRat() *big.Rat      { return big.NewRat(1, 1) }
 func minusOneRat() *big.Rat { return big.NewRat(-1, 1) }
 
-var errRevolveRingCollapse = fmt.Errorf(`%w: a revolve ring at a positive radius collapses onto itself at this angular count, and docs/tessellation-design.md §9 forbids merging it into a pole; retry with a coarser tolerance`, decaderr.ErrUnsupported)
+var errRevolveRingCollapse = fmt.Errorf(`%w: a revolve ring at a positive radius collapses onto itself at this angular count, and agent-docs/tessellation-design.md §9 forbids merging it into a pole; retry with a coarser tolerance`, decaderr.ErrUnsupported)

@@ -8,14 +8,14 @@ import (
 
 // falsifyChainJoins is falsifyLoopJoins restricted to a chain's INTERIOR
 // junctions: junction i, between edge i and edge i+1, for every i but the
-// last (docs/sketch-seam-design.md §2.2). A chain of one segment has no
+// last (agent-docs/sketch-seam-design.md §2.2). A chain of one segment has no
 // interior junction and this is a no-op for it. It only ever rejects, on the
 // identical source-aware rule falsifyLoopJoins applies.
 func falsifyChainJoins(joins []LoopJoin) error {
 	for i := 0; i+1 < len(joins); i++ {
 		from, to := joins[i], joins[i+1]
 		if from.closed || to.closed {
-			// A whole closed curve never reaches a chain (docs/sketch-seam-design.md
+			// A whole closed curve never reaches a chain (agent-docs/sketch-seam-design.md
 			// §2.2), but the guard is kept for the same reason falsifyLoopJoins
 			// keeps it: a defensive no-op rather than an assumption.
 			continue
@@ -34,7 +34,7 @@ func falsifyChainJoins(joins []LoopJoin) error {
 // LoopJoin is one recorded edge's junction coordinates: the point the previous
 // segment's walk must end at, and the point the next segment's walk must start
 // from. closed marks a whole closed curve — a circle, an ellipse, a closed
-// spline — which is a LoopRecord on its own (docs/sketch-seam-design.md §2) and
+// spline — which is a LoopRecord on its own (agent-docs/sketch-seam-design.md §2) and
 // so meets no neighbour at all.
 type LoopJoin struct {
 	start, end loopJoinPoint
@@ -191,7 +191,7 @@ func wholeSegmentEnds(seg CurveSegment) (start, end Point2, closed, ok bool) {
 }
 
 // falsifyLoopJoins disproves a recorded loop that does not close
-// (docs/sketch-seam-design.md §3). LoopRecord's contract is that each segment's
+// (agent-docs/sketch-seam-design.md §3). LoopRecord's contract is that each segment's
 // walk ends where the next one's starts and the last closes onto the first
 // (§2). A same-source mismatch proves the record's own segments do not meet. A
 // mixed-source mismatch beyond the range falsifier's tolerance contradicts a

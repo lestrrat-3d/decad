@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/loft-design.md §16's public-surface tests for the first
-// chain-loft increment — docs/surface-design.md §15's T196 through T199:
+// This file is agent-docs/loft-design.md §16's public-surface tests for the first
+// chain-loft increment — agent-docs/surface-design.md §15's T196 through T199:
 // LoftChain over a LineSeg-only correspondence between two open walks on
 // exactly parallel planes. A curved pair, and a plane pair that is not exactly
 // parallel or sits on the from-plane's negative side, stay refused.
@@ -55,11 +55,11 @@ func openWalkSketch(tb testing.TB, plane *sketch.Plane, w *sketch.World, pts [][
 }
 
 // TestLoftChainOneCellRibbonPinsTheSideToExtrudeChain is
-// docs/surface-design.md's T196: two 40 mm line walks on parallel planes 10 mm
+// agent-docs/surface-design.md's T196: two 40 mm line walks on parallel planes 10 mm
 // apart rule into a two-triangle ribbon. Beside the structural readings, the
 // row's own assertion is that every wall normal equals the normal
 // chain Extrude's wall over the SAME recorded segment publishes — which is what
-// pins docs/loft-design.md §16.2's stated positive side, T x N0, to the landed
+// pins agent-docs/loft-design.md §16.2's stated positive side, T x N0, to the landed
 // Table G rule rather than to this build's own winding convention.
 func TestLoftChainOneCellRibbonPinsTheSideToExtrudeChain(t *testing.T) {
 	t.Parallel()
@@ -92,7 +92,7 @@ func TestLoftChainOneCellRibbonPinsTheSideToExtrudeChain(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 400.0, area.Value.Base(), "a 40 x 10 mm ribbon is two 200 mm² triangles")
 	require.Equal(t, decad.Approximate, area.Exactness,
-		"docs/loft-design.md §8: a triangle area is a square root of a rational, so Area is never Exact")
+		"agent-docs/loft-design.md §8: a triangle area is a square root of a rational, so Area is never Exact")
 
 	decadtestBoundsChainLoft(t, body)
 
@@ -128,7 +128,7 @@ func decadtestBoundsChainLoft(tb testing.TB, body *decad.Body) {
 }
 
 // TestLoftChainMultiCellRibbonFreeEdgesAndArea rules a three-segment walk pair
-// and asserts the edge families docs/loft-design.md §16.5 states: n bottom
+// and asserts the edge families agent-docs/loft-design.md §16.5 states: n bottom
 // rims, n top rims and the two END rungs are free, while every diagonal and
 // every INTERIOR rung bounds two triangles. It also asserts the published area
 // against the analytic ruled area, which for a translated walk is the walk
@@ -163,7 +163,7 @@ func TestLoftChainMultiCellRibbonFreeEdgesAndArea(t *testing.T) {
 }
 
 // TestLoftChainRefusesANonParallelOrNegativePlanePair is
-// docs/surface-design.md's T197: docs/loft-design.md §16.2's gate refuses a
+// agent-docs/surface-design.md's T197: agent-docs/loft-design.md §16.2's gate refuses a
 // plane pair that is not exactly parallel, and one whose to-plane sits on the
 // from-plane's negative side. Each message is read, not only its sentinel, so
 // both refusals are known to fire at this gate rather than at a later one.
@@ -209,10 +209,10 @@ func TestLoftChainRefusesANonParallelOrNegativePlanePair(t *testing.T) {
 	require.Equal(t, decad.BodySheet, body.Kind())
 }
 
-// TestLoftChainCrossingCorrespondenceIsRefused is docs/surface-design.md's
+// TestLoftChainCrossingCorrespondenceIsRefused is agent-docs/surface-design.md's
 // T198, in the two legs the behaviour actually has.
 //
-// The first leg is the load-bearing one: docs/loft-design.md §6's crossing
+// The first leg is the load-bearing one: agent-docs/loft-design.md §6's crossing
 // audit is a pure function of the assembled vertex and triangle sets, so it
 // transfers to an open ribbon with the cap triangles simply absent. A
 // correspondence whose walls pass through one another is proven and refused
@@ -265,7 +265,7 @@ func TestLoftChainCrossingCorrespondenceIsRefused(t *testing.T) {
 	require.Len(t, twisted.Faces(), 4)
 }
 
-// TestLoftChainRefusesAMismatchedOrCurvedPairing is docs/surface-design.md's
+// TestLoftChainRefusesAMismatchedOrCurvedPairing is agent-docs/surface-design.md's
 // T199: a segment-count mismatch has no one-to-one pairing, a curved pair has
 // no side proof for its computed stations yet, and the coplanar pose is the
 // closed loft's own ErrDegenerate. Each message is read so the three refusals

@@ -11,9 +11,9 @@ import (
 
 // PlanarPairAdmits reports whether the exact planar arm serves this pair.
 // It exists for the payload classes the analytic kernel has no carrier model
-// for — a mitred sweep (docs/sweep-design.md Table DM row DM5), a faceted
-// Boolean result (docs/payload-verification-design.md §7) and a coil
-// (docs/helix-design.md Table CD row CD5) — each read off its own held
+// for — a mitred sweep (agent-docs/sweep-design.md Table DM row DM5), a faceted
+// Boolean result (agent-docs/payload-verification-design.md §7) and a coil
+// (agent-docs/helix-design.md Table CD row CD5) — each read off its own held
 // triangle set with that set's displacement, and it admits a prism or a
 // stitched solid only as their partner, read exactly off its own record
 // (contact_faceted_pair.go's planarPrismSolid and planarStitchSolid). A coil

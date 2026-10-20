@@ -21,7 +21,7 @@ import (
 // and revolveangle.ExtremeBounds brackets where that sweep turns. Every answer is a
 // bounded interval charging the frame's rounding, the angular interval's own
 // bound, and the meridian bound the walk carries. See
-// docs/evaluator-design.md §6.
+// agent-docs/evaluator-design.md §6.
 
 // ExtentAlong is the through-all stop's reading of the revolved solid
 // (stops.go): its extent interval along an arbitrary world direction g, beside
@@ -32,7 +32,7 @@ import (
 // its own extreme, and a linear functional's extreme sits on the boundary. An
 // end a sweep extreme or a computed arc radius holds only to a bracket
 // publishes that bracket's width, and the stop charges it to the level it
-// resolves (docs/evaluator-design.md §5/§6).
+// resolves (agent-docs/evaluator-design.md §5/§6).
 func (rp Payload) ExtentAlong(g r3.Vec) (float64, float64, float64, error) {
 	return rp.ExtentBoundedAlong(context.Background(), g, freeform.NewFreeformWork())
 }

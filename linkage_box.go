@@ -14,7 +14,7 @@ import (
 	"github.com/lestrrat-go/option/v3"
 )
 
-// This file is Document.VerifyJointBox (docs/linkage-check-design.md §14):
+// This file is Document.VerifyJointBox (agent-docs/linkage-check-design.md §14):
 // the joint-box vocabulary, Linkage.Configuration, the cell certificate, and
 // the subdivision that proves a box of joint values clear cell by cell. It
 // runs motion_verify.go's engine — the same groups, pairs, per-pose kernel and
@@ -23,7 +23,7 @@ import (
 // at its driver alone (§16): linkage_loop.go answers each cell's asks for its
 // dependent joints, and this file charges them into the cell's certificate.
 
-// JointBox is a box of joint values (docs/linkage-check-design.md §14.1).
+// JointBox is a box of joint values (agent-docs/linkage-check-design.md §14.1).
 type JointBox []JointRange
 
 // JointRange is one link's range of joint values.
@@ -32,12 +32,12 @@ type JointRange struct {
 	Min, Max units.Value
 }
 
-// defaultCellBudget is WithCellBudget's default (docs/linkage-check-design.md
+// defaultCellBudget is WithCellBudget's default (agent-docs/linkage-check-design.md
 // §14.1).
 const defaultCellBudget = 16384
 
 // WithCellBudget caps the number of cell centres VerifyJointBox evaluates
-// (docs/linkage-check-design.md §14.4); the default is 16384. Every split
+// (agent-docs/linkage-check-design.md §14.4); the default is 16384. Every split
 // evaluates two centres, so once fewer than two evaluations remain no cell is
 // split and the report raises DiagJointBoxBudgetExhausted. A budget of 1
 // evaluates the whole box's centre alone; cells < 1 is ErrDegenerate. It is a
@@ -54,7 +54,7 @@ type JointConfiguration struct {
 }
 
 // Configuration builds every link's world pose at the stated joint values,
-// one per link in Links() order (docs/linkage-check-design.md §14.1). It
+// one per link in Links() order (agent-docs/linkage-check-design.md §14.1). It
 // composes exactly as PoseAt composes — PoseAt is Configuration of a drive's
 // values at s — so a renderer drawing a cell and VerifyJointBox evaluating its
 // centre read the same transform. Every Bounds entry is zero.
@@ -66,7 +66,7 @@ type JointConfiguration struct {
 // (ErrNotFinite). A linkage with a loop is ErrUnsupported: a dependent
 // joint's value is not the caller's to state. A looped linkage's
 // configuration is a drive whose every sweep holds, posed by Linkage.PoseAt
-// or Schedule.PoseAt (docs/linkage-check-design.md §16.1).
+// or Schedule.PoseAt (agent-docs/linkage-check-design.md §16.1).
 func (l *Linkage) Configuration(values []units.Value) (JointConfiguration, error) {
 	if l == nil {
 		return JointConfiguration{}, fmt.Errorf(`%w: a nil linkage has no link to pose`, ErrDegenerate)
@@ -185,7 +185,7 @@ type JointBoxCollision struct {
 
 // VerifyJointBox checks whether every configuration in box is clear: whether
 // no link of l, at any joint values the box holds, meets a static body or a
-// body of another link (docs/linkage-check-design.md §14). It never changes
+// body of another link (agent-docs/linkage-check-design.md §14). It never changes
 // the document: each centre re-evaluates every link body's payload under its
 // link's pose as a transient body that is never committed.
 //
@@ -201,7 +201,7 @@ type JointBoxCollision struct {
 //
 // A closed loop (Linkage.Close) is varied at its driver alone: the box lists
 // at most one joint of each loop, whose parent is the loop's common link, and
-// every other joint of the loop follows it (docs/linkage-check-design.md
+// every other joint of the loop follows it (agent-docs/linkage-check-design.md
 // §16). Each cell reads the loop's dependent joints from sketch's certified
 // enclosures, as VerifyLinkage reads a drive's intervals: their enclosure at
 // the centre is charged into the pose deviation, and the distance from it to
@@ -250,7 +250,7 @@ func (d *Document) VerifyJointBox(ctx context.Context, l *Linkage, box JointBox,
 		return nil, err
 	}
 	if len(spec.loops) > 0 {
-		// docs/linkage-check-design.md §16.2: each loop axis is the drive
+		// agent-docs/linkage-check-design.md §16.2: each loop axis is the drive
 		// Min → Max; its scenes, its zero pose and its certifiable set, down
 		// to the verdict floor, before any cell, so a dependent's reach enters
 		// the bounds.
@@ -277,7 +277,7 @@ func (d *Document) VerifyJointBox(ctx context.Context, l *Linkage, box JointBox,
 }
 
 // requireLinkage applies the linkage refusals VerifyLinkage and
-// VerifyJointBox share (docs/linkage-check-design.md §3): a nil linkage or
+// VerifyJointBox share (agent-docs/linkage-check-design.md §3): a nil linkage or
 // one with no link, and a link body or declared contact body that is not a
 // live body of d this evaluator built.
 func (d *Document) requireLinkage(l *Linkage) error {
@@ -307,7 +307,7 @@ func (d *Document) requireLinkage(l *Linkage) error {
 	return nil
 }
 
-// resolveBox validates box against l (docs/linkage-check-design.md §14.1) and
+// resolveBox validates box against l (agent-docs/linkage-check-design.md §14.1) and
 // reads it into one joint per link: a listed joint's schedule is its range,
 // Min to Max, so every bound linkage_bound.go reads over a drive's waypoints
 // reads over the range's two ends; an unlisted joint holds 0. axes lists the
@@ -345,7 +345,7 @@ func (l *Linkage) resolveBox(box JointBox) (*linkageSpec, []int, error) {
 		varying[link.index] = c < 0
 	}
 	// A loop is varied at its driver alone, its range the one-segment drive
-	// Min → Max (docs/linkage-check-design.md §16.1, §16.2).
+	// Min → Max (agent-docs/linkage-check-design.md §16.1, §16.2).
 	if err := l.resolveLoops(spec, "box"); err != nil {
 		return nil, nil, err
 	}
@@ -409,7 +409,7 @@ func resolveJointBoxOptions(opts []JointBoxOption) (motionConfig, int, error) {
 	}
 	if !cfg.Stated {
 		// Unstated, the reading refines past the verdict floor to its own,
-		// per axis, as a drive's does (docs/linkage-check-design.md §3, §14.1).
+		// per axis, as a drive's does (agent-docs/linkage-check-design.md §3, §14.1).
 		reading := motionbound.MotionParam{Turn: new(big.Rat), Base: new(big.Rat).SetFrac64(1, linkageReadingFloor)}
 		cfg.ReadingP = &reading
 	}
@@ -462,7 +462,7 @@ type boxCell struct {
 	// the pair the reading and the margin split for; nil when that bound is
 	// an excluded pair's, which no split changes.
 	low *[2]int
-	// A looped linkage's cell (docs/linkage-check-design.md §16.3): delta is,
+	// A looped linkage's cell (agent-docs/linkage-check-design.md §16.3): delta is,
 	// per dependent joint, δ_j, the distance from the centre's enclosure to
 	// the far end of the dependent's hull over the cell, zero for a held
 	// loop's. gate is the refusal that left the cell's centre or a hull
@@ -475,7 +475,7 @@ type boxCell struct {
 	gate     string
 	gateLoop *loopDrive
 	// projShares holds, for each evaluated pair whose bound over the cell is
-	// the projection bound (docs/linkage-check-design.md §5.8), every axis's
+	// the projection bound (agent-docs/linkage-check-design.md §5.8), every axis's
 	// share of that bound's defect; a pair absent here takes the travel
 	// bound's shares, linkagebound.SumTerms over boxRun.pairTerms.
 	projShares map[[2]int]map[int]*big.Rat
@@ -488,7 +488,7 @@ func (c *boxCell) centre(k int) *big.Rat {
 }
 
 // subdivide evaluates the whole box's centre, then splits for the verdict and
-// for the readings (docs/linkage-check-design.md §14.4 steps 3-7): the verdict
+// for the readings (agent-docs/linkage-check-design.md §14.4 steps 3-7): the verdict
 // first, and once no cell is splittable for it, one split at a time for the
 // whole-box reading or the margin, the verdict resuming on the halves, until
 // neither asks for a split or the budget stops it.

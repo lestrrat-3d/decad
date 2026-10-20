@@ -15,7 +15,7 @@ import (
 // created, not when it is restated: the boolean's stitch and a faceted
 // placement both check every facet their float rounding moved and refuse a
 // held mesh they cannot keep embedded (meshbool.EnforceHeldEmbedding,
-// docs/evaluator-design.md §9). Restatement moves no coordinate, so there is
+// agent-docs/evaluator-design.md §9). Restatement moves no coordinate, so there is
 // no audit for a lower level to decline.
 func AuditsFacetContact(p topo.Payload) bool {
 	if _, ok := p.(breprecord.AllEdgeChamferPayload); ok {

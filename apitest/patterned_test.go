@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The Patterned tests of docs/mirror-pattern-design.md §8: one body holding
+// The Patterned tests of agent-docs/mirror-pattern-design.md §8: one body holding
 // every instance, a prism group where sketch proves the instances disjoint
 // and Union's own result otherwise.
 

@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The general revolve mass path (docs/multibody-dynamics-design.md §8.6) is
+// The general revolve mass path (agent-docs/multibody-dynamics-design.md §8.6) is
 // checked against expectations built in this file from section integrals
 // integrated independently of decad's Green's-theorem engine: each fixture's
 // section is a region z ∈ [0, L], ρ between two affine functions of z, so
@@ -337,7 +337,7 @@ func TestMassPropertiesRevolveArcWedge(t *testing.T) {
 // TestMassPropertiesRevolveRotated places the quarter-turn triangle under a
 // rotation composed from eight steps about (1, 1, 1), so the held basis
 // carries accumulated rounding. The revolve denotes the image of the local
-// solid under that held basis M read exactly (docs/multibody-dynamics-design.md
+// solid under that held basis M read exactly (agent-docs/multibody-dynamics-design.md
 // §8.6), so the mass must enclose ρ·|det M|·V and every world component the
 // image's inertia (affineInertia), I the independent local tensor; the sketch
 // frame is XY, so the local basis (axis, radial, sweep) is the frame's

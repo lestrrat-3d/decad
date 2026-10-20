@@ -52,7 +52,7 @@ type LoopMesh struct {
 	CapBound       []proofbound.WalkEndBound
 	CapWallStart   []int // walk i's first cap sample
 	// CapMotion is each cap sample's plane-local displacement from the point
-	// docs/tessellation-reach-design.md §7's ideal polyhedron B1 places there,
+	// agent-docs/tessellation-reach-design.md §7's ideal polyhedron B1 places there,
 	// filled by CapMotion only when the occupied-volume proof is built.
 	// It answers a different question from CapBound — a station's gap from the
 	// held offset circle — and never replaces it.
@@ -113,7 +113,7 @@ func ChordVolume(cbp Payload, lms []LoopMesh) float64 {
 
 // ChordLoop resolves ONE loop's walks the way capblend.BuildBand does and
 // chords each of them ONCE, at the single count every level of that loop then
-// reads (docs/tessellation-reach-design.md §7).
+// reads (agent-docs/tessellation-reach-design.md §7).
 //
 // For a circular wall of a chamfered loop the count is the larger of what the
 // wall's own arc needs and what its cap-level offset arc needs, so the side

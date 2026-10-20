@@ -12,7 +12,7 @@ import (
 
 // floor lists the internal packages internal/topo may depend on, directly or
 // through another package. internal/topo sits directly above this set and
-// below every other internal package (docs/evaluator-design.md §3), so no
+// below every other internal package (agent-docs/evaluator-design.md §3), so no
 // package here may ever import internal/topo. Later node fields grow the
 // closure toward this list; a package outside it fails the test.
 var floor = map[string]struct{}{

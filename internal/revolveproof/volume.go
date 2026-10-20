@@ -12,7 +12,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// MeridianMoment is docs/tessellation-design.md §11's Mmeridian: the
+// MeridianMoment is agent-docs/tessellation-design.md §11's Mmeridian: the
 // volume between the analytic body B0 and the body BM whose every circular
 // meridian subarc has been replaced by its chord.
 //
@@ -84,7 +84,7 @@ func SweepUpper(sweep float64, full bool) float64 {
 	return proofbound.UpRound(sweep)
 }
 
-// SymDiff composes docs/tessellation-design.md §11's four stages into the
+// SymDiff composes agent-docs/tessellation-design.md §11's four stages into the
 // mesh's volSymDiff.
 //
 //	volSymDiff = proofbound.UpRound(Mmeridian + Σ_cells Icell + Mconstruct + Mround)

@@ -30,7 +30,7 @@ import (
 // is the per-loop walk it runs once per outer loop and once per hole, with
 // the hole's orientation reversed. Every face this file stamps carries the
 // displacement its own surface was built from. See
-// docs/evaluator-design.md §5.
+// agent-docs/evaluator-design.md §5.
 
 // OuterFirstSideRole names the wall built from the first segment of a
 // prism's outer profile. A single-circle extrusion has only this side wall.
@@ -67,7 +67,7 @@ func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.Freefor
 	// A surface result publishes a sheet, never a solid: solid false is what
 	// makes Volume() and Centroid() answer ErrNotSolid through their existing
 	// guards, and kind BodySheet is what Kind() reports
-	// (docs/surface-design.md §4.3).
+	// (agent-docs/surface-design.md §4.3).
 	kind := topo.BodySolid
 	if pp.SurfaceResult {
 		kind = topo.BodySheet
@@ -84,7 +84,7 @@ func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.Freefor
 	// sectionDelta nonzero and mints neither — so every vertex and rim edge
 	// this build places at z0/z1 can later prove PatchEdges's bounded-chain
 	// gate coplanar by shared identity alone, never by comparing a
-	// coordinate (docs/surface-design.md §5.2). The token's own origin/normal
+	// coordinate (agent-docs/surface-design.md §5.2). The token's own origin/normal
 	// are read off the SAME frame-derived construction Payload.CapFrame uses below
 	// for the solid's own caps (pp.point/pp.dir), never fitted to held vertex
 	// coordinates — the two ends share one normal (a prism does not tilt
@@ -180,7 +180,7 @@ func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.Freefor
 		capEnd.Loops = append(capEnd.Loops, topobuild.NewLoop(env.Alloc, topo.Loop{Outer: li == 0, CoEdges: top}))
 	}
 	// A surface result omits both caps from the shell (Table W,
-	// docs/surface-design.md §4.1-§4.2): capStart/capEnd stay constructed above
+	// agent-docs/surface-design.md §4.1-§4.2): capStart/capEnd stay constructed above
 	// so the area accumulation below can still read their area fields, but
 	// neither joins faces nor gets its loops attached, which is what leaves
 	// each rim edge with only its wall face — both rims of every loop become
@@ -195,7 +195,7 @@ func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.Freefor
 	// topobuild.SheetLumps derives IsOpen from the faces' own edge adjacency rather than
 	// the option that built them, and splits the face set by connectivity
 	// rather than assuming one shell holds the whole body regardless of it
-	// (docs/surface-design.md §2.2). A solid's faces are always one connected
+	// (agent-docs/surface-design.md §2.2). A solid's faces are always one connected
 	// piece — its caps join every loop's wall tube to every other's — so this
 	// reproduces the previous single-shell, single-lump body for a solid
 	// unchanged; a surface result's holed profile, whose loops touch nowhere
@@ -203,9 +203,9 @@ func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.Freefor
 	body.Lumps = topobuild.SheetLumps(env.Alloc, faces)
 
 	// Measurements carry the closed forms' proven float bounds
-	// (docs/evaluator-design.md §5), plus — where the payload carries one — the
+	// (agent-docs/evaluator-design.md §5), plus — where the payload carries one — the
 	// section's own displacement from the section it denotes
-	// (docs/prism-boolean-design.md §7). The area a displaced boundary moves is
+	// (agent-docs/prism-boolean-design.md §7). The area a displaced boundary moves is
 	// internal/proofbound/bounds.go's proofbound.SectionDisplacementArea, charged once into the region area, so
 	// the volume takes it through the height and each cap takes it once; the
 	// walls take it through the perimeter, which every walk already charged its
@@ -235,7 +235,7 @@ func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.Freefor
 	// volume and centroid are always computed and stored — a sheet needs them
 	// finite for topobuild.ValidateAnalyticMeasurements below — but Body.Volume and
 	// Body.Centroid gate on solid and answer ErrNotSolid for a sheet, so these
-	// two stay held and unpublished then (docs/surface-design.md §8).
+	// two stay held and unpublished then (agent-docs/surface-design.md §8).
 	body.Volume = measurement.Measurement{
 		Value:     units.CubicMillimeters(volume.Value),
 		Exactness: measurement.ExactnessOf(volume.Bound),
@@ -252,7 +252,7 @@ func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.Freefor
 	centroidValue := pp.Point(cu.Value, cv.Value, zc.Value)
 	// A displaced section moves its own centroid, so the displacement enters the
 	// plane-local source term prismrecord.Payload.PointBound already carries through the frame
-	// and placement (docs/prism-boolean-design.md §7). The geometry envelope is a
+	// and placement (agent-docs/prism-boolean-design.md §7). The geometry envelope is a
 	// separate proof — the centroid lies inside the prism — so it takes the same
 	// displacement rather than being allowed to undercut the formula bound with a
 	// figure proven only for the recorded section.
@@ -306,11 +306,11 @@ func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.Freefor
 // walk, and closed marks a single whole closed walk sharing one seam vertex
 // at each cap (bStart==bEnd, tStart==tEnd) — never true for a chain, since
 // RecordChain admits no whole closed segment
-// (docs/sketch-seam-design.md §2.2). It is the one per-kind construction a
+// (agent-docs/sketch-seam-design.md §2.2). It is the one per-kind construction a
 // closed loop's own wall (BuildLoopSidesAs) and an open chain's own wall
 // (chainrecord's buildSides) share; the two differ only in the TOPOLOGY
 // around it — wraparound junctions and cap coedges for a loop, neither for a
-// chain (docs/surface-design.md §13.4).
+// chain (agent-docs/surface-design.md §13.4).
 func BuildWallGeometry(alloc topo.Alloc, pp Payload, w survey2d.SideWalk, convex, closed bool, bStart, bEnd, tStart, tEnd *topo.Vertex) (*topo.Edge, *topo.Edge, surfacegeom.Surface, bool, error) {
 	switch w.Kind {
 	case survey2d.WalkCircular:
@@ -366,7 +366,7 @@ func BuildWallGeometry(alloc topo.Alloc, pp Payload, w survey2d.SideWalk, convex
 		return bottomEdge, topEdge, surf, clockwise, nil
 	case survey2d.WalkFreeform:
 		// §6.5's wall-edge convexity certificate, wired here for the first
-		// time (docs/spline-design.md §6.5, Table R R19). It applies the
+		// time (agent-docs/spline-design.md §6.5, Table R R19). It applies the
 		// one reversal negation internally and states its verdict in the
 		// LOOP'S OWN WALK direction, so the mapping below reads it
 		// verbatim — a counter-clockwise turn convex, clockwise concave,
@@ -434,7 +434,7 @@ func BuildLoopSides(ctx context.Context, env topo.Env, body *topo.Body, pp Paylo
 // walks each loop of the void the SOLID wraps — the void's outer boundary is a
 // hole in the solid (holeLoop true), each of the void's own holes a solid post
 // (holeLoop false) — a pairing the natural li != 0 rule cannot express
-// (docs/modify-design.md §9).
+// (agent-docs/modify-design.md §9).
 //
 // resolved is a *momentinput.ProfileWalks whose loop index roleLoop holds this loop's
 // pre-resolved walks, or nil to resolve each segment through walkOf as
@@ -483,7 +483,7 @@ func BuildLoopSidesAs(ctx context.Context, env topo.Env, body *topo.Body, pp Pay
 	// Every coordinate this loop's walks read sits within the payload's own
 	// section displacement of the section it denotes, so each walk's length, each
 	// junction vertex and each side face carries that displacement too
-	// (docs/prism-boolean-design.md §7). It is zero for every payload a caller
+	// (agent-docs/prism-boolean-design.md §7). It is zero for every payload a caller
 	// draws, and the arithmetic below is then the unchanged one.
 	delta := pp.SectionDelta
 	walkLenAllow := proofbound.SectionDisplacementLength(delta, 1)

@@ -1,0 +1,853 @@
+# Payload Verification Design
+
+How `Verify` answers every question for `cupPayload`, `loftPayload`,
+`sweepPayload`, `twistedSweepPayload`, `compositeTwistedSweepPayload`,
+`mitredSweepPayload`, `coilPayload`,
+and `facetedPayload`.
+Companion to:
+
+- `agent-docs/verification-design.md` — report meaning, tolerance, absence, status;
+- `agent-docs/clearance-design.md` — analytic distance candidates + pair partition;
+- `agent-docs/modify-design.md` — exact shell/cup construction;
+- `agent-docs/evaluator-design.md` — mesh boolean + evaluator staging.
+
+This document owns payload adaptation, bounded mesh proofs, survey certificates,
+implementation order, and required tests. It changes no public signature.
+
+## 1. Coverage contract
+
+`Verify` MUST support every payload the public evaluator builds. Unsupported
+answers stay `Suspect` until their stage lands. NEVER turn a missing payload
+case into nil, an empty list, or `Sound`.
+
+| Payload | Validity | Pair clearance | `Wall` | `Undercut` | `ConcaveRadius` |
+|---|---|---|---|---|---|
+| `prismPayload` | exact construction proof | analytic kernel | exact 2D reduction | exact normal range | exact curvature |
+| `revolvePayload` | exact construction proof | analytic kernel | exact meridian reduction | exact normal range | exact curvature |
+| `cupPayload` | exact construction proof | exact analytic adapter (§3) | exact shell theorem (§4) | existing exact cup walk | existing exact cup walk |
+| `loftPayload` | exact construction audit | bounds-disjoint shortcut over each body's own `Bounds` and the bound it carries; `WithClearances` stays `Suspect` until an analytic adapter lands; mesh path staged | `Unavailable` | `Unavailable` | `Unavailable` |
+| `sweepPayload` | exact construction audit | bounds-disjoint shortcut; all other pair and requested-clearance proofs are staged | `Unavailable` | `Unavailable` | `Unavailable` |
+| `twistedSweepPayload` | bounded one-cell or stationed construction and held-shell audit (§17 of `agent-docs/sweep-design.md`) | bounds-disjoint shortcut; overlapping pair and requested-clearance proofs are staged | `Unavailable` | `Unavailable` | `Unavailable` |
+| `compositeTwistedSweepPayload` | bounded construction, sewn topology and held-facet contact audit (§17.2 of `agent-docs/sweep-design.md`) | bounds-disjoint shortcut; overlapping pair and requested-clearance proofs are staged | `Unavailable` | `Unavailable` | `Unavailable` |
+| `mitredSweepPayload` | exact construction audit | bounds-disjoint shortcut; the exact planar arm (§7) against a prism, a stitched solid, a faceted result or another mitred sweep; overlap volume through the mesh-boolean path | `Unavailable` | `Unavailable` | `Unavailable` |
+| `coilPayload` | exact construction proof (`agent-docs/helix-design.md` CP5) and the build's held-shell audit | bounds-disjoint shortcut; `WithClearances` against a prism or a stitched solid reads the exact planar arm (`agent-docs/helix-design.md` CD5), and stays `Suspect` against every other payload; overlap volume through the mesh-boolean path, for a partner whose pair tolerance the coil's facets meet | `Unavailable` | `Unavailable` | `Unavailable` |
+| `facetedPayload` | bounded boundary proof (§6) | the exact planar arm (§7) against the same partners | bounded medial survey (§10) | certified normal patches (§8) | certified curvature patches (§9) |
+
+The `prismPayload` row's own four right-hand columns are the ANALYTIC-walled
+case. A free-form (Tier A NURBS) wall answers `Suspect` in all four instead —
+`agent-docs/spline-design.md` Table C already decides this per capability — while
+`Validity` stays the exact construction proof: `Verify`'s own diameter-gate
+arm and loop-less-face audit already cover a free-form-walled body
+(`agent-docs/verification-design.md` §3, `agent-docs/spline-design.md` §10 P4b).
+
+Four payload classes require different treatment:
+
+- `cupPayload` is exact analytic data. Adapt its two recorded regions and three
+  axial planes. NEVER tessellate it for verification.
+- `facetedPayload` is an approximate boundary backed by a proof certificate.
+  Read held polygons exactly, then widen every claim by that certificate.
+- `loftPayload` is a closed triangle boundary whose facets carry the payload's
+  own facet departure `absSumUpper(matchedDelta, maxTwistOffsetUpper)`
+  (loft §5.2, which owns each term, its condition and its zero test). That
+  boundary is exact only where both published terms are zero by value, on that table's own
+  conditions and never on the body simply never having been placed. Its
+  construction audit proves validity, and it re-runs
+  on every placement. Its `Bounds`, inflated by the two-term
+  `absSumUpper(delta, sectionDelta)` those boxes carry rather than by the
+  facet departure, settle bounds-disjoint pairs; a
+  requested clearance remains `Suspect` until an analytic adapter lands; a pair
+  requiring the mesh path remains `Suspect` until that path lands, and every
+  survey remains `Suspect` until it gains a non-constant-section proof.
+- `sweepPayload` carries the construction and global audit promised by
+  `agent-docs/sweep-design.md`. Structural validity and all four body readings are
+  available immediately; its pair adapters and surveys remain staged by that
+  design's Table D.
+
+- `twistedSweepPayload` retains the true rotating polygon separately from
+  one Loft or §17.3's sewn Loft cells. Its §17 construction proves a non-intersecting solid;
+  its volume and centroid are exact before coordinate publication, while wall
+  area and boundary departure carry rational interval bounds. The held mesh
+  carries the horizontal-section occupied-volume proof, §17.3's axial station
+  movement allowance and each Loft's vertex-rounding proof. Pair and survey
+  answers remain staged.
+
+- `compositeTwistedSweepPayload` retains the true curved-path polygon separately
+  from its nine held Loft cells. The exact Sketch profile and path prove
+  section separation; the held-facet audit proves the sewn mesh embedded.
+  Its occupied-volume proof sums local boundary homotopies and Loft placement
+  bounds. Surveys remain staged.
+
+- `mitredSweepPayload` is `agent-docs/sweep-design.md` §16's planar solid: exact
+  rational vertices rounded once to the held table, every held vertex within
+  `delta` of its rational. Its §16.3 construction and SM8 crossing audit prove
+  validity and re-run on every placement; `Verify`'s gate diameter is the held
+  vertex set's, shrunk by twice `delta`. Its pair partition and clearance are
+  §7's exact planar arm over its held triangles at `delta`; an overlapping
+  pair's volume reads through the mesh-boolean path (Table DM row DM4); its
+  surveys stay staged by that design's Table DM.
+
+## 2. Shared proof rules
+
+### 2.1 Outcomes
+
+Every internal verification routine returns one of:
+
+| Outcome | Report effect |
+|---|---|
+| proven value interval `[lo, hi]` | emit midpoint/half-width `Measurement`; `Exact` iff `lo == hi` |
+| proven absence | emit allowed nil/empty answer |
+| proven spec failure | emit value/list where defined; `Violating` |
+| proven invalidity | `Unsound` |
+| undecided | emit no fabricated answer; `Suspect` |
+
+Bounds MUST round outward. Put each new error mechanism in `internal/proofbound/bounds.go`; NEVER
+compute a measurement bound at its call site.
+
+### 2.2 Tolerance vs. proof
+
+`WithTolerance` judges a bounded value after proof:
+
+`Bound <= rel * Ref`
+
+It MUST NOT change:
+
+- validity;
+- disjoint/overlap classification;
+- undercut membership;
+- wall-vs-edge classification at draft allowance;
+- feature existence/absence.
+
+Those are predicates. A predicate is proven, refuted, or undecided independently
+of caller tolerance. A loose tolerance NEVER turns an unresolved pinch, contact,
+normal sign, or missing feature into a pass.
+
+Wall specs use `agent-docs/verification-design.md`'s interval rule after measurement:
+
+- `hi < tool` → `Violating`;
+- `lo >= tool` → spec met, then run tolerance gate;
+- otherwise → `Suspect`.
+
+### 2.3 Boundary displacement
+
+For payload `X`, define `delta(X)`:
+
+- analytic payload → `0`;
+- `facetedPayload` → payload boundary certificate's `Delta` (§5).
+
+For pair `(A, B)`, define `DeltaPair = up(delta(A) + delta(B))`.
+
+Distance between closed sets is 1-Lipschitz in each operand. If held-boundary
+distance lies in `[loH, hiH]`, true-boundary distance lies in:
+
+`[max(0, down(loH - DeltaPair)), up(hiH + DeltaPair)]`.
+
+Use this formula once, after held-boundary candidate aggregation. NEVER add the
+same payload bound per face, edge, candidate, or refinement level.
+
+## 3. Cup boundary adapter
+
+### 3.1 Record
+
+For open end above closed end, cup solid is:
+
+`(O x [zOuter, zOpen]) \\ (C x (zCav, zOpen])`.
+
+Bottom-open cup is its exact axial mirror. `O` and `C` are recorded
+`ProfileRecord`s in one frame. Shell construction proves:
+
+- both regions are simple + correctly nested;
+- loop counts match;
+- `C` is exact erosion of `O` by `t` for inward shell, or `O` is exact
+  dilation of `C` by `t` for outward shell;
+- the floor plane was constructed from the same positive `t` in the opening's
+  axial sense;
+- cavity interval is non-empty;
+- every offset feature survives; topology does not change.
+
+`cupPayload` retains that shell thickness and sense as a private morphology
+certificate. They are the inputs used to build both the section offset and the
+floor plane; retaining them avoids recovering a thickness by subtracting two
+rounded coordinates. The certificate is never sufficient by itself: every
+consumer that uses it MUST recheck the stored regions and axial planes.
+
+### 3.2 `bodyGeom`
+
+Add `bodyGeom.addCupFaces(cp)` by refactoring prism helpers. Build exactly:
+
+| Cup boundary | Carrier/trim | Orientation |
+|---|---|---|
+| every loop of `O` over outer interval | plane/cylinder side face | natural `O` walk |
+| every loop of `C` over cavity interval | plane/cylinder side face | reversed `C` walk |
+| kept cap at `zOuter` | planar region `O` | away from material |
+| pocket floor at `zCav` | planar region `C` | into cavity |
+| `rim(i)` at `zOpen` | planar band between paired loops `O_i`, `C_i` | toward opening |
+
+Requirements:
+
+- Reuse `recordLoops`, `walkElem`, `clearance.Region2`, `clearance.CFace`, `clearance.CEdge`, and `addTopology`.
+- Build no temporary prism caps. They are not cup faces.
+- Keep one rim face per paired loop. Hole/post loop polarity follows
+  `cupwall.Build`'s existing topology.
+- Add `cupPayload` to `payloadExtent` through `cp.ExtentAlong(g)`'s outer-prism
+  reading, taken as an exact interval only where it publishes a zero
+  displacement.
+- Use outer-prism extrema for support points. Cavity lies inside.
+- Use live cup shell witnesses for nesting casts.
+
+All cup carriers, trims, edges, vertices, extents, and witnesses are exact.
+Existing analytic clearance cells apply unchanged.
+
+### 3.3 Pair result
+
+Cup/cup, cup/prism, and cup/revolve pairs run normal analytic enumeration.
+
+- Positive boundary lower bound + nesting excluded → proven disjoint.
+- Certified analytic contact → `Clearance{Gap: Exact 0}` when requested.
+- Nesting/crossing → hand pair to interference path (§11).
+- Unresolved analytic cell → `Suspect`; NEVER fall back to cup tessellation.
+
+## 4. Cup wall theorem
+
+### 4.1 Result
+
+For accepted cup shell thickness `t` and draft allowance `alpha`:
+
+- any material junction with dihedral `<= alpha` → `Wall.Minimum = Exact 0`;
+- otherwise → `Wall.Minimum = t`, `Exact` only when converting the shell
+  thickness to millimetres was itself exact, and otherwise carrying that
+  conversion's own proven displacement as its bound.
+
+A cup always has a wall. `Wall.Outcome` is never `ScalarAbsent` for a cup
+whose exact morphology recheck succeeds — it is `ScalarMeasured`. The
+theorem itself — which value the wall reading takes — is unchanged; only the
+number `t`'s own exactness depends on the unit conversion that produced it.
+
+### 4.2 Proof
+
+Upper bound:
+
+- Pick any strict interior point of `C`.
+- Center a radius-`t/2` ball halfway between kept cap and pocket floor.
+- Exact erosion/dilation proves ball fits inside `O`.
+- Opposite cap contacts prove ball spans.
+- Two opposite contacts make ball maximal.
+- Therefore wall reading `<= t`.
+
+Lower bound when no qualifying junction exists:
+
+- Exact erosion/dilation makes every cavity skin an offset skin at distance `t`.
+- S11 offset audit proves no feature drops, merges, crosses, or changes nesting.
+- A non-corresponding skin pair closer than `t` would make offset regions cross,
+  touch, merge, or drop a feature; S11 excludes every case.
+- Floor thickness is exactly `t`.
+- Vertical-horizontal cup junctions have dihedral `90 degrees`; legal
+  `alpha < 90 degrees` excludes them.
+- Therefore no spanning maximal ball has diameter below `t`.
+
+Boundary limit:
+
+- A junction with material dihedral `<= alpha` admits spanning balls tending to
+  radius zero.
+- Closure-under-limits rule makes reading genuine `Exact 0`.
+
+The theorem depends on exact morphology, not the requested shell thickness.
+`Verify` MUST recheck certificate facts it consumes. It MUST NOT return `t`
+from the input value alone.
+
+### 4.3 Algorithm
+
+`internal/cupwall.Evaluate(cp, alpha)`:
+
+1. Read positive finite `t` and the valid shell sense from the private morphology
+   certificate. Reconfirm the exact axial construction relation used by that
+   sense and opening direction, plus a non-empty cavity interval; reject any
+   inconsistency as undecided.
+2. Reconfirm equal loop count, strict region nesting, and the sense-specific
+   exact offset relation.
+3. Walk every loop of `O` in natural material-left sense.
+4. Walk every loop of `C` reversed, matching cavity material-left sense.
+5. Run existing `junctionPinch` on each non-smooth junction.
+6. Return exact zero on any qualifying pinch; else `t` carrying the shell
+   thickness's own millimetre-conversion displacement as its bound, `Exact`
+   only when that displacement is zero (§4.1).
+
+Do not count:
+
+- tangent offset joins — material angle is `pi`, not a pinch;
+- vertical-horizontal cap/rim junctions — `90 degrees > alpha`;
+- sharp concave floor edges in `ConcaveRadius` — radius survey reads face
+  curvature, not edge radius.
+
+## 5. Faceted boundary certificate
+
+`Faceted.Bound` exposes one length. Verification needs a stronger internal proof
+behind it. Add no public field.
+
+### 5.1 Contract
+
+`facetedPayload` carries `boundaryCert`:
+
+```go
+type boundaryCert struct {
+    Delta   float64
+    Facets  []facetCert
+    Local   []localJoinCert
+}
+
+type facetCert struct {
+    SourceID int
+    Delta    float64
+    Normal   normalCert
+    Radius   radiusCert
+}
+```
+
+Names are illustrative; representation stays internal.
+
+Certificate proves:
+
+1. Each held facet maps continuously + orientation-preservingly to one non-empty
+   true boundary patch.
+2. Map and inverse move every point by at most `Delta` → two-sided Hausdorff
+   bound plus correspondence.
+3. Each `facetCert.Delta` bounds its true source patch against that held facet;
+   it is never greater than the payload-wide `boundaryCert.Delta`.
+4. Maps agree on every certified shared edge/vertex.
+5. Each certified vertex fan maps to one local disk; each certified shell fan
+   preserves its local orientation.
+6. `normalCert` encloses every true patch normal (§8).
+7. `radiusCert` encloses every true patch's concave principal radius state (§9).
+
+Raw Hausdorff distance alone is insufficient: a sub-bound handle can stay near a
+plane while changing topology. Local bijection/orientation clauses are mandatory.
+
+### 5.2 Creation + composition
+
+Analytic tessellation creates certificates:
+
+- record source surface variant + trim cell internally;
+- split parameter cells at normal/curvature sign boundaries;
+- prove chord correspondence + `facetCert.Delta` per cell;
+- make neighboring cell edge maps agree because boundary chording is shared.
+
+Mesh boolean preserves certificates:
+
+- exact facet subdivision gives every child its parent's source cell;
+- tightening child parameter range or displacement is optional; inheriting
+  parent ranges + `facetCert.Delta` is safe;
+- stitched shared vertices retain compatible local join certificates;
+- tangency/branching refusal remains mandatory;
+- final rounding/weld adds its displacement to payload `Delta` and every
+  surviving child certificate;
+- a weld that destroys local fan correspondence is `ErrUnsupported`, like a
+  whole component welded away.
+
+Second-generation booleans carry operand certificates through the same path.
+An output face records a tighter inherited displacement only when it composes
+every parent, trim/rim, and final-rounding allowance that can move that patch.
+Otherwise it records no tighter claim and uses payload `Delta` as the
+conservative fallback.
+Rigid placement:
+
+- rotate normal certificates;
+- preserve curvature certificates;
+- add `RigidRoundAllow` to payload `Delta` and every per-facet displacement;
+- rebuild local fan certificates after reflected winding reversal.
+
+Missing, malformed, or mismatched certificate → faceted validity + every survey
+that needs it are undecided. NEVER reconstruct source identity from provenance
+roles or fit an analytic surface to polygons.
+
+### 5.3 Boolean hidden-tangency handoff
+
+The evaluator §9 hidden-tangency pre-pass consumes the same displacement proof:
+
+- Tessellation carries an internal `sourceBound` parallel to every mesh facet's
+  current operand `*Face`.
+- Analytic face `sourceBound` is current chording displacement.
+- Faceted face `sourceBound` is its inherited per-face displacement; when that
+  tighter value is unavailable, use `boundaryCert.Delta`.
+- Grouping facets by current operand face takes the maximum `sourceBound` in
+  that group.
+- `KindFaceted` alone NEVER makes `sourceBound` zero. Zero requires a certificate
+  proving the true patch equals the held polygons.
+- A face pair whose held facets miss but come within summed `sourceBound` is
+  refused as hidden-tangency-undecidable.
+
+This handoff is mandatory before a faceted body can enter another boolean. It
+prevents a first boolean's displaced true patch from hiding a touch during a
+second boolean.
+
+### 5.4 Public readings
+
+Strengthen existing meanings; add no API:
+
+- `Faceted.Bound` is certificate `Delta`.
+- `Vertex.Position().Bound` remains `Delta` or tighter local displacement.
+- `Face.NormalAt(p)` on a faceted face finds held facet(s) containing `p`, unions
+  their `normalCert`s, and returns `Approximate` direction bound.
+- Point outside held face trim → `ErrDegenerate`.
+- Certificate too broad for one direction ball → `ErrUnsupported`; verification
+  consumes full internal range and remains `Suspect` where needed.
+
+## 6. Faceted validity
+
+### 6.1 Held audit
+
+Audit held mesh exactly:
+
+- every directed edge has one reverse;
+- every vertex fan is one disk per shell;
+- no collapsed facet;
+- no remote facet intersection;
+- shell signed volumes are nonzero;
+- shell containment is decided by exact parity;
+- face loop topology is consistent.
+
+This audit is exactly what `Validity.Outcome == ValidityValid` entails —
+watertightness, manifoldness and no self-intersection for that proof — and
+`Topology.Lumps`/`Topology.Voids` describe the held data exactly.
+
+### 6.2 Local vs. remote
+
+Exclude a facet pair from self-clearance only when:
+
+- facets share a vertex; and
+- `localJoinCert` proves their whole common vertex fan maps to one local true
+  sheet with consistent orientation.
+
+No certificate → pair is remote. Same source id alone NEVER makes a pair local:
+one source face can be split into disconnected patches or separated by a narrow
+trim.
+
+Also compare nonadjacent face-loop edges. This catches a narrow planar web whose
+two trim boundaries approach while cap facets remain one connected sheet.
+
+### 6.3 Feature scale
+
+Build BVH over outward-rounded triangle/edge boxes. BVH only prunes; every remote
+candidate whose boxes can beat current minimum MUST reach exact distance code.
+
+Compute certified held feature-scale lower bound `sH` over:
+
+- remote triangle/triangle pairs;
+- nonadjacent loop edge/edge pairs;
+- distinct shell pairs;
+- neck-separating boundary pairs found by same remote primitive pass.
+
+Reuse `triTriDistance`, segment distance, exact incidence, and exact parity.
+Replace fixed fractional nudges with `internal/proofbound/bounds.go` helpers proving float slop.
+
+### 6.4 Verdict
+
+Let `delta = boundaryCert.Delta` and `guard = up(2 * delta)`.
+
+| Held/certificate result | Part validity |
+|---|---|
+| clean held audit, complete local certificate, `down(sH) > guard` | proven valid |
+| exact held defect and `delta == 0` | proven invalid |
+| held defect with certified persistence depth `> guard` | proven invalid |
+| anything else | undecided |
+
+Persistence depth is minimum boundary displacement required to remove held
+crossing, gap, or non-manifold junction. A bare intersection witness has depth
+zero and proves no approximate part invalid.
+
+When validity is undecided:
+
+- held predicate fields + counts remain populated as held-data facts;
+- `BodyReport.Status = Suspect`;
+- region quantities (`Volume`, `Centroid`, opt-in solid surveys) are nil because
+  report cannot vouch for a region.
+
+When validity is proven, expose bounded region quantities and run tolerance gate.
+Approximate does NOT imply `Suspect`; only failed bound gate does.
+
+## 7. Faceted clearance
+
+**Landed as the exact planar arm** (`clearance_planar.go`,
+`agent-docs/interference-design.md` §3.2), not as a `bodyGeom` carrier model: a
+`facetedPayload`, or a `mitredSweepPayload`, is read off its own held
+triangle set as an exact dyadic snapshot with its displacement `δ`
+(`planarFacetedSolid` and `planarHeldMeshSolid`, `contact_faceted_pair.go`),
+its partner — a prism, a stitched solid, or another of the two — the same
+way, and the pair is decided by the exact planar relation of
+`agent-docs/multibody-dynamics-design.md` §9.1, over which §7.2's rules below hold
+unchanged: the held interval is widened once by `DeltaPair`, a held touch
+certifies only at `DeltaPair == 0`, and a held nesting or crossing routes to
+the interference path, with a positive displacement admitting it only
+through a vertex deeper than `DeltaPair` (`pair.PlanarDeepVertex`). The arm
+runs only after the analytic kernel leaves the pair undecided, so no pair
+that kernel decides changes. §7.1's `bodyGeom` adapter is the design this
+replaces for that pair shape; it is kept as the shape a carrier model would
+take if one were ever needed, and §7.3's extent and pair-diameter rules stand
+(the diameter is `pairkernel.PairGateDiameter`'s reading).
+
+### 7.1 `bodyGeom`
+
+A `bodyGeom.addFacetedFaces(fp)` would hold:
+
+- one `ckPlane` face per held triangle;
+- triangle-local orthonormal frame;
+- three-line `clearance.Region2` trim;
+- outward normal from held winding;
+- exact held triangle box + centroid witness;
+- all triangle edges as line `clearance.CEdge`s, including internal tessellation edges;
+- held vertices once each;
+- one live topology witness per shell.
+
+Duplicates are allowed. They cost time, never correctness. Internal triangle
+edges are required: a constrained plane minimum can migrate to any triangle
+boundary even when boundary is not a public B-rep edge.
+
+Set `bodyGeom.delta = fp.boundaryCert.Delta`. Analytic adapters set zero.
+
+### 7.2 Held interval + true interval
+
+Run existing face/edge/vertex tiers against held geometry. Triangle faces reuse
+the plane row. Parity ray casts use exact triangle predicates.
+
+After candidate aggregation, expand once with §2.3 formula.
+
+- `loTrue > 0` + held nesting excluded + both bodies proven valid → disjoint.
+- `loTrue == 0` with nonzero `DeltaPair` → undecided unless separate exact contact
+  certificate proves touching.
+- `DeltaPair == 0` permits existing exact coplanar contact certificate.
+- Held nesting/crossing routes to interference path (§11).
+
+Gap measurement uses true interval midpoint + half-width. It is `Exact` only
+when held interval is a point and `DeltaPair == 0`.
+
+### 7.3 Extents + pair diameter
+
+- Faceted directional extent = held vertex projection interval expanded by
+  `delta`.
+- Never call exact coplanar material-side certificate with nonzero extent bound.
+- Pair-diameter underestimate remains safe for noise floor; include held support
+  points from both bodies. Do not inflate it to loosen tolerance gate.
+
+## 8. Faceted undercuts
+
+### 8.1 Normal certificate
+
+`normalCert` returns, for unit pull `p`:
+
+- enclosing dot interval `[lo, hi]` for every true patch normal;
+- `constant` bit + exact value for constant analytic normal;
+- `ok` bit.
+
+Plane → exact constant. Cylinder/cone/sphere/torus → closed-form range over source
+parameter cell, widened by inherited direction bound. Child facets may inherit
+parent range. Placement rotates certificate exactly, then adds direction-rounding
+bound.
+
+The `constant` bit is plane-only: no curved variant mints it, and §5.2 has boolean
+children inherit their parent's source cell rather than mint a new source identity,
+so this holds through second-generation booleans. §8.2's carve-out rests on it.
+
+Length `Delta` alone NEVER supplies normal tilt. A tiny corrugation can fit inside
+any positional bound while reversing its normal.
+
+### 8.2 Three-way face decision
+
+For each true patch:
+
+- `constant && value == -1` → exact antiparallel carve-out; clears;
+- `lo >= 0` → clears;
+- `hi < 0 && lo > -1` → proven opposing patch;
+- otherwise → undecided.
+
+Aggregate by public `*Face`:
+
+- any proven opposing patch → list face once;
+- all patches clear → face settled clear;
+- otherwise → face undecided.
+
+Any listed face proves `Violating`, even if another face is undecided. Empty list
+is proven only when every face settles clear. Otherwise empty + `Suspect`.
+
+The carve-out clears a patch, while verification §6's antiparallel exception is
+face-wide, so it is sound only under the invariants that make the two coincide:
+
+- `constant && value == -1` forces `n == -p` over the whole patch, so the patch is
+  planar and its certificate came from a plane source (§8.1's plane-only `constant`
+  bit);
+- every patch of one public faceted `*Face` descends from a single analytic source
+  face. `facetedrecord.Build` keys a face on one connected patch of one source group,
+  and its flood fill refuses to cross source groups.
+
+A face holding any `constant && value == -1` patch is therefore plane-sourced, and
+every patch of it carries that same exact value, so "all patches clear" over such a
+face is exactly the face-wide antiparallel case the exception is written for. A face
+mixing an exact `-1` patch with a `lo >= 0` patch does not exist. Normal continuity
+bounds the same case independently: a face carrying both an exactly antiparallel
+point and an `n·p >= 0` point passes through `n·p` strictly inside `(-1, 0)`, and
+whatever patch covers that transition is neither `constant` nor `lo >= 0`, so the
+face reads undecided rather than settled clear.
+
+Should either invariant loosen — a curved source minting a `constant` certificate, or
+one public face spanning several analytic sources — the carve-out MUST move from the
+patch to the face and clear only a face proven exactly antiparallel at every point.
+
+## 9. Faceted minimum radius
+
+### 9.1 Radius certificate
+
+Each `radiusCert` is one of:
+
+```text
+none                  # patch proven to have no concave principal curvature
+interval [lo, hi]     # patch proven concave; its minimum radius lies here
+unknown
+```
+
+Rules:
+
+- Plane → `none`.
+- Cylinder/sphere → exact signed radius or `none` from material orientation.
+- Cone/torus → closed-form interval over parameter cell.
+- Split tessellation cells at curvature-sign transitions. A cell NEVER mixes
+  `none` and concave.
+- Boolean child may inherit parent interval: lower bounds every subset; upper
+  bounds every point in consistently-concave parent, so child remains enclosed.
+- Placement preserves interval.
+
+### 9.2 Aggregate
+
+- Any `unknown` → question undecided.
+- All `none` → proven nil, no concave feature.
+- Otherwise global interval is
+  `[min(all lo), min(all hi)]`.
+- Emit midpoint/half-width; run tolerance gate.
+
+Both endpoints are taken over the whole population, never over whichever
+candidate won a comparison of held values: each candidate's bound is its own, so
+a rival's truth can sit below a winner's interval and no arithmetic the winner
+performed can see it.
+
+That reduction is not specific to the faceted radius. It is the rule for **any**
+survey reading that is an extremum over candidates carrying independent bounds —
+the analytic concave-radius arms, the analytic wall reading's arms, and the 2D
+kernel's own least spanning diameter and greatest inscribed radius. A MAXIMUM
+runs the same argument the other way, `[max(all lo), max(all hi)]`. The
+reduction never widens an exact reading: when the candidates deciding both ends
+are exact the interval collapses, and an inexact rival that does not reach the
+extremum moves neither end.
+
+Do not infer radius from faceted hinge angle or fit circles to vertices. Boolean
+rim edges add no radius: `ConcaveRadius` reads face principal curvature.
+
+## 10. Faceted wall thickness
+
+Nearest remote skins alone are not wall thickness. Survey MUST enforce maximal
+inscribed ball, material containment, and draft-opposed contacts.
+
+### 10.1 Held medial candidates
+
+Triangulated closed solid's maximal ball has a contact subset of at most four
+boundary features: contact directions' convex hull contains origin, and
+Caratheodory in 3D reduces support to four.
+
+Enumerate unordered feature tuples of size 2..4 over triangle interiors, edges,
+and vertices. BVH prunes tuples whose distance boxes cannot beat current bound.
+
+For each tuple, solve variables `(center, radius)` with certified interval
+arithmetic:
+
+- equal distance to tuple features;
+- contact lies inside each feature trim;
+- radius no greater than distance to every other triangle;
+- center lies inside held solid by exact parity;
+- contact-direction convex hull contains origin;
+- at least two source-normal certificates admit contacts within `alpha` of
+  diametrally opposite.
+
+Parallel-face and other positive-dimensional families add stationarity of radius
+on family, plus family endpoints. Interval Newton isolates zero-dimensional
+roots; branch-and-bound encloses families. Every primitive is linear/quadratic on
+held mesh.
+
+Limits:
+
+- max depth 80;
+- max active boxes `1 << 20` per body;
+- context cancellation checked every 1024 boxes.
+
+Budget exhaustion returns honest remaining lower/upper enclosure. It NEVER drops
+a family.
+
+### 10.2 True interval
+
+Let held thickness interval be `[loH, hiH]`. Distance-transform perturbation by
+`delta` moves a ball radius by at most `delta`, so diameter interval is:
+
+`[max(0, down(loH - 2*delta)), up(hiH + 2*delta)]`.
+
+Normal certificates decide whether each contact family is a wall:
+
+- proven within allowance → include;
+- proven outside → exclude;
+- straddles allowance → survey undecided, unless another exact-zero candidate
+  already wins globally.
+
+Outcomes:
+
+- at least one proven family + all possible smaller families bounded → emit
+  measurement interval;
+- every family proven outside allowance → proven nil;
+- possible family but no proven existence/value → nil + `Suspect`.
+
+Then apply wall tool interval rule + tolerance gate independently.
+
+## 11. Pair partition + interference dependency
+
+This design proves disjointness and gap. It does not fabricate overlap volume.
+
+Pair flow over proven solids:
+
+1. Bounds-disjoint shortcut → proven disjoint; run payload kernel only when gap
+   requested.
+2. Run payload clearance adapter.
+3. Positive true gap + nesting excluded → disjoint; optional `Clearance` row.
+4. Exact touching certificate → disjoint interiors; zero `Clearance` row when
+   requested.
+5. Nested/crossing/zero-band pair → interference evaluator.
+6. Bounded overlap volume → `Interference` row.
+7. Interference evaluator undecided → pair omitted from both lists; `Suspect`.
+
+Cup/faceted clearance can land before interference. Until bounded overlap volume
+lands, overlapping pairs remain `Suspect` by verification's pair-partition rule.
+
+## 12. Implementation map
+
+| File | Change |
+|---|---|
+| `internal/proofbound/bounds.go` | interval expansion, distance slop, direction-bound composition |
+| `internal/clearance/pairkernel/geom.go` | `addCupFaces`, `addFacetedFaces`, payload delta |
+| `internal/clearance/pairkernel/kernel.go` | bounded extent/contact gates + true interval expansion |
+| `shell.go` / `internal/cupwall/payload.go` | expose/recheck exact morphology certificate internally |
+| `internal/cupwall/wall.go` | cup wall theorem and morphology recheck |
+| `survey.go` | cup wall adapter; dispatch faceted surveys |
+| `tessellate.go` | create/carry per-facet source certificates + `sourceBound` internally |
+| `boolean.go` / `boolean_mesh.go` | hidden-tangency `sourceBound` consumption; compose `boundaryCert`; preserve facet survey metadata |
+| `topology.go` | faceted `NormalAt` through certificate; no public type change |
+| new `verify_mesh.go` | BVH feature scale + faceted validity |
+| new `survey_mesh.go` | faceted undercut/radius/wall kernels |
+| `verify.go` / `verify_tolerance.go` | loft construction validity + bounds-disjoint staging; validity-first presence; total tolerance gate; payload outcomes |
+
+## 13. Stages
+
+Each row leaves every later question staged as `Suspect`.
+
+| Stage | Lands |
+|---|---|
+| cup boundary | analytic adapter, pair clearance, payload extent/contact gates |
+| cup wall | morphology recheck + exact wall theorem |
+| faceted certificate | `boundaryCert` creation/composition, boolean `sourceBound`, `NormalAt` |
+| faceted validity | held audit, BVH feature scale, validity/presence integration |
+| faceted clearance | landed: §7's exact planar arm over the held triangles, for faceted and mitred-sweep pairs against prisms, stitched solids and each other |
+| faceted shape surveys | undercut + min-radius certificates/surveys |
+| faceted wall | medial wall survey |
+| loft verification | construction validity + bounds-disjoint staging over each body's own bounds and the bound they carry; pairs that need the mesh path and requested surveys remain `Suspect` until their payload path lands; requested clearances remain `Suspect` until the analytic adapter lands |
+
+Tolerance-gate implementation MUST exist by the faceted-validity stage.
+Otherwise a proven valid faceted body still cannot become `Sound` when all
+bounds pass. These local stages do not allocate global evaluator increment
+numbers.
+
+## 14. Required tests
+
+### 14.1 Loft
+
+| Area | Cases |
+|---|---|
+| validity | accepted loft construction is valid; the tolerance gate judges its volume, area, centroid, and bounds without a fabricated payload-specific reading |
+| pair staging | a bounds-disjoint loft pair is proven disjoint; `WithClearances` has no `Clearance` row and remains `Suspect` for that pair until the analytic adapter lands; a pair that needs the mesh path is `Suspect` before that path lands |
+| surveys | Each requested `Wall`, `Undercut`, and `ConcaveRadius` survey reports `Unavailable` (`Coverage`'s equivalent for `Undercut`) through `DiagUnsupportedSurveyPayload`, still `Suspect`, never absent or silently exact |
+
+### 14.2 Cup
+
+| Area | Cases |
+|---|---|
+| boundary adapter | inward/outward; top/bottom opening; reflected/placed; holes/posts; face count + roles |
+| clearance | cup/cup, cup/prism, cup/revolve; box-disjoint requested gap; nested; non-box-disjoint but clear; coplanar touch |
+| wall | box/cylinder `t` — `Exact` from an exactly converted thickness, `Approximate` with the conversion's own bound otherwise; outward rounded cup; holed cup; top/bottom mirror; qualifying section pinch exact zero |
+| wall spec | tool below/equal/above `t`; zero pinch violates every legal tool |
+| refusals | malformed internal offset relation → `Suspect`, never fabricated `t` |
+
+Every clearance test asserts gap value/bound. Every wall test asserts the
+reading's own value and bound, not only status.
+
+### 14.3 Faceted certificate + validity
+
+| Case | Required result |
+|---|---|
+| ordinary curved boolean, remote feature scale `> 2*delta` | validity proven; quantities present |
+| same body under default passing tolerance | `Sound` if no pair/spec issue |
+| strict tolerance rejecting one quantity bound | `Suspect` from gate, not validity |
+| narrow neck/trim gap `<= 2*delta` | validity undecided; region quantities nil |
+| exact all-planar faceted body, `delta == 0` | clean mesh proves validity |
+| remote held crossing with persistence `> 2*delta` | `Unsound` |
+| crossing without persistence proof | `Suspect` |
+| missing/local fan certificate | `Suspect` |
+| placement/reflection | same topology verdict; rounding added to bound |
+| second-generation boolean | certificates survive subdivision + composition; hidden-tangency pre-pass receives inherited per-face displacement |
+| second-generation near miss | held facets miss within inherited `sourceBound` → `ErrUnsupported`, never accepted through `KindFaceted == zero` |
+| per-face fallback | tighter face displacement used when present; payload `Delta` used when absent; neither path understates |
+
+Internal tests inject payloads for invalid/missing-certificate cases. Public API
+cannot manufacture them.
+
+### 14.4 Faceted clearance
+
+- all-planar `delta == 0` exact gap;
+- curved pair: returned interval contains independently sampled true gap;
+- mixed analytic/faceted pair;
+- held gap just above/below `DeltaPair`;
+- nonzero-bound near-touch → undecided, never exact zero;
+- nested/overlap route to interference;
+- loose/strict `WithTolerance` over same gap interval;
+- placement rounding widens but never shrinks interval.
+
+### 14.5 Faceted surveys
+
+| Survey | Cases |
+|---|---|
+| undercut | proven opposing patch; all-clear; exact antiparallel; perpendicular-straddling `Suspect`; one proven face plus another undecided still `Violating` |
+| radius | planar nil; concave cylinder exact interval; torus variable interval; sign-split cell; unknown certificate `Suspect`; second generation |
+| wall | parallel skins; curved skins; allowance boundary; exact zero; tool below/above; tool straddle; no-wall proof; budget exhaustion keeps honest interval/`Suspect` |
+
+Property tests compare:
+
+- certificate interval against dense analytic samples from source surfaces;
+- BVH-pruned result against brute-force all-pair mesh pass;
+- wall branch-and-bound interval against refined independent mesh samples;
+- every refined interval nests inside its coarser predecessor.
+
+## 15. Rejected shortcuts
+
+- NEVER tessellate cup verification. Use exact cup payload adapter.
+- NEVER return the requested shell thickness without morphology recheck. Use §4 proof.
+- NEVER derive normal/curvature bounds from positional `Delta`. Carry source
+  certificates.
+- NEVER mark every `Approximate` body `Suspect`. Run total tolerance gate.
+- NEVER use caller tolerance for validity/contact/predicate admission.
+- NEVER emit exact faceted touching with nonzero `DeltaPair`.
+- NEVER expose certificate triangles or indices through public API.
+- NEVER call a held-mesh all-clear a part all-clear without certificate proof.
+
+## 16. Resolved decisions
+
+- Cup wall needs no stacked 3D solver: exact morphology proves `0` or `t`.
+- Faceted bound means two-sided displacement under internal local correspondence,
+  not raw one-sided proximity.
+- Faceted self-clearance excludes only certified shared-vertex fans.
+- Faceted normals/curvature use per-facet source certificates, not surface fitting.
+- Triangle facets adapt to existing plane clearance cells; no separate mesh-only
+  pair API.
+- Validity ignores caller tolerance.
+- Faceted touching with nonzero boundary bound remains undecided.
+- A faceted source face supplies inherited displacement to later boolean
+  hidden-tangency checks; exact held polygons do not erase true-patch `Delta`.
+
+No public API decision remains open for this payload-verification work.

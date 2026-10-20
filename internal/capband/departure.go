@@ -13,7 +13,7 @@ import (
 
 // This file owns ONE bound: how far the surface a cap-loop chamfer's band patch
 // actually carries can point away from the surface the build tags it with
-// (docs/modify-reach-design.md §8.3) — the `Cone` of a circular patch and the
+// (agent-docs/modify-reach-design.md §8.3) — the `Cone` of a circular patch and the
 // `Plane` of a flat one alike. `Face.NormalAt` publishes it beside its own
 // arithmetic proof (internal/surfacenormal) and DX7 composes it into the allowance its
 // decision reads (capblend_survey.go).

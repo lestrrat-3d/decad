@@ -11,13 +11,13 @@ import (
 
 // Example_decad_loft_placed builds one tapered tooth as a Loft, then
 // Copy's a mirror of it into a herringbone pair — the target case
-// docs/loft-design.md names for PR 2a. The tooth occupies x in [0, 40]; the
+// agent-docs/loft-design.md names for PR 2a. The tooth occupies x in [0, 40]; the
 // mirror, reflected across the x=0 plane, occupies x in [-40, 0], so the
 // pair meets at the shared root.
 //
 // A reflection is still a rigid motion, so the mirrored tooth's volume
 // matches the source's, but every held vertex now carries the payload's own
-// proven displacement delta (docs/loft-design.md §5/§12 PR 2a): a general
+// proven displacement delta (agent-docs/loft-design.md §5/§12 PR 2a): a general
 // rigid motion rounds inside its own products and sums. The placement
 // therefore demotes the source's Exact Centroid and Bounds to Approximate.
 // The source's Volume is already Approximate before any placement — the

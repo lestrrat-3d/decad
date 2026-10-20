@@ -13,7 +13,7 @@ import (
 )
 
 // WithAsymmetricChamfer sets a chamfer back by two different distances
-// (docs/modify-reach-design.md §6): the positional distance across the
+// (agent-docs/modify-reach-design.md §6): the positional distance across the
 // reference face and the option's other distance across the face beside it.
 // The reference is a face query resolved against the body, so the call names
 // which wall takes which setback without depending on how the edge is walked.

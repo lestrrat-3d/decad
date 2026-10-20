@@ -14,7 +14,7 @@ import (
 )
 
 // Motion is the per-vertex displacement from the ideal polyhedron B1
-// (docs/tessellation-reach-design.md §7's motion array): the store for every
+// (agent-docs/tessellation-reach-design.md §7's motion array): the store for every
 // vertex, widened by the side level's displacement on a side ring vertex, and
 // replaced on a cap contour vertex by its station's gap from the exact
 // fraction of the side window plus its rounding and F's level displacement.

@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/surface-design.md's Table W and T6-shaped public-surface
+// This file is agent-docs/surface-design.md's Table W and T6-shaped public-surface
 // tests for WithSurfaceResult() on Revolve: one test per Table W row (a
 // partial sweep clear of the axis, a partial sweep meeting it, and a full
 // revolution, each on or off the axis), the design's T6 (a half-disc revolved
@@ -73,7 +73,7 @@ func annularHoledSketch(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
 
 // quarterTurn is the 90° AngleExtent every partial-sweep row below uses: a
 // degree-stated extent denotes an exact fraction of a turn
-// (docs/evaluator-design.md §6), so it is the sweep every hand computation in
+// (agent-docs/evaluator-design.md §6), so it is the sweep every hand computation in
 // this file is checked against.
 var quarterTurn = decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}
 
@@ -158,7 +158,7 @@ func TestSurfaceRevolvePartialMeetingAxisOmitsOnAxisEdge(t *testing.T) {
 	// of CLOSED curves, never a chain with loose ends: every vertex the free
 	// edges touch is incident to exactly two of them, here forming one
 	// six-edge loop through the two on-axis corners and the two off-axis
-	// ones (docs/surface-design.md §2.2).
+	// ones (agent-docs/surface-design.md §2.2).
 	degree := map[*decad.Vertex]int{}
 	for _, e := range free {
 		degree[e.Start()]++
@@ -171,7 +171,7 @@ func TestSurfaceRevolvePartialMeetingAxisOmitsOnAxisEdge(t *testing.T) {
 
 	// The solid built from the same profile has exactly one Line3 edge with
 	// both endpoints on the axis — the edge shared by its two caps
-	// (docs/evaluator-design.md §6) — and the sheet has none at all.
+	// (agent-docs/evaluator-design.md §6) — and the sheet has none at all.
 	s2, p2 := solidSketch(t)
 	solidDoc := decad.New()
 	solid, err := decad.Revolve(t.Context(), solidDoc, s2, p2, uAxis, quarterTurn)
@@ -246,7 +246,7 @@ func TestSurfaceRevolveFullTurnClearOfAxisIsClosed(t *testing.T) {
 	require.Equal(t, solidBox, sheetBox)
 }
 
-// TestSurfaceRevolveHalfDiscFullTurnIsClosedSphereSheet is docs/surface-design
+// TestSurfaceRevolveHalfDiscFullTurnIsClosedSphereSheet is agent-docs/surface-design
 // .md's T6: a half-disc revolved a full turn about its diameter is a closed
 // sphere sheet.
 func TestSurfaceRevolveHalfDiscFullTurnIsClosedSphereSheet(t *testing.T) {
@@ -447,7 +447,7 @@ func TestSurfaceRevolveRolesResolveThroughFaceCreatedBy(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrNoMatch)
 }
 
-// TestSurfaceRevolveSheetVerifiesUndecided is docs/surface-design.md §15's
+// TestSurfaceRevolveSheetVerifiesUndecided is agent-docs/surface-design.md §15's
 // T40: a quarter-turn revolve sheet stays Suspect with DiagUndecidedValidity,
 // because revolveplan.Payload.ProvesSimple requires full == true and
 // a partial turn never has it — the manifold-with-boundary audit this
@@ -474,7 +474,7 @@ func TestSurfaceRevolveSheetVerifiesUndecided(t *testing.T) {
 	}
 }
 
-// TestSurfaceRevolveFullTurnSheetVerifiesValid is docs/surface-design.md
+// TestSurfaceRevolveFullTurnSheetVerifiesValid is agent-docs/surface-design.md
 // §15's T39: a full-revolution surface sheet reads ValidityValid, admitted
 // by construction — revolveplan.Payload.ProvesSimple holds because
 // the sweep is exactly one full turn and annularSketch's radial minimum

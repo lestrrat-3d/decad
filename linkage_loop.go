@@ -16,7 +16,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is the closed loop of docs/linkage-check-design.md §15: Close and
+// This file is the closed loop of agent-docs/linkage-check-design.md §15: Close and
 // Loop, the private sketch scene a driven loop is read from, the canonical
 // chain of certified enclosures every dependent joint value comes from, the
 // Schedule a renderer calls per frame, and the asks a joint box over a
@@ -25,7 +25,7 @@ import (
 // checks this file runs on what sketch returns only ever refuse.
 
 // LinkageLoop is one closure joint of a linkage and the links it ties together
-// (docs/linkage-check-design.md §15.1): a revolute pin joining two links that
+// (agent-docs/linkage-check-design.md §15.1): a revolute pin joining two links that
 // both already have parents, so the tree gains one loop. A drive lists at most
 // one joint of a loop, the driver; every other joint of the loop is dependent,
 // and its value at a parameter is whatever closes the loop there.
@@ -45,7 +45,7 @@ type LinkageLoop struct {
 	// slide is the loop's primary slide: the first prismatic link in Links()
 	// order whose parent is Common, nil when there is none. Its rail is the
 	// scene's u axis. Every other prismatic loop link is anchored
-	// (docs/linkage-check-design.md §15.2), and kappa holds each one's κ.
+	// (agent-docs/linkage-check-design.md §15.2), and kappa holds each one's κ.
 	slide *Link
 	kappa map[*Link]*big.Rat
 	reach float64 // four times the loop's perimeter at the zero pose
@@ -53,7 +53,7 @@ type LinkageLoop struct {
 }
 
 // LoopBar is the length a loop's private scene holds one link's two loop
-// pins apart at (docs/linkage-check-design.md §15.2): the exact distance, in
+// pins apart at (agent-docs/linkage-check-design.md §15.2): the exact distance, in
 // the loop's plane, between the pins. The scene states the bar as the
 // interval [Length.Value − Length.Bound, Length.Value], so its claims cover
 // the exact length; Length is Exact with a zero Bound when the length is a
@@ -106,7 +106,7 @@ func (l *Linkage) Loops() []*LinkageLoop {
 
 // Close joins a and b, two distinct links of l that already have parents,
 // with a revolute pin at center about axis (world coordinates at the zero
-// pose), so the tree gains one loop (docs/linkage-check-design.md §15.1).
+// pose), so the tree gains one loop (agent-docs/linkage-check-design.md §15.1).
 // Which joint drives the loop is stated per Drive.
 //
 // It refuses, in this order: a nil linkage, a nil or parentless a or b,
@@ -305,7 +305,7 @@ func slideDir(k *Link) motionbound.RatVec {
 }
 
 // anchored reports whether k is a loop slide other than the primary one,
-// whose rail is held by an anchor (docs/linkage-check-design.md §15.2).
+// whose rail is held by an anchor (agent-docs/linkage-check-design.md §15.2).
 func (lp *LinkageLoop) anchored(k *Link) bool {
 	return isSlide(k) && k != lp.slide
 }
@@ -345,7 +345,7 @@ func (lp *LinkageLoop) featureAt(k *Link) r3.Vec {
 
 // readKappa reads the loop's reach — four times its perimeter, the sum of the
 // plane distances between consecutive loop features at the zero pose — and
-// picks κ for every anchored slide (docs/linkage-check-design.md §15.2): the
+// picks κ for every anchored slide (agent-docs/linkage-check-design.md §15.2): the
 // scale that carries its Dir to the reach, doubled until neither anchor
 // meets a revolute parent's pin in the plane. κ only places the anchor; no
 // claim depends on its value.
@@ -390,7 +390,7 @@ func (lp *LinkageLoop) anchorMeets(k *Link, kappa *big.Rat, ahead bool) bool {
 }
 
 // anchorAt is anchored slide k's anchor A = P₀ − κ·Dir, or P₀ + κ·Dir ahead
-// of its rider (docs/linkage-check-design.md §15.2), exactly.
+// of its rider (agent-docs/linkage-check-design.md §15.2), exactly.
 func (lp *LinkageLoop) anchorAt(k *Link, ahead bool) motionbound.RatVec {
 	return lp.anchorAtKappa(k, lp.kappa[k], ahead)
 }
@@ -456,7 +456,7 @@ func (lp *LinkageLoop) readBars() ([]loopBar, error) {
 
 // loopDrive is one loop moved by one drive: its driver and dependents, the
 // private scenes, and the chains of certified enclosures every dependent value
-// is read from (docs/linkage-check-design.md §15.2-§15.3, §15.8). The drive is
+// is read from (agent-docs/linkage-check-design.md §15.2-§15.3, §15.8). The drive is
 // cut into sub-segments, each a stretch of one segment on which the driver's
 // value has one sign, with a chain of its own from its near end. The asks are
 // serialised behind mu, since sketch.Enclose must not run concurrently on one
@@ -484,14 +484,14 @@ type loopDrive struct {
 	hulls  []proofbound.RatInterval
 	// certified lists the stretches [a, b] of the fraction the decomposition
 	// asked whole and sketch certified; a joint-box cell whose loop-axis range
-	// meets none of them is stuck (docs/linkage-check-design.md §16.4).
+	// meets none of them is stuck (agent-docs/linkage-check-design.md §16.4).
 	certified [][2]*big.Rat
 }
 
 type loopSpan = linkagebound.Span
 
 // unbuildableError marks a pose whose loop could not be enclosed
-// (docs/linkage-check-design.md §15.6): the pose is not evaluated and the
+// (agent-docs/linkage-check-design.md §15.6): the pose is not evaluated and the
 // intervals that end at it are undecided. loop is the loop that refused.
 type unbuildableError struct {
 	cause error

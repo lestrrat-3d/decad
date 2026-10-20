@@ -89,7 +89,7 @@ func recordLoop(name string, edges []sketch.BoundaryEdge) (LoopRecord, error) {
 
 // recordEdge converts one boundary edge into its entity's own variant.
 //
-// Admission (docs/sketch-seam-design.md §1): a whole edge records from the
+// Admission (agent-docs/sketch-seam-design.md §1): a whole edge records from the
 // entity's own defining data — TExact is never consulted, because there is no
 // trim to certify (the whole *EllipticalArc edge's contingent flag is a fact
 // about its pinned ends, not topology distrust). A Partial fragment records

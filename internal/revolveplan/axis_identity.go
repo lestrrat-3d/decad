@@ -5,7 +5,7 @@ import "github.com/lestrrat-3d/decad/internal/revolveaxis"
 // AxisIdentical is S4's revolve comparison: the resolved axis's own
 // anchor, direction and each of those four fields' proven bound, under Go ==
 // on the stored floats and never a tolerance
-// (docs/surface-intersection-design.md §2.1 S4).
+// (agent-docs/surface-intersection-design.md §2.1 S4).
 //
 // It compares EIGHT fields and not the whole revolveaxis.Frame. The remaining
 // four — snapTol, radialAdmitAllow, axialExtentUpper and snap — are each

@@ -43,7 +43,7 @@ func coalesceWalksContext(ctx context.Context, walks []survey2d.SideWalk) ([]sur
 // it merges adjacent collinear segments exactly as a loop's coalescing does,
 // but never wraps the last walk into the first. An open chain's two ends are
 // free — they meet no neighbour to merge into
-// (docs/surface-design.md §13.4).
+// (agent-docs/surface-design.md §13.4).
 func coalesceChainWalksContext(ctx context.Context, walks []survey2d.SideWalk) ([]survey2d.SideWalk, error) {
 	return coalesceWalksWithPoll(ctx.Err, walks, false)
 }

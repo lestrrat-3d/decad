@@ -12,7 +12,7 @@ import (
 
 // This file reads the coincident carriers sketch resolves in a scene: two
 // operands' lines on one carrier line (sketch's
-// docs/coincident-carrier-resolution-design.md, "Coincident line carriers"),
+// agent-docs/coincident-carrier-resolution-design.md, "Coincident line carriers"),
 // or two operands' arcs and circles on one carrier circle (the same document's
 // circular case). Where two such entities share a span, sketch emits the span
 // once, under the entity it names, and withdraws it from the other — the
@@ -150,7 +150,7 @@ func CoincidentEdges(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origi
 
 // CoincidentEdgesRegions is CoincidentEdges with a span's partner taken from
 // any other record of the scene — another region of the same operand as
-// well as the other operand (docs/general-boolean-design.md §3 "A1 as a
+// well as the other operand (agent-docs/general-boolean-design.md §3 "A1 as a
 // brep") — so two records of one operand sharing a wall read as A3 reads
 // two operands sharing one.
 func CoincidentEdgesRegions(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin, profiles []*sketch.Profile) (CoincidentReading, bool, error) {

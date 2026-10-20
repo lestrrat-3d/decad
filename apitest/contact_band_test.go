@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The fixtures of docs/multibody-dynamics-design.md §13 PR 18: §10.4's
+// The fixtures of agent-docs/multibody-dynamics-design.md §13 PR 18: §10.4's
 // ContactBand for a body whose held mesh stands for its true boundary up to a
 // positive displacement δ. Two real producers supply δ, read back through
 // Tessellate's Bound rather than pinned: a cap-loop chamfered block, whose δ
@@ -498,7 +498,7 @@ func requireGapHolds(t *testing.T, report *decad.ContactReport, truth *big.Float
 		truth.Text('g', 20), low.Text('g', 20), high.Text('g', 20))
 }
 
-// TestHeldMeshAdmitsEveryPayload is docs/multibody-dynamics-design.md §13
+// TestHeldMeshAdmitsEveryPayload is agent-docs/multibody-dynamics-design.md §13
 // PR 20b: every solid payload without an exact contact family is read off its
 // VerifyAll tessellation, an all-planar body at a chord that chords nothing
 // and a body with a curved face at the request's HeldChord, with δ the mesh's
@@ -660,7 +660,7 @@ func TestHeldChordValidation(t *testing.T) {
 	}
 }
 
-// The fixtures of docs/multibody-dynamics-design.md §13 PR 20c: §10.4's rows
+// The fixtures of agent-docs/multibody-dynamics-design.md §13 PR 20c: §10.4's rows
 // for a displaced pair's lifted set and deep overlap, each run in both body
 // orders over the §2 tray. A held separated pair within the lifted band
 // b = max(SupportBand, δ) over which the tray, the zero-δ body, hosts a

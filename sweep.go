@@ -18,7 +18,7 @@ import (
 // sweepPayload preserves the operation's downstream staging and replays every
 // reduction for placement. internal/twistsweep owns the bounded nonzero-twist case.
 //
-// WithSurfaceResult() (docs/surface-design.md §4, docs/sweep-design.md §14
+// WithSurfaceResult() (agent-docs/surface-design.md §4, agent-docs/sweep-design.md §14
 // increment 3) reaches every one of Sweep's three build paths, but not through
 // one shared mechanism: a one-span straight or arc path sets the flag on its
 // reduced prismPayload/revolvePayload and gets the whole sheet behaviour for
@@ -59,7 +59,7 @@ func WithSweepTwist(angle units.Value) SweepOption {
 // admit bounded closed-path classes.
 //
 // A chain section is gated exactly as a chain [Extrude] gates it
-// (docs/surface-design.md §13.3); the seam's own sentinel wins before any path
+// (agent-docs/surface-design.md §13.3); the seam's own sentinel wins before any path
 // geometry is read. The path must start in the sketch plane with its initial
 // tangent codirectional with that plane's positive normal (ErrDegenerate). The
 // evaluator sweeps one straight span, one arc, or §15.8's cardinal line/arc pair;
@@ -68,7 +68,7 @@ func WithSweepTwist(angle units.Value) SweepOption {
 // closing face. A chain section therefore returns ErrUnsupported for
 // [WithSurfaceResult] (there is no solid to toggle), [WithSweepTwist],
 // [WithMitredJoins] and [WithSectionScale]. That refusal follows the chain's
-// seam gate and precedes every path-geometry gate (docs/sweep-design.md §15.3).
+// seam gate and precedes every path-geometry gate (agent-docs/sweep-design.md §15.3).
 //
 // A nil context, document, sketch, section or path returns ErrDegenerate.
 // Every failure and cancellation
@@ -85,7 +85,7 @@ func Sweep[S Section](ctx context.Context, d *Document, s *sketch.Sketch, sec S,
 	}
 }
 
-// sweepProfile is the profile-fed Sweep body (docs/sweep-design.md §3-§17).
+// sweepProfile is the profile-fed Sweep body (agent-docs/sweep-design.md §3-§17).
 func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile, path *sweepinput.Path,
 	opts []SweepOption) (*Body, error) {
 	if ctx == nil {
@@ -114,7 +114,7 @@ func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 	return body, nil
 }
 
-// This section is the chain-fed form of Sweep, docs/sweep-design.md §15: the open sketch
+// This section is the chain-fed form of Sweep, agent-docs/sweep-design.md §15: the open sketch
 // chain swept along a Path. §15.1 states why the composite join's pairing rule
 // survives an open walk — it pairs by recorded-segment index and reads no
 // winding — and §15.2 states why a ONE-SPAN path needs no such rule at all: it
@@ -124,7 +124,7 @@ func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 // Extent. A one-span arc reduces to a chain Revolve. Composite paths outside
 // §15.8's cardinal class stay ErrUnsupported (Table SC row SC7).
 
-// sweepChain is the chain-fed Sweep body (docs/sweep-design.md §15).
+// sweepChain is the chain-fed Sweep body (agent-docs/sweep-design.md §15).
 func sweepChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch.Chain, path *sweepinput.Path,
 	opts []SweepOption) (*Body, error) {
 	if ctx == nil {
@@ -147,7 +147,7 @@ func sweepChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch.C
 
 	// SC2 before SC3: a seam refusal names a repair the caller makes in the
 	// sketch, and reporting a path refusal first would hide it behind geometry
-	// the caller cannot act on (docs/sweep-design.md Table SC).
+	// the caller cannot act on (agent-docs/sweep-design.md Table SC).
 	chain, plane, err := recordChain(s, ch)
 	if err != nil {
 		return nil, err
@@ -180,7 +180,7 @@ func refuseChainSweepOptions(opts []SweepOption, segments int) error {
 		return fmt.Errorf(`%w: a chain sweep always returns a sheet; WithSurfaceResult has no solid to toggle`,
 			ErrUnsupported)
 	case cfg.Twisted || cfg.Twist.Kind() == units.Angle:
-		return fmt.Errorf(`%w: WithSweepTwist is not implemented for a chain sweep (docs/sweep-design.md Table S row S11)`,
+		return fmt.Errorf(`%w: WithSweepTwist is not implemented for a chain sweep (agent-docs/sweep-design.md Table S row S11)`,
 			ErrUnsupported)
 	case cfg.Mitred || cfg.Scaled:
 		return fmt.Errorf(`%w: WithMitredJoins and WithSectionScale build a solid from a profile only`, ErrUnsupported)

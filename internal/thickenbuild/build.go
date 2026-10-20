@@ -25,7 +25,7 @@ const (
 	Centered
 )
 
-// thickenRadial is the revolve arm's radial-axis gate (docs/surface-design.md
+// thickenRadial is the revolve arm's radial-axis gate (agent-docs/surface-design.md
 // §16.5): the plane-local axis every swept offset must keep a strictly
 // positive radius from, held as exact rationals so each comparison below is
 // decided rather than measured. A surface of revolution's own normal lies in
@@ -60,7 +60,7 @@ func thickenRadialOf(ax revolveaxis.Frame) (thickenRadial, error) {
 
 // Revolve builds a solid of revolution from an admitted revolve sheet
 // by offsetting its recorded meridian and spinning the annulus through the
-// sheet's own interval (docs/surface-design.md §16.5).
+// sheet's own interval (agent-docs/surface-design.md §16.5).
 func Revolve(ctx context.Context, env topo.Env, rp revolveplan.Payload, side Side, tmm, tDelta float64) (*topo.Body, error) {
 	if !rp.SurfaceResult || rp.SectionDelta != 0 || len(rp.Profile.Holes) != 0 {
 		return nil, fmt.Errorf(`%w: this revolve sheet has no admitted Thicken section`, decaderr.ErrUnsupported)
@@ -122,7 +122,7 @@ func RibbonSteps(side Side) (int, int) {
 
 // ChainExtrude builds a solid from a ribbon: the open walk's own
 // thickened section swept through the ribbon's unchanged interval
-// (docs/surface-design.md §16.6).
+// (agent-docs/surface-design.md §16.6).
 func ChainExtrude(ctx context.Context, env topo.Env, cp chainrecord.Payload, side Side, tmm, tDelta float64) (*topo.Body, error) {
 	if len(cp.Chains) != 1 || cp.SectionDelta != 0 {
 		return nil, fmt.Errorf(`%w: this ribbon has no admitted Thicken walk`, decaderr.ErrUnsupported)
@@ -157,7 +157,7 @@ func ChainExtrude(ctx context.Context, env topo.Env, cp chainrecord.Payload, sid
 
 // ChainRevolve builds a solid of revolution from an uncapped chain
 // shell: §16.6's assembled section under §16.5's sweep and radial gate
-// (docs/surface-design.md §16.7).
+// (agent-docs/surface-design.md §16.7).
 func ChainRevolve(ctx context.Context, env topo.Env, cp revolveplan.ChainPayload, side Side, tmm, tDelta float64) (*topo.Body, error) {
 	// The prism ribbon's own admission, re-read over the meridian walk set
 	// (ChainExtrude above): §16.6 offsets ONE walk, and the assembled

@@ -12,7 +12,7 @@ import (
 	"github.com/lestrrat-go/option/v3"
 )
 
-// This file is the motion vocabulary of docs/motion-check-design.md §2-§4:
+// This file is the motion vocabulary of agent-docs/motion-check-design.md §2-§4:
 // the sealed Motion set, root-owned option types and
 // MotionReport records. motion_verify.go runs the check, and
 // internal/motionbound proves the bounds its interval certificate consumes.
@@ -161,7 +161,7 @@ func decodeMotionOptions(opts []MotionOption) ([]motionoption.MotionOption, erro
 
 type motionConfig = motionoption.Config
 
-// MotionReport is VerifyMotion's path report (docs/motion-check-design.md §4).
+// MotionReport is VerifyMotion's path report (agent-docs/motion-check-design.md §4).
 type MotionReport struct {
 	Request     MotionRequest
 	Motion      Motion

@@ -60,7 +60,7 @@ func RatWeighted(points []RatPoint, weights []int64, den int64) RatPoint {
 }
 
 // ClampedBezierSpans extracts the Bézier form of a clamped polynomial B-spline
-// by Boehm knot insertion (docs/spline-design.md §5.1). Every interior knot is
+// by Boehm knot insertion (agent-docs/spline-design.md §5.1). Every interior knot is
 // raised to multiplicity degree; the control points then split into consecutive
 // blocks of degree+1 that share their boundary values, which is exactly the
 // per-span Bézier form. BezierSliceCount proves that shape holds before a

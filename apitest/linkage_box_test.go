@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file holds the PR 1 tests of docs/linkage-check-design.md §14.8:
+// This file holds the PR 1 tests of agent-docs/linkage-check-design.md §14.8:
 // scene 6 (the crane's box), the budget, the one-joint boxes,
 // Linkage.Configuration and the standing tests of VerifyJointBox. Bounds are
 // asserted against geometric truths, never pinned to a measured literal: FMA
@@ -126,7 +126,7 @@ func requireTiles(t *testing.T, cells []craneCell) {
 	}
 }
 
-// TestVerifyJointBoxCrane is scene 6 of docs/linkage-check-design.md §14.8,
+// TestVerifyJointBoxCrane is scene 6 of agent-docs/linkage-check-design.md §14.8,
 // the acceptance target. The boom's tip corner reaches the wall's face
 // y = 62 on the one curve d*(θ) = (62 − 5·cos θ)/sin θ − 60, from θ ≈ 40.29°
 // at d = 30 to d ≈ 2.075 at θ = 80°; the colliding region lies above it. The
@@ -328,7 +328,7 @@ func TestVerifyJointBoxBudget(t *testing.T) {
 }
 
 // TestVerifyJointBoxOneJoint covers one varying joint
-// (docs/linkage-check-design.md §14.8).
+// (agent-docs/linkage-check-design.md §14.8).
 //
 //   - Scene 2's elbow as the box [0°, 180°], the shoulder unlisted: the
 //     forearm's leading corner reaches the fence at φ* = acos(−19/25) −
@@ -404,7 +404,7 @@ func TestVerifyJointBoxOneJoint(t *testing.T) {
 }
 
 // TestLinkageConfiguration pins Linkage.Configuration
-// (docs/linkage-check-design.md §14.1): scene 1's forearm point (96, 0, 0) at
+// (agent-docs/linkage-check-design.md §14.1): scene 1's forearm point (96, 0, 0) at
 // shoulder 30° and elbow −30° is (48·cos 30°, 48·sin 30°, 0) + (48, 0, 0),
 // PoseAt at s = 1/3 is Configuration of its own values bit for bit, and each
 // refusal carries its sentinel.
@@ -477,7 +477,7 @@ func TestJointBoxOptionSet(t *testing.T) {
 }
 
 // TestVerifyJointBoxErrors is one subtest per row of
-// docs/linkage-check-design.md §14.6's table and per shared row of §8 the
+// agent-docs/linkage-check-design.md §14.6's table and per shared row of §8 the
 // public API can reach, each asserting the sentinel, no report, and an
 // unchanged document. The row for a body this evaluator did not build lives
 // in linkage_internal_test.go.

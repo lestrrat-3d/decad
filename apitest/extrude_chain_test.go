@@ -12,14 +12,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/surface-design.md §13's public-surface tests for the
+// This file is agent-docs/surface-design.md §13's public-surface tests for the
 // first chain-extrude increment: chain Extrude over a chain of exactly one
 // straight segment, and the SweepChain/LoftChain staged refusals (§13.5,
 // §14). Multi-segment and curved-wall chains, and chain Revolve, land in a
 // later increment (§15's T131-T135, T140-T141).
 
 // lineChainSketch builds a sketch holding one 40 mm horizontal line on the XY
-// plane and nothing else — docs/surface-design.md §15's T130 fixture:
+// plane and nothing else — agent-docs/surface-design.md §15's T130 fixture:
 // s.Profiles() is empty and s.Chains() has length 1.
 func lineChainSketch(tb testing.TB) (*sketch.Sketch, *sketch.Chain) {
 	tb.Helper()
@@ -39,7 +39,7 @@ func lineChainSketch(tb testing.TB) (*sketch.Sketch, *sketch.Chain) {
 	return s, chains[0]
 }
 
-// TestExtrudeChainOneLineRibbon is docs/surface-design.md's T130 in full: a
+// TestExtrudeChainOneLineRibbon is agent-docs/surface-design.md's T130 in full: a
 // single 40 mm line, the only non-construction entity in its sketch,
 // extruded 10 mm Along into a single-face ribbon sheet.
 func TestExtrudeChainOneLineRibbon(t *testing.T) {
@@ -70,7 +70,7 @@ func TestExtrudeChainOneLineRibbon(t *testing.T) {
 	require.Equal(t, []*decad.Body{body}, doc.Bodies())
 }
 
-// TestExtrudeChainRibbonReadsValid is docs/surface-design.md §9.1's fourth
+// TestExtrudeChainRibbonReadsValid is agent-docs/surface-design.md §9.1's fourth
 // validity leg, restated for a chain-fed prism: `sketch` already proved
 // T130's single line simple, chain Extrude refuses a non-positive height, and
 // a simple planar curve crossed with a positive interval cannot
@@ -96,7 +96,7 @@ func TestExtrudeChainRibbonReadsValid(t *testing.T) {
 
 // TestExtrudeChainDiagonalLineAreaBoundEnclosesAnalyticValue builds a
 // diagonal (irrational-length) one-line chain, so the wall area's bound is
-// genuinely nonzero (docs/surface-design.md §13.4's boundedAdd/boundedMul
+// genuinely nonzero (agent-docs/surface-design.md §13.4's boundedAdd/boundedMul
 // composition, never a raw float product). Shown-to-fail: replacing
 // chainrecord.Build's boundedMul(measuredScalar(w.length,
 // w.lengthBound), height) with an uncharged exactScalar(w.length*height.value)
@@ -131,11 +131,11 @@ func TestExtrudeChainDiagonalLineAreaBoundEnclosesAnalyticValue(t *testing.T) {
 		"the published area must enclose the analytic value within its own proven bound")
 }
 
-// TestExtrudeChainRejectsUncertifiedFragment is docs/surface-design.md's
+// TestExtrudeChainRejectsUncertifiedFragment is agent-docs/surface-design.md's
 // T136: two lines crossing at their midpoints split into four one-edge
 // chains — sketch's own C3 fixture — each Partial fragment TExact == true
 // under a pure line/line kernel. Adding an untouched spline elsewhere
-// withholds certification sketch-wide (docs/sketch-seam-design.md §1), so
+// withholds certification sketch-wide (agent-docs/sketch-seam-design.md §1), so
 // every fragment — the chain's included — reads TExact == false, and a whole
 // edge could never demonstrate this refusal: it never consults the flag at
 // all.
@@ -170,7 +170,7 @@ func TestExtrudeChainRejectsUncertifiedFragment(t *testing.T) {
 	require.Empty(t, doc.Bodies())
 }
 
-// TestExtrudeChainRejectsStaleChain is docs/surface-design.md's T137's first
+// TestExtrudeChainRejectsStaleChain is agent-docs/surface-design.md's T137's first
 // half: a chain held across a later Solve reads stale.
 func TestExtrudeChainRejectsStaleChain(t *testing.T) {
 	t.Parallel()
@@ -200,7 +200,7 @@ func TestExtrudeChainRejectsStaleChain(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// TestExtrudeChainRejectsInvalidChain is docs/surface-design.md's T137's
+// TestExtrudeChainRejectsInvalidChain is agent-docs/surface-design.md's T137's
 // second half: a chain that doubles back over itself — sketch's own C6
 // fixture — reads Chain.Valid == false, and chain Extrude refuses it rather
 // than silently sweeping it.
@@ -225,7 +225,7 @@ func TestExtrudeChainRejectsInvalidChain(t *testing.T) {
 	require.Empty(t, doc.Bodies())
 }
 
-// TestExtrudeChainMultiSegmentWallSet is docs/surface-design.md's T131: an
+// TestExtrudeChainMultiSegmentWallSet is agent-docs/surface-design.md's T131: an
 // open three-segment walk — line, arc, line — each meeting the next at a
 // shared point, built into a three-face ribbon whose per-wall area bounds
 // compose through boundedAdd rather than as raw floats.
@@ -291,7 +291,7 @@ func TestExtrudeChainMultiSegmentWallSet(t *testing.T) {
 		"the body's own area bound is the three walls' own bounds folded through boundedAdd")
 }
 
-// TestExtrudeChainRectangleMinusOneSideBuildsThreeWalls is docs/surface-design.md's
+// TestExtrudeChainRectangleMinusOneSideBuildsThreeWalls is agent-docs/surface-design.md's
 // T132: a rectangle with one side erased mints one wall per surviving side —
 // three, not four — the ribbon this section opens on.
 func TestExtrudeChainRectangleMinusOneSideBuildsThreeWalls(t *testing.T) {
@@ -326,7 +326,7 @@ func TestExtrudeChainRectangleMinusOneSideBuildsThreeWalls(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// TestExtrudeChainOverEachChainOfACutVertex is docs/surface-design.md's T133:
+// TestExtrudeChainOverEachChainOfACutVertex is agent-docs/surface-design.md's T133:
 // three lines meeting at one point publish three separate one-edge chains
 // (§13.1's cut-vertex rule), and chain Extrude over each in turn builds its
 // own one-face ribbon — three bodies, never one.
@@ -356,7 +356,7 @@ func TestExtrudeChainOverEachChainOfACutVertex(t *testing.T) {
 }
 
 // TestExtrudeChainFreeformWallAreaNeverPublishesTheLengthUnderestimate is
-// docs/surface-design.md's T141: a chain holding a Tier A free-form fragment
+// agent-docs/surface-design.md's T141: a chain holding a Tier A free-form fragment
 // builds a NURBSSurface wall whose area is Approximate over
 // internal/freeform/spline_length.go's proven bracket, and Chain.Length·h — the sampling-
 // convergent underestimate §13.3 forbids chain Extrude from ever publishing —
@@ -395,9 +395,9 @@ func TestExtrudeChainFreeformWallAreaNeverPublishesTheLengthUnderestimate(t *tes
 		"Chain.Length's sampling-convergent underestimate must sit at or below the enclosure's own lower end, never inside it")
 }
 
-// TestChainFedRefusals is docs/surface-design.md's T139: a SweepChain over a
+// TestChainFedRefusals is agent-docs/surface-design.md's T139: a SweepChain over a
 // COMPOSITE path is ErrUnsupported (R34) ahead of the increment that builds
-// docs/sweep-design.md §15.1's join, and chain Revolve handed a chain with both
+// agent-docs/sweep-design.md §15.1's join, and chain Revolve handed a chain with both
 // free ends on the resolved axis is ErrUnsupported (R22), pending its
 // closed-sheet pole topology. A one-span straight path builds instead, which
 // sweep_chain_test.go owns; LoftChain's own staged refusal is the curved pair
@@ -442,7 +442,7 @@ func TestChainFedRefusals(t *testing.T) {
 	require.Empty(t, doc.Bodies())
 }
 
-// TestExtrudeChainRibbonsWeldAtAProvenCoincidentPair is docs/surface-design.md's
+// TestExtrudeChainRibbonsWeldAtAProvenCoincidentPair is agent-docs/surface-design.md's
 // T140: a ribbon is an ordinary Stitch operand, admitted by the existing
 // gates and not by a new one. Two independently built ribbons whose free-end
 // edges are a proven-coincident, zero-bound pair weld under Table J's Line3

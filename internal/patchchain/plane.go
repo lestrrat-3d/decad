@@ -27,15 +27,15 @@ type Edge struct {
 func ProvePlane(verts []Vertex, edges []Edge) error {
 	for _, v := range verts {
 		if !proofbound.FiniteVec(v.Position) || v.Bound != 0 {
-			return fmt.Errorf(`%w: a PatchEdges chain vertex carries a nonzero bound, so its position is not proven exactly (docs/surface-design.md Table R row R6)`, decaderr.ErrUnsupported)
+			return fmt.Errorf(`%w: a PatchEdges chain vertex carries a nonzero bound, so its position is not proven exactly (agent-docs/surface-design.md Table R row R6)`, decaderr.ErrUnsupported)
 		}
 	}
 	for _, e := range edges {
 		if !e.Exact {
-			return fmt.Errorf(`%w: a PatchEdges chain edge's own curve carries a nonzero bound, so its geometry is not proven exactly (docs/surface-design.md Table R row R6)`, decaderr.ErrUnsupported)
+			return fmt.Errorf(`%w: a PatchEdges chain edge's own curve carries a nonzero bound, so its geometry is not proven exactly (agent-docs/surface-design.md Table R row R6)`, decaderr.ErrUnsupported)
 		}
 		if e.Curved && (!proofbound.FiniteVec(e.Center) || !proofbound.FiniteVec(e.Axis)) {
-			return fmt.Errorf(`%w: a PatchEdges chain edge's carrier plane is not representable (docs/surface-design.md Table R row R6)`, decaderr.ErrUnsupported)
+			return fmt.Errorf(`%w: a PatchEdges chain edge's carrier plane is not representable (agent-docs/surface-design.md Table R row R6)`, decaderr.ErrUnsupported)
 		}
 	}
 
@@ -44,7 +44,7 @@ func ProvePlane(verts []Vertex, edges []Edge) error {
 		normal, origin, ok = planeFromCarrier(edges)
 	}
 	if !ok {
-		return fmt.Errorf(`%w: a PatchEdges chain has too few independent points to determine a plane (docs/surface-design.md Table R row R6)`, decaderr.ErrUnsupported)
+		return fmt.Errorf(`%w: a PatchEdges chain has too few independent points to determine a plane (agent-docs/surface-design.md Table R row R6)`, decaderr.ErrUnsupported)
 	}
 
 	normalDy := proofarith.DyVec(normal)
@@ -52,7 +52,7 @@ func ProvePlane(verts []Vertex, edges []Edge) error {
 	for _, v := range verts {
 		rel := proofarith.DvSub(proofarith.DyVec(v.Position), originDy)
 		if !proofarith.DvDot(normalDy, rel).IsZero() {
-			return fmt.Errorf(`%w: a PatchEdges chain is not planar (docs/surface-design.md Table R row R6)`, decaderr.ErrUnsupported)
+			return fmt.Errorf(`%w: a PatchEdges chain is not planar (agent-docs/surface-design.md Table R row R6)`, decaderr.ErrUnsupported)
 		}
 	}
 	for _, e := range edges {
@@ -60,11 +60,11 @@ func ProvePlane(verts []Vertex, edges []Edge) error {
 			continue
 		}
 		if !proofarith.DvIsZero(proofarith.DvCross(proofarith.DyVec(e.Axis), normalDy)) {
-			return fmt.Errorf(`%w: a PatchEdges chain edge's carrier plane does not match the chain's plane (docs/surface-design.md Table R row R6)`, decaderr.ErrUnsupported)
+			return fmt.Errorf(`%w: a PatchEdges chain edge's carrier plane does not match the chain's plane (agent-docs/surface-design.md Table R row R6)`, decaderr.ErrUnsupported)
 		}
 		rel := proofarith.DvSub(proofarith.DyVec(e.Center), originDy)
 		if !proofarith.DvDot(normalDy, rel).IsZero() {
-			return fmt.Errorf(`%w: a PatchEdges chain edge's carrier plane does not match the chain's plane (docs/surface-design.md Table R row R6)`, decaderr.ErrUnsupported)
+			return fmt.Errorf(`%w: a PatchEdges chain edge's carrier plane does not match the chain's plane (agent-docs/surface-design.md Table R row R6)`, decaderr.ErrUnsupported)
 		}
 	}
 	return nil

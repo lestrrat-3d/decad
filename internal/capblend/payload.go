@@ -23,9 +23,9 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
-// This file is the cap-loop chamfer payload docs/modify-reach-design.md PR E
+// This file is the cap-loop chamfer payload agent-docs/modify-reach-design.md PR E
 // (§14) states: the record Build evaluates over topology nodes and a placement
-// re-evaluates. It implements topo.Payload (docs/evaluator-design.md §8).
+// re-evaluates. It implements topo.Payload (agent-docs/evaluator-design.md §8).
 //
 // The reduction mirrors modify-design §2's lateral-edge one: the selected
 // cap loop's boundary is offset dc into the material (the "cap contour",
@@ -44,7 +44,7 @@ import (
 // re-derived.
 
 // Payload is the evaluator's own record of a complete-cap-loop
-// chamfer result (docs/modify-reach-design.md §8.3, BX3): the receiver's
+// chamfer result (agent-docs/modify-reach-design.md §8.3, BX3): the receiver's
 // unrewritten section (unselected loops build exactly as an ordinary prism;
 // selected loops are chamfered per below), the plane frame, sweep interval,
 // accumulated placement, each chamfered cap's two setbacks, and which loop
@@ -79,7 +79,7 @@ type Payload struct {
 	// (BandResult.delta, capband.ContourDisplacement), keyed by the
 	// (loop, cap) that band sits on. BuildBand already computes it once for
 	// every cap-level vertex, edge and area reading of that band; storing it here
-	// lets a later reader — the tessellator, docs/tessellation-reach-design.md
+	// lets a later reader — the tessellator, agent-docs/tessellation-reach-design.md
 	// §7 — charge the SAME number those readings did rather than re-derive a
 	// second one from the same offset. It is plane-local and
 	// placement-invariant, exactly as patches is.
@@ -88,7 +88,7 @@ type Payload struct {
 	// (draftrecord.Payload.Band): its corners take the sharp offset
 	// rule (offset2d.SharpJoinsBudget) rather than the reflex-corner arc, its
 	// wall patches carry the prism's side(i, j) roles, and its rim and ruling
-	// edges take the prism's convexity (docs/draft-design.md §2, §6). A
+	// edges take the prism's convexity (agent-docs/draft-design.md §2, §6). A
 	// cap-loop chamfer never sets it.
 	Draft bool
 	// fillet marks a route L view whose inward circular walk may collapse to
@@ -104,7 +104,7 @@ type Payload struct {
 	LoftSource *LoftSource
 }
 
-// Setback is one chamfered cap's two setbacks (docs/modify-reach-design.md
+// Setback is one chamfered cap's two setbacks (agent-docs/modify-reach-design.md
 // §8.3.1): dc across the cap face — the in-plane offset of the cap contour —
 // and ds down the side wall — the axial distance from the cap level to the
 // side level — each beside the rounding its own unit conversion committed.
@@ -445,7 +445,7 @@ func (cbp Payload) Loops() []sectionrecord.LoopRecord {
 }
 
 // offsetJoins is capband.OffsetJoins read under cbp's corner rule for loop li. A
-// draft view (docs/draft-design.md §2) checks the band radius of each circular
+// draft view (agent-docs/draft-design.md §2) checks the band radius of each circular
 // wall it moves exactly as capband.OffsetJoins does and then resolves every corner
 // by the sharp rule, each walk at its own amount (offset2d.DraftWalkAmounts, §10.2): a
 // reflex corner is mitered, a corner at a circular walk must be a G1 join

@@ -14,7 +14,7 @@ import (
 )
 
 // These tests drive the islands and the frictionless certified solver of a
-// world of four or more bodies (docs/multibody-dynamics-design.md §6.1–§6.3
+// world of four or more bodies (agent-docs/multibody-dynamics-design.md §6.1–§6.3
 // and §6.6, §13 PR 4) through the real producers: Body.MassProperties for
 // mass, SweepPair for every initial manifold and continuation, and the
 // step's own certificate for every published impulse and velocity.
@@ -31,7 +31,7 @@ func islandStepConfig() dynamics.StepConfig {
 	return config
 }
 
-// The 3-2-1 pyramid of docs/multibody-dynamics-design.md §2's Phase 1 scene:
+// The 3-2-1 pyramid of agent-docs/multibody-dynamics-design.md §2's Phase 1 scene:
 // a fixed 200×200×10 mm floor with its top at z = 0, three 20 mm boxes on it
 // at x = 0, 25 and 50, two boxes bridging the 5 mm gaps on top of them, and
 // one box on the top row. Every coordinate is dyadic.
@@ -402,7 +402,7 @@ func TestIslandTwoSphereImpactThroughGeneralPath(t *testing.T) {
 	}
 }
 
-// Gates and legs of the island certificate (docs/multibody-dynamics-design.md
+// Gates and legs of the island certificate (agent-docs/multibody-dynamics-design.md
 // §6.3, frictionless rows), each shown to fail by deleting it in
 // island_certify.go, watching the named test go red, and restoring it:
 //   - linear law: TestIslandCertificateGates/"linear law" and

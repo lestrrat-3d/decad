@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The fixtures of docs/mirror-pattern-design.md §2 and §8: every payload class
+// The fixtures of agent-docs/mirror-pattern-design.md §2 and §8: every payload class
 // mirrored across the plane x = 30, and the plane named by a face.
 
 // mirrorScene is one fixture's world and document.
@@ -126,7 +126,7 @@ func requireMirroredCentroid(t *testing.T, src, img decad.VecMeasurement) {
 		"image centroid %v is not the source centroid %v reflected across x = 30 within %v + %v", img.Value, src.Value, ib, sb)
 }
 
-// TestMirroredCopyEveryPayload is docs/mirror-pattern-design.md §8's
+// TestMirroredCopyEveryPayload is agent-docs/mirror-pattern-design.md §8's
 // every-payload test over §3's consumer table: each payload class mirrored
 // across the plane x = 30 keeps its volume and area within their bounds,
 // lands its centroid at x = 60 − x_source, verifies Sound beside its Sound

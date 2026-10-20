@@ -55,8 +55,8 @@ type LoftResult struct {
 	VolumeProof bool
 }
 
-// RestateLoft is docs/tessellation-reach-design.md §4's loftPayload EXACT
-// RESTATEMENT (docs/tessellation-design.md §13's increment T6). A loft body
+// RestateLoft is agent-docs/tessellation-reach-design.md §4's loftPayload EXACT
+// RESTATEMENT (agent-docs/tessellation-design.md §13's increment T6). A loft body
 // already holds the complete, globally oriented triangle set its construction
 // built and its crossing audit classified. A solid copies that set; a sheet
 // copies its recorded wall range and omits the cap ranges. Both preserve the
@@ -67,14 +67,14 @@ type LoftResult struct {
 // It takes no chord tolerance, and that is the design's own reading rather
 // than an omission: this path adds no chording of its own, so there is no
 // chording component for a tolerance to bind, and the whole published bound is
-// inherited payload displacement, which docs/tessellation-design.md §1's
+// inherited payload displacement, which agent-docs/tessellation-design.md §1's
 // Tolerance row lets ride above tol exactly as a prism's per-end axial
 // displacement does. A prism reserves its section displacement from the
 // requested tolerance because its own chords are still to be chosen against
 // what is left; a loft has no such choice to make, so it neither reserves nor
 // refuses.
 //
-// Orientation needs no work here either. docs/loft-design.md §5's whole-shell
+// Orientation needs no work here either. agent-docs/loft-design.md §5's whole-shell
 // step already turned every triangle outward from the signed tetrahedron sum,
 // and placed re-runs that step on the placed triangle set, so §4's "a
 // reflected placement reverses every final triangle once" rule is discharged
@@ -88,7 +88,7 @@ type LoftResult struct {
 // missing source role is Degenerate because the live topology contradicts its
 // payload.
 //
-// A non-finite published term refuses (docs/tessellation-design.md §12): an
+// A non-finite published term refuses (agent-docs/tessellation-design.md §12): an
 // absent proof must never reach a consumer as a bound. The sheet never
 // publishes a volume proof, so its value does not gate sheet export. A sheet's
 // area slack may include nonnegative cap allowances; they conservatively cover
@@ -96,7 +96,7 @@ type LoftResult struct {
 // facet departure is published for EVERY face, and as the mesh's own bound,
 // since each face's facets are exactly the payload's triangles for it. A zero
 // is published only where the payload proved both facet-departure terms zero
-// by value (docs/loft-design.md §5.2), which is what admits such a loft to the
+// by value (agent-docs/loft-design.md §5.2), which is what admits such a loft to the
 // boolean's all-planar zero-bound path.
 func RestateLoft(ctx context.Context, in LoftInput) (LoftResult, error) {
 	if err := ctx.Err(); err != nil {
@@ -107,10 +107,10 @@ func RestateLoft(ctx context.Context, in LoftInput) (LoftResult, error) {
 	}
 
 	// Provenance roles are how the payload's cells name the faces the
-	// topology builder built from them (docs/evaluator-design.md §3): one
+	// topology builder built from them (agent-docs/evaluator-design.md §3): one
 	// side(i,j,k) face per wall triangle — a loft coalesces no wall, so the
 	// two halves of a cell keep their two distinct faces even when coplanar
-	// (docs/tessellation-design.md §4). A sheet carries no cap role.
+	// (agent-docs/tessellation-design.md §4). A sheet carries no cap role.
 	faceOfRole := func(role string) (int, error) {
 		f, ok := in.FaceOfRole[role]
 		if !ok {
@@ -194,8 +194,8 @@ func RestateLoft(ctx context.Context, in LoftInput) (LoftResult, error) {
 	if tessellation.RequireClosedMesh(out.Triangles) != nil {
 		return LoftResult{}, tessellation.UnsupportedError(`the loft payload's held triangle set is not a closed mesh, so it restates no boundary`)
 	}
-	// docs/tessellation-design.md §4's signed-volume audit, over the same
-	// identity docs/loft-design.md §5's whole-shell orientation rule reads and
+	// agent-docs/tessellation-design.md §4's signed-volume audit, over the same
+	// identity agent-docs/loft-design.md §5's whole-shell orientation rule reads and
 	// at the same anchor the loft build used. The shell is not a void, so its
 	// sum must come out positive.
 	if !finiteVec(in.Anchor) {

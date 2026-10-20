@@ -78,7 +78,7 @@ func Example_decad_loft_chain() {
 	// sheet: true, solid: false, faces: 4
 	// free edges: 6
 	// area: 350.0000 mm² (Approximate)
-	// reversed argument order: decad: not supported by the current evaluator: the second chain's plane does not lie on the first plane's positive side, so this evaluator has no stated positive side for the ribbon between them (docs/loft-design.md §16.2)
+	// reversed argument order: decad: not supported by the current evaluator: the second chain's plane does not lie on the first plane's positive side, so this evaluator has no stated positive side for the ribbon between them (agent-docs/loft-design.md §16.2)
 	// bodies: 1
 }
 

@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// These fixtures pin docs/general-boolean-design.md §9's A1 brep rows: a
+// These fixtures pin agent-docs/general-boolean-design.md §9's A1 brep rows: a
 // Union whose boss is flush with the plate's outline, or crosses it, builds an
 // analytic brep body that every brep consumer reads.
 

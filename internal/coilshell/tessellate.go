@@ -12,7 +12,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// This file is docs/helix-design.md Table CD row CD2: a coil's mesh is an
+// This file is agent-docs/helix-design.md Table CD row CD2: a coil's mesh is an
 // exact restatement of the held triangles Build made and audited, with each
 // vertex's β as its per-vertex bound, and the §8.1 area slack and §8.2
 // occupied-volume proof that admit it to the mesh boolean (CD3), to
@@ -21,7 +21,7 @@ import (
 // Tessellate restates the held triangles of body, whose payload is cp, as a
 // mesh node. A tolerance below δ asks for a mesh closer to the body than its
 // held vertices are, which no restatement can give
-// (docs/tessellation-design.md §7's rule). Every wall triangle attributes to
+// (agent-docs/tessellation-design.md §7's rule). Every wall triangle attributes to
 // the side(i, k) face of the recorded segment whose chord its cell sweeps,
 // and every cap triangle to its cap. The boundary proof is the build's own
 // crossing audit, so the mesh runs no facet-contact audit of its own.

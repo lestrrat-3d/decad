@@ -14,7 +14,7 @@ import (
 
 // This file holds every brep body's vertex at an arc's natural t = 1 end to
 // the point the arc denotes there: Start's radius at End's angle
-// (docs/evaluator-design.md §4). Each section below draws a sketch arc about
+// (agent-docs/evaluator-design.md §4). Each section below draws a sketch arc about
 // the origin whose End sits 500 ulps past Start's radius, inside the arc
 // preflight's 1024-ulp allowance, and never solves the sketch, so the record
 // keeps the drawn End. The vertex there holds End verbatim, about 1.8e-12 mm

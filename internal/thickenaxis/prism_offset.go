@@ -17,7 +17,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file builds the offset sections of a prism sheet for docs/surface-design.md
+// This file builds the offset sections of a prism sheet for agent-docs/surface-design.md
 // §16.2 (Thicken) and §17.2 (Offset). The shell tolerance the offset construction
 // binds is the tol parameter of each builder; the root passes its shellTol.
 

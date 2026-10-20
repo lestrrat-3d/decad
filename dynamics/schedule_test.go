@@ -14,7 +14,7 @@ import (
 )
 
 // These tests drive the step of a world of four or more bodies
-// (docs/multibody-dynamics-design.md §4.3 and §5, §13 PR 3) through the real
+// (agent-docs/multibody-dynamics-design.md §4.3 and §5, §13 PR 3) through the real
 // producers: Document.SweptBox for the broad phase, Document.SweepPair for
 // every candidate pair, and SweepReport.CertifiedPosesAtInterval for replay.
 //

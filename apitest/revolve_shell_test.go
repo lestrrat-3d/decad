@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file covers docs/modify-reach-design.md §9.3 (Table RX row RX2, Table
+// This file covers agent-docs/modify-reach-design.md §9.3 (Table RX row RX2, Table
 // BX row BX7): Shell on a partial revolve with both angular caps removed. Every
 // fixture is drawn on the XY plane and revolved half a turn about the sketch's
 // u axis, so a meridian point (u, v) is the axis coordinate z = u and the
@@ -188,7 +188,7 @@ func TestRevolveShellConeApex(t *testing.T) {
 	//
 	// The miter and the arc's foot sit at irrational points the float build
 	// rounds, so the wall's record carries a nonzero section displacement
-	// (docs/modify-reach-design.md §9.3.1). Every reading below is held to the
+	// (agent-docs/modify-reach-design.md §9.3.1). Every reading below is held to the
 	// closed form in 400-bit reference arithmetic with no slack: the volume's
 	// bound encloses π times the wall's ∫ρ dA, and inward the cavity's apex
 	// vertex, held at the float nearest 20 − √5 (√5 trailing), encloses the
@@ -487,7 +487,7 @@ func TestRevolveShellTessellates(t *testing.T) {
 	}
 }
 
-// This half covers the closed full-turn shell of docs/modify-reach-design.md
+// This half covers the closed full-turn shell of agent-docs/modify-reach-design.md
 // §9.3 (Table BX row BX6): Shell(nil, t, WithNoOpenings()) on a full revolve.
 // The wall region is the same one a partial turn sweeps, swept a whole turn,
 // so V = 2π·∫ρ dA over it. An off-axis meridian's wall region is the meridian

@@ -27,7 +27,7 @@ func WallReading(
 		return survey2d.WallReading{}, err
 	}
 	// The sweep, with the subtraction's OWN rounding plus the proven angular
-	// displacement (docs/evaluator-design.md §6) as its bound — the two
+	// displacement (agent-docs/evaluator-design.md §6) as its bound — the two
 	// recorded angles are held floats, not the angle the record denotes, so
 	// the displacement between the two is part of the error too. A survey
 	// bound may never be floored at some coarse magnitude ceiling the way a

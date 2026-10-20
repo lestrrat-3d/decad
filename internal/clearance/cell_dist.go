@@ -10,7 +10,7 @@ import (
 )
 
 // This file holds the closed-form readings every clearance cell publishes
-// (docs/clearance-design.md §5): each returns a proven enclosure of one
+// (agent-docs/clearance-design.md §5): each returns a proven enclosure of one
 // distance or signed height read off the carriers' own floats. Every product,
 // sum and difference is taken exactly over the dyadic rationals, and every
 // square root and quotient is rounded outward by an exact comparison, so no

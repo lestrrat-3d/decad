@@ -13,9 +13,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Regression guard for the agent docs CLAUDE.md, the docs/layout.md index and
-// the docs/layout/ part files (see
-// docs/layout.md's own "## Layout rows" section and
+// Regression guard for the agent docs CLAUDE.md, the agent-docs/layout.md index and
+// the agent-docs/layout/ part files (see
+// agent-docs/layout.md's own "## Layout rows" section and
 // ~/.claude/docs/agent-instructions.md's "prefer mechanical doc/code checks
 // over exhortations"): each feature PR tends to append prose to a row's
 // description cell instead of pointing elsewhere, so this test fails the
@@ -23,11 +23,11 @@ import (
 // or a row stops parsing as a row at all. A mechanical comparison that can
 // FAIL beats a comment asking authors to "keep it short".
 //
-// The files are measured under one scanner and one spec each. Each docs/layout/
+// The files are measured under one scanner and one spec each. Each agent-docs/layout/
 // part file holds Layout rows under its own "## Layout" heading and its own
 // byte budget, so a parallel PR that fills one part cannot break another.
 // CLAUDE.md declares its own non-Layout table, and both it and the
-// docs/layout.md index are refused a Layout heading or table outright, since
+// agent-docs/layout.md index are refused a Layout heading or table outright, since
 // a copy of the table outside the parts is one that nothing keeps in step
 // with them. Coverage runs over the union of every part's rows, and a path
 // with rows in two parts is refused.
@@ -75,12 +75,12 @@ const (
 	// row spells that content in words instead of by number.
 	layoutCellMaxChars = 300
 	// designDocDir and designDocSuffix spell CLAUDE.md's own Conventions
-	// rule, "Design docs live in `docs/<topic>-design.md`", once. Every file
+	// rule, "Design docs live in `agent-docs/<topic>-design.md`", once. Every file
 	// matching them must carry a Layout row, the mirror of the root-".go"
 	// coverage check: a design doc with no row is a doc CLAUDE.md never
 	// points at. coverageTargets owns what keeps either check from matching
 	// nothing and covering nothing while reporting PASS.
-	designDocDir    = "docs"
+	designDocDir    = "agent-docs"
 	designDocSuffix = "-design.md"
 )
 
@@ -188,7 +188,7 @@ var (
 	}
 )
 
-// layoutPartSpec is the spec of one docs/layout/ part file: it holds Layout
+// layoutPartSpec is the spec of one agent-docs/layout/ part file: it holds Layout
 // rows and weighs at most layoutPartMaxBytes.
 func layoutPartSpec(name string) docSpec {
 	return docSpec{
@@ -398,8 +398,8 @@ func (spec docSpec) requireSeparator(lines []string, i int, header string) error
 // five structural rules:
 //
 //  1. layoutHeading appears exactly once in each spec that holds Layout rows
-//     (a docs/layout/ part file), spelled exactly, and never at all in a spec
-//     that does not (CLAUDE.md, the docs/layout.md index). A
+//     (a agent-docs/layout/ part file), spelled exactly, and never at all in a spec
+//     that does not (CLAUDE.md, the agent-docs/layout.md index). A
 //     second copy — earlier, later, in the other file, or inside a code fence
 //     — would capture the parse and leave the rows it did not capture
 //     unmeasured. A line that READS as the Layout heading in any other
@@ -678,7 +678,7 @@ func TestCLAUDEMDLayoutStaysCompact(t *testing.T) {
 
 		t.Run(spec.path+" file size budget", func(t *testing.T) {
 			require.LessOrEqualf(t, len(data), spec.maxBytes,
-				"%s is %d bytes, over the %d byte budget — follow docs/layout.md's Splitting oversized agent files section to split this file", spec.path, len(data), spec.maxBytes)
+				"%s is %d bytes, over the %d byte budget — follow agent-docs/layout.md's Splitting oversized agent files section to split this file", spec.path, len(data), spec.maxBytes)
 		})
 
 		t.Run(spec.path+" layout cell length budget", func(t *testing.T) {
@@ -852,7 +852,7 @@ const (
 // unguarded. Deleting every subject is the loud way to reach that state; the
 // reachable way is an ordinary reorganisation, because the enumeration is a
 // FLAT, non-recursive read with a literal suffix filter. Moving the design docs
-// into docs/<subdir>/ and repointing their Layout rows, or renaming them to
+// into agent-docs/<subdir>/ and repointing their Layout rows, or renaming them to
 // another convention, empties this set while every other subtest stays green.
 // Hence the refusal, and hence a cause string rather than a bare count.
 func coverageTargets(dir string, keep func(string) bool, cause string) ([]string, error) {
@@ -995,11 +995,11 @@ func TestParseLayoutRowsRejectsMalformedRows(t *testing.T) {
 	for name, malformed := range map[string]string{
 		// The audited defect: a docs row whose closing "|" is missing, so
 		// layoutRowRe's "\|$" anchor cannot match and the line was skipped.
-		"row missing its closing pipe": "| `docs/invented-design.md` | An invented pointer row with no closing delimiter",
+		"row missing its closing pipe": "| `agent-docs/invented-design.md` | An invented pointer row with no closing delimiter",
 		// The same shape carrying a cell far past the budget — proof that a
 		// skipped row really did escape the cap.
-		"oversized cell on a row missing its closing pipe": "| `docs/invented-design.md` | " + oversized,
-		"first column is not a backtick-quoted path":       "| docs/invented-design.md | An invented pointer row. |",
+		"oversized cell on a row missing its closing pipe": "| `agent-docs/invented-design.md` | " + oversized,
+		"first column is not a backtick-quoted path":       "| agent-docs/invented-design.md | An invented pointer row. |",
 		"first column holds three backtick tokens":         "| `a.go` / `b.go` / `c.go` | An invented pointer row. |",
 		"pipe-prefixed prose with no second column":        "| An invented stray line |",
 	} {

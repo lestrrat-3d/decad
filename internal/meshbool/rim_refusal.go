@@ -17,7 +17,7 @@ import (
 // vertex of the operation takes. Once it is not finite, or reaches the pair's
 // own diameter, the operation is refused (decaderr.ErrUnsupported) rather than
 // reported with a bound nobody can use — decad never understates a bound, and
-// never fakes one (docs/faceted-vertex-bounds-design.md §3.2).
+// never fakes one (agent-docs/faceted-vertex-bounds-design.md §3.2).
 func RefuseRimPastPair(maxRim, dPair float64) error {
 	if proofbound.IsNonFinite(maxRim) {
 		return fmt.Errorf(`%w: the operands' facets meet at an angle this evaluator cannot bound`, decaderr.ErrUnsupported)

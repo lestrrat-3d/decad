@@ -19,7 +19,7 @@ type MeshInput struct {
 	MaxRound float64
 }
 
-// MeshProofs is docs/helix-design.md §8.1's areaSlack and §8.2's
+// MeshProofs is agent-docs/helix-design.md §8.1's areaSlack and §8.2's
 // volSymDiff over the held set: walls triangles first, two per cell in
 // (station, loop, segment) order, then both caps.
 //

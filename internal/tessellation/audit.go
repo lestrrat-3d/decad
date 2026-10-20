@@ -14,9 +14,9 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// This file is docs/tessellation-design.md §1.2's manifold-with-boundary
+// This file is agent-docs/tessellation-design.md §1.2's manifold-with-boundary
 // audit for a sheet mesh, and the closed-mesh audit a solid mesh takes in its
-// place. The sheet audit leans on docs/surface-design.md §2.3's own
+// place. The sheet audit leans on agent-docs/surface-design.md §2.3's own
 // consistent-orientation claim for a sheet shell rather than re-proving it.
 // Every check here is purely COMBINATORIAL, over the mesh's own directed-edge
 // structure and the body's own recorded free-edge topology, supplied by the
@@ -115,7 +115,7 @@ type SheetBoundary struct {
 	FreeChainCounts map[int]int
 }
 
-// RequireSheetBoundary runs docs/tessellation-design.md §1.2's audit in place
+// RequireSheetBoundary runs agent-docs/tessellation-design.md §1.2's audit in place
 // of the closed-mesh audit a solid mesh takes:
 //
 //   - no directed edge occurs more than once;
@@ -127,7 +127,7 @@ type SheetBoundary struct {
 //     boundary chains.
 //
 // Orientation across every interior edge is proven by CONSTRUCTION
-// (docs/surface-design.md §2.3): the mesh is built from the walls with the
+// (agent-docs/surface-design.md §2.3): the mesh is built from the walls with the
 // payload's own winding, so a facet and its neighbor already traverse their
 // shared edge in opposite senses, and the tests assert this directly rather
 // than this audit re-deriving it from a per-triangle sign test against a
@@ -238,7 +238,7 @@ func chainRoot(parent map[int]int, v int) int {
 	return v
 }
 
-// RequireSheetVertexLinks is docs/tessellation-design.md §1.2's own vertex-
+// RequireSheetVertexLinks is agent-docs/tessellation-design.md §1.2's own vertex-
 // link safety net for a sheet mesh. The root's closed-mesh vertex-link audit
 // demands one connected CYCLE at every degree-two vertex, which is right for
 // a closed mesh but wrong for a boundary vertex: a free edge's two endpoints
@@ -357,12 +357,12 @@ func requireCycleOrPathLink(center int, link map[int][]int) error {
 }
 
 // OrientationSign is the sign of the signed tetrahedron sum
-// docs/loft-design.md §8 defines, over the complete triangle set anchored at
+// agent-docs/loft-design.md §8 defines, over the complete triangle set anchored at
 // anchor — the same identity §5's whole-shell orientation rule reads, computed
 // once directly over exact dyadics rather than through the full
 // loftMassAccumulator (which also folds in the area/bounds bookkeeping this
 // sign check does not need). It reads nothing loft-specific, so
-// docs/tessellation-design.md §4's signed-volume audit runs on it too, for
+// agent-docs/tessellation-design.md §4's signed-volume audit runs on it too, for
 // every payload class that assembles its own triangle set.
 func OrientationSign(vertices []r3.Vec, triangles [][3]int, anchor r3.Vec) int {
 	return orientationSum(vertices, triangles, anchor,
@@ -410,7 +410,7 @@ func orientationSum(vertices []r3.Vec, triangles [][3]int, anchor r3.Vec, worker
 	return sum.Dyadic()
 }
 
-// RequireVertexLinks is docs/tessellation-design.md §9's construction safety
+// RequireVertexLinks is agent-docs/tessellation-design.md §9's construction safety
 // net: the combinatorial link of every stored vertex — the edge each incident
 // triangle contributes between its other two corners — must be ONE connected
 // cycle with every vertex of degree two. A pinched pole passes the

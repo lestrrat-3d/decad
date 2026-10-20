@@ -16,7 +16,7 @@ import (
 // Edges (split where the adjacent face pair or the exact hinge convexity
 // changes) and builds each face's loops by walking the facet fans. Each
 // Vertex reports its own held bound VertexBound[v], and each Edge the largest
-// of its chain's vertices' bounds (docs/faceted-vertex-bounds-design.md
+// of its chain's vertices' bounds (agent-docs/faceted-vertex-bounds-design.md
 // §4.2). Every vertex, edge and loop node comes from alloc.
 func buildTopologyWithBudget(
 	ctx context.Context,
