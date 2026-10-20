@@ -284,9 +284,15 @@ func checkFinite(vals ...float64) error {
 // findLine returns the retained straight edge of body whose corners are key's,
 // and false when there is none or more than one.
 func findLine(body *topo.Body, key lineKey, slack float64) (*topo.Edge, bool) {
+	return findEdge(body, key, slack, looksLikeLine)
+}
+
+// findEdge returns the edge of body that satisfies ok and whose corners are
+// key's, and false when there is none or more than one.
+func findEdge(body *topo.Body, key lineKey, slack float64, ok func(*topo.Edge) bool) (*topo.Edge, bool) {
 	var found *topo.Edge
 	for _, e := range topobuild.Edges(body) {
-		if !looksLikeLine(e) {
+		if !ok(e) {
 			continue
 		}
 		p, q := e.Start.Position, e.End.Position

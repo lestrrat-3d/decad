@@ -33,6 +33,8 @@ type work struct {
 	// dir is +1 when the rim loop runs counter-clockwise about the plane's
 	// outward normal, else -1.
 	dir float64
+	// cuts are the vertices a wall cut made, by the mesh edge it cut.
+	cuts map[[2]int]int
 }
 
 type ringPt struct {
@@ -43,7 +45,7 @@ type ringPt struct {
 // newWork starts a rewrite. A straight-edge rewrite has no rim and passes a
 // rim that holds only the scale.
 func newWork(fp facetedrecord.Payload, r rim, spec blendSpec) *work {
-	w := &work{fp: fp, r: r, spec: spec}
+	w := &work{fp: fp, r: r, spec: spec, cuts: map[[2]int]int{}}
 	w.verts = append([]r3.Vec(nil), fp.Verts...)
 	w.beta = append([]float64(nil), fp.VertexBound...)
 	size := spec.r
