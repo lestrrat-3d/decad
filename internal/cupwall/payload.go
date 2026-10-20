@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
@@ -367,3 +368,12 @@ func (cp View) Payload(ctx context.Context) (Payload, error) {
 // SurveyClass names the payload class a staged survey diagnostic reports
 // (internal/reportvocab): the root type name this payload had before it moved.
 func (Payload) SurveyClass() string { return "cupPayload" }
+
+// MassRecords reads the two prism records whose difference forms the cup.
+func (cp View) MassRecords() (massmoment.PrismRecord, massmoment.PrismRecord) {
+	outer := cp.OuterPrism()
+	outer.Profile = cp.Outer
+	cavity := cp.CavityPrism()
+	cavity.Profile = cp.Cavity
+	return outer.MassRecord(), cavity.MassRecord()
+}
