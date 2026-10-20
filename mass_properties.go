@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/tessaudit"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -219,7 +220,7 @@ func meshMassPropertiesAt(ctx context.Context, b *Body, tol float64, density uni
 	if !mesh.BoundaryVerified() || !mesh.VolumeVerified() {
 		return MassProperties{}, fmt.Errorf("%w: the body's mesh carries no occupied-volume proof", ErrUnsupported)
 	}
-	if err := massmoment.AuditMesh(ctx, mesh.n.Vertices, mesh.n.Triangles, payloadAuditsFacetContact(b.n.Payload)); err != nil {
+	if err := massmoment.AuditMesh(ctx, mesh.n.Vertices, mesh.n.Triangles, tessaudit.AuditsFacetContact(b.n.Payload)); err != nil {
 		return MassProperties{}, err
 	}
 	anchor := b.n.Bounds.Min.Add(b.n.Bounds.Max).Scale(.5)

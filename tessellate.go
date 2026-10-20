@@ -24,6 +24,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/decad/internal/stitchtess"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/tessaudit"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
 
@@ -266,7 +267,7 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value, verify Ver
 	if verify < VerifyAll {
 		mesh.withholdProofs()
 	}
-	mesh.n.BoundaryOK = verify >= VerifyBoundary || !payloadAuditsFacetContact(b.n.Payload)
+	mesh.n.BoundaryOK = verify >= VerifyBoundary || !tessaudit.AuditsFacetContact(b.n.Payload)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
