@@ -164,14 +164,38 @@ allowance, as it does for every analytic variant
 ### 3.4 Placement
 
 `Transform` and `Copy` carry the tag to its float image
-(`surfaceplace.TransformSurface`) and today charge the placed group a normal
-bound of 2 unless the placement is the identity (vertex bounds §4.3). With
-retention this makes every placed Boolean result report an unusable
-`NormalAt`. Increment 4 replaces the 2 for a translation or a signed
-permutation, whose image is exact, with `NormalBound_f` unchanged, and for a
-general rotation with `NormalBound_f` plus the rotation's certified
-orthonormality defect (`massmoment.MapCharge`). The `CapRecord` follows the
-placement already, because the placed plane is the record's image.
+(`surfaceplace.TransformSurface`). A retained `Plane`, `Cylinder`, `Sphere` or
+`Torus` group keeps its departure `ε_F` and adds the departure of the float
+image from the exact image of the tag under the placement
+(`facetedrecord.PlacedTagDeparture`). The held term of §3.3 is then recomputed
+against the placed mesh's own `δ_f`, as for any Boolean result. A group that
+is not retained, a retained `Cone`, a placement whose orthonormality defect
+`e` exceeds `10⁻³`, and a displacement that reaches A4 keep the bound of 2.
+
+Let the placement be the linear map `B` and the translation `t`, read as exact
+rationals, with orthonormality defect `e` (`massmoment.MapCharge.Stretch`).
+
+- **Plane.** `(B·U)×(B·V) = det(B)·B⁻ᵀ(U×V)`, so the exact image of the tag
+  lies on the true normal's line. Only the rounding of the moved frame vectors
+  remains. With `a` the largest distance of a moved vector from `B` applied to
+  it, the crossed normal moves by under `3a`, and normalising by a length of at
+  least 0.99 gives under `7a`. The charge is `8a + 4e + P`, with `P` the
+  distance of the moved origin from the exact image of the origin. `4e` and `P`
+  are not needed by the normal; they keep a zero bound meaning "the tag is the
+  exact image plane", which `MirrorFace` reads (§4).
+- **Cylinder, Sphere, Torus.** The true normal is `B⁻ᵀn` and the tag's is
+  `B·n`. Their difference `B⁻ᵀ(I − BᵀB)n` has length at most `e/σ`, with
+  `σ² ≥ 1 − e`, so the unit normals differ by at most `2e/σ² ≤ 4e`. The tag
+  surface sits away from the true image by at most `P` for the origin, plus
+  `(a + 2e)·D` for the moved axis and the stretch, where `D` bounds the
+  distance from the tag's origin to any true point (the farthest held vertex
+  plus the mesh bound and the largest vertex bound). The charge is `4e` plus
+  the held term of §3.3 at twice that displacement.
+
+A translation or a signed permutation has `e = 0` and `a = 0`, so the charge is
+the origin's rounding alone, and a plane whose origin the translation leaves
+exact adds nothing. The `CapRecord` follows the placement already, because the
+placed plane is the record's image.
 
 ## 4. Readers
 
@@ -183,7 +207,7 @@ does with a retained tag; the audit in §7 keeps the table complete.
 | `Face.Surface()`, `reportvocab.SurfaceTypeName`, `decadtest` formatting | the tag | reports `Plane`/`Cylinder`/`Sphere` instead of `Faceted`; examples and tests that print `faceted` for these faces change (§8) |
 | `Face.NormalAt` | tag + `NormalBound` | answers with the bound of §3.3 instead of `ErrUnsupported` |
 | `internal/selectorquery/topo_views.go` planar and cylindrical views | the tag | a flat retained face matches `Facing`/`ParallelTo` by its plane normal, signed by `Reversed` |
-| `internal/extent/to_face.go`, `angular_stop.go` | `Plane`, `NormalBound == 0`, `CapRecord`, `HasAxialDelta` | admits a retained `Plane` whose group carried `CapRecord` and `NormalBound == 0`; a placed or scaled body drops the record and `NormalBound` is 2, so it refuses as before |
+| `internal/extent/to_face.go`, `angular_stop.go` | `Plane`, `NormalBound == 0`, `CapRecord`, `HasAxialDelta` | admits a retained `Plane` whose group carried `CapRecord` and `NormalBound == 0`; a placed or scaled body drops the record, so it refuses as before |
 | `mirror.go` `resolveMirrorFace` | `Plane` | mirrors across a retained `Plane` with `NormalBound == 0`; a placed body's tag is a float image and keeps refusing |
 | `Face.isPlanar` | `Plane` or `HeldPlanar` | unchanged; both stay true |
 | `contact_faceted_floor.go` `sourceFacetedAxisSupport` | `HeldPlanar && Kind == Faceted` | **must change.** The predicate drops every retained plane from the support proof. It becomes `HeldPlanar && face is held geometry`, where a new `topo.Face.RetainedTag` flag marks a tag on a faceted payload (§5) |
@@ -249,7 +273,7 @@ the clause named.
 | A3 | a Boolean that leaves one loop-less sphere face reads `Faceted` | drop A3: `AuditSolidBoundary` accepts a body whose only face is a retained loop-less sphere |
 | `contact_faceted_floor.go` predicate | the support proof still finds the floor face of a retained-plane body | keep the old `Kind == Faceted` test: the proof finds no valid face and the contact returns `ContactPayloadUnsupported` |
 | `ToFace` on a retained plane | the stop level equals the plane's exact coordinate; `AxialDelta` is the operand's | clear `CapRecord` on the group: `ToFace` refuses |
-| Placement | translation and signed-permutation placements keep `NormalBound_f`; a 20° rotation adds the defect and no more | keep the old constant 2: the placed `NormalAt` bound is 2 |
+| Placement | a translated and a 20°-rotated copy of P3 report `NormalAt` bounds within 1e-9 of the unplaced copy's, and the rotated normal lies within the two bounds of the rotated reading; a rotated plane never reads as an exact mirror plane | keep the old constant 2: the placed `NormalAt` bound is 2 |
 | Reader audit | a test lists every non-test file under the module that matches `Surface\.\(surfacegeom\.` or `Surface\(\)\.\(`, and fails on a file this document's §4 does not name | add a reader without a §4 row: the audit fails |
 | Existing assertions | the 23 `decad.Faceted` / `KindFaceted` assertions under `apitest/` and `examples/` (for example `apitest/mirror_test.go`, whose premise is a Boolean wall that carries no `Plane`) are rewritten to the retained kind where §3.2 admits the face, and kept where it declines | run the suite before the change; a test that still passes after it, on a face §3.2 admits, asserts the wrong thing |
 
@@ -264,7 +288,7 @@ expression) and not a printed number.
 |---|---|
 | `boolean_mesh.go` | fill `facetGroup.Surface`, `Retained`, `Reversed`, `NormalBound` from the operand face (§3.1, §3.2) |
 | `internal/facetedrecord/assemble.go` | compute `NormalBound_f` per built face, apply A4, set `RetainedTag` |
-| `internal/facetedrecord/place.go`, `placed.go` | placement rule of §3.4 |
+| `internal/facetedrecord/place_tag.go`, `placed.go` | placement rule of §3.4 |
 | `internal/topo/face.go` | `RetainedTag` |
 | `contact_faceted_floor.go` | predicate of §4 |
 | `internal/facetedrecord/edge_curve.go`, `topology.go`, `internal/topo/edge.go` | edge curves and their witness flag (§10, increment 3) |
@@ -275,8 +299,8 @@ expression) and not a printed number.
 
 ## 9. Increments
 
-Increments 1, 2 and 3 are the priority order. Increments 4 and 5 stay
-planned; nothing in 1–3 depends on them.
+Increments 1 to 4 are in. Increment 5 stays planned; nothing in 1–4 depends
+on it.
 
 | # | Lands | Gate to start the next |
 |---|---|---|
@@ -286,7 +310,7 @@ planned; nothing in 1–3 depends on them.
 | 4 | Placement rule of §3.4 | a rotated copy of P3 reports a finite `NormalAt` bound below 2 |
 | 5 | A later mesh Boolean charges a retained `Plane` group's out-of-plane displacement by its measured distance from `T` instead of `δ_f` (§11) | measured: a second cut near the first cut's rim, previously refused as hidden tangency, builds |
 
-Increments 1–4 only publish what Claim R and Claim E already prove.
+Increments 1–4 only publish what Claim R and Claim E already prove (increment 4 adds the placement charge of §3.4).
 Increment 5 uses the tag to tighten later arithmetic and needs its own proof,
 written in this document before it lands.
 

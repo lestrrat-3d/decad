@@ -574,7 +574,9 @@ is a tagged analytic variant on a faceted face, a float-image stand-in whose
 departure is carried in `NormalAt`, never in `Surface()`'s parameters.
 `Transform` and `Copy` carry such a tag to the float image of the source tag,
 and unless the placement is exactly the identity, `NormalAt` charges a placed
-group that has no denoted patch a direction bound of 2
+group that has no denoted patch the tag's own departure plus the float image's
+(`docs/faceted-source-retention-design.md` §3.4) where the tag is a retained
+`Plane`, `Cylinder`, `Sphere` or `Torus`, and a direction bound of 2 otherwise
 (`docs/faceted-vertex-bounds-design.md` §4.3). So a `Cylinder.Axis`
 or a `Sphere.Center` is an exact parameter of its named surface, while
 `Face.NormalAt(p)` — a quantity the evaluator *computes*, on a face that may be
