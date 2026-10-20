@@ -26,7 +26,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
 
-	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/lestrrat-go/option/v3"
@@ -511,20 +510,6 @@ func requireMeshAudit(ctx context.Context, sheet bool, b *Body, m *Mesh) error {
 		return topobuild.RequireSheetMesh(ctx, &b.n, &m.n)
 	}
 	return topobuild.RequireClosedMesh(&m.n)
-}
-
-// publishSymDiff sums an analytic payload's occupied-volume terms into the
-// mesh's own volSymDiff and marks the proof complete. A term this build cannot
-// state refuses (docs/tessellation-design.md §12) rather than publishing a
-// symmetric-difference bound the boolean would then compose into a result.
-func publishSymDiff(m *Mesh, terms []float64) error {
-	total, err := tessellation.SymDiff(terms)
-	if err != nil {
-		return err
-	}
-	m.n.VolSymDiff = total
-	m.n.SymDiffOK = true
-	return nil
 }
 
 // tessellateBodyPatch binds source handles and public refusal names to the
