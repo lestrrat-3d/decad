@@ -378,7 +378,7 @@ result record's index space.
 
 ### 7.1 Implementation
 
-`revolve_blend.go` runs this section; `Fillet` and `Chamfer` route a
+`internal/brepmodify/revolve_blend.go` runs this section; `Fillet` and `Chamfer` route a
 `revolvePayload` receiver to it after stage 1 and SX10/SX16. Both operations
 try §7.2's source-specific radial rim first.
 
@@ -424,7 +424,7 @@ it sweeps. §6's role reading picks which plane-local walk takes `d`, and
 
 ### 7.2 One quarter-turn angular-cap radial-rim blend
 
-`revolve_cap_edge_blend.go` admits an unplaced solid Revolve of one exact
+`internal/brepmodify/rim_revolve.go` admits an unplaced solid Revolve of one exact
 XY-plane rectangle `(xlo,0)`–`(xhi,R)`, swept from zero to a denoted exact
 quarter turn about +X. The four natural-range lines must follow that order;
 the source has no holes, section displacement, previous blend, or draft

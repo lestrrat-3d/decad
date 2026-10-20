@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/booloperand"
+	"github.com/lestrrat-3d/decad/internal/brepmodify"
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
@@ -80,9 +81,11 @@ func TestLoftCapBandReflexVolumeProofAndSharpBore(t *testing.T) {
 	selector := Edges(OuterLoopOf(CapStart(body))).Or(OuterLoopOf(CapEnd(body)))
 	edges, err := selector.SelectEdges(body)
 	require.NoError(t, err)
-	out, recognized, err := tryLoftCapChamfer(t.Context(), body, source, edges, 0.1, 0, nil)
+	outNode, recognized, err := brepmodify.LoftCapChamfer(t.Context(), envOf(body.n.Doc, body.n.Doc.NextProducer), &body.n,
+		source, edgeNodes(edges), 0.1, 0, nil)
 	require.NoError(t, err)
 	require.True(t, recognized)
+	out := bodyHandle(outNode)
 	require.True(t, out.IsSolid())
 	band := out.n.Payload.(capBlendPayload)
 	require.IsType(t, fitSplineSeg{}, band.LoftSource.Profile.Outer.Segments[0])

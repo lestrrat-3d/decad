@@ -649,7 +649,7 @@ before the comparison (`docs/surface-intersection-design.md` §7.2).
 The swept edges' curves are held floats with no bound of their own: a
 junction `Circle3`/`Arc3` takes its centre and radius from the walk's (z, ρ)
 (`junctionCircle`) and a cap `Arc3` its centre from the walk's (cU, cV).
-`revolve_blend.go` matches a selected edge against `junctionCircle` by
+`internal/brepmodify/revolve_blend.go` matches a selected edge against `junctionCircle` by
 float identity over the same payload, so it reads the same numbers and needs
 no bound. The clearance kernel reads them through `newCEdge`, and its revolve
 carriers read the same walk values, so the displacement it charges for the

@@ -62,7 +62,7 @@ func (a *Asymmetric) Setbacks(loop survey2d.CornerLoop, li, ci int, e *topo.Edge
 // cap face borders every edge of its loops, and a side wall borders that
 // loop's edges on both caps, so a mixed pick names some edge's two faces or
 // neither — and these arms are a second check over the resolved pairs. An
-// edge on neither cap face is decaderr.ErrUnsupported; classifyChamferSelection has
+// edge on neither cap face is decaderr.ErrUnsupported; ClassifyChamferSelection has
 // already put every selected edge on one. A cap with no selected edge reads
 // the side-wall pick, which no band reads.
 func (a *Asymmetric) CapSetbacks(caps PrismCaps, edges []*topo.Edge, startLoops, endLoops map[int]bool) (capblend.Setback, capblend.Setback, error) {

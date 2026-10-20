@@ -160,9 +160,7 @@ type (
 // docs/evaluator-design.md §8). The other names are its setbacks and its
 // loft source.
 type (
-	capBlendPayload   = capblend.Payload
-	capSetback        = capblend.Setback
-	loftCapBandSource = capblend.LoftSource
+	capBlendPayload = capblend.Payload
 )
 
 // facetedPayload is the evaluator's record of a mesh-built body, and
@@ -189,7 +187,6 @@ type (
 	pointPlaneLimit            = facetedrecord.PointPlaneLimit
 	pointSectionRecord         = facetedrecord.PointSectionRecord
 	pointSectionSource         = facetedrecord.PointSectionSource
-	prismUnionFilletRecord     = facetedrecord.PrismUnionFilletRecord
 	revolveLoftSectorPlacement = facetedrecord.RevolveLoftSectorPlacement
 	revolveSectionCertificate  = facetedrecord.RevolveSectionCertificate
 	revolveSectionSpan         = facetedrecord.RevolveSectionSpan
