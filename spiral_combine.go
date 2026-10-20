@@ -22,7 +22,7 @@ func spiralCombineBody(ctx context.Context, d *Document, ref producerID,
 	if err != nil {
 		return nil, asBooleanError(meshbool.OpUnion, err)
 	}
-	return bodyResult(facetedrecord.BuildWithProof(ctx, envOf(documentNode(d), ref), eval.payload, eval.audit, measurementToInternal(eval.volume), eval.volumeRat))
+	return bodyResult(facetedrecord.BuildWithProof(ctx, envOf(documentNode(d), ref), eval.payload, eval.audit, eval.volume, eval.volumeRat))
 }
 
 // spiralCombinedToolBody builds the transient, unregistered disjoint union of

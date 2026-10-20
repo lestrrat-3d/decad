@@ -1,8 +1,10 @@
-package reportvocab
+package verifypublish
 
 import (
 	"fmt"
 	"strings"
+
+	"github.com/lestrrat-3d/decad/report"
 
 	"github.com/lestrrat-3d/units"
 )
@@ -11,10 +13,10 @@ import (
 // with the requested tool. The numeric tolerance gate runs separately.
 func WallDiagnostics[BodyT comparable, CellT any](body BodyT, payload any, out ScalarSurvey,
 	tool units.Value, toolMM float64,
-) []Diagnostic[BodyT, CellT] {
+) []report.DiagnosticOf[BodyT, CellT] {
 	if !out.OK {
-		return []Diagnostic[BodyT, CellT]{surveyRefusalDiagnostic[BodyT, CellT](
-			body, payload, SurveyWall, out.Reason, DiagUndecidedWall,
+		return []report.DiagnosticOf[BodyT, CellT]{surveyRefusalDiagnostic[BodyT, CellT](
+			body, payload, report.SurveyWall, out.Reason, report.DiagUndecidedWall,
 			"the wall survey could neither answer nor prove no wall exists",
 			"facetedPayload wall survey support is not implemented; use an analytic body or wait for faceted wall support",
 			"wall")}
@@ -23,22 +25,22 @@ func WallDiagnostics[BodyT comparable, CellT any](body BodyT, payload any, out S
 		return nil
 	}
 	m := LengthMeasurement(*out.Reading, out.Bound)
-	var code DiagnosticCode
-	var status Status
+	var code report.DiagnosticCode
+	var status report.Status
 	var message string
 	switch IntervalVerdict(*out.Reading, out.Bound, toolMM) {
 	case -1:
-		code, status = DiagWallTooThin, Violating
+		code, status = report.DiagWallTooThin, report.Violating
 		message = "the minimum wall thickness is proven below the tool"
 	case 0:
-		code, status = DiagUndecidedWall, Suspect
+		code, status = report.DiagUndecidedWall, report.Suspect
 		message = "the minimum wall thickness interval straddles the tool"
 	default:
 		return nil
 	}
-	return []Diagnostic[BodyT, CellT]{{
-		Code: code, Status: status, Body: body, Survey: SurveyWall,
-		Reading: ReadingWall, Observed: &m, Required: &tool, Message: message,
+	return []report.DiagnosticOf[BodyT, CellT]{{
+		Code: code, Status: status, Body: body, Survey: report.SurveyWall,
+		Reading: report.ReadingWall, Observed: &m, Required: &tool, Message: message,
 	}}
 }
 
@@ -46,18 +48,18 @@ func WallDiagnostics[BodyT comparable, CellT any](body BodyT, payload any, out S
 // coverage as separate findings, in that order.
 func UndercutDiagnostics[BodyT comparable, FaceT comparable, CellT any](body BodyT,
 	payload any, out UndercutSurvey[FaceT],
-) []Diagnostic[BodyT, CellT] {
-	var diags []Diagnostic[BodyT, CellT]
+) []report.DiagnosticOf[BodyT, CellT] {
+	var diags []report.DiagnosticOf[BodyT, CellT]
 	if out.OK && len(out.Faces) > 0 {
-		diags = append(diags, Diagnostic[BodyT, CellT]{
-			Code: DiagUndercut, Status: Violating, Body: body,
-			Survey: SurveyUndercut, Reading: ReadingNone,
+		diags = append(diags, report.DiagnosticOf[BodyT, CellT]{
+			Code: report.DiagUndercut, Status: report.Violating, Body: body,
+			Survey: report.SurveyUndercut, Reading: report.ReadingNone,
 			Message: "a face is a proven undercut against the pull",
 		})
 	}
 	if !out.OK || out.Undecided {
 		diags = append(diags, surveyRefusalDiagnostic[BodyT, CellT](
-			body, payload, SurveyUndercut, out.Reason, DiagUndecidedUndercut,
+			body, payload, report.SurveyUndercut, out.Reason, report.DiagUndecidedUndercut,
 			"the pull survey could neither prove nor exclude an undercut",
 			"facetedPayload pull survey support is not implemented; use an analytic body or wait for faceted undercut support",
 			"pull"))
@@ -68,12 +70,12 @@ func UndercutDiagnostics[BodyT comparable, FaceT comparable, CellT any](body Bod
 // RadiusDiagnostics records a concave-radius survey that could not answer.
 func RadiusDiagnostics[BodyT comparable, CellT any](body BodyT, payload any,
 	out ScalarSurvey, ok bool,
-) []Diagnostic[BodyT, CellT] {
+) []report.DiagnosticOf[BodyT, CellT] {
 	if ok && out.OK {
 		return nil
 	}
-	return []Diagnostic[BodyT, CellT]{surveyRefusalDiagnostic[BodyT, CellT](
-		body, payload, SurveyConcaveRadius, out.Reason, DiagUndecidedMinRadius,
+	return []report.DiagnosticOf[BodyT, CellT]{surveyRefusalDiagnostic[BodyT, CellT](
+		body, payload, report.SurveyConcaveRadius, out.Reason, report.DiagUndecidedMinRadius,
 		"the concave-radius survey could neither measure nor exclude a concave feature",
 		"facetedPayload concave-radius survey support is not implemented; use an analytic body or wait for faceted radius support",
 		"concave-radius")}
@@ -82,23 +84,23 @@ func RadiusDiagnostics[BodyT comparable, CellT any](body BodyT, payload any,
 // surveyRefusalDiagnostic distinguishes an undecided proof from a payload
 // whose survey has not been implemented.
 func surveyRefusalDiagnostic[BodyT comparable, CellT any](body BodyT, payload any,
-	survey SurveyKind, reason SurveyReason, undecidedCode DiagnosticCode,
+	survey report.SurveyKind, reason SurveyReason, undecidedCode report.DiagnosticCode,
 	undecidedMessage, facetedMessage, surveyNoun string,
-) Diagnostic[BodyT, CellT] {
+) report.DiagnosticOf[BodyT, CellT] {
 	code, message := undecidedCode, undecidedMessage
 	switch reason {
 	case SurveyFacetedUnsupported:
-		code, message = DiagUnsupportedSurveyPayload, facetedMessage
+		code, message = report.DiagUnsupportedSurveyPayload, facetedMessage
 	case SurveyPayloadStaged:
 		class := payloadClassName(payload)
-		code = DiagUnsupportedSurveyPayload
+		code = report.DiagUnsupportedSurveyPayload
 		message = fmt.Sprintf(
 			"%s %s survey support is not implemented; use an analytic body or wait for wider %s survey support",
 			class, surveyNoun, class)
 	}
-	return Diagnostic[BodyT, CellT]{
-		Code: code, Status: Suspect, Body: body, Survey: survey,
-		Reading: ReadingNone, Message: message,
+	return report.DiagnosticOf[BodyT, CellT]{
+		Code: code, Status: report.Suspect, Body: body, Survey: survey,
+		Reading: report.ReadingNone, Message: message,
 	}
 }
 
@@ -113,15 +115,4 @@ func payloadClassName(payload any) string {
 		return name[i+1:]
 	}
 	return name
-}
-
-// PayloadTypeName names a payload's type in a public error message. A payload
-// that states a SurveyClass prints as the root type it replaced, "decad."
-// followed by that class, so moving a payload between packages leaves the
-// message unchanged. Any other payload prints its Go type name.
-func PayloadTypeName(payload any) string {
-	if named, ok := payload.(interface{ SurveyClass() string }); ok {
-		return "decad." + named.SurveyClass()
-	}
-	return fmt.Sprintf("%T", payload)
 }

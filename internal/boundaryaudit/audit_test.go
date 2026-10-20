@@ -1,10 +1,12 @@
-package reportvocab_test
+package boundaryaudit_test
 
 import (
 	"context"
 	"testing"
 
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
+	"github.com/lestrrat-3d/decad/internal/boundaryaudit"
+	"github.com/lestrrat-3d/decad/report"
+
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -54,20 +56,20 @@ func TestAuditSolidBoundary(t *testing.T) {
 	t.Parallel()
 
 	a, b, _ := lens()
-	require.True(t, reportvocab.AuditSolidBoundary(bodyOf(a, b), false), "two faces closing one edge")
-	require.False(t, reportvocab.AuditSolidBoundary(bodyOf(), true), "a body with no faces")
+	require.True(t, boundaryaudit.AuditSolidBoundary(bodyOf(a, b), false), "two faces closing one edge")
+	require.False(t, boundaryaudit.AuditSolidBoundary(bodyOf(), true), "a body with no faces")
 
 	t.Run("an edge bounding one face", func(t *testing.T) {
 		t.Parallel()
 		a, b, e := lens()
 		e.Faces = e.Faces[:1]
-		require.False(t, reportvocab.AuditSolidBoundary(bodyOf(a, b), false))
+		require.False(t, boundaryaudit.AuditSolidBoundary(bodyOf(a, b), false))
 	})
 	t.Run("an empty loop", func(t *testing.T) {
 		t.Parallel()
 		a, b, _ := lens()
 		a.Loops = append(a.Loops, &topo.Loop{})
-		require.False(t, reportvocab.AuditSolidBoundary(bodyOf(a, b), false))
+		require.False(t, boundaryaudit.AuditSolidBoundary(bodyOf(a, b), false))
 	})
 	t.Run("loopless faces", func(t *testing.T) {
 		t.Parallel()
@@ -83,14 +85,14 @@ func TestAuditSolidBoundary(t *testing.T) {
 			{name: "audited faceted image", surface: surfacegeom.Faceted{}, faceted: true, want: true},
 			{name: "unaudited faceted image", surface: surfacegeom.Faceted{}, faceted: false, want: false},
 		} {
-			got := reportvocab.AuditSolidBoundary(bodyOf(&topo.Face{Surface: tc.surface}), tc.faceted)
+			got := boundaryaudit.AuditSolidBoundary(bodyOf(&topo.Face{Surface: tc.surface}), tc.faceted)
 			require.Equal(t, tc.want, got, tc.name)
 		}
 	})
 	t.Run("a faceted image is admitted only as the one face", func(t *testing.T) {
 		t.Parallel()
 		image := func() *topo.Face { return &topo.Face{Surface: surfacegeom.Faceted{}} }
-		require.False(t, reportvocab.AuditSolidBoundary(bodyOf(image(), image()), true))
+		require.False(t, boundaryaudit.AuditSolidBoundary(bodyOf(image(), image()), true))
 	})
 }
 
@@ -105,11 +107,11 @@ func TestAuditSheetBoundary(t *testing.T) {
 		t.Parallel()
 		a, b, _ := lens()
 		body := bodyOf(a, b)
-		require.Equal(t, reportvocab.SheetAuditUndecided, reportvocab.AuditSheetBoundary(ctx, body), "no payload")
+		require.Equal(t, boundaryaudit.SheetAuditUndecided, boundaryaudit.AuditSheetBoundary(ctx, body), "no payload")
 		body.Payload = simplePayload{answer: false}
-		require.Equal(t, reportvocab.SheetAuditUndecided, reportvocab.AuditSheetBoundary(ctx, body))
+		require.Equal(t, boundaryaudit.SheetAuditUndecided, boundaryaudit.AuditSheetBoundary(ctx, body))
 		body.Payload = simplePayload{answer: true}
-		require.Equal(t, reportvocab.SheetAuditProven, reportvocab.AuditSheetBoundary(ctx, body))
+		require.Equal(t, boundaryaudit.SheetAuditProven, boundaryaudit.AuditSheetBoundary(ctx, body))
 	})
 	t.Run("a free edge is admitted", func(t *testing.T) {
 		t.Parallel()
@@ -118,7 +120,7 @@ func TestAuditSheetBoundary(t *testing.T) {
 		e.Faces = []*topo.Face{f}
 		body := bodyOf(f)
 		body.Payload = simplePayload{answer: true}
-		require.Equal(t, reportvocab.SheetAuditProven, reportvocab.AuditSheetBoundary(ctx, body))
+		require.Equal(t, boundaryaudit.SheetAuditProven, boundaryaudit.AuditSheetBoundary(ctx, body))
 	})
 	for _, tc := range []struct {
 		name  string
@@ -157,7 +159,7 @@ func TestAuditSheetBoundary(t *testing.T) {
 			a, b, e := lens()
 			body := tc.build(a, b, e)
 			body.Payload = simplePayload{answer: true}
-			require.Equal(t, reportvocab.SheetAuditViolated, reportvocab.AuditSheetBoundary(ctx, body))
+			require.Equal(t, boundaryaudit.SheetAuditViolated, boundaryaudit.AuditSheetBoundary(ctx, body))
 		})
 	}
 }
@@ -179,24 +181,24 @@ func TestUndecidedPairReason(t *testing.T) {
 	flipped.Lumps[0].Shells[0].Faces[0].Surface = surfacegeom.Plane{Frame: frame}
 
 	for _, tc := range []struct {
-		outcome reportvocab.InterferenceOutcome
-		verdict reportvocab.PairVerdict
-		code    reportvocab.DiagnosticCode
+		outcome boundaryaudit.InterferenceOutcome
+		verdict boundaryaudit.PairVerdict
+		code    report.DiagnosticCode
 		first   bool
 	}{
-		{outcome: reportvocab.InterferenceUnsupportedPayloadFirst, code: reportvocab.DiagUnsupportedPairPayload, first: true},
-		{outcome: reportvocab.InterferenceUnsupportedPayloadSecond, code: reportvocab.DiagUnsupportedPairPayload},
-		{outcome: reportvocab.InterferenceUnsupportedVolumeProofFirst, code: reportvocab.DiagUnsupportedPairPayload, first: true},
-		{outcome: reportvocab.InterferenceUnsupportedVolumeProofSecond, code: reportvocab.DiagUnsupportedPairPayload},
-		{outcome: reportvocab.InterferenceUnsupportedPipeline, code: reportvocab.DiagUnsupportedPairPipeline},
-		{outcome: reportvocab.InterferenceUndecided, verdict: reportvocab.PairOverlapping, code: reportvocab.DiagUndecidedInterference},
-		{outcome: reportvocab.InterferenceUndecided, verdict: reportvocab.PairUndecided, code: reportvocab.DiagUndecidedPair},
-		{outcome: reportvocab.InterferenceMeasured, verdict: reportvocab.PairOverlapping, code: reportvocab.DiagUndecidedPair},
+		{outcome: boundaryaudit.InterferenceUnsupportedPayloadFirst, code: report.DiagUnsupportedPairPayload, first: true},
+		{outcome: boundaryaudit.InterferenceUnsupportedPayloadSecond, code: report.DiagUnsupportedPairPayload},
+		{outcome: boundaryaudit.InterferenceUnsupportedVolumeProofFirst, code: report.DiagUnsupportedPairPayload, first: true},
+		{outcome: boundaryaudit.InterferenceUnsupportedVolumeProofSecond, code: report.DiagUnsupportedPairPayload},
+		{outcome: boundaryaudit.InterferenceUnsupportedPipeline, code: report.DiagUnsupportedPairPipeline},
+		{outcome: boundaryaudit.InterferenceUndecided, verdict: boundaryaudit.PairOverlapping, code: report.DiagUndecidedInterference},
+		{outcome: boundaryaudit.InterferenceUndecided, verdict: boundaryaudit.PairUndecided, code: report.DiagUndecidedPair},
+		{outcome: boundaryaudit.InterferenceMeasured, verdict: boundaryaudit.PairOverlapping, code: report.DiagUndecidedPair},
 	} {
-		code, msg := reportvocab.UndecidedPairReason(low, high, tc.verdict, tc.outcome)
+		code, msg := boundaryaudit.UndecidedPairReason(low, high, tc.verdict, tc.outcome)
 		require.Equal(t, tc.code, code, "outcome %d", tc.outcome)
 		require.NotEmpty(t, msg)
-		if tc.code == reportvocab.DiagUnsupportedPairPayload {
+		if tc.code == report.DiagUnsupportedPairPayload {
 			if tc.first {
 				require.Contains(t, msg, "the first operand")
 			} else {
@@ -206,11 +208,11 @@ func TestUndecidedPairReason(t *testing.T) {
 	}
 
 	const shared = "the operands share a face plane"
-	code, msg := reportvocab.UndecidedPairReason(low, high, reportvocab.PairUndecided, reportvocab.InterferenceUnsupportedContact)
-	require.Equal(t, reportvocab.DiagUnsupportedPairContact, code)
+	code, msg := boundaryaudit.UndecidedPairReason(low, high, boundaryaudit.PairUndecided, boundaryaudit.InterferenceUnsupportedContact)
+	require.Equal(t, report.DiagUnsupportedPairContact, code)
 	require.NotContains(t, msg, shared, "planes one apart")
-	_, msg = reportvocab.UndecidedPairReason(low, flipped, reportvocab.PairUndecided, reportvocab.InterferenceUnsupportedContact)
+	_, msg = boundaryaudit.UndecidedPairReason(low, flipped, boundaryaudit.PairUndecided, boundaryaudit.InterferenceUnsupportedContact)
 	require.Contains(t, msg, shared, "one plane facing both ways")
-	_, msg = reportvocab.UndecidedPairReason(low, planeAt(0), reportvocab.PairUndecided, reportvocab.InterferenceUnsupportedPipeline)
+	_, msg = boundaryaudit.UndecidedPairReason(low, planeAt(0), boundaryaudit.PairUndecided, boundaryaudit.InterferenceUnsupportedPipeline)
 	require.NotContains(t, msg, shared, "only a contact refusal names the plane")
 }

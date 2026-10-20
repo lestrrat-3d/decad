@@ -5,13 +5,15 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/boundaryaudit"
+	"github.com/lestrrat-3d/decad/internal/motionconclude"
+
 	"github.com/lestrrat-3d/decad/internal/clearance/pairkernel"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
 	"github.com/lestrrat-3d/r3"
 )
@@ -85,24 +87,24 @@ func (r *motionRun) settleConstant(i, k int) error {
 		return err
 	}
 	switch {
-	case res.Verdict == reportvocab.PairDisjoint:
+	case res.Verdict == boundaryaudit.PairDisjoint:
 		pair.once = &constantOutcome{res: res}
 		return nil
-	case res.Verdict == reportvocab.PairTouching || boxProven:
+	case res.Verdict == boundaryaudit.PairTouching || boxProven:
 		return nil
 	}
 	volume, outcome, err := measuredInterference(r.ctx, mover, partner, res, pairMeshes{})
 	if err != nil {
 		return err
 	}
-	if outcome != reportvocab.InterferenceMeasured {
+	if outcome != boundaryaudit.InterferenceMeasured {
 		return nil
 	}
-	publishedInternal, ok := motionbound.TransferredOverlap(measurementToInternal(volume), true, 0)
+	publishedInternal, ok := motionbound.TransferredOverlap(volume, true, 0)
 	if !ok {
 		return nil
 	}
-	published := measurementFromInternal(publishedInternal)
+	published := publishedInternal
 	beyond, fails, err := r.collisionBeyond(mover, partner, mover, partner, published)
 	if err != nil {
 		return err
@@ -239,7 +241,7 @@ func (r *motionRun) evaluatePair(mp *motionPose, i, k int, a, b *motionPlaced) e
 	if err := r.ctx.Err(); err != nil {
 		return err
 	}
-	if res.Verdict == reportvocab.PairDisjoint || res.Verdict == reportvocab.PairTouching {
+	if res.Verdict == boundaryaudit.PairDisjoint || res.Verdict == boundaryaudit.PairTouching {
 		r.recordGap(mp, i, k, res, a.eta, etaB)
 		return nil
 	}
@@ -255,7 +257,7 @@ func (r *motionRun) evaluatePair(mp *motionPose, i, k int, a, b *motionPlaced) e
 	if err != nil {
 		return err
 	}
-	if outcome != reportvocab.InterferenceMeasured && res.Verdict != reportvocab.PairOverlapping {
+	if outcome != boundaryaudit.InterferenceMeasured && res.Verdict != boundaryaudit.PairOverlapping {
 		if declared {
 			return nil
 		}
@@ -264,19 +266,19 @@ func (r *motionRun) evaluatePair(mp *motionPose, i, k int, a, b *motionPlaced) e
 		r.poseDiag(mp, mp.stamp(diag))
 		return nil
 	}
-	publishedInternal, ok := motionbound.TransferredOverlap(measurementToInternal(volume), outcome == reportvocab.InterferenceMeasured, allowance)
+	publishedInternal, ok := motionbound.TransferredOverlap(volume, outcome == boundaryaudit.InterferenceMeasured, allowance)
 	if !ok && declared {
 		return nil
 	}
 	if !ok {
 		msg := "the pair is proven to overlap at the evaluated float pose, but the overlap volume is unmeasured, so it cannot be carried to the ideal pose and no collision is proven at this parameter"
-		if outcome == reportvocab.InterferenceMeasured {
+		if outcome == boundaryaudit.InterferenceMeasured {
 			msg = fmt.Sprintf("the pair is proven to overlap at the evaluated float pose, but the measured volume %s does not clear the %v mm^3 the pose's deviation from the ideal motion can sweep, so no collision is proven at this parameter", volume.Value, allowance)
 		}
 		r.poseDiag(mp, mp.stamp(pairDiagNone(mover, partner, DiagUndecidedInterference, msg)))
 		return nil
 	}
-	published := measurementFromInternal(publishedInternal)
+	published := publishedInternal
 	beyond, fails, err := r.collisionBeyond(a.body, target, mover, partner, published)
 	if err != nil {
 		return err
@@ -372,7 +374,7 @@ func (r *motionRun) recordGap(mp *motionPose, i, k int, res pairkernel.Result, e
 	}
 	lo, hi, exact := pairkernel.DeltaWiden(res.Lo, res.Hi, res.Exact, etaA, etaB)
 	mp.pairs[i][k] = motionPairPose{hasGap: true, lo: lo, hi: hi, diam: res.Diam}
-	gap := measurementFromInternal(pairkernel.GapMeasurement(pairkernel.Result{Lo: lo, Hi: hi, Exact: exact}))
+	gap := pairkernel.GapMeasurement(pairkernel.Result{Lo: lo, Hi: hi, Exact: exact})
 	mp.result.Clearances = append(mp.result.Clearances, Clearance{A: mover, B: partner, Gap: gap})
 	if r.cfg.MinimumMM != nil && proofarith.FloatRat(hi).Cmp(r.cfg.MinimumMM) < 0 {
 		// The proven upper end of the ideal pose's gap lies below the spec:
@@ -415,11 +417,11 @@ func (r *motionRun) recordGap(mp *motionPose, i, k int, res pairkernel.Result, e
 // and the gap feeds neither an interval certificate nor the whole-path
 // reading.
 func (r *motionRun) recordDeclaredGap(mp *motionPose, mover, partner *Body, res pairkernel.Result, etaA, etaB float64) {
-	if res.Verdict != reportvocab.PairDisjoint || proofbound.IsNonFinite(etaA) || proofbound.IsNonFinite(etaB) {
+	if res.Verdict != boundaryaudit.PairDisjoint || proofbound.IsNonFinite(etaA) || proofbound.IsNonFinite(etaB) {
 		return
 	}
 	lo, hi, exact := pairkernel.DeltaWiden(res.Lo, res.Hi, res.Exact, etaA, etaB)
-	gap := measurementFromInternal(pairkernel.GapMeasurement(pairkernel.Result{Lo: lo, Hi: hi, Exact: exact}))
+	gap := pairkernel.GapMeasurement(pairkernel.Result{Lo: lo, Hi: hi, Exact: exact})
 	mp.result.Clearances = append(mp.result.Clearances, Clearance{A: mover, B: partner, Gap: gap})
 }
 
@@ -470,7 +472,7 @@ func (r *motionRun) intervalOutcome(a, b *motionPose) (IntervalOutcome, *Measure
 	if !ok {
 		return IntervalUndecided, nil
 	}
-	return IntervalClear, measurementPtrFromInternal(motionbound.LowerBoundMeasurement(lowest))
+	return IntervalClear, motionbound.LowerBoundMeasurement(lowest)
 }
 
 // collides reports whether some pair at the pose carries a proven collision.
@@ -501,28 +503,28 @@ func (r *motionRun) certifyPairs(certify func(i, k int) *big.Rat, held func(i, k
 
 // conclude assembles the intervals, the whole-path reading, the assessment,
 // the diagnostics and the status from the evaluated poses and intervals.
-func (r *motionRun) conclude(poses []*motionPose, spans []motionSpan) reportvocab.MotionConclusion[*Body, JointCell] {
+func (r *motionRun) conclude(poses []*motionPose, spans []motionSpan) motionconclude.MotionConclusion[*Body, JointCell] {
 	against := make([]*Body, 0, len(r.statics))
 	for _, st := range r.statics {
 		against = append(against, st.body)
 	}
-	poseFacts := make([]reportvocab.MotionPoseFinding[*Body, JointCell], len(poses))
+	poseFacts := make([]motionconclude.MotionPoseFinding[*Body, JointCell], len(poses))
 	for i, pose := range poses {
-		poseFacts[i] = reportvocab.MotionPoseFinding[*Body, JointCell]{
+		poseFacts[i] = motionconclude.MotionPoseFinding[*Body, JointCell]{
 			At: pose.result.At, Unbuildable: pose.unbuildable != nil,
-			Violated: pose.violated, Diagnostics: diagnosticsToInternal(pose.findings),
+			Violated: pose.violated, Diagnostics: pose.findings,
 		}
 	}
-	spanFacts := make([]reportvocab.MotionSpanFinding, len(spans))
+	spanFacts := make([]motionconclude.MotionSpanFinding, len(spans))
 	for i, span := range spans {
-		spanFacts[i] = reportvocab.MotionSpanFinding{
-			Outcome: reportSpanOutcome(span.outcome), Clearance: measurementPtrToInternal(span.clearance), Note: span.note,
+		spanFacts[i] = motionconclude.MotionSpanFinding{
+			Outcome: reportSpanOutcome(span.outcome), Clearance: span.clearance, Note: span.note,
 		}
 	}
-	return reportvocab.ConcludeMotion(r.cfg.Minimum, against, poseFacts, spanFacts, r.cfg.MinimumMM,
-		func(lowest *measurement.Measurement) (*reportvocab.ScalarReading, *reportvocab.Diagnostic[*Body, JointCell]) {
-			reading, diag := r.pathClearance(poses, measurementPtrFromInternal(lowest), "whole-path")
-			return scalarReadingPtrToInternal(reading), diagnosticPtrToInternal(diag)
+	return motionconclude.ConcludeMotion(r.cfg.Minimum, against, poseFacts, spanFacts, r.cfg.MinimumMM,
+		func(lowest *measurement.Measurement) (*ScalarReading, *Diagnostic) {
+			reading, diag := r.pathClearance(poses, lowest, "whole-path")
+			return reading, diag
 		})
 }
 
@@ -534,10 +536,10 @@ func (r *motionRun) publish(poses []*motionPose, spans []motionSpan) *MotionRepo
 		Against:     c.Against,
 		Intervals:   rootMotionIntervals(c.Intervals),
 		Collisions:  []Collision{},
-		Clearance:   scalarReadingPtrFromInternal(c.Clearance),
-		Assessment:  Assessment(c.Assessment),
-		Diagnostics: diagnosticsFromInternal(c.Diagnostics),
-		Status:      Status(c.Status),
+		Clearance:   c.Clearance,
+		Assessment:  c.Assessment,
+		Diagnostics: c.Diagnostics,
+		Status:      c.Status,
 	}
 	for _, mv := range r.movers {
 		report.Moving = append(report.Moving, mv.body)
@@ -575,17 +577,17 @@ func (r *motionRun) pathClearance(poses []*motionPose, lowest *Measurement, scop
 	// upper end — which sound bounds never produce — is clamped rather than
 	// published inverted.
 	lower := math.Min(lowest.Value.Base(), upper)
-	gap := measurementFromInternal(pairkernel.GapMeasurement(pairkernel.Result{Lo: lower, Hi: upper}))
+	gap := pairkernel.GapMeasurement(pairkernel.Result{Lo: lower, Hi: upper})
 	gap.Exactness = Approximate
 	pass, ref, haveRef := tolerance.Scalar(gap.Value, gap.Bound, r.cfg.Rel,
 		pairToleranceInputs{diameter: diam}.lengthReference)
-	reading := &ScalarReading{Measurement: gap, Tolerance: toleranceResultFromInternal(tolerance.Judge(pass, haveRef, r.cfg.Rel, ref, gap.Value))}
+	reading := &ScalarReading{Measurement: gap, Tolerance: tolerance.Judge(pass, haveRef, r.cfg.Rel, ref, gap.Value)}
 	if pass {
 		return reading, nil
 	}
 	obs := gap
 	diag := &Diagnostic{
-		Code:     DiagnosticCode(tolerance.DiagnosticCode(toleranceResultToInternal(reading.Tolerance))),
+		Code:     tolerance.DiagnosticCode(reading.Tolerance),
 		Status:   Suspect,
 		Reading:  ReadingGap,
 		Observed: &obs,

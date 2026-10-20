@@ -1,7 +1,10 @@
-package reportvocab_test
+package verifypublish_test
 
 import (
 	"testing"
+
+	"github.com/lestrrat-3d/decad/internal/verifypublish"
+	"github.com/lestrrat-3d/decad/report"
 
 	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/chainrecord"
@@ -11,7 +14,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/patchchain"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/decad/internal/stitchrecord"
@@ -54,10 +56,10 @@ func TestStagedSurveyNamesRootPayloadClass(t *testing.T) {
 	} {
 		t.Run(tc.class, func(t *testing.T) {
 			t.Parallel()
-			diags := reportvocab.UndercutDiagnostics[int, int, struct{}](1, tc.payload,
-				reportvocab.UndercutSurvey[int]{Reason: reportvocab.SurveyPayloadStaged})
+			diags := verifypublish.UndercutDiagnostics[int, int, struct{}](1, tc.payload,
+				verifypublish.UndercutSurvey[int]{Reason: verifypublish.SurveyPayloadStaged})
 			require.Len(t, diags, 1)
-			require.Equal(t, reportvocab.DiagUnsupportedSurveyPayload, diags[0].Code)
+			require.Equal(t, report.DiagUnsupportedSurveyPayload, diags[0].Code)
 			require.Equal(t, tc.class+" pull survey support is not implemented; use an analytic body or wait for wider "+
 				tc.class+" survey support", diags[0].Message)
 		})

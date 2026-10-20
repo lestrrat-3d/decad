@@ -7,11 +7,12 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/motionconclude"
+
 	"github.com/lestrrat-3d/decad/internal/linkagebound"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -218,7 +219,7 @@ func (b *boxRun) classify(c *boxCell) {
 		c.outcome = CellUndecided
 		return
 	}
-	c.outcome, c.clearance = CellClear, measurementPtrFromInternal(motionbound.LowerBoundMeasurement(lowest))
+	c.outcome, c.clearance = CellClear, motionbound.LowerBoundMeasurement(lowest)
 	if lowBound != nil && lowBound.Cmp(lowest) == 0 {
 		c.low = low
 	}
@@ -650,7 +651,7 @@ func (b *boxRun) publish(l *Linkage, box JointBox) *JointBoxReport {
 			}
 		}
 	}
-	report.Status = Status(reportvocab.WorstStatus(diagnosticsToInternal(report.Diagnostics)))
+	report.Status = motionconclude.WorstStatus(report.Diagnostics)
 	return report
 }
 

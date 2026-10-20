@@ -115,5 +115,5 @@ func distanceResult(m measurement.Measurement, err error) (Measurement, error) {
 	if err != nil {
 		return Measurement{}, err
 	}
-	return measurementFromInternal(m), nil
+	return m, nil
 }

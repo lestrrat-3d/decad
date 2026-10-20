@@ -1,10 +1,9 @@
-package reportvocab
+package report
 
 import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
-	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -48,63 +47,63 @@ type ToleranceResult struct {
 // (proposal §8). Embedding Measurement gives callers typed value access
 // (.Value, .Exactness, .Bound) with Tolerance as a separate decision.
 type ScalarReading struct {
-	measurement.Measurement
+	Measurement
 	Tolerance ToleranceResult
 }
 
 // VectorReading is a vector measurement (a centroid) plus its tolerance
 // verdict.
 type VectorReading struct {
-	measurement.VecMeasurement
+	VecMeasurement
 	Tolerance ToleranceResult
 }
 
 // BoundsReading is a bounding box plus its tolerance verdict.
 type BoundsReading struct {
-	measurement.Box
+	Box
 	Tolerance ToleranceResult
 }
 
-// WallResult is one body's wall survey result (proposal §6). Request is
+// WallResultOf is one body's wall survey result (proposal §6). Request is
 // non-nil exactly for a requested survey and shares the pointer
 // VerifyRequest.Wall carries. Diagnostics is this result's own local
 // findings: the survey's own explanation (or the DiagSurveyPrerequisite a
 // non-valid body's validity substitutes for it), plus the reading's own
 // precision finding when it fired.
-type WallResult[BodyT comparable, CellT any] struct {
+type WallResultOf[BodyT comparable, CellT any] struct {
 	Request     *WallRequest
 	Outcome     ScalarOutcome
 	Minimum     *ScalarReading
 	Assessment  Assessment
-	Diagnostics []Diagnostic[BodyT, CellT]
+	Diagnostics []DiagnosticOf[BodyT, CellT]
 }
 
-// UndercutResult is one body's undercut survey result (proposal §7): every
+// UndercutResultOf is one body's undercut survey result (proposal §7): every
 // face in Faces is a CONFIRMED opposing face against the requested pull; no
 // uncertain face appears. Faces appear once each, in their body's Faces()
 // order.
-type UndercutResult[BodyT comparable, FaceT any, CellT any] struct {
+type UndercutResultOf[BodyT comparable, FaceT any, CellT any] struct {
 	Request     *UndercutRequest
 	Coverage    Coverage
 	Faces       []FaceT
 	Assessment  Assessment
-	Diagnostics []Diagnostic[BodyT, CellT]
+	Diagnostics []DiagnosticOf[BodyT, CellT]
 }
 
-// ConcaveRadiusResult is one body's concave-radius survey result (proposal
+// ConcaveRadiusResultOf is one body's concave-radius survey result (proposal
 // §6). It has no Assessment field: Verify accepts no radius requirement.
-type ConcaveRadiusResult[BodyT comparable, CellT any] struct {
+type ConcaveRadiusResultOf[BodyT comparable, CellT any] struct {
 	Outcome     ScalarOutcome
 	Minimum     *ScalarReading
-	Diagnostics []Diagnostic[BodyT, CellT]
+	Diagnostics []DiagnosticOf[BodyT, CellT]
 }
 
-// ValidityResult is one body's validity verdict and the diagnostic that
+// ValidityResultOf is one body's validity verdict and the diagnostic that
 // explains it (proposal §9): at most one entry, since a body carries exactly
 // one underlying validity finding.
-type ValidityResult[BodyT comparable, CellT any] struct {
+type ValidityResultOf[BodyT comparable, CellT any] struct {
 	Outcome     ValidityOutcome
-	Diagnostics []Diagnostic[BodyT, CellT]
+	Diagnostics []DiagnosticOf[BodyT, CellT]
 }
 
 // HeldTopology is one body's lump and void counts (proposal §9), using the
@@ -123,7 +122,7 @@ type RegionReadings struct {
 	Centroid VectorReading
 }
 
-// BodyReport is one live body's verdict and readings (verification §1,
+// BodyReportOf is one live body's verdict and readings (verification §1,
 // proposal §3). Area and Bounds are unconditional boundary readings on
 // every returned body; Region carries the two region quantities and is
 // non-nil exactly when Validity.Outcome is ValidityValid (proposal §9).
@@ -136,21 +135,21 @@ type RegionReadings struct {
 // present exactly once even though it is also reachable through its own
 // result's local Diagnostics slice (proposal §10); it is empty exactly when
 // Status is Sound.
-type BodyReport[BodyT comparable, FaceT any, CellT any] struct {
+type BodyReportOf[BodyT comparable, FaceT any, CellT any] struct {
 	Body          BodyT
 	Status        Status
-	Validity      ValidityResult[BodyT, CellT]
+	Validity      ValidityResultOf[BodyT, CellT]
 	Topology      HeldTopology
 	Area          ScalarReading
 	Bounds        BoundsReading
 	Region        *RegionReadings
-	Wall          WallResult[BodyT, CellT]
-	Undercut      UndercutResult[BodyT, FaceT, CellT]
-	ConcaveRadius ConcaveRadiusResult[BodyT, CellT]
-	Diagnostics   []Diagnostic[BodyT, CellT]
+	Wall          WallResultOf[BodyT, CellT]
+	Undercut      UndercutResultOf[BodyT, FaceT, CellT]
+	ConcaveRadius ConcaveRadiusResultOf[BodyT, CellT]
+	Diagnostics   []DiagnosticOf[BodyT, CellT]
 }
 
-// Report is what Verify returns: the 3D counterpart of
+// ReportOf is what Verify returns: the 3D counterpart of
 // sketch.VerificationReport (core §10, verification §1). Request records the
 // validated effective settings this call used, including defaults, even for
 // an empty document (proposal §5). Bodies follows Document.Bodies() order at
@@ -158,14 +157,14 @@ type BodyReport[BodyT comparable, FaceT any, CellT any] struct {
 // the whole call: body diagnostics in body order, then pair diagnostics in
 // pair order, each finding present exactly once (proposal §10, §11); it is
 // empty EXACTLY when Status == Sound, and Status is the worst
-// Diagnostic.Status in it. The zero Report is Unverified and carries no
+// DiagnosticOf.Status in it. The zero Report is Unverified and carries no
 // verdict.
-type Report[BodyT comparable, FaceT any, CellT any] struct {
+type ReportOf[BodyT comparable, FaceT any, CellT any] struct {
 	Request       VerifyRequest
-	Bodies        []*BodyReport[BodyT, FaceT, CellT]
-	Interferences []Interference[BodyT]
-	Clearances    []Clearance[BodyT]
-	Diagnostics   []Diagnostic[BodyT, CellT]
+	Bodies        []*BodyReportOf[BodyT, FaceT, CellT]
+	Interferences []InterferenceOf[BodyT]
+	Clearances    []ClearanceOf[BodyT]
+	Diagnostics   []DiagnosticOf[BodyT, CellT]
 	Status        Status
 }
 
@@ -173,11 +172,11 @@ type Report[BodyT comparable, FaceT any, CellT any] struct {
 // including the default interference check (proposal §1, §4). It does not
 // imply that every optional survey ran — Wall, Undercut, and ConcaveRadius
 // can each read NotRequested on a Sound report. It returns false for a nil
-// Report and for any Status other than Sound, including an unrecognized one:
+// ReportOf and for any Status other than Sound, including an unrecognized one:
 // it is a convenience predicate over Status, not a validator of a
 // caller-built or decoded Report, so an unrecognized nested result enum
 // never overrides a caller-assigned Sound Status.
-func (r *Report[BodyT, FaceT, CellT]) Passed() bool {
+func (r *ReportOf[BodyT, FaceT, CellT]) Passed() bool {
 	return r != nil && r.Status == Sound
 }
 
@@ -186,9 +185,9 @@ func (r *Report[BodyT, FaceT, CellT]) Passed() bool {
 // non-nil identity, including a foreign body, returns
 // ErrBodyReportNotFound. Successful lookup returns the report's own
 // existing pointer and performs no verification: it consults only this
-// Report's recorded bodies, never current document membership or liveness,
+// ReportOf's recorded bodies, never current document membership or liveness,
 // so it still resolves a body later retired from its document.
-func (r *Report[BodyT, FaceT, CellT]) ForBody(body BodyT) (*BodyReport[BodyT, FaceT, CellT], error) {
+func (r *ReportOf[BodyT, FaceT, CellT]) ForBody(body BodyT) (*BodyReportOf[BodyT, FaceT, CellT], error) {
 	var zero BodyT
 	if r == nil || body == zero {
 		return nil, fmt.Errorf(`%w: a nil report or body names no lookup`, decaderr.ErrDegenerate)

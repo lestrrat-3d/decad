@@ -4,6 +4,8 @@ import (
 	"context"
 	"math/big"
 
+	vocab "github.com/lestrrat-3d/decad/report"
+
 	"github.com/lestrrat-3d/decad/internal/contactround"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
@@ -11,7 +13,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/planarsnapshot"
 	"github.com/lestrrat-3d/decad/internal/planarsweep"
 	"github.com/lestrrat-3d/decad/internal/pointquery"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -44,71 +45,71 @@ type rulingSide struct {
 // occupied set meets the separating plane in exactly its tangent ruling; a
 // plane side holds the whole certified ruling inside its trim. The complete
 // contact set is then one segment, published as its two ends.
-func PublishRulingManifold(report *reportvocab.ContactReport, ruling *clearance.RulingContact) {
+func PublishRulingManifold(report *contactReport, ruling *clearance.RulingContact) {
 	outward := ruling.Normal
 	sideA, reason := rulingSideOf(report.A, ruling.FaceA, outward, ruling.Offset)
-	if reason != reportvocab.ContactNoReason {
+	if reason != vocab.ContactNoReason {
 		report.Reason = reason
 		return
 	}
 	inward := proofarith.DvSub(proofarith.DyV3{}, outward)
 	sideB, reason := rulingSideOf(report.B, ruling.FaceB, inward, proofarith.DyNeg(ruling.Offset))
-	if reason != reportvocab.ContactNoReason {
+	if reason != vocab.ContactNoReason {
 		report.Reason = reason
 		return
 	}
 	ends, ok := rulingContactSet(sideA, sideB)
 	if !ok || !proofarith.DvEqual(ends[0], ruling.Ends[0]) ||
 		!proofarith.DvEqual(ends[1], ruling.Ends[1]) {
-		report.Reason = reportvocab.ContactAmbiguousFeature
+		report.Reason = vocab.ContactAmbiguousFeature
 		return
 	}
 	var witnesses [2]measurement.VecMeasurement
 	for i := range ends {
 		witness, ok := pairbox.DyadicPointMeasurement(&ends[i])
 		if !ok || witness.Bound.Base() > report.Request.PointResolution.Base() {
-			report.Reason = reportvocab.ContactPointTooCoarse
+			report.Reason = vocab.ContactPointTooCoarse
 			return
 		}
 		witnesses[i] = witness
 	}
-	points := make([]reportvocab.ContactPoint, 0, len(ends))
+	points := make([]contactPoint, 0, len(ends))
 	for _, witness := range witnesses {
 		normal, angle, ok := rulingNormal(sideA, sideB, witness, outward)
 		if !ok || angle.Base() > report.Request.NormalResolution.Base() {
-			report.Reason = reportvocab.ContactNoNormalProof
+			report.Reason = vocab.ContactNoNormalProof
 			return
 		}
-		points = append(points, reportvocab.ContactPoint{
+		points = append(points, contactPoint{
 			OnA: witness, OnB: witness, Normal: normal, NormalAngle: angle,
 			Separation: measurement.Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(0), Exactness: measurement.Exact},
 			FaceA:      sideA.face, FaceB: sideB.face,
-			FeatureA: reportvocab.ContactFeature{Face: sideA.face}, FeatureB: reportvocab.ContactFeature{Face: sideB.face},
+			FeatureA: contactFeature{Face: sideA.face}, FeatureB: contactFeature{Face: sideB.face},
 		})
 	}
-	report.Manifold = &reportvocab.ContactManifold{Points: points}
-	report.Reason = reportvocab.ContactNoReason
+	report.Manifold = &contactManifold{Points: points}
+	report.Reason = vocab.ContactNoReason
 }
 
 // rulingSideOf maps one certified carrier back to its body's original face.
 // outward is the side's exact outward normal at the contact and offset the
 // separating plane's offset along it.
 func rulingSideOf(b *topo.Body, carrier *clearance.CFace, outward proofarith.DyV3,
-	offset proofarith.Dyadic) (rulingSide, reportvocab.ContactReason) {
+	offset proofarith.Dyadic) (rulingSide, vocab.ContactReason) {
 	if carrier.Kind == clearance.CkPlane {
 		face, ok := uniquePlaneFace(b, clearance.DyAxisVec(outward), offset)
 		if !ok {
-			return rulingSide{}, reportvocab.ContactAmbiguousFeature
+			return rulingSide{}, vocab.ContactAmbiguousFeature
 		}
-		return rulingSide{face: face}, reportvocab.ContactNoReason
+		return rulingSide{face: face}, vocab.ContactNoReason
 	}
 	cylinder, ok := contactround.CylinderAtPose(b, r3.Identity())
 	if !ok {
-		return rulingSide{}, reportvocab.ContactPayloadUnsupported
+		return rulingSide{}, vocab.ContactPayloadUnsupported
 	}
 	normalAxis, side, ok := clearance.SignedAxis(clearance.DyAxisVec(outward))
 	if !ok || normalAxis == cylinder.Axis {
-		return rulingSide{}, reportvocab.ContactAmbiguousFeature
+		return rulingSide{}, vocab.ContactAmbiguousFeature
 	}
 	var wall *topo.Face
 	for _, face := range topobuild.Faces(b) {
@@ -117,7 +118,7 @@ func rulingSideOf(b *topo.Body, carrier *clearance.CFace, outward proofarith.DyV
 		}
 	}
 	if wall == nil {
-		return rulingSide{}, reportvocab.ContactAmbiguousFeature
+		return rulingSide{}, vocab.ContactAmbiguousFeature
 	}
 	// The source box is the exact disk-by-interval box: its transverse
 	// extents are the axis coordinate plus or minus the radius.
@@ -140,11 +141,11 @@ func rulingSideOf(b *topo.Body, carrier *clearance.CFace, outward proofarith.DyV
 		}
 	}
 	if proofarith.DyCmp(proofarith.DvDot(outward, point), offset) != 0 {
-		return rulingSide{}, reportvocab.ContactAmbiguousFeature
+		return rulingSide{}, vocab.ContactAmbiguousFeature
 	}
 	ends := [2]proofarith.DyV3{point, point}
 	ends[0][cylinder.Axis], ends[1][cylinder.Axis] = box.Lo[cylinder.Axis], box.Hi[cylinder.Axis]
-	return rulingSide{face: wall, ends: ends, radius: radius, curved: true}, reportvocab.ContactNoReason
+	return rulingSide{face: wall, ends: ends, radius: radius, curved: true}, vocab.ContactNoReason
 }
 
 // uniquePlaneFace finds the one original planar face whose outward normal is
@@ -318,7 +319,7 @@ func PlacedCylinderAt(b *topo.Body, pose r3.Transform) (PlacedCylinder, bool) {
 // from the cylinder, so a gap's lower end is the lesser of the least height's
 // and m, its upper end unchanged; a touch or band publishes only when m
 // exceeds its half-width, and otherwise the pair is Undecided.
-func ClassifyPlacedRuling(ctx context.Context, mesher verifiedmesh.Mesher, report *reportvocab.ContactReport) (bool, error) {
+func ClassifyPlacedRuling(ctx context.Context, mesher verifiedmesh.Mesher, report *contactReport) (bool, error) {
 	cylinderFirst := true
 	bodyM, bodyS, poseS := report.A, report.B, report.PoseB
 	cylinder, ok := PlacedCylinderAt(bodyM, report.PoseA)
@@ -344,7 +345,7 @@ func ClassifyPlacedRuling(ctx context.Context, mesher verifiedmesh.Mesher, repor
 	if !ok {
 		return false, nil
 	}
-	trial := reportvocab.ContactReport{A: report.A, B: report.B, PoseA: report.PoseA, PoseB: report.PoseB,
+	trial := contactReport{A: report.A, B: report.B, PoseA: report.PoseA, PoseB: report.PoseB,
 		Request: report.Request}
 	switch classification.Relation {
 	case placedruling.Separated:
@@ -352,15 +353,15 @@ func ClassifyPlacedRuling(ctx context.Context, mesher verifiedmesh.Mesher, repor
 		if !ok {
 			return false, nil
 		}
-		trial.Relation, trial.Gap = reportvocab.ContactSeparated, &gap
+		trial.Relation, trial.Gap = vocab.ContactSeparated, &gap
 	case placedruling.Touching:
-		trial.Relation = reportvocab.ContactTouching
+		trial.Relation = vocab.ContactTouching
 		trial.Gap = &measurement.Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(0), Exactness: measurement.Exact}
 		publishPlacedRulingManifold(&trial, &cylinder, &plane, cylinderFirst,
 			classification.Lateral, new(big.Rat))
 	case placedruling.Band:
 		width := classification.BandWidth
-		trial.Relation = reportvocab.ContactBand
+		trial.Relation = vocab.ContactBand
 		trial.Gap = &measurement.Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(width),
 			Exactness: measurement.ExactnessOf(width)}
 		publishPlacedRulingManifold(&trial, &cylinder, &plane, cylinderFirst,
@@ -377,11 +378,11 @@ func ClassifyPlacedRuling(ctx context.Context, mesher verifiedmesh.Mesher, repor
 // is M's own normal at its true lowest point. separation is the band's
 // half-width, zero for an exact touch. A point beyond the request withholds
 // the manifold with ContactPointTooCoarse.
-func publishPlacedRulingManifold(report *reportvocab.ContactReport, c *PlacedCylinder, plane *placedruling.Plane,
+func publishPlacedRulingManifold(report *contactReport, c *PlacedCylinder, plane *placedruling.Plane,
 	cylinderFirst bool, lateral, separation *big.Rat) {
 	resolution, ok := sweeppath.ExactBaseValue(report.Request.PointResolution)
 	if !ok {
-		report.Reason = reportvocab.ContactPointTooCoarse
+		report.Reason = vocab.ContactPointTooCoarse
 		return
 	}
 	var rims [2]proofarith.DyV3
@@ -397,7 +398,7 @@ func publishPlacedRulingManifold(report *reportvocab.ContactReport, c *PlacedCyl
 	}
 	normal, angle, ok := pairbox.PlanarNormalMeasurement(direction)
 	if !ok || angle.Base() > report.Request.NormalResolution.Base() {
-		report.Reason = reportvocab.ContactNoNormalProof
+		report.Reason = vocab.ContactNoNormalProof
 		return
 	}
 	faces := topobuild.Faces(report.A)
@@ -405,36 +406,36 @@ func publishPlacedRulingManifold(report *reportvocab.ContactReport, c *PlacedCyl
 		faces = topobuild.Faces(report.B)
 	}
 	if plane.Face.ID < 0 || plane.Face.ID >= len(faces) {
-		report.Reason = reportvocab.ContactAmbiguousFeature
+		report.Reason = vocab.ContactAmbiguousFeature
 		return
 	}
 	faceS := faces[plane.Face.ID]
 	bound := proofbound.RatFloatUp(separation)
-	points := make([]reportvocab.ContactPoint, 0, len(rims))
+	points := make([]contactPoint, 0, len(rims))
 	for _, rim := range rims {
 		foot := rim
 		foot[plane.Axis] = plane.Offset
 		onM, okM := planarsweep.PointReading([3]*big.Rat(planarsweep.RatOfDyV3(rim)), lateral, resolution)
 		onS, okS := planarsweep.PointReading([3]*big.Rat(planarsweep.RatOfDyV3(foot)), lateral, resolution)
 		if !okM || !okS {
-			report.Reason = reportvocab.ContactPointTooCoarse
+			report.Reason = vocab.ContactPointTooCoarse
 			return
 		}
-		point := reportvocab.ContactPoint{Normal: normal, NormalAngle: angle,
+		point := contactPoint{Normal: normal, NormalAngle: angle,
 			Separation: measurement.Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(bound),
 				Exactness: measurement.ExactnessOf(bound)}}
 		if cylinderFirst {
 			point.OnA, point.OnB = onM, onS
-			point.FeatureA, point.FeatureB = reportvocab.ContactFeature{Face: c.Wall}, reportvocab.ContactFeature{Face: faceS}
+			point.FeatureA, point.FeatureB = contactFeature{Face: c.Wall}, contactFeature{Face: faceS}
 		} else {
 			point.OnA, point.OnB = onS, onM
-			point.FeatureA, point.FeatureB = reportvocab.ContactFeature{Face: faceS}, reportvocab.ContactFeature{Face: c.Wall}
+			point.FeatureA, point.FeatureB = contactFeature{Face: faceS}, contactFeature{Face: c.Wall}
 		}
 		point.FaceA, point.FaceB = point.FeatureA.Face, point.FeatureB.Face
 		points = append(points, point)
 	}
-	report.Manifold = &reportvocab.ContactManifold{Points: points}
-	report.Reason = reportvocab.ContactNoReason
+	report.Manifold = &contactManifold{Points: points}
+	report.Reason = vocab.ContactNoReason
 }
 
 // ends are the centers of a source cylinder's two end disks.

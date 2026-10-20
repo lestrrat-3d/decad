@@ -11,7 +11,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/pair/box"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -21,7 +20,7 @@ type pairSweepRun struct {
 	doc          *Document
 	a, b         *Body
 	pa, pb       affinePairPath
-	req          reportvocab.SweepRequest
+	req          SweepRequest
 	report       *SweepReport
 	boxA, boxB   contactbox.SourceBox
 	facetedFloor bool // box for faceted body is its exact lower support patch
@@ -42,7 +41,7 @@ func (r *pairSweepRun) sample(ctx context.Context, f *big.Rat) (*SweepSample, er
 	if err != nil {
 		return nil, err
 	}
-	contact, err := r.doc.ContactPair(ctx, r.a, r.b, poseA, poseB, contactRequestFromInternal(r.req.ContactRequest))
+	contact, err := r.doc.ContactPair(ctx, r.a, r.b, poseA, poseB, r.req.ContactRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +69,7 @@ func (r *pairSweepRun) idealContact(f *big.Rat, at SweepInstant) SweepEvent {
 		a.Lo[i], a.Hi[i] = proofarith.DyAdd(a.Lo[i], moveA), proofarith.DyAdd(a.Hi[i], moveA)
 		b.Lo[i], b.Hi[i] = proofarith.DyAdd(b.Lo[i], moveB), proofarith.DyAdd(b.Hi[i], moveB)
 	}
-	report := &reportvocab.ContactReport{A: bodyNode(r.a), B: bodyNode(r.b),
+	report := &nodeContactReport{A: bodyNode(r.a), B: bodyNode(r.b),
 		Request: r.req.ContactRequest}
 	if r.facetedFloor {
 		floor, faceted := a, b
@@ -219,7 +218,7 @@ func (r *pairSweepRun) fullSourceBoxTrack(first *SweepSample, end *big.Rat) *Swe
 		a: r.boxA, b: r.boxB, deltaA: r.pa.Delta, deltaB: r.pb.Delta,
 		start: new(big.Rat), end: new(big.Rat).Set(end), duration: new(big.Rat).Set(r.pa.Duration),
 		request:  r.req.ContactRequest,
-		features: [2]reportvocab.ContactFeature{contactFeatureToInternal(point.FeatureA), contactFeatureToInternal(point.FeatureB)},
+		features: [2]nodeContactFeature{contactFeatureToInternal(point.FeatureA), contactFeatureToInternal(point.FeatureB)},
 		normal:   normal,
 	}
 }
@@ -254,12 +253,12 @@ func (r *pairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*Sweep
 		return r.report, nil
 	case ContactTouching:
 		r.report.InitialEvent = &first.Ideal
-		if r.req.StartPolicy == reportvocab.StopAtInitialContact {
+		if r.req.StartPolicy == StopAtInitialContact {
 			r.report.Outcome, r.report.Event = SweepInitiallyTouching, &first.Ideal
 			return r.report, nil
 		}
 		if !box.ProvesDeparture(r.boxA.AxisBox(), r.boxB.AxisBox(), r.pa.Delta, r.pb.Delta) {
-			if r.req.StartPolicy == reportvocab.ContinueCertifiedTouch {
+			if r.req.StartPolicy == ContinueCertifiedTouch {
 				if track := r.fullSourceBoxTrack(first, one); track != nil {
 					last, err := r.sample(ctx, one)
 					if errors.Is(err, errSweepPoseBudget) {
@@ -307,7 +306,7 @@ func (r *pairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*Sweep
 				}
 			}
 			cause := SweepDepartureUnproved
-			if r.req.StartPolicy == reportvocab.ContinueCertifiedTouch {
+			if r.req.StartPolicy == ContinueCertifiedTouch {
 				cause = SweepContactTrackUnproved
 			}
 			return r.undecided(zero, one, cause), nil

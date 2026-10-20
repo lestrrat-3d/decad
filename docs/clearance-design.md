@@ -100,7 +100,7 @@ admissible only when every crossing is certified transversal and interior to
 its face; a cast that grazes an edge, a vertex or a tangency retries the next
 direction on a fixed ladder — deterministic, never random, so a replay
 resolves identically (evaluator §8). Interference PR 1 MUST return any witness
-strictly inside as proven nesting — `reportvocab.PairOverlapping`, never the same state as
+strictly inside as proven nesting — `boundaryaudit.PairOverlapping`, never the same state as
 a failed cast; all
 witnesses mutually outside, with `g > 0`, is the disjointness proof. Preserve
 inside / outside / undecided for the shipped single-lump analytic payloads, per
@@ -838,9 +838,9 @@ the caller is owed unasked; no rung needs a gap the caller never asked for.
 - **Interference PR 1 makes overlap and uncertainty distinct.** `lo` that
   cannot clear zero with no certified contact, a budget-exhausted refinement
   whose `lo ≤ 0`, and an
-  uncertified cast are `reportvocab.PairUndecided`. An admitted boundary crossing, an
+  uncertified cast are `boundaryaudit.PairUndecided`. An admitted boundary crossing, an
   aligned-normal contact whose material sides prove shared interior, or a
-  nesting witness is `reportvocab.PairOverlapping`. Neither emits a `Clearance` row. The
+  nesting witness is `boundaryaudit.PairOverlapping`. Neither emits a `Clearance` row. The
   overlap relation proceeds to the containment-volume or read-only intersection
   path of `docs/interference-design.md`; if neither bounds the complete overlap
   volume, the pair makes the report `Suspect` without losing the relation the
@@ -930,7 +930,7 @@ CLOSED, every vertex carries a proven bound of exactly zero
 (`stitchweld.ZeroBound`), and its lumps are proven separate
 (`docs/tessellation-design.md` §2's `stitchPayload` row). Such a body passes
 `booloperand.RequireVolumeProof` (`internal/booloperand/volume_proof.go`), so a
-pair the kernel proves `reportvocab.PairOverlapping` for it reaches a real
+pair the kernel proves `boundaryaudit.PairOverlapping` for it reaches a real
 `Interference` row through the ordinary mesh boolean. A placed stitched solid,
 or one closed by the CURVE weld certificate at a nonzero class bound, publishes
 no occupied-volume proof: its clearance reads through the bounded carrier

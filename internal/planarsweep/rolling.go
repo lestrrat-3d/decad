@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/report"
+
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/measurement"
@@ -13,7 +15,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/placedruling"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -303,7 +304,7 @@ type RollingTrack struct {
 	radius             *big.Rat
 	normal             proofarith.DyV3 // S's exact unit outward normal, a signed axis
 	origin             int             // an S vertex on the plane
-	FeatureM, FeatureS reportvocab.ContactFeature
+	FeatureM, FeatureS contactFeature
 	Direction          measurement.VecMeasurement // the published A-to-B normal
 	Angle              units.Value
 	coefficients       rollingCoefficients
@@ -317,7 +318,7 @@ type RollingTrack struct {
 // start rims, as ContactPair publishes the ruling, and a rigid motion keeps
 // that pairing. ok is false when the published normal has no finite reading
 // or is wider than normalResolution, or the depth is not finite.
-func (b *RollingBand) Track(source [2]proofarith.DyV3, featureM, featureS reportvocab.ContactFeature,
+func (b *RollingBand) Track(source [2]proofarith.DyV3, featureM, featureS contactFeature,
 	normalResolution units.Value) (*RollingTrack, bool) {
 	direction := b.Support.Normal
 	if b.m == 0 {
@@ -388,7 +389,7 @@ func (p *RollingTrack) rounded(f *big.Rat) ([2]r3.Transform, [2]*big.Rat, []proo
 // normal; the true rim point lies within M's pose deviation plus the lateral
 // drift of it, and its foot on S's rounded plane within S's deviation more.
 // The separation is the band's two-sided bound.
-func (p *RollingTrack) ManifoldAt(f *big.Rat, req reportvocab.ContactRequest) (*reportvocab.ContactManifold, error) {
+func (p *RollingTrack) ManifoldAt(f *big.Rat, req report.ContactRequest) (*contactManifold, error) {
 	poses, eta, vertsS, ok := p.rounded(f)
 	if !ok {
 		return nil, fmt.Errorf("%w: rolling contact track pose has no finite bound", decaderr.ErrUnsupported)
@@ -402,7 +403,7 @@ func (p *RollingTrack) ManifoldAt(f *big.Rat, req reportvocab.ContactRequest) (*
 	_, lateral := p.coefficients.at(new(big.Rat).Mul(f, p.paths[p.M].Path.Duration))
 	separation := measurement.Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(p.depthUp),
 		Exactness: measurement.ExactnessOf(p.depthUp)}
-	points := make([]reportvocab.ContactPoint, 0, len(p.ends))
+	points := make([]contactPoint, 0, len(p.ends))
 	for _, end := range p.ends {
 		center := RatOfDyV3(proofarith.DvTransform(poses[p.M], end))
 		var rim, foot [3]*big.Rat
@@ -418,7 +419,7 @@ func (p *RollingTrack) ManifoldAt(f *big.Rat, req reportvocab.ContactRequest) (*
 		if !okM || !okS {
 			return nil, fmt.Errorf("%w: rolling contact track point exceeds point resolution", decaderr.ErrUnsupported)
 		}
-		point := reportvocab.ContactPoint{Normal: p.Direction, NormalAngle: p.Angle, Separation: separation}
+		point := contactPoint{Normal: p.Direction, NormalAngle: p.Angle, Separation: separation}
 		if p.M == 0 {
 			point.OnA, point.OnB = onM, onS
 			point.FeatureA, point.FeatureB = p.FeatureM, p.FeatureS
@@ -429,7 +430,7 @@ func (p *RollingTrack) ManifoldAt(f *big.Rat, req reportvocab.ContactRequest) (*
 		point.FaceA, point.FaceB = point.FeatureA.Face, point.FeatureB.Face
 		points = append(points, point)
 	}
-	return &reportvocab.ContactManifold{Points: points}, nil
+	return &contactManifold{Points: points}, nil
 }
 
 // ReplayPoses replays the track at f without rerunning the pair relation.

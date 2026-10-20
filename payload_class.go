@@ -2,7 +2,6 @@ package decad
 
 import (
 	"github.com/lestrrat-3d/decad/internal/payloadclass"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 )
 
 // init installs the reader decadtest.PayloadClass calls. Tests need it because
@@ -15,6 +14,6 @@ func init() {
 		if !ok || b == nil {
 			return ""
 		}
-		return reportvocab.PayloadTypeName(b.n.Payload)
+		return payloadclass.TypeName(b.n.Payload)
 	}
 }

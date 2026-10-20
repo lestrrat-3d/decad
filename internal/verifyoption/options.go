@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"math"
 
+	vocab "github.com/lestrrat-3d/decad/report"
+
 	"github.com/lestrrat-3d/decad/internal/decaderr"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -214,20 +215,20 @@ func Resolve(opts []Token) (Config, error) {
 // canonicalized to millimetres and radians, recorded even for an empty
 // document. The pull vector is kept exactly as accepted — never normalized —
 // so the recorded request shows the actual input the survey consumed.
-func EffectiveRequest(cfg Config) reportvocab.VerifyRequest {
-	req := reportvocab.VerifyRequest{
+func EffectiveRequest(cfg Config) vocab.VerifyRequest {
+	req := vocab.VerifyRequest{
 		RelativeTolerance: units.Scalar(cfg.Rel),
 		ConcaveRadius:     cfg.ConcaveRadius,
 		Clearances:        cfg.Clearances,
 	}
 	if cfg.Wall != nil {
-		req.Wall = &reportvocab.WallRequest{
+		req.Wall = &vocab.WallRequest{
 			Minimum:        units.Millimeters(cfg.ToolMM),
 			DraftAllowance: units.Radians(cfg.AllowRad),
 		}
 	}
 	if cfg.Pull != nil {
-		req.Undercut = &reportvocab.UndercutRequest{PullDirection: *cfg.Pull}
+		req.Undercut = &vocab.UndercutRequest{PullDirection: *cfg.Pull}
 	}
 	return req
 }

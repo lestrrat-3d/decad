@@ -7,7 +7,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -50,7 +49,7 @@ func ToFaceStop(face *topo.Face, frame r3.Frame, travel, offset, offsetDelta flo
 		// carry a Faceted surface, and this evaluator cannot use it as a stop.
 		// The message names the actual public surface type so the caller sees
 		// why.
-		return 0, 0, fmt.Errorf(`%w: ToFace requires a stop face with an analytic Plane surface whose normal is parallel to the sweep direction, not merely a flat face; this face's surface is %s, which this evaluator cannot use as a stop even when flat — choose any analytic planar face with that orientation, or use a Distance (or, inside a TwoSided extent, DistanceSide) extent`, decaderr.ErrUnsupported, reportvocab.SurfaceTypeName(face.Surface))
+		return 0, 0, fmt.Errorf(`%w: ToFace requires a stop face with an analytic Plane surface whose normal is parallel to the sweep direction, not merely a flat face; this face's surface is %s, which this evaluator cannot use as a stop even when flat — choose any analytic planar face with that orientation, or use a Distance (or, inside a TwoSided extent, DistanceSide) extent`, decaderr.ErrUnsupported, surfacegeom.SurfaceTypeName(face.Surface))
 	}
 	n := frame.N()
 	if !ExactlyParallel(pl.Frame.N(), n) {

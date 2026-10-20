@@ -248,10 +248,10 @@ func loftContactFacetedBody(ctx context.Context, d *Document, ref producerID,
 	if err := ctx.Err(); err != nil {
 		return nil, false, err
 	}
-	volume := measurementToInternal(Measurement{
+	volume := Measurement{
 		Value: units.CubicMillimeters(volF), Exactness: exactnessOf(bound),
 		Bound: units.CubicMillimeters(bound),
-	})
+	}
 	built, admitted, err := facetedrecord.BuildWithProofBounded(ctx, budget,
 		envOf(documentNode(d), ref),
 		payload, audit, volume, volumeRat)

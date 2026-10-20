@@ -3,14 +3,15 @@ package spherepath
 import (
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/report"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 )
 
 // PairReplay checks rounded source centers against the exact affine path and
 // the producer's certified relation. An empty result means the geometry fits;
 // the caller must still check the source features of a persistent point track.
-func PairReplay(m PairMotion, observedA, observedB proofarith.DyV3, outcome reportvocab.SweepOutcome,
+func PairReplay(m PairMotion, observedA, observedB proofarith.DyV3, outcome report.SweepOutcome,
 	f, resolution, lo, hi, grazingAt *big.Rat, hasTrack bool) string {
 	idealA := pairIdealCenter(m.CenterA, m.DeltaA, f)
 	idealB := pairIdealCenter(m.CenterB, m.DeltaB, f)
@@ -37,11 +38,11 @@ func PairReplay(m PairMotion, observedA, observedB proofarith.DyV3, outcome repo
 	clearMargin.Mul(clearMargin, clearMargin)
 	strictClear := actualDistance2.Cmp(clearMargin) > 0
 	switch outcome {
-	case reportvocab.SweepClear:
+	case report.SweepClear:
 		if idealRelation <= 0 || !strictClear {
 			return "rounded sphere-pair clear path loses its gap"
 		}
-	case reportvocab.SweepDepartedClear:
+	case report.SweepDepartedClear:
 		if f.Sign() == 0 {
 			if idealRelation != 0 || actualRelation != 0 {
 				return "sphere-pair departure start is not touching"
@@ -49,11 +50,11 @@ func PairReplay(m PairMotion, observedA, observedB proofarith.DyV3, outcome repo
 		} else if idealRelation <= 0 || !strictClear {
 			return "rounded sphere-pair departure loses its gap"
 		}
-	case reportvocab.SweepPersistentTouch:
+	case report.SweepPersistentTouch:
 		if !hasTrack || idealRelation != 0 || actualRelation != 0 {
 			return "sphere-pair replay loses its exact touch"
 		}
-	case reportvocab.SweepImpactBracket:
+	case report.SweepImpactBracket:
 		if lo == nil || hi == nil {
 			return "sphere-pair impact lacks its exact bracket"
 		}
@@ -63,7 +64,7 @@ func PairReplay(m PairMotion, observedA, observedB proofarith.DyV3, outcome repo
 		if f.Cmp(hi) == 0 && (idealRelation > 0 || actualDistance2.Cmp(clearMargin) > 0) {
 			return "sphere-pair impact right pose is not near contact"
 		}
-	case reportvocab.SweepGrazingTouch:
+	case report.SweepGrazingTouch:
 		if grazingAt == nil {
 			return "sphere-pair graze lacks exact time"
 		}

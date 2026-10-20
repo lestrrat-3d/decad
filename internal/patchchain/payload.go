@@ -121,7 +121,7 @@ func (pp BodyPayload) Placed(ctx context.Context, env topo.Env, composed r3.Tran
 }
 
 // SurveyClass names the payload class a staged survey diagnostic reports
-// (internal/reportvocab): the root type name this payload had before it moved.
+// (internal/verifypublish): the root type name this payload had before it moved.
 func (Payload) SurveyClass() string { return "patchPayload" }
 
 // ProvesSimple implements topo.SimpleProver. Rule P (docs/surface-design.md
@@ -251,5 +251,5 @@ func edgeSetsEqual(a, b []*topo.Edge) bool {
 }
 
 // SurveyClass names the payload class a staged survey diagnostic reports
-// (internal/reportvocab): the root type name this payload had before it moved.
+// (internal/verifypublish): the root type name this payload had before it moved.
 func (BodyPayload) SurveyClass() string { return "bodyPatchPayload" }

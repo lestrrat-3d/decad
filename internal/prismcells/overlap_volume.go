@@ -52,7 +52,7 @@ func OverlapVolume(ctx context.Context, a, b topo.Payload, newEnv func() topo.En
 		if errors.Is(err, decaderr.ErrUnsupported) {
 			// RB7 (§9): the arrangement cap. Wrapped exactly as
 			// booleandispatch.AnalyticIntersect wraps its own RB7, so
-			// measuredInterference reads it as reportvocab.InterferenceUnsupportedPipeline
+			// measuredInterference reads it as boundaryaudit.InterferenceUnsupportedPipeline
 			// and the report says Suspect.
 			return 0, 0, false, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err)
 		}

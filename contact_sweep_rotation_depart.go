@@ -10,7 +10,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/contactbox"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/sweepdeparture"
 	"github.com/lestrrat-3d/decad/internal/sweepmemo"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
@@ -74,7 +73,7 @@ func (r *rotationalPairSweep) departureGap(ctx context.Context, f *big.Rat, samp
 	}
 	req := r.req.ContactRequest
 	req.SupportBand = units.Value{}
-	contact, err := r.doc.ContactPair(ctx, r.a.body, r.b.body, sample.PoseA, sample.PoseB, contactRequestFromInternal(req))
+	contact, err := r.doc.ContactPair(ctx, r.a.body, r.b.body, sample.PoseA, sample.PoseB, req)
 	if err != nil {
 		return nil, false, err
 	}
@@ -95,7 +94,7 @@ func (r *rotationalPairSweep) departureGap(ctx context.Context, f *big.Rat, samp
 
 // continuationCause names the missing proof after an initial touch.
 func (r *rotationalPairSweep) continuationCause() SweepCause {
-	if r.req.StartPolicy == reportvocab.ContinueCertifiedTouch {
+	if r.req.StartPolicy == ContinueCertifiedTouch {
 		return SweepContactTrackUnproved
 	}
 	return SweepDepartureUnproved

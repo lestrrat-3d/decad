@@ -318,7 +318,7 @@ jobs:
           - os: ubuntu-latest
             race: "-race"
             shard: ""
-            packages: "./examples/ ./decadtest/ ./export/ ./internal/..."
+            packages: "./examples/ ./decadtest/ ./export/ ./report/ ./internal/..."
             timeout: "10m"
           - os: ubuntu-latest
             race: "-race"

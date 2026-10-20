@@ -8,7 +8,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/contactbox"
 	"github.com/lestrrat-3d/decad/internal/contactround"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
@@ -23,7 +22,7 @@ import (
 // sourceCylinderFaceSweep uses one complete axial-disk or circular-sidewall
 // box-face corridor for clear motion, first impact, and one-sided departure.
 func (d *Document) sourceCylinderFaceSweep(ctx context.Context, a, b *Body,
-	pa, pb affinePairPath, req reportvocab.SweepRequest, report *SweepReport,
+	pa, pb affinePairPath, req SweepRequest, report *SweepReport,
 	cylinder contactround.CylinderProof, box contactbox.SourceBox, cylinderFirst bool) (*SweepReport, error) {
 	firstBox, secondBox := box, cylinder.Box
 	if cylinderFirst {
@@ -84,7 +83,7 @@ func (d *Document) sourceCylinderFaceSweep(ctx context.Context, a, b *Body,
 		return nil, err
 	}
 	for index, poses := range [][2]r3.Transform{{startA, startB}, {endA, endB}} {
-		contact, err := d.ContactPair(ctx, a, b, poses[0], poses[1], contactRequestFromInternal(req.ContactRequest))
+		contact, err := d.ContactPair(ctx, a, b, poses[0], poses[1], req.ContactRequest)
 		if err != nil {
 			return nil, err
 		}
@@ -120,7 +119,7 @@ type sourceCylinderImpactRun struct {
 	doc           *Document
 	a, b          *Body
 	pa, pb        affinePairPath
-	req           reportvocab.SweepRequest
+	req           SweepRequest
 	report        *SweepReport
 	cylinder      contactround.CylinderProof
 	box           contactbox.SourceBox
@@ -157,7 +156,7 @@ func (r *sourceCylinderImpactRun) sample(ctx context.Context, f *big.Rat) (*Swee
 	if err != nil {
 		return nil, err
 	}
-	actual, err := r.doc.ContactPair(ctx, r.a, r.b, poseA, poseB, contactRequestFromInternal(r.req.ContactRequest))
+	actual, err := r.doc.ContactPair(ctx, r.a, r.b, poseA, poseB, r.req.ContactRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +164,7 @@ func (r *sourceCylinderImpactRun) sample(ctx context.Context, f *big.Rat) (*Swee
 	cylinder, box, ok := r.boxesAt(f)
 	ideal := SweepEvent{At: at, Relation: ContactUndecided, Reason: ContactPayloadUnsupported}
 	if ok {
-		contact := &reportvocab.ContactReport{Request: r.req.ContactRequest}
+		contact := &nodeContactReport{Request: r.req.ContactRequest}
 		contactround.ClassifyCylinderBox(contact, cylinder, box, r.cylinderFirst)
 		ideal = sweepEventOf(at, contact)
 	}
@@ -285,7 +284,7 @@ func (r *sourceCylinderImpactRun) execute(ctx context.Context) (*SweepReport, er
 	}
 	if first.Ideal.Relation == ContactTouching {
 		r.report.InitialEvent = &first.Ideal
-		if r.req.StartPolicy == reportvocab.StopAtInitialContact {
+		if r.req.StartPolicy == StopAtInitialContact {
 			r.report.Outcome, r.report.Event = SweepInitiallyTouching, &first.Ideal
 			return r.report, nil
 		}
@@ -367,7 +366,7 @@ func (r *sourceCylinderImpactRun) execute(ctx context.Context) (*SweepReport, er
 // the closed span, and ManifoldAt reduces the exact pair at any fraction.
 func (r *sourceCylinderImpactRun) persistentTrack(ctx context.Context, first *SweepSample) (*SweepReport, error) {
 	zero, one := new(big.Rat), big.NewRat(1, 1)
-	if r.req.StartPolicy != reportvocab.ContinueCertifiedTouch {
+	if r.req.StartPolicy != ContinueCertifiedTouch {
 		return cylinderSweepCause(r.report, r.pa.Duration, SweepDepartureUnproved), nil
 	}
 	firstBox, secondBox := r.box, r.cylinder.Box
@@ -397,7 +396,7 @@ func (r *sourceCylinderImpactRun) persistentTrack(ctx context.Context, first *Sw
 		cylinder: &cylinder, cylinderFirst: r.cylinderFirst,
 		start: new(big.Rat), end: big.NewRat(1, 1), duration: new(big.Rat).Set(r.pa.Duration),
 		request:  r.req.ContactRequest,
-		features: [2]reportvocab.ContactFeature{contactFeatureToInternal(point.FeatureA), contactFeatureToInternal(point.FeatureB)},
+		features: [2]nodeContactFeature{contactFeatureToInternal(point.FeatureA), contactFeatureToInternal(point.FeatureB)},
 		normal:   point.Normal, pointCount: 1}
 	r.report.Outcome, r.report.ContactTrack = SweepPersistentTouch, track
 	r.report.replay.track = track
@@ -421,9 +420,9 @@ func (t *SweepContactTrack) cylinderTrackManifold(f *big.Rat) (*ContactManifold,
 	}
 	cylinder := *t.cylinder
 	cylinder.Box = movedCylinder
-	report := &reportvocab.ContactReport{Request: t.request}
+	report := &nodeContactReport{Request: t.request}
 	contactround.ClassifyCylinderBox(report, cylinder, movedBox, t.cylinderFirst)
-	if report.Relation != reportvocab.ContactTouching || report.Manifold == nil || len(report.Manifold.Points) != 1 ||
+	if report.Relation != ContactTouching || report.Manifold == nil || len(report.Manifold.Points) != 1 ||
 		report.Manifold.Points[0].FeatureA != t.features[0] ||
 		report.Manifold.Points[0].FeatureB != t.features[1] {
 		return nil, fmt.Errorf("%w: cylinder contact track lost its disk point", ErrUnsupported)

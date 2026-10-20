@@ -189,7 +189,7 @@ manifold carry in each case.
 separated pair; box separation alone does not supply a minimum. If the
 analytic kernel proves separation but cannot measure the gap, return
 `Undecided` with a gap-specific reason. Keep the private four-way
-`reportvocab.PairVerdict` separate from the public `ContactRelation`; map it only after
+`boundaryaudit.PairVerdict` separate from the public `ContactRelation`; map it only after
 the transient pose's own displacement has been charged. A later overlap
 volume proof may upgrade an undecided analytic relation, but may not weaken a
 stronger earlier certificate.
@@ -668,14 +668,17 @@ a body is immutable, so a repeat reads the stored report and changes no
 outcome. Only a completed query is stored, never an error or a
 cancellation, and every call returns its own copy of the report.
 
-The proof paths fill the report's internal form, `internal/reportvocab`'s
-`ContactReport`, which names topology nodes and holds internal readings.
-`ContactPair` converts a completed report to the public type once, before the
-memo stores it: each node maps to the handle that holds it, so every body,
-face, edge and vertex a report names is the very pointer the body's own
-accessors return, and a nil manifold, gap or overlap stays nil. A sweep that
-runs the same proof paths converts their reports in the same way where it
-publishes a `SweepEvent`, a contact track's features or a track manifold.
+The proof paths fill the report's node form: `report.ContactReportOf`
+instantiated with topology nodes, which each kernel package names
+`contactReport`. The public `ContactReport` is the same generic type
+instantiated with the root handles, so the two forms share one definition and
+one set of readings. `ContactPair` lifts a completed report to the handle
+instantiation once, with `report.Lift`, before the memo stores it: each node
+maps to the handle that holds it, so every body, face, edge and vertex a
+report names is the very pointer the body's own accessors return, and a nil
+manifold, gap or overlap stays nil. A sweep that runs the same proof paths
+lifts their reports in the same way where it publishes a `SweepEvent`, a
+contact track's features or a track manifold.
 
 ## 7. Delivery and computed tests
 

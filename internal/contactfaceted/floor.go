@@ -3,6 +3,8 @@ package contactfaceted
 import (
 	"context"
 
+	vocab "github.com/lestrrat-3d/decad/report"
+
 	"github.com/lestrrat-3d/decad/internal/contactbox"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
@@ -10,7 +12,6 @@ import (
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
@@ -192,9 +193,9 @@ func AxisSupportAtPose(ctx context.Context, b *topo.Body, pose r3.Transform) (Ax
 // ClassifyFloorBox admits a faceted body only when its complete lower
 // support patch lies strictly inside a source-box floor's upper face. The
 // certified support plane separates the whole occupied sets at and above it.
-func ClassifyFloorBox(ctx context.Context, report *reportvocab.ContactReport, faceted *topo.Body,
+func ClassifyFloorBox(ctx context.Context, report *contactReport, faceted *topo.Body,
 	pose r3.Transform, floor contactbox.SourceBox, facetedIsA bool) error {
-	report.Reason = reportvocab.ContactPayloadUnsupported
+	report.Reason = vocab.ContactPayloadUnsupported
 	support, ok, err := AxisSupportAtPose(ctx, faceted, pose)
 	if err != nil {
 		return err
@@ -209,7 +210,7 @@ func ClassifyFloorBox(ctx context.Context, report *reportvocab.ContactReport, fa
 		}
 		if bounded && extent.Bound.Sign() > 0 && InsideFloor(extent, floor) {
 			if gap, measured := FloorGap(extent, floor); measured {
-				report.Relation, report.Gap, report.Reason = reportvocab.ContactSeparated, &gap, reportvocab.ContactNoReason
+				report.Relation, report.Gap, report.Reason = vocab.ContactSeparated, &gap, vocab.ContactNoReason
 			}
 		}
 		return nil
@@ -229,13 +230,13 @@ func ClassifyFloorBox(ctx context.Context, report *reportvocab.ContactReport, fa
 		gaps[2] = gap
 		m, measured := pairbox.GapMeasurement(gaps)
 		if !measured {
-			report.Reason = reportvocab.ContactNoGapProof
+			report.Reason = vocab.ContactNoGapProof
 			return nil
 		}
-		report.Relation, report.Gap, report.Reason = reportvocab.ContactSeparated, &m, reportvocab.ContactNoReason
+		report.Relation, report.Gap, report.Reason = vocab.ContactSeparated, &m, vocab.ContactNoReason
 		return nil
 	}
-	report.Relation = reportvocab.ContactTouching
+	report.Relation = vocab.ContactTouching
 	exactZero := measurement.Measurement{Value: units.Millimeters(0), Exactness: measurement.Exact, Bound: units.Millimeters(0)}
 	report.Gap = &exactZero
 	patch := contactbox.SourceBox{}
@@ -250,7 +251,7 @@ func ClassifyFloorBox(ctx context.Context, report *reportvocab.ContactReport, fa
 		contactbox.PublishSourceBoxPatch(report, floor, patch, 2, 1, proofarith.DyZero())
 	}
 	if report.Manifold != nil {
-		report.Reason = reportvocab.ContactNoReason
+		report.Reason = vocab.ContactNoReason
 	}
 	return nil
 }

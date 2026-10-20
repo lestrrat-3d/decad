@@ -4,12 +4,13 @@ import (
 	"context"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/boundaryaudit"
+
 	"github.com/lestrrat-3d/decad/internal/booleandispatch"
 	"github.com/lestrrat-3d/decad/internal/booleaneval"
 	"github.com/lestrrat-3d/decad/internal/clearance/pairkernel"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
 )
 
@@ -68,58 +69,58 @@ func analyticBodiesEqual(budget *proofbound.WorkBudget, a, b *Body) (bool, error
 //
 // meshes supplies the mesh path's operand meshes: Verify's per-call cache,
 // or pairMeshes{} where a caller measures one pair on its own.
-func measuredInterference(ctx context.Context, a, b *Body, res pairkernel.Result, meshes booleaneval.OperandMesher) (Measurement, reportvocab.InterferenceOutcome, error) {
+func measuredInterference(ctx context.Context, a, b *Body, res pairkernel.Result, meshes booleaneval.OperandMesher) (Measurement, boundaryaudit.InterferenceOutcome, error) {
 	if res.Contained != nil {
-		return measurementFromInternal(res.Contained.Volume), reportvocab.InterferenceMeasured, nil
+		return res.Contained.Volume, boundaryaudit.InterferenceMeasured, nil
 	}
 	equal, err := analyticBodiesEqual(proofbound.NewWorkBudget(ctx), a, b)
 	if err != nil {
-		return Measurement{}, reportvocab.InterferenceUndecided, err
+		return Measurement{}, boundaryaudit.InterferenceUndecided, err
 	}
 	if equal {
 		// Stable pair order chooses A when the represented sets are equal.
-		return measurementFromInternal(a.n.Volume), reportvocab.InterferenceMeasured, nil
+		return a.n.Volume, boundaryaudit.InterferenceMeasured, nil
 	}
 
 	analyticNode, ok, err := booleandispatch.AnalyticIntersect(ctx, envOf(a.n.Doc, a.n.Doc.NextProducer), &a.n, &b.n)
 	if err != nil {
 		if expected, ok := asExpectedBoolean(err); ok {
-			return Measurement{}, reportvocab.InterferenceOutcomeForExpected(expected), nil
+			return Measurement{}, boundaryaudit.InterferenceOutcomeForExpected(expected), nil
 		}
-		return Measurement{}, reportvocab.InterferenceUndecided, err
+		return Measurement{}, boundaryaudit.InterferenceUndecided, err
 	}
 	if ok {
-		if !positiveVolume(measurementFromInternal(analyticNode.Volume)) {
-			return Measurement{}, reportvocab.InterferenceUndecided, nil
+		if !positiveVolume(analyticNode.Volume) {
+			return Measurement{}, boundaryaudit.InterferenceUndecided, nil
 		}
-		return measurementFromInternal(analyticNode.Volume), reportvocab.InterferenceMeasured, nil
+		return analyticNode.Volume, boundaryaudit.InterferenceMeasured, nil
 	}
 
 	overlap, ok, err := prismOverlapVolume(ctx, a, b)
 	if err != nil {
 		if expected, ok := asExpectedBoolean(err); ok {
-			return Measurement{}, reportvocab.InterferenceOutcomeForExpected(expected), nil
+			return Measurement{}, boundaryaudit.InterferenceOutcomeForExpected(expected), nil
 		}
-		return Measurement{}, reportvocab.InterferenceUndecided, err
+		return Measurement{}, boundaryaudit.InterferenceUndecided, err
 	}
 	if ok {
 		if !positiveVolume(overlap) {
-			return Measurement{}, reportvocab.InterferenceUndecided, nil
+			return Measurement{}, boundaryaudit.InterferenceUndecided, nil
 		}
-		return overlap, reportvocab.InterferenceMeasured, nil
+		return overlap, boundaryaudit.InterferenceMeasured, nil
 	}
 
 	eval, err := evaluateBooleanMeshes(ctx, meshbool.OpIntersect, a, b, meshes, 1)
 	if err != nil {
 		if expected, ok := asExpectedBoolean(err); ok {
-			return Measurement{}, reportvocab.InterferenceOutcomeForExpected(expected), nil
+			return Measurement{}, boundaryaudit.InterferenceOutcomeForExpected(expected), nil
 		}
-		return Measurement{}, reportvocab.InterferenceUndecided, err
+		return Measurement{}, boundaryaudit.InterferenceUndecided, err
 	}
 	if !positiveVolume(eval.volume) {
-		return Measurement{}, reportvocab.InterferenceUndecided, nil
+		return Measurement{}, boundaryaudit.InterferenceUndecided, nil
 	}
-	return eval.volume, reportvocab.InterferenceMeasured, nil
+	return eval.volume, boundaryaudit.InterferenceMeasured, nil
 }
 
 // positiveVolume is interference design §6's positive-volume gate: the true

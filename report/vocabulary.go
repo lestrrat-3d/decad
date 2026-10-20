@@ -1,4 +1,4 @@
-package reportvocab
+package report
 
 import "fmt"
 

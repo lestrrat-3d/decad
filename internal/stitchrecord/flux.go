@@ -10,7 +10,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/stitchflux"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -378,7 +377,7 @@ func FaceFluxAndMoment(f *topo.Face, anchor r3.Vec) (flux, mx, my, mz proofbound
 	default:
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
 			`%w: Stitch closes a boundary holding a %s face this evaluator has no closed-form flux integral for (docs/surface-design.md Table R row R8)`,
-			decaderr.ErrUnsupported, reportvocab.SurfaceTypeName(s),
+			decaderr.ErrUnsupported, surfacegeom.SurfaceTypeName(s),
 		)
 	}
 }
@@ -405,7 +404,7 @@ func (s loopSource) Circle() (stitchflux.CircleRim, bool, string) {
 	edge := s.loop.CoEdges[0].Edge
 	circle, ok := edge.Curve.(surfacegeom.Circle3)
 	if !ok {
-		return stitchflux.CircleRim{}, false, reportvocab.CurveTypeName(edge.Curve)
+		return stitchflux.CircleRim{}, false, surfacegeom.CurveTypeName(edge.Curve)
 	}
 	return stitchflux.CircleRim{
 		Center:          circle.Center,

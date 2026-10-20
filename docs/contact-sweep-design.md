@@ -911,15 +911,14 @@ sentinel (`ErrDegenerate`, `ErrForeignBody`, `ErrRetiredBody`, `ErrUnitKind`,
 solid whose pair kernel lacks a proof returns `SweepUndecided`, not an input
 error. An internal invariant failure remains an error with no report.
 
-`SweepPair` converts the validated request to its internal form,
-`internal/reportvocab`'s `SweepRequest`, whose contact request and start policy
-are the internal twins with the same fields and constants, and passes that form
-to the sweep path it selects. When a rotating source-box run ends undecided
-with `SweepDepartureUnproved` or `SweepContactTrackUnproved` at a touching or
-`ContactBand` start, `planarContinuation` converts the report's saved public
-`Request` again to rerun the pair through `sweepPlanarPair`. The
-report's `Request` holds the caller's own value. A `ContactPair` query made by a
-sweep receives the internal contact request converted back to the public type;
+`SweepPair` passes the validated request, a `report.SweepRequest`, to the sweep
+path it selects. The public `SweepRequest` is an alias of that type, so the
+request, its contact request and its start policy have one definition. When a
+rotating source-box run ends undecided with `SweepDepartureUnproved` or
+`SweepContactTrackUnproved` at a touching or `ContactBand` start,
+`planarContinuation` reruns the pair through `sweepPlanarPair` with the
+report's saved `Request`. The report's `Request` holds the caller's own value.
+A `ContactPair` query made by a sweep receives the contact request unchanged;
 the departure-gap query of a rotating run clears its `SupportBand` first.
 
 The dyadic grid depth is `ceil(log2(Duration / TimeResolution))`. Fully

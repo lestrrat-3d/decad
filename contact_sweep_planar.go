@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/planarfeaturemap"
+
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	"github.com/lestrrat-3d/decad/internal/planarband"
@@ -14,7 +16,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/planarsweep"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -34,7 +35,7 @@ import (
 // reports false, leaving report untouched. A path whose ideal motion or
 // travel bound cannot be formed is SweepUndecided with SweepMissingBound.
 func (d *Document) sweepPlanarPair(ctx context.Context, a, b *Body,
-	pa, pb affinePairPath, req reportvocab.SweepRequest, resolution *big.Rat,
+	pa, pb affinePairPath, req SweepRequest, resolution *big.Rat,
 	report *SweepReport) (*SweepReport, bool, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	chord := req.HeldChord.Base()
@@ -83,7 +84,7 @@ func (d *Document) planarContinuation(ctx context.Context, boxes *SweepReport,
 		return nil, false, nil
 	}
 	fresh := &SweepReport{A: boxes.A, B: boxes.B, PathA: boxes.PathA, PathB: boxes.PathB, Request: boxes.Request}
-	result, admitted, err := d.sweepPlanarPair(ctx, boxes.A, boxes.B, pa, pb, sweepRequestToInternal(boxes.Request),
+	result, admitted, err := d.sweepPlanarPair(ctx, boxes.A, boxes.B, pa, pb, boxes.Request,
 		resolution, fresh)
 	if err != nil {
 		return nil, true, err
@@ -320,7 +321,7 @@ func (r *rotationalPairSweep) planarBand(ctx context.Context) (*SweepContactTrac
 // manifold publishes at the start. It stays in the root because the feature
 // map reads both public bodies and the track is a public type.
 func (r *rotationalPairSweep) planarTrack(band *planarsweep.BandHorizon) (*SweepContactTrack, bool, error) {
-	features, err := reportvocab.NewPlanarFeatureMap(bodyNode(r.a.body), bodyNode(r.b.body), r.a.Solid, r.b.Solid)
+	features, err := planarfeaturemap.NewPlanarFeatureMap(bodyNode(r.a.body), bodyNode(r.b.body), r.a.Solid, r.b.Solid)
 	if err != nil {
 		return nil, false, err
 	}
@@ -330,7 +331,7 @@ func (r *rotationalPairSweep) planarTrack(band *planarsweep.BandHorizon) (*Sweep
 		return nil, false, nil
 	}
 	track := &SweepContactTrack{start: new(big.Rat), end: new(big.Rat).Set(band.End), duration: r.a.Path.Duration,
-		request: r.req.ContactRequest, normal: vecMeasurementFromInternal(proof.Direction), planar: proof}
+		request: r.req.ContactRequest, normal: proof.Direction, planar: proof}
 	// A track whose start manifold is refused (a point ball over
 	// PointResolution) is not published; the refusal is the answer.
 	if _, refused := track.ManifoldAt(units.Scalar(0)); refused != nil {
@@ -344,7 +345,7 @@ func (r *rotationalPairSweep) planarTrack(band *planarsweep.BandHorizon) (*Sweep
 // planarManifoldAt publishes a planar track's manifold at an exact fraction
 // (planarsweep.TrackProof.Points). The separation is the band's two-sided
 // bound.
-func planarManifoldAt(p *planarsweep.TrackProof, f *big.Rat, req reportvocab.ContactRequest) (*ContactManifold, error) {
+func planarManifoldAt(p *planarsweep.TrackProof, f *big.Rat, req ContactRequest) (*ContactManifold, error) {
 	verts, eta, ok := p.RoundedVertices(f)
 	if !ok {
 		return nil, fmt.Errorf("%w: planar contact track pose has no finite bound", ErrUnsupported)
@@ -361,8 +362,8 @@ func planarManifoldAt(p *planarsweep.TrackProof, f *big.Rat, req reportvocab.Con
 		Exactness: exactnessFromBound(p.DepthUp)}
 	points := make([]ContactPoint, 0, len(readings))
 	for slot, reading := range readings {
-		onM, onS := vecMeasurementFromInternal(reading.OnM), vecMeasurementFromInternal(reading.OnS)
-		point := ContactPoint{Normal: vecMeasurementFromInternal(p.Direction), NormalAngle: p.Angle,
+		onM, onS := reading.OnM, reading.OnS
+		point := ContactPoint{Normal: p.Direction, NormalAngle: p.Angle,
 			Separation: separation}
 		featureM, featureS := contactFeatureFromInternal(p.FeatureM[slot]), contactFeatureFromInternal(p.FeatureS)
 		if p.M == 0 {

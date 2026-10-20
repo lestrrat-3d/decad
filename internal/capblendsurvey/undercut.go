@@ -4,13 +4,14 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/verifypublish"
+
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/radiussurvey"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
 
@@ -22,7 +23,7 @@ import (
 type prismPayload = prismrecord.Payload
 type capPatch = capblend.Patch
 type capPatchGeom = capband.Patch
-type undercutOutcome = reportvocab.UndercutSurvey[*topo.Face]
+type undercutOutcome = verifypublish.UndercutSurvey[*topo.Face]
 
 // This file is the cap-blend payload's DX7/DX8 surveys
 // (docs/modify-reach-design.md Table DX): per-patch normal ranges against a
@@ -84,7 +85,7 @@ type undercutOutcome = reportvocab.UndercutSurvey[*topo.Face]
 // allowance — this survey reads it rather than composing it further. The
 // existential listing and universal all-clear rules then decide it per point:
 // see the loop below.
-func CapBlendUndercuts(b *topo.Body, cbp capblend.Payload, pull r3.Vec) reportvocab.UndercutSurvey[*topo.Face] {
+func CapBlendUndercuts(b *topo.Body, cbp capblend.Payload, pull r3.Vec) verifypublish.UndercutSurvey[*topo.Face] {
 	p, ok := pull.Normalize()
 	if !ok {
 		return undercutOutcome{}
@@ -300,15 +301,15 @@ func PatchNormalRange(f *topo.Face, pl prismPayload, g capPatchGeom, p r3.Vec) (
 // So for a band of those patches the correct answer is exactly "no new
 // concave principal radius" and the whole survey reduces to radiussurvey.Prism on
 // the receiver's own untouched profile.
-func CapBlendMinRadius(b *topo.Body, cbp capblend.Payload) reportvocab.ScalarSurvey {
+func CapBlendMinRadius(b *topo.Body, cbp capblend.Payload) verifypublish.ScalarSurvey {
 	roles := topobuild.FacesByRole(b)
 	for _, patch := range cbp.Patches {
 		f := roles[patch.Role]
 		if f == nil {
-			return reportvocab.ScalarSurvey{}
+			return verifypublish.ScalarSurvey{}
 		}
 		if capblend.PatchWindowSkew(patch.Geom) > 0 || f.NormalBound != 0 {
-			return reportvocab.ScalarSurvey{}
+			return verifypublish.ScalarSurvey{}
 		}
 	}
 	return radiussurvey.Prism(cbp.Profile, 0)

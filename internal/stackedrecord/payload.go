@@ -117,5 +117,5 @@ func VecL1(v r3.Vec) float64 {
 }
 
 // SurveyClass names the payload class a staged survey diagnostic reports
-// (internal/reportvocab): the root type name this payload had before it moved.
+// (internal/verifypublish): the root type name this payload had before it moved.
 func (Payload) SurveyClass() string { return "stackedPrismPayload" }

@@ -117,7 +117,7 @@ A group takes the tag only when all of these hold; a group that fails stays
 |---|---|---|
 | A1 | The operand face's surface is `Plane`, `Cylinder`, `Cone`, `Sphere` or `Torus` | Each has a normal whose sensitivity to a displaced point reads from its radii and, for a cone, its axial range (§3.3) |
 | A2 | A built operand face with no denoted patch has `NormalBound == 0`; a retained face or a face with a denoted patch is admitted | A built face with a stated tilt (a ruled chamfer band, a tilted-frame cylinder) departs from its tag by more than the tilt, so its tag is not its geometry. A denoted patch proves the normal against the surface it denotes, which the result's patch still lies on, so the group carries the patch and `NormalAt` keeps judging against it |
-| A3 | A `Sphere` group's patches all have a loop | A loop-less `Sphere` face is a closed analytic surface to `AuditSolidBoundary` (`internal/reportvocab/boundary_audit.go`) |
+| A3 | A `Sphere` group's patches all have a loop | A loop-less `Sphere` face is a closed analytic surface to `AuditSolidBoundary` (`internal/boundaryaudit/audit.go`) |
 | A4 | After assembly, `2·δ_f / R < 1` for a curved group (§3.3) | Past that the normal bound is the trivial 2 and the tag says nothing a reader can use |
 | A5 | The operand face is not already `Faceted` with no retained tag | Nothing to carry |
 
@@ -204,7 +204,7 @@ does with a retained tag; the audit in §7 keeps the table complete.
 
 | Reader | Reads | With a retained tag |
 |---|---|---|
-| `Face.Surface()`, `reportvocab.SurfaceTypeName`, `decadtest` formatting | the tag | reports `Plane`/`Cylinder`/`Sphere` instead of `Faceted`; examples and tests that print `faceted` for these faces change (§8) |
+| `Face.Surface()`, `surfacegeom.SurfaceTypeName`, `decadtest` formatting | the tag | reports `Plane`/`Cylinder`/`Sphere` instead of `Faceted`; examples and tests that print `faceted` for these faces change (§8) |
 | `Face.NormalAt` | tag + `NormalBound` | answers with the bound of §3.3 instead of `ErrUnsupported` |
 | `internal/selectorquery/topo_views.go` planar and cylindrical views | the tag | a flat retained face matches `Facing`/`ParallelTo` by its plane normal, signed by `Reversed` |
 | `internal/extent/to_face.go`, `angular_stop.go` | `Plane`, `NormalBound == 0`, `CapRecord`, `HasAxialDelta` | admits a retained `Plane` whose group carried `CapRecord` and `NormalBound == 0`; a placed or scaled body drops the record, so it refuses as before |
@@ -215,7 +215,7 @@ does with a retained tag; the audit in §7 keeps the table complete.
 | `internal/clearance/stitch_carriers.go`, `internal/stackedrecord/mesh.go` | `Plane` | gated by `stitchPayload` / `stackedPrismPayload`; unreachable from a faceted payload |
 | `export/step_analytic.go` `supportsAnalyticSTEP` | `Plane`/`Cylinder` plus each loop's edge curves | a retained face's edges are `FacetedCurve`, which the loop check refuses, so the whole body takes the faceted writer as now |
 | `section.go` cardinal cone section | two faces, one `Cone`, one `Plane` | also requires the revolve payload record; a faceted payload never matches |
-| `internal/reportvocab/boundary_audit.go` | `KindFaceted` for one-face loop-less images | A3 keeps a loop-less `Sphere` retained face out |
+| `internal/boundaryaudit/audit.go` | `KindFaceted` for one-face loop-less images | A3 keeps a loop-less `Sphere` retained face out |
 
 A reader that treats `Surface()` as the built geometry of a face's loops
 (exact polygons in the plane, exact circle for a rim) is gated by payload

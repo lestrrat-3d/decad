@@ -1,7 +1,9 @@
-package reportvocab
+package boundaryaudit
 
 import (
 	"context"
+
+	"github.com/lestrrat-3d/decad/report"
 
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -145,34 +147,34 @@ func AuditSheetBoundary(ctx context.Context, b *topo.Body) SheetAuditOutcome {
 // internal/clearance/pairkernel/kernel.go), and takes
 // DiagUnsupportedPairSheet or DiagSheetSolidCrossing instead
 // (docs/surface-design.md §9.3).
-func UndecidedPairReason(a, b *topo.Body, verdict PairVerdict, outcome InterferenceOutcome) (DiagnosticCode, string) {
+func UndecidedPairReason(a, b *topo.Body, verdict PairVerdict, outcome InterferenceOutcome) (report.DiagnosticCode, string) {
 	switch {
 	case outcome == InterferenceUnsupportedPayloadFirst:
-		return DiagUnsupportedPairPayload,
+		return report.DiagUnsupportedPairPayload,
 			"the first operand cannot enter the read-only intersection at the chord tolerance this check derives from the pair's own size, which no option sets: its tessellation refused that tolerance, or its held facets where the pair meets are coarser than it; simplify that operand or reduce the pair's extent, or wait for wider tessellation reach"
 	case outcome == InterferenceUnsupportedPayloadSecond:
-		return DiagUnsupportedPairPayload,
+		return report.DiagUnsupportedPairPayload,
 			"the second operand cannot enter the read-only intersection at the chord tolerance this check derives from the pair's own size, which no option sets: its tessellation refused that tolerance, or its held facets where the pair meets are coarser than it; simplify that operand or reduce the pair's extent, or wait for wider tessellation reach"
 	case outcome == InterferenceUnsupportedVolumeProofFirst:
-		return DiagUnsupportedPairPayload,
+		return report.DiagUnsupportedPairPayload,
 			"the first operand tessellates, but its mesh carries no proof of the volume it and the body it stands for differ by, so no read-only intersection may compose it; keep this body out of overlapping pairs, or wait for its occupied-volume proof"
 	case outcome == InterferenceUnsupportedVolumeProofSecond:
-		return DiagUnsupportedPairPayload,
+		return report.DiagUnsupportedPairPayload,
 			"the second operand tessellates, but its mesh carries no proof of the volume it and the body it stands for differ by, so no read-only intersection may compose it; keep this body out of overlapping pairs, or wait for its occupied-volume proof"
 	case outcome == InterferenceUnsupportedContact:
 		if sharesFacePlane(a, b) {
-			return DiagUnsupportedPairContact,
+			return report.DiagUnsupportedPairContact,
 				"the pair reaches a contact or near-contact that the read-only intersection cannot classify, and the operands share a face plane; offset the operands so no face plane is shared, or adjust the geometry to create clear separation or deeper overlap, or wait for contact support"
 		}
-		return DiagUnsupportedPairContact,
+		return report.DiagUnsupportedPairContact,
 			"the pair reaches a contact or near-contact that the read-only intersection cannot classify; adjust the geometry to create clear separation or deeper overlap, or wait for contact support"
 	case outcome == InterferenceUnsupportedPipeline:
-		return DiagUnsupportedPairPipeline,
+		return report.DiagUnsupportedPairPipeline,
 			"both operands tessellate, but later read-only intersection geometry exceeds the boolean pipeline's reach; simplify the boolean geometry or wait for pipeline support"
 	case outcome == InterferenceUndecided && verdict == PairOverlapping:
-		return DiagUndecidedInterference, "the pair is proven to overlap but the overlap volume is unmeasured"
+		return report.DiagUndecidedInterference, "the pair is proven to overlap but the overlap volume is unmeasured"
 	default:
-		return DiagUndecidedPair, "the disjoint/overlap partition proof resolved neither way"
+		return report.DiagUndecidedPair, "the disjoint/overlap partition proof resolved neither way"
 	}
 }
 
