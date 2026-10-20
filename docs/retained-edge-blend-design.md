@@ -1,0 +1,373 @@
+# Retained Edge Blend Design
+
+`Fillet` and `Chamfer` of an edge of a mesh Boolean result whose two faces
+carry retained analytic surfaces (`docs/faceted-source-retention-design.md`,
+"retention §N" below). Companion to `docs/modify-design.md` ("modify §N"),
+which owns the call contracts and base gates, and to
+`docs/modify-reach-design.md` ("reach §N"), whose SX9 row this document
+narrows. Nothing here changes a prism, revolve or brep receiver.
+
+## 1. Problem
+
+Probe on `main` on 2026-10-20 (retention §1, row P4): a 40×20×20 box with four
+filleted lateral edges, cross-drilled by a tool that a `Transform` placed, then
+`Fillet` of the four x-parallel cap edges. The call returns `ErrUnsupported`
+(reach SX9). The same box drilled by an unplaced tool is a `brepPayload`
+(general-boolean class B) and takes the brep routes. A drilled plate whose
+tool was placed, rotated or cut at an angle is the common machining shape, and
+it is the shape the mesh path exists for.
+
+Three things stop the call today.
+
+1. **No analytic edge.** Before retention an edge of a mesh result was a chord
+   chain (`FacetedCurve`) between two `Faceted` faces. Retention §10 now
+   publishes `Line3`, `Circle3` and `Arc3` for edges between two retained
+   faces, and §10.5 adds `Ellipse3`.
+2. **No blend by Boolean.** A rolling-ball blend can be written as a Cut by a
+   cutter solid, but the cutter's blend face is tangent to both faces it cuts.
+   The mesh Boolean refuses that contact (`an operand edge grazes along the
+   other operand's facet`, evaluator §9), and it should.
+3. **No record the brep routes read.** `brepPayload` keeps every frame a signed
+   permutation of one reference frame (general-boolean §4.1). A rotated or
+   oblique result has no such record, which is why it is a mesh result.
+
+This design builds the blend as a local rewrite of the held mesh, in the way
+the prism route rewrites a section (modify §2) and reach §10.1 rewrites a
+Union's source. The rewrite replaces the facets near one edge by facets that
+lie on exact surfaces computed from the two retained tags.
+
+## 2. What the design reads
+
+| Input | Source | Used for |
+|---|---|---|
+| The two retained tags `T1`, `T2` | retention §3 | the exact surfaces the blend is tangent to |
+| The edge's exact curve | retention §10 | the line or circle the blend is measured from |
+| Held facets and vertex bounds | retention §3.3, faceted-vertex-bounds §2 | what the rewrite cuts and keeps |
+| The slab bound of a retained plane facet | retention §11 | how far a cut point on a held facet sits from the tag plane (§6.3) |
+
+Tags with a stated departure (`NormalBound != 0`, a placed float image) and
+faces with a denoted patch are not read: their plane or axis may differ from
+the true one, so an exact setback computed from them has no proof (SR1).
+
+## 3. Edge classes
+
+Table RR lists the edges a blend can be built on. The others are refused.
+
+| RR | Edge | Faces | Blend surface (fillet / chamfer) | Staged |
+|---|---|---|---|---|
+| **R1** | `Line3`, convex or concave | two retained `Plane`s, not parallel | `Cylinder` / `Plane` | increment B2 |
+| **R2** | `Circle3`, closed, centre on the axis | retained `Plane` and coaxial retained `Cylinder` | `Torus` / `Cone` | increment B1; equal-distance chamfer only |
+| **R3** | `Line3` of retention E4 | retained `Plane` and a `Cylinder` whose axis lies in the plane | `Cylinder` / `Plane` | increment B3 |
+| **R4** | `Arc3` | as R2, open | as R2 | increment B4 |
+
+Refused, with the reason a caller can act on:
+
+- **An oblique plane and cylinder (`Ellipse3`).** The surface that rolls a ball
+  between them is a pipe surface about an ellipse offset. It is neither a
+  `Cylinder`, `Cone`, `Torus` nor `Sphere`, and the only other surface the
+  vocabulary has is `NURBSSurface`, an opaque marker with no geometry to carry
+  a proof (spline §7). The rim keeps its published ellipse and the blend
+  refuses (SR1).
+- **A `Cylinder`/`Cylinder` rim, a `Sphere` rim, a `Cone` or `Torus` face.**
+  No Table RR row; SR1.
+- **A rim with a face that is not retained,** or whose edge is a chord chain
+  because retention §10 declined it. SR1.
+
+Both the convex and the concave edge are built. A concave fillet adds
+material in the corner, a convex one removes it. The two share the clip and
+strip construction below; only the side of the faces the strip lies on and
+the sign of the blend face's orientation change.
+
+## 4. The exact blend
+
+All values are computed in exact rational arithmetic from the tags' float
+parameters and rounded once, upward where a bound is wanted.
+
+### 4.1 R1, a straight edge between planes
+
+Let `nA`, `nB` be the faces' outward unit normals (the frame normal, negated
+for a `Reversed` face), `d̂ = (nA × nB) / |nA × nB|` the edge direction and
+`φ ∈ (0, π)` the angle between the normals, `cos φ = nA · nB`. Let `e₀` be a
+point of the edge line. The edge is convex when the face `A`'s inward
+in-plane direction `uA` (the unit vector along `±(nA × d̂)` that points into
+`A`'s held facets) satisfies `nB · uA < 0`; the held `Edge.Convex` flag must
+agree or the call refuses (SR1). Let `s = −1` for a convex edge and `s = +1`
+for a concave one.
+
+| Quantity | Fillet radius `r` | Chamfer distances `dA`, `dB` |
+|---|---|---|
+| Setback on `A` and `B` | `t = r · tan(φ / 2)` | `dA`, `dB` |
+| Setback line on `A` | the line at in-plane distance `t` from the edge, parallel to it, inside `A` | the same at `dA` |
+| Setback line on `B` | the same at `t` | the same at `dB` |
+| Blend surface | `Cylinder`, axis `d̂`, radius `r`, through `e₀ + s·b̂·r / cos(φ/2)` with `b̂ = (nA + nB) / |nA + nB|` | `Plane` through the two setback lines |
+| Blend face orientation | `Reversed = false` convex, `true` concave | the plane's own normal, signed to point away from the material |
+
+*Why.* A ball of radius `r` tangent to both planes has its centre on the line
+parallel to the edge at distance `r / cos(φ/2)` along the bisector, and touches
+each plane at distance `r · tan(φ/2)` from the edge. A 90° box edge has
+`φ = π/2`, `t = r`, centre offset `r√2`, which is the familiar quarter circle.
+
+The cylinder meets each face tangentially along its setback line, so the
+construction needs the setback lines and nothing else of the cylinder. The
+chamfer plane contains both setback lines, which are parallel.
+
+### 4.2 R2, a closed circular rim
+
+Take the meridian half-plane `(ρ, z)` about the common axis, with the plane at
+`z = 0`, the cylinder at `ρ = R` and the rim at `(R, 0)`. The ball sits on the
+material side for a convex rim and the void side for a concave one, and on the
+outside of the cylinder (`ρ > R`) or the inside.
+
+| Rim | Convex or concave | Ball centre `(ρ, z)` | `Torus.Major` |
+|---|---|---|---|
+| hole mouth: material at `ρ > R`, `z < 0` | convex | `(R + r, −r)` | `R + r` |
+| boss root: boss at `ρ < R`, `z > 0`, plate at `z < 0` | concave | `(R + r, +r)` | `R + r` |
+| shaft end: material at `ρ < R`, `z < 0` | convex | `(R − r, −r)` | `R − r` |
+| blind-hole floor: void at `ρ < R`, `z > −h` | concave | `(R − r, −h + r)` | `R − r` |
+
+The torus has `Center` on the axis at the centre's height, `Minor = r`, and the
+blend face is the quarter of it between the two tangent circles: radius
+`R ± r` on the plane (setback `r` from the rim along the plane) and height `r`
+on the cylinder (setback `r` along the wall). A chamfer with distances `dA`
+along the plane and `dB` along the wall is the `Cone` through the circle of
+radius `R + σ·dA` on the plane and the circle at distance `dB` along the wall.
+`σ = +1` when the plane face lies at `ρ > R`, else `−1`.
+
+A fillet that would need `R − r ≤ 0` (the ball cannot sit inside the
+cylinder) is SR3.
+
+### 4.3 R3, a line between a plane and a parallel cylinder
+
+The rolling ball between a plane and a cylinder whose axis lies in the plane
+is a cylinder parallel to the axis. The construction is R1's with the
+cylinder's own tangent line in place of the second plane's setback line; it is
+specified when increment B3 starts.
+
+## 5. Construction
+
+The rewrite touches the faces `A` and `B` of the edge and, for R1, the two end
+faces `G₀` and `G₁`. Everything else in the held mesh is copied unchanged.
+
+1. **Region.** Let `K` be the closed region the blend changes: for R1 the
+   triangular prism of the corner between the two setback lines, cut by the
+   planes of `G₀` and `G₁`; for R2 the annular wedge between the rim, the two
+   setback circles and the blend torus or cone. §6's gates prove that nothing
+   but `A`, `B`, and the end faces `G` meets `K`.
+2. **Rewrite the faces.** The plane face's facets are replaced. Its boundary
+   loops other than the rim are kept with their vertices, the rim loop gives way
+   to a polygon of `N` vertices on the setback circle (R2) or a cut line (R1), and
+   the region is triangulated again by ear clipping over those loops, with one
+   bridge from each hole to the outer loop. The ear clipping uses every loop
+   vertex, collinear ones included, so the face keeps the vertices its
+   neighbours share. A plane face with a vertex off its boundary loops refuses
+   (SR5). The wall's facets are cut by the setback plane: a facet wholly beyond
+   it stays, one wholly before it goes, and a crossing facet is clipped, with one
+   new vertex per cut mesh edge shared by the facets on either side. A new wall
+   vertex lies on a held facet edge, so it takes that edge's larger vertex bound,
+   plus `τ` and the rounding of the cut.
+3. **Strip.** The blend face is a grid of rings. The first ring is the plane
+   face's new polygon and the last is the wall's cut vertices, sorted by angle
+   about the axis. A fillet has `m − 1` rings between them on the exact torus,
+   with `m` the smallest count whose arc sagitta `r·(1 − cos(Δα/2))` is at most
+   `τ = 2⁻¹⁰·r` (not below `64·2⁻⁵²·scale`). A chamfer has none. Neighbouring
+   rings join by walking both in angle and advancing the ring whose next vertex
+   comes first, which gives the band of triangles whatever the two rings' vertex
+   counts. Each triangle is wound to face the blend's analytic outward normal.
+4. **Ends (R1).** At each end vertex `V`, the end face `G` meets the blend
+   cylinder in an arc: a circle arc when `G` is normal to `d̂`, an `Ellipse3`
+   arc otherwise, running from `P_A` (the setback line of `A` on `A ∩ G`)
+   to `P_B`. For a chamfer it is the segment `P_A P_B`. The region of `G`
+   inside the polygon `V, P_A, arc, P_B` is removed from `G`'s facets by
+   the same ear clipping; the arc enters as the chords of the strip's rows.
+5. **Build.** The new vertex and triangle lists, the new groups and the new
+   bounds go through `facetedrecord.Build`, which derives the topology, the
+   measurements and the held audit the way `Placed` does.
+
+### 5.1 Groups and tags
+
+| Face | Group fields |
+|---|---|
+| `A`, `B`, `G` | the old group, with `Surface`, `Retained`, `Reversed`, `CapRecord` and `NormalBound` unchanged. The face's patch is smaller; its plane or cylinder is not |
+| blend | a new group: `Surface` the exact `Cylinder`, `Plane`, `Torus` or `Cone` of §4, `Retained = true`, `Reversed` as §4 states, `NormalBound = 0`, `Origins` the role the step mints (`fillet(k)` or `chamfer(k)`, `k` the edge's ordinal in the call) |
+
+The blend tag satisfies retention Claim R: the true blend patch lies on the
+surface by definition of the blend. The face's normal bound follows retention
+§3.3 from its own `δ_f`, which is the strip's sagitta and rounding.
+A face whose `2·δ_f / R` reaches 1 reads `Faceted` (retention A4); that is
+not a refusal.
+
+### 5.2 Edges
+
+The new edges are constructed, not discovered, so they publish their curve
+without retention's falsifier: the two setback edges (`Line3` for R1,
+`Circle3` for R2), the end arcs (`Arc3`, or `Ellipse3` for an oblique `G`), and
+for a chamfer the end segments (`Line3`). Each is marked `RetainedCurve`.
+Their vertices are the exact intersections of the setback lines with the end
+planes or the end faces' own edges, so a vertex position bound is the rounding
+of that computation.
+
+## 6. Gates and bounds
+
+### 6.1 Table SR — refusals
+
+| SR | Call | Existence | Sentinel |
+|---|---|---|---|
+| **SR1** | an edge outside Table RR: a curve that is not `Line3` or `Circle3`, a face that is not `RetainedTag`, a face with `NormalBound != 0` or a denoted patch, or a `Convex` flag that disagrees with §4.1 | body exists; no admitted source for the selected edge | `ErrUnsupported` (reach SX9's text) |
+| **SR2** | two selected edges share a vertex, or a selected edge continues tangentially into a neighbour | no transition built | `ErrUnsupported` |
+| **SR3** | no blend of that size exists: `R − r ≤ 0` for an inside ball (§4.2), `φ` within 10⁻⁹ of 0 or π, or a chamfer distance of zero or below | no regular blend | `ErrDegenerate` |
+| **SR4** | the setback does not fit (§6.2) and the held bounds prove it does not | the blend consumes the face | `ErrDegenerate` |
+| **SR5** | the setback might not fit and the held bounds cannot decide it, or an end vertex of an R1 edge is not a three-face corner with a convex planar retained `G`, or the polygon `V, P_A, arc, P_B` contains another boundary vertex of `G` within its bound | body exists; the evaluator cannot prove its construction | `ErrUnsupported` |
+| **SR6** | the held mesh disagrees with the exact vertex of its three tags by more than the vertex bound plus slack (§6.3) | the record and the mesh do not describe one solid | `ErrUnsupported` |
+| **SR7** | the rewritten mesh fails the held audit (watertight, no remote self-intersection, shells positive) | the result is invalid | `ErrDegenerate` when the audit proves a face inside out (modify S8), else `ErrUnsupported` |
+
+Gate order: base gates of modify §4 stage 1, then SR1, SR2, SR3, SR6, SR5, SR4,
+then the construction, then SR7.
+
+### 6.2 Clearance
+
+The strip must lie inside `A` and `B`. Each held boundary vertex is known to
+within its bound `b_v`, and the held bound of a retained plane facet is the slab
+bound of retention §11. The gate uses held data and published bounds and
+nothing fitted.
+
+- **R1.** For `A`, let `s(v)` be the signed in-plane distance of a boundary
+  vertex `v` from the edge line, positive into `A`. Every boundary vertex of
+  `A` other than the edge's two end vertices must satisfy
+  `s(v) − b_v ≥ t + slack`. A boundary segment between two such vertices stays
+  at `s ≥ t + slack`, so no boundary edge of `A` other than the two end edges
+  enters the strip. The two end edges are `Line3` edges to the end faces and
+  reach `s ≥ t` by the same inequality at their far vertices. The same holds
+  for `B`. If some vertex has `s(v) + b_v < t` the strip provably leaves the
+  face (SR4); if neither inequality holds, SR5.
+- **R2.** On the plane, every boundary segment of every loop other than the rim
+  must be at distance at least `R + σ·t + b + slack` from the axis, the way
+  `σ` of §4.2 points. On the cylinder, every boundary vertex other than the
+  rim's must lie at axial distance at least `t + b + slack` from the rim's
+  plane.
+
+### 6.3 Bounds of the result
+
+A ring vertex on the plane face lies at the exact setback circle, so it is an
+exact function of the tags; every strip vertex takes the bound `τ` plus the
+rounding of its computation, because the chords between ring vertices leave the
+exact surface by at most `τ` and a vertex bound is the only place a facet can
+state that. A wall cut vertex takes the larger bound of its edge's two ends, plus
+`τ` and the rounding (§5 step 2). An old vertex keeps its bound.
+
+**Claim K.** Let `H` be the held solid with `VolSymDiff = v`, `H'` the rewritten
+held solid, and `S'` the true blended solid. Then
+`vol(H' △ S') ≤ v + τ·area(blend) + ρ`, with `ρ` the rounding of the new
+vertices times the area of the faces they touch.
+
+*Proof.* Outside `K`, `H'` equals `H` and `S'` equals the true solid `S`,
+because the gates of §6.2 show that no other face enters `K`. So the difference
+outside `K` lies inside `H △ S`. Inside `K`, `S'` is the exact blended region and
+`H'` is the polyhedron on the strip's chords; they differ by at most the sagitta
+`τ` times the blend face's area, plus the rounding of the grid's vertices. ∎
+
+**Area.** Write `Δ_held` for the held area of the new facets less that of the
+old facets the rewrite replaced, and `Δ_true` for the exact area of the blend
+face less the exact area of the annulus and the wall band it removes. Both
+bodies have the same area elsewhere, so the held total differs from the true one
+by the old difference plus `Δ_held − Δ_true`. The new `AreaSlack` is the old one
+plus `|Δ_held − Δ_true|` and the rounding of the two area sums
+(`proofbound.FacetAreaTermSlop` per facet).
+
+**Volume.** The new `VolSymDiff` is the old one plus `ε·(A_strip + A_true)`, with
+`ε` the largest vertex bound of the strip and `A_strip`, `A_true` the held and
+exact areas of the blend face. Two surfaces within `ε` of each other enclose at
+most `ε` times the larger area between them.
+
+The `Verify` and `VerifyAll` results come from the faceted audit of the rebuilt
+body, not from these terms.
+
+## 7. Receiver and dispatch
+
+Reach RX6's row gains a class and SX9 narrows with it.
+
+| Receiver | `Fillet` / `Chamfer` |
+|---|---|
+| `facetedPayload` whose selected edges are all Table RR edges | this document's route, applied one edge at a time to the evolving mesh. Each step reads the previous step's result as an ordinary retained body; the selection resolves up front to `(face pair, curve)` records, not mesh indices |
+| any other `facetedPayload` call | SX9, unchanged |
+
+The result is a `facetedPayload` with retained tags. A further `Fillet`,
+`Chamfer` or Boolean takes it like any retained body, and a placement carries
+its tags by retention §3.4. `Shell` stays SX9. An asymmetric chamfer takes the
+reference-face option of modify §7 through the faces' public indices; a missing
+or ambiguous one is reach SX3.
+
+## 8. Readers
+
+A blend result is a retained body, so every retention §4 and §10.3 reader row
+applies unchanged. Two readers see something new: `FaceCreatedBy` finds the
+blend face by its role, and the edges between the blend and `A` or `B` are
+tangent junctions, the kind a tangent-chain selection expands (reach SX2).
+
+## 9. Tests and the red leg each must show
+
+Tests assert on computed geometry. Volumes are compared with the result's
+published bound, never with a pinned literal.
+
+| Test | Asserts | Red leg |
+|---|---|---|
+| Hole mouth in a placed-tool plate (R2 fillet, convex) | blend face is a `Torus` with `Major = R + r`, `Minor = r`; removed volume equals `π·r·(2Rr + r²) − 2π·((R + r) − 4r/(3π))·(π·r²/4)` within the bound; both setback edges are `Circle3` | build the cone for a fillet: the surface kind is wrong |
+| Boss root fillet (R2 concave) | the volume grows by the same expression with the tangent circles at `R + r`; the blend face has `Reversed = true` | use the convex sign: the blend removes material |
+| Shaft end fillet and chamfer (R2) | `Major = R − r`; `R − r ≤ 0` refuses with `ErrDegenerate` | drop SR3: the torus has a negative major radius |
+| Straight 90° edge (R1 fillet) | `Cylinder`, axis along the edge, removed volume `L·r²(1 − π/4)` | use `r` for the setback at `φ ≠ π/2`: the 60° test fails |
+| 60° edge (R1 fillet) and chamfer | setback `r·tan(φ/2)`; removed area per unit length `r²(tan(φ/2) − φ/2)` for the fillet, `dA·dB·sin φ / 2` for the chamfer | |
+| Oblique end face | the end arc is an `Ellipse3` with `SemiMinor = r` and `SemiMajor = r / |d̂ · nG|`; removed volume equals the section area times the length between the end planes measured through the section's centroid | treat `G` as normal to the edge: the volume is off by the centroid offset |
+| Clearance | a radius past the face width refuses `ErrDegenerate`; a radius within `b` of it refuses `ErrUnsupported` | drop the `− b_v` term of §6.2: the near case builds an invalid solid |
+| Shared vertex / tangent chain | refuse SR2 | |
+| Oblique plane/cylinder rim | refuse SR1 and keep the `Ellipse3` of retention §10.5 | |
+| Result is an ordinary retained body | a second blend on another edge, a `Cut` through the blended region and `Transform` all build; `NormalAt` on the blend face has a bound below 1 | store the blend with `Retained = false`: the chain loses the tag |
+| New vertex bounds | every new vertex lies within its stated bound of its exact point | skip the rounding charge: the bound is zero and the check fails |
+| Verify | `Verify` of a blended plate passes with no `Suspect` in watertightness | |
+
+## 10. Files and fallout
+
+| Area | Change |
+|---|---|
+| `internal/retainedblend/` | new: classification (Table RR), exact geometry (§4), clip, strip and end construction (§5), gates (§6) |
+| `internal/facetedrecord/` | an entry that builds a payload from new vertices, triangles, groups and bounds; no change to `Build` |
+| `fillet.go`, `chamfer.go` | call the route before SX9 for a `facetedPayload`; thin wrappers only |
+| `docs/modify-reach-design.md` | RX6 row and SX9 text; the sentence in §11 about what SX9 leaves a caller proving |
+| `docs/missing-features.md` | the row for faceted `Fillet`/`Chamfer` |
+| `docs/faceted-source-retention-design.md` | this document's row in §9, §13 |
+| `docs/layout/design-docs.md` | this document's row |
+| `apitest/`, `examples/` | the tests of §9; one executable example, a filleted hole mouth on a placed-tool plate |
+
+## 11. Increments
+
+| # | Lands | Gate to start the next |
+|---|---|---|
+| B1 | R2 fillet and chamfer: classification, the four rims of §4.2, clip and strip, bounds, gates SR1–SR4 and SR6–SR7 | the hole-mouth, boss-root and shaft-end rows of §9 pass; `go test ./...` on CI |
+| B2 | R1 fillet and chamfer with planar end faces, SR5 | the 90° and 60° edge rows and the oblique-end row pass |
+| B3 | R3, a line between a plane and a parallel cylinder | its row of §9 is added and passes |
+| B4 | R4, an open arc | as B1 for an arc with end faces |
+
+## 12. Rejected shortcuts
+
+- **A Cut by a cutter solid.** The cutter's blend face is tangent to the faces
+  it cuts, and the mesh Boolean refuses tangency. A slightly deeper cutter is
+  not the fillet.
+- **Promote the retained body to a `brepPayload`.** A brep keeps every frame a
+  signed permutation of one reference frame. The bodies this route exists for
+  are the ones that do not.
+- **Fit a cylinder or torus to the held rim.** It blesses a surface from the
+  polygons it should be checked against (CLAUDE.md). The tags come from the
+  operands.
+- **Admit a blend because the rebuilt volume matches.** A matching volume
+  proves nothing about a blend that leaves its faces; the gates of §6.2 admit
+  from published bounds, and the volume check can only reject.
+- **Blend an oblique plane and cylinder as a `NURBSSurface`.** The surface
+  carries no geometry a proof can read.
+
+## 13. Decisions the user may want to overturn
+
+| Decision | Default | Alternative |
+|---|---|---|
+| Edge classes in the first increment | R2 (closed circular rims) first, because they have no end vertices | R1 first: more common, but needs the end-face construction and SR5 |
+| A blend whose clearance is undecided within bounds | refuse (`ErrUnsupported`) | build with a bound that charges the undecided margin: smaller refusal set, larger proof |
+| Chord tolerance `τ = 2⁻¹⁰·r` for the blend grid | fixed ratio of the radius | follow the body's `MeshBound`: finer blend, many more facets |
+| Several selected edges | one at a time on the evolving mesh; each later rim is found again by its circle | require disjoint regions `K` and build them together |
+| `Shell` of a retained body | stays SX9 | a separate design |

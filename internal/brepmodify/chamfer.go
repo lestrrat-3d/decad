@@ -18,6 +18,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/retainedblend"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -126,6 +127,10 @@ func Chamfer(ctx context.Context, env topo.Env, b *topo.Body, call ChamferCall) 
 			return Result{Body: node}, err
 		}
 		node, recognized, err = loftcylinder.CapChamfer(ctx, env, b, fp, edges, dmm, dDelta, asym != nil)
+		if recognized || err != nil {
+			return Result{Body: node}, err
+		}
+		node, recognized, err = retainedblend.Chamfer(ctx, env, b, fp, edges, dmm, dDelta, asym != nil)
 		if recognized || err != nil {
 			return Result{Body: node}, err
 		}

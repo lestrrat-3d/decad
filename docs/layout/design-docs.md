@@ -51,6 +51,7 @@ The rules for rows live in `docs/layout.md`.
 | `docs/tessellation-reach-design.md` | Tessellation reach for lofts, free-form prisms, revolves and cap-loop chamfers. |
 | `docs/faceted-vertex-bounds-design.md` | Per-vertex displacement bounds on faceted bodies and their boolean composition. |
 | `docs/faceted-source-retention-design.md` | Analytic source surfaces carried onto mesh Boolean result faces: claim, admission, normal bound, readers, increments. |
+| `docs/retained-edge-blend-design.md` | `Fillet` and `Chamfer` of an edge between two retained faces of a mesh Boolean result: edge classes, exact blend geometry, local mesh rewrite, gates, bounds, increments. |
 | `docs/surface-intersection-design.md` | `Trim`/`Extend`/`Split` over shared-generator sweeps. |
 | `docs/surface-design.md` | Sheet bodies, surface operations, verification and export. |
 | `docs/motion-check-design.md` | `VerifyMotion`: motions, the per-pose proof, the interval certificate, `MotionReport`. |

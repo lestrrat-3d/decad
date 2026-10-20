@@ -20,6 +20,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/retainedblend"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -129,6 +130,15 @@ func Fillet(ctx context.Context, env topo.Env, b *topo.Body, call FilletCall) (R
 			return Result{}, err
 		}
 		return Result{Body: out}, nil
+	}
+
+	if fp, ok := b.Payload.(facetedrecord.Payload); ok {
+		// A closed circular rim between two retained faces rebuilds the held
+		// mesh near it (docs/retained-edge-blend-design.md). A selection it does
+		// not recognize keeps the ordinary S3 refusal and its edge context.
+		if out, recognized, err := retainedblend.Fillet(ctx, env, b, fp, edges, rmm, rDelta); recognized || err != nil {
+			return Result{Body: out}, err
+		}
 	}
 
 	// Stage 2 (§4): the receiver's payload class (S3), then every selected

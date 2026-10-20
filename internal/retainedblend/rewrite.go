@@ -1,0 +1,519 @@
+package retainedblend
+
+import (
+	"fmt"
+	"math"
+	"sort"
+
+	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
+)
+
+// work is one rim's rewrite in progress: the vertices and facets it adds, and
+// the facets of the old mesh it replaces.
+type work struct {
+	fp    facetedrecord.Payload
+	r     rim
+	spec  blendSpec
+	verts []r3.Vec
+	beta  []float64
+	// out are the facets this rewrite emits, with their source groups.
+	out    [][3]int
+	outSrc []int
+	// removed are the old facets the rewrite replaces.
+	removed []int
+	// tau is the chord tolerance of the blend's grid.
+	tau float64
+	// dir is +1 when the rim loop runs counter-clockwise about the plane's
+	// outward normal, else -1.
+	dir float64
+}
+
+type ringPt struct {
+	idx int
+	ang float64
+}
+
+func newWork(fp facetedrecord.Payload, r rim, spec blendSpec) *work {
+	w := &work{fp: fp, r: r, spec: spec}
+	w.verts = append([]r3.Vec(nil), fp.Verts...)
+	w.beta = append([]float64(nil), fp.VertexBound...)
+	size := spec.r
+	if !spec.fillet {
+		size = max(spec.dA, spec.dB)
+	}
+	w.tau = max(math.Ldexp(size, -10), 64*ulp*r.scale)
+	return w
+}
+
+func (w *work) vertex(p r3.Vec, bound float64) int {
+	w.verts = append(w.verts, p)
+	w.beta = append(w.beta, bound)
+	return len(w.verts) - 1
+}
+
+func (w *work) emit(t [3]int, src int) {
+	w.out = append(w.out, t)
+	w.outSrc = append(w.outSrc, src)
+}
+
+// groupOf returns the one source group the facets belong to.
+func (w *work) groupOf(facets []int) (int, error) {
+	if len(facets) == 0 {
+		return 0, fmt.Errorf("%w: a rim face has no facets", decaderr.ErrUnsupported)
+	}
+	g := w.fp.Src[facets[0]]
+	for _, f := range facets {
+		if w.fp.Src[f] != g {
+			return 0, fmt.Errorf("%w: a rim face mixes source groups", decaderr.ErrUnsupported)
+		}
+	}
+	return g, nil
+}
+
+// ringCount is the number of vertices a circle of radius rho needs for its
+// chord sagitta to stay within the blend's tolerance.
+func (w *work) ringCount(rho float64) int {
+	if w.tau >= rho {
+		return 8
+	}
+	step := 2 * math.Acos(1-w.tau/rho)
+	return min(max(int(math.Ceil(2*math.Pi/step)), 8), 4096)
+}
+
+// clearance refuses a blend whose setback does not fit: the bounds say the
+// blend consumes the face (SR4, ErrDegenerate), or cannot say it does not
+// (SR5, ErrUnsupported). gap is the distance by which a held feature clears
+// the removed zone, negative when it lies inside it, and margin is what the
+// held bounds allow it to move.
+func clearance(gap, margin float64, what string) error {
+	switch {
+	case gap > margin:
+		return nil
+	case gap < -margin:
+		return fmt.Errorf("%w: the blend consumes %s", decaderr.ErrDegenerate, what)
+	}
+	return fmt.Errorf("%w: the held bounds cannot show that the blend leaves %s", decaderr.ErrUnsupported, what)
+}
+
+// rewritePlane replaces the plane face's facets: the rim loop gives way to a
+// polygon on the plane's setback circle, and the face is triangulated again
+// over its remaining boundary loops (§5 step 2, R2).
+func (w *work) rewritePlane(fi int) ([]ringPt, int, error) {
+	r := w.r
+	facets := facetsOfFace(w.fp.FaceOf, fi)
+	group, err := w.groupOf(facets)
+	if err != nil {
+		return nil, 0, err
+	}
+	loops, err := boundaryLoops(w.fp.Tris, facets)
+	if err != nil {
+		return nil, 0, err
+	}
+	slack := r.slack()
+	rimAt := -1
+	for li, loop := range loops {
+		on := true
+		for _, v := range loop {
+			on = on && r.onRim(w.verts[v], w.beta[v])
+		}
+		if !on {
+			continue
+		}
+		if rimAt >= 0 {
+			return nil, 0, fmt.Errorf("%w: the plane face has two loops on the rim", decaderr.ErrUnsupported)
+		}
+		rimAt = li
+	}
+	if rimAt < 0 {
+		return nil, 0, fmt.Errorf("%w: the plane face has no loop on the rim", decaderr.ErrUnsupported)
+	}
+	inLoop := map[int]bool{}
+	for _, loop := range loops {
+		for _, v := range loop {
+			inLoop[v] = true
+		}
+	}
+	for _, f := range facets {
+		for _, v := range w.fp.Tris[f] {
+			if !inLoop[v] {
+				return nil, 0, fmt.Errorf("%w: the plane face holds a vertex off its boundary", decaderr.ErrUnsupported)
+			}
+		}
+	}
+
+	ta := w.spec.planeSetback()
+	rhoA := r.radius + r.kappa*ta
+	lo, hi := min(r.radius, rhoA), max(r.radius, rhoA)
+	for li, loop := range loops {
+		if li == rimAt {
+			continue
+		}
+		for k, v := range loop {
+			q := loop[(k+1)%len(loop)]
+			lowRho, highRho := w.segmentRadialRange(w.verts[v], w.verts[q])
+			margin := max(w.beta[v], w.beta[q]) + slack + w.tau
+			if highRho <= lo-margin || lowRho >= hi+margin {
+				continue
+			}
+			// The segment's radial range meets the removed annulus. It is
+			// inside it when the range reaches into the annulus past the margin.
+			depth := min(highRho-lo, hi-lowRho)
+			if err := clearance(-depth, margin, "the plane face"); err != nil {
+				return nil, 0, err
+			}
+		}
+	}
+
+	rimLoop := loops[rimAt]
+	w.dir = 1
+	rimPoints := make([]pt2, len(rimLoop))
+	rimIdx := make([]int, len(rimLoop))
+	for i, v := range rimLoop {
+		rimPoints[i] = w.plane2(w.verts[v])
+		rimIdx[i] = i
+	}
+	if signedArea2(rimPoints, rimIdx) < 0 {
+		w.dir = -1
+	}
+
+	n := w.ringCount(max(r.radius, rhoA))
+	ring := make([]ringPt, n)
+	ringBound := w.tau + slack
+	for k := range n {
+		ang := float64(k) * 2 * math.Pi / float64(n)
+		ring[k] = ringPt{idx: w.vertex(r.at(rhoA, w.dir*ang, 0), ringBound), ang: ang}
+	}
+
+	var global []int
+	local := map[int]int{}
+	var ps []pt2
+	use := func(v int) int {
+		if li, ok := local[v]; ok {
+			return li
+		}
+		local[v] = len(global)
+		global = append(global, v)
+		ps = append(ps, w.plane2(w.verts[v]))
+		return local[v]
+	}
+	var polys [][]int
+	for li, loop := range loops {
+		if li == rimAt {
+			continue
+		}
+		poly := make([]int, len(loop))
+		for i, v := range loop {
+			poly[i] = use(v)
+		}
+		polys = append(polys, poly)
+	}
+	cpoly := make([]int, n)
+	for k := range n {
+		cpoly[k] = use(ring[k].idx)
+	}
+	polys = append(polys, cpoly)
+
+	var outer []int
+	var holes [][]int
+	for _, poly := range polys {
+		if signedArea2(ps, poly) > 0 {
+			if outer != nil {
+				return nil, 0, fmt.Errorf("%w: the plane face has two outer loops", decaderr.ErrUnsupported)
+			}
+			outer = poly
+			continue
+		}
+		holes = append(holes, poly)
+	}
+	if outer == nil {
+		return nil, 0, fmt.Errorf("%w: the plane face has no outer loop", decaderr.ErrUnsupported)
+	}
+	tris, err := triangulateRegion(ps, outer, holes)
+	if err != nil {
+		return nil, 0, err
+	}
+	for _, t := range tris {
+		w.emit([3]int{global[t[0]], global[t[1]], global[t[2]]}, group)
+	}
+	w.removed = append(w.removed, facets...)
+	return ring, group, nil
+}
+
+// plane2 is p in the rim plane's (u, w) coordinates.
+func (w *work) plane2(p r3.Vec) pt2 {
+	q := p.Sub(w.r.center)
+	return pt2{q.Dot(w.r.u), q.Dot(w.r.w)}
+}
+
+// segmentRadialRange returns the smallest and largest distance from the rim
+// axis over the segment pq.
+func (w *work) segmentRadialRange(p, q r3.Vec) (float64, float64) {
+	a, b := w.plane2(p), w.plane2(q)
+	du, dw := b.u-a.u, b.w-a.w
+	t := 0.0
+	if d := du*du + dw*dw; d > 0 {
+		t = math.Min(1, math.Max(0, -(a.u*du+a.w*dw)/d))
+	}
+	low := math.Hypot(a.u+t*du, a.w+t*dw)
+	return low, math.Max(math.Hypot(a.u, a.w), math.Hypot(b.u, b.w))
+}
+
+// rewriteWall cuts the wall at the blend's setback height and keeps the part
+// beyond it (§5 step 2, R2). It returns the cut ring, sorted by angle.
+func (w *work) rewriteWall(fi int) ([]ringPt, int, error) {
+	r := w.r
+	facets := facetsOfFace(w.fp.FaceOf, fi)
+	group, err := w.groupOf(facets)
+	if err != nil {
+		return nil, 0, err
+	}
+	slack := r.slack()
+	tb := w.spec.wallSetback()
+	rimVerts := 0
+	g := map[int]float64{}
+	for _, f := range facets {
+		for _, v := range w.fp.Tris[f] {
+			if _, seen := g[v]; seen {
+				continue
+			}
+			p := w.verts[v]
+			if r.onRim(p, w.beta[v]) {
+				g[v] = -tb
+				rimVerts++
+				continue
+			}
+			gv := r.side*r.height(p) - tb
+			if err := clearance(gv, w.beta[v]+slack+w.tau, "the wall"); err != nil {
+				return nil, 0, err
+			}
+			g[v] = gv
+		}
+	}
+	if rimVerts == 0 {
+		return nil, 0, fmt.Errorf("%w: the wall has no vertex on the rim", decaderr.ErrUnsupported)
+	}
+
+	type key struct{ a, b int }
+	cuts := map[key]int{}
+	cut := func(a, b int) int {
+		k := key{min(a, b), max(a, b)}
+		if c, ok := cuts[k]; ok {
+			return c
+		}
+		t := g[a] / (g[a] - g[b])
+		p := w.verts[a].Add(w.verts[b].Sub(w.verts[a]).Scale(t))
+		c := w.vertex(p, max(w.beta[a], w.beta[b])+slack+w.tau)
+		cuts[k] = c
+		return c
+	}
+	for _, f := range facets {
+		t := w.fp.Tris[f]
+		var above []int
+		for k, v := range t {
+			if g[v] > 0 {
+				above = append(above, k)
+			}
+		}
+		switch len(above) {
+		case 0:
+		case 3:
+			w.emit(t, group)
+		case 1:
+			x := above[0]
+			a, b, c := t[x], t[(x+1)%3], t[(x+2)%3]
+			w.emit([3]int{a, cut(a, b), cut(c, a)}, group)
+		case 2:
+			z := 0
+			for k := range 3 {
+				if g[t[k]] <= 0 {
+					z = k
+				}
+			}
+			x, y, below := t[(z+1)%3], t[(z+2)%3], t[z]
+			cyz, czx := cut(y, below), cut(below, x)
+			w.emit([3]int{x, y, cyz}, group)
+			w.emit([3]int{x, cyz, czx}, group)
+		}
+	}
+	w.removed = append(w.removed, facets...)
+
+	ring := make([]ringPt, 0, len(cuts))
+	seen := map[int]bool{}
+	for _, c := range cuts {
+		if seen[c] {
+			continue
+		}
+		seen[c] = true
+		ring = append(ring, ringPt{idx: c, ang: w.angleOf(w.verts[c])})
+	}
+	sort.Slice(ring, func(i, j int) bool { return ring[i].ang < ring[j].ang })
+	if len(ring) < 3 {
+		return nil, 0, fmt.Errorf("%w: the wall's cut leaves fewer than three vertices", decaderr.ErrUnsupported)
+	}
+	for i, p := range ring {
+		next := ring[(i+1)%len(ring)].ang
+		if i == len(ring)-1 {
+			next += 2 * math.Pi
+		}
+		if next-p.ang >= math.Pi {
+			return nil, 0, fmt.Errorf("%w: the wall's cut does not go round the axis", decaderr.ErrUnsupported)
+		}
+	}
+	return ring, group, nil
+}
+
+// angleOf is the angle of p about the axis, measured in the rim loop's own
+// sense from r.u, in [0, 2π).
+func (w *work) angleOf(p r3.Vec) float64 {
+	a := math.Mod(w.dir*w.r.angle(p), 2*math.Pi)
+	if a < 0 {
+		a += 2 * math.Pi
+	}
+	return a
+}
+
+// blendTag is the exact surface of the blend face and its orientation.
+type blendTag struct {
+	surface  surfacegeom.Surface
+	reversed bool
+	// outward returns the outward normal of the blend at p.
+	outward func(p r3.Vec) r3.Vec
+	// rows are the intermediate rows of the grid, from the plane ring toward
+	// the wall ring; each maps an azimuth to a point.
+	rows []func(phi float64) r3.Vec
+	// trueArea is the exact area of the blend face.
+	trueArea float64
+}
+
+func (w *work) tag() blendTag {
+	if w.spec.fillet {
+		return w.torusTag()
+	}
+	return w.coneTag()
+}
+
+func (w *work) torusTag() blendTag {
+	r, rr := w.r, w.spec.r
+	rhoC := r.radius + r.kappa*rr
+	zetaC := r.side * rr
+	tag := blendTag{
+		surface: surfacegeom.Torus{
+			Center: r.center.Add(r.n.Scale(zetaC)), Axis: r.n,
+			Major: units.Millimeters(rhoC), Minor: units.Millimeters(rr),
+		},
+		reversed: !r.convex,
+		trueArea: math.Pi*math.Pi*rr*rhoC - 2*math.Pi*r.kappa*rr*rr,
+	}
+	tag.outward = func(p r3.Vec) r3.Vec {
+		d := p.Sub(r.at(rhoC, r.angle(p), zetaC))
+		if !r.convex {
+			d = d.Scale(-1)
+		}
+		return d
+	}
+	step := 2 * math.Acos(1-math.Min(w.tau/rr, 1))
+	m := max(2, int(math.Ceil(math.Pi/2/step)))
+	for j := 1; j < m; j++ {
+		alpha := float64(j) * math.Pi / 2 / float64(m)
+		tag.rows = append(tag.rows, func(phi float64) r3.Vec {
+			return r.at(rhoC-r.kappa*rr*math.Sin(alpha), phi, r.side*rr*(1-math.Cos(alpha)))
+		})
+	}
+	return tag
+}
+
+func (w *work) coneTag() blendTag {
+	r := w.r
+	rho1 := r.radius + r.kappa*w.spec.dA
+	zeta2 := r.side * w.spec.dB
+	dRho := rho1 - r.radius
+	half := math.Atan(math.Abs(dRho) / w.spec.dB)
+	cone := surfacegeom.Cone{HalfAngle: units.Radians(half)}
+	if rho1 > r.radius {
+		cone.Origin, cone.Axis, cone.Radius = r.center.Add(r.n.Scale(zeta2)), r.n.Scale(-r.side), units.Millimeters(r.radius)
+	} else {
+		cone.Origin, cone.Axis, cone.Radius = r.center, r.n.Scale(r.side), units.Millimeters(rho1)
+	}
+	// The blend's outward normal leans toward the bisector of the plane's and
+	// the wall's outward normals, in the meridian plane.
+	chordRho, chordZeta := r.radius-rho1, zeta2
+	normRho, normZeta := -chordZeta, chordRho
+	nBRho := 1.0
+	if r.matOutside {
+		nBRho = -1
+	}
+	if normRho*nBRho+normZeta < 0 {
+		normRho, normZeta = -normRho, -normZeta
+	}
+	outward := func(p r3.Vec) r3.Vec {
+		radial := p.Sub(r.center)
+		radial = radial.Sub(r.n.Scale(radial.Dot(r.n)))
+		unit, ok := radial.Normalize()
+		if !ok {
+			unit = r.u
+		}
+		return unit.Scale(normRho).Add(r.n.Scale(normZeta))
+	}
+	sample := outward(r.at(r.radius, 0, 0))
+	natural := r.u.Scale(math.Cos(half)).Sub(cone.Axis.Scale(math.Sin(half)))
+	length := math.Hypot(dRho, w.spec.dB)
+	return blendTag{
+		surface:  cone,
+		reversed: sample.Dot(natural) < 0,
+		outward:  outward,
+		trueArea: math.Pi * (math.Abs(rho1) + r.radius) * length,
+	}
+}
+
+// strip builds the blend face's grid between the plane ring and the wall ring
+// and emits it under group.
+func (w *work) strip(tag blendTag, ringA, ringB []ringPt, group int) {
+	rowBound := w.tau + w.r.slack()
+	rows := [][]ringPt{ringA}
+	for _, at := range tag.rows {
+		row := make([]ringPt, len(ringA))
+		for k, p := range ringA {
+			row[k] = ringPt{idx: w.vertex(at(w.dir*p.ang), rowBound), ang: p.ang}
+		}
+		rows = append(rows, row)
+	}
+	rows = append(rows, ringB)
+	for i := 0; i+1 < len(rows); i++ {
+		for _, t := range zipper(rows[i], rows[i+1]) {
+			a, b, c := w.verts[t[0]], w.verts[t[1]], w.verts[t[2]]
+			centroid := a.Add(b).Add(c).Scale(1.0 / 3)
+			if b.Sub(a).Cross(c.Sub(a)).Dot(tag.outward(centroid)) < 0 {
+				t[1], t[2] = t[2], t[1]
+			}
+			w.emit(t, group)
+		}
+	}
+}
+
+// zipper joins two closed rings, each sorted by angle, into a band of
+// triangles by advancing whichever ring's next vertex has the smaller angle.
+func zipper(a, b []ringPt) [][3]int {
+	na, nb := len(a), len(b)
+	angA := func(k int) float64 { return a[k%na].ang + 2*math.Pi*float64(k/na) }
+	angB := func(k int) float64 { return b[k%nb].ang + 2*math.Pi*float64(k/nb) }
+	j0 := 0
+	for j0 < nb && angB(j0) < angA(0) {
+		j0++
+	}
+	var out [][3]int
+	i, j := 0, j0
+	for i < na || j < j0+nb {
+		if i < na && (j >= j0+nb || angA(i+1) <= angB(j+1)) {
+			out = append(out, [3]int{a[i%na].idx, a[(i+1)%na].idx, b[j%nb].idx})
+			i++
+			continue
+		}
+		out = append(out, [3]int{a[i%na].idx, b[(j+1)%nb].idx, b[j%nb].idx})
+		j++
+	}
+	return out
+}
