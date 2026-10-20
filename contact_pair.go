@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/clearance/pairkernel"
 	"github.com/lestrrat-3d/decad/internal/contactbox"
+	"github.com/lestrrat-3d/decad/internal/contactfaceted"
 	"github.com/lestrrat-3d/decad/internal/contactround"
 	"github.com/lestrrat-3d/decad/internal/contactruling"
 	"github.com/lestrrat-3d/decad/internal/measurement"
@@ -326,7 +327,7 @@ func classifyContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.Transf
 	}
 	if okA && !okB {
 		if _, faceted := b.n.Payload.(facetedPayload); faceted {
-			if err := classifyFacetedFloorBox(ctx, report, b, poseB, boxA, false); err != nil {
+			if err := contactfaceted.ClassifyFloorBox(ctx, report, bodyNode(b), poseB, boxA, false); err != nil {
 				return nil, err
 			}
 			if err := classifyPlanarFallback(ctx, report); err != nil {
@@ -348,7 +349,7 @@ func classifyContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.Transf
 	}
 	if okB && !okA {
 		if _, faceted := a.n.Payload.(facetedPayload); faceted {
-			if err := classifyFacetedFloorBox(ctx, report, a, poseA, boxB, true); err != nil {
+			if err := contactfaceted.ClassifyFloorBox(ctx, report, bodyNode(a), poseA, boxB, true); err != nil {
 				return nil, err
 			}
 			if err := classifyPlanarFallback(ctx, report); err != nil {

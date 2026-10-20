@@ -9,6 +9,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/booleandispatch"
 	"github.com/lestrrat-3d/decad/internal/booloperand"
+	"github.com/lestrrat-3d/decad/internal/contactfaceted"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -203,7 +204,7 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 			return bodyNode(body), ok, err
 		},
 		LowerSupport: func(ctx context.Context, result, first, second *topo.Body) error {
-			return certifyFacetedUnionLowerSupport(ctx, bodyHandle(result), bodyHandle(first), bodyHandle(second))
+			return contactfaceted.CertifyUnionLowerSupport(ctx, result, first, second)
 		},
 	}
 	return bodyResult(booleandispatch.Body(ctx, op, envOf(documentNode(d), ref), &a.n, &b.n, hooks))
