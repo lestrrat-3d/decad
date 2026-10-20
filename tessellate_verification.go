@@ -3,7 +3,6 @@ package decad
 import (
 	"fmt"
 
-	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-go/option/v3"
 )
 
@@ -128,36 +127,6 @@ func (m *Mesh) withholdProofs() {
 // publishes BoundaryVerified() true at every level, which is the whole of what
 // it claims today and would be an over-claim once it had an audit to decline.
 //
-// facetedPayload is absent because its embedding is proven when the body is
-// created, not when it is restated: the boolean's stitch and a faceted
-// placement both check every facet their float rounding moved and refuse a
-// held mesh they cannot keep embedded (meshbool.EnforceHeldEmbedding,
-// docs/evaluator-design.md §9). Restatement moves no coordinate, so there is
-// no audit for a lower level to decline.
-func payloadAuditsFacetContact(p topo.Payload) bool {
-	if _, ok := p.(allEdgeChamferPayload); ok {
-		return true
-	}
-	if _, ok := p.(patchPayload); ok {
-		return true
-	}
-	_, ok := p.(revolvePayload)
-	if ok {
-		return true
-	}
-	if sp, ok := p.(sweepPayload); ok {
-		return len(sp.Spans) != 0 || sp.Arc
-	}
-	if sp, ok := p.(chainSweepPayload); ok {
-		return len(sp.Spans) != 0 || sp.Arc
-	}
-	if _, ok := p.(bodyPatchPayload); ok {
-		return true
-	}
-	sp, ok := p.(stitchPayload)
-	return ok && sp.Tris == nil
-}
-
 // foldVerification reads the level a call's options name, starting from the
 // caller's own default. The last [WithVerification] wins, matching how every
 // other option in this package folds.
