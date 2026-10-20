@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/seal"
+
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/contactbox"
 	"github.com/lestrrat-3d/decad/internal/pair/box"
@@ -48,8 +50,7 @@ func (r *pairSweepRun) sample(ctx context.Context, f *big.Rat) (*SweepSample, er
 	at := sweepInstant(f, r.pa.Duration)
 	event := r.idealContact(f, at)
 	r.transferManifold(f, poseA, poseB, contact, &event)
-	sample := SweepSample{At: at, PoseA: poseA, PoseB: poseB, FloatContact: contact, Ideal: event,
-		exactFraction: new(big.Rat).Set(f)}
+	sample := sampleWith(SweepSample{At: at, PoseA: poseA, PoseB: poseB, FloatContact: contact, Ideal: event}, new(big.Rat).Set(f))
 	r.report.Samples = append(r.report.Samples, sample)
 	r.report.PoseEvaluations++
 	return &sample, nil
@@ -296,8 +297,8 @@ func (r *pairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*Sweep
 							(right.Ideal.Relation == ContactTouching || right.Ideal.Relation == ContactSeparated) {
 							r.report.Outcome, r.report.ContactTrack = SweepContactTransitionBracket, track
 							r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
-							r.report.bracketRight = new(big.Rat).Set(rightF)
-							r.report.replay.setBracket(leftF, rightF)
+							r.report.SetBracketRight(seal.Key{}, new(big.Rat).Set(rightF))
+							r.report.Replay(seal.Key{}).setBracket(leftF, rightF)
 							r.report.Event = &right.Ideal
 							r.sortSamples()
 							return r.report, nil
@@ -405,8 +406,8 @@ func (r *pairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*Sweep
 	}
 	r.report.Outcome, r.report.Event = SweepImpactBracket, &right.Ideal
 	r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
-	r.report.bracketRight = new(big.Rat).Set(rightF)
-	r.report.replay.setBracket(leftF, rightF)
+	r.report.SetBracketRight(seal.Key{}, new(big.Rat).Set(rightF))
+	r.report.Replay(seal.Key{}).setBracket(leftF, rightF)
 	r.sortSamples()
 	return r.report, nil
 }

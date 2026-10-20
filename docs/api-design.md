@@ -824,8 +824,9 @@ companion design.
 `report/` holds the result vocabulary that `Verify`, `ContactPair` and
 `SweepPair` publish: `Measurement`, `VecMeasurement`, `Box` and `Exactness`;
 the outcome, reading, survey and diagnostic enums; the contact and sweep
-requests and enums; and the contact, diagnostic, interference, clearance and
-Verify report records. A record that names bodies, faces, edges or vertices is
+requests and enums; the pair path segments; the sweep instant, interval,
+departure, event, sample and report records; and the contact, diagnostic,
+interference, clearance and Verify report records. A record that names bodies, faces, edges or vertices is
 generic over those reference types, and its name ends in `Of`
 (`ContactReportOf[B, F, E, V]`, `DiagnosticOf[B, C]`, `ReportOf[B, F, C]`).
 

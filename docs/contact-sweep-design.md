@@ -779,6 +779,13 @@ func (r *SweepReport) CertifiedPosesAt(elapsed units.Value) (r3.Transform, r3.Tr
 func (r *SweepReport) CertifiedPosesAtInterval(time, start, end units.Value) (r3.Transform, r3.Transform, error)
 ```
 
+`SweepReport` is `report.SweepReportOf` instantiated with the root handles,
+and `SweepEvent` and `SweepSample` are its event and sample records; the
+fields and methods above are defined there. The record also carries the
+producer's replay proof and exact bracket right fraction, and a sample its
+exact fraction, behind accessors that take an `internal/seal.Key`, so only
+decad's own producers can read or set them.
+
 `BracketEndsAtDuration` compares the producer's private exact bracket right
 fraction with one. The public `Fraction` may be rounded.
 

@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/seal"
+
 	"github.com/lestrrat-3d/decad/internal/contactbox"
 	"github.com/lestrrat-3d/decad/internal/contactround"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
@@ -141,8 +143,7 @@ func (r *sourceSphereSweepRun) sample(ctx context.Context, f *big.Rat) (*SweepSa
 	at := sweepInstant(f, r.pa.Duration)
 	ideal := r.idealAt(f, at)
 	r.transferManifold(f, poseA, poseB, contact, &ideal)
-	sample := SweepSample{At: at, PoseA: poseA, PoseB: poseB, FloatContact: contact, Ideal: ideal,
-		exactFraction: new(big.Rat).Set(f)}
+	sample := sampleWith(SweepSample{At: at, PoseA: poseA, PoseB: poseB, FloatContact: contact, Ideal: ideal}, new(big.Rat).Set(f))
 	r.report.Samples = append(r.report.Samples, sample)
 	r.report.PoseEvaluations++
 	return &sample, nil
@@ -293,13 +294,13 @@ func (r *sourceSphereSweepRun) execute(ctx context.Context, resolution *big.Rat)
 	if !ok {
 		return r.undecided(zero, one, SweepContactUnsupported), nil
 	}
-	r.report.replay = &sweepReplayProof{pa: r.pa, pb: r.pb, request: r.req.ContactRequest,
+	r.report.SetReplay(seal.Key{}, &sweepReplayProof{pa: r.pa, pb: r.pb, request: r.req.ContactRequest,
 		sphere: &r.sphere, sphereFirst: r.sphereFirst, sphereAxis: axis, sphereSide: side,
-		sphereGap: gap, sphereSlope: slope}
+		sphereGap: gap, sphereSlope: slope})
 	if r.sphereFirst {
-		r.report.replay.boxB = r.box
+		r.report.Replay(seal.Key{}).boxB = r.box
 	} else {
-		r.report.replay.boxA = r.box
+		r.report.Replay(seal.Key{}).boxA = r.box
 	}
 	if first.Ideal.Relation == ContactTouching {
 		if slope.Sign() > 0 {
@@ -315,7 +316,7 @@ func (r *sourceSphereSweepRun) execute(ctx context.Context, resolution *big.Rat)
 			}
 			r.report.Outcome = SweepDepartedClear
 			r.report.Departure = &SweepDeparture{Until: last.At, GapAtUntil: *last.Ideal.Gap}
-			r.report.replay.snapshot(r.report)
+			r.report.Replay(seal.Key{}).snapshot(r.report)
 			return r.report, nil
 		}
 		if slope.IsZero() && r.req.StartPolicy == ContinueCertifiedTouch {
@@ -330,7 +331,7 @@ func (r *sourceSphereSweepRun) execute(ctx context.Context, resolution *big.Rat)
 				}
 				if last.Ideal.Relation == ContactTouching && last.Ideal.Manifold != nil {
 					r.report.Outcome, r.report.ContactTrack = SweepPersistentTouch, track
-					r.report.replay.snapshot(r.report)
+					r.report.Replay(seal.Key{}).snapshot(r.report)
 					return r.report, nil
 				}
 			}
@@ -352,7 +353,7 @@ func (r *sourceSphereSweepRun) execute(ctx context.Context, resolution *big.Rat)
 			return r.undecided(zero, one, SweepPoseRelation), nil
 		}
 		r.report.Outcome = SweepClear
-		r.report.replay.snapshot(r.report)
+		r.report.Replay(seal.Key{}).snapshot(r.report)
 		return r.report, nil
 	}
 	root := new(big.Rat).Quo(proofarith.DyNeg(gap).Rat(), slope.Rat())
@@ -381,9 +382,9 @@ func (r *sourceSphereSweepRun) execute(ctx context.Context, resolution *big.Rat)
 	}
 	r.report.Outcome, r.report.Event = SweepImpactBracket, &right.Ideal
 	r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
-	r.report.bracketRight = new(big.Rat).Set(rightF)
-	r.report.replay.setBracket(leftF, rightF)
-	r.report.replay.snapshot(r.report)
+	r.report.SetBracketRight(seal.Key{}, new(big.Rat).Set(rightF))
+	r.report.Replay(seal.Key{}).setBracket(leftF, rightF)
+	r.report.Replay(seal.Key{}).snapshot(r.report)
 	r.sortSamples()
 	return r.report, nil
 }
@@ -472,8 +473,8 @@ func (r *orientedSphereSweepRun) sample(ctx context.Context, f *big.Rat) (*Sweep
 			}
 		}
 	}
-	sample := &SweepSample{At: at, PoseA: poseA, PoseB: poseB, FloatContact: contact,
-		Ideal: ideal, exactFraction: new(big.Rat).Set(f)}
+	sample := sampleWithPtr(SweepSample{At: at, PoseA: poseA, PoseB: poseB, FloatContact: contact,
+		Ideal: ideal}, new(big.Rat).Set(f))
 	r.report.Samples = append(r.report.Samples, *sample)
 	r.report.PoseEvaluations++
 	return sample, nil
@@ -544,9 +545,9 @@ func (r *orientedSphereSweepRun) execute(ctx context.Context, resolution *big.Ra
 	if !ok {
 		return r.undecided(zero, one, SweepContactUnsupported), nil
 	}
-	r.report.replay = &sweepReplayProof{pa: r.pa, pb: r.pb, request: r.req.ContactRequest,
+	r.report.SetReplay(seal.Key{}, &sweepReplayProof{pa: r.pa, pb: r.pb, request: r.req.ContactRequest,
 		orientedSphere: &r.sphere, orientedSphereBox: &r.box, sphereFirst: r.sphereFirst,
-		sphereAxis: r.axis, sphereSide: r.side, sphereGap: r.start, sphereSlope: r.slope}
+		sphereAxis: r.axis, sphereSide: r.side, sphereGap: r.start, sphereSlope: r.slope})
 	if first.Ideal.Relation == ContactTouching {
 		if r.slope.Sign() <= 0 {
 			return r.undecided(zero, one, SweepDepartureUnproved), nil
@@ -563,7 +564,7 @@ func (r *orientedSphereSweepRun) execute(ctx context.Context, resolution *big.Ra
 		}
 		r.report.Outcome = SweepDepartedClear
 		r.report.Departure = &SweepDeparture{Until: last.At, GapAtUntil: *last.Ideal.Gap}
-		r.report.replay.snapshot(r.report)
+		r.report.Replay(seal.Key{}).snapshot(r.report)
 		return r.report, nil
 	}
 	if spherepath.OrientedFaceSign(r.start, r.slope, r.sphere.Radius, r.outward, one) > 0 {
@@ -578,7 +579,7 @@ func (r *orientedSphereSweepRun) execute(ctx context.Context, resolution *big.Ra
 			return r.undecided(zero, one, SweepPoseRelation), nil
 		}
 		r.report.Outcome = SweepClear
-		r.report.replay.snapshot(r.report)
+		r.report.Replay(seal.Key{}).snapshot(r.report)
 		return r.report, nil
 	}
 	leftF, rightF, ok := spherepath.OrientedFaceBracket(
@@ -607,9 +608,9 @@ func (r *orientedSphereSweepRun) execute(ctx context.Context, resolution *big.Ra
 	}
 	r.report.Outcome, r.report.Event = SweepImpactBracket, &right.Ideal
 	r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
-	r.report.bracketRight = new(big.Rat).Set(rightF)
-	r.report.replay.setBracket(leftF, rightF)
-	r.report.replay.snapshot(r.report)
+	r.report.SetBracketRight(seal.Key{}, new(big.Rat).Set(rightF))
+	r.report.Replay(seal.Key{}).setBracket(leftF, rightF)
+	r.report.Replay(seal.Key{}).snapshot(r.report)
 	sort.Slice(r.report.Samples, func(i, j int) bool {
 		return r.report.Samples[i].At.Fraction.Base() < r.report.Samples[j].At.Fraction.Base()
 	})

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/seal"
+
 	"github.com/lestrrat-3d/decad/internal/contactbox"
 	"github.com/lestrrat-3d/decad/internal/contactfaceted"
 	"github.com/lestrrat-3d/decad/internal/contactround"
@@ -72,7 +74,7 @@ func (p *sweepReplayProof) setBracket(left, right *big.Rat) {
 func (p *sweepReplayProof) setRotatingBracketGap(r *SweepReport, travel *big.Rat) {
 	for i := range r.Samples {
 		sample := &r.Samples[i]
-		if sample.exactFraction == nil || sample.exactFraction.Cmp(p.bracketLo) != 0 {
+		if sample.ExactFraction(seal.Key{}) == nil || sample.ExactFraction(seal.Key{}).Cmp(p.bracketLo) != 0 {
 			continue
 		}
 		if gap := sampleLowerGap(sample); gap != nil {
@@ -82,15 +84,15 @@ func (p *sweepReplayProof) setRotatingBracketGap(r *SweepReport, travel *big.Rat
 	}
 }
 
-// HasAffineReplayProof reports whether this sweep can certify rounded poses
+// Present reports whether the proof exists.
+func (p *sweepReplayProof) Present() bool { return p != nil }
+
+// HasAffineProof reports whether this sweep can certify rounded poses
 // along an affine source-box, source-sphere, faceted clear, extruded or
 // revolved source-cylinder, or oriented face-track path.
-func (r *SweepReport) HasAffineReplayProof() bool {
-	if r == nil || r.replay == nil {
-		return false
-	}
-	if r.replay.rotation == nil {
-		switch r.replay.outcome {
+func (p *sweepReplayProof) HasAffineProof() bool {
+	if p.rotation == nil {
+		switch p.outcome {
 		case SweepClear, SweepDepartedClear, SweepPersistentTouch, SweepGrazingTouch,
 			SweepImpactBracket, SweepContactTransitionBracket:
 			return true
@@ -98,35 +100,31 @@ func (r *SweepReport) HasAffineReplayProof() bool {
 			return false
 		}
 	}
-	return r.replay.outcome == SweepPersistentTouch && r.replay.track != nil &&
-		r.replay.rotation[0].Path.Drift == nil && r.replay.rotation[1].Path.Drift == nil
+	return p.outcome == SweepPersistentTouch && p.track != nil &&
+		p.rotation[0].Path.Drift == nil && p.rotation[1].Path.Drift == nil
 }
 
-// CertifiedPosesAt evaluates the recorded paths at elapsed time and checks
-// their rounded placements against the sweep's exact source proof.
-// It reads no Document geometry and performs no new contact query. A pose whose
-// rounding can change the reported relation beyond PointResolution is refused.
-func (r *SweepReport) CertifiedPosesAt(elapsed units.Value) (r3.Transform, r3.Transform, error) {
-	if r == nil || r.replay == nil || elapsed.Kind() != units.Time ||
-		!measurement.FiniteValues(elapsed.Base()) {
+// PosesAt evaluates the recorded paths at elapsed time and checks
+// their rounded placements against the exact source proof.
+func (p *sweepReplayProof) PosesAt(elapsed units.Value) (r3.Transform, r3.Transform, error) {
+	if elapsed.Kind() != units.Time || !measurement.FiniteValues(elapsed.Base()) {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: sweep has no replay proof", ErrUnsupported)
 	}
 	t, ok := sweeppath.ExactBaseValue(elapsed)
-	duration := r.replay.pa.Duration
-	if r.replay.rotation != nil {
-		duration = r.replay.rotation[0].Path.Duration
+	duration := p.pa.Duration
+	if p.rotation != nil {
+		duration = p.rotation[0].Path.Duration
 	}
 	if !ok || t.Sign() < 0 || t.Cmp(duration) > 0 {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: replay time is outside the sweep", ErrDegenerate)
 	}
-	return r.certifiedPosesAtFraction(new(big.Rat).Quo(t, duration))
+	return p.posesAtFraction(new(big.Rat).Quo(t, duration))
 }
 
-// CertifiedPosesAtInterval maps an exact held time from [start, end] onto the
-// certified spatial path. It permits a caller to replay a slice whose global
-// clock endpoints differ slightly from the rounded sweep duration.
-func (r *SweepReport) CertifiedPosesAtInterval(time, start, end units.Value) (r3.Transform, r3.Transform, error) {
-	if r == nil || r.replay == nil || time.Kind() != units.Time || start.Kind() != units.Time ||
+// PosesAtInterval maps an exact held time from [start, end] onto the
+// certified spatial path.
+func (p *sweepReplayProof) PosesAtInterval(time, start, end units.Value) (r3.Transform, r3.Transform, error) {
+	if time.Kind() != units.Time || start.Kind() != units.Time ||
 		end.Kind() != units.Time || !measurement.FiniteValues(time.Base(), start.Base(), end.Base()) {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: sweep has no replay proof", ErrUnsupported)
 	}
@@ -141,88 +139,87 @@ func (r *SweepReport) CertifiedPosesAtInterval(time, start, end units.Value) (r3
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: replay time is outside the interval", ErrDegenerate)
 	}
 	f := new(big.Rat).Quo(new(big.Rat).Sub(timeValue, startValue), span)
-	return r.certifiedPosesAtFraction(f)
+	return p.posesAtFraction(f)
 }
 
 // certifiedPosesAtFraction answers from the replay's memo when it holds f,
 // and replays f otherwise.
-func (r *SweepReport) certifiedPosesAtFraction(f *big.Rat) (r3.Transform, r3.Transform, error) {
+func (p *sweepReplayProof) posesAtFraction(f *big.Rat) (r3.Transform, r3.Transform, error) {
 	key := sweepmemo.ReplayFractionKey(f)
-	if value, ok := r.replay.poses.Load(key); ok {
+	if value, ok := p.poses.Load(key); ok {
 		return value.A, value.B, value.Err
 	}
-	a, b, err := r.replayPosesAtFraction(f)
-	r.replay.poses.Store(key, sweepmemo.ReplayPoses{A: a, B: b, Err: err}, sweepmemo.ReplayPoseCap)
+	a, b, err := p.replayPosesAtFraction(f)
+	p.poses.Store(key, sweepmemo.ReplayPoses{A: a, B: b, Err: err}, sweepmemo.ReplayPoseCap)
 	return a, b, err
 }
 
-func (r *SweepReport) replayPosesAtFraction(f *big.Rat) (r3.Transform, r3.Transform, error) {
+func (p *sweepReplayProof) replayPosesAtFraction(f *big.Rat) (r3.Transform, r3.Transform, error) {
 	var trackEnd *big.Rat
-	if r.replay.track != nil && (r.replay.track.planar != nil || r.replay.track.rolling != nil) {
-		trackEnd = r.replay.track.end
+	if p.track != nil && (p.track.planar != nil || p.track.rolling != nil) {
+		trackEnd = p.track.end
 	}
-	if !sweepmemo.FractionCovered(r.replay.outcome, f, trackEnd, r.replay.bracketLo,
-		r.replay.bracketHi, r.replay.bracketGap, r.replay.rotation != nil) {
+	if !sweepmemo.FractionCovered(p.outcome, f, trackEnd, p.bracketLo,
+		p.bracketHi, p.bracketGap, p.rotation != nil) {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: replay time is outside the certified sweep prefix", ErrUnsupported)
 	}
-	if r.replay.rotation != nil {
-		return r.certifiedRotationalPosesAtFraction(f)
+	if p.rotation != nil {
+		return p.certifiedRotationalPosesAtFraction(f)
 	}
 	poseAt := func(path affinePairPath) (r3.Transform, error) { return path.PoseAt(f) }
-	if r.replay.sphere != nil || r.replay.spherePair != nil {
+	if p.sphere != nil || p.spherePair != nil {
 		poseAt = func(path affinePairPath) (r3.Transform, error) {
 			return path.SpherePoseAt(f)
 		}
 	}
-	poseA, err := poseAt(r.replay.pa)
+	poseA, err := poseAt(p.pa)
 	if err != nil {
 		return r3.Transform{}, r3.Transform{}, err
 	}
-	poseB, err := poseAt(r.replay.pb)
+	poseB, err := poseAt(p.pb)
 	if err != nil {
 		return r3.Transform{}, r3.Transform{}, err
 	}
-	if r.replay.sphere != nil {
-		return r.certifiedSpherePosesAtFraction(f, poseA, poseB)
+	if p.sphere != nil {
+		return p.certifiedSpherePosesAtFraction(f, poseA, poseB)
 	}
-	if r.replay.cylinder != nil {
-		return r.certifiedCylinderPosesAtFraction(f, poseA, poseB)
+	if p.cylinder != nil {
+		return p.certifiedCylinderPosesAtFraction(f, poseA, poseB)
 	}
-	if r.replay.spherePair != nil {
-		return r.certifiedSpherePairPosesAtFraction(f, poseA, poseB)
+	if p.spherePair != nil {
+		return p.certifiedSpherePairPosesAtFraction(f, poseA, poseB)
 	}
-	if r.replay.orientedSphere != nil {
-		return r.certifiedOrientedSpherePosesAtFraction(f, poseA, poseB)
+	if p.orientedSphere != nil {
+		return p.certifiedOrientedSpherePosesAtFraction(f, poseA, poseB)
 	}
-	if r.replay.facetedClear != nil {
-		return r.certifiedBoundedFacetedPosesAtFraction(f, poseA, poseB)
+	if p.facetedClear != nil {
+		return p.certifiedBoundedFacetedPosesAtFraction(f, poseA, poseB)
 	}
-	actualA, ok := translatedReplayBox(r.replay.boxA, r.replay.pa.From, poseA)
+	actualA, ok := translatedReplayBox(p.boxA, p.pa.From, poseA)
 	if !ok {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: replay pose A is not an affine translation", ErrUnsupported)
 	}
-	actualB, ok := translatedReplayBox(r.replay.boxB, r.replay.pb.From, poseB)
+	actualB, ok := translatedReplayBox(p.boxB, p.pb.From, poseB)
 	if !ok {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: replay pose B is not an affine translation", ErrUnsupported)
 	}
-	deviation := boxPoseDeviation(r.replay.boxA, actualA, r.replay.pa.Delta, f)
-	deviation.Add(deviation, boxPoseDeviation(r.replay.boxB, actualB, r.replay.pb.Delta, f))
-	resolution, ok := sweeppath.ExactBaseValue(r.replay.request.PointResolution)
+	deviation := boxPoseDeviation(p.boxA, actualA, p.pa.Delta, f)
+	deviation.Add(deviation, boxPoseDeviation(p.boxB, actualB, p.pb.Delta, f))
+	resolution, ok := sweeppath.ExactBaseValue(p.request.PointResolution)
 	if !ok || deviation.Cmp(resolution) > 0 {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded replay pose exceeds point resolution", ErrUnsupported)
 	}
-	contact := &nodeContactReport{Request: r.replay.request}
+	contact := &nodeContactReport{Request: p.request}
 	contactbox.ClassifySourceBoxes(contact, actualA, actualB)
-	if !sweepmemo.RelationCovered(r.replay.outcome, f, r.replay.bracketLo,
+	if !sweepmemo.RelationCovered(p.outcome, f, p.bracketLo,
 		resolution, contact.Relation, actualA.AxisBox(), actualB.AxisBox()) {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded replay pose changes the certified relation", ErrUnsupported)
 	}
 	return poseA, poseB, nil
 }
 
-func (r *SweepReport) certifiedBoundedFacetedPosesAtFraction(f *big.Rat,
+func (p *sweepReplayProof) certifiedBoundedFacetedPosesAtFraction(f *big.Rat,
 	poseA, poseB r3.Transform) (r3.Transform, r3.Transform, error) {
-	p := r.replay
 	floor := p.boxA
 	if p.facetedFirst {
 		floor = p.boxB
@@ -240,9 +237,8 @@ func (r *SweepReport) certifiedBoundedFacetedPosesAtFraction(f *big.Rat,
 	return poseA, poseB, nil
 }
 
-func (r *SweepReport) certifiedCylinderPosesAtFraction(f *big.Rat, poseA, poseB r3.Transform) (
+func (p *sweepReplayProof) certifiedCylinderPosesAtFraction(f *big.Rat, poseA, poseB r3.Transform) (
 	r3.Transform, r3.Transform, error) {
-	p := r.replay
 	actualA, okA := translatedReplayBox(p.boxA, p.pa.From, poseA)
 	actualB, okB := translatedReplayBox(p.boxB, p.pb.From, poseB)
 	if !okA || !okB {
@@ -317,9 +313,8 @@ func (r *SweepReport) certifiedCylinderPosesAtFraction(f *big.Rat, poseA, poseB 
 // The sphere-pair producer proves the ideal center-distance quadratic over
 // its full certified interval. Replay checks the two rounded source centers
 // against that same exact path and retains the producer's relation gate.
-func (r *SweepReport) certifiedSpherePairPosesAtFraction(f *big.Rat, poseA, poseB r3.Transform) (
+func (p *sweepReplayProof) certifiedSpherePairPosesAtFraction(f *big.Rat, poseA, poseB r3.Transform) (
 	r3.Transform, r3.Transform, error) {
-	p := r.replay
 	start := p.spherePair
 	actualA, okA := rotatingReplaySphere(start[0], p.pa, poseA)
 	actualB, okB := rotatingReplaySphere(start[1], p.pb, poseB)
@@ -355,9 +350,8 @@ func (r *SweepReport) certifiedSpherePairPosesAtFraction(f *big.Rat, poseA, pose
 // The producer's face corridor makes one support distance affine. Replay
 // compares the rounded cached source sets with that ideal support at any
 // fraction, without asking the document to classify a new pair.
-func (r *SweepReport) certifiedOrientedSpherePosesAtFraction(f *big.Rat,
+func (p *sweepReplayProof) certifiedOrientedSpherePosesAtFraction(f *big.Rat,
 	poseA, poseB r3.Transform) (r3.Transform, r3.Transform, error) {
-	p := r.replay
 	spherePath, boxPath := p.pb, p.pa
 	spherePose, boxPose := poseB, poseA
 	if p.sphereFirst {
@@ -405,15 +399,15 @@ func (r *SweepReport) certifiedOrientedSpherePosesAtFraction(f *big.Rat,
 // A clear rotating sweep certifies the ideal source boxes over every fraction.
 // Replay only accepts the rounded poses when their exact held source corners
 // remain separated after charging the producer's pose error bound.
-func (r *SweepReport) certifiedRotationalPosesAtFraction(f *big.Rat) (
+func (p *sweepReplayProof) certifiedRotationalPosesAtFraction(f *big.Rat) (
 	r3.Transform, r3.Transform, error) {
-	if r.replay.planar != nil {
-		return r.certifiedPlanarPosesAtFraction(f)
+	if p.planar != nil {
+		return p.certifiedPlanarPosesAtFraction(f)
 	}
-	if r.replay.track != nil && r.replay.track.rolling != nil {
-		return r.replay.track.rolling.ReplayPoses(f, r.replay.request.PointResolution)
+	if p.track != nil && p.track.rolling != nil {
+		return p.track.rolling.ReplayPoses(f, p.request.PointResolution)
 	}
-	paths := r.replay.rotation
+	paths := p.rotation
 	var pose [2]r3.Transform
 	var box [2]contactbox.OrientedSourceBox
 	var deviation [2]float64
@@ -431,20 +425,20 @@ func (r *SweepReport) certifiedRotationalPosesAtFraction(f *big.Rat) (
 			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rotating replay pose has no finite error bound", ErrUnsupported)
 		}
 	}
-	resolution, ok := sweeppath.ExactBaseValue(r.replay.request.PointResolution)
+	resolution, ok := sweeppath.ExactBaseValue(p.request.PointResolution)
 	if !ok || new(big.Rat).Add(proofarith.FloatRat(deviation[0]), proofarith.FloatRat(deviation[1])).Cmp(resolution) > 0 {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rotating replay pose exceeds point resolution", ErrUnsupported)
 	}
-	if r.replay.outcome == SweepImpactBracket && r.replay.bracketLo != nil && f.Cmp(r.replay.bracketLo) > 0 {
+	if p.outcome == SweepImpactBracket && p.bracketLo != nil && f.Cmp(p.bracketLo) > 0 {
 		deviation := new(big.Rat).Add(proofarith.FloatRat(deviation[0]), proofarith.FloatRat(deviation[1]))
-		if !sweepmemo.BracketDepthWithin(f, deviation, resolution, r.replay.bracketLo,
-			r.replay.bracketHi, r.replay.bracketGap, r.replay.bracketTravel) {
+		if !sweepmemo.BracketDepthWithin(f, deviation, resolution, p.bracketLo,
+			p.bracketHi, p.bracketGap, p.bracketTravel) {
 			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rotating impact pose leaves the point resolution of contact", ErrUnsupported)
 		}
 		return pose[0], pose[1], nil
 	}
-	if r.replay.outcome == SweepPersistentTouch {
-		if !r.certifiedOrientedTouchAtFraction(f, box[0], box[1]) {
+	if p.outcome == SweepPersistentTouch {
+		if !p.certifiedOrientedTouchAtFraction(f, box[0], box[1]) {
 			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded replay pose loses the certified face track", ErrUnsupported)
 		}
 		return pose[0], pose[1], nil
@@ -466,14 +460,14 @@ func (r *SweepReport) certifiedRotationalPosesAtFraction(f *big.Rat) (
 
 // The producer proves the ideal face track for every fraction. Replay checks
 // the rounded source boxes against that same face pair and its point bounds.
-func (r *SweepReport) certifiedOrientedTouchAtFraction(f *big.Rat, a, b contactbox.OrientedSourceBox) bool {
-	track := r.replay.track
+func (p *sweepReplayProof) certifiedOrientedTouchAtFraction(f *big.Rat, a, b contactbox.OrientedSourceBox) bool {
+	track := p.track
 	if track == nil || track.orientedA == nil || track.orientedB == nil ||
 		f.Cmp(track.start) < 0 || f.Cmp(track.end) > 0 ||
-		r.replay.rotation[0].Path.Drift != nil || r.replay.rotation[1].Path.Drift != nil {
+		p.rotation[0].Path.Drift != nil || p.rotation[1].Path.Drift != nil {
 		return false
 	}
-	report := &nodeContactReport{Request: r.replay.request}
+	report := &nodeContactReport{Request: p.request}
 	report.Relation, _, _ = contactbox.OrientedBoxRelation(a, b)
 	if report.Relation == ContactTouching {
 		contactbox.PublishOrientedBoxPatch(report, a, b)
@@ -552,9 +546,8 @@ func rotatingReplaySphere(sphere contactround.SphereProof, path affinePairPath,
 // The sphere producer proves one face corridor and an affine support gap.
 // Replay checks the rounded placements against both claims at the requested
 // fraction, including fractions that are not dyadic.
-func (r *SweepReport) certifiedSpherePosesAtFraction(f *big.Rat, poseA, poseB r3.Transform) (
+func (p *sweepReplayProof) certifiedSpherePosesAtFraction(f *big.Rat, poseA, poseB r3.Transform) (
 	r3.Transform, r3.Transform, error) {
-	p := r.replay
 	spherePath, boxPath := p.pb, p.pa
 	spherePose, boxPose := poseB, poseA
 	box := p.boxA
@@ -624,8 +617,7 @@ func (r *SweepReport) certifiedSpherePosesAtFraction(f *big.Rat, poseA, poseB r3
 // most the transfer charge ‖R_r − R_i‖_F·δ (motionbound.SweepTransferCharge),
 // so the lower gap must also exceed that for each body. A translating path
 // charges nothing, and a rotating one a few ulps of δ.
-func (r *SweepReport) certifiedPlanarPosesAtFraction(f *big.Rat) (r3.Transform, r3.Transform, error) {
-	p := r.replay
+func (p *sweepReplayProof) certifiedPlanarPosesAtFraction(f *big.Rat) (r3.Transform, r3.Transform, error) {
 	var poses [2]r3.Transform
 	deviation, displacement := new(big.Rat), new(big.Rat)
 	for i, path := range p.rotation {

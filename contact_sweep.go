@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/seal"
+
 	"github.com/lestrrat-3d/decad/report"
 
 	"github.com/lestrrat-3d/decad/internal/contactbox"
@@ -15,56 +17,21 @@ import (
 	"github.com/lestrrat-3d/decad/internal/planarsweep"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
-	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
 var errSweepPoseBudget = errors.New("decad: sweep pose budget exhausted")
 
-// PairPath names one body's motion during a two-body sweep. Affine source-box,
-// source-sphere, and certified faceted-floor paths, co-translating oblique
-// source boxes, rotating source-box or centered-sphere rigid drifts, and any
-// path of two exact planar solids can receive continuous certificates; other
-// valid paths report an undecided sweep.
-type PairPath interface{ pairPath() }
-
-// PoseSegment joins two placements relative to the body's current placement.
-type PoseSegment struct {
-	From, To r3.Transform
-	Duration units.Value
-}
-
-func (PoseSegment) pairPath() {}
-
-// QuantityVec carries three components of one physical kind.
-type QuantityVec struct{ X, Y, Z units.Value }
-
-// RigidDriftSegment moves a center linearly while its orientation rotates.
-type RigidDriftSegment struct {
-	From            r3.Transform
-	Center          r3.Vec
-	LinearVelocity  QuantityVec
-	AngularVelocity QuantityVec
-	Duration        units.Value
-}
-
-func (RigidDriftSegment) pairPath() {}
-
-func encodedPairPath(path PairPath) sweeppath.PairPath {
-	switch p := path.(type) {
-	case PoseSegment:
-		return sweeppath.PoseSegment(p)
-	case RigidDriftSegment:
-		return sweeppath.RigidDriftSegment{
-			From: p.From, Center: p.Center,
-			LinearVelocity:  sweeppath.QuantityVec(p.LinearVelocity),
-			AngularVelocity: sweeppath.QuantityVec(p.AngularVelocity),
-			Duration:        p.Duration,
-		}
-	default:
-		return nil
-	}
-}
+type (
+	// PairPath names one body's motion during a two-body sweep.
+	PairPath = report.PairPath
+	// PoseSegment joins two placements relative to the body's current placement.
+	PoseSegment = report.PoseSegment
+	// QuantityVec carries three components of one physical kind.
+	QuantityVec = report.QuantityVec
+	// RigidDriftSegment moves a center linearly while its orientation rotates.
+	RigidDriftSegment = report.RigidDriftSegment
+)
 
 // SweepStartPolicy selects what to prove when the bodies initially touch.
 type SweepStartPolicy = report.SweepStartPolicy
@@ -135,20 +102,20 @@ type SweepOutcome = report.SweepOutcome
 // SweepCause explains why a continuous claim was not proved.
 type SweepCause = report.SweepCause
 
-// SweepInstant identifies a dyadic fraction of the requested duration.
-type SweepInstant struct {
-	Fraction units.Value
-	Elapsed  Measurement
-}
-
-// SweepInterval identifies an interval of the requested duration.
-type SweepInterval struct{ From, To SweepInstant }
-
-// SweepDeparture certifies positive separation after an initial touch.
-type SweepDeparture struct {
-	Until      SweepInstant
-	GapAtUntil Measurement
-}
+type (
+	// SweepInstant identifies a dyadic fraction of the requested duration.
+	SweepInstant = report.SweepInstant
+	// SweepInterval identifies an interval of the requested duration.
+	SweepInterval = report.SweepInterval
+	// SweepDeparture certifies positive separation after an initial touch.
+	SweepDeparture = report.SweepDeparture
+	// SweepEvent reports the ideal path relation at one sampled instant.
+	SweepEvent = report.SweepEventOf[*Face, *Edge, *Vertex]
+	// SweepSample keeps the query pose and the transferred pair finding.
+	SweepSample = report.SweepSampleOf[*Body, *Face, *Edge, *Vertex]
+	// SweepReport states the first certified event or the earliest unresolved span.
+	SweepReport = report.SweepReportOf[*Body, *Face, *Edge, *Vertex, SweepContactTrack, *sweepReplayProof]
+)
 
 // SweepContactTrack owns the exact source geometry and affine motion of a
 // certified touching prefix. Its source face pointers are the original faces.
@@ -333,58 +300,12 @@ func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, 
 	return contactManifoldFromInternal(report.Manifold), nil
 }
 
-// SweepEvent reports the ideal path relation at one sampled instant.
-type SweepEvent struct {
-	At       SweepInstant
-	Relation ContactRelation
-	Gap      *Measurement
-	Overlap  *Measurement
-	Manifold *ContactManifold
-	Reason   ContactReason
-}
-
 // sweepEventOf publishes a contact producer's finished report as the ideal
 // event at at, converting it to its public form.
 func sweepEventOf(at SweepInstant, contact *nodeContactReport) SweepEvent {
 	return SweepEvent{At: at, Relation: contact.Relation,
 		Gap: contact.Gap, Overlap: contact.Overlap,
 		Manifold: contactManifoldFromInternal(contact.Manifold), Reason: contact.Reason}
-}
-
-// SweepSample keeps the query pose and the transferred pair finding.
-type SweepSample struct {
-	At            SweepInstant
-	PoseA, PoseB  r3.Transform
-	FloatContact  *ContactReport
-	Ideal         SweepEvent
-	exactFraction *big.Rat
-}
-
-// SweepReport states the first certified event or the earliest unresolved span.
-type SweepReport struct {
-	A, B            *Body
-	PathA, PathB    PairPath
-	Request         SweepRequest
-	Outcome         SweepOutcome
-	Bracket         *SweepInterval
-	Unresolved      *SweepInterval
-	InitialEvent    *SweepEvent
-	Event           *SweepEvent
-	Departure       *SweepDeparture
-	ContactTrack    *SweepContactTrack
-	Cause           SweepCause
-	Samples         []SweepSample
-	BoxExcluded     bool
-	PoseEvaluations uint64
-	replay          *sweepReplayProof
-	bracketRight    *big.Rat
-}
-
-// BracketEndsAtDuration reports whether the sweep producer proved its bracket
-// right endpoint is the exact final fraction of the requested duration.
-func (r *SweepReport) BracketEndsAtDuration() bool {
-	return r != nil && r.Bracket != nil && r.bracketRight != nil &&
-		r.bracketRight.Cmp(big.NewRat(1, 1)) == 0
 }
 
 type affinePairPath = sweeppath.AffinePath
@@ -442,11 +363,11 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 	if a == b {
 		return nil, fmt.Errorf("%w: a pair must name distinct bodies", ErrDegenerate)
 	}
-	pa, err := sweeppath.Validate(encodedPairPath(pathA))
+	pa, err := sweeppath.Validate(pathA)
 	if err != nil {
 		return nil, err
 	}
-	pb, err := sweeppath.Validate(encodedPairPath(pathB))
+	pb, err := sweeppath.Validate(pathB)
 	if err != nil {
 		return nil, err
 	}
@@ -516,8 +437,8 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 			sphereB, sphereOKB := contactround.SphereAtPose(bodyNode(b), pb.From)
 			if sphereOKA && sphereOKB {
 				pair := [2]contactround.SphereProof{sphereA, sphereB}
-				report.replay = &sweepReplayProof{pa: pa, pb: pb, spherePair: &pair,
-					request: request.ContactRequest}
+				report.SetReplay(seal.Key{}, &sweepReplayProof{pa: pa, pb: pb, spherePair: &pair,
+					request: request.ContactRequest})
 				return (&sourceSpherePairSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
 					req: request, report: report, sphereA: sphereA, sphereB: sphereB}).execute(ctx, resolution)
 			}
@@ -565,14 +486,26 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 			To: sweepInstant(big.NewRat(1, 1), pa.Duration)}
 		return report, nil
 	}
-	report.replay = &sweepReplayProof{pa: pa, pb: pb, boxA: boxA, boxB: boxB,
-		request: request.ContactRequest}
+	report.SetReplay(seal.Key{}, &sweepReplayProof{pa: pa, pb: pb, boxA: boxA, boxB: boxB,
+		request: request.ContactRequest})
 	run := pairSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb, req: request, report: report,
 		boxA: boxA, boxB: boxB}
 	result, err := run.execute(ctx, resolution)
 	if err != nil || result == nil {
 		return result, err
 	}
-	result.replay.snapshot(result)
+	result.Replay(seal.Key{}).snapshot(result)
 	return result, nil
+}
+
+// sampleWith records a sample's exact fraction of the duration.
+func sampleWith(s SweepSample, f *big.Rat) SweepSample {
+	s.SetExactFraction(seal.Key{}, f)
+	return s
+}
+
+// sampleWithPtr is sampleWith for a sample kept by pointer.
+func sampleWithPtr(s SweepSample, f *big.Rat) *SweepSample {
+	s.SetExactFraction(seal.Key{}, f)
+	return &s
 }

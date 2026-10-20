@@ -4,6 +4,8 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/seal"
+
 	"github.com/lestrrat-3d/decad/internal/contactruling"
 	"github.com/lestrrat-3d/decad/internal/planarpose"
 	"github.com/lestrrat-3d/decad/internal/planarsweep"
@@ -83,8 +85,8 @@ func (d *Document) sweepRollingPair(ctx context.Context, a, b *Body,
 		return result, true, err
 	}
 	if result.ContactTrack != nil {
-		result.replay = &sweepReplayProof{rotation: &[2]rotationalSweepPath{run.paths[0], run.paths[1]},
-			track: result.ContactTrack, request: req.ContactRequest, outcome: result.Outcome}
+		result.SetReplay(seal.Key{}, &sweepReplayProof{rotation: &[2]rotationalSweepPath{run.paths[0], run.paths[1]},
+			track: result.ContactTrack, request: req.ContactRequest, outcome: result.Outcome})
 	}
 	return result, true, nil
 }
@@ -159,8 +161,8 @@ func (r *rollingPairSweep) sample(ctx context.Context) (*SweepSample, error) {
 		event.Relation, event.Gap, event.Overlap = contact.Relation, contact.Gap, contact.Overlap
 		event.Manifold = contact.Manifold
 	}
-	sample := &SweepSample{At: at, PoseA: poses[0], PoseB: poses[1], FloatContact: contact,
-		Ideal: event, exactFraction: zero}
+	sample := sampleWithPtr(SweepSample{At: at, PoseA: poses[0], PoseB: poses[1], FloatContact: contact,
+		Ideal: event}, zero)
 	r.report.Samples = append(r.report.Samples, *sample)
 	r.report.PoseEvaluations++
 	return sample, nil

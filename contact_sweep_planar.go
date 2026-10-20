@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/seal"
+
 	"github.com/lestrrat-3d/decad/internal/planarfeaturemap"
 
 	"github.com/lestrrat-3d/decad/internal/measurement"
@@ -67,7 +69,7 @@ func (d *Document) sweepPlanarPair(ctx context.Context, a, b *Body,
 	if err != nil || result == nil {
 		return result, true, err
 	}
-	result.replay = run.planarReplayProof(result)
+	result.SetReplay(seal.Key{}, run.planarReplayProof(result))
 	return result, true, nil
 }
 
@@ -132,10 +134,12 @@ func (r *rotationalPairSweep) planarReplayProof(result *SweepReport) *sweepRepla
 		start = r.departure.Until
 	}
 	samples := append([]SweepSample(nil), result.Samples...)
-	sort.Slice(samples, func(i, j int) bool { return samples[i].exactFraction.Cmp(samples[j].exactFraction) < 0 })
+	sort.Slice(samples, func(i, j int) bool {
+		return samples[i].ExactFraction(seal.Key{}).Cmp(samples[j].ExactFraction(seal.Key{})) < 0
+	})
 	covered := new(big.Rat).Set(start)
 	for i := 0; i+1 < len(samples); i++ {
-		from, to := samples[i].exactFraction, samples[i+1].exactFraction
+		from, to := samples[i].ExactFraction(seal.Key{}), samples[i+1].ExactFraction(seal.Key{})
 		if from.Cmp(start) < 0 || to.Cmp(end) > 0 {
 			continue
 		}

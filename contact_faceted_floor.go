@@ -4,6 +4,8 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/seal"
+
 	"github.com/lestrrat-3d/decad/internal/contactbox"
 	"github.com/lestrrat-3d/decad/internal/contactfaceted"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -54,8 +56,8 @@ func (d *Document) sweepFacetedFloor(ctx context.Context, a, b *Body,
 	if facetedFirst {
 		boxA, boxB = patch, floor
 	}
-	report.replay = &sweepReplayProof{pa: pa, pb: pb, boxA: boxA, boxB: boxB,
-		request: req.ContactRequest}
+	report.SetReplay(seal.Key{}, &sweepReplayProof{pa: pa, pb: pb, boxA: boxA, boxB: boxB,
+		request: req.ContactRequest})
 	run := pairSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb, req: req,
 		report: report, boxA: boxA, boxB: boxB, facetedFloor: true}
 	resolution, _ := sweeppath.ExactBaseValue(req.TimeResolution)
@@ -66,7 +68,7 @@ func (d *Document) sweepFacetedFloor(ctx context.Context, a, b *Body,
 	if result.Outcome == SweepUndecided || result.Outcome == SweepInitiallyOverlapping ||
 		result.Outcome == SweepImpactBracket &&
 			(result.Event == nil || result.Event.Relation != ContactTouching) {
-		result.replay = nil
+		result.SetReplay(seal.Key{}, nil)
 		return result, nil
 	}
 	// An impact bracket may end only on exact touch. Generic source-box
@@ -79,16 +81,17 @@ func (d *Document) sweepFacetedFloor(ctx context.Context, a, b *Body,
 		startGap := proofarith.DySubScalar(patch.Lo[2], floor.Hi[2])
 		slope := proofarith.DySubScalar(facetedDelta[2], floorDelta[2])
 		endGap := new(big.Rat).Add(startGap.Rat(),
-			new(big.Rat).Mul(slope.Rat(), result.bracketRight))
+			new(big.Rat).Mul(slope.Rat(), result.BracketRight(seal.Key{})))
 		if endGap.Sign() != 0 {
 			result.Outcome, result.Cause = SweepUndecided, SweepContactUnsupported
 			result.Unresolved = result.Bracket
-			result.Bracket, result.Event, result.bracketRight = nil, nil, nil
-			result.replay = nil
+			result.Bracket, result.Event = nil, nil
+			result.SetBracketRight(seal.Key{}, nil)
+			result.SetReplay(seal.Key{}, nil)
 			return result, nil
 		}
 	}
-	result.replay.snapshot(result)
+	result.Replay(seal.Key{}).snapshot(result)
 	return result, nil
 }
 
@@ -163,18 +166,17 @@ func (d *Document) sweepBoundedFacetedFloorClear(ctx context.Context, a, b *Body
 		}
 		gap := held
 		at := sweepInstant(fraction, pa.Duration)
-		report.Samples = append(report.Samples, SweepSample{At: at, PoseA: poseA, PoseB: poseB,
-			FloatContact: contact, Ideal: SweepEvent{At: at, Relation: ContactSeparated, Gap: &gap},
-			exactFraction: fraction})
+		report.Samples = append(report.Samples, sampleWith(SweepSample{At: at, PoseA: poseA, PoseB: poseB,
+			FloatContact: contact, Ideal: SweepEvent{At: at, Relation: ContactSeparated, Gap: &gap}}, fraction))
 		report.PoseEvaluations++
 	}
 	report.Outcome, report.BoxExcluded = SweepClear, true
-	report.replay = &sweepReplayProof{pa: pa, pb: pb, request: req.ContactRequest,
-		boxA: floor, boxB: extent.Box, facetedClear: &extent, facetedFirst: facetedFirst}
+	report.SetReplay(seal.Key{}, &sweepReplayProof{pa: pa, pb: pb, request: req.ContactRequest,
+		boxA: floor, boxB: extent.Box, facetedClear: &extent, facetedFirst: facetedFirst})
 	if facetedFirst {
-		report.replay.boxA, report.replay.boxB = extent.Box, floor
+		report.Replay(seal.Key{}).boxA, report.Replay(seal.Key{}).boxB = extent.Box, floor
 	}
-	report.replay.snapshot(report)
+	report.Replay(seal.Key{}).snapshot(report)
 	return report, nil
 }
 
