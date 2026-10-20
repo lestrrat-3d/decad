@@ -22,14 +22,14 @@ func stackedScaleSource(ctx context.Context, b *Body, source stackedPrismPayload
 			return facetedPayload{}, fmt.Errorf("%w: a stack level carries displacement", ErrUnsupported)
 		}
 		for _, region := range slab.Regions {
-			if !scaleLineProfile(region) {
+			if !region.AllLines() {
 				return facetedPayload{}, fmt.Errorf("%w: a stack section is not line-only", ErrUnsupported)
 			}
 		}
 	}
 	for _, boundary := range source.Interfaces {
 		for _, exposed := range append(append([]profileRecord(nil), boundary.LowerExposed...), boundary.UpperExposed...) {
-			if !scaleLineProfile(exposed) {
+			if !exposed.AllLines() {
 				return facetedPayload{}, fmt.Errorf("%w: a stack interface is not line-only", ErrUnsupported)
 			}
 		}
@@ -51,7 +51,7 @@ func brepScaleSource(ctx context.Context, b *Body, source brepPayload) (facetedP
 			return facetedPayload{}, fmt.Errorf("%w: a BRep stack level carries displacement", ErrUnsupported)
 		}
 		for _, region := range slab.Regions {
-			if !scaleLineProfile(region) {
+			if !region.AllLines() {
 				return facetedPayload{}, fmt.Errorf("%w: a BRep stack section is not line-only", ErrUnsupported)
 			}
 		}
@@ -61,7 +61,7 @@ func brepScaleSource(ctx context.Context, b *Body, source brepPayload) (facetedP
 			return facetedPayload{}, fmt.Errorf("%w: a BRep face has no exact line-section proof", ErrUnsupported)
 		}
 		if face.Planar() {
-			if !scaleLineProfile(*face.Region) {
+			if !face.Region.AllLines() {
 				return facetedPayload{}, fmt.Errorf("%w: a BRep face is not line-only", ErrUnsupported)
 			}
 		} else if _, ok := face.Wall.(lineSeg); !ok {
@@ -74,20 +74,6 @@ func brepScaleSource(ctx context.Context, b *Body, source brepPayload) (facetedP
 		}
 	}
 	return certifiedLineStackScaleSource(ctx, b)
-}
-
-func scaleLineProfile(profile profileRecord) bool {
-	for _, loop := range append([]loopRecord{profile.Outer}, profile.Holes...) {
-		if len(loop.Segments) == 0 {
-			return false
-		}
-		for _, segment := range loop.Segments {
-			if _, ok := segment.(lineSeg); !ok {
-				return false
-			}
-		}
-	}
-	return true
 }
 
 func certifiedLineStackScaleSource(ctx context.Context, b *Body) (facetedPayload, error) {

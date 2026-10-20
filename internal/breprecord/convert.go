@@ -348,3 +348,16 @@ func ThroughCapsCount(bp Payload, embeds []brepgeom.Embed, k int) int {
 	}
 	return n
 }
+
+// P8QuarterRadius reports whether radius is one of the values below.
+// These quarter-millimeter radii are represented exactly in binary. The
+// quarter-cylinder cutter and its P8 clearance were checked at each value;
+// a wider radius interval needs its own contact and Verify bound.
+func P8QuarterRadius(radius float64) bool {
+	switch radius {
+	case 0.25, 0.5, 0.75, 1:
+		return true
+	default:
+		return false
+	}
+}

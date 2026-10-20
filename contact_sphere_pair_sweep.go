@@ -108,11 +108,11 @@ func (r *sourceSpherePairSweepRun) sample(ctx context.Context, f *big.Rat) (*Swe
 	if r.report.PoseEvaluations >= r.req.MaxPoseEvaluations {
 		return nil, errSweepPoseBudget
 	}
-	poseA, err := sourceSpherePathPoseAt(r.pa, f)
+	poseA, err := r.pa.SpherePoseAt(f)
 	if err != nil {
 		return nil, err
 	}
-	poseB, err := sourceSpherePathPoseAt(r.pb, f)
+	poseB, err := r.pb.SpherePoseAt(f)
 	if err != nil {
 		return nil, err
 	}

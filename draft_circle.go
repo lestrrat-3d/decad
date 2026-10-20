@@ -3,13 +3,11 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
 
 	"github.com/lestrrat-3d/decad/internal/draftrecord"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
-	"github.com/lestrrat-3d/r3"
 )
 
 // tryDraftCircleRimChamfer bevels the far rim of one inward-tapered circular
@@ -22,7 +20,7 @@ func tryDraftCircleRimChamfer(ctx context.Context, b *Body, edges []*Edge, setba
 		return nil, false, nil
 	}
 	circle, ok := dp.Profile.Outer.Segments[0].(circleSeg)
-	if !ok || !circle.CCW || len(dp.Far.Outer.Segments) != 1 || !exactSignedAxisFrame(dp.Frame) {
+	if !ok || !circle.CCW || len(dp.Far.Outer.Segments) != 1 || !draftrecord.ExactSignedAxisFrame(dp.Frame) {
 		return nil, false, nil
 	}
 	if _, ok := dp.Far.Outer.Segments[0].(circleSeg); !ok {
@@ -76,7 +74,7 @@ func tryDraftCircleRimFillet(ctx context.Context, b *Body, edges []*Edge, radius
 		return nil, false, nil
 	}
 	circle, ok := dp.Profile.Outer.Segments[0].(circleSeg)
-	if !ok || !circle.CCW || len(dp.Far.Outer.Segments) != 1 || !exactSignedAxisFrame(dp.Frame) {
+	if !ok || !circle.CCW || len(dp.Far.Outer.Segments) != 1 || !draftrecord.ExactSignedAxisFrame(dp.Frame) {
 		return nil, false, nil
 	}
 	if _, ok := dp.Far.Outer.Segments[0].(circleSeg); !ok {
@@ -118,16 +116,6 @@ func tryDraftCircleRimFillet(ctx context.Context, b *Body, edges []*Edge, radius
 	return out, true, err
 }
 
-func exactSignedAxisFrame(frame r3.Frame) bool {
-	u, v := frame.U(), frame.V()
-	axis := func(a r3.Vec) bool {
-		return (math.Abs(a.X) == 1 && a.Y == 0 && a.Z == 0) ||
-			(math.Abs(a.Y) == 1 && a.X == 0 && a.Z == 0) ||
-			(math.Abs(a.Z) == 1 && a.X == 0 && a.Y == 0)
-	}
-	return axis(u) && axis(v) && u.Dot(v) == 0
-}
-
 // tryDraftCircleShell shells the far cap of one positive-taper, full-circle
 // draft. Its authenticated radius is affine in axial distance. A normal
 // inward offset moves its conical wall radially by t/cos(alpha), while the
@@ -139,7 +127,7 @@ func tryDraftCircleShell(ctx context.Context, b *Body, removed []*Face, sense Sh
 	dp, ok := b.n.Payload.(draftPayload)
 	if !ok || sense != Inward || !dp.NearStart || dp.Taper <= 0 || len(dp.Kept) != 0 ||
 		len(dp.Profile.Holes) != 0 || len(dp.Profile.Outer.Segments) != 1 ||
-		len(dp.Far.Outer.Segments) != 1 || !exactSignedAxisFrame(dp.Frame) {
+		len(dp.Far.Outer.Segments) != 1 || !draftrecord.ExactSignedAxisFrame(dp.Frame) {
 		return nil, false, nil
 	}
 	nearCircle, ok := dp.Profile.Outer.Segments[0].(circleSeg)

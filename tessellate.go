@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/alledgechamfermesh"
 	"github.com/lestrrat-3d/decad/internal/brepbandmesh"
@@ -17,7 +16,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/patchchain"
 	"github.com/lestrrat-3d/decad/internal/patchmesh"
 	"github.com/lestrrat-3d/decad/internal/prismtess"
-	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/revolvetess"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -465,7 +463,7 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		}
 		if sp.Arc {
 			node, err := revolvetess.TessellateRevolveWithRoles(
-				ctx, &b.n, sp.Revolve, chord, revolvetess.Level(verify), sweepArcRole(sp.ReverseArcCaps))
+				ctx, &b.n, sp.Revolve, chord, revolvetess.Level(verify), revolvetess.ArcRole(sp.ReverseArcCaps))
 			if err != nil {
 				return nil, err
 			}
@@ -490,25 +488,6 @@ func prismWallRole(loop, seg int) string { return fmt.Sprintf("side(%d,%d)", loo
 // reduction rewrote every side(i,j) to carry the path-span index ahead of
 // them (internal/sweeprecord's prefixSpanZeroRole): side(0,i,j).
 func sweepWallRole(loop, seg int) string { return fmt.Sprintf("side(0,%d,%d)", loop, seg) }
-
-// sweepArcRole maps the revolve reduction's source roles to those minted by
-// sweeprecord.FinishArc. A reversed axis exchanges only the two cap names.
-func sweepArcRole(reverseCaps bool) func(string) string {
-	return func(role string) string {
-		if suffix, ok := strings.CutPrefix(role, "side("); ok {
-			return "side(0," + suffix
-		}
-		if reverseCaps {
-			switch role {
-			case provenance.RoleCapStart:
-				return provenance.RoleCapEnd
-			case provenance.RoleCapEnd:
-				return provenance.RoleCapStart
-			}
-		}
-		return role
-	}
-}
 
 // tessellatePrismWithCountFloor births the prism mesher's node in its root
 // handle, so the one-entry tessellation cache can return that same handle.

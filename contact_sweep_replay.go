@@ -169,7 +169,7 @@ func (r *SweepReport) replayPosesAtFraction(f *big.Rat) (r3.Transform, r3.Transf
 	poseAt := func(path affinePairPath) (r3.Transform, error) { return path.PoseAt(f) }
 	if r.replay.sphere != nil || r.replay.spherePair != nil {
 		poseAt = func(path affinePairPath) (r3.Transform, error) {
-			return sourceSpherePathPoseAt(path, f)
+			return path.SpherePoseAt(f)
 		}
 	}
 	poseA, err := poseAt(r.replay.pa)

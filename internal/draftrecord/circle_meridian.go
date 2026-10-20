@@ -277,3 +277,15 @@ func CircleShellMeridian(dp Payload, nearCircle, farCircle sectionrecord.CircleS
 	}
 	return CircleMeridian{Profile: profile, Frame: frame, SectionDelta: sectionDelta}, nil
 }
+
+// ExactSignedAxisFrame reports whether both frame axes are exactly a signed
+// coordinate axis and are perpendicular.
+func ExactSignedAxisFrame(frame r3.Frame) bool {
+	u, v := frame.U(), frame.V()
+	axis := func(a r3.Vec) bool {
+		return (math.Abs(a.X) == 1 && a.Y == 0 && a.Z == 0) ||
+			(math.Abs(a.Y) == 1 && a.X == 0 && a.Z == 0) ||
+			(math.Abs(a.Z) == 1 && a.X == 0 && a.Y == 0)
+	}
+	return axis(u) && axis(v) && u.Dot(v) == 0
+}

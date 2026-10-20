@@ -140,3 +140,24 @@ func (p AffinePath) RoundedPoseAt(f *big.Rat) (r3.Transform, error) {
 	}
 	return pose.Then(shift)
 }
+
+// SpherePoseAt is the pose a sphere carried by this path holds at fraction f.
+// A drifting path rounds the pose through the rounded path and moves only the
+// centre along the exact delta, so the rotation stays the rounded one.
+func (path AffinePath) SpherePoseAt(f *big.Rat) (r3.Transform, error) {
+	if path.Drift != nil {
+		pose, err := path.RoundedPoseAt(f)
+		if err != nil {
+			return r3.Transform{}, err
+		}
+		if f.Sign() == 0 {
+			return pose, nil
+		}
+		start := path.From.Translation()
+		center := r3.Vec{X: start.X + RatFloatNearest(new(big.Rat).Mul(path.Delta[0].Rat(), f)),
+			Y: start.Y + RatFloatNearest(new(big.Rat).Mul(path.Delta[1].Rat(), f)),
+			Z: start.Z + RatFloatNearest(new(big.Rat).Mul(path.Delta[2].Rat(), f))}
+		return r3.FromBasis(pose.Basis(), center)
+	}
+	return path.PoseAt(f)
+}
