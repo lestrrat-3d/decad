@@ -43,4 +43,4 @@ The rules for rows live in `docs/layout.md`.
 
 | Path | Responsibility |
 |---|---|
-| `capblend.go` | Complete-cap-loop chamfer: selection classification, build gates and the hand-off to `internal/capblend/`. See modify-reach §8.3/§4. |
+| `capblend.go` | Complete-cap-loop chamfer: selection classification and the hand-off to `internal/capblend/`, which owns the build gates. See modify-reach §8.3/§4. |
