@@ -238,28 +238,11 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 	return publishReport(req, report.Bodies, report.Interferences, report.Clearances, report.Diagnostics, report.Status), nil
 }
 
-func pairGapMeasurement(res pairkernel.Result) Measurement {
-	midpoint := proofbound.BoundedMul(proofbound.BoundedAdd(proofbound.ExactScalar(res.Lo), proofbound.ExactScalar(res.Hi)), proofbound.ExactScalar(0.5))
-	halfWidth := proofbound.BoundedMul(proofbound.BoundedSub(proofbound.ExactScalar(res.Hi), proofbound.ExactScalar(res.Lo)), proofbound.ExactScalar(0.5))
-	// The midpoint error and the half-width's own error both widen the
-	// published interval. The same bound feeds appendClearance's tolerance gate.
-	bound := proofbound.AbsSumUpper(halfWidth.Value, halfWidth.Bound, midpoint.Bound)
-	gap := Measurement{
-		Value:     units.Millimeters(midpoint.Value),
-		Exactness: Approximate,
-		Bound:     units.Millimeters(bound),
-	}
-	if res.Exact && bound == 0 {
-		gap.Exactness = Exact
-	}
-	return gap
-}
-
 // appendClearance records the proven-disjoint pair's Clearance row and returns
 // a DiagMeasurementBeyondTolerance (Reading ReadingGap) when the gap's Bound
 // exceeds the pair-relative tolerance, else nil (verification §1.1/§6).
 func appendClearance(report *Report, a, b *Body, res pairkernel.Result, rel float64) *Diagnostic {
-	gap := pairGapMeasurement(res)
+	gap := measurementFromInternal(pairkernel.GapMeasurement(res))
 	report.Clearances = append(report.Clearances, Clearance{A: a, B: b, Gap: gap})
 	pairGate := pairToleranceInputs{diameter: res.Diam}
 	pass, ref, haveRef := tolerance.Scalar(gap.Value, gap.Bound, rel, pairGate.lengthReference)
