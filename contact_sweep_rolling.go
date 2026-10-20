@@ -4,10 +4,9 @@ import (
 	"context"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/contactround"
+	"github.com/lestrrat-3d/decad/internal/contactruling"
 	"github.com/lestrrat-3d/decad/internal/planarpose"
 	"github.com/lestrrat-3d/decad/internal/planarsweep"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/r3"
@@ -23,13 +22,13 @@ import (
 // SweepContactTrack.
 
 // rollingPairSweep continues a source cylinder's ruling touch, or its placed
-// band (classifyPlacedRuling), on an exact planar body. paths are in sweep
+// band (contactruling.ClassifyPlacedRuling), on an exact planar body. paths are in sweep
 // order.
 type rollingPairSweep struct {
 	doc        *Document
 	paths      [2]rotationalSweepPath
 	m, s       int
-	cylinder   placedCylinder // M staged through its start pose
+	cylinder   contactruling.PlacedCylinder // M staged through its start pose
 	req        reportvocab.SweepRequest
 	report     *SweepReport
 	resolution *big.Rat
@@ -49,10 +48,10 @@ func (d *Document) sweepRollingPair(ctx context.Context, a, b *Body,
 	pa, pb affinePairPath, req reportvocab.SweepRequest, resolution *big.Rat,
 	report *SweepReport) (*SweepReport, bool, error) {
 	m, bodyM, bodyS, pathM, pathS := 0, a, b, pa, pb
-	start, ok := placedCylinderAt(a, pa.From)
+	start, ok := contactruling.PlacedCylinderAt(bodyNode(a), pa.From)
 	if !ok {
 		m, bodyM, bodyS, pathM, pathS = 1, b, a, pb, pa
-		if start, ok = placedCylinderAt(b, pb.From); !ok {
+		if start, ok = contactruling.PlacedCylinderAt(bodyNode(b), pb.From); !ok {
 			return nil, false, nil
 		}
 	}
@@ -91,18 +90,6 @@ func (d *Document) sweepRollingPair(ctx context.Context, a, b *Body,
 	return result, true, nil
 }
 
-// rollingEnds are the centers of a source cylinder's two end disks.
-func rollingEnds(c contactround.CylinderProof) [2]proofarith.DyV3 {
-	half := proofarith.MustDyOf(.5)
-	var center proofarith.DyV3
-	for k := range 3 {
-		center[k] = proofarith.DyMul(proofarith.DyAdd(c.Box.Lo[k], c.Box.Hi[k]), half)
-	}
-	ends := [2]proofarith.DyV3{center, center}
-	ends[0][c.Axis], ends[1][c.Axis] = c.Box.Lo[c.Axis], c.Box.Hi[c.Axis]
-	return ends
-}
-
 func (r *rollingPairSweep) execute(ctx context.Context) (*SweepReport, error) {
 	zero, one := new(big.Rat), big.NewRat(1, 1)
 	first, err := r.sample(ctx)
@@ -116,7 +103,7 @@ func (r *rollingPairSweep) execute(ctx context.Context) (*SweepReport, error) {
 		return r.report, nil
 	case ContactTouching, ContactBand:
 		// A ContactBand start is a placed cylinder whose pose basis rounds
-		// its section (classifyPlacedRuling); the track charges that band.
+		// its section (contactruling.ClassifyPlacedRuling); the track charges that band.
 		r.report.InitialEvent = &first.Ideal
 		switch r.req.StartPolicy {
 		case reportvocab.StopAtInitialContact:
@@ -202,7 +189,7 @@ func (r *rollingPairSweep) track(ctx context.Context, first *SweepSample) (*Swee
 		return nil, false, nil
 	}
 	featureS := ContactFeature{Face: faces[band.Support.Face.ID]}
-	featureM := ContactFeature{Face: r.cylinder.wall}
+	featureM := ContactFeature{Face: faceHandle(r.cylinder.Wall)}
 	if first.Ideal.Manifold != nil {
 		for _, point := range first.Ideal.Manifold.Points {
 			onM, onS := point.FeatureB, point.FeatureA
@@ -214,14 +201,14 @@ func (r *rollingPairSweep) track(ctx context.Context, first *SweepSample) (*Swee
 			}
 		}
 	}
-	proof, ok := band.Track(r.cylinder.source, contactFeatureToInternal(featureM), contactFeatureToInternal(featureS),
+	proof, ok := band.Track(r.cylinder.Source, contactFeatureToInternal(featureM), contactFeatureToInternal(featureS),
 		r.req.NormalResolution)
 	if !ok {
 		return nil, false, nil
 	}
 	track := &SweepContactTrack{start: new(big.Rat), end: new(big.Rat).Set(band.End),
 		duration: r.paths[r.m].Path.Duration, request: r.req.ContactRequest,
-		normal: vecMeasurementFromInternal(proof.Direction), rolling: proof, pointCount: len(r.cylinder.source)}
+		normal: vecMeasurementFromInternal(proof.Direction), rolling: proof, pointCount: len(r.cylinder.Source)}
 	track.features[r.m], track.features[r.s] = proof.FeatureM, proof.FeatureS
 	// A track whose start manifold is refused is not published; the refusal
 	// is the answer.

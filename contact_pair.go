@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/clearance/pairkernel"
 	"github.com/lestrrat-3d/decad/internal/contactbox"
 	"github.com/lestrrat-3d/decad/internal/contactround"
+	"github.com/lestrrat-3d/decad/internal/contactruling"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/planarband"
 	"github.com/lestrrat-3d/decad/internal/planarpose"
@@ -401,7 +402,7 @@ func classifyContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.Transf
 		}
 		identity := poseA == r3.Identity() && poseB == r3.Identity()
 		if !planar && !identity {
-			placed, err := classifyPlacedRuling(ctx, report)
+			placed, err := contactruling.ClassifyPlacedRuling(ctx, verifyAllMesher{}, report)
 			if err != nil {
 				return nil, err
 			}
@@ -478,7 +479,7 @@ func classifyPlanarManifold(ctx context.Context, report *reportvocab.ContactRepo
 
 // classifyUndecidedCylinder completes a source cylinder report the box
 // proofs left undecided: at identity query poses the analytic kernel's
-// verdict, elsewhere the placed ruling of classifyPlacedRuling.
+// verdict, elsewhere the placed ruling of contactruling.ClassifyPlacedRuling.
 func classifyUndecidedCylinder(ctx context.Context, report *reportvocab.ContactReport) error {
 	if report.Relation != reportvocab.ContactUndecided {
 		return nil
@@ -487,7 +488,7 @@ func classifyUndecidedCylinder(ctx context.Context, report *reportvocab.ContactR
 		report.Reason = reportvocab.ContactNoReason
 		return classifyAnalyticContact(ctx, report)
 	}
-	_, err := classifyPlacedRuling(ctx, report)
+	_, err := contactruling.ClassifyPlacedRuling(ctx, verifyAllMesher{}, report)
 	return err
 }
 
@@ -536,7 +537,7 @@ func classifyAnalyticContact(ctx context.Context, report *reportvocab.ContactRep
 		report.Gap = &gap
 		report.Reason = reportvocab.ContactNoNormalProof
 		if res.Ruling != nil {
-			publishRulingManifold(report, res.Ruling)
+			contactruling.PublishRulingManifold(report, res.Ruling)
 		}
 	case reportvocab.PairOverlapping:
 		report.Relation = reportvocab.ContactOverlapping

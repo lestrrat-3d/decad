@@ -2821,7 +2821,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 
 - Delivers plane/cylinder ruling and cylinder/cylinder manifolds from clearance's certified feet with
   `Face.NormalAt` balls.
-- Files: new `contact_analytic_manifold.go`; `internal/clearance/pairkernel/cells.go`.
+- Files: new `internal/contactruling/ruling.go`; `internal/clearance/pairkernel/cells.go`.
 - Test (`apitest`): `apitest/contact_analytic_manifold_test.go`: a cylinder on its side against a floor publishes
   the ruling's two endpoints with the computed normal ball.
 - Depends on: nothing.
@@ -2833,7 +2833,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 ### PR 20 (Phase 3) — rolling band tracks
 
 - Delivers §10.4's rolling track.
-- Files: `contact_sweep_planar.go`, new `contact_sweep_rolling.go`, `contact_analytic_manifold.go`,
+- Files: `contact_sweep_planar.go`, new `contact_sweep_rolling.go`, `internal/contactruling/ruling.go`,
   `contact_pair.go`.
 - Test: `dynamics/rolling_test.go`: the cylinder rolls `π·20 mm` in one turn at `ω = 2π rad/s` with
   contact-point speed within `VelocityResidual` of zero.
@@ -2842,7 +2842,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   `internal/planarsweep/rolling.go`; `contact_sweep_rolling.go` runs the sweep and publishes the track,
   dispatched from `contact_sweep_planar.go` and read through `contact_sweep.go` and
   `contact_sweep_replay.go`; the placed-pose ruling that lets a turned cylinder start a track lives in
-  `contact_analytic_manifold.go`, dispatched from `contact_pair.go`. Root tests:
+  `internal/contactruling/ruling.go`, dispatched from `contact_pair.go`. Root tests:
   `apitest/contact_sweep_rolling_test.go` rolls a `Ø20` cylinder `π·20 mm` in one turn at `2π rad/s` as an
   exact touch track whose contact point is at rest within its published ball, publishes the computed
   depths of sinking, orbiting and tilting drifts, and starts tracks from translated, long-rolled and
@@ -2972,10 +2972,10 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 
 - Delivers §10.6 for the placed ruling and the rolling track: `placedruling.Support` admits a face-local plane
   under the column test at `f = 0` over the cylinder's staged corner box and records `m`;
-  `classifyPlacedRuling` publishes a separated gap with lower end `min(σ_lo, m)` and a touch or band only
+  `contactruling.ClassifyPlacedRuling` publishes a separated gap with lower end `min(σ_lo, m)` and a touch or band only
   when `m` exceeds its half-width; the rolling track's band search runs the column test over the corners'
   path box less `S`'s translation.
-- Files: `contact_analytic_manifold.go`, `contact_sweep_rolling.go`.
+- Files: `internal/contactruling/ruling.go`, `contact_sweep_rolling.go`.
 - Test (`apitest`): `apitest/contact_analytic_manifold_test.go` gains, over the §2 tray: the `Ø20 × 30 mm` cylinder on
   its side on the floor at a signed-axis pose, `Touching` with the ruling's two ends and `Normal`
   `(0, 0, 1)`; turned `2⁻²⁰ rad` about `Z`, the band the plain-floor fixture publishes; `1 mm` above the

@@ -22,7 +22,6 @@ The rules for rows live in `docs/layout.md`.
 | `contact_faceted_floor.go` | Exact faceted support-face proof, bounded strict separation, and faceted floor sweeps by exact support face or swept-box clearance. See contact-geometry §4 and contact-sweep. |
 | `contact_sphere_sweep.go` | Sphere-box sweeps over `internal/contactround/` proofs. See contact-sweep §4–§5. |
 | `contact_cylinder_sweep.go` | Cylinder sweep adapters over `internal/contactround/` proofs and `internal/pair/box/`. See contact-sweep §4–§5. |
-| `contact_analytic_manifold.go` | Ruling contact adapters. See contact-geometry §4.5. |
 | `contact_sphere_pair_sweep.go` | Sphere-pair sweep. See contact-sweep §4–§5. |
 | `contact_sweep_replay.go` | Replay adapters. See contact-sweep §6. |
 | `point_containment.go` | Public point location and body/face distance through verified meshes. See point-containment design. |
