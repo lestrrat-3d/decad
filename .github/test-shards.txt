@@ -201,7 +201,6 @@
 10	0.00	TestLoftFacesTangentHeelRefusesOtherCone
 10	0.00	TestLoftFacesTangentHeelRefusesMissingToolFace
 10	0.00	TestSpiralTangentRecordCurrent
-10	0.00	TestLoftCapTangentToHeelCone
 10	0.00	TestTangentCapExtensionOnRealChain
 10	0.00	TestTopologyHandlesAreBorn
 10	0.00	TestTopoDocumentWriteGuard

@@ -23,48 +23,6 @@ import (
 // dyadic coordinates, so a verdict it returns is a certificate, never a
 // float estimate, and the one rounding — a positive gap's square root — is
 // enclosed outward.
-
-// planarPairAdmits reports whether the exact planar arm serves this pair.
-// It exists for the payload classes the analytic kernel has no carrier model
-// for — a mitred sweep (docs/sweep-design.md Table DM row DM5), a faceted
-// Boolean result (docs/payload-verification-design.md §7) and a coil
-// (docs/helix-design.md Table CD row CD5) — each read off its own held
-// triangle set with that set's displacement, and it admits a prism or a
-// stitched solid only as their partner, read exactly off its own record
-// (contact_faceted_pair.go's planarPrismSolid and planarStitchSolid). A coil
-// is served only against a prism or a stitched solid: a coil against a
-// mitred sweep, a faceted result or another coil stays undecided. A pair of
-// prisms or stitched solids keeps the analytic kernel's answer, and every
-// other payload keeps its own design's staging: a cup is never tessellated
-// for verification (payload verification §1), and a loft, a composite sweep
-// and a cap-loop chamfer stay undecided until their own adapters land.
-func planarPairAdmits(a, b *Body) bool {
-	served, coils := false, 0
-	for _, body := range []*Body{a, b} {
-		switch body.n.Payload.(type) {
-		case mitredSweepPayload, facetedPayload:
-			served = true
-		case coilPayload:
-			served = true
-			coils++
-		case prismPayload, stitchPayload:
-		default:
-			return false
-		}
-	}
-	if coils == 0 {
-		return served
-	}
-	for _, body := range []*Body{a, b} {
-		switch body.n.Payload.(type) {
-		case coilPayload, prismPayload, stitchPayload:
-		default:
-			return false
-		}
-	}
-	return coils == 1
-}
-
 // planarPairVerdict decides an admitted pair (planarPairAdmits) through the
 // exact planar relation and §10.4's displacement band. ok is false when the
 // pair is not served, or when either body is refused a planar snapshot at
@@ -92,7 +50,7 @@ func planarPairAdmits(a, b *Body) bool {
 // loosens the analytic kernel's: the caller consults this arm only for a
 // reportvocab.PairUndecided result.
 func planarPairVerdict(ctx context.Context, a, b *Body) (pairkernel.Result, bool, error) {
-	if !planarPairAdmits(a, b) {
+	if !pairkernel.PlanarPairAdmits(bodyNode(a), bodyNode(b)) {
 		return pairkernel.Result{}, false, nil
 	}
 	budget := proofbound.NewWorkBudget(ctx)

@@ -157,7 +157,7 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 	}
 	var plane *loftface.TangentPlane
 	if !facetedrecord.CapOutsideHeelCone(p.LoftFacesToe.Cap.Final, box, cone) {
-		tangent, err := loftCapTangentToHeelCone(p.LoftFacesToe.Cap, box, cone)
+		tangent, err := facetedrecord.CapTangentToHeelCone(p.LoftFacesToe.Cap, box, cone)
 		if err != nil {
 			return nil, true, asBooleanError(op, err)
 		}
@@ -262,52 +262,6 @@ func tryLoftFacesConeHeel(ctx context.Context, op meshbool.OperationKind, d *Doc
 func orderedLoftFacesConeLimits(toe, heel *pointConeLimit, base facetedPayload) bool {
 	return pointcone.ToeHeelOrdered(toe.Apex, toe.Slope, heel.Apex, heel.Slope,
 		base.Verts, base.MeshBound)
-}
-
-// loftCapTangentToHeelCone admits the cap of a cone-tangent LoftFaces end
-// that touches the heel cone along one ruling. It returns the cap's exact
-// plane, with the loft side, when all of these hold, and nil when the record
-// is not a cone-tangent end for this cone:
-//
-//   - the record's tangent end was built for this cone's exact apex and slope
-//     and reproduces the recorded final map;
-//   - the final cap's pullback to the cone is exactly C*v^2 with C > 0 over a
-//     source rectangle strictly on one side of u = 0
-//     (loftface.ConeTangentAlongRuling);
-//   - the cone lies on the loft side of the cap plane (G1,
-//     loftface.ConeOnLoftSide);
-//   - every earlier cap lies strictly on that side (G2, loftface.CapsOnSide).
-//
-// An error wrapping ErrUnsupported means the record is a tangent end for
-// this cone but the loft and the cone are not provably on one side of the
-// cap plane. The caller refuses; it never falls back to a skipped pair.
-// See docs/loft-face-sections-design.md, "Two-cone continuation".
-func loftCapTangentToHeelCone(record *loftFacesCapRecord, box [4]*big.Rat,
-	cone *pointConeLimit) (*loftface.TangentPlane, error) {
-	rec := record.Tangent
-	if rec == nil || !rec.MatchesCone(cone.Apex, cone.Slope) ||
-		!loftface.MapEqual(rec.Map(), record.Final) ||
-		!loftface.ConeTangentAlongRuling(record.Final, box, cone.Apex, cone.Slope) {
-		return nil, nil //nolint:nilnil // nil plane with nil error means the record is not a tangent end for this cone.
-	}
-	if len(record.Maps) < 2 {
-		return nil, nil //nolint:nilnil // same: not a tangent end for this cone.
-	}
-	side, ok := loftface.ConeOnLoftSide(record.Final, record.Maps[len(record.Maps)-2], box,
-		cone.Apex, cone.Slope, cone.Far)
-	if !ok {
-		return nil, fmt.Errorf("%w: the heel cone is not provably on the loft side of the tangent cap plane",
-			ErrUnsupported)
-	}
-	if !loftface.CapsOnSide(record.Final, record.Maps[:len(record.Maps)-1], box, side) {
-		return nil, fmt.Errorf("%w: an earlier cap is not provably on the loft side of the tangent cap plane",
-			ErrUnsupported)
-	}
-	plane, ok := loftface.NewTangentPlane(record.Final, side)
-	if !ok {
-		return nil, fmt.Errorf("%w: the tangent cap has no exact plane", ErrUnsupported)
-	}
-	return &plane, nil
 }
 
 // tangentCapExtensionLength is the length in millimetres of the prism that

@@ -706,7 +706,7 @@ func TestLoftFacesTangentHeelRefusesOtherCone(t *testing.T) {
 	box, err := revolveloftfaces.LfSourceBox(c.loftRecord.Source)
 	require.NoError(t, err)
 	require.False(t, facetedrecord.CapOutsideHeelCone(c.loftRecord.Final, box, limit))
-	plane, err := loftCapTangentToHeelCone(c.loftRecord, box, limit)
+	plane, err := facetedrecord.CapTangentToHeelCone(c.loftRecord, box, limit)
 	require.NoError(t, err)
 	require.Nil(t, plane, "the record gate fails")
 
