@@ -5,12 +5,10 @@ import (
 	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/capblendsurvey"
-	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/radiussurvey"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
-	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
@@ -40,11 +38,15 @@ func brepUndercuts(budget *proofbound.WorkBudget, b *Body, bp brepPayload, pull 
 		return undercutOutcome{}
 	}
 	roles := facesByRole(b)
-	faces := []*Face{}
+	nodeRoles := make(map[string]*topo.Face, len(roles))
+	for role, face := range roles {
+		nodeRoles[role] = faceNode(face)
+	}
+	faces := []*topo.Face{}
 	undecided := false
 	work := freeform.NewFreeformWork()
 	for _, f := range bp.Faces {
-		face := roles[f.Role]
+		face := nodeRoles[f.Role]
 		if face == nil {
 			return undercutOutcome{}
 		}
@@ -52,41 +54,37 @@ func brepUndercuts(budget *proofbound.WorkBudget, b *Body, bp brepPayload, pull 
 			Frame: f.Frame, Transform: bp.Xform, Wall: f.Wall,
 			Planar: f.Planar(), Outward: f.Outward,
 		}, pull, work)
-		if !listVerdict(&faces, &undecided, face, verdict, ok) {
+		if !breprecord.ListVerdict(&faces, &undecided, face, verdict, ok) {
 			return undercutOutcome{}
 		}
 	}
 	// A route L body's band patches are no face of the record: each is read
 	// through its own built Face.NormalAt in its band's face frame, by the
 	// reader a cap-blend body's patches take (modify-general Table DG's DG7).
-	nodeRoles := make(map[string]*topo.Face, len(roles))
-	for role, face := range roles {
-		nodeRoles[role] = faceNode(face)
-	}
 	for bi, band := range bp.LoopBands {
 		if bi >= len(bp.LoopPatches) {
 			return undercutOutcome{}
 		}
 		if band.Kind == breprecord.BandFillet {
-			if !brepFilletUndercuts(budget, roles, bp, band, pull, &faces, &undecided, work) {
+			if !breprecord.FilletUndercuts(budget, nodeRoles, bp, band, pull, &faces, &undecided, work) {
 				return undercutOutcome{}
 			}
 			continue
 		}
 		pl := bp.Faces[band.Face].View(bp.Xform)
-		var patchFaces []*topo.Face
-		if !capblendsurvey.PatchUndercuts(nodeRoles, pl, bp.LoopPatches[bi], p, &patchFaces, &undecided) {
+		if !capblendsurvey.PatchUndercuts(nodeRoles, pl, bp.LoopPatches[bi], p, &faces, &undecided) {
 			return undercutOutcome{}
-		}
-		for _, face := range patchFaces {
-			faces = append(faces, faceHandle(face))
 		}
 	}
 	if undecided && len(faces) == 0 {
 		// Keep an entirely undecided result distinct from a proven all-clear.
-		faces = nil
+		return undercutOutcome{ok: true, undecided: undecided}
 	}
-	return undercutOutcome{faces: faces, ok: true, undecided: undecided}
+	handles := make([]*Face, len(faces))
+	for i, face := range faces {
+		handles[i] = faceHandle(face)
+	}
+	return undercutOutcome{faces: handles, ok: true, undecided: undecided}
 }
 
 // brepMinRadius is the tightest concave radius over a brep body's faces
@@ -171,75 +169,3 @@ func brepMinRadius(b *Body, bp brepPayload) (radiusOutcome, bool) {
 //
 // analyticundercut.Revolve reads through revolveangle.Extremes, a different
 // reader, and does not use this decision.
-
-// listVerdict folds one public face's verdict into the running faces list and
-// undecided flag used by the root BRep undercut readers. Analytic
-// undercut packages have their own node-typed fold. Here ok=false (a
-// non-finite input or a failed enclosure) propagates as a total refusal to
-// the caller, matching every other refusal path these surveys already take.
-func listVerdict(faces *[]*Face, undecided *bool, f *Face, verdict survey2d.PullVerdict, ok bool) bool {
-	if !ok {
-		return false
-	}
-	switch verdict {
-	case survey2d.PullOpposes:
-		*faces = append(*faces, f)
-	case survey2d.PullUndecided:
-		*undecided = true
-	}
-	return true
-}
-
-// brepFilletUndercuts folds DF7's reading of band's pipe patches into the
-// running faces list and undecided flag (loop-fillet Table DF's DF7). Patch
-// p of the band is read through the closed-form range of cos φ·A + sin φ·B(θ)
-// of its outward normal along the pull: A from F's frame normal, B from the
-// inward normal of F's region at the patch's walk (survey2d.InwardRange) or
-// through the turn of a reflex corner (survey2d.CornerRange), decided by the
-// three-valued rule every undercut reading uses. The patch tags are the built
-// surfaces (their stamped departure is zero), so no allowance beyond that
-// arithmetic arises. It reports false, a total refusal, when a patch's face is
-// missing or a range cannot be enclosed.
-func brepFilletUndercuts(budget *proofbound.WorkBudget, roles map[string]*Face, bp brepPayload, band brepLoopBand, pull r3.Vec,
-	faces *[]*Face, undecided *bool, work *freeform.FreeformWork) bool {
-	f := bp.Faces[band.Face]
-	view := f.View(bp.Xform)
-	m, ok := survey2d.NewPlacedFrameMap(view.Frame, view.Xform)
-	if !ok {
-		return false
-	}
-	fr, err := breprecord.FilletLoopOf(budget, band.Orig, band.Setback.Dc, f.Role, work)
-	if err != nil {
-		return false
-	}
-	sign := int64(-1)
-	if f.Outward {
-		sign = 1
-	}
-	sigma := int64(band.Sigma)
-	n := len(fr.Walks)
-	p := 0
-	patch := func(rng survey2d.PullBracket, ok bool) bool {
-		if !ok {
-			return false
-		}
-		face := roles[band.PatchRole(p)]
-		p++
-		if face == nil {
-			return false
-		}
-		verdict, ok := survey2d.PatchPullVerdict(m, pull, sign, rng)
-		return listVerdict(faces, undecided, face, verdict, ok)
-	}
-	for i, w := range fr.Walks {
-		if !patch(survey2d.InwardRange(w, m, pull, sigma)) {
-			return false
-		}
-		if ni := (i + 1) % n; !fr.Loop.WholeTurn() && fr.Loop.Corners[ni] == filletband.Reflex {
-			if !patch(survey2d.CornerRange(w, fr.Walks[ni], m, pull, sigma)) {
-				return false
-			}
-		}
-	}
-	return p == len(fr.Pieces)
-}

@@ -240,7 +240,6 @@ type allEdgeChamferPayload = breprecord.AllEdgeChamferPayload
 type (
 	brepPayload  = breprecord.Payload
 	brepFace     = breprecord.Face
-	brepLoopBand = breprecord.LoopBand
 	brepBandKind = breprecord.BandKind
 	brepTopology = breprecord.Topology
 )
