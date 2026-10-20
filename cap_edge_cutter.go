@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/capedge"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -58,7 +57,7 @@ func tryObliqueCapEdgeCut(ctx context.Context, body *Body, pp prismPayload, edge
 		return nil, false, nil
 	}
 	if len(pp.Profile.Holes) != 0 || len(pp.Profile.Outer.Segments) < 3 ||
-		pp.Z1-pp.Z0 <= 4*reach || !obliqueCapEdgeProfile(pp, edges[0], reach) {
+		pp.Z1-pp.Z0 <= 4*reach || !capedge.ObliqueProfile(pp, edgeNode(edges[0]), reach) {
 		return nil, false, nil
 	}
 	facing := edges[0].Faces()
@@ -110,28 +109,4 @@ func tryObliqueCapEdgeCut(ctx context.Context, body *Body, pp prismPayload, edge
 	}
 	d.commitSpan(out, 2, body)
 	return out, true, nil
-}
-
-// obliqueCapEdgeProfile adapts the selected topology edge to its recorded
-// section edge, then applies the cutter's convexity and clearance gates.
-func obliqueCapEdgeProfile(pp prismPayload, edge *Edge, radius float64) bool {
-	vertices, ok := capedge.ConvexVertices(pp.Profile)
-	if !ok {
-		return false
-	}
-	match := -1
-	for i, a := range vertices {
-		b := vertices[(i+1)%len(vertices)]
-		for _, level := range []float64{pp.Z0, pp.Z1} {
-			if !brepgeom.MatchEndpoints(edge.n.Start.Position, edge.n.End.Position,
-				pp.Point(a.U, a.V, level), pp.Point(b.U, b.V, level), 1e-6) {
-				continue
-			}
-			if match >= 0 {
-				return false
-			}
-			match = i
-		}
-	}
-	return capedge.Eligible(vertices, match, radius)
 }
