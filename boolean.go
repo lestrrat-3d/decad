@@ -241,15 +241,15 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 	} else if ok {
 		return bodyHandle(n), nil
 	}
-	if body, ok, err := tryRevolveLoftNextSectorUnion(ctx, op, d, ref, a, b); err != nil {
+	if n, ok, err := revolveshell.NextSectorUnion(ctx, op, envOf(documentNode(d), ref), bodyNode(a), bodyNode(b)); err != nil {
 		return nil, err
 	} else if ok {
-		return body, nil
+		return bodyHandle(n), nil
 	}
-	if body, ok, err := tryRevolveLoftSectorUnion(ctx, op, d, ref, a, b); err != nil {
+	if n, ok, err := revolveshell.SectorUnion(ctx, op, envOf(documentNode(d), ref), bodyNode(a), bodyNode(b)); err != nil {
 		return nil, err
 	} else if ok {
-		return body, nil
+		return bodyHandle(n), nil
 	}
 	if ok, err := tryRevolveLoftFacesUnion(ctx, op, a, b); err != nil {
 		return nil, err
