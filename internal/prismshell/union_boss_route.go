@@ -1,11 +1,16 @@
-package decad
+package prismshell
 
 import (
 	"context"
 
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
-	"github.com/lestrrat-3d/decad/internal/prismshell"
+	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -16,28 +21,30 @@ const prismUnionBossShellStations = 16
 // stored dyadic coefficients; its scale is bracketed before any offset is
 // mapped into the boss's local rectangle.
 type prismUnionBossShellSource struct {
-	plate, boss                                  prismPayload
-	plateRect, bossRect                          prismshell.BossRect
+	plate, boss                                  prismrecord.Payload
+	plateRect, bossRect                          BossRect
 	plateBottom, interfaceZ, bossBottom, bossTop float64
 	unitLo, unitHi                               float64
 	outer                                        [4]int
 	topGroup                                     int
 }
 
-func (b *Body) shellPrismUnionBoss(ctx context.Context, fp facetedPayload,
-	removed []*Face, sense ShellSense, t, tDelta float64) (*Body, bool, error) {
-	if len(removed) != 1 || sense != Inward || tDelta != 0 || !(t > 0) ||
+// PrismUnionBossShell shells the plate-and-boss union result inward through
+// its single removed boss cap, or declines when the receiver is not that
+// authenticated construction.
+func PrismUnionBossShell(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Payload,
+	removed []*topo.Face, inward bool, t, tDelta float64) (*topo.Body, bool, error) {
+	if len(removed) != 1 || !inward || tDelta != 0 || !(t > 0) ||
 		proofbound.IsNonFinite(t) || fp.PrismUnionFillet == nil || fp.Xform != r3.Identity() {
 		return nil, false, nil
 	}
-	for _, pair := range [][2]*Body{{bodyHandle(fp.PrismUnionFillet.First), bodyHandle(fp.PrismUnionFillet.Second)},
-		{bodyHandle(fp.PrismUnionFillet.Second), bodyHandle(fp.PrismUnionFillet.First)}} {
+	for _, pair := range [][2]*topo.Body{{fp.PrismUnionFillet.First, fp.PrismUnionFillet.Second},
+		{fp.PrismUnionFillet.Second, fp.PrismUnionFillet.First}} {
 		source, ok := prismUnionBossShellAuthenticate(b, fp, pair[0], pair[1], removed[0], t)
 		if !ok {
 			continue
 		}
-		ref := b.n.Doc.NextProducer
-		payload, audit, err := prismshell.PrismUnionBossShellPayload(ctx, ref, prismshell.BossMeshInput{
+		payload, audit, err := PrismUnionBossShellPayload(ctx, env.Ref, BossMeshInput{
 			Verts: fp.Verts, VertexBound: fp.VertexBound, Groups: fp.Groups,
 			Tris: fp.Tris, Src: fp.Src, Boss: source.boss,
 			PlateRect: source.plateRect, BossRect: source.bossRect,
@@ -50,51 +57,46 @@ func (b *Body) shellPrismUnionBoss(ctx context.Context, fp facetedPayload,
 		if err != nil {
 			return nil, true, err
 		}
-		out, err := bodyResult(facetedrecord.BuildWithProof(ctx,
-			envOf(b.n.Doc, ref), payload, audit, measurementToInternal(Measurement{}), nil))
-		if err != nil {
-			return nil, true, err
-		}
-		body, err := commitModifyResult(ctx, b, out)
-		return body, true, err
+		out, err := facetedrecord.BuildWithProof(ctx, env, payload, audit, measurement.Measurement{}, nil)
+		return out, true, err
 	}
 	return nil, false, nil
 }
 
-func prismUnionBossShellAuthenticate(result *Body, fp facetedPayload, plateBody, bossBody *Body,
-	opening *Face, t float64) (prismUnionBossShellSource, bool) {
+func prismUnionBossShellAuthenticate(result *topo.Body, fp facetedrecord.Payload, plateBody, bossBody *topo.Body,
+	opening *topo.Face, t float64) (prismUnionBossShellSource, bool) {
 	var src prismUnionBossShellSource
-	if plateBody == nil || bossBody == nil || opening == nil || opening.n.Body != bodyNode(result) ||
+	if plateBody == nil || bossBody == nil || opening == nil || opening.Body != result ||
 		len(fp.Verts) != len(fp.VertexBound) || len(fp.Tris) != len(fp.Src) ||
 		len(fp.Tris) != len(fp.FaceOf) || fp.VolSymDiff < 0 ||
 		proofbound.IsNonFinite(fp.VolSymDiff) {
 		return src, false
 	}
 	var ok bool
-	src.plate, ok = plateBody.n.Payload.(prismPayload)
+	src.plate, ok = plateBody.Payload.(prismrecord.Payload)
 	if !ok || src.plate.SectionDelta != 0 || src.plate.Z0Delta != 0 || src.plate.Z1Delta != 0 ||
 		src.plate.SurfaceResult || src.plate.Xform != r3.Identity() ||
 		src.plate.Frame.U() != (r3.Vec{X: 1}) || src.plate.Frame.V() != (r3.Vec{Y: 1}) ||
 		src.plate.Frame.N() != (r3.Vec{Z: 1}) {
 		return src, false
 	}
-	src.boss, ok = bossBody.n.Payload.(prismPayload)
+	src.boss, ok = bossBody.Payload.(prismrecord.Payload)
 	if !ok || src.boss.SectionDelta != 0 || src.boss.Z0Delta != 0 || src.boss.Z1Delta != 0 ||
 		src.boss.SurfaceResult || src.boss.Frame.U() != (r3.Vec{X: 1}) ||
 		src.boss.Frame.V() != (r3.Vec{Y: 1}) || src.boss.Frame.N() != (r3.Vec{Z: 1}) {
 		return src, false
 	}
-	src.plateRect, ok = prismshell.RecordedBossRect(src.plate.Profile)
+	src.plateRect, ok = RecordedBossRect(src.plate.Profile)
 	if !ok {
 		return src, false
 	}
-	src.bossRect, ok = prismshell.RecordedBossRect(src.boss.Profile)
+	src.bossRect, ok = RecordedBossRect(src.boss.Profile)
 	if !ok {
 		return src, false
 	}
-	src.unitLo, src.unitHi, ok = prismshell.PrismUnionBossShellSimilarity(src.boss.Xform)
-	if !ok || !prismshell.BossRectArithmeticExact(src.plateRect, t) ||
-		!prismshell.BossRectArithmeticExact(src.bossRect, 0) {
+	src.unitLo, src.unitHi, ok = PrismUnionBossShellSimilarity(src.boss.Xform)
+	if !ok || !BossRectArithmeticExact(src.plateRect, t) ||
+		!BossRectArithmeticExact(src.bossRect, 0) {
 		return src, false
 	}
 	plateOrigin := src.plate.Frame.Origin()
@@ -124,10 +126,10 @@ func prismUnionBossShellAuthenticate(result *Body, fp facetedPayload, plateBody,
 			src.bossTop, -src.interfaceZ) != 0 {
 		return src, false
 	}
-	if !prismshell.PrismUnionBossShellLevels(src.plateBottom, src.bossBottom,
+	if !PrismUnionBossShellLevels(src.plateBottom, src.bossBottom,
 		src.interfaceZ, src.bossTop, t) ||
-		!prismshell.PrismUnionBossShellRoom(src.bossRect.Width(), src.unitLo, t) ||
-		!prismshell.PrismUnionBossShellRoom(src.bossRect.Height(), src.unitLo, t) {
+		!PrismUnionBossShellRoom(src.bossRect.Width(), src.unitLo, t) ||
+		!PrismUnionBossShellRoom(src.bossRect.Height(), src.unitLo, t) {
 		return src, false
 	}
 	// The entire boss, enlarged by its source-point bound, must lie strictly
@@ -135,19 +137,19 @@ func prismUnionBossShellAuthenticate(result *Body, fp facetedPayload, plateBody,
 	// side or the lower floor.
 	plateInner := src.plateRect.Inset(t)
 	var corners [4]r3.Vec
-	for i, uv := range prismshell.PrismUnionBossShellCorners(src.bossRect) {
+	for i, uv := range PrismUnionBossShellCorners(src.bossRect) {
 		p := src.boss.Point(uv[0], uv[1], src.boss.Z1)
 		beta := src.boss.PointBound(proofbound.ExactScalar(uv[0]),
 			proofbound.ExactScalar(uv[1]), proofbound.ExactScalar(src.boss.Z1))
 		if !proofbound.FiniteVec(p) || proofbound.IsNonFinite(beta) ||
-			!prismshell.PrismUnionBossShellInside(p.X, beta, plateInner.U0, plateInner.U1) ||
-			!prismshell.PrismUnionBossShellInside(p.Y, beta, plateInner.V0, plateInner.V1) ||
+			!PrismUnionBossShellInside(p.X, beta, plateInner.U0, plateInner.U1) ||
+			!PrismUnionBossShellInside(p.Y, beta, plateInner.V0, plateInner.V1) ||
 			p.Z != src.bossTop {
 			return src, false
 		}
 		corners[i] = p
 	}
-	faces := result.Faces()
+	faces := topobuild.Faces(result)
 	openingIdx := -1
 	for i, f := range faces {
 		if f == opening {
@@ -155,14 +157,18 @@ func prismUnionBossShellAuthenticate(result *Body, fp facetedPayload, plateBody,
 			break
 		}
 	}
-	if openingIdx < 0 || !opening.isPlanar() || len(opening.n.Origins) != 1 ||
-		opening.n.Origins[0] != refOf(CapEnd(bossBody)) {
+	if openingIdx < 0 || opening.Surface.Kind() != surfacegeom.KindPlane && !opening.HeldPlanar || len(opening.Origins) != 1 ||
+		opening.Origins[0] != capEndRef(bossBody) {
 		return src, false
 	}
-	src.outer, src.topGroup, ok = prismshell.PrismUnionBossShellCapOwners(
-		fp, openingIdx, refOf(CapEnd(bossBody)), corners)
+	src.outer, src.topGroup, ok = PrismUnionBossShellCapOwners(
+		fp, openingIdx, capEndRef(bossBody), corners)
 	if !ok {
 		return src, false
 	}
 	return src, true
+}
+
+func capEndRef(b *topo.Body) provenance.Ref {
+	return provenance.Ref{Producer: b.Origin.Producer, Role: provenance.RoleCapEnd}
 }

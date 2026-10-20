@@ -287,3 +287,5 @@
 10	0.00	TestPrismPatternFilletBodyGates
 10	0.00	TestStraightLoftPrismUnionManyGates
 10	0.00	TestPointConeBooleanGates
+10	0.00	TestTryAllEdgeChamferGates
+10	0.00	TestPrismUnionBossShellGates
