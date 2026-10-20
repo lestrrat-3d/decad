@@ -37,7 +37,7 @@ import (
 // degenerate or unsupported all decline silently, and the caller falls back
 // to the mesh path unchanged. A non-nil err is a genuine refusal past §3.4's
 // point of no return: the arrangement work cap (RB7, wrapped so
-// measuredInterference reads it exactly as evaluateAnalyticIntersect's own
+// measuredInterference reads it exactly as booleandispatch.AnalyticIntersect's own
 // RB7 wrapping), a recordEdge rejection or a non-closing cell loop
 // (RB8/RB9) on cuts that carry no amplified displacement, or the caller's
 // own cancellation. A crossing too close to tangent for A6's charge declines
@@ -51,7 +51,7 @@ func OverlapVolume(ctx context.Context, a, b topo.Payload, newEnv func() topo.En
 	if err != nil {
 		if errors.Is(err, decaderr.ErrUnsupported) {
 			// RB7 (§9): the arrangement cap. Wrapped exactly as
-			// evaluateAnalyticIntersect wraps its own RB7, so
+			// booleandispatch.AnalyticIntersect wraps its own RB7, so
 			// measuredInterference reads it as reportvocab.InterferenceUnsupportedPipeline
 			// and the report says Suspect.
 			return 0, 0, false, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err)

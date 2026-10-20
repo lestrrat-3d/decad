@@ -395,7 +395,7 @@ With `s = +1`, `t` the thickness in millimetres with its conversion bound
    figure). `Tᵢ' = prismPayload{profile: Dᵢ, frame: F_j, z0: L0 − t, z1: L1 + t}`
    with `offset2d.OffsetSectionDelta(Tᵢ, −1, t, tDelta)`. The cavity is
    `Cut(…Cut(A', T₁'), …, Tₙ')` through class B's own entry over payloads
-   (`classbgeom.OfPayloads`, PR 0's `classBOfPayloads`, the body-free form of `tryClassB`): each cut
+   (`classbgeom.OfPayloads`, PR 0's `classBOfPayloads`, the body-free form of `booleandispatch`'s class B route): each cut
    must build a `brepPayload`; a pair class B does not admit — two dilated
    holes closer than `2t` (B7), a dilated tool reaching a cap of `A'` within
    `t` of a hole (the crossing reach or the mesh path) — is SG6, naming the

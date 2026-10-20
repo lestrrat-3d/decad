@@ -340,7 +340,7 @@ reflected the same way with no re-expression at all (T1). The G3 reading of
 the world normal uses `ApplyDir`, which a reflection maps correctly, so the
 co-directional test is unchanged. `δ_reexpress` is the same single
 rounding per coordinate; a reflection adds no term. Interference's read-only
-twin (`evaluateAnalyticIntersect`) and the overlap-area reading share the
+twin (`booleandispatch.AnalyticIntersect`) and the overlap-area reading share the
 same gate and scene, so a reflected pair the analytic `Intersect` resolves is
 measured instead of reaching the mesh path's `unsupported_pair_contact`.
 A pair with equal transform bases whose composed origins differ only along
