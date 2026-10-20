@@ -41,6 +41,7 @@ const (
 	closedRim edgeKind = iota
 	straightLine
 	cylinderLine
+	openArc
 )
 
 func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Payload, edges []*topo.Edge,
@@ -49,7 +50,7 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 		return nil, false, nil
 	}
 	for _, e := range edges {
-		if !looksLikeRim(e) && !looksLikeLine(e) && !looksLikeCylLine(e) {
+		if !looksLikeRim(e) && !looksLikeLine(e) && !looksLikeCylLine(e) && !looksLikeArc(e) {
 			return nil, false, nil
 		}
 	}
@@ -89,6 +90,18 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 				return nil, true, err
 			}
 			targets[i] = target{lineKey: l.key(), kind: straightLine}
+		case looksLikeArc(e):
+			a, err := readArc(e, fp, faceIndex)
+			if err != nil {
+				return nil, true, err
+			}
+			if err := a.checkSize(spec); err != nil {
+				return nil, true, err
+			}
+			if err := claim(a.ends, a.scale); err != nil {
+				return nil, true, err
+			}
+			targets[i] = target{lineKey: a.arcKey(), kind: openArc}
 		case looksLikeCylLine(e):
 			c, err := readCylLine(e, fp, faceIndex)
 			if err != nil {
@@ -121,6 +134,8 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 			switch targets[i].kind {
 			case straightLine:
 				e, ok = findLine(cur, targets[i].lineKey, 64*ulp*math.Max(1, math.Abs(targets[i].lineKey.p0.X)))
+			case openArc:
+				e, ok = findArc(cur, targets[i].lineKey, 64*ulp*math.Max(1, math.Abs(targets[i].lineKey.p0.X)))
 			case cylinderLine:
 				e, ok = findCylLine(cur, targets[i].lineKey, 64*ulp*math.Max(1, math.Abs(targets[i].lineKey.p0.X)))
 			default:
@@ -139,6 +154,11 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 			var l line
 			if l, err = readLine(e, curFP, faceIndex); err == nil {
 				next, err = rewriteLineEdge(ctx, env, curFP, l, spec, role, faceIndex)
+			}
+		case openArc:
+			var a arcRim
+			if a, err = readArc(e, curFP, faceIndex); err == nil {
+				next, err = rewriteArc(ctx, env, curFP, a, spec, role, faceIndex)
 			}
 		case cylinderLine:
 			var c cylLine
