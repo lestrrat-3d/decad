@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/draftrecord"
 	"github.com/lestrrat-3d/decad/internal/extent"
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/modifyselect"
 	"github.com/lestrrat-3d/decad/internal/obliqueboss"
 	"github.com/lestrrat-3d/decad/internal/prismpattern"
@@ -257,7 +258,12 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 		return b.blendRevolveJunctions(ctx, sel, edges, rp, blend)
 	}
 	if lp, ok := b.n.Payload.(loftPayload); ok {
-		return b.filletStraightLoft(ctx, sel, edges, lp, rmm)
+		node, err := loftrecord.FilletStraight(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), fmt.Sprint(sel),
+			edgeNodes(edges), lp, rmm)
+		if err != nil {
+			return nil, err
+		}
+		return commitModifyResult(ctx, b, bodyHandle(node))
 	}
 	if fp, ok := b.n.Payload.(facetedPayload); ok && fp.ObliqueBoss != nil {
 		node, err := obliqueboss.FilletBoss(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), edgeNodes(edges),

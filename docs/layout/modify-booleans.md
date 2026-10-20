@@ -13,7 +13,6 @@ The rules for rows live in `docs/layout.md`.
 | `prism_union_fillet.go` | Authenticates one untouched outer edge of a faceted prism Union and rebuilds its isolated source fillet. See modify-reach §10.1. |
 | `prism_union_chamfer.go` | Reuses an authenticated outer edge and corner separation to rebuild one isolated source chamfer. See modify-reach §10.1. |
 | `draft_circle.go` | Admits the live far rim and commits its fillet or chamfer, or the far cap and inward sense for the cup; `internal/draftrecord/` builds the bounded meridian. See draft §10.4–§10.6. |
-| `loft_fillet.go` | Rewrites matching loft records at selected analytic and fitted-spline root corners. See loft §17. |
 | `loft_chamfer.go` | Builds both outer cap bands on a matching axial loft's held polygon. See loft §18. |
 | `cap_edge_cutter.go` | Applies `internal/capedge/` admission and cutters to one oblique prism cap-edge fillet or chamfer. |
 | `brep_rounded_edge_fillet.go` | Rounds P8's one front top edge after matching its exact rounded, cross-drilled BRep record. See modify-general §4.3c. |
