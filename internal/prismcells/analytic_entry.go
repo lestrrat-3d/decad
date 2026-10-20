@@ -174,7 +174,7 @@ func TryAnalytic(ctx context.Context, op meshbool.OperationKind, a, b topo.Paylo
 // (docs/prism-boolean-design.md §4.5's "Entry" paragraph) so a second caller
 // can share it unchanged rather than duplicate it: TryAnalytic's own
 // meshbool.OpIntersect case above, and §4.5's overlap-area reading
-// (prismOverlapVolume, prism_overlap.go). Every gate below keeps its order.
+// (prismcells.OverlapVolume). Every gate below keeps its order.
 //
 // ok=false (err always nil in that case) means "not admitted" (§3.1/§3.4):
 // every miss above is silent fallback, exactly as TryAnalytic's own

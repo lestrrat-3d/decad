@@ -179,7 +179,7 @@ func ResolveCrossing(ctx context.Context, budget *proofbound.WorkBudget, pa, pb 
 // loop and so cannot answer a multi-region selection at all
 // (docs/prism-boolean-design.md §4.4). ResolveCrossing above is this
 // task's own caller; §4.5's overlap-area reading
-// (prismOverlapVolume, prism_overlap.go) is the second, sharing this exact
+// (prismcells.OverlapVolume) is the second, sharing this exact
 // selection so it never re-derives §4.2's classification.
 //
 // resolved=false (err always nil in that case) is silent fallback (§4.4),

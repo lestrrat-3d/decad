@@ -23,7 +23,7 @@ The rules for rows live in `docs/layout.md`.
 | `loft_contact_output_proof.go` | Reads the payloads of two live Loft/prism bodies in either order and runs the source partition and output shell in `internal/loftcontact`, which certifies the partition and both Sketch caps, then builds, tiles and audits the transient held shell. |
 | `loft_cylinder_placement.go` | Dispatches the common signed-axis cylinder/Loft `Union` and bore `Cut`, rebuilds the local join and tool, and places the audited shell. `internal/loftcylinder` holds the shape and source checks and the local blank and tooth rebuilds. See loft-cylinder-boolean design. |
 | `loft_cylinder_chamfer.go` | Recognizes the two-cap Chamfer of an audited loft/cylinder result, reads the receiver's cap refs, and maps the result node built in `internal/loftcylinder` to its handle. See loft-cylinder-boolean design. |
-| `prism_overlap.go` | Prism-boolean §4.5's overlap-area reading for `Verify`. See its doc comment. |
+| `prism_overlap.go` | Wraps `prismcells.OverlapVolume`, prism-boolean §4.5's overlap-area reading, as a `Verify` measurement. See its doc comment. |
 | `brep_measure.go` | The brep surveys, including fillet-band pull readings and the undercut verdict fold; `internal/breprecord` states prisms and stacked prisms as face views, then builds and measures the record. See general-boolean §4. |
 | `surface_trim.go` / `surface_split_revolve.go` | Public `Trim`, `Extend` and `Split` entry checks, result builds and commits, and revolve `Split`; gates in `internal/surfacetrim/`. See surface-intersection §2–§3. |
 | `point_plane_split.go` | Routes a point-loft Split through facetedrecord's source and sheet gates and plane order, and commits its two slabs. See loft-point design. |
