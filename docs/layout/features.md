@@ -26,7 +26,7 @@ The rules for rows live in `docs/layout.md`.
 | `extrude.go` | Generic `Extrude` over a profile or chain, `WithTaper`, linear-extent resolution, the chain ribbon entry point. See evaluator §5 and surface §13.2. |
 | `draft.go` | `Draft`, `NeutralPlane`, `Walls` gates, plus the tapered extrude angle and surface-result gates, extent resolution and slab dispatch. See draft §5, §7, §10. |
 | `sweep.go` | Generic `Sweep` over a profile or chain and path admission adapters, including the cardinal line/arc chain and the full-circle path reduction; builds through `internal/sweeprecord/`. See sweep §3.3, §15.8–§15.9. |
-| `sweep_mitre.go` | Mitred options, entry adapters and restatement; builds through `sweepmitre.Build`. See sweep §16. |
+| `sweep_mitre.go` | Mitred options and entry adapters; builds through `sweepmitre.Build`. See sweep §16. |
 | `coil.go` | `Coil`, `CoilOption`, Table CS gates. Root `coilPayload` aliases `coilshell.Payload`. See helix §2, §4, §5.6. |
 | `revolve.go` | Generic `Revolve` over a profile or chain: `Axis` variants, options, angular extents, and the public axis adapter to `internal/revolveaxis/`. See evaluator §6 and surface §13.2. |
 | `revolve_blend.go` | Fillet/Chamfer of revolve meridian junctions. See modify-reach §7. |

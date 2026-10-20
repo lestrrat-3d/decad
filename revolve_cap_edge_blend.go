@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
+	"github.com/lestrrat-3d/decad/internal/tessdispatch"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -50,7 +51,7 @@ func buildRevolveCapRimBlend(ctx context.Context, body *Body, source revolvemesh
 		return nil, err
 	}
 	roles := facesByRole(body)
-	roleOrder := [5]string{prismWallRole(0, 1), prismWallRole(0, 2), prismWallRole(0, 3),
+	roleOrder := [5]string{tessdispatch.PrismWallRole(0, 1), tessdispatch.PrismWallRole(0, 2), tessdispatch.PrismWallRole(0, 3),
 		provenance.RoleCapStart, provenance.RoleCapEnd}
 	for _, role := range roleOrder {
 		if roles[role] == nil {

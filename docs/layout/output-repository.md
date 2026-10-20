@@ -9,10 +9,8 @@ The rules for rows live in `docs/layout.md`.
 
 | Path | Responsibility |
 |---|---|
-| `tessellate.go` | `Mesh`, `Body.Tessellate`, prism mesh handle adapter and dispatch, and the PatchEdges source mesh adapter. See tessellation design, surface §10.1. |
+| `tessellate.go` | `Mesh`, `Body.Tessellate`, its mesh cache and proof withholding, and the call into `internal/tessdispatch/`. See tessellation design, surface §10.1. |
 | `tessellate_verification.go` | `Verification`, `WithVerification` and mesh proof publication. See tessellation §1, §4. |
-| `tessellate_sweep_composite.go` | Builds composite Sweep span handles and runs the body audit around internal station assembly. See sweep Table D. |
-| `tessellate_capblend.go` | Adapts the cap-blend mesh build to public handles and runs the Loft proof, including the cap-band volume bound. See tessellation reach §7. |
 | `export/` | STL, OBJ, 3MF and AP214 writers. See `docs/step-export-design.md`, `docs/3mf-export-design.md`. |
 
 ### Repository

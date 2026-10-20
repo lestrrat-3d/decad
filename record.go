@@ -75,15 +75,14 @@ type (
 	cupView    = cupwall.View
 )
 
-// patchPayload and bodyPatchPayload are the evaluator's own records of a
-// PatchProfile body and a PatchEdges body: the internal/patchchain payloads,
-// which patchchain.Build and patchchain.BuildBody evaluate over topology nodes
-// and which implement topo.Payload. bodyPatchChain is one proven chain of the
-// latter (docs/surface-design.md §5, docs/evaluator-design.md §8).
+// patchPayload is the evaluator's own record of a PatchProfile body: the
+// internal/patchchain payload, which patchchain.Build evaluates over topology
+// nodes and which implements topo.Payload. bodyPatchChain is one proven chain
+// of a PatchEdges body's record (docs/surface-design.md §5,
+// docs/evaluator-design.md §8).
 type (
-	patchPayload     = patchchain.Payload
-	bodyPatchPayload = patchchain.BodyPayload
-	bodyPatchChain   = patchchain.Chain
+	patchPayload   = patchchain.Payload
+	bodyPatchChain = patchchain.Chain
 )
 
 // revolvePayload is the evaluator's own record of a revolved body, and
@@ -116,14 +115,12 @@ type (
 	chainLoftPayload = loftrecord.ChainPayload
 )
 
-// twistedSweepPayload and compositeTwistedSweepPayload are the evaluator's
-// records of a twisted Sweep along one line and along a line and a cardinal
-// quarter arc: the internal/twistsweep payloads, which twistsweep.Eval
-// evaluates over topology nodes and which implement topo.Payload
-// (docs/sweep-design.md §17, docs/evaluator-design.md §8).
+// twistedSweepPayload is the evaluator's record of a twisted Sweep along one
+// line: the internal/twistsweep payload, which twistsweep.Eval evaluates over
+// topology nodes and which implements topo.Payload (docs/sweep-design.md §17,
+// docs/evaluator-design.md §8).
 type (
-	twistedSweepPayload          = twistsweep.Payload
-	compositeTwistedSweepPayload = twistsweep.CompositePayload
+	twistedSweepPayload = twistsweep.Payload
 )
 
 // sweepPayload and chainSweepPayload are the evaluator's records of a profile
@@ -213,12 +210,6 @@ type circleSeg = sectionrecord.CircleSeg
 type arcSeg = sectionrecord.ArcSeg
 
 type fitSplineSeg = sectionrecord.FitSplineSeg
-
-// allEdgeChamferPayload is the evaluator's record of the box all-edge chamfer
-// of modify-general §4.3b: the internal/breprecord payload, which
-// breprecord.BuildAllEdgeChamfer evaluates over topology nodes and which
-// implements topo.Payload (docs/evaluator-design.md §8).
-type allEdgeChamferPayload = breprecord.AllEdgeChamferPayload
 
 // brepPayload is the evaluator's record of an analytically trimmed body
 // (docs/general-boolean-design.md §4): the internal/breprecord payload, which
