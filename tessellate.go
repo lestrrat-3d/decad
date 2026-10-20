@@ -5,26 +5,11 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/lestrrat-3d/decad/internal/alledgechamfermesh"
-	"github.com/lestrrat-3d/decad/internal/brepbandmesh"
-	"github.com/lestrrat-3d/decad/internal/chainrecord"
-	"github.com/lestrrat-3d/decad/internal/coilshell"
-	"github.com/lestrrat-3d/decad/internal/cuptess"
-	"github.com/lestrrat-3d/decad/internal/draftrecord"
-	"github.com/lestrrat-3d/decad/internal/facetedrecord"
-	"github.com/lestrrat-3d/decad/internal/loftrecord"
-	"github.com/lestrrat-3d/decad/internal/patchchain"
-	"github.com/lestrrat-3d/decad/internal/patchmesh"
-	"github.com/lestrrat-3d/decad/internal/prismtess"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
-	"github.com/lestrrat-3d/decad/internal/revolvetess"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
-	"github.com/lestrrat-3d/decad/internal/stackedrecord"
-	"github.com/lestrrat-3d/decad/internal/stitchtess"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tessaudit"
+	"github.com/lestrrat-3d/decad/internal/tessdispatch"
 	"github.com/lestrrat-3d/decad/internal/topo"
-	"github.com/lestrrat-3d/decad/internal/topobuild"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -257,10 +242,15 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value, verify Ver
 		}
 		return meshHandle(cached.Mesh), nil
 	}
-	mesh, err := tessellateBodyContext(ctx, b, chord, verify)
+	node, err := tessdispatch.Body(ctx, &b.n, chord, tessdispatch.Verify(verify), tessdispatch.Options{
+		Surface: func(s surfacegeom.Surface) any { return publicSurface(s) },
+		Curve:   func(c surfacegeom.Curve) any { return publicCurve(c) },
+		Alloc:   handleAlloc{},
+	})
 	if err != nil {
 		return nil, err
 	}
+	mesh := bornMesh(&Mesh{n: *node})
 	if verify < VerifyAll {
 		mesh.withholdProofs()
 	}
@@ -270,272 +260,6 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value, verify Ver
 	}
 	b.n.Tess.Store(&topo.TessEntry{ChordBits: key, Verify: int(verify), Mesh: meshNode(mesh)})
 	return mesh, nil
-}
-
-// tessellateBodyContext dispatches one body to its payload's own tessellator.
-// verify reaches only the paths that would otherwise COMPUTE a proof the level
-// withholds, such as prism, brep, cup, revolve, cap-loop chamfer and draft.
-// A restatement path (faceted, loft, all-planar stitch) copies its proof terms
-// off the payload at no cost and publishes them unconditionally;
-// tessellateContext withholds them afterwards.
-func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify Verification) (*Mesh, error) {
-	formatSurface := func(s surfacegeom.Surface) any { return publicSurface(s) }
-	if p, ok := b.n.Payload.(allEdgeChamferPayload); ok {
-		node, err := alledgechamfermesh.Build(ctx, &b.n, p, chord,
-			verify >= VerifyBoundary, verify >= VerifyAll)
-		if err != nil {
-			return nil, err
-		}
-		return bornMesh(&Mesh{n: *node}), nil
-	}
-	if fp, ok := b.n.Payload.(facetedPayload); ok {
-		node, err := facetedrecord.Restate(ctx, &b.n, fp, chord)
-		if err != nil {
-			return nil, err
-		}
-		return bornMesh(&Mesh{n: *node}), nil
-	}
-	if cp, ok := b.n.Payload.(cupPayload); ok {
-		node, err := cuptess.Tessellate(ctx, &b.n, cp.View(), chord, verify >= VerifyAll)
-		if err != nil {
-			return nil, err
-		}
-		return bornMesh(&Mesh{n: *node}), nil
-	}
-	if sp, ok := b.n.Payload.(stackedPrismPayload); ok {
-		node, err := stackedrecord.Tessellate(ctx, &b.n, sp, chord, verify >= VerifyAll)
-		if err != nil {
-			return nil, err
-		}
-		return bornMesh(&Mesh{n: *node}), nil
-	}
-	if bp, ok := b.n.Payload.(brepPayload); ok {
-		node, err := brepbandmesh.Tessellate(ctx, &b.n, bp, chord, verify >= VerifyAll)
-		if err != nil {
-			return nil, err
-		}
-		return bornMesh(&Mesh{n: *node}), nil
-	}
-	if lp, ok := b.n.Payload.(loftPayload); ok {
-		// The loft path exactly restates the payload's complete set for a
-		// solid or its recorded wall range for a sheet, with no chording
-		// (internal/loftmesh.RestateLoft's own doc comment owns why).
-		node, err := loftrecord.Tessellate(ctx, &b.n, lp)
-		if err != nil {
-			return nil, err
-		}
-		return bornMesh(&Mesh{n: *node}), nil
-	}
-	if tp, ok := b.n.Payload.(twistedSweepPayload); ok {
-		if chord < tp.Delta {
-			return nil, fmt.Errorf(`%w: the twisted sweep's held boundary is %g mm from its true wall; %g mm is finer`, ErrUnsupported, tp.Delta, chord)
-		}
-		if tp.Mesh != nil {
-			mesh := bornMesh(&Mesh{n: *tp.Mesh})
-			return mesh, nil
-		}
-		node, err := loftrecord.Tessellate(ctx, &b.n, tp.Held, tp.SourceRoles)
-		if err != nil {
-			return nil, err
-		}
-		for _, face := range node.Source {
-			topobuild.SetFaceBound(node, face, tp.Delta)
-		}
-		node.Bound = tp.Delta
-		node.AreaSlack = tp.AreaSlack
-		node.VolSymDiff = tp.VolSymDiff
-		node.SymDiffOK = true
-		return bornMesh(&Mesh{n: *node}), nil
-	}
-	if tp, ok := b.n.Payload.(compositeTwistedSweepPayload); ok {
-		if chord < tp.Delta {
-			return nil, fmt.Errorf(`%w: the composite twist's held boundary is %g mm from its true wall; %g mm is finer`,
-				ErrUnsupported, tp.Delta, chord)
-		}
-		mesh := bornMesh(&Mesh{n: *tp.Mesh})
-		return mesh, nil
-	}
-	if pp, ok := b.n.Payload.(patchPayload); ok {
-		node, err := patchmesh.Profile(ctx, &b.n, pp, chord, patchmesh.Level(verify))
-		if err != nil {
-			return nil, err
-		}
-		return bornMesh(&Mesh{n: *node}), nil
-	}
-	if rp, ok := b.n.Payload.(revolvePayload); ok {
-		node, err := revolvetess.TessellateRevolve(ctx, &b.n, rp, chord, revolvetess.Level(verify))
-		if err != nil {
-			return nil, err
-		}
-		return bornMesh(&Mesh{n: *node}), nil
-	}
-	if cbp, ok := b.n.Payload.(capBlendPayload); ok {
-		return tessellateCapBlend(ctx, b, cbp, chord, verify)
-	}
-	if dp, ok := b.n.Payload.(draftPayload); ok {
-		node, err := draftrecord.Tessellate(ctx, &b.n, dp, chord, verify >= VerifyAll)
-		if err != nil {
-			return nil, err
-		}
-		return bornMesh(&Mesh{n: *node}), nil
-	}
-	if dp, ok := b.n.Payload.(twoSidedDraftPayload); ok {
-		node, err := draftrecord.TessellateTwoSided(ctx, &b.n, envOf(b.n.Doc, b.n.Origin.Producer), dp, chord, verify >= VerifyAll)
-		if err != nil {
-			return nil, err
-		}
-		return bornMesh(&Mesh{n: *node}), nil
-	}
-	if sp, ok := b.n.Payload.(stitchPayload); ok {
-		var node *topo.Mesh
-		var err error
-		if sp.Tris == nil {
-			node, err = stitchtess.Curved(ctx, &b.n, sp, chord, revolvetess.Level(verify), formatSurface)
-		} else {
-			// The all-planar stitch restatement takes no chord tolerance.
-			node, err = stitchtess.Restate(ctx, &b.n, sp, formatSurface)
-		}
-		if err != nil {
-			return nil, err
-		}
-		return bornMesh(&Mesh{n: *node}), nil
-	}
-	if pp, ok := b.n.Payload.(bodyPatchPayload); ok {
-		return tessellateBodyPatch(ctx, b, pp, chord, verify)
-	}
-	if cp, ok := b.n.Payload.(chainPayload); ok {
-		// The chain-fed ribbon path takes no chord tolerance either, on the
-		// identical reasoning: every wall is already an exact planar quad,
-		// so there is no chording decision for a tolerance to bind
-		// (internal/chainrecord.Tessellate's own doc comment owns why).
-		node, err := chainrecord.Tessellate(ctx, &b.n, cp, formatSurface)
-		if err != nil {
-			return nil, err
-		}
-		return bornMesh(&Mesh{n: *node}), nil
-	}
-	if sp, ok := b.n.Payload.(chainSweepPayload); ok {
-		if len(sp.Spans) != 0 {
-			node, err := revolvetess.TessellateChainSweep(ctx, &b.n, sp, chord, revolvetess.Level(verify))
-			if err != nil {
-				return nil, err
-			}
-			return bornMesh(&Mesh{n: *node}), nil
-		}
-		if sp.Arc {
-			node, err := revolvetess.TessellateChainArcSweep(ctx, &b.n, sp, chord, revolvetess.Level(verify))
-			if err != nil {
-				return nil, err
-			}
-			return bornMesh(&Mesh{n: *node}), nil
-		}
-		// the chain Sweep's one-span straight reduction builds through the
-		// identical chainrecord.Build a plain chain Extrude does, over
-		// the chainPayload it wraps unchanged (internal/sweeprecord's
-		// FinishChain), so it reuses that same restatement rather
-		// than a second one keyed on the wrapper type.
-		node, err := chainrecord.Tessellate(ctx, &b.n, sp.Chain, formatSurface)
-		if err != nil {
-			return nil, err
-		}
-		return bornMesh(&Mesh{n: *node}), nil
-	}
-	if mp, ok := b.n.Payload.(mitredSweepPayload); ok {
-		// docs/sweep-design.md Table DM row DM2: an exact restatement of the
-		// held triangles, refused below the payload's own delta.
-		return tessellateMitredSweep(ctx, b, mp, chord)
-	}
-	if cp, ok := b.n.Payload.(coilPayload); ok {
-		// docs/helix-design.md Table CD row CD2: an exact restatement of the
-		// held triangles, refused below the payload's own delta.
-		node, err := coilshell.Tessellate(ctx, &b.n, cp, chord, verify >= VerifyAll)
-		if err != nil {
-			return nil, err
-		}
-		return bornMesh(&Mesh{n: *node}), nil
-	}
-	if sp, ok := b.n.Payload.(sweepPayload); ok {
-		// One-span sweeps reuse the prism or revolve mesh of their exact
-		// analytic reduction. A sheet carries no occupied-volume proof.
-		if len(sp.Spans) != 0 {
-			return tessellateCompositeSweep(ctx, b, sp, chord, verify)
-		}
-		if sp.Arc {
-			node, err := revolvetess.TessellateRevolveWithRoles(
-				ctx, &b.n, sp.Revolve, chord, revolvetess.Level(verify), revolvetess.ArcRole(sp.ReverseArcCaps))
-			if err != nil {
-				return nil, err
-			}
-			return bornMesh(&Mesh{n: *node}), nil
-		}
-		return tessellatePrismWithCountFloor(ctx, b, sp.Prism, sweepWallRole, chord, verify, nil, 0)
-	}
-	pp, ok := b.n.Payload.(prismPayload)
-	if !ok {
-		// Chording is per payload kind. Name both the staged kind and the
-		// implemented set so the refusal cannot misstate evaluator reach.
-		return nil, fmt.Errorf(`%w: tessellation does not support payload %s; supported payload classes are prism, patch, stacked prism, brep, chain-fed prism, sweep, mitred sweep, coil, revolve, cup, loft, cap-loop chamfer, draft (tapered extrude), stitch, and faceted`, ErrUnsupported, reportvocab.PayloadTypeName(b.n.Payload))
-	}
-	return tessellatePrismWithCountFloor(ctx, b, pp, prismWallRole, chord, verify, nil, 0)
-}
-
-// prismWallRole names the wall face prismrecord.Build minted for segment seg
-// of section loop loop: Table B's side(i,j).
-func prismWallRole(loop, seg int) string { return fmt.Sprintf("side(%d,%d)", loop, seg) }
-
-// sweepWallRole names the same wall on a one-span straight sweep, whose
-// reduction rewrote every side(i,j) to carry the path-span index ahead of
-// them (internal/sweeprecord's prefixSpanZeroRole): side(0,i,j).
-func sweepWallRole(loop, seg int) string { return fmt.Sprintf("side(0,%d,%d)", loop, seg) }
-
-// tessellatePrismWithCountFloor births the prism mesher's node in its root
-// handle, so the one-entry tessellation cache can return that same handle.
-func tessellatePrismWithCountFloor(ctx context.Context, b *Body, pp prismPayload,
-	wallRole func(loop, seg int) string, chord float64, verify Verification,
-	countFloor func(loop, seg int) int, freeformTarget float64) (*Mesh, error) {
-	node, err := prismtess.Build(ctx, &b.n, pp, wallRole, chord,
-		verify >= VerifyAll, countFloor, freeformTarget)
-	if err != nil {
-		return nil, err
-	}
-	return bornMesh(&Mesh{n: *node}), nil
-}
-
-// requireMeshAudit dispatches docs/tessellation-design.md §1's mandatory
-// mesh audit by body kind. A solid takes the closed-mesh audit; a sheet takes
-// topobuild.RequireSheetMesh's free-boundary and vertex-link audits. Angular
-// Revolve and chain Sweep builders call that node audit directly.
-func requireMeshAudit(ctx context.Context, sheet bool, b *Body, m *Mesh) error {
-	if sheet {
-		return topobuild.RequireSheetMesh(ctx, &b.n, &m.n)
-	}
-	return topobuild.RequireClosedMesh(&m.n)
-}
-
-// tessellateBodyPatch binds source handles and public refusal names to the
-// PatchEdges node builder. The circular source mesh is certified first at
-// VerifyBoundary even when the requested result level is VerifyNone.
-func tessellateBodyPatch(ctx context.Context, b *Body, pp bodyPatchPayload,
-	chord float64, verify Verification,
-) (*Mesh, error) {
-	var node *topo.Mesh
-	var err error
-	if prism, ok := patchchain.CircularPrismSource(pp); ok {
-		source, sourceErr := tessellatePrismWithCountFloor(ctx, bodyHandle(pp.Faces[0].Body), prism,
-			prismWallRole, chord, VerifyBoundary, nil, 0)
-		if sourceErr != nil {
-			return nil, sourceErr
-		}
-		node, err = patchmesh.CircularPrism(ctx, &b.n, pp, prism, &source.n, chord, patchmesh.Level(verify))
-	} else {
-		node, err = patchmesh.Planar(ctx, &b.n, pp, patchmesh.Level(verify),
-			func(s surfacegeom.Surface) any { return publicSurface(s) },
-			func(c surfacegeom.Curve) any { return publicCurve(c) })
-	}
-	if err != nil {
-		return nil, err
-	}
-	return bornMesh(&Mesh{n: *node}), nil
 }
 
 // verifyAllMesher gives the internal builders a body's mesh at VerifyAll
