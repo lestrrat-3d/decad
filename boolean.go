@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftmirror"
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/obliqueboss"
@@ -203,10 +204,11 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body) 
 // commits only the last result. a and b MUST belong to one document.
 func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref producerID) (*Body, error) {
 	d := documentHandle(a.n.Doc)
-	if body, ok, err := tryLoftMirrorUnion(ctx, op, d, ref, a, b); err != nil {
+	if n, ok, err := loftmirror.Union(ctx, op, envOf(documentNode(d), ref), verifyAllMesher{},
+		bodyNode(a), bodyNode(b)); err != nil {
 		return nil, err
 	} else if ok {
-		return body, nil
+		return bodyHandle(n), nil
 	}
 	if body, ok, err := tryLoftMirrorCylinderUnion(ctx, op, d, ref, a, b); err != nil {
 		return nil, err
