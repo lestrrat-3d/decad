@@ -729,7 +729,7 @@ type SweepDeparture struct {
 
 // SweepContactTrack holds an immutable private continuous certificate.
 // Accessors return copies; no exported field can change that certificate.
-type SweepContactTrack struct { /* private source snapshot and proof */ }
+type SweepContactTrack struct { /* private source snapshot and proof */ } // report.SweepContactTrackOf, handle instantiation
 
 func (t *SweepContactTrack) Start() SweepInstant
 func (t *SweepContactTrack) End() SweepInstant
@@ -778,6 +778,21 @@ func (r *SweepReport) BracketEndsAtDuration() bool
 func (r *SweepReport) CertifiedPosesAt(elapsed units.Value) (r3.Transform, r3.Transform, error)
 func (r *SweepReport) CertifiedPosesAtInterval(time, start, end units.Value) (r3.Transform, r3.Transform, error)
 ```
+
+`SweepReport` is `report.SweepReportOf` instantiated with the root handles,
+and `SweepEvent` and `SweepSample` are its event and sample records; the
+fields and methods above are defined there. The record also carries the
+producer's replay proof and exact bracket right fraction, and a sample its
+exact fraction, behind accessors that take an `internal/seal.Key`, so only
+decad's own producers can read or set them.
+
+`SweepPair` validates the bodies, paths and request, builds the report over
+the bodies' topology nodes, and hands it to `internal/sweeprun`, which selects
+the producer and fills it. The run takes two hooks from the document:
+`ContactPair` in node form, with its recent-report memo, and the verified
+mesher the held-body paths use. `report.LiftSweepReport` then maps the finished
+node report to the root handles, keeping an event that is also the initial
+event as one event.
 
 `BracketEndsAtDuration` compares the producer's private exact bracket right
 fraction with one. The public `Fraction` may be rounded.
@@ -911,15 +926,14 @@ sentinel (`ErrDegenerate`, `ErrForeignBody`, `ErrRetiredBody`, `ErrUnitKind`,
 solid whose pair kernel lacks a proof returns `SweepUndecided`, not an input
 error. An internal invariant failure remains an error with no report.
 
-`SweepPair` converts the validated request to its internal form,
-`internal/reportvocab`'s `SweepRequest`, whose contact request and start policy
-are the internal twins with the same fields and constants, and passes that form
-to the sweep path it selects. When a rotating source-box run ends undecided
-with `SweepDepartureUnproved` or `SweepContactTrackUnproved` at a touching or
-`ContactBand` start, `planarContinuation` converts the report's saved public
-`Request` again to rerun the pair through `sweepPlanarPair`. The
-report's `Request` holds the caller's own value. A `ContactPair` query made by a
-sweep receives the internal contact request converted back to the public type;
+`SweepPair` passes the validated request, a `report.SweepRequest`, to the sweep
+path it selects. The public `SweepRequest` is an alias of that type, so the
+request, its contact request and its start policy have one definition. When a
+rotating source-box run ends undecided with `SweepDepartureUnproved` or
+`SweepContactTrackUnproved` at a touching or `ContactBand` start,
+`planarContinuation` reruns the pair through `sweepPlanarPair` with the
+report's saved `Request`. The report's `Request` holds the caller's own value.
+A `ContactPair` query made by a sweep receives the contact request unchanged;
 the departure-gap query of a rotating run clears its `SupportBand` first.
 
 The dyadic grid depth is `ceil(log2(Duration / TimeResolution))`. Fully

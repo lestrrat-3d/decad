@@ -6,6 +6,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -159,4 +160,30 @@ func CheckedBoundsCorners(minimum, maximum r3.Vec, bound units.Value) ([8]proofa
 		return [8]proofarith.DyV3{}, false
 	}
 	return InflatedBoundsCorners(minimum, maximum, bound.Base())
+}
+
+// NodeSweptBounds is the box body b sweeps along path: b's inflated bounds
+// mapped through the path's From and expanded by the path's whole-duration
+// travel bound. It reports false when b's bounds or that travel bound are not
+// finite.
+func NodeSweptBounds(b *topo.Body, path AffinePath) (SweptBounds, bool) {
+	corners, ok := NodeBoundsCorners(b)
+	if !ok {
+		return SweptBounds{}, false
+	}
+	return SweepBounds(corners, path, proofarith.DvTransform,
+		func(from r3.Transform, center r3.Vec, axis motionbound.RatVec) (*big.Rat, bool) {
+			return RotationalSweepRadius(b, from, center, axis)
+		})
+}
+
+// StrictlyDisjoint reports a positive gap between s and o on at least one
+// axis, compared exactly. Boxes that merely meet are not disjoint.
+func (s SweptBounds) StrictlyDisjoint(o SweptBounds) bool {
+	for axis := range 3 {
+		if proofarith.DyCmp(s.Hi[axis], o.Lo[axis]) < 0 || proofarith.DyCmp(o.Hi[axis], s.Lo[axis]) < 0 {
+			return true
+		}
+	}
+	return false
 }

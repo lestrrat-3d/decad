@@ -1432,7 +1432,7 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
 - **Pairs**: use the four-way relation and proof order of
   `agent-docs/interference-design.md`. Bounds separation or the analytic clearance
   kernel proves disjoint/touching; nesting and admitted crossings remain
-  explicitly `reportvocab.PairOverlapping`, never folded into undecided. A strict
+  explicitly `boundaryaudit.PairOverlapping`, never folded into undecided. A strict
   full-containment or analytic equality certificate reuses an operand's
   volume. Every other candidate overlap runs the read-only `OpIntersect`
   evaluator and emits a row
@@ -1444,7 +1444,7 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   interference design.
 - **Wall thickness / undercuts / min radius**: the analytic surveys of
   verification §6, answered outright on this evaluator's own payloads
-  (`survey.go`, `internal/survey2d/`, `internal/revolvesurvey/`): prism/revolve wall reduces exactly to the 2D
+  (`internal/verifyrun/survey.go`, `internal/survey2d/`, `internal/revolvesurvey/`): prism/revolve wall reduces exactly to the 2D
   spanning-disk problem (a prism's profile with the height as the vertical
   fit; a revolve's meridian section, mirrored for a full turn). `Verify`
   passes one shared work counter through the prism/revolve survey; candidate

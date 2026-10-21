@@ -6,11 +6,10 @@ import (
 	"math"
 	"slices"
 
-	"github.com/lestrrat-3d/decad/internal/clearance/pairkernel"
-	"github.com/lestrrat-3d/decad/internal/contactbox"
+	"github.com/lestrrat-3d/decad/report"
+
+	"github.com/lestrrat-3d/decad/internal/contactpair"
 	"github.com/lestrrat-3d/decad/internal/measurement"
-	"github.com/lestrrat-3d/decad/internal/planarband"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -19,12 +18,7 @@ import (
 // ContactRequest states the maximum position and normal error a manifold may publish.
 // SupportBand and HeldChord are nonnegative lengths; zero disables their
 // respective approximate contact paths.
-type ContactRequest struct {
-	PointResolution  units.Value
-	NormalResolution units.Value
-	SupportBand      units.Value
-	HeldChord        units.Value
-}
+type ContactRequest = report.ContactRequest
 
 // validateSupportBand admits the zero Value or a finite nonnegative Length.
 func validateSupportBand(v units.Value) error {
@@ -55,74 +49,39 @@ func validateNonnegativeLength(v units.Value, name string) error {
 }
 
 // ContactRelation is the proven relation of the two complete occupied sets.
-type ContactRelation int
+type ContactRelation = report.ContactRelation
 
 const (
-	ContactUndecided ContactRelation = iota
-	ContactSeparated
-	ContactTouching
-	ContactOverlapping
-	// ContactBand is published for a body whose held boundary carries a
-	// positive displacement (agent-docs/multibody-dynamics-design.md §10.4), or for
-	// an exact planar pair apart by at most the request's SupportBand
-	// (§10.5): the interiors are disjoint except possibly within a band of
-	// width Gap.Bound around Gap.Value, which is zero. A displaced pair's
-	// manifold Separation intervals carry the same band; an exact pair's
-	// manifold is its support set, each point at its exact height.
-	ContactBand
+	ContactUndecided   = report.ContactUndecided
+	ContactSeparated   = report.ContactSeparated
+	ContactTouching    = report.ContactTouching
+	ContactOverlapping = report.ContactOverlapping
+	ContactBand        = report.ContactBand
+)
+
+const (
+	ContactNoReason           = report.ContactNoReason
+	ContactPayloadUnsupported = report.ContactPayloadUnsupported
+	ContactNoGapProof         = report.ContactNoGapProof
+	ContactNoNormalProof      = report.ContactNoNormalProof
+	ContactAmbiguousFeature   = report.ContactAmbiguousFeature
+	ContactPointTooCoarse     = report.ContactPointTooCoarse
+	ContactNonConvex          = report.ContactNonConvex
 )
 
 // ContactReason explains an undecided relation or an absent manifold.
-type ContactReason int
+type ContactReason = report.ContactReason
 
-const (
-	ContactNoReason ContactReason = iota
-	ContactPayloadUnsupported
-	ContactNoGapProof
-	ContactNoNormalProof
-	ContactAmbiguousFeature
-	ContactPointTooCoarse
-	// ContactNonConvex withholds a manifold because neither body carries the
-	// convexity certificate of agent-docs/multibody-dynamics-design.md §9.2: an
-	// overlap, or a touch whose contacts no single face of one body holds
-	// with the other body's corners inside it (§10.5).
-	ContactNonConvex
+type (
+	// ContactFeature names an original topological feature.
+	ContactFeature = report.ContactFeatureOf[*Face, *Edge, *Vertex]
+	// ContactPoint bounds two boundary witnesses and their A-to-B normal.
+	ContactPoint = report.ContactPointOf[*Face, *Edge, *Vertex]
+	// ContactManifold is a deterministic reduction of the complete certified contact patch.
+	ContactManifold = report.ContactManifoldOf[*Face, *Edge, *Vertex]
+	// ContactReport is a read-only pair result at the two caller-supplied poses.
+	ContactReport = report.ContactReportOf[*Body, *Face, *Edge, *Vertex]
 )
-
-// ContactFeature names an original topological feature.
-type ContactFeature struct {
-	Face   *Face
-	Edge   *Edge
-	Vertex *Vertex
-}
-
-// ContactPoint bounds two boundary witnesses and their A-to-B normal.
-type ContactPoint struct {
-	OnA, OnB           VecMeasurement
-	Normal             VecMeasurement
-	NormalAngle        units.Value
-	Separation         Measurement
-	FaceA, FaceB       *Face
-	FeatureA, FeatureB ContactFeature
-}
-
-// ContactManifold is a deterministic reduction of the complete certified contact patch.
-type ContactManifold struct {
-	Points []ContactPoint
-}
-
-// ContactReport is a read-only pair result at the two caller-supplied poses.
-type ContactReport struct {
-	A, B     *Body
-	PoseA    r3.Transform
-	PoseB    r3.Transform
-	Request  ContactRequest
-	Relation ContactRelation
-	Gap      *Measurement
-	Overlap  *Measurement
-	Manifold *ContactManifold
-	Reason   ContactReason
-}
 
 // ContactPair proves the relation of two live solids at poses applied after
 // their recorded placements. Bodies and the document are not changed.
@@ -178,6 +137,18 @@ type ContactReport struct {
 // Both bodies must be non-nil, distinct, live members of d.
 func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.Transform,
 	req ContactRequest) (*ContactReport, error) {
+	found, err := d.contactNodes(ctx, a, b, poseA, poseB, req)
+	if err != nil {
+		return nil, err
+	}
+	return handleLift.Report(found), nil
+}
+
+// contactNodes is ContactPair's answer in node form: the sweeps read it
+// directly, and ContactPair lifts it to the public handles. It keeps the
+// recent reports a is the first operand of, and returns a copy of each.
+func (d *Document) contactNodes(ctx context.Context, a, b *Body, poseA, poseB r3.Transform,
+	req ContactRequest) (*nodeContactReport, error) {
 	if a == b && a != nil {
 		return nil, fmt.Errorf("%w: contact requires distinct bodies", ErrDegenerate)
 	}
@@ -213,336 +184,27 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 	}
 	key := newPairReportKey(b, poseA, poseB, req)
 	if report, ok := a.pairReports.Load(key); ok {
-		return cloneContactReport(report), nil
+		return cloneNodeContactReport(report), nil
 	}
-	found, err := classifyContactPair(ctx, a, b, poseA, poseB, req)
+	found, err := contactpair.Classify(ctx, verifyAllMesher{}, bodyNode(a), bodyNode(b), poseA, poseB, req)
 	if err != nil {
 		return nil, err
 	}
-	report := contactReportFromInternal(found)
-	a.pairReports.Store(key, report, pairReportMemoCap)
-	return cloneContactReport(report), nil
+	a.pairReports.Store(key, found, pairReportMemoCap)
+	return cloneNodeContactReport(found), nil
 }
 
-// Each public contact enum holds the same constants, in the same order, as
-// its reportvocab twin; a constant that drifts fails to compile here.
-var (
-	_ = [1]struct{}{}[int(ContactUndecided)-int(reportvocab.ContactUndecided)]
-	_ = [1]struct{}{}[int(ContactSeparated)-int(reportvocab.ContactSeparated)]
-	_ = [1]struct{}{}[int(ContactTouching)-int(reportvocab.ContactTouching)]
-	_ = [1]struct{}{}[int(ContactOverlapping)-int(reportvocab.ContactOverlapping)]
-	_ = [1]struct{}{}[int(ContactBand)-int(reportvocab.ContactBand)]
-	_ = [1]struct{}{}[int(ContactNoReason)-int(reportvocab.ContactNoReason)]
-	_ = [1]struct{}{}[int(ContactPayloadUnsupported)-int(reportvocab.ContactPayloadUnsupported)]
-	_ = [1]struct{}{}[int(ContactNoGapProof)-int(reportvocab.ContactNoGapProof)]
-	_ = [1]struct{}{}[int(ContactNoNormalProof)-int(reportvocab.ContactNoNormalProof)]
-	_ = [1]struct{}{}[int(ContactAmbiguousFeature)-int(reportvocab.ContactAmbiguousFeature)]
-	_ = [1]struct{}{}[int(ContactPointTooCoarse)-int(reportvocab.ContactPointTooCoarse)]
-	_ = [1]struct{}{}[int(ContactNonConvex)-int(reportvocab.ContactNonConvex)]
+// The contact vocabulary with topology nodes as the face, edge, vertex and
+// body references, as the internal kernels produce it.
+type (
+	nodeContactManifold = report.ContactManifoldOf[*topo.Face, *topo.Edge, *topo.Vertex]
+	nodeContactReport   = report.ContactReportOf[*topo.Body, *topo.Face, *topo.Edge, *topo.Vertex]
 )
 
-// contactRequestToInternal gives a public request its reportvocab form.
-func contactRequestToInternal(req ContactRequest) reportvocab.ContactRequest {
-	return reportvocab.ContactRequest(req)
-}
-
-// contactRequestFromInternal gives an internal request its public form.
-func contactRequestFromInternal(req reportvocab.ContactRequest) ContactRequest {
-	return ContactRequest(req)
-}
-
-// contactFeatureFromInternal maps a feature's nodes to their handles; a nil
-// node stays a nil handle.
-func contactFeatureFromInternal(f reportvocab.ContactFeature) ContactFeature {
-	return ContactFeature{Face: faceHandle(f.Face), Edge: edgeHandle(f.Edge), Vertex: vertexHandle(f.Vertex)}
-}
-
-// contactFeatureToInternal maps a feature's handles to their nodes; a nil
-// handle stays a nil node.
-func contactFeatureToInternal(f ContactFeature) reportvocab.ContactFeature {
-	return reportvocab.ContactFeature{Face: faceNode(f.Face), Edge: edgeNode(f.Edge), Vertex: vertexNode(f.Vertex)}
-}
-
-// contactPointFromInternal gives an internal point its public form.
-func contactPointFromInternal(p reportvocab.ContactPoint) ContactPoint {
-	return ContactPoint{
-		OnA: vecMeasurementFromInternal(p.OnA), OnB: vecMeasurementFromInternal(p.OnB),
-		Normal: vecMeasurementFromInternal(p.Normal), NormalAngle: p.NormalAngle,
-		Separation: measurementFromInternal(p.Separation),
-		FaceA:      faceHandle(p.FaceA), FaceB: faceHandle(p.FaceB),
-		FeatureA: contactFeatureFromInternal(p.FeatureA), FeatureB: contactFeatureFromInternal(p.FeatureB),
-	}
-}
-
-// contactManifoldFromInternal gives an internal manifold a fresh public
-// form: a nil manifold stays nil, and nil Points stay nil while empty
-// non-nil Points stay empty and non-nil.
-func contactManifoldFromInternal(m *reportvocab.ContactManifold) *ContactManifold {
-	if m == nil {
-		return nil
-	}
-	if m.Points == nil {
-		return &ContactManifold{}
-	}
-	points := make([]ContactPoint, len(m.Points))
-	for i := range m.Points {
-		points[i] = contactPointFromInternal(m.Points[i])
-	}
-	return &ContactManifold{Points: points}
-}
-
-// contactReportFromInternal gives a finished internal report a fresh public
-// form. Topology nodes map to their handles, and Gap, Overlap and Manifold
-// keep their nil or non-nil state.
-func contactReportFromInternal(r *reportvocab.ContactReport) *ContactReport {
-	return &ContactReport{
-		A: bodyHandle(r.A), B: bodyHandle(r.B), PoseA: r.PoseA, PoseB: r.PoseB,
-		Request:  contactRequestFromInternal(r.Request),
-		Relation: ContactRelation(r.Relation),
-		Gap:      measurementPtrFromInternal(r.Gap), Overlap: measurementPtrFromInternal(r.Overlap),
-		Manifold: contactManifoldFromInternal(r.Manifold),
-		Reason:   ContactReason(r.Reason),
-	}
-}
-
-// classifyContactPair is ContactPair's proof for validated, distinct, live
-// solids and a validated request, before the memo.
-func classifyContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.Transform,
-	req ContactRequest) (*reportvocab.ContactReport, error) {
-	report := &reportvocab.ContactReport{A: bodyNode(a), B: bodyNode(b), PoseA: poseA, PoseB: poseB,
-		Request: contactRequestToInternal(req)}
-	boxA, okA := contactbox.SourceBoxAtPose(bodyNode(a), poseA)
-	boxB, okB := contactbox.SourceBoxAtPose(bodyNode(b), poseB)
-	if !okA && !okB {
-		sphereA, sphereOKA := sourceSphereAtPose(a, poseA)
-		sphereB, sphereOKB := sourceSphereAtPose(b, poseB)
-		if sphereOKA && sphereOKB {
-			classifySourceSpherePair(report, sphereA, sphereB)
-			return report, nil
-		}
-	}
-	if okA && !okB {
-		if _, faceted := b.n.Payload.(facetedPayload); faceted {
-			if err := classifyFacetedFloorBox(ctx, report, b, poseB, boxA, false); err != nil {
-				return nil, err
-			}
-			if err := classifyPlanarFallback(ctx, report); err != nil {
-				return nil, err
-			}
-			return report, nil
-		}
-		if sphere, ok := sourceSphereAtPose(b, poseB); ok {
-			classifySourceSphereBox(report, sphere, boxA, false)
-			return report, nil
-		}
-		if cylinder, ok := sourceCylinderAtPose(b, poseB); ok {
-			classifySourceCylinderBox(report, cylinder, boxA, false)
-			if err := classifyUndecidedCylinder(ctx, report); err != nil {
-				return nil, err
-			}
-			return report, nil
-		}
-	}
-	if okB && !okA {
-		if _, faceted := a.n.Payload.(facetedPayload); faceted {
-			if err := classifyFacetedFloorBox(ctx, report, a, poseA, boxB, true); err != nil {
-				return nil, err
-			}
-			if err := classifyPlanarFallback(ctx, report); err != nil {
-				return nil, err
-			}
-			return report, nil
-		}
-		if sphere, ok := sourceSphereAtPose(a, poseA); ok {
-			classifySourceSphereBox(report, sphere, boxB, true)
-			return report, nil
-		}
-		if cylinder, ok := sourceCylinderAtPose(a, poseA); ok {
-			classifySourceCylinderBox(report, cylinder, boxB, true)
-			if err := classifyUndecidedCylinder(ctx, report); err != nil {
-				return nil, err
-			}
-			return report, nil
-		}
-	}
-	if !okA || !okB {
-		orientedA, orientedOKA := contactbox.SourceOrientedBoxAtPose(bodyNode(a), poseA)
-		orientedB, orientedOKB := contactbox.SourceOrientedBoxAtPose(bodyNode(b), poseB)
-		if orientedOKA && !orientedOKB {
-			if sphere, ok := sourceSphereAtPose(b, poseB); ok {
-				classifySourceSphereOrientedBox(report, sphere, orientedA, false)
-				return report, nil
-			}
-		}
-		if orientedOKB && !orientedOKA {
-			if sphere, ok := sourceSphereAtPose(a, poseA); ok {
-				classifySourceSphereOrientedBox(report, sphere, orientedB, true)
-				return report, nil
-			}
-		}
-		if orientedOKA && orientedOKB {
-			contactbox.ClassifyOriented(report, orientedA, orientedB)
-			if err := classifyPlanarManifold(ctx, report); err != nil {
-				return nil, err
-			}
-			if err := classifyPlanarSupportBand(ctx, report); err != nil {
-				return nil, err
-			}
-			return report, nil
-		}
-		planar, err := classifyExactPlanarPair(ctx, report)
-		if err != nil {
-			return nil, err
-		}
-		if planar && report.Relation != reportvocab.ContactUndecided {
-			return report, nil
-		}
-		identity := poseA == r3.Identity() && poseB == r3.Identity()
-		if !planar && !identity {
-			placed, err := classifyPlacedRuling(ctx, report)
-			if err != nil {
-				return nil, err
-			}
-			if placed {
-				return report, nil
-			}
-		}
-		if identity {
-			report.Reason = reportvocab.ContactNoReason
-			if err := classifyAnalyticContact(ctx, report); err != nil {
-				return nil, err
-			}
-			return report, nil
-		}
-		if !planar {
-			report.Reason = reportvocab.ContactPayloadUnsupported
-		}
-		return report, nil
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	contactbox.ClassifySourceBoxes(report, boxA, boxB)
-	return report, nil
-}
-
-// classifyPlanarFallback replaces an undecided source-box/faceted report with
-// the exact planar relation when both bodies are admitted and it decides one.
-func classifyPlanarFallback(ctx context.Context, report *reportvocab.ContactReport) error {
-	if report.Relation != reportvocab.ContactUndecided {
-		return nil
-	}
-	trial := reportvocab.ContactReport{A: report.A, B: report.B, PoseA: report.PoseA, PoseB: report.PoseB,
-		Request: report.Request}
-	planar, err := classifyExactPlanarPair(ctx, &trial)
-	if err != nil {
-		return err
-	}
-	if planar && trial.Relation != reportvocab.ContactUndecided {
-		*report = trial
-	}
-	return nil
-}
-
-// classifyPlanarManifold completes an oriented source-box report whose box
-// patches publish no manifold for a touching or overlapping pair: both boxes
-// are exact planar bodies (agent-docs/multibody-dynamics-design.md §9), so §9.3's
-// manifold replaces the report when the exact planar relation agrees and
-// every published point is an edge or vertex of one box on, in or crossing
-// the other, the rows the box patches do not cover. Face pairs stay with the
-// box patches (§9.4), and a report the planar path cannot complete stands.
-func classifyPlanarManifold(ctx context.Context, report *reportvocab.ContactReport) error {
-	if report.Manifold != nil || report.Reason == reportvocab.ContactPointTooCoarse ||
-		report.Relation != reportvocab.ContactTouching && report.Relation != reportvocab.ContactOverlapping {
-		return nil
-	}
-	trial := reportvocab.ContactReport{A: report.A, B: report.B, PoseA: report.PoseA, PoseB: report.PoseB,
-		Request: report.Request}
-	planar, err := classifyExactPlanarPair(ctx, &trial)
-	if err != nil {
-		return err
-	}
-	if !planar || trial.Relation != report.Relation || trial.Manifold == nil {
-		return nil
-	}
-	for _, point := range trial.Manifold.Points {
-		if point.FeatureA.Face != nil && point.FeatureB.Face != nil {
-			return nil
-		}
-	}
-	*report = trial
-	return nil
-}
-
-// classifyUndecidedCylinder completes a source cylinder report the box
-// proofs left undecided: at identity query poses the analytic kernel's
-// verdict, elsewhere the placed ruling of classifyPlacedRuling.
-func classifyUndecidedCylinder(ctx context.Context, report *reportvocab.ContactReport) error {
-	if report.Relation != reportvocab.ContactUndecided {
-		return nil
-	}
-	if report.PoseA == r3.Identity() && report.PoseB == r3.Identity() {
-		report.Reason = reportvocab.ContactNoReason
-		return classifyAnalyticContact(ctx, report)
-	}
-	_, err := classifyPlacedRuling(ctx, report)
-	return err
-}
-
-// classifyPlanarSupportBand completes an oriented source-box report that may
-// be separated by at most the request's positive SupportBand: the box patches
-// know no band, so the exact planar path decides whether the pair is §10.5's
-// ContactBand, and its report replaces this one when it is.
-func classifyPlanarSupportBand(ctx context.Context, report *reportvocab.ContactReport) error {
-	if planarband.SupportBand(report.Request).Sign() <= 0 || report.Relation != reportvocab.ContactSeparated || report.Gap == nil ||
-		report.Gap.Value.Base()-report.Gap.Bound.Base() > report.Request.SupportBand.Base() {
-		return nil
-	}
-	trial := reportvocab.ContactReport{A: report.A, B: report.B, PoseA: report.PoseA, PoseB: report.PoseB,
-		Request: report.Request}
-	planar, err := classifyExactPlanarPair(ctx, &trial)
-	if err != nil {
-		return err
-	}
-	if planar && trial.Relation == reportvocab.ContactBand {
-		*report = trial
-	}
-	return nil
-}
-
-// classifyAnalyticContact consumes the clearance kernel's complete-pair
-// verdict. Only a touch the kernel proved by a ruling certificate keeps its
-// faces and feet, so only that touch can publish a manifold here.
-func classifyAnalyticContact(ctx context.Context, report *reportvocab.ContactReport) error {
-	res, err := pairkernel.Pair(ctx, report.A, report.B, false, nil)
-	if err != nil {
-		return err
-	}
-	switch res.Verdict {
-	case reportvocab.PairDisjoint:
-		gap := measurementToInternal(pairGapMeasurement(res))
-		if !measurement.FiniteValues(gap.Value.Base(), gap.Bound.Base()) ||
-			gap.Value.Base()-gap.Bound.Base() <= 0 {
-			report.Reason = reportvocab.ContactNoGapProof
-			return nil
-		}
-		report.Relation = reportvocab.ContactSeparated
-		report.Gap = &gap
-	case reportvocab.PairTouching:
-		report.Relation = reportvocab.ContactTouching
-		gap := measurement.Measurement{Value: units.Millimeters(0), Exactness: measurement.Exact, Bound: units.Millimeters(0)}
-		report.Gap = &gap
-		report.Reason = reportvocab.ContactNoNormalProof
-		if res.Ruling != nil {
-			publishRulingManifold(report, res.Ruling)
-		}
-	case reportvocab.PairOverlapping:
-		report.Relation = reportvocab.ContactOverlapping
-		report.Reason = reportvocab.ContactNoNormalProof
-	default:
-		report.Reason = reportvocab.ContactNoGapProof
-	}
-	return nil
+// handleLift maps topology nodes to their root handles; a nil node stays a
+// nil handle.
+var handleLift = report.Lift[*topo.Body, *topo.Face, *topo.Edge, *topo.Vertex, *Body, *Face, *Edge, *Vertex]{
+	Body: bodyHandle, Face: faceHandle, Edge: edgeHandle, Vertex: vertexHandle,
 }
 
 // pairReportMemoCap bounds one body's completed contact reports.
@@ -570,7 +232,7 @@ func newPairReportKey(b *Body, poseA, poseB r3.Transform, req ContactRequest) pa
 	return key
 }
 
-func cloneContactReport(r *ContactReport) *ContactReport {
+func cloneNodeContactReport(r *nodeContactReport) *nodeContactReport {
 	out := *r
 	if r.Gap != nil {
 		gap := *r.Gap
@@ -581,7 +243,7 @@ func cloneContactReport(r *ContactReport) *ContactReport {
 		out.Overlap = &overlap
 	}
 	if r.Manifold != nil {
-		out.Manifold = &ContactManifold{Points: slices.Clone(r.Manifold.Points)}
+		out.Manifold = &nodeContactManifold{Points: slices.Clone(r.Manifold.Points)}
 	}
 	return &out
 }

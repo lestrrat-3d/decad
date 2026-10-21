@@ -1,0 +1,300 @@
+package loftdirect
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"math"
+
+	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
+	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/topo"
+	vocab "github.com/lestrrat-3d/decad/report"
+
+	"github.com/lestrrat-3d/decad/internal/booloperand"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
+	"github.com/lestrrat-3d/decad/internal/facetproof"
+	"github.com/lestrrat-3d/decad/internal/loftcontact"
+	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
+)
+
+var (
+	errLoftDirectLimit        = errors.New("direct Loft/prism bounded limit")
+	errLoftDirectProofRefused = errors.New("direct Loft/prism proof refused")
+)
+
+type LoftDirectOutputLimitKey struct{}
+
+// Only a package-private, lower-only test allowance can reduce this limit.
+func loftDirectOutputLimit(ctx context.Context) uint64 {
+	if limit, ok := ctx.Value(LoftDirectOutputLimitKey{}).(uint64); ok &&
+		limit > 0 && limit < loftcontact.VolumeOutputSteps {
+		return limit
+	}
+	return loftcontact.VolumeOutputSteps
+}
+
+// DirectShellUnion publishes only the shell certified from the
+// same live prism and Loft records. A source geometry miss leaves the existing
+// Boolean paths available; a certified source with a refused proof does not.
+func DirectShellUnion(ctx context.Context, op meshbool.OperationKind,
+	env topo.Env, first, second *topo.Body) (*topo.Body, bool, error) {
+	if op != meshbool.OpUnion {
+		return nil, false, nil
+	}
+	prism, loft := first, second
+	pp, prismOK := prism.Payload.(prismrecord.Payload)
+	lp, loftOK := loft.Payload.(loftrecord.Payload)
+	if !prismOK || !loftOK {
+		prism, loft = second, first
+		pp, prismOK = prism.Payload.(prismrecord.Payload)
+		lp, loftOK = loft.Payload.(loftrecord.Payload)
+		if !prismOK || !loftOK {
+			return nil, false, nil
+		}
+	}
+	operation := proofbound.NewWorkBudget(ctx)
+	boundary, admitted, err := CertifyLoftOutputBoundaryForDirectShell(
+		ctx, first, second, operation)
+	if err != nil {
+		return loftContactBoundedResult(ctx, err)
+	}
+	if !admitted {
+		return nil, false, nil
+	}
+	proof, admitted, err := loftcontact.VolumeCompose(ctx, operation, pp, lp, boundary)
+	if err != nil {
+		return loftContactBoundedResult(ctx, err)
+	}
+	if !admitted {
+		return loftContactBoundedResult(ctx, errLoftDirectProofRefused)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, false, err
+	}
+	if proof.TotalOutputVisits >= loftcontact.VolumeOutputSteps {
+		return loftContactBoundedResult(ctx, errLoftDirectLimit)
+	}
+	budget := proofbound.NewWallWorkBudgetWithOperation(
+		loftcontact.VolumeOutputSteps-proof.TotalOutputVisits, operation)
+	if err := budget.Err(); err != nil {
+		return loftContactBoundedResult(ctx, err)
+	}
+	body, admitted, err := LoftContactFacetedBody(ctx, env, first, second,
+		prism, loft, lp, proof, budget)
+	if err != nil {
+		return loftContactBoundedResult(ctx, err)
+	}
+	if !admitted {
+		return loftContactBoundedResult(ctx, errLoftDirectProofRefused)
+	}
+	return body, true, nil
+}
+
+func LoftContactFacetedBody(ctx context.Context, env topo.Env,
+	first, second, prism, loft *topo.Body, lp loftrecord.Payload,
+	proof loftcontact.VolumeProof, budget *proofbound.WorkBudget) (*topo.Body, bool, error) {
+	shell := proof.Boundary.Shell
+	if len(shell.Faces) != len(shell.Triangles) ||
+		len(shell.Vertices) == 0 || len(shell.Vertices) > 512 ||
+		len(shell.Triangles) == 0 || len(shell.Triangles) > 512 ||
+		proof.Boundary.HeldAudit == nil ||
+		len(proof.Boundary.AuditedVerts) != len(shell.Vertices) ||
+		len(proof.Boundary.AuditedTris) != len(shell.Triangles) {
+		return nil, false, nil
+	}
+	prismFaces, ok, err := loftcontact.SourceFaces(prism, budget)
+	if err != nil || !ok {
+		return loftContactBoundedResult(ctx, err)
+	}
+	loftFaces, ok, err := loftcontact.SourceFaces(loft, budget)
+	if err != nil || !ok {
+		return loftContactBoundedResult(ctx, err)
+	}
+	// loftcontact.PartitionLines allocates its result before its own per-line visits.
+	if len(lp.Profile0.Outer.Segments) < 3 || len(lp.Profile0.Outer.Segments) > 32 ||
+		len(lp.Profile1.Outer.Segments) < 3 || len(lp.Profile1.Outer.Segments) > 32 {
+		return nil, false, nil
+	}
+	if _, err := budget.StepN(uint64(len(lp.Profile0.Outer.Segments) +
+		len(lp.Profile1.Outer.Segments))); err != nil {
+		return loftContactBoundedResult(ctx, err)
+	}
+	lower, ok, err := loftcontact.PartitionLines(budget, lp.Profile0.Outer)
+	if err != nil || !ok {
+		return loftContactBoundedResult(ctx, err)
+	}
+	upper, ok, err := loftcontact.PartitionLines(budget, lp.Profile1.Outer)
+	if err != nil || !ok || len(lower) != len(upper) {
+		return loftContactBoundedResult(ctx, err)
+	}
+	if _, err := budget.StepN(uint64(2 * len(shell.Vertices))); err != nil {
+		return loftContactBoundedResult(ctx, err)
+	}
+	if err := budget.Err(); err != nil {
+		return loftContactBoundedResult(ctx, err)
+	}
+	verts := make([]r3.Vec, len(shell.Vertices))
+	beta := make([]float64, len(shell.Vertices))
+	for i, vertex := range shell.Vertices {
+		if err := budget.Step(); err != nil {
+			return loftContactBoundedResult(ctx, err)
+		}
+		if math.Float64bits(vertex.Held.X) != math.Float64bits(proof.Boundary.AuditedVerts[i].X) ||
+			math.Float64bits(vertex.Held.Y) != math.Float64bits(proof.Boundary.AuditedVerts[i].Y) ||
+			math.Float64bits(vertex.Held.Z) != math.Float64bits(proof.Boundary.AuditedVerts[i].Z) {
+			return nil, false, nil
+		}
+		verts[i], beta[i] = vertex.Held, vertex.Bound
+	}
+	// Reserve the conversion's slices and lookup before any allocation.
+	if _, err := budget.StepN(uint64(3 * len(shell.Triangles))); err != nil {
+		return loftContactBoundedResult(ctx, err)
+	}
+	if err := budget.Err(); err != nil {
+		return loftContactBoundedResult(ctx, err)
+	}
+	groups := make([]facetedrecord.Group, 0, len(shell.Triangles))
+	groupOf := make(map[[2]*topo.Face]int, len(shell.Triangles))
+	src := make([]int, len(shell.Triangles))
+	for i, face := range shell.Faces {
+		// A wall may format two distinct source roles before it looks them up.
+		if _, err := budget.StepN(3); err != nil {
+			return loftContactBoundedResult(ctx, err)
+		}
+		roles, owner, found, err := loftcontact.SourceRoles(face, shell.Triangles[i], shell,
+			lower, upper, proof.Boundary.Source.CapLevels[0],
+			proof.Boundary.Source.CapLevels[1], budget)
+		if err != nil {
+			return loftContactBoundedResult(ctx, err)
+		}
+		if !found {
+			return nil, false, nil
+		}
+		var sources [2]*topo.Face
+		for index, role := range roles {
+			if role == "" {
+				continue
+			}
+			if owner == 0 {
+				sources[index] = prismFaces[role]
+			} else {
+				sources[index] = loftFaces[role]
+			}
+			if sources[index] == nil {
+				return nil, false, nil
+			}
+		}
+		group, exists := groupOf[sources]
+		if !exists {
+			group = len(groups)
+			if err := budget.Step(); err != nil {
+				return loftContactBoundedResult(ctx, err)
+			}
+			groupOf[sources] = group
+			entry := facetedrecord.Group{Planar: true}
+			for _, source := range sources {
+				if source == nil {
+					continue
+				}
+				if _, err := budget.StepN(uint64(len(source.Origins))); err != nil {
+					return loftContactBoundedResult(ctx, err)
+				}
+				entry.Origins = append(entry.Origins, source.Origins...)
+				entry.Planar = entry.Planar && isPlanar(source)
+			}
+			if err := budget.Step(); err != nil {
+				return loftContactBoundedResult(ctx, err)
+			}
+			groups = append(groups, entry)
+		}
+		src[i] = group
+	}
+	if _, err := budget.StepN(2); err != nil {
+		return loftContactBoundedResult(ctx, err)
+	}
+	_, dPair, err := booloperand.PairChord(ctx, first, second)
+	if err != nil {
+		return nil, true, err
+	}
+	if _, err := budget.StepN(uint64(2 * len(shell.Triangles))); err != nil {
+		return loftContactBoundedResult(ctx, err)
+	}
+	if err := budget.Err(); err != nil {
+		return loftContactBoundedResult(ctx, err)
+	}
+	tris := make([][3]int, len(shell.Triangles))
+	for i, triangle := range shell.Triangles {
+		if err := budget.Step(); err != nil {
+			return loftContactBoundedResult(ctx, err)
+		}
+		if triangle != proof.Boundary.AuditedTris[i] {
+			return nil, false, nil
+		}
+		tris[i] = triangle
+	}
+	payload := facetedrecord.Payload{
+		Verts: verts, VertexBound: beta,
+		Tris: tris,
+		Src:  src, Groups: groups,
+		MeshBound:  facetproof.FacetBoundMax(shell.Triangles, beta),
+		VolSymDiff: proof.SymDiffUpper, DPair: dPair,
+		Xform: r3.Identity(),
+	}
+	audit := proof.Boundary.HeldAudit
+	volF, bound, volumeRat, admitted, err := facetproof.VolumeFromAuditBounded(
+		budget, audit, payload.VolSymDiff)
+	if err != nil || !admitted {
+		return loftContactBoundedResult(ctx, err)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, false, err
+	}
+	volume := vocab.Measurement{
+		Value: units.CubicMillimeters(volF), Exactness: measurement.ExactnessOf(bound),
+		Bound: units.CubicMillimeters(bound),
+	}
+	built, admitted, err := facetedrecord.BuildWithProofBounded(ctx, budget,
+		env,
+		payload, audit, volume, volumeRat)
+	if err != nil || !admitted {
+		return loftContactBoundedResult(ctx, err)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, true, err
+	}
+	if err := budget.Step(); err != nil {
+		return loftContactBoundedResult(ctx, err)
+	}
+	body, err := built, error(nil)
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, false, ctxErr
+	}
+	return body, true, err
+}
+
+// loftContactBoundedResult stops this private route on a bounded refusal.
+// Cancellation and ordinary validation errors keep their original result.
+func loftContactBoundedResult(ctx context.Context, err error) (*topo.Body, bool, error) {
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, false, ctxErr
+	}
+	if errors.Is(err, proofbound.ErrWallWorkBudget) || errors.Is(err, errLoftDirectLimit) {
+		return nil, false, fmt.Errorf("%w: direct Loft/prism bounded proof limit", decaderr.ErrUnsupported)
+	}
+	if errors.Is(err, errLoftDirectProofRefused) {
+		return nil, false, fmt.Errorf("%w: direct Loft/prism proof refused after source certification", decaderr.ErrUnsupported)
+	}
+	return nil, false, err
+}
+
+// isPlanar reports whether a face lies on a plane, analytic or held.
+func isPlanar(f *topo.Face) bool {
+	return f.Surface.Kind() == surfacegeom.KindPlane || f.HeldPlanar
+}

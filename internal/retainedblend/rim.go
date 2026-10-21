@@ -74,10 +74,29 @@ func (r rim) slack() float64 { return 64 * ulp * r.scale }
 // Cylinder, neither with a stated tag departure. It reads no mesh and refuses
 // nothing.
 func looksLikeRim(edge *topo.Edge) bool {
-	if edge == nil || edge.Start == nil || edge.Start != edge.End || !edge.RetainedCurve || len(edge.Faces) != 2 {
+	if edge == nil || edge.Start == nil || edge.Start != edge.End {
 		return false
 	}
-	if _, ok := edge.Curve.(surfacegeom.Circle3); !ok {
+	_, ok := edge.Curve.(surfacegeom.Circle3)
+	return ok && planeAndWall(edge)
+}
+
+// looksLikeArc reports whether edge is a candidate for the open-arc route: a
+// retained Arc3 between exactly one retained Plane and one retained Cylinder,
+// with two distinct ends.
+func looksLikeArc(edge *topo.Edge) bool {
+	if edge == nil || edge.Start == nil || edge.End == nil || edge.Start == edge.End {
+		return false
+	}
+	_, ok := edge.Curve.(surfacegeom.Arc3)
+	return ok && planeAndWall(edge)
+}
+
+// planeAndWall reports whether edge is a retained curve between exactly one
+// retained Plane and one retained Cylinder, neither with a stated tag
+// departure.
+func planeAndWall(edge *topo.Edge) bool {
+	if !edge.RetainedCurve || len(edge.Faces) != 2 {
 		return false
 	}
 	planes, cylinders := 0, 0
@@ -95,6 +114,17 @@ func looksLikeRim(edge *topo.Edge) bool {
 	return planes == 1 && cylinders == 1
 }
 
+// circleOf is the centre and radius of a circle or an arc curve.
+func circleOf(curve surfacegeom.Curve) (r3.Vec, units.Value, bool) {
+	switch c := curve.(type) {
+	case surfacegeom.Circle3:
+		return c.Center, c.Radius, true
+	case surfacegeom.Arc3:
+		return c.Center, c.Radius, true
+	}
+	return r3.Vec{}, units.Value{}, false
+}
+
 // readRim reads the rim of edge from its two tags and the held wall. It
 // refuses (SR1, SR6) an edge whose tags and held mesh do not describe one rim.
 func readRim(edge *topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo.Face]int) (rim, error) {
@@ -108,7 +138,7 @@ func readRim(edge *topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo.Face
 	}
 	plane, planeOK := r.planeFace.Surface.(surfacegeom.Plane)
 	cyl, cylOK := r.wallFace.Surface.(surfacegeom.Cylinder)
-	circle, circleOK := edge.Curve.(surfacegeom.Circle3)
+	circleCentre, circleRadiusValue, circleOK := circleOf(edge.Curve)
 	if !planeOK || !cylOK || !circleOK {
 		return rim{}, fmt.Errorf("%w: the rim's faces or curve changed kind", decaderr.ErrUnsupported)
 	}
@@ -133,13 +163,13 @@ func readRim(edge *topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo.Face
 	}
 	o := plane.Frame.Origin()
 	center := cyl.Origin.Add(axis.Scale(n.Dot(o.Sub(cyl.Origin)) / n.Dot(axis)))
-	circleRadius, err := circle.Radius.In(units.Millimeter)
+	circleRadius, err := circleRadiusValue.In(units.Millimeter)
 	if err != nil {
 		return rim{}, fmt.Errorf("%w: the rim's circle has no radius", decaderr.ErrUnsupported)
 	}
 	r.center, r.n, r.radius = center, n, radius
 	slack := r.slack()
-	if center.Sub(circle.Center).Len() > slack || math.Abs(circleRadius-radius) > slack {
+	if center.Sub(circleCentre).Len() > slack || math.Abs(circleRadius-radius) > slack {
 		return rim{}, fmt.Errorf("%w: the rim's circle is not the meeting of its two tags", decaderr.ErrUnsupported)
 	}
 	r.u, ok = perpendicular(n)
@@ -284,9 +314,15 @@ func checkFinite(vals ...float64) error {
 // findLine returns the retained straight edge of body whose corners are key's,
 // and false when there is none or more than one.
 func findLine(body *topo.Body, key lineKey, slack float64) (*topo.Edge, bool) {
+	return findEdge(body, key, slack, looksLikeLine)
+}
+
+// findEdge returns the edge of body that satisfies ok and whose corners are
+// key's, and false when there is none or more than one.
+func findEdge(body *topo.Body, key lineKey, slack float64, ok func(*topo.Edge) bool) (*topo.Edge, bool) {
 	var found *topo.Edge
 	for _, e := range topobuild.Edges(body) {
-		if !looksLikeLine(e) {
+		if !ok(e) {
 			continue
 		}
 		p, q := e.Start.Position, e.End.Position

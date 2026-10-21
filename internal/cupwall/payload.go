@@ -366,7 +366,7 @@ func (cp View) Payload(ctx context.Context) (Payload, error) {
 }
 
 // SurveyClass names the payload class a staged survey diagnostic reports
-// (internal/reportvocab): the root type name this payload had before it moved.
+// (internal/verifypublish): the root type name this payload had before it moved.
 func (Payload) SurveyClass() string { return "cupPayload" }
 
 // MassRecords reads the two prism records whose difference forms the cup.

@@ -41,7 +41,7 @@ func secondMoments(record momentinput.Profile) (decad.SecondMoments, error) {
 }
 
 func rootRecordMeasurement(m measurement.Measurement) decad.Measurement {
-	return decad.Measurement{Value: m.Value, Exactness: decad.Exactness(m.Exactness), Bound: m.Bound}
+	return decad.Measurement{Value: m.Value, Exactness: m.Exactness, Bound: m.Bound}
 }
 
 func momentLine(u0, v0, u1, v1 float64) sectionrecord.CurveSegment {

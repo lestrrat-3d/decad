@@ -34,13 +34,23 @@ func Chamfer(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.P
 	return blend(ctx, env, b, fp, edges, blendSpec{dA: d, dB: d}, dDelta, "chamfer")
 }
 
+// edgeKind is the class of a selected edge.
+type edgeKind int
+
+const (
+	closedRim edgeKind = iota
+	straightLine
+	cylinderLine
+	openArc
+)
+
 func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Payload, edges []*topo.Edge,
 	spec blendSpec, delta float64, op string) (*topo.Body, bool, error) {
 	if len(edges) == 0 || !b.Solid {
 		return nil, false, nil
 	}
 	for _, e := range edges {
-		if !looksLikeRim(e) && !looksLikeLine(e) {
+		if !looksLikeRim(e) && !looksLikeLine(e) && !looksLikeCylLine(e) && !looksLikeArc(e) {
 			return nil, false, nil
 		}
 	}
@@ -54,38 +64,68 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 	type target struct {
 		rimKey  rimKey
 		lineKey lineKey
-		isLine  bool
+		kind    edgeKind
 	}
 	targets := make([]target, len(edges))
 	var corners []r3.Vec
+	claim := func(ends [2]lineEnd, scale float64) error {
+		for _, end := range ends {
+			for _, c := range corners {
+				if c.Sub(end.exact).Len() <= 1e-9*scale {
+					return fmt.Errorf("%w: two selected edges share a corner", decaderr.ErrUnsupported)
+				}
+			}
+			corners = append(corners, end.exact)
+		}
+		return nil
+	}
 	for i, e := range edges {
-		if looksLikeLine(e) {
+		switch {
+		case looksLikeLine(e):
 			l, err := readLine(e, fp, faceIndex)
 			if err != nil {
 				return nil, true, err
 			}
-			targets[i] = target{lineKey: l.key(), isLine: true}
-			for _, end := range l.ends {
-				for _, c := range corners {
-					if c.Sub(end.exact).Len() <= 1e-9*l.scale {
-						return nil, true, fmt.Errorf("%w: two selected edges share a corner", decaderr.ErrUnsupported)
-					}
-				}
-				corners = append(corners, end.exact)
+			if err := claim(l.ends, l.scale); err != nil {
+				return nil, true, err
 			}
-			continue
-		}
-		r, err := readRim(e, fp, faceIndex)
-		if err != nil {
-			return nil, true, err
-		}
-		if err := r.checkSize(spec); err != nil {
-			return nil, true, err
-		}
-		targets[i] = target{rimKey: r.key()}
-		for _, earlier := range targets[:i] {
-			if !earlier.isLine && earlier.rimKey == targets[i].rimKey {
-				return nil, true, fmt.Errorf("%w: the selection names one rim twice", decaderr.ErrDegenerate)
+			targets[i] = target{lineKey: l.key(), kind: straightLine}
+		case looksLikeArc(e):
+			a, err := readArc(e, fp, faceIndex)
+			if err != nil {
+				// An arc this route cannot read is left to the generic refusal, which
+				// names the whole selection.
+				return nil, false, nil //nolint:nilerr // declining is the generic refusal's cue, not a swallowed failure
+			}
+			if err := a.checkSize(spec); err != nil {
+				return nil, true, err
+			}
+			if err := claim(a.ends, a.scale); err != nil {
+				return nil, true, err
+			}
+			targets[i] = target{lineKey: a.arcKey(), kind: openArc}
+		case looksLikeCylLine(e):
+			c, err := readCylLine(e, fp, faceIndex)
+			if err != nil {
+				return nil, true, err
+			}
+			if err := claim(c.ends, c.scale); err != nil {
+				return nil, true, err
+			}
+			targets[i] = target{lineKey: c.key(), kind: cylinderLine}
+		default:
+			r, err := readRim(e, fp, faceIndex)
+			if err != nil {
+				return nil, true, err
+			}
+			if err := r.checkSize(spec); err != nil {
+				return nil, true, err
+			}
+			targets[i] = target{rimKey: r.key(), kind: closedRim}
+			for _, earlier := range targets[:i] {
+				if earlier.kind == closedRim && earlier.rimKey == targets[i].rimKey {
+					return nil, true, fmt.Errorf("%w: the selection names one rim twice", decaderr.ErrDegenerate)
+				}
 			}
 		}
 	}
@@ -93,9 +133,14 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 	for i, e := range edges {
 		if i > 0 {
 			var ok bool
-			if targets[i].isLine {
+			switch targets[i].kind {
+			case straightLine:
 				e, ok = findLine(cur, targets[i].lineKey, 64*ulp*math.Max(1, math.Abs(targets[i].lineKey.p0.X)))
-			} else {
+			case openArc:
+				e, ok = findArc(cur, targets[i].lineKey, 64*ulp*math.Max(1, math.Abs(targets[i].lineKey.p0.X)))
+			case cylinderLine:
+				e, ok = findCylLine(cur, targets[i].lineKey, 64*ulp*math.Max(1, math.Abs(targets[i].lineKey.p0.X)))
+			default:
 				e, ok = findRim(cur, targets[i].rimKey, 64*ulp*math.Max(1, math.Abs(targets[i].rimKey.radius)))
 			}
 			if !ok {
@@ -106,12 +151,23 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 		role := fmt.Sprintf("%s(%d)", op, i)
 		var next *topo.Body
 		var err error
-		if targets[i].isLine {
+		switch targets[i].kind {
+		case straightLine:
 			var l line
 			if l, err = readLine(e, curFP, faceIndex); err == nil {
 				next, err = rewriteLineEdge(ctx, env, curFP, l, spec, role, faceIndex)
 			}
-		} else {
+		case openArc:
+			var a arcRim
+			if a, err = readArc(e, curFP, faceIndex); err == nil {
+				next, err = rewriteArc(ctx, env, curFP, a, spec, role, faceIndex)
+			}
+		case cylinderLine:
+			var c cylLine
+			if c, err = readCylLine(e, curFP, faceIndex); err == nil {
+				next, err = rewriteCylLine(ctx, env, curFP, c, spec, role, faceIndex)
+			}
+		default:
 			var r rim
 			if r, err = readRim(e, curFP, faceIndex); err == nil {
 				next, err = rewriteRim(ctx, env, curFP, r, spec, role, faceIndex)

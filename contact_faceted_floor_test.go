@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/contactfaceted"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -284,7 +285,7 @@ func TestPositiveBoundFacetedUnionRefusesToolBelowLowerFace(t *testing.T) {
 	pp := union.n.Payload.(facetedPayload)
 	require.Positive(t, pp.MeshBound)
 	require.Nil(t, pp.LowerSupport)
-	_, proven, err := sourceFacetedAxisSupport(t.Context(), union, r3.Identity())
+	_, proven, err := contactfaceted.AxisSupportAtPose(t.Context(), &union.n, r3.Identity())
 	require.NoError(t, err)
 	require.False(t, proven)
 }
@@ -386,11 +387,11 @@ func TestSweepPairRealFacetedUnionClearAndImpact(t *testing.T) {
 	require.Equal(t, ContactSeparated, impact.Samples[0].Ideal.Relation)
 	require.Equal(t, ContactTouching, impact.Event.Relation)
 	require.Len(t, impact.Event.Manifold.Points, 4)
-	proof, ok, err := sourceFacetedAxisSupport(t.Context(), union, r3.Identity())
+	proof, ok, err := contactfaceted.AxisSupportAtPose(t.Context(), &union.n, r3.Identity())
 	require.NoError(t, err)
 	require.True(t, ok)
 	for _, point := range impact.Event.Manifold.Points {
-		require.Same(t, proof.face, point.FaceB)
+		require.Same(t, faceHandle(proof.Face), point.FaceB)
 		require.Equal(t, r3.Vec{Z: 1}, point.Normal.Value)
 	}
 	for _, elapsed := range []float64{0, 0.1, 0.25, 0.5} {

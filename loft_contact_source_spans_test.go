@@ -5,6 +5,8 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/loftdirect"
+
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -71,54 +73,54 @@ func TestLoftCurvedSourceCapsRealIndependentWedgeRefusesWithoutBoundaryProof(t *
 	require.Zero(t, prism.n.Origin.Producer)
 	require.Zero(t, loft.n.Origin.Producer)
 	require.False(t, prism.n.Doc == loft.n.Doc)
-	certificate, certified, certErr := certifyLoftSourceSpanCaps(t.Context(),
+	certificate, certified, certErr := loftdirect.CertifyLoftSourceSpanCaps(t.Context(),
 		proofbound.NewWallWorkBudgetWithOperation(4096, proofbound.NewWorkBudget(t.Context())),
-		prism, loft)
+		bodyNode(prism), bodyNode(loft))
 	require.NoError(t, certErr)
 	require.True(t, certified)
-	require.True(t, certificate.prism == prism && certificate.loft == loft)
+	require.True(t, certificate.Prism == bodyNode(prism) && certificate.Loft == bodyNode(loft))
 	require.Equal(t, [3]string{"0", "10", "12"}, [3]string{
-		certificate.levels[0].RatString(), certificate.levels[1].RatString(),
-		certificate.levels[2].RatString(),
+		certificate.Levels[0].RatString(), certificate.Levels[1].RatString(),
+		certificate.Levels[2].RatString(),
 	})
-	require.Positive(t, certificate.visits)
-	require.Less(t, certificate.visits, uint64(4096))
+	require.Positive(t, certificate.Visits)
+	require.Less(t, certificate.Visits, uint64(4096))
 	for cap := range 2 {
-		require.Equal(t, 4, len(certificate.prismCaps[cap]))
-		require.Equal(t, 3, len(certificate.loftCaps[cap]))
+		require.Equal(t, 4, len(certificate.PrismCaps[cap]))
+		require.Equal(t, 3, len(certificate.LoftCaps[cap]))
 		var arcsWithWalls int
-		for _, span := range certificate.loftCaps[cap] {
-			require.True(t, span.body == loft)
-			require.Equal(t, float64(0), span.tStart)
-			require.Equal(t, float64(1), span.tEnd)
-			if _, arc := span.curve.(sectionrecord.ArcSeg); arc {
-				require.Positive(t, len(span.wallFaces))
+		for _, span := range certificate.LoftCaps[cap] {
+			require.True(t, span.Body == bodyNode(loft))
+			require.Equal(t, float64(0), span.TStart)
+			require.Equal(t, float64(1), span.TEnd)
+			if _, arc := span.Curve.(sectionrecord.ArcSeg); arc {
+				require.Positive(t, len(span.WallFaces))
 				arcsWithWalls++
 			}
 		}
 		require.Equal(t, 1, arcsWithWalls)
 	}
-	ordered, certifiedOrder, orderErr := certifyLoftCapSourceOrder(t.Context(),
+	ordered, certifiedOrder, orderErr := loftdirect.CertifyLoftCapSourceOrder(t.Context(),
 		proofbound.NewWallWorkBudgetWithOperation(4096, proofbound.NewWorkBudget(t.Context())),
 		certificate)
 	require.NoError(t, orderErr)
 	require.True(t, certifiedOrder)
-	require.Positive(t, ordered.visits)
+	require.Positive(t, ordered.Visits)
 	for cap := range 2 {
-		require.NotEmpty(t, ordered.caps[cap])
+		require.NotEmpty(t, ordered.Caps[cap])
 		var sharedCells, cutArcs int
-		for _, cell := range ordered.caps[cap] {
-			require.NotEmpty(t, cell.edges)
-			if cell.prism && cell.loft {
+		for _, cell := range ordered.Caps[cap] {
+			require.NotEmpty(t, cell.Edges)
+			if cell.Prism && cell.Loft {
 				sharedCells++
 			}
-			for _, edge := range cell.edges {
-				require.True(t, edge.span.body == prism || edge.span.body == loft)
-				require.Less(t, edge.tStart, edge.tEnd)
-				require.Equal(t, edge.span.body.n.Origin.Producer,
-					edge.span.capFace.Producer)
-				if _, arc := edge.span.curve.(sectionrecord.ArcSeg); arc && edge.partial {
-					require.True(t, edge.span.body == loft)
+			for _, edge := range cell.Edges {
+				require.True(t, edge.Span.Body == bodyNode(prism) || edge.Span.Body == bodyNode(loft))
+				require.Less(t, edge.TStart, edge.TEnd)
+				require.Equal(t, edge.Span.Body.Origin.Producer,
+					edge.Span.CapFace.Producer)
+				if _, arc := edge.Span.Curve.(sectionrecord.ArcSeg); arc && edge.Partial {
+					require.True(t, edge.Span.Body == bodyNode(loft))
 					cutArcs++
 				}
 			}
@@ -126,7 +128,7 @@ func TestLoftCurvedSourceCapsRealIndependentWedgeRefusesWithoutBoundaryProof(t *
 		require.Positive(t, sharedCells)
 		require.Positive(t, cutArcs)
 	}
-	_, certifiedOrder, orderErr = certifyLoftCapSourceOrder(t.Context(),
+	_, certifiedOrder, orderErr = loftdirect.CertifyLoftCapSourceOrder(t.Context(),
 		proofbound.NewWallWorkBudgetWithOperation(1, proofbound.NewWorkBudget(t.Context())),
 		certificate)
 	require.ErrorIs(t, orderErr, proofbound.ErrWallWorkBudget)
@@ -143,7 +145,7 @@ func TestLoftCurvedSourceCapsRealIndependentWedgeRefusesWithoutBoundaryProof(t *
 		},
 		ErrFn: canceled.Err,
 	}
-	_, certifiedOrder, orderErr = certifyLoftCapSourceOrder(canceled,
+	_, certifiedOrder, orderErr = loftdirect.CertifyLoftCapSourceOrder(canceled,
 		proofbound.NewWallWorkBudgetWithOperation(4096, operation), certificate)
 	require.ErrorIs(t, orderErr, context.Canceled)
 	require.False(t, certifiedOrder)
@@ -184,48 +186,48 @@ func TestLoftCurvedSourceCapsRealIndependentWedgeRefusesWithoutBoundaryProof(t *
 		arcLoft, loftErr := Loft(t.Context(), New(), arcSections[0], arcProfiles[0],
 			arcSections[1], arcProfiles[1])
 		require.NoError(t, loftErr)
-		arcSource, sourceOK, sourceErr := certifyLoftSourceSpanCaps(t.Context(),
+		arcSource, sourceOK, sourceErr := loftdirect.CertifyLoftSourceSpanCaps(t.Context(),
 			proofbound.NewWallWorkBudgetWithOperation(4096, proofbound.NewWorkBudget(t.Context())),
-			prism, arcLoft)
+			bodyNode(prism), bodyNode(arcLoft))
 		require.NoError(t, sourceErr)
 		require.True(t, sourceOK)
-		require.Len(t, arcSource.loftCaps[0], arcs+2)
+		require.Len(t, arcSource.LoftCaps[0], arcs+2)
 		arcCount := 0
-		for _, span := range arcSource.loftCaps[0] {
-			if _, isArc := span.curve.(sectionrecord.ArcSeg); isArc {
+		for _, span := range arcSource.LoftCaps[0] {
+			if _, isArc := span.Curve.(sectionrecord.ArcSeg); isArc {
 				arcCount++
 			}
 		}
 		require.Equal(t, arcs, arcCount)
-		conservativeSegments := len(arcSource.prismCaps[0]) +
-			len(arcSource.loftCaps[0]) - arcCount + 256*arcCount
+		conservativeSegments := len(arcSource.PrismCaps[0]) +
+			len(arcSource.LoftCaps[0]) - arcCount + 256*arcCount
 		require.Greater(t, conservativeSegments, prismcells.MaxArrangementSegments)
 		steps := 0
 		operation := &proofbound.WorkBudget{
 			StepFn: func() error { steps++; return nil },
 			ErrFn:  t.Context().Err,
 		}
-		_, admitted, capErr := certifyLoftCapSourceOrder(t.Context(),
+		_, admitted, capErr := loftdirect.CertifyLoftCapSourceOrder(t.Context(),
 			proofbound.NewWallWorkBudgetWithOperation(4096, operation), arcSource)
 		require.NoError(t, capErr)
 		require.False(t, admitted)
 		require.Positive(t, steps)
 		require.Less(t, steps,
-			len(arcSource.prismCaps[0])+len(arcSource.loftCaps[0]))
+			len(arcSource.PrismCaps[0])+len(arcSource.LoftCaps[0]))
 	})
 	for _, tc := range []struct {
 		name          string
 		first, second *Body
 	}{{loftOperandPrismFirst, prism, loft}, {loftOperandLoftFirst, loft, prism}} {
 		t.Run(tc.name, func(t *testing.T) {
-			source, admitted, sourceErr := certifyLoftSourcePartition(t.Context(),
-				tc.first, tc.second, proofbound.NewWorkBudget(t.Context()), false)
+			source, admitted, sourceErr := loftdirect.CertifyLoftSourcePartition(t.Context(),
+				bodyNode(tc.first), bodyNode(tc.second), proofbound.NewWorkBudget(t.Context()), false)
 			require.NoError(t, sourceErr)
 			require.False(t, admitted)
 			require.Zero(t, source.SourceVisits)
 
-			boundary, accepted, boundaryErr := certifyLoftOutputBoundary(t.Context(),
-				tc.first, tc.second, proofbound.NewWorkBudget(t.Context()))
+			boundary, accepted, boundaryErr := loftdirect.CertifyLoftOutputBoundary(t.Context(),
+				bodyNode(tc.first), bodyNode(tc.second), proofbound.NewWorkBudget(t.Context()))
 			require.NoError(t, boundaryErr)
 			require.False(t, accepted)
 			require.Zero(t, len(boundary.Shell.Vertices))
@@ -287,34 +289,34 @@ func TestLoftCircleSourceCapsRealDiscRefusesWithoutBoundaryProof(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, float64(4), radius)
 
-	spans, accepted, err := certifyLoftSourceSpanCaps(t.Context(),
+	spans, accepted, err := loftdirect.CertifyLoftSourceSpanCaps(t.Context(),
 		proofbound.NewWallWorkBudgetWithOperation(4096, proofbound.NewWorkBudget(t.Context())),
-		prism, loft)
+		bodyNode(prism), bodyNode(loft))
 	require.NoError(t, err)
 	require.True(t, accepted)
-	require.Positive(t, spans.visits)
-	require.Less(t, spans.visits, uint64(4096))
+	require.Positive(t, spans.Visits)
+	require.Less(t, spans.Visits, uint64(4096))
 	for cap := range 2 {
-		require.Equal(t, 1, len(spans.prismCaps[cap]))
-		span := spans.prismCaps[cap][0]
-		require.True(t, span.body == prism)
-		require.Equal(t, 0, span.segment)
+		require.Equal(t, 1, len(spans.PrismCaps[cap]))
+		span := spans.PrismCaps[cap][0]
+		require.True(t, span.Body == bodyNode(prism))
+		require.Equal(t, 0, span.Segment)
 		role := provenance.RoleCapStart
 		if cap == 1 {
 			role = provenance.RoleCapEnd
 		}
-		require.Equal(t, role, span.capFace.Role)
-		require.Equal(t, prism.n.Origin.Producer, span.capFace.Producer)
-		require.Equal(t, 0, len(span.wallFaces))
-		got, ok := span.curve.(sectionrecord.CircleSeg)
+		require.Equal(t, role, span.CapFace.Role)
+		require.Equal(t, prism.n.Origin.Producer, span.CapFace.Producer)
+		require.Equal(t, 0, len(span.WallFaces))
+		got, ok := span.Curve.(sectionrecord.CircleSeg)
 		require.True(t, ok)
 		require.Equal(t, circle, got)
-		require.Equal(t, circle.TStart, span.tStart)
-		require.Equal(t, circle.TEnd, span.tEnd)
-		require.Equal(t, circle.TStart > circle.TEnd, span.reversed)
+		require.Equal(t, circle.TStart, span.TStart)
+		require.Equal(t, circle.TEnd, span.TEnd)
+		require.Equal(t, circle.TStart > circle.TEnd, span.Reversed)
 	}
 	for _, pair := range [][2]*Body{{prism, loft}, {loft, prism}} {
-		_, admitted, sourceErr := certifyLoftSourcePartition(t.Context(), pair[0], pair[1],
+		_, admitted, sourceErr := loftdirect.CertifyLoftSourcePartition(t.Context(), bodyNode(pair[0]), bodyNode(pair[1]),
 			proofbound.NewWorkBudget(t.Context()), false)
 		require.NoError(t, sourceErr)
 		require.False(t, admitted)
@@ -327,7 +329,7 @@ func TestLoftCircleSourceCapsRealDiscRefusesWithoutBoundaryProof(t *testing.T) {
 			},
 			ErrFn: func() error { return nil },
 		}
-		_, admitted, sourceErr = certifyLoftSourcePartition(t.Context(), pair[0], pair[1], stopAtReader, false)
+		_, admitted, sourceErr = loftdirect.CertifyLoftSourcePartition(t.Context(), bodyNode(pair[0]), bodyNode(pair[1]), stopAtReader, false)
 		require.ErrorIs(t, sourceErr, proofbound.ErrWallWorkBudget)
 		require.False(t, admitted)
 		require.Equal(t, 1, steps)
@@ -358,7 +360,7 @@ func TestLoftCircleSourceSpanRefusesInvalidRecord(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			circle := valid
 			tc.change(&circle)
-			_, accepted := loftSourceCapSpanOf(nil, provenance.RoleCapStart, 0, circle)
+			_, accepted := loftdirect.LoftSourceCapSpanOf(nil, provenance.RoleCapStart, 0, circle)
 			require.False(t, accepted)
 		})
 	}
@@ -384,12 +386,12 @@ func TestLoftFitSplineSourceCapsRealWedge(t *testing.T) {
 	require.Equal(t, prism.n.Origin.Producer, loft.n.Origin.Producer)
 
 	budget := proofbound.NewWallWorkBudgetWithOperation(4096, proofbound.NewWorkBudget(t.Context()))
-	spans, accepted, err := certifyLoftSourceSpanCaps(t.Context(), budget, prism, loft)
+	spans, accepted, err := loftdirect.CertifyLoftSourceSpanCaps(t.Context(), budget, bodyNode(prism), bodyNode(loft))
 	require.NoError(t, err)
 	require.True(t, accepted)
-	require.True(t, spans.prism == prism && spans.loft == loft)
-	require.Positive(t, spans.visits)
-	require.Less(t, spans.visits, uint64(4096))
+	require.True(t, spans.Prism == bodyNode(prism) && spans.Loft == bodyNode(loft))
+	require.Positive(t, spans.Visits)
+	require.Less(t, spans.Visits, uint64(4096))
 	lp := loft.n.Payload.(loftPayload)
 	for cap := range 2 {
 		want := lp.Profile0.Outer.Segments
@@ -398,47 +400,47 @@ func TestLoftFitSplineSourceCapsRealWedge(t *testing.T) {
 			want = lp.Profile1.Outer.Segments
 			role = provenance.RoleCapEnd
 		}
-		require.Len(t, spans.loftCaps[cap], 3)
+		require.Len(t, spans.LoftCaps[cap], 3)
 		var fitCount int
-		for i, span := range spans.loftCaps[cap] {
-			require.True(t, span.body == loft)
-			require.Equal(t, i, span.segment)
-			require.Equal(t, loft.n.Origin.Producer, span.capFace.Producer)
-			require.Equal(t, role, span.capFace.Role)
-			require.NotEmpty(t, span.wallFaces)
-			for _, face := range span.wallFaces {
+		for i, span := range spans.LoftCaps[cap] {
+			require.True(t, span.Body == bodyNode(loft))
+			require.Equal(t, i, span.Segment)
+			require.Equal(t, loft.n.Origin.Producer, span.CapFace.Producer)
+			require.Equal(t, role, span.CapFace.Role)
+			require.NotEmpty(t, span.WallFaces)
+			for _, face := range span.WallFaces {
 				require.Equal(t, loft.n.Origin.Producer, face.Producer)
 			}
-			fit, isFit := span.curve.(sectionrecord.FitSplineSeg)
+			fit, isFit := span.Curve.(sectionrecord.FitSplineSeg)
 			if !isFit {
 				continue
 			}
 			fitCount++
 			require.Len(t, fit.Fit, 5)
-			require.Equal(t, want[i], span.curve)
-			require.Equal(t, float64(0), span.tStart)
-			require.Equal(t, float64(1), span.tEnd)
-			require.False(t, span.reversed)
+			require.Equal(t, want[i], span.Curve)
+			require.Equal(t, float64(0), span.TStart)
+			require.Equal(t, float64(1), span.TEnd)
+			require.False(t, span.Reversed)
 		}
 		require.Equal(t, 1, fitCount)
 	}
 	for _, order := range [][2]*Body{{prism, loft}, {loft, prism}} {
-		_, admitted, sourceErr := certifyLoftSourcePartition(t.Context(), order[0], order[1],
+		_, admitted, sourceErr := loftdirect.CertifyLoftSourcePartition(t.Context(), bodyNode(order[0]), bodyNode(order[1]),
 			proofbound.NewWorkBudget(t.Context()), false)
 		require.NoError(t, sourceErr)
 		require.False(t, admitted)
-		boundary, outputAdmitted, outputErr := certifyLoftOutputBoundaryForDirectShell(t.Context(),
-			order[0], order[1], proofbound.NewWorkBudget(t.Context()))
+		boundary, outputAdmitted, outputErr := loftdirect.CertifyLoftOutputBoundaryForDirectShell(t.Context(),
+			bodyNode(order[0]), bodyNode(order[1]), proofbound.NewWorkBudget(t.Context()))
 		require.NoError(t, outputErr)
 		require.False(t, outputAdmitted)
 		require.Empty(t, boundary.Shell.Triangles)
 	}
 
 	shortBudget := proofbound.NewWallWorkBudgetWithOperation(1, proofbound.NewWorkBudget(t.Context()))
-	partial, accepted, err := certifyLoftSourceSpanCaps(t.Context(), shortBudget, prism, loft)
+	partial, accepted, err := loftdirect.CertifyLoftSourceSpanCaps(t.Context(), shortBudget, bodyNode(prism), bodyNode(loft))
 	require.ErrorIs(t, err, proofbound.ErrWallWorkBudget)
 	require.False(t, accepted)
-	require.True(t, partial.prism == nil && partial.loft == nil)
+	require.True(t, partial.Prism == nil && partial.Loft == nil)
 
 	canceled, cancel := context.WithCancel(t.Context())
 	steps := 0
@@ -452,10 +454,10 @@ func TestLoftFitSplineSourceCapsRealWedge(t *testing.T) {
 		},
 		ErrFn: canceled.Err,
 	}
-	partial, accepted, err = certifyLoftSourceSpanCaps(canceled,
-		proofbound.NewWallWorkBudgetWithOperation(4096, operation), prism, loft)
+	partial, accepted, err = loftdirect.CertifyLoftSourceSpanCaps(canceled,
+		proofbound.NewWallWorkBudgetWithOperation(4096, operation), bodyNode(prism), bodyNode(loft))
 	require.ErrorIs(t, err, context.Canceled)
 	require.False(t, accepted)
-	require.True(t, partial.prism == nil && partial.loft == nil)
+	require.True(t, partial.Prism == nil && partial.Loft == nil)
 	require.Equal(t, 16, steps)
 }

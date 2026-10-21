@@ -104,7 +104,7 @@ type SegmentWalk struct {
 	// bracket. It exists because radius is NOT an exact leaf the way a
 	// recorded coordinate is, and a reading that treats it as one can publish
 	// an interval its own truth sits outside of. The analytic surveys
-	// (survey.go's minimum-radius arms, and survey2d.go through
+	// (internal/verifyrun/survey.go's minimum-radius arms, and survey2d.go through
 	// SurveyElem.rrBound) take it; a consumer that reads radius as a leaf
 	// still owes its own account of the error, from its own envelope.
 	RadiusBound float64

@@ -14,6 +14,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Case names the contact admission gate tests share.
+const (
+	caseSurfaceResult       = "surface result"
+	caseSectionDisplacement = "section displacement"
+)
+
 // TestContactBoxAdmissionGates builds a real box, then breaks one fact of its
 // payload, kind or faces at a time. Each break must make both source-box
 // readers refuse; the unbroken box must read as six mapped faces.
@@ -41,8 +47,8 @@ func TestContactBoxAdmissionGates(t *testing.T) {
 		edit  func(*prismPayload)
 		axial bool
 	}{
-		{"surface result", func(p *prismPayload) { p.SurfaceResult = true }, true},
-		{"section displacement", func(p *prismPayload) { p.SectionDelta = 1 }, true},
+		{caseSurfaceResult, func(p *prismPayload) { p.SurfaceResult = true }, true},
+		{caseSectionDisplacement, func(p *prismPayload) { p.SectionDelta = 1 }, true},
 		{"near level displacement", func(p *prismPayload) { p.Z0Delta = 1 }, true},
 		{"far level displacement", func(p *prismPayload) { p.Z1Delta = 1 }, true},
 		{"placed off the signed axes", func(p *prismPayload) { p.Xform = turn }, true},

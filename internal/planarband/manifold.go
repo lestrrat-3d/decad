@@ -5,13 +5,15 @@ import (
 	"slices"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/planarfeaturemap"
+	vocab "github.com/lestrrat-3d/decad/report"
+
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/pair"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -27,7 +29,7 @@ import (
 // neither patch can certify otherwise keeps the reason report already carries.
 // A positive band appends the lifted set of each support plane after the
 // exact points (agent-docs/multibody-dynamics-design.md §10.5).
-func publishManifold(budget *proofbound.WorkBudget, report *reportvocab.ContactReport, a, b *planar.PlanarSolid,
+func publishManifold(budget *proofbound.WorkBudget, report *contactReport, a, b *planar.PlanarSolid,
 	result planar.PlanarResult, convexA, convexB bool, band proofarith.Dyadic) error {
 	var points []planar.PatchPoint
 	var planes []planar.SupportPlane
@@ -41,7 +43,7 @@ func publishManifold(budget *proofbound.WorkBudget, report *reportvocab.ContactR
 				return err
 			}
 			if manifold.Points == nil {
-				report.Reason = reportvocab.ContactNonConvex
+				report.Reason = vocab.ContactNonConvex
 				return nil
 			}
 			points, planes = manifold.Points, manifold.Supports
@@ -52,7 +54,7 @@ func publishManifold(budget *proofbound.WorkBudget, report *reportvocab.ContactR
 			return err
 		}
 		if manifold.Points == nil {
-			report.Reason = reportvocab.ContactReasonOf(manifold.Reason)
+			report.Reason = pair.ContactReasonOf(manifold.Reason)
 			return nil
 		}
 		points, planes = manifold.Points, manifold.Supports
@@ -66,7 +68,7 @@ func publishManifold(budget *proofbound.WorkBudget, report *reportvocab.ContactR
 		}
 		if points == nil {
 			if reason != pair.NoReason {
-				report.Reason = reportvocab.ContactReasonOf(reason)
+				report.Reason = pair.ContactReasonOf(reason)
 			}
 			return nil
 		}
@@ -74,7 +76,7 @@ func publishManifold(budget *proofbound.WorkBudget, report *reportvocab.ContactR
 	default:
 		return nil
 	}
-	features, err := reportvocab.NewPlanarFeatureMap(report.A, report.B, a, b)
+	features, err := planarfeaturemap.NewPlanarFeatureMap(report.A, report.B, a, b)
 	if err != nil {
 		return err
 	}
@@ -97,7 +99,7 @@ func publishManifold(budget *proofbound.WorkBudget, report *reportvocab.ContactR
 			manifold.Points = append(manifold.Points, extra.Points...)
 		}
 	}
-	report.Manifold, report.Reason = manifold, reportvocab.ContactNoReason
+	report.Manifold, report.Reason = manifold, vocab.ContactNoReason
 	return nil
 }
 
@@ -107,7 +109,7 @@ func publishManifold(budget *proofbound.WorkBudget, report *reportvocab.ContactR
 // The planes are read with the B body's faces first, then A's, each in face
 // order. The gap becomes [0 ± g], g its upper end, and the manifold is every
 // such plane's lifted set. A pair that meets neither stays Separated.
-func publishSupportBand(budget *proofbound.WorkBudget, report *reportvocab.ContactReport, a, b *planar.PlanarSolid,
+func publishSupportBand(budget *proofbound.WorkBudget, report *contactReport, a, b *planar.PlanarSolid,
 	result planar.PlanarResult, band proofarith.Dyadic) error {
 	if band.Sign() <= 0 || result.Gap == nil {
 		return nil
@@ -125,9 +127,9 @@ func publishSupportBand(budget *proofbound.WorkBudget, report *reportvocab.Conta
 	if !measurement.FiniteValues(g) {
 		return nil
 	}
-	report.Relation, report.Reason = reportvocab.ContactBand, reportvocab.ContactNoReason
+	report.Relation, report.Reason = vocab.ContactBand, vocab.ContactNoReason
 	report.Gap = &measurement.Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(g), Exactness: measurement.ExactnessOf(g)}
-	features, err := reportvocab.NewPlanarFeatureMap(report.A, report.B, a, b)
+	features, err := planarfeaturemap.NewPlanarFeatureMap(report.A, report.B, a, b)
 	if err != nil {
 		return err
 	}
@@ -143,7 +145,7 @@ func publishSupportBand(budget *proofbound.WorkBudget, report *reportvocab.Conta
 // entries are ordered by A's feature, then B's, then exact coordinate (§9.5).
 
 type patchEntry struct {
-	point      reportvocab.ContactPoint
+	point      contactPoint
 	keyA, keyB [2]int
 	onA, onB   planar.Point3
 }
@@ -153,33 +155,33 @@ type patchEntry struct {
 // (AmbiguousFeature), a witness ball over PointResolution (PointTooCoarse), or
 // a normal angle over NormalResolution (NoNormalProof). A point the kernel
 // gives no Separation publishes an exact zero.
-func patchManifold(req reportvocab.ContactRequest, points []planar.PatchPoint,
-	features *reportvocab.PlanarFeatureMap) (*reportvocab.ContactManifold, reportvocab.ContactReason) {
+func patchManifold(req vocab.ContactRequest, points []planar.PatchPoint,
+	features *planarfeaturemap.PlanarFeatureMap) (*contactManifold, vocab.ContactReason) {
 	entries := make([]patchEntry, 0, len(points))
 	for _, p := range points {
 		featureA, okA := features.Feature(0, p.A)
 		featureB, okB := features.Feature(1, p.B)
 		if !okA || !okB {
-			return nil, reportvocab.ContactAmbiguousFeature
+			return nil, vocab.ContactAmbiguousFeature
 		}
 		onA, validA := pairbox.PointMeasurement([3]*big.Rat(p.OnA))
 		onB, validB := pairbox.PointMeasurement([3]*big.Rat(p.OnB))
 		if !validA || !validB || onA.Bound.Base() > req.PointResolution.Base() ||
 			onB.Bound.Base() > req.PointResolution.Base() {
-			return nil, reportvocab.ContactPointTooCoarse
+			return nil, vocab.ContactPointTooCoarse
 		}
 		normal, angle, ok := pairbox.PlanarNormalMeasurement(p.Normal)
 		if !ok || angle.Base() > req.NormalResolution.Base() {
-			return nil, reportvocab.ContactNoNormalProof
+			return nil, vocab.ContactNoNormalProof
 		}
-		point := reportvocab.ContactPoint{OnA: onA, OnB: onB, Normal: normal, NormalAngle: angle,
+		point := contactPoint{OnA: onA, OnB: onB, Normal: normal, NormalAngle: angle,
 			Separation: p.Separation.Measurement(), FaceA: featureA.Face, FaceB: featureB.Face,
 			FeatureA: featureA, FeatureB: featureB}
 		entries = append(entries, patchEntry{point: point, keyA: features.Order(0, featureA),
 			keyB: features.Order(1, featureB), onA: p.OnA, onB: p.OnB})
 	}
 	sort.SliceStable(entries, func(i, j int) bool { return patchEntryLess(&entries[i], &entries[j]) })
-	out := make([]reportvocab.ContactPoint, 0, len(entries))
+	out := make([]contactPoint, 0, len(entries))
 	for i := range entries {
 		if i > 0 && !patchEntryLess(&entries[i-1], &entries[i]) {
 			// Equal keys and equal exact coordinates: the same entry reached
@@ -188,7 +190,7 @@ func patchManifold(req reportvocab.ContactRequest, points []planar.PatchPoint,
 		}
 		out = append(out, entries[i].point)
 	}
-	return &reportvocab.ContactManifold{Points: out}, reportvocab.ContactNoReason
+	return &contactManifold{Points: out}, vocab.ContactNoReason
 }
 
 func patchEntryLess(x, y *patchEntry) bool {

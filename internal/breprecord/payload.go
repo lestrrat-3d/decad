@@ -97,7 +97,7 @@ type Payload struct {
 }
 
 // SurveyClass names the payload class a staged survey diagnostic reports
-// (internal/reportvocab), the name the evaluator has always published for it.
+// (internal/verifypublish), the name the evaluator has always published for it.
 func (Payload) SurveyClass() string { return "brepPayload" }
 
 func (f Face) Planar() bool { return f.Region != nil }

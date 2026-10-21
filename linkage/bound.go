@@ -1,0 +1,329 @@
+package linkage
+
+import (
+	"fmt"
+	"math/big"
+
+	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
+
+	"github.com/lestrrat-3d/decad/internal/contactround"
+	"github.com/lestrrat-3d/decad/internal/linkagebound"
+	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/motionbound"
+	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
+	"github.com/lestrrat-3d/decad/internal/topo"
+
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/r3"
+)
+
+// This file proves the bounds agent-docs/linkage-check-design.md §5 builds its
+// interval certificate from, every one over exact rationals so that no float
+// rounding sits between a bound and the claim it supports:
+//
+//   - each joint's exact frame and each link's ideal pose, the exact
+//     composition of its path joints' ideal poses (§5.1);
+//   - ρ_{ik}, a proven upper bound on the distance from joint i's axis of
+//     every point of link k once the joints strictly below i on its path have
+//     moved to any value the drive reaches, read from the link's rest box
+//     through balls carried down the path (§5.2);
+//   - the chain travel bound τ, summed joint by joint below a pair's lowest
+//     common ancestor (§5.2), and the reach the swept-box exclusion inflates a
+//     link body's box by (§6 step 4);
+//   - the projection bound L_n (§5.8): each body's inflated box corners and
+//     their velocities under each joint at a pose, the second-derivative
+//     bounds B_ij and the remainder Rem they give over an interval, and the
+//     separation of two bodies along a coordinate direction that follows.
+//
+// Every square root is proofbound.RatSqrtUp, an up-rounded float read back as
+// an exact rational; every sum and product after it is big.Rat arithmetic.
+
+type linkBound = linkagebound.ReachBound
+type cornerReading = linkagebound.Reading
+type cornerBounds = linkagebound.Bounds
+type projectionSide = linkagebound.Side
+
+// linkageFrames reads every joint's exact frame (motionbound.MotionFrame);
+// ok is false when an axis, direction or centre is not representable.
+func linkageFrames[B comparable](spec *linkageSpec[B]) ([]motionbound.MotionFrame, bool) {
+	frames := make([]motionbound.MotionFrame, len(spec.joints))
+	for k, jt := range spec.joints {
+		ms := motionbound.Spec{Kind: motionbound.MotionPrismatic, Dir: jt.axis}
+		if jt.revolute {
+			ms = motionbound.Spec{Kind: motionbound.MotionRevolute, Center: jt.center, Axis: jt.axis}
+		}
+		frame, ok := motionbound.NewMotionFrame(ms)
+		if !ok {
+			return nil, false
+		}
+		frames[k] = frame
+	}
+	return frames, true
+}
+
+// jointReach is m_i of agent-docs/linkage-check-design.md §5.2: the farthest joint
+// i's value reaches from 0 over the drive, the largest |w| over its
+// waypoints — radians with π at its upper enclosure for an angle, millimetres
+// exactly for a length, and 0 for an unlisted joint. q(s) is linear within
+// each segment, so every value the drive visits lies within it.
+func jointReach[B comparable](jt linkJoint[B]) *big.Rat {
+	if jt.dep != nil {
+		return new(big.Rat).Set(jt.depReach)
+	}
+	return linkagebound.JointReach(jt.points)
+}
+
+// jointParam is joint jt's exact value at the fraction s: its segment's
+// exact interpolation at the local fraction.
+func jointParam[B comparable](jt linkJoint[B], s *big.Rat) motionbound.MotionParam {
+	seg, t := jt.segment(s)
+	return seg.FromP.Lerp(seg.ToP, t)
+}
+
+// jointSpan is |Δq_i| of agent-docs/linkage-check-design.md §5.2 while the
+// fraction runs between sa and sb: a proven upper bound on the joint's total
+// variation, the sum of motionbound.MotionParam.SpanUpper over the pieces
+// that every waypoint strictly inside the interval cuts it into. A joint that
+// turns back at a waypoint travels farther than its two ends differ, and the
+// sum is additive over any split of the interval, which is what the interval
+// certificate's two one-sided bounds need. With no waypoint inside it is the
+// span of the two ends.
+func jointSpan[B comparable](jt linkJoint[B], sa, sb *big.Rat) *big.Rat {
+	return linkagebound.JointSpan(jt.points, sa, sb, func(s *big.Rat) motionbound.MotionParam {
+		return jointParam(jt, s)
+	})
+}
+
+// reachSource adapts the root linkage's bodies and joints to the exact
+// ball and cylinder calculation in internal/linkagebound.
+type reachSource[B comparable] struct {
+	spec   *linkageSpec[B]
+	frames []motionbound.MotionFrame
+	node   func(B) *topo.Body
+}
+
+func (s reachSource[B]) JointCount() int                     { return len(s.spec.joints) }
+func (s reachSource[B]) Parent(i int) int                    { return s.spec.joints[i].parent }
+func (s reachSource[B]) Revolute(i int) bool                 { return s.spec.joints[i].revolute }
+func (s reachSource[B]) Frame(i int) motionbound.MotionFrame { return s.frames[i] }
+func (s reachSource[B]) RestBox(i int) (motionbound.RatVec, motionbound.RatVec, bool) {
+	bodies := s.spec.joints[i].link.bodies
+	boxes := make([]measurement.Box, len(bodies))
+	for n, body := range bodies {
+		boxes[n] = s.node(body).Bounds
+	}
+	return linkagebound.RestBox(boxes)
+}
+func (s reachSource[B]) Reach(i int) *big.Rat { return jointReach(s.spec.joints[i]) }
+
+// chainTravel is τ^(L)_k of agent-docs/linkage-check-design.md §5.2: a proven upper
+// bound on how far any point of link k moves, relative to the links at and
+// above its ancestor L, while the fraction runs from a to b — the telescoping
+// sum over the joints on its path strictly below L of ρ_{ik}·|Δq_i| for a
+// revolute and |Δq_i| for a prismatic, |Δq_i| taken by jointSpan, or for a
+// loop's dependent by linkagebound.SpanUpper over the readings intervalGate took; nil
+// when a dependent's readings are missing. below is the position on the path
+// of the first joint below L: 0 when L is the ground.
+func chainTravel[B comparable](spec *linkageSpec[B], b linkBound, below int, sa, sb *big.Rat) *big.Rat {
+	return linkagebound.PathTravel(b.Path, b.Rho, below, func(joint int) *big.Rat {
+		jt := spec.joints[joint]
+		if jt.dep == nil {
+			return jointSpan(jt, sa, sb)
+		}
+		return jt.dep.span(joint, sa, sb)
+	})
+}
+
+// idealPosesAt is every link's ideal pose at the exact fraction s
+// (agent-docs/linkage-check-design.md §5.1): its joint's ideal motion at the exact
+// joint value, then its parent's ideal pose, composed over rational
+// intervals; a link under the ground takes its joint's ideal motion alone.
+func idealPosesAt[B comparable](spec *linkageSpec[B], frames []motionbound.MotionFrame, s *big.Rat) []motionbound.IdealPose {
+	params := make([]motionbound.MotionParam, len(spec.joints))
+	for k, jt := range spec.joints {
+		params[k] = jointParam(jt, s)
+	}
+	return idealPosesOf(spec, frames, params)
+}
+
+// idealPosesOf is every link's ideal pose at the exact joint values params,
+// one per link in Linkage.Links() order: its joint's ideal motion, then its
+// parent's ideal pose, composed over rational intervals.
+func idealPosesOf[B comparable](spec *linkageSpec[B], frames []motionbound.MotionFrame, params []motionbound.MotionParam) []motionbound.IdealPose {
+	ideals := make([]motionbound.IdealPose, len(spec.joints))
+	for k, jt := range spec.joints {
+		ideal := frames[k].At(params[k])
+		if jt.parent >= 0 {
+			ideal = ideal.Then(ideals[jt.parent])
+		}
+		ideals[k] = ideal
+	}
+	return ideals
+}
+
+// linkageBoundsError is the refusal for a box or axis the exact reader cannot
+// form (agent-docs/linkage-check-design.md §5.3).
+func linkageBoundsError() error {
+	return fmt.Errorf(`%w: a link's bounds or a joint's axis cannot be read exactly`, decaderr.ErrNotFinite)
+}
+
+// linkStanding is a link's standing over a drive
+// (agent-docs/linkage-check-design.md §6 step 2).
+type linkStanding int
+
+const (
+	// linkFixed: every joint on the link's path holds 0, so its ideal pose is
+	// the identity at every s and its bodies stand where they are.
+	linkFixed linkStanding = 1
+	// linkConstant: every joint on the link's path holds, one at a nonzero
+	// value, so its pose is the same at every s.
+	linkConstant linkStanding = 2
+)
+
+// heldAtZeroJoint reports whether a joint's value is exactly 0 at every s:
+// every waypoint is 0.
+func heldAtZeroJoint[B comparable](jt linkJoint[B]) bool {
+	if jt.dep != nil {
+		return false
+	}
+	for _, p := range jt.points {
+		if p.Turn.Sign() != 0 || p.Base.Sign() != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// linkStandings reads every link's standing from the joints on its path.
+func linkStandings[B comparable](spec *linkageSpec[B], bounds []linkBound) []linkStanding {
+	out := make([]linkStanding, len(spec.joints))
+	for k, b := range bounds {
+		zero, held := true, true
+		for _, i := range b.Path {
+			jt := spec.joints[i]
+			if !heldAtZeroJoint(jt) {
+				zero = false
+			}
+			if (jt.listed || jt.dep != nil) && jt.moves() {
+				held = false
+			}
+		}
+		switch {
+		case zero:
+			out[k] = linkFixed
+		case held:
+			out[k] = linkConstant
+		}
+	}
+	return out
+}
+
+// layerExtent reads a body's inflated rest box and delegates its exact a-extents.
+func layerExtent(b *topo.Body, a motionbound.RatVec) (lo, hi *big.Rat, ok bool) {
+	boxLo, boxHi, ok := motionbound.BoxCornersExact(b.Bounds, new(big.Rat))
+	if !ok {
+		return nil, nil, false
+	}
+	lo, hi = linkagebound.LayerExtent(boxLo, boxHi, a)
+	return lo, hi, true
+}
+
+// layerLower applies the exact layer exclusion to the root linkage bodies.
+func layerLower[B comparable](spec *linkageSpec[B], frames []motionbound.MotionFrame, path []int, x, y *topo.Body) (float64, bool) {
+	joints := make([]linkagebound.LayerJoint, len(spec.joints))
+	for _, i := range path {
+		jt := spec.joints[i]
+		joints[i] = linkagebound.LayerJoint{
+			Axis: frames[i].Axis, Revolute: jt.revolute, HeldAtZero: heldAtZeroJoint(jt),
+		}
+	}
+	return linkagebound.LayerLower(joints, path, func(a motionbound.RatVec) (xLo, xHi, yLo, yHi *big.Rat, ok bool) {
+		xLo, xHi, okX := layerExtent(x, a)
+		yLo, yHi, okY := layerExtent(y, a)
+		return xLo, xHi, yLo, yHi, okX && okY
+	})
+}
+
+// readPoints maps a static point reading through the link's relative joint path.
+func readPoints[B comparable](spec *linkageSpec[B], frames []motionbound.MotionFrame, params []motionbound.MotionParam, b linkBound, below int, out cornerReading) cornerReading {
+	revolute := make([]bool, len(spec.joints))
+	for i := range revolute {
+		revolute[i] = spec.joints[i].revolute
+	}
+	return linkagebound.ReadPoints(frames, params, b.Path, revolute, below, out)
+}
+
+// jointStep reads a joint's signed interval step when no interior waypoint bends it.
+func jointStep[B comparable](jt linkJoint[B], sa, sb *big.Rat) (proofbound.RatInterval, bool) {
+	return linkagebound.JointStep(jt.points, sa, sb, func(s *big.Rat) motionbound.MotionParam {
+		return jointParam(jt, s)
+	})
+}
+
+// bodySymmetryAxis is the exact axis line of a body that every rotation
+// about that line carries onto itself (agent-docs/linkage-check-design.md §5.2):
+// a point on it and its direction, as exact rationals. It admits only bodies
+// whose geometry is exact under a cardinal frame and a placement that
+// permutes and signs the coordinate axes — a solid prism whose profile is one
+// whole circle (sourceCylinderAtPose) and a solid full revolve whose axis the
+// record states exactly — and answers ok false for anything else.
+func bodySymmetryAxis(b *topo.Body) (point, dir motionbound.RatVec, ok bool) {
+	toRat := func(v proofarith.DyV3) motionbound.RatVec {
+		return motionbound.RatVec{v[0].Rat(), v[1].Rat(), v[2].Rat()}
+	}
+	if rp, isRevolve := b.Payload.(revolveplan.Payload); isRevolve {
+		if !b.Solid || b.Kind != topo.BodySolid || rp.SurfaceResult || !rp.Full || rp.SectionDelta != 0 ||
+			!pairbox.CardinalBasis(rp.Frame.U(), rp.Frame.V(), rp.Frame.N()) || !pairbox.SignedAxisTransform(rp.Xform) ||
+			!proofbound.FiniteVec(rp.Frame.Origin()) || !measurement.FiniteValues(rp.Ax.AU, rp.Ax.AV, rp.Ax.DU, rp.Ax.DV) ||
+			rp.Ax.AUBound != 0 || rp.Ax.AVBound != 0 || rp.Ax.DUBound != 0 || rp.Ax.DVBound != 0 ||
+			(rp.Ax.DU == 0 && rp.Ax.DV == 0) {
+			return motionbound.RatVec{}, motionbound.RatVec{}, false
+		}
+		anchor := proofarith.DvAdd(proofarith.DyVec(rp.Frame.Origin()), proofarith.DvAdd(
+			proofarith.DvScale(proofarith.DyVec(rp.Frame.U()), proofarith.MustDyOf(rp.Ax.AU)),
+			proofarith.DvScale(proofarith.DyVec(rp.Frame.V()), proofarith.MustDyOf(rp.Ax.AV))))
+		w := proofarith.DvAdd(proofarith.DvScale(proofarith.DyVec(rp.Frame.U()), proofarith.MustDyOf(rp.Ax.DU)),
+			proofarith.DvScale(proofarith.DyVec(rp.Frame.V()), proofarith.MustDyOf(rp.Ax.DV)))
+		far := proofarith.DvTransform(rp.Xform, proofarith.DvAdd(anchor, w))
+		anchor = proofarith.DvTransform(rp.Xform, anchor)
+		var d motionbound.RatVec
+		for i := range 3 {
+			d[i] = new(big.Rat).Sub(far[i].Rat(), anchor[i].Rat())
+		}
+		return toRat(anchor), d, true
+	}
+	cylinder, isCylinder := contactround.CylinderAtPose(b, r3.Identity())
+	if !isCylinder {
+		return motionbound.RatVec{}, motionbound.RatVec{}, false
+	}
+	half := big.NewRat(1, 2)
+	for i := range 3 {
+		point[i] = new(big.Rat).Add(cylinder.Box.Lo[i].Rat(), cylinder.Box.Hi[i].Rat())
+		point[i].Mul(point[i], half)
+		dir[i] = new(big.Rat)
+	}
+	dir[cylinder.Axis].SetInt64(1)
+	return point, dir, true
+}
+
+// symmetricAboutJoint reports whether body b, a body of link jt, does not
+// move under its own joint (agent-docs/linkage-check-design.md §5.2): jt is a
+// revolute whose axis is exactly parallel to b's symmetry axis and whose
+// centre lies exactly on that axis line.
+func symmetricAboutJoint[B comparable](b *topo.Body, jt linkJoint[B], f motionbound.MotionFrame) bool {
+	if !jt.revolute {
+		return false
+	}
+	point, dir, ok := bodySymmetryAxis(b)
+	if !ok || !linkagebound.ZeroVec(linkagebound.Cross(dir, f.Axis)) {
+		return false
+	}
+	var offset motionbound.RatVec
+	for i := range 3 {
+		offset[i] = new(big.Rat).Sub(f.Center[i], point[i])
+	}
+	return linkagebound.ZeroVec(linkagebound.Cross(offset, dir))
+}

@@ -444,7 +444,7 @@ type Face struct {
 // (agent-docs/payload-verification-design.md §5.4, §13).
 func (f *Face) NormalAt(p r3.Vec) (VecMeasurement, error) {
 	m, err := topobuild.NormalAt(&f.n, p)
-	return vecMeasurementFromInternal(m), err
+	return m, err
 }
 
 // Surface returns the face's tagged geometry.
@@ -480,7 +480,7 @@ func (f *Face) Centroid() (VecMeasurement, error) {
 	if !f.n.HasCentroid {
 		return VecMeasurement{}, fmt.Errorf("%w: this face has no bounded area centroid", ErrUnsupported)
 	}
-	return vecMeasurementFromInternal(f.n.Centroid), nil
+	return f.n.Centroid, nil
 }
 
 // isPlanar reports whether the face this evaluator holds is FLAT: an analytic
@@ -539,7 +539,7 @@ type Body struct {
 	// pairReports keeps the recent ContactPair reports this body is the
 	// first operand of; it changes no outcome either. ContactPair stores each
 	// report once and hands out copies.
-	pairReports ringmemo.Memo[pairReportKey, *ContactReport]
+	pairReports ringmemo.Memo[pairReportKey, *nodeContactReport]
 }
 
 // Document returns the document that owns (or owned) this body.
@@ -614,7 +614,7 @@ func (b *Body) IsSolid() bool { return b.n.Solid }
 
 // Bounds returns the body's axis-aligned bounding box, as tight as the
 // evaluator can prove, reporting its own exactness (core §6).
-func (b *Body) Bounds() (Box, error) { return boxFromInternal(b.n.Bounds), nil }
+func (b *Body) Bounds() (Box, error) { return b.n.Bounds, nil }
 
 // Volume returns the enclosed volume. A body that is not a solid encloses
 // none: ErrNotSolid, never zero (core §4/§6).
@@ -622,11 +622,11 @@ func (b *Body) Volume() (Measurement, error) {
 	if !b.n.Solid {
 		return Measurement{}, ErrNotSolid
 	}
-	return measurementFromInternal(b.n.Volume), nil
+	return b.n.Volume, nil
 }
 
 // Area returns the total surface area of the body's boundary.
-func (b *Body) Area() (Measurement, error) { return measurementFromInternal(b.n.Area), nil }
+func (b *Body) Area() (Measurement, error) { return b.n.Area, nil }
 
 // Centroid returns the centroid of the enclosed region. A body that is not a
 // solid has none: ErrNotSolid.
@@ -634,7 +634,7 @@ func (b *Body) Centroid() (VecMeasurement, error) {
 	if !b.n.Solid {
 		return VecMeasurement{}, ErrNotSolid
 	}
-	return vecMeasurementFromInternal(b.n.Centroid), nil
+	return b.n.Centroid, nil
 }
 
 // originRefs returns a copy of the face's origin roles in their internal form,

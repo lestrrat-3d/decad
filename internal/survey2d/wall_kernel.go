@@ -146,7 +146,7 @@ func NewWallKernelBudget(budget *proofbound.WorkBudget, elems, containOnly []Sur
 
 // WallSurveyOut is the kernel's answer over its candidate set. Both of its
 // numbers are extrema over a population of candidates that each carry their
-// OWN bound, so each is published as survey.go's §9.2 ExtremeAggregate proves
+// OWN bound, so each is published as internal/verifyrun/survey.go's §9.2 ExtremeAggregate proves
 // it — the aggregate interval's midpoint beside its half-width — and never as
 // the figures of whichever candidate won a comparison of held values. Two
 // candidates whose held values order one way can have true values that order

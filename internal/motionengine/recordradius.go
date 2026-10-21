@@ -1,0 +1,60 @@
+package motionengine
+
+import (
+	"context"
+	"math"
+
+	"github.com/lestrrat-3d/decad/internal/draftrecord"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
+	"github.com/lestrrat-3d/decad/internal/topo"
+
+	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/motionbound"
+
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+)
+
+// This file reads a mover's payload-specific record radius. internal/motionbound
+// builds motion frames, box corners, axis radii, swept boxes and interval
+// calculations described in agent-docs/motion-check-design.md §5–§6.
+
+// moverRecordRadius is R0 of agent-docs/motion-check-design.md §5.1: a proven upper
+// bound on |p| for every point p of the mover's record before its own
+// placement applies, read off the payload's own envelopes. It is an L1 bound,
+// which dominates the Euclidean one. A prism reads its profile coordinate
+// envelope (internal/prismrecord) widened by its section displacement, and its
+// sweep levels widened by their axial displacement; a revolve reads the
+// generator envelope and axis anchor revolvemass.Centroid already
+// bounds a rotated material point with. Any other payload states no record
+// radius and answers +Inf, which motionbound.PoseDeviation charges only where the pose's
+// linear part departs from the ideal one.
+func moverRecordRadius(ctx context.Context, b *topo.Body) float64 {
+	if ctx.Err() != nil {
+		return math.Inf(1)
+	}
+	switch pl := b.Payload.(type) {
+	case prismrecord.Payload:
+		coordUpper, err := momentinput.CoordinateEnvelope(pl.Profile, freeform.NewFreeformWork(), pl.Walks)
+		if err != nil {
+			return math.Inf(1)
+		}
+		coordUpper = proofbound.AbsSumUpper(coordUpper, pl.SectionDelta)
+		zUpper := proofbound.AbsSumUpper(math.Max(math.Abs(pl.Z0), math.Abs(pl.Z1)), pl.AxialDelta())
+		return motionbound.LinearRecordRadius(pl.Frame, coordUpper, zUpper)
+	case draftrecord.Payload:
+		return pl.MoverRecordRadius()
+	case draftrecord.TwoSidedPayload:
+		return math.Max(pl.Negative.MoverRecordRadius(), pl.Positive.MoverRecordRadius())
+	case revolveplan.Payload:
+		coordUpper, err := momentinput.CoordinateUpper(pl.Profile, freeform.NewFreeformWork(), nil)
+		if err != nil {
+			return math.Inf(1)
+		}
+		coordUpper = proofbound.AbsSumUpper(coordUpper, pl.SectionDelta)
+		return motionbound.RevolveRecordRadius(pl.Frame, coordUpper, pl.Ax.AU, pl.Ax.AUBound, pl.Ax.AV, pl.Ax.AVBound)
+	default:
+		return math.Inf(1)
+	}
+}

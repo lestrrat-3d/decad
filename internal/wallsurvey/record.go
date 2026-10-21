@@ -3,11 +3,12 @@ package wallsurvey
 import (
 	"errors"
 
+	"github.com/lestrrat-3d/decad/internal/verifypublish"
+
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolvesurvey"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -74,41 +75,41 @@ func RevolveLoopsPlane(budget *proofbound.WorkBudget, profile momentinput.Profil
 // to widen. Only an undecomposable free-form section is an undecided walk;
 // all other survey errors reach the caller.
 func PrismWall(budget *proofbound.WorkBudget, profile momentinput.Profile,
-	height survey2d.PrismHeight, sectionDelta, alpha float64) (reportvocab.ScalarSurvey, error) {
+	height survey2d.PrismHeight, sectionDelta, alpha float64) (verifypublish.ScalarSurvey, error) {
 	if err := survey2d.WallBudgetErr(budget); err != nil {
-		return reportvocab.ScalarSurvey{}, err
+		return verifypublish.ScalarSurvey{}, err
 	}
 	if sectionDelta != 0 {
-		return reportvocab.ScalarSurvey{}, nil
+		return verifypublish.ScalarSurvey{}, nil
 	}
 	loops, err := boundarywalk.SurveyLoops(budget, boundarywalk.Profile(profile))
 	if err != nil {
 		if errors.Is(err, boundarywalk.ErrFreeformSection) {
 			// runSurveys polls the budget again after mapping this undecided
 			// result, so cancellation still reaches Verify as an error.
-			return reportvocab.ScalarSurvey{}, nil
+			return verifypublish.ScalarSurvey{}, nil
 		}
-		return reportvocab.ScalarSurvey{}, err
+		return verifypublish.ScalarSurvey{}, err
 	}
 	reading, err := survey2d.PrismWallReading(budget, loops, height, alpha)
-	return reportvocab.ScalarSurvey{Reading: reading.Reading, Bound: reading.Bound, OK: reading.Ok}, err
+	return verifypublish.ScalarSurvey{Reading: reading.Reading, Bound: reading.Bound, OK: reading.Ok}, err
 }
 
 // RevolveWall reads the meridian's bounded spanning-ball survey. A displaced
 // meridian is undecided for the same reason as a displaced prism section.
 func RevolveWall(budget *proofbound.WorkBudget, record RevolveRecord,
-	alpha float64) (reportvocab.ScalarSurvey, error) {
+	alpha float64) (verifypublish.ScalarSurvey, error) {
 	if err := survey2d.WallBudgetErr(budget); err != nil {
-		return reportvocab.ScalarSurvey{}, err
+		return verifypublish.ScalarSurvey{}, err
 	}
 	if record.SectionDelta != 0 {
-		return reportvocab.ScalarSurvey{}, nil
+		return verifypublish.ScalarSurvey{}, nil
 	}
 	loops, err := RevolveLoops(budget, record.Profile, record.Axis)
 	if err != nil {
-		return reportvocab.ScalarSurvey{}, err
+		return verifypublish.ScalarSurvey{}, err
 	}
 	reading, err := revolvesurvey.WallReading(budget, loops, record.Axis,
 		record.Full, record.Phi0, record.Phi1, record.AngularDelta, alpha)
-	return reportvocab.ScalarSurvey{Reading: reading.Reading, Bound: reading.Bound, OK: reading.Ok}, err
+	return verifypublish.ScalarSurvey{Reading: reading.Reading, Bound: reading.Bound, OK: reading.Ok}, err
 }

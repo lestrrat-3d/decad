@@ -1,7 +1,7 @@
 # decad agent documentation
 
 This directory holds design decisions and maintenance instructions for agents that develop, fix or maintain decad.
-User-facing documentation, including the API reference, lives in [`docs/`](../docs/README.md).
+User-facing documentation, including the API reference, lives in [`docs/`](../agent-docs/README.md).
 
 ## What belongs here
 

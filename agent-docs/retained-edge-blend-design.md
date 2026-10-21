@@ -57,8 +57,8 @@ Table RR lists the edges a blend can be built on. The others are refused.
 |---|---|---|---|---|
 | **R1** | `Line3`, convex or concave | two retained `Plane`s, not parallel, ending at three-face corners whose third face is a retained `Plane` | `Cylinder` / `Plane` | increment B2; equal-distance chamfer only |
 | **R2** | `Circle3`, closed, centre on the axis | retained `Plane` and coaxial retained `Cylinder` | `Torus` / `Cone` | increment B1; equal-distance chamfer only |
-| **R3** | `Line3` of retention E4 | retained `Plane` and a `Cylinder` whose axis lies in the plane | `Cylinder` / `Plane` | increment B3 |
-| **R4** | `Arc3` | as R2, open | as R2 | increment B4 |
+| **R3** | `Line3` of retention E4 | retained `Plane` and a `Cylinder` whose axis lies in the plane, ending on retained planes normal to the axis | `Cylinder` / `Plane` | increment B3; equal-distance chamfer only |
+| **R4** | `Arc3` | as R2, open, ending on planes parallel to the axis | as R2 | ends on two distinct retained planes; equal-distance chamfer only; an arc whose ends meet one face is refused |
 
 Refused, with the reason a caller can act on:
 
@@ -138,10 +138,56 @@ cylinder) is SR3.
 
 ### 4.3 R3, a line between a plane and a parallel cylinder
 
-The rolling ball between a plane and a cylinder whose axis lies in the plane
-is a cylinder parallel to the axis. The construction is R1's with the
-cylinder's own tangent line in place of the second plane's setback line; it is
-specified when increment B3 starts.
+Take the cross-section normal to the common direction `d̂` of the edge and the
+cylinder's axis. The plane is a line `L` with outward normal `nA`; the
+cylinder is a circle `C` of radius `R` about `o`, with outward normal `nB(x)`
+radial (negated for a `Reversed` wall); the edge is their meeting `K`. The
+corner is convex when the wall's material lies on the same side of `L` as the
+plane's. The angle between the tangent of `C` at `K` and `L` must clear
+`minSine`; a tangent meeting is not an edge.
+
+**Fillet.** The ball touches `L` from the side `ball` (`−1` convex, `+1` concave)
+along `nA`, so its centre lies on the line `L'` at distance `r` from `L`. It
+touches `C` from the outside (`|c − o| = R + r`) when `κ = +1` and from the
+inside (`|c − o| = R − r`) when `κ = −1`, where `κ = +1` exactly when the edge is
+convex and the material lies outside `C`, or the edge is concave and the
+material lies inside `C`. The centre is the point of `L' ∩ circle(o, R + κ·r)`
+nearest `K`. The tangent points are `T_A = c − ball·r·nA` and the radial
+projection `T_B` of `c` onto `C`. The unit vectors from the centre to them are
+`a₀ = −ball·nA` and `a₁ = −κ·(c − o)/|c − o|`, `φ` is the angle between them, and
+the blend arc runs between them through `φ`, as in R1. The surface is a
+`Cylinder` of radius `r` and axis `d̂` through `c`.
+
+**Chamfer.** The setback is `d` along `L` from `K` into the plane's face and arc
+length `d` along `C` from `K` into the wall's face. The blend is the `Plane`
+through the two generator lines.
+
+The wall's setback line is the generator of the cylinder at `T_B`. Cutting the
+held wall there is a cut by the half-plane that holds the axis and that
+generator, applied to the facets whose angle about the axis, measured from `K`
+into the wall, is below the angle of `T_B`.
+
+### 4.4 R4, an open arc
+
+The surfaces are R2's: the same four rims, the same `κ`, torus or cone, with the
+rim an arc of the circle from `V₀` to `V₁` and the faces ending on planes `G_i`
+that are parallel to the axis. Each `G_i` meets the wall in a generator line and
+the plane in a straight line, and the three meet at the end vertex.
+
+The plane's setback curve is the arc of the circle of radius `ρ_A = R + κ·t`
+between its points on the two end faces. A point `P_A,i` is where that circle
+meets the line `A ∩ G_i`, taken on the side of the corner the chain leaves along
+(a quadratic in the distance along the line). The wall's setback curve is the arc
+at height `t_B` below the rim, and `P_B,i` is where it meets the generator
+`B ∩ G_i`. The rows between them are the circles of the torus (or the straight
+generators of the cone) at the tube angle `α_j`; row `j` runs from the azimuth
+where its circle meets `G₀` to the one where it meets `G₁`, a solution of
+`n_G · x = h_G` in the azimuth. The blend meets `G_i` in the curve those end
+points trace, a section of a torus by a plane that is not a conic, so it stays a
+chain of exact points.
+
+The faces are rewritten as in R2 for the plane (a polygon on the setback arc)
+and the wall (the cut at the setback height), and as in R1 for the ends.
 
 ## 5. Construction
 
@@ -213,6 +259,19 @@ again over the new loops. Let `e` run from `V₀` to `V₁`, with `d̂` its dire
    of `A` and `B` and the end curves of `G₀` and `G₁`, which are the vertices
    the four faces share with it.
 
+**A face that is reflex at an end.** A concave edge can end where one of its two
+faces wraps the corner, as a plate's top face does at the foot of a wall. That
+face leaves the edge on the far side of its line: the setback line meets the
+line of `A ∩ G` behind the corner, not along the chain. The face is not trimmed.
+Its boundary runs on from the corner `V` to the setback point and along the
+setback edge, so `V` stays in its loop. The end face `G` is convex at `V`, and the
+blend's end cap lies in `G`'s plane beside it. `G` gains the cap: its loop keeps
+`V`, takes the arc and the setback points next to it, and loses the removed part
+of the other face's chain. A convex edge refuses a reflex face, and so does an end
+where both faces are reflex. Which way a face leaves the edge comes from the
+loop: a face lies to the left of its own boundary, so the way into `A` is
+`n_A × δ`, with `δ` the direction the loop runs along the edge.
+
 **Exact areas.** The removed region of `A` is the quadrilateral
 `V₀ V₁ P_A,₁ P_A,₀`, and `B`'s likewise. The removed region of `G_i` is the
 projection along `d̂` of the corner region of the cross-section, area
@@ -256,7 +315,7 @@ of that computation.
 | **SR2** | two selected edges share a vertex, or a selected edge continues tangentially into a neighbour | no transition built | `ErrUnsupported` |
 | **SR3** | no blend of that size exists: `R − r ≤ 0` for an inside ball (§4.2), `φ` within 10⁻⁹ of 0 or π, or a chamfer distance of zero or below | no regular blend | `ErrDegenerate` |
 | **SR4** | the setback does not fit (§6.2) and the held bounds prove it does not | the blend consumes the face | `ErrDegenerate` |
-| **SR5** | the setback might not fit and the held bounds cannot decide it, or an end vertex of an R1 edge is not a three-face corner with a retained planar `G`, or `G`'s corner at the vertex does not match the edge (a convex edge needs a convex corner of `G`, a concave edge a reflex one), or `A` or `B` turns reflex at the vertex, or another part of `G` comes within the blend's reach of the vertex | body exists; the evaluator cannot prove its construction | `ErrUnsupported` |
+| **SR5** | the setback might not fit and the held bounds cannot decide it, or an end vertex of an R1 edge is not a three-face corner with a retained planar `G`, or `G`'s corner at the vertex does not match the edge (a convex edge needs a convex corner of `G`, a concave edge a reflex one), or both `A` and `B` turn reflex at the vertex, or a convex edge meets a reflex face, or another part of `G` comes within the blend's reach of the vertex | body exists; the evaluator cannot prove its construction | `ErrUnsupported` |
 | **SR6** | the held mesh disagrees with the exact vertex of its three tags by more than the vertex bound plus slack (§6.3) | the record and the mesh do not describe one solid | `ErrUnsupported` |
 | **SR7** | the rewritten mesh fails the held audit (watertight, no remote self-intersection, shells positive) | the result is invalid | `ErrDegenerate` when the audit proves a face inside out (modify S8), else `ErrUnsupported` |
 
@@ -355,8 +414,10 @@ published bound, never with a pinned literal.
 | Shaft end fillet and chamfer (R2) | `Major = R − r`; `R − r ≤ 0` refuses with `ErrDegenerate` | drop SR3: the torus has a negative major radius |
 | Straight 90° edge (R1 fillet and chamfer) | `Cylinder`, axis along the edge, removed volume `L·r²(1 − π/4)`; the chamfer removes `L·d²/2` | |
 | 45° edge (R1 fillet) | setback `r·tan(φ/2)`; removed area per unit length `r²(tan(φ/2) − φ/2)` | use `r` for the setback at `φ ≠ π/2`: the 45° test fails |
+| Plane to cylinder edge (R3): a groove's top edge, fillet and chamfer | the fillet's centre and tangent points are those of the cross-section; the volume change equals `L` times the area of the corner region, and the surface changes by the cylinder gained less the plane strip, the wall band and a corner of each end face | take `κ` the other way: the ball sits on the wrong side of the wall |
+| Plane to cylinder edge at a boss's foot | the plate's top face is reflex at each end; the fill adds `L` times the corner region's area, and `VerifyAll` passes | |
 | Concave edge in an L section | the fill adds `L·r²(1 − π/4)`, the blend's normal points into the void, `VerifyAll` passes | build the convex blend: the normal points into the material |
-| Concave edge at a wall's foot | refuses with `ErrUnsupported`: the plate face wraps the foot and turns reflex at the corner | |
+| Concave edge at a wall's foot | the plate face is reflex at each foot corner; the fill adds `L·r²(1 − π/4)`, the wall's end faces grow by the caps, `VerifyAll` passes; two foot edges together and a chamfer build as well | keep `V` out of the extended end face's loop: the mesh fails its audit |
 | Oblique end face | the end arc is an `Ellipse3` with `SemiMinor = r` and `SemiMajor = r / |d̂ · nG|`; removed volume equals the section area times the length between the end planes measured through the section's centroid | treat `G` as normal to the edge: the volume is off by the centroid offset |
 | Clearance | a radius past the face width refuses `ErrDegenerate`; a radius within `b` of it refuses `ErrUnsupported` | drop the `− b_v` term of §6.2: the near case builds an invalid solid |
 | Shared vertex / tangent chain | refuse SR2 | |
@@ -384,7 +445,7 @@ published bound, never with a pinned literal.
 |---|---|---|
 | B1 | R2 fillet and chamfer: classification, the four rims of §4.2, clip and strip, bounds, gates SR1–SR4 and SR6–SR7 | the hole-mouth, boss-root and shaft-end rows of §9 pass; `go test ./...` on CI |
 | B2 | R1 fillet and equal-distance chamfer with planar end faces, SR5 | the 90° and 45° edge rows, the oblique-end row and the L-section concave row pass |
-| B3 | R3, a line between a plane and a parallel cylinder | its row of §9 is added and passes |
+| B3 | R3, a line between a plane and a parallel cylinder, ending on planes normal to the axis | the groove, chamfer and boss-foot rows of §9 pass |
 | B4 | R4, an open arc | as B1 for an arc with end faces |
 
 ## 12. Rejected shortcuts

@@ -19,13 +19,13 @@ type Body struct {
 	// PlanarConvexity caches the exact planar convexity certificate and
 	// PlanarSnapshot the exact held snapshot it is read off, each keyed by
 	// the held chord when the snapshot depends on it
-	// (root contact_faceted_pair.go); like the tessellation cache neither
+	// (root internal/planarpose/pose.go); like the tessellation cache neither
 	// changes the body's logical geometry.
 	PlanarConvexity atomic.Pointer[planarsnapshot.ConvexityEntry]
 	PlanarSnapshot  atomic.Pointer[planarsnapshot.SnapshotEntry]
 	// PlanarHints maps each partner body to the nearest candidate pair the
 	// last exact planar relation with this body first found
-	// (root contact_faceted_pair.go). It only speeds the next relation's
+	// (root internal/planarpose/pose.go). It only speeds the next relation's
 	// distance scan, never changes its result.
 	PlanarHints sync.Map
 	// Tess caches the last tessellation (root Body.Tessellate); like the

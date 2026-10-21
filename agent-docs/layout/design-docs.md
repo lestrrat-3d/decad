@@ -93,4 +93,4 @@ The rules for rows live in `agent-docs/layout.md`.
 
 | Path | Responsibility |
 |---|---|
-| `mass_properties.go` | Public mass and inertia types, mass dispatch and payload adapters, and mass read off verified meshes. See `agent-docs/dynamic-mass-design.md` §2–§3. |
+| `mass_properties.go` | Public mass and inertia types and the `Body.MassProperties` conversion over `internal/massdispatch/`. See `agent-docs/dynamic-mass-design.md` §2–§3. |

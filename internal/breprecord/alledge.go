@@ -36,7 +36,7 @@ type AllEdgeChamferPayload struct {
 }
 
 // SurveyClass names the payload class a staged survey diagnostic reports
-// (internal/reportvocab), the name the evaluator has always published for it.
+// (internal/verifypublish), the name the evaluator has always published for it.
 func (AllEdgeChamferPayload) SurveyClass() string { return "allEdgeChamferPayload" }
 
 // Transform is the accumulated rigid placement.

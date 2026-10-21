@@ -89,7 +89,11 @@ func triangulateRegion(ps []pt2, outer []int, holes [][]int) ([][3]int, error) {
 			return nil, err
 		}
 	}
-	return earClip(ps, merged)
+	tris, err := earClip(ps, merged)
+	if err != nil {
+		return nil, err
+	}
+	return flipSlivers(ps, tris), nil
 }
 
 // bridgeNearest splices one hole into the merged polygon along the shortest
@@ -179,19 +183,36 @@ func collinearOverlap(a, b, end, other pt2) bool {
 // earClip triangulates the weakly simple counter-clockwise polygon poly by
 // clipping strictly convex ears that no other vertex touches. A vertex at the
 // same position as an ear corner (a bridge's second copy) does not block it.
+// Of the ears that are free it clips the best shaped first, which keeps the
+// nearly collinear vertices of a straight boundary run out of triangles of
+// their own: such a sliver is exact in the plane but can fold when a later
+// placement rounds its vertices.
 func earClip(ps []pt2, poly []int) ([][3]int, error) {
 	idx := append([]int(nil), poly...)
 	tris := make([][3]int, 0, len(idx))
+	type ear struct {
+		at      int
+		quality float64
+	}
 	for len(idx) > 3 {
 		n := len(idx)
-		clipped := false
+		var ears []ear
 		for i := range n {
-			ia, ib, ic := idx[(i+n-1)%n], idx[i], idx[(i+1)%n]
-			if orient(ps[ia], ps[ib], ps[ic]) <= 0 || earBlocked(ps, idx, ia, ib, ic) {
+			a, b, c := ps[idx[(i+n-1)%n]], ps[idx[i]], ps[idx[(i+1)%n]]
+			if orient(a, b, c) <= 0 {
+				continue
+			}
+			ears = append(ears, ear{i, earQuality(a, b, c)})
+		}
+		sort.SliceStable(ears, func(i, j int) bool { return ears[i].quality > ears[j].quality })
+		clipped := false
+		for _, e := range ears {
+			ia, ib, ic := idx[(e.at+n-1)%n], idx[e.at], idx[(e.at+1)%n]
+			if earBlocked(ps, idx, ia, ib, ic) {
 				continue
 			}
 			tris = append(tris, [3]int{ia, ib, ic})
-			idx = append(idx[:i], idx[i+1:]...)
+			idx = append(idx[:e.at], idx[e.at+1:]...)
 			clipped = true
 			break
 		}
@@ -203,6 +224,21 @@ func earClip(ps []pt2, poly []int) ([][3]int, error) {
 		return nil, fmt.Errorf("%w: the face's boundary closes on a degenerate triangle", decaderr.ErrUnsupported)
 	}
 	return append(tris, [3]int{idx[0], idx[1], idx[2]}), nil
+}
+
+// earQuality is twice the triangle's area over the square of its longest side:
+// zero for a sliver, about 0.87 for an equilateral triangle.
+func earQuality(a, b, c pt2) float64 {
+	area2 := math.Abs((b.u-a.u)*(c.w-a.w) - (b.w-a.w)*(c.u-a.u))
+	long := 0.0
+	for _, d := range [][2]pt2{{a, b}, {b, c}, {c, a}} {
+		du, dw := d[1].u-d[0].u, d[1].w-d[0].w
+		long = math.Max(long, du*du+dw*dw)
+	}
+	if long == 0 {
+		return 0
+	}
+	return area2 / long
 }
 
 func earBlocked(ps []pt2, idx []int, ia, ib, ic int) bool {
@@ -217,4 +253,78 @@ func earBlocked(ps []pt2, idx []int, ia, ib, ic int) bool {
 		}
 	}
 	return false
+}
+
+// sliverQuality is the earQuality below which a triangle counts as a sliver.
+const sliverQuality = 1e-6
+
+type undirected struct{ a, b int }
+
+func edgeKey(a, b int) undirected { return undirected{min(a, b), max(a, b)} }
+
+// flipSlivers replaces the long edge of each sliver by the other diagonal of
+// the quadrilateral it closes, when both new triangles are counter-clockwise
+// and each is better shaped than the sliver. A run of collinear boundary
+// vertices ends as a fan of triangles from one apex, not as triangles that join
+// three of its own vertices.
+func flipSlivers(ps []pt2, tris [][3]int) [][3]int {
+	quality := func(t [3]int) float64 { return earQuality(ps[t[0]], ps[t[1]], ps[t[2]]) }
+	for range 4 * len(tris) {
+		owners := map[undirected][]int{}
+		for i, t := range tris {
+			for k := range 3 {
+				key := edgeKey(t[k], t[(k+1)%3])
+				owners[key] = append(owners[key], i)
+			}
+		}
+		flipped := false
+		for i, t := range tris {
+			q := quality(t)
+			if q >= sliverQuality {
+				continue
+			}
+			// The sliver's long edge is the one opposite its flat vertex.
+			lenSq := func(a, b int) float64 {
+				du, dw := ps[a].u-ps[b].u, ps[a].w-ps[b].w
+				return du*du + dw*dw
+			}
+			long := 0
+			for k := 1; k < 3; k++ {
+				if lenSq(t[k], t[(k+1)%3]) > lenSq(t[long], t[(long+1)%3]) {
+					long = k
+				}
+			}
+			p, qv, x := t[long], t[(long+1)%3], t[(long+2)%3]
+			shared := owners[edgeKey(p, qv)]
+			if len(shared) != 2 {
+				continue
+			}
+			j := shared[0]
+			if j == i {
+				j = shared[1]
+			}
+			var y int
+			for _, v := range tris[j] {
+				if v != p && v != qv {
+					y = v
+				}
+			}
+			// The sliver is (p, qv, x) and its neighbour holds (qv, p, y).
+			first, second := [3]int{p, y, x}, [3]int{y, qv, x}
+			if orient(ps[first[0]], ps[first[1]], ps[first[2]]) <= 0 ||
+				orient(ps[second[0]], ps[second[1]], ps[second[2]]) <= 0 {
+				continue
+			}
+			if min(quality(first), quality(second)) <= 2*min(q, quality(tris[j])) {
+				continue
+			}
+			tris[i], tris[j] = first, second
+			flipped = true
+			break
+		}
+		if !flipped {
+			break
+		}
+	}
+	return tris
 }

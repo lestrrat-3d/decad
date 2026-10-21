@@ -819,6 +819,33 @@ reads. The code in the root package carries the method form of every row in the
 table; each migrates to its free function in the change that updates that operation's
 companion design.
 
+### 6.4 The report package
+
+`report/` holds the result vocabulary that `Verify`, `ContactPair` and
+`SweepPair` publish: `Measurement`, `VecMeasurement`, `Box` and `Exactness`;
+the outcome, reading, survey and diagnostic enums; the contact and sweep
+requests and enums; the pair path segments; the sweep instant, interval,
+departure, event, sample and report records; and the contact, diagnostic,
+interference, clearance and Verify report records. A record that names bodies, faces, edges or vertices is
+generic over those reference types, and its name ends in `Of`
+(`ContactReportOf[B, F, E, V]`, `DiagnosticOf[B, C]`, `ReportOf[B, F, C]`).
+
+`decad` instantiates each generic record with its own handles and exports the
+instantiation as an alias, so `decad.ContactReport` and
+`report.ContactReportOf[*decad.Body, *decad.Face, *decad.Edge, *decad.Vertex]`
+are one type, and the enums, constants and requests are the same types under
+both spellings. Callers name the types through `decad`; the field and method
+documentation lives in `report`. The package imports no `decad` type, so the
+internal kernels instantiate the same records with topology nodes and
+`report.Lift` maps a finished node record to its handle form.
+
+`linkage/` holds the linkage model of `agent-docs/linkage-check-design.md` the same
+way: `Linkage`, `Link`, `Drive`, `LinkageLoop`, `Schedule` and the linkage and
+joint-box reports are generic over the body reference type, and `decad`
+exports each instantiated with `*Body` as an alias. Its checks run over the
+motion engine through a small set of hooks that map a body reference to its
+topology node and back.
+
 ## 7. The sketch seam
 
 `sketch` answers every 2D question; decad consumes the answer and NEVER

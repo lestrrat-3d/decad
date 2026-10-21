@@ -1,0 +1,164 @@
+package motionconclude
+
+import (
+	"fmt"
+	"math/big"
+
+	"github.com/lestrrat-3d/decad/report"
+
+	"github.com/lestrrat-3d/decad/internal/measurement"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/units"
+)
+
+// MotionPoseFinding contains the facts report publication reads from one pose.
+type MotionPoseFinding[BodyT comparable, CellT any] struct {
+	At          units.Value
+	Unbuildable bool
+	Violated    bool
+	Diagnostics []report.DiagnosticOf[BodyT, CellT]
+}
+
+// MotionSpanOutcome is the internal verdict consumed while concluding a path.
+type MotionSpanOutcome uint8
+
+const (
+	SpanNotEvaluated MotionSpanOutcome = iota
+	SpanClear
+	SpanColliding
+	SpanUndecided
+)
+
+// MotionSpanFinding contains one adjacent pose interval's certificate.
+type MotionSpanFinding struct {
+	Outcome   MotionSpanOutcome
+	Clearance *measurement.Measurement
+	Note      string
+}
+
+// ConcludedMotionSpan is the interval data returned to the root publisher.
+type ConcludedMotionSpan struct {
+	From, To  units.Value
+	Outcome   MotionSpanOutcome
+	Clearance *measurement.Measurement
+}
+
+// MotionConclusion is the verdict shared by motion and linkage reports.
+type MotionConclusion[BodyT comparable, CellT any] struct {
+	Against     []BodyT
+	Intervals   []ConcludedMotionSpan
+	Clearance   *report.ScalarReading
+	Assessment  report.Assessment
+	Diagnostics []report.DiagnosticOf[BodyT, CellT]
+	Status      report.Status
+}
+
+// ConcludeMotion assembles interval findings before pose findings, merges
+// intervals around unbuildable interior poses, and reads a path clearance only
+// when every interval is certified clear. Poses must hold one more entry than spans.
+func ConcludeMotion[BodyT comparable, CellT any](minimumRequested *units.Value, against []BodyT,
+	poses []MotionPoseFinding[BodyT, CellT], spans []MotionSpanFinding, minimum *big.Rat,
+	pathClearance func(*measurement.Measurement) (*report.ScalarReading, *report.DiagnosticOf[BodyT, CellT]),
+) MotionConclusion[BodyT, CellT] {
+	c := MotionConclusion[BodyT, CellT]{
+		Against:     against,
+		Diagnostics: []report.DiagnosticOf[BodyT, CellT]{},
+	}
+	violated := false
+	for _, pose := range poses {
+		violated = violated || pose.Violated
+	}
+	allClear, met := true, true
+	var lowest *measurement.Measurement
+	for k := 0; k < len(spans); k++ {
+		span := spans[k]
+		a := poses[k]
+		// A refused interior pose joins the intervals on either side into one
+		// undecided interval. The path's own endpoints remain in the report.
+		for poses[k+1].Unbuildable && k+2 < len(poses) {
+			k++
+			span = MotionSpanFinding{Outcome: SpanUndecided, Note: firstMotionNote(span.Note, spans[k].Note)}
+		}
+		b := poses[k+1]
+		interval := ConcludedMotionSpan{From: a.At, To: b.At, Outcome: span.Outcome, Clearance: span.Clearance}
+		c.Intervals = append(c.Intervals, interval)
+		if span.Outcome != SpanClear {
+			allClear, met = false, false
+		}
+		if span.Clearance != nil && (lowest == nil || span.Clearance.Value.Base() < lowest.Value.Base()) {
+			lowest = span.Clearance
+		}
+		switch {
+		case span.Outcome == SpanUndecided:
+			msg := fmt.Sprintf("the motion from %s to %s is neither certified clear nor bounded by a proven collision", a.At, b.At)
+			if span.Note != "" {
+				msg += ": " + span.Note
+			}
+			at := a.At
+			c.Diagnostics = append(c.Diagnostics, report.DiagnosticOf[BodyT, CellT]{
+				Code:    report.DiagMotionUndecidedInterval,
+				Status:  report.Suspect,
+				Reading: report.ReadingNone,
+				Message: msg,
+				At:      &at,
+			})
+		case span.Outcome == SpanClear && minimum != nil && span.Clearance != nil &&
+			proofarith.FloatRat(span.Clearance.Value.Base()).Cmp(minimum) < 0:
+			met = false
+			if violated {
+				break
+			}
+			obs, at := *span.Clearance, a.At
+			c.Diagnostics = append(c.Diagnostics, report.DiagnosticOf[BodyT, CellT]{
+				Code:     report.DiagMotionUndecidedClearance,
+				Status:   report.Suspect,
+				Reading:  report.ReadingGap,
+				Observed: &obs,
+				Required: minimumRequested,
+				Message:  fmt.Sprintf("the motion from %s to %s is certified clear, but its proven lower bound does not reach the required minimum", a.At, b.At),
+				At:       &at,
+			})
+		}
+	}
+	switch {
+	case minimum == nil:
+		c.Assessment = report.AssessmentNotEvaluated
+	case violated:
+		c.Assessment = report.AssessmentViolated
+	case met:
+		c.Assessment = report.AssessmentMet
+	default:
+		c.Assessment = report.AssessmentUndecided
+	}
+	for _, pose := range poses {
+		c.Diagnostics = append(c.Diagnostics, pose.Diagnostics...)
+	}
+	if allClear && lowest != nil {
+		if reading, diag := pathClearance(lowest); reading != nil {
+			c.Clearance = reading
+			if diag != nil {
+				c.Diagnostics = append(c.Diagnostics, *diag)
+			}
+		}
+	}
+	c.Status = WorstStatus(c.Diagnostics)
+	return c
+}
+
+func firstMotionNote(notes ...string) string {
+	for _, note := range notes {
+		if note != "" {
+			return note
+		}
+	}
+	return ""
+}
+
+// WorstStatus reports the highest status of the findings, or Sound when empty.
+func WorstStatus[BodyT comparable, CellT any](diagnostics []report.DiagnosticOf[BodyT, CellT]) report.Status {
+	status := report.Sound
+	for _, diagnostic := range diagnostics {
+		status = max(status, diagnostic.Status)
+	}
+	return status
+}

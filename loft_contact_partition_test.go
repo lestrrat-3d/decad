@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/loftdirect"
+
 	"github.com/lestrrat-3d/decad/internal/loftcontact"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -41,7 +43,7 @@ func TestLoftContactPartitionRealVaryingCapJunctions(t *testing.T) {
 	prism := internalBoxBody(t, New(), 0, 0, 10, 10, 5)
 	pp := prism.n.Payload.(prismPayload)
 	for _, operands := range [][2]*Body{{prism, loft}, {loft, prism}} {
-		partition, admitted, err := certifyLoftSourcePartition(t.Context(), operands[0], operands[1],
+		partition, admitted, err := loftdirect.CertifyLoftSourcePartition(t.Context(), bodyNode(operands[0]), bodyNode(operands[1]),
 			proofbound.NewWorkBudget(t.Context()), false)
 		require.NoError(t, err)
 		require.True(t, admitted)
@@ -138,7 +140,7 @@ func loftPartitionRealBodies(t *testing.T, lower, upper [4]float64, z0, z1 float
 func TestLoftContactPartitionCapMapRefusesAmbiguousFragments(t *testing.T) {
 	prism, loft := loftPartitionRealBodies(t,
 		[4]float64{8, 4, 12, 6}, [4]float64{8, 4, 13, 6}, 0, 4)
-	partition, admitted, err := certifyLoftSourcePartition(t.Context(), prism, loft,
+	partition, admitted, err := loftdirect.CertifyLoftSourcePartition(t.Context(), bodyNode(prism), bodyNode(loft),
 		proofbound.NewWorkBudget(t.Context()), false)
 	require.NoError(t, err)
 	require.True(t, admitted)
@@ -243,7 +245,7 @@ func TestLoftContactPartitionCapMapRefusesAmbiguousFragments(t *testing.T) {
 func TestLoftContactPartitionInteriorCutIsNotCapChord(t *testing.T) {
 	prism, loft := loftPartitionRealBodies(t,
 		[4]float64{8, 4, 12, 6}, [4]float64{8, 4, 13, 6}, 0, 4)
-	partition, admitted, err := certifyLoftSourcePartition(t.Context(), prism, loft,
+	partition, admitted, err := loftdirect.CertifyLoftSourcePartition(t.Context(), bodyNode(prism), bodyNode(loft),
 		proofbound.NewWorkBudget(t.Context()), false)
 	require.NoError(t, err)
 	require.True(t, admitted)
@@ -302,7 +304,7 @@ func TestLoftContactPartitionOtherPrismCarrier(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			prism, loft := loftPartitionRealBodies(t, tc.lower, tc.upper, 0, 4)
-			partition, admitted, err := certifyLoftSourcePartition(t.Context(), prism, loft,
+			partition, admitted, err := loftdirect.CertifyLoftSourcePartition(t.Context(), bodyNode(prism), bodyNode(loft),
 				proofbound.NewWorkBudget(t.Context()), false)
 			require.NoError(t, err)
 			require.True(t, admitted)
@@ -334,7 +336,7 @@ func TestLoftContactPartitionRealProducerRefusals(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			prism, loft := loftPartitionRealBodies(t, tc.lower, tc.upper, tc.z0, tc.z1)
-			_, admitted, err := certifyLoftSourcePartition(t.Context(), prism, loft,
+			_, admitted, err := loftdirect.CertifyLoftSourcePartition(t.Context(), bodyNode(prism), bodyNode(loft),
 				proofbound.NewWorkBudget(t.Context()), false)
 			require.NoError(t, err)
 			require.False(t, admitted)
@@ -362,19 +364,19 @@ func TestLoftContactPartitionSourceAndWorkRefusals(t *testing.T) {
 			payload := loft.n.Payload.(loftPayload)
 			change.edit(&payload)
 			alteredBody := bornBody(&Body{n: topo.Body{Payload: payload}})
-			_, admitted, err := certifyLoftSourcePartition(t.Context(), prism, alteredBody,
+			_, admitted, err := loftdirect.CertifyLoftSourcePartition(t.Context(), bodyNode(prism), bodyNode(alteredBody),
 				proofbound.NewWorkBudget(t.Context()), false)
 			require.NoError(t, err)
 			require.False(t, admitted)
 		})
 	}
 	exhausted := &proofbound.WorkBudget{StepFn: func() error { return context.DeadlineExceeded }}
-	_, admitted, err := certifyLoftSourcePartition(t.Context(), prism, loft, exhausted, false)
+	_, admitted, err := loftdirect.CertifyLoftSourcePartition(t.Context(), bodyNode(prism), bodyNode(loft), exhausted, false)
 	require.ErrorIs(t, err, context.DeadlineExceeded)
 	require.False(t, admitted)
 	canceled, cancel := context.WithCancel(t.Context())
 	cancel()
-	_, admitted, err = certifyLoftSourcePartition(canceled, prism, loft, proofbound.NewWorkBudget(canceled), false)
+	_, admitted, err = loftdirect.CertifyLoftSourcePartition(canceled, bodyNode(prism), bodyNode(loft), proofbound.NewWorkBudget(canceled), false)
 	require.ErrorIs(t, err, context.Canceled)
 	require.False(t, admitted)
 }

@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// These tests drive Verify's exact planar pair arm (clearance_planar.go)
+// These tests drive Verify's exact planar pair arm (internal/verifyrun/clearance.go)
 // through the public API alone, on mtilt's support-tree fixtures: a part
 // with an overhanging arm, and mitred, tapered 16-gon branches that stand
 // under it, inside its bounding box, which the analytic clearance kernel

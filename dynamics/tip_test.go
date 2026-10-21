@@ -42,7 +42,7 @@ import (
 //     (sweepmemo.BracketDepthWithin): the first rotating
 //     impact stops the step with StepPairUndecided;
 //   - the oriented-box planar manifold (contact_pair.go's
-//     classifyPlanarManifold): the initial edge contact stops the first step
+//     contactpair.classifyPlanarManifold): the initial edge contact stops the first step
 //     with StepManifoldMissing; dropping its face-pair exclusion publishes
 //     the degenerate face-pair manifolds the box patches withhold in
 //     TestClippedRotatedFaceRefusesUnprovedContacts and

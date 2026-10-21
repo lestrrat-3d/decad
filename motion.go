@@ -3,9 +3,10 @@ package decad
 import (
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/report"
+
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 	"github.com/lestrrat-3d/decad/internal/motionoption"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -14,7 +15,7 @@ import (
 
 // This file is the motion vocabulary of agent-docs/motion-check-design.md §2-§4:
 // the sealed Motion set, root-owned option types and
-// MotionReport records. motion_verify.go runs the check, and
+// MotionReport records. internal/motionengine runs the check, and
 // internal/motionbound proves the bounds its interval certificate consumes.
 
 // Motion is the sealed set of one-parameter rigid motions. PoseAt returns
@@ -159,134 +160,24 @@ func decodeMotionOptions(opts []MotionOption) ([]motionoption.MotionOption, erro
 	return encoded, nil
 }
 
-type motionConfig = motionoption.Config
-
-// MotionReport is VerifyMotion's path report (agent-docs/motion-check-design.md §4).
-type MotionReport struct {
-	Request     MotionRequest
-	Motion      Motion
-	Moving      []*Body
-	Against     []*Body
-	Poses       []PoseResult
-	Intervals   []MotionInterval
-	Collisions  []Collision
-	Clearance   *ScalarReading
-	Assessment  Assessment
-	Diagnostics []Diagnostic
-	Status      Status
-}
-
-// Passed reports whether the report is Sound. It returns false for nil.
-func (r *MotionReport) Passed() bool { return r != nil && r.Status == Sound }
-
-// MotionRequest records the effective settings of a VerifyMotion call.
-type MotionRequest struct {
-	RelativeTolerance units.Value
-	Resolution        units.Value
-	MinClearance      *units.Value
-}
-
-// PoseResult records one evaluated pose and its pair findings.
-type PoseResult struct {
-	At            units.Value
-	Pose          r3.Transform
-	Interferences []Interference
-	Clearances    []Clearance
-	Diagnostics   []Diagnostic
-}
-
-// MotionInterval records the certificate between adjacent poses.
-type MotionInterval struct {
-	From, To  units.Value
-	Outcome   IntervalOutcome
-	Clearance *Measurement
-}
-
-// IntervalOutcome states what a MotionInterval proves.
-type IntervalOutcome int
-
-const (
-	IntervalNotEvaluated IntervalOutcome = iota
-	IntervalClear
-	IntervalColliding
-	IntervalUndecided
+type (
+	// MotionReport is VerifyMotion's path report (agent-docs/motion-check-design.md §4).
+	MotionReport = report.MotionReportOf[*Body, Motion]
+	// MotionRequest records the effective settings of a VerifyMotion call.
+	MotionRequest = report.MotionRequest
+	// PoseResult records one evaluated pose and its pair findings.
+	PoseResult = report.PoseResultOf[*Body]
+	// MotionInterval records the certificate between adjacent poses.
+	MotionInterval = report.MotionInterval
+	// IntervalOutcome states what a MotionInterval proves.
+	IntervalOutcome = report.IntervalOutcome
+	// Collision is a proven overlap at one ideal pose.
+	Collision = report.CollisionOf[*Body]
 )
 
-// String renders the stable lower-snake token, including unknown values.
-func (o IntervalOutcome) String() string {
-	switch o {
-	case IntervalNotEvaluated:
-		return "not_evaluated"
-	case IntervalClear:
-		return "clear"
-	case IntervalColliding:
-		return "colliding"
-	case IntervalUndecided:
-		return "undecided"
-	default:
-		return fmt.Sprintf("interval_outcome(%d)", int(o))
-	}
-}
-
-func motionRequest(cfg motionConfig) MotionRequest {
-	return MotionRequest{
-		RelativeTolerance: units.Scalar(cfg.Rel),
-		Resolution:        cfg.Resolution,
-		MinClearance:      cfg.Minimum,
-	}
-}
-
-func rootMotionIntervals(intervals []reportvocab.ConcludedMotionSpan) []MotionInterval {
-	if intervals == nil {
-		return nil
-	}
-	result := make([]MotionInterval, len(intervals))
-	for i, interval := range intervals {
-		result[i] = MotionInterval{
-			From:      interval.From,
-			To:        interval.To,
-			Outcome:   rootIntervalOutcome(interval.Outcome),
-			Clearance: measurementPtrFromInternal(interval.Clearance),
-		}
-	}
-	return result
-}
-
-func rootIntervalOutcome(outcome reportvocab.MotionSpanOutcome) IntervalOutcome {
-	switch outcome {
-	case reportvocab.SpanNotEvaluated:
-		return IntervalNotEvaluated
-	case reportvocab.SpanClear:
-		return IntervalClear
-	case reportvocab.SpanColliding:
-		return IntervalColliding
-	case reportvocab.SpanUndecided:
-		return IntervalUndecided
-	default:
-		return IntervalOutcome(outcome)
-	}
-}
-
-func reportSpanOutcome(outcome IntervalOutcome) reportvocab.MotionSpanOutcome {
-	switch outcome {
-	case IntervalNotEvaluated:
-		return reportvocab.SpanNotEvaluated
-	case IntervalClear:
-		return reportvocab.SpanClear
-	case IntervalColliding:
-		return reportvocab.SpanColliding
-	case IntervalUndecided:
-		return reportvocab.SpanUndecided
-	default:
-		return reportvocab.MotionSpanOutcome(outcome)
-	}
-}
-
-// Collision is a proven overlap at one ideal pose.
-type Collision struct {
-	At     units.Value
-	Pose   r3.Transform
-	Moving *Body
-	Static *Body
-	Volume Measurement
-}
+const (
+	IntervalNotEvaluated = report.IntervalNotEvaluated
+	IntervalClear        = report.IntervalClear
+	IntervalColliding    = report.IntervalColliding
+	IntervalUndecided    = report.IntervalUndecided
+)

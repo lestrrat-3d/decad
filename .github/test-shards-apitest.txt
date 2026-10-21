@@ -2145,6 +2145,8 @@
 10	0.00	TestFacetedPlaneSlab
 10	0.00	TestFacetedRetainedBlend
 10	0.00	TestFacetedRetainedBlendStraight
+10	0.00	TestFacetedRetainedBlendCylinderLine
+10	0.00	TestFacetedRetainedBlendArc
 6	0.13	TestBrepLoopFilletUndercutReadsEachPipePatch
 6	0.13	TestBrepLoopFilletUndercutReflexCornerAndBottomLoop
 6	0.13	TestPointLoftSplitPieceRefusesPlanesOutsideItsSlab

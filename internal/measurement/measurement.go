@@ -1,42 +1,22 @@
 package measurement
 
 import (
-	"fmt"
 	"math"
+
+	"github.com/lestrrat-3d/decad/report"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
-// Exactness reports how far a computed result can be trusted: whether the
-// number IS the truth, or a bounded numerical approximation whose error the
-// accompanying Bound holds (agent-docs/api-design.md §5.3). Every measurement
-// the API returns carries one, from the first commit — that is what makes an
-// exact-kernel future monotonic rather than breaking: callers already branch
-// on Approximate, and under an exact evaluator that branch stops being taken.
-type Exactness int
+// Exactness is the public report.Exactness; see there for its meaning.
+type Exactness = report.Exactness
 
 const (
-	// Exact marks a proved exactly representable result: the number is the
-	// truth, and the Bound beside it is zero.
-	Exact Exactness = iota
-	// Approximate marks a bounded numerical or tessellation-derived result:
-	// the Bound beside it holds the absolute error the evaluator proves.
-	Approximate
+	Exact       = report.Exact
+	Approximate = report.Approximate
 )
-
-// String renders the exactness for diagnostics.
-func (e Exactness) String() string {
-	switch e {
-	case Exact:
-		return "Exact"
-	case Approximate:
-		return "Approximate"
-	default:
-		return fmt.Sprintf("Exactness(%d)", int(e))
-	}
-}
 
 // Measurement is a scalar quantity plus how far it can be trusted. Value is a
 // typed quantity — never a naked float (agent-docs/api-design.md §5.1) — and Bound

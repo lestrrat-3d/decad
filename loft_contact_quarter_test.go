@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/loftdirect"
+
 	"github.com/lestrrat-3d/decad/internal/loftcontact"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -90,7 +92,7 @@ func TestQuarterSourceHeldY1RealProducerGate(t *testing.T) {
 	outputOperation := &proofbound.WorkBudget{
 		StepFn: func() error { outputVisits++; return ctx.Err() }, ErrFn: ctx.Err,
 	}
-	proof, accepted, err := loftQuarterSourceHeldY1(ctx, prism, loft,
+	proof, accepted, err := loftdirect.LoftQuarterSourceHeldY1(ctx, bodyNode(prism), bodyNode(loft),
 		sourceOperation, outputOperation)
 	if err != nil || !accepted || proof.Bound == nil ||
 		proof.Bound.Cmp(big.NewRat(1, 4)) != 0 || proof.Pieces != 4 {
@@ -113,7 +115,7 @@ func TestQuarterSourceHeldY3RealProducerGate(t *testing.T) {
 	output := &proofbound.WorkBudget{
 		StepFn: func() error { outputVisits++; return ctx.Err() }, ErrFn: ctx.Err,
 	}
-	proof, accepted, err := loftQuarterSourceHeldY3(ctx, prism, loft, source, output)
+	proof, accepted, err := loftdirect.LoftQuarterSourceHeldY3(ctx, bodyNode(prism), bodyNode(loft), source, output)
 	if err != nil || !accepted || proof.Bound == nil ||
 		proof.Bound.Cmp(big.NewRat(1, 4)) != 0 || proof.Pieces != 8 {
 		t.Fatalf("real y=3 seam: accepted=%t reason=%s err=%v bound=%v pieces=%d source=%d output=%d",
@@ -135,7 +137,7 @@ func TestQuarterSourceHeldPairRealProducerGate(t *testing.T) {
 	output := &proofbound.WorkBudget{
 		StepFn: func() error { outputVisits++; return ctx.Err() }, ErrFn: ctx.Err,
 	}
-	proof, accepted, err := loftQuarterSourceHeldPair(ctx, prism, loft, source, output)
+	proof, accepted, err := loftdirect.LoftQuarterSourceHeldPair(ctx, bodyNode(prism), bodyNode(loft), source, output)
 	if err != nil || !accepted || proof.Y1.Bound == nil || proof.Y3.Bound == nil ||
 		proof.Y1.Bound.Cmp(big.NewRat(1, 4)) != 0 ||
 		proof.Y3.Bound.Cmp(big.NewRat(1, 4)) != 0 ||
@@ -153,7 +155,7 @@ func TestQuarterSourceHeldPairRealProducerGate(t *testing.T) {
 func TestQuarterSourceHeldPairReverseOrder(t *testing.T) {
 	ctx := t.Context()
 	prism, loft := quarterSeamRealPair(ctx, t, [2]float64{5, 5.5})
-	proof, accepted, err := loftQuarterSourceHeldPair(ctx, loft, prism,
+	proof, accepted, err := loftdirect.LoftQuarterSourceHeldPair(ctx, bodyNode(loft), bodyNode(prism),
 		proofbound.NewWorkBudget(ctx), proofbound.NewWorkBudget(ctx))
 	if err != nil || !accepted || proof.Y1.Bound == nil || proof.Y3.Bound == nil ||
 		proof.Y1.Pieces != 4 || proof.Y3.Pieces != 8 || proof.Slabs != 11 {
@@ -189,7 +191,7 @@ func TestQuarterSourceHeldPairRefusals(t *testing.T) {
 				outputVisits++
 				return nil
 			}, ErrFn: func() error { return nil }}
-			got, accepted, err := loftQuarterSourceHeldPair(ctx, prism, loft, source, output)
+			got, accepted, err := loftdirect.LoftQuarterSourceHeldPair(ctx, bodyNode(prism), bodyNode(loft), source, output)
 			if accepted || !errors.Is(err, limitErr) || got.Y1.Bound != nil ||
 				got.Y3.Bound != nil || got.Slabs != 0 {
 				t.Fatalf("limited paired %s: accepted=%t err=%v slabs=%d",
@@ -212,7 +214,7 @@ func TestQuarterSourceHeldPairRefusals(t *testing.T) {
 		}
 		return nil
 	}, ErrFn: func() error { return nil }}
-	got, accepted, err := loftQuarterSourceHeldPair(canceled, prism, loft, source, output)
+	got, accepted, err := loftdirect.LoftQuarterSourceHeldPair(canceled, bodyNode(prism), bodyNode(loft), source, output)
 	if accepted || !errors.Is(err, context.Canceled) || got.Y1.Bound != nil ||
 		got.Y3.Bound != nil || got.Slabs != 0 || outputVisits != 7000 {
 		t.Fatalf("paired cancellation: accepted=%t err=%v slabs=%d output=%d",
@@ -221,7 +223,7 @@ func TestQuarterSourceHeldPairRefusals(t *testing.T) {
 	if err := Remove(prism); err != nil {
 		t.Fatal(err)
 	}
-	got, accepted, err = loftQuarterSourceHeldPair(ctx, prism, loft,
+	got, accepted, err = loftdirect.LoftQuarterSourceHeldPair(ctx, bodyNode(prism), bodyNode(loft),
 		proofbound.NewWorkBudget(ctx), proofbound.NewWorkBudget(ctx))
 	if err != nil || accepted || got.Y1.Bound != nil || got.Y3.Bound != nil || got.Slabs != 0 {
 		t.Fatalf("retired paired source: accepted=%t err=%v slabs=%d", accepted, err, got.Slabs)
@@ -243,7 +245,7 @@ func TestQuarterSourceHeldPairWrongSource(t *testing.T) {
 			output := &proofbound.WorkBudget{
 				StepFn: func() error { outputVisits++; return nil }, ErrFn: func() error { return nil },
 			}
-			got, accepted, err := loftQuarterSourceHeldPair(ctx, prism, loft,
+			got, accepted, err := loftdirect.LoftQuarterSourceHeldPair(ctx, bodyNode(prism), bodyNode(loft),
 				proofbound.NewWorkBudget(ctx), output)
 			if err != nil || accepted || got.Y1.Bound != nil || got.Y3.Bound != nil ||
 				got.Slabs != 0 || outputVisits != 0 {
@@ -257,7 +259,7 @@ func TestQuarterSourceHeldPairWrongSource(t *testing.T) {
 func TestQuarterSourceHeldY3ReverseOrder(t *testing.T) {
 	ctx := t.Context()
 	prism, loft := quarterSeamRealPair(ctx, t, [2]float64{5, 5.5})
-	proof, accepted, err := loftQuarterSourceHeldY3(ctx, loft, prism,
+	proof, accepted, err := loftdirect.LoftQuarterSourceHeldY3(ctx, bodyNode(loft), bodyNode(prism),
 		proofbound.NewWorkBudget(ctx), proofbound.NewWorkBudget(ctx))
 	if err != nil || !accepted || proof.Bound == nil ||
 		proof.Bound.Cmp(big.NewRat(1, 4)) != 0 || proof.Pieces != 8 {
@@ -293,7 +295,7 @@ func TestQuarterSourceHeldY3Refusals(t *testing.T) {
 				outputVisits++
 				return nil
 			}, ErrFn: func() error { return nil }}
-			got, accepted, err := loftQuarterSourceHeldY3(ctx, prism, loft, source, output)
+			got, accepted, err := loftdirect.LoftQuarterSourceHeldY3(ctx, bodyNode(prism), bodyNode(loft), source, output)
 			if accepted || !errors.Is(err, limitErr) || got.Bound != nil || got.Pieces != 0 {
 				t.Fatalf("limited %s: accepted=%t err=%v pieces=%d", tc.name, accepted, err, got.Pieces)
 			}
@@ -314,7 +316,7 @@ func TestQuarterSourceHeldY3Refusals(t *testing.T) {
 		}
 		return nil
 	}, ErrFn: func() error { return nil }}
-	got, accepted, err := loftQuarterSourceHeldY3(canceled, prism, loft, source, output)
+	got, accepted, err := loftdirect.LoftQuarterSourceHeldY3(canceled, bodyNode(prism), bodyNode(loft), source, output)
 	if accepted || !errors.Is(err, context.Canceled) || got.Bound != nil || got.Pieces != 0 ||
 		outputVisits != 6000 {
 		t.Fatalf("in-flight cancellation: accepted=%t err=%v pieces=%d output=%d",
@@ -323,7 +325,7 @@ func TestQuarterSourceHeldY3Refusals(t *testing.T) {
 	if err := Remove(prism); err != nil {
 		t.Fatal(err)
 	}
-	got, accepted, err = loftQuarterSourceHeldY3(ctx, prism, loft,
+	got, accepted, err = loftdirect.LoftQuarterSourceHeldY3(ctx, bodyNode(prism), bodyNode(loft),
 		proofbound.NewWorkBudget(ctx), proofbound.NewWorkBudget(ctx))
 	if err != nil || accepted || got.Bound != nil || got.Pieces != 0 {
 		t.Fatalf("retired source: accepted=%t err=%v pieces=%d", accepted, err, got.Pieces)
@@ -337,7 +339,7 @@ func TestQuarterSourceHeldY3WrongRealRadius(t *testing.T) {
 	output := &proofbound.WorkBudget{
 		StepFn: func() error { outputVisits++; return nil }, ErrFn: func() error { return nil },
 	}
-	got, accepted, err := loftQuarterSourceHeldY3(ctx, prism, loft,
+	got, accepted, err := loftdirect.LoftQuarterSourceHeldY3(ctx, bodyNode(prism), bodyNode(loft),
 		proofbound.NewWorkBudget(ctx), output)
 	if err != nil || accepted || got.Bound != nil || got.Pieces != 0 || outputVisits != 0 {
 		t.Fatalf("wrong real radius: accepted=%t err=%v pieces=%d output=%d",
@@ -352,7 +354,7 @@ func TestQuarterSourceHeldY3MissingRealJunction(t *testing.T) {
 	output := &proofbound.WorkBudget{
 		StepFn: func() error { outputVisits++; return nil }, ErrFn: func() error { return nil },
 	}
-	got, accepted, err := loftQuarterSourceHeldY3(ctx, prism, loft,
+	got, accepted, err := loftdirect.LoftQuarterSourceHeldY3(ctx, bodyNode(prism), bodyNode(loft),
 		proofbound.NewWorkBudget(ctx), output)
 	if err != nil || accepted || got.Bound != nil || got.Pieces != 0 || outputVisits != 0 {
 		t.Fatalf("missing real cap junction: accepted=%t err=%v pieces=%d output=%d",
@@ -388,7 +390,7 @@ func TestQuarterSourceHeldY1Refusals(t *testing.T) {
 				outputVisits++
 				return nil
 			}, ErrFn: func() error { return nil }}
-			got, accepted, err := loftQuarterSourceHeldY1(ctx, prism, loft, source, output)
+			got, accepted, err := loftdirect.LoftQuarterSourceHeldY1(ctx, bodyNode(prism), bodyNode(loft), source, output)
 			if accepted || !errors.Is(err, limitErr) || got.Bound != nil || got.Pieces != 0 {
 				t.Fatalf("limited %s: accepted=%t reason=%s err=%v pieces=%d",
 					tc.name, accepted, got.Reason, err, got.Pieces)
@@ -410,7 +412,7 @@ func TestQuarterSourceHeldY1Refusals(t *testing.T) {
 		}
 		return nil
 	}, ErrFn: func() error { return nil }}
-	got, accepted, err := loftQuarterSourceHeldY1(canceled, prism, loft, source, output)
+	got, accepted, err := loftdirect.LoftQuarterSourceHeldY1(canceled, bodyNode(prism), bodyNode(loft), source, output)
 	if accepted || !errors.Is(err, context.Canceled) || got.Bound != nil || got.Pieces != 0 ||
 		outputVisits != 6000 {
 		t.Fatalf("in-flight cancellation: accepted=%t err=%v pieces=%d source=%d output=%d",
@@ -419,7 +421,7 @@ func TestQuarterSourceHeldY1Refusals(t *testing.T) {
 	if err := Remove(prism); err != nil {
 		t.Fatal(err)
 	}
-	got, accepted, err = loftQuarterSourceHeldY1(ctx, prism, loft,
+	got, accepted, err = loftdirect.LoftQuarterSourceHeldY1(ctx, bodyNode(prism), bodyNode(loft),
 		proofbound.NewWorkBudget(ctx), proofbound.NewWorkBudget(ctx))
 	if err != nil || accepted || got.Bound != nil || got.Pieces != 0 {
 		t.Fatalf("retired source: accepted=%t err=%v pieces=%d", accepted, err, got.Pieces)
@@ -433,7 +435,7 @@ func TestQuarterSourceHeldY1MissingRealJunction(t *testing.T) {
 	output := &proofbound.WorkBudget{
 		StepFn: func() error { outputVisits++; return nil }, ErrFn: func() error { return nil },
 	}
-	got, accepted, err := loftQuarterSourceHeldY1(ctx, prism, loft,
+	got, accepted, err := loftdirect.LoftQuarterSourceHeldY1(ctx, bodyNode(prism), bodyNode(loft),
 		proofbound.NewWorkBudget(ctx), output)
 	if err != nil || accepted || got.Bound != nil || got.Pieces != 0 || outputVisits != 0 {
 		t.Fatalf("missing real cap junction: accepted=%t err=%v pieces=%d output=%d",
@@ -448,7 +450,7 @@ func TestQuarterSourceHeldY1WrongRealRadius(t *testing.T) {
 	output := &proofbound.WorkBudget{
 		StepFn: func() error { outputVisits++; return nil }, ErrFn: func() error { return nil },
 	}
-	got, accepted, err := loftQuarterSourceHeldY1(ctx, prism, loft,
+	got, accepted, err := loftdirect.LoftQuarterSourceHeldY1(ctx, bodyNode(prism), bodyNode(loft),
 		proofbound.NewWorkBudget(ctx), output)
 	if err != nil || accepted || got.Bound != nil || got.Pieces != 0 || outputVisits != 0 {
 		t.Fatalf("wrong real radius: accepted=%t err=%v pieces=%d output=%d",
@@ -465,10 +467,10 @@ func TestQuarterRootBracketPreflight(t *testing.T) {
 		t.Fatal("boundary fixture fails the old square-only test")
 	}
 	one := big.NewRat(1, 1)
-	if quarterRootBracketFits(x, x, one, one, big.NewRat(117, 4)) {
+	if loftdirect.QuarterRootBracketFits(x, x, one, one, big.NewRat(117, 4)) {
 		t.Fatal("oversized comparison cross product was accepted")
 	}
-	if !quarterRootBracketFits(big.NewRat(5, 1), big.NewRat(11, 2),
+	if !loftdirect.QuarterRootBracketFits(big.NewRat(5, 1), big.NewRat(11, 2),
 		one, one, big.NewRat(117, 4)) {
 		t.Fatal("ordinary quarter-root bracket was refused")
 	}
@@ -1038,38 +1040,38 @@ func TestLoftQuarterJunctionOneRealCase(t *testing.T) {
 		ErrFn:  ctx.Err,
 	}
 	wall := proofbound.NewWallWorkBudgetWithOperation(4096, operation)
-	source, ok, err := certifyLoftSourceSpanCaps(ctx, wall, prism, loft)
+	source, ok, err := loftdirect.CertifyLoftSourceSpanCaps(ctx, wall, bodyNode(prism), bodyNode(loft))
 	if err != nil || !ok {
 		t.Fatalf("source authentication: ok=%t err=%v steps=%d", ok, err, total)
 	}
-	work := &loftQuarterWork{budget: wall}
-	order, ok, err := certifyLoftCapSourceOrder(ctx, wall, source, work)
+	work := &loftdirect.LoftQuarterWork{Budget: wall}
+	order, ok, err := loftdirect.CertifyLoftCapSourceOrder(ctx, wall, source, work)
 	t.Logf("quarter source counts: total=%d decad=%d raw=%d proof=%d pairs=%d",
-		total, total-work.raw-work.proof-work.pairs,
-		work.raw, work.proof, work.pairs)
-	if work.declined {
-		d := work.decline
+		total, total-work.Raw-work.Proof-work.Pairs,
+		work.Raw, work.Proof, work.Pairs)
+	if work.Declined {
+		d := work.Decline
 		t.Logf("first raw decline: predicate=%s cap=%d profile=%d loop=%d edge=%d left_source=%d left_kind=%T left_tagged=%t left_is_loft=%t left_segment=%d right_source=%d right_kind=%T right_tagged=%t right_is_loft=%t right_segment=%d",
-			d.Predicate, work.cap, d.Profile, d.Loop, d.Edge,
-			d.LeftSourceIndex, d.LeftEntity, work.leftTagged,
-			work.leftTag.IsB, work.leftTag.Segment,
-			d.RightSourceIndex, d.RightEntity, work.rightTagged,
-			work.rightTag.IsB, work.rightTag.Segment)
+			d.Predicate, work.Cap, d.Profile, d.Loop, d.Edge,
+			d.LeftSourceIndex, d.LeftEntity, work.LeftTagged,
+			work.LeftTag.IsB, work.LeftTag.Segment,
+			d.RightSourceIndex, d.RightEntity, work.RightTagged,
+			work.RightTag.IsB, work.RightTag.Segment)
 	}
 	if err != nil || !ok {
 		t.Fatalf("quarter cap proof: ok=%t err=%v", ok, err)
 	}
-	if work.pairs != 24 {
-		t.Fatalf("original pair scans=%d, want 24", work.pairs)
+	if work.Pairs != 24 {
+		t.Fatalf("original pair scans=%d, want 24", work.Pairs)
 	}
 	for cap := range 2 {
-		if len(order.quarter[cap]) != 2 {
-			t.Fatalf("cap %d: junctions=%d, want 2", cap, len(order.quarter[cap]))
+		if len(order.Quarter[cap]) != 2 {
+			t.Fatalf("cap %d: junctions=%d, want 2", cap, len(order.Quarter[cap]))
 		}
 		seen := map[float64]bool{}
-		for _, event := range order.quarter[cap] {
-			line := event.line.curve.(sectionrecord.LineSeg)
-			if line.Start.V != line.End.V || event.appearances == 0 {
+		for _, event := range order.Quarter[cap] {
+			line := event.Line.Curve.(sectionrecord.LineSeg)
+			if line.Start.V != line.End.V || event.Appearances == 0 {
 				t.Fatalf("cap %d: unverified source occurrence", cap)
 			}
 			y := line.Start.V
@@ -1086,7 +1088,7 @@ func TestLoftQuarterJunctionOneRealCase(t *testing.T) {
 			default:
 				t.Fatalf("cap %d: unexpected line y=%g", cap, y)
 			}
-			x, yBox := event.witness.Point()
+			x, yBox := event.Witness.Point()
 			xlo, xhi := x.Bounds()
 			ylo, yhi := yBox.Bounds()
 			if xlo == nil || xhi == nil || ylo == nil || yhi == nil ||
@@ -1102,45 +1104,45 @@ func TestLoftQuarterJunctionOneRealCase(t *testing.T) {
 			seen[y] = true
 		}
 	}
-	wallOrder, ordered, orderErr := certifyLoftQuarterWallOrder(ctx, wall, source)
-	if orderErr != nil || !ordered || wallOrder.prism != prism ||
-		wallOrder.loft != loft || wallOrder.arcSegment < 0 ||
-		len(wallOrder.wallFaces[0]) == 0 ||
-		len(wallOrder.wallFaces[0]) != len(wallOrder.wallFaces[1]) {
+	wallOrder, ordered, orderErr := loftdirect.CertifyLoftQuarterWallOrder(ctx, wall, source)
+	if orderErr != nil || !ordered || wallOrder.Prism != bodyNode(prism) ||
+		wallOrder.Loft != bodyNode(loft) || wallOrder.ArcSegment < 0 ||
+		len(wallOrder.WallFaces[0]) == 0 ||
+		len(wallOrder.WallFaces[0]) != len(wallOrder.WallFaces[1]) {
 		t.Fatalf("quarter wall order: accepted=%t err=%v steps=%d",
 			ordered, orderErr, total)
 	}
 	t.Logf("quarter source and wall order: total=%d remaining=%d wall_faces=%d",
-		total, 4096-total, len(wallOrder.wallFaces[0]))
+		total, 4096-total, len(wallOrder.WallFaces[0]))
 	for _, operands := range [][2]*Body{{prism, loft}, {loft, prism}} {
 		total = 0
-		envelope, certified, e := certifyLoftQuarterSourceEnvelope(ctx,
-			operands[0], operands[1], operation)
-		if e != nil || !certified || envelope.visits != total ||
-			envelope.visits >= 4096 || envelope.wall.prism != prism ||
-			envelope.wall.loft != loft || envelope.wall.arcSegment != wallOrder.arcSegment ||
-			envelope.wall.lower != wallOrder.lower || envelope.wall.upper != wallOrder.upper {
+		envelope, certified, e := loftdirect.CertifyLoftQuarterSourceEnvelope(ctx,
+			bodyNode(operands[0]), bodyNode(operands[1]), operation)
+		if e != nil || !certified || envelope.Visits != total ||
+			envelope.Visits >= 4096 || envelope.Wall.Prism != bodyNode(prism) ||
+			envelope.Wall.Loft != bodyNode(loft) || envelope.Wall.ArcSegment != wallOrder.ArcSegment ||
+			envelope.Wall.Lower != wallOrder.Lower || envelope.Wall.Upper != wallOrder.Upper {
 			t.Fatalf("shared quarter source: certified=%t err=%v visits=%d steps=%d",
-				certified, e, envelope.visits, total)
+				certified, e, envelope.Visits, total)
 		}
-		for cap := range envelope.order.quarter {
-			if len(envelope.order.quarter[cap]) != 2 {
+		for cap := range envelope.Order.Quarter {
+			if len(envelope.Order.Quarter[cap]) != 2 {
 				t.Fatalf("cap %d: envelope junctions=%d", cap,
-					len(envelope.order.quarter[cap]))
+					len(envelope.Order.Quarter[cap]))
 			}
 		}
 		total = 0
 		wall = proofbound.NewWallWorkBudgetWithOperation(4096, operation)
-		_, accepted, e := certifyLoftSourcePartition(ctx,
-			operands[0], operands[1], wall, false)
+		_, accepted, e := loftdirect.CertifyLoftSourcePartition(ctx,
+			bodyNode(operands[0]), bodyNode(operands[1]), wall, false)
 		if e != nil || accepted {
 			t.Fatalf("private source consumer: accepted=%t err=%v steps=%d",
 				accepted, e, total)
 		}
 		total = 0
 		wall = proofbound.NewWallWorkBudgetWithOperation(4096, operation)
-		_, accepted, e = certifyLoftOutputBoundary(ctx,
-			operands[0], operands[1], wall)
+		_, accepted, e = loftdirect.CertifyLoftOutputBoundary(ctx,
+			bodyNode(operands[0]), bodyNode(operands[1]), wall)
 		if e != nil || accepted {
 			t.Fatalf("private output consumer: accepted=%t err=%v steps=%d",
 				accepted, e, total)
@@ -1158,14 +1160,14 @@ func TestLoftQuarterJunctionOneRealCase(t *testing.T) {
 		},
 		ErrFn: ctx.Err,
 	}
-	_, certified, err := certifyLoftQuarterSourceEnvelope(ctx, prism, loft,
+	_, certified, err := loftdirect.CertifyLoftQuarterSourceEnvelope(ctx, bodyNode(prism), bodyNode(loft),
 		limitedOperation)
 	if !errors.Is(err, limitErr) || certified || limited != 3000 {
 		t.Fatalf("limited source: certified=%t err=%v steps=%d", certified, err, limited)
 	}
 	canceled, cancel := context.WithCancel(ctx)
 	cancel()
-	_, certified, err = certifyLoftQuarterSourceEnvelope(canceled, prism, loft,
+	_, certified, err = loftdirect.CertifyLoftQuarterSourceEnvelope(canceled, bodyNode(prism), bodyNode(loft),
 		proofbound.NewWorkBudget(canceled))
 	if !errors.Is(err, context.Canceled) || certified {
 		t.Fatalf("canceled source: certified=%t err=%v", certified, err)
@@ -1174,8 +1176,8 @@ func TestLoftQuarterJunctionOneRealCase(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, operands := range [][2]*Body{{prism, loft}, {loft, prism}} {
-		_, certified, err := certifyLoftQuarterSourceEnvelope(ctx,
-			operands[0], operands[1], proofbound.NewWorkBudget(ctx))
+		_, certified, err := loftdirect.CertifyLoftQuarterSourceEnvelope(ctx,
+			bodyNode(operands[0]), bodyNode(operands[1]), proofbound.NewWorkBudget(ctx))
 		if err != nil || certified {
 			t.Fatalf("retired source: certified=%t err=%v", certified, err)
 		}
@@ -1243,37 +1245,37 @@ func TestLoftQuarterWallOrderRealSketchPair(t *testing.T) {
 				ErrFn:  t.Context().Err,
 			}
 			wall := proofbound.NewWallWorkBudgetWithOperation(4096, operation)
-			source, ok, sourceErr := certifyLoftSourceSpanCaps(t.Context(), wall, prism, loft)
+			source, ok, sourceErr := loftdirect.CertifyLoftSourceSpanCaps(t.Context(), wall, bodyNode(prism), bodyNode(loft))
 			require.NoError(t, sourceErr)
 			require.True(t, ok)
-			proof, ordered, orderErr := certifyLoftQuarterWallOrder(t.Context(), wall, source)
+			proof, ordered, orderErr := loftdirect.CertifyLoftQuarterWallOrder(t.Context(), wall, source)
 			require.NoError(t, orderErr)
 			require.Equal(t, test.admit, ordered)
 			require.Less(t, steps, uint64(4096))
 			if !ordered {
 				return
 			}
-			require.Same(t, prism, proof.prism)
-			require.Same(t, loft, proof.loft)
-			require.Equal(t, "5", proof.radius[0].RatString())
-			require.Equal(t, "11/2", proof.radius[1].RatString())
-			require.NotEmpty(t, proof.wallFaces[0])
-			require.NotEmpty(t, proof.wallFaces[1])
+			require.Same(t, bodyNode(prism), proof.Prism)
+			require.Same(t, bodyNode(loft), proof.Loft)
+			require.Equal(t, "5", proof.Radius[0].RatString())
+			require.Equal(t, "11/2", proof.Radius[1].RatString())
+			require.NotEmpty(t, proof.WallFaces[0])
+			require.NotEmpty(t, proof.WallFaces[1])
 			pp := prism.n.Payload.(prismPayload)
-			lower := pp.Profile.Outer.Segments[proof.lower].(sectionrecord.LineSeg)
-			upper := pp.Profile.Outer.Segments[proof.upper].(sectionrecord.LineSeg)
+			lower := pp.Profile.Outer.Segments[proof.Lower].(sectionrecord.LineSeg)
+			upper := pp.Profile.Outer.Segments[proof.Upper].(sectionrecord.LineSeg)
 			require.Equal(t, float64(1), lower.Start.V)
 			require.Equal(t, float64(3), upper.Start.V)
-			require.Equal(t, "0", source.levels[0].RatString())
-			require.Equal(t, "10", source.levels[1].RatString())
-			require.Equal(t, "12", source.levels[2].RatString())
+			require.Equal(t, "0", source.Levels[0].RatString())
+			require.Equal(t, "10", source.Levels[1].RatString())
+			require.Equal(t, "12", source.Levels[2].RatString())
 		})
 	}
 
 	canceled, cancel := context.WithCancel(t.Context())
 	cancel()
-	_, ok, err := certifyLoftQuarterWallOrder(canceled,
-		proofbound.NewWorkBudget(canceled), loftSourceSpanCaps{})
+	_, ok, err := loftdirect.CertifyLoftQuarterWallOrder(canceled,
+		proofbound.NewWorkBudget(canceled), loftdirect.LoftSourceSpanCaps{})
 	require.ErrorIs(t, err, context.Canceled)
 	require.False(t, ok)
 }

@@ -30,6 +30,7 @@ var floor = map[string]struct{}{
 	"surfacegeom":    {},
 	"provenance":     {},
 	"radiusmemo":     {},
+	"seal":           {},
 }
 
 func TestTopoDependsOnlyOnFloor(t *testing.T) {

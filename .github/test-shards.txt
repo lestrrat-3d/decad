@@ -279,7 +279,6 @@
 10	0.00	TestQuarterSourceHeldY1MissingRealJunction
 10	0.00	TestQuarterSourceHeldY1WrongRealRadius
 10	0.00	TestQuarterRootBracketPreflight
-10	0.00	TestRunSurveysReportsUndecidedCupWall
 10	0.00	TestLoftThroughBoreCutGates
 10	0.00	TestRevolveLoftFacesSimpleSourceRefusesAnUncertifiedSource
 10	0.00	TestTangentCapExtensionGatesAndCharges
@@ -297,3 +296,6 @@
 10	0.00	TestThickenAdmissionGates
 10	0.00	TestOffsetAdmissionGates
 10	0.00	TestContactBoxAdmissionGates
+10	0.00	TestContactSphereAdmissionGates
+10	0.00	TestContactCylinderAdmissionGates
+10	0.00	TestPlanarPoseAdmissionGates

@@ -5,12 +5,13 @@ import (
 	"slices"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/planarfeaturemap"
+
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
 	"github.com/lestrrat-3d/decad/internal/pair/planar"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/sweepmemo"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 	"github.com/lestrrat-3d/units"
@@ -346,10 +347,10 @@ func faceContains(face *planar.SupportFace, spans sweepmemo.CornerSpans, delta [
 // read no document state.
 type TrackProof struct {
 	paths     [2]BodyPath
-	M, S      int                          // the guest and owner sides, in sweep order
-	Contact   []int                        // M vertices in published order
-	FeatureM  []reportvocab.ContactFeature // one per Contact entry
-	FeatureS  reportvocab.ContactFeature
+	M, S      int              // the guest and owner sides, in sweep order
+	Contact   []int            // M vertices in published order
+	FeatureM  []contactFeature // one per Contact entry
+	FeatureS  contactFeature
 	Direction measurement.VecMeasurement // the published A-to-B normal
 	Angle     units.Value
 	DepthUp   float64                  // the published depth, rounded up
@@ -370,7 +371,7 @@ type TrackProof struct {
 // when either snapshot carries no face IDs, a feature does not resolve, the
 // published normal has no finite reading or is wider than normalResolution,
 // or the depth is not finite.
-func NewTrackProof(paths [2]BodyPath, band *BandHorizon, features *reportvocab.PlanarFeatureMap,
+func NewTrackProof(paths [2]BodyPath, band *BandHorizon, features *planarfeaturemap.PlanarFeatureMap,
 	normalResolution units.Value) (*TrackProof, bool) {
 	support := band.Support
 	solids := [2]*planar.PlanarSolid{paths[0].Solid, paths[1].Solid}
@@ -384,7 +385,7 @@ func NewTrackProof(paths [2]BodyPath, band *BandHorizon, features *reportvocab.P
 	}
 	type entry struct {
 		index   int
-		feature reportvocab.ContactFeature
+		feature contactFeature
 		key     [2]int
 	}
 	var entries []entry

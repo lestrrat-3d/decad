@@ -965,7 +965,7 @@ func TestFreeformPrismClearanceUndecided(t *testing.T) {
 
 // TestFreeformPrismMinWallThicknessUndecided pins WithMinWallThickness: an
 // Undecided BodyReport.Wall.Outcome with DiagUndecidedWall, never a silent
-// pass (boundarywalk.ErrFreeformSection through survey.go's DiagUndecidedWall).
+// pass (boundarywalk.ErrFreeformSection through internal/verifyrun/survey.go's DiagUndecidedWall).
 func TestFreeformPrismMinWallThicknessUndecided(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
@@ -1005,7 +1005,7 @@ func TestFreeformPrismUndercutsUndecided(t *testing.T) {
 
 // TestFreeformPrismMinRadiusUndecided pins WithConcaveRadius: an Undecided
 // BodyReport.ConcaveRadius.Outcome with DiagUndecidedMinRadius, never a
-// silent "no concave feature" pass (survey.go).
+// silent "no concave feature" pass (internal/verifyrun/survey.go).
 func TestFreeformPrismMinRadiusUndecided(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()

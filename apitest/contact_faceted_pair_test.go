@@ -198,7 +198,7 @@ func TestContactPairExactPlanarNonConvex(t *testing.T) {
 // 14b), against a source-box floor whose top face is z = 0.
 //
 // Legs shown to fail (each deleted in turn, fixture red, then restored):
-//   - the delta reading (planarStitchSolid returning a zero displacement):
+//   - the delta reading (planarpose.stitchSolid returning a zero displacement):
 //     the placed copy below reads an exact ContactTouching where §10.4
 //     requires ContactBand;
 //   - the face map (TestPlanarManifoldStitchedVertexTouch).

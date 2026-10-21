@@ -2,75 +2,66 @@ package decad
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/contactbox"
-	"github.com/lestrrat-3d/decad/internal/measurement"
-	pairbox "github.com/lestrrat-3d/decad/internal/pair/box"
-	"github.com/lestrrat-3d/decad/internal/planarsweep"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
-	"github.com/lestrrat-3d/decad/internal/sweeppath"
+	"github.com/lestrrat-3d/decad/internal/sweeprun"
 	"github.com/lestrrat-3d/r3"
+
+	"github.com/lestrrat-3d/decad/internal/sweepproof"
+
+	"github.com/lestrrat-3d/decad/internal/seal"
+
+	"github.com/lestrrat-3d/decad/report"
+
+	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/sweeppath"
 	"github.com/lestrrat-3d/units"
 )
 
-var errSweepPoseBudget = errors.New("decad: sweep pose budget exhausted")
-
-// PairPath names one body's motion during a two-body sweep. Affine source-box,
-// source-sphere, and certified faceted-floor paths, co-translating oblique
-// source boxes, rotating source-box or centered-sphere rigid drifts, and any
-// path of two exact planar solids can receive continuous certificates; other
-// valid paths report an undecided sweep.
-type PairPath interface{ pairPath() }
-
-// PoseSegment joins two placements relative to the body's current placement.
-type PoseSegment struct {
-	From, To r3.Transform
-	Duration units.Value
-}
-
-func (PoseSegment) pairPath() {}
-
-// QuantityVec carries three components of one physical kind.
-type QuantityVec struct{ X, Y, Z units.Value }
-
-// RigidDriftSegment moves a center linearly while its orientation rotates.
-type RigidDriftSegment struct {
-	From            r3.Transform
-	Center          r3.Vec
-	LinearVelocity  QuantityVec
-	AngularVelocity QuantityVec
-	Duration        units.Value
-}
-
-func (RigidDriftSegment) pairPath() {}
-
-func encodedPairPath(path PairPath) sweeppath.PairPath {
-	switch p := path.(type) {
-	case PoseSegment:
-		return sweeppath.PoseSegment(p)
-	case RigidDriftSegment:
-		return sweeppath.RigidDriftSegment{
-			From: p.From, Center: p.Center,
-			LinearVelocity:  sweeppath.QuantityVec(p.LinearVelocity),
-			AngularVelocity: sweeppath.QuantityVec(p.AngularVelocity),
-			Duration:        p.Duration,
-		}
-	default:
-		return nil
-	}
-}
+type (
+	// PairPath names one body's motion during a two-body sweep.
+	PairPath = report.PairPath
+	// PoseSegment joins two placements relative to the body's current placement.
+	PoseSegment = report.PoseSegment
+	// QuantityVec carries three components of one physical kind.
+	QuantityVec = report.QuantityVec
+	// RigidDriftSegment moves a center linearly while its orientation rotates.
+	RigidDriftSegment = report.RigidDriftSegment
+)
 
 // SweepStartPolicy selects what to prove when the bodies initially touch.
-type SweepStartPolicy int
+type SweepStartPolicy = report.SweepStartPolicy
 
 const (
-	StopAtInitialContact SweepStartPolicy = iota
-	ContinueSeparatingTouch
-	ContinueCertifiedTouch
+	StopAtInitialContact    = report.StopAtInitialContact
+	ContinueSeparatingTouch = report.ContinueSeparatingTouch
+	ContinueCertifiedTouch  = report.ContinueCertifiedTouch
+)
+
+const (
+	SweepClear                    = report.SweepClear
+	SweepDepartedClear            = report.SweepDepartedClear
+	SweepPersistentTouch          = report.SweepPersistentTouch
+	SweepContactTransitionBracket = report.SweepContactTransitionBracket
+	SweepImpactBracket            = report.SweepImpactBracket
+	SweepInitiallyTouching        = report.SweepInitiallyTouching
+	SweepInitiallyOverlapping     = report.SweepInitiallyOverlapping
+	SweepUndecided                = report.SweepUndecided
+	SweepGrazingTouch             = report.SweepGrazingTouch
+	SweepPersistentBand           = report.SweepPersistentBand
+)
+
+const (
+	SweepNoCause              = report.SweepNoCause
+	SweepPoseRelation         = report.SweepPoseRelation
+	SweepMissingBound         = report.SweepMissingBound
+	SweepTimeFloor            = report.SweepTimeFloor
+	SweepFractionFloor        = report.SweepFractionFloor
+	SweepPoseBudget           = report.SweepPoseBudget
+	SweepContactUnsupported   = report.SweepContactUnsupported
+	SweepDepartureUnproved    = report.SweepDepartureUnproved
+	SweepContactTrackUnproved = report.SweepContactTrackUnproved
+	SweepEventUnrepresentable = report.SweepEventUnrepresentable
 )
 
 // SweepRequest bounds the time search and the contact geometry resolution.
@@ -81,13 +72,7 @@ const (
 // rises, on both sides of the plane, as it holds a contact vertex (§10.8), so
 // the track does not end where that vertex's lower height bound reaches the
 // plane. A departure rests nothing.
-type SweepRequest struct {
-	ContactRequest
-	TimeResolution     units.Value
-	MaxPoseEvaluations uint64
-	StartPolicy        SweepStartPolicy
-	RestSpeed          units.Value
-}
+type SweepRequest = report.SweepRequest
 
 // validateRestSpeed checks SweepRequest.RestSpeed as validateSupportBand
 // checks the band: the zero Value, or a finite, nonnegative Velocity.
@@ -107,336 +92,31 @@ func validateRestSpeed(v units.Value) error {
 	return nil
 }
 
-// The public start policy holds the same constants, in the same order, as its
-// reportvocab twin; a constant that drifts fails to compile here.
-var (
-	_ = [1]struct{}{}[int(StopAtInitialContact)-int(reportvocab.StopAtInitialContact)]
-	_ = [1]struct{}{}[int(ContinueSeparatingTouch)-int(reportvocab.ContinueSeparatingTouch)]
-	_ = [1]struct{}{}[int(ContinueCertifiedTouch)-int(reportvocab.ContinueCertifiedTouch)]
-)
-
-// sweepRequestToInternal gives a public request its reportvocab form, field
-// for field.
-func sweepRequestToInternal(req SweepRequest) reportvocab.SweepRequest {
-	return reportvocab.SweepRequest{
-		ContactRequest:     contactRequestToInternal(req.ContactRequest),
-		TimeResolution:     req.TimeResolution,
-		MaxPoseEvaluations: req.MaxPoseEvaluations,
-		StartPolicy:        reportvocab.SweepStartPolicy(req.StartPolicy),
-		RestSpeed:          req.RestSpeed,
-	}
-}
-
 // SweepOutcome states the certified relation over the requested path.
-type SweepOutcome int
-
-const (
-	SweepClear                    SweepOutcome = SweepOutcome(reportvocab.SweepClear)
-	SweepDepartedClear            SweepOutcome = SweepOutcome(reportvocab.SweepDepartedClear)
-	SweepPersistentTouch          SweepOutcome = SweepOutcome(reportvocab.SweepPersistentTouch)
-	SweepContactTransitionBracket SweepOutcome = SweepOutcome(reportvocab.SweepContactTransitionBracket)
-	SweepImpactBracket            SweepOutcome = SweepOutcome(reportvocab.SweepImpactBracket)
-	SweepInitiallyTouching        SweepOutcome = SweepOutcome(reportvocab.SweepInitiallyTouching)
-	SweepInitiallyOverlapping     SweepOutcome = SweepOutcome(reportvocab.SweepInitiallyOverlapping)
-	SweepUndecided                SweepOutcome = SweepOutcome(reportvocab.SweepUndecided)
-	SweepGrazingTouch             SweepOutcome = SweepOutcome(reportvocab.SweepGrazingTouch)
-	// SweepPersistentBand: the pair stays within a certified band of one
-	// normal through its contact track. At every instant of the track the
-	// signed separation along Normal() of every point the track publishes
-	// lies in [−Depth, Depth], the interiors overlap by at most Depth along
-	// that normal, every vertex of the touching body the track does not
-	// publish stays strictly in front of the support plane, and the source
-	// features are stable. Depth
-	// is the track's Band(). The track may end before the duration.
-	SweepPersistentBand SweepOutcome = SweepOutcome(reportvocab.SweepPersistentBand)
-)
+type SweepOutcome = report.SweepOutcome
 
 // SweepCause explains why a continuous claim was not proved.
-type SweepCause int
+type SweepCause = report.SweepCause
 
-const (
-	SweepNoCause SweepCause = iota
-	SweepPoseRelation
-	SweepMissingBound
-	SweepTimeFloor
-	SweepFractionFloor
-	SweepPoseBudget
-	SweepContactUnsupported
-	SweepDepartureUnproved
-	SweepContactTrackUnproved
-	SweepEventUnrepresentable
+type (
+	// SweepInstant identifies a dyadic fraction of the requested duration.
+	SweepInstant = report.SweepInstant
+	// SweepInterval identifies an interval of the requested duration.
+	SweepInterval = report.SweepInterval
+	// SweepDeparture certifies positive separation after an initial touch.
+	SweepDeparture = report.SweepDeparture
+	// SweepEvent reports the ideal path relation at one sampled instant.
+	SweepEvent = report.SweepEventOf[*Face, *Edge, *Vertex]
+	// SweepSample keeps the query pose and the transferred pair finding.
+	SweepSample = report.SweepSampleOf[*Body, *Face, *Edge, *Vertex]
+	// SweepContactTrack owns the exact source geometry and affine motion of a
+	// certified touching prefix. Its source face pointers are the original faces.
+	SweepContactTrack = report.SweepContactTrackOf[*Face, *Edge, *Vertex]
+	// SweepReport states the first certified event or the earliest unresolved span.
+	SweepReport = report.SweepReportOf[*Body, *Face, *Edge, *Vertex, *sweepproof.Proof]
 )
 
-// SweepInstant identifies a dyadic fraction of the requested duration.
-type SweepInstant struct {
-	Fraction units.Value
-	Elapsed  Measurement
-}
-
-// SweepInterval identifies an interval of the requested duration.
-type SweepInterval struct{ From, To SweepInstant }
-
-// SweepDeparture certifies positive separation after an initial touch.
-type SweepDeparture struct {
-	Until      SweepInstant
-	GapAtUntil Measurement
-}
-
-// SweepContactTrack owns the exact source geometry and affine motion of a
-// certified touching prefix. Its source face pointers are the original faces.
-type SweepContactTrack struct {
-	a, b          contactbox.SourceBox
-	deltaA        [3]proofarith.Dyadic
-	deltaB        [3]proofarith.Dyadic
-	sphere        *sourceSphereContactProof
-	spherePair    *[2]sourceSphereContactProof
-	sphereFirst   bool
-	cylinder      *sourceCylinderContactProof // disk-on-face track (contact_cylinder_sweep.go)
-	cylinderFirst bool
-	start, end    *big.Rat
-	duration      *big.Rat
-	request       reportvocab.ContactRequest
-	features      [2]reportvocab.ContactFeature
-	normal        VecMeasurement
-	pointCount    int
-	orientedA     *contactbox.OrientedSourceBox
-	orientedB     *contactbox.OrientedSourceBox
-	orientedDelta [3]proofarith.Dyadic
-	planar        *planarsweep.TrackProof   // general planar touch or band (contact_sweep_planar.go)
-	rolling       *planarsweep.RollingTrack // rolling cylinder touch or band (contact_sweep_rolling.go)
-}
-
-func (t *SweepContactTrack) Start() SweepInstant { return sweepInstant(t.start, t.duration) }
-
-func (t *SweepContactTrack) End() SweepInstant { return sweepInstant(t.end, t.duration) }
-
-func (t *SweepContactTrack) Features() (ContactFeature, ContactFeature) {
-	return contactFeatureFromInternal(t.features[0]), contactFeatureFromInternal(t.features[1])
-}
-
-func (t *SweepContactTrack) Normal() VecMeasurement { return t.normal }
-
-// Band returns the depth of a band track (agent-docs/multibody-dynamics-design.md
-// §10.3), a Length Measurement whose Value plus Bound bounds every contact
-// point's separation in both directions and the interiors' overlap along
-// Normal(). It is nil for an exact touch track.
-func (t *SweepContactTrack) Band() *Measurement {
-	var band *Measurement
-	switch {
-	case t.planar != nil:
-		band = measurementPtrFromInternal(t.planar.Band)
-	case t.rolling != nil:
-		band = measurementPtrFromInternal(t.rolling.Band)
-	}
-	if band == nil {
-		return nil
-	}
-	out := *band
-	return &out
-}
-
-// BandAt returns the depth of a band track over its prefix through fraction
-// (agent-docs/multibody-dynamics-design.md §10.3): a Length Measurement whose Value
-// plus Bound bounds every contact point's separation in both directions and
-// the interiors' overlap along Normal() at every instant from the track's
-// start through fraction. At the track's end it is at most Band(); it grows
-// with fraction, so a caller can end a slice where the band reaches its own
-// residual. It is nil for an exact touch track.
-func (t *SweepContactTrack) BandAt(fraction units.Value) (*Measurement, error) {
-	if fraction.Kind() != units.Dimensionless {
-		return nil, fmt.Errorf("%w: contact-track fraction must be dimensionless", ErrUnitKind)
-	}
-	f, ok := sweeppath.ExactBaseValue(fraction)
-	if !ok || !measurement.FiniteValues(fraction.Base()) {
-		return nil, fmt.Errorf("%w: nonfinite contact-track fraction", ErrNotFinite)
-	}
-	if f.Cmp(t.start) < 0 || f.Cmp(t.end) > 0 {
-		return nil, fmt.Errorf("%w: fraction is outside contact track", ErrDegenerate)
-	}
-	var depth *big.Rat
-	switch {
-	case t.planar != nil && t.planar.Band != nil:
-		if depth, ok = t.planar.DepthThrough(f); !ok {
-			return nil, fmt.Errorf("%w: band depth has no finite bound", ErrUnsupported)
-		}
-	case t.rolling != nil && t.rolling.Band != nil:
-		depth = t.rolling.DepthThrough(f)
-	default:
-		return nil, nil //nolint:nilnil // an exact touch track has no band, as Band() reports
-	}
-	value := sweeppath.RatFloatNearest(depth)
-	bound := proofarith.RationalFloatError(depth, value)
-	if !measurement.FiniteValues(value, bound) {
-		return nil, fmt.Errorf("%w: band depth has no finite bound", ErrUnsupported)
-	}
-	return &Measurement{Value: units.Millimeters(value), Bound: units.Millimeters(bound),
-		Exactness: exactnessFromBound(bound)}, nil
-}
-
-// ManifoldAt returns a fresh reduction of the complete exact touching set at
-// a fraction in this track's certified interval.
-func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, error) {
-	if fraction.Kind() != units.Dimensionless {
-		return nil, fmt.Errorf("%w: contact-track fraction must be dimensionless", ErrUnitKind)
-	}
-	f, ok := sweeppath.ExactBaseValue(fraction)
-	if !ok || !measurement.FiniteValues(fraction.Base()) {
-		return nil, fmt.Errorf("%w: nonfinite contact-track fraction", ErrNotFinite)
-	}
-	if f.Cmp(t.start) < 0 || f.Cmp(t.end) > 0 {
-		return nil, fmt.Errorf("%w: fraction is outside contact track", ErrDegenerate)
-	}
-	if t.planar != nil {
-		return planarManifoldAt(t.planar, f, t.request)
-	}
-	if t.rolling != nil {
-		manifold, err := t.rolling.ManifoldAt(f, t.request)
-		return contactManifoldFromInternal(manifold), err
-	}
-	if t.cylinder != nil {
-		return t.cylinderTrackManifold(f)
-	}
-	if t.orientedA != nil && t.orientedB != nil {
-		// Translation keeps both boxes' source face identities.
-		a, b := *t.orientedA, *t.orientedB
-		var okA, okB bool
-		a.OrientedBox, okA = pairbox.TranslateOriented(a.OrientedBox, t.orientedDelta, f)
-		b.OrientedBox, okB = pairbox.TranslateOriented(b.OrientedBox, t.orientedDelta, f)
-		if !okA || !okB {
-			return nil, fmt.Errorf("%w: oriented contact-track fraction cannot be represented", ErrUnsupported)
-		}
-		report := &reportvocab.ContactReport{Request: t.request}
-		report.Relation, _, _ = contactbox.OrientedBoxRelation(a, b)
-		if report.Relation == reportvocab.ContactTouching {
-			contactbox.PublishOrientedBoxPatch(report, a, b)
-			if report.Manifold == nil {
-				contactbox.PublishClippedHorizontalPatch(report, a, b)
-			}
-		}
-		if report.Relation != reportvocab.ContactTouching || report.Manifold == nil ||
-			len(report.Manifold.Points) != t.pointCount {
-			return nil, fmt.Errorf("%w: oriented contact track lost its face patch", ErrUnsupported)
-		}
-		return contactManifoldFromInternal(report.Manifold), nil
-	}
-	if t.sphere != nil {
-		sphereDelta, boxDelta := t.deltaB, t.deltaA
-		box := t.a
-		if t.sphereFirst {
-			sphereDelta, boxDelta, box = t.deltaA, t.deltaB, t.b
-		}
-		sphere, okSphere := translatedSphere(*t.sphere, sphereDelta, f)
-		box, okBox := translatedContactBox(box, boxDelta, f)
-		if !okSphere || !okBox {
-			return nil, fmt.Errorf("%w: contact-track fraction cannot be represented", ErrUnsupported)
-		}
-		report := &reportvocab.ContactReport{Request: t.request}
-		classifySourceSphereBox(report, sphere, box, t.sphereFirst)
-		if report.Relation != reportvocab.ContactTouching || report.Manifold == nil {
-			return nil, fmt.Errorf("%w: contact track has no bounded sphere point", ErrUnsupported)
-		}
-		return contactManifoldFromInternal(report.Manifold), nil
-	}
-	if t.spherePair != nil {
-		a, okA := translatedSphere(t.spherePair[0], t.deltaA, f)
-		b, okB := translatedSphere(t.spherePair[1], t.deltaB, f)
-		if !okA || !okB {
-			return nil, fmt.Errorf("%w: sphere-pair contact-track fraction cannot be represented", ErrUnsupported)
-		}
-		report := &reportvocab.ContactReport{Request: t.request}
-		classifySourceSpherePair(report, a, b)
-		if report.Relation != reportvocab.ContactTouching || report.Manifold == nil ||
-			len(report.Manifold.Points) != 1 ||
-			report.Manifold.Points[0].FeatureA != t.features[0] ||
-			report.Manifold.Points[0].FeatureB != t.features[1] {
-			return nil, fmt.Errorf("%w: sphere-pair contact track lost its point", ErrUnsupported)
-		}
-		return contactManifoldFromInternal(report.Manifold), nil
-	}
-	a, b, ok := translatedSourceBoxes(t.a, t.b, t.deltaA, t.deltaB, f)
-	if !ok {
-		return nil, fmt.Errorf("%w: fraction is not representable as a source-box translation", ErrUnsupported)
-	}
-	report := &reportvocab.ContactReport{Request: t.request}
-	contactbox.ClassifySourceBoxes(report, a, b)
-	if report.Relation != reportvocab.ContactTouching || report.Manifold == nil {
-		return nil, fmt.Errorf("%w: contact track has no bounded face patch", ErrUnsupported)
-	}
-	return contactManifoldFromInternal(report.Manifold), nil
-}
-
-// SweepEvent reports the ideal path relation at one sampled instant.
-type SweepEvent struct {
-	At       SweepInstant
-	Relation ContactRelation
-	Gap      *Measurement
-	Overlap  *Measurement
-	Manifold *ContactManifold
-	Reason   ContactReason
-}
-
-// sweepEventOf publishes a contact producer's finished report as the ideal
-// event at at, converting it to its public form.
-func sweepEventOf(at SweepInstant, contact *reportvocab.ContactReport) SweepEvent {
-	return SweepEvent{At: at, Relation: ContactRelation(contact.Relation),
-		Gap: measurementPtrFromInternal(contact.Gap), Overlap: measurementPtrFromInternal(contact.Overlap),
-		Manifold: contactManifoldFromInternal(contact.Manifold), Reason: ContactReason(contact.Reason)}
-}
-
-// SweepSample keeps the query pose and the transferred pair finding.
-type SweepSample struct {
-	At            SweepInstant
-	PoseA, PoseB  r3.Transform
-	FloatContact  *ContactReport
-	Ideal         SweepEvent
-	exactFraction *big.Rat
-}
-
-// SweepReport states the first certified event or the earliest unresolved span.
-type SweepReport struct {
-	A, B            *Body
-	PathA, PathB    PairPath
-	Request         SweepRequest
-	Outcome         SweepOutcome
-	Bracket         *SweepInterval
-	Unresolved      *SweepInterval
-	InitialEvent    *SweepEvent
-	Event           *SweepEvent
-	Departure       *SweepDeparture
-	ContactTrack    *SweepContactTrack
-	Cause           SweepCause
-	Samples         []SweepSample
-	BoxExcluded     bool
-	PoseEvaluations uint64
-	replay          *sweepReplayProof
-	bracketRight    *big.Rat
-}
-
-// BracketEndsAtDuration reports whether the sweep producer proved its bracket
-// right endpoint is the exact final fraction of the requested duration.
-func (r *SweepReport) BracketEndsAtDuration() bool {
-	return r != nil && r.Bracket != nil && r.bracketRight != nil &&
-		r.bracketRight.Cmp(big.NewRat(1, 1)) == 0
-}
-
 type affinePairPath = sweeppath.AffinePath
-
-func sweepInstant(f, duration *big.Rat) SweepInstant {
-	t := new(big.Rat).Mul(f, duration)
-	value := sweeppath.RatFloatNearest(t)
-	bound := proofarith.RationalFloatError(t, value)
-	return SweepInstant{
-		Fraction: units.Scalar(sweeppath.RatFloatNearest(f)),
-		Elapsed:  Measurement{Value: units.Seconds(value), Bound: units.Seconds(bound), Exactness: exactnessFromBound(bound)},
-	}
-}
-
-func exactnessFromBound(bound float64) Exactness {
-	if bound == 0 {
-		return Exact
-	}
-	return Approximate
-}
 
 // SweepPair certifies the first encounter of two live solids under one shared
 // duration. Continuous proofs cover affine source-box paths, exact faceted
@@ -474,11 +154,11 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 	if a == b {
 		return nil, fmt.Errorf("%w: a pair must name distinct bodies", ErrDegenerate)
 	}
-	pa, err := sweeppath.Validate(encodedPairPath(pathA))
+	pa, err := sweeppath.Validate(pathA)
 	if err != nil {
 		return nil, err
 	}
-	pb, err := sweeppath.Validate(encodedPairPath(pathB))
+	pb, err := sweeppath.Validate(pathB)
 	if err != nil {
 		return nil, err
 	}
@@ -511,100 +191,13 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 	if err := validateRestSpeed(req.RestSpeed); err != nil {
 		return nil, err
 	}
-	report := &SweepReport{A: a, B: b, PathA: pathA, PathB: pathB, Request: req}
-	request := sweepRequestToInternal(req)
-	if !pa.Supported || !pb.Supported {
-		report.Outcome, report.Cause = SweepUndecided, SweepContactUnsupported
-		report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), pa.Duration),
-			To: sweepInstant(big.NewRat(1, 1), pa.Duration)}
-		return report, nil
+	hooks := sweeprun.Hooks{
+		Contact: func(ctx context.Context, poseA, poseB r3.Transform, request ContactRequest) (*nodeContactReport, error) {
+			return d.contactNodes(ctx, a, b, poseA, poseB, request)
+		},
+		Mesher: verifyAllMesher{},
 	}
-	if pa.Drift != nil || pb.Drift != nil || pa.Screw != nil || pb.Screw != nil {
-		if pa.Screw == nil && pb.Screw == nil {
-			if result, admitted, err := d.sweepRotatingSpherePair(ctx, a, b, pa, pb, request, resolution, report); admitted {
-				return result, err
-			}
-			if result, admitted, err := d.sweepRotatingSphereBox(ctx, a, b, pa, pb, request, resolution, report); admitted {
-				return result, err
-			}
-		}
-		return d.sweepRotatingPair(ctx, a, b, pa, pb, request, resolution, report)
-	}
-	boxA, okA := contactbox.SourceBoxAtPose(bodyNode(a), pa.From)
-	boxB, okB := contactbox.SourceBoxAtPose(bodyNode(b), pb.From)
-	if !okA || !okB {
-		if okA {
-			if _, faceted := b.n.Payload.(facetedPayload); faceted {
-				return d.sweepFacetedFloor(ctx, a, b, pa, pb, request, report, boxA, false)
-			}
-		}
-		if okB {
-			if _, faceted := a.n.Payload.(facetedPayload); faceted {
-				return d.sweepFacetedFloor(ctx, a, b, pa, pb, request, report, boxB, true)
-			}
-		}
-		if !okA && !okB {
-			sphereA, sphereOKA := sourceSphereAtPose(a, pa.From)
-			sphereB, sphereOKB := sourceSphereAtPose(b, pb.From)
-			if sphereOKA && sphereOKB {
-				pair := [2]sourceSphereContactProof{sphereA, sphereB}
-				report.replay = &sweepReplayProof{pa: pa, pb: pb, spherePair: &pair,
-					request: request.ContactRequest}
-				return (&sourceSpherePairSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
-					req: request, report: report, sphereA: sphereA, sphereB: sphereB}).execute(ctx, resolution)
-			}
-		}
-		if okA && !okB {
-			if sphere, ok := sourceSphereAtPose(b, pb.From); ok {
-				return (&sourceSphereSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
-					req: request, report: report, sphere: sphere, box: boxA}).execute(ctx, resolution)
-			}
-			if cylinder, ok := sourceCylinderAtPose(b, pb.From); ok {
-				return d.sourceCylinderFaceSweep(ctx, a, b, pa, pb, request, report, cylinder, boxA, false)
-			}
-		}
-		if okB && !okA {
-			if sphere, ok := sourceSphereAtPose(a, pa.From); ok {
-				return (&sourceSphereSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
-					req: request, report: report, sphere: sphere, box: boxB, sphereFirst: true}).execute(ctx, resolution)
-			}
-			if cylinder, ok := sourceCylinderAtPose(a, pa.From); ok {
-				return d.sourceCylinderFaceSweep(ctx, a, b, pa, pb, request, report, cylinder, boxB, true)
-			}
-		}
-		if sphere, sphereOK := sourceSphereAtPose(a, pa.From); sphereOK {
-			if box, boxOK := contactbox.SourceOrientedBoxAtPose(bodyNode(b), pb.From); boxOK {
-				return (&orientedSphereSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
-					req: request, report: report, sphere: sphere, box: box, sphereFirst: true}).execute(ctx, resolution)
-			}
-		}
-		if sphere, sphereOK := sourceSphereAtPose(b, pb.From); sphereOK {
-			if box, boxOK := contactbox.SourceOrientedBoxAtPose(bodyNode(a), pa.From); boxOK {
-				return (&orientedSphereSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
-					req: request, report: report, sphere: sphere, box: box}).execute(ctx, resolution)
-			}
-		}
-		if _, orientedA := contactbox.SourceOrientedBoxAtPose(bodyNode(a), pa.From); orientedA {
-			if _, orientedB := contactbox.SourceOrientedBoxAtPose(bodyNode(b), pb.From); orientedB {
-				return d.sweepRotatingPair(ctx, a, b, pa, pb, request, resolution, report)
-			}
-		}
-		if result, admitted, err := d.sweepPlanarPair(ctx, a, b, pa, pb, request, resolution, report); admitted {
-			return result, err
-		}
-		report.Outcome, report.Cause = SweepUndecided, SweepContactUnsupported
-		report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), pa.Duration),
-			To: sweepInstant(big.NewRat(1, 1), pa.Duration)}
-		return report, nil
-	}
-	report.replay = &sweepReplayProof{pa: pa, pb: pb, boxA: boxA, boxB: boxB,
-		request: request.ContactRequest}
-	run := pairSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb, req: request, report: report,
-		boxA: boxA, boxB: boxB}
-	result, err := run.execute(ctx, resolution)
-	if err != nil || result == nil {
-		return result, err
-	}
-	result.replay.snapshot(result)
-	return result, nil
+	found := sweeprun.NewReport(bodyNode(a), bodyNode(b), pathA, pathB, req)
+	result, err := sweeprun.Pair(ctx, hooks, bodyNode(a), bodyNode(b), pa, pb, req, resolution, found)
+	return report.LiftSweepReport(seal.Key{}, result, &handleLift), err
 }

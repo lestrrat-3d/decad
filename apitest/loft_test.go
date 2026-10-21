@@ -655,7 +655,7 @@ func TestLoftVerifySound(t *testing.T) {
 }
 
 // TestLoftVerifySurveysStaySuspect proves loft is a payload class the wall,
-// undercut, and concave-radius type switches in survey.go do not name at
+// undercut, and concave-radius type switches in internal/verifyrun/survey.go do not name at
 // all (task-list §4 item 3): every asked survey reports the explicit
 // DiagUnsupportedSurveyPayload refusal, still Suspect, distinguished by its
 // structured Survey identity rather than by its DiagnosticCode alone.

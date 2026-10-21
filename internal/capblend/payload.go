@@ -218,7 +218,7 @@ func (cbp Payload) Placed(ctx context.Context, env topo.Env, composed r3.Transfo
 }
 
 // SurveyClass names the payload class a staged survey diagnostic reports
-// (internal/reportvocab): the root type name this payload had before it moved.
+// (internal/verifypublish): the root type name this payload had before it moved.
 func (Payload) SurveyClass() string { return "capBlendPayload" }
 
 // prismLike returns a prismrecord.Payload sharing the receiver's frame and

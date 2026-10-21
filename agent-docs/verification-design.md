@@ -74,6 +74,13 @@ type BodyReport struct {
 }
 ```
 
+`Report`, `BodyReport` and the rows they hold are `report.ReportOf`,
+`report.BodyReportOf` and their siblings instantiated with the root handles;
+the type names, enums and constants here are aliases of those definitions.
+`Verify` gates the options, hands the live bodies' topology nodes to
+`internal/verifyrun`, which audits, surveys and proves pairs over nodes, and
+lifts the node report to the handles with `report.LiftVerifyReport`.
+
 `Status` reserves its zero value as `Unverified`. A zero `Report` or
 `BodyReport` therefore carries no verification verdict, and
 `(&Report{}).Passed()` is false. `Verify` explicitly initializes the
@@ -511,7 +518,7 @@ Every shipped payload class forms its tolerance reference, so `Suspect` from
 distinct from `DiagMeasurementBeyondTolerance`'s known reference rejecting the
 bound — never fires on a shipped path today: an analytic reading carries a
 zero `Bound` and short-circuits the gate before
-any reference is consulted (`verify_tolerance.go`'s `scalarToleranceRef` and
+any reference is consulted (`internal/verifyrun/tolerance.go`'s `scalarToleranceRef` and
 `boundedToleranceRef`), and a faceted body
 always forms a usable reference — its `payload.Diameter` is guaranteed at build
 (`internal/facetedrecord/assemble.go`'s `AssembleBody`) and an edge length is
@@ -605,7 +612,7 @@ their published bounds; a coil reads every held station vertex, each within
 its station rounding of a point of its true helix edge) and reads the largest distance among them, pairs
 across the two bodies included, shrunk by twice the larger gap. The
 clearance kernel's pair reading (`pairKernel.pairDiameter`), `Verify`'s
-interference row (`verify_pairs.go`), the motion run's collision gate
+interference row (`internal/verifyrun/pairs.go`), the motion run's collision gate
 (`motionRun.collisionBeyond`) and the exact planar arm (`planarPairVerdict`)
 all read it. The reading itself never reads the carriers' witnesses
 (`CFace.Wit`). Two unit cylinders 1 mm tall, their axes 10 mm apart along

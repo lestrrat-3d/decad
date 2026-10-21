@@ -1,0 +1,420 @@
+package sweeprun
+
+import (
+	"context"
+	"errors"
+	"math/big"
+	"sort"
+
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
+	vocab "github.com/lestrrat-3d/decad/report"
+
+	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/sweepproof"
+
+	"github.com/lestrrat-3d/decad/internal/seal"
+
+	"github.com/lestrrat-3d/decad/internal/clearance"
+	"github.com/lestrrat-3d/decad/internal/contactbox"
+	"github.com/lestrrat-3d/decad/internal/pair/box"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sweeppath"
+	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
+)
+
+type pairSweepRun struct {
+	hooks        Hooks
+	a, b         *topo.Body
+	pa, pb       affinePairPath
+	req          vocab.SweepRequest
+	report       *sweepReport
+	boxA, boxB   contactbox.SourceBox
+	facetedFloor bool // box for faceted body is its exact lower support patch
+}
+
+func (r *pairSweepRun) sample(ctx context.Context, f *big.Rat) (*sweepSample, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if r.report.PoseEvaluations >= r.req.MaxPoseEvaluations {
+		return nil, errSweepPoseBudget
+	}
+	poseA, err := r.pa.PoseAt(f)
+	if err != nil {
+		return nil, err
+	}
+	poseB, err := r.pb.PoseAt(f)
+	if err != nil {
+		return nil, err
+	}
+	contact, err := r.hooks.Contact(ctx, poseA, poseB, r.req.ContactRequest)
+	if err != nil {
+		return nil, err
+	}
+	at := sweeppath.Instant(f, r.pa.Duration)
+	event := r.idealContact(f, at)
+	r.transferManifold(f, poseA, poseB, contact, &event)
+	sample := sampleWith(sweepSample{At: at, PoseA: poseA, PoseB: poseB, FloatContact: contact, Ideal: event}, new(big.Rat).Set(f))
+	r.report.Samples = append(r.report.Samples, sample)
+	r.report.PoseEvaluations++
+	return &sample, nil
+}
+
+// idealContact classifies the exact source boxes at the dyadic path fraction.
+// Its manifold is an internal feature proof. transferManifold publishes either
+// that bounded proof or a matching real ContactPair manifold.
+func (r *pairSweepRun) idealContact(f *big.Rat, at vocab.SweepInstant) sweepEvent {
+	fraction, ok := proofarith.DyOfRat(f)
+	if !ok {
+		return sweepEvent{At: at, Relation: vocab.ContactUndecided, Reason: vocab.ContactPayloadUnsupported}
+	}
+	a, b := r.boxA, r.boxB
+	for i := range 3 {
+		moveA, moveB := proofarith.DyMul(r.pa.Delta[i], fraction), proofarith.DyMul(r.pb.Delta[i], fraction)
+		a.Lo[i], a.Hi[i] = proofarith.DyAdd(a.Lo[i], moveA), proofarith.DyAdd(a.Hi[i], moveA)
+		b.Lo[i], b.Hi[i] = proofarith.DyAdd(b.Lo[i], moveB), proofarith.DyAdd(b.Hi[i], moveB)
+	}
+	report := &contactReport{A: r.a, B: r.b,
+		Request: r.req.ContactRequest}
+	if r.facetedFloor {
+		floor, faceted := a, b
+		if _, ok := r.a.Payload.(facetedrecord.Payload); ok {
+			floor, faceted = b, a
+		}
+		if proofarith.DyCmp(faceted.Lo[2], floor.Hi[2]) < 0 {
+			return sweepEvent{At: at, Relation: vocab.ContactUndecided, Reason: vocab.ContactPayloadUnsupported}
+		}
+	}
+	contactbox.ClassifySourceBoxes(report, a, b)
+	return sweepEventOf(at, report)
+}
+
+// transferManifold checks that the float query and ideal boxes select the same
+// source faces and normal. The float manifold's witnesses are then widened by
+// the exact L1 pose discrepancy. Tangential clipped corners can depend on
+// either body, so each point receives the sum of both pose discrepancies.
+// When read-pose rounding changes the relation or makes that widening too
+// coarse, the exact source-box proof supplies its own bounded ideal manifold.
+func (r *pairSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.Transform,
+	contact *contactReport, event *sweepEvent) {
+	ideal := event.Manifold
+	event.Manifold = nil
+	useIdeal := func() {
+		if ideal != nil {
+			event.Manifold = ideal
+			event.Reason = vocab.ContactNoReason
+		}
+	}
+	if ideal == nil || contact.Manifold == nil || event.Relation != contact.Relation ||
+		len(ideal.Points) != len(contact.Manifold.Points) {
+		if ideal != nil {
+			useIdeal()
+		}
+		return
+	}
+	for i, idealPoint := range ideal.Points {
+		actual := contact.Manifold.Points[i]
+		if actual.FaceA != idealPoint.FaceA || actual.FaceB != idealPoint.FaceB ||
+			actual.FeatureA != idealPoint.FeatureA || actual.FeatureB != idealPoint.FeatureB ||
+			actual.Normal.Value != idealPoint.Normal.Value ||
+			actual.Normal.Bound.Base() != 0 || actual.NormalAngle.Base() != 0 {
+			useIdeal()
+			return
+		}
+	}
+	observedA, okA := contactbox.SourceBoxAtPose(r.a, poseA)
+	observedB, okB := contactbox.SourceBoxAtPose(r.b, poseB)
+	if !okA || !okB {
+		useIdeal()
+		return
+	}
+	deviation := sweepproof.BoxPoseDeviation(r.boxA, observedA, r.pa.Delta, f)
+	deviation.Add(deviation, sweepproof.BoxPoseDeviation(r.boxB, observedB, r.pb.Delta, f))
+	resolution, ok := sweeppath.ExactBaseValue(r.req.PointResolution)
+	if !ok {
+		useIdeal()
+		return
+	}
+	points := append([]contactPoint(nil), contact.Manifold.Points...)
+	for i := range points {
+		point := &points[i]
+		for _, witness := range []*vocab.VecMeasurement{&point.OnA, &point.OnB} {
+			bound := new(big.Rat).Add(proofarith.FloatRat(witness.Bound.Base()), deviation)
+			if bound.Cmp(resolution) > 0 {
+				useIdeal()
+				return
+			}
+			publishedBound := proofbound.RatFloatUp(bound)
+			if publishedBound > r.req.PointResolution.Base() {
+				useIdeal()
+				return
+			}
+			witness.Bound = units.Millimeters(publishedBound)
+			witness.Exactness = measurement.ExactnessOf(witness.Bound.Base())
+		}
+		separationBound := new(big.Rat).Add(proofarith.FloatRat(point.Separation.Bound.Base()), deviation)
+		point.Separation.Bound = units.Millimeters(proofbound.RatFloatUp(separationBound))
+		point.Separation.Exactness = measurement.ExactnessOf(point.Separation.Bound.Base())
+	}
+	event.Manifold = &contactManifold{Points: points}
+	event.Reason = vocab.ContactNoReason
+}
+
+// fullSourceBoxTrack admits an entire affine face-contact span only when the
+// same source faces and clipped-patch corner owners hold on its open interval.
+// Endpoint ties at zero use their right-sided order.
+func (r *pairSweepRun) fullSourceBoxTrack(first *sweepSample, end *big.Rat) *sweepproof.Track {
+	if first.Ideal.Manifold == nil || len(first.Ideal.Manifold.Points) != 4 {
+		return nil
+	}
+	normal := first.Ideal.Manifold.Points[0].Normal
+	axis, side, ok := clearance.SignedAxis(normal.Value)
+	if !ok || normal.Bound.Base() != 0 ||
+		first.Ideal.Manifold.Points[0].NormalAngle.Base() != 0 ||
+		proofarith.DyCmp(r.pa.Delta[axis], r.pb.Delta[axis]) != 0 {
+		return nil
+	}
+	if side == 1 && proofarith.DyCmp(r.boxA.Hi[axis], r.boxB.Lo[axis]) != 0 ||
+		side == 0 && proofarith.DyCmp(r.boxB.Hi[axis], r.boxA.Lo[axis]) != 0 {
+		return nil
+	}
+	for i := range 3 {
+		if i == axis {
+			continue
+		}
+		// Both projected overlap inequalities are affine, so strict endpoint
+		// tests prove positive overlap for every intervening time.
+		for _, f := range []*big.Rat{new(big.Rat), end} {
+			a, b, _ := sweepproof.TranslatedSourceBoxes(r.boxA, r.boxB, r.pa.Delta, r.pb.Delta, f)
+			if proofarith.DyCmp(a.Lo[i], b.Hi[i]) >= 0 || proofarith.DyCmp(b.Lo[i], a.Hi[i]) >= 0 {
+				return nil
+			}
+		}
+		// A change of the lower or upper corner owner changes the patch
+		// structure. The first full-span increment refuses those transitions.
+		if box.AffineEqualityRootWithin(r.boxA.Lo[i], r.pa.Delta[i], r.boxB.Lo[i], r.pb.Delta[i], end) ||
+			box.AffineEqualityRootWithin(r.boxA.Hi[i], r.pa.Delta[i], r.boxB.Hi[i], r.pb.Delta[i], end) {
+			return nil
+		}
+	}
+	if !box.TrackPointsWithin(r.boxA.AxisBox(), r.boxB.AxisBox(), r.pa.Delta, r.pb.Delta,
+		r.req.PointResolution.Base()) {
+		return nil
+	}
+	point := first.Ideal.Manifold.Points[0]
+	return &sweepproof.Track{
+		A: r.boxA, B: r.boxB, DeltaA: r.pa.Delta, DeltaB: r.pb.Delta,
+		From: new(big.Rat), To: new(big.Rat).Set(end), Duration: new(big.Rat).Set(r.pa.Duration),
+		Request:    r.req.ContactRequest,
+		Sources:    [2]contactFeature{point.FeatureA, point.FeatureB},
+		NormalRead: normal,
+	}
+}
+
+// sourceBoxTransitionRoot finds the first possible change of a projected
+// clipped-patch owner or the first edge-contact limit. Roots at zero use the
+// right-sided patch and do not restart the solver at its initial time.
+func (r *pairSweepRun) sourceBoxTransitionRoot(first *sweepSample) *big.Rat {
+	if first.Ideal.Manifold == nil || len(first.Ideal.Manifold.Points) != 4 {
+		return nil
+	}
+	axis, _, ok := clearance.SignedAxis(first.Ideal.Manifold.Points[0].Normal.Value)
+	if !ok {
+		return nil
+	}
+	return box.TransitionRoot(r.boxA.AxisBox(), r.boxB.AxisBox(), r.pa.Delta, r.pb.Delta, axis)
+}
+
+func (r *pairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*sweepReport, error) {
+	zero, one := new(big.Rat), big.NewRat(1, 1)
+	first, err := r.sample(ctx, zero)
+	if errors.Is(err, errSweepPoseBudget) {
+		return r.undecided(zero, zero, vocab.SweepPoseBudget), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	switch first.Ideal.Relation {
+	case vocab.ContactOverlapping:
+		r.report.InitialEvent = &first.Ideal
+		r.report.Outcome, r.report.Event = vocab.SweepInitiallyOverlapping, &first.Ideal
+		return r.report, nil
+	case vocab.ContactTouching:
+		r.report.InitialEvent = &first.Ideal
+		if r.req.StartPolicy == vocab.StopAtInitialContact {
+			r.report.Outcome, r.report.Event = vocab.SweepInitiallyTouching, &first.Ideal
+			return r.report, nil
+		}
+		if !box.ProvesDeparture(r.boxA.AxisBox(), r.boxB.AxisBox(), r.pa.Delta, r.pb.Delta) {
+			if r.req.StartPolicy == vocab.ContinueCertifiedTouch {
+				if track := r.fullSourceBoxTrack(first, one); track != nil {
+					last, err := r.sample(ctx, one)
+					if errors.Is(err, errSweepPoseBudget) {
+						return r.undecided(zero, one, vocab.SweepPoseBudget), nil
+					}
+					if err != nil {
+						return nil, err
+					}
+					if last.Ideal.Relation == vocab.ContactTouching && last.Ideal.Manifold != nil {
+						r.report.Outcome, r.report.ContactTrack = vocab.SweepPersistentTouch, nodeTrack(track)
+						return r.report, nil
+					}
+				}
+				if root := r.sourceBoxTransitionRoot(first); root != nil {
+					leftF, rightF, ok := box.ContactRootBracket(root, r.pa.Duration, resolution)
+					if !ok || leftF.Sign() == 0 {
+						return r.undecided(zero, root, vocab.SweepFractionFloor), nil
+					}
+					if track := r.fullSourceBoxTrack(first, leftF); track != nil {
+						left, err := r.sample(ctx, leftF)
+						if errors.Is(err, errSweepPoseBudget) {
+							return r.undecided(zero, leftF, vocab.SweepPoseBudget), nil
+						}
+						if err != nil {
+							return nil, err
+						}
+						right, err := r.sample(ctx, rightF)
+						if errors.Is(err, errSweepPoseBudget) {
+							return r.undecided(leftF, rightF, vocab.SweepPoseBudget), nil
+						}
+						if err != nil {
+							return nil, err
+						}
+						if left.Ideal.Relation == vocab.ContactTouching &&
+							(right.Ideal.Relation == vocab.ContactTouching || right.Ideal.Relation == vocab.ContactSeparated) {
+							r.report.Outcome, r.report.ContactTrack = vocab.SweepContactTransitionBracket, nodeTrack(track)
+							r.report.Bracket = &vocab.SweepInterval{From: left.At, To: right.At}
+							r.report.SetBracketRight(seal.Key{}, new(big.Rat).Set(rightF))
+							r.report.Replay(seal.Key{}).SetBracket(leftF, rightF)
+							r.report.Event = &right.Ideal
+							r.sortSamples()
+							return r.report, nil
+						}
+					}
+				}
+			}
+			cause := vocab.SweepDepartureUnproved
+			if r.req.StartPolicy == vocab.ContinueCertifiedTouch {
+				cause = vocab.SweepContactTrackUnproved
+			}
+			return r.undecided(zero, one, cause), nil
+		}
+		last, err := r.sample(ctx, one)
+		if errors.Is(err, errSweepPoseBudget) {
+			return r.undecided(zero, one, vocab.SweepPoseBudget), nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		if last.Ideal.Relation != vocab.ContactSeparated || last.Ideal.Gap == nil {
+			return r.undecided(zero, one, vocab.SweepPoseRelation), nil
+		}
+		r.report.Outcome = vocab.SweepDepartedClear
+		r.report.Departure = &vocab.SweepDeparture{Until: last.At, GapAtUntil: *last.Ideal.Gap}
+		return r.report, nil
+	case vocab.ContactSeparated:
+		// Exact source boxes below independently establish the path relation.
+	default:
+		return r.undecided(zero, zero, vocab.SweepPoseRelation), nil
+	}
+	entry, exit, intersects := box.ContactSpan(r.boxA.AxisBox(), r.boxB.AxisBox(), r.pa.Delta, r.pb.Delta)
+	if !intersects || entry.Cmp(one) > 0 || exit.Sign() < 0 || entry.Cmp(exit) > 0 {
+		_, err := r.sample(ctx, one)
+		if errors.Is(err, errSweepPoseBudget) {
+			return r.undecided(zero, one, vocab.SweepPoseBudget), nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		r.report.Outcome = vocab.SweepClear
+		return r.report, nil
+	}
+	if entry.Sign() <= 0 {
+		return r.undecided(zero, zero, vocab.SweepPoseRelation), nil
+	}
+	depth := 0
+	step := new(big.Rat).Set(paDurationFraction(resolution, r.pa.Duration))
+	step.Quo(step, big.NewRat(2, 1))
+	for step.Cmp(one) < 0 && depth < 60 {
+		depth++
+		step.Mul(step, big.NewRat(2, 1))
+	}
+	if depth == 60 && step.Cmp(one) < 0 {
+		return r.undecided(zero, one, vocab.SweepFractionFloor), nil
+	}
+	grid := new(big.Int).Lsh(big.NewInt(1), uint(depth))
+	scaled := new(big.Rat).Mul(entry, new(big.Rat).SetInt(grid))
+	floorIdx := new(big.Int).Quo(scaled.Num(), scaled.Denom())
+	leftIdx := new(big.Int).Set(floorIdx)
+	rightIdx := new(big.Int).Add(floorIdx, big.NewInt(2))
+	exactEntry := new(big.Rat).SetInt(floorIdx).Cmp(scaled) == 0
+	if exactEntry {
+		leftIdx.Sub(leftIdx, big.NewInt(1))
+		rightIdx.Sub(rightIdx, big.NewInt(1))
+	}
+	if r.facetedFloor {
+		if !exactEntry {
+			return r.undecided(zero, one, vocab.SweepContactUnsupported), nil
+		}
+		rightIdx.Set(floorIdx)
+	}
+	leftF := new(big.Rat).SetFrac(leftIdx, grid)
+	rightF := new(big.Rat).SetFrac(rightIdx, grid)
+	if rightF.Cmp(exit) > 0 || rightF.Cmp(one) > 0 {
+		// The first grid point after entry is still a valid contact sample.
+		// In particular, an impact at the path endpoint has no later sample.
+		if exactEntry {
+			rightIdx.Set(floorIdx)
+		} else {
+			rightIdx.Add(floorIdx, big.NewInt(1))
+		}
+		rightF.SetFrac(rightIdx, grid)
+	}
+	if rightF.Cmp(exit) > 0 || rightF.Cmp(one) > 0 {
+		return r.undecided(leftF, rightF, vocab.SweepTimeFloor), nil
+	}
+	left, err := r.sample(ctx, leftF)
+	if errors.Is(err, errSweepPoseBudget) {
+		return r.undecided(zero, leftF, vocab.SweepPoseBudget), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	right, err := r.sample(ctx, rightF)
+	if errors.Is(err, errSweepPoseBudget) {
+		return r.undecided(leftF, rightF, vocab.SweepPoseBudget), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if left.Ideal.Relation != vocab.ContactSeparated ||
+		(right.Ideal.Relation != vocab.ContactTouching && right.Ideal.Relation != vocab.ContactOverlapping) {
+		return r.undecided(leftF, rightF, vocab.SweepPoseRelation), nil
+	}
+	r.report.Outcome, r.report.Event = vocab.SweepImpactBracket, &right.Ideal
+	r.report.Bracket = &vocab.SweepInterval{From: left.At, To: right.At}
+	r.report.SetBracketRight(seal.Key{}, new(big.Rat).Set(rightF))
+	r.report.Replay(seal.Key{}).SetBracket(leftF, rightF)
+	r.sortSamples()
+	return r.report, nil
+}
+
+func paDurationFraction(resolution, duration *big.Rat) *big.Rat {
+	return new(big.Rat).Quo(resolution, duration)
+}
+
+func (r *pairSweepRun) sortSamples() {
+	sort.Slice(r.report.Samples, func(i, j int) bool {
+		return r.report.Samples[i].At.Fraction.Base() < r.report.Samples[j].At.Fraction.Base()
+	})
+}
+
+func (r *pairSweepRun) undecided(from, to *big.Rat, cause vocab.SweepCause) *sweepReport {
+	r.report.Outcome, r.report.Cause = vocab.SweepUndecided, cause
+	r.report.Unresolved = &vocab.SweepInterval{From: sweeppath.Instant(from, r.pa.Duration), To: sweeppath.Instant(to, r.pa.Duration)}
+	r.sortSamples()
+	return r.report
+}

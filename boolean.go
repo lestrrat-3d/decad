@@ -7,8 +7,11 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/loftdirect"
+
 	"github.com/lestrrat-3d/decad/internal/booleandispatch"
 	"github.com/lestrrat-3d/decad/internal/booloperand"
+	"github.com/lestrrat-3d/decad/internal/contactfaceted"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -194,16 +197,12 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body) 
 func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref producerID) (*Body, error) {
 	d := documentHandle(a.n.Doc)
 	hooks := booleandispatch.Hooks{
-		Mesher:         pairMeshes{},
-		Verified:       verifyAllMesher{},
-		AsBooleanError: asBooleanError,
-		DirectShellUnion: func(ctx context.Context, op meshbool.OperationKind, _ topo.Env,
-			first, second *topo.Body) (*topo.Body, bool, error) {
-			body, ok, err := tryLoftContactDirectShellUnion(ctx, op, d, ref, bodyHandle(first), bodyHandle(second))
-			return bodyNode(body), ok, err
-		},
+		Mesher:           pairMeshes{},
+		Verified:         verifyAllMesher{},
+		AsBooleanError:   asBooleanError,
+		DirectShellUnion: loftdirect.DirectShellUnion,
 		LowerSupport: func(ctx context.Context, result, first, second *topo.Body) error {
-			return certifyFacetedUnionLowerSupport(ctx, bodyHandle(result), bodyHandle(first), bodyHandle(second))
+			return contactfaceted.CertifyUnionLowerSupport(ctx, result, first, second)
 		},
 	}
 	return bodyResult(booleandispatch.Body(ctx, op, envOf(documentNode(d), ref), &a.n, &b.n, hooks))

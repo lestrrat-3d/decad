@@ -3,10 +3,10 @@ package capblendsurvey
 import (
 	"github.com/lestrrat-3d/decad/internal/draftrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
+	"github.com/lestrrat-3d/decad/internal/verifypublish"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -30,7 +30,7 @@ import (
 // straddling wall sets undecided without discarding a face already proven to
 // oppose, and an entirely undecided survey keeps a nil listing, distinct from
 // the empty proven all-clear (agent-docs/verification-design.md §6).
-func DraftUndercuts(b *topo.Body, dp draftrecord.Payload, pull r3.Vec) reportvocab.UndercutSurvey[*topo.Face] {
+func DraftUndercuts(b *topo.Body, dp draftrecord.Payload, pull r3.Vec) verifypublish.UndercutSurvey[*topo.Face] {
 	p, ok := pull.Normalize()
 	if !ok {
 		return undercutOutcome{}

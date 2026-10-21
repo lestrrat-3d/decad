@@ -3,11 +3,10 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math/big"
+
+	"github.com/lestrrat-3d/decad/internal/measurement"
 
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
-
-	"github.com/lestrrat-3d/decad/internal/motionbound"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -41,7 +40,7 @@ func (d *Document) SweptBox(ctx context.Context, b *Body, path PairPath) (SweptB
 	if err := d.requireLive(b); err != nil {
 		return SweptBox{}, err
 	}
-	p, err := sweeppath.Validate(encodedPairPath(path))
+	p, err := sweeppath.Validate(path)
 	if err != nil {
 		return SweptBox{}, err
 	}
@@ -85,21 +84,14 @@ func (s SweptBox) Box() Box {
 			proofarith.DyadicFloatError(s.hi[axis], hi[axis]))
 	}
 	return Box{Min: r3.Vec{X: lo[0], Y: lo[1], Z: lo[2]}, Max: r3.Vec{X: hi[0], Y: hi[1], Z: hi[2]},
-		Exactness: exactnessFromBound(bound), Bound: units.Millimeters(bound)}
+		Exactness: measurement.ExactnessOf(bound), Bound: units.Millimeters(bound)}
 }
 
 // sweptBoxOf is the one swept-box implementation: Document.SweptBox and the
 // sweeps that certify clearance by a box gap all read it. It reports false
 // when b's bounds or the path's travel bound are not finite.
 func sweptBoxOf(b *Body, p affinePairPath) (SweptBox, bool) {
-	corners, ok := sweeppath.NodeBoundsCorners(&b.n)
-	if !ok {
-		return SweptBox{}, false
-	}
-	bounds, ok := sweeppath.SweepBounds(corners, p, proofarith.DvTransform,
-		func(from r3.Transform, center r3.Vec, axis motionbound.RatVec) (*big.Rat, bool) {
-			return sweeppath.RotationalSweepRadius(&b.n, from, center, axis)
-		})
+	bounds, ok := sweeppath.NodeSweptBounds(&b.n, p)
 	if !ok {
 		return SweptBox{}, false
 	}

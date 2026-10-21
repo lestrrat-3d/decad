@@ -5,13 +5,14 @@ package analyticundercut
 import (
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/verifypublish"
+
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/cupwall"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/revolvesurvey"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -22,7 +23,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-type outcome = reportvocab.UndercutSurvey[*topo.Face]
+type outcome = verifypublish.UndercutSurvey[*topo.Face]
 
 func listVerdict(faces *[]*topo.Face, undecided *bool, f *topo.Face, verdict survey2d.PullVerdict, ok bool) bool {
 	if !ok {
@@ -56,7 +57,7 @@ func listVerdict(faces *[]*topo.Face, undecided *bool, f *topo.Face, verdict sur
 // orientation the solid would have had: the identical outward normal, from
 // the identical code. The survey therefore quantifies over exactly the
 // sheet's own published faces, which are its walls.
-func Prism(b *topo.Body, pp prismrecord.Payload, pull r3.Vec) reportvocab.UndercutSurvey[*topo.Face] {
+func Prism(b *topo.Body, pp prismrecord.Payload, pull r3.Vec) verifypublish.UndercutSurvey[*topo.Face] {
 	if _, ok := pull.Normalize(); !ok {
 		return outcome{}
 	}
@@ -108,7 +109,7 @@ func Prism(b *topo.Body, pp prismrecord.Payload, pull r3.Vec) reportvocab.Underc
 // Revolve surveys a revolved body's faces against the pull: each
 // wall's normal is n_ρ·radial(φ) + n_z·ŵ over the meridian range its walk
 // sweeps and the azimuth range of the sweep — both exact.
-func Revolve(b *topo.Body, rp revolveplan.Payload, pull r3.Vec) reportvocab.UndercutSurvey[*topo.Face] {
+func Revolve(b *topo.Body, rp revolveplan.Payload, pull r3.Vec) verifypublish.UndercutSurvey[*topo.Face] {
 	if rp.SectionDelta != 0 {
 		// The survey reads the recorded meridian's own tangents as exact, and a
 		// displaced meridian's tangents only sit within its displacement of the
@@ -168,7 +169,7 @@ func cupWalksBudget(budget *proofbound.WorkBudget, loop sectionrecord.LoopRecord
 // being a pocket, the pocket floor (shellCap) and the rims face the open end
 // and the kept cap (capStart) faces away from it, so their outward normals
 // are ±N by which side of the outer floor the open end lies on.
-func Cup(b *topo.Body, cp cupwall.View, pull r3.Vec) reportvocab.UndercutSurvey[*topo.Face] {
+func Cup(b *topo.Body, cp cupwall.View, pull r3.Vec) verifypublish.UndercutSurvey[*topo.Face] {
 	if _, ok := pull.Normalize(); !ok {
 		return outcome{}
 	}

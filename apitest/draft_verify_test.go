@@ -19,7 +19,7 @@ import (
 // decided exactly.
 //
 // Shown to fail first: with the draftPayload arm removed from runSurveys
-// (survey.go), every fixture here read Coverage Unavailable with
+// (internal/verifyrun/survey.go), every fixture here read Coverage Unavailable with
 // DiagUnsupportedSurveyPayload and no listed face.
 
 // draftSurvey verifies doc under the pull and returns body's report.

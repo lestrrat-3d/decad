@@ -6,7 +6,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/chainrecord"
 	"github.com/lestrrat-3d/decad/internal/coilshell"
-	"github.com/lestrrat-3d/decad/internal/cupwall"
 	"github.com/lestrrat-3d/decad/internal/draftrecord"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
@@ -17,7 +16,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/decad/internal/stitchrecord"
-	"github.com/lestrrat-3d/decad/internal/sweeprecord"
 	"github.com/lestrrat-3d/decad/internal/twistsweep"
 )
 
@@ -65,15 +63,6 @@ type stackedPrismPayload = stackedrecord.Payload
 // (agent-docs/surface-design.md §13.4, agent-docs/evaluator-design.md §8).
 type chainPayload = chainrecord.Payload
 
-// cupPayload is the evaluator's own record of a cup: the internal/cupwall
-// payload, which cupwall.Build evaluates over topology nodes and which
-// implements topo.Payload (agent-docs/modify-reach-design.md §9.1,
-// agent-docs/evaluator-design.md §8). cupView is the two-prism reading it re-derives.
-type (
-	cupPayload = cupwall.Payload
-	cupView    = cupwall.View
-)
-
 // patchPayload is the evaluator's own record of a PatchProfile body: the
 // internal/patchchain payload, which patchchain.Build evaluates over topology
 // nodes and which implements topo.Payload (agent-docs/surface-design.md §5,
@@ -111,15 +100,6 @@ type (
 	twistedSweepPayload = twistsweep.Payload
 )
 
-// sweepPayload and chainSweepPayload are the evaluator's records of a profile
-// Sweep and a chain Sweep, and chainSweepSpanPayload is one chain span:
-// the internal/sweeprecord payloads, which sweeprecord's
-// builders evaluate over topology nodes and whose body records implement
-// topo.Payload (agent-docs/sweep-design.md, agent-docs/evaluator-design.md §8).
-type (
-	sweepPayload = sweeprecord.Payload
-)
-
 // stitchPayload and unstitchPayload are the evaluator's records of a Stitch
 // and of one Unstitch piece: the internal/stitchrecord payloads, which
 // stitchrecord.Build and stitchrecord.BuildUnstitchFace evaluate over
@@ -136,8 +116,7 @@ type (
 // draftrecord.BuildTwoSided evaluate over topology nodes and which implement
 // topo.Payload (agent-docs/draft-design.md, agent-docs/evaluator-design.md §8).
 type (
-	draftPayload         = draftrecord.Payload
-	twoSidedDraftPayload = draftrecord.TwoSidedPayload
+	draftPayload = draftrecord.Payload
 )
 
 // capBlendPayload is the evaluator's record of a complete-cap-loop chamfer

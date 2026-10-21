@@ -5,9 +5,10 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/boundaryaudit"
+
 	"github.com/lestrrat-3d/decad/internal/clearance/pairkernel"
 	"github.com/lestrrat-3d/decad/internal/pair"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/stretchr/testify/require"
 )
 
@@ -39,7 +40,7 @@ func TestDisjointResult(t *testing.T) {
 			require.Equal(t, pairkernel.Result{}, got, tc.name)
 			continue
 		}
-		require.Equal(t, reportvocab.PairDisjoint, got.Verdict, tc.name)
+		require.Equal(t, boundaryaudit.PairDisjoint, got.Verdict, tc.name)
 		require.Equal(t, tc.lo, got.Lo, tc.name)
 		require.Equal(t, tc.hi, got.Hi, tc.name)
 		require.Equal(t, tc.exact, got.Exact, tc.name)

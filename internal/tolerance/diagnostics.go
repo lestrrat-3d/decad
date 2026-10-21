@@ -3,8 +3,9 @@ package tolerance
 import (
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/report"
+
 	"github.com/lestrrat-3d/decad/internal/measurement"
-	"github.com/lestrrat-3d/decad/internal/reportvocab"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -16,33 +17,33 @@ func RequiredThreshold(relRef float64, sample units.Value) *units.Value {
 
 // Judge converts a gate comparison into the reading's tolerance verdict.
 // A zero bound passes without loading a reference or publishing a limit.
-func Judge(pass, haveRef bool, rel, ref float64, sample units.Value) reportvocab.ToleranceResult {
+func Judge(pass, haveRef bool, rel, ref float64, sample units.Value) report.ToleranceResult {
 	if !haveRef {
 		if pass {
-			return reportvocab.ToleranceResult{State: reportvocab.ToleranceSatisfied}
+			return report.ToleranceResult{State: report.ToleranceSatisfied}
 		}
-		return reportvocab.ToleranceResult{State: reportvocab.ToleranceUndecided}
+		return report.ToleranceResult{State: report.ToleranceUndecided}
 	}
 	limit := RequiredThreshold(rel*ref, sample)
 	if pass {
-		return reportvocab.ToleranceResult{State: reportvocab.ToleranceSatisfied, Limit: limit}
+		return report.ToleranceResult{State: report.ToleranceSatisfied, Limit: limit}
 	}
-	return reportvocab.ToleranceResult{State: reportvocab.ToleranceExceeded, Limit: limit}
+	return report.ToleranceResult{State: report.ToleranceExceeded, Limit: limit}
 }
 
 // DiagnosticCode distinguishes a rejected bound from a missing reference.
-func DiagnosticCode(tr reportvocab.ToleranceResult) reportvocab.DiagnosticCode {
-	if tr.State == reportvocab.ToleranceUndecided {
-		return reportvocab.DiagToleranceReferenceUnavailable
+func DiagnosticCode(tr report.ToleranceResult) report.DiagnosticCode {
+	if tr.State == report.ToleranceUndecided {
+		return report.DiagToleranceReferenceUnavailable
 	}
-	return reportvocab.DiagMeasurementBeyondTolerance
+	return report.DiagMeasurementBeyondTolerance
 }
 
 // ScalarVerdict judges one scalar reading and returns its diagnostic if it fails.
-func ScalarVerdict[BodyT comparable, CellT any](reading reportvocab.ReadingKind,
-	survey reportvocab.SurveyKind, body BodyT, m measurement.Measurement, rel float64,
+func ScalarVerdict[BodyT comparable, CellT any](reading report.ReadingKind,
+	survey report.SurveyKind, body BodyT, m measurement.Measurement, rel float64,
 	reference func(float64) (float64, bool),
-) (reportvocab.ToleranceResult, *reportvocab.Diagnostic[BodyT, CellT]) {
+) (report.ToleranceResult, *report.DiagnosticOf[BodyT, CellT]) {
 	pass, ref, haveRef := Scalar(m.Value, m.Bound, rel, reference)
 	tr := Judge(pass, haveRef, rel, ref, m.Value)
 	if pass {
@@ -51,11 +52,11 @@ func ScalarVerdict[BodyT comparable, CellT any](reading reportvocab.ReadingKind,
 	obs := m
 	code := DiagnosticCode(tr)
 	message := fmt.Sprintf("the %s reading's bound %s is beyond the relative tolerance", reading, m.Bound)
-	if code == reportvocab.DiagToleranceReferenceUnavailable {
+	if code == report.DiagToleranceReferenceUnavailable {
 		message = fmt.Sprintf("the %s reading has no usable tolerance reference", reading)
 	}
-	return tr, &reportvocab.Diagnostic[BodyT, CellT]{
-		Code: code, Status: reportvocab.Suspect, Body: body,
+	return tr, &report.DiagnosticOf[BodyT, CellT]{
+		Code: code, Status: report.Suspect, Body: body,
 		Survey: survey, Reading: reading, Observed: &obs,
 		Required: tr.Limit, Message: message,
 	}
@@ -64,7 +65,7 @@ func ScalarVerdict[BodyT comparable, CellT any](reading reportvocab.ReadingKind,
 // BoundsVerdict judges a body's box against its diameter reference.
 func BoundsVerdict[BodyT comparable, CellT any](body BodyT, box measurement.Box,
 	rel float64, reference func() (float64, bool),
-) (reportvocab.ToleranceResult, *reportvocab.Diagnostic[BodyT, CellT]) {
+) (report.ToleranceResult, *report.DiagnosticOf[BodyT, CellT]) {
 	pass, ref, haveRef := Bounded(box.Bound.Base(), rel, reference)
 	tr := Judge(pass, haveRef, rel, ref, box.Bound)
 	if pass {
@@ -73,12 +74,12 @@ func BoundsVerdict[BodyT comparable, CellT any](body BodyT, box measurement.Box,
 	observed := box
 	code := DiagnosticCode(tr)
 	message := fmt.Sprintf("the bounds reading's bound %s is beyond the relative tolerance", box.Bound)
-	if code == reportvocab.DiagToleranceReferenceUnavailable {
+	if code == report.DiagToleranceReferenceUnavailable {
 		message = "the bounds reading has no usable tolerance reference"
 	}
-	return tr, &reportvocab.Diagnostic[BodyT, CellT]{
-		Code: code, Status: reportvocab.Suspect, Body: body,
-		Reading: reportvocab.ReadingBounds, ObservedBox: &observed,
+	return tr, &report.DiagnosticOf[BodyT, CellT]{
+		Code: code, Status: report.Suspect, Body: body,
+		Reading: report.ReadingBounds, ObservedBox: &observed,
 		Required: tr.Limit, Message: message,
 	}
 }
@@ -86,7 +87,7 @@ func BoundsVerdict[BodyT comparable, CellT any](body BodyT, box measurement.Box,
 // CentroidVerdict judges a body's centroid against its diameter reference.
 func CentroidVerdict[BodyT comparable, CellT any](body BodyT, cen measurement.VecMeasurement,
 	rel float64, reference func() (float64, bool),
-) (reportvocab.ToleranceResult, *reportvocab.Diagnostic[BodyT, CellT]) {
+) (report.ToleranceResult, *report.DiagnosticOf[BodyT, CellT]) {
 	pass, ref, haveRef := Bounded(cen.Bound.Base(), rel, reference)
 	tr := Judge(pass, haveRef, rel, ref, cen.Bound)
 	if pass {
@@ -95,12 +96,12 @@ func CentroidVerdict[BodyT comparable, CellT any](body BodyT, cen measurement.Ve
 	observed := cen
 	code := DiagnosticCode(tr)
 	message := fmt.Sprintf("the centroid reading's bound %s is beyond the relative tolerance", cen.Bound)
-	if code == reportvocab.DiagToleranceReferenceUnavailable {
+	if code == report.DiagToleranceReferenceUnavailable {
 		message = "the centroid reading has no usable tolerance reference"
 	}
-	return tr, &reportvocab.Diagnostic[BodyT, CellT]{
-		Code: code, Status: reportvocab.Suspect, Body: body,
-		Reading: reportvocab.ReadingCentroid, ObservedVec: &observed,
+	return tr, &report.DiagnosticOf[BodyT, CellT]{
+		Code: code, Status: report.Suspect, Body: body,
+		Reading: report.ReadingCentroid, ObservedVec: &observed,
 		Required: tr.Limit, Message: message,
 	}
 }
@@ -117,14 +118,14 @@ type BodyReadings struct {
 
 // BodyVerdicts holds the result for each present reading.
 type BodyVerdicts struct {
-	Area, Bounds, Volume, Centroid, Wall, Radius reportvocab.ToleranceResult
+	Area, Bounds, Volume, Centroid, Wall, Radius report.ToleranceResult
 }
 
 // BodyDiagSet keeps core diagnostics apart from optional survey findings.
 type BodyDiagSet[BodyT comparable, CellT any] struct {
-	Core   []reportvocab.Diagnostic[BodyT, CellT]
-	Wall   *reportvocab.Diagnostic[BodyT, CellT]
-	Radius *reportvocab.Diagnostic[BodyT, CellT]
+	Core   []report.DiagnosticOf[BodyT, CellT]
+	Wall   *report.DiagnosticOf[BodyT, CellT]
+	Radius *report.DiagnosticOf[BodyT, CellT]
 }
 
 // BodyReferences loads only the reference a nonzero bound needs.
@@ -140,14 +141,14 @@ func BodyDiagnostics[BodyT comparable, CellT any](body BodyT, r BodyReadings,
 ) (BodyVerdicts, BodyDiagSet[BodyT, CellT]) {
 	var out BodyDiagSet[BodyT, CellT]
 	var verdicts BodyVerdicts
-	scalar := func(reading reportvocab.ReadingKind, survey reportvocab.SurveyKind,
+	scalar := func(reading report.ReadingKind, survey report.SurveyKind,
 		m measurement.Measurement, reference func(float64) (float64, bool),
-	) (reportvocab.ToleranceResult, *reportvocab.Diagnostic[BodyT, CellT]) {
+	) (report.ToleranceResult, *report.DiagnosticOf[BodyT, CellT]) {
 		return ScalarVerdict[BodyT, CellT](reading, survey, body, m, rel, reference)
 	}
 
-	var diag *reportvocab.Diagnostic[BodyT, CellT]
-	verdicts.Area, diag = scalar(reportvocab.ReadingArea, reportvocab.SurveyNone, r.Area, refs.Area)
+	var diag *report.DiagnosticOf[BodyT, CellT]
+	verdicts.Area, diag = scalar(report.ReadingArea, report.SurveyNone, r.Area, refs.Area)
 	if diag != nil {
 		out.Core = append(out.Core, *diag)
 	}
@@ -156,7 +157,7 @@ func BodyDiagnostics[BodyT comparable, CellT any](body BodyT, r BodyReadings,
 		out.Core = append(out.Core, *diag)
 	}
 	if r.Volume != nil {
-		verdicts.Volume, diag = scalar(reportvocab.ReadingVolume, reportvocab.SurveyNone, *r.Volume, refs.Volume)
+		verdicts.Volume, diag = scalar(report.ReadingVolume, report.SurveyNone, *r.Volume, refs.Volume)
 		if diag != nil {
 			out.Core = append(out.Core, *diag)
 		}
@@ -168,11 +169,11 @@ func BodyDiagnostics[BodyT comparable, CellT any](body BodyT, r BodyReadings,
 		}
 	}
 	if r.Wall != nil {
-		verdicts.Wall, out.Wall = scalar(reportvocab.ReadingWall, reportvocab.SurveyWall, *r.Wall, refs.Length)
+		verdicts.Wall, out.Wall = scalar(report.ReadingWall, report.SurveyWall, *r.Wall, refs.Length)
 	}
 	if r.Radius != nil {
-		verdicts.Radius, out.Radius = scalar(reportvocab.ReadingMinRadius,
-			reportvocab.SurveyConcaveRadius, *r.Radius, refs.Length)
+		verdicts.Radius, out.Radius = scalar(report.ReadingMinRadius,
+			report.SurveyConcaveRadius, *r.Radius, refs.Length)
 	}
 	return verdicts, out
 }
