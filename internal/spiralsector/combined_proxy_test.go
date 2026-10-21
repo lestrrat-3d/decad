@@ -71,11 +71,12 @@ func TestPrepareCombinedUnionGates(t *testing.T) {
 	original := &topo.Mesh{}
 	pass := func(name string, op meshbool.OperationKind, payload topo.Payload) {
 		t.Run(name, func(t *testing.T) {
-			got, source, err := spiralsector.PrepareCombinedUnion(t.Context(), op, noMesher{t},
+			got, source, home, err := spiralsector.PrepareCombinedUnion(t.Context(), op, noMesher{t},
 				&topo.Body{}, &topo.Body{Payload: payload}, original, 0.1)
 			require.NoError(t, err)
 			require.Same(t, original, got)
 			require.Nil(t, source)
+			require.Nil(t, home)
 		})
 	}
 	pass("not faceted", meshbool.OpUnion, nil)
@@ -95,7 +96,7 @@ func TestPrepareCombinedUnionGates(t *testing.T) {
 			"no first tooth": {First: &facetedrecord.SpiralFirstJoinSource{}, Tools: []*topo.Body{tool, tool}, Moves: []r3.Transform{move, move}},
 		}
 		for name, source := range tests {
-			_, _, err := spiralsector.PrepareCombinedUnion(t.Context(), meshbool.OpUnion, noMesher{t},
+			_, _, _, err := spiralsector.PrepareCombinedUnion(t.Context(), meshbool.OpUnion, noMesher{t},
 				&topo.Body{}, &topo.Body{Payload: facetedrecord.Payload{
 					SpiralTools: &facetedrecord.SpiralCombinedTools{Source: source}}}, original, 0.1)
 			require.ErrorIs(t, err, decaderr.ErrUnsupported, name)

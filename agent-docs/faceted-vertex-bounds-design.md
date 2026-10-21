@@ -228,6 +228,24 @@ adds its held area upper bound and both operands' true area upper bounds, so
 composition adds the two operand symmetric-difference bounds and Stitch's
 rounding charge.
 
+The published result does not keep the proxy's positions. After the Boolean,
+the audits and the boundary proofs have passed on the proxy-position mesh,
+`spiralsector.RestoreCaps` puts every result vertex that still sits at a moved
+proxy position back at the source tooth's position (for a copy, the source
+placed by the same motion: `facetedrecord.PlacedSourceMeshes`). The vertex
+bounds stand as they are: the proxy bound already adds the move to the source
+bound, so it covers the restored vertex. The restored mesh differs only on
+facets that touch a restored vertex, so the volume bound adds
+`SweptVolumeAllow(d, PerturbedAreaUpper(changed facets, d))` for the largest
+restored distance `d`, and the area slack adds the changed facets' area upper
+bounds before and after. The restored mesh must pass the same closed, oriented,
+embedded audit; when it does not, or when two moved vertices share a position
+or a result vertex bound is below the source bound, the proxy-position mesh is
+published unchanged. A vertex the Boolean created on a moved cap (a rim vertex)
+is not a proxy vertex and stays where the Boolean put it. The toe and heel
+faces of the joined tooth therefore lie on their cones to the faces' tessellation
+chord, not 0.032 mm off.
+
 ### 3.7 One Boolean for patterned curved teeth
 
 `Union` with three or more operands admits one certified finite blank and 2–31 rigid copies of the
