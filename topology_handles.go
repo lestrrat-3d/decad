@@ -342,17 +342,23 @@ func documentNode(d *Document) *topo.Document {
 // topo.Payload.Placed: it builds the environment from d and maps the node
 // back. It never commits.
 func placePayload(ctx context.Context, p topo.Payload, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
+	return bodyResult(placePayloadNode(ctx, p, &d.n, ref, composed))
+}
+
+// placePayloadNode is placePayload's node form, which the motion engine takes
+// as its placement hook.
+func placePayloadNode(ctx context.Context, p topo.Payload, d *topo.Document, ref producerID, composed r3.Transform) (*topo.Body, error) {
 	switch pl := p.(type) {
 	case stitchPayload:
-		documentHandle(&d.n)
+		documentHandle(d)
 		assertPlacedStitchOwners(pl.Faces, composed)
 	case unstitchPayload:
-		documentHandle(&d.n)
+		documentHandle(d)
 		assertUnstitchFaceOwners(pl.Face, composed)
 	case facetedPayload:
-		documentHandle(&d.n)
+		documentHandle(d)
 	}
-	return bodyResult(p.Placed(ctx, envOf(&d.n, ref), composed))
+	return p.Placed(ctx, envOf(d, ref), composed)
 }
 
 // handleAlloc is the node allocator root hands internal builders (topo.Alloc):

@@ -77,3 +77,63 @@ func LiftVerifyReport[B1 comparable, F1 any, B2 comparable, F2 any](l *RefLift[B
 		Status:      r.Status,
 	}
 }
+
+func (l *RefLift[B1, F1, B2, F2]) interferences(in []InterferenceOf[B1]) []InterferenceOf[B2] {
+	return liftSlice(in, func(i InterferenceOf[B1]) InterferenceOf[B2] {
+		return InterferenceOf[B2]{A: l.Body(i.A), B: l.Body(i.B), Volume: i.Volume}
+	})
+}
+
+func (l *RefLift[B1, F1, B2, F2]) clearances(in []ClearanceOf[B1]) []ClearanceOf[B2] {
+	return liftSlice(in, func(c ClearanceOf[B1]) ClearanceOf[B2] {
+		return ClearanceOf[B2]{A: l.Body(c.A), B: l.Body(c.B), Gap: c.Gap}
+	})
+}
+
+// Diagnostics maps a diagnostic list; nil stays nil.
+func (l *RefLift[B1, F1, B2, F2]) Diagnostics(in []DiagnosticOf[B1, JointCell]) []DiagnosticOf[B2, JointCell] {
+	return l.diagnostics(in)
+}
+
+// Interferences maps an interference list; nil stays nil.
+func (l *RefLift[B1, F1, B2, F2]) Interferences(in []InterferenceOf[B1]) []InterferenceOf[B2] {
+	return l.interferences(in)
+}
+
+// Clearances maps a clearance list; nil stays nil.
+func (l *RefLift[B1, F1, B2, F2]) Clearances(in []ClearanceOf[B1]) []ClearanceOf[B2] {
+	return l.clearances(in)
+}
+
+// Bodies maps a body list; nil stays nil.
+func (l *RefLift[B1, F1, B2, F2]) Bodies(in []B1) []B2 { return liftSlice(in, l.Body) }
+
+// Collisions maps a collision list; nil stays nil.
+func (l *RefLift[B1, F1, B2, F2]) Collisions(in []CollisionOf[B1]) []CollisionOf[B2] {
+	return liftSlice(in, func(c CollisionOf[B1]) CollisionOf[B2] {
+		return CollisionOf[B2]{At: c.At, Pose: c.Pose, Moving: l.Body(c.Moving), Static: l.Body(c.Static), Volume: c.Volume}
+	})
+}
+
+// PoseResults maps a pose result list; nil stays nil.
+func (l *RefLift[B1, F1, B2, F2]) PoseResults(in []PoseResultOf[B1]) []PoseResultOf[B2] {
+	return liftSlice(in, func(p PoseResultOf[B1]) PoseResultOf[B2] {
+		return PoseResultOf[B2]{At: p.At, Pose: p.Pose, Interferences: l.interferences(p.Interferences),
+			Clearances: l.clearances(p.Clearances), Diagnostics: l.diagnostics(p.Diagnostics)}
+	})
+}
+
+// LiftMotionReport returns r with every body reference mapped by l and its
+// Motion set to motion. Lists keep their nil or empty state. A nil report
+// stays nil.
+func LiftMotionReport[B1 comparable, F1 any, B2 comparable, F2 any, M, X any](l *RefLift[B1, F1, B2, F2],
+	r *MotionReportOf[B1, X], motion M) *MotionReportOf[B2, M] {
+	if r == nil {
+		return nil
+	}
+	return &MotionReportOf[B2, M]{
+		Request: r.Request, Motion: motion, Moving: l.Bodies(r.Moving), Against: l.Bodies(r.Against),
+		Poses: l.PoseResults(r.Poses), Intervals: r.Intervals, Collisions: l.Collisions(r.Collisions),
+		Clearance: r.Clearance, Assessment: r.Assessment, Diagnostics: l.diagnostics(r.Diagnostics), Status: r.Status,
+	}
+}

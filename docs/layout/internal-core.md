@@ -9,8 +9,9 @@ The rules for rows live in `docs/layout.md`.
 
 | Path | Responsibility |
 |---|---|
-| `internal/verifyrun/` | Verify over topology nodes: body audits and readings, surveys, pair proofs, interference measurement, tolerance gates and report publication. See verification §1–§9, interference §2–§8. |
-| `internal/sweeprun/` | The pair sweeps over topology nodes: producer selection, sampling, ideal contact, manifold transfer, departure and track proofs for every admitted pair. See contact-sweep §4–§7. |
+| `internal/motionengine/` | The motion check engine over nodes: per-pose pairs, interval certificates, bisection and reports for all three checks. See motion-check §3–§8. |
+| `internal/verifyrun/` | Verify over nodes: body audits, surveys, pair proofs, interference, tolerance gates and reports. See verification §1–§9, interference §2–§8. |
+| `internal/sweeprun/` | The pair sweeps over nodes: producer choice, sampling, contact transfer, departure and track proofs. See contact-sweep §4–§7. |
 | `internal/sweepproof/` | The exact sweep proofs: the contact track behind `report.SweepContactTrackOf`, the replay proof behind `SweepReport`, and the box and track helpers they share. See contact-sweep §6–§7. |
 | `internal/seal/` | The key that opens the sealed accessors on `report/` sweep records, so only decad's own producers set a report's replay proof or a sample's exact fraction. See contact-sweep §7. |
 | `internal/payloadclass/` | The hook through which `decadtest.PayloadClass` reads a body's payload class, and the payload type name an error prints. See faceted-source-retention §10. |

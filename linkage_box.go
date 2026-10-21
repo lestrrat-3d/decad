@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/motionengine"
+
 	"github.com/lestrrat-3d/decad/report"
 
 	"github.com/lestrrat-3d/decad/internal/linkagebound"
@@ -19,7 +21,7 @@ import (
 // This file is Document.VerifyJointBox (docs/linkage-check-design.md §14):
 // the joint-box vocabulary, Linkage.Configuration, the cell certificate, and
 // the subdivision that proves a box of joint values clear cell by cell. It
-// runs motion_verify.go's engine — the same groups, pairs, per-pose kernel and
+// runs internal/motionengine's engine — the same groups, pairs, per-pose kernel and
 // pair walk VerifyLinkage runs — at each cell's centre, and reads the chain
 // bounds linkage_bound.go proves over the whole box. A closed loop is varied
 // at its driver alone (§16): linkage_loop.go answers each cell's asks for its
@@ -131,10 +133,6 @@ type JointBoxRequest struct {
 
 // JointCell records one closed cell of joint values.
 type JointCell = report.JointCell
-
-func cloneJointCell(c JointCell) JointCell {
-	return JointCell{Min: slices.Clone(c.Min), Max: slices.Clone(c.Max)}
-}
 
 // JointCellResult records one leaf cell and its centre's findings.
 type JointCellResult struct {
@@ -267,8 +265,8 @@ func (d *Document) VerifyJointBox(ctx context.Context, l *Linkage, box JointBox,
 	}
 
 	run := newLinkageRun(ctx, d, spec, frames, bounds, cfg)
-	run.poseBodies = make([]poseBodyCache, len(run.movers))
-	dr, _ := run.drive.(*linkageDriver) // newLinkageRun always drives by a linkageDriver
+	run.PoseBodies = make([]motionengine.PoseBodyCache, len(run.Movers))
+	dr, _ := run.Drive.(*linkageDriver) // newLinkageRun always drives by a linkageDriver
 	br := &boxRun{run: run, dr: dr, axes: axes, budget: budget}
 	if err := br.subdivide(); err != nil {
 		return nil, err
@@ -419,7 +417,7 @@ func resolveJointBoxOptions(opts []JointBoxOption) (motionConfig, int, error) {
 // boxRun is one VerifyJointBox call's subdivision over the engine's run. It
 // lives in the call alone.
 type boxRun struct {
-	run    *motionRun
+	run    *motionengine.Run
 	dr     *linkageDriver
 	axes   []int // the varying joints, in Links() order
 	budget int
@@ -433,7 +431,7 @@ type boxRun struct {
 	unsplit   int
 	// upper is the centre holding the smallest gap upper end, upperHi that
 	// end; anyViolated: some centre disproves the margin.
-	upper       *motionPose
+	upper       *motionengine.Pose
 	upperHi     *float64
 	anyViolated bool
 	// statics holds each static body's point reading for the cell form's
@@ -448,7 +446,7 @@ type boxCell struct {
 	lo, hi    []*big.Rat
 	depth     int
 	cell      JointCell
-	pose      *motionPose
+	pose      *motionengine.Pose
 	outcome   CellOutcome
 	clearance *Measurement
 	// held lists the pairs that held the cell back — the uncertified pairs
@@ -514,7 +512,7 @@ func (b *boxRun) subdivide() error {
 		return err
 	}
 	b.leaves, b.exhausted, b.unsplit = schedule.Leaves, schedule.Exhausted, schedule.Unsplit
-	return b.run.ctx.Err()
+	return b.run.Ctx.Err()
 }
 
 // nextReadingSplit is §14.4 step 6: the leaf to split for the readings and
@@ -543,12 +541,12 @@ func (b *boxRun) nextReadingSplit(leaves []*boxCell) (int, int) {
 	c := leaves[smallest]
 	if allClear {
 		if axis := b.readingAxis(c, b.wideForReading); axis >= 0 {
-			if reading, _ := r.pathClearance(b.upperPoses(), c.clearance, "whole-box"); reading != nil && reading.Tolerance.State != ToleranceSatisfied {
+			if reading, _ := r.PathClearance(b.upperPoses(), c.clearance, "whole-box"); reading != nil && reading.Tolerance.State != ToleranceSatisfied {
 				return smallest, axis
 			}
 		}
 	}
-	if r.cfg.MinimumMM != nil && !b.anyViolated && !r.meetsMinimum(c.clearance) {
+	if r.Cfg.MinimumMM != nil && !b.anyViolated && !r.MeetsMinimum(c.clearance) {
 		if axis := b.readingAxis(c, b.wide); axis >= 0 {
 			return smallest, axis
 		}
@@ -579,21 +577,21 @@ func (b *boxRun) boundShares(c *boxCell, i, k int) (map[int]*big.Rat, bool) {
 // of any pair's gap, the first in evaluation order on a tie, or none: all the
 // whole-box reading takes from the centres besides the leaves' bounds, so the
 // reading over it is the reading over every centre.
-func (b *boxRun) upperPoses() []*motionPose {
+func (b *boxRun) upperPoses() []*motionengine.Pose {
 	if b.upper == nil {
 		return nil
 	}
-	return []*motionPose{b.upper}
+	return []*motionengine.Pose{b.upper}
 }
 
 // note keeps the running facts the readings consult about every evaluated
 // centre: the smallest gap upper end and whether some margin is disproven.
-func (b *boxRun) note(mp *motionPose) {
-	b.anyViolated = b.anyViolated || mp.violated
-	for _, row := range mp.pairs {
+func (b *boxRun) note(mp *motionengine.Pose) {
+	b.anyViolated = b.anyViolated || mp.Violated
+	for _, row := range mp.Pairs {
 		for _, pp := range row {
-			if pp.hasGap && (b.upperHi == nil || pp.hi < *b.upperHi) {
-				hi := pp.hi
+			if pp.HasGap && (b.upperHi == nil || pp.Hi < *b.upperHi) {
+				hi := pp.Hi
 				b.upper, b.upperHi = mp, &hi
 			}
 		}

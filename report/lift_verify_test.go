@@ -84,3 +84,85 @@ func TestLiftVerifyReport(t *testing.T) {
 	require.Nil(t, empty.Clearances, "a nil list stays nil")
 	require.Nil(t, empty.Interferences)
 }
+
+func TestLiftMotionReport(t *testing.T) {
+	t.Parallel()
+	lift := refs()
+	var none *report.MotionReportOf[int, any]
+	require.Nil(t, report.LiftMotionReport(&lift, none, "m"), "a nil report stays nil")
+
+	diag := intDiag{Code: report.DiagMotionCollision, Status: report.Interfering, Body: 4,
+		Pair: &report.DiagnosticPairOf[int]{A: 1, B: 2}}
+	in := &report.MotionReportOf[int, any]{
+		Request: report.MotionRequest{Resolution: units.Scalar(0.5)},
+		Moving:  []int{1, 3}, Against: []int{},
+		Poses: []report.PoseResultOf[int]{{
+			At:            units.Scalar(0.25),
+			Interferences: []report.InterferenceOf[int]{{A: 1, B: 2}},
+			Clearances:    []report.ClearanceOf[int]{{A: 1, B: 5}},
+			Diagnostics:   []intDiag{diag},
+		}},
+		Intervals:   []report.MotionInterval{{Outcome: report.IntervalColliding}},
+		Collisions:  []report.CollisionOf[int]{{Moving: 1, Static: 2, Volume: report.Measurement{Value: units.CubicMillimeters(3)}}},
+		Clearance:   &report.ScalarReading{},
+		Assessment:  report.AssessmentViolated,
+		Diagnostics: []intDiag{diag},
+		Status:      report.Interfering,
+	}
+
+	out := report.LiftMotionReport(&lift, in, "stated motion")
+	require.Equal(t, "stated motion", out.Motion, "the stated motion is the caller's")
+	require.Equal(t, []string{"1", "3"}, out.Moving)
+	require.NotNil(t, out.Against, "an empty list stays empty")
+	require.Empty(t, out.Against)
+	require.Equal(t, in.Request, out.Request)
+	require.Equal(t, report.IntervalColliding, out.Intervals[0].Outcome)
+	require.Equal(t, "1", out.Poses[0].Interferences[0].A)
+	require.Equal(t, "2", out.Poses[0].Interferences[0].B)
+	require.Equal(t, "5", out.Poses[0].Clearances[0].B)
+	require.Equal(t, "4", out.Poses[0].Diagnostics[0].Body)
+	require.Equal(t, "2", out.Poses[0].Diagnostics[0].Pair.B)
+	require.Equal(t, "1", out.Collisions[0].Moving)
+	require.Equal(t, "2", out.Collisions[0].Static)
+	require.InDelta(t, 3, out.Collisions[0].Volume.Value.Base(), 0)
+	require.Same(t, in.Clearance, out.Clearance)
+	require.Equal(t, report.AssessmentViolated, out.Assessment)
+	require.Equal(t, "4", out.Diagnostics[0].Body)
+	require.Equal(t, report.Interfering, out.Status)
+	require.False(t, out.Passed())
+
+	in.Moving, in.Poses, in.Collisions, in.Diagnostics = nil, nil, nil, nil
+	empty := report.LiftMotionReport(&lift, in, "m")
+	require.Nil(t, empty.Moving)
+	require.Nil(t, empty.Poses)
+	require.Nil(t, empty.Collisions)
+	require.Nil(t, empty.Diagnostics)
+}
+
+func TestMotionReportPassed(t *testing.T) {
+	t.Parallel()
+	var none *report.MotionReportOf[int, any]
+	require.False(t, none.Passed())
+	require.False(t, (&report.MotionReportOf[int, any]{Status: report.Suspect}).Passed())
+	require.True(t, (&report.MotionReportOf[int, any]{Status: report.Sound}).Passed())
+}
+
+func TestIntervalOutcomeString(t *testing.T) {
+	t.Parallel()
+	for outcome, want := range map[report.IntervalOutcome]string{
+		report.IntervalNotEvaluated: "not_evaluated", report.IntervalClear: "clear",
+		report.IntervalColliding: "colliding", report.IntervalUndecided: "undecided",
+		report.IntervalOutcome(9): "interval_outcome(9)",
+	} {
+		require.Equal(t, want, outcome.String())
+	}
+}
+
+func TestJointCellClone(t *testing.T) {
+	t.Parallel()
+	cell := report.JointCell{Min: []units.Value{units.Scalar(1)}, Max: []units.Value{units.Scalar(2)}}
+	clone := cell.Clone()
+	clone.Min[0], clone.Max[0] = units.Scalar(7), units.Scalar(8)
+	require.InDelta(t, 1, cell.Min[0].Base(), 0)
+	require.InDelta(t, 2, cell.Max[0].Base(), 0)
+}

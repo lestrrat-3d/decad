@@ -1,8 +1,13 @@
-package decad
+package motionengine
 
 import (
 	"context"
 	"math"
+
+	"github.com/lestrrat-3d/decad/internal/draftrecord"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
@@ -25,12 +30,12 @@ import (
 // bounds a rotated material point with. Any other payload states no record
 // radius and answers +Inf, which motionbound.PoseDeviation charges only where the pose's
 // linear part departs from the ideal one.
-func moverRecordRadius(ctx context.Context, b *Body) float64 {
+func moverRecordRadius(ctx context.Context, b *topo.Body) float64 {
 	if ctx.Err() != nil {
 		return math.Inf(1)
 	}
-	switch pl := b.n.Payload.(type) {
-	case prismPayload:
+	switch pl := b.Payload.(type) {
+	case prismrecord.Payload:
 		coordUpper, err := momentinput.CoordinateEnvelope(pl.Profile, freeform.NewFreeformWork(), pl.Walks)
 		if err != nil {
 			return math.Inf(1)
@@ -38,11 +43,11 @@ func moverRecordRadius(ctx context.Context, b *Body) float64 {
 		coordUpper = proofbound.AbsSumUpper(coordUpper, pl.SectionDelta)
 		zUpper := proofbound.AbsSumUpper(math.Max(math.Abs(pl.Z0), math.Abs(pl.Z1)), pl.AxialDelta())
 		return motionbound.LinearRecordRadius(pl.Frame, coordUpper, zUpper)
-	case draftPayload:
+	case draftrecord.Payload:
 		return pl.MoverRecordRadius()
-	case twoSidedDraftPayload:
+	case draftrecord.TwoSidedPayload:
 		return math.Max(pl.Negative.MoverRecordRadius(), pl.Positive.MoverRecordRadius())
-	case revolvePayload:
+	case revolveplan.Payload:
 		coordUpper, err := momentinput.CoordinateUpper(pl.Profile, freeform.NewFreeformWork(), nil)
 		if err != nil {
 			return math.Inf(1)

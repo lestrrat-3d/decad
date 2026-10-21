@@ -16,10 +16,8 @@ The rules for rows live in `docs/layout.md`.
 | `contact_pair.go` | Pair gates, public contact report aliases of `report/`, the lift from the node report to the handle report, the bit-exact pair report memo key and cap, and the `internal/contactpair/` call. See contact-geometry §6. |
 | `internal/planarpose/pose.go` | Planar admission, snapshots and convexity cache; publication through `internal/planarband/`. See multibody §9–§10. |
 | `point_containment.go` | Public point location and body/face distance through verified meshes. See point-containment design. |
-| `motion.go` / `motion_verify.go` | Public motion inputs, options, requests and reports; pose checks over `internal/motionbound/` and static pair classification through `internal/motionrun/`. See motion-check §2–§6. |
-| `motion_verify_pair.go` | Per-pose mover and pair evaluation, interval verdicts and report publication for `VerifyMotion`. See motion-check §5–§8. |
+| `motion.go` / `motion_verify.go` | Public motion inputs and options, the report aliases of `report/`, and the `VerifyMotion` gate over `internal/motionengine/`. See motion-check §2–§6. |
 | `linkage_box_cell.go` | Joint-box cell evaluation, classification and report publication, and the bounded transient body cache. See linkage §10, §14. |
-| `motion_bound.go` | Reads payload record radii for `internal/motionbound/`. |
 | `linkage.go` / `linkage_verify.go` | `VerifyLinkage` and its public report types. See linkage design. |
 | `linkage_box.go` | `VerifyJointBox` and its public joint-space inputs and reports. See `docs/linkage-check-design.md`. |
 | `linkage_loop.go` | Closed loops and their bar geometry. See `docs/linkage-check-design.md` §15. |

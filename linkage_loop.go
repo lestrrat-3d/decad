@@ -502,4 +502,4 @@ func (e *unbuildableError) Error() string { return e.cause.Error() }
 
 func (e *unbuildableError) Unwrap() error { return e.cause }
 
-func (e *unbuildableError) unbuildable() {}
+func (e *unbuildableError) Unbuildable() {}
