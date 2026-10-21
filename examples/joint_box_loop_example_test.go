@@ -12,7 +12,7 @@ import (
 )
 
 // VerifyJointBox varies a closed loop at its driver alone. The crank-rocker
-// four-bar of Example_decad_linkageLoop turns its crank anywhere in
+// four-bar of Example_linkageLoop turns its crank anywhere in
 // [0°, 90°], and a gate above the follower slides down anywhere in [0, 10]
 // mm. The box lists the crank and the gate; the coupler's and the follower's
 // angles over every cell are read from sketch's certified enclosure of the
@@ -20,7 +20,7 @@ import (
 // the travel the cell's centre must clear. The follower rocks up toward the
 // gate and back while the gate comes down, so the colliding region's edge
 // turns back along the crank.
-func Example_decad_jointBoxLoop() {
+func Example_jointBoxLoop() {
 	prism := func(doc *decad.Document, pts [][2]float64, z0, h float64) (*decad.Body, error) {
 		w := sketch.NewWorld()
 		plane, err := w.CreateOffsetPlane(w.XY(), z0)

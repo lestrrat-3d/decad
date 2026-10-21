@@ -17,7 +17,7 @@ import (
 // a Plane for a straight one. The rewrite is exact and bounded, never a
 // tessellated guess. The call resolves the edge query and single setback
 // distance, so repeated construction is deterministic.
-func Example_decad_capblend_chamfer() {
+func Example_capblend_chamfer() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

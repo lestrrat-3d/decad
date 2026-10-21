@@ -14,7 +14,7 @@ import (
 // receiver live. A prism moved in its own plane keeps its frame: the copy is
 // the same record moved, so integer-millimetre steps and the quarter turns of
 // a four-way pattern stay Exact.
-func Example_decad_pattern() {
+func Example_pattern() {
 	ctx := context.Background()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())

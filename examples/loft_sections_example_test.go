@@ -10,7 +10,7 @@ import (
 )
 
 // A middle section sets a quadratic bulge through three matched profiles.
-func Example_decad_loft_sections() {
+func Example_loft_sections() {
 	ctx := context.Background()
 	w := sketch.NewWorld()
 	var sections [3]decad.LoftSection

@@ -12,8 +12,8 @@ import (
 
 // Cut removes the tool from the target. This placed tool takes the mesh path,
 // which stitches a watertight faceted boundary and publishes a proven volume
-// bound. A same-plane blind tool is shown in Example_decad_blind_cut.
-func Example_decad_cut() {
+// bound. A same-plane blind tool is shown in Example_blind_cut.
+func Example_cut() {
 	w := sketch.NewWorld()
 	plateSketch, err := w.CreateSketch(w.XY())
 	if err != nil {

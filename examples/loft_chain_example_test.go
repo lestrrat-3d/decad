@@ -21,7 +21,7 @@ import (
 // segment publishes. Swapping the two arguments puts the planes the wrong way
 // round, and the call says so instead of quietly building a ribbon facing the
 // other way.
-func Example_decad_loft_chain() {
+func Example_loft_chain() {
 	w := sketch.NewWorld()
 	top, err := w.CreateOffsetPlane(w.XY(), 10)
 	if err != nil {

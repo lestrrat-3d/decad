@@ -17,7 +17,7 @@ import (
 // depended on, never consumed. Copy re-evaluates the payload under the
 // motion, so each instance's centroid moves by its own placement while the
 // master part stays put.
-func Example_decad_copy() {
+func Example_copy() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

@@ -13,7 +13,7 @@ import (
 // A boolean union can take different chamfer setbacks across its two faces
 // beside an independent straight edge. The reference face takes the first
 // distance; the other face takes the option's distance.
-func Example_decad_asymmetric_brep_chamfer() {
+func Example_asymmetric_brep_chamfer() {
 	ctx := context.Background()
 	w := sketch.NewWorld()
 	doc := decad.New()

@@ -14,7 +14,7 @@ import (
 // joined with its own image. WithJoin rewrites the half's section instead of
 // running a boolean, so the joined L below is one exact T-shaped prism that
 // later modify operations accept.
-func Example_decad_mirror_join() {
+func Example_mirror_join() {
 	ctx := context.Background()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())

@@ -17,7 +17,7 @@ import (
 // 16*26 - (4 - pi)*9 - 200 for the slot lining (its grown corners are
 // radius-3 arcs) and pi*(11^2 - 8^2) for the bore lining, so the volume is
 // (1104 + 66*pi) * 20.
-func Example_decad_shell_bands() {
+func Example_shell_bands() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

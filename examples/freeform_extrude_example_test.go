@@ -27,7 +27,7 @@ import (
 // by crossing (agent-docs/spline-design.md §2.1) — a caller cannot guess that from
 // the error alone, so join the endpoints in the sketch when a profile is
 // rejected as ErrUnrecordableProfile.
-func Example_decad_freeformExtrude() {
+func Example_freeformExtrude() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

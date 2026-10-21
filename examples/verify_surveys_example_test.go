@@ -17,7 +17,7 @@ import (
 // WithPullDirection states the direction the part must pull along. A wall
 // proven thinner than the tool — or a face provenly opposing the pull — is
 // Violating; a cube whose only wall is its own 100 mm slab is Sound.
-func Example_decad_verify_surveys() {
+func Example_verify_surveys() {
 	prism := func(doc *decad.Document, w, d, h float64) error {
 		ws := sketch.NewWorld()
 		s, err := ws.CreateSketch(ws.XY())

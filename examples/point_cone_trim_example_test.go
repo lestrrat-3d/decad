@@ -10,7 +10,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-func Example_decad_point_cone_trim() {
+func Example_point_cone_trim() {
 	ctx := context.Background()
 	w := sketch.NewWorld()
 	plane, err := w.CreateOffsetPlane(w.YZ(), 8)

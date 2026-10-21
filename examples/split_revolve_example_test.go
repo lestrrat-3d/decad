@@ -13,7 +13,7 @@ import (
 // Split cuts a solid revolve with a sheet spun about the same axis: here a
 // cylinder of radius 4 and height 10 by a disc at height 6, which leaves
 // cylinders of 96π and 64π mm³.
-func Example_decad_splitRevolve() {
+func Example_splitRevolve() {
 	// Both bodies spin about the sketch plane's own v axis.
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}
 	w := sketch.NewWorld()

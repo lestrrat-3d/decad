@@ -12,7 +12,7 @@ import (
 // Sweep moves a solved planar profile along an immutable spatial Path. This
 // example uses one straight span along the profile plane's positive normal;
 // the path start may lie outside the profile itself.
-func Example_decad_sweep() {
+func Example_sweep() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

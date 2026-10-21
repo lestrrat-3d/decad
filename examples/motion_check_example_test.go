@@ -17,7 +17,7 @@ import (
 // on a dyadic grid of 90° down to the stated resolution, so the first
 // collision it reports is bracketed to one grid step above the true contact,
 // and it prints the same on every platform.
-func Example_decad_motionCheck() {
+func Example_motionCheck() {
 	block := func(doc *decad.Document, x0, y0, x1, y1, z0, h float64) (*decad.Body, error) {
 		w := sketch.NewWorld()
 		plane, err := w.CreateOffsetPlane(w.XY(), z0)

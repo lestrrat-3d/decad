@@ -16,7 +16,7 @@ import (
 // points along z. The typed CapStart / CapEnd helpers then name the same face
 // through its provenance role without a "capStart" string literal a typo could
 // break.
-func Example_decad_facing() {
+func Example_facing() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

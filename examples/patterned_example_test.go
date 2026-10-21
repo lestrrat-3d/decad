@@ -13,7 +13,7 @@ import (
 // Patterned returns one body holding every instance. Disjoint instances of a
 // prism become one prism group, which cuts a row of holes in a single
 // analytic step: the plate keeps exact walls and stays filletable.
-func Example_decad_patterned() {
+func Example_patterned() {
 	ctx := context.Background()
 	w := sketch.NewWorld()
 	doc := decad.New()

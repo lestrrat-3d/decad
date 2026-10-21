@@ -10,7 +10,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-func Example_decad_extend() {
+func Example_extend() {
 	ctx := context.Background()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())

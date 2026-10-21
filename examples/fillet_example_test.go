@@ -15,7 +15,7 @@ import (
 // arc — so the blend walls are true cylinders and circular measurements carry
 // proven bounds. The call resolves the edge query and radius before retiring
 // the receiver, so repeated construction is deterministic.
-func Example_decad_fillet() {
+func Example_fillet() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

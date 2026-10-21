@@ -16,7 +16,7 @@ import (
 // proven bound. Coverage reads Partial, never Complete or Undecided, because
 // a nonempty confirmed Faces list coexists with membership the survey could
 // not finish deciding elsewhere.
-func Example_decad_verify_undercuts() {
+func Example_verify_undercuts() {
 	ws := sketch.NewWorld()
 	s, err := ws.CreateSketch(ws.XY())
 	if err != nil {

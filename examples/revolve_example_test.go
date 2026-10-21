@@ -15,7 +15,7 @@ import (
 // closed form with a proven bound. A rectangle with one edge ON the axis revolves into a solid
 // cylinder — the on-axis edge sweeps nothing, so there is no inner face, and
 // a full revolution has no caps and no seam.
-func Example_decad_revolve() {
+func Example_revolve() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

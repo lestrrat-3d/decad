@@ -13,7 +13,7 @@ import (
 
 // This file holds the Between tests of agent-docs/motion-check-design.md §9,
 // numbered 12-20 as §9 numbers them; test 21 is examples/'s
-// Example_decad_motionBetween, and the internal tests sit in
+// Example_motionBetween, and the internal tests sit in
 // motion_internal_test.go. Bounds are asserted against geometric truths or as
 // small, never pinned to a measured literal: FMA contraction moves the last
 // ulp between amd64 and arm64.

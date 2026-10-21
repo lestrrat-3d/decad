@@ -19,7 +19,7 @@ import (
 // sound or not; Area and Bounds still answer, over the walls alone.
 // A one-span straight sweep sheet tessellates through its prism reduction
 // (agent-docs/sweep-design.md Table D row D2).
-func Example_decad_surfaceSweep() {
+func Example_surfaceSweep() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

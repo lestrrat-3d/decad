@@ -14,7 +14,7 @@ import (
 // positive angle narrows the body away from the neutral cap, so a molded part
 // releases from the mold opening on that side. The result is the body a tapered
 // extrude of the same sketch builds, and the receiver is retired.
-func Example_decad_draft() {
+func Example_draft() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

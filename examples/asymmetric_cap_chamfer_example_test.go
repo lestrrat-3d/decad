@@ -16,7 +16,7 @@ import (
 // runs where: naming the cap face puts the positional distance across the cap
 // and the other distance down the side walls; naming the side walls swaps
 // them.
-func Example_decad_asymmetric_cap_chamfer() {
+func Example_asymmetric_cap_chamfer() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

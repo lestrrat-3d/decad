@@ -18,7 +18,7 @@ import (
 // measurement, not a verdict: the caller compares it against their own
 // clearance spec, and the report passes because every answer, the gap
 // included, is proven to the asked figures.
-func Example_decad_verify_clearances() {
+func Example_verify_clearances() {
 	buildPlate := func(doc *decad.Document) (*decad.Body, error) {
 		w := sketch.NewWorld()
 		s, err := w.CreateSketch(w.XY())

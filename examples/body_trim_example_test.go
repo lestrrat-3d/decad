@@ -16,7 +16,7 @@ import (
 // walls at two points each. KeepOutside keeps the tube's own material
 // outside that tool, splitting it into the two ribbons that survive on
 // either side of the cut.
-func Example_decad_body_trim() {
+func Example_body_trim() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

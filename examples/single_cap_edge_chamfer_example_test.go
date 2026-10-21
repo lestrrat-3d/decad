@@ -12,7 +12,7 @@ import (
 
 // A single straight cap edge can be chamfered without selecting the whole
 // cap loop. A box takes route E and keeps an exact volume.
-func Example_decad_single_cap_edge_chamfer() {
+func Example_single_cap_edge_chamfer() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

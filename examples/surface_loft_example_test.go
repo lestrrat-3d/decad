@@ -18,7 +18,7 @@ import (
 // for a sheet, proven sound or not; Area and Bounds still answer, over the
 // walls alone. Tessellate and OBJ export the wall triangles with both section
 // rims free (agent-docs/surface-design.md §10).
-func Example_decad_surfaceLoft() {
+func Example_surfaceLoft() {
 	w := sketch.NewWorld()
 	s0, err := w.CreateSketch(w.XY())
 	if err != nil {

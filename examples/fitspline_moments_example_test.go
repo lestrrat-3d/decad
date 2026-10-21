@@ -17,7 +17,7 @@ import (
 //
 // A fit-spline section can also EXTRUDE now (agent-docs/spline-design.md §10 P4b);
 // this example stays scoped to the moments-only capability above.
-func Example_decad_fitSplineMoments() {
+func Example_fitSplineMoments() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

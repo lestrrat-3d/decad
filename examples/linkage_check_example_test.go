@@ -19,7 +19,7 @@ import (
 // grid of its fraction down to the stated resolution, so the first collision
 // it reports is the first grid point past the true contact, the same on every
 // platform.
-func Example_decad_linkageCheck() {
+func Example_linkageCheck() {
 	block := func(doc *decad.Document, x0, y0, x1, y1, z0, h float64) (*decad.Body, error) {
 		w := sketch.NewWorld()
 		plane, err := w.CreateOffsetPlane(w.XY(), z0)

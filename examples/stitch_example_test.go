@@ -15,7 +15,7 @@ import (
 // volume — every coordinate in it is stated rather than computed, so every
 // welded rim edge and its matching patch edge hold the same float64 values
 // at a zero bound, which is exactly what Table J admits.
-func Example_decad_stitch() {
+func Example_stitch() {
 	w := sketch.NewWorld()
 	ctx := context.Background()
 

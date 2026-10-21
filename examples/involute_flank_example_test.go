@@ -17,12 +17,12 @@ import (
 // involute flank is convex its entire run from base circle to tooth tip, so
 // its chain clears that certificate and the section builds into a fully
 // measured solid — the same certificate that refuses a section whose
-// curvature changes sign partway along (see Example_decad_freeformExtrude's
+// curvature changes sign partway along (see Example_freeformExtrude's
 // neighbours in apitest/extrude_freeform_test.go for a refused case).
 //
 // module 1, 17 teeth, 20 degree pressure angle are a gear dialog's own
 // defaults.
-func Example_decad_involuteFlank() {
+func Example_involuteFlank() {
 	const (
 		module        = 1.0
 		toothNumber   = 17.0

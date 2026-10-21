@@ -12,7 +12,7 @@ import (
 
 // Sweep carries the sketch's fitted spline through tangent arc, line, and arc
 // path spans. The resulting walls keep their free-form surface identity.
-func Example_decad_sweepFitSpline() {
+func Example_sweepFitSpline() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

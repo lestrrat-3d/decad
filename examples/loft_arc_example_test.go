@@ -19,7 +19,7 @@ import (
 // The wall is a chorded polyhedron, not the true curved surface, so every
 // published measurement carries a proven positive Bound rather than reading
 // Exact — the same honesty a straight-walled loft's own Bound reads zero for.
-func Example_decad_loft_arc() {
+func Example_loft_arc() {
 	w := sketch.NewWorld()
 	s0, err := w.CreateSketch(w.XY())
 	if err != nil {

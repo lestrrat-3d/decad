@@ -55,7 +55,7 @@
 //	}
 //	_ = body
 //
-// A runnable version of this loop is Example_decad_quickstart in this package's
+// A runnable version of this loop is Example_quickstart in this package's
 // test files. The examples directory holds fuller, feature-specific cases —
 // selectors, revolve, the modify ops, booleans, verification, and error
 // recovery — each an executable test with a verified

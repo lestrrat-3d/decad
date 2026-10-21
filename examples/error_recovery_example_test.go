@@ -18,7 +18,7 @@ import (
 // tapered surface result (ErrUnsupported) is retried as a solid, and an
 // over-asserted selector (ErrCardinality) is relaxed to a count the body can
 // meet.
-func Example_decad_error_recovery() {
+func Example_error_recovery() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

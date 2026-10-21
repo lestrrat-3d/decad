@@ -11,7 +11,7 @@ import (
 
 // A rectangular boss on a plate has a rounded cavity where the two slabs
 // meet. The top opening is the boss cap from the Union result.
-func Example_decad_shell_stacked_boss() {
+func Example_shell_stacked_boss() {
 	ctx := context.Background()
 	doc := decad.New()
 	box := func(x0, y0, x1, y1, z0, height float64) (*decad.Body, error) {

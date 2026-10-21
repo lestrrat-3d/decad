@@ -56,7 +56,7 @@ func clippedGrooveMoment(root, mouth, r float64) float64 {
 // and Q its moment ∫ρ dA. The published volume interval encloses that closed
 // form. The readings fit within Verify's default tolerances, so it reports
 // Sound with the solid proven valid.
-func Example_decad_thread_external() {
+func Example_thread_external() {
 	w := sketch.NewWorld()
 	cs, err := w.CreateSketch(w.XY())
 	if err != nil {

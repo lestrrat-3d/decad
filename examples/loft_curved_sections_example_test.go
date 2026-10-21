@@ -11,7 +11,7 @@ import (
 )
 
 // Three exact copies of one curved section make an analytic straight solid.
-func Example_decad_loftCurvedSections() {
+func Example_loftCurvedSections() {
 	ctx := context.Background()
 	w := sketch.NewWorld()
 	var sections [3]decad.LoftSection

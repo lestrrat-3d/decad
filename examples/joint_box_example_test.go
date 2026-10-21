@@ -18,7 +18,7 @@ import (
 // can travel within the cell; a cell it cannot certify is halved. The cells
 // are dyadic fractions of each range, so the first collision it reports
 // sits at the same joint values on every platform.
-func Example_decad_jointBox() {
+func Example_jointBox() {
 	block := func(doc *decad.Document, x0, y0, x1, y1, z0, h float64) (*decad.Body, error) {
 		w := sketch.NewWorld()
 		plane, err := w.CreateOffsetPlane(w.XY(), z0)

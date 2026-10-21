@@ -10,7 +10,7 @@ import (
 )
 
 // Split returns one solid body for each cell a sheet separates from a solid.
-func Example_decad_split() {
+func Example_split() {
 	w := sketch.NewWorld()
 	blockSketch, err := w.CreateSketch(w.XY())
 	if err != nil {

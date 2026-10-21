@@ -16,7 +16,7 @@ import (
 // open walk encloses no region to close. A line-arc-line chain here builds a
 // three-wall ribbon; the arc wall's area carries its own evaluation bound,
 // while the two straight walls stay exact.
-func Example_decad_extrude_chain() {
+func Example_extrude_chain() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

@@ -12,7 +12,7 @@ import (
 // A fitted-spline meridian stays a free-form surface after Revolve. The
 // profile must have proven clearance from the axis, and VerifyAll certifies
 // the chorded boundary and occupied-volume difference.
-func Example_decad_revolveFitSpline() {
+func Example_revolveFitSpline() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

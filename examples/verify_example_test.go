@@ -18,7 +18,7 @@ import (
 // never a silent pass: here two far-apart plates are provenly disjoint and
 // the report is Sound, while two overlapping plates are a pair this
 // evaluator can prove neither overlapping nor disjoint.
-func Example_decad_verify() {
+func Example_verify() {
 	buildPlate := func(doc *decad.Document) (*decad.Body, error) {
 		w := sketch.NewWorld()
 		s, err := w.CreateSketch(w.XY())

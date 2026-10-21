@@ -15,7 +15,7 @@ import (
 // selects the drilled plate's hole wall by surface kind plus
 // the feature role that created it, and another names a revolve axis as "the
 // one bottom edge of the gusset parallel to x".
-func Example_decad_selectors() {
+func Example_selectors() {
 	w := sketch.NewWorld()
 
 	// A 100 x 60 plate with a Ø20 hole, extruded 8 mm.

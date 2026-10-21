@@ -16,7 +16,7 @@ import (
 // solid: a hexagon of radius 1.5 mm that leans over and narrows to 1 mm.
 // Every wall is an exact plane, so the volume is the nearest float to an
 // exact rational, and the branch tessellates without chording.
-func Example_decad_sweepMitred() {
+func Example_sweepMitred() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

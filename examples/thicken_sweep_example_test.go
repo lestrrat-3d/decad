@@ -12,7 +12,7 @@ import (
 
 // A one-span sweep sheet can be thickened on either side or centered. The
 // resulting solid keeps Sweep's path and face roles for later operations.
-func Example_decad_thickenSweep() {
+func Example_thickenSweep() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

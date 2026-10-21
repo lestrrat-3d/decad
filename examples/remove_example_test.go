@@ -16,7 +16,7 @@ import (
 // Verify fail can undo its own addition. The removed body is retired: it
 // leaves Bodies() and Verify, still answers its measurements, and no
 // operation takes it.
-func Example_decad_remove() {
+func Example_remove() {
 	buildCube := func(doc *decad.Document, x, y, z float64) (*decad.Body, error) {
 		w := sketch.NewWorld()
 		s, err := w.CreateSketch(w.XY())

@@ -11,7 +11,7 @@ import (
 
 // A blind Cut keeps a plate analytic. Later same-plane through cuts keep its
 // section in both slabs, so holes can be added after the pocket.
-func Example_decad_blind_cut() {
+func Example_blind_cut() {
 	ctx := context.Background()
 	w := sketch.NewWorld()
 	doc := decad.New()

@@ -15,7 +15,7 @@ import (
 // an output for export, never the representation. Faces that share a curved
 // edge chord it at the same samples, so the mesh has no cracks, and the mesh
 // reports the chord deviation it proves. STL and OBJ writers build on it.
-func Example_decad_tessellate() {
+func Example_tessellate() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

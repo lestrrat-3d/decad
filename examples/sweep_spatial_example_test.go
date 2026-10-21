@@ -10,10 +10,10 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// Example_decad_sweep_spatial builds a square duct whose path turns first in
+// Example_sweep_spatial builds a square duct whose path turns first in
 // the XZ plane and then in the XY plane. The integer ArcThrough points form
 // quarter circles, and the line between them meets both arcs tangentially.
-func Example_decad_sweep_spatial() {
+func Example_sweep_spatial() {
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
 	if err != nil {

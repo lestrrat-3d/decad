@@ -19,7 +19,7 @@ The rules for rows live in `agent-docs/layout.md`.
 
 | Path | Responsibility |
 |---|---|
-| `examples/` | Executable Go examples (`Example_decad_…`, `go test`-verified `// Output:` blocks). Never `package main`. |
+| `examples/` | Executable Go examples (`Example_…`, `go test`-verified `// Output:` blocks). Never `package main`. |
 | `dynamics/` | Rigid-body worlds and their scheduled step. See `agent-docs/multibody-dynamics-design.md`. |
 | `apitest/` | Tests of the exported API alone. See `apitest/doc.go`. |
 | `decadtest/` | The public test kit. See `decadtest/doc.go`. |

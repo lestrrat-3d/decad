@@ -16,7 +16,7 @@ import (
 // bounds are charged against that exact rotation. The copy gives up the
 // analytic surface tags of a transform-placed copy; a prism copy, as here,
 // is placed exactly as WithCopyPlacement of the same rotation.
-func Example_decad_copy_rotation() {
+func Example_copy_rotation() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

@@ -17,7 +17,7 @@ import (
 // stays an exact surface: a Plane leaning by the taper for each straight edge.
 // The tangent of the angle is only ever enclosed, so the drafted body's
 // measurements are approximate, each with the bound it carries.
-func Example_decad_extrude_taper() {
+func Example_extrude_taper() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {
@@ -80,7 +80,7 @@ func Example_decad_extrude_taper() {
 
 // A tapered extrude can stop at a planar face of another live body. The
 // selected face supplies the far level; the sketch remains the near level.
-func Example_decad_extrude_taper_to_face() {
+func Example_extrude_taper_to_face() {
 	w := sketch.NewWorld()
 	stopFrame, err := r3.NewFrame(r3.NewVec(0, 0, 30), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	if err != nil {

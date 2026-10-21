@@ -17,7 +17,7 @@ import (
 // reconstructing it from source — the stable rendering, the expected/actual
 // counts, and the running match count after each clause, which names the
 // clause that emptied the set.
-func Example_decad_selection_error() {
+func Example_selection_error() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

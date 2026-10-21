@@ -17,7 +17,7 @@ import (
 // planes, not cylinders, and irrational lengths carry proven bounds. The call
 // resolves the edge query and setback distance before retiring the receiver, so
 // repeated construction is deterministic.
-func Example_decad_chamfer() {
+func Example_chamfer() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

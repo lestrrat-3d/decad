@@ -13,7 +13,7 @@ import (
 // faces a revolved Profile would mint. A FULL revolution of a chain still
 // leaves it open — its two free ends sweep two circles that nothing fills —
 // unlike a full-turn Profile revolve, which closes.
-func Example_decad_revolve_chain() {
+func Example_revolve_chain() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

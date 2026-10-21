@@ -14,7 +14,7 @@ import (
 // and the Observed reading against its Required threshold. The slice is empty
 // EXACTLY when the report is Sound, so a caller reads WHY, not just THAT, a body
 // failed. Here a 0.5 mm plate is checked against a 1 mm tool.
-func Example_decad_verify_diagnostics() {
+func Example_verify_diagnostics() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

@@ -16,7 +16,7 @@ import (
 // does. The face selector must name exactly one face: the L below has two
 // walls facing +x, so naming "the +x wall" is a cardinality error, while its
 // single -x wall names the plane x = 0.
-func Example_decad_mirror() {
+func Example_mirror() {
 	ctx := context.Background()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())

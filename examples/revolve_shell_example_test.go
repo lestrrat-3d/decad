@@ -15,7 +15,7 @@ import (
 // removed. The wall is the meridian's own offset swept over the same angle,
 // and a meridian edge lying on the axis grows no wall: a half cylinder shelled
 // this way is a trough with closed ends, not a tube around its own axis.
-func Example_decad_revolve_shell() {
+func Example_revolve_shell() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

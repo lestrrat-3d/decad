@@ -15,7 +15,7 @@ import (
 // far end disk of a solid cylinder hollows it into a cup. The wall follows the
 // kept skin and the kept end, and the meridian edge on the axis grows no wall,
 // so the cup's floor meets the axis instead of leaving a tube along it.
-func Example_decad_revolve_side_shell() {
+func Example_revolve_side_shell() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

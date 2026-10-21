@@ -19,7 +19,7 @@ import (
 // is that dimensionless fraction, bisected on a dyadic grid down to the
 // stated resolution, so the first collision prints the same on every
 // platform: 105/256, the first grid point past the contact.
-func Example_decad_motionBetween() {
+func Example_motionBetween() {
 	block := func(doc *decad.Document, x0, y0, x1, y1, z0, h float64) (*decad.Body, error) {
 		w := sketch.NewWorld()
 		plane, err := w.CreateOffsetPlane(w.XY(), z0)

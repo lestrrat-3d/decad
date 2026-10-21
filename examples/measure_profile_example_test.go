@@ -10,7 +10,7 @@ import (
 
 // MeasureProfile gives bounded 2D readings from a current sketch profile.
 // It rejects boundaries that decad cannot record exactly.
-func Example_decad_measureProfile() {
+func Example_measureProfile() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

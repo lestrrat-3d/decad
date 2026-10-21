@@ -16,7 +16,7 @@ import (
 // revolve has two angular caps in different planes, and its meridian's end
 // faces are planar too, so no single list of predicates names just the caps.
 // One branch per cap, by provenance, names both, and Shell removes them.
-func Example_decad_selector_union() {
+func Example_selector_union() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

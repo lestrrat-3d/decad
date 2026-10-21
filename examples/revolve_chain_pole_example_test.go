@@ -10,7 +10,7 @@ import (
 )
 
 // A meridian ending on the axis revolves into a cone sheet with one free rim.
-func Example_decad_revolve_chain_pole() {
+func Example_revolve_chain_pole() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

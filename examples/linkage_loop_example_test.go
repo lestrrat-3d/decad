@@ -18,7 +18,7 @@ import (
 // coupler's and the follower's angles at every pose are read from sketch's
 // certified enclosure of the loop, never from a float solve. As the crank
 // turns, the follower rocks up into a wall at y = 68.5.
-func Example_decad_linkageLoop() {
+func Example_linkageLoop() {
 	prism := func(doc *decad.Document, pts [][2]float64, z0, h float64) (*decad.Body, error) {
 		w := sketch.NewWorld()
 		plane, err := w.CreateOffsetPlane(w.XY(), z0)

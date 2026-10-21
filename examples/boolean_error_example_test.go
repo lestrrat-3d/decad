@@ -19,7 +19,7 @@ import (
 // (a bug to file). The error still wraps the §12 sentinel errors.Is branches on,
 // so errors.Is(err, decad.ErrUnsupported) holds for an unclassifiable contact
 // and errors.Is(err, decad.ErrBooleanFailed) for an empty result.
-func Example_decad_boolean_error() {
+func Example_boolean_error() {
 	// Two 10 mm cubes meet at offset caps in one document: a valid model whose
 	// partial coplanar contact the mesh evaluator cannot classify.
 	doc := decad.New()

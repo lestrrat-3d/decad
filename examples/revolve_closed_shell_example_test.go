@@ -14,7 +14,7 @@ import (
 // sealed body: every face stays, and the cavity is a second, void shell
 // inside the first. A meridian edge lying on the axis grows no wall, so a
 // solid cylinder becomes a closed tank with flat ends, not a tube.
-func Example_decad_revolve_closed_shell() {
+func Example_revolve_closed_shell() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

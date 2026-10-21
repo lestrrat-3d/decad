@@ -12,7 +12,7 @@ import (
 
 // A cross-drilled plate is a brep. Its complete top loop can take one
 // setback across the top face and another down the surrounding walls.
-func Example_decad_asymmetric_brep_loop_chamfer() {
+func Example_asymmetric_brep_loop_chamfer() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

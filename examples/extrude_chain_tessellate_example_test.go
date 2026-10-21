@@ -15,7 +15,7 @@ import (
 // planar quad read straight off the body's topology — no chording, and no
 // tolerance for one to bind. A straight (LineSeg-only) chain's ribbon
 // tessellates and exports; a curved or free-form wall is not yet chorded.
-func Example_decad_extrude_chain_tessellate() {
+func Example_extrude_chain_tessellate() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

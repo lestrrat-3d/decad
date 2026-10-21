@@ -46,12 +46,12 @@ func acceptExceptDesignatedThinWall(ctx context.Context, doc *decad.Document, mi
 	return nil
 }
 
-// Example_decad_verify_exception demonstrates a caller waiving one named,
+// Example_verify_exception demonstrates a caller waiving one named,
 // expected reason while every other reason stays fatal (proposal §12): a
 // thin plate the caller designates permitted passes alone, and adding a
 // SECOND thin plate the caller never named makes the same policy reject the
 // document, because the exception matches identity, not merely the code.
-func Example_decad_verify_exception() {
+func Example_verify_exception() {
 	minimum := units.Millimeters(1)
 
 	solo := decad.New()

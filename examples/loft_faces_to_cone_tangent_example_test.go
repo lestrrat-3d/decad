@@ -10,9 +10,9 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// Example_decad_loft_faces_to_cone_tangent lofts two cap faces of a point
+// Example_loft_faces_to_cone_tangent lofts two cap faces of a point
 // loft, then a constructed last section tangent to a cone along one ruling.
-func Example_decad_loft_faces_to_cone_tangent() {
+func Example_loft_faces_to_cone_tangent() {
 	ctx := context.Background()
 	w := sketch.NewWorld()
 	doc := decad.New()

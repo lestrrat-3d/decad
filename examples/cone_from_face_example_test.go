@@ -9,9 +9,9 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// Example_decad_cone_from_face builds the cone that extends one conical side
+// Example_cone_from_face builds the cone that extends one conical side
 // of a revolved blank, moved off the blank by one float step.
-func Example_decad_cone_from_face() {
+func Example_cone_from_face() {
 	ctx := context.Background()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())

@@ -10,7 +10,7 @@ import (
 )
 
 // A through hole followed by a wider blind cut leaves an analytic shoulder.
-func Example_decad_counterbore() {
+func Example_counterbore() {
 	w := sketch.NewWorld()
 	plateSketch, err := w.CreateSketch(w.XY())
 	if err != nil {

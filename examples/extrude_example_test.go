@@ -14,7 +14,7 @@ import (
 // prism it defines: an analytic B-rep body whose mass properties are closed-form.
 // Every measurement carries its exactness — the evaluator never hands back a
 // number it cannot vouch for.
-func Example_decad_extrude() {
+func Example_extrude() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {
@@ -69,7 +69,7 @@ func Example_decad_extrude() {
 // Transform applies a rigid motion to a body: the moved body is a new body with
 // fresh provenance, and the original is retired —
 // it stays readable, but takes no further operations.
-func Example_decad_transform() {
+func Example_transform() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

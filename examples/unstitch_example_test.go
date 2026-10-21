@@ -13,7 +13,7 @@ import (
 // box closed, then take it apart again into one single-face sheet per face.
 // Every edge of every result is free, and the six faces' areas sum back to
 // the same 15200 mm^2 the solid's own Area already reported.
-func Example_decad_unstitch() {
+func Example_unstitch() {
 	w := sketch.NewWorld()
 	ctx := context.Background()
 

@@ -15,7 +15,7 @@ import (
 // a prism fillet inserts, applied to the meridian, so the blend is a torus
 // whose tube radius is the fillet radius, and the volume follows Pappus over
 // the rewritten meridian.
-func Example_decad_revolve_fillet() {
+func Example_revolve_fillet() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

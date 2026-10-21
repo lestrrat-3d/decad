@@ -16,7 +16,7 @@ import (
 // BodySheet — instead of a solid (agent-docs/surface-design.md §4). Volume and
 // Centroid answer ErrNotSolid for a sheet, proven sound or not; Area and
 // Bounds still answer, over the walls alone.
-func Example_decad_surfaceExtrude() {
+func Example_surfaceExtrude() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

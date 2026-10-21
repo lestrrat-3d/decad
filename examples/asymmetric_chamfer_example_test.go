@@ -17,7 +17,7 @@ import (
 // reference face and the option's other distance across the face beside it.
 // The reference is a face query resolved against the body, so the call names
 // which wall takes which setback without depending on how the edge is walked.
-func Example_decad_asymmetric_chamfer() {
+func Example_asymmetric_chamfer() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

@@ -17,7 +17,7 @@ import (
 // volume is the revolve's Θ·∫ρ dA with Θ = 2π·turns. The extent is stated in
 // turns: a spring of length L at pitch p passes units.Scalar(L/p), and the
 // body then denotes pitch × that float as its height.
-func Example_decad_coil() {
+func Example_coil() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

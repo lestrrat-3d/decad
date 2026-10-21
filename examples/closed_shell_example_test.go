@@ -14,7 +14,7 @@ import (
 // and the cavity is a second, void shell inside the first. The 100 x 60 x 20
 // box with a 5 mm wall keeps a 90 x 50 x 10 cavity, so its volume is
 // 120000 - 45000 mm^3.
-func Example_decad_closed_shell() {
+func Example_closed_shell() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

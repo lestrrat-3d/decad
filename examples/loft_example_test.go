@@ -15,7 +15,7 @@ import (
 // not exactly representable in binary — the evaluator reports it
 // Approximate with a proven bound, the same honesty every other analytic
 // measurement carries.
-func Example_decad_loft() {
+func Example_loft() {
 	w := sketch.NewWorld()
 	s0, err := w.CreateSketch(w.XY())
 	if err != nil {

@@ -13,7 +13,7 @@ import (
 // (agent-docs/surface-design.md §4). A full revolution mints no closing face to
 // omit in the first place, so there the option changes no face at all: the
 // result is a CLOSED sheet — no free edge — rather than a refusal.
-func Example_decad_surfaceRevolve() {
+func Example_surfaceRevolve() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

@@ -13,7 +13,7 @@ import (
 // A straight Sweep can rotate a centred polygon along its path. The true
 // volume uses the rotating sections, while the mesh carries a certified
 // approximation of the curved walls.
-func Example_decad_sweepTwist() {
+func Example_sweepTwist() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {
@@ -58,7 +58,7 @@ func Example_decad_sweepTwist() {
 
 // A small centred polygon can twist along a line and then a tangent
 // quarter-circle. The extra arc stations stay internal to the returned body.
-func Example_decad_sweepTwistCardinalArc() {
+func Example_sweepTwistCardinalArc() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

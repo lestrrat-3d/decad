@@ -16,7 +16,7 @@ import (
 // bracket that integrates a Taylor expansion of the area element piece by
 // piece and charges the remainder, so the area bound stays near 1e-10 of the
 // area. A whole circle's rim is a closed Circle3 edge on each end cap.
-func Example_decad_coil_round_wire() {
+func Example_coil_round_wire() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

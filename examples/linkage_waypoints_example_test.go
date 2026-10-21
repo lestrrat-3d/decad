@@ -18,7 +18,7 @@ import (
 // segment j of n covers s ∈ [j/n, (j+1)/n]. The landing block's top sits
 // 5 mm above the arm's resting underside, so the lowering arm meets it at
 // s = 11/12, and the first collision is the first grid point past that.
-func Example_decad_linkageWaypoints() {
+func Example_linkageWaypoints() {
 	block := func(doc *decad.Document, x0, y0, x1, y1, z0, h float64) (*decad.Body, error) {
 		w := sketch.NewWorld()
 		plane, err := w.CreateOffsetPlane(w.XY(), z0)

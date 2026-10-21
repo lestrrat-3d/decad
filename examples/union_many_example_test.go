@@ -9,7 +9,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-func Example_decad_unionMany() {
+func Example_unionMany() {
 	ctx := context.Background()
 	doc := decad.New()
 	box := func(x0, y0, x1, y1 float64) (*decad.Body, error) {

@@ -13,7 +13,7 @@ import (
 // profile, on the sketch plane's own frame (agent-docs/surface-design.md §5.1). The
 // result is a one-face sheet body: Volume and Centroid answer ErrNotSolid,
 // while Area and Bounds answer over the one face.
-func Example_decad_patch() {
+func Example_patch() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

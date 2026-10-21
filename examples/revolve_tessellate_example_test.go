@@ -22,7 +22,7 @@ import (
 // chording the requested tolerance bought. A revolve mesh serves export today
 // and is not yet admitted to the mesh boolean, which needs a proof of the
 // volume the mesh and the body differ by.
-func Example_decad_revolve_tessellate() {
+func Example_revolve_tessellate() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

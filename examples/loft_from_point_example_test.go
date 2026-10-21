@@ -10,7 +10,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-func Example_decad_loft_from_point() {
+func Example_loft_from_point() {
 	ctx := context.Background()
 	w := sketch.NewWorld()
 	plane, err := w.CreateOffsetPlane(w.XY(), 6)

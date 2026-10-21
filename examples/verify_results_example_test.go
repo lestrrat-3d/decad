@@ -14,7 +14,7 @@ import (
 // with an interval, or ScalarAbsent when the feature provably does not
 // exist — and an unrequested survey answers ScalarNotRequested rather than
 // leaving a nil the caller must interpret.
-func Example_decad_verify_results() {
+func Example_verify_results() {
 	ws := sketch.NewWorld()
 	s, err := ws.CreateSketch(ws.XY())
 	if err != nil {

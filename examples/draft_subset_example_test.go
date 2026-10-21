@@ -15,7 +15,7 @@ import (
 // height z is 20 × (20 − z·tan 5°), and the kept walls stay perpendicular to
 // the caps. A subset that would move only one of two walls meeting tangentially
 // at an arc is refused, since their corner would no longer be a line or arc.
-func Example_decad_draft_subset() {
+func Example_draft_subset() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

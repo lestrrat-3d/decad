@@ -9,7 +9,7 @@ import (
 	"github.com/lestrrat-3d/sketch"
 )
 
-// Example_decad_loft_placed builds one tapered tooth as a Loft, then
+// Example_loft_placed builds one tapered tooth as a Loft, then
 // Copy's a mirror of it into a herringbone pair — the target case
 // agent-docs/loft-design.md names for PR 2a. The tooth occupies x in [0, 40]; the
 // mirror, reflected across the x=0 plane, occupies x in [-40, 0], so the
@@ -23,7 +23,7 @@ import (
 // The source's Volume is already Approximate before any placement — the
 // tooth's true volume is 16000/3 mm^3, which float64 cannot represent — and
 // the placement only widens that bound, from 3.03e-13 to 8.74e-10 mm^3.
-func Example_decad_loft_placed() {
+func Example_loft_placed() {
 	w := sketch.NewWorld()
 	s0, err := w.CreateSketch(w.XY())
 	if err != nil {

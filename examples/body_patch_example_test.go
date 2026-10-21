@@ -15,7 +15,7 @@ import (
 // Edges(Free()) always resolves to both — so the contract fills every
 // closed chain the selection partitions into, proving each independently,
 // which is what lets one call cap both ends of the tube at once.
-func Example_decad_body_patch() {
+func Example_body_patch() {
 	w := sketch.NewWorld()
 	ctx := context.Background()
 

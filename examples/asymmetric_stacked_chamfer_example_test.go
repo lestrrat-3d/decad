@@ -11,7 +11,7 @@ import (
 
 // A blind pocket makes a stacked body. Its outer top loop accepts different
 // setbacks across the top cap and down the surrounding walls.
-func Example_decad_asymmetric_stacked_chamfer() {
+func Example_asymmetric_stacked_chamfer() {
 	w := sketch.NewWorld()
 	doc := decad.New()
 	extrudeRectangle := func(x0, y0, x1, y1, z, height float64) (*decad.Body, error) {

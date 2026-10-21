@@ -20,7 +20,7 @@ import (
 // The cut removes the screw sweep of the groove's part outside ρ = 5, Θ·Q
 // with Θ = 2π, from π·(10² − 5²)·20. The published volume interval
 // encloses that closed form, and Verify reports Sound with the solid proven valid.
-func Example_decad_thread_internal() {
+func Example_thread_internal() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XZ())
 	if err != nil {

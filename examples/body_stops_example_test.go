@@ -13,7 +13,7 @@ import (
 // the far side of every live body it meets. The stop is resolved at the
 // call from the document's live bodies. The stop body is depended on, never
 // consumed, so it stays live.
-func Example_decad_extrude_through_all() {
+func Example_extrude_through_all() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

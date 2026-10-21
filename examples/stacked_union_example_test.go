@@ -11,7 +11,7 @@ import (
 
 // A Union of a block standing on a plate keeps the part analytic: the result
 // is a stacked prism with the plate's top as one face around the block.
-func Example_decad_stacked_union() {
+func Example_stacked_union() {
 	ctx := context.Background()
 	w := sketch.NewWorld()
 	doc := decad.New()
