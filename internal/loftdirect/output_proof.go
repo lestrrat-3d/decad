@@ -1,19 +1,23 @@
-package decad
+package loftdirect
 
 import (
 	"context"
 	"errors"
 
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
+
 	"github.com/lestrrat-3d/decad/internal/loftcontact"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
-// certifyLoftSourcePartition stays in the root because it reads the *Body
+// CertifyLoftSourcePartition stays in the root because it reads the *topo.Body
 // payloads, in either operand order, and reads their source spans when a
 // refused partition owes that read. It maps the direct-shell exact seam size
 // refusal to errLoftDirectLimit. The partition proof is
 // loftcontact.CertifySourcePartition.
-func certifyLoftSourcePartition(ctx context.Context, first, second *Body,
+func CertifyLoftSourcePartition(ctx context.Context, first, second *topo.Body,
 	operation *proofbound.WorkBudget, directShell bool,
 	checked ...*loftcontact.Arithmetic) (loftcontact.SourcePartition, bool, error) {
 	var no loftcontact.SourcePartition
@@ -24,22 +28,22 @@ func certifyLoftSourcePartition(ctx context.Context, first, second *Body,
 		return no, false, nil
 	}
 	prism, loft := first, second
-	pp, prismOK := prism.n.Payload.(prismPayload)
-	lp, loftOK := loft.n.Payload.(loftPayload)
+	pp, prismOK := prism.Payload.(prismrecord.Payload)
+	lp, loftOK := loft.Payload.(loftrecord.Payload)
 	if !prismOK || !loftOK {
 		prism, loft = second, first
-		pp, prismOK = prism.n.Payload.(prismPayload)
-		lp, loftOK = loft.n.Payload.(loftPayload)
+		pp, prismOK = prism.Payload.(prismrecord.Payload)
+		lp, loftOK = loft.Payload.(loftrecord.Payload)
 		if !prismOK || !loftOK {
 			return no, false, nil
 		}
 	}
 	readSource := func(budget *proofbound.WorkBudget, withOrder bool) error {
-		source, certified, err := certifyLoftSourceSpanCaps(ctx, budget, prism, loft)
+		source, certified, err := CertifyLoftSourceSpanCaps(ctx, budget, prism, loft)
 		if err != nil || !certified || !withOrder {
 			return err
 		}
-		_, _, err = certifyLoftCapSourceOrder(ctx, budget, source)
+		_, _, err = CertifyLoftCapSourceOrder(ctx, budget, source)
 		return err
 	}
 	partition, admitted, err := loftcontact.CertifySourcePartition(ctx, operation,
@@ -51,12 +55,12 @@ func certifyLoftSourcePartition(ctx context.Context, first, second *Body,
 }
 
 // Both proof modes charge their held audits to the output budget.
-func certifyLoftOutputBoundary(ctx context.Context, first, second *Body,
+func CertifyLoftOutputBoundary(ctx context.Context, first, second *topo.Body,
 	operation *proofbound.WorkBudget) (loftcontact.OutputBoundary, bool, error) {
 	return certifyLoftOutputBoundaryMode(ctx, first, second, operation, false, nil)
 }
 
-func certifyLoftOutputBoundaryForDirectShell(ctx context.Context, first, second *Body,
+func CertifyLoftOutputBoundaryForDirectShell(ctx context.Context, first, second *topo.Body,
 	operation *proofbound.WorkBudget) (loftcontact.OutputBoundary, bool, error) {
 	var sourceCertified bool
 	proof, admitted, err := certifyLoftOutputBoundaryMode(ctx, first, second,
@@ -67,10 +71,10 @@ func certifyLoftOutputBoundaryForDirectShell(ctx context.Context, first, second 
 	return proof, admitted, err
 }
 
-// certifyLoftOutputBoundaryMode stays in the root because it reads the *Body
+// certifyLoftOutputBoundaryMode stays in the root because it reads the *topo.Body
 // payloads and runs the root source partition wrapper. loftcontact builds and
 // audits the output shell from that partition.
-func certifyLoftOutputBoundaryMode(ctx context.Context, first, second *Body,
+func certifyLoftOutputBoundaryMode(ctx context.Context, first, second *topo.Body,
 	operation *proofbound.WorkBudget, directShell bool,
 	sourceCertified *bool) (loftcontact.OutputBoundary, bool, error) {
 	var no loftcontact.OutputBoundary
@@ -81,7 +85,7 @@ func certifyLoftOutputBoundaryMode(ctx context.Context, first, second *Body,
 	if first == nil || second == nil || operation == nil {
 		return no, false, nil
 	}
-	source, ok, err := certifyLoftSourcePartition(ctx, first, second, operation, directShell, arithmetic)
+	source, ok, err := CertifyLoftSourcePartition(ctx, first, second, operation, directShell, arithmetic)
 	if err != nil {
 		return no, false, err
 	}
@@ -97,11 +101,11 @@ func certifyLoftOutputBoundaryMode(ctx context.Context, first, second *Body,
 	if sourceCertified != nil {
 		*sourceCertified = true
 	}
-	pp, prismOK := first.n.Payload.(prismPayload)
-	lp, loftOK := second.n.Payload.(loftPayload)
+	pp, prismOK := first.Payload.(prismrecord.Payload)
+	lp, loftOK := second.Payload.(loftrecord.Payload)
 	if !prismOK {
-		pp, prismOK = second.n.Payload.(prismPayload)
-		lp, loftOK = first.n.Payload.(loftPayload)
+		pp, prismOK = second.Payload.(prismrecord.Payload)
+		lp, loftOK = first.Payload.(loftrecord.Payload)
 	}
 	if !prismOK || !loftOK {
 		return no, false, nil

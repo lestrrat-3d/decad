@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/loftdirect"
+
 	"github.com/lestrrat-3d/decad/internal/loftcontact"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -68,21 +70,21 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 			}
 			if !reverse {
 				// A pair outside the prism/Loft source class still falls through.
-				miss, attempted, missErr := tryLoftContactDirectShellUnion(t.Context(),
-					meshbool.OpUnion, d, d.nextProducerID(), prism, prism)
+				miss, attempted, missErr := loftdirect.DirectShellUnion(t.Context(),
+					meshbool.OpUnion, envOf(documentNode(d), d.nextProducerID()), bodyNode(prism), bodyNode(prism))
 				require.NoError(t, missErr)
 				require.False(t, attempted)
 				require.True(t, miss == nil)
 			}
-			candidate, admitted, err := tryLoftContactDirectShellUnion(t.Context(),
-				meshbool.OpUnion, d, d.nextProducerID(), first, second)
+			candidate, admitted, err := loftdirect.DirectShellUnion(t.Context(),
+				meshbool.OpUnion, envOf(documentNode(d), d.nextProducerID()), bodyNode(first), bodyNode(second))
 			require.NoError(t, err)
 			require.True(t, admitted, "the public case must reach the direct shell")
 			require.True(t, candidate != nil)
 			if !reverse {
 				operation := proofbound.NewWorkBudget(t.Context())
-				boundary, boundaryOK, boundaryErr := certifyLoftOutputBoundaryForDirectShell(
-					t.Context(), prism, loft, operation)
+				boundary, boundaryOK, boundaryErr := loftdirect.CertifyLoftOutputBoundaryForDirectShell(
+					t.Context(), bodyNode(prism), bodyNode(loft), operation)
 				require.NoError(t, boundaryErr)
 				require.True(t, boundaryOK)
 				pp := prism.n.Payload.(prismPayload)
@@ -93,8 +95,8 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 				require.True(t, proofOK)
 				require.Less(t, proof.TotalOutputVisits, uint64(loftcontact.VolumeOutputSteps))
 				// A one-step remainder must refuse before conversion can build.
-				refused, accepted, refusalErr := loftContactFacetedBody(t.Context(), d,
-					d.nextProducerID(), first, second, prism, loft, lp, proof,
+				refused, accepted, refusalErr := loftdirect.LoftContactFacetedBody(t.Context(),
+					envOf(documentNode(d), d.nextProducerID()), bodyNode(first), bodyNode(second), bodyNode(prism), bodyNode(loft), lp, proof,
 					proofbound.NewWallWorkBudgetWithOperation(1, operation))
 				require.ErrorIs(t, refusalErr, ErrUnsupported)
 				require.ErrorContains(t, refusalErr, "direct Loft/prism bounded proof limit")
@@ -112,8 +114,8 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 					},
 					ErrFn: raceCtx.Err,
 				}
-				raceBody, accepted, raceErr := loftContactFacetedBody(raceCtx, d,
-					d.nextProducerID(), first, second, prism, loft, lp, proof,
+				raceBody, accepted, raceErr := loftdirect.LoftContactFacetedBody(raceCtx,
+					envOf(documentNode(d), d.nextProducerID()), bodyNode(first), bodyNode(second), bodyNode(prism), bodyNode(loft), lp, proof,
 					proofbound.NewWallWorkBudgetWithOperation(1, raceOperation))
 				require.ErrorIs(t, raceErr, context.Canceled)
 				require.False(t, accepted)
@@ -134,8 +136,8 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 					},
 					ErrFn: cancelCtx.Err,
 				}
-				cancelled, accepted, cancelErr := loftContactFacetedBody(cancelCtx,
-					d, d.nextProducerID(), first, second, prism, loft, lp, proof,
+				cancelled, accepted, cancelErr := loftdirect.LoftContactFacetedBody(cancelCtx,
+					envOf(documentNode(d), d.nextProducerID()), bodyNode(first), bodyNode(second), bodyNode(prism), bodyNode(loft), lp, proof,
 					cancelBudget)
 				require.ErrorIs(t, cancelErr, context.Canceled)
 				require.False(t, accepted)
@@ -152,7 +154,7 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 			firstVolume, secondVolume := first.n.Volume.Value.Base(), second.n.Volume.Value.Base()
 			firstVolumeBound, secondVolumeBound := first.n.Volume.Bound.Base(), second.n.Volume.Bound.Base()
 			firstVolumeExact, secondVolumeExact := first.n.Volume.Exactness, second.n.Volume.Exactness
-			limited := context.WithValue(t.Context(), loftDirectOutputLimitKey{}, uint64(1))
+			limited := context.WithValue(t.Context(), loftdirect.LoftDirectOutputLimitKey{}, uint64(1))
 			refused, refusalErr := Union(limited, first, second)
 			require.True(t, refused == nil)
 			require.ErrorIs(t, refusalErr, ErrUnsupported)
@@ -278,15 +280,15 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 				if reverse {
 					first, second = loft, prism
 				}
-				candidate, admitted, err := tryLoftContactDirectShellUnion(t.Context(),
-					meshbool.OpUnion, d, d.nextProducerID(), first, second)
+				candidate, admitted, err := loftdirect.DirectShellUnion(t.Context(),
+					meshbool.OpUnion, envOf(documentNode(d), d.nextProducerID()), bodyNode(first), bodyNode(second))
 				require.NoError(t, err)
 				require.True(t, admitted, "the public trapezoid must reach the direct shell")
 				require.NotNil(t, candidate)
 				if !reverse {
 					before := append([]*Body(nil), d.Bodies()...)
 					beforeProducer := d.nextProducerID()
-					limited := context.WithValue(t.Context(), loftDirectOutputLimitKey{}, uint64(1))
+					limited := context.WithValue(t.Context(), loftdirect.LoftDirectOutputLimitKey{}, uint64(1))
 					refused, refusalErr := Union(limited, first, second)
 					require.True(t, refused == nil)
 					require.ErrorIs(t, refusalErr, ErrUnsupported)

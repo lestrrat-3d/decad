@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/loftdirect"
+
 	"github.com/lestrrat-3d/decad/internal/loftcontact"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -24,7 +26,7 @@ func TestLoftContactOutputBoundaryRealVaryingTab(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			prism, loft := loftPartitionRealBodies(t, tc.lower, tc.upper, 0, 4)
 			for _, pair := range [][2]*Body{{prism, loft}, {loft, prism}} {
-				proof, admitted, err := certifyLoftOutputBoundary(t.Context(), pair[0], pair[1],
+				proof, admitted, err := loftdirect.CertifyLoftOutputBoundary(t.Context(), bodyNode(pair[0]), bodyNode(pair[1]),
 					proofbound.NewWorkBudget(t.Context()))
 				require.NoError(t, err)
 				require.True(t, admitted)
@@ -73,11 +75,11 @@ func loftOutputTestCapAreas(shell loftcontact.OutputShell) [3]string {
 func TestLoftContactOutputBoundarySourceRefusals(t *testing.T) {
 	prism, loft := loftPartitionRealBodies(t,
 		[4]float64{8, 4, 12, 6}, [4]float64{8, 4, 13, 6}, 0, 4)
-	source, admitted, err := certifyLoftSourcePartition(t.Context(), prism, loft,
+	source, admitted, err := loftdirect.CertifyLoftSourcePartition(t.Context(), bodyNode(prism), bodyNode(loft),
 		proofbound.NewWorkBudget(t.Context()), false)
 	require.NoError(t, err)
 	require.True(t, admitted)
-	proof, admitted, err := certifyLoftOutputBoundary(t.Context(), prism, loft,
+	proof, admitted, err := loftdirect.CertifyLoftOutputBoundary(t.Context(), bodyNode(prism), bodyNode(loft),
 		proofbound.NewWorkBudget(t.Context()))
 	require.NoError(t, err)
 	require.True(t, admitted)
@@ -151,7 +153,7 @@ func TestLoftContactOutputBoundaryLimitsAndCancellation(t *testing.T) {
 	prism, loft := loftPartitionRealBodies(t,
 		[4]float64{8, 4, 12, 6}, [4]float64{8, 4, 13, 6}, 0, 4)
 	pp, lp := prism.n.Payload.(prismPayload), loft.n.Payload.(loftPayload)
-	source, admitted, err := certifyLoftSourcePartition(t.Context(), prism, loft,
+	source, admitted, err := loftdirect.CertifyLoftSourcePartition(t.Context(), bodyNode(prism), bodyNode(loft),
 		proofbound.NewWorkBudget(t.Context()), false)
 	require.NoError(t, err)
 	require.True(t, admitted)
@@ -166,7 +168,7 @@ func TestLoftContactOutputBoundaryLimitsAndCancellation(t *testing.T) {
 		readLines(lp.Profile0.Outer), readLines(lp.Profile1.Outer), source,
 		new(loftcontact.OutputShell), 0)
 	require.ErrorIs(t, err, proofbound.ErrWallWorkBudget)
-	proof, admitted, err := certifyLoftOutputBoundary(t.Context(), prism, loft,
+	proof, admitted, err := loftdirect.CertifyLoftOutputBoundary(t.Context(), bodyNode(prism), bodyNode(loft),
 		proofbound.NewWorkBudget(t.Context()))
 	require.NoError(t, err)
 	require.True(t, admitted)
@@ -184,7 +186,7 @@ func TestLoftContactOutputBoundaryLimitsAndCancellation(t *testing.T) {
 
 	count := 0
 	probe := &proofbound.WorkBudget{StepFn: func() error { count++; return nil }, ErrFn: func() error { return nil }}
-	_, admitted, err = certifyLoftSourcePartition(t.Context(), prism, loft, probe, false)
+	_, admitted, err = loftdirect.CertifyLoftSourcePartition(t.Context(), bodyNode(prism), bodyNode(loft), probe, false)
 	require.NoError(t, err)
 	require.True(t, admitted)
 	ctx, cancel := context.WithCancel(t.Context())
@@ -201,7 +203,7 @@ func TestLoftContactOutputBoundaryLimitsAndCancellation(t *testing.T) {
 		},
 		ErrFn: ctx.Err,
 	}
-	_, admitted, err = certifyLoftOutputBoundary(ctx, prism, loft, operation)
+	_, admitted, err = loftdirect.CertifyLoftOutputBoundary(ctx, bodyNode(prism), bodyNode(loft), operation)
 	require.False(t, admitted)
 	require.True(t, errors.Is(err, context.Canceled))
 	t.Logf("source steps=%d, canceled after %d shared operation steps", count, steps)
@@ -210,7 +212,7 @@ func TestLoftContactOutputBoundaryLimitsAndCancellation(t *testing.T) {
 func TestLoftContactOutputBoundaryMiddleRegionContact(t *testing.T) {
 	prism, loft := loftPartitionRealBodies(t,
 		[4]float64{8, 4, 12, 6}, [4]float64{8, 4, 13, 6}, 0, 4)
-	proof, admitted, err := certifyLoftOutputBoundary(t.Context(), prism, loft,
+	proof, admitted, err := loftdirect.CertifyLoftOutputBoundary(t.Context(), bodyNode(prism), bodyNode(loft),
 		proofbound.NewWorkBudget(t.Context()))
 	require.NoError(t, err)
 	require.True(t, admitted)
