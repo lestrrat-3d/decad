@@ -17,7 +17,9 @@ func Example_extrude_to_face() {
 	w := sketch.NewWorld()
 	doc := decad.New()
 
-	// The stop is a 60 x 60 x 5 mm plate whose bottom face sits at z = 30.
+	// Build the stop: a plate that floats 30 mm above the XY plane. The column
+	// below will grow until it meets this plate. To place the plate at z = 30 we
+	// sketch it on a plane whose frame starts at that height.
 	stopFrame, err := r3.NewFrame(r3.NewVec(0, 0, 30), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	if err != nil {
 		fmt.Printf("failed to build frame: %s\n", err)
@@ -46,7 +48,8 @@ func Example_extrude_to_face() {
 		return
 	}
 
-	// The part is a 20 x 20 mm column that starts at z = 0.
+	// Sketch the column on the XY plane. It starts at z = 0 and has no length
+	// of its own yet; the stop will decide how tall it is.
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {
 		fmt.Printf("failed to create sketch: %s\n", err)

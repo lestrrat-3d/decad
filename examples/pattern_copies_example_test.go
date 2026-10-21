@@ -15,7 +15,8 @@ import (
 // repeated features. A CircularPattern spaces copies evenly about an axis. A
 // LinearPattern spaces them along a direction.
 func Example_pattern_copies() {
-	// A 4 x 2 x 5 mm block whose center is 20 mm out along +X.
+	// The block to repeat. It sits 20 mm out from the origin, so that a pattern
+	// about the Z axis moves it onto a ring.
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

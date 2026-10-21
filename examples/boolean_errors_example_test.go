@@ -16,7 +16,8 @@ import (
 // evaluator cannot handle yet, and BooleanEvaluatorFailure is a bug to report.
 // Here two cubes that do not touch are intersected, which is an empty result.
 func Example_boolean_errors() {
-	// Two 10 mm cubes, 40 mm apart. They share one sketch as two profiles.
+	// We need two bodies that do not touch, so that intersecting them has nothing
+	// to return. Draw two squares 40 mm apart in one sketch.
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

@@ -14,7 +14,8 @@ import (
 // merged. Use it to model a symmetric part as a single half and mirror it
 // into the whole, so that changing the half changes both sides.
 func Example_mirror_join() {
-	// Half of a T: the profile's left edge lies on the mirror plane x = 0.
+	// Model only half of the part. The profile's left edge lies on the plane
+	// x = 0, which will be the mirror plane, so the two halves meet exactly there.
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

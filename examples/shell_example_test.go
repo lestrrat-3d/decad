@@ -14,7 +14,8 @@ import (
 // name are removed to make the opening. Use it to turn a solid block into a
 // box, cup or housing without modelling the cavity by hand.
 func Example_shell() {
-	// A solid 100 x 60 x 20 mm block.
+	// Make the solid to hollow out: sketch a rectangle and extrude it into a
+	// block (see Example_extrude for these steps).
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

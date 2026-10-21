@@ -14,8 +14,8 @@ import (
 // across whatever is there, such as a pin or a cut that has to go all the way
 // through. The bodies it passes through are left untouched.
 func Example_extrude_through_all() {
-	// One sketch holds two profiles: a 100 x 60 plate, and a 20 x 20 square
-	// beside it that will become the pin.
+	// Draw both parts in one sketch: a large rectangle for the plate and a
+	// small square for the pin. Sketch reports two profiles, one per closed shape.
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {
@@ -38,7 +38,7 @@ func Example_extrude_through_all() {
 		}
 	}
 
-	// First extrude the plate, 10 mm thick.
+	// Extrude the plate first, so there is a body for the pin to pass through.
 	doc := decad.New()
 	if _, err := decad.Extrude(context.Background(), doc, s, plateProfile,
 		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}); err != nil {

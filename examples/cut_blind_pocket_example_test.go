@@ -16,7 +16,7 @@ func Example_cut_blind_pocket() {
 	w := sketch.NewWorld()
 	doc := decad.New()
 
-	// The part is a 10 x 10 x 10 mm cube.
+	// Start with the part to pocket: a cube.
 	cubeSketch, err := w.CreateSketch(w.XY())
 	if err != nil {
 		fmt.Printf("failed to create sketch: %s\n", err)
@@ -35,8 +35,9 @@ func Example_cut_blind_pocket() {
 		return
 	}
 
-	// The tool is a 4 x 4 mm block from z = 6 to z = 10, flush with the top
-	// of the cube. Sketching it on a plane 6 mm up sets the pocket floor.
+	// The tool is the shape of the pocket: a 4 x 4 mm block filling z = 6 to 10,
+	// flush with the cube's top. Sketching it on a plane 6 mm up sets where the
+	// pocket floor is, so the pocket is 4 mm deep and stops inside the part.
 	plane, err := w.CreateOffsetPlane(w.XY(), 6)
 	if err != nil {
 		fmt.Printf("failed to create plane: %s\n", err)

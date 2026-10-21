@@ -17,7 +17,7 @@ func Example_union() {
 	w := sketch.NewWorld()
 	doc := decad.New()
 
-	// The plate is 20 x 20 x 5 mm.
+	// The first piece is a plate to build on.
 	plateSketch, err := w.CreateSketch(w.XY())
 	if err != nil {
 		fmt.Printf("failed to create sketch: %s\n", err)
@@ -36,8 +36,9 @@ func Example_union() {
 		return
 	}
 
-	// The block is 10 x 10 x 10 mm and starts on the plate's top face, at
-	// z = 5. Sketching it on an offset plane puts it there.
+	// The second piece is a block that stands on the plate. Sketching it on a
+	// plane 5 mm up puts its bottom on the plate's top face, so the two pieces
+	// touch and can be joined.
 	plane, err := w.CreateOffsetPlane(w.XY(), 5)
 	if err != nil {
 		fmt.Printf("failed to create plane: %s\n", err)

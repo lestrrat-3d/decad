@@ -14,7 +14,8 @@ import (
 // for parts that come in left and right versions. The mirror plane is named by
 // one of the body's own flat faces, so it follows the part if the part changes.
 func Example_mirrored_copy() {
-	// An L-shaped profile: a 5 mm wide upright along x = 0 and a foot along y = 0.
+	// An L-shaped profile has a clear left/right asymmetry, so the mirror image
+	// is easy to tell apart from the original.
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

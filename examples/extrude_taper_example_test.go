@@ -13,7 +13,8 @@ import (
 // leaves the sketch plane. Molded and cast parts need this so they can be
 // released from the mold. The far end of the body is smaller than the sketch.
 func Example_extrude_taper() {
-	// A 20 x 20 mm square centered on the origin.
+	// Sketch the outline to be drafted. It is a 20 x 20 mm square centered on the
+	// origin, so the walls lean in evenly on every side.
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {
@@ -27,8 +28,8 @@ func Example_extrude_taper() {
 		return
 	}
 
-	// Extrude 10 mm with a 5 degree taper. Without WithTaper the volume
-	// would be 20 x 20 x 10 = 4000 mm^3.
+	// Extrude 10 mm with a 5 degree taper. For comparison, the same extrude
+	// without WithTaper would hold 20 x 20 x 10 = 4000 mm^3.
 	doc := decad.New()
 	body, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
 		decad.Distance{D: units.Millimeters(10), Dir: decad.Along},

@@ -13,8 +13,9 @@ import (
 // profile. The result is a sheet body: one wall per edge, with no caps. Use it
 // for thin walls and surfaces, which can later be thickened into a solid.
 func Example_extrude_chain() {
-	// Draw an open line-arc-line path. It is open, so the sketch has a
-	// chain but no profile.
+	// Draw a line-arc-line path that is NOT closed. Because it is open, the
+	// sketch has a chain instead of a profile, and a chain is what Extrude needs
+	// to build a wall instead of a solid.
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {
@@ -34,7 +35,7 @@ func Example_extrude_chain() {
 		return
 	}
 
-	// Pass the chain where a profile would go.
+	// Pass the chain where a profile would normally go.
 	doc := decad.New()
 	body, err := decad.Extrude(context.Background(), doc, s, s.Chains()[0],
 		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})

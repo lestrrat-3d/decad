@@ -13,7 +13,8 @@ import (
 // the sharp rim of a plate or lid. The edges are selected by where they came
 // from ("the edges created by the end cap") rather than by position.
 func Example_chamfer_cap_loop() {
-	// A 100 x 60 mm plate, extruded 20 mm.
+	// Make a plate whose top rim we will bevel: sketch a rectangle and extrude it
+	// (see Example_extrude for these steps).
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {
@@ -34,7 +35,9 @@ func Example_chamfer_cap_loop() {
 		return
 	}
 
-	// All four edges of the top face, chamfered 5 mm.
+	// Select the four edges of the top face. The end cap is the face the extrude
+	// created at its far end, so "edges created by the end cap" finds them.
+	// Beveling them 5 mm removes the sharp rim.
 	rim := decad.Edges(decad.CreatedBy(decad.CapEnd(box)))
 	beveled, err := decad.Chamfer(context.Background(), box, rim, units.Millimeters(5))
 	if err != nil {

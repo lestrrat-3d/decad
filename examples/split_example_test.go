@@ -16,7 +16,7 @@ func Example_split() {
 	w := sketch.NewWorld()
 	doc := decad.New()
 
-	// The block is 100 x 60 x 10 mm.
+	// The block is the solid we want to cut into pieces.
 	blockSketch, err := w.CreateSketch(w.XY())
 	if err != nil {
 		fmt.Printf("failed to create sketch: %s\n", err)
@@ -35,9 +35,9 @@ func Example_split() {
 		return
 	}
 
-	// The cutting sheet comes from extruding a single line (an open chain)
-	// at y = 30, so it stands upright across the middle of the block. It
-	// extends 15 mm up and 5 mm down, which carries it past both block faces.
+	// The cutter must be a sheet. Extruding a single line (an open chain) at
+	// y = 30 gives an upright wall across the middle of the block. It reaches
+	// 15 mm up and 5 mm down so it passes completely through both block faces.
 	lineSketch, err := w.CreateSketch(w.XY())
 	if err != nil {
 		fmt.Printf("failed to create sketch: %s\n", err)

@@ -13,7 +13,8 @@ import (
 // result is a sealed hollow part with a void inside, such as a lightweight
 // printed block.
 func Example_shell_closed() {
-	// A solid 100 x 60 x 20 mm block.
+	// Make the solid to hollow out: sketch a rectangle and extrude it into a
+	// block (see Example_extrude for these steps).
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

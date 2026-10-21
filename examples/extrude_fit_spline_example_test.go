@@ -14,8 +14,9 @@ import (
 // taken from a drawing. The curved side wall becomes a free-form (NURBS)
 // surface, and the body is still a measured solid.
 func Example_extrude_fit_spline() {
-	// The outline is a spline through three points, closed by a straight
-	// line back to the start.
+	// A fit spline passes through the points you give it, which is how you
+	// reproduce a curved outline taken from a drawing. Here it runs through three
+	// points, and a straight line closes the shape.
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

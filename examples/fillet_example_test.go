@@ -15,7 +15,8 @@ import (
 // chosen with a query, so the call says which edges it means (here: those
 // parallel to Z) instead of pointing at them by index.
 func Example_fillet() {
-	// A 100 x 60 mm plate, extruded 20 mm.
+	// Make a box to round: sketch a rectangle and extrude it (see
+	// Example_extrude for these steps).
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

@@ -15,7 +15,8 @@ import (
 // pattern: model the part once, then place each instance with
 // WithCopyPlacement. Transform, by contrast, moves a body and retires it.
 func Example_copy_with_placement() {
-	// The master part is a 10 x 10 x 4 mm peg at the origin.
+	// The master part is a small peg that we will copy several times. Model it
+	// once here.
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {
@@ -36,7 +37,8 @@ func Example_copy_with_placement() {
 		return
 	}
 
-	// Place three copies, 40 mm apart along X.
+	// Place three copies, 40 mm apart along X, by giving each Copy a translation.
+	// This builds a row of identical parts without modelling each one again.
 	for i := 1; i <= 3; i++ {
 		shift, err := r3.Translation(r3.NewVec(float64(40*i), 0, 0))
 		if err != nil {

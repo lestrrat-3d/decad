@@ -13,8 +13,9 @@ import (
 // sketch normal. It is the usual way to start a part: sketch the outline,
 // extrude it, then measure or modify the resulting body.
 func Example_extrude() {
-	// Sketch a 100 x 60 mm rectangle on the XY plane. Fix pins one corner
-	// so the sketch solver has a single answer.
+	// Start with a sketch, the 2D outline of the part. This draws a 100 x 60 mm
+	// rectangle on the XY plane. Fix pins one corner in place; without it the
+	// rectangle could float and Solve would not have a single answer.
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

@@ -13,8 +13,9 @@ import (
 // corner where a thick section steps down to a thin one, which concentrates
 // stress. Rounding that corner with a fillet is standard practice.
 func Example_fillet_revolved_shoulder() {
-	// Draw half of the shaft's side view above the X axis: a radius-10
-	// section from x = 0 to 10, then a radius-5 section to x = 20.
+	// A turned shaft is drawn as half of its side view above the X axis and then
+	// spun. This outline has a thick section (radius 10, x = 0 to 10) that steps
+	// down to a thin one (radius 5, x = 10 to 20).
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

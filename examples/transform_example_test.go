@@ -15,7 +15,8 @@ import (
 // body, and the original is retired: it can still be measured, but no
 // further operation accepts it. Use Copy to keep the original.
 func Example_transform() {
-	// Build a 100 x 60 x 10 mm plate to move.
+	// We need a body to move, so extrude a plate from a rectangle (see
+	// Example_extrude for these steps).
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {
@@ -36,7 +37,8 @@ func Example_transform() {
 		return
 	}
 
-	// Move the plate 200 mm along X and 25 mm up.
+	// Describe the move as a translation: 200 mm along X and 25 mm up, as if
+	// placing the plate where it belongs in an assembly.
 	motion, err := r3.Translation(r3.NewVec(200, 0, 25))
 	if err != nil {
 		fmt.Printf("failed to build motion: %s\n", err)

@@ -17,7 +17,7 @@ func Example_pattern_as_one_body() {
 	w := sketch.NewWorld()
 	doc := decad.New()
 
-	// The plate is 60 x 40 x 5 mm.
+	// The plate is the part that will receive the holes.
 	plateSketch, err := w.CreateSketch(w.XY())
 	if err != nil {
 		fmt.Printf("failed to create sketch: %s\n", err)
@@ -36,7 +36,8 @@ func Example_pattern_as_one_body() {
 		return
 	}
 
-	// The drill is one round pin, 4 mm across, as long as the plate is thick.
+	// The drill is one round pin, which the pattern below repeats. It is as long
+	// as the plate is thick, so each copy goes all the way through.
 	drillSketch, err := w.CreateSketch(w.XY())
 	if err != nil {
 		fmt.Printf("failed to create sketch: %s\n", err)
@@ -56,7 +57,7 @@ func Example_pattern_as_one_body() {
 		return
 	}
 
-	// Six pins, 10 mm apart along X, as a single tool body.
+	// Repeat the pin six times, 10 mm apart along X, as one tool body.
 	pins, err := decad.Patterned(context.Background(), drill,
 		decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(10), Count: 6})
 	if err != nil {

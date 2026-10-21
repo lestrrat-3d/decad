@@ -16,7 +16,7 @@ func Example_intersect() {
 	w := sketch.NewWorld()
 	doc := decad.New()
 
-	// Box A is 20 x 20 mm and 10 mm tall.
+	// Box A is the first body to compare.
 	aSketch, err := w.CreateSketch(w.XY())
 	if err != nil {
 		fmt.Printf("failed to create sketch: %s\n", err)
@@ -35,7 +35,8 @@ func Example_intersect() {
 		return
 	}
 
-	// Box B is shifted 10 mm in X and Y, and taller, starting 5 mm below A.
+	// Box B is the second. It overlaps A by half its width in X and Y, and it is
+	// taller, starting 5 mm below A, so the shared space is a clean box.
 	plane, err := w.CreateOffsetPlane(w.XY(), -5)
 	if err != nil {
 		fmt.Printf("failed to create plane: %s\n", err)
@@ -59,7 +60,7 @@ func Example_intersect() {
 		return
 	}
 
-	// The shared space is 10 x 10 mm across and 10 mm tall.
+	// What remains is the shared space: 10 mm in X, 10 mm in Y and 10 mm tall.
 	common, err := decad.Intersect(context.Background(), a, b)
 	if err != nil {
 		fmt.Printf("failed to intersect: %s\n", err)

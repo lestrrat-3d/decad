@@ -17,7 +17,7 @@ func Example_cut() {
 	w := sketch.NewWorld()
 	doc := decad.New()
 
-	// The target is a 20 x 20 x 8 mm plate.
+	// The target is the part we want to drill: a plate.
 	plateSketch, err := w.CreateSketch(w.XY())
 	if err != nil {
 		fmt.Printf("failed to create sketch: %s\n", err)
@@ -36,7 +36,8 @@ func Example_cut() {
 		return
 	}
 
-	// The tool is a 4 mm wide pin, longer than the plate is thick.
+	// The tool is the shape to remove: a pin, modelled as its own body. It is
+	// longer than the plate is thick, so it passes all the way through.
 	pinSketch, err := w.CreateSketch(w.XY())
 	if err != nil {
 		fmt.Printf("failed to create sketch: %s\n", err)

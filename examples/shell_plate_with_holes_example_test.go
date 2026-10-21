@@ -15,7 +15,8 @@ import (
 // separate pieces, so the body has several lumps. Use this to see what Shell
 // does to a part with internal cutouts.
 func Example_shell_plate_with_holes() {
-	// A 100 x 60 mm plate with a rectangular slot and a round bore.
+	// Sketch a plate with two cutouts, a rectangular slot and a round bore, so we
+	// can see how Shell treats holes.
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {
@@ -30,7 +31,8 @@ func Example_shell_plate_with_holes() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	// The profile we want is the plate region, the one with two holes.
+	// Sketch finds several regions here (the plate and each cutout). Choose the
+	// one that has two holes.
 	var plate *sketch.Profile
 	for _, p := range s.Profiles() {
 		if len(p.Holes) == 2 {

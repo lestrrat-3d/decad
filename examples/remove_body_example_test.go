@@ -16,7 +16,7 @@ func Example_remove_body() {
 	w := sketch.NewWorld()
 	doc := decad.New()
 
-	// The part is a 10 mm cube at the origin.
+	// The part is the thing we are building: a cube.
 	partSketch, err := w.CreateSketch(w.XY())
 	if err != nil {
 		fmt.Printf("failed to create sketch: %s\n", err)
@@ -34,8 +34,8 @@ func Example_remove_body() {
 		return
 	}
 
-	// The fixture is another 10 mm cube, shifted 5 mm in X, Y and Z, so it
-	// overlaps the part's corner.
+	// The fixture is a second cube shifted 5 mm in X, Y and Z, so it overlaps the
+	// part's corner. It stands in for a support or jig that collides with the part.
 	plane, err := w.CreateOffsetPlane(w.XY(), 5)
 	if err != nil {
 		fmt.Printf("failed to create plane: %s\n", err)

@@ -14,7 +14,7 @@ import (
 // center point, a direction and an angle. Use it when the copy should be
 // swung into position instead of slid, for example around a shaft.
 func Example_copy_with_rotation() {
-	// The master part is a 10 x 10 x 4 mm peg at the origin.
+	// The master part is a small peg to copy.
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

@@ -14,7 +14,8 @@ import (
 // part needs a simple, easy-to-machine corner. Edges are chosen with a query,
 // here the four edges parallel to Z.
 func Example_chamfer() {
-	// A 100 x 60 mm plate, extruded 20 mm.
+	// Make a box to bevel: sketch a rectangle and extrude it (see
+	// Example_extrude for these steps).
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

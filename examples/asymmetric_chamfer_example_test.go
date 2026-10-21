@@ -15,7 +15,8 @@ import (
 // one side, for example to clear a mating part. A reference face says which
 // side takes the first distance.
 func Example_asymmetric_chamfer() {
-	// A 40 x 20 mm plate, extruded 10 mm.
+	// Make a plate with a sharp vertical corner to bevel: sketch a rectangle and
+	// extrude it (see Example_extrude for these steps).
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {
