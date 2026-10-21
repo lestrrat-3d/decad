@@ -42,6 +42,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/survey2d/` | 2D disks, prism readers, walks, corner loops, Bézier carriers. See verification §6. |
 | `internal/holeplan/` | Plans `Hole`: places the axis on the face plane, gates sizes, and returns the bore, counterbore and countersink tool shapes. See hole design. |
 | `internal/ribplan/` | Plans `Rib`: the rib outline from a line, thickness and overrun, the box-disjoint test and the no-added-volume test. See rib design. |
+| `internal/embossplan/` | Plans `Emboss`: the sketch-versus-face plane test, the two tool sides and the no-removed-volume test. See emboss design. |
 | `internal/thickenaxis/` | Holds certified section pairs, checks offsets, ribbons and interval clearance, and builds the circle and axis offset sections of a prism sheet. See surface §16, §17. |
 | `internal/thickenbuild/` | Dispatches Thicken and Offset by sheet payload, computes its amounts and certified sections, and builds the solids from admitted sheets. See surface §16. |
 | `internal/revolvesurvey/` | Revolve wall, undercut and concave-radius readers. See verification §6. |

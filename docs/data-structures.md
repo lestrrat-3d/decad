@@ -118,6 +118,7 @@ configuration option.
 | `decad.BlindHole` | struct | A hole that stops at a depth below the face. | The caller |
 | `decad.HoleHead` | sealed interface | The widening at a hole's mouth. | The caller |
 | `decad.Counterbore` | struct | A flat-bottomed cylindrical recess. | The caller |
+| `decad.EmbossMode` | enum | `decad.EmbossRaised` or `decad.EmbossEngraved`. | The caller |
 | `decad.Countersink` | struct | A conical recess with an included angle. | The caller |
 
 ### Selection, patterns and placement

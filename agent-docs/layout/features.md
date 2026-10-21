@@ -20,6 +20,8 @@ The rules for rows live in `agent-docs/layout.md`.
 | `patch.go` | `PatchProfile`: records the profile and builds its face through `patchchain.Build`. See surface §5.1. |
 | `hole.go` | Public `Hole`, `HoleSpec`, depth and head variants: gates, tool sketches, chained cut and the commit; `internal/holeplan/` computes the tools. See hole design. |
 | `rib.go` | Public `Rib`, `Web` and `WithRibOverrun`: line, thickness and extent gates, rib tool extrusion, touch and volume checks. See rib design. |
+| `emboss.go` | Public `Emboss` and `EmbossMode`: gates, sketch-plane check, tool extrusion, join and volume checks. See emboss design. |
+| `planar_face.go` | Resolves a selector to one analytic planar face and its outward normal; `Hole` and `Emboss` share it. |
 | `tool_combine.go` | Shared by `Hole` and `Rib`: chains boolean steps over tool bodies, commits once, and removes the tools. |
 | `thicken.go` | Public `Thicken` option, thickness and sheet gates and the commit; `internal/thickenbuild/` dispatches the payload and builds. See surface §16. |
 | `offset.go` | `Offset`: option, distance and sheet gates and the commit; `internal/thickenbuild/` builds the second sheet at a normal distance. See surface §17. |
