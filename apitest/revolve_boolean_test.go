@@ -52,8 +52,8 @@ func TestCommonAxisRevolveSteppedBooleanOperations(t *testing.T) {
 		{name: "common axis union", want: 84 * math.Pi, run: func(ctx context.Context, a, b *decad.Body) (*decad.Body, error) {
 			return decad.Union(ctx, a, b)
 		}},
-		{name: "common axis cut", want: 36 * math.Pi, run: decad.Cut},
-		{name: "common axis intersect", want: 8 * math.Pi, run: decad.Intersect},
+		{name: "common axis cut", want: 36 * math.Pi, run: pairCut},
+		{name: "common axis intersect", want: 8 * math.Pi, run: pairIntersect},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

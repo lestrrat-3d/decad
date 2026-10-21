@@ -105,10 +105,16 @@ edges split together, including root edges. It rebuilds the shared ring and
 recomputes the cone cap and full boundary bounds after refinement. Each
 construction attempt permits at most three additional cap passes within the
 same mesh ceiling; a cap that still exceeds the budget refuses the join.
-Every sector carries the same cap, so the joined mesh grows with the sector
+A cap station of the tool's upper cone whose Q falls short of 1 by more than the
+sample's error is refused, because the cone cap would then reach the far source
+plane. When the Boolean that recorded the cone was called with
+`WithMatchingFaces`, a shortfall of at most 64 steps at 1 is taken as the
+intended match instead: the station takes the far point, charged for its
+distance from the smooth cone point like a station inside the error band. A
+larger shortfall refuses. Every sector carries the same cap, so the joined mesh grows with the sector
 count. The first attempt subdivides each cap four times; when the mesh would
-pass the triangle ceiling the builder retries with one fewer subdivision, down
-to none, without using up an attempt, and cap refinement adds cells back only
+pass the triangle ceiling, or the crossing audit's scan allowance, the builder
+retries with one fewer subdivision, down to none, without using up an attempt, and cap refinement adds cells back only
 where the bound needs them. The sector count has no fixed limit of its own.
 The builder makes at most eight construction attempts. Before the next one, a cap
 bound refusal lowers the cone cap limit, a specific cap/root adjacency contact

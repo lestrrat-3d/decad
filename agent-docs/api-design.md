@@ -1083,9 +1083,23 @@ parameter:
 
 ```go
 func Union(ctx context.Context, first *Body, others ...*Body) (*Body, error)
-func Cut(ctx context.Context, target, tool *Body) (*Body, error)
-func Intersect(ctx context.Context, a, b *Body) (*Body, error)
+func Cut(ctx context.Context, target, tool *Body, opts ...BooleanOption) (*Body, error)
+func Intersect(ctx context.Context, a, b *Body, opts ...BooleanOption) (*Body, error)
 ```
+
+`BooleanOption` is a sealed option tier for `Cut` and `Intersect`. A nil or zero
+option is `ErrDegenerate`. `WithMatchingFaces()` declares that faces of the two
+operands are meant to match where they meet: a cap drawn to touch the tool's
+cone, or two faces meant to coincide. Faces drawn in floating point seldom
+match exactly, and a design that matches on paper can miss by a few last-place
+steps. With the option, a miss of at most 64 binary64 steps at 1 is taken as
+the intended match and its effect is charged into the result's error bounds. A
+larger miss disproves the declaration and refuses as it would without the
+option. The declaration comes from the caller and decad's check can only reject
+it, so the option never admits a shape for another reason. It is read only
+where a pair's source records keep a cone limit (a point-Loft cut or
+intersected by a cone about the world X axis); elsewhere it has no effect. The
+construction is in `agent-docs/revolve-loft-sector-design.md`.
 
 `Union` requires at least two distinct live bodies from one document. A
 two-body call uses the pair evaluator. For three or more bodies, one operation

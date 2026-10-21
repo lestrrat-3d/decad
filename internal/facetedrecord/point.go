@@ -60,6 +60,11 @@ type PointConeLimit struct {
 	Origins          []provenance.Ref
 	Denoted          *surfacenormal.Revolved
 	Reversed         bool
+	// MatchingFaces records that the caller asked the Boolean that made this
+	// limit to treat a cap that meets the cone within rounding as meeting it
+	// exactly (decad.WithMatchingFaces). It only widens the cap-node test by
+	// pointcone.MatchingFaceSlack; a larger gap still refuses.
+	MatchingFaces bool
 
 	Consts *pointcone.Consts // built on first use by Constants
 }

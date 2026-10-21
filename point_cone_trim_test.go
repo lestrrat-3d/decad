@@ -71,12 +71,41 @@ func TestPointConeUpperFarPlaneNodeRequiresCapCharge(t *testing.T) {
 	sample, err := facetedrecord.PointConeFactor(far, cone)
 	require.NoError(t, err)
 	require.Less(t, sample.Q+sample.QError, 1.0)
-	_, _, err = pointcone.UpperCapNode(far, sample, false)
+	_, _, err = pointcone.UpperCapNode(far, sample, false, false)
 	require.ErrorIs(t, err, ErrUnsupported)
-	clipped, round, err := pointcone.UpperCapNode(far, sample, true)
+	clipped, round, err := pointcone.UpperCapNode(far, sample, true, false)
 	require.NoError(t, err)
 	require.Equal(t, far, clipped)
 	require.GreaterOrEqual(t, round, far.Scale(sample.Alpha).Sub(far).Len())
+}
+
+// A cap drawn to touch the cone misses it by a few last-place steps. With the
+// caller's matching-faces declaration that miss takes the far point, charged
+// for its distance from the smooth cone point; a miss beyond rounding
+// disproves the declaration and refuses.
+func TestPointConeUpperCapNodeMatchingFaces(t *testing.T) {
+	t.Parallel()
+	cone := &pointConeLimit{Apex: big.NewRat(10, 1), Slope: big.NewRat(1, 1)}
+	near := r3.Vec{X: 5, Y: 5 * (1 - 1e-14)}
+	sample, err := facetedrecord.PointConeFactor(near, cone)
+	require.NoError(t, err)
+	shortfall := 1 - (sample.Q + sample.QError)
+	require.Positive(t, shortfall)
+	require.LessOrEqual(t, shortfall, pointcone.MatchingFaceSlack)
+
+	_, _, err = pointcone.UpperCapNode(near, sample, false, false)
+	require.ErrorIs(t, err, ErrUnsupported)
+	point, round, err := pointcone.UpperCapNode(near, sample, false, true)
+	require.NoError(t, err)
+	require.Equal(t, near, point)
+	require.GreaterOrEqual(t, round, near.Scale(sample.Alpha).Sub(near).Len())
+	require.Less(t, round, 1e-12)
+
+	far := r3.Vec{X: 5, Y: 5 * (1 - 1e-9)}
+	sample, err = facetedrecord.PointConeFactor(far, cone)
+	require.NoError(t, err)
+	_, _, err = pointcone.UpperCapNode(far, sample, false, true)
+	require.ErrorIs(t, err, ErrUnsupported)
 }
 
 func TestPointConeOutsideWitnessRejectsUncertainContact(t *testing.T) {

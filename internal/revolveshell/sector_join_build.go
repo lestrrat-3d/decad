@@ -2,6 +2,7 @@ package revolveshell
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 
@@ -28,15 +29,14 @@ type sectorVolumeRefineError struct{ gain, bound float64 }
 
 type sectorCapRefineError struct{ limit float64 }
 
-// sectorAuditLimitError reports that the joined mesh exceeds the audit
-// triangle ceiling, so a coarser cap subdivision may still fit.
-type sectorAuditLimitError struct{}
+// sectorAuditLimitError reports that the joined mesh exceeds an audit ceiling,
+// its triangle count or its crossing-scan work, so a coarser cap subdivision
+// may still fit. cause is the refusal to report when none does.
+type sectorAuditLimitError struct{ cause error }
 
-func (sectorAuditLimitError) Error() string {
-	return fmt.Sprintf("%v: joined sectors exceed the audit mesh limit", decaderr.ErrUnsupported)
-}
+func (e sectorAuditLimitError) Error() string { return e.cause.Error() }
 
-func (sectorAuditLimitError) Unwrap() error { return decaderr.ErrUnsupported }
+func (e sectorAuditLimitError) Unwrap() error { return e.cause }
 
 // sectorCapRounds is the finest cap subdivision a sector starts from.
 const sectorCapRounds = 4
@@ -320,7 +320,8 @@ func buildSectorsJoinAtSag(ctx context.Context, env topo.Env,
 	capTriangleLimit := uint64(len(sources)) * uint64(2*len(caps)+2*len(edges))
 	maxTriangles, sumOK := proofbound.WallCheckedAdd(ringLimit, capTriangleLimit)
 	if !sumOK || count == 0 || uint64(count) > maxTriangles || maxTriangles > sectorJoinMaxAuditTriangles {
-		return nil, nil, sectorAuditLimitError{}
+		return nil, nil, sectorAuditLimitError{cause: fmt.Errorf(
+			"%w: joined sectors exceed the audit mesh limit", decaderr.ErrUnsupported)}
 	}
 	pairCount, pairOK := proofbound.WallChoose2(uint64(count))
 	workCeiling, workOK := proofbound.WallCheckedMul(25_000_000, uint64(len(sources)))
@@ -349,6 +350,9 @@ func buildSectorsJoinAtSag(ctx context.Context, env topo.Env,
 	if err := audit(proofbound.NewWorkBudget(ctx), mesh.Verts, mesh.Tris, patches, count, scans); err != nil {
 		if RootCapContact(mesh.Src, ring.Groups, section.RootSpan, plans, err) {
 			return nil, nil, &sectorContactRefineError{cause: err}
+		}
+		if errors.Is(err, loftmesh.ErrLoftAuditCeiling) {
+			return nil, nil, sectorAuditLimitError{cause: err}
 		}
 		return nil, nil, err
 	}

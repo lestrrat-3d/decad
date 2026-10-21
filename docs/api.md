@@ -171,6 +171,11 @@ Each of these returns a new body and retires its input.
 | `decad.Intersect` | The volume common to both bodies. |
 | `decad.Split` | One solid per arranged target cell. |
 
+`Cut` and `Intersect` take options. `decad.WithMatchingFaces()` says faces of the two bodies are meant to match
+where they meet, such as a cap drawn to touch a cone. A miss of a few last-place steps is then taken as the
+match you intended and charged into the result's error bounds; a larger miss is still refused. See
+`Example_intersect_matching_faces`.
+
 A boolean never takes a result parameter and never changes an operand. It retires its operands and returns the
 result. A geometric failure is a `*decad.BooleanError`; read its `Code` with `errors.As`. Booleans that cannot be
 proven exact may return a faceted body whose measurements are `decad.Approximate` with a proven bound.
