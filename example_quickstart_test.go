@@ -16,7 +16,7 @@ import (
 // pkg.go.dev render it right beside the package doc; the `go doc` CLI skips
 // test files, so there it is the doc.go Quickstart section that a caller reads
 // instead. The examples directory holds the fuller, feature-specific cases.
-func Example_decad_quickstart() {
+func Example_quickstart() {
 	// 1. A solved 2D profile: a 100 x 60 plate on the XY plane.
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
