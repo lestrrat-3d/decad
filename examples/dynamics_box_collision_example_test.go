@@ -7,41 +7,25 @@ import (
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/decad/dynamics"
 	"github.com/lestrrat-3d/r3"
-	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 )
 
-// A dynamic box falls onto a fixed box. The geometry query proves their
-// initial separation; Step finds the impact and computes the rebound.
-func Example_dynamics_boxCollision() {
+// The dynamics package simulates rigid bodies that fall, collide and bounce.
+// Use it to see how parts behave under motion, for example whether a dropped
+// part bounces off a surface. Here a box moving down at 100 mm/s hits a fixed
+// floor. Step runs the simulation forward and returns the impact and the
+// velocity after it.
+func Example_dynamics_box_collision() {
 	ctx := context.Background()
 	doc := decad.New()
-	box := func(x0, y0, x1, y1, z0, height float64) (*decad.Body, error) {
-		world := sketch.NewWorld()
-		plane, err := world.CreateOffsetPlane(world.XY(), z0)
-		if err != nil {
-			return nil, err
-		}
-		s, err := world.CreateSketch(plane)
-		if err != nil {
-			return nil, err
-		}
-		rect := s.CreateRectangle(x0, y0, x1, y1)
-		s.Fix(rect.A)
-		if _, err := s.Solve(ctx); err != nil {
-			return nil, err
-		}
-		return decad.Extrude(ctx, doc, s, s.Profiles()[0], decad.Distance{
-			D: units.Millimeters(height), Dir: decad.Along,
-		})
-	}
-
-	floor, err := box(-20, -20, 20, 20, -10, 10)
+	// Two bodies: a fixed floor, and a 10 mm box above it. The box starts
+	// with its bottom 10 mm above the floor's top face.
+	floor, err := extrudeBlock(doc, -20, -20, 20, 20, -10, 10)
 	if err != nil {
 		fmt.Printf("failed to build floor: %s\n", err)
 		return
 	}
-	mover, err := box(-5, -5, 5, 5, 0, 10)
+	mover, err := extrudeBlock(doc, -5, -5, 5, 5, 0, 10)
 	if err != nil {
 		fmt.Printf("failed to build moving box: %s\n", err)
 		return
@@ -51,6 +35,8 @@ func Example_dynamics_boxCollision() {
 		fmt.Printf("failed to place moving box: %s\n", err)
 		return
 	}
+	// First confirm the geometry is valid: the boxes must start apart.
+	// ContactPair asks how two bodies, each in a given pose, relate.
 	contactRequest := decad.ContactRequest{
 		PointResolution: units.Millimeters(1e-6), NormalResolution: units.Radians(1e-6),
 	}
@@ -64,6 +50,11 @@ func Example_dynamics_boxCollision() {
 		return
 	}
 
+	// Describe the world. The floor is Fixed and never moves. The box is
+	// Dynamic, so it needs a density to get a mass. Restitution 0.5 means it
+	// rebounds at half its impact speed, and Friction 0 keeps this a pure
+	// vertical bounce. The step settings below are tolerances, which are fine
+	// for most uses.
 	density := units.KilogramsPerCubicMillimeter(0.001)
 	material := dynamics.Material{Restitution: units.Scalar(0.5), Friction: units.Scalar(0)}
 	simulation, err := dynamics.NewWorld(ctx, doc, dynamics.WorldConfig{
@@ -86,6 +77,8 @@ func Example_dynamics_boxCollision() {
 		fmt.Printf("failed to create simulation: %s\n", err)
 		return
 	}
+	// The starting state: the floor is still, and the box moves down
+	// (negative Z) at 100 mm/s.
 	zeroVelocity := dynamics.QuantityVec{
 		X: units.MillimetersPerSecond(0), Y: units.MillimetersPerSecond(0), Z: units.MillimetersPerSecond(0),
 	}
@@ -102,6 +95,8 @@ func Example_dynamics_boxCollision() {
 		fmt.Printf("failed to create state: %s\n", err)
 		return
 	}
+	// Turn gravity off so the only motion is the box's initial velocity, then
+	// run for up to 0.2 s. The box crosses the 10 mm gap in 0.1 s and hits.
 	zeroGravity := dynamics.QuantityVec{
 		X: units.MillimetersPerSecondSquared(0), Y: units.MillimetersPerSecondSquared(0),
 		Z: units.MillimetersPerSecondSquared(0),

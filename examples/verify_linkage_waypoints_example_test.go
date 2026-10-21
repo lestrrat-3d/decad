@@ -7,60 +7,42 @@ import (
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
-	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 )
 
-// A drive can pass through waypoints. An arm lifts 20 mm, swings 90° over a
-// post, then lowers onto its landing place: three segments, written as each
-// joint's From, Via values and To. The check covers the whole motion in one
-// report over one fraction s, each segment taking an equal share of it, so
-// segment j of n covers s ∈ [j/n, (j+1)/n]. The landing block's top sits
-// 5 mm above the arm's resting underside, so the lowering arm meets it at
-// s = 11/12, and the first collision is the first grid point past that.
-func Example_linkageWaypoints() {
-	block := func(doc *decad.Document, x0, y0, x1, y1, z0, h float64) (*decad.Body, error) {
-		w := sketch.NewWorld()
-		plane, err := w.CreateOffsetPlane(w.XY(), z0)
-		if err != nil {
-			return nil, err
-		}
-		s, err := w.CreateSketch(plane)
-		if err != nil {
-			return nil, err
-		}
-		rect := s.CreateRectangle(x0, y0, x1, y1)
-		s.Fix(rect.A)
-		if _, err := s.Solve(context.Background()); err != nil {
-			return nil, err
-		}
-		return decad.Extrude(context.Background(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
-	}
-
+// A Drive can pass through waypoints. Give each joint a From value, any Via
+// values, and a To value, and the motion visits them in order. Use it for a
+// mechanism that does not move in one smooth sweep, such as a crane that
+// lifts, swings, and then lowers. Here an arm lifts 20 mm, swings 90 degrees
+// over a post, and lowers onto a landing block.
+func Example_verify_linkage_waypoints() {
 	doc := decad.New()
-	hub, err := block(doc, -5, -5, 5, 5, -20, 8)
+	hub, err := extrudeBlock(doc, -5, -5, 5, 5, -20, 8)
 	if err != nil {
 		fmt.Printf("failed to build the hub: %s\n", err)
 		return
 	}
-	arm, err := block(doc, 0, -5, 50, 5, 0, 10)
+	arm, err := extrudeBlock(doc, 0, -5, 50, 5, 0, 10)
 	if err != nil {
 		fmt.Printf("failed to build the arm: %s\n", err)
 		return
 	}
-	// The post stands in the swing's path, 5 mm below the lifted arm.
-	post, err := block(doc, 17, 17, 25, 25, -10, 25)
+	// The post stands in the swing's path, 5 mm below the lifted arm, so the
+	// lifted arm clears it. Without the lift it would hit the post.
+	post, err := extrudeBlock(doc, 17, 17, 25, 25, -10, 25)
 	if err != nil {
 		fmt.Printf("failed to build the post: %s\n", err)
 		return
 	}
-	landing, err := block(doc, -20, 30, 20, 40, -10, 15)
+	landing, err := extrudeBlock(doc, -20, 30, 20, 40, -10, 15)
 	if err != nil {
 		fmt.Printf("failed to build the landing block: %s\n", err)
 		return
 	}
 
 	crane := decad.NewLinkage()
+	// Build the linkage: a hub that turns about Z, carrying an arm that slides
+	// up and down along Z.
 	z := r3.NewVec(0, 0, 1)
 	swing, err := crane.Ground().Revolute(r3.Vec{}, z, []*decad.Body{hub})
 	if err != nil {
@@ -72,16 +54,22 @@ func Example_linkageWaypoints() {
 		fmt.Printf("failed to attach the arm: %s\n", err)
 		return
 	}
+	// Each joint lists its waypoints. The swing stays at 0 degrees while the
+	// arm lifts, turns to 90 degrees while the arm is up, then stays there
+	// while the arm lowers. The three segments take equal shares of the drive.
 	drive := decad.Drive{
 		{Link: swing, From: units.Degrees(0), Via: []units.Value{units.Degrees(0), units.Degrees(90)}, To: units.Degrees(90)},
 		{Link: lift, From: units.Millimeters(0), Via: []units.Value{units.Millimeters(20), units.Millimeters(20)}, To: units.Millimeters(0)},
 	}
 
+	// Check the whole motion in one report.
 	report, err := doc.VerifyLinkage(context.Background(), crane, drive, decad.WithResolution(units.Scalar(1.0/256)))
 	if err != nil {
 		fmt.Printf("failed to check the linkage: %s\n", err)
 		return
 	}
+	// The fraction s tells which segment the collision is in: segment j of 3
+	// covers s from j/3 to (j+1)/3. Here the lowering arm hits the landing block.
 	names := map[*decad.Body]string{hub: "hub", arm: "arm", post: "post", landing: "landing block"}
 	segments := []string{"lift", "swing", "lower"}
 	first := report.Collisions[0]
