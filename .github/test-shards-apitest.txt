@@ -2180,3 +2180,5 @@
 10	0.3	TestChamferAllEdgesOfBareBoxRefusals
 10	0.3	TestChamferPartOfBareBoxEdgesStaysRefused
 10	0.3	TestChamferAllEdgesOfCrossDrilledBarKeepsItsBore
+10	8	TestUnionBevelBlankAndEmbeddedRootTeeth
+10	8	TestUnionHubAndManyRadialLugs

@@ -28,6 +28,19 @@ type sectorVolumeRefineError struct{ gain, bound float64 }
 
 type sectorCapRefineError struct{ limit float64 }
 
+// sectorAuditLimitError reports that the joined mesh exceeds the audit
+// triangle ceiling, so a coarser cap subdivision may still fit.
+type sectorAuditLimitError struct{}
+
+func (sectorAuditLimitError) Error() string {
+	return fmt.Sprintf("%v: joined sectors exceed the audit mesh limit", decaderr.ErrUnsupported)
+}
+
+func (sectorAuditLimitError) Unwrap() error { return decaderr.ErrUnsupported }
+
+// sectorCapRounds is the finest cap subdivision a sector starts from.
+const sectorCapRounds = 4
+
 func (r *sectorCapRefineError) Error() string {
 	return fmt.Sprintf("%v: joined sectors need a finer cone cap", decaderr.ErrUnsupported)
 }
@@ -97,10 +110,22 @@ func buildSectorsJoinRefined(ctx context.Context, env topo.Env,
 	sources []facetedrecord.Payload) (*topo.Body, *facetedrecord.RevolvedSectionRing, error) {
 	sag := 0.01
 	capLimit := math.Inf(1)
-	for attempt := range 8 {
-		body, ring, err := buildSectorsJoinAtSag(ctx, env, cert, sources, sag, capLimit)
+	rounds := sectorCapRounds
+	attempt := -1
+	for {
+		attempt++
+		body, ring, err := buildSectorsJoinAtSag(ctx, env, cert, sources, sag, capLimit, rounds)
 		if err == nil {
 			return body, ring, nil
+		}
+		// Every sector carries the same cap, so the joined mesh grows with the
+		// sector count. A coarser start fits more sectors; the cap bound check
+		// and the cap refinement below add cells back only where they are
+		// needed. This step does not use up one of the eight attempts.
+		if _, limit := err.(sectorAuditLimitError); limit && rounds > 0 {
+			rounds--
+			attempt--
+			continue
 		}
 		if refine, ok := err.(*sectorCapRefineError); ok {
 			if attempt == 7 || !(refine.limit > 0 && refine.limit < capLimit) {
@@ -109,7 +134,8 @@ func buildSectorsJoinRefined(ctx context.Context, env topo.Env,
 			capLimit = refine.limit
 			continue
 		}
-		if _, contact := err.(*sectorContactRefineError); contact {
+		_, snap := err.(*sectorSnapError)
+		if _, contact := err.(*sectorContactRefineError); contact || snap {
 			if attempt == 7 {
 				return nil, nil, err
 			}
@@ -127,12 +153,11 @@ func buildSectorsJoinRefined(ctx context.Context, env topo.Env,
 		}
 		sag = next
 	}
-	return nil, nil, fmt.Errorf("%w: sector angular refinement ended without a volume proof", decaderr.ErrUnsupported)
 }
 
 func buildSectorsJoinAtSag(ctx context.Context, env topo.Env,
 	cert *facetedrecord.RevolveLoftSectorCertificate, sources []facetedrecord.Payload,
-	sagAllowance, capLimit float64) (*topo.Body, *facetedrecord.RevolvedSectionRing, error) {
+	sagAllowance, capLimit float64, capRounds int) (*topo.Body, *facetedrecord.RevolvedSectionRing, error) {
 	section, record, base := cert.Section, cert.Trim, cert.Base
 	regularSource, sourceSector, err := RevolveSectionAngles(section, cert.Sector, sagAllowance)
 	if err != nil {
@@ -152,7 +177,7 @@ func buildSectorsJoinAtSag(ctx context.Context, env topo.Env,
 	if err != nil {
 		return nil, nil, triangulation.WrapLoftError(err)
 	}
-	original, caps, edges, farRound, err := pointcone.SectorSubdivide(ctx, original, caps, 4)
+	original, caps, edges, farRound, err := pointcone.SectorSubdivide(ctx, original, caps, capRounds)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -295,7 +320,7 @@ func buildSectorsJoinAtSag(ctx context.Context, env topo.Env,
 	capTriangleLimit := uint64(len(sources)) * uint64(2*len(caps)+2*len(edges))
 	maxTriangles, sumOK := proofbound.WallCheckedAdd(ringLimit, capTriangleLimit)
 	if !sumOK || count == 0 || uint64(count) > maxTriangles || maxTriangles > sectorJoinMaxAuditTriangles {
-		return nil, nil, fmt.Errorf("%w: joined sectors exceed the audit mesh limit", decaderr.ErrUnsupported)
+		return nil, nil, sectorAuditLimitError{}
 	}
 	pairCount, pairOK := proofbound.WallChoose2(uint64(count))
 	workCeiling, workOK := proofbound.WallCheckedMul(25_000_000, uint64(len(sources)))

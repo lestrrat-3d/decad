@@ -160,8 +160,7 @@ func AccumulateSectorJoinBounds(state *SectorJoinBounds, plan SectorJoinPlan,
 	seamAllowance := proofbound.AbsSumUpper(input.BaseMeshBound, sectionSag,
 		input.ConeGap, plan.CrossingBound, toolGap, plan.PlacedRound)
 	if plan.Snap > seamAllowance {
-		return fmt.Errorf("%w: placed cap misses the finite root patch (sector %d snap %.9g allowance %.9g)",
-			decaderr.ErrUnsupported, i, plan.Snap, seamAllowance)
+		return &sectorSnapError{sector: i, snap: plan.Snap, allowance: seamAllowance}
 	}
 	stretch := proofbound.AbsSumUpper(1, plan.Charge.Stretch)
 	farTerm := proofbound.ProductUpper(proofbound.ProductUpper(farRound, stretch), lip)
@@ -233,3 +232,18 @@ func RootCapContact(src, ringGroups []int, rootSpan int, plans []SectorJoinPlan,
 	a, b := src[contact.I], src[contact.J]
 	return isCap(a) && isNeighbor(b) || isCap(b) && isNeighbor(a)
 }
+
+// sectorSnapError reports a placed cap whose root contact lies farther from
+// the ring stations than the seam allowance. A finer angular mesh moves the
+// stations closer, so the refinement loop retries with a smaller sag.
+type sectorSnapError struct {
+	sector          int
+	snap, allowance float64
+}
+
+func (e *sectorSnapError) Error() string {
+	return fmt.Sprintf("%v: placed cap misses the finite root patch (sector %d snap %.9g allowance %.9g)",
+		decaderr.ErrUnsupported, e.sector, e.snap, e.allowance)
+}
+
+func (e *sectorSnapError) Unwrap() error { return decaderr.ErrUnsupported }
