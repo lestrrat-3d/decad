@@ -282,7 +282,12 @@ func TestContactPairExactPlanarCancels(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, decad.ContactTouching, report.Relation)
 	polls := counting.calls.Load()
-	require.Greater(t, polls, int32(8), "the planar kernel polls inside its loops")
+	// The planar scans skip box pairs through trees, so this small pair charges
+	// the kernel too few steps to reach its context poll inside a loop; the
+	// polls left are the phase boundaries, enough for the three cancellation
+	// points below. Cancellation inside the loops is held at the planar level
+	// (internal/pair/planar).
+	require.Greater(t, polls, int32(3), "the query polls at its phase boundaries")
 
 	doc, tray, hex = setup()
 	before := doc.Bodies()
