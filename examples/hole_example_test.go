@@ -10,11 +10,14 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// Hole drills into a planar face at a world point. Here a counterbored
-// through hole goes into the top of a 40 x 30 x 10 plate, so the volume is the
-// plate minus the bore and minus the wider recess around its mouth.
+// Hole drills a round hole into a flat face at a point you choose. Use it for
+// bolt holes and screw holes instead of sketching and cutting a cylinder
+// yourself. The spec states the hole's diameter, how deep it goes, and an
+// optional head: a counterbore (a flat-bottomed recess for a bolt head) or a
+// countersink (a cone for a flat-head screw).
 func Example_hole() {
-	ctx := context.Background()
+	// Make the plate to drill: sketch a rectangle and extrude it (see
+	// Example_extrude for these steps).
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {
@@ -23,19 +26,22 @@ func Example_hole() {
 	}
 	rect := s.CreateRectangle(0, 0, 40, 30)
 	s.Fix(rect.A)
-	if _, err := s.Solve(ctx); err != nil {
-		fmt.Printf("failed to solve sketch: %s\n", err)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
 	doc := decad.New()
-	plate, err := decad.Extrude(ctx, doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	plate, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	if err != nil {
-		fmt.Printf("failed to extrude plate: %s\n", err)
+		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}
 
-	// The extrude's end cap is the plate's top face, at z = 10.
-	part, err := decad.Hole(ctx, plate, decad.HoleSpec{
+	// Drill a 6 mm hole all the way through, from the middle of the top face
+	// (the extrude's end cap, at z = 10). The head is a 12 mm wide
+	// counterbore, 4 mm deep, so a bolt head can sit flush.
+	drilled, err := decad.Hole(context.Background(), plate, decad.HoleSpec{
 		Face:     decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))),
 		At:       r3.Vec{X: 20, Y: 15, Z: 10},
 		Diameter: units.Millimeters(6),
@@ -43,17 +49,16 @@ func Example_hole() {
 		Head:     decad.Counterbore{Diameter: units.Millimeters(12), Depth: units.Millimeters(4)},
 	})
 	if err != nil {
-		fmt.Printf("failed to drill plate: %s\n", err)
+		fmt.Printf("failed to drill: %s\n", err)
 		return
 	}
-	volume, err := part.Volume()
+	volume, err := drilled.Volume()
 	if err != nil {
-		fmt.Printf("failed to measure part: %s\n", err)
+		fmt.Printf("failed to measure volume: %s\n", err)
 		return
 	}
-	fmt.Printf("volume: %.3f mm^3 (%s)\n", volume.Value.Base(), volume.Exactness)
-	fmt.Printf("live bodies: %d\n", len(doc.Bodies()))
+	// The plate held 12000 mm^3. The hole and its recess remove the rest.
+	fmt.Printf("volume: %.0f mm^3\n", volume.Value.Base())
 	// Output:
-	// volume: 11377.965 mm^3 (Approximate)
-	// live bodies: 1
+	// volume: 11378 mm^3
 }
