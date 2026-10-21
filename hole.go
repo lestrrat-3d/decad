@@ -128,18 +128,7 @@ func Hole(ctx context.Context, b *Body, spec HoleSpec) (*Body, error) {
 // holeInput resolves spec into the plain-data request holeplan reads.
 func holeInput(b *Body, spec HoleSpec) (holeplan.Input, error) {
 	var in holeplan.Input
-	faces, err := spec.Face.SelectFaces(b)
-	if err != nil {
-		return in, err
-	}
-	if len(faces) != 1 {
-		return in, fmt.Errorf(`%w: Hole needs exactly one face, the selector matched %d`, ErrDegenerate, len(faces))
-	}
-	plane, ok := faces[0].Surface().(Plane)
-	if !ok {
-		return in, fmt.Errorf(`%w: Hole needs an analytic planar face, this one is %T`, ErrUnsupported, faces[0].Surface())
-	}
-	normal, err := faces[0].NormalAt(plane.Frame.Origin())
+	plane, normal, err := resolvePlanarFace(b, spec.Face, "Hole")
 	if err != nil {
 		return in, err
 	}

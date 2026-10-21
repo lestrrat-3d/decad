@@ -1499,6 +1499,10 @@ atomic commit, and retires `b`. `agent-docs/hole-design.md` owns the placement, 
 extrudes the outline by `e`, and joins it to `b`; `Web` does the same for several lines in one commit.
 `WithRibOverrun` buries the ends of a rib in the walls it spans. `agent-docs/rib-design.md` owns the rules.
 
+**A relief is a profile on a face.** `Emboss(ctx, b, s, profiles, face, mode, height)` extrudes closed profiles of a sketch
+that lies in the plane of a planar face, outward for `EmbossRaised` and inward for `EmbossEngraved`, and joins them to
+`b` with `Union` or `Cut` in one commit. `agent-docs/emboss-design.md` owns the rules.
+
 ### 8.1 Extent — illegal states unrepresentable
 
 Fusion has three mutually-exclusive `setXxxExtent` methods with no enforcement,

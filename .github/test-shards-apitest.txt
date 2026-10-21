@@ -2165,3 +2165,11 @@
 10	0.3	TestRibOverrunBuriesTheEnds
 10	0.3	TestRibRefusals
 10	0.3	TestRibRefusesForeignLine
+10	0.3	TestEmbossRaisedOnTop
+10	0.3	TestEmbossEngravedOnTop
+10	0.3	TestEmbossRaisedOnBottom
+10	0.3	TestEmbossEngravedOnBottom
+10	0.3	TestEmbossRingKeepsItsHole
+10	0.3	TestEmbossCircleRelief
+10	0.3	TestEmbossRefusals
+10	0.3	TestEmbossRefusesTiltedSketchAndCurvedFace

@@ -166,26 +166,37 @@ func ribTool(ctx context.Context, d *Document, frame r3.Frame, corners [4][2]flo
 
 // requireRibTouches refuses a rib whose bounding box certifiably misses b's.
 func requireRibTouches(b, tool *Body) error {
-	bb, err := b.Bounds()
+	disjoint, err := boundsDisjoint(b, tool)
 	if err != nil {
 		return err
 	}
-	tb, err := tool.Bounds()
-	if err != nil {
-		return err
-	}
-	bbBound, err := bb.Bound.In(units.Millimeter)
-	if err != nil {
-		return fmt.Errorf(`%w: the body bounds are not representable: %s`, ErrNotFinite, err)
-	}
-	tbBound, err := tb.Bound.In(units.Millimeter)
-	if err != nil {
-		return fmt.Errorf(`%w: the rib bounds are not representable: %s`, ErrNotFinite, err)
-	}
-	if ribplan.Disjoint(bb.Min, bb.Max, tb.Min, tb.Max, bbBound+tbBound+ribTolerance) {
+	if disjoint {
 		return fmt.Errorf(`%w: the rib lies outside the body, so it would not attach`, ErrDegenerate)
 	}
 	return nil
+}
+
+// boundsDisjoint reports whether the bounding boxes of a and b certifiably
+// share no point. Each box is grown by its own bound, so a true answer is
+// certain and a false answer proves nothing.
+func boundsDisjoint(a, b *Body) (bool, error) {
+	ab, err := a.Bounds()
+	if err != nil {
+		return false, err
+	}
+	bb, err := b.Bounds()
+	if err != nil {
+		return false, err
+	}
+	aBound, err := ab.Bound.In(units.Millimeter)
+	if err != nil {
+		return false, fmt.Errorf(`%w: the bounds are not representable: %s`, ErrNotFinite, err)
+	}
+	bBound, err := bb.Bound.In(units.Millimeter)
+	if err != nil {
+		return false, fmt.Errorf(`%w: the bounds are not representable: %s`, ErrNotFinite, err)
+	}
+	return ribplan.Disjoint(ab.Min, ab.Max, bb.Min, bb.Max, aBound+bBound+ribTolerance), nil
 }
 
 // requireRibAddsVolume refuses a union whose volume certifiably does not
