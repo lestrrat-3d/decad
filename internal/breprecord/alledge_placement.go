@@ -43,7 +43,7 @@ func (p AllEdgeChamferPayload) PlacedGeometry() (AllEdgeChamferPayload, AxisMap,
 				fmt.Errorf(`%w: the all-edge chamfer needs a signed-axis placement`, decaderr.ErrUnsupported)
 		}
 	}
-	if axisMap.source[1] != 1 {
+	if p.Bored() && axisMap.source[1] != 1 {
 		return AllEdgeChamferPayload{}, AxisMap{},
 			fmt.Errorf(`%w: the placed all-edge chamfer bore must stay along y`, decaderr.ErrUnsupported)
 	}
@@ -69,6 +69,9 @@ func (p AllEdgeChamferPayload) PlacedGeometry() (AllEdgeChamferPayload, AxisMap,
 	center := p.Xform.Apply(r3.NewVec(p.Center[0], 0, p.Center[1]))
 	centerImage := [3]float64{center.X, center.Y, center.Z}
 	for _, axis := range []int{0, 2} {
+		if !p.Bored() {
+			break
+		}
 		sourceAxis := axisMap.source[axis]
 		original := p.Center[0]
 		if sourceAxis == 2 {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
@@ -119,6 +120,71 @@ func TryAllEdgeChamfer(ctx context.Context, env topo.Env, source *topo.Body, bp 
 		p.Center[1]-p.Radius <= p.Box[2][0]+distance ||
 		p.Center[1]+p.Radius >= p.Box[2][1]-distance {
 		return nil, true, fmt.Errorf(`%w: the bore reaches the all-edge chamfer`, decaderr.ErrUnsupported)
+	}
+	body, err := BuildAllEdgeChamfer(ctx, env, p)
+	return body, true, err
+}
+
+// TryBareBoxAllEdgeChamfer accepts the complete straight-edge set of an exact
+// axis-aligned box with no bore: a rectangular straight prism, or a six-face
+// record that reads as one. The body is the same eighteen-plane construction
+// as TryAllEdgeChamfer's, without the bore. Other bodies keep their existing
+// route and its refusal.
+func TryBareBoxAllEdgeChamfer(ctx context.Context, env topo.Env, source *topo.Body,
+	edges []*topo.Edge, distance, distanceDelta float64, asymmetric bool) (*topo.Body, bool, error) {
+	if len(edges) != 12 || asymmetric {
+		return nil, false, nil
+	}
+	switch pl := source.Payload.(type) {
+	case prismrecord.Payload:
+		if pl.SectionDelta != 0 || pl.Z0Delta != 0 || pl.Z1Delta != 0 || len(pl.Profile.Holes) != 0 ||
+			len(pl.BlendSegs) != 0 || pl.SurfaceResult {
+			return nil, false, nil
+		}
+	case Payload:
+		if len(pl.Faces) != 6 || pl.Xform != r3.Identity() || pl.SectionDelta() != 0 || pl.AxialDelta() != 0 ||
+			len(pl.LoopBands) != 0 || pl.BossShell != nil || pl.PocketShell != nil {
+			return nil, false, nil
+		}
+	default:
+		return nil, false, nil
+	}
+	if distanceDelta != 0 {
+		return nil, true, fmt.Errorf(`%w: the all-edge chamfer needs an exact millimetre setback`, decaderr.ErrUnsupported)
+	}
+	var p AllEdgeChamferPayload
+	p.Xform = r3.Identity()
+	p.D = distance
+	p.Box = [3][2]float64{{source.Bounds.Min.X, source.Bounds.Max.X},
+		{source.Bounds.Min.Y, source.Bounds.Max.Y}, {source.Bounds.Min.Z, source.Bounds.Max.Z}}
+	if source.Bounds.Bound.Base() != 0 || !p.AdmitBox() {
+		return nil, false, nil
+	}
+	selected := map[*topo.Edge]struct{}{}
+	for _, e := range edges {
+		if _, dup := selected[e]; dup || !p.OuterBoxEdge(e) {
+			return nil, false, nil
+		}
+		selected[e] = struct{}{}
+	}
+	faces := topobuild.Faces(source)
+	if len(faces) != 6 {
+		return nil, false, nil
+	}
+	var seen [3][2]bool
+	for _, f := range faces {
+		surface, ok := f.Surface.(surfacegeom.Plane)
+		if !ok || len(f.Loops) != 1 {
+			return nil, false, nil
+		}
+		axis, side, ok := p.BoxPlane(f, surface)
+		if !ok || seen[axis][side] {
+			return nil, false, nil
+		}
+		seen[axis][side] = true
+	}
+	if !p.ExactCoordinates() {
+		return nil, true, fmt.Errorf(`%w: an all-edge chamfer corner is not exactly representable`, decaderr.ErrUnsupported)
 	}
 	body, err := BuildAllEdgeChamfer(ctx, env, p)
 	return body, true, err

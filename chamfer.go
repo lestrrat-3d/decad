@@ -103,8 +103,10 @@ type ChamferOption interface{ chamferOption() }
 // agent-docs/modify-reach-design.md §8.3's cap-loop chamfer. It bevels each loop
 // with a band of analytic patches, and the result is a cap-blend body whose
 // volume, area, bounds, undercut and minimum-radius readings all answer.
-// Other partial cap selections and mixed cap/lateral selections are SX4
-// (ErrUnsupported). A setback across the
+// All twelve straight edges of an exact axis-aligned box take
+// agent-docs/modify-general-design.md §4.3b's simultaneous chamfer, with or
+// without a cross bore. Other partial cap selections and mixed cap/lateral
+// selections are SX4 (ErrUnsupported). A setback across the
 // cap that empties the cap contour is SX6 (ErrDegenerate), and bands whose
 // setbacks down the side reach the far end of the sweep are SX7
 // (ErrUnsupported). A chamfer whose setback is so small beside the geometry it

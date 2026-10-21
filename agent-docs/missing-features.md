@@ -19,7 +19,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 
 | Gap | Section below |
 |---|---|
-| Fillet, chamfer and shell take a boolean result only where it reads as a prism, (shell) as a prism cut by through tools with its caps or a run of straight walls removed, or (fillet, chamfer) at straight edges along an axis, or (chamfer) at complete loops, one or two adjacent rising inner edges, two adjacent outer edges, or every straight outer edge of the admitted cross-drilled box | Modify operations |
+| Fillet, chamfer and shell take a boolean result only where it reads as a prism, (shell) as a prism cut by through tools with its caps or a run of straight walls removed, or (fillet, chamfer) at straight edges along an axis, or (chamfer) at complete loops, one or two adjacent rising inner edges, two adjacent outer edges, or every straight outer edge of an admitted axis-aligned box, bored or bare | Modify operations |
 | No import of any file format | Data exchange |
 | Booleans outside the admitted analytic classes fall to a faceted mesh result, and may refuse touching contact | Booleans |
 
@@ -68,8 +68,8 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Shell of a revolve keeping an angular cap, with a holed meridian or one meeting the axis twice, or whose outward wall reaches the axis | `ErrUnsupported` (SX8) (`internal/revolveshell/shell.go`) | `agent-docs/modify-reach-design.md` §9.3 |
 | Fillet/chamfer of a revolve cap edge outside one bounded 90° rectangular radial-rim blend, or an edge on the axis | `ErrUnsupported` (SX5) (`internal/brepmodify/revolve_blend.go`) | `agent-docs/modify-reach-design.md` §7 |
 | Fillet or chamfer of a cap edge outside the convex prism cutter or exact P8 front top edge | `ErrUnsupported` (SB7); admitted cases build as faceted results | `agent-docs/modify-general-design.md` §4.3c |
-| Chamfer of a prism's partial cap loop or a brep/stacked cap chain outside one or two adjacent straight rising inner edges or two adjacent straight descending outer edges, or cap and lateral edges together outside the admitted cross-drilled box's all-edge case | `ErrUnsupported` (SX4, SL1) | `agent-docs/modify-reach-design.md` Table SX, `agent-docs/modify-general-design.md` §4.3a–§4.3b |
-| Placement of the dedicated all-edge chamfer result under an oblique transform, one moving its bore off y, or one rounding a required corner | `ErrUnsupported` (`breprecord.AllEdgeChamferPayload.Placed`) | `agent-docs/modify-general-design.md` §4.3b |
+| Chamfer of a prism's partial cap loop or a brep/stacked cap chain outside one or two adjacent straight rising inner edges or two adjacent straight descending outer edges, or cap and lateral edges together outside the all-edge case of an admitted axis-aligned box, bored or bare | `ErrUnsupported` (SX4, SL1) | `agent-docs/modify-reach-design.md` Table SX, `agent-docs/modify-general-design.md` §4.3a–§4.3b |
+| Placement of the dedicated all-edge chamfer result under an oblique transform, one moving a bore off y, or one rounding a required corner | `ErrUnsupported` (`breprecord.AllEdgeChamferPayload.Placed`) | `agent-docs/modify-general-design.md` §4.3b |
 | Cap-loop chamfer at a corner where a circular wall meets a neighbour tangentially but runs back against it (a tangent cusp), or turns past the G1 tolerance too slightly to enclose | `ErrUnsupported` (SX14) (`internal/capblend/gate.go`) | `agent-docs/modify-reach-design.md` Table SX |
 | Asymmetric brep or stacked chamfer selection outside routes E/L | `ErrUnsupported` (SX16); E takes straight edges, L takes full planar loops | `agent-docs/modify-reach-design.md` §6, `agent-docs/modify-general-design.md` §4 |
 | Tangent chain that branches or whose G1 continuity the oracle cannot decide | `ErrUnsupported` (SX2) (`brep_modify_partial.go`, `internal/tangentchain/geometry.go`) | `agent-docs/modify-reach-design.md` §5 |
