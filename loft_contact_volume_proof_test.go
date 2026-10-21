@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/loftdirect"
+
 	"github.com/lestrrat-3d/decad/internal/loftcontact"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -23,7 +25,7 @@ func loftVolumeRealCertificates(t *testing.T, first, second *Body) (
 ) {
 	t.Helper()
 	operation := proofbound.NewWorkBudget(t.Context())
-	boundary, admitted, err := certifyLoftOutputBoundary(t.Context(), first, second, operation)
+	boundary, admitted, err := loftdirect.CertifyLoftOutputBoundary(t.Context(), bodyNode(first), bodyNode(second), operation)
 	require.NoError(t, err)
 	require.True(t, admitted)
 	if pp, ok := first.n.Payload.(prismPayload); ok {
@@ -117,7 +119,7 @@ func TestLoftVolumeSourceRefusesNonbinaryJunction(t *testing.T) {
 		first, second *Body
 	}{{loftOperandPrismFirst, prism, loft}, {loftOperandLoftFirst, loft, prism}} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, admitted, err := certifyLoftSourcePartition(t.Context(), tc.first, tc.second,
+			_, admitted, err := loftdirect.CertifyLoftSourcePartition(t.Context(), bodyNode(tc.first), bodyNode(tc.second),
 				proofbound.NewWorkBudget(t.Context()), false)
 			require.NoError(t, err)
 			require.False(t, admitted)
@@ -154,8 +156,8 @@ func TestLoftOutputBoundaryRefusesTinyTranslatedSeam(t *testing.T) {
 		first, second *Body
 	}{{loftOperandPrismFirst, prism, loft}, {loftOperandLoftFirst, loft, prism}} {
 		t.Run(tc.name, func(t *testing.T) {
-			source, admitted, sourceErr := certifyLoftSourcePartition(t.Context(),
-				tc.first, tc.second, proofbound.NewWorkBudget(t.Context()), false)
+			source, admitted, sourceErr := loftdirect.CertifyLoftSourcePartition(t.Context(),
+				bodyNode(tc.first), bodyNode(tc.second), proofbound.NewWorkBudget(t.Context()), false)
 			require.NoError(t, sourceErr)
 			require.True(t, admitted)
 			require.Positive(t, source.SourceVisits)
@@ -164,8 +166,8 @@ func TestLoftOutputBoundaryRefusesTinyTranslatedSeam(t *testing.T) {
 				require.Positive(t, len(cap.Raw))
 			}
 
-			boundary, accepted, boundaryErr := certifyLoftOutputBoundary(t.Context(),
-				tc.first, tc.second, proofbound.NewWorkBudget(t.Context()))
+			boundary, accepted, boundaryErr := loftdirect.CertifyLoftOutputBoundary(t.Context(),
+				bodyNode(tc.first), bodyNode(tc.second), proofbound.NewWorkBudget(t.Context()))
 			require.ErrorIs(t, boundaryErr, ErrUnsupported)
 			require.ErrorContains(t, boundaryErr, "private loft crossing vertex exceeds the exact-bit gate")
 			require.False(t, accepted)
@@ -233,8 +235,8 @@ func TestLoftVolumeSourceRefusesRealTriangleFractionalSeam(t *testing.T) {
 				},
 				ErrFn: parent.Err,
 			}
-			source, admitted, sourceErr := certifyLoftSourcePartition(
-				t.Context(), tc.first, tc.second, operation, false)
+			source, admitted, sourceErr := loftdirect.CertifyLoftSourcePartition(
+				t.Context(), bodyNode(tc.first), bodyNode(tc.second), operation, false)
 			require.ErrorIs(t, sourceErr, proofbound.ErrWallWorkBudget)
 			require.False(t, admitted)
 			// The source wall accepts 4,096 steps before refusing this attempt.
@@ -247,8 +249,8 @@ func TestLoftVolumeSourceRefusesRealTriangleFractionalSeam(t *testing.T) {
 
 			canceled, cancel := context.WithCancel(t.Context())
 			cancel()
-			partial, accepted, cancelErr := certifyLoftSourcePartition(canceled,
-				tc.first, tc.second, proofbound.NewWorkBudget(canceled), false)
+			partial, accepted, cancelErr := loftdirect.CertifyLoftSourcePartition(canceled,
+				bodyNode(tc.first), bodyNode(tc.second), proofbound.NewWorkBudget(canceled), false)
 			require.ErrorIs(t, cancelErr, context.Canceled)
 			require.False(t, accepted)
 			require.Zero(t, partial.SourceVisits)
@@ -385,7 +387,7 @@ func TestLoftVolumeComposeKeepsBoundaryOperationBudget(t *testing.T) {
 			return nil
 		},
 	}
-	boundary, admitted, err := certifyLoftOutputBoundary(t.Context(), prism, loft, operation)
+	boundary, admitted, err := loftdirect.CertifyLoftOutputBoundary(t.Context(), bodyNode(prism), bodyNode(loft), operation)
 	require.NoError(t, err)
 	require.True(t, admitted)
 	require.Positive(t, boundary.WorkVisits)
@@ -486,10 +488,10 @@ func TestLoftVolumeSourceEqualityRealAndRefusals(t *testing.T) {
 				}
 				t.Run(name, func(t *testing.T) {
 					operation := proofbound.NewWorkBudget(t.Context())
-					source, admitted, err := certifyLoftSourcePartition(t.Context(), pair[0], pair[1], operation, false)
+					source, admitted, err := loftdirect.CertifyLoftSourcePartition(t.Context(), bodyNode(pair[0]), bodyNode(pair[1]), operation, false)
 					require.NoError(t, err)
 					require.True(t, admitted)
-					proof, admitted, err := certifyLoftOutputBoundary(t.Context(), pair[0], pair[1], operation)
+					proof, admitted, err := loftdirect.CertifyLoftOutputBoundary(t.Context(), bodyNode(pair[0]), bodyNode(pair[1]), operation)
 					require.NoError(t, err)
 					require.True(t, admitted)
 					const outputWorkLimit uint64 = 65_536
@@ -661,7 +663,7 @@ func loftVolumeSourceAdversarialCases(t *testing.T, pp prismPayload, lp loftPayl
 func TestLoftBoundedProfilesRealRightXPrismFirst(t *testing.T) {
 	prism, loft := loftBounded520Operands(t)
 	operation := proofbound.NewWorkBudget(t.Context())
-	boundary, admitted, err := certifyLoftOutputBoundary(t.Context(), prism, loft, operation)
+	boundary, admitted, err := loftdirect.CertifyLoftOutputBoundary(t.Context(), bodyNode(prism), bodyNode(loft), operation)
 	require.NoError(t, err)
 	require.True(t, admitted)
 	checkLoftBoundedCapCertificates(t, boundary.Source)
@@ -678,7 +680,7 @@ func TestLoftBoundedProfilesRealRightXPrismFirst(t *testing.T) {
 func TestLoftBoundedProfilesRealRightXLoftFirst(t *testing.T) {
 	prism, loft := loftBounded520Operands(t)
 	operation := proofbound.NewWorkBudget(t.Context())
-	boundary, admitted, err := certifyLoftOutputBoundary(t.Context(), loft, prism, operation)
+	boundary, admitted, err := loftdirect.CertifyLoftOutputBoundary(t.Context(), bodyNode(loft), bodyNode(prism), operation)
 	require.NoError(t, err)
 	require.True(t, admitted)
 	checkLoftBoundedCapCertificates(t, boundary.Source)
@@ -786,8 +788,8 @@ func TestLoftContactTwoLineCapsRealTrapezoid524(t *testing.T) {
 	loft, err := Loft(t.Context(), doc, sections[0], profiles[0], sections[1], profiles[1])
 	require.NoError(t, err)
 	operation := proofbound.NewWorkBudget(t.Context())
-	boundary, admitted, err := certifyLoftOutputBoundary(
-		t.Context(), prism, loft, operation)
+	boundary, admitted, err := loftdirect.CertifyLoftOutputBoundary(
+		t.Context(), bodyNode(prism), bodyNode(loft), operation)
 	require.NoError(t, err)
 	require.True(t, admitted)
 	require.Greater(t, len(boundary.Shell.Vertices), 0)
@@ -916,8 +918,8 @@ func TestLoftContactTwoLineCapsNarrowTranslated524(t *testing.T) {
 	}{{loftOperandPrismFirst, prism, loft}, {loftOperandLoftFirst, loft, prism}} {
 		t.Run(tc.name, func(t *testing.T) {
 			operation := proofbound.NewWorkBudget(t.Context())
-			boundary, admitted, boundaryErr := certifyLoftOutputBoundary(
-				t.Context(), tc.first, tc.second, operation)
+			boundary, admitted, boundaryErr := loftdirect.CertifyLoftOutputBoundary(
+				t.Context(), bodyNode(tc.first), bodyNode(tc.second), operation)
 			require.NoError(t, boundaryErr, "real boundary")
 			require.True(t, admitted, "real boundary")
 			require.Less(t, boundary.Source.SourceVisits, uint64(4096))
@@ -1009,8 +1011,8 @@ func TestLoftVolumeComposeRealDisplacedNonjunction(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			operation := proofbound.NewWorkBudget(t.Context())
-			boundary, admitted, err := certifyLoftOutputBoundary(
-				t.Context(), tc.first, tc.second, operation)
+			boundary, admitted, err := loftdirect.CertifyLoftOutputBoundary(
+				t.Context(), bodyNode(tc.first), bodyNode(tc.second), operation)
 			require.NoError(t, err, "boundary")
 			require.True(t, admitted, "boundary")
 			proof, admitted, err := loftcontact.VolumeCompose(t.Context(), operation, pp, lp, boundary)
@@ -1043,7 +1045,7 @@ func TestLoftVolumeComposeRealDisplacedNonjunction(t *testing.T) {
 
 	t.Run("charged refusal", func(t *testing.T) {
 		operation := proofbound.NewWorkBudget(t.Context())
-		boundary, admitted, err := certifyLoftOutputBoundary(t.Context(), prism, loft, operation)
+		boundary, admitted, err := loftdirect.CertifyLoftOutputBoundary(t.Context(), bodyNode(prism), bodyNode(loft), operation)
 		require.NoError(t, err)
 		require.True(t, admitted)
 		limited := proofbound.NewWallWorkBudgetWithOperation(16, operation)
@@ -1071,7 +1073,7 @@ func TestLoftVolumeComposeRealDisplacedNonjunction(t *testing.T) {
 			},
 			ErrFn: parent.Err,
 		}
-		boundary, admitted, err := certifyLoftOutputBoundary(ctx, prism, loft, operation)
+		boundary, admitted, err := loftdirect.CertifyLoftOutputBoundary(ctx, bodyNode(prism), bodyNode(loft), operation)
 		require.NoError(t, err)
 		require.True(t, admitted)
 		composing = true

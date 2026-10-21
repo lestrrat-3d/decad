@@ -10,10 +10,6 @@ The rules for rows live in `docs/layout.md`.
 | `boolean.go` | Public `Union`/`Cut`/`Intersect`, `BooleanError` mapping and scale-source marking; hands the route order to `internal/booleandispatch/` with root-only hooks. See evaluator §9. |
 | `boolean_many.go` | Validates and commits a multi-body Union, dispatching the certified pattern, one-scene prism and straight-source Loft routes and transient prism pair chains. See API §8 and prism-boolean §4.6. |
 | `spiral_combine.go` | Builds a multi-tool spiral-bevel join and its cap proxy, and admits the first curved join by requiring every copy to carry an exact X-axis rotation (`WithCopyRotation`). `internal/spiralsector` binds copy roles and validates each copy. See faceted-vertex-bounds §3.7. |
-| `loft_contact_source_spans.go` | Reads authenticated line, circle, arc and fit-spline cap spans, ordered Sketch cap cells and Loft wall-cell source roles for the private curved-contact lane; it publishes no output proof. |
-| `loft_contact_quarter.go` | Relates certified quarter-arc cap crossings to original Loft wall sources, pairs witnesses with held seams, and checks a paired wall's source order, under private source and output budgets. |
-| `loft_contact_direct_shell.go` | Builds a bounded public Union shell from the certified Loft/prism output boundary and its `internal/loftcontact` volume proof. See its proof comments. |
-| `loft_contact_output_proof.go` | Reads the payloads of two live Loft/prism bodies in either order and runs the source partition and output shell in `internal/loftcontact`, which certifies the partition and both Sketch caps, then builds, tiles and audits the transient held shell. |
 | `surface_trim.go` | Public `Trim`, `Extend` and `Split` entry checks and commits; `internal/surfacetrim/` builds them. See surface-intersection §2–§3. |
 | `point_plane_scale.go` | ScaledAt: resolves the similarity source by payload kind and commits the image; facetedrecord.ScaleImage admits and scales it. See loft-point design and evaluator §8. |
 | `prism_scale.go` | Admits prism and full-Revolve certified similarity sources and transfers their face roles. See evaluator §8. |

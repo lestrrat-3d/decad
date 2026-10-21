@@ -1,10 +1,16 @@
-package decad
+package loftdirect
 
 import (
 	"context"
 	"errors"
 	"fmt"
 	"math/big"
+
+	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/loftcontact"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
@@ -23,46 +29,46 @@ import (
 // entity, whose full walk was built from span.curve. They do not name a
 // selected output edge or an occupied source face at this axial level.
 type loftCapSourceEdge struct {
-	span           loftSourceCapSpan
-	tStart, tEnd   float64
-	reversed       bool
-	partial        bool
+	Span           loftSourceCapSpan
+	TStart, TEnd   float64
+	Reversed       bool
+	Partial        bool
 	walkWithSource bool
 }
 
 type loftCapSourceCell struct {
-	prism, loft bool
-	edges       []loftCapSourceEdge
+	Prism, Loft bool
+	Edges       []loftCapSourceEdge
 }
 
 // loftCapSourceOrder is a transient reading of both exact Sketch cap scenes.
 // It does not certify output patch ownership, boundary coverage, or volume.
 type loftCapSourceOrder struct {
-	source  loftSourceSpanCaps
-	caps    [2][]loftCapSourceCell
-	quarter [2][]loftQuarterSourceEvent
-	visits  uint64
+	source  LoftSourceSpanCaps
+	Caps    [2][]loftCapSourceCell
+	Quarter [2][]loftQuarterSourceEvent
+	Visits  uint64
 }
 
-// certifyLoftCapSourceOrder reads each cap scene under the consumer's source
+// CertifyLoftCapSourceOrder reads each cap scene under the consumer's source
 // wall budget. Sketch supplies cut ranges and walk order; every resulting
 // fragment must authenticate to one original LineSeg or ArcSeg. Coincident
 // source spans await a separate two-owner certificate and safely decline.
 // The 4096-segment scene preflight bounds Sketch publication; tag scans and
 // the later profile-record walk are separately charged to the source wall.
-func certifyLoftCapSourceOrder(ctx context.Context, budget *proofbound.WorkBudget,
-	source loftSourceSpanCaps, quarter ...*loftQuarterWork) (loftCapSourceOrder, bool, error) {
+func CertifyLoftCapSourceOrder(ctx context.Context, budget *proofbound.WorkBudget,
+	source LoftSourceSpanCaps, quarter ...*LoftQuarterWork) (loftCapSourceOrder, bool, error) {
 	var no loftCapSourceOrder
 	if err := ctx.Err(); err != nil {
 		return no, false, err
 	}
-	if budget == nil || source.prism == nil || source.loft == nil ||
+	if budget == nil || source.Prism == nil || source.Loft == nil ||
 		len(quarter) > 1 || len(quarter) == 1 &&
-		(quarter[0] == nil || quarter[0].budget != budget) {
+		(quarter[0] == nil || quarter[0].Budget != budget) {
 		return no, false, nil
 	}
-	pp, prismOK := source.prism.n.Payload.(prismPayload)
-	lp, loftOK := source.loft.n.Payload.(loftPayload)
+	pp, prismOK := source.Prism.Payload.(prismrecord.Payload)
+	lp, loftOK := source.Loft.Payload.(loftrecord.Payload)
 	if !prismOK || !loftOK || pp.SectionDelta != 0 {
 		return no, false, nil
 	}
@@ -73,12 +79,12 @@ func certifyLoftCapSourceOrder(ctx context.Context, budget *proofbound.WorkBudge
 		if cap == 1 {
 			loftLoop = lp.Profile1.Outer
 		}
-		if len(source.prismCaps[cap]) != len(pp.Profile.Outer.Segments) ||
-			len(source.loftCaps[cap]) != len(loftLoop.Segments) {
+		if len(source.PrismCaps[cap]) != len(pp.Profile.Outer.Segments) ||
+			len(source.LoftCaps[cap]) != len(loftLoop.Segments) {
 			return no, false, nil
 		}
 		_, withinCap, err := prismcells.RegionsWithinWorkCap(budget,
-			pp.Profile, profileRecord{Outer: loftLoop})
+			pp.Profile, momentinput.Profile{Outer: loftLoop})
 		if err != nil || !withinCap {
 			return no, false, err
 		}
@@ -90,13 +96,13 @@ func certifyLoftCapSourceOrder(ctx context.Context, budget *proofbound.WorkBudge
 			return no, false, err
 		}
 		// TaggedSegments scans the tags and both source-index arrays.
-		_, err = budget.StepN(uint64(len(tags) + len(source.prismCaps[cap]) +
-			len(source.loftCaps[cap])))
+		_, err = budget.StepN(uint64(len(tags) + len(source.PrismCaps[cap]) +
+			len(source.LoftCaps[cap])))
 		if err != nil {
 			return no, false, err
 		}
-		if !prismcells.TaggedSegments(tags, len(source.prismCaps[cap]),
-			len(source.loftCaps[cap])) {
+		if !prismcells.TaggedSegments(tags, len(source.PrismCaps[cap]),
+			len(source.LoftCaps[cap])) {
 			return no, false, nil
 		}
 		var cells []*sketch.Profile
@@ -110,7 +116,7 @@ func certifyLoftCapSourceOrder(ctx context.Context, budget *proofbound.WorkBudge
 			if readErr != nil {
 				return no, false, readErr
 			}
-			quarter[0].cap = cap
+			quarter[0].Cap = cap
 			quarter[0].tags = tags
 			witnesses, ok, certErr := scene.CertifyQuarterArcJunctions(
 				ctx, raw, quarter[0])
@@ -122,7 +128,7 @@ func certifyLoftCapSourceOrder(ctx context.Context, budget *proofbound.WorkBudge
 			if splitErr != nil || !resolved {
 				return no, false, splitErr
 			}
-			result.quarter[cap], ok, certErr = mapLoftQuarterWitnesses(
+			result.Quarter[cap], ok, certErr = mapLoftQuarterWitnesses(
 				ctx, budget, raw, split, lineage, tags, source, cap, witnesses)
 			if certErr != nil || !ok {
 				return no, false, certErr
@@ -143,13 +149,13 @@ func certifyLoftCapSourceOrder(ctx context.Context, budget *proofbound.WorkBudge
 		if len(coincident.Spans) != 0 {
 			return no, false, nil
 		}
-		result.caps[cap] = make([]loftCapSourceCell, len(cells))
+		result.Caps[cap] = make([]loftCapSourceCell, len(cells))
 		for i, cell := range cells {
 			if err := budget.Step(); err != nil {
 				return no, false, err
 			}
-			owned := loftCapSourceCell{prism: matterPrism[i], loft: matterLoft[i],
-				edges: make([]loftCapSourceEdge, len(cell.Outer))}
+			owned := loftCapSourceCell{Prism: matterPrism[i], Loft: matterLoft[i],
+				Edges: make([]loftCapSourceEdge, len(cell.Outer))}
 			for j, edge := range cell.Outer {
 				if err := budget.Step(); err != nil {
 					return no, false, err
@@ -160,20 +166,20 @@ func certifyLoftCapSourceOrder(ctx context.Context, budget *proofbound.WorkBudge
 					(edge.Partial && !edge.TExact) {
 					return no, false, nil
 				}
-				spans := source.prismCaps[cap]
+				spans := source.PrismCaps[cap]
 				if origin.IsB {
-					spans = source.loftCaps[cap]
+					spans = source.LoftCaps[cap]
 				}
 				if origin.Segment < 0 || origin.Segment >= len(spans) {
 					return no, false, nil
 				}
-				owned.edges[j] = loftCapSourceEdge{
-					span: spans[origin.Segment], tStart: edge.TStart,
-					tEnd: edge.TEnd, reversed: edge.Reversed,
-					partial:        edge.Partial,
+				owned.Edges[j] = loftCapSourceEdge{
+					Span: spans[origin.Segment], TStart: edge.TStart,
+					TEnd: edge.TEnd, Reversed: edge.Reversed,
+					Partial:        edge.Partial,
 					walkWithSource: edge.Reversed == origin.AuthoredReversed,
 				}
-				result.visits++
+				result.Visits++
 			}
 			// RecordProfileLoops records and joins each edge, then checks closure.
 			_, err := budget.StepN(uint64(len(cell.Outer))*2 + 1)
@@ -181,26 +187,26 @@ func certifyLoftCapSourceOrder(ctx context.Context, budget *proofbound.WorkBudge
 				return no, false, err
 			}
 			if _, err := prismcells.RecordArrangedProfileContext(ctx, cell); err != nil {
-				if errors.Is(err, ErrUnrecordableProfile) {
+				if errors.Is(err, decaderr.ErrUnrecordableProfile) {
 					return no, false, nil
 				}
 				return no, false, err
 			}
-			shared[cap] = shared[cap] || owned.prism && owned.loft
-			result.caps[cap][i] = owned
-			result.visits++
+			shared[cap] = shared[cap] || owned.Prism && owned.Loft
+			result.Caps[cap][i] = owned
+			result.Visits++
 		}
 		if !shared[cap] {
 			return no, false, nil
 		}
 		if len(quarter) == 1 {
 			pairsOK, pairErr := quarterSourcePairs(
-				budget, quarter[0], source, cap, result.quarter[cap])
+				budget, quarter[0], source, cap, result.Quarter[cap])
 			if pairErr != nil || !pairsOK {
 				return no, false, pairErr
 			}
 			intervalsOK, intervalErr := quarterSourceIntervals(
-				budget, source, cap, result.caps[cap])
+				budget, source, cap, result.Caps[cap])
 			if intervalErr != nil || !intervalsOK {
 				return no, false, intervalErr
 			}
@@ -216,48 +222,48 @@ func certifyLoftCapSourceOrder(ctx context.Context, budget *proofbound.WorkBudge
 // wallFaces names the original Loft wall cells paired to it. Neither this
 // record nor its parent claims a selected Boolean output patch.
 type loftSourceCapSpan struct {
-	body      *Body
-	capFace   provenance.Ref
-	segment   int
-	curve     sectionrecord.CurveSegment
-	tStart    float64
-	tEnd      float64
-	reversed  bool
-	wallFaces []provenance.Ref
+	Body      *topo.Body
+	CapFace   provenance.Ref
+	Segment   int
+	Curve     sectionrecord.CurveSegment
+	TStart    float64
+	TEnd      float64
+	Reversed  bool
+	WallFaces []provenance.Ref
 }
 
-// loftSourceSpanCaps is the source-only stage before cap intersection,
+// LoftSourceSpanCaps is the source-only stage before cap intersection,
 // ownership, two-way boundary coverage, and occupied-volume proofs. Consumers
 // must refuse a curved Boolean until those later stages certify output patches.
-type loftSourceSpanCaps struct {
-	prism, loft *Body
-	levels      [3]*big.Rat
-	prismCaps   [2][]loftSourceCapSpan
-	loftCaps    [2][]loftSourceCapSpan
-	visits      uint64
+type LoftSourceSpanCaps struct {
+	Prism, Loft *topo.Body
+	Levels      [3]*big.Rat
+	PrismCaps   [2][]loftSourceCapSpan
+	LoftCaps    [2][]loftSourceCapSpan
+	Visits      uint64
 }
 
-// certifyLoftSourceSpanCaps reads original, unplaced producer records. budget
+// CertifyLoftSourceSpanCaps reads original, unplaced producer records. budget
 // must be the same 4096-step source wall used by the private consumer.
-func certifyLoftSourceSpanCaps(ctx context.Context, budget *proofbound.WorkBudget,
-	prism, loft *Body) (loftSourceSpanCaps, bool, error) {
-	var no loftSourceSpanCaps
+func CertifyLoftSourceSpanCaps(ctx context.Context, budget *proofbound.WorkBudget,
+	prism, loft *topo.Body) (LoftSourceSpanCaps, bool, error) {
+	var no LoftSourceSpanCaps
 	if err := ctx.Err(); err != nil {
 		return no, false, err
 	}
 	if budget == nil || prism == nil || loft == nil || prism == loft ||
-		prism.n.Doc == nil || loft.n.Doc == nil ||
-		prism.n.Owner != prism || loft.n.Owner != loft ||
-		prism.n.Origin.Role != provenance.RoleBody ||
-		loft.n.Origin.Role != provenance.RoleBody ||
-		(prism.n.Doc == loft.n.Doc &&
-			prism.n.Origin.Producer == loft.n.Origin.Producer) {
+		prism.Doc == nil || loft.Doc == nil ||
+		prism.Owner == nil || loft.Owner == nil ||
+		prism.Origin.Role != provenance.RoleBody ||
+		loft.Origin.Role != provenance.RoleBody ||
+		(prism.Doc == loft.Doc &&
+			prism.Origin.Producer == loft.Origin.Producer) {
 		return no, false, nil
 	}
-	pp, prismOK := prism.n.Payload.(prismPayload)
-	lp, loftOK := loft.n.Payload.(loftPayload)
+	pp, prismOK := prism.Payload.(prismrecord.Payload)
+	lp, loftOK := loft.Payload.(loftrecord.Payload)
 	if !prismOK || !loftOK || !lp.AuthenticatedReconstruction ||
-		lp.SourceIdentity == nil || lp.SourceIdentity.Origin != loft.n.Origin.Producer ||
+		lp.SourceIdentity == nil || lp.SourceIdentity.Origin != loft.Origin.Producer ||
 		lp.SurfaceResult || lp.ThroughBoreCut || lp.AnalyticBore ||
 		lp.ConstructionDelta != 0 || len(lp.BlendSegs) != 0 ||
 		len(lp.Profile0.Holes) != 0 || len(lp.Profile1.Holes) != 0 ||
@@ -304,17 +310,17 @@ func certifyLoftSourceSpanCaps(ctx context.Context, budget *proofbound.WorkBudge
 	if err != nil || !fitOK {
 		return no, false, err
 	}
-	result := loftSourceSpanCaps{prism: prism, loft: loft,
-		levels: [3]*big.Rat{big.NewRat(0, 1), new(big.Rat).Set(axis.Shift), prismTop},
-		visits: fitVisits}
+	result := LoftSourceSpanCaps{Prism: prism, Loft: loft,
+		Levels: [3]*big.Rat{big.NewRat(0, 1), new(big.Rat).Set(axis.Shift), prismTop},
+		Visits: fitVisits}
 	for cap := range 2 {
 		prismRole := provenance.RoleCapStart
 		loftRole := provenance.RoleCapStart
 		if cap == 1 {
 			prismRole, loftRole = provenance.RoleCapEnd, provenance.RoleCapEnd
 		}
-		result.prismCaps[cap] = make([]loftSourceCapSpan, len(prismSegments))
-		result.loftCaps[cap] = make([]loftSourceCapSpan, len(lower))
+		result.PrismCaps[cap] = make([]loftSourceCapSpan, len(prismSegments))
+		result.LoftCaps[cap] = make([]loftSourceCapSpan, len(lower))
 		loftSegments := lower
 		if cap == 1 {
 			loftSegments = upper
@@ -323,12 +329,12 @@ func certifyLoftSourceSpanCaps(ctx context.Context, budget *proofbound.WorkBudge
 			if err := budget.Step(); err != nil {
 				return no, false, err
 			}
-			span, ok := loftSourceCapSpanOf(prism, prismRole, i, curve)
+			span, ok := LoftSourceCapSpanOf(prism, prismRole, i, curve)
 			if !ok {
 				return no, false, nil
 			}
-			result.prismCaps[cap][i] = span
-			result.visits++
+			result.PrismCaps[cap][i] = span
+			result.Visits++
 		}
 		for i, curve := range loftSegments {
 			if err := budget.Step(); err != nil {
@@ -337,12 +343,12 @@ func certifyLoftSourceSpanCaps(ctx context.Context, budget *proofbound.WorkBudge
 			if !loftcontact.SameKind(lower[i], upper[i]) {
 				return no, false, nil
 			}
-			span, ok := loftSourceCapSpanOf(loft, loftRole, i, curve)
+			span, ok := LoftSourceCapSpanOf(loft, loftRole, i, curve)
 			if !ok {
 				return no, false, nil
 			}
-			result.loftCaps[cap][i] = span
-			result.visits++
+			result.LoftCaps[cap][i] = span
+			result.Visits++
 		}
 	}
 	seen := make([][2]uint8, len(lp.Segment[0]))
@@ -357,7 +363,7 @@ func certifyLoftSourceSpanCaps(ctx context.Context, budget *proofbound.WorkBudge
 			return no, false, nil
 		}
 		seen[cell[1]][side]++
-		result.visits++
+		result.Visits++
 	}
 	for cell, source := range lp.Segment[0] {
 		if err := budget.Step(); err != nil {
@@ -368,11 +374,11 @@ func certifyLoftSourceSpanCaps(ctx context.Context, budget *proofbound.WorkBudge
 		}
 		for cap := range 2 {
 			role := fmt.Sprintf("side(0,%d,%d)", cell, cap)
-			span := &result.loftCaps[cap][source]
-			span.wallFaces = append(span.wallFaces, provenance.Ref{
+			span := &result.LoftCaps[cap][source]
+			span.WallFaces = append(span.WallFaces, provenance.Ref{
 				Producer: lp.SourceIdentity.Origin, Role: role})
 		}
-		result.visits++
+		result.Visits++
 	}
 	if err := budget.Err(); err != nil {
 		return no, false, err
@@ -380,7 +386,7 @@ func certifyLoftSourceSpanCaps(ctx context.Context, budget *proofbound.WorkBudge
 	return result, true, nil
 }
 
-func loftSourceCapSpanOf(body *Body, role string, index int,
+func LoftSourceCapSpanOf(body *topo.Body, role string, index int,
 	curve sectionrecord.CurveSegment) (loftSourceCapSpan, bool) {
 	var no loftSourceCapSpan
 	var start, end float64
@@ -422,8 +428,8 @@ func loftSourceCapSpanOf(body *Body, role string, index int,
 			return no, false
 		}
 	}
-	return loftSourceCapSpan{body: body,
-		capFace: provenance.Ref{Producer: body.n.Origin.Producer, Role: role},
-		segment: index, curve: curve, tStart: start, tEnd: end,
-		reversed: start > end}, true
+	return loftSourceCapSpan{Body: body,
+		CapFace: provenance.Ref{Producer: body.Origin.Producer, Role: role},
+		Segment: index, Curve: curve, TStart: start, TEnd: end,
+		Reversed: start > end}, true
 }

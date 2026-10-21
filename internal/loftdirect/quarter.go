@@ -1,9 +1,13 @@
-package decad
+package loftdirect
 
 import (
 	"context"
 	"fmt"
 	"math/big"
+
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 
 	"github.com/lestrrat-3d/decad/internal/loftcontact"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
@@ -40,13 +44,13 @@ func quarterRootBracketFitsAtY(xlo, xhi, ylo, yhi, carrier, square *big.Rat) boo
 	return true
 }
 
-func quarterRootBracketFits(xlo, xhi, ylo, yhi, square *big.Rat) bool {
+func QuarterRootBracketFits(xlo, xhi, ylo, yhi, square *big.Rat) bool {
 	return quarterRootBracketFitsAtY(xlo, xhi, ylo, yhi, big.NewRat(1, 1), square)
 }
 
 // loftQuarterSourceHeldSelected is an inactive proof of selected arc seams.
 // It does not certify a complete shell, volume, or public Union.
-func loftQuarterSourceHeldSelected(ctx context.Context, first, second *Body, selectedMask uint8,
+func loftQuarterSourceHeldSelected(ctx context.Context, first, second *topo.Body, selectedMask uint8,
 	sourceOperation, outputOperation *proofbound.WorkBudget) (
 	loftcontact.QuarterSourceHeldPair, bool, error) {
 	var no loftcontact.QuarterSourceHeldPair
@@ -74,67 +78,67 @@ func loftQuarterSourceHeldSelected(ctx context.Context, first, second *Body, sel
 	}
 	sourceBudget := proofbound.NewWallWorkBudgetWithOperation(4096, withContext(sourceOperation))
 	outputBudget := proofbound.NewWallWorkBudgetWithOperation(65_536, withContext(outputOperation))
-	envelope, accepted, err := certifyLoftQuarterSourceEnvelope(
+	envelope, accepted, err := CertifyLoftQuarterSourceEnvelope(
 		ctx, first, second, sourceBudget)
 	if err != nil || !accepted {
 		return no, false, err
 	}
-	wall := envelope.wall
-	if wall.prism == nil || wall.loft == nil || wall.prism == wall.loft ||
-		wall.lower < 0 || wall.upper < 0 || wall.arcSegment < 0 ||
-		len(envelope.order.quarter[0]) != 2 ||
-		len(envelope.order.quarter[1]) != 2 ||
-		envelope.order.source.levels[0] == nil ||
-		envelope.order.source.levels[1] == nil ||
-		envelope.order.source.levels[2] == nil {
+	wall := envelope.Wall
+	if wall.Prism == nil || wall.Loft == nil || wall.Prism == wall.Loft ||
+		wall.Lower < 0 || wall.Upper < 0 || wall.ArcSegment < 0 ||
+		len(envelope.Order.Quarter[0]) != 2 ||
+		len(envelope.Order.Quarter[1]) != 2 ||
+		envelope.Order.source.Levels[0] == nil ||
+		envelope.Order.source.Levels[1] == nil ||
+		envelope.Order.source.Levels[2] == nil {
 		return no, false, nil
 	}
 	for i, want := range [3]*big.Rat{big.NewRat(0, 1), big.NewRat(10, 1), big.NewRat(12, 1)} {
 		if err := sourceBudget.Step(); err != nil {
 			return no, false, err
 		}
-		if envelope.order.source.levels[i].Cmp(want) != 0 {
+		if envelope.Order.source.Levels[i].Cmp(want) != 0 {
 			return no, false, nil
 		}
 	}
-	if wall.lower == wall.upper {
+	if wall.Lower == wall.Upper {
 		return no, false, nil
 	}
 	wantSquares := [2][2]*big.Rat{
 		{big.NewRat(24, 1), big.NewRat(16, 1)},
 		{big.NewRat(117, 4), big.NewRat(85, 4)},
 	}
-	for capIndex, events := range envelope.order.quarter {
+	for capIndex, events := range envelope.Order.Quarter {
 		var found [2]bool
 		for _, event := range events {
 			if err := sourceBudget.Step(); err != nil {
 				return no, false, err
 			}
 			index := -1
-			switch event.line.segment {
-			case wall.lower:
+			switch event.Line.Segment {
+			case wall.Lower:
 				index = 0
-			case wall.upper:
+			case wall.Upper:
 				index = 1
 			}
 			if index < 0 || selectedMask&uint8(1<<index) == 0 {
 				continue
 			}
-			if found[index] || event.line.body != wall.prism ||
-				event.arc.body != wall.loft || event.arc.segment != wall.arcSegment ||
-				event.appearances == 0 {
+			if found[index] || event.Line.Body != wall.Prism ||
+				event.arc.Body != wall.Loft || event.arc.Segment != wall.ArcSegment ||
+				event.Appearances == 0 {
 				return no, false, nil
 			}
 			found[index] = true
 			carrierY := 1 + 2*index
 			wantQ := wantSquares[capIndex][index]
-			line, isLine := event.line.curve.(sectionrecord.LineSeg)
+			line, isLine := event.Line.Curve.(sectionrecord.LineSeg)
 			if !isLine || line.Start.V != float64(carrierY) || line.End.V != float64(carrierY) ||
 				!((line.Start.U == 2 && line.End.U == 6) ||
 					(line.Start.U == 6 && line.End.U == 2)) {
 				return no, false, nil
 			}
-			x, y := event.witness.Point()
+			x, y := event.Witness.Point()
 			xlo, xhi := x.Bounds()
 			ylo, yhi := y.Bounds()
 			carrier := big.NewRat(int64(carrierY), 1)
@@ -167,7 +171,7 @@ func loftQuarterSourceHeldSelected(ctx context.Context, first, second *Body, sel
 		return no, false, err
 	}
 	result, accepted, err := loftcontact.CertifyQuarterSourceHeldSelected(ctx,
-		outputBudget, &wall.prism.n, &wall.loft.n, wall.arcSegment, wall.radius, selectedMask)
+		outputBudget, wall.Prism, wall.Loft, wall.ArcSegment, wall.Radius, selectedMask)
 	if err != nil || !accepted {
 		return no, false, err
 	}
@@ -183,7 +187,7 @@ func loftQuarterSourceHeldSelected(ctx context.Context, first, second *Body, sel
 	return result, true, nil
 }
 
-func loftQuarterSourceHeldY1(ctx context.Context, first, second *Body,
+func LoftQuarterSourceHeldY1(ctx context.Context, first, second *topo.Body,
 	sourceOperation, outputOperation *proofbound.WorkBudget) (
 	loftcontact.QuarterSourceHeldY1, bool, error) {
 	pair, accepted, err := loftQuarterSourceHeldSelected(ctx, first, second, 1,
@@ -191,7 +195,7 @@ func loftQuarterSourceHeldY1(ctx context.Context, first, second *Body,
 	return pair.Y1, accepted, err
 }
 
-func loftQuarterSourceHeldY3(ctx context.Context, first, second *Body,
+func LoftQuarterSourceHeldY3(ctx context.Context, first, second *topo.Body,
 	sourceOperation, outputOperation *proofbound.WorkBudget) (
 	loftcontact.QuarterSourceHeldY3, bool, error) {
 	pair, accepted, err := loftQuarterSourceHeldSelected(ctx, first, second, 2,
@@ -199,8 +203,8 @@ func loftQuarterSourceHeldY3(ctx context.Context, first, second *Body,
 	return pair.Y3, accepted, err
 }
 
-// loftQuarterSourceHeldPair certifies only the two selected arc-wall seams.
-func loftQuarterSourceHeldPair(ctx context.Context, first, second *Body,
+// LoftQuarterSourceHeldPair certifies only the two selected arc-wall seams.
+func LoftQuarterSourceHeldPair(ctx context.Context, first, second *topo.Body,
 	sourceOperation, outputOperation *proofbound.WorkBudget) (
 	loftcontact.QuarterSourceHeldPair, bool, error) {
 	return loftQuarterSourceHeldSelected(ctx, first, second, 3,
@@ -210,34 +214,34 @@ func loftQuarterSourceHeldPair(ctx context.Context, first, second *Body,
 // loftQuarterSourceEnvelope relates certified cap crossings to the original
 // Loft wall. It does not select output patches or prove occupied volume.
 type loftQuarterSourceEnvelope struct {
-	order  loftCapSourceOrder
-	wall   loftQuarterWallOrderProof
-	visits uint64
+	Order  loftCapSourceOrder
+	Wall   loftQuarterWallOrderProof
+	Visits uint64
 }
 
-// certifyLoftQuarterSourceEnvelope reads live same-document producers in
+// CertifyLoftQuarterSourceEnvelope reads live same-document producers in
 // either operand order. All source stages share the unchanged 4096-step wall.
-func certifyLoftQuarterSourceEnvelope(ctx context.Context, first, second *Body,
+func CertifyLoftQuarterSourceEnvelope(ctx context.Context, first, second *topo.Body,
 	operation *proofbound.WorkBudget) (loftQuarterSourceEnvelope, bool, error) {
 	var no loftQuarterSourceEnvelope
 	if err := ctx.Err(); err != nil {
 		return no, false, err
 	}
 	if first == nil || second == nil || operation == nil || first == second ||
-		first.n.Doc == nil || first.n.Doc != second.n.Doc {
+		first.Doc == nil || first.Doc != second.Doc {
 		return no, false, nil
 	}
-	if !first.n.Doc.IsLive(&first.n) || !first.n.Doc.IsLive(&second.n) {
+	if !first.Doc.IsLive(first) || !first.Doc.IsLive(second) {
 		return no, false, nil
 	}
 	prism, loft := first, second
-	if _, ok := prism.n.Payload.(prismPayload); !ok {
+	if _, ok := prism.Payload.(prismrecord.Payload); !ok {
 		prism, loft = second, first
 	}
-	if _, ok := prism.n.Payload.(prismPayload); !ok {
+	if _, ok := prism.Payload.(prismrecord.Payload); !ok {
 		return no, false, nil
 	}
-	if _, ok := loft.n.Payload.(loftPayload); !ok {
+	if _, ok := loft.Payload.(loftrecord.Payload); !ok {
 		return no, false, nil
 	}
 	wall := proofbound.NewWallWorkBudgetWithOperation(4096, operation)
@@ -252,36 +256,36 @@ func certifyLoftQuarterSourceEnvelope(ctx context.Context, first, second *Body,
 		},
 		ErrFn: wall.Err,
 	}
-	source, accepted, err := certifyLoftSourceSpanCaps(ctx, budget, prism, loft)
+	source, accepted, err := CertifyLoftSourceSpanCaps(ctx, budget, prism, loft)
 	if err != nil || !accepted {
 		return no, false, err
 	}
-	order, accepted, err := certifyLoftCapSourceOrder(ctx, budget, source,
-		&loftQuarterWork{budget: budget})
+	order, accepted, err := CertifyLoftCapSourceOrder(ctx, budget, source,
+		&LoftQuarterWork{Budget: budget})
 	if err != nil || !accepted {
 		return no, false, err
 	}
-	wallOrder, accepted, err := certifyLoftQuarterWallOrder(ctx, budget, source)
+	wallOrder, accepted, err := CertifyLoftQuarterWallOrder(ctx, budget, source)
 	if err != nil || !accepted {
 		return no, false, err
 	}
-	for cap := range order.quarter {
-		if len(order.quarter[cap]) != 2 {
+	for cap := range order.Quarter {
+		if len(order.Quarter[cap]) != 2 {
 			return no, false, nil
 		}
 		seen := [2]bool{}
-		for _, event := range order.quarter[cap] {
+		for _, event := range order.Quarter[cap] {
 			if err := budget.Step(); err != nil {
 				return no, false, err
 			}
-			if event.arc.segment != wallOrder.arcSegment {
+			if event.arc.Segment != wallOrder.ArcSegment {
 				return no, false, nil
 			}
 			edge := -1
-			switch event.line.segment {
-			case wallOrder.lower:
+			switch event.Line.Segment {
+			case wallOrder.Lower:
 				edge = 0
-			case wallOrder.upper:
+			case wallOrder.Upper:
 				edge = 1
 			}
 			if edge < 0 || seen[edge] {
@@ -299,69 +303,69 @@ func certifyLoftQuarterSourceEnvelope(ctx context.Context, first, second *Body,
 	if err := ctx.Err(); err != nil {
 		return no, false, err
 	}
-	return loftQuarterSourceEnvelope{order: order, wall: wallOrder, visits: visits}, true, nil
+	return loftQuarterSourceEnvelope{Order: order, Wall: wallOrder, Visits: visits}, true, nil
 }
 
-// loftQuarterWork debits both Sketch categories against the original source wall.
-type loftQuarterWork struct {
-	budget                  *proofbound.WorkBudget
-	raw, proof, pairs       uint64
-	cap                     int
+// LoftQuarterWork debits both Sketch categories against the original source wall.
+type LoftQuarterWork struct {
+	Budget                  *proofbound.WorkBudget
+	Raw, Proof, Pairs       uint64
+	Cap                     int
 	tags                    map[sketch.Entity]prismcells.Origin
-	decline                 sketch.JunctionDecline
-	declined                bool
-	leftTag, rightTag       prismcells.Origin
-	leftTagged, rightTagged bool
+	Decline                 sketch.JunctionDecline
+	Declined                bool
+	LeftTag, RightTag       prismcells.Origin
+	LeftTagged, RightTagged bool
 }
 
-func (w *loftQuarterWork) JunctionDeclined(d sketch.JunctionDecline) {
-	if w.declined {
+func (w *LoftQuarterWork) JunctionDeclined(d sketch.JunctionDecline) {
+	if w.Declined {
 		return
 	}
-	w.declined = true
-	w.decline = d
-	w.leftTag, w.leftTagged = w.tags[d.LeftEntity]
-	w.rightTag, w.rightTagged = w.tags[d.RightEntity]
+	w.Declined = true
+	w.Decline = d
+	w.LeftTag, w.LeftTagged = w.tags[d.LeftEntity]
+	w.RightTag, w.RightTagged = w.tags[d.RightEntity]
 }
 
-func (w *loftQuarterWork) Step(kind sketch.JunctionCharge) error {
-	if w == nil || w.budget == nil {
+func (w *LoftQuarterWork) Step(kind sketch.JunctionCharge) error {
+	if w == nil || w.Budget == nil {
 		return sketch.ErrJunctionWorkLimit
 	}
 	switch kind {
 	case sketch.JunctionRawVisit:
-		if w.raw >= 896 {
+		if w.Raw >= 896 {
 			return sketch.ErrJunctionWorkLimit
 		}
 	case sketch.JunctionRootProof:
-		if w.proof >= 2048 {
+		if w.Proof >= 2048 {
 			return sketch.ErrJunctionWorkLimit
 		}
 	default:
 		return sketch.ErrJunctionWorkLimit
 	}
-	if err := w.budget.Step(); err != nil {
+	if err := w.Budget.Step(); err != nil {
 		return err
 	}
 	if kind == sketch.JunctionRawVisit {
-		w.raw++
+		w.Raw++
 	} else {
-		w.proof++
+		w.Proof++
 	}
 	return nil
 }
 
-func (w *loftQuarterWork) Err() error {
-	if w == nil || w.budget == nil {
+func (w *LoftQuarterWork) Err() error {
+	if w == nil || w.Budget == nil {
 		return sketch.ErrJunctionWorkLimit
 	}
-	return w.budget.Err()
+	return w.Budget.Err()
 }
 
 type loftQuarterSourceEvent struct {
-	witness     sketch.QuarterArcJunction
-	line, arc   loftSourceCapSpan
-	appearances int
+	Witness     sketch.QuarterArcJunction
+	Line, arc   loftSourceCapSpan
+	Appearances int
 }
 
 func loftQuarterRawLoop(p *sketch.Profile, loop int) []sketch.BoundaryEdge {
@@ -394,7 +398,7 @@ func loftQuarterPieceRange(l prismcells.ProfileLineage, loop, edge int) (
 
 func mapLoftQuarterWitnesses(ctx context.Context, budget *proofbound.WorkBudget,
 	raw, split []*sketch.Profile, lineage []prismcells.ProfileLineage,
-	tags map[sketch.Entity]prismcells.Origin, source loftSourceSpanCaps, capIndex int,
+	tags map[sketch.Entity]prismcells.Origin, source LoftSourceSpanCaps, capIndex int,
 	witnesses []sketch.QuarterArcJunction) ([]loftQuarterSourceEvent, bool, error) {
 	if len(raw) != len(split) || len(raw) != len(lineage) {
 		return nil, false, nil
@@ -408,7 +412,7 @@ func mapLoftQuarterWitnesses(ctx context.Context, budget *proofbound.WorkBudget,
 		if len(occurrences) == 0 {
 			return nil, false, nil
 		}
-		event := loftQuarterSourceEvent{witness: witness}
+		event := loftQuarterSourceEvent{Witness: witness}
 		sources := witness.Sources()
 		if sources[0].Kind == sources[1].Kind {
 			return nil, false, nil
@@ -464,7 +468,7 @@ func mapLoftQuarterWitnesses(ctx context.Context, budget *proofbound.WorkBudget,
 				// Sources describes the representative walk. Other cells may
 				// reach the same token with the opposite walked order or with
 				// different fragment ranges.
-				if event.appearances == 0 &&
+				if event.Appearances == 0 &&
 					(edges[i].TStart != sources[i].TStart ||
 						edges[i].TEnd != sources[i].TEnd ||
 						edges[i].Reversed != sources[i].Reversed ||
@@ -473,39 +477,39 @@ func mapLoftQuarterWitnesses(ctx context.Context, budget *proofbound.WorkBudget,
 				}
 				if origin.IsB {
 					_, isArc := edges[i].Entity.(*sketch.Arc)
-					if !isArc || event.appearances == 0 &&
+					if !isArc || event.Appearances == 0 &&
 						sources[i].Kind != sketch.JunctionArc ||
 						origin.Segment < 0 ||
-						origin.Segment >= len(source.loftCaps[capIndex]) {
+						origin.Segment >= len(source.LoftCaps[capIndex]) {
 						return nil, false, nil
 					}
-					span := source.loftCaps[capIndex][origin.Segment]
-					if _, ok := span.curve.(sectionrecord.ArcSeg); !ok {
+					span := source.LoftCaps[capIndex][origin.Segment]
+					if _, ok := span.Curve.(sectionrecord.ArcSeg); !ok {
 						return nil, false, nil
 					}
-					if event.appearances != 0 && event.arc.segment != span.segment {
+					if event.Appearances != 0 && event.arc.Segment != span.Segment {
 						return nil, false, nil
 					}
 					event.arc = span
 				} else {
 					_, isLine := edges[i].Entity.(*sketch.Line)
-					if !isLine || event.appearances == 0 &&
+					if !isLine || event.Appearances == 0 &&
 						sources[i].Kind != sketch.JunctionLine ||
 						origin.Segment < 0 ||
-						origin.Segment >= len(source.prismCaps[capIndex]) {
+						origin.Segment >= len(source.PrismCaps[capIndex]) {
 						return nil, false, nil
 					}
-					span := source.prismCaps[capIndex][origin.Segment]
-					if _, ok := span.curve.(sectionrecord.LineSeg); !ok {
+					span := source.PrismCaps[capIndex][origin.Segment]
+					if _, ok := span.Curve.(sectionrecord.LineSeg); !ok {
 						return nil, false, nil
 					}
-					if event.appearances != 0 && event.line.segment != span.segment {
+					if event.Appearances != 0 && event.Line.Segment != span.Segment {
 						return nil, false, nil
 					}
-					event.line = span
+					event.Line = span
 				}
 			}
-			event.appearances++
+			event.Appearances++
 		}
 		out = append(out, event)
 	}
@@ -514,114 +518,114 @@ func mapLoftQuarterWitnesses(ctx context.Context, budget *proofbound.WorkBudget,
 
 // quarterSourcePairs adapts authenticated body spans to the plain-data pair
 // classifier. Every original segment retains its source index.
-func quarterSourcePairs(budget *proofbound.WorkBudget, work *loftQuarterWork,
-	source loftSourceSpanCaps, capIndex int, events []loftQuarterSourceEvent) (bool, error) {
-	prism := make([]sectionrecord.CurveSegment, len(source.prismCaps[capIndex]))
-	loft := make([]sectionrecord.CurveSegment, len(source.loftCaps[capIndex]))
-	for i, span := range source.prismCaps[capIndex] {
+func quarterSourcePairs(budget *proofbound.WorkBudget, work *LoftQuarterWork,
+	source LoftSourceSpanCaps, capIndex int, events []loftQuarterSourceEvent) (bool, error) {
+	prism := make([]sectionrecord.CurveSegment, len(source.PrismCaps[capIndex]))
+	loft := make([]sectionrecord.CurveSegment, len(source.LoftCaps[capIndex]))
+	for i, span := range source.PrismCaps[capIndex] {
 		if err := budget.Step(); err != nil {
 			return false, err
 		}
-		if span.body != source.prism || span.segment != i {
+		if span.Body != source.Prism || span.Segment != i {
 			return false, nil
 		}
-		prism[i] = span.curve
+		prism[i] = span.Curve
 	}
-	for i, span := range source.loftCaps[capIndex] {
+	for i, span := range source.LoftCaps[capIndex] {
 		if err := budget.Step(); err != nil {
 			return false, err
 		}
-		if span.body != source.loft || span.segment != i {
+		if span.Body != source.Loft || span.Segment != i {
 			return false, nil
 		}
-		loft[i] = span.curve
+		loft[i] = span.Curve
 	}
 	pairs := make([][2]int, len(events))
 	for i, event := range events {
 		if err := budget.Step(); err != nil {
 			return false, err
 		}
-		pairs[i] = [2]int{event.line.segment, event.arc.segment}
+		pairs[i] = [2]int{event.Line.Segment, event.arc.Segment}
 	}
 	visited, accepted, err := loftcontact.QuarterSourcePairs(
 		budget, prism, loft, pairs)
-	work.pairs += visited
+	work.Pairs += visited
 	return accepted, err
 }
 
 // quarterSourceIntervals checks that every original cap segment has continuous
 // arranged coverage over its complete natural [0,1] domain.
 func quarterSourceIntervals(budget *proofbound.WorkBudget,
-	source loftSourceSpanCaps, capIndex int, cells []loftCapSourceCell) (bool, error) {
+	source LoftSourceSpanCaps, capIndex int, cells []loftCapSourceCell) (bool, error) {
 	var fragments []loftcontact.QuarterSourceInterval
 	for _, cell := range cells {
-		for _, edge := range cell.edges {
+		for _, edge := range cell.Edges {
 			if err := budget.Step(); err != nil {
 				return false, err
 			}
-			isLoft := edge.span.body == source.loft
-			if !isLoft && edge.span.body != source.prism {
+			isLoft := edge.Span.Body == source.Loft
+			if !isLoft && edge.Span.Body != source.Prism {
 				return false, nil
 			}
 			fragments = append(fragments, loftcontact.QuarterSourceInterval{
-				Loft: isLoft, Segment: edge.span.segment,
-				Start: edge.tStart, End: edge.tEnd,
+				Loft: isLoft, Segment: edge.Span.Segment,
+				Start: edge.TStart, End: edge.TEnd,
 			})
 		}
 	}
 	return loftcontact.QuarterSourceIntervals(budget,
-		len(source.prismCaps[capIndex]), len(source.loftCaps[capIndex]), fragments)
+		len(source.PrismCaps[capIndex]), len(source.LoftCaps[capIndex]), fragments)
 }
 
 // loftQuarterWallOrderProof is a private source-only reading. It identifies
 // the two rectangle edges crossing one paired quarter-arc wall at every
 // height. It does not select output patches or certify held-mesh coverage.
 type loftQuarterWallOrderProof struct {
-	prism, loft  *Body
-	arcSegment   int
-	lower, upper int // source indices of the rectangle's lower and upper edges
-	radius       [2]*big.Rat
-	wallFaces    [2][]provenance.Ref
+	Prism, Loft  *topo.Body
+	ArcSegment   int
+	Lower, Upper int // source indices of the rectangle's lower and upper edges
+	Radius       [2]*big.Rat
+	WallFaces    [2][]provenance.Ref
 }
 
-// certifyLoftQuarterWallOrder accepts only a concentric, first-quadrant
+// CertifyLoftQuarterWallOrder accepts only a concentric, first-quadrant
 // quarter-arc pair and one axis-aligned rectangle. The caller passes the
 // authenticated source spans and their original 4096-step source wall.
-func certifyLoftQuarterWallOrder(ctx context.Context, budget *proofbound.WorkBudget,
-	source loftSourceSpanCaps) (loftQuarterWallOrderProof, bool, error) {
+func CertifyLoftQuarterWallOrder(ctx context.Context, budget *proofbound.WorkBudget,
+	source LoftSourceSpanCaps) (loftQuarterWallOrderProof, bool, error) {
 	var no loftQuarterWallOrderProof
 	if err := ctx.Err(); err != nil {
 		return no, false, err
 	}
-	if budget == nil || source.prism == nil || source.loft == nil ||
-		source.prism == source.loft {
+	if budget == nil || source.Prism == nil || source.Loft == nil ||
+		source.Prism == source.Loft {
 		return no, false, nil
 	}
-	pp, prismOK := source.prism.n.Payload.(prismPayload)
-	lp, loftOK := source.loft.n.Payload.(loftPayload)
+	pp, prismOK := source.Prism.Payload.(prismrecord.Payload)
+	lp, loftOK := source.Loft.Payload.(loftrecord.Payload)
 	if !prismOK || !loftOK || !lp.AuthenticatedReconstruction ||
-		lp.SourceIdentity == nil || lp.SourceIdentity.Origin != source.loft.n.Origin.Producer ||
+		lp.SourceIdentity == nil || lp.SourceIdentity.Origin != source.Loft.Origin.Producer ||
 		len(lp.Alignment) > 1 || len(lp.Alignment) == 1 && lp.Alignment[0] != 0 ||
 		len(pp.Profile.Outer.Segments) != 4 ||
 		len(lp.Profile0.Outer.Segments) != 3 || len(lp.Profile1.Outer.Segments) != 3 ||
 		len(lp.Verts) > 512 || len(lp.Tris) > 512 ||
-		len(source.prismCaps[0]) != 4 || len(source.prismCaps[1]) != 4 ||
-		len(source.loftCaps[0]) != 3 || len(source.loftCaps[1]) != 3 ||
-		source.levels[0] == nil || source.levels[1] == nil || source.levels[2] == nil {
+		len(source.PrismCaps[0]) != 4 || len(source.PrismCaps[1]) != 4 ||
+		len(source.LoftCaps[0]) != 3 || len(source.LoftCaps[1]) != 3 ||
+		source.Levels[0] == nil || source.Levels[1] == nil || source.Levels[2] == nil {
 		return no, false, nil
 	}
 	checked := &loftcontact.Arithmetic{OK: true}
-	if checked.Cmp(source.levels[0], big.NewRat(0, 1)) != 0 ||
-		checked.Cmp(source.levels[0], source.levels[1]) >= 0 ||
-		checked.Cmp(source.levels[1], source.levels[2]) >= 0 || !checked.OK {
+	if checked.Cmp(source.Levels[0], big.NewRat(0, 1)) != 0 ||
+		checked.Cmp(source.Levels[0], source.Levels[1]) >= 0 ||
+		checked.Cmp(source.Levels[1], source.Levels[2]) >= 0 || !checked.OK {
 		return no, false, nil
 	}
 	rect, edges, ok, err := loftQuarterWallRectangle(ctx, budget, source, pp)
 	if err != nil || !ok {
 		return no, false, err
 	}
-	proof := loftQuarterWallOrderProof{prism: source.prism, loft: source.loft,
-		lower: edges[0], upper: edges[1], arcSegment: -1}
+	proof := loftQuarterWallOrderProof{Prism: source.Prism, Loft: source.Loft,
+		Lower: edges[0], Upper: edges[1], ArcSegment: -1}
 	for cap, loop := range [2]sectionrecord.LoopRecord{lp.Profile0.Outer, lp.Profile1.Outer} {
 		arcIndex := -1
 		axisLines := [2]bool{}
@@ -629,27 +633,27 @@ func certifyLoftQuarterWallOrder(ctx context.Context, budget *proofbound.WorkBud
 			if err := budget.Step(); err != nil {
 				return no, false, err
 			}
-			span := source.loftCaps[cap][i]
-			if span.body != source.loft || span.segment != i {
+			span := source.LoftCaps[cap][i]
+			if span.Body != source.Loft || span.Segment != i {
 				return no, false, nil
 			}
 			switch segment := raw.(type) {
 			case sectionrecord.ArcSeg:
-				borrowed, same := span.curve.(sectionrecord.ArcSeg)
+				borrowed, same := span.Curve.(sectionrecord.ArcSeg)
 				if !same || borrowed != segment || arcIndex >= 0 ||
 					segment.TStart != 0 || segment.TEnd != 1 ||
 					segment.Center.U != 0 || segment.Center.V != 0 ||
 					proofbound.IsNonFinite(segment.Start.U) ||
 					segment.Start.U <= 0 || segment.Start.V != 0 ||
 					segment.End.U != 0 || segment.End.V != segment.Start.U ||
-					len(span.wallFaces) == 0 {
+					len(span.WallFaces) == 0 {
 					return no, false, nil
 				}
 				arcIndex = i
-				proof.radius[cap] = proofarith.FloatRat(segment.Start.U)
-				proof.wallFaces[cap] = span.wallFaces
+				proof.Radius[cap] = proofarith.FloatRat(segment.Start.U)
+				proof.WallFaces[cap] = span.WallFaces
 			case sectionrecord.LineSeg:
-				borrowed, same := span.curve.(sectionrecord.LineSeg)
+				borrowed, same := span.Curve.(sectionrecord.LineSeg)
 				if !same || borrowed != segment ||
 					!loftcontact.QuarterWallAxisLine(segment, proofarith.FloatRat(loopArcRadius(loop))) {
 					return no, false, nil
@@ -670,12 +674,12 @@ func certifyLoftQuarterWallOrder(ctx context.Context, budget *proofbound.WorkBud
 			}
 		}
 		if arcIndex < 0 || !axisLines[0] || !axisLines[1] ||
-			cap == 1 && arcIndex != proof.arcSegment {
+			cap == 1 && arcIndex != proof.ArcSegment {
 			return no, false, nil
 		}
 		if cap == 1 {
 			if len(lp.Segment) != 1 || len(lp.Segment[0]) > 512 ||
-				len(proof.wallFaces[0]) != len(proof.wallFaces[1]) {
+				len(proof.WallFaces[0]) != len(proof.WallFaces[1]) {
 				return no, false, nil
 			}
 			matched := 0
@@ -686,7 +690,7 @@ func certifyLoftQuarterWallOrder(ctx context.Context, budget *proofbound.WorkBud
 				if segment != arcIndex {
 					continue
 				}
-				if matched >= len(proof.wallFaces[0]) {
+				if matched >= len(proof.WallFaces[0]) {
 					return no, false, nil
 				}
 				for half := range 2 {
@@ -697,17 +701,17 @@ func certifyLoftQuarterWallOrder(ctx context.Context, budget *proofbound.WorkBud
 						Producer: lp.SourceIdentity.Origin,
 						Role:     fmt.Sprintf("side(0,%d,%d)", cell, half),
 					}
-					if proof.wallFaces[half][matched] != expected {
+					if proof.WallFaces[half][matched] != expected {
 						return no, false, nil
 					}
 				}
 				matched++
 			}
-			if matched == 0 || matched != len(proof.wallFaces[0]) {
+			if matched == 0 || matched != len(proof.WallFaces[0]) {
 				return no, false, nil
 			}
 		}
-		proof.arcSegment = arcIndex
+		proof.ArcSegment = arcIndex
 	}
 	// The authenticated Loft pairs corresponding source parameters by a
 	// straight rule. Matching quarter arcs therefore have radius bounded by
@@ -715,7 +719,7 @@ func certifyLoftQuarterWallOrder(ctx context.Context, budget *proofbound.WorkBud
 	if _, err := budget.StepN(12); err != nil {
 		return no, false, err
 	}
-	rMin, rMax := proof.radius[0], proof.radius[1]
+	rMin, rMax := proof.Radius[0], proof.Radius[1]
 	if checked.Cmp(rMin, rMax) > 0 {
 		rMin, rMax = rMax, rMin
 	}
@@ -741,7 +745,7 @@ func certifyLoftQuarterWallOrder(ctx context.Context, budget *proofbound.WorkBud
 }
 
 func loftQuarterWallRectangle(ctx context.Context, budget *proofbound.WorkBudget,
-	source loftSourceSpanCaps, pp prismPayload) ([4]*big.Rat, [2]int, bool, error) {
+	source LoftSourceSpanCaps, pp prismrecord.Payload) ([4]*big.Rat, [2]int, bool, error) {
 	var bounds [4]*big.Rat
 	var horizontal [2]int
 	if len(pp.Profile.Outer.Segments) != 4 {
@@ -760,9 +764,9 @@ func loftQuarterWallRectangle(ctx context.Context, budget *proofbound.WorkBudget
 			return bounds, horizontal, false, nil
 		}
 		for cap := range 2 {
-			span := source.prismCaps[cap][i]
-			borrowed, same := span.curve.(sectionrecord.LineSeg)
-			if !same || borrowed != line || span.body != source.prism || span.segment != i {
+			span := source.PrismCaps[cap][i]
+			borrowed, same := span.Curve.(sectionrecord.LineSeg)
+			if !same || borrowed != line || span.Body != source.Prism || span.Segment != i {
 				return bounds, horizontal, false, nil
 			}
 		}
