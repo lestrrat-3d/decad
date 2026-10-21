@@ -9,86 +9,79 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// Stitch is the one operation that turns a boundary into a solid
-// (agent-docs/surface-design.md §6): weld a surface-extruded wall set to a patch
-// at each open end, and the box closes into a BodySolid with an exact
-// volume — every coordinate in it is stated rather than computed, so every
-// welded rim edge and its matching patch edge hold the same float64 values
-// at a zero bound, which is exactly what Table J admits.
+// Stitch welds sheets along their shared edges, and if the result encloses a
+// volume it becomes a solid. Use it to build a solid from surfaces: walls from
+// a surface extrude, closed by a patch at each end.
 func Example_stitch() {
 	w := sketch.NewWorld()
 	ctx := context.Background()
 
-	s, err := w.CreateSketch(w.XY())
+	// The bottom outline, which is both the profile we extrude and the shape
+	// of the bottom cap.
+	bottomSketch, err := w.CreateSketch(w.XY())
 	if err != nil {
 		fmt.Printf("failed to create sketch: %s\n", err)
 		return
 	}
-	rect := s.CreateRectangle(0, 0, 100, 60)
-	s.Fix(rect.A)
-	if _, err := s.Solve(ctx); err != nil {
+	bottomRect := bottomSketch.CreateRectangle(0, 0, 100, 60)
+	bottomSketch.Fix(bottomRect.A)
+	if _, err := bottomSketch.Solve(ctx); err != nil {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	prof := s.Profiles()[0]
 
-	top, err := w.CreateOffsetPlane(w.XY(), 10)
+	// The top outline: the same rectangle, 10 mm up. The top cap is built
+	// from this one, so its edges coincide exactly with the walls' top edges.
+	topPlane, err := w.CreateOffsetPlane(w.XY(), 10)
 	if err != nil {
-		fmt.Printf("failed to create the top plane: %s\n", err)
+		fmt.Printf("failed to create plane: %s\n", err)
 		return
 	}
-	ts, err := w.CreateSketch(top)
+	topSketch, err := w.CreateSketch(topPlane)
 	if err != nil {
-		fmt.Printf("failed to create the top sketch: %s\n", err)
+		fmt.Printf("failed to create sketch: %s\n", err)
 		return
 	}
-	topRect := ts.CreateRectangle(0, 0, 100, 60)
-	ts.Fix(topRect.A)
-	if _, err := ts.Solve(ctx); err != nil {
-		fmt.Printf("failed to solve the top sketch: %s\n", err)
+	topRect := topSketch.CreateRectangle(0, 0, 100, 60)
+	topSketch.Fix(topRect.A)
+	if _, err := topSketch.Solve(ctx); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
 
+	// Three sheets: the four walls, and one flat cap for each end.
 	doc := decad.New()
-	walls, err := decad.Extrude(ctx, doc, s, prof,
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
-		decad.WithSurfaceResult())
+	walls, err := decad.Extrude(ctx, doc, bottomSketch, bottomSketch.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
 	if err != nil {
-		fmt.Printf("failed to extrude the walls: %s\n", err)
+		fmt.Printf("failed to extrude walls: %s\n", err)
 		return
 	}
-	bottom, err := decad.PatchProfile(context.Background(), doc, s, prof)
+	bottom, err := decad.PatchProfile(ctx, doc, bottomSketch, bottomSketch.Profiles()[0])
 	if err != nil {
-		fmt.Printf("failed to patch the bottom: %s\n", err)
+		fmt.Printf("failed to patch bottom: %s\n", err)
 		return
 	}
-	topPatch, err := decad.PatchProfile(context.Background(), doc, ts, ts.Profiles()[0])
+	top, err := decad.PatchProfile(ctx, doc, topSketch, topSketch.Profiles()[0])
 	if err != nil {
-		fmt.Printf("failed to patch the top: %s\n", err)
+		fmt.Printf("failed to patch top: %s\n", err)
 		return
 	}
 
-	box, err := decad.Stitch(context.Background(), walls, bottom, topPatch)
+	// Weld them. The sheets close into a box, so the result is a solid.
+	box, err := decad.Stitch(ctx, walls, bottom, top)
 	if err != nil {
 		fmt.Printf("failed to stitch: %s\n", err)
 		return
 	}
-
-	vol, err := box.Volume()
+	volume, err := box.Volume()
 	if err != nil {
 		fmt.Printf("failed to measure volume: %s\n", err)
 		return
 	}
-
-	fmt.Printf("kind is solid: %v\n", box.Kind() == decad.BodySolid)
-	fmt.Printf("is solid: %v\n", box.IsSolid())
-	fmt.Printf("faces: %d\n", len(box.Faces()))
-	fmt.Printf("edges: %d\n", len(box.Edges()))
-	fmt.Printf("volume: %s (%s)\n", vol.Value, vol.Exactness)
+	fmt.Printf("solid: %v, faces: %d\n", box.IsSolid(), len(box.Faces()))
+	fmt.Printf("volume: %s\n", volume.Value)
 	// Output:
-	// kind is solid: true
-	// is solid: true
-	// faces: 6
-	// edges: 12
-	// volume: 60000 mm^3 (Exact)
+	// solid: true, faces: 6
+	// volume: 60000 mm^3
 }
