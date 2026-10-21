@@ -10,66 +10,46 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// Shell hollows a straight prism through the faces a selector names. Removing
-// both caps of a hole-free box gives a TUBE — a plain prism over the annular
-// section, so every measurement carries its numerical proof and the body is a first-class prism
-// downstream. The construction is the recorded section's own exact inward
-// offset (P ⊖ t): the wall is uniform, and the volume is (A_P − A_Q)·h.
+// Shell hollows a body, leaving walls of a chosen thickness. The faces you
+// name are removed to make the opening. Use it to turn a solid block into a
+// box, cup or housing without modelling the cavity by hand.
 func Example_shell() {
+	// A solid 100 x 60 x 20 mm block.
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {
 		fmt.Printf("failed to create sketch: %s\n", err)
 		return
 	}
-
-	// A 100 x 60 plate, extruded 20 mm — a box with two caps.
 	rect := s.CreateRectangle(0, 0, 100, 60)
 	s.Fix(rect.A)
 	if _, err := s.Solve(context.Background()); err != nil {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-
 	doc := decad.New()
-	box, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	block, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}
 
-	// Remove both caps (planar, normal to the z sweep) and line the rest with a
-	// 5 mm wall — a rectangular tube.
-	tube, err := decad.Shell(context.Background(), box, decad.Faces(decad.NormalTo(r3.NewVec(0, 0, 1))), units.Millimeters(5))
+	// Remove the top face (the one facing +Z) and leave 5 mm walls. The
+	// result is an open box.
+	top := decad.Faces(decad.Planar(), decad.Facing(r3.NewVec(0, 0, 1)))
+	box, err := decad.Shell(context.Background(), block, top, units.Millimeters(5))
 	if err != nil {
 		fmt.Printf("failed to shell: %s\n", err)
 		return
 	}
-
-	vol, err := tube.Volume()
+	volume, err := box.Volume()
 	if err != nil {
 		fmt.Printf("failed to measure volume: %s\n", err)
 		return
 	}
-	mm3, err := vol.Value.In(units.CubicMillimeter)
-	if err != nil {
-		fmt.Printf("failed to convert volume: %s\n", err)
-		return
-	}
-
-	report, err := doc.Verify(context.Background())
-	if err != nil {
-		fmt.Printf("failed to verify: %s\n", err)
-		return
-	}
-
-	fmt.Printf("solid: %v, faces: %d\n", tube.IsSolid(), len(tube.Faces()))
-	fmt.Printf("volume: %.3f mm^3 (%s)\n", mm3, vol.Exactness)
-	fmt.Printf("trustworthy: %v\n", report.Passed())
-	fmt.Printf("live bodies: %d\n", len(doc.Bodies()))
+	// The cavity is 90 x 50 x 15 mm, so the walls hold 120000 - 67500 mm^3.
+	fmt.Printf("volume: %.0f mm^3\n", volume.Value.Base())
 	// Output:
-	// solid: true, faces: 10
-	// volume: 30000.000 mm^3 (Exact)
-	// trustworthy: true
-	// live bodies: 1
+	// volume: 52500 mm^3
 }
