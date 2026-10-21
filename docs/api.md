@@ -155,6 +155,7 @@ Each of these returns a new body and retires its input.
 | `decad.Chamfer` | Bevels selected edges. `decad.WithAsymmetricChamfer` sets a second distance. |
 | `decad.Shell` | Removes the selected faces and lines the rest with a wall. `decad.WithShellSense` picks `decad.Inward` or `decad.Outward`. |
 | `decad.Draft` | Leans selected walls about a `decad.NeutralPlane` (`decad.NeutralFace`). |
+| `decad.Hole` | Cuts a round hole at a point on a planar face, through or blind, with an optional `decad.Counterbore` or `decad.Countersink` head. |
 | `decad.Thicken` | Turns a sheet into a solid. `decad.WithThickenSide` picks the side. |
 | `decad.Offset` | Builds a second sheet at a normal distance and leaves the source live. |
 

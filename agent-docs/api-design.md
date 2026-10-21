@@ -1491,6 +1491,10 @@ Copies do not consume their source. Each successful copy gets a fresh private
 producer identity so callers can use its returned provenance values without
 persisting or constructing internal identifiers.
 
+**A hole is one call.** `Hole(ctx, b, HoleSpec)` cuts a round, through or blind hole, with an optional counterbore or
+countersink head, at a world point on a planar face of `b`. It builds the tool bodies, cuts them from `b` in one
+atomic commit, and retires `b`. `agent-docs/hole-design.md` owns the placement, size and refusal rules.
+
 ### 8.1 Extent — illegal states unrepresentable
 
 Fusion has three mutually-exclusive `setXxxExtent` methods with no enforcement,
