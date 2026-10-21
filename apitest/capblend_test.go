@@ -111,12 +111,13 @@ func TestCapBlendMixedCapAndLateralSelectionRefused(t *testing.T) {
 	verticalMatched, err := verticalEdges().SelectEdges(box)
 	require.NoError(t, err)
 	require.Len(t, verticalMatched, 4, `the box's four lateral edges`)
-	// LongerThan(15mm) matches every lateral edge (20mm) AND every cap rim
-	// edge (100mm/60mm) — a genuine mix of the two classes.
-	q := decad.Edges(decad.LongerThan(units.Millimeters(15)))
+	// The X-parallel cap rim edges and the lateral edges are a genuine mix of
+	// the two classes that is not the box's complete set of twelve edges, which
+	// the bare-box all-edge chamfer builds.
+	q := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0))).Or(decad.ParallelTo(r3.NewVec(0, 0, 1)))
 	matched, err := q.SelectEdges(box)
 	require.NoError(t, err)
-	require.Len(t, matched, 12)
+	require.Len(t, matched, 8)
 	_, err = decad.Chamfer(t.Context(), box, q, units.Millimeters(5))
 	require.Error(t, err)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
