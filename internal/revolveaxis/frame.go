@@ -105,7 +105,7 @@ func (ax Frame) PlaneDirection(wg, k float64) (float64, float64) {
 // the origin is that frame exactly: every product is by 1 or 0 and nothing
 // rounds. The ρ (V) component's OWN proven bound is stated separately, in
 // startVBound/endVBound/cVBound, through ToAxisRhoBound: a reading that folds
-// the re-expressed ρ into a published measurement (survey.go's
+// the re-expressed ρ into a published measurement (internal/verifyrun/survey.go's
 // radiussurvey.Revolve) takes it rather than treating startV/endV/cV as an exact
 // leaf the way contact classification does.
 //

@@ -9,7 +9,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
-	"github.com/lestrrat-3d/decad/internal/verifyoption"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -308,8 +307,6 @@ func loftRecordAreasOrZero(profile0, profile1 profileRecord) [2]float64 {
 }
 
 var revolveAxisU = SketchLine{Start: planePoint{}, End: planePoint{U: 1}}
-
-type wallSpec = verifyoption.WallSpec
 
 func arcCellFixture(center, radius, start, delta float64) revolvemesh.RevArcCell {
 	return revolvemesh.RevArcCell{

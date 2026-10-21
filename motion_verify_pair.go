@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/verifyrun"
+
 	"github.com/lestrrat-3d/decad/internal/boundaryaudit"
 	"github.com/lestrrat-3d/decad/internal/motionconclude"
 
@@ -27,7 +29,7 @@ func (r *motionRun) evaluateMover(mp *motionPose, i int, placed []*motionPlaced)
 	mv := r.movers[i]
 	for k, pair := range r.pairs[i] {
 		if pair.sheet && !pair.declared && !pair.unformed {
-			diag := mp.stamp(pairDiagNone(mv.body, r.partner(i, k), DiagUnsupportedPairSheet,
+			diag := mp.stamp(verifyrun.PairDiagNone(mv.body, r.partner(i, k), DiagUnsupportedPairSheet,
 				"a sheet operand has no clearance the motion check can certify, so this pair is undecided at every pose"))
 			mp.result.Diagnostics = append(mp.result.Diagnostics, diag)
 			mp.findings = append(mp.findings, diag)
@@ -93,7 +95,7 @@ func (r *motionRun) settleConstant(i, k int) error {
 	case res.Verdict == boundaryaudit.PairTouching || boxProven:
 		return nil
 	}
-	volume, outcome, err := measuredInterference(r.ctx, mover, partner, res, pairMeshes{})
+	volume, outcome, err := verifyrun.MeasuredInterference(r.ctx, handleAlloc{}, bodyNode(mover), bodyNode(partner), res, pairMeshes{})
 	if err != nil {
 		return err
 	}
@@ -248,12 +250,12 @@ func (r *motionRun) evaluatePair(mp *motionPose, i, k int, a, b *motionPlaced) e
 	declared := r.pairs[i][k].declared
 	if boxProven {
 		if !declared {
-			r.poseDiag(mp, mp.stamp(pairDiagNone(mover, partner, DiagUndecidedClearance,
+			r.poseDiag(mp, mp.stamp(verifyrun.PairDiagNone(mover, partner, DiagUndecidedClearance,
 				"the pair is proven disjoint at this pose but its gap is unmeasured")))
 		}
 		return nil
 	}
-	volume, outcome, err := measuredInterference(r.ctx, a.body, target, res, pairMeshes{})
+	volume, outcome, err := verifyrun.MeasuredInterference(r.ctx, handleAlloc{}, bodyNode(a.body), bodyNode(target), res, pairMeshes{})
 	if err != nil {
 		return err
 	}
@@ -261,7 +263,7 @@ func (r *motionRun) evaluatePair(mp *motionPose, i, k int, a, b *motionPlaced) e
 		if declared {
 			return nil
 		}
-		diag := undecidedPairDiag(a.body, target, res.Verdict, outcome)
+		diag := verifyrun.UndecidedPairDiag(a.body, target, bodyNode(a.body), bodyNode(target), res.Verdict, outcome)
 		diag.Pair = &DiagnosticPair{A: mover, B: partner}
 		r.poseDiag(mp, mp.stamp(diag))
 		return nil
@@ -275,7 +277,7 @@ func (r *motionRun) evaluatePair(mp *motionPose, i, k int, a, b *motionPlaced) e
 		if outcome == boundaryaudit.InterferenceMeasured {
 			msg = fmt.Sprintf("the pair is proven to overlap at the evaluated float pose, but the measured volume %s does not clear the %v mm^3 the pose's deviation from the ideal motion can sweep, so no collision is proven at this parameter", volume.Value, allowance)
 		}
-		r.poseDiag(mp, mp.stamp(pairDiagNone(mover, partner, DiagUndecidedInterference, msg)))
+		r.poseDiag(mp, mp.stamp(verifyrun.PairDiagNone(mover, partner, DiagUndecidedInterference, msg)))
 		return nil
 	}
 	published := publishedInternal
@@ -300,7 +302,7 @@ func (r *motionRun) collisionBeyond(a, b, mover, partner *Body, published Measur
 	if err != nil {
 		return Diagnostic{}, false, err
 	}
-	pass, ref, haveRef := interferenceToleranceRef(published, a, b, pairD, r.cfg.Rel)
+	pass, ref, haveRef := verifyrun.InterferenceToleranceRef(published, bodyNode(a), bodyNode(b), pairD, r.cfg.Rel)
 	if pass {
 		return Diagnostic{}, false, nil
 	}
@@ -368,7 +370,7 @@ func (r *motionRun) recordGap(mp *motionPose, i, k int, res pairkernel.Result, e
 		return
 	}
 	if proofbound.IsNonFinite(etaA) || proofbound.IsNonFinite(etaB) {
-		r.poseDiag(mp, mp.stamp(pairDiagNone(mover, partner, DiagUndecidedClearance,
+		r.poseDiag(mp, mp.stamp(verifyrun.PairDiagNone(mover, partner, DiagUndecidedClearance,
 			"the pair is proven disjoint at this pose, but the pose's departure from the ideal motion is unbounded for this payload, so its gap is unmeasured")))
 		return
 	}
@@ -392,7 +394,7 @@ func (r *motionRun) recordGap(mp *motionPose, i, k int, res pairkernel.Result, e
 		}))
 	}
 	pass, ref, haveRef := tolerance.Scalar(gap.Value, gap.Bound, r.cfg.Rel,
-		pairToleranceInputs{diameter: res.Diam}.lengthReference)
+		verifyrun.PairToleranceInputs{Diameter: res.Diam}.LengthReference)
 	if pass {
 		return
 	}
@@ -580,7 +582,7 @@ func (r *motionRun) pathClearance(poses []*motionPose, lowest *Measurement, scop
 	gap := pairkernel.GapMeasurement(pairkernel.Result{Lo: lower, Hi: upper})
 	gap.Exactness = Approximate
 	pass, ref, haveRef := tolerance.Scalar(gap.Value, gap.Bound, r.cfg.Rel,
-		pairToleranceInputs{diameter: diam}.lengthReference)
+		verifyrun.PairToleranceInputs{Diameter: diam}.LengthReference)
 	reading := &ScalarReading{Measurement: gap, Tolerance: tolerance.Judge(pass, haveRef, r.cfg.Rel, ref, gap.Value)}
 	if pass {
 		return reading, nil

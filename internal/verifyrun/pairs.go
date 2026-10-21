@@ -1,10 +1,13 @@
-package decad
+package verifyrun
 
 import (
 	"context"
 	"fmt"
 	"math"
 	"sync"
+
+	"github.com/lestrrat-3d/decad/internal/verifiedmesh"
+	vocab "github.com/lestrrat-3d/decad/report"
 
 	"github.com/lestrrat-3d/decad/internal/boundaryaudit"
 
@@ -15,7 +18,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
 	"github.com/lestrrat-3d/decad/internal/topo"
-	"github.com/lestrrat-3d/units"
 )
 
 // This file is Verify's pair partition (docs/interference-design.md §2):
@@ -27,7 +29,7 @@ import (
 // verifyPairJob is one unordered pair, in Document.Bodies() order, that box
 // separation alone does not finish.
 type verifyPairJob struct {
-	a, b      *Body
+	a, b      *topo.Body
 	boxProven bool
 }
 
@@ -55,7 +57,7 @@ func verifyPairJobs(ctx context.Context, bodies []*BodyReport, cfg verifyConfig)
 			a, b := bodies[i].Body, bodies[j].Body
 			boxProven := measurement.BoxesDisjoint(bodies[i].Bounds.Box, bodies[j].Bounds.Box)
 			if boxProven {
-				sheetPair := a.Kind() == BodySheet && b.Kind() == BodySheet
+				sheetPair := a.Kind == topo.BodySheet && b.Kind == topo.BodySheet
 				if sheetPair || !cfg.Clearances {
 					continue
 				}
@@ -71,7 +73,7 @@ func verifyPairJobs(ctx context.Context, bodies []*BodyReport, cfg verifyConfig)
 // procedure; a solid pair takes the analytic pair kernel, then containment,
 // equality and read-only intersection measurement. geomCache is nil unless
 // clearances were asked; it and meshes must be safe for concurrent use.
-func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, geomCache *pairkernel.Cache, meshes booleaneval.OperandMesher) (verifyPairOutcome, error) {
+func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, geomCache *pairkernel.Cache, meshes booleaneval.OperandMesher, mesher verifiedmesh.Mesher, alloc topo.Alloc) (verifyPairOutcome, error) {
 	var out verifyPairOutcome
 	a, b, boxProven := job.a, job.b, job.boxProven
 
@@ -88,29 +90,29 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 	// not), and also when the boxes are separated but a gap was requested,
 	// exactly as the solid-solid path below runs pairkernel.Pair in that same
 	// second case.
-	if a.Kind() == BodySheet || b.Kind() == BodySheet {
-		if a.Kind() == BodySheet && b.Kind() == BodySheet {
+	if a.Kind == topo.BodySheet || b.Kind == topo.BodySheet {
+		if a.Kind == topo.BodySheet && b.Kind == topo.BodySheet {
 			out.diagnostics = append(out.diagnostics,
-				pairDiagNone(a, b, DiagUnsupportedPairSheet,
+				PairDiagNone(a, b, vocab.DiagUnsupportedPairSheet,
 					"both operands are sheet bodies, and neither offers a closed boundary to cast the other against"))
 			out.undecided = true
 			return out, nil
 		}
 		sheet, solid := a, b
-		if b.Kind() == BodySheet {
+		if b.Kind == topo.BodySheet {
 			sheet, solid = b, a
 		}
-		sres, err := pairkernel.SheetSolid(ctx, &sheet.n, &solid.n, boxProven, geomCache)
+		sres, err := pairkernel.SheetSolid(ctx, sheet, solid, boxProven, geomCache)
 		if err != nil {
 			return verifyPairOutcome{}, err
 		}
 		switch sres.Verdict {
 		case boundaryaudit.SheetSolidCrossing:
 			out.diagnostics = append(out.diagnostics, Diagnostic{
-				Code:    DiagSheetSolidCrossing,
-				Status:  Interfering,
+				Code:    vocab.DiagSheetSolidCrossing,
+				Status:  vocab.Interfering,
 				Pair:    &DiagnosticPair{A: a, B: b},
-				Reading: ReadingNone,
+				Reading: vocab.ReadingNone,
 				Message: "the sheet crosses the solid's boundary; no Interference row is emitted because a sheet encloses no region and there is no overlap volume to report",
 			})
 		case boundaryaudit.SheetSolidContained, boundaryaudit.SheetSolidOutside:
@@ -125,11 +127,11 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 				// same shape of gap as an unmeasured solid-solid clearance
 				// below.
 				out.diagnostics = append(out.diagnostics,
-					pairDiagNone(a, b, DiagUndecidedClearance,
+					PairDiagNone(a, b, vocab.DiagUndecidedClearance,
 						"the pair is proven disjoint but the requested clearance gap is unmeasured"))
 			} else {
 				out.diagnostics = append(out.diagnostics,
-					pairDiagNone(a, b, DiagUnsupportedPairSheet,
+					PairDiagNone(a, b, vocab.DiagUnsupportedPairSheet,
 						"the clearance kernel could not settle this sheet-against-solid pair"))
 			}
 			out.undecided = true
@@ -137,20 +139,20 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 		return out, nil
 	}
 
-	res, fast := pairkernel.AxisBoxes(&a.n, &b.n)
+	res, fast := pairkernel.AxisBoxes(a, b)
 	if !fast {
 		var err error
-		res, err = pairkernel.Pair(ctx, &a.n, &b.n, boxProven, geomCache)
+		res, err = pairkernel.Pair(ctx, a, b, boxProven, geomCache)
 		if err != nil {
 			return verifyPairOutcome{}, err
 		}
 	}
 	if res.Verdict == boundaryaudit.PairUndecided {
-		// The exact planar relation (clearance_planar.go) answers what the
+		// The exact planar relation (internal/verifyrun/clearance.go) answers what the
 		// analytic kernel left open — a pair an operand has no carrier model
 		// in, or one its enumeration could not settle — and only ever adds a
 		// verdict, never replaces one (interference design §3.2).
-		planar, ok, err := planarPairVerdict(ctx, a, b)
+		planar, ok, err := planarPairVerdict(ctx, mesher, a, b)
 		if err != nil {
 			return verifyPairOutcome{}, err
 		}
@@ -172,7 +174,7 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 			return out, nil
 		}
 		out.diagnostics = append(out.diagnostics,
-			pairDiagNone(a, b, DiagUndecidedClearance,
+			PairDiagNone(a, b, vocab.DiagUndecidedClearance,
 				"the pair is proven disjoint but the requested clearance gap is unmeasured"))
 		out.undecided = true
 		return out, nil
@@ -185,36 +187,36 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 		return out, nil
 	}
 
-	volume, outcome, err := measuredInterference(ctx, a, b, res, meshes)
+	volume, outcome, err := MeasuredInterference(ctx, alloc, a, b, res, meshes)
 	if err != nil {
 		return verifyPairOutcome{}, err
 	}
 	if outcome != boundaryaudit.InterferenceMeasured {
-		out.diagnostics = append(out.diagnostics, undecidedPairDiag(a, b, res.Verdict, outcome))
+		out.diagnostics = append(out.diagnostics, UndecidedPairDiag(a, b, a, b, res.Verdict, outcome))
 		out.undecided = true
 		return out, nil
 	}
 	out.interferences = append(out.interferences, Interference{A: a, B: b, Volume: volume})
-	pairD, err := pairkernel.PairGateDiameter(ctx, &a.n, &b.n, nil)
+	pairD, err := pairkernel.PairGateDiameter(ctx, a, b, nil)
 	if err != nil {
 		return verifyPairOutcome{}, err
 	}
 	obs := volume
 	out.diagnostics = append(out.diagnostics, Diagnostic{
-		Code:     DiagInterference,
-		Status:   Interfering,
+		Code:     vocab.DiagInterference,
+		Status:   vocab.Interfering,
 		Pair:     &DiagnosticPair{A: a, B: b},
-		Reading:  ReadingOverlapVolume,
+		Reading:  vocab.ReadingOverlapVolume,
 		Observed: &obs,
 		Message:  "the pair is proven to overlap",
 	})
-	pass, ref, haveRef := interferenceToleranceRef(volume, a, b, pairD, cfg.Rel)
+	pass, ref, haveRef := InterferenceToleranceRef(volume, a, b, pairD, cfg.Rel)
 	if !pass {
 		beyond := Diagnostic{
-			Code:     DiagMeasurementBeyondTolerance,
-			Status:   Suspect,
+			Code:     vocab.DiagMeasurementBeyondTolerance,
+			Status:   vocab.Suspect,
 			Pair:     &DiagnosticPair{A: a, B: b},
-			Reading:  ReadingOverlapVolume,
+			Reading:  vocab.ReadingOverlapVolume,
 			Observed: &obs,
 			Message:  fmt.Sprintf("the overlap-volume reading's bound %s is beyond the relative tolerance", volume.Bound),
 		}
@@ -229,7 +231,7 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 
 // appendClearance records the pair's Clearance row and, when the gap misses
 // the tolerance gate, its diagnostic (verify.go's appendClearance).
-func (o *verifyPairOutcome) appendClearance(a, b *Body, res pairkernel.Result, rel float64) {
+func (o *verifyPairOutcome) appendClearance(a, b *topo.Body, res pairkernel.Result, rel float64) {
 	scratch := Report{}
 	if d := appendClearance(&scratch, a, b, res, rel); d != nil {
 		o.diagnostics = append(o.diagnostics, *d)
@@ -254,7 +256,9 @@ func (o *verifyPairOutcome) appendClearance(a, b *Body, res pairkernel.Result, r
 // pair touches at the pair's own tolerance (docs/api-design.md §8 "The chain
 // depth", docs/faceted-vertex-bounds-design.md §5).
 type verifyMeshCache struct {
-	entries map[*Body]*verifyMeshEntry
+	entries map[*topo.Body]*verifyMeshEntry
+	mesher  verifiedmesh.Mesher
+	operand booleaneval.OperandMesher
 }
 
 // verifyMeshEntry is one body's shared mesh: the chord it is meshed at, and
@@ -262,7 +266,7 @@ type verifyMeshCache struct {
 type verifyMeshEntry struct {
 	chord float64
 	once  sync.Once
-	mesh  *Mesh
+	mesh  *topo.Mesh
 	err   error
 }
 
@@ -270,13 +274,13 @@ type verifyMeshEntry struct {
 // no chord tolerance contributes nothing here: if it reaches the mesh path
 // anyway, booloperand.PairChord refuses it there exactly as it would without
 // the cache. The context is polled once per job.
-func newVerifyMeshCache(ctx context.Context, jobs []verifyPairJob) (*verifyMeshCache, error) {
-	cache := &verifyMeshCache{entries: map[*Body]*verifyMeshEntry{}}
-	shares := map[*Body]meshbool.ChordOperand{}
-	share := func(b *Body) meshbool.ChordOperand {
+func newVerifyMeshCache(ctx context.Context, h Hooks, jobs []verifyPairJob) (*verifyMeshCache, error) {
+	cache := &verifyMeshCache{entries: map[*topo.Body]*verifyMeshEntry{}, mesher: h.Mesher, operand: h.Operand}
+	shares := map[*topo.Body]meshbool.ChordOperand{}
+	share := func(b *topo.Body) meshbool.ChordOperand {
 		s, ok := shares[b]
 		if !ok {
-			s = booloperand.ChordShare(ctx, &b.n)
+			s = booloperand.ChordShare(ctx, b)
 			shares[b] = s
 		}
 		return s
@@ -285,17 +289,17 @@ func newVerifyMeshCache(ctx context.Context, jobs []verifyPairJob) (*verifyMeshC
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		if job.boxProven || job.a.Kind() == BodySheet || job.b.Kind() == BodySheet {
+		if job.boxProven || job.a.Kind == topo.BodySheet || job.b.Kind == topo.BodySheet {
 			continue
 		}
 		tol, _, ok := meshbool.PairChordFrom(share(job.a), share(job.b))
 		if !ok {
 			continue
 		}
-		for _, b := range [2]*Body{job.a, job.b} {
+		for _, b := range [2]*topo.Body{job.a, job.b} {
 			// A body that restates a held mesh chords nothing, so one mesh at
 			// one chord cannot serve its pairs.
-			if _, restating := booloperand.HeldFloor(&b.n); restating {
+			if _, restating := booloperand.HeldFloor(b); restating {
 				continue
 			}
 			e, ok := cache.entries[b]
@@ -315,16 +319,15 @@ func newVerifyMeshCache(ctx context.Context, jobs []verifyPairJob) (*verifyMeshC
 // like a mesh: the build is deterministic, so every pair would fail the same
 // way, and each pair maps the error to its own operand index.
 func (c *verifyMeshCache) TessellateOperand(ctx context.Context, node *topo.Body, pairTol float64) (*topo.Mesh, bool, error) {
-	b := bodyHandle(node)
-	e, ok := c.entries[b]
+	e, ok := c.entries[node]
 	if !ok {
-		return pairMeshes{}.TessellateOperand(ctx, node, pairTol)
+		return c.operand.TessellateOperand(ctx, node, pairTol)
 	}
 	e.once.Do(func() {
-		e.mesh, e.err = tessellateContext(ctx, b, units.Millimeters(e.chord), VerifyAll)
+		e.mesh, e.err = c.mesher.VerifyAll(ctx, node, e.chord)
 	})
 	if e.err != nil {
 		return nil, false, e.err
 	}
-	return &e.mesh.n, false, nil
+	return e.mesh, false, nil
 }

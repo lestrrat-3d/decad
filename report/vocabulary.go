@@ -16,7 +16,7 @@ const (
 // effective-request records, bounded readings, survey result records, and
 // Report/BodyReport
 // (docs/verification-design.md §1-§9). Verify publication builds a Report
-// from survey outcomes and certified readings in verify_publish.go.
+// from survey outcomes and certified readings in internal/verifyrun/publish.go.
 
 // ScalarOutcome is a whole-body scalar survey's primary outcome (Wall or
 // ConcaveRadius): whether the question was asked, and if so, whether the
