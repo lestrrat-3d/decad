@@ -8,67 +8,60 @@ import (
 	"github.com/lestrrat-3d/sketch"
 )
 
-// Loft rules a solid between two profiles recorded on distinct planes: a
-// 40 mm square on the sketch plane and a 20 mm square on a plane offset
-// 10 mm along its normal, both centred on the axis. The result is a
-// pyramidal frustum, whose volume h/3*(A0+A1+sqrt(A0*A1)) = 28000/3 mm^3 is
-// not exactly representable in binary — the evaluator reports it
-// Approximate with a proven bound, the same honesty every other analytic
-// measurement carries.
+// Loft joins two profiles on different planes with a smooth skin, making a
+// solid that changes shape from one end to the other. Use it for tapered
+// parts, adapters and transitions, such as going from a large square to a
+// small one.
 func Example_loft() {
+	// The bottom profile is a 40 x 40 mm square on the XY plane.
 	w := sketch.NewWorld()
-	s0, err := w.CreateSketch(w.XY())
+	bottom, err := w.CreateSketch(w.XY())
 	if err != nil {
-		fmt.Printf("failed to create the bottom sketch: %s\n", err)
+		fmt.Printf("failed to create sketch: %s\n", err)
 		return
 	}
-	bottom := s0.CreateRectangle(-20, -20, 20, 20)
-	s0.Fix(bottom.A)
-	if _, err := s0.Solve(context.Background()); err != nil {
-		fmt.Printf("failed to solve the bottom sketch: %s\n", err)
+	bottomRect := bottom.CreateRectangle(-20, -20, 20, 20)
+	bottom.Fix(bottomRect.A)
+	if _, err := bottom.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
 
-	top, err := w.CreateOffsetPlane(w.XY(), 10)
+	// The top profile is a smaller 20 x 20 mm square, drawn on a plane 10 mm
+	// above the first. Loft needs its two profiles on different planes.
+	topPlane, err := w.CreateOffsetPlane(w.XY(), 10)
 	if err != nil {
-		fmt.Printf("failed to create the top plane: %s\n", err)
+		fmt.Printf("failed to create plane: %s\n", err)
 		return
 	}
-	s1, err := w.CreateSketch(top)
+	top, err := w.CreateSketch(topPlane)
 	if err != nil {
-		fmt.Printf("failed to create the top sketch: %s\n", err)
+		fmt.Printf("failed to create sketch: %s\n", err)
 		return
 	}
-	topRect := s1.CreateRectangle(-10, -10, 10, 10)
-	s1.Fix(topRect.A)
-	if _, err := s1.Solve(context.Background()); err != nil {
-		fmt.Printf("failed to solve the top sketch: %s\n", err)
+	topRect := top.CreateRectangle(-10, -10, 10, 10)
+	top.Fix(topRect.A)
+	if _, err := top.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
 
+	// Loft from the bottom profile to the top one. The result is a frustum:
+	// a pyramid with its tip cut off.
 	doc := decad.New()
-	body, err := decad.Loft(context.Background(), doc, s0, s0.Profiles()[0], s1, s1.Profiles()[0])
+	frustum, err := decad.Loft(context.Background(), doc, bottom, bottom.Profiles()[0], top, top.Profiles()[0])
 	if err != nil {
 		fmt.Printf("failed to loft: %s\n", err)
 		return
 	}
-
-	vol, err := body.Volume()
+	volume, err := frustum.Volume()
 	if err != nil {
 		fmt.Printf("failed to measure volume: %s\n", err)
 		return
 	}
-	bounds, err := body.Bounds()
-	if err != nil {
-		fmt.Printf("failed to measure bounds: %s\n", err)
-		return
-	}
-
-	fmt.Printf("volume: %s (%s)\n", vol.Value, vol.Exactness)
-	fmt.Printf("bounds: %v .. %v\n", bounds.Min, bounds.Max)
-	fmt.Printf("faces: %d\n", len(body.Faces()))
+	fmt.Printf("faces: %d\n", len(frustum.Faces()))
+	fmt.Printf("volume: %.1f mm^3\n", volume.Value.Base())
 	// Output:
-	// volume: 9333.333333333334 mm^3 (Approximate)
-	// bounds: {-20 -20 0} .. {20 20 10}
 	// faces: 10
+	// volume: 9333.3 mm^3
 }

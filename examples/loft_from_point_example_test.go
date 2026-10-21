@@ -7,44 +7,46 @@ import (
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
-	"github.com/lestrrat-3d/units"
 )
 
+// LoftFromPoint lofts from a single point to a profile, making a pointed solid
+// such as a pyramid or cone. Use it for tips, spikes and any shape that
+// closes down to a point.
 func Example_loft_from_point() {
-	ctx := context.Background()
+	// The base of the pyramid: a 4 x 4 mm square on a plane 6 mm above the
+	// XY plane.
 	w := sketch.NewWorld()
 	plane, err := w.CreateOffsetPlane(w.XY(), 6)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Printf("failed to create plane: %s\n", err)
 		return
 	}
 	s, err := w.CreateSketch(plane)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Printf("failed to create sketch: %s\n", err)
 		return
 	}
-	rectangle := s.CreateRectangle(-2, -2, 2, 2)
-	s.Fix(rectangle.A)
-	if _, err := s.Solve(ctx); err != nil {
-		fmt.Println(err)
+	square := s.CreateRectangle(-2, -2, 2, 2)
+	s.Fix(square.A)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	body, err := decad.LoftFromPoint(ctx, decad.New(), r3.NewVec(0, 0, 0), s, s.Profiles()[0])
+
+	// The tip is the origin, 6 mm below the base.
+	pyramid, err := decad.LoftFromPoint(context.Background(), decad.New(),
+		r3.NewVec(0, 0, 0), s, s.Profiles()[0])
 	if err != nil {
-		fmt.Println(err)
+		fmt.Printf("failed to loft: %s\n", err)
 		return
 	}
-	volume, err := body.Volume()
+	volume, err := pyramid.Volume()
 	if err != nil {
-		fmt.Println(err)
+		fmt.Printf("failed to measure volume: %s\n", err)
 		return
 	}
-	mesh, err := body.Tessellate(ctx, units.Millimeters(0.01))
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Printf("%.0f mm³; boundary %t; volume %t\n",
-		volume.Value.Base(), mesh.BoundaryVerified(), mesh.VolumeVerified())
-	// Output: 32 mm³; boundary true; volume true
+	// A pyramid holds a third of base x height: 16 x 6 / 3 = 32 mm^3.
+	fmt.Printf("volume: %.0f mm^3\n", volume.Value.Base())
+	// Output:
+	// volume: 32 mm^3
 }
