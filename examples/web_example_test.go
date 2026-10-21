@@ -13,7 +13,7 @@ import (
 // 30 x 30 pocket 15 deep. The rib lines are drawn on a plane 1 mm below the
 // pocket floor, so each rib is buried in the floor, and run 2 mm into the
 // pocket walls so the rib ends are buried in them too.
-func Example_decad_web() {
+func Example_web() {
 	ctx := context.Background()
 	w := sketch.NewWorld()
 	doc := decad.New()

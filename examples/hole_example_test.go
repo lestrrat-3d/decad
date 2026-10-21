@@ -13,7 +13,7 @@ import (
 // Hole drills into a planar face at a world point. Here a counterbored
 // through hole goes into the top of a 40 x 30 x 10 plate, so the volume is the
 // plate minus the bore and minus the wider recess around its mouth.
-func Example_decad_hole() {
+func Example_hole() {
 	ctx := context.Background()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
