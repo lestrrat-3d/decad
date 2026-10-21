@@ -31,7 +31,7 @@ type Track struct {
 	Sphere        *contactround.SphereProof
 	SpherePair    *[2]contactround.SphereProof
 	SphereFirst   bool
-	Cylinder      *contactround.CylinderProof // disk-on-face track (contact_cylinder_sweep.go)
+	Cylinder      *contactround.CylinderProof // disk-on-face track (internal/sweeprun/cylinder.go)
 	CylinderFirst bool
 	From, To      *big.Rat
 	Duration      *big.Rat
@@ -42,8 +42,8 @@ type Track struct {
 	OrientedA     *contactbox.OrientedSourceBox
 	OrientedB     *contactbox.OrientedSourceBox
 	OrientedDelta [3]proofarith.Dyadic
-	Planar        *planarsweep.TrackProof   // general planar touch or band (contact_sweep_planar.go)
-	Rolling       *planarsweep.RollingTrack // rolling cylinder touch or band (contact_sweep_rolling.go)
+	Planar        *planarsweep.TrackProof   // general planar touch or band (internal/sweeprun/planar.go)
+	Rolling       *planarsweep.RollingTrack // rolling cylinder touch or band (internal/sweeprun/rolling.go)
 }
 
 func (t *Track) Start() vocab.SweepInstant { return sweeppath.Instant(t.From, t.Duration) }

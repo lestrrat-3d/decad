@@ -1,10 +1,13 @@
-package decad
+package sweeprun
 
 import (
 	"context"
 	"errors"
 	"math/big"
 	"sort"
+
+	"github.com/lestrrat-3d/decad/internal/topo"
+	vocab "github.com/lestrrat-3d/decad/report"
 
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/sweepproof"
@@ -23,11 +26,11 @@ import (
 )
 
 type sourceSphereSweepRun struct {
-	doc         *Document
-	a, b        *Body
+	hooks       Hooks
+	a, b        *topo.Body
 	pa, pb      affinePairPath
-	req         SweepRequest
-	report      *SweepReport
+	req         vocab.SweepRequest
+	report      *sweepReport
 	sphere      contactround.SphereProof
 	box         contactbox.SourceBox
 	sphereFirst bool
@@ -36,9 +39,9 @@ type sourceSphereSweepRun struct {
 // A rotating ball has the same occupied set as its translating center when
 // its drift pivot is the proved sphere center. Keep the real rotating path for
 // sampled poses and replay, while the support gap uses its exact center drift.
-func (d *Document) sweepRotatingSphereBox(ctx context.Context, a, b *Body,
-	pa, pb affinePairPath, req SweepRequest, resolution *big.Rat,
-	report *SweepReport) (*SweepReport, bool, error) {
+func sweepRotatingSphereBox(ctx context.Context, h Hooks, a, b *topo.Body,
+	pa, pb affinePairPath, req vocab.SweepRequest, resolution *big.Rat,
+	report *sweepReport) (*sweepReport, bool, error) {
 	if (pa.Drift == nil) == (pb.Drift == nil) {
 		return nil, false, nil
 	}
@@ -49,8 +52,8 @@ func (d *Document) sweepRotatingSphereBox(ctx context.Context, a, b *Body,
 	if boxPath.Drift != nil || boxPath.Screw != nil {
 		return nil, false, nil
 	}
-	sphere, sphereOK := contactround.SphereAtPose(bodyNode(sphereBody), spherePath.From)
-	box, boxOK := contactbox.SourceBoxAtPose(bodyNode(boxBody), boxPath.From)
+	sphere, sphereOK := contactround.SphereAtPose(sphereBody, spherePath.From)
+	box, boxOK := contactbox.SourceBoxAtPose(boxBody, boxPath.From)
 	if !sphereOK || !boxOK {
 		return nil, false, nil
 	}
@@ -60,8 +63,8 @@ func (d *Document) sweepRotatingSphereBox(ctx context.Context, a, b *Body,
 	from := spherePath.From.Translation()
 	for axis, value := range [3]float64{from.X, from.Y, from.Z} {
 		if proofarith.DyCmp(sphere.Center[axis], proofarith.MustDyOf(value)) != 0 {
-			report.Outcome, report.Cause = SweepUndecided, SweepContactUnsupported
-			report.Unresolved = &SweepInterval{From: sweeppath.Instant(new(big.Rat), pa.Duration),
+			report.Outcome, report.Cause = vocab.SweepUndecided, vocab.SweepContactUnsupported
+			report.Unresolved = &vocab.SweepInterval{From: sweeppath.Instant(new(big.Rat), pa.Duration),
 				To: sweeppath.Instant(big.NewRat(1, 1), pa.Duration)}
 			return report, true, nil
 		}
@@ -86,7 +89,7 @@ func (d *Document) sweepRotatingSphereBox(ctx context.Context, a, b *Body,
 		}
 		spherePath.Delta[axis] = component
 	}
-	run := &sourceSphereSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
+	run := &sourceSphereSweepRun{hooks: h, a: a, b: b, pa: pa, pb: pb,
 		req: req, report: report, sphere: sphere, box: box, sphereFirst: sphereFirst}
 	result, err := run.execute(ctx, resolution)
 	return result, true, err
@@ -99,19 +102,19 @@ func (r *sourceSphereSweepRun) deltas() ([3]proofarith.Dyadic, [3]proofarith.Dya
 	return r.pb.Delta, r.pa.Delta
 }
 
-func (r *sourceSphereSweepRun) idealAt(f *big.Rat, at SweepInstant) SweepEvent {
+func (r *sourceSphereSweepRun) idealAt(f *big.Rat, at vocab.SweepInstant) sweepEvent {
 	sphereDelta, boxDelta := r.deltas()
 	sphere, okSphere := contactround.TranslatedSphere(r.sphere, sphereDelta, f)
 	box, okBox := sweepproof.TranslatedContactBox(r.box, boxDelta, f)
 	if !okSphere || !okBox {
-		return SweepEvent{At: at, Relation: ContactUndecided, Reason: ContactPayloadUnsupported}
+		return sweepEvent{At: at, Relation: vocab.ContactUndecided, Reason: vocab.ContactPayloadUnsupported}
 	}
-	contact := &nodeContactReport{Request: r.req.ContactRequest}
+	contact := &contactReport{Request: r.req.ContactRequest}
 	contactround.ClassifySphereBox(contact, sphere, box, r.sphereFirst)
 	return sweepEventOf(at, contact)
 }
 
-func (r *sourceSphereSweepRun) sample(ctx context.Context, f *big.Rat) (*SweepSample, error) {
+func (r *sourceSphereSweepRun) sample(ctx context.Context, f *big.Rat) (*sweepSample, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -126,14 +129,14 @@ func (r *sourceSphereSweepRun) sample(ctx context.Context, f *big.Rat) (*SweepSa
 	if err != nil {
 		return nil, err
 	}
-	contact, err := r.doc.ContactPair(ctx, r.a, r.b, poseA, poseB, r.req.ContactRequest)
+	contact, err := r.hooks.Contact(ctx, poseA, poseB, r.req.ContactRequest)
 	if err != nil {
 		return nil, err
 	}
 	at := sweeppath.Instant(f, r.pa.Duration)
 	ideal := r.idealAt(f, at)
 	r.transferManifold(f, poseA, poseB, contact, &ideal)
-	sample := sampleWith(SweepSample{At: at, PoseA: poseA, PoseB: poseB, FloatContact: contact, Ideal: ideal}, new(big.Rat).Set(f))
+	sample := sampleWith(sweepSample{At: at, PoseA: poseA, PoseB: poseB, FloatContact: contact, Ideal: ideal}, new(big.Rat).Set(f))
 	r.report.Samples = append(r.report.Samples, sample)
 	r.report.PoseEvaluations++
 	return &sample, nil
@@ -143,7 +146,7 @@ func (r *sourceSphereSweepRun) sample(ctx context.Context, f *big.Rat) (*SweepSa
 // box proofs bound its difference from the exact affine path; a relation or
 // source-feature change withholds the manifold instead of guessing a match.
 func (r *sourceSphereSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.Transform,
-	contact *ContactReport, ideal *SweepEvent) {
+	contact *contactReport, ideal *sweepEvent) {
 	if ideal.Manifold == nil {
 		return
 	}
@@ -151,25 +154,25 @@ func (r *sourceSphereSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.Tran
 		len(ideal.Manifold.Points) != 1 ||
 		len(contact.Manifold.Points) != 1 {
 		ideal.Manifold = nil
-		ideal.Reason = ContactNoNormalProof
+		ideal.Reason = vocab.ContactNoNormalProof
 		return
 	}
 	want, actual := ideal.Manifold.Points[0], contact.Manifold.Points[0]
 	if want.FeatureA != actual.FeatureA || want.FeatureB != actual.FeatureB ||
 		want.Normal.Value != actual.Normal.Value {
 		ideal.Manifold = nil
-		ideal.Reason = ContactNoNormalProof
+		ideal.Reason = vocab.ContactNoNormalProof
 		return
 	}
 	spherePose, boxPose := poseB, poseA
 	if r.sphereFirst {
 		spherePose, boxPose = poseA, poseB
 	}
-	observedSphere, okSphere := contactround.SphereAtPose(bodyNode(r.sphereBody()), spherePose)
-	observedBox, okBox := contactbox.SourceBoxAtPose(bodyNode(r.boxBody()), boxPose)
+	observedSphere, okSphere := contactround.SphereAtPose(r.sphereBody(), spherePose)
+	observedBox, okBox := contactbox.SourceBoxAtPose(r.boxBody(), boxPose)
 	if !okSphere || !okBox {
 		ideal.Manifold = nil
-		ideal.Reason = ContactPayloadUnsupported
+		ideal.Reason = vocab.ContactPayloadUnsupported
 		return
 	}
 	sphereDelta, boxDelta := r.deltas()
@@ -179,14 +182,14 @@ func (r *sourceSphereSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.Tran
 	resolution, ok := sweeppath.ExactBaseValue(r.req.PointResolution)
 	if !ok {
 		ideal.Manifold = nil
-		ideal.Reason = ContactPointTooCoarse
+		ideal.Reason = vocab.ContactPointTooCoarse
 		return
 	}
-	for _, witness := range []*VecMeasurement{&actual.OnA, &actual.OnB} {
+	for _, witness := range []*vocab.VecMeasurement{&actual.OnA, &actual.OnB} {
 		bound := new(big.Rat).Add(proofarith.FloatRat(witness.Bound.Base()), deviation)
 		if bound.Cmp(resolution) > 0 {
 			ideal.Manifold = nil
-			ideal.Reason = ContactPointTooCoarse
+			ideal.Reason = vocab.ContactPointTooCoarse
 			return
 		}
 		witness.Bound = units.Millimeters(proofbound.RatFloatUp(bound))
@@ -195,27 +198,27 @@ func (r *sourceSphereSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.Tran
 	sepBound := new(big.Rat).Add(proofarith.FloatRat(actual.Separation.Bound.Base()), deviation)
 	actual.Separation.Bound = units.Millimeters(proofbound.RatFloatUp(sepBound))
 	actual.Separation.Exactness = measurement.ExactnessOf(actual.Separation.Bound.Base())
-	ideal.Manifold = &ContactManifold{Points: []ContactPoint{actual}}
-	ideal.Reason = ContactNoReason
+	ideal.Manifold = &contactManifold{Points: []contactPoint{actual}}
+	ideal.Reason = vocab.ContactNoReason
 }
 
-func (r *sourceSphereSweepRun) sphereBody() *Body {
+func (r *sourceSphereSweepRun) sphereBody() *topo.Body {
 	if r.sphereFirst {
 		return r.a
 	}
 	return r.b
 }
 
-func (r *sourceSphereSweepRun) boxBody() *Body {
+func (r *sourceSphereSweepRun) boxBody() *topo.Body {
 	if r.sphereFirst {
 		return r.b
 	}
 	return r.a
 }
 
-func (r *sourceSphereSweepRun) undecided(from, to *big.Rat, cause SweepCause) *SweepReport {
-	r.report.Outcome, r.report.Cause = SweepUndecided, cause
-	r.report.Unresolved = &SweepInterval{From: sweeppath.Instant(from, r.pa.Duration),
+func (r *sourceSphereSweepRun) undecided(from, to *big.Rat, cause vocab.SweepCause) *sweepReport {
+	r.report.Outcome, r.report.Cause = vocab.SweepUndecided, cause
+	r.report.Unresolved = &vocab.SweepInterval{From: sweeppath.Instant(from, r.pa.Duration),
 		To: sweeppath.Instant(to, r.pa.Duration)}
 	r.sortSamples()
 	return r.report
@@ -227,7 +230,7 @@ func (r *sourceSphereSweepRun) sortSamples() {
 	})
 }
 
-func (r *sourceSphereSweepRun) track(first *SweepSample) *sweepproof.Track {
+func (r *sourceSphereSweepRun) track(first *sweepSample) *sweepproof.Track {
 	if first.Ideal.Manifold == nil || len(first.Ideal.Manifold.Points) != 1 {
 		return nil
 	}
@@ -241,7 +244,7 @@ func (r *sourceSphereSweepRun) track(first *SweepSample) *sweepproof.Track {
 	track := &sweepproof.Track{
 		From: new(big.Rat), To: big.NewRat(1, 1), Duration: new(big.Rat).Set(r.pa.Duration),
 		Request: r.req.ContactRequest, Sphere: &r.sphere, SphereFirst: r.sphereFirst,
-		Sources:    [2]nodeContactFeature{contactFeatureToInternal(point.FeatureA), contactFeatureToInternal(point.FeatureB)},
+		Sources:    [2]contactFeature{point.FeatureA, point.FeatureB},
 		NormalRead: point.Normal,
 		DeltaA:     r.pa.Delta, DeltaB: r.pb.Delta,
 	}
@@ -253,27 +256,27 @@ func (r *sourceSphereSweepRun) track(first *SweepSample) *sweepproof.Track {
 	return track
 }
 
-func (r *sourceSphereSweepRun) execute(ctx context.Context, resolution *big.Rat) (*SweepReport, error) {
+func (r *sourceSphereSweepRun) execute(ctx context.Context, resolution *big.Rat) (*sweepReport, error) {
 	zero, one := new(big.Rat), big.NewRat(1, 1)
 	first, err := r.sample(ctx, zero)
 	if errors.Is(err, errSweepPoseBudget) {
-		return r.undecided(zero, zero, SweepPoseBudget), nil
+		return r.undecided(zero, zero, vocab.SweepPoseBudget), nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	if first.Ideal.Relation == ContactOverlapping {
+	if first.Ideal.Relation == vocab.ContactOverlapping {
 		r.report.InitialEvent, r.report.Event = &first.Ideal, &first.Ideal
-		r.report.Outcome = SweepInitiallyOverlapping
+		r.report.Outcome = vocab.SweepInitiallyOverlapping
 		return r.report, nil
 	}
-	if first.Ideal.Relation != ContactSeparated && first.Ideal.Relation != ContactTouching {
-		return r.undecided(zero, zero, SweepPoseRelation), nil
+	if first.Ideal.Relation != vocab.ContactSeparated && first.Ideal.Relation != vocab.ContactTouching {
+		return r.undecided(zero, zero, vocab.SweepPoseRelation), nil
 	}
-	if first.Ideal.Relation == ContactTouching {
+	if first.Ideal.Relation == vocab.ContactTouching {
 		r.report.InitialEvent = &first.Ideal
-		if r.req.StartPolicy == StopAtInitialContact {
-			r.report.Outcome, r.report.Event = SweepInitiallyTouching, &first.Ideal
+		if r.req.StartPolicy == vocab.StopAtInitialContact {
+			r.report.Outcome, r.report.Event = vocab.SweepInitiallyTouching, &first.Ideal
 			return r.report, nil
 		}
 	}
@@ -282,7 +285,7 @@ func (r *sourceSphereSweepRun) execute(ctx context.Context, resolution *big.Rat)
 		pairbox.AxisSphere{Center: r.sphere.Center, Radius: r.sphere.Radius}, r.box.AxisBox(),
 		sphereDelta, boxDelta)
 	if !ok {
-		return r.undecided(zero, one, SweepContactUnsupported), nil
+		return r.undecided(zero, one, vocab.SweepContactUnsupported), nil
 	}
 	r.report.SetReplay(seal.Key{}, &sweepproof.Proof{PA: r.pa, PB: r.pb, Request: r.req.ContactRequest,
 		Sphere: &r.sphere, SphereFirst: r.sphereFirst, SphereAxis: axis, SphereSide: side,
@@ -292,86 +295,86 @@ func (r *sourceSphereSweepRun) execute(ctx context.Context, resolution *big.Rat)
 	} else {
 		r.report.Replay(seal.Key{}).BoxA = r.box
 	}
-	if first.Ideal.Relation == ContactTouching {
+	if first.Ideal.Relation == vocab.ContactTouching {
 		if slope.Sign() > 0 {
 			last, err := r.sample(ctx, one)
 			if errors.Is(err, errSweepPoseBudget) {
-				return r.undecided(zero, one, SweepPoseBudget), nil
+				return r.undecided(zero, one, vocab.SweepPoseBudget), nil
 			}
 			if err != nil {
 				return nil, err
 			}
-			if last.Ideal.Relation != ContactSeparated || last.Ideal.Gap == nil {
-				return r.undecided(zero, one, SweepPoseRelation), nil
+			if last.Ideal.Relation != vocab.ContactSeparated || last.Ideal.Gap == nil {
+				return r.undecided(zero, one, vocab.SweepPoseRelation), nil
 			}
-			r.report.Outcome = SweepDepartedClear
-			r.report.Departure = &SweepDeparture{Until: last.At, GapAtUntil: *last.Ideal.Gap}
+			r.report.Outcome = vocab.SweepDepartedClear
+			r.report.Departure = &vocab.SweepDeparture{Until: last.At, GapAtUntil: *last.Ideal.Gap}
 			r.report.Replay(seal.Key{}).Snapshot(r.report.Outcome)
 			return r.report, nil
 		}
-		if slope.IsZero() && r.req.StartPolicy == ContinueCertifiedTouch {
+		if slope.IsZero() && r.req.StartPolicy == vocab.ContinueCertifiedTouch {
 			track := r.track(first)
 			if track != nil {
 				last, err := r.sample(ctx, one)
 				if errors.Is(err, errSweepPoseBudget) {
-					return r.undecided(zero, one, SweepPoseBudget), nil
+					return r.undecided(zero, one, vocab.SweepPoseBudget), nil
 				}
 				if err != nil {
 					return nil, err
 				}
-				if last.Ideal.Relation == ContactTouching && last.Ideal.Manifold != nil {
-					r.report.Outcome, r.report.ContactTrack = SweepPersistentTouch, publishTrack(track)
+				if last.Ideal.Relation == vocab.ContactTouching && last.Ideal.Manifold != nil {
+					r.report.Outcome, r.report.ContactTrack = vocab.SweepPersistentTouch, nodeTrack(track)
 					r.report.Replay(seal.Key{}).Snapshot(r.report.Outcome)
 					return r.report, nil
 				}
 			}
 		}
-		return r.undecided(zero, one, SweepContactTrackUnproved), nil
+		return r.undecided(zero, one, vocab.SweepContactTrackUnproved), nil
 	}
 	if gap.Sign() <= 0 {
-		return r.undecided(zero, one, SweepPoseRelation), nil
+		return r.undecided(zero, one, vocab.SweepPoseRelation), nil
 	}
 	if slope.Sign() >= 0 || proofarith.DyAdd(gap, slope).Sign() > 0 {
 		last, err := r.sample(ctx, one)
 		if errors.Is(err, errSweepPoseBudget) {
-			return r.undecided(zero, one, SweepPoseBudget), nil
+			return r.undecided(zero, one, vocab.SweepPoseBudget), nil
 		}
 		if err != nil {
 			return nil, err
 		}
-		if last.Ideal.Relation != ContactSeparated {
-			return r.undecided(zero, one, SweepPoseRelation), nil
+		if last.Ideal.Relation != vocab.ContactSeparated {
+			return r.undecided(zero, one, vocab.SweepPoseRelation), nil
 		}
-		r.report.Outcome = SweepClear
+		r.report.Outcome = vocab.SweepClear
 		r.report.Replay(seal.Key{}).Snapshot(r.report.Outcome)
 		return r.report, nil
 	}
 	root := new(big.Rat).Quo(proofarith.DyNeg(gap).Rat(), slope.Rat())
 	leftF, rightF, ok := spherepath.ImpactBracket(root, r.pa.Duration, resolution)
 	if !ok || leftF.Sign() <= 0 || rightF.Cmp(one) > 0 {
-		return r.undecided(zero, one, SweepTimeFloor), nil
+		return r.undecided(zero, one, vocab.SweepTimeFloor), nil
 	}
 	left, err := r.sample(ctx, leftF)
 	if errors.Is(err, errSweepPoseBudget) {
-		return r.undecided(zero, leftF, SweepPoseBudget), nil
+		return r.undecided(zero, leftF, vocab.SweepPoseBudget), nil
 	}
 	if err != nil {
 		return nil, err
 	}
 	right, err := r.sample(ctx, rightF)
 	if errors.Is(err, errSweepPoseBudget) {
-		return r.undecided(leftF, rightF, SweepPoseBudget), nil
+		return r.undecided(leftF, rightF, vocab.SweepPoseBudget), nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	if left.Ideal.Relation != ContactSeparated ||
-		(right.Ideal.Relation != ContactTouching && right.Ideal.Relation != ContactOverlapping) ||
+	if left.Ideal.Relation != vocab.ContactSeparated ||
+		(right.Ideal.Relation != vocab.ContactTouching && right.Ideal.Relation != vocab.ContactOverlapping) ||
 		right.Ideal.Manifold == nil {
-		return r.undecided(leftF, rightF, SweepPoseRelation), nil
+		return r.undecided(leftF, rightF, vocab.SweepPoseRelation), nil
 	}
-	r.report.Outcome, r.report.Event = SweepImpactBracket, &right.Ideal
-	r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
+	r.report.Outcome, r.report.Event = vocab.SweepImpactBracket, &right.Ideal
+	r.report.Bracket = &vocab.SweepInterval{From: left.At, To: right.At}
 	r.report.SetBracketRight(seal.Key{}, new(big.Rat).Set(rightF))
 	r.report.Replay(seal.Key{}).SetBracket(leftF, rightF)
 	r.report.Replay(seal.Key{}).Snapshot(r.report.Outcome)
@@ -380,11 +383,11 @@ func (r *sourceSphereSweepRun) execute(ctx context.Context, resolution *big.Rat)
 }
 
 type orientedSphereSweepRun struct {
-	doc          *Document
-	a, b         *Body
+	hooks        Hooks
+	a, b         *topo.Body
 	pa, pb       affinePairPath
-	req          SweepRequest
-	report       *SweepReport
+	req          vocab.SweepRequest
+	report       *sweepReport
 	sphere       contactround.SphereProof
 	box          contactbox.OrientedSourceBox
 	sphereFirst  bool
@@ -400,21 +403,21 @@ func (r *orientedSphereSweepRun) deltas() ([3]proofarith.Dyadic, [3]proofarith.D
 	return r.pb.Delta, r.pa.Delta
 }
 
-func (r *orientedSphereSweepRun) idealAt(f *big.Rat, at SweepInstant) SweepEvent {
+func (r *orientedSphereSweepRun) idealAt(f *big.Rat, at vocab.SweepInstant) sweepEvent {
 	sphereDelta, boxDelta := r.deltas()
 	sphere, okSphere := contactround.TranslatedSphere(r.sphere, sphereDelta, f)
 	box := r.box // the translated box keeps its source face identities
 	geometry, okBox := pairbox.TranslateOriented(box.OrientedBox, boxDelta, f)
 	box.OrientedBox = geometry
 	if !okSphere || !okBox {
-		return SweepEvent{At: at, Relation: ContactUndecided, Reason: ContactPayloadUnsupported}
+		return sweepEvent{At: at, Relation: vocab.ContactUndecided, Reason: vocab.ContactPayloadUnsupported}
 	}
-	contact := &nodeContactReport{Request: r.req.ContactRequest}
+	contact := &contactReport{Request: r.req.ContactRequest}
 	contactround.ClassifySphereOrientedBox(contact, sphere, box, r.sphereFirst)
 	return sweepEventOf(at, contact)
 }
 
-func (r *orientedSphereSweepRun) sample(ctx context.Context, f *big.Rat) (*SweepSample, error) {
+func (r *orientedSphereSweepRun) sample(ctx context.Context, f *big.Rat) (*sweepSample, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -429,7 +432,7 @@ func (r *orientedSphereSweepRun) sample(ctx context.Context, f *big.Rat) (*Sweep
 	if err != nil {
 		return nil, err
 	}
-	contact, err := r.doc.ContactPair(ctx, r.a, r.b, poseA, poseB, r.req.ContactRequest)
+	contact, err := r.hooks.Contact(ctx, poseA, poseB, r.req.ContactRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -441,15 +444,15 @@ func (r *orientedSphereSweepRun) sample(ctx context.Context, f *big.Rat) (*Sweep
 			ideal.Manifold.Points[0].FeatureA != contact.Manifold.Points[0].FeatureA ||
 			ideal.Manifold.Points[0].FeatureB != contact.Manifold.Points[0].FeatureB ||
 			ideal.Manifold.Points[0].Normal.Value != contact.Manifold.Points[0].Normal.Value {
-			ideal.Manifold, ideal.Reason = nil, ContactNoNormalProof
+			ideal.Manifold, ideal.Reason = nil, vocab.ContactNoNormalProof
 		} else {
 			deviation := r.poseDeviation(f, poseA, poseB)
 			point := contact.Manifold.Points[0]
 			resolution, _ := sweeppath.ExactBaseValue(r.req.PointResolution)
-			for _, witness := range []*VecMeasurement{&point.OnA, &point.OnB} {
+			for _, witness := range []*vocab.VecMeasurement{&point.OnA, &point.OnB} {
 				bound := new(big.Rat).Add(proofarith.FloatRat(witness.Bound.Base()), deviation)
 				if bound.Cmp(resolution) > 0 {
-					ideal.Manifold, ideal.Reason = nil, ContactPointTooCoarse
+					ideal.Manifold, ideal.Reason = nil, vocab.ContactPointTooCoarse
 					break
 				}
 				witness.Bound = units.Millimeters(proofbound.RatFloatUp(bound))
@@ -459,11 +462,11 @@ func (r *orientedSphereSweepRun) sample(ctx context.Context, f *big.Rat) (*Sweep
 				bound := new(big.Rat).Add(proofarith.FloatRat(point.Separation.Bound.Base()), deviation)
 				point.Separation.Bound = units.Millimeters(proofbound.RatFloatUp(bound))
 				point.Separation.Exactness = measurement.ExactnessOf(point.Separation.Bound.Base())
-				ideal.Manifold = &ContactManifold{Points: []ContactPoint{point}}
+				ideal.Manifold = &contactManifold{Points: []contactPoint{point}}
 			}
 		}
 	}
-	sample := sampleWithPtr(SweepSample{At: at, PoseA: poseA, PoseB: poseB, FloatContact: contact,
+	sample := sampleWithPtr(sweepSample{At: at, PoseA: poseA, PoseB: poseB, FloatContact: contact,
 		Ideal: ideal}, new(big.Rat).Set(f))
 	r.report.Samples = append(r.report.Samples, *sample)
 	r.report.PoseEvaluations++
@@ -488,9 +491,9 @@ func (r *orientedSphereSweepRun) poseDeviation(f *big.Rat, poseA, poseB r3.Trans
 		boxDelta, r.sphere.Center, observedSphere.Center, sphereDelta, f)
 }
 
-func (r *orientedSphereSweepRun) undecided(from, to *big.Rat, cause SweepCause) *SweepReport {
-	r.report.Outcome, r.report.Cause = SweepUndecided, cause
-	r.report.Unresolved = &SweepInterval{From: sweeppath.Instant(from, r.pa.Duration),
+func (r *orientedSphereSweepRun) undecided(from, to *big.Rat, cause vocab.SweepCause) *sweepReport {
+	r.report.Outcome, r.report.Cause = vocab.SweepUndecided, cause
+	r.report.Unresolved = &vocab.SweepInterval{From: sweeppath.Instant(from, r.pa.Duration),
 		To: sweeppath.Instant(to, r.pa.Duration)}
 	sort.Slice(r.report.Samples, func(i, j int) bool {
 		return r.report.Samples[i].At.Fraction.Base() < r.report.Samples[j].At.Fraction.Base()
@@ -498,33 +501,33 @@ func (r *orientedSphereSweepRun) undecided(from, to *big.Rat, cause SweepCause) 
 	return r.report
 }
 
-func (r *orientedSphereSweepRun) execute(ctx context.Context, resolution *big.Rat) (*SweepReport, error) {
+func (r *orientedSphereSweepRun) execute(ctx context.Context, resolution *big.Rat) (*sweepReport, error) {
 	zero, one := new(big.Rat), big.NewRat(1, 1)
 	if !pairbox.OrthogonalSourceBox(r.box.OrientedBox) {
-		return r.undecided(zero, one, SweepContactUnsupported), nil
+		return r.undecided(zero, one, vocab.SweepContactUnsupported), nil
 	}
 	axis, side, outward, _, _, ok := pairbox.OrientedSphereFace(
 		r.sphere.Center, r.sphere.Radius, r.box.OrientedBox)
 	if !ok {
-		return r.undecided(zero, one, SweepContactUnsupported), nil
+		return r.undecided(zero, one, vocab.SweepContactUnsupported), nil
 	}
 	r.axis, r.side, r.outward = axis, side, outward
 	first, err := r.sample(ctx, zero)
 	if err != nil {
 		return nil, err
 	}
-	if first.Ideal.Relation == ContactOverlapping {
+	if first.Ideal.Relation == vocab.ContactOverlapping {
 		r.report.InitialEvent, r.report.Event = &first.Ideal, &first.Ideal
-		r.report.Outcome = SweepInitiallyOverlapping
+		r.report.Outcome = vocab.SweepInitiallyOverlapping
 		return r.report, nil
 	}
-	if first.Ideal.Relation != ContactSeparated && first.Ideal.Relation != ContactTouching {
-		return r.undecided(zero, zero, SweepPoseRelation), nil
+	if first.Ideal.Relation != vocab.ContactSeparated && first.Ideal.Relation != vocab.ContactTouching {
+		return r.undecided(zero, zero, vocab.SweepPoseRelation), nil
 	}
-	if first.Ideal.Relation == ContactTouching {
+	if first.Ideal.Relation == vocab.ContactTouching {
 		r.report.InitialEvent = &first.Ideal
-		if r.req.StartPolicy == StopAtInitialContact {
-			r.report.Outcome, r.report.Event = SweepInitiallyTouching, &first.Ideal
+		if r.req.StartPolicy == vocab.StopAtInitialContact {
+			r.report.Outcome, r.report.Event = vocab.SweepInitiallyTouching, &first.Ideal
 			return r.report, nil
 		}
 	}
@@ -533,71 +536,71 @@ func (r *orientedSphereSweepRun) execute(ctx context.Context, resolution *big.Ra
 		r.sphere.Center, r.sphere.Radius, r.box.OrientedBox, sphereDelta, boxDelta,
 		r.axis, r.side, r.outward)
 	if !ok {
-		return r.undecided(zero, one, SweepContactUnsupported), nil
+		return r.undecided(zero, one, vocab.SweepContactUnsupported), nil
 	}
 	r.report.SetReplay(seal.Key{}, &sweepproof.Proof{PA: r.pa, PB: r.pb, Request: r.req.ContactRequest,
 		OrientedSphere: &r.sphere, OrientedSphereBox: &r.box, SphereFirst: r.sphereFirst,
 		SphereAxis: r.axis, SphereSide: r.side, SphereGap: r.start, SphereSlope: r.slope})
-	if first.Ideal.Relation == ContactTouching {
+	if first.Ideal.Relation == vocab.ContactTouching {
 		if r.slope.Sign() <= 0 {
-			return r.undecided(zero, one, SweepDepartureUnproved), nil
+			return r.undecided(zero, one, vocab.SweepDepartureUnproved), nil
 		}
 		last, sampleErr := r.sample(ctx, one)
 		if errors.Is(sampleErr, errSweepPoseBudget) {
-			return r.undecided(zero, one, SweepPoseBudget), nil
+			return r.undecided(zero, one, vocab.SweepPoseBudget), nil
 		}
 		if sampleErr != nil {
 			return nil, sampleErr
 		}
-		if last.Ideal.Relation != ContactSeparated || last.Ideal.Gap == nil {
-			return r.undecided(zero, one, SweepPoseRelation), nil
+		if last.Ideal.Relation != vocab.ContactSeparated || last.Ideal.Gap == nil {
+			return r.undecided(zero, one, vocab.SweepPoseRelation), nil
 		}
-		r.report.Outcome = SweepDepartedClear
-		r.report.Departure = &SweepDeparture{Until: last.At, GapAtUntil: *last.Ideal.Gap}
+		r.report.Outcome = vocab.SweepDepartedClear
+		r.report.Departure = &vocab.SweepDeparture{Until: last.At, GapAtUntil: *last.Ideal.Gap}
 		r.report.Replay(seal.Key{}).Snapshot(r.report.Outcome)
 		return r.report, nil
 	}
 	if spherepath.OrientedFaceSign(r.start, r.slope, r.sphere.Radius, r.outward, one) > 0 {
 		last, sampleErr := r.sample(ctx, one)
 		if errors.Is(sampleErr, errSweepPoseBudget) {
-			return r.undecided(zero, one, SweepPoseBudget), nil
+			return r.undecided(zero, one, vocab.SweepPoseBudget), nil
 		}
 		if sampleErr != nil {
 			return nil, sampleErr
 		}
-		if last.Ideal.Relation != ContactSeparated {
-			return r.undecided(zero, one, SweepPoseRelation), nil
+		if last.Ideal.Relation != vocab.ContactSeparated {
+			return r.undecided(zero, one, vocab.SweepPoseRelation), nil
 		}
-		r.report.Outcome = SweepClear
+		r.report.Outcome = vocab.SweepClear
 		r.report.Replay(seal.Key{}).Snapshot(r.report.Outcome)
 		return r.report, nil
 	}
 	leftF, rightF, ok := spherepath.OrientedFaceBracket(
 		r.start, r.slope, r.sphere.Radius, r.outward, r.pa.Duration, resolution)
 	if !ok {
-		return r.undecided(zero, one, SweepTimeFloor), nil
+		return r.undecided(zero, one, vocab.SweepTimeFloor), nil
 	}
 	left, err := r.sample(ctx, leftF)
 	if errors.Is(err, errSweepPoseBudget) {
-		return r.undecided(zero, leftF, SweepPoseBudget), nil
+		return r.undecided(zero, leftF, vocab.SweepPoseBudget), nil
 	}
 	if err != nil {
 		return nil, err
 	}
 	right, err := r.sample(ctx, rightF)
 	if errors.Is(err, errSweepPoseBudget) {
-		return r.undecided(leftF, rightF, SweepPoseBudget), nil
+		return r.undecided(leftF, rightF, vocab.SweepPoseBudget), nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	if left.Ideal.Relation != ContactSeparated ||
-		(right.Ideal.Relation != ContactTouching && right.Ideal.Relation != ContactOverlapping) ||
+	if left.Ideal.Relation != vocab.ContactSeparated ||
+		(right.Ideal.Relation != vocab.ContactTouching && right.Ideal.Relation != vocab.ContactOverlapping) ||
 		right.Ideal.Manifold == nil {
-		return r.undecided(leftF, rightF, SweepPoseRelation), nil
+		return r.undecided(leftF, rightF, vocab.SweepPoseRelation), nil
 	}
-	r.report.Outcome, r.report.Event = SweepImpactBracket, &right.Ideal
-	r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
+	r.report.Outcome, r.report.Event = vocab.SweepImpactBracket, &right.Ideal
+	r.report.Bracket = &vocab.SweepInterval{From: left.At, To: right.At}
 	r.report.SetBracketRight(seal.Key{}, new(big.Rat).Set(rightF))
 	r.report.Replay(seal.Key{}).SetBracket(leftF, rightF)
 	r.report.Replay(seal.Key{}).Snapshot(r.report.Outcome)

@@ -1,9 +1,12 @@
-package decad
+package sweeprun
 
 import (
 	"context"
 	"errors"
 	"math/big"
+
+	"github.com/lestrrat-3d/decad/internal/topo"
+	vocab "github.com/lestrrat-3d/decad/report"
 
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/sweepproof"
@@ -25,15 +28,15 @@ import (
 
 // sourceCylinderFaceSweep uses one complete axial-disk or circular-sidewall
 // box-face corridor for clear motion, first impact, and one-sided departure.
-func (d *Document) sourceCylinderFaceSweep(ctx context.Context, a, b *Body,
-	pa, pb affinePairPath, req SweepRequest, report *SweepReport,
-	cylinder contactround.CylinderProof, box contactbox.SourceBox, cylinderFirst bool) (*SweepReport, error) {
+func sourceCylinderFaceSweep(ctx context.Context, h Hooks, a, b *topo.Body,
+	pa, pb affinePairPath, req vocab.SweepRequest, report *sweepReport,
+	cylinder contactround.CylinderProof, box contactbox.SourceBox, cylinderFirst bool) (*sweepReport, error) {
 	firstBox, secondBox := box, cylinder.Box
 	if cylinderFirst {
 		firstBox, secondBox = cylinder.Box, box
 	}
-	fullA, okA := sweptBoxOf(a, pa)
-	fullB, okB := sweptBoxOf(b, pb)
+	fullA, okA := sweptBoundsOf(a, pa)
+	fullB, okB := sweptBoundsOf(b, pb)
 	if !okA || !okB {
 		return cylinderSweepUndecided(report, pa.Duration), nil
 	}
@@ -45,11 +48,11 @@ func (d *Document) sourceCylinderFaceSweep(ctx context.Context, a, b *Body,
 	}
 	// The swept boxes enclose both bodies over the whole path, so a gap
 	// between them on the face axis proves the pair clear throughout.
-	axisGap := func(a, b SweptBox) (int, *big.Rat, bool) {
-		if gap := new(big.Rat).Sub(b.lo[axis].Rat(), a.hi[axis].Rat()); gap.Cmp(resolution) > 0 {
+	axisGap := func(a, b sweeppath.SweptBounds) (int, *big.Rat, bool) {
+		if gap := new(big.Rat).Sub(b.Lo[axis].Rat(), a.Hi[axis].Rat()); gap.Cmp(resolution) > 0 {
 			return 1, gap, true
 		}
-		if gap := new(big.Rat).Sub(a.lo[axis].Rat(), b.hi[axis].Rat()); gap.Cmp(resolution) > 0 {
+		if gap := new(big.Rat).Sub(a.Lo[axis].Rat(), b.Hi[axis].Rat()); gap.Cmp(resolution) > 0 {
 			return -1, gap, true
 		}
 		return 0, nil, false
@@ -73,7 +76,7 @@ func (d *Document) sourceCylinderFaceSweep(ctx context.Context, a, b *Body,
 		return cylinderSweepUndecided(report, pa.Duration), nil
 	}
 	if !ok {
-		return (&sourceCylinderImpactRun{doc: d, a: a, b: b, pa: pa, pb: pb,
+		return (&sourceCylinderImpactRun{hooks: h, a: a, b: b, pa: pa, pb: pb,
 			req: req, report: report, cylinder: cylinder, box: box,
 			cylinderFirst: cylinderFirst, axis: axis}).execute(ctx)
 	}
@@ -87,11 +90,11 @@ func (d *Document) sourceCylinderFaceSweep(ctx context.Context, a, b *Body,
 		return nil, err
 	}
 	for index, poses := range [][2]r3.Transform{{startA, startB}, {endA, endB}} {
-		contact, err := d.ContactPair(ctx, a, b, poses[0], poses[1], req.ContactRequest)
+		contact, err := h.Contact(ctx, poses[0], poses[1], req.ContactRequest)
 		if err != nil {
 			return nil, err
 		}
-		if contact.Relation != ContactSeparated {
+		if contact.Relation != vocab.ContactSeparated {
 			return cylinderSweepUndecided(report, pa.Duration), nil
 		}
 		fraction := big.NewRat(int64(index), 1)
@@ -106,12 +109,12 @@ func (d *Document) sourceCylinderFaceSweep(ctx context.Context, a, b *Body,
 			return cylinderSweepUndecided(report, pa.Duration), nil
 		}
 		at := sweeppath.Instant(fraction, pa.Duration)
-		ideal := SweepEvent{At: at, Relation: ContactSeparated, Gap: contact.Gap}
-		report.Samples = append(report.Samples, sampleWith(SweepSample{At: at, PoseA: poses[0], PoseB: poses[1],
+		ideal := sweepEvent{At: at, Relation: vocab.ContactSeparated, Gap: contact.Gap}
+		report.Samples = append(report.Samples, sampleWith(sweepSample{At: at, PoseA: poses[0], PoseB: poses[1],
 			FloatContact: contact, Ideal: ideal}, fraction))
 		report.PoseEvaluations++
 	}
-	report.Outcome, report.BoxExcluded = SweepClear, true
+	report.Outcome, report.BoxExcluded = vocab.SweepClear, true
 	report.SetReplay(seal.Key{}, &sweepproof.Proof{PA: pa, PB: pb, Request: req.ContactRequest,
 		Cylinder: &cylinder, CylinderFirst: cylinderFirst, BoxA: firstBox, BoxB: secondBox,
 		ClearAxis: axis, ClearSign: sign, ClearGap: gap})
@@ -120,11 +123,11 @@ func (d *Document) sourceCylinderFaceSweep(ctx context.Context, a, b *Body,
 }
 
 type sourceCylinderImpactRun struct {
-	doc           *Document
-	a, b          *Body
+	hooks         Hooks
+	a, b          *topo.Body
 	pa, pb        affinePairPath
-	req           SweepRequest
-	report        *SweepReport
+	req           vocab.SweepRequest
+	report        *sweepReport
 	cylinder      contactround.CylinderProof
 	box           contactbox.SourceBox
 	cylinderFirst bool
@@ -145,7 +148,7 @@ func (r *sourceCylinderImpactRun) boxesAt(f *big.Rat) (contactround.CylinderProo
 	return cylinder, box, okCylinder && okBox
 }
 
-func (r *sourceCylinderImpactRun) sample(ctx context.Context, f *big.Rat) (*SweepSample, error) {
+func (r *sourceCylinderImpactRun) sample(ctx context.Context, f *big.Rat) (*sweepSample, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -160,20 +163,20 @@ func (r *sourceCylinderImpactRun) sample(ctx context.Context, f *big.Rat) (*Swee
 	if err != nil {
 		return nil, err
 	}
-	actual, err := r.doc.ContactPair(ctx, r.a, r.b, poseA, poseB, r.req.ContactRequest)
+	actual, err := r.hooks.Contact(ctx, poseA, poseB, r.req.ContactRequest)
 	if err != nil {
 		return nil, err
 	}
 	at := sweeppath.Instant(f, r.pa.Duration)
 	cylinder, box, ok := r.boxesAt(f)
-	ideal := SweepEvent{At: at, Relation: ContactUndecided, Reason: ContactPayloadUnsupported}
+	ideal := sweepEvent{At: at, Relation: vocab.ContactUndecided, Reason: vocab.ContactPayloadUnsupported}
 	if ok {
-		contact := &nodeContactReport{Request: r.req.ContactRequest}
+		contact := &contactReport{Request: r.req.ContactRequest}
 		contactround.ClassifyCylinderBox(contact, cylinder, box, r.cylinderFirst)
 		ideal = sweepEventOf(at, contact)
 	}
 	r.transferManifold(f, poseA, poseB, actual, &ideal)
-	sample := sampleWith(SweepSample{At: at, PoseA: poseA, PoseB: poseB,
+	sample := sampleWith(sweepSample{At: at, PoseA: poseA, PoseB: poseB,
 		FloatContact: actual, Ideal: ideal}, new(big.Rat).Set(f))
 	r.report.Samples = append(r.report.Samples, sample)
 	r.report.PoseEvaluations++
@@ -181,24 +184,24 @@ func (r *sourceCylinderImpactRun) sample(ctx context.Context, f *big.Rat) (*Swee
 }
 
 func (r *sourceCylinderImpactRun) transferManifold(f *big.Rat, poseA, poseB r3.Transform,
-	actual *ContactReport, ideal *SweepEvent) {
+	actual *contactReport, ideal *sweepEvent) {
 	if ideal.Manifold == nil {
 		return
 	}
 	if actual.Relation != ideal.Relation || !matchingCylinderManifold(actual.Manifold, ideal.Manifold) {
 		ideal.Manifold = nil
-		ideal.Reason = ContactNoNormalProof
+		ideal.Reason = vocab.ContactNoNormalProof
 		return
 	}
 	cylinderPose, boxPose := poseB, poseA
 	if r.cylinderFirst {
 		cylinderPose, boxPose = poseA, poseB
 	}
-	observedCylinder, okCylinder := contactround.CylinderAtPose(bodyNode(r.cylinderBody()), cylinderPose)
-	observedBox, okBox := contactbox.SourceBoxAtPose(bodyNode(r.boxBody()), boxPose)
+	observedCylinder, okCylinder := contactround.CylinderAtPose(r.cylinderBody(), cylinderPose)
+	observedBox, okBox := contactbox.SourceBoxAtPose(r.boxBody(), boxPose)
 	if !okCylinder || !okBox {
 		ideal.Manifold = nil
-		ideal.Reason = ContactPayloadUnsupported
+		ideal.Reason = vocab.ContactPayloadUnsupported
 		return
 	}
 	firstBox, secondBox := r.box, r.cylinder.Box
@@ -214,15 +217,15 @@ func (r *sourceCylinderImpactRun) transferManifold(f *big.Rat, poseA, poseB r3.T
 	resolution, ok := sweeppath.ExactBaseValue(r.req.PointResolution)
 	if !ok || deviation.Cmp(resolution) > 0 {
 		ideal.Manifold = nil
-		ideal.Reason = ContactPointTooCoarse
+		ideal.Reason = vocab.ContactPointTooCoarse
 		return
 	}
 	point := actual.Manifold.Points[0]
-	for _, witness := range []*VecMeasurement{&point.OnA, &point.OnB} {
+	for _, witness := range []*vocab.VecMeasurement{&point.OnA, &point.OnB} {
 		bound := new(big.Rat).Add(proofarith.FloatRat(witness.Bound.Base()), deviation)
 		if bound.Cmp(resolution) > 0 {
 			ideal.Manifold = nil
-			ideal.Reason = ContactPointTooCoarse
+			ideal.Reason = vocab.ContactPointTooCoarse
 			return
 		}
 		witness.Bound = units.Millimeters(proofbound.RatFloatUp(bound))
@@ -231,25 +234,25 @@ func (r *sourceCylinderImpactRun) transferManifold(f *big.Rat, poseA, poseB r3.T
 	separationBound := new(big.Rat).Add(proofarith.FloatRat(point.Separation.Bound.Base()), deviation)
 	point.Separation.Bound = units.Millimeters(proofbound.RatFloatUp(separationBound))
 	point.Separation.Exactness = measurement.ExactnessOf(point.Separation.Bound.Base())
-	ideal.Manifold = &ContactManifold{Points: []ContactPoint{point}}
-	ideal.Reason = ContactNoReason
+	ideal.Manifold = &contactManifold{Points: []contactPoint{point}}
+	ideal.Reason = vocab.ContactNoReason
 }
 
-func (r *sourceCylinderImpactRun) cylinderBody() *Body {
+func (r *sourceCylinderImpactRun) cylinderBody() *topo.Body {
 	if r.cylinderFirst {
 		return r.a
 	}
 	return r.b
 }
 
-func (r *sourceCylinderImpactRun) boxBody() *Body {
+func (r *sourceCylinderImpactRun) boxBody() *topo.Body {
 	if r.cylinderFirst {
 		return r.b
 	}
 	return r.a
 }
 
-func matchingCylinderManifold(actual, ideal *ContactManifold) bool {
+func matchingCylinderManifold(actual, ideal *contactManifold) bool {
 	if actual == nil || ideal == nil || len(actual.Points) != 1 || len(ideal.Points) != 1 {
 		return false
 	}
@@ -258,7 +261,7 @@ func matchingCylinderManifold(actual, ideal *ContactManifold) bool {
 		a.Normal.Value == b.Normal.Value
 }
 
-func (r *sourceCylinderImpactRun) execute(ctx context.Context) (*SweepReport, error) {
+func (r *sourceCylinderImpactRun) execute(ctx context.Context) (*sweepReport, error) {
 	zero, one := new(big.Rat), big.NewRat(1, 1)
 	cylinderDelta, boxDelta := r.pb.Delta, r.pa.Delta
 	if r.cylinderFirst {
@@ -283,13 +286,13 @@ func (r *sourceCylinderImpactRun) execute(ctx context.Context) (*SweepReport, er
 	if err != nil {
 		return nil, err
 	}
-	if first.Ideal.Relation != ContactSeparated && first.Ideal.Relation != ContactTouching {
+	if first.Ideal.Relation != vocab.ContactSeparated && first.Ideal.Relation != vocab.ContactTouching {
 		return cylinderSweepUndecided(r.report, r.pa.Duration), nil
 	}
-	if first.Ideal.Relation == ContactTouching {
+	if first.Ideal.Relation == vocab.ContactTouching {
 		r.report.InitialEvent = &first.Ideal
-		if r.req.StartPolicy == StopAtInitialContact {
-			r.report.Outcome, r.report.Event = SweepInitiallyTouching, &first.Ideal
+		if r.req.StartPolicy == vocab.StopAtInitialContact {
+			r.report.Outcome, r.report.Event = vocab.SweepInitiallyTouching, &first.Ideal
 			return r.report, nil
 		}
 	}
@@ -301,7 +304,7 @@ func (r *sourceCylinderImpactRun) execute(ctx context.Context) (*SweepReport, er
 		Cylinder: &r.cylinder, CylinderFirst: r.cylinderFirst,
 		BoxA: firstBox, BoxB: secondBox, ClearAxis: r.axis,
 		CylinderSide: r.side, CylinderGap: r.gap, CylinderSlope: r.slope})
-	if first.Ideal.Relation == ContactTouching {
+	if first.Ideal.Relation == vocab.ContactTouching {
 		if first.Ideal.Manifold == nil {
 			return cylinderSweepUndecided(r.report, r.pa.Duration), nil
 		}
@@ -312,11 +315,11 @@ func (r *sourceCylinderImpactRun) execute(ctx context.Context) (*SweepReport, er
 		if err != nil {
 			return nil, err
 		}
-		if last.Ideal.Relation != ContactSeparated || last.Ideal.Gap == nil {
+		if last.Ideal.Relation != vocab.ContactSeparated || last.Ideal.Gap == nil {
 			return cylinderSweepUndecided(r.report, r.pa.Duration), nil
 		}
-		r.report.Outcome = SweepDepartedClear
-		r.report.Departure = &SweepDeparture{Until: last.At, GapAtUntil: *last.Ideal.Gap}
+		r.report.Outcome = vocab.SweepDepartedClear
+		r.report.Departure = &vocab.SweepDeparture{Until: last.At, GapAtUntil: *last.Ideal.Gap}
 		r.report.Replay(seal.Key{}).Snapshot(r.report.Outcome)
 		return r.report, nil
 	}
@@ -344,8 +347,8 @@ func (r *sourceCylinderImpactRun) execute(ctx context.Context) (*SweepReport, er
 	if err != nil {
 		return nil, err
 	}
-	if left.Ideal.Relation != ContactSeparated ||
-		(right.Ideal.Relation != ContactTouching && right.Ideal.Relation != ContactOverlapping) ||
+	if left.Ideal.Relation != vocab.ContactSeparated ||
+		(right.Ideal.Relation != vocab.ContactTouching && right.Ideal.Relation != vocab.ContactOverlapping) ||
 		right.Ideal.Manifold == nil {
 		return cylinderSweepUndecided(r.report, r.pa.Duration), nil
 	}
@@ -354,8 +357,8 @@ func (r *sourceCylinderImpactRun) execute(ctx context.Context) (*SweepReport, er
 	if new(big.Rat).Abs(rightGap).Cmp(pointResolution) > 0 {
 		return cylinderSweepUndecided(r.report, r.pa.Duration), nil
 	}
-	r.report.Outcome, r.report.Event = SweepImpactBracket, &right.Ideal
-	r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
+	r.report.Outcome, r.report.Event = vocab.SweepImpactBracket, &right.Ideal
+	r.report.Bracket = &vocab.SweepInterval{From: left.At, To: right.At}
 	r.report.SetBracketRight(seal.Key{}, new(big.Rat).Set(rightF))
 	r.report.Replay(seal.Key{}).SetBracket(leftF, rightF)
 	r.report.Replay(seal.Key{}).Snapshot(r.report.Outcome)
@@ -368,10 +371,10 @@ func (r *sourceCylinderImpactRun) execute(ctx context.Context) (*SweepReport, er
 // endpoint containment keeps the complete disk inside the same face
 // throughout. The two source faces and the exact normal therefore hold over
 // the closed span, and ManifoldAt reduces the exact pair at any fraction.
-func (r *sourceCylinderImpactRun) persistentTrack(ctx context.Context, first *SweepSample) (*SweepReport, error) {
+func (r *sourceCylinderImpactRun) persistentTrack(ctx context.Context, first *sweepSample) (*sweepReport, error) {
 	zero, one := new(big.Rat), big.NewRat(1, 1)
-	if r.req.StartPolicy != ContinueCertifiedTouch {
-		return cylinderSweepCause(r.report, r.pa.Duration, SweepDepartureUnproved), nil
+	if r.req.StartPolicy != vocab.ContinueCertifiedTouch {
+		return cylinderSweepCause(r.report, r.pa.Duration, vocab.SweepDepartureUnproved), nil
 	}
 	firstBox, secondBox := r.box, r.cylinder.Box
 	if r.cylinderFirst {
@@ -380,7 +383,7 @@ func (r *sourceCylinderImpactRun) persistentTrack(ctx context.Context, first *Sw
 	if !r.slope.IsZero() || r.axis != r.cylinder.Axis || len(first.Ideal.Manifold.Points) != 1 ||
 		!pairbox.TrackPointsWithin(firstBox.AxisBox(), secondBox.AxisBox(), r.pa.Delta, r.pb.Delta,
 			r.req.PointResolution.Base()) {
-		return cylinderSweepCause(r.report, r.pa.Duration, SweepContactTrackUnproved), nil
+		return cylinderSweepCause(r.report, r.pa.Duration, vocab.SweepContactTrackUnproved), nil
 	}
 	last, err := r.sample(ctx, one)
 	if errors.Is(err, errSweepPoseBudget) {
@@ -390,39 +393,39 @@ func (r *sourceCylinderImpactRun) persistentTrack(ctx context.Context, first *Sw
 		return nil, err
 	}
 	point := first.Ideal.Manifold.Points[0]
-	if last.Ideal.Relation != ContactTouching || last.Ideal.Manifold == nil ||
+	if last.Ideal.Relation != vocab.ContactTouching || last.Ideal.Manifold == nil ||
 		len(last.Ideal.Manifold.Points) != 1 || last.Ideal.Manifold.Points[0].FeatureA != point.FeatureA ||
 		last.Ideal.Manifold.Points[0].FeatureB != point.FeatureB {
-		return cylinderSweepCause(r.report, r.pa.Duration, SweepContactTrackUnproved), nil
+		return cylinderSweepCause(r.report, r.pa.Duration, vocab.SweepContactTrackUnproved), nil
 	}
 	cylinder := r.cylinder
 	track := &sweepproof.Track{A: firstBox, B: secondBox, DeltaA: r.pa.Delta, DeltaB: r.pb.Delta,
 		Cylinder: &cylinder, CylinderFirst: r.cylinderFirst,
 		From: new(big.Rat), To: big.NewRat(1, 1), Duration: new(big.Rat).Set(r.pa.Duration),
 		Request:    r.req.ContactRequest,
-		Sources:    [2]nodeContactFeature{contactFeatureToInternal(point.FeatureA), contactFeatureToInternal(point.FeatureB)},
+		Sources:    [2]contactFeature{point.FeatureA, point.FeatureB},
 		NormalRead: point.Normal, PointCount: 1}
-	r.report.Outcome, r.report.ContactTrack = SweepPersistentTouch, publishTrack(track)
+	r.report.Outcome, r.report.ContactTrack = vocab.SweepPersistentTouch, nodeTrack(track)
 	r.report.Replay(seal.Key{}).Track = track
 	r.report.Replay(seal.Key{}).Snapshot(r.report.Outcome)
 	return r.report, nil
 }
 
-func cylinderSweepCause(report *SweepReport, duration *big.Rat, cause SweepCause) *SweepReport {
+func cylinderSweepCause(report *sweepReport, duration *big.Rat, cause vocab.SweepCause) *sweepReport {
 	cylinderSweepUndecided(report, duration)
 	report.Cause = cause
 	return report
 }
 
-func cylinderSweepBudget(report *SweepReport, duration, from, to *big.Rat) *SweepReport {
-	report.Outcome, report.Cause = SweepUndecided, SweepPoseBudget
-	report.Unresolved = &SweepInterval{From: sweeppath.Instant(from, duration), To: sweeppath.Instant(to, duration)}
+func cylinderSweepBudget(report *sweepReport, duration, from, to *big.Rat) *sweepReport {
+	report.Outcome, report.Cause = vocab.SweepUndecided, vocab.SweepPoseBudget
+	report.Unresolved = &vocab.SweepInterval{From: sweeppath.Instant(from, duration), To: sweeppath.Instant(to, duration)}
 	return report
 }
 
-func cylinderSweepUndecided(report *SweepReport, duration *big.Rat) *SweepReport {
-	report.Outcome, report.Cause = SweepUndecided, SweepContactUnsupported
-	report.Unresolved = &SweepInterval{From: sweeppath.Instant(new(big.Rat), duration),
+func cylinderSweepUndecided(report *sweepReport, duration *big.Rat) *sweepReport {
+	report.Outcome, report.Cause = vocab.SweepUndecided, vocab.SweepContactUnsupported
+	report.Unresolved = &vocab.SweepInterval{From: sweeppath.Instant(new(big.Rat), duration),
 		To: sweeppath.Instant(big.NewRat(1, 1), duration)}
 	return report
 }

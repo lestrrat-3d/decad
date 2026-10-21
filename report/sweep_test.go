@@ -163,10 +163,10 @@ func TestLiftSweepContactTrack(t *testing.T) {
 	t.Parallel()
 	lift := refLift()
 	var none *report.SweepContactTrackOf[int, int, int]
-	require.Nil(t, report.LiftSweepContactTrack(seal.Key{}, none, lift), "a nil track stays nil")
+	require.Nil(t, report.LiftSweepContactTrack(seal.Key{}, none, &lift), "a nil track stays nil")
 
 	track := report.NewSweepContactTrack[int, int, int](seal.Key{}, stubTrack{}, "producer record")
-	lifted := report.LiftSweepContactTrack(seal.Key{}, track, lift)
+	lifted := report.LiftSweepContactTrack(seal.Key{}, track, &lift)
 	require.Equal(t, "producer record", lifted.Source(seal.Key{}), "the producer record survives the lift")
 
 	a, b := lifted.Features()
@@ -183,4 +183,68 @@ func TestLiftSweepContactTrack(t *testing.T) {
 	band, err := lifted.BandAt(units.Scalar(0.4))
 	require.NoError(t, err)
 	require.InDelta(t, 0.4, band.Value.Base(), 0)
+}
+
+func TestLiftSweepReport(t *testing.T) {
+	t.Parallel()
+	lift := refLift()
+	var none *sweepReport
+	require.Nil(t, report.LiftSweepReport(seal.Key{}, none, &lift), "a nil report stays nil")
+
+	proof := &stubReplay{present: true, affine: true}
+	touch := &report.SweepEventOf[int, int, int]{
+		Relation: report.ContactTouching,
+		Gap:      &report.Measurement{Value: units.Millimeters(1)},
+		Manifold: &report.ContactManifoldOf[int, int, int]{Points: []report.ContactPointOf[int, int, int]{{FaceA: 5, FaceB: 6}}},
+	}
+	later := &report.SweepEventOf[int, int, int]{Relation: report.ContactSeparated}
+	in := &sweepReport{
+		A: 1, B: 2, Outcome: report.SweepImpactBracket, Cause: report.SweepNoCause,
+		Bracket:      &report.SweepInterval{},
+		InitialEvent: touch, Event: touch, Departure: &report.SweepDeparture{},
+		ContactTrack: report.NewSweepContactTrack[int, int, int](seal.Key{}, stubTrack{}, "record"),
+		BoxExcluded:  true, PoseEvaluations: 7,
+		Samples: []report.SweepSampleOf[int, int, int, int]{
+			{PoseA: shift(r3.Vec{X: 1}), Ideal: *later, FloatContact: &report.ContactReportOf[int, int, int, int]{A: 1, B: 2}},
+			{Ideal: *touch},
+		},
+	}
+	in.SetReplay(seal.Key{}, proof)
+	in.SetBracketRight(seal.Key{}, big.NewRat(1, 1))
+	in.Samples[0].SetExactFraction(seal.Key{}, big.NewRat(1, 4))
+
+	out := report.LiftSweepReport(seal.Key{}, in, &lift)
+	require.Equal(t, "1", out.A)
+	require.Equal(t, "2", out.B)
+	require.Equal(t, report.SweepImpactBracket, out.Outcome)
+	require.True(t, out.BoxExcluded)
+	require.Equal(t, uint64(7), out.PoseEvaluations)
+	require.Same(t, in.Bracket, out.Bracket)
+	require.Same(t, in.Departure, out.Departure)
+	require.Same(t, proof, out.Replay(seal.Key{}), "the replay proof carries over")
+	require.True(t, out.BracketEndsAtDuration(), "the exact bracket end carries over")
+
+	require.NotNil(t, out.InitialEvent)
+	require.Same(t, out.InitialEvent, out.Event, "an event that is the initial event stays that one event")
+	require.Equal(t, "5", out.Event.Manifold.Points[0].FaceA)
+	require.Equal(t, "6", out.Event.Manifold.Points[0].FaceB)
+	require.NotSame(t, touch.Gap, out.Event.Gap, "the lifted event owns its gap")
+	require.Equal(t, *touch.Gap, *out.Event.Gap)
+
+	require.Len(t, out.Samples, 2)
+	require.Equal(t, report.ContactSeparated, out.Samples[0].Ideal.Relation)
+	require.Equal(t, "1", out.Samples[0].FloatContact.A)
+	require.Nil(t, out.Samples[1].FloatContact, "an absent float contact stays absent")
+	require.Equal(t, big.NewRat(1, 4), out.Samples[0].ExactFraction(seal.Key{}))
+	require.Nil(t, out.Samples[1].ExactFraction(seal.Key{}))
+	require.Equal(t, shift(r3.Vec{X: 1}), out.Samples[0].PoseA)
+
+	a, _ := out.ContactTrack.Features()
+	require.Equal(t, "1", a.Face)
+	require.Equal(t, "record", out.ContactTrack.Source(seal.Key{}))
+
+	in.Event = later
+	other := report.LiftSweepReport(seal.Key{}, in, &lift)
+	require.NotSame(t, other.InitialEvent, other.Event, "distinct events stay distinct")
+	require.Equal(t, report.ContactSeparated, other.Event.Relation)
 }

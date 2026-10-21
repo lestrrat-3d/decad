@@ -263,7 +263,7 @@ func (t *SweepContactTrackOf[F, E, V]) ManifoldAt(fraction units.Value) (*Contac
 // liftedTrack answers a track's questions in another reference instantiation.
 type liftedTrack[B1, F1, E1, V1, B2, F2, E2, V2 any] struct {
 	inner SweepTrack[F1, E1, V1]
-	lift  Lift[B1, F1, E1, V1, B2, F2, E2, V2]
+	lift  *Lift[B1, F1, E1, V1, B2, F2, E2, V2]
 }
 
 func (t liftedTrack[B1, F1, E1, V1, B2, F2, E2, V2]) Start() SweepInstant { return t.inner.Start() }
@@ -288,9 +288,10 @@ func (t liftedTrack[B1, F1, E1, V1, B2, F2, E2, V2]) ManifoldAt(fraction units.V
 }
 
 // LiftSweepContactTrack returns t with its features and manifolds mapped by l.
-// It keeps t's source record; a nil track stays nil.
+// It keeps t's source record; a nil track stays nil. The track holds l by
+// pointer, so tracks lifted by one Lift compare deeply equal.
 func LiftSweepContactTrack[B1, F1, E1, V1, B2, F2, E2, V2 any](_ seal.Key, t *SweepContactTrackOf[F1, E1, V1],
-	l Lift[B1, F1, E1, V1, B2, F2, E2, V2]) *SweepContactTrackOf[F2, E2, V2] {
+	l *Lift[B1, F1, E1, V1, B2, F2, E2, V2]) *SweepContactTrackOf[F2, E2, V2] {
 	if t == nil {
 		return nil
 	}
@@ -298,4 +299,41 @@ func LiftSweepContactTrack[B1, F1, E1, V1, B2, F2, E2, V2 any](_ seal.Key, t *Sw
 		proof:  liftedTrack[B1, F1, E1, V1, B2, F2, E2, V2]{inner: t.proof, lift: l},
 		source: t.source,
 	}
+}
+
+// LiftSweepReport returns r with every body, face, edge and vertex reference
+// mapped by l. The replay proof, the paths, the request and the exact bracket
+// end carry over; each sample keeps its exact fraction, and the contact track
+// keeps its producer record. A report whose Event is its InitialEvent keeps
+// them one event. A nil report stays nil.
+func LiftSweepReport[B1, F1, E1, V1 any, R SweepReplay, B2, F2, E2, V2 any](key seal.Key, r *SweepReportOf[B1, F1, E1, V1, R],
+	l *Lift[B1, F1, E1, V1, B2, F2, E2, V2]) *SweepReportOf[B2, F2, E2, V2, R] {
+	if r == nil {
+		return nil
+	}
+	out := &SweepReportOf[B2, F2, E2, V2, R]{
+		A: l.Body(r.A), B: l.Body(r.B), PathA: r.PathA, PathB: r.PathB, Request: r.Request,
+		Outcome: r.Outcome, Bracket: r.Bracket, Unresolved: r.Unresolved,
+		InitialEvent: l.SweepEvent(r.InitialEvent), Departure: r.Departure,
+		ContactTrack: LiftSweepContactTrack(key, r.ContactTrack, l), Cause: r.Cause,
+		BoxExcluded: r.BoxExcluded, PoseEvaluations: r.PoseEvaluations,
+		replay: r.replay, bracketRight: r.bracketRight,
+	}
+	if r.Event != nil && r.Event == r.InitialEvent {
+		out.Event = out.InitialEvent
+	} else {
+		out.Event = l.SweepEvent(r.Event)
+	}
+	if r.Samples != nil {
+		out.Samples = make([]SweepSampleOf[B2, F2, E2, V2], len(r.Samples))
+		for i := range r.Samples {
+			s := &r.Samples[i]
+			out.Samples[i] = SweepSampleOf[B2, F2, E2, V2]{At: s.At, PoseA: s.PoseA, PoseB: s.PoseB,
+				Ideal: *l.SweepEvent(&s.Ideal), exactFraction: s.exactFraction}
+			if s.FloatContact != nil {
+				out.Samples[i].FloatContact = l.Report(s.FloatContact)
+			}
+		}
+	}
+	return out
 }

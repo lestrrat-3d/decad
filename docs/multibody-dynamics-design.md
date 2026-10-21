@@ -1406,12 +1406,12 @@ passes through has one.
 
 ### 10.1 Rotating drift over exact planar bodies
 
-`contact_sweep_rotation.go`'s `rotationalPairSweep` already carries the general machinery for a rigid
+`internal/sweeprun/rotation.go`'s `rotationalPairSweep` already carries the general machinery for a rigid
 drift: `prepareRotationalSweepPath` builds the ideal path and travel bound, `refine`
-(`contact_sweep_rotation_depart.go`) is contact-sweep §5's left-first dyadic search, `intervalClear` is
+(`internal/sweeprun/depart.go`) is contact-sweep §5's left-first dyadic search, `intervalClear` is
 §4.3's `g_l + g_r > T` certificate, and `planarsweep.BodyPath.RoundedBox` (`internal/planarsweep/`)
 bounds the float-to-ideal pose deviation from the body's exact corners. It is limited to source boxes by
-its eight-corner inputs. `contact_sweep_planar.go` generalizes it to any §9 body: the exact vertex set
+its eight-corner inputs. `internal/sweeprun/planar.go` generalizes it to any §9 body: the exact vertex set
 replaces the corners, the per-sample relation and gap come from §9.1 at the rounded pose, and the
 deviation is the largest outward corner distance over all vertices. `SweepPair` dispatches to it when
 either path rotates and both bodies are §9 bodies; affine paths of §9 bodies take the same run with a
@@ -1661,7 +1661,7 @@ poses (§13 PR 19), and against a signed-axis face of an exact planar body at an
 (§13 PRs 20 and 20e).
 
 **Rolling.** A cylinder rolling on a floor takes §10.3's track with the ruling's two ends as the
-contact set. `contact_sweep_rolling.go` picks the sides, reads the start through `ContactPair` and
+contact set. `internal/sweeprun/rolling.go` picks the sides, reads the start through `ContactPair` and
 publishes the track; `internal/planarsweep/rolling.go` proves the band (`planarsweep.ProveRollingBand`)
 and certifies it (`planarsweep.RollingTrack`: depth, manifold and replay check). `SweepPair` admits a
 full source cylinder `M` at any start pose with a positive determinant whose path rotates, against an
@@ -1792,7 +1792,7 @@ points with their exact heights; `internal/planarband` maps and publishes them.
 
 **`SweepPair`.** A §9 pair whose first sample is `Touching`, or `ContactBand` from this path, continues under
 both policies over the support set (`planarContinuation` in
-`contact_sweep_planar.go` admits a `ContactBand` initial event of two source boxes as it admits a touch):
+`internal/sweeprun/planar.go` admits a `ContactBand` initial event of two source boxes as it admits a touch):
 
 - `planarsweep.FindPathSupports` admits a plane whose support set is nonempty and records each lifted
   vertex's exact start height `h0` and start rate `h'(0)`.
@@ -2022,7 +2022,7 @@ the step's end, and the step stops with `StepEventBudget` (MaxEvents `64`): the 
 `39`, the wedge in its step `29`, the `45°` and `60°` boxes in steps `80` and `48`, while the `75°` box runs
 256 steps still sliding at about `5 mm/s` with seven events per step. No `dynamics` rule alone closes the
 cycle, since no correction lands a rotated vertex in exact touch and a sweep that starts `Overlapping` is
-`SweepInitiallyOverlapping`; §10.8 changes the band track itself (`contact_sweep_planar.go`) and adds the two
+`SweepInitiallyOverlapping`; §10.8 changes the band track itself (`internal/sweeprun/planar.go`) and adds the two
 step rules the changed track needs.
 
 Rejected alternatives:
@@ -2354,7 +2354,7 @@ lines below do not repeat it.
 ### PR 2 (Phase 1) — `Document.SweptBox`
 
 - Delivers §4.2: `SweptBox`, `StrictlyDisjoint`, `Box()`; the cylinder and bounded-faceted sweeps consume it.
-- Files: new `swept_box.go`, `contact_cylinder_sweep.go`, `contact_faceted_floor.go`.
+- Files: new `swept_box.go`, `internal/sweeprun/cylinder.go`, `internal/sweeprun/faceted.go`.
 - Test (`apitest`): `apitest/swept_box_test.go`: a rotating box's swept box contains its exact corners at fractions
   `0`, `1/3` and `1`; dropping the travel term lets a corner escape (shown to fail); meeting boxes are
   not disjoint.
@@ -2495,7 +2495,7 @@ lines below do not repeat it.
 ### PR 12 (Phase 2) — general rotating sweep
 
 - Delivers §10.1.
-- Files: new `contact_sweep_planar.go`; `contact_sweep.go`, `contact_sweep_rotation.go`.
+- Files: new `internal/sweeprun/planar.go`; `contact_sweep.go`, `internal/sweeprun/rotation.go`.
 - Test (`apitest`): `apitest/contact_sweep_faceted_test.go`: a wedge tumbling toward a floor brackets its first
   vertex impact at the exact drift time within `TimeResolution`; the deviation leg is shown to fail.
 - Depends on: PRs 10, 11.
@@ -2505,8 +2505,8 @@ lines below do not repeat it.
 
 - Delivers §10.2, `SweepPersistentBand`, `Band()` and `BandAt()` (§10.3); `dynamics` consumes band
   tracks and advances through a rotating pair's impact (§5 steps 4, 6 and 7).
-- Files: `contact_sweep_planar.go`, `contact_sweep.go`,
-  `internal/sweepproof/replay.go`, `contact_sweep_rotation.go`, `contact_pair.go`,
+- Files: `internal/sweeprun/planar.go`, `contact_sweep.go`,
+  `internal/sweepproof/replay.go`, `internal/sweeprun/rotation.go`, `contact_pair.go`,
   `internal/pair/planar/planar_manifold.go`, `dynamics/schedule.go`, new `dynamics/schedule_band.go`,
   `dynamics/schedule_event.go`, `dynamics/island.go`.
 - Test (`apitest`): `apitest/contact_sweep_band_test.go`: a box resting on an edge with `ω = (0,1,0) rad/s`
@@ -2545,8 +2545,8 @@ lines below do not repeat it.
 - Delivers §10.5: `ContactRequest.SupportBand`, the support-set manifold of `ContactPair`, the band track over
   the support set, the exact pair's band start and departure, and the flat rest of a tipped box.
 - Files: `contact_pair.go`, `internal/planarpose/pose.go`,
-  `internal/pair/planar/planar_manifold.go`, `contact_sweep.go`, `contact_sweep_planar.go`,
-  `contact_sweep_rotation.go`, `dynamics/world.go`, `dynamics/schedule_event.go`.
+  `internal/pair/planar/planar_manifold.go`, `contact_sweep.go`, `internal/sweeprun/planar.go`,
+  `internal/sweeprun/rotation.go`, `dynamics/world.go`, `dynamics/schedule_event.go`.
 - Test (`apitest`): new `apitest/contact_support_band_test.go`, over the `8 mm` cube on a floor turned about `Y` by
   `sin θ = 2⁻²⁴`, so its far edge stands exactly `2⁻²¹ mm` up and every height below is a float: at
   `SupportBand = 2⁻²⁰ mm` the touch publishes four points, the far edge's two with `Separation` exactly `2⁻²¹`
@@ -2615,7 +2615,7 @@ lines below do not repeat it.
   it, under the column test and lateral clearance; `planarsweep.DepartureProof.LowerGap` and the replay
   read the clearance;
   `PlanarColumnClear` in `internal/pair` owns the projected box-triangle test and the gap.
-- Files: `contact_sweep_planar.go`, `internal/sweepproof/replay.go`, new
+- Files: `internal/sweeprun/planar.go`, `internal/sweepproof/replay.go`, new
   `internal/pair/planar/planar_column.go`.
 - Test (`apitest`): `apitest/contact_sweep_band_test.go` gains three tests over the §2 `Cut` tray and the `8 mm` cube
   of `apitest/contact_support_band_test.go`, each in both body orders: `TestSweepPairDepartsFromTrayFloor`, the
@@ -2705,7 +2705,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 - Delivers §10.8: `SweepRequest.RestSpeed` and the two-sided hold of a rested vertex, the per-vertex
   curvature `K_p`, the overlapping initial contact, the carried correction allowance and the cut band track
   of §5 step 7 and §6.6, and the §2 residuals of the `tumble` scene.
-- Files: `contact_sweep.go` (the field and its validation), `contact_sweep_planar.go`, `dynamics/step.go`
+- Files: `contact_sweep.go` (the field and its validation), `internal/sweeprun/planar.go`, `dynamics/step.go`
   (`sweepRequest`), `dynamics/schedule_event.go` (`solveEvent`, `trackPairs`, `carriedPenetration`), `dynamics/island.go`
   (`solveIslands`), `.github/test-shards-apitest.txt`.
 - Test (`apitest`): `apitest/contact_sweep_test.go` rejects a negative, non-finite or non-`Velocity` `RestSpeed` with
@@ -2803,7 +2803,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 ### PR 18 (Phase 3) — `ContactBand` for positive-displacement bodies
 
 - Delivers §10.4.
-- Files: `internal/planarpose/pose.go`, `contact_sweep_planar.go`, `contact_sweep_rotation.go`,
+- Files: `internal/planarpose/pose.go`, `internal/sweeprun/planar.go`, `internal/sweeprun/rotation.go`,
   `internal/sweepproof/replay.go`, `dynamics/schedule.go`, `dynamics/schedule_band.go`,
   `dynamics/schedule_event.go`, `dynamics/island.go`.
 - Test (`apitest`): `apitest/contact_band_test.go` and `contact_band_internal_test.go`: the band, its charges and
@@ -2833,14 +2833,14 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 ### PR 20 (Phase 3) — rolling band tracks
 
 - Delivers §10.4's rolling track.
-- Files: `contact_sweep_planar.go`, new `contact_sweep_rolling.go`, `internal/contactruling/ruling.go`,
+- Files: `internal/sweeprun/planar.go`, new `internal/sweeprun/rolling.go`, `internal/contactruling/ruling.go`,
   `contact_pair.go`.
 - Test: `dynamics/rolling_test.go`: the cylinder rolls `π·20 mm` in one turn at `ω = 2π rad/s` with
   contact-point speed within `VelocityResidual` of zero.
 - Depends on: PRs 13, 19.
 - Shipped. The rolling band proof, its certificate, manifold, `BandAt` depth and replay check live in
-  `internal/planarsweep/rolling.go`; `contact_sweep_rolling.go` runs the sweep and publishes the track,
-  dispatched from `contact_sweep_planar.go` and read through `contact_sweep.go` and
+  `internal/planarsweep/rolling.go`; `internal/sweeprun/rolling.go` runs the sweep and publishes the track,
+  dispatched from `internal/sweeprun/planar.go` and read through `contact_sweep.go` and
   `internal/sweepproof/replay.go`; the placed-pose ruling that lets a turned cylinder start a track lives in
   `internal/contactruling/ruling.go`, dispatched from `contact_pair.go`. Root tests:
   `apitest/contact_sweep_rolling_test.go` rolls a `Ø20` cylinder `π·20 mm` in one turn at `2π rad/s` as an
@@ -2975,7 +2975,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   `contactruling.ClassifyPlacedRuling` publishes a separated gap with lower end `min(σ_lo, m)` and a touch or band only
   when `m` exceeds its half-width; the rolling track's band search runs the column test over the corners'
   path box less `S`'s translation.
-- Files: `internal/contactruling/ruling.go`, `contact_sweep_rolling.go`.
+- Files: `internal/contactruling/ruling.go`, `internal/sweeprun/rolling.go`.
 - Test (`apitest`): `apitest/contact_analytic_manifold_test.go` gains, over the §2 tray: the `Ø20 × 30 mm` cylinder on
   its side on the floor at a signed-axis pose, `Touching` with the ruling's two ends and `Normal`
   `(0, 0, 1)`; turned `2⁻²⁰ rad` about `Z`, the band the plain-floor fixture publishes; `1 mm` above the
@@ -3003,7 +3003,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 ### PR 20f (Phase 3) — the transfer charge
 
 - Delivers §10.4's replay transfer charge `‖R_r − R_i‖_F·δ` in `planarsweep.BodyPath.ReplayDeviation`.
-- Files: `contact_sweep_rotation.go`, `internal/sweepproof/replay.go`.
+- Files: `internal/sweeprun/rotation.go`, `internal/sweepproof/replay.go`.
 - Test (root): `contact_band_internal_test.go` gains `TestReplayTransferChargeIsTheBasisDifference`: PR 18's
   knob pair (`δ` about `4e-4 mm`) resting at a held gap `1.5·δ` on a translating path replays every
   fraction, where the `(s + 1)·δ` form refuses each (recorded in the test); on a rotating path the charge
