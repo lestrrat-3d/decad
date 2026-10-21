@@ -43,7 +43,7 @@ plate reads `Approximate` with a bound near 1e-11 mm³, because the join takes t
 A face that a relief joined or cut loses the `CapEnd` and `CapStart` roles of the original extrusion, so
 `FaceCreatedBy(CapEnd(b))` finds nothing on the result. `Facing` selects by outward normal. On a body with two
 reliefs of different height on one side, `Facing` matches several faces and `Emboss` refuses the selection
-(`TestEmbossRaisedOnTop` and `Example_decad_emboss` select the face before the first relief).
+(`TestEmbossRaisedOnTop` and `Example_emboss` select the face before the first relief).
 
 ## 5. Not covered
 
