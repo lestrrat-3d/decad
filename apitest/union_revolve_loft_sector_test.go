@@ -340,6 +340,15 @@ func taperedHubAndRadialLug(t *testing.T, splitU, toeApex, rootRadius float64, f
 	*decad.Document, *decad.Body, *decad.Body, *sketch.Sketch, []decad.FeatureRef,
 ) {
 	t.Helper()
+	return taperedHubAndRadialLugWidth(t, splitU, toeApex, rootRadius, 0.4, fitted)
+}
+
+// taperedHubAndRadialLugWidth is taperedHubAndRadialLug with the lug's half
+// width in the sketch plane given, so a test can fit more lugs around the hub.
+func taperedHubAndRadialLugWidth(t *testing.T, splitU, toeApex, rootRadius, half float64, fitted bool) (
+	*decad.Document, *decad.Body, *decad.Body, *sketch.Sketch, []decad.FeatureRef,
+) {
+	t.Helper()
 	doc := decad.New()
 	world := sketch.NewWorld()
 	section, err := world.CreateSketch(world.XY())
@@ -380,19 +389,19 @@ func taperedHubAndRadialLug(t *testing.T, splitU, toeApex, rootRadius float64, f
 	require.NoError(t, err)
 	lugSketch, err := lugWorld.CreateSketch(plane)
 	require.NoError(t, err)
-	rootLow := lugSketch.CreatePoint(-rootRadius, -0.4)
-	flankLow := lugSketch.CreatePoint(-5.5, -0.4)
-	tipLow := lugSketch.CreatePoint(-6, -0.4)
-	tipHigh := lugSketch.CreatePoint(-6, 0.4)
-	flankHigh := lugSketch.CreatePoint(-5.5, 0.4)
-	rootHigh := lugSketch.CreatePoint(-rootRadius, 0.4)
+	rootLow := lugSketch.CreatePoint(-rootRadius, -half)
+	flankLow := lugSketch.CreatePoint(-5.5, -half)
+	tipLow := lugSketch.CreatePoint(-6, -half)
+	tipHigh := lugSketch.CreatePoint(-6, half)
+	flankHigh := lugSketch.CreatePoint(-5.5, half)
+	rootHigh := lugSketch.CreatePoint(-rootRadius, half)
 	center := lugSketch.CreatePoint(0, 0)
 	for _, point := range []*sketch.Point{rootLow, flankLow, tipLow,
 		tipHigh, flankHigh, rootHigh, center} {
 		lugSketch.Fix(point)
 	}
 	if fitted {
-		midLow := lugSketch.CreatePoint(-(rootRadius+5.5)/2, -0.48)
+		midLow := lugSketch.CreatePoint(-(rootRadius+5.5)/2, -1.2*half)
 		lugSketch.Fix(midLow)
 		_, err = lugSketch.CreateFitSpline(rootLow, midLow, flankLow)
 		require.NoError(t, err)
@@ -403,7 +412,7 @@ func taperedHubAndRadialLug(t *testing.T, splitU, toeApex, rootRadius float64, f
 	lugSketch.CreateArc(center, tipHigh, tipLow)
 	lugSketch.CreateLine(tipHigh, flankHigh)
 	if fitted {
-		midHigh := lugSketch.CreatePoint(-(rootRadius+5.5)/2, 0.48)
+		midHigh := lugSketch.CreatePoint(-(rootRadius+5.5)/2, 1.2*half)
 		lugSketch.Fix(midHigh)
 		_, err = lugSketch.CreateFitSpline(flankHigh, midHigh, rootHigh)
 		require.NoError(t, err)

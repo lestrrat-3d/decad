@@ -20,8 +20,17 @@ has two fitted-spline crossings with strict source-side transitions and a
 strict local coordinate derivative. All other whole entities need strict
 Sketch side certificates with margins above the source-fan displacement and
 finite-meridian allowance. A missing, stale, approximate or ambiguous answer
-refuses the route. Partial entities are refused even when their endpoints are
-exact: this route has no side certificate restricted to a partial span.
+refuses the route. A Partial edge is admitted only on the fitted route and only
+when Sketch reports its bounds exact (`TExact`). Two kinds qualify. A fitted
+spline fragment must record exactly the span Sketch reports, in the edge's walk
+direction, and its cone crossing must lie strictly inside that span. A circle
+fragment, the root of a tooth whose involute base circle lies inside the root
+circle, has no Sketch side certificate, so decad proves its side itself: an
+exact rational interval box around the reported parameter range, widened by a
+fixed relative slack and one ulp, with the sign of the cone residual over the
+box and a margin above the same displacement allowance. The fragment may span
+less than a quarter turn. It serves as the inside segment. Any other Partial
+edge refuses the route.
 
 The certificate retains ordered section spans, both axis endpoints through
 the axial span, root face and cone, Sketch crossing/side answers, source
@@ -95,11 +104,18 @@ budget, the builder splits only cap cells above that term's target. Shared
 edges split together, including root edges. It rebuilds the shared ring and
 recomputes the cone cap and full boundary bounds after refinement. Each
 construction attempt permits at most three additional cap passes within the
-same mesh ceiling; a cap that still exceeds the budget refuses the join. The
-builder makes at most eight construction attempts. Before the next one, a cap
+same mesh ceiling; a cap that still exceeds the budget refuses the join.
+Every sector carries the same cap, so the joined mesh grows with the sector
+count. The first attempt subdivides each cap four times; when the mesh would
+pass the triangle ceiling the builder retries with one fewer subdivision, down
+to none, without using up an attempt, and cap refinement adds cells back only
+where the bound needs them. The sector count has no fixed limit of its own.
+The builder makes at most eight construction attempts. Before the next one, a cap
 bound refusal lowers the cone cap limit, a specific cap/root adjacency contact
-quarters the angular sag allowance, and an occupied-volume refusal scales that
-allowance by a factor from 0.1 to 0.5 set by its measured margin. Each new
+or a placed cap whose root contact misses the ring stations by more than the
+seam allowance quarters the angular sag allowance, and an occupied-volume
+refusal scales that allowance by a factor from 0.1 to 0.5 set by its measured
+margin. Each new
 mesh must pass the same exact audit. Refusal leaves all operands live. The
 current source class requires a canonical unplaced, full axis-X Revolve.
 Off-axis and transformed Revolves use the ordinary Boolean route or refuse.

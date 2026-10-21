@@ -31,7 +31,10 @@ func CertifyRevolveFitBoundary(record *facetedrecord.PointSectionRecord,
 	sides := make([]sketch.ConeSide, len(src.Entities))
 	fitCount := 0
 	for i, entity := range src.Entities {
-		if src.Profile.Outer[i].Partial {
+		edge := src.Profile.Outer[i]
+		_, isFit := entity.(*sketch.FitSpline)
+		_, isCircle := entity.(*sketch.Circle)
+		if edge.Partial && ((!isFit && !isCircle) || !edge.TExact) {
 			return empty, false
 		}
 		switch typed := entity.(type) {
@@ -41,8 +44,7 @@ func CertifyRevolveFitBoundary(record *facetedrecord.PointSectionRecord,
 			}
 		case *sketch.FitSpline:
 			segment, ok := record.Profile.Outer.Segments[i].(sectionrecord.FitSplineSeg)
-			if !ok || !((segment.TStart == 0 && segment.TEnd == 1) ||
-				(segment.TStart == 1 && segment.TEnd == 0)) {
+			if !ok || !FitRangeMatchesEdge(segment, edge) {
 				return empty, false
 			}
 			cert, err := src.Sketch.CertifyConeFitCrossing(typed, cone)
@@ -54,7 +56,10 @@ func CertifyRevolveFitBoundary(record *facetedrecord.PointSectionRecord,
 					return empty, false
 				}
 				lo, hi := cert.TBounds()
-				if !(0 < lo && lo <= hi && hi < 1) {
+				// The crossing must lie strictly inside the fragment the
+				// profile keeps, so the Before and After sides bound it.
+				if !(0 < lo && lo <= hi && hi < 1) ||
+					!(min(segment.TStart, segment.TEnd) < lo && hi < max(segment.TStart, segment.TEnd)) {
 					return empty, false
 				}
 				derivativeLo, derivativeHi, ok := cert.TangentBounds(0, 1)
@@ -69,6 +74,29 @@ func CertifyRevolveFitBoundary(record *facetedrecord.PointSectionRecord,
 			if _, ok := record.Profile.Outer.Segments[i].(sectionrecord.ArcSeg); !ok {
 				return empty, false
 			}
+		case *sketch.Circle:
+			// Only a Partial fragment reaches here; a whole circle would
+			// straddle the cone and has no side to prove.
+			segment, ok := record.Profile.Outer.Segments[i].(sectionrecord.CircleSeg)
+			if !ok {
+				return empty, false
+			}
+			side, margin, ok := CircleFragmentSide(src.Frame, typed, edge, segment, cone)
+			if !ok || margin.Cmp(proofarith.FloatRat(implicitCost)) <= 0 {
+				return empty, false
+			}
+			sides[i] = side
+			switch side {
+			case sketch.ConeInside:
+				// The root fragment plays the part of the inside arc.
+				if result.InsideSegment >= 0 {
+					return empty, false
+				}
+				result.InsideSegment = i
+			case sketch.ConeOutside:
+				result.OutsideWitness = i
+			}
+			continue
 		default:
 			return empty, false
 		}
@@ -120,7 +148,7 @@ func CertifyRevolveFitBoundary(record *facetedrecord.PointSectionRecord,
 			return empty, false
 		}
 		startSide, endSide := result.Contacts[k].Fit.BeforeSide(), result.Contacts[k].Fit.AfterSide()
-		if segment.TStart == 1 {
+		if segment.TStart > segment.TEnd {
 			startSide, endSide = endSide, startSide
 		}
 		if startSide != previous || endSide != next {
@@ -216,4 +244,22 @@ func CertifyRevolveConnectorBoundary(record *facetedrecord.PointSectionRecord,
 		return empty, false
 	}
 	return result, true
+}
+
+// FitRangeMatchesEdge reports whether a recorded fitted-spline segment walks
+// exactly the span Sketch reports for edge. A whole edge records 0..1 or 1..0.
+// A Partial edge is admitted only when Sketch certifies its bounds as the true
+// parameters (TExact), and the record must carry those same bounds in the
+// edge's walk direction.
+func FitRangeMatchesEdge(segment sectionrecord.FitSplineSeg, edge sketch.BoundaryEdge) bool {
+	if !edge.Partial {
+		return (segment.TStart == 0 && segment.TEnd == 1) || (segment.TStart == 1 && segment.TEnd == 0)
+	}
+	if !edge.TExact || !(0 <= edge.TStart && edge.TStart < edge.TEnd && edge.TEnd <= 1) {
+		return false
+	}
+	if edge.Reversed {
+		return segment.TStart == edge.TEnd && segment.TEnd == edge.TStart
+	}
+	return segment.TStart == edge.TStart && segment.TEnd == edge.TEnd
 }

@@ -154,9 +154,10 @@ func revolveFitStationEdge(base facetedrecord.Payload, groups []int, source *fac
 		return -1, false
 	}
 	segment, ok := record.Profile.Outer.Segments[entity].(sectionrecord.FitSplineSeg)
-	if !ok || !((segment.TStart == 0 && segment.TEnd == 1) ||
-		(segment.TStart == 1 && segment.TEnd == 0)) ||
-		!(0 < root[0] && root[0] < root[1] && root[1] < 1) {
+	edge := source.Profile.Outer[entity]
+	if !ok || !FitRangeMatchesEdge(segment, edge) ||
+		!(0 < root[0] && root[0] < root[1] && root[1] < 1) ||
+		!(min(segment.TStart, segment.TEnd) < root[0] && root[1] < max(segment.TStart, segment.TEnd)) {
 		return -1, false
 	}
 	lower, upper, ok := cert.PointBounds(root[0], root[1])
@@ -168,7 +169,7 @@ func revolveFitStationEdge(base facetedrecord.Payload, groups []int, source *fac
 		return -1, false
 	}
 	increasing := tangentLo[0] > 0
-	if segment.TStart == 1 {
+	if segment.TStart > segment.TEnd {
 		increasing = !increasing
 	}
 	rootLo, rootHi := proofarith.FloatRat(lower[0]), proofarith.FloatRat(upper[0])
