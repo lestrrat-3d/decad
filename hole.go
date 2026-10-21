@@ -121,8 +121,8 @@ func Hole(ctx context.Context, b *Body, spec HoleSpec) (*Body, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer removeHoleTools(tools)
-	return cutHoleTools(ctx, d, b, tools)
+	defer removeTools(tools)
+	return combineTools(ctx, d, b, meshbool.OpCut, tools, false, nil)
 }
 
 // holeInput resolves spec into the plain-data request holeplan reads.
@@ -233,7 +233,7 @@ func holeAxisInsideBody(ctx context.Context, b *Body, in holeplan.Input, plan ho
 func buildHoleTools(ctx context.Context, d *Document, plan holeplan.Plan) ([]*Body, error) {
 	var tools []*Body
 	fail := func(err error) ([]*Body, error) {
-		removeHoleTools(tools)
+		removeTools(tools)
 		return nil, err
 	}
 	bore, err := holeCylinder(ctx, d, plan, plan.Bore)
@@ -306,39 +306,4 @@ func holeSink(ctx context.Context, d *Document, sink *holeplan.Sink) (*Body, err
 	}
 	axis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 0, V: 1}}
 	return Revolve(ctx, d, s, s.Profiles()[0], axis, FullRevolution{})
-}
-
-// cutHoleTools subtracts the tools from b in order and commits the final body
-// in place of b. Nothing is registered until every cut has succeeded.
-func cutHoleTools(ctx context.Context, d *Document, b *Body, tools []*Body) (*Body, error) {
-	start := d.nextProducerID()
-	ref := start
-	acc := b
-	for _, tool := range tools {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		next, err := booleanBody(ctx, meshbool.OpCut, acc, tool, ref)
-		if err != nil {
-			return nil, err
-		}
-		acc = next
-		ref++
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	if err := d.requireLive(b); err != nil {
-		return nil, err
-	}
-	d.commitSpan(acc, ref-start, b)
-	return acc, nil
-}
-
-// removeHoleTools retires the tool bodies Hole registered. A tool is live
-// until Hole returns, so a removal cannot fail except on a body already gone.
-func removeHoleTools(tools []*Body) {
-	for _, t := range tools {
-		_ = Remove(t)
-	}
 }

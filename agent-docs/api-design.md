@@ -1495,6 +1495,10 @@ persisting or constructing internal identifiers.
 countersink head, at a world point on a planar face of `b`. It builds the tool bodies, cuts them from `b` in one
 atomic commit, and retires `b`. `agent-docs/hole-design.md` owns the placement, size and refusal rules.
 
+**A rib is a thickened line.** `Rib(ctx, b, s, line, thickness, e)` thickens one straight sketch line across its width,
+extrudes the outline by `e`, and joins it to `b`; `Web` does the same for several lines in one commit.
+`WithRibOverrun` buries the ends of a rib in the walls it spans. `agent-docs/rib-design.md` owns the rules.
+
 ### 8.1 Extent — illegal states unrepresentable
 
 Fusion has three mutually-exclusive `setXxxExtent` methods with no enforcement,
