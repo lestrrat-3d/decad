@@ -76,3 +76,54 @@ func TestPlacedRefusesObliqueMotion(t *testing.T) {
 	_, err = crossDrilled().Placed(t.Context(), env, oblique)
 	require.Error(t, err)
 }
+
+// bareBox is a 40x20x20 box with no bore, every edge set back by 1 mm.
+func bareBox() breprecord.AllEdgeChamferPayload {
+	return breprecord.AllEdgeChamferPayload{
+		Xform: r3.Identity(),
+		Box:   [3][2]float64{{0, 40}, {0, 20}, {0, 20}},
+		D:     1,
+	}
+}
+
+func TestBuildBareBoxAllEdgeChamfer(t *testing.T) {
+	t.Parallel()
+	p := bareBox()
+	body := buildBody(t, p)
+	faces := topobuild.Faces(body)
+	require.Len(t, faces, 18, "six inset planes and twelve bevels, no bore wall")
+	require.Equal(t, "chamfer(2,1,1)", faces[17].Origins[0].Role)
+	for _, f := range faces {
+		require.Len(t, f.Loops, 1, "no face carries a bore hole")
+	}
+	edges := topobuild.Edges(body)
+	require.Len(t, edges, 48, "every polygon edge is shared by exactly two faces")
+	for _, e := range edges {
+		require.Len(t, e.Faces, 2)
+	}
+	// 40*20*20 - 2*(40+20+20) + 6.
+	require.Equal(t, 15846.0, body.Volume.Value.Base())
+	require.Zero(t, body.Volume.Bound.Base())
+	require.Equal(t, r3.NewVec(20, 10, 10), body.Centroid.Value)
+	require.Equal(t, p, body.Payload)
+}
+
+// A bare box has no bore axis to keep, so a placement may turn any axis onto
+// any other, where the bored box must keep its bore along y.
+func TestPlacedBareBoxMayTurnAnyAxis(t *testing.T) {
+	t.Parallel()
+	env := topo.Env{Doc: &topo.Document{}, Ref: 3, Alloc: topotest.Alloc{}}
+	// Rotation about x by a quarter turn takes y to z and z to -y.
+	turn, err := r3.FromBasis(r3.Basis{
+		EX: r3.NewVec(1, 0, 0), EY: r3.NewVec(0, 0, 1), EZ: r3.NewVec(0, -1, 0),
+	}, r3.NewVec(0, 20, 0))
+	require.NoError(t, err)
+	placed, err := bareBox().Placed(t.Context(), env, turn)
+	require.NoError(t, err)
+	require.Len(t, topobuild.Faces(placed), 18)
+	require.Equal(t, r3.NewVec(0, 0, 0), placed.Bounds.Min)
+	require.Equal(t, r3.NewVec(40, 20, 20), placed.Bounds.Max)
+	require.Equal(t, 15846.0, placed.Volume.Value.Base())
+	_, err = crossDrilled().Placed(t.Context(), env, turn)
+	require.Error(t, err, "the bored box keeps its bore along y")
+}

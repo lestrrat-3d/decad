@@ -96,6 +96,10 @@ func Chamfer(ctx context.Context, env topo.Env, b *topo.Body, call ChamferCall) 
 			return Result{Body: node}, err
 		}
 	}
+	// All twelve edges of a bare box take the same whole-body chamfer.
+	if node, matched, err := breprecord.TryBareBoxAllEdgeChamfer(ctx, env, b, edges, dmm, dDelta, asym != nil); matched || err != nil {
+		return Result{Body: node}, err
+	}
 	route, err := Receiver(ctx, env, b, loopCall)
 	if err != nil {
 		return Result{}, err

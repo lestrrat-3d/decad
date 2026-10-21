@@ -25,15 +25,19 @@ import (
 )
 
 // AllEdgeChamferPayload is the bounded box-with-one-cross-bore construction
-// in modify-general §4.3b. The twelve simultaneous cuts are half spaces;
-// their three planes meet at (d/2,d/2,d/2) at each original box corner.
+// in modify-general §4.3b, or the bare box when Radius is zero. The twelve
+// simultaneous cuts are half spaces; their three planes meet at
+// (d/2,d/2,d/2) at each original box corner.
 type AllEdgeChamferPayload struct {
 	Xform  r3.Transform
 	Box    [3][2]float64
-	Center [2]float64 // x and z of the through-y bore
-	Radius float64
+	Center [2]float64 // x and z of the through-y bore; zero without a bore
+	Radius float64    // zero for a box without a bore
 	D      float64
 }
+
+// Bored reports whether the record carries the through-y bore.
+func (p AllEdgeChamferPayload) Bored() bool { return p.Radius != 0 }
 
 // SurveyClass names the payload class a staged survey diagnostic reports
 // (internal/verifypublish), the name the evaluator has always published for it.
@@ -200,7 +204,7 @@ func (p AllEdgeChamferPayload) polygons() []allEdgePolygon {
 			area := proofbound.BoundedMul(
 				widthB, widthC)
 			out = append(out, allEdgePolygon{points: vecs(coords), normal: vec(n),
-				role: fmt.Sprintf("face(%d)", 2*axis+side), area: area, hole: axis == 1})
+				role: fmt.Sprintf("face(%d)", 2*axis+side), area: area, hole: axis == 1 && p.Bored()})
 		}
 	}
 	sqrt2 := proofbound.BoundedSqrt(proofbound.ExactScalar(2))
@@ -322,11 +326,13 @@ func BuildAllEdgeChamfer(ctx context.Context, env topo.Env, p AllEdgeChamferPayl
 		face.Loops = []*topo.Loop{loop}
 		faces = append(faces, face)
 	}
-	bore, err := geometry.addBoreTopology(env.Alloc, body, ref, faces, vertex)
-	if err != nil {
-		return nil, err
+	if geometry.Bored() {
+		bore, err := geometry.addBoreTopology(env.Alloc, body, ref, faces, vertex)
+		if err != nil {
+			return nil, err
+		}
+		faces = append(faces, bore)
 	}
-	faces = append(faces, bore)
 	if err := topobuild.AttachFaceLoops(ctx, faces); err != nil {
 		return nil, err
 	}
@@ -422,8 +428,8 @@ func (p AllEdgeChamferPayload) measure(body *topo.Body, polygons []allEdgePolygo
 		Exactness: measurement.ExactnessOf(area.Bound)}
 	// The admitted bore is centered in x and z and traverses the full y range.
 	// The twelve edge wedges are symmetric about all three box midplanes.
-	if !rationalMidpointEquals(p.Box[0], p.Center[0]) ||
-		!rationalMidpointEquals(p.Box[2], p.Center[1]) {
+	if p.Bored() && (!rationalMidpointEquals(p.Box[0], p.Center[0]) ||
+		!rationalMidpointEquals(p.Box[2], p.Center[1])) {
 		return fmt.Errorf(`%w: the all-edge chamfer requires a centered bore`, decaderr.ErrUnsupported)
 	}
 	var midpoint [3]proofbound.BoundedScalar

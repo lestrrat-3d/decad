@@ -27,7 +27,9 @@ import (
 // Build tiles every planar face from its own exact corner vertices and chords
 // the unchanged circular bore once for its two cap holes and wall. The only
 // denoted-to-held volume difference is that bore's chord sliver plus the
-// certified station-position displacement. ctx and body must be non-nil.
+// certified station-position displacement. A record without a bore has
+// neither, and its mesh is the polyhedron of its exact corners. ctx and body
+// must be non-nil.
 func Build(ctx context.Context, body *topo.Body, p breprecord.AllEdgeChamferPayload,
 	chord float64, verifyBoundary, verifyAll bool) (*topo.Mesh, error) {
 	if err := ctx.Err(); err != nil {
@@ -39,23 +41,33 @@ func Build(ctx context.Context, body *topo.Body, p breprecord.AllEdgeChamferPayl
 	}
 	p = geometry
 	faces := topobuild.Faces(body)
-	if len(faces) != 19 {
-		return nil, fmt.Errorf(`%w: the all-edge chamfer has no 18 planes and one bore`, decaderr.ErrUnsupported)
+	planes := 18
+	want := planes
+	if p.Bored() {
+		want++
 	}
-	loop := sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{sectionrecord.CircleSeg{
-		Center: sectionrecord.Point2{U: p.Center[0], V: p.Center[1]},
-		Radius: units.Millimeters(p.Radius), CCW: true, TStart: 0, TEnd: 1,
-	}}}
-	heightMeasure := proofbound.BoundedSub(proofbound.ExactScalar(p.Box[1][1]),
-		proofbound.ExactScalar(p.Box[1][0]))
-	height := proofbound.AbsSumUpper(heightMeasure.Value, heightMeasure.Bound)
-	samples, err := tessellation.ChordLoop(ctx, loop, chord, height, freeform.NewFreeformWork(), nil, 0,
-		func(_ survey2d.SideWalk) (*topo.Face, error) { return faces[18], nil }, stationbound.ChordStationBound)
-	if err != nil {
-		return nil, err
+	if len(faces) != want {
+		return nil, fmt.Errorf(`%w: the all-edge chamfer has no 18 planes and its bore`, decaderr.ErrUnsupported)
 	}
-	if len(samples.Samples) < 3 {
-		return nil, fmt.Errorf(`%w: the bore has too few stations`, decaderr.ErrUnsupported)
+	var samples tessellation.ChordSamples[*topo.Face]
+	height := 0.0
+	if p.Bored() {
+		loop := sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{sectionrecord.CircleSeg{
+			Center: sectionrecord.Point2{U: p.Center[0], V: p.Center[1]},
+			Radius: units.Millimeters(p.Radius), CCW: true, TStart: 0, TEnd: 1,
+		}}}
+		heightMeasure := proofbound.BoundedSub(proofbound.ExactScalar(p.Box[1][1]),
+			proofbound.ExactScalar(p.Box[1][0]))
+		height = proofbound.AbsSumUpper(heightMeasure.Value, heightMeasure.Bound)
+		var err error
+		samples, err = tessellation.ChordLoop(ctx, loop, chord, height, freeform.NewFreeformWork(), nil, 0,
+			func(_ survey2d.SideWalk) (*topo.Face, error) { return faces[18], nil }, stationbound.ChordStationBound)
+		if err != nil {
+			return nil, err
+		}
+		if len(samples.Samples) < 3 {
+			return nil, fmt.Errorf(`%w: the bore has too few stations`, decaderr.ErrUnsupported)
+		}
 	}
 	mesh := new(topo.Mesh)
 	index := map[r3.Vec]int{}
@@ -80,7 +92,7 @@ func Build(ctx context.Context, body *topo.Body, p breprecord.AllEdgeChamferPayl
 			circle[side][i] = add(v, proofbound.WalkEndBoundAllow(samples.BoundOf[i]))
 		}
 	}
-	for fi, face := range faces[:18] {
+	for fi, face := range faces[:planes] {
 		plane, ok := face.Surface.(surfacegeom.Plane)
 		if !ok || len(face.Loops) == 0 {
 			return nil, fmt.Errorf(`%w: all-edge chamfer face %d is not planar`, decaderr.ErrUnsupported, fi)
@@ -96,7 +108,7 @@ func Build(ctx context.Context, body *topo.Body, p breprecord.AllEdgeChamferPayl
 			outer = append(outer, len(points)-1)
 		}
 		loops := [][]int{outer}
-		if fi == 2 || fi == 3 {
+		if p.Bored() && (fi == 2 || fi == 3) {
 			side := fi - 2
 			hole := make([]int, 0, len(circle[side]))
 			for _, meshIndex := range circle[side] {
@@ -141,8 +153,11 @@ func Build(ctx context.Context, body *topo.Body, p breprecord.AllEdgeChamferPayl
 			return nil, err
 		}
 	}
-	trim := map[*topo.Face]float64{faces[2]: samples.MaxSag, faces[3]: samples.MaxSag,
-		faces[18]: samples.MaxSag}
+	trim := map[*topo.Face]float64{}
+	if p.Bored() {
+		trim = map[*topo.Face]float64{faces[2]: samples.MaxSag, faces[3]: samples.MaxSag,
+			faces[18]: samples.MaxSag}
+	}
 	bounds, err := tessellation.FaceBounds(mesh.Triangles, mesh.Source, trim, nil, store, 0)
 	if err != nil {
 		return nil, err
@@ -162,9 +177,11 @@ func Build(ctx context.Context, body *topo.Body, p breprecord.AllEdgeChamferPayl
 		if err != nil {
 			return nil, err
 		}
-		terms := []float64{proofbound.ProductUpper(height, samples.SegmentArea),
-			proofbound.SweptVolumeAllow(storeMax,
-				proofbound.PerturbedAreaUpper(mesh.Vertices, mesh.Triangles, storeMax))}
+		terms := []float64{proofbound.SweptVolumeAllow(storeMax,
+			proofbound.PerturbedAreaUpper(mesh.Vertices, mesh.Triangles, storeMax))}
+		if p.Bored() {
+			terms = append([]float64{proofbound.ProductUpper(height, samples.SegmentArea)}, terms...)
+		}
 		total, err := tessellation.SymDiff(terms)
 		if err != nil {
 			return nil, err

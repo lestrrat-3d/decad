@@ -2173,3 +2173,10 @@
 10	0.3	TestEmbossCircleRelief
 10	0.3	TestEmbossRefusals
 10	0.3	TestEmbossRefusesTiltedSketchAndCurvedFace
+10	0.3	TestChamferAllEdgesOfBareBox
+10	0.3	TestChamferAllEdgesOfBareBoxMeshes
+10	0.3	TestChamferAllEdgesOfBareBoxStaysPlaced
+10	0.3	TestChamferAllEdgesOfBareBoxIsSound
+10	0.3	TestChamferAllEdgesOfBareBoxRefusals
+10	0.3	TestChamferPartOfBareBoxEdgesStaysRefused
+10	0.3	TestChamferAllEdgesOfCrossDrilledBarKeepsItsBore

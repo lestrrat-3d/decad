@@ -675,13 +675,23 @@ for the selected-chain fillet: a terminal line for the chamfer and a
 terminal arc for the fillet. `internal/brepmodify/partial_route.go` passes the
 selected edges to route E's preparation and builds the body.
 
-### 4.3b Simultaneous outer-edge chamfer of a cross-drilled box
+### 4.3b Simultaneous outer-edge chamfer of a box
 
 The symmetric `Chamfer` of all twelve straight outer edges of P1 has a
 bounded box-with-one-bore construction. Admission requires six zero-bound
 axis-aligned rectangular planes, one through-y cylinder and its two matching
 circle rims, no displaced record faces, and the selected set of all twelve
-outer box edges. The circular bore must remain strictly inside the inset
+outer box edges.
+
+The same twelve edges of a box with no bore take the same construction
+without the bore (`breprecord.TryBareBoxAllEdgeChamfer`). The receiver is a
+straight prism with a hole-free rectangular section, or a six-face record with
+no loop bands, and it MUST read as six zero-bound axis-aligned planes whose
+corners are the box's eight corners. The record's `Radius` is zero, so it has
+eighteen planes and no bore wall, rims or hole loops. The volume formula below
+holds with the bore term zero, and the result is `Exact` for a setback that
+meets the exact-coordinate gate. A placement may turn any box axis onto any
+other, where the bored box must keep its bore along y. The circular bore must remain strictly inside the inset
 x and z faces. The setback and every resulting polygon corner and bore seam
 must equal their rational coordinate expressions as `float64` values. Thus
 `d = 1` and `d = 0.5` build on P1, while `d = 0.1` refuses rather than
@@ -778,7 +788,7 @@ as a plane, takes the partial fillet route
 | **BG2** | route L chamfer | `brepPayload` with `loopBands`, `stack` nil | the rewritten record's faces plus the band patches | `face(k)` / `wall(k)`; each patch `chamferLoop(f,l,p)` for face `f`, loop `l`, patch `p` in its band's own order |
 | **BG3** | rectangular-boss shell (§3.1a) | `brepPayload` with `bossShell`, `stack` nil | ordinary faces plus four cylinder patches and four ellipse seams; the closed arm groups the cavity as one void shell | `face(k)` / `wall(k)`; the patches carry `filletLoop` roles |
 | **BG4** | circular-boss shell (§3.1c) | `brepPayload` with `bossShell`, `stack` nil | ordinary faces plus one whole-turn torus patch | `face(k)` / `wall(k)`; the patch carries a `filletLoop` role |
-| **BG5** | box all-edge chamfer (§4.3b) | `allEdgeChamferPayload` (`breprecord.AllEdgeChamferPayload`) | six inset box planes, twelve bevel planes, one bore cylinder | `face(k)` / `chamfer(axis,side,side)` / `wall(6)` |
+| **BG5** | box all-edge chamfer (§4.3b) | `allEdgeChamferPayload` (`breprecord.AllEdgeChamferPayload`) | six inset box planes, twelve bevel planes, one bore cylinder or none | `face(k)` / `chamfer(axis,side,side)` / `wall(6)` |
 | **BG6** | coaxial counterbore shell (§3.1e) | `brepPayload` with `pocketShell`, `stack` nil | retained source faces, two cavity linings and floors, two opening rims, one whole-turn torus patch | `face(k)` / `wall(k)`; the patch carries a `filletLoop` role |
 
 A BG1 result is an ordinary brep: general-boolean §4.5 reads it unchanged.
