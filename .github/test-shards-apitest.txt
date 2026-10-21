@@ -2182,3 +2182,4 @@
 10	0.3	TestChamferAllEdgesOfCrossDrilledBarKeepsItsBore
 10	8	TestUnionBevelBlankAndEmbeddedRootTeeth
 10	8	TestUnionHubAndManyRadialLugs
+10	8	TestUnionBevelTipTouchingHeelConeNeedsMatchingFaces

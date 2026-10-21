@@ -98,7 +98,7 @@ func BuildRevolveSectorMesh(mesh *facetedrecord.JoinedMesh, ring facetedrecord.R
 		if down.Q-down.QError <= 1 {
 			return 0, 0, fmt.Errorf("%w: sector cap reaches its source plane", decaderr.ErrUnsupported)
 		}
-		upperPoint, upperRound, err := pointcone.UpperCapNode(far, up, false)
+		upperPoint, upperRound, err := pointcone.UpperCapNode(far, up, false, record.Upper.MatchingFaces)
 		if err != nil {
 			return 0, 0, err
 		}

@@ -142,6 +142,14 @@ func pairUnion(ctx context.Context, a, b *decad.Body) (*decad.Body, error) {
 	return decad.Union(ctx, a, b)
 }
 
+func pairCut(ctx context.Context, a, b *decad.Body) (*decad.Body, error) {
+	return decad.Cut(ctx, a, b)
+}
+
+func pairIntersect(ctx context.Context, a, b *decad.Body) (*decad.Body, error) {
+	return decad.Intersect(ctx, a, b)
+}
+
 func TestBooleanContextCancellationLeavesDocumentUnchanged(t *testing.T) {
 	t.Parallel()
 	testcases := []struct {
@@ -149,8 +157,8 @@ func TestBooleanContextCancellationLeavesDocumentUnchanged(t *testing.T) {
 		Call func(context.Context, *decad.Body, *decad.Body) (*decad.Body, error)
 	}{
 		{Name: "Union", Call: pairUnion},
-		{Name: "Cut", Call: decad.Cut},
-		{Name: "Intersect", Call: decad.Intersect},
+		{Name: "Cut", Call: pairCut},
+		{Name: "Intersect", Call: pairIntersect},
 	}
 	for _, tc := range testcases {
 		t.Run(tc.Name, func(t *testing.T) {
@@ -181,8 +189,8 @@ func TestBooleanNilContextIsDegenerate(t *testing.T) {
 		Call func(context.Context, *decad.Body, *decad.Body) (*decad.Body, error)
 	}{
 		{Name: "Union", Call: pairUnion},
-		{Name: "Cut", Call: decad.Cut},
-		{Name: "Intersect", Call: decad.Intersect},
+		{Name: "Cut", Call: pairCut},
+		{Name: "Intersect", Call: pairIntersect},
 	}
 	for _, tc := range testcases {
 		t.Run(tc.Name, func(t *testing.T) {

@@ -299,3 +299,4 @@
 10	0.00	TestContactSphereAdmissionGates
 10	0.00	TestContactCylinderAdmissionGates
 10	0.00	TestPlanarPoseAdmissionGates
+10	0.01	TestPointConeUpperCapNodeMatchingFaces

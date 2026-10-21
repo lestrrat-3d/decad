@@ -19,12 +19,12 @@ func TestPointConeBooleanDeclines(t *testing.T) {
 
 	target := &topo.Body{Payload: facetedrecord.Payload{}}
 	for _, op := range []meshbool.OperationKind{meshbool.OpUnion, meshbool.OpCut, meshbool.OpIntersect} {
-		_, ok, err := revolveplan.PointConeBoolean(t.Context(), op, topo.Env{}, target, &topo.Body{})
+		_, ok, err := revolveplan.PointConeBoolean(t.Context(), op, topo.Env{}, target, &topo.Body{}, false)
 		require.NoError(t, err, op.String())
 		require.False(t, ok, "%s with a tool that is no cone", op)
 	}
 	_, ok, err := revolveplan.PointConeBoolean(t.Context(), meshbool.OpUnion, topo.Env{}, target,
-		&topo.Body{Payload: revolveplan.Payload{}})
+		&topo.Body{Payload: revolveplan.Payload{}}, false)
 	require.NoError(t, err)
 	require.False(t, ok)
 }

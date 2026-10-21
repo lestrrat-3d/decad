@@ -157,12 +157,27 @@ func SectorMergedAngles(base []float64, nodes []SectorNode) ([]float64, []int, e
 	return unique, rootNode, nil
 }
 
+// MatchingFaceSlack is the largest shortfall of a cap station's Q below 1 that
+// a caller's matching-faces declaration absorbs: 64 binary64 steps at 1. A cap
+// drawn in a float frame cannot touch a cone exactly; the frame, the involute
+// samples and the cone's own stored numbers each round, and their sum stays
+// within a few steps of 1.
+const MatchingFaceSlack = 64 * 0x1p-52
+
 // UpperCapNode charges any replacement of the exact smooth cone map by
 // the source far plane at one cap station. Cell interiors are charged by the
 // caller's upper far-plane sliver bound when that source class is admitted.
+//
+// matchingFaces is the caller's declaration that the cap is meant to meet the
+// cone exactly. It does not admit a station: it only stops a station whose
+// held Q falls short of 1 by no more than MatchingFaceSlack, beyond the
+// sample's own error, from being refused. That station takes the far point
+// with the same charge as one inside the error band. A larger shortfall
+// disproves the declaration and still refuses.
 func UpperCapNode(far r3.Vec, sample Sample,
-	upperFarSliverCharged bool) (r3.Vec, float64, error) {
-	if !upperFarSliverCharged && sample.Q+sample.QError < 1 {
+	upperFarSliverCharged, matchingFaces bool) (r3.Vec, float64, error) {
+	if !upperFarSliverCharged && sample.Q+sample.QError < 1 &&
+		!(matchingFaces && 1-(sample.Q+sample.QError) <= MatchingFaceSlack) {
 		return r3.Vec{}, 0, fmt.Errorf("%w: sector cap reaches its far source plane", decaderr.ErrUnsupported)
 	}
 	smooth := far.Scale(sample.Alpha)

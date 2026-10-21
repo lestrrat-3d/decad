@@ -46,6 +46,9 @@ type Hooks struct {
 	DirectShellUnion func(ctx context.Context, op meshbool.OperationKind, env topo.Env, a, b *topo.Body) (*topo.Body, bool, error)
 	// LowerSupport certifies a faceted Union result's lower support plane.
 	LowerSupport func(ctx context.Context, result, a, b *topo.Body) error
+	// MatchingFaces is decad.WithMatchingFaces: the caller intends the
+	// operands' faces to meet exactly where they meet within rounding.
+	MatchingFaces bool
 }
 
 // Body builds a Boolean's result body under env's producer identity without
@@ -105,7 +108,7 @@ func Body(ctx context.Context, op meshbool.OperationKind, env topo.Env, a, b *to
 	} else if ok {
 		return nil, decaderr.ErrUnsupported
 	}
-	if n, ok, err := revolveplan.PointConeBoolean(ctx, op, env, a, b); err != nil {
+	if n, ok, err := revolveplan.PointConeBoolean(ctx, op, env, a, b, hooks.MatchingFaces); err != nil {
 		return nil, err
 	} else if ok {
 		return n, nil

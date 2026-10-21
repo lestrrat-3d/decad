@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/loftdirect"
+	"github.com/lestrrat-go/option/v3"
 
 	"github.com/lestrrat-3d/decad/internal/booleandispatch"
 	"github.com/lestrrat-3d/decad/internal/booloperand"
@@ -119,16 +120,65 @@ func Union(ctx context.Context, first *Body, others ...*Body) (*Body, error) {
 // everything is ErrBooleanFailed;
 // the other gates match Union's. It returns ctx.Err() unchanged when ctx is
 // canceled before the document commit.
-func Cut(ctx context.Context, target, tool *Body) (*Body, error) {
-	return performBoolean(ctx, meshbool.OpCut, target, tool)
+func Cut(ctx context.Context, target, tool *Body, opts ...BooleanOption) (*Body, error) {
+	return performBoolean(ctx, meshbool.OpCut, target, tool, opts...)
 }
 
 // Intersect returns the volume common to a and b, retiring both operands
 // from their document (core §8). Disjoint operands share nothing, so the
 // empty result is ErrBooleanFailed; the other gates match Union's. It returns
 // ctx.Err() unchanged when ctx is canceled before the document commit.
-func Intersect(ctx context.Context, a, b *Body) (*Body, error) {
-	return performBoolean(ctx, meshbool.OpIntersect, a, b)
+func Intersect(ctx context.Context, a, b *Body, opts ...BooleanOption) (*Body, error) {
+	return performBoolean(ctx, meshbool.OpIntersect, a, b, opts...)
+}
+
+// BooleanOption configures Cut and Intersect. An option from another package
+// cannot implement this sealed tier.
+type BooleanOption interface {
+	option.Interface
+	booleanOption()
+}
+
+type booleanOption struct{ option.Interface }
+
+func (booleanOption) booleanOption() {}
+
+type identMatchingFaces struct{}
+
+// WithMatchingFaces tells Cut or Intersect that the operands' faces are meant
+// to match where they meet: a cap drawn to touch the tool's cone, say, or two
+// faces meant to coincide. Faces drawn in floating point seldom match exactly;
+// each rounds on its own, so a design that matches on paper can miss by a few
+// last-place steps and be refused for it. With this option a miss of that size
+// is taken as the match the design intends, and its effect is charged into
+// the result's error bounds. A miss larger than rounding disproves the
+// declaration, and the operation refuses as it would without the option. The
+// option never admits a shape that would otherwise be refused for another
+// reason, and it has no effect on a pair whose faces do not meet.
+func WithMatchingFaces() BooleanOption {
+	return booleanOption{option.New(identMatchingFaces{}, true)}
+}
+
+// booleanConfig is the folded form of a call's BooleanOptions.
+type booleanConfig struct{ matchingFaces bool }
+
+func foldBooleanOptions(opts []BooleanOption) (booleanConfig, error) {
+	var cfg booleanConfig
+	for _, opt := range opts {
+		if opt == nil {
+			return cfg, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
+		}
+		if o, ok := opt.(booleanOption); ok && o.Interface == nil {
+			return cfg, fmt.Errorf(`%w: a zero option names nothing to apply`, ErrDegenerate)
+		}
+		switch opt.Ident().(type) {
+		case identMatchingFaces:
+			cfg.matchingFaces = true
+		default:
+			return cfg, fmt.Errorf(`%w: the boolean option is not a decad boolean option (%T)`, ErrDegenerate, opt)
+		}
+	}
+	return cfg, nil
 }
 
 // tessellateBooleanOperand meshes one boolean operand at its own request
@@ -161,9 +211,13 @@ type booleanEvaluation struct {
 // performBoolean gates the operands, runs the read-only geometry evaluator,
 // then builds and commits the public result atomically. A failure before the
 // commit leaves the live-body set, and operands unchanged.
-func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body) (*Body, error) {
+func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body, opts ...BooleanOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a boolean`, ErrDegenerate)
+	}
+	cfg, err := foldBooleanOptions(opts)
+	if err != nil {
+		return nil, err
 	}
 	if a == nil || a.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: the first operand belongs to no document`, ErrDegenerate)
@@ -178,7 +232,7 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body) 
 	if a == b {
 		return nil, fmt.Errorf(`%w: a boolean needs two distinct bodies`, ErrDegenerate)
 	}
-	body, err := booleanBody(ctx, op, a, b, d.nextProducerID())
+	body, err := booleanBodyWith(ctx, op, a, b, d.nextProducerID(), cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -195,8 +249,14 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body) 
 // fallback (pattern.go) chains it over instances not yet registered and
 // commits only the last result. a and b MUST belong to one document.
 func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref producerID) (*Body, error) {
+	return booleanBodyWith(ctx, op, a, b, ref, booleanConfig{})
+}
+
+func booleanBodyWith(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref producerID,
+	cfg booleanConfig) (*Body, error) {
 	d := documentHandle(a.n.Doc)
 	hooks := booleandispatch.Hooks{
+		MatchingFaces:    cfg.matchingFaces,
 		Mesher:           pairMeshes{},
 		Verified:         verifyAllMesher{},
 		AsBooleanError:   asBooleanError,

@@ -1,6 +1,7 @@
 package loftmesh
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"runtime"
@@ -176,8 +177,13 @@ func LoftSweepCandidates(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][
 // no candidate count bounds: far-apart triangles give no candidates at all.
 const MaxLoftAuditTriangles = 8*8192 - 8
 
+// ErrLoftAuditCeiling is wrapped by every refusal that the audit's work
+// ceiling causes, so a caller that can shrink its mesh may retry with less.
+var ErrLoftAuditCeiling = errors.New("loft crossing audit work ceiling")
+
 func errLoftAuditCeiling() error {
-	return fmt.Errorf(`%w: the loft crossing audit's candidate pair count exceeds the fixed work ceiling`, decaderr.ErrUnsupported)
+	return fmt.Errorf(`%w: the loft crossing audit's candidate pair count exceeds the fixed work ceiling: %w`,
+		decaderr.ErrUnsupported, ErrLoftAuditCeiling)
 }
 
 func errLoftAuditTriangles(f int) error {

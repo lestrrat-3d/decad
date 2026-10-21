@@ -12,8 +12,11 @@ import (
 
 // PointConeBoolean is an accept-only structural arm. It does not change
 // the mesh Boolean fallback for any pair outside this exact source class.
+//
+// matchingFaces marks the recorded cone limit as one whose cap meets the cone
+// within rounding by design (decad.WithMatchingFaces).
 func PointConeBoolean(ctx context.Context, op meshbool.OperationKind, env topo.Env,
-	target, tool *topo.Body) (*topo.Body, bool, error) {
+	target, tool *topo.Body, matchingFaces bool) (*topo.Body, bool, error) {
 	if op != meshbool.OpCut && op != meshbool.OpIntersect {
 		return nil, false, nil
 	}
@@ -21,6 +24,7 @@ func PointConeBoolean(ctx context.Context, op meshbool.OperationKind, env topo.E
 	if !ok {
 		return nil, false, nil
 	}
+	cone.MatchingFaces = matchingFaces
 	fp, ok := target.Payload.(facetedrecord.Payload)
 	if !ok || fp.Xform != r3.Identity() {
 		return nil, false, nil

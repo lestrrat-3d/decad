@@ -22,7 +22,7 @@ func TestPointConeBooleanGates(t *testing.T) {
 	run := func(op meshbool.OperationKind, target, tool *topo.Body) (*topo.Body, bool) {
 		t.Helper()
 		out, ok, err := revolveplan.PointConeBoolean(t.Context(), op, envOf(documentNode(d), d.nextProducerID()),
-			target, tool)
+			target, tool, false)
 		require.NoError(t, err)
 		return out, ok
 	}
