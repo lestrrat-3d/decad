@@ -156,6 +156,8 @@ Each of these returns a new body and retires its input.
 | `decad.Shell` | Removes the selected faces and lines the rest with a wall. `decad.WithShellSense` picks `decad.Inward` or `decad.Outward`. |
 | `decad.Draft` | Leans selected walls about a `decad.NeutralPlane` (`decad.NeutralFace`). |
 | `decad.Hole` | Cuts a round hole at a point on a planar face, through or blind, with an optional `decad.Counterbore` or `decad.Countersink` head. |
+| `decad.Rib` | Thickens one straight sketch line, extrudes it by an `decad.Extent` and joins it to the body. `decad.WithRibOverrun` buries its ends in the walls. |
+| `decad.Web` | Adds one such rib for each of several lines in one step. |
 | `decad.Thicken` | Turns a sheet into a solid. `decad.WithThickenSide` picks the side. |
 | `decad.Offset` | Builds a second sheet at a normal distance and leaves the source live. |
 

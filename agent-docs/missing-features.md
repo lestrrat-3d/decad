@@ -46,7 +46,8 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Analytic cylinder topology for a Loft bore whose held center rounds or whose frame map has a nonzero orthonormality defect | The Loft keeps faceted bore faces because the cylinder builder publishes no wall-normal departure bound | `agent-docs/loft-design.md` §18 |
 | `LoftChain` with curved segments or non-parallel planes | `ErrUnsupported` (R36, R35) | `agent-docs/surface-design.md` §1.2 |
 | `Extrude` over a chain with `WithTaper` (any angle) or `WithSurfaceResult()` | `ErrUnsupported` after the seam gates and before the extent; a chain extrude always returns a sheet and has no draft build | `agent-docs/surface-design.md` §13.2 |
-| Rib, web, emboss features | No entry point exists | none |
+| Emboss features | No entry point exists | none |
+| `Rib` or `Web` along a chain, arc or polyline, or one that extends itself to the body | `Rib` accepts one straight `*sketch.Line` and the caller sets the extent and overrun (`rib.go`) | `agent-docs/rib-design.md` §4 |
 
 ## Modify operations
 

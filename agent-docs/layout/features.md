@@ -19,6 +19,8 @@ The rules for rows live in `agent-docs/layout.md`.
 | `feature_options.go` | Public feature option tiers and adapters to `internal/featureoption/`. See surface §4, sweep §2 and loft §2. |
 | `patch.go` | `PatchProfile`: records the profile and builds its face through `patchchain.Build`. See surface §5.1. |
 | `hole.go` | Public `Hole`, `HoleSpec`, depth and head variants: gates, tool sketches, chained cut and the commit; `internal/holeplan/` computes the tools. See hole design. |
+| `rib.go` | Public `Rib`, `Web` and `WithRibOverrun`: line, thickness and extent gates, rib tool extrusion, touch and volume checks. See rib design. |
+| `tool_combine.go` | Shared by `Hole` and `Rib`: chains boolean steps over tool bodies, commits once, and removes the tools. |
 | `thicken.go` | Public `Thicken` option, thickness and sheet gates and the commit; `internal/thickenbuild/` dispatches the payload and builds. See surface §16. |
 | `offset.go` | `Offset`: option, distance and sheet gates and the commit; `internal/thickenbuild/` builds the second sheet at a normal distance. See surface §17. |
 | `patch_body.go` | `PatchEdges` selection and commit; the chain gates, level proof and Rule P live in `internal/patchchain/`. See surface §5.2. |

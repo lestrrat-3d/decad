@@ -254,6 +254,7 @@ other sections return them.
 | `decad.ShellOption` | `decad.Shell` |
 | `decad.DraftOption` | `decad.Draft` |
 | `decad.OffsetOption`, `decad.ThickenOption` | `decad.Offset`, `decad.Thicken` |
+| `decad.RibOption` | `decad.Rib`, `decad.Web` |
 | `decad.CopyOption`, `decad.MirrorOption` | `decad.Copy`, `decad.Mirrored` |
 | `decad.SurfaceResultOption` | Every feature that `decad.WithSurfaceResult` reaches. |
 | `decad.TessellateOption` | `Body.Tessellate` |

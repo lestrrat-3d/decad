@@ -2160,3 +2160,8 @@
 10	0.3	TestHoleRefusals
 10	0.3	TestHoleRefusesNonPlanarFace
 10	0.3	TestHoleOnRotatedPlate
+10	0.3	TestRibAcrossPocket
+10	0.3	TestWebCrossesRibs
+10	0.3	TestRibOverrunBuriesTheEnds
+10	0.3	TestRibRefusals
+10	0.3	TestRibRefusesForeignLine
